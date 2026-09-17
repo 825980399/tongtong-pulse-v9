@@ -1,0 +1,266 @@
+# ============================================================================
+# PulseNet v9.0 脉冲配置清单 · 物理光脉冲模块预留宪法
+# ============================================================================
+# 版本: v9.0 PulseNet
+# 设计: 路灯、小林、星轨
+# 日期: 2026年6月14日
+# 更新: P3-1 物理光脉冲模块预留接口补齐
+#
+# 职责:
+#   1. 声明所有系统脉冲事件的元数据（优先级、用途、来源、去向）。
+#   2. 作为未来"物理光脉冲模块"的唯一权威注册表。
+#   3. 定义光速通道隔离原则——抽象优先级绝不依赖物理光子。
+#   4. 为自动诊断工具（pulse_doctor.py）提供可解析的脉冲规范。
+#
+# 架构定位:
+#   - 与 const.py 协同，const.py 定义枚举常量，本文件定义元数据。
+#   - 与 PulseCore 协同，脉冲创建时参考此配置确定优先级和TTL。
+#   - 与 InfoField 协同，信息场匹配条件时参考此配置的订阅关系。
+#   - 物理光脉冲模块（P3-1）从此文件读取"哪些脉冲走光速通道"。
+#
+# 光速通道隔离原则（不可变）:
+#   - 抽象优先级（priority 0-10）是脉冲的逻辑属性，独立于传输介质。
+#   - 物理光脉冲模块是可选插件，日常关闭。
+#   - 任何器官不得直接依赖物理光子传输——先走信息场，必要时才加速。
+#   - LIGHT_SPEED(10) 仅用于系统存活信号和紧急熔断，普通业务不得占用。
+# ============================================================================
+
+# 脉冲配置版本
+version: "9.0.0"
+last_updated: "2026-06-14"
+
+# ============================================================================
+# 光速通道配置（P3-1预留）
+# ============================================================================
+light_speed_channel:
+  enabled: false                    # 默认关闭，等待物理硬件成熟
+  description: "物理光脉冲通道——LIGHT_SPEED(10)脉冲绕过信息场直接送达目标器官"
+  hardware_requirement: "FPGA光收发器 / 量子纠缠通信模块"
+  eligible_priorities: [10]        # 仅LIGHT_SPEED级别的脉冲可走光速通道
+  max_concurrent_channels: 4       # 最多4条并行光速通道
+  fallback_behavior: "光速通道不可用时，自动降级为信息场CRITICAL(9)优先级广播"
+
+# ============================================================================
+# 系统脉冲事件注册表
+# ============================================================================
+pulses:
+
+  # ---- 系统生命周期 ----
+  system.boot:
+    priority: 10
+    ttl_ms: 5000
+    description: "系统启动信号，激活所有器官的启动逻辑"
+    source: "main.py"
+    targets: ["心脏", "大脑皮层", "潜意识", "触觉", "系统管理器"]
+    light_speed_eligible: true
+
+  system.stop:
+    priority: 10
+    ttl_ms: 5000
+    description: "系统停止信号，通知所有器官执行优雅关闭"
+    source: "main.py"
+    targets: ["心脏", "潜意识", "系统管理器"]
+    light_speed_eligible: true
+
+  system.alarm:
+    priority: 9
+    ttl_ms: 3000
+    description: "系统告警，紧急处理器官接收并分级响应"
+    source: ["健康监控", "血管", "白细胞", "人格内核"]
+    targets: ["紧急处理"]
+    light_speed_eligible: true
+
+  system.safe_mode:
+    priority: 10
+    ttl_ms: 5000
+    description: "安全模式激活信号"
+    source: "紧急处理"
+    targets: ["所有器官"]
+    light_speed_eligible: true
+
+  # ---- 心跳驱动 ----
+  heart.beat:
+    priority: 7
+    ttl_ms: 10000
+    description: "心跳脉冲，周期性驱动器官巡检、衰减、批量处理"
+    source: "心脏"
+    targets: ["血管", "前额叶", "风险感知", "兴趣模型", "主动交互", "潜意识", "本体感知", "脊髓", "指标采集器"]
+    light_speed_eligible: false
+
+  # ---- 对话交互 ----
+  chat.message:
+    priority: 8
+    ttl_ms: 30000
+    description: "用户对话消息"
+    source: "外部输入"
+    targets: ["耳朵", "大脑皮层", "风险感知"]
+    light_speed_eligible: false
+
+  mouth.speak:
+    priority: 7
+    ttl_ms: 15000
+    description: "回复生成请求"
+    source: ["大脑皮层", "内在世界"]
+    targets: ["嘴巴", "前额叶", "兴趣模型"]
+    light_speed_eligible: false
+
+  mouth.reply:
+    priority: 8
+    ttl_ms: 15000
+    description: "生成的回复内容"
+    source: "嘴巴"
+    targets: ["主动交互"]
+    light_speed_eligible: false
+
+  # ---- 知识管理 ----
+  knowledge.written:
+    priority: 3
+    ttl_ms: 5000
+    description: "知识写入完成通知"
+    source: "胃"
+    targets: ["肝"]
+    light_speed_eligible: false
+
+  knowledge.compressed:
+    priority: 5
+    ttl_ms: 5000
+    description: "知识压缩完成通知"
+    source: "肝"
+    targets: ["潜意识"]
+    light_speed_eligible: false
+
+  knowledge.raw:
+    priority: 3
+    ttl_ms: 10000
+    description: "原始知识数据（文件消化器→胃）"
+    source: "文件消化器"
+    targets: ["胃"]
+    light_speed_eligible: false
+
+  # ---- 代码执行 ----
+  motor.execute:
+    priority: 7
+    ttl_ms: 10000
+    description: "代码执行请求"
+    source: ["耳朵", "双手"]
+    targets: ["代码沙箱"]
+    light_speed_eligible: false
+
+  code.result:
+    priority: 4
+    ttl_ms: 5000
+    description: "代码执行结果"
+    source: "代码沙箱"
+    targets: ["嘴巴"]
+    light_speed_eligible: false
+
+  digest.knowledge:
+    priority: 3
+    ttl_ms: 10000
+    description: "消化后的知识数据"
+    source: ["代码沙箱", "潜意识", "双腿"]
+    targets: ["胃"]
+    light_speed_eligible: false
+
+  # ---- 共享记忆回路 ----
+  reflection.insight:
+    priority: 4
+    ttl_ms: 10000
+    description: "前额叶复盘洞察"
+    source: "前额叶"
+    targets: ["肝", "兴趣模型"]
+    light_speed_eligible: false
+
+  interest.changed:
+    priority: 3
+    ttl_ms: 5000
+    description: "兴趣模型变化通知"
+    source: "兴趣模型"
+    targets: ["潜意识"]
+    light_speed_eligible: false
+
+  # ---- 安全防御 ----
+  security.threat_detected:
+    priority: 9
+    ttl_ms: 3000
+    description: "安全威胁检测"
+    source: ["皮肤", "沙箱", "伦理"]
+    targets: ["白细胞"]
+    light_speed_eligible: true
+
+  security.blocked:
+    priority: 9
+    ttl_ms: 3000
+    description: "安全拦截通知"
+    source: ["皮肤", "沙箱", "伦理"]
+    targets: ["白细胞"]
+    light_speed_eligible: true
+
+  # ---- 硬件感知 ----
+  sensor.camera.frame:
+    priority: 4
+    ttl_ms: 1000
+    description: "摄像头帧数据"
+    source: "硬件抽象层"
+    targets: ["视觉皮层"]
+    light_speed_eligible: false
+
+  touch.hardware_snapshot:
+    priority: 3
+    ttl_ms: 30000
+    description: "硬件状态快照"
+    source: "触觉"
+    targets: ["能量代谢", "健康监控"]
+    light_speed_eligible: false
+
+  # ---- 器官巡检 ----
+  organ.silent:
+    priority: 6
+    ttl_ms: 10000
+    description: "沉默器官告警"
+    source: "血管"
+    targets: ["紧急处理", "健康监控"]
+    light_speed_eligible: false
+
+# ============================================================================
+# 脉冲优先级语义说明
+# ============================================================================
+priority_semantics:
+  LIGHT_SPEED:
+    value: 10
+    description: "系统存活信号、紧急熔断——绕过信息场，物理直连目标器官"
+    examples: ["system.boot", "system.stop", "system.safe_mode"]
+  CRITICAL:
+    value: 9
+    description: "健康监控L3告警、安全拦截——最高软件优先级"
+    examples: ["system.alarm", "security.blocked", "security.threat_detected"]
+  HIGH:
+    value: 7
+    description: "心跳脉冲、器官巡检、代码执行——确保不被普通业务挤占"
+    examples: ["heart.beat", "motor.execute"]
+  NORMAL:
+    value: 5
+    description: "对话交互、知识压缩——默认优先级"
+    examples: ["mouth.speak", "knowledge.compressed"]
+  LOW:
+    value: 3
+    description: "后台探索、知识写入通知——不影响交互响应"
+    examples: ["knowledge.written", "interest.changed"]
+  BACKGROUND:
+    value: 1
+    description: "知识衰减、统计收集——最低优先级，可被延迟或丢弃"
+    examples: ["observability.snapshot"]
+
+# ============================================================================
+# 未来演化预留
+# ============================================================================
+future_evolution:
+  v10_oscillon_field:
+    description: "振荡场模式下，脉冲配置中的priority映射为场的频率振幅"
+    status: "预留"
+  v11_quantum_field:
+    description: "量子混合场中，LIGHT_SPEED脉冲通过量子纠缠实现零延迟传输"
+    status: "预留"
+  physical_light_pulse_hardware:
+    description: "当FPGA光收发器或量子通信模块就绪时，启用light_speed_channel"
+    status: "等待硬件成熟"

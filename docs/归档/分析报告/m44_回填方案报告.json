@@ -1,0 +1,40 @@
+{
+  "dir": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces",
+  "apply": false,
+  "version": "unknown",
+  "files": [
+    {
+      "file": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces\\calls_20260913.jsonl",
+      "total": 261,
+      "prompt_version_fill": 261,
+      "error_fill": 117,
+      "bad_lines": 0,
+      "samples": [
+        {
+          "line": 1,
+          "trace_id": "m40-38a2d6f9f70c",
+          "status": "success",
+          "set_prompt_version": "unknown",
+          "set_error": null
+        },
+        {
+          "line": 2,
+          "trace_id": "m40-c59b8e4e1039",
+          "status": "failed",
+          "set_prompt_version": "unknown",
+          "set_error": "(backfilled: source had no error detail)"
+        },
+        {
+          "line": 3,
+          "trace_id": "m40-4605cb379d17",
+          "status": "success",
+          "set_prompt_version": "unknown",
+          "set_error": null
+        }
+      ]
+    }
+  ],
+  "total_records": 261,
+  "total_prompt_version_fill": 261,
+  "total_error_fill": 117
+}

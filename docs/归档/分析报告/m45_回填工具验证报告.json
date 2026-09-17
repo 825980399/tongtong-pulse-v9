@@ -1,0 +1,93 @@
+{
+  "tool": "tools/backfill_llm_trace_fields.py",
+  "checks": {
+    "dry_run_stability_3x": {
+      "runs": [
+        {
+          "total": 3,
+          "pv": 2,
+          "err": 1
+        },
+        {
+          "total": 3,
+          "pv": 2,
+          "err": 1
+        },
+        {
+          "total": 3,
+          "pv": 2,
+          "err": 1
+        }
+      ],
+      "stable": true
+    },
+    "live_dry_run": {
+      "runs": [
+        {
+          "total": 444,
+          "pv": 296,
+          "err": 120
+        },
+        {
+          "total": 444,
+          "pv": 296,
+          "err": 120
+        }
+      ],
+      "dir": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces",
+      "note": "框架运行中，计数漂移属预期"
+    },
+    "boundary": {
+      "plan_broken": {
+        "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m45_t4_vmutz09a\\edge\\calls_20260202.jsonl",
+        "total": 2,
+        "prompt_version_fill": 2,
+        "error_fill": 1,
+        "bad_lines": 2,
+        "samples": [
+          {
+            "line": 1,
+            "trace_id": "x",
+            "status": "failed",
+            "set_prompt_version": "unknown",
+            "set_error": "(backfilled: source had no error detail)"
+          },
+          {
+            "line": 4,
+            "trace_id": "y",
+            "status": "success",
+            "set_prompt_version": "unknown",
+            "set_error": null
+          }
+        ]
+      },
+      "plan_empty": {
+        "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m45_t4_vmutz09a\\edge\\calls_20260201.jsonl",
+        "total": 0,
+        "prompt_version_fill": 0,
+        "error_fill": 0,
+        "bad_lines": 0,
+        "samples": []
+      },
+      "ok": true
+    },
+    "idempotency": {
+      "r1": 1,
+      "r2": 0,
+      "ok": true
+    },
+    "archive_backup": {
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m45_t4_vmutz09a\\arch\\llm_traces_backup_20260913_215614",
+      "files": 1,
+      "total_bytes": 105,
+      "mismatch": [],
+      "ok": true
+    },
+    "production_untouched": {
+      "total": 444,
+      "pv_empty": 296,
+      "backfilled": false
+    }
+  },
+  "all_ok": true
+}

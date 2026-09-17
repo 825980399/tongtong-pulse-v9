@@ -1,0 +1,95 @@
+{
+  "total": 60,
+  "no_regression": {
+    "true": 60,
+    "false": 0,
+    "none": 0
+  },
+  "problem_fixed": {
+    "true": 0,
+    "false": 1,
+    "none": 59
+  },
+  "granularity_dist": {
+    "static_only": 59,
+    "effectiveness": 1
+  },
+  "real_fix_rate": 0.0,
+  "verifiable_rate": 0.0167,
+  "old_claimed_rate": 1.0,
+  "effectiveness_mean": 0.0,
+  "effectiveness_count": 1,
+  "dry_run": false,
+  "applied": true,
+  "backup": {
+    "dir": "data\\_archive\\patch_split\\20260914_070941",
+    "backup": "data\\_archive\\patch_split\\20260914_070941\\patch_history.json",
+    "sha256": "314cb96e4b1d348006371d1064950bac1182ae0960b0f81132e8d2d2533b7792"
+  },
+  "sha256_before": "314cb96e4b1d348006371d1064950bac1182ae0960b0f81132e8d2d2533b7792",
+  "sha256_after": "43e7265e603a80d5102c7218e8237216671a3dd97a8ca81c70b8331d622614ce",
+  "samples": [
+    {
+      "id": "patch_1788744800_b982",
+      "file": "organs/body/PulseHeart.py",
+      "baseline_errors": 0,
+      "post_apply_errors": 0,
+      "verification.passed": true,
+      "no_regression": null,
+      "problem_fixed": null,
+      "granularity": null,
+      "effectiveness": null,
+      "label": "✅ 无回归 · ❓ 修复效果未验证"
+    },
+    {
+      "id": "patch_1788744813_1deb",
+      "file": "organs/body/PulseHeart.py",
+      "baseline_errors": 0,
+      "post_apply_errors": 0,
+      "verification.passed": true,
+      "no_regression": null,
+      "problem_fixed": null,
+      "granularity": null,
+      "effectiveness": null,
+      "label": "✅ 无回归 · ❓ 修复效果未验证"
+    },
+    {
+      "id": "patch_multi_1788455899_c",
+      "file": "organs/brain/PulseCodeLearner.py",
+      "baseline_errors": null,
+      "post_apply_errors": null,
+      "verification.passed": true,
+      "no_regression": null,
+      "problem_fixed": null,
+      "granularity": null,
+      "effectiveness": null,
+      "label": "✅ 无回归 · ❓ 修复效果未验证"
+    },
+    {
+      "id": "patch_multi_1788459695_c",
+      "file": "organs/brain/PulseCodeLearner.py",
+      "baseline_errors": null,
+      "post_apply_errors": null,
+      "verification.passed": true,
+      "no_regression": null,
+      "problem_fixed": null,
+      "granularity": null,
+      "effectiveness": null,
+      "label": "✅ 无回归 · ❓ 修复效果未验证"
+    },
+    {
+      "id": "patch_1788590332_d156",
+      "file": "organs/body/PulseLiver.py",
+      "baseline_errors": 4,
+      "post_apply_errors": 4,
+      "verification.passed": true,
+      "no_regression": null,
+      "problem_fixed": null,
+      "granularity": null,
+      "effectiveness": null,
+      "label": "✅ 无回归 · ❌ 问题仍在"
+    }
+  ],
+  "target": "data\\patches\\patch_history.json",
+  "real_fix_rate_fn": 0.0
+}

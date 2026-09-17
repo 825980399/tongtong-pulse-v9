@@ -1,0 +1,109 @@
+%% 曈曈 PulseNet 优化后目标架构图（第三方深度分析建议·2026-09-11）
+%% 红色=当前断链/空转点，绿色=建议补强，蓝色=已真实落地的优势
+flowchart TB
+    subgraph PERCEPT["感知层（真采集，但需打通入脑）"]
+        EYES["眼睛 PulseEyes<br/>OpenCV 22180帧"]
+        EARS["耳朵 PulseEars<br/>vosk ASR"]
+        VC["视觉皮层<br/>MediaPipe+OCR"]
+        TOUCH["系统遥测 PulseTouch<br/>(原'触觉'·实为psutil)"]
+    end
+
+    subgraph FIELD["脉冲信息场 InfoField（生产级韧性·真实优势）"]
+        DEDUP["SHA256幂等去重"]
+        STORM["风暴检测 500/5s"]
+        BP["L0-L3背压<br/>丢弃式准入"]
+        RESIZE["三层动态扩缩容<br/>L1/L2/L3(已实现)"]
+        LOCKFIX["建议:锁分段+事件名分桶索引<br/>(治单锁四抢60-80ms)"]
+    end
+
+    subgraph COGN["认知层（智能100%外包·需补本地深度）"]
+        CORTEX["大脑皮层 PulseCortex"]
+        SYM["符号推理 SymbolicReasoner<br/>(CSP/闭包/拓扑·真算法)"]
+        MULTI["多步推理器<br/>(建议:SOAR subgoaling真搜索)"]
+        LUNG["肺 PulseLung→DeepSeek API<br/>(开放域智能来源)"]
+    end
+
+    subgraph KNOW["知识/记忆层（生命周期完备·质量待提）"]
+        POOL["节点池 热/温/冷<br/>L1=159/L2=7259/L3=3077/L4=0"]
+        ANN["建议:ANN索引 hnswlib/FAISS<br/>(替暴力余弦+全局锁)"]
+        LIVER["肝 L1→L2压缩<br/>(建议:LLM语义摘要替词频抽取)"]
+        FORGET["建议:ACT-R激活方程<br/>(真遗忘曲线·当前total_decayed=0)"]
+        EXP["经验库(87.5%污染)<br/>建议:写入端SHA256去重"]
+    end
+
+    subgraph TASK["任务编排层（当前空转·最高优先补强）"]
+        TP["TaskPipeline 六阶段状态机<br/>(建议:补丁链路试点接线)"]
+        TOOLS["工具注册表(统一)<br/>(建议:ToolRegistry+Cortex二选一+executor绑定)"]
+        HANDOFF["建议:Swarm式handoff<br/>多器官角色编排"]
+        ORPHAN["孤儿脉冲治理<br/>(100条无消费→指定消费方)"]
+    end
+
+    subgraph EVO["自进化层（全球前1%稀缺·真实优势）"]
+        INSP["self_inspector 扫描"]
+        PATCH["PatchManager 沙箱验证<br/>(python -I+setrlimit+副本)"]
+        APPROVE["审批门(建议:统一受总开关约束)"]
+        PARAM["参数自学习闭环<br/>87应用/3回滚(真跑)"]
+        REGRESS["建议:补丁应用后强制回归并阻塞<br/>(当前回归0记录)"]
+    end
+
+    subgraph SELF["自我认知层（四维自省·能自曝假闭环）"]
+        SA["SelfAwarenessEngine 四维健康度"]
+        FAKE["FakeLoopDetector<br/>(检出NodePool/Liver假闭环)"]
+        FIXLOOP["建议:检测→受控修复闭环<br/>(当前只报告不修复)"]
+        GHOST["建议:audit_ghost_listeners接线<br/>(64类幽灵事件矩阵入回归)"]
+    end
+
+    subgraph OUTPUT["表达/执行层"]
+        MOUTH["嘴巴 PulseMouth pyttsx3<br/>(建议:废长答腰斩→LLM摘要/流式)"]
+        WECOM["企业微信桥(唯一产品入口)<br/>(建议:多用户·废单槽竞态)"]
+        BODY["ESP32躯体 RobotBodyDriver<br/>(零引用·建议:联调或文档降格)"]
+        HWABS["建议:hw_abstraction门面<br/>(统一10处psutil)"]
+    end
+
+    subgraph GOV["工程治理层（纪律崩坏·止血优先）"]
+        GIT["建议:434项变更分批提交+提交门禁"]
+        CI["建议:CI(pytest594+ruff+coverage)"]
+        SPLIT["建议:拆分PulseInnerWorld 22112行"]
+        UTF8["建议:Windows统一UTF-8(修2例GBK失败)"]
+    end
+
+    %% 主数据流
+    EYES --> VC
+    EARS --> FIELD
+    VC -->|"建议:image_url数组真入模<br/>(当前帧从不入LLM)"| LUNG
+    TOUCH --> HWABS
+    HWABS --> FIELD
+    PERCEPT --> FIELD
+    FIELD --> COGN
+    CORTEX --> SYM
+    CORTEX --> MULTI
+    CORTEX --> LUNG
+    COGN <--> KNOW
+    POOL --> ANN
+    LIVER --> POOL
+    EXP --> POOL
+    COGN --> TASK
+    TP --> TOOLS
+    TP --> HANDOFF
+    TASK --> OUTPUT
+    FIELD -.孤儿脉冲.-> ORPHAN
+    ORPHAN --> TP
+
+    %% 自进化与自我认知闭环
+    INSP --> PATCH --> APPROVE --> REGRESS
+    SA --> FAKE --> FIXLOOP
+    FIXLOOP -->|"建议:接入受控修复"| PATCH
+    GHOST --> SA
+    PARAM --> POOL
+
+    %% 治理贯穿
+    GOV -.约束.-> EVO
+    GOV -.约束.-> TASK
+    CI -.回归网.-> REGRESS
+
+    classDef broken fill:#FFC7CE,stroke:#C00000,color:#000
+    classDef fix fill:#C6EFCE,stroke:#006100,color:#000
+    classDef good fill:#BDD7EE,stroke:#1F4E79,color:#000
+    class TP,TOOLS,ORPHAN,EXP,FIXLOOP,GHOST,ANN,LIVER,FORGET,MULTI,LOCKFIX,REGRESS,APPROVE,MOUTH,WECOM,BODY,HWABS,GIT,CI,SPLIT,UTF8,HANDOFF fix
+    class DEDUP,STORM,BP,RESIZE,INSP,PATCH,PARAM,SA,FAKE,SYM,POOL,EYES,EARS,TOUCH good
+    class VC,LUNG,CORTEX broken
