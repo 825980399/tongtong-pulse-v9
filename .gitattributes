@@ -2,8 +2,10 @@
 * text=auto
 
 # Python文件
-*.py text eol=lf
-*.pyi text eol=lf
+# ★ 2026-09-20 第94批事故修复：eol=lf 改为 eol=crlf，与项目实际约定一致
+# （之前 git checkout 会把 CRLF 转成 LF，导致行尾被静默修改）
+*.py text eol=crlf
+*.pyi text eol=crlf
 
 # 文档文件
 *.md text eol=lf

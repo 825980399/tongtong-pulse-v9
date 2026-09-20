@@ -151,9 +151,13 @@ data/reports/
 
 # ===== 15. data目录整体忽略（2026-09-15 星轨完善）=====
 # 原则：运行时数据全部不入库，仅保留必要的测试脚本
-data/
+# ★ 2026-09-20 第94批事故修复：data/ 改为 /data/ 锚定根目录，避免命中 nucleus/data/
+/data/
 # 反向例外：保留进化测试脚本（这些是源码级测试，非运行时数据）
-!data/evolution/
-!data/evolution/tests/
-!data/evolution/tests/*.py
+!/data/evolution/
+!/data/evolution/tests/
+!/data/evolution/tests/*.py
+
+# ★ nucleus/data/ 是源码目录（数据访问层），必须跟踪，不能被忽略
+# （之前因为 data/ 无锚点规则被误忽略，导致 git pull 时源码被删除）
 
