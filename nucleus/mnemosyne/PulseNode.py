@@ -36,6 +36,19 @@ PulseNode 是 v9.5 知识体系的基本单元，在 PulseNodePool 内存池中�
 
 _module_logger = get_module_logger("PulseNode")
 
+# ★第80批 T2：缺失 evol_level 的 from_dict 调用 debounce 告警（最多 5 次/进程），
+#   防止其他调用方未回填导致 L2/L3 静默塌缩 L1（与 PulseSnapshot._m68_load_from_parquet 回填配套）。
+_m80_evol_missing = {"n": 0}
+
+# ★第80批 T5：_m70_blanked 节点 save 还原写盘时的聚合告警（最多 5 次/进程）。
+_m80_blanked = {"n": 0}
+def _m80_blanked_warn():
+    if _m80_blanked["n"] < 5:
+        _module_logger.warning(
+            "[第80批 T5] _m70_blanked 节点 save 时还原 value/linked_nodes 写盘"
+            "（HOT_COLD_LOAD 误开保护：避免静默写空）")
+        _m80_blanked["n"] += 1
+
 
 class PulseNode:
     """
@@ -159,6 +172,9 @@ class PulseNode:
         #    "confidence": float, "step": int}
         # 让推理结论从"文本置信度说明"升级为"可追溯的结构化证据链"。
         self.evidence_chain: list[dict[str, Any]] = []
+        # ★第80批 T5：_m70 清空标记双保险（省内存清空前留原值，save 时还原写盘防静默写空）。
+        self._m70_blanked = False
+        self._m70_keep = None
         if not _restore:
             # 类型安全清洗：确保 value 是可序列化的基本类型
             if self.value is not None and not isinstance(self.value, (str, int, float, bool, list, dict)):
@@ -272,9 +288,14 @@ class PulseNode:
     
     def to_dict(self) -> dict[str, Any]:
         """序列化为字典（用于 JSON 快照持久化）"""
+        # ★第80批 T5：_m70_blanked 节点用留存原值还原写盘（防静默写空），并聚合告警。
+        _blanked = getattr(self, "_m70_blanked", False)
+        _keep = getattr(self, "_m70_keep", None)
+        if _blanked and _keep:
+            _m80_blanked_warn()
         return {
             "node_id": self.node_id,
-            "value": self.value,
+            "value": (_keep.get("value") if (_blanked and _keep) else self.value),
             "keywords": self.keywords,
             "evol_level": self.evol_level,
             "importance": self.importance,
@@ -296,8 +317,8 @@ class PulseNode:
             "source_url": getattr(self, "source_url", ""),   # ★R1：向前兼容
             "trigger_reason": self.trigger_reason,
             "frequency_signature": self.frequency_signature,
-            "linked_nodes": self.linked_nodes,
-            "semantic_relations": self.semantic_relations,            
+            "linked_nodes": (_keep.get("linked_nodes") if (_blanked and _keep) else self.linked_nodes),
+            "semantic_relations": self.semantic_relations,
             "hebbian_weight": self.hebbian_weight,
             "cooccurrence_count": self.cooccurrence_count,
             "version": self.version,
@@ -317,6 +338,25 @@ class PulseNode:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PulseNode":
         """从字典反序列化（快照恢复用）"""
+        if "evol_level" not in data and _m80_evol_missing["n"] < 5:
+            # ★第83批 T-d1：告警必须能定位到具体调用方。此前只有笼统的"其他调用方兜底"，
+            #   实测无法判断是 benchmark 按文件读 Parquet 还是框架内某条加载路径。
+            _m83_caller = "?"
+            try:
+                import traceback as _tb_m83
+                for _fr in reversed(_tb_m83.extract_stack()[:-1]):
+                    _fn = str(getattr(_fr, "filename", "") or "")
+                    if not _fn.endswith("PulseNode.py"):
+                        _m83_caller = "%s:%s" % (
+                            _fn.replace(chr(92), "/"), getattr(_fr, "lineno", 0))
+                        break
+            except Exception:
+                _m83_caller = "?"
+            _module_logger.warning(
+                "[第80批 T2/第83批 T-d1] from_dict 缺失 evol_level，将静默默认 L1"
+                "（疑似分层塌缩；_m68_load_from_parquet 已回填，此为其他调用方兜底）"
+                " 调用方=%s 样本 node_id=%s" % (_m83_caller, data.get("node_id", "?")))
+            _m80_evol_missing["n"] += 1
         node = cls(
             value=data.get("value", ""),
             keywords=data.get("keywords", []),

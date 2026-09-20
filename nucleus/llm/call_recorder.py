@@ -158,6 +158,37 @@ def format_error(exc: Any, limit: int | None = None) -> str:
     return sanitize_text(_txt)
 
 
+def _m94_normalize_usage(usage: Any) -> dict[str, int] | None:  # _m94_extract_usage_marker
+    """★第94批 T-94b：归一化 token 用量字典（留存 schema 的 ``usage`` 字段）。
+
+    兼容上游两种形态：完整三值 / 仅含其中一部分（缺 ``total_tokens`` 时用前两者
+    补齐）。非 dict / 三值全零 / 非数值 → 返回 ``None``（**不写假数据**）。
+
+    ★向后兼容：本函数只产出**新字段** ``usage``；``tokens`` 的取值优先级为
+    「显式传入的 tokens > usage.total_tokens」，故显式传参的既有调用方不受影响。
+    """
+    if not isinstance(usage, dict):
+        return None
+
+    def _num(_v: Any) -> int | None:
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            return None
+        _i = int(_v)
+        return _i if _i >= 0 else None
+
+    _pi = _num(usage.get("prompt_tokens"))
+    _ci = _num(usage.get("completion_tokens"))
+    _ti = _num(usage.get("total_tokens"))
+    if _ti is None:
+        if _pi is None and _ci is None:
+            return None
+        _ti = (_pi or 0) + (_ci or 0)
+    if _ti <= 0 and not (_pi or 0) and not (_ci or 0):
+        return None
+    return {"prompt_tokens": _pi or 0, "completion_tokens": _ci or 0,
+            "total_tokens": _ti}
+
+
 class LLMCallRecorder:
     """LLM 调用对留存器（JSONL 追加写 + 滚窗清理）。
 
@@ -312,7 +343,8 @@ class LLMCallRecorder:
     def record(self, *, origin: str, prompt: Any, response: Any,
                prompt_version: str = "", channel: str = "", model: str = "",
                duration: float = 0.0, tokens: int = 0, status: str = STATUS_SUCCESS,
-               error: str = "", ts: float | None = None) -> str | None:
+               error: str = "", ts: float | None = None,
+               usage: dict | None = None) -> str | None:
         """留存一条调用对，返回 ``trace_id``（供后续 ``record_feedback``）。
 
         Returns:
@@ -329,6 +361,11 @@ class LLMCallRecorder:
             return None
         _ts = float(ts if ts is not None else time.time())
         _tid = "m40-" + uuid.uuid4().hex[:12]
+        # ★第94批 T-94b：新增 usage 字段 + tokens 回落（显式 tokens 优先）。
+        _m94_usage = _m94_normalize_usage(usage)
+        _m94_tokens = int(tokens or 0)
+        if not _m94_tokens and _m94_usage:
+            _m94_tokens = int(_m94_usage.get("total_tokens", 0) or 0)
         _rec = {
             "trace_id": _tid,
             "ts": _ts,
@@ -339,7 +376,8 @@ class LLMCallRecorder:
             "channel": str(channel or ""),
             "model": str(model or ""),
             "duration": round(float(duration or 0.0), 4),
-            "tokens": int(tokens or 0),
+            "tokens": _m94_tokens,
+            "usage": _m94_usage,
             "status": str(status or STATUS_SUCCESS),
             "error": self._resolve_error(error, str(status or STATUS_SUCCESS)),
             "feedback": None,
@@ -445,7 +483,8 @@ def record_evolution_call(*, prompt: Any, response: Any,
                           status: str = STATUS_SUCCESS, error: Any = "",
                           prompt_version: str = "", channel: str = "",
                           model: str = "", duration: float = 0.0,
-                          tokens: int = 0, ts: float | None = None) -> str | None:
+                          tokens: int = 0, ts: float | None = None,
+                          usage: dict | None = None) -> str | None:
     """进化循环专用留存入口（★第44批 T1 / P1-285 + P1-286）。
 
     背景：实测 ``data/llm_traces`` 的 ``origin`` 分布**只有** ``user_query`` /
@@ -467,7 +506,7 @@ def record_evolution_call(*, prompt: Any, response: Any,
                            response=response if response is not None else "",
                            prompt_version=_pv, channel=channel, model=model,
                            duration=duration, tokens=tokens, status=status,
-                           error=error, ts=ts)
+                           error=error, ts=ts, usage=usage)
     except Exception:
         return None
 
@@ -517,13 +556,18 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                 raise
             finally:
                 try:
+                    # ★第94批 T-94b：取用引擎侧暂存的 usage（未设→None，零回归）。
+                    _m94_usage = getattr(_self, "_m44_last_usage", None)
                     record_evolution_call(
                         prompt=_prompt if _prompt is not None else "",
                         response=_resp if _resp else "",
                         status=_status, error=_err,
                         prompt_version=version,
                         model=str(getattr(_self, "_m44_last_model", "") or ""),
-                        duration=time.time() - _t0)
+                        duration=time.time() - _t0,
+                        usage=_m94_usage if isinstance(_m94_usage, dict) else None)
+                    if _self is not None:
+                        _self._m44_last_usage = None
                 except Exception:
                     pass
         return _wrapper

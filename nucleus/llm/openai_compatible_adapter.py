@@ -76,5 +76,44 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         except Exception:
             return None
 
+    def extract_usage(self, response: Any) -> dict | None:
+        """★第94批 T-94b：解析 OpenAI 响应体的 ``usage`` 字段。  # _m94_extract_usage_marker
+
+        ★实测根因（本批 T0）：``data/llm_traces`` 8 天 5759 条记录中
+        ``origin=evolution_task`` **2423 条 100% tokens=0** —— 进化引擎走
+        ``trace_evolution_call`` 装饰器留存，而装饰器**从未取用 usage**；肺通道
+        虽有 ``_m40_last_usage`` 私有旁路（第40批 T2），但全项目**无统一入口**。
+
+        语义：
+        * 缺 ``total_tokens`` 时用 prompt+completion 补齐；
+        * 三值全为 0 / 非数值 / 无 ``usage`` → 返回 ``None``（**不写假数据**）。
+        """
+        try:
+            if not isinstance(response, dict):
+                return None
+            _u = response.get("usage")
+            if not isinstance(_u, dict):
+                return None
+
+            def _num(_v: Any) -> int | None:
+                if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+                    return None
+                _i = int(_v)
+                return _i if _i >= 0 else None
+
+            _pi = _num(_u.get("prompt_tokens"))
+            _ci = _num(_u.get("completion_tokens"))
+            _ti = _num(_u.get("total_tokens"))
+            if _ti is None:
+                if _pi is None and _ci is None:
+                    return None
+                _ti = (_pi or 0) + (_ci or 0)
+            if _ti <= 0 and not (_pi or 0) and not (_ci or 0):
+                return None
+            return {"prompt_tokens": _pi or 0, "completion_tokens": _ci or 0,
+                    "total_tokens": _ti}
+        except Exception:
+            return None
+
     def check_availability(self, api_key: str) -> bool:
         return bool(api_key)

@@ -48,6 +48,7 @@ from nucleus.const import (
     ControllerEvent,
     DigestEvent,
     LogLevel,
+    SearchEvent,
     SystemEvent,
     TouchEvent,
 )
@@ -732,8 +733,14 @@ class PulseController(BasePulseOrgan):
         return _best
 
     def _emit_stage_feedback(self, stage: int, search_topic: str, keywords: list,
-                              articles_found: int, status: str, note: str = ""):
-        """发射搜索阶段完成反馈脉冲，供内在世界审查阶段结果"""
+                              articles_found: int, status: str, note: str = "",
+                              correlation_id: str = ""):
+        """发射搜索阶段完成反馈脉冲，供内在世界审查阶段结果。
+
+        ★第82批 T-d（D167）：correlation_id 随脉冲原样带回——发射端内在世界已把
+        search_correlation_id 放进 OPEN_URL payload，本方法从 _search_deep_headless
+        一路接过来再写回 payload，消费端据此回嘴（旧字符串注册表仅兜底）。
+        """
         if not self.info_field or not self.pulse_core:
             return
         self.info_field.publish(self.pulse_core.emit(
@@ -746,12 +753,13 @@ class PulseController(BasePulseOrgan):
                 "articles_found": articles_found,
                 "status": status,
                 "note": note,
+                "search_correlation_id": correlation_id,
             },
             priority=4,
             layer="L3"
         ))
 
-    def _search_deep_headless(self, search_topic: str, reason: str, max_articles: int = 3) -> dict[str, Any]:
+    def _search_deep_headless(self, search_topic: str, reason: str, max_articles: int = 3, correlation_id: str = "") -> dict[str, Any]:
         """
         三阶段递进式深度搜索：
         阶段1：大面搜索 → 从搜索结果摘要中提取关键概念
@@ -907,7 +915,7 @@ class PulseController(BasePulseOrgan):
                 self._log(LogLevel.INFO, f"🔍 阶段1·关键词提取: {', '.join(purified_keywords[:5])}")
                 self._emit_stage_feedback(1, search_topic, purified_keywords,
                                            len(all_articles), "stage1_completed",
-                                           f"提取{len(purified_keywords)}个关键词")
+                                           f"提取{len(purified_keywords)}个关键词", correlation_id=correlation_id)
                 all_keywords.extend(purified_keywords)
 
                 # 等待内在世界审查阶段1结果（最多1.5秒），给予审查和终止信号到达的时间窗口
@@ -1056,7 +1064,7 @@ class PulseController(BasePulseOrgan):
             # 新增：阶段2/3完成后发射反馈
             self._emit_stage_feedback(2, search_topic, all_keywords,
                                        len(all_articles), "stage2_completed",
-                                       f"已精读{len(all_articles)}篇文章")
+                                       f"已精读{len(all_articles)}篇文章", correlation_id=correlation_id)
 
             # 等待内在世界审查阶段2结果（最多1.0秒），给予审查和终止信号到达的时间窗口
             _wait_start2 = time.time()
@@ -1088,7 +1096,7 @@ class PulseController(BasePulseOrgan):
                         self._log(LogLevel.INFO, f"🔍 兜底提取: 搜索结果页正文{len(fallback_text)}字符，已消化")
                         self._emit_stage_feedback(3, search_topic, all_keywords,
                                            len(all_articles) + 1, "stage3_fallback",
-                                           "搜索结果页正文提取完成")
+                                           "搜索结果页正文提取完成", correlation_id=correlation_id)
                     # 兜底策略2：正文太短，用搜索词+关键词构造一条L1知识节点
                     # 至少让这次搜索产生一条可消化的知识，避免完全空手而归
                     elif all_keywords:
@@ -1107,7 +1115,7 @@ class PulseController(BasePulseOrgan):
                         self._log(LogLevel.INFO, f"🔍 知识构造: 从关键词构造L1种子 '{', '.join(all_keywords[:3])}'")
                         self._emit_stage_feedback(3, search_topic, all_keywords,
                                            len(all_articles) + 1, "stage3_constructed",
-                                           "从关键词构造知识种子")
+                                           "从关键词构造知识种子", correlation_id=correlation_id)
                 elif all_keywords:
                     # 兜底策略3：连正文都提取不到，直接用关键词构造
                     constructed_content = (
@@ -1126,7 +1134,7 @@ class PulseController(BasePulseOrgan):
             # 新增：兜底阶段反馈
             self._emit_stage_feedback(3, search_topic, all_keywords,
                                        len(all_articles), "stage3_fallback",
-                                       "已执行兜底提取" if all_articles else "搜索无结果")
+                                       "已执行兜底提取" if all_articles else "搜索无结果", correlation_id=correlation_id)
             self._search_terminated = False  # 搜索完成，重置终止标记
             result = {
                 "status": "headless_completed",
@@ -1759,6 +1767,23 @@ class PulseController(BasePulseOrgan):
         except Exception:
             return []
 
+    @staticmethod
+    def _kws_match_topic(keywords: list, search_topic: str) -> bool:
+        """★第83批 T-c1(1)：关键词与搜索主题是否存在至少一个 2-gram 字符重叠。
+
+        判据与内在世界审查侧（PulseInnerWorld._handle_search_stage_feedback）保持同源，
+        便于"提取侧先自检、审查侧复核"两处一致。
+        """
+        _t = str(search_topic or "").lower()
+        if not _t:
+            return True
+        for _kw in (keywords or []):
+            _k = str(_kw).lower()
+            for _i in range(len(_k) - 1):
+                if _k[_i:_i + 2] in _t:
+                    return True
+        return False
+
     def _extract_keywords_from_summary(self, search_topic: str) -> list[str]:
         """
         从当前页面的搜索结果摘要中提取关键概念。
@@ -1783,6 +1808,15 @@ class PulseController(BasePulseOrgan):
             #   实测出现过「中的文字」「天之前」「小时之前」）
             semantic_kws = self._purify_search_keywords(
                 semantic_kws, search_topic, limit=6)
+            # ★第83批 T-c1(1)：语义增强结果与主题重叠度校验。
+            #   词典最长匹配可能给出与主题无关的通用词（实测 "今天的科技新闻" →
+            #   ['探索','适合','生活']），下游审查据此误判「关键词与主题无关」而终止搜索。
+            #   判据与审查侧一致（2-gram 字符重叠）；零重叠即视为提取错误 → 丢弃并回退硬切。
+            if semantic_kws and not self._kws_match_topic(semantic_kws, search_topic):
+                self._log(LogLevel.WARNING,
+                          f"语义增强提取与主题零重叠，丢弃并回退硬切: "
+                          f"提取={semantic_kws} 主题='{str(search_topic)[:40]}'")
+                semantic_kws = []
             if len(semantic_kws) >= 3:
                 self._log(LogLevel.INFO, f"语义增强提取成功: {semantic_kws}")
                 return semantic_kws[:6]
@@ -2330,6 +2364,9 @@ class PulseController(BasePulseOrgan):
             return self._on_hardware_snapshot(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
+        elif event_type == SearchEvent.TERMINATED:
+            # ★第86批 T-86b：搜索终止信号改为独立事件（信号分层）
+            return self._on_search_terminate(payload)
         elif event_type == "controller.search_stage_completed":
             payload = pulse.get("payload", {})
             if payload.get("status") == "terminate":
@@ -2528,7 +2565,10 @@ class PulseController(BasePulseOrgan):
                 return _wiki_result
         except Exception as e:
             self._log(LogLevel.DEBUG, f"百科优先查询异常已忽略（{type(e).__name__}: {e}）")
-        return self._search_deep_headless(actual_topic, reason, max_articles)
+        return self._search_deep_headless(
+            actual_topic, reason, max_articles,
+            correlation_id=payload.get("search_correlation_id", ""),
+        )
 
     def _try_encyclopedia_first(self, topic: str) -> dict[str, Any] | None:
         """★任务6（2026-09-08）：实体/概念查询优先用百科查询器。
@@ -2669,7 +2709,8 @@ class PulseController(BasePulseOrgan):
                 if not has_concrete:
                     search_topic = f"{search_topic} 概念 原理"
             result = self._search_deep_headless(
-                search_topic or reason, reason, max_articles
+                search_topic or reason, reason, max_articles,
+                correlation_id=payload.get("search_correlation_id", ""),
             )
             self._deep_search_active = False
             if result.get("status") == "headless_completed":
@@ -3450,6 +3491,7 @@ class PulseController(BasePulseOrgan):
                 ControllerEvent.LIST_DIRECTORY,
                 ControllerEvent.LAUNCH_APP,
                 ControllerEvent.SEARCH_STAGE_COMPLETED,
+                SearchEvent.TERMINATED,
                 TouchEvent.HARDWARE_SNAPSHOT,
                 SystemEvent.STATUS_REQUEST,
             ],

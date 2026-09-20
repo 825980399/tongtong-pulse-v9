@@ -73,7 +73,7 @@ def install_drivers():
             getattr(neo4j, "__version__", "?"),
             getattr(influxdb_client, "__version__", "?"),
         ))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("驱动安装后导入失败：%s: %s" % (type(e).__name__, e))
         return 2
     return 0
@@ -84,7 +84,7 @@ def check_neo4j():
     print("== 检查 Neo4j (%s) ==" % NEO4J_URI)
     try:
         from neo4j import GraphDatabase
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("neo4j 驱动未安装：%s。请先运行 install-drivers。" % e)
         return 2
     if not NEO4J_PASSWORD:
@@ -99,7 +99,7 @@ def check_neo4j():
             _ok("Neo4j 服务可用，探测返回 %s" % (_rec["ok"] if _rec else None))
         _driver.close()
         return 0
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("Neo4j 连接失败：%s: %s" % (type(e).__name__, e))
         _warn("请确认 Neo4j Community/Enterprise 已启动且 bolt 端口可达。")
         return 2
@@ -110,7 +110,7 @@ def check_influxdb():
     print("== 检查 InfluxDB (%s) ==" % INFLUXDB_URL)
     try:
         from influxdb_client import InfluxDBClient
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("influxdb-client 驱动未安装：%s。请先运行 install-drivers。" % e)
         return 2
     if not INFLUXDB_TOKEN:
@@ -125,7 +125,7 @@ def check_influxdb():
         _fail("InfluxDB ping 返回非健康")
         _client.close()
         return 2
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("InfluxDB 连接失败：%s: %s" % (type(e).__name__, e))
         _warn("请确认 InfluxDB 2.x 已启动且 http 端口可达。")
         return 2
@@ -136,7 +136,7 @@ def init_neo4j():
     print("== 初始化 Neo4j 约束与索引 ==")
     try:
         from neo4j import GraphDatabase
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("neo4j 驱动未安装：%s" % e)
         return 2
     try:
@@ -154,7 +154,7 @@ def init_neo4j():
             _ok("约束 PulseNode.node_id 唯一 + 关系索引 RELATED.rel_type 已创建")
         _driver.close()
         return 0
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("Neo4j 初始化失败：%s: %s" % (type(e).__name__, e))
         return 2
 
@@ -165,7 +165,7 @@ def init_influxdb():
     try:
         from influxdb_client import InfluxDBClient
         from influxdb_client.client.bucket_api import BucketsApi
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("influxdb-client 驱动未安装：%s" % e)
         return 2
     try:
@@ -181,7 +181,7 @@ def init_influxdb():
         # 在服务端配置；脚本仅确保主 bucket 存在。详细策略见 InfluxDB 集成设计文档。
         _client.close()
         return 0
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _fail("InfluxDB 初始化失败：%s: %s" % (type(e).__name__, e))
         return 2
 

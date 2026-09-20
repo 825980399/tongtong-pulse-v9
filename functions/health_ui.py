@@ -125,7 +125,9 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             <div class="metric"><span class="metric-label">自持力</span><span class="metric-value" id="llmdepSelf">--</span></div>
             <div class="metric"><span class="metric-label">LLM / 本地</span><span class="metric-value" id="llmdepSplit">--</span></div>
             <div class="metric"><span class="metric-label">搜索 / 消化</span><span class="metric-value" id="llmdepOther">--</span></div>
-            <div class="metric"><span class="metric-label">总请求</span><span class="metric-value" id="llmdepTotal">--</span></div>
+            <div class="metric"><span class="metric-label">回答请求</span><span class="metric-value" id="llmdepTotal">--</span></div>
+            <!-- ★第94批 T-94c 方案A：全栈大模型占比（分母含搜索+消化） -->
+            <div class="metric"><span class="metric-label">全栈大模型占比</span><span class="metric-value" id="llmdepOverall">--</span></div>
         </div>
     </div>
     <script>
@@ -137,7 +139,10 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             set('llmdepSelf', (dv.self_sufficiency_score || 0).toFixed(3));
             set('llmdepSplit', (dv.llm_call_total || 0) + ' / ' + (dv.local_inference_total || 0));
             set('llmdepOther', (dv.search_total || 0) + ' / ' + (dv.digestion_total || 0));
-            set('llmdepTotal', dv.total_requests || 0);
+            // ★第94批 T-94c 方案C：total_requests → answer_requests（旧字段保留兼容）
+            set('llmdepTotal', (dv.answer_requests != null ? dv.answer_requests
+                : (dv.total_requests || 0)));
+            set('llmdepOverall', (dv.overall_llm_share || 0).toFixed(4));
         }).catch(function () { });
     }
     setInterval(loadLLMDep, 10000);

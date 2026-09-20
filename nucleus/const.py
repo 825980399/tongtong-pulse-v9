@@ -581,6 +581,33 @@ class ControllerEvent:
     # 结果回传
     RESULT = "controller.result"
     ERROR = "controller.error"
+
+class SearchEvent:
+    """★第86批 T-86b 预埋：搜索生命周期事件契约（信号分层）。
+
+    背景（第83批 T-c1(3) 提出、本批落地）：此前「终止信号」与「结果信号」混用同一个
+    ``controller.search_stage_completed``。订阅方无法从**事件类型**上区分
+    「这一阶段有结果了」与「这次搜索被终止了」，只能靠 payload["status"] 猜；
+    终止信号（stage=-1 / articles_found=0）一旦落到结果审查通路，就会被读成
+    「阶段2无文章产出 → 接受兜底」，即把『终止』误读为『我来兜底』。
+
+    分层后每个终态是独立事件，订阅方按事件类型分流：
+        COMPLETED   —— 搜索正常产出结果（结果信号）
+        FAILED      —— 搜索执行失败（结果信号，可按失败策略处理）
+        TERMINATED  —— 被内在世界审查判定终止（终止信号，不得进结果审查/兜底）
+    旧的 STAGE_COMPLETED 仍保留，仅表示「某阶段进行中反馈」，不再承载终止语义。
+    """
+
+    # 预留：搜索成功完成（结果信号）
+    COMPLETED = "search.completed"
+    # 预留：搜索执行失败（结果信号）
+    FAILED = "search.failed"
+    # 搜索被内在世界审查终止（终止信号，非结果信号）
+    TERMINATED = "search.terminated"
+    # 旧「阶段完成反馈」事件名（非终态信号，供控制器↔内在世界进行中反馈）
+    STAGE_COMPLETED = ControllerEvent.SEARCH_STAGE_COMPLETED
+
+
     
 
 
@@ -609,6 +636,10 @@ class Event:
     STRESS_RECOVER = StressAxisEvent.RECOVER
     CONTROLLER_OPEN_URL = ControllerEvent.OPEN_URL
     CONTROLLER_SEARCH_STAGE_COMPLETED = ControllerEvent.SEARCH_STAGE_COMPLETED
+    # —— 第86批 T-86b：搜索终态事件契约（信号分层，统一注册表登记）——
+    SEARCH_COMPLETED = SearchEvent.COMPLETED
+    SEARCH_FAILED = SearchEvent.FAILED
+    SEARCH_TERMINATED = SearchEvent.TERMINATED
     # —— 此前纯硬编码、本次新增常量 ——
     EXPRESS_URGE = "express.urge"
     LEGS_LEARN_NOW = "legs.learn_now"

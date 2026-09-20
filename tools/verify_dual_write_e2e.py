@@ -178,7 +178,7 @@ def run(backend):
             _check("节点双写-更新属性(路径迁移触发)",
                    _ts in (0.95, "0.95"),
                    "trust_score=%s updated=%s" % (_ts, _ok_upd))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             _check("节点双写-更新属性(路径迁移触发)", False, "更新异常: %s" % e)
 
         # 4. 一致性检查
@@ -202,7 +202,7 @@ def run(backend):
             st = pool.get_dual_write_stats()
             _check("异常场景-双写统计记失败", st.get("node_fail", 0) > 0,
                    "node_fail=%s" % st.get("node_fail"))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             _check("异常场景-主流程不抛异常", False, "意外抛异常: %s" % e)
 
         # 7. 开关关闭 → 零副作用

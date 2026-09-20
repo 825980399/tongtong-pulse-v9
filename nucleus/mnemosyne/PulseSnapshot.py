@@ -278,6 +278,12 @@ class PulseSnapshot:
     
     def set_node_pool(self, node_pool):
         self.node_pool = node_pool
+        # ★第81批补 T2：自动绑定冷召回源（消除 main 漏调→fn 永远 None 失效类）。
+        # 仅在尚未显式绑定时自动设置，可被 set_cold_recall_source 显式覆盖。
+        if node_pool is not None and getattr(self, "_m70_cold_recall_fn", None) is None:
+            _fn = getattr(node_pool, "recall_cold_nodes_batch", None)
+            if callable(_fn):
+                self._m70_cold_recall_fn = _fn
         
     def set_resonance_engine(self, engine):
         self.resonance_engine = engine
@@ -441,7 +447,8 @@ class PulseSnapshot:
                 _success = self._incremental_save(saved_nodes, current_checksum, start_time)
         else:
             # ===== 全量保存模式 =====
-            _success = self._full_save(saved_nodes, current_checksum, start_time)
+            # ★第81批补2 T2：改走统一全量检查点（JSON+Parquet 物化成功后才清空增量日志）
+            _success = self._m67_full_checkpoint(saved_nodes, current_checksum, start_time)
             if _success:
                 self._last_full_save_time = _now
         if _success:
@@ -454,11 +461,8 @@ class PulseSnapshot:
             # ★v30.0修复：增量保存不再触发 Parquet 写入，避免每60秒一次的全量重写导致
             #   data/knowledge/parquet 文件无限膨胀。Parquet 作为「全量列式副本」，
             #   只跟随全量节奏（约10分钟一次）刷新，与 JSON 主快照的轮转机制对齐。
-            if self._use_parquet and not _use_incremental:
-                try:
-                    self.save_parquet()
-                except Exception as _e:
-                    self._log(LogLevel.WARNING, f"Parquet 快照同步保存失败（不影响 JSON）: {_e}")
+            # ★第81批补2 T2：Parquet 刷新已移入 _m67_full_checkpoint（JSON 成功后按
+            #   self._use_parquet 判定写入并据返回值决定清空增量日志），此处不再重复刷。
 
         return _success
         
@@ -758,15 +762,40 @@ class PulseSnapshot:
 
     def _save_async(self) -> bool:
         """★T1：把保存提交到后台线程并立即返回，不阻塞调用方。
-        若已有保存在进行中则跳过本次触发——避免保存线程堆积形成新的恶性循环。
+        ★主线第78批 T4：合并触发（coalesce）——保存进行中若再有触发，不直接丢弃，
+        而是置 _m67_pending_save 标记；当前保存结束后据该标记补一次保存，
+        保证「不丢数据」且「最多 1 个保存线程」（避免线程堆积 / 触发堆积恶性循环）。
         线程内异常只记 ERROR，绝不影响框架其它部分运行。"""
         if getattr(self, "_m67_is_saving", False):
-            self._log(LogLevel.WARNING,
-                      "[第67批] 已有快照保存进行中，跳过本次触发（避免堆积）")
-            return True
+            # ★第80批 T3：in-flight 卡死检测（watchdog）。
+            #   若上一次保存已持续超过阈值（取 SNAPSHOT_SAVE_TIMEOUT 与 2×全量间隔的较大者），
+            #   视为保存卡死（如磁盘 IO 阻塞），强制重置标记 + ERROR + snapshot_stalled 告警，
+            #   允许本次启动新保存，避免快照永久不更新。
+            _stall_to = 1800.0
+            try:
+                import config as _c80
+                _stall_to = float(getattr(_c80, "SNAPSHOT_SAVE_TIMEOUT", 1800) or 1800)
+                _full_int = float(getattr(_c80, "SNAPSHOT_FULL_SAVE_INTERVAL", 3600) or 3600)
+                _stall_to = max(_stall_to, 2 * _full_int)
+            except Exception:
+                pass
+            _stuck = time.time() - getattr(self, "_m67_save_start_time", 0)
+            if _stuck > _stall_to:
+                self._log(LogLevel.ERROR,
+                          f"[第80批 T3] 快照保存卡死检测：in-flight 已 {_stuck:.0f}s（阈值 {_stall_to:.0f}s），"
+                          f"强制重置并启动新保存（告警 snapshot_stalled）")
+                self._m67_is_saving = False
+                self._m67_pending_save = False
+            else:
+                self._m67_pending_save = True
+                self._log(LogLevel.DEBUG,
+                          "[第67批] 已有快照保存进行中，本次触发合并为待保存（不丢数据，避免堆积）")
+                return True
         import threading as _th67
         self._m67_is_saving = True
+        self._m67_pending_save = False
         _t0 = time.time()
+        self._m67_save_start_time = _t0  # ★第80批 T3：记录保存起始时间，供入口 watchdog 检测卡死
 
         def _run():
             try:
@@ -776,6 +805,15 @@ class PulseSnapshot:
                           f"[第67批] 异步快照保存异常: {type(_e).__name__}: {_e}")
             finally:
                 self._m67_is_saving = False
+                # ★主线第78批 T4：合并触发——若保存期间又有触发，补一次保存（最多再 1 个线程）。
+                #   仅当此时标记存在才补，且补前清标记，避免与并发触发的重复。
+                if getattr(self, "_m67_pending_save", False):
+                    self._m67_pending_save = False
+                    try:
+                        self._save_async()
+                    except Exception as _e2:
+                        self._log(LogLevel.ERROR,
+                                  f"[第67批] 合并触发快照保存失败: {type(_e2).__name__}: {_e2}")
                 _el = time.time() - _t0
                 try:
                     import config as _c67
@@ -834,12 +872,21 @@ class PulseSnapshot:
                         f.write(json.dumps(_node.to_dict(), ensure_ascii=False))
                     del _batch
                 f.write("]}")
-            if os.path.exists(self.snapshot_path):
-                os.remove(self.snapshot_path)
+                f.flush()
+                os.fsync(f.fileno())
+            # ★第80批 T4：纯 os.replace 原子覆盖（Windows 可直接覆盖已存在目标，
+            #   前置 os.remove 冗余且目标被锁时会抛错；原子替换保证崩溃窗口最小）。
             os.replace(tmp_path, self.snapshot_path)
         except Exception:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            # ★第80批 T4：写失败保留 tmp 副本供恢复（不再无条件删除），
+            #   重命名为带时间戳 .failed 副本，便于崩溃后人工/自动恢复。
+            try:
+                if os.path.exists(tmp_path):
+                    _failed = f"{tmp_path}.failed_{time.strftime('%Y%m%d_%H%M%S')}"
+                    os.rename(tmp_path, _failed)
+                    self._log(LogLevel.ERROR, f"[第80批 T4] 快照写入失败，保留临时副本供恢复: {_failed}")
+            except Exception:
+                pass
             raise
         self._cleanup_old_backups()
 
@@ -864,6 +911,14 @@ class PulseSnapshot:
         except Exception:
             return 10000
 
+    def _m67_incremental_delete_ratio_max(self) -> float:
+        """★第81批 T3：单轮删除占比熔断阈值（默认 0.5）。"""
+        try:
+            import config as _cfg67
+            return float(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX", 0.5))
+        except Exception:
+            return 0.5
+
     def _m67_incremental_log_lines(self) -> int:
         _p = self._m67_incremental_log_path()
         try:
@@ -880,28 +935,53 @@ class PulseSnapshot:
 
     def _m67_incremental_log_save(self, saved_nodes: list, current_checksum: str,
                                    start_time: float) -> bool:
-        """★T2：把本轮变更以 jsonl 追加方式写入增量日志（O(变更数)，不读全文件）。
-        既有 _incremental_save 需读全量快照 + 解析 + 重建索引，实测比全量还慢约 10 倍
-        （8700 节点：170s vs 9s）；本方法只追加变更行，耗时与变更量成正比。"""
+        """★第81批 T3：修正删除集根因 + 删除比例熔断 + 行 checksum。
+
+        - 删除集 = 上次保存有、本次无（不再误把 _get_changed_nodes 第二返回值当删除集）；
+        - 单轮删除占比超阈值 → 拒写 delete + ERROR（含期望/实际计数）+ 本轮降级全量保存；
+        - 每条 upsert 行附带节点 checksum，重放端校验不符即跳过。
+        """
+        _prev_map = getattr(self, "_last_saved_nodes_map", {}) or {}
         try:
-            _changed, _deleted = self._get_changed_nodes(saved_nodes)
+            _changed, _current_ids = self._get_changed_nodes(saved_nodes)
         except Exception as _e:
             self._log(LogLevel.DEBUG,
-                      f"[第67批] 变更节点计算失败，回退: {type(_e).__name__}: {_e}")
+                      f"[第81批 T3] 变更节点计算失败，回退: {type(_e).__name__}: {_e}")
             return False
+        _current_ids = _current_ids or set()
         _now = time.time()
+        # ★根因修正：删除集 = 上次有、本次无（upsert 用 changed、delete 用 deleted_ids）
+        _deleted_ids = set(_prev_map.keys()) - _current_ids
+        # ★删除比例熔断（阈值进 config）
+        _surviving = len(_current_ids)
+        _del_ratio = (len(_deleted_ids) / _surviving) if _surviving > 0 else 0.0
+        _del_threshold = self._m67_incremental_delete_ratio_max()
+        if _surviving > 0 and _del_ratio > _del_threshold:
+            # 熔断：拒写 delete + ERROR（含期望/实际计数）+ 本轮降级全量保存
+            self._log(LogLevel.ERROR,
+                      f"[第81批 T3] 增量日志删除比例熔断: 删除 {len(_deleted_ids)}/"
+                      f"存活 {_surviving} = {_del_ratio*100:.1f}% > 阈值 {_del_threshold*100:.1f}%，"
+                      f"拒写 delete，降级全量保存")
+            # ★第81批补2 T3：改走统一全量检查点（刷新 Parquet + 仅物化成功才清空 jsonl）。
+            #   状态维护统一由 _full_save 内部完成（恰好一次），不再重复累加。
+            return self._m67_full_checkpoint(saved_nodes, current_checksum, time.time())
+        # 正常：upsert 行（含 checksum）+ 仅真删除的 delete 行
         _buf = []
         for _n in (_changed or []):
             try:
-                _buf.append(json.dumps({"node_id": getattr(_n, "node_id", "") or "",
-                                        "action": "upsert", "ts": _now,
-                                        "data": _n.to_dict()}, ensure_ascii=False))
+                _cs = getattr(_n, "checksum", "")
+                _buf.append(json.dumps({
+                    "node_id": getattr(_n, "node_id", "") or "",
+                    "action": "upsert", "ts": _now,
+                    "checksum": _cs,
+                    "data": _n.to_dict(),
+                }, ensure_ascii=False))
             except Exception as _e:
                 self._log(LogLevel.DEBUG,
-                          f"[第67批] 节点序列化跳过: {type(_e).__name__}: {_e}")
-        for _nid in (_deleted or []):
-            _buf.append(json.dumps({"node_id": str(_nid), "action": "delete",
-                                    "ts": _now}, ensure_ascii=False))
+                          f"[第81批 T3] 节点序列化跳过: {type(_e).__name__}: {_e}")
+        for _nid in _deleted_ids:
+            _buf.append(json.dumps({"node_id": str(_nid), "action": "delete", "ts": _now},
+                                   ensure_ascii=False))
         _path = self._m67_incremental_log_path()
         try:
             _d = os.path.dirname(_path)
@@ -912,7 +992,7 @@ class PulseSnapshot:
                     f.write(_l + "\n")
         except Exception as _e:
             self._log(LogLevel.WARNING,
-                      f"[第67批] 增量日志写入失败，回退原增量/全量: {type(_e).__name__}: {_e}")
+                      f"[第81批 T3] 增量日志写入失败，回退原增量/全量: {type(_e).__name__}: {_e}")
             return False
 
         self._last_saved_checksum = current_checksum
@@ -923,18 +1003,15 @@ class PulseSnapshot:
         self._total_saves += 1
         _el = time.time() - start_time
         self._log(LogLevel.INFO,
-                  f"[第67批] 增量日志保存完成: {len(_buf)}条变更 耗时 {_el:.2f}s")
+                  f"[第81批 T3] 增量日志保存完成: upsert {len(_changed or [])} 条"
+                  f"/ delete {len(_deleted_ids)} 条 耗时 {_el:.2f}s")
 
         # 日志达阈值 → 触发全量合并并清空（合并失败则保留日志，下轮重试）
         if self._m67_incremental_log_lines() >= self._m67_incremental_log_max():
-            self._log(LogLevel.INFO, "[第67批] 增量日志达阈值，触发全量合并并清空日志")
-            try:
-                self._full_save(saved_nodes, current_checksum, time.time())
-                self._m67_clear_incremental_log()
-            except Exception as _e:
-                self._log(LogLevel.WARNING,
-                          f"[第67批] 全量合并失败（增量日志保留，下轮重试）: "
-                          f"{type(_e).__name__}: {_e}")
+            self._log(LogLevel.INFO, "[第81批 T3] 增量日志达阈值，触发全量合并并清空日志")
+            # ★第81批补2 T3：改走统一全量检查点（刷新 Parquet + 仅物化成功才清空 jsonl）；
+            #   Parquet 失败=检查点未达成=保留 jsonl，下轮重试（语义不变）。
+            self._m67_full_checkpoint(saved_nodes, current_checksum, time.time())
         return True
 
     def _m67_clear_incremental_log(self) -> None:
@@ -946,9 +1023,58 @@ class PulseSnapshot:
             self._log(LogLevel.WARNING,
                       f"[第67批] 增量日志清理失败: {type(_e).__name__}: {_e}")
 
+    def _m67_full_checkpoint(self, saved_nodes: list, current_checksum: str,
+                             start_time: float) -> bool:
+        """★第81批补2 T1：统一"全量检查点"语义 = 全量物化（JSON[+Parquet]）+ 增量日志清空。
+
+        - 先 _full_save（写 JSON 全量/兼容备份、更新内部状态、Parquet 行数校验日志）；
+        - Parquet 启用（self._use_parquet，与 save() 全量分支同口径）时调用 save_parquet()
+          并取 bool 返回；未启用（纯 JSON）时该步视为成功；
+        - 仅当 _full_save 成功 且（Parquet 未启用 或 save_parquet() 返回 True）时，若增量
+          日志启用则清空 jsonl 并返回 True；
+        - 任一要素失败 → 保留 jsonl（下次启动「旧 Parquet + jsonl 重放」兜底，零丢失），
+          捕获 Parquet 异常不崩溃，返回值如实反映全量 JSON 是否成功。
+        """
+        try:
+            _json_ok = bool(self._full_save(saved_nodes, current_checksum, start_time))
+        except Exception as _e:
+            self._log(LogLevel.ERROR,
+                      f"[第81批补2 T1] 全量保存异常（检查点未达成）: "
+                      f"{type(_e).__name__}: {_e}")
+            return False
+        if not _json_ok:
+            return False
+        _parquet_enabled = bool(getattr(self, "_use_parquet", False))
+        _parquet_ok = True
+        if _parquet_enabled:
+            try:
+                _parquet_ok = bool(self.save_parquet())
+            except Exception as _e:
+                _parquet_ok = False
+                self._log(LogLevel.WARNING,
+                          f"[第81批补2 T1] Parquet 物化异常（检查点未达成，保留增量日志）: "
+                          f"{type(_e).__name__}: {_e}")
+        if not _parquet_ok:
+            self._log(LogLevel.WARNING,
+                      "[第81批补2 T1] 全量检查点未达成：Parquet 物化失败，增量日志保留"
+                      "（下次启动将 Parquet+jsonl 重放兜底，零丢失）")
+            return _json_ok
+        if self._m67_incremental_log_enabled():
+            self._m67_clear_incremental_log()
+            self._log(LogLevel.INFO,
+                      f"[第81批补2 T1] 全量检查点达成: {len(saved_nodes)} 节点, "
+                      f"Parquet{('已刷新' if _parquet_enabled else '未启用')}, jsonl 已重置")
+        return True
+
     def _m67_apply_incremental_log(self, nodes: list) -> list:
-        """★T2：启动恢复——在已加载的全量快照基础上重放增量日志。
-        ★损坏容错：单行解析失败只跳过该行并告警，绝不影响整体启动。"""
+        """★第81批 T3：重放定序 + 幂等 + 类型统一 + 行 checksum 校验。
+
+        - 先按 node_id 分组收集，再按 ts 折叠（同 id 的 upsert/delete 乱序不影响结果）；
+        - 每条 upsert 行校验 checksum，不符则跳过并告警（不影响其余）；
+        - upsert 统一经 PulseNode.from_dict 转 PulseNode，返回值类型一致；
+        - delete 为最终态（仅当其 ts >= 最终 upsert ts）才移除节点；
+        - 单行损坏只跳过该行业告警，绝不影响整体启动；重复重放结果相同（幂等）。
+        """
         if not self._m67_incremental_log_enabled():
             return nodes
         _p = self._m67_incremental_log_path()
@@ -962,42 +1088,74 @@ class PulseSnapshot:
                     _by_id[_nid] = _n
         except Exception:
             return nodes
+        # ★先收集再按 (node_id, ts) 折叠，保证乱序幂等
+        _recs = {}
         _bad = 0
-        _applied = 0
         with open(_p, "r", encoding="utf-8", errors="replace") as f:
             for _line in f:
                 if not _line.strip():
                     continue
                 try:
                     _rec = json.loads(_line)
-                    _nid = str(_rec.get("node_id") or "")
-                    _act = _rec.get("action")
-                    if _act == "delete":
-                        _by_id.pop(_nid, None)
-                        _applied += 1
-                    elif _act == "upsert" and _nid:
-                        _data = _rec.get("data")
-                        if not isinstance(_data, dict):
-                            continue
-                        _old = _by_id.get(_nid)
-                        if _old is not None and not isinstance(_old, dict):
-                            # ★已存在的节点对象：逐字段更新，保持原类型（不整体替换成 dict）
-                            for _k, _v in _data.items():
-                                try:
-                                    setattr(_old, _k, _v)
-                                except Exception:
-                                    pass
-                        else:
-                            _by_id[_nid] = _data
-                        _applied += 1
                 except Exception:
+                    _bad += 1
+                    continue
+                _nid = str(_rec.get("node_id") or "")
+                if not _nid:
+                    _bad += 1
+                    continue
+                _act = _rec.get("action")
+                _ts = float(_rec.get("ts", 0.0) or 0.0)
+                if _act == "delete":
+                    _slot = _recs.get(_nid)
+                    if _slot is None:
+                        _recs[_nid] = {"upsert": None, "delete_ts": _ts}
+                    else:
+                        _slot["delete_ts"] = _ts
+                elif _act == "upsert":
+                    _data = _rec.get("data")
+                    if not isinstance(_data, dict):
+                        _bad += 1
+                        continue
+                    # ★行 checksum 校验（不符跳过）
+                    _cs = _rec.get("checksum")
+                    if _cs and _data.get("checksum") != _cs:
+                        self._log(LogLevel.WARNING,
+                                  f"[第81批 T3] 增量日志行 checksum 不符，跳过 node_id={_nid}")
+                        _bad += 1
+                        continue
+                    _slot = _recs.get(_nid)
+                    if _slot is None:
+                        _recs[_nid] = {"upsert": (_ts, _data), "delete_ts": None}
+                    elif _slot["upsert"] is None or _ts > _slot["upsert"][0]:
+                        _slot["upsert"] = (_ts, _data)
+                else:
+                    _bad += 1
+        _applied = 0
+        for _nid, _slot in _recs.items():
+            _up_ts = _slot["upsert"][0] if _slot["upsert"] else -1.0
+            # delete 为最终态：仅当其 ts >= 最终 upsert ts 才移除
+            if _slot["delete_ts"] is not None and _slot["delete_ts"] >= _up_ts:
+                _by_id.pop(_nid, None)
+                _applied += 1
+                continue
+            if _slot["upsert"] is not None:
+                _data = _slot["upsert"][1]
+                try:
+                    # ★类型统一：统一转 PulseNode，返回值类型一致
+                    _by_id[_nid] = PulseNode.from_dict(_data)
+                    _applied += 1
+                except Exception as _e:
+                    self._log(LogLevel.WARNING,
+                              f"[第81批 T3] 增量日志节点还原失败，跳过 node_id={_nid}: "
+                              f"{type(_e).__name__}: {_e}")
                     _bad += 1
         if _bad:
             self._log(LogLevel.WARNING,
-                      f"[第67批] 增量日志有 {_bad} 行损坏已跳过（其余正常重放）")
+                      f"[第81批 T3] 增量日志有 {_bad} 行损坏/校验不符/跳过（其余正常重放）")
         if _applied:
             self._log(LogLevel.INFO,
-                      f"[第67批] 增量日志重放完成: 应用 {_applied} 条")
+                      f"[第81批 T3] 增量日志重放完成: 应用 {_applied} 条")
         return list(_by_id.values())
 
     # ===== ★主线第68批 T1/P0：Parquet 主存储 =====
@@ -1024,38 +1182,137 @@ class PulseSnapshot:
         """Parquet 分片根目录（与快照同级的 parquet/ 目录）。"""
         return os.path.join(os.path.dirname(self.snapshot_path) or ".", "parquet")
 
-    def _m68_load_from_parquet(self):
-        """★T1：优先从 Parquet 分片加载节点（列式存储，压缩比约 27:1）。
-        成功返回节点列表；**失败或无数据返回 None**，由调用方回退 JSON 加载。
-        分片目录：parquet/evol_level=L1 | L2 | L3（本批前已存在）。"""
+    # ===== ★主线第81批 T1/T5：schema 补全 + 读路径统一校验 =====
+
+    def _m81_parquet_schema_complete_enabled(self) -> bool:
+        """★T1 灰度：默认开 = 写/读 7 字段并启用 schema 校验；关 = 复现旧 29 列行为。"""
         try:
-            import pyarrow.parquet as _pq68
+            import config as _cfg81
+            return bool(getattr(_cfg81, "PARQUET_SCHEMA_M81_COMPLETE", True))
+        except Exception:
+            return True
+
+    def _m81_parquet_expected_schema_version(self) -> str:
+        try:
+            import config as _cfg81
+            return str(getattr(_cfg81, "PARQUET_VERIFY_SCHEMA_VERSION", "m81.v1"))
+        except Exception:
+            return "m81.v1"
+
+    def _m81_parquet_required_columns(self) -> list[str]:
+        """★T1：Parquet 必需**文件**列集合（含 7 新列；开关关时仅 28 旧数据列）。
+
+        注意：evol_level 是 Hive 分区列（write_to_dataset 从数据文件移除，仅编码在
+        目录名 evol_level=<L>），不计入文件列；加载时由目录名显式回填（见
+        _m81_load_parquet_unified ③）。故此处不含 evol_level。
+        """
+        _base = [
+            "node_id", "value", "keywords", "importance",
+            "abstraction", "created_at", "last_activated", "activation_count",
+            "space_path", "state", "source_organ", "trigger_reason",
+            "frequency_signature", "linked_nodes", "semantic_relations",
+            "hebbian_weight", "cooccurrence_count", "version", "updated_at",
+            "checksum", "instinct", "instinct_at", "instinct_active_times",
+            "instinct_last_use", "ephemeral", "view_mode", "trust_score",
+            "verification_history",
+        ]
+        if self._m81_parquet_schema_complete_enabled():
+            _base = _base + [
+                "source_url", "evidence_chain", "source_time",
+                "acquired_time", "source_timestamp", "quality_flag",
+                "quality_reason",
+            ]
+        return _base
+
+    def _m81_load_parquet_unified(self):
+        """★第81批 T5：统一 Parquet 加载入口（路径甲/乙/by_level 共用）。
+
+        显式带回分区列 evol_level → **schema 版本 / 列集合 / 分层三道校验** →
+        失败 FAIL-fast 回退 JSON。成功返回节点列表；失败/不可用返回 None
+        （调用方回退 JSON 加载）。不依赖 pyarrow 整目录读的自动分区列注入。
+        """
+        try:
+            import pyarrow.parquet as _pq81
         except Exception:
             return None
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
             return None
+        _req = set(self._m81_parquet_required_columns())
+        _exp_ver = self._m81_parquet_expected_schema_version()
         _out = []
+        _lv_loaded = {"L1": 0, "L2": 0, "L3": 0}   # 磁盘分区行数（按目录）
+        _lv_real = {"L1": 0, "L2": 0, "L3": 0}     # 内存实际加载节点数（from_dict 成功）
+        _meta = None
         for _lv in ("L1", "L2", "L3"):
             _d = os.path.join(_base, "evol_level=%s" % _lv)
             if not os.path.isdir(_d):
                 continue
             try:
-                _tbl = _pq68.read_table(_d)
-                for _row in _tbl.to_pylist():
-                    try:
-                        _out.append(PulseNode.from_dict(_row))
-                    except Exception:
-                        continue
+                _tbl = _pq81.read_table(_d)
             except Exception as _e:
-                self._log(LogLevel.WARNING,
-                          f"[第68批] Parquet 分片读取失败(evol_level={_lv})，回退 JSON: "
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T5] Parquet 分片读取失败({_lv})，回退 JSON: "
                           f"{type(_e).__name__}: {_e}")
                 return None
-        return _out if _out else None
+            # ① 必需列集合校验（D151：缺列不可检出 → FAIL）
+            _missing = _req - set(_tbl.schema.names)
+            if _missing:
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T5] Parquet 缺列 {sorted(_missing)}({_lv})，回退 JSON")
+                return None
+            # ② schema 版本校验（旧版本 → FAIL）
+            _md = _tbl.schema.metadata or {}
+            _ver = (_md.get(b"m81_schema_version") or b"").decode("utf-8", "replace")
+            if _ver and _ver != _exp_ver:
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T5] Parquet schema 版本过旧 磁盘={_ver} 期望={_exp_ver}，回退 JSON")
+                return None
+            if _meta is None and _md:
+                _meta = _md
+            for _row in _tbl.to_pylist():
+                try:
+                    # ③ 显式带回分区列（目录名即权威层级，不依赖 pyarrow 自动注入）
+                    _row["evol_level"] = _lv
+                    _out.append(PulseNode.from_dict(self._parquet_row_to_dict(_row, level=_lv)))
+                    _lv_real[_lv] += 1
+                except Exception:
+                    continue
+            _lv_loaded[_lv] = _tbl.num_rows
+        if not _out:
+            return None
+        # ④ 分层塌缩 / 部分加载 FAIL-fast（两条路径共用）
+        # (a) 对**旧 parquet（无元数据）也稳健**：某层分区目录在磁盘有行，但
+        #     from_dict 全程失败导致内存该层实际加载为 0 → 判定塌缩/解析失败，回退 JSON。
+        #     纯靠磁盘行数 vs 内存实际加载计数，不依赖元数据声明。
+        for _lv in ("L1", "L2", "L3"):
+            if _lv_loaded[_lv] > 0 and _lv_real.get(_lv, 0) == 0:
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T5] Parquet 分层塌缩: 磁盘 {_lv}={_lv_loaded[_lv]} "
+                          f"但内存加载 0 节点（解析失败/塌缩），回退 JSON")
+                return None
+        # (b) 新写 parquet 带元数据：元数据声明计数 vs 实际磁盘计数（外部篡改/截断检测）
+        if _meta is not None:
+            for _k in ("L1", "L2", "L3"):
+                try:
+                    _exp_n = int((_meta.get(("%s_count" % _k.lower()).encode("utf-8"))
+                                 or b"0").decode("utf-8", "replace") or 0)
+                except Exception:
+                    _exp_n = 0
+                if _exp_n > 0 and _lv_loaded[_k] == 0:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T5] Parquet 分层塌缩: 元数据 {_k}={_exp_n} 实际=0，回退 JSON")
+                    return None
+        return _out
+
+    def _m68_load_from_parquet(self):
+        """★T1(第81批)：委托给统一加载入口 _m81_load_parquet_unified（路径甲/乙共用）。
+        成功返回节点列表；**失败或无数据返回 None**，由调用方回退 JSON 加载。"""
+        return self._m81_load_parquet_unified()
 
     def _m68_verify_parquet(self) -> int:
-        """★T1：保存后校验 Parquet 完整性（统计各分片总行数）。失败返回 -1。"""
+        """★T1(第81批升级)：保存后校验 Parquet 完整性 + schema 双校验。
+        返回总行数；缺列/版本过旧/分层塌缩任一失败返回 -1（调用方据此回退 JSON + ERROR）。"""
         try:
             import pyarrow.parquet as _pq68
         except Exception:
@@ -1063,17 +1320,70 @@ class PulseSnapshot:
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
             return -1
+        _req = set(self._m81_parquet_required_columns())
+        _exp_ver = self._m81_parquet_expected_schema_version()
         _total = 0
+        _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
+        try:
+            for _lv in ("L1", "L2", "L3"):
+                _d = os.path.join(_base, "evol_level=%s" % _lv)
+                if not os.path.isdir(_d):
+                    continue
+                _tbl = _pq68.read_table(_d)
+                # ① 必需列集合校验
+                _missing = _req - set(_tbl.schema.names)
+                if _missing:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T1] Parquet 校验失败: 缺列 {sorted(_missing)}({_lv})")
+                    return -1
+                # ② schema 版本元数据校验
+                _md = _tbl.schema.metadata or {}
+                _ver = (_md.get(b"m81_schema_version") or b"").decode("utf-8", "replace")
+                if _ver and _ver != _exp_ver:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T1] Parquet schema 版本过旧: 磁盘={_ver} 期望={_exp_ver}，回退 JSON")
+                    return -1
+                _n = _tbl.num_rows
+                _total += _n
+                _lv_counts[_lv] = _n
+            # ③ 分层分布校验：总量>0 但某层元数据期望>0 实际=0（塌缩）
+            for _k in ("L1", "L2", "L3"):
+                _mc = (_md.get(("%s_count" % _k.lower()).encode("utf-8")) if _md else None)
+                if _mc is not None:
+                    try:
+                        _exp_n = int(_mc.decode("utf-8", "replace") or 0)
+                    except Exception:
+                        _exp_n = 0
+                    if _exp_n > 0 and _lv_counts[_k] == 0:
+                        self._log(LogLevel.ERROR,
+                                  f"[第81批 T1] Parquet 分层校验失败: {_k} 期望={_exp_n} 实际=0（塌缩），回退 JSON")
+                        return -1
+            return _total
+        except Exception as _e:
+            self._log(LogLevel.ERROR,
+                      f"[第81批 T1] Parquet 完整性校验失败: {type(_e).__name__}: {_e}")
+            return -1
+
+    def _m68_parquet_level_counts(self) -> dict:
+        """★第80批 T2：统计 Parquet 各层级分区行数（L1/L2/L3）。
+        用于加载侧 FAIL-fast 分层保真校验与测试。失败/无数据返回空 dict。"""
+        try:
+            import pyarrow.parquet as _pq68
+        except Exception:
+            return {}
+        _base = self._m68_parquet_dir()
+        if not os.path.isdir(_base):
+            return {}
+        _counts = {"L1": 0, "L2": 0, "L3": 0}
         try:
             for _lv in ("L1", "L2", "L3"):
                 _d = os.path.join(_base, "evol_level=%s" % _lv)
                 if os.path.isdir(_d):
-                    _total += _pq68.read_table(_d).num_rows
-            return _total
+                    _counts[_lv] = _pq68.read_table(_d).num_rows
         except Exception as _e:
             self._log(LogLevel.WARNING,
-                      f"[第68批] Parquet 完整性校验失败: {type(_e).__name__}: {_e}")
-            return -1
+                      f"[第80批 T2] Parquet 分层计数失败: {type(_e).__name__}: {_e}")
+        return _counts
 
     def _update_saved_nodes_map(self, saved_nodes: list):
         """
@@ -1206,14 +1516,21 @@ class PulseSnapshot:
                     json.dump(snapshot, f, ensure_ascii=False)
                 else:
                     json.dump(snapshot, f, ensure_ascii=False, indent=2)
-            
-            if os.path.exists(self.snapshot_path):
-                os.remove(self.snapshot_path)
+                f.flush()
+                os.fsync(f.fileno())
+            # ★第80批 T4：纯 os.replace 原子覆盖（Windows 可直接覆盖已存在目标，
+            #   前置 os.remove 冗余且目标被锁时会抛错；原子替换保证崩溃窗口最小）。
             os.replace(tmp_path, self.snapshot_path)
-            
         except Exception:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            # ★第80批 T4：写失败保留 tmp 副本供恢复（不再无条件删除），
+            #   重命名为带时间戳 .failed 副本，便于崩溃后人工/自动恢复。
+            try:
+                if os.path.exists(tmp_path):
+                    _failed = f"{tmp_path}.failed_{time.strftime('%Y%m%d_%H%M%S')}"
+                    os.rename(tmp_path, _failed)
+                    self._log(LogLevel.ERROR, f"[第80批 T4] 快照写入失败，保留临时副本供恢复: {_failed}")
+            except Exception:
+                pass
             raise
         
         # ===== 清理旧备份（仅 rotate=True） =====
@@ -1255,11 +1572,26 @@ class PulseSnapshot:
         if self._m68_parquet_primary_enabled():
             _pq = self._m68_load_from_parquet()
             if _pq:
-                self._m68_last_load_source = "parquet"
-                self._log(LogLevel.INFO,
-                          f"[第68批] 从 Parquet 主存储加载 {len(_pq)} 个节点"
-                          f"（JSON 未读取）")
-                _nodes = _pq
+                # ★第80批 T2：FAIL-fast 分层保真校验。
+                #   若磁盘 Parquet 存在 L2/L3 分区（分层计数>0）但加载后内存 L2/L3==0，
+                #   说明发生塌缩（分区列未正确回填），拒绝采用 Parquet，回退 JSON 加载。
+                _pq_disk_l2l3 = sum(self._m68_parquet_level_counts().get(_k, 0)
+                                    for _k in ("L2", "L3"))
+                _mem_l2l3 = sum(1 for _n in _pq
+                                if str(getattr(_n, "evol_level", "")).upper() in ("L2", "L3"))
+                if _pq_disk_l2l3 > 0 and _mem_l2l3 == 0:
+                    self._log(LogLevel.ERROR,
+                              f"[第80批 T2] Parquet 分层塌缩检测：磁盘 L2/L3={_pq_disk_l2l3} "
+                              f"但内存 L2/L3=0，拒绝采用 Parquet，回退 JSON 加载")
+                    _pq = None
+                if _pq:
+                    self._m68_last_load_source = "parquet"
+                    self._log(LogLevel.INFO,
+                              f"[第68批] 从 Parquet 主存储加载 {len(_pq)} 个节点"
+                              f"（JSON 未读取）")
+                    _nodes = _pq
+                else:
+                    _nodes = self._load_internal(full_load)
             else:
                 _nodes = self._load_internal(full_load)
         else:
@@ -1298,12 +1630,13 @@ class PulseSnapshot:
           space_path / keywords 一律保留，否则下游按路径/层级检索会失效。
         ★降级：任何异常都会被 load() 捕获并退回全量加载，不会丢节点。
         """
+        self._m70_lazy_ids = set()
+        self._m70_lazy_node_map = {}
         if not self._m70_hot_cold_enabled():
             return nodes
         if not nodes:
             return nodes
         try:
-            self._m70_lazy_ids = set()
             self._m70_hot_load_stats = {"total": 0, "hot": 0, "lazy": 0}
             _out = []
             for _n in nodes:
@@ -1315,6 +1648,15 @@ class PulseSnapshot:
                     continue
                 # L2/L3 → 转轻量：清大字段，留元数据
                 try:
+                    # ★第80批 T5：清空前留存原值 + 置标记（双保险）。
+                    #   即使开关漏配导致 _m70_apply_hot_cold_load 误触发清空，save 时
+                    #   to_dict 会用 _m70_keep 还原写盘，盘上 value/linked_nodes 不被空值覆盖。
+                    if not getattr(_n, "_m70_blanked", False):
+                        _n._m70_keep = {
+                            "value": getattr(_n, "value", ""),
+                            "linked_nodes": getattr(_n, "linked_nodes", []),
+                        }
+                        _n._m70_blanked = True
                     if hasattr(_n, "value"):
                         _n.value = ""
                     if hasattr(_n, "linked_nodes"):
@@ -1323,6 +1665,7 @@ class PulseSnapshot:
                         self._m70_lazy_ids.add(getattr(_n, "node_id", ""))
                     except Exception:
                         pass
+                    self._m70_lazy_node_map[getattr(_n, "node_id", "")] = _n
                     self._m70_hot_load_stats["lazy"] += 1
                 except Exception:
                     pass
@@ -1334,6 +1677,90 @@ class PulseSnapshot:
             return _out
         except Exception:
             return nodes
+
+    def set_cold_recall_source(self, recall_fn) -> None:
+        """★第81批 T2：注册冷存批量召回源（如 PulseNodePool.recall_cold_nodes_batch）。
+
+        懒加载节点 _m70_keep 丢失、需从真冷存取回正文/链接时调用。
+        """
+        self._m70_cold_recall_fn = recall_fn
+
+    def _materialize_lazy_node(self, node) -> bool:
+        """★第81批 T2：按需回填单个懒加载节点的正文（value/linked_nodes）。
+
+        返回 True=已回填或本就完整；False=无法恢复（fail-closed，ERROR 可见，不静默丢）。
+        优先级：① 节点自身 _m70_keep（内存，零 IO）→ ② 注册的真冷存召回源 → ③ 失败 ERROR。
+        """
+        if node is None:
+            return False
+        if not getattr(node, "_m70_blanked", False):
+            return True  # 本就完整，无需回填
+        _nid = getattr(node, "node_id", "")
+        _keep = getattr(node, "_m70_keep", None)
+        if isinstance(_keep, dict) and ("value" in _keep or "linked_nodes" in _keep):
+            if "value" in _keep:
+                try:
+                    node.value = _keep["value"]
+                except Exception:
+                    pass
+            if "linked_nodes" in _keep:
+                try:
+                    node.linked_nodes = _keep["linked_nodes"]
+                except Exception:
+                    pass
+            node._m70_blanked = False
+            _lazy_ids = getattr(self, "_m70_lazy_ids", None)
+            if _lazy_ids is not None and _nid in _lazy_ids:
+                _lazy_ids.discard(_nid)
+            return True
+        # 内存无 keep → 走真冷存召回
+        _fn = getattr(self, "_m70_cold_recall_fn", None)
+        if callable(_fn) and _nid:
+            try:
+                _recalled = _fn([_nid])
+                if _recalled:
+                    _rn = _recalled[0]
+                    try:
+                        node.value = getattr(_rn, "value", node.value)
+                    except Exception:
+                        pass
+                    try:
+                        node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
+                    except Exception:
+                        pass
+                    node._m70_blanked = False
+                    _lazy_ids = getattr(self, "_m70_lazy_ids", None)
+                    if _lazy_ids is not None and _nid in _lazy_ids:
+                        _lazy_ids.discard(_nid)
+                    return True
+            except Exception as _e:
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T2] 懒加载节点 {_nid} 冷存召回失败: {type(_e).__name__}: {_e}")
+        self._log(LogLevel.ERROR,
+                  f"[第81批 T2] 懒加载节点 {_nid} 无法回填（无 _m70_keep 且冷存无副本），保留空白")
+        return False
+
+    def _materialize_lazy_batch(self, node_ids=None) -> int:
+        """★第81批 T2：批量回填。node_ids=None 时回填全部已登记懒加载节点。返回成功数。"""
+        _ids = node_ids if node_ids is not None else list(getattr(self, "_m70_lazy_ids", set()))
+        _node_map = getattr(self, "_m70_lazy_node_map", {})
+        _ok = 0
+        for _nid in _ids:
+            _node = _node_map.get(_nid)
+            if _node is None:
+                continue
+            if self._materialize_lazy_node(_node):
+                _ok += 1
+        return _ok
+
+    def materialize_lazy_nodes(self, node_ids=None) -> int:
+        """★第81批 T2：公开回填入口。
+
+        KAL 检索 / 胃消化 / 对话上下文组装等「需要正文」的热路径在访问懒加载节点前调用，
+        保证拿到完整 value/linked_nodes；只用到元数据（node_id/evol_level/keywords）的路径可不调用，
+        保留省内存收益。
+        """
+        return self._materialize_lazy_batch(node_ids)
 
     def _load_internal(self, full_load: bool = True):
         """
@@ -1378,7 +1805,9 @@ class PulseSnapshot:
         #   首次全量保存会重建。失败或节点数过少时回退 JSON（零冲突）。
         if self._use_parquet and os.path.isdir(self.parquet_dir):
             try:
-                _pq_nodes = self.load_parquet()
+                # ★第81批 T5：走统一加载入口（显式带回分区列 + schema/列集合/分层三道校验
+                #   + FAIL-fast 回退 JSON），不再用无校验的 load_parquet 整目录读。
+                _pq_nodes = self._m81_load_parquet_unified()
                 if _pq_nodes and len(_pq_nodes) > 100:
                     # 重新计算 checksum（元数据留空，首次 save 会全量写入）
                     try:
@@ -1467,19 +1896,30 @@ class PulseSnapshot:
         backups.sort(reverse=True, key=lambda x: x[0])
         best_nodes = []
         best_backup_path = None
+        best_score = -1.0  # ★第80批 T4：综合选优评分基准
         
         for _mtime, backup_path in backups:
             try:
                 data = safe_read_json(backup_path, default={})
                 nodes = self._restore_from_data(data, time.time())
+                _n = len(nodes)
+                # ★第80批 T4：综合评分选优（不再固定取第一份 / >=4000 即停）。
+                #   评分 = 节点数 + 分层完整度(L2/L3>0 加分) + checksum 有效加分 + 时间衰减。
+                _l2l3 = sum(1 for _x in nodes
+                            if str(getattr(_x, "evol_level", "")).upper() in ("L2", "L3"))
+                _has_checksum = bool(data.get("node_list_checksum", ""))
+                _age_min = max(0.0, (time.time() - _mtime) / 60.0)
+                _score = (float(_n)
+                          + (10.0 if _l2l3 > 0 else 0.0)
+                          + (5.0 if _has_checksum else 0.0)
+                          - min(_age_min * 0.001, 1.0))
                 self._log(LogLevel.INFO,
-                         f"备份 {os.path.basename(backup_path)} 恢复 {len(nodes)} 个节点")
-                if len(nodes) > len(best_nodes):
+                         f"备份 {os.path.basename(backup_path)} 恢复 {_n} 节点(L2/L3={_l2l3}) "
+                         f"score={_score:.1f}")
+                if _score > best_score:
                     best_nodes = nodes
                     best_backup_path = backup_path
-                    # 如果已经找到接近5000的节点，提前结束
-                    if len(nodes) >= 4000:
-                        break
+                    best_score = _score
             except Exception as e:
                 self._log(LogLevel.WARNING, f"备份加载失败 {backup_path}: {e}")
                 continue
@@ -1519,6 +1959,7 @@ class PulseSnapshot:
         # ===== v24.0修改：完整性校验改为软校验 =====
         integrity_ok = self._verify_integrity(data, restored_nodes)
         if not integrity_ok:
+            self._m80_last_load_checksum_failed = True  # ★第80批 T4：暴露校验FAIL信号供 main 回退决策
             self._log(LogLevel.WARNING,
                       f"快照完整性校验未通过（节点数据仍可加载）。"
                       f"预期{data.get('node_count_at_save', '?')}个节点，"
@@ -1937,7 +2378,7 @@ class PulseSnapshot:
         _rows = []
         for _n in nodes:
             _d = _n.to_dict()
-            _rows.append({
+            _row = {
                 "node_id": str(_d.get("node_id", "")),
                 "value": str(_d.get("value", "")),  # ★14.52 原生str列（实测100%为str）
                 "keywords": list(_d.get("keywords", []) or []),
@@ -1972,7 +2413,19 @@ class PulseSnapshot:
                 "verification_history": self._normalize_struct_list(
                     _d.get("verification_history"), "verification_history",
                     str(_d.get("node_id", ""))),
-            })
+            }
+            # ★主线第81批 T1：补 7 字段（D151/D158/D159）。灰度关时复现旧 29 列。
+            if self._m81_parquet_schema_complete_enabled():
+                _row["source_url"] = str(_d.get("source_url", ""))
+                _row["evidence_chain"] = self._normalize_struct_list(
+                    _d.get("evidence_chain"), "evidence_chain",
+                    str(_d.get("node_id", "")))
+                _row["source_time"] = float(_d.get("source_time", 0.0) or 0.0)
+                _row["acquired_time"] = float(_d.get("acquired_time", 0.0) or 0.0)
+                _row["source_timestamp"] = float(_d.get("source_timestamp", 0.0) or 0.0)
+                _row["quality_flag"] = str(_d.get("quality_flag", "clean"))
+                _row["quality_reason"] = str(_d.get("quality_reason", ""))
+            _rows.append(_row)
         return _rows
 
     @staticmethod
@@ -2029,6 +2482,15 @@ class PulseSnapshot:
             # ★主线第10批 T4.3：同 semantic_relations，损坏降级不炸整行
             "verification_history": self._safe_json_col(
                     _row.get("verification_history", "[]"), "verification_history"),
+            # ★主线第81批 T1：补 7 字段（.get 默认→旧 parquet 无此列自动补默认，向后兼容）
+            "source_url": _row.get("source_url", ""),
+            "evidence_chain": self._safe_json_col(
+                    _row.get("evidence_chain", "[]"), "evidence_chain"),
+            "source_time": float(_row.get("source_time", 0.0) or 0.0),
+            "acquired_time": float(_row.get("acquired_time", 0.0) or 0.0),
+            "source_timestamp": float(_row.get("source_timestamp", 0.0) or 0.0),
+            "quality_flag": _row.get("quality_flag", "clean") or "clean",
+            "quality_reason": _row.get("quality_reason", "") or "",
         }
 
     @staticmethod
@@ -2096,6 +2558,28 @@ class PulseSnapshot:
                             _r[_c] = json.dumps(_v if isinstance(_v, list) else [_v],
                                                 ensure_ascii=False, default=str)
                 _table = pa.Table.from_pylist(_rows)
+            # ★第81批 T1-⑤：写 schema 版本/分层计数/checksum 元数据（回退 JSON 的判据来源）
+            _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
+            for _r in _rows:
+                _lv = str(_r.get("evol_level", "L1")).upper()
+                if _lv in _lv_counts:
+                    _lv_counts[_lv] += 1
+            try:
+                _checksum = self._compute_node_list_checksum(_saved)
+            except Exception:
+                _checksum = ""
+            try:
+                _table = _table.replace_schema_metadata({
+                    b"m81_schema_version": self._m81_parquet_expected_schema_version().encode("utf-8"),
+                    b"node_count": str(len(_rows)).encode("utf-8"),
+                    b"l1_count": str(_lv_counts["L1"]).encode("utf-8"),
+                    b"l2_count": str(_lv_counts["L2"]).encode("utf-8"),
+                    b"l3_count": str(_lv_counts["L3"]).encode("utf-8"),
+                    b"node_list_checksum": str(_checksum).encode("utf-8"),
+                    b"write_time": time.strftime("%Y-%m-%dT%H:%M:%S").encode("utf-8"),
+                })
+            except Exception as _md_e:
+                self._log(LogLevel.WARNING, f"[第81批 T1] Parquet schema 元数据写入失败(忽略): {_md_e}")
             os.makedirs(self.parquet_dir, exist_ok=True)
             # ★v30.0修复：覆盖写（而非 append 写）。
             # 原实现直接 write_to_dataset 到正式目录，pyarrow 的 dataset 写入是
@@ -2168,7 +2652,12 @@ class PulseSnapshot:
             for _batch in _table.to_batches(max_chunksize=2000):
                 for _row in _batch.to_pylist():
                     try:
-                        _node = PulseNode.from_dict(self._parquet_row_to_dict(_row))
+                        # ★第83批 T-d1：evol_level 是**分区目录名**（evol_level=Lx）编码，
+                        #   不在 parquet 文件列内；整目录读取不得依赖 pyarrow 自动注入，
+                        #   显式回填，避免 from_dict 静默默认 L1 造成 L2/L3 分层塌缩。
+                        _lv83 = _row.get("evol_level") or ""
+                        _node = PulseNode.from_dict(
+                            self._parquet_row_to_dict(_row, level=_lv83 or None))
                         _nodes.append(_node)
                     except Exception as _e:
                         self._log(LogLevel.ERROR, f"Parquet 节点恢复失败: {_e}")

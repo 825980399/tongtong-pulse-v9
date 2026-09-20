@@ -64,6 +64,33 @@ def _blank_counters() -> dict[str, dict[str, int]]:
     }
 
 
+#: ★T-94c：补丁库文件（相对项目根），供 `evolution_local_rule_rate` 读取
+_M94_PATCH_FILES = ("data/patches/patch_history.json",
+                    "data/patches/pending_patches.json")
+
+
+def _m94_load_patch_records() -> list:
+    """★T-94c：尽力读取补丁库（history + pending）并合并为列表。**只读**。
+
+    任何异常 / 文件缺失 / 结构不符 → 返回 ``[]``（调用方据此返回 ``None``，
+    **不编造 0.0**）。绝不写盘、绝不抛。
+    """
+    _out: list = []
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for _rel in _M94_PATCH_FILES:
+        _fp = os.path.join(_root, _rel.replace("/", os.sep))
+        try:
+            if not os.path.isfile(_fp):
+                continue
+            _d = safe_read_json(_fp, default=[])
+            _items = _d if isinstance(_d, list) else (_d or {}).get("patches")
+            if isinstance(_items, list):
+                _out.extend([x for x in _items if isinstance(x, dict)])
+        except Exception:
+            continue
+    return _out
+
+
 class LLMDependencyMetrics:
     """LLM 依赖度量器：4 类计数器 + 依赖度 / 自持力派生指标。"""
 
@@ -129,9 +156,116 @@ class LLMDependencyMetrics:
         with self._lock:
             return int(sum(self._counters.get("local_inference_count", {}).values()))
 
-    def total_requests(self) -> int:
-        """回答类请求总数 = LLM 调用 + 本地推理（与依赖度分母口径一致）。"""
+    # ============ ★第94批 T-94c：口径修正（重命名 + 分层报告） ============
+
+    def search_total(self) -> int:
+        """外部搜索调用总数（★T-94c：此前只进快照，不进任何分母）。"""
+        with self._lock:
+            return int(sum(self._counters.get("search_count", {}).values()))
+
+    def digestion_total(self) -> int:
+        """知识消化总数（★T-94c：此前只进快照，不进任何分母）。"""
+        with self._lock:
+            return int(sum(self._counters.get("digestion_count", {}).values()))
+
+    def answer_requests(self) -> int:
+        """★T-94c 方案C：**回答类**请求总数 = LLM 调用 + 本地推理。
+
+        ★重命名说明：本方法即改造前的 ``total_requests``。原名字「总请求」有严重
+        误导性 —— 实测 ``llm_dependency_ratio = llm / (llm + local)`` 的分母
+        **只含回答类两类**，而 ``search_count``（实测 774）与 ``digestion_count``
+        （实测 36032）在计数上完全不计入 ⇒ 报出的 97.73% 实为「**回答通道内**
+        的大模型占比」，被误读成「框架对大模型的总依赖度」。新名字精确表达分母
+        范围。``total_requests`` 保留为兼容别名（★保留一个版本，任务书方案C）。
+        """
         return self.llm_total() + self.local_total()
+
+    def total_requests(self) -> int:
+        """★兼容别名（deprecated）：与 :meth:`answer_requests` 等价。
+
+        ★保留原因：``functions/health_ui.py`` 等既有消费方仍读该键；任务书
+        §T-94c 方案C 要求「保留旧字段一个版本做兼容」。**值不变**（零行为变化）。
+        """
+        return self.answer_requests()
+
+    def overall_llm_share(self) -> float:
+        """★T-94c 方案A：**全栈**大模型占比。  # _m94_overall_llm_share
+
+        ``= llm_total / (llm_total + local_total + search_total + digestion_total)``
+
+        ★与 `llm_dependency_ratio` 的差别（本批实测）：后者分母**只含回答类两类**，
+        把本地「消化 36032 次 / 搜索 774 次」排除在外，分母仅剩 125 ⇒ 报出 97.73%。
+        本指标把四类处理均计入分母，实测 **12.72%**，才是「全栈大模型占比」真实值。
+        ★**不改动** `llm_dependency_ratio` / `self_sufficiency_score` 的任何既有值。
+        无样本时返回 0.0。
+        """
+        _llm = self.llm_total()
+        _den = (_llm + self.local_total() + self.search_total()
+                + self.digestion_total())
+        if _den <= 0:
+            return 0.0
+        return round(_llm / _den, 4)
+
+    #: ★T-94c：补丁库读取结果的缓存 TTL（秒），避免面板 10s 轮询触发高频 IO
+    _M94_LOCAL_RULE_CACHE_TTL = 60.0
+
+    def evolution_local_rule_rate(self, patches: list | None = None) -> float | None:
+        """★T-94c 方案A：自学习闭环的**本地化成效**。
+
+        口径（★以**任务书自给的实测值 95.4% 可复算**为准，记 D94-3）：
+
+            problem_fixed is True 的 local_rule 补丁数 / local_rule 补丁**总数**
+
+        溯源：第93批只读分析的「按来源分组」计算即此口径（当时 62/65 = 95.4%）。
+        ★与项目既有 ``patch_verification_split.real_fix_rate`` 的差别：后者的分母
+        是「**可判定数**」（``problem_fixed is None`` 的补丁分子分母都不计，实测
+        51/51 = 100%）；本指标分母是**该来源补丁总数**，把「基线为 0 / 无检测器
+        导致不可判定」的补丁视为**未确认修复**计入分母 —— 更保守，也更贴合
+        「本地规则补丁有多大比例被确证修好」这一语义。
+        ★任务书文字写「本地规则修复数 / 总修复数」，按字面可读成 62/62 = 100%，
+        与任务书自给的 95.4% 不符 ⇒ 已记 D94-3 上报裁决。
+
+        * ``patches`` 显式传入 → 直接用（单测 / 离线分析，零 IO）；
+        * 未传入 → 尽力读 ``data/patches``（**只读**），结果缓存 60s；
+        * 无样本 / 读取失败 → 返回 ``None``（**不编造 0.0**）。
+        """
+        _now = time.time()
+        _cached = getattr(self, "_m94_lr_cache", None)
+        _ts = float(getattr(self, "_m94_lr_cache_ts", 0.0) or 0.0)
+        if patches is None:
+            if _cached is not None and (_now - _ts) < self._M94_LOCAL_RULE_CACHE_TTL:
+                return _cached
+            patches = _m94_load_patch_records()
+        if not isinstance(patches, list) or not patches:
+            return getattr(self, "_m94_lr_cache", None)
+        try:
+            from nucleus.evolution.patch_verification_split import (
+                F_SPLIT_VERSION as _F_SV,
+            )
+            from nucleus.evolution.patch_verification_split import (
+                split_verification as _split_v,
+            )
+            _lr = [p for p in patches if isinstance(p, dict)
+                   and str(p.get("source", "")) == "local_rule"]
+            if not _lr:
+                return None
+            _ok = 0
+            for _p in _lr:
+                _pf = _p.get("problem_fixed")
+                if _pf is None and _F_SV not in _p:  # _m94_lr_denominator_total
+                    try:
+                        _pf = _split_v(_p).get("problem_fixed")
+                    except Exception:
+                        _pf = None
+                if _pf is True:
+                    _ok += 1
+            _rate = round(_ok / float(len(_lr)), 4)
+        except Exception as e:
+            _logger.debug(f"本地规则修复率计算异常已忽略: {type(e).__name__}: {e}")
+            return getattr(self, "_m94_lr_cache", None)
+        self._m94_lr_cache = _rate
+        self._m94_lr_cache_ts = _now
+        return _rate
 
     def llm_dependency_ratio(self) -> float:
         """LLM 依赖度 = llm / (llm + local)；无样本时返回 0.0。"""
@@ -149,6 +283,11 @@ class LLMDependencyMetrics:
 
     def get_snapshot(self) -> dict[str, Any]:
         """当前完整指标快照（供面板/日志/持久化）。"""
+        # ★第94批 T-94c：`evolution_local_rule_rate` 可能触发补丁库文件读（带 60s
+        #   缓存），必须在**取锁之前**算好 —— 否则在锁内做 IO 会阻塞高频 `_bump`
+        #   （埋点热路径）。
+        _m94_lr_rate = self.evolution_local_rule_rate()
+        _m94_overall = self.overall_llm_share()
         with self._lock:
             return {
                 "started_at": self._started_at,
@@ -160,8 +299,11 @@ class LLMDependencyMetrics:
                     "search_total": int(sum(self._counters.get("search_count", {}).values())),
                     "digestion_total": int(sum(self._counters.get("digestion_count", {}).values())),
                     "total_requests": self.total_requests(),
+                    "answer_requests": self.answer_requests(),
                     "llm_dependency_ratio": self.llm_dependency_ratio(),
                     "self_sufficiency_score": self.self_sufficiency_score(),
+                    "overall_llm_share": _m94_overall,
+                    "evolution_local_rule_rate": _m94_lr_rate,
                 },
                 "history": list(self._history),
             }

@@ -135,8 +135,12 @@ class TestInfluxDBStore(unittest.TestCase):
         self.assertEqual(rp["1h_agg"], "365d")
 
     def test_18_token_not_hardcoded(self):
-        """Token 不硬编码。"""
-        self.assertEqual(self.store._token, "")
+        """Token 不硬编码：隔离宿主 setx 的真实 INFLUXDB_TOKEN 后，默认应为空。"""
+        from unittest import mock
+        from nucleus.timeseries_store.influxdb_store import InfluxDBStore
+        with mock.patch.dict(os.environ, {"INFLUXDB_TOKEN": ""}):
+            _store = InfluxDBStore(token="")
+        self.assertEqual(_store._token, "")
 
     def test_19_config_present(self):
         """InfluxDB 配置齐全。"""
@@ -300,8 +304,9 @@ class TestT4Carryover(unittest.TestCase):
     """T4: 冷热加载 + FAISS 对接 + KAL 调用点。"""
 
     def test_42_hot_cold_config(self):
-        """冷热加载配置存在且默认开。"""
-        self.assertTrue(config.SNAPSHOT_HOT_COLD_LOAD)
+        """冷热加载配置键存在；第80批 T1 止血后默认关（_m70 反向地雷，回填消费方实现前严禁重开）。"""
+        self.assertTrue(hasattr(config, "SNAPSHOT_HOT_COLD_LOAD"))
+        self.assertFalse(config.SNAPSHOT_HOT_COLD_LOAD)
         self.assertTrue(config.ENABLE_FAISS_FAST_OPS)
         self.assertTrue(config.ENABLE_KAL_CALL_SITES)
 

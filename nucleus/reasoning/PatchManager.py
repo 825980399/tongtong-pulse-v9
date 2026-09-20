@@ -77,6 +77,250 @@ def _m54_auto_apply_on() -> bool:
         return False
 
 
+# ★第89批 T-89a：LLM 补丁完整性「最低相似度」阈值（改造前硬编码 0.5）。
+_M89_PATCH_MIN_SIMILARITY = 0.3
+# ★第89批 T-89a：与阈值并列的「长度下限」（modified 不得短于 original 的 1/3；0 = 关闭）。
+_M89_PATCH_MIN_LEN_RATIO = 1.0 / 3.0
+# 改造前的阈值（开关关闭时逐字回退到此值）
+_M89_PATCH_MIN_SIMILARITY_LEGACY = 0.5
+
+
+def _m89_patch_sim_switch_on() -> bool:
+    """★第89批 T-89a 灰度开关：LLM 补丁完整性阈值调整（含长度下限）是否启用。
+
+    开启（默认）→ 相似度阈值 0.3 + 长度下限 1/3；
+    关闭 → 相似度阈值 0.5 且无长度下限（**逐字**回到第89批前行为），零回归。
+
+    默认值内联在本模块（遵守本批红线「不改 config.py 开关」）；
+    每次调用重新 ``import config`` → 改配置即时生效，无需重启框架。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M89_PATCH_SIM_THRESHOLD", True))
+    except Exception as _e:
+        _module_logger.debug(
+            f"[补丁完整性] 阈值开关读取失败，按默认(启用)处理: {type(_e).__name__}: {_e}")
+        return True
+
+
+def _m89_min_similarity() -> float:
+    """★第89批 T-89a：读取 LLM 补丁最低相似度阈值（开关关 → 0.5，改造前值）。
+
+    阈值下调依据（实测）：
+      · 过闸的 3 个真实代码补丁按本函数同口径复算 = 0.5137 / **0.5006** / 0.5774
+        （`organs/body/PulseLiver.py:_m70_kal_node_count` 距 0.5 仅 **0.0006**）；
+      · 0.5 对「LLM 输出整段替换代码」这一形态过紧——合法的局部改写（保留了原文
+        约 69% 内容却新增大量代码）ratio 会自然落到 0.5 附近，抖动即误杀。
+    """
+    if _m89_patch_sim_switch_on():
+        return _M89_PATCH_MIN_SIMILARITY
+    return _M89_PATCH_MIN_SIMILARITY_LEGACY
+
+
+def _m89_len_floor() -> float:
+    """★第89批 T-89a：读取「长度下限」比值（开关关 → 0.0 = 不启用）。
+
+    为什么阈值下调必须**同时**补长度下限（见 `_check_llm_patch_completeness` 关3b）：
+    相似度是**对称**指标，对「modified 远短于 original」的截断形态不敏感；
+    只降阈值会在长方法上放行「删掉 80% 方法体」的补丁。
+    """
+    if _m89_patch_sim_switch_on():
+        return _M89_PATCH_MIN_LEN_RATIO
+    return 0.0
+
+
+# ★第90批 T-90a：LLM 补丁「字段契约」必填校验（关0）。
+#   为什么必须单列一关（而不是靠关1/关3 顺带拦下）：
+#     · 关1 的判据是 `not _mod_norm or _mod_norm == _orig_norm` ——
+#       original 为空、modified 非空时 **关1 通过**；
+#     · 关3 才以 `ratio(("", mod)) == 0.0 < 阈值` 拦下，报的却是
+#       「与原文相似度过低(0.00 < 0.3)」⇒ 把「字段缺失」误报成「内容残缺」；
+#     · 关3 内部还有一段 `except: pass`（相似度计算失败不阻断），关3b 又要求
+#       `_orig_norm` 非空且 `_m89_len_floor() > 0` —— 三者叠加时，空 original_code
+#       的补丁可**同时绕过关3 与关3b**。
+#   ⇒ 关0 把「字段缺失」这条判据**结构性**固定下来，与任何灰度开关/阈值无关。
+_M90_PATCH_REQUIRED_FIELDS = ("original_code", "modified_code")
+
+
+def _m90_patch_field_contract_on() -> bool:
+    """★第90批 T-90a 灰度开关：补丁字段契约必填校验（关0）是否启用。
+
+    开启（默认）→ `_check_llm_patch_completeness` 先校验 original_code /
+    modified_code 非空，缺失即返回带**字段名**的明确原因；
+    关闭 → 逐字回到第90批前行为（缺失字段由关1/关3 以别的理由拦下）。
+
+    默认值内联本模块（遵守本批红线「不改 config.py 开关」）；
+    每次调用重新 ``import config`` → 改配置即时生效，无需重启框架。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M90_PATCH_FIELD_CONTRACT", True))
+    except Exception as _e:
+        _module_logger.debug(
+            f"[补丁字段契约] 开关读取失败，按默认(启用)处理: {type(_e).__name__}: {_e}")
+        return True
+
+
+def _m90_missing_patch_fields(patch: dict) -> list:
+    """返回补丁中「缺失或为空」的必填字段名列表（空列表 = 契约完整）。"""
+    _miss = []
+    for _f in _M90_PATCH_REQUIRED_FIELDS:
+        if not str(patch.get(_f, "") or "").strip():
+            _miss.append(_f)
+    return _miss
+
+
+# ★第92批 T-92c/T-92d：验证侧两道**防御性**结构化关（任务书要求默认**关闭**，先观察一批）。
+#   两者都只做「拒绝」判定，不改任何既有放行逻辑 ⇒ 关闭时逐字回到第91批末行为。
+_M92_BASE_INDENT_GUARD_DEFAULT = False
+_M92_AST_STRUCT_GUARD_DEFAULT = False
+#   T-92d 判据：类方法总数缩水**超过**该比例即拒绝。
+_M92_STRUCT_SHRINK_RATIO = 0.10
+
+
+def _m92_base_indent_guard_on() -> bool:
+    """★第92批 T-92c 灰度开关：验证侧「基础缩进相等」结构化关。
+
+    开启 → `_verify_in_copy` 在写副本前要求
+    `base(modified_code) == base(original_code)`，不等即拒绝
+    （stage=`base_indent_guard_failed`）；
+    关闭（默认）→ 逐字回到第91批末行为，零回归。
+
+    为什么需要（T0 实测根因）：`_verify_in_copy` 的
+    `modified_full = full_content.replace(original_code, modified_code)`
+    是**原位整段替换**，对缩进一字不改 ⇒ base 不一致时替换结果**仍是合法
+    Python**（`ast.parse` / `compile` / `py_compile` / `import` 全部放行），
+    却会把类体/函数体**提前终止**。第91批只在**构造侧**对齐（三个构造点），
+    本关是**验证侧**兜底。
+
+    默认值为 False（关闭）是任务书要求：防御性校验先观察一批，
+    避免对既有补丁链产生未评估的行为变化。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M92_PATCH_BASE_INDENT_GUARD",
+                            _M92_BASE_INDENT_GUARD_DEFAULT))
+    except Exception as _e:
+        _module_logger.debug(
+            f"[补丁基础缩进关] 开关读取失败，按默认(关闭)处理: {type(_e).__name__}: {_e}")
+        return _M92_BASE_INDENT_GUARD_DEFAULT
+
+
+def _m92_ast_struct_guard_on() -> bool:
+    """★第92批 T-92d 灰度开关：验证侧「AST 结构不变量」关。
+
+    开启 → `_verify_in_copy` 在写副本前统计**类方法总数**，若
+    `after < before * (1 - _M92_STRUCT_SHRINK_RATIO)` 即拒绝
+    （stage=`ast_structure_guard_failed`）；
+    关闭（默认）→ 逐字回到第91批末行为，零回归。
+
+    为什么需要（第91d 事故）：LLM 补丁把类方法**改写成模块级函数**
+    （original 基础缩进 8 → modified 0），`ast.parse` / `compile` /
+    `import` **全部放行** —— 「语法合法 ≠ 结构未退化」。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M92_PATCH_AST_STRUCT_GUARD",
+                            _M92_AST_STRUCT_GUARD_DEFAULT))
+    except Exception as _e:
+        _module_logger.debug(
+            f"[补丁结构关] 开关读取失败，按默认(关闭)处理: {type(_e).__name__}: {_e}")
+        return _M92_AST_STRUCT_GUARD_DEFAULT
+
+
+def _m92_base_indent(code: str) -> int:
+    """代码片段的**基础缩进宽度** = 首个**可执行行**的前导空白宽度（tab 按 4 展开）。
+
+    ★口径必须与第91批 `SafeEvolutionExecutor._m91_base_indent` **完全一致**
+    （构造侧与验证侧用同一把尺子），故**优先复用同一实现**；只有在 import
+    失败时才用下面的本地等价实现兜底（等价性由 m92 门控单测交叉断言）。
+
+    为什么跳过**空行与纯注释行**：第91批 T0 实测，真实 LLM 补丁常见形态是
+    「col 0 前置模块级注释/import + 保留原缩进的方法体」，例如
+    `patch_llm_1789462016_8789` 首行是 col 0 注释而方法体仍在 8；
+    Python 词法器**不把注释当作缩进层级** ⇒ 首行注释 col 0 无害。
+    按「首个非空行」算会把 base 误判为 0。
+    """
+    if not code:
+        return -1
+    try:
+        from nucleus.reasoning.SafeEvolutionExecutor import (
+            SafeEvolutionExecutor as _SEE,
+        )
+        _fn = getattr(_SEE, "_m91_base_indent", None)
+        if callable(_fn):
+            return int(_fn(str(code)))
+    except Exception:
+        pass
+    for _ln in str(code).replace("\r\n", "\n").split("\n"):
+        _s = _ln.strip()
+        if not _s or _s.startswith("#"):
+            continue
+        return len(_ln[: len(_ln) - len(_ln.lstrip(" \t"))].expandtabs(4))
+    return -1
+
+
+def _m92_count_class_methods(src: str):
+    """→ (类方法总数, 类总数)；源码无法解析返回 ``None``。
+
+    ★为什么是「ClassDef 的**直接**函数成员」而不是 `ast.walk` 全量函数：
+    第91d 事故的形态是把类方法 dedent 成**模块级函数**或**嵌套进其它函数**
+    —— 全文件的 `FunctionDef` 总数**一个不少**，只有「类的方法数」会掉。
+    用全量函数计数会**完全漏判**（T0 实测 `tmp/m92_t0d.txt`：PulseInnerWorld
+    `ast.walk` 函数数基本不变，类方法 368 → 271）。
+    """
+    try:
+        _tree = ast.parse(src, filename="<m92-class-method-counter>")
+    except SyntaxError:
+        return None
+    _methods = 0
+    _classes = 0
+    _stack = [_tree]
+    while _stack:
+        _nd = _stack.pop()
+        for _ch in ast.iter_child_nodes(_nd):
+            if isinstance(_ch, ast.ClassDef):
+                _classes += 1
+                _methods += len([
+                    _y for _y in _ch.body
+                    if isinstance(_y, (ast.FunctionDef, ast.AsyncFunctionDef))
+                ])
+                _stack.append(_ch)
+    return _methods, _classes
+
+
+def _m92_ast_struct_guard(before_src: str, after_src: str):
+    """T-92d 判据：比较补丁前后「类方法总数」。
+
+    → ``None`` = 本关不适用（任一侧无法解析，交由既有语法/编译关处置）；
+      否则 ``{"ok": bool, "before": int, "after": int, "ratio": float, "reason": str}``。
+
+    只在**缩水**时判定（增/平一律放行）；`before == 0` 亦放行（无方法可失）。
+    纯函数、无副作用，便于单测直接调用与先红后绿取证。
+    """
+    _b = _m92_count_class_methods(before_src)
+    _a = _m92_count_class_methods(after_src)
+    if _b is None or _a is None:
+        return None
+    _nb, _na = _b[0], _a[0]
+    if _nb <= 0 or _na >= _nb:
+        return {"ok": True, "before": _nb, "after": _na, "ratio": 0.0, "reason": ""}
+    _drop = (_nb - _na) / float(_nb)
+    if _drop <= _M92_STRUCT_SHRINK_RATIO:
+        return {"ok": True, "before": _nb, "after": _na, "ratio": _drop, "reason": ""}
+    return {
+        "ok": False,
+        "before": _nb,
+        "after": _na,
+        "ratio": _drop,
+        "reason": (
+            f"类方法数量异常缩水（未应用）: {_nb} → {_na}"
+            f"（-{_drop:.1%} > {_M92_STRUCT_SHRINK_RATIO:.0%} 阈值），"
+            f"疑似补丁把类方法改写成模块级/嵌套函数（语法仍合法但是结构破坏）"
+        ),
+    }
+
+
 class PatchManager:
     def __init__(self, project_root: str):
         self._project_root = project_root
@@ -117,6 +361,383 @@ class PatchManager:
             str(patch.get("repair_source", "") or ""),
         )
 
+    # ========== ★主线第80批 T7 (P0-3)：核心文件免签改写统一闸门 ==========
+    #   单一路由，供 save_pending_patch（入队覆写）/ 反思直批(main.py) /
+    #   落地(apply_all_pending) 共用。核心性单一真源为 SafeEvolutionExecutor._is_core_file。
+    _M80_CORE_FILE_MARKERS = (
+        "main.py", "config.py",
+        "/base/", "base/",
+        "nucleus/pulse/", "nucleus/field/", "nucleus/mnemosyne/",
+        "nucleus/reasoning/", "nucleus/security/", "nucleus/evolution/",
+        # ★T7-3：安全/宪法相关器官（精神宪法/人格内核/伦理）
+        "PulseSpiritConstitution.py", "PulsePersonalityKernel.py", "PulseEthics.py",
+    )
+
+    @staticmethod
+    def _m80_is_core_file(file_path: str) -> bool:
+        """★T7(P0-3)：核心文件判定——优先复用 SafeEvolutionExecutor 单一真源。"""
+        try:
+            from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+            return SafeEvolutionExecutor._is_core_file(file_path or "")
+        except Exception:
+            _norm = (file_path or "").replace("\\", "/")
+            return any(m in _norm for m in PatchManager._M80_CORE_FILE_MARKERS)
+
+    @staticmethod
+    def _m80_auto_apply_enabled(evo_cfg: dict | None = None) -> bool:
+        """★T7(P0-3)：读取 auto_apply_enabled 总开关（默认 False = 安全红线）。"""
+        if evo_cfg is None:
+            try:
+                import config as _c
+                evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
+            except Exception:
+                return False
+        return bool(evo_cfg.get("auto_apply_enabled", False))
+
+    @staticmethod
+    def _m80_allow_core_auto_apply(evo_cfg: dict | None = None) -> bool:
+        """★T7(P0-3)：核心文件自动批准专用红线开关（默认 False = 禁止核心自动应用）。
+        与 auto_apply_enabled 分离：即便总开关打开，核心文件仍须 allow_core_auto_apply=True
+        才放行（仅紧急回退用）；落地双判定以此为准。
+        """
+        if evo_cfg is None:
+            try:
+                import config as _c
+                evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
+            except Exception:
+                return False
+        return bool(evo_cfg.get("allow_core_auto_apply", False))
+
+    @staticmethod
+    def _m80_gate_blocked(patch: dict, evo_cfg: dict | None = None) -> bool:
+        """★T7(P0-3)：免签改写闸门——命中核心文件或总开关关闭 → 拦截(True)。
+        与 status==verified 组合：verified 补丁一律禁止升 approved。
+        """
+        if PatchManager._m80_is_core_file(patch.get("file", "")):
+            return True
+        if not PatchManager._m80_auto_apply_enabled(evo_cfg):
+            return True
+        return False
+
+    @staticmethod
+    def _m85_local_low_risk_auto_apply(patch: dict, evo_cfg: dict | None = None) -> bool:
+        """★第85批 T-85d（D84-4）：本地生成的低风险补丁是否放行自动应用。
+
+        ★口径按**生产实测字段**（任务书给的 ``source="local"`` /
+        ``confidence>=0.9`` / ``risk_level="low"`` 与实测不符，见交付报告
+        「任务书偏差清单」——实测 64 条：source 恒为 ``local_rule``、
+        confidence 为**字符串枚举** ``high``、risk_level 为**中文** ``低``）：
+            source      == "local_rule"
+            confidence  == "high"
+            risk_level  == "低"
+        且必须同时满足：
+            * **非核心文件** —— 沿用既有红线（``_m80_is_core_file``），本批不绕过；
+            * **非学习尝试补丁** —— ``learning_attempt=True`` /
+              ``source="local_learning"`` → 任务书 §T-85a.3「默认不自动应用」。
+
+        ★LLM 补丁（``source="llm"``）一律返回 False —— 即使 auto_approved=True
+        也仍走人工审批（任务书 §T-85d.2）。
+        ★开关 ``EVOLUTION_CONFIG["local_auto_apply_enabled"]``（默认 True）
+        关闭即整条放行失效（零副作用回退）。
+        """
+        if not isinstance(patch, dict):
+            return False
+        if evo_cfg is None:
+            try:
+                import config as _c
+                evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
+            except Exception:
+                return False
+        if not isinstance(evo_cfg, dict):
+            return False
+        try:
+            if not bool(evo_cfg.get("local_auto_apply_enabled", True)):
+                return False
+            if patch.get("learning_attempt"):
+                return False
+            if str(patch.get("source", "")) != "local_rule":
+                return False
+            if str(patch.get("confidence", "")) != "high":
+                return False
+            if str(patch.get("risk_level", "")) != "低":
+                return False
+            if PatchManager._m80_is_core_file(str(patch.get("file", ""))):
+                return False
+            return True
+        except Exception as _e:
+            _module_logger.debug(
+                "[补丁自动审批][M85] 本地放行判据异常，按保守(不放行)处理: %s: %s",
+                type(_e).__name__, _e)
+            return False
+
+    # ========== ★主线第94批 T-94a（P0）：待审批队列老化策略 ==========
+    #   背景（第93批只读诊断）：14 轮「发现 168 / 修复 4」= 2.38%；空转主因
+    #   「已有待审批」48 次（28.6%，单项最大）= 补丁入 pending 后等人工裁决，
+    #   而自动化流程无人裁决 ⇒ 永久 pending ⇒ 同位置反复被跳过。
+    #   ★本批 T0 实测（重要前提修正）：pending 队列 12 条**全部 source=llm**，
+    #   local_rule **0 条** —— 因为 local_rule 在**入队时**已被
+    #   `_m85_local_low_risk_auto_apply` 放行为 approved（65 条 local_rule
+    #   全在 patch_history 且 applied=True）。故本策略的放行判据在真实队列上
+    #   命中 0 条，属「纵深防御 + 未来场景」。已记 D94-1 上报星轨裁决。
+
+    _M94_AGING_DEFAULT_MAX_COUNT = 20        # pending 条数阈值（任务书建议 20 条）
+    _M94_AGING_DEFAULT_MAX_HOURS = 24.0      # 未裁决时长阈值（任务书建议 24 小时）
+
+    # ★T-94a：任务书点名的「上帝文件」排除（只加严，不放松）——详见 `_m94_is_god_file`
+    _M94_GOD_FILE_MARKERS = ("PulseInnerWorld.py",)
+
+    @staticmethod
+    def _m94_pending_aging_on() -> bool:
+        """★T-94a：老化策略总开关（``ENABLE_PENDING_QUEUE_AGING``，默认 False）。
+
+        关闭 → 全链路零行为变化（不读队列、不改状态、不写盘）。
+        """
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_PENDING_QUEUE_AGING", False))
+        except Exception:
+            return False
+
+    @staticmethod
+    def _m94_aging_max_count() -> int:
+        """★T-94a：pending 条数阈值（可配，默认 20）。"""
+        try:
+            import config as _c
+            return max(1, int(getattr(_c, "PENDING_AGING_MAX_COUNT",
+                                      PatchManager._M94_AGING_DEFAULT_MAX_COUNT)))
+        except Exception:
+            return PatchManager._M94_AGING_DEFAULT_MAX_COUNT
+
+    @staticmethod
+    def _m94_aging_max_hours() -> float:
+        """★T-94a：未裁决时长阈值（小时，可配，默认 24.0）。"""
+        try:
+            import config as _c
+            return max(0.0, float(getattr(_c, "PENDING_AGING_MAX_AGE_HOURS",
+                                          PatchManager._M94_AGING_DEFAULT_MAX_HOURS)))
+        except Exception:
+            return PatchManager._M94_AGING_DEFAULT_MAX_HOURS
+
+    @staticmethod
+    def _m94_patch_age_hours(patch: dict, now: float | None = None) -> float | None:
+        """★T-94a：补丁在 pending 中的停留时长（小时）。
+
+        ★口径与 `_is_stale`（第54批）保持一致的时间戳候选集，并**追加**
+        ``saved_at``（`save_pending_patch` 入队时必写，比 generated_at 更贴近
+        「等待裁决」的起点）。取不到任何时间戳 → ``None``（**不误伤**历史补丁）。
+        """
+        if not isinstance(patch, dict):
+            return None
+        _now = float(time.time() if now is None else now)
+        for _k in ("saved_at", "created_at", "submitted_at", "timestamp",
+                   "generated_at"):
+            _t = patch.get(_k)
+            if isinstance(_t, (int, float)) and not isinstance(_t, bool) and _t > 0:
+                return max(0.0, (_now - float(_t)) / 3600.0)
+        return None
+
+    @staticmethod
+    def _m94_aging_eligible(patch: dict) -> bool:
+        """★T-94a 放行判据（纯函数，逐条对齐任务书 §T-94a.1）：
+
+            source           == "local_rule"（本地规则来源）
+            非核心文件       —— 复用 `_m80_is_core_file` 单一真源
+                              **再叠加** `_m94_is_god_file`（任务书点名上帝文件）
+            runtime_verified is True（已通过运行期验证）
+            risk_level       == "低"
+
+        ★字段口径按**生产实测**（与第85批 T-85d 同型）：实测 risk_level 为**中文**
+        ``"低"``、source 为 ``"local_rule"``；任务书未给字段字面量，此处以实测为准。
+        ★非 dict / 判据异常 → **一律返回 False**（保守：不放行）。
+        ★``file`` 缺失 → False（保守：无路径信息不可判定是否非核心）。
+        """
+        if not isinstance(patch, dict):
+            return False
+        try:
+            if str(patch.get("source", "")) != "local_rule":
+                return False
+            if patch.get("runtime_verified") is not True:
+                return False
+            if str(patch.get("risk_level", "")) != "低":
+                return False
+            _fp = str(patch.get("file", "") or "")
+            if not _fp:
+                return False          # ★无路径信息 → 不放行（保守）
+            if PatchManager._m80_is_core_file(_fp):
+                return False
+            if PatchManager._m94_is_god_file(_fp):
+                return False
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _m94_is_god_file(file_path: str) -> bool:
+        """★T-94a：任务书点名的「上帝文件」排除（**只加严，不放松**）。
+
+        任务书 §T-94a.1 原文：「非核心文件（排除 organs/brain/PulseInnerWorld.py
+        等上帝文件）」。而既有单一真源 `_is_core_file` / `_m80_is_core_file` 的
+        ``_core_markers`` **不含** ``organs/`` ⇒ 该上帝文件会被判为「非核心」。
+        此处叠加一层**薄**排除，且**仅在 M94 放行判据内生效** ——
+        *不改* `_is_core_file` 全局语义（免签闸门等既有链路零影响）。
+        判定异常 / 无路径信息 → True（保守：视为受保护）。
+        """
+        try:
+            _norm = str(file_path or "").replace("\\", "/")
+            if not _norm:
+                return True          # 无路径信息 → 保守视为受保护
+            return any(m in _norm for m in PatchManager._M94_GOD_FILE_MARKERS)
+        except Exception:
+            return True
+
+    @staticmethod
+    def _m94_aging_should_run(pending: list,
+                              now: float | None = None) -> tuple[bool, str]:
+        """★T-94a：是否达到老化触发条件。
+
+        任务书 §T-94a.1：「pending 超过 N 条（建议 20）**或**超过 T 小时（建议 24）
+        未裁决」⇒ 二者取**或**。返回 ``(是否触发, 原因串)``，原因串供日志留痕。
+        """
+        if not isinstance(pending, list) or not pending:
+            return False, "empty"
+        _n = len([p for p in pending if isinstance(p, dict)])
+        _maxc = PatchManager._m94_aging_max_count()
+        if _n >= _maxc:
+            return True, "count=%d>=%d" % (_n, _maxc)
+        _ages = [a for a in (PatchManager._m94_patch_age_hours(p, now)
+                             for p in pending) if isinstance(a, float)]
+        _maxh = PatchManager._m94_aging_max_hours()
+        if _ages and max(_ages) >= _maxh:
+            return True, "max_age=%.1fh>=%.1fh" % (max(_ages), _maxh)
+        return False, "below_threshold(n=%d,max_age=%s)" % (
+            _n, ("%.1fh" % max(_ages)) if _ages else "unknown")
+
+    def pending_aging_preview(self, now: float | None = None) -> dict[str, Any]:
+        """★T-94a：只读预览——当前 pending 队列在老化策略下会放行哪些补丁。
+
+        **不写盘、不改状态**；供诊断 / 交付报告 / 单测使用。
+        ★``triggered`` 为**假设语义**：「若开关开启，当前队列是否会达阈值」，
+        与 ``enabled``（开关真实状态）相互独立 —— 便于开关关闭时评估影响面。
+        """
+        _out: dict[str, Any] = {
+            "enabled": self._m94_pending_aging_on(), "triggered": False,
+            "reason": "", "checked": 0, "eligible": 0, "released": [],
+            "max_count": self._m94_aging_max_count(),
+            "max_hours": self._m94_aging_max_hours(),
+        }
+        try:
+            _pending = self._load_patch_list(self._pending_file)
+        except Exception as _e:
+            _out["reason"] = "load_failed:%s" % type(_e).__name__
+            return _out
+        if not isinstance(_pending, list):
+            return _out
+        _out["checked"] = len(_pending)
+        _should, _why = self._m94_aging_should_run(_pending, now)
+        _out["triggered"] = bool(_should)
+        _out["reason"] = _why
+        # ★条数触发=队列拥堵 ⇒ 放行全部合格项；时长触发 ⇒ 只放行「自身也超期」的
+        _by_count = str(_why).startswith("count=")
+        _maxh = self._m94_aging_max_hours()
+        for _p in _pending:
+            if not isinstance(_p, dict):
+                continue
+            if str(_p.get("status", "")) == "approved":
+                continue
+            if not self._m94_aging_eligible(_p):
+                continue
+            if not _by_count:
+                _age = self._m94_patch_age_hours(_p, now)
+                if _age is None or _age < _maxh:
+                    continue
+            _out["eligible"] += 1
+            _out["released"].append({
+                "id": _p.get("id"), "file": _p.get("file"),
+                "method": _p.get("method"),
+                "age_h": self._m94_patch_age_hours(_p, now),
+            })
+        return _out
+
+    def _m94_apply_pending_aging(self, pending: list,
+                                 now: float | None = None) -> dict[str, Any]:
+        """★T-94a：对 pending 队列执行老化放行（就地改 status 并**落盘**）。
+
+        * 开关关闭（默认）→ 立即返回 ``enabled=False``，**不触碰**任何补丁；
+        * 未达阈值 → 返回 ``triggered=False``，同样不改状态；
+        * 达阈值 → 对 `_m94_aging_eligible` 命中的补丁置 ``status='approved'``
+          （+ ``aged_approved`` / ``aged_approved_at`` / ``aged_reason`` 留痕），
+          使后续 ``only_approved=True`` 的过滤能捞到它们。
+          ★放行集合按触发器区分：**条数触发**（队列拥堵）放行全部合格项；
+          **时长触发**只放行「自身停留也 ≥ max_hours」的合格项 ——
+          避免队列里刚入队的合格补丁被顺手放行（违背「老化」本意）。
+
+        ★落盘用**浅拷贝**列表：`_save_patch_list` 会把 ``file`` 归一化为相对路径
+        （原地改写元素），若直接传原列表会污染后续 apply 循环依赖的绝对路径。
+        """
+        _out: dict[str, Any] = {
+            "enabled": False, "triggered": False, "reason": "",
+            "released": [], "eligible": 0, "checked": 0, "persisted": False,
+        }
+        if not self._m94_pending_aging_on():
+            return _out
+        _out["enabled"] = True
+        if not isinstance(pending, list) or not pending:
+            _out["reason"] = "empty"
+            return _out
+        _out["checked"] = len(pending)
+        _should, _why = self._m94_aging_should_run(pending, now)
+        _out["reason"] = _why
+        if not _should:
+            return _out
+        _out["triggered"] = True
+        _now = float(time.time() if now is None else now)
+        # ★条数触发=队列拥堵 ⇒ 放行全部合格项；时长触发 ⇒ 只放行「自身也超期」的
+        _by_count = str(_why).startswith("count=")
+        _maxh = self._m94_aging_max_hours()
+        _released = []
+        for _p in pending:
+            if not isinstance(_p, dict):
+                continue
+            if str(_p.get("status", "")) == "approved":
+                continue
+            if not self._m94_aging_eligible(_p):
+                continue
+            if not _by_count:
+                _age_h = self._m94_patch_age_hours(_p, now)
+                if _age_h is None or _age_h < _maxh:
+                    continue
+            _p["status"] = "approved"
+            _p["aged_approved"] = True
+            _p["aged_approved_at"] = _now
+            _p["aged_reason"] = _why
+            _released.append({
+                "id": _p.get("id"), "file": _p.get("file"),
+                "method": _p.get("method"),
+                "age_h": self._m94_patch_age_hours(_p, now),
+            })
+        _out["eligible"] = len(_released)
+        _out["released"] = _released
+        if _released:
+            try:
+                _payload = [dict(_p) if isinstance(_p, dict) else _p
+                            for _p in pending]
+                _out["persisted"] = bool(self._save_patch_list(
+                    self._pending_file, _payload))
+            except Exception as _e:
+                _module_logger.warning(
+                    "[补丁老化][M94] 释放结果落盘失败: %s: %s",
+                    type(_e).__name__, _e)
+            _module_logger.info(
+                "[补丁老化][M94] 触发(%s)：放行 %d 条合格补丁为 approved"
+                "（判据 local_rule+非核心+runtime_verified+低风险）",
+                _why, len(_released))
+        else:
+            _module_logger.info(
+                "[补丁老化][M94] 触发(%s)但无合格补丁可放行"
+                "（判据 source=local_rule / 非核心 / runtime_verified=True / risk_level=低）",
+                _why)
+        return _out
+
     def save_pending_patch(self, patch: dict[str, Any]):
         """
         保存待应用的补丁到队列。
@@ -131,6 +752,15 @@ class PatchManager:
             patch["reason"] = patch.get("description", "未说明修改原因")
         if "source_diagnosis" not in patch:
             patch["source_diagnosis"] = patch.get("source", "未知诊断源")
+
+        # ★主线第80批 T7 (P0-3)：顶部闸门——核心文件补丁禁止自动 approved。
+        #   防御「反思直批」等旁路在入队前直接置 approved（main.py:3480 反射改进版、
+        #   PulseCodeLearner apply_now 过滤均依赖此兜底）。已 verified 的保持 verified。
+        if PatchManager._m80_is_core_file(patch.get("file", "")) and patch.get("status") == "approved":
+            patch["status"] = "verified"
+            _module_logger.warning(
+                f"[补丁入队][T7] 核心文件补丁禁止自动approved，已回退verified: "
+                f"{patch.get('file','')}:{patch.get('method','')}")
 
         # ★D4修复（P2，2026-09-05，星轨 PHASE6 列为第六批必做第 3 项）：
         #   规则式补丁（repair_source="local_rule"）从未经过 AestheticJudge 评分，
@@ -200,15 +830,39 @@ class PatchManager:
             _trust_val_a1 = float(patch.get("trust_score", 0) or 0)
         except (TypeError, ValueError):
             _trust_val_a1 = 0.0
-        _risk_ok_a1 = isinstance(_risk_val, (int, float)) and _risk_val <= _max_risk_a1
-        _trust_ok_a1 = _trust_val_a1 >= _min_trust_a1
+        # ★M85-4（第85批 T-85d / D84-4）：本地低风险补丁放行自动应用。
+        #   三道既有门槛（风险/信任/免签总开关）对本地补丁放宽，
+        #   但核心文件红线与 LLM 审批要求**不变**。
+        _m85_allow = PatchManager._m85_local_low_risk_auto_apply(patch, _evo_cfg_a1)
+        _risk_ok_a1 = isinstance(_risk_val, (int, float)) and (
+            _risk_val <= _max_risk_a1 or _m85_allow)
+        _trust_ok_a1 = (_trust_val_a1 >= _min_trust_a1) or _m85_allow
         if _risk_ok_a1 and _trust_ok_a1:
-            patch["status"] = "approved"
-            patch["auto_approved"] = True
-            _module_logger.info(
-                f"[补丁自动审批] 低风险补丁已自动审批: "
-                f"{patch.get('file','')}:{patch.get('method','')} "
-                f"risk={_risk_raw}(<={_max_risk_a1}), trust={_trust_val_a1}(>={_min_trust_a1})")
+            # ★主线第80批 T7 (P0-3)：免签改写闸门——verified 或核心文件或总开关关闭，
+            #   禁止升 approved；核心/关闭场景下未 verified 的补丁强制置 verified 待人工。
+            # ★M85-4：总开关关闭时，本地低风险补丁仍放行（_m85_allow 认定）；
+            #   核心文件由 _m85_allow 内部已排除，此处再叠加一次显式红线判定。
+            _blocked = (patch.get("status") == "verified") or (
+                PatchManager._m80_gate_blocked(patch, _evo_cfg_a1)
+                and not _m85_allow) or PatchManager._m80_is_core_file(
+                    str(patch.get("file", "")))
+            if _blocked:
+                if patch.get("status") != "verified":
+                    patch["status"] = "verified"
+                _module_logger.info(
+                    f"[补丁自动审批][T7] 免签改写闸门拦截(未升approved): "
+                    f"{patch.get('file','')}:{patch.get('method','')} "
+                    f"status={patch.get('status')} "
+                    f"(verified={patch.get('status')=='verified'}, "
+                    f"core={PatchManager._m80_is_core_file(patch.get('file',''))}, "
+                    f"auto_apply={PatchManager._m80_auto_apply_enabled(_evo_cfg_a1)})")
+            else:
+                patch["status"] = "approved"
+                patch["auto_approved"] = True
+                _module_logger.info(
+                    f"[补丁自动审批] 低风险补丁已自动审批: "
+                    f"{patch.get('file','')}:{patch.get('method','')} "
+                    f"risk={_risk_raw}(<={_max_risk_a1}), trust={_trust_val_a1}(>={_min_trust_a1})")
         else:
             _module_logger.debug(
                 f"[补丁入队] 未自动审批(转人工): {patch.get('file','')}:{patch.get('method','')} "
@@ -443,6 +1097,44 @@ class PatchManager:
             return False
         return False
 
+    def find_blocking_pending_patch(self, file_path: str, method_name: str,
+                                    now: float | None = None) -> dict | None:
+        """★T-94a.3：返回真正**阻塞再生**的待审批补丁（按补丁活性判定）。
+
+        任务书 §T-94a.3：「『已有待审批』计时器改为按补丁而非按问题位置」。
+        实现语义（★与 `has_pending_patch_for` 的差别）：
+
+        * 老化开关**关闭**（默认）→ 与 `has_pending_patch_for` **完全一致**
+          （任一 file+method 匹配即算阻塞），零行为变化；
+        * 老化开关**开启** → 仅在补丁仍处**老化窗口内**（未超过
+          ``PENDING_AGING_MAX_AGE_HOURS``）时才视为阻塞。超时未裁决的补丁不再永久冻结同位置的
+          再生 —— 这正是第93批测得的「已有待审批」死循环（pending 只增不减、
+          同位置问题每轮重复发现）。
+
+        ★注意：本方法**只解除阻塞**，**不做放行**；放行仍必须走
+        `_m94_aging_eligible` 的严格判据（`_m94_apply_pending_aging`）。
+        ★取不到时间戳的补丁：视为仍在窗口内（保守，不误伤）。
+        """
+        if not file_path or not method_name:
+            return None
+        try:
+            _aging = self._m94_pending_aging_on()
+            _maxh = self._m94_aging_max_hours()
+            for _p in self._load_patch_list(self._pending_file):
+                if not isinstance(_p, dict):
+                    continue
+                if (_p.get("file") != file_path
+                        or _p.get("method") != method_name):
+                    continue
+                if not _aging:
+                    return _p
+                _age = self._m94_patch_age_hours(_p, now)
+                if _age is None or _age < _maxh:
+                    return _p
+        except Exception:
+            return None
+        return None
+
     def _is_stale(self, patch: dict[str, Any]) -> bool:
         """★第54批 T3.2：补丁是否已过期（超过 PATCH_AUTO_APPROVE_STALE_DAYS 天）。
 
@@ -621,8 +1313,17 @@ class PatchManager:
         if not _path_ok:
             result["errors"].append(f"补丁路径校验失败: {_path_reason}")
             result["stage"] = "path_check_failed"
+            # ★第87批 T-87b：原告警只有原因，无法从日志判断是「哪一类补丁」出的问题
+            #   —— 实测 09-18~09-20 共 19 条**完全相同**的文案，定位一次要翻整条
+            #   补丁链路。补上来源/类型/方法/file 实值/键名清单，一眼可辨
+            #   「字段缺失（file=''）」还是「值非法（路径越界/扩展名）」。
             _module_logger.warning(
-                f"[补丁验证] 路径沙箱拒绝: {_path_reason}")
+                f"[补丁验证] 路径沙箱拒绝: {_path_reason} "
+                f"（source={patch.get('source', '')!r}, "
+                f"issue_type={patch.get('issue_type', '')!r}, "
+                f"method={patch.get('method', '')!r}, "
+                f"file={patch.get('file', '')!r}, "
+                f"keys={sorted(str(_k) for _k in patch.keys())}）")
             return result
 
         # ★策略自进化扩展(长期深化): 验证深度按历史策略效果 + 风险分级动态标记。
@@ -668,7 +1369,46 @@ class PatchManager:
                 result["stage"] = "code_not_found"
                 return result
 
+            # ★第92批 T-92c（防御性，默认关闭）：验证侧「基础缩进相等」结构化关。
+            #   原位整段替换对缩进一字不改 ⇒ base 不一致会把类体/函数体提前终止，
+            #   且替换后**语法仍合法**（既有语法/编译/导入关全部放行）。
+            #   第91批只在构造侧对齐，本关是验证侧兜底。
+            #   开关 ENABLE_M92_PATCH_BASE_INDENT_GUARD（默认关闭，先观察一批）。
+            if _m92_base_indent_guard_on():
+                _bo92 = _m92_base_indent(patch.get("original_code", ""))
+                _bm92 = _m92_base_indent(patch.get("modified_code", ""))
+                if _bo92 >= 0 and _bm92 >= 0 and _bm92 != _bo92:
+                    result["errors"].append(
+                        f"基础缩进不一致（未替换）: original={_bo92} modified={_bm92} "
+                        f"（原位替换会把类体/函数体提前终止，且语法仍合法）")
+                    result["stage"] = "base_indent_guard_failed"
+                    _module_logger.warning(
+                        f"[补丁验证] 基础缩进结构化关拒绝: original={_bo92} "
+                        f"modified={_bm92}（source={patch.get('source', '')!r}, "
+                        f"file={patch.get('file', '')!r}, "
+                        f"method={patch.get('method', '')!r}）")
+                    return result
+
             modified_full = full_content.replace(patch["original_code"], patch["modified_code"])
+
+            # ★第92批 T-92d（防御性，默认关闭）：验证侧「AST 结构不变量」关。
+            #   第91d 事故：LLM 补丁把类方法改写成模块级函数（base 8 → 0），
+            #   ast.parse / compile / py_compile / import **全部放行**
+            #   ——「语法合法 ≠ 结构未退化」。
+            #   判据：类方法总数缩水 > _M92_STRUCT_SHRINK_RATIO（10%）即拒绝。
+            #   开关 ENABLE_M92_PATCH_AST_STRUCT_GUARD（默认关闭，先观察一批）。
+            if _m92_ast_struct_guard_on():
+                _st92 = _m92_ast_struct_guard(full_content, modified_full)
+                if _st92 and not _st92["ok"]:
+                    result["errors"].append(_st92["reason"])
+                    result["stage"] = "ast_structure_guard_failed"
+                    _module_logger.warning(
+                        f"[补丁验证] 结构不变量关拒绝: 类方法 {_st92['before']} → "
+                        f"{_st92['after']}（-{_st92['ratio']:.1%}）（"
+                        f"file={patch.get('file', '')!r}, "
+                        f"method={patch.get('method', '')!r}）")
+                    return result
+
             with open(tmp_target, 'w', encoding='utf-8') as f:
                 f.write(modified_full)
             
@@ -678,13 +1418,16 @@ class PatchManager:
             try:
                 with open(tmp_target, encoding='utf-8') as f:
                     _src = f.read()
-                ast.parse(_src)
+                ast.parse(_src, filename="<llm-patch>")
                 # ★多入口验证: compile() 走完整编译，捕获 ast.parse 不报但编译期
                 #   报错的情况（future 语句位置/编码/重复等），作为第二道语法入口。
                 compile(_src, tmp_target, 'exec')
                 result["stage"] = "syntax_check_passed"
             except SyntaxError as e:
-                result["errors"].append(f"语法错误: {e}")
+                # ★第92批 T-92a（同批一致性，_m92_t92a_step3_label）：补齐异常类名，
+                #   与关2 文案同口径 —— 否则整份副本语法失败仍无法从日志区分
+                #   `TabError` / `IndentationError` / 其他。
+                result["errors"].append(f"语法错误({type(e).__name__}): {e}")
                 result["stage"] = "syntax_check_failed"
                 return result
             
@@ -946,7 +1689,8 @@ class PatchManager:
             def _sig(txt):
                 # 带缩进的方法体片段直接 ast.parse 会报 IndentationError，
                 # 解析前先 dedent 去统一缩进（与完整性检查一致的处理）。
-                _t = _ast.parse(_tw.dedent(txt))
+                _t = _ast.parse(_tw.dedent(txt),
+                                filename="<llm-patch>")
                 for _n in _ast.walk(_t):
                     if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
                             and _n.name == _method:
@@ -978,10 +1722,15 @@ class PatchManager:
     def _check_llm_patch_completeness(self, patch: dict[str, Any]) -> dict[str, Any]:
         """★PULSE-DEFECT-20260901-01 方案B：LLM 补丁完整性静态护栏。
 
-        在副本验证之前，先做三关静态检查，从源头拦截残缺/截断的补丁：
+        在副本验证之前，先做四关静态检查，从源头拦截残缺/截断的补丁：
+          0) 字段契约（★第90批 T-90a 新增）：original_code / modified_code 必须存在
+             且非空。缺失时报**字段名**，不再由关3 以「相似度过低(0.00)」伪装成
+             「内容残缺」；且本关与灰度开关无关，结构性生效；
           1) 修改内容非空、且与原文有实质差异；
-          2) 修改后代码语法可解析（ast.parse）；
-          3) 与原文的相似度不低于阈值（默认 0.5），拦截「仅剩 2%~12%」的严重残缺。
+          3) 与原文的相似度不低于阈值（第89批 T-89a 起默认 0.3，可开关回退 0.5），
+             拦截「仅剩 2%~12%」的严重残缺；
+          3b) 长度下限：修改后代码不得短于原文的 1/3（第89批 T-89a 新增，
+             与关3 并列的独立判据，防阈值下调放行「长方法被删掉大半」。
 
         返回 {"complete": bool, "reason": str}。complete=False 时 reason 说明失败原因。
         """
@@ -995,6 +1744,24 @@ class PatchManager:
         _orig_norm = _tw.dedent(_original or "").strip()
         _mod_norm = _tw.dedent(_modified or "").strip()
 
+        # 关0：字段契约（★第90批 T-90a 新增）
+        #   把「字段缺失」与「内容残缺」分开报因 —— 文案把「字段没传」伪装成
+        #   「LLM 生成残缺」，是本项目反复踩过的「错理由掩盖真因」模式
+        #   （同型处置见第87批 `_llm_no_file`、第88批 `_llm_bad_material`）。
+        #   ★零回归证明：空字段在原实现下**必然被拒**（关3 的
+        #     ratio(("", mod)) == 0.0 恒小于任何启用阈值 0.3/0.5），
+        #     本关只改「拒绝的理由」，不改任何通过/拒绝结论。
+        if _m90_patch_field_contract_on():
+            _miss = _m90_missing_patch_fields(patch)
+            if _miss:
+                return {
+                    "complete": False,
+                    "reason": (f"补丁缺少必填字段 {'、'.join(_miss)}"
+                               "（补丁字段契约不完整，非内容残缺；"
+                               "请检查补丁构造点是否传入 original_code/modified_code）"),
+                }
+
+
         # 关1：非空 + 实质差异
         if not _mod_norm or _mod_norm == _orig_norm:
             return {"complete": False, "reason": "修改内容为空或与原文完全一致"}
@@ -1004,24 +1771,62 @@ class PatchManager:
         #   需包装进虚拟函数才能正确解析；完整方法（def 开头）包装后为嵌套 def 亦合法。
         try:
             import ast as _ast
-            _ast.parse("def _wrap():\n" + _tw.indent(_mod_norm, "    "))
+            _ast.parse("def _wrap():\n" + _tw.indent(_mod_norm, "    "),
+                      filename="<llm-patch>")
         except SyntaxError as _e:
-            return {"complete": False, "reason": f"语法错误: {_e}"}
+            # ★第92批 T-92a：补上异常类名（`TabError` / `IndentationError` / ...）。
+            #   改前只写 message ⇒ 日志里 `TabError` 与 `IndentationError` 都长成
+            #   「语法错误: inconsistent use of ... / unindent does not match ...」，
+            #   无法一眼区分异常种类，排查要靠人肉读 message。
+            #   改后 `语法错误(TabError): ...`，异常种类可直接 grep。
+            return {"complete": False,
+                    "reason": f"语法错误({type(_e).__name__}): {_e}"}
 
         # 关3：相似度阈值（拦截严重残缺/截断；dedent 后对比保证可比）
         #   ★PULSE-DEFECT-20260902-01: 用整字符串对比（不用 splitlines——单行方法体
         #   时 SequenceMatcher 对 [A] vs [B] 恒为 0.0，误拦所有单行补丁）。
+        #   ★第89批 T-89a: 阈值由硬编码 0.5 改为 _m89_min_similarity()（默认 0.3，
+        #   开关 ENABLE_M89_PATCH_SIM_THRESHOLD 关闭 → 0.5，逐字回到改造前）。
+        _min_sim = _m89_min_similarity()
         try:
             import difflib
             _ratio = difflib.SequenceMatcher(None, _orig_norm, _mod_norm).ratio()
-            if _ratio < 0.5:
+            if _ratio < _min_sim:
                 return {
                     "complete": False,
-                    "reason": f"与原文相似度过低({_ratio:.2f} < 0.5)，疑似严重残缺/截断",
+                    "reason": f"与原文相似度过低({_ratio:.2f} < {_min_sim:g})，疑似严重残缺/截断",
                 }
         except Exception:
             # 相似度计算失败不阻断验证（保守放行，交给后续语法/导入关）
             pass
+
+        # 关3b：长度下限（★第89批 T-89a 新增，与关3 并列的**独立**判据）
+        #   为什么必须补：补丁是**整段替换**（PatchManager._verify_in_copy 的
+        #       modified_full = full_content.replace(original_code, modified_code)），
+        #   而关3 的相似度是**对称**指标——modified 远短于 original 时
+        #       ratio ≈ 2*len(mod) / (len(orig)+len(mod))
+        #   ⇒ 只看相似度无法区分「合法的局部改写」与「被截断的残缺」。
+        #   实测（2026-09-20 15:25:47）被判 ratio=0.09 的失败样本，
+        #   按上式反推 modified 仅剩原文 **4.7%**（= 真截断）。
+        #   阈值降到 0.3 后，len(mod) ≥ 3/17*len(orig)（≈17.6%）即可过闸：
+        #   对长方法（PulseLiver._periodic_purity_check 17089 字符）等于放行
+        #   「删掉约 82% 方法体」的补丁 ⇒ 必须补一条显式长度下限。
+        #   ★零安全回归证明：原 0.5 阈值下任何过闸补丁恒满足
+        #       len(mod) ≥ len(orig)/3
+        #   （M ≤ len(mod) ⇒ ratio ≤ 2*len(mod)/(len(orig)+len(mod))，
+        #     令其 ≥ 0.5 即得 len(mod) ≥ len(orig)/3）
+        #   ⇒ 本关**不会**拒绝任何「原阈值下可通过」的补丁，只堵住阈值下调新开的口子；
+        #     对「同长度但重叠较少」的合法改写则完全放行（这正是 T-89a 的目的）。
+        #   开关关闭时 _m89_len_floor() 返回 0.0 → 本关不生效。
+        _len_floor = _m89_len_floor()
+        if _len_floor > 0 and _orig_norm:
+            if len(_mod_norm) < len(_orig_norm) * _len_floor:  # _M89_LEN_FLOOR_FIXED
+                return {
+                    "complete": False,
+                    "reason": (
+                        f"修改后代码长度不足({len(_mod_norm)} < "
+                        f"{len(_orig_norm)} * {_len_floor:.3f})，疑似截断/残缺"),
+                }
 
         return {"complete": True, "reason": ""}
 
@@ -1048,7 +1853,7 @@ class PatchManager:
 
             with open(_file, encoding="utf-8") as _f:
                 _src = _f.read()
-            _tree = ast.parse(_src)
+            _tree = ast.parse(_src, filename="<llm-patch>")
             _target = None
             for _n in ast.walk(_tree):
                 if isinstance(_n, ast.FunctionDef) and _n.name == _method:
@@ -1641,6 +2446,10 @@ class PatchManager:
             self.reset_restart_counter()
             return {"applied": 0, "failed": 0, "details": []}
         
+        # ★主线第94批 T-94a（P0）：待审批队列老化策略——在审批过滤**之前**执行，
+        #   使老化放行的补丁（status→approved）能被下面的 only_approved 过滤捞到。
+        #   开关默认关闭 ⇒ `_m94_apply_pending_aging` 立即返回、不触碰任何补丁。
+        self._m94_apply_pending_aging(pending)
         # ★v24.0新增：审批过滤
         if only_approved:
             _approved_pending = []
@@ -1706,6 +2515,20 @@ class PatchManager:
 
         for patch in _sorted_pending:
             try:
+                # ★主线第80批 T7 (P0-3)：落地前双判定——核心文件且核心红线开关未开，
+                #   即使已被标 approved 也拒绝自动应用（防御 legacy/旁路漏网）。
+                #   用 allow_core_auto_apply 专用红线（默认 False），而非总开关 auto_apply_enabled。
+                if PatchManager._m80_is_core_file(patch.get("file", "")) and not PatchManager._m80_allow_core_auto_apply():
+                    patch["applied"] = False
+                    patch["apply_error"] = "核心文件免签改写闸门拦截(落地)"
+                    results["failed"] += 1
+                    results["details"].append({
+                        "id": patch.get("id"), "file": patch.get("file"),
+                        "status": "rejected_core_guard",
+                        "reason": "核心文件禁止自动应用，需人工审批",
+                    })
+                    history.append(patch)
+                    continue
                 # ★v22.0 P2新增：应用前先通过人格基线校验
                 _baseline_check = self._check_personality_baseline(patch)
                 if not _baseline_check["safe"]:
@@ -1782,10 +2605,42 @@ class PatchManager:
                 elif _occurrences == 1:
                     modified_full = full_content.replace(patch["original_code"], patch["modified_code"], 1)
 
-                    # ★修复: 写入活文件前先做语法复验，避免坏补丁导致下次启动即崩
                     if patch["file"].endswith(".py"):
+                        # ★第93批 T-93a（Q92-3 星轨裁决「确认需要」）：写盘点补结构关。
+                        #   第92批的结构关只在 `_verify_in_copy`（**沙箱副本**）生效；
+                        #   补丁若绕过沙箱直接落到本函数（写活文件），结构关不生效
+                        #   ⇒ 本关是**写盘侧兜底**，与验证侧构成「双闸」。
+                        #   ★判据与验证侧**完全一致**：同一对纯函数 + 同一对开关
+                        #     （`ENABLE_M92_PATCH_BASE_INDENT_GUARD` /
+                        #      `ENABLE_M92_PATCH_AST_STRUCT_GUARD`，均默认关闭）。
+                        #     仅 `status` 用 `rejected_*` 前缀，以区分拒绝发生在写盘点。
+                        #   T-93c 基础缩进关（同验证侧 T-92c 判据）：
+                        if _m92_base_indent_guard_on():
+                            _bo93 = _m92_base_indent(patch.get("original_code", ""))
+                            _bm93 = _m92_base_indent(patch.get("modified_code", ""))
+                            if _bo93 >= 0 and _bm93 >= 0 and _bm93 != _bo93:
+                                patch["applied"] = False
+                                patch["apply_error"] = (
+                                    f"基础缩进不一致（未写入）: original={_bo93} "
+                                    f"modified={_bm93}（原位替换会把类体/函数体提前终止，"
+                                    f"且语法仍合法）")
+                                results["failed"] += 1
+                                results["details"].append({
+                                    "id": patch["id"], "file": patch["file"],
+                                    "status": "rejected_base_indent_guard",
+                                    "reason": patch["apply_error"],
+                                })
+                                _module_logger.warning(
+                                    f"[补丁写盘] 基础缩进结构化关拒绝: original={_bo93} "
+                                    f"modified={_bm93}（source={patch.get('source', '')!r}, "
+                                    f"file={patch.get('file', '')!r}, "
+                                    f"method={patch.get('method', '')!r}）")
+                                history.append(patch)
+                                continue
+
+                        # ★修复: 写入活文件前先做语法复验，避免坏补丁导致下次启动即崩
                         try:
-                            ast.parse(modified_full)
+                            ast.parse(modified_full, filename="<llm-patch>")
                         except SyntaxError as _se:
                             patch["applied"] = False
                             patch["apply_error"] = f"补丁应用后语法校验失败（未写入）: {_se}"
@@ -1797,6 +2652,31 @@ class PatchManager:
                             })
                             history.append(patch)
                             continue
+
+                        # ★第93批 T-93a：AST 结构不变量关（同验证侧 T-92d 判据）。
+                        #   第91d 事故形态：类方法被 dedent 成模块级函数，
+                        #   `ast.parse` / `compile` / `import` **全部放行**
+                        #   ——「语法合法 ≠ 结构未退化」。
+                        if _m92_ast_struct_guard_on():
+                            _st93 = _m92_ast_struct_guard(full_content, modified_full)
+                            if _st93 and not _st93["ok"]:
+                                patch["applied"] = False
+                                patch["apply_error"] = (
+                                    f"补丁应用后结构校验失败（未写入）: "
+                                    f"{_st93['reason']}")
+                                results["failed"] += 1
+                                results["details"].append({
+                                    "id": patch["id"], "file": patch["file"],
+                                    "status": "rejected_ast_structure_guard",
+                                    "reason": patch["apply_error"],
+                                })
+                                _module_logger.warning(
+                                    f"[补丁写盘] 结构不变量关拒绝: 类方法 {_st93['before']} → "
+                                    f"{_st93['after']}（-{_st93['ratio']:.1%}）（"
+                                    f"file={patch.get('file', '')!r}, "
+                                    f"method={patch.get('method', '')!r}）")
+                                history.append(patch)
+                                continue
 
                     # ★FIX: mkstemp 随机名，避免预测名 TOCTOU/符号链接重定向
                     import tempfile
@@ -1819,6 +2699,27 @@ class PatchManager:
                     patch["rollback_available"] = True
                     self._last_apply_time = time.time()
                     results["applied"] += 1
+                    # ★M85-2（第85批 T-85b / D84-1）：应用后**运行时**主动复现。
+                    #   第51批设计的最高优先级判据 `reprobe_verdict`（代码级、不受
+                    #   日志轮转影响）此前**运行时从未写入**，只被一次性工具与只读
+                    #   脚本调用 → `problem_fixed` 因 `baseline_errors=0` 恒 None。
+                    #   此处补上运行时接线：写入本字段后，下游 `_apply_split`
+                    #   （同函数 :1960）会优先采用它，`problem_fixed` 即可判定。
+                    #   ★不阻塞主流程：任何异常只记 DEBUG，应用判定不受影响。
+                    try:
+                        from nucleus.evolution.patch_active_reprobe import (
+                            apply_reprobe as _m85_apply_reprobe,
+                        )
+                        _m85_rp = _m85_apply_reprobe(patch)
+                        _module_logger.debug(
+                            "[运行时复现] 补丁%s verdict=%s（作用域=%s）",
+                            str(patch.get("id", ""))[:12],
+                            (_m85_rp or {}).get("reprobe_verdict", ""),
+                            (_m85_rp or {}).get("reprobe_scope", ""))
+                    except Exception as _m85_rpe:
+                        _module_logger.debug(
+                            "[运行时复现] 失败（已忽略，不影响应用）: %s: %s",
+                            type(_m85_rpe).__name__, _m85_rpe)
                     # ★第九批 B-4（星轨要求）：补丁落地后做**针对该问题**的效果验证。
                     #   此前只有 compile_check + 副本验证，等于「代码能跑就算修好」，
                     #   问题是否真的消失、功能是否被带坏、性能是否退化，全都没人管。
@@ -2117,11 +3018,28 @@ class PatchManager:
             f.write("\n".join(_lines))
 
         _module_logger.info(f"修改日志已更新: {_log_path}")        
+    @staticmethod
+    def _m80_safe_target_path(target_file: str, project_root: str) -> bool:
+        """★T7-4：回滚目标路径必须在项目根内，禁止越界(呼应 SSL 路径沙箱教训)。"""
+        if not target_file or not project_root:
+            return False
+        try:
+            _abs = os.path.abspath(target_file)
+            _root = os.path.abspath(project_root)
+            return os.path.commonpath([_abs, _root]) == _root
+        except Exception:
+            return False
+
     def rollback_last(self) -> bool:
         """回滚最近一次应用的补丁"""
         history = self._load_patch_list(self._history_file)
         for patch in reversed(history):
             if patch.get("applied") and patch.get("rollback_available"):
+                # ★主线第80批 T7-4：回滚目标路径越界拒绝（防补丁 file 逃逸出项目根）
+                if not self._m80_safe_target_path(patch.get("file", ""), self._project_root):
+                    _module_logger.warning(
+                        f"[补丁回滚][T7-4] 目标路径越界，拒绝回滚: {patch.get('file','')}")
+                    continue
                 backup_path = patch.get("backup_path", "")
                 if os.path.isdir(backup_path):
                     # ★v23.0新增：使用集中备份恢复
@@ -2159,6 +3077,9 @@ class PatchManager:
         for patch in history:
             if patch.get("id") != patch_id:
                 continue
+            # ★主线第80批 T7-4：回滚目标路径越界拒绝（防补丁 file 逃逸出项目根）
+            if not self._m80_safe_target_path(patch.get("file", ""), self._project_root):
+                return {"ok": False, "reason": f"补丁 {patch_id} 目标路径越界，拒绝回滚"}
             if not patch.get("applied"):
                 return {"ok": False, "reason": f"补丁 {patch_id} 未处于已应用状态，无需回滚"}
             if not patch.get("rollback_available"):

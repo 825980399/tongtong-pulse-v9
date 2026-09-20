@@ -147,10 +147,16 @@ class TestSnapshotPerf(unittest.TestCase):
         calls = []
         s._save_sync = lambda force_full=False: (calls.append(1), True)[1]
         s._m67_is_saving = True
+        # ★第81批 T3：建模真实 in-flight 状态——生产里 _m67_save_start_time 与
+        #   _m67_is_saving 同时置位（PulseSnapshot._save_async :793-794）；否则第80批 T3
+        #   的卡死 watchdog 会把 time.time()-0 误判为卡死并强制重启保存。
+        s._m67_save_start_time = time.time()
         r = s._save_async()
         self.assertTrue(r)
         self.assertEqual(len(calls), 0, "进行中时不得再提交")
-        self.assertTrue(any("跳过本次触发" in x for x in s._logs))
+        # ★第81批 T3：78批 T4 把跳过文案从「跳过本次触发」改为「已有快照保存进行中，
+        #   本次触发合并为待保存」，此处对齐真实输出（验证走了合并/跳过分支）。
+        self.assertTrue(any("已有快照保存进行中" in x for x in s._logs))
 
     def test_15_async_switch_off(self):
         """异步开关关闭 → _m67_async_save_enabled() 为 False（走同步路径）。"""
@@ -206,7 +212,7 @@ class TestIncrementalLog(unittest.TestCase):
         self.assertEqual(s._m67_incremental_log_lines(), 0)
 
     def test_23_replay_applies_upsert(self):
-        """启动恢复：重放 upsert 更新已存在节点的字段（保持原对象类型）。"""
+        """启动恢复：重放 upsert 经 PulseNode.from_dict 转成 PulseNode（类型统一），字段更新正确。"""
         s = self._snap(self._d())
         node = _FakeNode("a", value="old")
         payload = {"node_id": "a", "action": "upsert", "ts": time.time(),
@@ -218,7 +224,7 @@ class TestIncrementalLog(unittest.TestCase):
         with _CfgSwitch(SNAPSHOT_USE_INCREMENTAL_LOG=True):
             out = s._m67_apply_incremental_log([node])
         self.assertEqual(len(out), 1)
-        self.assertIs(out[0], node, "应保持原节点对象，不得替换为 dict")
+        self.assertNotIsInstance(out[0], dict, "重放结果应为 PulseNode 而非 dict（类型统一）")
         self.assertEqual(out[0].value, "new")
 
     def test_24_corrupt_line_skipped(self):
@@ -433,12 +439,18 @@ class TestWriteGuardEnv(unittest.TestCase):
     def test_52_force_env_override(self):
         """强制环境配置：test/production 均可覆盖自动判定。"""
         os.environ["PULSE_FRAMEWORK"] = "1"
-        config.WRITE_GUARD_FORCE_ENV = "test"
-        self.assertEqual(_wg.resolve_env(), "test")
-        self.assertTrue(_wg.is_test_like_env())
-        config.WRITE_GUARD_FORCE_ENV = "production"
-        self.assertEqual(_wg.resolve_env(), "production")
-        self.assertFalse(_wg.is_test_like_env())
+        # ★第81批补2：进入时保存原值、finally 还原原值（原实现线性改到 "production"
+        #   后不再还原，会把 WRITE_GUARD_FORCE_ENV 污染给同进程后续用例）。
+        _orig_force_env = config.WRITE_GUARD_FORCE_ENV
+        try:
+            config.WRITE_GUARD_FORCE_ENV = "test"
+            self.assertEqual(_wg.resolve_env(), "test")
+            self.assertTrue(_wg.is_test_like_env())
+            config.WRITE_GUARD_FORCE_ENV = "production"
+            self.assertEqual(_wg.resolve_env(), "production")
+            self.assertFalse(_wg.is_test_like_env())
+        finally:
+            config.WRITE_GUARD_FORCE_ENV = _orig_force_env
 
     def test_53_env_reason_not_empty(self):
         """判定依据有输出（便于排查误判）。"""

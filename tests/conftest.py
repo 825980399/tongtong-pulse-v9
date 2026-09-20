@@ -116,7 +116,9 @@ def is_framework_running():
 
     判定（任一为真即视为运行中）：
       1. data/runtime.lock 存在；
-      2. 进程检测：命令行含 main.py 的 python 进程在跑。
+      2. 进程检测：命令行**指向** main.py 的进程在跑
+         （★第89批 T-89c：改用 psutil 读命令行；原 Windows `tasklist /fo csv`
+          输出不含命令行，"main.py" 恒不命中 → 该分支恒假，详见 _detect_framework_process）。
          探测失败时**不**保守判定为运行中（避免沙箱/CI 环境误跳过全部生产测试）。
 
     可用环境变量 PULSE_TEST_FRAMEWORK_RUNNING 强制覆盖：
@@ -127,20 +129,101 @@ def is_framework_running():
         return True
     if _env == "0":
         return False
-    if os.path.exists(os.path.join(ROOT, "data", "runtime.lock")):
+    if _framework_lock_present():
         return True
+    return _detect_framework_process()
+
+
+def _framework_lock_present() -> bool:
+    """★第57批 T1：`data/runtime.lock` 是否存在（独立成函数，便于单测注入）。"""
+    return os.path.exists(os.path.join(ROOT, "data", "runtime.lock"))
+
+
+def _cmdline_is_framework_main(cmdline) -> bool:
+    """★第89批 T-89c：命令行是否**指向框架入口** main.py。
+
+    精确匹配「某个参数的文件名恰为 main.py」，而不是子串包含 ——
+    子串匹配会误命中「命令行正文里提到 main.py」的进程
+    （如 `python -c "import ast; ast.parse(open('main.py').read())"`）。
+    """
+    for _a in cmdline or []:
+        try:
+            if os.path.basename(str(_a)).lower() == "main.py":
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _iter_main_py_cmdlines():
+    """★第89批 T-89c：用 psutil 枚举「命令行指向 main.py」的进程（排除本进程）。
+
+    返回命令行列表；psutil 不可用时返回 ``None`` —— 以便调用方区分
+    「探测可用但没找到」([]) 与「无法探测」(None) 两种情形。
+    """
+    try:
+        import psutil
+    except Exception:
+        return None
+    _self_pid = os.getpid()
+    _out = []
+    for _p in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            if _p.info.get("pid") == _self_pid:
+                continue
+            _cl = _p.info.get("cmdline") or []
+            if _cmdline_is_framework_main(_cl):
+                _out.append(" ".join(str(_a) for _a in _cl))
+        except Exception:
+            continue
+    return _out
+
+
+def _detect_framework_process() -> bool:
+    """★第89批 T-89c：进程探测 —— 改用可读「命令行」的方式。
+
+    ★根因（2026-09-20 实测）：原实现 Windows 走 ``tasklist /fo csv``，而该输出
+    **不含命令行参数**（实测 15290 字节输出里 "main.py" 出现 **0** 次），
+    故 ``"main.py" in _raw`` 恒假 —— 框架明明在跑（PID 26392 ``python.exe main.py``，
+    `logs/pulse.log` mtime 秒级刷新）却判为"未运行"，
+    ``production_data`` 测试不被跳过 → 必然假失败（第88批 m47 即此）。
+
+    分层探测（psutil 优先）：
+      1. **psutil**（`requirements.txt` 既有依赖：``psutil>=5.9.0``，项目内 17 个模块在用）
+         —— 枚举命令行并精确匹配参数文件名 == main.py；
+      2. POSIX 回退 ``pgrep -af main.py``；
+      3. Windows 无 psutil 时回退 ``wmic process get commandline``
+         （部分受限环境被安全策略拒绝，故包在 try 内）；
+      4. 最后才回退 ``tasklist /fo csv``（★已知不含命令行，仅"尽力而为"，
+         其结果不足以判定"未运行"）。
+    探测失败一律返回 False（沿用原语义：不保守判定为运行中，
+    避免沙箱/CI 环境误跳过全部生产数据测试）。
+    """
+    _cl = _iter_main_py_cmdlines()
+    if _cl is not None:
+        return bool(_cl)
     try:
         import subprocess
-        if os.name == "nt":
-            _raw = subprocess.run(
-                ["tasklist", "/fo", "csv"], capture_output=True, timeout=5,
-            ).stdout
-        else:
+        if os.name != "nt":
             _raw = subprocess.run(
                 ["pgrep", "-af", "main.py"], capture_output=True, timeout=5,
             ).stdout
-        _txt = _raw.decode("utf-8", errors="replace") if _raw else ""
-        return "main.py" in _txt.replace('"', '')
+            return "main.py" in (_raw.decode("utf-8", errors="replace") or "")
+        try:
+            _raw = subprocess.run(
+                ["wmic", "process", "get", "commandline"],
+                capture_output=True, timeout=8,
+            ).stdout
+            _txt = (_raw.decode("utf-8", errors="replace") or "").replace('"', "")
+            if "main.py" in _txt:
+                return True
+        except Exception:
+            pass
+        _raw = subprocess.run(
+            ["tasklist", "/fo", "csv"], capture_output=True, timeout=5,
+        ).stdout
+        _txt = (_raw.decode("utf-8", errors="replace") or "").replace('"', "")
+        return "main.py" in _txt
     except Exception:
         return False
 

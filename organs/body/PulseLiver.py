@@ -18,6 +18,7 @@ import re
 import sys
 import threading
 import time
+import traceback
 from collections import Counter
 from typing import Any
 
@@ -84,7 +85,7 @@ class PulseLiver(BasePulseOrgan):
         #   被这里的硬编码默认值逐个覆盖（全项目 10 个器官、24 个属性）。
         #   默认值先行、配置覆盖，是「配置优先」的标准顺序。
         self._adaptive_fuse_blocked_paths = {}
-        self._adaptive_fuse_blocked_until = {}
+        self._adaptive_fuse_blocked_until = 0.0  # ★第80批 T3：原 {} 导致 :2392 `now < {}` 抛 TypeError 崩溃（P0）；改为 float 默认（与 :477 型兜底一致）
         self._association_scan_interval = 0.0
         self._association_scan_offset = 0
         self._clean_failure_counts = {}
@@ -473,6 +474,12 @@ class PulseLiver(BasePulseOrgan):
                     now = time.time()
                     # ★P2-1：经器官级标准接口获取后台节奏（消除锁内对单例的隐式耦合）
                     _tempo = self._get_background_tempo()
+                    # ★主线第79批 T2：防御性兜底——_tempo 应为数值(后台节奏系数)，
+                    #   若因任何原因非数值(dict/None/str/bool)则回退 1.0，
+                    #   避免 min(3.0, _tempo) 触发 float<dict / float<NoneType 崩溃
+                    #   (75批已在 _get_background_tempo 加守卫，此处为调用点双保险)。
+                    if not isinstance(_tempo, (int, float)) or isinstance(_tempo, bool):
+                        _tempo = 1.0
                     _adjusted_interval = self._association_scan_interval * max(0.3, min(3.0, _tempo))
                     if now - self._last_association_scan_time >= _adjusted_interval:
                         self._last_association_scan_time = now
@@ -498,10 +505,51 @@ class PulseLiver(BasePulseOrgan):
                 self._semantic_association_scan()
 
         except Exception as e:
-            # ★主线第75批 T2：异常详情含类型（铁律10），便于排查 float/dict 等类型不匹配
-            self._log(LogLevel.ERROR, f"异步优化任务异常: {type(e).__name__}: {e}")
+            # ★主线第79批 T2：同根因错误聚合上报（避免 float<dict 等类型崩溃每日刷屏）
+            self._report_optimize_error(e)
         finally:
             self._optimize_pending = False
+
+    # ===== ★主线第79批 T2：同根因错误聚合上报 =====
+    # 历史问题：肝异步优化任务因 float<dict / float<NoneType 类型不匹配每次都打完整
+    # 日志，形成日志风暴(每日约21次)。现按错误签名聚合——首次出现打完整 traceback，
+    # 之后仅按时间窗口/次数阈值周期汇总上报一次，避免刷屏且保留可观测性。
+    _OPTIMIZE_ERROR_AGGREGATE_WINDOW = 300.0   # 同签名 5 分钟内只汇总上报一次
+    _OPTIMIZE_ERROR_AGGREGATE_THRESHOLD = 20  # 或累计达 20 次也汇总一次
+
+    def _report_optimize_error(self, exc: Exception) -> None:
+        """聚合上报异步优化任务的同根因异常，避免日志风暴。
+
+        - 同一错误签名(type:msg)首次出现：记录 ERROR + 完整 traceback。
+        - 后续出现：累加计数；达到时间窗口或次数阈值时，汇总上报一次 WARNING。
+        """
+        if not hasattr(self, "_optimize_error_counts"):
+            self._optimize_error_counts = {}
+        _now = time.time()
+        _sig = f"{type(exc).__name__}:{exc}"
+        # 用异常对象自身回溯，无论是否在 except 块内都能拿到完整 traceback
+        _tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        _rec = self._optimize_error_counts.get(_sig)
+        if _rec is None:
+            self._optimize_error_counts[_sig] = {
+                "count": 1, "first_ts": _now, "last_ts": _now,
+                "last_logged": _now, "first_tb": _tb,
+            }
+            self._log(LogLevel.ERROR,
+                      f"异步优化任务异常(首报): {_sig}\n{_tb}")
+            return
+        _rec["count"] += 1
+        _rec["last_ts"] = _now
+        _elapsed = _now - _rec["last_logged"]
+        if (_elapsed >= self._OPTIMIZE_ERROR_AGGREGATE_WINDOW
+                or _rec["count"] % self._OPTIMIZE_ERROR_AGGREGATE_THRESHOLD == 0):
+            _window = max(1.0, _now - _rec["first_ts"])
+            self._log(LogLevel.WARNING,
+                      f"异步优化任务异常(聚合): {_sig} "
+                      f"近{_window:.0f}s内累计{_rec['count']}次，"
+                      f"首次traceback见 "
+                      f"{time.strftime('%H:%M:%S', time.localtime(_rec['first_ts']))}")
+            _rec["last_logged"] = _now
     def _consolidate_knowledge(self):
         """
         知识巩固：对反复激活、高度信任的L2节点提升重要性。
@@ -2340,8 +2388,12 @@ class PulseLiver(BasePulseOrgan):
                         _blocked_until = self._adaptive_fuse_blocked_paths.get(prefix, 0.0)
                     if _blocked_until > 0 and now < _blocked_until:
                         continue
-                    # 全局阻塞标记兜底
-                    if _blocked_until <= 0 and hasattr(self, '_adaptive_fuse_blocked_until') and now < self._adaptive_fuse_blocked_until:
+                    # 全局阻塞标记兜底（★第80批 T3：加类型守卫，防止 _adaptive_fuse_blocked_until
+                    #   非数值类型时 `now < {}` 抛 TypeError 崩溃；与 :477 型兜底一致）
+                    _blocked_until_global = getattr(self, '_adaptive_fuse_blocked_until', 0.0)
+                    if not isinstance(_blocked_until_global, (int, float)) or isinstance(_blocked_until_global, bool):
+                        _blocked_until_global = 0.0
+                    if _blocked_until <= 0 and now < _blocked_until_global:
                         continue
 
                     should_fuse = True

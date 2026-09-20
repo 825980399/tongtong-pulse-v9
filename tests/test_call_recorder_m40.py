@@ -93,6 +93,8 @@ class TestSanitize(_Base):
                          self._lines()[0]["prompt"])
 
     def test_15_sanitize_can_be_disabled(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 True）
+        _orig_sanitize = config.LLM_TRACE_SANITIZE
         config.LLM_TRACE_SANITIZE = False
         try:
             _r = cr.LLMCallRecorder(base_dir=self._dir)
@@ -100,7 +102,7 @@ class TestSanitize(_Base):
                       prompt="key=sk-abcdefghijklmnop9999", response="")
             self.assertIn("sk-abcdefghijklmnop9999", self._lines()[0]["prompt"])
         finally:
-            config.LLM_TRACE_SANITIZE = True
+            config.LLM_TRACE_SANITIZE = _orig_sanitize
 
     def test_16_normal_text_not_mangled(self):
         _s = cr.sanitize_text("请解释 token 是什么，以及如何使用它")
@@ -109,6 +111,8 @@ class TestSanitize(_Base):
 
 class TestTruncate(_Base):
     def test_20_truncate(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 8000）
+        _orig_max_len = config.LLM_TRACE_MAX_TEXT_LEN
         config.LLM_TRACE_MAX_TEXT_LEN = 20
         try:
             _r = cr.LLMCallRecorder(base_dir=self._dir)
@@ -117,20 +121,24 @@ class TestTruncate(_Base):
             self.assertLess(len(_p), 100)
             self.assertIn("[truncated", _p)
         finally:
-            config.LLM_TRACE_MAX_TEXT_LEN = 8000
+            config.LLM_TRACE_MAX_TEXT_LEN = _orig_max_len
 
     def test_21_zero_means_unlimited(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 8000）
+        _orig_max_len = config.LLM_TRACE_MAX_TEXT_LEN
         config.LLM_TRACE_MAX_TEXT_LEN = 0
         try:
             _r = cr.LLMCallRecorder(base_dir=self._dir)
             _r.record(origin=cr.ORIGIN_USER_QUERY, prompt="y" * 500, response="")
             self.assertEqual(len(self._lines()[0]["prompt"]), 500)
         finally:
-            config.LLM_TRACE_MAX_TEXT_LEN = 8000
+            config.LLM_TRACE_MAX_TEXT_LEN = _orig_max_len
 
 
 class TestRotation(_Base):
     def test_30_old_files_removed(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 90）
+        _orig_retention = config.LLM_TRACE_RETENTION_DAYS
         config.LLM_TRACE_RETENTION_DAYS = 90
         try:
             # 造 1 个 200 天前的旧文件 + 1 个 10 天前的新文件
@@ -150,9 +158,11 @@ class TestRotation(_Base):
             self.assertFalse(os.path.isfile(_old), "200 天前文件应被清理")
             self.assertTrue(os.path.isfile(_new), "10 天前文件应保留")
         finally:
-            config.LLM_TRACE_RETENTION_DAYS = 90
+            config.LLM_TRACE_RETENTION_DAYS = _orig_retention
 
     def test_31_retention_zero_no_cleanup(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 90）
+        _orig_retention = config.LLM_TRACE_RETENTION_DAYS
         config.LLM_TRACE_RETENTION_DAYS = 0
         try:
             _r = cr.LLMCallRecorder(base_dir=self._dir)
@@ -162,11 +172,13 @@ class TestRotation(_Base):
             _r.record(origin=cr.ORIGIN_USER_QUERY, prompt="x", response="y")
             self.assertTrue(os.path.isfile(_old))
         finally:
-            config.LLM_TRACE_RETENTION_DAYS = 90
+            config.LLM_TRACE_RETENTION_DAYS = _orig_retention
 
 
 class TestSwitchAndConcurrency(_Base):
     def test_40_switch_off_zero_io(self):
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 True）
+        _orig_recorder = config.ENABLE_LLM_CALL_RECORDER
         config.ENABLE_LLM_CALL_RECORDER = False
         try:
             _d = tempfile.mkdtemp(prefix="m40_t1_off_")
@@ -177,7 +189,7 @@ class TestSwitchAndConcurrency(_Base):
             self.assertFalse(os.path.exists(_d), "开关关闭不得创建目录")
             self.assertFalse(_r.record_feedback("m40-x", "ok"))
         finally:
-            config.ENABLE_LLM_CALL_RECORDER = True
+            config.ENABLE_LLM_CALL_RECORDER = _orig_recorder
 
     def test_41_concurrent_lines_intact(self):
         def _work(_i):

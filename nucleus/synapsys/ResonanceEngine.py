@@ -13,6 +13,9 @@ ResonanceEngine.py —— 共振引擎
 
 import math
 
+# ★第82批 T-c：五维权重单一来源（D173）。唯一数值定义在 config.RESONANCE_WEIGHTS。
+from config import RESONANCE_WEIGHTS
+
 from nucleus.logger import get_module_logger
 from nucleus.mnemosyne.PulseNode import PulseNode
 
@@ -35,13 +38,9 @@ class ResonanceEngine:
     """
     
     # 五维权重（规则1.3：永久固定，禁止修改）
-    WEIGHTS = {
-        "memory": 0.40,   # 记忆维
-        "space":  0.30,   # 空间维
-        "logic":  0.15,   # 逻辑维
-        "time":   0.10,   # 时间维
-        "state":  0.05,   # 状态维
-    }
+    # ★第82批 T-c：单一来源收敛（D173）——唯一数值定义在 config.RESONANCE_WEIGHTS，
+    #   此处只做只读引用，禁止再写字面数值（原类内重复定义已删）。
+    WEIGHTS = RESONANCE_WEIGHTS
     
     def __init__(self):
         # 频率索引: frequency_signature → [node_id, ...]
@@ -249,6 +248,21 @@ class ResonanceEngine:
                 continue
         if out:
             self._rule_calls += 1
+            # ★M84-2（第84批 T-84c）：本次查询规则通道**确实生效**（产出非空规则得分）
+            #   → 计入本地推理「规则通道」档。此前全库**没有任何**
+            #   `record_local_inference(KIND_RULE)` 调用点，导致 llm_dependency 的
+            #   「规则通道」恒为 0（实测），把本地推理分母算小、夸大 LLM 占比。
+            #   计数失败不影响任何既有行为（异常降级 DEBUG）。
+            try:
+                from nucleus.LLMDependencyMetrics import (
+                    KIND_RULE as _KIND_RULE84,
+                    record_local_inference as _rec_local84,
+                )
+                _rec_local84(_KIND_RULE84)
+            except Exception as _e84:
+                _logger.debug(
+                    "[共振引擎] 规则通道本地推理计数失败（已忽略）: %s: %s",
+                    type(_e84).__name__, _e84)
         return out
 
     def _try_load_resonance_cy(self):

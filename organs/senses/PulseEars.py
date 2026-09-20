@@ -362,9 +362,14 @@ class PulseEars(BasePulseOrgan):
             log_data = []
             if os.path.exists(ear_log_path):
                 try:
-                    log_data = safe_read_json(ear_log_path, default={})
+                    log_data = safe_read_json(ear_log_path, default=[])
                 except (ValueError, OSError) as e:
                     self._log(LogLevel.INFO, f"[WARNING] PulseEars.py:367: {type(e).__name__}: {e}")
+                    log_data = []
+                # ★第81批 T6：历史脏文件自愈（流日志本应是 list，若读到 dict 不得对其调 append）
+                if isinstance(log_data, dict):
+                    self._log(LogLevel.WARNING,
+                              "[第81批 T6] 耳朵流日志为 dict（历史脏文件），自愈为 list")
                     log_data = []
             log_data.append(entry)
             if len(log_data) > 50:
@@ -378,7 +383,11 @@ class PulseEars(BasePulseOrgan):
             ear_log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
                                          'data', 'stream', 'ear_stream_log.json')
             if os.path.exists(ear_log_path):
-                log_data = safe_read_json(ear_log_path, default={})
+                log_data = safe_read_json(ear_log_path, default=[])
+                if isinstance(log_data, dict):
+                    self._log(LogLevel.WARNING,
+                              "[第81批 T6] 耳朵流日志为 dict（历史脏文件），自愈为 list")
+                    log_data = []
                 if log_data:
                     if text:
                         log_data[-1]["recognized_text"] = text

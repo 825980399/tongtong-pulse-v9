@@ -228,7 +228,7 @@ def run(backend):
             _check("只写-query_executed写入",
                    mock.counts["query_executed"] == qe0 + 1,
                    "=%d" % mock.counts["query_executed"])
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # Stomach 构造可能依赖器官上下文；直接校验 store 方法签名
             qe0 = mock.counts["query_executed"]
             mock.query_executed("digest_knowledge", 1.5, 1)
@@ -243,7 +243,7 @@ def run(backend):
             m = PulseNode(value="e2e-io2", evol_level="L1", keywords=["e2e"])
             pool.add(m)
             _check("异常场景-主流程不抛异常", True)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             _check("异常场景-主流程不抛异常", False, "意外抛异常: %s" % e)
 
         # 6. 开关关闭 → 零副作用

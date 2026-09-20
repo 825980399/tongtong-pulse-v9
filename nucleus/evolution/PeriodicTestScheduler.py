@@ -81,7 +81,13 @@ class PeriodicTestScheduler:
 
     # 已评估为「仅人工运行」的脚本：明确登记，
     # 避免后续被人因不明就里而误加回自动集。
-    _MANUAL_ONLY: tuple[str, ...] = ()
+    # ★第82批 T-b：benchmark_hot_cold_faiss_kal.py 为第81批冷热/FAISS/KAL
+    #   性能基准（CPU 计时比值 + 压测自扰），按 T7/T8 只应人工触发；
+    #   登记后 discover_scripts 不再为它打"未登记重型脚本" WARNING，
+    #   但仍归 excluded（不自动跑），安全契约不变。
+    _MANUAL_ONLY: tuple[str, ...] = (
+        "benchmark_hot_cold_faiss_kal.py",
+    )
 
     # 保留前缀仅用于**识别**新出现的重型脚本并提示登记，不再决定归属
     _HEAVY_HINT_PREFIXES = ("stress_test_", "benchmark_")

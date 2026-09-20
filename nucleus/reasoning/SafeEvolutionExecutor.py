@@ -34,6 +34,79 @@ from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
+# ★第86批 T-86a（P0）：LLM 修复补丁零产出根因修复 —— 推理模型 token 预算。
+#   根因（已实测复现）：REMOTE_API_CONFIG 指向的 deepseek-v4-flash 属**推理模型**，
+#   响应先产出 reasoning_content 再产出 content。原 max_tokens=1500 被推理解析
+#   全部吃光 → finish_reason=length、content 为空串、completion_tokens 打满 1500，
+#   再由 `if not answer: return None` 把整条 LLM 补丁通道变成恒零产出且无任何日志。
+#   修复（最小）：为修复调用预留足够预算。实测同 prompt：1500 → length/content 0 字；
+#   8000 → stop/content 1311 字（reasoning 约 1.8 万字，completion 约 6.5k tokens）。
+_LLM_REPAIR_MAX_TOKENS = 16384
+
+# ★第86批 T-86a：推理模型单次耗时显著更长（实测 8000 档约 27s），而
+#   api_rate_limiter 的 evolution 默认超时仅 30s，余量过紧易被读超时打断，
+#   故修复调用取「配置值与下限的较大者」；**不修改全局超时配置**。
+_LLM_REPAIR_MIN_TIMEOUT = 180
+# ★第91批 T-91b：LLM 补丁**缩进契约**开关（prompt 约束 + 后处理修复 + 基础缩进对齐）。
+#   开启（默认）→ 三层同时生效：
+#     ① system prompt 显式要求「保持与输入代码完全相同的缩进层级与宽度、禁用 Tab」；
+#     ② `_clean_llm_code` 阶段3：把「缩进漂移」修复为结构自洽
+#        （行首 tab→空格 + 只修 Python 实际报错那一行的缩进层级）；
+#     ③ 补丁构造时把 `modified_code` 的**基础缩进**整体对齐到 `original_code`。
+#   关闭 → 三层同时关闭，逐字回到第90批末行为，零回归。
+#   为什么必须补（第91批 T0 实测，非推测）：
+#     · 4 次 LLM 补丁尝试全部因 `unindent does not match any outer indentation
+#       level (<llm-patch>, line 26/19/11/9)` 被完整性关2 拒绝；
+#     · 原 prompt 只有「ASCII/标点/括号」要求，**完全未提缩进**；
+#     · 真正危险的是**静默分支**：缩进塌陷到 col0 时 ast.parse 反而通过 ⇒
+#       2026-09-20 已把 PulseInnerWorld.py（类方法 367→270）与 PulseLung.py
+#       （86→45）的类体提前终止，而三关 + py_compile + import **全部放行**。
+def _m91_indent_repair_on() -> bool:
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M91_LLM_INDENT_REPAIR", True))
+    except Exception:
+        return True
+
+
+def _m91_gate2_parse(code: str) -> tuple:
+    """与 `PatchManager._check_llm_patch_completeness` **关2 同口径**的解析，
+    返回 `(是否通过, 失败文案, 包裹后文本中的错误行号)`。
+
+    口径与关2 逐字一致：
+        ast.parse("def _wrap():\n" + textwrap.indent(textwrap.dedent(mod).strip(), "    "),
+                  filename="<llm-patch>")
+    行号（无错为 0）用于 `_m91_repair_indentation` **精确定位**要修的那一行。
+
+    ★为什么不能改用 `_clean_llm_code` 自身的 `ast.parse(_code)` 作判据（第91批 T0 实测）：
+    真实补丁的 original/modified 是**原样缩进的方法体片段**（base 4/8/12…，含 return），
+    直接 `ast.parse` 会同时踩「顶层 unexpected indent」与「顶层 return」两个坑，
+    对 base>0 的片段**恒**失败 ⇒ 任何「修复结果」都无法通过判据、永不被采纳。
+    即：修复必须用**下游验证关的口径**自检，否则修了也白修。
+    """
+    try:
+        import ast as _ast_g2
+        import textwrap as _tw_g2
+        _g2_norm = _tw_g2.dedent(code or "").strip()
+        _ast_g2.parse("def _wrap():\n" + _tw_g2.indent(_g2_norm, "    "),
+                      filename="<llm-patch>")
+        return True, "", 0
+    except SyntaxError as _g2_e:
+        return False, f"{type(_g2_e).__name__}: {_g2_e}", int(getattr(_g2_e, "lineno", 0) or 0)
+    except Exception as _g2_e2:
+        return False, f"{type(_g2_e2).__name__}: {_g2_e2}", 0
+
+
+def _m91_gate2_check(code: str) -> tuple:
+    """关2 同口径判据，返回 `(是否通过, 失败文案)`。
+
+    ★同口径同步铁律：本函数与 PatchManager 关2 必须同步演进。
+    `tests/test_llm_indent_contract_m91.py` 用**生产补丁库的真补丁**交叉校验
+    （它们的关2 结论均为 PASS ⇒ 本函数也必须为 True），关2 改动破坏同步时该测试转红。
+    """
+    _g2a, _g2b, _g2c = _m91_gate2_parse(code)
+    return _g2a, _g2b
+
 # ★W4修复：高危问题类型永不自动修复（含 LLM 回退）。
 # 与 nucleus.self_inspector._issue_severity 中的 high 级类型保持一致
 # （unsafe_eval/subprocess_shell/sql_injection）。进化闭环升级（阶段A）后，
@@ -371,8 +444,79 @@ class SafeEvolutionExecutor:
             "nucleus/field/",
             "nucleus/mnemosyne/",
             "nucleus/reasoning/",
+            # ★主线第80批 T7-3：补全核心文件清单
+            "nucleus/security/",
+            "nucleus/evolution/",
+            # 安全/宪法相关器官（精神宪法/人格内核/伦理）
+            "PulseSpiritConstitution.py",
+            "PulsePersonalityKernel.py",
+            "PulseEthics.py",
         )
         return any(m in _norm for m in _core_markers)
+
+    def _m94_pending_blocks_regeneration(self, file_path: str,
+                                         method_name: str) -> bool:
+        """★第94批 T-94a.3：同位置「已有待审批」是否**阻塞再生**。
+
+        * 老化开关 ``ENABLE_PENDING_QUEUE_AGING`` **关闭（默认）** → 逐字等价于既有
+          ``PatchManager.has_pending_patch_for``（file+method 双匹配即阻塞），
+          **零行为变化**；
+        * 开关**开启** → 改走 ``PatchManager.find_blocking_pending_patch``：仅当该
+          待审批补丁仍在老化窗口内（未超 ``PENDING_AGING_MAX_AGE_HOURS``）才算阻塞。
+          超期未裁决的补丁不再永久冻结同位置的再生 —— 这正是第93批实测的
+          「已有待审批」死循环（pending 只增不减、同位置问题每轮重复发现，
+          单项占未修复原因 28.6%）。即任务书 §T-94a.3 的「计时器改为按补丁」。
+
+        ★只解除**阻塞**，不代替**放行**（放行判据见 ``PatchManager._m94_aging_eligible``）。
+        ★判据异常 → 回落既有 ``has_pending_patch_for`` 口径；再异常则返回 False，
+          与既有实现「读取失败不阻断生成」的保守口径保持一致。
+        """
+        if not file_path or not method_name:
+            return False
+        try:
+            if not self._patch_manager._m94_pending_aging_on():
+                return bool(self._patch_manager.has_pending_patch_for(
+                    file_path, method_name))
+            return self._patch_manager.find_blocking_pending_patch(
+                file_path, method_name) is not None
+        except Exception as _e:
+            _module_logger.debug(
+                "[M94老化] 待审批阻塞判定异常，回落既有口径: %s: %s",
+                type(_e).__name__, _e)
+            try:
+                return bool(self._patch_manager.has_pending_patch_for(
+                    file_path, method_name))
+            except Exception:
+                return False
+
+    @staticmethod
+    def _core_auto_apply_allowed() -> bool:
+        """★主线第79批 T1(P0 安全审计): 灰度开关——是否允许核心文件自动批准。
+
+        默认 False：安全红线，核心文件(main/config/base/nucleus/*)永远等待人工审批
+        (status=verified)，绝不自动 approved。
+        置 EVOLUTION_CONFIG.allow_core_auto_apply=True 可一键回退到旧行为
+        (核心文件也自动 approved)，仅用于紧急回退。
+        """
+        try:
+            import config  # type: ignore[possibly-unbound]
+            return bool(getattr(config, 'EVOLUTION_CONFIG', {}).get("allow_core_auto_apply", False))
+        except Exception:
+            return False
+
+    def _resolve_core_auto_apply_status(self, is_core: bool) -> str:
+        """★主线第79批 T1(P0 安全审计): 决定自动批准分支下补丁的最终状态。
+
+        核心文件(is_core=True)默认 'verified'——强制人工审批(安全红线)；
+        仅当灰度开关 _core_auto_apply_allowed() 为真才回退为 'approved'。
+        非核心文件(is_core=False)恒为 'approved'。
+
+        该封装同时服务于 execute() 与 _verify_and_save_patch() 两条路径，
+        保证两条状态决策逻辑不再分叉，且可被单测直接覆盖。
+        """
+        if is_core and not self._core_auto_apply_allowed():
+            return "verified"
+        return "approved"
 
     def _find_related_logs(self, file_path: str, method_name: str, limit: int = 3) -> str:
         """在运行日志中查找与指定文件/方法相关的错误日志（★FIX: 日志关联，精准定位问题）"""
@@ -800,6 +944,15 @@ class SafeEvolutionExecutor:
                         "你是曈曈的代码自学习助手，负责生成精确的Python代码修复建议。"
                         "只输出Python代码，使用纯ASCII字符，不要使用中文标点。"
                         "确保语法正确，所有引号和括号必须匹配。不要输出解释文字，只输出代码。")
+
+                    # ★第91批 T-91b：缩进契约（T0 实测：原 prompt **完全未提缩进**，
+                    #   而 4 次 LLM 补丁尝试全部因 unindent 语法错误被拒）。
+                    if _m91_indent_repair_on():
+                        _sys_prompt += (
+                            "保持与输入代码**完全相同的缩进层级与缩进宽度**："
+                            "每个缩进层级使用 4 个空格，禁止使用制表符；"
+                            "只返回修复后的完整方法（含 def 行及其原有缩进），"
+                            "不要提升或降低代码所在的层级。")
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             _payload = {
@@ -809,16 +962,39 @@ class SafeEvolutionExecutor:
                     {"role": "user", "content": p},
                 ],
                 "temperature": 0.3,
-                "max_tokens": 1500,
+                "max_tokens": _LLM_REPAIR_MAX_TOKENS,
             }
             _bytes = json.dumps(_payload, ensure_ascii=False).encode('utf-8')
             _headers = {'Content-Type': 'application/json; charset=utf-8', 'Authorization': 'Bearer ' + api_key}
+            _timeout = max(
+                int((get_llm_call_config().get("timeout_by_purpose") or {}).get("evolution", 30)),
+                _LLM_REPAIR_MIN_TIMEOUT)
             with api_rate_limited(enabled=get_llm_call_config().get("enable_rate_limit", True)):
-                _ok, _data = safe_http_json(api_url, method='POST', data=_bytes, headers=_headers, timeout=get_llm_call_config()["timeout_by_purpose"]["evolution"])
+                _ok, _data = safe_http_json(api_url, method='POST', data=_bytes, headers=_headers, timeout=_timeout)
             if _ok and isinstance(_data, dict):
+                # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存。
+                #   （本方法被装饰，装饰器在 finally 读 `_m44_last_usage`；
+                #    多次追问时取**最后一次**调用的用量，属可接受的近似。）
+                self._m44_last_usage = _data.get("usage")  # _m94_extract_usage_marker
                 _choices = _data.get("choices", [])
                 if _choices:
-                    return _choices[0].get("message", {}).get("content", "")
+                    _msg = _choices[0].get("message") or {}
+                    _content = _msg.get("content") or ""
+                    if not _content:
+                        # ★第86批 T-86a：推理模型把预算耗在 reasoning_content 上时
+                        #   content 会是空串；旧代码静默返回 ""，外层再静默 return None，
+                        #   导致「LLM 补丁通道零产出」长期无迹可循。此处必须留痕。
+                        _usage = _data.get("usage") or {}
+                        _module_logger.warning(
+                            "[LLM修复] 模型返回 content 为空（finish_reason=%s, completion_tokens=%s, "
+                            "reasoning_content=%d字, max_tokens=%d）"
+                            "——疑似推理预算被耗尽，请上调 _LLM_REPAIR_MAX_TOKENS",
+                            _choices[0].get("finish_reason"), _usage.get("completion_tokens"),
+                            len(_msg.get("reasoning_content") or ""), _LLM_REPAIR_MAX_TOKENS)
+                    return _content
+            _module_logger.warning(
+                "[LLM修复] 调用未返回可用结果（HTTP ok=%s, data_type=%s）",
+                _ok, type(_data).__name__)
             return None
 
         # 第一轮
@@ -901,7 +1077,13 @@ class SafeEvolutionExecutor:
                         _answer = _better
 
             return _answer
-        except Exception:
+        except Exception as e:
+            # ★第86批 T-86a：原为裸 `except Exception: return None`——任何底层异常
+            #   （配置缺失/JSON 解析/prompt 组装/HTTP 封装）都被吞成 None，表现为
+            #   「LLM 补丁路径零产出且日志无任何线索」。改为留痕后仍降级返回 None。
+            _module_logger.warning(
+                f"[LLM修复] 修复建议生成异常，本轮 LLM 通道降级返回 None: "
+                f"{type(e).__name__}: {e}")
             return None
 
     def _aesthetic_guidance(self) -> str:
@@ -1160,6 +1342,46 @@ class SafeEvolutionExecutor:
                 except Exception as _resolve_err:
                     _module_logger.debug(
                         f"[修复蒸馏] organ→file 反查失败 {_organ}: {_resolve_err}")
+            # ★第87批 T-87b：非器官标签的二级反查兜底（修复「补丁缺少 file 字段」）。
+            #   实测根因（09-18 14:14 ~ 09-20 09:03 共 19 次沙箱拒绝）：日志类问题的
+            #   organ 标签多为「非器官模块/类名」——PulseSnapshot / PatchManager /
+            #   InfoField / PulseNodePool，而上一段的 resolve_organ_file 只覆盖
+            #   organs/ 目录，对这些标签一律返回 None ⇒ issue["file"] 保持空字符串
+            #   ⇒ 下游 LLM 补丁的 file 字段为空 ⇒ 路径沙箱在验证第一关拒绝并丢弃补丁
+            #   （LLM token 与一次 verify_in_copy 全部白耗）。
+            #   这里复用 self_inspector 既有的「全项目类索引」
+            #   （_build_project_class_index：AST 扫描 organs/ 之外的 nucleus/、
+            #   base/、functions/ 等，源码注释给出的口径是覆盖率 100%），
+            #   按类名精确命中文件路径。
+            #   ⚠ 口径红线：**只回填 issue["file"]**（LLM/本地补丁 file 字段的唯一来源），
+            #     **不触碰 _file / _resolved_file** —— PHASE13 修正过的
+            #     「日志类·已定位文件但缺方法 / 日志类·文件未定位」统计口径与代码片段
+            #     获取路径仍由那两个变量决定，此处保持零变化。
+            #   灰度开关 ENABLE_NONORGAN_FILE_RESOLVE（默认开）；关闭时与改造前一致。
+            if self_inspector and _organ and not _issue.get("file"):
+                _nor_on = True
+                try:
+                    import config as _cfg_nor87
+                    _nor_on = bool(getattr(
+                        _cfg_nor87, "ENABLE_NONORGAN_FILE_RESOLVE", True))
+                except Exception:
+                    _nor_on = True
+                if _nor_on:
+                    try:
+                        _lookup87 = getattr(
+                            self_inspector, "_lookup_class_in_project", None)
+                        _hit87 = _lookup87(_organ) if callable(_lookup87) else None
+                        _hit87_file = str((_hit87 or {}).get("file_path") or "")
+                        if _hit87_file and os.path.isfile(_hit87_file):
+                            _issue["file"] = _hit87_file
+                            _module_logger.debug(
+                                f"[修复蒸馏] 非器官标签二级反查命中: {_organ} → "
+                                f"{_hit87_file}（resolve_organ_file 未覆盖，"
+                                f"原会因缺少 file 被路径沙箱拒绝）")
+                    except Exception as _lookup87_err:
+                        _module_logger.debug(
+                            f"[修复蒸馏] 非器官标签二级反查失败 {_organ}: "
+                            f"{type(_lookup87_err).__name__}: {_lookup87_err}")
             # ★P2-18（2026-09-09 技术债务第一批）：日志里的 file/method 定位兜底。
             #   日志类问题（LogAnalyzer 的 ERROR 行分支）构造 issue 时只填了 organ
             #   标签，file 与 method 皆为空字符串 → 原实现在日志里一律打「未定位」，
@@ -1190,6 +1412,10 @@ class SafeEvolutionExecutor:
                         f"[修复蒸馏] 获取代码片段失败 {_organ}.{_method}: {_snippet_err}")
             _related_logs = self._find_related_logs(_file or _resolved_file, _method)
             _snippet_source = "method_body" if _snippet else ""
+            # ★第88批 T-88a：素材来源标记与开关预置（在 _fallback_on 分支外
+            #   初始化，保证第88批守卫读取时恒有定义，零 NameError 风险）。
+            _m88_src = ""
+            _m88_mat_on = False
             if not _snippet:
                 # ★主线第22批 T4/P2-122：空片段兜底 —— 不再直接跳过 LLM 对比。
                 #   原实现「方法体取不到 → 直接跳过」，导致日志类 ERROR（如
@@ -1206,14 +1432,51 @@ class SafeEvolutionExecutor:
                 except Exception:
                     _fallback_on = True
                 if _fallback_on:
+                    # ★第88批 T-88a（根因：错误素材 ⇒ 结构性不可应用补丁）：
+                    #   第87批把「非器官标签」的真文件路径回填进了 issue["file"]
+                    #   （受 PHASE13 口径红线约束，刻意未动 _file/_resolved_file），
+                    #   但本处素材提取读的是 _file/_resolved_file（此时仍为空）
+                    #   ⇒ 读不到文件 ⇒ 素材退化成 ERROR 日志文本 ⇒ 补丁
+                    #   original_code 不是代码：
+                    #     ① 完整性关3「与原文相似度≥0.5」必然判 0.03（实测 11:18:20）；
+                    #     ② 即便绕过，PatchManager._verify_in_copy 的
+                    #        「original_code not in full_content」仍会拦下。
+                    #   ⇒ 把已解析的 issue["file"] 并入素材来源（只读，不写回
+                    #     _file/_resolved_file，PHASE13 统计口径零变化）。
+                    #   灰度 ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE：关闭 ⇒
+                    #   素材选择与补丁构造判定逐字回到第87批行为。
+                    _m88_mat_on = True
+                    try:
+                        import config as _cfg_m88
+                        _m88_mat_on = bool(getattr(
+                            _cfg_m88, "ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE", True))
+                    except Exception:
+                        _m88_mat_on = True
+                    _m88_mat_file = _file or _resolved_file
+                    if _m88_mat_on and not _m88_mat_file:
+                        _m88_mat_file = str(_issue.get("file", "") or "")
                     _snippet = self._extract_comparison_material(
-                        _issue, _related_logs, _file or _resolved_file, _method)
+                        _issue, _related_logs, _m88_mat_file, _method)
+                    # 素材来源判定：能按「文件(+方法)」读出代码 ⇒ 代码素材；
+                    # 否则为 ERROR 日志文本（非代码，补丁不可应用）。
+                    if _snippet and _m88_mat_file:
+                        try:
+                            if self._read_snippet_from_file(_m88_mat_file, _method):
+                                _m88_src = "code_from_file"
+                        except Exception as _m88_se:
+                            _module_logger.debug(
+                                f"[修复蒸馏] 素材来源判定失败（按非代码处理）: "
+                                f"{type(_m88_se).__name__}: {_m88_se}")
                     if _snippet:
                         _snippet_source = "error_message"
+                        if _m88_mat_on:
+                            _m88_src = _m88_src or "error_message"
+                            _snippet_source = _m88_src
                         _module_logger.debug(
                             f"[修复蒸馏] 方法体为空 → 改用文件/ERROR消息作为对比输入: "
                             f"type={_type}, organ={_organ}, method={_method}, "
-                            f"file={_loc_label}, 素材={len(_snippet)}字")
+                            f"file={_loc_label}, 素材={len(_snippet)}字, "
+                            f"来源={_snippet_source}")
                     else:
                         _module_logger.debug(
                             f"[修复蒸馏] 无法提取代码片段，跳过修复蒸馏: "
@@ -1234,7 +1497,7 @@ class SafeEvolutionExecutor:
             _has_pending_dup = False
             if _file and _method:
                 try:
-                    if self._patch_manager.has_pending_patch_for(_file, _method):
+                    if self._m94_pending_blocks_regeneration(_file, _method):
                         _has_pending_dup = True
                         _bump_reason("已有待审批")
                 except Exception as _exc:
@@ -1278,6 +1541,23 @@ class SafeEvolutionExecutor:
                             f"[本地修复] {_organ}.{_method} ({_type}) 补丁生成失败或无变化")
                 except Exception as _le:
                     _module_logger.error(f"[本地修复] {_organ}.{_method} ({_type}) 异常: {_le}")
+            # ★M85-1（第85批 T-85a）：本地学习尝试通道。
+            #   对「本地无规则」的问题先做一次**保守低风险**修复尝试
+            #   （不替代 LLM 通道 / 不自动应用 / 只入队待审批），并把结果记入
+            #   data/patches/local_learning_attempts.jsonl，形成
+            #   「尝试 → 验证 → 学习 → 提升」闭环。
+            #   ★零侵入：不 return / 不 continue、不复用 _local_patch 变量，
+            #     路径A 与路径B 的行为逐字不变；关闭开关即完全短路。
+            if (not _local_ok and not _has_pending_dup and _snippet
+                    and self_inspector and _organ and _method
+                    and (_file or _resolved_file)):
+                try:
+                    self._m85_learning_attempt(
+                        _issue, _file or _resolved_file, _method, _snippet, _organ)
+                except Exception as _m85e:
+                    _module_logger.debug(
+                        "[M85 学习尝试] 通道异常（已忽略）: %s: %s",
+                        type(_m85e).__name__, _m85e)
 
             # ===== 路径B：大模型处理（并行对比，学习阶段不可避免）=====
             # ★PHASE12-P1-3（2026-09-06）：LLM 通道补丁生成门禁。
@@ -1328,7 +1608,59 @@ class SafeEvolutionExecutor:
                 # 尝试将LLM建议转为补丁并验证
                 try:
                     _llm_clean = self._clean_llm_code(_llm_suggestion)  # ★PHASE17-A2
-                    if _llm_clean and _llm_clean.strip() != _snippet.strip():
+                    _llm_clean, _ = self._m91_align_base_indent(
+                        _snippet, _llm_clean,
+                        f"file={_issue.get('file', '')}, "
+                        f"method={_issue.get('method', '')}")  # ★第91批T-91b
+                    # ★第87批 T-87b：补丁 file 字段必填校验（防呆 + 留痕）。
+                    #   若上面两级反查后 issue["file"] 仍为空（如 organ 是"胃"这类
+                    #   中文器官名），构造出的补丁必然被 _check_patch_path 以
+                    #   「补丁缺少 file 字段」拒绝 —— 既然注定被拒，就不再生成、
+                    #   也不再消耗一次 verify_in_copy（文件复制 + 语法 + 导入三轮检查），
+                    #   改为显式留痕，让「未定位」在日志里可见而不是伪装成验证失败。
+                    _llm_no_file = not str(_issue.get("file", "") or "").strip()
+                    # ★第90批 T-90a：original_code 必填（与 _llm_no_file /
+                    #   _llm_bad_material **同型**处置）。
+                    #   补丁的 original_code 取自素材 _snippet；素材为空时
+                    #   `_check_llm_patch_completeness` 关0 会以「缺少 original_code」
+                    #   拒绝（改前则由关3 以「相似度过低(0.00)」拒绝）⇒ 注定失败，
+                    #   不如不构造、不消耗一次 verify_in_copy，并显式留痕。
+                    #   ★可复现的现状（第90批 T0 实测）：`_llm_suggestion` 仅在
+                    #     `_snippet` 非空时被赋值（:1465 与降级分支 :1487）⇒ 本闸
+                    #     当前**结构性不可达**，属契约显式化（零行为变化），
+                    #     用于在素材提取链路未来变更时自保。
+                    _llm_no_snippet = not str(_snippet or "").strip()
+                    # ★第88批 T-88a：素材非代码（ERROR 日志文本）时不得构造补丁 ——
+                    #   补丁契约要求 original_code 能在目标文件里定位
+                    #   （_verify_in_copy 的「original_code not in full_content」），
+                    #   日志文本找不到 ⇒ 该补丁注定以「与原文相似度过低(0.03<0.5)」
+                    #   或「code_not_found」失败，且把「素材取错」误报成「LLM 生成
+                    #   残缺/截断」，掩盖真因。与第87批 _llm_no_file 同型处置：
+                    #   注定失败就不再生成、也不再消耗一次 verify_in_copy，改为留痕。
+                    _llm_bad_material = bool(_m88_mat_on and _m88_src == "error_message")
+                    if _llm_no_snippet:
+                        _module_logger.warning(
+                            "[LLM修复] 跳过补丁构造：对比素材为空（无法提供 "
+                            "original_code，补丁字段契约不完整）——"
+                            "file=%s, organ=%s, method=%s, type=%s, 素材=0字",
+                            _loc_label, _organ, _method, _type)
+                    elif _llm_no_file:
+                        _module_logger.warning(
+                            "[LLM修复] 跳过补丁构造：问题未定位到文件"
+                            "（organ=%s, method=%s, type=%s）——补丁会因缺少 file "
+                            "字段被路径沙箱拒绝，先跳过避免无效验证",
+                            _organ, _method, _type)
+                    elif _llm_bad_material:
+                        _module_logger.warning(
+                            "[LLM修复] 跳过补丁构造：对比素材非代码（ERROR 日志文本，"
+                            "file=%s, organ=%s, method=%s, type=%s, 素材=%d字）——"
+                            "original_code 无法在目标文件中定位，补丁必然以"
+                            "「与原文相似度过低」或「code_not_found」失败；"
+                            "请按「无方法名的日志类问题缺少修复单元」处理",
+                            _loc_label, _organ, _method, _type, len(_snippet))
+                    if (_llm_clean and _llm_clean.strip() != _snippet.strip()
+                            and not _llm_no_file and not _llm_bad_material
+                            and not _llm_no_snippet):  # _M90_FIELD_CONTRACT
                         _llm_patch = {
                             "id": f"patch_llm_{int(__import__('time').time())}_{abs(hash(_llm_clean)) & 0xFFFF:04x}",
                             "file": _issue.get("file", ""),
@@ -1544,6 +1876,11 @@ class SafeEvolutionExecutor:
         #   无法据此判断自主进化到底有没有干活（星轨据此报了 N1）。
         #   此处补齐两个键，并额外给出是否全部跳过的标记，便于排查。
         _repaired = _local_submitted + _submitted
+        # ★M84-4（第84批 T-84b）：口径分层——`_repaired` 实为「提交待审批数」，
+        #   与「已应用」「已验证修复」是三个不同的量。此前统一叫"修复"，导致下游
+        #   （含只读诊断）把 _repaired=0 误读为"要求运行时验证通过才 +1 的天花板"。
+        #   本行**只读**补丁历史做汇总，不改任何既有返回值与流程。
+        _m84_ledger = self._m84_patch_ledger()
         _total_in = max(1, len(_sorted_issues[:_process_count]))
         # ★PHASE13-P1-1（2026-09-07）：skipped_no_snippet 口径修错。
         #   原写法 `_total_in - _repaired` 把**所有未修复**问题都算成
@@ -1567,16 +1904,22 @@ class SafeEvolutionExecutor:
         #   此处是唯一同时掌握「本轮处理问题数」与「真实修复数 _repaired」的位置
         #   （main.py 的 repaired/pass_rate 正是取自本返回字典），故埋在这里最准。
         #   只做计数与落盘，绝不改变原有返回值与流程。
+        _m84_extra = {"skip_reasons": _result_reasons, "skipped": _skipped,
+                      "submitted": _submitted,
+                      "local_patched": _local_patched, "local_verified": _local_verified}
+        if _m84_ledger:
+            _m84_extra.update(_m84_ledger)
         self._log_evolution_health(len(_sorted_issues[:_process_count]), _repaired,
-                                    {"skip_reasons": _result_reasons, "skipped": _skipped,
-                                     "submitted": _submitted,
-                                     "local_patched": _local_patched, "local_verified": _local_verified})
+                                   _m84_extra)
         try:
             from nucleus.evolution.PatchAutoApprover import record_evolution_round
+            _m84_round_extra = {"submitted": _submitted,
+                                "local_patched": _local_patched,
+                                "local_verified": _local_verified}
+            if _m84_ledger:
+                _m84_round_extra.update(_m84_ledger)
             record_evolution_round(
-                len(_sorted_issues[:_process_count]), _repaired,
-                {"submitted": _submitted, "local_patched": _local_patched,
-                 "local_verified": _local_verified})
+                len(_sorted_issues[:_process_count]), _repaired, _m84_round_extra)
         except Exception as e:
             _module_logger.debug(f"修复率埋点异常已忽略: {type(e).__name__}: {e}")
         return {
@@ -1783,6 +2126,64 @@ class SafeEvolutionExecutor:
             "detail": _detail,
         }
 
+    def _m84_recompute_split(self, patch: dict[str, Any]) -> bool:
+        """★M84-3（第84批 T-84a）：运行时验证写回后重算 problem_fixed。
+
+        背景（实测）：``patch_verification_split.apply_split`` 此前**只在补丁落盘到
+        history 时**被调用一次（``PatchManager.apply_all_pending`` 内，L1960），那一刻
+        ``post_apply_errors`` 尚未产生、``baseline_errors`` 多为 0 → ``problem_fixed``
+        恒为 None（实测 63/64）→ ``real_fix_rate`` 恒 0.0%。
+
+        本方法在运行时验证写回 ``runtime_verify_result`` / ``post_apply_errors``
+        **之后**重算一次拆分字段，闭合"跑了但没写回"的断链。
+
+        ★绝不改变验证/回滚流程与任何返回值；异常降级为 DEBUG（不阻断）。
+        """
+        try:
+            if not isinstance(patch, dict):
+                return False
+            from nucleus.evolution.patch_verification_split import (
+                apply_split as _apply_split84,
+            )
+            _apply_split84(patch)
+            return True
+        except Exception as _e84:
+            _module_logger.debug(
+                f"[语义拆分] 运行时写回重算失败（已忽略）: {type(_e84).__name__}: {_e84}")
+            return False
+
+    def _m84_patch_ledger(self) -> dict[str, Any]:
+        """★M84-4（第84批 T-84b）：补丁账本分层计数（**只读**，不改任何状态）。
+
+        把此前被混为一谈的三个口径分开暴露：
+            * ``applied_total``        —— 已落盘到活代码的补丁数
+            * ``problem_fixed_true``   —— 语义拆分判定「问题真消失」的补丁数
+            * ``problem_fixed_known``  —— 可判定的补丁数（problem_fixed 非 None）
+            * ``history_total``        —— 补丁历史总条数
+
+        动机：``_repaired`` 实为「提交待审批数」（见 L1582），却与"修复数"同名，
+        下游（含只读诊断）据此误判过一轮。本方法只读汇总，供日志与埋点分层呈现。
+        异常一律返回空 dict（调用方跳过附加字段）。
+        """
+        try:
+            _hist = self._patch_manager.load_json(
+                self._patch_manager.get_history_file(), [])
+            if not isinstance(_hist, list):
+                return {}
+            _applied = sum(1 for _p in _hist
+                           if isinstance(_p, dict) and _p.get("applied"))
+            _pf_true = sum(1 for _p in _hist
+                           if isinstance(_p, dict) and _p.get("problem_fixed") is True)
+            _pf_known = sum(1 for _p in _hist
+                            if isinstance(_p, dict) and _p.get("problem_fixed") is not None)
+            return {"history_total": len(_hist), "applied_total": _applied,
+                    "problem_fixed_true": _pf_true,
+                    "problem_fixed_known": _pf_known}
+        except Exception as _e84:
+            _module_logger.debug(
+                f"[补丁账本] 分层计数失败（已忽略）: {type(_e84).__name__}: {_e84}")
+            return {}
+
     def verify_submitted_patches(self) -> dict[str, Any]:
         """★P1-2：批量验证所有已提交补丁的运行时修复效果。
 
@@ -1806,6 +2207,10 @@ class SafeEvolutionExecutor:
                 if not _patch.get("needs_runtime_verify"):
                     continue
                 if _patch.get("runtime_verified"):
+                    # ★M84-3（第84批 T-84a）：历史已验补丁补算 problem_fixed——
+                    #   此前本分支直接 continue，使旧补丁永久停在 None（实测 4 条
+                    #   PulseKidney 补丁 baseline>0 效果 100% 却无该字段）。
+                    self._m84_recompute_split(_patch)
                     continue  # 已验证过，跳过
                 _total += 1
 
@@ -1815,6 +2220,9 @@ class SafeEvolutionExecutor:
                 # ★第41批 T1（P0-263）：回写应用后错误数（任务书要求，此前缺失）
                 _patch["post_apply_errors"] = _result.get(
                     "post_apply_errors", _result.get("after_fix", 0))
+                # ★M84-3（第84批 T-84a）：baseline + post_apply_errors 均已齐备 →
+                #   重算语义拆分，把 problem_fixed 从 None 落到 True/False。
+                self._m84_recompute_split(_patch)
 
                 if _result["verified"]:
                     _verified += 1
@@ -1930,6 +2338,9 @@ class SafeEvolutionExecutor:
                 if not _patch.get("needs_runtime_verify"):
                     continue
                 if _patch.get("runtime_verified"):
+                    # ★M84-3（第84批 T-84a）：已验补丁补算 problem_fixed（与
+                    #   verify_submitted_patches 同源处置）。
+                    self._m84_recompute_split(_patch)
                     continue
                 _total += 1
 
@@ -1966,6 +2377,10 @@ class SafeEvolutionExecutor:
                     "detail": (f"应用后错误={_after}, 基线={_baseline}, "
                                f"效果={_effectiveness:.0%}, 运行{_elapsed:.0f}秒"),
                 }
+                # ★M84-3（第84批 T-84a）：应用后计数已实测 → 回写顶层 post_apply_errors
+                #   并重算语义拆分（此前只写 runtime_verify_result，problem_fixed 不更新）。
+                _patch["post_apply_errors"] = _after
+                self._m84_recompute_split(_patch)
 
                 if _verified_ok:
                     _verified += 1
@@ -2247,6 +2662,165 @@ class SafeEvolutionExecutor:
             _i += 1
         return "".join(_out), _count
 
+    # ========== ★第91批 T-91b：LLM 补丁缩进契约 ==========
+
+    _M91_INDENT_UNIT = 4
+    _M91_REPAIR_ROUNDS = 8
+
+    @staticmethod
+    def _m91_base_indent(code: str) -> int:
+        """代码片段的**基础缩进宽度** = 首个**可执行行**的前导空白宽度（tab 按 4 展开）。
+
+        为什么它是要害：`PatchManager._verify_in_copy` 用
+        `full_content.replace(original_code, modified_code)` **原位整段替换**，
+        对此后的缩进**一字不改** ⇒ modified 的基础缩进必须与 original 一致。
+        不一致时替换结果**仍是合法 Python**，却会把**类体/函数体提前终止**。
+        2026-09-20 实测（星轨 T-91d 自动应用 LLM 补丁，三关 + py_compile + import 全放行）：
+          PulseInnerWorld.py 类方法 367 → 270（-97）
+          PulseLung.py       类方法  86 →  45（-41）
+
+        ★为什么必须跳过**空行与纯注释行**（第91批 T0 实测，真实补丁取证）：
+        LLM 常见形态是「在 col 0 前置模块级注释/import，再保留原有方法体」，例如
+        patch_llm_1789462016_8789 首行是 col 0 的注释、其后方法体仍在 8；
+        Python 词法器**不把注释当作缩进层级** ⇒ 首行注释落在 col 0 **无害**。
+        若按「首个非空行」算会把 base 误判为 0，触发**多余的整体平移**
+        （把注释与整个方法体一起推深），改变补丁内容却没有必要。
+        同理 patch_llm_1789886195_fb44（PulseInterestModel）是纯注释前置，
+        实测其结构损伤仅为「注释缩进退化」（无害），与此判据一致。
+        """
+        if not code:
+            return -1
+        for _ln in str(code).split("\n"):
+            _s = _ln.strip()
+            if not _s or _s.startswith("#"):
+                continue
+            return len(_ln[: len(_ln) - len(_ln.lstrip(" \t"))].expandtabs(4))
+        return -1
+
+    @staticmethod
+    def _m91_indent_levels(lines, unit: int = 4) -> set:
+        """给定若干行，返回其中**代码行**已出现过的缩进宽度集合（tab 按 unit 展开）。
+
+        跳空行与纯注释行，口径与 `_m91_base_indent` 一致（注释不构成缩进层级）。
+        """
+        _out = set()
+        for _ln in lines:
+            _b = _ln.lstrip(" \t")
+            if not _b or _b.startswith("#"):
+                continue
+            _out.add(len(_ln[: len(_ln) - len(_b)].expandtabs(unit)))
+        return _out
+
+    def _m91_repair_indentation(self, code: str) -> str:
+        """把「缩进漂移」修复为结构自洽（**只改 Python 实际报错那一行的行首空白**）。
+
+        契约（三条都是可断言的行为，见 tests/test_llm_indent_contract_m91.py）：
+          1) 输入若能通过「关2 同口径」判据 ⇒ **逐字原样返回**（零误伤，构造上成立）；
+          2) 返回值**要么与输入逐字相同，要么能通过关2 同口径判据**（无中间态）；
+          3) 只改「行首空白」，不改任何行的 `strip()` 后内容。
+
+        算法：反复取关2 同口径解析的**首个错误行号** → 用 `SyntaxError.lineno` 定位原始行
+        （包裹文本第 1 行是 `def _wrap():`，其后第 k 行对应内容第 k-1 行；再补偿
+        `strip()` 去掉的行前空行数）→ 该行缩进吸附到「本行之前已出现过的合法层级」
+        （**等距取更深者**：`def f():`(4) / `x=1`(8) / `return x`(6) 中 6 应吸附 8，
+        否则 `return` 落到函数外）；每轮只在**能过关2 判据**时采纳，最多 8 轮。
+
+        ★为什么**不能**改成「逐行试吸附」（第91批 T0 实测教训）：
+        逐行试吸附会重排**多行字符串内部**的行 —— SafeEvolutionExecutor 内实测
+        **35 个方法**的 docstring 被压到 col 0（字符串内容被静默改写）。
+        行定位法从构造上排除该风险：字符串行**永远不会**触发缩进错误，
+        故被修改的行必然是代码行。同时「输入已过关2 则逐字不动」也一并成立。
+        """
+        if not code:
+            return code
+        _unit = self._M91_INDENT_UNIT
+        _cur = str(code)
+        for _ in range(self._M91_REPAIR_ROUNDS):
+            _g2_ok, _g2_err, _g2_line = _m91_gate2_parse(_cur)
+            if _g2_ok:
+                break
+            if _g2_line <= 1:
+                break                      # 非「可定位到内容行」的错误（如非法字符）
+            _lines = _cur.split("\n")
+            _lead = 0
+            while _lead < len(_lines) and not _lines[_lead].strip():
+                _lead += 1
+            _i = _lead + _g2_line - 2      # 包裹行号 → 原始行下标
+            if not (0 <= _i < len(_lines)):
+                break
+            _body = _lines[_i].lstrip(" \t")
+            if not _body or _body.startswith("#"):
+                break
+            _raw = _lines[_i][: len(_lines[_i]) - len(_body)]
+            _w = len(_raw.expandtabs(_unit))
+            _cands = set(self._m91_indent_levels(_lines[:_i], _unit))
+            _cands.add((_w // _unit) * _unit)
+            _cands.add(((_w // _unit) + 1) * _unit)
+            _next = None
+            for _c in sorted(_cands, key=lambda _c: (abs(_c - _w), -_c)):
+                if _c == _w and _raw == " " * _w:
+                    continue
+                _trial = list(_lines)
+                _trial[_i] = " " * _c + _body
+                _trial_s = "\n".join(_trial)
+                if _m91_gate2_check(_trial_s)[0]:
+                    _next = _trial_s
+                    break
+            if _next is None and _g2_err.startswith("TabError"):
+                # ★TabError 的报错行**可能落在 tab 行的下一行**：词法器要等到下一次
+                #   INDENT/DEDENT 比较时才察觉 tab/空格混用（T0 实测：tab 在第 3 行、
+                #   报错行却是第 4 行）⇒ 行定位修不掉。兜底为「行首 tab 按 4 列展开」：
+                #   只改行首空白、不触碰任何 token，且仍要求关2 同口径自检通过才采纳。
+                _tabs = "\n".join(
+                    (" " * len(_ln[: len(_ln) - len(_ln.lstrip(" \t"))].expandtabs(_unit))
+                     + _ln.lstrip(" \t")) if _ln.strip() else _ln
+                    for _ln in _lines)
+                if _tabs != _cur and _m91_gate2_check(_tabs)[0]:
+                    _next = _tabs
+            if _next is None:
+                break
+            _module_logger.debug(
+                "[LLM缩进修复] 第%d行缩进 %d -> 修复，关2 同口径自检通过（原报错: %s）",
+                _i + 1, _w, _g2_err)
+            _cur = _next
+        if _m91_gate2_check(_cur)[0]:
+            return _cur
+        return code
+
+    def _m91_align_base_indent(self, original_code: str, modified_code: str,
+                               context: str = "") -> tuple:
+        """把 modified 的**基础缩进**整体平移到与 original 同级；返回 (代码, 位移)。
+
+        · 均匀平移只给每个非空行加同一前缀 ⇒ 相对缩进结构与全部 token 守恒；
+        · 位移为 0（或开关关闭）→ 原样返回，零副作用；
+        · 平移后用**关2 同口径**判据复验，不通过则放弃（宁可交给验证关以明确理由拒绝，
+          也不引入新的破损）；
+        · 反向（modified 更深）不处理：裁剪缩进可能把行裁空，风险高于收益，
+          交给验证关以明确理由拒绝。
+        · 改变了补丁内容就必须留痕（本项目「伪静默」铁律）⇒ 内部 info 日志。
+        """
+        if not _m91_indent_repair_on() or not original_code or not modified_code:
+            return modified_code, 0
+        _bo = self._m91_base_indent(original_code)
+        _bm = self._m91_base_indent(modified_code)
+        if _bo < 0 or _bm < 0 or _bo <= _bm:
+            return modified_code, 0
+        _delta = _bo - _bm
+        _pad = " " * _delta
+        _fixed = "\n".join(
+            (_pad + _ln) if _ln.strip() else _ln
+            for _ln in str(modified_code).split("\n"))
+        _g2_ok_a, _g2_err_a, _ = _m91_gate2_parse(_fixed)
+        if not _g2_ok_a:
+            _module_logger.debug(
+                "[LLM缩进对齐] 放弃对齐（平移后关2 同口径判据仍未通过: %s）%s",
+                _g2_err_a, context)
+            return modified_code, 0
+        _module_logger.info(
+            "[LLM缩进对齐] 基础缩进 %d -> %d（位移 %+d 空格），已消除"
+            "「类体/函数体被提前终止」风险 %s", _bm, _bo, _delta, context)
+        return _fixed, _delta
+
     def _clean_llm_code(self, text: str) -> str:
         """LLM 输出代码清理：去 markdown 围栏 +（必要时）全角标点归一化。
 
@@ -2283,6 +2857,27 @@ class SafeEvolutionExecutor:
                 return _fixed
             except SyntaxError:
                 _cur = _fixed
+        # ★第91批 T-91b 阶段3：缩进修复（灰度 ENABLE_M91_LLM_INDENT_REPAIR）。
+        #   T0 实测：4 次 LLM 补丁尝试全部因
+        #   `IndentationError: unindent does not match any outer indentation level
+        #    (<llm-patch>, line 9/11/19/26)` 被完整性关2 拒绝；复现实验逐字复现。
+        #   本函数此前只有「全角标点归一化」一种修复能力，对缩进无能为力。
+        #   ★采纳判据 = `_m91_gate2_check`（关2 同口径），**不是**本函数开头的
+        #     `ast.parse(_code)`：真实补丁是带缩进的方法体片段，后者恒失败
+        #     ⇒ 若用它会「修了也白修」。前置条件保证只对**关2 本来就会拒**的输入生效。
+        if _m91_indent_repair_on():
+            _m91_g2_ok0, _m91_g2_err0, _ = _m91_gate2_parse(_code)
+            if not _m91_g2_ok0:
+                for _cand_src in (_code, _cur):
+                    _rep = self._m91_repair_indentation(_cand_src)
+                    if not _rep or _rep == _cand_src:
+                        continue
+                    if not _m91_gate2_check(_rep)[0]:
+                        continue
+                    _module_logger.info(
+                        "[LLM代码清理] 缩进漂移已修复（关2 同口径自检由失败转通过）——"
+                        "修复前关2: %s", _m91_g2_err0)
+                    return _rep
         if _total_n:
             _module_logger.debug(
                 f"[LLM代码清理] 已归一化 {_total_n} 处全角/中文标点，语法仍不合法，"
@@ -2305,6 +2900,8 @@ class SafeEvolutionExecutor:
         if not _file or not original_code or not llm_fixed:
             return False
         _llm_clean = self._clean_llm_code(llm_fixed)  # ★PHASE17-A2
+        _llm_clean, _ = self._m91_align_base_indent(
+            original_code, _llm_clean, f"file={_file}, method={_method}")  # ★第91批T-91b
         if not _llm_clean or _llm_clean.strip() == original_code.strip():
             return False
         # ★FIX(AP60复现): LLM 补丁同样由方案数值评分推导风险/信任分，
@@ -2699,10 +3296,21 @@ class SafeEvolutionExecutor:
                             _module_logger.warning(
                                 f"审美门槛拦截: 补丁{_aesthetic_grade}级(质量低)转人工审批 {patch['id'][:16]}...")
                         else:
-                            # 核心文件额外标注，供后续健康度对比与告警链路区分风险等级
+                            # ★主线第79批 T1(P0 安全审计): 核心文件永远不自动批准，
+                            #   强制等待人工审批(status=verified)；仅非核心走自动批准(approved)。
                             if _is_core:
                                 patch["is_core_file"] = True
-                            patch["status"] = "approved"
+                                patch["status"] = self._resolve_core_auto_apply_status(_is_core)
+                                if self._core_auto_apply_allowed():
+                                    _module_logger.warning(
+                                        f"灰度开关允许核心文件自动批准(回退旧行为): "
+                                        f"{patch['id'][:16]}...")
+                                else:
+                                    _module_logger.warning(
+                                        f"核心文件强制人工审批(安全红线，不自动批准): "
+                                        f"{patch['id'][:16]}... → {patch['file']}")
+                            else:
+                                patch["status"] = "approved"
                     else:
                         patch["status"] = "verified"
                     self._patch_manager.save_pending_patch(patch)
@@ -3008,6 +3616,228 @@ class SafeEvolutionExecutor:
             }
         return None
 
+    # ===== ★M85-1（第85批 T-85a）：本地学习尝试通道 =====
+    #   动机（任务书 T-85a）：`Traceback` / `ERROR` / `cross_module_singleton_call`
+    #   / `long_method` 等未分类问题此前**完全不参与本地修复** —— L1178 的
+    #   `_local_ok = _type in _local_fixable_types` 为假 → 路径A 直接短路 →
+    #   本地机制失去学习机会，问题 100% 转 LLM，`submitted` 长期为 0。
+    #   ★设计报告（任务书授权"先出设计报告再改"）：
+    #     docs/分析报告/第85批_T85a本地学习尝试通道设计报告_20260919.md
+    #     任务书点名的 `_cooldown_classify` 只是**循环结束后的冷却登记分类**，
+    #     不参与"是否走本地"的决策；故本通道接在路径A 之后、路径B 之前。
+    @staticmethod
+    def _m85_learning_attempt_enabled() -> bool:
+        """★M85-1 灰度开关：本地学习尝试通道（默认 True）。
+
+        ★不改 config.py（红线②）：EVOLUTION_CONFIG 里没有该键时取默认 True；
+        显式置 False → 通道整体短路，行为回到改造前（零副作用）。
+        """
+        try:
+            import config as _m85c
+            _cfg = getattr(_m85c, "EVOLUTION_CONFIG", {})
+            if isinstance(_cfg, dict):
+                return bool(_cfg.get("learning_attempt_enabled", True))
+            return True
+        except Exception:
+            return True
+
+    @staticmethod
+    def _m85_conservative_fix(issue_type: str, code: str) -> tuple[str, str]:
+        """对任意代码片段做一次**保守低风险**修复尝试。
+
+        Returns:
+            ``(strategy, modified_code)``；``strategy == ""`` 表示无安全修复。
+
+        ★只做两类「纯文本、语义不变量明确、可被 verify_in_copy 验证」的改写：
+          ① ``except_log``   —— ``except [X]: <换行> pass`` → 补错误日志
+          ② ``http_timeout`` —— 无 ``timeout=`` 的 requests 调用 → 补 timeout
+        其余形态（try-except 包裹裸调用 / None 检查 / 方法拆解）需要作用域与
+        数据流分析，不属"低风险保守"范畴 → **如实返回无安全修复**，
+        由调用方记为 ``no_safe_fix`` 并交给既有 LLM 通道（不硬做）。
+        """
+        if not isinstance(code, str) or not code.strip():
+            return "", code or ""
+        import ast as _m85_ast
+        import re as _m85_re
+        import textwrap as _m85_tw
+
+        _cands: list[tuple[str, str]] = []
+
+        # ---- ① except 块内裸 pass → 补日志（与既有 silent_exception 同形）----
+        try:
+            _pat_pass = _m85_re.compile(
+                r"(?m)^(\s*)except([^\n:]*):\s*\n\s*pass\b")
+
+            def _repl_pass(_m):
+                _exc = _m.group(2).strip()
+                # 去掉已存在的 as 别名，避免 "except X as e as e:"
+                _exc = _m85_re.sub(r"\s+as\s+\w+\s*$", "", _exc).strip()
+                if not _exc:
+                    _exc = "Exception"
+                return ("%sexcept %s as e:\n%s    self._log("
+                        "LogLevel.ERROR, f'异常: {e}')"
+                        % (_m.group(1), _exc, _m.group(1)))
+
+            _cand1 = _pat_pass.sub(_repl_pass, code)
+            if _cand1 != code:
+                _cands.append(("except_log", _cand1))
+        except Exception as _cand1_err:
+            # ★第87批：m7 门禁（7 个核心文件不得出现静默 except）要求兜底必须留痕。
+            #   行为零变化 —— 仍是「丢弃候选①、继续尝试候选②」，仅补一条 DEBUG。
+            _module_logger.debug(
+                f"[M85 保守修复] 候选生成失败（已忽略）: except 补日志 "
+                f"({type(_cand1_err).__name__}: {_cand1_err})")
+
+        # ---- ② requests 无 timeout → 补 timeout ----
+        try:
+            _pat_http = _m85_re.compile(
+                r"requests\.(?:get|post|put|delete|patch|head)\(")
+            for _m in _pat_http.finditer(code):
+                _depth, _i = 1, _m.end()
+                while _i < len(code) and _depth > 0:
+                    _ch = code[_i]
+                    if _ch == "(":
+                        _depth += 1
+                    elif _ch == ")":
+                        _depth -= 1
+                    _i += 1
+                if _depth != 0:
+                    continue
+                _args = code[_m.end():_i - 1]
+                if "timeout" in _args:
+                    continue
+                _sep = ", " if _args.strip() else ""
+                _cand2 = (code[:_i - 1] + _sep + "timeout=10" + code[_i - 1:])
+                _cands.append(("http_timeout", _cand2))
+                break
+        except Exception as _cand2_err:
+            # ★第87批：同上（m7 门禁）。行为零变化，仅补 DEBUG 留痕。
+            _module_logger.debug(
+                f"[M85 保守修复] 候选生成失败（已忽略）: requests 补 timeout "
+                f"({type(_cand2_err).__name__}: {_cand2_err})")
+
+        # ---- 自检：改写结果必须能解析为合法 Python，否则放弃（保守）----
+        for _s, _cand in _cands:
+            if not _cand or _cand == code:
+                continue
+            _ok = False
+            for _v in (_cand, _m85_tw.dedent(_cand)):
+                try:
+                    _m85_ast.parse(_v)
+                    _ok = True
+                    break
+                except Exception:
+                    continue
+            if _ok:
+                return _s, _cand
+        return "", code
+
+    def _m85_record_learning_attempt(self, issue_type, file_path, method,
+                                     strategy, res, verify_reason="") -> None:
+        """★M85-1：把一次学习尝试追加写入 JSONL（append-only，永不覆盖）。
+
+        落盘：``<project_root>/data/patches/local_learning_attempts.jsonl``
+        （任务书 §T-85a.2 指定字段 + patch_id / verify_reason 便于审计）。
+        """
+        import json as _m85_json
+        _dir = os.path.join(self._project_root, "data", "patches")
+        os.makedirs(_dir, exist_ok=True)
+        _row = {
+            "ts": round(time.time(), 3),
+            "issue_type": issue_type,
+            "file": file_path,
+            "method": method,
+            "attempted_fix": strategy,
+            "strategy": strategy,
+            "result": res.get("result", ""),
+            "llm_fallback": bool(res.get("llm_fallback", True)),
+            "patch_id": res.get("patch_id", ""),
+            "verify_reason": verify_reason,
+            "version": "M85-1",
+        }
+        _path = os.path.join(_dir, "local_learning_attempts.jsonl")
+        with open(_path, "a", encoding="utf-8") as _fh:
+            _fh.write(_m85_json.dumps(_row, ensure_ascii=False) + "\n")
+
+    def _m85_learning_attempt(self, issue, file_path, method, snippet,
+                              organ="") -> dict:
+        """★M85-1（第85批 T-85a）：对未分类问题做一次保守修复尝试并记录学习结果。
+
+        流程：生成保守修复 → 副本验证 → 通过则**入队待审批**（★不自动应用，
+        见 PatchManager._m85_local_low_risk_auto_apply 显式排除 learning_attempt）
+        → 无论成败均追加写学习日志。
+
+        ★不改变调用方行为：本方法**不抛异常**，返回值仅供调用方可选使用。
+        """
+        _type = str((issue or {}).get("type", "") or "")
+        _res = {"result": "no_safe_fix", "strategy": "",
+                "llm_fallback": True, "patch_id": ""}
+        if not self._m85_learning_attempt_enabled():
+            _res["result"] = "disabled"
+            return _res
+        _strategy, _verify_reason = "", ""
+        try:
+            _strategy, _modified = self._m85_conservative_fix(_type, snippet)
+            if not _strategy or not _modified or _modified == snippet:
+                _res["result"] = "no_safe_fix"
+            else:
+                _patch = {
+                    "id": "patch_learn_%d_%04x" % (
+                        int(time.time()), abs(hash(_modified)) & 0xFFFF),
+                    "file": file_path,
+                    "method": method,
+                    "issue_type": _type,
+                    "risk_level": "低",
+                    "description": "本地学习尝试(%s): %s" % (_strategy, _type),
+                    "original_code": snippet,
+                    "modified_code": _modified,
+                    "diff_summary": self._generate_diff_summary(snippet, _modified),
+                    "trust_score": 55,
+                    "confidence": "high",
+                    "repair_source": "local_learning",
+                    "generated_at": time.time(),
+                    "status": "pending",
+                    "applied": False,
+                    "source": "local_learning",
+                    "learning_attempt": True,
+                    "attempted_fix": _strategy,
+                }
+                _verify = self._patch_manager.verify_in_copy(_patch)
+                _patch["verification"] = _verify
+                _verify_reason = str(_verify.get("reason", ""))[:200]
+                if _verify.get("passed"):
+                    _res["result"] = "success"
+                    _res["patch_id"] = _patch["id"]
+                    _res["llm_fallback"] = False
+                    try:
+                        _patch["status"] = "verified"
+                        _patch["needs_runtime_verify"] = True
+                        self._patch_manager.save_pending_patch(_patch)
+                        _module_logger.info(
+                            "[M85 学习尝试] %s.%s (%s) 保守修复通过验证，已入队待审批"
+                            "（策略=%s）", organ, method, _type, _strategy)
+                    except Exception as _qe:
+                        _module_logger.warning(
+                            "[M85 学习尝试] 入队失败（已忽略）: %s: %s",
+                            type(_qe).__name__, _qe)
+                else:
+                    _res["result"] = "failed"
+            _res["strategy"] = _strategy
+        except Exception as _e:
+            _module_logger.debug(
+                "[M85 学习尝试] 异常已忽略: %s: %s", type(_e).__name__, _e)
+            _res["result"] = "error"
+            _verify_reason = "%s: %s" % (type(_e).__name__, _e)
+        try:
+            self._m85_record_learning_attempt(
+                _type, file_path, method, _strategy, _res, _verify_reason)
+        except Exception as _re:
+            _module_logger.debug(
+                "[M85 学习尝试] 学习记录写入失败（已忽略）: %s: %s",
+                type(_re).__name__, _re)
+        return _res
+
+
     def _generate_patch(self, plan: dict[str, Any], 
                          self_inspector=None) -> dict[str, Any] | None:
         """
@@ -3051,7 +3881,7 @@ class SafeEvolutionExecutor:
         #   补丁重复生成 34 次，每次都走「同题择优保留」白白浪费 LLM 调用。
         #   此处从源头拦截：只要同位置已有待审批补丁，就不再重新生成。
         try:
-            if self._patch_manager.has_pending_patch_for(file_path, method_name):
+            if self._m94_pending_blocks_regeneration(file_path, method_name):
                 _module_logger.debug(
                     f"[补丁预检] 同文件同方法已有待审批补丁，跳过生成: "
                     f"{os.path.basename(file_path) if isinstance(file_path, str) else file_path}:{method_name}")
@@ -3382,7 +4212,9 @@ class SafeEvolutionExecutor:
 
             def _try_ast_parse(code: str) -> tuple:
                 try:
-                    _ast_qc.parse(code)
+                    # ★第83批 T-a2：ast.parse 不传 filename 时告警显示 <unknown>，
+                    #   无法定位是哪段 LLM 补丁代码。统一标注来源文件。
+                    _ast_qc.parse(code, filename="<llm-patch>")
                     return (True, None)
                 except SyntaxError as _e:
                     return (False, f"{_e.msg} (line {_e.lineno})")
@@ -3748,6 +4580,9 @@ class SafeEvolutionExecutor:
                 return None
             # 清理 LLM 输出的 markdown 代码块
             _llm_clean = self._clean_llm_code(_llm_fixed)  # ★PHASE17-A2
+            _llm_clean, _ = self._m91_align_base_indent(
+                original_code, _llm_clean,
+                f"file={_issue.get('file', '')}, method={method_name}")  # ★第91批T-91b
             if not _llm_clean or _llm_clean.strip() == original_code.strip():
                 return None
 
@@ -3829,9 +4664,22 @@ class SafeEvolutionExecutor:
                     _module_logger.warning(
                         f"审美门槛拦截: 跨文件补丁D级(质量低)转人工审批 {patch.get('id', '')[:16]}...")
                 else:
-                    if self._is_core_file(patch.get("file", "")):
+                    # ★主线第79批 T1(P0 安全审计): 跨文件补丁同样——核心文件永远不自动批准，
+                    #   强制等待人工审批(status=verified)；仅非核心走自动批准(approved)。
+                    _is_core = self._is_core_file(patch.get("file", ""))
+                    if _is_core:
                         patch["is_core_file"] = True
-                    patch["status"] = "approved"
+                        patch["status"] = self._resolve_core_auto_apply_status(_is_core)
+                        if self._core_auto_apply_allowed():
+                            _module_logger.warning(
+                                f"灰度开关允许核心文件自动批准(回退旧行为): "
+                                f"{patch.get('id', '')[:16]}...")
+                        else:
+                            _module_logger.warning(
+                                f"核心文件强制人工审批(安全红线，不自动批准): "
+                                f"{patch.get('id', '')[:16]}... → {patch.get('file', '')}")
+                    else:
+                        patch["status"] = "approved"
             else:
                 patch["status"] = "verified"
             self._patch_manager.save_pending_patch(patch)

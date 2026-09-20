@@ -11,6 +11,7 @@ runtime_metrics.py —— 运行时指标
 定位: 监控层
 """
 
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 from config import TIMEOUT_CONFIG
 import queue
 import threading
@@ -56,6 +57,15 @@ class RuntimeMetrics:
         # ★B3：最近一次瞬时队列深度（区别于 queue_max_depth 的峰值），
         #   用于告警判断——峰值不会下降，若用峰值做阈值会「一旦超阈值就持续告警」。
         self._last_queue_depth = 0
+        # ★主线第78批 T1：队列深度趋势窗口（每采样点记录一次瞬时深度，供趋势告警）
+        self._queue_depth_window: list = []
+        self._queue_depth_window_max = 12
+        # ★主线第78批 T3：内存占用趋势窗口（每采样点记录一次 mem_percent，供趋势/高水位告警）
+        self._mem_percent_window: list = []
+        self._mem_percent_window_max = 12
+        # ★主线第78批 T3：内存高水位阈值（>=80% 触发告警，呼应任务书验收<80%）
+        self._mem_percent_alert = 80.0
+        self._mem_percent_trend_delta = 10.0  # 窗口内涨幅>=10pct 且逼近阈值即趋势告警
 
         # ===== ★B1：滑动窗口平均（deque maxlen，只保留近期样本）=====
         # 累计平均 bug：pulse_count 单调递增，长时间运行后新样本权重→0。
@@ -95,22 +105,22 @@ class RuntimeMetrics:
         """记录一次脉冲处理（无锁投递，不阻塞主链路）。"""
         try:
             self._queue.put_nowait(("pulse", duration_ms, lock_wait_ms, queue_depth))
-        except queue.Full:
-            pass
+        except queue.Full as _se:
+            silent_exc(_se, "runtime_metrics.py:101")
 
     def record_error(self, pulse_type: str, error: str, traceback_text: str, lock_held: bool = False):
         """记录异常现场快照（脉冲类型 + 错误 + 调用栈 + 锁状态）。"""
         try:
             self._queue.put_nowait(("error", pulse_type, error, traceback_text, lock_held))
-        except queue.Full:
-            pass
+        except queue.Full as _se:
+            silent_exc(_se, "runtime_metrics.py:108")
 
     def record_reentry(self, task_name: str):
         """记录周期任务重入触发。"""
         try:
             self._queue.put_nowait(("reentry", task_name))
-        except queue.Full:
-            pass
+        except queue.Full as _se:
+            silent_exc(_se, "runtime_metrics.py:115")
 
     def _aggregate_loop(self):
         """独立聚合线程：批量消费队列，更新指标（避免主链路被埋点拖慢）。"""
@@ -185,6 +195,14 @@ class RuntimeMetrics:
                 "mem_rss_mb": self.get_memory_usage().get("rss_mb", 0.0),
                 "mem_percent": self.get_memory_usage().get("percent", 0.0),
             }
+            # ★主线第78批 T1：记录瞬时队列深度进趋势窗口
+            self._queue_depth_window.append(self._last_queue_depth)
+            if len(self._queue_depth_window) > self._queue_depth_window_max:
+                self._queue_depth_window.pop(0)
+            # ★主线第78批 T3：记录内存占用进趋势窗口
+            self._mem_percent_window.append(_point.get("mem_percent", 0.0))
+            if len(self._mem_percent_window) > self._mem_percent_window_max:
+                self._mem_percent_window.pop(0)
             self._history.append(_point)
         # ★B3：告警检测（在锁外做，避免阻塞）
         self._check_alerts(_point)
@@ -231,8 +249,8 @@ class RuntimeMetrics:
                     _parts = [f"{_n} {_v:.0f}ms({_v / _total * 100:.0f}%)"
                               for _n, _v in _top]
                     _hot_lock_msg = f"，主要来源: {' | '.join(_parts)}"
-            except Exception:
-                pass  # 读取失败不影响告警本身（★旁路）
+            except Exception as _se:
+                silent_exc(_se, "runtime_metrics.py:241")
             _alerts.append({
                 "type": "lock_wait_high",
                 "level": "WARNING",
@@ -252,6 +270,52 @@ class RuntimeMetrics:
                 "actual": _depth,
                 "timestamp": _now,
             })
+        # ★主线第78批 T1：队列深度趋势告警（早期预警）。
+        #   绝对阈值只能在「已破阈」后告警；趋势告警在深度持续爬升、尚未破阈时
+        #   即提前示警，给运维缓冲窗口。窗口来自每采样点记录的 _last_queue_depth。
+        _w = self._queue_depth_window
+        if len(_w) >= 6:
+            _rising = all(_w[i] <= _w[i + 1] for i in range(len(_w) - 1))
+            _delta = _w[-1] - _w[0]
+            # 仅当：持续上升 + 涨幅显著 + 尚未触发绝对阈值告警 时示警
+            if _rising and _delta >= 800 and 0 < _w[-1] < _thr["queue_max_depth"]:
+                _alerts.append({
+                    "type": "queue_depth_trend_rising",
+                    "level": "WARNING",
+                    "message": (f"队列深度持续上升(趋势告警): 近{len(_w)}采样点从"
+                                f"{_w[0]}升至{_w[-1]}(+{_delta})"),
+                    "threshold": _thr["queue_max_depth"],
+                    "actual": _w[-1],
+                    "timestamp": _now,
+                })
+
+        # ★主线第78批 T3：内存占用告警（呼应任务书验收「内存<80%」）。
+        #   (a) 高水位：mem_percent 越过阈值即告警，给运维明确「已超验收线」信号；
+        #   (b) 趋势：窗口内持续上升且逼近阈值但未破阈时提前示警，避免陡增措手不及。
+        _mp = point.get("mem_percent", 0.0)
+        if _mp >= self._mem_percent_alert:
+            _alerts.append({
+                "type": "mem_percent_high",
+                "level": "WARNING",
+                "message": f"内存占用过高: {_mp:.1f}%(阈值{self._mem_percent_alert:.0f}%)",
+                "threshold": self._mem_percent_alert,
+                "actual": round(_mp, 1),
+                "timestamp": _now,
+            })
+        _mw = self._mem_percent_window
+        if len(_mw) >= 6:
+            _m_rising = all(_mw[i] <= _mw[i + 1] for i in range(len(_mw) - 1))
+            _m_delta = _mw[-1] - _mw[0]
+            if _m_rising and _m_delta >= self._mem_percent_trend_delta and 0 < _mw[-1] < self._mem_percent_alert:
+                _alerts.append({
+                    "type": "mem_percent_trend_rising",
+                    "level": "WARNING",
+                    "message": (f"内存占用持续上升(趋势告警): 近{len(_mw)}采样点从"
+                                f"{_mw[0]:.1f}%升至{_mw[-1]:.1f}%(+{_m_delta:.1f})"),
+                    "threshold": self._mem_percent_alert,
+                    "actual": round(_mw[-1], 1),
+                    "timestamp": _now,
+                })
 
         if not _alerts:
             return
@@ -270,8 +334,8 @@ class RuntimeMetrics:
                     _logger.error(_a["message"])
                 else:
                     _logger.warning(_a["message"])
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "runtime_metrics.py:298")
 
     def get_queue_depth(self) -> int:
         """★第64批 T4：获取当前瞬时队列深度（供自适应缓存 TTL 参考）。
@@ -298,8 +362,8 @@ class RuntimeMetrics:
             import psutil
             _cpu = float(psutil.cpu_percent(interval=None))
             _mem = float(psutil.virtual_memory().percent)
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "runtime_metrics.py:326")
         _level = "low"
         if _cpu > 85.0 or _qd > 10000:
             _level = "critical"
@@ -329,8 +393,8 @@ class RuntimeMetrics:
             _rss = _mi.rss / (1024.0 * 1024.0)
             _vms = _mi.vms / (1024.0 * 1024.0)
             _pct = float(_p.memory_percent())
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "runtime_metrics.py:357")
         return {"rss_mb": round(_rss, 1), "vms_mb": round(_vms, 1),
                 "percent": round(_pct, 1)}
 
@@ -348,8 +412,8 @@ class RuntimeMetrics:
                 _logger.warning(
                     f"[运行时指标] 内存使用率 {_pct:.1f}% ≥ 阈值 {threshold_percent:.1f}%，"
                     f"建议降载/触发 GC")
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "runtime_metrics.py:376")
             return True
         return False
 
@@ -407,14 +471,14 @@ class RuntimeMetrics:
                     _logger.warning(
                         "[运行时指标] 内存增长率 %.2fMB/分钟 ≥ 阈值 %.1fMB/分钟（疑似内存泄漏），"
                         "RSS=%.1fMB 使用率=%.1f%%", _growth, _growth_thr, _rss, _pct)
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "runtime_metrics.py:435")
             if auto_gc and _enable_gc:
                 try:
                     gc.collect()
                     _gc_done = True
-                except Exception:
-                    pass
+                except Exception as _se:
+                    silent_exc(_se, "runtime_metrics.py:441")
         return {"triggered": _triggered, "percent": _pct, "rss_mb": _rss,
                 "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done}
 
@@ -478,8 +542,8 @@ def shutdown_runtime_metrics() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "runtime_metrics.py:506")
 
 
 # ===== ★主线第67批 T4/P1：队列深度自适应降频机制 =====
@@ -542,8 +606,8 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
                 _level = "HIGH"
             elif _q >= _med:
                 _level = "MEDIUM"
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as _se:
+            silent_exc(_se, "runtime_metrics.py:570")
 
     if cpu_percent is not None:
         try:
@@ -554,16 +618,16 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
                 _level = "HIGH"
             elif _c > 50 and _level == "LOW":
                 _level = "MEDIUM"
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as _se:
+            silent_exc(_se, "runtime_metrics.py:582")
 
     if memory_percent is not None:
         try:
             _m = float(memory_percent)
             if _m > 90 and _level != "CRITICAL":
                 _level = "CRITICAL"
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as _se:
+            silent_exc(_se, "runtime_metrics.py:590")
 
     # 快照保存中：至少视为 MEDIUM（保存本身吃 IO，不宜再叠加非关键操作）
     if snapshot_saving and _level == "LOW":

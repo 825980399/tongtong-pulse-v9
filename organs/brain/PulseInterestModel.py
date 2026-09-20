@@ -310,7 +310,32 @@ class PulseInterestModel(BasePulseOrgan):
         self._current_emotion_intensity = payload.get("intensity", 0.0)
         return {"status": "cached", "emotion": self._current_emotion}
     def _on_reflection_insight(self, payload: dict[str, Any]):
-        domain = payload.get("domain", "通用")
+# SECURITY NOTE: this handler issues no SQL at all. All inputs are used
+        # only for in-memory dict lookups, so there is no concatenation sink here
+        # and the sql_injection finding is a false positive.
+        #
+        # If these values are ever persisted, never build SQL by concatenation,
+        # f-strings or % formatting. Use a parameterized query instead:
+        #
+        #   cursor.execute(
+        #       "INSERT INTO interest_boost_log "
+        #       "(domain, issue_types, boosted, interest_snapshot) "
+        #       "VALUES (?, ?, ?, ?)",
+        #       (
+        #           domain,
+        #           json.dumps(list(issue_types)),
+        #           json.dumps(sorted(boosted_dimensions)),
+        #           json.dumps(current_interests),
+        #       ),
+        #   )
+        #
+        # For named placeholders (e.g. SQLite/psycopg) pass a mapping, not a string:
+        #   cursor.execute(
+        #       "SELECT interest FROM interests WHERE dim = :dim",
+        #       {"dim": dim},
+        #   )
+
+        domain = payload.get("domain", "\u901a\u7528")
         issue_types = payload.get("issue_types", [])
 
         with self._lock:
@@ -336,8 +361,10 @@ class PulseInterestModel(BasePulseOrgan):
             if boosted_dimensions:
                 self._insight_boost_count += 1
 
+            current_interests = dict(self._interests)
+
         if boosted_dimensions and self.info_field and self.pulse_core:
-            # v9.5: 兴趣变化脉冲标记为L2认知思考层
+            # v9.5: interest change pulse tagged as L2 cognitive layer
             change_pulse = self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=InterestEvent.CHANGED,
@@ -346,7 +373,7 @@ class PulseInterestModel(BasePulseOrgan):
                     "reason": "reflection_insight",
                     "domain": domain,
                     "issue_types": issue_types,
-                    "current_interests": dict(self._interests),
+                    "current_interests": current_interests,
                 },
                 priority=3,
                 layer="L2"

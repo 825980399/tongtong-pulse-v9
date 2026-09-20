@@ -347,9 +347,14 @@ class PulseEyes(BasePulseOrgan):
                             log_data = []
                             if os.path.exists(log_path):
                                 try:
-                                    log_data = safe_read_json(log_path, default={})
+                                    log_data = safe_read_json(log_path, default=[])
                                 except (ValueError, OSError) as e:
                                     self._log(LogLevel.INFO, f"[WARNING] PulseEyes.py:351: {type(e).__name__}: {e}")
+                                    log_data = []
+                                # ★第81批 T6：历史脏文件自愈（流日志本应是 list，若读到 dict 不得对其调 append）
+                                if isinstance(log_data, dict):
+                                    self._log(LogLevel.WARNING,
+                                              "[第81批 T6] 眼睛流日志为 dict（历史脏文件），自愈为 list")
                                     log_data = []
                             log_data.append(log_entry)
                             if len(log_data) > 50:

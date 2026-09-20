@@ -394,9 +394,10 @@ def test_benchmark_synthetic_stages():
 
 
 def test_benchmark_real_loader_12295():
+    # 第82批 T-f：节点数随进化持续增长，改为下限容差，不断言精确值（不再硬编码 12295）
     import tools.benchmark_hot_cold_faiss_kal as bench
     nodes = bench._load_real_nodes("data/knowledge/parquet")
-    assert isinstance(nodes, list) and len(nodes) == 12295
+    assert isinstance(nodes, list) and len(nodes) >= 1000
 
 
 def test_benchmark_real_node_build():
@@ -559,13 +560,16 @@ def test_kal_query_common_neighbors_fallback():
 def test_kal_neo4j_read_enabled_flag():
     from nucleus.knowledge_access_layer import get_kal
     orr = getattr(config, "ENABLE_NEO4J_READ", False)
+    # ★第81批补2：一并保存另两个开关原值，退出时还原原值（原实现硬编码还原 False）
+    org = getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
+    odw = getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False)
     config.ENABLE_NEO4J_READ = True
     config.ENABLE_NEO4J_GRAPH_STORE = True
     config.ENABLE_NEO4J_DUAL_WRITE = True
     assert get_kal().neo4j_read_enabled() is True
     config.ENABLE_NEO4J_READ = orr
-    config.ENABLE_NEO4J_GRAPH_STORE = False
-    config.ENABLE_NEO4J_DUAL_WRITE = False
+    config.ENABLE_NEO4J_GRAPH_STORE = org
+    config.ENABLE_NEO4J_DUAL_WRITE = odw
 
 
 def test_kal_get_neo4j_read_stats(neo4j_env):

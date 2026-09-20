@@ -140,7 +140,7 @@ class TestT1Neo4jDualWritePool(unittest.TestCase):
         # 关闭时不写库、不抛异常
         try:
             self.pool._m71_influx_write("node_activated", "n1", "L1", "test")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.fail("influx write raised when off: %s" % e)
 
 

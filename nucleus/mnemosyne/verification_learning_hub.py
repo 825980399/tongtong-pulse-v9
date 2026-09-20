@@ -22,6 +22,13 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json
 
+# ★第87批 T-87c：验证决策校验日志的采样间隔（每 N 条不一致打 1 条 DEBUG）。
+#   原实现「每次不一致都打一条」，实测单次进化轮次可产出上百条
+#   （09-18~09-20 累计 1633 条），把同文件的 INFO/WARNING 淹没在 DEBUG 里。
+#   改为采样后噪声下降约 99%，可观测性由「首条必打 + 累计计数」保留。
+#   ≤0 表示禁用采样（回退为改造前的全量打印）。
+_VL_MISMATCH_LOG_EVERY = 100
+
 
 
 class VerificationLearningHub:
@@ -34,6 +41,9 @@ class VerificationLearningHub:
                  distill_threshold: int = 200):
         self._file_path = file_path
         self._distill_threshold = max(5, distill_threshold)  # 保留下限校验，删掉冗余的第二行
+        # ★第87批 T-87c：验证决策校验日志采样计数（纯计数，不参与任何判定）。
+        self._vl_mismatch_total = 0
+        self._vl_mismatch_logged = 0
         self._entries: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self._organ_appliers: dict[str, Callable] = {}
@@ -167,12 +177,28 @@ class VerificationLearningHub:
             try:
                 _should = self.should_verify(organ, task_type, confidence, relevance_score)
                 if _should != bool(needs_verification):
-                    self._log(LogLevel.DEBUG,
-                              f"[验证决策校验] {organ}/{task_type} 置信度={confidence:.2f} "
-                              f"匹配度={relevance_score:.2f}，规则判定={_should}，"
-                              f"实际={bool(needs_verification)}（不一致，供阈值调优参考）")
-            except Exception:
-                pass
+                    # ★第87批 T-87c：采样打印（判定逻辑与写入流程零改动）。
+                    #   首条必打（保证"机制在工作"始终可见）+ 每 _VL_MISMATCH_LOG_EVERY
+                    #   条打一条，并在每条采样日志里带上累计值，避免完全静默。
+                    self._vl_mismatch_total = getattr(
+                        self, "_vl_mismatch_total", 0) + 1
+                    _every87 = int(_VL_MISMATCH_LOG_EVERY)
+                    _should_log87 = (
+                        self._vl_mismatch_total == 1
+                        or (_every87 > 0 and self._vl_mismatch_total % _every87 == 0))
+                    if _should_log87:
+                        self._vl_mismatch_logged = getattr(
+                            self, "_vl_mismatch_logged", 0) + 1
+                        self._log(LogLevel.DEBUG,
+                                  f"[验证决策校验] {organ}/{task_type} 置信度={confidence:.2f} "
+                                  f"匹配度={relevance_score:.2f}，规则判定={_should}，"
+                                  f"实际={bool(needs_verification)}（不一致，供阈值调优参考；"
+                                  f"累计不一致={self._vl_mismatch_total} 条，"
+                                  f"已采样打印={self._vl_mismatch_logged} 条）")
+            except Exception as _vl87_err:
+                self._log(LogLevel.DEBUG,
+                          f"[验证决策校验] 校验失败（已忽略）: "
+                          f"{type(_vl87_err).__name__}: {_vl87_err}")
             # 防止意外膨胀
             if len(self._entries) > 2000:
                 self._entries = self._entries[-2000:]

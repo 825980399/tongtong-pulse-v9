@@ -39,6 +39,17 @@ _LOG_LEVEL_MARKER_RE = re.compile(
 )
 
 
+# ★第90批 T-90b：日志定位修复开关（bug#1 message 时机 + 有界重试 / bug#4 末帧）。
+#   开启（默认）→ 与修复同批的所有行为；关闭 → 逐字回到第90批前。
+#   默认值内联本模块（遵守红线「不改 config.py 开关」）。
+def _m90_log_locate_v2_on() -> bool:
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
+    except Exception:
+        return True
+
+
 def is_error_level_line(line: str) -> bool:
     """该行是否为**错误级**日志（ERROR / CRITICAL）。
 
@@ -193,19 +204,25 @@ class LogAnalyzer(SilentLogMixin):
                         _issue["count"] += 1
                         _issue["last_seen"] = _ts or time.time()
                         _issue["organ"] = _organ
+                        # ★第90批 T-90b bug#1（上半）：message 必须在定位**之前**填充。
+                        #   改前 message 在 locate 之后两行才赋值 ⇒ 首次定位调用的是
+                        #   `_locate_for_issue(organ, "")`，而
+                        #   `guess_method_from_message("")` 恒返回空方法名 ⇒ 即便文件
+                        #   定位成功也拿不到行号，且置信度被 -0.2 惩罚。
+                        if _m90_log_locate_v2_on() and not _issue["message"]:
+                            _issue["message"] = _line.strip()[:200]
                         # ★P0-7 位置补全：普通 ERROR 行不带 file/method/line，
                         #   SafeEvolutionExecutor 拿不到位置就无法生成补丁。
                         #   此处用 self_inspector 从「器官名 + 错误消息」反推。
-                        if not _issue.get("file_path") and not _issue.get("_locate_attempted"):
-                            _issue["_locate_attempted"] = True
-                            _loc = self._locate_for_issue(_organ, _issue["message"])
-                            if _loc and _loc.get("file"):
-                                _issue["file_path"] = _loc["file"]
-                                _issue["line"] = _loc.get("line", 0)
-                                _issue["method"] = _loc.get("method", "")
-                                _issue["locate_confidence"] = _loc.get("confidence", 0.0)
-                                _issue["needs_human_confirm"] = (
-                                    _loc.get("confidence", 0.0) < self._LOCATE_CONF_THRESHOLD)
+                        #   ★第90批 T-90b bug#1（下半）：由「试一次即永久封死」
+                        #     改为「有界重试」（message 细化后可再试，总次数 ≤
+                        #     _LOCATE_MAX_ATTEMPTS）；开关关闭→旧判据。
+                        if self._m90_should_locate(_issue):
+                            self._m90_mark_located(_issue)
+                            self._m90_apply_location(
+                                _issue, self._locate_for_issue(_organ, _issue["message"]))
+                        # ★兼容旧路径：message 兜底填充（v2 开启时此处恒为空操作的
+                        #   分支已被上面提前填过；关闭时即改前行为）。
                         if not _issue["message"]:
                             _issue["message"] = _line.strip()[:200]
 
@@ -223,12 +240,16 @@ class LogAnalyzer(SilentLogMixin):
             _snap = _rt.get_snapshot()
             for _err in _snap.get("error_snapshots", []):
                 _tb = _err.get("traceback", "")
-                _m = _TRACEBACK_FILE_RE.search(_tb)
-                if not _m:
+                # ★第90批 T-90b bug#4：Traceback 取**最后一帧**（= 致错点）。
+                #   改前用 `.search()` 取首帧 = **最外层调用者**
+                #   （实测嵌套三层时得到 `_level1`，真凶是 `_level3`），
+                #   ⇒ 定位到的位置永远停在调用链顶端。
+                #   开关关闭 → 逐字回到 `.search()` 首帧行为。
+                _frames = _TRACEBACK_FILE_RE.findall(_tb)
+                if not _frames:
                     continue
-                _file = _m.group("file")
-                _line_no = int(_m.group("line"))
-                _func = _m.group("func")
+                _fr = _frames[0] if not _m90_log_locate_v2_on() else _frames[-1]
+                _file, _line_no, _func = _fr[0], int(_fr[1]), _fr[2]
                 _key = f"rt:{_file}:{_line_no}:{_func}"
                 _issue = self._get_or_create(issues, _key, _file, _line_no, _func, "Exception")
                 _issue["count"] += 1
@@ -243,6 +264,54 @@ class LogAnalyzer(SilentLogMixin):
 
     # ★P0-7：定位置信度低于此值的问题标记为"需人工确认"，不进自动修复队列
     _LOCATE_CONF_THRESHOLD = 0.5
+    # ★第90批 T-90b bug#1：定位重试上限（同一条 message 只试一次；
+    #   message 被细化后可再试一次）。改前是「试过一次即永久封死」。
+    _LOCATE_MAX_ATTEMPTS = 2
+
+    def _m90_should_locate(self, issue: dict[str, Any]) -> bool:
+        """此刻是否应尝试定位（第90批 T-90b bug#1 修）。
+
+        改前：`not file_path and not _locate_attempted` —— 一旦试过就永久封死，
+        而首次尝试时 message 还是空串（见 `_scan_log_file` 的填入时机）⇒
+        该问题整个生命周期内定位机会为 0。
+
+        改后（有界重试）：
+          · 已定位到文件 → 不再试；
+          · message 为空 → 不试（无从下手，等 message 填充后再试）；
+          · 尝试次数 ≥ `_LOCATE_MAX_ATTEMPTS` → 不再试；
+          · 上次失败且 message 与上次**完全相同** → 不再试（避免纯重复开销）。
+        开关关闭 → 逐字回到改前判据。
+        """
+        if issue.get("file_path"):
+            return False
+        if not _m90_log_locate_v2_on():
+            return not issue.get("_locate_attempted")
+        _msg = str(issue.get("message", "") or "")
+        if not _msg:
+            return False
+        if int(issue.get("_locate_attempts", 0) or 0) >= self._LOCATE_MAX_ATTEMPTS:
+            return False
+        #   上次失败且 message 未变化 → 纯重复，不再试（SIM103：直接返回布尔）
+        return issue.get("_locate_tried_msg") != _msg
+
+    def _m90_mark_located(self, issue: dict[str, Any]) -> None:
+        """登记一次定位尝试（次数 + 本次所用 message），供有界重试判据使用。"""
+        issue["_locate_attempted"] = True     # 兼容既有字段（外部只读语义不变）
+        issue["_locate_attempts"] = int(issue.get("_locate_attempts", 0) or 0) + 1
+        issue["_locate_tried_msg"] = str(issue.get("message", "") or "")
+
+    def _m90_apply_location(self, issue: dict[str, Any],
+                            loc: dict[str, Any] | None) -> None:
+        """把定位结果写回问题记录（纯抽取，语义与改动前逐字一致）。"""
+        if not loc or not loc.get("file"):
+            return
+        issue["file_path"] = loc["file"]
+        issue["line"] = loc.get("line", 0)
+        issue["method"] = loc.get("method", "")
+        issue["locate_confidence"] = loc.get("confidence", 0.0)
+        issue["needs_human_confirm"] = (
+            loc.get("confidence", 0.0) < self._LOCATE_CONF_THRESHOLD)
+
 
     def _get_inspector(self):
         """惰性获取 SelfInspector（仅在需要补全位置时创建，避免拖慢常规扫描）。
@@ -297,6 +366,8 @@ class LogAnalyzer(SilentLogMixin):
                 "locate_confidence": 0.0,
                 "needs_human_confirm": False,
                 "_locate_attempted": False,
+                "_locate_attempts": 0,
+                "_locate_tried_msg": "",
             }
         return issues[key]
 

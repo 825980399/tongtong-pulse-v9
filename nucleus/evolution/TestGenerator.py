@@ -488,6 +488,10 @@ if __name__ == "__main__":
         "id": "test_smoke",
         "file": "nucleus/evolution/HealthScore.py",
         "method": "compute_health_score",
+        # ★第90批 T-90a：补齐 original_code —— 全库 11 个「补丁 dict 构造点」
+        #   中唯一缺该字段的一处（属 `__main__` 自测夹具，不进验证链路，
+        #   但字段契约应全库一致）。
+        "original_code": "def compute_health_score():\n    return {'score': 0}\n",
         "modified_code": "def compute_health_score():\n    return {'score': 100}\n",
     }
     _r = _gen.generate_and_run(_patch)

@@ -211,7 +211,9 @@ def backfill(patches: list[dict[str, Any]],
             granularity_dist, real_fix_rate, fixable_rate,
             old_claimed_rate, effectiveness_values}``
 
-        ★ ``real_fix_rate`` = ``problem_fixed=True`` / 总数
+        ★ ``real_fix_rate`` = ``problem_fixed=True`` / **可判定补丁数**
+          （第85批 T-85c 改口径：不可判定的 None **移出分母**，
+           否则指标会被永久压低到接近 0）
         ★ ``old_claimed_rate`` = 旧口径（verified=true）/ 总数 —— 用于对比虚高幅度
     """
     _n = len(patches)
@@ -247,6 +249,11 @@ def backfill(patches: list[dict[str, Any]],
                             if isinstance(_p.get("verification"), dict)
                             else bool(_p.get(F_VERIFIED))))
 
+    # ★M85-3（第85批 T-85c / D84-2）：不可判定（None）的补丁**移出分母**。
+    #   它们既不证明"修好了"也不证明"没修好"，留在分母只会把指标永久压低
+    #   （实测 64 条里 62 条 problem_fixed=None → 旧口径恒 ≈0%）。
+    #   同时用 verifiable_rate / verifiable_count 单独展示"有多少是可判定的"。
+    _verifiable = _pf.get(True, 0) + _pf.get(False, 0)
     return {
         "total": _n,
         "no_regression": {"true": _nr.get(True, 0), "false": _nr.get(False, 0),
@@ -254,9 +261,9 @@ def backfill(patches: list[dict[str, Any]],
         "problem_fixed": {"true": _pf.get(True, 0), "false": _pf.get(False, 0),
                           "none": _pf.get(None, 0)},
         "granularity_dist": _gran,
-        "real_fix_rate": round(_pf.get(True, 0) / _n, 4) if _n else 0.0,
-        "verifiable_rate": round(
-            (_pf.get(True, 0) + _pf.get(False, 0)) / _n, 4) if _n else 0.0,
+        "real_fix_rate": round(_pf.get(True, 0) / _verifiable, 4) if _verifiable else 0.0,
+        "verifiable_rate": round(_verifiable / _n, 4) if _n else 0.0,
+        "verifiable_count": _verifiable,
         "old_claimed_rate": round(_old_claimed / _n, 4) if _n else 0.0,
         "effectiveness_mean": (round(sum(_effs) / len(_effs), 4)
                                if _effs else None),
@@ -265,9 +272,11 @@ def backfill(patches: list[dict[str, Any]],
 
 
 def real_fix_rate(patches: list[dict[str, Any]]) -> float:
-    """**真实**修复率 = ``problem_fixed is True`` 占比。
+    """**真实**修复率 = ``problem_fixed is True`` / **可判定补丁数**。
 
-    ★取代旧的「基于 verified 的修复率」。不可判定的补丁**不计入分子**。
+    ★取代旧的「基于 verified 的修复率」。
+    ★第85批 T-85c（D84-2）：不可判定（``None``）的补丁**分子分母都不计**——
+    留在分母只会让指标永久接近 0，无助于判断本地修复能力的真实水平。
     """
     if not patches:
         return 0.0
@@ -275,6 +284,7 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
     if not _n:
         return 0.0
     _ok = 0
+    _known = 0
     for _p in patches:
         if not isinstance(_p, dict):
             continue
@@ -283,7 +293,12 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
             _pf = split_verification(_p)[F_PROBLEM_FIXED]
         if _pf is True:
             _ok += 1
-    return round(_ok / _n, 4)
+            _known += 1
+        elif _pf is False:
+            _known += 1
+    # ★M85-3（第85批 T-85c / D84-2）：分母 = 可判定补丁数（True + False）；
+    #   无可判定样本时返回 0.0（不返回 0/0 的 NaN，也不虚报满分）。
+    return round(_ok / _known, 4) if _known else 0.0
 
 
 def display_label(patch: dict[str, Any]) -> str:

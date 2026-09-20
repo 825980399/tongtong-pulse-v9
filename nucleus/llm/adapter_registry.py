@@ -39,6 +39,10 @@ class ExternalGatewayAdapter(BaseLLMAdapter):
     def parse_response(self, response):  # type: ignore[override]
         return OpenAICompatibleAdapter().parse_response(response)
 
+    def extract_usage(self, response):  # type: ignore[override]  # _m94_extract_usage_marker
+        """★第94批 T-94b：网关对外即 OpenAI 兼容格式，直接复用兼容实现。"""
+        return OpenAICompatibleAdapter().extract_usage(response)
+
     def check_availability(self, api_key: str) -> bool:
         # 未配置令牌即不可用 —— 保证默认（关闭网关）时零副作用
         return bool(api_key)

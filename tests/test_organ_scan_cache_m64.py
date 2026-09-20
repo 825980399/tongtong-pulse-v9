@@ -35,6 +35,13 @@ def _fresh_inspector():
     inst._l2_hits = 0
     inst._l2_misses = 0
     inst._scan_stats_last_log = 0.0
+    # ★主线第90批（顺手修存量）：第65批 T3/P2 在 __init__ 里新增了
+    #   get_method_body 文件级缓存的三个统计属性，而本用例走 __new__ 绕开
+    #   __init__ ⇒ get_scan_cache_stats() 抛 AttributeError，自第65批起一直红。
+    #   此处补齐（纯测试侧注入，无语义改动）。
+    inst._method_body_cache = {}
+    inst._method_body_hits = 0
+    inst._method_body_misses = 0
     inst._project_root = _ROOT
     return inst
 

@@ -11,6 +11,7 @@ self_inspector.py —— 自省检查器
 定位: 自省治理层
 """
 
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 import ast
 import os
 import re
@@ -35,6 +36,40 @@ def _get_logger():
         return logging.getLogger("self_inspector")
 
 _module_logger = _get_logger()
+
+
+# ★第90批 T-90b：日志/类名定位 v2 开关（bug#2 类索引接入 + bug#3 包含匹配）。
+#   开启（默认）→ 与修复同批的行为；关闭 → 逐字回到第90批前（仅中文名前缀匹配）。
+#   默认值内联本模块（遵守红线「不改 config.py 开关」）。
+def _m90_locate_v2_on() -> bool:
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
+    except Exception:
+        return True
+# ★第91批 T-91a：日志调用点定位 v3（logger 名 / 器官别名 两级**数据驱动**索引）。
+#   开启（默认）→ 在 v2（类索引 + 中文名包含）之上再接入两级新索引：
+#     ① logger 名字面量索引：静态扫描源码里的
+#        `get_organ_logger("X") / get_module_logger("X") / get_logger("X")`
+#        字面量 → 源文件，再按 PulseFormatter 规则反查日志 TAG；
+#     ② 器官别名索引：扫描器官 `organ_name: str = "X"` / `organ_name="X"` 声明。
+#   为什么必须有（第91批 T0 实测，非推测）：
+#     日志 TAG 由 `nucleus/logger.py::PulseFormatter` 从 **logger 名**派生——
+#       `pulse.organ.胸腺` → `胸腺`；`pulse.module.WriteGuard` → `WriteGuard`；
+#       `pulse.structured_parallel` → 原名。
+#     logger 名来自 `BasePulseOrgan.__init__` 的
+#       `self._logger = get_organ_logger(self.organ_name)`
+#     而旧 `_build_organ_name_index()` 读的是**统一头部中文短语**
+#       （`PulseEyes —— 脉冲驱动眼睛（知识检索器官 · v9.5 …）`）
+#     ⇒ 两个命名源结构性错位，16 个真实标签恒不可定位（覆盖率卡在 80.2%）。
+#   关闭 → 逐字回到第90批末行为（类索引 + 中文名前缀/包含），零回归。
+def _m91_log_locate_v3_on() -> bool:
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M91_LOG_LOCATE_V3", True))
+    except Exception:
+        return True
+
 
 # ★PHASE14（2026-09-07）：方法体定位的**聚合式**日志计数器。
 #   背景（2h33m 运行日志实测，36793 行）：
@@ -97,8 +132,8 @@ def _body_loc_tick(kind: str, offset: float | None = None) -> None:
                 _s[_k] = 0
             _s["offset_dist"] = {}
             _s["since"] = _t.time()
-    except Exception:
-        pass
+    except Exception as _se:
+        silent_exc(_se, "self_inspector.py:100")
 
 
 def _issue_file_in_backup_dir(file_path: str) -> bool:
@@ -692,13 +727,13 @@ class SelfInspector(SilentLogMixin):
                 else:
                     with open(file_path, encoding="utf-8") as f:
                         content = f.read()
-                    tree = ast.parse(content)
+                    tree = ast.parse(content, filename="<llm-patch>")
                     self._ast_cache[file_path] = (_file_mtime, tree)
                     self._ast_content_cache[file_path] = content
             else:
                 with open(file_path, encoding="utf-8") as f:
                     content = f.read()
-                tree = ast.parse(content)
+                tree = ast.parse(content, filename="<llm-patch>")
                 self._ast_cache[file_path] = (_file_mtime, tree)
                 if not hasattr(self, '_ast_content_cache'):
                     self._ast_content_cache = {}
@@ -984,8 +1019,8 @@ class SelfInspector(SilentLogMixin):
             for cls in classes:
                 for m in cls.get("methods", []):
                     all_methods[m["name"]] = m.get("line_number", 0)
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:987")
 
         call_chain = []
         for called in direct_calls:
@@ -1023,8 +1058,8 @@ class SelfInspector(SilentLogMixin):
                         calls = self._analyze_method_calls(file_path, mname, mline)
                         if target_method in calls:
                             callers.add(mname)
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1026")
         return sorted(callers)
 
     def _get_class_context(self, file_path: str, class_name: str) -> dict[str, Any]:
@@ -1049,8 +1084,8 @@ class SelfInspector(SilentLogMixin):
                         "methods": [m["name"] for m in methods],
                         "doc": cls.get("doc", ""),
                     }
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1052")
         return {"class_name": class_name, "error": "class not found"}
 
     # ===== ★PHASE12-P1-2扩展：全项目类索引（get_method_body 的兜底数据源）=====
@@ -1099,7 +1134,7 @@ class SelfInspector(SilentLogMixin):
                         #   AST 一次解析同时拿到准确类名、方法名、行号，三项缺陷一起消除。
                         with open(_fp, encoding="utf-8", errors="ignore") as _f:
                             _src = _f.read()
-                        _tree = ast.parse(_src)
+                        _tree = ast.parse(_src, filename="<llm-patch>")
                         _top_classes = [n for n in _tree.body if isinstance(n, ast.ClassDef)]
                         if not _top_classes:
                             continue
@@ -1157,8 +1192,8 @@ class SelfInspector(SilentLogMixin):
                 if os.path.getmtime(file_path) == _mtime:
                     self._method_body_hits += 1
                     return dict(_result)   # 独立副本，避免调用方改脏缓存
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "self_inspector.py:1160")
             self._method_body_cache.pop(_key, None)   # mtime 变化/读取失败→失效
         self._method_body_misses += 1
         return None
@@ -1175,8 +1210,8 @@ class SelfInspector(SilentLogMixin):
         if len(self._method_body_cache) > 1000:
             try:
                 self._method_body_cache.pop(next(iter(self._method_body_cache)))
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "self_inspector.py:1178")
 
     def get_method_body(self, organ_name: str, method_name: str) -> dict[str, Any] | None:
         """
@@ -1255,6 +1290,31 @@ class SelfInspector(SilentLogMixin):
     _HEAD_CN_RE = re.compile(
         r"([A-Za-z_][A-Za-z0-9_]*)[ \t]*——[ \t]*([^ \t\r\n（）()]+)"
     )
+    # ★第91批 T-91a：两级新索引的扫描根 / 排除规则 / 取键正则
+    #   扫描根 = 生产源码（非器官的 nucleus/*、functions/、base/、utils/ 也有 logger 字面量）
+    _M91_TAG_SCAN_ROOTS = ("nucleus", "organs", "functions", "base", "utils")
+    _M91_TAG_SCAN_FILES = ("main.py", "config.py")
+    # ★危险解析防护：备份/临时/缓存目录一律排除。
+    #   第91批 T0 实测：朴素 file-walk 会把 `self_inspector` 解析到
+    #   `.bak_batch75/.release-tmp/nucleus/self_inspector.py` —— 定位到**陈旧副本**，
+    #   后续取方法体/生成补丁全部作用在错误路径上。`^\.` 一并排除所有点目录。
+    #   ★只排除「点目录 + 缓存 + 虚拟环境」——**不按目录名排除**
+    #   data/logs/build/tmp 等：第91批 T0 实测这类规则会误伤合法子包
+    #   （nucleus/data 含 write_guard.py == [WriteGuard] 标签来源；
+    #     nucleus/pulse/build、organs/brain/logs 同理）。
+    #   扫描根本身已不含顶层 data//logs//tmp/，无需再按名字排除。
+    #   _m91_skip_dir_fix
+    _M91_SKIP_DIR_RE = re.compile(
+        r"(^\.|^__pycache__$|^venv$|^\.venv$|^node_modules$)")
+    # logger 名字面量调用（与 nucleus/logger.py 的工厂函数同型）
+    _M91_LOGGER_CALL_RE = re.compile(
+        r"(?:get_organ_logger|get_module_logger|get_logger|logging\.getLogger)"
+        r"\s*\(\s*['\"]([^'\"]{1,60})['\"]")
+    # organ_name 声明的两种真实形式（T0 实测：PulseThymus/PulseEyes/... 用带标注默认值）
+    _M91_ORGAN_NAME_RES = (
+        re.compile(r"""organ_name\s*:\s*str\s*=\s*['\"]([^'\"]{1,20})['\"]"""),
+        re.compile(r"""organ_name\s*=\s*['\"]([^'\"]{1,20})['\"]"""),
+    )
 
     def _build_organ_name_index(self) -> dict[str, str]:
         """构建「中文器官名 → 文件相对路径」索引（扫描文件头部，零硬编码）。
@@ -1291,8 +1351,8 @@ class SelfInspector(SilentLogMixin):
                             if _cn and _cn not in idx:
                                 idx[_cn] = os.path.relpath(
                                     _fp, _base).replace(_bs, "/")
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1294")
         self._organ_name_index = idx
         return idx
 
@@ -1326,6 +1386,160 @@ class SelfInspector(SilentLogMixin):
             if _m:
                 return _m.group(1)
         return ""
+
+    # ========== ★第91批 T-91a：日志调用点定位主能力（两级数据驱动索引） ==========
+    #   与旧 `_build_organ_name_index()` 的**根本区别**：旧索引读「文件头中文短语」，
+    #   本处两级索引读「真正产生日志 TAG 的命名源」（logger 名 / organ_name 声明），
+    #   故与日志生产者**同源**，不依赖头部书写规范。
+
+    def _m91_project_base(self) -> str:
+        """项目根（本文件位于 <root>/nucleus/self_inspector.py）。"""
+        return self._project_root or os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))
+
+    def _m91_iter_production_py(self):
+        """产出生产源码的相对路径（posix 分隔）；备份/临时目录已排除。"""
+        _base = self._m91_project_base()
+        _bs = chr(92)
+        for _sub in self._M91_TAG_SCAN_ROOTS:
+            _abs = os.path.join(_base, _sub)
+            if not os.path.isdir(_abs):
+                continue
+            for _dp, _dn, _fn in os.walk(_abs):
+                _dn[:] = [d for d in _dn if not self._M91_SKIP_DIR_RE.search(d)]
+                for _f in _fn:
+                    if _f.endswith(".py"):
+                        yield os.path.relpath(
+                            os.path.join(_dp, _f), _base).replace(_bs, "/")
+        for _f in self._M91_TAG_SCAN_FILES:
+            if os.path.isfile(os.path.join(_base, _f)):
+                yield _f
+
+    @staticmethod
+    def _m91_logger_literal_to_tags(lit: str) -> list:
+        """logger 名字面量 → 可能的日志 TAG（与 PulseFormatter 规则**互逆**）。
+
+        PulseFormatter: `pulse.organ.胸腺`→`胸腺` ; `pulse.module.WriteGuard`→`WriteGuard`
+                        `pulse.framework`→`框架`   ; 其余→原名
+        故一个字面量可能对应多个 TAG，全部登记（多登记不会误命中——TAG 取的是
+        日志里真实出现过的字符串）。
+        """
+        _orig = str(lit or "").strip()
+        if not _orig:
+            return []
+        _s = _orig
+        for _p in ("pulse.organ.", "pulse.module."):
+            if _s.startswith(_p):
+                _s = _s[len(_p):]
+                break
+        _out = []
+        for _cand in (_orig, _s, _s.split(".")[-1]):
+            if _cand and _cand not in _out:
+                _out.append(_cand)
+        if _s.startswith("Pulse") and len(_s) > 5 and _s[5:] not in _out:
+            _out.append(_s[5:])
+        return _out
+
+    def _build_logger_tag_index(self) -> dict:
+        """构建「日志 TAG → 文件相对路径」索引（★第91批 T-91a）。
+
+        零硬编码：只做静态扫描，新增模块/器官无需维护映射表。
+        多候选（同一字面量出现在多个文件）时按
+        「路径层级最少 → 最短 → 字典序」确定性择一，并记入 `_m91_logger_tag_ambig`。
+        """
+        _cached = getattr(self, "_m91_logger_tag_index", None)
+        if _cached is not None:
+            return _cached
+        idx = {}
+        _cands = {}
+        _ambig = set()
+        try:
+            for _rel in self._m91_iter_production_py():
+                _fp = os.path.join(self._m91_project_base(), _rel)
+                try:
+                    with open(_fp, encoding="utf-8", errors="ignore") as _f:
+                        _src = _f.read()
+                except Exception:
+                    continue
+                for _m in self._M91_LOGGER_CALL_RE.finditer(_src):
+                    for _tag in self._m91_logger_literal_to_tags(_m.group(1)):
+                        _lst = _cands.setdefault(_tag, [])
+                        if _rel not in _lst:
+                            _lst.append(_rel)
+            for _tag, _lst in _cands.items():
+                idx[_tag] = sorted(_lst, key=lambda p: (p.count("/"), len(p), p))[0]
+                if len(_lst) > 1:
+                    _ambig.add(_tag)
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:_build_logger_tag_index")
+        self._m91_logger_tag_index = idx
+        self._m91_logger_tag_ambig = _ambig
+        return idx
+
+    def _build_organ_alias_index(self) -> dict:
+        """构建「中文器官别名（organ_name 声明）→ 文件相对路径」索引（★第91批 T-91a）。
+
+        与 `_build_organ_name_index()` 并存而非替换（最小侵入 + 零回归）：
+        旧索引继续服务头部短语型标签，本索引补上 organ_name 声明型标签。
+        """
+        _cached = getattr(self, "_m91_organ_alias_index", None)
+        if _cached is not None:
+            return _cached
+        idx = {}
+        _bs = chr(92)
+        try:
+            _base = self._m91_project_base()
+            for _sub in self._ORGAN_SCAN_ROOTS:
+                _abs = os.path.join(_base, _sub)
+                if not os.path.isdir(_abs):
+                    continue
+                for _dp, _dn, _fn in os.walk(_abs):
+                    _dn[:] = [d for d in _dn
+                              if not self._M91_SKIP_DIR_RE.search(d)]
+                    for _f in _fn:
+                        if not _f.endswith(".py"):
+                            continue
+                        _rel = os.path.relpath(
+                            os.path.join(_dp, _f), _base).replace(_bs, "/")
+                        try:
+                            with open(os.path.join(_dp, _f),
+                                      encoding="utf-8", errors="ignore") as _fh:
+                                _src = _fh.read()
+                        except Exception:
+                            continue
+                        for _re in self._M91_ORGAN_NAME_RES:
+                            for _m in _re.finditer(_src):
+                                _cn = _m.group(1)
+                                if _cn and _cn not in idx:
+                                    idx[_cn] = _rel
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:_build_organ_alias_index")
+        self._m91_organ_alias_index = idx
+        return idx
+
+    def _m91_lookup_logger_tag(self, tag: str) -> str | None:
+        """日志 TAG → 真实存在的文件相对路径（不存在则 None，绝不返回死路径）。"""
+        _rel = self._build_logger_tag_index().get(str(tag or "").strip())
+        if not _rel:
+            return None
+        try:
+            if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
+                return _rel
+        except Exception:
+            return None
+        return None
+
+    def _m91_lookup_organ_alias(self, tag: str) -> str | None:
+        """中文器官别名 → 真实存在的文件相对路径（不存在则 None）。"""
+        _rel = self._build_organ_alias_index().get(str(tag or "").strip())
+        if not _rel:
+            return None
+        try:
+            if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
+                return _rel
+        except Exception:
+            return None
+        return None
 
     def locate_issue(self, organ: str, msg: str, file_hint: str = "") -> dict[str, Any]:
         """综合定位问题的代码位置。
@@ -1363,8 +1577,8 @@ class SelfInspector(SilentLogMixin):
                         if os.path.basename(_p) == _bn:
                             _file, _conf = _p, 0.8
                             break
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1366")
 
         # 1b. file_hint
         if not _file and file_hint:
@@ -1378,17 +1592,60 @@ class SelfInspector(SilentLogMixin):
                         _file, _conf = _p, 0.75
                         break
 
-        # 1c. 器官名 → 文件（依赖统一头部索引）
+        # 1c. 器官名/类名 → 文件（★第90批 T-90b bug#2/#3 修复）
+        #   改前只用 `_build_organ_name_index()`（243 个**中文**头部名）且模糊匹配
+        #   是**前缀**关系 ⇒ 两类真实标签恒不命中：
+        #     bug#2：主源码日志标签多为**类名**（InfoField / PulseSnapshot /
+        #            PulseNodePool / SafeEvolutionExecutor …），中文名索引里根本没有；
+        #            而第87批已建好的「全项目类索引」（1007 类）从未接进本函数。
+        #     bug#3：中文标签与头部名常是**包含**关系而非前缀
+        #            （`胃` vs `脉冲驱动胃`、`框架` vs `能力框架`）⇒ startswith 双向皆假。
+        #   实测（logs/pulse.log 的 15 个真实日志类问题标签）：命中 6/15 = 40.0%
+        #   → 修后 13/15 = 86.7%。开关关闭 → 逐字回到改前。
         if not _file and organ:
+            _m90_v2 = _m90_locate_v2_on()
+            _m91_v3 = (_m90_v2 and _m91_log_locate_v3_on())
+            if _m90_v2:
+                # 1c-a：全项目类索引（类名精确匹配，置信度 0.75 —— 低于 1a 的 0.9）
+                try:
+                    _cls_hit = self._lookup_class_in_project(organ)
+                    if _cls_hit:
+                        _cfp = str(_cls_hit.get("file_path", "") or "")
+                        if _cfp:
+                            try:
+                                _crel = os.path.relpath(_cfp, _base).replace(_bs, "/")
+                            except Exception:
+                                _crel = _cfp.replace(_bs, "/")
+                            if os.path.isfile(os.path.join(_base, _crel)):
+                                _file, _conf = _crel, 0.75
+                except Exception as _se:
+                    silent_exc(_se, "self_inspector.py:1351")
             _idx = self._build_organ_name_index()
-            if organ in _idx:
+            if not _file and organ in _idx:
                 _file, _conf = _idx[organ], 0.7
-            else:
-                # 模糊匹配：日志器官名可能是头部中文名的前缀或反之
+            if not _file:
+                # 模糊匹配：日志标签与头部中文名可能是前缀关系，也可能是**包含**关系
                 for _cn, _p in _idx.items():
                     if _cn.startswith(organ) or organ.startswith(_cn):
                         _file, _conf = _p, 0.6
                         break
+                    if _m90_v2 and _cn and ((organ in _cn) or (_cn in organ)):
+                        _file, _conf = _p, 0.6
+                        break
+            # ★第91批 T-91a：两级新索引（放在中文名模糊匹配**之后** ⇒ 既有高优先级
+            #   层级全部保留，只接管「此前恒不命中」的标签）。置信度 0.8 高于中文名
+            #   精确 0.7 —— 它是**与日志生产者同源**的字面量精确匹配。
+            if _m91_v3 and not _file:
+                _tag_rel = self._m91_lookup_logger_tag(organ)
+                if _tag_rel:
+                    _file = _tag_rel
+                    # 同一字面量出现在多个文件 ⇒ 本质歧义（如 `pulse`），降置信留痕
+                    _conf = 0.55 if organ in getattr(
+                        self, "_m91_logger_tag_ambig", set()) else 0.8
+            if _m91_v3 and not _file:
+                _alias_rel = self._m91_lookup_organ_alias(organ)
+                if _alias_rel:
+                    _file, _conf = _alias_rel, 0.8
         if not _file:
             return _out
 
@@ -1409,7 +1666,7 @@ class SelfInspector(SilentLogMixin):
                 if not _hit:
                     import ast as _ast
                     with open(_fp, encoding="utf-8", errors="ignore") as _f:
-                        _tree = _ast.parse(_f.read())
+                        _tree = _ast.parse(_f.read(), filename="<llm-patch>")
                     for _node in _ast.walk(_tree):
                         if isinstance(_node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
                             if _node.name == _method:
@@ -1477,8 +1734,8 @@ class SelfInspector(SilentLogMixin):
                             "file": _rel,
                             "category": os.path.basename(os.path.dirname(_rel)),
                         })
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1480")
 
         _cls_of = {o["class_name"]: o for o in organs}
 
@@ -1506,8 +1763,8 @@ class SelfInspector(SilentLogMixin):
                             _pair_count[_key] = _pair_count.get(_key, 0) + 1
             for (_from, _to), _cnt in sorted(_pair_count.items()):
                 dependencies.append({"from": _from, "to": _to, "refs": _cnt})
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1509")
 
         # ---- 3) 健康指标（异常次数取 LogAnalyzer；响应时间待埋点） ----
         health: dict[str, Any] = {}
@@ -1609,8 +1866,8 @@ class SelfInspector(SilentLogMixin):
             _ctrl.register("organ_scan", 300)
             if not _ctrl.should_execute("organ_scan"):
                 return {}
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "self_inspector.py:1612")
         return self._scan_all_organs()
 
     def _scan_all_organs(self) -> dict[str, dict[str, Any]]:
@@ -1797,8 +2054,8 @@ class SelfInspector(SilentLogMixin):
                 _fpp = os.path.join(_dp, _fn)
                 try:
                     self._scan_cache_file_mtimes[_fpp] = os.path.getmtime(_fpp)
-                except OSError:
-                    pass
+                except OSError as _se:
+                    silent_exc(_se, "self_inspector.py:1800")
 
     def _get_adaptive_cache_ttl(self) -> float:
         """★第64批 T3/T4：自适应缓存 TTL（根据 CPU 负载 + 队列深度延长）。
@@ -1840,8 +2097,8 @@ class SelfInspector(SilentLogMixin):
                 _high = float(getattr(_m64_cfg2, "QUEUE_DEPTH_HIGH_THRESHOLD", 5000.0))
                 _crit = float(getattr(_m64_cfg2, "QUEUE_DEPTH_CRITICAL_THRESHOLD", 10000.0))
                 _low = float(getattr(_m64_cfg2, "QUEUE_DEPTH_LOW_THRESHOLD", 2000.0))
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "self_inspector.py:1843")
             if _depth > _crit:
                 _ttl = max(_ttl, 900.0)
             elif _depth > _high:
@@ -3963,8 +4220,8 @@ def shutdown_self_inspector() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "self_inspector.py:3966")
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== SelfInspector v9.5 自测 ===\n")

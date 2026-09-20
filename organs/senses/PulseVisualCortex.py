@@ -251,10 +251,15 @@ class PulseVisualCortex(BasePulseOrgan):
                 log_data = []
                 if os.path.exists(log_path):
                     try:
-                        log_data = safe_read_json(log_path, default={})
+                        log_data = safe_read_json(log_path, default=[])
                     except (ValueError, OSError) as e:
                         self._log(LogLevel.INFO, f"[WARNING] PulseVisualCortex.py:251: {type(e).__name__}: {e}")
                         log_data = []
+                # ★第81批 T6：历史脏文件自愈（流日志本应是 list，若读到 dict 不得对其调 extend）
+                if isinstance(log_data, dict):
+                    self._log(LogLevel.WARNING,
+                              "[第81批 T6] 视觉流日志为 dict（历史脏文件），自愈为 list 后追加")
+                    log_data = []
                 # 追加新条目
                 log_data.extend(batch)
                 if len(log_data) > 100:

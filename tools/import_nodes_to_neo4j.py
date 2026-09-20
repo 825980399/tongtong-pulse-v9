@@ -144,7 +144,7 @@ def load_checkpoint(path):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return set(data.get("imported", [])), data.get("meta", {})
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.warning("checkpoint 读取失败，视为空：%s", e)
         return set(), {}
 
@@ -197,7 +197,7 @@ def collect_pool_nodes(limit=None):
                 if limit and len(out) >= limit:
                     break
         return out
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.warning("从节点池收集失败：%s", e)
         return []
 
@@ -250,7 +250,7 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
         if checkpoint_path and os.path.isfile(checkpoint_path):
             try:
                 os.remove(checkpoint_path)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     for node in nodes:
@@ -276,14 +276,14 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
                 stats.relationships += 1
             imported_ids.add(node_id)
             stats.imported += 1
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             stats.failed += 1
             log.warning("节点 %s 导入失败：%s", node_id, e)
 
     if not dry_run:
         try:
             writer.flush()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         if checkpoint_path:
             save_checkpoint(checkpoint_path, imported_ids, meta)
@@ -322,7 +322,7 @@ def main(argv=None):
 
     try:
         nodes = collect_nodes(args.source, limit=args.limit)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.error("节点收集失败：%s", e)
         return 2
 

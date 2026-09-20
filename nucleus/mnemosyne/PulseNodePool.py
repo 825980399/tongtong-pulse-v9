@@ -86,6 +86,16 @@ class PulseNodePool(SilentLogMixin):
         # ★P1修复：冷节点召回失败聚合计数
         self._cold_recall_fail_count = 0
         self._cold_recall_fail_last_log = 0.0
+
+        # ★第81批 T4：冷存批量写 buffer / 侧车索引 / compaction 协调（全部默认关/空，零侵入）
+        self._cold_write_buffer: list = []          # 待落盘节点缓冲（攒批 flush 减碎文件）
+        self._cold_buffer_lock = threading.Lock()   # 缓冲/索引独立锁（不与其他 self._lock 路径重入死锁）
+        self._cold_index: dict = {}                 # node_id -> {file, rg, offset, level} 侧车索引
+        self._cold_index_loaded = False             # 索引是否已加载/构建（懒加载）
+        self._cold_compacting = False               # compaction 进行中标志：期间驱逐写只进 buffer，不碎写
+        self._cold_last_flush_time = 0.0
+        self._cold_compact_cooldown_until = 0.0
+        self._cold_compact_fail_streak = 0
         
         # ★P3-1新增：分层索引——按 evol_level 快速定位节点
         # 格式：{"L1": {node_id, ...}, "L2": {node_id, ...}, "L3": {node_id, ...}}
@@ -237,12 +247,25 @@ class PulseNodePool(SilentLogMixin):
         #   用 daemon 后台线程执行，避免阻塞启动；失败不影响主流程。
         if enabled:
             try:
-                _t = threading.Thread(
-                    target=self._startup_cold_compaction_check,
-                    name="冷存启动compaction检查",
-                    daemon=True,
-                )
-                _t.start()
+                # ★第81批 T4：灰度开关 COLD_DISABLE_STARTUP_COMPACT（默认 False）。
+                #   测试场景（A6 构造 2000/1000 历史碎文件需确定性地「先计数再手动 compaction」）
+                #   需关闭后台 daemon 以消除与手动 compact 的竞态；生产默认 False（daemon 照常运行）。
+                if self._m81_cold_cfg("COLD_DISABLE_STARTUP_COMPACT", False):
+                    _module_logger.debug(
+                        "冷存启动compaction检查被 COLD_DISABLE_STARTUP_COMPACT 关闭（测试/降级用）")
+                else:
+                    _t = threading.Thread(
+                        target=self._startup_cold_compaction_check,
+                        name="冷存启动compaction检查",
+                        daemon=True,
+                    )
+                    _t.start()
+                    # ★第81批 T4-④：可选有界同步等待（默认 0 = 不阻塞启动）。
+                    #   生产冷存开关为 False、零爆炸半径；仅在显式配置 >0 时才阻塞等待，
+                    #   保证「先 compaction 后 lazy/驱逐」顺序，消除「边合并边碎写」。
+                    _wait = self._m81_cold_cfg("COLD_STARTUP_COMPACT_WAIT_SECONDS", 0.0)
+                    if _wait and _wait > 0:
+                        _t.join(timeout=float(_wait))
             except Exception as _e:
                 _module_logger.debug(f"冷存启动compaction检查线程启动失败(忽略): {_e}")
 
@@ -488,11 +511,26 @@ class PulseNodePool(SilentLogMixin):
                         _new_trust = getattr(node, 'trust_score', 50.0)
                         _existing.trust_score = min(95.0, max(_old_trust, _new_trust) + 2.0)
                         _existing.activate()
-                        # ★P3-8：内容去重合并是实质产出，提升为INFO便于运行监控观察
-                        _module_logger.info(
-                            f'内容去重: 合并到已有节点(信任{_old_trust:.0f}->{_existing.trust_score:.0f}, '
-                            f'重叠={_overlap:.0%})'
-                        )
+                        # ★第83批 T-a1：内容去重是高频事件（实测 19:33 一分钟 1286 条 INFO）。
+                        #   A·信任顶格（_old_trust >= 95）无实质变化 → 降 DEBUG（消灭 39.3% 噪音）；
+                        #   C·信任有提升的合并按 space_path 做 1 分钟节流，同路径只留首条 INFO；
+                        #   运行监控口径以聚合指标 get_content_dedup_rate() 为准，不依赖逐条 INFO。
+                        _m83_msg = (
+                            f'内容去重: 合并到已有节点(信任{_old_trust:.0f}->'
+                            f'{_existing.trust_score:.0f}, 重叠={_overlap:.0%})')
+                        if _old_trust >= 95.0:
+                            _module_logger.debug(_m83_msg)
+                        else:
+                            _m83_now = time.time()
+                            _m83_seen = getattr(self, '_m83_dedup_log_ts', None)
+                            if _m83_seen is None:
+                                _m83_seen = {}
+                                self._m83_dedup_log_ts = _m83_seen
+                            if _m83_now - _m83_seen.get(_path, 0.0) >= 60.0:
+                                _m83_seen[_path] = _m83_now
+                                _module_logger.info(_m83_msg)
+                            else:
+                                _module_logger.debug(_m83_msg)
                         self._content_dedup_total += 1
                         return True
         except Exception as e:
@@ -629,6 +667,7 @@ class PulseNodePool(SilentLogMixin):
         在三个池中查找，找到后自动调用 activate()。
         第69批 T1: 增加访问频率跟踪 + LRU + 升降级判定。
         """
+        _m70_pending_recall = None  # ★第81批补 T1：锁外冷召回待回填节点
         with self._lock:
             # ★T1: 访问频率跟踪
             if self._hot_cold_enabled:
@@ -656,6 +695,28 @@ class PulseNodePool(SilentLogMixin):
                     self._warm[node_id] = node
             
             if node:
+                # ★第81批补 T1：懒加载回填（锁安全：锁内仅做内存 _m70_keep 快速回填，零 IO）
+                if getattr(node, "_m70_blanked", False):
+                    _keep = getattr(node, "_m70_keep", None)
+                    if isinstance(_keep, dict) and ("value" in _keep or "linked_nodes" in _keep):
+                        if "value" in _keep:
+                            try:
+                                node.value = _keep["value"]
+                            except Exception:
+                                pass
+                        if "linked_nodes" in _keep:
+                            try:
+                                node.linked_nodes = _keep["linked_nodes"]
+                            except Exception:
+                                pass
+                        node._m70_blanked = False
+                        try:
+                            self._cold_evicted.discard(getattr(node, "node_id", ""))
+                        except Exception:
+                            pass
+                    else:
+                        # 内存无 keep → 记录 id，锁外冷召回（不在持锁状态做 IO）
+                        _m70_pending_recall = node
                 node.activate()
                 self._total_activated += 1
                 self._m71_influx_write("node_activated", node_id,
@@ -687,8 +748,17 @@ class PulseNodePool(SilentLogMixin):
                     # L1→L2 降级：热池节点长期低频 → 降级到温池
                     elif _count <= self._demotion_threshold and node_id in self._hot and _count > 0:
                         self._demote_to_warm(node)
-                
-            return node
+
+        # ===== 锁外：冷召回回填（IO 不在持锁状态，避免全局锁队头阻塞）=====
+        if _m70_pending_recall is not None and getattr(_m70_pending_recall, "_m70_blanked", False):
+            try:
+                self._m70_materialize_lazy_node(_m70_pending_recall)
+            except Exception as _e:
+                self._log(LogLevel.ERROR,
+                          f"[第81批补 T1] get() 冷召回回填失败 node_id="
+                          f"{getattr(_m70_pending_recall, 'node_id', '')}: "
+                          f"{type(_e).__name__}: {_e}")
+        return node
     
     def remove(self, node_id: str) -> bool:
         """
@@ -1213,15 +1283,78 @@ class PulseNodePool(SilentLogMixin):
         with self._lock:
             return list(self._hot.values()) + list(self._warm.values()) + list(self._cold.values())
 
+    def _m70_batch_materialize(self, nodes) -> list:
+        """★第81批补 T3：批量回填 blanked 懒加载节点（覆盖 get_all 类批量消费方）。
+
+        优先内存 _m70_keep（零 IO）；无 keep 的收集 id 后一次 recall_cold_nodes_batch 整读（禁 N+1），
+        二次加锁写回。返回原 nodes 列表（原地回填，调用方拿到的引用即已回填）。
+        """
+        _cold_ids = []
+        _by_id = {}
+        for _n in nodes:
+            if not getattr(_n, "_m70_blanked", False):
+                continue
+            _keep = getattr(_n, "_m70_keep", None)
+            if isinstance(_keep, dict) and ("value" in _keep or "linked_nodes" in _keep):
+                if "value" in _keep:
+                    try:
+                        _n.value = _keep["value"]
+                    except Exception:
+                        pass
+                if "linked_nodes" in _keep:
+                    try:
+                        _n.linked_nodes = _keep["linked_nodes"]
+                    except Exception:
+                        pass
+                _n._m70_blanked = False
+            else:
+                _nid = getattr(_n, "node_id", "")
+                if _nid:
+                    _cold_ids.append(_nid)
+                    _by_id[_nid] = _n
+        if _cold_ids and getattr(self, "_cold_storage_enabled", False):
+            try:
+                _recalled = self.recall_cold_nodes_batch(_cold_ids)  # 一次整读，锁外 IO
+            except Exception as _e:
+                self._log(LogLevel.ERROR,
+                          f"[第81批补 T3] 批量冷召回失败: {type(_e).__name__}: {_e}")
+                _recalled = []
+            _rmap = {getattr(_r, "node_id", ""): _r for _r in _recalled}
+            with self._lock:  # 二次加锁写回
+                for _nid, _n in _by_id.items():
+                    _rn = _rmap.get(_nid)
+                    if _rn is None:
+                        continue
+                    try:
+                        _n.value = getattr(_rn, "value", _n.value)
+                    except Exception:
+                        pass
+                    try:
+                        _n.linked_nodes = getattr(_rn, "linked_nodes", _n.linked_nodes)
+                    except Exception:
+                        pass
+                    _n._m70_blanked = False
+                    try:
+                        self._cold_evicted.discard(_nid)
+                    except Exception:
+                        pass
+        return nodes
+
     def get_all_including_evicted(self) -> list[PulseNode]:
         """★阶段B'：返回逻辑全量节点（内存节点 + 磁盘冷存兜底）。
 
         专供快照保存、肾脏全量遍历等需要完整数据集的场景。冷存储未启用时等价 get_all()。
         注意：此方法会触发磁盘 IO（召回被驱逐节点），仅限全量遍历场景调用，勿在热路径使用。
+        ★第81批 T4：改走 recall_cold_nodes_batch 一次整读（O(N×全扫)→一次整读），
+        由 COLD_BATCH_RECALL_ENABLED 灰度（关闭则回退逐节点循环）。
         """
-        _mem = self.get_all()
+        _mem = self._m70_batch_materialize(self.get_all())  # ★第81批补 T3：批量回填 blanked 节点
         if not self._cold_storage_enabled or not self._cold_evicted:
             return _mem
+        if self._m81_cold_cfg("COLD_BATCH_RECALL_ENABLED", True):
+            _evicted_nodes = self.recall_cold_nodes_batch(list(self._cold_evicted), consume=False)
+            return _mem + _evicted_nodes
+        # 回退（灰度关闭）：逐节点循环
         _evicted_nodes = []
         for _nid in list(self._cold_evicted):
             _node = self._recall_cold_node(_nid, consume=False)
@@ -1986,8 +2119,13 @@ class PulseNodePool(SilentLogMixin):
     # ========== ★阶段B'：L1 冷存储分治（驱逐 + 召回） ==========
 
     def _cold_parquet_dir(self) -> str:
-        """返回冷存 Parquet 分区目录（按 evol_level=L1 分区，与阶段A schema 一致）。"""
-        return os.path.join(self._cold_dir, "evol_level=L1")
+        """★第81批 T4：返回冷存 Parquet 目录（flat，evol_level 作为数据列存储，不再按分区落子目录）。
+
+        历史实现硬编码 evol_level=L1 分区，导致冷节点无论真实层级全落 L1 子目录、
+        召回后全标 L1（D164 塌缩）。本批改为 flat 目录 + evol_level 数据列，
+        召回/compaction/count 全部读本目录，层级由行内 evol_level 保真。
+        """
+        return self._cold_dir
 
     def _write_cold_node_to_disk(self, node: PulseNode) -> bool:
         """★阶段D：把单个节点序列化并增量写入冷存 Parquet（不改变内存池状态）。
@@ -1999,97 +2137,32 @@ class PulseNodePool(SilentLogMixin):
         if not self._cold_storage_enabled:
             return False
         try:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
-        except Exception:
-            return False
-        try:
-            _d = node.to_dict()
-            _row = {
-                "node_id": str(_d.get("node_id", "")),
-                "value": json.dumps(_d.get("value", ""), ensure_ascii=False),
-                "keywords": list(_d.get("keywords", []) or []),
-                "evol_level": "L1",
-                "importance": str(_d.get("importance", "C")),
-                "abstraction": float(_d.get("abstraction", 0.0) or 0.0),
-                "created_at": float(_d.get("created_at", 0.0) or 0.0),
-                "last_activated": float(_d.get("last_activated", 0.0) or 0.0),
-                "activation_count": int(_d.get("activation_count", 0) or 0),
-                "space_path": str(_d.get("space_path", "/")),
-                "state": str(_d.get("state", "active")),
-                "source_organ": str(_d.get("source_organ", "unknown")),
-                "trigger_reason": str(_d.get("trigger_reason", "")),
-                "frequency_signature": float(_d.get("frequency_signature", 0.0) or 0.0),
-                "linked_nodes": list(_d.get("linked_nodes", []) or []),
-                "semantic_relations": json.dumps(_d.get("semantic_relations", []), ensure_ascii=False),
-                "hebbian_weight": float(_d.get("hebbian_weight", 0.0) or 0.0),
-                "cooccurrence_count": int(_d.get("cooccurrence_count", 0) or 0),
-                "version": int(_d.get("version", 1) or 1),
-                "updated_at": float(_d.get("updated_at", 0.0) or 0.0),
-                "checksum": str(_d.get("checksum", "")),
-                "instinct": bool(_d.get("instinct", False)),
-                "instinct_at": float(_d.get("instinct_at", 0.0) or 0.0),
-                "instinct_active_times": int(_d.get("instinct_active_times", 0) or 0),
-                "instinct_last_use": float(_d.get("instinct_last_use", 0.0) or 0.0),
-                "ephemeral": bool(_d.get("ephemeral", False)),
-                "view_mode": str(_d.get("view_mode", "OUTER_VIEW")),
-                "trust_score": float(_d.get("trust_score", 50.0) or 0.0),
-                "verification_history": json.dumps(_d.get("verification_history", []), ensure_ascii=False),
-            }
+            _row = self._cold_node_to_row(node)
             # ★P0修复：显式指定列表列的元素类型为string，避免空列表被推断为null类型
             # 导致不同文件schema不一致，读取时报"Unsupported cast from string to null"
-            _schema = pa.schema([
-                pa.field("node_id", pa.string()),
-                pa.field("value", pa.string()),
-                pa.field("keywords", pa.list_(pa.string())),
-                pa.field("evol_level", pa.string()),
-                pa.field("importance", pa.string()),
-                pa.field("abstraction", pa.float64()),
-                pa.field("created_at", pa.float64()),
-                pa.field("last_activated", pa.float64()),
-                pa.field("activation_count", pa.int64()),
-                pa.field("space_path", pa.string()),
-                pa.field("state", pa.string()),
-                pa.field("source_organ", pa.string()),
-                pa.field("trigger_reason", pa.string()),
-                pa.field("frequency_signature", pa.float64()),
-                pa.field("linked_nodes", pa.list_(pa.string())),
-                pa.field("semantic_relations", pa.string()),
-                pa.field("hebbian_weight", pa.float64()),
-                pa.field("cooccurrence_count", pa.int64()),
-                pa.field("version", pa.int64()),
-                pa.field("updated_at", pa.float64()),
-                pa.field("checksum", pa.string()),
-                pa.field("instinct", pa.bool_()),
-                pa.field("instinct_at", pa.float64()),
-                pa.field("instinct_active_times", pa.int64()),
-                pa.field("instinct_last_use", pa.float64()),
-                pa.field("ephemeral", pa.bool_()),
-                pa.field("view_mode", pa.string()),
-                pa.field("trust_score", pa.float64()),
-                pa.field("verification_history", pa.string()),
-            ])
-            _table = pa.Table.from_pylist([_row], schema=_schema)
-            _dir = self._cold_parquet_dir()
-            os.makedirs(_dir, exist_ok=True)
-            pq.write_to_dataset(
-                _table,
-                root_path=self._cold_dir,
-                partition_cols=["evol_level"],
-                compression="snappy",
-            )
-            # ★S4：冷存parquet「单节点=单文件」只增不减，文件数累积后
-            # 单次召回需打开全部文件footer，全量召回退化为O(N²)
-            # （实测1000节点=162.9秒，compaction后约1.5秒）。
-            # 此处接入已实现但零调用的maybe_compact_cold_storage。
-            #
-            # ★R4改进：原门槛为「每写盘10次检查一次」，实测该门槛几乎不可达
-            #   （温池上限50000，写盘路径调用极少，7小时0次检查），
-            #   故下调为「每3次写盘检查一次」+「60秒时间节流」，
-            #   既避免每次写盘都列目录，又保证检查能实际发生。
-            #   另：原实现只在 triggered=True 时打日志，导致无法区分
-            #   「检查没发生」与「检查了但没触发」——本次补上未触发日志。
-            #   内层try/except确保compaction失败不影响本次写盘结果。
+            # ★第81批 T4：批量写（攒批 flush，源头减碎文件）。
+            #   单节点不再立即 write_to_dataset（否则每个驱逐=1 碎文件，
+            #   5483 碎文件导致全量召回 O(N²) 退化）。改为进入 _cold_write_buffer，
+            #   达到 COLD_WRITE_BATCH_SIZE 或超时/强制 flush 时一次 write_to_dataset 写一批。
+            #   compaction 进行中(_cold_compacting=True)的写请求只进 buffer，不落碎文件
+            #   （消除「边合并边碎写」）。
+            if getattr(self, "_cold_compacting", False):
+                with self._cold_buf_lock():
+                    self._cold_write_buffer.append(node)
+            else:
+                _buf = None
+                with self._cold_buf_lock():
+                    self._cold_write_buffer.append(node)
+                    _size = self._m81_cold_cfg("COLD_WRITE_BATCH_SIZE", 200)
+                    _now = time.time()
+                    _interval = self._m81_cold_cfg("COLD_WRITE_FLUSH_INTERVAL", 30.0)
+                    _last = getattr(self, "_cold_last_flush_time", 0.0)
+                    if len(self._cold_write_buffer) >= _size or (_now - _last) >= _interval:
+                        _buf = self._cold_write_buffer
+                        self._cold_write_buffer = []
+                if _buf is not None:
+                    self._flush_cold_buffer_nodes(_buf)
+            # 原 compaction 检查（每3次写盘/60s节流）
             try:
                 self._cold_write_count = getattr(self, "_cold_write_count", 0) + 1
                 _now_chk = time.time()
@@ -2205,22 +2278,360 @@ class PulseNodePool(SilentLogMixin):
             return False
         self._cold.pop(_node_id, None)
         self._cold_evicted.add(_node_id)
-        # 外置索引标记 evicted
+        # 外置索引标记 evicted（★第81批 T4：用真实 evol_level，不再恒 L1）
         if self._index_store is not None:
             self._index_store.record_change(
                 "add", "level_index",
-                {"evol_level": "L1", "node_id": _node_id, "evicted": True}
+                {"evol_level": str(getattr(node, "evol_level", "L1")), "node_id": _node_id, "evicted": True}
             )
         return True
 
-    def _recall_cold_node(self, node_id: str, consume: bool = True) -> PulseNode | None:
-        """从磁盘冷存召回单个被驱逐节点，返回节点（不自动提升，由调用方决定）。
+    # ==================== ★第81批 T4：冷存批量写 / 真层级 / schema 同步 / 索引 ====================
+    def _m81_cold_cfg(self, name: str, default):
+        """★第81批 T4：冷存相关配置惰性读取（默认兜底值）。"""
+        try:
+            import config as _cfg81
+            return getattr(_cfg81, name, default)
+        except Exception:
+            return default
 
-        Args:
-            consume: True 表示「真正召回」——从 _cold_evicted 移除、清除索引 evicted 标记、
-                     统计命中（供 get()/recall_cold_node 使用）。
-                     False 表示「只读读取」——不改变 _cold_evicted 状态，仅供全量遍历
-                     （如 get_all_including_evicted）使用，避免遍历破坏驱逐登记。
+    def _cold_buf_lock(self):
+        """★第81批 T4：懒初始化并返回冷存缓冲锁（同时确保缓冲列表存在）。
+
+        兼容绕过 __init__ 的轻量实例：既有测试（如 m63）用
+        `PulseNodePool.__new__(PulseNodePool)` 只喂冷存字段，不会走 __init__，
+        因而没有 _cold_buffer_lock/_cold_write_buffer。T4 新增的
+        flush_cold_buffer/_rebuild_cold_index 直接取属性会抛 AttributeError，
+        进而被 compact_cold_storage 的外层 except 吞掉、整体判失败。
+        故统一走本方法懒初始化，保证轻量实例与真实实例行为一致。
+        """
+        _lock = getattr(self, "_cold_buffer_lock", None)
+        if _lock is None:
+            _lock = threading.RLock()
+            self._cold_buffer_lock = _lock
+        if getattr(self, "_cold_write_buffer", None) is None:
+            self._cold_write_buffer = []
+        return _lock
+
+    def _cold_node_to_row(self, node: "PulseNode") -> dict:
+        """★第81批 T4：节点 -> 冷存 parquet 行（真实 evol_level + 7 新字段）。
+
+        根因修复：原实现硬编码 evol_level="L1"，导致冷节点无论真实层级全落 L1 分区、
+        召回后全标 L1（D164 新发现塌缩）。此处用节点真实 evol_level；并补 7 个数据字段
+        （source_url/evidence_chain/source_time/acquired_time/source_timestamp/
+        quality_flag/quality_reason），保证「驱逐→召回」往返不丢（A6）。
+        灰度开关 COLD_STORAGE_SCHEMA_M81_COMPLETE 关闭时回退旧行为
+        （evol_level 恒 L1、7 字段用默认值）。
+        """
+        _d = node.to_dict()
+        _complete = self._m81_cold_cfg("COLD_STORAGE_SCHEMA_M81_COMPLETE", True)
+        _level = "L1" if not _complete else str(_d.get("evol_level", "L1"))
+        _row = {
+            "node_id": str(_d.get("node_id", "")),
+            "value": json.dumps(_d.get("value", ""), ensure_ascii=False),
+            "keywords": list(_d.get("keywords", []) or []),
+            "evol_level": _level,
+            "importance": str(_d.get("importance", "C")),
+            "abstraction": float(_d.get("abstraction", 0.0) or 0.0),
+            "created_at": float(_d.get("created_at", 0.0) or 0.0),
+            "last_activated": float(_d.get("last_activated", 0.0) or 0.0),
+            "activation_count": int(_d.get("activation_count", 0) or 0),
+            "space_path": str(_d.get("space_path", "/")),
+            "state": str(_d.get("state", "active")),
+            "source_organ": str(_d.get("source_organ", "unknown")),
+            "trigger_reason": str(_d.get("trigger_reason", "")),
+            "frequency_signature": float(_d.get("frequency_signature", 0.0) or 0.0),
+            "linked_nodes": list(_d.get("linked_nodes", []) or []),
+            "semantic_relations": json.dumps(_d.get("semantic_relations", []), ensure_ascii=False),
+            "hebbian_weight": float(_d.get("hebbian_weight", 0.0) or 0.0),
+            "cooccurrence_count": int(_d.get("cooccurrence_count", 0) or 0),
+            "version": int(_d.get("version", 1) or 1),
+            "updated_at": float(_d.get("updated_at", 0.0) or 0.0),
+            "checksum": str(_d.get("checksum", "")),
+            "instinct": bool(_d.get("instinct", False)),
+            "instinct_at": float(_d.get("instinct_at", 0.0) or 0.0),
+            "instinct_active_times": int(_d.get("instinct_active_times", 0) or 0),
+            "instinct_last_use": float(_d.get("instinct_last_use", 0.0) or 0.0),
+            "ephemeral": bool(_d.get("ephemeral", False)),
+            "view_mode": str(_d.get("view_mode", "OUTER_VIEW")),
+            "trust_score": float(_d.get("trust_score", 50.0) or 0.0),
+            "verification_history": json.dumps(_d.get("verification_history", []), ensure_ascii=False),
+        }
+        if _complete:
+            _row["source_url"] = str(_d.get("source_url", ""))
+            _row["evidence_chain"] = json.dumps(_d.get("evidence_chain", []), ensure_ascii=False)
+            _row["source_time"] = float(_d.get("source_time", 0.0) or 0.0)
+            _row["acquired_time"] = float(_d.get("acquired_time", 0.0) or 0.0)
+            _row["source_timestamp"] = float(_d.get("source_timestamp", 0.0) or 0.0)
+            _row["quality_flag"] = str(_d.get("quality_flag", "clean"))
+            _row["quality_reason"] = str(_d.get("quality_reason", ""))
+        return _row
+
+    def _cold_row_schema(self) -> "Any":
+        """★第81批 T4：冷存行 schema（与 _cold_node_to_row 同步，含 7 新字段）。"""
+        import pyarrow as pa
+        _complete = self._m81_cold_cfg("COLD_STORAGE_SCHEMA_M81_COMPLETE", True)
+        _fields = [
+            pa.field("node_id", pa.string()),
+            pa.field("value", pa.string()),
+            pa.field("keywords", pa.list_(pa.string())),
+            pa.field("evol_level", pa.string()),
+            pa.field("importance", pa.string()),
+            pa.field("abstraction", pa.float64()),
+            pa.field("created_at", pa.float64()),
+            pa.field("last_activated", pa.float64()),
+            pa.field("activation_count", pa.int64()),
+            pa.field("space_path", pa.string()),
+            pa.field("state", pa.string()),
+            pa.field("source_organ", pa.string()),
+            pa.field("trigger_reason", pa.string()),
+            pa.field("frequency_signature", pa.float64()),
+            pa.field("linked_nodes", pa.list_(pa.string())),
+            pa.field("semantic_relations", pa.string()),
+            pa.field("hebbian_weight", pa.float64()),
+            pa.field("cooccurrence_count", pa.int64()),
+            pa.field("version", pa.int64()),
+            pa.field("updated_at", pa.float64()),
+            pa.field("checksum", pa.string()),
+            pa.field("instinct", pa.bool_()),
+            pa.field("instinct_at", pa.float64()),
+            pa.field("instinct_active_times", pa.int64()),
+            pa.field("instinct_last_use", pa.float64()),
+            pa.field("ephemeral", pa.bool_()),
+            pa.field("view_mode", pa.string()),
+            pa.field("trust_score", pa.float64()),
+            pa.field("verification_history", pa.string()),
+        ]
+        if _complete:
+            _fields += [
+                pa.field("source_url", pa.string()),
+                pa.field("evidence_chain", pa.string()),
+                pa.field("source_time", pa.float64()),
+                pa.field("acquired_time", pa.float64()),
+                pa.field("source_timestamp", pa.float64()),
+                pa.field("quality_flag", pa.string()),
+                pa.field("quality_reason", pa.string()),
+            ]
+        return pa.schema(_fields)
+
+    def _flush_cold_buffer_nodes(self, nodes: list) -> int:
+        """★第81批 T4：把一批节点一次 write_to_dataset 写出（flat 目录），返回写出数。
+
+        与 _write_cold_node_to_disk 共用 _cold_node_to_row/_cold_row_schema，保证 schema 一致。
+        写后重建侧车索引（便于单点召回命中 row_group）。
+        """
+        if not nodes:
+            return 0
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except Exception:
+            return 0
+        try:
+            _rows = [self._cold_node_to_row(_n) for _n in nodes]
+            _dir = self._cold_dir
+            os.makedirs(_dir, exist_ok=True)
+            _schema = self._cold_row_schema()
+            _table = pa.Table.from_pylist(_rows, schema=_schema)
+            pq.write_to_dataset(_table, root_path=_dir, compression="snappy")
+            self._cold_last_flush_time = time.time()
+            # 重建侧车索引（单点召回命中 row_group）
+            self._rebuild_cold_index()
+            return len(_rows)
+        except Exception as _e:
+            _module_logger.warning(f"[第81批 T4] 冷存批量 flush 失败: {_e}")
+            return 0
+
+    def flush_cold_buffer(self) -> int:
+        """★第81批 T4：强制把缓冲节点落盘（保存/退出/compaction 前调用）。返回写出数。"""
+        _buf = None
+        with self._cold_buf_lock():
+            if self._cold_write_buffer:
+                _buf = self._cold_write_buffer
+                self._cold_write_buffer = []
+        if _buf is None:
+            return 0
+        return self._flush_cold_buffer_nodes(_buf)
+
+    def _cold_data_files(self) -> list:
+        """★第81批 T4：返回冷存目录全部 .parquet 文件绝对路径（**递归**）。
+
+        ★必须递归：历史（hive 分区）数据落在 evol_level=LX/ 子目录，分区列只存在于目录名；
+        新写入为 flat 目录（evol_level 作数据列）。用 os.listdir（非递归）会**漏掉全部历史
+        分区文件**——实测 count_cold_parquet_files 返回 0、批量召回返回 0 节点，正是此坑
+        （A6 复现：2000/1000 历史碎文件全部不可见）。故改为 os.walk 递归，两种布局一网打尽。
+        """
+        _dir = self._cold_parquet_dir()
+        if not os.path.isdir(_dir):
+            return []
+        _out = []
+        for _root, _dirs, _files in os.walk(_dir):
+            for _fname in sorted(_files):
+                if _fname.endswith(".parquet"):
+                    _out.append(os.path.join(_root, _fname))
+        return _out
+
+    def _read_cold_all_rows(self) -> list:
+        """★第81批 T4：读全部冷存 parquet 文件，返回 [(row_dict, file_path, rg_index, row_offset), ...]。
+
+        ★层级保真（D164 根因）：历史 hive 分区文件的 evol_level **只存在于目录名**
+        （evol_level=LX/），文件内没有该列。此处按「文件所在目录名」补回，
+        避免召回时 evol_level 缺失而塌缩为 L1。新 flat 文件内自带 evol_level 数据列，不会被覆盖。
+        """
+        import pyarrow.parquet as pq
+        _rows = []
+        for _fpath in self._cold_data_files():
+            # 从父目录名解析历史分区层级（如 "evol_level=L2" -> "L2"）
+            _dir_level = None
+            _pbase = os.path.basename(os.path.dirname(_fpath).rstrip(os.sep))
+            if "=" in _pbase and _pbase.split("=", 1)[0] == "evol_level":
+                _dir_level = _pbase.split("=", 1)[1]
+            try:
+                _pf = pq.ParquetFile(_fpath)
+                for _rg in range(_pf.num_row_groups):
+                    _pl = _pf.read_row_group(_rg).to_pylist()
+                    for _i, _row in enumerate(_pl):
+                        if _dir_level is not None and "evol_level" not in _row:
+                            _row["evol_level"] = _dir_level
+                        _rows.append((_row, _fpath, _rg, _i))
+            except Exception as _e:
+                _module_logger.debug(f"[第81批 T4] 冷存索引读文件失败 {_fpath}: {_e}")
+        return _rows
+
+    def _rebuild_cold_index(self) -> None:
+        """★第81批 T4：重建侧车索引 node_id->(file,rg,offset,level) 并持久化 JSON。"""
+        if not self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
+            return
+        try:
+            _rows = self._read_cold_all_rows()
+            _idx = {}
+            for _row, _fpath, _rg, _i in _rows:
+                _nid = str(_row.get("node_id", ""))
+                if _nid and _nid not in _idx:
+                    _idx[_nid] = {"file": _fpath, "rg": _rg, "offset": _i,
+                                  "level": _row.get("evol_level", "L1")}
+            with self._cold_buf_lock():
+                self._cold_index = _idx
+                self._cold_index_loaded = True
+            try:
+                _ip = self._cold_dir.rstrip(os.sep) + ".index.json"
+                with open(_ip, "w", encoding="utf-8") as _f:
+                    json.dump(_idx, _f)
+            except Exception:
+                pass
+        except Exception as _e:
+            _module_logger.debug(f"[第81批 T4] 重建冷存索引失败: {_e}")
+
+    def _ensure_cold_index(self) -> None:
+        """★第81批 T4：懒加载侧车索引（进程重启后从 JSON 恢复，避免每次全扫）。"""
+        # ★第81批 T4：轻量实例（绕过 __init__）缺这些属性，用 getattr 兜底
+        if getattr(self, "_cold_index_loaded", False):
+            return
+        if getattr(self, "_cold_index", None) is None:
+            self._cold_index = {}
+        if self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
+            _ip = self._cold_dir.rstrip(os.sep) + ".index.json"
+            try:
+                if os.path.isfile(_ip):
+                    with open(_ip, "r", encoding="utf-8") as _f:
+                        _loaded = json.load(_f)
+                    if isinstance(_loaded, dict):
+                        with self._cold_buf_lock():
+                            self._cold_index = _loaded
+            except Exception:
+                pass
+        self._cold_index_loaded = True
+
+    def _cold_row_to_node(self, row: dict) -> "PulseNode | None":
+        """★第81批 T4：冷存行 -> PulseNode（真实 evol_level + 7 新字段）。"""
+        _complete = self._m81_cold_cfg("COLD_STORAGE_SCHEMA_M81_COMPLETE", True)
+        try:
+            _d = {
+                "node_id": row.get("node_id", ""),
+                "value": json.loads(row.get("value", '""')) if row.get("value") not in (None, "") else "",
+                "keywords": list(row.get("keywords", []) or []),
+                "evol_level": row.get("evol_level", "L1"),
+                "importance": row.get("importance", "C"),
+                "abstraction": float(row.get("abstraction", 0.0) or 0.0),
+                "created_at": float(row.get("created_at", 0.0) or 0.0),
+                "last_activated": float(row.get("last_activated", 0.0) or 0.0),
+                "activation_count": int(row.get("activation_count", 0) or 0),
+                "space_path": row.get("space_path", "/"),
+                "state": row.get("state", "active"),
+                "source_organ": row.get("source_organ", "unknown"),
+                "trigger_reason": row.get("trigger_reason", ""),
+                "frequency_signature": float(row.get("frequency_signature", 0.0) or 0.0),
+                "linked_nodes": list(row.get("linked_nodes", []) or []),
+                "semantic_relations": json.loads(row.get("semantic_relations", "[]")) if row.get("semantic_relations") else [],
+                "hebbian_weight": float(row.get("hebbian_weight", 0.0) or 0.0),
+                "cooccurrence_count": int(row.get("cooccurrence_count", 0) or 0),
+                "version": int(row.get("version", 1) or 1),
+                "updated_at": float(row.get("updated_at", 0.0) or 0.0),
+                "checksum": row.get("checksum", ""),
+                "instinct": bool(row.get("instinct", False)),
+                "instinct_at": float(row.get("instinct_at", 0.0) or 0.0),
+                "instinct_active_times": int(row.get("instinct_active_times", 0) or 0),
+                "instinct_last_use": float(row.get("instinct_last_use", 0.0) or 0.0),
+                "ephemeral": bool(row.get("ephemeral", False)),
+                "view_mode": row.get("view_mode", "OUTER_VIEW"),
+                "trust_score": float(row.get("trust_score", 50.0) or 0.0),
+                "verification_history": json.loads(row.get("verification_history", "[]")) if row.get("verification_history") else [],
+            }
+            if _complete:
+                _d["source_url"] = str(row.get("source_url", ""))
+                _d["evidence_chain"] = json.loads(row.get("evidence_chain", "[]")) if row.get("evidence_chain") else []
+                _d["source_time"] = float(row.get("source_time", 0.0) or 0.0)
+                _d["acquired_time"] = float(row.get("acquired_time", 0.0) or 0.0)
+                _d["source_timestamp"] = float(row.get("source_timestamp", 0.0) or 0.0)
+                _d["quality_flag"] = str(row.get("quality_flag", "clean"))
+                _d["quality_reason"] = str(row.get("quality_reason", ""))
+            return PulseNode.from_dict(_d)
+        except Exception as _e:
+            _module_logger.debug(f"[第81批 T4] 冷存行转节点失败: {_e}")
+            return None
+
+    def recall_cold_nodes_batch(self, node_ids=None, consume: bool = False) -> list:
+        """★第81批 T4：批量召回（性能关键）。一次读全冷存构建 {node_id:row} 映射后 join 返回。
+
+        替换 get_all_including_evicted 的逐节点全目录扫（O(N×全扫)→一次整读）。
+        node_ids=None 时返回全部冷节点；consume=True 时同步清除驱逐登记 + 命中统计。
+        """
+        if not self._cold_storage_enabled:
+            return []
+        self.flush_cold_buffer()
+        try:
+            import pyarrow.parquet as pq  # noqa: F401
+        except Exception:
+            return []
+        _rows = self._read_cold_all_rows()
+        _by_id = {}
+        for _row, _fp, _rg, _i in _rows:
+            _nid = str(_row.get("node_id", ""))
+            if _nid and _nid not in _by_id:
+                _by_id[_nid] = _row
+        _result = []
+        _targets = node_ids if node_ids is not None else list(_by_id.keys())
+        for _nid in _targets:
+            _row = _by_id.get(_nid)
+            if _row is None:
+                if consume:
+                    self._cold_stats["recall_misses"] += 1
+                continue
+            _node = self._cold_row_to_node(_row)
+            if _node is None:
+                continue
+            _result.append(_node)
+            if consume:
+                self._cold_evicted.discard(_nid)
+                self._cold_stats["recall_hits"] += 1
+        return _result
+
+    def _recall_cold_node(self, node_id: str, consume: bool = True) -> PulseNode | None:
+        """★第81批 T4：单点召回走侧车索引（node_id→(file,rg,offset)），read_row_group 直读；
+        索引缺失/失效/损坏时自动回退批量读并重建索引（降级不报错）。
+
+        D164 根因修复：原实现 `pq.read_table(_dir, filters=[("node_id","=",id)])` 每次都打开
+        整个冷存目录做全扫过滤（O(N²)），且硬编码 evol_level="L1" 导致召回后层级塌缩。
         """
         if not self._cold_storage_enabled:
             return None
@@ -2230,76 +2641,95 @@ class PulseNodePool(SilentLogMixin):
             import pyarrow.parquet as pq
         except Exception:
             return None
-        try:
-            _dir = self._cold_parquet_dir()
-            if not os.path.isdir(_dir):
-                if consume:
-                    self._cold_stats["recall_misses"] += 1
-                return None
-            _table = pq.read_table(_dir, filters=[("node_id", "=", node_id)])
-            if _table.num_rows == 0:
-                if consume:
-                    self._cold_stats["recall_misses"] += 1
-                return None
-            _row = _table.to_pylist()[0]
-            _d = {
-                "node_id": _row.get("node_id", ""),
-                "value": json.loads(_row.get("value", '""')) if _row.get("value") not in (None, "") else "",
-                "keywords": list(_row.get("keywords", []) or []),
-                "evol_level": "L1",
-                "importance": _row.get("importance", "C"),
-                "abstraction": float(_row.get("abstraction", 0.0) or 0.0),
-                "created_at": float(_row.get("created_at", 0.0) or 0.0),
-                "last_activated": float(_row.get("last_activated", 0.0) or 0.0),
-                "activation_count": int(_row.get("activation_count", 0) or 0),
-                "space_path": _row.get("space_path", "/"),
-                "state": _row.get("state", "active"),
-                "source_organ": _row.get("source_organ", "unknown"),
-                "trigger_reason": _row.get("trigger_reason", ""),
-                "frequency_signature": float(_row.get("frequency_signature", 0.0) or 0.0),
-                "linked_nodes": list(_row.get("linked_nodes", []) or []),
-                "semantic_relations": json.loads(_row.get("semantic_relations", "[]")) if _row.get("semantic_relations") else [],
-                "hebbian_weight": float(_row.get("hebbian_weight", 0.0) or 0.0),
-                "cooccurrence_count": int(_row.get("cooccurrence_count", 0) or 0),
-                "version": int(_row.get("version", 1) or 1),
-                "updated_at": float(_row.get("updated_at", 0.0) or 0.0),
-                "checksum": _row.get("checksum", ""),
-                "instinct": bool(_row.get("instinct", False)),
-                "instinct_at": float(_row.get("instinct_at", 0.0) or 0.0),
-                "instinct_active_times": int(_row.get("instinct_active_times", 0) or 0),
-                "instinct_last_use": float(_row.get("instinct_last_use", 0.0) or 0.0),
-                "ephemeral": bool(_row.get("ephemeral", False)),
-                "view_mode": _row.get("view_mode", "OUTER_VIEW"),
-                "trust_score": float(_row.get("trust_score", 50.0) or 0.0),
-                "verification_history": json.loads(_row.get("verification_history", "[]")) if _row.get("verification_history") else [],
-            }
-            _node = PulseNode.from_dict(_d)
-            if consume:
-                self._cold_evicted.discard(node_id)
-                self._cold_stats["recall_hits"] += 1
-                if self._index_store is not None:
-                    self._index_store.record_change(
-                        "remove", "level_index",
-                        {"evol_level": "L1", "node_id": node_id, "evicted": True}
-                    )
-            return _node
-        except Exception as _e:
-            # ★P1修复：聚合统计，避免单条WARNING刷屏（Parquet类型转换失败是已知问题）
-            self._cold_recall_fail_count += 1
-            import time as _time_cold
-            _now = _time_cold.time()
-            # 每100次失败或距上次日志超过60秒才输出一次WARNING
-            if (self._cold_recall_fail_count % 100 == 0 or
-                    _now - self._cold_recall_fail_last_log > 60.0):
+        # ★第81批 T4：确保缓冲落盘 + 索引可用，再走单点索引召回（毫秒-百毫秒级）
+        self.flush_cold_buffer()
+        self._ensure_cold_index()
+        _idx = self._cold_index.get(node_id)
+        if _idx is not None and self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
+            try:
+                _pf = pq.ParquetFile(_idx["file"])
+                _tbl = _pf.read_row_group(int(_idx["rg"]))
+                _pl = _tbl.to_pylist()
+                _i = int(_idx["offset"])
+                if 0 <= _i < len(_pl):
+                    _node = self._cold_row_to_node(_pl[_i])
+                    if _node is not None:
+                        if consume:
+                            self._cold_evicted.discard(node_id)
+                            self._cold_stats["recall_hits"] += 1
+                            if self._index_store is not None:
+                                self._index_store.record_change(
+                                    "remove", "level_index",
+                                    {"evol_level": _node.evol_level, "node_id": node_id, "evicted": True})
+                        return _node
+            except Exception as _e:
+                # 索引失效/文件损坏/行偏移漂移：回退批量读并重建索引（降级不报错）
                 _module_logger.warning(
-                    f"冷节点召回失败聚合: 累计{self._cold_recall_fail_count}次, "
-                    f"最近错误={str(_e)[:80]}")
-                self._cold_recall_fail_last_log = _now
-            else:
-                _module_logger.debug(f"冷节点召回失败 {node_id}: {_e}")
-            if consume:
-                self._cold_stats["recall_misses"] += 1
-            return None
+                    f"[第81批 T4] 冷存索引召回失败，回退批量读并重建索引: "
+                    f"{type(_e).__name__}: {_e}")
+                self._rebuild_cold_index()
+        # 回退：批量读单点（一次整读，取代逐节点全扫）
+        _nodes = self.recall_cold_nodes_batch([node_id], consume=consume)
+        if _nodes:
+            return _nodes[0]
+        if consume:
+            self._cold_stats["recall_misses"] += 1
+        return None
+
+    def _m70_materialize_lazy_node(self, node) -> bool:
+        """★第81批 T2：节点池 serve 边界的懒加载回填（与 PulseSnapshot 同源逻辑）。
+
+        _m70_keep（内存）优先；否则从真冷存批量召回取回。
+        开关关闭时节点无 _m70_blanked 属性 → 调用方 no-op，零回归。
+        """
+        if node is None or not getattr(node, "_m70_blanked", False):
+            return True
+        _nid = getattr(node, "node_id", "")
+        _keep = getattr(node, "_m70_keep", None)
+        if isinstance(_keep, dict) and ("value" in _keep or "linked_nodes" in _keep):
+            if "value" in _keep:
+                try:
+                    node.value = _keep["value"]
+                except Exception:
+                    pass
+            if "linked_nodes" in _keep:
+                try:
+                    node.linked_nodes = _keep["linked_nodes"]
+                except Exception:
+                    pass
+            node._m70_blanked = False
+            try:
+                self._cold_evicted.discard(_nid)
+            except Exception:
+                pass
+            return True
+        # 内存无 keep → 走真冷存召回
+        if _nid and getattr(self, "_cold_storage_enabled", False):
+            try:
+                _recalled = self.recall_cold_nodes_batch([_nid])
+            except Exception:
+                _recalled = []
+            if _recalled:
+                _rn = _recalled[0]
+                # ★第81批补 T1：二次加锁写回（冷召回 IO 已在锁外完成）
+                with self._lock:
+                    try:
+                        node.value = getattr(_rn, "value", node.value)
+                    except Exception:
+                        pass
+                    try:
+                        node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
+                    except Exception:
+                        pass
+                    node._m70_blanked = False
+                    try:
+                        self._cold_evicted.discard(_nid)
+                    except Exception:
+                        pass
+                return True
+        _module_logger.error(
+            f"[第81批 T2] 节点池懒加载节点 {_nid} 无法回填（无 _m70_keep 且冷存无副本），保留空白")
+        return False
 
     def evict_cold_node(self, node_id: str) -> bool:
         """★阶段B'公开接口：驱逐指定冷节点到磁盘（需在 _cold 池中）。"""
@@ -2334,11 +2764,19 @@ class PulseNodePool(SilentLogMixin):
             }
 
     def count_cold_parquet_files(self) -> int:
-        """★阶段B'硬约束2：统计冷存 L1 分区的 Parquet 小文件数（用于 compaction 触发判断）。"""
+        """★阶段B'硬约束2：统计冷存 Parquet 小文件数（用于 compaction 触发判断）。
+
+        ★第81批 T4：改为**递归**统计（含历史 evol_level=LX/ 子目录）。
+        非递归 os.listdir 会漏掉历史分区文件 → 启动检查永远认为「无需合并」，
+        5483 历史碎文件因此从未被 compaction 触发（与 _cold_data_files 同一个坑）。
+        """
         _dir = self._cold_parquet_dir()
         if not os.path.isdir(_dir):
             return 0
-        return sum(1 for _f in os.listdir(_dir) if _f.endswith(".parquet"))
+        _n = 0
+        for _root, _dirs, _files in os.walk(_dir):
+            _n += sum(1 for _f in _files if _f.endswith(".parquet"))
+        return _n
 
     # ========== ★主线第65批 T2/P1：冷存 compaction 自适应 ==========
     def _cold_compaction_adaptive_enabled(self) -> bool:
@@ -2393,42 +2831,63 @@ class PulseNodePool(SilentLogMixin):
             return {"before_files": 0, "after_files": 0, "node_count": 0,
                     "dedup_count": 0, "success": True, "reason": "no_data"}
         try:
-            _files = sorted(f for f in os.listdir(_dir) if f.endswith(".parquet"))
-            _before = len(_files)
+            # ★第81批 T4-④：标记 compaction 进行中，阻断缓冲写落碎文件（消除边合并边碎写）
+            self._cold_compacting = True
+            self.flush_cold_buffer()
+            # ★第81批 T4：兼容 flat + 历史 hive 分区（evol_level=LX/ 子目录）两种布局，
+            #   枚举全部源目录（base 直接落盘 + 各 evol_level 子目录）。
+            _base = self._cold_parquet_dir()
+            _src_dirs = []
+            if os.path.isdir(_base):
+                _src_dirs.append(_base)
+                for _dn in sorted(os.listdir(_base)):
+                    _full = os.path.join(_base, _dn)
+                    if os.path.isdir(_full) and "=" in _dn and _dn.split("=", 1)[0] == "evol_level":
+                        _src_dirs.append(_full)
+            _total_files = 0
+            _before_per_level: dict[str, int] = {}
+            for _sd in _src_dirs:
+                _c = sum(1 for _f in os.listdir(_sd) if _f.endswith(".parquet"))
+                _total_files += _c
+                _before_per_level["flat" if _sd == _base else os.path.basename(_sd)] = _c
+            _before = _total_files
             # ★PHASE17-C3：与调用方共用同一阈值常量
             if _before < COLD_COMPACT_MIN_FILES:
                 # 不足 COLD_COMPACT_MIN_FILES 个文件，无需合并
+                self._cold_compacting = False
                 return {"before_files": _before, "after_files": _before,
+                        "before_per_level": _before_per_level,
                         "node_count": 0, "dedup_count": 0, "success": True,
                         "reason": "no_need"}
-            # ★T2修复（N2/P1）：原实现用 ParquetDataset 一次性读整个分区，
-            #   要求所有文件 schema 严格一致。生产环境 374 个历史文件 schema 混杂
-            #   （evol_level 有的存 string、有的存 dictionary 编码），
-            #   直接抛 "Unable to merge: Field evol_level has incompatible types:
-            #   string vs dictionary<...>"，导致 compaction 永远失败、
-            #   冷存 O(N²) 问题无法缓解（已在本地复现，错误逐字一致）。
-            #   改为「逐文件读取 + 容错规整」：
-            #     a) dictionary 编码列 decode 为其 value 类型（消除本次的直接报错）；
-            #     b) 单文件读取失败只跳过该文件，不影响其余文件合并；
-            #     c) 缺失列补 null，列顺序统一，再由 concat_tables 做类型提升。
-            _table, _skipped = self._read_cold_partition_tolerant()
-            if _table is None:
+            # ★T2修复（N2/P1）：逐文件容错读取（兼容历史 schema 混杂 + 多分区），
+            #   单文件损坏只跳过不阻断；_read_cold_partition_tolerant 已按 COLD_COMPACT_SKIP_ERROR_ENABLED
+            #   将跳过文件升为 ERROR + 汇总（T4-⑥）。
+            _rows: list[dict] = []
+            _skipped = 0
+            for _sd in _src_dirs:
+                _t, _s = self._read_cold_partition_tolerant(_sd)
+                if _t is not None:
+                    _rows.extend(_t.to_pylist())
+                _skipped += _s
+            if not _rows:
+                self._cold_compacting = False
                 return {"before_files": _before, "after_files": _before,
+                        "before_per_level": _before_per_level,
                         "node_count": 0, "dedup_count": 0, "success": False,
                         "reason": "所有parquet文件均无法读取", "skipped_files": _skipped}
-            _rows = _table.to_pylist()
-            # 按 node_id 去重，保留最新（后出现者覆盖前者；Parquet 读顺序即文件顺序）
+            # 按 node_id 去重，保留最新（后出现者覆盖前者）
             _dedup: dict[str, dict[str, Any]] = {}
             for _row in _rows:
                 _dedup[_row.get("node_id", "")] = _row
             _dedup_count = len(_rows) - len(_dedup)
             _merged_rows = list(_dedup.values())
-            # 全量重写为单个文件（先写临时目录，再原子替换，避免中断损坏）
+            # 全量重写为单个 flat 文件（evol_level 作为数据列，不再按分区落子目录），
+            # 先写临时目录并校验行数一致，再原子替换，避免中断损坏 / 静默丢节点（T4-⑥）。
+            import shutil
             _tmp_dir = self._cold_dir + ".compact_tmp"
             if os.path.exists(_tmp_dir):
                 # ★主线第60批 T6：清理旧临时目录失败时降级（DEBUG），不阻断主流程
                 try:
-                    import shutil
                     shutil.rmtree(_tmp_dir)
                 except Exception as _tmp_err:
                     _module_logger.debug(
@@ -2439,16 +2898,38 @@ class PulseNodePool(SilentLogMixin):
             except Exception as _mk_err:
                 _module_logger.debug(
                     f"[冷存compaction] 创建临时目录失败: {type(_mk_err).__name__}: {_mk_err}")
+            # ★第81批 T4：不用 _cold_row_schema 强制全字段，避免历史文件缺 7 新列时写入失败；
+            #   让 pyarrow 按实际行推断 schema，召回时由 _cold_row_to_node 的 _complete 守卫补默认值。
             _merged_table = pa.Table.from_pylist(_merged_rows) if _merged_rows else pa.Table.from_pylist([{}])
             pq.write_to_dataset(
                 _merged_table,
                 root_path=_tmp_dir,
-                partition_cols=["evol_level"],
                 compression="snappy",
             )
-            # 原子替换：删旧分区目录，重命名临时目录
+            # ★第81批 T4-⑥：先校验新文件行数与去重后节点数一致，再删旧目录，
+            #   防止「合并删旧后静默丢节点」。
+            if self._m81_cold_cfg("COLD_COMPACT_ROWCOUNT_VERIFY", True):
+                _written = 0
+                for _wf in os.listdir(_tmp_dir):
+                    if _wf.endswith(".parquet"):
+                        _written += pq.ParquetFile(os.path.join(_tmp_dir, _wf)).metadata.num_rows
+                if _written != len(_merged_rows):
+                    self._cold_compacting = False
+                    _module_logger.error(
+                        f"冷存compaction行数校验失败: 写入{_written}≠去重{len(_merged_rows)}，"
+                        f"中止替换（保留旧数据，不静默丢节点）")
+                    try:
+                        shutil.rmtree(_tmp_dir)
+                    except Exception:
+                        pass
+                    return {"before_files": _before, "after_files": _before,
+                            "before_per_level": _before_per_level,
+                            "node_count": 0, "dedup_count": 0, "success": False,
+                            "reason": "row_count_mismatch",
+                            "written": _written, "expected": len(_merged_rows),
+                            "skipped_files": _skipped}
+            # 原子替换：删旧目录（含历史 evol_level=* 子目录），重命名临时目录
             # ★主线第60批 T6：Windows 文件锁重试 + 冷却降级（与第59批 T1 日志轮转同源）。
-            import shutil
             import time as _time_mod
             _retry_on = True
             try:
@@ -2464,8 +2945,9 @@ class PulseNodePool(SilentLogMixin):
             else:
                 _cooldown_until = getattr(self, "_cold_compact_cooldown_until", 0.0)
                 if _cooldown_until and _time_mod.time() < _cooldown_until:
-                    _module_logger.info("[冷存compaction] 冷却期内跳过（30分钟）")
+                    self._cold_compacting = False
                     return {"before_files": _before, "after_files": _before,
+                            "before_per_level": _before_per_level,
                             "node_count": 0, "dedup_count": 0, "success": False,
                             "reason": "cooldown"}
                 if os.path.exists(self._cold_dir):
@@ -2508,10 +2990,12 @@ class PulseNodePool(SilentLogMixin):
                         if self._cold_compact_fail_streak >= 3:
                             self._cold_compact_cooldown_until = _time_mod.time() + 1800.0
                             _module_logger.info("[冷存compaction] 连续失败3次，冷却30分钟")
+                        self._cold_compacting = False
                         _module_logger.warning(
                             f"冷存 compaction 失败: 删除旧目录耗尽重试 "
                             f"({type(_last_rm_err).__name__}: {_last_rm_err})")
                         return {"before_files": _before, "after_files": _before,
+                                "before_per_level": _before_per_level,
                                 "node_count": 0, "dedup_count": 0, "success": False,
                                 "reason": "delete_retry_exhausted"}
                 _ok = False
@@ -2533,18 +3017,24 @@ class PulseNodePool(SilentLogMixin):
                     if self._cold_compact_fail_streak >= 3:
                         self._cold_compact_cooldown_until = _time_mod.time() + 1800.0
                         _module_logger.info("[冷存compaction] 连续失败3次，冷却30分钟")
+                    self._cold_compacting = False
                     _module_logger.warning(
                         f"冷存 compaction 失败: 重命名临时目录耗尽重试 "
                         f"({type(_last_rn_err).__name__}: {_last_rn_err})")
                     return {"before_files": _before, "after_files": _before,
+                            "before_per_level": _before_per_level,
                             "node_count": 0, "dedup_count": 0, "success": False,
                             "reason": "rename_retry_exhausted"}
                 # 成功：重置连败计数
                 self._cold_compact_fail_streak = 0
+            # 成功：重建侧车索引（单点召回命中 row_group）+ 清除进行中标志
+            self._rebuild_cold_index()
+            self._cold_compacting = False
             _after = self.count_cold_parquet_files()
             return {
                 "before_files": _before,
                 "after_files": _after,
+                "before_per_level": _before_per_level,
                 "node_count": len(_merged_rows),
                 "dedup_count": _dedup_count,
                 "skipped_files": _skipped,
@@ -2555,7 +3045,7 @@ class PulseNodePool(SilentLogMixin):
             return {"before_files": 0, "after_files": 0, "node_count": 0,
                     "dedup_count": 0, "success": False, "reason": str(_e)}
 
-    def _read_cold_partition_tolerant(self) -> tuple[Any, int]:
+    def _read_cold_partition_tolerant(self, dir_override: str | None = None) -> tuple[Any, int]:
         """★T2：容错读取冷存 L1 分区，返回 (合并后的表, 跳过的坏文件数)。
 
         相比 `pq.ParquetDataset(...).read()`，本方法容忍三类历史数据不一致：
@@ -2579,69 +3069,100 @@ class PulseNodePool(SilentLogMixin):
         except Exception:
             _pc = None
 
-        _dir = self._cold_parquet_dir()
-        if not os.path.isdir(_dir):
+        # ★第81批 T4：目录解析兼容两种布局。
+        #   dir_override 给定 → 只读该目录（compaction 按源目录逐个调用，保持原语义）；
+        #   未给定 → 覆盖「flat 基目录 + 各 evol_level=* 历史分区子目录」。
+        #   ★不做多目录会发现不了历史数据：flat 化后 _cold_parquet_dir() 返回基目录，
+        #   而历史文件仍在 evol_level=LX/ 子目录下，只读基目录会一个文件都读不到
+        #   （实测 m63 用例返回 None、skipped=0）。
+        if dir_override is not None:
+            _dirs: list[str] = [dir_override]
+        else:
+            _base_dir = self._cold_parquet_dir()
+            _dirs = []
+            if os.path.isdir(_base_dir):
+                _dirs.append(_base_dir)
+                for _dn in sorted(os.listdir(_base_dir)):
+                    _full = os.path.join(_base_dir, _dn)
+                    if (os.path.isdir(_full) and "=" in _dn
+                            and _dn.split("=", 1)[0] == "evol_level"):
+                        _dirs.append(_full)
+        if not _dirs:
             return None, 0
-
-        # 从目录名解析分区键值对（如 "evol_level=L1" → {"evol_level": "L1"}）
-        _partition_kv: dict[str, str] = {}
-        _base = os.path.basename(_dir.rstrip(os.sep))
-        if "=" in _base:
-            _k, _v = _base.split("=", 1)
-            _partition_kv[_k] = _v
 
         _tables: list[Any] = []
         _skipped = 0
-        for _fname in sorted(os.listdir(_dir)):
-            if not _fname.endswith(".parquet"):
+        _skipped_files: list[str] = []
+        for _dir in _dirs:
+            if not os.path.isdir(_dir):
                 continue
-            try:
-                # ★关键：必须用 ParquetFile，不能用 pq.read_table()。
-                #   pyarrow 23 的 pq.read_table() 底层走 dataset 逻辑，
-                #   **即使是读单个文件**也会做 schema 合并推断，
-                #   于是读到第2个 schema 不同的文件时照样抛
-                #   "Unable to merge: Field X has incompatible types"。
-                #   实测（pyarrow 23.0.0）：
-                #     pq.read_table(path)            -> 第2个文件起全部失败
-                #     pq.ParquetFile(path).read()    -> 全部成功
-                #   后者是直接的文件读取器，不做任何跨文件 schema 合并，
-                #   正是「逐文件容错读取」所需要的语义。
-                _t = pq.ParquetFile(os.path.join(_dir, _fname)).read()
-            except Exception as _e1:
+            # 从目录名解析分区键值对（如 "evol_level=L1" → {"evol_level": "L1"}）
+            _partition_kv: dict[str, str] = {}
+            _base = os.path.basename(_dir.rstrip(os.sep))
+            if "=" in _base:
+                _k, _v = _base.split("=", 1)
+                _partition_kv[_k] = _v
+
+            for _fname in sorted(os.listdir(_dir)):
+                if not _fname.endswith(".parquet"):
+                    continue
                 try:
-                    _t = pq.read_table(os.path.join(_dir, _fname))
-                except Exception as _e2:
-                    _skipped += 1
-                    # ★主线第68批 T6/P2：告警合并（实测单次重启 1621 条同型 WARNING 刷屏）。
-                    #   改为：前 3 条保留 WARNING（保留可诊断性），其余降级 DEBUG；
-                    #   根因（cold 目录/文件缺失）交由启动一致性检查统一输出一次汇总。
-                    if _skipped <= 3:
-                        _module_logger.warning(
-                            f"冷存compaction: 跳过无法读取的parquet文件 {_fname}: {_e1}")
-                    else:
-                        _module_logger.debug(
-                            f"冷存compaction: 跳过无法读取的parquet文件 {_fname}: {_e1}")
-                continue
-
-            # (1) dictionary 编码列 → decode 为其 value 类型
-            if _pc is not None:
-                for _i, _field in enumerate(list(_t.schema)):
-                    if pa.types.is_dictionary(_field.type):
-                        try:
-                            _decoded = _pc.dictionary_decode(_t.column(_i))
-                            _t = _t.set_column(
-                                _i, pa.field(_field.name, _field.type.value_type), _decoded)
-                        except Exception as _de:
+                    # ★关键：必须用 ParquetFile，不能用 pq.read_table()。
+                    #   pyarrow 23 的 pq.read_table() 底层走 dataset 逻辑，
+                    #   **即使是读单个文件**也会做 schema 合并推断，
+                    #   于是读到第2个 schema 不同的文件时照样抛
+                    #   "Unable to merge: Field X has incompatible types"。
+                    #   实测（pyarrow 23.0.0）：
+                    #     pq.read_table(path)            -> 第2个文件起全部失败
+                    #     pq.ParquetFile(path).read()    -> 全部成功
+                    #   后者是直接的文件读取器，不做任何跨文件 schema 合并，
+                    #   正是「逐文件容错读取」所需要的语义。
+                    _t = pq.ParquetFile(os.path.join(_dir, _fname)).read()
+                except Exception as _e1:
+                    try:
+                        _t = pq.read_table(os.path.join(_dir, _fname))
+                    except Exception as _e2:
+                        _skipped += 1
+                        _skipped_files.append(_fname)
+                        # ★主线第68批 T6/P2：告警合并（实测单次重启 1621 条同型 WARNING 刷屏）。
+                        #   改为：前 3 条保留 WARNING（保留可诊断性），其余降级 DEBUG；
+                        #   根因（cold 目录/文件缺失）交由启动一致性检查统一输出一次汇总。
+                        if _skipped <= 3:
+                            _module_logger.warning(
+                                f"冷存compaction: 跳过无法读取的parquet文件 {_fname}: {_e1}")
+                        else:
                             _module_logger.debug(
-                                f"冷存compaction: 列 {_field.name} dictionary解码失败(保留原值): {_de}")
+                                f"冷存compaction: 跳过无法读取的parquet文件 {_fname}: {_e1}")
+                    continue
 
-            # (2) 分区列缺失时从目录名补回
-            for _pk, _pv in _partition_kv.items():
-                if _pk not in _t.column_names:
-                    _t = _t.append_column(
-                        _pk, pa.array([_pv] * _t.num_rows, type=pa.string()))
+                # (1) dictionary 编码列 → decode 为其 value 类型
+                if _pc is not None:
+                    for _i, _field in enumerate(list(_t.schema)):
+                        if pa.types.is_dictionary(_field.type):
+                            try:
+                                _decoded = _pc.dictionary_decode(_t.column(_i))
+                                _t = _t.set_column(
+                                    _i, pa.field(_field.name, _field.type.value_type), _decoded)
+                            except Exception as _de:
+                                _module_logger.debug(
+                                    f"冷存compaction: 列 {_field.name} dictionary解码失败(保留原值): {_de}")
 
-            _tables.append(_t)
+                # (2) 分区列缺失时从目录名补回
+                for _pk, _pv in _partition_kv.items():
+                    if _pk not in _t.column_names:
+                        _t = _t.append_column(
+                            _pk, pa.array([_pv] * _t.num_rows, type=pa.string()))
+
+                _tables.append(_t)
+
+        # ★第81批 T4-⑥：compaction 跳过文件可见性（D163 一半）。
+        #   历史行为：跳过文件仅 WARNING(前3条)/DEBUG(其余)——09-16 曾静默跳过 1621 个文件，
+        #   合并删旧后等于静默丢节点且无人察觉。此处在开关打开时追加**一条 ERROR 汇总**
+        #   （跳过文件数 + 文件名样本），保证运维可见；开关关闭时完全回退旧行为（零回归）。
+        if _skipped > 0 and self._m81_cold_cfg("COLD_COMPACT_SKIP_ERROR_ENABLED", True):
+            _module_logger.error(
+                f"冷存compaction: 跳过 {_skipped} 个无法读取的parquet文件"
+                f"（目录={_dirs}），这些文件未参与合并，样本: {_skipped_files[:5]}")
 
         if not _tables:
             return None, _skipped

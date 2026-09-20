@@ -112,7 +112,21 @@ class FAISSVectorStore:
 
             ids = [vid for vid, _ in vectors]
             vecs = np.array([v for _, v in vectors], dtype=np.float32)
+            # [第82批 T-g] 单条向量时 np.array 可能得到 (d,) 1 维数组，faiss add 要求 2 维
+            vecs = np.atleast_2d(vecs)
             if vecs.shape[0] == 0:
+                return
+            # [第82批 T-g] 维度一致性校验：与索引维度不符时告警并跳过（不崩），
+            #   向量仍落内存 → search 走暴力余弦回退，检索正确性不受影响；
+            #   否则 index.add 会抛空消息 AssertionError 且向量丢失 → ADD_UNDERFLOW。
+            if vecs.shape[1] != self._dimension:
+                _logger.warning(
+                    "[第82批 T-g] 向量维度不一致（实际 %d vs 期望 %d），跳过 FAISS "
+                    "索引构建，保留向量走暴力余弦回退",
+                    int(vecs.shape[1]), self._dimension)
+                self._index = None
+                for _vid, _v in vectors:
+                    self._vectors[_vid] = _v
                 return
 
             idx_type = self._auto_select_index_type(vecs.shape[0])
@@ -123,9 +137,16 @@ class FAISSVectorStore:
             elif idx_type == "IVFFlat":
                 quantizer = faiss.IndexFlatL2(self._dimension)
                 nlist = max(1, int(np.sqrt(vecs.shape[0])))
-                # faiss 1.x 的 IndexIVFFlat 构造需显式传入维度 d
-                index = faiss.IndexIVFFlat(quantizer, self._dimension, nlist, faiss.METRIC_L2)
-                index.train(vecs)
+                # [第82批 T-g] 训练样本不足以支撑 nlist 时降级 FlatL2（避免 train 断言）
+                if vecs.shape[0] < nlist:
+                    _logger.warning(
+                        "[第82批 T-g] IVFFlat 样本数 %d < nlist %d，降级 FlatL2",
+                        int(vecs.shape[0]), nlist)
+                    index = faiss.IndexFlatL2(self._dimension)
+                else:
+                    # faiss 1.x 的 IndexIVFFlat 构造需显式传入维度 d
+                    index = faiss.IndexIVFFlat(quantizer, self._dimension, nlist, faiss.METRIC_L2)
+                    index.train(vecs)
             else:
                 index = faiss.IndexFlatL2(self._dimension)
 
@@ -174,7 +195,13 @@ class FAISSVectorStore:
             # 索引已存在：增量添加
             try:
                 import numpy as np
-                vecs = np.array(vectors, dtype=np.float32)
+                vecs = np.atleast_2d(np.array(vectors, dtype=np.float32))
+                # [第82批 T-g] 增量路径同样校验维度：不一致时跳过（不崩），既有索引保持可用
+                if vecs.ndim < 2 or vecs.shape[1] != self._dimension:
+                    _logger.warning(
+                        "[第82批 T-g] 增量向量维度与索引不一致（%s vs %d），跳过本次增量",
+                        getattr(vecs, "shape", "?"), self._dimension)
+                    return False
                 self._index.add(vecs)
                 for _i, _nid in enumerate(node_ids):
                     self._reverse_map[_nid] = len(self._id_map)

@@ -264,6 +264,8 @@ class TestV2EndToEndAdmission(unittest.TestCase):
 
     def test_50_operational_reaches_v2_when_enabled(self):
         """开关**显式开启**时，操作指令可越过 v2 入口门槛（默认已关闭，见裁决 §61.4-3）。"""
+        # ★第81批补2：进入时保存原值、finally 还原原值（不硬编码 False）
+        _orig_admission = config.ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION
         config.ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION = True
         _logs = []
         try:
@@ -286,7 +288,7 @@ class TestV2EndToEndAdmission(unittest.TestCase):
             self.assertTrue(any("返回 None" in _m for _m in _logs),
                             "应留下「全步失败 → None」的可观测日志")
         finally:
-            config.ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION = False
+            config.ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION = _orig_admission
 
     _q = "先打开设置，再点击蓝牙，然后配对设备。"
 

@@ -1020,7 +1020,19 @@ class PulseLung(BasePulseOrgan):
             # ★主线第32批 T6（P2-184）：登记 token 用量（供额度监控与自动切换）
             self._m32_record_quota_usage(_name, _data)
             # ★主线第40批 T2（P0-254）：暂存 usage 供调用对留存读取（纯内存赋值）
-            self._m40_last_usage = _data.get("usage") if isinstance(_data, dict) else None
+            # ★第94批 T-94b：改用适配器**统一入口** `extract_usage`（提供者可覆写），
+            #   第40批的「直接取 usage 键」保留为回落 —— 无该方法/返回 None 时
+            #   行为与改造前**逐字一致**（零回归）。
+            _m94_extract = getattr(_adapter, "extract_usage", None)
+            _m94_usage = None
+            if callable(_m94_extract):
+                try:
+                    _m94_usage = _m94_extract(_data)
+                except Exception:
+                    _m94_usage = None
+            if _m94_usage is None:
+                _m94_usage = _data.get("usage") if isinstance(_data, dict) else None
+            self._m40_last_usage = _m94_usage
             return _adapter.parse_response(_data)
         except Exception as _exc:
             self._log(LogLevel.DEBUG,
@@ -1644,7 +1656,10 @@ class PulseLung(BasePulseOrgan):
             _r.record(origin=origin, prompt=prompt, response=response or "",
                       prompt_version=prompt_version,
                       channel=channel, model=model, duration=duration,
-                      tokens=_tokens, status=status, error=error)
+                      tokens=_tokens, status=status, error=error,
+                      # ★第94批 T-94b：调用层把 usage 一并交给留存器（新增字段）；
+                      #   非 dict → None，`record` 侧对 None 完全透明（零回归）。
+                      usage=_usage if isinstance(_usage, dict) else None)
         except Exception as _e:
             self._log(LogLevel.DEBUG,
                       f"[调用留存] 记录失败（已忽略）: {type(_e).__name__}")

@@ -5,10 +5,19 @@
 日期: 2026年9月9日
 """
 
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 import threading
 import time
 from collections import deque
 from typing import Any
+import sys
+
+# ★第80批 T6：启动早期 stdout 重配置为 utf-8+replace，根治 GBK 重定向下 emoji/中文 print 崩溃
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception as _e:
+    silent_exc(_e, "chat_service.py:19")
 
 from nucleus.const import ChatEvent, LogLevel, MotorEvent, MouthEvent, PersonaEvent
 
@@ -130,7 +139,14 @@ class ChatService:
             user_name = payload.get("user_name", "用户")
             if user_name and user_name != "用户":
                 self._current_user_name = user_name
-            print(f"\n👁️ 曈曈看到你回来了，{user_name}！")
+            # ★第80批 T6：emoji print 包 try-except 降级，不阻断后续计时器重置与脉冲发射
+            try:
+                print(f"\n👁️ 曈曈看到你回来了，{user_name}！")
+            except UnicodeEncodeError:
+                try:
+                    print(f"\n[图标] 曈曈看到你回来了，{user_name}！")
+                except Exception as _e:
+                    silent_exc(_e, "chat_service.py:148")
             self._reset_silence_timer()
             # ★v17.0 Q8修复：改为发射"你是谁"推理请求，让回答能融入自我画像
             if self.pulse_core and self.info_field:
@@ -178,7 +194,14 @@ class ChatService:
             return
         if event_type == ChatEvent.USER_LEFT:
             user_name = payload.get("user_name", "用户")
-            print(f"\n👁️ 曈曈看到你离开了，{user_name}。")
+            # ★第80批 T6：emoji print 包 try-except 降级，不阻断后续身份重置与脉冲发射
+            try:
+                print(f"\n👁️ 曈曈看到你离开了，{user_name}。")
+            except UnicodeEncodeError:
+                try:
+                    print(f"\n[图标] 曈曈看到你离开了，{user_name}。")
+                except Exception as _e:
+                    silent_exc(_e, "chat_service.py:203")
             self._current_user_name = "访客"  # ← 新增：人离开后重置身份
             # 取消当前的沉默计时器（人走了不用再问候）
             if self._silence_timer:
@@ -207,19 +230,34 @@ class ChatService:
             return
 
         # 为了不打断用户正在输入的内容，先换行
-        print()
+        try:
+            print()
+        except UnicodeEncodeError as _e:
+            silent_exc(_e, "chat_service.py:235")
 
         # 根据来源区分显示风格（★v30.0 P3优化：按语义分组，覆盖主动发起/代码执行/系统状态等）
         _icon = self._source_icon(source)
         # ★2026-09-03新增：控制台输出后台日志，便于分析"输入→处理→输出"完整链路
         self._log(LogLevel.INFO, f"控制台输出: {content[:300]}{'...' if len(content) > 300 else ''} (来源={source}, 长度={len(content)})")
-        print(f"{_icon} 曈曈: {content}\n")
 
-        # 同时推入Web对话窗口的回复队列
+        # ★第80批 T6：关键副作用（推 Web 回复）前置到 print 之前——GBK 重定向下 print
+        #   抛 UnicodeEncodeError 也不影响回复推送（P0-2 根因：:217 print 先于 _push_reply 阻断推送）。
         _push_reply(content, source)
 
+        # 显示回复（包 try-except，GBK 场景降级 ASCII 占位，不中断 handler）
+        try:
+            print(f"{_icon} 曈曈: {content}\n")
+        except UnicodeEncodeError:
+            try:
+                print(f"[图标] 曈曈: {content}\n")
+            except Exception as _e:
+                silent_exc(_e, "chat_service.py:253")
+
         # 重新显示输入提示符（如果用户正在输入，输入内容不会丢失）
-        print("💬 你: ", end="", flush=True)
+        try:
+            print("💬 你: ", end="", flush=True)
+        except UnicodeEncodeError as _e:
+            silent_exc(_e, "chat_service.py:259")
 
     def _source_icon(self, source: str) -> str:
         """根据来源语义返回显示图标，让不同来源的回复有视觉区分。
@@ -510,8 +548,8 @@ class ChatService:
                     if _total_methods > 0:
                         _pct = round(_understood / _total_methods * 100, 1)
                         _code_progress_text = f"代码理解: {_understood}/{_total_methods} ({_pct}%)"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:513")
         
         # ===== v17.0新增：直觉命中率 =====
         _intuition_text = ""
@@ -525,8 +563,8 @@ class ChatService:
                     if _queries > 0:
                         _rate = round(_hits / _queries * 100, 1)
                         _intuition_text = f"直觉命中: {_hits}/{_queries} ({_rate}%)"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:528")
         
         # ===== v17.0新增：对话记忆数 =====
         _conv_mem_text = ""
@@ -536,8 +574,8 @@ class ChatService:
                 if _iw and hasattr(_iw, 'get_conversation_memory'):
                     _conv_count = len(_iw.get_conversation_memory())
                     _conv_mem_text = f"对话记忆: {_conv_count}条"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:539")
         
         # ===== v17.0新增：生命周期阶段 =====
         _life_stage_text = ""
@@ -549,8 +587,8 @@ class ChatService:
                     if _stage:
                         _stage_short = _stage.split("：")[0] if "：" in _stage else _stage[:20]
                         _life_stage_text = f"生命阶段: {_stage_short}"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:552")
         
         # ===== v17.0新增：代码问题趋势 =====
         _code_trend_text = ""
@@ -566,8 +604,8 @@ class ChatService:
                 _code_trend_text = f"代码问题: ↑增加{_total_change}个"
             else:
                 _code_trend_text = "代码问题: →稳定"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:569")
         
         # ===== 第64批 T5：器官扫描缓存统计 =====
         _cache_stats_text = ""
@@ -581,8 +619,8 @@ class ChatService:
                 f"失效{_cs.get('invalidations', 0)}) "
                 f"L2命中{_cs.get('l2_hits', 0)}/未命中{_cs.get('l2_misses', 0)}"
             )
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:584")
 
         # ===== 组装输出 =====
         _lines = []
@@ -621,8 +659,8 @@ class ChatService:
                         if _weak:
                             _parts.append("待加强:" + "、".join([w["name"] for w in _weak[:2]]))
                         _reasoning_text = "推理技能: " + " | ".join(_parts)
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:624")
         if _reasoning_text:
             _lines.append(f"   {_reasoning_text}")
         # ★v17.0新增：情绪趋势
@@ -638,8 +676,8 @@ class ChatService:
                         _dir = _emotion_trend.get("direction", "stable")
                         _dir_label = {"rising": "↑好转", "falling": "↓下沉", "stable": "→平稳"}.get(_dir, "")
                         _emotion_trend_text = f"情绪: {_curr} {_dir_label}"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:641")
         if _emotion_trend_text:
             _lines.append(f"   {_emotion_trend_text}")
         # ★v17.0新增：高光记忆
@@ -658,8 +696,8 @@ class ChatService:
                         _hours = _latest.get("hours_ago", 0)
                         if _user and _summary:
                             _highlights_text = f"高光记忆: {_hours:.0f}h前与{_user}「{_summary}」"
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:661")
         if _highlights_text:
             _lines.append(f"   {_highlights_text}")
         # 原有行
@@ -674,8 +712,8 @@ class ChatService:
             _lines.append(f"   参数补丁: 已应用{_pstats.get('applied', 0)}个 "
                           f"回滚{_pstats.get('rolled_back', 0)}个 "
                           f"正向{_pstats.get('effect_positive', 0)}个")
-        except Exception:
-            pass
+        except Exception as _se:
+            silent_exc(_se, "chat_service.py:677")
         if hasattr(self.framework, 'organs'):
             subcon = self.framework.organs.get("潜意识")
             if subcon and hasattr(subcon, 'get_life_state'):
@@ -709,8 +747,8 @@ class ChatService:
             try:
                 if self.framework and getattr(self.framework, 'personality', None):
                     _status_content = self.framework.personality.filter_output(_status_content)
-            except Exception:
-                pass
+            except Exception as _se:
+                silent_exc(_se, "chat_service.py:712")
             status_pulse = self.pulse_core.emit(
                 source_organ="对话模块",
                 event_type=MouthEvent.REPLY,
@@ -764,8 +802,8 @@ class ChatService:
                 try:
                     if self.framework and getattr(self.framework, 'personality', None):
                         knowledge_text = self.framework.personality.filter_output(knowledge_text)
-                except Exception:
-                    pass
+                except Exception as _se:
+                    silent_exc(_se, "chat_service.py:767")
                 knowledge_pulse = self.pulse_core.emit(
                     source_organ="对话模块",
                     event_type=MouthEvent.REPLY,

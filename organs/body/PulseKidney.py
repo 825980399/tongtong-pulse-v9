@@ -707,8 +707,8 @@ class PulseKidney(BasePulseOrgan):
             _r = get_kal().get_node(node_id)
             if _r is not None:
                 return _r
-        except Exception:
-            pass
+        except Exception as e:
+            self._log(LogLevel.ERROR, f'异常: {e}')
         return self._m70_direct_get_node(node_id)
 
     def _m70_kal_search_by_level(self, evol_level, top_k=10):
@@ -720,8 +720,8 @@ class PulseKidney(BasePulseOrgan):
             _r = get_kal().search_by_evol_level(evol_level, top_k=top_k)
             if _r:
                 return _r
-        except Exception:
-            pass
+        except Exception as e:
+            self._log(LogLevel.ERROR, f'异常: {e}')
         return []
 
     def _m70_direct_get_node(self, node_id):
@@ -730,8 +730,8 @@ class PulseKidney(BasePulseOrgan):
             _pool = getattr(self, "node_pool", None)
             if _pool is not None:
                 return _pool.get(node_id)
-        except Exception:
-            pass
+        except Exception as e:
+            self._log(LogLevel.ERROR, f'异常: {e}')
         return None
 
     def _m70_kal_callsites_on(self) -> bool:

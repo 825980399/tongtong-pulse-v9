@@ -46,7 +46,7 @@ def load_real_nodes(parquet_dir):
             try:
                 import pandas as pd
                 nodes.extend(pd.read_parquet(f).to_dict(orient="records"))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 print("[WARN] 读取 %s 失败: %s" % (f, e))
     return nodes
 

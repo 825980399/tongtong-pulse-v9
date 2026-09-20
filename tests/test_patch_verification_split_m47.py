@@ -162,17 +162,26 @@ class TestBackfill(unittest.TestCase):
         self.assertEqual(_r["problem_fixed"]["none"], 2)
 
     def test_32_real_fix_rate_vs_claimed(self):
-        """★真实修复率必须显著低于旧声称率。"""
+        """★真实修复率必须显著低于旧声称率。
+
+        ★第85批 T-85c（D84-2）口径变更：分母由「补丁总数」改为
+        「**可判定补丁数**」（problem_fixed=None 的不可判定补丁移出分母）
+        → 1/2 = 0.5（旧口径 1/4 = 0.25）。
+        本组 4 条：p2 修好(True) / p3 未修好(False) / p1、p4 不可判定(None)。
+        """
         _ps = self._set()
         _r = _pvs.backfill(_ps, apply=True)
         self.assertEqual(_r["old_claimed_rate"], 1.0)     # 旧口径 100%
-        self.assertEqual(_r["real_fix_rate"], 0.25)       # 真实 25%
+        self.assertEqual(_r["real_fix_rate"], 0.5)        # 可判定 2 条中修好 1 条
+        self.assertEqual(_r["verifiable_rate"], 0.5)      # 2/4 可判定
+        self.assertEqual(_r["verifiable_count"], 2)
         self.assertLess(_r["real_fix_rate"], _r["old_claimed_rate"])
 
     def test_33_real_fix_rate_fn(self):
+        """★第85批 T-85c：real_fix_rate() 同步改为「可判定数」为分母 → 0.5。"""
         _ps = self._set()
         _pvs.backfill(_ps, apply=True)
-        self.assertAlmostEqual(_pvs.real_fix_rate(_ps), 0.25)
+        self.assertAlmostEqual(_pvs.real_fix_rate(_ps), 0.5)
 
     def test_34_granularity_dist(self):
         _ps = self._set()

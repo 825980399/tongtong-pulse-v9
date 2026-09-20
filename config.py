@@ -4635,6 +4635,18 @@ ENABLE_BACKGROUND_DIGEST_ADAPTIVE = True
 # 负载检查间隔（秒），各模块周期性查询系统负载用
 ADAPTIVE_LOAD_CHECK_INTERVAL = 300
 
+# ★主线第81批 T4（2026-09-18）：冷存批量写 / 批量召回 / 侧车索引 / 真层级 / compaction 健壮性
+#   以下开关全部默认开启（=新正确行为）；任一关闭即回退旧行为（快速回退，零回归）。
+COLD_WRITE_BATCH_SIZE = 200                  # 冷存攒批写阈值：缓冲节点达此数一次 write_to_dataset（源头减碎文件）
+COLD_WRITE_FLUSH_INTERVAL = 30.0             # 冷存缓冲 flush 时间节流（秒）：超时才 flush，避免小块频繁写
+COLD_BATCH_RECALL_ENABLED = True             # True=get_all_including_evicted 走一次整读批量召回（O(N)→一次整读）；False=回退逐节点循环
+COLD_SIDECAR_INDEX_ENABLED = True            # True=单点召回走 node_id→(file,rg,offset) 侧车索引 read_row_group；False=回退逐节点全扫
+COLD_STORAGE_SCHEMA_M81_COMPLETE = True      # True=冷存行含真实 evol_level + 7 新字段；False=回退旧行为（evol_level 恒 L1、缺 7 字段）
+COLD_STARTUP_COMPACT_WAIT_SECONDS = 0.0      # 启动 compaction 有界等待（秒）：0=火不等待（daemon 后台）；>0=set_cold_storage 同步等待最多 N 秒
+COLD_COMPACT_SKIP_ERROR_ENABLED = True       # True=compaction 跳过文件由 DEBUG 升 ERROR + 汇总；False=回退 DEBUG
+COLD_COMPACT_ROWCOUNT_VERIFY = True          # True=compaction 删旧目录前校验新文件行数==合并节点数，不一致则中止（防静默丢节点）
+COLD_INDEX_BACKOFF_BASE = 1.0                # 侧车索引读取失败退避基数（秒，指数上限 8s）
+
 # _m64_t3_config_done
 
 # ★主线第66批 T4/P2（2026-09-16）：经验库隔离恢复开关
@@ -4669,8 +4681,20 @@ SNAPSHOT_INCREMENTAL_MAX_NODES = 200
 # ★T2/P0：真正的增量保存（增量日志）。既有 _incremental_save 需读全文件+解析+重建索引，
 #   实测比全量慢约 10 倍（8700 节点：170s vs 9s）；本批改为 jsonl 追加式增量日志：
 #   变更即追加，超阈值触发全量合并，启动可重放恢复，失败回退全量。
-SNAPSHOT_USE_INCREMENTAL_LOG = True
-SNAPSHOT_INCREMENTAL_LOG_MAX_LINES = 10000
+# ★第80批 T1（G0 存储止血·临时止血）：关闭假 delete 增量日志。
+#   原因：增量日志路径 snapshot_incremental.jsonl 在 Parquet 主存储后并未启用，
+#     属"无实物承诺"的空路径（审计 agentJ 证实文件不存在），开启即假生效。
+#   重启用前置条件：增量日志真实落地（文件存在 + 启动可重放恢复 + 失败回退全量）经实测验证。
+#   重启用批次：待定（本批不启用，留第81+ 评估）。
+SNAPSHOT_USE_INCREMENTAL_LOG = True  # ★灰度第二步 2026-09-19 星轨开启：81批T3真实落地+81批补2全量检查点闭环，C1-C7端到端验证，满足80批T1重启用三前置（文件落地/启动重放/失败回退）
+# ★第81批 T3：增量日志行数阈值（默认 50000）。
+#   原 10000 行 < 节点 12295，导致每天必触达阈值→每次增量后立刻全量重写，
+#   失去 O(变更数) 增量意义。改为明显大于一轮可能变更上限（按节点规模留余量）。
+SNAPSHOT_INCREMENTAL_LOG_MAX_LINES = 50000
+# ★第81批 T3：单轮删除占比熔断阈值（0.5 = 50%）。
+#   单轮 delete 占存活基数比例超过此值 → 拒写 delete + ERROR（含期望/实际计数）+ 本轮降级全量保存，
+#   防止任何未来的解构/集合 bug 演变成批量误删。
+SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX = 0.5
 
 # ★T3/P1：统一知识访问层（KAL）。本批仅接口 + 基础实现，不做全量迁移（不破坏现有代码）。
 ENABLE_KAL = True
@@ -4692,11 +4716,27 @@ WRITE_GUARD_FORCE_ENV = None
 # ★T1/P0：Parquet 主存储。加载/保存优先 Parquet，JSON 降级为可选兼容备份。
 #   ★T0核实：按 evol_level 分片（parquet/evol_level=L1|L2|L3）**已存在**，非本批新增；
 #     真实开关是 FEATURE["use_parquet_snapshot"]（字典取值），并非属性访问。
-PARQUET_AS_PRIMARY_STORAGE = True
+# ★第80批 T1（G0 存储止血·临时止血）：Parquet 主存储回退为 JSON 主存储。
+#   原因：_m68_load_from_parquet 逐分区 read_table 不回填 evol_level 分区列（PulseSnapshot.py:1059），
+#     叠加 PulseNode.from_dict 缺失即静默 L1（PulseNode.py:324）→ L2/L3 全量塌缩 L1（G0 分层抹平事故）。
+#   重启用前置条件：T2 加载侧分层/字段守卫全过（回填 evol_level + _m68_verify_parquet 双校验 + from_dict 缺省告警），
+#     且 A1 分层保真端到端测试通过（真实 load→save→load 零偏移）。
+#   重启用批次：第81批（T2 收口并验证后）。
+PARQUET_AS_PRIMARY_STORAGE = True  # ★灰度第一步 2026-09-19 星轨开启（81批T2/T5已验证；SNAPSHOT_SAVE_JSON_BACKUP=True 仍保留JSON备份，可随时回退）
 SNAPSHOT_SAVE_JSON_BACKUP = True
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000
+
+# ===== ★主线第81批 T1/T5（Parquet schema 补全 + 读路径统一校验）=====
+# ★灰度开关：默认开 = 补齐 7 字段（source_url/evidence_chain/source_time/acquired_time/
+#   source_timestamp/quality_flag/quality_reason）并启用 schema 版本/列集合/分层校验；
+#   关 = 复现旧行为（仅 29 列、无 schema 校验），用于回退。
+PARQUET_SCHEMA_M81_COMPLETE = True
+# Parquet 校验阈值（不硬编码，进 config）：
+PARQUET_VERIFY_COUNT_DRIFT_PCT = 2.0       # 计数类偏移容忍（>2% 即 FAIL）
+PARQUET_VERIFY_VALUE_NONEMPTY_TOLERANCE = 0  # value 非空率 0 容忍（核心字段不可丢）
+PARQUET_VERIFY_SCHEMA_VERSION = "m81.v1"   # 期望 schema 版本，不匹配→回退 JSON
 
 # ★T2/P0：冷热分离（L1 内存常驻 / L2 LRU 缓存 / L3 按需加载）
 ENABLE_HOT_COLD_SEPARATION = True
@@ -4763,7 +4803,12 @@ DISTRIBUTED_REPLICA_COUNT = 3
 DISTRIBUTED_CONSISTENCY = "eventual"  # eventual / strong
 
 # ---- T4 第69批遗留延续开关 ----
-SNAPSHOT_HOT_COLD_LOAD = True   # PulseSnapshot 冷热加载（L1全量 + L2/L3元数据）
+# ★第80批 T1（G0 存储止血·临时止血）：关闭 _m70 就地清空。
+#   原因：_m70_apply_hot_cold_load 清空 L2/L3 的 value/linked_nodes（PulseSnapshot.py:1334/1336），
+#     但回填消费方 _m70_lazy_ids 全仓 0 读取（:1321/1338）→ 清空后无法回填（反向地雷）。
+#   重启用前置条件：T5 双保险收口（_m70_blanked 标记 + save 跳过被清字段写回）+ 回填消费方实现。
+#   重启用批次：第81批之后（回填消费方实现前严禁重开，否则永久抹除 L2/L3 正文）。
+SNAPSHOT_HOT_COLD_LOAD = False   # PulseSnapshot 冷热加载（L1全量 + L2/L3元数据）——第80批T1临时关闭
 ENABLE_FAISS_FAST_OPS = True    # fast_ops.fast_vector_search 优先走 FAISS
 ENABLE_KAL_CALL_SITES = True    # 胃/肝/肾实际调用点替换为 KAL
 
@@ -4793,3 +4838,132 @@ NEO4J_READ_COMPARE_WARN_THRESHOLD = 0.05      # 不一致率告警阈值（>5% �
 NEO4J_READ_COMPARE_FALLBACK_THRESHOLD = 0.10  # 不一致率自动回退阈值（>10% 自动回退节点内查询）
 NEO4J_READ_COMPARE_MIN_SAMPLES = 10           # 触发告警/回退前的最小采样数（避免单样本误判）
 # [M73-CFG]
+
+# ============================================================
+# ★主线第76批 T3（P1）：本地修复规则灰度开关
+# ============================================================
+# bare_return_none_in_except：except 块内「裸 return None 且无日志」
+#   → 本地自动补一行 WARNING 日志（高置信度纯文本替换）。
+# 默认 True = 修复生效；置 False 即回到修复前行为（该类型转 LLM）。
+ENABLE_LOCAL_FIX_BARE_RETURN_NONE = True
+
+# ===== 主线第81批 T4：冷存启动 compaction 灰度开关 =====
+# True=关闭 set_cold_storage 的后台启动 compaction daemon（供测试确定性构造历史碎文件场景 /
+#      生产降级止血用）；False=保持原行为（daemon 后台检查并合并历史遗留小文件）。
+# 默认 False：生产行为零变化，仅测试显式置 True。
+COLD_DISABLE_STARTUP_COMPACT = False
+# ============================================================
+# ★主线第91批 T-91c：日志定位 / 补丁契约 / 缩进契约 灰度开关**正式登记**
+# ------------------------------------------------------------
+# 背景：本批之前这 5 个开关只以「模块内联默认值 + getattr 兜底」的形式存在
+#   （`getattr(config, "X", True)`），config.py 里**查不到**，
+#   导致「默认值只能靠读源码推断」，灰度裁决没有正式落点。
+#   ★第89/90批的批内红线是「不改 config.py」（只加新开关、不动既有值），
+#     第91批 T-91c 明确解除该约束：把这些开关登记为**正式配置项**。
+# 本批**不改任何既有开关的值**，只把默认值显式登记；登记的默认值与本批前的
+#   `getattr` 兜底默认值**完全一致**（均为 True）⇒ 登记本身零行为变化，
+#   `getattr` 兜底继续保留（双保险：即使此处被删也仍是 True）。
+# ★运行时生效：读取点每次调用都重新 ``import config`` ⇒ 改配置即时生效（无需重启框架）。
+# ============================================================
+
+# ★第89批 T-89a：LLM 补丁完整性「相似度阈值下调 + 长度下限」总开关。
+#   True（默认）→ 相似度阈值 0.3 + 长度下限 1/3；
+#   False       → 阈值 0.5 且无长度下限（**逐字**回到第89批前行为）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m89_patch_sim_switch_on
+ENABLE_M89_PATCH_SIM_THRESHOLD = True
+
+# ★第90批 T-90a：LLM 补丁「字段契约」（关0）必填校验总开关。
+#   True（默认）→ original_code / modified_code 缺失时报**字段名**；
+#   False       → 逐字回到第90批前行为（由关1/关3 以别的理由拦下）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m90_patch_field_contract_on
+ENABLE_M90_PATCH_FIELD_CONTRACT = True
+
+# ★第90批 T-90b：日志调用点定位 V2（取调用栈**最深**帧 + message 兜底 + 中文器官模糊匹配）。
+#   True（默认）→ V2 生效；False → 逐字回到 V1（取最浅帧）。
+#   读取点：nucleus/evolution/LogAnalyzer.py::_m90_log_locate_v2_on
+#           nucleus/self_inspector.py::_m90_locate_v2_on（同一开关，两处读取点）
+ENABLE_M90_LOG_LOCATE_V2 = True
+
+# ★第91批 T-91a：日志调用点定位 V3（logger 名字面量 / organ_name 声明两级数据驱动索引）。
+#   依赖 ENABLE_M90_LOG_LOCATE_V2 同时为 True（V3 是 V2 的第三级细化）。
+#   实测覆盖率：81/81 = 100.0%（改前 65/81 = 80.2%）。
+#   读取点：nucleus/self_inspector.py::_m91_log_locate_v3_on
+ENABLE_M91_LOG_LOCATE_V3 = True
+
+# ★第91批 T-91b：LLM 补丁「缩进契约」三层防护总开关
+#   （① prompt 缩进约束 ② `_clean_llm_code` 阶段3 缩进修复 ③ 基础缩进对齐）。
+#   True（默认）→ 三层同时生效；False → 三者同时关闭，逐字回到第90批末行为。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m91_indent_repair_on
+ENABLE_M91_LLM_INDENT_REPAIR = True
+# [M91-CFG]
+
+# ============================================================================
+# ★第92批登记（T-92b 遗留开关 + T-92c/T-92d 两个防御性开关）
+#   本批红线「不改 config.py 运行开关（只加新开关）」⇒ 本段**只新增**，
+#   不修改任何既有开关的值。
+# ============================================================================
+
+# ★第87批 T-87b：非器官标签的「二级反查」兜底（标签 → 全项目类索引 → 文件）。
+#   True（默认）→ `resolve_organ_file`（仅 organs/）未覆盖的标签，再走
+#   `self_inspector._lookup_class_in_project` 反查；False → 逐字回到第87批前行为。
+#   ★第92批 T-92b：由「模块内联默认值 + getattr 兜底」改为**正式登记**。
+#     默认值与登记前的兜底值**完全一致**（True）⇒ 零行为变化；
+#     `getattr(..., True)` 兜底保留为第二道保险（config 读取失败时仍为 True）。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation
+ENABLE_NONORGAN_FILE_RESOLVE = True
+
+# ★第92批 T-92c：验证侧「基础缩进相等」结构化关。
+#   判据复用 T-91b 的 `SafeEvolutionExecutor._m91_base_indent`（构造侧与验证侧
+#   用同一把尺子），要求 base(modified_code) == base(original_code)。
+#   True → `PatchManager._verify_in_copy` 写副本前拦截
+#          （stage=base_indent_guard_failed）；
+#   False（默认）→ 逐字回到第91批末行为。
+#   ★任务书要求默认**关闭**：防御性校验先观察一批再考虑开启。
+#   读取点：nucleus/reasoning/PatchManager.py::_m92_base_indent_guard_on
+ENABLE_M92_PATCH_BASE_INDENT_GUARD = False
+
+# ★第92批 T-92d：验证侧「AST 结构不变量」关（类方法总数不得大幅缩水）。
+#   True → `_verify_in_copy` 写副本前比较补丁前后「类方法总数」，缩水 > 10%
+#          即拒绝（stage=ast_structure_guard_failed）；
+#   False（默认）→ 逐字回到第91批末行为。
+#   ★为什么需要：第91d 事故中 LLM 补丁把类方法改写成模块级函数
+#     （base 8 → 0），ast.parse / compile / py_compile / import **全部放行**
+#     ——「语法合法 ≠ 结构未退化」。
+#   阈值常量：nucleus/reasoning/PatchManager.py::_M92_STRUCT_SHRINK_RATIO (0.10)
+#   读取点：nucleus/reasoning/PatchManager.py::_m92_ast_struct_guard_on
+ENABLE_M92_PATCH_AST_STRUCT_GUARD = False
+# [M92-CFG]
+
+# ============================================================================
+# ★第94批登记（T-94a 老化策略三开关）
+#   本批红线「不改 config.py 运行开关（只加新开关）」⇒ 本段**只新增**，
+#   不修改任何既有开关/常量的值（既有 193 个 ENABLE_* 逐字未变）。
+# ============================================================================
+
+# ★第94批 T-94a：待审批队列**老化策略**总开关。
+#   True  → `PatchManager.apply_all_pending` 在审批过滤**之前**执行老化：
+#           pending 条数 ≥ PENDING_AGING_MAX_COUNT 或 最老补丁停留 ≥
+#           PENDING_AGING_MAX_AGE_HOURS 时，对满足
+#             source == "local_rule" / 非核心文件 / runtime_verified is True /
+#             risk_level == "低"
+#           的补丁置 status='approved'（放行）。同时
+#           `SafeEvolutionExecutor._m94_pending_blocks_regeneration` 改为
+#           「按补丁活性」判定同位置是否阻塞再生（超期未裁决不再永久冻结）。
+#   False（默认）→ 全链路**零行为变化**（不读队列、不改状态、不写盘）。
+#   ★T0 实测：当前 pending 12 条**全部 source=llm**（local_rule 0 条，早在
+#     入队时被 `_m85_local_low_risk_auto_apply` 放行），故开启后放行数仍为 0
+#     —— 属「纵深防御 + 未来场景」，详见交付报告偏差清单 D94-1。
+#   读取点：nucleus/reasoning/PatchManager.py::_m94_pending_aging_on
+#           nucleus/reasoning/SafeEvolutionExecutor.py::_m94_pending_blocks_regeneration
+ENABLE_PENDING_QUEUE_AGING = False
+
+# ★第94批 T-94a：老化触发阈值——pending 条数（任务书建议 20 条）。
+#   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。
+#   读取点：nucleus/reasoning/PatchManager.py::_m94_aging_max_count
+PENDING_AGING_MAX_COUNT = 20
+
+# ★第94批 T-94a：老化触发阈值——最老待审批补丁的停留时长（小时，任务书建议 24）。
+#   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。
+#   读取点：nucleus/reasoning/PatchManager.py::_m94_aging_max_hours
+PENDING_AGING_MAX_AGE_HOURS = 24
+# [M94-CFG]

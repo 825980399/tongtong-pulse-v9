@@ -448,7 +448,7 @@ class KnowledgeAccessLayer:
         if _pool is not None and hasattr(_pool, "get_relationships_neo4j"):
             try:
                 return _pool.get_relationships_neo4j(node_id, direction)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] query_relationships 回退: %s", e)
         _node = self.get_node(node_id)
         if _node is None:
@@ -476,7 +476,7 @@ class KnowledgeAccessLayer:
         if _store is not None and _store.is_available() and hasattr(_store, "query_multi_hop"):
             try:
                 return [str(x) for x in _store.query_multi_hop(node_id, int(max_depth or 2))]
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] query_multi_hop Neo4j 失败回退: %s", e)
         try:
             return [str(x[0].node_id) if hasattr(x[0], "node_id") else str(x[0])
@@ -500,7 +500,7 @@ class KnowledgeAccessLayer:
         if _store is not None and _store.is_available() and hasattr(_store, "query_common_neighbors"):
             try:
                 return [str(x) for x in _store.query_common_neighbors(node_id_1, node_id_2)]
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] query_common_neighbors Neo4j 失败回退: %s", e)
         _a = set()
         _b = set()
@@ -520,7 +520,7 @@ class KnowledgeAccessLayer:
         if _pool is not None and hasattr(_pool, "get_read_stats"):
             try:
                 return _pool.get_read_stats()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] 取双读统计失败: %s", e)
         return {"enabled": self.neo4j_read_enabled(), "note": "pool 未提供接口"}
 
@@ -530,7 +530,7 @@ class KnowledgeAccessLayer:
         if _pool is not None and hasattr(_pool, "get_read_compare_stats"):
             try:
                 return _pool.get_read_compare_stats()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] 取一致性比对统计失败: %s", e)
         return {"enabled": self.neo4j_read_enabled(), "note": "pool 未提供接口"}
 
@@ -540,7 +540,7 @@ class KnowledgeAccessLayer:
         if _pool is not None and hasattr(_pool, "reset_read_compare"):
             try:
                 _pool.reset_read_compare()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] 重置一致性比对失败: %s", e)
 
     def repair_inconsistent_node(self, node_id: str) -> int:
@@ -549,7 +549,7 @@ class KnowledgeAccessLayer:
         if _pool is not None and hasattr(_pool, "repair_inconsistent_node"):
             try:
                 return int(_pool.repair_inconsistent_node(node_id) or 0)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _logger.debug("[KAL] 修复不一致节点失败: %s", e)
         return 0
 

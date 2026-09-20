@@ -35,24 +35,23 @@ from __future__ import annotations
 
 import argparse
 import ast
-import io
 import json
 import os
 import re
 import sys
-from typing import Dict, List, Set, Tuple
 
 _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
 # ★第55批 T4：统一排除清单（新增目录只需改 exclude_dirs 一处）
-from nucleus.data import exclude_dirs as E  # noqa: E402
+from nucleus.data import exclude_dirs as E
+
 # ★第55批 T3：跨盘安全的 relpath（同盘行为与 os.path.relpath 一致，
 #   跨盘降级绝对路径而不抛 ValueError —— 测试沙箱可能落在别的盘）
-from nucleus.data.path_utils import safe_relpath  # noqa: E402
+from nucleus.data.path_utils import safe_relpath
 
-MODULES: Tuple[str, ...] = (
+MODULES: tuple[str, ...] = (
     "base", "functions", "hardware", "nucleus",
     "organs", "pulses", "somatics", "utils",
 )
@@ -80,19 +79,19 @@ _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _MODULE_DOTTED_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 
 
-def _module_symbols(dotted: str) -> Set[str]:
+def _module_symbols(dotted: str) -> set[str]:
     """从 'a.b.C' 取出末段符号名（最可能的类/函数名）。"""
     _parts = [p for p in dotted.split(".") if p]
     return {_parts[-1]} if _parts else set()
 
 
-def extract_dynamic_load_names(files: List[str]) -> Set[str]:
+def extract_dynamic_load_names(files: list[str]) -> set[str]:
     """★T3 字符串加载追踪：识别 importlib.import_module / __import__ / getattr 的
     字符串参数，作为潜在动态引用名（保守：命中即标 DYNAMIC_RISK，宁可漏报不可误删）。"""
-    out: Set[str] = set()
+    out: set[str] = set()
     for _f in files:
         try:
-            _src = io.open(_f, encoding="utf-8", errors="ignore").read()
+            _src = open(_f, encoding="utf-8", errors="ignore").read()  # noqa: SIM115
             _tree = ast.parse(_src, filename=_f)
         except Exception:
             continue
@@ -121,13 +120,13 @@ def extract_dynamic_load_names(files: List[str]) -> Set[str]:
     return out
 
 
-def _iter_tmp_py(root: str) -> List[str]:
+def _iter_tmp_py(root: str) -> list[str]:
     """★T3-b：收集 tmp/ 下全部 .py（排除缓存/备份子目录），仅用于动态加载追踪。
     tmp 仍不计入 def/ref 统计，只作为反射风险信号（保守：宁可漏报不可误删）。"""
     _tmp = os.path.join(root, "tmp")
     if not os.path.isdir(_tmp):
         return []
-    out: List[str] = []
+    out: list[str] = []
     for _dp, _dns, _fns in os.walk(_tmp):
         _dns[:] = [d for d in _dns
                    if d not in ("__pycache__", "code_backups", ".bak_batch58")]
@@ -148,10 +147,10 @@ def _iter_json_strings(obj):
             yield from _iter_json_strings(_v)
 
 
-def collect_config_refs(root: str) -> Set[str]:
+def collect_config_refs(root: str) -> set[str]:
     """★T3 配置引用追踪：扫描 data/ 下 *.json（排除副本/知识/模型目录），
     提取标识符形态的字符串值，作为潜在动态引用名。"""
-    out: Set[str] = set()
+    out: set[str] = set()
     _data_dir = os.path.join(root, "data")
     if not os.path.isdir(_data_dir):
         return out
@@ -167,7 +166,7 @@ def collect_config_refs(root: str) -> Set[str]:
             if not _fn.endswith(".json"):
                 continue
             try:
-                with io.open(os.path.join(_dp, _fn), encoding="utf-8",
+                with open(os.path.join(_dp, _fn), encoding="utf-8",
                              errors="ignore") as _fh:
                     _obj = _json.load(_fh)
             except Exception:
@@ -181,10 +180,10 @@ def collect_config_refs(root: str) -> Set[str]:
 # ---------------------------------------------------------------------------
 # 扫描
 # ---------------------------------------------------------------------------
-def iter_source_files(root: str, extra_excludes: Set[str] | None = None) -> List[str]:
+def iter_source_files(root: str, extra_excludes: set[str] | None = None) -> list[str]:
     """遍历 ``root`` 下全部 .py（★已排除副本/缓存/备份/临时目录，可追加排除）。"""
     _extra = set(extra_excludes or ())
-    out: List[str] = []
+    out: list[str] = []
     for _dp, _dns, _fns in os.walk(root):
         _dns[:] = [d for d in _dns
                    if not E.is_excluded(d) and d not in _extra]
@@ -194,7 +193,7 @@ def iter_source_files(root: str, extra_excludes: Set[str] | None = None) -> List
     return out
 
 
-def collect_definitions(files: List[str], root: str = _PROJ) -> Dict[str, List[dict]]:
+def collect_definitions(files: list[str], root: str = _PROJ) -> dict[str, list[dict]]:
     """AST 收集每个文件的**模块级** def/class 名 + 一些元信息。
 
     Args:
@@ -202,16 +201,16 @@ def collect_definitions(files: List[str], root: str = _PROJ) -> Dict[str, List[d
         root:  **相对路径的基准目录** —— 必须传扫描根，否则跨盘会抛
                ``ValueError``（测试沙箱可能落在与项目不同的盘）。
     """
-    defs: Dict[str, List[dict]] = {}
+    defs: dict[str, list[dict]] = {}
     for _f in files:
         try:
-            _src = io.open(_f, encoding="utf-8", errors="ignore").read()
+            _src = open(_f, encoding="utf-8", errors="ignore").read()  # noqa: SIM115
             _tree = ast.parse(_src, filename=_f)
         except (SyntaxError, ValueError, UnicodeDecodeError):
             continue
         _rel = safe_relpath(_f, root).replace("\\", "/")
-        _all: Set[str] = set()
-        _strings: Set[str] = set()
+        _all: set[str] = set()
+        _strings: set[str] = set()
 
         # __all__ 列表里的名字
         for _n in ast.walk(_tree):
@@ -253,7 +252,7 @@ def collect_definitions(files: List[str], root: str = _PROJ) -> Dict[str, List[d
     return defs
 
 
-def collect_refs(files: List[str]) -> Tuple[Dict[str, int], Set[str]]:
+def collect_refs(files: list[str]) -> tuple[dict[str, int], set[str]]:
     """★AST 单次遍历：统计每个标识符作为**引用**出现的次数 + 全部字符串常量。
 
     为什么不用正则全文匹配：名字数（数千）× 文件数（数百）= 百万次正则 → 超时。
@@ -265,11 +264,11 @@ def collect_refs(files: List[str]) -> Tuple[Dict[str, int], Set[str]]:
     Returns:
         (name -> 引用次数, 全部字符串常量集合)
     """
-    counter: Dict[str, int] = {}
-    strings: Set[str] = set()
+    counter: dict[str, int] = {}
+    strings: set[str] = set()
     for _f in files:
         try:
-            _src = io.open(_f, encoding="utf-8", errors="ignore").read()
+            _src = open(_f, encoding="utf-8", errors="ignore").read()  # noqa: SIM115
             _tree = ast.parse(_src, filename=_f)
         except (SyntaxError, ValueError, OSError, UnicodeDecodeError):
             continue
@@ -290,7 +289,7 @@ def collect_refs(files: List[str]) -> Tuple[Dict[str, int], Set[str]]:
     return counter, strings
 
 
-def count_references(files: List[str], names: Set[str]) -> Dict[str, int]:
+def count_references(files: list[str], names: set[str]) -> dict[str, int]:
     """（保留兼容入口）基于 AST 的引用计数。"""
     counter, _ = collect_refs(files)
     return {_n: counter.get(_n, 0) for _n in names}
@@ -299,10 +298,10 @@ def count_references(files: List[str], names: Set[str]) -> Dict[str, int]:
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
-def scan(root: str = _PROJ, extra_excludes: Set[str] | None = None) -> dict:
+def scan(root: str = _PROJ, extra_excludes: set[str] | None = None) -> dict:
     all_files = iter_source_files(root, extra_excludes)
-    in_modules: List[str] = []
-    test_files: List[str] = []
+    in_modules: list[str] = []
+    test_files: list[str] = []
     for _f in all_files:
         _rel = safe_relpath(_f, root).replace("\\", "/")
         if _rel.startswith("tests" + "/"):
@@ -313,9 +312,9 @@ def scan(root: str = _PROJ, extra_excludes: Set[str] | None = None) -> dict:
     defs = collect_definitions(in_modules, root=root)
 
     # 收集名字
-    names: Set[str] = set()
-    meta: Dict[Tuple[str, str], dict] = {}
-    strings_by_file: Dict[str, Set[str]] = {}
+    names: set[str] = set()
+    meta: dict[tuple[str, str], dict] = {}
+    strings_by_file: dict[str, set[str]] = {}
     for _rel, _items in defs.items():
         for _it in _items:
             if "_strings" in _it:
@@ -343,7 +342,7 @@ def scan(root: str = _PROJ, extra_excludes: Set[str] | None = None) -> dict:
     _config_refs = collect_config_refs(root)
     all_dynamic_names = all_strings | _dynamic_loads | _config_refs
 
-    results: List[dict] = []
+    results: list[dict] = []
     for (_rel, _name), _it in sorted(meta.items()):
         _pc = prod_counter.get(_name, 0)
         _tc = test_counter.get(_name, 0)
@@ -506,11 +505,11 @@ def main() -> int:
         print("分级：%s" % report["summary"]["by_level"])
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    io.open(args.out, "w", encoding="utf-8", newline="").write(md)
+    open(args.out, "w", encoding="utf-8", newline="").write(md)
     print("报告已写入：%s" % args.out)
 
     if args.json_out:
-        io.open(args.json_out, "w", encoding="utf-8", newline="").write(
+        open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(report, ensure_ascii=False, indent=2))
         print("JSON 已写入：%s" % args.json_out)
     return 0

@@ -13,11 +13,14 @@ ssrf_guard.py —— SSRF防护
 
 import ipaddress
 import json
+import logging
 import socket
 import urllib.error
 import urllib.request
 from typing import Any
 from urllib.parse import urlparse
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # 允许抓取的协议
@@ -49,8 +52,12 @@ def _trusted_hosts() -> set:
         _oh = urlparse(_ollama).hostname
         if _oh:
             _hosts.add(_oh.lower())
-    except Exception:
-        pass
+    except Exception as e:
+        # ★主线第77批：受信任主机解析失败必须留痕。
+        #   此处为 fail-closed（集合变小 → 判定更严格），安全方向正确；
+        #   但静默会导致「合法 API 被拒却查不到原因」，排查成本极高。
+        _LOGGER.debug("受信任主机集合解析失败（按最小集合处理）: %s: %s",
+                      type(e).__name__, e)
     _TRUSTED_CACHE = _hosts
     return _hosts
 

@@ -48,6 +48,20 @@ class BaseLLMAdapter:
         """从响应 dict 中提取回答文本；结构异常返回 None（不抛）。"""
         raise NotImplementedError
 
+    def extract_usage(self, response: Any) -> dict | None:
+        """★第94批 T-94b：从响应中提取 token 用量（**可选能力**）。  # _m94_extract_usage_marker
+
+        设计约束（任务书 §T-94b.1）：
+        * **不改** `parse_response` 签名（零回归），只**新增**本方法；
+        * 基类默认返回 ``None`` —— 未覆写的适配器一律「无用量」，调用方据此
+          保持既有行为（``tokens`` 沿用原值，新增 ``usage`` 字段为 ``None``）。
+
+        Returns:
+            ``{"prompt_tokens": int, "completion_tokens": int,
+            "total_tokens": int}`` 或 ``None``（无 usage / 结构异常）。
+        """
+        return None
+
     def check_availability(self, api_key: str) -> bool:
         """渠道可用性预检（只做静态检查，不发网络请求）。
 

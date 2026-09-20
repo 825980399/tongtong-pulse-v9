@@ -544,6 +544,10 @@ class PulseInnerWorld(BasePulseOrgan):
         elif event_type == KnowledgeEvent.FUSED:
             # ★P3-5补订阅：知识融合完成（肝 L2→L3），内在世界刷新缓存
             return self._on_knowledge_fused(payload)
+        elif event_type == Event.SEARCH_TERMINATED:
+            # ★第86批 T-86b：终止信号独立分层——只登记终止，
+            #   不得进入结果审查/兜底通路（否则空结果被误读为「我来兜底」）。
+            return self._handle_search_terminated(payload)
         elif event_type == Event.CONTROLLER_SEARCH_STAGE_COMPLETED:
             return self._handle_search_stage_feedback(payload)
         elif event_type == "inner_world.cache_clear":
@@ -1391,6 +1395,7 @@ class PulseInnerWorld(BasePulseOrgan):
                         "search_topic": _supplement_topic[:80],
                         "deep_search": True,
                         "search_intent": "curiosity",
+                        "search_correlation_id": correlation_id,
                     }, priority=2, layer="L3")
                     self._log(LogLevel.INFO, f"知识补充搜索: '{_supplement_topic[:40]}' (检索置信度={knowledge_hint})")
             self._emit(InferenceEvent.RESULT, {
@@ -2019,7 +2024,12 @@ class PulseInnerWorld(BasePulseOrgan):
 
         开关 enable_simple_query_local=False 时返回 None（完全回退到原行为）。
         """
-        record_local_inference(KIND_SIMPLE)
+        # ★M84-1（第84批 T-84c）：`record_local_inference(KIND_SIMPLE)` 已下移到本函数
+        #   「模板真正命中」分支（`_answer is None` 之后的命中点）。原实现在函数入口
+        #   **无条件**计数：未命中任何模板、最终 `return None`（L2082）的请求同样被计入
+        #   local_inference_count，使该指标含大量噪声（实测 llm_dependency 的
+        #   「本地简单回答」=118 即含全部未命中项），把本地自给率抬高、依赖度分母算错。
+        #   关闭开关时行为不变（命中分支本就在开关之后）。
         # ★第十一批 任务2：回报源2 —— 用户显式纠错检测（权重0.3）。
         #   每次推理入口先判定本轮是否为纠错语句，命中则回标「上一轮本地推理」为错误，
         #   让 EvidenceCalibrator 的历史成功率真正跟随用户反馈变化（此前恒为冷启动0.7）。
@@ -2080,6 +2090,9 @@ class PulseInnerWorld(BasePulseOrgan):
         if _answer is None:
             return None
 
+        # ★M84-1（第84批 T-84c）：只在真正命中（即将返回非 None 答案）处计入本地推理。
+        #   与函数入口的旧位置相比，只有"命中"才 +1，未命中不再污染计数。
+        record_local_inference(KIND_SIMPLE)
         self._inference_count += 1
         self._cache_inference(ctx.question, _answer, ctx.user_name)
         self._trace_inference(ctx.question, _answer, "simple_query_local", 0.95, ctx.user_name,
@@ -3286,10 +3299,41 @@ class PulseInnerWorld(BasePulseOrgan):
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
 
+    def _handle_search_terminated(self, payload: dict) -> dict[str, Any]:
+        """★第86批 T-86b：搜索终止信号（SearchEvent.TERMINATED）独立处理通路。
+
+        分层动机：终止信号与结果信号此前混用同一个「阶段完成」事件，订阅方无法
+        区分「这一阶段有结果了」与「这次搜索被终止了」，于是把「终止后的空结果」
+        （stage=-1 / articles_found=0）按结果信号解读，落入「无文章产出 → 接受
+        兜底」的判断，表现为『我来兜底』。
+
+        本方法只做终止登记，**明确不触发结果审查与兜底回退**：兜底是由终止分支
+        自身按需发起的后台学习动作，不得由订阅通路重复发起。
+        """
+        search_topic = payload.get("search_topic", "") or ""
+        self._log(LogLevel.INFO,
+                  "搜索终止信号(Terminated): 已登记终止，不进入结果审查/兜底通路 "
+                  f"(主题='{str(search_topic)[:40]}')")
+        try:
+            _exp_map = getattr(self, "_search_experience", None) or {}
+            _exp_key = self._make_experience_key(search_topic) if search_topic else ""
+            _exp = _exp_map.get(_exp_key) if _exp_key else None
+            if _exp:
+                _exp["last_result"] = "terminated"
+                _exp["best_tool"] = "inner_world"  # 被终止的搜索不适合再用
+        except Exception as e:
+            self._log(LogLevel.DEBUG,
+                      f"终止信号经验登记降级(不阻断): {type(e).__name__}: {e}")
+        return {"status": "search_terminated", "action": "none"}
+
     def _handle_search_stage_feedback(self, payload: dict) -> dict[str, Any]:
         """
         接收控制器的搜索阶段完成反馈脉冲，分析阶段结果质量。
         """
+        # ★第86批 T-86b：旧格式终止信号（status="terminate"）防御性分层——
+        #   不得按结果信号进入审查/兜底判断。
+        if payload.get("status") == "terminate":
+            return self._handle_search_terminated(payload)
         stage = payload.get("stage", 0)
         search_topic = payload.get("search_topic", "")
         keywords = payload.get("keywords", [])
@@ -3355,6 +3399,32 @@ class PulseInnerWorld(BasePulseOrgan):
                     for _kw in keywords[:5]
                 )
                 if (_relevant_count == 0 or _is_misunderstood) and len(keywords) >= 3:
+                    # ★第83批 T-c1(2)：审查须区分「提取错误」与「主题无关」。
+                    #   零重叠多半是上游关键词提取错误（实测 "今天的科技新闻" 被提取为
+                    #   ['探索','适合','生活']），直接终止会把可修复的提取问题误判成主题问题。
+                    #   处置：先重试提取一次（重新发起同主题深度搜索），重试后仍无关才终止。
+                    _m83_key = str(search_topic)[:60]
+                    _m83_map = getattr(self, "_m83_search_retry", None)
+                    if _m83_map is None:
+                        _m83_map = {}
+                        self._m83_search_retry = _m83_map
+                    if (_relevant_count == 0 and not _is_misunderstood
+                            and _m83_map.get(_m83_key, 0) < 1):
+                        _m83_map[_m83_key] = _m83_map.get(_m83_key, 0) + 1
+                        self._log(LogLevel.WARNING,
+                                  f"搜索反馈审查: 阶段1关键词与主题零重叠，疑似提取错误 → "
+                                  f"重试提取一次(不终止) "
+                                  f"(主题='{search_topic[:40]}', 关键词='{', '.join(keywords[:3])}')")
+                        self._emit(Event.CONTROLLER_OPEN_URL, {
+                            "url": f"https://lite.duckduckgo.com/lite/?q={str(search_topic)[:80]}",
+                            "reason": f"关键词与主题零重叠，重试提取: {str(search_topic)[:40]}",
+                            "search_topic": str(search_topic)[:80],
+                            "deep_search": True,
+                            "search_intent": "keyword_retry",
+                            "_m83_retry": True,
+                        }, priority=5, layer="L3")
+                        return {"status": "stage1_retry_keywords",
+                                "action": "retry_extraction"}
                     _is_terminated = True
                     self._log(LogLevel.INFO,
                              f"搜索反馈审查: 阶段1关键词与主题无关，通知控制器终止 "
@@ -3362,7 +3432,10 @@ class PulseInnerWorld(BasePulseOrgan):
                     # ★任务2：坏信号 stage1_terminate（关键词与主题无关）→ 喂给搜索质量闭环
                     self._observe_search_quality("stage1_terminate", True,
                                                  topic=str(search_topic)[:60])
-                    self._emit(Event.CONTROLLER_SEARCH_STAGE_COMPLETED, {
+                    # ★第86批 T-86b：终止信号改用独立事件（SearchEvent.TERMINATED），
+                    #   不再复用「阶段完成」结果事件——否则订阅方（含自身）会把它
+                    #   当作阶段结果进入审查/兜底判断，把终止后的空结果误读为兜底。
+                    self._emit(Event.SEARCH_TERMINATED, {
                         "stage": -1,
                         "search_topic": search_topic,
                         "keywords": keywords[:5],
@@ -3375,7 +3448,7 @@ class PulseInnerWorld(BasePulseOrgan):
                         self._direct_to_lung_questions.discard(search_topic.strip())
                         self._log(LogLevel.DEBUG, f"搜索终止回退跳过(已直接推给大模型): {search_topic[:40]}")
                     else:
-                        original_correlation_id = self._active_search_correlation.pop(search_topic, "")
+                        original_correlation_id = self._pick_search_cid(payload, search_topic)
                         # 构造简化上下文用于公共兜底方法
                         _fallback_ctx = PulseInnerWorld.InferenceContext(
                             question=search_topic or "",
@@ -17344,6 +17417,18 @@ class PulseInnerWorld(BasePulseOrgan):
             return "这个问题我还需要再想想，暂时给不出确定的答案。"
         return answer
 
+    def _pick_search_cid(self, payload: dict, search_topic: str) -> str:
+        """★第82批 T-d（D167）：解析搜索终止回退的 correlation_id。
+
+        优先取控制器随 stage 脉冲透传回的 search_correlation_id（发射端随
+        OPEN_URL 带入、控制器原样带回）；缺失时回退旧字符串注册表 pop；
+        两者皆无 → 空串优雅降级（后台学习不回嘴，不崩）。
+        """
+        cid = (payload or {}).get("search_correlation_id") or ""
+        if cid:
+            return cid
+        return self._active_search_correlation.pop(search_topic, "")
+
     def _sanitize_internal_content(self, answer: str, question: str = "") -> str:
         """★P0修复：清理answer中的内部处理内容，防止泄露到对话输出。
         过滤规则：
@@ -17390,6 +17475,20 @@ class PulseInnerWorld(BasePulseOrgan):
         # 5. 清理设计文档标记
         answer = _re_s.sub(r'\[设计文档·.*?\].*?(?=[。！？]|$)', '', answer)
         answer = _re_s.sub(r'### .*?(?=[。！？\n]|$)', '', answer)
+        # 5.1 ★第83批 T-b2：清理器官名方括号标记（[器官]/[大脑]/[肺] ...）。
+        #   实测泄露样本："深层原理：[器官] [器官职责说明书·自动生成] PulseX 是框架内部组件"。
+        #   与"关联知识"同规则：命中即硬删至句末，不放行。
+        answer = _re_s.sub(
+            r'\[(?:器官|大脑|小脑|肺|胃|心|心脏|肝|肾|脾|胆|眼睛|耳朵|皮肤|胸腺|'
+            r'双腿|双脚|骨架|免疫系统)\].*?(?=[。！？]|$)', '', answer)
+
+        # ★第83批 T-b1：_regex_removed 必须在「标点归一化 / 首尾 strip」**之前**计算。
+        #   旧位置在 strip 之后，导致 answer.strip(' 。！？，、') 剥掉尾句号造成的长度变化
+        #   被误判为"正则删掉了内部标记词" → 真短答案被硬清空（实测 2026-09-19 19:54:21
+        #   "在吗" 模板命中 "在呢，你说。" 后仍输出兜底话术 "暂时给不出确定的答案"）。
+        #   此处只统计"正则真的删除了内部标记词"，与第82批补强2 的注释意图一致。
+        _regex_removed = (_before_regex is not None
+                          and len(answer) != len(_before_regex))
 
         # 6. 清理残留的空括号和多余标点
         answer = _re_s.sub(r'[。！？]{2,}', '。', answer)
@@ -17402,12 +17501,15 @@ class PulseInnerWorld(BasePulseOrgan):
         #           只是删了前缀、答案本身就短 → 保留。
         #   注意：不能用「原答案是否含内部标记词」判定，因为「我了解到，」既是
         #   要删的前缀（16147行）又是标记词，同一标记用两次会导致短答案仍被清空。
-        _regex_removed = (_before_regex is not None
-                          and len(answer) != len(_before_regex))
+        # ★第82批 T-d（D168 补强2）：短答案判据收敛。
+        #   旧判据 `_regex_removed or not _stripped_prefix` 会把不以"我了解到，"开头
+        #   的真短答案（问候"你好"/短事实"1+1等于2"/"你是谁"）误清空成兜底话术。
+        #   新判据：仅当"正则真删了内部标记词"才说明原答案混了内部内容 → 硬清空；
+        #   未命中内部标记 → 真短答案一律保留（白名单：问候/短事实/你是谁类）。
         if len(answer) < 10 and _original:
-            if _regex_removed or not _stripped_prefix:
+            if _regex_removed:
                 self._log(LogLevel.WARNING,
-                         f"内部内容过滤后答案过短({len(answer)}字)，原答案主要为内部内容，已清理")
+                         f"内部内容过滤后答案过短({len(answer)}字)，原答案含内部标记词，已硬清空")
                 answer = ""
             else:
                 self._log(LogLevel.DEBUG,

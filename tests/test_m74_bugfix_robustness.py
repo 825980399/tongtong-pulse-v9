@@ -125,7 +125,7 @@ def test_t4_log_rollover_permissionerror_no_crash(tmp_path):
             mt.sleep = mock.MagicMock()
             try:
                 h.doRollover()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 pytest.fail(f"doRollover 抛异常(应优雅降级): {e}")
             # 至少尝试了退避重试
             assert mt.sleep.called
@@ -143,7 +143,7 @@ def test_t4_log_rollover_exponential_backoff(tmp_path):
             mt.sleep = lambda s: sleeps.append(s)
             try:
                 h.doRollover()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
     # 至少两次退避，且呈递增（0.2, 0.4, ...）
     assert len(sleeps) >= 2
@@ -170,7 +170,7 @@ def test_t4_compaction_permissionerror_no_crash(tmp_path):
         _sl.side_effect = lambda *a, **k: None
         try:
             result = pool.compact_cold_storage()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             pytest.fail(f"compaction 抛异常(应优雅降级): {e}")
     assert isinstance(result, dict)
     assert "success" in result

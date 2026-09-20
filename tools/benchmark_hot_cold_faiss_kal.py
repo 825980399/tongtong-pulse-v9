@@ -184,17 +184,21 @@ def stage_faiss(count=2000, dim=512, k=10, queries=200, seed=42):
     }
 
 
-def stage_faiss_fix(count=12295, dim=512, topks=(100, 500, 1000, 5000, 10000),
+def stage_faiss_fix(count=None, dim=512, topks=(100, 500, 1000, 5000, 10000),
                     queries=200, seed=42):
     """[M73-T2] FAISS 索引修复后的真实对比基准。
 
-    - 用真实规模（默认 12295，与 Parquet 全量一致）的随机 512 维向量；
+    - count 为 None 时动态取 Parquet 实际节点数（不再硬编码 12295，避免随
+      数据增长误判）；读取失败回退 2000；
+    - 用真实规模（以 Parquet 实际节点数为准）的随机 512 维向量；
     - 验证 add_vectors 自动构建索引（index_ready=True）；
     - 对比 FAISS 索引检索 vs 暴力余弦 在 Top100/500/1000/5000/10000 的 p50/p95/max 与加速比；
     - 计算 Recall@10（FAISS Top10 与暴力 L2 Top10 交集 / 10）；
     - 测量索引构建耗时、增量添加（1000）耗时、保存/加载耗时。
     向量为随机合成（FAISS 性能只取决于规模与维度，不依赖向量取值），规模与真实一致。
     """
+    if count is None:
+        count = _real_node_count() or 2000
     import random
     import tempfile
     import shutil
@@ -346,20 +350,44 @@ def _load_real_nodes(parquet_dir):
     files = sorted(glob.glob(os.path.join(parquet_dir, "**", "*.parquet"), recursive=True))
     nodes = []
     for f in files:
+        # ★第83批 T-d1：evol_level 是分区目录名（evol_level=Lx），**不在 parquet 文件列内**。
+        #   逐文件读取时必须显式回填，否则 from_dict 缺字段 → 静默默认 L1（分层塌缩）
+        #   并触发 "[第80批 T2] from_dict 缺失 evol_level" 告警（≤5 次/进程 debounce）。
+        _lv83 = ""
+        for _seg in f.replace("\\", "/").split("/"):
+            if _seg.startswith("evol_level="):
+                _lv83 = _seg.split("=", 1)[1]
+                break
         try:
             import pyarrow.parquet as pq
-            nodes.extend(pq.read_table(f).to_pylist())
+            _rows = pq.read_table(f).to_pylist()
         except Exception:
             try:
                 import pandas as pd
-                nodes.extend(pd.read_parquet(f).to_dict(orient="records"))
-            except Exception as e:  # noqa: BLE001
+                _rows = pd.read_parquet(f).to_dict(orient="records")
+            except Exception as e:
                 return {"error": "%s: %s" % (type(e).__name__, e)}
+        for _r in _rows:
+            if _lv83:
+                _r.setdefault("evol_level", _lv83)
+        nodes.extend(_rows)
     return nodes
 
 
+def _real_node_count(parquet_dir="data/knowledge/parquet"):
+    """动态读取 Parquet 主存储的实际节点数（替代硬编码 12295）。
+
+    数据规模随进化持续增长，硬编码会随之误判；此处以 Parquet 实际行数为准，
+    读取失败返回 0（调用方按需回退）。
+    """
+    raw = _load_real_nodes(parquet_dir)
+    if isinstance(raw, dict) and "error" in raw:
+        return 0
+    return len(raw or [])
+
+
 def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000):
-    """真实数据冷加载微基准：从 Parquet 主存储恢复 12295 节点，测量 materialization 开销。
+    """真实数据冷加载微基准：从 Parquet 主存储恢复实际节点数，测量 materialization 开销。
 
     说明
     ----
@@ -391,7 +419,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
     for d in raw:
         try:
             built.append(PulseNode.from_dict(d))
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
 
     t0 = time.perf_counter()
@@ -400,7 +428,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
         try:
             pool.add(n)
             added += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
     add_dt = time.perf_counter() - t0
 
@@ -457,7 +485,7 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--json-out", default="")
     ap.add_argument("--real-data", action="store_true",
-                    help="加载 Parquet 主存储真实 12295 节点做冷加载微基准")
+                    help="加载 Parquet 主存储真实节点（Parquet 实际节点数）做冷加载微基准")
     ap.add_argument("--parquet-dir", default="data/knowledge/parquet",
                     help="Parquet 主存储目录（相对/绝对）")
     ap.add_argument("--faiss-fix", action="store_true",
@@ -493,7 +521,7 @@ def main():
     if a.real_data:
         try:
             result["stages"]["node_pool_real"] = stage_node_pool_real(a.parquet_dir)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             result["stages"]["node_pool_real"] = {
                 "status": "SKIPPED",
                 "reason": "%s: %s" % (type(e).__name__, str(e)[:300]),
@@ -502,11 +530,12 @@ def main():
     if a.faiss_fix:
         try:
             _topks = tuple(int(x) for x in str(a.faiss_topks).split(",") if x.strip())
-            _cnt = a.faiss_count if a.faiss_count > 0 else (12295 if a.real_data else 2000)
+            _cnt = a.faiss_count if a.faiss_count > 0 else (
+                (_real_node_count(a.parquet_dir) or 2000) if a.real_data else 2000)
             result["stages"]["faiss_fix"] = stage_faiss_fix(
                 count=_cnt, dim=a.faiss_dim, topks=_topks,
                 queries=a.faiss_queries, seed=a.seed)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             result["stages"]["faiss_fix"] = {
                 "status": "SKIPPED",
                 "reason": "%s: %s" % (type(e).__name__, str(e)[:300]),

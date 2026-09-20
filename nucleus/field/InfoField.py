@@ -893,9 +893,15 @@ class InfoField(SilentLogMixin):
                     self.pulse_core.notify_completed(pulse)
                 except Exception as _nc_e:
                     _module_logger.debug(f"[脉冲完成] notify_completed 异常(已忽略): {_nc_e}")
-            # ★P0-3修复：在途分发计数减一（与 publish 提交时的 +1 对应），
+            # ★主线第78批 T1/P0：在途分发计数减一（与 publish 提交时的 +1 对应），
             #   供运行时埋点估算四层线程池积压。
-            self._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)
+            #   ★修复竞态漂移：原实现此处「-1」未加锁，而 publish 提交处的「+1」
+            #   （:724）使用 self._task_count_lock；±不对称锁在多线程下导致读-改-写
+            #   互相覆盖、部分 -1 丢失 → 计数只增不减、队列深度指标持续偏高
+            #   （星轨 2026-09-18 指认「:712 有锁 / :898 无锁，指标漂移」）。
+            #   此处补锁使 +1/-1 对称，从根上消除漂移。
+            with self._task_count_lock:
+                self._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)
             if layer_tag == _PULSE_LAYER_L3:
                 self._record_l3_completion()
     
@@ -2093,6 +2099,15 @@ class InfoField(SilentLogMixin):
                         #   关键：不能全局 clear——其他层（L1/L2）仍有真实在途任务，
                         #   全局归零会把它们的合法计数一并抹掉，造成新的计数偏差。
                         _layer_pending = dict(self._layer_organ_inflight.get(layer, {}))
+                        # ★主线第78批 T1/P0：池重建取消旧池排队任务（cancel_futures=True），
+                        # 被取消任务永不进入 _dispatch_handler，其 finally 中的 -1（:898）不执行
+                        # → _inflight_dispatch_count 永久泄漏、队列深度指标只增不减。
+                        # 本层在途任务数即被取消任务数，按此精确递减（与 ±1 配对，零回归）。
+                        _cancelled = sum(_layer_pending.values())
+                        if _cancelled > 0:
+                            with self._task_count_lock:
+                                self._inflight_dispatch_count = max(
+                                    0, self._inflight_dispatch_count - _cancelled)
                         for _org, _n in _layer_pending.items():
                             _cur = self._organ_concurrent_count.get(_org, 0)
                             if _cur > 0:
