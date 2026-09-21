@@ -843,7 +843,45 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self._serve_knowledge_graph_data()
             elif self.path == '/params/data':
                 self._serve_params_data()
-            elif self.path.startswith('/params/apply_preset'):
+            else:
+                self.send_response(404)
+                self.end_headers()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
+
+    def _is_same_origin(self) -> bool:
+        """同源校验：仅允许来自本面板的请求，防御 CSRF。"""
+        from urllib.parse import urlparse
+        _host = (self.headers.get('Host') or '').split(':')[0]
+        _origin = self.headers.get('Origin', '')
+        _referer = self.headers.get('Referer', '')
+        if _origin:
+            try:
+                _op = urlparse(_origin)
+                if _op.netloc and _op.netloc.split(':')[0] == _host and _host:
+                    return True
+            except Exception:
+                return False
+            return False
+        if _referer:
+            try:
+                _rp = urlparse(_referer)
+                if _rp.netloc and _rp.netloc.split(':')[0] == _host and _host:
+                    return True
+            except Exception:
+                return False
+        # 无 Origin/Referer 的同源简单请求（如同源 fetch、测试）放行
+        return True
+
+    def do_POST(self):
+        try:
+            if not self._is_same_origin():
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "message": "CSRF: origin not allowed"}, ensure_ascii=False).encode('utf-8'))
+                return
+            if self.path.startswith('/params/apply_preset'):
                 self._serve_apply_preset()
             else:
                 self.send_response(404)

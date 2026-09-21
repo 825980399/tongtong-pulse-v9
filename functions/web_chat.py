@@ -11,7 +11,7 @@ import re
 import threading
 import time
 from collections import deque
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from nucleus.const import ChatEvent, EyeEvent
 
@@ -629,12 +629,12 @@ class WebChatServer:
     
     def __init__(self, port: int = 5052):
         self.port = port
-        self._server: HTTPServer | None = None
+        self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
     
     def start(self, info_field=None, pulse_core=None):
-        self._server = HTTPServer(('127.0.0.1', self.port), WebChatHandler)
+        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), WebChatHandler)
         self._server.info_field = info_field
         self._server.pulse_core = pulse_core
         self._running = True

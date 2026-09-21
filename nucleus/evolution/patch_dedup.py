@@ -171,10 +171,15 @@ def fix_detail_consistency(rec: dict) -> bool:
         _calc = (_b - _a) / _b
     _new = "修复前错误=%s, 修复后错误=%s, 效果=%s" % (
         "?" if _b is None else int(_b), "?" if _a is None else int(_a), _fmt_eff(_calc))
-    if str(_vr.get("detail") or "") == _new:
-        return False
-    _vr["detail"] = _new
-    return True
+    _changed = str(_vr.get("detail") or "") != _new
+    if _changed:
+        _vr["detail"] = _new
+    # ★T-99d：baseline=0 时 effectiveness 字段同步为 None，修复历史不一致
+    # （此前只改 detail 文案为「不可判定」，字段仍记 1.0 假成功）。
+    if _b == 0 and _vr.get("effectiveness") is not None:
+        _vr["effectiveness"] = None
+        _changed = True
+    return _changed
 
 
 def fix_details_in_history(hist: Any) -> tuple:

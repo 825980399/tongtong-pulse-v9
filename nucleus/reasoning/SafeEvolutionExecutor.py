@@ -2283,17 +2283,23 @@ class SafeEvolutionExecutor:
         # 计算修复效果：错误减少率
         if _baseline > 0:
             _effectiveness = max(0.0, min(1.0, 1.0 - _after / _baseline))
+            _verified = _after == 0 or _effectiveness >= 0.8
+            _detail = (f"修复前错误={_baseline}, 修复后错误={_after}, "
+                       f"效果={_effectiveness:.0%}, 运行时长={_elapsed:.0f}秒")
         else:
-            _effectiveness = 1.0 if _after == 0 else 0.5
-
-        _verified = _after == 0 or _effectiveness >= 0.8
-
-        _detail = (f"修复前错误={_baseline}, 修复后错误={_after}, "
-                   f"效果={_effectiveness:.0%}, 运行时长={_elapsed:.0f}秒")
+            # ★T-99d：baseline_errors=0 时无错误基线可对比，无法判定修复效果
+            # （不适用/无法验证）。此前会误判为 effectiveness=1.0 + verified=True
+            # （假成功），污染修复率与平均效果统计。此处明确标记为无法验证，
+            # 既不算修复成功，也不参与平均效果计算。
+            _effectiveness = None
+            _verified = False
+            _detail = (f"修复前错误=0(baseline_errors=0)，无错误基线可对比，"
+                       f"无法判定修复效果（不适用）；修复后错误={_after}, "
+                       f"运行时长={_elapsed:.0f}秒")
 
         _module_logger.info(
             f"[运行时验证] {os.path.basename(_file)}.{_method}: {_detail}"
-            f" → {'验证通过' if _verified else '验证未通过'}")
+            f" → {'验证通过' if _verified else '验证未通过/无法验证'}")
 
         return {
             "verified": _verified,
@@ -2301,7 +2307,8 @@ class SafeEvolutionExecutor:
             "after_fix": _after,
             # ★第41批 T1（P0-263）：任务书要求写入 post_apply_errors（此前完全缺失）
             "post_apply_errors": _after,
-            "effectiveness": round(_effectiveness, 2),
+            # ★T-99d：baseline=0 时为 None（无法验证），不参与平均效果计算
+            "effectiveness": _effectiveness,
             "new_issues": _after,
             "detail": _detail,
         }
@@ -2440,7 +2447,9 @@ class SafeEvolutionExecutor:
                 # ★第四阶段：从验证结果中学习
                 self._learn_from_verification(_patch, _result)
 
-                _effects.append(_result["effectiveness"])
+                _eff = _result.get("effectiveness")
+                if _eff is not None:
+                    _effects.append(_eff)
 
             # 保存更新后的补丁队列
             self._patch_manager._save_json(
@@ -2544,18 +2553,26 @@ class SafeEvolutionExecutor:
                     _file, _method, since=_applied_at)
                 if _baseline > 0:
                     _effectiveness = max(0.0, min(1.0, 1.0 - _after / _baseline))
+                    _verified_ok = _after == 0 or _effectiveness >= 0.8
+                    _detail = (f"应用后错误={_after}, 基线={_baseline}, "
+                               f"效果={_effectiveness:.0%}, 运行{_elapsed:.0f}秒")
                 else:
-                    _effectiveness = 1.0 if _after == 0 else 0.5
+                    # ★T-99d：baseline=0 无法判定修复效果（不适用/无法验证），
+                    # 不算修复成功，effectiveness 记为 None（不参与平均）。
+                    _effectiveness = None
+                    _verified_ok = False
+                    _detail = (f"应用后错误={_after}, 基线=0(baseline_errors=0)，"
+                               f"无错误基线可对比，无法判定修复效果（不适用），"
+                               f"运行{_elapsed:.0f}秒")
 
-                _verified_ok = _after == 0 or _effectiveness >= 0.8
                 _patch["runtime_verified"] = True
                 _patch["runtime_verify_result"] = {
                     "verified": _verified_ok,
                     "baseline": _baseline,
                     "after_fix": _after,
-                    "effectiveness": round(_effectiveness, 2),
-                    "detail": (f"应用后错误={_after}, 基线={_baseline}, "
-                               f"效果={_effectiveness:.0%}, 运行{_elapsed:.0f}秒"),
+                    # ★T-99d：baseline=0 时为 None（无法验证），不参与平均
+                    "effectiveness": _effectiveness,
+                    "detail": _detail,
                 }
                 # ★M84-3（第84批 T-84a）：应用后计数已实测 → 回写顶层 post_apply_errors
                 #   并重算语义拆分（此前只写 runtime_verify_result，problem_fixed 不更新）。
@@ -2592,7 +2609,8 @@ class SafeEvolutionExecutor:
                         _module_logger.error(
                             f"[A2运行时验证] 失败补丁回滚异常: {_rb_e}")
 
-                _effects.append(_effectiveness)
+                if _effectiveness is not None:
+                    _effects.append(_effectiveness)
 
             # 保存更新后的 history
             self._patch_manager._save_json(
@@ -2627,7 +2645,8 @@ class SafeEvolutionExecutor:
             _strategy = patch.get("applied_strategy", "unknown")
             _type = patch.get("type", patch.get("issue_type", "unknown"))
             _success = verify_result.get("verified", False)
-            _effectiveness = verify_result.get("effectiveness", 0.0)
+            _eff_raw = verify_result.get("effectiveness")
+            _effectiveness = 0.0 if _eff_raw is None else float(_eff_raw)
 
             # 记录策略效果统计
             if not hasattr(self, "_strategy_stats"):
