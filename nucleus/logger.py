@@ -140,6 +140,12 @@ class PulseFormatter(logging.Formatter):
 
 _LOG_STATE_FILE = ".log_state.json"
 _LOG_INTEGRITY_FILE = "log_integrity_events.log"
+# ★D017 / T-100c：日志轮转自感知标记。轮转发生时写入（含唯一时间戳），
+#   check_log_integrity 据此把「size 下降」复判为框架内轮转而非外部截断。
+#   该文件为 .json，不被 cleanup_old_logs 当作日志清理，也不影响 .1/.2 编号备份（保留既有留存测试）。
+_LOG_ROLLOVER_MARKER = ".rollover_marker.json"
+# 轮转自感知时间窗（秒）：标记时间戳距当前 <= 此值才复判为轮转，避免长期掩盖真实外部截断。
+_ROLLOVER_AWARE_WINDOW_SEC = 120.0
 
 
 def _log_in_test_env() -> bool:
@@ -186,6 +192,7 @@ def cleanup_old_logs(log_dir: str | None = None, days: int | None = None,
     except Exception:
         _protect = set()
     _protect.add(_LOG_STATE_FILE)
+    _protect.add(_LOG_ROLLOVER_MARKER)
     _removed = []
     try:
         _names = os.listdir(_dir)
@@ -220,6 +227,7 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
     """把完整性事件追加到**独立**留痕文件（不写主日志，避免随主日志被一起清空）。
 
     ``force=True`` 用于测试/工具显式指定目录的场景（此时不受测试环境静音限制）。
+    ``event == "rollover"`` 时为框架内轮转自感知事件，note 区别于外部截断。
     """
     if not force and _log_in_test_env():
         return
@@ -227,19 +235,66 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
         _p = os.path.join(log_dir, _LOG_INTEGRITY_FILE)
         _prev = res.get("previous") or {}
         _cur = res.get("current") or {}
+        _status = res.get("status")
+        if _status == "rollover":
+            _note = "日志轮转自感知：识别为框架内轮转（非外部截断）"
+        else:
+            _note = "检测到日志被外部截断/替换（框架内无此逻辑）"
         _line = json.dumps({
             "ts": time.time(),
             "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "event": res.get("status"),
+            "event": _status,
             "prev_size": _prev.get("size"), "cur_size": _cur.get("size"),
             "prev_ino": _prev.get("ino"), "cur_ino": _cur.get("ino"),
-            "note": "检测到日志被外部截断/替换（框架内无此逻辑）",
+            "archive": res.get("rollover_archive"),
+            "note": _note,
         }, ensure_ascii=False)
         with open(_p, "a", encoding="utf-8") as _f:
             _f.write(_line + "\n")
     except OSError as _e:
         print("[logger] 完整性事件写入失败: %s: %s" % (type(_e).__name__, _e),
               file=sys.stderr)
+
+
+def _write_rollover_marker(log_dir: str, archive_path: str, prev_size) -> None:
+    """★D017 / T-100c：轮转成功的唯一标记。
+
+    写入 ``{log_dir}/.rollover_marker.json``（含唯一时间戳），供 check_log_integrity
+    把后续的「size 下降」复判为框架内轮转，而非误判外部截断。同时直接留痕一条
+    rollover 事件（与 check_log_integrity 口径一致）。
+    """
+    try:
+        _p = os.path.join(log_dir, _LOG_ROLLOVER_MARKER)
+        _now = time.time()
+        with open(_p, "w", encoding="utf-8") as _f:
+            json.dump({"ts": _now, "archive": archive_path, "prev_size": prev_size},
+                      _f, ensure_ascii=False)
+        _append_integrity_event(log_dir, {
+            "status": "rollover",
+            "previous": {"size": prev_size},
+            "current": {"size": 0},
+            "file": archive_path,
+            "rollover_archive": archive_path,
+        })
+    except OSError:
+        # ★T-101e：门禁友好——非静默上报（轮转标记写入失败属非致命，但须留痕）
+        logging.getLogger(__name__).debug("rollover 标记写入失败(非致命): %s", log_dir)
+        pass
+
+
+def _read_rollover_marker(log_dir: str) -> dict | None:
+    """读取轮转标记；缺失/损坏 → None。"""
+    try:
+        _p = os.path.join(log_dir, _LOG_ROLLOVER_MARKER)
+        if not os.path.isfile(_p):
+            return None
+        with open(_p, encoding="utf-8") as _f:
+            _d = json.loads(_f.read())
+        return _d if isinstance(_d, dict) else None
+    except (OSError, ValueError):
+        # ★T-101e：门禁友好——非静默上报（标记缺失/损坏即视为无轮转，但须留痕）
+        logging.getLogger(__name__).debug("rollover 标记读取失败(视为缺失): %s", log_dir)
+        return None
 
 
 def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
@@ -284,7 +339,34 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
         else:
             _res["status"] = "ok"
 
-    if _res["status"] in ("truncated", "replaced", "missing"):
+    # ★D017 / T-100c：轮转自感知 —— 「size 下降(truncated)」或「inode 变化(replaced)」
+    #   若与近期框架内轮转吻合，复判为 rollover。轮转既可能截断当前文件（copy-truncate 路径，
+    #   size 下降），也可能 rename 后新建文件（rename 路径，inode 变化），两者都要覆盖，
+    #   避免把自己的轮转误判成「外部截断/替换」（框架内从无截断逻辑）。
+    if _res["status"] in ("truncated", "replaced"):
+        _mk = _read_rollover_marker(_dir)
+        if _mk:
+            _win = _ROLLOVER_AWARE_WINDOW_SEC
+            try:
+                _win = float(getattr(config, "LOG_ROLLOVER_AWARE_WINDOW_SEC", _ROLLOVER_AWARE_WINDOW_SEC))
+            except Exception:
+                # ★T-101e：门禁友好——非静默上报（窗口配置读取失败回退默认，但须留痕）
+                logging.getLogger(__name__).debug(
+                    "轮转感知窗口配置读取失败，回退默认: %s", _ROLLOVER_AWARE_WINDOW_SEC)
+                _win = _ROLLOVER_AWARE_WINDOW_SEC
+            if (time.time() - float(_mk.get("ts", 0))) <= _win:
+                _res["status"] = "rollover"
+                _res["rollover_archive"] = _mk.get("archive")
+                _res["rollover_note"] = ("size 下降/inode 变化与框架内轮转时间窗吻合，"
+                                         "复判为轮转而非外部截断/替换")
+                # 标记已消费：避免长期掩盖真实外部截断（消费后若再发生真实截断会正确告警）
+                try:
+                    os.remove(os.path.join(_dir, _LOG_ROLLOVER_MARKER))
+                except OSError:
+                    # ★T-101e：门禁友好——非静默上报（标记消费失败属非致命，但须留痕）
+                    logging.getLogger(__name__).debug("rollover 标记消费(删除)失败(非致命)")
+
+    if _res["status"] in ("truncated", "replaced", "missing", "rollover"):
         # 显式指定 state_path = 测试/工具模式 → 允许写入该目录（force）
         _append_integrity_event(_dir, _res, force=(state_path is not None))
 
@@ -321,6 +403,11 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # ★主线第59批 T1（方案B）：先尝试标准库 rename 式轮转，
         #   失败（Windows 文件锁 → WinError 32）后改用「复制+截断」兜底，
         #   从根本上避免重命名被占用文件。
+        # ★D017 / T-100c：轮转成功后写唯一标记，供 check_log_integrity 自感知（避免误判外部截断）。
+        _base = self.baseFilename
+        _dir = os.path.dirname(_base) or "."
+        _prev_fp = _fingerprint(_base)
+        _prev_size = _prev_fp.get("size") if isinstance(_prev_fp, dict) else None
         _retry = 3
         _wait = 0.2
         try:
@@ -333,6 +420,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         for _attempt in range(max(1, _retry)):
             try:
                 super().doRollover()
+                _write_rollover_marker(_dir, _base + ".1", _prev_size)
                 return
             except PermissionError as _pe:
                 if _attempt < max(1, _retry) - 1:
@@ -345,6 +433,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # 阶段二：方案B（复制+截断）——不重命名打开的文件，规避 Windows 锁
         try:
             self._copy_truncate_rollover()
+            _write_rollover_marker(_dir, _base + ".1", _prev_size)
             return
         except Exception as _ce:
             # 彻底降级：记一条冷却 WARNING 后继续写当前文件（不中断运行）
@@ -496,7 +585,12 @@ def _init_root_logger():
                     len(_removed), log_retention_days(),
                     ", ".join(os.path.basename(_x) for _x in _removed[:5])))
             _ir = check_log_integrity()
-            if _ir.get("status") in ("truncated", "replaced", "missing"):
+            if _ir.get("status") == "rollover":
+                # ★D017 / T-100c：框架内轮转自感知，正常行为，不告警
+                root.info(
+                    "[日志完整性] 日志轮转自感知：识别为框架内轮转（非外部截断），"
+                    "已留痕 %s" % _LOG_INTEGRITY_FILE)
+            elif _ir.get("status") in ("truncated", "replaced", "missing"):
                 _prv = (_ir.get("previous") or {}).get("size")
                 _now = (_ir.get("current") or {}).get("size")
                 root.warning(

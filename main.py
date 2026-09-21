@@ -37,6 +37,7 @@ _re._cache = {}  # 预留给后续正则优化
 import signal
 import threading
 import time
+import logging
 
 # ★P1修复: 启动时把当前工作目录归一化到项目根目录
 # 背景: 知识快照/parquet/日志/本能快照均使用相对路径（如 data/knowledge/...），
@@ -2242,8 +2243,9 @@ class PulseFramework:
                             _discover_max = int(
                                 getattr(_evo_cfg, "EVOLUTION_CONFIG", {})
                                 .get("discover_max_issues", 60))
-                        except Exception:
+                        except Exception as e:
                             _discover_max = 60
+                            logging.warning(f"进化发现上限回退失败(沿用60): {type(e).__name__}: {e}")
                         _raw = self.evolution_loop.discover_all_issues(
                             log_file="logs/pulse.log",
                             max_issues=_discover_max,
@@ -2298,8 +2300,9 @@ class PulseFramework:
                                         get_self_inspector,
                                     )
                                     _inspector = get_self_inspector()
-                                except Exception:
+                                except Exception as e:
                                     _inspector = None
+                                    logging.warning(f"代码审查器初始化失败(跳过): {type(e).__name__}: {e}")
                                 _executor = get_safe_evolution_executor()
                                 _result = _executor.repair_with_distillation(
                                     _issues, self_inspector=_inspector)
@@ -3469,7 +3472,7 @@ def main():
             info_field=framework.info_field,
             pulse_core=framework.pulse_core,
             framework=framework,
-            admin_userid=getattr(config, "WECOM_ADMIN_USERID", "RenGuiLin"),
+            admin_userid=getattr(config, "WECOM_ADMIN_USERID", ""),
         )
         wecom_bridge.start()
         framework.wecom_bridge = wecom_bridge
@@ -3482,7 +3485,7 @@ def main():
             f"曈曈已成功启动\n{_online_organs}/{_total_organs}个器官在线（实时扫描）\n知识节点: {framework.node_pool.count()}个"
         )
     except Exception as e:
-        print(f"[企业微信] 桥接器启动失败（不影响框架运行）: {e}")
+        logging.warning(f"[企业微信] 桥接器启动失败（不影响框架运行）: {e}")
         framework.wecom_bridge = None
 
     # ★v23.0新增：自我验证
@@ -3595,7 +3598,7 @@ def main():
         health_ui.set_node_pool(framework.node_pool)
         health_ui.start()
     except Exception as e:
-        print(f"[框架] 人体UI启动失败 (端口5051): {e}")
+        logging.warning(f"[框架] 人体UI启动失败 (端口5051): {e}")
     
     # 启动Web对话窗口（独立Web服务）
     web_chat = None
@@ -3604,7 +3607,7 @@ def main():
         web_chat = WebChatServer(port=5052)
         web_chat.start(info_field=framework.info_field, pulse_core=framework.pulse_core)
     except Exception as e:
-        print(f"[框架] Web对话窗口启动失败 (端口5052): {e}")
+        logging.warning(f"[框架] Web对话窗口启动失败 (端口5052): {e}")
     
     # 启动功能模块加载器
     framework.function_loader = FunctionLoader(framework)
@@ -3633,7 +3636,7 @@ def main():
         if _hot_reload_organs:
             print(f"[Config] 热重载回调已注册（{len(_hot_reload_organs)}个器官: {', '.join(_hot_reload_organs)}）")
     except Exception as _hre:
-        print(f"[Config] 热重载回调注册失败: {_hre}")
+        logging.warning(f"[Config] 热重载回调注册失败: {_hre}")
 
     # ========== 假死探测器（P1） ==========
     # 框架启动后若长时间无任何脉冲被实际处理（疑似卡死/死锁），自动 dump 所有线程
@@ -3642,8 +3645,9 @@ def main():
         import faulthandler as _fh
         try:
             _crash_fh = open(os.path.join("logs", "pulse_crash.log"), "a", encoding="utf-8", errors="replace")  # noqa: SIM115 - 有意持有句柄供 faulthandler 常驻
-        except Exception:
+        except Exception as e:
             _crash_fh = None
+            logging.warning(f"崩溃日志句柄初始化失败(留空): {type(e).__name__}: {e}")
         # 关键：把原生崩溃（如 PortAudio 的 access violation）堆栈也重定向到日志文件。
         # 否则 faulthandler 只打印到控制台，不会写入 pulse_crash.log（这正是上次日志为空的原因）。
         try:
@@ -3656,9 +3660,10 @@ def main():
                 _fh.enable()
             except Exception as _se:
                 silent_exc(_se, "main.py:3576")
-    except Exception:
+    except Exception as e:
         _fh = None
         _crash_fh = None
+        logging.warning(f"日志句柄初始化失败(禁用落盘): {type(e).__name__}: {e}")
 
     _lv_fw = framework  # 捕获闭包引用
 
@@ -3723,7 +3728,7 @@ def main():
                         if _apply_pending_patches_and_restart(framework):
                             sys.exit(0)
                 except Exception as _apply_check_e:
-                    print(f"[进化] 应用请求检测异常(忽略): {_apply_check_e}")
+                    logging.warning(f"[进化] 应用请求检测异常(忽略): {_apply_check_e}")
     except KeyboardInterrupt as _se:
         silent_exc(_se, "main.py:3646")
     except Exception as _main_loop_e:

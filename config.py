@@ -20,7 +20,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SYSTEM_NAME = "曈曈"
 SYSTEM_VERSION = "v9.5 PulseNet"
 SYSTEM_PORT = 5050
-CREATOR = "小林（任桂林）" 
+CREATOR = "" 
 
 # ========== 企业微信凭证（★安全修复：从环境变量读取，禁止硬编码） ==========
 # 用法：启动前设置环境变量，或在下方填入（填入的值不要提交到任何代码库/压缩包）
@@ -2018,11 +2018,7 @@ EVENT_TAP_MAX_EVENT_TYPES = 500      # 事件名种类上限（超出归入 __ot
 # ========== 控制器权限配置 ==========
 CONTROLLER_PERMISSION = {
     # 文件读取白名单路径（完全放开读取）
-    "read_whitelist": [
-        r"D:\xinrenlei\tongtong-pulse-v9",
-        r"D:\文档",
-        r"D:\桌面",
-    ],
+    "read_whitelist": [],
     # 文件读取黑名单（永久禁止读取）
     "read_blacklist": [
         r"C:\Windows",

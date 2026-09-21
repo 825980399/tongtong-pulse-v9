@@ -263,8 +263,8 @@ class PulseStomach(BasePulseOrgan):
             _ctrl.register("stomach_digest", 30)
             if not _ctrl.should_execute("stomach_digest"):
                 return None
-        except Exception:
-            pass
+        except Exception as e:
+            self._log(LogLevel.WARNING, f"胃自适应降频注册失败(降级为不降频，保持常开): {type(e).__name__}: {e}")
         # ★第54批 T5（P2-371-2）：pulse / payload 为 None 时原会抛 AttributeError → 安全降级。
         try:
             import config as _stomach_cfg

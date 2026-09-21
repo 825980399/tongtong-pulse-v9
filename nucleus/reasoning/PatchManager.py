@@ -500,6 +500,40 @@ class PatchManager:
                 type(_e).__name__, _e)
             return False
 
+    @staticmethod
+    def _m101_low_risk_release_path(patch: dict, evo_cfg: dict | None = None) -> bool:
+        """★第101批 T-101a（P0）：低风险可放行路径判据（纯函数，保守默认 False）。
+
+        放行条件（全部满足）：
+            * risk_level == "低"（中文，与 _m85/_m94 实测口径一致）
+            * runtime_verified is True —— 回归测试通过 + 主动复现真通过 的统一证据
+              （SafeEvolutionExecutor 验证流水线在复现确认错误消失后设置，比 auto_apply_enabled
+              更严格，故该路径即使总开关关闭也放行）
+            * 非核心文件（_m80_is_core_file 单一真源；落地核心门再兑底一次）
+            * 目标方法不在安全护栏禁改清单 _M96_NO_AUTO_PATCH_METHODS
+        不满足 / 异常 → False（保守：不放行，退回人工）。
+        """
+        if not isinstance(patch, dict):
+            return False
+        try:
+            if str(patch.get("risk_level", "")) != "低":
+                return False
+            if patch.get("runtime_verified") is not True:
+                return False
+            _fp = str(patch.get("file", "") or "")
+            if not _fp:
+                return False
+            if PatchManager._m80_is_core_file(_fp):
+                return False
+            if str(patch.get("method", "")) in PatchManager._M96_NO_AUTO_PATCH_METHODS:
+                return False
+            return True
+        except Exception:
+            # ★T-101e：门禁友好——非静默上报（判据异常时保守不放行，但须留痕）
+            _module_logger.debug("[T-101a] 低风险放行判据异常，保守退回人工: %s",
+                                 type(Exception).__name__)
+            return False
+
     # ========== ★主线第94批 T-94a（P0）：待审批队列老化策略 ==========
     #   背景（第93批只读诊断）：14 轮「发现 168 / 修复 4」= 2.38%；空转主因
     #   「已有待审批」48 次（28.6%，单项最大）= 补丁入 pending 后等人工裁决，
@@ -898,6 +932,25 @@ class PatchManager:
                 f"[补丁入队] 未自动审批(转人工): {patch.get('file','')}:{patch.get('method','')} "
                 f"risk={_risk_raw}(需<={_max_risk_a1}, {'通过' if _risk_ok_a1 else '超限'}), "
                 f"trust={_trust_val_a1}(需>={_min_trust_a1}, {'通过' if _trust_ok_a1 else '不足'})")
+
+        # ★第101批 T-101a（P0）：低风险可放行路径——打通进化闭环最后一环。
+        #   现状：18 条补丁（多为 LLM 来源）提交后因 T7 闸门 + auto_apply_enabled=False
+        #   全部 pending/verified，0 批准 0 落盘（烛微第3期 N2）。
+        #   放行判据（比 auto_apply_enabled 更严格，故即使总开关关闭也放行，仍受
+        #   核心文件落地门 + 护栏函数清单双重兑底）：
+        #     risk_level == "低" 且 runtime_verified is True（回归+复现通过）且非核心且非护栏函数。
+        #   该路径允许 LLM 来源（与 _m85_local_low_risk_auto_apply 不同），因已通过
+        #   运行期复现验证；标记 auto_released=True（非 auto_approved），使 apply_all_pending
+        #   入口收口不将其退回，且落地核心门仍拦截核心文件。
+        if str(patch.get("status", "")) != "approved":
+            if PatchManager._m101_low_risk_release_path(patch, _evo_cfg_a1):
+                patch["status"] = "approved"
+                patch["auto_released"] = True
+                patch["release_reason"] = "low_risk_release:T-101a"
+                _module_logger.info(
+                    f"[补丁自动审批][T-101a] 低风险可放行(已升approved): "
+                    f"{patch.get('file','')}:{patch.get('method','')} "
+                    f"risk={patch.get('risk_level')}, runtime_verified={patch.get('runtime_verified')}")
 
         pending = self._load_patch_list(self._pending_file)
         history = self._load_patch_list(self._history_file)
@@ -2494,7 +2547,8 @@ class PatchManager:
         # ★第96批 T-96b：入口收口（机器自动批准专用）
         try:
             _machines = [p for p in pending
-                         if isinstance(p, dict) and p.get("auto_approved")]
+                         if isinstance(p, dict) and p.get("auto_approved")
+                         and not p.get("auto_released")]
             if _machines:
                 _evo96 = getattr(_c96_import(), "EVOLUTION_CONFIG", {})
                 if not PatchManager._m80_auto_apply_enabled(_evo96):

@@ -34,12 +34,12 @@ class WeComChatBridge(SilentLogMixin):
 
     # ★v23.0：userid → 框架内用户名映射
     USERID_MAP = {
-        "RenGuiLin": "小林",
+        # ★T-101d：不内置任何实际 userid，需显式配置（环境变量 / config_override.json）
     }
 
     def __init__(self, bot_id: str, secret: str,
                  info_field=None, pulse_core=None, framework=None,
-                 admin_userid: str = "RenGuiLin"):
+                 admin_userid: str = ""):
         self._bot_id = bot_id
         self._secret = secret
         self._info_field = info_field

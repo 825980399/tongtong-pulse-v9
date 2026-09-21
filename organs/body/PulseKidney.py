@@ -700,16 +700,16 @@ class PulseKidney(BasePulseOrgan):
 
     def _m70_kal_get_node(self, node_id):
         """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。"""
-        if not self._m70_kal_callsites_on():
-            return self._m70_direct_get_node(node_id)
-        try:
-            from nucleus.knowledge_access_layer import get_kal
-            _r = get_kal().get_node(node_id)
-            if _r is not None:
-                return _r
-        except Exception as e:
-            self._log(LogLevel.ERROR, f'异常: {e}')
-        return self._m70_direct_get_node(node_id)
+        def _m70_get_node(self, node_id):
+                if not self._m70_kal_callsites_on():
+                    return self._m70_direct_get_node(node_id)
+                try:
+                    _r = self._pulse_bus.request('kal.get_node', node_id)
+                    if _r is not None:
+                        return _r
+                except Exception as e:
+                    self._log(LogLevel.ERROR, f'异常: {e}')
+                return self._m70_direct_get_node(node_id)
 
     def _m70_kal_search_by_level(self, evol_level, top_k=10):
         """★T4.3 实际调用点：按进化层级搜索（KAL 优先 + 回退）。"""

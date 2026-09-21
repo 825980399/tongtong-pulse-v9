@@ -929,15 +929,18 @@ class PulseLung(BasePulseOrgan):
             self._log(LogLevel.DEBUG, f"[渠道] {_name} 配置不完整，跳过")
             return None
 
-        # SSRF 防护：复用既有守卫
+        # SSRF 防护：复用既有守卫（★第101批 T-101c：fail-closed，守卫失败硬 return 不放行）
         try:
             from nucleus.ssrf_guard import is_safe_http_url
             _allowed, _reason = is_safe_http_url(_api_url)
-            if not _allowed:
-                self._log(LogLevel.WARNING, f"[渠道] {_name} 被SSRF防护拦截: {_reason}")
-                return None
         except Exception as _exc:
-            self._log(LogLevel.DEBUG, f"[渠道] SSRF检查异常: {type(_exc).__name__}")
+            # ★T-101c：守卫自身抛异常 = 无法确认安全性 ⇒ 拒绝请求（与 _call_remote_api 一致）
+            self._log(LogLevel.WARNING,
+                      f"[渠道] {_name} SSRF检查异常(拒绝请求): {type(_exc).__name__}: {_exc}")
+            return None
+        if not _allowed:
+            self._log(LogLevel.WARNING, f"[渠道] {_name} 被SSRF防护拦截: {_reason}")
+            return None
 
         # 经注册表取适配器（未知类型回落 OpenAI 兼容）
         try:
