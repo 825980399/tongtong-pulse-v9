@@ -1297,6 +1297,21 @@ class PulseFramework:
                                           node_pool=self.node_pool,
                                           frequency_codec=self.frequency_codec)
         self.lung = self._create_organ(PulseLung, "肺")
+        # ★第97批 T-97a：注入运行中的肺实例，使进化通道与对话链路共享同一
+        #   ChannelHealthTracker 账本（熔断/健康度双写同源、结果回写同一账本）。
+        #   灰度沿用 ENABLE_EVOLUTION_USE_CHANNEL_POOL：关闭时不注入（走本地等价账本）。
+        if getattr(config, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False):
+            try:
+                from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+                SafeEvolutionExecutor._m96_set_lung(self.lung)
+            except Exception as _e97a:
+                try:
+                    from nucleus.logger import get_module_logger
+                    get_module_logger("main").warning(
+                        "[进化渠道] 注入肺实例失败(降级本地账本): %s: %s",
+                        type(_e97a).__name__, _e97a)
+                except Exception:
+                    pass
         self.liver = self._create_organ(PulseLiver, "肝",
                                         node_pool=self.node_pool,
                                         knowledge_tree=self.knowledge_tree,

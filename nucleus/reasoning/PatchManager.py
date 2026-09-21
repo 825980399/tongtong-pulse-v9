@@ -170,6 +170,15 @@ def _m90_missing_patch_fields(patch: dict) -> list:
     return _miss
 
 
+def _c96_import():
+    """★第96批 T-96b：惰性取 config 模块（保持与同文件其它处同风格）。
+
+    入口收口处需多次读配置，抽成单点便于测试注入，也避免重复 try/except。
+    """
+    import config as _c96
+    return _c96
+
+
 # ★第92批 T-92c/T-92d：验证侧两道**防御性**结构化关（任务书要求默认**关闭**，先观察一批）。
 #   两者都只做「拒绝」判定，不改任何既有放行逻辑 ⇒ 关闭时逐字回到第91批末行为。
 _M92_BASE_INDENT_GUARD_DEFAULT = False
@@ -419,6 +428,21 @@ class PatchManager:
             return True
         return False
 
+    # ★第96批 T-96c（N2-② 烛微第1期）：**禁止自动补丁**的目标符号清单。
+    #   历史补丁曾对 `_safe_eval_arithmetic` 这类**安全护栏**函数自动生成补丁，
+    #   并一度被记为 applied。护栏一旦被无人类复核地改写，其约束语义可能被
+    #   静默削弱 ⇒ 一律退回人工审批（不论来源/灵敏度/风险如何）。
+    #   ★按**方法名精确匹配**（不做前缀模糊，避免误伤同名业务方法）。
+    _M96_NO_AUTO_PATCH_METHODS = frozenset((
+        "_safe_eval_arithmetic",
+        "guard_write",
+        "_check_patch_safety",
+        "_check_patch_path",
+        "_verify_in_copy",
+        "_is_core_file",
+        "_m80_gate_blocked",
+    ))
+
     @staticmethod
     def _m85_local_low_risk_auto_apply(patch: dict, evo_cfg: dict | None = None) -> bool:
         """★第85批 T-85d（D84-4）：本地生成的低风险补丁是否放行自动应用。
@@ -462,6 +486,12 @@ class PatchManager:
             if str(patch.get("risk_level", "")) != "低":
                 return False
             if PatchManager._m80_is_core_file(str(patch.get("file", ""))):
+                return False
+            # ★第96批 T-96c（N2-②）：安全护栏函数禁止自动补丁 ⇒ 转人工审批。
+            if str(patch.get("method", "")) in PatchManager._M96_NO_AUTO_PATCH_METHODS:
+                _module_logger.debug(
+                    "[补丁自动审批][M96] 目标为安全护栏函数，转人工审批: %s",
+                    patch.get("method", ""))
                 return False
             return True
         except Exception as _e:
@@ -2398,9 +2428,20 @@ class PatchManager:
 
     def _check_patch_safety(self, patch: dict[str, Any]) -> dict[str, Any]:
         """落地前校验信任分/风险等级/冷却时间（A3：与自动审批共用安全门）。
-        ★FIX(2026-09-07): 人工批准(status=approved)绕过自动安全门。"""
+        ★FIX(2026-09-07): 人工批准(status=approved)绕过自动安全门。
+
+        ★第96批 T-96b（N1-④ 烛微第1期）：原实现对 ``status=="approved"``
+        **无条件返回 safe**（三关全跳）。问题是 ``approved`` 有两个来源：
+          · 人工批准（``approve_patch`` / ``approve_all_patches``）
+          · **机器自动批准**（``patch["auto_approved"]=True``，本文件 :861）
+        后者本应受信任/风险/冷却三关约束，却因同一个 status 被一并放行。
+        ⇒ 按星轨裁决「区分机器/人工」：**仅人工批准**沿用原放行语义；
+          **机器自动批准**（``auto_approved=True``）必须走完三关。
+          ★判据来源：``auto_approved`` 在本文件 :861 是**唯一写入点**，
+            人工批准路径不写该键 ⇒ 区分度可靠（历史 67 条：5 True / 62 无）。
+        """
         try:
-            if patch.get("status") == "approved":
+            if patch.get("status") == "approved" and not patch.get("auto_approved"):
                 return {"safe": True, "reason": "人工批准"}
             import config
             _evo_cfg = getattr(config, 'EVOLUTION_CONFIG', {})
@@ -2438,9 +2479,48 @@ class PatchManager:
         
         Args:
             only_approved: 仅应用 status == "approved" 的补丁。
-                          若为 True，则跳过 pending/未审批 的补丁。
+                           若为 True，则跳过 pending/未审批 的补丁。
+
+        ★第96批 T-96b（N1-③）：**机器自动批准**的补丁在入口统一查总开关。
+        落地侧原有三个触发口，均只读 ``status==approved``、不读总开关 ⇒
+        侧门得以绕过 ``auto_apply_enabled=False``。此处**一处收口**：
+        凡 ``auto_approved=True``（机器批准）的补丁，总开关关闭即拒、
+        命中核心文件即拒 ⇒ 三个触发口同时被覆盖。
+        ★人工批准（无 ``auto_approved`` 标记）不受影响：按星轨裁决，
+          人类的显式批准即为最高授权，不得被自动化开关反向否决
+          （否则历史上 62 条人工批准记录将全部不可落地，进化闭环归零）。
         """
         pending = self._load_patch_list(self._pending_file)
+        # ★第96批 T-96b：入口收口（机器自动批准专用）
+        try:
+            _machines = [p for p in pending
+                         if isinstance(p, dict) and p.get("auto_approved")]
+            if _machines:
+                _evo96 = getattr(_c96_import(), "EVOLUTION_CONFIG", {})
+                if not PatchManager._m80_auto_apply_enabled(_evo96):
+                    _dropped = 0
+                    for _mp in _machines:
+                        _mp["status"] = "pending"
+                        _mp["reject_stage"] = "m96_auto_apply_gate"
+                        _mp["reject_reason"] = "机器自动批准：总开关关闭"
+                        _dropped += 1
+                    if _dropped:
+                        _module_logger.warning(
+                            "[自动审批治理][M96] 总开关关闭，%d 条机器自动批准"
+                            "已退回待人工审批", _dropped)
+                else:
+                    for _mp in _machines:
+                        if PatchManager._m80_is_core_file(str(_mp.get("file", ""))):
+                            _mp["status"] = "pending"
+                            _mp["reject_stage"] = "m96_core_file_gate"
+                            _mp["reject_reason"] = "机器自动批准：核心文件禁止"
+                            _module_logger.warning(
+                                "[自动审批治理][M96] 核心文件机器自动批准已拦截: %s",
+                                _mp.get("file", ""))
+        except Exception as _g96:
+            _module_logger.debug(
+                "[自动审批治理][M96] 入口收口异常，按保守处理（不改写队列）: %s: %s",
+                type(_g96).__name__, _g96)
         if not pending:
             # ★FIX(问题12): 无待应用补丁时重置重启计数器，避免无意义累计导致永久锁死
             self.reset_restart_counter()
@@ -2699,6 +2779,38 @@ class PatchManager:
                     patch["rollback_available"] = True
                     self._last_apply_time = time.time()
                     results["applied"] += 1
+                    # ★第96批 T-96c（N2-① 烛微第1期）：applied 前**磁盘复核**。
+                    #   账本曾出现 applied=True / effect_verified=True /
+                    #   effectiveness=1.0，但目标文件与落地前备份**逐字节相同**
+                    #   （2 条假成功）。根因：``applied`` 置位只代表「写盘动作
+                    #   已发出」，**从不回读校验** ⇒ 任何静默失败都记为成功。
+                    #   ⇒ 此处写盘后立即回读，确认 modified_code 已在磁盘生效。
+                    #   ★只读复核，绝不因复核失败回滚已落地内容；
+                    #   ★异常一律按「未通过」处理（不静默放行）。
+                    patch["disk_verified"] = False
+                    try:
+                        with open(patch["file"], "r", encoding="utf-8",
+                                  errors="ignore") as _df96:
+                            _disk96 = _df96.read().replace("\r\n", "\n")
+                        _mc96 = str(patch.get("modified_code") or "").replace(
+                            "\r\n", "\n")
+                        if _mc96 and _mc96 in _disk96:
+                            patch["disk_verified"] = True
+                            patch["disk_verify_reason"] = ""
+                        else:
+                            patch["disk_verify_reason"] = (
+                                "落地后磁盘未命中 modified_code" if _mc96
+                                else "补丁缺 modified_code，无法复核")
+                    except Exception as _dve96:
+                        patch["disk_verify_reason"] = (
+                            f"磁盘复核异常: {type(_dve96).__name__}: {_dve96}")
+                    if not patch.get("disk_verified"):
+                        patch["effect_verified"] = False
+                        _module_logger.warning(
+                            "[落地复核][M96] 补丁 %s 写盘后磁盘无对应内容 "
+                            "⇒ effect_verified=False（%s）",
+                            str(patch.get("id", ""))[:12],
+                            patch.get("disk_verify_reason", ""))
                     # ★M85-2（第85批 T-85b / D84-1）：应用后**运行时**主动复现。
                     #   第51批设计的最高优先级判据 `reprobe_verdict`（代码级、不受
                     #   日志轮转影响）此前**运行时从未写入**，只被一次性工具与只读

@@ -479,26 +479,42 @@ class TestT5ImportTool(unittest.TestCase):
 
 
 # ===== 集成：文档更新状态 =====
+# ★第96批 T-96f（D95-7）：3 个分布式设计文档已从根目录 docs/ 移入
+#   docs/设计文档/（Neo4j、分布式还在「暂缓考虑/」子目录），而这些用例仍按
+#   **根路径**断言 ⇒ FileNotFoundError。
+#   ⇒ 改为**递归定位**（任务书改法2：更鲁棒）——今后再调整目录层级也不会失配。
+def _m96_locate_doc(filename: str) -> str:
+    """在 docs/ 下递归查找指定文档，返回最浅命中路径；未找到返回空串。"""
+    hits = []
+    for _dp, _dn, _fn in os.walk(os.path.join(_ROOT, "docs")):
+        if filename in _fn:
+            hits.append(os.path.join(_dp, filename))
+    return sorted(hits, key=len)[0] if hits else ""
+
+
 class TestM71Docs(unittest.TestCase):
     def test_60_design_docs_present(self):
         for f in ("Neo4j图数据库集成设计_20260917.md",
                   "InfluxDB时序数据库集成设计_20260917.md",
                   "分布式架构设计文档_20260917.md"):
-            p = os.path.join(_ROOT, "docs", f)
-            self.assertTrue(os.path.isfile(p), f)
+            self.assertTrue(_m96_locate_doc(f),
+                            f"设计文档缺失（已递归搜索 docs/）：{f}")
 
     def test_61_neo4j_doc_has_71_section(self):
-        p = os.path.join(_ROOT, "docs/Neo4j图数据库集成设计_20260917.md")
+        p = _m96_locate_doc("Neo4j图数据库集成设计_20260917.md")
+        self.assertTrue(p, "Neo4j 设计文档未找到")
         src = open(p, encoding="utf-8").read()
         self.assertIn("第71批", src)
 
     def test_62_influx_doc_has_71_section(self):
-        p = os.path.join(_ROOT, "docs/InfluxDB时序数据库集成设计_20260917.md")
+        p = _m96_locate_doc("InfluxDB时序数据库集成设计_20260917.md")
+        self.assertTrue(p, "InfluxDB 设计文档未找到")
         src = open(p, encoding="utf-8").read()
         self.assertIn("第71批", src)
 
     def test_63_distributed_doc_has_71_section(self):
-        p = os.path.join(_ROOT, "docs/分布式架构设计文档_20260917.md")
+        p = _m96_locate_doc("分布式架构设计文档_20260917.md")
+        self.assertTrue(p, "分布式架构设计文档未找到")
         src = open(p, encoding="utf-8").read()
         self.assertIn("第71批", src)
 

@@ -283,8 +283,10 @@ class SafeEvolutionExecutor:
         except Exception:
             self._no_fix_cooldown_secs = {}
         if not self._no_fix_cooldown_secs:
+            # ★第95批 T-95a：回填表不再含死配置「已有待审批」
+            #   （与 config.py EVOLUTION_CONFIG 同步清理）。
             self._no_fix_cooldown_secs = {
-                "高危·安全拦截": 86400.0, "已有待审批": 7200.0,
+                "高危·安全拦截": 86400.0,
                 "本地无规则·转LLM": 21600.0, "_default": 3600.0,
             }
         # ★v16.0新增：初始化PatchManager
@@ -925,9 +927,22 @@ class SafeEvolutionExecutor:
 
     @trace_evolution_call(prompt_pos=3, version="evolution.repair.v1")
     def _call_llm_with_followup(self, api_url: str, api_key: str, prompt: str,
-                                 max_followups: int = 1) -> str | None:
-        """★学生-老师模式：多轮追问机制。第一次回答不完整时自动追加追问。"""
-        record_llm_call(SCENE_EVOLUTION)
+                                 max_followups: int = 1,
+                                 scene: str | None = None,
+                                 model: str = "") -> str | None:
+        """★学生-老师模式：多轮追问机制。第一次回答不完整时自动追加追问。
+
+        ★第95批 T-95d：新增可选 ``scene``（默认 ``None`` ⇒ ``SCENE_EVOLUTION``，
+        既有行为逐字不变）。``PulseCodeLearner`` 经 ``repair_with_distillation``
+        透传 ``SCENE_CODE_LEARN``，让「代码学习」场景不再恒 0 —— 同一调用
+        **只记一次**，只是场景归类不同，**不重复计数**（不虚增 llm_total）。
+
+        ★第96批 T-96a：新增可选 ``model``（默认 ``""`` ⇒ 沿用全局默认模型，
+        既有行为逐字不变）。渠道池命中时由 ``_call_llm_for_repair`` 传入该
+        渠道的 ``model``（火山方舟为**推理接入点 ID**），避免「换了渠道却
+        仍在请求旧模型」——这正是免费额度实际用不上的表现之一。
+        """
+        record_llm_call(scene or SCENE_EVOLUTION)
         import json
 
         from nucleus.ssrf_guard import safe_http_json
@@ -956,7 +971,9 @@ class SafeEvolutionExecutor:
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             _payload = {
-                "model": get_llm_call_config().get("default_model", "deepseek-v4-flash"),
+                # ★第96批 T-96a：渠道池命中时以**渠道自带的 model**（推理接入点 ID）
+                #   为准；为空（回落 REMOTE_API_CONFIG 路径）才用全局默认模型。
+                "model": model or get_llm_call_config().get("default_model", "deepseek-v4-flash"),
                 "messages": [
                     {"role": "system", "content": _sys_prompt},
                     {"role": "user", "content": p},
@@ -973,9 +990,10 @@ class SafeEvolutionExecutor:
                 _ok, _data = safe_http_json(api_url, method='POST', data=_bytes, headers=_headers, timeout=_timeout)
             if _ok and isinstance(_data, dict):
                 # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存。
-                #   （本方法被装饰，装饰器在 finally 读 `_m44_last_usage`；
+                #   （本方法被装饰，装饰器在 finally 读 `_last_llm_usage`；
                 #    多次追问时取**最后一次**调用的用量，属可接受的近似。）
-                self._m44_last_usage = _data.get("usage")  # _m94_extract_usage_marker
+                #   ★第95批 T-95e：属性统一命名（原 `_m44_last_usage`）。
+                self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
                 _choices = _data.get("choices", [])
                 if _choices:
                     _msg = _choices[0].get("message") or {}
@@ -1015,16 +1033,174 @@ class SafeEvolutionExecutor:
                 return _better
         return answer
 
+    # ========== ★第96批 T-96a（P0）：进化通道接入渠道池 ==========
+    #   背景（烛微第1期 N3 + 第96批 T0 实测）：进化链 LLM 调用直连
+    #   `REMOTE_API_CONFIG`（api.deepseek.com，**收费**），既不走渠道池、
+    #   不享受智谱/火山免费额度，也不接 ChannelHealthTracker 熔断。
+    #   本段提供「按优先级取可用渠道」的能力，默认**关闭**（灰度），
+    #   任何异常/缺渠道都回落到既有 REMOTE_API_CONFIG 路径。
+
+    @staticmethod
+    def _m96_channel_pool_on() -> bool:
+        """第96批 T-96a 灰度开关：True → 进化通道走渠道池。"""
+        try:
+            import config as _c96
+            return bool(getattr(_c96, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False))
+        except Exception:
+            return False
+
+    @staticmethod
+    def _m96_set_lung(lung) -> None:
+        """★注入钩子：允许 main 传入**运行中的** PulseLung 实例。
+
+        传入后与其**共享** ChannelHealthTracker 熔断状态，避免两处健康度
+        各自记账。不传（默认）→ 走 `_m96_select_channel` 的内部等价实现，
+        行为与 PulseLung 的渠道选择器同判据、同顺序。
+        """
+        SafeEvolutionExecutor._M96_LUNG = lung
+
+    _M96_LUNG = None
+
+    @staticmethod
+    def _m96_channel_health():
+        """取渠道健康度跟踪器；优先复用注入肺实例的那一个（同账本）。"""
+        _lung = SafeEvolutionExecutor._M96_LUNG
+        if _lung is not None:
+            try:
+                _h = _lung._get_channel_health()
+                if _h is not None:
+                    return _h
+            except Exception as _e96h:
+                # ★不留痕的 except: pass 会被 m7 门禁判为「静默吞异常」
+                #   （烛微 N7 TIER1 同族）⇒ 一律记录 type + msg。
+                _module_logger.debug(
+                    "[进化渠道] 复用肺实例健康度失败，转本地构造: %s: %s",
+                    type(_e96h).__name__, _e96h)
+        try:
+            with SafeEvolutionExecutor._M96_HEALTH_LOCK:
+                if getattr(SafeEvolutionExecutor, "_M96_HEALTH", None) is None:
+                    import config as _c96
+                    from nucleus.llm.channel_health import ChannelHealthTracker
+                    _hcfg = ((getattr(_c96, "REMOTE_API_CHANNELS", {}) or {})
+                             .get("health", {}) or {})
+                    SafeEvolutionExecutor._M96_HEALTH = ChannelHealthTracker(
+                        int(_hcfg.get("window_size", 10)),
+                        int(_hcfg.get("circuit_break_threshold", 3)),
+                        float(_hcfg.get("circuit_break_seconds", 300.0)))
+                return SafeEvolutionExecutor._M96_HEALTH
+        except Exception:
+            return None
+
+    _M96_HEALTH = None
+    _M96_HEALTH_LOCK = __import__("threading").Lock()
+
+    def _m96_select_channel(self):
+        """★第96批 T-96a：从渠道池按优先级选一个可用渠道。
+
+        返回渠道 dict（含 name/model/api_url/api_key）；无可用 → None。
+        ★判据与 PulseLung 的生产选择器**同源**：
+          ① `config.get_active_channels()`（已按 priority 升序过滤 enabled）；
+          ② `ChannelQuotaMonitor.apply_to_channels()`（额度降级/暂停策略）；
+          ③ `ChannelHealthTracker.is_available()`（跳过熔断中的渠道）。
+        ★优先复用**注入的肺实例**的选择器（`_select_default_channel`），
+          保证与主对话通道选择结果一致；无注入时用本实现（等价判据）。
+        """
+        _lung = SafeEvolutionExecutor._M96_LUNG
+        if _lung is not None:
+            try:
+                _ch = _lung._select_default_channel()
+                if isinstance(_ch, dict) and _ch.get("api_url") and _ch.get("model"):
+                    return _ch
+            except Exception as _e96a:
+                _module_logger.debug(
+                    "[进化渠道] 复用肺实例选择器失败，转本地实现: %s: %s",
+                    type(_e96a).__name__, _e96a)
+        try:
+            import config as _c96
+            _pool = _c96.get_active_channels()
+        except Exception as _e96b:
+            _module_logger.debug(
+                "[进化渠道] 取渠道池失败: %s: %s", type(_e96b).__name__, _e96b)
+            return None
+        if not _pool:
+            return None
+        # 额度策略（与主链路同口径）
+        try:
+            from nucleus.llm.ChannelQuotaMonitor import (  # type: ignore
+                get_channel_quota_monitor as _m96_qm,
+            )
+            _pool = _m96_qm().apply_to_channels(list(_pool))
+        except Exception as _e96q:
+            _module_logger.debug(
+                "[进化渠道] 额度策略应用失败（用原始池）: %s",
+                type(_e96q).__name__)
+        _h = self._m96_channel_health()
+        for _ch in _pool:
+            if not isinstance(_ch, dict):
+                continue
+            _name = _ch.get("name") or "?"
+            if not (_ch.get("api_url") and _ch.get("model")):
+                continue
+            if _h is not None:
+                try:
+                    if not _h.is_available(_name):
+                        _module_logger.debug("[进化渠道] %s 熔断中，跳过", _name)
+                        continue
+                except Exception as _e96a2:
+                    # ★同上：判定失败必须留痕，否则故障无声。
+                    _module_logger.debug(
+                        "[进化渠道] 熔断可用性判定失败，按可用处理: %s: %s",
+                        type(_e96a2).__name__, _e96a2)
+            return _ch
+        return None
+
+    def _m96_record_channel_result(self, channel_name: str, success: bool,
+                                   latency: float = 0.0) -> None:
+        """把进化链的调用结果计入渠道健康度（与对话链路**同账本**）。"""
+        if not channel_name:
+            return
+        try:
+            _h = self._m96_channel_health()
+            if _h is not None:
+                _h.record(channel_name, bool(success), float(latency))
+        except Exception as _e96r:
+            _module_logger.debug(
+                "[进化渠道] 健康度回写失败: %s: %s", type(_e96r).__name__, _e96r)
+
     def _call_llm_for_repair(self, issue: dict[str, Any], code_snippet: str,
-                             related_logs: str = "") -> str | None:
+                             related_logs: str = "",
+                             scene: str | None = None) -> str | None:
         """★自适应询问模式（v3）：使用AdaptiveQueryStrategyGenerator动态生成询问策略。
         不写死询问模板，根据问题特征、自我分析、历史经验创造性组织询问方式。
         每次询问后评估效果，成功策略沉淀为可复用模式，实现元学习。"""
         try:
             import config  # type: ignore[possibly-unbound]
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})  # type: ignore[possibly-unbound]
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
+            # ★第96批 T-96a：默认仍是 REMOTE_API_CONFIG；开关打开且渠道池
+            #   可取到渠道时才切换（三层回落：无渠道路/异常/字段不全）。
+            _m96_ch = None
+            _m96_name = ""
+            if self._m96_channel_pool_on():
+                _m96_ch = self._m96_select_channel()
+                if isinstance(_m96_ch, dict):
+                    _m96_name = str(_m96_ch.get("name") or "")
+                    _module_logger.info(
+                        "[进化渠道] 已选渠道 %s（model=%s）",
+                        _m96_name or "?", _m96_ch.get("model", ""))
+                else:
+                    _module_logger.info(
+                        "[进化渠道] 渠道池不可用，回落 REMOTE_API_CONFIG")
+            if _m96_ch is not None:
+                _api_url = _m96_ch.get("api_url", "")
+                _api_key = _m96_ch.get("api_key", "")
+                _api_model = _m96_ch.get("model", "")
+                if not _api_key:
+                    _api_key = getattr(config, 'REMOTE_API_CONFIG', {}).get(
+                        "api_key", "")
+            else:
+                _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
+                _api_url = _api_cfg.get("api_url", "")
+                _api_key = _api_cfg.get("api_key", "")
+                _api_model = ""
             if not _api_url or not _api_key or not code_snippet:
                 return None
 
@@ -1063,7 +1239,8 @@ class SafeEvolutionExecutor:
 
             # ★多轮追问（根据策略动态决定追问次数）
             _answer = self._call_llm_with_followup(
-                _api_url, _api_key, _prompt, _strategy["max_followups"])
+                _api_url, _api_key, _prompt, _strategy["max_followups"], scene,
+                _api_model)
 
             # ★效果评估 + 策略沉淀（元学习闭环）
             if _answer:
@@ -1072,7 +1249,8 @@ class SafeEvolutionExecutor:
                 if _quality.get("needs_followup") and _strategy["max_followups"] == 0:
                     # 评估认为需要追问但策略没安排，补一次追问
                     _followup = f"你的回答不够完整。\n上一轮回答:\n{_answer}\n请补充完整的修复代码（用```python包裹）和关键改动说明。"
-                    _better = self._call_llm_with_followup(_api_url, _api_key, _followup, 0)
+                    _better = self._call_llm_with_followup(
+                        _api_url, _api_key, _followup, 0, scene, _api_model)
                     if _better and len(_better) > len(_answer):
                         _answer = _better
 
@@ -1117,7 +1295,8 @@ class SafeEvolutionExecutor:
         except Exception as _e:
             _module_logger.debug(f"[进化健康] 日志异常已忽略: {type(_e).__name__}: {_e}")
 
-    def repair_with_distillation(self, issues: list[dict[str, Any]], self_inspector=None) -> dict[str, Any]:
+    def repair_with_distillation(self, issues: list[dict[str, Any]], self_inspector=None,
+                                 scene: str | None = None) -> dict[str, Any]:
         """
         ★FIX: 「自身修复 → 大模型对比 → 知识蒸馏」闭环。
         对每个问题：先判断本地规则能否修复，再调大模型获取修复建议做对比，
@@ -1570,7 +1749,8 @@ class SafeEvolutionExecutor:
             #       属确定性浪费；本地已修好的场景仍继续对比学习，保持原有闭环。
             _llm_suggestion = None
             if _snippet and not _has_pending_dup:
-                _llm_suggestion = self._call_llm_for_repair(_issue, _snippet, _related_logs)
+                _llm_suggestion = self._call_llm_for_repair(
+                    _issue, _snippet, _related_logs, scene)
             elif _has_pending_dup:
                 _llm_skipped_pending += 1
                 _module_logger.info(
@@ -1597,7 +1777,7 @@ class SafeEvolutionExecutor:
                                 f"[修复蒸馏] _snippet为空降级：用文件前100行调用LLM: "
                                 f"type={_type}, file={_file}, 素材={len(_snippet)}字")
                             _llm_suggestion = self._call_llm_for_repair(
-                                _issue, _snippet, _related_logs)
+                                _issue, _snippet, _related_logs, scene)
                     except Exception as _deg_err:
                         _module_logger.debug(
                             f"[修复蒸馏] _snippet为空降级失败: {type(_deg_err).__name__}: {_deg_err}")

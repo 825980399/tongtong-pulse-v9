@@ -272,9 +272,20 @@ class TestT4GitInit(unittest.TestCase):
         self.assertTrue(so.strip(), "无任何提交")
 
     def test_32_commit_message_baseline(self):
-        rc, so, _ = _git(["log", "-1", "--pretty=%s"])
+        """★第96批 T-96g（D95-8）：原断言**最新提交**的 message 含「初始提交」。
+
+        第94批星轨在 HEAD 上新增了 commit（「第94批事故修复…」）⇒ HEAD 不再是
+        初始提交，该断言失去意义。改为**相对基线**：取 **root commit**
+        （``git rev-list --max-parents=0 HEAD``）的 message —— 不依赖 HEAD，
+        无论后续再有多少批次提交都不会失配，仍守护「仓库由初始提交建立」这一事实。
+        """
+        rc, so, _ = _git(["rev-list", "--max-parents=0", "HEAD"])
         self.assertEqual(rc, 0)
-        self.assertIn("初始提交", so)
+        _roots = [x for x in so.splitlines() if x.strip()]
+        self.assertTrue(_roots, "无 root commit（git log 为空？）")
+        rc2, so2, _ = _git(["log", "-1", "--pretty=%s", _roots[-1]])
+        self.assertEqual(rc2, 0)
+        self.assertIn("初始提交", so2, "root commit 不是初始提交: %r" % so2[:120])
 
     def test_33_data_not_tracked(self):
         rc, so, _ = _git(["ls-files", "data"])
@@ -295,9 +306,25 @@ class TestT4GitInit(unittest.TestCase):
         self.assertEqual(bad, [], "备份目录被提交: %s" % bad[:5])
 
     def test_37_no_remote_configured(self):
-        """★约束6：只做本地初始化，不得推送。"""
+        """★约束6（第96批 T-96g 修订）：**不得由自动化流程擅自配置远程**。
+
+        原断言要求 ``git remote -v`` **恒为空**。第94批星轨**主动**配置了
+        origin（gitee.com/tongtongkaiyuan/tongtong-pulse-v9.git）作为备份远程，
+        该约束事实上已被人类决策解除 ⇒ 原断言必红（D95-8）。
+        ⇒ 改为**白名单守护**：远程为空，或仅指向白名单主机。
+        仍守护原始意图（自动化不得乱配远程、不得偷偷指向未知第三方），
+        同时不违背星轨的显式决策。
+        """
+        _ALLOWED_HOSTS = ("gitee.com",)
         rc, so, _ = _git(["remote", "-v"])
-        self.assertEqual(so.strip(), "", "存在远程仓库配置（应为空）")
+        lines = [x for x in so.splitlines() if x.strip()]
+        for line in lines:
+            parts = line.split()
+            url = parts[1] if len(parts) > 1 else ""
+            self.assertTrue(
+                any(h in url for h in _ALLOWED_HOSTS),
+                "远程不在白名单 %s（约束：自动化不得乱配远程）: %s"
+                % (_ALLOWED_HOSTS, url))
 
     def test_38_gitignore_covers_keys(self):
         gi = _rd(os.path.join(_ROOT, ".gitignore"))

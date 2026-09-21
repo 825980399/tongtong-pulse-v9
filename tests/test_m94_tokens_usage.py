@@ -13,19 +13,19 @@
     `tokens>0` 有 **2893 条（50.2%）** —— **不是恒 0**！零值是**结构性集中**的：
     `origin=evolution_task` 那批 100% 为 0（装饰器 `trace_evolution_call`
     的 `finally` 从未取用 usage），肺通道（`system_internal`）靠第40批的
-    `_m40_last_usage` 私有旁路**已经是对的**。
+    私有旁路**已经是对的**（该旁路本批 T-95e 统一命名为 `_last_llm_usage`）。
     ⇒ 真根因 = **三个被装饰的进化引擎出口没有统一入口**，E 组即为该结论的
     可执行证据（只固化「可复算事实」，不写死生产数字）。
 
 覆盖五组：
   A. 静态接线（AST）—— 新增成员归属 + `parse_response` 签名与改前**逐字一致**
-     + 三个进化引擎出口 `_m44_last_usage` 赋值确实落在被装饰的函数体内；
+     + 三个进化引擎出口 `_last_llm_usage` 赋值确实落在被装饰的函数体内；
   B. adapter 层 —— `extract_usage` 边界（完整 / 缺失补齐 / 全 0 / 非数值 / 负数
      / 非 dict / 无键）+ 委托适配器一致性 + 纯函数不改入参；
   C. 留存器层 —— `record(usage=...)` 写新字段 + `tokens` 回落规则 +
      显式 tokens 优先（向后兼容）+ 落盘 JSON 实测；
   D. 装饰器闭环 —— `trace_evolution_call` 在 `finally` 取用并**清空**
-     `_m44_last_usage`，未设时零回归；
+     `_last_llm_usage`，未设时零回归；
   E. 生产 traces 只读取证 + 回归不变量（有 usage ⇒ tokens == total_tokens）。
 """
 import ast
@@ -69,10 +69,20 @@ def _read(path):
 
 
 def _def_args(path, cls, name):
-    """返回类内某方法的**全部形参名**（位置参数 + 关键字参数，含 self）。"""
+    """返回方法的**全部形参名**（位置 + 关键字，含 self）。
+
+    ``cls is None`` ⇒ 在**模块级**函数中查找；否则在指定类内查找。
+    """
     _t = ast.parse(_read(path))
+    if cls is None:
+        for _n in _t.body:
+            if (isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and _n.name == name):
+                return ([a.arg for a in _n.args.args]
+                        + [a.arg for a in _n.args.kwonlyargs])
+        return None
     for _n in ast.walk(_t):
-        if isinstance(_n, ast.ClassDef) and (cls is None or _n.name == cls):
+        if isinstance(_n, ast.ClassDef) and _n.name == cls:
             for _m in _n.body:
                 if (isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef))
                         and _m.name == name):
@@ -178,7 +188,8 @@ class TestM94TokensStaticWiring(_Base):
             if isinstance(_n, ast.ClassDef) and _n.name == "LLMCallRecorder":
                 for _m in _n.body:
                     if (isinstance(_m, ast.FunctionDef) and _m.name == "record"):
-                        _kw = {k.arg: k.default for k in _m.args.kwonlyargs}
+                        _kw = {a.arg: d for a, d in zip(_m.args.kwonlyargs,
+                                                        _m.args.kw_defaults)}
                         _default = ast.unparse(_kw["usage"]) if "usage" in _kw else None
         self.assertEqual("None", _default, "★usage 默认值必须为 None")
         self.assertTrue(callable(getattr(_r, "record", None)))
@@ -188,17 +199,17 @@ class TestM94TokensStaticWiring(_Base):
 
     def test_A5_decorator_reads_and_clears_usage(self):
         _src = _read(os.path.join(_LLM, "call_recorder.py"))
-        self.assertIn('getattr(_self, "_m44_last_usage", None)', _src)
-        self.assertIn("_self._m44_last_usage = None", _src,
+        self.assertIn('getattr(_self, "_last_llm_usage", None)', _src)
+        self.assertIn("_self._last_llm_usage = None", _src,
                       "★必须在 finally 清空，避免串到下一次调用（脏读）")
         # 清空动作必须与取用同处 finally
-        _i_use = _src.index('getattr(_self, "_m44_last_usage", None)')
-        _i_clr = _src.index("_self._m44_last_usage = None")
+        _i_use = _src.index('getattr(_self, "_last_llm_usage", None)')
+        _i_clr = _src.index("_self._last_llm_usage = None")
         self.assertLess(_i_use, _i_clr)
 
     def test_A6_engine_exits_assign_usage_inside_decorated_func(self):
         for _name, _p in _ENGINES.items():
-            _hits = _decorated_funcs_with_assign(_p, "_m44_last_usage")
+            _hits = _decorated_funcs_with_assign(_p, "_last_llm_usage")
             self.assertEqual(1, len(_hits),
                              "★%s 必须恰有 1 个被装饰的出口暂存 usage，实得 %r"
                              % (_name, _hits))
@@ -371,19 +382,19 @@ class TestM94RecorderUsage(_Base):
 
 
 class TestM94DecoratorLoop(_Base):
-    """D 组：`trace_evolution_call` 与引擎 `_m44_last_usage` 的闭环。"""
+    """D 组：`trace_evolution_call` 与引擎 `_last_llm_usage` 的闭环。"""
 
     class _FakeEngine:
         def __init__(self, usage):
             self._m44_last_model = "fake-model"
             self._m44_last_error = ""
             self._usage = usage
-            self._m44_last_usage = None
+            self._last_llm_usage = None
 
         @cr.trace_evolution_call(prompt_pos=2, version="test.m94.v1")
         def _call_llm(self, system, prompt):
             if self._usage is not None:
-                self._m44_last_usage = self._usage
+                self._last_llm_usage = self._usage
             return "answer"
 
     def test_D1_usage_survives_into_trace_and_is_cleared(self):
@@ -397,7 +408,7 @@ class TestM94DecoratorLoop(_Base):
         self.assertEqual("fake-model", _rec["model"])
         self.assertEqual(20, _rec["tokens"], "★这就是 2423 条恒 0 的修复点")
         self.assertEqual(20, _rec["usage"]["total_tokens"])
-        self.assertIsNone(_eng._m44_last_usage,
+        self.assertIsNone(_eng._last_llm_usage,
                           "★finally 必须清空，避免脏读串到下一次调用")
 
     def test_D2_no_usage_is_zero_regression(self):
@@ -420,7 +431,7 @@ class TestM94DecoratorLoop(_Base):
         class _Boom(self._FakeEngine):
             @cr.trace_evolution_call(prompt_pos=2, version="test.m94.boom.v1")
             def _call_llm(self, system, prompt):
-                self._m44_last_usage = {"total_tokens": 40}
+                self._last_llm_usage = {"total_tokens": 40}
                 raise ValueError("boom")
 
         _eng = _Boom({"total_tokens": 1})
@@ -429,7 +440,7 @@ class TestM94DecoratorLoop(_Base):
         _rec = self._lines()[-1]
         self.assertEqual(cr.STATUS_FAILED, _rec["status"])
         self.assertEqual(40, _rec["tokens"], "★异常路径同样要带出 usage")
-        self.assertIsNone(_eng._m44_last_usage)
+        self.assertIsNone(_eng._last_llm_usage)
 
 
 class TestM94ProductionTraces(_Base):

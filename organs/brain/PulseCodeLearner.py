@@ -3295,7 +3295,18 @@ class PulseCodeLearner(BasePulseOrgan):
                         self._log(LogLevel.WARNING,
                                  f"代码修复蒸馏 stderr(尾): {_err_tail[-600:]}")
                     self._record_code_distill("failed", _reason)
-                    _distill_report = _repair_executor.repair_with_distillation(issues, inspector)
+                    # ★第95批 T-95d：显式声明这是「代码学习」场景的 LLM 调用
+                    #   （此前一律归入 SCENE_EVOLUTION ⇒「代码学习」恒 0）。
+                    #   仅归类不同，不重复计数。已知局限：子进程路径
+                    #   （run_in_subprocess）的调用仍归 SCENE_EVOLUTION。
+                    try:
+                        from nucleus.LLMDependencyMetrics import (
+                            SCENE_CODE_LEARN as _m95_code_learn,
+                        )
+                    except Exception:
+                        _m95_code_learn = None
+                    _distill_report = _repair_executor.repair_with_distillation(
+                        issues, inspector, scene=_m95_code_learn)
                     self._code_distill_stats["degraded_to_main"] += 1
                 self._log(LogLevel.INFO,
                          f"代码修复蒸馏: 本地可修{_distill_report.get('local_fixable',0)}个, "
@@ -3479,7 +3490,10 @@ class PulseCodeLearner(BasePulseOrgan):
                             _approved_patches = [
                                 _p for _p in _patch_report["patches"][:_batch_size]
                                 if _p.get("status") == "approved"
-                                and _p.get("dynamic_test", {}).get("passed", True)
+                                # ★第96批 T-96b（N1-④）：原缺省 True ⇒ 动态测试
+                                #   **没跑过也当通过**（异常=假通过）。改 False：
+                                #   拿不到 dynamic_test 结果时按**未通过**处理。
+                                and _p.get("dynamic_test", {}).get("passed", False)
                             ]
                             if _approved_patches and self._evolution_driver is not None:
                                 _approved_count = len(_approved_patches)

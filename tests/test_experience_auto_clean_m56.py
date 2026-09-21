@@ -60,10 +60,16 @@ class TestExperienceAutoCleanM56(unittest.TestCase):
         self.assertEqual(_last.get("cleanup_batch"), 56)
 
     def test_write_path_marks_boilerplate(self):
-        """★写入侧样板短句（动机循环内部评估）写入即被标记。"""
+        """★写入侧样板短句（含 SERP 样板 token）写入即被标记 write_side_boilerplate。
+
+        ★第97批 T-97d 修正：原载荷「动机循环内部评估」在第65批分类收窄后已不再
+        被判污染（收窄为仅认 SERP 样板 token，修复 82.6% 误标）。该测试属 stale 用例，
+        改为用真正的 SERP 样板短句验证写入路径仍标记 write_side_boilerplate 类。
+        """
         self._cfg.ENABLE_EXPERIENCE_AUTO_CLEAN = True
         pool = self._pool()
-        _id = pool.record_experience(content="动机循环内部评估")
+        _id = pool.record_experience(
+            content="搜索结果相关搜索广告赞助商链接百度一下相关推荐")
         self.assertTrue(_id)
         _last = pool._experiences[-1]
         self.assertTrue(_last.get("polluted") is True)

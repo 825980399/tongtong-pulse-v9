@@ -150,11 +150,28 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
         self.assertEqual([], _drift[:10], "既有开关值被改动：%s" % _drift[:10])
         self.assertGreater(len(_old), 150, "改前开关数异常（%d）" % len(_old))
 
-    def test_C3_switch_count_grows_by_exactly_three(self):
+    def test_C3_switch_count_grows_by_at_least_three(self):
+        """★版本无关判据（铁律 100：脆弱源码文本断言改版本无关复算）。
+
+        ★第94批修正：原断言硬编码「恰好 +3」，其含义是「本批新增 3 个开关」，
+        但写成「全库新增数 == 3」后，**任何**后续批次合法地新增开关都会把它打红
+        （第94批 T-94a 的 `ENABLE_PENDING_QUEUE_AGING` 即此）。
+        改为复算三项不变量：
+          ① 既有开关**一个都没被删除**；
+          ② 本批三个开关**都在**新增集合内；
+          ③ 新增总数 ≥ 3。
+        """
         _old = _top_level_enable_assigns(self._require_bak())
         _new = _top_level_enable_assigns(_cfg_src())
-        self.assertEqual(3, len(_new) - len(_old),
-                         "新增开关数应为 3，实际 %d" % (len(_new) - len(_old)))
+        _added = set(_new) - set(_old)
+        _removed = set(_old) - set(_new)
+        self.assertEqual(set(), _removed,
+                         "既有开关被删除：%s" % sorted(_removed)[:10])
+        self.assertEqual(set(), set(_EXPECT) - _added,
+                         "本批三个开关必须都在新增集合内，缺：%s"
+                         % sorted(set(_EXPECT) - _added))
+        self.assertGreaterEqual(len(_added), 3,
+                                "新增开关数应 ≥3（本批 3 个），实际 %d" % len(_added))
 
     def test_C4_no_test_used_to_assert_absence(self):
         """★任务书「同步更新相关单测断言」的**反向核实**：

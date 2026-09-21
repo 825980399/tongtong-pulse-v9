@@ -999,6 +999,24 @@ class ResonanceEngine:
         else:
             _level = "low"
 
+        # ★第95批 T-95d：补「置信度守卫」本地推理埋点（此前全库**零调用点**
+        #   ⇒ llm_dependency 的「置信度守卫」恒为 0）。语义 = 三通道一致性
+        #   置信度判定为**低**（< ``confidence_low_threshold``），即本地检索
+        #   结果不足以自持、已标记 ``needs_llm_review`` 的**守卫触发**事件。
+        #   本函数在 L558 每查询**只调用一次** ⇒ 每查询至多计 1 次，不放大。
+        #   异常只记 DEBUG，绝不影响检索（对齐第84批 M84-2 的埋点风格）。
+        if _level == "low":
+            try:
+                from nucleus.LLMDependencyMetrics import (
+                    KIND_GUARD as _m95_kind_guard,
+                    record_local_inference as _m95_rec_local,
+                )
+                _m95_rec_local(_m95_kind_guard)
+            except Exception as _e95g:
+                _logger.debug(
+                    "[共振引擎] 置信度守卫本地推理计数失败（已忽略）: %s: %s",
+                    type(_e95g).__name__, _e95g)
+
         return {
             "confidence": round(_conf, 4),
             "level": _level,

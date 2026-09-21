@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import (
+    DigestEvent,
     ErrorCode,
     HeartEvent,
     KnowledgeEvent,
@@ -193,8 +194,41 @@ class PulseLiver(BasePulseOrgan):
             self._check_and_optimize(pulse)
         elif event_type == ReflectionEvent.INSIGHT:
             self._on_reflection_insight(payload)
+        elif event_type == DigestEvent.KNOWLEDGE:
+            # ★第98批 T-98b：肝作为知识代谢中枢，消费代码学习等器官发射的
+            #   digest.knowledge 脉冲，避免其成为「孤儿脉冲（发射后无器官接收）」。
+            self._on_digest_knowledge(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
+
+    def _on_digest_knowledge(self, payload: dict[str, Any]) -> None:
+        """★第98批 T-98b：消费 digest.knowledge 脉冲（代码学习等器官发射）。
+
+        肝是框架的「知识代谢中枢」，把消化后的知识点沉淀进共享记忆
+        （node_pool），使 digest.knowledge 不再成为孤儿脉冲（发射后无器官接收）。
+        注意：log_receive 已在 BasePulseOrgan._handle_pulse_safe 中于 on_pulse 之前
+        触发，因此只要本方法被调度，孤儿检测即被消除；本方法仅做知识沉淀，
+        任何异常都被静默降级，绝不影响脉冲消费。
+        """
+        _content = (payload or {}).get("content")
+        if not _content:
+            return
+        self._log(LogLevel.DEBUG,
+                  f"[第98批T-98b] 肝吸收 digest.knowledge: {str(_content)[:50]}")
+        try:
+            if self.node_pool is not None:
+                _node = PulseNode(
+                    value=str(_content)[:500],
+                    keywords=["digest.knowledge",
+                              str((payload or {}).get("source_organ", "代码学习"))],
+                    source_organ=self.organ_name,
+                    evol_level=PulseNode.EVOL_L1,
+                    space_path="/自我理解/消化知识",
+                )
+                self.node_pool.add(_node)
+        except Exception as _e:
+            self._log(LogLevel.DEBUG,
+                      f"[第98批T-98b] 知识沉淀失败(已忽略): {type(_e).__name__}: {_e}")
 
     def get_resonance_conditions(self) -> list[dict[str, Any]]:
         return [
@@ -204,6 +238,7 @@ class PulseLiver(BasePulseOrgan):
                     HeartEvent.BEAT,
                     KnowledgeEvent.WRITTEN,
                     ReflectionEvent.INSIGHT,
+                    DigestEvent.KNOWLEDGE,  # ★第98批 T-98b：肝订阅 digest.knowledge，吸收消化知识
                 ],
                 "min_priority": 1,
             }

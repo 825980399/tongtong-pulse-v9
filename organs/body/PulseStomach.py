@@ -2230,6 +2230,7 @@ class PulseStomach(BasePulseOrgan):
             pass
         return _out
 
+    @staticmethod
     def _balanced_json_extract(text: str) -> str:
         """★第26批 T3 策略2c：引号感知的括号平衡提取。
 

@@ -70,7 +70,7 @@ class SelfReflectionEngine:
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
             # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
-            self._m44_last_usage = _data.get("usage")  # _m94_extract_usage_marker
+            self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
             _choices = _data.get("choices", [])
             if _choices:
                 return _choices[0].get("message", {}).get("content", "")

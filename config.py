@@ -963,6 +963,17 @@ EVOLUTION_CONFIG = {
     
     # 自动执行冷却时间（秒），防止短时间内连续修改
     "auto_apply_cooldown": 86400,  # 24小时
+    # ★第96批 T-96b（N1-① 烛微第1期审计）：第85批 T-85d 引入的本地低风险
+    #   补丁**免签自动应用**开关此前**从未登记 config**，读取端兜底为 True
+    #   ⇒ 事实上「默认开启」（与 :952 auto_apply_enabled=False 语义矛盾）。
+    #   显式登记为 False ⇒ 非核心文件的 local_rule 补丁回到需人工审批。
+    #   读取点：nucleus/reasoning/PatchManager.py::_m85_local_low_risk_auto_apply
+    "local_auto_apply_enabled": False,
+    # ★第96批 T-96b（N1-① + Q1）：核心文件专用红线此前同样未登记 config
+    #   （读取端兜底 False，取值安全但「声明与配置不符」第09-18 T1-b 复发）。
+    #   显式登记 False ⇒ 语义与既有兜底**完全一致**（零行为变化）。
+    #   读取点：nucleus/reasoning/PatchManager.py::_m80_allow_core_auto_apply
+    "allow_core_auto_apply": False,
     
     # 自动执行前是否需要创建快照备份
     "auto_apply_backup_required": True,
@@ -1052,9 +1063,11 @@ EVOLUTION_CONFIG = {
         # 安全边界拦截（unsafe_eval / sql_injection 等）：故意不修，
         # 且判定不随重试改变 → 冷却最久，24 小时后复检一次。
         "高危·安全拦截": 86400.0,
-        # 已有待审批补丁：等人裁决。若补丁被批准/拒绝，
-        # PulseCodeLearner 的待审批门禁会自然放行，此处只防重复上报刷屏。
-        "已有待审批": 7200.0,
+        # ★第95批 T-95a：原「已有待审批」项已删除（死配置，第94批 D94-2）。
+        #   依据：`SafeEvolutionExecutor._cooldown_classify` 只返回
+        #   「高危·安全拦截」/「本地无规则·转LLM」两类，**从不返回该键**；
+        #   而 `_cooldown_ttl_for` 是按 reason 前缀匹配 ⇒ 该键永远匹配不到。
+        #   真实「已有待审批」阻塞走 `has_pending_patch_for` 预检（不经过冷却表）。
         # 本地无规则、只能转 LLM：随 patch 规则库扩充有可能变成可修，
         # 故冷却较短（6 小时）后重试。
         "本地无规则·转LLM": 21600.0,
@@ -1156,40 +1169,45 @@ REMOTE_API_CHANNELS = {
         # 所有火山方舟渠道共用同一个API端点和ARK_API_KEY，通过推理接入点ID区分模型
         {
             "name": "ark-seed-21-turbo",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260912135401-nkcns",  # Doubao-Seed-2.1-turbo，复杂请求易超时，放第4优先级备用
             "timeout": 120,  # ★主线第56批 T1/P2-393：思考模型推理时间长，放宽超时
             "quota_limit": 5000000,  # ★第32批 T6：500 万免费额度（协作奖励计划，tokens）；2026-09-15控制台未找到对应模型，额度待确认
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 6,  # ★2026-09-15紧急调整：深度思考模型复杂请求易超时，降级备用
+            "priority": 10,  # ★第96批 T-96d：未列入本批清单 ⇒ 垫底（原与 deepseek 重号为 6）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,  # 复杂请求易超时，降低并发
         },
         {
             "name": "ark-ds-v4-flash",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260912135632-k7c2w",  # DeepSeek-V4-Flash正式版，稳定，优先
             # ★2026-09-15 星轨修正：经火山方舟控制台核实，真实免费总额度为3,243,216 tokens
             #   （此前第32批误配为500,000，导致错误预警"余量不足20%"）。额度用尽后本模块会自动暂停。
-            "quota_limit": 5000000,
+            # ★第96批 T-96d：注释与取值**长期自相矛盾**（注释说 3,243,216，值却是
+            #   5,000,000）⇒ 额度耗尽预警事实上被推迟。按注释的实测值统一修正。
+            "quota_limit": 3243216,
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 4,
+            "priority": 5,  # ★第96批 T-96d：协作奖励（每日补充）正式版，第5
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
         {
             "name": "ark-seed-evolving",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260912132754-zr67j",  # Doubao-Seed-Evolving，550万免费tokens
             "timeout": 120,  # ★主线第56批 T1/P2-393：思考模型推理时间长，放宽超时
             "quota_limit": 5000000,  # ★第32批 T6：免费额度总额（tokens）
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 5,  # ★2026-09-15紧急调整：深度思考模型复杂请求>90s，降级备用
+            "priority": 9,  # ★第96批 T-96d：未列入本批清单 ⇒ 顺延（原5，已让位给 Seed-2.1-pro）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,  # ★2026-09-15紧急调整：思考模型并发高会加剧超时
@@ -1200,7 +1218,7 @@ REMOTE_API_CHANNELS = {
             "quota_limit": -1,  # ★第32批 T6：-1 = 不限量（永久免费，不参与额度管控）
             "api_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
             "api_key": os.environ.get("ZHIPU_API_KEY", ""),
-            "priority": 1,
+            "priority": 1,  # ★第96批 T-96d：永久免费不限量，维持第1优先级（无需调整）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 1,   # 智谱免费渠道，实测并发能力约 1
@@ -1209,11 +1227,13 @@ REMOTE_API_CHANNELS = {
             "name": "ark-seed-21-pro",
             "model": "ep-20260912135302-wg5wn",  # Doubao-Seed-2.1-pro，免费，复杂任务用
             "timeout": 120,  # ★主线第56批 T1/P2-393：思考模型推理时间长，放宽超时
-            "quota_limit": 5000000,  # ★第32批 T6：500 万免费额度（协作奖励计划，tokens）；2026-09-15控制台未找到对应模型，额度待确认
+            "quota_limit": 2300000,  # ★第96批 T-96d：星轨实测**固定额度 230 万** tokens
+                                     #   （原第32批误配 500 万且标注「待确认」，额度虚高
+                                     #     ⇒ 额度耗尽预警失效）。用完即止，不再假设可返还。
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 7,  # ★2026-09-15紧急调整：深度思考模型复杂请求易超时，降级备用
+            "priority": 4,  # ★第96批 T-96d：豆包高质量（固定230万），升为第4
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,  # ★2026-09-15紧急调整：思考模型并发高会加剧超时
@@ -1224,33 +1244,35 @@ REMOTE_API_CHANNELS = {
             "quota_limit": -1,  # ★第32批 T6：-1 = 不限量（收费兜底）
             "api_url": "https://api.deepseek.com/v1/chat/completions",
             "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
-            "priority": 6,
+            "priority": 7,  # ★第96批 T-96d：收费兜底明确垫底（原与 ark-seed-21-turbo 同为6，重号）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 10,  # DeepSeek 付费渠道，给更大初始并发
         },
         {
             "name": "ark-ds-v4-pro",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260912135550-b7mxr",  # DeepSeek-V4-Pro正式版，高质量，协作奖励计划
             "timeout": 120,  # 复杂请求推理时间可能较长
             "quota_limit": 5000000,  # ★2026-09-15 协作奖励计划，每日上限500万免费tokens（用多少返多少）
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 2,  # ★2026-09-15 新增：高质量模型，高优先级
+            "priority": 6,  # ★第96批 T-96d：协作奖励高质量模型，降为第6（先吃免费/固定额度）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 3,
         },
         {
             "name": "ark-glm-5.2",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260912135848-t4l8q",  # GLM-5.2，智谱高质量，协作奖励计划
             "timeout": 120,
             "quota_limit": 5000000,  # ★2026-09-15 协作奖励计划，每日上限500万免费tokens（用多少返多少）
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 3,  # ★2026-09-15 新增：智谱高质量模型
+            "priority": 8,  # ★第96批 T-96d：未列入本批优先级清单 ⇒ 顺延到清单之后（原3，已让位给 V4.1-Flash/GLM-5.3）
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 3,
@@ -1263,7 +1285,7 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 8,  # ★2026-09-15 新增：备用渠道
+            "priority": 2,  # ★第96批 T-96d：最快最省（1.6s/57tokens），升为第2
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
@@ -1276,13 +1298,14 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             "api_key": (os.environ.get("ARK_API_KEY", "")
                         or os.environ.get("DOUBAO_API_KEY", "")),
-            "priority": 8,  # ★2026-09-15 新增：备用渠道
+            "priority": 3,  # ★第96批 T-96d：智谱快速版，升为第3
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
         {
             "name": "ark-seed-character",
+            "quota_type": "daily_reward",  # ★第97批 T-97c：协作奖励额度，每日 11 点自动重置，不降优先级/不暂停
             "model": "ep-20260915081954-hhb6b",  # Doubao-Seed-Character，角色模型，协作奖励计划
             "timeout": 120,
             "quota_limit": 5000000,  # ★2026-09-15 协作奖励计划，每日上限500万免费tokens
@@ -1325,6 +1348,19 @@ REMOTE_API_CHANNELS = {
     "local_fallback_model": "qwen2:7b-instruct-q4_K_M",
     "local_fallback_enabled": True,
 }
+
+# ★主线第98批 T-98a（P0）：SSRF 防护「显式额外白名单」开关（新增，非改动既有开关）。
+#   背景：SSRF 防护只放行「受信任主机」——即管理员显式配置、且允许私网/环回解析的
+#   模型端点（本地优先部署语义）；其余主机一律经 socket.getaddrinfo 解析后按 is_global 判定。
+#   生产环境曾把火山方舟域名 ark.cn-beijing.volces.com 解析到内网 IP 192.168.50.86，
+#   导致 6 个火山渠道被误拦（渠道池失败率 33%）。
+#   修复双保险：
+#   ① ssrf_guard._trusted_hosts() 现已自动纳入 REMOTE_API_CHANNELS 渠道池每个渠道的 api_url 主机；
+#   ② 本开关保留一个显式、可调的额外白名单，便于运维在不动代码的情况下追加受信任
+#      主机/域名（如新增 SaaS 模型域名、内网网关对应的主机名）。
+#   红线合规：本开关为「新增」开关，未改动任何既有运行开关；云元数据等保留地址
+#   仍在 ssrf_guard._TRUSTED_HARD_BLOCK 中硬拒绝，不受本白名单影响。
+SSRF_TRUSTED_EXTRA_HOSTS = ("ark.cn-beijing.volces.com",)
 
 # ★主线第11批 T2/P2-59（星轨裁决选 3）：外挂 LLM 聚合网关开关。
 #   False（默认）= 只用进程内渠道池（REMOTE_API_CHANNELS）；
@@ -4933,6 +4969,34 @@ ENABLE_M92_PATCH_BASE_INDENT_GUARD = False
 #   读取点：nucleus/reasoning/PatchManager.py::_m92_ast_struct_guard_on
 ENABLE_M92_PATCH_AST_STRUCT_GUARD = False
 # [M92-CFG]
+# ============================================================================
+# ★第96批登记（T-96a 进化通道渠道池）
+#   本批红线「不改 config.py 运行开关（只加新开关）」⇒ 本段**只新增**，
+#   不修改任何既有开关/常量的值。
+# ============================================================================
+
+# ★第96批 T-96a（P0）：进化通道是否改走**渠道池**（按优先级选渠道）。
+#   True  → `SafeEvolutionExecutor._call_llm_for_repair` 不再直连
+#           `REMOTE_API_CONFIG`（DeepSeek 官方收费 API），改为经
+#           `_m96_select_channel()` 从渠道池按优先级取可用渠道（跳过熔断、
+#           已应用额度策略），从而享受智谱/火山的免费额度。
+#   False（默认，灰度）→ **零行为变化**：仍直连 REMOTE_API_CONFIG。
+#   ★回落设计（D96 三层）：渠道池不可用 / 取渠道异常 / 渠道字段不全
+#     ⇒ 一律回落到 REMOTE_API_CONFIG，进化通道绝不因本开关而失能。
+#   ★T0 实测（第96批）：REMOTE_API_CONFIG.api_url =
+#     https://api.deepseek.com/v1/chat/completions（官方收费）；
+#     渠道池 `get_active_channels()` 实测 **12 条**可用（含 zhipu 免费）。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m96_channel_pool_on
+ENABLE_EVOLUTION_USE_CHANNEL_POOL = False
+
+# ★T-96d 第3项（「固定额度用完即止 / 协作奖励每日 11 点补充」）经星轨裁决
+#   **单独立项**：需改造 ChannelQuotaMonitor 的持久化与daily调度，且当前
+#   无渠道额度 API 可校核 ⇒ 面较大。
+#   ★本批**刻意不落地「空开关」**——开关默认值 False + 读取端未实现
+#     =「声明与实施不符」，正是本仓库历史上被反复清理的一类技术债。
+#   本批只落地 T-96d 第 1、2 项（模型已在池 + 优先级重排 + 额度数值修正）。
+
+# [M96-CFG]
 
 # ============================================================================
 # ★第94批登记（T-94a 老化策略三开关）

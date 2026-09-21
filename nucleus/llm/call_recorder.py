@@ -557,7 +557,12 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
             finally:
                 try:
                     # ★第94批 T-94b：取用引擎侧暂存的 usage（未设→None，零回归）。
-                    _m94_usage = getattr(_self, "_m44_last_usage", None)
+                    # ★第95批 T-95e：暂存属性统一为 `_last_llm_usage`
+                    #   （原 `_m44_last_usage`）；保留旧名回落读取，避免外部脚本
+                    #   仍按旧名写入时静默丢掉 usage。
+                    _m94_usage = getattr(_self, "_last_llm_usage", None)
+                    if _m94_usage is None:
+                        _m94_usage = getattr(_self, "_m44_last_usage", None)
                     record_evolution_call(
                         prompt=_prompt if _prompt is not None else "",
                         response=_resp if _resp else "",
@@ -567,7 +572,9 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                         duration=time.time() - _t0,
                         usage=_m94_usage if isinstance(_m94_usage, dict) else None)
                     if _self is not None:
-                        _self._m44_last_usage = None
+                        _self._last_llm_usage = None
+                        if hasattr(_self, "_m44_last_usage"):
+                            _self._m44_last_usage = None
                 except Exception:
                     pass
         return _wrapper

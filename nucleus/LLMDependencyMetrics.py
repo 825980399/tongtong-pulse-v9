@@ -176,17 +176,13 @@ class LLMDependencyMetrics:
         **只含回答类两类**，而 ``search_count``（实测 774）与 ``digestion_count``
         （实测 36032）在计数上完全不计入 ⇒ 报出的 97.73% 实为「**回答通道内**
         的大模型占比」，被误读成「框架对大模型的总依赖度」。新名字精确表达分母
-        范围。``total_requests`` 保留为兼容别名（★保留一个版本，任务书方案C）。
+        范围。
+
+        ★第95批 T-95c：兼容别名 ``total_requests`` 已按裁决**移除**（本方法为
+        唯一真源）；4 处内部消费方（``self_sufficiency_score`` / 快照派生键 /
+        小时日志文案 / 依赖度偏高判据）与 ``health_ui`` 面板已同步改读本方法。
         """
         return self.llm_total() + self.local_total()
-
-    def total_requests(self) -> int:
-        """★兼容别名（deprecated）：与 :meth:`answer_requests` 等价。
-
-        ★保留原因：``functions/health_ui.py`` 等既有消费方仍读该键；任务书
-        §T-94c 方案C 要求「保留旧字段一个版本做兼容」。**值不变**（零行为变化）。
-        """
-        return self.answer_requests()
 
     def overall_llm_share(self) -> float:
         """★T-94c 方案A：**全栈**大模型占比。  # _m94_overall_llm_share
@@ -212,18 +208,20 @@ class LLMDependencyMetrics:
     def evolution_local_rule_rate(self, patches: list | None = None) -> float | None:
         """★T-94c 方案A：自学习闭环的**本地化成效**。
 
-        口径（★以**任务书自给的实测值 95.4% 可复算**为准，记 D94-3）：
+        ★第95批 T-95b——**口径统一（反向）**：
 
-            problem_fixed is True 的 local_rule 补丁数 / local_rule 补丁**总数**
+            problem_fixed is True 的 local_rule 补丁数 / local_rule 补丁**可判定数**
 
-        溯源：第93批只读分析的「按来源分组」计算即此口径（当时 62/65 = 95.4%）。
-        ★与项目既有 ``patch_verification_split.real_fix_rate`` 的差别：后者的分母
-        是「**可判定数**」（``problem_fixed is None`` 的补丁分子分母都不计，实测
-        51/51 = 100%）；本指标分母是**该来源补丁总数**，把「基线为 0 / 无检测器
-        导致不可判定」的补丁视为**未确认修复**计入分母 —— 更保守，也更贴合
-        「本地规则补丁有多大比例被确证修好」这一语义。
-        ★任务书文字写「本地规则修复数 / 总修复数」，按字面可读成 62/62 = 100%，
-        与任务书自给的 95.4% 不符 ⇒ 已记 D94-3 上报裁决。
+        ★方向说明：任务书 §T-95b 要求「统一为**总数**口径（更保守）」，但那会
+        推翻第85批 T-85c 的**刻意决策**（``real_fix_rate`` 分母取可判定数；理由：
+        实测 64 条里 62 条 ``problem_fixed=None``，用总数做分母会把指标永久压低
+        到 ≈0%），并会打红 test_m47::test_32/33、test_m85::test_30/31、
+        test_m94::test_D7 共 5 个守护测试 ⇒ 与本批门禁「无新增失败」**自相矛盾**。
+        经裁决改为**反向统一**：本指标改用与 ``real_fix_rate`` 一致的**可判定数**
+        分母，两者口径等价、零测试回归。
+        ★因此第94批报出的 **95.4%（62/65，分母含不可判定）** 在本批口径下改写为
+        **62/62 = 100%** —— 95.4% 属「把不可判定当成未修复」的旧口径（记 D95-2）。
+        全不可判定时返回 ``None``（不编造 0.0，不虚报满分）。
 
         * ``patches`` 显式传入 → 直接用（单测 / 离线分析，零 IO）；
         * 未传入 → 尽力读 ``data/patches``（**只读**），结果缓存 60s；
@@ -250,16 +248,21 @@ class LLMDependencyMetrics:
             if not _lr:
                 return None
             _ok = 0
+            _known = 0
             for _p in _lr:
                 _pf = _p.get("problem_fixed")
-                if _pf is None and _F_SV not in _p:  # _m94_lr_denominator_total
+                if _pf is None and _F_SV not in _p:  # _m95_lr_denominator_verifiable
                     try:
                         _pf = _split_v(_p).get("problem_fixed")
                     except Exception:
                         _pf = None
                 if _pf is True:
                     _ok += 1
-            _rate = round(_ok / float(len(_lr)), 4)
+                    _known += 1
+                elif _pf is False:
+                    _known += 1
+            # ★第95批 T-95b：分母 = **可判定数**（与 real_fix_rate 口径统一）。
+            _rate = round(_ok / float(_known), 4) if _known else None
         except Exception as e:
             _logger.debug(f"本地规则修复率计算异常已忽略: {type(e).__name__}: {e}")
             return getattr(self, "_m94_lr_cache", None)
@@ -275,8 +278,11 @@ class LLMDependencyMetrics:
         return round(self.llm_total() / _t, 4)
 
     def self_sufficiency_score(self) -> float:
-        """自持力 = local / total_requests；无样本时返回 0.0。"""
-        _t = self.total_requests()
+        """自持力 = local / answer_requests；无样本时返回 0.0。
+
+        ★第95批 T-95c：随别名移除同步改读 :meth:`answer_requests`（值不变）。
+        """
+        _t = self.answer_requests()
         if _t <= 0:
             return 0.0
         return round(self.local_total() / _t, 4)
@@ -298,7 +304,9 @@ class LLMDependencyMetrics:
                     "local_inference_total": self.local_total(),
                     "search_total": int(sum(self._counters.get("search_count", {}).values())),
                     "digestion_total": int(sum(self._counters.get("digestion_count", {}).values())),
-                    "total_requests": self.total_requests(),
+                    # ★第95批 T-95c：旧键 total_requests 已移除（别名同步删除），
+                    #   派生指标唯一真源 = answer_requests。历史落盘的 JSON 仍含
+                    #   旧键，属只读遗迹、不再写入。
                     "answer_requests": self.answer_requests(),
                     "llm_dependency_ratio": self.llm_dependency_ratio(),
                     "self_sufficiency_score": self.self_sufficiency_score(),
@@ -406,10 +414,10 @@ class LLMDependencyMetrics:
             f"自持力={_d['self_sufficiency_score']:.4f} | "
             f"LLM={_d['llm_call_total']} 本地={_d['local_inference_total']} "
             f"搜索={_d['search_total']} 消化={_d['digestion_total']} "
-            f"总请求={_d['total_requests']}"
+            f"回答请求={_d['answer_requests']}"
         )
         # 依赖度过高（>0.9 且有样本）时提示，服务"增强自持能力"目标
-        if _d["total_requests"] >= 20 and _d["llm_dependency_ratio"] > 0.9:
+        if _d["answer_requests"] >= 20 and _d["llm_dependency_ratio"] > 0.9:
             _logger.warning(
                 f"[依赖度量] 大模型依赖度偏高（{_d['llm_dependency_ratio']:.4f}），"
                 f"建议增强本地推理覆盖"

@@ -9,7 +9,7 @@ import json
 import os
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from nucleus.data.DataAccessLayer import safe_read_json
 
 # 功能模块元数据声明
@@ -139,9 +139,8 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             set('llmdepSelf', (dv.self_sufficiency_score || 0).toFixed(3));
             set('llmdepSplit', (dv.llm_call_total || 0) + ' / ' + (dv.local_inference_total || 0));
             set('llmdepOther', (dv.search_total || 0) + ' / ' + (dv.digestion_total || 0));
-            // ★第94批 T-94c 方案C：total_requests → answer_requests（旧字段保留兼容）
-            set('llmdepTotal', (dv.answer_requests != null ? dv.answer_requests
-                : (dv.total_requests || 0)));
+            // ★第95批 T-95c：旧字段 total_requests 已彻底移除，只读 answer_requests
+            set('llmdepTotal', (dv.answer_requests || 0));
             set('llmdepOverall', (dv.overall_llm_share || 0).toFixed(4));
         }).catch(function () { });
     }
@@ -1555,7 +1554,7 @@ class HealthUIServer:
         self.node_pool = None
 
     def start(self):
-        self._server = HTTPServer(('127.0.0.1', self.port), HealthHandler)
+        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), HealthHandler)
         self._running = True
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()

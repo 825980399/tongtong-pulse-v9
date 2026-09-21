@@ -109,22 +109,22 @@ class TestTraceRecording(_Base):
 
     def test_04_tokens_from_usage(self):
         _l = _make_lung("x")
-        _l._m40_last_usage = {"prompt_tokens": 7, "completion_tokens": 3,
+        _l._last_llm_usage = {"prompt_tokens": 7, "completion_tokens": 3,
                               "total_tokens": 10}
         _l._call_via_channels("q", "m1")
         self.assertEqual(self._lines()[0]["tokens"], 10)
 
     def test_05_tokens_fallback_sum(self):
         _l = _make_lung("x")
-        _l._m40_last_usage = {"prompt_tokens": 7, "completion_tokens": 3}
+        _l._last_llm_usage = {"prompt_tokens": 7, "completion_tokens": 3}
         _l._call_via_channels("q", "m1")
         self.assertEqual(self._lines()[0]["tokens"], 10)
 
     def test_06_usage_cleared_after_use(self):
         _l = _make_lung("x")
-        _l._m40_last_usage = {"total_tokens": 10}
+        _l._last_llm_usage = {"total_tokens": 10}
         _l._call_via_channels("q", "m1")
-        self.assertIsNone(getattr(_l, "_m40_last_usage", None))
+        self.assertIsNone(getattr(_l, "_last_llm_usage", None))
 
 
 class TestOriginPropagation(_Base):

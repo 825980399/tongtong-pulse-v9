@@ -82,7 +82,8 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         ★实测根因（本批 T0）：``data/llm_traces`` 8 天 5759 条记录中
         ``origin=evolution_task`` **2423 条 100% tokens=0** —— 进化引擎走
         ``trace_evolution_call`` 装饰器留存，而装饰器**从未取用 usage**；肺通道
-        虽有 ``_m40_last_usage`` 私有旁路（第40批 T2），但全项目**无统一入口**。
+        虽有 ``_last_llm_usage``（原 ``_m40_last_usage``，第40批 T2；
+        第95批 T-95e 统一命名）私有旁路，但全项目**无统一入口**。
 
         语义：
         * 缺 ``total_tokens`` 时用 prompt+completion 补齐；

@@ -370,8 +370,22 @@ class TestM85LocalAutoApply(unittest.TestCase):
         _b.update(kw)
         return _b
 
-    def test_40_local_low_risk_allowed(self):
-        self.assertTrue(PatchManager._m85_local_low_risk_auto_apply(self._p()))
+    def test_40_local_low_risk_blocked_by_default(self):
+        """★第96批 T-96b（N1-① 烛微第1期）：开关显式登记 config 且默认 False。
+
+        原用例断言「缺省放行」。第96批把 ``local_auto_apply_enabled``
+        显式登记为 False（此前**从未登记**，读取端兜底 True ⇒ 事实上默认开启，
+        与本文件 :952 ``auto_apply_enabled=False`` 的安全语义矛盾）⇒ 缺省
+        下非核心 local_rule 补丁**回到需人工审批**。
+        ★同时保留「显式置 True 仍放行」⇒ 证明是**收开关**而非删除能力。
+        """
+        self.assertFalse(
+            PatchManager._m85_local_low_risk_auto_apply(self._p()),
+            "缺省（config 已登记 False）下不得自动放行")
+        self.assertTrue(
+            PatchManager._m85_local_low_risk_auto_apply(
+                self._p(), {"local_auto_apply_enabled": True}),
+            "显式开启后仍须放行（能力保留）")
 
     def test_41_llm_source_not_allowed(self):
         self.assertFalse(

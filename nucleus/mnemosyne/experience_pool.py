@@ -475,15 +475,6 @@ class ExperiencePool:
             return True
 
     def run_pollution_cleanup(self, dry_run: bool = False) -> dict:
-        # ★T3: 自适应降频接线——经验库清理
-        try:
-            from nucleus.runtime_metrics import get_adaptive_controller
-            _ctrl = get_adaptive_controller()
-            _ctrl.register("experience_cleanup", 300)
-            if not _ctrl.should_execute("experience_cleanup"):
-                return {"skipped": True, "reason": "adaptive_frequency_throttle"}
-        except Exception:
-            pass
         """★主线第65批 T1/P2（清理闭环）：处理 polluted & is_cleaned=False 的记录。
 
         分级（置信度=boilerplate 覆盖度）：
@@ -497,6 +488,21 @@ class ExperiencePool:
                 "quarantined": 0, "restored": 0, "dry_run": dry_run}
         if not _res["enabled"]:
             return _res
+        # ★T3: 自适应降频接线——经验库清理。
+        #   仅生产主池生效（测试显式 base_dir 隔离池跳过，保证门控单测确定性）；
+        #   节流早返回仍保持契约形状（含 quarantined/processed/restored 键，值 0），
+        #   避免调用方 KeyError（第97批 T-97d 修复：原早返回 dict 缺键致 8 条门控失败）。
+        if not getattr(self, "_m44_base_dir_explicit", False):
+            try:
+                from nucleus.runtime_metrics import get_adaptive_controller
+                _ctrl = get_adaptive_controller()
+                _ctrl.register("experience_cleanup", 300)
+                if not _ctrl.should_execute("experience_cleanup"):
+                    _res["skipped"] = True
+                    _res["reason"] = "adaptive_frequency_throttle"
+                    return _res
+            except Exception:
+                pass
         try:
             import config as _c
             _hi = float(getattr(_c, "EXPERIENCE_POLLUTION_HIGH_CONFIDENCE", 0.9))

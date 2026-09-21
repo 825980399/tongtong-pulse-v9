@@ -1032,7 +1032,7 @@ class PulseLung(BasePulseOrgan):
                     _m94_usage = None
             if _m94_usage is None:
                 _m94_usage = _data.get("usage") if isinstance(_data, dict) else None
-            self._m40_last_usage = _m94_usage
+            self._last_llm_usage = _m94_usage   # ★第95批 T-95e：统一命名
             return _adapter.parse_response(_data)
         except Exception as _exc:
             self._log(LogLevel.DEBUG,
@@ -1646,7 +1646,9 @@ class PulseLung(BasePulseOrgan):
             _r = get_call_recorder()
             if _r is None:
                 return
-            _usage = getattr(self, "_m40_last_usage", None)
+            _usage = getattr(self, "_last_llm_usage", None)
+            if _usage is None:  # ★第95批 T-95e：旧名回落（兼容外部写入）
+                _usage = getattr(self, "_m40_last_usage", None)
             _tokens = 0
             if isinstance(_usage, dict):
                 _tokens = int(_usage.get("total_tokens", 0) or 0)
@@ -1664,7 +1666,9 @@ class PulseLung(BasePulseOrgan):
             self._log(LogLevel.DEBUG,
                       f"[调用留存] 记录失败（已忽略）: {type(_e).__name__}")
         finally:
-            self._m40_last_usage = None
+            self._last_llm_usage = None
+            if hasattr(self, "_m40_last_usage"):
+                self._m40_last_usage = None
 
     def _m32_apply_quota_policy(self, channels: list) -> list:
         """★主线第32批 T6（P2-184）：按额度用量调整渠道池。

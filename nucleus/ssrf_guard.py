@@ -48,6 +48,24 @@ def _trusted_hosts() -> set:
             _h = urlparse(_api).hostname
             if _h:
                 _hosts.add(_h.lower())
+        # ★第98批 T-98a：渠道池每个渠道的 api_url 同样是管理员显式配置的模型接口，
+        #   与顶层单端点同属「本地优先部署」语义（火山方舟/智谱等 SaaS 端点）。
+        #   原实现只取顶层 REMOTE_API_CONFIG.api_url，漏掉了渠道池，导致 ark 等
+        #   渠道主机不在受信任集合 → 落入 DNS 解析 → 生产环境把火山域名解析到内网
+        #   IP 时被 SSRF 防护误拦（渠道失败率 33%）。此处补齐，使所有配置过的模型
+        #   端点都享受「私网/环回豁免」（仍强制 http/https，且云元数据等保留地址
+        #   始终在 _TRUSTED_HARD_BLOCK 中硬拒绝）。
+        for _ch in getattr(_cfg, "REMOTE_API_CHANNELS", {}).get("default_channels", []) or []:
+            _cu = (_ch or {}).get("api_url", "")
+            if _cu:
+                _chh = urlparse(_cu).hostname
+                if _chh:
+                    _hosts.add(_chh.lower())
+        # ★第98批 T-98a：显式额外白名单开关（默认含火山方舟域名）。运维可在不改代码
+        #   的情况下追加受信任主机/域名。见 config.SSRF_TRUSTED_EXTRA_HOSTS。
+        for _h in getattr(_cfg, "SSRF_TRUSTED_EXTRA_HOSTS", ()) or ():
+            if _h:
+                _hosts.add(_h.lower())
         _ollama = getattr(_cfg, "OLLAMA_BASE_URL", "") or "http://localhost:11434"
         _oh = urlparse(_ollama).hostname
         if _oh:
