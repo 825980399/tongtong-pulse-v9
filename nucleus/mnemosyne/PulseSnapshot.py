@@ -1424,6 +1424,22 @@ class PulseSnapshot:
             "l1_count": len(l1_nodes),
             "nodes": [node.to_dict() for node in l1_nodes],
         }
+
+        # ★第102批 T-102a：L1 落盘前过滤悬空边
+        if _m102_dangling_guard_on():
+            try:
+                _m102_side = self._m102_sidecar_node_ids()
+                if _m102_side is not None:
+                    _srm, _lrm, _kn = _m102_filter_dangling_edges(
+                        snapshot, _m102_side)
+                    if _srm or _lrm:
+                        self._log(LogLevel.INFO,
+                                  f"[第102批 T-102a] L1落盘过滤悬空边: "
+                                  f"sem={_srm} linked={_lrm}")
+            except Exception as _e:
+                self._log(LogLevel.WARNING,
+                          f"[第102批 T-102a] L1悬空边过滤异常(已忽略): "
+                          f"{type(_e).__name__}: {_e}")
         
         try:
             l1_dir = os.path.dirname(self.l1_snapshot_path)
@@ -1504,6 +1520,22 @@ class PulseSnapshot:
                           f"快照轮转备份失败(无回退副本): {e}")
         
         # ===== 原子写入新快照 =====
+        # ===== ★第102批 T-102a：落盘前引用完整性过滤（悬空边不落盘） =====
+        if _m102_dangling_guard_on():
+            try:
+                _m102_side = self._m102_sidecar_node_ids()
+                if _m102_side is not None:
+                    _srm, _lrm, _kn = _m102_filter_dangling_edges(
+                        snapshot, _m102_side)
+                    if _srm or _lrm:
+                        self._log(LogLevel.INFO,
+                                  f"[第102批 T-102a] 落盘过滤悬空边: "
+                                  f"sem={_srm} linked={_lrm} (已知节点={_kn})")
+            except Exception as _e:
+                self._log(LogLevel.WARNING,
+                          f"[第102批 T-102a] 悬空边过滤异常(已忽略): "
+                          f"{type(_e).__name__}: {_e}")
+
         tmp_fd, tmp_path = tempfile.mkstemp(
             suffix=".json",
             prefix="snapshot_",
@@ -2796,3 +2828,130 @@ if __name__ == "__main__":
     
     print("\n=== 自测全部通过 ===")
 # _m70_t4_snapshot_hotcold
+
+# ============================================================================
+# 第102批 T-102a：落盘链路「引用完整性」守卫（悬空边不落盘）
+# ============================================================================
+# 背景（烛微第2期 D160）：快照里 sem/linked 两类边约 2.69% 指向已被删除的节点，
+# 这些悬空边①白占体积 ②让多跳检索在幽灵节点处静默截断。本守卫在**落盘前**
+# 就地剔除指向「已知节点集合之外」的边，保证盘上无悬空引用。
+# 零回归设计：仅删除目标不存在的边；开关关闭时一行都不改。
+
+_M102_DANGLING_GUARD_DEFAULT = True
+
+_m102_logger = get_module_logger("PulseSnapshot")
+
+
+def _m102_dangling_guard_on() -> bool:
+    """灰度开关：落盘前是否过滤悬空边（默认开）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_M102_DANGLING_EDGE_GUARD",
+                            _M102_DANGLING_GUARD_DEFAULT))
+    except Exception:
+        return _M102_DANGLING_GUARD_DEFAULT
+
+
+def _m102_filter_dangling_edges(snapshot: dict, extra_ids=None) -> tuple:
+    """就地过滤 snapshot["nodes"] 里的悬空边。
+
+    Args:
+        snapshot: 待落盘的快照 dict（含 "nodes" 列表，元素为 dict）
+        extra_ids: 额外的已知节点 ID 集合（如节点池全量 + 冷存索引）。
+            ★为 None 表示「无法取得可靠全集」→ 直接跳过（绝不误删）。
+
+    Returns:
+        (sem_removed, linked_removed, known_count)
+    """
+    if not isinstance(snapshot, dict) or extra_ids is None:
+        return (0, 0, 0)
+    _nodes = snapshot.get("nodes")
+    if not isinstance(_nodes, list) or not _nodes:
+        return (0, 0, 0)
+    _known = set()
+    for _n in _nodes:
+        if isinstance(_n, dict):
+            _id = _n.get("node_id")
+            if _id:
+                _known.add(str(_id))
+    for _x in (extra_ids or ()):
+        _known.add(str(_x))
+    if not _known:
+        return (0, 0, 0)
+    _srm = _lrm = 0
+    for _n in _nodes:
+        if not isinstance(_n, dict):
+            continue
+        _sr = _n.get("semantic_relations")
+        if isinstance(_sr, list) and _sr:
+            _keep = []
+            for _it in _sr:
+                _tg = _it.get("target_node_id") if isinstance(_it, dict) else _it
+                if _tg is None:
+                    continue
+                if str(_tg) in _known:
+                    _keep.append(_it)
+                else:
+                    _srm += 1
+            if len(_keep) != len(_sr):
+                _n["semantic_relations"] = _keep
+        _ln = _n.get("linked_nodes")
+        if isinstance(_ln, list) and _ln:
+            _keep2 = [x for x in _ln if x is not None and str(x) in _known]
+            _lrm += len(_ln) - len(_keep2)
+            if len(_keep2) != len(_ln):
+                _n["linked_nodes"] = _keep2
+    return (_srm, _lrm, len(_known))
+
+
+def _m102_cold_index_ids(cache: dict) -> set:
+    """冷存索引（cold.index.json 的键）中的节点 ID，按文件 mtime 缓存。"""
+    try:
+        _p = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "..", "data", "knowledge", "cold.index.json"))
+        if not os.path.isfile(_p):
+            return set()
+        _mt = os.path.getmtime(_p)
+        if cache.get("mtime") == _mt and "ids" in cache:
+            return cache["ids"]
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _d = json.load(_f)
+        _ids = set(str(k) for k in _d.keys()) if isinstance(_d, dict) else set()
+        cache["mtime"] = _mt
+        cache["ids"] = _ids
+        return _ids
+    except Exception as _e:
+        _m102_logger.debug(f"[第102批 T-102a] 冷存索引读取失败(已忽略): "
+                           f"{type(_e).__name__}: {_e}")
+        return set()
+
+
+def _m102_sidecar_node_ids(self) -> set:
+    """快照自身之外的已知节点 ID（节点池全量 + 冷存索引）。
+
+    ★返回 None 表示节点池不可用（无法得到可靠全集）→ 调用方必须跳过过滤，
+    否则会把「指向快照外合法节点」的边误判为悬空。
+    """
+    _pool = getattr(self, "node_pool", None)
+    if _pool is None:
+        return None
+    _ids = set()
+    try:
+        _all = _pool.get_all_including_evicted()
+    except Exception:
+        return None
+    try:
+        for _n in (_all or []):
+            _id = getattr(_n, "node_id", None)
+            if _id:
+                _ids.add(str(_id))
+    except Exception:
+        return None
+    _ids |= _m102_cold_index_ids(getattr(self, "_m102_cold_cache", {})
+                                 if isinstance(getattr(self, "_m102_cold_cache", None), dict)
+                                 else {})
+    return _ids
+
+
+PulseSnapshot._m102_sidecar_node_ids = _m102_sidecar_node_ids

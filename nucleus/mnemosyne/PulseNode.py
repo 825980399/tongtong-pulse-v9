@@ -317,7 +317,15 @@ class PulseNode:
             "source_url": getattr(self, "source_url", ""),   # ★R1：向前兼容
             "trigger_reason": self.trigger_reason,
             "frequency_signature": self.frequency_signature,
-            "linked_nodes": (_keep.get("linked_nodes") if (_blanked and _keep) else self.linked_nodes),
+            # ★第102批 T-102c：linked_nodes 是 semantic_relations 的冗余投影，
+            #   仅当「可由 sem 完整重建」时才不落盘（加载时 from_dict 动态重建）。
+            #   ★零丢失边界（实测回归）：运行期器官只往 linked_nodes 追加、不写 sem，
+            #     此类「只在 linked 里的边」set 不等 ⇒ 原样落盘，绝不丢。
+            #   ★例外：_m70_blanked 节点必须原样保留（懒加载还原依赖 _keep）。
+            "linked_nodes": (_keep.get("linked_nodes") if (_blanked and _keep)
+                             else ([] if _m102_linked_derivable(self.linked_nodes,
+                                                               self.semantic_relations)
+                                   else self.linked_nodes)),
             "semantic_relations": self.semantic_relations,
             "hebbian_weight": self.hebbian_weight,
             "cooccurrence_count": self.cooccurrence_count,
@@ -384,6 +392,12 @@ class PulseNode:
         node.frequency_signature = data.get("frequency_signature", 0.0)
         node.linked_nodes = data.get("linked_nodes", [])
         node.semantic_relations = data.get("semantic_relations", [])        
+
+        # ★第102批 T-102c：linked_nodes 不再落盘（semantic_relations 为唯一权威存储），
+        #   未存时由 semantic_relations 动态重建。
+        #   ★零丢失前提：T-102c 治理时已把「linked 独有边」并入 sem（source=m102_merge）。
+        if not node.linked_nodes and node.semantic_relations and _m102_linked_derived_on():
+            node.linked_nodes = _m102_derive_linked_nodes(node.semantic_relations)
         node.hebbian_weight = data.get("hebbian_weight", 0.0)
         node.cooccurrence_count = data.get("cooccurrence_count", 0)
         node.version = data.get("version", 1)
@@ -873,3 +887,62 @@ if __name__ == "__main__":
     
     print("\n=== 自测全部通过 ===")
     
+
+
+# ============================================================================
+# 第102批 T-102c：linked_nodes 由 semantic_relations 动态重建（消除冗余投影）
+# ============================================================================
+# 背景（烛微第2期 D165）：同一邻接关系在盘上存两遍（semantic_relations 447.7MB +
+# linked_nodes 58.0MB），Jaccard 0.9625 —— linked_nodes 是 sem 的近乎纯冗余投影。
+# 治理后：盘上只存 sem；linked_nodes 在 from_dict 时按 sem 的 target 动态算出。
+# 零回归设计：仅当 linked_nodes 为空且 sem 非空时才重建；开关关闭时行为与改造前一致。
+
+_M102_LINKED_DERIVED_DEFAULT = True
+
+
+def _m102_linked_derived_on() -> bool:
+    """灰度开关：是否由 semantic_relations 动态重建 linked_nodes（默认开）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_M102_LINKED_NODES_DERIVED",
+                            _M102_LINKED_DERIVED_DEFAULT))
+    except Exception:
+        return _M102_LINKED_DERIVED_DEFAULT
+
+
+def _m102_linked_derivable(linked, semantic_relations) -> bool:
+    """linked_nodes 能否由 semantic_relations **完整**重建（是 ⇒ 可安全不落盘）。
+
+    ★零丢失判据：只有两侧目标集合**完全相等**才算可重建。
+      任何「linked 里有、sem 里没有」的边都会让本函数返回 False ⇒ 原样落盘。
+      开关关闭时恒 False（行为与改造前一致）。
+    """
+    if not _m102_linked_derived_on():
+        return False
+    if not linked:
+        return True                      # 空列表本就无需落盘
+    if not semantic_relations:
+        return False                     # ★有 linked 但无 sem ⇒ 存，绝不丢
+    _tg = set()
+    for _it in semantic_relations:
+        _t = _it.get("target_node_id") if isinstance(_it, dict) else _it
+        if _t:
+            _tg.add(str(_t))
+    if not _tg:
+        return False
+    return set(str(_x) for _x in linked) == _tg
+
+
+def _m102_derive_linked_nodes(semantic_relations) -> list:
+    """从 semantic_relations 抽取去重后的目标节点 ID（保持首次出现顺序）。"""
+    _out = []
+    _seen = set()
+    for _it in (semantic_relations or []):
+        _tg = _it.get("target_node_id") if isinstance(_it, dict) else _it
+        if _tg is None:
+            continue
+        _tg = str(_tg)
+        if _tg and _tg not in _seen:
+            _seen.add(_tg)
+            _out.append(_tg)
+    return _out

@@ -242,6 +242,7 @@ class AsyncEncodeQueue:
             return 0
         store, _enc = self._ensure_deps()
         added = 0
+        _m102_seen = set()
         try:
             nodes = pool.get_all()
         except Exception as _e:
@@ -250,6 +251,7 @@ class AsyncEncodeQueue:
         for nd in nodes:
             try:
                 nid = getattr(nd, "node_id", "") or ""
+                _m102_seen.add(nid)
                 if not nid:
                     continue
                 text = self._node_text(nd)
@@ -260,6 +262,19 @@ class AsyncEncodeQueue:
                         added += 1
             except Exception:
                 continue
+        # ★第102批 T-102b：反向回收——清除「节点已不存在」的孤儿向量
+        #   （原 reconcile 只单向补码，只增不减，孤儿向量只涨不降）
+        _m102_reaped = 0
+        try:
+            import config as _cfg102
+            if bool(getattr(_cfg102, 'ENABLE_M102_ORPHAN_VECTOR_REAP', True)) \
+                    and _m102_seen:
+                _m102_reaped = int(store.reap_orphans(_m102_seen) or 0)
+                if _m102_reaped:
+                    _logger.info(f"[编码队列] [第102批 T-102b] 反向回收孤儿向量 {_m102_reaped} 条")
+        except Exception as _e102:
+            _logger.debug(f"[编码队列] [第102批 T-102b] 孤儿向量回收异常(已忽略): "
+                          f"{type(_e102).__name__}: {_e102}")
         return added
 
     # ---------------- 工具 ----------------

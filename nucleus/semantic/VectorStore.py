@@ -402,6 +402,33 @@ class VectorStore:
         if self._dirty >= cnt or (time.time() - self._last_flush) >= sec:
             self.flush()
 
+    def reap_orphans(self, valid_ids) -> int:
+        """★第102批 T-102b：反向回收孤儿向量。
+
+        删除「向量库里有、但节点已不存在」的条目，返回移除条数。
+        （对应债务 D161：remove 生产 0 调用 + reconcile 只单向补码）
+        """
+        self._ensure_loaded()
+        _valid = set(str(x) for x in (valid_ids or ()) if x)
+        if not _valid:
+            return 0
+        with self._lock:
+            _dead = [nid for nid in self._ids if str(nid) not in _valid]
+            if not _dead:
+                return 0
+            for nid in _dead:
+                self._row_of.pop(nid, None)
+                self._hash_of.pop(nid, None)
+                self._updated.pop(nid, None)
+            self._dirty += len(_dead)
+        try:
+            self.flush(force=True)
+        except Exception as _exc:
+            _module_logger.debug(
+                f"[向量库] [第102批 T-102b] 孤儿回收后落盘失败(已忽略): "
+                f"{type(_exc).__name__}: {_exc}")
+        return len(_dead)
+
     def flush(self, force: bool = False) -> bool:
         """原子落盘。force=True 时忽略 dirty 计数强制写。"""
         with self._lock:

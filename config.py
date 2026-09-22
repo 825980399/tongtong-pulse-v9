@@ -5027,3 +5027,36 @@ PENDING_AGING_MAX_COUNT = 20
 #   读取点：nucleus/reasoning/PatchManager.py::_m94_aging_max_hours
 PENDING_AGING_MAX_AGE_HOURS = 24
 # [M94-CFG]
+
+
+# ============================================================================
+# 主线第102批（数据治理专项：D160 悬空引用 / D161 孤儿向量 / D165 语义关系冗余）
+# ============================================================================
+# ★第102批 T-102a：落盘链路「引用完整性」守卫（悬空边不落盘）。
+#   True（默认）→ 快照落盘前就地剔除 target 不存在的 semantic_relations /
+#     linked_nodes 条目（★守卫取不到可靠节点全集时自动跳过，绝不误删）。
+#   False → 与改造前完全一致（盘上保留悬空边）。
+#   现状基线（2026-09-22 实测）：悬空边 135,229 条（sem 61,686 / linked 73,543）。
+#   读取点：nucleus/mnemosyne/PulseSnapshot.py::_m102_dangling_guard_on
+ENABLE_M102_DANGLING_EDGE_GUARD = True
+
+# ★第102批 T-102b：删除节点时级联移除其向量（防孤儿向量）。
+#   True（默认）→ PulseNodePool.remove() 调用 VectorStore.remove(node_id)。
+#   False → 与改造前一致（向量残留）。
+#   读取点：nucleus/mnemosyne/PulseNodePool.py::remove
+ENABLE_M102_VECTOR_CASCADE_REMOVE = True
+
+# ★第102批 T-102b：AsyncEncodeQueue.reconcile 反向回收孤儿向量（双向同步）。
+#   True（默认）→ 每次对账在「补码」之后清理「节点已不存在」的向量条目。
+#   False → 只单向补码（改造前行为，孤儿向量只涨不降）。
+#   读取点：nucleus/semantic/AsyncEncodeQueue.py::reconcile
+ENABLE_M102_ORPHAN_VECTOR_REAP = True
+
+# ★第102批 T-102c：linked_nodes 由 semantic_relations 动态重建（消除冗余投影）。
+#   True（默认）→ PulseNode.from_dict 时若 linked_nodes 为空而 sem 非空，
+#     由 sem 的 target_node_id 去重重建（盘上不再存 linked_nodes）。
+#   False → 只认盘上 linked_nodes（改造前行为）。
+#   ★零丢失前提：治理脚本已把「linked 独有边」以 source="m102_merge" 并入 sem。
+#   读取点：nucleus/mnemosyne/PulseNode.py::_m102_linked_derived_on
+ENABLE_M102_LINKED_NODES_DERIVED = True
+# [M102-CFG]

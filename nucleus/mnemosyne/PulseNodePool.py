@@ -784,6 +784,21 @@ class PulseNodePool(SilentLogMixin):
                     self._update_index_on_remove(node)
                     
                     self._dual_write_neo4j_node(node, "remove")
+
+                    # ★第102批 T-102b：删节点级联移除向量（防孤儿向量 D161）
+                    #   孤儿向量根因：VectorStore.remove 生产零调用点，
+                    #   节点被淘汰/删除后其向量永久残留在 vectors.npz。
+                    try:
+                        import config as _cfg102
+                        if bool(getattr(_cfg102, 'ENABLE_M102_VECTOR_CASCADE_REMOVE', True)):
+                            from nucleus.semantic.VectorStore import get_vector_store
+                            _vs = get_vector_store()
+                            if _vs is not None:
+                                _vs.remove(node_id)
+                    except Exception as _e102:
+                        self._log(LogLevel.DEBUG,
+                                  f"[第102批 T-102b] 向量级联移除失败(已忽略): "
+                                  f"{type(_e102).__name__}: {_e102}")
                     self._total_removed += 1
                     return True
             # ★阶段B'：节点可能已被驱逐（不在内存池，但在 _cold_evicted）
