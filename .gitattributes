@@ -1,0 +1,43 @@
+﻿# 自动检测文本文件并规范化换行符
+* text=auto
+
+# Python文件
+# ★ 2026-09-20 第94批事故修复：eol=lf 改为 eol=crlf，与项目实际约定一致
+# （之前 git checkout 会把 CRLF 转成 LF，导致行尾被静默修改）
+*.py text eol=crlf
+*.pyi text eol=crlf
+
+# 文档文件
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# 批处理和脚本
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件（不转换换行符）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.pyd binary
+*.pyc binary
+*.parquet binary
+*.npz binary
+*.onnx binary
+*.fst binary
+*.mdl binary

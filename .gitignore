@@ -1,0 +1,163 @@
+# 曈曈 PulseNet v9 — Git 忽略规则
+# 建立时间：2026-09-05（T1 / S10）
+# 原则：源码必须入库；运行时产物、凭证、大文件一律不入库。
+
+# ===== 1. 凭证与密钥（最高优先级，绝不入库）=====
+# 企业微信 BOT_ID / SECRET 等明文凭证。
+# 这些值应改用环境变量注入（WECOM_BOT_ID / WECOM_SECRET）。
+data/config_override.json
+*.env
+.env
+.env.*
+# ★主线第33批 T1（P2-163）：.env.example 是**模板**（只有占位符，无真实密钥），
+#   必须入库以便新部署者照抄；因此对 .env.* 通配加一条反向例外。
+!.env.example
+config_override*.json
+secrets.json
+*credential*.json
+
+# ===== 2. Python 运行时产物 =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===== 3. 运行时数据（体量大且可重建）=====
+# 冷存 parquet：数量可达数百，且已验证会持续增长（历史 374 个）
+data/knowledge/
+*.parquet
+# 日志：单日可达数 MB，且含运行期敏感信息
+logs/*.log
+logs/*.log.*
+# 演化/补丁产物
+data/evolution/patches/
+data/patches/
+data/evolution/test_runs/
+# 索引与缓存快照
+data/**/*.index
+data/**/*.snapshot
+data/**/cache/
+
+# ===== 4. 临时与分析脚本产物 =====
+_analysis/__pycache__/
+*.tmp
+*.bak
+*.orig
+*.rej
+# ★主线第13批 P2-88：pytest 临时快照目录（test_lazy_snapshot_m9.py 落盘位置）
+tmp/_snapshot_m9/
+# ★主线第14批 T3：事件总线测试落盘目录（test_event_bus_m14.py 导出用）
+tmp/_eventbus_m14/
+# ★主线第14批 T3：快照校验和测试落盘目录（test_snapshot_checksum_m13.py）
+tmp/_snapshot_m13_t3/
+# 补丁回归数据（由 tools/generate_patch_regression_tests.py 生成）
+data/patch_regression.json
+
+# ===== 5. 编辑器与系统 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 6. 第三方/体积 =====
+node_modules/
+bandit_report.json
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== 7. 批次备份与临时目录（2026-09-11补充） =====
+.bak_batch*/
+.bak_*/
+tmp/
+_analysis/
+data/code_backups/
+data/stream/
+data/self_awareness/
+data/monitor/
+data/metrics/
+data/runtime_state.json
+data/semantic_lessons.json
+data/health_snapshot.json
+data/pulse_orphans.json
+data/evolution/effectiveness.json
+
+# ===== 8. 大模型与Windows特殊文件（2026-09-11补充） =====
+models/
+nul
+*.nul
+
+# ===== 9. 运行时数据目录（2026-09-11补充） =====
+data/context/
+data/corrupted/
+data/experience/
+data/learning/
+data/param_tuning/
+data/probe/
+data/qica/
+data/reasoning/
+data/rss_cache/
+data/stream_miner/
+data/wiki_cache/
+data/evolution/*.json
+data/*.json
+.mpy-workbench/
+.workbuddy/
+
+# ===== 10. 补充排除规则（2026-09-13 第43批后首次Git提交） =====
+# 归档与备份目录
+data/_archive/
+data/backups/
+# logs目录下所有文件（不仅仅是*.log）
+logs/
+# 配置备份文件（config.py.bak_*）
+config.py.bak*
+*.bak_*
+# 大模型版本库（运行时产物）
+data/models/
+# LLM调用追踪（运行时数据）
+data/llm_traces/
+# 数据质量报告（运行时产物）
+data/quality_reports/
+# 模型版本（运行时产物）
+data/model_versions/
+
+.pytest_tmp/
+.bak_tmp/
+# ===== 11. 仓库镜像与发布临时目录（2026-09-14补充） =====
+.release-tmp/
+.release-tmp*/
+
+# ===== 12. 运行时轨迹与报告（2026-09-14补充） =====
+nucleus/data/runtime_trajectory/
+data/reports/
+*.jsonl
+
+# ===== 14. 批次备份文件（2026-09-14补充） =====
+*.m53bak
+*.m52bak
+*.batchbak
+
+# ===== 15. data目录整体忽略（2026-09-15 星轨完善）=====
+# 原则：运行时数据全部不入库，仅保留必要的测试脚本
+# ★ 2026-09-20 第94批事故修复：data/ 改为 /data/ 锚定根目录，避免命中 nucleus/data/
+/data/
+# 反向例外：保留进化测试脚本（这些是源码级测试，非运行时数据）
+!/data/evolution/
+!/data/evolution/tests/
+!/data/evolution/tests/*.py
+
+# ★ nucleus/data/ 是源码目录（数据访问层），必须跟踪，不能被忽略
+# （之前因为 data/ 无锚点规则被误忽略，导致 git pull 时源码被删除）
+

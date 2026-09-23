@@ -1,0 +1,36 @@
+name: 静默except门禁 (N7 防回潮)
+
+# 接入方式：在 Gitee 仓库「DevOps → 流水线」启用本工作流即可。
+# 作用：对任何改动（push / PR），检测是否「新增静默 except handler」，
+#       新增数必须为 0，否则 CI 失败（EXIT=1），阻断合并/上推。
+# 门禁脚本：tools/ci/cw2_t2e_ci_gate_silent_except.py（路径无关，自动定位仓库根）。
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  silent-except-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: 运行门禁 (新增静默 except 必须为 0)
+        run: |
+          # push 事件对比上一提交；PR 事件对比与 master 的 merge-base
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=$(git merge-base origin/master HEAD)
+          else
+            BASE="HEAD~1"
+          fi
+          python tools/ci/cw2_t2e_ci_gate_silent_except.py --base "$BASE" --target worktree --verbose

@@ -1,0 +1,65 @@
+name: CI 工程纪律门禁 (第104批 + 第106批)
+
+# 第104批 T-104a（D006）：补齐工程纪律 CI（四道关口）
+# 第106批 T-106b：新增第五道关口「只写不读增量门禁」
+# - ruff 检查（F 规则，全项目 = 0）
+# - py_compile 全量语法校验
+# - 静默 except 门禁（N7 防回潮，复用 tools/ci/cw2_t2e_ci_gate_silent_except.py）
+# - 只写不读增量门禁（T-106b 防回潮，复用 tools/ci/check_write_only_gates.py）
+# - 关键测试运行（离线安全单测，不依赖框架运行）
+# 触发：push 到 master / 对 master 的 PR
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  engineering-discipline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: 安装工具
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+
+      - name: ruff 检查 (F 规则)
+        run: |
+          ruff check --select F .
+
+      - name: py_compile 全量语法校验
+        run: |
+          git ls-files '*.py' | xargs python -m py_compile
+
+      - name: 静默 except 门禁 (N7 防回潮)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=$(git merge-base origin/master HEAD)
+          else
+            BASE="HEAD~1"
+          fi
+          python tools/ci/cw2_t2e_ci_gate_silent_except.py --base "$BASE" --target worktree --verbose
+
+      - name: 只写不读增量门禁 (第106批 T-106b 防回潮)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=$(git merge-base origin/master HEAD)
+          else
+            BASE="HEAD~1"
+          fi
+          python tools/ci/check_write_only_gates.py --base "$BASE" --target worktree --verbose
+
+      - name: 关键测试运行 (离线安全单测)
+        run: |
+          python -m pytest tests/test_t104c_error_snapshot.py tests/test_t104b_http_concurrency.py tests/test_t107d_fault_panel.py -p no:cacheprovider -q

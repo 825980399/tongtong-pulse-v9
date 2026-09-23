@@ -1,0 +1,17 @@
+{
+  "cleanup": {
+    "total": 1501,
+    "polluted": 1140,
+    "polluted_rate": 0.7595,
+    "marked_not_cleaned": 1140,
+    "marked_by_class": {
+      "template_summary_legacy": 953,
+      "write_side_boilerplate": 184,
+      "other_polluted": 3
+    },
+    "retrievable": 361,
+    "retrievable_rate": 0.2405
+  },
+  "clean_records": 361,
+  "clean_retrievable": 361
+}
