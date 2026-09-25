@@ -49,13 +49,22 @@ def _load_all(pm):
     return _pending, _history, _obsolete, _obsolete_path
 
 
-def _find(pending, history, patch_id, source):
+def _find(pending, history, patch_id, source, obsolete=None):
+    """按账本定位补丁。
+
+    ★第116批 T-116c②/③ 修复：source=='obsolete' 时必须能搜到归档账，
+    否则 keep/reject --source obsolete 恒报“未找到补丁”（实测 rc=2）。
+    """
     if source == "pending":
         _ledgers = [("pending", pending)]
     elif source == "history":
         _ledgers = [("history", history)]
+    elif source == "obsolete":
+        _ledgers = [("obsolete", obsolete or [])]
     else:
         _ledgers = [("pending", pending), ("history", history)]
+        if obsolete:
+            _ledgers.append(("obsolete", obsolete))
     for _name, _lst in _ledgers:
         for _i, _p in enumerate(_lst):
             if isinstance(_p, dict) and str(_p.get("id")) == patch_id:
@@ -101,9 +110,17 @@ def _cmd_show(args, pm, pending, history, obsolete, _op):
     return 0
 
 
-def _save_ledger(pm, name, lst):
+def _save_ledger(pm, name, lst, obsolete_path=None):
+    """★第116批 T-116c②/③ 修复：补 obsolete 归档账写回分支。"""
     if name == "pending":
         _path = pm.get_pending_file()
+    elif name == "obsolete":
+        if not obsolete_path:
+            _path = os.path.join(
+                os.path.dirname(pm.get_history_file()),
+                "patch_history_obsolete.json")
+        else:
+            _path = obsolete_path
     else:
         _path = pm.get_history_file()
     return pm._save_json(_path, lst)
@@ -165,7 +182,8 @@ def _cmd_approve(args, pm, pending, history, obsolete, _op):
 
 
 def _cmd_keep(args, pm, pending, history, obsolete, _op):
-    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source)
+    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source,
+                                obsolete=obsolete)
     if _p is None:
         print(f"未找到补丁: {args.patch_id}", file=sys.stderr)
         return 2
@@ -173,7 +191,7 @@ def _cmd_keep(args, pm, pending, history, obsolete, _op):
     _p["adjudicated_at"] = time.time()
     _p["adjudicated_by"] = "adjudicate_patch.cli"
     _p["adjudicated_verdict"] = "keep"
-    if not _save_ledger(pm, _name, _lst):
+    if not _save_ledger(pm, _name, _lst, obsolete_path=_op):
         print("写盘失败", file=sys.stderr)
         return 1
     print(f"✅ 已记录保留裁决: {args.patch_id}（状态未改动）")
@@ -295,7 +313,8 @@ def _cmd_stale_audit(args, pm, pending, history, obsolete, _op):
 
 def _cmd_reject(args, pm, pending, history, obsolete, _op):
     """★T-116c③：reject 入口（白名单含 rejected 态）。"""
-    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source)
+    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source,
+                                obsolete=obsolete)
     if _p is None:
         print(f"未找到补丁: {args.patch_id}", file=sys.stderr)
         return 2
@@ -306,7 +325,7 @@ def _cmd_reject(args, pm, pending, history, obsolete, _op):
     _p["adjudicated_verdict"] = "rejected"
     if args.reason:
         _p["adjudicated_reason"] = args.reason
-    if not _save_ledger(pm, _name, _lst):
+    if not _save_ledger(pm, _name, _lst, obsolete_path=_op):
         print("写盘失败", file=sys.stderr)
         return 1
     print(f"✅ 已裁决 rejected: {args.patch_id}")
@@ -314,7 +333,13 @@ def _cmd_reject(args, pm, pending, history, obsolete, _op):
 
 
 def _queue_clean(pending):
-    """队列清洁判据：无 pending/needs_reverify/undecidable 悬挂项。"""
+    """队列清洁判据：顶层 status 为 pending / needs_reverify 的悬挂项。
+
+    ★第116批 T-116c④ 注释校正：'undecidable' 并非顶层 status，
+    而是 runtime_verify_result 内的嵌套字段（SafeEvolutionExecutor
+    :2305/:2318/:2340），此前 docstring 将其写成 status 属误导。
+    本函数据此只按顶层 status 判定；嵌套 undecidable 是否纳入悬挂 -> 待裁决。
+    """
     _dirty = []
     for _p in pending:
         if not isinstance(_p, dict):

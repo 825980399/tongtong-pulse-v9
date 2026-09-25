@@ -2557,6 +2557,9 @@ class PatchManager:
             人工批准路径不写该键 ⇒ 区分度可靠（历史 67 条：5 True / 62 无）。
         """
         try:
+            # ★T-123b（僵尸拆弹）：冻结补丁硬门禁——fail-closed，优先于一切安全校验。
+            if patch.get("frozen") or patch.get("status") == "frozen":
+                return {"safe": False, "reason": "补丁已冻结(T-123b)，禁止自动应用"}
             # ★T-113e②（2026-09-23）：堵「auto_released 借道」。
             #   仅「无任何 auto_* 标记」的纯人工批准才放行；
             #   auto_approved / auto_released 一律走信任/风险/冷却三关。
@@ -2744,6 +2747,12 @@ class PatchManager:
 
         for patch in _sorted_pending:
             try:
+                # ★T-123b（僵尸拆弹）：冻结补丁硬门禁——fail-closed 跳过，绝不自动应用。
+                if patch.get("frozen") or patch.get("status") == "frozen":
+                    _module_logger.info(
+                        "[T-123b冻结] 跳过冻结补丁（不自动应用），待人工/烛微预审: %s",
+                        patch.get("id"))
+                    continue
                 # ★主线第80批 T7 (P0-3)：落地前双判定——核心文件且核心红线开关未开，
                 #   即使已被标 approved 也拒绝自动应用（防御 legacy/旁路漏网）。
                 #   用 allow_core_auto_apply 专用红线（默认 False），而非总开关 auto_apply_enabled。

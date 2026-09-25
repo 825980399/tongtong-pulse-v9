@@ -1711,6 +1711,7 @@ class PulseNodePool(SilentLogMixin):
         _reinforce_nodes: list = []  # 缓存节点对象引用（避免在锁内调用 self.get 导致死锁）
         _dormant_cands: list[dict] = []
         _cleanup_cands: list[dict] = []
+        _downgrade_cands: list[dict] = []
         _applied = 0
 
         _importance_w = {"S": 1.0, "A": 0.8, "B": 0.5, "C": 0.2}
@@ -1720,8 +1721,22 @@ class PulseNodePool(SilentLogMixin):
                 _is_l3 = getattr(_node, "evol_level", "") == "L3"
                 _is_instinct = bool(getattr(_node, "instinct", False))
                 # L3 / 本能节点不参与沉睡/清理评估（永久保留）
+                # L3 / 本能节点不参与沉睡/清理评估（永久保留）
                 if _is_l3 or _is_instinct:
                     _active += 1
+                    if _is_l3:
+                        # ★T-123d（D040 C2·断4门修）：降级判定挪进扫池段（纯结构接线）。
+                        #   conflict_count 现网恒 0（C2 不动写侧）→ should_downgrade_l3 永 False，
+                        #   本批零降级、零行为变化；保险丝 N=1 与 l3_downgraded 键同步预埋。
+                        try:
+                            if _node.should_downgrade_l3() and self._l3_fuse_allows():
+                                _downgrade_cands.append({
+                                    "node_id": getattr(_node, "node_id", "?"),
+                                    "value": str(getattr(_node, "value", ""))[:50],
+                                    "action": "downgrade_l3",
+                                })
+                        except Exception:
+                            pass
                     continue
 
                 _last = getattr(_node, "last_activated", 0.0) or _now
@@ -1791,8 +1806,56 @@ class PulseNodePool(SilentLogMixin):
             "dormant_candidates": _dormant_cands,
             "cleanup_candidates": _cleanup_cands,
             "applied_reinforcements": _applied,
+            "l3_downgraded": 0,            "l3_downgrade_candidates": len(_downgrade_cands),
             "verified_at": _now,
         }
+
+    # ========== ★T-123d（D040 C2）：L3 降级保险丝 N=1（每日最多 1 个 L3 降级，跨重启持久化） ==========
+    _L3_FUSE_DAILY_MAX = 1
+
+    def _l3_fuse_state(self) -> dict:
+        """读取保险丝持久化状态（date + count），文件缺失/损坏即返回空态。"""
+        import os as _os
+        import json as _json
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        _root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_here)))
+        _path = _os.path.join(_root, "data", "l3_downgrade_fuse.json")
+        try:
+            with open(_path, encoding="utf-8") as _f:
+                return _json.load(_f)
+        except Exception:
+            return {"date": "", "count": 0}
+
+    def _l3_fuse_allows(self) -> bool:
+        """今日降级额度是否未满（N=1/日）。跨重启按日期串比较，新的一天重置。"""
+        import time as _t
+        _st = self._l3_fuse_state()
+        _today = _t.strftime("%Y-%m-%d")
+        if _st.get("date") != _today:
+            return True
+        return int(_st.get("count", 0)) < self._L3_FUSE_DAILY_MAX
+
+    def _l3_fuse_record(self) -> None:
+        """保险丝记一笔（C2 不调用；124 批实际执行降级时调用，跨重启持久化）。"""
+        import os as _os
+        import json as _json
+        import time as _t
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        _root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_here)))
+        _path = _os.path.join(_root, "data", "l3_downgrade_fuse.json")
+        _today = _t.strftime("%Y-%m-%d")
+        _st = self._l3_fuse_state()
+        if _st.get("date") != _today:
+            _st = {"date": _today, "count": 0}
+        _st["count"] = int(_st.get("count", 0)) + 1
+        try:
+            _d = _os.path.dirname(_path)
+            if _d and not _os.path.isdir(_d):
+                _os.makedirs(_d, exist_ok=True)
+            with open(_path, "w", encoding="utf-8") as _f:
+                _json.dump(_st, _f)
+        except Exception:
+            pass
 
     def start_memory_verification_loop(self, interval_hours: float = 6.0,
                                        stale_days: float = 45.0,

@@ -341,6 +341,9 @@ class PulseNode:
             "trust_score": getattr(self, 'trust_score', 50.0),
             "verification_history": getattr(self, 'verification_history', []),
             "evidence_chain": getattr(self, 'evidence_chain', []),   # ★山1：可验证推理证据链（向前兼容）
+            # ★第120批 T-120e：D040 第一步（序列化层），旧快照无此键向前兼容
+            "conflict_count": getattr(self, "conflict_count", 0),
+            "last_conflict_at": getattr(self, "last_conflict_at", 0.0),
         }
     
     @classmethod
@@ -412,6 +415,9 @@ class PulseNode:
         node.trust_score = max(0.0, min(100.0, float(data.get("trust_score", 50.0))))  # ★知识污染治理：钳制信任分
         node.verification_history = data.get("verification_history", [])   
         node.source_url = data.get("source_url", "")   # ★R1：向前兼容——旧快照无此字段自动填充空串
+        # ★第120批 T-120e：D040 第一步读回（向前兼容，旧快照缺键→0）
+        node.conflict_count = int(data.get("conflict_count", 0))  # ★第121批 T-121d int() 加固（防快照写非整型）
+        node.last_conflict_at = float(data.get("last_conflict_at", 0.0) or 0.0)
         node.evidence_chain = data.get("evidence_chain", [])   # ★山1：向前兼容——旧快照无此字段自动填充空列表
         return node
     

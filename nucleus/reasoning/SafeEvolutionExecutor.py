@@ -27,12 +27,43 @@ from nucleus.reasoning.PatchManager import PatchManager
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
 from nucleus.data.DataAccessLayer import safe_read_json
+# ★第117批 T-117d①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
+from nucleus.data.path_utils import safe_relpath as _safe_relpath
 from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
 import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
+
+# ★第117批 T-117d①（烛微 N4）：项目根（供问题身份键做路径归一）
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _normalize_file_key(file_val: str) -> str:
+    """★第117批 T-117d①（N4）：把 file 字段归一成「形制唯一」的键。
+
+    背景（烛微 117 §2-N4 实证）：补丁账本里同一目标文件**三种形制并存** ——
+        ``organs\\brain\\PulseSubconscious.py``（反斜杠·相对）
+        ``organs/brain/PulseSubconscious.py``（正斜杠·相对）
+        ``D:\\...\\organs\\brain\\PulseSubconscious.py``（反斜杠·绝对）
+    于是同一个题在「去重 / 分组 / 冷却」三处被算成 2~3 个不同的键，
+    冷却计数被稀释、去重失效 —— 双指纹格式已于 T-116a③ 统一，
+    但**路径形制**这一层此前没归一。
+
+    归一四步：normpath（消 ``.``/``..``/重复分隔符）→ safe_relpath(项目根)
+    （绝对→相对，跨盘安全降级）→ normcase（消大小写）→ 分隔符统一 ``/``。
+    """
+    if not file_val:
+        return ""
+    try:
+        _p = os.path.normpath(str(file_val))
+        _p = _safe_relpath(_p, _PROJECT_ROOT)
+        _p = os.path.normcase(_p)
+        return _p.replace(os.sep, "/").replace("\\", "/")
+    except Exception:
+        return str(file_val)
 
 # ★第86批 T-86a（P0）：LLM 修复补丁零产出根因修复 —— 推理模型 token 预算。
 #   根因（已实测复现）：REMOTE_API_CONFIG 指向的 deepseek-v4-flash 属**推理模型**，
@@ -293,6 +324,8 @@ class SafeEvolutionExecutor:
             self._no_fix_cooldown_secs = {
                 "高危·安全拦截": 86400.0,
                 "本地无规则·转LLM": 21600.0, "_default": 3600.0,
+                "验证失败·3轮": 86400.0,  # ★T-119d 同步 114a 活键（config 同名）
+                "验证失败": 3600.0,  # ★T-119d 同步 114a 活键
             }
         # ★v16.0新增：初始化PatchManager
         # ★主线第58批 T1（P1）：_project_root 提升为实例变量，
@@ -1711,6 +1744,11 @@ class SafeEvolutionExecutor:
                         if _verify.get("passed"):
                             _local_verified += 1
                             _local_verify_passed = True
+                            # ★第117批 T-117b：成功即出清同指纹连败计数（断5 棘轮自愈）。
+                            #   失败侧在下方 else 分支递增，成功侧此前零出清 ⇒ 单向棘轮。
+                            self._m114a_clear_ratchet(
+                                self._cooldown_key(_issue),
+                                reason="本地修复验证通过")
                             # ★主线C(C1)：本地规则修复成功，报告到 AdaptiveDecision
                             if _strategy_ad is not None:
                                 try:
@@ -2846,6 +2884,12 @@ class SafeEvolutionExecutor:
                     f"[经验学习] 成功模式记录: type={_type}, strategy={_strategy}, "
                     f"effectiveness={_effectiveness:.0%}"
                 )
+                # ★第117批 T-117b：补丁验证通过 —— 出清同指纹连败计数。
+                #   与上方失败分支的 _m114a_register_verify_failure 严格对称：
+                #   此处是「本地/LLM 统一学习入口」的成功侧，一处覆盖全部补丁路径
+                #   （含延迟复验 :2461 与主验证循环 :2576 两处调用）。
+                self._m114a_clear_ratchet(
+                    self._cooldown_key(patch), reason="补丁验证通过")
 
             # 记录到验证学习枢纽
             try:
@@ -4676,7 +4720,10 @@ class SafeEvolutionExecutor:
         _f = str(issue.get("file", "") or "")
         _m = str(issue.get("method", "") or "")
         if _f or _m:
-            return (_f, _m, str(issue.get("type", "") or ""))
+            # ★第117批 T-117d①：file 先做形制归一（详见 _normalize_file_key），
+            #   使「反斜杠相对 / 正斜杠相对 / 绝对」三种形制收敛为同一键。
+            return (_normalize_file_key(_f), _m,
+                    str(issue.get("type", "") or ""))
         # 无代码位置：退化为 器官 + 类型 + 描述摘要
         _o = str(issue.get("organ", "") or "")
         _t = str(issue.get("type", "") or "")
@@ -4790,6 +4837,38 @@ class SafeEvolutionExecutor:
                 f'{"（升86400s/日级复检）" if _rnd >= 3 else ""}')
         except Exception as _e:
             _module_logger.debug(f"[验证失败冷却] 登记异常(已忽略): {type(_e).__name__}: {_e}")
+
+    def _m114a_clear_ratchet(self, fp: str, reason: str = "") -> None:
+        """★第117批 T-117b（N1）：成功侧出清 —— 同指纹连败计数归零（棘轮自愈）。
+
+        背景（烛微 §2-N1 实测）：断5 换源后判据源 = `_no_fix_cooldown_rounds`，
+        计数只在 `_m114a_register_verify_failure` 里**递增**，成功侧**无任何出清点**。
+        于是某指纹累计 >=3 连败后被 `_m114a_should_skip_ask` 永久跳过；计数还会
+        随 `_m114a_save_cooldown` 落盘 ⇒ **跨重启永续**，棘轮单向、无自愈出口。
+        而该函数 docstring 自称判据是「无成功记录」——成功了也不重置，名实不符。
+
+        修法：修复/验证成功的分支调用本方法，把该指纹连败计数清零，
+        棘轮从此可逆（「3 连败 → 1 次成功 → 重新获得 LLM 问询资格」）。
+
+        ★刻意不动 `_no_fix_cooldown`（deadline 表）：那是「冷却隔离」的另一套
+        机制（:1447 到期自动解冻），与断5 棘轮无关；并入本批会扩大改动面。
+        """
+        if not isinstance(self, SafeEvolutionExecutor):
+            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            return
+        try:
+            _had = int(self._no_fix_cooldown_rounds.get(fp, 0))
+            if _had <= 0:
+                return  # 无连败记录：零开销短路，不产生日志噪音
+            self._no_fix_cooldown_rounds.pop(fp, None)
+            self._m114a_save_cooldown()
+            _module_logger.info(
+                f"[棘轮重置] 指纹={fp[:80]} 连败清零（{_had}→0）"
+                f"{('·' + reason) if reason else ''}"
+                f"——该指纹恢复本轮 LLM 问询资格")
+        except Exception as _e:
+            _module_logger.debug(
+                f"[棘轮重置] 出清异常(已忽略): {type(_e).__name__}: {_e}")
 
     def _m114a_should_skip_ask(self, issue: dict[str, Any]) -> bool:
         """★断5（T-115d 指纹级降档）：同指纹问题若已累计 ≥3 轮验证失败且无成功记录，
