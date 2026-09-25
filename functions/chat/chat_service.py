@@ -142,8 +142,8 @@ class ChatService:
         
         # 处理人脸检测事件（保留欢迎/告别打印）
         if event_type == ChatEvent.USER_PRESENCE_DETECTED:
-            user_name = payload.get("user_name", "用户")
-            if user_name and user_name != "用户":
+            user_name = payload.get("user_name", "访客")  # ★T-118a 未知/访客占位
+            if user_name and user_name not in ("用户", "访客"):
                 self._current_user_name = user_name
             # ★第80批 T6：emoji print 包 try-except 降级，不阻断后续计时器重置与脉冲发射
             try:

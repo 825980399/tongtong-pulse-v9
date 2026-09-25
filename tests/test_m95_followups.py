@@ -50,7 +50,7 @@ _PCL = os.path.join(ROOT, "organs", "brain", "PulseCodeLearner.py")
 _RES = os.path.join(ROOT, "nucleus", "synapsys", "ResonanceEngine.py")
 _CR = os.path.join(ROOT, "nucleus", "llm", "call_recorder.py")
 
-_EXPECT_COOLDOWN_KEYS = {"高危·安全拦截", "本地无规则·转LLM", "_default"}
+_EXPECT_COOLDOWN_KEYS = {"高危·安全拦截", "本地无规则·转LLM", "_default", "验证失败", "验证失败·3轮"}  # ★T-118d① 补 114a 新增两键
 # `_cooldown_classify` 实际可达的 reason（前缀匹配用真实形态）
 _REACHABLE_REASONS = ("高危·安全拦截", "高危·安全拦截(unsafe_eval)",
                       "高危·安全拦截(sql_injection)", "本地无规则·转LLM")

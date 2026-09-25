@@ -105,7 +105,7 @@ class PulseHeart(BasePulseOrgan):
         self._reply_guidance_provider = None      # (user_name) -> dict
         self._existential_state_provider = None   # () -> dict
         self._survival_orchestrator = None  # ★R4阶段二：存续编排器引用（main.py注入，可选）
-        self._current_user_name = "小林"    # 当前用户
+        self._current_user_name = "访客"    # 当前用户（T-118a：未知用户默认访客）
         self._last_activity_time = time.time()  # 最后活跃时间
         self._interest_level = 0.0          # 当前兴趣水平
         # 任务调度队列: {task_id: {"interval": seconds, "last_run": timestamp, "event_type": str}}

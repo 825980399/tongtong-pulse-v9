@@ -158,7 +158,7 @@ class PulseEars(BasePulseOrgan):
         }
     def _on_persona_switched(self, payload: dict) -> dict[str, Any]:
         """收到身份切换脉冲，更新当前用户"""
-        self._current_user_name = payload.get("current_user", "小林")
+        self._current_user_name = payload.get("current_user", "访客")  # ★T-118a 未知用户默认访客
         return {"status": "ok", "user": self._current_user_name}
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()

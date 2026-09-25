@@ -660,9 +660,9 @@ class PulseSelfAwareness(BasePulseOrgan):
         }
     def _on_user_presence(self, payload: dict) -> dict[str, Any]:
         """摄像头检测到人脸出现，确认身份并发射SWITCHED"""
-        user_name = payload.get("user_name", "小林")
+        user_name = payload.get("user_name", "访客")  # ★T-118a 未知用户默认访客
         if not user_name or user_name == "用户":
-            user_name = "小林"
+            user_name = "访客"  # ★T-118a "用户"占位或未知→访客
 
         self._active_user = user_name
         self._last_activity_time = time.time()
