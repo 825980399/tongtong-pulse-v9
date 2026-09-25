@@ -16,13 +16,15 @@ except Exception:  # pragma: no cover - 配置缺失时安全降级
     _FEATURE = {}
 
 
-def silent_exc(e: Exception, where: str = "") -> None:
+def silent_exc(e: Exception, where: str = "", level: str = "debug") -> None:
     """记录一处被静默捕获的异常（类型 + 信息 + 位置）。
 
-    where 形如 "main.py:29"，便于回溯。灰度关闭时直接返回（复现原 pass 行为）。
+    where 形如 "main.py:29"，便于回溯。level 控制日志级别（默认 debug，不刷屏）；
+    调用方可传 "warning" 提升可见度。灰度关闭时直接返回（复现原 pass 行为）。
     """
     if not _FEATURE.get("enable_silent_except_logging", True):
         return
-    logging.getLogger("pulse.silent_except").debug(
+    _lvl = level if level in ("debug", "info", "warning", "error", "critical") else "debug"
+    getattr(logging.getLogger("pulse.silent_except"), _lvl)(
         f"[静默异常可见化] {where} {type(e).__name__}: {e}"
     )

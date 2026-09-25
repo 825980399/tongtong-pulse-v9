@@ -21,7 +21,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 # 视为「已上报」的函数名（含框架自有 _log）
 LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal",
              "log", "aibot_log", "log_error", "log_warning", "log_info", "record", "report",
-             "notify", "alert", "emit", "_log", "_log_safe", "_log_msg", "_trace"}
+             "notify", "alert", "emit", "_log", "_log_safe", "_log_msg", "_trace", "silent_exc"}
 
 
 def _log(level, msg):

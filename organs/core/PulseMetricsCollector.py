@@ -35,6 +35,7 @@ from nucleus.const import (
 )
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.organ_identity import ORGAN_ALIASES  # ★T-112d：器官名归一化单源真相
+from nucleus._silent_except import silent_exc
 
 # 尝试读取配置，缺失时使用默认值
 try:
@@ -425,8 +426,8 @@ class PulseMetricsCollector(BasePulseOrgan):
                         controller_stats["files_read"] += 1
                     elif et.startswith("controller."):
                         controller_stats["operations"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "PulseMetricsCollector.py:428 快照统计", level="warning")
         snapshot["controller"] = controller_stats
 
         # ===== 新增：无头浏览器统计 =====

@@ -22,6 +22,7 @@ import time
 
 import config
 from nucleus.const import LogLevel
+from nucleus._silent_except import silent_exc
 
 
 # 日志级别字符串 → logging 常量映射
@@ -503,8 +504,8 @@ def _warn_rollover_blocked_cooled(exc: BaseException) -> None:
         try:
             _cooldown = float(getattr(config, "LOG_ROLLOVER_WARN_COOLDOWN_SEC",
                                       _ROLLOVER_WARN_COOLDOWN_SEC))
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "logger.py:506 轮转冷却读", level="warning")
         _emit = False
         with _rollover_warn_lock:
             if _now - _last_rollover_warn_ts >= _cooldown:
@@ -641,6 +642,48 @@ def get_module_logger(module_name: str) -> logging.Logger:
     """
     _init_root_logger()
     return logging.getLogger(f"pulse.module.{module_name}")
+
+
+# ========== ★第117批 T-117d② / R4-B22：冒烟隔离规矩 ==========
+SMOKE_TAG = "[SMOKE]"
+SMOKE_LOG_FILE = "smoke.log"
+
+
+def get_smoke_logger(name: str = "smoke") -> logging.Logger:
+    """★第117批 T-117d②（R4-B22）：冒烟 / 合成指纹用例专用日志器。
+
+    背景（烛微 117 §3 实测）：停机窗 pulse.log 出现一行
+        ``[指纹咨询硬闸] 指纹=a.py|m|silent_exception ...``
+    ——那是**合成指纹**（file="a.py"、method="m"）驱动的冒烟产物，却被生产判据
+    当成真实命中（对「INFO>=1」类判据构成**假阳性风险**，本次差点误导结论）。
+
+    规矩：凡用合成指纹 / 假数据驱动的冒烟与单测，一律走本日志器，不得写进 pulse.log。
+
+    三保险：
+      ① 独立文件 ``logs/smoke.log``（与 pulse.log 物理隔离）；
+      ② 每条前缀 ``[SMOKE]``（即便被复制粘贴到别处也一眼可辨）；
+      ③ ``propagate = False``（绝不冒泡到 root 'pulse'，双重不污染）。
+
+    用法（冒烟脚本 / 单测）：
+        ``mod._module_logger = get_smoke_logger("my_smoke_case")``
+    """
+    _lg = logging.getLogger(f"pulse.smoke.{name}")
+    _lg.setLevel(logging.DEBUG)
+    _lg.propagate = False
+    if not any(getattr(_h, "_pulse_smoke", False) for _h in _lg.handlers):
+        try:
+            os.makedirs(_log_dir, exist_ok=True)
+            _h = logging.FileHandler(
+                os.path.join(_log_dir, SMOKE_LOG_FILE), encoding="utf-8")
+            _h.setLevel(logging.DEBUG)
+            _h.setFormatter(logging.Formatter(
+                "%(asctime)s " + SMOKE_TAG + " [%(name)s] %(levelname)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"))
+            _h._pulse_smoke = True
+            _lg.addHandler(_h)
+        except Exception as _se:
+            print(f"[logger] smoke 日志句柄初始化失败(降级为纯内存): {type(_se).__name__}: {_se}", file=sys.stderr)
+    return _lg
 
 
 # ========== ★主线第32批 T3（P2-190）：异常/调用位置动态获取 ==========
