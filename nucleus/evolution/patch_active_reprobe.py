@@ -66,6 +66,7 @@ modified_code（修复后）  ──检测器──▶  问题应当**消失**  
     true_fix_rate(patches, strict=False)      # 含部分修复   → 1.0
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import ast
 import difflib
@@ -138,7 +139,8 @@ def parse_with_offset(code: Any) -> tuple[ast.Module | None, int]:
     for _cand, _off in _cands:
         try:
             return ast.parse(_cand), _off
-        except (SyntaxError, ValueError, IndentationError):
+        except (SyntaxError, ValueError, IndentationError) as e:
+            silent_exc(e, "patch_active_reprobe.py:141:parse_with_offset", level="warning")
             continue
     return None, 0
 

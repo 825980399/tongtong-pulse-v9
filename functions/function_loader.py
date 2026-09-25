@@ -5,6 +5,7 @@
 日期: 2026年9月9日
 """
 
+from nucleus._silent_except import silent_exc
 import importlib
 import os
 import threading
@@ -136,7 +137,7 @@ class FunctionLoader:
                     )
                     self.framework.info_field.publish(alarm_pulse)
             except Exception as e:
-                pass
+                silent_exc(e, "function_loader.py:138:_run_module", level="warning")
 
     def stop_all(self):
         """停止所有功能模块"""

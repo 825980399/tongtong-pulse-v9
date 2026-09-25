@@ -18,6 +18,7 @@
     「真在跑」与「探测失败被迫保守」。安全契约不变：失败仍返回 True。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import logging
 import subprocess
@@ -57,7 +58,8 @@ def _psutil_running() -> bool | None:
     """
     try:
         import psutil
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "_framework_probe.py:60:_psutil_running", level="warning")
         return None
 
     for proc in psutil.process_iter(["name", "cmdline"]):
@@ -67,8 +69,9 @@ def _psutil_running() -> bool | None:
                 continue
             if _cmdline_is_framework(proc.info.get("cmdline")):
                 return True
-        except Exception:
+        except Exception as e:
             # 单进程在枚举中消失 / 无权限读取 → 跳过该进程，不影响整体判定
+            silent_exc(e, "_framework_probe.py:70:_psutil_running", level="warning")
             continue
     return False
 

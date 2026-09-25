@@ -12,6 +12,7 @@ RuntimeTrajectory.py —— 运行轨迹
 """
 
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import json
 import os
@@ -226,14 +227,16 @@ class RuntimeTrajectory:
                                 continue
                             try:
                                 _rec = json.loads(_line)
-                            except Exception:
+                            except Exception as e:
+                                silent_exc(e, "RuntimeTrajectory.py:229:load", level="warning")
                                 continue
                             _tid = _rec.get("trajectory_id")
                             if _tid in _seen:
                                 continue
                             _seen.add(_tid)
                             _loaded.append(_rec)
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "RuntimeTrajectory.py:236:load", level="warning")
                     continue
             # 按时间排序，截断到最近 max_records 条
             _loaded.sort(key=lambda r: r.get("timestamp", 0))

@@ -278,6 +278,10 @@ class PulseNode:
         Returns:
             是否满足降级条件。当前 conflict_count 恒为 0（冲突计数集成待肝脏矛盾检测
             回写，见 P3），因此本方法在未集成冲突计数前不会真正触发降级。
+
+            实际降级动作（level 四同步 + 保险丝记录）已由
+            PulseNodePool.run_memory_verification 的 D040 W7-B 执行段驱动（T-127b）：
+            本方法仅作条件判定，执行段会二次复核并落四同步。
         """
         if self.evol_level != self.EVOL_L3:
             return False

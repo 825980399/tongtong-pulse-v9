@@ -12,6 +12,7 @@ EvolutionEffectVerifier.py —— 进化效果验证器
 """
 
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import difflib
 import json
@@ -160,8 +161,8 @@ class EvolutionEffectVerifier:
             _max_regression = float(
                 getattr(_cfg, "EVOLUTION_EFFECT_VERIFY_CONFIG", {}).get(
                     "max_regression_ms", _max_regression) or _max_regression)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "EvolutionEffectVerifier.py:163:verify", level="warning")
 
         # ① 问题是否消失
         if problem_gone is None:

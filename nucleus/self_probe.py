@@ -12,6 +12,7 @@ self_probe.py —— 自我探测
 """
 
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import json
 import os
@@ -56,8 +57,8 @@ class AutonomousProbeOrchestrator(SilentLogMixin):
         self._report_dir = os.path.join(self._project_root, "data", "probe")
         try:
             os.makedirs(self._report_dir, exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "self_probe.py:59:probe", level="warning")
         # 探查预算（config 可覆写）
         self._max_targets = 5        # 每轮最多深入的目标数
         self._max_depth = 3          # L1/L2/L3 三层
@@ -293,7 +294,8 @@ class AutonomousProbeOrchestrator(SilentLogMixin):
                 "detail": f"目标 {name} 结构定位：方法数={_method_count}",
                 "meta": {"method_count": _method_count, "file": os.path.basename(_file)},
             }
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "self_probe.py:296:_probe_l1", level="warning")
             return None
 
     def _probe_l2(self, name: str, budget: dict[str, Any]) -> dict[str, Any]:

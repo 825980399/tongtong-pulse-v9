@@ -21,6 +21,7 @@
 ``findings``（结论文本）与 ``recommendations``（按预期收益排序的建议）。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import hashlib
 import io
@@ -294,7 +295,8 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         with io.open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
-    except OSError:
+    except OSError as e:
+        silent_exc(e, "call_pattern_analyzer.py:297:save_report", level="warning")
         return None
 
 

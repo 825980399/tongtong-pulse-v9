@@ -11,6 +11,7 @@ SearchIntentClassifier.py —— 搜索意图分类器
 定位: 搜索管理层
 """
 
+from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
@@ -97,8 +98,8 @@ class SearchIntentClassifier:
             with open(self._rules_path, "w", encoding="utf-8") as f:
                 json.dump({"user_rules": self._user_rules, "updated_at": time.time()},
                           f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass  # 持久化失败不影响分类
+        except Exception as e:
+            silent_exc(e, "SearchIntentClassifier.py:100:_save_user_rules", level="warning")
 
     def reset_user_rules(self):
         """一键清空用户层规则，回退到出厂内置规则。"""

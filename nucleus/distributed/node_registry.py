@@ -10,6 +10,7 @@
   - 持久化失败只记 WARNING，不抛异常给调用方；
   - 线程安全（内部 RLock）。
 """
+from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
@@ -210,8 +211,8 @@ class NodeRegistry:
             _node["last_heartbeat"] = time.time()
             try:
                 _node["health_score"] = max(0.0, min(1.0, float(health_score)))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as e:
+                silent_exc(e, "node_registry.py:213:mark_heartbeat", level="warning")
             if _node.get("status") == "inactive":
                 _node["status"] = "active"
             self._maybe_persist()

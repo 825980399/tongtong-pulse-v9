@@ -33,6 +33,7 @@ L1 仅观测（**不改变任何进化决策**）
   （本批 62/67 条属此类，是"判据缺陷"的下游后果，而非补丁本身的问题）。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import io
 import json
@@ -365,7 +366,8 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         with io.open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
-    except OSError:
+    except OSError as e:
+        silent_exc(e, "patch_quality_evaluator.py:368:save_report", level="warning")
         return None
 
 

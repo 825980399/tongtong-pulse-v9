@@ -11,6 +11,7 @@ ParamPatchEffectVerifier.py —— 参数补丁效果验证器
 定位: 进化验证层
 """
 
+from nucleus._silent_except import silent_exc
 import os
 import re
 import time
@@ -98,7 +99,8 @@ def verify_patch_effect_in_process(patch_info: dict, log_file: str | None = None
                     continue
                 try:
                     t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "ParamPatchEffectVerifier.py:101:verify_patch_effect_in_process", level="warning")
                     continue
 
                 # 确定时间段

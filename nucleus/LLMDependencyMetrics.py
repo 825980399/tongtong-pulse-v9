@@ -11,6 +11,7 @@ LLMDependencyMetrics.py —— LLM依赖度指标
 定位: 自省监测层
 """
 
+from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
@@ -86,7 +87,8 @@ def _m94_load_patch_records() -> list:
             _items = _d if isinstance(_d, list) else (_d or {}).get("patches")
             if isinstance(_items, list):
                 _out.extend([x for x in _items if isinstance(x, dict)])
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "LLMDependencyMetrics.py:89:_m94_load_patch_records", level="warning")
             continue
     return _out
 

@@ -11,6 +11,7 @@ exploration_audit.py —— 探索审计器
 定位: 安全治理层
 """
 
+from nucleus._silent_except import silent_exc
 from config import TIMEOUT_CONFIG
 from nucleus.logger import get_module_logger
 
@@ -39,7 +40,8 @@ def register_default_probes() -> None:
     """
     try:
         from nucleus.probe_registry import get_probe_registry
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "exploration_audit.py:42:register_default_probes", level="warning")
         return
     _reg = get_probe_registry()
     _reg.register("tool_channel", "tool", _tool_channel, priority=10, takes_inspector=True)

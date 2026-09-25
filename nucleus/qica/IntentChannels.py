@@ -11,6 +11,7 @@ IntentChannels.py —— 意图通道
 定位: 意图分类层
 """
 
+from nucleus._silent_except import silent_exc
 import os
 import re
 import threading
@@ -317,8 +318,8 @@ class ClassificationFeedback:
         try:
             os.makedirs(os.path.dirname(self._path), exist_ok=True)
             safe_write_json(self._path, self._data, indent=2)
-        except Exception:
-            pass  # 反馈落盘失败不得影响分类主流程
+        except Exception as e:
+            silent_exc(e, "IntentChannels.py:320:save", level="warning")
 
     def record(self, intent: str, ok: bool, actual_intent: str | None = None) -> dict:
         """记录一次分类反馈，返回该意图的最新统计。"""

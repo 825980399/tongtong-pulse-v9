@@ -1736,8 +1736,9 @@ class PulseNodePool(SilentLogMixin):
                                     "node_id": getattr(_node, "node_id", "?"),
                                     "value": str(getattr(_node, "value", ""))[:50],
                                     "action": "downgrade_l3",
+                                    "node": _node,  # ★T-127b：缓存节点引用，供执行段动作段四同步降 L2 使用
                                 })
-                                self._l3_fuse_record()  # ★T-125a：接通保险丝记录（N=1 跨重启持久化）
+                                # ★T-127b：_l3_fuse_record() 已从收集块挪到执行段（修 T-125a 误接位置 bug）
                         except Exception:
                             pass
                     continue
@@ -1788,6 +1789,51 @@ class PulseNodePool(SilentLogMixin):
             except Exception:
                 continue
 
+        # ========== ★T-127b（D040 W7-B·断4门修·动作段）：执行 L3→L2 降级 ==========
+        # 收集块（上方）仅做"判定 + 候选登记"；真正的降级动作（四同步 + 保险丝记录）
+        # 在此执行，修 T-125a 把 _l3_fuse_record 误接在收集块的位置 bug。
+        _l3_downgraded = 0
+        with self._lock:
+            for _cand in _downgrade_cands:
+                _node = _cand.get("node")
+                if _node is None:
+                    continue
+                try:
+                    # ③ 案丙 locked 豁免：本能 / 主器官 / 受保护空间路径不降级
+                    if bool(getattr(_node, "instinct", False)):
+                        continue
+                    if getattr(_node, "source_organ", "") == "main":
+                        continue
+                    _space_path = getattr(_node, "space_path", "/") or "/"
+                    _sp_norm = _space_path.rstrip("/")
+                    _exempt_prefixes = ("/自我/架构", "/身份", "/本能", "/自我理解/代码")
+                    if any(_sp_norm == _p or _sp_norm.startswith(_p + "/") for _p in _exempt_prefixes):
+                        continue
+                    # 锁内 should_downgrade_l3() 复核（收集块已判一次，执行段再判，双保险）
+                    if not _node.should_downgrade_l3():
+                        continue
+                    if not self._l3_fuse_allows():
+                        continue
+                    # ① 四同步：level 改 + state 保持 + version+=1 + checksum + 索引成对
+                    _old_level = _node.evol_level
+                    self._update_index_on_remove(_node)   # 用旧 level 从分层/路径索引摘除
+                    _node.evol_level = PulseNode.EVOL_L2
+                    _node.version = int(getattr(_node, "version", 0) or 0) + 1
+                    if hasattr(_node, "_update_checksum"):
+                        _node._update_checksum()
+                    self._update_index_on_add(_node)      # 用新 level 入索引
+                    _l3_downgraded += 1
+                    # ★T-127b：保险丝记录（从收集块挪到执行段，修位置 bug）
+                    self._l3_fuse_record()
+                    # ④ 返回键 + 日志：[L3降级] INFO 行供 T+6h 判据直接命中
+                    _module_logger.info(
+                        f"[L3降级] node_id={getattr(_node, 'node_id', '?')} {_old_level}->L2 "
+                        f"state={getattr(_node, 'state', '')} space_path={_space_path} "
+                        f"source_organ={getattr(_node, 'source_organ', '')}")
+                except Exception as _e:
+                    _module_logger.warning(
+                        f"[L3降级] 单节点降级失败(已忽略): {type(_e).__name__}: {_e}")
+
         # 执行强化反馈（活跃记忆被验证有效 → 提升 hebbian_weight）
         # 注意：不能在锁内调用 self.get()（普通 Lock 不可重入，会死锁）。
         # 这里直接操作评估阶段缓存的节点对象引用。
@@ -1809,7 +1855,7 @@ class PulseNodePool(SilentLogMixin):
             "dormant_candidates": _dormant_cands,
             "cleanup_candidates": _cleanup_cands,
             "applied_reinforcements": _applied,
-            "l3_downgraded": 0,
+            "l3_downgraded": _l3_downgraded,
             "l3_downgrade_candidates": len(_downgrade_cands),
             "verified_at": _now,
         }
@@ -1907,7 +1953,9 @@ class PulseNodePool(SilentLogMixin):
                     _report = self.run_memory_verification(stale_days=stale_days)
                     _stale_n = len(_report.get("cleanup_candidates", []))
                     _reinforce_n = _report.get("applied_reinforcements", 0)
-                    if _stale_n > 0:
+                    # ② 三连护栏：降级发生同轮禁 purge（防降级->L2->同轮物理删除）
+                    _l3_downgraded_n = int(_report.get("l3_downgraded", 0) or 0)
+                    if _stale_n > 0 and _l3_downgraded_n == 0:
                         _purged = self.purge_obsolete(max_age_days=30.0)
                     else:
                         _purged = 0

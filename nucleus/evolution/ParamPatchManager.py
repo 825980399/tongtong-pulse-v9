@@ -11,6 +11,7 @@ ParamPatchManager.py —— 参数补丁管理器
 定位: 进化管理层
 """
 
+from nucleus._silent_except import silent_exc
 from config import TIMEOUT_CONFIG
 import json
 import os
@@ -504,8 +505,8 @@ class ParamPatchManager:
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(history, f, ensure_ascii=False, indent=2)
             os.replace(temp_path, _PATCH_HISTORY_PATH)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "ParamPatchManager.py:507:_save_history", level="warning")
 
     def get_pending_patches(self) -> list[dict[str, Any]]:
         """获取待处理补丁"""

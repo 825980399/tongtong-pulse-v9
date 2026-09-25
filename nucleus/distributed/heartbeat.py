@@ -9,6 +9,7 @@
   - 线程异常被守护，绝不让后台线程退出主流程；
   - 开关关闭时仍可本地计算健康分（用于测试与诊断）。
 """
+from nucleus._silent_except import silent_exc
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
@@ -184,8 +185,8 @@ class HeartbeatManager:
         if _t is not None:
             try:
                 _t.join(timeout=1.0)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "heartbeat.py:187:stop_heartbeat", level="warning")
             with self._lock:
                 self._threads.pop(node_id, None)
         return True

@@ -11,6 +11,7 @@ knowledge_noise_filter.py —— 知识噪声过滤器
 定位: 知识治理层
 """
 
+from nucleus._silent_except import silent_exc
 import time  # noqa: F401
 from typing import Any
 
@@ -69,8 +70,8 @@ def _load_noise_from_config():
             for word in additional:
                 if isinstance(word, str) and len(word) >= 2:
                     _DYNAMIC_NOISE.add(word.lower())
-    except Exception:
-        pass  # config不可用时静默降级
+    except Exception as e:
+        silent_exc(e, "knowledge_noise_filter.py:72:_load_noise_from_config", level="warning")
 
 
 def add_noise_word(word: str):

@@ -11,6 +11,7 @@ ToolStrategyMemory.py —— 工具策略记忆
 定位: 学习记忆层
 """
 
+from nucleus._silent_except import silent_exc
 import os
 import threading
 import time
@@ -172,8 +173,8 @@ class ToolStrategyMemory:
                 for _cat, _strategies in (_raw or {}).items():
                     for _name, _entry in _strategies.items():
                         self._data[_cat][_name] = _entry
-        except Exception:
-            pass  # 加载失败不阻塞，从空记忆开始
+        except Exception as e:
+            silent_exc(e, "ToolStrategyMemory.py:175:_load", level="warning")
 
     def save(self) -> None:
         try:

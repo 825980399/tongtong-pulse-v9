@@ -25,6 +25,7 @@ bge-small-zh 上「同类最小 0.7220 / 异类最大 0.6746」——若属实�
 ★编码器不可用（模型未就绪/开关关闭）时明确报错退出，**不伪造数据**。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import argparse
 import glob
@@ -210,7 +211,8 @@ def load_corpus(directory: str, limit: int = 400) -> list[str]:
                         continue
                     try:
                         _rec = json.loads(_line)
-                    except Exception:
+                    except Exception as e:
+                        silent_exc(e, "calibrate_semantic_threshold.py:213:load_corpus", level="warning")
                         continue
                     _p = str(_rec.get("prompt", "") or "").strip()
                     if not _p or _p in _seen:
@@ -221,7 +223,8 @@ def load_corpus(directory: str, limit: int = 400) -> list[str]:
                     _out.append(_p)
                     if len(_out) >= limit:
                         return _out
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "calibrate_semantic_threshold.py:224:load_corpus", level="warning")
             continue
     return _out
 

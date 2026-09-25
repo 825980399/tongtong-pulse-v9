@@ -28,6 +28,7 @@ API
 存储路径可注入（测试用临时目录），默认落在 ``<项目根>/data/code_learning/``。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import io
 import json
@@ -100,9 +101,9 @@ class CheckedIssueMemory:
             with io.open(_tmp, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
             os.replace(_tmp, self.storage_path)
-        except Exception:
+        except Exception as e:
             # 持久化失败不得阻断检测流程
-            pass
+            silent_exc(e, "code_learning_memory.py:103:_save", level="warning")
 
     # ------------------------------------------------------------------
     def should_skip(self, file_path: str, line, issue_type: str) -> bool:

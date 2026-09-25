@@ -294,7 +294,8 @@ class ChannelQuotaMonitor:
         try:
             _p = max(0, int(prompt_tokens or 0))
             _c = max(0, int(completion_tokens or 0))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "ChannelQuotaMonitor.py:297:QuotaMonitor回收", level="warning")
             return
         if _p == 0 and _c == 0:
             return
