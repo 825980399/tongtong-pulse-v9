@@ -1,4 +1,5 @@
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
+from nucleus._warn_throttle import should_warn
 from config import EXTERNAL_CALL_TIMEOUTS  # noqa: F401
 """main —— v9.5 PulseNet 脉冲框架总入口（自进化基座版）
 
@@ -3699,7 +3700,8 @@ def main():
                 _getter = getattr(_inf, "get_total_handled", None)
                 _handled = _getter() if _getter else None
             except Exception as e:
-                silent_exc(e, "main.py:3700 假死探测取handled", level="warning")
+                if should_warn("main:false_death_probe", 300):
+                    silent_exc(e, "main.py:3700 假死探测取handled", level="warning")
                 continue
             if _handled is None:
                 continue

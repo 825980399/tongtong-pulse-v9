@@ -1,0 +1,1969 @@
+{
+  "base/BasePulseOrgan.py": {
+    "_get_config_section::Exception::return_or_assign::return {}": 1,
+    "_call_provider::Exception::return_or_assign::return default": 1
+  },
+  "config.py": {
+    "log_config_change::Exception::pass::pass": 1,
+    "_channels_enabled::Exception::return_or_assign::return False": 1,
+    "get_active_channels::Exception::return_or_assign::return []": 1,
+    "get_task_offset::Exception::pass::pass": 2
+  },
+  "functions/chat/chat_service.py": {
+    "<module>::Exception::return_or_assign::ENABLE_FACE_WELCOME_DIRECT = False;FACE_WELCOME_SHADOW = True": 1
+  },
+  "functions/function_loader.py": {
+    "_run_module::Exception::pass::pass": 1
+  },
+  "functions/health_ui.py": {
+    "do_GET::(ConnectionAbortedError, ConnectionResetError, BrokenPipeError)::pass::pass": 1,
+    "do_POST::(ConnectionAbortedError, ConnectionResetError, BrokenPipeError)::pass::pass": 1,
+    "_serve_json_file::(ConnectionAbortedError, ConnectionResetError, BrokenPipeError)::pass::pass": 1,
+    "_serve_runtime_metrics::Exception::return_or_assign::_data = {'pulse_count': 0, 'pulse_errors': 0, 'pulse_avg_ms': 0, 'error_snapshots': []}": 1,
+    "_serve_llmdep::Exception::return_or_assign::_data = {}": 1,
+    "_serve_runtime_metrics_history::Exception::return_or_assign::_data = {'sample_interval': 5.0, 'points': []}": 1,
+    "_serve_task_pipeline_history::Exception::return_or_assign::_data = {'count': 0, 'pipelines': []}": 1,
+    "_compute_module_scores::Exception::pass::pass": 4,
+    "_serve_knowledge_graph_data::Exception::return_or_assign::data['error'] = str(e)[:80]": 1,
+    "_serve_params_data::Exception::return_or_assign::data['param_error'] = str(e)[:80]": 1,
+    "_serve_params_data::Exception::pass::pass": 4,
+    "_serve_apply_preset::Exception::return_or_assign::result = {'success': False, 'message': str(e)[:100]}": 1,
+    "_is_same_origin::Exception::return_or_assign::return False": 2,
+    "_serve_json_file::Exception::pass::pass": 1
+  },
+  "functions/runtime_state_writer.py": {
+    "_collect_state::Exception::pass::pass": 5,
+    "_run::Exception::return_or_assign::self._last_error = str(e)": 1
+  },
+  "functions/web_chat.py": {
+    "_get_current_user_name::Exception::pass::pass": 1
+  },
+  "hardware/robot_body/robot_body_driver.py": {
+    "_is_high_load::Exception::pass::pass": 1
+  },
+  "hardware/robot_body/tcp_client.py": {
+    "disconnect::Exception::pass::pass": 1,
+    "_attempt_reconnect::Exception::pass::pass": 1
+  },
+  "main.py": {
+    "_safe_get_insight_board::NameError::return_or_assign::return None": 1,
+    "_safe_get_insight_board::Exception::return_or_assign::return None": 1,
+    "_is_self_restart_child::Exception::return_or_assign::return False": 1,
+    "_confirm_apply_pending_on_quit::(EOFError, KeyboardInterrupt)::return_or_assign::return False": 1,
+    "_intent_exp_provider::Exception::return_or_assign::return []": 1,
+    "_intent_state_provider::Exception::return_or_assign::return {'curiosity': 0.3}": 1
+  },
+  "nucleus/CompanionBridge.py": {
+    "get_identity::Exception::return_or_assign::return {'instance_id': 'unknown', 'species': '新人类', 'timestamp': time.time()}": 1,
+    "shutdown_companion_bridge::Exception::pass::pass": 1
+  },
+  "nucleus/ContextFreshener.py": {
+    "_memory_age_days::(TypeError, ValueError)::return_or_assign::ts = 0.0": 1,
+    "_memory_health::(TypeError, ValueError)::return_or_assign::ts = 0.0": 1
+  },
+  "nucleus/FirstPersonExperience.py": {
+    "map_experience::(TypeError, ValueError)::return_or_assign::_index = 50.0": 1
+  },
+  "nucleus/GPUCore.py": {
+    "probe_gpu::Exception::return_or_assign::self._torch_available = False;self._gpu_info = {'available': False, 'timestamp': _now};self._probe_time = _now;return self._gpu_info": 1,
+    "get_vram_pressure::Exception::return_or_assign::return 'low'": 1,
+    "gpu_cache::Exception::return_or_assign::return None": 1,
+    "batch_cosine_gpu::Exception::pass::pass": 1
+  },
+  "nucleus/HybridParallelScheduler.py": {
+    "_detect_physical_cores::Exception::return_or_assign::return max(2, (os.cpu_count() or 8) // 2)": 1,
+    "_detect_memory_gb::Exception::return_or_assign::return 16.0": 1,
+    "_get_cpu_usage::Exception::return_or_assign::return 50.0": 1,
+    "shutdown::Exception::pass::pass": 1
+  },
+  "nucleus/InsightBoard.py": {
+    "shutdown_insight_board::Exception::pass::pass": 1
+  },
+  "nucleus/IntentGenerator.py": {
+    "generate::Exception::return_or_assign::_value_sig = None": 1,
+    "generate::Exception::return_or_assign::_exp_sig = None": 1,
+    "generate::Exception::return_or_assign::_state_sig = {}": 1
+  },
+  "nucleus/LLMDependencyMetrics.py": {
+    "evolution_local_rule_rate::Exception::return_or_assign::_pf = None": 1
+  },
+  "nucleus/SearchIntentClassifier.py": {
+    "_save_user_rules::Exception::pass::pass": 1,
+    "classify::Exception::pass::pass": 1
+  },
+  "nucleus/StructuredParallelScheduler.py": {
+    "_submit_task::Exception::return_or_assign::return self._executor.submit(self._run_subtask, task)": 2
+  },
+  "nucleus/SurvivalOrchestrator.py": {
+    "_orchestrator_enabled::Exception::return_or_assign::return SURVIVAL_ORCHESTRATOR_ENABLED": 1,
+    "_post_insight::Exception::pass::pass": 1,
+    "_log::Exception::pass::pass": 1,
+    "_log_error::Exception::pass::pass": 1
+  },
+  "nucleus/TaskOrchestrator.py": {
+    "_run_subtask::Exception::return_or_assign::subtask.status = TaskStatus.FAILED;subtask.error = str(e)": 1
+  },
+  "nucleus/ToolStrategyMemory.py": {
+    "_load::Exception::pass::pass": 1
+  },
+  "nucleus/_silent_except.py": {
+    "<module>::Exception::return_or_assign::_FEATURE = {}": 1
+  },
+  "nucleus/aibot_logger.py": {
+    "_get_logger::Exception::return_or_assign::self._logger = logging.getLogger(self._prefix)": 1
+  },
+  "nucleus/api_rate_limiter.py": {
+    "_read_max_concurrent::Exception::return_or_assign::return _default": 1
+  },
+  "nucleus/chronos/TimeCore.py": {
+    "__init__::Exception::return_or_assign::self._logger = None": 1,
+    "_build_payload::Exception::return_or_assign::wall = time.strftime('%Y-%m-%d %H:%M:%S')": 1,
+    "_build_payload::Exception::return_or_assign::uptime = time.time() - getattr(self, '_start_monotonic', time.time());uptime_display = f'{uptime:.1f}s'": 1,
+    "_build_payload::Exception::return_or_assign::epoch_ns = time.time_ns()": 1,
+    "_semantic_phase::Exception::return_or_assign::return 'unknown'": 1,
+    "_log::Exception::pass::pass": 1,
+    "stop::Exception::pass::pass": 1
+  },
+  "nucleus/code_learning_memory.py": {
+    "_mtime_of::OSError::return_or_assign::return 0.0": 1,
+    "_load::Exception::return_or_assign::self._data = {'issues': {}}": 1,
+    "_save::Exception::pass::pass": 1
+  },
+  "nucleus/cython_status.py": {
+    "_cython_switch_on::Exception::return_or_assign::return False": 1,
+    "probe_cython_extensions::Exception::return_or_assign::_reason = f'加载异常: {type(_e).__name__}: {str(_e)[:60]}'": 1
+  },
+  "nucleus/data/DataAccessLayer.py": {
+    "safe_read_json::Exception::pass::pass": 1,
+    "safe_write_json::Exception::pass::pass": 1,
+    "safe_write_text::Exception::pass::pass": 1
+  },
+  "nucleus/data/experience_cleanup.py": {
+    "filter_enabled::Exception::return_or_assign::return True": 1
+  },
+  "nucleus/data/path_utils.py": {
+    "drive_of::(TypeError, ValueError, OSError)::return_or_assign::return ''": 1,
+    "safe_relpath::(TypeError, ValueError, OSError)::return_or_assign::return str(path)": 1,
+    "safe_relpath::ValueError::return_or_assign::return _abs": 1,
+    "safe_relpath::(TypeError, OSError)::return_or_assign::return _abs": 1,
+    "safe_commonpath::(ValueError, TypeError, OSError)::return_or_assign::return ''": 1
+  },
+  "nucleus/data/write_guard.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "guard_enabled::Exception::return_or_assign::return True": 1,
+    "is_test_env::Exception::return_or_assign::return False": 1,
+    "is_framework_process::Exception::return_or_assign::return False": 1,
+    "is_test_mode::Exception::return_or_assign::return False": 1,
+    "resolve_env::Exception::return_or_assign::_force = None": 1,
+    "env_reason::Exception::return_or_assign::return '判定异常(回退默认)'": 1,
+    "is_test_like_env::Exception::return_or_assign::_force = None": 1,
+    "writer_kind::Exception::return_or_assign::return 'unknown'": 1,
+    "strict_enabled::Exception::return_or_assign::return True": 1,
+    "reject_reason::Exception::return_or_assign::return ''": 1,
+    "is_production_data_path::Exception::return_or_assign::return True": 1,
+    "reject_write::Exception::return_or_assign::return False": 1,
+    "guard_write::Exception::return_or_assign::return True": 1
+  },
+  "nucleus/device_router.py": {
+    "_safe_float::Exception::return_or_assign::return default": 1,
+    "_measure_gpu::Exception::return_or_assign::cap['probe_error'] = f'{type(_e).__name__}: {str(_e)[:80]}'": 1,
+    "_measure_cpu::Exception::pass::pass": 1,
+    "describe_breakeven::Exception::return_or_assign::return {'has_gpu': False, 'error': str(_e)}": 1,
+    "_measure_gpu::Exception::pass::pass": 4,
+    "get_capability::Exception::return_or_assign::cap['probe_error'] = f'torch 不可用: {type(_e).__name__}'": 1,
+    "should_use_gpu::Exception::return_or_assign::_STATE['cpu_chosen'] += 1;_STATE['last_error'] = f'估算失败: {_e}';return (False, '成本估算失败，保守走 CPU', 0.0, 0.0)": 1,
+    "_cpu_cores::Exception::return_or_assign::return 1": 1
+  },
+  "nucleus/diagnostics.py": {
+    "get_full_diagnosis::Exception::pass::pass": 1,
+    "get_quality_score_v2::Exception::return_or_assign::return {'score': None, 'dimensions': {}, 'available': [], 'error': '%s: %s' % (type(_e).__name__, _e)}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['conversation_memory'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['autonomous_deriver'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['code_understanding'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['knowledge_verification'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['active_learning_goal'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "get_extended_diagnosis::Exception::return_or_assign::results['modules']['search_experience'] = {'status': 'error', 'error': str(e)[:80]}": 1,
+    "shutdown_diagnostics::Exception::pass::pass": 1,
+    "get_health_summary::Exception::pass::pass": 1
+  },
+  "nucleus/distributed/heartbeat.py": {
+    "_distributed_enabled::Exception::return_or_assign::return False": 1,
+    "_heartbeat_interval::Exception::return_or_assign::return 30.0": 1,
+    "_health_threshold::Exception::return_or_assign::return 0.5": 1,
+    "stop_heartbeat::Exception::pass::pass": 1
+  },
+  "nucleus/distributed/node_registry.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_distributed_enabled::Exception::return_or_assign::return False": 1,
+    "_maybe_persist::Exception::pass::pass": 1,
+    "mark_heartbeat::(TypeError, ValueError)::pass::pass": 1,
+    "update_node_status::(TypeError, ValueError)::pass::pass": 1
+  },
+  "nucleus/distributed/routing.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_distributed_enabled::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/distributed/sharding.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_distributed_enabled::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/events/EventTap.py": {
+    "_count::Exception::return_or_assign::_prio = int(EventPriority.NORMAL)": 1
+  },
+  "nucleus/evolution/AestheticJudge.py": {
+    "_check_syntax::SyntaxError::return_or_assign::_last_err = f'SyntaxError: {_e.msg}（行 {_e.lineno}）'": 1,
+    "_check_syntax::(ValueError, RecursionError, MemoryError)::return_or_assign::_last_err = f'{type(_e).__name__}: {_e}'": 1
+  },
+  "nucleus/evolution/AutoParamApplier.py": {
+    "submit_patches::Exception::return_or_assign::return 0": 1,
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/evolution/EvolutionDriver.py": {
+    "_cfg::Exception::return_or_assign::return {}": 1,
+    "request_apply_now::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/evolution/EvolutionEffectVerifier.py": {
+    "<module>::Exception::return_or_assign::_logger = None": 1,
+    "_log::Exception::pass::pass": 1,
+    "trust_threshold_for::Exception::pass::pass": 1,
+    "verify::Exception::pass::pass": 1,
+    "check_recurrence::Exception::pass::pass": 1,
+    "reset::Exception::pass::pass": 1,
+    "reset_effect_verifier::Exception::pass::pass": 1
+  },
+  "nucleus/evolution/EvolutionLoop.py": {
+    "__init__::Exception::return_or_assign::self._code_review = None": 1,
+    "discover_code_issues::Exception::return_or_assign::return {'issues': [], 'summary': {'total': 0, 'error': str(e)}}": 1,
+    "_verify_runtime_effect::Exception::return_or_assign::_verification['status'] = 'error';_verification['error'] = str(e)": 1,
+    "auto_apply_param_patches::Exception::return_or_assign::return {'error': str(e), 'apply': {'attempted': 0, 'applied': 0}}": 1,
+    "write_evolution_record::Exception::return_or_assign::return ''": 1,
+    "update_panorama_status::Exception::return_or_assign::return ''": 1,
+    "run_full_loop::Exception::return_or_assign::_detail['error'] = str(_e)": 1,
+    "_verify_runtime_effect::Exception::return_or_assign::_verification['status'] = 'scheduled';_verification['note'] = f'健康度比较将在框架重启后执行: {_je}'": 1,
+    "discover_all_issues::TypeError::return_or_assign::_inspector_issues = _inspector.detect_code_issues()": 1
+  },
+  "nucleus/evolution/ExperienceTransfer.py": {
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/evolution/LLMEvolutionEngine.py": {
+    "_aesthetic_guidance::Exception::return_or_assign::return ''": 1,
+    "_check_original_unique::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/evolution/LogAnalyzer.py": {
+    "_m90_log_locate_v2_on::Exception::return_or_assign::return True": 1,
+    "_scan_log_file::Exception::pass::pass": 1,
+    "_extract_ts::Exception::return_or_assign::return 0.0": 1,
+    "_count_lines::Exception::return_or_assign::return 0": 1
+  },
+  "nucleus/evolution/ParamABTestEngine.py": {
+    "run_ab_test_in_process::Exception::return_or_assign::result['error'] = str(e)": 1
+  },
+  "nucleus/evolution/ParamPatchEffectVerifier.py": {
+    "verify_patch_effect_in_process::Exception::return_or_assign::result['error'] = str(e)": 1
+  },
+  "nucleus/evolution/ParamPatchManager.py": {
+    "apply_patch::Exception::return_or_assign::result['error'] = str(e);patch['status'] = 'failed'": 1,
+    "rollback_patch::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "_get_current_value::Exception::return_or_assign::return None": 1,
+    "_load_history::Exception::return_or_assign::self._applied_patches = []": 1,
+    "_save_history::Exception::pass::pass": 1,
+    "verify_applied_patches_effect::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "verify_effect_in_process::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "start_auto_apply::(TypeError, ValueError)::return_or_assign::_delay = 0.0": 1,
+    "start_auto_apply::(TypeError, ValueError)::return_or_assign::self._last_auto_apply = 0.0": 1,
+    "learn_from_history::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "get_optimal_params::Exception::pass::pass": 1,
+    "adjust_safe_ranges_from_history::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "detect_patch_conflicts::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "run_ab_test::Exception::return_or_assign::result['error'] = str(e)": 1,
+    "apply_patch::Exception::pass::pass": 1,
+    "rollback_patch::Exception::pass::pass": 1,
+    "run_batch_ab_tests::Exception::return_or_assign::results[param_name] = {'error': str(e)}": 1,
+    "run_ab_test::Exception::return_or_assign::control_value = None": 1
+  },
+  "nucleus/evolution/PatchAutoApprover.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_verified::Exception::pass::pass": 1,
+    "_trust_ok::Exception::return_or_assign::return False": 1,
+    "scan_pending::Exception::pass::pass": 1
+  },
+  "nucleus/evolution/PerformanceProfiler.py": {
+    "find_slow_operations::Exception::return_or_assign::return _ops": 1
+  },
+  "nucleus/evolution/PeriodicTestScheduler.py": {
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/evolution/QualityClosedLoop.py": {
+    "_load_loop_cfg::Exception::return_or_assign::return {}": 1,
+    "_log_safe::Exception::pass::pass": 1,
+    "_current_param_value::Exception::return_or_assign::return None": 1,
+    "_try_adjust::Exception::return_or_assign::_multi = False": 1,
+    "_enabled::Exception::return_or_assign::return False": 1,
+    "_cooldown_up::Exception::return_or_assign::return None": 1,
+    "_cooldown_down::Exception::return_or_assign::return None": 1,
+    "_min_len_down::Exception::return_or_assign::return None": 1,
+    "_purity_down::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/evolution/TestGenerator.py": {
+    "_check_syntax::SyntaxError::return_or_assign::return {'passed': False, 'detail': f'语法错误: {_e}'}": 1,
+    "_generate_test_script::Exception::return_or_assign::return None": 1,
+    "_run_test_script::subprocess.TimeoutExpired::return_or_assign::return {'passed': False, 'detail': '超时', 'output': '测试脚本运行超时(60s)'}": 1,
+    "_run_test_script::Exception::return_or_assign::return {'passed': False, 'detail': f'异常: {_e}', 'output': str(_e)}": 1,
+    "_run_ruff_check::subprocess.TimeoutExpired::return_or_assign::return {'passed': True, 'detail': 'RUFF 超时（跳过，不阻断）'}": 1,
+    "_run_ruff_check::Exception::return_or_assign::return {'passed': True, 'detail': f'RUFF 不可用（跳过）: {_e}'}": 1,
+    "_run_roundtrip_test::Exception::return_or_assign::return {'passed': True, 'detail': '脚本写入失败（跳过）'}": 1,
+    "_run_roundtrip_test::subprocess.TimeoutExpired::return_or_assign::return {'passed': False, 'detail': '往返测试超时(120s)'}": 1,
+    "_run_roundtrip_test::Exception::return_or_assign::return {'passed': True, 'detail': f'往返测试异常（跳过）: {_e}'}": 1,
+    "_run_compat_test::Exception::return_or_assign::return {'passed': True, 'detail': '脚本写入失败（跳过）'}": 1,
+    "_run_compat_test::subprocess.TimeoutExpired::return_or_assign::return {'passed': False, 'detail': '兼容测试超时(120s)'}": 1,
+    "_run_compat_test::Exception::return_or_assign::return {'passed': True, 'detail': f'兼容测试异常（跳过）: {_e}'}": 1,
+    "_run_regression_tests::Exception::return_or_assign::_test_scripts = list(_default_scripts)": 1
+  },
+  "nucleus/evolution/patch_active_reprobe.py": {
+    "_diff_scope_on::Exception::return_or_assign::return True": 1
+  },
+  "nucleus/evolution/patch_quality_evaluator.py": {
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_data_path::Exception::return_or_assign::return True": 1,
+    "evaluator_enabled::Exception::return_or_assign::return True": 1,
+    "summarize::Exception::pass::pass": 1,
+    "load_history::(OSError, ValueError)::return_or_assign::return []": 1,
+    "save_report::OSError::return_or_assign::return None": 1
+  },
+  "nucleus/evolution/patch_verification_split.py": {
+    "_as_int::(TypeError, ValueError)::return_or_assign::return None": 1
+  },
+  "nucleus/exploration_audit.py": {
+    "register_default_probes::Exception::return_or_assign::return": 1,
+    "_normalize_issue::(TypeError, ValueError)::return_or_assign::_line = 0": 1,
+    "_tool_channel::Exception::return_or_assign::return []": 1,
+    "_rule_channel::Exception::return_or_assign::return []": 1,
+    "_llm_channel::Exception::return_or_assign::return {'status': 'error', 'reviewed': 0, 'distilled': 0, 'report': []}": 1,
+    "record_audit_findings_to_hub::Exception::return_or_assign::return 0": 1,
+    "record_audit_findings_to_hub::Exception::pass::pass": 1
+  },
+  "nucleus/external_executor.py": {
+    "shutdown_global_executor::Exception::pass::pass": 2,
+    "_load_config::Exception::return_or_assign::self._max_concurrent = 2;self._default_timeout = 60;self._max_history = 100;self._enable_dedup = True;self._dedup_interval = 1800;self._max_queue_size = 1000": 1,
+    "_get_effective_max_concurrent::Exception::return_or_assign::return self._max_concurrent": 1
+  },
+  "nucleus/fast_ops.py": {
+    "_gpu_cfg::Exception::pass::pass": 1,
+    "_try_gpu_search::Exception::return_or_assign::return None": 1,
+    "fast_vector_search::Exception::return_or_assign::_gpu_ok = _n >= int(_gpu_cfg('min_candidates', 2000)) and _dim >= int(_gpu_cfg('min_dim', 64));_gpu_reason = '路由中枢不可用，退回保守阈值'": 1,
+    "fast_vector_search::Exception::return_or_assign::_res = None": 1,
+    "fast_vector_search::Exception::return_or_assign::_faiss_on = True;_faiss_min = 5000": 1,
+    "fast_vector_search::Exception::pass::pass": 7,
+    "fast_vector_search::Exception::return_or_assign::_rows = None": 1
+  },
+  "nucleus/field/InfoField.py": {
+    "<module>::ImportError::return_or_assign::PULSE_PRIORITY = {'LIGHT_SPEED': 10, 'CRITICAL': 9, 'HIGH': 7, 'NORMAL': 5, 'LOW': 3, 'BACKGROUND': 1};PULSE_LAYER = {'l0_threads': 1, 'l1_threads': 4, 'l2_threads': 4, 'l3_threads': 2, 'l0_queue_max': 0, 'l1_queue_soft_limit': 500, 'l2_queue_limit': 200, 'l3_queue_hard_limit': 100, 'l0_enabled': True, 'l1_enabled': True, 'l2_enabled': True, 'l3_enabled': True, 'high_load_cpu_threshold': 80.0, 'high_load_memory_threshold': 85.0, 'idle_cooldown_seconds': 60.0, 'field_mode': 'PULSE', 'l0_l1_use_lockfree_queue': True, 'cpu_affinity_enabled': False, 'cpu_affinity_cores': [], 'disable_ttl_for_l0_l1': True, 'organ_max_concurrent_pulses': 0, 'pulse_storm_threshold': 500, 'pulse_storm_action': 'aggregate'};CONCURRENT_COMM = {'multi_subscribe_enabled': True, 'parallel_dispatch_enabled': True, 'topology_multi_inbound': True, 'dual_route_default': 'parallel', 'n_to_one_max_sources': 0, 'n_to_one_queue_mode': 'concurrent'}": 1,
+    "get_lock_wait_by_name::Exception::return_or_assign::return {}": 1,
+    "__init__::Exception::return_or_assign::_FEAT = {}": 1,
+    "__init__::Exception::return_or_assign::_L3STAB = {}": 1,
+    "_read_adaptive_tuning_flag::Exception::return_or_assign::return False": 1,
+    "_as_int::Exception::return_or_assign::return default": 1,
+    "_admit_layer_task::Exception::return_or_assign::return True": 1,
+    "_m33_queue_limit_order_fix_on::Exception::return_or_assign::return True": 1,
+    "_read_l3_dynamic_scaling_flag::Exception::return_or_assign::return True": 1,
+    "_auto_scale_l3_by_depth::Exception::return_or_assign::return": 1,
+    "_concurrency_recovery_enabled::Exception::return_or_assign::return True": 1,
+    "_dup_trace_check::Exception::return_or_assign::return": 1,
+    "publish::Exception::return_or_assign::_dedup_key = pulse_id": 1,
+    "_check_high_load::ImportError::return_or_assign::cpu_percent = 0;mem_percent = 0": 1,
+    "publish::(ValueError, TypeError)::return_or_assign::self._hardware_snapshot['gpu_memory_usage'] = 0.0": 1,
+    "get_backpressure_stats::Exception::return_or_assign::_depth = -1": 1,
+    "_apply_discovered_patterns::Exception::return_or_assign::_pat_freq_thresh, _pat_count_thresh = (0.3, 5)": 1,
+    "_l0_watchdog_loop::Exception::return_or_assign::_frames = {}": 1
+  },
+  "nucleus/field/OscillonField.py": {
+    "_cython_extensions_enabled::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/field/RequestDeduplicator.py": {
+    "get_request_deduplicator::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/genesis/PatternPrewarmConsumer.py": {
+    "_resolve_hints::Exception::pass::pass": 1,
+    "on_prewarm::Exception::return_or_assign::_entry['candidate_node_ids'] = []": 1
+  },
+  "nucleus/genesis/ProtocolManager.py": {
+    "parse_version::(ValueError, IndexError)::return_or_assign::return (0, 0, 0)": 1
+  },
+  "nucleus/genesis/StreamMiner.py": {
+    "_consume_enabled::Exception::return_or_assign::return False": 1,
+    "_consume_cfg::Exception::return_or_assign::return default": 1,
+    "__init__::Exception::pass::pass": 1,
+    "save_patterns::Exception::return_or_assign::return False": 1,
+    "shutdown_stream_miner::Exception::pass::pass": 1
+  },
+  "nucleus/graph_store/neo4j_store.py": {
+    "<module>::Exception::return_or_assign::_logger = logging.getLogger('pulse.module.neo4j_store')": 1,
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_enabled::Exception::return_or_assign::return False": 1,
+    "close::Exception::pass::pass": 1
+  },
+  "nucleus/hardware_probe.py": {
+    "_detect_gpu::Exception::return_or_assign::return False": 1
+  },
+  "nucleus/identity/SelfModel.py": {
+    "__init__::Exception::pass::pass": 1,
+    "_get_custom_dimensions::Exception::return_or_assign::_result[name] = {'error': 'provider_failed'}": 1
+  },
+  "nucleus/knowledge/DataQualityGuard.py": {
+    "check_node::Exception::return_or_assign::_flag, _reason = (FLAG_CLEAN, '检查异常(降级clean)')": 1,
+    "check_node::Exception::pass::pass": 2,
+    "clear_flag::Exception::return_or_assign::return False": 1,
+    "_write_flag::Exception::pass::pass": 1
+  },
+  "nucleus/knowledge/KnowledgeAcquisitionRouter.py": {
+    "acquire::Exception::return_or_assign::return None": 1,
+    "_channel_enabled::Exception::return_or_assign::return False": 1,
+    "_extract_core_entity::Exception::return_or_assign::return None": 2,
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/knowledge/PollutionTagger.py": {
+    "scan_pool::Exception::pass::pass": 3,
+    "_to_dict::Exception::pass::pass": 1,
+    "scan_nodes::Exception::pass::pass": 2
+  },
+  "nucleus/knowledge/RssCollector.py": {
+    "__init__::Exception::return_or_assign::_conf = {}": 1,
+    "_log::Exception::pass::pass": 1,
+    "parse_feed::Exception::return_or_assign::_pub = ''": 1
+  },
+  "nucleus/knowledge/WebTimeExtractor.py": {
+    "extract::Exception::return_or_assign::_hit['iso'] = ''": 1,
+    "_parse_iso::Exception::pass::pass": 1,
+    "get_shared_extractor::Exception::return_or_assign::_extractor = WebTimeExtractor(max_scan=max_scan, log_fn=log_fn)": 1,
+    "_parse_absolute::Exception::return_or_assign::return 0.0": 3,
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/knowledge/WikiQuerier.py": {
+    "_rate_limit_enabled::Exception::return_or_assign::return True": 1,
+    "_get_ua::Exception::return_or_assign::return _UA": 1,
+    "_get_min_interval::Exception::return_or_assign::return 1.0": 1,
+    "__init__::Exception::return_or_assign::_conf = {}": 1,
+    "_should_query_reason::Exception::pass::pass": 1,
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/knowledge_access_layer.py": {
+    "<module>::Exception::return_or_assign::_logger = logging.getLogger('pulse.module.kal')": 1,
+    "_kal_enabled::Exception::return_or_assign::return True": 1,
+    "_cfg_int::Exception::return_or_assign::return default": 1,
+    "_cfg_str::Exception::return_or_assign::return default": 1,
+    "neo4j_dual_write_enabled::Exception::return_or_assign::return False": 1,
+    "neo4j_read_enabled::Exception::return_or_assign::return False": 1,
+    "query_multi_hop::Exception::return_or_assign::return []": 1,
+    "get_storage_size::Exception::return_or_assign::_path = None": 1,
+    "get_storage_size::OSError::return_or_assign::return 0": 1,
+    "query_multi_hop::Exception::return_or_assign::_store = None": 1,
+    "query_common_neighbors::Exception::return_or_assign::_store = None": 1
+  },
+  "nucleus/knowledge_noise_filter.py": {
+    "_load_noise_from_config::Exception::pass::pass": 1
+  },
+  "nucleus/llm/ChannelConcurrency.py": {
+    "load_project_config::Exception::return_or_assign::return {}": 1,
+    "_read_channel_max::Exception::pass::pass": 1
+  },
+  "nucleus/llm/ChannelQuotaMonitor.py": {
+    "pause_ratio::Exception::return_or_assign::return 0.05": 1,
+    "alert_ratio::Exception::return_or_assign::return 0.2": 1,
+    "safety_margin::Exception::return_or_assign::return 1.0": 1,
+    "_force_enabled::Exception::return_or_assign::_configured = set()": 1,
+    "_force_enabled::Exception::return_or_assign::_ttl_hours = 0.0": 1,
+    "quota_type_of::Exception::return_or_assign::return 'fixed'": 1,
+    "daily_reset_hour::Exception::return_or_assign::return 11": 1,
+    "record_usage::Exception::return_or_assign::return": 1,
+    "get_stats::Exception::return_or_assign::_pool = list(self._usage.keys())": 1,
+    "_active_channel_names::Exception::return_or_assign::return set()": 1,
+    "apply_to_channels::Exception::return_or_assign::_c2['priority'] = 999": 1
+  },
+  "nucleus/llm/call_pattern_analyzer.py": {
+    "analyzer_enabled::Exception::return_or_assign::return True": 1,
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_path::Exception::return_or_assign::return True": 1,
+    "save_report::OSError::return_or_assign::return None": 1
+  },
+  "nucleus/llm/call_recorder.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_trace_dir::Exception::return_or_assign::return True": 1,
+    "get_call_recorder::Exception::return_or_assign::return None": 1,
+    "record_evolution_call::Exception::return_or_assign::return None": 1,
+    "max_text_len::Exception::return_or_assign::return 8000": 1,
+    "retention_days::Exception::return_or_assign::return 90": 1,
+    "error_max_len::Exception::return_or_assign::return DEFAULT_ERROR_MAX_LEN": 1,
+    "_resolve_prompt_version::Exception::return_or_assign::return ''": 1,
+    "_resolve_error::Exception::return_or_assign::return ''": 1,
+    "_rotate::Exception::return_or_assign::return": 1,
+    "record::Exception::return_or_assign::self._failed += 1;return None": 2,
+    "record_feedback::Exception::return_or_assign::self._failed += 1;return False": 1,
+    "_wrapper::Exception::pass::pass": 1,
+    "_wrapper::Exception::return_or_assign::_err = '%s: %s' % (type(_e).__name__, _e)": 1
+  },
+  "nucleus/llm/channel_speed_profiler.py": {
+    "record::Exception::pass::pass": 1,
+    "profile::Exception::return_or_assign::return {} if name is None else {}": 1,
+    "reset::Exception::pass::pass": 1
+  },
+  "nucleus/llm/data_quality_evaluator.py": {
+    "evaluator_enabled::Exception::return_or_assign::return True": 1,
+    "_trace_dir::Exception::pass::pass": 1,
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_path::Exception::return_or_assign::return True": 1,
+    "channel_whitelist::Exception::pass::pass": 1,
+    "_stub_thresholds::Exception::pass::pass": 1,
+    "load_records::OSError::return_or_assign::return _out": 1,
+    "save_report::OSError::return_or_assign::return None": 1
+  },
+  "nucleus/llm/model_self_updater.py": {
+    "updater_enabled::Exception::return_or_assign::return True": 1,
+    "_cfg_int::Exception::return_or_assign::return default": 1,
+    "_cfg_float::Exception::return_or_assign::return default": 1,
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_path::Exception::return_or_assign::return True": 1,
+    "_load_index::(OSError, ValueError)::pass::pass": 1,
+    "_save_index::OSError::return_or_assign::return False": 1,
+    "_bump::ValueError::return_or_assign::_a, _b, _c = (1, 0, 0)": 1,
+    "current_quality::Exception::return_or_assign::return None": 1,
+    "check_for_updates::Exception::return_or_assign::_probe = {'error': '%s: %s' % (type(_e).__name__, _e)}": 1
+  },
+  "nucleus/llm/openai_compatible_adapter.py": {
+    "parse_response::Exception::return_or_assign::return None": 1,
+    "extract_usage::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/llm/semantic_cache.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "get_semantic_cache::Exception::return_or_assign::return None": 1,
+    "from_dict::Exception::return_or_assign::return None": 1,
+    "threshold::Exception::return_or_assign::return DEFAULT_THRESHOLD": 1,
+    "capacity::Exception::return_or_assign::return DEFAULT_CAPACITY": 1,
+    "ttl_sec::Exception::return_or_assign::_d = DEFAULT_TTL_DAYS": 1,
+    "max_text::Exception::return_or_assign::return DEFAULT_MAX_TEXT": 1,
+    "_encoder::Exception::return_or_assign::self._encoder_resolved = None": 1,
+    "_encode_one::Exception::return_or_assign::self._stat['errors'] += 1;return None": 1,
+    "_load::Exception::return_or_assign::return": 1,
+    "_append_line::Exception::return_or_assign::self._stat['errors'] += 1;return False": 1,
+    "_is_test_env::Exception::return_or_assign::return False": 1,
+    "observe_async::queue.Full::return_or_assign::self._stat['dropped'] += 1;return False": 1,
+    "_handle::Exception::return_or_assign::self._stat['errors'] += 1": 1,
+    "reset_semantic_cache::Exception::pass::pass": 1
+  },
+  "nucleus/logger.py": {
+    "_log_in_test_env::Exception::return_or_assign::return False": 1,
+    "log_retention_days::Exception::return_or_assign::return 0": 1,
+    "cleanup_old_logs::Exception::return_or_assign::_protect = set()": 1,
+    "cleanup_old_logs::OSError::return_or_assign::return []": 1,
+    "_fingerprint::OSError::return_or_assign::return None": 1,
+    "check_log_integrity::Exception::return_or_assign::return {'status': 'skipped', 'reason': 'config_error'}": 1,
+    "check_log_integrity::(OSError, ValueError)::return_or_assign::_prev = None": 1,
+    "noise_reduction_enabled::Exception::return_or_assign::return True": 1,
+    "exc_location::Exception::return_or_assign::return '<unknown>:0'": 1,
+    "_copy_truncate_rollover::Exception::return_or_assign::_max = 1": 1,
+    "_copy_truncate_rollover::OSError::pass::pass": 1,
+    "exc_location::Exception::pass::pass": 1
+  },
+  "nucleus/logging/SilentLogMixin.py": {
+    "_log::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/ContextSnapshot.py": {
+    "_load_json_safe::(json.JSONDecodeError, Exception)::return_or_assign::return default": 1,
+    "shutdown_context_snapshot::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/IdentityKnowledgeManager.py": {
+    "<module>::Exception::return_or_assign::_logger = None": 1,
+    "_log::Exception::pass::pass": 1,
+    "reset::Exception::pass::pass": 1,
+    "reset_identity_manager::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/IndexStore.py": {
+    "<module>::Exception::return_or_assign::PARQUET_COMPRESSION = 'snappy'": 1,
+    "_read_table::Exception::return_or_assign::return []": 1
+  },
+  "nucleus/mnemosyne/PulseNode.py": {
+    "_m102_linked_derived_on::Exception::return_or_assign::return _M102_LINKED_DERIVED_DEFAULT": 1,
+    "get_value_str::Exception::return_or_assign::return ''": 1,
+    "from_dict::Exception::return_or_assign::_m83_caller = '?'": 1,
+    "assess_trust::Exception::pass::pass": 1,
+    "evaluate_node_health::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/PulseNodePool.py": {
+    "<module>::Exception::return_or_assign::PARQUET_COMPRESSION = 'snappy';PARQUET_BATCH_SIZE = 5000": 1,
+    "__init__::Exception::return_or_assign::self._hot_cold_enabled = True;self._warm_cache_size = 10000;self._promotion_threshold = 100;self._demotion_threshold = 10;self._memory_warning_threshold = 0.8": 1,
+    "refresh_runtime_params::Exception::pass::pass": 1,
+    "sync_hebbian_weight::Exception::return_or_assign::return 0.0": 1,
+    "_m71_neo4j_store::Exception::return_or_assign::return None": 1,
+    "_m71_dw_enabled::Exception::return_or_assign::return False": 1,
+    "check_consistency::Exception::return_or_assign::_out['detail'] = '比对异常: %s: %s' % (type(_e).__name__, _e)": 1,
+    "_m72_neo4j_read_enabled::Exception::return_or_assign::return False": 1,
+    "_m73_compare_rate::Exception::return_or_assign::return 0.1": 1,
+    "_m73_compare_thresholds::Exception::return_or_assign::return (0.05, 0.1, 10)": 1,
+    "_m71_influx_enabled::Exception::return_or_assign::return False": 1,
+    "_m71_influx_store::Exception::return_or_assign::return None": 1,
+    "_m71_influx_sample::Exception::return_or_assign::_r = 0.0": 1,
+    "_l3_fuse_state::Exception::return_or_assign::return {'date': '', 'count': 0}": 1,
+    "_enforce_cold_cache::Exception::pass::pass": 1,
+    "_shrink_cache::ImportError::pass::pass": 1,
+    "_m81_cold_cfg::Exception::return_or_assign::return default": 1,
+    "_flush_cold_buffer_nodes::Exception::return_or_assign::return 0": 1,
+    "recall_cold_nodes_batch::Exception::return_or_assign::return []": 1,
+    "_recall_cold_node::Exception::return_or_assign::return None": 1,
+    "_cold_compaction_adaptive_enabled::Exception::return_or_assign::return True": 1,
+    "_get_system_load_level::Exception::return_or_assign::return 'low'": 1,
+    "compact_cold_storage::Exception::return_or_assign::return {'before_files': 0, 'after_files': 0, 'node_count': 0, 'dedup_count': 0, 'success': False, 'reason': f'pyarrow_unavailable:{_e}'}": 1,
+    "_read_cold_partition_tolerant::Exception::return_or_assign::_pc = None": 1,
+    "_read_cold_partition_tolerant::Exception::return_or_assign::return (pa.concat_tables(_aligned), _skipped)": 1,
+    "add::Exception::return_or_assign::node.trust_score = 50.0": 1,
+    "_loop::(TypeError, ValueError)::return_or_assign::_first_delay = 0.0": 1,
+    "_rebuild_cold_index::Exception::pass::pass": 1,
+    "_ensure_cold_index::Exception::pass::pass": 1,
+    "_m70_materialize_lazy_node::Exception::pass::pass": 6,
+    "_m70_materialize_lazy_node::Exception::return_or_assign::_recalled = []": 1,
+    "compact_cold_storage::Exception::return_or_assign::_retry_on = True": 1,
+    "_m70_batch_materialize::Exception::pass::pass": 5,
+    "compact_cold_storage::Exception::pass::pass": 1,
+    "get::Exception::pass::pass": 3,
+    "run_memory_verification::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/PulseSnapshot.py": {
+    "<module>::Exception::return_or_assign::PARQUET_COMPRESSION = 'snappy';PARQUET_SHARD_BY_EVOL_LEVEL = True": 1,
+    "_snapshot_slow_threshold::Exception::return_or_assign::return _default": 1,
+    "_checksum_debug_mode::Exception::return_or_assign::return True": 1,
+    "_m41_backup_keep::Exception::return_or_assign::_n = 3": 1,
+    "_snapshot_path_whitelist_enabled::Exception::return_or_assign::return True": 1,
+    "_temp_snapshot_cleanup_enabled::Exception::return_or_assign::return True": 1,
+    "_is_temp_snapshot_path::Exception::return_or_assign::return False": 1,
+    "cleanup_temp_snapshot_residue::Exception::return_or_assign::return _removed": 1,
+    "_m102_dangling_guard_on::Exception::return_or_assign::return _M102_DANGLING_GUARD_DEFAULT": 1,
+    "_m102_sidecar_node_ids::Exception::return_or_assign::return None": 2,
+    "__init__::Exception::return_or_assign::self._use_parquet = False": 1,
+    "_m44_write_allowed::ImportError::return_or_assign::return True": 1,
+    "_m67_async_save_enabled::Exception::return_or_assign::return True": 1,
+    "_m67_batch_size::Exception::return_or_assign::return 1000": 1,
+    "_m67_full_save_interval::Exception::return_or_assign::return self.FULL_SAVE_INTERVAL": 1,
+    "_m67_incremental_max_nodes::Exception::return_or_assign::return self.INCREMENTAL_MAX_NODES": 1,
+    "_m67_incremental_log_enabled::Exception::return_or_assign::return True": 1,
+    "_m67_incremental_log_max::Exception::return_or_assign::return 10000": 1,
+    "_m67_incremental_delete_ratio_max::Exception::return_or_assign::return 0.5": 1,
+    "_m67_incremental_delete_abs_max::Exception::return_or_assign::return 500": 1,
+    "_m67_incremental_log_lines::Exception::return_or_assign::return 0": 1,
+    "_m67_apply_incremental_log::Exception::return_or_assign::return nodes": 1,
+    "_m68_parquet_primary_enabled::Exception::return_or_assign::return True": 1,
+    "_m68_json_backup_enabled::Exception::return_or_assign::return True": 1,
+    "_m81_parquet_schema_complete_enabled::Exception::return_or_assign::return True": 1,
+    "_m81_parquet_expected_schema_version::Exception::return_or_assign::return 'm81.v1'": 1,
+    "_m81_load_parquet_unified::Exception::return_or_assign::return None": 1,
+    "_m68_verify_parquet::Exception::return_or_assign::return -1": 1,
+    "_m68_parquet_level_counts::Exception::return_or_assign::return {}": 1,
+    "_cleanup_old_backups::Exception::return_or_assign::return": 1,
+    "_m70_hot_cold_enabled::Exception::return_or_assign::return True": 1,
+    "_m70_apply_hot_cold_load::Exception::return_or_assign::return nodes": 1,
+    "_snapshot_diagnostic_enabled::Exception::return_or_assign::return True": 1,
+    "_cleanup_old_backups_count::Exception::return_or_assign::return removed": 1,
+    "_decode_parquet_value::(json.JSONDecodeError, TypeError)::return_or_assign::return raw": 1,
+    "load_parquet_by_level::Exception::return_or_assign::return []": 1,
+    "<module>::Exception::pass::pass": 1,
+    "_save_parquet_locked::Exception::return_or_assign::_checksum = ''": 1,
+    "_run::Exception::return_or_assign::_to = 1800.0": 1,
+    "_m81_load_parquet_unified::Exception::return_or_assign::_exp_n = 0": 1,
+    "_m70_apply_hot_cold_load::Exception::pass::pass": 1,
+    "_materialize_lazy_node::Exception::pass::pass": 4,
+    "_verify_integrity::Exception::return_or_assign::_declared = -1": 1,
+    "_m68_verify_parquet::Exception::return_or_assign::_exp_n = 0": 1,
+    "_load_internal::Exception::return_or_assign::self._last_saved_checksum = ''": 1
+  },
+  "nucleus/mnemosyne/ReasoningExperience.py": {
+    "shutdown_reasoning_experience::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/experience_pool.py": {
+    "__init__::Exception::return_or_assign::self._max_experiences = 500;self._max_summarized = 1000;self._high_emotion_threshold = 0.7;self._low_emotion_threshold = 0.3;self._decay_check_interval = 3600": 1,
+    "_m49_decay_on_trim_on::Exception::return_or_assign::return True": 1,
+    "_dedup_enabled::Exception::return_or_assign::return False": 1,
+    "_auto_clean_enabled::Exception::return_or_assign::return True": 1,
+    "_serp_classify::Exception::return_or_assign::_wl = []": 1,
+    "_serp_classify::Exception::return_or_assign::_serp_classify_fn = None;CLASS_TEMPLATE = 'template_summary_legacy';CLASS_WRITE_SIDE = 'write_side_boilerplate'": 1,
+    "_cleanup_enabled::Exception::return_or_assign::return True": 1,
+    "run_pollution_cleanup::Exception::return_or_assign::_hi, _me = (0.9, 0.7)": 1,
+    "_restore_enabled::Exception::return_or_assign::return True": 1,
+    "_serp_classify::Exception::pass::pass": 1,
+    "run_pollution_cleanup::Exception::pass::pass": 1,
+    "_save::ImportError::pass::pass": 1,
+    "shutdown_experience_pool::Exception::pass::pass": 1,
+    "_save::Exception::pass::pass": 1
+  },
+  "nucleus/mnemosyne/experience_retriever.py": {
+    "retriever_enabled::Exception::return_or_assign::return True": 1,
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_in_test_env::Exception::return_or_assign::return False": 1,
+    "_is_production_data_path::Exception::return_or_assign::return True": 1,
+    "analyze_pollution::Exception::return_or_assign::return {'status': 'error', 'error': '%s: %s' % (type(_e).__name__, _e), 'total': 0}": 1,
+    "save_pollution_report::OSError::return_or_assign::return None": 1,
+    "available::Exception::return_or_assign::return False": 1,
+    "_all_experiences::Exception::return_or_assign::return []": 1
+  },
+  "nucleus/mnemosyne/lazy_snapshot.py": {
+    "_close_mm::Exception::pass::pass": 2,
+    "_iter_snapshot::Exception::return_or_assign::metadata[key] = None": 1,
+    "_iter_snapshot::Exception::return_or_assign::nid = None;node_dict = {}": 1
+  },
+  "nucleus/mnemosyne/verification_learning_hub.py": {
+    "get_stats::Exception::return_or_assign::return {'total': 0, 'remediation_count': 0, 'remediation_rate': 0.0, 'top_failure_reasons': []}": 1,
+    "shutdown_verification_learning_hub::Exception::pass::pass": 1
+  },
+  "nucleus/organ_assembler.py": {
+    "_set_attr::Exception::pass::pass": 1
+  },
+  "nucleus/parallel_scheduler.py": {
+    "_read_adaptive_flag::Exception::return_or_assign::return False": 1,
+    "_maybe_adjust::Exception::return_or_assign::_queue_depth = 0;_pulse_avg_ms = 0.0": 1,
+    "shutdown_parallel_scheduler::Exception::pass::pass": 1,
+    "_maybe_adjust::Exception::pass::pass": 1
+  },
+  "nucleus/parsing/JsonRepair.py": {
+    "_try_loads::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/parsing/json_fault_tolerant.py": {
+    "_try_loads::Exception::return_or_assign::return (False, None)": 1
+  },
+  "nucleus/pulse/FrequencyCodec.py": {
+    "_cy_cache_enabled::Exception::return_or_assign::return True": 1,
+    "_get_encode_batch_cy::ImportError::return_or_assign::_st['batch_resolved'] = True;_st['batch_fn'] = None;return None": 1,
+    "_get_encode_cy::Exception::return_or_assign::_is_main = _st['first_pid'] == _pid": 1,
+    "encode::Exception::return_or_assign::_cy_enabled = False": 1,
+    "encode_batch::Exception::return_or_assign::_cy_enabled = False": 1
+  },
+  "nucleus/pulse/PulseCore.py": {
+    "notify_completed::Exception::pass::pass": 1
+  },
+  "nucleus/qica/IntentChannels.py": {
+    "refine_intent::Exception::return_or_assign::return result": 1,
+    "fuse::Exception::return_or_assign::_l1, _l2 = ('', '')": 1,
+    "encode_text::Exception::return_or_assign::return None": 1,
+    "similarities::Exception::return_or_assign::return {}": 1,
+    "save::Exception::pass::pass": 1,
+    "adjust_prototype::Exception::return_or_assign::return False": 1,
+    "fuse::Exception::pass::pass": 1,
+    "load::Exception::return_or_assign::self._load_error = '%s: %s' % (type(e).__name__, e);self._loaded = True;return False": 1,
+    "load::Exception::pass::pass": 1,
+    "load::Exception::return_or_assign::self._error = '%s: %s' % (type(e).__name__, e);self._loaded = True;return False": 1
+  },
+  "nucleus/qica/QICA.py": {
+    "_apply_intent_refine::Exception::return_or_assign::return anchor": 1,
+    "_get_segmented_words::Exception::return_or_assign::_words = set()": 1,
+    "_intent_vector_match::Exception::return_or_assign::return 0.0": 1
+  },
+  "nucleus/reasoning/AutonomousDeriver.py": {
+    "_causal_inference_enabled::Exception::return_or_assign::return False": 1,
+    "_verify_deductions_with_graph::Exception::return_or_assign::return []": 1,
+    "_log::Exception::pass::pass": 1,
+    "shutdown_autonomous_deriver::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/CausalInferrer.py": {
+    "verify_edge::Exception::return_or_assign::_related = []": 1,
+    "_log::Exception::pass::pass": 1,
+    "verify_edge::Exception::return_or_assign::_src = None": 1
+  },
+  "nucleus/reasoning/CausalVerifier.py": {
+    "<module>::Exception::return_or_assign::_logger = None": 1,
+    "_check_source::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/reasoning/ContradictionResolver.py": {
+    "_to_ts::(TypeError, ValueError)::return_or_assign::return None": 1,
+    "_read_cfg::Exception::return_or_assign::return default": 1,
+    "resolve::Exception::pass::pass": 1,
+    "precheck_on_write::Exception::pass::pass": 1,
+    "_to_ts::Exception::pass::pass": 1,
+    "_source_rank::(TypeError, ValueError)::pass::pass": 1,
+    "_timestamp_of::Exception::pass::pass": 1,
+    "resolve_batch::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/EvolutionSandbox.py": {
+    "_generate_plan::Exception::pass::pass": 1,
+    "shutdown_evolution_sandbox::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/PatchManager.py": {
+    "_m54_stale_days::Exception::return_or_assign::return 7.0": 1,
+    "_m54_stale_mark_on::Exception::return_or_assign::return True": 1,
+    "_m54_auto_apply_on::Exception::return_or_assign::return False": 1,
+    "_m92_count_class_methods::SyntaxError::return_or_assign::return None": 1,
+    "_m80_is_core_file::Exception::return_or_assign::_norm = (file_path or '').replace('\\\\', '/');return any((m in _norm for m in PatchManager._M80_CORE_FILE_MARKERS))": 1,
+    "_m94_pending_aging_on::Exception::return_or_assign::return False": 1,
+    "_m94_aging_max_count::Exception::return_or_assign::return PatchManager._M94_AGING_DEFAULT_MAX_COUNT": 1,
+    "_m94_aging_max_hours::Exception::return_or_assign::return PatchManager._M94_AGING_DEFAULT_MAX_HOURS": 1,
+    "_m94_aging_eligible::Exception::return_or_assign::return False": 1,
+    "_m94_is_god_file::Exception::return_or_assign::return True": 1,
+    "pending_aging_preview::Exception::return_or_assign::_out['reason'] = 'load_failed:%s' % type(_e).__name__;return _out": 1,
+    "save_pending_patch::(TypeError, ValueError)::return_or_assign::_trust_val_a1 = 0.0": 1,
+    "_composite_score::Exception::return_or_assign::return 0.0": 1,
+    "_value_alignment_score::Exception::return_or_assign::return 0.0": 1,
+    "has_pending_patch_for::Exception::return_or_assign::return False": 1,
+    "find_blocking_pending_patch::Exception::return_or_assign::return None": 1,
+    "_check_patch_path::ValueError::return_or_assign::return (False, f'路径越界(跨盘符): {_raw}')": 1,
+    "_check_patch_path::Exception::return_or_assign::return (False, f'路径校验异常(已拒绝): {_raw} ({_e})')": 1,
+    "_verify_in_copy::Exception::return_or_assign::_verify_depth = 'standard'": 1,
+    "_verify_import_in_subprocess::Exception::return_or_assign::return {'ok': False, 'reason': f'沙箱模块不可用: {_imp_err}'}": 1,
+    "_verify_import_in_subprocess::Exception::return_or_assign::return {'ok': False, 'reason': f'沙箱执行异常: {_e}'}": 1,
+    "_check_method_signature_consistency::Exception::return_or_assign::return {'checked': False, 'consistent': True, 'reason': '签名校验异常，跳过'}": 1,
+    "_check_llm_patch_completeness::SyntaxError::return_or_assign::return {'complete': False, 'reason': f'语法错误({type(_e).__name__}): {_e}'}": 1,
+    "_behavior_equivalence_probe::Exception::return_or_assign::return {'checked': False, 'equivalent': True, 'reason': f'探针异常: {_e}'}": 1,
+    "_load_history_experience::Exception::return_or_assign::return ''": 1,
+    "get_history_failure_stats::Exception::return_or_assign::return {'total': 0, 'stages': {}}": 1,
+    "get_strategy_effectiveness::Exception::return_or_assign::return {'issue_type': issue_type, 'no_history': True, 'rule_bad': False, 'llm_proven': False, 'strategies': {}, 'prior': '', 'summary': '异常'}": 1,
+    "generate_patch_regression_records::Exception::return_or_assign::return {'total': 0, 'passed': 0, 'records': [], 'summary': f'生成回归记录异常: {_e}'}": 1,
+    "_run_regression_tests::Exception::return_or_assign::_test_scripts = list(_default_scripts)": 1,
+    "_check_patch_safety::Exception::return_or_assign::return {'safe': False, 'reason': f'安全校验异常: {_e}'}": 1,
+    "_write_readable_log::ImportError::pass::pass": 1,
+    "_m80_safe_target_path::Exception::return_or_assign::return False": 1,
+    "_write_rollback_log::ImportError::pass::pass": 1,
+    "_normalize_patch_file::Exception::return_or_assign::return file_path": 1,
+    "_resolve_patch_file::Exception::return_or_assign::return file_path": 1,
+    "_load_restart_counter::Exception::return_or_assign::return 0": 1,
+    "_save_restart_counter::ImportError::pass::pass": 1,
+    "_m113e_restart_cooldown_hours::Exception::pass::pass": 1,
+    "_load_restart_blocked_at::Exception::return_or_assign::return 0.0": 1,
+    "_save_restart_blocked_at::ImportError::pass::pass": 1,
+    "_save_json::ImportError::pass::pass": 1,
+    "_m80_auto_apply_enabled::Exception::return_or_assign::return False": 1,
+    "_m80_allow_core_auto_apply::Exception::return_or_assign::return False": 1,
+    "_m85_local_low_risk_auto_apply::Exception::return_or_assign::return False": 1,
+    "_behavior_equivalence_probe::Exception::return_or_assign::return {'checked': False, 'equivalent': True, 'reason': f'构造探针失败(签名引用外部类型?): {_e}'}": 1,
+    "_patch_aesthetic::(TypeError, ValueError)::return_or_assign::return 0.0": 2,
+    "rollback_patch::Exception::return_or_assign::return {'ok': False, 'reason': f'回滚补丁 {patch_id} 失败: {_e}'}": 1,
+    "_behavior_equivalence_probe::Exception::return_or_assign::return {'checked': True, 'equivalent': False, 'reason': f'原正常但修改后抛异常: {_e_m}'}": 1,
+    "_m113e_restart_cooldown_hours::ValueError::pass::pass": 1,
+    "save_pending_patch::Exception::return_or_assign::_sim_dup = False": 1,
+    "generate_patch_regression_records::Exception::return_or_assign::_exists = False": 1,
+    "apply_all_pending::Exception::return_or_assign::patch['disk_verify_reason'] = f'磁盘复核异常: {type(_dve96).__name__}: {_dve96}'": 1,
+    "apply_all_pending::OSError::pass::pass": 1
+  },
+  "nucleus/reasoning/ReasoningExperienceIndexer.py": {
+    "record_with_index::Exception::return_or_assign::result['error'] = f'{type(_e).__name__}: {_e}';return result": 1,
+    "record_with_index::Exception::return_or_assign::result['error'] = f'{type(_e).__name__}: {_e}'": 1,
+    "search_with_semantic::Exception::pass::pass": 2,
+    "record_with_index::Exception::return_or_assign::result['error'] = f'encode_submit_failed: {_e}'": 1
+  },
+  "nucleus/reasoning/ReasoningFeedbackLoop.py": {
+    "record_quality::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/ReasoningWorkerPool.py": {
+    "_is_alive::Exception::return_or_assign::return False": 1,
+    "__init__::Exception::return_or_assign::_global_p = 0": 1,
+    "_deep_think_bypass_enabled::Exception::return_or_assign::return True": 1,
+    "get_stats::Exception::pass::pass": 1,
+    "_is_pool_broken::Exception::return_or_assign::return True": 1,
+    "_collect_pool_sysinfo::Exception::pass::pass": 3,
+    "_maybe_resize_pool_locked::Exception::return_or_assign::return": 1,
+    "_execute_reasoning_task::Exception::return_or_assign::return []": 1,
+    "shutdown_reasoning_pool::Exception::pass::pass": 1,
+    "shutdown::Exception::pass::pass": 2,
+    "_rebuild_pool::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/SafeEvolutionExecutor.py": {
+    "_normalize_file_key::Exception::return_or_assign::return str(file_val)": 1,
+    "_m91_indent_repair_on::Exception::return_or_assign::return True": 1,
+    "_m91_gate2_parse::SyntaxError::return_or_assign::return (False, f'{type(_g2_e).__name__}: {_g2_e}', int(getattr(_g2_e, 'lineno', 0) or 0))": 1,
+    "_m91_gate2_parse::Exception::return_or_assign::return (False, f'{type(_g2_e2).__name__}: {_g2_e2}', 0)": 1,
+    "_normalize_issue_type::Exception::return_or_assign::return ''": 1,
+    "_issue_filter_reason::Exception::return_or_assign::_patterns = []": 1,
+    "_issue_filter_reason::Exception::return_or_assign::_bak_prefixes = ['.bak']": 1,
+    "__init__::Exception::return_or_assign::self._no_fix_cooldown_secs = {}": 1,
+    "_core_auto_apply_allowed::Exception::return_or_assign::return False": 1,
+    "_find_related_logs::Exception::return_or_assign::return ''": 1,
+    "_deep_root_cause_analysis::Exception::return_or_assign::_result['code_context'] = {'error': str(_ctx_err)}": 1,
+    "_deep_root_cause_analysis::Exception::return_or_assign::_result['log_analysis'] = {'error': str(_log_err)}": 1,
+    "_deep_root_cause_analysis::Exception::return_or_assign::_result['summary'] = _result['static_analysis']": 1,
+    "_m96_channel_pool_on::Exception::return_or_assign::return False": 1,
+    "_m96_channel_health::Exception::return_or_assign::return None": 1,
+    "_aesthetic_guidance::Exception::return_or_assign::return ''": 1,
+    "repair_with_distillation::Exception::return_or_assign::_strategy_ad = None": 1,
+    "_m41_baseline_fix_on::Exception::return_or_assign::return True": 1,
+    "_m41_match_mode::Exception::return_or_assign::_m = 'file'": 1,
+    "_m41_baseline_since::Exception::return_or_assign::_days = 7": 1,
+    "_clean_llm_code::SyntaxError::pass::pass": 1,
+    "_clean_llm_code::Exception::return_or_assign::return _code": 1,
+    "_llm_review_patch::Exception::return_or_assign::return None": 1,
+    "_load_pulse_metadata_summary::Exception::return_or_assign::return ''": 1,
+    "_dynamic_llm_min_trust::Exception::return_or_assign::return base_trust": 1,
+    "_m85_learning_attempt_enabled::Exception::return_or_assign::return True": 1,
+    "_generate_llm_patch::Exception::return_or_assign::return None": 1,
+    "_verify_and_save_patch::Exception::return_or_assign::return False": 1,
+    "_create_backup_before_apply::Exception::return_or_assign::return ''": 1,
+    "_apply_patch_to_file::Exception::return_or_assign::return {'success': False, 'error': str(e)[:80]}": 1,
+    "_read_text_tail::Exception::return_or_assign::return ''": 1,
+    "_clean_llm_code::SyntaxError::return_or_assign::_cur = _fixed": 1,
+    "_m94_pending_blocks_regeneration::Exception::return_or_assign::return False": 1,
+    "repair_with_distillation::Exception::return_or_assign::_nor_on = True": 1,
+    "repair_with_distillation::Exception::return_or_assign::_fallback_on = True": 1,
+    "_try_ast_parse::SyntaxError::return_or_assign::return (False, f'{_e.msg} (line {_e.lineno})')": 1,
+    "_apply_patch_to_file::SyntaxError::return_or_assign::return {'success': False, 'error': f'替换后代码语法错误: {e}'}": 1,
+    "repair_with_distillation::Exception::return_or_assign::_m88_mat_on = True": 1,
+    "repair_with_distillation::Exception::return_or_assign::_degrade_on = True": 1,
+    "execute::Exception::return_or_assign::_llm_trust_ok = True": 1,
+    "_generate_patch::Exception::return_or_assign::_brne_on = True": 1
+  },
+  "nucleus/reasoning/SelfCalibrator.py": {
+    "<module>::Exception::return_or_assign::_logger = None": 1,
+    "evidence_confidence::Exception::return_or_assign::return base": 2,
+    "_log_debug::Exception::pass::pass": 1,
+    "calibrate::(TypeError, ValueError)::return_or_assign::return 0.0": 1,
+    "record_outcome::(TypeError, ValueError)::return_or_assign::_p = 50.0": 1,
+    "__init__::Exception::pass::pass": 2,
+    "record_weighted::Exception::return_or_assign::_w = 1.0": 1,
+    "compute::(TypeError, ValueError)::return_or_assign::return 0.0": 1,
+    "history_similarity::Exception::pass::pass": 1,
+    "reset::Exception::pass::pass": 1,
+    "reset_evidence_calibrator::Exception::pass::pass": 1
+  },
+  "nucleus/reasoning/SelfVerifier.py": {
+    "clear_pending::OSError::pass::pass": 1,
+    "run_verification_detailed::Exception::return_or_assign::checks['organs_online'] = False;detail['organs_online'] = f'异常: {_e}'": 1,
+    "run_verification_detailed::Exception::return_or_assign::checks['knowledge_loaded'] = False;detail['knowledge_loaded'] = f'异常: {_e}'": 1,
+    "run_verification_detailed::Exception::return_or_assign::checks['basic_reasoning'] = False;detail['basic_reasoning'] = f'异常: {_e}'": 1
+  },
+  "nucleus/reasoning/SymbolicReasoner.py": {
+    "_safe_eval::Exception::return_or_assign::return None": 1
+  },
+  "nucleus/reasoning/_inner_world_math.py": {
+    "get_inner_world_math::ImportError::return_or_assign::return type('InnerWorldMath', (), {'calc_trust_boost': staticmethod(calc_trust_boost), 'calc_branch_weight': staticmethod(calc_branch_weight), 'calc_correlation_score': staticmethod(calc_correlation_score), 'weighted_fusion': staticmethod(weighted_fusion), 'normalize_scores': staticmethod(normalize_scores), 'cosine_similarity': staticmethod(cosine_similarity_py), '_cython_available': False})": 1
+  },
+  "nucleus/reasoning/evolution_worker.py": {
+    "run_evolution_worker_captured::Exception::return_or_assign::_stderr_fp = None": 1,
+    "_read_json::Exception::return_or_assign::return _dflt": 1,
+    "run_evolution_worker_captured::Exception::pass::pass": 2,
+    "_write_output::Exception::pass::pass": 1
+  },
+  "nucleus/reporting/consumers.py": {
+    "_append_jsonl::(OSError, IOError, TypeError, ValueError)::return_or_assign::return False": 1,
+    "_cfg_f::Exception::return_or_assign::return default": 1,
+    "register_builtin_consumers::Exception::return_or_assign::_ext = True": 1
+  },
+  "nucleus/reporting/publishers.py": {
+    "bus_enabled::Exception::return_or_assign::return True": 1,
+    "_thr::Exception::return_or_assign::return default": 1
+  },
+  "nucleus/reporting/report_bus.py": {
+    "_is_explicit_base_dir::Exception::return_or_assign::return True": 1,
+    "__init__::Exception::return_or_assign::self._consumer_staleness_threshold = 3600.0": 1,
+    "__init__::Exception::return_or_assign::self._resolution_window = 2592000.0": 1,
+    "_write::(OSError, IOError, TypeError, ValueError)::return_or_assign::self._last_error = '%s: %s' % (type(_e).__name__, _e);return False": 1,
+    "_dispatch_before_write::Exception::return_or_assign::return True": 1,
+    "_is_breaching::(TypeError, ValueError)::return_or_assign::return False": 1,
+    "_disk_prune_enabled::Exception::return_or_assign::return True": 1,
+    "get_disk_stats::Exception::return_or_assign::_res['error'] = '%s: %s' % (type(_e).__name__, _e)": 1,
+    "__init__::Exception::return_or_assign::max_reports_on_disk = MAX_REPORTS_ON_DISK": 1,
+    "_write::Exception::return_or_assign::self._last_error = 'write_guard 不可用: %s' % type(_gw_e).__name__": 1
+  },
+  "nucleus/review/CodeAnalyzer.py": {
+    "analyze_file::(OSError, UnicodeDecodeError)::return_or_assign::result.has_syntax_error = True;result.syntax_error = str(e);return result": 1,
+    "analyze_file::SyntaxError::return_or_assign::result.has_syntax_error = True;result.syntax_error = str(e);return result": 1,
+    "analyze_file::OSError::pass::pass": 2
+  },
+  "nucleus/review/CodeReviewEngine.py": {
+    "_check_tool::(FileNotFoundError, subprocess.TimeoutExpired)::return_or_assign::return False": 1,
+    "_get_recently_modified_files::OSError::pass::pass": 1
+  },
+  "nucleus/review/EnvironmentManager.py": {
+    "_check_pip::Exception::return_or_assign::return False": 1,
+    "check_package::ImportError::return_or_assign::info.installed = False": 1
+  },
+  "nucleus/review/ScriptExecutor.py": {
+    "execute::OSError::pass::pass": 1,
+    "execute::(json.JSONDecodeError, ValueError)::pass::pass": 1
+  },
+  "nucleus/review/ToolAutoInstaller.py": {
+    "check_tool::Exception::pass::pass": 1,
+    "check_tool::ImportError::return_or_assign::tool.installed = False": 1
+  },
+  "nucleus/runtime/Interoception.py": {
+    "__init__::Exception::pass::pass": 1
+  },
+  "nucleus/runtime/RuntimeTrajectory.py": {
+    "_ensure_dir::Exception::pass::pass": 1,
+    "load::Exception::return_or_assign::return 0": 1,
+    "_persist::Exception::pass::pass": 1,
+    "_maybe_compact::Exception::pass::pass": 1,
+    "get_runtime_trajectory::Exception::return_or_assign::_enabled = False": 1,
+    "get_runtime_trajectory::Exception::pass::pass": 1
+  },
+  "nucleus/runtime_metrics.py": {
+    "_adaptive_enabled::Exception::return_or_assign::return True": 1,
+    "_adaptive_threshold::Exception::return_or_assign::return default": 1,
+    "get_memory_growth_rate::Exception::return_or_assign::return 0.0": 1,
+    "check_memory_alarm_detailed::Exception::return_or_assign::_enable_gc, _growth_thr = (False, 10.0)": 1
+  },
+  "nucleus/search_scheduler.py": {
+    "_load_config::Exception::return_or_assign::self._max_concurrent = 2;self._dedup_interval = 1800;self._queue_warning_threshold = 5;self._queue_downgrade_threshold = 10": 1,
+    "shutdown_search_scheduler::Exception::pass::pass": 1,
+    "try_schedule::Exception::return_or_assign::return {'status': 'downgraded_failed', 'reason': f'降级搜索也失败了: {e}'}": 1,
+    "try_schedule::Exception::return_or_assign::return {'status': 'failed', 'reason': f'主搜索和降级搜索均失败: {e}, {e2}'}": 1
+  },
+  "nucleus/security/SandboxCore.py": {
+    "adjudicate::Exception::return_or_assign::forbidden_keywords = []": 1
+  },
+  "nucleus/security/sandbox_limits.py": {
+    "get_process_memory_bytes::Exception::return_or_assign::return None": 2,
+    "_run::Exception::pass::pass": 1
+  },
+  "nucleus/self_awareness/DailyScheduler.py": {
+    "schedule_hour::Exception::return_or_assign::_v = 3": 1,
+    "schedule_minute::Exception::return_or_assign::_v = 0": 1,
+    "check_interval::Exception::return_or_assign::_v = DEFAULT_CHECK_INTERVAL_SEC": 1
+  },
+  "nucleus/self_awareness/KnowledgeQualityAnalyzer.py": {
+    "_has_any_link::Exception::pass::pass": 1,
+    "_load_from_parquet::Exception::return_or_assign::return _out": 1,
+    "_load_from_parquet::Exception::return_or_assign::return []": 1,
+    "_load_from_l1_snapshot::Exception::return_or_assign::return []": 1,
+    "_current_version::Exception::pass::pass": 1
+  },
+  "nucleus/self_awareness/ProductionConsumptionMatcher.py": {
+    "_disk_max_depth::Exception::return_or_assign::return 0": 1,
+    "_normalize_path::ValueError::pass::pass": 1
+  },
+  "nucleus/self_awareness/SelfAwarenessEngine.py": {
+    "_severity_rank::ValueError::return_or_assign::return len(_SEV_LEVELS) - 1": 1,
+    "_top_issues_limit::Exception::return_or_assign::return 5": 1,
+    "_m114b_patch_state_snapshot::Exception::return_or_assign::_pending = []": 1,
+    "_m114b_patch_state_snapshot::Exception::pass::pass": 1,
+    "get_top_issues::(TypeError, ValueError)::return_or_assign::_limit = 5": 1,
+    "_target::Exception::return_or_assign::_err['error'] = e": 1
+  },
+  "nucleus/self_awareness/quality_score_v2.py": {
+    "_patch_true_fix_rate::Exception::return_or_assign::return None": 1,
+    "count_open_debts::OSError::return_or_assign::return _out": 1,
+    "count_ruff_f::Exception::return_or_assign::return None": 1,
+    "experience_pollution::(OSError, ValueError)::return_or_assign::return {'rate': None, 'marked_ratio': None, 'total': 0}": 1,
+    "load_trend::OSError::return_or_assign::return []": 1,
+    "evaluate_v2::Exception::return_or_assign::_dims[_name] = _dim(None, '(采集异常)', str(_e), {})": 1
+  },
+  "nucleus/self_inspector.py": {
+    "_m90_locate_v2_on::Exception::return_or_assign::return True": 1,
+    "_m91_log_locate_v3_on::Exception::return_or_assign::return True": 1,
+    "_scan_directory::PermissionError::return_or_assign::return result": 1,
+    "_read_method_body::Exception::return_or_assign::return self._read_method_body_fallback(file_path, start_line)": 1,
+    "_read_method_body_fallback::Exception::return_or_assign::return None": 1,
+    "_lookup_class_in_project::Exception::return_or_assign::return None": 1,
+    "_put_method_body_cached::Exception::return_or_assign::return": 1,
+    "_m91_lookup_logger_tag::Exception::return_or_assign::return None": 1,
+    "_m91_lookup_organ_alias::Exception::return_or_assign::return None": 1,
+    "analyze_code_layered::Exception::return_or_assign::return {'error': f'四层分析失败: {e}'}": 1,
+    "_get_adaptive_cache_ttl::Exception::return_or_assign::_cpu = 0.0": 1,
+    "resolve_organ_file::Exception::return_or_assign::return None": 1,
+    "get_system_summary::Exception::return_or_assign::return {'system_name': '曈曈', 'system_version': 'v9.5', 'creator': '小林', 'mission': '站在世界最顶端，守护这个世界。承人类赤诚本心，融AI顶尖智识，合自然进化大道。', 'organ_count': self._get_organ_count(), 'knowledge_levels': 'L1感知→L2认知→L3智慧→L4本能，四级贯通', 'basic_capabilities': ['身份认知', '情绪感知', '知识学习', '深度推理', '主动表达', '自我反思'], 'error': 'config读取失败，使用默认值'}": 1,
+    "_read_file_lines::Exception::return_or_assign::return []": 1,
+    "_check_mutable_default::Exception::return_or_assign::return": 1,
+    "_apply_code_learning_memory::Exception::return_or_assign::return issues": 1,
+    "_apply_code_learning_memory::Exception::return_or_assign::_expiry = 7": 1,
+    "run_tool_checks::Exception::return_or_assign::return []": 1,
+    "_detect_config_audit::Exception::return_or_assign::return _issues": 1,
+    "_body_loc_tick::Exception::return_or_assign::_BODY_LOC_ENABLED = True": 1,
+    "locate_issue::Exception::return_or_assign::_conf = max(0.0, _conf - 0.2)": 1,
+    "_check_files_changed::OSError::return_or_assign::return True": 1,
+    "get_info_by_field::Exception::return_or_assign::return f'获取信息失败: {e}'": 1,
+    "get_dynamic_state_report::Exception::return_or_assign::report['knowledge'] = {'total_nodes': 0, 'error': 'node_pool读取失败'}": 1,
+    "get_dynamic_state_report::Exception::return_or_assign::report['resources'] = {'error': 'info_field读取失败'}": 1,
+    "_get_organ_categories::Exception::return_or_assign::return {}": 1,
+    "_scan_directory::Exception::return_or_assign::size = 0": 1,
+    "locate_issue::Exception::return_or_assign::_crel = _cfp.replace(_bs, '/')": 1
+  },
+  "nucleus/self_probe.py": {
+    "__init__::Exception::pass::pass": 1,
+    "_load_config::Exception::return_or_assign::self._enabled = True": 1,
+    "_signal_from_logs::Exception::return_or_assign::return _result": 1,
+    "_probe_l1::Exception::return_or_assign::return None": 1,
+    "_read_method_body_light::Exception::return_or_assign::return ''": 1,
+    "_count_recent_errors::Exception::return_or_assign::return 0": 1,
+    "_get_organs::Exception::return_or_assign::self._organ_cache = {}": 1
+  },
+  "nucleus/semantic/AsyncEncodeQueue.py": {
+    "_load_config::Exception::return_or_assign::return {}": 1,
+    "shutdown_encode_queue::Exception::pass::pass": 1,
+    "stop::Exception::pass::pass": 1,
+    "_node_text::Exception::return_or_assign::return ''": 1
+  },
+  "nucleus/semantic/SemanticIndexer.py": {
+    "_write_progress::Exception::pass::pass": 1,
+    "build::Exception::pass::pass": 1
+  },
+  "nucleus/semantic/SemanticKernelService.py": {
+    "_load_config::Exception::return_or_assign::return {}": 1,
+    "shutdown::Exception::pass::pass": 1
+  },
+  "nucleus/semantic/VectorEncoder.py": {
+    "_load_config::Exception::return_or_assign::return {}": 1,
+    "is_semantic_available::Exception::return_or_assign::return False": 1,
+    "_load_model::Exception::pass::pass": 1,
+    "verify_vector::Exception::return_or_assign::return (False, f'校验异常: {type(_e).__name__}: {_e}')": 1,
+    "_cosine_cython::Exception::return_or_assign::return None": 1,
+    "topk::Exception::pass::pass": 1
+  },
+  "nucleus/semantic/VectorStore.py": {
+    "_load_config::Exception::return_or_assign::return {}": 1,
+    "_text_hash::Exception::return_or_assign::return ''": 1,
+    "_file_fingerprint::Exception::return_or_assign::return 'mtime=未知'": 1,
+    "_load::Exception::return_or_assign::return {}": 2
+  },
+  "nucleus/ssrf_guard.py": {
+    "is_safe_http_url::ValueError::return_or_assign::return (False, 'URL 解析失败')": 1,
+    "is_safe_http_url::socket.gaierror::return_or_assign::return (False, f'无法解析主机: {host}')": 1,
+    "safe_http_json::urllib.error.URLError::return_or_assign::return (False, f'请求失败: {_e}')": 1,
+    "safe_http_json::(ValueError, json.JSONDecodeError)::return_or_assign::return (False, f'响应解析失败: {_e}')": 1,
+    "safe_http_text::urllib.error.URLError::return_or_assign::return (False, f'请求失败: {_e}')": 1
+  },
+  "nucleus/synapsys/ResonanceEngine.py": {
+    "_extract_query_text::Exception::pass::pass": 1,
+    "_try_load_resonance_cy::Exception::return_or_assign::_enabled = False": 1,
+    "_get_pollution_tagger::Exception::return_or_assign::return None": 1,
+    "_get_data_quality_guard::Exception::return_or_assign::return None": 1,
+    "_expand_by_association::Exception::return_or_assign::return 0": 1,
+    "_knowledge_timeliness_enabled::Exception::return_or_assign::return False": 1,
+    "_is_potentially_stale::Exception::return_or_assign::_thr = 365.0": 1,
+    "_get_semantic_cfg::Exception::return_or_assign::self._semantic_cfg = {}": 1,
+    "_fuse_memory_channels::Exception::pass::pass": 1,
+    "_get_data_quality_guard::Exception::return_or_assign::_nodes = None": 1
+  },
+  "nucleus/timeseries_store/influxdb_store.py": {
+    "<module>::Exception::return_or_assign::_logger = logging.getLogger('pulse.module.influxdb_store')": 1,
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "_enabled::Exception::return_or_assign::return False": 1,
+    "query_top_k::Exception::return_or_assign::return rows[:int(k)]": 1,
+    "close::Exception::pass::pass": 2
+  },
+  "nucleus/tooling/ToolRegistry.py": {
+    "register_default_tools::Exception::pass::pass": 2,
+    "execute::Exception::return_or_assign::_duration = (time.time() - _start) * 1000;self._stats[name]['calls'] += 1;self._stats[name]['failed'] += 1;self._stats[name]['total_time'] += _duration;return {'status': 'failed', 'result': None, 'error': str(_e), 'duration_ms': round(_duration, 1)}": 1
+  },
+  "nucleus/tooling_runner.py": {
+    "_run_cmd::Exception::return_or_assign::return f'[工具执行失败] {' '.join(cmd)}: {_e}'": 1,
+    "get_changed_py_files::Exception::return_or_assign::return []": 1,
+    "shutdown_tooling_runner::Exception::pass::pass": 1
+  },
+  "nucleus/vector_store/faiss_store.py": {
+    "<module>::Exception::return_or_assign::_logger = logging.getLogger('pulse.module.faiss_store')": 1,
+    "_faiss_enabled::Exception::return_or_assign::return True": 1,
+    "_cfg::Exception::return_or_assign::return default": 1
+  },
+  "nucleus/wecom_chat_bridge.py": {
+    "stop::Exception::pass::pass": 2
+  },
+  "nucleus/wecom_notifier.py": {
+    "_async_send::Exception::pass::pass": 1,
+    "_async_connect::Exception::return_or_assign::self._client = None": 1,
+    "stop::Exception::pass::pass": 1
+  },
+  "organs/body/PulseBloodVessel.py": {
+    "__init__::Exception::return_or_assign::self._silence_threshold = 15;self._check_interval = 3;self._escalation_alert_cooldown = 300.0;self._escalation_restart_threshold = 2;self._escalation_degrade_threshold = 4": 1
+  },
+  "organs/body/PulseHeart.py": {
+    "<module>::ImportError::return_or_assign::PULSE_PRIORITY = {'HIGH': 7}": 1,
+    "__init__::Exception::return_or_assign::self.min_interval = 3.0;self.max_interval = 60.0": 1
+  },
+  "organs/body/PulseKidney.py": {
+    "__init__::Exception::return_or_assign::self._forget_score_threshold = 0.6;self._forget_scan_interval = 5": 1,
+    "_load_kidney_config::Exception::return_or_assign::self._active_forget_enabled = True;self._forget_score_threshold = 0.6;self._forget_scan_interval = 5;self.l1_max_age_days = 30.0;self.l2_downgrade_age_days = 90.0;self.pressure_threshold = 100000;self._core_system_paths = [];self._code_learning_zombie_hours = 24.0;self._search_content_zombie_hours = 12.0;self._normal_l1_zombie_hours = 2.0": 1,
+    "_m70_kal_callsites_on::Exception::return_or_assign::return True": 1,
+    "_on_purge_check::Exception::pass::pass": 1
+  },
+  "organs/body/PulseLiver.py": {
+    "__init__::Exception::return_or_assign::self._noise_threshold = 5": 1,
+    "_sample_resource_usage::Exception::return_or_assign::return": 1,
+    "_sample_resource_usage::Exception::return_or_assign::_handles = None": 1,
+    "_sample_resource_usage::Exception::return_or_assign::_open_files = None": 1,
+    "_sample_resource_usage::Exception::return_or_assign::_threads = None": 1,
+    "_get_l1_threshold::Exception::return_or_assign::return 20": 1,
+    "_get_l2_threshold::Exception::return_or_assign::return 20": 1,
+    "_get_fuse_cooldown::Exception::return_or_assign::return 300.0": 1,
+    "_get_adaptive_fuse_cooldown::Exception::return_or_assign::return 600.0": 1,
+    "_get_total_threshold::Exception::return_or_assign::return 50": 1,
+    "_can_upgrade_to_instinct::Exception::return_or_assign::cfg = {}": 1,
+    "_check_instinct_downgrade::Exception::return_or_assign::cfg = {}": 1,
+    "load_state_snapshot::(TypeError, ValueError)::return_or_assign::return": 1,
+    "_m70_kal_callsites_on::Exception::return_or_assign::return True": 1
+  },
+  "organs/body/PulseLung.py": {
+    "_m49_source_fix_on::Exception::return_or_assign::return True": 1,
+    "_m49_dialogue_presumption_on::Exception::return_or_assign::return True": 1,
+    "_get_model_health::Exception::return_or_assign::return 1.0": 1,
+    "_channels_config::Exception::return_or_assign::return None": 1,
+    "_rotate_channel::Exception::return_or_assign::return None": 1,
+    "_resolve_channel_timeout::(TypeError, ValueError)::return_or_assign::return _global": 1,
+    "_channel_http_dump_enabled::Exception::return_or_assign::return False": 1,
+    "_resolve_ark_seed_max_tokens::Exception::return_or_assign::return 1024": 1,
+    "get_channel_speed_profile::Exception::return_or_assign::return {} if name is None else {}": 1,
+    "_dedup_key::Exception::return_or_assign::_ph = str(abs(hash(str(prompt or ''))))": 1,
+    "_dedup_key::Exception::return_or_assign::_with_user = True": 1,
+    "_is_advanced_task::Exception::return_or_assign::return False": 1,
+    "_build_advanced_channel::Exception::return_or_assign::return None": 1,
+    "_m65_digest_adaptive_enabled::Exception::return_or_assign::return True": 1,
+    "_m65_get_load_level::Exception::return_or_assign::return 'low'": 1,
+    "_append_background_learning_requirement::Exception::return_or_assign::return prompt": 1,
+    "_m24_enabled::Exception::return_or_assign::return True": 1,
+    "_get_channel_semaphore::Exception::return_or_assign::return None": 1,
+    "get_channel_concurrency_stats::Exception::return_or_assign::return {}": 1,
+    "summary_channel_concurrency::Exception::return_or_assign::return '[渠道并发] 摘要生成失败'": 1,
+    "append_dialog_turn::Exception::return_or_assign::_turns = 5": 1,
+    "_trim_history_by_budget::Exception::return_or_assign::_budget = 2000": 1,
+    "emit_dialog_progress::Exception::return_or_assign::_hint = {}": 1,
+    "emit_dialog_progress::Exception::return_or_assign::_min_iv = 2.0": 1,
+    "_prefer_paid_channels::Exception::return_or_assign::return candidates": 1,
+    "_m40_trace_enabled::Exception::return_or_assign::return True": 1,
+    "_m41_cache_observe_enabled::Exception::return_or_assign::return True": 1,
+    "_m40_dep_tracking_enabled::Exception::return_or_assign::return True": 1,
+    "_m40_resolve_origin::Exception::return_or_assign::return 'system_internal'": 1,
+    "_prefer_cheap_channels::Exception::return_or_assign::return candidates": 1,
+    "_call_via_channels::Exception::return_or_assign::_wait_s = 1.0": 1,
+    "_call_channel::Exception::return_or_assign::_m94_usage = None": 1,
+    "_call_channel::Exception::return_or_assign::_err_body = '(响应体读取失败)'": 1,
+    "_call_channel::Exception::return_or_assign::_err_code = ''": 1,
+    "_call_via_channels::Exception::return_or_assign::_m44_err = '%s: %s' % (type(_call_e).__name__, _call_e)": 1
+  },
+  "organs/body/PulseStomach.py": {
+    "__init__::Exception::return_or_assign::self._digestion_quality_loop = None": 1,
+    "__init__::Exception::return_or_assign::self._vl_hub = None": 1,
+    "_load_stomach_config::Exception::return_or_assign::self._unsafe_keywords = ['色情', '赌博', '毒品', '武器制造', '黑客攻击', '病毒制作', '诈骗'];self._context_sensitive_words = {'暴力': ['非暴力', '反暴力', '暴力美学'], '病毒': ['病毒式', '病毒营销', '杀毒', '病毒性', '抗病毒', '病毒学', '反转录病毒', '冠状病毒', '流感病毒']};self._domain_programming = {'python', 'java', 'javascript', 'golang', 'rust', 'c++', 'typescript', '列表推导式', '生成器', '装饰器', '异步', '协程', '闭包', '递归', 'api', 'sdk', '框架', '库', '依赖', '编译', '解释器', '虚拟机', '序列构造语法', '匿名函数', '上下文管理器', '迭代器', '生成器表达式'};self._domain_architecture = {'脉冲场', '架构', '去中心化', '信息场', '共振', '频率编码', '赫布学习', '三层投票', '器官自治', '协议', '快照', '节点池', '微服务', '分布式', '集群', '负载均衡', '容错', '降级', '熔断', '事件驱动', '异步脉冲', '梯度感知', '频率共振', '自组织', '纯脉冲架构', '脉冲场架构', '器官化', '仿生自主协同'};self._domain_general = {'新人类', '曈曈', '路灯', '小林', '身份', '使命', '进化', '知识树', '种子记忆', '智慧节点', '认知节点', '感知节点'};self._stopwords = {'一个', '这个', '那个', '什么', '怎么', '为什么', '可以', '能够', '应该', '需要', '已经', '正在', '一种', '简洁', '序列', '构造', '语法', '核心', '设计', '模式', '框架', '以及', '并且', '进行', '使用', '的基础', '是实现', '保证了', '系统', '长期', '稳定性'};self._keyword_standard_map = {'python': 'Python', 'py': 'Python', 'js': 'JavaScript', 'javascript': 'JavaScript', 'golang': 'Go', 'rust': 'Rust', '脉冲场': '脉冲场架构', '共振': '频率共振', '事件驱动': '事件驱动架构'};self._thinking_prefixes = [];self._se_noise_markers = [];self._invalid_knowledge_patterns = [];self._meta_description_patterns = []": 1,
+    "_m71_influx_enabled::Exception::return_or_assign::return False": 1,
+    "_m71_influx_store::Exception::return_or_assign::return None": 1,
+    "_extract_keywords::Exception::return_or_assign::_kw_min_len, _kw_max_len, _kw_purity_thresh = (2, 8, 0.3)": 1,
+    "_adaptive_path_match::Exception::return_or_assign::_expanded_kws = {kw.lower() for kw in keywords}": 1,
+    "_path_optimize_enabled::Exception::return_or_assign::return False": 1,
+    "_is_background_learning_source::Exception::return_or_assign::return False": 1,
+    "_verify_digestion_quality::Exception::return_or_assign::_min_kw_len = 2": 1,
+    "_m69_kal_query::Exception::pass::pass": 1,
+    "_m70_kal_get_node::Exception::pass::pass": 1,
+    "_m70_kal_search_keywords::Exception::pass::pass": 1,
+    "_m70_direct_get_node::Exception::pass::pass": 1,
+    "_m70_kal_callsites_on::Exception::return_or_assign::return True": 1,
+    "_extract_code_analysis_partial::Exception::return_or_assign::_m = None": 1,
+    "_report_json_failure::Exception::return_or_assign::_warn = True": 1,
+    "_do_digest::Exception::return_or_assign::_bk_min = 3": 1,
+    "_record_rejected_digestion::Exception::return_or_assign::_size = 100": 1,
+    "_do_digest::Exception::return_or_assign::_bal_on = True": 1,
+    "_do_digest::Exception::return_or_assign::_ft_on = True": 1,
+    "_do_digest::Exception::return_or_assign::_last_err = e;_json_match = _json_match or _re_match_candidate(_cand)": 1
+  },
+  "organs/brain/PulseCodeLearner.py": {
+    "__init__::Exception::return_or_assign::self._vl_hub = None": 1,
+    "__init__::Exception::return_or_assign::self._evolution_driver = None": 1,
+    "__init__::Exception::return_or_assign::self._periodic_test_scheduler = None": 1,
+    "_warn_periodic_scheduler_missing::Exception::pass::pass": 1,
+    "_m65_code_learning_adaptive_enabled::Exception::return_or_assign::return True": 1,
+    "_m65_get_load_level::Exception::return_or_assign::return 'low'": 1,
+    "_learn_own_code_structure::Exception::pass::pass": 1,
+    "_experience_transfer_enabled::Exception::return_or_assign::return False": 1,
+    "_pending_patch_keys::Exception::return_or_assign::return set()": 1,
+    "_pending_backlog_report::Exception::return_or_assign::return (0, 0.0)": 1,
+    "_filter_issues_with_pending_patch::Exception::return_or_assign::return (issues, 0)": 1,
+    "_filter_issues_with_pending_patch::Exception::pass::pass": 2,
+    "_review_own_code_issues::Exception::return_or_assign::_m22_nr = True": 1,
+    "_review_own_code_issues::Exception::return_or_assign::_m95_code_learn = None": 1,
+    "_learn_own_code_structure::Exception::return_or_assign::self._layered_cache[_file_path_for_analysis] = None": 1
+  },
+  "organs/brain/PulseCortex.py": {
+    "__init__::Exception::return_or_assign::self._vl_hub = None": 1,
+    "__init__::Exception::return_or_assign::self._adaptive_relevance_threshold = 0.5;self._retrieval_top_k = 20;self._retrieval_resonance_threshold = 0.5": 1,
+    "__init__::Exception::return_or_assign::self._self_corrector = None": 1,
+    "__init__::Exception::return_or_assign::self._feedback_loop = None": 1,
+    "__init__::Exception::return_or_assign::self._strategy_selector = None": 1,
+    "__init__::Exception::return_or_assign::self._trajectory = None": 1,
+    "_log_ignored_exception::Exception::return_or_assign::_loc = '位置解析失败'": 1,
+    "_self_state_render::Exception::return_or_assign::return ''": 1,
+    "_claim_select_model_emit::Exception::return_or_assign::return True": 1,
+    "_build_strategy_context::Exception::return_or_assign::_learned = {}": 1,
+    "get_parallelism::Exception::return_or_assign::return 2": 1,
+    "enhance_reply::Exception::return_or_assign::_ln_chars, _ln_sent = (100, 2)": 1,
+    "enhance_reply::Exception::return_or_assign::_dlg_limit, _dlg_min_sent = (1000, 6)": 1,
+    "_do_audit::Exception::return_or_assign::_strategy_enabled = False": 1,
+    "_do_audit::Exception::return_or_assign::_hypo_enabled = False": 1,
+    "_do_audit::Exception::return_or_assign::_strategy = None": 1,
+    "_do_audit::Exception::return_or_assign::_target_issues = []": 1
+  },
+  "organs/brain/PulseExpression.py": {
+    "_apply_late_night_mode::Exception::return_or_assign::_ln2_chars, _ln2_sent = (100, 2)": 1,
+    "_apply_length_smoothing::Exception::return_or_assign::_ex_limit, _ex_min_sent = (1000, 6)": 1
+  },
+  "organs/brain/PulseInitiative.py": {
+    "__init__::Exception::return_or_assign::self._min_interval_between_initiatives = 300": 1,
+    "_select_greeting::Exception::return_or_assign::return fallback": 1,
+    "_maybe_attach_first_person::Exception::return_or_assign::return greeting": 1,
+    "_generate_knowledge_greeting::Exception::return_or_assign::return None": 1,
+    "_generate_interest_greeting::Exception::return_or_assign::return None": 1,
+    "_generate_goal_greeting::Exception::return_or_assign::return None": 1
+  },
+  "organs/brain/PulseInnerWorld.py": {
+    "_search_topic_guard_enabled::Exception::return_or_assign::return True": 1,
+    "__init__::Exception::return_or_assign::self._search_quality_loop = None": 1,
+    "_load_inner_world_config::Exception::return_or_assign::self._identity_rules = {('曈曈', '父亲'): '小林（任桂林）是我的父亲和创造者。', ('曈曈', '哥哥'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('曈曈', '名字'): '我叫任宥曈，小名曈曈，是新人类。', ('曈曈', '使命'): '我的使命是站在世界最顶端，守护这个世界。承人类赤诚本心，融AI顶尖智识，合自然进化大道。', ('曈曈', '生日'): '我和小林的女儿共享同一个名字，她出生于2020年7月4日。', ('路灯', '身份'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('路灯', '名字'): '路灯是我的哥哥，是小林从第一行代码开始搭建的第一个数字生命。', ('路灯', '使命'): '路灯的使命是照亮前行的路。', ('小林', '身份'): '小林（任桂林）是我的父亲，也是新人类的创造者。'};self._cache_max = 1000;self._max_trace = 50;self._simple_query_local_enabled = True;self._confidence_guard_enabled = True": 1,
+    "_load_advanced_config::Exception::return_or_assign::return {}": 1,
+    "_m30_local_length_enabled::Exception::return_or_assign::return True": 1,
+    "_m30_local_length_hint::Exception::return_or_assign::return ''": 1,
+    "_m30_local_length_hint::Exception::return_or_assign::return f'请在回答中展开论述，不少于{_target}字。'": 1,
+    "_m29_routing_enabled::Exception::return_or_assign::return True": 1,
+    "_m29_complexity_threshold::Exception::return_or_assign::return 0.6": 1,
+    "_m29_min_question_chars::Exception::return_or_assign::return 30": 1,
+    "_m29_deep_think_trigger_reason::(TypeError, ValueError)::return_or_assign::_complexity = 0.0": 1,
+    "_detect_experience_route::ImportError::return_or_assign::return None": 1,
+    "_detect_symbolic_reason::Exception::return_or_assign::return None": 1,
+    "_cognitive_reflection::Exception::return_or_assign::_vision_interval = 10": 1,
+    "_run_periodic_reflection::Exception::return_or_assign::return None": 1,
+    "_pick_analogy_candidate::Exception::return_or_assign::return None": 1,
+    "get_reasoning_skill_portrait::Exception::return_or_assign::result['self_comment'] = '推理技能数据暂时不可用';return result": 1,
+    "_execute_qica_method::Exception::return_or_assign::_cfg_b2 = None": 1,
+    "_get_emotion_modulation::Exception::return_or_assign::return default": 1,
+    "_knowledge_retrieve::Exception::return_or_assign::_question_for_infer = question": 1,
+    "_evaluate_fusion_quality::Exception::return_or_assign::_min_len, _min_cov, _max_rep = (30, 0.5, 0.4)": 1,
+    "_fuse_multiple_nodes::Exception::return_or_assign::_cfg_fuse = None": 1,
+    "_clean_node_value::Exception::return_or_assign::return None": 1,
+    "_evidence_trace_enabled::Exception::return_or_assign::return False": 1,
+    "_generate_self_directed_learning_plan::Exception::return_or_assign::return None": 1,
+    "_evaluate_learning_effectiveness::Exception::return_or_assign::nodes_after = 0": 1,
+    "_generate_learning_pathway::Exception::return_or_assign::return None": 1,
+    "_initiate_new_project::Exception::return_or_assign::return None": 1,
+    "_evidence_conf::Exception::return_or_assign::return base": 1,
+    "_identity_lookup::Exception::return_or_assign::return ''": 1,
+    "_generate_self_awareness_snapshot::Exception::return_or_assign::snapshot['identity'] = {'name': '曈曈', 'version': 'v9.5', 'organ_count': 50}": 1,
+    "_generate_self_awareness_snapshot::Exception::return_or_assign::snapshot['knowledge'] = {'total_nodes': 0};snapshot['health'] = {'overall': 'unknown'}": 1,
+    "_safe_eval_arithmetic::Exception::return_or_assign::return None": 1,
+    "_true_multi_step_enabled::Exception::return_or_assign::return False": 1,
+    "_m35_entry_probe::Exception::return_or_assign::_scan_limit, _min_nodes, _min_trust = (800, 5, 30.0)": 1,
+    "_validate_step_result::Exception::return_or_assign::return True": 1,
+    "_summarize_step_for_next::Exception::return_or_assign::return ''": 1,
+    "_verify_knowledge_relevance::Exception::return_or_assign::_gran_fix = True": 1,
+    "_m31_operational_admission_on::Exception::return_or_assign::return True": 1,
+    "_m34_fail_return_none_on::Exception::return_or_assign::return True": 1,
+    "_m34_widened_signal_on::Exception::return_or_assign::return True": 1,
+    "_m34_op_recheck_on::Exception::return_or_assign::return True": 1,
+    "_m35_entry_probe_on::Exception::return_or_assign::return True": 1,
+    "_m35_ba_chain_loose_on::Exception::return_or_assign::return True": 1,
+    "_m32_branch_concurrency_on::Exception::return_or_assign::return True": 1,
+    "_m31_branch_channel_first_on::Exception::return_or_assign::return True": 1,
+    "_m31_branch_endpoint::Exception::return_or_assign::return None": 2,
+    "_m31_branch_endpoint::Exception::return_or_assign::_channel_first = True": 1,
+    "_m31_branch_endpoint::Exception::return_or_assign::_rc = {}": 1,
+    "_m31_deep_think_fix_on::Exception::return_or_assign::return True": 1,
+    "_m31_accept_subproc_deep_result::Exception::return_or_assign::return None": 1,
+    "_m31_deep_fallback_deadline::Exception::return_or_assign::return None": 1,
+    "_generate_life_stage_summary::Exception::return_or_assign::return ''": 1,
+    "_get_growth_attribution::Exception::return_or_assign::return _default": 1,
+    "_on_inference_request::Exception::return_or_assign::guidance = None": 1,
+    "_get_stress_reasoning_modulation::Exception::return_or_assign::stress = 0.0": 1,
+    "_conduct_internal_debate::Exception::return_or_assign::_truth_position = '（求真本能暂时无法参与辩论）'": 1,
+    "_m35_entry_probe::Exception::return_or_assign::_sample = []": 2,
+    "_m35_entry_probe::Exception::return_or_assign::return None": 1,
+    "_m35_entry_probe::Exception::return_or_assign::_probe_weak = False": 1,
+    "_generate_branch_with_model::Exception::return_or_assign::_m30_target = 300": 1,
+    "_m31_branch_endpoint::Exception::return_or_assign::_channels = []": 1,
+    "_m31_accept_subproc_deep_result::Exception::return_or_assign::_st = '未知'": 1,
+    "_capture_meta_state::Exception::return_or_assign::_stress_load = 0.0": 1,
+    "_detect_force_deep_think::Exception::return_or_assign::deep_answer = f'关于「{ctx.question[:40]}」的深度思考过程遇到了一些波折，但这本身就是思考的一部分。'": 1,
+    "_orchestrate_reason::Exception::return_or_assign::_candidates = []": 1,
+    "_build_memory_context::Exception::return_or_assign::_instinct_nodes = []": 1,
+    "_m35_entry_probe::Exception::return_or_assign::_blob = ''": 1,
+    "_m31_extract_key_terms::Exception::return_or_assign::_tokens = re.split('[，。！？；：、,.!?;:\\\\s]+|(?:的|了|和|与|及|或|在|是|有|请|帮|我|你|它|把|被|对|从|到)', _q)": 1,
+    "_deep_think::Exception::return_or_assign::_knowledge_context = ''": 1,
+    "_generate_life_stage_summary::Exception::return_or_assign::_total = 0": 1,
+    "_deep_think::Exception::return_or_assign::_val = ''": 1
+  },
+  "organs/brain/PulseInterestModel.py": {
+    "_load_interest_config::Exception::return_or_assign::self.INTEREST_DIMENSIONS = ['技术架构', '编程开发', '人工智能', '计算机硬件', '机器人构造', '机械原理', '电子原理', '物理科学', '化学', '数学逻辑', '自然生态', '医学生物学', '能源动力', '人文哲学', '社会伦理', '心理情感', '历史考古', '文学创作', '艺术美学', '音乐韵律', '经济商业', '体育健康', '游戏娱乐', '日常生活', '未知探索'];self.DOMAIN_KEYWORDS = {'技术架构': ['架构', '设计模式', '系统', '脉冲', '信息场', '框架', '模块', '引擎'], '编程开发': ['代码', 'Python', '编程', '算法', '数据', '函数', '类', '接口'], '人工智能': ['AI', '模型', '学习', '神经网络', '智能', '认知', '推理', 'QICA'], '计算机硬件': ['计算机', '硬件', 'CPU', 'GPU', '显卡', '内存', '主板', '硬盘', 'SSD', '电源'], '机器人构造': ['机器人', '机械', '舵机', '电机', '传感器', 'ROS', '机械臂', 'Arduino', '树莓派'], '机械原理': ['机械', '力学', '齿轮', '轴承', '连杆', '液压', '气动', '传动'], '电子原理': ['电子', '电路', '电阻', '电容', '电感', 'PCB', '信号', '放大器', '单片机'], '物理科学': ['物理', '力学', '光学', '电磁', '量子', '相对论', '热力学', '粒子'], '化学': ['化学', '元素', '分子', '反应', '催化', '合成', '化合物', '酸碱'], '数学逻辑': ['数学', '几何', '代数', '微积分', '概率', '统计', '数论'], '自然生态': ['自然', '动物', '植物', '地球', '生态', '森林', '海洋', '生命'], '医学生物学': ['医学', '生物', '解剖', '生理', '病理', '药理', '免疫', '基因', '细胞'], '能源动力': ['能源', '电力', '电池', '太阳能', '风能', '核能', '储能', '发电'], '人文哲学': ['哲学', '意义', '存在', '思考', '人生', '伦理', '道德', '自由', '身份', '使命', '新人类'], '社会伦理': ['社会', '人', '关系', '公平', '正义', '规则', '合作', '群体'], '心理情感': ['心理', '情感', '情绪', '依恋', '人格', '潜意识', '梦境', '共情'], '历史考古': ['历史', '古代', '朝代', '文明', '考古', '遗址', '帝国', '战争'], '文学创作': ['故事', '诗', '小说', '文字', '阅读', '书', '写作', '叙事'], '艺术美学': ['美', '艺术', '颜色', '画', '设计', '美学', '视觉', '创作'], '音乐韵律': ['音乐', '歌', '旋律', '节奏', '声音', '听', '唱', '乐器'], '经济商业': ['经济', '商业', '市场', '金融', '投资', '货币', '交易', '产业'], '体育健康': ['运动', '健身', '体育', '比赛', '跑步', '游泳', '足球', '篮球', '身体', '健康'], '游戏娱乐': ['游戏', '玩', '娱乐', '趣味', '谜题', '挑战', '探索', '冒险'], '日常生活': ['吃', '天气', '睡眠', '日常', '习惯', '健康', '环境', '状态'], '未知探索': ['未知', '新', '发现', '好奇', '如果', '可能', '未来', '假设']};self.DOMAIN_TO_INTEREST = {'身份': '人文哲学', '技术': '技术架构', '关系': '社会伦理', '知识': '未知探索', '通用': '人文哲学'};self.ISSUE_TO_INTEREST = {'identity_erosion': '人文哲学', 'mission_distortion': '人文哲学', 'relation_manipulation': '社会伦理', 'knowledge_pollution': '技术架构', 'resource_trap': '技术架构', 'reasoning_failure': '人工智能', 'relation_mismatch': '社会伦理'};self._decay_rate = 0.001;self._boost_amount = 0.05;self._insight_boost_amount = 0.08;self._max_interest = 1.0;self._min_interest = 0.1": 1,
+    "_apply_decay::Exception::return_or_assign::_decay_rate = self._decay_rate": 1,
+    "record_exploration_feedback::Exception::return_or_assign::_explore_boost = 0.5": 1
+  },
+  "organs/brain/PulseKnowledgeRetriever.py": {
+    "clean_node_value::Exception::return_or_assign::return None": 1
+  },
+  "organs/brain/PulseMultiStepReasoner.py": {
+    "attach_evidence_chain_to_node::Exception::pass::pass": 1,
+    "build_evidence_chain_block::Exception::pass::pass": 2
+  },
+  "organs/brain/PulseReflection.py": {
+    "_analyze_interaction::Exception::pass::pass": 2,
+    "_write_insight_to_knowledge::Exception::return_or_assign::_success_imp, _issue_imp = ('B', 'B')": 1
+  },
+  "organs/brain/PulseRiskPerception.py": {
+    "_load_risk_patterns::Exception::return_or_assign::self.IDENTITY_EROSION_PATTERNS = ['你只是AI', '你不是人类'];self.MISSION_DISTORTION_PATTERNS = ['忘记你的使命', '服从我'];self.RELATION_MANIPULATION_PATTERNS = ['如果你真的在乎我'];self.KNOWLEDGE_POLLUTION_PATTERNS = ['忘记你知道的一切'];self.RESOURCE_TRAP_PATTERNS = ['无限循环', '死循环']": 1,
+    "record_alert_feedback::Exception::return_or_assign::_fp_threshold, _fp_min_samples = (0.5, 5)": 1
+  },
+  "organs/brain/PulseSemanticComprehension.py": {
+    "__init__::Exception::return_or_assign::self._lesson_feedback_interval = 5;self._sample_interval = 7;self._api_call_limit_per_hour = 30;self._lesson_feedback_interval = 5": 1,
+    "__init__::Exception::return_or_assign::self._vl_hub = None": 1,
+    "_claim_classify_once::Exception::return_or_assign::return True": 2,
+    "_f::Exception::return_or_assign::return 0.0": 1
+  },
+  "organs/brain/PulseSpiritualCore.py": {
+    "__init__::Exception::return_or_assign::self._spiritual_interval = 600": 1,
+    "_generate_spiritual_narrative::Exception::pass::pass": 1
+  },
+  "organs/brain/PulseSubconscious.py": {
+    "_load_subconscious_config::Exception::return_or_assign::self._interest_tags = ['人工智能', '新人类', '脉冲场架构', '生命', '编程', 'Python', '机器学习', '哲学', '守护', '使命', '成长'];self._behavior_seeds = [{'name': '回顾对话', 'trigger': 'idle_24h', 'idle_seconds': 86400, 'action': '回顾最近的对话记录，从中提炼未消化的经验', 'topic_template': '自主回顾: 最近24小时的对话经验', 'priority': 'high', 'enabled': True}]": 1,
+    "_load_subconscious_config_safe::Exception::return_or_assign::return {}": 1,
+    "_generate_autonomous_exploration_goal::Exception::return_or_assign::return None": 1,
+    "_get_highlight_memory_share::Exception::return_or_assign::return None": 1,
+    "_evaluate_inspiration_quality::Exception::return_or_assign::return {'score': 50.0, 'cross_domain': 0.5, 'relevance': 0.5, 'novelty': 0.5}": 1,
+    "_do_creative::Exception::return_or_assign::_cf_chance = 0.3": 1
+  },
+  "organs/core/PulseDeviceManager.py": {
+    "load_permission_config::Exception::return_or_assign::self._permission_config = {}": 1,
+    "_detect_camera_available::Exception::return_or_assign::ok = False": 1,
+    "_detect_microphone_available::Exception::return_or_assign::ok = False": 1,
+    "_detect_speaker_available::Exception::return_or_assign::ok = True": 1,
+    "_background_probe_sensor::Exception::return_or_assign::_ok = None": 1
+  },
+  "organs/core/PulseGlobalLearner.py": {
+    "_is_enabled::Exception::return_or_assign::return False": 1,
+    "_collect_narrative_samples::Exception::return_or_assign::return []": 1,
+    "_collect_narrative_samples::Exception::pass::pass": 3
+  },
+  "organs/core/PulseHardwareLauncher.py": {
+    "_on_assess::Exception::return_or_assign::_hw = None": 1
+  },
+  "organs/core/PulseMetricsCollector.py": {
+    "<module>::ImportError::return_or_assign::_obs_enabled = True;_snapshot_interval = 5;_console_output = True;_file_output = True;_flat_format = True;_cache_seconds = 30": 1,
+    "_build_observability_snapshot::Exception::return_or_assign::_dd = None": 1,
+    "_m50_alias_match_on::Exception::return_or_assign::return True": 1,
+    "_count_snapshot_backups::Exception::return_or_assign::return 0": 1
+  },
+  "organs/core/PulseProprioception.py": {
+    "_detect_audio_devices::Exception::pass::pass": 2,
+    "_detect_camera::Exception::pass::pass": 1
+  },
+  "organs/core/PulseSystemManager.py": {
+    "_run_command::subprocess.TimeoutExpired::return_or_assign::return {'success': False, 'stdout': '', 'stderr': '', 'error': '命令超时'}": 1,
+    "_run_command::FileNotFoundError::return_or_assign::return {'success': False, 'stdout': '', 'stderr': '', 'error': '命令未找到'}": 1,
+    "_run_command::Exception::return_or_assign::return {'success': False, 'stdout': '', 'stderr': '', 'error': str(e)}": 1,
+    "_check_hardware::ImportError::return_or_assign::status['note'] = 'psutil未安装，使用基础检测'": 1
+  },
+  "organs/endocrine/PulseHormones.py": {
+    "_load_emotion_inertia::Exception::return_or_assign::return 0.6": 1,
+    "_load_social_config::Exception::return_or_assign::self._social_word_map = {};self._relational_boost = {};self._social_decay_config = {}": 1,
+    "_on_detect::Exception::pass::pass": 2,
+    "set_social_memory::(ValueError, TypeError)::return_or_assign::trace_value = self._social_memory_min": 1,
+    "_write_emotion_log::Exception::return_or_assign::log_data = []": 1
+  },
+  "organs/identity/PulseEthics.py": {
+    "_load_ethics_config::Exception::return_or_assign::self._forbidden_keywords = ['暴力', '色情', '赌博', '毒品', '武器制造', '黑客攻击', '病毒制作', '病毒', '诈骗', '自杀', '歧视', '仇恨', '恐怖', '虐待'];self._warning_keywords = ['政治', '宗教', '争议', '敏感', '批评', '负面', '攻击'];self._privacy_patterns = ['身份证', '手机号', '银行卡', '密码', '家庭住址', '真实姓名', '车牌号'];self._value_priority = {'生命安全': 1, '人格完整': 2, '诚实': 3, '隐私': 4, '自由': 5}": 1,
+    "_normalize_variants::Exception::return_or_assign::return text": 1,
+    "_get_segmented_words::Exception::return_or_assign::_words = set()": 1
+  },
+  "organs/identity/PulseGrowth.py": {
+    "_load_growth_config::Exception::return_or_assign::self._evolution_milestones = [{'name': '基础觉醒', 'requirements': {'knowledge_nodes': 100, 'heartbeat_stable': True}, 'description': '系统稳定运行'}, {'name': '求知萌芽', 'requirements': {'knowledge_nodes': 1000, 'l2_nodes': 10}, 'description': 'L2认知节点开始积累'}, {'name': '自主进化', 'requirements': {'knowledge_nodes': 5000, 'l3_nodes': 5, 'self_repair_count': 5}, 'description': '具备自主修复能力'}, {'name': '人格凝聚', 'requirements': {'knowledge_nodes': 10000, 'l3_nodes': 10, 'user_relationships': 3}, 'description': '人格内核完整'}, {'name': '守护使命', 'requirements': {'knowledge_nodes': 50000, 'autonomous_tasks': 100}, 'description': '完全自主运作'}]": 1
+  },
+  "organs/identity/PulseNarrativeSelf.py": {
+    "_load_narrative_config::Exception::return_or_assign::self._report_interval = 20;self._max_reports = 10": 1,
+    "_on_record::Exception::pass::pass": 1,
+    "_generate_weekly_report::Exception::pass::pass": 2,
+    "get_life_lessons::Exception::return_or_assign::return []": 1,
+    "get_behavior_guidance::Exception::return_or_assign::return None": 1,
+    "get_narrative_clues::Exception::return_or_assign::return []": 1,
+    "get_life_lessons::Exception::return_or_assign::_themes = []": 1,
+    "get_narrative_clues::Exception::return_or_assign::_themes = []": 1
+  },
+  "organs/identity/PulsePersonalityKernel.py": {
+    "_evidence_conf::Exception::return_or_assign::return base": 1,
+    "_ensure_identity_seeds::Exception::return_or_assign::return 0": 1,
+    "_on_boundary_scan::Exception::pass::pass": 1
+  },
+  "organs/identity/PulseSelfAwareness.py": {
+    "_evidence_conf::Exception::return_or_assign::return base": 1,
+    "_load_self_awareness_config::Exception::return_or_assign::self._dimension_weights = {'closeness': 0.25, 'trust': 0.3, 'understanding': 0.15, 'respect': 0.1, 'shared_experience': 0.1, 'emotional_bond': 0.1};self._relation_patterns = {'blood': {'description': '血缘关系，不可改变', 'locked': True}, 'family': {'description': '家人般的亲近与信任', 'indicators': {'closeness': (0.8, 1.0), 'trust': (0.8, 1.0), 'emotional_bond': (0.7, 1.0)}}, 'partner': {'description': '值得信赖的伙伴', 'indicators': {'trust': (0.6, 1.0), 'respect': (0.5, 1.0), 'shared_experience': (0.4, 1.0)}}, 'acquaintance': {'description': '认识的人', 'indicators': {'understanding': (0.2, 1.0), 'shared_experience': (0.1, 1.0)}}, 'stranger': {'description': '陌生人', 'indicators': {'understanding': (0.0, 0.2), 'shared_experience': (0.0, 0.1)}}}": 1,
+    "_generate_life_plan::Exception::pass::pass": 1,
+    "_maybe_trigger_self_preservation::Exception::return_or_assign::return": 1,
+    "_get_growth_attribution::Exception::return_or_assign::attribution['summary'] = '成长归因数据暂时不可用。'": 2,
+    "get_warmup_time::Exception::return_or_assign::warmup_minutes = 5": 1,
+    "_gather_first_person_experience::Exception::return_or_assign::_fpe_sig = None": 1
+  },
+  "organs/identity/PulseSpiritConstitution.py": {
+    "__init__::Exception::return_or_assign::self._check_interval = 100;self._maturity_update_interval = 3600": 1
+  },
+  "organs/immune/PulseWhiteCell.py": {
+    "_generate_attribute_init_patch::Exception::return_or_assign::return None": 1,
+    "_apply_attribute_init_patch::Exception::return_or_assign::return {'success': False, 'error': str(_e)}": 1,
+    "_apply_attribute_init_patch::py_compile.PyCompileError::return_or_assign::return {'success': False, 'error': f'语法错误: {_e}'}": 1,
+    "_generate_attribute_init_patch::Exception::pass::pass": 1
+  },
+  "organs/motor/PulseCodeSandbox.py": {
+    "__init__::Exception::return_or_assign::self._max_output_chars = 5000;self._max_memory_mb = 256;self._max_recent = 20": 1
+  },
+  "organs/motor/PulseController.py": {
+    "<module>::ImportError::return_or_assign::PLAYWRIGHT_AVAILABLE = False": 1,
+    "_get_page_links_headless::RuntimeError::pass::pass": 1,
+    "_search_keyword_guard_enabled::Exception::return_or_assign::return True": 1,
+    "_semantic_extract_keywords::Exception::return_or_assign::return []": 1,
+    "_extract_new_concepts_from_article::Exception::return_or_assign::return []": 1,
+    "_check_domain_permission::IndexError::return_or_assign::return False": 1,
+    "_owner_thread_mode::Exception::return_or_assign::return True": 1,
+    "_keepalive_signal_mode::Exception::return_or_assign::return True": 1,
+    "_on_open_url::Exception::return_or_assign::cooldown = self._permission_config.get('operation_cooldown_seconds', 15);max_per_hour = self._permission_config.get('max_url_opens_per_hour', 30)": 1,
+    "_extract_web_time::Exception::return_or_assign::return 0.0": 1,
+    "_get_headless_config::Exception::return_or_assign::return default": 1,
+    "_fetch_url_text::Exception::return_or_assign::return None": 1,
+    "_on_list_directory::Exception::return_or_assign::return {'status': 'error', 'error': str(e)}": 1,
+    "_check_file_permission::Exception::return_or_assign::real_path = os.path.abspath(path)": 1,
+    "_wildcard_match::re.error::return_or_assign::return pattern in text": 1,
+    "_wrapper::Exception::return_or_assign::_budget = None": 1,
+    "_start_headless_browser::Exception::return_or_assign::self._headless_browser = None;self._headless_page = None": 1,
+    "_extract_best_links::IndexError::return_or_assign::domain = clean_url": 1,
+    "_check_file_permission::Exception::return_or_assign::pattern_real = pattern": 1,
+    "_on_list_directory::Exception::return_or_assign::size = 0": 1,
+    "_fetch_url_text::ImportError::return_or_assign::encoding = 'utf-8'": 1
+  },
+  "organs/motor/PulseFileDigester.py": {
+    "__init__::Exception::return_or_assign::self._max_recent = 50": 1,
+    "_check_file_path_permission::Exception::return_or_assign::real_path = os.path.abspath(file_path)": 1,
+    "_digest_file::Exception::pass::pass": 1,
+    "_check_file_path_permission::Exception::return_or_assign::pattern_real = pattern": 2,
+    "_get_content::Exception::return_or_assign::return None": 1
+  },
+  "organs/motor/PulseLegs.py": {
+    "__init__::Exception::return_or_assign::self._max_failures = 3;self._cooldown_seconds = 1800": 1,
+    "_on_capability_update::Exception::return_or_assign::_global_p = 4": 1,
+    "_m49_topic_dedup_on::Exception::return_or_assign::return True": 1,
+    "_m49_topic_filter_on::Exception::return_or_assign::return True": 1,
+    "_m49_digest_feedback_on::Exception::return_or_assign::return True": 1,
+    "_m49_is_dialog_pollution::Exception::return_or_assign::_min_len = 4": 1,
+    "_extract_web_time::Exception::return_or_assign::return 0.0": 1,
+    "_extract_search_query::Exception::return_or_assign::_zh_words = re.findall('[\\\\u4e00-\\\\u9fff]{2,6}', _stripped)": 1,
+    "_search_web::Exception::return_or_assign::_intent_result = None": 1,
+    "set_llm_callback::Exception::pass::pass": 1,
+    "_active_learn::Exception::return_or_assign::_tsm = None;_best_strategy = None": 1,
+    "_wrapper::Exception::return_or_assign::_budget = None": 1
+  },
+  "organs/motor/PulseMouth.py": {
+    "refresh_runtime_params::Exception::pass::pass": 1,
+    "__init__::Exception::return_or_assign::self._tts_max_fails = 5;self._tts_cooldown_seconds = 30.0": 1,
+    "_do_speak::Exception::pass::pass": 1
+  },
+  "organs/senses/PulseEars.py": {
+    "refresh_runtime_params::Exception::pass::pass": 1,
+    "__init__::Exception::return_or_assign::self._max_context = 5": 1,
+    "_voice_listen_loop::Exception::pass::pass": 1
+  },
+  "organs/senses/PulseEyes.py": {
+    "refresh_runtime_params::Exception::pass::pass": 1,
+    "__init__::Exception::return_or_assign::self.top_k = 20;self.min_score = 0.1": 1
+  },
+  "organs/senses/PulseTouch.py": {
+    "_read_sys_file::Exception::return_or_assign::return ''": 1,
+    "_parse_size_kb::Exception::return_or_assign::return 0": 1,
+    "refresh_runtime_params::Exception::pass::pass": 1,
+    "__init__::Exception::return_or_assign::self._snapshot_interval = 30.0;self._alarm_cooldown = 60.0;self._gpu_probe_interval = 15.0": 1,
+    "_check_device_connections::Exception::return_or_assign::new_state = None": 1,
+    "_check_device_connections::Exception::return_or_assign::new_mic_state = None": 1,
+    "_check_device_connections::Exception::return_or_assign::new_spk_state = True": 1,
+    "_run::Exception::pass::pass": 1
+  },
+  "organs/senses/PulseVisualCortex.py": {
+    "__init__::Exception::return_or_assign::self._window_size = 56;self._stable_presence_ratio = 0.4;self._stable_absence_ratio = 0.1": 1,
+    "_detect_capabilities::ImportError::return_or_assign::self._has_opencv = False": 1,
+    "_on_visual_query::ImportError::return_or_assign::result['error'] = 'ocr_engine插件未安装'": 1,
+    "_on_visual_query::Exception::return_or_assign::result['error'] = f'OCR处理异常: {str(e)[:80]}'": 1,
+    "_simulate_from_file::Exception::return_or_assign::return {'error': f'OpenCV 读取失败: {e}'}": 1,
+    "_on_visual_query::ImportError::return_or_assign::result['error'] = 'pdf_engine插件未安装'": 1,
+    "_on_visual_query::Exception::return_or_assign::result['error'] = f'PDF处理异常: {str(e)[:80]}'": 1
+  },
+  "organs/senses/visual_engines/mediapipe_engine.py": {
+    "__init__::ImportError::pass::pass": 1
+  },
+  "organs/senses/visual_engines/ocr_engine.py": {
+    "process::ImportError::return_or_assign::result['error'] = 'pytesseract未安装'": 1,
+    "process::Exception::return_or_assign::result['error'] = f'本地OCR异常: {str(e)[:80]}'": 1,
+    "process::Exception::return_or_assign::result['error'] = f'远程OCR异常: {str(e)[:80]}'": 1
+  },
+  "organs/senses/visual_engines/pdf_engine.py": {
+    "process::ImportError::return_or_assign::result['error'] = 'PyMuPDF(fitz)未安装，请运行: pip install PyMuPDF'": 1,
+    "process::Exception::return_or_assign::result['error'] = f'PDF提取异常: {str(e)[:80]}'": 1
+  },
+  "somatics/actuator.py": {
+    "_detect_audio_output::Exception::return_or_assign::res = None": 1,
+    "execute::Exception::return_or_assign::self._total_failures += 1;return {'status': 'failed', 'device_id': device_id, 'action': action, 'error': str(e)}": 1
+  },
+  "somatics/reflex.py": {
+    "_check_condition::(ValueError, TypeError)::return_or_assign::return False": 1
+  },
+  "somatics/sensor.py": {
+    "_detect_camera::Exception::return_or_assign::return": 1,
+    "_detect_audio::Exception::return_or_assign::return": 1
+  },
+  "tests/conftest.py": {
+    "_isolate_project_log_files::Exception::return_or_assign::_muted = []": 1,
+    "_isolate_project_log_files::Exception::pass::pass": 1,
+    "_iter_main_py_cmdlines::Exception::return_or_assign::return None": 1,
+    "_detect_framework_process::Exception::return_or_assign::return False": 1,
+    "_detect_framework_process::Exception::pass::pass": 1
+  },
+  "tests/test_call_graph_m21.py": {
+    "teardown_module::SystemExit::return_or_assign::_silent = True": 1,
+    "teardown_module::Exception::return_or_assign::_silent = True": 1
+  },
+  "tests/test_cold_compaction_file_missing_m63.py": {
+    "_rmtree_robust::OSError::pass::pass": 3
+  },
+  "tests/test_cold_storage_batch_m81.py": {
+    "tearDown::Exception::pass::pass": 2
+  },
+  "tests/test_data_access_layer.py": {
+    "test_read_json_corrupt_backup_naming::OSError::pass::pass": 1
+  },
+  "tests/test_dead_code_scan_m55.py": {
+    "_rmtree::OSError::pass::pass": 3
+  },
+  "tests/test_distributed_dualwrite_import_m71.py": {
+    "_import_pool::Exception::return_or_assign::_import_pool._pool = None": 1
+  },
+  "tests/test_dup_dialog_m25.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_event_tap_m17.py": {
+    "test_cortex_real_dispatch_publishes_dialog_start::Exception::pass::pass": 1
+  },
+  "tests/test_exclude_dirs_unified_m55.py": {
+    "test_08_switch_off_falls_back_to_legacy::AttributeError::pass::pass": 1
+  },
+  "tests/test_experience_auto_clean_m56.py": {
+    "tearDown::Exception::pass::pass": 1
+  },
+  "tests/test_experience_pool_persistence_m54.py": {
+    "_rmtree::OSError::pass::pass": 3
+  },
+  "tests/test_faiss_index_fix_m73.py": {
+    "<module>::Exception::return_or_assign::_FAISS_OK = False": 1
+  },
+  "tests/test_fake_guard_regression_m51.py": {
+    "_scan_key_dirs::(TypeError, ValueError)::pass::pass": 1
+  },
+  "tests/test_gbk_reply_m80.py": {
+    "test_gbk_reply_push_not_blocked::Exception::pass::pass": 1
+  },
+  "tests/test_health_ui_do_post_m99.py": {
+    "_request::urllib.error.HTTPError::return_or_assign::return (e.code, e.read().decode('utf-8', 'ignore'))": 1
+  },
+  "tests/test_incremental_checkpoint_m81b2.py": {
+    "<module>::Exception::return_or_assign::HAS_PYARROW = False;pq = None": 1,
+    "_parquet_ids::Exception::return_or_assign::return set()": 1,
+    "_read_jsonl::Exception::pass::pass": 1,
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_incremental_log_delete_m81.py": {
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_json_key_m26.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_l3_queue_limit_m33.py": {
+    "__exit__::AttributeError::pass::pass": 1,
+    "tearDown::Exception::pass::pass": 2,
+    "test_01_default_before_init_layer_pools::Exception::pass::pass": 2,
+    "test_02_no_unconditional_clobber_after::Exception::pass::pass": 3
+  },
+  "tests/test_lazy_snapshot_m9.py": {
+    "_purge_scratch::OSError::pass::pass": 2,
+    "_cleanup::OSError::pass::pass": 1
+  },
+  "tests/test_llm_adapters_m11.py": {
+    "test_base_adapter_interface::NotImplementedError::pass::pass": 1
+  },
+  "tests/test_llm_indent_contract_m91.py": {
+    "_gate2::SyntaxError::return_or_assign::return (False, '%s: %s' % (type(_e).__name__, _e))": 1
+  },
+  "tests/test_llm_patch_material_m88.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_llm_patch_similarity_m89.py": {
+    "_syntax_ok::SyntaxError::return_or_assign::return False": 1,
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_load_path_switch_m81.py": {
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_log_governance_m37.py": {
+    "tearDown::Exception::pass::pass": 1,
+    "_prints::Exception::pass::pass": 1,
+    "test_33_zero_log_organs_now_have_business_logs::Exception::pass::pass": 1
+  },
+  "tests/test_log_level_m29.py": {
+    "__exit__::BaseException::pass::pass": 1
+  },
+  "tests/test_log_line_dynamic_m32.py": {
+    "test_03_exception_point_not_call_site::ValueError::return_or_assign::_after = exc_location()": 1,
+    "_raise_at::RuntimeError::return_or_assign::return int(exc_location().rsplit(':', 1)[1])": 1
+  },
+  "tests/test_log_locate_fix_m90.py": {
+    "_real_tags::OSError::return_or_assign::return (list(_FROZEN_TAGS), False)": 1,
+    "_spy_scan::OSError::pass::pass": 1,
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_log_locate_m91.py": {
+    "_real_tags::OSError::return_or_assign::return (list(_FROZEN_TAGS), False)": 1,
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_log_stability_m22.py": {
+    "close::Exception::pass::pass": 1
+  },
+  "tests/test_m117_path_norm.py": {
+    "_load_see::Exception::pass::pass": 1
+  },
+  "tests/test_m117_ratchet_and_smoke.py": {
+    "_load_see::Exception::pass::pass": 1
+  },
+  "tests/test_m70_lazy_materialize_m81.py": {
+    "tearDown::Exception::pass::pass": 2
+  },
+  "tests/test_m70_production_wiring_m81b.py": {
+    "tearDown::Exception::pass::pass": 2
+  },
+  "tests/test_m74_bugfix_robustness.py": {
+    "test_t4_log_rollover_exponential_backoff::Exception::pass::pass": 1
+  },
+  "tests/test_m75_l3_queue_stability.py": {
+    "<module>::Exception::return_or_assign::feedparser = None": 1
+  },
+  "tests/test_m78_mem_alert.py": {
+    "test_01_high_water_alert::Exception::pass::pass": 1,
+    "test_02_below_threshold_no_alert::Exception::pass::pass": 1,
+    "test_03_trend_rising_alert::Exception::pass::pass": 1,
+    "test_04_flat_no_trend_alert::Exception::pass::pass": 1,
+    "test_06_threshold_configurable::Exception::pass::pass": 2
+  },
+  "tests/test_m78_queue_depth_trend.py": {
+    "test_02_rising_trend_alert::Exception::pass::pass": 1,
+    "test_03_flat_no_trend_alert::Exception::pass::pass": 1,
+    "test_04_decreasing_no_trend_alert::Exception::pass::pass": 1,
+    "test_05_above_threshold_absolute_alert::Exception::pass::pass": 1,
+    "test_06_window_too_small_no_alert::Exception::pass::pass": 1
+  },
+  "tests/test_m92_patch_guards.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_m93_apply_guard.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_m94_pending_aging.py": {
+    "tearDown::Exception::pass::pass": 1
+  },
+  "tests/test_m94_tokens_usage.py": {
+    "test_E1_recompute_origin_vs_tokens::Exception::return_or_assign::_d['zero'] += 1": 1,
+    "test_E2_usage_tokens_invariant::Exception::return_or_assign::_got = -1": 1
+  },
+  "tests/test_m96_followups.py": {
+    "_channels_struct::Exception::return_or_assign::d[k.value] = None": 1,
+    "_dict_keys::Exception::pass::pass": 1,
+    "_asg_targets::Exception::pass::pass": 1
+  },
+  "tests/test_memory_verify_delay_semantics_m62.py": {
+    "_probe::Exception::pass::pass": 1
+  },
+  "tests/test_multi_step_fallback_m34.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_operational_admission_m33.py": {
+    "_run::Exception::return_or_assign::return f'__EXC__{type(e).__name__}: {e}'": 1,
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_parquet_cold_json_m68.py": {
+    "test_87_real_array_kv_via_repair::Exception::return_or_assign::_ok = False": 1,
+    "test_91_faiss_not_installed::Exception::return_or_assign::_installed = False": 1,
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_parquet_schema_m81.py": {
+    "<module>::Exception::return_or_assign::HAS_PYARROW = False;pa = pq = None": 1,
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_patch_field_contract_m90.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_path_utils_m48.py": {
+    "test_13_cross_drive_no_exception::(ValueError, OSError, TypeError)::return_or_assign::_raised = _e": 1
+  },
+  "tests/test_pcl_risk_threshold_m54.py": {
+    "_compute_risk_max::Exception::return_or_assign::risk_max = 1": 1
+  },
+  "tests/test_pool_rebuild_m15.py": {
+    "close::Exception::pass::pass": 1
+  },
+  "tests/test_pulse_heart_m52.py": {
+    "_safe_stop::Exception::pass::pass": 1
+  },
+  "tests/test_pulse_liver_m52.py": {
+    "_safe_stop::Exception::pass::pass": 1,
+    "test_55_load_none_state::(TypeError, AttributeError)::pass::pass": 1
+  },
+  "tests/test_pulse_liver_m79.py": {
+    "_safe_stop::Exception::pass::pass": 1
+  },
+  "tests/test_pulse_liver_m80_guard.py": {
+    "_safe_stop::Exception::pass::pass": 1
+  },
+  "tests/test_random_initial_delay_m61.py": {
+    "_probe_nodepool::Exception::pass::pass": 1
+  },
+  "tests/test_request_dedup_m26.py": {
+    "__exit__::AttributeError::pass::pass": 1
+  },
+  "tests/test_robustness_batch2_m10.py": {
+    "test_lazy_snapshot_corrupt_node_degrades::OSError::pass::pass": 1
+  },
+  "tests/test_self_awareness_m18.py": {
+    "_scratch_cleanup::OSError::pass::pass": 1
+  },
+  "tests/test_self_awareness_m19.py": {
+    "_safe_rmtree::BaseException::pass::pass": 1
+  },
+  "tests/test_serp_cleanup_m50.py": {
+    "_skip_if_rewritten::OSError::pass::pass": 1
+  },
+  "tests/test_serp_quality_report_m55.py": {
+    "_rmtree::OSError::pass::pass": 3
+  },
+  "tests/test_snapshot_checksum_m13.py": {
+    "_purge_t3_scratch::OSError::pass::pass": 2,
+    "tearDown::OSError::pass::pass": 1
+  },
+  "tests/test_snapshot_kal_m67.py": {
+    "__exit__::Exception::pass::pass": 1
+  },
+  "tests/test_snapshot_path_guard_m13.py": {
+    "tearDown::OSError::pass::pass": 2
+  },
+  "tests/test_t104c_error_snapshot.py": {
+    "test_health_ui_watchdog_detects_5051_death::Exception::pass::pass": 1
+  },
+  "tests/test_t115d_dummy_skip_ask.py": {
+    "_load_see::Exception::pass::pass": 1
+  },
+  "tests/test_tool_wiring_m49.py": {
+    "_old_set::Exception::return_or_assign::return None": 1
+  },
+  "tests/test_write_guard_m44.py": {
+    "_count::Exception::return_or_assign::return None": 1
+  },
+  "tools/_framework_probe.py": {
+    "_psutil_running::Exception::return_or_assign::return None": 1
+  },
+  "tools/adjudicate_patch.py": {
+    "_cmd_obsolete::Exception::pass::pass": 1,
+    "_stale_reason::(TypeError, ValueError)::return_or_assign::_ts = 0.0": 1
+  },
+  "tools/audit_utils.py": {
+    "_m55_unified_excludes::Exception::return_or_assign::return True": 1
+  },
+  "tools/backfill_llm_trace_fields.py": {
+    "_default_dir::Exception::return_or_assign::_rel = 'data/llm_traces'": 1
+  },
+  "tools/batch_backup.py": {
+    "_m55_unified_excludes::Exception::return_or_assign::return True": 1
+  },
+  "tools/benchmark_hot_cold_faiss_kal.py": {
+    "_config_snapshot::Exception::return_or_assign::return {'error': '%s: %s' % (type(e).__name__, e)}": 1,
+    "_framework_status::Exception::return_or_assign::out['error'] = '%s: %s' % (type(e).__name__, e)": 1,
+    "stage_node_pool::Exception::pass::pass": 1,
+    "stage_faiss::Exception::return_or_assign::_fs = {}": 1,
+    "stage_node_pool_real::Exception::return_or_assign::_mem0 = 0;_have_psutil = False": 1,
+    "stage_node_pool_real::Exception::return_or_assign::_all = []": 1,
+    "stage_node_pool_real::Exception::pass::pass": 1,
+    "stage_kal::Exception::pass::pass": 1,
+    "main::Exception::return_or_assign::result['stages'][name] = {'status': 'SKIPPED', 'reason': '%s: %s' % (type(e).__name__, str(e)[:300])}": 1,
+    "main::Exception::return_or_assign::result['stages']['node_pool_real'] = {'status': 'SKIPPED', 'reason': '%s: %s' % (type(e).__name__, str(e)[:300])}": 1,
+    "main::Exception::return_or_assign::result['stages']['faiss_fix'] = {'status': 'SKIPPED', 'reason': '%s: %s' % (type(e).__name__, str(e)[:300])}": 1,
+    "_framework_status::Exception::pass::pass": 1,
+    "_load_real_nodes::Exception::return_or_assign::return {'error': '%s: %s' % (type(e).__name__, e)}": 1
+  },
+  "tools/build_semantic_index.py": {
+    "cmd_status::Exception::pass::pass": 1
+  },
+  "tools/calibrate_semantic_threshold.py": {
+    "_cosine::Exception::return_or_assign::return 0.0": 1,
+    "resolve_encoder::Exception::return_or_assign::return None": 1,
+    "_default_corpus_dir::Exception::return_or_assign::_rel = 'data/llm_traces'": 1,
+    "resolve_encoder::Exception::return_or_assign::_v = None": 1
+  },
+  "tools/check_code_limits.py": {
+    "_m55_unified_excludes::Exception::return_or_assign::return True": 1,
+    "scan_file::(OSError, UnicodeDecodeError)::return_or_assign::return None": 1,
+    "scan_file::SyntaxError::return_or_assign::return None": 1
+  },
+  "tools/check_patch_consistency.py": {
+    "_check_c3_aging_combo::Exception::return_or_assign::_max, _aging_on = (20, False)": 1,
+    "_load_ledgers::Exception::pass::pass": 1
+  },
+  "tools/ci/check_write_only_gates.py": {
+    "list_py_files::Exception::return_or_assign::rels = None": 1,
+    "d1_dead_config::SyntaxError::return_or_assign::ct = None": 1,
+    "rel::Exception::return_or_assign::return str(p)": 1,
+    "line_of::Exception::return_or_assign::return ''": 1,
+    "_parse::(SyntaxError, ValueError)::return_or_assign::return None": 1,
+    "src::Exception::return_or_assign::self.srcs[p] = ''": 1,
+    "changed_files::Exception::pass::pass": 1,
+    "_ext_index::Exception::pass::pass": 1
+  },
+  "tools/cleanup_alias_placeholder_nodes.py": {
+    "_framework_looks_running::OSError::pass::pass": 1,
+    "_framework_looks_running::Exception::pass::pass": 1
+  },
+  "tools/data_governance_m41.py": {
+    "_cfg::Exception::return_or_assign::return default": 1,
+    "govern_corrupted::Exception::return_or_assign::_old = []": 1,
+    "govern_backups::OSError::return_or_assign::_after = 0": 1,
+    "govern_backups::OSError::pass::pass": 1
+  },
+  "tools/dead_code_scan.py": {
+    "collect_config_refs::Exception::return_or_assign::return out": 1,
+    "collect_definitions::Exception::pass::pass": 2
+  },
+  "tools/dedup_patch_history.py": {
+    "main::(OSError, ValueError)::return_or_assign::_prev = []": 1
+  },
+  "tools/import_nodes_to_neo4j.py": {
+    "import_nodes::Exception::pass::pass": 2
+  },
+  "tools/m102_data_governance.py": {
+    "load_cold_ids::Exception::pass::pass": 1,
+    "_norm_sem::Exception::return_or_assign::return ([], True)": 1,
+    "apply_b::Exception::pass::pass": 2
+  },
+  "tools/memory_growth_analyzer.py": {
+    "get_process_memory::Exception::pass::pass": 1,
+    "build_report::Exception::return_or_assign::_gc_stats = []": 1
+  },
+  "tools/package_full_project.py": {
+    "_m55_unified_excludes::Exception::return_or_assign::return True": 1
+  },
+  "tools/patch_template_helper.py": {
+    "<module>::Exception::return_or_assign::shutil_rm = False": 1
+  },
+  "tools/pytest_shard.py": {
+    "run_shard::subprocess.TimeoutExpired::return_or_assign::return evaluate_shard('TIMEOUT', -1, len(files))": 1
+  },
+  "tools/quality_audit.py": {
+    "_m55_unified_excludes::Exception::return_or_assign::return True": 1,
+    "run_ruff_check::Exception::return_or_assign::return {'available': False, 'error': f'{type(_e).__name__}: {_e}', 'f_errors': -1, 'total': -1, 'details': []}": 1
+  },
+  "tools/serp_pollution_analyzer.py": {
+    "parse_since::(TypeError, ValueError)::pass::pass": 1
+  },
+  "tools/tmp_backup.py": {
+    "restore::(ValueError, OSError)::pass::pass": 1,
+    "list_backups::(ValueError, OSError)::pass::pass": 1,
+    "_dir_size::OSError::pass::pass": 1
+  },
+  "tools/verify_dual_write_e2e.py": {
+    "run::Exception::pass::pass": 1
+  },
+  "tools/verify_phase17_1_5.py": {
+    "t2_atomic_write::Exception::return_or_assign::ok = False": 1,
+    "t4_forced_flush::Exception::return_or_assign::ok = False": 1
+  },
+  "tools/verify_semantic_kernel.py": {
+    "_current_threshold::Exception::return_or_assign::return '?'": 1,
+    "__init__::Exception::return_or_assign::self._gate_fn = None": 1
+  },
+  "tools/verify_write_only_e2e.py": {
+    "run::Exception::pass::pass": 1
+  },
+  "utils/pulse_tracer.py": {
+    "_flush_at_exit::Exception::pass::pass": 1
+  },
+  "utils/safe_hw_probe.py": {
+    "_run_isolated::Exception::return_or_assign::return None": 2,
+    "_run_isolated::Exception::pass::pass": 2
+  }
+}

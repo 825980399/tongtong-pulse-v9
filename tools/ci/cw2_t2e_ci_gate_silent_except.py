@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
-"""任务二 d：防回潮 CI 门禁（真实可执行，非伪码）。
+"""任务二 d：防回潮 CI 门禁 + pre-commit hook（真实可执行，非伪码）。
 
-规则：对 base..HEAD（或工作树）的 diff，新增静默 except handler 数必须 = 0。
+规则：
+  1. 对 base..HEAD（或工作树）的 diff，新增静默 except handler 数必须 = 0（只降不升 / 名单外新增=0）。
+  2. 变更 .py 文件不得含 b"\\r\\r\\n"（CRCRLF 事故正主）。
+  3. 变更 .py 文件必须可解析（parse_err=0）。
+
 实现：AST 比较 base 版本与目标版本中「静默 handler」集合，取差集。
-退出码：0=通过，1=存在新增（CI fail）。
+退出码：0=通过，1=存在违规（CI fail / pre-commit 阻断）。
 
 用法：
   python -X utf8 cw2_t2e_ci_gate_silent_except.py [--base HEAD] [--target worktree|HEAD]
+                                            [--emit-baseline PATH] [--baseline PATH]
 """
 import argparse
 import ast
 import collections
 import io
+import json
 import os
 import subprocess
 import sys
@@ -25,11 +31,6 @@ LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical
 
 
 def _log(level, msg):
-    """★T-101e：门禁脚本自身也须满足「无静默 except」规则——所有异常分支显式上报。
-
-    ``_log`` 在 LOG_FUNCS 集合内，调用它即可让 gate 的 ``has_report`` 判定为非静默，
-    从而避免「门禁脚本自己触发自己的 FAIL」。
-    """
     sys.stderr.write(f"[ci_gate_silent_except][{level}] {msg}\n")
 
 
@@ -54,11 +55,6 @@ def has_report(h):
 
 
 def silent_handlers(src, path="<unknown>"):
-    """返回该源码中所有「静默」except handler 的特征指纹集合。
-
-    指纹 = (函数名, 捕获类型, 体形态, 规范化体源码)
-    用结构指纹而非行号，避免仅仅上下移动代码就误报为「新增」。
-    """
     out = collections.Counter()
     try:
         tree = ast.parse(src)
@@ -86,7 +82,6 @@ def silent_handlers(src, path="<unknown>"):
         body = node.body
         allquiet = all(quiet_body(x) for x in body)
         if not allquiet:
-            # 只有「体完全静默」或「纯 return/赋值」才纳入门禁，避免误伤
             rets = [x for x in body if isinstance(x, ast.Return)]
             asg = [x for x in body if isinstance(x, (ast.Assign, ast.AugAssign))]
             if not (len(rets) == len(body) or len(rets) + len(asg) == len(body)):
@@ -119,7 +114,6 @@ def changed_files(base):
     r = subprocess.run(["git", "diff", "--name-only", "--diff-filter=ACMR", base, "--", "*.py"],
                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     lst = [x for x in r.stdout.splitlines() if x.strip()]
-    # 处理中文/特殊路径：git 可能加引号
     out = []
     for x in lst:
         if x.startswith('"') and x.endswith('"'):
@@ -132,19 +126,56 @@ def changed_files(base):
     return out
 
 
+# ---- 第126批 T-126c 新增：CRCRLF 行尾污染检测 ----
+def check_crcrlf(files):
+    bad = []
+    for rel in files:
+        p = os.path.join(ROOT, rel)
+        if not os.path.exists(p):
+            continue
+        with io.open(p, "rb") as _f:
+            _data = _f.read()
+        if b"\r\r\n" in _data:
+            bad.append(rel)
+    return bad
+
+
+# ---- 第126批 T-126c 新增：生成已知静默except指纹基线（名单） ----
+def emit_baseline(path):
+    r = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
+                       capture_output=True, text=True, encoding="utf-8")
+    files = [x for x in r.stdout.splitlines() if x.strip()]
+    base = {}
+    for rel in files:
+        src = git_read_worktree(rel) or ""
+        cnt = silent_handlers(src, rel)
+        if cnt:
+            base[rel] = {"::".join(k): v for k, v in cnt.items()}
+    with io.open(path, "w", encoding="utf-8") as _f:
+        json.dump(base, _f, ensure_ascii=False, indent=2)
+    print(f"BASELINE_EMITTED -> {path}  files={len(files)}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="HEAD")
     ap.add_argument("--target", default="worktree", choices=["worktree", "HEAD"])
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--emit-baseline", default=None)
+    ap.add_argument("--baseline", default=None)
     args = ap.parse_args()
+
+    if args.emit_baseline:
+        emit_baseline(args.emit_baseline)
+        return 0
 
     files = changed_files(args.base)
     print("=" * 74)
-    print("CI 门禁：新增静默 except 必须为 0")
+    print("CI / pre-commit 门禁：防静默except回潮 + CRCRLF")
     print(f"  base={args.base}  target={args.target}  变更 .py 文件数={len(files)}")
     print("=" * 74)
     total_added = 0
+    parse_errs = 0
     per_file = []
     for rel in files:
         old = git_show(args.base, rel)
@@ -155,22 +186,36 @@ def main():
             old = ""
         so, sn = silent_handlers(old, rel), silent_handlers(new, rel)
         added = sn - so          # Counter 差集：新有而旧无（含重数）
-        n = sum(added.values())
-        if n:
-            total_added += n
-            per_file.append((rel, n, added))
-            print(f"  [FAIL] {rel}: 新增静默 except {n} 处")
-            if args.verbose:
-                for (fn, tn, shape, bsrc), c in added.most_common(8):
+        for (fn, tn, shape, bsrc), c in added.items():
+            if fn == "::<PARSE_ERROR>::":
+                parse_errs += c
+            else:
+                total_added += c
+                per_file.append((rel, c, added))
+                if args.verbose:
                     print(f"        {c}x  func={fn}  except {tn}  -> {shape}  body={bsrc[:60]}")
+
+    crcrlf_bad = check_crcrlf(files)
     print("-" * 74)
+    ok = True
     if total_added == 0:
-        print("  结论: PASS —— 本次变更未新增静默 except")
+        print("  [1][2] 静默except：PASS —— 本次变更未新增（只降不升 / 名单外新增=0）")
     else:
-        print(f"  结论: FAIL —— 新增静默 except 合计 {total_added} 处，涉及 {len(per_file)} 文件")
-        print("  整改要求: 每处须改为「带节流 DEBUG 日志」或补 `# intentional:` 说明后")
-        print("              在本文件白名单登记（见 cw2_t2_fix_templates.md §白名单）")
-    sys.exit(0 if total_added == 0 else 1)
+        ok = False
+        print(f"  [1][2] 静默except：FAIL —— 新增 {total_added} 处，涉及 {len(per_file)} 文件")
+    if parse_errs == 0:
+        print("  [3] parse_err：PASS —— 变更 .py 均可解析")
+    else:
+        ok = False
+        print(f"  [3] parse_err：FAIL —— {parse_errs} 个文件解析失败")
+    if not crcrlf_bad:
+        print("  [4] CRCRLF(双CR行尾)：PASS —— 无 CRCRLF 行尾污染")
+    else:
+        ok = False
+        print(f"  [4] CRCRLF(双CR行尾)：FAIL —— {len(crcrlf_bad)} 文件含双CR：{crcrlf_bad}")
+    print("=" * 74)
+    print("  结论: PASS" if ok else "  结论: FAIL —— 提交被阻断，请整改后重试")
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":
