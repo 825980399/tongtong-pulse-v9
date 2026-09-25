@@ -15,6 +15,15 @@ def _load_see():
     _spec = importlib.util.spec_from_file_location("SEE_t115d_test", _src)
     _mod = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)
+    # ★第117批 T-117d②（R4-B22 冒烟隔离规矩）：本用例用**合成指纹**
+    #   （file="a.py"、method="m"）驱动断5 硬闸，其 `[指纹咨询硬闸]` INFO 属冒烟产物。
+    #   实测该行曾落进 pulse.log（2026-09-23 21:05:26），对「INFO>=1」类生产判据构成
+    #   假阳性风险。改为走 smoke 日志器（独立 smoke.log + [SMOKE] 前缀 + 不冒泡）。
+    try:
+        from nucleus.logger import get_smoke_logger
+        _mod._module_logger = get_smoke_logger("t115d_dummy_skip_ask")
+    except Exception:
+        pass  # 拿不到 smoke 日志器就保持原样（不因日志设施失败而让用例失败）
     return _mod.SafeEvolutionExecutor
 
 

@@ -307,10 +307,12 @@ class BasePulseOrgan(ABC):
             try:
                 import config
                 if getattr(config, 'DEBUG_PULSE_TRACE', False):
-                    from utils.pulse_tracer import flush_to_file, log_emit
+                    # ★第117批 T-117a（方案B）：同步 flush_to_file() 已移除 ——
+                    #   它让器官发射线程直面 per-path 写锁（19:35 块实测 11 个参与者
+                    #   排队），写盘改由 tracer 内部 daemon 线程承担。
+                    from utils.pulse_tracer import log_emit
                     _trace_id = pulse.get("pulse_id", "") if isinstance(pulse, dict) else ""
                     log_emit(self.organ_name, event_type, layer, _trace_id)
-                    flush_to_file()
             except Exception:
                 self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
             
@@ -472,11 +474,12 @@ class BasePulseOrgan(ABC):
         try:
             import config
             if getattr(config, 'DEBUG_PULSE_TRACE', False):
-                from utils.pulse_tracer import log_receive, flush_to_file
+                # ★第117批 T-117a（方案B）：同步 flush_to_file() 已移除（同上），
+                #   器官接收线程不再卡在业务之前的写锁上。
+                from utils.pulse_tracer import log_receive
                 event_type = pulse.get("event_type", "?")
                 source = pulse.get("source_organ", "?")
                 log_receive(self.organ_name, event_type, source)
-                flush_to_file()
         except Exception:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         # === 执行业务逻辑（锁外，其他线程可同时进入） ===
