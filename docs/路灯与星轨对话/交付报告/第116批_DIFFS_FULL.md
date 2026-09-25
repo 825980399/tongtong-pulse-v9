@@ -1,7 +1,7 @@
 # 第116批 改动 DIFF（全量）
 
 - 比对基准：`.bak_batch116/`（首次改动前备份，含 `_manifest.txt` 5 个文件）
-- 统计：**+195 / -14**（按行，unified_diff n=6）
+- 统计：**+243 / -21**（按行，unified_diff n=6）
 - 行尾保全：所有文件行尾未翻转
 
 ---
@@ -206,7 +206,81 @@
  """
  from __future__ import annotations
  
-@@ -174,24 +178,155 @@
+@@ -42,19 +46,28 @@
+     _obsolete_path = os.path.join(
+         os.path.dirname(pm.get_history_file()), "patch_history_obsolete.json")
+     _obsolete = pm.load_json(_obsolete_path, [])
+     return _pending, _history, _obsolete, _obsolete_path
+ 
+ 
+-def _find(pending, history, patch_id, source):
++def _find(pending, history, patch_id, source, obsolete=None):
++    """按账本定位补丁。
++
++    ★第116批 T-116c②/③ 修复：source=='obsolete' 时必须能搜到归档账，
++    否则 keep/reject --source obsolete 恒报“未找到补丁”（实测 rc=2）。
++    """
+     if source == "pending":
+         _ledgers = [("pending", pending)]
+     elif source == "history":
+         _ledgers = [("history", history)]
++    elif source == "obsolete":
++        _ledgers = [("obsolete", obsolete or [])]
+     else:
+         _ledgers = [("pending", pending), ("history", history)]
++        if obsolete:
++            _ledgers.append(("obsolete", obsolete))
+     for _name, _lst in _ledgers:
+         for _i, _p in enumerate(_lst):
+             if isinstance(_p, dict) and str(_p.get("id")) == patch_id:
+                 return _name, _lst, _i, _p
+     return None, None, None, None
+ 
+@@ -94,15 +107,23 @@
+         print(f"未找到补丁: {args.patch_id}", file=sys.stderr)
+         return 2
+     print(json.dumps(_p, ensure_ascii=False, indent=2))
+     return 0
+ 
+ 
+-def _save_ledger(pm, name, lst):
++def _save_ledger(pm, name, lst, obsolete_path=None):
++    """★第116批 T-116c②/③ 修复：补 obsolete 归档账写回分支。"""
+     if name == "pending":
+         _path = pm.get_pending_file()
++    elif name == "obsolete":
++        if not obsolete_path:
++            _path = os.path.join(
++                os.path.dirname(pm.get_history_file()),
++                "patch_history_obsolete.json")
++        else:
++            _path = obsolete_path
+     else:
+         _path = pm.get_history_file()
+     return pm._save_json(_path, lst)
+ 
+ 
+ def _cmd_obsolete(args, pm, pending, history, obsolete, obsolete_path):
+@@ -158,40 +179,179 @@
+         return 1
+     print(f"✅ 已裁决 approved: {args.patch_id}")
+     return 0
+ 
+ 
+ def _cmd_keep(args, pm, pending, history, obsolete, _op):
+-    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source)
++    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source,
++                                obsolete=obsolete)
+     if _p is None:
+         print(f"未找到补丁: {args.patch_id}", file=sys.stderr)
+         return 2
+     _p["adjudicated"] = True
+     _p["adjudicated_at"] = time.time()
+     _p["adjudicated_by"] = "adjudicate_patch.cli"
+     _p["adjudicated_verdict"] = "keep"
+-    if not _save_ledger(pm, _name, _lst):
++    if not _save_ledger(pm, _name, _lst, obsolete_path=_op):
+         print("写盘失败", file=sys.stderr)
          return 1
      print(f"✅ 已记录保留裁决: {args.patch_id}（状态未改动）")
      return 0
@@ -327,7 +401,8 @@
 +
 +def _cmd_reject(args, pm, pending, history, obsolete, _op):
 +    """★T-116c③：reject 入口（白名单含 rejected 态）。"""
-+    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source)
++    _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source,
++                                obsolete=obsolete)
 +    if _p is None:
 +        print(f"未找到补丁: {args.patch_id}", file=sys.stderr)
 +        return 2
@@ -338,7 +413,7 @@
 +    _p["adjudicated_verdict"] = "rejected"
 +    if args.reason:
 +        _p["adjudicated_reason"] = args.reason
-+    if not _save_ledger(pm, _name, _lst):
++    if not _save_ledger(pm, _name, _lst, obsolete_path=_op):
 +        print("写盘失败", file=sys.stderr)
 +        return 1
 +    print(f"✅ 已裁决 rejected: {args.patch_id}")
@@ -346,7 +421,13 @@
 +
 +
 +def _queue_clean(pending):
-+    """队列清洁判据：无 pending/needs_reverify/undecidable 悬挂项。"""
++    """队列清洁判据：顶层 status 为 pending / needs_reverify 的悬挂项。
++
++    ★第116批 T-116c④ 注释校正：'undecidable' 并非顶层 status，
++    而是 runtime_verify_result 内的嵌套字段（SafeEvolutionExecutor
++    :2305/:2318/:2340），此前 docstring 将其写成 status 属误导。
++    本函数据此只按顶层 status 判定；嵌套 undecidable 是否纳入悬挂 -> 待裁决。
++    """
 +    _dirty = []
 +    for _p in pending:
 +        if not isinstance(_p, dict):
@@ -362,7 +443,7 @@
      _sub = _ap.add_subparsers(dest="cmd", required=True)
  
      _sp = _sub.add_parser("list")
-@@ -210,27 +345,47 @@
+@@ -210,27 +370,47 @@
      _sp = _sub.add_parser("approve")
      _sp.add_argument("patch_id")
      _sp.add_argument("--source", default=None, choices=["pending", "history"])
@@ -472,4 +553,89 @@
 
 ### `tools/check_patch_consistency.py`
 
-（无改动）
+> 行尾：备份=LF 当前=LF
+
+```diff
+--- a/tools/check_patch_consistency.py
++++ b/tools/check_patch_consistency.py
+@@ -16,12 +16,17 @@
+     C7 无reason的obsolete —— obsolete 补丁缺 obsolete_reason / reason
+ 
+ 退出码：发现任一问题 -> 1；全部通过 -> 0。便于门禁串联。
+ 
+ 用法：
+     python tools/check_patch_consistency.py [--root <项目根>] [--json] [--strict]
++                                            [--no-import]
++
++★第116批 T-116b③：新增 --no-import —— CI 环境用它强制走「直读 JSON」退化路径，
++  不 import PatchManager（避免拉起 config/框架依赖导致门禁受污染或变慢）。
++  默认仍优先复用 PatchManager 的真实路径（与生产口径一致）。
+ """
+ from __future__ import annotations
+ 
+ import argparse
+ import json
+ import os
+@@ -44,17 +49,23 @@
+ 
+ def _detect_root() -> str:
+     """tools/check_patch_consistency.py -> 项目根 = tools 的父目录。"""
+     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ 
+ 
+-def _load_ledgers(root: str):
+-    """优先复用 PatchManager 的真实路径与加载逻辑；失败则退化为直接读 JSON。"""
++def _load_ledgers(root: str, no_import: bool = False):
++    """优先复用 PatchManager 的真实路径与加载逻辑；失败则退化为直接读 JSON。
++
++    ★第116批 T-116b③：no_import=True 时跳过 PatchManager，直接按约定路径读三本账，
++    供 CI 门禁在无框架依赖的环境下使用（结果口径与退化路径一致）。
++    """
+     pending, history, obsolete = [], [], []
+     pending_path = history_path = obsolete_path = ""
+     try:
++        if no_import:
++            raise RuntimeError("--no-import：按用户要求跳过 PatchManager 直读")
+         sys.path.insert(0, root)
+         from nucleus.reasoning.PatchManager import PatchManager
+         _pm = PatchManager(root)
+         pending_path = _pm.get_pending_file()
+         history_path = _pm.get_history_file()
+         _hist_dir = os.path.dirname(history_path)
+@@ -266,16 +277,20 @@
+ def main(argv=None):
+     _ap = argparse.ArgumentParser(description="补丁账本一致性巡检（C1-C7）")
+     _ap.add_argument("--root", default=None, help="项目根目录（默认自动探测）")
+     _ap.add_argument("--json", action="store_true", help="输出 JSON")
+     _ap.add_argument("--strict", action="store_true",
+                      help="C3 队列级组合也计为失败（默认仅逐条问题计失败）")
++    # ★第116批 T-116b③：CI 直读退化开关
++    _ap.add_argument("--no-import", dest="no_import", action="store_true",
++                     help="不 import PatchManager，直接读三本账 JSON（CI 友好）")
+     _args = _ap.parse_args(argv)
+ 
+     _root = _args.root or _detect_root()
+-    _pending, _history, _obsolete, _pp, _hp, _op = _load_ledgers(_root)
++    _pending, _history, _obsolete, _pp, _hp, _op = _load_ledgers(
++        _root, no_import=_args.no_import)
+ 
+     _all = {
+         "pending": _pending,
+         "history": _history,
+         "obsolete": _obsolete,
+     }
+@@ -311,12 +326,13 @@
+ 
+     if _args.json:
+         print(json.dumps({"summary": _summary, "issues": _issues},
+                          ensure_ascii=False, indent=2))
+     else:
+         print(f"[一致性巡检] 项目根: {_root}")
++        print(f"  账本来源: {'直读JSON(--no-import)' if _args.no_import else 'PatchManager(默认)'}")
+         print(f"  pending={len(_pending)} history={len(_history)} "
+               f"obsolete={len(_obsolete)}")
+         print(f"  问题总数: {len(_issues)}  按检查: {_by_check or '无'}")
+         if _issues:
+             print("  --- 明细 ---")
+             for _i in _issues:
+```
