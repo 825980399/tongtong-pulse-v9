@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """ChannelQuotaMonitor.py —— 渠道免费额度监控与自动切换
 
 版本: v10 PulseNet
@@ -83,7 +84,8 @@ class ChannelQuotaMonitor:
         try:
             import config as _c
             return _c
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/ChannelQuotaMonitor.py:86", level="warning")
             return None
 
     def enabled(self) -> bool:
@@ -98,7 +100,8 @@ class ChannelQuotaMonitor:
         _c = self._cfg()
         try:
             return float(getattr(_c, "QUOTA_DEGRADE_RATIO", 0.10))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/ChannelQuotaMonitor.py:101", level="warning")
             return 0.10
 
     def pause_ratio(self) -> float:
@@ -247,8 +250,8 @@ class ChannelQuotaMonitor:
                     self._daily_reset[channel_name] = _today
                     self._dirty = True
                     self._last_save = 0.0
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/ChannelQuotaMonitor.py:250", level="warning")
 
     def tick_daily_reset(self) -> int:
         """★第97批 T-97c：运维/调度主动触发——对所有 active 渠道执行每日重置检查。
@@ -266,8 +269,8 @@ class ChannelQuotaMonitor:
                     self._ensure_daily_reset(_name)
                     if self._daily_reset.get(_name) != _before:
                         _n += 1
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/ChannelQuotaMonitor.py:269", level="warning")
         return _n
 
     # ------------------------------------------------------------------

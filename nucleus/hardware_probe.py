@@ -12,6 +12,7 @@ hardware_probe.py —— 硬件探测器
 """
 
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 from config import TIMEOUT_CONFIG
 
 import os
@@ -82,7 +83,8 @@ def _has_psutil() -> bool:
     try:
         import psutil  # noqa: F401
         return True
-    except ImportError:
+    except ImportError as e:
+        silent_exc(e, "nucleus/hardware_probe.py:85", level="warning")
         return False
 
 
@@ -91,7 +93,8 @@ def _detect_cores() -> int:
     try:
         import psutil
         return psutil.cpu_count(logical=True) or os.cpu_count() or 1
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/hardware_probe.py:94", level="warning")
         return os.cpu_count() or 1
 
 
@@ -101,7 +104,8 @@ def _detect_memory_gb() -> float:
         import psutil
         vm = psutil.virtual_memory()
         return round(vm.total / (1024 ** 3), 1)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/hardware_probe.py:104", level="warning")
         return 0.0
 
 
@@ -198,8 +202,8 @@ def _detect_gpu_deep() -> dict[str, Any]:
             _mem_free = _info.get("memory_free_mb", 0)
             _info["shared_memory_mb"] = 0  # 独显不加载共享显存空想条（稳定优先）
             _info["usable_mb"] = _mem_free  # 实际可用于计算的显存
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, "nucleus/hardware_probe.py:201", level="warning")
     return _info
 
 

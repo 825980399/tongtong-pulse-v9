@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """
 PatchManager.py —— 补丁管理器
 
@@ -259,8 +260,8 @@ def _m92_base_indent(code: str) -> int:
         _fn = getattr(_SEE, "_m91_base_indent", None)
         if callable(_fn):
             return int(_fn(str(code)))
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, "nucleus/reasoning/PatchManager.py:262", level="warning")
     for _ln in str(code).replace("\r\n", "\n").split("\n"):
         _s = _ln.strip()
         if not _s or _s.startswith("#"):
@@ -1941,7 +1942,8 @@ class PatchManager:
                     "complete": False,
                     "reason": f"与原文相似度过低({_ratio:.2f} < {_min_sim:g})，疑似严重残缺/截断",
                 }
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/PatchManager.py:1944", level="warning")
             # 相似度计算失败不阻断验证（保守放行，交给后续语法/导入关）
             pass
 
@@ -2480,8 +2482,8 @@ class PatchManager:
             import config as _cfg_mod2
             _timeout = int(getattr(_cfg_mod2, 'EVOLUTION_CONFIG', {}).get(
                 "regression_timeout", _timeout) or _timeout)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/PatchManager.py:2483", level="warning")
         _passed = 0
         _failed = 0
         _missing = []
@@ -2581,7 +2583,8 @@ class PatchManager:
                     )
                     # 阈值从 config.EVOLUTION_EFFECT_VERIFY_CONFIG 读（低风险40/高风险60）
                     _min_trust = _EV.trust_threshold_for(patch)
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "nucleus/reasoning/PatchManager.py:2584", level="warning")
                     pass  # 判定失败则维持原门槛，绝不放宽
             if _trust < _min_trust:
                 return {"safe": False, "reason": f"信任分数不足({_trust}<{_min_trust})"}

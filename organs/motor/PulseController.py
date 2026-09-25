@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """
 PulseController —— 控制器器官 · 网页深度搜索与本地文件/应用操纵
 
@@ -287,8 +288,8 @@ class PulseController(BasePulseOrgan):
             if loop.is_running():
                 self._log(LogLevel.DEBUG, "异步循环运行中，跳过无头浏览器启动")
                 return False
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            silent_exc(e, "organs/motor/PulseController.py:290", level="warning")
         except Exception as e:
             self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
         if not PLAYWRIGHT_AVAILABLE:
@@ -376,8 +377,8 @@ class PulseController(BasePulseOrgan):
                 # networkidle 超时说明页面有持续请求（如广告），降级到 domcontentloaded
                 try:
                     self._headless_page.wait_for_load_state('domcontentloaded', timeout=5000)
-                except PlaywrightTimeout:  # type: ignore[possibly-unbound]
-                    pass
+                except PlaywrightTimeout as e:  # type: ignore[possibly-unbound]
+                    silent_exc(e, "organs/motor/PulseController.py:379", level="warning")
             self._headless_last_used = time.time()
 
             human_cfg = self._get_headless_config("human_behavior", {})

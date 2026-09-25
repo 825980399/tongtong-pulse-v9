@@ -1,6 +1,7 @@
 import logging
 _module_logger = logging.getLogger(__name__)
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """
 PulseLung —— 脉冲驱动肺 · 模型调用器官
 
@@ -48,7 +49,8 @@ class PulseLung(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             self.ollama_timeout = _rp.get("llm_timeout_seconds", 30)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/body/PulseLung.py:51", level="warning")
             self.ollama_timeout = 30
 
         # 统计
@@ -64,7 +66,8 @@ class PulseLung(BasePulseOrgan):
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             self._model_downgrade_threshold = _rp.get("llm_model_downgrade_threshold", 0.4)
             self._model_recover_threshold = _rp.get("llm_model_recover_threshold", 0.7)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/body/PulseLung.py:67", level="warning")
             self._model_downgrade_threshold = 0.4
             self._model_recover_threshold = 0.7
         self._local_fallback = ""  # 远程调用失败时的本地回退模型

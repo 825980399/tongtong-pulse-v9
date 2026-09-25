@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """
 PulseStomach —— 脉冲驱动胃 · 知识消化器官
 
@@ -792,8 +793,8 @@ class PulseStomach(BasePulseOrgan):
                                     if isinstance(_v68, (list, dict)):
                                         try:
                                             _data68[_k68] = _json105.dumps(_v68, ensure_ascii=False)
-                                        except Exception:
-                                            pass
+                                        except Exception as e:
+                                            silent_exc(e, "organs/body/PulseStomach.py:795", level="warning")
                                 _parsed = _data68
                                 self._log(LogLevel.INFO,
                                           f"代码分析JSON经策略5(容错解析:{_st68})成功: "
@@ -2049,8 +2050,8 @@ class PulseStomach(BasePulseOrgan):
                 "content_len": len(str(content or "")),
                 "reason": str(reason)[:80],
             })
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "organs/body/PulseStomach.py:2052", level="warning")
 
     def _verify_digestion_quality(self, content: str, keywords: list,
                                   space_path: str, source_organ: str,
@@ -2253,8 +2254,8 @@ class PulseStomach(BasePulseOrgan):
             _s = _t.get_stats() if hasattr(_t, "get_stats") else None
             if isinstance(_s, dict):
                 _out["tracker"] = _s
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "organs/body/PulseStomach.py:2256", level="warning")
         return _out
 
     @staticmethod

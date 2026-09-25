@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from nucleus._silent_except import silent_exc
 """
 PulseSnapshot.py —— 脉冲快照
 
@@ -266,8 +267,8 @@ class PulseSnapshot:
                 if _n > 0:
                     self._logger.info(
                         f"[P2-88] 已清理临时快照残留 {_n} 个（%TEMP%/snap_t4_*）")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:269", level="warning")
 
     def _log(self, level: str, msg: str):
         """统一日志输出"""
@@ -344,8 +345,8 @@ class PulseSnapshot:
                 self._logger.info(
                     f"[DataQualityGuard] 快照保存前健康度: 累计检查{_gs.get('checked', 0)}次, "
                     f"异常{_gs.get('bad', 0)}个")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:347", level="warning")
 
         if self.node_pool is None:
             self._log(LogLevel.WARNING, "node_pool 未注入，跳过保存")
@@ -783,8 +784,8 @@ class PulseSnapshot:
                 _stall_to = float(getattr(_c80, "SNAPSHOT_SAVE_TIMEOUT", 1800) or 1800)
                 _full_int = float(getattr(_c80, "SNAPSHOT_FULL_SAVE_INTERVAL", 3600) or 3600)
                 _stall_to = max(_stall_to, 2 * _full_int)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:786", level="warning")
             _stuck = time.time() - getattr(self, "_m67_save_start_time", 0)
             if _stuck > _stall_to:
                 self._log(LogLevel.ERROR,
@@ -891,8 +892,8 @@ class PulseSnapshot:
                     _failed = f"{tmp_path}.failed_{time.strftime('%Y%m%d_%H%M%S')}"
                     os.rename(tmp_path, _failed)
                     self._log(LogLevel.ERROR, f"[第80批 T4] 快照写入失败，保留临时副本供恢复: {_failed}")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:894", level="warning")
             raise
         self._cleanup_old_backups()
 
@@ -1588,8 +1589,8 @@ class PulseSnapshot:
                     _failed = f"{tmp_path}.failed_{time.strftime('%Y%m%d_%H%M%S')}"
                     os.rename(tmp_path, _failed)
                     self._log(LogLevel.ERROR, f"[第80批 T4] 快照写入失败，保留临时副本供恢复: {_failed}")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:1591", level="warning")
             raise
         
         # ===== 清理旧备份（仅 rotate=True） =====
@@ -1722,8 +1723,8 @@ class PulseSnapshot:
                         _n.linked_nodes = []
                     try:
                         self._m70_lazy_ids.add(getattr(_n, "node_id", ""))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:1725", level="warning")
                     self._m70_lazy_node_map[getattr(_n, "node_id", "")] = _n
                     self._m70_hot_load_stats["lazy"] += 1
                 except Exception:
