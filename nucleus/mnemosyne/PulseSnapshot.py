@@ -2493,6 +2493,9 @@ class PulseSnapshot:
                 _row["source_timestamp"] = float(_d.get("source_timestamp", 0.0) or 0.0)
                 _row["quality_flag"] = str(_d.get("quality_flag", "clean"))
                 _row["quality_reason"] = str(_d.get("quality_reason", ""))
+            # ★第122批 T-122b：C4断5 补 conflict_count/last_conflict_at 两键（Parquet 主存储搬运，与 JSON 侧 T-120e 对齐）
+            _row["conflict_count"] = int(_d.get("conflict_count", 0) or 0)
+            _row["last_conflict_at"] = float(_d.get("last_conflict_at", 0.0) or 0.0)
             _rows.append(_row)
         return _rows
 
@@ -2559,6 +2562,9 @@ class PulseSnapshot:
             "source_timestamp": float(_row.get("source_timestamp", 0.0) or 0.0),
             "quality_flag": _row.get("quality_flag", "clean") or "clean",
             "quality_reason": _row.get("quality_reason", "") or "",
+            # ★第122批 T-122b：C4断5 读映射补两键（与写白名单对齐）
+            "conflict_count": int(_row.get("conflict_count", 0) or 0),
+            "last_conflict_at": float(_row.get("last_conflict_at", 0.0) or 0.0),
         }
 
     @staticmethod
