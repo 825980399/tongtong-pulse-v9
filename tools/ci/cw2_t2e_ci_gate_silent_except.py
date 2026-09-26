@@ -30,6 +30,21 @@ LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical
              "notify", "alert", "emit", "_log", "_log_safe", "_log_msg", "_trace", "silent_exc"}
 
 
+# ---- 第132批 T-132d：静默except豁免白名单（8 处合理自举兜底） ----
+# 这些位置是框架有意的静默兜底（PM 的 ImportError 日志模块自举、RWP 的 shutdown 期落盘/回收保护），
+# 不应计入"待改造"清单，也不应在未来被重新引入时触发违规。键 = (relpath, 源文件行号)。
+LOCATION_WHITELIST = {
+    ("nucleus/reasoning/PatchManager.py", 3364),   # except ImportError: pass（日志模块不可用兜底）
+    ("nucleus/reasoning/PatchManager.py", 3493),   # except ImportError: pass
+    ("nucleus/reasoning/PatchManager.py", 3641),   # except ImportError: pass
+    ("nucleus/reasoning/PatchManager.py", 3725),   # except ImportError: pass
+    ("nucleus/reasoning/PatchManager.py", 3782),   # except ImportError: pass
+    ("nucleus/reasoning/ReasoningWorkerPool.py", 707),   # shutdown 取消在途任务：except Exception: pass
+    ("nucleus/reasoning/ReasoningWorkerPool.py", 747),   # shutdown join 子进程：except Exception: pass
+    ("nucleus/reasoning/ReasoningWorkerPool.py", 795),   # shutdown 落盘保护(_sd)：except Exception: pass
+}
+
+
 def _log(level, msg):
     sys.stderr.write(f"[ci_gate_silent_except][{level}] {msg}\n")
 
@@ -78,6 +93,8 @@ def silent_handlers(src, path="<unknown>"):
         if not isinstance(node, ast.ExceptHandler):
             continue
         if has_report(node):
+            continue
+        if (path, node.lineno) in LOCATION_WHITELIST:
             continue
         body = node.body
         allquiet = all(quiet_body(x) for x in body)

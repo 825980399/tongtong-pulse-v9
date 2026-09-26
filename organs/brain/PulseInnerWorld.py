@@ -4132,7 +4132,8 @@ class PulseInnerWorld(BasePulseOrgan):
                     return {"status": f"experience_{_exp_type}_honest", "answer": _fallback_result.get("answer")}
             return _fallback_result
 
-        except ImportError:
+        except ImportError as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:4135:_detect_experience_route", level="debug")
             return None
         except Exception as _exp_e:
             self._log(LogLevel.DEBUG, f"经验匹配路由异常: {_exp_e}")
@@ -5249,7 +5250,8 @@ class PulseInnerWorld(BasePulseOrgan):
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             self._log(LogLevel.DEBUG, f"认知反思(周期): {_insight[:120]}")
             return _insight
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:5252:_run_periodic_reflection", level="warning")
             return None
 
     def _pick_analogy_candidate(self, exclude_text: str, limit: int = 30) -> str | None:

@@ -316,8 +316,8 @@ class ReasoningWorkerPool:
         # ★主线第15批 T2/P1-92：并入重建统计（供自省/诊断）
         try:
             _stats.update(self.get_rebuild_stats())
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/ReasoningWorkerPool.py:319:get_stats", level="warning")
         return _stats
     
     # ==================================================================
@@ -445,8 +445,8 @@ class ReasoningWorkerPool:
                     if _pending:
                         try:
                             wait(_pending, timeout=5.0)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            silent_exc(e, "nucleus/reasoning/ReasoningWorkerPool.py:448:_rebuild_pool", level="warning")
                         with self._lock:
                             self._inflight_futures.difference_update(_pending)
                 except Exception as e:
@@ -605,7 +605,8 @@ class ReasoningWorkerPool:
             from nucleus.parallel_scheduler import get_parallel_scheduler
             _cur_p = get_parallel_scheduler().get_parallelism()
             _cur_p = max(2, int(_cur_p))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/ReasoningWorkerPool.py:608:_maybe_resize_pool_locked", level="warning")
             return
         _new_workers = max(2, int(_cur_p * 0.75))
         _old_workers = self._max_workers

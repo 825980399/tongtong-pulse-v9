@@ -281,7 +281,8 @@ def _m92_count_class_methods(src: str):
     """
     try:
         _tree = ast.parse(src, filename="<m92-class-method-counter>")
-    except SyntaxError:
+    except SyntaxError as e:
+        silent_exc(e, "nucleus/reasoning/PatchManager.py:284:_m92_count_class_methods", level="debug")
         return None
     _methods = 0
     _classes = 0
@@ -1329,7 +1330,8 @@ class PatchManager:
                 _age = self._m94_patch_age_hours(_p, now)
                 if _age is None or _age < _maxh:
                     return _p
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/PatchManager.py:1332:find_blocking_pending_patch", level="warning")
             return None
         return None
 
@@ -2212,7 +2214,8 @@ class PatchManager:
                     # 原方法抛异常：若修改后也抛 → 行为一致；否则不一致
                     try:
                         _f_mod(*_args)
-                    except Exception:
+                    except Exception as e:
+                        silent_exc(e, "nucleus/reasoning/PatchManager.py:2215:_behavior_equivalence_probe", level="warning")
                         continue
                     return {"checked": True, "equivalent": False,
                             "reason": f"原抛异常但修改后不抛: {_e_o}"}
@@ -3000,8 +3003,8 @@ class PatchManager:
                         if os.path.exists(_tmp_path):  # type: ignore[possibly-unbound]
                             try:
                                 os.remove(_tmp_path)  # type: ignore[possibly-unbound]
-                            except OSError:
-                                pass
+                            except OSError as e:
+                                silent_exc(e, "nucleus/reasoning/PatchManager.py:3003:apply_all_pending", level="warning")
                     
                     patch["applied"] = True
                     patch["applied_at"] = time.time()

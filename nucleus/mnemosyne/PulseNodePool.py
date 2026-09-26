@@ -25,6 +25,7 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 from nucleus.mnemosyne.PulseNode import PulseNode
 
 from nucleus.data.DataAccessLayer import safe_write_json  # ★T-125a：原子写复用（原子写）
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = get_module_logger("PulseNodePool")
@@ -823,7 +824,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             from nucleus.graph_store.neo4j_store import get_neo4j_store
             return get_neo4j_store()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/mnemosyne/PulseNodePool.py:826:_m71_neo4j_store", level="warning")
             return None
 
     def _m71_dw_enabled(self) -> bool:
@@ -1188,7 +1190,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             from nucleus.timeseries_store.influxdb_store import get_influxdb_store
             return get_influxdb_store()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/mnemosyne/PulseNodePool.py:1191:_m71_influx_store", level="warning")
             return None
 
     def _m71_influx_write(self, method: str, *args) -> None:
@@ -1843,7 +1846,8 @@ class PulseNodePool(SilentLogMixin):
                 try:
                     _node.hebbian_weight = min(1.0, getattr(_node, "hebbian_weight", 0.0) + 0.05)
                     _applied += 1
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "nucleus/mnemosyne/PulseNodePool.py:1846:run_memory_verification", level="warning")
                     continue
 
         return {

@@ -30,6 +30,7 @@ from nucleus.data.DataAccessLayer import safe_read_json
 # ★第117批 T-117d①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
 from nucleus.data.path_utils import safe_relpath as _safe_relpath
 from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
+from nucleus._silent_except import silent_exc
 import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
@@ -1127,7 +1128,8 @@ class SafeEvolutionExecutor:
                         int(_hcfg.get("circuit_break_threshold", 3)),
                         float(_hcfg.get("circuit_break_seconds", 300.0)))
                 return SafeEvolutionExecutor._M96_HEALTH
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:1130:_m96_channel_health", level="warning")
             return None
 
     _M96_HEALTH = None
@@ -3236,7 +3238,8 @@ class SafeEvolutionExecutor:
             import ast as _ast_clean
             _ast_clean.parse(_code)
             return _code          # 语法已合法，不动一个字符
-        except SyntaxError:
+        except SyntaxError as e:
+            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3239:_clean_llm_code", level="debug")
             pass                  # 语法有问题，尝试归一化
         except Exception:
             return _code          # 其他异常（如 ValueError 空源码）不处理
@@ -3425,7 +3428,8 @@ class SafeEvolutionExecutor:
             _passed = "PASS" in _first or "FAIL" not in _first
             _reason = " ".join(_raw.strip().splitlines()[1:2]) or _raw.strip()[:80]
             return {"passed": _passed, "reason": _reason[:120], "raw": _raw.strip()[:200]}
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3428:_llm_review_patch", level="warning")
             return None
 
     def _load_pulse_metadata_summary(self, max_events: int = 40) -> str:
@@ -4128,7 +4132,8 @@ class SafeEvolutionExecutor:
                     _m85_ast.parse(_v)
                     _ok = True
                     break
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:4131:_m85_conservative_fix", level="warning")
                     continue
             if _ok:
                 return _s, _cand
@@ -5176,7 +5181,8 @@ class SafeEvolutionExecutor:
                 "applied": False,
                 "applied_at": 0,
             }
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:5179:_generate_llm_patch", level="warning")
             return None
 
     def _verify_and_save_patch(self, patch: dict[str, Any]) -> bool:
