@@ -49,6 +49,11 @@ class RssArticle:
 
 def _default_fetch(url: str, timeout: float = 8.0) -> bytes:
     """默认网络抓取（可注入替身做离线测试）"""
+    # ★第134批 T-134a：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
+    from nucleus.ssrf_guard import is_safe_http_url
+    _ok, _reason = is_safe_http_url(url)
+    if not _ok:
+        raise ValueError(f"[SSRF] 拒绝出站请求: {url} -> {_reason}")
     req = Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
     with urlopen(req, timeout=timeout) as resp:
         return resp.read()

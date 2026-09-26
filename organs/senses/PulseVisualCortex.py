@@ -47,7 +47,8 @@ from nucleus.const import (
     PersonaEvent,
     VisualEvent,
 )
-from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json  # ★R5 加 safe_write_json
+from nucleus.data.DataAccessLayer import safe_read_json  # ★R5：视觉流日志读取
+from nucleus.security.face_codec import load_roster, save_roster  # ★T-134b 人脸名册加密存储
 _DIRTY_FACE_KEYS = ("用户", "访客", "小林")  # ★R5-1 脏键唯一真相源（:362 守卫/load 过滤/save 过滤三处共用）
 
 
@@ -158,7 +159,7 @@ class PulseVisualCortex(BasePulseOrgan):
             _np = None
             self._log(LogLevel.DEBUG, "[R5] 未安装 numpy，人脸编码落盘/加载走纯 list 兜底")
         try:
-            _raw = safe_read_json(self._face_roster_path(), default={})
+            _raw = load_roster(self._face_roster_path())
             if not isinstance(_raw, dict):
                 _raw = {}
             if not _raw:
@@ -966,8 +967,19 @@ class PulseVisualCortex(BasePulseOrgan):
     
     # ========== ★R5-7 册路径 / 落盘（原子写；失败只 WARN）==========
     def _face_roster_path(self) -> str:
-        """册路径（单独函数=测试可用 TONGTONG_FACE_ROSTER 覆盖，防污染生产生物特征册）。"""
-        return os.environ.get("TONGTONG_FACE_ROSTER", self._FACE_ROSTER_PATH)
+        """册路径（测试可用 TONGTONG_FACE_ROSTER 覆盖）。
+
+        ★T-134b：env 重定向必须在 data/ 内（realpath 前缀 + os.sep 边界），
+        越界即拒绝（fail-closed，绝不把生物特征册写到 data/ 之外）。
+        """
+        _env = os.environ.get("TONGTONG_FACE_ROSTER")
+        if _env:
+            from nucleus.security.face_codec import is_path_within_data
+            if not is_path_within_data(_env):
+                raise ValueError(
+                    f"[PulseVisualCortex] TONGTONG_FACE_ROSTER 越界 data/ 被拒绝: {_env}")
+            return _env
+        return self._FACE_ROSTER_PATH
 
     def _save_face_roster(self) -> None:
         """人脸册落盘。快照遍历（:368 可能并发改写）；backup=False 免生 .bak 明文副本。"""
@@ -985,9 +997,8 @@ class PulseVisualCortex(BasePulseOrgan):
                     "hits": int(self._roster_hits.get(_name, 0)),
                     "tolerance_override": _meta.get("tolerance_override"),
                 }
-            if not safe_write_json(self._face_roster_path(),
-                                   {"version": 1, "updated_at": time.time(), "faces": _faces},
-                                   backup=False):
+            if not save_roster(self._face_roster_path(),
+                               {"version": 1, "updated_at": time.time(), "faces": _faces}):
                 self._log(LogLevel.WARNING, "[R5] 人脸册落盘返回 False（内存册仍有效）")
         except (Exception, SystemExit) as _e:
             self._log(LogLevel.WARNING,
@@ -1026,13 +1037,12 @@ class PulseVisualCortex(BasePulseOrgan):
         if user_name == self._current_user_name:
             self._current_user_name = "访客"   # ★T-118a 同族回落（回落"用户"亦不阻断下次绑定，见票 §D3）
         try:
-            _raw = safe_read_json(self._face_roster_path(), default={})
+            _raw = load_roster(self._face_roster_path())
             _faces = (_raw or {}).get("faces") or {}
             _existed_disk = _faces.pop(user_name, None) is not None
             if _existed_disk or _existed_mem:
-                if not safe_write_json(self._face_roster_path(),
-                                       {"version": 1, "updated_at": time.time(), "faces": _faces},
-                                       backup=False):
+                if not save_roster(self._face_roster_path(),
+                                   {"version": 1, "updated_at": time.time(), "faces": _faces}):
                     self._log(LogLevel.WARNING,
                               "[R5] 遗忘落盘失败：'%s' 内存已删，磁盘册可能残留 → 需人工删文件" % user_name)
             return {"status": "forgotten", "name": user_name, "was_in_memory": _existed_mem}

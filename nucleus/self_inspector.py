@@ -13,13 +13,30 @@ self_inspector.py —— 自省检查器
 
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 import ast
+import json
 import os
 import re
 import threading
 import time
 from typing import Any
 
-from nucleus.const import LogLevel, SCAN_EXCLUDE_DIR_BASENAMES, SCAN_EXCLUDE_PREFIX
+from nucleus.const import (
+    LogLevel,
+    SCAN_EXCLUDE_DIR_BASENAMES,
+    SCAN_EXCLUDE_PREFIX,
+    SELF_INSPECTOR_BOOT_SILENCE_SEC,
+    SELF_INSPECTOR_B1_THROTTLE_SEC,
+    SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA,
+    SELF_INSPECTOR_B1_SILENT_RISE_PCT,
+    SELF_INSPECTOR_HISTORY_PATH,
+    SELF_INSPECTOR_B2_STALE_SEC,
+    SELF_INSPECTOR_B2_ADAPTIVE_MULT,
+    SELF_INSPECTOR_B2_L1_FLOOR,
+    SELF_INSPECTOR_B2_HEARTBEAT_REL,
+    SELF_INSPECTOR_B3_CEILING_PCT,
+    SELF_INSPECTOR_B3_BASELINE_REL,
+    GOD_FILE_EXEMPT,
+)
 from config import EXTERNAL_CALL_TIMEOUTS
 from config import TIMEOUT_CONFIG
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
@@ -164,6 +181,8 @@ class SelfInspector(SilentLogMixin):
     def __init__(self):
         self._config = None
         self._project_root = ""
+        # ★第134批 T-134c：boot 时间戳（B1/B2 boot 后 30 分钟静默判定）
+        self._boot_ts = time.time()
         # ★第64批 T1：器官扫描缓存初始化
         self._scan_cache = {}
         self._scan_cache_time = 0.0
@@ -2684,6 +2703,309 @@ class SelfInspector(SilentLogMixin):
             f"在 {file_name} 的 {method} 方法中发现 {issue_type} 类型的问题，建议进一步审查。"
         )    
     
+    # ========== ★第134批 T-134c：三检测器（B1/B2/B3，B4 已由 T-133c 覆盖） ==========
+
+    # ---- 通用辅助 ----
+
+    def _si_issue(self, detector: str, itype: str, desc: str, root: str, file: str = "") -> dict:
+        """统一问题条目（与既有 _detect_* 返回结构兼容）。"""
+        return {
+            "type": itype,
+            "detector": detector,
+            "severity": "medium",
+            "description": desc,
+            "suggestion": "复核近期变更，确认是否为预期增长或异常膨胀",
+            "file": file or "",
+            "organ": "",
+            "method": "",
+            "line": 0,
+        }
+
+    def _si_walk_py(self):
+        """产出非排除源码 .py 的 (abspath, relpath)。
+
+        排除：根级 data/（运行时数据，非源码）、备份/临时树（.bak*/backups/tmp/
+        code_backups）、.git/.workbuddy。保留 nucleus/data（源码）。
+        """
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for _dp, _dn, _fn in os.walk(_root):
+            _rel_dp = os.path.relpath(_dp, _root)
+            _dn[:] = [d for d in _dn if self._si_dir_allowed(_rel_dp, d)]
+            for _f in _fn:
+                if not _f.endswith(".py"):
+                    continue
+                _ap = os.path.join(_dp, _f)
+                yield _ap, os.path.relpath(_ap, _root)
+
+    def _si_dir_allowed(self, rel_parent: str, name: str) -> bool:
+        _path = os.path.join(rel_parent, name) if rel_parent else name
+        _parts = _path.split(os.sep)
+        if _parts[0] == "data":
+            return False  # 根级 data/ 是运行时数据，非源码
+        for _p in _parts:
+            if _p in SCAN_EXCLUDE_DIR_BASENAMES:
+                return False
+            if _p.startswith(tuple(SCAN_EXCLUDE_PREFIX)) or _p.startswith(".bak"):
+                return False
+            if _p in (".git", ".workbuddy"):
+                return False
+        return True
+
+    def _si_count_loc(self) -> int:
+        """源码总行数（B2 的 l1 执法前提用）。"""
+        _n = 0
+        for _ap, _rel in self._si_walk_py():
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    _n += sum(1 for _ in _f)
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_si_count_loc", level="debug")
+        return _n
+
+    def _si_collect_metrics(self):
+        """行数 + silent_exc( 调用计数（B1 用），单次遍历。"""
+        _loc = 0
+        _silent = 0
+        _pat = re.compile(r"silent_exc\(")
+        for _ap, _rel in self._si_walk_py():
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    for _line in _f:
+                        _loc += 1
+                        if _pat.search(_line):
+                            _silent += 1
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_si_collect_metrics", level="debug")
+        return _loc, _silent
+
+    def _si_count_branches(self, src: str) -> int:
+        """AST 分支节点计数（B3 用）。"""
+        try:
+            _tree = ast.parse(src)
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, "self_inspector.py:_si_count_branches", level="debug")
+            return 0
+        _n = 0
+        for _node in ast.walk(_tree):
+            if isinstance(_node, (ast.If, ast.For, ast.While, ast.With, ast.Try,
+                                  ast.IfExp, ast.BoolOp, ast.ExceptHandler)):
+                _n += 1
+        return _n
+
+    def _si_read_jsonl(self, path: str) -> list[dict]:
+        _out = []
+        if not os.path.exists(path):
+            return _out
+        try:
+            with open(path, "r", encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _out.append(json.loads(_line))
+                    except ValueError:
+                        continue
+        except OSError as _e:
+            silent_exc(_e, "self_inspector.py:_si_read_jsonl", level="debug")
+        return _out
+
+    # ---- B1 silent_growth ----
+
+    def _detect_silent_growth(self) -> list[dict]:
+        """B1 silent_growth：趋势账 + 6h 节流 + boot 静默；首扫建基线，周增超阈告警。"""
+        _now = time.time()
+        if _now - self._boot_ts < SELF_INSPECTOR_BOOT_SILENCE_SEC:
+            return []
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _hist = os.path.join(_root, SELF_INSPECTOR_HISTORY_PATH)
+        _entries = self._si_read_jsonl(_hist)
+        _loc, _silent = self._si_collect_metrics()
+        if not _entries:
+            self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent})
+            return []
+        if _now - float(_entries[-1].get("ts", 0)) < SELF_INSPECTOR_B1_THROTTLE_SEC:
+            return []  # 6h 节流，未到采样点
+        self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent})
+        _week_ago = _now - 7 * 86400
+        _base = None
+        for _e in _entries:
+            if float(_e.get("ts", 0)) <= _week_ago:
+                _base = _e
+        if _base is None:
+            return []  # 不足一周基线，不告警
+        _issues: list[dict] = []
+        _loc_delta = _loc - int(_base.get("loc", 0))
+        if _loc_delta > SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA:
+            _issues.append(self._si_issue(
+                "silent_growth", "code_loc_weekly_growth",
+                f"代码行数周增 {_loc_delta}（>{SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA}），疑似快速膨胀", _root))
+        _b_silent = int(_base.get("silent", 0))
+        if _b_silent > 0:
+            _rise = (_silent - _b_silent) / _b_silent * 100.0
+            if _rise > SELF_INSPECTOR_B1_SILENT_RISE_PCT:
+                _issues.append(self._si_issue(
+                    "silent_growth", "silent_except_weekly_rise",
+                    f"静默计数周升 {_rise:.1f}%（>{SELF_INSPECTOR_B1_SILENT_RISE_PCT}%），疑错误被静默吞掉", _root))
+        return _issues
+
+    def _si_append_jsonl(self, path: str, rec: dict) -> None:
+        try:
+            _d = os.path.dirname(path)
+            if _d:
+                os.makedirs(_d, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError as _e:
+            silent_exc(_e, "self_inspector.py:_si_append_jsonl", level="warning")
+
+    # ---- B2 l3_inversion ----
+
+    def _detect_l3_inversion(self) -> list[dict]:
+        """B2 l3_inversion：L3 心跳时效；boot 静默 + l1<400 不执法 + 自适应阈值。
+
+        监控 L3 后台层心跳时间戳（由框架 L3 循环周期性写入
+        data/mnemosyne/l3_heartbeat.timestamp）。首扫无基线 → 建基线不告警；
+        心跳陈旧 > max(300s, 近8条间隔中位数×1.2) → 告警（宕机 5 分钟内报警）。
+        注：l1（L1 层代码行数）恒 > 400 → 正常执法；仅极端裁剪场景豁免。
+        """
+        _now = time.time()
+        if _now - self._boot_ts < SELF_INSPECTOR_BOOT_SILENCE_SEC:
+            return []
+        if self._si_count_loc() < SELF_INSPECTOR_B2_L1_FLOOR:
+            return []
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _hb = os.path.join(_root, SELF_INSPECTOR_B2_HEARTBEAT_REL)
+        if not os.path.exists(_hb):
+            # 首扫：建基线（写入当前时间 + 空间隔序列），不告警
+            try:
+                _d = os.path.dirname(_hb)
+                if _d:
+                    os.makedirs(_d, exist_ok=True)
+                with open(_hb, "w", encoding="utf-8") as _f:
+                    _f.write(str(_now))
+                self._si_write_l3_intervals(_hb, [])
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_detect_l3_inversion[init]", level="debug")
+            return []
+        try:
+            with open(_hb, "r", encoding="utf-8") as _f:
+                _last_ts = float(_f.read().strip() or _now)
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, "self_inspector.py:_detect_l3_inversion[read_hb]", level="debug")
+            return []
+        _gap = _now - _last_ts
+        _intervals = self._si_read_l3_intervals(_hb)
+        _intervals.append(_gap)
+        _intervals = _intervals[-8:]
+        self._si_write_l3_intervals(_hb, _intervals)
+        if len(_intervals) >= 2:
+            _med = sorted(_intervals)[len(_intervals) // 2]
+            _adaptive = _med * SELF_INSPECTOR_B2_ADAPTIVE_MULT
+        else:
+            _adaptive = SELF_INSPECTOR_B2_STALE_SEC
+        _thr = max(SELF_INSPECTOR_B2_STALE_SEC, _adaptive)
+        if _gap > _thr:
+            # 去抖：更新时间戳避免告警风暴
+            try:
+                with open(_hb, "w", encoding="utf-8") as _f:
+                    _f.write(str(_now))
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_detect_l3_inversion[dedup]", level="debug")
+            return [self._si_issue(
+                "l3_inversion", "l3_heartbeat_stale",
+                f"L3 心跳陈旧 {_gap:.0f}s（阈值 {_thr:.0f}s），疑似 L3 后台层停滞/宕机", _root)]
+        return []
+
+    def _si_l3_interval_path(self, hb_path: str) -> str:
+        return hb_path + ".intervals.json"
+
+    def _si_read_l3_intervals(self, hb_path: str) -> list[float]:
+        _p = self._si_l3_interval_path(hb_path)
+        try:
+            if os.path.exists(_p):
+                with open(_p, "r", encoding="utf-8") as _f:
+                    _v = json.load(_f)
+                if isinstance(_v, list):
+                    return [float(x) for x in _v]
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, "self_inspector.py:_si_read_l3_intervals", level="debug")
+        return []
+
+    def _si_write_l3_intervals(self, hb_path: str, intervals: list[float]) -> None:
+        _p = self._si_l3_interval_path(hb_path)
+        try:
+            with open(_p, "w", encoding="utf-8") as _f:
+                json.dump(intervals, _f)
+        except OSError as _e:
+            silent_exc(_e, "self_inspector.py:_si_write_l3_intervals", level="warning")
+
+    # ---- B3 god_file ----
+
+    def _detect_god_file(self) -> list[dict]:
+        """B3 god_file：独立行数 + AST 分支计数；ceiling 豁免制（首扫记基线，> +5% 才报）。
+
+        豁免表 GOD_FILE_EXEMPT（核心名单，补丁改不动）不参与膨胀告警。
+        """
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _base_path = os.path.join(_root, SELF_INSPECTOR_B3_BASELINE_REL)
+        _baseline = self._si_read_god_baseline(_base_path)
+        _issues: list[dict] = []
+        _cur: dict[str, dict] = {}
+        for _ap, _rel in self._si_walk_py():
+            if os.path.basename(_ap) in GOD_FILE_EXEMPT:
+                continue
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    _src = _f.read()
+            except OSError:
+                continue
+            _lines = _src.count("\n") + (1 if _src and not _src.endswith("\n") else 0)
+            _branches = self._si_count_branches(_src)
+            _cur[_rel] = {"loc": _lines, "branches": _branches}
+            if not _baseline:
+                continue
+            _b = _baseline.get(_rel)
+            if not _b:
+                continue
+            _loc_b = _b.get("loc", 0)
+            _br_b = _b.get("branches", 0)
+            if _loc_b > 0:
+                _loc_rise = (_lines - _loc_b) / _loc_b * 100.0
+                if _loc_rise > SELF_INSPECTOR_B3_CEILING_PCT:
+                    _issues.append(self._si_issue(
+                        "god_file", "loc_ceiling_exceeded",
+                        f"{_rel} 行数较基线 +{_loc_rise:.1f}%（>{SELF_INSPECTOR_B3_CEILING_PCT}%）", _root, file=_ap))
+            if _br_b > 0:
+                _br_rise = (_branches - _br_b) / _br_b * 100.0
+                if _br_rise > SELF_INSPECTOR_B3_CEILING_PCT:
+                    _issues.append(self._si_issue(
+                        "god_file", "branch_ceiling_exceeded",
+                        f"{_rel} 分支数较基线 +{_br_rise:.1f}%（>{SELF_INSPECTOR_B3_CEILING_PCT}%）", _root, file=_ap))
+        self._si_write_god_baseline(_base_path, _cur)
+        return _issues
+
+    def _si_read_god_baseline(self, path: str) -> dict:
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as _f:
+                    _v = json.load(_f)
+                if isinstance(_v, dict):
+                    return _v
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, "self_inspector.py:_si_read_god_baseline", level="debug")
+        return {}
+
+    def _si_write_god_baseline(self, path: str, baseline: dict) -> None:
+        try:
+            _d = os.path.dirname(path)
+            if _d:
+                os.makedirs(_d, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as _f:
+                json.dump(baseline, _f, ensure_ascii=False)
+        except OSError as _e:
+            silent_exc(_e, "self_inspector.py:_si_write_god_baseline", level="warning")
+
     # ========== 代码问题检测 ==========
 
     # ★9-问题3：全库级检测器注册表。
@@ -2693,6 +3015,10 @@ class SelfInspector(SilentLogMixin):
         "dead_code": "_detect_dead_code",
         "unused_imports": "_detect_unused_imports",
         "config_audit": "_detect_config_audit",
+        # ★第134批 T-134c：三检测器（B4 已由 T-133c 覆盖）
+        "silent_growth": "_detect_silent_growth",
+        "l3_inversion": "_detect_l3_inversion",
+        "god_file": "_detect_god_file",
     }
 
     def detect_code_issues(self, target_organs: list[str] | None = None,

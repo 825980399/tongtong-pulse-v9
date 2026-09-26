@@ -24,6 +24,40 @@ SCAN_EXCLUDE_DIR_BASENAMES = {
 }
 
 
+# ========== ★第134批 T-134c：self_inspector 三检测器配置 ==========
+#   集中常量，便于巡检策略调参；补丁改不动（与 GOD_FILE_EXEMPT 同源约束）。
+# ---- B1 silent_growth：趋势账 + 节流 + boot 静默 ----
+SELF_INSPECTOR_BOOT_SILENCE_SEC = 1800          # boot 后静默 30 分钟（B1/B2 共用）
+SELF_INSPECTOR_B1_THROTTLE_SEC = 21600          # 6 小时节流（趋势账最小采样间隔）
+SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA = 500        # 行数周增 > 500 告警
+SELF_INSPECTOR_B1_SILENT_RISE_PCT = 20          # 静默计数周升 > 20% 告警
+SELF_INSPECTOR_HISTORY_PATH = "data/self_inspector_history.jsonl"  # 趋势账（git-ignored）
+
+# ---- B2 l3_inversion：L3 心跳时效 + 自适应阈值 ----
+SELF_INSPECTOR_B2_STALE_SEC = 300               # 心跳陈旧 > 300s 告警（宕机 5 分钟内报警）
+SELF_INSPECTOR_B2_ADAPTIVE_MULT = 1.2           # 自适应阈值 = 近 8 条间隔中位数 × 1.2
+SELF_INSPECTOR_B2_L1_FLOOR = 400                # l1（L1 层代码行数）< 400 不执法
+SELF_INSPECTOR_B2_HEARTBEAT_REL = "data/mnemosyne/l3_heartbeat.timestamp"  # L3 心跳时间戳路径
+
+# ---- B3 god_file：天花板豁免制 + ceiling 基线 ----
+SELF_INSPECTOR_B3_CEILING_PCT = 5               # 相对首扫基线 > +5% 才报
+SELF_INSPECTOR_B3_BASELINE_REL = "data/god_file_baseline.json"  # 首扫基线（git-ignored）
+
+# B3 豁免表：核心名单（补丁改不动）。这些文件是地基/巨型器官，预期庞大且补丁不应改，
+# 不参与 god_file 膨胀告警，避免噪声刷屏。落 const 而非 detector 内联，便于统一治理。
+GOD_FILE_EXEMPT = {
+    "main.py",
+    "self_inspector.py",
+    "PulseInnerWorld.py",
+    "PulseVisualCortex.py",
+    "PulseLiver.py",
+    "PulseLung.py",
+    "SafeEvolutionExecutor.py",
+    "config.py",
+}
+
+
+
 # ========== v9.5新增: 分层脉冲层级枚举 ==========
 
 class PulseLayer:

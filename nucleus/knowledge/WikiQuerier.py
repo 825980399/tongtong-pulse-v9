@@ -105,6 +105,11 @@ def _default_fetch(url: str, timeout: float = 8.0) -> str:
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "zh-CN,zh;q=0.9",
     }
+    # ★第134批 T-134a：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
+    from nucleus.ssrf_guard import is_safe_http_url
+    _ok, _reason = is_safe_http_url(url)
+    if not _ok:
+        raise ValueError(f"[SSRF] 拒绝出站请求: {url} -> {_reason}")
     _retry_on_403 = _rate_limit_enabled()
     # ★主线第65批 T6/P2：重试 3 次（间隔 5s），降低 403 反爬瞬时失败率
     _attempts = 3 if _retry_on_403 else 1

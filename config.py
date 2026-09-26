@@ -1370,7 +1370,17 @@ REMOTE_API_CHANNELS = {
 #      主机/域名（如新增 SaaS 模型域名、内网网关对应的主机名）。
 #   红线合规：本开关为「新增」开关，未改动任何既有运行开关；云元数据等保留地址
 #   仍在 ssrf_guard._TRUSTED_HARD_BLOCK 中硬拒绝，不受本白名单影响。
-SSRF_TRUSTED_EXTRA_HOSTS = ("ark.cn-beijing.volces.com",)
+SSRF_TRUSTED_EXTRA_HOSTS = (
+    "ark.cn-beijing.volces.com",
+    # ★第134批 T-134a：RSS 采集源域名（管理员显式配置的公网源）。
+    #   纳入受信任集合，避免 DNS 解析失败时误拦既有 RSS 订阅（仍强制 http/https，
+    #   云元数据等保留地址始终在 _TRUSTED_HARD_BLOCK 中硬拒绝）。
+    "www.solidot.org",
+    "www.infoq.cn",
+    "feed.cnblogs.com",
+    "www.ruanyifeng.com",
+    "sspai.com",
+)
 
 # ★主线第11批 T2/P2-59（星轨裁决选 3）：外挂 LLM 聚合网关开关。
 #   False（默认）= 只用进程内渠道池（REMOTE_API_CHANNELS）；
