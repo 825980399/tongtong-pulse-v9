@@ -12,9 +12,6 @@
   "functions/chat/chat_service.py": {
     "<module>::Exception::return_or_assign::ENABLE_FACE_WELCOME_DIRECT = False;FACE_WELCOME_SHADOW = True": 1
   },
-  "functions/function_loader.py": {
-    "_run_module::Exception::pass::pass": 1
-  },
   "functions/health_ui.py": {
     "do_GET::(ConnectionAbortedError, ConnectionResetError, BrokenPipeError)::pass::pass": 1,
     "do_POST::(ConnectionAbortedError, ConnectionResetError, BrokenPipeError)::pass::pass": 1,
@@ -88,7 +85,6 @@
     "evolution_local_rule_rate::Exception::return_or_assign::_pf = None": 1
   },
   "nucleus/SearchIntentClassifier.py": {
-    "_save_user_rules::Exception::pass::pass": 1,
     "classify::Exception::pass::pass": 1
   },
   "nucleus/StructuredParallelScheduler.py": {
@@ -102,9 +98,6 @@
   },
   "nucleus/TaskOrchestrator.py": {
     "_run_subtask::Exception::return_or_assign::subtask.status = TaskStatus.FAILED;subtask.error = str(e)": 1
-  },
-  "nucleus/ToolStrategyMemory.py": {
-    "_load::Exception::pass::pass": 1
   },
   "nucleus/_silent_except.py": {
     "<module>::Exception::return_or_assign::_FEATURE = {}": 1
@@ -126,8 +119,7 @@
   },
   "nucleus/code_learning_memory.py": {
     "_mtime_of::OSError::return_or_assign::return 0.0": 1,
-    "_load::Exception::return_or_assign::self._data = {'issues': {}}": 1,
-    "_save::Exception::pass::pass": 1
+    "_load::Exception::return_or_assign::self._data = {'issues': {}}": 1
   },
   "nucleus/cython_status.py": {
     "_cython_switch_on::Exception::return_or_assign::return False": 1,
@@ -165,7 +157,6 @@
     "guard_write::Exception::return_or_assign::return True": 1
   },
   "nucleus/device_router.py": {
-    "_safe_float::Exception::return_or_assign::return default": 1,
     "_measure_gpu::Exception::return_or_assign::cap['probe_error'] = f'{type(_e).__name__}: {str(_e)[:80]}'": 1,
     "_measure_cpu::Exception::pass::pass": 1,
     "describe_breakeven::Exception::return_or_assign::return {'has_gpu': False, 'error': str(_e)}": 1,
@@ -175,7 +166,6 @@
     "_cpu_cores::Exception::return_or_assign::return 1": 1
   },
   "nucleus/diagnostics.py": {
-    "get_full_diagnosis::Exception::pass::pass": 1,
     "get_quality_score_v2::Exception::return_or_assign::return {'score': None, 'dimensions': {}, 'available': [], 'error': '%s: %s' % (type(_e).__name__, _e)}": 1,
     "get_extended_diagnosis::Exception::return_or_assign::results['modules']['conversation_memory'] = {'status': 'error', 'error': str(e)[:80]}": 1,
     "get_extended_diagnosis::Exception::return_or_assign::results['modules']['autonomous_deriver'] = {'status': 'error', 'error': str(e)[:80]}": 1,
@@ -189,14 +179,12 @@
   "nucleus/distributed/heartbeat.py": {
     "_distributed_enabled::Exception::return_or_assign::return False": 1,
     "_heartbeat_interval::Exception::return_or_assign::return 30.0": 1,
-    "_health_threshold::Exception::return_or_assign::return 0.5": 1,
-    "stop_heartbeat::Exception::pass::pass": 1
+    "_health_threshold::Exception::return_or_assign::return 0.5": 1
   },
   "nucleus/distributed/node_registry.py": {
     "_cfg::Exception::return_or_assign::return default": 1,
     "_distributed_enabled::Exception::return_or_assign::return False": 1,
     "_maybe_persist::Exception::pass::pass": 1,
-    "mark_heartbeat::(TypeError, ValueError)::pass::pass": 1,
     "update_node_status::(TypeError, ValueError)::pass::pass": 1
   },
   "nucleus/distributed/routing.py": {
@@ -226,13 +214,11 @@
     "<module>::Exception::return_or_assign::_logger = None": 1,
     "_log::Exception::pass::pass": 1,
     "trust_threshold_for::Exception::pass::pass": 1,
-    "verify::Exception::pass::pass": 1,
     "check_recurrence::Exception::pass::pass": 1,
     "reset::Exception::pass::pass": 1,
     "reset_effect_verifier::Exception::pass::pass": 1
   },
   "nucleus/evolution/EvolutionLoop.py": {
-    "__init__::Exception::return_or_assign::self._code_review = None": 1,
     "discover_code_issues::Exception::return_or_assign::return {'issues': [], 'summary': {'total': 0, 'error': str(e)}}": 1,
     "_verify_runtime_effect::Exception::return_or_assign::_verification['status'] = 'error';_verification['error'] = str(e)": 1,
     "auto_apply_param_patches::Exception::return_or_assign::return {'error': str(e), 'apply': {'attempted': 0, 'applied': 0}}": 1,
@@ -266,7 +252,6 @@
     "rollback_patch::Exception::return_or_assign::result['error'] = str(e)": 1,
     "_get_current_value::Exception::return_or_assign::return None": 1,
     "_load_history::Exception::return_or_assign::self._applied_patches = []": 1,
-    "_save_history::Exception::pass::pass": 1,
     "verify_applied_patches_effect::Exception::return_or_assign::result['error'] = str(e)": 1,
     "verify_effect_in_process::Exception::return_or_assign::result['error'] = str(e)": 1,
     "start_auto_apply::(TypeError, ValueError)::return_or_assign::_delay = 0.0": 1,
@@ -295,7 +280,6 @@
   },
   "nucleus/evolution/QualityClosedLoop.py": {
     "_load_loop_cfg::Exception::return_or_assign::return {}": 1,
-    "_log_safe::Exception::pass::pass": 1,
     "_current_param_value::Exception::return_or_assign::return None": 1,
     "_try_adjust::Exception::return_or_assign::_multi = False": 1,
     "_enabled::Exception::return_or_assign::return False": 1,
@@ -327,14 +311,12 @@
     "_is_production_data_path::Exception::return_or_assign::return True": 1,
     "evaluator_enabled::Exception::return_or_assign::return True": 1,
     "summarize::Exception::pass::pass": 1,
-    "load_history::(OSError, ValueError)::return_or_assign::return []": 1,
-    "save_report::OSError::return_or_assign::return None": 1
+    "load_history::(OSError, ValueError)::return_or_assign::return []": 1
   },
   "nucleus/evolution/patch_verification_split.py": {
     "_as_int::(TypeError, ValueError)::return_or_assign::return None": 1
   },
   "nucleus/exploration_audit.py": {
-    "register_default_probes::Exception::return_or_assign::return": 1,
     "_normalize_issue::(TypeError, ValueError)::return_or_assign::_line = 0": 1,
     "_tool_channel::Exception::return_or_assign::return []": 1,
     "_rule_channel::Exception::return_or_assign::return []": 1,
@@ -348,7 +330,6 @@
     "_get_effective_max_concurrent::Exception::return_or_assign::return self._max_concurrent": 1
   },
   "nucleus/fast_ops.py": {
-    "_gpu_cfg::Exception::pass::pass": 1,
     "_try_gpu_search::Exception::return_or_assign::return None": 1,
     "fast_vector_search::Exception::return_or_assign::_gpu_ok = _n >= int(_gpu_cfg('min_candidates', 2000)) and _dim >= int(_gpu_cfg('min_dim', 64));_gpu_reason = '路由中枢不可用，退回保守阈值'": 1,
     "fast_vector_search::Exception::return_or_assign::_res = None": 1,
@@ -447,7 +428,6 @@
     "_log::Exception::pass::pass": 1
   },
   "nucleus/knowledge_access_layer.py": {
-    "<module>::Exception::return_or_assign::_logger = logging.getLogger('pulse.module.kal')": 1,
     "_kal_enabled::Exception::return_or_assign::return True": 1,
     "_cfg_int::Exception::return_or_assign::return default": 1,
     "_cfg_str::Exception::return_or_assign::return default": 1,
@@ -458,9 +438,6 @@
     "get_storage_size::OSError::return_or_assign::return 0": 1,
     "query_multi_hop::Exception::return_or_assign::_store = None": 1,
     "query_common_neighbors::Exception::return_or_assign::_store = None": 1
-  },
-  "nucleus/knowledge_noise_filter.py": {
-    "_load_noise_from_config::Exception::pass::pass": 1
   },
   "nucleus/llm/ChannelConcurrency.py": {
     "load_project_config::Exception::return_or_assign::return {}": 1,
@@ -474,7 +451,6 @@
     "_force_enabled::Exception::return_or_assign::_ttl_hours = 0.0": 1,
     "quota_type_of::Exception::return_or_assign::return 'fixed'": 1,
     "daily_reset_hour::Exception::return_or_assign::return 11": 1,
-    "record_usage::Exception::return_or_assign::return": 1,
     "get_stats::Exception::return_or_assign::_pool = list(self._usage.keys())": 1,
     "_active_channel_names::Exception::return_or_assign::return set()": 1,
     "apply_to_channels::Exception::return_or_assign::_c2['priority'] = 999": 1
@@ -482,8 +458,7 @@
   "nucleus/llm/call_pattern_analyzer.py": {
     "analyzer_enabled::Exception::return_or_assign::return True": 1,
     "_in_test_env::Exception::return_or_assign::return False": 1,
-    "_is_production_path::Exception::return_or_assign::return True": 1,
-    "save_report::OSError::return_or_assign::return None": 1
+    "_is_production_path::Exception::return_or_assign::return True": 1
   },
   "nucleus/llm/call_recorder.py": {
     "_cfg::Exception::return_or_assign::return default": 1,
@@ -518,7 +493,6 @@
     "save_report::OSError::return_or_assign::return None": 1
   },
   "nucleus/llm/model_self_updater.py": {
-    "updater_enabled::Exception::return_or_assign::return True": 1,
     "_cfg_int::Exception::return_or_assign::return default": 1,
     "_cfg_float::Exception::return_or_assign::return default": 1,
     "_in_test_env::Exception::return_or_assign::return False": 1,
@@ -534,7 +508,6 @@
     "extract_usage::Exception::return_or_assign::return None": 1
   },
   "nucleus/llm/semantic_cache.py": {
-    "_cfg::Exception::return_or_assign::return default": 1,
     "get_semantic_cache::Exception::return_or_assign::return None": 1,
     "from_dict::Exception::return_or_assign::return None": 1,
     "threshold::Exception::return_or_assign::return DEFAULT_THRESHOLD": 1,
@@ -677,7 +650,6 @@
     "shutdown_reasoning_experience::Exception::pass::pass": 1
   },
   "nucleus/mnemosyne/experience_pool.py": {
-    "__init__::Exception::return_or_assign::self._max_experiences = 500;self._max_summarized = 1000;self._high_emotion_threshold = 0.7;self._low_emotion_threshold = 0.3;self._decay_check_interval = 3600": 1,
     "_m49_decay_on_trim_on::Exception::return_or_assign::return True": 1,
     "_dedup_enabled::Exception::return_or_assign::return False": 1,
     "_auto_clean_enabled::Exception::return_or_assign::return True": 1,
@@ -741,7 +713,6 @@
     "fuse::Exception::return_or_assign::_l1, _l2 = ('', '')": 1,
     "encode_text::Exception::return_or_assign::return None": 1,
     "similarities::Exception::return_or_assign::return {}": 1,
-    "save::Exception::pass::pass": 1,
     "adjust_prototype::Exception::return_or_assign::return False": 1,
     "fuse::Exception::pass::pass": 1,
     "load::Exception::return_or_assign::self._load_error = '%s: %s' % (type(e).__name__, e);self._loaded = True;return False": 1,
@@ -847,7 +818,6 @@
     "record_quality::Exception::pass::pass": 1
   },
   "nucleus/reasoning/ReasoningWorkerPool.py": {
-    "_is_alive::Exception::return_or_assign::return False": 1,
     "__init__::Exception::return_or_assign::_global_p = 0": 1,
     "_deep_think_bypass_enabled::Exception::return_or_assign::return True": 1,
     "get_stats::Exception::pass::pass": 1,
@@ -903,7 +873,6 @@
     "_generate_patch::Exception::return_or_assign::_brne_on = True": 1
   },
   "nucleus/reasoning/SelfCalibrator.py": {
-    "<module>::Exception::return_or_assign::_logger = None": 1,
     "evidence_confidence::Exception::return_or_assign::return base": 2,
     "_log_debug::Exception::pass::pass": 1,
     "calibrate::(TypeError, ValueError)::return_or_assign::return 0.0": 1,
@@ -943,7 +912,6 @@
     "_thr::Exception::return_or_assign::return default": 1
   },
   "nucleus/reporting/report_bus.py": {
-    "_is_explicit_base_dir::Exception::return_or_assign::return True": 1,
     "__init__::Exception::return_or_assign::self._consumer_staleness_threshold = 3600.0": 1,
     "__init__::Exception::return_or_assign::self._resolution_window = 2592000.0": 1,
     "_write::(OSError, IOError, TypeError, ValueError)::return_or_assign::self._last_error = '%s: %s' % (type(_e).__name__, _e);return False": 1,
@@ -1068,10 +1036,8 @@
     "locate_issue::Exception::return_or_assign::_crel = _cfp.replace(_bs, '/')": 1
   },
   "nucleus/self_probe.py": {
-    "__init__::Exception::pass::pass": 1,
     "_load_config::Exception::return_or_assign::self._enabled = True": 1,
     "_signal_from_logs::Exception::return_or_assign::return _result": 1,
-    "_probe_l1::Exception::return_or_assign::return None": 1,
     "_read_method_body_light::Exception::return_or_assign::return ''": 1,
     "_count_recent_errors::Exception::return_or_assign::return 0": 1,
     "_get_organs::Exception::return_or_assign::self._organ_cache = {}": 1
@@ -1119,7 +1085,6 @@
     "_expand_by_association::Exception::return_or_assign::return 0": 1,
     "_knowledge_timeliness_enabled::Exception::return_or_assign::return False": 1,
     "_is_potentially_stale::Exception::return_or_assign::_thr = 365.0": 1,
-    "_get_semantic_cfg::Exception::return_or_assign::self._semantic_cfg = {}": 1,
     "_fuse_memory_channels::Exception::pass::pass": 1,
     "_get_data_quality_guard::Exception::return_or_assign::_nodes = None": 1
   },
@@ -1135,7 +1100,7 @@
     "execute::Exception::return_or_assign::_duration = (time.time() - _start) * 1000;self._stats[name]['calls'] += 1;self._stats[name]['failed'] += 1;self._stats[name]['total_time'] += _duration;return {'status': 'failed', 'result': None, 'error': str(_e), 'duration_ms': round(_duration, 1)}": 1
   },
   "nucleus/tooling_runner.py": {
-    "_run_cmd::Exception::return_or_assign::return f'[工具执行失败] {' '.join(cmd)}: {_e}'": 1,
+    "_run_cmd::Exception::return_or_assign::return f\"[工具执行失败] {' '.join(cmd)}: {_e}\"": 1,
     "get_changed_py_files::Exception::return_or_assign::return []": 1,
     "shutdown_tooling_runner::Exception::pass::pass": 1
   },
@@ -1178,7 +1143,6 @@
     "_get_total_threshold::Exception::return_or_assign::return 50": 1,
     "_can_upgrade_to_instinct::Exception::return_or_assign::cfg = {}": 1,
     "_check_instinct_downgrade::Exception::return_or_assign::cfg = {}": 1,
-    "load_state_snapshot::(TypeError, ValueError)::return_or_assign::return": 1,
     "_m70_kal_callsites_on::Exception::return_or_assign::return True": 1
   },
   "organs/body/PulseLung.py": {
@@ -1349,7 +1313,6 @@
     "_get_stress_reasoning_modulation::Exception::return_or_assign::stress = 0.0": 1,
     "_conduct_internal_debate::Exception::return_or_assign::_truth_position = '（求真本能暂时无法参与辩论）'": 1,
     "_m35_entry_probe::Exception::return_or_assign::_sample = []": 2,
-    "_m35_entry_probe::Exception::return_or_assign::return None": 1,
     "_m35_entry_probe::Exception::return_or_assign::_probe_weak = False": 1,
     "_generate_branch_with_model::Exception::return_or_assign::_m30_target = 300": 1,
     "_m31_branch_endpoint::Exception::return_or_assign::_channels = []": 1,
@@ -1836,9 +1799,6 @@
   "tests/test_write_guard_m44.py": {
     "_count::Exception::return_or_assign::return None": 1
   },
-  "tools/_framework_probe.py": {
-    "_psutil_running::Exception::return_or_assign::return None": 1
-  },
   "tools/adjudicate_patch.py": {
     "_cmd_obsolete::Exception::pass::pass": 1,
     "_stale_reason::(TypeError, ValueError)::return_or_assign::_ts = 0.0": 1
@@ -1958,9 +1918,6 @@
   },
   "tools/verify_write_only_e2e.py": {
     "run::Exception::pass::pass": 1
-  },
-  "utils/pulse_tracer.py": {
-    "_flush_at_exit::Exception::pass::pass": 1
   },
   "utils/safe_hw_probe.py": {
     "_run_isolated::Exception::return_or_assign::return None": 2,

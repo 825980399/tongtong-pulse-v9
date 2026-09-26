@@ -783,6 +783,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         priority=7,
                         layer="L1"
                     ))
+                self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
                 return {"status": "fast_left", "frame_seq": frame_seq}
         
         # 常规时序追踪（兜底）：基于滑动窗口的稳定性判断
@@ -862,6 +863,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         priority=7,
                         layer="L1"
                     ))
+                self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
         
         # 异步写入视觉流日志（放入队列，后台线程处理）
         try:
