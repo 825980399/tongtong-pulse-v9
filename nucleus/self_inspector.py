@@ -19,7 +19,7 @@ import threading
 import time
 from typing import Any
 
-from nucleus.const import LogLevel
+from nucleus.const import LogLevel, SCAN_EXCLUDE_DIR_BASENAMES, SCAN_EXCLUDE_PREFIX
 from config import EXTERNAL_CALL_TIMEOUTS
 from config import TIMEOUT_CONFIG
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
@@ -140,11 +140,15 @@ def _issue_file_in_backup_dir(file_path: str) -> bool:
     # ★主线第60批 T3：问题文件路径是否落在备份目录（.bak_batchN / .bak_tmp /
     #   .bak_mainlineN 等）。按路径「段前缀 .bak」判定，不误伤文件名含 .bak 后缀的
     #   正常文件（foo.py.bak）。供 self_inspector 防御过滤与 glob 扫描排除共用。
+    # ★T-133c 制度化：并入 const.SCAN_EXCLUDE_DIR_BASENAMES / SCAN_EXCLUDE_PREFIX，
+    #   覆盖 backups/ data/code_backups/ tmp/ 等备份/临时树（原仅认 .bak 段，漏此三族）。
     if not file_path:
         return False
     _norm = file_path.replace("\\", "/")
     for _seg in _norm.split("/"):
-        if _seg.startswith(".bak"):
+        if (_seg.startswith(".bak")
+                or _seg.startswith(tuple(SCAN_EXCLUDE_PREFIX))
+                or _seg in SCAN_EXCLUDE_DIR_BASENAMES):
             return True
     return False
 
@@ -195,7 +199,8 @@ class SelfInspector(SilentLogMixin):
         self._scan_stats_last_log = 0.0
         # _m64_t2_l2_cache_done
         self._allowed_extensions = [".py", ".md", ".json"]
-        self._excluded_dirs = ["__pycache__", ".git", "logs", "data", "models"]
+        self._excluded_dirs = ["__pycache__", ".git", "logs", "data", "models",
+                               "backups", "tmp"]
         self._excluded_files = ["*.pyc", "*.log", "*.bak"]
         # ★PHASE12-P1-2扩展（2026-09-07）：全项目类索引（供 get_method_body 兜底查询）。
         #   背景（15小时运行日志实证）：自主进化每轮「发现17个问题 / 处理6个 /
@@ -1131,7 +1136,7 @@ class SelfInspector(SilentLogMixin):
 
             _skip_dirs = {"__pycache__", ".git", "venv", ".venv", "node_modules",
                           "logs", "data", "backups", "models", ".idea", ".vscode",
-                          "dist", "build", ".pytest_cache"}
+                          "dist", "build", ".pytest_cache", "tmp"}
             for _dirpath, _dirnames, _filenames in os.walk(project_root):
                 _dirnames[:] = [d for d in _dirnames if d not in _skip_dirs
                                 and not d.startswith(".")]

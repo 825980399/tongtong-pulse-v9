@@ -4545,7 +4545,8 @@ class PulseInnerWorld(BasePulseOrgan):
         try:
             from nucleus.reasoning.SymbolicReasoner import SymbolicReasoner
             _result = SymbolicReasoner().reason(ctx.question)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:4547:_detect_symbolic_reason", level="warning")
             return None
 
         # 记录推理能力自评到验证学习枢纽（对错学习闭环的数据源）
@@ -5278,7 +5279,8 @@ class PulseInnerWorld(BasePulseOrgan):
                 if _diff > _best_diff:
                     _best_diff, _best = _diff, _v
             return _best
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:5279:_pick_analogy_candidate", level="warning")
             return None
 
     def _assess_knowledge_health(self) -> str | None:
@@ -8612,7 +8614,8 @@ class PulseInnerWorld(BasePulseOrgan):
                 return None
             if not isinstance(value, str):
                 value = str(value)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:8613:_clean_node_value", level="warning")
             return None
 
         if len(value) < 5:
@@ -13113,7 +13116,8 @@ class PulseInnerWorld(BasePulseOrgan):
         # 1. 获取知识能力画像
         try:
             profile = self._call_provider(self._knowledge_profile_provider, default={})
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:13114:_generate_self_directed_learning", level="warning")
             return None
 
         weak_areas = profile.get("weak_areas", [])  # type: ignore[possibly-unbound]
@@ -13365,7 +13369,8 @@ class PulseInnerWorld(BasePulseOrgan):
             profile = self._call_provider(self._knowledge_profile_provider, default={})
             weak_areas = profile.get("weak_areas", [])  # type: ignore[possibly-unbound]
             strong_areas = profile.get("strong_areas", [])  # noqa: F841  # type: ignore[possibly-unbound]
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:13366:_generate_learning_pathway", level="warning")
             return None
 
         if not weak_areas:  # type: ignore[possibly-unbound]
@@ -13535,7 +13540,8 @@ class PulseInnerWorld(BasePulseOrgan):
         try:
             profile = self._call_provider(self._knowledge_profile_provider, default={})
             weak_areas = profile.get("weak_areas", [])  # type: ignore[possibly-unbound]
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:13536:_initiate_new_project", level="warning")
             return None
 
         if not weak_areas:  # type: ignore[possibly-unbound]
@@ -17394,7 +17400,8 @@ class PulseInnerWorld(BasePulseOrgan):
                 if isinstance(_result, float) and _result.is_integer():
                     return int(_result)
                 return round(_result, 6) if isinstance(_result, float) else _result
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:17395:_safe_eval_arithmetic", level="debug")
             return None
         return None
 
@@ -20111,7 +20118,8 @@ class PulseInnerWorld(BasePulseOrgan):
         """
         try:
             import config as _cfg
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:20112:_m31_branch_endpoint_config", level="debug")
             return None
 
         # ① 渠道池（按 priority 升序取第一个 url+key 齐备的渠道）
@@ -20129,7 +20137,8 @@ class PulseInnerWorld(BasePulseOrgan):
                 try:
                     _url = str(_c.get("api_url") or "").strip()
                     _key = str(_c.get("api_key") or "").strip()
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, "organs/brain/PulseInnerWorld.py:20130:_m31_branch_endpoint_candidate", level="warning")
                     continue
                 if _url and _key:
                     return (_url, _key,
@@ -20151,7 +20160,8 @@ class PulseInnerWorld(BasePulseOrgan):
             return (_url, _key,
                     str(_rc.get("default_model") or "deepseek-v4-flash"),
                     "remote_config")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:20152:_m31_branch_endpoint_remote", level="warning")
             return None
 
     @staticmethod
@@ -20219,7 +20229,8 @@ class PulseInnerWorld(BasePulseOrgan):
             return None
         try:
             return str(result) or None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:20220:_m31_accept_subproc_deep_result", level="debug")
             return None
 
     def _m31_deep_fallback_deadline(self, start_time):
@@ -20249,7 +20260,8 @@ class PulseInnerWorld(BasePulseOrgan):
             if not _budget or _budget <= 0:
                 return None
             return float(start_time or time.time()) + float(_budget)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "organs/brain/PulseInnerWorld.py:20250:_m31_deep_fallback_deadline", level="warning")
             return None
 
     def _m27_timeout_protection_on(self) -> bool:

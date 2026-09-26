@@ -23,6 +23,7 @@ import time
 import config
 from nucleus.const import LogLevel
 from nucleus._silent_except import silent_exc
+from nucleus.logging.sanitizer import sanitize, SanitizingFilter
 
 
 # 日志级别字符串 → logging 常量映射
@@ -127,6 +128,12 @@ class PulseFormatter(logging.Formatter):
         else:
             record.organ_tag = name
         return super().format(record)
+    def formatException(self, ei) -> str:
+        _s = super().formatException(ei)
+        return sanitize(_s) if _s else _s
+    def formatStack(self, stack_info) -> str:
+        _s = super().formatStack(stack_info)
+        return sanitize(_s) if _s else _s
 
 
 # ========== ★主线第42批 T1（P0-272）：日志留存治理 ==========  # _m42_t1b
@@ -251,7 +258,7 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
             "note": _note,
         }, ensure_ascii=False)
         with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(_line + "\n")
+            _f.write(sanitize(_line) + "\n")
     except OSError as _e:
         print("[logger] 完整性事件写入失败: %s: %s" % (type(_e).__name__, _e),
               file=sys.stderr)
@@ -542,6 +549,8 @@ def _init_root_logger():
         fmt="[%(organ_tag)s] [%(levelname)s] %(message)s"
     )
     console_handler.setFormatter(console_format)
+    console_handler.addFilter(
+        SanitizingFilter(enabled=not bool(getattr(config, "LOG_SANITIZER_DEBUG_MODE", False))))
     root.addHandler(console_handler)
 
     # 文件 handler（带轮转）
@@ -567,6 +576,7 @@ def _init_root_logger():
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     file_handler.setFormatter(file_format)
+    file_handler.addFilter(SanitizingFilter(enabled=True))
     root.addHandler(file_handler)
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
@@ -680,6 +690,7 @@ def get_smoke_logger(name: str = "smoke") -> logging.Logger:
                 "%(asctime)s " + SMOKE_TAG + " [%(name)s] %(levelname)s: %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S"))
             _h._pulse_smoke = True
+            _h.addFilter(SanitizingFilter(enabled=True))
             _lg.addHandler(_h)
         except Exception as _se:
             print(f"[logger] smoke 日志句柄初始化失败(降级为纯内存): {type(_se).__name__}: {_se}", file=sys.stderr)

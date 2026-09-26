@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """
+
+
 const.py —— 常量定义
 
 版本: v10 PulseNet
@@ -10,6 +12,16 @@ const.py —— 常量定义
 机制: 基于PulseLayer类实现，包含0个核心方法
 定位: 配置基础设施层
 """
+
+# ========== ★主线第133批 T-133c：备份树扫描白名单（制度化） ==========
+#   供 self_inspector 防御过滤与 glob/os.walk 扫描排除共用，避免 dead_code 扫描
+#   误入 backups/ code_backups/ tmp/ 等备份/临时树（前序实测 9 分钟 → 目标 <1 分钟）。
+SCAN_EXCLUDE_DIRS = ["backups/", "data/code_backups/", "tmp/"]
+SCAN_EXCLUDE_PREFIX = [".bak_batch", ".bak_"]
+# 由 SCAN_EXCLUDE_DIRS 推导的段名白名单（去尾部斜杠、取 basename）
+SCAN_EXCLUDE_DIR_BASENAMES = {
+    _d.rstrip("/").split("/")[-1] for _d in SCAN_EXCLUDE_DIRS
+}
 
 
 # ========== v9.5新增: 分层脉冲层级枚举 ==========

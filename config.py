@@ -3394,6 +3394,10 @@ ENABLE_LOG_INTEGRITY_CHECK = True     # 启动时校验日志连续性：检测�
 # ★F3：重复日志聚合降噪（仅聚合 DEBUG/INFO，WARNING 及以上不聚合）
 LOG_AGGREGATION_ENABLED = True    # 是否启用重复日志聚合
 LOG_AGGREGATION_WINDOW = 60.0     # 聚合窗口（秒）：窗口内同类重复日志静默，窗口结束输出摘要
+# ★主线第133批 T-133a（fc133 七卡）：日志脱敏层
+ENABLE_LOG_SANITIZER = True              # 总开关：关闭后全库不脱敏（调试用）
+LOG_SANITIZER_DEBUG_MODE = False         # 调试模式：控制台 handler 不脱敏（保留现场）
+OUTPUT_WINDOWS_PATH_MASK = False         # 可选：额外屏蔽 Windows 绝对路径（默认 OFF）
 # ★F4收尾：沉默器官分级自愈总开关（默认开；关闭后仅保留沉默告警，不再发射处置脉冲）
 SILENCE_ESCALATION_ENABLED = True
 # ★F4处置闭环：处置动作总开关（默认 False，灰度控制；系统管理器订阅 ORGAN_ESCALATION 后据此决定是否执行处置）
@@ -3493,6 +3497,9 @@ _COVERABLE_CONFIGS = {
     "LOG_BACKUP_COUNT": None,
     "LOG_DIR": None,
     "LOG_FILE": None,
+    "ENABLE_LOG_SANITIZER": None,
+    "LOG_SANITIZER_DEBUG_MODE": None,
+    "OUTPUT_WINDOWS_PATH_MASK": None,
 }
 
 # ★v17.0安全加固：热重载安全白名单——以下配置不允许通过热重载修改

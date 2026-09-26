@@ -12,6 +12,7 @@ runtime_metrics.py —— 运行时指标
 """
 
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
+from nucleus.logging.sanitizer import sanitize
 from config import TIMEOUT_CONFIG
 import queue
 import threading
@@ -743,10 +744,10 @@ class ErrorCaptureHandler(logging.Handler):
             _rt = get_runtime_metrics()
             _tb = ""
             if record.exc_info:
-                _tb = "".join(traceback.format_exception(*record.exc_info))
+                _tb = sanitize("".join(traceback.format_exception(*record.exc_info)))
             _rt.record_error(
                 pulse_type=record.name or "log",
-                error=record.getMessage(),
+                error=sanitize(record.getMessage()),
                 traceback_text=_tb,
                 lock_held=False,
             )
