@@ -1545,7 +1545,7 @@ DIALOG_TIMEOUT_FALLBACK_SEC = 60              # 大脑皮层看门狗：对话�
 
 # ★第109批 T-109b：face_welcome 快赢开关（方案A：人脸识别后直接欢迎，跳过"你是谁"推理请求，省 1 次 LLM 调用）
 #   False（默认）= 保持原行为（发射 InferenceEvent.REQUEST 融入自我画像）；True = 跳过推理请求，仅打印欢迎 + L1 欢迎脉冲。
-ENABLE_FACE_WELCOME_DIRECT = False
+ENABLE_FACE_WELCOME_DIRECT = True
 # ★第115批 T-115e：face_welcome 影子半态开关（默认开=只记日志不真跳，观察 1 天后由星轨翻 False 真生效）
 FACE_WELCOME_SHADOW = True
 

@@ -1786,7 +1786,8 @@ class PulseNodePool(SilentLogMixin):
                         "value": _val,
                         "action": "purge",
                     })
-            except Exception:
+            except Exception as e:
+                _module_logger.warning(f"记忆验证·节点遍历异常(已跳过该节点): {e}", exc_info=True)
                 continue
 
         # ========== ★T-127b（D040 W7-B·断4门修·动作段）：执行 L3→L2 降级 ==========
@@ -1963,8 +1964,9 @@ class PulseNodePool(SilentLogMixin):
                         _log(f"记忆验证闭环: "
                              f"评估{_report.get('total_evaluated', 0)}节点, "
                              f"强化{_reinforce_n}, 沉睡{len(_report.get('dormant_candidates', []))}, "
-                             f"清理候选{_stale_n}, 实际淘汰{_purged}")
-                except Exception:
+                             f"清理候选{_stale_n}, 实际淘汰{_purged}, L3候选{_report.get('l3_downgrade_candidates', 0)}, 降级{_report.get('l3_downgraded', 0)}")
+                except Exception as e:
+                    _module_logger.warning(f"记忆验证闭环·异常(已跳过本轮): {e}", exc_info=True)
                     continue
 
         _thr = _th.Thread(target=_loop, name="MemoryVerifyLoop", daemon=True)
