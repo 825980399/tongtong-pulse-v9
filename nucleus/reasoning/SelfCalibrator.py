@@ -20,6 +20,7 @@ from typing import Any
 from nucleus.logger import get_module_logger
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger('SelfCalibrator')
@@ -27,7 +28,8 @@ _logger = get_module_logger('SelfCalibrator')
 try:
     from nucleus.logger import get_module_logger
     _logger = get_module_logger("SelfCalibrator")
-except Exception:
+except Exception as e:
+    silent_exc(e, "nucleus/reasoning/SelfCalibrator.py:30:自校准操作异常", level="warning")
     _logger = None
 
 

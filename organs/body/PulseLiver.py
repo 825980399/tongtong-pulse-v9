@@ -41,6 +41,7 @@ from nucleus.knowledge_noise_filter import (
 )
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.events.EventTap import tap_publish  # ★第17批 T3：旁路事件发布入口
+from nucleus._silent_except import silent_exc
 
 # ★第107批 T-107a（D171）：无人值守资源看门狗（被动、节流、零副作用）
 #   随心跳节流采样进程 RSS / 句柄 / 线程 / 打开文件，超阈值告警，
@@ -3619,7 +3620,8 @@ class PulseLiver(BasePulseOrgan):
             _last_opt = float(state.get("last_optimize_time", 0.0) or 0.0)
             _last_fuse = float(state.get("last_fuse_time", 0.0) or 0.0)
             _last_snap = float(state.get("last_snapshot_save_time", 0.0) or 0.0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            silent_exc(e, "organs/body/PulseLiver.py:3622:状态时间字段解析异常", level="warning")
             return
         self._last_optimize_time = max(self._last_optimize_time, _last_opt)
         self._last_fuse_time = max(self._last_fuse_time, _last_fuse)

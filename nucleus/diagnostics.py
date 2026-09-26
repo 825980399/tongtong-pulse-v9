@@ -14,6 +14,7 @@ diagnostics.py —— 诊断工具集
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 
@@ -151,8 +152,8 @@ class FrameworkDiagnostics:
             if failure_rate > 0.5 and exec_stats.get("total_submitted", 0) > 5:
                 diagnosis["warnings"].append(f"外部操作失败率偏高({failure_rate:.0%})，可能网络存在问题")
                 
-        except Exception:
-            pass  # 调度器不可用时跳过
+        except Exception as e:
+            silent_exc(e, "nucleus/diagnostics.py:154:诊断操作异常", level="warning")
         
         # 5. 整体健康判定
         if not diagnosis["issues"]:

@@ -23,6 +23,7 @@ from nucleus.mnemosyne.PulseNode import PulseNode
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("ResonanceEngine")
@@ -146,7 +147,8 @@ class ResonanceEngine:
                 import config as _cfg
                 _raw = getattr(_cfg, "SEMANTIC_KERNEL_CONFIG", {})
                 self._semantic_cfg = _raw if isinstance(_raw, dict) else {}
-            except Exception:
+            except Exception as e:
+                silent_exc(e, "nucleus/synapsys/ResonanceEngine.py:149:共振引擎异常", level="warning")
                 self._semantic_cfg = {}
         return self._semantic_cfg
 

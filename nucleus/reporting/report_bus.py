@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from nucleus._silent_except import silent_exc
+
 import io
 import json
 import os
@@ -57,7 +59,8 @@ def _is_explicit_base_dir(base_dir: str) -> bool:
     try:
         return os.path.abspath(str(base_dir)) != os.path.abspath(
             os.path.join(_PROJECT_ROOT, DEFAULT_ROOT))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/reporting/report_bus.py:60:上报总线异常", level="warning")
         return True          # 无法判定→按已注入处理（与改造前行为一致）
 
 

@@ -40,6 +40,7 @@ from organs.brain.PulseMultiStepReasoner import PulseMultiStepReasoner
 from organs.brain.PulseReasoningFormatter import PulseReasoningFormatter
 from utils.time_utils import get_current_datetime, get_weather
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 # ★主线第16批 T1：模块级 logger 必须放在全部 import 之后
@@ -18677,7 +18678,8 @@ class PulseInnerWorld(BasePulseOrgan):
             _probe_prompt = ("%s %s" % (" ".join(_terms), question)).strip() if _terms else question
             try:
                 _probe = self._knowledge_retrieve(_probe_prompt)
-            except Exception:
+            except Exception as e:
+                silent_exc(e, "organs/brain/PulseInnerWorld.py:18680:知识检索探针异常", level="warning")
                 return None                      # 探针异常 → 不确定
             try:
                 _probe_weak = not self._validate_step_result(_probe, _probe_prompt)

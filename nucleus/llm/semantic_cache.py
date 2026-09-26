@@ -36,6 +36,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 # ---------------------------------------------------------------------------
 # 默认值
@@ -51,7 +52,8 @@ def _cfg(name: str, default: Any) -> Any:
     try:
         import config
         return getattr(config, name, default)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/llm/semantic_cache.py:54:语义缓存操作异常", level="warning")
         return default
 
 

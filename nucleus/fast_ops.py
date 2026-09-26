@@ -1,3 +1,4 @@
+from nucleus._silent_except import silent_exc
 # -*- coding: utf-8 -*-
 """
 fast_ops.py —— 快速操作集
@@ -19,8 +20,8 @@ def _gpu_cfg(key: str, default):
         _seg = getattr(_cfg, "GPU_VECTOR_SEARCH", {})
         if isinstance(_seg, dict) and key in _seg:
             return _seg[key]
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, "nucleus/fast_ops.py:22:快速操作异常", level="warning")
     return default
 
 

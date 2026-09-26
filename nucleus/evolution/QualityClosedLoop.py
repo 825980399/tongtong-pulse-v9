@@ -18,6 +18,7 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -165,8 +166,8 @@ class ParamTuningClosedLoop:
     def _log_safe(self, msg: str):
         try:
             self._log_fn(f"[{self.name}] {msg}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "nucleus/evolution/QualityClosedLoop.py:168:质量闭环异常", level="warning")
 
     def _bad_ratio(self, since_ts: float, until_ts: float) -> tuple[float, int]:
         """[since_ts, until_ts] 内坏信号占比与观察总数。"""

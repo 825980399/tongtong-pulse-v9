@@ -11,6 +11,7 @@ import os
 import threading
 import time
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+from nucleus._silent_except import silent_exc
 
 _MAX_EVENTS = 200
 _MAX_ORPHANS = 100
@@ -166,8 +167,8 @@ def _flush_at_exit():
             return
         _flusher_stop.set()
         flush_to_file(force=True)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, "utils/pulse_tracer.py:169:退出终刷异常", level="warning")
 
 
 atexit.register(_flush_at_exit)
@@ -219,6 +220,8 @@ def flush_to_file(force: bool = False):
                 existing_keys.add(key)
         
         for o in new_orphans:
+            if not isinstance(o, dict):
+                continue
             key = f"{o['timestamp']:.3f}_{o['organ']}_{o['event_type']}"
             if key not in existing_keys:
                 existing_orphans.append(o)

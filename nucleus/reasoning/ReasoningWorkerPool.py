@@ -20,6 +20,7 @@ from concurrent.futures.process import BrokenProcessPool
 from typing import Any
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = get_module_logger("ReasoningWorkerPool")
@@ -33,7 +34,8 @@ def _is_alive(proc) -> bool:
     """
     try:
         return bool(proc.is_alive())
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/reasoning/ReasoningWorkerPool.py:36:推理工作池操作异常", level="warning")
         return False
 
 

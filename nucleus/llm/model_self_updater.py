@@ -33,6 +33,7 @@ import os
 import sys
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_BASE_DIR",
@@ -63,7 +64,8 @@ def updater_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_MODEL_SELF_UPDATER", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/llm/model_self_updater.py:66:模型自更新异常", level="warning")
         return True
 
 

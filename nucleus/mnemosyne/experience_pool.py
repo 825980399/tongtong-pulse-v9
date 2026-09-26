@@ -15,6 +15,7 @@ import time
 from typing import Any
 from nucleus.logger import get_module_logger
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 """
@@ -94,7 +95,8 @@ class ExperiencePool:
             self._high_emotion_threshold = _cfg.get("high_emotion_threshold", 0.7)
             self._low_emotion_threshold = _cfg.get("low_emotion_threshold", 0.3)
             self._decay_check_interval = _cfg.get("decay_check_interval", 3600)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/mnemosyne/experience_pool.py:97:经验池操作异常", level="warning")
             self._max_experiences = 500
             self._max_summarized = 1000
             self._high_emotion_threshold = 0.7

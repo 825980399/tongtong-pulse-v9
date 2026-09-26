@@ -26,6 +26,7 @@ from nucleus.evolution.TestGenerator import TestGenerator
 #   AttributeError，把真正的原始异常完全掩盖，是本类最难排查的失败模式。
 #   补 SilentLogMixin 兜底，与全项目其余 32 个类保持同一修复口径。
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = logging.getLogger("EvolutionLoop")
@@ -44,7 +45,8 @@ class EvolutionLoop(SilentLogMixin):
         try:
             from nucleus.review import get_code_review_engine
             self._code_review = get_code_review_engine()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "nucleus/evolution/EvolutionLoop.py:47:进化循环异常", level="warning")
             self._code_review = None
 
     # ========== 阶段 1+2：发现问题 + 精准定位 ==========

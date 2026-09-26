@@ -27,11 +27,13 @@ import logging
 import os
 import time
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+from nucleus._silent_except import silent_exc
 
 try:  # 项目内模块日志器；取不到时回退标准 logging（零依赖）
     from nucleus.logger import get_module_logger as _get_module_logger
     _logger = _get_module_logger("pulse.module.kal")
-except Exception:  # pragma: no cover - 仅为健壮性兜底
+except Exception as e:  # pragma: no cover - 仅为健壮性兜底
+    silent_exc(e, "nucleus/knowledge_access_layer.py:35:知识访问层异常", level="warning")
     _logger = logging.getLogger("pulse.module.kal")
 
 # 单例（全局唯一实例）

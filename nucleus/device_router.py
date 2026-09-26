@@ -16,6 +16,7 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 # ── 每类运算的「每元素浮点运算数」（用于估算 FLOPs）──
@@ -59,7 +60,8 @@ def _safe_float(v: Any, default: float) -> float:
     try:
         _f = float(v)
         return _f if _f > 0 and _f == _f else default   # 排除 0/负/NaN
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "nucleus/device_router.py:62:设备路由异常", level="warning")
         return default
 
 
