@@ -486,6 +486,8 @@ class SafeEvolutionExecutor:
             "nucleus/mnemosyne/",
             "nucleus/data/",
             "nucleus/reasoning/",
+            # ★T-135d：大脑器官目录（含 PulseInnerWorld 等巨型器官）纳入核心保护
+            "organs/brain/",
             # ★主线第80批 T7-3：补全核心文件清单
             "nucleus/security/",
             "nucleus/evolution/",

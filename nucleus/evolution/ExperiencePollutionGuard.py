@@ -196,11 +196,3 @@ def scan_all(rels: tuple[str, ...] = (
     return [scan_library(r, mark=mark) for r in rels]
 
 
-def weight_of(entry: dict[str, Any]) -> float:
-    """检索消费时按污染标记返回权重。"""
-    if not isinstance(entry, dict):
-        return WEIGHT_POLLUTED
-    if entry.get("polluted"):
-        _f = entry.get("quality_flag")
-        return WEIGHT_SUSPECT if _f == "suspect" else WEIGHT_POLLUTED
-    return WEIGHT_NORMAL

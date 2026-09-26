@@ -448,9 +448,3 @@ def get_vector_encoder() -> VectorEncoder:
     return VectorEncoder.get_instance()
 
 
-def is_semantic_available() -> bool:
-    """语义内核是否可用（供检索侧判断是否走向量通道）。"""
-    try:
-        return get_vector_encoder().is_available()
-    except Exception:
-        return False

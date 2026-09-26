@@ -390,7 +390,3 @@ def resolve_batch(tracking, node_getter=None, now=None,
     return {"auto_resolved": _auto_n, "human_routed": _human_n,
             "aged": _aged, "adjudications": _adjudications}
 
-def resolve_contradiction(node_a: Any, node_b: Any,
-                          strategy: str = _STRATEGY_DEFAULT) -> dict:
-    """模块级便捷入口。"""
-    return ContradictionResolver.resolve(node_a, node_b, strategy)

@@ -1060,13 +1060,5 @@ class CallGraphAnalyzer:
 # ----------------------------------------------------------------------
 # 分析器入口（供 SelfAwarenessEngine.register_analyzer 使用）
 # ----------------------------------------------------------------------
-def analyze_call_graph(engine: Any = None) -> dict:
-    """分析器入口：走引擎的 `integrate_call_graph()`（便于统一开关/异常口径）。
-
-    engine 为 None 时直接分析当前项目（便于独立调用）。
-    """
-    if engine is not None and hasattr(engine, "integrate_call_graph"):
-        return engine.integrate_call_graph()
-    return CallGraphAnalyzer().analyze_health()
 # _m49_t5_cg_body_done
 # _m49_t5_cg_imp_done

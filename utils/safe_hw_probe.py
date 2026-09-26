@@ -112,17 +112,3 @@ def safe_camera_devices(timeout: float = 6.0):
     """
     return _run_isolated(_CAMERA_SCRIPT, timeout)
 
-
-# 便捷布尔封装：None 表示未能确定（调用方应保留上次安全默认）
-def safe_audio_available(want_input: bool, timeout: float = 6.0):
-    res = safe_audio_devices(want_input, timeout)
-    if not isinstance(res, dict):
-        return None
-    return bool(res.get("ok", False))
-
-
-def safe_camera_available(timeout: float = 6.0):
-    res = safe_camera_devices(timeout)
-    if not isinstance(res, dict):
-        return None
-    return bool(res.get("ok", False))

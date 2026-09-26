@@ -523,10 +523,5 @@ def _verdicts(patches: list[dict[str, Any]],
 _SILENT_RE: re.Pattern = re.compile(r"except\s+[^\n:]+:\s*\n\s*pass\s*(?:\n|$)")
 
 
-def lint_silent_hint(code: Any) -> int:
-    """正则口径的"疑似静默异常"计数（**仅诊断用**，主判据一律走 AST）。"""
-    if not isinstance(code, str):
-        return 0
-    return len(_SILENT_RE.findall(code.replace("\r\n", "\n")))
 
 # _m51_t1_partial

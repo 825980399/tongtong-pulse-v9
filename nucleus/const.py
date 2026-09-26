@@ -33,26 +33,19 @@ SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA = 500        # 行数周增 > 500 告警
 SELF_INSPECTOR_B1_SILENT_RISE_PCT = 20          # 静默计数周升 > 20% 告警
 SELF_INSPECTOR_HISTORY_PATH = "data/self_inspector_history.jsonl"  # 趋势账（git-ignored）
 
-# ---- B2 l3_inversion：L3 心跳时效 + 自适应阈值 ----
-SELF_INSPECTOR_B2_STALE_SEC = 300               # 心跳陈旧 > 300s 告警（宕机 5 分钟内报警）
-SELF_INSPECTOR_B2_ADAPTIVE_MULT = 1.2           # 自适应阈值 = 近 8 条间隔中位数 × 1.2
+# ---- B2 l3_inversion：框架运行态时间戳时效（runtime_state.json 顶层 timestamp） ----
+SELF_INSPECTOR_B2_STALE_SEC = 300               # 时间戳陈旧 > 300s 告警（框架停滞/宕机 5 分钟内报警）
 SELF_INSPECTOR_B2_L1_FLOOR = 400                # l1（L1 层代码行数）< 400 不执法
-SELF_INSPECTOR_B2_HEARTBEAT_REL = "data/mnemosyne/l3_heartbeat.timestamp"  # L3 心跳时间戳路径
 
 # ---- B3 god_file：天花板豁免制 + ceiling 基线 ----
 SELF_INSPECTOR_B3_CEILING_PCT = 5               # 相对首扫基线 > +5% 才报
 SELF_INSPECTOR_B3_BASELINE_REL = "data/god_file_baseline.json"  # 首扫基线（git-ignored）
 
-# B3 豁免表：核心名单（补丁改不动）。这些文件是地基/巨型器官，预期庞大且补丁不应改，
-# 不参与 god_file 膨胀告警，避免噪声刷屏。落 const 而非 detector 内联，便于统一治理。
+# B3 豁免表（T-135a 收窄为 3 个地基文件）：仅 main.py / self_inspector.py / config.py 不参与
+# god_file 膨胀告警；其余巨型器官（含 PulseInnerWorld 等）改走 ceiling 基线，避免噪声刷屏。
 GOD_FILE_EXEMPT = {
     "main.py",
     "self_inspector.py",
-    "PulseInnerWorld.py",
-    "PulseVisualCortex.py",
-    "PulseLiver.py",
-    "PulseLung.py",
-    "SafeEvolutionExecutor.py",
     "config.py",
 }
 
@@ -100,26 +93,6 @@ class TrackingEvent:
     EYES_RESET = "motor.eyes_reset"
     TARGET_LOCKED = "motor.target_locked"
     TARGET_LOST = "motor.target_lost"
-
-# ========== v9.5新增: 场域模式枚举（v10.0启用） ==========
-
-class FieldMode:
-    """
-    场域模式枚举 —— v9.5预埋，v10.0启用。
-    
-    定义信息场的运行模式：
-        PULSE —— 离散脉冲模式（v9.5当前实现）
-        OSCILLATION —— 连续振荡场模式（v10.0）
-        MIXED —— 混合模式（v10.5+）
-    
-    使用方式:
-        from nucleus.const import FieldMode
-        info_field.set_field_mode(FieldMode.PULSE)
-    """
-    PULSE = "PULSE"              # 离散脉冲：事件驱动，按需唤醒
-    OSCILLATION = "OSCILLATION"  # 连续振荡场：全域持续波动，器官频率共振
-    MIXED = "MIXED"              # 混合模式：交互走脉冲，潜意识走振荡场
-
 
 # ========== 系统事件类型 ==========
 
@@ -264,11 +237,6 @@ class SubconsciousEvent:
     CURIOSITY_TICK = "curiosity.tick"
     EXPLORE = "subconscious.explore"
     SEARCH_FEEDBACK = "subconscious.search_feedback"  # ← 新增：搜索质量反馈
-class StreamMinerEvent:
-    # TODO: 预留接口，待未来功能使用（事件占位类，详见下方说明）
-    """事件流挖掘器事件（★P3-4修复：让挖掘出的模式有真实消费者）"""
-    # ★主线第8批 任务4（P2-37）：PATTERN_DISCOVERED（stream_miner.pattern_discovered）已摘除 ——
-    #   四步验证（Class.MEMBER / 'value' / getattr）全库零引用；非传感器词汇/外部协议，确认死常量。
 class LungEvent:
     """肺/模型池相关事件"""
     SELECT_MODEL = "lungs.select_model"

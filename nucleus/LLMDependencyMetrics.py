@@ -492,9 +492,3 @@ def get_dependency_snapshot() -> dict[str, Any]:
         return {}
 
 
-def log_dependency_now() -> None:
-    """立即输出一次依赖度指标（供手动触发/启动时观测）。"""
-    try:
-        get_llm_dependency_metrics().log_hourly()
-    except Exception as e:
-        _logger.debug(f"输出依赖度指标异常已忽略: {type(e).__name__}: {e}")

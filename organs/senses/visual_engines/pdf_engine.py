@@ -9,14 +9,8 @@ import os
 from typing import Any
 
 
-def engine_name() -> str:
-    """返回引擎名称"""
-    return "pdf_engine"
 
 
-def supported_extensions() -> list:
-    """返回支持的文件扩展名列表"""
-    return ['.pdf']
 
 
 def process(file_path: str, max_pages: int = 10) -> dict[str, Any]:

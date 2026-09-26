@@ -580,12 +580,12 @@ def _init_root_logger():
     root.addHandler(file_handler)
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
-    # filter 挂在 root 上，同时作用于 console 与 file 两个 handler；
+    # filter 仅挂在 file_handler 上，只作用于落盘的文件日志（避免误伤 console 实时输出）；
     # 仅聚合 DEBUG/INFO，WARNING 及以上不聚合。
     _agg_enabled = bool(getattr(config, "LOG_AGGREGATION_ENABLED", True))
     _agg_window = float(getattr(config, "LOG_AGGREGATION_WINDOW", 60.0))
     if _agg_enabled:
-        root.addFilter(LogAggregationFilter(window_seconds=_agg_window))
+        file_handler.addFilter(LogAggregationFilter(window_seconds=_agg_window))
 
     # ★主线第42批 T1（P0-272）：日志留存治理（测试环境跳过，避免污染生产 logs/）
     if not _log_in_test_env():

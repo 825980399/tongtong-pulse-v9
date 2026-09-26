@@ -21,7 +21,7 @@ def _make_inspector(root, boot_ts=0.0):
 
 def test_b1_first_scan_zero_and_baseline(tmp_path, monkeypatch):
     ins = _make_inspector(str(tmp_path))
-    monkeypatch.setattr(ins, "_si_collect_metrics", lambda: (100, 5))
+    monkeypatch.setattr(ins, "_si_collect_metrics", lambda: (100, 5, {}))
     assert ins._detect_silent_growth() == []
     hist = os.path.join(str(tmp_path), "data", "self_inspector_history.jsonl")
     assert os.path.exists(hist), "首扫应建趋势账基线"
@@ -36,7 +36,7 @@ def test_b1_alert_on_weekly_growth(tmp_path, monkeypatch):
         f.write(f'{{"ts": {_old}, "loc": 100, "silent": 5}}\n')
         # 一条 6h 前的采样，确保节流放行
         f.write(f'{{"ts": {time.time() - 7*86400}, "loc": 100, "silent": 5}}\n')
-    monkeypatch.setattr(ins, "_si_collect_metrics", lambda: (2000, 6))
+    monkeypatch.setattr(ins, "_si_collect_metrics", lambda: (2000, 6, {}))
     issues = ins._detect_silent_growth()
     assert any(i["type"] == "code_loc_weekly_growth" for i in issues), "周增应告警"
 
@@ -44,20 +44,26 @@ def test_b1_alert_on_weekly_growth(tmp_path, monkeypatch):
 def test_b2_first_scan_zero(tmp_path, monkeypatch):
     ins = _make_inspector(str(tmp_path))
     monkeypatch.setattr(ins, "_si_count_loc", lambda: 9999)
+    # 运行态时间戳为当前时间 → 不陈旧 → 无告警
+    rs = os.path.join(str(tmp_path), "data", "runtime_state.json")
+    os.makedirs(os.path.dirname(rs), exist_ok=True)
+    with open(rs, "w", encoding="utf-8") as f:
+        f.write('{"timestamp": %s}' % (time.time(),))
     assert ins._detect_l3_inversion() == []
+    # B2 不再自建旧的 L3 心跳文件
     hb = os.path.join(str(tmp_path), "data", "mnemosyne", "l3_heartbeat.timestamp")
-    assert os.path.exists(hb), "首扫应建 L3 心跳基线"
+    assert not os.path.exists(hb), "B2 不应再自建 L3 心跳文件"
 
 
 def test_b2_stale_alert(tmp_path, monkeypatch):
     ins = _make_inspector(str(tmp_path))
-    hb = os.path.join(str(tmp_path), "data", "mnemosyne", "l3_heartbeat.timestamp")
-    os.makedirs(os.path.dirname(hb), exist_ok=True)
-    with open(hb, "w", encoding="utf-8") as f:
-        f.write(str(time.time() - 1000))  # 陈旧 1000s
+    rs = os.path.join(str(tmp_path), "data", "runtime_state.json")
+    os.makedirs(os.path.dirname(rs), exist_ok=True)
+    with open(rs, "w", encoding="utf-8") as f:
+        f.write('{"timestamp": %s}' % (time.time() - 1000,))  # 陈旧 1000s
     monkeypatch.setattr(ins, "_si_count_loc", lambda: 9999)
     issues = ins._detect_l3_inversion()
-    assert any(i["type"] == "l3_heartbeat_stale" for i in issues), "心跳陈旧应告警"
+    assert any(i["type"] == "runtime_state_stale" for i in issues), "运行态时间戳陈旧应告警"
 
 
 def test_b2_l1_floor_skip(tmp_path):

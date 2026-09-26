@@ -276,10 +276,6 @@ def get_strategy_selector() -> StrategySelector:
     return _strategy_selector
 
 
-def set_strategy_selector(selector: StrategySelector) -> None:
-    """设置 StrategySelector 单例（用于依赖注入/测试）。"""
-    global _strategy_selector
-    _strategy_selector = selector
 
 
 if __name__ == "__main__":

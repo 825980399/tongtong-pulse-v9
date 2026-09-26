@@ -52,20 +52,6 @@ def get_current_datetime() -> dict[str, Any]:
     }
 
 
-def get_timestamp_weekday(timestamp: float) -> str:
-    """
-    根据时间戳获取对应的星期几。
-    
-    Args:
-        timestamp: Unix时间戳
-    
-    Returns:
-        星期几的中文字符串
-    """
-    import datetime
-    weekday_map = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-    dt = datetime.datetime.fromtimestamp(timestamp)
-    return weekday_map[dt.weekday()]
 
 
 # ========== 天气获取（有状态，线程安全） ==========

@@ -88,8 +88,6 @@ class SelfModel(SilentLogMixin):
     def set_feedback_loop(self, ref: Any) -> None:
         self._feedback_loop = ref
 
-    def set_strategy_selector(self, ref: Any) -> None:
-        self._strategy_selector = ref
 
     def register_dimension(self, name: str,
                            provider: Callable[[], dict[str, Any]]) -> None:

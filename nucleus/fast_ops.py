@@ -272,17 +272,4 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             pass
 
 
-def fast_text_clean(text: str) -> str:
-    """
-    高性能文本清洗（预埋C扩展点）。
-    
-    当前实现：纯 Python 正则替换。
-    未来可替换为：C/re2 实现的高性能正则引擎。
-    """
-    import re
-    # 去除多余空白
-    text = re.sub(r'\s+', ' ', text)
-    # 去除控制字符
-    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
-    return text.strip()
 # _m70_t4_faiss_fastops

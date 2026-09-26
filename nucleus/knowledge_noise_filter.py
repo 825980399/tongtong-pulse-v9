@@ -168,12 +168,6 @@ def is_noise_keyword(keyword: str) -> bool:
     return False
 
 
-def filter_keywords(keywords: list) -> list:
-    """
-    从关键词列表中过滤噪音词，保留有价值的词。
-    返回过滤后的新列表。
-    """
-    return [kw for kw in keywords if not is_noise_keyword(kw)]
 
 
 def get_top_valuable_keywords(keywords: list, top_n: int = 10) -> list:
@@ -250,47 +244,6 @@ def get_view_mode(source_organ: str, trigger_reason: str) -> str:
     return ViewMode.OUTER_VIEW
 
 
-def get_trust_score(source_organ: str, trigger_reason: str, view_mode: str) -> float:
-    """
-    根据来源和视角计算初始可信度评分（0-100）。
-    内视本地源码 / 设计文档 → 最高可信度
-    外视权威科普 / 官方技术文档 → 高可信度
-    外视网络碎片 / 单一孤源 → 低可信度
-    """
-    if view_mode == ViewMode.INNER_VIEW:
-        # 本地源码、设计文档、阶段总结 → 极高可信
-        if "controller.read_file" in trigger_reason:
-            return 95.0
-        # 自我反思产生 → 高可信
-        if source_organ in ("前额叶", "内在世界"):
-            return 85.0
-        # 肝脏压缩 / 融合 → 已验证
-        if source_organ == "肝":
-            return 80.0
-        return 70.0
-
-    if view_mode == ViewMode.OUTER_VIEW:
-        # 无头浏览器深度搜索 → 较高可信（已做域名白名单过滤）
-        if "deep_search.headless" in trigger_reason:
-            return 75.0
-        # 双腿主动学习内置知识 → 高可信
-        if "active_learn:builtin" in trigger_reason:
-            return 85.0
-        # 双腿定向搜索 → 中等可信
-        if "active_learn:search" in trigger_reason:
-            return 65.0
-        # 好奇心探索 / 梦境推演 → 低可信（临时节点）
-        if trigger_reason in ("curiosity.explore", "dream.deduction", "creative.insight"):
-            return 30.0
-        # 对话消化 → 中等可信
-        if source_organ in ("耳朵", "嘴巴"):
-            return 60.0
-        # 网络抓取 → 需交叉验证
-        if "fetch" in trigger_reason or "search" in trigger_reason:
-            return 40.0
-        return 50.0
-
-    return 50.0
 
 # ===== 模块初始化：加载配置中的补充噪音词 =====
 _load_noise_from_config()
@@ -580,22 +533,3 @@ def assess_content_quality(text: str, keywords: list | None = None) -> dict:
     return result
 
 
-def filter_noise_nodes(nodes: list) -> tuple[list, list]:
-    """批量过滤知识节点，返回(有效节点, 被过滤节点)。
-
-    每个节点应为dict，包含value和keywords字段。
-    """
-    valid = []
-    filtered = []
-    for node in nodes:
-        if not isinstance(node, dict):
-            valid.append(node)
-            continue
-        text = node.get("value", "")
-        keywords = node.get("keywords", [])
-        quality = assess_content_quality(text, keywords)
-        if quality["is_valid"]:
-            valid.append(node)
-        else:
-            filtered.append({"node": node, "reason": "; ".join(quality["issues"])})
-    return valid, filtered

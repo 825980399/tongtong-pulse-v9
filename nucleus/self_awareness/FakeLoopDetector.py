@@ -157,28 +157,8 @@ def _call_names(fn: ast.AST) -> list[tuple[str, int, str]]:
     return _out
 
 
-def _has_real_write(fn: ast.AST) -> bool:
-    """方法体内是否有真正的文件写入。"""
-    for _nm, _ln, _mode in _call_names(fn):
-        if _nm == "open":
-            if any(c in _mode for c in ("w", "a", "x", "+")):
-                return True
-            continue
-        if _nm in _WRITE_CALLS:
-            return True
-    return False
 
 
-def _has_real_read(fn: ast.AST) -> bool:
-    """方法体内是否有真正的文件读取。"""
-    for _nm, _ln, _mode in _call_names(fn):
-        if _nm == "open":
-            if not _mode or "r" in _mode:
-                return True
-            continue
-        if _nm in _READ_CALLS:
-            return True
-    return False
 
 
 def _self_path_attrs(fn: ast.AST) -> set[str]:

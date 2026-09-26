@@ -10,14 +10,8 @@ from typing import Any
 from config import EXTERNAL_CALL_TIMEOUTS
 
 
-def engine_name() -> str:
-    """返回引擎名称"""
-    return "ocr_engine"
 
 
-def supported_extensions() -> list:
-    """返回支持的文件扩展名列表"""
-    return ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp', '.tiff']
 
 
 def process(file_path: str, remote_api_config: dict | None = None) -> dict[str, Any]:

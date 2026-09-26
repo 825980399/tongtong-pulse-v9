@@ -18,6 +18,7 @@ import os
 import re
 import threading
 import time
+from datetime import datetime
 from typing import Any
 
 from nucleus.const import (
@@ -30,9 +31,7 @@ from nucleus.const import (
     SELF_INSPECTOR_B1_SILENT_RISE_PCT,
     SELF_INSPECTOR_HISTORY_PATH,
     SELF_INSPECTOR_B2_STALE_SEC,
-    SELF_INSPECTOR_B2_ADAPTIVE_MULT,
     SELF_INSPECTOR_B2_L1_FLOOR,
-    SELF_INSPECTOR_B2_HEARTBEAT_REL,
     SELF_INSPECTOR_B3_CEILING_PCT,
     SELF_INSPECTOR_B3_BASELINE_REL,
     GOD_FILE_EXEMPT,
@@ -2763,20 +2762,24 @@ class SelfInspector(SilentLogMixin):
         return _n
 
     def _si_collect_metrics(self):
-        """行数 + silent_exc( 调用计数（B1 用），单次遍历。"""
+        """行数 + silent_exc( 调用计数 + 每文件行数（B1 趋势账 per_file 维度），单次遍历。"""
         _loc = 0
         _silent = 0
+        _per_file = {}
         _pat = re.compile(r"silent_exc\(")
         for _ap, _rel in self._si_walk_py():
             try:
+                _floc = 0
                 with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
                     for _line in _f:
                         _loc += 1
+                        _floc += 1
                         if _pat.search(_line):
                             _silent += 1
+                _per_file[_rel] = _floc
             except OSError as _e:
                 silent_exc(_e, "self_inspector.py:_si_collect_metrics", level="debug")
-        return _loc, _silent
+        return _loc, _silent, _per_file
 
     def _si_count_branches(self, src: str) -> int:
         """AST 分支节点计数（B3 用）。"""
@@ -2820,13 +2823,13 @@ class SelfInspector(SilentLogMixin):
         _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _hist = os.path.join(_root, SELF_INSPECTOR_HISTORY_PATH)
         _entries = self._si_read_jsonl(_hist)
-        _loc, _silent = self._si_collect_metrics()
+        _loc, _silent, _per_file = self._si_collect_metrics()
         if not _entries:
-            self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent})
+            self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent, "per_file": _per_file})
             return []
         if _now - float(_entries[-1].get("ts", 0)) < SELF_INSPECTOR_B1_THROTTLE_SEC:
             return []  # 6h 节流，未到采样点
-        self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent})
+        self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent, "per_file": _per_file})
         _week_ago = _now - 7 * 86400
         _base = None
         for _e in _entries:
@@ -2862,12 +2865,13 @@ class SelfInspector(SilentLogMixin):
     # ---- B2 l3_inversion ----
 
     def _detect_l3_inversion(self) -> list[dict]:
-        """B2 l3_inversion：L3 心跳时效；boot 静默 + l1<400 不执法 + 自适应阈值。
+        """B2 l3_inversion：监控框架运行态时间戳（data/runtime_state.json 顶层 timestamp）。
 
-        监控 L3 后台层心跳时间戳（由框架 L3 循环周期性写入
-        data/mnemosyne/l3_heartbeat.timestamp）。首扫无基线 → 建基线不告警；
-        心跳陈旧 > max(300s, 近8条间隔中位数×1.2) → 告警（宕机 5 分钟内报警）。
-        注：l1（L1 层代码行数）恒 > 400 → 正常执法；仅极端裁剪场景豁免。
+        boot 静默 + l1<400 不执法；时间戳陈旧 > SELF_INSPECTOR_B2_STALE_SEC(300s) 告警
+        （框架停止运行 5 分钟内报警）。单一数据源为框架周期性写入的 runtime_state.json
+        顶层 timestamp，不再自建 data/mnemosyne/l3_heartbeat.timestamp。
+        运行态快照缺失或 timestamp 为空/解析失败 → 视为未初始化，不告警（避免误报）。
+        兼容 epoch 秒（数值）与 ISO 字符串两种格式。
         """
         _now = time.time()
         if _now - self._boot_ts < SELF_INSPECTOR_BOOT_SILENCE_SEC:
@@ -2875,70 +2879,30 @@ class SelfInspector(SilentLogMixin):
         if self._si_count_loc() < SELF_INSPECTOR_B2_L1_FLOOR:
             return []
         _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        _hb = os.path.join(_root, SELF_INSPECTOR_B2_HEARTBEAT_REL)
-        if not os.path.exists(_hb):
-            # 首扫：建基线（写入当前时间 + 空间隔序列），不告警
-            try:
-                _d = os.path.dirname(_hb)
-                if _d:
-                    os.makedirs(_d, exist_ok=True)
-                with open(_hb, "w", encoding="utf-8") as _f:
-                    _f.write(str(_now))
-                self._si_write_l3_intervals(_hb, [])
-            except OSError as _e:
-                silent_exc(_e, "self_inspector.py:_detect_l3_inversion[init]", level="debug")
+        _rs = os.path.join(_root, "data", "runtime_state.json")
+        if not os.path.exists(_rs):
+            # 运行态快照缺失：首扫/未初始化，不告警（避免误报）
             return []
         try:
-            with open(_hb, "r", encoding="utf-8") as _f:
-                _last_ts = float(_f.read().strip() or _now)
-        except (OSError, ValueError) as _e:
-            silent_exc(_e, "self_inspector.py:_detect_l3_inversion[read_hb]", level="debug")
+            with open(_rs, "r", encoding="utf-8") as _f:
+                _d = json.load(_f)
+            _ts_raw = _d.get("timestamp")
+            if _ts_raw is None:
+                return []
+            if isinstance(_ts_raw, (int, float)):
+                _last_ts = float(_ts_raw)
+            else:
+                _last_ts = datetime.fromisoformat(str(_ts_raw)).timestamp()
+        except (OSError, ValueError, TypeError) as _e:
+            silent_exc(_e, "self_inspector.py:_detect_l3_inversion[read_rs]", level="debug")
             return []
         _gap = _now - _last_ts
-        _intervals = self._si_read_l3_intervals(_hb)
-        _intervals.append(_gap)
-        _intervals = _intervals[-8:]
-        self._si_write_l3_intervals(_hb, _intervals)
-        if len(_intervals) >= 2:
-            _med = sorted(_intervals)[len(_intervals) // 2]
-            _adaptive = _med * SELF_INSPECTOR_B2_ADAPTIVE_MULT
-        else:
-            _adaptive = SELF_INSPECTOR_B2_STALE_SEC
-        _thr = max(SELF_INSPECTOR_B2_STALE_SEC, _adaptive)
-        if _gap > _thr:
-            # 去抖：更新时间戳避免告警风暴
-            try:
-                with open(_hb, "w", encoding="utf-8") as _f:
-                    _f.write(str(_now))
-            except OSError as _e:
-                silent_exc(_e, "self_inspector.py:_detect_l3_inversion[dedup]", level="debug")
+        if _gap > SELF_INSPECTOR_B2_STALE_SEC:
             return [self._si_issue(
-                "l3_inversion", "l3_heartbeat_stale",
-                f"L3 心跳陈旧 {_gap:.0f}s（阈值 {_thr:.0f}s），疑似 L3 后台层停滞/宕机", _root)]
+                "l3_inversion", "runtime_state_stale",
+                f"框架运行态时间戳陈旧 {_gap:.0f}s（阈值 {SELF_INSPECTOR_B2_STALE_SEC}s），"
+                f"疑似框架停滞/宕机", _root)]
         return []
-
-    def _si_l3_interval_path(self, hb_path: str) -> str:
-        return hb_path + ".intervals.json"
-
-    def _si_read_l3_intervals(self, hb_path: str) -> list[float]:
-        _p = self._si_l3_interval_path(hb_path)
-        try:
-            if os.path.exists(_p):
-                with open(_p, "r", encoding="utf-8") as _f:
-                    _v = json.load(_f)
-                if isinstance(_v, list):
-                    return [float(x) for x in _v]
-        except (OSError, ValueError) as _e:
-            silent_exc(_e, "self_inspector.py:_si_read_l3_intervals", level="debug")
-        return []
-
-    def _si_write_l3_intervals(self, hb_path: str, intervals: list[float]) -> None:
-        _p = self._si_l3_interval_path(hb_path)
-        try:
-            with open(_p, "w", encoding="utf-8") as _f:
-                json.dump(intervals, _f)
-        except OSError as _e:
-            silent_exc(_e, "self_inspector.py:_si_write_l3_intervals", level="warning")
 
     # ---- B3 god_file ----
 
