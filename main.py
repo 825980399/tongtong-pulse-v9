@@ -3270,20 +3270,38 @@ def _spawn_self_restart() -> bool:
         # 显式指定工作目录为项目根目录（main.py所在目录），
         #   确保无论父进程从哪个目录启动，接班进程的相对路径都正确。
         _project_root = _os.path.dirname(_os.path.abspath(__file__))
+        # ★T-131a③：自重启接班进程 stdout/stderr 重定向到 logs/boot_crash.log，
+        #   避免启动期崩溃信息随控制台丢失、无迹可查。
+        try:
+            _os.makedirs(_os.path.join(_project_root, "logs"), exist_ok=True)
+            _boot_log_fh = open(_os.path.join(_project_root, "logs", "boot_crash.log"),
+                                 "a", encoding="utf-8")
+        except Exception as e:
+            silent_exc(e, "main:_spawn_self_restart:boot_crash.log打开失败", level="warning")
+            _boot_log_fh = None
         if _sys.platform == 'win32':
             _proc = subprocess.Popen(
                 [_sys.executable, __file__],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
                 cwd=_project_root,
+                stdout=_boot_log_fh,
+                stderr=_boot_log_fh,
             )
         else:
             _proc = subprocess.Popen(
                 [_sys.executable, __file__],
                 start_new_session=True,
                 cwd=_project_root,
+                stdout=_boot_log_fh,
+                stderr=_boot_log_fh,
             )
         with _SELF_RESTART_PIDS_LOCK:
             _SELF_RESTART_CHILD_PIDS.add(_proc.pid)
+        if _boot_log_fh is not None:
+            try:
+                _boot_log_fh.close()
+            except Exception as e:
+                silent_exc(e, "main:_spawn_self_restart:boot_crash.log关闭失败", level="warning")
         _logger.info(f"[自重启] 接班进程已启动(pid={_proc.pid}, 独立会话)，父进程即将退出")
         return True
     except Exception as _spawn_e:

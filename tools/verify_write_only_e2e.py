@@ -18,6 +18,7 @@
 import argparse
 import os
 import sys
+from nucleus._silent_except import silent_exc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -264,8 +265,8 @@ def run(backend):
         try:
             from nucleus.timeseries_store.influxdb_store import get_influxdb_store as _real
             influx_mod.get_influxdb_store = _real
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "verify_write_only_e2e:267:还原influxdb_store异常", level="warning")
 
     print("\n只写统计快照: %s" % mock.get_stats())
     return 0 if not FAIL else 1

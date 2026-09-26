@@ -184,8 +184,8 @@ class ModelSelfUpdater:
                     _d = json.loads(_f.read())
                 if isinstance(_d, dict) and isinstance(_d.get("versions"), list):
                     return _d
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            silent_exc(e, "model_self_updater:187:模型索引读取异常", level="warning")
         return {"current": None, "versions": []}
 
     def _save_index(self, idx: dict) -> bool:

@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = get_module_logger("VectorEncoder")
@@ -180,8 +181,8 @@ class VectorEncoder:
                                  self._cfg.get("cache_dir", "data/models"))
         try:
             os.makedirs(cache_dir, exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "VectorEncoder:183:模型缓存目录创建失败", level="warning")
 
         # 尝试顺序：ModelScope > hf-mirror > 直连 HF（星轨 Q6 决策）
         mirrors = self._cfg.get("download_mirrors") or [

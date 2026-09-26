@@ -2728,11 +2728,13 @@ class PatchManager:
         if only_approved:
             _approved_pending = []
             _skipped_count = 0
+            _skipped_list = []
             for _p in pending:
                 if _p.get("status") == "approved":
                     _approved_pending.append(_p)
                 else:
                     _skipped_count += 1
+                    _skipped_list.append(_p)
             if _skipped_count > 0:
                 _module_logger.info(f"审批过滤：跳过 {_skipped_count} 个未审批补丁")
             pending = _approved_pending
@@ -3174,7 +3176,12 @@ class PatchManager:
             _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
         self._save_patch_list(self._history_file, history)
-        self._save_patch_list(self._pending_file, [])
+        # ★T-131a②：仅应用 approved 时，未审批补丁须写回 pending，
+        #   绝不能被 [] 清空（否则未审批补丁在 apply 后永久丢失）。
+        if only_approved:
+            self._save_patch_list(self._pending_file, _skipped_list)
+        else:
+            self._save_patch_list(self._pending_file, [])
         # ★v23.0新增：写入人类可读的修改日志
         self._write_readable_log(results, history)
         return results

@@ -483,6 +483,7 @@ class SafeEvolutionExecutor:
             "nucleus/pulse/",
             "nucleus/field/",
             "nucleus/mnemosyne/",
+            "nucleus/data/",
             "nucleus/reasoning/",
             # ★主线第80批 T7-3：补全核心文件清单
             "nucleus/security/",

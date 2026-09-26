@@ -35,6 +35,7 @@ import re
 import threading
 import time
 from typing import Any, Optional
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "repair_json_text",
@@ -258,7 +259,8 @@ def _try_loads(text: str) -> Optional[Any]:
     """尝试解析；成功且为 dict/list 时返回对象，否则 None。"""
     try:
         _obj = json.loads(text)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, "JsonRepair:261:JSON解析失败", level="warning")
         return None
     return _obj if isinstance(_obj, (dict, list)) else None
 

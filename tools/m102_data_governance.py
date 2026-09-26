@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import time
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KNOWLEDGE_DIR = os.path.join(_PROJECT_ROOT, "data", "knowledge")
@@ -144,8 +145,8 @@ def load_cold_ids():
             d = json.load(io.open(COLD_INDEX, encoding="utf-8", errors="replace"))
             if isinstance(d, dict):
                 ids |= set(str(k) for k in d.keys())
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "m102_data_governance:147:冷索引读取异常", level="warning")
     return ids
 
 

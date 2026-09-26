@@ -73,6 +73,7 @@ import re
 import sys
 import time
 from typing import Any, Callable
+from nucleus._silent_except import silent_exc
 
 ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
@@ -500,9 +501,11 @@ def load_trend(path: str | None = None, limit: int = 50) -> list[dict]:
                 continue
             try:
                 _out.append(json.loads(_line))
-            except ValueError:
+            except ValueError as e:
+                silent_exc(e, "quality_score_v2:503:日志行JSON解析失败", level="warning")
                 continue
-    except OSError:
+    except OSError as e:
+        silent_exc(e, "quality_score_v2:505:日志文件读取异常", level="warning")
         return []
     return _out[-limit:]
 

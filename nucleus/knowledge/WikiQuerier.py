@@ -26,6 +26,7 @@ from urllib.request import Request, urlopen
 
 from nucleus.logger import get_module_logger
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("WikiQuerier")
@@ -186,6 +187,11 @@ class WikiQuerier:
         self._last_fetch_ts = 0.0
         self._throttle_lock = threading.Lock()
 
+        # ★T-131d：域级冷却（被拒/Retry-After 后逐级退避，防封禁升级）
+        self._domain_cooldown_until = {}
+        self._domain_backoff_level = {}
+        self._domain_cooldown_lock = threading.Lock()
+
     # ========== 对外接口 ==========
 
     def query(self, keyword: str) -> WikiResult | None:
@@ -230,11 +236,19 @@ class WikiQuerier:
         # ★P2-85：请求前按最小间隔节流（开关关闭时 _get_min_interval 返回 0.0）。
         self._throttle()
         _url = self._url_template.format(keyword=quote(str(keyword), safe=""))
+        # ★T-131d：域级冷却——冷却期内直接 fallback，不发起请求（防封禁升级）。
+        _domain = self._domain_of_url(_url)
+        if self._domain_in_cooldown(_domain):
+            self._stats["rate_limited"] += 1
+            self._log(f"查询[{keyword}]域 {_domain} 冷却中，跳过并 fallback 浏览器")
+            return None
         try:
             _html = self._fetch(_url, timeout=self._timeout)
         except HTTPError as _he:
             if getattr(_he, "code", None) == 403:
                 self._stats["forbidden_403"] += 1
+                # ★T-131d：403 触发域冷却（含 Retry-After，若存在）。
+                self._domain_trigger_cooldown(_domain, self._http_retry_after(_he))
                 self._log(f"查询[{keyword}]被站点拒绝(403)，将 fallback 浏览器")
             raise
         _r = self.parse_baidu_html(_html, keyword)
@@ -379,6 +393,67 @@ class WikiQuerier:
                     self._stats["rate_limited"] += 1
                     time.sleep(_wait)
             self._last_fetch_ts = time.time()
+
+    # ========== ★T-131d：域级冷却 ==========
+    _DOMAIN_BACKOFF_SCHEDULE = (1800.0, 7200.0, 21600.0)  # 30min / 2h / 6h
+
+    def _domain_of_url(self, url: str) -> str:
+        """从 URL 提取域名（小写）作为冷却键。"""
+        try:
+            from urllib.parse import urlparse
+            return (urlparse(url).netloc or "unknown").lower()
+        except Exception as e:
+            silent_exc(e, "WikiQuerier:_domain_of_url:URL解析异常", level="warning")
+            return "unknown"
+
+    def _domain_in_cooldown(self, domain: str) -> bool:
+        """域是否处于冷却期（冷却期内不发起请求，直接 fallback，避免封禁升级）。"""
+        if not _rate_limit_enabled():
+            return False
+        with self._domain_cooldown_lock:
+            _until = self._domain_cooldown_until.get(domain, 0.0)
+        return time.time() < _until
+
+    @staticmethod
+    def _http_retry_after(he) -> "float | None":
+        """解析 HTTP 响应头 Retry-After（秒数或 HTTP 日期），无则 None。"""
+        try:
+            _ra = getattr(he, "headers", None)
+            if not _ra:
+                return None
+            _val = _ra.get("Retry-After")
+            if not _val:
+                return None
+            _val = str(_val).strip()
+            if _val.isdigit():
+                return float(_val)
+            from email.utils import parsedate_to_datetime
+            try:
+                _dt = parsedate_to_datetime(_val)
+                return max(0.0, _dt.timestamp() - time.time())
+            except Exception as e:
+                silent_exc(e, "WikiQuerier:_http_retry_after:日期解析异常", level="warning")
+                return None
+        except Exception as e:
+            silent_exc(e, "WikiQuerier:_http_retry_after:解析异常", level="warning")
+            return None
+
+    def _domain_trigger_cooldown(self, domain: str, retry_after: "float | None" = None):
+        """被拒时触发/升级域冷却：默认按退避档（30min→2h→6h），有 Retry-After 取较大值。"""
+        if not _rate_limit_enabled():
+            return
+        with self._domain_cooldown_lock:
+            _lvl = min(self._domain_backoff_level.get(domain, 0),
+                       len(self._DOMAIN_BACKOFF_SCHEDULE) - 1)
+            _sched = self._DOMAIN_BACKOFF_SCHEDULE[_lvl]
+            _now = time.time()
+            _wait = max(_sched, float(retry_after)) if retry_after else _sched
+            self._domain_cooldown_until[domain] = _now + _wait
+            self._domain_backoff_level[domain] = min(
+                _lvl + 1, len(self._DOMAIN_BACKOFF_SCHEDULE) - 1)
+            _logger.warning(
+                f"[WikiQuerier][T-131d] 域 {domain} 触发冷却 {_wait / 60:.0f}min"
+                f"（退避档={_lvl}，Retry-After={retry_after}）")
 
     def _set_cache(self, keyword: str, result: WikiResult):
         with self._cache_lock:

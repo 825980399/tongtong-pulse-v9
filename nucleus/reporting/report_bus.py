@@ -715,7 +715,8 @@ class ReportBus:
                     _j = json.load(io.open(os.path.join(_d, _fn),
                                            encoding="utf-8"))
                     _e = ReportEnvelope.from_dict(_j)
-                except (ValueError, OSError, TypeError):
+                except (ValueError, OSError, TypeError) as e:
+                    silent_exc(e, "report_bus:718:报告信封解析异常", level="warning")
                     continue
                 with self._lock:
                     self._envelopes[_e.report_id] = _e

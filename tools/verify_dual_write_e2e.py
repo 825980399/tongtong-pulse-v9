@@ -28,6 +28,7 @@
 import argparse
 import os
 import sys
+from nucleus._silent_except import silent_exc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -225,8 +226,8 @@ def run(backend):
         try:
             from nucleus.graph_store.neo4j_store import get_neo4j_store as _real
             neo4j_mod.get_neo4j_store = _real
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, "verify_dual_write_e2e:228:还原neo4j_store异常", level="warning")
 
     print("\n双写统计快照: %s" % mock.get_stats())
     return 0 if not FAIL else 1

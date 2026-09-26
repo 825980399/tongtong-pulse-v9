@@ -33,6 +33,7 @@ import os
 import sys
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_POLLUTION_REPORT_PATH",
@@ -435,5 +436,6 @@ def save_pollution_report(report: dict, path: str | None = None) -> str | None:
         with io.open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
-    except OSError:
+    except OSError as e:
+        silent_exc(e, "experience_retriever:438:报告写出异常", level="warning")
         return None

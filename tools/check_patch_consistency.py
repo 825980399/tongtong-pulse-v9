@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import sys
+from nucleus._silent_except import silent_exc
 
 # ===== 态白名单（C5）：历史/生产实测出现过的合法 status =====
 #   注：'verified' 为早期代码遗留别名（现框架统一用 'runtime_verified'），
@@ -85,8 +86,8 @@ def _load_ledgers(root: str, no_import: bool = False):
                     with open(_p, encoding="utf-8") as _f:
                         _data = json.load(_f)
                     _out.extend(_data if isinstance(_data, list) else [])
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, "check_patch_consistency:88:补丁文件读取异常", level="warning")
     return (pending, history, obsolete, pending_path, history_path, obsolete_path)
 
 

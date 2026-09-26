@@ -50,6 +50,7 @@ from nucleus.data import exclude_dirs as E
 # ★第55批 T3：跨盘安全的 relpath（同盘行为与 os.path.relpath 一致，
 #   跨盘降级绝对路径而不抛 ValueError —— 测试沙箱可能落在别的盘）
 from nucleus.data.path_utils import safe_relpath
+from nucleus._silent_except import silent_exc
 
 MODULES: tuple[str, ...] = (
     "base", "functions", "hardware", "nucleus",
@@ -93,7 +94,8 @@ def extract_dynamic_load_names(files: list[str]) -> set[str]:
         try:
             _src = open(_f, encoding="utf-8", errors="ignore").read()  # noqa: SIM115
             _tree = ast.parse(_src, filename=_f)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, "dead_code_scan:96:源文件解析异常", level="warning")
             continue
         for _n in ast.walk(_tree):
             if isinstance(_n, ast.Call):

@@ -21,6 +21,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 # ==================== 资源上限默认值 ====================
@@ -408,8 +409,8 @@ class MemoryWatchdog:
                 # 主调方在 communicate 返回后还会补一次 kill，确保不留活口。
                 try:
                     self._proc.terminate()
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, "sandbox_limits:411:子进程终止异常", level="warning")
                 return
 
 

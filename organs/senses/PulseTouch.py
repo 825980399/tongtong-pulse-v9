@@ -34,6 +34,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import Event, LogLevel, SystemEvent, TouchEvent
+from nucleus._silent_except import silent_exc
 
 
 def _read_sys_file(path: str) -> str:
@@ -531,8 +532,8 @@ class PulseTouch(BasePulseOrgan):
                     usage = float(parts[0].strip()) if len(parts) >= 1 else 0.0
                     mem = float(parts[1].strip()) if len(parts) >= 2 else 0.0
                     self._gpu_usage_cache = {"usage_percent": usage, "memory_usage_percent": mem}
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, "PulseTouch:534:GPU探测异常", level="warning")
         _t = threading.Thread(target=_run, daemon=True)
         _t.start()
 
