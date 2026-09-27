@@ -30,8 +30,8 @@ def _make_si():
     _si._scan_cache_invalidations = 0
     _si._scan_cache = {}
     _si._scan_cache_time = 0.0
-    _si._l2_hits = 0
-    _si._l2_misses = 0
+    _si._scan_cache_l2_hits = 0
+    _si._scan_cache_l2_misses = 0
     return _si
 
 

@@ -5,12 +5,13 @@
 日期: 2026年9月9日
 """
 
-from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
+import sys
 import threading
 import time
 from collections import deque
 from typing import Any
-import sys
+
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 
 # ★第80批 T6：启动早期 stdout 重配置为 utf-8+replace，根治 GBK 重定向下 emoji/中文 print 崩溃
 try:
@@ -641,7 +642,7 @@ class ChatService:
                 f"扫描缓存: 命中率{_cs.get('hit_rate', '?')} "
                 f"(命中{_cs.get('hits', 0)}/未命中{_cs.get('misses', 0)}/"
                 f"失效{_cs.get('invalidations', 0)}) "
-                f"L2命中{_cs.get('l2_hits', 0)}/未命中{_cs.get('l2_misses', 0)}"
+                f"扫描二级缓存命中{_cs.get('scan_cache_l2_hits', 0)}/未命中{_cs.get('scan_cache_l2_misses', 0)}"
             )
         except Exception as _se:
             silent_exc(_se, "chat_service.py:584")

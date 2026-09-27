@@ -32,8 +32,8 @@ def _fresh_inspector():
     inst._organ_file_cache = {}
     inst._structure_cache = {}
     inst._method_info_cache = {}
-    inst._l2_hits = 0
-    inst._l2_misses = 0
+    inst._scan_cache_l2_hits = 0
+    inst._scan_cache_l2_misses = 0
     inst._scan_stats_last_log = 0.0
     # ★主线第90批（顺手修存量）：第65批 T3/P2 在 __init__ 里新增了
     #   get_method_body 文件级缓存的三个统计属性，而本用例走 __new__ 绕开
@@ -172,7 +172,7 @@ class TestScanCacheTTL(unittest.TestCase):
         inst._scan_all_organs()
         s = inst.get_scan_cache_stats()
         for k in ("hits", "misses", "invalidations", "hit_rate", "cache_size",
-                  "cache_age_seconds", "l2_hits", "l2_misses", "l2_hit_rate"):
+                  "cache_age_seconds", "scan_cache_l2_hits", "scan_cache_l2_misses", "scan_cache_l2_hit_rate"):
             self.assertIn(k, s, f"统计缺少字段 {k}")
         self.assertEqual(s["hits"], 1)
         self.assertTrue(s["hit_rate"].endswith("%"))
@@ -204,18 +204,18 @@ class TestL2CacheVersionStamp(unittest.TestCase):
         r1 = inst.resolve_organ_file("PulseHeart")
         r2 = inst.resolve_organ_file("PulseHeart")
         self.assertEqual(r1, r2)
-        self.assertEqual(inst._l2_hits, 1)  # 第二次走二级缓存命中
-        self.assertEqual(inst._l2_misses, 1)  # 第一次未命中触发扫描
+        self.assertEqual(inst._scan_cache_l2_hits, 1)  # 第二次走二级缓存命中
+        self.assertEqual(inst._scan_cache_l2_misses, 1)  # 第一次未命中触发扫描
 
     def test_10_l2_invalidated_on_scan_refresh(self):
         inst = self._inst_with_scan()
         inst.resolve_organ_file("PulseHeart")
-        self.assertEqual(inst._l2_hits, 0)
+        self.assertEqual(inst._scan_cache_l2_hits, 0)
         # 扫描缓存刷新（版本戳变化）→ 二级缓存应失效
         inst._scan_cache_time = time.time() + 1.0
         r = inst.resolve_organ_file("PulseHeart")
         self.assertIsNotNone(r)
-        self.assertEqual(inst._l2_misses, 2, "版本戳变化后应再次未命中")
+        self.assertEqual(inst._scan_cache_l2_misses, 2, "版本戳变化后应再次未命中")
 
 
 if __name__ == "__main__":

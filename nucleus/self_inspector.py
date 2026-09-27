@@ -216,9 +216,12 @@ class SelfInspector(SilentLogMixin):
         self._method_body_cache: dict = {}          # (file_path, method_name) -> (result, mtime)
         self._method_body_hits = 0
         self._method_body_misses = 0
-        # ★第64批 T5：二级缓存命中/未命中计数（可观测性）
-        self._l2_hits = 0
-        self._l2_misses = 0
+        # ★第64批 T5：扫描侧二级缓存（organ_file/structure/method 三级缓存）命中/未命中计数（可观测性）
+        #   ★主线第142批 T-142a 改名消歧：原名 _l2_hits/_l2_misses 与「语义缓存 L2」重名，
+        #   日志中两本 L2 账同名造成跨月误读（D138-3）。改名为 _scan_cache_l2_*，语义=L2 扫描缓存，
+        #   与 config.ENABLE_SEMANTIC_CACHE_L2（语义缓存）无关。
+        self._scan_cache_l2_hits = 0
+        self._scan_cache_l2_misses = 0
         self._scan_stats_last_log = 0.0
         # _m64_t2_l2_cache_done
         self._allowed_extensions = [".py", ".md", ".json"]
@@ -1940,7 +1943,7 @@ class SelfInspector(SilentLogMixin):
                 _module_logger.info(
                     f"[SelfInspector] 缓存统计: 命中率={_s['hit_rate']} "
                     f"命中={_s['hits']} 未命中={_s['misses']} 失效={_s['invalidations']} "
-                    f"L2命中={self._l2_hits} L2未命中={self._l2_misses} "
+                    f"扫描L2缓存命中={self._scan_cache_l2_hits} 未命中={self._scan_cache_l2_misses} "
                     f"缓存年龄={_s['cache_age_seconds']:.0f}s"
                 )
             except Exception as _m64_log_e:
@@ -2175,8 +2178,8 @@ class SelfInspector(SilentLogMixin):
         """获取缓存统计信息（命中率/失效次数/缓存大小/年龄）。"""
         _total = self._scan_cache_hits + self._scan_cache_misses
         _hit = (self._scan_cache_hits / _total * 100.0) if _total > 0 else 0.0
-        _l2_total = self._l2_hits + self._l2_misses
-        _l2_hit = (self._l2_hits / _l2_total * 100.0) if _l2_total > 0 else 0.0
+        _l2_total = self._scan_cache_l2_hits + self._scan_cache_l2_misses
+        _l2_hit = (self._scan_cache_l2_hits / _l2_total * 100.0) if _l2_total > 0 else 0.0
         return {
             "hits": self._scan_cache_hits,
             "misses": self._scan_cache_misses,
@@ -2184,9 +2187,9 @@ class SelfInspector(SilentLogMixin):
             "hit_rate": f"{_hit:.1f}%",
             "cache_size": len(self._scan_cache),
             "cache_age_seconds": (time.time() - self._scan_cache_time) if self._scan_cache else 0.0,
-            "l2_hits": self._l2_hits,
-            "l2_misses": self._l2_misses,
-            "l2_hit_rate": f"{_l2_hit:.1f}%",
+            "scan_cache_l2_hits": self._scan_cache_l2_hits,
+            "scan_cache_l2_misses": self._scan_cache_l2_misses,
+            "scan_cache_l2_hit_rate": f"{_l2_hit:.1f}%",
             # ★主线第65批 T3/P2：get_method_body 文件级缓存统计（绑文件 mtime）
             "method_body_hits": self._method_body_hits,
             "method_body_misses": self._method_body_misses,
@@ -2218,9 +2221,9 @@ class SelfInspector(SilentLogMixin):
         if self._scan_cache_enabled and organ_tag:
             _fc = self._organ_file_cache.get(organ_tag)
             if _fc is not None and _fc[1] == self._scan_cache_time:
-                self._l2_hits += 1
+                self._scan_cache_l2_hits += 1
                 return _fc[0]
-            self._l2_misses += 1
+            self._scan_cache_l2_misses += 1
         if not organ_tag:
             return None
         _file = None
@@ -2267,9 +2270,9 @@ class SelfInspector(SilentLogMixin):
         if self._scan_cache_enabled:
             _sc = self._structure_cache.get(organ_name)
             if _sc is not None and _sc[1] == self._scan_cache_time:
-                self._l2_hits += 1
+                self._scan_cache_l2_hits += 1
                 return _sc[0]
-            self._l2_misses += 1
+            self._scan_cache_l2_misses += 1
         all_organs = self._scan_all_organs()
         
         if organ_name:
@@ -2303,9 +2306,9 @@ class SelfInspector(SilentLogMixin):
         if self._scan_cache_enabled:
             _mc = self._method_info_cache.get((organ_name, method_name))
             if _mc is not None and _mc[1] == self._scan_cache_time:
-                self._l2_hits += 1
+                self._scan_cache_l2_hits += 1
                 return _mc[0]
-            self._l2_misses += 1
+            self._scan_cache_l2_misses += 1
         all_organs = self._scan_all_organs()
         organ_info = all_organs.get(organ_name)
         if not organ_info:
