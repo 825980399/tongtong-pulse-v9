@@ -79,7 +79,7 @@ class TestCmdlineMatcher:
 
     def test_matches_absolute_main_py(self):
         assert cf._cmdline_is_framework_main(
-            ["python.exe", "D:\\xinrenlei\\tongtong-pulse-v9\\main.py"]) is True
+            ["python.exe", "C:\\work\\project\\main.py"]) is True
 
     def test_does_not_match_mentioning_process(self):
         """命令行**正文里提到** main.py（如 -c 脚本）不得命中。"""

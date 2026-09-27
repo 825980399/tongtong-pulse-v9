@@ -36,7 +36,7 @@ def test_stdlib_lib_path_filtered():
 def test_site_packages_path_filtered():
     """第三方包（site-packages/）路径应被过滤。"""
     _cases = [
-        "D:/xinrenlei/tongtong-pulse-v9/.venv/Lib/site-packages/requests/api.py",
+        "C:/work/project/.venv/Lib/site-packages/requests/api.py",
         "/home/user/venv/lib/python3.11/site-packages/numpy/core/__init__.py",
     ]
     for _c in _cases:

@@ -284,7 +284,7 @@ class PulseInitiative(BasePulseOrgan):
         return time.time() - self._last_interaction_time
     def _get_user_intimacy(self, user_name: str) -> int:
         if not self.self_awareness:
-            if user_name in ("小林", "路灯", "星轨", "小曈曈"):
+            if user_name in ("小林", "路灯", "星轨", "<CREATOR_DAUGHTER>"):
                 return 8
             return 3
 
@@ -306,7 +306,7 @@ class PulseInitiative(BasePulseOrgan):
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
-        if user_name in ("小林", "路灯", "星轨", "小曈曈"):
+        if user_name in ("小林", "路灯", "星轨", "<CREATOR_DAUGHTER>"):
             return 8
         return 3
     def _select_greeting(self, intimacy: int, silence_level: int = 1, is_last: bool = False) -> str:

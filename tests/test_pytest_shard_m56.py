@@ -3,11 +3,12 @@
 
 不依赖框架重启；全部为纯函数/ mock 测试，不真正跑全量 pytest。
 """
+import os
 import sys
 import unittest
 from unittest import mock
 
-_TOOLS = "D:/xinrenlei/tongtong-pulse-v9/tools"
+_TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
 import pytest_shard as S  # noqa: E402

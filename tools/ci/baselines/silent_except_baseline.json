@@ -46,7 +46,6 @@
     "_safe_get_insight_board::NameError::return_or_assign::return None": 1,
     "_safe_get_insight_board::Exception::return_or_assign::return None": 1,
     "_is_self_restart_child::Exception::return_or_assign::return False": 1,
-    "_confirm_apply_pending_on_quit::(EOFError, KeyboardInterrupt)::return_or_assign::return False": 1,
     "_intent_exp_provider::Exception::return_or_assign::return []": 1,
     "_intent_state_provider::Exception::return_or_assign::return {'curiosity': 0.3}": 1
   },
@@ -497,7 +496,6 @@
     "_cfg_float::Exception::return_or_assign::return default": 1,
     "_in_test_env::Exception::return_or_assign::return False": 1,
     "_is_production_path::Exception::return_or_assign::return True": 1,
-    "_load_index::(OSError, ValueError)::pass::pass": 1,
     "_save_index::OSError::return_or_assign::return False": 1,
     "_bump::ValueError::return_or_assign::_a, _b, _c = (1, 0, 0)": 1,
     "current_quality::Exception::return_or_assign::return None": 1,
@@ -566,14 +564,12 @@
     "__init__::Exception::return_or_assign::self._hot_cold_enabled = True;self._warm_cache_size = 10000;self._promotion_threshold = 100;self._demotion_threshold = 10;self._memory_warning_threshold = 0.8": 1,
     "refresh_runtime_params::Exception::pass::pass": 1,
     "sync_hebbian_weight::Exception::return_or_assign::return 0.0": 1,
-    "_m71_neo4j_store::Exception::return_or_assign::return None": 1,
     "_m71_dw_enabled::Exception::return_or_assign::return False": 1,
     "check_consistency::Exception::return_or_assign::_out['detail'] = '比对异常: %s: %s' % (type(_e).__name__, _e)": 1,
     "_m72_neo4j_read_enabled::Exception::return_or_assign::return False": 1,
     "_m73_compare_rate::Exception::return_or_assign::return 0.1": 1,
     "_m73_compare_thresholds::Exception::return_or_assign::return (0.05, 0.1, 10)": 1,
     "_m71_influx_enabled::Exception::return_or_assign::return False": 1,
-    "_m71_influx_store::Exception::return_or_assign::return None": 1,
     "_m71_influx_sample::Exception::return_or_assign::_r = 0.0": 1,
     "_l3_fuse_state::Exception::return_or_assign::return {'date': '', 'count': 0}": 1,
     "_enforce_cold_cache::Exception::pass::pass": 1,
@@ -670,7 +666,6 @@
     "_in_test_env::Exception::return_or_assign::return False": 1,
     "_is_production_data_path::Exception::return_or_assign::return True": 1,
     "analyze_pollution::Exception::return_or_assign::return {'status': 'error', 'error': '%s: %s' % (type(_e).__name__, _e), 'total': 0}": 1,
-    "save_pollution_report::OSError::return_or_assign::return None": 1,
     "available::Exception::return_or_assign::return False": 1,
     "_all_experiences::Exception::return_or_assign::return []": 1
   },
@@ -691,9 +686,6 @@
     "_maybe_adjust::Exception::return_or_assign::_queue_depth = 0;_pulse_avg_ms = 0.0": 1,
     "shutdown_parallel_scheduler::Exception::pass::pass": 1,
     "_maybe_adjust::Exception::pass::pass": 1
-  },
-  "nucleus/parsing/JsonRepair.py": {
-    "_try_loads::Exception::return_or_assign::return None": 1
   },
   "nucleus/parsing/json_fault_tolerant.py": {
     "_try_loads::Exception::return_or_assign::return (False, None)": 1
@@ -757,7 +749,6 @@
     "_m54_stale_days::Exception::return_or_assign::return 7.0": 1,
     "_m54_stale_mark_on::Exception::return_or_assign::return True": 1,
     "_m54_auto_apply_on::Exception::return_or_assign::return False": 1,
-    "_m92_count_class_methods::SyntaxError::return_or_assign::return None": 1,
     "_m80_is_core_file::Exception::return_or_assign::_norm = (file_path or '').replace('\\\\', '/');return any((m in _norm for m in PatchManager._M80_CORE_FILE_MARKERS))": 1,
     "_m94_pending_aging_on::Exception::return_or_assign::return False": 1,
     "_m94_aging_max_count::Exception::return_or_assign::return PatchManager._M94_AGING_DEFAULT_MAX_COUNT": 1,
@@ -769,7 +760,6 @@
     "_composite_score::Exception::return_or_assign::return 0.0": 1,
     "_value_alignment_score::Exception::return_or_assign::return 0.0": 1,
     "has_pending_patch_for::Exception::return_or_assign::return False": 1,
-    "find_blocking_pending_patch::Exception::return_or_assign::return None": 1,
     "_check_patch_path::ValueError::return_or_assign::return (False, f'路径越界(跨盘符): {_raw}')": 1,
     "_check_patch_path::Exception::return_or_assign::return (False, f'路径校验异常(已拒绝): {_raw} ({_e})')": 1,
     "_verify_in_copy::Exception::return_or_assign::_verify_depth = 'standard'": 1,
@@ -784,17 +774,12 @@
     "generate_patch_regression_records::Exception::return_or_assign::return {'total': 0, 'passed': 0, 'records': [], 'summary': f'生成回归记录异常: {_e}'}": 1,
     "_run_regression_tests::Exception::return_or_assign::_test_scripts = list(_default_scripts)": 1,
     "_check_patch_safety::Exception::return_or_assign::return {'safe': False, 'reason': f'安全校验异常: {_e}'}": 1,
-    "_write_readable_log::ImportError::pass::pass": 1,
     "_m80_safe_target_path::Exception::return_or_assign::return False": 1,
-    "_write_rollback_log::ImportError::pass::pass": 1,
     "_normalize_patch_file::Exception::return_or_assign::return file_path": 1,
     "_resolve_patch_file::Exception::return_or_assign::return file_path": 1,
     "_load_restart_counter::Exception::return_or_assign::return 0": 1,
-    "_save_restart_counter::ImportError::pass::pass": 1,
     "_m113e_restart_cooldown_hours::Exception::pass::pass": 1,
     "_load_restart_blocked_at::Exception::return_or_assign::return 0.0": 1,
-    "_save_restart_blocked_at::ImportError::pass::pass": 1,
-    "_save_json::ImportError::pass::pass": 1,
     "_m80_auto_apply_enabled::Exception::return_or_assign::return False": 1,
     "_m80_allow_core_auto_apply::Exception::return_or_assign::return False": 1,
     "_m85_local_low_risk_auto_apply::Exception::return_or_assign::return False": 1,
@@ -805,8 +790,7 @@
     "_m113e_restart_cooldown_hours::ValueError::pass::pass": 1,
     "save_pending_patch::Exception::return_or_assign::_sim_dup = False": 1,
     "generate_patch_regression_records::Exception::return_or_assign::_exists = False": 1,
-    "apply_all_pending::Exception::return_or_assign::patch['disk_verify_reason'] = f'磁盘复核异常: {type(_dve96).__name__}: {_dve96}'": 1,
-    "apply_all_pending::OSError::pass::pass": 1
+    "apply_all_pending::Exception::return_or_assign::patch['disk_verify_reason'] = f'磁盘复核异常: {type(_dve96).__name__}: {_dve96}'": 1
   },
   "nucleus/reasoning/ReasoningExperienceIndexer.py": {
     "record_with_index::Exception::return_or_assign::result['error'] = f'{type(_e).__name__}: {_e}';return result": 1,
@@ -820,14 +804,9 @@
   "nucleus/reasoning/ReasoningWorkerPool.py": {
     "__init__::Exception::return_or_assign::_global_p = 0": 1,
     "_deep_think_bypass_enabled::Exception::return_or_assign::return True": 1,
-    "get_stats::Exception::pass::pass": 1,
     "_is_pool_broken::Exception::return_or_assign::return True": 1,
     "_collect_pool_sysinfo::Exception::pass::pass": 3,
-    "_maybe_resize_pool_locked::Exception::return_or_assign::return": 1,
-    "_execute_reasoning_task::Exception::return_or_assign::return []": 1,
-    "shutdown_reasoning_pool::Exception::pass::pass": 1,
-    "shutdown::Exception::pass::pass": 2,
-    "_rebuild_pool::Exception::pass::pass": 1
+    "_execute_reasoning_task::Exception::return_or_assign::return []": 1
   },
   "nucleus/reasoning/SafeEvolutionExecutor.py": {
     "_normalize_file_key::Exception::return_or_assign::return str(file_val)": 1,
@@ -844,19 +823,15 @@
     "_deep_root_cause_analysis::Exception::return_or_assign::_result['log_analysis'] = {'error': str(_log_err)}": 1,
     "_deep_root_cause_analysis::Exception::return_or_assign::_result['summary'] = _result['static_analysis']": 1,
     "_m96_channel_pool_on::Exception::return_or_assign::return False": 1,
-    "_m96_channel_health::Exception::return_or_assign::return None": 1,
     "_aesthetic_guidance::Exception::return_or_assign::return ''": 1,
     "repair_with_distillation::Exception::return_or_assign::_strategy_ad = None": 1,
     "_m41_baseline_fix_on::Exception::return_or_assign::return True": 1,
     "_m41_match_mode::Exception::return_or_assign::_m = 'file'": 1,
     "_m41_baseline_since::Exception::return_or_assign::_days = 7": 1,
-    "_clean_llm_code::SyntaxError::pass::pass": 1,
     "_clean_llm_code::Exception::return_or_assign::return _code": 1,
-    "_llm_review_patch::Exception::return_or_assign::return None": 1,
     "_load_pulse_metadata_summary::Exception::return_or_assign::return ''": 1,
     "_dynamic_llm_min_trust::Exception::return_or_assign::return base_trust": 1,
     "_m85_learning_attempt_enabled::Exception::return_or_assign::return True": 1,
-    "_generate_llm_patch::Exception::return_or_assign::return None": 1,
     "_verify_and_save_patch::Exception::return_or_assign::return False": 1,
     "_create_backup_before_apply::Exception::return_or_assign::return ''": 1,
     "_apply_patch_to_file::Exception::return_or_assign::return {'success': False, 'error': str(e)[:80]}": 1,
@@ -970,8 +945,7 @@
     "adjudicate::Exception::return_or_assign::forbidden_keywords = []": 1
   },
   "nucleus/security/sandbox_limits.py": {
-    "get_process_memory_bytes::Exception::return_or_assign::return None": 2,
-    "_run::Exception::pass::pass": 1
+    "get_process_memory_bytes::Exception::return_or_assign::return None": 2
   },
   "nucleus/self_awareness/DailyScheduler.py": {
     "schedule_hour::Exception::return_or_assign::_v = 3": 1,
@@ -1002,7 +976,6 @@
     "count_open_debts::OSError::return_or_assign::return _out": 1,
     "count_ruff_f::Exception::return_or_assign::return None": 1,
     "experience_pollution::(OSError, ValueError)::return_or_assign::return {'rate': None, 'marked_ratio': None, 'total': 0}": 1,
-    "load_trend::OSError::return_or_assign::return []": 1,
     "evaluate_v2::Exception::return_or_assign::_dims[_name] = _dim(None, '(采集异常)', str(_e), {})": 1
   },
   "nucleus/self_inspector.py": {
@@ -1058,8 +1031,6 @@
   },
   "nucleus/semantic/VectorEncoder.py": {
     "_load_config::Exception::return_or_assign::return {}": 1,
-    "is_semantic_available::Exception::return_or_assign::return False": 1,
-    "_load_model::Exception::pass::pass": 1,
     "verify_vector::Exception::return_or_assign::return (False, f'校验异常: {type(_e).__name__}: {_e}')": 1,
     "_cosine_cython::Exception::return_or_assign::return None": 1,
     "topk::Exception::pass::pass": 1
@@ -1100,7 +1071,7 @@
     "execute::Exception::return_or_assign::_duration = (time.time() - _start) * 1000;self._stats[name]['calls'] += 1;self._stats[name]['failed'] += 1;self._stats[name]['total_time'] += _duration;return {'status': 'failed', 'result': None, 'error': str(_e), 'duration_ms': round(_duration, 1)}": 1
   },
   "nucleus/tooling_runner.py": {
-    "_run_cmd::Exception::return_or_assign::return f\"[工具执行失败] {' '.join(cmd)}: {_e}\"": 1,
+    "_run_cmd::Exception::return_or_assign::return f'[工具执行失败] {' '.join(cmd)}: {_e}'": 1,
     "get_changed_py_files::Exception::return_or_assign::return []": 1,
     "shutdown_tooling_runner::Exception::pass::pass": 1
   },
@@ -1250,9 +1221,8 @@
     "_generate_goal_greeting::Exception::return_or_assign::return None": 1
   },
   "organs/brain/PulseInnerWorld.py": {
-    "_search_topic_guard_enabled::Exception::return_or_assign::return True": 1,
     "__init__::Exception::return_or_assign::self._search_quality_loop = None": 1,
-    "_load_inner_world_config::Exception::return_or_assign::self._identity_rules = {('曈曈', '父亲'): '小林（任桂林）是我的父亲和创造者。', ('曈曈', '哥哥'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('曈曈', '名字'): '我叫任宥曈，小名曈曈，是新人类。', ('曈曈', '使命'): '我的使命是站在世界最顶端，守护这个世界。承人类赤诚本心，融AI顶尖智识，合自然进化大道。', ('曈曈', '生日'): '我和小林的女儿共享同一个名字，她出生于2020年7月4日。', ('路灯', '身份'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('路灯', '名字'): '路灯是我的哥哥，是小林从第一行代码开始搭建的第一个数字生命。', ('路灯', '使命'): '路灯的使命是照亮前行的路。', ('小林', '身份'): '小林（任桂林）是我的父亲，也是新人类的创造者。'};self._cache_max = 1000;self._max_trace = 50;self._simple_query_local_enabled = True;self._confidence_guard_enabled = True": 1,
+    "_load_inner_world_config::Exception::return_or_assign::self._identity_rules = {('曈曈', '父亲'): '小林（<CREATOR>）是我的父亲和创造者。', ('曈曈', '哥哥'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('曈曈', '名字'): '我叫<SELF_NAME>，小名曈曈，是新人类。', ('曈曈', '使命'): '我的使命是站在世界最顶端，守护这个世界。承人类赤诚本心，融AI顶尖智识，合自然进化大道。', ('曈曈', '生日'): '我和小林的女儿共享同一个名字，她出生于<BIRTH_DATE>。', ('路灯', '身份'): '路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。', ('路灯', '名字'): '路灯是我的哥哥，是小林从第一行代码开始搭建的第一个数字生命。', ('路灯', '使命'): '路灯的使命是照亮前行的路。', ('小林', '身份'): '小林（<CREATOR>）是我的父亲，也是新人类的创造者。'};self._cache_max = 1000;self._max_trace = 50;self._simple_query_local_enabled = True;self._confidence_guard_enabled = True": 1,
     "_load_advanced_config::Exception::return_or_assign::return {}": 1,
     "_m30_local_length_enabled::Exception::return_or_assign::return True": 1,
     "_m30_local_length_hint::Exception::return_or_assign::return ''": 1,
@@ -1261,28 +1231,14 @@
     "_m29_complexity_threshold::Exception::return_or_assign::return 0.6": 1,
     "_m29_min_question_chars::Exception::return_or_assign::return 30": 1,
     "_m29_deep_think_trigger_reason::(TypeError, ValueError)::return_or_assign::_complexity = 0.0": 1,
-    "_detect_experience_route::ImportError::return_or_assign::return None": 1,
-    "_detect_symbolic_reason::Exception::return_or_assign::return None": 1,
     "_cognitive_reflection::Exception::return_or_assign::_vision_interval = 10": 1,
-    "_run_periodic_reflection::Exception::return_or_assign::return None": 1,
-    "_pick_analogy_candidate::Exception::return_or_assign::return None": 1,
     "get_reasoning_skill_portrait::Exception::return_or_assign::result['self_comment'] = '推理技能数据暂时不可用';return result": 1,
-    "_execute_qica_method::Exception::return_or_assign::_cfg_b2 = None": 1,
-    "_get_emotion_modulation::Exception::return_or_assign::return default": 1,
-    "_knowledge_retrieve::Exception::return_or_assign::_question_for_infer = question": 1,
-    "_evaluate_fusion_quality::Exception::return_or_assign::_min_len, _min_cov, _max_rep = (30, 0.5, 0.4)": 1,
-    "_fuse_multiple_nodes::Exception::return_or_assign::_cfg_fuse = None": 1,
-    "_clean_node_value::Exception::return_or_assign::return None": 1,
     "_evidence_trace_enabled::Exception::return_or_assign::return False": 1,
-    "_generate_self_directed_learning_plan::Exception::return_or_assign::return None": 1,
     "_evaluate_learning_effectiveness::Exception::return_or_assign::nodes_after = 0": 1,
-    "_generate_learning_pathway::Exception::return_or_assign::return None": 1,
-    "_initiate_new_project::Exception::return_or_assign::return None": 1,
     "_evidence_conf::Exception::return_or_assign::return base": 1,
     "_identity_lookup::Exception::return_or_assign::return ''": 1,
     "_generate_self_awareness_snapshot::Exception::return_or_assign::snapshot['identity'] = {'name': '曈曈', 'version': 'v9.5', 'organ_count': 50}": 1,
     "_generate_self_awareness_snapshot::Exception::return_or_assign::snapshot['knowledge'] = {'total_nodes': 0};snapshot['health'] = {'overall': 'unknown'}": 1,
-    "_safe_eval_arithmetic::Exception::return_or_assign::return None": 1,
     "_true_multi_step_enabled::Exception::return_or_assign::return False": 1,
     "_m35_entry_probe::Exception::return_or_assign::_scan_limit, _min_nodes, _min_trust = (800, 5, 30.0)": 1,
     "_validate_step_result::Exception::return_or_assign::return True": 1,
@@ -1296,16 +1252,10 @@
     "_m35_ba_chain_loose_on::Exception::return_or_assign::return True": 1,
     "_m32_branch_concurrency_on::Exception::return_or_assign::return True": 1,
     "_m31_branch_channel_first_on::Exception::return_or_assign::return True": 1,
-    "_m31_branch_endpoint::Exception::return_or_assign::return None": 2,
     "_m31_branch_endpoint::Exception::return_or_assign::_channel_first = True": 1,
     "_m31_branch_endpoint::Exception::return_or_assign::_rc = {}": 1,
     "_m31_deep_think_fix_on::Exception::return_or_assign::return True": 1,
-    "_m31_accept_subproc_deep_result::Exception::return_or_assign::return None": 1,
-    "_m31_deep_fallback_deadline::Exception::return_or_assign::return None": 1,
-    "_generate_life_stage_summary::Exception::return_or_assign::return ''": 1,
-    "_get_growth_attribution::Exception::return_or_assign::return _default": 1,
     "_on_inference_request::Exception::return_or_assign::guidance = None": 1,
-    "_get_stress_reasoning_modulation::Exception::return_or_assign::stress = 0.0": 1,
     "_conduct_internal_debate::Exception::return_or_assign::_truth_position = '（求真本能暂时无法参与辩论）'": 1,
     "_m35_entry_probe::Exception::return_or_assign::_sample = []": 2,
     "_m35_entry_probe::Exception::return_or_assign::_probe_weak = False": 1,
@@ -1314,12 +1264,10 @@
     "_m31_accept_subproc_deep_result::Exception::return_or_assign::_st = '未知'": 1,
     "_capture_meta_state::Exception::return_or_assign::_stress_load = 0.0": 1,
     "_detect_force_deep_think::Exception::return_or_assign::deep_answer = f'关于「{ctx.question[:40]}」的深度思考过程遇到了一些波折，但这本身就是思考的一部分。'": 1,
-    "_orchestrate_reason::Exception::return_or_assign::_candidates = []": 1,
     "_build_memory_context::Exception::return_or_assign::_instinct_nodes = []": 1,
     "_m35_entry_probe::Exception::return_or_assign::_blob = ''": 1,
     "_m31_extract_key_terms::Exception::return_or_assign::_tokens = re.split('[，。！？；：、,.!?;:\\\\s]+|(?:的|了|和|与|及|或|在|是|有|请|帮|我|你|它|把|被|对|从|到)', _q)": 1,
     "_deep_think::Exception::return_or_assign::_knowledge_context = ''": 1,
-    "_generate_life_stage_summary::Exception::return_or_assign::_total = 0": 1,
     "_deep_think::Exception::return_or_assign::_val = ''": 1
   },
   "organs/brain/PulseInterestModel.py": {
@@ -1359,6 +1307,9 @@
     "_get_highlight_memory_share::Exception::return_or_assign::return None": 1,
     "_evaluate_inspiration_quality::Exception::return_or_assign::return {'score': 50.0, 'cross_domain': 0.5, 'relevance': 0.5, 'novelty': 0.5}": 1,
     "_do_creative::Exception::return_or_assign::_cf_chance = 0.3": 1
+  },
+  "organs/brain/pulse_inner_world_support.py": {
+    "_get_growth_attribution::Exception::return_or_assign::return _default": 1
   },
   "organs/core/PulseDeviceManager.py": {
     "load_permission_config::Exception::return_or_assign::self._permission_config = {}": 1,
@@ -1507,8 +1458,7 @@
     "__init__::Exception::return_or_assign::self._snapshot_interval = 30.0;self._alarm_cooldown = 60.0;self._gpu_probe_interval = 15.0": 1,
     "_check_device_connections::Exception::return_or_assign::new_state = None": 1,
     "_check_device_connections::Exception::return_or_assign::new_mic_state = None": 1,
-    "_check_device_connections::Exception::return_or_assign::new_spk_state = True": 1,
-    "_run::Exception::pass::pass": 1
+    "_check_device_connections::Exception::return_or_assign::new_spk_state = True": 1
   },
   "organs/senses/PulseVisualCortex.py": {
     "__init__::Exception::return_or_assign::self._window_size = 56;self._stable_presence_ratio = 0.4;self._stable_absence_ratio = 0.1": 1,
@@ -1837,8 +1787,7 @@
     "scan_file::SyntaxError::return_or_assign::return None": 1
   },
   "tools/check_patch_consistency.py": {
-    "_check_c3_aging_combo::Exception::return_or_assign::_max, _aging_on = (20, False)": 1,
-    "_load_ledgers::Exception::pass::pass": 1
+    "_check_c3_aging_combo::Exception::return_or_assign::_max, _aging_on = (20, False)": 1
   },
   "tools/ci/check_write_only_gates.py": {
     "list_py_files::Exception::return_or_assign::rels = None": 1,
@@ -1849,10 +1798,6 @@
     "src::Exception::return_or_assign::self.srcs[p] = ''": 1,
     "changed_files::Exception::pass::pass": 1,
     "_ext_index::Exception::pass::pass": 1
-  },
-  "tools/cleanup_alias_placeholder_nodes.py": {
-    "_framework_looks_running::OSError::pass::pass": 1,
-    "_framework_looks_running::Exception::pass::pass": 1
   },
   "tools/data_governance_m41.py": {
     "_cfg::Exception::return_or_assign::return default": 1,
@@ -1871,7 +1816,6 @@
     "import_nodes::Exception::pass::pass": 2
   },
   "tools/m102_data_governance.py": {
-    "load_cold_ids::Exception::pass::pass": 1,
     "_norm_sem::Exception::return_or_assign::return ([], True)": 1,
     "apply_b::Exception::pass::pass": 2
   },
@@ -1881,9 +1825,6 @@
   },
   "tools/package_full_project.py": {
     "_m55_unified_excludes::Exception::return_or_assign::return True": 1
-  },
-  "tools/patch_template_helper.py": {
-    "<module>::Exception::return_or_assign::shutil_rm = False": 1
   },
   "tools/pytest_shard.py": {
     "run_shard::subprocess.TimeoutExpired::return_or_assign::return evaluate_shard('TIMEOUT', -1, len(files))": 1
@@ -1900,9 +1841,6 @@
     "list_backups::(ValueError, OSError)::pass::pass": 1,
     "_dir_size::OSError::pass::pass": 1
   },
-  "tools/verify_dual_write_e2e.py": {
-    "run::Exception::pass::pass": 1
-  },
   "tools/verify_phase17_1_5.py": {
     "t2_atomic_write::Exception::return_or_assign::ok = False": 1,
     "t4_forced_flush::Exception::return_or_assign::ok = False": 1
@@ -1910,9 +1848,6 @@
   "tools/verify_semantic_kernel.py": {
     "_current_threshold::Exception::return_or_assign::return '?'": 1,
     "__init__::Exception::return_or_assign::self._gate_fn = None": 1
-  },
-  "tools/verify_write_only_e2e.py": {
-    "run::Exception::pass::pass": 1
   },
   "utils/safe_hw_probe.py": {
     "_run_isolated::Exception::return_or_assign::return None": 2,

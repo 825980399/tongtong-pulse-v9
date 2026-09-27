@@ -10,10 +10,11 @@
   B. 窗口容量充足时，延期组仍获 slots（不被永久排除）。
   C. 窗口触顶截断时，优先保留新鲜组、丢弃延期组（饥饿被打破）。
 """
+import os
 import sys
 import unittest
 
-ROOT = r"D:\xinrenlei\tongtong-pulse-v9"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

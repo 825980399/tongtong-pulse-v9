@@ -12,7 +12,7 @@
         ],
         "name": "_cosine_cpu_cy",
         "sources": [
-            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\gpu\\_cosine_cpu_cy.pyx"
+            "nucleus/gpu/_cosine_cpu_cy.pyx"
         ]
     },
     "module_name": "_cosine_cpu_cy"

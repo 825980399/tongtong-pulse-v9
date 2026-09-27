@@ -11,7 +11,7 @@
     "ENABLE_DISTRIBUTED": false
   },
   "framework": {
-    "pulse_log": "d:\\xinrenlei\\tongtong-pulse-v9\\logs\\pulse.log",
+    "pulse_log": "<PROJECT_ROOT>\\logs\\pulse.log",
     "mtime_age_min": 4.0,
     "graceful_shutdown": false
   },

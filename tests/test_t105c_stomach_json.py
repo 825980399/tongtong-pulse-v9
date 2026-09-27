@@ -20,7 +20,7 @@ import os
 import sys
 import unittest
 
-ROOT = r"D:\xinrenlei\tongtong-pulse-v9"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

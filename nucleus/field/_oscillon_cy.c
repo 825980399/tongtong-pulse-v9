@@ -9,7 +9,7 @@
         ],
         "name": "_oscillon_cy",
         "sources": [
-            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\field\\_oscillon_cy.pyx"
+            "nucleus/field/_oscillon_cy.pyx"
         ]
     },
     "module_name": "_oscillon_cy"

@@ -946,7 +946,7 @@ class ContextSnapshot(SilentLogMixin):
         # 兜底：预置用户判断
         if user_name in ("小林", "路灯"):
             return "blood"
-        elif user_name == "小曈曈":
+        elif user_name == "<CREATOR_DAUGHTER>":
             return "family"
         elif user_name == "星轨":
             return "partner"

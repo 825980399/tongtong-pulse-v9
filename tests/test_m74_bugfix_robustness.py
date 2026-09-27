@@ -8,13 +8,14 @@
 """
 import json
 import logging
+import os
 import sys
 from types import SimpleNamespace
 from unittest import mock
 
 import pytest
 
-ROOT = "D:/xinrenlei/tongtong-pulse-v9"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

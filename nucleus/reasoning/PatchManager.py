@@ -3520,7 +3520,7 @@ class PatchManager:
 
     # ===== ★PHASE17-A4（2026-09-07）：补丁路径跨平台归一化 =====
     #   问题：patch_history.json 中 file 字段写的是 Windows 绝对路径
-    #         （实测 22 条全为 `D:\xinrenlei\tongtong-pulse-v9\...`）。
+    #         （实测 22 条全为 `<PROJECT_ROOT>\...`）。
     #         在 Linux/沙箱下 _check_patch_path 的跨盘符分支一律判越界 →
     #         补丁既不能应用也不能回滚，跨平台验证与迁移全部失效（P2-5）。
     #
@@ -3533,9 +3533,9 @@ class PatchManager:
     def _normalize_patch_file(self, file_path: str) -> str:
         """绝对路径（Windows 或 POSIX）→ 相对项目根的 POSIX 路径；非绝对路径原样返回。
 
-        跨平台难点：Windows 绝对路径（`D:\\xinrenlei\\tongtong-pulse-v9\\organs\\...`）
+        跨平台难点：Windows 绝对路径（`<PROJECT_ROOT>\\organs\\...`）
         无法直接 relpath 到本地项目根（Linux 上是 `/workspace/tongtong-pulse-v9`）——
-        简单去掉盘符会得到 `xinrenlei/tongtong-pulse-v9/...`（错误，多保留了上层目录）。
+        简单去掉盘符会得到 `workspace/tongtong-pulse-v9/...`（错误，多保留了上层目录）。
         因此用**项目根目录名做锚点**：在路径片段中找最后一个与项目根目录同名的片段，
         取其之后的部分作为相对路径。
         """

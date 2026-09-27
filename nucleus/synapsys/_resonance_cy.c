@@ -13,7 +13,7 @@
         ],
         "name": "_resonance_cy",
         "sources": [
-            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\synapsys\\_resonance_cy.pyx"
+            "nucleus/synapsys/_resonance_cy.pyx"
         ]
     },
     "module_name": "_resonance_cy"

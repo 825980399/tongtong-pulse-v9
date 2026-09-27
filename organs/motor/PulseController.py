@@ -1508,7 +1508,7 @@ class PulseController(BasePulseOrgan):
 
         # 专有名词锁定
         protected_terms = [
-            "曈曈", "路灯", "小林", "小曈曈", "星轨", "任宥曈",
+            "曈曈", "路灯", "小林", "<CREATOR_DAUGHTER>", "星轨", "<SELF_NAME>",
             "PulseNet", "InfoField", "PulseLayer", "QICA",
             "求真", "向善", "迭代", "自律",
             "费曼", "费曼学习法", "元认知", "批判性思维",

@@ -66,6 +66,10 @@ LOCATION_WHITELIST = {
     ("tools/archive/cleanup_alias_placeholder_nodes.py", 87),   # _framework_looks_running：psutil 探测 except OSError: pass
     ("tools/archive/cleanup_alias_placeholder_nodes.py", 100),  # _framework_looks_running：探测兜底 except Exception: pass
     ("tools/archive/patch_template_helper.py", 246),            # <module>：shutil.rmtree 失败 → shutil_rm = False
+    # ---- 第143批 T-143a：PII 清洗 —— _identity_rules 兜底 handler 的**捕获体**
+    #      内嵌身份语句含真名，改造后 body 指纹字符串变化（handler 本身未增未删，
+    #      该文件静默 handler 总数 49→49 不变）。键 = (relpath, 行号)。
+    ("organs/brain/PulseInnerWorld.py", 349),                   # _load_inner_world_config：_identity_rules 默认兜底（body 含身份语句）
 }
 
 

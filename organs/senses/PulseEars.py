@@ -469,7 +469,7 @@ class PulseEars(BasePulseOrgan):
         return text
 
     def _find_last_person_in_context(self) -> str | None:
-        known_persons = ["小林", "路灯", "小曈曈"]
+        known_persons = ["小林", "路灯", "<CREATOR_DAUGHTER>"]
         for round_data in reversed(self._context):
             content = round_data.get("content", "")
             for person in known_persons:

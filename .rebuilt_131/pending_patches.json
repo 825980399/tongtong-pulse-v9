@@ -884,8 +884,8 @@
             "peak_memory_bytes": 0
           }
         },
-        "regression": "0通过/1失败 | verify_phase17_1_5.py:  \"D:\\xinrenlei\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
-        "regression_warning": "全局回归脚本有失败(1个)，与具体补丁无关，仅记录参考: 0通过/1失败 | verify_phase17_1_5.py:  \"D:\\xinrenlei\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
+        "regression": "0通过/1失败 | verify_phase17_1_5.py:  \"<PROJECT_ROOT>\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
+        "regression_warning": "全局回归脚本有失败(1个)，与具体补丁无关，仅记录参考: 0通过/1失败 | verify_phase17_1_5.py:  \"<PROJECT_ROOT>\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
         "verify_entries": [
           "syntax",
           "import",
@@ -1641,7 +1641,7 @@
       "runtime_verified": true,
       "auto_released": true,
       "release_reason": "low_risk_release:T-101a",
-      "backup_path": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\code_backups\\backup_20260926_165842",
+      "backup_path": "<PROJECT_ROOT>\\data\\code_backups\\backup_20260926_165842",
       "applied_at": 1790413122.6230004,
       "rollback_available": true,
       "disk_verified": true,

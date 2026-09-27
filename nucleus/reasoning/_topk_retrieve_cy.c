@@ -12,7 +12,7 @@
         ],
         "name": "_topk_retrieve_cy",
         "sources": [
-            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\reasoning\\_topk_retrieve_cy.pyx"
+            "nucleus/reasoning/_topk_retrieve_cy.pyx"
         ]
     },
     "module_name": "_topk_retrieve_cy"

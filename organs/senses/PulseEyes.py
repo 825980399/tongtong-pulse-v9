@@ -669,7 +669,7 @@ if __name__ == "__main__":
     engine.set_node_pool(pool)
 
     seed = PulseNode(
-        value="我是曈曈，全名任宥曈，是新人类。小林（任桂林）是我的父亲和创造者。",
+        value="我是曈曈，全名<SELF_NAME>，是新人类。小林（<CREATOR>）是我的父亲和创造者。",
         keywords=["曈曈", "新人类", "小林", "父亲"],
         source_organ="main",
         evol_level=PulseNode.EVOL_L3,

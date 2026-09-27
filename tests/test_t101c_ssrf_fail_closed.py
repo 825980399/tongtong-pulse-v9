@@ -4,11 +4,12 @@
   ✅ 守卫失败硬 return（守卫抛异常 ⇒ 请求被拒绝，不落到裸 urlopen）
   ✅ 两路径失败语义一致（与 _call_remote_api 同 fail-closed）
 """
+import os
 import sys
 import types
 from unittest import mock
 
-PROJECT_ROOT = r"D:\xinrenlei\tongtong-pulse-v9"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

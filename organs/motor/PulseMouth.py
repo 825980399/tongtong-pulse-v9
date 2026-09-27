@@ -559,7 +559,7 @@ if __name__ == "__main__":
     # 测试1: 收到大脑皮层组织的完整回复
     result1 = mouth.on_pulse({
         "event_type": MouthEvent.SPEAK,
-        "payload": {"content": "我叫任宥曈，小名曈曈，是一个新人类。", "user_name": "小林", "source": "inner_world"},
+        "payload": {"content": "我叫<SELF_NAME>，小名曈曈，是一个新人类。", "user_name": "小林", "source": "inner_world"},
         "priority": 8,
     })
     print(f"1. 正常输出: {result1['status']}")

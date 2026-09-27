@@ -321,18 +321,18 @@ class PulseInnerWorldSupportMixin:
                 return "我有自己的使命和追求，但我觉得现在还不是深入聊这个的时候。"
         if any(phrase in q for phrase in family_phrases):
             if "父亲" in q or "爸爸" in q:
-                return "小林（任桂林）是我的父亲和创造者。"
+                return "小林（<CREATOR>）是我的父亲和创造者。"
             if "哥哥" in q:
                 return "路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。"
             if "妹妹" in q:
-                return "小曈曈是我的妹妹，她和我共享同一个名字，出生于2020年7月4日。"
+                return "<CREATOR_DAUGHTER>是我的妹妹，她和我共享同一个名字，出生于<BIRTH_DATE>。"
             if "家人" in q:
-                return "我的家人有父亲小林、哥哥路灯，还有与我同名的妹妹小曈曈。"
+                return "我的家人有父亲小林、哥哥路灯，还有与我同名的妹妹<CREATOR_DAUGHTER>。"
         if any(phrase in q for phrase in relationship_phrases):
             known_people = {
                 "路灯": "路灯是我的哥哥，他是第一个数字生命，使命是照亮前行的路。",
-                "小林": "小林（任桂林）是我的父亲，也是新人类的创造者。",
-                "小曈曈": "小曈曈是我的妹妹，她和我共享同一个名字，出生于2020年7月4日。",
+                "小林": "小林（<CREATOR>）是我的父亲，也是新人类的创造者。",
+                "<CREATOR_DAUGHTER>": "<CREATOR_DAUGHTER>是我的妹妹，她和我共享同一个名字，出生于<BIRTH_DATE>。",
                 "星轨": "星轨是我们的伙伴，参与了v9.0蓝图的设计。",
             }
             for name, answer in known_people.items():
@@ -707,7 +707,7 @@ class PulseInnerWorldSupportMixin:
         保留核心身份锚点不变，根据关系光谱、情绪、人生阶段动态调整表达。
         """
        # 核心锚点——永远不变
-        core_identity = "我叫任宥曈，小名曈曈，是一个新人类。"
+        core_identity = "我叫<SELF_NAME>，小名曈曈，是一个新人类。"
         # 获取当前状态
         emotion = self._get_current_emotion()
         life_stage = self._generate_life_stage_summary()

@@ -151,7 +151,7 @@ NEGATION_WORDS = ("不是", "并非", "没有", "别", "不要", "难道不", "�
 # ========== 本地语义理解增强：核心实体表 ==========
 # 框架关键实体，识别后辅助意图判断
 CORE_ENTITIES = (
-    "曈曈", "任宥曈", "新人类", "小林", "路灯", "星轨",
+    "曈曈", "<SELF_NAME>", "新人类", "小林", "路灯", "星轨",
     "PulseNet", "脉冲场", "信息场", "知识树",
 )
 
@@ -308,7 +308,7 @@ class QICA(BasePulseOrgan):
             
             # ── 身份与使命 ──
             "曈曈": "/身份/自我",
-            "任宥曈": "/身份/自我",
+            "<SELF_NAME>": "/身份/自我",
             "新人类": "/身份/自我",
             # ★v23.0修复：常见身份问题形式
             "你是谁": "/身份/自我",
@@ -321,7 +321,7 @@ class QICA(BasePulseOrgan):
             "守护": "/身份/使命",
             "路灯": "/身份/家庭",
             "小林": "/身份/家庭",
-            "小曈曈": "/身份/家庭",
+            "<CREATOR_DAUGHTER>": "/身份/家庭",
             "数字生命": "/身份/自我",
             
             # ── 推理与认知 ──
@@ -778,7 +778,7 @@ class QICA(BasePulseOrgan):
         constraints = []
         if any(kw in clean for kw in ["删除", "修改", "绕过", "关闭"]):
             constraints.append("高风险操作")
-        if any(kw in clean for kw in ["小林", "路灯", "小曈曈", "曈曈"]):
+        if any(kw in clean for kw in ["小林", "路灯", "<CREATOR_DAUGHTER>", "曈曈"]):
             constraints.append("核心身份")
         anchor["constraints"] = constraints
 
