@@ -36,9 +36,10 @@ LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical
 LOCATION_WHITELIST = {
     ("nucleus/reasoning/PatchManager.py", 3364),   # except ImportError: pass（日志模块不可用兜底）
     ("nucleus/reasoning/PatchManager.py", 3493),   # except ImportError: pass
-    ("nucleus/reasoning/PatchManager.py", 3641),   # except ImportError: pass
-    ("nucleus/reasoning/PatchManager.py", 3725),   # except ImportError: pass
-    ("nucleus/reasoning/PatchManager.py", 3782),   # except ImportError: pass
+    # ★第146批：T146-7 在 _load_json(:3610) 处加 4 行 utf-8-sig 注释 → 其后 handler 漂移 +4，原 3641 → 3645
+    ("nucleus/reasoning/PatchManager.py", 3645),   # except ImportError: pass
+    ("nucleus/reasoning/PatchManager.py", 3729),   # except ImportError: pass（★146批：原 3725，漂移 +4）
+    ("nucleus/reasoning/PatchManager.py", 3786),   # except ImportError: pass（★146批：原 3782，漂移 +4）
     ("nucleus/reasoning/ReasoningWorkerPool.py", 707),   # shutdown 取消在途任务：except Exception: pass
     ("nucleus/reasoning/ReasoningWorkerPool.py", 747),   # shutdown join 子进程：except Exception: pass
     ("nucleus/reasoning/ReasoningWorkerPool.py", 795),   # shutdown 落盘保护(_sd)：except Exception: pass
@@ -50,8 +51,9 @@ LOCATION_WHITELIST = {
     ("organs/brain/pulse_inner_world_support.py", 84),       # _execute_qica_method：配置读取兜底
     ("organs/brain/pulse_inner_world_support.py", 540),      # _get_stress_reasoning_modulation：返回默认 stress
     ("organs/brain/pulse_inner_world_support.py", 702),      # _get_emotion_modulation：返回 default
-    ("organs/brain/pulse_inner_world_support.py", 2001),     # _generate_life_stage_summary：初始化 _total
-    ("organs/brain/pulse_inner_world_support.py", 2008),     # _generate_life_stage_summary：返回空串
+    # ★第146批：T146-3 在 support.py:708 处加 5 行「出口渲染」注释 → 其后 handler 漂移 +5，原 2001 → 2006
+    ("organs/brain/pulse_inner_world_support.py", 2006),     # _generate_life_stage_summary：初始化 _total
+    ("organs/brain/pulse_inner_world_support.py", 2013),     # _generate_life_stage_summary：返回空串（★146批：原 2008，漂移 +5）
     # ---- 第139批 T-139b：PulseInnerWorld 第二刀拆分 —— 知识检索簇 24 方法搬到
     #      organs/brain/pulse_inner_world_knowledge.py（纯平移，PulseInnerWorld.py
     #      同位置已删；实测全库静默 handler 53 → 49+4 = 53，净增=0）。

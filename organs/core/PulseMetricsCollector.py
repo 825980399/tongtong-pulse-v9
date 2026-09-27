@@ -401,15 +401,19 @@ class PulseMetricsCollector(BasePulseOrgan):
         #   拆分复用计划，故选「接消费」而非「删除」。)
         _nr_count = 0
         try:
-            import json as _json
             import os as _os
             _root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
             _pp = _os.path.join(_root, "data", "patches", "pending_patches.json")
             if _os.path.exists(_pp):
-                with open(_pp, encoding="utf-8") as _f:
-                    _pending = _json.loads(_f.read())
+                # ★第146批 T146-7：改走 DataAccessLayer.safe_read_json ——
+                #   其编码回退链首位即 utf-8-sig，可透明剥离 UTF-8 BOM；
+                #   旧写法 open(encoding="utf-8") 遇到 BOM 的补丁文件会抛异常，
+                #   落到下面的 WARNING 分支造成每次采集刷一条告警。
+                from nucleus.data.DataAccessLayer import safe_read_json as _safe_read_json
+                _pending = _safe_read_json(_pp, [])
                 if isinstance(_pending, list):
-                    _nr_count = sum(1 for _p in _pending if _p.get("needs_repair"))
+                    _nr_count = sum(1 for _p in _pending
+                                    if isinstance(_p, dict) and _p.get("needs_repair"))
         except Exception as _e:
             self._log(LogLevel.WARNING, f"[needs_repair] 积压采集失败: {_e}")
         snapshot["patch_needs_repair"] = _nr_count

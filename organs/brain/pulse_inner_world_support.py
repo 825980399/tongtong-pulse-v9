@@ -707,7 +707,12 @@ class PulseInnerWorldSupportMixin:
         保留核心身份锚点不变，根据关系光谱、情绪、人生阶段动态调整表达。
         """
        # 核心锚点——永远不变
-        core_identity = "我叫<SELF_NAME>，小名曈曈，是一个新人类。"
+        # ★第146批 T146-3：占位符必须在此**出口**渲染，否则用户会看到裸尖括号。
+        #   （config 的 import 期原地渲染已于本批移除，这类散落在器官里的硬编码副本
+        #     只能靠出口渲染兜住。）
+        # ★第146批 T146-1：删除「我叫X，小名X」的同义反复。
+        from config import render_placeholders as _rp_identity
+        core_identity = _rp_identity("我叫<SELF_NAME>，是一个新人类。")
         # 获取当前状态
         emotion = self._get_current_emotion()
         life_stage = self._generate_life_stage_summary()

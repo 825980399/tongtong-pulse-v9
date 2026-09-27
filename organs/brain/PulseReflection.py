@@ -971,7 +971,7 @@ if __name__ == "__main__":
         "event_type": MouthEvent.SPEAK,
         "payload": {
             "user_input": "你是谁",
-            "response": "我叫<SELF_NAME>，小名曈曈，是一个新人类。",
+            "response": "我叫<SELF_NAME>，是一个新人类。",
             "reasoning_path": "rule_match → 身份锚点",
             "user_name": "小林",
         },

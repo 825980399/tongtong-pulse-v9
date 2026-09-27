@@ -170,6 +170,19 @@ PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         r"(?!<|$|your|<YOUR|\.\.\.)[A-Za-z0-9_\-]{16,}[\"']")),
 ]
 
+#: ★第146批 T146-2：**弱告警**模式 —— 只提示人工复核，**不阻断**导出。
+#:   背景：真实出生年份以裸四位数字（如 ``2020年``）写进 tracked 源码时，
+#:   上面的强模式（精确日期）未必命中，但信息已经随公开包泄露。
+#:   判据：单行内同时命中「裸四位年份」**且**含出生/生日类上下文词。
+WEAK_PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("疑似出生年份", re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")),
+]
+
+#: 触发弱告警所需的**同行上下文词**（出现其一才告警，避免把普通日期全报出来）
+WEAK_CONTEXT_MARKERS: tuple[str, ...] = (
+    "出生", "生日", "诞生", "BIRTH_DATE", "birth_date", "birthday",
+)
+
 #: 视为二进制 / 无需扫描的扩展名
 BINARY_EXT: frozenset[str] = frozenset({
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp",
@@ -343,6 +356,49 @@ def verify_clean(root: str, files: list[str]) -> list[tuple[str, str, int, str]]
     return out
 
 
+def scan_text_weak(path: str) -> list[tuple[str, int, str]]:
+    """★第146批 T146-2：弱告警扫描，返回 [(模式名, 行号, 命中行片段)]。
+
+    与 scan_text 的区别：
+      · 只看「裸四位年份 + 出生/生日上下文」**同段**；
+      · 结果**不影响退出码**，仅供人工复核（弱规则可能产生良性命中）。
+    """
+    ext = os.path.splitext(path)[1].lower()
+    if ext in BINARY_EXT:
+        return []
+    out: list[tuple[str, int, str]] = []
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            for i, line in enumerate(fh, 1):
+                if any(mk in line for mk in SCAN_SKIP_MARKERS):
+                    continue
+                lower = line.lower()
+                if not any(m.lower() in lower for m in WEAK_CONTEXT_MARKERS):
+                    continue
+                for name, pat in WEAK_PII_PATTERNS:
+                    if not pat.search(line):
+                        continue
+                    snip = line.strip()[:100]
+                    out.append((name, i, snip))
+                    break
+    except OSError as e:
+        silent_exc(e, where="export_public.scan_text_weak", level="debug")
+        return []
+    return out
+
+
+def verify_weak(root: str, files: list[str]) -> list[tuple[str, str, int, str]]:
+    """对导出清单做**弱告警**扫描（结果不改变退出码，仅供人工复核）。"""
+    out: list[tuple[str, str, int, str]] = []
+    for p in files:
+        rel = _norm(os.path.relpath(p, root))
+        if rel in SCAN_EXEMPT_FILES:
+            continue
+        for name, ln, snip in scan_text_weak(p):
+            out.append((rel, name, ln, snip))
+    return out
+
+
 # =============================================================================
 # 五、导出
 # =============================================================================
@@ -419,6 +475,18 @@ def main(argv: list[str] | None = None) -> int:
         export_dir(root, out, files)
         out_size = -1
     print(f"\n导出完成: {out}")
+
+    # ---- 弱告警扫描（第146批 T146-2：只提示，不阻断） ----
+    if not args.no_scan:
+        _weak = verify_weak(root, files)
+        if _weak:
+            print(f"\n[WARN] 弱告警 {len(_weak)} 处（不阻断导出，需人工复核）：")
+            for rel, name, ln, snip in _weak[:20]:
+                print(f"  {rel}:{ln}  [{name}]  {snip}")
+            if len(_weak) > 20:
+                print(f"  ... 其余 {len(_weak)-20} 处略")
+        else:
+            print("\n[OK] 弱告警扫描通过：无「年份 + 出生/生日」同段命中。")
 
     # ---- PII 复扫 ----
     if not args.no_scan:

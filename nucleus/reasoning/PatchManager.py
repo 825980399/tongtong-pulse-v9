@@ -3610,7 +3610,11 @@ class PatchManager:
     def _load_json(self, path, default):
         if not os.path.exists(path): return default
         try:
-            with open(path, encoding='utf-8') as f:
+            # ★第146批 T146-7：``utf-8-sig`` —— 透明剥离 UTF-8 BOM。
+            #   带 BOM 的补丁文件用 strict utf-8 能解码但 json.loads 会报
+            #   "Unexpected UTF-8 BOM"，表现为持续 ERROR + 一律回落默认值；
+            #   无 BOM 时 utf-8-sig 行为与 utf-8 完全一致。
+            with open(path, encoding='utf-8-sig') as f:
                 _content = f.read()
             if not _content.strip():
                 # ★P3修复：空文件/仅空白视为合法空状态（如用户手动清空补丁），

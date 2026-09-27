@@ -264,7 +264,39 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
               file=sys.stderr)
 
 
-def _write_rollover_marker(log_dir: str, archive_path: str, prev_size) -> None:
+def _log_max_bytes() -> int:
+    """★第146批 T146-8：单日志文件轮转上限（bytes）；不可读/未配置 → 0（表示未知）。"""
+    try:
+        _v = int(getattr(config, "LOG_MAX_BYTES", 0) or 0)
+    except Exception:
+        # ★T-101e：门禁友好——非静默上报（配置读取失败按「未知」处理，不臆断）
+        logging.getLogger(__name__).debug("LOG_MAX_BYTES 读取失败，按未知处理")
+        return 0
+    return _v if _v > 0 else 0
+
+
+def _reset_log_state(log_dir: str, log_file: str) -> None:
+    """★第146批 T146-8：把状态文件的指纹复位为**轮转后**的当前值。
+
+    根因：轮转前 size 远大于轮转后 size，若状态文件仍记着旧的大 size，
+    下一次 check_log_integrity 必然算成「size 下降 → 外部截断」。只有在同一次检查里
+    恰好命中「近期 marker」才能被复判为 rollover；marker 一旦过期/被清，
+    正常轮转就会被误报成本该告警的外部截断。
+    """
+    try:
+        _sp = os.path.join(log_dir, _LOG_STATE_FILE)
+        _fp = _fingerprint(log_file) or {}
+        with open(_sp, "w", encoding="utf-8") as _f:
+            json.dump({"ts": time.time(), "file": log_file,
+                       "size": _fp.get("size"), "ino": _fp.get("ino"),
+                       "mtime": _fp.get("mtime")}, _f, ensure_ascii=False)
+    except OSError as _e:
+        print("[logger] 轮转后状态复位失败: %s: %s" % (type(_e).__name__, _e),
+              file=sys.stderr)
+
+
+def _write_rollover_marker(log_dir: str, archive_path: str, prev_size,
+                           log_file: str | None = None) -> None:
     """★D017 / T-100c：轮转成功的唯一标记。
 
     写入 ``{log_dir}/.rollover_marker.json``（含唯一时间戳），供 check_log_integrity
@@ -284,6 +316,10 @@ def _write_rollover_marker(log_dir: str, archive_path: str, prev_size) -> None:
             "file": archive_path,
             "rollover_archive": archive_path,
         })
+        # ★第146批 T146-8（判据 A）：写 marker 的同时把状态文件复位到轮转后的指纹，
+        #   使下一次 check_log_integrity 直接判 ok，不再依赖 marker 时间窗兜底。
+        if log_file:
+            _reset_log_state(log_dir, log_file)
     except OSError:
         # ★T-101e：门禁友好——非静默上报（轮转标记写入失败属非致命，但须留痕）
         logging.getLogger(__name__).debug("rollover 标记写入失败(非致命): %s", log_dir)
@@ -353,6 +389,19 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
     #   避免把自己的轮转误判成「外部截断/替换」（框架内从无截断逻辑）。
     if _res["status"] in ("truncated", "replaced"):
         _mk = _read_rollover_marker(_dir)
+        if _mk is None and isinstance(_prev, dict) and _cur is not None:
+            # ★第146批 T146-8（判据 B）：无 marker 也不必急着喊外部截断——
+            #   若「上次 size 已达轮转上限」且「<log>.1 归档确实存在」，
+            #   这只可能是我们自己的 SafeRotatingFileHandler 转出去的。
+            _maxb = _log_max_bytes()
+            _prev_sz = _prev.get("size")
+            if (_maxb > 0 and isinstance(_prev_sz, int) and _prev_sz >= _maxb
+                    and os.path.isfile(_file + ".1")):
+                _res["status"] = "rollover"
+                _res["rollover_archive"] = _file + ".1"
+                _res["rollover_note"] = (
+                    "补充判据：prev.size(%d) 已达轮转上限(%d) 且 %s.1 归档存在，"
+                    "判定为框架内轮转" % (_prev_sz, _maxb, os.path.basename(_file)))
         if _mk:
             _win = _ROLLOVER_AWARE_WINDOW_SEC
             try:
@@ -428,7 +477,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         for _attempt in range(max(1, _retry)):
             try:
                 super().doRollover()
-                _write_rollover_marker(_dir, _base + ".1", _prev_size)
+                _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
                 return
             except PermissionError as _pe:
                 if _attempt < max(1, _retry) - 1:
@@ -441,7 +490,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # 阶段二：方案B（复制+截断）——不重命名打开的文件，规避 Windows 锁
         try:
             self._copy_truncate_rollover()
-            _write_rollover_marker(_dir, _base + ".1", _prev_size)
+            _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
             return
         except Exception as _ce:
             # 彻底降级：记一条冷却 WARNING 后继续写当前文件（不中断运行）

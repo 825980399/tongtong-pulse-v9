@@ -52,6 +52,24 @@ def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:
 class PulseSelfAwareness(BasePulseOrgan):
     """多维关系认知系统（v9.5 分层脉冲版）"""
 
+    @staticmethod
+    def _load_core_identity_keywords() -> list[list[str]]:
+        """★第146批 T146-9：从 config.SEED_MEMORIES 读取前 5 条身份种子的 keywords。
+
+        与 config 同源 ⇒ 不再出现「期望表与真实种子不一致」的恒真 missing_seeds。
+        延迟 import 避免模块级循环依赖；取不到时返回空列表（按「无期望」处理，
+        不制造误报）。
+        """
+        import config as _ident_cfg
+        _out: list[list[str]] = []
+        for _seed in (getattr(_ident_cfg, "SEED_MEMORIES", None) or [])[:5]:
+            if not isinstance(_seed, dict):
+                continue
+            _kws = [str(_k) for _k in (_seed.get("keywords") or []) if str(_k)]
+            if _kws:
+                _out.append(_kws)
+        return _out
+
     def __init__(self, organ_name: str = "自我认知"):
         super().__init__(organ_name)
 
