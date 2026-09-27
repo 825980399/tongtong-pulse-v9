@@ -41,9 +41,29 @@ def process(file_path: str, remote_api_config: dict | None = None) -> dict[str, 
         import pytesseract
         from PIL import Image
         
-        # 设置Tesseract路径（根据实际安装位置调整）
-        _tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        if os.path.exists(_tesseract_path):
+        # 设置Tesseract路径：动态查找（★第144批 T-144b：去写死绝对路径，跨环境可跑）
+        #   优先级：环境变量 TESSERACT_CMD → PATH（shutil.which）→ 常见安装位置
+        _tesseract_path = os.environ.get("TESSERACT_CMD") or ""
+        if not _tesseract_path or not os.path.exists(_tesseract_path):
+            import shutil as _shutil
+            _which = _shutil.which("tesseract")
+            if _which:
+                _tesseract_path = _which
+        if not _tesseract_path or not os.path.exists(_tesseract_path):
+            for _cand in (
+                os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                             "Tesseract-OCR", "tesseract.exe"),
+                os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+                             "Tesseract-OCR", "tesseract.exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                             "Tesseract-OCR", "tesseract.exe"),
+                "/usr/bin/tesseract",
+                "/usr/local/bin/tesseract",
+            ):
+                if _cand and os.path.exists(_cand):
+                    _tesseract_path = _cand
+                    break
+        if _tesseract_path and os.path.exists(_tesseract_path):
             pytesseract.pytesseract.tesseract_cmd = _tesseract_path
         
         _img = Image.open(file_path)

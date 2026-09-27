@@ -311,13 +311,38 @@ def organ_test_coverage() -> dict[str, Any]:
 
 # ==================== ④ 静态健康 ====================
 
+def _find_ruff() -> str | None:
+    """动态定位 ruff 可执行文件（跨环境，无写死绝对路径）。
+
+    查找顺序：
+    1. ``PATH`` 上的 ``ruff``（``shutil.which``）；
+    2. 当前解释器所在目录的 ``Scripts/ruff.exe``（Windows venv/系统安装）；
+    3. 当前解释器所在目录的 ``bin/ruff``（POSIX venv）。
+    全部未命中返回 ``None``（调用方按"数据不可用"处理，不惩罚）。
+    """
+    import shutil
+    _ruff = shutil.which("ruff")
+    if _ruff:
+        return _ruff
+    _bindir = os.path.dirname(os.path.abspath(sys.executable))
+    for _cand in (
+        os.path.join(_bindir, "Scripts", "ruff.exe"),
+        os.path.join(_bindir, "Scripts", "ruff"),
+        os.path.join(_bindir, "bin", "ruff"),
+        os.path.join(_bindir, "ruff.exe"),
+        os.path.join(_bindir, "ruff"),
+    ):
+        if os.path.isfile(_cand):
+            return _cand
+    return None
+
+
 def count_ruff_f() -> int | None:
     """全库 ``ruff --select F`` 错误数（失败返回 None）。"""
     try:
-        import shutil
         import subprocess
-        _ruff = shutil.which("ruff") or "D:/Program Files/Python312/Scripts/ruff.exe"
-        if not os.path.isfile(_ruff):
+        _ruff = _find_ruff()
+        if not _ruff or not os.path.isfile(_ruff):
             return None
         _r = subprocess.run([_ruff, "check", "--select", "F",
                              "--output-format", "concise", "."],

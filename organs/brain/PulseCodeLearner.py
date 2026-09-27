@@ -2906,7 +2906,7 @@ class PulseCodeLearner(BasePulseOrgan):
         匹配口径：
             以 **(类名, 方法名)** 为准，而非文件路径。原因：
             - issue 的 file 可能是 Windows 绝对路径
-              （日志实证：`<PROJECT_ROOT>\\...\\organs\\body\\PulseLiver.py`）；
+              （日志实证：「<项目根>\\...\\organs\\body\\PulseLiver.py」）；
             - 补丁的 file 多为项目相对路径（`organs/body/PulseLiver.py`）。
             两者直接比字符串永远比不上，按 basename/类名比才稳。
 

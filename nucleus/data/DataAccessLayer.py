@@ -11,13 +11,12 @@ DataAccessLayer.py —— 数据访问层
 定位: 数据基础设施层
 """
 
-import os
 import json
-import shutil
-import time
-import threading
 import logging
-
+import os
+import shutil
+import threading
+import time
 
 _module_logger = logging.getLogger("nucleus.data.DataAccessLayer")
 
@@ -147,7 +146,10 @@ def safe_read_json(path, default=None):
         pass
     
     raw = None
-    for enc in ("utf-8", "gbk", "latin-1"):
+    # ★第144批 T-144d：``utf-8-sig`` 置于首位——透明剥离 UTF-8 BOM，
+    #   避免带 BOM 的 JSON 被 utf-8 成功解码后 json.loads 报 "Unexpected UTF-8 BOM"。
+    #   （无 BOM 时行为与 utf-8 完全一致；有 BOM 则自动去除，免手动清洗。）
+    for enc in ("utf-8-sig", "utf-8", "gbk", "latin-1"):
         try:
             with open(path, encoding=enc) as f:
                 raw = f.read()

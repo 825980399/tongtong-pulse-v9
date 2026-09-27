@@ -2049,13 +2049,13 @@ CONTROLLER_PERMISSION = {
     "read_blacklist": [
         r"C:\Windows",
         r"C:\Program Files",
-        r"<HOME>\.ssh",   # 通用化：不硬编码真实用户名
+        r"**\.ssh",       # 通用化：不硬编码真实用户名/家目录（跨平台匹配任意层级 .ssh）
         r"**\.env",
         r"**\password*",
     ],
     # 文件写入白名单（仅允许在此范围内写入）
     "write_whitelist": [
-        r"<PROJECT_ROOT>\workspace",
+        os.path.join(_PROJECT_ROOT, "workspace"),
     ],
     # 软件启动白名单（仅允许启动列表内程序）
     "app_whitelist": [

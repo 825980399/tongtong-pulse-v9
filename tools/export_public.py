@@ -40,6 +40,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import os
 import re
 import sys
@@ -87,12 +88,14 @@ EXCLUDE_FILE_EXT: frozenset[str] = frozenset({
     ".o", ".obj", ".lib", ".exp", ".ilk", ".pdb", ".tlog",
 })
 
-#: 精确排除的文件名（凭据 / 本地配置 / 内部账本）
+#: 精确排除的文件名（凭据 / 本地配置 / 内部账本 / 一次性产物）
 EXCLUDE_EXACT_NAMES: frozenset[str] = frozenset({
     ".env",
     "credentials.json",
     "secrets.json",
     "token.json",
+    # ★第144批 T-144a/T-144d：含本机 Python 绝对路径，跨环境无效，不对外发布
+    "_install_cython.bat",
 })
 
 #: 排除的路径前缀（相对仓库根，正斜杠）
@@ -100,6 +103,13 @@ EXCLUDE_PATH_PREFIXES: tuple[str, ...] = (
     ".git/",
     ".workbuddy/",
     ".rebuilt_131/",
+)
+
+#: 排除的路径通配（fnmatch 风格，正斜杠 / 匹配相对路径）
+#: ★第144批 T-144a：账本旁路重建目录每批重建（.rebuilt_131/.rebuilt_132/…），通配收口。
+EXCLUDE_PATH_GLOBS: tuple[str, ...] = (
+    ".rebuilt_*/",
+    ".rebuilt_*",
 )
 
 #: 备份目录/文件前缀（.bak_batchN、xxx.bak 等）
@@ -232,6 +242,15 @@ def should_skip(rel: str) -> bool:
 
     for pref in EXCLUDE_PATH_PREFIXES:
         if rel_n.startswith(pref) or ("/" + pref) in ("/" + rel_n):
+            return True
+
+    # ★第144批 T-144a：通配目录（.rebuilt_*）前缀匹配
+    for g in EXCLUDE_PATH_GLOBS:
+        pat = g.rstrip("/")
+        for p in parts:
+            if fnmatch.fnmatch(p, pat):
+                return True
+        if fnmatch.fnmatch(rel_n, g) or fnmatch.fnmatch(rel_n, pat):
             return True
 
     if any(is_backup_name(p) for p in parts):
