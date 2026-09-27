@@ -58,8 +58,11 @@ class TestDocsWhitelist(unittest.TestCase):
     """docs/ 白名单 fail-closed。"""
 
     def test_01_allow_files(self):
+        # ★第145批 T-145b：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
+        #   （该文档含批次交付确认/债务编号/第三方评分等内部运行资料），
+        #   现断言其**被拒绝**（见 test_03）。
         for rel in ("README.md", "demo-quickstart.md", "项目架构总览_20260927.md",
-                    "项目结构树.md", "完整进化路线与技术债务清单_v1.0.md"):
+                    "项目结构树.md"):
             self.assertTrue(ep.docs_allowed(rel), rel)
 
     def test_02_allow_dirs(self):
@@ -70,9 +73,11 @@ class TestDocsWhitelist(unittest.TestCase):
 
     def test_03_unlisted_file_rejected(self):
         # 未在白名单里的根级文档 → 拒绝（fail-closed）
+        # ★第145批 T-145b：内部总账加入本列表（原在白名单，属越权公开）
         for rel in ("第三方全面分析报告_20260926.md",
                     "死代码检测报告_8大模块_v2.0.md",
-                    "git_commit_hash_mapping.md"):
+                    "git_commit_hash_mapping.md",
+                    "完整进化路线与技术债务清单_v1.0.md"):
             self.assertFalse(ep.docs_allowed(rel), rel)
 
     def test_04_internal_dir_rejected(self):

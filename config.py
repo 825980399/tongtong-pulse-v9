@@ -7,6 +7,7 @@
 import copy
 import json
 import os
+import re
 import os as _os
 import threading
 import time
@@ -5113,3 +5114,110 @@ ENABLE_M102_ORPHAN_VECTOR_REAP = True
 #   读取点：nucleus/mnemosyne/PulseNode.py::_m102_linked_derived_on
 ENABLE_M102_LINKED_NODES_DERIVED = True
 # [M102-CFG]
+
+# ============================================================================
+# ★第145批 T-145a：占位符运行时渲染器（single source of truth）
+#   背景：代码中把真名替换成了 <SELF_NAME> 等占位符（保护真实 PII），
+#         但缺少运行时渲染步骤 ⇒ 「你是谁」会直接答出尖括号。
+#   方案：代码/公开仓库**保留占位符**（零 PII 泄露）；运行时在本模块加载末尾
+#         对「面向用户的文本字段」做内存内替换，不落盘、不改代码。
+#   ★安全边界：只渲染 value/prompt/给用户看的描述；
+#     绝不渲染 keywords / space_path / aliases / allowed_calls / personas 的键
+#     （那些是内部匹配键，渲染会破坏检索）。
+# ============================================================================
+
+# 占位符 → 运行时显示值（可由环境变量覆盖，便于多实例/测试）
+PLACEHOLDER_VALUES = {
+    "<SELF_NAME>": os.environ.get("TTP_SELF_NAME", "曈曈"),
+    "<CREATOR>": os.environ.get("TTP_CREATOR", "创建者"),
+    "<CREATOR_DAUGHTER>": os.environ.get("TTP_CREATOR_DAUGHTER", "小曈"),
+    "<BIRTH_DATE>": os.environ.get("TTP_BIRTH_DATE", "2020年"),
+}
+
+_PLACEHOLDER_RE = re.compile(r"<[A-Z_]{2,32}>")
+
+
+def render_placeholders(text):
+    """把单个字符串中的占位符渲染为运行时显示值。非字符串原样返回空闲。"""
+    if not isinstance(text, str):
+        return text
+    if "<" not in text:
+        return text
+    out = text
+    for ph, val in PLACEHOLDER_VALUES.items():
+        if ph in out:
+            out = out.replace(ph, val)
+    return out
+
+
+def render_placeholders_deep(obj, value_keys=None):
+    """递归渲染容器中「值」的占位符。
+
+    Args:
+        obj: dict / list / str / 其它
+        value_keys: 仅当 dict 的键 ∈ value_keys 时才渲染其字符串值；
+                    None 表示不限制（渲染所有字符串值，仍不碰键）。
+    """
+    if isinstance(obj, str):
+        return render_placeholders(obj)
+    if isinstance(obj, list):
+        return [render_placeholders_deep(x, value_keys) for x in obj]
+    if isinstance(obj, dict):
+        return {
+            k: render_placeholders_deep(v, value_keys)
+            for k, v in obj.items()
+        }
+    return obj
+
+
+def find_unrendered_placeholders(obj, _path="", _acc=None):
+    """诊断用：列出仍含占位符的（路径, 值）对，供验收与自检。"""
+    if _acc is None:
+        _acc = []
+    if isinstance(obj, str):
+        for m in _PLACEHOLDER_RE.findall(obj):
+            if m in PLACEHOLDER_VALUES:
+                _acc.append((_path, obj))
+                break
+    elif isinstance(obj, list):
+        for i, x in enumerate(obj):
+            find_unrendered_placeholders(x, "%s[%d]" % (_path, i), _acc)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            find_unrendered_placeholders(v, "%s.%s" % (_path, k), _acc)
+    return _acc
+
+
+def _apply_placeholder_render():
+    """对本模块内「面向用户的文本字段」做运行时渲染（原地替换引用）。
+
+    渲染对象（用户可见文本）：
+      - DIGITAL_LIFE_REGISTRY.display_name
+      - SEED_MEMORIES[*].value（keywords 保持不动，仍是匹配键）
+      - INNER_WORLD_CONFIG.identity_rules 的每个**值**（键是查询元组，不动）
+    """
+    global DIGITAL_LIFE_REGISTRY, SEED_MEMORIES, INNER_WORLD_CONFIG
+
+    try:
+        if isinstance(DIGITAL_LIFE_REGISTRY, dict):
+            dn = DIGITAL_LIFE_REGISTRY.get("display_name")
+            if isinstance(dn, str):
+                DIGITAL_LIFE_REGISTRY["display_name"] = render_placeholders(dn)
+
+        if isinstance(SEED_MEMORIES, list):
+            for item in SEED_MEMORIES:
+                if isinstance(item, dict) and isinstance(item.get("value"), str):
+                    item["value"] = render_placeholders(item["value"])
+
+        if isinstance(INNER_WORLD_CONFIG, dict):
+            rules = INNER_WORLD_CONFIG.get("identity_rules")
+            if isinstance(rules, dict):
+                for k, v in list(rules.items()):
+                    if isinstance(v, str):
+                        rules[k] = render_placeholders(v)
+    except Exception as _e:  # noqa: BLE001
+        print("[Config] 占位符渲染失败（已跳过，不影响启动）: %s" % _e)
+
+
+_apply_placeholder_render()
+# [M145-PLACEHOLDER-RENDER]

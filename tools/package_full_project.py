@@ -17,6 +17,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 # ★主线第12批 T2/P2-82：备份目录统一排除（含未来批次），避免备份快照打进交付 zip
 from tools.audit_utils import is_backup_name, is_backup_path  # noqa: E402
+# ★第145批 T-145c：复用对外发布工具的 fail-closed 白名单（单一真值源）。
+#   背景：本工具原以黑名单排除，实测把 内部总账 / docs 分析报告97 / 归档91 /
+#   archive21 / 第三方分析 / .pytest_tmp 等大面积内部资产打进了包。
+#   改为直接复用 export_public.should_skip（docs 只放行白名单），杜绝漂移。
+from tools.export_public import should_skip as _public_should_skip  # noqa: E402
 
 
 
@@ -40,9 +45,37 @@ EXCLUDE_FILE_EXT = {".pyc", ".pyo", ".pyd", ".so", ".dll", ".log"}
 # data/ 与 logs/ 只保留目录骨架，不打内容
 SKELETON_ONLY = {"data", "logs"}
 
+# ★第145批 T-145c：交付包专属安全排除（仅本工具生效，不动共享常量）。
+#   理由：本工具把**整个项目**打进 zip，必须挡住不该外发的运行资料。
+#   - tmp/                 ：临时脚本/诊断产物/导出试验包
+#   - docs/路灯与星轨对话/ ：内部协作记录（任务书/交付报告/前置分析）
+PACKAGE_LOCAL_EXCLUDE_DIRS: frozenset[str] = frozenset({"tmp", ".workbuddy"})
+#: 相对项目根的**精确路径**排除（内部文档目录等）
+PACKAGE_LOCAL_EXCLUDE_PATHS: frozenset[str] = frozenset({
+    "docs/路灯与星轨对话",
+})
+#: 敏感文件名（凭证 / 本地覆盖配置），无论位于何处一律排除
+PACKAGE_SENSITIVE_FILES: frozenset[str] = frozenset({
+    ".env", ".env.local", "config_override.json",
+    "credentials.json", "secrets.json",
+})
+
 
 def should_skip(rel_path: str) -> bool:
-    parts = rel_path.replace("\\", "/").split("/")
+    _rel = rel_path.replace("\\", "/")
+    parts = _rel.split("/")
+    # ★第145批 T-145c：先经统一对外白名单（fail-closed，docs 只放行白名单）
+    if _public_should_skip(_rel):
+        return True
+    # ★第145批 T-145c：敏感文件名优先拦截
+    if parts[-1] in PACKAGE_SENSITIVE_FILES:
+        return True
+    # ★第145批 T-145c：交付包专属排除目录
+    if any(p in PACKAGE_LOCAL_EXCLUDE_DIRS for p in parts):
+        return True
+    # ★第145批 T-145c：精确路径排除（内部文档目录）
+    if any(_rel == p or _rel.startswith(p + "/") for p in PACKAGE_LOCAL_EXCLUDE_PATHS):
+        return True
     # 备份目录/文件（.bak* 及其它历史命名）一律排除
     if any(is_backup_name(p) for p in parts):
         return True
@@ -66,7 +99,14 @@ def main() -> int:
                          compresslevel=6) as zf:
         for root, dirs, files in os.walk(PROJECT_ROOT):
             dirs[:] = [d for d in dirs
-                       if d not in EXCLUDE_DIRS and not is_backup_name(d)]
+                       if d not in EXCLUDE_DIRS
+                       and d not in PACKAGE_LOCAL_EXCLUDE_DIRS
+                       and not is_backup_name(d)]
+            # ★第145批 T-145c：精确路径剪枝（内部文档目录）
+            _drel = os.path.relpath(root, PROJECT_ROOT).replace("\\", "/")
+            dirs[:] = [d for d in dirs
+                       if not any((_drel + "/" + d) == p or (_drel + "/" + d).startswith(p + "/")
+                                  for p in PACKAGE_LOCAL_EXCLUDE_PATHS)]
             rel_root = os.path.relpath(root, PROJECT_ROOT)  # noqa: F841
             for f in sorted(files):
                 full = os.path.join(root, f)

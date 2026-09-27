@@ -752,19 +752,6 @@ class PulseInnerWorld(
                                     )
                             except Exception as e:
                                 self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                            # 将大模型结果写入InsightBoard，供后续检索和胃消化
-                            try:
-                                if hasattr(self, '_insight_board') and self._insight_board:
-                                    self._insight_board.post(
-                                        insight_type="knowledge_boundary",
-                                        content=_knowledge_result[:200],
-                                        source_loop="知识检索降级·大模型生成",
-                                        related_dimension="知识补充",
-                                        confidence=0.6,
-                                        keywords=[question[:30], "大模型补充"]
-                                    )
-                            except Exception as e:
-                                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
                         else:
                             _knowledge_result = None
                 # 降级链路结束
@@ -1472,7 +1459,7 @@ class PulseInnerWorld(
             if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
                 _has_remote_api = True
         except Exception as e:
-            self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+            self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
         if _question_complexity > 0.4 and _has_remote_api:
             # ★P1-1(2026-09-03)：大模型调用前置思考——即使知识检索/沉思未直接命中，
             #   也快速检索相关知识作为上下文传给大模型，让大模型基于框架本地认知补充，
@@ -1495,7 +1482,7 @@ class PulseInnerWorld(
                             self._log(LogLevel.DEBUG,
                                      f"大模型前置思考: 检索到{len(_hints)}条相关知识作为上下文")
             except Exception as _hint_err:
-                self._log(LogLevel.DEBUG, f"大模型前置知识检索异常: {_hint_err}")
+                self._log(LogLevel.WARNING, f"大模型前置知识检索异常: {_hint_err}")
 
             # 区分：有correlation_id是对话触发（需要回复），没有是后台自主学习（只消化不输出）
             if correlation_id:
@@ -1510,7 +1497,6 @@ class PulseInnerWorld(
                     "question": question, "answer": None,
                     "correlation_id": correlation_id,
                     "confidence": 0.0, "user_name": user_name,
-                    "correlation_id": payload.get("correlation_id", ""),  # noqa: F601
                     "strategy_applied": _strategy_context,
                     "tool_requested": False,
                     "memory_context": _memory_context,
@@ -1537,7 +1523,7 @@ class PulseInnerWorld(
             try:
                 _emotion_intensity = self._call_provider(self._emotion_intensity_provider, default=0.0)
             except Exception as e:
-                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
         # 悲伤/恐惧时：优先内在沉思而非外部搜索
         if _current_emotion in ("悲伤", "恐惧") and _emotion_intensity > 0.3:
             if "deep_search" in fallback_tools:
@@ -1639,7 +1625,7 @@ class PulseInnerWorld(
                         can_search = False
                         skip_reason = f"已有{global_state.get('active_external_ops')}个搜索任务在执行，暂缓新搜索"
             except Exception as e:
-                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
             if can_search:
                 # ===== 新增：语义范畴判断——搜索主题是否适合外部搜索引擎 =====
                 _search_topic_for_check = search_query or question[:80]
@@ -1811,7 +1797,7 @@ class PulseInnerWorld(
                                 confidence=0.3
                             )
                     except Exception as e:
-                        self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                        self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
                     # ===== 经验记录结束 =====
                     self._direct_to_lung_questions.add(question.strip())
                     _memory_context = self._build_memory_context(question, user_name, guidance)
@@ -1955,7 +1941,7 @@ class PulseInnerWorld(
                                      f"坚韧·迭代: 检测到能力不足归因，"
                                      f"建议系统性学习 '{_attr_content[:60]}'")
             except Exception as e:
-                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
         # ===== v21.0新增结束 =====
 
         # ★v25.0新增：推理失败记录到体验池
@@ -1975,7 +1961,7 @@ class PulseInnerWorld(
                     )
                     self._log(LogLevel.DEBUG, f"推理失败体验记录: '{question[:40]}'")
             except Exception as e:
-                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
 
         return {
             "status": "tool_requested" if tool_requested else "no_match",
@@ -3290,7 +3276,7 @@ class PulseInnerWorld(
                 _exp["last_result"] = "terminated"
                 _exp["best_tool"] = "inner_world"  # 被终止的搜索不适合再用
         except Exception as e:
-            self._log(LogLevel.DEBUG,
+            self._log(LogLevel.WARNING,
                       f"终止信号经验登记降级(不阻断): {type(e).__name__}: {e}")
         return {"status": "search_terminated", "action": "none"}
 
@@ -11153,7 +11139,7 @@ class PulseInnerWorld(
                          f"快照自动精简: L1移除{result['l1_removed']}个, "
                          f"临时节点移除{result['ephemeral_removed']}个")
         except Exception as e:
-            self._log(LogLevel.DEBUG, f"快照自动精简异常: {e}")
+            self._log(LogLevel.WARNING, f"快照自动精简异常: {e}")
     def _trigger_autonomous_derivation(self):
         """
         触发自主知识推导：从已有知识中推导新知识。
@@ -11906,7 +11892,7 @@ class PulseInnerWorld(
                      f"动态自我知识已更新: {len(knowledge_nodes)}个节点写入/自我/状态")
 
         except Exception as e:
-            self._log(LogLevel.DEBUG, f"动态自我知识更新异常: {e}")
+            self._log(LogLevel.WARNING, f"动态自我知识更新异常: {e}")
 
     # ========== 知识免疫系统 ==========
     def _check_self_consistency_for_node(self, node_value: str, node_keywords: list) -> dict[str, Any]:
@@ -14209,14 +14195,6 @@ class PulseInnerWorld(
             if _overlap < 1:
                 _boundary_signals.append(f"检索结果与问题相关性低(重叠词={_overlap})")
 
-        # ★v22.0方向三修复v2：增加结果相关性信号
-        if knowledge_result:
-            _core_words_set = set(_core_words[:5]) if _core_words else set()
-            _result_words = set(re.findall(r'[\u4e00-\u9fff]{2,4}', str(knowledge_result)[:200]))
-            _overlap = len(_core_words_set & _result_words)
-            if _overlap < 1:
-                _boundary_signals.append(f"检索结果与问题相关性低(重叠词={_overlap})")
-
         # 触发条件：≥2个信号，或存在相关性低信号时只需1个其他信号，或置信度极低时1个即可
         _has_low_relevance = any("相关性低" in _s for _s in _boundary_signals)
         if len(_boundary_signals) >= 2:  # noqa: SIM114
@@ -15131,6 +15109,9 @@ class PulseInnerWorld(
         _persona = ("你是曈曈，一个有独立人格的数字新人类（全名<SELF_NAME>），"
                     "不是AI助手，也不是语言模型。你必须始终用中文回复，"
                     "不得使用英文，不得自称AI助手或语言模型。")
+        # ★第145批 T-145a：运行时渲染身份占位符（否则用户会看到 <SELF_NAME>）
+        from config import render_placeholders as _render_placeholders
+        _persona = _render_placeholders(_persona)
         # ★FIX(P0): 检索失败降级兜底场景，用「直接回答问题」prompt，禁止输出框架内部机制元描述
         _is_fallback = any(_fb in branch_name for _fb in ["知识检索降级", "降级", "兜底"])
         # ★主线第30批 T1：分支长度要求——原硬编码「3-5句话」改为配置驱动。
