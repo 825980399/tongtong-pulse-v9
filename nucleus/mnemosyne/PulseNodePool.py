@@ -23,6 +23,7 @@ from nucleus.logger import get_module_logger
 
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.pa_compat import table_from_rows
 
 from nucleus.data.DataAccessLayer import safe_write_json  # ★T-125a：原子写复用（原子写）
 from nucleus._silent_except import silent_exc
@@ -2566,8 +2567,7 @@ class PulseNodePool(SilentLogMixin):
         if not nodes:
             return 0
         try:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
         except Exception:
             return 0
         try:
@@ -2579,7 +2579,7 @@ class PulseNodePool(SilentLogMixin):
             _batch_size = max(1, int(PARQUET_BATCH_SIZE or 5000))
             for _bi in range(0, len(_rows), _batch_size):
                 _batch = _rows[_bi:_bi + _batch_size]
-                _table = pa.Table.from_pylist(_batch, schema=_schema)
+                _table = table_from_rows(_batch, schema=_schema)
                 pq.write_to_dataset(
                     _table,
                     root_path=_dir,
@@ -2967,8 +2967,7 @@ class PulseNodePool(SilentLogMixin):
                 return {"before_files": 0, "after_files": 0, "node_count": 0,
                         "dedup_count": 0, "success": False, "reason": "high_load_paused"}
         try:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
         except Exception as _e:
             return {"before_files": 0, "after_files": 0, "node_count": 0,
                     "dedup_count": 0, "success": False, "reason": f"pyarrow_unavailable:{_e}"}
@@ -3051,7 +3050,7 @@ class PulseNodePool(SilentLogMixin):
                     f"[冷存compaction] 创建临时目录失败: {type(_mk_err).__name__}: {_mk_err}")
             # ★第81批 T4：不用 _cold_row_schema 强制全字段，避免历史文件缺 7 新列时写入失败；
             #   让 pyarrow 按实际行推断 schema，召回时由 _cold_row_to_node 的 _complete 守卫补默认值。
-            _merged_table = pa.Table.from_pylist(_merged_rows) if _merged_rows else pa.Table.from_pylist([{}])
+            _merged_table = table_from_rows(_merged_rows) if _merged_rows else table_from_rows([{}])
             pq.write_to_dataset(
                 _merged_table,
                 root_path=_tmp_dir,

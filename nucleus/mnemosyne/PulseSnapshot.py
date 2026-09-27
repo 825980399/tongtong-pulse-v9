@@ -24,6 +24,7 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.logger import get_module_logger
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.pa_compat import table_from_rows
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
 
@@ -2601,8 +2602,7 @@ class PulseSnapshot:
             self._log(LogLevel.WARNING, "node_pool 未注入，跳过 Parquet 保存")
             return False
         try:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
         except Exception as _e:
             self._log(LogLevel.WARNING, f"pyarrow 不可用，Parquet 保存跳过: {_e}")
             return False
@@ -2615,7 +2615,7 @@ class PulseSnapshot:
                 self._log(LogLevel.INFO, "无节点，跳过 Parquet 保存")
                 return True
             try:
-                _table = pa.Table.from_pylist(_rows)
+                _table = table_from_rows(_rows)
             except Exception as _schema_e:
                 # ★3.1（2026-09-08 第八批）：struct/非struct 混合兜底。
                 #   semantic_relations / verification_history 为 list<struct> 原生列，
@@ -2632,7 +2632,7 @@ class PulseSnapshot:
                         if not isinstance(_v, str):
                             _r[_c] = json.dumps(_v if isinstance(_v, list) else [_v],
                                                 ensure_ascii=False, default=str)
-                _table = pa.Table.from_pylist(_rows)
+                _table = table_from_rows(_rows)
             # ★第81批 T1-⑤：写 schema 版本/分层计数/checksum 元数据（回退 JSON 的判据来源）
             _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
             for _r in _rows:

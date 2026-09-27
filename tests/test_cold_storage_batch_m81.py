@@ -27,10 +27,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config                                                    # noqa: E402
-import pyarrow as pa                                            # noqa: E402
 import pyarrow.parquet as pq                                    # noqa: E402
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool       # noqa: E402
 from nucleus.mnemosyne.PulseNode import PulseNode               # noqa: E402
+from nucleus.mnemosyne.pa_compat import table_from_rows          # noqa: E402
 import nucleus.mnemosyne.PulseNodePool as PNP                    # noqa: E402
 
 
@@ -99,7 +99,7 @@ def _write_legacy_fragment(cold_dir: str, node: "PulseNode") -> None:
         "trust_score": getattr(node, "trust_score", 50.0),
         "verification_history": json.dumps([], ensure_ascii=False),
     }
-    _t = pa.Table.from_pylist([_row])
+    _t = table_from_rows([_row])
     pq.write_to_dataset(_t, root_path=cold_dir, partition_cols=["evol_level"], compression="snappy")
 
 

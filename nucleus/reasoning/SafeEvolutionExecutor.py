@@ -21,8 +21,6 @@ from nucleus.evolution.LogAnalyzer import is_error_level_line  # ★第30批 T2
 from nucleus.logger import get_module_logger
 
 
-from nucleus.reasoning.PatchManager import PatchManager
-
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
@@ -332,6 +330,12 @@ class SafeEvolutionExecutor:
         # ★主线第58批 T1（P1）：_project_root 提升为实例变量，
         #   供 _read_snippet_from_file / _m41_* 等方法经 self._project_root 引用，修复 AttributeError。
         self._project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # ★第140批 T-140c①：PatchManager 改为函数内延迟导入，
+        #   切断「PatchManager ↔ SafeEvolutionExecutor」模块级循环边
+        #   （PatchManager 模块级 import SafeEvolutionExecutor，若此处也模块级
+        #    import PatchManager 则形成模块级环）。延迟到实例化时导入，
+        #   此时两模块均已完成定义，环消失。
+        from nucleus.reasoning.PatchManager import PatchManager
         self._patch_manager = PatchManager(self._project_root)
 
     # ===== ★PHASE12-P1-1：进化参数外置读取（配置化优先）=====

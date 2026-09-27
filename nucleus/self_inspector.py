@@ -2976,27 +2976,60 @@ class SelfInspector(SilentLogMixin):
             silent_exc(_e, "self_inspector.py:_si_write_god_baseline", level="warning")
 
     # ---- ★第136批 T-136c：import cycles（Tarjan 强连通分量） ----
-    def _si_resolve_import_mods(self, src: str) -> list[str]:
-        """抽取单文件源码中的 import 模块名（忽略相对导入，避免误判环）。"""
-        _mods: list[str] = []
+    def _si_resolve_import_mods(self, src: str) -> tuple[list[str], list[str]]:
+        """抽取单文件源码中的 import 模块名，**按边层级分账**（★第140批 T-140c②）。
+
+        返回 ``(module_level, function_level)`` 两个列表：
+          - ``module_level``：模块顶层（含类体直接语句，但不含函数/方法体）的 import。
+            只有这一层才可能构成**真·模块级循环**（import 期死锁）。
+          - ``function_level``：函数/方法体内的延迟 import。运行时才执行，不会造成
+            import 期死锁，属**观察账**，不参与环判定。
+
+        相对导入无法可靠解析，两层均跳过（避免误判环）。
+        """
+        _module_level: list[str] = []
+        _function_level: list[str] = []
         try:
             _tree = ast.parse(src, filename="<self_inspector>")
         except (SyntaxError, ValueError) as _e:
             silent_exc(_e, "self_inspector.py:_si_resolve_import_mods", level="debug")
-            return _mods
-        for _node in ast.walk(_tree):
-            if isinstance(_node, ast.Import):
-                for _a in _node.names:
-                    _mods.append(_a.name)
-            elif isinstance(_node, ast.ImportFrom):
-                if _node.level and _node.level > 0:
-                    continue  # 相对导入无法可靠解析，跳过
-                if _node.module:
-                    _mods.append(_node.module)
-        return _mods
+            return _module_level, _function_level
+
+        def _collect(_node) -> None:
+            for _sub in ast.iter_child_nodes(_node):
+                if isinstance(_sub, ast.Import):
+                    for _a in _sub.names:
+                        _module_level.append(_a.name)
+                elif isinstance(_sub, ast.ImportFrom):
+                    if _sub.level and _sub.level > 0:
+                        continue  # 相对导入无法可靠解析，跳过
+                    if _sub.module:
+                        _module_level.append(_sub.module)
+                elif isinstance(_sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    # 函数体内的 import 记入观察账
+                    for _inner in ast.walk(_sub):
+                        if isinstance(_inner, ast.Import):
+                            for _a in _inner.names:
+                                _function_level.append(_a.name)
+                        elif isinstance(_inner, ast.ImportFrom):
+                            if _inner.level and _inner.level > 0:
+                                continue
+                            if _inner.module:
+                                _function_level.append(_inner.module)
+                elif isinstance(_sub, ast.ClassDef):
+                    # 类体直接语句按模块级计；类内方法体按函数级计
+                    _collect(_sub)
+
+        _collect(_tree)
+        return _module_level, _function_level
 
     def _find_import_cycles(self) -> list[tuple[str, ...]]:
-        """Tarjan 强连通分量：返回所有 size>=2 的内部模块环（每环为排序后的模块名元组）。"""
+        """Tarjan 强连通分量：返回所有 size>=2 的**模块级**内部模块环。
+
+        ★第140批 T-140c②：图只连**模块级边**（import 期真正会触发的边）。
+        函数体内延迟 import 记入 ``self._si_import_cycles_observed``（观察账），
+        不参与环判定——它们运行期才执行，不构成 import 期死锁。
+        """
         _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _mod_to_file: dict[str, str] = {}
         _file_to_mod: dict[str, str] = {}
@@ -3015,20 +3048,30 @@ class SelfInspector(SilentLogMixin):
             except OSError as _e:
                 silent_exc(_e, "self_inspector.py:_find_import_cycles", level="debug")
         _graph: dict[str, set[str]] = {_m: set() for _m in _mod_to_file}
+        _observed: list[tuple[str, str, str]] = []  # (src_mod, dst_mod, edge_kind)
         for _ap, _src in _file_src.items():
             _m = _file_to_mod.get(_ap)
             if not _m:
                 continue
-            for _im in self._si_resolve_import_mods(_src):
-                _target = None
+            _mods, _fn_mods = self._si_resolve_import_mods(_src)
+
+            def _resolve(_im: str):
                 _parts = _im.split(".")
                 for _i in range(len(_parts), 0, -1):
                     _cand = ".".join(_parts[:_i])
                     if _cand in _mod_to_file:
-                        _target = _cand
-                        break
+                        return _cand
+                return None
+
+            for _im in _mods:
+                _target = _resolve(_im)
                 if _target and _target != _m:
                     _graph[_m].add(_target)
+            for _im in _fn_mods:
+                _target = _resolve(_im)
+                if _target and _target != _m:
+                    _observed.append((_m, _target, "function_level"))
+        self._si_import_cycles_observed = _observed
         # Tarjan 强连通分量
         _idx_counter = [0]
         _stack: list[str] = []
@@ -3067,7 +3110,13 @@ class SelfInspector(SilentLogMixin):
         return _sccs
 
     def _detect_import_cycles(self) -> list[dict]:
-        """C1：import 循环依赖检测器。首扫把现有环记基线，新增环才告警。"""
+        """C1：import 循环依赖检测器（★第140批 T-140c② 边层级分账）。
+
+        只检测**模块级**环（import 期死锁风险）。函数体内延迟 import 构成的
+        「环」记入 ``self._si_import_cycles_observed`` 观察账，不告警——它们在
+        运行期才执行，不会造成 import 期死锁。首扫把现有模块级环记基线，
+        新增环才告警。
+        """
         _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _base_path = os.path.join(_root, SELF_INSPECTOR_C1_BASELINE_REL)
         _cycles = self._find_import_cycles()

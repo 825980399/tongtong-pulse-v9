@@ -53,6 +53,42 @@ def test_c1_alert_on_new_cycle(tmp_path):
                for i in issues), "新增 c↔d 环应告警"
 
 
+# ---- ★第140批 T-140c②：边层级分账 ----
+
+def test_c1_function_level_cycle_not_flagged(tmp_path):
+    """函数体内延迟 import 构成的「环」不算模块级环（运行期才执行）。"""
+    ins = _make_inspector(str(tmp_path))
+    (tmp_path / "a.py").write_text(
+        "def f():\n    import b\n    return b\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text(
+        "def g():\n    import a\n    return a\n", encoding="utf-8")
+    cycles = ins._find_import_cycles()
+    assert not any(set(c) == {"a", "b"} for c in cycles), \
+        f"函数级 import 环不应计入模块级环，实际 {cycles}"
+
+
+def test_c1_resolve_splits_module_and_function(tmp_path):
+    """_si_resolve_import_mods 返回 (模块级, 函数级) 二元组。"""
+    ins = _make_inspector(str(tmp_path))
+    src = "import os\nfrom x import y\n\ndef f():\n    import z\n    from w import q\n"
+    mods, fn_mods = ins._si_resolve_import_mods(src)
+    assert "os" in mods and "x" in mods, f"模块级应含 os/x，实际 {mods}"
+    assert "z" in fn_mods and "w" in fn_mods, f"函数级应含 z/w，实际 {fn_mods}"
+    assert "z" not in mods and "w" not in mods, "函数级 import 不应进模块级表"
+
+
+def test_c1_observation_ledger_records_function_edges(tmp_path):
+    """函数级边写入观察账 _si_import_cycles_observed。"""
+    ins = _make_inspector(str(tmp_path))
+    (tmp_path / "a.py").write_text(
+        "def f():\n    import b\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("x = 1\n", encoding="utf-8")
+    ins._find_import_cycles()
+    obs = getattr(ins, "_si_import_cycles_observed", [])
+    assert any(s == "a" and d == "b" for (s, d, _k) in obs), \
+        f"应记录 a→b 函数级观察边，实际 {obs}"
+
+
 # ============ D1 unreachable code ============
 
 def test_d1_scan_block_flags_after_return(tmp_path):

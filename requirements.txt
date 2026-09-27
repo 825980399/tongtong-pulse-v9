@@ -18,6 +18,8 @@ requests>=2.28.0          # 网络请求（大模型 API、知识抓取）
 psutil>=5.9.0             # 硬件探测/进程监控（硬件自适应核心）
 numpy>=1.24.0             # 数值计算（振荡场/共振/频率编解码）
 pyarrow>=12.0.0           # Parquet 列式存储（知识快照）
+cryptography>=41.0.0      # 人脸特征加密（nucleus/security/face_codec.py，隐私保护必需）
+faiss-cpu>=1.7.4          # 向量检索（nucleus/vector_store/faiss_store.py、nucleus/fast_ops.py）
 
 # ============ [可选功能] ============
 jieba>=0.42.1             # 中文分词（语义理解）

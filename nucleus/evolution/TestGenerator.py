@@ -12,7 +12,6 @@ TestGenerator.py —— 测试生成器
 """
 
 from __future__ import annotations
-from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 
 import ast
 import os
@@ -20,6 +19,7 @@ import subprocess
 import time
 from typing import Any
 
+from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 
 # ========== ★P0 新增：测试脚本模板常量 ==========
 
@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 try:
     from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
     from nucleus.mnemosyne.PulseNode import PulseNode
-    import pyarrow as pa
+    from nucleus.mnemosyne.pa_compat import table_from_rows
     import pyarrow.parquet as pq
 except ImportError as e:
     print(f"[SKIP] 依赖不可用: {e}")
@@ -45,7 +45,7 @@ sp._logger.setLevel(logging.WARNING)
 nodes = [PulseNode(value=f"test{i}", keywords=[f"kw{i}"], source_organ="rt", evol_level="L2") for i in range(20)]
 rows = sp._nodes_to_parquet_columns(nodes)
 with tempfile.TemporaryDirectory() as td:
-    pq.write_to_dataset(pa.Table.from_pylist(rows), root_path=td, partition_cols=["evol_level"], compression="snappy")
+    pq.write_to_dataset(table_from_rows(rows), root_path=td, partition_cols=["evol_level"], compression="snappy")
     rt = pq.read_table(td).to_pylist()
     restored = [PulseNode.from_dict(sp._parquet_row_to_dict(r)) for r in rt]
 assert len(restored) == len(nodes), f"节点数不一致: {len(restored)} != {len(nodes)}"
@@ -65,7 +65,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 try:
     from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
     from nucleus.mnemosyne.PulseNode import PulseNode
-    import pyarrow as pa
+    from nucleus.mnemosyne.pa_compat import table_from_rows
     import pyarrow.parquet as pq
 except ImportError as e:
     print(f"[SKIP] 依赖不可用: {e}")
@@ -80,7 +80,7 @@ nodes = [PulseNode(value=f"old_format_test{i}", keywords=[f"kw{i}"], source_orga
 rows = sp._nodes_to_parquet_columns(nodes)
 old_rows = [{**r, "value": json.dumps(r["value"], ensure_ascii=False)} for r in rows]
 with tempfile.TemporaryDirectory() as td:
-    pq.write_to_dataset(pa.Table.from_pylist(old_rows), root_path=td, partition_cols=["evol_level"], compression="snappy")
+    pq.write_to_dataset(table_from_rows(old_rows), root_path=td, partition_cols=["evol_level"], compression="snappy")
     rt = pq.read_table(td).to_pylist()
     restored = [PulseNode.from_dict(sp._parquet_row_to_dict(r)) for r in rt]
 assert len(restored) == len(nodes)
@@ -269,7 +269,7 @@ if __name__ == "__main__":
             _proc = subprocess.run(  # 有意不检查子进程退出码
                 
                 ["python", script_path],
-                capture_output=True, text=True, timeout=TIMEOUT_CONFIG['llm_call'],
+                check=False, capture_output=True, text=True, timeout=TIMEOUT_CONFIG['llm_call'],
                 encoding="utf-8", errors="replace",
                 cwd=self._project_root,
             )
@@ -296,7 +296,7 @@ if __name__ == "__main__":
         try:
             _proc = subprocess.run(
                 ["python", "-m", "ruff", "check", _abs],
-                capture_output=True, text=True, timeout=30,
+                check=False, capture_output=True, text=True, timeout=30,
                 encoding="utf-8", errors="replace",
                 cwd=self._project_root,
             )
@@ -332,7 +332,7 @@ if __name__ == "__main__":
         try:
             _proc = subprocess.run(
                 ["python", _script_path],
-                capture_output=True, text=True, timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_long"],
+                check=False, capture_output=True, text=True, timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_long"],
                 encoding="utf-8", errors="replace",
                 cwd=self._project_root,
             )
@@ -377,7 +377,7 @@ if __name__ == "__main__":
         try:
             _proc = subprocess.run(
                 ["python", _script_path],
-                capture_output=True, text=True, timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_long"],
+                check=False, capture_output=True, text=True, timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_long"],
                 encoding="utf-8", errors="replace",
                 cwd=self._project_root,
             )
@@ -449,7 +449,7 @@ if __name__ == "__main__":
                 _env["PYTHONIOENCODING"] = "utf-8"
                 _proc = subprocess.run(  # 有意不检查子进程退出码
                     ["python", _script],
-                    capture_output=True, text=True, timeout=TIMEOUT_CONFIG['llm_call'],
+                    check=False, capture_output=True, text=True, timeout=TIMEOUT_CONFIG['llm_call'],
                     encoding="utf-8", errors="replace",
                     cwd=self._project_root, env=_env,
                 )

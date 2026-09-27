@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config                                                    # noqa: E402
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
 from nucleus.mnemosyne.PulseNode import PulseNode                # noqa: E402
+from nucleus.mnemosyne.pa_compat import table_from_rows          # noqa: E402
 
 try:
     import pyarrow as pa                                        # noqa: E402
@@ -203,7 +204,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         nodes = [PulseNode.from_dict(_mk_node("n%d" % i, lv))
                  for lv in ("L1", "L2", "L3") for i in range(20)]
         rows = s._nodes_to_parquet_columns(nodes)
-        tbl = pa.Table.from_pylist(rows).replace_schema_metadata({
+        tbl = table_from_rows(rows).replace_schema_metadata({
             b"m81_schema_version": b"m81.v1",
             b"node_count": b"60", b"l1_count": b"20",
             b"l2_count": b"100",   # 谎报：实际仅 20
@@ -227,7 +228,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         for r in rows:
             if r.get("evol_level") == "L2":
                 r["activation_count"] = "abc"
-        tbl = pa.Table.from_pylist(rows)
+        tbl = table_from_rows(rows)
         pq.write_to_dataset(tbl, root_path=s.parquet_dir,
                             partition_cols=["evol_level"], compression="snappy")
         out = s._m81_load_parquet_unified()
@@ -241,7 +242,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         rows = s._nodes_to_parquet_columns(nodes)
         for r in rows:
             r.pop("quality_flag", None)
-        tbl = pa.Table.from_pylist(rows)
+        tbl = table_from_rows(rows)
         pq.write_to_dataset(tbl, root_path=s.parquet_dir,
                             partition_cols=["evol_level"], compression="snappy")
         out = s._m81_load_parquet_unified()
@@ -253,7 +254,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         nodes = [PulseNode.from_dict(_mk_node("n%d" % i, lv))
                  for lv in ("L1", "L2", "L3") for i in range(10)]
         rows = s._nodes_to_parquet_columns(nodes)
-        tbl = pa.Table.from_pylist(rows).replace_schema_metadata({
+        tbl = table_from_rows(rows).replace_schema_metadata({
             b"m81_schema_version": b"m80.old"})
         pq.write_to_dataset(tbl, root_path=s.parquet_dir,
                             partition_cols=["evol_level"], compression="snappy")

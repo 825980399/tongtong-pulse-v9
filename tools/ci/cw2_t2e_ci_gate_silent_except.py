@@ -60,6 +60,12 @@ LOCATION_WHITELIST = {
     ("organs/brain/pulse_inner_world_knowledge.py", 792),    # _evaluate_fusion_quality：融合阈值兜底常量
     ("organs/brain/pulse_inner_world_knowledge.py", 863),    # _fuse_multiple_nodes：融合配置读取兜底 _cfg_fuse=None
     ("organs/brain/pulse_inner_world_knowledge.py", 2300),   # _orchestrate_reason：候选列表兜底 _candidates=[]
+    # ---- 第140批 T-140b：历史一次性脚本归档到 tools/archive/（纯 git mv，非新增回潮）----
+    #      以下 3 处静默 handler 系**平移**（旧路径 tools/xxx.py 同内容已删，
+    #      实测 HEAD 旧路径与新路径 handler 数完全一致、净增=0）。键 = (新路径, 行号)。
+    ("tools/archive/cleanup_alias_placeholder_nodes.py", 87),   # _framework_looks_running：psutil 探测 except OSError: pass
+    ("tools/archive/cleanup_alias_placeholder_nodes.py", 100),  # _framework_looks_running：探测兜底 except Exception: pass
+    ("tools/archive/patch_template_helper.py", 246),            # <module>：shutil.rmtree 失败 → shutil_rm = False
 }
 
 

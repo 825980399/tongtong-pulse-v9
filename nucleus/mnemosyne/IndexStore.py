@@ -18,6 +18,8 @@ import threading
 import time
 from typing import Any
 
+from nucleus.mnemosyne.pa_compat import table_from_rows
+
 
 _MODULE_LOGGER = __import__("logging").getLogger("IndexStore")
 
@@ -84,14 +86,13 @@ class IndexStore:
     def _write_table(self, table: str, rows: list[dict[str, Any]]) -> bool:
         """写单张索引表（全量重写）。空 rows 也写空表（标记已落盘）。"""
         try:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
         except Exception as _e:
             _MODULE_LOGGER.warning(f"pyarrow 不可用，索引表 {table} 写入跳过: {_e}")
             return False
         try:
             self._ensure_dir()
-            _table = pa.Table.from_pylist(rows) if rows else pa.Table.from_pylist(
+            _table = table_from_rows(rows) if rows else table_from_rows(
                 [{}]
             )
             pq.write_table(
