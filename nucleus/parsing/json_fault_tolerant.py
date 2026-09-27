@@ -1,6 +1,14 @@
 # -*- coding: utf-8 -*-
 """JSON 容错解析（主线第68批 T8/P2）。
 
+【姊妹件】nucleus/parsing/JsonRepair.py。
+分工：本模块修复
+    「结构错配类」故障（数组里放键值对，即声明为 [ ] 却写 "key": "value"）；
+    姊妹件修复「格式瑕疵类」故障（缺冒号 / 缺逗号 / 尾随逗号 / 单引号 /
+    字符串内未转义引号），面向 PulseStomach 代码分析 JSON。
+    两者修复**不同的故障形态**，各含独立的 repair_json_text 实现，故**不合并**，
+    仅在此互相标注，避免后续误判为重复实现而错删其一。
+
 背景
 ----
 胃模块（``organs/body/PulseStomach.py``）解析大模型返回的代码分析 JSON 时，
