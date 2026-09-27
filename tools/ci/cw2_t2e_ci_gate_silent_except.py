@@ -42,6 +42,17 @@ LOCATION_WHITELIST = {
     ("nucleus/reasoning/ReasoningWorkerPool.py", 707),   # shutdown 取消在途任务：except Exception: pass
     ("nucleus/reasoning/ReasoningWorkerPool.py", 747),   # shutdown join 子进程：except Exception: pass
     ("nucleus/reasoning/ReasoningWorkerPool.py", 795),   # shutdown 落盘保护(_sd)：except Exception: pass
+    # ---- 第137批 T-137：PulseInnerWorld 首刀拆分 —— 支撑簇/尾块 42 方法搬到
+    #      organs/brain/pulse_inner_world_support.py，守卫三连搬到 nucleus/iw_text_guard.py。
+    #      以下 7 处静默 handler 系**平移**（PulseInnerWorld.py 同位置已删，全库净增=0），
+    #      非新增回潮。键 = (relpath, 新文件行号)。
+    ("nucleus/iw_text_guard.py", 36),                        # _search_topic_guard_enabled：config 读不到时默认开启
+    ("organs/brain/pulse_inner_world_support.py", 84),       # _execute_qica_method：配置读取兜底
+    ("organs/brain/pulse_inner_world_support.py", 540),      # _get_stress_reasoning_modulation：返回默认 stress
+    ("organs/brain/pulse_inner_world_support.py", 702),      # _get_emotion_modulation：返回 default
+    ("organs/brain/pulse_inner_world_support.py", 2001),     # _generate_life_stage_summary：初始化 _total
+    ("organs/brain/pulse_inner_world_support.py", 2008),     # _generate_life_stage_summary：返回空串
+    ("organs/brain/pulse_inner_world_support.py", 2072),     # _get_growth_attribution：返回 _default
 }
 
 
