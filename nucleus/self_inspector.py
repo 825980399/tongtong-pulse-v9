@@ -34,6 +34,8 @@ from nucleus.const import (
     SELF_INSPECTOR_B2_L1_FLOOR,
     SELF_INSPECTOR_B3_CEILING_PCT,
     SELF_INSPECTOR_B3_BASELINE_REL,
+    SELF_INSPECTOR_C1_BASELINE_REL,
+    SELF_INSPECTOR_D1_BASELINE_REL,
     GOD_FILE_EXEMPT,
 )
 from config import EXTERNAL_CALL_TIMEOUTS
@@ -2784,7 +2786,7 @@ class SelfInspector(SilentLogMixin):
     def _si_count_branches(self, src: str) -> int:
         """AST 分支节点计数（B3 用）。"""
         try:
-            _tree = ast.parse(src)
+            _tree = ast.parse(src, filename="<self_inspector>")
         except (SyntaxError, ValueError) as _e:
             silent_exc(_e, "self_inspector.py:_si_count_branches", level="debug")
             return 0
@@ -2970,6 +2972,188 @@ class SelfInspector(SilentLogMixin):
         except OSError as _e:
             silent_exc(_e, "self_inspector.py:_si_write_god_baseline", level="warning")
 
+    # ---- ★第136批 T-136c：import cycles（Tarjan 强连通分量） ----
+    def _si_resolve_import_mods(self, src: str) -> list[str]:
+        """抽取单文件源码中的 import 模块名（忽略相对导入，避免误判环）。"""
+        _mods: list[str] = []
+        try:
+            _tree = ast.parse(src, filename="<self_inspector>")
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, "self_inspector.py:_si_resolve_import_mods", level="debug")
+            return _mods
+        for _node in ast.walk(_tree):
+            if isinstance(_node, ast.Import):
+                for _a in _node.names:
+                    _mods.append(_a.name)
+            elif isinstance(_node, ast.ImportFrom):
+                if _node.level and _node.level > 0:
+                    continue  # 相对导入无法可靠解析，跳过
+                if _node.module:
+                    _mods.append(_node.module)
+        return _mods
+
+    def _find_import_cycles(self) -> list[tuple[str, ...]]:
+        """Tarjan 强连通分量：返回所有 size>=2 的内部模块环（每环为排序后的模块名元组）。"""
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _mod_to_file: dict[str, str] = {}
+        _file_to_mod: dict[str, str] = {}
+        _file_src: dict[str, str] = {}
+        for _ap, _rel in self._si_walk_py():
+            _rel_nopy = _rel[:-3] if _rel.endswith(".py") else _rel
+            if os.path.basename(_rel_nopy) == "__init__":
+                _mod = _rel_nopy[: -len("__init__")].rstrip(".")
+            else:
+                _mod = _rel_nopy.replace(os.sep, ".")
+            _mod_to_file[_mod] = _ap
+            _file_to_mod[_ap] = _mod
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    _file_src[_ap] = _f.read()
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_find_import_cycles", level="debug")
+        _graph: dict[str, set[str]] = {_m: set() for _m in _mod_to_file}
+        for _ap, _src in _file_src.items():
+            _m = _file_to_mod.get(_ap)
+            if not _m:
+                continue
+            for _im in self._si_resolve_import_mods(_src):
+                _target = None
+                _parts = _im.split(".")
+                for _i in range(len(_parts), 0, -1):
+                    _cand = ".".join(_parts[:_i])
+                    if _cand in _mod_to_file:
+                        _target = _cand
+                        break
+                if _target and _target != _m:
+                    _graph[_m].add(_target)
+        # Tarjan 强连通分量
+        _idx_counter = [0]
+        _stack: list[str] = []
+        _onstack: dict[str, bool] = {}
+        _idx: dict[str, int] = {}
+        _low: dict[str, int] = {}
+        _sccs: list[tuple[str, ...]] = []
+
+        def _strongconnect(v: str) -> None:
+            _idx[v] = _idx_counter[0]
+            _low[v] = _idx_counter[0]
+            _idx_counter[0] += 1
+            _stack.append(v)
+            _onstack[v] = True
+            for _w in _graph.get(v, ()):
+                if _w not in _idx:
+                    _strongconnect(_w)
+                    _low[v] = min(_low[v], _low[_w])
+                elif _onstack.get(_w):
+                    _low[v] = min(_low[v], _idx[_w])
+            if _low[v] == _idx[v]:
+                _comp: list[str] = []
+                while True:
+                    _w = _stack.pop()
+                    _onstack[_w] = False
+                    _comp.append(_w)
+                    if _w == v:
+                        break
+                if len(_comp) >= 2:
+                    _sccs.append(tuple(sorted(_comp)))
+
+        for _v in list(_graph.keys()):
+            if _v not in _idx:
+                _strongconnect(_v)
+        self._si_mod_to_file = _mod_to_file
+        return _sccs
+
+    def _detect_import_cycles(self) -> list[dict]:
+        """C1：import 循环依赖检测器。首扫把现有环记基线，新增环才告警。"""
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _base_path = os.path.join(_root, SELF_INSPECTOR_C1_BASELINE_REL)
+        _cycles = self._find_import_cycles()
+        _cur: dict[str, list[str]] = {}
+        for _c in _cycles:
+            _cur[":".join(_c)] = list(_c)
+        _baseline = self._si_read_god_baseline(_base_path)
+        if not _baseline:
+            self._si_write_god_baseline(_base_path, _cur)
+            return []
+        _issues: list[dict] = []
+        for _key, _mods in _cur.items():
+            if _key not in _baseline:
+                _issues.append(self._si_issue(
+                    "import_cycles", "new_import_cycle",
+                    f"新增 import 循环依赖：{' ↔ '.join(_mods)}", _root,
+                    file=getattr(self, "_si_mod_to_file", {}).get(_mods[0], "")))
+        return _issues
+
+    # ---- ★第136批 T-136d：不可达代码（AST 扫描 return/raise 后同块死语句） ----
+    def _si_is_meaningful_stmt(self, stmt) -> bool:
+        if isinstance(stmt, ast.Pass):
+            return False
+        if isinstance(stmt, ast.Expr) and isinstance(getattr(stmt, "value", None), ast.Constant) \
+                and isinstance(stmt.value.value, str):
+            return False  # docstring / 纯字符串常量
+        return True
+
+    def _si_scan_unreachable_block(self, stmts, issues, fname, root, mod_file) -> None:
+        _terminated = False
+        for _s in stmts:
+            if _terminated:
+                if self._si_is_meaningful_stmt(_s):
+                    _line = getattr(_s, "lineno", 0)
+                    issues.append(self._si_issue(
+                        "unreachable_code", "dead_code_after_return",
+                        f"{fname}:{_line} return/raise 之后的不可达语句（{type(_s).__name__}）",
+                        root, file=mod_file))
+                self._si_scan_subblocks(_s, issues, fname, root, mod_file)
+                continue
+            if isinstance(_s, (ast.Return, ast.Raise)):
+                _terminated = True
+                continue
+            self._si_scan_subblocks(_s, issues, fname, root, mod_file)
+
+    def _si_scan_subblocks(self, node, issues, fname, root, mod_file) -> None:
+        for _field, _val in ast.iter_fields(node):
+            if isinstance(_val, list):
+                _sub = [e for e in _val if isinstance(e, ast.stmt)]
+                if _sub:
+                    self._si_scan_unreachable_block(_sub, issues, fname, root, mod_file)
+                for _e in _val:
+                    if isinstance(_e, ast.ExceptHandler):
+                        self._si_scan_unreachable_block(_e.body, issues, fname, root, mod_file)
+            elif isinstance(_val, ast.ExceptHandler):
+                self._si_scan_unreachable_block(_val.body, issues, fname, root, mod_file)
+
+    def _detect_unreachable_code(self) -> list[dict]:
+        """D1：不可达代码检测器。首扫把现有死语句记基线，新增才告警。"""
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _base_path = os.path.join(_root, SELF_INSPECTOR_D1_BASELINE_REL)
+        _issues: list[dict] = []
+        for _ap, _rel in self._si_walk_py():
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    _src = _f.read()
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
+                continue
+            try:
+                _tree = ast.parse(_src, filename=_ap)
+            except (SyntaxError, ValueError) as _e:
+                silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
+                continue
+            self._si_scan_unreachable_block(_tree.body, _issues, _rel, _root, _ap)
+        _cur: dict[str, str] = {}
+        for _i in _issues:
+            _cur[f'{_i["file"]}:{_i["line"]}:{_i["description"]}'] = _i["description"]
+        _baseline = self._si_read_god_baseline(_base_path)
+        if not _baseline:
+            self._si_write_god_baseline(_base_path, _cur)
+            return []
+        _new = []
+        for _i in _issues:
+            _k = f'{_i["file"]}:{_i["line"]}:{_i["description"]}'
+            if _k not in _baseline:
+                _new.append(_i)
+        return _new
+
     # ========== 代码问题检测 ==========
 
     # ★9-问题3：全库级检测器注册表。
@@ -2983,6 +3167,9 @@ class SelfInspector(SilentLogMixin):
         "silent_growth": "_detect_silent_growth",
         "l3_inversion": "_detect_l3_inversion",
         "god_file": "_detect_god_file",
+        # ★第136批 T-136c/d：循环依赖 + 不可达代码（首扫记基线，新增才告警）
+        "import_cycles": "_detect_import_cycles",
+        "unreachable_code": "_detect_unreachable_code",
     }
 
     def detect_code_issues(self, target_organs: list[str] | None = None,
@@ -3005,7 +3192,8 @@ class SelfInspector(SilentLogMixin):
         Args:
             target_organs: 定向扫描的器官名列表；None 表示全量。
             skip_detectors: 要跳过的全库级检测器名列表，取值见 GLOBAL_DETECTORS
-                （"dead_code" / "unused_imports" / "config_audit"）。
+                （"dead_code" / "unused_imports" / "config_audit" /
+                 "import_cycles" / "unreachable_code"）。
                 仅对全量扫描生效（定向扫描本就不跑全库检测器）。
             min_severity: 若指定，只返回严重程度不低于该级别的问题。
                 级别序：high > medium > low > info。未知级别按 medium 处理

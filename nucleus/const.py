@@ -41,6 +41,12 @@ SELF_INSPECTOR_B2_L1_FLOOR = 400                # l1（L1 层代码行数）< 40
 SELF_INSPECTOR_B3_CEILING_PCT = 5               # 相对首扫基线 > +5% 才报
 SELF_INSPECTOR_B3_BASELINE_REL = "data/god_file_baseline.json"  # 首扫基线（git-ignored）
 
+# ---- ★第136批 T-136c：import cycles 检测器（Tarjan 强连通分量） ----
+SELF_INSPECTOR_C1_BASELINE_REL = "data/import_cycles_baseline.json"  # 首扫基线（git-ignored）
+
+# ---- ★第136批 T-136d：不可达代码检测器（AST 扫描 return/raise 后死语句） ----
+SELF_INSPECTOR_D1_BASELINE_REL = "data/unreachable_code_baseline.json"  # 首扫基线（git-ignored）
+
 # B3 豁免表（T-135a 收窄为 3 个地基文件）：仅 main.py / self_inspector.py / config.py 不参与
 # god_file 膨胀告警；其余巨型器官（含 PulseInnerWorld 等）改走 ceiling 基线，避免噪声刷屏。
 GOD_FILE_EXEMPT = {

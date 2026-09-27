@@ -1112,11 +1112,6 @@
   "nucleus/wecom_chat_bridge.py": {
     "stop::Exception::pass::pass": 2
   },
-  "nucleus/wecom_notifier.py": {
-    "_async_send::Exception::pass::pass": 1,
-    "_async_connect::Exception::return_or_assign::self._client = None": 1,
-    "stop::Exception::pass::pass": 1
-  },
   "organs/body/PulseBloodVessel.py": {
     "__init__::Exception::return_or_assign::self._silence_threshold = 15;self._check_interval = 3;self._escalation_alert_cooldown = 300.0;self._escalation_restart_threshold = 2;self._escalation_degrade_threshold = 4": 1
   },
