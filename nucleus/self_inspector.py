@@ -36,6 +36,9 @@ from nucleus.const import (
     SELF_INSPECTOR_B3_BASELINE_REL,
     SELF_INSPECTOR_C1_BASELINE_REL,
     SELF_INSPECTOR_D1_BASELINE_REL,
+    SELF_INSPECTOR_B6_OBS_MIN,
+    SELF_INSPECTOR_B6_GATE_MIN,
+    SELF_INSPECTOR_B6_BASELINE_REL,
     GOD_FILE_EXEMPT,
 )
 from config import EXTERNAL_CALL_TIMEOUTS
@@ -3139,7 +3142,9 @@ class SelfInspector(SilentLogMixin):
             except (SyntaxError, ValueError) as _e:
                 silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
                 continue
-            self._si_scan_unreachable_block(_tree.body, _issues, _rel, _root, _ap)
+            # ★第138批 T-138c：基线键用**相对路径 + '/' 分隔**（跨机可移植）
+            _rel_key = _rel.replace(os.sep, "/")
+            self._si_scan_unreachable_block(_tree.body, _issues, _rel_key, _root, _rel_key)
         _cur: dict[str, str] = {}
         for _i in _issues:
             _cur[f'{_i["file"]}:{_i["line"]}:{_i["description"]}'] = _i["description"]
@@ -3153,6 +3158,78 @@ class SelfInspector(SilentLogMixin):
             if _k not in _baseline:
                 _new.append(_i)
         return _new
+
+    # ---- ★第138批 T-138a：圈复杂度（CC）检测器 ----
+    def _si_cc_blocks(self, src: str) -> list[tuple[str, int, int]]:
+        """radon cc_visit → [(name, complexity, lineno)]（仅 Function/Method，剔除 Class 级块）。"""
+        try:
+            from radon.complexity import cc_visit
+        except ImportError as _e:
+            silent_exc(_e, "self_inspector.py:_si_cc_blocks", level="warning")
+            return []
+        try:
+            _blocks = cc_visit(src)
+        except Exception as _e:
+            silent_exc(_e, "self_inspector.py:_si_cc_blocks", level="debug")
+            return []
+        _out: list[tuple[str, int, int]] = []
+        for _blk in _blocks:
+            # 只取函数/方法（radon 也返回类级块，与 B3 分支账口径分离）
+            if type(_blk).__name__ not in ("Function", "Method"):
+                continue
+            _c = getattr(_blk, "complexity", None)
+            if not isinstance(_c, int):
+                continue
+            _out.append((getattr(_blk, "name", "?"), _c, int(getattr(_blk, "lineno", 0) or 0)))
+        return _out
+
+    def _detect_cc_growth(self) -> list[dict]:
+        """B6 CC 检测器：观察账（≥25）+ 棘轮闸（≥50，只降不升）。
+
+        * per_file 记每文件 ge25/ge50/max_cc/worst$\uff0c为趋势观察账（不直接告警）；
+        * blocks_ge50 列表是棘轮本体：**新增成员**（差集非空））→ `cc_ge50_new` 告警；
+        * 首扫只记基线不告警；阈值来自 137 期全树实测分布。
+        """
+        _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _base_path = os.path.join(_root, SELF_INSPECTOR_B6_BASELINE_REL)
+        _per_file: dict[str, dict] = {}
+        _ge50: set[str] = set()
+        for _ap, _rel in self._si_walk_py():
+            try:
+                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+                    _src = _f.read()
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_detect_cc_growth", level="debug")
+                continue
+            _blocks = self._si_cc_blocks(_src)
+            _ge25 = 0
+            _ge50c = 0
+            _max_cc = 0
+            _worst = ""
+            _rel_key = _rel.replace(os.sep, "/")
+            for _name, _cc, _ln in _blocks:
+                if _cc > _max_cc:
+                    _max_cc, _worst = _cc, f"{_name}@{_ln}"
+                if _cc >= SELF_INSPECTOR_B6_OBS_MIN:
+                    _ge25 += 1
+                if _cc >= SELF_INSPECTOR_B6_GATE_MIN:
+                    _ge50c += 1
+                    _ge50.add(f"{_rel_key}::{_name}@{_ln}")
+            _per_file[_rel_key] = {"ge25": _ge25, "ge50": _ge50c,
+                                   "max_cc": _max_cc, "worst": _worst}
+        _cur = {"per_file": _per_file, "blocks_ge50": sorted(_ge50)}
+        _baseline = self._si_read_god_baseline(_base_path)
+        self._si_write_god_baseline(_base_path, _cur)
+        if not _baseline:
+            return []
+        _old = set(_baseline.get("blocks_ge50", []) or [])
+        _issues: list[dict] = []
+        for _blk in sorted(_ge50 - _old):
+            _issues.append(self._si_issue(
+                "cc_growth", "cc_ge50_new",
+                f"新增高圈复杂度块（CC≥{SELF_INSPECTOR_B6_GATE_MIN}）：{_blk}", _root,
+                file=os.path.join(_root, _blk.split("::", 1)[0].replace("/", os.sep))))
+        return _issues
 
     # ========== 代码问题检测 ==========
 
@@ -3170,6 +3247,8 @@ class SelfInspector(SilentLogMixin):
         # ★第136批 T-136c/d：循环依赖 + 不可达代码（首扫记基线，新增才告警）
         "import_cycles": "_detect_import_cycles",
         "unreachable_code": "_detect_unreachable_code",
+        # ★第138批 T-138a：圈复杂度 CC（radon，观察≥25/棘轮≥50，首扫记基线）
+        "cc_growth": "_detect_cc_growth",
     }
 
     def detect_code_issues(self, target_organs: list[str] | None = None,

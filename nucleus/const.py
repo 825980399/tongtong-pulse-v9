@@ -47,6 +47,15 @@ SELF_INSPECTOR_C1_BASELINE_REL = "data/import_cycles_baseline.json"  # 首扫基
 # ---- ★第136批 T-136d：不可达代码检测器（AST 扫描 return/raise 后死语句） ----
 SELF_INSPECTOR_D1_BASELINE_REL = "data/unreachable_code_baseline.json"  # 首扫基线（git-ignored）
 
+# ---- ★第138批 T-138a：圈复杂度 CC 检测器（radon cc_visit，函数/方法级） ----
+#   阈值来自 137 期全树实测分布（6,689 块，319 文件）：
+#     ≥25 函数 227 个（进 per_file 趋势观察账，不直接告警）；
+#     ≥50 函数  58 个（棘轮本体，**新增**才告警，只降不升）。
+#   15/10 阈值被否（578 / 1,094 员 → 噪声）。
+SELF_INSPECTOR_B6_OBS_MIN = 25                  # 观察账阈值：≥25 进 per_file 计数
+SELF_INSPECTOR_B6_GATE_MIN = 50                 # 棘轮闸阈值：≥50 计入 blocks_ge50（新增才报）
+SELF_INSPECTOR_B6_BASELINE_REL = "data/cc_baseline.json"  # 首扫基线（git-ignored）
+
 # B3 豁免表（T-135a 收窄为 3 个地基文件）：仅 main.py / self_inspector.py / config.py 不参与
 # god_file 膨胀告警；其余巨型器官（含 PulseInnerWorld 等）改走 ceiling 基线，避免噪声刷屏。
 GOD_FILE_EXEMPT = {

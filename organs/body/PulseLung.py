@@ -1778,6 +1778,22 @@ class PulseLung(BasePulseOrgan):
         # ★主线第40批 T2（P0-254）：解析调用来源标记（显式优先，其次按 caller 映射）
         _m40_origin = self._m40_resolve_origin(caller, origin)
 
+        # ★主线第138批 T-138d（D138-4/步骤1-2）：语义缓存 L2 前置查表。
+        #   命中且过四闸（置信/时效/幂等/质量）→ **直接返回缓存响应**，跳过渠道调用。
+        #   ★设计选点：这是**唯一 100% 覆盖**的出口（对话/补救/语义理解全走这）。
+        #   ★灰度：`ENABLE_SEMANTIC_CACHE_L2` 默认 False → 关闭时零副作用（该块直接 None）。
+        try:
+            from nucleus.llm.semantic_cache import lookup_l2 as _m138_lookup_l2
+            _m138_hit = _m138_lookup_l2(prompt, origin=_m40_origin)
+            if _m138_hit and _m138_hit.get("response"):
+                self._log(LogLevel.INFO,
+                          f"[语义缓存L2] 命中（sim={_m138_hit.get('similarity')}，"
+                          f"省一次渠道调用）")
+                return _m138_hit["response"]
+        except Exception as _m138le:
+            self._log(LogLevel.DEBUG,
+                      f"[语义缓存L2] 查表异常（已忽略）: {type(_m138le).__name__}")
+
         # 1. 网关优先（星轨裁决选3）
         _gw = self._gateway_channel()
         if _gw is not None:
@@ -1897,6 +1913,15 @@ class PulseLung(BasePulseOrgan):
                         self._log(LogLevel.DEBUG,
                                   f"[语义缓存] 观测投递失败（已忽略）: "
                                   f"{type(_m41ce).__name__}")
+                # ★主线第138批 T-138d：语义缓存 L2 写入（仅合法 origin；内存，零 IO）
+                if _reply and self._m41_cache_observe_enabled():
+                    try:
+                        from nucleus.llm.semantic_cache import store_l2 as _m138_store_l2
+                        _m138_store_l2(prompt, _reply, origin=_m40_origin)
+                    except Exception as _m138se:
+                        self._log(LogLevel.DEBUG,
+                                  f"[语义缓存L2] 写入失败（已忽略）: "
+                                  f"{type(_m138se).__name__}")
 
                 if _reply:
                     self._update_channel_health(_name, True, _latency)

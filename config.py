@@ -4187,6 +4187,18 @@ SEMANTIC_CACHE_TTL_DAYS = 7              # 条目过期天数
 SEMANTIC_CACHE_MAX_TEXT = 4000           # 单条 prompt/response 截断长度
 # _m41_t2
 
+# ★主线第138批 T-138d（D138-4/步骤1-2）：语义缓存升 L2（**返回级**，命中直接返回缓存响应）====
+#   依据：`docs/设计文档/语义缓存升L2方案_v1.0.md`（第44批设计）+ 第138批前置分析 §3。
+#   ★L1→L2 的实质：L1 结构上**不可能**返回内容（只回统计），故可生产常开；
+#     L2 后这条结构保证消失 → 必须用**四道闸门**（置信/时效/幂等/质量）替代，任一不过静默回落正常渠道调用。
+#   ★灰度：ENABLE_SEMANTIC_CACHE_L2 默认 **False**（与第44批设计 §6 阶段A一致）——关闭时零副作用，逐字回 L1 行为。
+#   ★TTL：本批按任务书口径设 **1 小时**（L2 层独立，不改 L1 的 7 天观测账）；内存自动淘汰（LRU）。
+ENABLE_SEMANTIC_CACHE_L2 = False          # L2 总开关（默认关；开启后命中直接返回缓存响应）
+SEMANTIC_CACHE_L2_TTL_SEC = 3600          # L2 条目 TTL（1 小时）
+SEMANTIC_CACHE_L2_CAPACITY = 2000         # L2 内存条目上限（超限 LRU 淘汰）
+SEMANTIC_CACHE_L2_MIN_LEN = 8             # 短 prompt（<此长度）不入缓存（指代/寒暄高发区）
+SEMANTIC_CACHE_L2_RATIO = 1.0             # 灰度流量比例（0.0~1.0，确定性分桶）
+
 
 # ★主线第19批 T3/T4：与现有分析模块的整合开关（"整合而非替代"）==========
 #   · LogAnalyzer（nucleus/evolution/LogAnalyzer.py）→ runtime_health
