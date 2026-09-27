@@ -21,8 +21,16 @@ if _PROJECT_ROOT not in sys.path:
 import config  # noqa: E402
 from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 
-_IW_SRC = open(os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py"),
-               encoding="utf-8").read()
+_IW_FAMILY = [
+    os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py"),
+    os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_support.py"),
+    os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_knowledge.py"),
+]
+# ★主线第139批 T-139b：知识检索簇已平移至 KnowledgeMixin，
+#   故源码断言须拼接 IW 全家族（主文件 + 两个 Mixin），否则平移即假失败。
+_IW_SRC = "\n".join(
+    open(_p, encoding="utf-8").read() for _p in _IW_FAMILY
+)
 
 # 真实长问题样本（本批 T0 实测用的同一批）
 _Q_LONG = "请分析深度学习的原理和应用场景，并与传统机器学习进行对比"
@@ -162,6 +170,7 @@ class TestSourceWiring(unittest.TestCase):
         断言改为数**调用形态**（`self._m31_extract_key_terms(`），
         避免 docstring 中的示例文本被计入（原实现数裸方法名 → 脆弱）。
 
+        ★主线第139批 T-139b：计数口径改为 IW 全家族三文件拼接（拆分后跨文件）。
         ★主线第33批 T2（P2-195）：再放宽为 `>= 12` —— 语义是「定长切片已大范围
         被替换」（回退即骤降）；精确计数会因正常重构而假失败。
         """

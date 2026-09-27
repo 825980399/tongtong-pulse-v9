@@ -260,7 +260,7 @@ ENABLE_SEMANTIC_EXPAND_QUALITY_FILTER = True
 # ★向后兼容：三个开关全 False 时走原有 _i_classify 完整逻辑，行为与改造前完全一致。
 ENABLE_QICA_MULTI_CHANNEL = True
 ENABLE_QICA_FUSION_ROUTING = True
-ENABLE_QICA_FEEDBACK_LEARNING = False
+ENABLE_QICA_FEEDBACK_LEARNING = True  # 2026-09-27星轨开启：意图路由反馈学习
 
 # 8 通道融合权重（无需预先归一化，融合时按总和归一化）
 QICA_CHANNEL_WEIGHTS = {
@@ -404,7 +404,7 @@ ENABLE_CONTRADICTION_RESOLVER = True
 CONTRADICTION_RESOLUTION_STRATEGY = "time"
 # 写入时矛盾预检：新L2节点落库前与同路径已有节点比对，命中且旧陈述胜出则跳过写入。
 # 默认关闭（避免影响正常知识沉淀），需要时置 True 启用；任一异常均回退正常写入。
-ENABLE_CONTRADICTION_WRITE_PRECHECK = False
+ENABLE_CONTRADICTION_WRITE_PRECHECK = True  # 2026-09-27星轨开启：知识写入矛盾预检
 
 # ========== 主线第4批 预埋PHASE18数据：信号采集开关 ==========
 # 为 PHASE18（器官关联图谱与生命形体指数）铺设三类信号采集：
@@ -4193,7 +4193,7 @@ SEMANTIC_CACHE_MAX_TEXT = 4000           # 单条 prompt/response 截断长度
 #     L2 后这条结构保证消失 → 必须用**四道闸门**（置信/时效/幂等/质量）替代，任一不过静默回落正常渠道调用。
 #   ★灰度：ENABLE_SEMANTIC_CACHE_L2 默认 **False**（与第44批设计 §6 阶段A一致）——关闭时零副作用，逐字回 L1 行为。
 #   ★TTL：本批按任务书口径设 **1 小时**（L2 层独立，不改 L1 的 7 天观测账）；内存自动淘汰（LRU）。
-ENABLE_SEMANTIC_CACHE_L2 = False          # L2 总开关（默认关；开启后命中直接返回缓存响应）
+ENABLE_SEMANTIC_CACHE_L2 = True  # 2026-09-27星轨开启：语义缓存L2，省大模型调用          # L2 总开关（默认关；开启后命中直接返回缓存响应）
 SEMANTIC_CACHE_L2_TTL_SEC = 3600          # L2 条目 TTL（1 小时）
 SEMANTIC_CACHE_L2_CAPACITY = 2000         # L2 内存条目上限（超限 LRU 淘汰）
 SEMANTIC_CACHE_L2_MIN_LEN = 8             # 短 prompt（<此长度）不入缓存（指代/寒暄高发区）
@@ -4390,7 +4390,7 @@ EXPERIENCE_SUMMARY_VERSION = 2
 #                 True  = 完全重复的 summary 直接拒绝写入。
 # ★建议先观测 1~2 天确认无误报再开启。注意：第46批实测污染 83.1% 来自
 #   维护侧摘要压缩（非写入），写入侧拦截只能覆盖 16.9%，不可指望它单独解决。
-ENABLE_EXPERIENCE_DEDUP = False
+ENABLE_EXPERIENCE_DEDUP = True  # 2026-09-27星轨开启：经验自动去重
 
 # =============================================================================
 # ★主线第49批 T1（P1-327）：对话路由修复
@@ -4744,7 +4744,7 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   ENABLE_MEMORY_AUTO_GC：使用率/增长率超阈值时自动 gc.collect()（默认关，避免副作用/零回归）；
 #   MEMORY_GROWTH_ALARM_MB_PER_MIN：内存增长率告警阈值（MB/分钟），超此值即判疑似泄漏。
 #   ★生产生效需停机/重启窗口；在线运行期仅采集与告警，不自动回收。
-ENABLE_MEMORY_AUTO_GC = False
+ENABLE_MEMORY_AUTO_GC = True  # 2026-09-27星轨开启：内存自动垃圾回收
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
 
 # ===== ★主线第67批（2026-09-16）：快照性能止血 + KAL + 自适应降频 + WriteGuard =====
@@ -5069,7 +5069,7 @@ ENABLE_EVOLUTION_USE_CHANNEL_POOL = False
 #     —— 属「纵深防御 + 未来场景」，详见交付报告偏差清单 D94-1。
 #   读取点：nucleus/reasoning/PatchManager.py::_m94_pending_aging_on
 #           nucleus/reasoning/SafeEvolutionExecutor.py::_m94_pending_blocks_regeneration
-ENABLE_PENDING_QUEUE_AGING = False
+ENABLE_PENDING_QUEUE_AGING = True  # 2026-09-27星轨开启：补丁队列老化处理
 
 # ★第94批 T-94a：老化触发阈值——pending 条数（任务书建议 20 条）。
 #   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。

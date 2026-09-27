@@ -52,7 +52,14 @@ LOCATION_WHITELIST = {
     ("organs/brain/pulse_inner_world_support.py", 702),      # _get_emotion_modulation：返回 default
     ("organs/brain/pulse_inner_world_support.py", 2001),     # _generate_life_stage_summary：初始化 _total
     ("organs/brain/pulse_inner_world_support.py", 2008),     # _generate_life_stage_summary：返回空串
-    ("organs/brain/pulse_inner_world_support.py", 2072),     # _get_growth_attribution：返回 _default
+    # ---- 第139批 T-139b：PulseInnerWorld 第二刀拆分 —— 知识检索簇 24 方法搬到
+    #      organs/brain/pulse_inner_world_knowledge.py（纯平移，PulseInnerWorld.py
+    #      同位置已删；实测全库静默 handler 53 → 49+4 = 53，净增=0）。
+    #      键 = (relpath, 新文件行号)。
+    ("organs/brain/pulse_inner_world_knowledge.py", 216),    # _knowledge_retrieve：检索前提兜底 _question_for_infer
+    ("organs/brain/pulse_inner_world_knowledge.py", 792),    # _evaluate_fusion_quality：融合阈值兜底常量
+    ("organs/brain/pulse_inner_world_knowledge.py", 863),    # _fuse_multiple_nodes：融合配置读取兜底 _cfg_fuse=None
+    ("organs/brain/pulse_inner_world_knowledge.py", 2300),   # _orchestrate_reason：候选列表兜底 _candidates=[]
 }
 
 

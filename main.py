@@ -55,6 +55,16 @@ sys.path.insert(0, _PROJECT_ROOT)
 #   必须在任何可能触发写盘的 import 之前设置。
 os.environ.setdefault("PULSE_FRAMEWORK", "1")
 
+# ★主线第139批 T-139a（P1）：退出确认交互的防呆常量。
+#   背景：_confirm_apply_pending_on_quit 的 input() 在交互终端会无限阻塞，
+#   若 stdin 判定为 TTY 但实际无输入（伪 TTY / 管道 / 期望脚本驱动），
+#   进程将永久卡在退出路径，无法自愈也无法退出。
+#   PULSE_QUIT_CONFIRM=0：非交互直接跳过确认（按「应用并重启」默认语义继续）。
+#   PULSE_QUIT_TIMEOUT_SEC：input 等待上限（秒），超时按默认 Y 继续，0 表示沿用默认。
+PULSE_QUIT_CONFIRM_ENV = "PULSE_QUIT_CONFIRM"
+PULSE_QUIT_TIMEOUT_ENV = "PULSE_QUIT_TIMEOUT_SEC"
+PULSE_QUIT_CONFIRM_DEFAULT_TIMEOUT = 30.0
+
 import config
 
 # -- 功能模块 --
@@ -3372,6 +3382,45 @@ def _apply_pending_patches_and_restart(framework) -> bool:
     return False
 
 
+def _prompt_with_timeout(prompt: str, timeout: float):
+    """★主线第139批 T-139a：带超时的 input 包装。
+
+    返回二元组 (answered, value)：
+      - answered=True  + value=str ：用户在时限内提交了输入；
+      - answered=False + value="" ：超时无输入（调用方按默认值 Y 继续）；
+      - answered=False + value=None：EOF / Ctrl+C / 异常（用户取消，视为拒绝）。
+    工作线程设为 daemon，主线程超时后立即返回，不会因残留线程阻塞进程退出。
+    """
+    _ev = threading.Event()
+    _box: "dict[str, Any]" = {}
+
+    def _worker() -> None:
+        try:
+            _box["v"] = input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            # ★门禁可见化：用户取消输入属预期路径，但仍留痕便于排查
+            _logger.debug("[补丁] 退出确认被用户中断（EOF/Ctrl+C）")
+            _box["v"] = None
+        except Exception as _we:
+            silent_exc(_we, "main.py:3397")
+            _box["v"] = None
+        finally:
+            _ev.set()
+
+    _th = threading.Thread(target=_worker, name="pulse-quit-confirm", daemon=True)
+    _th.start()
+    if not _ev.wait(timeout):
+        # 超时：判定为非交互/无输入，交由调用方走「默认 Y」分支
+        _logger.info(
+            f"[补丁] 退出确认等待 {timeout:.0f}s 无输入，按默认 Y 继续"
+        )
+        return False, ""
+    _val = _box.get("v")
+    if _val is None:
+        return False, None
+    return True, _val
+
+
 def _confirm_apply_pending_on_quit(framework) -> bool:
     """★主线第59批 T4：用户主动退出（SIGINT/SIGTERM）时的待应用补丁确认提示。
 
@@ -3383,6 +3432,11 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
     返回 False 表示跳过应用，直接退出。
     """
     try:
+        # ★主线第139批 T-139a：显式关闭确认（CI/脚本/容器驱动退出）：
+        #   PULSE_QUIT_CONFIRM=0 时不做任何交互，直接按「应用并重启」继续。
+        _confirm_env = os.environ.get(PULSE_QUIT_CONFIRM_ENV, "").strip().lower()
+        if _confirm_env in ("0", "false", "no", "off"):
+            return True
         # 非交互终端（服务/后台）：无法交互，保持原行为直接应用
         if not sys.stdin.isatty():
             return True
@@ -3393,15 +3447,30 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
         if not _approved:
             return False
         _n = len(_approved)
+        # ★主线第139批 T-139a（P1）：超时兜底。
+        #   原实现直接调用 input()，在 TTY 阻塞无输入时会把退出路径挂死。
+        #   这里改用「工作线程 + 事件超时」：超时后按默认 Y 继续，主线程绝不无限等待。
+        _timeout = PULSE_QUIT_CONFIRM_DEFAULT_TIMEOUT
         try:
-            _ans = input(
-                f"\n[补丁] 检测到 {_n} 个已批准的待应用补丁，"
-                f"是否应用并重启验证？(Y/n，默认 Y): "
-            ).strip().lower()
-        except (EOFError, KeyboardInterrupt):
+            _raw_to = os.environ.get(PULSE_QUIT_TIMEOUT_ENV, "").strip()
+            if _raw_to:
+                _parsed = float(_raw_to)
+                if _parsed > 0:
+                    _timeout = _parsed
+        except (TypeError, ValueError) as _te:
+            # ★门禁可见化：非法超时配置回落默认值（第124批 silent_exc 惯例）
+            silent_exc(_te, "main.py:PULSE_QUIT_TIMEOUT_SEC", level="warning")
+            _timeout = PULSE_QUIT_CONFIRM_DEFAULT_TIMEOUT
+        _answered, _ans = _prompt_with_timeout(
+            f"\n[补丁] 检测到 {_n} 个已批准的待应用补丁，"
+            f"是否应用并重启验证？(Y/n，默认 Y): ",
+            _timeout,
+        )
+        if not _answered and _ans is None:
             # 用户取消输入（Ctrl+D / Ctrl+C）：视为拒绝，避免意外重启
             return False
-        return _ans in ("", "y", "yes")
+        # 超时（_answered=False, _ans=""）或正常输入：按默认 Y 语义判定
+        return (_ans or "").strip().lower() in ("", "y", "yes")
     except Exception as _e:
         _logger.warning(f"[补丁] 退出确认提示异常，默认不应用补丁: {_e}")
         return False
