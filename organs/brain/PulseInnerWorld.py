@@ -1062,6 +1062,173 @@ class PulseInnerWorld(
                 return {"status": "contemplation_match", "answer": ctx.contemplative_answer}
         return None
 
+    def _ir_qica_knowledge_retrieve(self, ctx: "PulseInnerWorld.InferenceContext", _qica_paths):
+        _knowledge_result = None
+        # ★v22.0修复：严格按QICA优先级顺序检索
+        if _qica_paths and self.node_pool:  # type: ignore[possibly-unbound]
+            for _path in _qica_paths[:3]:  # type: ignore[possibly-unbound]
+                _l3_nodes = self.node_pool.query(evol_level="L3", space_path_prefix=_path, limit=10)  # type: ignore[possibly-unbound]
+                if _l3_nodes:
+                    for _node in _l3_nodes:
+                        _val = self._clean_node_value(str(_node.value)) if _node.value else ""
+                        if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
+                            _knowledge_result = _val
+                            self._log(LogLevel.INFO, f"QICA路径检索: 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
+                            break
+                if _knowledge_result:
+                    break
+                # 该路径未命中，继续下一个路径
+                _l2_nodes = self.node_pool.query(evol_level="L2", space_path_prefix=_path, limit=10)  # type: ignore[possibly-unbound]
+                if _l2_nodes:
+                    for _node in _l2_nodes:
+                        _val = self._clean_node_value(str(_node.value)) if _node.value else ""
+                        # ★质量修复B2：L2 路径与 L3 路径统一调用内部节点过滤器（修复仅查4前缀导致的漏检）
+                        if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
+                            _knowledge_result = _val
+                            self._log(LogLevel.INFO, f"QICA路径检索(L2): 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
+                            break
+                if _knowledge_result:
+                    break
+                self._log(LogLevel.DEBUG, f"QICA路径检索未命中: 路径={_path}，尝试下一个路径")  # type: ignore[possibly-unbound]
+        if not _knowledge_result:
+            _knowledge_result = self._knowledge_retrieve(ctx.question)
+
+        if _knowledge_result:
+            # ★v23.0支点：检索结果相关性验证 + 自动降级链路
+            # ★v9.5修复：传入命中节点所在 space_path，桥接「路径主题」与「正文关键词」语义鸿沟  # type: ignore[possibly-unbound]
+            _relevance = self._verify_knowledge_relevance(
+                ctx.question, _knowledge_result,
+                space_path=_path if _qica_paths else None)  # type: ignore[possibly-unbound]
+            if _relevance < 0.10:
+                # 相关性过低，先尝试内在沉思拼凑
+                self._log(LogLevel.INFO,
+                         f"QICA检索结果不相关(相关度={_relevance:.2f})，尝试内在沉思")
+                _contemplation = self._contemplative_reason(ctx.question)
+                if _contemplation and len(_contemplation) > 30:
+                    _knowledge_result = _contemplation
+                    self._log(LogLevel.INFO, "降级到内在沉思成功")
+                else:
+                    # 沉思也不行，调用大模型
+                    self._log(LogLevel.INFO, "内在沉思失败，降级到大模型")
+                    _model_result = self._generate_branch_with_model(
+                        original_question=ctx.question,
+                        branch_name="知识检索降级",
+                        branch_prompt=ctx.question,
+                    )
+                    if _model_result and len(_model_result) > 20:
+                        _knowledge_result = _model_result
+                        self._log(LogLevel.INFO, f"大模型降级成功: {_knowledge_result[:60]}...")
+                        # ★v23.0补充：将大模型结果消化为知识，存入InsightBoard
+                        try:
+                            if hasattr(self, '_insight_board') and self._insight_board:
+                                self._insight_board.post(
+                                    insight_type="knowledge_boundary",
+                                    content=_knowledge_result[:200],
+                                    source_loop="知识检索降级·大模型生成",
+                                    related_dimension="知识补充",
+                                    confidence=0.6,
+                                    keywords=[ctx.question[:30], "大模型补充"]
+                                )
+                        except Exception as e:
+                            self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                    else:
+                        _knowledge_result = None
+            # 降级链路结束
+
+            if _knowledge_result:
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _knowledge_result, ctx.user_name)
+            self._trace_inference(ctx.question, _knowledge_result, "qica_knowledge", 0.75, ctx.user_name,
+                                 duration=time.time() - ctx._reasoning_start_time,
+                                 complexity=ctx._question_complexity,
+                                 tuning_hint="QICA建议知识检索")
+            _final = self._enhance_answer(
+                answer=_knowledge_result, question=ctx.question, method="qica_knowledge",
+                complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                memory_context=ctx._memory_context
+            )
+            self._emit(InferenceEvent.RESULT, {
+                "question": ctx.question, "answer": _final,
+                "method": "qica_knowledge", "confidence": 0.75, "user_name": ctx.user_name,
+                "correlation_id": ctx.correlation_id,
+                "confidence_hint": "moderate",
+                "strategy_applied": ctx.payload.get("strategy_context", {}),
+            }, priority=7, layer="L2")
+            return {"status": "qica_knowledge", "answer": _knowledge_result}
+        return None
+
+
+    def _ir_dispatch_qica_method(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # ===== ★v22.0重构：QICA建议方法优先执行 =====
+        _qica_method = ctx.payload.get("strategy_context", {}).get("qica_suggested_method", "")
+        _qica_paths = ctx.payload.get("strategy_context", {}).get("qica_knowledge_paths", [])  # type: ignore[possibly-unbound]
+
+        if _qica_method == "rule_reason":
+            _rule_result = self._rule_reason(ctx.question, ctx.user_name, ctx.guidance)
+            if _rule_result:
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _rule_result, ctx.user_name)
+                self._trace_inference(ctx.question, _rule_result, "qica_rule_reason", 0.9, ctx.user_name,
+                                     duration=time.time() - ctx._reasoning_start_time,
+                                     complexity=ctx._question_complexity,
+                                     tuning_hint="QICA建议规则推理")
+                _final = self._enhance_answer(
+                    answer=_rule_result, question=ctx.question, method="qica_rule_reason",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "qica_rule_reason", "confidence": self._evidence_conf(0.9, "rule", [_rule_result]), "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "high",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                }, priority=7, layer="L2")
+                return {"status": "qica_rule_reason", "answer": _rule_result}
+
+        # ===== ★第六批 任务2.2：补齐其余 6 个 QICA 建议方法的执行分支 =====
+        # 原实现仅覆盖 rule_reason / knowledge_retrieve，其余 method 无分支，
+        # 导致 QICA 建议被记录进 strategy_applied 却从不真正执行。
+        if _qica_method in self._QICA_EXTRA_METHODS:
+            _extra = self._execute_qica_method(
+                _qica_method, ctx.question, ctx.user_name, ctx.guidance)
+            if _extra:
+                self._log(LogLevel.INFO,
+                          f"[B2策略] 建议方法={_qica_method} 已采纳并优先执行")
+                return _extra
+            self._log(LogLevel.INFO,
+                      f"[B2策略] 建议方法={_qica_method} 执行无有效结果，回落默认路径")
+
+        if _qica_method == "knowledge_retrieve":
+            _k = self._ir_qica_knowledge_retrieve(ctx, _qica_paths)
+            if _k is not None:
+                return _k
+        if _qica_method == "cognitive_compute":
+            _cog_result = self._cognitive_compute(ctx.question)
+            if _cog_result:
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _cog_result, ctx.user_name)
+                self._trace_inference(ctx.question, _cog_result, "qica_cognitive", 0.65, ctx.user_name,
+                                     duration=time.time() - ctx._reasoning_start_time,
+                                     complexity=ctx._question_complexity,
+                                     tuning_hint="QICA建议认知算子")
+                _final = self._enhance_answer(
+                    answer=_cog_result, question=ctx.question, method="qica_cognitive",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "qica_cognitive", "confidence": 0.65, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "moderate",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                }, priority=7, layer="L2")
+                return {"status": "qica_cognitive", "answer": _cog_result}
+        # ===== QICA建议方法优先执行结束 =====
+        return None
+
+
 
 
 
@@ -1090,164 +1257,9 @@ class PulseInnerWorld(
         _detector_result = self._ir_run_detectors(_ctx)
         if _detector_result is not None:
             return _detector_result
-        # ===== ★v22.0重构：QICA建议方法优先执行 =====
-        _qica_method = payload.get("strategy_context", {}).get("qica_suggested_method", "")
-        _qica_paths = payload.get("strategy_context", {}).get("qica_knowledge_paths", [])  # type: ignore[possibly-unbound]
-
-        if _qica_method == "rule_reason":
-            _rule_result = self._rule_reason(question, user_name, guidance)
-            if _rule_result:
-                self._inference_count += 1
-                self._cache_inference(question, _rule_result, user_name)
-                self._trace_inference(question, _rule_result, "qica_rule_reason", 0.9, user_name,
-                                     duration=time.time() - _reasoning_start_time,
-                                     complexity=_question_complexity,
-                                     tuning_hint="QICA建议规则推理")
-                _final = self._enhance_answer(
-                    answer=_rule_result, question=question, method="qica_rule_reason",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "qica_rule_reason", "confidence": self._evidence_conf(0.9, "rule", [_rule_result]), "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "high",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "qica_rule_reason", "answer": _rule_result}
-
-        # ===== ★第六批 任务2.2：补齐其余 6 个 QICA 建议方法的执行分支 =====
-        # 原实现仅覆盖 rule_reason / knowledge_retrieve，其余 method 无分支，
-        # 导致 QICA 建议被记录进 strategy_applied 却从不真正执行。
-        if _qica_method in self._QICA_EXTRA_METHODS:
-            _extra = self._execute_qica_method(
-                _qica_method, question, user_name, guidance)
-            if _extra:
-                self._log(LogLevel.INFO,
-                          f"[B2策略] 建议方法={_qica_method} 已采纳并优先执行")
-                return _extra
-            self._log(LogLevel.INFO,
-                      f"[B2策略] 建议方法={_qica_method} 执行无有效结果，回落默认路径")
-
-        if _qica_method == "knowledge_retrieve":
-            _knowledge_result = None
-            # ★v22.0修复：严格按QICA优先级顺序检索
-            if _qica_paths and self.node_pool:  # type: ignore[possibly-unbound]
-                for _path in _qica_paths[:3]:  # type: ignore[possibly-unbound]
-                    _l3_nodes = self.node_pool.query(evol_level="L3", space_path_prefix=_path, limit=10)  # type: ignore[possibly-unbound]
-                    if _l3_nodes:
-                        for _node in _l3_nodes:
-                            _val = self._clean_node_value(str(_node.value)) if _node.value else ""
-                            if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
-                                _knowledge_result = _val
-                                self._log(LogLevel.INFO, f"QICA路径检索: 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
-                                break
-                    if _knowledge_result:
-                        break
-                    # 该路径未命中，继续下一个路径
-                    _l2_nodes = self.node_pool.query(evol_level="L2", space_path_prefix=_path, limit=10)  # type: ignore[possibly-unbound]
-                    if _l2_nodes:
-                        for _node in _l2_nodes:
-                            _val = self._clean_node_value(str(_node.value)) if _node.value else ""
-                            # ★质量修复B2：L2 路径与 L3 路径统一调用内部节点过滤器（修复仅查4前缀导致的漏检）
-                            if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
-                                _knowledge_result = _val
-                                self._log(LogLevel.INFO, f"QICA路径检索(L2): 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
-                                break
-                    if _knowledge_result:
-                        break
-                    self._log(LogLevel.DEBUG, f"QICA路径检索未命中: 路径={_path}，尝试下一个路径")  # type: ignore[possibly-unbound]
-            if not _knowledge_result:
-                _knowledge_result = self._knowledge_retrieve(question)
-
-            if _knowledge_result:
-                # ★v23.0支点：检索结果相关性验证 + 自动降级链路
-                # ★v9.5修复：传入命中节点所在 space_path，桥接「路径主题」与「正文关键词」语义鸿沟  # type: ignore[possibly-unbound]
-                _relevance = self._verify_knowledge_relevance(
-                    question, _knowledge_result,
-                    space_path=_path if _qica_paths else None)  # type: ignore[possibly-unbound]
-                if _relevance < 0.10:
-                    # 相关性过低，先尝试内在沉思拼凑
-                    self._log(LogLevel.INFO,
-                             f"QICA检索结果不相关(相关度={_relevance:.2f})，尝试内在沉思")
-                    _contemplation = self._contemplative_reason(question)
-                    if _contemplation and len(_contemplation) > 30:
-                        _knowledge_result = _contemplation
-                        self._log(LogLevel.INFO, "降级到内在沉思成功")
-                    else:
-                        # 沉思也不行，调用大模型
-                        self._log(LogLevel.INFO, "内在沉思失败，降级到大模型")
-                        _model_result = self._generate_branch_with_model(
-                            original_question=question,
-                            branch_name="知识检索降级",
-                            branch_prompt=question,
-                        )
-                        if _model_result and len(_model_result) > 20:
-                            _knowledge_result = _model_result
-                            self._log(LogLevel.INFO, f"大模型降级成功: {_knowledge_result[:60]}...")
-                            # ★v23.0补充：将大模型结果消化为知识，存入InsightBoard
-                            try:
-                                if hasattr(self, '_insight_board') and self._insight_board:
-                                    self._insight_board.post(
-                                        insight_type="knowledge_boundary",
-                                        content=_knowledge_result[:200],
-                                        source_loop="知识检索降级·大模型生成",
-                                        related_dimension="知识补充",
-                                        confidence=0.6,
-                                        keywords=[question[:30], "大模型补充"]
-                                    )
-                            except Exception as e:
-                                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                        else:
-                            _knowledge_result = None
-                # 降级链路结束
-
-                if _knowledge_result:
-                    self._inference_count += 1
-                    self._cache_inference(question, _knowledge_result, user_name)
-                self._trace_inference(question, _knowledge_result, "qica_knowledge", 0.75, user_name,
-                                     duration=time.time() - _reasoning_start_time,
-                                     complexity=_question_complexity,
-                                     tuning_hint="QICA建议知识检索")
-                _final = self._enhance_answer(
-                    answer=_knowledge_result, question=question, method="qica_knowledge",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "qica_knowledge", "confidence": 0.75, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "moderate",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "qica_knowledge", "answer": _knowledge_result}
-
-        if _qica_method == "cognitive_compute":
-            _cog_result = self._cognitive_compute(question)
-            if _cog_result:
-                self._inference_count += 1
-                self._cache_inference(question, _cog_result, user_name)
-                self._trace_inference(question, _cog_result, "qica_cognitive", 0.65, user_name,
-                                     duration=time.time() - _reasoning_start_time,
-                                     complexity=_question_complexity,
-                                     tuning_hint="QICA建议认知算子")
-                _final = self._enhance_answer(
-                    answer=_cog_result, question=question, method="qica_cognitive",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "qica_cognitive", "confidence": 0.65, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "moderate",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "qica_cognitive", "answer": _cog_result}
-        # ===== QICA建议方法优先执行结束 =====
-
+        _qica = self._ir_dispatch_qica_method(_ctx)
+        if _qica is not None:
+            return _qica
         # ===== v20.0新增：思考纪律——标准思维流水线入口 =====
         # 当所有检测器未命中时，按大脑皮层规划的流水线深度执行推理
         _pipeline = payload.get("strategy_context", {}).get("thinking_pipeline", {})
