@@ -49,16 +49,26 @@ def main(argv=None):
     if not os.path.isfile(args.csv):
         fail("登记册不存在: %s" % args.csv)
 
-    with open(args.csv, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        cols = reader.fieldnames or []
-        required = ["ID", "提出方", "提出批次", "摘要", "P级", "状态", "到期批次", "裁决批次", "裁决内容"]
-        missing = [c for c in required if c not in cols]
-        if missing:
-            fail("列缺失: %s（实际=%s）" % (missing, cols))
-        rows = list(reader)
-
     errors = []
+    with open(args.csv, "r", encoding="utf-8-sig", newline="") as f:
+        raw = list(csv.reader(f))
+    if not raw:
+        fail("登记册为空（无表头）")
+    header = [c.strip() for c in raw[0]]
+    cols = header
+    required = ["ID", "提出方", "提出批次", "摘要", "P级", "状态", "到期批次", "裁决批次", "裁决内容"]
+    missing = [c for c in required if c not in cols]
+    if missing:
+        fail("列缺失: %s（实际=%s）" % (missing, cols))
+    # ★D150-14 结构校验：每行列数须与表头一致；禁止出现第2个表头行（重复表头）
+    rows = []
+    for i, cells in enumerate(raw[1:], start=2):
+        if len(cells) != len(header):
+            errors.append("行%d: 列数 %d ≠ 表头列数 %d（结构损坏，门禁阻断）" % (i, len(cells), len(header)))
+        if [c.strip() for c in cells] == cols:
+            errors.append("行%d: 出现第2个表头行（重复表头，门禁阻断）" % i)
+        row = {cols[k]: (cells[k].strip() if k < len(cells) else "") for k in range(len(cols))}
+        rows.append(row)
     seen = {}
     for i, r in enumerate(rows, start=2):  # 第1行为表头
         rid = (r.get("ID") or "").strip()
