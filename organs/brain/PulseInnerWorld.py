@@ -76,6 +76,7 @@ class PulseInnerWorld(
             "_context_mode",
             "_context_signal",
             "_emotion_modulation",
+            "_derivation_answer",
             "_meta_state",
             "_explicit_inference_result",
             "_memory_context",
@@ -1382,6 +1383,178 @@ class PulseInnerWorld(
         # ===== v20.0思考纪律入口结束 =====
         return None
 
+    def _ir_try_derivation(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        ctx._derivation_answer = self._route_to_deriver(ctx.question, ctx.user_name, ctx._reasoning_start_time,
+                                                      ctx._question_complexity, ctx.empathetic_note,
+                                                      ctx._memory_context, ctx.payload, ctx.guidance)
+        if ctx._derivation_answer:
+            # ★v22.0方向三修复v3：相关性检查——经验路由结果与问题无关时，跳过
+            _derivation_content = ctx._derivation_answer.get("answer", "")
+            if _derivation_content and len(str(_derivation_content)) > 20:
+                _question_core = set(re.findall(r'[\u4e00-\u9fff]{2,4}', ctx.question)[:5])
+                _answer_core = set(re.findall(r'[\u4e00-\u9fff]{2,4}', str(_derivation_content)[:200]))
+                _overlap = len(_question_core & _answer_core)
+                if _overlap < 1:
+                    self._log(LogLevel.INFO,
+                             f"经验路由跳过(相关性低): 问题核心词={_question_core}, "
+                             f"答案核心词={_answer_core}, 重叠={_overlap}")
+                    ctx._derivation_answer = None  # 跳过，让流程继续到知识检索
+
+            if ctx._derivation_answer:
+                try:
+                    from nucleus.mnemosyne.ReasoningExperience import (
+                        get_reasoning_experience,
+                    )
+                    _reasoning_exp = get_reasoning_experience()
+                    _status = ctx._derivation_answer.get("status", "")
+                    if _status.startswith("deriver_"):
+                        _derivation_type_record = _status.replace("deriver_", "")
+                        _reasoning_exp.record(ctx.question, _derivation_type_record, source="local")
+                        self._log(LogLevel.DEBUG, f"经验沉淀: 类型={_derivation_type_record}")
+                except Exception as e:
+                    self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                return ctx._derivation_answer
+        return None
+
+
+    def _ir_decompose_and_deep_read(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # 使用大脑皮层传来的工具提示
+        ctx.tool_hint = ctx.payload.get("tool_hint", {})
+        if ctx.tool_hint.get("should_search", False):
+            self._log(LogLevel.DEBUG, f"工具提示: 问题='{ctx.question[:30]}' 建议搜索")
+        else:
+            # 工具认知层建议不搜索：将在元认知决策阶段处理
+            pass
+        # ===== 新增: 复杂问题自主拆解 =====
+        _is_param_format = ("已知：" in ctx.question or "已知:" in ctx.question) and ("=" in ctx.question or "＝" in ctx.question)
+        _is_rule_format = any(_kw in ctx.question for _kw in ["规则1", "规则2", "规则3", "第一，", "第二，", "第三，", "如果", "那么"])
+        if _is_param_format and not _is_rule_format:
+            sub_questions = None
+        else:
+            sub_questions = self._decompose_complex_question(ctx.question)
+        if sub_questions and len(sub_questions) >= 2:
+            self._log(LogLevel.INFO,
+                     f"问题拆解: 将'{ctx.question[:40]}'拆分为{len(sub_questions)}个子问题")
+            # 逐个推理子问题
+            sub_results = []
+            for sq in sub_questions:
+                sq_answer = self._knowledge_retrieve(sq)
+                if sq_answer:
+                    sub_results.append({"question": sq, "answer": sq_answer, "found": True})
+                else:
+                    sub_results.append({"question": sq, "answer": None, "found": False})
+            # 综合子问题结果
+            if any(r["found"] for r in sub_results):
+                composite_answer = self._compose_sub_results(ctx.question, sub_results)
+                if composite_answer:
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, composite_answer, ctx.user_name)
+                    self._trace_inference(ctx.question, composite_answer, "decompose", 0.75, ctx.user_name,
+                                         duration=time.time() - ctx._reasoning_start_time,
+                                         complexity=ctx._question_complexity,
+                                         tuning_hint="复杂问题拆解成功，分解策略有效")
+                    final_answer = self._enhance_answer(
+                        answer=composite_answer,
+                        question=ctx.question,
+                        method="decompose",
+                        complexity=ctx._question_complexity,
+                        empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": final_answer,
+                        "method": "decompose", "confidence": 0.75, "user_name": ctx.user_name,
+                        "correlation_id": ctx.payload.get("correlation_id", ""),
+                        "strategy_applied": ctx.payload.get("strategy_context", {}),
+                        "confidence_hint": "moderate",
+                    }, priority=7, layer="L2")
+                    return {"status": "decompose_match", "answer": composite_answer}
+        # ===== 新增: 思考停顿——复杂问题优先走深度思考模式 =====
+        complexity_score = self._assess_question_complexity(ctx.question)
+        _deep_concept_words = ["智慧", "自由", "意义", "本质", "真理", "存在", "意识", "爱", "幸福本质", "价值"]
+        _has_deep_concept = any(_dw in ctx.question for _dw in _deep_concept_words)
+        if _has_deep_concept:
+            complexity_score = max(complexity_score, 0.65)  # 强制提高复杂度
+        if complexity_score >= 0.6:
+            # 高复杂度问题：先尝试沉思，再回退到知识检索
+            self._log(LogLevel.INFO,
+                     f"思考停顿: 问题复杂度={complexity_score:.2f}，进入深度思考模式: {ctx.question[:40]}")
+            if self.node_pool:
+                deep_answer = None
+                if hasattr(self, '_reasoning_pool') and self._reasoning_pool:
+                    _future = None
+                    try:
+                        _future = self._reasoning_pool.submit(
+                            "PulseInnerWorld._deep_think", ctx.question, 3
+                        )
+                        if _future:
+                            # ★主线第31批 T1：统一判定，见 _m31_accept_subproc_deep_result
+                            deep_answer = self._m31_accept_subproc_deep_result(
+                                _future.result(timeout=self._deep_think_timeout))
+                    except Exception:
+                        if _future is not None:
+                            try:
+                                _future.cancel()
+                            except Exception as e:
+                                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                if not deep_answer:
+                    # ★主线第31批 T1：主进程同步执行 + 第27批预算口径
+                    deep_answer = self._deep_think(
+                        ctx.question,
+                        deadline=self._m31_deep_fallback_deadline(ctx._reasoning_start_time))
+                if deep_answer:
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, deep_answer, ctx.user_name)
+                    self._trace_inference(ctx.question, deep_answer, "deep_think", 0.55, ctx.user_name,
+                                         duration=time.time() - ctx._reasoning_start_time,
+                                         complexity=ctx._question_complexity,
+                                         tuning_hint="深度思考流水线完成，多维度综合")
+                    final_answer = self._enhance_answer(
+                        answer=deep_answer,
+                        question=ctx.question,
+                        method="deep_think",
+                        complexity=ctx._question_complexity,
+                        empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": final_answer,
+                        "method": "deep_think", "confidence": 0.55, "user_name": ctx.user_name,
+                        "correlation_id": ctx.payload.get("correlation_id", ""),
+                        "strategy_applied": ctx.payload.get("strategy_context", {}),
+                        "confidence_hint": "moderate",
+                        "thinking_pause": True,
+                    }, priority=7, layer="L2")
+                    return {"status": "deep_think", "answer": deep_answer}
+                # 流水线未产生结果，回退到原有沉思逻辑
+                ctx.contemplative_answer = self._contemplative_reason(ctx.question)
+                if ctx.contemplative_answer:
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, ctx.contemplative_answer, ctx.user_name)
+                    self._trace_inference(ctx.question, ctx.contemplative_answer, "deep_contemplation", 0.6, ctx.user_name,
+                                         duration=time.time() - ctx._reasoning_start_time,
+                                         complexity=ctx._question_complexity,
+                                         tuning_hint="高复杂度问题，已进入深度思考模式")
+                    final_answer = self._enhance_answer(
+                        answer=ctx.contemplative_answer,
+                        question=ctx.question,
+                        method="deep_contemplation",
+                        complexity=ctx._question_complexity,
+                        empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": final_answer,
+                        "method": "deep_contemplation", "confidence": 0.6, "user_name": ctx.user_name,
+                        "correlation_id": ctx.payload.get("correlation_id", ""),
+                        "strategy_applied": ctx.payload.get("strategy_context", {}),
+                        "confidence_hint": "moderate",
+                        "thinking_pause": True,
+                    }, priority=7, layer="L2")
+                    return {"status": "deep_contemplation", "answer": ctx.contemplative_answer}
+        return None
+
+
 
 
 
@@ -1395,7 +1568,6 @@ class PulseInnerWorld(
         user_name = _ctx.user_name
         correlation_id = _ctx.correlation_id
         empathetic_note = _ctx.empathetic_note
-        contemplative_answer = _ctx.contemplative_answer
         _supplement_topic = _ctx._supplement_topic
         _explicit_inference_result = _ctx._explicit_inference_result
         tool_hint = _ctx.tool_hint
@@ -1529,173 +1701,14 @@ class PulseInnerWorld(
         # ===== v20.0新增结束 =====
 
         # ===== 推理问题前置过滤结束 =====
-        _derivation_answer = self._route_to_deriver(question, user_name, _reasoning_start_time,
-                                                      _question_complexity, empathetic_note,
-                                                      _memory_context, payload, guidance)
-        if _derivation_answer:
-            # ★v22.0方向三修复v3：相关性检查——经验路由结果与问题无关时，跳过
-            _derivation_content = _derivation_answer.get("answer", "")
-            if _derivation_content and len(str(_derivation_content)) > 20:
-                _question_core = set(re.findall(r'[\u4e00-\u9fff]{2,4}', question)[:5])
-                _answer_core = set(re.findall(r'[\u4e00-\u9fff]{2,4}', str(_derivation_content)[:200]))
-                _overlap = len(_question_core & _answer_core)
-                if _overlap < 1:
-                    self._log(LogLevel.INFO,
-                             f"经验路由跳过(相关性低): 问题核心词={_question_core}, "
-                             f"答案核心词={_answer_core}, 重叠={_overlap}")
-                    _derivation_answer = None  # 跳过，让流程继续到知识检索
-
-            if _derivation_answer:
-                try:
-                    from nucleus.mnemosyne.ReasoningExperience import (
-                        get_reasoning_experience,
-                    )
-                    _reasoning_exp = get_reasoning_experience()
-                    _status = _derivation_answer.get("status", "")
-                    if _status.startswith("deriver_"):
-                        _derivation_type_record = _status.replace("deriver_", "")
-                        _reasoning_exp.record(question, _derivation_type_record, source="local")
-                        self._log(LogLevel.DEBUG, f"经验沉淀: 类型={_derivation_type_record}")
-                except Exception as e:
-                    self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                return _derivation_answer
-        # 使用大脑皮层传来的工具提示
-        tool_hint = payload.get("tool_hint", {})
-        if tool_hint.get("should_search", False):
-            self._log(LogLevel.DEBUG, f"工具提示: 问题='{question[:30]}' 建议搜索")
-        else:
-            # 工具认知层建议不搜索：将在元认知决策阶段处理
-            pass
-        # ===== 新增: 复杂问题自主拆解 =====
-        _is_param_format = ("已知：" in question or "已知:" in question) and ("=" in question or "＝" in question)
-        _is_rule_format = any(_kw in question for _kw in ["规则1", "规则2", "规则3", "第一，", "第二，", "第三，", "如果", "那么"])
-        if _is_param_format and not _is_rule_format:
-            sub_questions = None
-        else:
-            sub_questions = self._decompose_complex_question(question)
-        if sub_questions and len(sub_questions) >= 2:
-            self._log(LogLevel.INFO,
-                     f"问题拆解: 将'{question[:40]}'拆分为{len(sub_questions)}个子问题")
-            # 逐个推理子问题
-            sub_results = []
-            for sq in sub_questions:
-                sq_answer = self._knowledge_retrieve(sq)
-                if sq_answer:
-                    sub_results.append({"question": sq, "answer": sq_answer, "found": True})
-                else:
-                    sub_results.append({"question": sq, "answer": None, "found": False})
-            # 综合子问题结果
-            if any(r["found"] for r in sub_results):
-                composite_answer = self._compose_sub_results(question, sub_results)
-                if composite_answer:
-                    self._inference_count += 1
-                    self._cache_inference(question, composite_answer, user_name)
-                    self._trace_inference(question, composite_answer, "decompose", 0.75, user_name,
-                                         duration=time.time() - _reasoning_start_time,
-                                         complexity=_question_complexity,
-                                         tuning_hint="复杂问题拆解成功，分解策略有效")
-                    final_answer = self._enhance_answer(
-                        answer=composite_answer,
-                        question=question,
-                        method="decompose",
-                        complexity=_question_complexity,
-                        empathetic_note=empathetic_note,
-                        memory_context=_memory_context
-                    )
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": final_answer,
-                        "method": "decompose", "confidence": 0.75, "user_name": user_name,
-                        "correlation_id": payload.get("correlation_id", ""),
-                        "strategy_applied": payload.get("strategy_context", {}),
-                        "confidence_hint": "moderate",
-                    }, priority=7, layer="L2")
-                    return {"status": "decompose_match", "answer": composite_answer}
-        # ===== 新增: 思考停顿——复杂问题优先走深度思考模式 =====
-        complexity_score = self._assess_question_complexity(question)
-        _deep_concept_words = ["智慧", "自由", "意义", "本质", "真理", "存在", "意识", "爱", "幸福本质", "价值"]
-        _has_deep_concept = any(_dw in question for _dw in _deep_concept_words)
-        if _has_deep_concept:
-            complexity_score = max(complexity_score, 0.65)  # 强制提高复杂度
-        if complexity_score >= 0.6:
-            # 高复杂度问题：先尝试沉思，再回退到知识检索
-            self._log(LogLevel.INFO,
-                     f"思考停顿: 问题复杂度={complexity_score:.2f}，进入深度思考模式: {question[:40]}")
-            if self.node_pool:
-                deep_answer = None
-                if hasattr(self, '_reasoning_pool') and self._reasoning_pool:
-                    _future = None
-                    try:
-                        _future = self._reasoning_pool.submit(
-                            "PulseInnerWorld._deep_think", question, 3
-                        )
-                        if _future:
-                            # ★主线第31批 T1：统一判定，见 _m31_accept_subproc_deep_result
-                            deep_answer = self._m31_accept_subproc_deep_result(
-                                _future.result(timeout=self._deep_think_timeout))
-                    except Exception:
-                        if _future is not None:
-                            try:
-                                _future.cancel()
-                            except Exception as e:
-                                self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                if not deep_answer:
-                    # ★主线第31批 T1：主进程同步执行 + 第27批预算口径
-                    deep_answer = self._deep_think(
-                        question,
-                        deadline=self._m31_deep_fallback_deadline(_reasoning_start_time))
-                if deep_answer:
-                    self._inference_count += 1
-                    self._cache_inference(question, deep_answer, user_name)
-                    self._trace_inference(question, deep_answer, "deep_think", 0.55, user_name,
-                                         duration=time.time() - _reasoning_start_time,
-                                         complexity=_question_complexity,
-                                         tuning_hint="深度思考流水线完成，多维度综合")
-                    final_answer = self._enhance_answer(
-                        answer=deep_answer,
-                        question=question,
-                        method="deep_think",
-                        complexity=_question_complexity,
-                        empathetic_note=empathetic_note,
-                        memory_context=_memory_context
-                    )
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": final_answer,
-                        "method": "deep_think", "confidence": 0.55, "user_name": user_name,
-                        "correlation_id": payload.get("correlation_id", ""),
-                        "strategy_applied": payload.get("strategy_context", {}),
-                        "confidence_hint": "moderate",
-                        "thinking_pause": True,
-                    }, priority=7, layer="L2")
-                    return {"status": "deep_think", "answer": deep_answer}
-                # 流水线未产生结果，回退到原有沉思逻辑
-                contemplative_answer = self._contemplative_reason(question)
-                if contemplative_answer:
-                    self._inference_count += 1
-                    self._cache_inference(question, contemplative_answer, user_name)
-                    self._trace_inference(question, contemplative_answer, "deep_contemplation", 0.6, user_name,
-                                         duration=time.time() - _reasoning_start_time,
-                                         complexity=_question_complexity,
-                                         tuning_hint="高复杂度问题，已进入深度思考模式")
-                    final_answer = self._enhance_answer(
-                        answer=contemplative_answer,
-                        question=question,
-                        method="deep_contemplation",
-                        complexity=_question_complexity,
-                        empathetic_note=empathetic_note,
-                        memory_context=_memory_context
-                    )
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": final_answer,
-                        "method": "deep_contemplation", "confidence": 0.6, "user_name": user_name,
-                        "correlation_id": payload.get("correlation_id", ""),
-                        "strategy_applied": payload.get("strategy_context", {}),
-                        "confidence_hint": "moderate",
-                        "thinking_pause": True,
-                    }, priority=7, layer="L2")
-                    return {"status": "deep_contemplation", "answer": contemplative_answer}
-
+        _derivation = self._ir_try_derivation(_ctx)
+        if _derivation is not None:
+            return _derivation
+        _deep_read = self._ir_decompose_and_deep_read(_ctx)
+        if _deep_read is not None:
+            return _deep_read
         # ★v17.0新增：认知边界感知——记录推理失败的领域
-        if not _derivation_answer:
+        if not _ctx._derivation_answer:
             _failed_keywords = []
             for _match in re.finditer(r'[\u4e00-\u9fff]{2,4}', question):
                 _word = _match.group()
