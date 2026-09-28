@@ -82,13 +82,16 @@ class PulseInnerWorld(
             "_question_length",
             "_reasoning_start_time",
             "_supplement_topic",
+            "_strategy_context",
             "correlation_id",
             "empathetic_note",
             "guidance",
             "payload",
             "question",
+            "question_features",
             "search_query",
             "tool_hint",
+            "tool_requested",
             "user_name",
         )
 
@@ -1849,52 +1852,58 @@ class PulseInnerWorld(
                 "current_level": {"unsolved_question": question[:80]},
                 "growth_topic": f"待解决问题: {question[:60]}",
             }, priority=3, layer="L3")
+        _ctx._strategy_context = _strategy_context
+        _ctx.tool_requested = tool_requested
+        _ctx.question_features = question_features
+        return self._ir_finalize(_ctx)
+
+    def _ir_finalize(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         # 发射最终结果（无答案时附上记忆上下文，供大脑皮层调用肺模型时使用）
-        _memory_context = self._build_memory_context(question, user_name, guidance)
+        _memory_context = self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance)
         self._emit(InferenceEvent.RESULT, {
-            "question": question, "answer": None,
-            "method": "none", "confidence": 0.0, "user_name": user_name,
-            "correlation_id": payload.get("correlation_id", ""),
-            "strategy_applied": _strategy_context,
-            "tool_requested": tool_requested,
+            "question": ctx.question, "answer": None,
+            "method": "none", "confidence": 0.0, "user_name": ctx.user_name,
+            "correlation_id": ctx.payload.get("correlation_id", ""),
+            "strategy_applied": ctx._strategy_context,
+            "tool_requested": ctx.tool_requested,
             "memory_context": _memory_context,
         }, priority=5, layer="L2")
         # ===== 新增: 实时元认知监控——感知本次推理的总体质量 =====
-        reasoning_duration = time.time() - _reasoning_start_time
+        reasoning_duration = time.time() - ctx._reasoning_start_time
         if reasoning_duration > 2.0:
             self._log(LogLevel.DEBUG,
                      f"实时元认知: 本次推理耗时{reasoning_duration:.1f}秒，"
-                     f"问题复杂度={_question_complexity:.2f}，"
-                     f"最终状态={tool_requested and '已触发工具' or '未找到答案'}")
+                     f"问题复杂度={ctx._question_complexity:.2f}，"
+                     f"最终状态={ctx.tool_requested and '已触发工具' or '未找到答案'}")
         # ===== 新增: 元认知决策经验记录 =====
-        if tool_requested:
+        if ctx.tool_requested:
             # 有工具被触发时，记录触发原因和策略
-            _decision_type = "search" if not question_features.get("is_computational") else "code"
-            self._trace_inference(question, f"[工具调度: {_decision_type}]",
-                                 f"tool_{_decision_type}", 0.0, user_name,
+            _decision_type = "search" if not ctx.question_features.get("is_computational") else "code"
+            self._trace_inference(ctx.question, f"[工具调度: {_decision_type}]",
+                                 f"tool_{_decision_type}", 0.0, ctx.user_name,
                                  duration=reasoning_duration,
-                                 complexity=_question_complexity,
+                                 complexity=ctx._question_complexity,
                                  tuning_hint=f"元认知决策触发{_decision_type}，耗时{reasoning_duration:.1f}s")
 
             # 补充工具认知层经验：记录触发工具时的决策上下文
             if hasattr(self, '_search_experience') and _decision_type == "search":
                 self._log(LogLevel.DEBUG,
-                         f"元认知决策记录: 触发深度搜索 (主题='{search_query[:40]}')")
+                         f"元认知决策记录: 触发深度搜索 (主题='{ctx.search_query[:40]}')")
         else:
             # 无工具可用，记录为推理盲区
-            self._trace_inference(question, "[无可用工具]",
-                                 "none", 0.0, user_name,
+            self._trace_inference(ctx.question, "[无可用工具]",
+                                 "none", 0.0, ctx.user_name,
                                  duration=reasoning_duration,
-                                 complexity=_question_complexity,
+                                 complexity=ctx._question_complexity,
                                  tuning_hint="所有工具均不可用，建议补充知识")
         # 如果推理耗时过长且未找到答案，记录为需要关注的事件
-        if reasoning_duration > 5.0 and not tool_requested:
+        if reasoning_duration > 5.0 and not ctx.tool_requested:
             self._log(LogLevel.INFO,
-                     f"实时元认知: 高耗时未命中——问题'{question[:40]}'"
+                     f"实时元认知: 高耗时未命中——问题'{ctx.question[:40]}'"
                      f"推理{reasoning_duration:.1f}秒后仍未找到答案，可能需要补充知识")
 
         # ===== v21.0新增：坚韧品格·迭代层——根据失败归因自动调整策略 =====
-        if not tool_requested and reasoning_duration > 1.0:
+        if not ctx.tool_requested and reasoning_duration > 1.0:
             # 查询InsightBoard中最近的失败归因结果
             try:
                 if hasattr(self, '_insight_board') and self._insight_board:
@@ -1919,7 +1928,7 @@ class PulseInnerWorld(
                                     get_reasoning_experience,
                                 )
                                 _exp = get_reasoning_experience()
-                                _exp.record(question, "unknown", source="strategy_adjustment", confidence=0.4)
+                                _exp.record(ctx.question, "unknown", source="strategy_adjustment", confidence=0.4)
                             except Exception as e:
                                 self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
                         elif _attr_type == "information":
@@ -1933,7 +1942,7 @@ class PulseInnerWorld(
                                     "gaps": [{"metric": "knowledge_gap", "current": 0, "target": 1}],
                                     "suggestion": f"归因分析发现信息不足: {_attr_content[:80]}",
                                     "current_level": {"attribution": _attr_content[:80]},
-                                    "growth_topic": f"补充学习: {question[:60]}",
+                                    "growth_topic": f"补充学习: {ctx.question[:60]}",
                                 }, priority=4, layer="L3")
                         elif _attr_type == "capability":
                             # 能力不足：触发系统性学习计划
@@ -1945,11 +1954,11 @@ class PulseInnerWorld(
         # ===== v21.0新增结束 =====
 
         # ★v25.0新增：推理失败记录到体验池
-        if not tool_requested and reasoning_duration > 0.5:
+        if not ctx.tool_requested and reasoning_duration > 0.5:
             try:
                 if hasattr(self, 'experience_pool') and self.experience_pool:
                     self.experience_pool.record_experience(
-                        motivation=f"尝试回答「{question[:50]}」",
+                        motivation=f"尝试回答「{ctx.question[:50]}」",
                         motivation_intensity=0.6,
                         process_pressure=0.6,
                         pressure_type="frustration",
@@ -1957,18 +1966,19 @@ class PulseInnerWorld(
                         reward_intensity=0.1,
                         emotion_tags=["挫败", "不确定"],
                         emotion_intensity=0.5,
-                        content=f"推理未命中，问题复杂度={_question_complexity:.2f}，耗时={reasoning_duration:.1f}秒"
+                        content=f"推理未命中，问题复杂度={ctx._question_complexity:.2f}，耗时={reasoning_duration:.1f}秒"
                     )
-                    self._log(LogLevel.DEBUG, f"推理失败体验记录: '{question[:40]}'")
+                    self._log(LogLevel.DEBUG, f"推理失败体验记录: '{ctx.question[:40]}'")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
 
         return {
-            "status": "tool_requested" if tool_requested else "no_match",
+            "status": "tool_requested" if ctx.tool_requested else "no_match",
             "answer": None,
             "confidence": 0.0,
             "reasoning_duration": round(reasoning_duration, 2),
         }
+
     # ========== 推理检测器（从_on_inference_request提取） ==========
 
     def _detect_simple_query_local(self, ctx: "PulseInnerWorld.InferenceContext"):

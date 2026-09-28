@@ -71,7 +71,7 @@ LOCATION_WHITELIST = {
     # ---- 第143批 T-143a：PII 清洗 —— _identity_rules 兜底 handler 的**捕获体**
     #      内嵌身份语句含真名，改造后 body 指纹字符串变化（handler 本身未增未删，
     #      该文件静默 handler 总数 49→49 不变）。键 = (relpath, 行号)。
-    ("organs/brain/PulseInnerWorld.py", 349),                   # _load_inner_world_config：_identity_rules 默认兜底（body 含身份语句）
+    ("organs/brain/PulseInnerWorld.py", 352),                   # _load_inner_world_config：_identity_rules 默认兜底（★147批刀1：__slots__ +3 漂移，原 349）
 }
 
 
