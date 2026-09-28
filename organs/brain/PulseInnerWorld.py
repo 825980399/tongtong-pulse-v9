@@ -1763,6 +1763,7 @@ class PulseInnerWorld(
                 ctx.fallback_tools.append("deep_search")
             # 提升复杂度感知，更容易触发深度思考
             _question_complexity = min(1.0, ctx._question_complexity + 0.1)
+            ctx._question_complexity = _question_complexity   # ★148批：情绪加成后同步ctx，防陈旧读
         # 焦虑时：使用缓存优先，减少不确定性
         elif _current_emotion == "焦虑" and _emotion_intensity > 0.3:
             # 延长缓存有效期（在缓存检查处已处理）
