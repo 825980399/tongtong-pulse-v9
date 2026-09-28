@@ -197,18 +197,32 @@ def _load_owner_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
     cfg = os.environ.get("PULSE_OWNER_PII_FILE", "")
     if not cfg:
         cfg = os.path.join(PROJECT_ROOT, ".owner_pii.json")
+    file_names: list[str] = []
+    file_paths: list[str] = []
     if cfg and os.path.isfile(cfg):
         try:
             with open(cfg, encoding="utf-8") as fh:
                 data = json.load(fh)
-            names = list(data.get("names", [])) or names
-            paths = list(data.get("path_hints", [])) or paths
+            file_names = list(data.get("names", []))
+            file_paths = list(data.get("path_hints", []))
         except (OSError, ValueError) as _e:
             silent_exc(_e, where="export_public._load_owner_pii_patterns", level="warning")
+    # ★D150-13 修复：环境注入与本地脱敏配置「合并去重」，禁止任一方静默覆盖另一方
+    #   （旧实现 `list(data.get(...)) or names` 在配置文件含该键时会整段丢弃环境注入的真值）
+    merged_names = sorted(set(names) | set(file_names))
+    merged_paths = sorted(set(paths) | set(file_paths))
+    if not getattr(_load_owner_pii_patterns, "_src_printed", False):
+        _load_owner_pii_patterns._src_printed = True  # 防 verify_clean 多文件复扫刷屏，仅首调打印来源
+        def _src(e: list, f: list) -> str:
+            return "env+file" if (e and f) else "env" if e else "file" if f else "none"
+        print("[export_public] 属主 PII 来源（合并去重·非覆盖）: "
+              "names=%s(%d) paths=%s(%d)"
+              % (_src(names, file_names), len(merged_names),
+                 _src(paths, file_paths), len(merged_paths)))
     pats: list[tuple[str, re.Pattern[str]]] = []
-    for n in names:
+    for n in merged_names:
         pats.append(("真名·属主", re.compile(re.escape(n))))
-    for p in paths:
+    for p in merged_paths:
         pats.append(("真实路径", re.compile(re.escape(p))))
     return pats
 

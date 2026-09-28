@@ -103,10 +103,19 @@ class TestPiiScan(unittest.TestCase):
         return "138" + "1234" + "5678"        # 构造的假手机号
 
     def test_01_real_name_flagged(self):
+        import json
         import tempfile
         # D148-1：真实姓名模式改由脱敏配置（PULSE_OWNER_NAMES）加载，注入后验证。
+        # D150-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入），
+        #          避免依赖/泄露真实属主配置导致断言失真。
         old = os.environ.get("PULSE_OWNER_NAMES")
+        old_file = os.environ.get("PULSE_OWNER_PII_FILE")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                         encoding="utf-8") as cf:
+            json.dump({"names": [], "path_hints": []}, cf)
+            cfg = cf.name
         os.environ["PULSE_OWNER_NAMES"] = self._name_gl()
+        os.environ["PULSE_OWNER_PII_FILE"] = cfg
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False,
                                              encoding="utf-8") as fh:
@@ -122,6 +131,11 @@ class TestPiiScan(unittest.TestCase):
                 os.environ.pop("PULSE_OWNER_NAMES", None)
             else:
                 os.environ["PULSE_OWNER_NAMES"] = old
+            if old_file is None:
+                os.environ.pop("PULSE_OWNER_PII_FILE", None)
+            else:
+                os.environ["PULSE_OWNER_PII_FILE"] = old_file
+            os.unlink(cfg)
 
     def test_02_example_domain_allowed(self):
         import tempfile
@@ -148,11 +162,19 @@ class TestPiiScan(unittest.TestCase):
             os.unlink(p)
 
     def test_04_real_path_flagged(self):
+        import json
         import tempfile
         # D148-1：真实路径模式改由脱敏配置（PULSE_OWNER_PATH_HINTS）加载，
         # 注入后验证扫描器对真实项目路径的命中行为。
+        # D150-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入）。
         old = os.environ.get("PULSE_OWNER_PATH_HINTS")
+        old_file = os.environ.get("PULSE_OWNER_PII_FILE")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                         encoding="utf-8") as cf:
+            json.dump({"names": [], "path_hints": []}, cf)
+            cfg = cf.name
         os.environ["PULSE_OWNER_PATH_HINTS"] = "C:/test"
+        os.environ["PULSE_OWNER_PII_FILE"] = cfg
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
                                              encoding="utf-8") as fh:
@@ -168,6 +190,11 @@ class TestPiiScan(unittest.TestCase):
                 os.environ.pop("PULSE_OWNER_PATH_HINTS", None)
             else:
                 os.environ["PULSE_OWNER_PATH_HINTS"] = old
+            if old_file is None:
+                os.environ.pop("PULSE_OWNER_PII_FILE", None)
+            else:
+                os.environ["PULSE_OWNER_PII_FILE"] = old_file
+            os.unlink(cfg)
 
     def test_05_export_script_self_not_exempt(self):
         # D148-1：扫描器自身不得再豁免，且源码内零真值（自复扫必过）。
