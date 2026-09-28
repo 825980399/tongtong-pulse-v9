@@ -1228,6 +1228,161 @@ class PulseInnerWorld(
         # ===== QICA建议方法优先执行结束 =====
         return None
 
+    def _ir_run_pipeline(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # ===== v20.0新增：思考纪律——标准思维流水线入口 =====
+        # 当所有检测器未命中时，按大脑皮层规划的流水线深度执行推理
+        _pipeline = ctx.payload.get("strategy_context", {}).get("thinking_pipeline", {})
+        _pipeline_depth = _pipeline.get("depth", "standard")
+
+        if _pipeline_depth == "quick":
+            # 快速通道：仅知识检索，不经过复杂推理
+            self._log(LogLevel.DEBUG, f"思考纪律·快速通道: '{ctx.question[:40]}'")
+            _knowledge_result = self._knowledge_retrieve(ctx.question)
+            if _knowledge_result:
+                # v20.0新增：追加L3智慧节点的策略指导
+                _wisdom = self._get_wisdom_guidance(ctx.question)
+                if _wisdom:
+                    _knowledge_result = _knowledge_result + "\n\n💡 " + _wisdom
+                # ★v23.0：标准通道检索结果验证降级
+                _validated = self._validate_and_degrade(ctx.question, _knowledge_result, "标准通道")
+                if _validated != _knowledge_result:
+                    _knowledge_result = _validated
+
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _knowledge_result, ctx.user_name)
+                _final = self._enhance_answer(
+                    answer=_knowledge_result, question=ctx.question, method="thinking_discipline_quick",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "thinking_discipline_quick", "confidence": 0.85, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "high",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                }, priority=7, layer="L2")
+                return {"status": "thinking_discipline_quick", "answer": _knowledge_result}
+            # 快速通道未命中，降级到标准通道继续
+            self._log(LogLevel.DEBUG, "思考纪律·快速通道未命中，降级为标准通道")
+
+        if _pipeline_depth in ("standard", "quick"):
+            # 标准通道：理解→检索→表达（快速通道降级也走此路径）
+            _knowledge_result = self._knowledge_retrieve(ctx.question)
+            if _knowledge_result:
+                # v20.0新增：追加L3智慧节点的策略指导
+                _wisdom = self._get_wisdom_guidance(ctx.question)
+                if _wisdom:
+                    _knowledge_result = _knowledge_result + "\n\n💡 " + _wisdom
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _knowledge_result, ctx.user_name)
+                _final = self._enhance_answer(
+                    answer=_knowledge_result, question=ctx.question, method="thinking_discipline_standard",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "thinking_discipline_standard", "confidence": 0.75, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "moderate",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                }, priority=7, layer="L2")
+                return {"status": "thinking_discipline_standard", "answer": _knowledge_result}
+
+        if _pipeline_depth == "deep":
+            # 深度通道：理解→检索→验证→深度思考→表达
+            self._log(LogLevel.INFO, f"思考纪律·深度通道: '{ctx.question[:60]}'")
+            # 第一步：先检索知识作为基础
+            _knowledge_result = self._knowledge_retrieve(ctx.question)
+            # 第二步：深度思考
+            _deep_result = None
+            if hasattr(self, '_reasoning_pool') and self._reasoning_pool:
+                _future = None
+                try:
+                    _future = self._reasoning_pool.submit("PulseInnerWorld._deep_think", ctx.question, 3)
+                    if _future:
+                        # ★主线第31批 T1：降级标记（truthy dict）不得当结果用，
+                        #   否则主进程同步回退被跳过、内部 dict 还会进入用户可见答案。
+                        _deep_result = self._m31_accept_subproc_deep_result(
+                            _future.result(timeout=self._deep_think_timeout))
+                except Exception:
+                    if _future is not None:
+                        try:
+                            _future.cancel()
+                        except Exception as e:
+                            self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+            if not _deep_result:
+                # ★主线第31批 T1：主进程同步执行（子进程结果不可用时的正路）；
+                #   受第27批「自推理开始起算」的总预算约束，避免无限耗时。
+                _deep_result = self._deep_think(
+                    ctx.question,
+                    deadline=self._m31_deep_fallback_deadline(ctx._reasoning_start_time))
+
+            # 第三步：综合知识检索和深度思考结果
+            if _deep_result:
+                # v20.0新增：追加L3智慧节点的策略指导
+                _wisdom = self._get_wisdom_guidance(ctx.question)
+                _wisdom_text = f"\n\n💡 {_wisdom}" if _wisdom else ""
+                # 如果知识检索也有结果，融合两者
+                # ★主线第30批 T1：深度思考返回的是**降级标记**（如子进程无知识上下文）
+                #   时，绝不能把它当内容拼进用户可见答案——那会把内部 dict 直接暴露给用户。
+                #   此时仅用知识检索结果作答（深度思考部分静默丢弃并记 DEBUG）。
+                _m30_degraded = False
+                try:
+                    _m30_d = _deep_result if isinstance(_deep_result, dict) else {}
+                    _m30_degraded = bool(_m30_d) and str(_m30_d.get("status", "")) == "degraded"
+                except Exception as _m30_e:
+                    self._log(LogLevel.DEBUG,
+                              f"降级标记判定异常已忽略: {type(_m30_e).__name__}: {_m30_e}")
+                if _m30_degraded:
+                    self._log(LogLevel.DEBUG,
+                              "深度思考返回降级标记，本次仅用知识检索结果作答（不拼入内部标记）")
+                if _knowledge_result and not _m30_degraded:
+                    _combined = f"{_knowledge_result}\n\n（经过深入思考后补充）{_deep_result}{_wisdom_text}"
+                else:
+                    _combined = _deep_result
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _combined, ctx.user_name)
+                self._trace_inference(ctx.question, _combined, "thinking_discipline_deep", 0.7, ctx.user_name,
+                                     duration=time.time() - ctx._reasoning_start_time,
+                                     complexity=ctx._question_complexity,
+                                     tuning_hint="思考纪律深度通道完成")
+                _final = self._enhance_answer(
+                    answer=_combined, question=ctx.question, method="thinking_discipline_deep",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "thinking_discipline_deep", "confidence": 0.7, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "moderate",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                    "thinking_discipline": True,
+                }, priority=7, layer="L2")
+                return {"status": "thinking_discipline_deep", "answer": _combined}
+            elif _knowledge_result:
+                # 深度思考失败但知识检索有结果，按标准通道处理
+                self._inference_count += 1
+                self._cache_inference(ctx.question, _knowledge_result, ctx.user_name)
+                _final = self._enhance_answer(
+                    answer=_knowledge_result, question=ctx.question, method="thinking_discipline_deep_fallback",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "thinking_discipline_deep_fallback", "confidence": 0.6, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "moderate",
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                }, priority=7, layer="L2")
+                return {"status": "thinking_discipline_deep_fallback", "answer": _knowledge_result}
+        # ===== v20.0思考纪律入口结束 =====
+        return None
+
+
 
 
 
@@ -1260,157 +1415,9 @@ class PulseInnerWorld(
         _qica = self._ir_dispatch_qica_method(_ctx)
         if _qica is not None:
             return _qica
-        # ===== v20.0新增：思考纪律——标准思维流水线入口 =====
-        # 当所有检测器未命中时，按大脑皮层规划的流水线深度执行推理
-        _pipeline = payload.get("strategy_context", {}).get("thinking_pipeline", {})
-        _pipeline_depth = _pipeline.get("depth", "standard")
-
-        if _pipeline_depth == "quick":
-            # 快速通道：仅知识检索，不经过复杂推理
-            self._log(LogLevel.DEBUG, f"思考纪律·快速通道: '{question[:40]}'")
-            _knowledge_result = self._knowledge_retrieve(question)
-            if _knowledge_result:
-                # v20.0新增：追加L3智慧节点的策略指导
-                _wisdom = self._get_wisdom_guidance(question)
-                if _wisdom:
-                    _knowledge_result = _knowledge_result + "\n\n💡 " + _wisdom
-                # ★v23.0：标准通道检索结果验证降级
-                _validated = self._validate_and_degrade(question, _knowledge_result, "标准通道")
-                if _validated != _knowledge_result:
-                    _knowledge_result = _validated
-
-                self._inference_count += 1
-                self._cache_inference(question, _knowledge_result, user_name)
-                _final = self._enhance_answer(
-                    answer=_knowledge_result, question=question, method="thinking_discipline_quick",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "thinking_discipline_quick", "confidence": 0.85, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "high",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "thinking_discipline_quick", "answer": _knowledge_result}
-            # 快速通道未命中，降级到标准通道继续
-            self._log(LogLevel.DEBUG, "思考纪律·快速通道未命中，降级为标准通道")
-
-        if _pipeline_depth in ("standard", "quick"):
-            # 标准通道：理解→检索→表达（快速通道降级也走此路径）
-            _knowledge_result = self._knowledge_retrieve(question)
-            if _knowledge_result:
-                # v20.0新增：追加L3智慧节点的策略指导
-                _wisdom = self._get_wisdom_guidance(question)
-                if _wisdom:
-                    _knowledge_result = _knowledge_result + "\n\n💡 " + _wisdom
-                self._inference_count += 1
-                self._cache_inference(question, _knowledge_result, user_name)
-                _final = self._enhance_answer(
-                    answer=_knowledge_result, question=question, method="thinking_discipline_standard",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "thinking_discipline_standard", "confidence": 0.75, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "moderate",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "thinking_discipline_standard", "answer": _knowledge_result}
-
-        if _pipeline_depth == "deep":
-            # 深度通道：理解→检索→验证→深度思考→表达
-            self._log(LogLevel.INFO, f"思考纪律·深度通道: '{question[:60]}'")
-            # 第一步：先检索知识作为基础
-            _knowledge_result = self._knowledge_retrieve(question)
-            # 第二步：深度思考
-            _deep_result = None
-            if hasattr(self, '_reasoning_pool') and self._reasoning_pool:
-                _future = None
-                try:
-                    _future = self._reasoning_pool.submit("PulseInnerWorld._deep_think", question, 3)
-                    if _future:
-                        # ★主线第31批 T1：降级标记（truthy dict）不得当结果用，
-                        #   否则主进程同步回退被跳过、内部 dict 还会进入用户可见答案。
-                        _deep_result = self._m31_accept_subproc_deep_result(
-                            _future.result(timeout=self._deep_think_timeout))
-                except Exception:
-                    if _future is not None:
-                        try:
-                            _future.cancel()
-                        except Exception as e:
-                            self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-            if not _deep_result:
-                # ★主线第31批 T1：主进程同步执行（子进程结果不可用时的正路）；
-                #   受第27批「自推理开始起算」的总预算约束，避免无限耗时。
-                _deep_result = self._deep_think(
-                    question,
-                    deadline=self._m31_deep_fallback_deadline(_reasoning_start_time))
-
-            # 第三步：综合知识检索和深度思考结果
-            if _deep_result:
-                # v20.0新增：追加L3智慧节点的策略指导
-                _wisdom = self._get_wisdom_guidance(question)
-                _wisdom_text = f"\n\n💡 {_wisdom}" if _wisdom else ""
-                # 如果知识检索也有结果，融合两者
-                # ★主线第30批 T1：深度思考返回的是**降级标记**（如子进程无知识上下文）
-                #   时，绝不能把它当内容拼进用户可见答案——那会把内部 dict 直接暴露给用户。
-                #   此时仅用知识检索结果作答（深度思考部分静默丢弃并记 DEBUG）。
-                _m30_degraded = False
-                try:
-                    _m30_d = _deep_result if isinstance(_deep_result, dict) else {}
-                    _m30_degraded = bool(_m30_d) and str(_m30_d.get("status", "")) == "degraded"
-                except Exception as _m30_e:
-                    self._log(LogLevel.DEBUG,
-                              f"降级标记判定异常已忽略: {type(_m30_e).__name__}: {_m30_e}")
-                if _m30_degraded:
-                    self._log(LogLevel.DEBUG,
-                              "深度思考返回降级标记，本次仅用知识检索结果作答（不拼入内部标记）")
-                if _knowledge_result and not _m30_degraded:
-                    _combined = f"{_knowledge_result}\n\n（经过深入思考后补充）{_deep_result}{_wisdom_text}"
-                else:
-                    _combined = _deep_result
-                self._inference_count += 1
-                self._cache_inference(question, _combined, user_name)
-                self._trace_inference(question, _combined, "thinking_discipline_deep", 0.7, user_name,
-                                     duration=time.time() - _reasoning_start_time,
-                                     complexity=_question_complexity,
-                                     tuning_hint="思考纪律深度通道完成")
-                _final = self._enhance_answer(
-                    answer=_combined, question=question, method="thinking_discipline_deep",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "thinking_discipline_deep", "confidence": 0.7, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "moderate",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                    "thinking_discipline": True,
-                }, priority=7, layer="L2")
-                return {"status": "thinking_discipline_deep", "answer": _combined}
-            elif _knowledge_result:
-                # 深度思考失败但知识检索有结果，按标准通道处理
-                self._inference_count += 1
-                self._cache_inference(question, _knowledge_result, user_name)
-                _final = self._enhance_answer(
-                    answer=_knowledge_result, question=question, method="thinking_discipline_deep_fallback",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "thinking_discipline_deep_fallback", "confidence": 0.6, "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "moderate",
-                    "strategy_applied": payload.get("strategy_context", {}),
-                }, priority=7, layer="L2")
-                return {"status": "thinking_discipline_deep_fallback", "answer": _knowledge_result}
-        # ===== v20.0思考纪律入口结束 =====
+        _pipeline_result = self._ir_run_pipeline(_ctx)
+        if _pipeline_result is not None:
+            return _pipeline_result
 
         # ★v23.0清理：v18.0标记的旧内联分支已由17个检测器完整覆盖，安全移除
         # ★v17.0新增：情绪调制推理策略——调整复杂度阈值和检索深度
