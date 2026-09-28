@@ -1,0 +1,39 @@
+{
+ "schema": "cw3-consistency/1",
+ "anchor_rev": "HEAD",
+ "anchor_sha": "bc4df27e1346583e7c359bf4d7971cdb29b22278",
+ "observed_at": "2026-09-28T20:58:34",
+ "watch": [
+  "organs/brain/PulseInnerWorld.py"
+ ],
+ "files": {
+  "organs/brain/PulseInnerWorld.py": {
+   "metrics": {
+    "try": 207,
+    "except": 208,
+    "except_pass": 0,
+    "if": 1875,
+    "for": 284,
+    "while": 1,
+    "return": 795,
+    "raise": 0,
+    "await": 0,
+    "emit_calls": 103,
+    "methods": 314,
+    "lines": 17774,
+    "ast_sha256_12": "cff72bcfca41"
+   },
+   "priority_hist": {
+    "2": 4,
+    "3": 25,
+    "4": 10,
+    "5": 21,
+    "6": 7,
+    "7": 28,
+    "8": 6
+   },
+   "event_hist": {}
+  }
+ },
+ "delta_reason": ""
+}
