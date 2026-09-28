@@ -96,6 +96,8 @@ class PulseInnerWorld(
             "search_query",
             "tool_hint",
             "tool_requested",
+            "fallback_tools",
+            "_has_remote_api",
             "user_name",
         )
 
@@ -660,9 +662,9 @@ class PulseInnerWorld(
 
         return None
 
-    def _ir_try_deep_search_pre(self, ctx: "PulseInnerWorld.InferenceContext", fallback_tools, tool_requested):
+    def _ir_try_deep_search_pre(self, ctx: "PulseInnerWorld.InferenceContext"):
         # 策略3: 深度搜索（原有逻辑）
-        if "deep_search" in fallback_tools and not tool_requested:
+        if "deep_search" in ctx.fallback_tools and not ctx.tool_requested:
             # ===== 全局状态感知：自主判断是否适合执行搜索 =====
             can_search = True
             skip_reason = ""
@@ -681,7 +683,7 @@ class PulseInnerWorld(
         return None
 
 
-    def _ir_try_deep_search_exec(self, ctx: "PulseInnerWorld.InferenceContext", can_search, skip_reason, tool_requested, _strategy_context, _has_remote_api):
+    def _ir_try_deep_search_exec(self, ctx: "PulseInnerWorld.InferenceContext", can_search, skip_reason):
         if can_search:
             # ===== 新增：语义范畴判断——搜索主题是否适合外部搜索引擎 =====
             _search_topic_for_check = ctx.search_query or ctx.question[:80]
@@ -706,24 +708,24 @@ class PulseInnerWorld(
                             "question": ctx.question, "answer": final_answer,
                             "method": "contemplation_semantic", "confidence": 0.5, "user_name": ctx.user_name,
                             "correlation_id": ctx.payload.get("correlation_id", ""),
-                            "strategy_applied": _strategy_context,
+                            "strategy_applied": ctx._strategy_context,
                             "confidence_hint": "low",
                         }, priority=6, layer="L2")
-                        return ({"status": "contemplation_match", "answer": ctx.contemplative_answer}, tool_requested)
+                        return {"status": "contemplation_match", "answer": ctx.contemplative_answer}
                 # ★v25.0修复：不适合搜索且沉思失败，直接走大模型兜底或诚实回答，绝不发起外部搜索
                 self._log(LogLevel.INFO, "语义范畴: 不适合搜索且沉思未命中，走大模型兜底或诚实回答")
-                if _has_remote_api and ctx.correlation_id:
+                if ctx._has_remote_api and ctx.correlation_id:
                     ctx._memory_context = self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance)
                     self._emit(InferenceEvent.RESULT, {
                         "question": ctx.question, "answer": None,
                         "method": "meta_not_search",
                         "confidence": 0.0, "user_name": ctx.user_name,
                         "correlation_id": ctx.correlation_id,
-                        "strategy_applied": _strategy_context,
-                        "tool_requested": False,
+                        "strategy_applied": ctx._strategy_context,
+                        "ctx.tool_requested": False,
                         "memory_context": ctx._memory_context,
                     }, priority=5, layer="L2")
-                    return ({"status": "delegated_to_lung_meta", "reason": "不适合搜索且沉思失败"}, tool_requested)
+                    return {"status": "delegated_to_lung_meta", "reason": "不适合搜索且沉思失败"}
                 else:
                     fallback_answer = (
                         "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答，"
@@ -743,10 +745,10 @@ class PulseInnerWorld(
                         "question": ctx.question, "answer": final_answer,
                         "method": "meta_honest", "confidence": 0.3, "user_name": ctx.user_name,
                         "correlation_id": ctx.correlation_id,
-                        "strategy_applied": _strategy_context,
+                        "strategy_applied": ctx._strategy_context,
                         "confidence_hint": "low",
                     }, priority=5, layer="L2")
-                    return ({"status": "meta_honest", "answer": fallback_answer}, tool_requested)
+                    return {"status": "meta_honest", "answer": fallback_answer}
             # ===== 新增: 观点陈述检测——判断用户输入是观点还是问题 =====
             is_opinion_statement = self._is_opinion_statement(ctx.question)
             if is_opinion_statement and self.node_pool:
@@ -769,10 +771,10 @@ class PulseInnerWorld(
                         "question": ctx.question, "answer": final_answer,
                         "method": "contemplation", "confidence": 0.5, "user_name": ctx.user_name,
                         "correlation_id": ctx.payload.get("correlation_id", ""),
-                        "strategy_applied": _strategy_context,
+                        "strategy_applied": ctx._strategy_context,
                         "confidence_hint": "low",
                     }, priority=6, layer="L2")
-                    return ({"status": "contemplation_match", "answer": ctx.contemplative_answer}, tool_requested)
+                    return {"status": "contemplation_match", "answer": ctx.contemplative_answer}
                 # 沉思无法回答时，生成带有价值冲突说明的兜底回答
                 fallback_answer = (
                     "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答。"
@@ -793,7 +795,7 @@ class PulseInnerWorld(
                     "question": ctx.question, "answer": final_answer,
                     "method": "contemplation", "confidence": 0.4, "user_name": ctx.user_name,
                     "correlation_id": ctx.payload.get("correlation_id", ""),
-                    "strategy_applied": _strategy_context,
+                    "strategy_applied": ctx._strategy_context,
                     "confidence_hint": "low",
                 }, priority=6, layer="L2")
                 # 将兜底回答发射为消化脉冲，让胃创建L1节点
@@ -804,7 +806,7 @@ class PulseInnerWorld(
                     "importance": "B",
                     "view_mode": "INNER_VIEW",
                 }, priority=3, layer="L2")
-                return ({"status": "contemplation_match", "answer": fallback_answer}, tool_requested)
+                return {"status": "contemplation_match", "answer": fallback_answer}
             else:
                 # ★FIX: 抽象概念/知识陈述在源头拦截，不发射无效搜索
                 _skip_search = self._should_skip_search(ctx.question)
@@ -826,9 +828,9 @@ class PulseInnerWorld(
                     "deep_search": True,
                     "search_intent": "curiosity",
                 }, priority=4, layer="L3")
-                tool_requested = True
+                ctx.tool_requested = True
             # ===== 搜索发起后，如果远程API可用，同时作为兜底方案 =====
-            if _has_remote_api and ctx.correlation_id:
+            if ctx._has_remote_api and ctx.correlation_id:
                 # ===== 大模型兜底前记录经验 =====
                 try:
                     from nucleus.mnemosyne.ReasoningExperience import (
@@ -862,13 +864,13 @@ class PulseInnerWorld(
                     "method": "search_with_lung_fallback",
                     "confidence": 0.0, "user_name": ctx.user_name,
                     "correlation_id": ctx.correlation_id,  # ← 使用前面提取的ID
-                    "strategy_applied": _strategy_context,
-                    "tool_requested": True,
+                    "strategy_applied": ctx._strategy_context,
+                    "ctx.tool_requested": True,
                     "memory_context": ctx._memory_context,
                 }, priority=4, layer="L2")
         else:
             self._log(LogLevel.INFO, f"元认知决策: {skip_reason}: {ctx.question[:40]}")
-        return (None, tool_requested)
+        return None
 
     def _ir_assemble_knowledge_answer(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         # 知识检索
@@ -1668,6 +1670,174 @@ class PulseInnerWorld(
         # ===== 推理问题前置过滤结束 =====
         return None
 
+    def _ir_plan_tools(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # ===== 元认知决策：推理结束后的行动闭环（增强版） =====
+        ctx._strategy_context = ctx.payload.get("strategy_context", {})
+        ctx.tool_requested = False
+        # ===== 新增: 状态感知调制——根据内在状态调整工具选择倾向 =====
+        ctx.fallback_tools = ctx._strategy_context.get("fallback_approach", [])
+        # ===== 新增：复杂问题直接走大模型，不走搜索 =====
+        ctx._has_remote_api = False
+        try:
+            import config as _cfg_check
+            _api_cfg = getattr(_cfg_check, 'REMOTE_API_CONFIG', {})
+            if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
+                ctx._has_remote_api = True
+        except Exception as e:
+            self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+        if ctx._question_complexity > 0.4 and ctx._has_remote_api:
+            # ★P1-1(2026-09-03)：大模型调用前置思考——即使知识检索/沉思未直接命中，
+            #   也快速检索相关知识作为上下文传给大模型，让大模型基于框架本地认知补充，
+            #   而非从零开始回答。减少大模型依赖，提高回答准确性。
+            _local_knowledge_hint = ""
+            try:
+                if self.node_pool:
+                    _hint_results = self.node_pool.query(
+                        ctx.question, limit=3, min_relevance=0.3)
+                    if _hint_results:
+                        _hints = []
+                        for _h in _hint_results[:3]:
+                            _val = _h.get("value", "") or _h.get("content", "")
+                            if _val and len(_val) > 10:
+                                _hints.append(_val[:200])
+                        if _hints:
+                            _local_knowledge_hint = (
+                                "[框架本地相关知识参考]\n" + "\n".join(_hints)
+                            )
+                            self._log(LogLevel.DEBUG,
+                                     f"大模型前置思考: 检索到{len(_hints)}条相关知识作为上下文")
+            except Exception as _hint_err:
+                self._log(LogLevel.WARNING, f"大模型前置知识检索异常: {_hint_err}")
+
+            # 区分：有ctx.correlation_id是对话触发（需要回复），没有是后台自主学习（只消化不输出）
+            if ctx.correlation_id:
+                self._log(LogLevel.INFO,
+                         f"复杂问题推给大模型: 复杂度={ctx._question_complexity:.2f}"
+                         f"{'，含本地知识参考' if _local_knowledge_hint else ''}")
+                self._direct_to_lung_questions.add(ctx.question.strip())
+                _memory_context = self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance)
+                if _local_knowledge_hint:
+                    _memory_context = (ctx._memory_context or "") + "\n\n" + _local_knowledge_hint
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": None,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence": 0.0, "user_name": ctx.user_name,
+                    "strategy_applied": ctx._strategy_context,
+                    "tool_requested": False,
+                    "memory_context": ctx._memory_context,
+                }, priority=5, layer="L2")
+                return {"status": "direct_to_lung", "reason": "复杂问题优先推理"}
+            else:
+                # 后台自主学习：直接调用大模型消化为知识，不经过嘴巴输出
+                self._log(LogLevel.INFO, f"后台学习触发大模型: {ctx.question[:40]}")
+                self._emit(Event.LUNGS_SELECT_MODEL, {  # ★P3-5修复：修正笔误，原 "lung.select_model" 与常量 LungEvent.SELECT_MODEL 不匹配
+                    "task_type": "chat",
+                    "prompt": ctx.question,
+                    "user_name": ctx.user_name,
+                    "memory_context": self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance),
+                    # ★修复：显式标记后台学习，不依赖肺部「is_dialogue 默认 False」的隐式行为。
+                    # 明确 is_dialogue=False + is_background_learning=True，语义自明、防回归。
+                    "is_dialogue": False,
+                    "is_background_learning": True,
+                }, priority=4, layer="L2")
+                return {"status": "background_learning", "reason": "后台自主学习"}
+        # ===== 新增: 情绪驱动的工具选择 =====
+        _current_emotion = self._get_current_emotion()
+        _emotion_intensity = 0.0
+        if self.hormones and hasattr(self.hormones, 'get_emotion_intensity'):
+            try:
+                _emotion_intensity = self._call_provider(self._emotion_intensity_provider, default=0.0)
+            except Exception as e:
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+        # 悲伤/恐惧时：优先内在沉思而非外部搜索
+        if _current_emotion in ("悲伤", "恐惧") and _emotion_intensity > 0.3:
+            if "deep_search" in ctx.fallback_tools:
+                ctx.fallback_tools.remove("deep_search")
+            if "inner_world" not in ctx.fallback_tools:
+                ctx.fallback_tools.insert(0, "inner_world")
+            self._log(LogLevel.DEBUG,
+                     f"情绪驱动({_current_emotion}): 优先内在沉思，跳过外部搜索")
+        # 喜悦/期待时：更愿意尝试外部搜索和探索
+        elif _current_emotion in ("喜悦", "期待") and _emotion_intensity > 0.2:
+            if "deep_search" not in ctx.fallback_tools:
+                ctx.fallback_tools.append("deep_search")
+            # 提升复杂度感知，更容易触发深度思考
+            _question_complexity = min(1.0, ctx._question_complexity + 0.1)
+        # 焦虑时：使用缓存优先，减少不确定性
+        elif _current_emotion == "焦虑" and _emotion_intensity > 0.3:
+            # 延长缓存有效期（在缓存检查处已处理）
+            ctx.fallback_tools = ["inner_world"]  # 只用内在世界，不做外部搜索
+        # ===== 工具认知层：根据大脑皮层的建议决定是否跳过深度搜索 =====
+        if not ctx.tool_hint.get("should_search", True) and "deep_search" in ctx.fallback_tools:
+            ctx.fallback_tools.remove("deep_search")
+            self._log(LogLevel.INFO, f"工具认知: 根据搜索经验，跳过深度搜索 (问题='{ctx.question[:30]}')")
+        if ctx._meta_state.get("cognitive_load") == "high":
+            if "deep_search" in ctx.fallback_tools:
+                ctx.fallback_tools.remove("deep_search")
+                self._log(LogLevel.DEBUG, "状态感知: 认知负荷偏高，跳过深度搜索")
+        # ★压力闭环：高压下降并行/外部搜索，优先内在分步求解（复用已算出的压力调制）
+        if ctx._stress_modulation.get("avoid_parallel"):
+            if "deep_search" in ctx.fallback_tools:
+                ctx.fallback_tools.remove("deep_search")
+            if "inner_world" not in ctx.fallback_tools:
+                ctx.fallback_tools.insert(0, "inner_world")
+        if ctx._meta_state.get("wisdom_quality") == "high":
+            if "deep_search" not in ctx.fallback_tools:
+                ctx.fallback_tools.append("deep_search")
+        # 情感充盈时，更愿意冒险尝试创造性方案
+        if ctx._meta_state.get("emotional_state") == "positive":
+            complexity_threshold = ctx._meta_state.get("complexity_bonus", 0)
+            ctx._question_complexity += complexity_threshold  # 提升复杂度感知，更容易触发深度思考
+        # 分析问题特征，决定工具选择策略
+        ctx.question_features = self._analyze_question_features(ctx.question)
+        # 策略1: 计算验证类问题 → 优先用代码沙箱
+        if ctx.question_features.get("is_computational") and not ctx.tool_requested:
+            # ★FIX(推理准确性): 先尝试本地安全算术求值，命中则直接返回结果，不再发射空壳占位代码
+            _calc_result = self._safe_eval_arithmetic(ctx.question)
+            if _calc_result is not None:
+                self._inference_count += 1
+                _calc_answer = f"计算结果：{_calc_result}"
+                self._cache_inference(ctx.question, _calc_answer, ctx.user_name)
+                _final = self._enhance_answer(
+                    answer=_calc_answer, question=ctx.question, method="arithmetic",
+                    complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context,
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": _final,
+                    "method": "arithmetic", "confidence": self._evidence_conf(0.95, "arithmetic", [1]), "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
+                    "confidence_hint": "high",
+                    "strategy_applied": ctx._strategy_context,
+                }, priority=7, layer="L2")
+                return {"status": "arithmetic", "answer": _calc_answer}
+            self._log(LogLevel.INFO,
+                     f"元认知决策: 计算类问题，尝试代码验证: {ctx.question[:40]}")
+            self._emit(Event.MOTOR_EXECUTE, {
+                "code": f"# 验证计算: {ctx.question[:80]}\nprint('计算结果: ...')",
+                "language": "python",
+                "user_name": ctx.user_name,
+                "task_id": f"meta_calc_{int(time.time())}",
+            }, priority=6, layer="L2")
+            ctx.tool_requested = True
+        # 策略2: 比较分析类问题 → 拆解子问题后逐个搜索
+        if ctx.question_features.get("is_comparative") and not ctx.tool_requested:
+            sub_parts = self._decompose_complex_question(ctx.question)
+            if sub_parts and len(sub_parts) >= 2:
+                self._log(LogLevel.INFO,
+                         f"元认知决策: 比较类问题，拆解为{len(sub_parts)}个子问题: {ctx.question[:40]}")
+                for sq in sub_parts[:2]:
+                    self._emit(Event.CONTROLLER_OPEN_URL, {
+                        "url": f"https://lite.duckduckgo.com/lite/?q={sq[:80]}",
+                        "reason": f"元认知拆解搜索: {sq[:40]}",
+                        "search_topic": sq[:80],
+                        "deep_search": True,
+                        "search_intent": "curiosity",
+                    }, priority=4, layer="L3")
+                ctx.tool_requested = True
+        return None
+
+
 
 
 
@@ -1679,19 +1849,6 @@ class PulseInnerWorld(
         _ctx = self._ir_build_context(payload)
         if _ctx is None:
             return {"status": "skipped", "reason": "空问题"}
-        question = _ctx.question
-        user_name = _ctx.user_name
-        correlation_id = _ctx.correlation_id
-        empathetic_note = _ctx.empathetic_note
-        _supplement_topic = _ctx._supplement_topic
-        _explicit_inference_result = _ctx._explicit_inference_result
-        tool_hint = _ctx.tool_hint
-        guidance = _ctx.guidance
-        _memory_context = _ctx._memory_context
-        _question_complexity = _ctx._question_complexity
-        _emotion_modulation = _ctx._emotion_modulation
-        _reasoning_start_time = _ctx._reasoning_start_time
-        _meta_state = _ctx._meta_state
 
         _explicit = self._ir_try_explicit_search(_ctx)
         if _explicit is not None:
@@ -1715,10 +1872,30 @@ class PulseInnerWorld(
         _deep_read = self._ir_decompose_and_deep_read(_ctx)
         if _deep_read is not None:
             return _deep_read
+        self._ir_record_failed_domain(_ctx)
+
+        _knowledge = self._ir_assemble_knowledge_answer(_ctx)
+        if _knowledge is not None:
+            return _knowledge
+        _plan = self._ir_plan_tools(_ctx)
+        if _plan is not None:
+            return _plan
+        _ds_gate = self._ir_try_deep_search_pre(_ctx)
+        if _ds_gate is not None:
+            _can_search, _skip_reason = _ds_gate
+            _ds_exec = self._ir_try_deep_search_exec(_ctx, _can_search, _skip_reason)
+            if _ds_exec is not None:
+                return _ds_exec
+        _creative = self._ir_try_creative_solution(_ctx, payload)
+        if _creative is not None:
+            return _creative
+        return self._ir_finalize(_ctx)
+
+    def _ir_record_failed_domain(self, ctx: "PulseInnerWorld.InferenceContext") -> None:
         # ★v17.0新增：认知边界感知——记录推理失败的领域
-        if not _ctx._derivation_answer:
+        if not ctx._derivation_answer:
             _failed_keywords = []
-            for _match in re.finditer(r'[\u4e00-\u9fff]{2,4}', question):
+            for _match in re.finditer(r'[\u4e00-\u9fff]{2,4}', ctx.question):
                 _word = _match.group()
                 if _word not in _failed_keywords and _word not in [
                     "什么是", "是什么", "为什么", "如何", "怎么",
@@ -1742,200 +1919,28 @@ class PulseInnerWorld(
                              f"认知边界记录: 推理失败已累计{self._failed_domain_log_count}次, "
                              f"高频失败领域={_top_failed}")
 
-        _knowledge = self._ir_assemble_knowledge_answer(_ctx)
-        if _knowledge is not None:
-            return _knowledge
-        # ===== 元认知决策：推理结束后的行动闭环（增强版） =====
-        _strategy_context = payload.get("strategy_context", {})
-        tool_requested = False
-        # ===== 新增: 状态感知调制——根据内在状态调整工具选择倾向 =====
-        fallback_tools = _strategy_context.get("fallback_approach", [])
-        # ===== 新增：复杂问题直接走大模型，不走搜索 =====
-        _has_remote_api = False
-        try:
-            import config as _cfg_check
-            _api_cfg = getattr(_cfg_check, 'REMOTE_API_CONFIG', {})
-            if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
-                _has_remote_api = True
-        except Exception as e:
-            self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-        if _question_complexity > 0.4 and _has_remote_api:
-            # ★P1-1(2026-09-03)：大模型调用前置思考——即使知识检索/沉思未直接命中，
-            #   也快速检索相关知识作为上下文传给大模型，让大模型基于框架本地认知补充，
-            #   而非从零开始回答。减少大模型依赖，提高回答准确性。
-            _local_knowledge_hint = ""
-            try:
-                if self.node_pool:
-                    _hint_results = self.node_pool.query(
-                        question, limit=3, min_relevance=0.3)
-                    if _hint_results:
-                        _hints = []
-                        for _h in _hint_results[:3]:
-                            _val = _h.get("value", "") or _h.get("content", "")
-                            if _val and len(_val) > 10:
-                                _hints.append(_val[:200])
-                        if _hints:
-                            _local_knowledge_hint = (
-                                "[框架本地相关知识参考]\n" + "\n".join(_hints)
-                            )
-                            self._log(LogLevel.DEBUG,
-                                     f"大模型前置思考: 检索到{len(_hints)}条相关知识作为上下文")
-            except Exception as _hint_err:
-                self._log(LogLevel.WARNING, f"大模型前置知识检索异常: {_hint_err}")
-
-            # 区分：有correlation_id是对话触发（需要回复），没有是后台自主学习（只消化不输出）
-            if correlation_id:
-                self._log(LogLevel.INFO,
-                         f"复杂问题推给大模型: 复杂度={_question_complexity:.2f}"
-                         f"{'，含本地知识参考' if _local_knowledge_hint else ''}")
-                self._direct_to_lung_questions.add(question.strip())
-                _memory_context = self._build_memory_context(question, user_name, guidance)
-                if _local_knowledge_hint:
-                    _memory_context = (_memory_context or "") + "\n\n" + _local_knowledge_hint
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": None,
-                    "correlation_id": correlation_id,
-                    "confidence": 0.0, "user_name": user_name,
-                    "strategy_applied": _strategy_context,
-                    "tool_requested": False,
-                    "memory_context": _memory_context,
-                }, priority=5, layer="L2")
-                return {"status": "direct_to_lung", "reason": "复杂问题优先推理"}
-            else:
-                # 后台自主学习：直接调用大模型消化为知识，不经过嘴巴输出
-                self._log(LogLevel.INFO, f"后台学习触发大模型: {question[:40]}")
-                self._emit(Event.LUNGS_SELECT_MODEL, {  # ★P3-5修复：修正笔误，原 "lung.select_model" 与常量 LungEvent.SELECT_MODEL 不匹配
-                    "task_type": "chat",
-                    "prompt": question,
-                    "user_name": user_name,
-                    "memory_context": self._build_memory_context(question, user_name, guidance),
-                    # ★修复：显式标记后台学习，不依赖肺部「is_dialogue 默认 False」的隐式行为。
-                    # 明确 is_dialogue=False + is_background_learning=True，语义自明、防回归。
-                    "is_dialogue": False,
-                    "is_background_learning": True,
-                }, priority=4, layer="L2")
-                return {"status": "background_learning", "reason": "后台自主学习"}
-        # ===== 新增: 情绪驱动的工具选择 =====
-        _current_emotion = self._get_current_emotion()
-        _emotion_intensity = 0.0
-        if self.hormones and hasattr(self.hormones, 'get_emotion_intensity'):
-            try:
-                _emotion_intensity = self._call_provider(self._emotion_intensity_provider, default=0.0)
-            except Exception as e:
-                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-        # 悲伤/恐惧时：优先内在沉思而非外部搜索
-        if _current_emotion in ("悲伤", "恐惧") and _emotion_intensity > 0.3:
-            if "deep_search" in fallback_tools:
-                fallback_tools.remove("deep_search")
-            if "inner_world" not in fallback_tools:
-                fallback_tools.insert(0, "inner_world")
-            self._log(LogLevel.DEBUG,
-                     f"情绪驱动({_current_emotion}): 优先内在沉思，跳过外部搜索")
-        # 喜悦/期待时：更愿意尝试外部搜索和探索
-        elif _current_emotion in ("喜悦", "期待") and _emotion_intensity > 0.2:
-            if "deep_search" not in fallback_tools:
-                fallback_tools.append("deep_search")
-            # 提升复杂度感知，更容易触发深度思考
-            _question_complexity = min(1.0, _question_complexity + 0.1)
-        # 焦虑时：使用缓存优先，减少不确定性
-        elif _current_emotion == "焦虑" and _emotion_intensity > 0.3:
-            # 延长缓存有效期（在缓存检查处已处理）
-            fallback_tools = ["inner_world"]  # 只用内在世界，不做外部搜索
-        # ===== 工具认知层：根据大脑皮层的建议决定是否跳过深度搜索 =====
-        if not tool_hint.get("should_search", True) and "deep_search" in fallback_tools:
-            fallback_tools.remove("deep_search")
-            self._log(LogLevel.INFO, f"工具认知: 根据搜索经验，跳过深度搜索 (问题='{question[:30]}')")
-        if _meta_state.get("cognitive_load") == "high":
-            if "deep_search" in fallback_tools:
-                fallback_tools.remove("deep_search")
-                self._log(LogLevel.DEBUG, "状态感知: 认知负荷偏高，跳过深度搜索")
-        # ★压力闭环：高压下降并行/外部搜索，优先内在分步求解（复用已算出的压力调制）
-        if _ctx._stress_modulation.get("avoid_parallel"):
-            if "deep_search" in fallback_tools:
-                fallback_tools.remove("deep_search")
-            if "inner_world" not in fallback_tools:
-                fallback_tools.insert(0, "inner_world")
-        if _meta_state.get("wisdom_quality") == "high":
-            if "deep_search" not in fallback_tools:
-                fallback_tools.append("deep_search")
-        # 情感充盈时，更愿意冒险尝试创造性方案
-        if _meta_state.get("emotional_state") == "positive":
-            complexity_threshold = _meta_state.get("complexity_bonus", 0)
-            _question_complexity += complexity_threshold  # 提升复杂度感知，更容易触发深度思考
-        # 分析问题特征，决定工具选择策略
-        question_features = self._analyze_question_features(question)
-        # 策略1: 计算验证类问题 → 优先用代码沙箱
-        if question_features.get("is_computational") and not tool_requested:
-            # ★FIX(推理准确性): 先尝试本地安全算术求值，命中则直接返回结果，不再发射空壳占位代码
-            _calc_result = self._safe_eval_arithmetic(question)
-            if _calc_result is not None:
-                self._inference_count += 1
-                _calc_answer = f"计算结果：{_calc_result}"
-                self._cache_inference(question, _calc_answer, user_name)
-                _final = self._enhance_answer(
-                    answer=_calc_answer, question=question, method="arithmetic",
-                    complexity=_question_complexity, empathetic_note=empathetic_note,
-                    memory_context=_memory_context,
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _final,
-                    "method": "arithmetic", "confidence": self._evidence_conf(0.95, "arithmetic", [1]), "user_name": user_name,
-                    "correlation_id": correlation_id,
-                    "confidence_hint": "high",
-                    "strategy_applied": _strategy_context,
-                }, priority=7, layer="L2")
-                return {"status": "arithmetic", "answer": _calc_answer}
-            self._log(LogLevel.INFO,
-                     f"元认知决策: 计算类问题，尝试代码验证: {question[:40]}")
-            self._emit(Event.MOTOR_EXECUTE, {
-                "code": f"# 验证计算: {question[:80]}\nprint('计算结果: ...')",
-                "language": "python",
-                "user_name": user_name,
-                "task_id": f"meta_calc_{int(time.time())}",
-            }, priority=6, layer="L2")
-            tool_requested = True
-        # 策略2: 比较分析类问题 → 拆解子问题后逐个搜索
-        if question_features.get("is_comparative") and not tool_requested:
-            sub_parts = self._decompose_complex_question(question)
-            if sub_parts and len(sub_parts) >= 2:
-                self._log(LogLevel.INFO,
-                         f"元认知决策: 比较类问题，拆解为{len(sub_parts)}个子问题: {question[:40]}")
-                for sq in sub_parts[:2]:
-                    self._emit(Event.CONTROLLER_OPEN_URL, {
-                        "url": f"https://lite.duckduckgo.com/lite/?q={sq[:80]}",
-                        "reason": f"元认知拆解搜索: {sq[:40]}",
-                        "search_topic": sq[:80],
-                        "deep_search": True,
-                        "search_intent": "curiosity",
-                    }, priority=4, layer="L3")
-                tool_requested = True
-        _ds_gate = self._ir_try_deep_search_pre(_ctx, fallback_tools, tool_requested)
-        if _ds_gate is not None:
-            _can_search, _skip_reason = _ds_gate
-            _ds_exec, tool_requested = self._ir_try_deep_search_exec(_ctx, _can_search, _skip_reason, tool_requested, _strategy_context, _has_remote_api)
-            if _ds_exec is not None:
-                return _ds_exec
+    def _ir_try_creative_solution(self, ctx: "PulseInnerWorld.InferenceContext", payload: dict) -> dict | None:
         # 策略4: 无工具可用——创造性解决方案
-        if not tool_requested:
+        if not ctx.tool_requested:
             self._log(LogLevel.INFO,
-                     f"元认知决策: 无预设工具可用，尝试创造性解决: {question[:40]}")
+                     f"元认知决策: 无预设工具可用，尝试创造性解决: {ctx.question[:40]}")
             # 生成一个基于已有知识的假设作为临时解决方案
-            creative_solution = self._attempt_creative_solution(question)
+            creative_solution = self._attempt_creative_solution(ctx.question)
             if creative_solution:
                 final_answer = self._enhance_answer(
                     answer=creative_solution,
-                    question=question,
+                    question=ctx.question,
                     method="creative_solution",
-                    complexity=_question_complexity,
-                    empathetic_note=empathetic_note,
-                    memory_context=_memory_context
+                    complexity=ctx._question_complexity,
+                    empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
                 )
                 self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": final_answer,
+                    "question": ctx.question, "answer": final_answer,
                     "method": "creative_solution", "confidence": 0.3,
-                    "user_name": user_name,
+                    "user_name": ctx.user_name,
                     "correlation_id": payload.get("correlation_id", ""),
-                    "strategy_applied": _strategy_context,
+                    "strategy_applied": ctx._strategy_context,
                     "tool_requested": True,
                     "creative_solution": True,
                 }, priority=5, layer="L2")
@@ -1948,14 +1953,11 @@ class PulseInnerWorld(
             self._emit(GrowthEvent.NEED_DETECTED, {
                 "milestone": "待解决问题",
                 "gaps": [{"metric": "unsolved", "current": 0, "target": 1}],
-                "suggestion": f"未解决的问题: {question[:80]}",
-                "current_level": {"unsolved_question": question[:80]},
-                "growth_topic": f"待解决问题: {question[:60]}",
+                "suggestion": f"未解决的问题: {ctx.question[:80]}",
+                "current_level": {"unsolved_question": ctx.question[:80]},
+                "growth_topic": f"待解决问题: {ctx.question[:60]}",
             }, priority=3, layer="L3")
-        _ctx._strategy_context = _strategy_context
-        _ctx.tool_requested = tool_requested
-        _ctx.question_features = question_features
-        return self._ir_finalize(_ctx)
+        return None
 
     def _ir_finalize(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         # 发射最终结果（无答案时附上记忆上下文，供大脑皮层调用肺模型时使用）
