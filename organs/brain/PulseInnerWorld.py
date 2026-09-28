@@ -581,35 +581,15 @@ class PulseInnerWorld(
         _ctx._meta_state = _meta_state
         return _ctx
 
-    def _on_inference_request(self, payload: dict) -> dict[str, Any]:
-        _ctx = self._ir_build_context(payload)
-        if _ctx is None:
-            return {"status": "skipped", "reason": "空问题"}
-        question = _ctx.question
-        user_name = _ctx.user_name
-        correlation_id = _ctx.correlation_id
-        search_query = _ctx.search_query
-        empathetic_note = _ctx.empathetic_note
-        contemplative_answer = _ctx.contemplative_answer
-        _supplement_topic = _ctx._supplement_topic
-        _explicit_inference_result = _ctx._explicit_inference_result
-        tool_hint = _ctx.tool_hint
-        guidance = _ctx.guidance
-        _memory_context = _ctx._memory_context
-        _question_complexity = _ctx._question_complexity
-        _emotion_modulation = _ctx._emotion_modulation
-        _reasoning_start_time = _ctx._reasoning_start_time
-        _meta_state = _ctx._meta_state
-        _REASONING_TIMEOUT = 45.0
-
+    def _ir_try_explicit_search(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         # ★v26.0修复：用户明确要求搜索时，优先触发搜索（不经过内部推理）
         # ★主线第16批 T1/P2-104：三处前缀正则收敛为单一事实来源（见模块顶部常量）
         _prefix_alt = _search_prefix_pattern()
         _explicit_search_patterns = [rf'^({_prefix_alt})']
-        _is_explicit_search = any(re.match(p, question.strip()) for p in _explicit_search_patterns)
+        _is_explicit_search = any(re.match(p, ctx.question.strip()) for p in _explicit_search_patterns)
         if _is_explicit_search:
             # 提取搜索词（去掉"搜索一下"等前缀）
-            _search_topic = re.sub(rf'^({_prefix_alt})\s*', '', question.strip()).strip()
+            _search_topic = re.sub(rf'^({_prefix_alt})\s*', '', ctx.question.strip()).strip()
             # ★T1 防御：前缀剥离后若仍以单字噪声开头，判定为疑似截断残留 ——
             #   只记日志留痕，**不擅改主题**（详见 _detect_leading_search_noise 注释）。
             if _search_topic_guard_enabled():
@@ -630,12 +610,16 @@ class PulseInnerWorld(
                 # 同时返回一个占位回答，告诉用户正在搜索
                 _search_placeholder = f"好的，我正在搜索「{_search_topic[:30]}」相关信息，请稍候..."
                 self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": _search_placeholder,
-                    "method": "explicit_search", "confidence": 0.5, "user_name": user_name,
-                    "correlation_id": correlation_id,
+                    "question": ctx.question, "answer": _search_placeholder,
+                    "method": "explicit_search", "confidence": 0.5, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,
                 }, priority=6, layer="L2")
                 return {"status": "explicit_search", "answer": _search_placeholder}
 
+        return None
+
+
+    def _ir_run_detectors(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         # 检测器调度循环：按优先级依次调用，第一个匹配的立即返回
         # ★D4配置中心化：检测器优先级从「注释魔法数字」收敛为结构化 (优先级, 检测器) 元组，
         #   消除散落注释中的硬编码数字，便于后续统一配置化与审计。执行顺序与优先级数值不变。
@@ -660,17 +644,47 @@ class PulseInnerWorld(
             (42, self._detect_symbolic_reason),          # ★新增：内部符号推理
             (44, self._detect_cognitive_operator),       # ★新增
         ]
+        _REASONING_TIMEOUT = 45.0
         for _priority, _detector in _detectors:
             # ★v26.0新增：检测器调度超时检查
-            if time.time() - _reasoning_start_time > _REASONING_TIMEOUT:
+            if time.time() - ctx._reasoning_start_time > _REASONING_TIMEOUT:
                 self._log(LogLevel.WARNING,
-                         f"推理超时({_REASONING_TIMEOUT}s)，检测器调度中断，问题='{question[:30]}'")
+                         f"推理超时({_REASONING_TIMEOUT}s)，检测器调度中断，问题='{ctx.question[:30]}'")
                 break
-            _result = _detector(_ctx)
+            _result = _detector(ctx)
             if _result is not None:
                 self._log(LogLevel.DEBUG, f"检测器命中: {_detector.__name__} → {_result.get('status', '?')}")
                 return _result
 
+        return None
+
+
+    def _on_inference_request(self, payload: dict) -> dict[str, Any]:
+        _ctx = self._ir_build_context(payload)
+        if _ctx is None:
+            return {"status": "skipped", "reason": "空问题"}
+        question = _ctx.question
+        user_name = _ctx.user_name
+        correlation_id = _ctx.correlation_id
+        search_query = _ctx.search_query
+        empathetic_note = _ctx.empathetic_note
+        contemplative_answer = _ctx.contemplative_answer
+        _supplement_topic = _ctx._supplement_topic
+        _explicit_inference_result = _ctx._explicit_inference_result
+        tool_hint = _ctx.tool_hint
+        guidance = _ctx.guidance
+        _memory_context = _ctx._memory_context
+        _question_complexity = _ctx._question_complexity
+        _emotion_modulation = _ctx._emotion_modulation
+        _reasoning_start_time = _ctx._reasoning_start_time
+        _meta_state = _ctx._meta_state
+
+        _explicit = self._ir_try_explicit_search(_ctx)
+        if _explicit is not None:
+            return _explicit
+        _detector_result = self._ir_run_detectors(_ctx)
+        if _detector_result is not None:
+            return _detector_result
         # ===== ★v22.0重构：QICA建议方法优先执行 =====
         _qica_method = payload.get("strategy_context", {}).get("qica_suggested_method", "")
         _qica_paths = payload.get("strategy_context", {}).get("qica_knowledge_paths", [])  # type: ignore[possibly-unbound]
