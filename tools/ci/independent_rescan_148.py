@@ -14,6 +14,7 @@ import argparse
 import io
 import os
 import re
+import json
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -27,7 +28,6 @@ STRONG_PATTERNS = [
     ("手机号", re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")),
     ("邮箱", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
     ("身份证", re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")),
-    ("出生日期", re.compile(r"2020[年.\-/]0?7[月.\-/]0?4")),
     ("API Key 赋值", re.compile(
         r"(?i)\b(api[_-]?key|secret|token|password|passwd)\s*[:=]\s*[\"']"
         r"(?!<|$|your|<YOUR|\.\.\.)[A-Za-z0-9_\-]{16,}[\"']")),
@@ -69,6 +69,35 @@ BINARY_EXT = {
 }
 
 
+def _unicode_unescape(text: str) -> str:
+    """把文本中的 unicode 转义序列还原为真实字符（防转义形态 PII 漏检，T149-1）。
+
+    源码/文档若以转义形式（\\uXXXX / \\UXXXXXXXX）隐藏真实姓名，
+    复扫器须先解码再跑 PII 规则。仅解析转义序列，不动其它字符。
+    """
+    if "\\u" not in text and "\\U" not in text:
+        return text
+    return re.sub(r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})",
+                  lambda m: chr(int(m.group(1) or m.group(2), 16)), text)
+
+
+def _load_owner_patterns():
+    """从本地 .owner_pii.json 加载属主真名/生日规则（T149-2）。"""
+    cfg = os.path.join(ROOT, ".owner_pii.json")
+    pats = []
+    if os.path.isfile(cfg):
+        try:
+            with io.open(cfg, encoding="utf-8") as fh:
+                data = json.load(fh)
+            for n in data.get("names", []):
+                pats.append(("真名·属主", re.compile(re.escape(n))))
+            for b in data.get("birthdays", []):
+                pats.append(("属主生日", re.compile(re.escape(b))))
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, where="independent_rescan._load_owner_patterns", level="warning")
+    return pats
+
+
 def scan_text(path: str) -> list[tuple[str, int, str]]:
     ext = os.path.splitext(path)[1].lower()
     if ext in BINARY_EXT:
@@ -86,8 +115,9 @@ def scan_text(path: str) -> list[tuple[str, int, str]]:
     for i, line in enumerate(lines, 1):
         if any(mk in line for mk in SCAN_SKIP_MARKERS):
             continue
+        line_u = _unicode_unescape(line)
         for name, pat in STRONG_PATTERNS:
-            m = pat.search(line)
+            m = pat.search(line_u)
             if not m:
                 continue
             snip = m.group(0)
@@ -158,6 +188,16 @@ def main() -> int:
     ap.add_argument("--export-root", required=True,
                     help="导出包根目录（含 tongtong-pulse-net/ 的目录，或直接传 tongtong-pulse-net 本身）")
     args = ap.parse_args()
+
+    # ---- 属主 PII 闸门（T149-2）：复扫器必须武装属主真名/生日规则 ----
+    _owner_pats = _load_owner_patterns()
+    if not _owner_pats:
+        print("[FAIL] 属主 PII 规则数为 0：复扫器未加载属主真名/生日规则"
+              "（检查 <root>/.owner_pii.json）。未武装的复扫器会给出"
+              " 虚假的「PII 0 命中」结论，禁止通过。", file=sys.stderr)
+        return 2
+    STRONG_PATTERNS.extend(_owner_pats)
+    print("[OK] 属主 PII 闸门：已加载 %d 条属主真名/生日规则。" % len(_owner_pats))
 
     root = os.path.abspath(args.export_root)
     pkg = os.path.join(root, "tongtong-pulse-net")

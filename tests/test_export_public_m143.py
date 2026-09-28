@@ -96,7 +96,7 @@ class TestPiiScan(unittest.TestCase):
 
     @staticmethod
     def _name_gl() -> str:
-        return "\u4efb\u6842\u6797"          # 真名（转义构造）
+        return "测试甲"          # 合成测试值（替代真实姓名，防转义形态泄露）
 
     @staticmethod
     def _phone() -> str:
@@ -152,12 +152,11 @@ class TestPiiScan(unittest.TestCase):
         # D148-1：真实路径模式改由脱敏配置（PULSE_OWNER_PATH_HINTS）加载，
         # 注入后验证扫描器对真实项目路径的命中行为。
         old = os.environ.get("PULSE_OWNER_PATH_HINTS")
-        os.environ["PULSE_OWNER_PATH_HINTS"] = "D:\\xinrenlei"
+        os.environ["PULSE_OWNER_PATH_HINTS"] = "C:/test"
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
                                              encoding="utf-8") as fh:
-                fh.write('ROOT = "' + "D:" + chr(92) + "xinrenlei" + chr(92)
-                         + 'tongtong-pulse-v9"' + "\n")
+                fh.write('ROOT = "C:/test/demo.md"\n')
                 p = fh.name
             try:
                 hits = ep.scan_text(p)

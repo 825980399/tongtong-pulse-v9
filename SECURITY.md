@@ -4,8 +4,8 @@
 
 如发现安全漏洞，请**不要**直接公开提交 Issue，以免在修复前被利用。可通过以下方式私下上报：
 
-1. **GitHub Security Advisory**（推荐）：在本仓库的 **Security → Report a vulnerability** 中提交，仅维护者可见。
-2. 若你的平台不支持 Private Advisory，请给维护者发送站内私信，标题注明 `[SECURITY]`。
+1. **Gitee / OpenI 站内私信（推荐）**：在本仓库托管平台（Gitee 或 OpenI）向维护者发送私信，标题注明 `[SECURITY]`，仅维护者可见。
+2. **私有 Issue / 安全渠道**：若平台支持，可创建仅维护者可见的 Issue 或使用仓库安全公告渠道上报；如均无对应渠道，再邮件联系维护者并标题注明 `[SECURITY]`。
 
 上报时请尽量包含：
 

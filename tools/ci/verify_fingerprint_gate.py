@@ -7,7 +7,7 @@
 ④ 删除一个被豁免 handler -> 红（白名单腐化须显式 shrink 提交，rot 检查）
 ⑤ 新增含 except:pass 的未跟踪文件 -> 红（全量集合兜底生效）
 
-运行：python tools/ci/test_fingerprint_gate.py
+运行：python tools/ci/verify_fingerprint_gate.py
 退出码：0=5 项全过，1=存在未通过项。
 """
 import os

@@ -84,6 +84,11 @@ def main(argv=None):
         elif due and not due.isdigit():
             errors.append("行%d [%s]: 到期批次非整数 %r" % (i, rid, due))
 
+        # 提出批次非空率必须 100%（T149-6 新增硬校验）
+        proposed = (r.get("提出批次") or "").strip()
+        if not proposed:
+            errors.append("行%d [%s]: 提出批次为空（非空率须100%%）" % (i, rid))
+
     if errors:
         for e in errors:
             sys.stderr.write("CHECK_FAIL: %s\n" % e)

@@ -173,7 +173,6 @@ STATIC_PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("手机号", re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")),
     ("邮箱", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
     ("身份证", re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")),
-    ("出生日期", re.compile(r"2020[年.\-/]0?7[月.\-/]0?4")),
     ("API Key 赋值", re.compile(
         r"(?i)\b(api[_-]?key|secret|token|password|passwd)\s*[:=]\s*[\"']"
         r"(?!<|$|your|<YOUR|\.\.\.)[A-Za-z0-9_\-]{16,}[\"']")),
@@ -196,6 +195,8 @@ def _load_owner_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
     if env_paths:
         paths = [x.strip() for x in env_paths.split(",") if x.strip()]
     cfg = os.environ.get("PULSE_OWNER_PII_FILE", "")
+    if not cfg:
+        cfg = os.path.join(PROJECT_ROOT, ".owner_pii.json")
     if cfg and os.path.isfile(cfg):
         try:
             with open(cfg, encoding="utf-8") as fh:
@@ -226,6 +227,10 @@ PII_PATTERNS = STATIC_PII_PATTERNS
 #:   判据：单行内同时命中「裸四位年份」**且**含出生/生日类上下文词。
 WEAK_PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("疑似出生年份", re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")),
+    # T149-3：泛化「具体日期」弱告警（不阻断导出）；具体属主生日由
+    # .owner_pii.json 强规则兜底（T149-2 闸门）。强阻断会误伤仓库 HEAD
+    # 中大量合法日期（.gitattributes/.gitignore/docs 的 2026-09-* 等）。
+    ("疑似具体日期", re.compile(r"\d{4}[年.\-/]\d{1,2}[月.\-/]\d{1,2}")),
 ]
 
 #: 触发弱告警所需的**同行上下文词**（出现其一才告警，避免把普通日期全报出来）
@@ -360,6 +365,18 @@ def iter_public_files(root: str) -> Iterator[str]:
 # 四、PII 复扫
 # =============================================================================
 
+def _unicode_unescape(text: str) -> str:
+    """把文本中的 unicode 转义序列还原为真实字符（防转义形态 PII 漏检，T149-1）。
+
+    源码/文档若以转义形式（\\uXXXX / \\UXXXXXXXX）隐藏真实姓名，
+    扫描器须先解码再跑 PII 规则。仅解析转义序列，不动其它字符。
+    """
+    if "\\u" not in text and "\\U" not in text:
+        return text
+    return re.sub(r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})",
+                  lambda m: chr(int(m.group(1) or m.group(2), 16)), text)
+
+
 def scan_text(path: str) -> list[tuple[str, int, str]]:
     """扫描单个文本文件，返回 [(模式名, 行号, 命中片段)]。"""
     ext = os.path.splitext(path)[1].lower()
@@ -377,8 +394,9 @@ def scan_text(path: str) -> list[tuple[str, int, str]]:
                         return []
                 if any(mk in line for mk in SCAN_SKIP_MARKERS):
                     continue
+                line_u = _unicode_unescape(line)
                 for name, pat in all_pii_patterns():
-                    m = pat.search(line)
+                    m = pat.search(line_u)
                     if not m:
                         continue
                     snip = m.group(0)
@@ -533,6 +551,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  ... 其余 {len(files)-200} 条略")
         print("\n[dry-run] 未落盘。加 --out <路径> 导出。")
         return 0
+
+    # ---- 属主 PII 闸门（T149-2）：扫描器必须武装属主真名/路径规则 ----
+    _owner_pats = _load_owner_pii_patterns()
+    if not _owner_pats:
+        print("[FAIL] 属主 PII 规则数为 0：扫描器未加载属主真名/路径规则"
+              "（检查 .owner_pii.json 或 PULSE_OWNER_NAMES /"
+              " PULSE_OWNER_PATH_HINTS 环境变量）。未武装的扫描器会给出"
+              " 虚假的「PII 0 命中」结论，禁止导出。", file=sys.stderr)
+        return 2
+    print("[OK] 属主 PII 闸门：已加载 %d 条属主真名/路径规则。" % len(_owner_pats))
 
     # ---- 落盘 ----
     out = os.path.abspath(args.out)

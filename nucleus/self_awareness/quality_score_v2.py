@@ -90,7 +90,7 @@ DIMENSION_WEIGHTS_V2: dict[str, float] = {
     "test_coverage": 0.20,
     "static_health": 0.15,
     "data_integrity": 0.10,
-    "resolution_rate": 0.05,
+    "resolution_rate": 0.0,
 }
 
 #: 扣分系数（出现在公式里，便于审计）
