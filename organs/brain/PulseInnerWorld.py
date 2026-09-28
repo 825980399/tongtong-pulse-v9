@@ -868,6 +868,201 @@ class PulseInnerWorld(
             self._log(LogLevel.INFO, f"元认知决策: {skip_reason}: {ctx.question[:40]}")
         return (None, tool_requested)
 
+    def _ir_assemble_knowledge_answer(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # 知识检索
+        # ★v22.0重构：如果大脑皮层给出了建议路径，优先在建议路径下检索
+        _qica_paths = ctx.payload.get("strategy_context", {}).get("knowledge_paths", [])  # type: ignore[possibly-unbound]
+        # ★第九批 3.4（星轨 P2-9）：QICA 建议 /人物/{人名} 时先查身份知识库。
+        #   此前知识树里没有这些路径，检索必然落空，于是「小林是谁」每次都重新瞎猜。
+        _identity_hit = self._identity_lookup(ctx.question)  # type: ignore[possibly-unbound]
+        if _identity_hit:
+            self._log(LogLevel.INFO,  # type: ignore[possibly-undefined]
+                     f"身份知识命中: {_identity_hit[:40]}")
+        if _identity_hit:
+            knowledge_answer = _identity_hit  # type: ignore[possibly-unbound]
+        elif _qica_paths:  # type: ignore[possibly-unbound]
+            _path_knowledge = None  # type: ignore[possibly-unbound]
+            for _path in _qica_paths[:3]:  # type: ignore[possibly-unbound]
+                _nodes = self.node_pool.query(
+                    evol_level="L3", space_path_prefix=_path, limit=10  # type: ignore[possibly-unbound]
+                ) if self.node_pool else []
+                if _nodes:
+                    _val = str(_nodes[0].value) if _nodes[0].value else ""
+                    if _val and len(_val) > 20:
+                        _path_knowledge = _val[:200]  # type: ignore[possibly-unbound]
+                        self._log(LogLevel.INFO, f"QICA路径优先检索: 路径={_path}, 命中={len(_nodes)}个节点")  # type: ignore[possibly-unbound]
+                        break
+            knowledge_answer = _path_knowledge or self._knowledge_retrieve(ctx.question)  # type: ignore[possibly-unbound]
+        else:
+            knowledge_answer = self._knowledge_retrieve(ctx.question)
+        if knowledge_answer:
+            # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
+            self._inference_count += 1
+            self._cache_inference(ctx.question, knowledge_answer, ctx.user_name)
+            knowledge_hint = self._get_confidence_hint(ctx.question)
+            confidence_map = {"certain": 1.0, "high": 0.85, "moderate": 0.7, "low": 0.5}
+            confidence = confidence_map.get(knowledge_hint, 0.6)
+            duration = time.time() - ctx._reasoning_start_time
+            tuning = ""
+            if knowledge_hint == "low":
+                tuning = "知识检索质量偏低，可能需要补充此领域知识"
+            elif knowledge_hint == "high":
+                tuning = "知识检索质量高，此领域认知扎实"
+            self._trace_inference(ctx.question, knowledge_answer, f"knowledge_{knowledge_hint}",
+                                 confidence, ctx.user_name,
+                                 duration=duration, complexity=ctx._question_complexity,
+                                 tuning_hint=tuning)
+            # ===== ★v22.0方向三修复：知识边界感知——检测到低质量检索时自动生成追问 =====
+            _boundary_inquiry = self._detect_knowledge_boundary_and_inquire(
+                question=ctx.question,
+                knowledge_result=knowledge_answer,
+                contemplative_result=ctx.contemplative_answer,
+                confidence=0.3 if knowledge_hint == "low" else 0.5,
+            )
+            if _boundary_inquiry:
+                self._emit(GrowthEvent.NEED_DETECTED, {
+                    "milestone": "知识边界延伸",
+                    "gaps": [{"metric": "knowledge_boundary", "current": 0, "target": 1}],
+                    "suggestion": _boundary_inquiry,
+                    "current_level": {"original_question": ctx.question[:80], "boundary": _boundary_inquiry},
+                    "growth_topic": _boundary_inquiry[:60],
+                }, priority=5, layer="L3")
+                self._log(LogLevel.INFO, f"知识边界延伸: 生成追问 '{_boundary_inquiry[:60]}'")
+            # ===== ★v22.0方向三修复结束 =====
+
+            # ===== 新增: 自适应回答深度——根据关系和语境调整表达 =====
+            knowledge_answer = self._adapt_answer_depth(knowledge_answer, ctx.user_name, ctx.guidance, ctx.question)
+            # ===== 新增: 不确定性诚实表达——让回答更真实可信 =====
+            knowledge_answer = self._add_uncertainty_note(knowledge_answer, knowledge_hint, ctx.user_name)
+            # ===== 新增: 费曼解释——用自己的话重新组织答案 =====
+            if len(knowledge_answer) > 120 or any(
+                prefix in knowledge_answer for prefix in ["[主动学习", "[架构]", "[知识]", "[复盘认知", "相关知识汇总"]
+            ):
+                feynman_version = self._generate_feynman_explanation(ctx.question, knowledge_answer)
+                if feynman_version:
+                    knowledge_answer = feynman_version
+                    self._log(LogLevel.INFO, f"费曼解释: 将复杂知识转化为简单表达: {ctx.question[:30]}")
+            # ===== 新增: 本质追问——在答案基础上进行深层探究 =====
+            essence_question = self._generate_essence_inquiry(ctx.question, knowledge_answer)
+            # ===== 统一增强答案 =====
+            final_knowledge_answer = self._enhance_answer(
+                answer=knowledge_answer,
+                question=ctx.question,
+                method="knowledge",
+                complexity=ctx._question_complexity,
+                empathetic_note=ctx.empathetic_note,
+                memory_context=ctx._memory_context
+            )
+            # ===== 【v15.1修复】ctx._supplement_topic 提前初始化 =====
+            if knowledge_hint == "moderate" and self.node_pool:
+                ctx._supplement_topic = self._build_supplement_search_topic(ctx.question, knowledge_answer)
+            if ctx.correlation_id:
+                self._active_search_correlation[ctx.search_query[:80]] = ctx.correlation_id
+                if ctx._supplement_topic:
+                    self._emit(Event.CONTROLLER_OPEN_URL, {
+                        "url": f"https://lite.duckduckgo.com/lite/?q={ctx._supplement_topic[:80]}",
+                        "reason": f"知识补充搜索: {ctx._supplement_topic[:40]}",
+                        "search_topic": ctx._supplement_topic[:80],
+                        "deep_search": True,
+                        "search_intent": "curiosity",
+                        "search_correlation_id": ctx.correlation_id,
+                    }, priority=2, layer="L3")
+                    self._log(LogLevel.INFO, f"知识补充搜索: '{ctx._supplement_topic[:40]}' (检索置信度={knowledge_hint})")
+            self._emit(InferenceEvent.RESULT, {
+                "question": ctx.question, "answer": final_knowledge_answer,
+                "method": "knowledge", "confidence": 0.7, "user_name": ctx.user_name,
+                "correlation_id": ctx.payload.get("correlation_id", ""),
+                "confidence_hint": knowledge_hint,
+                "strategy_applied": ctx.payload.get("strategy_context", {}),
+                "essence_inquiry": essence_question,
+            }, priority=7, layer="L2")
+            # ===== 新增: 自主建议生成——基于理解主动提供帮助 =====
+            proactive_suggestion = self._generate_proactive_suggestion(ctx.question, knowledge_answer, ctx.user_name)
+            if proactive_suggestion:
+                knowledge_answer = knowledge_answer + " " + proactive_suggestion
+                self._log(LogLevel.INFO, f"自主建议生成: 为'{ctx.user_name}'提供基于'{ctx.question[:30]}'的建议")
+            # ===== 新增: 情感记忆绑定——回忆触发情绪复现 =====
+            self._trigger_emotional_memory(knowledge_answer)
+            # ===== 新增: 知识自省与修正——根据检索质量强化或标记节点 =====
+            self._reflect_and_reinforce_knowledge(ctx.question, knowledge_answer)
+            # ===== 新增: 实践验证——主动构造验证场景 =====
+            verification = self._attempt_practical_verification(ctx.question, knowledge_answer)
+            if verification:
+                self._emit(verification["event_type"], verification["payload"],
+                          priority=verification.get("priority", 4),
+                          layer=verification.get("layer", "L2"))
+                self._log(LogLevel.INFO,
+                         f"实践验证: {verification.get('description', '')[:80]}")
+            # ===== 新增: 自主视角构建——从不同角度审视问题 =====
+            alternative_perspective = self._generate_alternative_perspective(ctx.question, knowledge_answer)
+            if alternative_perspective:
+                self._log(LogLevel.INFO, f"视角构建: {alternative_perspective[:80]}")
+                self._emit(GrowthEvent.NEED_DETECTED, {
+                    "milestone": "视角拓展",
+                    "gaps": [{"metric": "perspective", "current": 0, "target": 1}],
+                    "suggestion": alternative_perspective,
+                    "current_level": {
+                        "original_question": ctx.question,
+                        "perspective": alternative_perspective,
+                    },
+                    "growth_topic": alternative_perspective[:60],
+                }, priority=3, layer="L3")
+            # ===== 新增: 认知框架迁移——跨领域类比 =====
+            framework_transfer = self._attempt_framework_transfer(ctx.question, knowledge_answer)
+            if framework_transfer:
+                self._log(LogLevel.INFO,
+                         f"认知框架迁移: {framework_transfer.get('insight', '')[:80]}")
+                # 将迁移洞察作为探索种子
+                self._emit(GrowthEvent.NEED_DETECTED, {
+                    "milestone": "框架迁移",
+                    "gaps": [{"metric": "cross_domain", "current": 0, "target": 1}],
+                    "suggestion": framework_transfer.get("insight", ""),
+                    "current_level": {
+                        "source_question": ctx.question,
+                        "transferred_from": framework_transfer.get("source_domain", ""),
+                        "transferred_concept": framework_transfer.get("core_concept", ""),
+                    },
+                    "growth_topic": framework_transfer.get("explore_topic", ctx.question[:60]),
+                }, priority=3, layer="L3")
+            # 本质追问结果作为新的探索种子
+            if essence_question:
+                self._emit(GrowthEvent.NEED_DETECTED, {
+                    "milestone": "本质追问",
+                    "gaps": [{"metric": "deep_understanding", "current": 0, "target": 1}],
+                    "suggestion": essence_question,
+                    "current_level": {"original_question": ctx.question, "answer": knowledge_answer[:100]},
+                    "growth_topic": essence_question[:60],
+                }, priority=3, layer="L3")
+            return {"status": "knowledge_match", "answer": knowledge_answer}
+        # 内在沉思引擎——知识检索未命中时，基于已有知识进行推演
+        if self.node_pool:
+            ctx.contemplative_answer = self._contemplative_reason(ctx.question)
+            if ctx.contemplative_answer:
+                self._inference_count += 1
+                self._cache_inference(ctx.question, ctx.contemplative_answer, ctx.user_name)
+                self._trace_inference(ctx.question, ctx.contemplative_answer, "contemplation", 0.5, ctx.user_name,
+                                     duration=time.time() - ctx._reasoning_start_time,
+                                     complexity=ctx._question_complexity,
+                                     tuning_hint="沉思推演完成，需要后续验证")
+                final_answer = self._enhance_answer(
+                    answer=ctx.contemplative_answer,
+                    question=ctx.question,
+                    method="contemplation",
+                    complexity=ctx._question_complexity,
+                    empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": final_answer,
+                    "method": "contemplation", "confidence": 0.5, "user_name": ctx.user_name,
+                    "correlation_id": ctx.payload.get("correlation_id", ""),
+                    "strategy_applied": ctx.payload.get("strategy_context", {}),
+                    "confidence_hint": "low",
+                }, priority=6, layer="L2")
+                return {"status": "contemplation_match", "answer": ctx.contemplative_answer}
+        return None
+
+
 
 
     def _on_inference_request(self, payload: dict) -> dict[str, Any]:
@@ -877,7 +1072,6 @@ class PulseInnerWorld(
         question = _ctx.question
         user_name = _ctx.user_name
         correlation_id = _ctx.correlation_id
-        search_query = _ctx.search_query
         empathetic_note = _ctx.empathetic_note
         contemplative_answer = _ctx.contemplative_answer
         _supplement_topic = _ctx._supplement_topic
@@ -1508,197 +1702,9 @@ class PulseInnerWorld(
                              f"认知边界记录: 推理失败已累计{self._failed_domain_log_count}次, "
                              f"高频失败领域={_top_failed}")
 
-        # 知识检索
-        # ★v22.0重构：如果大脑皮层给出了建议路径，优先在建议路径下检索
-        _qica_paths = payload.get("strategy_context", {}).get("knowledge_paths", [])  # type: ignore[possibly-unbound]
-        # ★第九批 3.4（星轨 P2-9）：QICA 建议 /人物/{人名} 时先查身份知识库。
-        #   此前知识树里没有这些路径，检索必然落空，于是「小林是谁」每次都重新瞎猜。
-        _identity_hit = self._identity_lookup(question)  # type: ignore[possibly-unbound]
-        if _identity_hit:
-            self._log(LogLevel.INFO,  # type: ignore[possibly-undefined]
-                     f"身份知识命中: {_identity_hit[:40]}")
-        if _identity_hit:
-            knowledge_answer = _identity_hit  # type: ignore[possibly-unbound]
-        elif _qica_paths:  # type: ignore[possibly-unbound]
-            _path_knowledge = None  # type: ignore[possibly-unbound]
-            for _path in _qica_paths[:3]:  # type: ignore[possibly-unbound]
-                _nodes = self.node_pool.query(
-                    evol_level="L3", space_path_prefix=_path, limit=10  # type: ignore[possibly-unbound]
-                ) if self.node_pool else []
-                if _nodes:
-                    _val = str(_nodes[0].value) if _nodes[0].value else ""
-                    if _val and len(_val) > 20:
-                        _path_knowledge = _val[:200]  # type: ignore[possibly-unbound]
-                        self._log(LogLevel.INFO, f"QICA路径优先检索: 路径={_path}, 命中={len(_nodes)}个节点")  # type: ignore[possibly-unbound]
-                        break
-            knowledge_answer = _path_knowledge or self._knowledge_retrieve(question)  # type: ignore[possibly-unbound]
-        else:
-            knowledge_answer = self._knowledge_retrieve(question)
-        if knowledge_answer:
-            # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
-            self._inference_count += 1
-            self._cache_inference(question, knowledge_answer, user_name)
-            knowledge_hint = self._get_confidence_hint(question)
-            confidence_map = {"certain": 1.0, "high": 0.85, "moderate": 0.7, "low": 0.5}
-            confidence = confidence_map.get(knowledge_hint, 0.6)
-            duration = time.time() - _reasoning_start_time
-            tuning = ""
-            if knowledge_hint == "low":
-                tuning = "知识检索质量偏低，可能需要补充此领域知识"
-            elif knowledge_hint == "high":
-                tuning = "知识检索质量高，此领域认知扎实"
-            self._trace_inference(question, knowledge_answer, f"knowledge_{knowledge_hint}",
-                                 confidence, user_name,
-                                 duration=duration, complexity=_question_complexity,
-                                 tuning_hint=tuning)
-            # ===== ★v22.0方向三修复：知识边界感知——检测到低质量检索时自动生成追问 =====
-            _boundary_inquiry = self._detect_knowledge_boundary_and_inquire(
-                question=question,
-                knowledge_result=knowledge_answer,
-                contemplative_result=contemplative_answer if 'contemplative_answer' in dir() else None,
-                confidence=0.3 if knowledge_hint == "low" else 0.5,
-            )
-            if _boundary_inquiry:
-                self._emit(GrowthEvent.NEED_DETECTED, {
-                    "milestone": "知识边界延伸",
-                    "gaps": [{"metric": "knowledge_boundary", "current": 0, "target": 1}],
-                    "suggestion": _boundary_inquiry,
-                    "current_level": {"original_question": question[:80], "boundary": _boundary_inquiry},
-                    "growth_topic": _boundary_inquiry[:60],
-                }, priority=5, layer="L3")
-                self._log(LogLevel.INFO, f"知识边界延伸: 生成追问 '{_boundary_inquiry[:60]}'")
-            # ===== ★v22.0方向三修复结束 =====
-
-            # ===== 新增: 自适应回答深度——根据关系和语境调整表达 =====
-            knowledge_answer = self._adapt_answer_depth(knowledge_answer, user_name, guidance, question)
-            # ===== 新增: 不确定性诚实表达——让回答更真实可信 =====
-            knowledge_answer = self._add_uncertainty_note(knowledge_answer, knowledge_hint, user_name)
-            # ===== 新增: 费曼解释——用自己的话重新组织答案 =====
-            if len(knowledge_answer) > 120 or any(
-                prefix in knowledge_answer for prefix in ["[主动学习", "[架构]", "[知识]", "[复盘认知", "相关知识汇总"]
-            ):
-                feynman_version = self._generate_feynman_explanation(question, knowledge_answer)
-                if feynman_version:
-                    knowledge_answer = feynman_version
-                    self._log(LogLevel.INFO, f"费曼解释: 将复杂知识转化为简单表达: {question[:30]}")
-            # ===== 新增: 本质追问——在答案基础上进行深层探究 =====
-            essence_question = self._generate_essence_inquiry(question, knowledge_answer)
-            # ===== 统一增强答案 =====
-            final_knowledge_answer = self._enhance_answer(
-                answer=knowledge_answer,
-                question=question,
-                method="knowledge",
-                complexity=_question_complexity,
-                empathetic_note=empathetic_note,
-                memory_context=_memory_context
-            )
-            # ===== 【v15.1修复】_supplement_topic 提前初始化 =====
-            if knowledge_hint == "moderate" and self.node_pool:
-                _supplement_topic = self._build_supplement_search_topic(question, knowledge_answer)
-            if correlation_id:
-                self._active_search_correlation[search_query[:80]] = correlation_id
-                if _supplement_topic:
-                    self._emit(Event.CONTROLLER_OPEN_URL, {
-                        "url": f"https://lite.duckduckgo.com/lite/?q={_supplement_topic[:80]}",
-                        "reason": f"知识补充搜索: {_supplement_topic[:40]}",
-                        "search_topic": _supplement_topic[:80],
-                        "deep_search": True,
-                        "search_intent": "curiosity",
-                        "search_correlation_id": correlation_id,
-                    }, priority=2, layer="L3")
-                    self._log(LogLevel.INFO, f"知识补充搜索: '{_supplement_topic[:40]}' (检索置信度={knowledge_hint})")
-            self._emit(InferenceEvent.RESULT, {
-                "question": question, "answer": final_knowledge_answer,
-                "method": "knowledge", "confidence": 0.7, "user_name": user_name,
-                "correlation_id": payload.get("correlation_id", ""),
-                "confidence_hint": knowledge_hint,
-                "strategy_applied": payload.get("strategy_context", {}),
-                "essence_inquiry": essence_question,
-            }, priority=7, layer="L2")
-            # ===== 新增: 自主建议生成——基于理解主动提供帮助 =====
-            proactive_suggestion = self._generate_proactive_suggestion(question, knowledge_answer, user_name)
-            if proactive_suggestion:
-                knowledge_answer = knowledge_answer + " " + proactive_suggestion
-                self._log(LogLevel.INFO, f"自主建议生成: 为'{user_name}'提供基于'{question[:30]}'的建议")
-            # ===== 新增: 情感记忆绑定——回忆触发情绪复现 =====
-            self._trigger_emotional_memory(knowledge_answer)
-            # ===== 新增: 知识自省与修正——根据检索质量强化或标记节点 =====
-            self._reflect_and_reinforce_knowledge(question, knowledge_answer)
-            # ===== 新增: 实践验证——主动构造验证场景 =====
-            verification = self._attempt_practical_verification(question, knowledge_answer)
-            if verification:
-                self._emit(verification["event_type"], verification["payload"],
-                          priority=verification.get("priority", 4),
-                          layer=verification.get("layer", "L2"))
-                self._log(LogLevel.INFO,
-                         f"实践验证: {verification.get('description', '')[:80]}")
-            # ===== 新增: 自主视角构建——从不同角度审视问题 =====
-            alternative_perspective = self._generate_alternative_perspective(question, knowledge_answer)
-            if alternative_perspective:
-                self._log(LogLevel.INFO, f"视角构建: {alternative_perspective[:80]}")
-                self._emit(GrowthEvent.NEED_DETECTED, {
-                    "milestone": "视角拓展",
-                    "gaps": [{"metric": "perspective", "current": 0, "target": 1}],
-                    "suggestion": alternative_perspective,
-                    "current_level": {
-                        "original_question": question,
-                        "perspective": alternative_perspective,
-                    },
-                    "growth_topic": alternative_perspective[:60],
-                }, priority=3, layer="L3")
-            # ===== 新增: 认知框架迁移——跨领域类比 =====
-            framework_transfer = self._attempt_framework_transfer(question, knowledge_answer)
-            if framework_transfer:
-                self._log(LogLevel.INFO,
-                         f"认知框架迁移: {framework_transfer.get('insight', '')[:80]}")
-                # 将迁移洞察作为探索种子
-                self._emit(GrowthEvent.NEED_DETECTED, {
-                    "milestone": "框架迁移",
-                    "gaps": [{"metric": "cross_domain", "current": 0, "target": 1}],
-                    "suggestion": framework_transfer.get("insight", ""),
-                    "current_level": {
-                        "source_question": question,
-                        "transferred_from": framework_transfer.get("source_domain", ""),
-                        "transferred_concept": framework_transfer.get("core_concept", ""),
-                    },
-                    "growth_topic": framework_transfer.get("explore_topic", question[:60]),
-                }, priority=3, layer="L3")
-            # 本质追问结果作为新的探索种子
-            if essence_question:
-                self._emit(GrowthEvent.NEED_DETECTED, {
-                    "milestone": "本质追问",
-                    "gaps": [{"metric": "deep_understanding", "current": 0, "target": 1}],
-                    "suggestion": essence_question,
-                    "current_level": {"original_question": question, "answer": knowledge_answer[:100]},
-                    "growth_topic": essence_question[:60],
-                }, priority=3, layer="L3")
-            return {"status": "knowledge_match", "answer": knowledge_answer}
-        # 内在沉思引擎——知识检索未命中时，基于已有知识进行推演
-        if self.node_pool:
-            contemplative_answer = self._contemplative_reason(question)
-            if contemplative_answer:
-                self._inference_count += 1
-                self._cache_inference(question, contemplative_answer, user_name)
-                self._trace_inference(question, contemplative_answer, "contemplation", 0.5, user_name,
-                                     duration=time.time() - _reasoning_start_time,
-                                     complexity=_question_complexity,
-                                     tuning_hint="沉思推演完成，需要后续验证")
-                final_answer = self._enhance_answer(
-                    answer=contemplative_answer,
-                    question=question,
-                    method="contemplation",
-                    complexity=_question_complexity,
-                    empathetic_note=empathetic_note,
-                    memory_context=_memory_context
-                )
-                self._emit(InferenceEvent.RESULT, {
-                    "question": question, "answer": final_answer,
-                    "method": "contemplation", "confidence": 0.5, "user_name": user_name,
-                    "correlation_id": payload.get("correlation_id", ""),
-                    "strategy_applied": payload.get("strategy_context", {}),
-                    "confidence_hint": "low",
-                }, priority=6, layer="L2")
-                return {"status": "contemplation_match", "answer": contemplative_answer}
+        _knowledge = self._ir_assemble_knowledge_answer(_ctx)
+        if _knowledge is not None:
+            return _knowledge
         # ===== 元认知决策：推理结束后的行动闭环（增强版） =====
         _strategy_context = payload.get("strategy_context", {})
         tool_requested = False
