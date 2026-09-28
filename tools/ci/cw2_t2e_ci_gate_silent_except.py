@@ -1,38 +1,46 @@
 # -*- coding: utf-8 -*-
 """任务二 d：防回潮 CI 门禁 + pre-commit hook（真实可执行，非伪码）。
 
-规则：
-  1. 对 base..HEAD（或工作树）的 diff，新增静默 except handler 数必须 = 0（只降不升 / 名单外新增=0）。
+规则（D148-4 指纹化改造后）：
+  1. 对 base..HEAD（或工作树）的 diff，新增静默 except handler 数必须 = 0
+     （只降不升 / 指纹豁免集合外新增 = 0）。匹配改为「handler 指纹」，
+     行号漂移不再导致误报。
   2. 变更 .py 文件不得含 b"\\r\\r\\n"（CRCRLF 事故正主）。
   3. 变更 .py 文件必须可解析（parse_err=0）。
+  4. 全仓「已知豁免指纹集合」幂等比对兜底：任一已知豁免 handler 在仓库中消失
+     （被删/被改名）→ 视为「白名单腐化」，必须显式 shrink 提交（rot 检查）。
+  5. 未跟踪新 .py 文件也纳入全量扫描，消除「未 tracked 盲区」：其静默 handler
+     若不在已知豁免集合 → 阻断。
 
-实现：AST 比较 base 版本与目标版本中「静默 handler」集合，取差集。
-退出码：0=通过，1=存在违规（CI fail / pre-commit 阻断）。
+实现：AST 比较 base 版本与目标版本中「静默 handler」集合（按指纹 identity 取差集）。
+唯一键：(path, qualname, nth_in_function, body_sha256[:16])，行号仅作备注。
+退出码：0=通过，1=存在违规（CI fail / pre-commit 阻断），2=指纹基线缺失（配置错误）。
 
 用法：
   python -X utf8 cw2_t2e_ci_gate_silent_except.py [--base HEAD] [--target worktree|HEAD]
-                                            [--emit-baseline PATH] [--baseline PATH]
+                                            [--emit-baseline PATH] [--verbose]
 """
 import argparse
-import ast
-import collections
 import io
 import json
 import os
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ci_common import extract_handlers, handler_identity  # noqa: E402
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-# 视为「已上报」的函数名（含框架自有 _log）
-LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal",
-             "log", "aibot_log", "log_error", "log_warning", "log_info", "record", "report",
-             "notify", "alert", "emit", "_log", "_log_safe", "_log_msg", "_trace", "silent_exc"}
+FINGERPRINT_BASELINE = os.path.join(os.path.dirname(__file__), "silent_except_fingerprints.json")
+LEGACY_WHITELIST_BASELINE = os.path.join(os.path.dirname(__file__), "silent_except_legacy_whitelist.json")
 
 
 # ---- 第132批 T-132d：静默except豁免白名单（8 处合理自举兜底） ----
 # 这些位置是框架有意的静默兜底（PM 的 ImportError 日志模块自举、RWP 的 shutdown 期落盘/回收保护），
-# 不应计入"待改造"清单，也不应在未来被重新引入时触发违规。键 = (relpath, 源文件行号)。
+# 不应计入"待改造"清单，也不应在未来被重新引入时触发违规。
+# ★D148-4：本行号白名单已迁移为「handler 指纹」(silent_except_fingerprints.json)，
+#   此处仅作一个批次的**双轨对照**保留，下一批可删除。键 = (relpath, 源文件行号)。
 LOCATION_WHITELIST = {
     ("nucleus/reasoning/PatchManager.py", 3364),   # except ImportError: pass（日志模块不可用兜底）
     ("nucleus/reasoning/PatchManager.py", 3493),   # except ImportError: pass
@@ -77,76 +85,11 @@ LOCATION_WHITELIST = {
 
 
 def _log(level, msg):
-    sys.stderr.write(f"[ci_gate_silent_except][{level}] {msg}\n")
-
-
-def quiet_body(n):
-    if isinstance(n, ast.Pass):
-        return True
-    if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant):
-        return n.value.value is Ellipsis or isinstance(n.value.value, str)
-    return False
-
-
-def has_report(h):
-    for n in ast.walk(h):
-        if isinstance(n, ast.Raise):
-            return True
-        if isinstance(n, ast.Call):
-            f = n.func
-            nm = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else "")
-            if nm in LOG_FUNCS:
-                return True
-    return False
-
-
-def silent_handlers(src, path="<unknown>"):
-    out = collections.Counter()
-    try:
-        tree = ast.parse(src)
-    except SyntaxError as e:
-        _log("error", f"源码解析失败，跳过指纹提取: {type(e).__name__}: {e}")
-        out[("::<PARSE_ERROR>::", str(e)[:80], "", "")] += 1
-        return out
-    funcs = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            funcs.append((node.lineno, node.end_lineno or node.lineno, node.name))
-
-    def encf(line):
-        best = "<module>"
-        for a, b, nm in funcs:
-            if a <= line <= b:
-                best = nm
-        return best
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ExceptHandler):
-            continue
-        if has_report(node):
-            continue
-        if (path, node.lineno) in LOCATION_WHITELIST:
-            continue
-        body = node.body
-        allquiet = all(quiet_body(x) for x in body)
-        if not allquiet:
-            rets = [x for x in body if isinstance(x, ast.Return)]
-            asg = [x for x in body if isinstance(x, (ast.Assign, ast.AugAssign))]
-            if not (len(rets) == len(body) or len(rets) + len(asg) == len(body)):
-                continue
-        tname = ast.unparse(node.type) if node.type else "bare"
-        shape = "pass" if allquiet else "return_or_assign"
-        try:
-            body_src = ";".join(ast.unparse(x) for x in body)
-        except Exception:
-            _log("warning", "handler 体反解析失败，指纹体记为 '?'")
-            body_src = "?"
-        out[(encf(node.lineno), tname, shape, body_src)] += 1
-    return out
+    sys.stderr.write("[ci_gate_silent_except][%s] %s\n" % (level, msg))
 
 
 def git_show(ref, relpath):
-    r = subprocess.run(["git", "show", f"{ref}:{relpath}"], cwd=ROOT,
+    r = subprocess.run(["git", "show", "%s:%s" % (ref, relpath)], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.stdout if r.returncode == 0 else None
 
@@ -169,9 +112,20 @@ def changed_files(base):
                 x = x[1:-1].encode().decode("unicode_escape").encode("latin1").decode("utf-8")
             except Exception:
                 _log("warning", "中文/特殊路径反解失败，保留原串")
-                pass
         out.append(x)
     return out
+
+
+def git_ls_files_py():
+    r = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
+                       capture_output=True, text=True, encoding="utf-8")
+    return [x for x in r.stdout.splitlines() if x.strip()]
+
+
+def git_untracked_py():
+    r = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "--", "*.py"],
+                       cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    return [x for x in r.stdout.splitlines() if x.strip()]
 
 
 # ---- 第126批 T-126c 新增：CRCRLF 行尾污染检测 ----
@@ -188,20 +142,66 @@ def check_crcrlf(files):
     return bad
 
 
-# ---- 第126批 T-126c 新增：生成已知静默except指纹基线（名单） ----
+def load_known_fingerprints():
+    if not os.path.exists(FINGERPRINT_BASELINE):
+        _log("error", "缺失指纹基线 %s，请先运行 tools/ci/migrate_whitelist_to_fingerprints.py" % FINGERPRINT_BASELINE)
+        return None
+    with io.open(FINGERPRINT_BASELINE, encoding="utf-8") as _f:
+        data = json.load(_f)
+    return set(handler_identity(x) for x in data)
+
+
+def full_repo_scan(KNOWN):
+    """全仓静默 handler 指纹集合（含未跟踪 .py），用于 rot + 盲区兜底。
+
+    返回 (full_set, untracked_bad)：
+      full_set: 仓库当前所有静默 handler 的 identity 集合（tracked）。
+      untracked_bad: 未跟踪 .py 中「不在已知豁免集合」的静默 handler [(rel, identity)]。
+    """
+    full = set()
+    for rel in git_ls_files_py():
+        src = git_read_worktree(rel)
+        if not src:
+            continue
+        try:
+            hs = extract_handlers(src, rel)
+        except SyntaxError:
+            continue
+        full |= set(handler_identity(x) for x in hs)
+    untracked_bad = []
+    for rel in git_untracked_py():
+        src = git_read_worktree(rel)
+        if not src:
+            continue
+        try:
+            hs = extract_handlers(src, rel)
+        except SyntaxError:
+            continue
+        for fp in hs:
+            if handler_identity(fp) not in KNOWN:
+                untracked_bad.append((rel, handler_identity(fp)))
+    return full, untracked_bad
+
+
+# ---- 第126批 T-126c 新增：生成全仓静默except指纹基线（独立复扫用） ----
 def emit_baseline(path):
-    r = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
-                       capture_output=True, text=True, encoding="utf-8")
-    files = [x for x in r.stdout.splitlines() if x.strip()]
     base = {}
-    for rel in files:
+    for rel in git_ls_files_py():
         src = git_read_worktree(rel) or ""
-        cnt = silent_handlers(src, rel)
-        if cnt:
-            base[rel] = {"::".join(k): v for k, v in cnt.items()}
+        try:
+            hs = extract_handlers(src, rel)
+        except SyntaxError:
+            continue
+        if hs:
+            base[rel] = hs
     with io.open(path, "w", encoding="utf-8") as _f:
         json.dump(base, _f, ensure_ascii=False, indent=2)
-    print(f"BASELINE_EMITTED -> {path}  files={len(files)}")
+    print("BASELINE_EMITTED -> %s  files=%d" % (path, len(git_ls_files_py())))
+
+
+def _fmt_identity(ident):
+    path, qualname, nth, sha16 = ident
+    return "%s::%s[#%d]%s" % (path, qualname, nth, sha16)
 
 
 def main():
@@ -210,8 +210,11 @@ def main():
     ap.add_argument("--target", default="worktree", choices=["worktree", "HEAD"])
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--emit-baseline", default=None)
-    ap.add_argument("--baseline", default=None)
     args = ap.parse_args()
+
+    KNOWN = load_known_fingerprints()
+    if KNOWN is None:
+        sys.exit(2)
 
     if args.emit_baseline:
         emit_baseline(args.emit_baseline)
@@ -219,12 +222,14 @@ def main():
 
     files = changed_files(args.base)
     print("=" * 74)
-    print("CI / pre-commit 门禁：防静默except回潮 + CRCRLF")
-    print(f"  base={args.base}  target={args.target}  变更 .py 文件数={len(files)}")
+    print("CI / pre-commit 门禁：防静默except回潮（指纹化）+ rot + 未跟踪盲区 + CRCRLF")
+    print("  base=%s  target=%s  变更 .py 文件数=%d  已知豁免=%d"
+          % (args.base, args.target, len(files), len(KNOWN)))
     print("=" * 74)
+
     total_added = 0
     parse_errs = 0
-    per_file = []
+    added_details = []
     for rel in files:
         old = git_show(args.base, rel)
         new = git_read_worktree(rel) if args.target == "worktree" else git_show("HEAD", rel)
@@ -232,35 +237,64 @@ def main():
             continue
         if old is None:
             old = ""
-        so, sn = silent_handlers(old, rel), silent_handlers(new, rel)
-        added = sn - so          # Counter 差集：新有而旧无（含重数）
-        for (fn, tn, shape, bsrc), c in added.items():
-            if fn == "::<PARSE_ERROR>::":
-                parse_errs += c
-            else:
-                total_added += c
-                per_file.append((rel, c, added))
-                if args.verbose:
-                    print(f"        {c}x  func={fn}  except {tn}  -> {shape}  body={bsrc[:60]}")
+        try:
+            so = set(handler_identity(x) for x in extract_handlers(old, rel))
+        except SyntaxError:
+            parse_errs += 1
+            continue
+        try:
+            sn = set(handler_identity(x) for x in extract_handlers(new, rel))
+        except SyntaxError:
+            parse_errs += 1
+            continue
+        genuine = sn - (so | KNOWN)
+        if genuine:
+            total_added += len(genuine)
+            added_details.append((rel, genuine))
+
+    # 全仓兜底：rot（已知豁免消失）+ 未跟踪盲区
+    full_set, untracked_bad = full_repo_scan(KNOWN)
+    rot = [k for k in KNOWN if k not in full_set]
 
     crcrlf_bad = check_crcrlf(files)
+
     print("-" * 74)
     ok = True
     if total_added == 0:
-        print("  [1][2] 静默except：PASS —— 本次变更未新增（只降不升 / 名单外新增=0）")
+        print("  [1] 静默except（diff 指纹差集）：PASS —— 本次变更未新增（只降不升 / 豁免外新增=0）")
     else:
         ok = False
-        print(f"  [1][2] 静默except：FAIL —— 新增 {total_added} 处，涉及 {len(per_file)} 文件")
+        print("  [1] 静默except（diff 指纹差集）：FAIL —— 新增 %d 处" % total_added)
+        if args.verbose:
+            for rel, gens in added_details:
+                for g in gens:
+                    print("        %s  %s" % (rel, _fmt_identity(g)))
     if parse_errs == 0:
-        print("  [3] parse_err：PASS —— 变更 .py 均可解析")
+        print("  [2] parse_err：PASS —— 变更 .py 均可解析")
     else:
         ok = False
-        print(f"  [3] parse_err：FAIL —— {parse_errs} 个文件解析失败")
+        print("  [2] parse_err：FAIL —— %d 个文件解析失败" % parse_errs)
+    if not rot:
+        print("  [3] 白名单 rot：PASS —— 已知豁免 %d 条全部仍存在于仓库" % len(KNOWN))
+    else:
+        ok = False
+        print("  [3] 白名单 rot：FAIL —— %d 条已知豁免在仓库中消失（须显式 shrink 提交）：" % len(rot))
+        if args.verbose:
+            for k in rot:
+                print("        %s" % _fmt_identity(k))
+    if not untracked_bad:
+        print("  [4] 未跟踪盲区：PASS —— 无未跟踪 .py 含非豁免静默 handler")
+    else:
+        ok = False
+        print("  [4] 未跟踪盲区：FAIL —— %d 处未跟踪 .py 含静默 handler：" % len(untracked_bad))
+        if args.verbose:
+            for rel, ident in untracked_bad:
+                print("        %s  %s" % (rel, _fmt_identity(ident)))
     if not crcrlf_bad:
-        print("  [4] CRCRLF(双CR行尾)：PASS —— 无 CRCRLF 行尾污染")
+        print("  [5] CRCRLF(双CR行尾)：PASS —— 无 CRCRLF 行尾污染")
     else:
         ok = False
-        print(f"  [4] CRCRLF(双CR行尾)：FAIL —— {len(crcrlf_bad)} 文件含双CR：{crcrlf_bad}")
+        print("  [5] CRCRLF(双CR行尾)：FAIL —— %d 文件含双CR：%s" % (len(crcrlf_bad), crcrlf_bad))
     print("=" * 74)
     print("  结论: PASS" if ok else "  结论: FAIL —— 提交被阻断，请整改后重试")
     sys.exit(0 if ok else 1)

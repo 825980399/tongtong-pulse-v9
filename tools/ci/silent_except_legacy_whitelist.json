@@ -1,0 +1,94 @@
+[
+  {
+    "rel": "nucleus/iw_text_guard.py",
+    "lineno": 36
+  },
+  {
+    "rel": "nucleus/reasoning/PatchManager.py",
+    "lineno": 3364
+  },
+  {
+    "rel": "nucleus/reasoning/PatchManager.py",
+    "lineno": 3493
+  },
+  {
+    "rel": "nucleus/reasoning/PatchManager.py",
+    "lineno": 3645
+  },
+  {
+    "rel": "nucleus/reasoning/PatchManager.py",
+    "lineno": 3729
+  },
+  {
+    "rel": "nucleus/reasoning/PatchManager.py",
+    "lineno": 3786
+  },
+  {
+    "rel": "nucleus/reasoning/ReasoningWorkerPool.py",
+    "lineno": 707
+  },
+  {
+    "rel": "nucleus/reasoning/ReasoningWorkerPool.py",
+    "lineno": 747
+  },
+  {
+    "rel": "nucleus/reasoning/ReasoningWorkerPool.py",
+    "lineno": 795
+  },
+  {
+    "rel": "organs/brain/PulseInnerWorld.py",
+    "lineno": 358
+  },
+  {
+    "rel": "organs/brain/PulseInnerWorld.py",
+    "lineno": 565
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_knowledge.py",
+    "lineno": 216
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_knowledge.py",
+    "lineno": 792
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_knowledge.py",
+    "lineno": 863
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_knowledge.py",
+    "lineno": 2300
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_support.py",
+    "lineno": 84
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_support.py",
+    "lineno": 540
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_support.py",
+    "lineno": 702
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_support.py",
+    "lineno": 2006
+  },
+  {
+    "rel": "organs/brain/pulse_inner_world_support.py",
+    "lineno": 2013
+  },
+  {
+    "rel": "tools/archive/cleanup_alias_placeholder_nodes.py",
+    "lineno": 87
+  },
+  {
+    "rel": "tools/archive/cleanup_alias_placeholder_nodes.py",
+    "lineno": 100
+  },
+  {
+    "rel": "tools/archive/patch_template_helper.py",
+    "lineno": 246
+  }
+]
