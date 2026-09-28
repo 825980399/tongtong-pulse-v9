@@ -84,6 +84,7 @@ class PulseInnerWorld(
             "_question_length",
             "_reasoning_start_time",
             "_supplement_topic",
+            "_stress_modulation",
             "_strategy_context",
             "correlation_id",
             "empathetic_note",
@@ -1554,6 +1555,120 @@ class PulseInnerWorld(
                     return {"status": "deep_contemplation", "answer": ctx.contemplative_answer}
         return None
 
+    def _ir_apply_modulations(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # ★v23.0清理：v18.0标记的旧内联分支已由17个检测器完整覆盖，安全移除
+        # ★v17.0新增：情绪调制推理策略——调整复杂度阈值和检索深度
+        _modulated_complexity = ctx._question_complexity
+        if ctx._emotion_modulation.get("depth_factor", 1.0) > 1.1:
+            # 需要更深思时，降低触发深度思考的门槛
+            _modulated_complexity = min(1.0, ctx._question_complexity + 0.15)
+            self._log(LogLevel.DEBUG,
+                     f"情绪调制(深度): 降低深度思考门槛 "
+                     f"({ctx._question_complexity:.2f}→{_modulated_complexity:.2f})")
+        elif ctx._emotion_modulation.get("depth_factor", 1.0) < 0.9:
+            # 需要更快决策时，提高触发深度思考的门槛
+            _modulated_complexity = max(0.0, ctx._question_complexity - 0.1)
+
+        # ===== 阶段6新增：压力→策略调节闭环（应激轴调制推理策略）=====
+        ctx._stress_modulation = self._get_stress_reasoning_modulation()
+        if ctx._stress_modulation.get("depth_factor", 1.0) < 0.9:
+            # 高压：提高触发深度思考的门槛，优先更快更浅的决策
+            _modulated_complexity = max(0.0, _modulated_complexity - 0.1)
+
+        # ===== v20.0新增：情绪驱动的推理策略选择 =====
+        _strategy_pref = ctx._emotion_modulation.get("strategy_preference", {})
+        _strategy_active = _strategy_pref.get("active", False)
+        _preferred_strategies = list(_strategy_pref.get("preferred", []))
+        _avoid_strategies = list(_strategy_pref.get("avoid", []))
+
+        # 压力策略并入情绪策略偏好（压力优先：拆分 + 降并行）
+        if ctx._stress_modulation.get("prefer_decompose"):
+            if "multi_step_execute" not in _preferred_strategies:
+                _preferred_strategies.insert(0, "multi_step_execute")
+        if ctx._stress_modulation.get("avoid_parallel"):
+            for _p in ("multi_branch_deep_think", "multi_branch"):
+                if _p not in _avoid_strategies:
+                    _avoid_strategies.append(_p)
+        if ctx._stress_modulation.get("prefer_decompose") or ctx._stress_modulation.get("avoid_parallel"):
+            _strategy_active = True
+
+        if _strategy_active and (_preferred_strategies or _avoid_strategies):
+            # 策略偏好激活时，尝试优先策略列表中的方法
+            _strategy_result = None
+
+            # 1. 优先策略：按顺序尝试优先列表中的推理策略
+            for _strat in _preferred_strategies:
+                if _strat == "creative_solution":
+                    _strategy_result = self._attempt_creative_solution(ctx.question)
+                elif _strat == "experience_route":
+                    # 尝试经验匹配路由（已在检测器中，这里做补充尝试）
+                    try:
+                        from nucleus.mnemosyne.ReasoningExperience import (
+                            get_reasoning_experience,
+                        )
+                        _exp = get_reasoning_experience()
+                        _match = _exp.search(ctx.question)
+                        if _match and _match.get("confidence", 0) >= 0.4:
+                            _derivation_type = _match.get("derivation_type", "")
+                            if _derivation_type:
+                                _strategy_result = self._route_to_deriver(
+                                    ctx.question, ctx.user_name, ctx._reasoning_start_time,
+                                    ctx._question_complexity, ctx.empathetic_note,
+                                    ctx._memory_context, ctx.payload, ctx.guidance
+                                )
+                    except Exception as e:
+                        self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                elif _strat == "cache":
+                    _cached = self._inference_cache.get(f"{ctx.user_name}:{ctx.question.strip()}")
+                    if not _cached:
+                        _cached = self._inference_cache.get(f"用户:{ctx.question.strip()}")
+                    if _cached:
+                        _cached_answer = _cached.get("answer", "")
+                        if _cached_answer:
+                            # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
+                            self._cache_hit_count += 1
+                            _strategy_result = _cached_answer
+                elif _strat == "rule_reason":
+                    _strategy_result = self._rule_reason(ctx.question, ctx.user_name, ctx.guidance)
+                elif _strat == "contemplation":
+                    _strategy_result = self._contemplative_reason(ctx.question)
+
+                if _strategy_result:
+                    _method = f"emotion_strategy_{_strat}"
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, _strategy_result, ctx.user_name)
+                    self._trace_inference(ctx.question, _strategy_result, _method, 0.65, ctx.user_name,
+                                         duration=time.time() - ctx._reasoning_start_time,
+                                         complexity=ctx._question_complexity,
+                                         tuning_hint=f"情绪策略偏好触发({_strategy_pref.get('description', '')})")
+                    _final = self._enhance_answer(
+                        answer=_strategy_result, question=ctx.question, method=_method,
+                        complexity=ctx._question_complexity, empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": _final,
+                        "method": _method, "confidence": 0.65, "user_name": ctx.user_name,
+                        "ctx.correlation_id": ctx.correlation_id,
+                        "confidence_hint": "moderate",
+                        "strategy_applied": ctx.payload.get("strategy_context", {}),
+                        "emotion_strategy": True,
+                    }, priority=7, layer="L2")
+                    self._log(LogLevel.INFO,
+                             f"情绪策略命中: {ctx._emotion_modulation.get('emotion', '中性')}→{_strat} '{ctx.question[:40]}'")
+                    return {"status": _method, "answer": _strategy_result}
+
+            # 2. 如果优先策略都未命中，且当前路由类型在避免列表中，回退到知识检索
+            # （避免列表中的策略在下方的_route_to_deriver中被跳过，这里只做记录）
+            if _avoid_strategies:
+                self._log(LogLevel.DEBUG,
+                         f"情绪策略避免: {ctx._emotion_modulation.get('emotion', '中性')}→跳过{_avoid_strategies}")
+        # ===== v20.0新增结束 =====
+
+        # ===== 推理问题前置过滤结束 =====
+        return None
+
+
 
 
 
@@ -1591,116 +1706,9 @@ class PulseInnerWorld(
         if _pipeline_result is not None:
             return _pipeline_result
 
-        # ★v23.0清理：v18.0标记的旧内联分支已由17个检测器完整覆盖，安全移除
-        # ★v17.0新增：情绪调制推理策略——调整复杂度阈值和检索深度
-        _modulated_complexity = _question_complexity
-        if _emotion_modulation.get("depth_factor", 1.0) > 1.1:
-            # 需要更深思时，降低触发深度思考的门槛
-            _modulated_complexity = min(1.0, _question_complexity + 0.15)
-            self._log(LogLevel.DEBUG,
-                     f"情绪调制(深度): 降低深度思考门槛 "
-                     f"({_question_complexity:.2f}→{_modulated_complexity:.2f})")
-        elif _emotion_modulation.get("depth_factor", 1.0) < 0.9:
-            # 需要更快决策时，提高触发深度思考的门槛
-            _modulated_complexity = max(0.0, _question_complexity - 0.1)
-
-        # ===== 阶段6新增：压力→策略调节闭环（应激轴调制推理策略）=====
-        _stress_modulation = self._get_stress_reasoning_modulation()
-        if _stress_modulation.get("depth_factor", 1.0) < 0.9:
-            # 高压：提高触发深度思考的门槛，优先更快更浅的决策
-            _modulated_complexity = max(0.0, _modulated_complexity - 0.1)
-
-        # ===== v20.0新增：情绪驱动的推理策略选择 =====
-        _strategy_pref = _emotion_modulation.get("strategy_preference", {})
-        _strategy_active = _strategy_pref.get("active", False)
-        _preferred_strategies = list(_strategy_pref.get("preferred", []))
-        _avoid_strategies = list(_strategy_pref.get("avoid", []))
-
-        # 压力策略并入情绪策略偏好（压力优先：拆分 + 降并行）
-        if _stress_modulation.get("prefer_decompose"):
-            if "multi_step_execute" not in _preferred_strategies:
-                _preferred_strategies.insert(0, "multi_step_execute")
-        if _stress_modulation.get("avoid_parallel"):
-            for _p in ("multi_branch_deep_think", "multi_branch"):
-                if _p not in _avoid_strategies:
-                    _avoid_strategies.append(_p)
-        if _stress_modulation.get("prefer_decompose") or _stress_modulation.get("avoid_parallel"):
-            _strategy_active = True
-
-        if _strategy_active and (_preferred_strategies or _avoid_strategies):
-            # 策略偏好激活时，尝试优先策略列表中的方法
-            _strategy_result = None
-
-            # 1. 优先策略：按顺序尝试优先列表中的推理策略
-            for _strat in _preferred_strategies:
-                if _strat == "creative_solution":
-                    _strategy_result = self._attempt_creative_solution(question)
-                elif _strat == "experience_route":
-                    # 尝试经验匹配路由（已在检测器中，这里做补充尝试）
-                    try:
-                        from nucleus.mnemosyne.ReasoningExperience import (
-                            get_reasoning_experience,
-                        )
-                        _exp = get_reasoning_experience()
-                        _match = _exp.search(question)
-                        if _match and _match.get("confidence", 0) >= 0.4:
-                            _derivation_type = _match.get("derivation_type", "")
-                            if _derivation_type:
-                                _strategy_result = self._route_to_deriver(
-                                    question, user_name, _reasoning_start_time,
-                                    _question_complexity, empathetic_note,
-                                    _memory_context, payload, guidance
-                                )
-                    except Exception as e:
-                        self._log(LogLevel.DEBUG, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                elif _strat == "cache":
-                    _cached = self._inference_cache.get(f"{user_name}:{question.strip()}")
-                    if not _cached:
-                        _cached = self._inference_cache.get(f"用户:{question.strip()}")
-                    if _cached:
-                        _cached_answer = _cached.get("answer", "")
-                        if _cached_answer:
-                            # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
-                            self._cache_hit_count += 1
-                            _strategy_result = _cached_answer
-                elif _strat == "rule_reason":
-                    _strategy_result = self._rule_reason(question, user_name, guidance)
-                elif _strat == "contemplation":
-                    _strategy_result = self._contemplative_reason(question)
-
-                if _strategy_result:
-                    _method = f"emotion_strategy_{_strat}"
-                    self._inference_count += 1
-                    self._cache_inference(question, _strategy_result, user_name)
-                    self._trace_inference(question, _strategy_result, _method, 0.65, user_name,
-                                         duration=time.time() - _reasoning_start_time,
-                                         complexity=_question_complexity,
-                                         tuning_hint=f"情绪策略偏好触发({_strategy_pref.get('description', '')})")
-                    _final = self._enhance_answer(
-                        answer=_strategy_result, question=question, method=_method,
-                        complexity=_question_complexity, empathetic_note=empathetic_note,
-                        memory_context=_memory_context
-                    )
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": _final,
-                        "method": _method, "confidence": 0.65, "user_name": user_name,
-                        "correlation_id": correlation_id,
-                        "confidence_hint": "moderate",
-                        "strategy_applied": payload.get("strategy_context", {}),
-                        "emotion_strategy": True,
-                    }, priority=7, layer="L2")
-                    self._log(LogLevel.INFO,
-                             f"情绪策略命中: {_emotion_modulation.get('emotion', '中性')}→{_strat} '{question[:40]}'")
-                    return {"status": _method, "answer": _strategy_result}
-
-            # 2. 如果优先策略都未命中，且当前路由类型在避免列表中，回退到知识检索
-            # （避免列表中的策略在下方的_route_to_deriver中被跳过，这里只做记录）
-            if _avoid_strategies:
-                self._log(LogLevel.DEBUG,
-                         f"情绪策略避免: {_emotion_modulation.get('emotion', '中性')}→跳过{_avoid_strategies}")
-        # ===== v20.0新增结束 =====
-
-        # ===== 推理问题前置过滤结束 =====
+        _mod = self._ir_apply_modulations(_ctx)
+        if _mod is not None:
+            return _mod
         _derivation = self._ir_try_derivation(_ctx)
         if _derivation is not None:
             return _derivation
@@ -1842,7 +1850,7 @@ class PulseInnerWorld(
                 fallback_tools.remove("deep_search")
                 self._log(LogLevel.DEBUG, "状态感知: 认知负荷偏高，跳过深度搜索")
         # ★压力闭环：高压下降并行/外部搜索，优先内在分步求解（复用已算出的压力调制）
-        if _stress_modulation.get("avoid_parallel"):
+        if _ctx._stress_modulation.get("avoid_parallel"):
             if "deep_search" in fallback_tools:
                 fallback_tools.remove("deep_search")
             if "inner_world" not in fallback_tools:
