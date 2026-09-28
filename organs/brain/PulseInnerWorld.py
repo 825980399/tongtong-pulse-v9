@@ -658,6 +658,217 @@ class PulseInnerWorld(
 
         return None
 
+    def _ir_try_deep_search_pre(self, ctx: "PulseInnerWorld.InferenceContext", fallback_tools, tool_requested):
+        # 策略3: 深度搜索（原有逻辑）
+        if "deep_search" in fallback_tools and not tool_requested:
+            # ===== 全局状态感知：自主判断是否适合执行搜索 =====
+            can_search = True
+            skip_reason = ""
+            try:
+                if self.info_field and hasattr(self.info_field, 'get_global_state'):
+                    global_state = self.info_field.get_global_state()
+                    if global_state.get("is_high_load"):
+                        can_search = False
+                        skip_reason = "系统负载偏高，暂缓深度搜索"
+                    elif global_state.get("active_external_ops", 0) >= global_state.get("max_concurrent_ops", 2):
+                        can_search = False
+                        skip_reason = f"已有{global_state.get('active_external_ops')}个搜索任务在执行，暂缓新搜索"
+            except Exception as e:
+                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+            return (can_search, skip_reason)
+        return None
+
+
+    def _ir_try_deep_search_exec(self, ctx: "PulseInnerWorld.InferenceContext", can_search, skip_reason, tool_requested, _strategy_context, _has_remote_api):
+        if can_search:
+            # ===== 新增：语义范畴判断——搜索主题是否适合外部搜索引擎 =====
+            _search_topic_for_check = ctx.search_query or ctx.question[:80]
+            if not self._is_suitable_for_search(_search_topic_for_check):
+                self._log(LogLevel.INFO,
+                         f"语义范畴判断: 搜索主题'{_search_topic_for_check[:40]}'不适合外部搜索，"
+                         f"优先走内在沉思")
+                if self.node_pool:
+                    ctx.contemplative_answer = self._contemplative_reason(ctx.question)
+                    if ctx.contemplative_answer:
+                        self._inference_count += 1
+                        self._cache_inference(ctx.question, ctx.contemplative_answer, ctx.user_name)
+                        final_answer = self._enhance_answer(
+                            answer=ctx.contemplative_answer,
+                            question=ctx.question,
+                            method="contemplation_semantic",
+                            complexity=ctx._question_complexity,
+                            empathetic_note=ctx.empathetic_note,
+                            memory_context=ctx._memory_context
+                        )
+                        self._emit(InferenceEvent.RESULT, {
+                            "question": ctx.question, "answer": final_answer,
+                            "method": "contemplation_semantic", "confidence": 0.5, "user_name": ctx.user_name,
+                            "correlation_id": ctx.payload.get("correlation_id", ""),
+                            "strategy_applied": _strategy_context,
+                            "confidence_hint": "low",
+                        }, priority=6, layer="L2")
+                        return ({"status": "contemplation_match", "answer": ctx.contemplative_answer}, tool_requested)
+                # ★v25.0修复：不适合搜索且沉思失败，直接走大模型兜底或诚实回答，绝不发起外部搜索
+                self._log(LogLevel.INFO, "语义范畴: 不适合搜索且沉思未命中，走大模型兜底或诚实回答")
+                if _has_remote_api and ctx.correlation_id:
+                    ctx._memory_context = self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance)
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": None,
+                        "method": "meta_not_search",
+                        "confidence": 0.0, "user_name": ctx.user_name,
+                        "correlation_id": ctx.correlation_id,
+                        "strategy_applied": _strategy_context,
+                        "tool_requested": False,
+                        "memory_context": ctx._memory_context,
+                    }, priority=5, layer="L2")
+                    return ({"status": "delegated_to_lung_meta", "reason": "不适合搜索且沉思失败"}, tool_requested)
+                else:
+                    fallback_answer = (
+                        "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答，"
+                        "但我会继续学习和思考。"
+                    )
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, fallback_answer, ctx.user_name)
+                    final_answer = self._enhance_answer(
+                        answer=fallback_answer,
+                        question=ctx.question,
+                        method="meta_honest",
+                        complexity=ctx._question_complexity,
+                        empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context,
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": final_answer,
+                        "method": "meta_honest", "confidence": 0.3, "user_name": ctx.user_name,
+                        "correlation_id": ctx.correlation_id,
+                        "strategy_applied": _strategy_context,
+                        "confidence_hint": "low",
+                    }, priority=5, layer="L2")
+                    return ({"status": "meta_honest", "answer": fallback_answer}, tool_requested)
+            # ===== 新增: 观点陈述检测——判断用户输入是观点还是问题 =====
+            is_opinion_statement = self._is_opinion_statement(ctx.question)
+            if is_opinion_statement and self.node_pool:
+                # 用户可能在分享观点，尝试用内在沉思生成回应
+                self._log(LogLevel.INFO,
+                         f"元认知决策: 检测到观点陈述，优先内在沉思: '{ctx.question[:40]}...'")
+                ctx.contemplative_answer = self._contemplative_reason(ctx.question)
+                if ctx.contemplative_answer:
+                    self._inference_count += 1
+                    self._cache_inference(ctx.question, ctx.contemplative_answer, ctx.user_name)
+                    final_answer = self._enhance_answer(
+                        answer=ctx.contemplative_answer,
+                        question=ctx.question,
+                        method="contemplation",
+                        complexity=ctx._question_complexity,
+                        empathetic_note=ctx.empathetic_note,
+                        memory_context=ctx._memory_context
+                    )
+                    self._emit(InferenceEvent.RESULT, {
+                        "question": ctx.question, "answer": final_answer,
+                        "method": "contemplation", "confidence": 0.5, "user_name": ctx.user_name,
+                        "correlation_id": ctx.payload.get("correlation_id", ""),
+                        "strategy_applied": _strategy_context,
+                        "confidence_hint": "low",
+                    }, priority=6, layer="L2")
+                    return ({"status": "contemplation_match", "answer": ctx.contemplative_answer}, tool_requested)
+                # 沉思无法回答时，生成带有价值冲突说明的兜底回答
+                fallback_answer = (
+                    "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答。"
+                    "但我能感受到你在思考一个很重要的问题——如何在诚实和善意之间找到平衡。"
+                    "这种思考本身就很有价值。"
+                )
+                self._inference_count += 1
+                self._cache_inference(ctx.question, fallback_answer, ctx.user_name)
+                final_answer = self._enhance_answer(
+                    answer=fallback_answer,
+                    question=ctx.question,
+                    method="contemplation",
+                    complexity=ctx._question_complexity,
+                    empathetic_note=ctx.empathetic_note,
+                    memory_context=ctx._memory_context
+                )
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": final_answer,
+                    "method": "contemplation", "confidence": 0.4, "user_name": ctx.user_name,
+                    "correlation_id": ctx.payload.get("correlation_id", ""),
+                    "strategy_applied": _strategy_context,
+                    "confidence_hint": "low",
+                }, priority=6, layer="L2")
+                # 将兜底回答发射为消化脉冲，让胃创建L1节点
+                self._emit(DigestEvent.KNOWLEDGE, {
+                    "content": f"[内在沉思·兜底回答] {fallback_answer}",
+                    "source_organ": self.organ_name,
+                    "trigger_reason": "contemplation.fallback",
+                    "importance": "B",
+                    "view_mode": "INNER_VIEW",
+                }, priority=3, layer="L2")
+                return ({"status": "contemplation_match", "answer": fallback_answer}, tool_requested)
+            else:
+                # ★FIX: 抽象概念/知识陈述在源头拦截，不发射无效搜索
+                _skip_search = self._should_skip_search(ctx.question)
+                if _skip_search:
+                    self._log(LogLevel.INFO, f"搜索意图拦截: 抽象概念/知识陈述不触发搜索: '{ctx.question[:40]}...'")
+                # 正常搜索逻辑（ctx.search_query已在前面初始化为ctx.question[:80]）
+                if not _skip_search and len(ctx.question) > 40:
+                    refined = self._refine_search_intent(ctx.question)
+                    if refined and len(refined) >= 4:
+                        ctx.search_query = refined
+                        self._log(LogLevel.INFO, f"元认知决策(搜索意图提炼): '{ctx.question[:40]}...' → '{ctx.search_query}'")
+            if not _skip_search:
+                self._log(LogLevel.INFO,
+                         f"元认知决策: 内部推理未命中，触发深度搜索: {ctx.search_query[:40]}")
+                self._emit(Event.CONTROLLER_OPEN_URL, {
+                    "url": f"https://lite.duckduckgo.com/lite/?q={ctx.search_query[:80]}",
+                    "reason": "元认知决策: 内部推理未命中，需要深度搜索",
+                    "search_topic": ctx.search_query[:80],
+                    "deep_search": True,
+                    "search_intent": "curiosity",
+                }, priority=4, layer="L3")
+                tool_requested = True
+            # ===== 搜索发起后，如果远程API可用，同时作为兜底方案 =====
+            if _has_remote_api and ctx.correlation_id:
+                # ===== 大模型兜底前记录经验 =====
+                try:
+                    from nucleus.mnemosyne.ReasoningExperience import (
+                        get_reasoning_experience,
+                    )
+                    _reasoning_exp_fb = get_reasoning_experience()
+                    # 过滤内部追问词
+                    _is_internal_meta = bool(
+                        ctx.question and (
+                            re.search(r'的(?:前提|反例|边界|底层构成|演化路径|最小单元)是什么', ctx.question) or
+                            re.search(r'(?:前提|假设)是否(?:总是|还)?成立', ctx.question) or
+                            re.search(r'有没有.*反例|在什么情况下.*失效|结论还成立吗', ctx.question) or
+                            re.search(r'如果.*(?:反过来|放到|推到极致|不一样)', ctx.question) or
+                            re.search(r'它不是什么|换个角度|不同.*视角', ctx.question)
+                        )
+                    )
+                    if ctx.question and not _is_internal_meta:
+                        _reasoning_exp_fb.record(
+                            ctx.question,
+                            "unknown",
+                            source="local_fallback",
+                            confidence=0.3
+                        )
+                except Exception as e:
+                    self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
+                # ===== 经验记录结束 =====
+                self._direct_to_lung_questions.add(ctx.question.strip())
+                ctx._memory_context = self._build_memory_context(ctx.question, ctx.user_name, ctx.guidance)
+                self._emit(InferenceEvent.RESULT, {
+                    "question": ctx.question, "answer": None,
+                    "method": "search_with_lung_fallback",
+                    "confidence": 0.0, "user_name": ctx.user_name,
+                    "correlation_id": ctx.correlation_id,  # ← 使用前面提取的ID
+                    "strategy_applied": _strategy_context,
+                    "tool_requested": True,
+                    "memory_context": ctx._memory_context,
+                }, priority=4, layer="L2")
+        else:
+            self._log(LogLevel.INFO, f"元认知决策: {skip_reason}: {ctx.question[:40]}")
+        return (None, tool_requested)
+
+
 
     def _on_inference_request(self, payload: dict) -> dict[str, Any]:
         _ctx = self._ir_build_context(payload)
@@ -1652,208 +1863,12 @@ class PulseInnerWorld(
                         "search_intent": "curiosity",
                     }, priority=4, layer="L3")
                 tool_requested = True
-        # 策略3: 深度搜索（原有逻辑）
-        if "deep_search" in fallback_tools and not tool_requested:
-            # ===== 全局状态感知：自主判断是否适合执行搜索 =====
-            can_search = True
-            skip_reason = ""
-            try:
-                if self.info_field and hasattr(self.info_field, 'get_global_state'):
-                    global_state = self.info_field.get_global_state()
-                    if global_state.get("is_high_load"):
-                        can_search = False
-                        skip_reason = "系统负载偏高，暂缓深度搜索"
-                    elif global_state.get("active_external_ops", 0) >= global_state.get("max_concurrent_ops", 2):
-                        can_search = False
-                        skip_reason = f"已有{global_state.get('active_external_ops')}个搜索任务在执行，暂缓新搜索"
-            except Exception as e:
-                self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-            if can_search:
-                # ===== 新增：语义范畴判断——搜索主题是否适合外部搜索引擎 =====
-                _search_topic_for_check = search_query or question[:80]
-                if not self._is_suitable_for_search(_search_topic_for_check):
-                    self._log(LogLevel.INFO,
-                             f"语义范畴判断: 搜索主题'{_search_topic_for_check[:40]}'不适合外部搜索，"
-                             f"优先走内在沉思")
-                    if self.node_pool:
-                        contemplative_answer = self._contemplative_reason(question)
-                        if contemplative_answer:
-                            self._inference_count += 1
-                            self._cache_inference(question, contemplative_answer, user_name)
-                            final_answer = self._enhance_answer(
-                                answer=contemplative_answer,
-                                question=question,
-                                method="contemplation_semantic",
-                                complexity=_question_complexity,
-                                empathetic_note=empathetic_note,
-                                memory_context=_memory_context
-                            )
-                            self._emit(InferenceEvent.RESULT, {
-                                "question": question, "answer": final_answer,
-                                "method": "contemplation_semantic", "confidence": 0.5, "user_name": user_name,
-                                "correlation_id": payload.get("correlation_id", ""),
-                                "strategy_applied": _strategy_context,
-                                "confidence_hint": "low",
-                            }, priority=6, layer="L2")
-                            return {"status": "contemplation_match", "answer": contemplative_answer}
-                    # ★v25.0修复：不适合搜索且沉思失败，直接走大模型兜底或诚实回答，绝不发起外部搜索
-                    self._log(LogLevel.INFO, "语义范畴: 不适合搜索且沉思未命中，走大模型兜底或诚实回答")
-                    if _has_remote_api and correlation_id:
-                        _memory_context = self._build_memory_context(question, user_name, guidance)
-                        self._emit(InferenceEvent.RESULT, {
-                            "question": question, "answer": None,
-                            "method": "meta_not_search",
-                            "confidence": 0.0, "user_name": user_name,
-                            "correlation_id": correlation_id,
-                            "strategy_applied": _strategy_context,
-                            "tool_requested": False,
-                            "memory_context": _memory_context,
-                        }, priority=5, layer="L2")
-                        return {"status": "delegated_to_lung_meta", "reason": "不适合搜索且沉思失败"}
-                    else:
-                        fallback_answer = (
-                            "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答，"
-                            "但我会继续学习和思考。"
-                        )
-                        self._inference_count += 1
-                        self._cache_inference(question, fallback_answer, user_name)
-                        final_answer = self._enhance_answer(
-                            answer=fallback_answer,
-                            question=question,
-                            method="meta_honest",
-                            complexity=_question_complexity,
-                            empathetic_note=empathetic_note,
-                            memory_context=_memory_context,
-                        )
-                        self._emit(InferenceEvent.RESULT, {
-                            "question": question, "answer": final_answer,
-                            "method": "meta_honest", "confidence": 0.3, "user_name": user_name,
-                            "correlation_id": correlation_id,
-                            "strategy_applied": _strategy_context,
-                            "confidence_hint": "low",
-                        }, priority=5, layer="L2")
-                        return {"status": "meta_honest", "answer": fallback_answer}
-                # ===== 新增: 观点陈述检测——判断用户输入是观点还是问题 =====
-                is_opinion_statement = self._is_opinion_statement(question)
-                if is_opinion_statement and self.node_pool:
-                    # 用户可能在分享观点，尝试用内在沉思生成回应
-                    self._log(LogLevel.INFO,
-                             f"元认知决策: 检测到观点陈述，优先内在沉思: '{question[:40]}...'")
-                    contemplative_answer = self._contemplative_reason(question)
-                    if contemplative_answer:
-                        self._inference_count += 1
-                        self._cache_inference(question, contemplative_answer, user_name)
-                        final_answer = self._enhance_answer(
-                            answer=contemplative_answer,
-                            question=question,
-                            method="contemplation",
-                            complexity=_question_complexity,
-                            empathetic_note=empathetic_note,
-                            memory_context=_memory_context
-                        )
-                        self._emit(InferenceEvent.RESULT, {
-                            "question": question, "answer": final_answer,
-                            "method": "contemplation", "confidence": 0.5, "user_name": user_name,
-                            "correlation_id": payload.get("correlation_id", ""),
-                            "strategy_applied": _strategy_context,
-                            "confidence_hint": "low",
-                        }, priority=6, layer="L2")
-                        return {"status": "contemplation_match", "answer": contemplative_answer}
-                    # 沉思无法回答时，生成带有价值冲突说明的兜底回答
-                    fallback_answer = (
-                        "关于这个问题，我目前的知识库中还没有足够的信息来给出确切的回答。"
-                        "但我能感受到你在思考一个很重要的问题——如何在诚实和善意之间找到平衡。"
-                        "这种思考本身就很有价值。"
-                    )
-                    self._inference_count += 1
-                    self._cache_inference(question, fallback_answer, user_name)
-                    final_answer = self._enhance_answer(
-                        answer=fallback_answer,
-                        question=question,
-                        method="contemplation",
-                        complexity=_question_complexity,
-                        empathetic_note=empathetic_note,
-                        memory_context=_memory_context
-                    )
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": final_answer,
-                        "method": "contemplation", "confidence": 0.4, "user_name": user_name,
-                        "correlation_id": payload.get("correlation_id", ""),
-                        "strategy_applied": _strategy_context,
-                        "confidence_hint": "low",
-                    }, priority=6, layer="L2")
-                    # 将兜底回答发射为消化脉冲，让胃创建L1节点
-                    self._emit(DigestEvent.KNOWLEDGE, {
-                        "content": f"[内在沉思·兜底回答] {fallback_answer}",
-                        "source_organ": self.organ_name,
-                        "trigger_reason": "contemplation.fallback",
-                        "importance": "B",
-                        "view_mode": "INNER_VIEW",
-                    }, priority=3, layer="L2")
-                    return {"status": "contemplation_match", "answer": fallback_answer}
-                else:
-                    # ★FIX: 抽象概念/知识陈述在源头拦截，不发射无效搜索
-                    _skip_search = self._should_skip_search(question)
-                    if _skip_search:
-                        self._log(LogLevel.INFO, f"搜索意图拦截: 抽象概念/知识陈述不触发搜索: '{question[:40]}...'")
-                    # 正常搜索逻辑（search_query已在前面初始化为question[:80]）
-                    if not _skip_search and len(question) > 40:
-                        refined = self._refine_search_intent(question)
-                        if refined and len(refined) >= 4:
-                            search_query = refined
-                            self._log(LogLevel.INFO, f"元认知决策(搜索意图提炼): '{question[:40]}...' → '{search_query}'")
-                if not _skip_search:
-                    self._log(LogLevel.INFO,
-                             f"元认知决策: 内部推理未命中，触发深度搜索: {search_query[:40]}")
-                    self._emit(Event.CONTROLLER_OPEN_URL, {
-                        "url": f"https://lite.duckduckgo.com/lite/?q={search_query[:80]}",
-                        "reason": "元认知决策: 内部推理未命中，需要深度搜索",
-                        "search_topic": search_query[:80],
-                        "deep_search": True,
-                        "search_intent": "curiosity",
-                    }, priority=4, layer="L3")
-                    tool_requested = True
-                # ===== 搜索发起后，如果远程API可用，同时作为兜底方案 =====
-                if _has_remote_api and correlation_id:
-                    # ===== 大模型兜底前记录经验 =====
-                    try:
-                        from nucleus.mnemosyne.ReasoningExperience import (
-                            get_reasoning_experience,
-                        )
-                        _reasoning_exp_fb = get_reasoning_experience()
-                        # 过滤内部追问词
-                        _is_internal_meta = bool(
-                            question and (
-                                re.search(r'的(?:前提|反例|边界|底层构成|演化路径|最小单元)是什么', question) or
-                                re.search(r'(?:前提|假设)是否(?:总是|还)?成立', question) or
-                                re.search(r'有没有.*反例|在什么情况下.*失效|结论还成立吗', question) or
-                                re.search(r'如果.*(?:反过来|放到|推到极致|不一样)', question) or
-                                re.search(r'它不是什么|换个角度|不同.*视角', question)
-                            )
-                        )
-                        if question and not _is_internal_meta:
-                            _reasoning_exp_fb.record(
-                                question,
-                                "unknown",
-                                source="local_fallback",
-                                confidence=0.3
-                            )
-                    except Exception as e:
-                        self._log(LogLevel.WARNING, f"外部依赖异常已忽略: {type(e).__name__}: {e}")
-                    # ===== 经验记录结束 =====
-                    self._direct_to_lung_questions.add(question.strip())
-                    _memory_context = self._build_memory_context(question, user_name, guidance)
-                    self._emit(InferenceEvent.RESULT, {
-                        "question": question, "answer": None,
-                        "method": "search_with_lung_fallback",
-                        "confidence": 0.0, "user_name": user_name,
-                        "correlation_id": correlation_id,  # ← 使用前面提取的ID
-                        "strategy_applied": _strategy_context,
-                        "tool_requested": True,
-                        "memory_context": _memory_context,
-                    }, priority=4, layer="L2")
-            else:
-                self._log(LogLevel.INFO, f"元认知决策: {skip_reason}: {question[:40]}")
+        _ds_gate = self._ir_try_deep_search_pre(_ctx, fallback_tools, tool_requested)
+        if _ds_gate is not None:
+            _can_search, _skip_reason = _ds_gate
+            _ds_exec, tool_requested = self._ir_try_deep_search_exec(_ctx, _can_search, _skip_reason, tool_requested, _strategy_context, _has_remote_api)
+            if _ds_exec is not None:
+                return _ds_exec
         # 策略4: 无工具可用——创造性解决方案
         if not tool_requested:
             self._log(LogLevel.INFO,
