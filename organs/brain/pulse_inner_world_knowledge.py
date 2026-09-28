@@ -2024,8 +2024,8 @@ class PulseInnerWorldKnowledgeMixin:
                          f"路由薄弱降级: '{_derivation_type}'属于薄弱领域，"
                          f"复杂度感知+{_complexity_boost:.2f}")
                 # 通过调整 _question_complexity 让后续的深度思考检测更容易触发
-                # 注意：_question_complexity 是 _on_inference_request 中的局部变量
-                # 这里通过返回特殊的 derivation_type 来标记，让外层处理
+                # 注意：_question_complexity 现为 ctx._question_complexity 字段（第147批九刀拆分后）
+                # 本方法不持有 ctx，仍通过返回特殊的 derivation_type 来标记，让外层处理
                 _derivation_type = f"weak_{_derivation_type}"
 
         if not _derivation_type:

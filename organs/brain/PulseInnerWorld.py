@@ -2081,7 +2081,7 @@ class PulseInnerWorld(
             "reasoning_duration": round(reasoning_duration, 2),
         }
 
-    # ========== 推理检测器（从_on_inference_request提取） ==========
+    # ========== 推理检测器方法群（原 _on_inference_request C 段；第147批九刀拆分后由 _ir_run_detectors 调度） ==========
 
     def _detect_simple_query_local(self, ctx: "PulseInnerWorld.InferenceContext"):
         """优先级101：简单问题本地回答（阶段二子任务5.1）。

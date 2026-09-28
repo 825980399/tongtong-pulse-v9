@@ -243,8 +243,9 @@ class SelfInspector(SilentLogMixin):
         self._load_config()
         self._info_field = None  
         # ===== 已知超长方法白名单 =====
+        # ★第147批九刀拆分：_on_inference_request 已拆为 16 个 _ir_* 方法（主方法 45 行），
+        #   移除其豁免，改为盯防新拆出的方法（_ir_* 系列，均 ≤200 行，正常进入 long_method 检测）。
         self._long_method_whitelist = {
-            ("PulseInnerWorld", "_on_inference_request"),
             ("PulseInnerWorld", "_on_heartbeat"),
             ("PulseInnerWorld", "_generate_weekly_report"),
             ("PulseInnerWorld", "_deep_think"),
