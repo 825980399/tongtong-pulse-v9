@@ -1,0 +1,99 @@
+{
+  "title": "曈曈 PulseNet v10 · 热冷池/FAISS/KAL 进程内微基准",
+  "generated_at": "2026-09-17 16:31:14",
+  "note": "本结果为进程内微基准（非生产负载观测）。生产框架停机时不编造生产数字，仅如实记录组件自身开销。",
+  "config": {
+    "ENABLE_HOT_COLD_SEPARATION": true,
+    "ENABLE_NEO4J_GRAPH_STORE": false,
+    "ENABLE_NEO4J_DUAL_WRITE": false,
+    "ENABLE_INFLUXDB_TIMESERIES": false,
+    "ENABLE_INFLUXDB_WRITE_ONLY": false,
+    "ENABLE_DISTRIBUTED": false
+  },
+  "framework": {
+    "pulse_log": "<PROJECT_ROOT>\\logs\\pulse.log",
+    "mtime_age_min": 4.0,
+    "graceful_shutdown": false
+  },
+  "stages": {
+    "node_pool": {
+      "status": "OK",
+      "level_distribution": {
+        "L3": 96,
+        "L2": 289,
+        "L1": 615
+      },
+      "add": {
+        "count": 1000,
+        "ops_per_s": 890.7363159066614,
+        "p50_ms": 0.0909,
+        "p95_ms": 6.7646,
+        "max_ms": 20.3402
+      },
+      "get_all": {
+        "count": 1000,
+        "ops_per_s": 911244.5400627893,
+        "p50_ms": 0.0007,
+        "p95_ms": 0.0029,
+        "max_ms": 0.0194
+      },
+      "get_by_level": {
+        "L3": {
+          "count": 96,
+          "ops_per_s": 506863.97093918436,
+          "p50_ms": 0.0025,
+          "p95_ms": 0.0036,
+          "max_ms": 0.0055
+        },
+        "L2": {
+          "count": 289,
+          "ops_per_s": 930457.8542170647,
+          "p50_ms": 0.0007,
+          "p95_ms": 0.0026,
+          "max_ms": 0.0107
+        },
+        "L1": {
+          "count": 615,
+          "ops_per_s": 1029460.0297614887,
+          "p50_ms": 0.0007,
+          "p95_ms": 0.0027,
+          "max_ms": 0.0194
+        }
+      },
+      "cache_stats": {
+        "warm_hits": 0,
+        "warm_misses": 50,
+        "cold_loads": 0,
+        "cache_shrinks": 0,
+        "warm_hit_rate": 0.0,
+        "warm_lru_size": 52,
+        "hot_size": 0,
+        "warm_size": 152,
+        "cold_size": 0
+      }
+    },
+    "faiss": {
+      "status": "OK",
+      "faiss_available": true,
+      "index_type": "auto",
+      "index_ready": false,
+      "stored_vectors": 2000,
+      "vectors": 2000,
+      "dim": 512,
+      "add_total_ms": 0.23,
+      "add_ops_per_s": 8775779.269592153,
+      "search": {
+        "count": 200,
+        "ops_per_s": 24.905632558093394,
+        "p50_ms": 38.5524,
+        "p95_ms": 47.3175,
+        "max_ms": 49.7719
+      },
+      "note": "FAISS 单例处于 brute-force 回退模式（index_ready=False），search 为暴力余弦，时延偏高属预期"
+    },
+    "kal": {
+      "status": "SKIPPED",
+      "reason": "KAL 未接入节点池：进程内独立运行无 _node_pool（需生产框架主控制器装配），无法在独立进程内基准，须在生产框架装配后观测。"
+    }
+  }
+}

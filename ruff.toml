@@ -1,0 +1,56 @@
+# 曈曈 PulseNet RUFF 规则基线（2026-09-02 建立）
+# 2026-09-10 第2批调整（星轨裁决）：line-length 88 → 120；ignore 增加 B005
+# ------------------------------------------------------------------
+# 设计内忽略（防御性编程，属框架有意设计，不视为缺陷）：
+#   BLE001  盲捕获 Exception —— 外围模块/硬件探测/器官边界广泛用于
+#            防止外部模块崩溃拖垮主链路，故障由调用方或日志兜底。
+#   S110     try-except-pass —— 安全探测类（safe_hw_probe 等）失败时
+#            静默降级属合理设计；核心业务路径的静默吞异常已由
+#            self_inspector 的 silent_exception 检测器另行覆盖。
+#   S112     try-except-continue —— 批量外围任务容错继续，同理。
+#   B005     strip-with-multi-characters —— PulseInnerWorld 等处按字符集
+#            剥离（如 _seg.strip(" 　..。;；,，")），str.strip() 语义即字符集，
+#            改单字符或 re.sub 会丢功能，属业务意图与规则的合理冲突。
+#   UP009    utf8-encoding-declaration —— 项目头部规范强制要求
+#            `# -*- coding: utf-8 -*-` 声明，与 UP009「Python3 默认 UTF-8、
+#            无需声明」冲突；头部规范优先，属设计内忽略。
+# ------------------------------------------------------------------
+# 行宽上限：本项目大量中文注释与长字符串，默认 88 对中文不友好，
+# 星轨 2026-09-10 裁决调整为 120（方案A：调基线，不为过 ruff 改动业务代码）。
+line-length = 120
+
+# 历史备份快照目录（data/code_backups）不参与代码质量检查：
+# 它是历史版本的只读存档，会重复报出与真身完全相同的告警，干扰统计口径。
+# 注意：exclude 与 line-length 同为顶层配置项，写在 lint 段下不生效。
+# ★主线第1批 附带任务（星轨裁决·方案B）：tmp/ 下的一次性脚本纳入排除。
+#   这些 patch_ / scan_ / check_ 前缀脚本属诊断与施工临时产物，
+#   会虚增全库统计口径（第4批实测 +30 条，全部落在 tmp/）。
+#   ★注意：tmp/ 下的 test_*.py 是正式回归测试，必须继续受检，
+#     故此处按前缀精确排除，不整目录排除 tmp/。
+# ★星轨定时修复（2026-09-15）：.release-tmp/ 发布临时目录纳入排除。
+#   该目录是发布时生成的完整项目副本（1297文件/25.8MB），
+#   已在 .gitignore 中排除，但 ruff 仍会扫描导致告警虚高、扫描变慢。
+#   与 data/code_backups 同理，属只读临时副本，不参与代码质量检查。
+exclude = [
+    "data/code_backups",
+    "tmp/patch_*",
+    "tmp/scan_*",
+    "tmp/check_*",
+    ".bak*",
+    ".release-tmp",
+    ".release-tmp*/",
+]
+
+[lint]
+ignore = ["BLE001", "S110", "S112", "N999", "SIM102", "B005", "UP009", "E702"]
+
+# 目标：全库警告为 0（对基线忽略项之外的规则）
+[lint.per-file-ignores]
+# 工具/基准脚本属一次性诊断脚本，允许更宽松（如有额外必要在此声明）
+
+# 结构性 E402 豁免（星轨 2026-09-10 第3批疑问裁决 · 方案A）：
+#   PulseController / PulseLegs 的 budget_guard 装饰器必须在类定义与
+#   后续 import 之前就位，属有意设计而非笔误；二者均为 160KB 级核心文件，
+#   强行上移 import 有加载时序风险，故按设计内忽略处理（与 BLE001 / S110 同级）。
+"organs/motor/PulseController.py" = ["E402"]
+"organs/motor/PulseLegs.py" = ["E402"]
