@@ -76,6 +76,7 @@ class PulseInnerWorld(
             "_context_mode",
             "_context_signal",
             "_emotion_modulation",
+            "_meta_state",
             "_explicit_inference_result",
             "_memory_context",
             "_question_complexity",
@@ -85,6 +86,7 @@ class PulseInnerWorld(
             "_strategy_context",
             "correlation_id",
             "empathetic_note",
+            "contemplative_answer",
             "guidance",
             "payload",
             "question",
@@ -532,13 +534,12 @@ class PulseInnerWorld(
             return {"status": "cache_cleared", "cache_key": _cache_key}
         return None
     # ========== 事件处理 ==========
-    def _on_inference_request(self, payload: dict) -> dict[str, Any]:
+    def _ir_build_context(self, payload: dict):
         question = payload.get("question", "")
         user_name = payload.get("user_name", "用户")
         correlation_id = payload.get("correlation_id", "")
-        search_query = question[:80]  # 提前初始化，确保所有分支可用
         if not question:
-            return {"status": "skipped", "reason": "空问题"}
+            return None
         # ===== 【v15.1修复】提前初始化所有可能被引用的变量 =====
         empathetic_note = ""
         # ★FIX: 显式初始化 contemplative_answer，避免 dir() 探测导致的变量生命周期混乱
@@ -576,6 +577,30 @@ class PulseInnerWorld(
         _ctx._emotion_modulation = _emotion_modulation
         _ctx.guidance = guidance
         _ctx.tool_hint = tool_hint
+        _ctx.contemplative_answer = contemplative_answer
+        _ctx._meta_state = _meta_state
+        return _ctx
+
+    def _on_inference_request(self, payload: dict) -> dict[str, Any]:
+        _ctx = self._ir_build_context(payload)
+        if _ctx is None:
+            return {"status": "skipped", "reason": "空问题"}
+        question = _ctx.question
+        user_name = _ctx.user_name
+        correlation_id = _ctx.correlation_id
+        search_query = _ctx.search_query
+        empathetic_note = _ctx.empathetic_note
+        contemplative_answer = _ctx.contemplative_answer
+        _supplement_topic = _ctx._supplement_topic
+        _explicit_inference_result = _ctx._explicit_inference_result
+        tool_hint = _ctx.tool_hint
+        guidance = _ctx.guidance
+        _memory_context = _ctx._memory_context
+        _question_complexity = _ctx._question_complexity
+        _emotion_modulation = _ctx._emotion_modulation
+        _reasoning_start_time = _ctx._reasoning_start_time
+        _meta_state = _ctx._meta_state
+        _REASONING_TIMEOUT = 45.0
 
         # ★v26.0修复：用户明确要求搜索时，优先触发搜索（不经过内部推理）
         # ★主线第16批 T1/P2-104：三处前缀正则收敛为单一事实来源（见模块顶部常量）
