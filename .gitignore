@@ -15,6 +15,8 @@ data/config_override.json
 config_override*.json
 secrets.json
 *credential*.json
+# ★D148-1：属主脱敏 PII 配置（真实姓名/路径），绝不入库、绝不进发布包
+.owner_pii.json
 
 # ===== 2. Python 运行时产物 =====
 __pycache__/

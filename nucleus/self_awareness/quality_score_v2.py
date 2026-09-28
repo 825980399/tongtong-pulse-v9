@@ -68,12 +68,15 @@ from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批
 import glob
 import io
 import json
+import logging
 import os
 import re
 import sys
 import time
 from typing import Any, Callable
 from nucleus._silent_except import silent_exc
+
+_log = logging.getLogger(__name__)
 
 ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
@@ -252,14 +255,20 @@ def count_open_debts(doc_path: str | None = None) -> dict[str, int]:
     """统计**未修复**的 P0/P1/P2 问题数（唯一编号去重）。
 
     判据：债务清单中含 ``🔴``（待修复/未修）的表格行。
+
+    ★D147-3：内部总账（债务清单）在公开包中不存在时**降级**而非崩溃：
+    内部环境路径存在→正常统计；公开环境路径缺失→记 warning 并返回空计数
+    （严重度维度 score=None，不参与加权），不抛错、不静默吞。
     """
     _p = doc_path or os.path.join(ROOT, _DEBT_DOC)
     _out = {"P0": 0, "P1": 0, "P2": 0}
     if not os.path.isfile(_p):
+        _log.warning("债务清单缺失 %s：问题严重度维度降级为无数据（score=None）", _p)
         return _out
     try:
         _t = io.open(_p, encoding="utf-8", errors="replace").read()
-    except OSError:
+    except OSError as _e:
+        _log.warning("读取债务清单失败 %s：严重度维度降级（%s）", _p, _e)
         return _out
     _sets: dict[str, set] = {"P0": set(), "P1": set(), "P2": set()}
     for _line in _t.replace("\r\n", "\n").split("\n"):

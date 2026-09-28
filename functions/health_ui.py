@@ -10,6 +10,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+
 from nucleus.data.DataAccessLayer import safe_read_json
 
 # 功能模块元数据声明
@@ -1020,8 +1021,8 @@ class HealthHandler(BaseHTTPRequestHandler):
     def _serve_task_pipeline_history(self):
         """★B5【P2】：提供最近 N 个 TaskPipeline（元流程实体）的状态流转记录。
 
-        返回内存环形缓冲中的任务流水线序列化记录。当前 TaskPipeline 尚未接入
-        真实任务流，返回空列表属正常——端点已就绪，待 M4 接入后自动有数据。
+        返回内存环形缓冲中的任务流水线序列化记录。        当前 TaskPipeline 为实验性预埋接口，尚未接入
+        真实任务流，返回空列表属正常——端点已就绪，待接入后自动有数据。
         """
         try:
             from nucleus.TaskPipeline import get_recent_pipelines
@@ -1630,7 +1631,7 @@ class HealthUIServer:
                     from nucleus.runtime_metrics import get_runtime_metrics
                     get_runtime_metrics().record_error(
                         pulse_type="health_ui",
-                        error="5051 监控面板服务线程意外退出（端口 %s）" % self.port,
+                        error=f"5051 监控面板服务线程意外退出（端口 {self.port}）",
                         traceback_text="",
                         lock_held=False,
                     )

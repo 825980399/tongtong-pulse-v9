@@ -11367,6 +11367,10 @@ class PulseInnerWorld(
                             confidence=0.7,
                             keywords=["顿悟", "推导", "发现", "连接"]
                         )
+                        # ★D148-6：eureka_moment 消费方——顿悟写入检索加权反馈。
+                        #   计入检索统计（self._retrieval_stats），供检索深度自适应调节逻辑
+                        #   消费；不做复杂接线（不新建记忆节点 / 不引入额外检索子系统）。
+                        self._retrieval_stats["eureka"] = self._retrieval_stats.get("eureka", 0) + 1
 
                 # 将推导成果写入洞察黑板，供主动深度交互查询
                 if self._insight_board and derivations:

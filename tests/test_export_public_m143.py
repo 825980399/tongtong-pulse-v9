@@ -104,15 +104,24 @@ class TestPiiScan(unittest.TestCase):
 
     def test_01_real_name_flagged(self):
         import tempfile
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False,
-                                         encoding="utf-8") as fh:
-            fh.write("创建者是" + self._name_gl() + "\n")
-            p = fh.name
+        # D148-1：真实姓名模式改由脱敏配置（PULSE_OWNER_NAMES）加载，注入后验证。
+        old = os.environ.get("PULSE_OWNER_NAMES")
+        os.environ["PULSE_OWNER_NAMES"] = self._name_gl()
         try:
-            hits = ep.scan_text(p)
-            self.assertTrue(any("真名" in h[0] for h in hits), hits)
+            with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False,
+                                             encoding="utf-8") as fh:
+                fh.write("创建者是" + self._name_gl() + "\n")
+                p = fh.name
+            try:
+                hits = ep.scan_text(p)
+                self.assertTrue(any("真名" in h[0] for h in hits), hits)
+            finally:
+                os.unlink(p)
         finally:
-            os.unlink(p)
+            if old is None:
+                os.environ.pop("PULSE_OWNER_NAMES", None)
+            else:
+                os.environ["PULSE_OWNER_NAMES"] = old
 
     def test_02_example_domain_allowed(self):
         import tempfile
@@ -140,19 +149,32 @@ class TestPiiScan(unittest.TestCase):
 
     def test_04_real_path_flagged(self):
         import tempfile
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
-                                         encoding="utf-8") as fh:
-            fh.write('ROOT = "' + "D:" + chr(92) + "xinrenlei" + chr(92)
-                     + 'tongtong-pulse-v9"' + "\n")
-            p = fh.name
+        # D148-1：真实路径模式改由脱敏配置（PULSE_OWNER_PATH_HINTS）加载，
+        # 注入后验证扫描器对真实项目路径的命中行为。
+        old = os.environ.get("PULSE_OWNER_PATH_HINTS")
+        os.environ["PULSE_OWNER_PATH_HINTS"] = "D:\\xinrenlei"
         try:
-            hits = ep.scan_text(p)
-            self.assertTrue(any("路径" in h[0] for h in hits), hits)
+            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
+                                             encoding="utf-8") as fh:
+                fh.write('ROOT = "' + "D:" + chr(92) + "xinrenlei" + chr(92)
+                         + 'tongtong-pulse-v9"' + "\n")
+                p = fh.name
+            try:
+                hits = ep.scan_text(p)
+                self.assertTrue(any("路径" in h[0] for h in hits), hits)
+            finally:
+                os.unlink(p)
         finally:
-            os.unlink(p)
+            if old is None:
+                os.environ.pop("PULSE_OWNER_PATH_HINTS", None)
+            else:
+                os.environ["PULSE_OWNER_PATH_HINTS"] = old
 
-    def test_05_export_script_self_exempt(self):
-        self.assertIn("tools/export_public.py", ep.SCAN_EXEMPT_FILES)
+    def test_05_export_script_self_not_exempt(self):
+        # D148-1：扫描器自身不得再豁免，且源码内零真值（自复扫必过）。
+        self.assertNotIn("tools/export_public.py", ep.SCAN_EXEMPT_FILES)
+        here = os.path.join(_ROOT, "tools", "export_public.py")
+        self.assertEqual(ep.scan_text(here), [])
 
 
 class TestRealTree(unittest.TestCase):
