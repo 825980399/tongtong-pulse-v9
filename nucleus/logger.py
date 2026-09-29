@@ -3,7 +3,7 @@
 logger.py —— 日志器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: PulseNet 工程团队
 日期: 2026年9月11日
 
 职责: 基础日志功能封装
@@ -726,7 +726,7 @@ SMOKE_LOG_FILE = "smoke.log"
 def get_smoke_logger(name: str = "smoke") -> logging.Logger:
     """★往期批次 相关任务②（R4-B22）：冒烟 / 合成指纹用例专用日志器。
 
-    背景（内部协作者 117 §3 实测）：停机窗 pulse.log 出现一行
+    背景（内部分析 117 §3 实测）：停机窗 pulse.log 出现一行
         ``[指纹咨询硬闸] 指纹=a.py|m|silent_exception ...``
     ——那是**合成指纹**（file="a.py"、method="m"）驱动的冒烟产物，却被生产判据
     当成真实命中（对「INFO>=1」类判据构成**假阳性风险**，本次差点误导结论）。
