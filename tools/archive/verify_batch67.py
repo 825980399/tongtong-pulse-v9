@@ -1,6 +1,6 @@
 """第67批验收测试 - 配置项和模块导入验证"""
 import sys
-sys.path.insert(0, r'D:\xinrenlei\tongtong-pulse-v9')
+sys.path.insert(0, r'<PROJECT_ROOT>')
 
 print("=== 1. 配置项验证 ===")
 import config

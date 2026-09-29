@@ -1,7 +1,7 @@
 """修复第67批未完成项：PulseSnapshot中FULL_SAVE_INTERVAL和INCREMENTAL_MAX_NODES读取config"""
 import sys
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\nucleus\mnemosyne\PulseSnapshot.py'
+file_path = r'<PROJECT_ROOT>\nucleus\mnemosyne\PulseSnapshot.py'
 
 with open(file_path, 'r', encoding='utf-8') as f:
     content = f.read()

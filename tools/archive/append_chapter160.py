@@ -60,7 +60,7 @@ new_chapter = '''
 **第一百六十章结束。第68批任务已派发，核心目标：实现架构关键跃升——Parquet主存储+冷热分离+FAISS向量数据库，将单机支撑能力从50万节点提升到1000-3000万节点（提升30-100倍）。第68批完成后，单机架构就足够支撑1-2年的增长需求（500-2000万节点），分布式可以推迟到节点接近1亿时再引入。路灯执行顺序：T1→T2→T3→T4→T5→T6→T7，优先完成P0级任务（T1 Parquet主存储和T2冷热分离）。**
 '''
 
-with open(r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md', 'a', encoding='utf-8') as f:
+with open(r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md', 'a', encoding='utf-8') as f:
     f.write(new_chapter)
 
 print('第一百六十章已追加完成')

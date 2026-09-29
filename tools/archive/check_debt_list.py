@@ -1,6 +1,6 @@
 """检查技术债务清单末尾，并追加胃模块JSON解析失败问题"""
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md'
+file_path = r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md'
 
 # 读取文件末尾2000字符
 with open(file_path, 'r', encoding='utf-8') as f:

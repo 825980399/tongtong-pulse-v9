@@ -1,6 +1,6 @@
 """验证第67批修复：FULL_SAVE_INTERVAL和INCREMENTAL_MAX_NODES读取config"""
 import sys
-sys.path.insert(0, r'D:\xinrenlei\tongtong-pulse-v9')
+sys.path.insert(0, r'<PROJECT_ROOT>')
 
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 

@@ -1,6 +1,6 @@
 """修复FAISS_USE_GPU配置和注释"""
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\config.py'
+file_path = r'<PROJECT_ROOT>\config.py'
 
 with open(file_path, 'r', encoding='utf-8') as f:
     content = f.read()

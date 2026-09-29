@@ -4,7 +4,7 @@ import os
 import shutil
 
 # ========== 1. 追加第一百六十七章和第一百六十八章 ==========
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md'
+file_path = r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md'
 
 new_chapters = '''
 
@@ -113,8 +113,8 @@ with open(file_path, 'a', encoding='utf-8') as f:
 print('✅ 第一百六十七章和第一百六十八章已追加完成')
 
 # ========== 2. 移动第71批交付报告到已分析目录 ==========
-src = r'D:\xinrenlei\tongtong-pulse-v9\docs\路灯与星轨对话\交付报告\待分析\2026-09-17_路灯交付_主线第71批.md'
-dst_dir = r'D:\xinrenlei\tongtong-pulse-v9\docs\路灯与星轨对话\交付报告\已分析'
+src = r'<PROJECT_ROOT>\docs\路灯与星轨对话\交付报告\待分析\2026-09-17_路灯交付_主线第71批.md'
+dst_dir = r'<PROJECT_ROOT>\docs\路灯与星轨对话\交付报告\已分析'
 
 if os.path.exists(src):
     os.makedirs(dst_dir, exist_ok=True)

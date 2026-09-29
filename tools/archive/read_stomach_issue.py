@@ -1,6 +1,6 @@
 """读取技术债务清单中胃JSON解析问题的记录"""
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md'
+file_path = r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md'
 
 with open(file_path, 'r', encoding='utf-8') as f:
     lines = f.readlines()

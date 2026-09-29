@@ -1,6 +1,6 @@
 """更新技术债务清单：P2-401胃JSON解析失败详细根因分析 + 第68批补充任务"""
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md'
+file_path = r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md'
 
 with open(file_path, 'r', encoding='utf-8') as f:
     content = f.read()

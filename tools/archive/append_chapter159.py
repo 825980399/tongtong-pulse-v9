@@ -77,7 +77,7 @@ new_chapter = '''
 **第一百五十九章结束。第67批验收通过（29测试全过，未完成项已补全修复）。核心成果：异步保存+分批流式写+增量日志+KAL设计+自适应降频+WriteGuard修复。T0数据偏差已纳入经验教训。下一步：生成第68批任务书（Parquet主存储+冷热分离+FAISS，架构关键跃升点）。**
 '''
 
-with open(r'D:\xinrenlei\tongtong-pulse-v9\docs\完整进化路线与技术债务清单_v1.0.md', 'a', encoding='utf-8') as f:
+with open(r'<PROJECT_ROOT>\docs\完整进化路线与技术债务清单_v1.0.md', 'a', encoding='utf-8') as f:
     f.write(new_chapter)
 
 print('第一百五十九章已追加完成')

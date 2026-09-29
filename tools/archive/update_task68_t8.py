@@ -1,6 +1,6 @@
 """更新第68批任务书：补充T8胃模块JSON容错解析增强"""
 
-file_path = r'D:\xinrenlei\tongtong-pulse-v9\docs\路灯与星轨对话\任务书\2026-09-17_星轨任务书_主线第68批_Parquet主存储与冷热分离与FAISS集成.md'
+file_path = r'<PROJECT_ROOT>\docs\路灯与星轨对话\任务书\2026-09-17_星轨任务书_主线第68批_Parquet主存储与冷热分离与FAISS集成.md'
 
 with open(file_path, 'r', encoding='utf-8') as f:
     content = f.read()

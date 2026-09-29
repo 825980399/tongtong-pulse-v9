@@ -2,7 +2,7 @@
 import re
 from collections import Counter
 
-log_path = r'D:\xinrenlei\tongtong-pulse-v9\logs\pulse.log'
+log_path = r'<PROJECT_ROOT>\logs\pulse.log'
 
 # 读取日志
 with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
