@@ -9,11 +9,16 @@ import sys
 import tempfile
 import unittest
 
-# tools/ 非包，直接把 tools 目录加入路径后按模块名导入
+# tools/ 非包，直接把模块所在目录加入路径后按模块名导入。
+# ★第154批 T154-10：patch_template_helper 已归档至 tools/archive/，
+#   旧代码仍指向 tools/ 根目录 ⇒ 裸 import 失败并造成全量 pytest collection error。
+#   改为按归档位置定位（并保留 tools/ 作为回退），使本用例恢复有效。
 _TOOLS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
-if _TOOLS not in sys.path:
-    sys.path.insert(0, _TOOLS)
+_ARCHIVE = os.path.join(_TOOLS, "archive")
+for _p in (_ARCHIVE, _TOOLS):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
 import patch_template_helper as H  # noqa: E402
 
 
