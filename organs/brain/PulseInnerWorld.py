@@ -7126,40 +7126,6 @@ class PulseInnerWorld(
             f"知识体系从'树状结构'向'网状结构'演化。"
         )
 
-    def _project_autonomous_behavior_evolution(self, days: int,
-                                                 search_exp_count: int,
-                                                 conv_mem_count: int,
-                                                 deep_interaction_cooldown: int = 1800) -> str:
-        """
-        【P2-2新增】推演自主行为模式演化维度。
-
-        基于当前搜索经验库、对话记忆库和主动交互参数，
-        预测好奇心引擎、主动交互、自主推导等行为的变化趋势。
-        """
-        # 好奇心引擎：搜索经验积累提升探索精准度
-        _projected_exp = search_exp_count + days * 2
-        _exploration_precision = min(85, 40 + days * 1.5)
-
-        # 主动交互：对话记忆积累触发更自然的深度交互
-        _projected_conv = conv_mem_count + days * 3
-        _interaction_naturalness = "显著提升" if days >= 30 else "逐步提升"
-
-        # 自主推导：随L3节点增长而增长
-        _projected_derivations = days * 3
-
-        return (
-            f"搜索经验库预计从{search_exp_count}条增长至{_projected_exp}条，"
-            f"探索精准度提升至约{_exploration_precision}%。"
-            f"好奇心引擎将减少对低质量方向的重复探索，"
-            f"深度探索队列的命中率预计提升{min(40, days)}个百分点。"
-            f"对话记忆库预计从{conv_mem_count}条增长至约{_projected_conv}条，"
-            f"主动深度交互的自然度将{_interaction_naturalness}。"
-            f"自主推导引擎预计产生约{_projected_derivations}条新推导，"
-            f"其中约{int(_projected_derivations * 0.3)}条可能通过验证进入L3。"
-            f"整体行为模式从'被动响应'向'主动探索'过渡，"
-            f"自主行为在总认知活动中的占比预计从当前约30%提升至约{min(60, 30 + days)}%。"
-        )
-
     def _project_code_health_evolution(self, days: int,
                                          code_issues_count: int = 762) -> str:  # type: ignore[possibly-unbound]
         """
