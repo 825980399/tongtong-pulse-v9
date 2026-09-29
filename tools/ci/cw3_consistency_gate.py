@@ -103,11 +103,19 @@ def main():
         print('CW3-A 用法错误：监控文件不可读')
         return 3
     if a.update or not os.path.exists(bl):
+        _old = {}
+        if os.path.exists(bl):
+            try:
+                _old = json.load(io.open(bl, encoding='utf-8-sig'))
+            except Exception:
+                _old = {}
         payload = {'schema': 'cw3-consistency/1', 'anchor_rev': a.base,
                    'anchor_sha': subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=a.root,
                                                 capture_output=True, text=True).stdout.strip()[:40],
                    'observed_at': datetime.datetime.now().isoformat(timespec='seconds'),
-                   'watch': WATCH, 'files': cur, 'delta_reason': ''}
+                   'watch': WATCH, 'files': cur,
+                   'delta_reason': _old.get('delta_reason', ''),
+                   'expected_delta': _old.get('expected_delta', {})}
         os.makedirs(os.path.dirname(bl), exist_ok=True) if a.update else None
         if a.update:
             io.open(bl, 'w', encoding='utf-8', newline='\n').write(json.dumps(payload, ensure_ascii=False, indent=1))
@@ -117,7 +125,8 @@ def main():
         return 0
 
     base = json.load(io.open(bl, encoding='utf-8-sig'))
-    allow = bool(str(base.get('delta_reason', '')).strip())
+    delta_reason = str(base.get('delta_reason', '')).strip()
+    expected_delta = base.get('expected_delta') or {}
     fails = []
     for p in WATCH:
         b = base['files'].get(p)
@@ -126,8 +135,15 @@ def main():
             continue
         for k in METRICS:                       # 硬门禁：11 个语义计数（lines / ast_sha 仅展示，不参与判定）
             bv, cv = b['metrics'].get(k, 0), cur[p]['metrics'].get(k, 0)
-            if bv != cv:
-                fails.append('%s: 指标 %s 基准 %s → 当前 %s' % (p, k, bv, cv))
+            if bv == cv:
+                continue
+            _delta = cv - bv
+            # 精确白名单：仅当基准带 delta_reason（受控变更授权）且声明了本指标的预期增量时才放行
+            _exp = expected_delta.get(k) if (isinstance(expected_delta, dict) and delta_reason) else None
+            if _exp is not None and _delta == _exp:
+                continue
+            fails.append('%s: 指标 %s 基准 %s → 当前 %s%s' % (
+                p, k, bv, cv, ' (预期增量 %s)' % _exp if _exp is not None else ''))
         for key, lbl in (('priority_hist', 'emit priority 直方'), ('event_hist', '事件名直方')):
             if b.get(key) != cur[p].get(key):
                 bk, ck = b.get(key, {}), cur[p].get(key, {})
@@ -139,14 +155,17 @@ def main():
         print('  [OK] 硬门禁指标全部一致（参考：行数 %s / AST 指纹 %s）'
               % (cur[WATCH[0]]['metrics']['lines'], cur[WATCH[0]]['metrics']['ast_sha256_12']))
         return 0
-    if allow:
-        print('  [WARN] 有 %d 项漂移，但基准带 delta_reason=%r ⇒ 判"受控变更"放行（须在交付报告留痕）'
-              % (len(fails), base['delta_reason'][:40]))
-        return 0
-    print('  [FAIL] %d 项非预期漂移（无 delta_reason 即视为夹带）：' % len(fails))
+    if not delta_reason:
+        print('  [FAIL] %d 项漂移且无 delta_reason（须与代码同提交更新 %s 并填 delta_reason）'
+              % (len(fails), os.path.relpath(bl, a.root)))
+        for f in fails[:12]:
+            print('     - ' + f)
+        return 2
+    print('  [FAIL] %d 项非预期漂移（expected_delta 未覆盖即视为夹带，须回退或补白名单）：' % len(fails))
     for f in fails[:12]:
         print('     - ' + f)
-    print('  处方：① 若为误伤 ⇒ 与代码同提交更新 %s 并填 delta_reason；② 若为真漂移 ⇒ 回退该改动。' % os.path.relpath(bl, a.root))
+    print('  处方：① 若为误伤 ⇒ 在 %s 的 expected_delta 补声明该增量；② 若为真漂移 ⇒ 回退该改动。'
+          % os.path.relpath(bl, a.root))
     return 2
 
 

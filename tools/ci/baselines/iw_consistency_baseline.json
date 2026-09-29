@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "bc4df27e1346583e7c359bf4d7971cdb29b22278",
- "observed_at": "2026-09-28T20:58:34",
+ "anchor_sha": "b910b80011b89be62d60ad46f2eded80de0871a8",
+ "observed_at": "2026-09-29T00:06:34",
  "watch": [
   "organs/brain/PulseInnerWorld.py"
  ],
@@ -15,13 +15,13 @@
     "if": 1875,
     "for": 284,
     "while": 1,
-    "return": 795,
+    "return": 827,
     "raise": 0,
     "await": 0,
     "emit_calls": 103,
-    "methods": 314,
-    "lines": 17774,
-    "ast_sha256_12": "cff72bcfca41"
+    "methods": 375,
+    "lines": 17954,
+    "ast_sha256_12": "7169839bba9b"
    },
    "priority_hist": {
     "2": 4,
@@ -35,5 +35,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": ""
+ "delta_reason": "第151批 God方法第二波拆分·增量白名单（行为保全纯结构抽取，仅 methods/return 受控增长，try/except/if/for/while/emit_calls 与 emit priority/event 直方严格守恒）。累计：_cognitive_reflection 拆分 methods+27/return+0；_validate_knowledge_consistency 拆分 methods+13/return+11（13 个 _vk_* helper，emit 2 次 pri=3 守恒）；_enhance_answer 拆分 methods+21/return+21（21 个 _ea_* helper，emit 0 次守恒；表达增强早退块保留内联以守恒 if 计数）。",
+ "expected_delta": {}
 }

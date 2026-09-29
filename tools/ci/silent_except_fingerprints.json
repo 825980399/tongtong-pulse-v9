@@ -274,5 +274,25 @@
     "lineno": 246,
     "legacy_lineno": 246,
     "match": "exact"
+  },
+  {
+    "path": "organs/brain/PulseInnerWorld.py",
+    "qualname": "_cr_vision_insight",
+    "nth": 0,
+    "sha16": "86b989c50e54a4e8",
+    "tname": "Exception",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 5064
+  },
+  {
+    "path": "tools/ci/cw3_consistency_gate.py",
+    "qualname": "main",
+    "nth": 0,
+    "sha16": "1c830325fc48fe4c",
+    "tname": "Exception",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 110
   }
 ]
