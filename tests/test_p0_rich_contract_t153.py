@@ -14,6 +14,7 @@
 from organs.brain.PulseMultiStepReasoner import PulseMultiStepReasoner
 from organs.brain.PulseReasoningFormatter import PulseReasoningFormatter
 from organs.brain.PulseRiskPerception import PulseRiskPerception
+from organs.brain.PulseCognitiveReflector import PulseCognitiveReflector
 from organs.motor.PulseCodeSandbox import PulseCodeSandbox
 
 
@@ -57,4 +58,19 @@ def test_multistep_reasoner_decompose_and_snapshot():
     inst = PulseMultiStepReasoner()
     snap = inst.get_state_snapshot()
     assert isinstance(snap, dict) and snap.get("module") == "PulseMultiStepReasoner"
+    inst.refresh_runtime_params()
+
+
+def test_cognitive_reflector_tension_and_meta_insight():
+    inst = PulseCognitiveReflector()
+    inst.store_cognitive_tension("n_a", "n_b", "观点A", "观点B", "conflict")
+    stats = inst.get_tension_stats()
+    assert isinstance(stats, dict) and stats["total"] >= 1
+    review = inst.review_cognitive_tensions()
+    assert review is None or isinstance(review, str)
+    meta = PulseCognitiveReflector.synthesize_meta_insight(["我成长了", "我反思了自己的不足"])
+    assert isinstance(meta, str) and "成长" in meta
+    assert PulseCognitiveReflector.synthesize_meta_insight(["单条洞察"]) is None
+    snap = inst.get_state_snapshot()
+    assert isinstance(snap, dict) and "cognitive_tensions" in snap
     inst.refresh_runtime_params()
