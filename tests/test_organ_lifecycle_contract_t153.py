@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""T153-6（批次1+2）：器官生命周期契约参数化测试。
+"""T153-6（批次1+2+3）：器官生命周期契约参数化测试。
 
 通用契约断言 5 条（每器官）：
   A1 on_pulse 契约：未知事件不抛且返回 None/可空 dict；若器官在 get_resonance_conditions
@@ -13,8 +13,10 @@
 批次口径：
   批次1（6070378）：core 4 件（PulseInferenceEngine / PulseEnergyMetabolism /
       PulseHealthMonitor / PulseDeviceManager），16 passed / 4 skipped
-  批次2（本提交）：core/genetic 4 件（PulseEmergencyHandler / PulseSpinalCord /
+  批次2（e5e5b36）：core/genetic 4 件（PulseEmergencyHandler / PulseSpinalCord /
       PulseDNARepair / PulseReproductionEthics）
+  批次3（本提交）：immune/genetic/motor/body 4 件（PulseBoneMarrow / PulseEvolution /
+      PulseFileDigester / PulseBloodVessel）
   其余 P0/P1 器官于后续子批次补齐（纪律：每批 <=4 件、每器官 <=1 文件）
 """
 import os
@@ -36,6 +38,10 @@ ORGAN_MODULES = {
     "PulseSpinalCord": "organs.core.PulseSpinalCord",
     "PulseDNARepair": "organs.genetic.PulseDNARepair",
     "PulseReproductionEthics": "organs.genetic.PulseReproductionEthics",
+    "PulseBoneMarrow": "organs.immune.PulseBoneMarrow",
+    "PulseEvolution": "organs.genetic.PulseEvolution",
+    "PulseFileDigester": "organs.motor.PulseFileDigester",
+    "PulseBloodVessel": "organs.body.PulseBloodVessel",
 }
 
 
