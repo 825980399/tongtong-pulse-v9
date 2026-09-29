@@ -198,12 +198,17 @@ def _load_owner_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
         cfg = os.path.join(PROJECT_ROOT, ".owner_pii.json")
     file_names: list[str] = []
     file_paths: list[str] = []
+    #: ★第154批 T154-4（微光 C1）：补属主规则第 4 条「生日」——
+    #:   `.owner_pii.json` 早已含 `birthdays` 三条，但旧实现只读 names/path_hints，
+    #:   导致**所有既有扫描对生日系统性漏报**（真值在配置里却从不生成规则）。
+    file_birthdays: list[str] = []
     if cfg and os.path.isfile(cfg):
         try:
             with open(cfg, encoding="utf-8") as fh:
                 data = json.load(fh)
             file_names = list(data.get("names", []))
             file_paths = list(data.get("path_hints", []))
+            file_birthdays = list(data.get("birthdays", []))
         except (OSError, ValueError) as _e:
             silent_exc(_e, where="export_public._load_owner_pii_patterns", level="warning")
     # ★Dxxx-13 修复：环境注入与本地脱敏配置「合并去重」，禁止任一方静默覆盖另一方
@@ -223,6 +228,10 @@ def _load_owner_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
         pats.append(("真名·属主", re.compile(re.escape(n))))
     for p in merged_paths:
         pats.append(("真实路径", re.compile(re.escape(p))))
+    #: ★第154批 T154-4：属主生日（强规则，命中即阻断导出）。
+    #:   来源恒为 `.owner_pii.json::birthdays`（扫描器自身零真值，见 L186 注释口径）。
+    for b in file_birthdays:
+        pats.append(("生日·属主", re.compile(re.escape(b))))
     return pats
 
 
