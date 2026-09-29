@@ -33,12 +33,13 @@ from nucleus.const import SystemEvent
 # 判定标准：器官在 get_resonance_conditions() 的 event_types/event_type 中显式列出
 #   SystemEvent.STATUS_REQUEST 即视为"声明订阅"，A1 要求 on_pulse(STATUS_REQUEST) 返回非 None dict；
 #   未列出者按"声明即服务"约定不强制（返回 None 合法）。
-# 截至批次8（覆盖 13 件）：
-#   声明订阅(YES, A1 施回非None)：PulseInferenceEngine / PulseEnergyMetabolism /
+# 截至批次9（覆盖 17 件，T153-6 全部器官/引擎契约完结）：
+#   声明订阅(YES, A1 施回非None, 14 件)：PulseInferenceEngine / PulseEnergyMetabolism /
 #     PulseHealthMonitor / PulseDeviceManager / PulseEmergencyHandler / PulseSpinalCord /
-#     PulseDNARepair / PulseReproductionEthics / PulseEvolution / PulseBoneMarrow / PulseSelfAwareness
-#   未声明(NO, A1 不强制)：PulseFileDigester / PulseBloodVessel
-# （P1 4 件于批次9 补齐；Neurotransmitters 实测未声明 STATUS_REQUEST）
+#     PulseDNARepair / PulseReproductionEthics / PulseEvolution / PulseBoneMarrow /
+#     PulseSelfAwareness / PulseHormones / PulseMotivationCycle / PulseGrowth
+#   未声明(NO, A1 不强制, 3 件)：PulseFileDigester / PulseBloodVessel / PulseNeurotransmitters
+#   （PulseNeurotransmitters 实测仅声明 chat.message/hormones.emotion_detected/heart.beat，未订阅 STATUS_REQUEST）
 ORGAN_MODULES = {
     "PulseInferenceEngine": "organs.core.PulseInferenceEngine",
     "PulseEnergyMetabolism": "organs.core.PulseEnergyMetabolism",
@@ -53,6 +54,10 @@ ORGAN_MODULES = {
     "PulseFileDigester": "organs.motor.PulseFileDigester",
     "PulseBloodVessel": "organs.body.PulseBloodVessel",
     "PulseSelfAwareness": "organs.identity.PulseSelfAwareness",
+    "PulseHormones": "organs.endocrine.PulseHormones",
+    "PulseNeurotransmitters": "organs.endocrine.PulseNeurotransmitters",
+    "PulseMotivationCycle": "organs.core.PulseMotivationCycle",
+    "PulseGrowth": "organs.identity.PulseGrowth",
 }
 
 
