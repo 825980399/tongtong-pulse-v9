@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "b910b80011b89be62d60ad46f2eded80de0871a8",
- "observed_at": "2026-09-29T00:06:34",
+ "anchor_sha": "0d5c9277f6ddc81b3f71acde3387ed52aab0b34f",
+ "observed_at": "2026-09-29T20:32:54",
  "watch": [
   "organs/brain/PulseInnerWorld.py"
  ],
@@ -12,16 +12,16 @@
     "try": 207,
     "except": 208,
     "except_pass": 0,
-    "if": 1875,
-    "for": 284,
+    "if": 1874,
+    "for": 283,
     "while": 1,
-    "return": 827,
+    "return": 821,
     "raise": 0,
     "await": 0,
     "emit_calls": 103,
-    "methods": 375,
-    "lines": 17954,
-    "ast_sha256_12": "7169839bba9b"
+    "methods": 369,
+    "lines": 17888,
+    "ast_sha256_12": "9ca409ed14f9"
    },
    "priority_hist": {
     "2": 4,
@@ -35,6 +35,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "第151批 God方法第二波拆分·增量白名单（行为保全纯结构抽取，仅 methods/return 受控增长，try/except/if/for/while/emit_calls 与 emit priority/event 直方严格守恒）。累计：_cognitive_reflection 拆分 methods+27/return+0；_validate_knowledge_consistency 拆分 methods+13/return+11（13 个 _vk_* helper，emit 2 次 pri=3 守恒）；_enhance_answer 拆分 methods+21/return+21（21 个 _ea_* helper，emit 0 次守恒；表达增强早退块保留内联以守恒 if 计数）。",
- "expected_delta": {}
+ "delta_reason": "第153批 T153-5：删除 IW 6 个死方法（66 行，methods -6 / return -6 / if -1 / for -1 / lines -66），并补 _project_behavior 闭包调用（控制流计数不变）。语义守恒受控变更，交烛微复算签认（Q152-2）。",
+ "expected_delta": {"methods": -6, "return": -6, "if": -1, "for": -1}
 }
