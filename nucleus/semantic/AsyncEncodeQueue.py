@@ -3,7 +3,7 @@
 AsyncEncodeQueue.py —— 异步编码队列
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 文本向量编码的异步队列处理
@@ -42,7 +42,7 @@ class AsyncEncodeQueue:
     _cls_lock = threading.Lock()
 
     BATCH_WAIT_SEC = 0.5      # 攒批最长等待（避免低流量时一直等不满 32 条）
-    RECONCILE_INTERVAL_SEC = 3600   # 对账周期（星轨 Q11：每小时）
+    RECONCILE_INTERVAL_SEC = 3600   # 对账周期（内部协作者 Q11：每小时）
 
     def __init__(self):
         self._cfg = _load_config()
@@ -145,7 +145,7 @@ class AsyncEncodeQueue:
             self._queued_ids.add(nid)
             self._stats["submitted"] += 1
 
-        # 积压告警（星轨 Q11）
+        # 积压告警（内部协作者 Q11）
         size = self._q.qsize()
         if size > self._warn_backlog and (
                 size % 500 == 0 or size >= self._q.maxsize - 1):
@@ -221,7 +221,7 @@ class AsyncEncodeQueue:
         self._stats["failed"] += fail_n
         self._stats["batches"] += 1
 
-    # ---------------- 对账（星轨 Q11：每小时补编码）----------------
+    # ---------------- 对账（内部协作者 Q11：每小时补编码）----------------
     def _reconcile_loop(self) -> None:
         while not self._stop_event.is_set():
             if self._stop_event.wait(self.RECONCILE_INTERVAL_SEC):
@@ -244,7 +244,7 @@ class AsyncEncodeQueue:
         added = 0
         _m102_seen = set()
         try:
-            # ★D152/W5：取含冷驱逐节点的全集，避免冷驱逐合法节点被 reap_orphans 误判孤儿删除
+            # ★Dxxx/W5：取含冷驱逐节点的全集，避免冷驱逐合法节点被 reap_orphans 误判孤儿删除
             nodes = pool.get_all_including_evicted()
         except Exception as _e:
             _logger.debug(f"[编码队列] 对账取节点失败: {_e}")
@@ -263,7 +263,7 @@ class AsyncEncodeQueue:
                         added += 1
             except Exception:
                 continue
-        # ★第102批 T-102b：反向回收——清除「节点已不存在」的孤儿向量
+        # ★往期批次 相关任务：反向回收——清除「节点已不存在」的孤儿向量
         #   （原 reconcile 只单向补码，只增不减，孤儿向量只涨不降）
         _m102_reaped = 0
         try:
@@ -283,7 +283,7 @@ class AsyncEncodeQueue:
     def _node_text(node: Any) -> str:
         """从节点抽取待编码文本：value 为主，keywords 补充。
 
-        ★范围冻结（星轨 1.8）：只向量化**知识节点**。
+        ★范围冻结（内部协作者 1.8）：只向量化**知识节点**。
           临时节点（ephemeral）、空内容节点不编码。
         """
         try:

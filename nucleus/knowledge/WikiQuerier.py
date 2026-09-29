@@ -3,7 +3,7 @@
 WikiQuerier.py —— 百科查询器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 维基百科等百科数据源查询
@@ -105,7 +105,7 @@ def _default_fetch(url: str, timeout: float = 8.0) -> str:
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "zh-CN,zh;q=0.9",
     }
-    # ★第134批 T-134a：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
+    # ★往期批次 相关任务：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
     from nucleus.ssrf_guard import is_safe_http_url
     _ok, _reason = is_safe_http_url(url)
     if not _ok:
@@ -116,7 +116,7 @@ def _default_fetch(url: str, timeout: float = 8.0) -> str:
     _last_err = None
     for _i in range(_attempts):
         try:
-            # ★第105批 T-105d：UA 决策一处收口——合规 UA（_get_ua()）优先；
+            # ★往期批次 相关任务：UA 决策一处收口——合规 UA（_get_ua()）优先；
             #   仅当被拒（403 等）后才轮换 _UA_POOL，避免合规 UA 被无条件覆盖零生效。
             _h = dict(_headers)
             if _i == 0:
@@ -128,7 +128,7 @@ def _default_fetch(url: str, timeout: float = 8.0) -> str:
                 return resp.read().decode("utf-8", errors="replace")
         except HTTPError as _he:
             _last_err = _he
-            # ★第105批 T-105d：403 响应体留证（前 512B + 关键响应头），零误吞。
+            # ★往期批次 相关任务：403 响应体留证（前 512B + 关键响应头），零误吞。
             #   便于定位反爬策略（含 X-Baidu-* / Retry-After），而非仅上抛 code。
             if getattr(_he, "code", None) == 403:
                 try:
@@ -173,7 +173,7 @@ class WikiQuerier:
         self._log_fn = log_fn or (lambda _m: None)
         self._fetch = fetch_fn or _default_fetch
 
-        self._cache_ttl = float(_conf.get("cache_ttl", 86400))  # ★24小时（星轨批复）
+        self._cache_ttl = float(_conf.get("cache_ttl", 86400))  # ★24小时（内部协作者批复）
         self._timeout = float(_conf.get("timeout", 8))
         self._max_summary_length = int(_conf.get("max_summary_length", 500))
         self._url_template = str(_conf.get("url_template",
@@ -192,7 +192,7 @@ class WikiQuerier:
         self._last_fetch_ts = 0.0
         self._throttle_lock = threading.Lock()
 
-        # ★T-131d：域级冷却（被拒/Retry-After 后逐级退避，防封禁升级）
+        # ★相关任务：域级冷却（被拒/Retry-After 后逐级退避，防封禁升级）
         self._domain_cooldown_until = {}
         self._domain_backoff_level = {}
         self._domain_cooldown_lock = threading.Lock()
@@ -241,7 +241,7 @@ class WikiQuerier:
         # ★P2-85：请求前按最小间隔节流（开关关闭时 _get_min_interval 返回 0.0）。
         self._throttle()
         _url = self._url_template.format(keyword=quote(str(keyword), safe=""))
-        # ★T-131d：域级冷却——冷却期内直接 fallback，不发起请求（防封禁升级）。
+        # ★相关任务：域级冷却——冷却期内直接 fallback，不发起请求（防封禁升级）。
         _domain = self._domain_of_url(_url)
         if self._domain_in_cooldown(_domain):
             self._stats["rate_limited"] += 1
@@ -252,7 +252,7 @@ class WikiQuerier:
         except HTTPError as _he:
             if getattr(_he, "code", None) == 403:
                 self._stats["forbidden_403"] += 1
-                # ★T-131d：403 触发域冷却（含 Retry-After，若存在）。
+                # ★相关任务：403 触发域冷却（含 Retry-After，若存在）。
                 self._domain_trigger_cooldown(_domain, self._http_retry_after(_he))
                 self._log(f"查询[{keyword}]被站点拒绝(403)，将 fallback 浏览器")
             raise
@@ -285,7 +285,7 @@ class WikiQuerier:
                           summary=_summary, url="", fetched_at=time.time())
 
     def should_query(self, query: str) -> bool:
-        """触发判定：查询含明确实体名才值得发百科请求（星轨补充要求2）。
+        """触发判定：查询含明确实体名才值得发百科请求（内部协作者补充要求2）。
 
         命中形态：什么是X / X是什么 / X的定义 / X简介 / 引号内的名词 / 短名词短语。
         排除：时效类（最新/新闻/今天…）、过长句子、教程/方法类请求。
@@ -399,7 +399,7 @@ class WikiQuerier:
                     time.sleep(_wait)
             self._last_fetch_ts = time.time()
 
-    # ========== ★T-131d：域级冷却 ==========
+    # ========== ★相关任务：域级冷却 ==========
     _DOMAIN_BACKOFF_SCHEDULE = (1800.0, 7200.0, 21600.0)  # 30min / 2h / 6h
 
     def _domain_of_url(self, url: str) -> str:

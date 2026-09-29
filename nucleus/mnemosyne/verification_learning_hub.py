@@ -3,7 +3,7 @@
 verification_learning_hub.py —— 验证学习中心
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 验证结果的学习与反馈枢纽
@@ -22,7 +22,7 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json
 
-# ★第87批 T-87c：验证决策校验日志的采样间隔（每 N 条不一致打 1 条 DEBUG）。
+# ★第87批 相关任务：验证决策校验日志的采样间隔（每 N 条不一致打 1 条 DEBUG）。
 #   原实现「每次不一致都打一条」，实测单次进化轮次可产出上百条
 #   （09-18~09-20 累计 1633 条），把同文件的 INFO/WARNING 淹没在 DEBUG 里。
 #   改为采样后噪声下降约 99%，可观测性由「首条必打 + 累计计数」保留。
@@ -41,7 +41,7 @@ class VerificationLearningHub:
                  distill_threshold: int = 200):
         self._file_path = file_path
         self._distill_threshold = max(5, distill_threshold)  # 保留下限校验，删掉冗余的第二行
-        # ★第87批 T-87c：验证决策校验日志采样计数（纯计数，不参与任何判定）。
+        # ★第87批 相关任务：验证决策校验日志采样计数（纯计数，不参与任何判定）。
         self._vl_mismatch_total = 0
         self._vl_mismatch_logged = 0
         self._entries: list[dict[str, Any]] = []
@@ -177,7 +177,7 @@ class VerificationLearningHub:
             try:
                 _should = self.should_verify(organ, task_type, confidence, relevance_score)
                 if _should != bool(needs_verification):
-                    # ★第87批 T-87c：采样打印（判定逻辑与写入流程零改动）。
+                    # ★第87批 相关任务：采样打印（判定逻辑与写入流程零改动）。
                     #   首条必打（保证"机制在工作"始终可见）+ 每 _VL_MISMATCH_LOG_EVERY
                     #   条打一条，并在每条采样日志里带上累计值，避免完全静默。
                     self._vl_mismatch_total = getattr(

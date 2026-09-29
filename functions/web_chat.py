@@ -1,7 +1,7 @@
 """web_chat —— Web对话窗口 · 独立HTTP服务
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -646,10 +646,10 @@ class WebChatServer:
             from nucleus.const import ChatEvent as _ChatEvent
             from nucleus.const import PersonaEvent as _PersonaEvent
             def on_persona_switched(pulse):
-                user_name = pulse.get("payload", {}).get("current_user", "访客")  # ★T-118a
+                user_name = pulse.get("payload", {}).get("current_user", "访客")  # ★相关任务
                 self._server.current_user_name = user_name
             def on_user_presence(pulse):
-                user_name = pulse.get("payload", {}).get("user_name", "访客")  # ★T-118a
+                user_name = pulse.get("payload", {}).get("user_name", "访客")  # ★相关任务
                 if user_name and user_name != "用户":
                     self._server.current_user_name = user_name
             def on_user_left(pulse):

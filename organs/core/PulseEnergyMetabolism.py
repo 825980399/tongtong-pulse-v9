@@ -3,7 +3,7 @@
 PulseEnergyMetabolism —— 能量代谢引擎 · 硬件开销的统一计量
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 EnergyEvent.ASSESS 与 TouchEvent.HARDWARE_SNAPSHOT，分别计算算力、存储、加速器三类消耗，汇总为能量水位并向下游广播。

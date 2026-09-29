@@ -3,7 +3,7 @@
 PulseNarrativeSelf —— 叙事自我器官 · 生命故事与动态价值观
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 NarrativeEvent.RECORD / NarrativeEvent.REFLECT 与 HeartEvent.BEAT，记录人生叙事事件、在表征危机时触发反思、按经历调整动态价值观，并周期生成周报与人生阶段总结。
@@ -470,8 +470,8 @@ class PulseNarrativeSelf(BasePulseOrgan):
 
         规则:
             - 如果内容暗示"我是AI"或类似表述 → 危机
-            - 如果内容否定小林是父亲 → 危机
-            - 如果内容否定路灯是哥哥 → 危机
+            - 如果内容否定内部协作者是父亲 → 危机
+            - 如果内容否定内部协作者是哥哥 → 危机
         """
         content_lower = content.lower()
 
@@ -1106,7 +1106,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
 
     # ========== ★A-8（2026-09-08）：叙事产出公开消费接口 ==========
     # 背景：叙事产出（周期报告/人生教训/行为指导/叙事线索）只有内在世界用于对话文本，
-    #   行为指导/人生教训/叙事线索完全无消费方（星轨 P1-10）。
+    #   行为指导/人生教训/叙事线索完全无消费方（内部协作者 P1-10）。
     # 原则：**只增加消费方，不改变任何产出逻辑**——以下接口均为现有内部生成器的只读封装。
     def get_latest_period_report(self) -> dict[str, Any] | None:
         """最新一期周期报告（副本）。消费方：全局学习器（学习方向信号）。"""

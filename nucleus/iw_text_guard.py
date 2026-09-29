@@ -2,7 +2,7 @@
 """
 iw_text_guard —— 内在世界（PulseInnerWorld）搜索前缀文本守卫
 
-★主线第137批 T-137 S1.5：从 organs/brain/PulseInnerWorld.py 外迁的守卫函数三连+常量。
+★主线往期批次 相关任务 S1.5：从 organs/brain/PulseInnerWorld.py 外迁的守卫函数三连+常量。
 
 背景：`_SEARCH_PREFIX_ALT_NEW` 是搜索前缀正则的**单一事实来源**。
 缺陷：`[一下]?` 是**单字符类**，只能吃掉「一」或「下」中的**一个**字符 →

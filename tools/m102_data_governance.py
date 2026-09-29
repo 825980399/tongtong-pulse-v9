@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-第102批 数据治理工具（D160 悬空引用 / D161 孤儿向量 / D165 语义关系冗余）
+往期批次 数据治理工具（Dxxx 悬空引用 / Dxxx 孤儿向量 / Dxxx 语义关系冗余）
 
 用法：
     python tools/m102_data_governance.py --scan [--out tmp/m102_scan.json]
@@ -50,7 +50,7 @@ _M102_MERGE_REL = "cooccurrence"
 def _atomic_json(path, data, indent=None, separators=None):
     """原子写 JSON（ensure_ascii=False）。
 
-    ★格式对齐（第102批实测）：磁盘上 pulse_knowledge_snapshot.json 是**紧凑无空格**格式
+    ★格式对齐（往期批次实测）：磁盘上 pulse_knowledge_snapshot.json 是**紧凑无空格**格式
     （{"version":"v9.5",...}），而生产 _atomic_write_with_rotation 用的是默认带空格分隔符。
     为保证「治理前后体积差」只反映**数据减少**、不被序列化格式变化污染，
     重写主快照时显式传 separators=(",", ":") 复刻磁盘现有格式。
@@ -339,7 +339,7 @@ def _require_backup():
 
 
 def apply_a():
-    """T-102a：清理存量悬空边（主 JSON / L1 JSON / parquet 分区）。"""
+    """相关任务：清理存量悬空边（主 JSON / L1 JSON / parquet 分区）。"""
     if not _require_backup():
         return 1
     main, l1 = load_all_nodes()
@@ -409,7 +409,7 @@ def apply_a():
 
 
 def apply_b():
-    """T-102b：清理存量孤儿向量（npz + meta 同步）。"""
+    """相关任务：清理存量孤儿向量（npz + meta 同步）。"""
     if not _require_backup():
         return 1
     import numpy as np
@@ -429,7 +429,7 @@ def apply_b():
         return 0
 
     # ★坑：np.load 返回的 NpzFile 是懒加载且**持有文件句柄**，不 close 的话
-    #   Windows 上 os.replace 覆盖该文件会抛 [WinError 5] 拒绝访问（第102批实测）。
+    #   Windows 上 os.replace 覆盖该文件会抛 [WinError 5] 拒绝访问（往期批次实测）。
     data = np.load(VECTORS_NPZ)
     try:
         key = "matrix" if "matrix" in data.files else data.files[0]
@@ -476,7 +476,7 @@ def apply_b():
 
 
 def apply_c():
-    """T-102c：linked_nodes 冗余投影移除（先把 linked 独有边零丢失并入 sem）。"""
+    """相关任务：linked_nodes 冗余投影移除（先把 linked 独有边零丢失并入 sem）。"""
     if not _require_backup():
         return 1
     _now = time.time()

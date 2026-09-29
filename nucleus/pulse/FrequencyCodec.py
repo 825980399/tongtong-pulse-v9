@@ -3,7 +3,7 @@
 FrequencyCodec.py —— 频率编解码器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 将知识内容编码为频率签名（记忆维核心），相似语义→相近频率→共振更强，支持分层共振与记忆容量管理
@@ -26,7 +26,7 @@ from typing import Any
 """
 FrequencyCodec —— 频率编码/解码器（v9.5 分层共振版）
 版本: v9.5 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年6月9日
 更新: 2026年6月14日（v9.5: 版本升级，统计增强，共振记忆容量管理，层级预留）
 
@@ -341,7 +341,7 @@ class FrequencyCodec:
         if _node_id:
             _current_checksum = getattr(node, 'checksum', '')
             self._node_cache[_node_id] = (freq, _current_checksum)
-            # ★v23.0修正（星轨建议）：固定保留2400条，超出部分删除最旧条目
+            # ★v23.0修正（内部协作者建议）：固定保留2400条，超出部分删除最旧条目
             # Python 3.7+ dict 保持插入顺序，按顺序删除就是删最旧的
             if len(self._node_cache) > 3000:
                 _keep_size = 2400

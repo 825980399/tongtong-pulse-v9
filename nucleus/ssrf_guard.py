@@ -3,7 +3,7 @@
 ssrf_guard.py —— SSRF防护
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 服务器端请求伪造防护与URL校验
@@ -48,7 +48,7 @@ def _trusted_hosts() -> set:
             _h = urlparse(_api).hostname
             if _h:
                 _hosts.add(_h.lower())
-        # ★第98批 T-98a：渠道池每个渠道的 api_url 同样是管理员显式配置的模型接口，
+        # ★第98批 相关任务：渠道池每个渠道的 api_url 同样是管理员显式配置的模型接口，
         #   与顶层单端点同属「本地优先部署」语义（火山方舟/智谱等 SaaS 端点）。
         #   原实现只取顶层 REMOTE_API_CONFIG.api_url，漏掉了渠道池，导致 ark 等
         #   渠道主机不在受信任集合 → 落入 DNS 解析 → 生产环境把火山域名解析到内网
@@ -61,7 +61,7 @@ def _trusted_hosts() -> set:
                 _chh = urlparse(_cu).hostname
                 if _chh:
                     _hosts.add(_chh.lower())
-        # ★第98批 T-98a：显式额外白名单开关（默认含火山方舟域名）。运维可在不改代码
+        # ★第98批 相关任务：显式额外白名单开关（默认含火山方舟域名）。运维可在不改代码
         #   的情况下追加受信任主机/域名。见 config.SSRF_TRUSTED_EXTRA_HOSTS。
         for _h in getattr(_cfg, "SSRF_TRUSTED_EXTRA_HOSTS", ()) or ():
             if _h:

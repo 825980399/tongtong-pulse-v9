@@ -3,7 +3,7 @@
 SelfReflectionEngine.py —— 自我反思引擎
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 框架自我反思与经验总结
@@ -69,7 +69,7 @@ class SelfReflectionEngine:
             if not _ok or not isinstance(_data, dict):
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
-            # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
+            # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存
             self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
             _choices = _data.get("choices", [])
             if _choices:

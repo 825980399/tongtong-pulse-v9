@@ -1,7 +1,7 @@
 """experience_pool —— ExperiencePool 相关实现
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -21,7 +21,7 @@ from nucleus._silent_except import silent_exc
 """
 ExperiencePool —— 体验记忆库（v24.0新增）
 版本: v24.0 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年8月25日
 
 职责:
@@ -72,7 +72,7 @@ class ExperiencePool:
     """
     
     def __init__(self, base_dir: str | None = None):
-        # ★星轨修复：路径规范化，避免Windows混合斜杠导致os.replace失败
+        # ★内部协作者修复：路径规范化，避免Windows混合斜杠导致os.replace失败
         # ★第44批 T4（P2-290）：默认值改为**运行时解析**（默认参数在定义时求值，
         #   测试重定向后不生效 —— 铁律 #39），并记录"是否显式注入"供写盘守卫判据。
         self._m44_base_dir_explicit = base_dir is not None
@@ -493,7 +493,7 @@ class ExperiencePool:
         # ★T3: 自适应降频接线——经验库清理。
         #   仅生产主池生效（测试显式 base_dir 隔离池跳过，保证门控单测确定性）；
         #   节流早返回仍保持契约形状（含 quarantined/processed/restored 键，值 0），
-        #   避免调用方 KeyError（第97批 T-97d 修复：原早返回 dict 缺键致 8 条门控失败）。
+        #   避免调用方 KeyError（第97批 相关任务 修复：原早返回 dict 缺键致 8 条门控失败）。
         if not getattr(self, "_m44_base_dir_explicit", False):
             try:
                 from nucleus.runtime_metrics import get_adaptive_controller
@@ -1000,7 +1000,7 @@ class ExperiencePool:
         return merged
 
     def _save(self):
-        """保存体验池到文件（★星轨修复：增加Windows文件锁定重试机制）"""
+        """保存体验池到文件（★内部协作者修复：增加Windows文件锁定重试机制）"""
         try:
             # ★第44批 T4（P2-290）：写盘守卫 —— 测试环境不得写生产 data/
             try:
@@ -1041,7 +1041,7 @@ class ExperiencePool:
             with open(tmp_file, 'w', encoding='utf-8') as f:
                 json.dump(snapshot, f, ensure_ascii=False, indent=2)
             
-            # ★星轨修复：Windows文件锁定重试机制（最多3次，间隔100ms）
+            # ★内部协作者修复：Windows文件锁定重试机制（最多3次，间隔100ms）
             _last_error = None
             for _attempt in range(3):
                 try:

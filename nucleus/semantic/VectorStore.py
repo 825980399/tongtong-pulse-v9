@@ -3,7 +3,7 @@
 VectorStore.py —— 向量存储
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 向量数据库存储与检索
@@ -156,7 +156,7 @@ class VectorStore:
 
     @staticmethod
     def _file_fingerprint(path: str) -> str:
-        """★第九批 5.3（星轨要求）：库文件的时间/体积指纹。
+        """★第九批 5.3（内部协作者要求）：库文件的时间/体积指纹。
 
         背景：库内 meta 与当前配置不符时会拒绝加载，但此前只 WARNING 一句
         「模型变更」，看不出这份旧库**是什么时候、被谁**写出来的——排查
@@ -281,7 +281,7 @@ class VectorStore:
             self._maybe_backup_on_mismatch(meta)
             return
 
-        # ★第107批 T-107a（D171）：修复 npz 句柄泄漏——np.load 返回 NpzFile 持有
+        # ★往期批次 相关任务（Dxxx）：修复 npz 句柄泄漏——np.load 返回 NpzFile 持有
         #   文件句柄，若不 close 则在进程生命周期内一直占用（重载时累积泄漏）。
         #   改用 with 上下文确保句柄关闭，并 .copy() 把矩阵拷入内存（避免视图悬空）。
         with np.load(self._vec_path) as data:
@@ -380,7 +380,7 @@ class VectorStore:
         return ok_n, fail_n
 
     def remove(self, node_id: str) -> bool:
-        """删除向量（★L1 冷存淘汰联动移除，星轨 Q1 决策）。
+        """删除向量（★L1 冷存淘汰联动移除，内部协作者 Q1 决策）。
 
         实现：置零 + 从索引摘除，物理压缩在 flush 时做（避免频繁搬 20MB）。
         """
@@ -406,10 +406,10 @@ class VectorStore:
             self.flush()
 
     def reap_orphans(self, valid_ids) -> int:
-        """★第102批 T-102b：反向回收孤儿向量。
+        """★往期批次 相关任务：反向回收孤儿向量。
 
         删除「向量库里有、但节点已不存在」的条目，返回移除条数。
-        （对应债务 D161：remove 生产 0 调用 + reconcile 只单向补码）
+        （对应债务 Dxxx：remove 生产 0 调用 + reconcile 只单向补码）
         """
         self._ensure_loaded()
         _valid = set(str(x) for x in (valid_ids or ()) if x)

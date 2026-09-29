@@ -2,7 +2,7 @@
 """QICA 意图 3 层层次结构构建器 —— 生成 data/qica/intent_hierarchy.json
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026-09-10
 
 职责：

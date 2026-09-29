@@ -3,7 +3,7 @@
 PulseDNARepair —— DNA修复器官 · 错误自愈与补丁生成
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 DNARepairEvent.FIX，对框架运行中的错误类型匹配修复方案并尝试自愈，把生成的补丁以 DNARepairEvent.SOLUTION_GENERATED 广播。

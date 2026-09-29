@@ -4,7 +4,7 @@ from nucleus._silent_except import silent_exc
 PulseStomach —— 脉冲驱动胃 · 知识消化器官
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 接收 DigestEvent.KNOWLEDGE 脉冲完成知识消化——安全审查过滤不安全内容、词表驱动的关键词提取与权重排序、五维归属分配空间路径、创建 PulseNode 并做频率编码写入节点池，最后发射 KnowledgeEvent.WRITTEN。
@@ -760,7 +760,7 @@ class PulseStomach(BasePulseOrgan):
                         self._log(LogLevel.DEBUG,
                                   f"代码分析JSON经策略3(自动修复)解析成功: {len(_fixed_obj)}个字段")
 
-                # ★第105批 T-105c（P1）：交换策略4/5 顺序——策略5（容错解析）先于策略4（部分解析）。
+                # ★往期批次 相关任务（P1）：交换策略4/5 顺序——策略5（容错解析）先于策略4（部分解析）。
                 #   旧序：策略4先跑，会把 587 字原文抽成一串 35 字标点（纯 :,[ ] 组合）入库，
                 #   导致 _parsed 非 None、策略5 永不被触发（被遮蔽）。交换后容错解析优先，
                 #   能正确消化「数组里放键值对」等真错误；策略4 仅作兜底。
@@ -784,7 +784,7 @@ class PulseStomach(BasePulseOrgan):
                             )
                             _ok68, _data68, _st68 = _m68_parse_ft(cleaned_content)
                             if _ok68 and isinstance(_data68, dict) and _data68:
-                                # ★第105批 T-105c：列表/对象 repr 需 json 化——
+                                # ★往期批次 相关任务：列表/对象 repr 需 json 化——
                                 #   容错解析降级提取（extract_key_fields）对数组值返回
                                 #   Python list、对对象值返回 dict，若直接格式化会写成
                                 #   Python repr（如 ['a','b'] / {'k':'v'}），非合法 JSON。
@@ -799,7 +799,7 @@ class PulseStomach(BasePulseOrgan):
                                 self._log(LogLevel.INFO,
                                           f"代码分析JSON经策略5(容错解析:{_st68})成功: "
                                           f"{len(_data68)}个字段")
-                                # ★第105批 T-105c：列表repr需json化（可观测留痕）
+                                # ★往期批次 相关任务：列表repr需json化（可观测留痕）
                                 if any(isinstance(_v, (list, dict)) for _v in _data68.values()):
                                     self._log(LogLevel.DEBUG,
                                               "策略5输出含列表/对象repr，已json化（列表repr需json化）")
@@ -2238,7 +2238,7 @@ class PulseStomach(BasePulseOrgan):
                 _m = None
             if _m:
                 _v = _m.group(1).strip().strip('"').strip()
-                # ★第105批 T-105c：值有效性闸——纯标点串（仅由 : , [ ] 组成）
+                # ★往期批次 相关任务：值有效性闸——纯标点串（仅由 : , [ ] 组成）
                 #   视为解析失败、不入库（避免 587 字原文被 35 字标点串遮蔽，
                 #   进而饿死策略5容错解析）。
                 if _v and not set(_v) <= set(':,[ ]'):

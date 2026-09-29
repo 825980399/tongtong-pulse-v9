@@ -3,7 +3,7 @@
 PulseMetricsCollector —— 多层级指标采集器 · 运行态可观测性汇聚点
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 MetricsEvent.COLLECT 与心跳、情绪、兴趣、反思、生命状态等多类事件，采集分子/细胞/器官三层指标，构建可观测性快照并输出到控制台与日志。
@@ -34,7 +34,7 @@ from nucleus.const import (
     SystemEvent,
 )
 from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.organ_identity import ORGAN_ALIASES  # ★T-112d：器官名归一化单源真相
+from nucleus.organ_identity import ORGAN_ALIASES  # ★相关任务：器官名归一化单源真相
 from nucleus._silent_except import silent_exc
 from nucleus._warn_throttle import should_warn
 
@@ -209,7 +209,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             health_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                        'data', 'monitor', 'health_snapshot.json')
-            # T-112a：改走硬化写通道（路径锁 + 退避重试 + 唯一 tmp + 失败清理）
+            # 相关任务：改走硬化写通道（路径锁 + 退避重试 + 唯一 tmp + 失败清理）
             if not safe_write_json(health_path, snapshot, backup=False):
                 self._log(LogLevel.WARNING, "health_snapshot.json 写入失败（需关注）")
         except Exception as e:
@@ -375,7 +375,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             "instinct_upgrade": self._instinct_upgrade_count,
         }
 
-        # ===== 新增：请求去重统计（★T-113d：通电后让去重可见，防止"沉默器官"）=====
+        # ===== 新增：请求去重统计（★相关任务：通电后让去重可见，防止"沉默器官"）=====
         # 总开关关闭时 get_request_deduplicator() 返回 None → 仅标注 enabled=False；
         # 开启（启动侧设 PULSE_REQUEST_DEDUP=1）后含完整累计统计（claimed/duplicate/...）。
         _dd_enabled = False
@@ -394,10 +394,10 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._log(LogLevel.WARNING, f"[请求去重] 统计采集失败: {_e}")
         snapshot["request_dedup"] = _dd_stats
 
-        # ===== 新增：needs_repair 积压统计（★T-113e④：让死字段被消费，不再零读者）=====
+        # ===== 新增：needs_repair 积压统计（★相关任务④：让死字段被消费，不再零读者）=====
         # SafeEvolutionExecutor 在 runtime_failed 时写 needs_repair=True，此前全活树 0 读者。
         # 此处只读消费（fail-safe），把「真失败待重修」补丁数暴露到可观测快照。
-        # （删除该字段会破坏第114批"needs_repair=真失败待重修 / undecidable=不可判定"
+        # （删除该字段会破坏往期批次"needs_repair=真失败待重修 / undecidable=不可判定"
         #   拆分复用计划，故选「接消费」而非「删除」。)
         _nr_count = 0
         try:
@@ -405,7 +405,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             _root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
             _pp = _os.path.join(_root, "data", "patches", "pending_patches.json")
             if _os.path.exists(_pp):
-                # ★第146批 T146-7：改走 DataAccessLayer.safe_read_json ——
+                # ★往期批次 T146-7：改走 DataAccessLayer.safe_read_json ——
                 #   其编码回退链首位即 utf-8-sig，可透明剥离 UTF-8 BOM；
                 #   旧写法 open(encoding="utf-8") 遇到 BOM 的补丁文件会抛异常，
                 #   落到下面的 WARNING 分支造成每次采集刷一条告警。
@@ -535,7 +535,7 @@ class PulseMetricsCollector(BasePulseOrgan):
     #  「Web对话-人脸监听」（web_chat.py:658）与
     #  「对话模块-全局回复监听」（chat_service.py:108）
     #  —— 前者不含 "对话模块" 子串 → **恒判 mismatch**。
-    # ★T-112d：_LINK_ALIASES 提升为共享器官名归一化表（单源真相，见 nucleus.organ_identity）。
+    # ★相关任务：_LINK_ALIASES 提升为共享器官名归一化表（单源真相，见 nucleus.organ_identity）。
     #   原本地别名表已迁移并充实（覆盖豁免表命名空间），其余消费方统一走 resolve_organ_key。
     _LINK_ALIASES = ORGAN_ALIASES
 

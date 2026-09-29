@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""日志脱敏层（T-133a / fc133 七卡）：
+"""日志脱敏层（相关任务 / fc133 七卡）：
 
 在 logging **handler 级**统一改写 LogRecord（消息 + 参数 + 异常文本），
 一处接线即可覆盖全库（含 pulse.* 子 logger）。

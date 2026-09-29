@@ -3,7 +3,7 @@
 ResonanceEngine.py —— 共振引擎
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 器官间共振计算与协同激活
@@ -13,7 +13,7 @@ ResonanceEngine.py —— 共振引擎
 
 import math
 
-# ★第82批 T-c：五维权重单一来源（D173）。唯一数值定义在 config.RESONANCE_WEIGHTS。
+# ★第82批 T-c：五维权重单一来源（Dxxx）。唯一数值定义在 config.RESONANCE_WEIGHTS。
 from config import RESONANCE_WEIGHTS
 
 from nucleus.logger import get_module_logger
@@ -39,7 +39,7 @@ class ResonanceEngine:
     """
     
     # 五维权重（规则1.3：永久固定，禁止修改）
-    # ★第82批 T-c：单一来源收敛（D173）——唯一数值定义在 config.RESONANCE_WEIGHTS，
+    # ★第82批 T-c：单一来源收敛（Dxxx）——唯一数值定义在 config.RESONANCE_WEIGHTS，
     #   此处只做只读引用，禁止再写字面数值（原类内重复定义已删）。
     WEIGHTS = RESONANCE_WEIGHTS
     
@@ -250,7 +250,7 @@ class ResonanceEngine:
                 continue
         if out:
             self._rule_calls += 1
-            # ★M84-2（第84批 T-84c）：本次查询规则通道**确实生效**（产出非空规则得分）
+            # ★M84-2（第84批 相关任务）：本次查询规则通道**确实生效**（产出非空规则得分）
             #   → 计入本地推理「规则通道」档。此前全库**没有任何**
             #   `record_local_inference(KIND_RULE)` 调用点，导致 llm_dependency 的
             #   「规则通道」恒为 0（实测），把本地推理分母算小、夸大 LLM 占比。
@@ -553,7 +553,7 @@ class ResonanceEngine:
 
         # ★PHASE17-阶段二子任务4.2：三通道一致性置信度
         #   开关开启且有结果时，附加 confidence（float）+ confidence_detail（可解释分量）。
-        #   低置信度 <0.6 只标记 needs_llm_review，不自动改行为（星轨确认的保守策略）。
+        #   低置信度 <0.6 只标记 needs_llm_review，不自动改行为（内部协作者确认的保守策略）。
         if results and self._get_semantic_cfg().get("enable_confidence_calibration", False):
             try:
                 _top_score = results[0]["score"]
@@ -778,12 +778,12 @@ class ResonanceEngine:
                          rule_map: dict[str, float] | None = None) -> float:
         """记忆维得分。
 
-        ★PHASE17-1.3（星轨 Q3 决策：记忆维**内部分配**，五维权重不动）：
+        ★PHASE17-1.3（内部协作者 Q3 决策：记忆维**内部分配**，五维权重不动）：
 
             memory_score = α'·keyword_score + β'·vector_sim      (α'+β'=1.0)
             最终总分仍为 0.40 × memory_score + 0.30·space + ... （规则1.3 未触）
 
-        ★PHASE17-阶段二子任务1（星轨任务书：规则通道 γ' 接入）：
+        ★PHASE17-阶段二子任务1（内部协作者任务书：规则通道 γ' 接入）：
 
             memory_score = α'·keyword + β'·vector + γ'·rule     (α'+β'+γ'=1.0)
             规则通道关闭 / 该节点无规则得分时，退化为 α'+β' 双通道（行为不变）。
@@ -835,7 +835,7 @@ class ResonanceEngine:
         三通道模式（enable_rule_channel=True，阶段二子任务1）：
             memory = α'·keyword + β'·vector + γ'·rule (α'+β'+γ'=1.0)
             任一通道缺席（未编码/无规则得分）时，仅对在场通道的权重归一化到 1.0，
-            即「无规则 → 退化为 α'+β'」——与星轨任务书一致，不影响检索。
+            即「无规则 → 退化为 α'+β'」——与内部协作者任务书一致，不影响检索。
         """
         cfg = self._get_semantic_cfg()
         if not cfg.get("enable_semantic_kernel", False):
@@ -903,7 +903,7 @@ class ResonanceEngine:
 
         置信度 = 0.5×三通道一致性 + 0.3×最高分绝对值 + 0.2×历史正确推理相似度
 
-        三通道一致性（Jaccard 口径，星轨 2026-09-07 确认）：
+        三通道一致性（Jaccard 口径，内部协作者 2026-09-07 确认）：
           在场通道的 top-1 节点，取最大同簇数 / 在场通道数：
             三通道全一致 = 1.0，两通道一致 = 0.67，各指各的 = 0.33
             规则通道无规则 → 退化两通道（一致=1.0，分歧=0.5）
@@ -1001,7 +1001,7 @@ class ResonanceEngine:
         else:
             _level = "low"
 
-        # ★第95批 T-95d：补「置信度守卫」本地推理埋点（此前全库**零调用点**
+        # ★第95批 相关任务：补「置信度守卫」本地推理埋点（此前全库**零调用点**
         #   ⇒ llm_dependency 的「置信度守卫」恒为 0）。语义 = 三通道一致性
         #   置信度判定为**低**（< ``confidence_low_threshold``），即本地检索
         #   结果不足以自持、已标记 ``needs_llm_review`` 的**守卫触发**事件。
@@ -1053,7 +1053,7 @@ class ResonanceEngine:
 
         路径前缀匹配越长，共振越强。
 
-        ★PHASE17-1.3 修复（星轨 1.3 决策）：
+        ★PHASE17-1.3 修复（内部协作者 1.3 决策）：
             1. path 归一化 —— "a/b/"、"a//b"、"/a/b" 视为同一路径（原实现会误判）
             2. path="/" 视为「无有效路径」（原实现 strip("/") 后得到 [""]，
                会拿空串去比对节点路径首段，产生 0 分假信号）

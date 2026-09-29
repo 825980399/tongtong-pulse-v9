@@ -3,7 +3,7 @@
 PulseLiver —— 肝器官 · 知识自我优化（共享记忆版）
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 订阅 HeartEvent.BEAT、KnowledgeEvent.WRITTEN、ReflectionEvent.INSIGHT 三类脉冲，执行 L1→L2 压缩、L2→L3 融合、噪声检测与矛盾检测，把零散感知沉淀为认知与智慧，并驱动本能节点的学习、升级与降级。
@@ -43,7 +43,7 @@ from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.events.EventTap import tap_publish  # ★第17批 T3：旁路事件发布入口
 from nucleus._silent_except import silent_exc
 
-# ★第107批 T-107a（D171）：无人值守资源看门狗（被动、节流、零副作用）
+# ★往期批次 相关任务（Dxxx）：无人值守资源看门狗（被动、节流、零副作用）
 #   随心跳节流采样进程 RSS / 句柄 / 线程 / 打开文件，超阈值告警，
 #   并为 5051 故障面板提供数据。阈值为模块常量，不依赖 config 运行开关（红线）。
 _RESOURCE_SAMPLE_INTERVAL_SEC = 300.0      # 每 5 分钟采样一次（随心跳触发、内部节流）
@@ -146,7 +146,7 @@ class PulseLiver(BasePulseOrgan):
         self._reasoning_pool = None  # ★v17.0性能优化：推理进程池引用
         self._consolidation_count = 0       # 知识巩固次数
         self._stop_requested = False        # ★L10修复：停止请求标志，融合/压缩循环据此中断
-        # ★第107批 T-107a：资源看门狗状态（被动采样，零副作用）
+        # ★往期批次 相关任务：资源看门狗状态（被动采样，零副作用）
         self._last_rss_sample = 0.0
         self._rss_baseline = None
         self._rss_samples: list = []   # 最近 RSS 样本（滚动，约 8h 窗口）
@@ -217,14 +217,14 @@ class PulseLiver(BasePulseOrgan):
         elif event_type == ReflectionEvent.INSIGHT:
             self._on_reflection_insight(payload)
         elif event_type == DigestEvent.KNOWLEDGE:
-            # ★第98批 T-98b：肝作为知识代谢中枢，消费代码学习等器官发射的
+            # ★第98批 相关任务：肝作为知识代谢中枢，消费代码学习等器官发射的
             #   digest.knowledge 脉冲，避免其成为「孤儿脉冲（发射后无器官接收）」。
             self._on_digest_knowledge(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
 
     def _on_digest_knowledge(self, payload: dict[str, Any]) -> None:
-        """★第98批 T-98b：消费 digest.knowledge 脉冲（代码学习等器官发射）。
+        """★第98批 相关任务：消费 digest.knowledge 脉冲（代码学习等器官发射）。
 
         肝是框架的「知识代谢中枢」，把消化后的知识点沉淀进共享记忆
         （node_pool），使 digest.knowledge 不再成为孤儿脉冲（发射后无器官接收）。
@@ -260,7 +260,7 @@ class PulseLiver(BasePulseOrgan):
                     HeartEvent.BEAT,
                     KnowledgeEvent.WRITTEN,
                     ReflectionEvent.INSIGHT,
-                    DigestEvent.KNOWLEDGE,  # ★第98批 T-98b：肝订阅 digest.knowledge，吸收消化知识
+                    DigestEvent.KNOWLEDGE,  # ★第98批 相关任务：肝订阅 digest.knowledge，吸收消化知识
                 ],
                 "min_priority": 1,
             }
@@ -399,7 +399,7 @@ class PulseLiver(BasePulseOrgan):
         if self.node_pool is None:
             return
 
-        # ★第107批 T-107a：心跳触发资源看门狗采样（节流在方法内，零副作用）
+        # ★往期批次 相关任务：心跳触发资源看门狗采样（节流在方法内，零副作用）
         self._maybe_sample_resource()
 
         # 防重入：如果已有优化任务在执行，跳过本次心跳
@@ -425,9 +425,9 @@ class PulseLiver(BasePulseOrgan):
             # 信息场不可用，同步执行
             self._do_optimize()
 
-    # ===================== 第107批 T-107a：资源看门狗 =====================
+    # ===================== 往期批次 相关任务：资源看门狗 =====================
     def _maybe_sample_resource(self) -> None:
-        """★T-107a：心跳节流触发资源采样（被动、零副作用）。"""
+        """★相关任务：心跳节流触发资源采样（被动、零副作用）。"""
         _now = time.time()
         if _now - self._last_rss_sample < _RESOURCE_SAMPLE_INTERVAL_SEC:
             return
@@ -1049,9 +1049,9 @@ class PulseLiver(BasePulseOrgan):
                     if not _path:
                         continue
                     _parts = _path.rstrip('/').split('/')
-                    # ★T-108c：代码学习通道组键回写为全路径，避免 L2 落库成相对路径
+                    # ★相关任务：代码学习通道组键回写为全路径，避免 L2 落库成相对路径
                     #   （修复 runB 去重命中自己建的 L2 触发"自产自删"）
-                    # ★T-108e：平路径（深度<4）从节点 value 前缀提取类名分组，失败回落路径末段；
+                    # ★相关任务：平路径（深度<4）从节点 value 前缀提取类名分组，失败回落路径末段；
                     #   深路径维持后两段，使上千节点拆成多组，单组不超阈值。
                     if len(_parts) >= 4:
                         _group_key = '/自我理解/代码/' + '/'.join(_parts[-2:])
@@ -1379,7 +1379,7 @@ class PulseLiver(BasePulseOrgan):
 
                     # 但如果重叠率达到100%，说明内容完全重复，跳过不合并
                     if overlap_ratio >= 1.0:
-                        # ★T-108b：完全重复跳过仅表示无需新建 L2，不代表已有 L2 真正覆盖源节点内容。
+                        # ★相关任务：完全重复跳过仅表示无需新建 L2，不代表已有 L2 真正覆盖源节点内容。
                         #   因此【不建重复L2、也不删源L1】，直接返回 False 让主路径接管完整压缩。
                         self._log(LogLevel.WARNING,
                                 f"知识去重: '{path_name}' 新L2节点与已有节点完全重复，"
@@ -1464,7 +1464,7 @@ class PulseLiver(BasePulseOrgan):
         return False
 
     def _compress_group(self, prefix: str, nodes: list[PulseNode]) -> bool:
-        # ★T-108f：单次压缩上限 40 条，超出切片逐块处理（每块一个 L2），
+        # ★相关任务：单次压缩上限 40 条，超出切片逐块处理（每块一个 L2），
         #   杜绝单批吞噬全组导致"一次性删除上千 L1"。
         if len(nodes) > 40:
             _any_ok = False
@@ -1503,7 +1503,7 @@ class PulseLiver(BasePulseOrgan):
             if self._try_merge_duplicate_l2(prefix, nodes, top_keywords, all_values, path_name):
                 return True
 
-            # ★T-108f：记录本次压缩的成员 node_id，便于溯源与回滚
+            # ★相关任务：记录本次压缩的成员 node_id，便于溯源与回滚
             try:
                 l2_node.evidence_chain = [{"node_id": getattr(n, 'node_id', None)} for n in nodes]
             except Exception as _e:
@@ -1581,7 +1581,7 @@ class PulseLiver(BasePulseOrgan):
                                 if _now - self._last_snapshot_save_time >= 60.0:
                                     self.snapshot.save()
                                     self._last_snapshot_save_time = _now
-                                # ★T-108d：批量频率编码早退分支建了 L2 后必须同步清理源 L1，
+                                # ★相关任务：批量频率编码早退分支建了 L2 后必须同步清理源 L1，
                                 #   否则源 L1 残留到下一心跳，被去重误判为"自产自删"。
                                 if self.node_pool:
                                     _removed_count = 0
@@ -2941,7 +2941,7 @@ class PulseLiver(BasePulseOrgan):
             l3_node.trust_score = min(100.0, avg_trust + 10.0)
             l3_node.state = "locked"
 
-            # ★T-125b(D040 A')：融合点记源——记录本 L3 由哪些 L2 来源节点融合而来
+            # ★相关任务(D040 A')：融合点记源——记录本 L3 由哪些 L2 来源节点融合而来
             l3_node.evidence_chain = [
                 {"node_id": getattr(n, "node_id", None), "role": "source"}
                 for n in quality_nodes
@@ -3085,7 +3085,7 @@ class PulseLiver(BasePulseOrgan):
         ("正确", "错误"), ("真", "假"), ("有", "没有"),
     )
 
-    # ========== ★T-125b(D040 A')：L3 源反查桶（l2_id -> set(l3_id)） ==========
+    # ========== ★相关任务(D040 A')：L3 源反查桶（l2_id -> set(l3_id)） ==========
     _L3_SRC_BUCKET_TTL = 600.0      # 反查桶惰性重建 TTL（秒）
     _L3_SRC_BUCKET_CAP = 200_000     # 内存上界（熔断阈值）
 
@@ -3187,7 +3187,7 @@ class PulseLiver(BasePulseOrgan):
                     # 此前 conflict_count 恒为 0，规则5「三次推导冲突可降级」形同虚设。
                     node_a.conflict_count = getattr(node_a, 'conflict_count', 0) + 1
                     node_b.conflict_count = getattr(node_b, 'conflict_count', 0) + 1
-                    # ★T-125b(D040 A')：矛盾归属——反查桶求记源 L3（只计记源 L3），
+                    # ★相关任务(D040 A')：矛盾归属——反查桶求记源 L3（只计记源 L3），
                     #   成员存活校验（97%死引用条款）+ 同对去重 + 1h 冷却闸标记（last_conflict_at）。
                     #   本批只落观测（last_conflict_at 时间戳），冲突计数执行段归 W7-B（l3_downgraded 恒 0 诚实）。
                     try:
@@ -3590,7 +3590,7 @@ class PulseLiver(BasePulseOrgan):
             "instinct_upgrade_count": self._instinct_upgrade_count,
             "instinct_downgrade_count": self._instinct_downgrade_count,
             "consolidation_count": self._consolidation_count,
-            "resource": self._resource_stats(),  # ★第107批 T-107a：资源看门狗快照
+            "resource": self._resource_stats(),  # ★往期批次 相关任务：资源看门狗快照
         }
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()

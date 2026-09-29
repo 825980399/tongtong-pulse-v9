@@ -3,7 +3,7 @@
 TestGenerator.py —— 测试生成器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 自动生成测试用例与测试数据
@@ -488,7 +488,7 @@ if __name__ == "__main__":
         "id": "test_smoke",
         "file": "nucleus/evolution/HealthScore.py",
         "method": "compute_health_score",
-        # ★第90批 T-90a：补齐 original_code —— 全库 11 个「补丁 dict 构造点」
+        # ★第90批 相关任务：补齐 original_code —— 全库 11 个「补丁 dict 构造点」
         #   中唯一缺该字段的一处（属 `__main__` 自测夹具，不进验证链路，
         #   但字段契约应全库一致）。
         "original_code": "def compute_health_score():\n    return {'score': 0}\n",

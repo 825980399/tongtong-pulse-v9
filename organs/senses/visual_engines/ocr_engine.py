@@ -1,7 +1,7 @@
 """ocr_engine —— OCR图像文字识别引擎（v1.0）
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -41,7 +41,7 @@ def process(file_path: str, remote_api_config: dict | None = None) -> dict[str, 
         import pytesseract
         from PIL import Image
         
-        # 设置Tesseract路径：动态查找（★第144批 T-144b：去写死绝对路径，跨环境可跑）
+        # 设置Tesseract路径：动态查找（★往期批次 相关任务：去写死绝对路径，跨环境可跑）
         #   优先级：环境变量 TESSERACT_CMD → PATH（shutil.which）→ 常见安装位置
         _tesseract_path = os.environ.get("TESSERACT_CMD") or ""
         if not _tesseract_path or not os.path.exists(_tesseract_path):

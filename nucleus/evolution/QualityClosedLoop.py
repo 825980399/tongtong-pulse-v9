@@ -3,7 +3,7 @@
 QualityClosedLoop.py —— 质量闭环
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 质量问题发现-修复-验证闭环管理
@@ -382,7 +382,7 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
         ⚠️ search_max_articles / search_low_overlap_threshold /
            innerworld_search_quality_threshold / search_quality_threshold
            当前在器官侧**无消费点**（死参数），纳入只会造成"调了没用"的假闭环，
-           故不纳入。是否接通这些参数留给星轨决策（见交付报告遗留项）。
+           故不纳入。是否接通这些参数留给内部协作者决策（见交付报告遗留项）。
 
     策略：
         S1 止损——"stage1_terminate"（阶段1关键词与主题无关，频繁打转）主导时

@@ -4,7 +4,7 @@ from nucleus._silent_except import silent_exc
 PulseController —— 控制器器官 · 网页深度搜索与本地文件/应用操纵
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 ControllerEvent 的 OPEN_URL / READ_FILE / LIST_DIRECTORY / LAUNCH_APP 四类脉冲，负责网页深度搜索、正文抽取与质量评估，管理有头/无头浏览器的生命周期，并把抓取结果交下游消化。
@@ -738,7 +738,7 @@ class PulseController(BasePulseOrgan):
                               correlation_id: str = ""):
         """发射搜索阶段完成反馈脉冲，供内在世界审查阶段结果。
 
-        ★第82批 T-d（D167）：correlation_id 随脉冲原样带回——发射端内在世界已把
+        ★第82批 T-d（Dxxx）：correlation_id 随脉冲原样带回——发射端内在世界已把
         search_correlation_id 放进 OPEN_URL payload，本方法从 _search_deep_headless
         一路接过来再写回 payload，消费端据此回嘴（旧字符串注册表仅兜底）。
         """
@@ -2366,7 +2366,7 @@ class PulseController(BasePulseOrgan):
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
         elif event_type == SearchEvent.TERMINATED:
-            # ★第86批 T-86b：搜索终止信号改为独立事件（信号分层）
+            # ★第86批 相关任务：搜索终止信号改为独立事件（信号分层）
             return self._on_search_terminate(payload)
         elif event_type == "controller.search_stage_completed":
             payload = pulse.get("payload", {})
@@ -2528,7 +2528,7 @@ class PulseController(BasePulseOrgan):
         max_articles = self._get_headless_config(
             "heavy_max_articles" if self._current_load_level() == "heavy" else "max_articles_per_search", 3
         )
-        # ★A-9接通（2026-09-08，星轨拍板）：search_max_articles 参数补丁真实生效。
+        # ★A-9接通（2026-09-08，内部协作者拍板）：search_max_articles 参数补丁真实生效。
         #   此前该参数在器官侧无消费点（实际基线走 _get_headless_config），
         #   代码学习器/参数闭环对它的调整应用了也不生效。
         #   语义：作为搜索文章数基线的**显式覆盖**（安全范围 (1,20) 由

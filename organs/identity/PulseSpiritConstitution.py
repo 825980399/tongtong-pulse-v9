@@ -3,7 +3,7 @@
 PulseSpiritConstitution —— 精神宪法器官 · 运行模式与基底成熟度守护
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 随 HeartEvent.BEAT 周期执行精神宪法检查，在 normal / conservative / reinforcement 三态间切换运行模式，评估五大基底成熟度并留存宪法审计日志。

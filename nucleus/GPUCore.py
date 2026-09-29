@@ -3,7 +3,7 @@
 GPUCore.py —— GPU核心
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: GPU资源管理与计算任务调度
@@ -153,7 +153,7 @@ class GPUCore(SilentLogMixin):
 
         背景：本类原有三个方法（probe_gpu / gpu_available / get_vram_pressure）
         全部只做探测，所谓 gpu_cache 也只是把数字转成 cuda 张量存起来、
-        且全项目零调用。小林实测「任务管理器里 GPU 利用率纹丝不动」，
+        且全项目零调用。内部协作者实测「任务管理器里 GPU 利用率纹丝不动」，
         根因就在这里：GPU 被检测到，但从未被使用。
 
         实现要点：

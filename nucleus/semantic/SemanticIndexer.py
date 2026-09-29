@@ -3,7 +3,7 @@
 SemanticIndexer.py —— 语义索引器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 知识节点的语义索引构建与管理
@@ -96,7 +96,7 @@ class SemanticIndexer:
         """构建全量索引。
 
         Args:
-            batch_size: 编码批次大小（星轨要求 32-64）
+            batch_size: 编码批次大小（内部协作者要求 32-64）
             watchdog_sec: 看门狗心跳间隔（默认 5 分钟）
             include_evicted: 是否含冷存节点（首次全量建议 True）
             progress_cb: 进度回调

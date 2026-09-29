@@ -183,7 +183,7 @@ def _patch_true_fix_rate() -> float | None:
 
 
 def _report_resolution_rate() -> float | None:
-    """闭环解决率（问题解决率，★第111批 T-111b）。
+    """闭环解决率（问题解决率，★往期批次 相关任务）。
 
     采数：本进程 ReportBus.get_stats().resolution_rate（best-effort 内存态）。
     """
@@ -227,7 +227,7 @@ def score_module_effectiveness() -> dict[str, Any]:
 
 
 def score_resolution_rate() -> dict[str, Any]:
-    """闭环健康度：问题解决率（★第111批 T-111b）。
+    """闭环健康度：问题解决率（★往期批次 相关任务）。
 
     口径：报告异常在后续同类报告中不再越阈 → 判定「已解决」；
     解决率 = 已解决异常数 / 近窗内登记异常数（best-effort，详见 ReportBus）。
@@ -256,7 +256,7 @@ def count_open_debts(doc_path: str | None = None) -> dict[str, int]:
 
     判据：债务清单中含 ``🔴``（待修复/未修）的表格行。
 
-    ★D147-3：内部总账（债务清单）在公开包中不存在时**降级**而非崩溃：
+    ★Dxxx-3：内部总账（债务清单）在公开包中不存在时**降级**而非崩溃：
     内部环境路径存在→正常统计；公开环境路径缺失→记 warning 并返回空计数
     （严重度维度 score=None，不参与加权），不抛错、不静默吞。
     """

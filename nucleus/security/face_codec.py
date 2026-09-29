@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """face_codec.py —— 人脸名册加密存储（Fernet）。
 
-★第134批 T-134b：否决 XOR+机器码（已知明文攻击），改用 Fernet（AES-128-CBC + HMAC-SHA256）。
+★往期批次 相关任务：否决 XOR+机器码（已知明文攻击），改用 Fernet（AES-128-CBC + HMAC-SHA256）。
 - 密钥存 data/keys/face_key.key（不进 git）。缺失即生成（0600）。
 - 名册落盘为 Fernet token（二进制）；读取兼容旧明文 JSON（legacy 迁移免做，新写入即加密）。
 - env 重定向白名单：TONGTONG_FACE_ROSTER 越界 data/ 即拒绝（fail-closed，绝不向外泄生物特征）。

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PulseInnerWorld 第三刀拆分（主线第141批 T-141a）：创作自述簇 Mixin。
+"""PulseInnerWorld 第三刀拆分（主线往期批次 相关任务）：创作自述簇 Mixin。
 
 从 organs/brain/PulseInnerWorld.py 平移 14 个创作/自视/叙事/因果假设方法
 （原 17535-18646 行窗口，剔除 setter set_experience_pool 留主），约 1110 行。
@@ -18,12 +18,12 @@ from nucleus.const import (
     LogLevel,
 )
 
-# ★主线第141批 T-141a：模块级 logger（平移自主文件同名模块变量）
+# ★主线往期批次 相关任务：模块级 logger（平移自主文件同名模块变量）
 _module_logger = logging.getLogger(__name__)
 
 
 class PulseInnerWorldCreativeMixin:
-    """创作自述簇：知识创新 / 自视 / 叙事 / 因果假设（主线第141批 T-141a 拆分）。"""
+    """创作自述簇：知识创新 / 自视 / 叙事 / 因果假设（主线往期批次 相关任务 拆分）。"""
 
     def _attempt_knowledge_innovation(self) -> str | None:
         """

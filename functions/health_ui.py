@@ -1,7 +1,7 @@
 """health_ui —— 曈曈人体UI · 独立Web监控面板（v2.1 知识图谱文本化版）
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -127,7 +127,7 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             <div class="metric"><span class="metric-label">LLM / 本地</span><span class="metric-value" id="llmdepSplit">--</span></div>
             <div class="metric"><span class="metric-label">搜索 / 消化</span><span class="metric-value" id="llmdepOther">--</span></div>
             <div class="metric"><span class="metric-label">回答请求</span><span class="metric-value" id="llmdepTotal">--</span></div>
-            <!-- ★第94批 T-94c 方案A：全栈大模型占比（分母含搜索+消化） -->
+            <!-- ★第94批 相关任务 方案A：全栈大模型占比（分母含搜索+消化） -->
             <div class="metric"><span class="metric-label">全栈大模型占比</span><span class="metric-value" id="llmdepOverall">--</span></div>
         </div>
     </div>
@@ -140,7 +140,7 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             set('llmdepSelf', (dv.self_sufficiency_score || 0).toFixed(3));
             set('llmdepSplit', (dv.llm_call_total || 0) + ' / ' + (dv.local_inference_total || 0));
             set('llmdepOther', (dv.search_total || 0) + ' / ' + (dv.digestion_total || 0));
-            // ★第95批 T-95c：旧字段 total_requests 已彻底移除，只读 answer_requests
+            // ★第95批 相关任务：旧字段 total_requests 已彻底移除，只读 answer_requests
             set('llmdepTotal', (dv.answer_requests || 0));
             set('llmdepOverall', (dv.overall_llm_share || 0).toFixed(4));
         }).catch(function () { });
@@ -418,7 +418,7 @@ function fetchData() {
         }
         var u = d.current_user || '访客';
         el = document.getElementById('userName'); if (el) el.textContent = u;
-        if (u === '小林') {
+        if (u === '内部协作者') {
             el = document.getElementById('userRelation'); if (el) el.textContent = '创造者·父亲';
             el = document.getElementById('userCloseness'); if (el) el.textContent = '1.00';
             el = document.getElementById('userTrust'); if (el) el.textContent = '1.00';
@@ -1248,7 +1248,7 @@ setInterval(loadData, 60000);
             #       knowledge_association  ← organs/body/PulseLiver.py:1951（知识关联）
             #       temporal_self_insight  ← organs/identity/PulseSelfAwareness.py:1047（时间自我）
             #   补齐后，自进化链路的产出与顿悟/进化方案首次对健康面板可见，
-            #   小林能直接看到「曈曈自己想了什么、改了什么」。
+            #   内部协作者能直接看到「曈曈自己想了什么、改了什么」。
             _health_types = {
                 "comprehensive_diagnosis": "综合诊断",
                 "startup_health": "启动健康",
@@ -1599,7 +1599,7 @@ class HealthUIServer:
         self._running = True
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
-        # ★主线第104批 T-104c（D169）：5051 停服感知看门狗
+        # ★主线往期批次 相关任务（Dxxx）：5051 停服感知看门狗
         self._watchdog_running = True
         self._watchdog = threading.Thread(target=self._watchdog_loop, daemon=True)
         self._watchdog.start()
@@ -1616,7 +1616,7 @@ class HealthUIServer:
         global _node_pool
         _node_pool = node_pool
 
-    # ===== ★主线第104批 T-104c（D169）：5051 停服感知看门狗 =====
+    # ===== ★主线往期批次 相关任务（Dxxx）：5051 停服感知看门狗 =====
     def _watchdog_loop(self):
         """监控 serve 线程存活；意外死亡则记入 error_snapshots 并告警（治理 5051 零感知）。"""
         import logging as _logging

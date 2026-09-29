@@ -3,7 +3,7 @@
 PulseMultiStepReasoner —— 多步推理子模块
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 把复杂问题拆解为有序子步骤，并组织成带证据链的多步推理结构。
@@ -153,7 +153,7 @@ class PulseMultiStepReasoner:
             if not self.node_pool:
                 return
             nodes = None
-            # ★D152/W4：优先取含冷驱逐节点的全集（超集），避免语义随时间静默流失
+            # ★Dxxx/W4：优先取含冷驱逐节点的全集（超集），避免语义随时间静默流失
             if hasattr(self.node_pool, "get_all_including_evicted"):
                 nodes = self.node_pool.get_all_including_evicted()
             elif hasattr(self.node_pool, "get_all"):

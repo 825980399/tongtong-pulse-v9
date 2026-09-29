@@ -2,7 +2,7 @@
 """pa_compat.py —— pyarrow 跨版本兼容垫片
 
 版本: v10 PulseNet
-日期: 2026年9月27日（第140批 T-140a）
+日期: 2026年9月27日（往期批次 相关任务）
 
 背景:
     pyarrow 25.0.1 移除了 ``pa.Table.from_pylist``（与 ``pa.Table.from_batches``）。

@@ -3,7 +3,7 @@
 self_inspector.py —— 自省检查器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 框架自我结构检查与代码质量审计
@@ -59,7 +59,7 @@ def _get_logger():
 _module_logger = _get_logger()
 
 
-# ★第90批 T-90b：日志/类名定位 v2 开关（bug#2 类索引接入 + bug#3 包含匹配）。
+# ★第90批 相关任务：日志/类名定位 v2 开关（bug#2 类索引接入 + bug#3 包含匹配）。
 #   开启（默认）→ 与修复同批的行为；关闭 → 逐字回到第90批前（仅中文名前缀匹配）。
 #   默认值内联本模块（遵守红线「不改 config.py 开关」）。
 def _m90_locate_v2_on() -> bool:
@@ -68,7 +68,7 @@ def _m90_locate_v2_on() -> bool:
         return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
     except Exception:
         return True
-# ★第91批 T-91a：日志调用点定位 v3（logger 名 / 器官别名 两级**数据驱动**索引）。
+# ★第91批 相关任务：日志调用点定位 v3（logger 名 / 器官别名 两级**数据驱动**索引）。
 #   开启（默认）→ 在 v2（类索引 + 中文名包含）之上再接入两级新索引：
 #     ① logger 名字面量索引：静态扫描源码里的
 #        `get_organ_logger("X") / get_module_logger("X") / get_logger("X")`
@@ -161,7 +161,7 @@ def _issue_file_in_backup_dir(file_path: str) -> bool:
     # ★主线第60批 T3：问题文件路径是否落在备份目录（.bak_batchN / .bak_tmp /
     #   .bak_mainlineN 等）。按路径「段前缀 .bak」判定，不误伤文件名含 .bak 后缀的
     #   正常文件（foo.py.bak）。供 self_inspector 防御过滤与 glob 扫描排除共用。
-    # ★T-133c 制度化：并入 const.SCAN_EXCLUDE_DIR_BASENAMES / SCAN_EXCLUDE_PREFIX，
+    # ★相关任务 制度化：并入 const.SCAN_EXCLUDE_DIR_BASENAMES / SCAN_EXCLUDE_PREFIX，
     #   覆盖 backups/ data/code_backups/ tmp/ 等备份/临时树（原仅认 .bak 段，漏此三族）。
     if not file_path:
         return False
@@ -185,7 +185,7 @@ class SelfInspector(SilentLogMixin):
     def __init__(self):
         self._config = None
         self._project_root = ""
-        # ★第134批 T-134c：boot 时间戳（B1/B2 boot 后 30 分钟静默判定）
+        # ★往期批次 相关任务：boot 时间戳（B1/B2 boot 后 30 分钟静默判定）
         self._boot_ts = time.time()
         # ★第64批 T1：器官扫描缓存初始化
         self._scan_cache = {}
@@ -217,8 +217,8 @@ class SelfInspector(SilentLogMixin):
         self._method_body_hits = 0
         self._method_body_misses = 0
         # ★第64批 T5：扫描侧二级缓存（organ_file/structure/method 三级缓存）命中/未命中计数（可观测性）
-        #   ★主线第142批 T-142a 改名消歧：原名 _l2_hits/_l2_misses 与「语义缓存 L2」重名，
-        #   日志中两本 L2 账同名造成跨月误读（D138-3）。改名为 _scan_cache_l2_*，语义=L2 扫描缓存，
+        #   ★主线往期批次 相关任务 改名消歧：原名 _l2_hits/_l2_misses 与「语义缓存 L2」重名，
+        #   日志中两本 L2 账同名造成跨月误读（Dxxx-3）。改名为 _scan_cache_l2_*，语义=L2 扫描缓存，
         #   与 config.ENABLE_SEMANTIC_CACHE_L2（语义缓存）无关。
         self._scan_cache_l2_hits = 0
         self._scan_cache_l2_misses = 0
@@ -243,7 +243,7 @@ class SelfInspector(SilentLogMixin):
         self._load_config()
         self._info_field = None  
         # ===== 已知超长方法白名单 =====
-        # ★第147批九刀拆分：_on_inference_request 已拆为 16 个 _ir_* 方法（主方法 45 行），
+        # ★往期批次九刀拆分：_on_inference_request 已拆为 16 个 _ir_* 方法（主方法 45 行），
         #   移除其豁免，改为盯防新拆出的方法（_ir_* 系列，均 ≤200 行，正常进入 long_method 检测）。
         self._long_method_whitelist = {
             ("PulseInnerWorld", "_on_heartbeat"),
@@ -967,7 +967,7 @@ class SelfInspector(SilentLogMixin):
                     body_lines.append(line)
 
             if body_lines:
-                # ★T-115a 防御保险丝：切片长度 > 2×(至下一顶层 def 距离) 即视为失控切片，
+                # ★相关任务 防御保险丝：切片长度 > 2×(至下一顶层 def 距离) 即视为失控切片，
                 #   直接丢弃（BOM/编码异常会令缩进误判，fallback 一路吃到文件末尾）。
                 _next_def_line = None
                 for _j in range(start_line + 1, len(lines)):
@@ -1337,7 +1337,7 @@ class SelfInspector(SilentLogMixin):
     _HEAD_CN_RE = re.compile(
         r"([A-Za-z_][A-Za-z0-9_]*)[ \t]*——[ \t]*([^ \t\r\n（）()]+)"
     )
-    # ★第91批 T-91a：两级新索引的扫描根 / 排除规则 / 取键正则
+    # ★第91批 相关任务：两级新索引的扫描根 / 排除规则 / 取键正则
     #   扫描根 = 生产源码（非器官的 nucleus/*、functions/、base/、utils/ 也有 logger 字面量）
     _M91_TAG_SCAN_ROOTS = ("nucleus", "organs", "functions", "base", "utils")
     _M91_TAG_SCAN_FILES = ("main.py", "config.py")
@@ -1434,7 +1434,7 @@ class SelfInspector(SilentLogMixin):
                 return _m.group(1)
         return ""
 
-    # ========== ★第91批 T-91a：日志调用点定位主能力（两级数据驱动索引） ==========
+    # ========== ★第91批 相关任务：日志调用点定位主能力（两级数据驱动索引） ==========
     #   与旧 `_build_organ_name_index()` 的**根本区别**：旧索引读「文件头中文短语」，
     #   本处两级索引读「真正产生日志 TAG 的命名源」（logger 名 / organ_name 声明），
     #   故与日志生产者**同源**，不依赖头部书写规范。
@@ -1488,7 +1488,7 @@ class SelfInspector(SilentLogMixin):
         return _out
 
     def _build_logger_tag_index(self) -> dict:
-        """构建「日志 TAG → 文件相对路径」索引（★第91批 T-91a）。
+        """构建「日志 TAG → 文件相对路径」索引（★第91批 相关任务）。
 
         零硬编码：只做静态扫描，新增模块/器官无需维护映射表。
         多候选（同一字面量出现在多个文件）时按
@@ -1524,7 +1524,7 @@ class SelfInspector(SilentLogMixin):
         return idx
 
     def _build_organ_alias_index(self) -> dict:
-        """构建「中文器官别名（organ_name 声明）→ 文件相对路径」索引（★第91批 T-91a）。
+        """构建「中文器官别名（organ_name 声明）→ 文件相对路径」索引（★第91批 相关任务）。
 
         与 `_build_organ_name_index()` 并存而非替换（最小侵入 + 零回归）：
         旧索引继续服务头部短语型标签，本索引补上 organ_name 声明型标签。
@@ -1639,7 +1639,7 @@ class SelfInspector(SilentLogMixin):
                         _file, _conf = _p, 0.75
                         break
 
-        # 1c. 器官名/类名 → 文件（★第90批 T-90b bug#2/#3 修复）
+        # 1c. 器官名/类名 → 文件（★第90批 相关任务 bug#2/#3 修复）
         #   改前只用 `_build_organ_name_index()`（243 个**中文**头部名）且模糊匹配
         #   是**前缀**关系 ⇒ 两类真实标签恒不命中：
         #     bug#2：主源码日志标签多为**类名**（InfoField / PulseSnapshot /
@@ -1679,7 +1679,7 @@ class SelfInspector(SilentLogMixin):
                     if _m90_v2 and _cn and ((organ in _cn) or (_cn in organ)):
                         _file, _conf = _p, 0.6
                         break
-            # ★第91批 T-91a：两级新索引（放在中文名模糊匹配**之后** ⇒ 既有高优先级
+            # ★第91批 相关任务：两级新索引（放在中文名模糊匹配**之后** ⇒ 既有高优先级
             #   层级全部保留，只接管「此前恒不命中」的标签）。置信度 0.8 高于中文名
             #   精确 0.7 —— 它是**与日志生产者同源**的字面量精确匹配。
             if _m91_v3 and not _file:
@@ -2711,7 +2711,7 @@ class SelfInspector(SilentLogMixin):
             f"在 {file_name} 的 {method} 方法中发现 {issue_type} 类型的问题，建议进一步审查。"
         )    
     
-    # ========== ★第134批 T-134c：三检测器（B1/B2/B3，B4 已由 T-133c 覆盖） ==========
+    # ========== ★往期批次 相关任务：三检测器（B1/B2/B3，B4 已由 相关任务 覆盖） ==========
 
     # ---- 通用辅助 ----
 
@@ -2979,9 +2979,9 @@ class SelfInspector(SilentLogMixin):
         except OSError as _e:
             silent_exc(_e, "self_inspector.py:_si_write_god_baseline", level="warning")
 
-    # ---- ★第136批 T-136c：import cycles（Tarjan 强连通分量） ----
+    # ---- ★往期批次 相关任务：import cycles（Tarjan 强连通分量） ----
     def _si_resolve_import_mods(self, src: str) -> tuple[list[str], list[str]]:
-        """抽取单文件源码中的 import 模块名，**按边层级分账**（★第140批 T-140c②）。
+        """抽取单文件源码中的 import 模块名，**按边层级分账**（★往期批次 相关任务②）。
 
         返回 ``(module_level, function_level)`` 两个列表：
           - ``module_level``：模块顶层（含类体直接语句，但不含函数/方法体）的 import。
@@ -3030,7 +3030,7 @@ class SelfInspector(SilentLogMixin):
     def _find_import_cycles(self) -> list[tuple[str, ...]]:
         """Tarjan 强连通分量：返回所有 size>=2 的**模块级**内部模块环。
 
-        ★第140批 T-140c②：图只连**模块级边**（import 期真正会触发的边）。
+        ★往期批次 相关任务②：图只连**模块级边**（import 期真正会触发的边）。
         函数体内延迟 import 记入 ``self._si_import_cycles_observed``（观察账），
         不参与环判定——它们运行期才执行，不构成 import 期死锁。
         """
@@ -3114,7 +3114,7 @@ class SelfInspector(SilentLogMixin):
         return _sccs
 
     def _detect_import_cycles(self) -> list[dict]:
-        """C1：import 循环依赖检测器（★第140批 T-140c② 边层级分账）。
+        """C1：import 循环依赖检测器（★往期批次 相关任务② 边层级分账）。
 
         只检测**模块级**环（import 期死锁风险）。函数体内延迟 import 构成的
         「环」记入 ``self._si_import_cycles_observed`` 观察账，不告警——它们在
@@ -3140,7 +3140,7 @@ class SelfInspector(SilentLogMixin):
                     file=getattr(self, "_si_mod_to_file", {}).get(_mods[0], "")))
         return _issues
 
-    # ---- ★第136批 T-136d：不可达代码（AST 扫描 return/raise 后同块死语句） ----
+    # ---- ★往期批次 相关任务：不可达代码（AST 扫描 return/raise 后同块死语句） ----
     def _si_is_meaningful_stmt(self, stmt) -> bool:
         if isinstance(stmt, ast.Pass):
             return False
@@ -3195,7 +3195,7 @@ class SelfInspector(SilentLogMixin):
             except (SyntaxError, ValueError) as _e:
                 silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
                 continue
-            # ★第138批 T-138c：基线键用**相对路径 + '/' 分隔**（跨机可移植）
+            # ★往期批次 相关任务：基线键用**相对路径 + '/' 分隔**（跨机可移植）
             _rel_key = _rel.replace(os.sep, "/")
             self._si_scan_unreachable_block(_tree.body, _issues, _rel_key, _root, _rel_key)
         _cur: dict[str, str] = {}
@@ -3212,7 +3212,7 @@ class SelfInspector(SilentLogMixin):
                 _new.append(_i)
         return _new
 
-    # ---- ★第138批 T-138a：圈复杂度（CC）检测器 ----
+    # ---- ★往期批次 相关任务：圈复杂度（CC）检测器 ----
     def _si_cc_blocks(self, src: str) -> list[tuple[str, int, int]]:
         """radon cc_visit → [(name, complexity, lineno)]（仅 Function/Method，剔除 Class 级块）。"""
         try:
@@ -3293,14 +3293,14 @@ class SelfInspector(SilentLogMixin):
         "dead_code": "_detect_dead_code",
         "unused_imports": "_detect_unused_imports",
         "config_audit": "_detect_config_audit",
-        # ★第134批 T-134c：三检测器（B4 已由 T-133c 覆盖）
+        # ★往期批次 相关任务：三检测器（B4 已由 相关任务 覆盖）
         "silent_growth": "_detect_silent_growth",
         "l3_inversion": "_detect_l3_inversion",
         "god_file": "_detect_god_file",
-        # ★第136批 T-136c/d：循环依赖 + 不可达代码（首扫记基线，新增才告警）
+        # ★往期批次 相关任务/d：循环依赖 + 不可达代码（首扫记基线，新增才告警）
         "import_cycles": "_detect_import_cycles",
         "unreachable_code": "_detect_unreachable_code",
-        # ★第138批 T-138a：圈复杂度 CC（radon，观察≥25/棘轮≥50，首扫记基线）
+        # ★往期批次 相关任务：圈复杂度 CC（radon，观察≥25/棘轮≥50，首扫记基线）
         "cc_growth": "_detect_cc_growth",
     }
 

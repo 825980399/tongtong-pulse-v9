@@ -3,7 +3,7 @@
 LogAnalyzer.py —— 日志分析器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 运行日志深度分析与问题挖掘
@@ -39,7 +39,7 @@ _LOG_LEVEL_MARKER_RE = re.compile(
 )
 
 
-# ★第90批 T-90b：日志定位修复开关（bug#1 message 时机 + 有界重试 / bug#4 末帧）。
+# ★第90批 相关任务：日志定位修复开关（bug#1 message 时机 + 有界重试 / bug#4 末帧）。
 #   开启（默认）→ 与修复同批的所有行为；关闭 → 逐字回到第90批前。
 #   默认值内联本模块（遵守红线「不改 config.py 开关」）。
 def _m90_log_locate_v2_on() -> bool:
@@ -204,7 +204,7 @@ class LogAnalyzer(SilentLogMixin):
                         _issue["count"] += 1
                         _issue["last_seen"] = _ts or time.time()
                         _issue["organ"] = _organ
-                        # ★第90批 T-90b bug#1（上半）：message 必须在定位**之前**填充。
+                        # ★第90批 相关任务 bug#1（上半）：message 必须在定位**之前**填充。
                         #   改前 message 在 locate 之后两行才赋值 ⇒ 首次定位调用的是
                         #   `_locate_for_issue(organ, "")`，而
                         #   `guess_method_from_message("")` 恒返回空方法名 ⇒ 即便文件
@@ -214,7 +214,7 @@ class LogAnalyzer(SilentLogMixin):
                         # ★P0-7 位置补全：普通 ERROR 行不带 file/method/line，
                         #   SafeEvolutionExecutor 拿不到位置就无法生成补丁。
                         #   此处用 self_inspector 从「器官名 + 错误消息」反推。
-                        #   ★第90批 T-90b bug#1（下半）：由「试一次即永久封死」
+                        #   ★第90批 相关任务 bug#1（下半）：由「试一次即永久封死」
                         #     改为「有界重试」（message 细化后可再试，总次数 ≤
                         #     _LOCATE_MAX_ATTEMPTS）；开关关闭→旧判据。
                         if self._m90_should_locate(_issue):
@@ -240,7 +240,7 @@ class LogAnalyzer(SilentLogMixin):
             _snap = _rt.get_snapshot()
             for _err in _snap.get("error_snapshots", []):
                 _tb = _err.get("traceback", "")
-                # ★第90批 T-90b bug#4：Traceback 取**最后一帧**（= 致错点）。
+                # ★第90批 相关任务 bug#4：Traceback 取**最后一帧**（= 致错点）。
                 #   改前用 `.search()` 取首帧 = **最外层调用者**
                 #   （实测嵌套三层时得到 `_level1`，真凶是 `_level3`），
                 #   ⇒ 定位到的位置永远停在调用链顶端。
@@ -264,12 +264,12 @@ class LogAnalyzer(SilentLogMixin):
 
     # ★P0-7：定位置信度低于此值的问题标记为"需人工确认"，不进自动修复队列
     _LOCATE_CONF_THRESHOLD = 0.5
-    # ★第90批 T-90b bug#1：定位重试上限（同一条 message 只试一次；
+    # ★第90批 相关任务 bug#1：定位重试上限（同一条 message 只试一次；
     #   message 被细化后可再试一次）。改前是「试过一次即永久封死」。
     _LOCATE_MAX_ATTEMPTS = 2
 
     def _m90_should_locate(self, issue: dict[str, Any]) -> bool:
-        """此刻是否应尝试定位（第90批 T-90b bug#1 修）。
+        """此刻是否应尝试定位（第90批 相关任务 bug#1 修）。
 
         改前：`not file_path and not _locate_attempted` —— 一旦试过就永久封死，
         而首次尝试时 message 还是空串（见 `_scan_log_file` 的填入时机）⇒

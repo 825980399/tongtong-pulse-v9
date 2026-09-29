@@ -2,7 +2,7 @@
 """clean_polluted_nodes —— clean_polluted_nodes.py — 知识库错误节点标记工具（不删除，仅标记）
 
 版本: v10 PulseNet · 工具
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 

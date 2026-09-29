@@ -3,7 +3,7 @@
 IdentityKnowledgeManager.py —— 身份知识管理器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 身份相关知识的专门管理
@@ -81,17 +81,17 @@ def _is_self(name: str) -> bool:
 
 # ==================== 抽取规则 ====================
 
-# 规则1（别名链）：「小林就是<CREATOR>也就是你的父亲」「A即B」
+# 规则1（别名链）：「内部协作者就是<CREATOR>也就是你的父亲」「A即B」
 _RE_ALIAS_SPLIT = re.compile(r"(?:就是|也就是|即|亦即|aka)")
 
-# 规则2（正向关系）：「小林是我的父亲」「<CREATOR>是我父亲」
+# 规则2（正向关系）：「内部协作者是我的父亲」「<CREATOR>是我父亲」
 _RE_REL_FORWARD = re.compile(
     r"([\u4e00-\u9fff\w·]{1,12}?)\s*(?:是|为|就是|乃)\s*"
     r"([\u4e00-\u9fff\w·]{1,12}?)\s*(?:的)?\s*"
     r"(" + "|".join(RELATION_WORDS) + r")"
 )
 
-# 规则3（反向关系）：「我的父亲是小林」「你父亲叫<CREATOR>」
+# 规则3（反向关系）：「我的父亲是内部协作者」「你父亲叫<CREATOR>」
 _RE_REL_BACKWARD = re.compile(
     r"([\u4e00-\u9fff\w·]{1,12}?)\s*(?:的)?\s*"
     r"(" + "|".join(RELATION_WORDS) + r")\s*"
@@ -114,7 +114,7 @@ def _clean_name(raw: str) -> str:
 def _clean_target(raw: str) -> str:
     """清洗「关系目标」。
 
-    「小林就是<CREATOR>也就是你的父亲」里，正则会把目标抓成
+    「内部协作者就是<CREATOR>也就是你的父亲」里，正则会把目标抓成
     「<CREATOR>也就是你」——这是别名链的中间段被误当成人名。
     处理：先按别名连接词取最后一段，再去掉关系词，最后归一自称。
     """
@@ -172,7 +172,7 @@ class IdentityKnowledgeManager:
 
     @staticmethod
     def split_alias_chain(text: str) -> list[str]:
-        """把「小林就是<CREATOR>也就是你的父亲」切成候选片段。
+        """把「内部协作者就是<CREATOR>也就是你的父亲」切成候选片段。
 
         返回按出现顺序的片段列表（含尾部关系短语），供 extract_claims 继续解析。
         """
@@ -185,9 +185,9 @@ class IdentityKnowledgeManager:
         """从自然语言文本中抽取身份声明。
 
         支持三种说法：
-          ① 别名链：小林就是<CREATOR>（= 同一个人）
-          ② 正向：小林是我的父亲
-          ③ 反向：我的父亲是小林
+          ① 别名链：内部协作者就是<CREATOR>（= 同一个人）
+          ② 正向：内部协作者是我的父亲
+          ③ 反向：我的父亲是内部协作者
 
         Returns: [{"person":..., "relation"/"alias":..., "target":..., "raw":...}]
         """
@@ -197,7 +197,7 @@ class IdentityKnowledgeManager:
         _text = text.strip().replace("，", ",").replace("。", ",")
 
         # ---- ① 别名链：A就是B也就是C（优先处理，因为它决定了主名）----
-        #    「小林就是<CREATOR>也就是你的父亲」切成 ['小林','<CREATOR>','你的父亲']：
+        #    「内部协作者就是<CREATOR>也就是你的父亲」切成 ['内部协作者','<CREATOR>','你的父亲']：
         #     人名部分互认别名，末尾的关系短语则生成一条「主名 → 关系」声明。
         _parts = self.split_alias_chain(_text)
         _chain_names: list[str] = []
@@ -251,7 +251,7 @@ class IdentityKnowledgeManager:
                 "source": source,
             })
 
-        # ---- ③ 反向关系：B 的 Z 是 A（"我的父亲是小林"）----
+        # ---- ③ 反向关系：B 的 Z 是 A（"我的父亲是内部协作者"）----
         for _m in _RE_REL_BACKWARD.finditer(_text):
             _target = _clean_target(_m.group(1))
             _rel = _m.group(2)
@@ -310,7 +310,7 @@ class IdentityKnowledgeManager:
                 if _alias not in _entry["aliases"]:
                     _entry["aliases"].append(_alias)
                     _entry["updated"] = _now
-                    # 别名双向可见：<CREATOR> 也能查到 小林
+                    # 别名双向可见：<CREATOR> 也能查到 内部协作者
                     _a_entry = self._people.setdefault(
                         _alias, {"aliases": [], "relations": [], "updated": _now})
                     if _person not in _a_entry["aliases"]:

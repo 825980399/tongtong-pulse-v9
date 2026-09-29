@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""第114批 T-114b③c / T-114c：补丁裁决 CLI（收编带外裁决文化）。
+"""往期批次 相关任务③c / 相关任务：补丁裁决 CLI（收编带外裁决文化）。
 
 将"人工/机器裁决补丁"从散落的带外脚本收口为统一 CLI，供解锁棘轮前的队列裁决
-（T-114c）与日常运维使用。
+（相关任务）与日常运维使用。
 
 子命令：
     list                      列出补丁（可 --status / --source 过滤）
@@ -11,9 +11,9 @@
     approve <id>              裁决为 approved（仅对 pending 有效）
     keep <id>                 记录"保留"裁决（不改状态，仅打 adjudicated 标记）
     unlock-ratchet            解锁棘轮（重置重启计数 + 清冷却标记）——须先于解锁完成队列裁决
-                              --require-queue-clean  解锁前校验队列清洁（第116批硬门）
-    reject <id> [--reason R]  裁决为 rejected（第116批补口）
-    stale-audit               只读：三本账"建议作废单"（第116批补口）
+                              --require-queue-clean  解锁前校验队列清洁（往期批次硬门）
+    reject <id> [--reason R]  裁决为 rejected（往期批次补口）
+    stale-audit               只读：三本账"建议作废单"（往期批次补口）
     fix-c6 [--apply]          只读/回填：C6 字段污染（顶层 runtime_verified 取嵌套真值）
 
 所有写操作仅改 data/patches/ 账本（不动 data/knowledge/），下次重启生效。
@@ -52,7 +52,7 @@ def _load_all(pm):
 def _find(pending, history, patch_id, source, obsolete=None):
     """按账本定位补丁。
 
-    ★第116批 T-116c②/③ 修复：source=='obsolete' 时必须能搜到归档账，
+    ★往期批次 相关任务②/③ 修复：source=='obsolete' 时必须能搜到归档账，
     否则 keep/reject --source obsolete 恒报“未找到补丁”（实测 rc=2）。
     """
     if source == "pending":
@@ -111,7 +111,7 @@ def _cmd_show(args, pm, pending, history, obsolete, _op):
 
 
 def _save_ledger(pm, name, lst, obsolete_path=None):
-    """★第116批 T-116c②/③ 修复：补 obsolete 归档账写回分支。"""
+    """★往期批次 相关任务②/③ 修复：补 obsolete 归档账写回分支。"""
     if name == "pending":
         _path = pm.get_pending_file()
     elif name == "obsolete":
@@ -199,7 +199,7 @@ def _cmd_keep(args, pm, pending, history, obsolete, _op):
 
 
 def _cmd_unlock_ratchet(args, pm, pending, history, obsolete, _op):
-    # ★第116批 T-116c④：解锁硬门
+    # ★往期批次 相关任务④：解锁硬门
     if getattr(args, "require_queue_clean", False):
         _dirty = _queue_clean(pending)
         if _dirty:
@@ -237,7 +237,7 @@ def _c6_violations(rows):
 
 
 def _cmd_fix_c6(args, pm, pending, history, obsolete, _op):
-    """★第116批 T-116b②：C6 字段污染回填（顶层 runtime_verified 取嵌套真值）。
+    """★往期批次 相关任务②：C6 字段污染回填（顶层 runtime_verified 取嵌套真值）。
 
     默认 dry-run（只报告不写盘）；--apply 才写，且写盘须经 PULSE_FRAMEWORK=1 逃生口
     （WriteGuard fail-closed 默认只读）。
@@ -270,7 +270,7 @@ def _cmd_fix_c6(args, pm, pending, history, obsolete, _op):
 
 
 def _stale_reason(p):
-    """★T-116c①：内联 is_obsolete + 按龄判 stale（读 PatchAutoApprover 的判据为可选）。"""
+    """★相关任务①：内联 is_obsolete + 按龄判 stale（读 PatchAutoApprover 的判据为可选）。"""
     if p.get("obsolete") is True or str(p.get("status")) == "obsolete":
         return "已标记 obsolete"
     _reason = str(p.get("obsolete_reason") or p.get("reason") or "")
@@ -291,7 +291,7 @@ def _stale_reason(p):
 
 
 def _cmd_stale_audit(args, pm, pending, history, obsolete, _op):
-    """★T-116c①：stale-audit 只读子命令 —— 出三本账"建议作废单"。"""
+    """★相关任务①：stale-audit 只读子命令 —— 出三本账"建议作废单"。"""
     _total = 0
     for _name, _lst in (("pending", pending), ("history", history), ("obsolete", obsolete)):
         print(f"\n=== {_name} 账本（{len(_lst)} 条）建议作废单 ===")
@@ -312,7 +312,7 @@ def _cmd_stale_audit(args, pm, pending, history, obsolete, _op):
 
 
 def _cmd_reject(args, pm, pending, history, obsolete, _op):
-    """★T-116c③：reject 入口（白名单含 rejected 态）。"""
+    """★相关任务③：reject 入口（白名单含 rejected 态）。"""
     _name, _lst, _i, _p = _find(pending, history, args.patch_id, args.source,
                                 obsolete=obsolete)
     if _p is None:
@@ -335,7 +335,7 @@ def _cmd_reject(args, pm, pending, history, obsolete, _op):
 def _queue_clean(pending):
     """队列清洁判据：顶层 status 为 pending / needs_reverify 的悬挂项。
 
-    ★第116批 T-116c④ 注释校正：'undecidable' 并非顶层 status，
+    ★往期批次 相关任务④ 注释校正：'undecidable' 并非顶层 status，
     而是 runtime_verify_result 内的嵌套字段（SafeEvolutionExecutor
     :2305/:2318/:2340），此前 docstring 将其写成 status 属误导。
     本函数据此只按顶层 status 判定；嵌套 undecidable 是否纳入悬挂 -> 待裁决。
@@ -373,7 +373,7 @@ def main(argv=None):
 
     _sp = _sub.add_parser("keep")
     _sp.add_argument("patch_id")
-    # ★第116批 T-116c②：兼补 T-113a 追溯票通道（obsolete 账本也可记录保留裁决）
+    # ★往期批次 相关任务②：兼补 相关任务 追溯票通道（obsolete 账本也可记录保留裁决）
     _sp.add_argument("--source", default=None,
                      choices=["pending", "history", "obsolete"])
 
@@ -390,7 +390,7 @@ def main(argv=None):
                      help="默认 dry-run；加此开关才回填写盘")
 
     _sp = _sub.add_parser("unlock-ratchet")
-    # ★第116批 T-116c④：解锁硬门 —— 解锁前检查队列清洁
+    # ★往期批次 相关任务④：解锁硬门 —— 解锁前检查队列清洁
     _sp.add_argument("--require-queue-clean", action="store_true",
                      help="解锁前校验队列清洁，存在悬挂项则拒绝解锁")
 

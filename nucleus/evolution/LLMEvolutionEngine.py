@@ -3,7 +3,7 @@
 LLMEvolutionEngine.py —— LLM进化引擎
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 基于大模型的代码进化与优化
@@ -40,7 +40,7 @@ class LLMEvolutionEngine(SilentLogMixin):
                   temperature: float = 0.2) -> str | None:
         """统一 LLM 调用（复用 SSRF 防护网络层）。
         
-        优化（2026-09-10 星轨）：
+        优化（2026-09-10 内部协作者）：
         1. 超时重试机制：偶发网络超时自动重试1次，避免进化失败
         2. 用框架日志系统代替print，确保写入日志文件
         """
@@ -97,7 +97,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             if not _ok or not isinstance(_data, dict):
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
-            # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
+            # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存
             self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
             _choices = _data.get("choices", [])
             if _choices:

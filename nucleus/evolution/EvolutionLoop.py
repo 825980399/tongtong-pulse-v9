@@ -3,7 +3,7 @@
 EvolutionLoop.py —— 进化循环
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 自主进化主循环与状态管理
@@ -168,7 +168,7 @@ class EvolutionLoop(SilentLogMixin):
                 #   下沉后跳过该检测器，耗时与噪声同时消除。
                 #   兼容：旧版 self_inspector 无这两个参数 → TypeError 时降级原路径。
                 try:
-                    # ★第138批 T-138a：进化循环同时跳过两个**重扫描**检测器
+                    # ★往期批次 相关任务：进化循环同时跳过两个**重扫描**检测器
                     #   （dead_code 历史 9 分钟级；cc_growth 全树 radon 实测 ~5.9s）——
                     #   二者均为全库级静态扫描，与进化修复队列低相关，不应挤占循环预算。
                     _inspector_issues = _inspector.detect_code_issues(

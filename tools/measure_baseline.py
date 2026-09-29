@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""tools/measure_baseline.py —— ★第146批 T146-4：**唯一**规模度量真值源。
+"""tools/measure_baseline.py —— ★往期批次 T146-4：**唯一**规模度量真值源。
 
 背景：历史各份报告里的「Python 文件数 / 代码行数 / 器官数 / 测试用例数 /
 data 体积」由不同临时命令产出，口径互不统一（有的含 tmp/ 备份，有的不含，

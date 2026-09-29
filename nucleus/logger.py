@@ -3,7 +3,7 @@
 logger.py —— 日志器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 基础日志功能封装
@@ -148,7 +148,7 @@ class PulseFormatter(logging.Formatter):
 
 _LOG_STATE_FILE = ".log_state.json"
 _LOG_INTEGRITY_FILE = "log_integrity_events.log"
-# ★D017 / T-100c：日志轮转自感知标记。轮转发生时写入（含唯一时间戳），
+# ★D017 / 相关任务：日志轮转自感知标记。轮转发生时写入（含唯一时间戳），
 #   check_log_integrity 据此把「size 下降」复判为框架内轮转而非外部截断。
 #   该文件为 .json，不被 cleanup_old_logs 当作日志清理，也不影响 .1/.2 编号备份（保留既有留存测试）。
 _LOG_ROLLOVER_MARKER = ".rollover_marker.json"
@@ -265,18 +265,18 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
 
 
 def _log_max_bytes() -> int:
-    """★第146批 T146-8：单日志文件轮转上限（bytes）；不可读/未配置 → 0（表示未知）。"""
+    """★往期批次 T146-8：单日志文件轮转上限（bytes）；不可读/未配置 → 0（表示未知）。"""
     try:
         _v = int(getattr(config, "LOG_MAX_BYTES", 0) or 0)
     except Exception:
-        # ★T-101e：门禁友好——非静默上报（配置读取失败按「未知」处理，不臆断）
+        # ★相关任务：门禁友好——非静默上报（配置读取失败按「未知」处理，不臆断）
         logging.getLogger(__name__).debug("LOG_MAX_BYTES 读取失败，按未知处理")
         return 0
     return _v if _v > 0 else 0
 
 
 def _reset_log_state(log_dir: str, log_file: str) -> None:
-    """★第146批 T146-8：把状态文件的指纹复位为**轮转后**的当前值。
+    """★往期批次 T146-8：把状态文件的指纹复位为**轮转后**的当前值。
 
     根因：轮转前 size 远大于轮转后 size，若状态文件仍记着旧的大 size，
     下一次 check_log_integrity 必然算成「size 下降 → 外部截断」。只有在同一次检查里
@@ -297,7 +297,7 @@ def _reset_log_state(log_dir: str, log_file: str) -> None:
 
 def _write_rollover_marker(log_dir: str, archive_path: str, prev_size,
                            log_file: str | None = None) -> None:
-    """★D017 / T-100c：轮转成功的唯一标记。
+    """★D017 / 相关任务：轮转成功的唯一标记。
 
     写入 ``{log_dir}/.rollover_marker.json``（含唯一时间戳），供 check_log_integrity
     把后续的「size 下降」复判为框架内轮转，而非误判外部截断。同时直接留痕一条
@@ -316,12 +316,12 @@ def _write_rollover_marker(log_dir: str, archive_path: str, prev_size,
             "file": archive_path,
             "rollover_archive": archive_path,
         })
-        # ★第146批 T146-8（判据 A）：写 marker 的同时把状态文件复位到轮转后的指纹，
+        # ★往期批次 T146-8（判据 A）：写 marker 的同时把状态文件复位到轮转后的指纹，
         #   使下一次 check_log_integrity 直接判 ok，不再依赖 marker 时间窗兜底。
         if log_file:
             _reset_log_state(log_dir, log_file)
     except OSError:
-        # ★T-101e：门禁友好——非静默上报（轮转标记写入失败属非致命，但须留痕）
+        # ★相关任务：门禁友好——非静默上报（轮转标记写入失败属非致命，但须留痕）
         logging.getLogger(__name__).debug("rollover 标记写入失败(非致命): %s", log_dir)
         pass
 
@@ -336,7 +336,7 @@ def _read_rollover_marker(log_dir: str) -> dict | None:
             _d = json.loads(_f.read())
         return _d if isinstance(_d, dict) else None
     except (OSError, ValueError):
-        # ★T-101e：门禁友好——非静默上报（标记缺失/损坏即视为无轮转，但须留痕）
+        # ★相关任务：门禁友好——非静默上报（标记缺失/损坏即视为无轮转，但须留痕）
         logging.getLogger(__name__).debug("rollover 标记读取失败(视为缺失): %s", log_dir)
         return None
 
@@ -383,14 +383,14 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
         else:
             _res["status"] = "ok"
 
-    # ★D017 / T-100c：轮转自感知 —— 「size 下降(truncated)」或「inode 变化(replaced)」
+    # ★D017 / 相关任务：轮转自感知 —— 「size 下降(truncated)」或「inode 变化(replaced)」
     #   若与近期框架内轮转吻合，复判为 rollover。轮转既可能截断当前文件（copy-truncate 路径，
     #   size 下降），也可能 rename 后新建文件（rename 路径，inode 变化），两者都要覆盖，
     #   避免把自己的轮转误判成「外部截断/替换」（框架内从无截断逻辑）。
     if _res["status"] in ("truncated", "replaced"):
         _mk = _read_rollover_marker(_dir)
         if _mk is None and isinstance(_prev, dict) and _cur is not None:
-            # ★第146批 T146-8（判据 B）：无 marker 也不必急着喊外部截断——
+            # ★往期批次 T146-8（判据 B）：无 marker 也不必急着喊外部截断——
             #   若「上次 size 已达轮转上限」且「<log>.1 归档确实存在」，
             #   这只可能是我们自己的 SafeRotatingFileHandler 转出去的。
             _maxb = _log_max_bytes()
@@ -407,7 +407,7 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
             try:
                 _win = float(getattr(config, "LOG_ROLLOVER_AWARE_WINDOW_SEC", _ROLLOVER_AWARE_WINDOW_SEC))
             except Exception:
-                # ★T-101e：门禁友好——非静默上报（窗口配置读取失败回退默认，但须留痕）
+                # ★相关任务：门禁友好——非静默上报（窗口配置读取失败回退默认，但须留痕）
                 logging.getLogger(__name__).debug(
                     "轮转感知窗口配置读取失败，回退默认: %s", _ROLLOVER_AWARE_WINDOW_SEC)
                 _win = _ROLLOVER_AWARE_WINDOW_SEC
@@ -420,7 +420,7 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
                 try:
                     os.remove(os.path.join(_dir, _LOG_ROLLOVER_MARKER))
                 except OSError:
-                    # ★T-101e：门禁友好——非静默上报（标记消费失败属非致命，但须留痕）
+                    # ★相关任务：门禁友好——非静默上报（标记消费失败属非致命，但须留痕）
                     logging.getLogger(__name__).debug("rollover 标记消费(删除)失败(非致命)")
 
     if _res["status"] in ("truncated", "replaced", "missing", "rollover"):
@@ -460,7 +460,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # ★主线第59批 T1（方案B）：先尝试标准库 rename 式轮转，
         #   失败（Windows 文件锁 → WinError 32）后改用「复制+截断」兜底，
         #   从根本上避免重命名被占用文件。
-        # ★D017 / T-100c：轮转成功后写唯一标记，供 check_log_integrity 自感知（避免误判外部截断）。
+        # ★D017 / 相关任务：轮转成功后写唯一标记，供 check_log_integrity 自感知（避免误判外部截断）。
         _base = self.baseFilename
         _dir = os.path.dirname(_base) or "."
         _prev_fp = _fingerprint(_base)
@@ -646,7 +646,7 @@ def _init_root_logger():
                     ", ".join(os.path.basename(_x) for _x in _removed[:5])))
             _ir = check_log_integrity()
             if _ir.get("status") == "rollover":
-                # ★D017 / T-100c：框架内轮转自感知，正常行为，不告警
+                # ★D017 / 相关任务：框架内轮转自感知，正常行为，不告警
                 root.info(
                     "[日志完整性] 日志轮转自感知：识别为框架内轮转（非外部截断），"
                     "已留痕 %s" % _LOG_INTEGRITY_FILE)
@@ -703,15 +703,15 @@ def get_module_logger(module_name: str) -> logging.Logger:
     return logging.getLogger(f"pulse.module.{module_name}")
 
 
-# ========== ★第117批 T-117d② / R4-B22：冒烟隔离规矩 ==========
+# ========== ★往期批次 相关任务② / R4-B22：冒烟隔离规矩 ==========
 SMOKE_TAG = "[SMOKE]"
 SMOKE_LOG_FILE = "smoke.log"
 
 
 def get_smoke_logger(name: str = "smoke") -> logging.Logger:
-    """★第117批 T-117d②（R4-B22）：冒烟 / 合成指纹用例专用日志器。
+    """★往期批次 相关任务②（R4-B22）：冒烟 / 合成指纹用例专用日志器。
 
-    背景（烛微 117 §3 实测）：停机窗 pulse.log 出现一行
+    背景（内部协作者 117 §3 实测）：停机窗 pulse.log 出现一行
         ``[指纹咨询硬闸] 指纹=a.py|m|silent_exception ...``
     ——那是**合成指纹**（file="a.py"、method="m"）驱动的冒烟产物，却被生产判据
     当成真实命中（对「INFO>=1」类判据构成**假阳性风险**，本次差点误导结论）。

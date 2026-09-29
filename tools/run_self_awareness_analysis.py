@@ -3,7 +3,7 @@
 run_self_awareness_analysis.py —— 手动触发自我认知全量分析（PHASE18 阶段一）
 
 版本: v10 PulseNet · 工具
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 独立进程手动触发 SelfAwarenessEngine 的全量静态分析，产出**首份真实报告**

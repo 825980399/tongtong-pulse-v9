@@ -3,7 +3,7 @@
 PulseBloodVessel —— 血管器官 · 场数据循环与连通性监测
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 订阅心跳脉冲对信息场执行连通性巡检，识别沉默器官与订阅配对缺口并发射告警脉冲，汇总各器官脉冲收发量生成循环健康报告。
@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import config
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import SILENCE_EXEMPT_ORGANS, HeartEvent, LogLevel, VascularEvent
-from nucleus.organ_identity import resolve_organ_key  # ★T-112d：器官名归一化
+from nucleus.organ_identity import resolve_organ_key  # ★相关任务：器官名归一化
 
 
 class PulseBloodVessel(BasePulseOrgan):
@@ -74,7 +74,7 @@ class PulseBloodVessel(BasePulseOrgan):
 
         # ★F4收尾：低频器官豁免列表统一引用 const.SILENCE_EXEMPT_ORGANS，
         #   避免血管（检测侧）与系统管理器（处置侧）各自维护导致不一致。
-        # ★T-112d：豁免表统一归一化为规范 key 集合（命名空间对齐）
+        # ★相关任务：豁免表统一归一化为规范 key 集合（命名空间对齐）
         self._exempt_organs = {resolve_organ_key(o) for o in SILENCE_EXEMPT_ORGANS}
 
         # ★P0修复：初始化线程锁和追踪字典（之前缺失导致AttributeError）
@@ -88,7 +88,7 @@ class PulseBloodVessel(BasePulseOrgan):
         self._last_escalation_alert = 0.0
         self._last_degrade_alert = 0.0
         self._last_restart_alert = 0.0
-        # ★第106批 T-106a（P2）：DEBUG 巡检行节流状态。
+        # ★往期批次 相关任务（P2）：DEBUG 巡检行节流状态。
         #   记录上一轮巡检发现的沉默器官名集合，若本轮集合与之完全相同则跳过 DEBUG 日志，
         #   避免「同一批沉默器官」每 40 秒重复打印（任务书：原逻辑 7 小时刷屏 819 次）。
         self._last_patrol_silent_set: set = set()
@@ -189,7 +189,7 @@ class PulseBloodVessel(BasePulseOrgan):
             silent_organs = []
             for organ_name, last_active in list(self._organ_last_active.items()):
                 # ★v25.0修复：跳过豁免器官
-                # ★T-112d：比对走归一化，避免 source_organ 命名空间与裸名豁免表对不齐
+                # ★相关任务：比对走归一化，避免 source_organ 命名空间与裸名豁免表对不齐
                 if resolve_organ_key(organ_name) in self._exempt_organs:
                     continue
 

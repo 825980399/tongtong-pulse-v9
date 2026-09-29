@@ -3,7 +3,7 @@
 base_adapter.py —— 基础适配器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: LLM渠道适配器基类与接口定义
@@ -49,9 +49,9 @@ class BaseLLMAdapter:
         raise NotImplementedError
 
     def extract_usage(self, response: Any) -> dict | None:
-        """★第94批 T-94b：从响应中提取 token 用量（**可选能力**）。  # _m94_extract_usage_marker
+        """★第94批 相关任务：从响应中提取 token 用量（**可选能力**）。  # _m94_extract_usage_marker
 
-        设计约束（任务书 §T-94b.1）：
+        设计约束（任务书 §相关任务.1）：
         * **不改** `parse_response` 签名（零回归），只**新增**本方法；
         * 基类默认返回 ``None`` —— 未覆写的适配器一律「无用量」，调用方据此
           保持既有行为（``tokens`` 沿用原值，新增 ``usage`` 字段为 ``None``）。

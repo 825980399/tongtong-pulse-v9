@@ -361,7 +361,7 @@ class FAISSVectorStore:
             _npy = p + ".vectors.npy"
             if os.path.isfile(_npy):
                 try:
-                    # ★第107批 T-107a（D171）：修复 npy 句柄泄漏——np.load 返回的
+                    # ★往期批次 相关任务（Dxxx）：修复 npy 句柄泄漏——np.load 返回的
                     #   NpyFile 持有文件句柄，用 with 关闭；.copy() 避免视图悬空。
                     with np.load(_npy) as _arr:
                         for _i, _nid in enumerate(self._id_map):

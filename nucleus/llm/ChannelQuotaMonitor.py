@@ -3,7 +3,7 @@ from nucleus._silent_except import silent_exc
 """ChannelQuotaMonitor.py —— 渠道免费额度监控与自动切换
 
 版本: v10 PulseNet
-设计: 路灯、星轨
+设计: 内部协作者、内部协作者
 日期: 2026年9月12日
 
 职责: 统计各 LLM 渠道的 token 用量，按「剩余额度比例」自动降优先级或暂停渠道。
@@ -72,7 +72,7 @@ class ChannelQuotaMonitor:
         # ★P2-193：白名单渠道首次加入时间戳（用于FORCE_ENABLE_TTL_HOURS过期判断）
         # 内存中维护，重启后重新计算（合理：重启相当于重新开始白名单周期）
         self._force_enable_ts: dict[str, float] = {}
-        # ★第97批 T-97c：协作奖励渠道每日重置日期记录（name -> "YYYY-MM-DD"）
+        # ★第97批 相关任务：协作奖励渠道每日重置日期记录（name -> "YYYY-MM-DD"）
         self._daily_reset: dict[str, str] = {}
         self._load()
 
@@ -202,7 +202,7 @@ class ChannelQuotaMonitor:
         return -1
 
     # ------------------------------------------------------------------
-    # ★第97批 T-97c：额度类型（fixed / daily_reward）与每日重置
+    # ★第97批 相关任务：额度类型（fixed / daily_reward）与每日重置
     # ------------------------------------------------------------------
     def quota_type_of(self, channel_name: str) -> str:
         """渠道额度类型：'fixed'（默认，用完即止/降优先级）或 'daily_reward'
@@ -228,7 +228,7 @@ class ChannelQuotaMonitor:
 
     def _ensure_daily_reset(self, channel_name: str,
                             now: "datetime.datetime | None" = None) -> None:
-        """★第97批 T-97c：协作奖励（daily_reward）渠道，local QUOTA_DAILY_RESET_HOUR
+        """★第97批 相关任务：协作奖励（daily_reward）渠道，local QUOTA_DAILY_RESET_HOUR
 
         点后每日自动清零用量，避免被误判耗尽而降优先级/暂停。
         幂等：按「今日日期」去重，同一天只重置一次。固定额度（fixed）渠道不重置。
@@ -254,7 +254,7 @@ class ChannelQuotaMonitor:
             silent_exc(e, "nucleus/llm/ChannelQuotaMonitor.py:250", level="warning")
 
     def tick_daily_reset(self) -> int:
-        """★第97批 T-97c：运维/调度主动触发——对所有 active 渠道执行每日重置检查。
+        """★第97批 相关任务：运维/调度主动触发——对所有 active 渠道执行每日重置检查。
 
         返回本次实际重置的渠道数（供日志/诊断）。
         """
@@ -338,7 +338,7 @@ class ChannelQuotaMonitor:
 
     def is_exhausted(self, channel_name: str) -> bool:
         """该渠道是否因额度不足被暂停（且未被 `FORCE_ENABLE_CHANNELS` 放行）。"""
-        # ★第97批 T-97c：协作奖励（daily_reward）渠道每日补充，永不因额度暂停
+        # ★第97批 相关任务：协作奖励（daily_reward）渠道每日补充，永不因额度暂停
         if self.quota_type_of(str(channel_name)) == "daily_reward":
             return False
         if str(channel_name) in self._force_enabled():
@@ -379,7 +379,7 @@ class ChannelQuotaMonitor:
                 if _n in _force:
                     _out.append(dict(_ch))
                     continue
-                # ★第97批 T-97c：协作奖励（daily_reward）每日补充，不降优先级/不暂停；
+                # ★第97批 相关任务：协作奖励（daily_reward）每日补充，不降优先级/不暂停；
                 #   仍触发每日重置清空用量，保持额度账本新鲜。
                 if self.quota_type_of(_n) == "daily_reward":
                     self._ensure_daily_reset(_n)
@@ -531,7 +531,7 @@ class ChannelQuotaMonitor:
             if isinstance(_ch, dict):
                 self._usage = {str(k): dict(v) for k, v in _ch.items()
                                if isinstance(v, dict)}
-            # ★第97批 T-97c：加载协作奖励渠道每日重置日期
+            # ★第97批 相关任务：加载协作奖励渠道每日重置日期
             _dr = (_d or {}).get("daily_reset") or {}
             if isinstance(_dr, dict):
                 self._daily_reset = {str(k): str(v) for k, v in _dr.items()
@@ -577,7 +577,7 @@ class ChannelQuotaMonitor:
             if not force and (time.time() - self._last_save) < self.SAVE_MIN_INTERVAL:
                 return False
             _snap = {"channels": {k: dict(v) for k, v in self._usage.items()},
-                     # ★第97批 T-97c：持久化协作奖励渠道每日重置日期
+                     # ★第97批 相关任务：持久化协作奖励渠道每日重置日期
                      "daily_reset": dict(self._daily_reset),
                      "updated_at": time.time()}
             _path = self._path

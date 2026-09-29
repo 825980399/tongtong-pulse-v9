@@ -64,7 +64,7 @@ def _is_explicit_base_dir(base_dir: str) -> bool:
         return True          # 无法判定→按已注入处理（与改造前行为一致）
 
 
-# ==================== 优先级路由（★第111批 T-111c） ====================
+# ==================== 优先级路由（★往期批次 相关任务） ====================
 
 def _as_consume_result(res: Any, name: str,
                        envelope: "ReportEnvelope") -> "ConsumeResult":
@@ -80,7 +80,7 @@ def _as_consume_result(res: Any, name: str,
 
 
 class PriorityRouter:
-    """★第111批 T-111c：按报告严重度排定消费者调用顺序。
+    """★往期批次 相关任务：按报告严重度排定消费者调用顺序。
 
     设计约束（防新增死键）：
       * **只排序、不增删**被调用的消费者集合 → 完全行为守恒；
@@ -147,7 +147,7 @@ class ReportBus:
         self._subscribers: dict[str, list[Callable[[ReportEnvelope], Any]]] = {}
         self._publish_count = 0
         self._last_error: str = ""
-        # ★第111批 T-111a：消费者存在性机检
+        # ★往期批次 相关任务：消费者存在性机检
         self._last_consumed_at: dict[str, float] = {}  # 消费者名 -> 最后被 dispatch 调用时间
         self._published_types: set[str] = set()       # 总线实际产出过的报告类型
         # 陈旧阈值(秒)：订阅类型已产出但消费者超此时间未被调用 -> WARNING
@@ -158,7 +158,7 @@ class ReportBus:
         except Exception:
             self._consumer_staleness_threshold = 3600.0
         self._last_staleness_warn_at: float = 0.0
-        # ★第111批 T-111b：闭环解决率（问题解决率）best-effort 跟踪
+        # ★往期批次 相关任务：闭环解决率（问题解决率）best-effort 跟踪
         self._issues: dict[str, dict] = {}            # key=类型::异常码 -> 问题状态
         self._resolution_events: int = 0              # 状态翻转(问题->已解决)事件计数
         # 近窗(秒)：仅统计该窗口内登记的问题；默认 30 天
@@ -213,7 +213,7 @@ class ReportBus:
         """
         with self._lock:
             self._envelopes[envelope.report_id] = envelope
-            self._published_types.add(envelope.report_type)  # ★T-111a
+            self._published_types.add(envelope.report_type)  # ★相关任务
             self._publish_count += 1
 
             _consumers: list[str] = []
@@ -234,14 +234,14 @@ class ReportBus:
             self._trim()
             # ★第51批 T5（P2-357）：内存回收后同步做磁盘回收
             self._prune_disk()
-            # ★第111批 T-111b：闭环解决率跟踪（在锁内，读 self._issues）
+            # ★往期批次 相关任务：闭环解决率跟踪（在锁内，读 self._issues）
             self._track_resolution(envelope)
 
             # 灰度：开关关闭 → 退回旧顺序（零回归）
             if dispatch and not _dsp_first:
                 self._dispatch(envelope, _consumers, _errors)
 
-            self._maybe_warn_staleness()  # ★T-111a 节流式消费者陈旧 WARNING
+            self._maybe_warn_staleness()  # ★相关任务 节流式消费者陈旧 WARNING
             return {"report_id": envelope.report_id,
                     "persisted": _persisted,
                     "dispatched": bool(dispatch),
@@ -280,18 +280,18 @@ class ReportBus:
                       self._subscribers.get(envelope.report_type, [])]
         _wild_subs = [(f, True) for f in
                       self._subscribers.get("*", [])]
-        # ★第111批 T-111c：PriorityRouter 按严重度排定调用顺序（仅排序，不增删）
+        # ★往期批次 相关任务：PriorityRouter 按严重度排定调用顺序（仅排序，不增删）
         _ordered = PriorityRouter.order(envelope, _type_subs + _wild_subs)
         envelope.routing_order = [getattr(_f, "__name__", str(_f))
                                   for _f in _ordered]
         for _fn in _ordered:
             _name = getattr(_fn, "__name__", str(_fn))
             try:
-                # ★第111批 T-111a：记录消费者被 dispatch 调用的踪迹
+                # ★往期批次 相关任务：记录消费者被 dispatch 调用的踪迹
                 #   （证明"总线真的把报告送到了消费者"，是消费存在性机检基础）。
                 self._last_consumed_at[_name] = time.time()
                 _res = _fn(envelope)
-                # ★第111批 T-111c：统一收纳结构化消费结果（兼容旧 bool）
+                # ★往期批次 相关任务：统一收纳结构化消费结果（兼容旧 bool）
                 _cr = _as_consume_result(_res, _name, envelope)
                 envelope.record_consume_result(_cr)
                 if _cr.accepted:
@@ -365,7 +365,7 @@ class ReportBus:
                 _by_sev[_s] = _by_sev.get(_s, 0) + 1
             _anom = sum(len(e.anomalies) for e in _all)
             _acted = sum(len(e.actions_triggered) for e in _all)
-            # ★第111批 T-111c：消费结果与路由决策的读取点（防死键）
+            # ★往期批次 相关任务：消费结果与路由决策的读取点（防死键）
             _cr_total = 0
             _cr_accepted = 0
             _cr_action = 0
@@ -397,21 +397,21 @@ class ReportBus:
                 "dispatch_before_write": self._dispatch_before_write(),
                 "legacy_without_consumed": self._legacy_without_consumed,
                 "last_error": self._last_error,
-                # ★第111批 T-111a：消费者调用踪迹（机检读取点）
+                # ★往期批次 相关任务：消费者调用踪迹（机检读取点）
                 "consumer_last_invoked": dict(self._last_consumed_at),
                 "published_types": sorted(self._published_types),
                 "consumer_staleness_threshold": self._consumer_staleness_threshold,
-                # ★第111批 T-111b：闭环解决率（机检读取点）
+                # ★往期批次 相关任务：闭环解决率（机检读取点）
                 "resolution_rate": self._resolution_rate(),
                 "resolution_events": self._resolution_events,
-                # ★第111批 T-111c：消费结果 / 路由可见化（读取点）
+                # ★往期批次 相关任务：消费结果 / 路由可见化（读取点）
                 "consume_results_total": _cr_total,
                 "consume_results_accepted": _cr_accepted,
                 "consume_results_action_taken": _cr_action,
                 "envelopes_routed": _routed,
             }
 
-    # ---------- 消费者存在性机检（★第111批 T-111a） ----------
+    # ---------- 消费者存在性机检（★往期批次 相关任务） ----------
 
     def get_consumer_health(self) -> dict[str, Any]:
         """每消费者消费健康：最后被调用时间、是否陈旧。
@@ -467,14 +467,14 @@ class ReportBus:
         return _stale
 
     def _maybe_warn_staleness(self) -> None:
-        """★第111批 T-111a：节流式陈旧 WARNING（每阈值窗口最多一次）。"""
+        """★往期批次 相关任务：节流式陈旧 WARNING（每阈值窗口最多一次）。"""
         _now = time.time()
         if _now - self._last_staleness_warn_at < self._consumer_staleness_threshold:
             return
         self._last_staleness_warn_at = _now
         self.check_consumer_staleness()
 
-    # ---------- 闭环解决率（★第111批 T-111b） ----------
+    # ---------- 闭环解决率（★往期批次 相关任务） ----------
 
     @staticmethod
     def _is_breaching(metric_value, threshold, anomaly_type: str = "") -> bool:
@@ -496,7 +496,7 @@ class ReportBus:
         return _mv > _th
 
     def _track_resolution(self, envelope: ReportEnvelope) -> None:
-        """★第111批 T-111b：跟踪异常「问题→已解决」状态翻转。
+        """★往期批次 相关任务：跟踪异常「问题→已解决」状态翻转。
 
         每个异常(有 metric/threshold)登记为 open 问题；后续同类报告若不再越阈
         → 判定已解决，resolution_events +1（即一个「报告→消费→状态翻转」事件对）。

@@ -55,7 +55,7 @@ sys.path.insert(0, _PROJECT_ROOT)
 #   必须在任何可能触发写盘的 import 之前设置。
 os.environ.setdefault("PULSE_FRAMEWORK", "1")
 
-# ★主线第139批 T-139a（P1）：退出确认交互的防呆常量。
+# ★主线往期批次 相关任务（P1）：退出确认交互的防呆常量。
 #   背景：_confirm_apply_pending_on_quit 的 input() 在交互终端会无限阻塞，
 #   若 stdin 判定为 TTY 但实际无输入（伪 TTY / 管道 / 期望脚本驱动），
 #   进程将永久卡在退出路径，无法自愈也无法退出。
@@ -518,7 +518,7 @@ class PulseFramework:
             self._log(LogLevel.DEBUG, f"运行时状态写入器启动失败（不影响主链路）: {_rse}")
             self.runtime_state_writer = None
         # ★阶段三子任务1：TimeCore时间中枢启动（受ENABLE_TIME_CORE开关保护）
-        # 路灯设计：内核单例+独立daemon定时器，每60s经InfoField广播time.tick
+        # 内部协作者设计：内核单例+独立daemon定时器，每60s经InfoField广播time.tick
         # 零风险：开关False时直接return不建线程；异常吞掉不影响主流程
         try:
             from nucleus.chronos.TimeCore import get_time_core
@@ -869,7 +869,7 @@ class PulseFramework:
                 _tier = _hw.get("tier", "high")
                 _degraded = compute_degraded_feature(FEATURE, _tier)
                 # ★PHASE14-闭环修复：原实现只在「发生降级」时打日志，tier=high
-                #   （不降级）时完全无痕——小林无法从日志确认家底到底被判成哪一档，
+                #   （不降级）时完全无痕——内部协作者无法从日志确认家底到底被判成哪一档，
                 #   闭环无从验证。改为无论是否降级都留痕（启动期仅 1 次，无 IO 压力）。
                 self._log(LogLevel.INFO,
                           f"硬件 tier 评估: tier={_tier} (评分={_hw.get('score')} "
@@ -930,7 +930,7 @@ class PulseFramework:
                           + (f" 共享内存参考{_gpu_info.get('shared_hint_mb')}MB"
                              if _gpu_info.get('shared_hint_mb') else ""))
                 # ★PHASE14：GPU 能力自检说明。
-                #   小林实测困惑：「日志说有 GPU，任务管理器却纹丝不动」。
+                #   内部协作者实测困惑：「日志说有 GPU，任务管理器却纹丝不动」。
                 #   真相是框架当前的向量检索热点规模太小（意图匹配 4 维 × 数十条），
                 #   送进 GPU 反而被 PCIe 传输 + kernel launch 固定开销拖垮（预计慢 20~100 倍）。
                 #   所以「不用 GPU」是正确行为，不该静默——这里显式说明触发条件，
@@ -953,7 +953,7 @@ class PulseFramework:
         except Exception as _e:
             self._log(LogLevel.DEBUG, f"GPU计算加速探测跳过: {_e}")
 
-        # ★PHASE14：Cython 扩展加载状态自检（小林已点头）。
+        # ★PHASE14：Cython 扩展加载状态自检（内部协作者已点头）。
         #   此前各模块自己 try/except 静默回退，性能差 3 倍却无提示——
         #   连我都曾据沙箱日志误判为"未编译"。现在启动即明确告知，
         #   并区分「开关关闭」与「真的没编译」两种完全不同的情况。
@@ -1310,7 +1310,7 @@ class PulseFramework:
                                           node_pool=self.node_pool,
                                           frequency_codec=self.frequency_codec)
         self.lung = self._create_organ(PulseLung, "肺")
-        # ★第97批 T-97a：注入运行中的肺实例，使进化通道与对话链路共享同一
+        # ★第97批 相关任务：注入运行中的肺实例，使进化通道与对话链路共享同一
         #   ChannelHealthTracker 账本（熔断/健康度双写同源、结果回写同一账本）。
         #   灰度沿用 ENABLE_EVOLUTION_USE_CHANNEL_POOL：关闭时不注入（走本地等价账本）。
         if getattr(config, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False):
@@ -2200,7 +2200,7 @@ class PulseFramework:
             # ★PHASE12-P1-6（2026-09-06）：拆分两个语义不同的计数器。
             #   原只有一个 _evolution_loop_count，在循环体开头无条件 +1，
             #   于是「空转一轮」「异常一轮」「真正修了一轮」在日志里长得一模一样，
-            #   无法回答「自主进化到底尝试过几次」——这正是星轨 N1
+            #   无法回答「自主进化到底尝试过几次」——这正是内部协作者 N1
             #   （「修复完成 0/N，通过率 0%」无法判断是没干活还是干了没成）的延痛。
             #   现拆为两个口径，互不干扰：
             #     _evolution_loop_count   = 循环轮次（进入即计，含空转与异常）
@@ -2247,7 +2247,7 @@ class PulseFramework:
                         #   EVOLUTION_CONFIG，却漏了此处这个**真正的源头**——
                         #   候选池大小仍写死 20，于是「发现 17 个」的真实来源是
                         #   discover_all_issues 三源限流后的 unique[:20]，
-                        #   并不是什么硬编码 17。这是路灯上一批的疏漏，特此补上。
+                        #   并不是什么硬编码 17。这是内部协作者上一批的疏漏，特此补上。
                         #   同时放大候选池：P1-3 的僵尸冷却会先剔除不可修问题，
                         #   池子太小会导致过滤后填不满 12 步名额。
                         try:
@@ -2321,7 +2321,7 @@ class PulseFramework:
                                 # ★T3修复：原日志只显示 repaired/pass_rate，
                                 #   而当问题缺少 organ/method 导致代码片段取不到时，
                                 #   修复会被静默跳过，这里只能看到「0/N, 0%」，
-                                #   无法判断是「修复失败」还是「压根没尝试」（星轨 N1 的痛点）。
+                                #   无法判断是「修复失败」还是「压根没尝试」（内部协作者 N1 的痛点）。
                                 #   补上处理数与跳过数，让「没干活」和「干了没成」可区分。
                                 _repaired = _result.get('repaired', 0)
                                 _skipped = _result.get('skipped_no_snippet', 0)
@@ -2347,7 +2347,7 @@ class PulseFramework:
                                 if not _repaired and not _skipped and _skip_reasons:
                                     _log_line += "（均为已知不可自动修复项，非修复失败）"
                                 # ★PHASE12 可观测性：把第 2 批三项修复的效果打进主日志，
-                                #   否则改了也看不见——小林读日志时无从判断门禁有没有生效。
+                                #   否则改了也看不见——内部协作者读日志时无从判断门禁有没有生效。
                                 _llm_gated = _result.get('llm_skipped_pending', 0)
                                 if _llm_gated:
                                     _log_line += (f"；LLM门禁拦截{_llm_gated}次"
@@ -3083,7 +3083,7 @@ class PulseFramework:
         except Exception as _se:
             silent_exc(_se, "main.py:2997")
         
-        # 5. ★第114批 T-114b③a：启动即锁死WARNING
+        # 5. ★往期批次 相关任务③a：启动即锁死WARNING
         #    棘轮锁死状态此前仅在 apply_all_pending 运行时落日志，重启后若未触发
         #    apply 则该状态"失忆"。此处启动即重报，确保重启后立即可见。
         try:
@@ -3383,7 +3383,7 @@ def _apply_pending_patches_and_restart(framework) -> bool:
 
 
 def _prompt_with_timeout(prompt: str, timeout: float):
-    """★主线第139批 T-139a：带超时的 input 包装。
+    """★主线往期批次 相关任务：带超时的 input 包装。
 
     返回二元组 (answered, value)：
       - answered=True  + value=str ：用户在时限内提交了输入；
@@ -3432,7 +3432,7 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
     返回 False 表示跳过应用，直接退出。
     """
     try:
-        # ★主线第139批 T-139a：显式关闭确认（CI/脚本/容器驱动退出）：
+        # ★主线往期批次 相关任务：显式关闭确认（CI/脚本/容器驱动退出）：
         #   PULSE_QUIT_CONFIRM=0 时不做任何交互，直接按「应用并重启」继续。
         _confirm_env = os.environ.get(PULSE_QUIT_CONFIRM_ENV, "").strip().lower()
         if _confirm_env in ("0", "false", "no", "off"):
@@ -3447,7 +3447,7 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
         if not _approved:
             return False
         _n = len(_approved)
-        # ★主线第139批 T-139a（P1）：超时兜底。
+        # ★主线往期批次 相关任务（P1）：超时兜底。
         #   原实现直接调用 input()，在 TTY 阻塞无输入时会把退出路径挂死。
         #   这里改用「工作线程 + 事件超时」：超时后按默认 Y 继续，主线程绝不无限等待。
         _timeout = PULSE_QUIT_CONFIRM_DEFAULT_TIMEOUT
@@ -3458,7 +3458,7 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
                 if _parsed > 0:
                     _timeout = _parsed
         except (TypeError, ValueError) as _te:
-            # ★门禁可见化：非法超时配置回落默认值（第124批 silent_exc 惯例）
+            # ★门禁可见化：非法超时配置回落默认值（往期批次 silent_exc 惯例）
             silent_exc(_te, "main.py:PULSE_QUIT_TIMEOUT_SEC", level="warning")
             _timeout = PULSE_QUIT_CONFIRM_DEFAULT_TIMEOUT
         _answered, _ans = _prompt_with_timeout(
@@ -3481,7 +3481,7 @@ def main():
     主入口函数（v9.5）。
     """
     framework = None
-    # ★主线第104批 T-104c（D169）：启动即把 pulse.* 的 ERROR/CRITICAL 桥接进 error_snapshots，
+    # ★主线往期批次 相关任务（Dxxx）：启动即把 pulse.* 的 ERROR/CRITICAL 桥接进 error_snapshots，
     #   故障面板/HTTP 从此可见（"9类故障全盲"治理）；下次重启生效。
     try:
         from nucleus.runtime_metrics import install_error_capture

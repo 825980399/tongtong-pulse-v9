@@ -3,7 +3,7 @@
 PulseNodePool.py —— 脉冲节点池管理器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 管理所有PulseNode的生命周期，冷热分层内存池（热池/温池/冷池），节点增删改查，对接ResonanceEngine维护频率索引+空间索引，L1节点定期淘汰
@@ -25,7 +25,7 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.pa_compat import table_from_rows
 
-from nucleus.data.DataAccessLayer import safe_write_json  # ★T-125a：原子写复用（原子写）
+from nucleus.data.DataAccessLayer import safe_write_json  # ★相关任务：原子写复用（原子写）
 from nucleus._silent_except import silent_exc
 
 
@@ -34,7 +34,7 @@ _module_logger = get_module_logger("PulseNodePool")
 try:
     from config import PARQUET_COMPRESSION, PARQUET_BATCH_SIZE
 except Exception:
-    PARQUET_COMPRESSION = "snappy"  # ★第109批 T-109a：config 键缺失时回落
+    PARQUET_COMPRESSION = "snappy"  # ★往期批次 相关任务：config 键缺失时回落
     PARQUET_BATCH_SIZE = 5000
 
 
@@ -565,7 +565,7 @@ class PulseNodePool(SilentLogMixin):
     # add() 的幂等检查（:294）命中后直接 return，新路径永远不生效
     # → C+D 阶段的「共振引擎」节点仍停留在旧路径 /自我/架构/共振引擎，
     #   而「五维共振」因 D-1 微调了 value → node_id 变化 → 注入成功。
-    #   这一差异正是星轨观察到的「一个成功一个失败」的根因。
+    #   这一差异正是内部协作者观察到的「一个成功一个失败」的根因。
     # 处置原则：**路径迁移而非删除**（宪法红线：不删知识节点）。
     # 本组方法把脏活全部下沉到节点池，调用方（main._inject_seed_memories）只加调用。
     def find_by_value(self, value: str, level: str | None = None,
@@ -619,7 +619,7 @@ class PulseNodePool(SilentLogMixin):
     def update_node_path(self, node_id: str, new_space_path: str) -> bool:
         """迁移单个节点的 space_path（**不删节点**），并重建路径索引与共振索引。
 
-        重建范围（星轨开工批准要求）：
+        重建范围（内部协作者开工批准要求）：
             - 池内路径前缀索引 _path_index（旧前缀摘除 → 新前缀加入）
             - 层级索引 _level_index（经 _update_index_on_remove/add 同步）
             - 共振引擎 _space_index / _freq_index（旧路径条目移除 → 按新路径重建）
@@ -796,7 +796,7 @@ class PulseNodePool(SilentLogMixin):
                     
                     self._dual_write_neo4j_node(node, "remove")
 
-                    # ★第102批 T-102b：删节点级联移除向量（防孤儿向量 D161）
+                    # ★往期批次 相关任务：删节点级联移除向量（防孤儿向量 Dxxx）
                     #   孤儿向量根因：VectorStore.remove 生产零调用点，
                     #   节点被淘汰/删除后其向量永久残留在 vectors.npz。
                     try:
@@ -1731,7 +1731,7 @@ class PulseNodePool(SilentLogMixin):
                 if _is_l3 or _is_instinct:
                     _active += 1
                     if _is_l3:
-                        # ★T-123d（D040 C2·断4门修）：降级判定挪进扫池段（纯结构接线）。
+                        # ★相关任务（D040 C2·断4门修）：降级判定挪进扫池段（纯结构接线）。
                         #   conflict_count 现网恒 0（C2 不动写侧）→ should_downgrade_l3 永 False，
                         #   本批零降级、零行为变化；保险丝 N=1 与 l3_downgraded 键同步预埋。
                         try:
@@ -1740,9 +1740,9 @@ class PulseNodePool(SilentLogMixin):
                                     "node_id": getattr(_node, "node_id", "?"),
                                     "value": str(getattr(_node, "value", ""))[:50],
                                     "action": "downgrade_l3",
-                                    "node": _node,  # ★T-127b：缓存节点引用，供执行段动作段四同步降 L2 使用
+                                    "node": _node,  # ★相关任务：缓存节点引用，供执行段动作段四同步降 L2 使用
                                 })
-                                # ★T-127b：_l3_fuse_record() 已从收集块挪到执行段（修 T-125a 误接位置 bug）
+                                # ★相关任务：_l3_fuse_record() 已从收集块挪到执行段（修 相关任务 误接位置 bug）
                         except Exception:
                             pass
                     continue
@@ -1794,9 +1794,9 @@ class PulseNodePool(SilentLogMixin):
                 _module_logger.warning(f"记忆验证·节点遍历异常(已跳过该节点): {e}", exc_info=True)
                 continue
 
-        # ========== ★T-127b（D040 W7-B·断4门修·动作段）：执行 L3→L2 降级 ==========
+        # ========== ★相关任务（D040 W7-B·断4门修·动作段）：执行 L3→L2 降级 ==========
         # 收集块（上方）仅做"判定 + 候选登记"；真正的降级动作（四同步 + 保险丝记录）
-        # 在此执行，修 T-125a 把 _l3_fuse_record 误接在收集块的位置 bug。
+        # 在此执行，修 相关任务 把 _l3_fuse_record 误接在收集块的位置 bug。
         _l3_downgraded = 0
         with self._lock:
             for _cand in _downgrade_cands:
@@ -1828,7 +1828,7 @@ class PulseNodePool(SilentLogMixin):
                         _node._update_checksum()
                     self._update_index_on_add(_node)      # 用新 level 入索引
                     _l3_downgraded += 1
-                    # ★T-127b：保险丝记录（从收集块挪到执行段，修位置 bug）
+                    # ★相关任务：保险丝记录（从收集块挪到执行段，修位置 bug）
                     self._l3_fuse_record()
                     # ④ 返回键 + 日志：[L3降级] INFO 行供 T+6h 判据直接命中
                     _module_logger.info(
@@ -1866,7 +1866,7 @@ class PulseNodePool(SilentLogMixin):
             "verified_at": _now,
         }
 
-    # ========== ★T-123d（D040 C2）：L3 降级保险丝 N=1（每日最多 1 个 L3 降级，跨重启持久化） ==========
+    # ========== ★相关任务（D040 C2）：L3 降级保险丝 N=1（每日最多 1 个 L3 降级，跨重启持久化） ==========
     _L3_FUSE_DAILY_MAX = 1
 
     def _l3_fuse_state(self) -> dict:
@@ -1874,7 +1874,7 @@ class PulseNodePool(SilentLogMixin):
         import os as _os
         import json as _json
         _here = _os.path.dirname(_os.path.abspath(__file__))
-        _root = _os.path.dirname(_os.path.dirname(_here))  # ★T-125a：修正越界（原三级dirname落到项目根父目录）
+        _root = _os.path.dirname(_os.path.dirname(_here))  # ★相关任务：修正越界（原三级dirname落到项目根父目录）
         _path = _os.path.join(_root, "data", "l3_downgrade_fuse.json")
         try:
             with open(_path, encoding="utf-8") as _f:
@@ -1896,7 +1896,7 @@ class PulseNodePool(SilentLogMixin):
         import os as _os
         import time as _t
         _here = _os.path.dirname(_os.path.abspath(__file__))
-        _root = _os.path.dirname(_os.path.dirname(_here))  # ★T-125a：修正越界（原三级dirname落到项目根父目录）
+        _root = _os.path.dirname(_os.path.dirname(_here))  # ★相关任务：修正越界（原三级dirname落到项目根父目录）
         _path = _os.path.join(_root, "data", "l3_downgrade_fuse.json")
         _today = _t.strftime("%Y-%m-%d")
         _st = self._l3_fuse_state()
@@ -1919,7 +1919,7 @@ class PulseNodePool(SilentLogMixin):
         """★登顶路线图-山 1 P1：启动记忆验证闭环定时调度。
 
         ★主线第61批 T2/P1：新增 initial_delay_hours（首跑延迟，小时）。
-        ★主线第62批 T1/P1（星轨裁决方案B）：语义修正为「推迟」——
+        ★主线第62批 T1/P1（内部协作者裁决方案B）：语义修正为「推迟」——
           >0 时首次等 interval + 该时长（默认由 config 给 5~30 分钟），之后恢复每 interval 一轮；
           =0 时严格沿用旧行为（首次即等一个完整 interval 周期）——零回归。
           历史：第61批曾实现为「提前」（首次只等该时长），与错峰避峰原意相反，本批修正。
@@ -1946,7 +1946,7 @@ class PulseNodePool(SilentLogMixin):
                 _first_delay = max(0.0, float(initial_delay_hours)) * 3600.0
             except (TypeError, ValueError):
                 _first_delay = 0.0
-            # ★主线第62批 T1/P1（星轨裁决方案B）：修正语义为「推迟」
+            # ★主线第62批 T1/P1（内部协作者裁决方案B）：修正语义为「推迟」
             #   旧行为（第61批）：_first_delay > 0 -> 首次只等 _first_delay（把首跑提前，
             #           与「错峰避峰」原意相反）
             #   新行为（本批）：_first_delay > 0 -> 首次等 interval + _first_delay（推迟首跑）
@@ -2266,7 +2266,7 @@ class PulseNodePool(SilentLogMixin):
         """★第81批 T4：返回冷存 Parquet 目录（flat，evol_level 作为数据列存储，不再按分区落子目录）。
 
         历史实现硬编码 evol_level=L1 分区，导致冷节点无论真实层级全落 L1 子目录、
-        召回后全标 L1（D164 塌缩）。本批改为 flat 目录 + evol_level 数据列，
+        召回后全标 L1（Dxxx 塌缩）。本批改为 flat 目录 + evol_level 数据列，
         召回/compaction/count 全部读本目录，层级由行内 evol_level 保真。
         """
         return self._cold_dir
@@ -2323,7 +2323,7 @@ class PulseNodePool(SilentLogMixin):
                     else:
                         # ★9-问题3修复（2026-09-05）：原「未触发」打 DEBUG，
                         #   生产环境（INFO 级）看不到「检查发生了但文件数没到阈值」，
-                        #   星轨 7 小时日志因此无法判断 compaction 是「坏了」还是
+                        #   内部协作者 7 小时日志因此无法判断 compaction 是「坏了」还是
                         #   「没到触发条件」。改为 INFO，让检查活动可观察。
                         #   60 秒节流已由外层保证，此处不会刷屏。
                         _module_logger.info(
@@ -2461,7 +2461,7 @@ class PulseNodePool(SilentLogMixin):
         """★第81批 T4：节点 -> 冷存 parquet 行（真实 evol_level + 7 新字段）。
 
         根因修复：原实现硬编码 evol_level="L1"，导致冷节点无论真实层级全落 L1 分区、
-        召回后全标 L1（D164 新发现塌缩）。此处用节点真实 evol_level；并补 7 个数据字段
+        召回后全标 L1（Dxxx 新发现塌缩）。此处用节点真实 evol_level；并补 7 个数据字段
         （source_url/evidence_chain/source_time/acquired_time/source_timestamp/
         quality_flag/quality_reason），保证「驱逐→召回」往返不丢（A6）。
         灰度开关 COLD_STORAGE_SCHEMA_M81_COMPLETE 关闭时回退旧行为
@@ -2575,7 +2575,7 @@ class PulseNodePool(SilentLogMixin):
             _dir = self._cold_dir
             os.makedirs(_dir, exist_ok=True)
             _schema = self._cold_row_schema()
-            # ★第109批 T-109a：分批写入（PARQUET_BATCH_SIZE 可配，默认 5000 与旧行为一致）
+            # ★往期批次 相关任务：分批写入（PARQUET_BATCH_SIZE 可配，默认 5000 与旧行为一致）
             _batch_size = max(1, int(PARQUET_BATCH_SIZE or 5000))
             for _bi in range(0, len(_rows), _batch_size):
                 _batch = _rows[_bi:_bi + _batch_size]
@@ -2625,7 +2625,7 @@ class PulseNodePool(SilentLogMixin):
     def _read_cold_all_rows(self) -> list:
         """★第81批 T4：读全部冷存 parquet 文件，返回 [(row_dict, file_path, rg_index, row_offset), ...]。
 
-        ★层级保真（D164 根因）：历史 hive 分区文件的 evol_level **只存在于目录名**
+        ★层级保真（Dxxx 根因）：历史 hive 分区文件的 evol_level **只存在于目录名**
         （evol_level=LX/），文件内没有该列。此处按「文件所在目录名」补回，
         避免召回时 evol_level 缺失而塌缩为 L1。新 flat 文件内自带 evol_level 数据列，不会被覆盖。
         """
@@ -2781,7 +2781,7 @@ class PulseNodePool(SilentLogMixin):
         """★第81批 T4：单点召回走侧车索引（node_id→(file,rg,offset)），read_row_group 直读；
         索引缺失/失效/损坏时自动回退批量读并重建索引（降级不报错）。
 
-        D164 根因修复：原实现 `pq.read_table(_dir, filters=[("node_id","=",id)])` 每次都打开
+        Dxxx 根因修复：原实现 `pq.read_table(_dir, filters=[("node_id","=",id)])` 每次都打开
         整个冷存目录做全扫过滤（O(N²)），且硬编码 evol_level="L1" 导致召回后层级塌缩。
         """
         if not self._cold_storage_enabled:
@@ -3305,7 +3305,7 @@ class PulseNodePool(SilentLogMixin):
 
                 _tables.append(_t)
 
-        # ★第81批 T4-⑥：compaction 跳过文件可见性（D163 一半）。
+        # ★第81批 T4-⑥：compaction 跳过文件可见性（Dxxx 一半）。
         #   历史行为：跳过文件仅 WARNING(前3条)/DEBUG(其余)——09-16 曾静默跳过 1621 个文件，
         #   合并删旧后等于静默丢节点且无人察觉。此处在开关打开时追加**一条 ERROR 汇总**
         #   （跳过文件数 + 文件名样本），保证运维可见；开关关闭时完全回退旧行为（零回归）。

@@ -1,7 +1,7 @@
 """BasePulseOrgan —— 纯脉冲架构器官统一基类（v9.5 并发安全 · 终极完整版）
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -307,7 +307,7 @@ class BasePulseOrgan(ABC):
             try:
                 import config
                 if getattr(config, 'DEBUG_PULSE_TRACE', False):
-                    # ★第117批 T-117a（方案B）：同步 flush_to_file() 已移除 ——
+                    # ★往期批次 相关任务（方案B）：同步 flush_to_file() 已移除 ——
                     #   它让器官发射线程直面 per-path 写锁（19:35 块实测 11 个参与者
                     #   排队），写盘改由 tracer 内部 daemon 线程承担。
                     from utils.pulse_tracer import log_emit
@@ -474,7 +474,7 @@ class BasePulseOrgan(ABC):
         try:
             import config
             if getattr(config, 'DEBUG_PULSE_TRACE', False):
-                # ★第117批 T-117a（方案B）：同步 flush_to_file() 已移除（同上），
+                # ★往期批次 相关任务（方案B）：同步 flush_to_file() 已移除（同上），
                 #   器官接收线程不再卡在业务之前的写锁上。
                 from utils.pulse_tracer import log_receive
                 event_type = pulse.get("event_type", "?")

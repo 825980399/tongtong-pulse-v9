@@ -1,7 +1,7 @@
 """PulseEyes —— PulseEyes 相关实现
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 """
 PulseEyes —— 脉冲驱动眼睛（知识检索器官 · v9.5 分层脉冲版）
 版本: v9.5 PulseNet
-设计: 路灯、小林、星轨 
+设计: 内部协作者、内部协作者、内部协作者 
 日期: 2026年6月9日
 更新: 2026年6月13日（P0-2+P0-5: 五合一全面改造——事件枚举+统一日志+命名规范+get_stats+自测同步）
 更新: 2026年6月14日（v9.5: 检索结果脉冲标记layer=L2，适配分层异步调度）
@@ -165,7 +165,7 @@ class PulseEyes(BasePulseOrgan):
                 self._camera_cap = cap
                 self._camera_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 self._camera_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                self._camera_cap.set(cv2.CAP_PROP_FPS, 5)  # 星轨调整：30fps→5fps，降低采集负载
+                self._camera_cap.set(cv2.CAP_PROP_FPS, 5)  # 内部协作者调整：30fps→5fps，降低采集负载
                 self._camera_cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
                 self._camera_cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
 
@@ -424,7 +424,7 @@ class PulseEyes(BasePulseOrgan):
                 self._log(_m49_level, f"推流统计: 循环={_loop_count}, 成功帧={_frame_success}, 空帧={_frame_empty}, 发布成功={_publish_success}, 发布失败={_publish_fail}, stream_running={self._stream_running}, is_running={self.is_running}")
                 _last_stats_time = time.time()
 
-            time.sleep(0.5)  # 星轨调整：8.3fps→2fps，降低L3队列负载（人脸识别等功能完善后再调回）
+            time.sleep(0.5)  # 内部协作者调整：8.3fps→2fps，降低L3队列负载（人脸识别等功能完善后再调回）
     
     def _try_reopen_camera(self):
         """尝试重新打开摄像头（带指数退避冷却和最大重试限制）"""

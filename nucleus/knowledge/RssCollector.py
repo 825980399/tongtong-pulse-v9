@@ -3,7 +3,7 @@
 RssCollector.py —— RSS采集器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: RSS订阅源内容采集与解析
@@ -49,7 +49,7 @@ class RssArticle:
 
 def _default_fetch(url: str, timeout: float = 8.0) -> bytes:
     """默认网络抓取（可注入替身做离线测试）"""
-    # ★第134批 T-134a：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
+    # ★往期批次 相关任务：出站白名单前置检查（fail-closed，拒绝即上抛，不放行）。
     from nucleus.ssrf_guard import is_safe_http_url
     _ok, _reason = is_safe_http_url(url)
     if not _ok:
@@ -368,7 +368,7 @@ class RssCollector:
 
     @staticmethod
     def _hash_article(a: RssArticle) -> str:
-        """★星轨要求：标题+链接哈希去重"""
+        """★内部协作者要求：标题+链接哈希去重"""
         return hashlib.md5(f"{a.title}|{a.url}".encode()).hexdigest()[:16]
 
     @staticmethod

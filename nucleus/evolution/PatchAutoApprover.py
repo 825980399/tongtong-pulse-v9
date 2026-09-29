@@ -3,20 +3,20 @@
 PatchAutoApprover.py —— 补丁自动审批器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 基于规则的补丁自动审批与风险评估
 机制: 基于PatchAutoApprover类实现，包含10个核心方法
 定位: 进化治理层
 
-★第116批 T-116c⑤ 状态标注 —— 审批面 deprecated（本批删 0 行）:
+★往期批次 相关任务⑤ 状态标注 —— 审批面 deprecated（本批删 0 行）:
   AutoApprover 的「检测面」（is_obsolete / 按龄判废）已由裁决 CLI 的
   `adjudicate_patch.py stale-audit` 只读子命令收编（内联同判据，出三本账建议作废单）。
   ★处置约定：stale-audit 连续两个周期「无独有捕获」（即它发现的项 AutoApprover 也全部发现）
     后，才物理删除本模块的审批面；本批不做删除。
 
-★第53批 T1（P0-补丁3）状态标注 —— 短期 deprecated（星轨裁决2·选项B）:
+★第53批 T1（P0-补丁3）状态标注 —— 短期 deprecated（内部协作者裁决2·选项B）:
   本模块的审批/清理入口（classify / scan_pending / prune_pending）经全库排查
   **无生产调用点**（仅 record_evolution_round 被 SafeEvolutionExecutor 调用）。
   当前生产侧自动审批由 PatchManager 入队时的内联逻辑承担。

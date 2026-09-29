@@ -1,7 +1,7 @@
 """PulseVisualCortex —— PulseVisualCortex 相关实现
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 # ────────────────────────────────────────────────────────────────
 # PulseVisualCortex —— 视觉皮层器官 · 图像感知与分析（v9.5 分层脉冲版）
 # 版本: v9.5 PulseNet
-# 设计: 路灯、小林、星轨
+# 设计: 内部协作者、内部协作者、内部协作者
 # 日期: 2026年6月12日
 # 更新: 2026年6月18日（架构重构: 通过眼睛专用通道获取摄像头帧 + 人脸检测 + 图片文件分析）
 #
@@ -48,7 +48,7 @@ from nucleus.const import (
     VisualEvent,
 )
 from nucleus.data.DataAccessLayer import safe_read_json  # ★R5：视觉流日志读取
-from nucleus.security.face_codec import load_roster, save_roster  # ★T-134b 人脸名册加密存储
+from nucleus.security.face_codec import load_roster, save_roster  # ★相关任务 人脸名册加密存储
 _DIRTY_FACE_KEYS = ("用户", "访客", "小林")  # ★R5-1 脏键唯一真相源（:362 守卫/load 过滤/save 过滤三处共用）
 
 
@@ -110,7 +110,7 @@ class PulseVisualCortex(BasePulseOrgan):
         self._global_lock = threading.Lock()
         
         self.is_running = False
-        self._current_user_name = "访客"  # 当前检测到的用户（T-118a：未知默认访客）
+        self._current_user_name = "访客"  # 当前检测到的用户（相关任务：未知默认访客）
         # 摄像头监测线程
         self._camera_thread = None
         self._camera_running = False
@@ -202,7 +202,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     _loaded += 1
                 self._log(LogLevel.INFO, "[R5] 人脸册加载: %d 条(丢弃 %d) 读 %.3fs"
                           % (_loaded, _dropped, time.time() - _t_r5))
-        except (Exception, SystemExit) as _e_r5:             # 口径同 :547/:567（T-119a）
+        except (Exception, SystemExit) as _e_r5:             # 口径同 :547/:567（相关任务）
             self._known_face_encodings = {}
             self._roster_meta = {}
             self._roster_hits = {}
@@ -257,11 +257,11 @@ class PulseVisualCortex(BasePulseOrgan):
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         
-        # 3. 其他可选库（★T-113c：补 import，缺失即 False，消除"假有"）
+        # 3. 其他可选库（★相关任务：补 import，缺失即 False，消除"假有"）
         try:
             import face_recognition  # noqa: F401
             self._has_face_recognition = True
-        except (ImportError, SystemExit):  # ★T-119a 装库前置硬化：models 缺失 api.py quit() 抛 SystemExit
+        except (ImportError, SystemExit):  # ★相关任务 装库前置硬化：models 缺失 api.py quit() 抛 SystemExit
             self._has_face_recognition = False
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         try:
@@ -446,7 +446,7 @@ class PulseVisualCortex(BasePulseOrgan):
         这样曈曈在与人对话时自然学习对方的长相。
         """
         user_name = payload.get("user_name", "")
-        if not user_name or user_name in ("用户", "访客", "小林"):  # ★T-119a 绑定白名单守卫：脏键禁止入册
+        if not user_name or user_name in ("用户", "访客", "小林"):  # ★相关任务 绑定白名单守卫：脏键禁止入册
             return {"status": "skipped", "reason": "脏键(用户/访客/小林)禁止入册"}
         
         # 如果有待绑定的人脸编码且距今30秒内，绑定到当前用户名
@@ -598,7 +598,7 @@ class PulseVisualCortex(BasePulseOrgan):
         Returns:
             (user_name, confidence) 元组；未匹配/失败返回 (None, 0.0)。
             confidence = max(0, 1 - best_distance/0.6) —— "是他"的匹配度，
-            非"有脸"检测度（★T-115e Z1 置信度语义修正）。
+            非"有脸"检测度（★相关任务 Z1 置信度语义修正）。
         """
         if not self._has_face_recognition:
             return (None, 0.0)
@@ -633,12 +633,12 @@ class PulseVisualCortex(BasePulseOrgan):
                 self._pending_face_time = time.time()
                 return (None, 0.0)
             
-            # ★T-115e Z1：匹配度语义（"是他"而非"有脸"）
+            # ★相关任务 Z1：匹配度语义（"是他"而非"有脸"）
             _conf = max(0.0, 1.0 - best_distance / 0.6)
             return (best_match, _conf)
             
-        except (Exception, SystemExit) as _e:  # ★T-119a 硬化：SystemExit 非 Exception 子类
-            # ★T-113c：识别失败计数 + 日志，防止"8天0成功"无感知
+        except (Exception, SystemExit) as _e:  # ★相关任务 硬化：SystemExit 非 Exception 子类
+            # ★相关任务：识别失败计数 + 日志，防止"8天0成功"无感知
             _fc = getattr(self, "_face_recognize_fail_count", 0) + 1
             self._face_recognize_fail_count = _fc
             if _fc <= 1 or _fc % 50 == 0:
@@ -657,7 +657,7 @@ class PulseVisualCortex(BasePulseOrgan):
             face_encodings = face_recognition.face_encodings(rgb_frame)
             if face_encodings:
                 return face_encodings[0]
-        except (Exception, SystemExit) as e:  # ★T-119a 硬化：SystemExit 非 Exception 子类
+        except (Exception, SystemExit) as e:  # ★相关任务 硬化：SystemExit 非 Exception 子类
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         return None    
 
@@ -742,7 +742,7 @@ class PulseVisualCortex(BasePulseOrgan):
                             payload={
                                 "sensor_type": "visual",
                                 "user_id": self._current_user_name,
-                                "confidence": round(float(_match_conf), 2),  # ★T-115e Z1：用匹配度
+                                "confidence": round(float(_match_conf), 2),  # ★相关任务 Z1：用匹配度
                             },
                             priority=8,
                             layer="L1"
@@ -784,7 +784,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         priority=7,
                         layer="L1"
                     ))
-                self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
+                self._current_user_name = "访客"  # ★往期批次 相关任务：离场即清粘名，防影子误报
                 return {"status": "fast_left", "frame_seq": frame_seq}
         
         # 常规时序追踪（兜底）：基于滑动窗口的稳定性判断
@@ -830,7 +830,7 @@ class PulseVisualCortex(BasePulseOrgan):
                                 payload={
                                     "sensor_type": "visual",
                                     "user_id": self._current_user_name,
-                                    "confidence": round(float(_match_conf), 2),  # ★T-115e Z1：用匹配度
+                                    "confidence": round(float(_match_conf), 2),  # ★相关任务 Z1：用匹配度
                                 },
                                 priority=8,
                                 layer="L1"
@@ -864,7 +864,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         priority=7,
                         layer="L1"
                     ))
-                self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
+                self._current_user_name = "访客"  # ★往期批次 相关任务：离场即清粘名，防影子误报
         
         # 异步写入视觉流日志（放入队列，后台线程处理）
         try:
@@ -969,7 +969,7 @@ class PulseVisualCortex(BasePulseOrgan):
     def _face_roster_path(self) -> str:
         """册路径（测试可用 TONGTONG_FACE_ROSTER 覆盖）。
 
-        ★T-134b：env 重定向必须在 data/ 内（realpath 前缀 + os.sep 边界），
+        ★相关任务：env 重定向必须在 data/ 内（realpath 前缀 + os.sep 边界），
         越界即拒绝（fail-closed，绝不把生物特征册写到 data/ 之外）。
         """
         _env = os.environ.get("TONGTONG_FACE_ROSTER")
@@ -1035,7 +1035,7 @@ class PulseVisualCortex(BasePulseOrgan):
         self._pending_face_encoding = None
         self._pending_face_time = 0.0
         if user_name == self._current_user_name:
-            self._current_user_name = "访客"   # ★T-118a 同族回落（回落"用户"亦不阻断下次绑定，见票 §D3）
+            self._current_user_name = "访客"   # ★相关任务 同族回落（回落"用户"亦不阻断下次绑定，见票 §D3）
         try:
             _raw = load_roster(self._face_roster_path())
             _faces = (_raw or {}).get("faces") or {}

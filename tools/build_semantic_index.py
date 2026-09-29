@@ -2,7 +2,7 @@
 """build_semantic_index —— 全量语义索引构建工具（PHASE17 阶段一 · 任务 1.4）
 
 版本: v10 PulseNet · 工具
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 from __future__ import annotations

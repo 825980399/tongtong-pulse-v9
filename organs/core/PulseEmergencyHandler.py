@@ -3,7 +3,7 @@
 PulseEmergencyHandler —— 紧急处理器官 · 器官失联与系统告警的兜底恢复
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 监听 SystemEvent.ALARM、VascularEvent.SILENT_ORGAN 与心跳恢复信号，在器官失联或系统告警时尝试自动恢复，恢复失败则进入安全模式。

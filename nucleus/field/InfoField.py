@@ -3,7 +3,7 @@
 InfoField.py —— 信息场
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 全局信息场域，脉冲信号传播与共振
@@ -70,7 +70,7 @@ _module_logger = get_module_logger("InfoField")
 
 # ===== ★PHASE13（2026-09-07）：按锁名的等待时长累计器 =====
 # 背景：runtime_metrics 的「锁等待过高」告警只报一个总均值（实测 63.9~78.8ms，
-#   持续 11.5 小时），运维看到数字却不知道是哪把锁 —— 星轨据此误判为
+#   持续 11.5 小时），运维看到数字却不知道是哪把锁 —— 内部协作者据此误判为
 #   node_pool 的全局锁，实际是 InfoField._lock 在单条 publish 路径上被抢 4 次。
 # 方案：publish 路径上的每处加锁点按名字旁路累计，告警时读取 Top1 附带展示。
 # 约束：纯旁路、模块级、独立小锁、失败静默 —— 绝不影响主链路（★零侵入）。
@@ -163,7 +163,7 @@ class InfoField(SilentLogMixin):
         #   而 _lock 同时还被 publish 主流程（幂等/历史/统计）使用——
         #   后台那几十次自增，和前台每一次脉冲发布，挤在同一把锁上。
         #   这与 PHASE13 实测吻合：锁等待 70ms 且随知识节点增长而升高。
-        #   （星轨此前猜的是 node_pool.query 的全局锁，方向不对。）
+        #   （内部协作者此前猜的是 node_pool.query 的全局锁，方向不对。）
         #
         #   解耦后：handler 自增只与「另一个 handler 的自增」竞争，
         #   不再和 publish 主流程互相阻塞。临界区只有一次加法，持有时间极短。
@@ -383,7 +383,7 @@ class InfoField(SilentLogMixin):
         self._last_resized_level = "light"   # 上次调整四层池时的负载等级
 
         # ===== L0生命线看门狗（P0-1修复）：L0为单线程，任一处理器阻塞将冻结心跳/告警 =====
-        self._l0_timeout = float(PULSE_LAYER.get("l0_processor_timeout", 8.0))  # ★T-112c：超时阈值改读 config.PULSE_LAYER.l0_processor_timeout（默认 8.0s），消除硬编码漂移
+        self._l0_timeout = float(PULSE_LAYER.get("l0_processor_timeout", 8.0))  # ★相关任务：超时阈值改读 config.PULSE_LAYER.l0_processor_timeout（默认 8.0s），消除硬编码漂移
         self._l0_inflight: dict = {}    # pulse_id -> (入队时间戳, 订阅器官名, 处理线程标识)
         self._l0_watchdog = threading.Thread(
             target=self._l0_watchdog_loop, name="L0-Watchdog", daemon=True
@@ -496,7 +496,7 @@ class InfoField(SilentLogMixin):
         _lock_wait_ms = 0.0  # ★P1续: 累计本脉冲路径上的锁等待时长
         # ★PHASE13（2026-09-07）：按锁名分桶累计，供 runtime_metrics 告警时
         #   回答「到底是哪把锁」。原实现只报一个总均值，运维看到 70ms 却无从下手
-        #   （星轨据此猜错方向，以为是 node_pool 的全局锁）。
+        #   （内部协作者据此猜错方向，以为是 node_pool 的全局锁）。
         #   此处仅做旁路累计，不改动任何调用签名与既有字段（★零侵入）。
         _lock_wait_by_name: dict[str, float] = {}
         pulse_id = pulse.get("pulse_id", "?")
@@ -675,7 +675,7 @@ class InfoField(SilentLogMixin):
                     if self._check_organ_concurrency(organ_name):
                         dispatches.append((layer, handler, organ_name, route_mode))
 
-        # ★T-115b：boot 脉冲派发时把「心脏」置顶——抢占 L0 唯一 worker，
+        # ★相关任务：boot 脉冲派发时把「心脏」置顶——抢占 L0 唯一 worker，
         #   先于 L0 看门狗超时重建(cancel_futures)完成起搏，避免心脏 future 被连坐取消。
         if event_type == "system.boot":
             _heart_idx = next((i for i, d in enumerate(dispatches)
@@ -807,7 +807,7 @@ class InfoField(SilentLogMixin):
                     self._organ_last_active[organ_name] = time.time()
                 except Exception as _exc:
                     _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
-        # ★T-115b：boot 完整率审计（堵 P2-87 黑洞）。后台守护线程等待各订阅者
+        # ★相关任务：boot 完整率审计（堵 P2-87 黑洞）。后台守护线程等待各订阅者
         #   future 终态，枚举 handled/cancelled，确认心脏等生命线器官确实起搏。
         if event_type == "system.boot" and _boot_items:
             threading.Thread(
@@ -867,7 +867,7 @@ class InfoField(SilentLogMixin):
             "high_load": self._high_load,
         }
     
-    # ========== ★T-115b：boot 完整率审计 ==========
+    # ========== ★相关任务：boot 完整率审计 ==========
     def _audit_boot_completeness(self, items):
         """后台守护线程：等待 boot 脉冲各订阅者 future 终态，枚举 handled/cancelled。
 
@@ -952,7 +952,7 @@ class InfoField(SilentLogMixin):
             #   ★修复竞态漂移：原实现此处「-1」未加锁，而 publish 提交处的「+1」
             #   （:724）使用 self._task_count_lock；±不对称锁在多线程下导致读-改-写
             #   互相覆盖、部分 -1 丢失 → 计数只增不减、队列深度指标持续偏高
-            #   （星轨 2026-09-18 指认「:712 有锁 / :898 无锁，指标漂移」）。
+            #   （内部协作者 2026-09-18 指认「:712 有锁 / :898 无锁，指标漂移」）。
             #   此处补锁使 +1/-1 对称，从根上消除漂移。
             with self._task_count_lock:
                 self._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)
@@ -997,7 +997,7 @@ class InfoField(SilentLogMixin):
                             _stuck.append((_pid, _org, _entry))
                 if _stuck:
                     # ★P0-2修复（第十批）：dump 卡死线程调用栈，定位真实阻塞点。
-                    #   此前只报「超时」无堆栈，星轨本地（Windows）偶发心脏失联告警
+                    #   此前只报「超时」无堆栈，内部协作者本地（Windows）偶发心脏失联告警
                     #   触发 L0 卡顿 8s，但无法定位卡死位置。此处用 sys._current_frames()
                     #   提取卡死线程的栈帧（不中断、不重启，仅采集诊断信息）。
                     try:

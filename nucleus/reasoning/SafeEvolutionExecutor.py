@@ -3,7 +3,7 @@
 SafeEvolutionExecutor.py —— 安全进化执行器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 安全可控的进化代码执行
@@ -25,7 +25,7 @@ from nucleus.logger import get_module_logger
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
 from nucleus.data.DataAccessLayer import safe_read_json
-# ★第117批 T-117d①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
+# ★往期批次 相关任务①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
 from nucleus.data.path_utils import safe_relpath as _safe_relpath
 from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
 from nucleus._silent_except import silent_exc
@@ -35,20 +35,20 @@ from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
-# ★第117批 T-117d①（烛微 N4）：项目根（供问题身份键做路径归一）
+# ★往期批次 相关任务①（内部协作者 N4）：项目根（供问题身份键做路径归一）
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _normalize_file_key(file_val: str) -> str:
-    """★第117批 T-117d①（N4）：把 file 字段归一成「形制唯一」的键。
+    """★往期批次 相关任务①（N4）：把 file 字段归一成「形制唯一」的键。
 
-    背景（烛微 117 §2-N4 实证）：补丁账本里同一目标文件**三种形制并存** ——
+    背景（内部协作者 117 §2-N4 实证）：补丁账本里同一目标文件**三种形制并存** ——
         ``organs\\brain\\PulseSubconscious.py``（反斜杠·相对）
         ``organs/brain/PulseSubconscious.py``（正斜杠·相对）
         ``D:\\...\\organs\\brain\\PulseSubconscious.py``（反斜杠·绝对）
     于是同一个题在「去重 / 分组 / 冷却」三处被算成 2~3 个不同的键，
-    冷却计数被稀释、去重失效 —— 双指纹格式已于 T-116a③ 统一，
+    冷却计数被稀释、去重失效 —— 双指纹格式已于 相关任务③ 统一，
     但**路径形制**这一层此前没归一。
 
     归一四步：normpath（消 ``.``/``..``/重复分隔符）→ safe_relpath(项目根)
@@ -64,7 +64,7 @@ def _normalize_file_key(file_val: str) -> str:
     except Exception:
         return str(file_val)
 
-# ★第86批 T-86a（P0）：LLM 修复补丁零产出根因修复 —— 推理模型 token 预算。
+# ★第86批 相关任务（P0）：LLM 修复补丁零产出根因修复 —— 推理模型 token 预算。
 #   根因（已实测复现）：REMOTE_API_CONFIG 指向的 deepseek-v4-flash 属**推理模型**，
 #   响应先产出 reasoning_content 再产出 content。原 max_tokens=1500 被推理解析
 #   全部吃光 → finish_reason=length、content 为空串、completion_tokens 打满 1500，
@@ -73,11 +73,11 @@ def _normalize_file_key(file_val: str) -> str:
 #   8000 → stop/content 1311 字（reasoning 约 1.8 万字，completion 约 6.5k tokens）。
 _LLM_REPAIR_MAX_TOKENS = 16384
 
-# ★第86批 T-86a：推理模型单次耗时显著更长（实测 8000 档约 27s），而
+# ★第86批 相关任务：推理模型单次耗时显著更长（实测 8000 档约 27s），而
 #   api_rate_limiter 的 evolution 默认超时仅 30s，余量过紧易被读超时打断，
 #   故修复调用取「配置值与下限的较大者」；**不修改全局超时配置**。
 _LLM_REPAIR_MIN_TIMEOUT = 180
-# ★第91批 T-91b：LLM 补丁**缩进契约**开关（prompt 约束 + 后处理修复 + 基础缩进对齐）。
+# ★第91批 相关任务：LLM 补丁**缩进契约**开关（prompt 约束 + 后处理修复 + 基础缩进对齐）。
 #   开启（默认）→ 三层同时生效：
 #     ① system prompt 显式要求「保持与输入代码完全相同的缩进层级与宽度、禁用 Tab」；
 #     ② `_clean_llm_code` 阶段3：把「缩进漂移」修复为结构自洽
@@ -300,7 +300,7 @@ class SafeEvolutionExecutor:
             "no_fix_cooldown_enabled", default=True)
         self._no_fix_cooldown: dict[str, float] = {}
         self._no_fix_cooldown_secs: dict[str, float] = {}
-        # ★第114批 T-114a（治病·断6修复）：冷却表落盘，重启不丢冷却记录。
+        # ★往期批次 相关任务（治病·断6修复）：冷却表落盘，重启不丢冷却记录。
         #   冷却用 time.monotonic() 绝对截止，跨重启不可比；故落盘存「剩余秒数」
         #   而非绝对时间，加载时重建为 新时钟 + 剩余。详见 _m114a_* 方法。
         self._no_fix_cooldown_rounds: dict[str, int] = {}
@@ -318,19 +318,19 @@ class SafeEvolutionExecutor:
         except Exception:
             self._no_fix_cooldown_secs = {}
         if not self._no_fix_cooldown_secs:
-            # ★第95批 T-95a：回填表不再含死配置「已有待审批」
+            # ★第95批 相关任务：回填表不再含死配置「已有待审批」
             #   （与 config.py EVOLUTION_CONFIG 同步清理）。
             self._no_fix_cooldown_secs = {
                 "高危·安全拦截": 86400.0,
                 "本地无规则·转LLM": 21600.0, "_default": 3600.0,
-                "验证失败·3轮": 86400.0,  # ★T-119d 同步 114a 活键（config 同名）
-                "验证失败": 3600.0,  # ★T-119d 同步 114a 活键
+                "验证失败·3轮": 86400.0,  # ★相关任务 同步 114a 活键（config 同名）
+                "验证失败": 3600.0,  # ★相关任务 同步 114a 活键
             }
         # ★v16.0新增：初始化PatchManager
         # ★主线第58批 T1（P1）：_project_root 提升为实例变量，
         #   供 _read_snippet_from_file / _m41_* 等方法经 self._project_root 引用，修复 AttributeError。
         self._project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        # ★第140批 T-140c①：PatchManager 改为函数内延迟导入，
+        # ★往期批次 相关任务①：PatchManager 改为函数内延迟导入，
         #   切断「PatchManager ↔ SafeEvolutionExecutor」模块级循环边
         #   （PatchManager 模块级 import SafeEvolutionExecutor，若此处也模块级
         #    import PatchManager 则形成模块级环）。延迟到实例化时导入，
@@ -490,7 +490,7 @@ class SafeEvolutionExecutor:
             "nucleus/mnemosyne/",
             "nucleus/data/",
             "nucleus/reasoning/",
-            # ★T-135d：大脑器官目录（含 PulseInnerWorld 等巨型器官）纳入核心保护
+            # ★相关任务：大脑器官目录（含 PulseInnerWorld 等巨型器官）纳入核心保护
             "organs/brain/",
             # ★主线第80批 T7-3：补全核心文件清单
             "nucleus/security/",
@@ -504,7 +504,7 @@ class SafeEvolutionExecutor:
 
     def _m94_pending_blocks_regeneration(self, file_path: str,
                                          method_name: str) -> bool:
-        """★第94批 T-94a.3：同位置「已有待审批」是否**阻塞再生**。
+        """★第94批 相关任务.3：同位置「已有待审批」是否**阻塞再生**。
 
         * 老化开关 ``ENABLE_PENDING_QUEUE_AGING`` **关闭（默认）** → 逐字等价于既有
           ``PatchManager.has_pending_patch_for``（file+method 双匹配即阻塞），
@@ -513,7 +513,7 @@ class SafeEvolutionExecutor:
           待审批补丁仍在老化窗口内（未超 ``PENDING_AGING_MAX_AGE_HOURS``）才算阻塞。
           超期未裁决的补丁不再永久冻结同位置的再生 —— 这正是第93批实测的
           「已有待审批」死循环（pending 只增不减、同位置问题每轮重复发现，
-          单项占未修复原因 28.6%）。即任务书 §T-94a.3 的「计时器改为按补丁」。
+          单项占未修复原因 28.6%）。即任务书 §相关任务.3 的「计时器改为按补丁」。
 
         ★只解除**阻塞**，不代替**放行**（放行判据见 ``PatchManager._m94_aging_eligible``）。
         ★判据异常 → 回落既有 ``has_pending_patch_for`` 口径；再异常则返回 False，
@@ -978,12 +978,12 @@ class SafeEvolutionExecutor:
                                  model: str = "") -> str | None:
         """★学生-老师模式：多轮追问机制。第一次回答不完整时自动追加追问。
 
-        ★第95批 T-95d：新增可选 ``scene``（默认 ``None`` ⇒ ``SCENE_EVOLUTION``，
+        ★第95批 相关任务：新增可选 ``scene``（默认 ``None`` ⇒ ``SCENE_EVOLUTION``，
         既有行为逐字不变）。``PulseCodeLearner`` 经 ``repair_with_distillation``
         透传 ``SCENE_CODE_LEARN``，让「代码学习」场景不再恒 0 —— 同一调用
         **只记一次**，只是场景归类不同，**不重复计数**（不虚增 llm_total）。
 
-        ★第96批 T-96a：新增可选 ``model``（默认 ``""`` ⇒ 沿用全局默认模型，
+        ★第96批 相关任务：新增可选 ``model``（默认 ``""`` ⇒ 沿用全局默认模型，
         既有行为逐字不变）。渠道池命中时由 ``_call_llm_for_repair`` 传入该
         渠道的 ``model``（火山方舟为**推理接入点 ID**），避免「换了渠道却
         仍在请求旧模型」——这正是免费额度实际用不上的表现之一。
@@ -1006,7 +1006,7 @@ class SafeEvolutionExecutor:
                         "只输出Python代码，使用纯ASCII字符，不要使用中文标点。"
                         "确保语法正确，所有引号和括号必须匹配。不要输出解释文字，只输出代码。")
 
-                    # ★第91批 T-91b：缩进契约（T0 实测：原 prompt **完全未提缩进**，
+                    # ★第91批 相关任务：缩进契约（T0 实测：原 prompt **完全未提缩进**，
                     #   而 4 次 LLM 补丁尝试全部因 unindent 语法错误被拒）。
                     if _m91_indent_repair_on():
                         _sys_prompt += (
@@ -1017,7 +1017,7 @@ class SafeEvolutionExecutor:
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             _payload = {
-                # ★第96批 T-96a：渠道池命中时以**渠道自带的 model**（推理接入点 ID）
+                # ★第96批 相关任务：渠道池命中时以**渠道自带的 model**（推理接入点 ID）
                 #   为准；为空（回落 REMOTE_API_CONFIG 路径）才用全局默认模型。
                 "model": model or get_llm_call_config().get("default_model", "deepseek-v4-flash"),
                 "messages": [
@@ -1035,17 +1035,17 @@ class SafeEvolutionExecutor:
             with api_rate_limited(enabled=get_llm_call_config().get("enable_rate_limit", True)):
                 _ok, _data = safe_http_json(api_url, method='POST', data=_bytes, headers=_headers, timeout=_timeout)
             if _ok and isinstance(_data, dict):
-                # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存。
+                # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存。
                 #   （本方法被装饰，装饰器在 finally 读 `_last_llm_usage`；
                 #    多次追问时取**最后一次**调用的用量，属可接受的近似。）
-                #   ★第95批 T-95e：属性统一命名（原 `_m44_last_usage`）。
+                #   ★第95批 相关任务：属性统一命名（原 `_m44_last_usage`）。
                 self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
                 _choices = _data.get("choices", [])
                 if _choices:
                     _msg = _choices[0].get("message") or {}
                     _content = _msg.get("content") or ""
                     if not _content:
-                        # ★第86批 T-86a：推理模型把预算耗在 reasoning_content 上时
+                        # ★第86批 相关任务：推理模型把预算耗在 reasoning_content 上时
                         #   content 会是空串；旧代码静默返回 ""，外层再静默 return None，
                         #   导致「LLM 补丁通道零产出」长期无迹可循。此处必须留痕。
                         _usage = _data.get("usage") or {}
@@ -1079,8 +1079,8 @@ class SafeEvolutionExecutor:
                 return _better
         return answer
 
-    # ========== ★第96批 T-96a（P0）：进化通道接入渠道池 ==========
-    #   背景（烛微第1期 N3 + 第96批 T0 实测）：进化链 LLM 调用直连
+    # ========== ★第96批 相关任务（P0）：进化通道接入渠道池 ==========
+    #   背景（内部协作者第1期 N3 + 第96批 T0 实测）：进化链 LLM 调用直连
     #   `REMOTE_API_CONFIG`（api.deepseek.com，**收费**），既不走渠道池、
     #   不享受智谱/火山免费额度，也不接 ChannelHealthTracker 熔断。
     #   本段提供「按优先级取可用渠道」的能力，默认**关闭**（灰度），
@@ -1088,7 +1088,7 @@ class SafeEvolutionExecutor:
 
     @staticmethod
     def _m96_channel_pool_on() -> bool:
-        """第96批 T-96a 灰度开关：True → 进化通道走渠道池。"""
+        """第96批 相关任务 灰度开关：True → 进化通道走渠道池。"""
         try:
             import config as _c96
             return bool(getattr(_c96, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False))
@@ -1118,7 +1118,7 @@ class SafeEvolutionExecutor:
                     return _h
             except Exception as _e96h:
                 # ★不留痕的 except: pass 会被 m7 门禁判为「静默吞异常」
-                #   （烛微 N7 TIER1 同族）⇒ 一律记录 type + msg。
+                #   （内部协作者 N7 TIER1 同族）⇒ 一律记录 type + msg。
                 _module_logger.debug(
                     "[进化渠道] 复用肺实例健康度失败，转本地构造: %s: %s",
                     type(_e96h).__name__, _e96h)
@@ -1142,7 +1142,7 @@ class SafeEvolutionExecutor:
     _M96_HEALTH_LOCK = __import__("threading").Lock()
 
     def _m96_select_channel(self):
-        """★第96批 T-96a：从渠道池按优先级选一个可用渠道。
+        """★第96批 相关任务：从渠道池按优先级选一个可用渠道。
 
         返回渠道 dict（含 name/model/api_url/api_key）；无可用 → None。
         ★判据与 PulseLung 的生产选择器**同源**：
@@ -1222,7 +1222,7 @@ class SafeEvolutionExecutor:
         每次询问后评估效果，成功策略沉淀为可复用模式，实现元学习。"""
         try:
             import config  # type: ignore[possibly-unbound]
-            # ★第96批 T-96a：默认仍是 REMOTE_API_CONFIG；开关打开且渠道池
+            # ★第96批 相关任务：默认仍是 REMOTE_API_CONFIG；开关打开且渠道池
             #   可取到渠道时才切换（三层回落：无渠道路/异常/字段不全）。
             _m96_ch = None
             _m96_name = ""
@@ -1284,11 +1284,11 @@ class SafeEvolutionExecutor:
                 _strategy, issue, local_analysis=_local_analysis,
                 code_snippet=code_snippet, related_logs=related_logs)
 
-            # ★第114批 T-114a（断5）：指纹咨询台账硬闸。
+            # ★往期批次 相关任务（断5）：指纹咨询台账硬闸。
             #   同指纹问题若已 ≥3 次咨询且无任何成功记录，跳过本轮 LLM 问询，
             #   避免确定性回环持续烧 LLM（hub 记录按 task_type=patch_verification_learning 查）。
             if self._m114a_should_skip_ask(issue):
-                # ★T-115d：拦截 INFO 日志已下沉到 _m114a_should_skip_ask（指纹级·可审计）
+                # ★相关任务：拦截 INFO 日志已下沉到 _m114a_should_skip_ask（指纹级·可审计）
                 return None
             # ★多轮追问（根据策略动态决定追问次数）
             _answer = self._call_llm_with_followup(
@@ -1309,7 +1309,7 @@ class SafeEvolutionExecutor:
 
             return _answer
         except Exception as e:
-            # ★第86批 T-86a：原为裸 `except Exception: return None`——任何底层异常
+            # ★第86批 相关任务：原为裸 `except Exception: return None`——任何底层异常
             #   （配置缺失/JSON 解析/prompt 组装/HTTP 封装）都被吞成 None，表现为
             #   「LLM 补丁路径零产出且日志无任何线索」。改为留痕后仍降级返回 None。
             _module_logger.warning(
@@ -1541,7 +1541,7 @@ class SafeEvolutionExecutor:
         _result_reasons: dict[str, int] = {}
         def _bump_reason(_r: str) -> None:
             _result_reasons[_r] = _result_reasons.get(_r, 0) + 1
-        # ★C3：去重丢弃数也纳入分布（星轨要求的「去重丢弃」类别）
+        # ★C3：去重丢弃数也纳入分布（内部协作者要求的「去重丢弃」类别）
         # ★PHASE13（2026-09-07）：原写法把数量拼进 key（"去重丢弃×1"），
         #   而汇总输出处又会再拼一次 `_k×_v`，于是日志里出现
         #   「去重丢弃×1×1」这种重复尾巴；且数量变化时 key 也变，无法正确聚合。
@@ -1574,7 +1574,7 @@ class SafeEvolutionExecutor:
                 except Exception as _resolve_err:
                     _module_logger.debug(
                         f"[修复蒸馏] organ→file 反查失败 {_organ}: {_resolve_err}")
-            # ★第87批 T-87b：非器官标签的二级反查兜底（修复「补丁缺少 file 字段」）。
+            # ★第87批 相关任务：非器官标签的二级反查兜底（修复「补丁缺少 file 字段」）。
             #   实测根因（09-18 14:14 ~ 09-20 09:03 共 19 次沙箱拒绝）：日志类问题的
             #   organ 标签多为「非器官模块/类名」——PulseSnapshot / PatchManager /
             #   InfoField / PulseNodePool，而上一段的 resolve_organ_file 只覆盖
@@ -1644,7 +1644,7 @@ class SafeEvolutionExecutor:
                         f"[修复蒸馏] 获取代码片段失败 {_organ}.{_method}: {_snippet_err}")
             _related_logs = self._find_related_logs(_file or _resolved_file, _method)
             _snippet_source = "method_body" if _snippet else ""
-            # ★第88批 T-88a：素材来源标记与开关预置（在 _fallback_on 分支外
+            # ★第88批 相关任务：素材来源标记与开关预置（在 _fallback_on 分支外
             #   初始化，保证第88批守卫读取时恒有定义，零 NameError 风险）。
             _m88_src = ""
             _m88_mat_on = False
@@ -1664,7 +1664,7 @@ class SafeEvolutionExecutor:
                 except Exception:
                     _fallback_on = True
                 if _fallback_on:
-                    # ★第88批 T-88a（根因：错误素材 ⇒ 结构性不可应用补丁）：
+                    # ★第88批 相关任务（根因：错误素材 ⇒ 结构性不可应用补丁）：
                     #   第87批把「非器官标签」的真文件路径回填进了 issue["file"]
                     #   （受 PHASE13 口径红线约束，刻意未动 _file/_resolved_file），
                     #   但本处素材提取读的是 _file/_resolved_file（此时仍为空）
@@ -1753,7 +1753,7 @@ class SafeEvolutionExecutor:
                         if _verify.get("passed"):
                             _local_verified += 1
                             _local_verify_passed = True
-                            # ★第117批 T-117b：成功即出清同指纹连败计数（断5 棘轮自愈）。
+                            # ★往期批次 相关任务：成功即出清同指纹连败计数（断5 棘轮自愈）。
                             #   失败侧在下方 else 分支递增，成功侧此前零出清 ⇒ 单向棘轮。
                             self._m114a_clear_ratchet(
                                 self._cooldown_key(_issue),
@@ -1765,13 +1765,13 @@ class SafeEvolutionExecutor:
                                 except Exception as _exc:
                                     _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
                         else:
-                            # ★第114批 T-114a（断4）：失败原因解码——
+                            # ★往期批次 相关任务（断4）：失败原因解码——
                             #   _verify_in_copy 结果此前无 reason 字段，永远落「未知」；
                             #   现改用 failed_check（syntax/import/in_copy_match/indent…）。
                             _fc = _verify.get("failed_check") or _verify.get("reason", "未知")
                             _module_logger.debug(
                                 f"[本地修复] {_organ}.{_method} ({_type}) 验证未通过: {str(_fc)[:80]}")
-                            # ★第114批 T-114a（断2）：验证失败的题登记冷却，阻断每轮重扫重问。
+                            # ★往期批次 相关任务（断2）：验证失败的题登记冷却，阻断每轮重扫重问。
                             #   _issue 即本轮被问的题，冷却指纹与 discover 产出的身份一致。
                             self._m114a_register_verify_failure(
                                 self._cooldown_key(_issue), detail=str(_fc))
@@ -1784,13 +1784,13 @@ class SafeEvolutionExecutor:
                     else:
                         _module_logger.debug(
                             f"[本地修复] {_organ}.{_method} ({_type}) 补丁生成失败或无变化")
-                        # ★第116批 T-116a①：该主分支此前**零冷却登记**（断2 只覆盖"验证未通过"），
+                        # ★往期批次 相关任务①：该主分支此前**零冷却登记**（断2 只覆盖"验证未通过"），
                         #   导致 Liver×2 每轮被重扫重问、永无冷却。补登记使其进冷却闭环。
                         self._m114a_register_verify_failure(
                             self._cooldown_key(_issue), detail="补丁生成失败或无变化")
                 except Exception as _le:
                     _module_logger.error(f"[本地修复] {_organ}.{_method} ({_type}) 异常: {_le}")
-            # ★M85-1（第85批 T-85a）：本地学习尝试通道。
+            # ★M85-1（第85批 相关任务）：本地学习尝试通道。
             #   对「本地无规则」的问题先做一次**保守低风险**修复尝试
             #   （不替代 LLM 通道 / 不自动应用 / 只入队待审批），并把结果记入
             #   data/patches/local_learning_attempts.jsonl，形成
@@ -1862,14 +1862,14 @@ class SafeEvolutionExecutor:
                         _snippet, _llm_clean,
                         f"file={_issue.get('file', '')}, "
                         f"method={_issue.get('method', '')}")  # ★第91批T-91b
-                    # ★第87批 T-87b：补丁 file 字段必填校验（防呆 + 留痕）。
+                    # ★第87批 相关任务：补丁 file 字段必填校验（防呆 + 留痕）。
                     #   若上面两级反查后 issue["file"] 仍为空（如 organ 是"胃"这类
                     #   中文器官名），构造出的补丁必然被 _check_patch_path 以
                     #   「补丁缺少 file 字段」拒绝 —— 既然注定被拒，就不再生成、
                     #   也不再消耗一次 verify_in_copy（文件复制 + 语法 + 导入三轮检查），
                     #   改为显式留痕，让「未定位」在日志里可见而不是伪装成验证失败。
                     _llm_no_file = not str(_issue.get("file", "") or "").strip()
-                    # ★第90批 T-90a：original_code 必填（与 _llm_no_file /
+                    # ★第90批 相关任务：original_code 必填（与 _llm_no_file /
                     #   _llm_bad_material **同型**处置）。
                     #   补丁的 original_code 取自素材 _snippet；素材为空时
                     #   `_check_llm_patch_completeness` 关0 会以「缺少 original_code」
@@ -1880,7 +1880,7 @@ class SafeEvolutionExecutor:
                     #     当前**结构性不可达**，属契约显式化（零行为变化），
                     #     用于在素材提取链路未来变更时自保。
                     _llm_no_snippet = not str(_snippet or "").strip()
-                    # ★第88批 T-88a：素材非代码（ERROR 日志文本）时不得构造补丁 ——
+                    # ★第88批 相关任务：素材非代码（ERROR 日志文本）时不得构造补丁 ——
                     #   补丁契约要求 original_code 能在目标文件里定位
                     #   （_verify_in_copy 的「original_code not in full_content」），
                     #   日志文本找不到 ⇒ 该补丁注定以「与原文相似度过低(0.03<0.5)」
@@ -2049,7 +2049,7 @@ class SafeEvolutionExecutor:
                     _bump_reason("日志类·文件未定位")
             elif not _local_ok:
                 # ★PHASE13（2026-09-07）：拆分「不支持」的两种截然不同的语义。
-                #   原措辞统一是「类型不支持(X)」，读者无从分辨，星轨据此在
+                #   原措辞统一是「类型不支持(X)」，读者无从分辨，内部协作者据此在
                 #   15 小时分析报告里建议「把 unsafe_eval/sql_injection 补进
                 #   白名单」—— 那是 _HIGH_RISK_NON_FIXABLE 安全边界，补了等于
                 #   允许自动改写注入点，风险极高。措辞不清直接导致了错误结论。
@@ -2117,7 +2117,7 @@ class SafeEvolutionExecutor:
                 _module_logger.info(
                     f"[P1-3 冷却隔离] 本轮登记 {_cooled_down} 个不可修复问题，"
                     f"冷却期内不再占用修复名额（到期自动解冻复检）")
-                # ★第114批 T-114a（断6）：冷却登记变更后落盘，重启可续。
+                # ★往期批次 相关任务（断6）：冷却登记变更后落盘，重启可续。
                 self._m114a_save_cooldown()
 
         # ★T3修复（N1/P1）：原返回字典**没有** repaired 与 pass_rate 两个键，
@@ -2125,10 +2125,10 @@ class SafeEvolutionExecutor:
         #     _result.get('repaired', 0) / _result.get('pass_rate', 0)
         #   → 无论实际修复是否成功，日志恒显示「0/N个, 通过率=0%」。
         #   生产 11:21:43 的「修复完成: 0/1个, 通过率=0%」即该恒等式的产物，
-        #   无法据此判断自主进化到底有没有干活（星轨据此报了 N1）。
+        #   无法据此判断自主进化到底有没有干活（内部协作者据此报了 N1）。
         #   此处补齐两个键，并额外给出是否全部跳过的标记，便于排查。
         _repaired = _local_submitted + _submitted
-        # ★M84-4（第84批 T-84b）：口径分层——`_repaired` 实为「提交待审批数」，
+        # ★M84-4（第84批 相关任务）：口径分层——`_repaired` 实为「提交待审批数」，
         #   与「已应用」「已验证修复」是三个不同的量。此前统一叫"修复"，导致下游
         #   （含只读诊断）把 _repaired=0 误读为"要求运行时验证通过才 +1 的天花板"。
         #   本行**只读**补丁历史做汇总，不改任何既有返回值与流程。
@@ -2360,7 +2360,7 @@ class SafeEvolutionExecutor:
             _detail = (f"修复前错误={_baseline}, 修复后错误={_after}, "
                        f"效果={_effectiveness:.0%}, 运行时长={_elapsed:.0f}秒")
         else:
-            # ★T-99d：baseline_errors=0 时无错误基线可对比，无法判定修复效果
+            # ★相关任务：baseline_errors=0 时无错误基线可对比，无法判定修复效果
             # （不适用/无法验证）。此前会误判为 effectiveness=1.0 + verified=True
             # （假成功），污染修复率与平均效果统计。此处明确标记为无法验证，
             # 既不算修复成功，也不参与平均效果计算。
@@ -2381,18 +2381,18 @@ class SafeEvolutionExecutor:
             "after_fix": _after,
             # ★第41批 T1（P0-263）：任务书要求写入 post_apply_errors（此前完全缺失）
             "post_apply_errors": _after,
-            # ★T-99d：baseline=0 时为 None（无法验证），不参与平均效果计算
+            # ★相关任务：baseline=0 时为 None（无法验证），不参与平均效果计算
             "effectiveness": _effectiveness,
             "new_issues": _after,
             "detail": _detail,
-            # ★第114批 T-114b①：baseline=0 无错误基线可对比 -> undecidable=True，
+            # ★往期批次 相关任务①：baseline=0 无错误基线可对比 -> undecidable=True，
             #   调用方据此把补丁转入 needs_reverify（延迟复验）而非 runtime_failed，
             #   避免"无法验证"被误折叠为"修复失败"进而误回滚。
             "undecidable": _undecidable,
         }
 
     def _m84_recompute_split(self, patch: dict[str, Any]) -> bool:
-        """★M84-3（第84批 T-84a）：运行时验证写回后重算 problem_fixed。
+        """★M84-3（第84批 相关任务）：运行时验证写回后重算 problem_fixed。
 
         背景（实测）：``patch_verification_split.apply_split`` 此前**只在补丁落盘到
         history 时**被调用一次（``PatchManager.apply_all_pending`` 内，L1960），那一刻
@@ -2418,7 +2418,7 @@ class SafeEvolutionExecutor:
             return False
 
     def _m84_patch_ledger(self) -> dict[str, Any]:
-        """★M84-4（第84批 T-84b）：补丁账本分层计数（**只读**，不改任何状态）。
+        """★M84-4（第84批 相关任务）：补丁账本分层计数（**只读**，不改任何状态）。
 
         把此前被混为一谈的三个口径分开暴露：
             * ``applied_total``        —— 已落盘到活代码的补丁数
@@ -2472,7 +2472,7 @@ class SafeEvolutionExecutor:
             _needs_reverify = 0
             _reverify_delay = 3600  # 延迟复验窗口（秒）：到点后重采基线
 
-            # ★第114批 T-114b①：延迟复验前置——每轮开头对到点(>=reverify_after)的
+            # ★往期批次 相关任务①：延迟复验前置——每轮开头对到点(>=reverify_after)的
             #   needs_reverify 补丁重采基线(重数修复后错误)，据实判定，避免 baseline=0
             #   的"不可判定"被永久折叠进 runtime_failed + 回滚。未到点者跳过，等下轮。
             _now = time.time()
@@ -2499,7 +2499,7 @@ class SafeEvolutionExecutor:
                     "undecidable": False,
                 }
                 _patch["runtime_verify_result"] = _rverdict
-                # ★第116批 T-116b：顶层 runtime_verified 取嵌套真值（原恒 True，
+                # ★往期批次 相关任务：顶层 runtime_verified 取嵌套真值（原恒 True，
                 #   与 runtime_verify_result.verified=False 背离 ⇒ C6 污染）。
                 _patch["runtime_verified"] = bool(_rverdict.get("verified"))
                 _patch.pop("reverify_after", None)
@@ -2539,24 +2539,24 @@ class SafeEvolutionExecutor:
             for _patch in _pending:
                 if not _patch.get("needs_runtime_verify"):
                     continue
-                # ★第116批 T-116b：runtime_verified 语义改为"验证通过"，故跳过判据
+                # ★往期批次 相关任务：runtime_verified 语义改为"验证通过"，故跳过判据
                 #   补 OR runtime_verify_result 存在（=已验过，无论通过与否），保持原有
                 #   "已验证过即跳过、失败补丁不每轮重试"的行为不变。
                 if _patch.get("runtime_verified") or _patch.get("runtime_verify_result") is not None:
-                    # ★M84-3（第84批 T-84a）：历史已验补丁补算 problem_fixed——
+                    # ★M84-3（第84批 相关任务）：历史已验补丁补算 problem_fixed——
                     #   此前本分支直接 continue，使旧补丁永久停在 None（实测 4 条
                     #   PulseKidney 补丁 baseline>0 效果 100% 却无该字段）。
                     self._m84_recompute_split(_patch)
                     continue  # 已验证过，跳过
                 if _patch.get("status") == "needs_reverify":
-                    continue  # ★第114批 T-114b①：由延迟复验前置处理，避免重复判定
+                    continue  # ★往期批次 相关任务①：由延迟复验前置处理，避免重复判定
                 _total += 1
 
                 _result = self.verify_fix_from_logs(_patch)
                 _patch["runtime_verify_result"] = _result
-                # ★第116批 T-116b：顶层 runtime_verified 不再无条件置 True（C6 污染根因），
+                # ★往期批次 相关任务：顶层 runtime_verified 不再无条件置 True（C6 污染根因），
                 #   改为按判定结果落到下方"通过/失败/不可判定"三个分支中。
-                # ★第105批 T-105a：同步顶层 baseline_errors（供放行判据读取，
+                # ★往期批次 相关任务：同步顶层 baseline_errors（供放行判据读取，
                 #   避免仅依赖嵌套字段），回退 runtime_verify_result.baseline。
                 if not isinstance(_patch.get("baseline_errors"), (int, float)) or _patch.get("baseline_errors") <= 0:
                     _b = (_result or {}).get("baseline")
@@ -2565,12 +2565,12 @@ class SafeEvolutionExecutor:
                 # ★第41批 T1（P0-263）：回写应用后错误数（任务书要求，此前缺失）
                 _patch["post_apply_errors"] = _result.get(
                     "post_apply_errors", _result.get("after_fix", 0))
-                # ★M84-3（第84批 T-84a）：baseline + post_apply_errors 均已齐备 →
+                # ★M84-3（第84批 相关任务）：baseline + post_apply_errors 均已齐备 →
                 #   重算语义拆分，把 problem_fixed 从 None 落到 True/False。
                 self._m84_recompute_split(_patch)
 
                 if _result.get("undecidable"):
-                    # ★第114批 T-114b①：baseline=0 不可判定 -> 延迟复验，
+                    # ★往期批次 相关任务①：baseline=0 不可判定 -> 延迟复验，
                     #   不折叠进 runtime_failed（避免误回滚/误标 needs_repair）。
                     _patch["runtime_verified"] = False
                     _needs_reverify += 1
@@ -2626,10 +2626,10 @@ class SafeEvolutionExecutor:
                 if _eff is not None:
                     _effects.append(_eff)
 
-            # ★第105批 T-105a（P0）：补回边——验证写回后复查并放行 T-101a 合格补丁。
+            # ★往期批次 相关任务（P0）：补回边——验证写回后复查并放行 相关任务 合格补丁。
             #   旧逻辑仅在「入队时」调用放行判据（彼时 runtime_verify_result 尚不存在
             #   ⇒ 判据恒假），验证写回后又无人复查 ⇒ 闭环断裂（实测 30 条 rv=True 仍 0 放行）。
-            #   此处遍历 status∈{pending, runtime_verified} 的条目，对满足 T-101a 判据
+            #   此处遍历 status∈{pending, runtime_verified} 的条目，对满足 相关任务 判据
             #   （已改读嵌套 runtime_verify_result.verified + baseline_errors>0）者置 approved。
             _released = 0
             for _patch in _pending:
@@ -2721,9 +2721,9 @@ class SafeEvolutionExecutor:
                     continue
                 if not _patch.get("needs_runtime_verify"):
                     continue
-                # ★第116批 T-116b：同上，跳过判据补 OR runtime_verify_result 存在。
+                # ★往期批次 相关任务：同上，跳过判据补 OR runtime_verify_result 存在。
                 if _patch.get("runtime_verified") or _patch.get("runtime_verify_result") is not None:
-                    # ★M84-3（第84批 T-84a）：已验补丁补算 problem_fixed（与
+                    # ★M84-3（第84批 相关任务）：已验补丁补算 problem_fixed（与
                     #   verify_submitted_patches 同源处置）。
                     self._m84_recompute_split(_patch)
                     continue
@@ -2735,7 +2735,7 @@ class SafeEvolutionExecutor:
                 _baseline = _patch.get("baseline_errors", 0)
 
                 if not _file or not _method or not _applied_at:
-                    # ★第116批 T-116b：原恒置 True 与嵌套 verified=False 背离（C6 污染）。
+                    # ★往期批次 相关任务：原恒置 True 与嵌套 verified=False 背离（C6 污染）。
                     _patch["runtime_verified"] = False
                     _patch["runtime_verify_result"] = {
                         "verified": False, "detail": "缺位置/时间戳，跳过运行时验证"}
@@ -2754,7 +2754,7 @@ class SafeEvolutionExecutor:
                     _detail = (f"应用后错误={_after}, 基线={_baseline}, "
                                f"效果={_effectiveness:.0%}, 运行{_elapsed:.0f}秒")
                 else:
-                    # ★T-99d：baseline=0 无法判定修复效果（不适用/无法验证），
+                    # ★相关任务：baseline=0 无法判定修复效果（不适用/无法验证），
                     # 不算修复成功，effectiveness 记为 None（不参与平均）。
                     _effectiveness = None
                     _verified_ok = False
@@ -2762,17 +2762,17 @@ class SafeEvolutionExecutor:
                                f"无错误基线可对比，无法判定修复效果（不适用），"
                                f"运行{_elapsed:.0f}秒")
 
-                # ★第116批 T-116b：顶层取实测真值 _verified_ok（原恒 True ⇒ C6 污染）。
+                # ★往期批次 相关任务：顶层取实测真值 _verified_ok（原恒 True ⇒ C6 污染）。
                 _patch["runtime_verified"] = bool(_verified_ok)
                 _patch["runtime_verify_result"] = {
                     "verified": _verified_ok,
                     "baseline": _baseline,
                     "after_fix": _after,
-                    # ★T-99d：baseline=0 时为 None（无法验证），不参与平均
+                    # ★相关任务：baseline=0 时为 None（无法验证），不参与平均
                     "effectiveness": _effectiveness,
                     "detail": _detail,
                 }
-                # ★M84-3（第84批 T-84a）：应用后计数已实测 → 回写顶层 post_apply_errors
+                # ★M84-3（第84批 相关任务）：应用后计数已实测 → 回写顶层 post_apply_errors
                 #   并重算语义拆分（此前只写 runtime_verify_result，problem_fixed 不更新）。
                 _patch["post_apply_errors"] = _after
                 self._m84_recompute_split(_patch)
@@ -2877,9 +2877,9 @@ class SafeEvolutionExecutor:
                 _key = f"{_type}_{_strategy}_{_fail_reason}"
                 self._failure_patterns[_key] = self._failure_patterns.get(_key, 0) + 1
 
-                # ★第114批 T-114a（断2）：验证失败（本地/LLM 统一学习入口）登记冷却。
+                # ★往期批次 相关任务（断2）：验证失败（本地/LLM 统一学习入口）登记冷却。
                 #   补丁指纹 best-effort 构造，兜底覆盖 LLM 路径；本地路径已在修复落点精确登记。
-                # ★第116批 T-116a③：双指纹格式统一 —— 原此处为 organ|type|desc 第二格式，
+                # ★往期批次 相关任务③：双指纹格式统一 —— 原此处为 organ|type|desc 第二格式，
                 #   与本地路径 _cooldown_key（file|method|type）并存 ⇒ 同题两路=两键、冷却被稀释。
                 #   统一为 _cooldown_key(patch)（file|method|type，与断2 同构）。
                 _fp = self._cooldown_key(patch)
@@ -2893,7 +2893,7 @@ class SafeEvolutionExecutor:
                     f"[经验学习] 成功模式记录: type={_type}, strategy={_strategy}, "
                     f"effectiveness={_effectiveness:.0%}"
                 )
-                # ★第117批 T-117b：补丁验证通过 —— 出清同指纹连败计数。
+                # ★往期批次 相关任务：补丁验证通过 —— 出清同指纹连败计数。
                 #   与上方失败分支的 _m114a_register_verify_failure 严格对称：
                 #   此处是「本地/LLM 统一学习入口」的成功侧，一处覆盖全部补丁路径
                 #   （含延迟复验 :2461 与主验证循环 :2576 两处调用）。
@@ -3072,7 +3072,7 @@ class SafeEvolutionExecutor:
             _i += 1
         return "".join(_out), _count
 
-    # ========== ★第91批 T-91b：LLM 补丁缩进契约 ==========
+    # ========== ★第91批 相关任务：LLM 补丁缩进契约 ==========
 
     _M91_INDENT_UNIT = 4
     _M91_REPAIR_ROUNDS = 8
@@ -3085,7 +3085,7 @@ class SafeEvolutionExecutor:
         `full_content.replace(original_code, modified_code)` **原位整段替换**，
         对此后的缩进**一字不改** ⇒ modified 的基础缩进必须与 original 一致。
         不一致时替换结果**仍是合法 Python**，却会把**类体/函数体提前终止**。
-        2026-09-20 实测（星轨 T-91d 自动应用 LLM 补丁，三关 + py_compile + import 全放行）：
+        2026-09-20 实测（内部协作者 相关任务 自动应用 LLM 补丁，三关 + py_compile + import 全放行）：
           PulseInnerWorld.py 类方法 367 → 270（-97）
           PulseLung.py       类方法  86 →  45（-41）
 
@@ -3268,7 +3268,7 @@ class SafeEvolutionExecutor:
                 return _fixed
             except SyntaxError:
                 _cur = _fixed
-        # ★第91批 T-91b 阶段3：缩进修复（灰度 ENABLE_M91_LLM_INDENT_REPAIR）。
+        # ★第91批 相关任务 阶段3：缩进修复（灰度 ENABLE_M91_LLM_INDENT_REPAIR）。
         #   T0 实测：4 次 LLM 补丁尝试全部因
         #   `IndentationError: unindent does not match any outer indentation level
         #    (<llm-patch>, line 9/11/19/26)` 被完整性关2 拒绝；复现实验逐字复现。
@@ -4028,8 +4028,8 @@ class SafeEvolutionExecutor:
             }
         return None
 
-    # ===== ★M85-1（第85批 T-85a）：本地学习尝试通道 =====
-    #   动机（任务书 T-85a）：`Traceback` / `ERROR` / `cross_module_singleton_call`
+    # ===== ★M85-1（第85批 相关任务）：本地学习尝试通道 =====
+    #   动机（任务书 相关任务）：`Traceback` / `ERROR` / `cross_module_singleton_call`
     #   / `long_method` 等未分类问题此前**完全不参与本地修复** —— L1178 的
     #   `_local_ok = _type in _local_fixable_types` 为假 → 路径A 直接短路 →
     #   本地机制失去学习机会，问题 100% 转 LLM，`submitted` 长期为 0。
@@ -4150,7 +4150,7 @@ class SafeEvolutionExecutor:
         """★M85-1：把一次学习尝试追加写入 JSONL（append-only，永不覆盖）。
 
         落盘：``<project_root>/data/patches/local_learning_attempts.jsonl``
-        （任务书 §T-85a.2 指定字段 + patch_id / verify_reason 便于审计）。
+        （任务书 §相关任务.2 指定字段 + patch_id / verify_reason 便于审计）。
         """
         import json as _m85_json
         _dir = os.path.join(self._project_root, "data", "patches")
@@ -4174,7 +4174,7 @@ class SafeEvolutionExecutor:
 
     def _m85_learning_attempt(self, issue, file_path, method, snippet,
                               organ="") -> dict:
-        """★M85-1（第85批 T-85a）：对未分类问题做一次保守修复尝试并记录学习结果。
+        """★M85-1（第85批 相关任务）：对未分类问题做一次保守修复尝试并记录学习结果。
 
         流程：生成保守修复 → 副本验证 → 通过则**入队待审批**（★不自动应用，
         见 PatchManager._m85_local_low_risk_auto_apply 显式排除 learning_attempt）
@@ -4290,7 +4290,7 @@ class SafeEvolutionExecutor:
 
         # ★P1-1修复（第十批）：生成前预检——同文件同方法已有待审批补丁时，
         #   直接跳过生成，避免「同一处改动反复生成 + LLM 反复调用」。
-        #   星轨 9 小时日志实测：PulseLiver/PulseCortex 两个 silent_exception
+        #   内部协作者 9 小时日志实测：PulseLiver/PulseCortex 两个 silent_exception
         #   补丁重复生成 34 次，每次都走「同题择优保留」白白浪费 LLM 调用。
         #   此处从源头拦截：只要同位置已有待审批补丁，就不再重新生成。
         try:
@@ -4732,7 +4732,7 @@ class SafeEvolutionExecutor:
         _f = str(issue.get("file", "") or "")
         _m = str(issue.get("method", "") or "")
         if _f or _m:
-            # ★第117批 T-117d①：file 先做形制归一（详见 _normalize_file_key），
+            # ★往期批次 相关任务①：file 先做形制归一（详见 _normalize_file_key），
             #   使「反斜杠相对 / 正斜杠相对 / 绝对」三种形制收敛为同一键。
             return (_normalize_file_key(_f), _m,
                     str(issue.get("type", "") or ""))
@@ -4766,11 +4766,11 @@ class SafeEvolutionExecutor:
                 return _secs
         return float(self._no_fix_cooldown_secs.get("_default", 3600.0))
 
-    # ========== ★第114批 T-114a（治病·断2/断6）冷却落盘与验证失败登记 ==========
+    # ========== ★往期批次 相关任务（治病·断2/断6）冷却落盘与验证失败登记 ==========
     def _m114a_cooldown_path(self) -> str:
         """惰性解析冷却落盘路径（data/evolution/cooldown.json）。"""
         if not isinstance(self, SafeEvolutionExecutor):
-            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            # ★相关任务：占位/Dummy 实例不应承担冷却落盘职责
             return ""
         if self._m114a_cooldown_file is None:
             _root = getattr(self, "_project_root", None) or os.getcwd()
@@ -4781,7 +4781,7 @@ class SafeEvolutionExecutor:
     def _m114a_load_cooldown(self) -> None:
         """★断6：从 cooldown.json 加载冷却（存剩余秒数，跨重启可续）。"""
         if not isinstance(self, SafeEvolutionExecutor):
-            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            # ★相关任务：占位/Dummy 实例不应承担冷却落盘职责
             return
         try:
             import json as _json
@@ -4811,7 +4811,7 @@ class SafeEvolutionExecutor:
     def _m114a_save_cooldown(self) -> None:
         """★断6：把冷却表（剩余秒数 + 升级轮数）落盘到 cooldown.json。"""
         if not isinstance(self, SafeEvolutionExecutor):
-            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            # ★相关任务：占位/Dummy 实例不应承担冷却落盘职责
             return
         try:
             import json as _json
@@ -4834,7 +4834,7 @@ class SafeEvolutionExecutor:
         同因累计满 3 轮升级到 86400s（日级复检）；落盘见 _m114a_save_cooldown。
         """
         if not isinstance(self, SafeEvolutionExecutor):
-            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            # ★相关任务：占位/Dummy 实例不应承担冷却落盘职责
             return
         try:
             _rnd = int(self._no_fix_cooldown_rounds.get(fp, 0)) + 1
@@ -4851,9 +4851,9 @@ class SafeEvolutionExecutor:
             _module_logger.debug(f"[验证失败冷却] 登记异常(已忽略): {type(_e).__name__}: {_e}")
 
     def _m114a_clear_ratchet(self, fp: str, reason: str = "") -> None:
-        """★第117批 T-117b（N1）：成功侧出清 —— 同指纹连败计数归零（棘轮自愈）。
+        """★往期批次 相关任务（N1）：成功侧出清 —— 同指纹连败计数归零（棘轮自愈）。
 
-        背景（烛微 §2-N1 实测）：断5 换源后判据源 = `_no_fix_cooldown_rounds`，
+        背景（内部协作者 §2-N1 实测）：断5 换源后判据源 = `_no_fix_cooldown_rounds`，
         计数只在 `_m114a_register_verify_failure` 里**递增**，成功侧**无任何出清点**。
         于是某指纹累计 >=3 连败后被 `_m114a_should_skip_ask` 永久跳过；计数还会
         随 `_m114a_save_cooldown` 落盘 ⇒ **跨重启永续**，棘轮单向、无自愈出口。
@@ -4866,7 +4866,7 @@ class SafeEvolutionExecutor:
         机制（:1447 到期自动解冻），与断5 棘轮无关；并入本批会扩大改动面。
         """
         if not isinstance(self, SafeEvolutionExecutor):
-            # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
+            # ★相关任务：占位/Dummy 实例不应承担冷却落盘职责
             return
         try:
             _had = int(self._no_fix_cooldown_rounds.get(fp, 0))
@@ -4883,7 +4883,7 @@ class SafeEvolutionExecutor:
                 f"[棘轮重置] 出清异常(已忽略): {type(_e).__name__}: {_e}")
 
     def _m114a_should_skip_ask(self, issue: dict[str, Any]) -> bool:
-        """★断5（T-115d 指纹级降档）：同指纹问题若已累计 ≥3 轮验证失败且无成功记录，
+        """★断5（相关任务 指纹级降档）：同指纹问题若已累计 ≥3 轮验证失败且无成功记录，
         跳过本轮 LLM 问询，阻断确定性回环烧 LLM。
 
         判据源改用断2/断6 维护的 _no_fix_cooldown_rounds（真实指纹计数，非空集 hub），
@@ -4989,7 +4989,7 @@ class SafeEvolutionExecutor:
         _steps = []
         _step_index = 0
         # 按优先级排序：基础→中等→复杂
-        # ★第105批 T-105b（P1）：打破「延期标记只写不读」导致的永久饥饿。
+        # ★往期批次 相关任务（P1）：打破「延期标记只写不读」导致的永久饥饿。
         #   上一轮被截断丢弃的问题会打 _deferred_from_prev_round=True，但此前该标记
         #   从无读取点 → 下一轮排序仍靠前、仍被截掉（实测 8 位置永久轮不上）。
         #   此处补读取点：以「是否延期」作次级排序键，延期组排到同优先级队尾，

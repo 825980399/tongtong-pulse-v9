@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PulseInnerWorld 第二刀拆分（主线第139批 T-139b）：知识检索簇 Mixin。
+"""PulseInnerWorld 第二刀拆分（主线往期批次 相关任务）：知识检索簇 Mixin。
 
 从 organs/brain/PulseInnerWorld.py 平移 24 个知识检索/推理编排方法（原 5841-8207 行，
 2367 行），含 3 个 @staticmethod（_fusion_keywords / _split_sentences / _repeat_ratio）。
@@ -20,12 +20,12 @@ from nucleus.const import (
 )
 
 
-# ★主线第139批 T-139b：模块级 logger（平移自主文件同名模块变量）
+# ★主线往期批次 相关任务：模块级 logger（平移自主文件同名模块变量）
 _module_logger = logging.getLogger(__name__)
 
 
 class PulseInnerWorldKnowledgeMixin:
-    """知识检索簇：语义检索 / 融合 / 推理编排（主线第139批 T-139b 拆分）。"""
+    """知识检索簇：语义检索 / 融合 / 推理编排（主线往期批次 相关任务 拆分）。"""
 
     def _knowledge_retrieve(self, question: str) -> str | None:
         if self.node_pool is None:
@@ -783,7 +783,7 @@ class PulseInnerWorldKnowledgeMixin:
         return round(1.0 - len(set(grams)) / len(grams), 4)
 
     def _evaluate_fusion_quality(self, fused: str, nodes: list[dict]) -> dict:
-        """评估本地融合质量（星轨拍板标准）。"""
+        """评估本地融合质量（内部协作者拍板标准）。"""
         try:
             import config as _cfg_q
             _min_len = int(getattr(_cfg_q, "LOCAL_FUSION_MIN_LENGTH", 30))
@@ -1213,7 +1213,7 @@ class PulseInnerWorldKnowledgeMixin:
         for _tp in _thinking_prefixes:
             text = text.replace(_tp, "")
 
-        # 3.5 ★第九批 3.3（星轨 P1-20）：剔除拼进回答的「节点标签」。
+        # 3.5 ★第九批 3.3（内部协作者 P1-20）：剔除拼进回答的「节点标签」。
         #   知识节点里存着「功能: xxx」「依赖: a、b」这类结构化字段，被直接拼进
         #   回答就成了「…依赖、功能: 这样的关键词堆砌」，读起来根本不像人话。
         #   这里把「标签: 内容」整体删掉；剩下光秃秃的标签（如「依赖、功能:」）也删。
@@ -2024,7 +2024,7 @@ class PulseInnerWorldKnowledgeMixin:
                          f"路由薄弱降级: '{_derivation_type}'属于薄弱领域，"
                          f"复杂度感知+{_complexity_boost:.2f}")
                 # 通过调整 _question_complexity 让后续的深度思考检测更容易触发
-                # 注意：_question_complexity 现为 ctx._question_complexity 字段（第147批九刀拆分后）
+                # 注意：_question_complexity 现为 ctx._question_complexity 字段（往期批次九刀拆分后）
                 # 本方法不持有 ctx，仍通过返回特殊的 derivation_type 来标记，让外层处理
                 _derivation_type = f"weak_{_derivation_type}"
 
@@ -2287,7 +2287,7 @@ class PulseInnerWorldKnowledgeMixin:
                 # 取知识库中最近活跃的 L2/L3 节点文本作为类比源
                 _candidates = []
                 try:
-                    # ★D152/W4：优先取含冷驱逐节点的全集
+                    # ★Dxxx/W4：优先取含冷驱逐节点的全集
                     if hasattr(self.node_pool, "get_all_including_evicted"):
                         _pool_nodes = self.node_pool.get_all_including_evicted()
                     else:

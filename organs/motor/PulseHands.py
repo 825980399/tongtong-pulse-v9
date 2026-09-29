@@ -3,7 +3,7 @@
 PulseHands —— 双手器官 · 本地动作的短平快执行器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 MotorEvent.EXECUTE 与 HandsEvent.EXECUTE，执行本地动作类任务，执行前做算力准入判断，完成后广播 HandsEvent.RESULT。

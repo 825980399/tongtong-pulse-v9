@@ -1,7 +1,7 @@
 """chat_service —— 对话交互功能模块（v9.5 异步双向版 · 更像人类）
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -25,8 +25,8 @@ from nucleus.const import ChatEvent, LogLevel, MotorEvent, MouthEvent, PersonaEv
 try:
     from config import ENABLE_FACE_WELCOME_DIRECT, FACE_WELCOME_SHADOW
 except Exception:
-    ENABLE_FACE_WELCOME_DIRECT = False  # ★第109批 T-109b：config 键缺失时回落默认关
-    FACE_WELCOME_SHADOW = True  # ★第115批 T-115e：config 键缺失时回落默认影子开
+    ENABLE_FACE_WELCOME_DIRECT = False  # ★往期批次 相关任务：config 键缺失时回落默认关
+    FACE_WELCOME_SHADOW = True  # ★往期批次 相关任务：config 键缺失时回落默认影子开
 
 # 导入Web对话推送（如果模块未加载则降级）
 try:
@@ -137,13 +137,13 @@ class ChatService:
 
         # 处理身份切换脉冲（来自自我认知的权威身份）
         if event_type == PersonaEvent.SWITCHED:
-            user_name = payload.get("current_user", "访客")  # ★T-115e R2：未知用户默认"访客"而非"小林"
+            user_name = payload.get("current_user", "访客")  # ★相关任务 R2：未知用户默认"访客"而非"内部协作者"
             self._current_user_name = user_name
             return
         
         # 处理人脸检测事件（保留欢迎/告别打印）
         if event_type == ChatEvent.USER_PRESENCE_DETECTED:
-            user_name = payload.get("user_name", "访客")  # ★T-118a 未知/访客占位
+            user_name = payload.get("user_name", "访客")  # ★相关任务 未知/访客占位
             if user_name and user_name not in ("用户", "访客"):
                 self._current_user_name = user_name
             # ★第80批 T6：emoji print 包 try-except 降级，不阻断后续计时器重置与脉冲发射
@@ -171,10 +171,10 @@ class ChatService:
                     layer="L1"
                 )
                 self.info_field.publish(welcome_pulse)
-                # ★第109批 T-109b：face_welcome 快赢（方案A，灰度开关 ENABLE_FACE_WELCOME_DIRECT）
+                # ★往期批次 相关任务：face_welcome 快赢（方案A，灰度开关 ENABLE_FACE_WELCOME_DIRECT）
                 #   开关开（默认关）：跳过"你是谁"推理请求（InferenceEvent.REQUEST），省 1 次 LLM 调用；
                 #   开关关：保持原行为（发射 REQUEST 融入自我画像）。
-                # ★T-115e V4 熟人判据 + 影子半态：
+                # ★相关任务 V4 熟人判据 + 影子半态：
                 #   开关开 且 已识别熟人(非访客/用户) → 本应跳过"你是谁"询问（直接欢迎）；
                 #   陌生人/未绑定 → 始终发射推理请求（问"你是谁"）；
                 #   影子模式(FACE_WELCOME_SHADOW=True, 默认)：本应跳过者只记日志不真跳，观察 1 天。

@@ -3,7 +3,7 @@
 TimeCore.py —— 时间核心
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 时间感知与时间推理核心模块
@@ -116,7 +116,7 @@ class TimeCore:
                         f"托管调度可能停摆，建议关闭 ENABLE_TIMECORE_ACTIVE_SCHEDULE 回退 Heart"
                     )
             self._last_tick_time = now
-            # 顺序（星轨确认）：先广播 time.tick，再触发被托管任务
+            # 顺序（内部协作者确认）：先广播 time.tick，再触发被托管任务
             self._broadcast()
             if self._active_schedule_enabled:
                 self._dispatch_managed_tasks()

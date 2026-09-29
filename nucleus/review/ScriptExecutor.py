@@ -3,7 +3,7 @@
 ScriptExecutor.py —— 脚本执行器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 外部脚本的安全执行与结果收集
@@ -296,14 +296,14 @@ if __name__ == "__main__":
         validation = self.validate_script(script_code)
         if not validation["valid"]:
             result.error = f"脚本验证失败: {'; '.join(validation['errors'])}"
-            # ★T4修复（P2，星轨 N3）：安全门拒绝高危脚本是**预期业务行为**，
+            # ★T4修复（P2，内部协作者 N3）：安全门拒绝高危脚本是**预期业务行为**，
             #   不是系统错误。原用 ERROR 级别，导致两个后果：
             #   1) 污染错误统计（50分钟运行出现 4 个 ERROR，全是本处拦截日志）；
             #   2) 更严重的——LogAnalyzer 会把 ERROR 日志当作代码问题采集
             #      （LogAnalyzer.py:124-142 的 ERROR/CRITICAL 分支），
             #      使这些「正常拦截记录」进入自主进化的问题队列，
             #      而它们既无 file 也无 method，修复流程必然静默跳过，
-            #      最终表现为「发现N个问题，修复0个，通过率0%」（星轨 N1）。
+            #      最终表现为「发现N个问题，修复0个，通过率0%」（内部协作者 N1）。
             #   降级为 WARNING：仍醒目可追溯，但不再被当作系统错误与代码缺陷。
             _logger.warning(result.error)
             return result

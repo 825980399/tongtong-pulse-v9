@@ -3,7 +3,7 @@
 PulseInferenceEngine —— 推理引擎器官 · 本地轻量推理插槽
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 InferenceEngineEvent.EXECUTE 脉冲，执行带 KV 缓存的本地轻量推理，把结果写入缓存后广播 InferenceEngineEvent.RESULT；在外部大模型不可用时提供可降级的推理通路。

@@ -3,7 +3,7 @@
 IntentChannels.py —— 意图通道
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: QICA意图分类的多通道定义与权重
@@ -29,7 +29,7 @@ from nucleus.data.DataAccessLayer import safe_read_json
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
 
-# ========== 24 个意图类型（原 16 + 星轨补充 8） ==========
+# ========== 24 个意图类型（原 16 + 内部协作者补充 8） ==========
 ALL_INTENTS = (
     # —— 原有 16 ——
     "身份确认", "关系查询", "知识查询", "概念解释", "规则查阅", "技术推理",
@@ -78,7 +78,7 @@ PATH_TO_METHOD = {
     "llm_fallback": None,  # 不输出 method，由调用方标记 need_llm
 }
 
-# ========== 24 意图 → 8 method（保留原 _intent_to_method 取值，新增意图按星轨表） ==========
+# ========== 24 意图 → 8 method（保留原 _intent_to_method 取值，新增意图按内部协作者表） ==========
 INTENT_TO_METHOD = {
     "身份确认": "rule_reason",
     "关系查询": "rule_reason",
@@ -830,8 +830,8 @@ def refine_intent(text: str, result: dict, semantic_raw: dict | None = None) -> 
     """意图精修：人名 + 关系词 同时出现时判定为「关系查询」。
 
     ★修正 rule_fast_identity 关键词含 "关系" 造成的误命中：
-      实测 "你和小林是什么关系？" 融合得 身份确认 0.596 / 关系查询 0.575，
-      以 0.02 分之差错判，而星轨拍板的期望标签为「关系查询」。
+      实测 "你和内部协作者是什么关系？" 融合得 身份确认 0.596 / 关系查询 0.575，
+      以 0.02 分之差错判，而内部协作者拍板的期望标签为「关系查询」。
 
     Args:
         text: 已归一化的问题文本
@@ -960,7 +960,7 @@ def fuse(channel_scores: dict[str, dict[str, float]]) -> dict[str, Any]:
 
     # ★主线第5批 任务3+4：QICA 8 通道贡献度遥测（预埋 PHASE18 器官关联图谱）
     #   按「各通道对胜出意图的加权贡献占比」记录到 phase18_signals，
-    #   供星轨在运行时聚合 158 语料的多通道贡献分布。关闭开关时零开销。
+    #   供内部协作者在运行时聚合 158 语料的多通道贡献分布。关闭开关时零开销。
     if getattr(config, "ENABLE_QICA_CHANNEL_TELEMETRY", False):
         try:
             _contrib = channel_contributions(channel_scores, weights, top_intent)

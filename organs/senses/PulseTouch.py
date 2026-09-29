@@ -2,7 +2,7 @@ from config import EXTERNAL_CALL_TIMEOUTS
 """PulseTouch —— _read_sys_file 相关实现
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 
@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 """
 PulseTouch —— 脉冲驱动触觉（硬件感知器官 · v9.5 分层脉冲版）
 版本: v9.5 PulseNet
-设计: 路灯、小林、星轨 
+设计: 内部协作者、内部协作者、内部协作者 
 日期: 2026年6月9日
 更新: 2026年6月13日（P0-2+P0-5: 五合一全面改造——事件枚举+统一日志+命名规范+get_stats+自测同步）
 更新: 2026年6月14日（v9.5: 硬件快照脉冲标记layer=L3，适配分层异步调度）
@@ -91,7 +91,7 @@ class PulseTouch(BasePulseOrgan):
         #   之所以时好时坏：_get_gpu_info() 在**探测到 GPU** 时会顺手把 _has_gpu 置 True
         #   （:239/:256），于是「有 GPU 的机器」侥幸不报错；一旦 GPU 探测失败
         #   （无独显 / 驱动异常 / 沙箱），:126 立即 AttributeError。
-        #   实测证据：小林 logs/pulse.log:595 与本沙箱启动日志均出现
+        #   实测证据：内部协作者 logs/pulse.log:595 与本沙箱启动日志均出现
         #   「声明式装配失败 触觉: 'PulseTouch' object has no attribute '_has_gpu'」。
         #   修复：把这两个属性的初始化提到 _detect_hardware() 之前，零行为副作用。
         self._has_gpu = False
@@ -110,7 +110,7 @@ class PulseTouch(BasePulseOrgan):
         self._detect_hardware()
         # ★P0修复：初始化_booted属性（之前缺失导致AttributeError）
         self._booted = False
-        # ★Q4（2026-09-09 第一批追加，星轨拍板）：此处原有两句
+        # ★Q4（2026-09-09 第一批追加，内部协作者拍板）：此处原有两句
         #     self._has_gpu = False / self._has_psutil = False
         #   它们在 _detect_hardware() **之后**又把检测结果抹掉 —— 于是运行时
         #   这两个标志恒为 False，温度/CPU/GPU/内存采集一律走兜底分支，psutil 白装。
@@ -568,7 +568,7 @@ class PulseTouch(BasePulseOrgan):
             return {"status": "already_booted"}
         self._booted = True
         self._log(LogLevel.INFO, "触觉激活，开始硬件感知")
-        # ★T-113f（2026-09-23）：首帧硬件快照采集(CPU/内存/磁盘/GPU/设备连接检测)
+        # ★相关任务（2026-09-23）：首帧硬件快照采集(CPU/内存/磁盘/GPU/设备连接检测)
         #   属硬件 I/O，移后台守护线程，boot 立即返回，避免阻塞 L0 生命线层。
         #   GPU 探针本就后台；快照定时器轻量同步。
         threading.Thread(target=self._emit_snapshot, daemon=True).start()

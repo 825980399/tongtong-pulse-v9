@@ -3,7 +3,7 @@
 ParamPatchManager.py —— 参数补丁管理器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 参数补丁的创建、审批与应用管理
@@ -28,7 +28,7 @@ _CONFIG_OVERRIDE_PATH = os.path.join(_PROJECT_ROOT, "data", "config_override.jso
 _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
 
 # 参数安全范围（防止参数调整过度）
-# ★A-9死参数清理（2026-09-08，星轨拍板）：移除 search_quality_threshold /
+# ★A-9死参数清理（2026-09-08，内部协作者拍板）：移除 search_quality_threshold /
 #   search_low_overlap_threshold / innerworld_search_quality_threshold /
 #   stomach_min_keywords 的安全范围项（参数本体已从 RUNTIME_PARAMS 删除）
 _PARAM_SAFE_RANGES = {

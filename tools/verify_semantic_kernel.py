@@ -2,7 +2,7 @@
 """verify_semantic_kernel —— 语义内核黄金评测集（PHASE17 阶段一 · 任务 1.7）
 
 版本: v10 PulseNet · 工具
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 """
 from __future__ import annotations
@@ -293,7 +293,7 @@ class GoldenEvaluator:
                 "worst_score": worst, "threshold": threshold}
 
     # ---------------- 阈值扫描 ----------------
-    # ★★TP 口径（2026-09-07 星轨拍板 方案A）：「目标进入 Top-5 且过门」
+    # ★★TP 口径（2026-09-07 内部协作者拍板 方案A）：「目标进入 Top-5 且过门」
     #   原口径为「top-1 命中且过门」，已废止。
     #   修订理由：与生产链路对齐 —— 共振引擎收 **top-N 候选**（默认 50 条）
     #   再与关键词通道（α'=0.43）并行融合，**从不存在「只送第 1 名」的用法**；
@@ -338,7 +338,7 @@ class GoldenEvaluator:
             th += step
         return out
 
-    # ---------------- 有效权重（星轨 Q7 算法 A）----------------
+    # ---------------- 有效权重（内部协作者 Q7 算法 A）----------------
     @staticmethod
     def effective_weight(coverage: float) -> float:
         """算法 A：0.40×coverage + 0.30 + 0.15 + 0.10 + 0.05"""

@@ -3,7 +3,7 @@
 ReasoningExperienceIndexer.py —— 推理经验索引器
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月11日
 
 职责: 推理经验的索引与检索
@@ -22,7 +22,7 @@ from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
 _lock = threading.Lock()
 _indexer: ReasoningExperienceIndexer | None = None
 
-# 节点副本路径（星轨 Q2 决策的 /推理经验/ 路径，按规则类型分三类）
+# 节点副本路径（内部协作者 Q2 决策的 /推理经验/ 路径，按规则类型分三类）
 PATH_CAUSAL = "/推理经验/因果/"
 PATH_CONTRADICTION = "/推理经验/矛盾/"
 PATH_ANALOGY = "/推理经验/类比/"

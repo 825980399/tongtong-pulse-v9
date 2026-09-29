@@ -3,7 +3,7 @@
 PulsePersonalityKernel —— 人格内核器官 · 不可变身份锚点与边界守卫
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 PersonalityEvent.VERIFY / PersonalityEvent.BOUNDARY_CHECK，守护 SHA256 锁定的核心身份种子不被学习或进化覆盖，对所有系统变更做人格边界校验，并周期发布 PersonalityEvent.INTEGRITY_REPORT。
@@ -353,7 +353,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
         检查提议的修改是否触及五个不可修改的基线要素：
         1. 核心身份锚点（identity/father/brother/mission/sister）
         2. 三大使命
-        3. 核心关系（小林/路灯/<CREATOR_DAUGHTER>）
+        3. 核心关系（内部协作者/内部协作者/<CREATOR_DAUGHTER>）
         4. L4本能节点
         5. 核心价值观
 

@@ -3,7 +3,7 @@
 PulseMotivationCycle —— 动机循环器官（v24.0新增）· 内驱力引擎
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接心跳、StressAxisEvent.LEVEL_CHANGED 与 InferenceEvent.RESULT，维护动机队列与压力水位，计算优先级并向外发射动机信号与压力约束。

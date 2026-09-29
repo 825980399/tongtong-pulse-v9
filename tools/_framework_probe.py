@@ -12,7 +12,7 @@
   - 主探改用 psutil（生产 Python 3.12 已装 7.2.2），不再首走已被微软弃用、
     且易被沙箱 Program Blacklist 拦截的 wmic；
   - psutil 不可用（未安装）时回退 wmic，并显式 WARNING；
-  - 旧版 `except Exception: return True` 静默保守，导致路灯沙箱里 wmic 被拦时
+  - 旧版 `except Exception: return True` 静默保守，导致内部协作者沙箱里 wmic 被拦时
     verify 误判「框架在跑」而跳过重负载用例、"0 失败"表象掩盖少跑用例。
     现任何失败路径都打 logging.WARNING（带异常类型与原因），便于调用方区分
     「真在跑」与「探测失败被迫保守」。安全契约不变：失败仍返回 True。

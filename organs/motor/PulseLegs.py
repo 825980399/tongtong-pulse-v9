@@ -3,7 +3,7 @@
 PulseLegs —— 双腿器官 · 网络抓取与主动自学循环
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 LegsEvent.FETCH 与好奇心/兴趣信号，执行网页抓取、RSS 收集与四种主动学习策略（search / trending / explore / builtin），把新知识交胃消化。
@@ -777,7 +777,7 @@ class PulseLegs(BasePulseOrgan):
             if _route is not None:
                 _ch = _route.get("channel")
                 if _ch == "wiki":
-                    # ★第105批 T-105d Fix③：修复 wiki 双腿断点——命中被丢弃，
+                    # ★往期批次 相关任务 Fix③：修复 wiki 双腿断点——命中被丢弃，
                     #   改为经 DigestEvent.KNOWLEDGE 走正常消化链路（与 RSS 一致，不旁路）。
                     _wiki = _route.get("payload")
                     if not _wiki:

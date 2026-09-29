@@ -3,7 +3,7 @@
 PulseNeurotransmitters —— 神经递质器官 · 细粒度化学状态池
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 维护模块级 NEUROTRANSMITTERS 定义的多巴胺/血清素等递质水平，随 ChatEvent.MESSAGE 与 HormonesEvent.EMOTION_DETECTED 刺激升高、按各自 decay_rate 自然回落，对外提供单递质、全量、复合三种查询与状态快照。
@@ -334,7 +334,7 @@ ORGAN_META = {
     "always_online": True,
     # ★PHASE17-0.5-1（2026-09-07）：原为 "enable_neurotransmitters"，
     #   但该开关在 config.py 中**并不存在**，且与 always_online=True 语义冲突
-    #   （「生命线核心不可关闭」vs「可开关降级」）。经星轨决策：移除 feature_flag，
+    #   （「生命线核心不可关闭」vs「可开关降级」）。经内部协作者决策：移除 feature_flag，
     #   对齐核心器官惯例（心/肝/肺/肾/血管/皮层均为 always_online=True + feature_flag=None）。
     "feature_flag": None,
     "extra_deps": {},

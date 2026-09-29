@@ -3,7 +3,7 @@
 PulseConsent —— 共同决策器官 · 重大变更征得同意
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 ConsentEvent.PROPOSE 与 ConsentEvent.DECIDE，登记重大变更提议并按 accept / reject 结案，把结果以 ConsentEvent.RESULT 广播出去。

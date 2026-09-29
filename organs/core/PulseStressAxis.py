@@ -3,7 +3,7 @@
 PulseStressAxis —— 应激轴器官 · 压力水平的中枢调节
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 StressAxisEvent.ACTIVATE / RECOVER，维护内部应激水位并在等级变化时广播 StressAxisEvent.LEVEL_CHANGED，供动机循环等器官消费。

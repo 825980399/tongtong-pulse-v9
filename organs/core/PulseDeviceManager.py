@@ -3,7 +3,7 @@
 PulseDeviceManager —— 设备管理器器官 · 硬件能力枚举与资源分配
 
 版本: v10 PulseNet
-设计: 路灯、小林、星轨
+设计: 内部协作者、内部协作者、内部协作者
 日期: 2026年9月9日
 
 职责: 承接 SystemEvent.BOOT 与 DeviceEvent.ALLOCATE / REFRESH，枚举本机硬件能力（摄像头/麦克风/扬声器/算力档位），维护设备能力表并响应资源分配请求。
