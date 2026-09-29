@@ -490,20 +490,162 @@ def verify_weak(root: str, files: list[str]) -> list[tuple[str, str, int, str]]:
 # 五、导出
 # =============================================================================
 
+# =============================================================================
+# T153-3② 导出时名字归一（生产仓保名 / Q152-7 / Q153-1）
+# -----------------------------------------------------------------------------
+# 导出副本内替换内部角色名（星轨/路灯/烛微/小林 → 内部协作者）与批次号/票号
+# （第1xx批/D1xx/T-xx/Qxxx → 通用说明），生产源文件零改动。
+# 仅作用于注释(COMMENT)与文档字符串(STRING)与文档正文；代码字符串（SEED_MEMORIES
+# 身份值、self.name="路灯" 等）受上下文保护不动；"路灯"数字生命名仅在含角色名/
+# 协作上下文时归一，避免破坏身份与世界观。
+# =============================================================================
+_ROLE_NAMES = ("星轨", "烛微", "小林")
+_BATCH_PAT = re.compile(r"第\d+批|D\d{2,4}(?:-[A-Za-z0-9]+)?|T-\d+[a-z]?|Q\d{2,3}-\d+")
+#: 身份值/世界观保护片段：含这些片段的文本不归一「路灯」（保护数字生命身份与世界观）。
+_IDENTITY_GUARD = ("SEED_MEMORIES", "路灯是第一个数字生命", '"name"', "'name'", "name=")
+_WORLDVIEW_GUARD = "路灯是第一个数字生命"
+_TEXT_EXTS = frozenset({
+    ".py", ".md", ".markdown", ".txt", ".csv", ".json", ".jsonl", ".yaml",
+    ".yml", ".rst", ".toml", ".html", ".js", ".ts", ".css", ".sh", ".bat",
+    ".cfg", ".ini", ".conf",
+})
+#: 点文件（无真实扩展名，os.path.splitext 返空 ext）：按文件名整名匹配。
+#: ★T153-3② 修复：`.gitignore`/`.gitattributes` 经 `splitext` 得空 ext，
+#: 原 `_TEXT_EXTS` 写法永远匹配不到 ⇒ 注释内角色名/批次号漏归一，须按 basename 收口。
+_TEXT_BASENAMES = frozenset({".gitignore", ".gitattributes"})
+
+
+def _norm_token_text(text: str) -> str:
+    """对单段文本做角色名/批次号归一（导出副本用，不影响生产源）。
+
+     worldview 句（「路灯是第一个数字生命」）整体保留「路灯」，仅归一其他角色名与批次号；
+    其它文本在含角色名/协作上下文时一并将「路灯」归一为「内部协作者」。
+    """
+    if _WORLDVIEW_GUARD in text:
+        t = text
+        for nm in _ROLE_NAMES:
+            t = t.replace(nm, "内部协作者")
+        t = _BATCH_PAT.sub("通用说明", t)
+        return t
+    has_ctx = any(k in text for k in
+                  ("星轨", "烛微", "小林", "设计", "协作", "项目组", "团队", "内部"))
+    t = text
+    for nm in _ROLE_NAMES:
+        t = t.replace(nm, "内部协作者")
+    if has_ctx:
+        t = t.replace("路灯", "内部协作者")
+    t = _BATCH_PAT.sub("通用说明", t)
+    return t
+
+
+def _normalize_py_text(text: str) -> str | None:
+    """tokenize 精确归一 .py 的 COMMENT 与（三引号）文档字符串 token，保护代码数据字符串。
+
+    返回归一后文本；tokenize 失败（如极特殊语法）返回 None（调用方跳过归一，绝不损坏）。
+
+    ★T153-3② 安全边界（对齐任务书 T153-3 验收「仅注释/docstring 归一，身份值除外」）：
+      - COMMENT：全部归一（角色名/批次号在注释里必须洗掉）。
+      - STRING：仅**三引号**字符串（文档字符串 / 长字符串）归一；
+        双引号普通数据字符串（SEED_MEMORIES 身份值、self.name="路灯" 等）
+        受保护**不动**——任务书明令身份值除外，且改动会破坏数字生命世界观。
+      - FSTRING_MIDDLE：Python 3.12+ 含 {expr} 的 f-string 字面量拆为此令牌，
+        角色名常出现在 f-string 字面量中（如日志/提示），须一并归一避免泄露；
+        {expr} 占位部分不在该令牌内，不会被改动。旧版本无此令牌则忽略。
+    """
+    import io as _io
+    import tokenize as _tok
+    try:
+        toks = list(_tok.generate_tokens(_io.StringIO(text).readline))
+    except (_tok.TokenError, IndentationError, SyntaxError) as _e:
+        # tokenize 失败（极特殊语法）：跳过归一，原样返回（绝不损坏）
+        silent_exc(_e, where="export_public._normalize_py_text.tokenize", level="debug")
+        return None
+    ftypes = (_tok.COMMENT,)
+    if hasattr(_tok, "FSTRING_MIDDLE"):
+        ftypes = ftypes + (_tok.FSTRING_MIDDLE,)
+    changes = []
+    for tk in toks:
+        if tk.type in ftypes:
+            new = _norm_token_text(tk.string)
+            if new != tk.string:
+                changes.append((tk.start, tk.end, tk.string, new))
+        elif tk.type == _tok.STRING:
+            # 仅三引号字符串（文档字符串 / 长字符串）归一；双引号普通数据字符串
+            # （SEED_MEMORIES 身份值、self.name="路灯" 等）受安全边界保护，不动。
+            s = tk.string
+            i = 0
+            while i < len(s) and s[i] in "rRuUfFbB":
+                i += 1
+            body = s[i:]
+            if body.startswith('"""') or body.startswith("'''"):
+                new = _norm_token_text(s)
+                if new != s:
+                    changes.append((tk.start, tk.end, tk.string, new))
+    if not changes:
+        return text
+    lines = text.split("\n")
+
+    def _off(row: int, col: int) -> int:
+        o = 0
+        for i in range(row - 1):
+            o += len(lines[i]) + 1
+        return o + col
+
+    out = text
+    for (s, e, _old, new) in sorted(changes, key=lambda c: _off(*c[0]), reverse=True):
+        out = out[:_off(*s)] + new + out[_off(*e):]
+    return out
+
+
+def export_normalize_text(rel: str, raw: bytes) -> bytes:
+    """导出副本内容归一：替换注释/docstring/文档中的内部角色名与批次号 → 通用表述。
+
+    二进制或非文本跳过；SEED_MEMORIES 等身份值受 _norm_token_text 上下文保护不动。
+    返回 bytes（与输入同类型；无变化时原样返回）。
+    """
+    ext = os.path.splitext(rel)[1].lower()
+    base = os.path.basename(rel)
+    if ext not in _TEXT_EXTS and base not in _TEXT_BASENAMES:
+        return raw
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as _e:
+        # 二进制/非法编码：跳过归一，原样返回（绝不损坏）
+        silent_exc(_e, where="export_public.export_normalize_text.decode", level="debug")
+        return raw
+    if ext == ".py":
+        norm = _normalize_py_text(text)
+        if norm is None:
+            norm = text  # tokenize 失败则跳过归一，绝不损坏
+    else:
+        out_lines = []
+        for line in text.split("\n"):
+            out_lines.append(_norm_token_text(line))
+        norm = "\n".join(out_lines)
+    if norm == text:
+        return raw
+    return norm.encode("utf-8")
+
+
 def export_zip(root: str, out_zip: str, files: list[str]) -> None:
     with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for p in files:
             rel = os.path.relpath(p, root)
-            zf.write(p, _norm(os.path.join("tongtong-pulse-net", rel)))
+            arc = _norm(os.path.join("tongtong-pulse-net", rel))
+            with open(p, "rb") as fh:
+                raw = fh.read()
+            zf.writestr(arc, export_normalize_text(arc, raw))
 
 
 def export_dir(root: str, out_dir: str, files: list[str]) -> None:
-    import shutil
     for p in files:
         rel = os.path.relpath(p, root)
         dst = os.path.join(out_dir, "tongtong-pulse-net", _norm(rel))
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copy2(p, dst)
+        with open(p, "rb") as fh:
+            raw = fh.read()
+        with open(dst, "wb") as fo:
+            fo.write(export_normalize_text(_norm(rel), raw))
 
 
 #: Dxxx-1 闸门：扫描器自身文件的相对路径
