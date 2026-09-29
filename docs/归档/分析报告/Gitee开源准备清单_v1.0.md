@@ -54,7 +54,7 @@ find .release-tmp -name "*.pyc" -o -name "__pycache__" -o -name ".ruff_cache"
 
 ### 第5步：实名决策（需用户拍板）
 
-`docs/BLUEPRINT_CONSTITUTION.md`、`docs/CODE_STYLE.md`、对标分析报告等**多处含"小林（任桂林）"实名**。开源后实名公开可查，是否保留、化名或删除，发布日决定。
+`docs/BLUEPRINT_CONSTITUTION.md`、`docs/CODE_STYLE.md`、对标分析报告等**多处含"小林（[属主真名]）"实名**。开源后实名公开可查，是否保留、化名或删除，发布日决定。
 
 ### 第6步：Gitee 发布
 
