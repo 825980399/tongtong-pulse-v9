@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "0d5c9277f6ddc81b3f71acde3387ed52aab0b34f",
- "observed_at": "2026-09-29T20:32:54",
+ "anchor_sha": "e0e70be53b78dec924f75b6ef2a1dffd957b197a",
+ "observed_at": "2026-09-30T00:54:50",
  "watch": [
   "organs/brain/PulseInnerWorld.py"
  ],
@@ -15,13 +15,13 @@
     "if": 1874,
     "for": 283,
     "while": 1,
-    "return": 821,
+    "return": 820,
     "raise": 0,
     "await": 0,
     "emit_calls": 103,
-    "methods": 369,
-    "lines": 17888,
-    "ast_sha256_12": "9ca409ed14f9"
+    "methods": 368,
+    "lines": 17854,
+    "ast_sha256_12": "c0dae34b4335"
    },
    "priority_hist": {
     "2": 4,
@@ -35,6 +35,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "第153批 T153-5：删除 IW 6 个死方法（66 行，methods -6 / return -6 / if -1 / for -1 / lines -66），并补 _project_behavior 闭包调用（控制流计数不变）。语义守恒受控变更，交烛微复算签认（Q152-2）。",
- "expected_delta": {"methods": -6, "return": -6, "if": -1, "for": -1}
+ "delta_reason": "第154批 T154-12：回收新孤儿方法 _project_autonomous_behavior_evolution（IW:7129-7161 方法体 33 行 + 尾随空行 1 行 = 34 行），methods -1 / return -1 / lines -34；控制流计数（if/for/while/try/except/emit_calls）与事件直方均不变。前置：生产代码 0 调用、无外部脚本启用、停机窗口成立（runtime_state 32.16h + pulse.log 20s Δbytes=0）。基准已锚定当前（e0e70be 之后状态），expected_delta 清空。历史已验收增量：153批 T153-5 删 6 死方法（methods -6 / return -6 / if -1 / for -1，烛微已签认 Q152-2）。",
+ "expected_delta": {}
 }
