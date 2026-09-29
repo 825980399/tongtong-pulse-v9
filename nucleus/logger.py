@@ -25,6 +25,21 @@ from nucleus.const import LogLevel
 from nucleus._silent_except import silent_exc
 from nucleus.logging.sanitizer import sanitize, SanitizingFilter
 
+def _m153_sanitizer_enabled() -> bool:
+    """第153批 T153-2：ENABLE_LOG_SANITIZER 总开关接线。
+
+    config.py 注释承诺「总开关：关闭后全库不脱敏（调试用）」，接线前该键零引用。
+    默认（ENABLE_LOG_SANITIZER=True / LOG_SANITIZER_DEBUG_MODE=False）返回 True，
+    与接线前三处 SanitizingFilter(enabled=...) 的取值逐一相等 ⇒ 零回归。
+    """
+    try:
+        if not bool(getattr(config, "ENABLE_LOG_SANITIZER", True)):
+            return False
+        return not bool(getattr(config, "LOG_SANITIZER_DEBUG_MODE", False))
+    except Exception as _e:
+        silent_exc(_e, "_m153_sanitizer_enabled")
+        return True
+
 
 # 日志级别字符串 → logging 常量映射
 _LEVEL_MAP = {
@@ -599,7 +614,7 @@ def _init_root_logger():
     )
     console_handler.setFormatter(console_format)
     console_handler.addFilter(
-        SanitizingFilter(enabled=not bool(getattr(config, "LOG_SANITIZER_DEBUG_MODE", False))))
+        SanitizingFilter(enabled=_m153_sanitizer_enabled()))
     root.addHandler(console_handler)
 
     # 文件 handler（带轮转）
@@ -625,7 +640,7 @@ def _init_root_logger():
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     file_handler.setFormatter(file_format)
-    file_handler.addFilter(SanitizingFilter(enabled=True))
+    file_handler.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
     root.addHandler(file_handler)
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
@@ -739,7 +754,7 @@ def get_smoke_logger(name: str = "smoke") -> logging.Logger:
                 "%(asctime)s " + SMOKE_TAG + " [%(name)s] %(levelname)s: %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S"))
             _h._pulse_smoke = True
-            _h.addFilter(SanitizingFilter(enabled=True))
+            _h.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
             _lg.addHandler(_h)
         except Exception as _se:
             print(f"[logger] smoke 日志句柄初始化失败(降级为纯内存): {type(_se).__name__}: {_se}", file=sys.stderr)

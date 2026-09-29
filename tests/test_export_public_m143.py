@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""相关任务 回归测试：对外发布导出脚本 tools/export_public.py。
+"""T-143d 回归测试：对外发布导出脚本 tools/export_public.py。
 
 锁定三件事：
   1. 排除规则：data/tmp/logs/内部文档/备份/构建产物 一律不入包；
@@ -58,7 +58,7 @@ class TestDocsWhitelist(unittest.TestCase):
     """docs/ 白名单 fail-closed。"""
 
     def test_01_allow_files(self):
-        # ★往期批次 相关任务：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
+        # ★第145批 T-145b：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
         #   （该文档含批次交付确认/债务编号/第三方评分等内部运行资料），
         #   现断言其**被拒绝**（见 test_03）。
         for rel in ("README.md", "demo-quickstart.md", "项目架构总览_20260927.md",
@@ -66,14 +66,18 @@ class TestDocsWhitelist(unittest.TestCase):
             self.assertTrue(ep.docs_allowed(rel), rel)
 
     def test_02_allow_dirs(self):
+        # ★第152批 T152-2：`工具类文档` 整目录已从 PUBLIC_DOCS_ALLOW_DIRS 移除
+        #   （目录级白名单收紧为精确文件白名单，docs_allowed 保持 fail-closed）
+        #   ⇒ 第153批 T153-3 同步本断言：白名单内两项仍放行，被移除项改判拒绝。
         for rel in ("比赛准备/运行数据卡片_20260927.md",
-                    "设计文档/某设计_v1.0.md",
-                    "工具类文档/某说明.md"):
+                    "设计文档/某设计_v1.0.md"):
             self.assertTrue(ep.docs_allowed(rel), rel)
+        # fail-closed：未精确列入白名单的目录一律拒绝
+        self.assertFalse(ep.docs_allowed("工具类文档/某说明.md"))
 
     def test_03_unlisted_file_rejected(self):
         # 未在白名单里的根级文档 → 拒绝（fail-closed）
-        # ★往期批次 相关任务：内部总账加入本列表（原在白名单，属越权公开）
+        # ★第145批 T-145b：内部总账加入本列表（原在白名单，属越权公开）
         for rel in ("第三方全面分析报告_20260926.md",
                     "死代码检测报告_8大模块_v2.0.md",
                     "git_commit_hash_mapping.md",
