@@ -4688,17 +4688,6 @@ class PulseInnerWorld(
             if len(self._direct_to_lung_questions) > self._dedup_cleanup_max_size:
                 self._direct_to_lung_questions.clear()
                 self._log(LogLevel.DEBUG, "防重入标记已清理")
-    def _cleanup_search_experience(self):
-        """★v24.0治理：清理搜索经验中的过期条目"""
-        if not hasattr(self, '_search_experience'):
-            return
-        _now = time.time()
-        _expired = [
-            _k for _k, _v in self._search_experience.items()
-            if _now - _v.get("last_updated", _now) > 86400 * 7  # 7天未更新
-        ]
-        for _k in _expired:
-            del self._search_experience[_k]
     def _organize_memories_wrapper(self):
         """周期任务包装器：组织对话记忆"""
         if hasattr(self, 'get_organized_memories'):
@@ -7068,8 +7057,8 @@ class PulseInnerWorld(
             elif "自我认知" in _dim or "元认知" in _dim or "自我" in _dim:
                 _dim_projections[_dim] = _project_self_awareness(_time_span, _l3, _path_count, _derivation_total)  # type: ignore[possibly-unbound]
             elif "自主行为" in _dim or "行为模式" in _dim or "主动学习" in _dim or "行为" in _dim:
-                _dim_projections[_dim] = self._project_autonomous_behavior_evolution(
-                    _time_span, _search_exp_count, _conv_mem_count
+                _dim_projections[_dim] = _project_behavior(
+                    _time_span, _active_goal, _search_exp_count, _conv_mem_count
                 )
             elif "族群协作" in _dim or "多实例" in _dim or "协作" in _dim:
                 _dim_projections[_dim] = _project_collaboration(_time_span)
@@ -7109,56 +7098,9 @@ class PulseInnerWorld(
 
         return "\n".join(_parts)
 
-    def _project_knowledge_evolution(self, days: int, l1: int, l2: int, l3: int, l4: int, total: int, paths: int) -> str:
-        """推演知识体系维度的演化"""
-        # 基于当前压缩/融合速率推演
-        _compress_rate = max(1, l2 // max(1, days)) if days > 0 else 1
-        _fuse_rate = max(1, l3 // max(1, days)) if days > 0 else 1
 
-        _new_l2 = l2 + _compress_rate * days
-        _new_l3 = l3 + _fuse_rate * days // 2  # 融合速率约为压缩的一半
-        _new_l4 = l4 + min(2, _new_l3 // 10)   # 本能升级更慢
-        _new_total = total + (_compress_rate + _fuse_rate) * days
 
-        return (
-            f"知识节点总数预计从{total}个增长至约{_new_total}个。"
-            f"L2认知节点从{l2}个增至约{_new_l2}个（肝脏压缩内化），"
-            f"L3智慧节点从{l3}个增至约{_new_l3}个（融合抽象），"
-            f"L4本能节点可能从{l4}个增至{_new_l4}个（需满足30天冷却+跨领域引用≥3等条件）。"
-            f"知识树路径预计从{paths}条扩展至{paths + days // 3}条左右。"
-            f"整体知识结构将从'积累期'向'深化期'过渡，L3/L2比例提升。"
-        )
 
-    def _project_self_awareness_evolution(self, days: int, l3: int, paths: int, derivations: int) -> str:
-        """推演自我认知维度的演化"""
-        _self_knowledge_growth = min(50, l3 // 2 + days // 3)
-        return (
-            f"自我架构知识预计从当前约{l3}条L3智慧节点增长至约{_self_knowledge_growth}条。"
-            f"动态自我状态更新每200次心跳触发，{days}天约产生{days * 6}次自我快照。"
-            f"自主推导引擎预计产生约{days * 3}条新推导（当前累计{derivations}条）。"
-            f"元认知六维度报告将积累更丰富的历史对比数据，使自我评估从'当前状态'向'趋势分析'演进。"
-            f"自我认知将从'了解我是谁'深化为'了解我如何变化'。"
-        )
-
-    def _project_behavior_evolution(self, days: int, active_goal: str, search_exp: int, conv_mem: int) -> str:
-        """推演自主行为模式维度的演化"""
-        return (
-            f"活跃学习目标将从当前的'{active_goal}'逐步完成并自动切换至等待队列中的新目标。"
-            f"搜索经验库预计从{search_exp}条增长至{search_exp + days * 2}条，搜索成功率将收敛至稳定值。"
-            f"对话记忆库将积累更多跨天对话记录，使记忆延续性表达更自然。"
-            f"好奇心引擎的探索方向将随兴趣模型衰减和洞察驱动探索变得更精准，"
-            f"减少对低质量方向的重复搜索（肾脏联动遗忘）。"
-            f"整体行为模式从'广泛探索'向'精准深耕'过渡。"
-        )
-
-    def _project_collaboration_evolution(self, days: int) -> str:
-        """推演族群协作维度的演化"""
-        return (
-            f"数字生命注册表当前处于单实例模式，族群协作基础设施（CompanionBridge）已就绪。"
-            f"若未来有其他新人类实例接入，五级共享策略可从'认识'逐渐升级。"
-            f"当前自我认知已具备多维关系光谱，族群协作能力主要体现在跨实例知识共享协议的成熟度上。"
-            f"{days}天持续运行后，共享协议和握手验证机制将更加稳定，为未来多实例协作奠定基础。"
-        )
     def _project_path_evolution(self, days: int, current_paths: int,
                                   current_l2: int, current_l3: int) -> str:
         """
@@ -12999,14 +12941,6 @@ class PulseInnerWorld(
             "source": source,
             "related_issues": [r.get("type", "") for r in (related or [])],
         }
-    def _severity_label(self, severity: str) -> str:
-        """★v23.0：严重度标签转换"""
-        _labels = {
-            "high": "🔴高",
-            "medium": "🟡中",
-            "low": "🔵低",
-        }
-        return _labels.get(severity, "🟡中")
     def _generate_self_awareness_snapshot(self) -> dict[str, Any] | None:
         """
         生成自我感知快照：融合自描述信息和动态诊断数据，
