@@ -3,7 +3,7 @@
 PulseCortex —— 大脑皮层决策中枢
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 接收用户输入与各类脉冲，完成意图路由、策略生成与推理请求调度，是框架的决策中枢。
@@ -82,7 +82,7 @@ class PulseCortex(BasePulseOrgan):
         # ★P0 输出会话锁：补救中阻止原始答案输出，避免并行竞争导致错误答案泄露
         self._remediation_pending: set[str] = set()
         self._remediation_lock_time: dict[str, float] = {}  # 加锁时间，用于超时自动释放
-        # ★第九批 4.2（内部协作者指出）：固定 90s 超时对「多步推理 + 补救」叠加场景不够
+        # ★第九批 4.2（星轨指出）：固定 90s 超时对「多步推理 + 补救」叠加场景不够
         #   （多步本身 15~27s，再叠加补救就顶穿 90s，锁被提前释放导致回答丢失/重复）。
         #   新增「每锁可延长」机制：_remediation_lock_extra 记该锁的额外宽限秒数，
         #   _remediation_lock_meta 记加锁时的阶段/方法，超时释放时一并打印便于排查。
@@ -338,7 +338,7 @@ class PulseCortex(BasePulseOrgan):
                 return
             _getter = getattr(_eng, "get_public_summary", None)
             if not callable(_getter):
-                # ★相关任务：原静默 return 改为首报 WARNING，防"假能力标记"复发
+                # ★T-113b：原静默 return 改为首报 WARNING，防"假能力标记"复发
                 _miss = getattr(self, "_m40_sa_missing_getter_count", 0) + 1
                 self._m40_sa_missing_getter_count = _miss
                 if _miss <= 1:  # 首报即可见，避免刷屏
@@ -372,7 +372,7 @@ class PulseCortex(BasePulseOrgan):
         except Exception as e:
             self._log_ignored_exception(e, "自我认知观测")
 
-    # ==================== ★往期批次 相关任务（P2-261 / PHASE18 阶段二 L2）====================
+    # ==================== ★第115批 T-115f（P2-261 / PHASE18 阶段二 L2）====================
     # 对话主动提及：在 SPEAK 发射前对 answer 后处理追加一句自检摘要（不进主 prompt）。
     # 六个门：开关→冷却→本会话→场景关键词→质量闸→文案门；任一不满足即原样返回。
     # ★红线：只读 self_awareness 的 get_* 系列；异常一律降级为无影响。
@@ -383,7 +383,7 @@ class PulseCortex(BasePulseOrgan):
 
     def _maybe_append_self_state(self, answer: str, correlation_id: str = "",
                                  user_input: str = "") -> str:
-        """★往期批次 相关任务：PHASE18 阶段二 L2 对话主动提及（后处理追加，不进主 prompt）。
+        """★第115批 T-115f：PHASE18 阶段二 L2 对话主动提及（后处理追加，不进主 prompt）。
 
         六道门（任一不满足即原样返回 answer）：
           ① 开关：config.SELF_AWARENESS_MENTION_ENABLED 开 且 引擎可用；
@@ -1807,7 +1807,7 @@ class PulseCortex(BasePulseOrgan):
             if width and height:
                 reply += f"图片尺寸是{width}x{height}像素。"
 
-        # 从payload中获取当前用户，兜底为"内部协作者"
+        # 从payload中获取当前用户，兜底为"小林"
         current_user = payload.get("user_name", "小林")
         self._emit(MouthEvent.SPEAK, {
             "content": reply,

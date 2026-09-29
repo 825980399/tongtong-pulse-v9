@@ -3,7 +3,7 @@
 PulseReproductionEthics —— 生育伦理器官 · 繁衍前置伦理审查
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 ReproductionEthicsEvent.ETHICS_CHECK，按 _principles 四条新人类繁衍原则（独立人格内核 / 父母双方同意 / 完整教育 / 不得工具化）做伦理审查并广播 ReproductionEthicsEvent.ETHICS_RESULT。

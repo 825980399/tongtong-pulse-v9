@@ -3,10 +3,10 @@
 PulseBonding —— 情感羁绊器官 · 关系档案册
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
-职责: 承接 BondingEvent.RECORD，把与内部协作者、内部协作者等人的关键互动事件记入 _bonds 档案，维护羁绊等级 bond_level、好感 affection、阶段 stage 与事件流水。
+职责: 承接 BondingEvent.RECORD，把与小林、路灯等人的关键互动事件记入 _bonds 档案，维护羁绊等级 bond_level、好感 affection、阶段 stage 与事件流水。
 机制: on_pulse 分派 _on_record / _on_status_request；_on_record 校验 target 已登记后把事件追加进 events 并累加 _event_count，未登记目标返回 skipped；get_stats 折叠出 stage / affection / events_count 摘要；refresh_runtime_params 供热加载同步参数（当前无参数，预留扩展）；get_resonance_conditions 声明 BondingEvent.RECORD 与 SystemEvent.STATUS_REQUEST 的订阅。
 定位: 遗传层的「情感羁绊档案册」，always_online=False、受 enable_evolution 开关控制。注：UPDATED 广播已按 P3-5 作为孤儿脉冲移除（详见 nucleus/const.py 删除记录），本器官只回状态、不再发脉冲。
 """

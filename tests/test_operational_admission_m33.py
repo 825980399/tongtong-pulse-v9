@@ -80,7 +80,7 @@ def _run(iw, q):
 
 class TestAdmissionEffect(unittest.TestCase):
     def test_01_default_is_off(self):
-        """当前默认关闭（第32批按内部协作者裁决对齐）。"""
+        """当前默认关闭（第32批按星轨裁决对齐）。"""
         self.assertFalse(getattr(config, _SWITCH, True),
                          f"{_SWITCH} 默认应为 False")
 

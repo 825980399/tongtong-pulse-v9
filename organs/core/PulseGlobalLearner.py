@@ -3,7 +3,7 @@
 PulseGlobalLearner —— 全域自学习循环器官（v24.0新增）
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 在心跳上周期性审计全域样本，检测能力漂移与系统性偏差并产出改进结论，驱动全局自学习闭环，而非纠正单点错误。
@@ -268,7 +268,7 @@ class PulseGlobalLearner(BasePulseOrgan):
     # 【为什么改】原 _collect_and_sample 的样本**唯一来源**是 _lessons_provider，
     #   而 main.py 从未调用 set_lessons_provider → provider=None → 样本恒为 []
     #   → 抽样恒为 0 → _execute_comparisons 直接 return 0 → "学习"恒为 0。
-    #   （内部协作者观察到的「4次审计全0」即此。）
+    #   （星轨观察到的「4次审计全0」即此。）
     # 【怎么改】provider 未注入时**内部降级自取**（不动 main.py，符合红线），
     #   三路备用源各自 try/except 互不干扰，单轮样本上限 max_samples_per_round。
 
@@ -502,7 +502,7 @@ class PulseGlobalLearner(BasePulseOrgan):
     def _build_conclusion(self, category: str, items: list[dict[str, Any]]) -> dict[str, Any]:
         """★阶段三·任务1：把一个类别的样本聚合成**结构化学习结论**。
 
-        结论格式（内部协作者开工批准指定）：
+        结论格式（星轨开工批准指定）：
             {来源, 问题描述, 优化建议, 置信度, 建议优先级, 时间戳}
 
         置信度 = **样本一致性代理指标**：
@@ -570,7 +570,7 @@ class PulseGlobalLearner(BasePulseOrgan):
     def _execute_comparisons(self, samples: list[dict[str, Any]]) -> int:
         """★阶段三·任务1：按类别聚合样本 → 产出结构化学习结论。
 
-        说明（内部协作者 Q3 拍板）：本轮**不调用大模型**。原因：
+        说明（星轨 Q3 拍板）：本轮**不调用大模型**。原因：
             1) 本轮目标是让学习器从"完全空转"变成"产出可审计结论"，这是质的飞跃；
             2) 真实 LLM 比对成本高、稳定性风险大，且当前样本量不足以支撑比对。
         结论写入日志 + 体验池，**不自动执行任何优化建议**（执行闭环属后续任务）。

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""相关任务（D017）日志轮转自感知回归测试。
+"""T-100c（D017）日志轮转自感知回归测试。
 
 验证：
   1. doRollover 成功后写入唯一轮转标记 .rollover_marker.json；

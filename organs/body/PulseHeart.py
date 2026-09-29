@@ -3,7 +3,7 @@
 PulseHeart —— 脉冲驱动心脏 · 框架节律源
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 定时发射心跳脉冲（L0 生命线层）驱动全框架节律，检查到期任务并发射任务脉冲（L3 后台自主层），按系统负载动态调整心跳频率，并定期发布 heart.alive 存活信号。
@@ -105,7 +105,7 @@ class PulseHeart(BasePulseOrgan):
         self._reply_guidance_provider = None      # (user_name) -> dict
         self._existential_state_provider = None   # () -> dict
         self._survival_orchestrator = None  # ★R4阶段二：存续编排器引用（main.py注入，可选）
-        self._current_user_name = "访客"    # 当前用户（相关任务：未知用户默认访客）
+        self._current_user_name = "访客"    # 当前用户（T-118a：未知用户默认访客）
         self._last_activity_time = time.time()  # 最后活跃时间
         self._interest_level = 0.0          # 当前兴趣水平
         # 任务调度队列: {task_id: {"interval": seconds, "last_run": timestamp, "event_type": str}}

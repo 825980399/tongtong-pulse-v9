@@ -3,7 +3,7 @@
 TaskPipeline.py —— 任务流水线
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 任务流水线执行与阶段管理
@@ -59,7 +59,7 @@ _VALID_TRANSITIONS: dict[TaskStage, set[TaskStage]] = {
 class TaskPipeline:
     """元流程实体——单个任务的全生命周期状态机。
 
-    字段（对齐内部协作者 B1 要求）:
+    字段（对齐星轨 B1 要求）:
         task_id, task_pattern, stage, strategy, evidence, result,
         rollback_point, created_at, updated_at
     """

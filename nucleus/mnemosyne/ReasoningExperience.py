@@ -3,7 +3,7 @@
 ReasoningExperience.py —— 推理经验
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 推理过程经验的记录与复用
@@ -16,7 +16,7 @@ import re
 import time
 from typing import Any
 from nucleus.const import LogLevel
-from nucleus.data.DataAccessLayer import safe_write_json  # 相关任务：复用硬化写通道
+from nucleus.data.DataAccessLayer import safe_write_json  # T-112a：复用硬化写通道
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 import threading
 
@@ -37,7 +37,7 @@ class ReasoningExperience(SilentLogMixin):
         self._data_dir = data_dir
         self._file_path = os.path.join(data_dir, "reasoning_experience.json")
         self._experiences: list[dict[str, Any]] = []
-        self._save_lock = threading.RLock()  # 相关任务：保存可重入锁，防止并发/递归保存互相覆盖
+        self._save_lock = threading.RLock()  # T-112a：保存可重入锁，防止并发/递归保存互相覆盖
         self._max_experiences = 200
         self._min_confidence = 0.5  # 最低匹配置信度
         

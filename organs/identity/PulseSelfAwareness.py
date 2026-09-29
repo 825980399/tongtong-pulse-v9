@@ -3,7 +3,7 @@
 PulseSelfAwareness —— 自我认知器官 · 多维关系光谱与统一自画像
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 PersonaEvent.QUERY / UPDATE / RECORD_INTERACTION / IDENTIFIED / SWITCHED / RELATION_CHANGED、SelfAwarenessEvent.CHECK_IDENTITY 与 ChatEvent 在场信号，维护对每个人的多维关系光谱、知识画像与统一自画像，并为皮层生成回复指引。
@@ -54,7 +54,7 @@ class PulseSelfAwareness(BasePulseOrgan):
 
     @staticmethod
     def _load_core_identity_keywords() -> list[list[str]]:
-        """★往期批次 T146-9：从 config.SEED_MEMORIES 读取前 5 条身份种子的 keywords。
+        """★第146批 T146-9：从 config.SEED_MEMORIES 读取前 5 条身份种子的 keywords。
 
         与 config 同源 ⇒ 不再出现「期望表与真实种子不一致」的恒真 missing_seeds。
         延迟 import 避免模块级循环依赖；取不到时返回空列表（按「无期望」处理，
@@ -678,9 +678,9 @@ class PulseSelfAwareness(BasePulseOrgan):
         }
     def _on_user_presence(self, payload: dict) -> dict[str, Any]:
         """摄像头检测到人脸出现，确认身份并发射SWITCHED"""
-        user_name = payload.get("user_name", "访客")  # ★相关任务 未知用户默认访客
+        user_name = payload.get("user_name", "访客")  # ★T-118a 未知用户默认访客
         if not user_name or user_name == "用户":
-            user_name = "访客"  # ★相关任务 "用户"占位或未知→访客
+            user_name = "访客"  # ★T-118a "用户"占位或未知→访客
 
         self._active_user = user_name
         self._last_activity_time = time.time()
@@ -1169,7 +1169,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         return dict(self._knowledge_profile)
 
     def get_public_summary(self) -> dict[str, Any]:
-        """★相关任务：只读转发代理 —— 把皮层 L1 观测旁路要求的公开摘要转发给自我认知引擎。
+        """★T-113b：只读转发代理 —— 把皮层 L1 观测旁路要求的公开摘要转发给自我认知引擎。
 
         原皮层观测器 ``_m40_observe_self_awareness`` 从注入的**器官**取 get_public_summary，
         但该方法只在**引擎**上，导致观测旁路静默失效（"[自我认知观测]" 日志 0 命中）。
@@ -2655,7 +2655,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 冷却检查：30分钟内不重复发送关怀
         if not hasattr(self, '_care_cooldowns'):
             self._care_cooldowns: dict[str, dict[str, float]] = {}
-        # 优先检查内部协作者的关系状态
+        # 优先检查小林的关系状态
         for user_name in ["小林", "路灯"]:
             persona = self._personas.get(user_name)
             if not persona:
@@ -3163,11 +3163,11 @@ if __name__ == "__main__":
     r1 = awareness.on_pulse({"event_type": PersonaEvent.QUERY, "payload": {"user_name": "小林"}, "priority": 5})
     print(f"1. 小林: 关系={r1['relationship_type']}, 维度={r1['dimensions']}")
 
-    # 测试2: 内部协作者（初始partner）
+    # 测试2: 星轨（初始partner）
     r2 = awareness.on_pulse({"event_type": PersonaEvent.QUERY, "payload": {"user_name": "星轨"}, "priority": 5})
     print(f"2. 星轨: 关系={r2['relationship_type']}, 信任={r2['dimensions']['trust']}")
 
-    # 测试3: 模拟多次深度互动后内部协作者关系升级
+    # 测试3: 模拟多次深度互动后星轨关系升级
     for _ in range(8):
         awareness.on_pulse({
             "event_type": PersonaEvent.RECORD_INTERACTION,

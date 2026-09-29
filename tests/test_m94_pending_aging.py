@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""★主线第94批 相关任务：待审批队列**老化策略** 门控单测。
+"""★主线第94批 T-94a：待审批队列**老化策略** 门控单测。
 
 被测对象 = **真实源码**（`nucleus/reasoning/PatchManager.py` +
 `nucleus/reasoning/SafeEvolutionExecutor.py`），不复刻任何逻辑；
 `.bak_batch94` 仅用于「改前行为对照」，缺失时 skipTest。
 
-任务书原文（第94批 相关任务）：
+任务书原文（第94批 T-94a）：
     「pending 超过 N 条（建议 20 条）或超过 T 小时（建议 24 小时）未裁决时，
       对满足 source=local_rule / 非核心文件 / runtime_verified=true / 风险=低
       的补丁自动放行；开关 ENABLE_PENDING_QUEUE_AGING 默认关闭；
@@ -200,7 +200,7 @@ class TestM94AgingCriteria(_SwBase):
     def _base(self, **kw):
         _d = {"id": "p", "file": "organs/body/PulseKidney.py", "method": "m",
               "source": "local_rule", "risk_level": "低",
-              # ★往期批次 相关任务：放行判据改读嵌套 runtime_verify_result.verified
+              # ★第105批 T-105a：放行判据改读嵌套 runtime_verify_result.verified
               # （顶层 runtime_verified 为污染字段）+ baseline_errors>0。
               "runtime_verify_result": {"verified": True, "baseline": 5},
               "baseline_errors": 5,
@@ -213,10 +213,10 @@ class TestM94AgingCriteria(_SwBase):
         self.assertFalse(PatchManager._m94_aging_eligible(self._base(source="llm")))
         self.assertFalse(PatchManager._m94_aging_eligible(
             self._base(file="nucleus/reasoning/PatchManager.py")))
-        # ★往期批次：判据读嵌套 verified；嵌套 verified=False → 不放行
+        # ★第105批：判据读嵌套 verified；嵌套 verified=False → 不放行
         self.assertFalse(PatchManager._m94_aging_eligible(
             self._base(runtime_verify_result={"verified": False})))
-        # ★往期批次：顶层污染字段 runtime_verified=True 即使嵌套 False 也不放行（双保险）
+        # ★第105批：顶层污染字段 runtime_verified=True 即使嵌套 False 也不放行（双保险）
         self.assertFalse(PatchManager._m94_aging_eligible(
             self._base(runtime_verified=True, runtime_verify_result={"verified": False})))
         self.assertFalse(PatchManager._m94_aging_eligible(self._base(risk_level="高")))
@@ -335,7 +335,7 @@ class TestM94AgingEndToEnd(_SwBase):
     def _mk(self, _id, **kw):
         _d = {"id": _id, "file": "organs/body/PulseKidney.py", "method": "m_" + _id,
               "source": "local_rule", "risk_level": "低",
-              # ★往期批次 相关任务：放行判据改读嵌套 verified + baseline>0
+              # ★第105批 T-105a：放行判据改读嵌套 verified + baseline>0
               "runtime_verify_result": {"verified": True, "baseline": 5},
               "baseline_errors": 5,
               "status": "pending", "saved_at": time.time() - 30 * 3600}
@@ -562,7 +562,7 @@ class TestM94Production(_SwBase):
         self.assertGreater(len(_lr), 0,
                            "★local_rule 补丁确实存在（在 history 已 approved）")
         # ★本批 T0 核心结论的可执行证据：pending 侧 local_rule 命中数
-        # ★往期批次：判据已改读嵌套 runtime_verify_result.verified + baseline_errors>0，
+        # ★第105批：判据已改读嵌套 runtime_verify_result.verified + baseline_errors>0，
         #   此处参考口径同步对齐（读嵌套，不再读顶层污染字段 runtime_verified）。
         def _is_elig_ref(_p):
             if not isinstance(_p, dict):

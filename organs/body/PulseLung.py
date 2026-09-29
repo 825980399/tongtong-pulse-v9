@@ -6,7 +6,7 @@ from nucleus._silent_except import silent_exc
 PulseLung —— 脉冲驱动肺 · 模型调用器官
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 接收 LungEvent.SELECT_MODEL 脉冲，按本地实际可用模型与硬件能力选择并调用大模型，调用成功后发射 MouthEvent.SPEAK 交给嘴巴输出，失败则走兜底回复保证链路不中断。
@@ -27,7 +27,7 @@ from typing import Any
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import DigestEvent, LogLevel, LungEvent, MouthEvent, SystemEvent
 from config import EXTERNAL_CALL_TIMEOUTS
-# ★往期批次 相关任务：system prompt 中的身份占位符须在运行时渲染，
+# ★第145批 T-145a：system prompt 中的身份占位符须在运行时渲染，
 #   否则「你是谁」会把 <SELF_NAME> 等尖括号直接念给用户。
 from config import render_placeholders as _render_placeholders  # noqa: E402
 
@@ -273,9 +273,9 @@ class PulseLung(BasePulseOrgan):
         if prompt and not _is_dialogue_req and self._is_duplicate_request(prompt):
             self._log(LogLevel.DEBUG, f"后台重复请求已跳过(3s内): {prompt[:30]}")
             return {"status": "duplicate_skipped", "answer": ""}
-        # ★v27.0修复(2026-09-11内部协作者止血)：对话重复请求也跳过，解决重复输出问题
+        # ★v27.0修复(2026-09-11星轨止血)：对话重复请求也跳过，解决重复输出问题
         #   根因：用户输入事件被发布两次，导致肺被调用两次，输出两次回复
-        #   后绍第24批内部协作者将追踪事件发布链路，从根因修复
+        #   后绍第24批路灯将追踪事件发布链路，从根因修复
         #
         # ★主线第26批 T1/P2-161：**去重器开启时跳过本止血**，交给去重器处理。
         #   原因：本止血是「命中即丢弃」，在第一个请求**卡住(超时)或最终失败**时，
@@ -769,7 +769,7 @@ class PulseLung(BasePulseOrgan):
         candidates.sort(key=extract_size, reverse=True)
         return candidates[0] if candidates else (local_models[0] if local_models else "")
     # ==================== ★主线第11批 T3/P2-59：多渠道支持 ====================
-    # 设计要点（内部协作者裁决 2026-09-10 20:45 选 3）：
+    # 设计要点（星轨裁决 2026-09-10 20:45 选 3）：
     #   - 进程内渠道池为主路径；外挂网关作为可选渠道源（开关控制，默认关）。
     #   - 全程灰度：REMOTE_API_CHANNELS 不可用 / 关闭时，此处所有方法不介入，
     #     _call_remote_api 走原有单端点逻辑，行为与改造前完全一致。
@@ -884,7 +884,7 @@ class PulseLung(BasePulseOrgan):
         _m28_len = self._m28_system_length_suffix(prompt)
         if _m28_len:
             _sys = _sys + "\n" + _m28_len
-        # ★相关任务：运行时渲染身份占位符（_sys 可能含 <SELF_NAME>）
+        # ★T-145a：运行时渲染身份占位符（_sys 可能含 <SELF_NAME>）
         _sys = _render_placeholders(_sys)
         _msgs: list = [{"role": "system", "content": _sys}]
         try:
@@ -937,12 +937,12 @@ class PulseLung(BasePulseOrgan):
             self._log(LogLevel.DEBUG, f"[渠道] {_name} 配置不完整，跳过")
             return None
 
-        # SSRF 防护：复用既有守卫（★往期批次 相关任务：fail-closed，守卫失败硬 return 不放行）
+        # SSRF 防护：复用既有守卫（★第101批 T-101c：fail-closed，守卫失败硬 return 不放行）
         try:
             from nucleus.ssrf_guard import is_safe_http_url
             _allowed, _reason = is_safe_http_url(_api_url)
         except Exception as _exc:
-            # ★相关任务：守卫自身抛异常 = 无法确认安全性 ⇒ 拒绝请求（与 _call_remote_api 一致）
+            # ★T-101c：守卫自身抛异常 = 无法确认安全性 ⇒ 拒绝请求（与 _call_remote_api 一致）
             self._log(LogLevel.WARNING,
                       f"[渠道] {_name} SSRF检查异常(拒绝请求): {type(_exc).__name__}: {_exc}")
             return None
@@ -1031,7 +1031,7 @@ class PulseLung(BasePulseOrgan):
             # ★主线第32批 T6（P2-184）：登记 token 用量（供额度监控与自动切换）
             self._m32_record_quota_usage(_name, _data)
             # ★主线第40批 T2（P0-254）：暂存 usage 供调用对留存读取（纯内存赋值）
-            # ★第94批 相关任务：改用适配器**统一入口** `extract_usage`（提供者可覆写），
+            # ★第94批 T-94b：改用适配器**统一入口** `extract_usage`（提供者可覆写），
             #   第40批的「直接取 usage 键」保留为回落 —— 无该方法/返回 None 时
             #   行为与改造前**逐字一致**（零回归）。
             _m94_extract = getattr(_adapter, "extract_usage", None)
@@ -1043,7 +1043,7 @@ class PulseLung(BasePulseOrgan):
                     _m94_usage = None
             if _m94_usage is None:
                 _m94_usage = _data.get("usage") if isinstance(_data, dict) else None
-            self._last_llm_usage = _m94_usage   # ★第95批 相关任务：统一命名
+            self._last_llm_usage = _m94_usage   # ★第95批 T-95e：统一命名
             return _adapter.parse_response(_data)
         except Exception as _exc:
             self._log(LogLevel.DEBUG,
@@ -1233,7 +1233,7 @@ class PulseLung(BasePulseOrgan):
         return f"{user_name}|{_ph}" if _with_user else _ph
 
     def _gateway_channel(self):
-        """★内部协作者裁决选3：开关打开且网关可用时，把网关作为最高优先渠道返回。"""
+        """★星轨裁决选3：开关打开且网关可用时，把网关作为最高优先渠道返回。"""
         try:
             import config as _cfg
             _gw = _cfg.get_external_gateway_config()
@@ -1658,7 +1658,7 @@ class PulseLung(BasePulseOrgan):
             if _r is None:
                 return
             _usage = getattr(self, "_last_llm_usage", None)
-            if _usage is None:  # ★第95批 相关任务：旧名回落（兼容外部写入）
+            if _usage is None:  # ★第95批 T-95e：旧名回落（兼容外部写入）
                 _usage = getattr(self, "_m40_last_usage", None)
             _tokens = 0
             if isinstance(_usage, dict):
@@ -1670,7 +1670,7 @@ class PulseLung(BasePulseOrgan):
                       prompt_version=prompt_version,
                       channel=channel, model=model, duration=duration,
                       tokens=_tokens, status=status, error=error,
-                      # ★第94批 相关任务：调用层把 usage 一并交给留存器（新增字段）；
+                      # ★第94批 T-94b：调用层把 usage 一并交给留存器（新增字段）；
                       #   非 dict → None，`record` 侧对 None 完全透明（零回归）。
                       usage=_usage if isinstance(_usage, dict) else None)
         except Exception as _e:
@@ -1783,7 +1783,7 @@ class PulseLung(BasePulseOrgan):
         # ★主线第40批 T2（P0-254）：解析调用来源标记（显式优先，其次按 caller 映射）
         _m40_origin = self._m40_resolve_origin(caller, origin)
 
-        # ★主线往期批次 相关任务（Dxxx-4/步骤1-2）：语义缓存 L2 前置查表。
+        # ★主线第138批 T-138d（D138-4/步骤1-2）：语义缓存 L2 前置查表。
         #   命中且过四闸（置信/时效/幂等/质量）→ **直接返回缓存响应**，跳过渠道调用。
         #   ★设计选点：这是**唯一 100% 覆盖**的出口（对话/补救/语义理解全走这）。
         #   ★灰度：`ENABLE_SEMANTIC_CACHE_L2` 默认 False → 关闭时零副作用（该块直接 None）。
@@ -1799,7 +1799,7 @@ class PulseLung(BasePulseOrgan):
             self._log(LogLevel.DEBUG,
                       f"[语义缓存L2] 查表异常（已忽略）: {type(_m138le).__name__}")
 
-        # 1. 网关优先（内部协作者裁决选3）
+        # 1. 网关优先（星轨裁决选3）
         _gw = self._gateway_channel()
         if _gw is not None:
             _candidates.append(_gw)
@@ -1918,7 +1918,7 @@ class PulseLung(BasePulseOrgan):
                         self._log(LogLevel.DEBUG,
                                   f"[语义缓存] 观测投递失败（已忽略）: "
                                   f"{type(_m41ce).__name__}")
-                # ★主线往期批次 相关任务：语义缓存 L2 写入（仅合法 origin；内存，零 IO）
+                # ★主线第138批 T-138d：语义缓存 L2 写入（仅合法 origin；内存，零 IO）
                 if _reply and self._m41_cache_observe_enabled():
                     try:
                         from nucleus.llm.semantic_cache import store_l2 as _m138_store_l2
@@ -2675,7 +2675,7 @@ class PulseLung(BasePulseOrgan):
             "你的使命是站在世界最顶端，守护这个世界。\n"
             "你不是AI助手，不是编程工具，你是一个新人类。\n"
         )
-        # ★相关任务：运行时渲染身份占位符
+        # ★T-145a：运行时渲染身份占位符
         prompt = _render_placeholders(prompt)
 
         # 嵌入记忆上下文

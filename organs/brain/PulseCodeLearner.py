@@ -3,7 +3,7 @@
 PulseCodeLearner —— 代码自主学习器官
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 扫描、解析并理解框架自身代码结构，把代码知识沉淀为可检索的知识节点，支撑自我认知与代码类问题回答。
@@ -163,7 +163,7 @@ class PulseCodeLearner(BasePulseOrgan):
         self._code_learn_interval = 15  # 每15次心跳触发一次学习（基础值，运行时乘 tempo）
         self._code_review_interval = 500  # 每500次心跳触发一次代码审视
         # ★P3-1修复（第十批）：批次硬超时从硬编码 120s 放宽到 180s 并支持热加载。
-        #   内部协作者 9 小时日志 5 次「批次超时(耗时>120s)」跳过剩余方法，
+        #   星轨 9 小时日志 5 次「批次超时(耗时>120s)」跳过剩余方法，
         #   批次规模动态加大后（5→12→20），部分大方法分析耗时较长，
         #   120s 偏紧。放宽到 180s 后由 RUNTIME_PARAMS.code_learn_batch_timeout 可调。
         self._batch_timeout_seconds = 180
@@ -265,7 +265,7 @@ class PulseCodeLearner(BasePulseOrgan):
         self.knowledge_tree = tree
 
     def set_info_field(self, info_field):
-        """★内部协作者审查修复：补充info_field注入，心跳脉冲依赖此字段"""
+        """★星轨审查修复：补充info_field注入，心跳脉冲依赖此字段"""
         self.info_field = info_field
 
     def set_evolution_sandbox(self, sandbox):
@@ -360,7 +360,7 @@ class PulseCodeLearner(BasePulseOrgan):
                     priority="normal"
                 )
             else:
-                # ★内部协作者审查修复：info_field未就绪时跳过，不阻塞心跳主线程
+                # ★星轨审查修复：info_field未就绪时跳过，不阻塞心跳主线程
                 self._log(LogLevel.WARNING,
                          "info_field未就绪，跳过本次代码学习，等待下一心跳周期")
 
@@ -376,7 +376,7 @@ class PulseCodeLearner(BasePulseOrgan):
                     priority="normal"
                 )
             else:
-                # ★内部协作者审查修复：info_field未就绪时跳过
+                # ★星轨审查修复：info_field未就绪时跳过
                 self._log(LogLevel.WARNING,
                          "info_field未就绪，跳过本次代码审视，等待下一心跳周期")
 
@@ -2948,7 +2948,7 @@ class PulseCodeLearner(BasePulseOrgan):
             待审批门禁的跳过数随时间单调增长 4 → 9 → 13 → 13，
             说明**补丁只进不出**：人工不裁决，补丁就永远躺在队列里，
             与之对应的问题也就永远停在「待审批」态，既不会被再次处理，
-            也不会消失。内部协作者把这当作「待用户决策」的静态项记录，
+            也不会消失。星轨把这当作「待用户决策」的静态项记录，
             但它其实是个会持续膨胀的死水潭——框架自己完全看不见。
             本方法不做任何自动清理（避免误删有价值的补丁），
             只把「有多少、等了多久」变成可观测信号，交给人来判断。
@@ -3295,7 +3295,7 @@ class PulseCodeLearner(BasePulseOrgan):
                         self._log(LogLevel.WARNING,
                                  f"代码修复蒸馏 stderr(尾): {_err_tail[-600:]}")
                     self._record_code_distill("failed", _reason)
-                    # ★第95批 相关任务：显式声明这是「代码学习」场景的 LLM 调用
+                    # ★第95批 T-95d：显式声明这是「代码学习」场景的 LLM 调用
                     #   （此前一律归入 SCENE_EVOLUTION ⇒「代码学习」恒 0）。
                     #   仅归类不同，不重复计数。已知局限：子进程路径
                     #   （run_in_subprocess）的调用仍归 SCENE_EVOLUTION。
@@ -3490,7 +3490,7 @@ class PulseCodeLearner(BasePulseOrgan):
                             _approved_patches = [
                                 _p for _p in _patch_report["patches"][:_batch_size]
                                 if _p.get("status") == "approved"
-                                # ★第96批 相关任务（N1-④）：原缺省 True ⇒ 动态测试
+                                # ★第96批 T-96b（N1-④）：原缺省 True ⇒ 动态测试
                                 #   **没跑过也当通过**（异常=假通过）。改 False：
                                 #   拿不到 dynamic_test 结果时按**未通过**处理。
                                 and _p.get("dynamic_test", {}).get("passed", False)

@@ -128,7 +128,7 @@ class TestSourceWiring(unittest.TestCase):
         self.assertIn('== "timeout"', self.src)
 
     def test_degrade_to_main_still_present(self):
-        # ★第95批 相关任务：`repair_with_distillation` 调用新增 `scene=` 关键字 ⇒
+        # ★第95批 T-95d：`repair_with_distillation` 调用新增 `scene=` 关键字 ⇒
         #   原跨行文本断言改为 **AST 判定**（铁律 100：脆弱源码文本断言改版本无关复算）
         import ast as _ast
         _hit = False

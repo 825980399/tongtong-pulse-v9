@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """主线第81批【补】T2 生产热路径接线集成验收（A-E，先红后绿，禁 mock 召回）。
 
-验证生产链路是否真正闭环（内部协作者终验指出：上窗口 T2 的 API 从未接进生产运行链路，
+验证生产链路是否真正闭环（星轨终验指出：上窗口 T2 的 API 从未接进生产运行链路，
 get() 内 0 处调用、main.py 对 materialize/set_cold_recall/recall_cold 0 匹配）。
 
 - A 自动绑定：只调 snapshot.set_node_pool(pool)，断言 _m70_cold_recall_fn 已自动绑定

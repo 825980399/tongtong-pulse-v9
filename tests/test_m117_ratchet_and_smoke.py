@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 相关任务（断5 棘轮自愈）+ 相关任务②（冒烟隔离规矩）门禁单测。
+"""第117批 T-117b（断5 棘轮自愈）+ T-117d②（冒烟隔离规矩）门禁单测。
 
 设计原则：离线、隔离、不读生产账本；SEE 用 importlib 独立加载，
 并且**先把模块日志器换成 smoke 日志器**，避免合成指纹污染 pulse.log（B22）。
@@ -21,7 +21,7 @@ def _load_see():
     _spec = importlib.util.spec_from_file_location("SEE_m117_test", _SEE_SRC)
     _mod = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)
-    # ★相关任务②：合成指纹一律走 smoke 日志器，不污染 pulse.log
+    # ★T-117d②：合成指纹一律走 smoke 日志器，不污染 pulse.log
     try:
         from nucleus.logger import get_smoke_logger
         _mod._module_logger = get_smoke_logger("m117_ratchet")
@@ -87,7 +87,7 @@ class T117bRatchetSelfHeal(unittest.TestCase):
         self.assertEqual({}, _f._no_fix_cooldown_rounds)
 
     def test_04_dummy_placeholder_early_return(self):
-        """占位/Dummy 实例早退（相关任务 防御），不落盘。"""
+        """占位/Dummy 实例早退（T-115d 防御），不落盘。"""
         class _Dummy:
             pass
 

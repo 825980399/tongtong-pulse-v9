@@ -3,7 +3,7 @@
 wecom_chat_bridge.py —— 企业微信聊天桥
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 企业微信聊天接口桥接
@@ -34,7 +34,7 @@ class WeComChatBridge(SilentLogMixin):
 
     # ★v23.0：userid → 框架内用户名映射
     USERID_MAP = {
-        # ★相关任务：不内置任何实际 userid，需显式配置（环境变量 / config_override.json）
+        # ★T-101d：不内置任何实际 userid，需显式配置（环境变量 / config_override.json）
     }
 
     def __init__(self, bot_id: str, secret: str,
@@ -162,7 +162,7 @@ class WeComChatBridge(SilentLogMixin):
             self._client.on("message", self._on_wecom_message)
             # ★P2-2修复（第十批）：注册连接状态事件，补上重连成功/断开的日志。
             #   此前只注册 message，网络中断后 SDK 内部自动重连，框架层完全无感知，
-            #   内部协作者 9 小时日志只见「WebSocket connection closed」与
+            #   星轨 9 小时日志只见「WebSocket connection closed」与
             #   「Failed to create WebSocket connection」两条底层 ERROR，
             #   后续无任何「重连成功」日志，无法判断企业微信是否真的恢复在线。
             #   此处注册 connected/disconnected/reconnecting 三事件，

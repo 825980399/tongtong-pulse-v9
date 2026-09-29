@@ -1,7 +1,7 @@
 """verify_phase17_1_5 —— PHASE17 阶段一 · 任务 1.5 验证脚本
 
 版本: v10 PulseNet · 工具
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
 from __future__ import annotations

@@ -3,7 +3,7 @@
 VectorEncoder.py —— 向量编码器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 文本到向量的编码服务
@@ -32,7 +32,7 @@ _PROJECT_ROOT = os.path.dirname(
 
 
 # ============================================================
-# ★文本预处理（PHASE17 阶段一 · 门控调优，2026-09-07 内部协作者）
+# ★文本预处理（PHASE17 阶段一 · 门控调优，2026-09-07 路灯）
 # ------------------------------------------------------------
 # 为什么必须有这一段（实测证据，见 tools/probe_term_collapse.py）：
 #   bge-small-zh 的 WordPiece 遇到「未登录的连续 ASCII 串」会整段塌成 [UNK]。
@@ -184,7 +184,7 @@ class VectorEncoder:
         except Exception as e:
             silent_exc(e, "VectorEncoder:183:模型缓存目录创建失败", level="warning")
 
-        # 尝试顺序：ModelScope > hf-mirror > 直连 HF（内部协作者 Q6 决策）
+        # 尝试顺序：ModelScope > hf-mirror > 直连 HF（星轨 Q6 决策）
         mirrors = self._cfg.get("download_mirrors") or [
             "https://www.modelscope.cn", "https://hf-mirror.com",
             "https://huggingface.co",
@@ -299,7 +299,7 @@ class VectorEncoder:
     def cosine_matrix(query_vec: np.ndarray, matrix: np.ndarray) -> np.ndarray:
         """query(1,dim) 与 matrix(N,dim) 的余弦相似度。
 
-        实现选择（内部协作者 Q2 决策 1：优先复用 _cosine_cpu_cy，缺失回落纯 numpy）：
+        实现选择（星轨 Q2 决策 1：优先复用 _cosine_cpu_cy，缺失回落纯 numpy）：
             - 默认 numpy：已归一化前提下余弦=点积，一次矩阵乘法完成（全 C 层）。
             - retrieval_backend="cython" 且候选数 ≤ topk_cython_max 时，
               尝试 `_cosine_cpu_cy.batch_cosine_cy`（现成资产），失败静默回落 numpy。

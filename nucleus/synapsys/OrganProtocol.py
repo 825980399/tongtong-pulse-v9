@@ -3,7 +3,7 @@
 OrganProtocol.py —— 器官协议
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 器官间通信协议定义与解析
@@ -30,7 +30,7 @@ class OrganStatus_v2(Enum):             # 避免与基类OrganStatus重名，加
     DEPRECATED = "deprecated"
 
 class OrganActivityModel(Enum):
-    """★往期批次 相关任务（预埋）：器官活跃度模型，供沉默检测按模型分档。
+    """★第106批 T-106c（预埋）：器官活跃度模型，供沉默检测按模型分档。
 
     取值：
       - PULSE     脉冲型：有任务才启动，空闲静默属正常（多数低频器官）。
@@ -113,7 +113,7 @@ class OrganProtocol:
             if field not in manifest:
                 return {"status": "rejected", "reason": f"声明文件缺少必要字段: {field}"}
 
-        # ★往期批次 相关任务（预埋）：可选字段 activity_model 校验（不强制；存在才校验）。
+        # ★第106批 T-106c（预埋）：可选字段 activity_model 校验（不强制；存在才校验）。
         #   合法取值见 OrganActivityModel；声明非法值直接拒绝，避免后续分档逻辑误判。
         _am = manifest.get("activity_model")
         if _am is not None and _am not in {m.value for m in OrganActivityModel}:
@@ -145,7 +145,7 @@ class OrganProtocol:
                 "manifest": manifest,
                 "registered_at": time.time(),
                 "status": OrganStatus_v2.ACTIVE,
-                # ★往期批次 相关任务（预埋）：保存活跃度模型，供后续沉默检测分档过滤使用。
+                # ★第106批 T-106c（预埋）：保存活跃度模型，供后续沉默检测分档过滤使用。
                 "activity_model": manifest.get("activity_model"),
             }
             self._total_registered += 1
@@ -240,7 +240,7 @@ class OrganProtocol:
             old_entry["manifest"] = new_manifest
             old_entry["upgraded_at"] = time.time()
             old_entry["status"] = OrganStatus_v2.ACTIVE
-            # ★往期批次 相关任务（预埋）：同步活跃度模型（声明可能新增/变更 activity_model）。
+            # ★第106批 T-106c（预埋）：同步活跃度模型（声明可能新增/变更 activity_model）。
             old_entry["activity_model"] = new_manifest.get("activity_model")
             self._total_upgrades += 1
             
@@ -319,7 +319,7 @@ class OrganProtocol:
         return entry["manifest"] if entry else None
 
     def get_activity_model(self, organ_name: str) -> str | None:
-        """★往期批次 相关任务（预埋）：获取器官的活跃度模型；未声明返回 None。
+        """★第106批 T-106c（预埋）：获取器官的活跃度模型；未声明返回 None。
 
         后续批次可由沉默检测（PulseBloodVessel._check_silent_organs）调用此方法，
         将 ``activity_model == "constraint"`` 的器官排除出沉默检测池；本批仅提供接口，

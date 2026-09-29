@@ -1,7 +1,7 @@
-"""相关任务 回归测试：待审批队列不得包含"假成功"补丁。
+"""T-100a 回归测试：待审批队列不得包含"假成功"补丁。
 
-假成功定义（相关任务 新验证器口径 + m96 应用探针）：
-  - baseline_errors == 0 却被标记为 verified=True（相关任务 旧口径导致）
+假成功定义（T-99d 新验证器口径 + m96 应用探针）：
+  - baseline_errors == 0 却被标记为 verified=True（T-99d 旧口径导致）
   - 且仍处于待审批队列（status in pending/approved/runtime_verified）
   - 且补丁从未真正应用到源码（original_code 仍在盘、modified_code 不在盘）
 

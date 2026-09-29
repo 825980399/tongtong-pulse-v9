@@ -4,7 +4,7 @@ from config import EXTERNAL_CALL_TIMEOUTS
 PulseSystemManager —— 系统自主管理器 · 整机生命周期与自愈
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 SystemEvent.BOOT / STOP 与 SystemManagerEvent.HEALTH_CHECK / START_SERVICE，负责服务启停、硬件检查、器官上报处置与自动修复，就绪后宣告系统可用。
@@ -33,7 +33,7 @@ from nucleus.const import (
     VascularEvent,
 )
 from nucleus.organ_identity import resolve_organ_key, resolve_organ_keys
-# ★相关任务：豁免表统一归一化为规范 key 集合（命名空间对齐）
+# ★T-112d：豁免表统一归一化为规范 key 集合（命名空间对齐）
 _SILENCE_EXEMPT_KEYS = resolve_organ_keys(SILENCE_EXEMPT_ORGANS)
 
 
@@ -75,7 +75,7 @@ class PulseSystemManager(BasePulseOrgan):
         self._escalation_recover_threshold = 3     # 连续 3 次巡检正常 → 自动恢复降级
         self._escalation_action_enabled = getattr(
             config, "ORGAN_ESCALATION_ACTION_ENABLED", False)
-        # ★往期批次 相关任务（P3）：not_found 分支一次性告警去重集合。
+        # ★第106批 T-106a（P3）：not_found 分支一次性告警去重集合。
         #   处置目标不在器官注册表时，此前静默返回 "not_found" 直接蒸发（任务书：自愈闭环
         #   对非器官实体全窗 0 处置）。改为一次性 WARNING 让空转可见；同一名称只报一次。
         self._warned_not_found: set = set()
@@ -139,7 +139,7 @@ class PulseSystemManager(BasePulseOrgan):
     def _on_system_boot(self, payload: dict) -> dict[str, Any]:
         """系统启动时执行全面自检和修复（boot 重任务异步化，避免阻塞 L0 worker 超时）。
 
-        ★相关任务：服务检查 + 硬件检测是重任务（实测串行 ~12s > L0 看门狗 8s 预算），
+        ★T-112c：服务检查 + 硬件检测是重任务（实测串行 ~12s > L0 看门狗 8s 预算），
         直接在 L0 生命线层处理器执行会让心跳/告警冻结。改为：轻量步骤（建目录 + 启动周期
         巡检）同步执行，重任务（服务检查 + 硬件检测）移交后台守护线程，L0 worker 立即返回，
         不阻塞。结果存入实例属性（功能不丢，HEALTH_CHECK 无影响）。
@@ -171,7 +171,7 @@ class PulseSystemManager(BasePulseOrgan):
         }
 
     def _run_boot_checks(self) -> None:
-        """★相关任务：后台执行 boot 重任务（服务检查 + 硬件检测），不阻塞 L0 worker。"""
+        """★T-112c：后台执行 boot 重任务（服务检查 + 硬件检测），不阻塞 L0 worker。"""
         try:
             self._last_boot_services = self._check_and_repair_services()
             self._last_boot_hardware = self._check_hardware()
@@ -230,7 +230,7 @@ class PulseSystemManager(BasePulseOrgan):
 
         # 再启动
         self._log(LogLevel.DEBUG, f"正在启动 {service['name']}...")
-        # ★相关任务：Popen 不接受 timeout 形参（原代码 Popen(..., timeout=) 会抛 TypeError
+        # ★T-112c：Popen 不接受 timeout 形参（原代码 Popen(..., timeout=) 会抛 TypeError
         #   导致 Ollama 等托管服务自动启动失败）。timeout 改由 proc.wait() 施加。
         _proc = subprocess.Popen(
             service["start_cmd"],
@@ -299,7 +299,7 @@ class PulseSystemManager(BasePulseOrgan):
     def _dispatch_organ_action(self, name: str, level: int, action: str) -> str:
         """单个器官的处置调度（防抖 + 豁免 + 检查 + 执行 + 审计）。"""
         # 2. 豁免二次校验：绝不处置豁免器官
-        # ★相关任务：比对走归一化，避免 source_organ 命名空间与裸名豁免表对不齐
+        # ★T-112d：比对走归一化，避免 source_organ 命名空间与裸名豁免表对不齐
         if resolve_organ_key(name) in _SILENCE_EXEMPT_KEYS:
             return "exempt"
 
@@ -315,7 +315,7 @@ class PulseSystemManager(BasePulseOrgan):
         # 4. 获取器官引用（只读）
         organ = self.framework.organs.get(name) if self.framework else None
         if organ is None:
-            # ★往期批次 相关任务（P3）：处置目标不在器官注册表 → 多为豁免实体/注册错位，
+            # ★第106批 T-106a（P3）：处置目标不在器官注册表 → 多为豁免实体/注册错位，
             #   此前静默蒸发。改为一次性 WARNING（同一名称只报一次），让空转可见、便于排障。
             if name not in self._warned_not_found:
                 self._warned_not_found.add(name)

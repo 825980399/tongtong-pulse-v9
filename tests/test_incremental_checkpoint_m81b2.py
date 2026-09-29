@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """主线第81批【补2】增量日志 × Parquet 全量检查点闭环 —— 端到端测试 C1-C7。
 
-与旧 m81 T3 测试的区别（内部协作者补正要点）：
+与旧 m81 T3 测试的区别（星轨补正要点）：
 - 旧测试用 ``PulseSnapshot.__new__`` 残缺实例 + 直调内部方法（`_m67_incremental_log_save`）；
 - 本测试**走真实 `save()`/`load()` 编排** + 真实 `pyarrow` 写读 tmp parquet + 真实
   `PulseNodePool`（`get_all_including_evicted()` 返回真实节点），不 mock 被测检查点逻辑。

@@ -159,7 +159,7 @@ def format_error(exc: Any, limit: int | None = None) -> str:
 
 
 def _m94_normalize_usage(usage: Any) -> dict[str, int] | None:  # _m94_extract_usage_marker
-    """★第94批 相关任务：归一化 token 用量字典（留存 schema 的 ``usage`` 字段）。
+    """★第94批 T-94b：归一化 token 用量字典（留存 schema 的 ``usage`` 字段）。
 
     兼容上游两种形态：完整三值 / 仅含其中一部分（缺 ``total_tokens`` 时用前两者
     补齐）。非 dict / 三值全零 / 非数值 → 返回 ``None``（**不写假数据**）。
@@ -361,7 +361,7 @@ class LLMCallRecorder:
             return None
         _ts = float(ts if ts is not None else time.time())
         _tid = "m40-" + uuid.uuid4().hex[:12]
-        # ★第94批 相关任务：新增 usage 字段 + tokens 回落（显式 tokens 优先）。
+        # ★第94批 T-94b：新增 usage 字段 + tokens 回落（显式 tokens 优先）。
         _m94_usage = _m94_normalize_usage(usage)
         _m94_tokens = int(tokens or 0)
         if not _m94_tokens and _m94_usage:
@@ -556,8 +556,8 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                 raise
             finally:
                 try:
-                    # ★第94批 相关任务：取用引擎侧暂存的 usage（未设→None，零回归）。
-                    # ★第95批 相关任务：暂存属性统一为 `_last_llm_usage`
+                    # ★第94批 T-94b：取用引擎侧暂存的 usage（未设→None，零回归）。
+                    # ★第95批 T-95e：暂存属性统一为 `_last_llm_usage`
                     #   （原 `_m44_last_usage`）；保留旧名回落读取，避免外部脚本
                     #   仍按旧名写入时静默丢掉 usage。
                     _m94_usage = getattr(_self, "_last_llm_usage", None)

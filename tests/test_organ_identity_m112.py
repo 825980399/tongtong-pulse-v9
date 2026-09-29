@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""相关任务 resolve_organ_key 纯函数单测 + 豁免归一化比对验证。"""
+"""T-112d resolve_organ_key 纯函数单测 + 豁免归一化比对验证。"""
 import os
 import sys
 

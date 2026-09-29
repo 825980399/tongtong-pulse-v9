@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 刀2 槽位一致性单测：InferenceContext.__slots__ 必须覆盖所有 ctx 字段写入点。
+"""第147批 刀2 槽位一致性单测：InferenceContext.__slots__ 必须覆盖所有 ctx 字段写入点。
 
 背景：拆分 _on_inference_request 时，跨切口变量通过 InferenceContext（__slots__ 限定）承载。
 若某处写入 `ctx.xxx = ...` 但 xxx 未列入 __slots__，运行时抛 AttributeError（__slots__
@@ -61,7 +61,7 @@ def _ctx_attr_writes(tree):
 
 
 class TestIrSlotsT147(unittest.TestCase):
-    """往期批次刀2：ctx 槽位一致性（防漏槽 AttributeError）。"""
+    """第147批刀2：ctx 槽位一致性（防漏槽 AttributeError）。"""
 
     @classmethod
     def setUpClass(cls):

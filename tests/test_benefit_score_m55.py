@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""第55批 T1 门控测试：benefit_score 统一常量（P2-380，内部协作者裁决方案①）。
+"""第55批 T1 门控测试：benefit_score 统一常量（P2-380，星轨裁决方案①）。
 
 背景
 ----
 第54批 T0 发现：任务书称改两个 `PatchManager.py` 里的 `benefit_score` 默认值，
 但**这两个文件里根本没有该字段** —— 真实形态是 7 处 `get("benefit_score", 3)` 兜底。
-内部协作者裁决采用**方案①**：抽统一常量 `config.DEFAULT_BENEFIT_SCORE = 4`。
+星轨裁决采用**方案①**：抽统一常量 `config.DEFAULT_BENEFIT_SCORE = 4`。
 
 ★本批又一个 T0 偏差：任务书给的 5 个行号**全部偏移**（第54批 T6 在同一文件插入过代码）
 → 本测试**按内容断言，不按行号**。

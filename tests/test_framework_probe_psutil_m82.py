@@ -2,7 +2,7 @@
 
 背景（总账 185.5 / D-新记工具链债务）：
   旧版只走 wmic（已被微软弃用，且易被沙箱 Program Blacklist 拦截），
-  且 `except Exception: return True` 静默保守 —— 内部协作者沙箱里 wmic 被拦时
+  且 `except Exception: return True` 静默保守 —— 路灯沙箱里 wmic 被拦时
   verify 误判「框架在跑」而跳过重负载用例，"0 失败"表象掩盖了少跑用例。
 
 本测试锁定新契约：

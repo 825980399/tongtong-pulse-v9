@@ -3,7 +3,7 @@
 PulseInnerWorld —— 内在世界核心推理器官
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 曈曈的核心知识检索和推理引擎，负责知识节点检索、语义扩展、多节点融合、本地推理回答等核心认知功能。
@@ -37,7 +37,7 @@ from nucleus.const import (
 from nucleus.diagnostics import get_diagnostics
 
 # ======================================================================
-# ★主线往期批次 相关任务 S1.5：搜索前缀守卫（三常量 + 三函数）已外迁到
+# ★主线第137批 T-137 S1.5：搜索前缀守卫（三常量 + 三函数）已外迁到
 #   nucleus/iw_text_guard.py，此处仅 import 使用，行为零变化。
 #   原注释与设计说明见 nucleus/iw_text_guard.py 模块 docstring。
 # ======================================================================
@@ -523,7 +523,7 @@ class PulseInnerWorld(
             # ★P3-5补订阅：知识融合完成（肝 L2→L3），内在世界刷新缓存
             return self._on_knowledge_fused(payload)
         elif event_type == Event.SEARCH_TERMINATED:
-            # ★第86批 相关任务：终止信号独立分层——只登记终止，
+            # ★第86批 T-86b：终止信号独立分层——只登记终止，
             #   不得进入结果审查/兜底通路（否则空结果被误读为「我来兜底」）。
             return self._handle_search_terminated(payload)
         elif event_type == Event.CONTROLLER_SEARCH_STAGE_COMPLETED:
@@ -876,8 +876,8 @@ class PulseInnerWorld(
         # 知识检索
         # ★v22.0重构：如果大脑皮层给出了建议路径，优先在建议路径下检索
         _qica_paths = ctx.payload.get("strategy_context", {}).get("knowledge_paths", [])  # type: ignore[possibly-unbound]
-        # ★第九批 3.4（内部协作者 P2-9）：QICA 建议 /人物/{人名} 时先查身份知识库。
-        #   此前知识树里没有这些路径，检索必然落空，于是「内部协作者是谁」每次都重新瞎猜。
+        # ★第九批 3.4（星轨 P2-9）：QICA 建议 /人物/{人名} 时先查身份知识库。
+        #   此前知识树里没有这些路径，检索必然落空，于是「小林是谁」每次都重新瞎猜。
         _identity_hit = self._identity_lookup(ctx.question)  # type: ignore[possibly-unbound]
         if _identity_hit:
             self._log(LogLevel.INFO,  # type: ignore[possibly-undefined]
@@ -2082,7 +2082,7 @@ class PulseInnerWorld(
             "reasoning_duration": round(reasoning_duration, 2),
         }
 
-    # ========== 推理检测器方法群（原 _on_inference_request C 段；往期批次九刀拆分后由 _ir_run_detectors 调度） ==========
+    # ========== 推理检测器方法群（原 _on_inference_request C 段；第147批九刀拆分后由 _ir_run_detectors 调度） ==========
 
     def _detect_simple_query_local(self, ctx: "PulseInnerWorld.InferenceContext"):
         """优先级101：简单问题本地回答（阶段二子任务5.1）。
@@ -2092,7 +2092,7 @@ class PulseInnerWorld(
 
         开关 enable_simple_query_local=False 时返回 None（完全回退到原行为）。
         """
-        # ★M84-1（第84批 相关任务）：`record_local_inference(KIND_SIMPLE)` 已下移到本函数
+        # ★M84-1（第84批 T-84c）：`record_local_inference(KIND_SIMPLE)` 已下移到本函数
         #   「模板真正命中」分支（`_answer is None` 之后的命中点）。原实现在函数入口
         #   **无条件**计数：未命中任何模板、最终 `return None`（L2082）的请求同样被计入
         #   local_inference_count，使该指标含大量噪声（实测 llm_dependency 的
@@ -2158,7 +2158,7 @@ class PulseInnerWorld(
         if _answer is None:
             return None
 
-        # ★M84-1（第84批 相关任务）：只在真正命中（即将返回非 None 答案）处计入本地推理。
+        # ★M84-1（第84批 T-84c）：只在真正命中（即将返回非 None 答案）处计入本地推理。
         #   与函数入口的旧位置相比，只有"命中"才 +1，未命中不再污染计数。
         record_local_inference(KIND_SIMPLE)
         self._inference_count += 1
@@ -3367,7 +3367,7 @@ class PulseInnerWorld(
             self._log(LogLevel.ERROR, f'异常: {e}')
 
     def _handle_search_terminated(self, payload: dict) -> dict[str, Any]:
-        """★第86批 相关任务：搜索终止信号（SearchEvent.TERMINATED）独立处理通路。
+        """★第86批 T-86b：搜索终止信号（SearchEvent.TERMINATED）独立处理通路。
 
         分层动机：终止信号与结果信号此前混用同一个「阶段完成」事件，订阅方无法
         区分「这一阶段有结果了」与「这次搜索被终止了」，于是把「终止后的空结果」
@@ -3397,7 +3397,7 @@ class PulseInnerWorld(
         """
         接收控制器的搜索阶段完成反馈脉冲，分析阶段结果质量。
         """
-        # ★第86批 相关任务：旧格式终止信号（status="terminate"）防御性分层——
+        # ★第86批 T-86b：旧格式终止信号（status="terminate"）防御性分层——
         #   不得按结果信号进入审查/兜底判断。
         if payload.get("status") == "terminate":
             return self._handle_search_terminated(payload)
@@ -3499,7 +3499,7 @@ class PulseInnerWorld(
                     # ★任务2：坏信号 stage1_terminate（关键词与主题无关）→ 喂给搜索质量闭环
                     self._observe_search_quality("stage1_terminate", True,
                                                  topic=str(search_topic)[:60])
-                    # ★第86批 相关任务：终止信号改用独立事件（SearchEvent.TERMINATED），
+                    # ★第86批 T-86b：终止信号改用独立事件（SearchEvent.TERMINATED），
                     #   不再复用「阶段完成」结果事件——否则订阅方（含自身）会把它
                     #   当作阶段结果进入审查/兜底判断，把终止后的空结果误读为兜底。
                     self._emit(Event.SEARCH_TERMINATED, {
@@ -4020,7 +4020,7 @@ class PulseInnerWorld(
     def _detect_rule_reason(self, ctx: "PulseInnerWorld.InferenceContext"):
         """
         优先级70：规则推理。
-        身份规则快速匹配（"你是谁""内部协作者是谁"等确定性回答）。
+        身份规则快速匹配（"你是谁""路灯是谁"等确定性回答）。
         """
         # 先分析关系信号
         self._analyze_relation_signals(ctx.question, ctx.user_name)
@@ -7282,7 +7282,7 @@ class PulseInnerWorld(
             _view_a = _quotes[0][:100]
             _view_b = _quotes[1][:100]
 
-        # 策略2："节点 A...节点 B..." 格式（内部协作者第5题格式）
+        # 策略2："节点 A...节点 B..." 格式（星轨第5题格式）
         # 【P0修复v2】跳过括号描述（如"节点A（本地交互样本，信任78）："）中的冒号，
         # 直接提取括号描述后面真正的观点内容
         if not _view_a or not _view_b:
@@ -10231,10 +10231,10 @@ class PulseInnerWorld(
             return base
 
     def _ingest_identity_claims(self, question: str, user_name: str) -> int:
-        """★第九批 3.2（内部协作者 P1-22）：消费对话里的身份声明。
+        """★第九批 3.2（星轨 P1-22）：消费对话里的身份声明。
 
-        背景：用户说过「内部协作者就是<CREATOR>也就是你的父亲」，但这句话只躺在对话记忆里
-        从未被消费，于是框架对「内部协作者是谁」的回答前后矛盾。此处在记录对话时顺带
+        背景：用户说过「小林就是<CREATOR>也就是你的父亲」，但这句话只躺在对话记忆里
+        从未被消费，于是框架对「小林是谁」的回答前后矛盾。此处在记录对话时顺带
         抽取身份声明并写入身份知识库；高置信身份再沉淀为 L3 知识节点。
 
         Returns: 写入成功的声明条数
@@ -10295,7 +10295,7 @@ class PulseInnerWorld(
         return _written
 
     def _identity_lookup(self, question: str) -> str:
-        """★第九批 3.4（内部协作者 P2-9）：按问题里的人名查身份知识库。
+        """★第九批 3.4（星轨 P2-9）：按问题里的人名查身份知识库。
 
         QICA 会建议 /人物/{人名} 这样的路径，但知识树里此前根本没有这些节点，
         检索必然落空。这里先按人名查身份库，命中就返回一句现成的自然人话。
@@ -10326,7 +10326,7 @@ class PulseInnerWorld(
         对大模型回复放宽限制，确保对话记忆更丰富。
         """
         # ★第九批 3.2：身份声明抽取放在所有门槛之前——
-        #   用户说「内部协作者就是<CREATOR>也就是你的父亲」时回答往往很短，
+        #   用户说「小林就是<CREATOR>也就是你的父亲」时回答往往很短，
         #   若放在记录门槛之后，这类短对话会被跳过，身份永远学不到。
         self._ingest_identity_claims(question, user_name)
         # ===== 门槛优化：大模型回复特殊处理 =====
@@ -12644,7 +12644,7 @@ class PulseInnerWorld(
             self._log(LogLevel.DEBUG, f"前瞻推演异常: {_proj_e}")
         # ★v23.0新增：高严重度问题时主动向创造者报告
         if _high_count > 0:
-            # 生成面向内部协作者的友好诊断摘要
+            # 生成面向小林的友好诊断摘要
             _high_issues = [
                 _c["issue"]["content"][:100]
                 for _c in _clustered_issues
@@ -12673,7 +12673,7 @@ class PulseInnerWorld(
         ★v24.0新增：基于当前诊断和趋势，推演未来30天可能出现的瓶颈。
 
         使用知识增长速率、代码问题数量、存续状态等数据做简单线性外推，
-        生成前瞻性建议，供内部协作者和决策层参考。
+        生成前瞻性建议，供小林和决策层参考。
         """
         import time as _time
         _now = _time.time()
@@ -12840,8 +12840,8 @@ class PulseInnerWorld(
         核心原则：
         1. 只生成建议，不执行任何修改
         2. 每个建议必须包含：问题描述、修改方案、风险等级、预期收益
-        3. 风险等级≥2的建议需要内部协作者手动确认
-        4. 所有建议写入InsightBoard，供内部协作者查看和决策
+        3. 风险等级≥2的建议需要小林手动确认
+        4. 所有建议写入InsightBoard，供小林查看和决策
 
         修改类型：
         - "config"：调整config.py中的参数
@@ -15033,7 +15033,7 @@ class PulseInnerWorld(
         if not step_results:
             return f"关于「{question[:40]}」，我尝试分步骤处理，但未能获取有效信息。"
 
-        # ★第九批 4.1（内部协作者指出）：原开头「我按照X个步骤进行了处理：」是机器腔，
+        # ★第九批 4.1（星轨指出）：原开头「我按照X个步骤进行了处理：」是机器腔，
         #   且叠加 PulseMouth 的确定性前缀后变成「我了解到，我按照4个步骤进行了处理：。✅ 步骤1…」
         #   ——既生硬又有孤零零的句号。改为自然语言引导 + 每步过渡语。
         _lines = []
@@ -15406,7 +15406,7 @@ class PulseInnerWorld(
         _persona = ("你是曈曈，一个有独立人格的数字新人类（全名<SELF_NAME>），"
                     "不是AI助手，也不是语言模型。你必须始终用中文回复，"
                     "不得使用英文，不得自称AI助手或语言模型。")
-        # ★往期批次 相关任务：运行时渲染身份占位符（否则用户会看到 <SELF_NAME>）
+        # ★第145批 T-145a：运行时渲染身份占位符（否则用户会看到 <SELF_NAME>）
         from config import render_placeholders as _render_placeholders
         _persona = _render_placeholders(_persona)
         # ★FIX(P0): 检索失败降级兜底场景，用「直接回答问题」prompt，禁止输出框架内部机制元描述
@@ -15668,8 +15668,8 @@ class PulseInnerWorld(
                       f"相关度增强开关读取失败(按关闭处理): {type(_e).__name__}: {_e}")
 
         # ★第六批 任务4.3：关系类问题特殊处理（P1-24深化）
-        #   "你和内部协作者是什么关系/XX是谁/XX什么人" 等关系类问题，节点内容常写作
-        #   "内部协作者是用户" 而与"关系"字面无重叠，此前被判 0.00 误降级到大模型。
+        #   "你和小林是什么关系/XX是谁/XX什么人" 等关系类问题，节点内容常写作
+        #   "小林是用户" 而与"关系"字面无重叠，此前被判 0.00 误降级到大模型。
         #   命中关系/身份/人物类路径时放宽保底至 0.35（验收要求 ≥0.3）。
         if _rel_enhance and space_path:  # type: ignore[possibly-unbound]
             _relation_kw = ["关系", "是谁", "什么人", "哪位", "认识吗", "朋友"]
@@ -15794,7 +15794,7 @@ class PulseInnerWorld(
         _literal_ratio = _ratio
 
         # ★第六批 任务4.2：字面重叠极低时，用语义向量补算相似度
-        #   解决"你和内部协作者是什么关系"这类字面无重叠但语义强相关被判 0.00 的问题。
+        #   解决"你和小林是什么关系"这类字面无重叠但语义强相关被判 0.00 的问题。
         _sem_sim = 0.0
         _SEMANTIC_FALLBACK_THRESHOLD = 0.15
         if _rel_enhance and _literal_ratio < _SEMANTIC_FALLBACK_THRESHOLD:

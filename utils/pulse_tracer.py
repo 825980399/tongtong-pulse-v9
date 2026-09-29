@@ -1,9 +1,9 @@
 """pulse_tracer —— 脉冲链路追踪器 · 全局记录脉冲收发事件
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
-修复: 2026-09-10 内部协作者 — 原子写+频率限制+default类型修复，解决JSON解析刷屏
+修复: 2026-09-10 星轨 — 原子写+频率限制+default类型修复，解决JSON解析刷屏
 """
 
 import atexit
@@ -21,10 +21,10 @@ _lock = threading.Lock()
 _output_path = None
 _orphan_path = None
 _last_flush_time = 0.0
-# ★往期批次 相关任务（方案A）：占闸专用锁。刻意与 _events 的 _lock 分开，
+# ★第117批 T-117a（方案A）：占闸专用锁。刻意与 _events 的 _lock 分开，
 #   避免「拿事件快照」与「抢刷闸」互相排队（原实现的 convoy 正是锁串联造成）。
 _gate_lock = threading.Lock()
-# ★往期批次 相关任务（方案B）：后台守护刷。
+# ★第117批 T-117a（方案B）：后台守护刷。
 #   红线：★禁止在 import 期起线程/做 IO —— 只能由 log_emit/log_receive 懒启动。
 _flusher_thread = None
 _flusher_started = False
@@ -61,7 +61,7 @@ def log_emit(organ_name, event_type, layer, pulse_id=""):
         _events.append(event)
         if len(_events) > _MAX_EVENTS:
             _events.pop(0)
-    _ensure_flusher()  # ★相关任务 方案B：运行期懒启动（import 期绝不起线程）
+    _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
 def log_receive(organ_name, event_type, source_organ):
     """记录脉冲接收事件"""
@@ -80,7 +80,7 @@ def log_receive(organ_name, event_type, source_organ):
         })
         if len(_events) > _MAX_EVENTS:
             _events.pop(0)
-    _ensure_flusher()  # ★相关任务 方案B：运行期懒启动（import 期绝不起线程）
+    _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
 def _detect_orphans(events, min_age=1.0):
     """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件"""
@@ -103,12 +103,12 @@ def _detect_orphans(events, min_age=1.0):
     return orphans
 
 def _claim_flush_gate() -> bool:
-    """★往期批次 相关任务（方案A）：原子占闸 —— 判过的瞬间即占位。
+    """★第117批 T-117a（方案A）：原子占闸 —— 判过的瞬间即占位。
 
     原实现是**头判尾更**：本函数开头判「距上次 >= _FLUSH_INTERVAL？」、
     却在函数**末尾**（完成两轮 safe_write_json 之后）才更新 _last_flush_time。
     闸非原子 => 突发窗内 k 个并发者全部判「该我刷」，k 份近乎同内容的重复写
-    去排同一把 per-path 锁 = **写放大 k×**，且无一是必要 IO（内部协作者实测 19:35 块
+    去排同一把 per-path 锁 = **写放大 k×**，且无一是必要 IO（烛微实测 19:35 块
     参与者 11 个线程，等待者=器官接收线程，卡在业务之前 → 拖死器官主循环）。
 
     改为「判 + 更」在同一把 _gate_lock 内一次完成：一个 2s 窗口内恒定只有 1 个
@@ -124,7 +124,7 @@ def _claim_flush_gate() -> bool:
 
 
 def _flusher_loop():
-    """★往期批次 相关任务（方案B）：后台守护刷循环。
+    """★第117批 T-117a（方案B）：后台守护刷循环。
 
     器官主循环（BasePulseOrgan 的 emit/handle）不再承担同步 IO；
     真正的写盘发生在这里，频率仍受 _claim_flush_gate 的 2s 闸约束。
@@ -143,7 +143,7 @@ def _flusher_loop():
 
 
 def _ensure_flusher():
-    """★往期批次 相关任务（方案B）：首次记录事件时懒启动后台刷线程。
+    """★第117批 T-117a（方案B）：首次记录事件时懒启动后台刷线程。
 
     ★红线：本函数**只能**由 log_emit / log_receive 在运行期调用；
     模块 import 期绝不起线程、绝不做 IO（潜意识 :466 案反复验证的教训）。
@@ -182,7 +182,7 @@ def flush_to_file(force: bool = False):
     2. 原子写：使用safe_write_json，避免写入中途被读取导致解析失败
     3. 类型修复：default=[]而不是default={}
     """
-    # ★往期批次 相关任务（方案A）：原「本处判、函数尾更」的头判尾更已改为原子占闸，
+    # ★第117批 T-117a（方案A）：原「本处判、函数尾更」的头判尾更已改为原子占闸，
     #   详见 _claim_flush_gate 的注释。force=True（atexit 终刷）绕过 2s 闸。
     if not force and not _claim_flush_gate():
         return
@@ -233,7 +233,7 @@ def flush_to_file(force: bool = False):
         
         # 原子写孤儿记录
         safe_write_json(orphan_path, existing_orphans, backup=False)
-        # ★往期批次 相关任务：此处的 _last_flush_time 更新已删除（头判尾更的根因），
+        # ★第117批 T-117a：此处的 _last_flush_time 更新已删除（头判尾更的根因），
         #   占位统一在 _claim_flush_gate 内「判完即占」完成。
     except Exception as e:
         print(f"[WARNING] pulse_tracer.py:152: {type(e).__name__}: {e}")

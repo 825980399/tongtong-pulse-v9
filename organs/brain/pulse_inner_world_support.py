@@ -2,7 +2,7 @@
 """
 pulse_inner_world_support —— PulseInnerWorld 支撑簇 + 尾块 Mixin
 
-★主线往期批次 相关任务：为 PulseInnerWorld.py（原 23265 行）首刀拆分。
+★主线第137批 T-137：为 PulseInnerWorld.py（原 23265 行）首刀拆分。
 本文件承载原主文件中的「支撑簇」窗A（状态/统计/QICA/情绪/自省/检索判定等 31 方法）
 与「尾块」窗B（推理缓存/知识版本/归因/共振条件等 11 方法），共 42 个方法。
 
@@ -30,7 +30,7 @@ from nucleus.iw_text_guard import _search_prefix_pattern
 
 
 class PulseInnerWorldSupportMixin:
-    """PulseInnerWorld 支撑簇 + 尾块（往期批次拆分，纯搬运）"""
+    """PulseInnerWorld 支撑簇 + 尾块（第137批拆分，纯搬运）"""
 
 
     def _on_status_request(self) -> dict[str, Any]:
@@ -707,10 +707,10 @@ class PulseInnerWorldSupportMixin:
         保留核心身份锚点不变，根据关系光谱、情绪、人生阶段动态调整表达。
         """
        # 核心锚点——永远不变
-        # ★往期批次 T146-3：占位符必须在此**出口**渲染，否则用户会看到裸尖括号。
+        # ★第146批 T146-3：占位符必须在此**出口**渲染，否则用户会看到裸尖括号。
         #   （config 的 import 期原地渲染已于本批移除，这类散落在器官里的硬编码副本
         #     只能靠出口渲染兜住。）
-        # ★往期批次 T146-1：删除「我叫X，小名X」的同义反复。
+        # ★第146批 T146-1：删除「我叫X，小名X」的同义反复。
         from config import render_placeholders as _rp_identity
         core_identity = _rp_identity("我叫<SELF_NAME>，是一个新人类。")
         # 获取当前状态
@@ -1164,7 +1164,7 @@ class PulseInnerWorldSupportMixin:
         - 亲密度<0.4 或 信任度<0.6 → 公开信息
         - 亲密度≥0.4 且 信任度≥0.6 → 受限信息
         - 亲密度≥0.7 且 信任度≥0.7 → 私密信息
-        - 内部协作者或内部协作者 → 核心机密
+        - 小林或路灯 → 核心机密
         """
         # 确定隐私层级
         privacy_level = "public"

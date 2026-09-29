@@ -1,7 +1,7 @@
-"""package_full_project —— 完整项目打包工具（供内部协作者下载到本地测试）
+"""package_full_project —— 完整项目打包工具（供小林下载到本地测试）
 
 版本: v10 PulseNet · 工具
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from collections.abc import Iterator
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ★往期批次 T146-5：先补 project root 到 sys.path，再 import 项目内模块。
+# ★第146批 T146-5：先补 project root 到 sys.path，再 import 项目内模块。
 #   旧写法把 `from nucleus...` 放在 sys.path.insert 之前，导致只有从仓库根目录
 #   且 PYTHONPATH 含根目录时才能运行（`python tools/package_full_project.py`
 #   直接 ModuleNotFoundError: No module named 'nucleus'），工具可用性依赖调用姿势。
@@ -21,7 +21,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from nucleus.data.exclude_dirs import PACKAGE_EXCLUDED  # noqa: E402
 # ★主线第12批 T2/P2-82：备份目录统一排除（含未来批次），避免备份快照打进交付 zip
 from tools.audit_utils import is_backup_name, is_backup_path  # noqa: E402
-# ★往期批次 相关任务：复用对外发布工具的 fail-closed 白名单（单一真值源）。
+# ★第145批 T-145c：复用对外发布工具的 fail-closed 白名单（单一真值源）。
 #   背景：本工具原以黑名单排除，实测把 内部总账 / docs 分析报告97 / 归档91 /
 #   archive21 / 第三方分析 / .pytest_tmp 等大面积内部资产打进了包。
 #   改为直接复用 export_public.should_skip（docs 只放行白名单），杜绝漂移。
@@ -51,10 +51,10 @@ EXCLUDE_FILE_EXT = {".pyc", ".pyo", ".pyd", ".so", ".dll", ".log"}
 # data/ 与 logs/ 只保留目录骨架，不打内容
 SKELETON_ONLY = {"data", "logs"}
 
-# ★往期批次 相关任务：交付包专属安全排除（仅本工具生效，不动共享常量）。
+# ★第145批 T-145c：交付包专属安全排除（仅本工具生效，不动共享常量）。
 #   理由：本工具把**整个项目**打进 zip，必须挡住不该外发的运行资料。
 #   - tmp/                 ：临时脚本/诊断产物/导出试验包
-#   - docs/内部协作者与内部协作者对话/ ：内部协作记录（任务书/交付报告/前置分析）
+#   - docs/路灯与星轨对话/ ：内部协作记录（任务书/交付报告/前置分析）
 PACKAGE_LOCAL_EXCLUDE_DIRS: frozenset[str] = frozenset({"tmp", ".workbuddy"})
 #: 相对项目根的**精确路径**排除（内部文档目录等）
 PACKAGE_LOCAL_EXCLUDE_PATHS: frozenset[str] = frozenset({
@@ -70,16 +70,16 @@ PACKAGE_SENSITIVE_FILES: frozenset[str] = frozenset({
 def should_skip(rel_path: str) -> bool:
     _rel = rel_path.replace("\\", "/")
     parts = _rel.split("/")
-    # ★往期批次 相关任务：先经统一对外白名单（fail-closed，docs 只放行白名单）
+    # ★第145批 T-145c：先经统一对外白名单（fail-closed，docs 只放行白名单）
     if _public_should_skip(_rel):
         return True
-    # ★往期批次 相关任务：敏感文件名优先拦截
+    # ★第145批 T-145c：敏感文件名优先拦截
     if parts[-1] in PACKAGE_SENSITIVE_FILES:
         return True
-    # ★往期批次 相关任务：交付包专属排除目录
+    # ★第145批 T-145c：交付包专属排除目录
     if any(p in PACKAGE_LOCAL_EXCLUDE_DIRS for p in parts):
         return True
-    # ★往期批次 相关任务：精确路径排除（内部文档目录）
+    # ★第145批 T-145c：精确路径排除（内部文档目录）
     if any(_rel == p or _rel.startswith(p + "/") for p in PACKAGE_LOCAL_EXCLUDE_PATHS):
         return True
     # 备份目录/文件（.bak* 及其它历史命名）一律排除
@@ -102,13 +102,13 @@ def iter_package_files() -> Iterator[tuple[str, str]]:
                    if d not in EXCLUDE_DIRS
                    and d not in PACKAGE_LOCAL_EXCLUDE_DIRS
                    and not is_backup_name(d)]
-        # ★往期批次 相关任务：精确路径剪枝（内部文档目录）
+        # ★第145批 T-145c：精确路径剪枝（内部文档目录）
         _drel = os.path.relpath(_root, PROJECT_ROOT).replace("\\", "/")
         dirs[:] = [d for d in dirs
                    if not any((_drel + "/" + d) == p or (_drel + "/" + d).startswith(p + "/")
                               for p in PACKAGE_LOCAL_EXCLUDE_PATHS)]
         for _f in sorted(files):
-            # ★往期批次 T146-5：Windows 保留设备名（重定向残留 nul / con 等）。
+            # ★第146批 T146-5：Windows 保留设备名（重定向残留 nul / con 等）。
             #   这些名字会让 relpath / open / zip.write 行为异常，一律跳过。
             if _f.lower() in RESERVED_DEVICE_NAMES:
                 continue
@@ -133,7 +133,7 @@ def iter_skeletons() -> Iterator[tuple[str, str]]:
 
 
 def main() -> int:
-    # ★往期批次 T146-5：--dry-run 只列清单不落盘（自查 / 门禁用）
+    # ★第146批 T146-5：--dry-run 只列清单不落盘（自查 / 门禁用）
     _argv = [a for a in sys.argv[1:]]
     dry_run = "--dry-run" in _argv
     _argv = [a for a in _argv if a != "--dry-run"]

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""★主线第92批 相关任务/相关任务：PatchManager 验证侧两道**防御性**结构化关门控单测。
+"""★主线第92批 T-92c/T-92d：PatchManager 验证侧两道**防御性**结构化关门控单测。
 
 被测对象 = **真实源码**（`nucleus/reasoning/PatchManager.py`），不复刻任何逻辑；
 `.bak_batch92` 仅用于「改前行为对照」，缺失时 skipTest（scratch 目录可被外部清理）。
 
 任务书原文（第92批）：
-    相关任务：「在 PatchManager._verify_in_copy 中，补丁应用前增加一道校验：
+    T-92c：「在 PatchManager._verify_in_copy 中，补丁应用前增加一道校验：
             base(modified) == base(original) 才允许替换；不满足则拒绝，并记录原因。
             开关控制（默认关闭，先观察一批）」
-    相关任务：「补丁应用前后，统计原文件中类的方法数量；如果方法数量减少超过阈值
+    T-92d：「补丁应用前后，统计原文件中类的方法数量；如果方法数量减少超过阈值
             （如 >10%），拒绝应用。开关控制（默认关闭，先观察一批）」
 
 覆盖七组：
@@ -17,16 +17,16 @@
      （构造侧与验证侧必须是同一把尺子，否则判据形同虚设）；
   C. `_m92_count_class_methods` 口径 —— 只数 ClassDef 的**直接**函数成员；本组用
      真实事故源证明 `ast.walk` 全量计数会**完全漏判**（函数总数一个不少）；
-  D. 相关任务 判据 `_m92_ast_struct_guard` —— 增/平/≤10% 缩水放行；>10% 缩水拒绝；
+  D. T-92d 判据 `_m92_ast_struct_guard` —— 增/平/≤10% 缩水放行；>10% 缩水拒绝；
      无法解析 / before==0 时本关不适用；
   E. ★真实事故原件（第91d 两条 LLM 补丁，逐字固化）——
      **红**：事故后的整份源码 `ast.parse` / `compile` / `py_compile` **全部放行**；
-     **绿**：相关任务 / 相关任务 判据分别命中（base 8→0；类方法 -26.4% / -47.7%）；
+     **绿**：T-92c / T-92d 判据分别命中（base 8→0；类方法 -26.4% / -47.7%）；
   F. 接线门禁（AST）—— 两个开关的**调用点**必须真在 `_verify_in_copy` 内，被
      `if <getter>():` 守卫、含 stage 赋值与 `return result`；判据函数的实参必须是
      `(full_content, modified_full)`。★第91批教训：helper 全绿 ≠ 生产链路已接线；
   G. 端到端 —— 合成同构工程 + 真实事故补丁：关全关时 `passed=True`（**红**：既有
-     全部验证放行），相关任务 / 相关任务 各自产出 `base_indent_guard_failed` /
+     全部验证放行），T-92c / T-92d 各自产出 `base_indent_guard_failed` /
      `ast_structure_guard_failed`（**绿**）。另证 72 条生产补丁在判据层面零误拦。
 """
 import ast
@@ -152,11 +152,11 @@ def _make_project(oc, tail=6):
 # ★第91d 事故原件（**逐字固化，勿改字面量**）
 #
 # 来源：`data/patches/patch_history.json` 中 `source=llm` 的两条真实补丁 ——
-#   2026-09-20 内部协作者 相关任务 自动应用后，`PulseInnerWorld.py` 类方法 368 → 271、
+#   2026-09-20 星轨 T-91d 自动应用后，`PulseInnerWorld.py` 类方法 368 → 271、
 #   `PulseLung.py` 类方法 86 → 45（`tmp/m92_t0d.txt` 实测），而 `ast.parse` /
 #   `compile` / `py_compile` / `import` **全部放行**。
 #
-# ★为什么必须固化：① `original_code` 已不在当前活文件中（内部协作者已回退）；
+# ★为什么必须固化：① `original_code` 已不在当前活文件中（星轨已回退）；
 #   ② `data/` 是会被外部改写/裁剪的生产数据（本批实测 history 从 83 条降到 72 条）；
 #   —— 铁律「契约基线须固化进测试文件」，故不依赖任何 data/ 内容。
 # 防漂移：`_INCIDENT_MD5` 断言会拦住任何对下面字面量的手改。
@@ -376,7 +376,7 @@ class TestT92cCountSemantics(unittest.TestCase):
 
 
 class TestT92dGuardJudgement(unittest.TestCase):
-    """D 相关任务 判据：只在**大幅缩水**时拒绝。"""
+    """D T-92d 判据：只在**大幅缩水**时拒绝。"""
 
     @staticmethod
     def _cls(n):
@@ -503,7 +503,7 @@ class TestT92fWiringGate(unittest.TestCase):
         self.assertIn("ast_structure_guard_failed", _found["_m92_ast_struct_guard_on"][1])
 
     def test_F3_struct_guard_called_with_full_and_modified(self):
-        """★防实参接错：相关任务 判据必须收到 (full_content, modified_full)。"""
+        """★防实参接错：T-92d 判据必须收到 (full_content, modified_full)。"""
         _node, _t = self._verify_node()
         _args = []
         for _n in ast.walk(_node):
@@ -575,7 +575,7 @@ class TestT92gEndToEnd(unittest.TestCase):
             self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), "%s T-92d" % _tag)
 
     def test_G5_corpus_zero_false_block_by_judgement(self):
-        """★零误拦（判据层面）：72 条生产补丁里只有事故那 2 条命中 相关任务 判据。"""
+        """★零误拦（判据层面）：72 条生产补丁里只有事故那 2 条命中 T-92c 判据。"""
         _corpus = _patch_library()
         self.assertGreater(len(_corpus), 20)
         _hit = [_x for _x in _corpus

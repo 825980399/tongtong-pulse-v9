@@ -3,7 +3,7 @@
 openai_compatible_adapter.py —— OpenAI兼容适配器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: OpenAI兼容API的渠道适配器
@@ -77,13 +77,13 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             return None
 
     def extract_usage(self, response: Any) -> dict | None:
-        """★第94批 相关任务：解析 OpenAI 响应体的 ``usage`` 字段。  # _m94_extract_usage_marker
+        """★第94批 T-94b：解析 OpenAI 响应体的 ``usage`` 字段。  # _m94_extract_usage_marker
 
         ★实测根因（本批 T0）：``data/llm_traces`` 8 天 5759 条记录中
         ``origin=evolution_task`` **2423 条 100% tokens=0** —— 进化引擎走
         ``trace_evolution_call`` 装饰器留存，而装饰器**从未取用 usage**；肺通道
         虽有 ``_last_llm_usage``（原 ``_m40_last_usage``，第40批 T2；
-        第95批 相关任务 统一命名）私有旁路，但全项目**无统一入口**。
+        第95批 T-95e 统一命名）私有旁路，但全项目**无统一入口**。
 
         语义：
         * 缺 ``total_tokens`` 时用 prompt+completion 补齐；

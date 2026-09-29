@@ -1,4 +1,4 @@
-"""相关任务（P1）：SSRF 守卫 fail-open 修复 —— 守卫异常/拦截须硬 return 不放行。
+"""T-101c（P1）：SSRF 守卫 fail-open 修复 —— 守卫异常/拦截须硬 return 不放行。
 
 验收：
   ✅ 守卫失败硬 return（守卫抛异常 ⇒ 请求被拒绝，不落到裸 urlopen）

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★主线第91批 相关任务：日志「调用点定位主能力」——两级数据驱动索引的门控单测。
+"""★主线第91批 T-91a：日志「调用点定位主能力」——两级数据驱动索引的门控单测。
 
 被测对象 = **真实源码**（`nucleus/self_inspector.py`），不复刻任何索引逻辑。
 `.bak_batch91` 仅用于「改前不存在该能力」的静态先红证据，缺失时 skipTest。
@@ -13,7 +13,7 @@
 （`PulseEyes —— 脉冲驱动眼睛（知识检索器官 · v9.5 …）`）——
 两个命名源结构性错位 ⇒ 16 个真实标签恒不可定位，覆盖率卡在 **80.2%（65/81）**。
 
-任务书 相关任务 原本要求手写「模块名→文件映射表 + 标签别名表」；
+任务书 T-91a 原本要求手写「模块名→文件映射表 + 标签别名表」；
 实测该方案是过拟合指标（10 条映射表只能到 92.6%）且需人工维护，
 故本批改为**两级数据驱动索引**（扫描源码里的 logger 名字面量 + `organ_name` 声明），
 新增标签零维护自动纳入。实测 **81/81 = 100.0%**（改前 65/81 = 80.2%）。
@@ -471,7 +471,7 @@ class TestT91aSwitchContract(unittest.TestCase):
         self.assertTrue(_m91_log_locate_v3_on())
 
     def test_41_registered_in_config_py_with_true(self):
-        """★第91批 相关任务：本开关已**正式登记**进 config.py（默认值与登记前一致）。"""
+        """★第91批 T-91c：本开关已**正式登记**进 config.py（默认值与登记前一致）。"""
         _src = _read(_CFG)
         self.assertIn(_SWITCH, _src, "T-91c 起 %s 必须正式登记在 config.py" % _SWITCH)
         self.assertIn("%s = True" % _SWITCH, _src, "登记默认值必须为 True")
@@ -506,7 +506,7 @@ class TestT91aSwitchContract(unittest.TestCase):
     def test_45_backup_has_no_such_capability(self):
         """★先红证据（静态，`.bak_batch91`）：改前**不存在**本能力。
 
-        断言改前源码中不存在三个 相关任务 新增符号 ⇒ 「先红」不依赖运行期巧合。
+        断言改前源码中不存在三个 T-91a 新增符号 ⇒ 「先红」不依赖运行期巧合。
         """
         if not os.path.isfile(_BAK_SI):
             self.skipTest("缺少 .bak_batch91/nucleus/self_inspector.py.bak（改前对照）")

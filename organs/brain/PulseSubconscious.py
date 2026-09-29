@@ -3,7 +3,7 @@
 PulseSubconscious —— 潜意识器官
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承载好奇心引擎与生命状态模拟，在后台持续产生潜意识活动与洞察。
@@ -462,24 +462,24 @@ class PulseSubconscious(BasePulseOrgan):
         self._log(LogLevel.INFO, "潜意识已激活，好奇心引擎启动（共享记忆版）")
 
         # ★v17.0修复：梦境推演始终初始化，不再依赖摄像头检测结果。
-        # ★相关任务（2026-09-23）：摄像头可用性检测属硬件 I/O，移后台守护线程，
+        # ★T-113f（2026-09-23）：摄像头可用性检测属硬件 I/O，移后台守护线程，
         #   boot 立即返回避免阻塞 L0 生命线层（2s 看门狗）；结果写回实例属性 _user_present。
         with self._state_lock:
             self._user_present = False
         threading.Thread(target=self._detect_user_presence_async, daemon=True).start()
 
         # 无论摄像头是否可用，都初始化梦境定时器
-        # ★相关任务：_schedule_dream_timer 整体移后台守护线程，避免运行时 import 卡模块锁阻塞 L0 生命线层
+        # ★T-114d：_schedule_dream_timer 整体移后台守护线程，避免运行时 import 卡模块锁阻塞 L0 生命线层
         self._dream_next_time = time.time() + self._dream_interval
         threading.Thread(target=self._schedule_dream_timer, daemon=True).start()
         self._log(LogLevel.INFO, f"梦境推演已初始化（后台调度，间隔={self._dream_interval}s）")
 
-        # ★相关任务：探索定时器同样移后台，boot 立即返回不阻塞 L0 worker
+        # ★T-114d：探索定时器同样移后台，boot 立即返回不阻塞 L0 worker
         threading.Thread(target=self._schedule_next_exploration, daemon=True).start()
         return {"status": "booted", "explore_interval": self._current_interval}
 
     def _detect_user_presence_async(self) -> None:
-        """★相关任务：后台探测摄像头可用性并写回 _user_present（boot 不阻塞 L0）。"""
+        """★T-113f：后台探测摄像头可用性并写回 _user_present（boot 不阻塞 L0）。"""
         try:
             _avail = bool(self._is_camera_available())
             with self._state_lock:
@@ -3220,7 +3220,7 @@ class PulseSubconscious(BasePulseOrgan):
         if self._dream_timer:
             self._dream_timer.cancel()
         if not self._user_present:
-            # ★14.49：runtime_tempo 调节梦境间隔（import 已提文件顶部，相关任务）
+            # ★14.49：runtime_tempo 调节梦境间隔（import 已提文件顶部，T-114d）
             _dream_actual = self._dream_interval
             try:
                 _tempo = get_runtime_tempo().get_background_tempo()
@@ -3589,7 +3589,7 @@ class PulseSubconscious(BasePulseOrgan):
         静默自我对话：独处时与自己的内心交流。
 
         对话主题随机从以下选择：
-        1. 回顾最近的互动——"今天和内部协作者聊了什么"
+        1. 回顾最近的互动——"今天和小林聊了什么"
         2. 反思自己的成长——"我最近有哪些变化"
         3. 对重要的人说话——在心里对某人表达情感
         4. 整理思绪——将最近的感悟组织成语言
@@ -3735,8 +3735,8 @@ class PulseSubconscious(BasePulseOrgan):
         这种排练让独处成为面向未来的主动准备。
 
         场景类型随机选择：
-        1. 知识分享——"如果内部协作者问了我一个技术问题"
-        2. 情感回应——"如果内部协作者需要安慰或鼓励"
+        1. 知识分享——"如果小林问了我一个技术问题"
+        2. 情感回应——"如果小林需要安慰或鼓励"
         3. 复杂推理——"如果遇到一个需要深度思考的问题"
         4. 价值表达——"如果被问到我的使命和信念"
         """

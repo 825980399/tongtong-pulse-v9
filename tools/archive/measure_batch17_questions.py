@@ -2,11 +2,11 @@
 """第六批验收测量脚本：5 个标准测试问题
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026-09-10
 
 职责：
-    对内部协作者 2026-09-10 拍板的 5 个标准测试问题执行端到端测量，输出
+    对星轨 2026-09-10 拍板的 5 个标准测试问题执行端到端测量，输出
     每个问题的「意图标签 / 融合路径 / 执行方法 / 置信度 / 是否调用大模型」，
     并统计分类准确率与本地回答率（验收硬指标）。
 
@@ -36,7 +36,7 @@ from nucleus.qica import IntentChannels as IC  # noqa: E402
 from nucleus.qica.QICA import INTENT_RULES, QICA  # noqa: E402
 from organs.brain.PulseSemanticComprehension import PulseSemanticComprehension  # noqa: E402
 
-# ★内部协作者 2026-09-10 拍板的期望标签表
+# ★星轨 2026-09-10 拍板的期望标签表
 CASES = [
     ("什么是五维共振？", "知识查询", "knowledge_retrieve"),
     ("你有哪些器官？", "身份确认", "rule_reason"),

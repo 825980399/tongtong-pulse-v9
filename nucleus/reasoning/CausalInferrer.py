@@ -3,7 +3,7 @@
 CausalInferrer.py —— 因果推断器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 因果关系推断与归因分析
@@ -33,7 +33,7 @@ class CausalInferrer:
     # 置信度（0~1 口径）
     BASE_CONFIDENCE = 0.5          # 单条已验证边的基准置信度
     VERIFIED_BONUS = 0.15          # 每条已验证边的加成
-    UNVERIFIED_DECAY = 0.1         # ★内部协作者要求：每多一跳未验证边衰减 0.1
+    UNVERIFIED_DECAY = 0.1         # ★星轨要求：每多一跳未验证边衰减 0.1
     MIN_CONFIDENCE = 0.1           # 低于此值整条链不输出
 
     def __init__(self, log_fn=None):

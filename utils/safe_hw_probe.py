@@ -2,7 +2,7 @@ from config import EXTERNAL_CALL_TIMEOUTS
 """safe_hw_probe —— 安全硬件探测（v9.5 · 隔离子进程版）
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
 

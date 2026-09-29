@@ -2,10 +2,10 @@
 """第85批门控单测：本地学习尝试通道 / reprobe 接线 / real_fix_rate 口径 / 本地自动应用。
 
 覆盖：
-  M85-1  相关任务 SafeEvolutionExecutor 本地学习尝试通道（保守修复 + 学习日志 + 不自动应用）
-  M85-2  相关任务 PatchManager.apply_all_pending 应用后运行时 active_reprobe 接线
-  M85-3  相关任务 patch_verification_split 的 real_fix_rate 分母改为「可判定补丁数」
-  M85-4  相关任务 本地低风险补丁自动应用（source/confidence/risk_level 三条件）
+  M85-1  T-85a SafeEvolutionExecutor 本地学习尝试通道（保守修复 + 学习日志 + 不自动应用）
+  M85-2  T-85b PatchManager.apply_all_pending 应用后运行时 active_reprobe 接线
+  M85-3  T-85c patch_verification_split 的 real_fix_rate 分母改为「可判定补丁数」
+  M85-4  T-85d 本地低风险补丁自动应用（source/confidence/risk_level 三条件）
 
 ★行尾：本文件 LF（与 tests/ 惯例一致）。
 ★先红后绿：改前上述符号/行为均不存在或行为相反 → 红。
@@ -41,7 +41,7 @@ def _code_only(text):
 
 
 # ===========================================================================
-# M85-1  相关任务 本地学习尝试通道
+# M85-1  T-85a 本地学习尝试通道
 # ===========================================================================
 class TestM85ConservativeFix(unittest.TestCase):
     """保守修复策略（纯函数，直接调真实实现）。"""
@@ -147,7 +147,7 @@ class TestM85LearningAttempt(unittest.TestCase):
         self.assertEqual(_p.get("confidence"), "high")
 
     def test_11_learning_patch_not_auto_applyable(self):
-        """学习尝试补丁不得命中 相关任务 的自动应用条件（默认不自动应用）。"""
+        """学习尝试补丁不得命中 T-85d 的自动应用条件（默认不自动应用）。"""
         _code = ("def f(self):\n    try:\n        g()\n"
                  "    except Exception:\n        pass\n")
         self.executor._m85_learning_attempt(
@@ -244,7 +244,7 @@ class TestM85LearningAttempt(unittest.TestCase):
 
 
 # ===========================================================================
-# M85-2  相关任务 运行时 reprobe 接线
+# M85-2  T-85b 运行时 reprobe 接线
 # ===========================================================================
 class TestM85ReprobeWiring(unittest.TestCase):
 
@@ -308,7 +308,7 @@ class TestM85ReprobeWiring(unittest.TestCase):
 
 
 # ===========================================================================
-# M85-3  相关任务 real_fix_rate 口径
+# M85-3  T-85c real_fix_rate 口径
 # ===========================================================================
 class TestM85RealFixRateDenominator(unittest.TestCase):
 
@@ -359,7 +359,7 @@ class TestM85RealFixRateDenominator(unittest.TestCase):
 
 
 # ===========================================================================
-# M85-4  相关任务 本地低风险补丁自动应用
+# M85-4  T-85d 本地低风险补丁自动应用
 # ===========================================================================
 class TestM85LocalAutoApply(unittest.TestCase):
 
@@ -371,7 +371,7 @@ class TestM85LocalAutoApply(unittest.TestCase):
         return _b
 
     def test_40_local_low_risk_blocked_by_default(self):
-        """★第96批 相关任务（N1-① 内部协作者第1期）：开关显式登记 config 且默认 False。
+        """★第96批 T-96b（N1-① 烛微第1期）：开关显式登记 config 且默认 False。
 
         原用例断言「缺省放行」。第96批把 ``local_auto_apply_enabled``
         显式登记为 False（此前**从未登记**，读取端兜底 True ⇒ 事实上默认开启，

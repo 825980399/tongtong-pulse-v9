@@ -4,7 +4,7 @@ from nucleus._silent_except import silent_exc
 PulseSnapshot.py —— 脉冲快照
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 知识快照的持久化与版本管理
@@ -31,7 +31,7 @@ from nucleus.data.DataAccessLayer import safe_read_json
 try:
     from config import PARQUET_COMPRESSION, PARQUET_SHARD_BY_EVOL_LEVEL
 except Exception:
-    PARQUET_COMPRESSION = "snappy"  # ★往期批次 相关任务：config 键缺失时回落
+    PARQUET_COMPRESSION = "snappy"  # ★第109批 T-109a：config 键缺失时回落
     PARQUET_SHARD_BY_EVOL_LEVEL = True
 
 
@@ -928,7 +928,7 @@ class PulseSnapshot:
             return 0.5
 
     def _m67_incremental_delete_abs_max(self) -> int:
-        """★Dxxx 边界洞②：单轮删除绝对量硬上限（默认 500），与比例阈值构成双护栏。"""
+        """★D154 边界洞②：单轮删除绝对量硬上限（默认 500），与比例阈值构成双护栏。"""
         try:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_ABS_MAX", 500))
@@ -971,7 +971,7 @@ class PulseSnapshot:
         # ★删除比例熔断（阈值进 config）
         _surviving = len(_current_ids)
         _del_threshold = self._m67_incremental_delete_ratio_max()
-        # ★Dxxx 边界洞①：存活=0 时原 `_del_ratio=0.0` + `_surviving>0` 前置使熔断永不触发，
+        # ★D154 边界洞①：存活=0 时原 `_del_ratio=0.0` + `_surviving>0` 前置使熔断永不触发，
         #   且会继续 emit 全量 delete 行（覆盖 _prev_map）。直接拒写并降级全量保存。
         if _surviving == 0:
             self._log(LogLevel.ERROR,
@@ -979,7 +979,7 @@ class PulseSnapshot:
                       f"({len(_deleted_ids)} 条)，降级全量保存")
             return self._m67_full_checkpoint(saved_nodes, current_checksum, time.time())
         _del_ratio = len(_deleted_ids) / _surviving
-        # ★Dxxx 边界洞②：阈值 0.5 无绝对量护栏 → 单轮误删 49.9% 无感。
+        # ★D154 边界洞②：阈值 0.5 无绝对量护栏 → 单轮误删 49.9% 无感。
         #   加第二道绝对量硬上限（默认 500，可 config 覆盖），与比例阈值构成双护栏。
         _del_abs_cap = self._m67_incremental_delete_abs_max()
         _fuse_reason = None
@@ -1284,7 +1284,7 @@ class PulseSnapshot:
                           f"[第81批 T5] Parquet 分片读取失败({_lv})，回退 JSON: "
                           f"{type(_e).__name__}: {_e}")
                 return None
-            # ① 必需列集合校验（Dxxx：缺列不可检出 → FAIL）
+            # ① 必需列集合校验（D151：缺列不可检出 → FAIL）
             _missing = _req - set(_tbl.schema.names)
             if _missing:
                 self._log(LogLevel.ERROR,
@@ -1454,7 +1454,7 @@ class PulseSnapshot:
             "nodes": [node.to_dict() for node in l1_nodes],
         }
 
-        # ★往期批次 相关任务：L1 落盘前过滤悬空边
+        # ★第102批 T-102a：L1 落盘前过滤悬空边
         if _m102_dangling_guard_on():
             try:
                 _m102_side = self._m102_sidecar_node_ids()
@@ -1549,7 +1549,7 @@ class PulseSnapshot:
                           f"快照轮转备份失败(无回退副本): {e}")
         
         # ===== 原子写入新快照 =====
-        # ===== ★往期批次 相关任务：落盘前引用完整性过滤（悬空边不落盘） =====
+        # ===== ★第102批 T-102a：落盘前引用完整性过滤（悬空边不落盘） =====
         if _m102_dangling_guard_on():
             try:
                 _m102_side = self._m102_sidecar_node_ids()
@@ -2420,7 +2420,7 @@ class PulseSnapshot:
                 if isinstance(_e, dict):
                     _out.append(_e)
                 elif _e is not None:
-                    # ★Dxxx/Dxxx：丢弃从 DEBUG 升 WARNING，并带字段存活率门禁
+                    # ★D151/D162：丢弃从 DEBUG 升 WARNING，并带字段存活率门禁
                     _discarded += 1
             if _discarded > 0:
                 _kept = len(_out)
@@ -2431,7 +2431,7 @@ class PulseSnapshot:
                     _warn += "（存活率过低，疑似字段级数据损失）"
                 _lg.warning(_warn)
             return _out
-        # ★Dxxx/Dxxx：异常类型同样升 WARNING（原为 DEBUG）
+        # ★D151/D162：异常类型同样升 WARNING（原为 DEBUG）
         _lg.warning(
             f"[Parquet][D162] 类型归一化异常类型: 节点{node_id[:18]} 列{col} "
             f"类型{type(raw).__name__}→[]")
@@ -2484,7 +2484,7 @@ class PulseSnapshot:
                     _d.get("verification_history"), "verification_history",
                     str(_d.get("node_id", ""))),
             }
-            # ★主线第81批 T1：补 7 字段（Dxxx/Dxxx/Dxxx）。灰度关时复现旧 29 列。
+            # ★主线第81批 T1：补 7 字段（D151/D158/D159）。灰度关时复现旧 29 列。
             if self._m81_parquet_schema_complete_enabled():
                 _row["source_url"] = str(_d.get("source_url", ""))
                 _row["evidence_chain"] = self._normalize_struct_list(
@@ -2495,7 +2495,7 @@ class PulseSnapshot:
                 _row["source_timestamp"] = float(_d.get("source_timestamp", 0.0) or 0.0)
                 _row["quality_flag"] = str(_d.get("quality_flag", "clean"))
                 _row["quality_reason"] = str(_d.get("quality_reason", ""))
-            # ★往期批次 相关任务：C4断5 补 conflict_count/last_conflict_at 两键（Parquet 主存储搬运，与 JSON 侧 相关任务 对齐）
+            # ★第122批 T-122b：C4断5 补 conflict_count/last_conflict_at 两键（Parquet 主存储搬运，与 JSON 侧 T-120e 对齐）
             _row["conflict_count"] = int(_d.get("conflict_count", 0) or 0)
             _row["last_conflict_at"] = float(_d.get("last_conflict_at", 0.0) or 0.0)
             _rows.append(_row)
@@ -2564,7 +2564,7 @@ class PulseSnapshot:
             "source_timestamp": float(_row.get("source_timestamp", 0.0) or 0.0),
             "quality_flag": _row.get("quality_flag", "clean") or "clean",
             "quality_reason": _row.get("quality_reason", "") or "",
-            # ★往期批次 相关任务：C4断5 读映射补两键（与写白名单对齐）
+            # ★第122批 T-122b：C4断5 读映射补两键（与写白名单对齐）
             "conflict_count": int(_row.get("conflict_count", 0) or 0),
             "last_conflict_at": float(_row.get("last_conflict_at", 0.0) or 0.0),
         }
@@ -2688,7 +2688,7 @@ class PulseSnapshot:
                       f"Parquet 快照已保存(覆盖写): {len(_rows)} 节点 → {self.parquet_dir}")
             return True
         except Exception as _e:
-            # ★3.1：JSON 主快照正常时 Parquet 失败不影响运行，降为 WARNING（内部协作者第八批3.3）
+            # ★3.1：JSON 主快照正常时 Parquet 失败不影响运行，降为 WARNING（星轨第八批3.3）
             self._log(LogLevel.WARNING, f"Parquet 保存失败(JSON主快照不受影响): {_e}")
             return False
 
@@ -2873,9 +2873,9 @@ if __name__ == "__main__":
 # _m70_t4_snapshot_hotcold
 
 # ============================================================================
-# 往期批次 相关任务：落盘链路「引用完整性」守卫（悬空边不落盘）
+# 第102批 T-102a：落盘链路「引用完整性」守卫（悬空边不落盘）
 # ============================================================================
-# 背景（内部协作者第2期 Dxxx）：快照里 sem/linked 两类边约 2.69% 指向已被删除的节点，
+# 背景（烛微第2期 D160）：快照里 sem/linked 两类边约 2.69% 指向已被删除的节点，
 # 这些悬空边①白占体积 ②让多跳检索在幽灵节点处静默截断。本守卫在**落盘前**
 # 就地剔除指向「已知节点集合之外」的边，保证盘上无悬空引用。
 # 零回归设计：仅删除目标不存在的边；开关关闭时一行都不改。

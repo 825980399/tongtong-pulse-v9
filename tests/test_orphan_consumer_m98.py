@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第98批 相关任务（P1）门控测试：肝订阅并消费 digest.knowledge，消除孤儿脉冲。
+"""第98批 T-98b（P1）门控测试：肝订阅并消费 digest.knowledge，消除孤儿脉冲。
 
 根因：代码学习器官长期发射 DigestEvent.KNOWLEDGE，但无器官接收，
 pulse_orphans.json 持续积累 digest.knowledge 孤儿。

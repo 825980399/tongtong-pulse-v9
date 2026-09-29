@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 相关任务 / 相关任务 / 相关任务 语义门禁单测（离线、隔离、不读生产数据）。
+"""第116批 T-116b / T-116c / T-116f 语义门禁单测（离线、隔离、不读生产数据）。
 
 设计原则（呼应工程铁律：契约基线须固化进测试文件）：
   - 不读 data/patches 生产账本、不读 tmp/，全部断言基于「源码结构契约」+「tmp 隔离副本」。
@@ -30,7 +30,7 @@ def _read(rel: str) -> str:
 
 
 class T116bC6WritePoints(unittest.TestCase):
-    """相关任务①：C6 污染根因 —— 顶层 runtime_verified 不得无条件置 True。"""
+    """T-116b①：C6 污染根因 —— 顶层 runtime_verified 不得无条件置 True。"""
 
     @classmethod
     def setUpClass(cls):
@@ -73,7 +73,7 @@ class T116bC6WritePoints(unittest.TestCase):
 
 
 class T116b3ConsistencyGate(unittest.TestCase):
-    """相关任务③：CI 断言 —— C6 已属硬失败；脚本需 --no-import 直读退化开关。"""
+    """T-116b③：CI 断言 —— C6 已属硬失败；脚本需 --no-import 直读退化开关。"""
 
     @classmethod
     def setUpClass(cls):
@@ -95,7 +95,7 @@ class T116b3ConsistencyGate(unittest.TestCase):
 
 
 class T116cCliObsoleteChannel(unittest.TestCase):
-    """相关任务②/③：keep / reject --source obsolete 必须真的能定位到归档账。"""
+    """T-116c②/③：keep / reject --source obsolete 必须真的能定位到归档账。"""
 
     @classmethod
     def setUpClass(cls):
@@ -135,7 +135,7 @@ class T116cCliObsoleteChannel(unittest.TestCase):
 
 
 class T116fCreatedAt(unittest.TestCase):
-    """相关任务：入队时补记 created_at（此前 pending 全量 0，无法判龄）。"""
+    """T-116f：入队时补记 created_at（此前 pending 全量 0，无法判龄）。"""
 
     @classmethod
     def setUpClass(cls):

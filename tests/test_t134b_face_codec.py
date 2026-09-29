@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 相关任务：人脸名册加密 face_codec 单元测试。
+"""第134批 T-134b：人脸名册加密 face_codec 单元测试。
 
 覆盖：
   1) 加解密往返：save_roster → 磁盘密文（不含明文 encoding128）→ load_roster 等价

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★主线往期批次 相关任务（P1）：退出确认 input() 无限阻塞修复单测。
+"""★主线第139批 T-139a（P1）：退出确认 input() 无限阻塞修复单测。
 
 背景：main.py::_confirm_apply_pending_on_quit 原实现直接调用 input()，
 在 TTY 判定为真但实际无输入时会永久阻塞退出路径（P1 紧急）。

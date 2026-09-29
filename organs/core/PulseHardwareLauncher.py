@@ -3,7 +3,7 @@
 PulseHardwareLauncher —— 硬件自适应启动器 · 启动加载编排
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 HardwareEvent.ASSESS，根据当前机器硬件能力生成模块加载计划与启动顺序，并广播 HardwareEvent.LAUNCH_PLAN。
@@ -106,7 +106,7 @@ class PulseHardwareLauncher(BasePulseOrgan):
 
         # ★PHASE14-闭环修复兜底2：上面两条都拿不到数据时，原实现直接硬编码
         #   tier="standard"——这是「看家底吃饭」断链的最后一环：家底拿不到就
-        #   拍脑袋定档，且完全静默，内部协作者在日志里永远看不到。
+        #   拍脑袋定档，且完全静默，小林在日志里永远看不到。
         #   改为：先用 hardware_probe 独立探一次真实硬件（与装配路径同一数据源，
         #   消除「装配用 A 源、计划用 B 源」的不一致），彻底失败才落 standard 并告警。
         if tier is None:

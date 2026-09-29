@@ -3,7 +3,7 @@
 AdaptiveQueryStrategyGenerator.py —— 自适应查询策略生成器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 动态生成知识查询策略

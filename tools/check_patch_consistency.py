@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 相关任务②：补丁账本一致性巡检脚本（只读，可接入 CI）。
+"""第114批 T-114b②：补丁账本一致性巡检脚本（只读，可接入 CI）。
 
 扫描三本账：
     - data/patches/pending_patches.json      （待审批队列）
@@ -21,7 +21,7 @@
     python tools/check_patch_consistency.py [--root <项目根>] [--json] [--strict]
                                             [--no-import]
 
-★往期批次 相关任务③：新增 --no-import —— CI 环境用它强制走「直读 JSON」退化路径，
+★第116批 T-116b③：新增 --no-import —— CI 环境用它强制走「直读 JSON」退化路径，
   不 import PatchManager（避免拉起 config/框架依赖导致门禁受污染或变慢）。
   默认仍优先复用 PatchManager 的真实路径（与生产口径一致）。
 """
@@ -56,7 +56,7 @@ def _detect_root() -> str:
 def _load_ledgers(root: str, no_import: bool = False):
     """优先复用 PatchManager 的真实路径与加载逻辑；失败则退化为直接读 JSON。
 
-    ★往期批次 相关任务③：no_import=True 时跳过 PatchManager，直接按约定路径读三本账，
+    ★第116批 T-116b③：no_import=True 时跳过 PatchManager，直接按约定路径读三本账，
     供 CI 门禁在无框架依赖的环境下使用（结果口径与退化路径一致）。
     """
     pending, history, obsolete = [], [], []
@@ -281,7 +281,7 @@ def main(argv=None):
     _ap.add_argument("--json", action="store_true", help="输出 JSON")
     _ap.add_argument("--strict", action="store_true",
                      help="C3 队列级组合也计为失败（默认仅逐条问题计失败）")
-    # ★往期批次 相关任务③：CI 直读退化开关
+    # ★第116批 T-116b③：CI 直读退化开关
     _ap.add_argument("--no-import", dest="no_import", action="store_true",
                      help="不 import PatchManager，直接读三本账 JSON（CI 友好）")
     _args = _ap.parse_args(argv)

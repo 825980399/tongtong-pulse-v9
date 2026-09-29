@@ -3,7 +3,7 @@
 PulseMouth —— 嘴巴器官 · 人格化纯输出
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 MouthEvent.SPEAK 与 ChatEvent.INITIATIVE，把大脑皮层已组织好的内容做人设与关系口吻过滤后输出；同时把 CodeEvent.RESULT 的执行结果改写成自然语言回复。
@@ -477,7 +477,7 @@ class PulseMouth(BasePulseOrgan):
                 reply_text = f"（回忆）{shared_hint}。{reply_text}"
 
         # 4. 确定性前缀（仅在低置信度、且未叠加共同回忆时，避免前缀堆叠）
-        # ★第九批 4.1（内部协作者指出）：多步推理的结构化回答被硬套「我了解到，」前缀后
+        # ★第九批 4.1（星轨指出）：多步推理的结构化回答被硬套「我了解到，」前缀后
         #   变成「我了解到，我按照4个步骤进行了处理：。✅ 步骤1…」——机器腔且语病。
         #   结构化回答（含换行分步/列表）本身已有清楚的引导语，不再叠加确定性前缀。
         uncertainty = guidance.get("uncertainty_prefix", "")

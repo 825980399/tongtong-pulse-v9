@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""★主线往期批次：数据治理（Dxxx 悬空引用 / Dxxx 孤儿向量 / Dxxx 语义关系冗余）门控单测。
+"""★主线第102批：数据治理（D160 悬空引用 / D161 孤儿向量 / D165 语义关系冗余）门控单测。
 
 被测对象 = **真实源码**，不复刻任何逻辑：
-  - `nucleus/mnemosyne/PulseSnapshot.py`：落盘前悬空边过滤（相关任务 根因修复）
-  - `nucleus/mnemosyne/PulseNode.py`   ：linked_nodes 由 semantic_relations 动态重建（相关任务）
-  - `nucleus/mnemosyne/PulseNodePool.py`：remove() 级联移除向量（相关任务 根因修复）
-  - `nucleus/semantic/AsyncEncodeQueue.py`：reconcile() 反向回收孤儿向量（相关任务）
-  - `nucleus/semantic/VectorStore.py`：reap_orphans()（相关任务）
+  - `nucleus/mnemosyne/PulseSnapshot.py`：落盘前悬空边过滤（T-102a 根因修复）
+  - `nucleus/mnemosyne/PulseNode.py`   ：linked_nodes 由 semantic_relations 动态重建（T-102c）
+  - `nucleus/mnemosyne/PulseNodePool.py`：remove() 级联移除向量（T-102b 根因修复）
+  - `nucleus/semantic/AsyncEncodeQueue.py`：reconcile() 反向回收孤儿向量（T-102b）
+  - `nucleus/semantic/VectorStore.py`：reap_orphans()（T-102b）
 
 ★任务书前提修正（T0 实测，已写入交付报告）：
     任务书写「本批是数据治理，不涉及代码改动」。实测三条债务的**根因均在代码侧**：
@@ -175,7 +175,7 @@ class B_FilterDangling(unittest.TestCase):
 
 
 class C_DeriveLinked(unittest.TestCase):
-    """C 组：linked_nodes 动态派生（相关任务）。"""
+    """C 组：linked_nodes 动态派生（T-102c）。"""
 
     def _data(self, sem_targets, linked):
         return {"node_id": "n1", "content": "x", "evol_level": "L2",
@@ -231,7 +231,7 @@ class C_DeriveLinked(unittest.TestCase):
 
 
 class D_ZeroLossEquivalence(unittest.TestCase):
-    """D 组：相关任务 治理前后「可达邻居集合」必须完全一致（零丢失）。"""
+    """D 组：T-102c 治理前后「可达邻居集合」必须完全一致（零丢失）。"""
 
     def test_d1_merge_then_clear_keeps_union(self):
         sem_targets = ["n2", "n3"]

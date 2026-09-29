@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""nucleus/organ_identity.py —— 器官名归一化（★相关任务）。
+"""nucleus/organ_identity.py —— 器官名归一化（★T-112d）。
 
 把来自不同命名空间的器官名统一映射到规范 key：
 - emit 时的 source_organ（可能带后缀变体，如 "Web对话-人脸监听"）

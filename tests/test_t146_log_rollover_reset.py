@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★往期批次 T146-8：D017 日志轮转误报结案回归测试。
+"""★第146批 T146-8：D017 日志轮转误报结案回归测试。
 
 原缺陷：框架自己的 `SafeRotatingFileHandler.doRollover()` 转完后，
 下一次 `check_log_integrity` 仍拿「轮转前的大 size」当 prev，算成 size 下降 →

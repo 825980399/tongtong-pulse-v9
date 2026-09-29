@@ -164,7 +164,7 @@ class TestBackfill(unittest.TestCase):
     def test_32_real_fix_rate_vs_claimed(self):
         """★真实修复率必须显著低于旧声称率。
 
-        ★第85批 相关任务（D84-2）口径变更：分母由「补丁总数」改为
+        ★第85批 T-85c（D84-2）口径变更：分母由「补丁总数」改为
         「**可判定补丁数**」（problem_fixed=None 的不可判定补丁移出分母）
         → 1/2 = 0.5（旧口径 1/4 = 0.25）。
         本组 4 条：p2 修好(True) / p3 未修好(False) / p1、p4 不可判定(None)。
@@ -178,7 +178,7 @@ class TestBackfill(unittest.TestCase):
         self.assertLess(_r["real_fix_rate"], _r["old_claimed_rate"])
 
     def test_33_real_fix_rate_fn(self):
-        """★第85批 相关任务：real_fix_rate() 同步改为「可判定数」为分母 → 0.5。"""
+        """★第85批 T-85c：real_fix_rate() 同步改为「可判定数」为分母 → 0.5。"""
         _ps = self._set()
         _pvs.backfill(_ps, apply=True)
         self.assertAlmostEqual(_pvs.real_fix_rate(_ps), 0.5)

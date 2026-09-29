@@ -3,7 +3,7 @@
 LLMDependencyMetrics.py —— LLM依赖度指标
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 量化框架对大模型的依赖程度与调用分布
@@ -65,13 +65,13 @@ def _blank_counters() -> dict[str, dict[str, int]]:
     }
 
 
-#: ★相关任务：补丁库文件（相对项目根），供 `evolution_local_rule_rate` 读取
+#: ★T-94c：补丁库文件（相对项目根），供 `evolution_local_rule_rate` 读取
 _M94_PATCH_FILES = ("data/patches/patch_history.json",
                     "data/patches/pending_patches.json")
 
 
 def _m94_load_patch_records() -> list:
-    """★相关任务：尽力读取补丁库（history + pending）并合并为列表。**只读**。
+    """★T-94c：尽力读取补丁库（history + pending）并合并为列表。**只读**。
 
     任何异常 / 文件缺失 / 结构不符 → 返回 ``[]``（调用方据此返回 ``None``，
     **不编造 0.0**）。绝不写盘、绝不抛。
@@ -158,20 +158,20 @@ class LLMDependencyMetrics:
         with self._lock:
             return int(sum(self._counters.get("local_inference_count", {}).values()))
 
-    # ============ ★第94批 相关任务：口径修正（重命名 + 分层报告） ============
+    # ============ ★第94批 T-94c：口径修正（重命名 + 分层报告） ============
 
     def search_total(self) -> int:
-        """外部搜索调用总数（★相关任务：此前只进快照，不进任何分母）。"""
+        """外部搜索调用总数（★T-94c：此前只进快照，不进任何分母）。"""
         with self._lock:
             return int(sum(self._counters.get("search_count", {}).values()))
 
     def digestion_total(self) -> int:
-        """知识消化总数（★相关任务：此前只进快照，不进任何分母）。"""
+        """知识消化总数（★T-94c：此前只进快照，不进任何分母）。"""
         with self._lock:
             return int(sum(self._counters.get("digestion_count", {}).values()))
 
     def answer_requests(self) -> int:
-        """★相关任务 方案C：**回答类**请求总数 = LLM 调用 + 本地推理。
+        """★T-94c 方案C：**回答类**请求总数 = LLM 调用 + 本地推理。
 
         ★重命名说明：本方法即改造前的 ``total_requests``。原名字「总请求」有严重
         误导性 —— 实测 ``llm_dependency_ratio = llm / (llm + local)`` 的分母
@@ -180,14 +180,14 @@ class LLMDependencyMetrics:
         的大模型占比」，被误读成「框架对大模型的总依赖度」。新名字精确表达分母
         范围。
 
-        ★第95批 相关任务：兼容别名 ``total_requests`` 已按裁决**移除**（本方法为
+        ★第95批 T-95c：兼容别名 ``total_requests`` 已按裁决**移除**（本方法为
         唯一真源）；4 处内部消费方（``self_sufficiency_score`` / 快照派生键 /
         小时日志文案 / 依赖度偏高判据）与 ``health_ui`` 面板已同步改读本方法。
         """
         return self.llm_total() + self.local_total()
 
     def overall_llm_share(self) -> float:
-        """★相关任务 方案A：**全栈**大模型占比。  # _m94_overall_llm_share
+        """★T-94c 方案A：**全栈**大模型占比。  # _m94_overall_llm_share
 
         ``= llm_total / (llm_total + local_total + search_total + digestion_total)``
 
@@ -204,18 +204,18 @@ class LLMDependencyMetrics:
             return 0.0
         return round(_llm / _den, 4)
 
-    #: ★相关任务：补丁库读取结果的缓存 TTL（秒），避免面板 10s 轮询触发高频 IO
+    #: ★T-94c：补丁库读取结果的缓存 TTL（秒），避免面板 10s 轮询触发高频 IO
     _M94_LOCAL_RULE_CACHE_TTL = 60.0
 
     def evolution_local_rule_rate(self, patches: list | None = None) -> float | None:
-        """★相关任务 方案A：自学习闭环的**本地化成效**。
+        """★T-94c 方案A：自学习闭环的**本地化成效**。
 
-        ★第95批 相关任务——**口径统一（反向）**：
+        ★第95批 T-95b——**口径统一（反向）**：
 
             problem_fixed is True 的 local_rule 补丁数 / local_rule 补丁**可判定数**
 
-        ★方向说明：任务书 §相关任务 要求「统一为**总数**口径（更保守）」，但那会
-        推翻第85批 相关任务 的**刻意决策**（``real_fix_rate`` 分母取可判定数；理由：
+        ★方向说明：任务书 §T-95b 要求「统一为**总数**口径（更保守）」，但那会
+        推翻第85批 T-85c 的**刻意决策**（``real_fix_rate`` 分母取可判定数；理由：
         实测 64 条里 62 条 ``problem_fixed=None``，用总数做分母会把指标永久压低
         到 ≈0%），并会打红 test_m47::test_32/33、test_m85::test_30/31、
         test_m94::test_D7 共 5 个守护测试 ⇒ 与本批门禁「无新增失败」**自相矛盾**。
@@ -263,7 +263,7 @@ class LLMDependencyMetrics:
                     _known += 1
                 elif _pf is False:
                     _known += 1
-            # ★第95批 相关任务：分母 = **可判定数**（与 real_fix_rate 口径统一）。
+            # ★第95批 T-95b：分母 = **可判定数**（与 real_fix_rate 口径统一）。
             _rate = round(_ok / float(_known), 4) if _known else None
         except Exception as e:
             _logger.debug(f"本地规则修复率计算异常已忽略: {type(e).__name__}: {e}")
@@ -282,7 +282,7 @@ class LLMDependencyMetrics:
     def self_sufficiency_score(self) -> float:
         """自持力 = local / answer_requests；无样本时返回 0.0。
 
-        ★第95批 相关任务：随别名移除同步改读 :meth:`answer_requests`（值不变）。
+        ★第95批 T-95c：随别名移除同步改读 :meth:`answer_requests`（值不变）。
         """
         _t = self.answer_requests()
         if _t <= 0:
@@ -291,7 +291,7 @@ class LLMDependencyMetrics:
 
     def get_snapshot(self) -> dict[str, Any]:
         """当前完整指标快照（供面板/日志/持久化）。"""
-        # ★第94批 相关任务：`evolution_local_rule_rate` 可能触发补丁库文件读（带 60s
+        # ★第94批 T-94c：`evolution_local_rule_rate` 可能触发补丁库文件读（带 60s
         #   缓存），必须在**取锁之前**算好 —— 否则在锁内做 IO 会阻塞高频 `_bump`
         #   （埋点热路径）。
         _m94_lr_rate = self.evolution_local_rule_rate()
@@ -306,7 +306,7 @@ class LLMDependencyMetrics:
                     "local_inference_total": self.local_total(),
                     "search_total": int(sum(self._counters.get("search_count", {}).values())),
                     "digestion_total": int(sum(self._counters.get("digestion_count", {}).values())),
-                    # ★第95批 相关任务：旧键 total_requests 已移除（别名同步删除），
+                    # ★第95批 T-95c：旧键 total_requests 已移除（别名同步删除），
                     #   派生指标唯一真源 = answer_requests。历史落盘的 JSON 仍含
                     #   旧键，属只读遗迹、不再写入。
                     "answer_requests": self.answer_requests(),

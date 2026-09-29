@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""★主线第90批 相关任务：日志问题「调用点定位」4 条既有 bug 修复的门控单测。
+"""★主线第90批 T-90b：日志问题「调用点定位」4 条既有 bug 修复的门控单测。
 
 被测对象 = **真实源码**（`LogAnalyzer` / `SelfInspector`），不复刻任何逻辑。
 `.bak_batch90` 仅用于「改前行为对照」，缺失时 skipTest；
 改前算法的**判据本身**同时内联固化在本文件（`_legacy_*`），
 这样「红」的证据不依赖 git-ignored 的 scratch 目录。
 
-4 条 bug（任务书 相关任务 原文）：
+4 条 bug（任务书 T-90b 原文）：
   bug#1 `LogAnalyzer.py` 调用定位时 message 还是空串（填充在其后两行），
         且 `_locate_attempted` 使定位「只试一次、永不重试」；
   bug#2 `self_inspector.py` 1c 段只用中文器官名索引（243 条），
@@ -489,7 +489,7 @@ class TestT90bBug4TracebackLastFrame(unittest.TestCase):
 
 # ============================================================ E 覆盖率
 class TestT90bLocateCoverage(unittest.TestCase):
-    """验收线：日志定位覆盖率 ≥ 50%（任务书 相关任务）。"""
+    """验收线：日志定位覆盖率 ≥ 50%（任务书 T-90b）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -534,10 +534,10 @@ class TestT90bSwitchContract(unittest.TestCase):
         self.assertTrue(_m90_log_locate_v2_on())
 
     def test_71_config_py_registered_by_m91(self):
-        """★契约变更（第91批 相关任务）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
+        """★契约变更（第91批 T-91c）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
 
         ★历史：第90批的批内红线是「不改 config.py」⇒ 当时断言 `assertNotIn`；
-        第91批任务书 相关任务 解除该约束（登记默认值不变，仍为 True）⇒ 断言反转。
+        第91批任务书 T-91c 解除该约束（登记默认值不变，仍为 True）⇒ 断言反转。
         """
         _src = io.open(os.path.join(ROOT, "config.py"), encoding="utf-8",
                        errors="ignore").read()

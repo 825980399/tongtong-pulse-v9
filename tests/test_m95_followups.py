@@ -2,22 +2,22 @@
 """★主线第95批门控单测：待裁决项落地 + 零调用点补埋点。
 
 任务书（第95批，P1/P2）五件：
-  相关任务 死配置清理 —— ``no_fix_cooldown_seconds["已有待审批"]`` 删除；
-  相关任务 口径统一   —— ``evolution_local_rule_rate`` 与 ``real_fix_rate`` 同分母；
-  相关任务 别名移除   —— ``total_requests`` 兼容别名删除 + 4 处消费方同步；
-  相关任务 补埋点     —— ``SCENE_CODE_LEARN`` 场景透传 + ``KIND_GUARD`` 守卫埋点；
-  相关任务 命名收敛   —— ``_m40_last_usage`` / ``_m44_last_usage`` → ``_last_llm_usage``。
+  T-95a 死配置清理 —— ``no_fix_cooldown_seconds["已有待审批"]`` 删除；
+  T-95b 口径统一   —— ``evolution_local_rule_rate`` 与 ``real_fix_rate`` 同分母；
+  T-95c 别名移除   —— ``total_requests`` 兼容别名删除 + 4 处消费方同步；
+  T-95d 补埋点     —— ``SCENE_CODE_LEARN`` 场景透传 + ``KIND_GUARD`` 守卫埋点；
+  T-95e 命名收敛   —— ``_m40_last_usage`` / ``_m44_last_usage`` → ``_last_llm_usage``。
 
 ★★本批 T0 的**前提核实结论（4 项中 2 项被证伪 / 1 项需改向）**——本文件按实测结论落地：
-  * 相关任务 **成立**：``_cooldown_classify`` 只会返回「高危·安全拦截」/「本地无规则·转LLM」，
+  * T-95a **成立**：``_cooldown_classify`` 只会返回「高危·安全拦截」/「本地无规则·转LLM」，
     故该键**永不被前缀匹配** ⇒ 真死配置（A 组固化「可达 reason 的 TTL 零变化」）。
-  * 相关任务 **方向被改**：任务书要求「统一为**总数**口径」，但那会推翻第85批 相关任务 的
+  * T-95b **方向被改**：任务书要求「统一为**总数**口径」，但那会推翻第85批 T-85c 的
     刻意决策（分母=可判定数）并打红 5 个守护测试 ⇒ 经裁决**反向统一**（B 组）。
-  * 相关任务 **成立但消费面更大**：除 ``health_ui`` 外还有 4 处内部消费方（C 组）。
-  * 相关任务 **部分证伪**：``KIND_RULE`` 第84批**已接线**（``ResonanceEngine`` 用别名
+  * T-95c **成立但消费面更大**：除 ``health_ui`` 外还有 4 处内部消费方（C 组）。
+  * T-95d **部分证伪**：``KIND_RULE`` 第84批**已接线**（``ResonanceEngine`` 用别名
     ``_rec_local84(_KIND_RULE84)``，字面量 grep 命中不到 ⇒ 假零调用点）；真零调用点
     只剩 ``SCENE_CODE_LEARN`` 与 ``KIND_GUARD``（D 组只补这两个，且**不重复计数**）。
-  * 相关任务 **成立**：6 处源码 + 3 个测试文件，两个属性分属不同类、重命名无冲突（E 组）。
+  * T-95e **成立**：6 处源码 + 3 个测试文件，两个属性分属不同类、重命名无冲突（E 组）。
 """
 import ast
 import io
@@ -50,7 +50,7 @@ _PCL = os.path.join(ROOT, "organs", "brain", "PulseCodeLearner.py")
 _RES = os.path.join(ROOT, "nucleus", "synapsys", "ResonanceEngine.py")
 _CR = os.path.join(ROOT, "nucleus", "llm", "call_recorder.py")
 
-_EXPECT_COOLDOWN_KEYS = {"高危·安全拦截", "本地无规则·转LLM", "_default", "验证失败", "验证失败·3轮"}  # ★相关任务① 补 114a 新增两键
+_EXPECT_COOLDOWN_KEYS = {"高危·安全拦截", "本地无规则·转LLM", "_default", "验证失败", "验证失败·3轮"}  # ★T-118d① 补 114a 新增两键
 # `_cooldown_classify` 实际可达的 reason（前缀匹配用真实形态）
 _REACHABLE_REASONS = ("高危·安全拦截", "高危·安全拦截(unsafe_eval)",
                       "高危·安全拦截(sql_injection)", "本地无规则·转LLM")
@@ -137,9 +137,9 @@ def _production_py():
                 yield os.path.join(_dp, _n)
 
 
-# ==================================================================== A：相关任务
+# ==================================================================== A：T-95a
 class TestM95DeadConfig(unittest.TestCase):
-    """A 组：死配置清理（相关任务）—— 静态 + 行为 + 先红后绿。"""
+    """A 组：死配置清理（T-95a）—— 静态 + 行为 + 先红后绿。"""
 
     def test_A1_config_cooldown_keys_exact(self):
         _keys = None
@@ -229,9 +229,9 @@ def _se_new():
     return object.__new__(_SE)
 
 
-# ==================================================================== B：相关任务
+# ==================================================================== B：T-95b
 class TestM95RateUnification(unittest.TestCase):
-    """B 组：修复率口径统一（相关任务，**反向**统一到「可判定数」）。"""
+    """B 组：修复率口径统一（T-95b，**反向**统一到「可判定数」）。"""
 
     def setUp(self):
         self.m = M.LLMDependencyMetrics(base_dir=os.path.join(
@@ -307,9 +307,9 @@ class TestM95RateUnification(unittest.TestCase):
             [self._p(True, source="llm")]))
 
 
-# ==================================================================== C：相关任务
+# ==================================================================== C：T-95c
 class TestM95AliasRemoved(unittest.TestCase):
-    """C 组：`total_requests` 别名移除 + 4 处内部消费方同步（相关任务）。"""
+    """C 组：`total_requests` 别名移除 + 4 处内部消费方同步（T-95c）。"""
 
     def setUp(self):
         self.m = M.LLMDependencyMetrics(base_dir=os.path.join(
@@ -375,9 +375,9 @@ class TestM95AliasRemoved(unittest.TestCase):
         self.assertNotIn("def total_requests", _read(_METRICS), "★后绿：已删除")
 
 
-# ==================================================================== D：相关任务
+# ==================================================================== D：T-95d
 class TestM95Instrumentation(unittest.TestCase):
-    """D 组：`SCENE_CODE_LEARN` 场景透传 + `KIND_GUARD` 守卫埋点（相关任务）。"""
+    """D 组：`SCENE_CODE_LEARN` 场景透传 + `KIND_GUARD` 守卫埋点（T-95d）。"""
 
     def setUp(self):
         self.m = M.LLMDependencyMetrics(base_dir=os.path.join(
@@ -485,7 +485,7 @@ class TestM95Instrumentation(unittest.TestCase):
         self.assertIn("_m95_kind_guard", _src)
 
     def test_D11_kind_rule_not_reinstrumented(self):
-        """★★相关任务 前提证伪留档：KIND_RULE 第84批**已接线**，本批**不得**重复加。"""
+        """★★T-95d 前提证伪留档：KIND_RULE 第84批**已接线**，本批**不得**重复加。"""
         _res = _read(_RES)
         self.assertIn("_rec_local84(_KIND_RULE84)", _res,
                       "★第84批的既有接线必须仍在（不得被本批覆盖）")
@@ -493,9 +493,9 @@ class TestM95Instrumentation(unittest.TestCase):
                          "★若本批再加一处即为重复计数")
 
 
-# ==================================================================== E：相关任务
+# ==================================================================== E：T-95e
 class TestM95UsageAttrRename(unittest.TestCase):
-    """E 组：usage 暂存属性统一命名（相关任务）。"""
+    """E 组：usage 暂存属性统一命名（T-95e）。"""
 
     _LEGACY = ("_m44_last_usage", "_m40_last_usage")
     _NEW = "_last_llm_usage"

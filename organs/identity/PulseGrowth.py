@@ -3,7 +3,7 @@
 PulseGrowth —— 成长器官 · 能力差距评估与需求感知
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 GrowthEvent.ASSESS，采集系统指标评估当前能力与目标里程碑的差距，产出进化建议并自主发射 GrowthEvent.NEED_DETECTED，达标时发射 GrowthEvent.MILESTONE_REACHED。

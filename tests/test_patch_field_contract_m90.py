@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""★主线第90批 相关任务：LLM 补丁「字段契约」（关0）门控单测。
+"""★主线第90批 T-90a：LLM 补丁「字段契约」（关0）门控单测。
 
 背景（★与任务书前提的偏差，见交付报告 §1）：
-    任务书 相关任务 的前提是「主链路根本没传 original_code」。
+    任务书 T-90a 的前提是「主链路根本没传 original_code」。
     第90批 T0 用三路独立证据实测**证伪**了该前提：
       ① `.bak_batch86`（=第85批末）起，`_llm_patch` 构造点就**已含**
          `original_code` + `modified_code`；逐批次 keys 恒含两字段；
@@ -378,10 +378,10 @@ class TestT90aSwitchContract(unittest.TestCase):
         self.assertTrue(_m90_patch_field_contract_on())
 
     def test_51_config_py_has_m90_switch_registered_by_m91(self):
-        """★契约变更（第91批 相关任务）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
+        """★契约变更（第91批 T-91c）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
 
         ★历史：第90批的批内红线是「不改 config.py」⇒ 当时断言 `assertNotIn`；
-        第91批任务书 相关任务 解除该约束（登记默认值不变，仍为 True）⇒ 断言反转。
+        第91批任务书 T-91c 解除该约束（登记默认值不变，仍为 True）⇒ 断言反转。
         """
         _cfg = os.path.join(ROOT, "config.py")
         _src = io.open(_cfg, encoding="utf-8", errors="ignore").read()

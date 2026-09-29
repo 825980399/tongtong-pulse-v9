@@ -5,7 +5,7 @@
 const.py —— 常量定义
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 框架全局常量、枚举、默认值集中管理
@@ -13,7 +13,7 @@ const.py —— 常量定义
 定位: 配置基础设施层
 """
 
-# ========== ★主线往期批次 相关任务：备份树扫描白名单（制度化） ==========
+# ========== ★主线第133批 T-133c：备份树扫描白名单（制度化） ==========
 #   供 self_inspector 防御过滤与 glob/os.walk 扫描排除共用，避免 dead_code 扫描
 #   误入 backups/ code_backups/ tmp/ 等备份/临时树（前序实测 9 分钟 → 目标 <1 分钟）。
 SCAN_EXCLUDE_DIRS = ["backups/", "data/code_backups/", "tmp/"]
@@ -24,7 +24,7 @@ SCAN_EXCLUDE_DIR_BASENAMES = {
 }
 
 
-# ========== ★往期批次 相关任务：self_inspector 三检测器配置 ==========
+# ========== ★第134批 T-134c：self_inspector 三检测器配置 ==========
 #   集中常量，便于巡检策略调参；补丁改不动（与 GOD_FILE_EXEMPT 同源约束）。
 # ---- B1 silent_growth：趋势账 + 节流 + boot 静默 ----
 SELF_INSPECTOR_BOOT_SILENCE_SEC = 1800          # boot 后静默 30 分钟（B1/B2 共用）
@@ -41,13 +41,13 @@ SELF_INSPECTOR_B2_L1_FLOOR = 400                # l1（L1 层代码行数）< 40
 SELF_INSPECTOR_B3_CEILING_PCT = 5               # 相对首扫基线 > +5% 才报
 SELF_INSPECTOR_B3_BASELINE_REL = "data/god_file_baseline.json"  # 首扫基线（git-ignored）
 
-# ---- ★往期批次 相关任务：import cycles 检测器（Tarjan 强连通分量） ----
+# ---- ★第136批 T-136c：import cycles 检测器（Tarjan 强连通分量） ----
 SELF_INSPECTOR_C1_BASELINE_REL = "data/import_cycles_baseline.json"  # 首扫基线（git-ignored）
 
-# ---- ★往期批次 相关任务：不可达代码检测器（AST 扫描 return/raise 后死语句） ----
+# ---- ★第136批 T-136d：不可达代码检测器（AST 扫描 return/raise 后死语句） ----
 SELF_INSPECTOR_D1_BASELINE_REL = "data/unreachable_code_baseline.json"  # 首扫基线（git-ignored）
 
-# ---- ★往期批次 相关任务：圈复杂度 CC 检测器（radon cc_visit，函数/方法级） ----
+# ---- ★第138批 T-138a：圈复杂度 CC 检测器（radon cc_visit，函数/方法级） ----
 #   阈值来自 137 期全树实测分布（6,689 块，319 文件）：
 #     ≥25 函数 227 个（进 per_file 趋势观察账，不直接告警）；
 #     ≥50 函数  58 个（棘轮本体，**新增**才告警，只降不升）。
@@ -56,7 +56,7 @@ SELF_INSPECTOR_B6_OBS_MIN = 25                  # 观察账阈值：≥25 进 pe
 SELF_INSPECTOR_B6_GATE_MIN = 50                 # 棘轮闸阈值：≥50 计入 blocks_ge50（新增才报）
 SELF_INSPECTOR_B6_BASELINE_REL = "data/cc_baseline.json"  # 首扫基线（git-ignored）
 
-# B3 豁免表（相关任务 收窄为 3 个地基文件）：仅 main.py / self_inspector.py / config.py 不参与
+# B3 豁免表（T-135a 收窄为 3 个地基文件）：仅 main.py / self_inspector.py / config.py 不参与
 # god_file 膨胀告警；其余巨型器官（含 PulseInnerWorld 等）改走 ceiling 基线，避免噪声刷屏。
 GOD_FILE_EXEMPT = {
     "main.py",
@@ -350,7 +350,7 @@ SILENCE_EXEMPT_ORGANS = {
     #   故英文类名 "TimeCore" 即可命中；"时间中枢" 为保险条目（兼容按中文名追踪的调用方）。
     "TimeCore",                  # 时间中枢（非器官内核单例，有独立心跳机制）
     "时间中枢",                   # 同上，中文别名保险
-    # ★往期批次 相关任务（P1 短期止血）：补齐 4 个被沉默检测误报的非器官实体/被动模块。
+    # ★第106批 T-106a（P1 短期止血）：补齐 4 个被沉默检测误报的非器官实体/被动模块。
     #   根因：血管按 organ_name 比对豁免，而下列实体的实际追踪名（self.organ_name）与既有
     #   豁免条目（"企业微信桥接器-回复监听" / "Web对话-人脸监听" 等带后缀变体）不一致 →
     #   豁免命中失败 → 误报刷屏（任务书：1292 次/每 40 秒）。
@@ -618,7 +618,7 @@ class ControllerEvent:
     ERROR = "controller.error"
 
 class SearchEvent:
-    """★第86批 相关任务 预埋：搜索生命周期事件契约（信号分层）。
+    """★第86批 T-86b 预埋：搜索生命周期事件契约（信号分层）。
 
     背景（第83批 T-c1(3) 提出、本批落地）：此前「终止信号」与「结果信号」混用同一个
     ``controller.search_stage_completed``。订阅方无法从**事件类型**上区分
@@ -671,7 +671,7 @@ class Event:
     STRESS_RECOVER = StressAxisEvent.RECOVER
     CONTROLLER_OPEN_URL = ControllerEvent.OPEN_URL
     CONTROLLER_SEARCH_STAGE_COMPLETED = ControllerEvent.SEARCH_STAGE_COMPLETED
-    # —— 第86批 相关任务：搜索终态事件契约（信号分层，统一注册表登记）——
+    # —— 第86批 T-86b：搜索终态事件契约（信号分层，统一注册表登记）——
     SEARCH_COMPLETED = SearchEvent.COMPLETED
     SEARCH_FAILED = SearchEvent.FAILED
     SEARCH_TERMINATED = SearchEvent.TERMINATED

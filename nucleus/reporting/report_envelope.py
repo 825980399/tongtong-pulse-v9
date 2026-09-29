@@ -108,7 +108,7 @@ class ReportEnvelope:
     anomalies: list[Anomaly] = field(default_factory=list)
     consumed_by: list[str] = field(default_factory=list)
     actions_triggered: list[str] = field(default_factory=list)
-    # ★往期批次 相关任务：消费结果 + 路由决策（被 ReportBus.get_stats 读取，非死键）
+    # ★第111批 T-111c：消费结果 + 路由决策（被 ReportBus.get_stats 读取，非死键）
     consume_results: list[ConsumeResult] = field(default_factory=list)
     routing_order: list[str] = field(default_factory=list)
     schema_version: str = SCHEMA_VERSION
@@ -121,7 +121,7 @@ class ReportEnvelope:
         for _a in self.anomalies or []:
             _norm.append(_a if isinstance(_a, Anomaly) else Anomaly.from_dict(_a))
         self.anomalies = _norm
-        # ★往期批次 相关任务：消费结果反序列化（dict -> ConsumeResult）
+        # ★第111批 T-111c：消费结果反序列化（dict -> ConsumeResult）
         _cr_norm: list[ConsumeResult] = []
         for _cr in self.consume_results or []:
             _cr_norm.append(_cr if isinstance(_cr, ConsumeResult)
@@ -150,7 +150,7 @@ class ReportEnvelope:
     def is_consumed(self) -> bool:
         return bool(self.consumed_by)
 
-    # ---------- 消费结果 / 路由（★往期批次 相关任务） ----------
+    # ---------- 消费结果 / 路由（★第111批 T-111c） ----------
 
     def record_consume_result(self, result: "ConsumeResult") -> None:
         """记录一个消费者的结构化结果（供 ``get_stats`` 读取，闭环可见化）。"""
@@ -177,7 +177,7 @@ class ReportEnvelope:
 
 @dataclass
 class ConsumeResult:
-    """★往期批次 相关任务：消费者返回的**结构化结果**（此前只返回 bool）。
+    """★第111批 T-111c：消费者返回的**结构化结果**（此前只返回 bool）。
 
     保留与旧 ``bool`` 的兼容性：``__bool__`` 取 ``accepted``，
     因此 ``ReportBus._dispatch`` 中 ``if _res:`` 仍成立。

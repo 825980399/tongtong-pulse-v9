@@ -3,7 +3,7 @@
 PulseEvolution —— 进化器官 · 参数变异与基因蓝图
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 EvolutionEvent.MUTATE 与 EvolutionEvent.SAVE_BLUEPRINT，在安全边界内做参数变异搜索、校验与回滚，并把最优配置快照存为基因蓝图。

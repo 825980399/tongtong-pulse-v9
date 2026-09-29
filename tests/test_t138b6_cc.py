@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""往期批次 相关任务：self_inspector 圈复杂度（CC）检测器单元测。
+"""第138批 T-138a：self_inspector 圈复杂度（CC）检测器单元测。
 
 覆盖：
   B6 cc_growth：fixture 正控（cc=7 分支链）/ 直线函数 cc=1 / 首扫建基线=0告警 /

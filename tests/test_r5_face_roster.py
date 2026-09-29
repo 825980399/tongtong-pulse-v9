@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★往期批次 相关任务 门禁 + 往期批次 相关任务 改造：R5 人脸册 桩测。
+"""★第124批 T-124a 门禁 + 第134批 T-134b 改造：R5 人脸册 桩测。
 
 直接绑定 Production 的 PulseVisualCortex 真实方法体（_face_roster_path /
 _save_face_roster / _list_faces / _forget_face）到一个轻量 self，不实例化整个
@@ -25,7 +25,7 @@ from organs.senses.PulseVisualCortex import PulseVisualCortex  # noqa: E402
 
 
 def _in_data_path(name):
-    """名册路径必须落在 data/ 内（相关任务 白名单），用 .t_face_roster 隔离，git-ignored。"""
+    """名册路径必须落在 data/ 内（T-134b 白名单），用 .t_face_roster 隔离，git-ignored。"""
     _d = os.path.join(ROOT, "data", ".t_face_roster")
     os.makedirs(_d, exist_ok=True)
     return os.path.join(_d, f"{name}_{uuid.uuid4().hex}.json")

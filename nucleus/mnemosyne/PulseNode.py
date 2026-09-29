@@ -3,7 +3,7 @@
 PulseNode.py —— 脉冲节点
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 知识脉冲节点的数据结构
@@ -25,7 +25,7 @@ from nucleus.logger import get_module_logger
 """
 PulseNode —— 脉冲知识节点数据结构（v9.5 适配版）
 版本: v9.5 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年6月9日
 更新: 2026年6月14日（v9.5: 版本适配，增加并发安全说明，保持核心逻辑不变）
 
@@ -280,7 +280,7 @@ class PulseNode:
             回写，见 P3），因此本方法在未集成冲突计数前不会真正触发降级。
 
             实际降级动作（level 四同步 + 保险丝记录）已由
-            PulseNodePool.run_memory_verification 的 D040 W7-B 执行段驱动（相关任务）：
+            PulseNodePool.run_memory_verification 的 D040 W7-B 执行段驱动（T-127b）：
             本方法仅作条件判定，执行段会二次复核并落四同步。
         """
         if self.evol_level != self.EVOL_L3:
@@ -321,7 +321,7 @@ class PulseNode:
             "source_url": getattr(self, "source_url", ""),   # ★R1：向前兼容
             "trigger_reason": self.trigger_reason,
             "frequency_signature": self.frequency_signature,
-            # ★往期批次 相关任务：linked_nodes 是 semantic_relations 的冗余投影，
+            # ★第102批 T-102c：linked_nodes 是 semantic_relations 的冗余投影，
             #   仅当「可由 sem 完整重建」时才不落盘（加载时 from_dict 动态重建）。
             #   ★零丢失边界（实测回归）：运行期器官只往 linked_nodes 追加、不写 sem，
             #     此类「只在 linked 里的边」set 不等 ⇒ 原样落盘，绝不丢。
@@ -345,7 +345,7 @@ class PulseNode:
             "trust_score": getattr(self, 'trust_score', 50.0),
             "verification_history": getattr(self, 'verification_history', []),
             "evidence_chain": getattr(self, 'evidence_chain', []),   # ★山1：可验证推理证据链（向前兼容）
-            # ★往期批次 相关任务：D040 第一步（序列化层），旧快照无此键向前兼容
+            # ★第120批 T-120e：D040 第一步（序列化层），旧快照无此键向前兼容
             "conflict_count": getattr(self, "conflict_count", 0),
             "last_conflict_at": getattr(self, "last_conflict_at", 0.0),
         }
@@ -400,9 +400,9 @@ class PulseNode:
         node.linked_nodes = data.get("linked_nodes", [])
         node.semantic_relations = data.get("semantic_relations", [])        
 
-        # ★往期批次 相关任务：linked_nodes 不再落盘（semantic_relations 为唯一权威存储），
+        # ★第102批 T-102c：linked_nodes 不再落盘（semantic_relations 为唯一权威存储），
         #   未存时由 semantic_relations 动态重建。
-        #   ★零丢失前提：相关任务 治理时已把「linked 独有边」并入 sem（source=m102_merge）。
+        #   ★零丢失前提：T-102c 治理时已把「linked 独有边」并入 sem（source=m102_merge）。
         if not node.linked_nodes and node.semantic_relations and _m102_linked_derived_on():
             node.linked_nodes = _m102_derive_linked_nodes(node.semantic_relations)
         node.hebbian_weight = data.get("hebbian_weight", 0.0)
@@ -419,8 +419,8 @@ class PulseNode:
         node.trust_score = max(0.0, min(100.0, float(data.get("trust_score", 50.0))))  # ★知识污染治理：钳制信任分
         node.verification_history = data.get("verification_history", [])   
         node.source_url = data.get("source_url", "")   # ★R1：向前兼容——旧快照无此字段自动填充空串
-        # ★往期批次 相关任务：D040 第一步读回（向前兼容，旧快照缺键→0）
-        node.conflict_count = int(data.get("conflict_count", 0))  # ★往期批次 相关任务 int() 加固（防快照写非整型）
+        # ★第120批 T-120e：D040 第一步读回（向前兼容，旧快照缺键→0）
+        node.conflict_count = int(data.get("conflict_count", 0))  # ★第121批 T-121d int() 加固（防快照写非整型）
         node.last_conflict_at = float(data.get("last_conflict_at", 0.0) or 0.0)
         node.evidence_chain = data.get("evidence_chain", [])   # ★山1：向前兼容——旧快照无此字段自动填充空列表
         return node
@@ -900,9 +900,9 @@ if __name__ == "__main__":
 
 
 # ============================================================================
-# 往期批次 相关任务：linked_nodes 由 semantic_relations 动态重建（消除冗余投影）
+# 第102批 T-102c：linked_nodes 由 semantic_relations 动态重建（消除冗余投影）
 # ============================================================================
-# 背景（内部协作者第2期 Dxxx）：同一邻接关系在盘上存两遍（semantic_relations 447.7MB +
+# 背景（烛微第2期 D165）：同一邻接关系在盘上存两遍（semantic_relations 447.7MB +
 # linked_nodes 58.0MB），Jaccard 0.9625 —— linked_nodes 是 sem 的近乎纯冗余投影。
 # 治理后：盘上只存 sem；linked_nodes 在 from_dict 时按 sem 的 target 动态算出。
 # 零回归设计：仅当 linked_nodes 为空且 sem 非空时才重建；开关关闭时行为与改造前一致。

@@ -4,7 +4,7 @@ from nucleus._silent_except import silent_exc
 fast_ops.py —— 快速操作集
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 高频调用的优化操作集合，减少性能开销
@@ -77,7 +77,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
       失败时回退 _cosine_cpu_cy（批量余弦），再回退纯 Python 余弦（零冲突，接口一致）。
 
     ★PHASE14（2026-09-07）：新增 GPU 层。
-      内部协作者实测「GPU 宣告了但利用率纹丝不动」——根因是框架只有探测没有使用。
+      小林实测「GPU 宣告了但利用率纹丝不动」——根因是框架只有探测没有使用。
       现在大批量检索会真正走 GPU（torch 批量余弦），并做自适应：
       连续跑输 CPU 就自动停用，绝不拖慢。详见 config.GPU_VECTOR_SEARCH 注释。
 

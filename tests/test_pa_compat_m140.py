@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""相关任务 回归测试：pyarrow 跨版本兼容垫片 + 全库 from_pylist 清零。
+"""T-140a 回归测试：pyarrow 跨版本兼容垫片 + 全库 from_pylist 清零。
 
 背景：pyarrow 25.0.1 移除了 ``pa.Table.from_pylist``，历史代码直接调用会抛
 ``AttributeError: type object 'Table' has no attribute 'from_pylist'``，导致

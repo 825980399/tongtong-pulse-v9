@@ -26,7 +26,7 @@ _IW_FAMILY = [
     os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_support.py"),
     os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_knowledge.py"),
 ]
-# ★主线往期批次 相关任务：知识检索簇已平移至 KnowledgeMixin，
+# ★主线第139批 T-139b：知识检索簇已平移至 KnowledgeMixin，
 #   故源码断言须拼接 IW 全家族（主文件 + 两个 Mixin），否则平移即假失败。
 _IW_SRC = "\n".join(
     open(_p, encoding="utf-8").read() for _p in _IW_FAMILY
@@ -170,7 +170,7 @@ class TestSourceWiring(unittest.TestCase):
         断言改为数**调用形态**（`self._m31_extract_key_terms(`），
         避免 docstring 中的示例文本被计入（原实现数裸方法名 → 脆弱）。
 
-        ★主线往期批次 相关任务：计数口径改为 IW 全家族三文件拼接（拆分后跨文件）。
+        ★主线第139批 T-139b：计数口径改为 IW 全家族三文件拼接（拆分后跨文件）。
         ★主线第33批 T2（P2-195）：再放宽为 `>= 12` —— 语义是「定长切片已大范围
         被替换」（回退即骤降）；精确计数会因正常重构而假失败。
         """
@@ -238,7 +238,7 @@ class TestOperationalAdmission(unittest.TestCase):
         self.assertTrue(PulseInnerWorld._m29_has_multi_step_signal(self._Q_OP))
 
     def test_41_switch_default_off_per_arbitration(self):
-        """★内部协作者裁决（§61.4 第3项）：该准入**默认关闭**（记为债务 P2-191）。
+        """★星轨裁决（§61.4 第3项）：该准入**默认关闭**（记为债务 P2-191）。
 
         操作类指令的多步检索价值有限，可能「3 步全失败」劣于大模型兜底，
         故默认走原门槛；如需启用可显式打开开关。

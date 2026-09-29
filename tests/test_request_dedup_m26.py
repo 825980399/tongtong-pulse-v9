@@ -300,7 +300,7 @@ class TestLungIntegration(unittest.TestCase):
     def test_18_switch_on_duplicate_reuses_result(self):
         """开关开启 → 同一对话请求并发两次，第二次复用结果（大模型只调用 1 次）。
 
-        ★相关任务：注入独立去重器实例（渠道替身）替代全局单例，隔离跨测试污染；
+        ★T-113d：注入独立去重器实例（渠道替身）替代全局单例，隔离跨测试污染；
         不再依赖全局 ``get_request_deduplicator()`` 单例状态，消除隔离缺陷。
         """
         from unittest.mock import patch
@@ -315,7 +315,7 @@ class TestLungIntegration(unittest.TestCase):
             return "统一答案"
 
         _l = self._mk_lung(_remote)
-        # ★相关任务：为本测试构造独立去重器实例（替身），不共享全局单例
+        # ★T-113d：为本测试构造独立去重器实例（替身），不共享全局单例
         _dd_stub = RequestDeduplicator(timeout=5.0, max_wait=8, reuse_ttl=5.0)
         _results = {}
 
@@ -346,7 +346,7 @@ class TestLungIntegration(unittest.TestCase):
         # 一个真实执行（replied），另一个复用（dedup_reused）
         self.assertEqual(sorted(_sts.values()), ["dedup_reused", "replied"],
                          f"实际状态={_sts}；远程调用次数={len(_calls)}")
-        # ★相关任务：验证去重器实例确实被使用（claimed=1，duplicate=1）
+        # ★T-113d：验证去重器实例确实被使用（claimed=1，duplicate=1）
         _dd_stats = _dd_stub.stats()
         self.assertEqual(_dd_stats["claimed"], 1, f"claimed={_dd_stats}")
         self.assertEqual(_dd_stats["duplicate"], 1, f"duplicate={_dd_stats}")

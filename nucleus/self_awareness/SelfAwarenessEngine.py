@@ -3,7 +3,7 @@
 SelfAwarenessEngine.py —— PHASE18 阶段一：自我认知引擎核心
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 提供"自我认知画像"的统一数据模型与调度框架——把分散在各处的静态分析能力
@@ -1047,7 +1047,7 @@ class SelfAwarenessEngine:
                     "回退到私有属性访问（P2-242 兼容路径）")
                 _raw = _evolution_raw_stats(executor)
             _result = _score_evolution_health(_raw)
-            # ★往期批次 相关任务③b：补丁状态机健康快照（供候选4/5 观测读方消费）。
+            # ★第114批 T-114b③b：补丁状态机健康快照（供候选4/5 观测读方消费）。
             #   反映 pending 队列状态分布与棘轮锁死状态，使状态机收口后可被观测。
             try:
                 _result["patch_state_machine"] = _m114b_patch_state_snapshot(executor)
@@ -1911,13 +1911,13 @@ def _score_evolution_health(raw: Any) -> dict:
 
 
 def _m114b_patch_state_snapshot(executor: Any) -> dict:
-    """★往期批次 相关任务③b：补丁状态机健康快照（只读）。
+    """★第114批 T-114b③b：补丁状态机健康快照（只读）。
 
     供 evolution_health 观测读方（候选4/5）消费，反映 pending 队列状态分布与
     棘轮锁死状态。字段契约（读方据此取数）：
         pending                  —— pending 队列总条数
         by_status                —— {status: count}
-        needs_reverify           —— 延迟复验态条数（相关任务① 新态）
+        needs_reverify           —— 延迟复验态条数（T-114b① 新态）
         needs_reverify_overdue   —— 已到点(>=reverify_after)待重采基线条数
         runtime_failed           —— 运行验证失败条数
         needs_repair             —— 仍待修复条数

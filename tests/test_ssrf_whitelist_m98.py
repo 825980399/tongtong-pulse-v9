@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第98批 相关任务（P0）门控测试：SSRF 防护受信任主机补齐「渠道池 + 显式白名单」。
+"""第98批 T-98a（P0）门控测试：SSRF 防护受信任主机补齐「渠道池 + 显式白名单」。
 
 根因：原 _trusted_hosts() 只取顶层 REMOTE_API_CONFIG.api_url，漏掉渠道池
 （REMOTE_API_CHANNELS.default_channels 的 api_url），导致火山方舟域名

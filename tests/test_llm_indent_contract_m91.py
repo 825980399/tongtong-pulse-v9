@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★主线第91批 相关任务：LLM 补丁「缩进契约」门控单测（三层防护）。
+"""★主线第91批 T-91b：LLM 补丁「缩进契约」门控单测（三层防护）。
 
 背景（★第91批 T0 实测，非推测）
 --------------------------------
@@ -7,7 +7,7 @@
 `补丁完整性检查失败: 语法错误: IndentationError: unindent does not match any
 outer indentation level (<llm-patch>, line 26/19/11/9)` 被完整性关2 拒绝
 （`logs/pulse.log` 实测：`补丁完整性检查失败` 12 次 / `语法错误` 8 次 / `unindent` 8 次）。
-★第92批 相关任务（_m92_t92a_label_synced）已把关2 文案改为 `f"语法错误({type(_e).__name__}): {_e}"`
+★第92批 T-92a（_m92_t92a_label_synced）已把关2 文案改为 `f"语法错误({type(_e).__name__}): {_e}"`
 ——上引历史日志是**改前**原文（当时不含异常类名）；改后同一输入会带 `IndentationError`。
 本文件 A1/A2/A3 三例据此**加强**为直接断言异常类名出现在 `reason` 里。
 复现实验（`tmp/m91_indent.txt`）确认该报错文与行号可由「局部缩进漂移」逐字复现，
@@ -24,7 +24,7 @@ outer indentation level (<llm-patch>, line 26/19/11/9)` 被完整性关2 拒绝
    插入块的缩进由 modified 自身首行决定。LLM 输出首行落在 col 0 时整块比外层更浅
    ⇒ **类体/函数体提前终止**；而插入块自身在 base 0 上**仍是自洽的 Python**
    ⇒ `ast.parse` / `py_compile` / `import` **全部通过**（"语法合法 ≠ 结构未退化"）。
-   2026-09-20 实测（内部协作者 相关任务 自动应用补丁，见 `tmp/m91_audit.txt`）：
+   2026-09-20 实测（星轨 T-91d 自动应用补丁，见 `tmp/m91_audit.txt`）：
        PulseInnerWorld.py  类方法 367 → 270（-97），新增顶层函数 `_calc_math_question`
        PulseLung.py        类方法  86 →  45（-41），新增顶层函数 `_get_channel_semaphore`
        PulseInterestModel.py 仅 3 处**注释**缩进退化（无害）
@@ -44,7 +44,7 @@ outer indentation level (<llm-patch>, line 26/19/11/9)` 被完整性关2 拒绝
   A. 关2 先红后绿 —— 同一补丁 dict，改前被 `unindent` 拒 → 修后放行（真实 PatchManager）；
   B. `_m91_repair_indentation` 契约（行定位 / 等距取更深 / tab / token 守恒 / 零误伤 / 字符串安全）；
   C. `_m91_base_indent` 基础缩进口径（跳过空行与**纯注释行**）；
-  D. `_m91_align_base_indent` 平移契约 + ★**结构退化回归护栏**（复现 相关任务 机制）；
+  D. `_m91_align_base_indent` 平移契约 + ★**结构退化回归护栏**（复现 T-91d 机制）；
   E. `_clean_llm_code` 端到端（真实实例）先红后绿 + 对已过闸输入零改动 + 字符串不被改写；
   F. 开关契约（默认值 / 关闭逐字回退）；
   G. 生产补丁库交叉校验（关2 同口径 helper 与真实关2 结论一致性）；
@@ -181,7 +181,7 @@ def _lines_differ(a, b):
 
 
 class TestIndentContractM91(unittest.TestCase):
-    """★第91批 相关任务：LLM 补丁缩进契约（三层防护）。"""
+    """★第91批 T-91b：LLM 补丁缩进契约（三层防护）。"""
 
     def setUp(self):
         self.exe = _exe()
@@ -194,7 +194,7 @@ class TestIndentContractM91(unittest.TestCase):
         self.assertFalse(_r_red["complete"], "改前应被拒（红）")
         self.assertIn("unindent does not match any outer indentation level",
                       _r_red["reason"], "★必须是 T0 逐字命中的报错文案")
-        # ★第92批 相关任务：异常类名必须直接出现在文案里（改前只写 message ⇒ 此断言红）
+        # ★第92批 T-92a：异常类名必须直接出现在文案里（改前只写 message ⇒ 此断言红）
         self.assertIn("IndentationError", _r_red["reason"], "★T-92a：文案须含异常类名")
         _fixed = self.exe._m91_repair_indentation(_SAMPLE_DRIFT)
         self.assertNotEqual(_fixed, _SAMPLE_DRIFT, "漂移应被修复")
@@ -216,7 +216,7 @@ class TestIndentContractM91(unittest.TestCase):
     def test_A3_gate2_red_then_green_tab_error(self):
         """★tab/空格混用（T0 样本 B，`TabError`）先红后绿。
 
-        ★第91批 T0 记录的缺口「关2 文案不含异常类名」已由**第92批 相关任务** 修掉：
+        ★第91批 T0 记录的缺口「关2 文案不含异常类名」已由**第92批 T-92a** 修掉：
           改前 `f"语法错误: {_e}"`  →  改后 `f"语法错误({type(_e).__name__}): {_e}"`。
         本用例据此**加强**为断言 `reason` 里出现 `TabError`（改前会红、改后为绿）。
         """
@@ -408,7 +408,7 @@ class TestIndentContractM91(unittest.TestCase):
         self.assertEqual(_fixed2, _mod2)
 
     def test_D5_structural_regression_guard_t91d(self):
-        """★★相关任务 事故回归护栏：基础缩进不匹配 ⇒ 类体提前终止（且**语法仍然合法**）。
+        """★★T-91d 事故回归护栏：基础缩进不匹配 ⇒ 类体提前终止（且**语法仍然合法**）。
 
         逐字复现 `tmp/m91_audit.txt` 观测到的机制：`replace` 插入块的缩进由
         modified 自身首行决定 ⇒ 比外层更浅 ⇒ 类体提前终止；插入块自身在 base 0
@@ -645,7 +645,7 @@ class TestT91bCallSiteWiring(unittest.TestCase):
     def test_H1_clean_llm_code_has_at_least_three_call_sites(self):
         """★`_clean_llm_code` 必须真的被调用（≥3 处生产链路）。
 
-        本批之前它被 相关任务 补丁「误删调用」⇒ 阶段3 缩进修复、全角归一化、
+        本批之前它被 T-91b 补丁「误删调用」⇒ 阶段3 缩进修复、全角归一化、
         code fence 剥离**整体失效**且 ruff F821 报 `_llm_clean` 未定义。
         """
         _calls = self._attr_calls(self.tree, "_clean_llm_code")

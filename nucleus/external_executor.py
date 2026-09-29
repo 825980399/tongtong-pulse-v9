@@ -3,7 +3,7 @@
 external_executor.py —— 外部执行器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 安全沙箱中执行外部代码与命令
@@ -38,7 +38,7 @@ _OP_WORKERS = max(8, min(32, (os.cpu_count() or 8) * 2))
 _OP_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=_OP_WORKERS, thread_name_prefix="ExtOp")
 
 # ★A1【P0】外层调度线程池：替代 _try_execute_next 中每任务新建 threading.Thread 的无界创建。
-#   设计说明（为何不用内部协作者字面的 _OP_EXECUTOR.submit(self._execute_operation)）：
+#   设计说明（为何不用星轨字面的 _OP_EXECUTOR.submit(self._execute_operation)）：
 #   _execute_operation 内部（:323）又向 _OP_EXECUTOR 提交 executor_func 并阻塞等待
 #   future.result(timeout)。若外层也提交到同一个 _OP_EXECUTOR，当活跃任务数 ≥ 池线程数时，
 #   所有池线程都会「提交内层任务后阻塞等待」，池内无空闲线程执行内层 executor_func，

@@ -1,7 +1,7 @@
 """PulseBoneMarrow —— PulseBoneMarrow 相关实现
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
 
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 """
 PulseBoneMarrow —— 脉冲驱动骨髓（免疫系统第四器官 · v9.5 分层脉冲版）
 版本: v9.5 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年6月9日
 更新: 2026年6月13日（P0-2+P0-5: 五合一全面改造——事件枚举+补充get_stats+自测同步）
 更新: 2026年6月14日（v9.5: 生成结果脉冲标记layer=L3，适配分层异步调度）

@@ -1,4 +1,4 @@
-"""相关任务 门控测试：health_ui 面板「应用预设」POST 路径。
+"""T-99c 门控测试：health_ui 面板「应用预设」POST 路径。
 
 红（修复前）：HealthHandler 仅有 do_GET，无 do_POST；前端 fetch POST
 /params/apply_preset 命中默认处理器 → 返回 501，预设无法应用。

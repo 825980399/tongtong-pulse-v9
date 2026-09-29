@@ -3,7 +3,7 @@
 PulseEthics —— 伦理器官 · 输出安全与价值审查
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 承接 EthicsEvent.REVIEW，对内容与行为做禁止/警告/隐私三级审查与价值冲突权衡，把结论以 EthicsEvent.REVIEW_RESULT 返回，并按分级发射 SecurityEvent.PASSED 或 SecurityEvent.BLOCKED。

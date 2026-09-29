@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★往期批次 T146-3（import 期渲染移除）+ T146-1（语义破损）+ T146-2（出生年份）回归测试。
+"""★第146批 T146-3（import 期渲染移除）+ T146-1（语义破损）+ T146-2（出生年份）回归测试。
 
 核心钉住三件事：
   1. `import config` **不得**原地改写 SEED_MEMORIES / display_name / identity_rules
@@ -81,7 +81,7 @@ def test_birth_date_default_has_no_real_year():
 
 
 def test_seed_keywords_have_no_bare_year():
-    """keywords 不得含裸四位年份（往期批次漏清的那一处）。"""
+    """keywords 不得含裸四位年份（第143批漏清的那一处）。"""
     for i, seed in enumerate(config.SEED_MEMORIES):
         for kw in (seed.get("keywords") or []):
             assert not _BARE_YEAR.search(str(kw)), \

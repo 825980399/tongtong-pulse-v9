@@ -1,4 +1,4 @@
-"""相关任务（P0）：批准→落盘断链修复 —— 低风险可放行路径 + 全链落盘验证。
+"""T-101a（P0）：批准→落盘断链修复 —— 低风险可放行路径 + 全链落盘验证。
 
 验收：
   ✅ T7 闸门有低风险放行路径（save_pending_patch 将 runtime_verified 的低风险补丁升 approved + auto_released）
@@ -59,7 +59,7 @@ def test_low_risk_release_promotes_and_lands_on_disk():
         "original_code": original,
         "modified_code": modified,
         "risk_level": "\u4f4e",
-        # ★往期批次 相关任务：放行判据改读**嵌套** runtime_verify_result.verified
+        # ★第105批 T-105a：放行判据改读**嵌套** runtime_verify_result.verified
         # （顶层 runtime_verified 为污染字段，不可作依据）+ baseline_errors>0。
         "runtime_verify_result": {"verified": True, "baseline": 3},
         "baseline_errors": 3,

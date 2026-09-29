@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""相关任务 门控单测：114a Dummy 占位实例防御 + 断5 指纹级降档。
+"""T-115d 门控单测：114a Dummy 占位实例防御 + 断5 指纹级降档。
 
 全程不构造真实 SafeEvolutionExecutor（避免重依赖），直接以 unbound 方式调用
 实例方法，复现「占位/Dummy 实例被传入冷却方法」与「断5 同指纹计数」两条路径。
@@ -15,7 +15,7 @@ def _load_see():
     _spec = importlib.util.spec_from_file_location("SEE_t115d_test", _src)
     _mod = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)
-    # ★往期批次 相关任务②（R4-B22 冒烟隔离规矩）：本用例用**合成指纹**
+    # ★第117批 T-117d②（R4-B22 冒烟隔离规矩）：本用例用**合成指纹**
     #   （file="a.py"、method="m"）驱动断5 硬闸，其 `[指纹咨询硬闸]` INFO 属冒烟产物。
     #   实测该行曾落进 pulse.log（2026-09-23 21:05:26），对「INFO>=1」类生产判据构成
     #   假阳性风险。改为走 smoke 日志器（独立 smoke.log + [SMOKE] 前缀 + 不冒泡）。

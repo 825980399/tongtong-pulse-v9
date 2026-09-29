@@ -3,7 +3,7 @@
 __init__ —— 遗传系统包声明
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 
 职责: 声明 organs.genetic 为遗传系统器官包，供 organ_loader.scan_organs_directory 扫描发现并装载其下七个器官模块（PulseEvolution / PulseDNARepair / PulseBonding / PulseConsent / PulseNurture / PulseReproductionEthics 及本包）。

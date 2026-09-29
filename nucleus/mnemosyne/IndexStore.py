@@ -3,7 +3,7 @@
 IndexStore.py —— 索引存储
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 知识索引的持久化存储
@@ -26,7 +26,7 @@ _MODULE_LOGGER = __import__("logging").getLogger("IndexStore")
 try:
     from config import PARQUET_COMPRESSION
 except Exception:
-    PARQUET_COMPRESSION = "snappy"  # ★往期批次 相关任务：config 键缺失时回落硬编码默认值
+    PARQUET_COMPRESSION = "snappy"  # ★第109批 T-109a：config 键缺失时回落硬编码默认值
 
 
 class IndexStore:

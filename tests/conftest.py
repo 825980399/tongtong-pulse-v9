@@ -117,7 +117,7 @@ def is_framework_running():
     判定（任一为真即视为运行中）：
       1. data/runtime.lock 存在；
       2. 进程检测：命令行**指向** main.py 的进程在跑
-         （★第89批 相关任务：改用 psutil 读命令行；原 Windows `tasklist /fo csv`
+         （★第89批 T-89c：改用 psutil 读命令行；原 Windows `tasklist /fo csv`
           输出不含命令行，"main.py" 恒不命中 → 该分支恒假，详见 _detect_framework_process）。
          探测失败时**不**保守判定为运行中（避免沙箱/CI 环境误跳过全部生产测试）。
 
@@ -140,7 +140,7 @@ def _framework_lock_present() -> bool:
 
 
 def _cmdline_is_framework_main(cmdline) -> bool:
-    """★第89批 相关任务：命令行是否**指向框架入口** main.py。
+    """★第89批 T-89c：命令行是否**指向框架入口** main.py。
 
     精确匹配「某个参数的文件名恰为 main.py」，而不是子串包含 ——
     子串匹配会误命中「命令行正文里提到 main.py」的进程
@@ -156,7 +156,7 @@ def _cmdline_is_framework_main(cmdline) -> bool:
 
 
 def _iter_main_py_cmdlines():
-    """★第89批 相关任务：用 psutil 枚举「命令行指向 main.py」的进程（排除本进程）。
+    """★第89批 T-89c：用 psutil 枚举「命令行指向 main.py」的进程（排除本进程）。
 
     返回命令行列表；psutil 不可用时返回 ``None`` —— 以便调用方区分
     「探测可用但没找到」([]) 与「无法探测」(None) 两种情形。
@@ -180,7 +180,7 @@ def _iter_main_py_cmdlines():
 
 
 def _detect_framework_process() -> bool:
-    """★第89批 相关任务：进程探测 —— 改用可读「命令行」的方式。
+    """★第89批 T-89c：进程探测 —— 改用可读「命令行」的方式。
 
     ★根因（2026-09-20 实测）：原实现 Windows 走 ``tasklist /fo csv``，而该输出
     **不含命令行参数**（实测 15290 字节输出里 "main.py" 出现 **0** 次），

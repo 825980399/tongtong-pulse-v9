@@ -21,8 +21,8 @@ new_chapters = '''
 - T4 KAL迁移 ✅：胃/肝/肾3模块添加helper方法+双轨过渡（ENABLE_KAL_MIGRATION开关）
 - T5 测试文档 ✅：34例测试（修复faiss安装环境后全部通过）
 
-**内部协作者补全修复**：
-- faiss-cpu 1.15.0安装到框架运行环境（D:\\Program Files\\Python312）——内部协作者只装在了managed 3.13.12环境，导致4个测试skip
+**星轨补全修复**：
+- faiss-cpu 1.15.0安装到框架运行环境（D:\\Program Files\\Python312）——路灯只装在了managed 3.13.12环境，导致4个测试skip
 - FAISS_USE_GPU从True改为False（faiss-cpu不支持GPU，必须为False）
 - config注释更新：从"★依赖未安装"改为"faiss-cpu 1.15.0已安装（2026-09-17）"
 
@@ -33,10 +33,10 @@ new_chapters = '''
 - verify 46 PASS/0 FAIL
 - 导入冒烟3/3通过
 
-**第69批T0核实发现的9处偏差（内部协作者已诚实标注）**：
+**第69批T0核实发现的9处偏差（路灯已诚实标注）**：
 1. 框架在线状态→实际停机（00:50:41停止）
 2. faiss未安装→确认未安装→已安装faiss-cpu 1.15.0
-3. FAISS_USE_GPU默认False→实际为True→内部协作者已修正为False
+3. FAISS_USE_GPU默认False→实际为True→星轨已修正为False
 4. nucleus/code_learner.py不存在→实际在organs/brain/PulseCodeLearner.py
 5. config已有全部17项配置→第68批已落，确认生效
 6. 债务清单末章=第一百六十二章→确认
@@ -102,7 +102,7 @@ new_chapters = '''
 | **第70批** | **分布式架构设计+Neo4j+InfluxDB+遗留延续** | 🔄 **进行中** |
 | 第71批+ | 开始引入分布式组件 | ⏳ 待开始 |
 
-**第一百六十四章结束。第70批任务已派发，核心目标：分布式架构准备——Neo4j图数据库+InfluxDB时序数据库+分布式架构设计，同时完善第69批遗留接入点。Neo4j/InfluxDB/分布式默认关闭，只做设计和基础封装。内部协作者执行顺序：T4（遗留延续）→T1（Neo4j）→T2（InfluxDB）→T3（分布式设计）→T5（测试文档）。**
+**第一百六十四章结束。第70批任务已派发，核心目标：分布式架构准备——Neo4j图数据库+InfluxDB时序数据库+分布式架构设计，同时完善第69批遗留接入点。Neo4j/InfluxDB/分布式默认关闭，只做设计和基础封装。路灯执行顺序：T4（遗留延续）→T1（Neo4j）→T2（InfluxDB）→T3（分布式设计）→T5（测试文档）。**
 '''
 
 with open(file_path, 'a', encoding='utf-8') as f:

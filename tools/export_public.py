@@ -1,4 +1,4 @@
-"""export_public —— 对外发布包导出工具（往期批次 相关任务）
+"""export_public —— 对外发布包导出工具（第143批 T-143d）
 
 用途
 ----
@@ -9,7 +9,7 @@
 - **只包含**：全部源码（代码）、根 ``README.md``、``docs/`` 里对外的那部分
   核心文档（见 ``PUBLIC_DOCS_ALLOW``）、依赖声明、配置文件等。
 - **排除**：``data/``、``tmp/``、``logs/``、``models/`` 等运行数据；
-  全部内部协作文档（``docs/内部协作者与内部协作者对话/`` 任务书与交付报告、
+  全部内部协作文档（``docs/路灯与星轨对话/`` 任务书与交付报告、
   ``docs/分析报告/``、``docs/归档/``、``docs/archive/`` 等内部笔记）；
   备份快照（``.bak_batchN/``）；缓存与虚拟环境；密钥 / 凭据类文件。
 
@@ -20,7 +20,7 @@
 2. **默认 dry-run 安全**：加 ``--dry-run`` 只列清单不落盘。
 3. **PII 复扫断言**：导出后对包内每个文本文件跑一遍敏感信息扫描
    （真名 / 手机号 / 邮箱 / API Key / 真实绝对路径），命中即失败退出，
-   保证发布包不泄露个人信息（对齐往期批次 相关任务 验收）。
+   保证发布包不泄露个人信息（对齐第143批 T-143a 验收）。
 4. 复用 ``nucleus.data.exclude_dirs`` 的统一排除语义，避免各工具各写一份。
 
 用法
@@ -33,7 +33,7 @@
     python tools/export_public.py --no-scan       # 跳过 PII 复扫（不推荐）
 
 版本: v10 PulseNet · 工具
-设计: 内部协作者、内部协作者
+设计: 路灯、星轨
 日期: 2026年9月27日
 """
 
@@ -69,11 +69,11 @@ EXCLUDE_DIRS: frozenset[str] = PACKAGE_EXCLUDED | frozenset({
     # 构建产物（Cython 编译中间件，内含真实绝对路径）
     "build", "temp.win-amd64-cpython-312", "Release",
     # CI/宿主平台配置（含内部流程，不进发布包）
-    # ★往期批次 3.3：.github/ 改为随发布包发布——首发仅含公开的 PR 模板等
+    # ★第148批 3.3：.github/ 改为随发布包发布——首发仅含公开的 PR 模板等
     #   基础设施，不含内部流程；若后续新增含内部信息的 workflow 须重新评估并移回排除。
     ".gitee",
     # 内部协作文档（整目录剔除）
-    "路灯与星轨对话",          # 任务书 / 交付报告 / 与内部协作者对话记录
+    "路灯与星轨对话",          # 任务书 / 交付报告 / 与星轨对话记录
     "分析报告",                # 技术债务前置分析、第三方分析、台账 CSV
     "台账",
     "审查报告",
@@ -100,7 +100,7 @@ EXCLUDE_EXACT_NAMES: frozenset[str] = frozenset({
     # ★Dxxx-1：属主脱敏 PII 配置（真实姓名/路径），绝不进入发布包
     ".owner_pii.json",
     ".owner_pii.json.example",
-    # ★往期批次 相关任务/相关任务：含本机 Python 绝对路径，跨环境无效，不对外发布
+    # ★第144批 T-144a/T-144d：含本机 Python 绝对路径，跨环境无效，不对外发布
     "_install_cython.bat",
 })
 
@@ -112,7 +112,7 @@ EXCLUDE_PATH_PREFIXES: tuple[str, ...] = (
 )
 
 #: 排除的路径通配（fnmatch 风格，正斜杠 / 匹配相对路径）
-#: ★往期批次 相关任务：账本旁路重建目录每批重建（.rebuilt_131/.rebuilt_132/…），通配收口。
+#: ★第144批 T-144a：账本旁路重建目录每批重建（.rebuilt_131/.rebuilt_132/…），通配收口。
 EXCLUDE_PATH_GLOBS: tuple[str, ...] = (
     ".rebuilt_*/",
     ".rebuilt_*",
@@ -138,19 +138,19 @@ PUBLIC_DOCS_ALLOW_FILES: frozenset[str] = frozenset({
     "demo-quickstart.md",              # 演示快速启动（比赛/演示）
     "项目架构总览_20260927.md",        # 一页看懂架构
     "项目结构树.md",                   # 目录结构说明
-    # ★往期批次 3.3：首发必需公开文档
+    # ★第148批 3.3：首发必需公开文档
     "部署指南_APIKey配置.md",          # 最小化部署 + 环境变量配置
     "SECURITY.md",                     # 漏洞上报方式
     "CONTRIBUTING.md",                 # 外部贡献流程 + 公开子集门禁
     "CHANGELOG.md",                    # 首发版本说明
-    # ★往期批次 相关任务：移出 `完整进化路线与技术债务清单_v1.0.md`
+    # ★第145批 T-145b：移出 `完整进化路线与技术债务清单_v1.0.md`
     #   理由：该文档是**内部总账**（含批次交付确认/债务 D 编号/第三方评分/
     #   内部叙事），属内部运行资料，不得进入对外发布包。
 })
 
 #: docs/ 下允许整目录带入的**子目录**（相对 docs/）
 PUBLIC_DOCS_ALLOW_DIRS: frozenset[str] = frozenset({
-    "比赛准备",          # 往期批次 相关任务 对外运行数据卡片
+    "比赛准备",          # 第143批 T-143c 对外运行数据卡片
     "设计文档",          # 系统设计（对外可读）
     "操作手册",          # 操作类手册
 })
@@ -162,7 +162,7 @@ EXCLUDE_DOC_DIRS: frozenset[str] = frozenset({
 })
 
 # =============================================================================
-# 三、敏感信息复扫模式（对齐 相关任务 已清洗的 PII 类型）
+# 三、敏感信息复扫模式（对齐 T-143a 已清洗的 PII 类型）
 # =============================================================================
 
 #: 强 PII 模式（**通用型，源码内不含任何属主真值**）。
@@ -234,7 +234,7 @@ def all_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
 #: 兼容别名（旧调用 / 测试可能引用；仅含通用模式，不含属主真值）。
 PII_PATTERNS = STATIC_PII_PATTERNS
 
-#: ★往期批次 T146-2：**弱告警**模式 —— 只提示人工复核，**不阻断**导出。
+#: ★第146批 T146-2：**弱告警**模式 —— 只提示人工复核，**不阻断**导出。
 #:   背景：真实出生年份以裸四位数字（如 ``2020年``）写进 tracked 源码时，
 #:   上面的强模式（精确日期）未必命中，但信息已经随公开包泄露。
 #:   判据：单行内同时命中「裸四位年份」**且**含出生/生日类上下文词。
@@ -333,7 +333,7 @@ def should_skip(rel: str) -> bool:
         if rel_n.startswith(pref) or ("/" + pref) in ("/" + rel_n):
             return True
 
-    # ★往期批次 相关任务：通配目录（.rebuilt_*）前缀匹配
+    # ★第144批 T-144a：通配目录（.rebuilt_*）前缀匹配
     for g in EXCLUDE_PATH_GLOBS:
         pat = g.rstrip("/")
         for p in parts:
@@ -444,7 +444,7 @@ def verify_clean(root: str, files: list[str]) -> list[tuple[str, str, int, str]]
 
 
 def scan_text_weak(path: str) -> list[tuple[str, int, str]]:
-    """★往期批次 T146-2：弱告警扫描，返回 [(模式名, 行号, 命中行片段)]。
+    """★第146批 T146-2：弱告警扫描，返回 [(模式名, 行号, 命中行片段)]。
 
     与 scan_text 的区别：
       · 只看「裸四位年份 + 出生/生日上下文」**同段**；
@@ -589,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
         out_size = -1
     print(f"\n导出完成: {out}")
 
-    # ---- 弱告警扫描（往期批次 T146-2：只提示，不阻断） ----
+    # ---- 弱告警扫描（第146批 T146-2：只提示，不阻断） ----
     if not args.no_scan:
         _weak = verify_weak(root, files)
         if _weak:

@@ -1,7 +1,7 @@
 """PulseEars —— PulseEars 相关实现
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
 from config import TIMEOUT_CONFIG
@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 """
 PulseEars —— 脉冲驱动耳朵（意图识别器官 · v9.5 分层脉冲版）
 版本: v9.5 PulseNet
-设计: 内部协作者、内部协作者、内部协作者  
+设计: 路灯、小林、星轨  
 日期: 2026年6月9日
 更新: 2026年6月13日（P0-2+P0-5: 五合一全面改造——事件枚举+统一日志+命名规范+get_stats+自测同步）
 更新: 2026年6月14日（v9.5: 意图/代码/消化脉冲分层标记，适配分层异步调度）
@@ -158,7 +158,7 @@ class PulseEars(BasePulseOrgan):
         }
     def _on_persona_switched(self, payload: dict) -> dict[str, Any]:
         """收到身份切换脉冲，更新当前用户"""
-        self._current_user_name = payload.get("current_user", "访客")  # ★相关任务 未知用户默认访客
+        self._current_user_name = payload.get("current_user", "访客")  # ★T-118a 未知用户默认访客
         return {"status": "ok", "user": self._current_user_name}
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()

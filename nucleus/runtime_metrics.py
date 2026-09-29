@@ -3,7 +3,7 @@
 runtime_metrics.py —— 运行时指标
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 框架运行时性能指标采集与统计
@@ -237,7 +237,7 @@ class RuntimeMetrics:
         _lock_wait = point.get("lock_wait_avg_ms", 0.0)
         if _lock_wait >= _thr["lock_wait_avg_ms"]:
             # ★PHASE13（2026-09-07）：告警附带「热点锁」定位。
-            #   原告警只有「平均 70ms」，运维无从下手（内部协作者据此误判为 node_pool
+            #   原告警只有「平均 70ms」，运维无从下手（星轨据此误判为 node_pool
             #   的全局锁，实际是 InfoField._lock 在单条 publish 上被抢 4 次）。
             #   此处延迟读取 InfoField 的按锁名累计器（reset=True 取本窗口增量），
             #   把耗时最高的锁及其占比拼进消息，让告警自带答案。
@@ -722,7 +722,7 @@ def get_adaptive_controller() -> AdaptiveFrequencyController:
 # _m67_t4_adaptive_done
 
 
-# ===== ★主线往期批次 相关任务（Dxxx）：logger.ERROR -> error_snapshots 桥接 =====
+# ===== ★主线第104批 T-104c（D169）：logger.ERROR -> error_snapshots 桥接 =====
 # 现状偏差：此前仅 BasePulseOrgan._handle_pulse 的脉冲异常路径调用 record_error，
 #   大量 logging.error(...) 仍不进 error_snapshots（"9类故障面板全盲"部分成立）。
 # 机制：在框架根 logger("pulse") 挂一个 Handler，ERROR/CRITICAL 记录自动转成 error_snapshots，
@@ -730,7 +730,7 @@ def get_adaptive_controller() -> AdaptiveFrequencyController:
 # 安全：silent_exc 仅打 DEBUG 且不走 ERROR，本 Handler 不会形成递归。
 
 class ErrorCaptureHandler(logging.Handler):
-    """★相关任务：把 pulse.* 命名空间下 ERROR/CRITICAL 日志自动记入 error_snapshots。"""
+    """★T-104c：把 pulse.* 命名空间下 ERROR/CRITICAL 日志自动记入 error_snapshots。"""
 
     def __init__(self, level: int = logging.ERROR):
         super().__init__(level=level)
@@ -762,7 +762,7 @@ _error_capture_installed = False
 
 
 def install_error_capture(logger_name: str = "pulse") -> bool:
-    """★相关任务：在框架根 logger 上安装 ErrorCaptureHandler（幂等）。返回是否本次新安装。"""
+    """★T-104c：在框架根 logger 上安装 ErrorCaptureHandler（幂等）。返回是否本次新安装。"""
     global _error_capture_installed
     if _error_capture_installed:
         return False

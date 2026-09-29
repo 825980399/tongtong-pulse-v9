@@ -144,7 +144,7 @@ class TestShortAnswerSanitize:
 # ---------- 第82批 T-e：_search_deep 主线程路径不得丢 cid ----------
 
 class TestMainThreadPathCarriesCid:
-    """内部协作者独立终验抓到的主线程漏洞回归。
+    """星轨独立终验抓到的主线程漏洞回归。
 
     `_search_deep` 有两条进 `_search_deep_headless` 的路径：
     - 异步线程路径（非主线程 → executor.submit(_execute_headless_search)）已带 cid；
