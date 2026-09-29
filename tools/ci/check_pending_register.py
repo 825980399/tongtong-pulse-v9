@@ -17,6 +17,8 @@
 import argparse
 import csv
 import os
+import re
+import subprocess
 import sys
 
 VALID_STATES = {"待裁决", "已裁", "已排期", "已结案"}
@@ -26,6 +28,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CSV = os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", "..", "docs", "台账", "待裁决登记册.csv")
 )
+#: 项目根（tools/ci → tools → 项目根，共两层）。
+REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+from nucleus._silent_except import silent_exc  # 静默异常统一走 CI 门禁认可通道
 
 
 def fail(msg):
@@ -37,6 +44,123 @@ def _safe_int(s):
     """非负整数解析；非法返回 None。避免 except 被 CI 门禁记为静默 handler。"""
     s = (s or "").strip()
     return int(s) if s.isdigit() else None
+
+
+# ============================================================================
+# 新票同提交入册 硬校验（T153-7 / Q152-8 / Q153-8 双票合一）
+# ============================================================================
+#: 登记册 ID 语法（与 docs/台账/待裁决登记册.csv 实际 ID 形态一致）：
+#:   Q\d+-\d+       裁决票（Q153-1）
+#:   D-[A-Z]\d+     债务票（D-A1）
+#:   D\d{2,4}(-x)?  债务票（D008 / D148-v2score / D153-6）
+#:   P\d-\d+        优先票（P0-2 / P2-162）
+#: 注：批次任务号 T153-1 等**不是票**，不匹配，避免误阻断正常提交。
+TICKET_RE = re.compile(r"\b(Q\d{2,3}-\d+|D-[A-Z]\d+|D\d{2,4}(?:-[A-Za-z0-9]+)?|P\d-\d+)\b")
+
+#: 已提交树（HEAD）已知票扫描用 POSIX-ERE 安全形态（避免 \d/\b 依赖 PCRE）。
+_TICKET_ERE = r"(Q[0-9]{2,3}-[0-9]+|D-[A-Z][0-9]+|D[0-9]{2,4}(-[A-Za-z0-9]+)?|P[0-9]-[0-9]+)"
+_SCAN_EXTS = {".py", ".md", ".txt", ".csv", ".json", ".jsonl", ".yaml",
+              ".yml", ".rst", ".toml"}
+
+
+def _register_ids(csv_path):
+    """读取登记册 ID 列（去重集合）；不可读时返回空集合（不阻断既有校验）。"""
+    ids = set()
+    try:
+        with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+            for r in csv.reader(f):
+                if r and r[0].strip():
+                    ids.add(r[0].strip())
+    except OSError as _e:
+        silent_exc(_e, where="check_pending_register._register_ids", level="debug")
+    return ids
+
+
+def _known_tickets():
+    """已知票集合 = 登记册 ID ∪ 已提交(HEAD)仓库内票 ∪ 工作树 docs/ 在途已决票。
+
+    设计要点（避免误阻断在途批次）：
+      - 登记册是权威台账，但本批「在途已决票」（如 Q153-1/D-A4）由星轨验收时合并入册，
+        任务书明确「路灯本批不改登记册」；这些票已写在 docs/ 任务书中，视为已知。
+      - 仅「全仓（已提交+工作树docs）从未出现」的票才触发入册强制。
+      - 工作树 docs 扫描**不含**代码文件，故在代码里新造的票不会被 docs 扫描误判为已知
+        （HEAD 提交树也搜不到未提交的代码新增）→ 正确强制入册。
+    """
+    known = _register_ids(DEFAULT_CSV)
+    # 1) 已提交树（HEAD）文本文件中的票
+    p = subprocess.run(
+        ["git", "grep", "-E", "-o", _TICKET_ERE, "HEAD", "--",
+         "*.py", "*.md", "*.csv", "*.txt", "*.json", "*.jsonl",
+         "*.yaml", "*.yml", "*.rst", "*.toml"],
+        cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if p.returncode == 0:
+        for line in p.stdout.decode("utf-8", "replace").split("\n"):
+            line = line.strip()
+            if line:
+                known.add(line)
+    # 2) 工作树 docs/（任务书/交付报告含在途已决票，未提交亦视为已知）
+    docs_root = os.path.join(REPO_ROOT, "docs")
+    if os.path.isdir(docs_root):
+        for dp, dns, fns in os.walk(docs_root):
+            dns[:] = [d for d in dns if d not in (".git", "__pycache__")]
+            for fn in fns:
+                if os.path.splitext(fn)[1].lower() not in _SCAN_EXTS:
+                    continue
+                try:
+                    with open(os.path.join(dp, fn), "r",
+                              encoding="utf-8", errors="ignore") as fh:
+                        data = fh.read()
+                except OSError as _e:
+                    silent_exc(_e, where="check_pending_register._known_tickets", level="debug")
+                    continue
+                for tid in TICKET_RE.findall(data):
+                    known.add(tid)
+    return known
+
+
+def check_new_ticket_registered():
+    """新票必须同提交入册：若本次提交在非登记册文件中引入「全仓从未出现」的新票，
+    则登记册 CSV 必须在本提交内同步增加行（入册），否则返回错误列表。
+    仅在存在暂存差异时生效；无暂存差异（独立运行/验收）返回 []。"""
+    known = _known_tickets()
+    p = subprocess.run(
+        ["git", "diff", "--cached"],
+        cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if p.returncode != 0 or not p.stdout.strip():
+        return []  # 非 git 上下文或无暂存差异 → 放行
+    text = p.stdout.decode("utf-8", errors="replace")
+    register_rel = os.path.relpath(DEFAULT_CSV, REPO_ROOT).replace(os.sep, "/")
+    cur_file = None
+    introduced = set()
+    register_added_rows = 0
+    for line in text.split("\n"):
+        if line.startswith("diff --git"):
+            m = re.search(r" b/(.+)$", line)
+            cur_file = m.group(1) if m else None
+            continue
+        if not line.startswith("+"):
+            continue
+        if line.startswith("+++"):
+            continue
+        if cur_file == register_rel:
+            body = line[1:]
+            # 登记册新增数据行（含逗号且非表头行）
+            if "," in body and not body.startswith("ID,"):
+                register_added_rows += 1
+        elif cur_file:
+            for tid in TICKET_RE.findall(line):
+                introduced.add(tid)
+    new_tickets = introduced - known
+    if not new_tickets:
+        return []
+    if register_added_rows > 0:
+        return []  # 本提交已同步入册 → 通过
+    return [
+        "新票未同提交入册：提交引入新票 %s（全仓未出现过），但登记册行数未同步增加"
+        "（须在本提交内一并入册，Q152-8/Q153-8 双票合一）。" % "、".join(sorted(new_tickets))
+    ]
 
 
 def main(argv=None):
@@ -60,7 +184,7 @@ def main(argv=None):
     missing = [c for c in required if c not in cols]
     if missing:
         fail("列缺失: %s（实际=%s）" % (missing, cols))
-    # ★D150-14 结构校验：每行列数须与表头一致；禁止出现第2个表头行（重复表头）
+    # ★Dxxx-14 结构校验：每行列数须与表头一致；禁止出现第2个表头行（重复表头）
     rows = []
     for i, cells in enumerate(raw[1:], start=2):
         if len(cells) != len(header):
@@ -98,6 +222,10 @@ def main(argv=None):
         proposed = (r.get("提出批次") or "").strip()
         if not proposed:
             errors.append("行%d [%s]: 提出批次为空（非空率须100%%）" % (i, rid))
+
+    # --- T153-7：新票同提交入册 硬校验（仅存在暂存差异时生效）---
+    for e in check_new_ticket_registered():
+        errors.append(e)
 
     if errors:
         for e in errors:
