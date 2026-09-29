@@ -15,8 +15,8 @@ index 45f67b9..c19de24 100644
              "peak_memory_bytes": 0
            }
          },
--        "regression": "0通过/1失败 | verify_phase17_1_5.py:  \"D:\\xinrenlei\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
--        "regression_warning": "全局回归脚本有失败(1个)，与具体补丁无关，仅记录参考: 0通过/1失败 | verify_phase17_1_5.py:  \"D:\\xinrenlei\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
+-        "regression": "0通过/1失败 | verify_phase17_1_5.py:  \"<属主路径>\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
+-        "regression_warning": "全局回归脚本有失败(1个)，与具体补丁无关，仅记录参考: 0通过/1失败 | verify_phase17_1_5.py:  \"<属主路径>\\tongtong-pulse-v9\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
 +        "regression": "0通过/1失败 | verify_phase17_1_5.py:  \"<PROJECT_ROOT>\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
 +        "regression_warning": "全局回归脚本有失败(1个)，与具体补丁无关，仅记录参考: 0通过/1失败 | verify_phase17_1_5.py:  \"<PROJECT_ROOT>\\tools/verify_phase17_1_5.py\", line 21, in <module>\n    from tmp.test_isolation import TestIsolation, ISO_DIR\nModuleNotFoundError: No module named 'tmp.test_isolation'\n",
          "verify_entries": [
@@ -26,7 +26,7 @@ index 45f67b9..c19de24 100644
        "runtime_verified": true,
        "auto_released": true,
        "release_reason": "low_risk_release:T-101a",
--      "backup_path": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\code_backups\\backup_20260926_165842",
+-      "backup_path": "<属主路径>\\tongtong-pulse-v9\\data\\code_backups\\backup_20260926_165842",
 +      "backup_path": "<PROJECT_ROOT>\\data\\code_backups\\backup_20260926_165842",
        "applied_at": 1790413122.6230004,
        "rollback_available": true,
@@ -384,7 +384,7 @@ index 11e391b..6542415 100644
          ],
          "name": "_oscillon_cy",
          "sources": [
--            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\field\\_oscillon_cy.pyx"
+-            "<属主路径>\\tongtong-pulse-v9\\nucleus\\pulse\\..\\field\\_oscillon_cy.pyx"
 +            "nucleus/field/_oscillon_cy.pyx"
          ]
      },
@@ -397,7 +397,7 @@ index 5f6a51f..4b1a86b 100644
          ],
          "name": "_cosine_cpu_cy",
          "sources": [
--            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\gpu\\_cosine_cpu_cy.pyx"
+-            "<属主路径>\\tongtong-pulse-v9\\nucleus\\pulse\\..\\gpu\\_cosine_cpu_cy.pyx"
 +            "nucleus/gpu/_cosine_cpu_cy.pyx"
          ]
      },
@@ -562,10 +562,10 @@ index f58f2d2..a2b9eff 100644
      def _normalize_patch_file(self, file_path: str) -> str:
          """绝对路径（Windows 或 POSIX）→ 相对项目根的 POSIX 路径；非绝对路径原样返回。
  
--        跨平台难点：Windows 绝对路径（`D:\\xinrenlei\\tongtong-pulse-v9\\organs\\...`）
+-        跨平台难点：Windows 绝对路径（`<属主路径>\\tongtong-pulse-v9\\organs\\...`）
 +        跨平台难点：Windows 绝对路径（`<PROJECT_ROOT>\\organs\\...`）
          无法直接 relpath 到本地项目根（Linux 上是 `/workspace/tongtong-pulse-v9`）——
--        简单去掉盘符会得到 `xinrenlei/tongtong-pulse-v9/...`（错误，多保留了上层目录）。
+-        简单去掉盘符会得到 `<PROJECT_ROOT>-pulse-v9/...`（错误，多保留了上层目录）。
 +        简单去掉盘符会得到 `workspace/tongtong-pulse-v9/...`（错误，多保留了上层目录）。
          因此用**项目根目录名做锚点**：在路径片段中找最后一个与项目根目录同名的片段，
          取其之后的部分作为相对路径。
@@ -578,7 +578,7 @@ index 60b4874..0f8b0da 100644
          ],
          "name": "_topk_retrieve_cy",
          "sources": [
--            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\reasoning\\_topk_retrieve_cy.pyx"
+-            "<属主路径>\\tongtong-pulse-v9\\nucleus\\reasoning\\_topk_retrieve_cy.pyx"
 +            "nucleus/reasoning/_topk_retrieve_cy.pyx"
          ]
      },
@@ -591,7 +591,7 @@ index 06d9ca5..2e9f1fb 100644
          ],
          "name": "_resonance_cy",
          "sources": [
--            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\pulse\\..\\synapsys\\_resonance_cy.pyx"
+-            "<属主路径>\\tongtong-pulse-v9\\nucleus\\pulse\\..\\synapsys\\_resonance_cy.pyx"
 +            "nucleus/synapsys/_resonance_cy.pyx"
          ]
      },
@@ -661,7 +661,7 @@ index 0f068b4..f3c5339 100644
          匹配口径：
              以 **(类名, 方法名)** 为准，而非文件路径。原因：
              - issue 的 file 可能是 Windows 绝对路径
--              （日志实证：`D:\\xinrenlei\\...\\organs\\body\\PulseLiver.py`）；
+-              （日志实证：`<属主路径>\\...\\organs\\body\\PulseLiver.py`）；
 +              （日志实证：`<PROJECT_ROOT>\\...\\organs\\body\\PulseLiver.py`）；
              - 补丁的 file 多为项目相对路径（`organs/body/PulseLiver.py`）。
              两者直接比字符串永远比不上，按 basename/类名比才稳。
@@ -1213,7 +1213,7 @@ index 0000000..bfb3c3a
 +        import tempfile
 +        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
 +                                         encoding="utf-8") as fh:
-+            fh.write('ROOT = "' + "D:" + chr(92) + "xinrenlei" + chr(92)
++            fh.write('ROOT = "' + "D:" + chr(92) + "<属主目录名>" + chr(92)
 +                     + 'tongtong-pulse-v9"' + "\n")
 +            p = fh.name
 +        try:
@@ -1254,7 +1254,7 @@ index 5d97cad..29442f2 100644
  
      def test_matches_absolute_main_py(self):
          assert cf._cmdline_is_framework_main(
--            ["python.exe", "D:\\xinrenlei\\tongtong-pulse-v9\\main.py"]) is True
+-            ["python.exe", "<属主路径>\\tongtong-pulse-v9\\main.py"]) is True
 +            ["python.exe", "C:\\work\\project\\main.py"]) is True
  
      def test_does_not_match_mentioning_process(self):
@@ -1389,7 +1389,7 @@ index 83ae181..3d9883b 100644
      "ENABLE_DISTRIBUTED": false
    },
    "framework": {
--    "pulse_log": "d:\\xinrenlei\\tongtong-pulse-v9\\logs\\pulse.log",
+-    "pulse_log": "<属主路径>\\tongtong-pulse-v9\\logs\\pulse.log",
 +    "pulse_log": "<PROJECT_ROOT>\\logs\\pulse.log",
      "mtime_age_min": 4.0,
      "graceful_shutdown": false
@@ -1886,7 +1886,7 @@ index 0000000..62724bf
 +    ("真名·任*曈", re.compile("任*曈")),
 +    ("昵称·小*曈", re.compile("小*曈")),
 +    ("出生日期", re.compile(r"2020[年.\-/]0?7[月.\-/]0?4")),
-+    ("真实项目路径", re.compile(r"[Dd]:[\\/]xinrenlei")),
++    ("真实项目路径", re.compile(r"[Dd]:[\\/]<属主目录名>")),
 +    ("真实用户名", re.compile(r"[Cc]:[\\/]Users[\\/]Administrator")),
 +    ("API Key 赋值", re.compile(
 +        r"(?i)\b(api[_-]?key|secret|token|password|passwd)\s*[:=]\s*[\"']"

@@ -3,7 +3,7 @@
 - **发起方**：星轨（规划+任务书+独立终验）
 - **执行方**：路灯（WorkBuddy，唯一编码执行体）
 - **日期**：2026-09-19
-- **项目根**：`D:\xinrenlei\tongtong-pulse-v9`（Windows，仅 PowerShell；权威 Python `D:\Program Files\Python312\python.exe`）
+- **项目根**：`<PROJECT_ROOT>`（Windows，仅 PowerShell；权威 Python `D:\Program Files\Python312\python.exe`）
 - **状态**：待路灯执行 → 交付后星轨独立终验（grep 生产证据 + 独立复跑 + 先红后绿），通过才更新总账
 
 ---
@@ -102,7 +102,7 @@ if len(answer) < 10 and _original:
 - 不写 `data\knowledge\` 下任何文件；
 - 不改 `config.py` 的运行开关；
 - 改前备份到 `.bak_batch82a/`（目标文件：`organs/brain/PulseInnerWorld.py`、`organs/motor/PulseController.py`）；
-- 不写外部黄金数据 `D:\xinrenlei\tongtong-pulse-safeguard\`；
+- 不写外部黄金数据 `D:\<PROJECT_ROOT>-pulse-safeguard\`；
 - 只改 `.py`（下次重启才生效，不影响运行中框架）；
 - 不采信"自述通过"，以 pytest 实跑输出为准。
 

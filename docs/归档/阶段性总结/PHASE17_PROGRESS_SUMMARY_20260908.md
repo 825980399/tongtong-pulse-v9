@@ -2,7 +2,7 @@
 
 **更新时间**：2026-09-08 13:40
 **整理人**：星轨
-**项目根目录**：D:\xinrenlei\tongtong-pulse-v9
+**项目根目录**：<PROJECT_ROOT>
 
 ---
 

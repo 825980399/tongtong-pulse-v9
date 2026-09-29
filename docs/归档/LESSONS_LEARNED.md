@@ -1923,13 +1923,13 @@ Python 的 GIL（全局解释器锁）限制同一时刻只有一个线程执行
 
 ### SelfInspector路径计算错误会导致全器官扫描静默失败
 
-`_scan_all_organs`中`project_root`的计算多了一层`os.path.dirname`——`__file__`在`nucleus/self_inspector.py`，上溯三层变成了`D:\xinrenlei`而非`D:\xinrenlei\tongtong-pulse-v9`。
+`_scan_all_organs`中`project_root`的计算多了一层`os.path.dirname`——`__file__`在`nucleus/self_inspector.py`，上溯三层变成了`<属主路径>`而非`<PROJECT_ROOT>`。
 
-后果链：项目根路径错误→`organs_dir`指向不存在的`D:\xinrenlei\organs`→`os.path.isdir(organs_dir)`返回False→`return result`返回空字典→`get_organ_code_structure()`返回空→`_learn_own_code_structure`判断`if not code_summary: return`静默返回。全程无异常、无日志、无警告。
+后果链：项目根路径错误→`organs_dir`指向不存在的`<属主路径>\organs`→`os.path.isdir(organs_dir)`返回False→`return result`返回空字典→`get_organ_code_structure()`返回空→`_learn_own_code_structure`判断`if not code_summary: return`静默返回。全程无异常、无日志、无警告。
 
 这是"静默失败"的教科书级案例——每个环节都有合理的处理逻辑（目录不存在返回空、空结果返回None、None检查后return），但串联起来形成了一条完全不可见的失败链路。
 
-修复后日志确认"器官扫描完成: 52个器官文件, 项目根=D:\xinrenlei\tongtong-pulse-v9"。代码学习随即初始化"共782个方法待理解"。
+修复后日志确认"器官扫描完成: 52个器官文件, 项目根=<PROJECT_ROOT>"。代码学习随即初始化"共782个方法待理解"。
 
 **教训**：`os.path.dirname`的层级计算是易错点。`__file__`在`nucleus/self_inspector.py`时，项目根是`dirname(dirname(abspath(__file__)))`——上溯两层，不是三层。另外，关键路径上的"静默返回"必须有日志——如果`_scan_all_organs`返回空时有WARNING日志，这个问题会在第一时间暴露，而不是隐藏到代码学习无法启动时才被发现。
 

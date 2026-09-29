@@ -1,10 +1,10 @@
 {
-  "dir": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces",
+  "dir": "<属主路径>\\tongtong-pulse-v9\\data\\llm_traces",
   "apply": false,
   "version": "unknown",
   "files": [
     {
-      "file": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces\\calls_20260913.jsonl",
+      "file": "<属主路径>\\tongtong-pulse-v9\\data\\llm_traces\\calls_20260913.jsonl",
       "total": 261,
       "prompt_version_fill": 261,
       "error_fill": 117,

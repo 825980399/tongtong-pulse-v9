@@ -34,7 +34,7 @@
           "err": 120
         }
       ],
-      "dir": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces",
+      "dir": "<属主路径>\\tongtong-pulse-v9\\data\\llm_traces",
       "note": "框架运行中，计数漂移属预期"
     },
     "boundary": {

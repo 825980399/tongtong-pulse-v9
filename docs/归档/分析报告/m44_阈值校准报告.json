@@ -218,7 +218,7 @@
       "f1": 0.0
     }
   ],
-  "corpus_dir": "D:\\xinrenlei\\tongtong-pulse-v9\\data\\llm_traces",
+  "corpus_dir": "<属主路径>\\tongtong-pulse-v9\\data\\llm_traces",
   "corpus": {
     "n": 66,
     "nn_min": 0.7193,
