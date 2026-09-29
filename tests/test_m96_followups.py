@@ -2,12 +2,12 @@
 """第96批门控单测：进化通道接入渠道池 / 审批治理 / 账本假成功 / 台账投递 / 路径与 git 断言。
 
 分组：
-  A  TestM96ChannelPool        T-96a（P0 进化通道接入渠道池）
-  B  TestM96ApprovalGovernance T-96b（N1 审批治理残留）
-  C  TestM96LedgerVerification T-96c（N2 账本假成功）
-  D  TestM96ChannelPriority    T-96d（新模型 + 优先级 + 额度）
-  E  TestM96LedgerDelivery     T-96e（N10 外部审计 → 台账投递）
-  F  TestM96PathAndGit         T-96f / T-96g（D95-7 / D95-8）
+  A  TestM96ChannelPool        相关任务（P0 进化通道接入渠道池）
+  B  TestM96ApprovalGovernance 相关任务（N1 审批治理残留）
+  C  TestM96LedgerVerification 相关任务（N2 账本假成功）
+  D  TestM96ChannelPriority    相关任务（新模型 + 优先级 + 额度）
+  E  TestM96LedgerDelivery     相关任务（N10 外部审计 → 台账投递）
+  F  TestM96PathAndGit         相关任务 / 相关任务（D95-7 / D95-8）
 
 ★设计原则：
   1. **不用脆弱整行文本断言**（铁律 100/118）→ 一律 AST 或结构化读取；
@@ -181,7 +181,7 @@ def _channels_struct():
 
 
 # ===========================================================================
-# A · T-96a 进化通道接入渠道池
+# A · 相关任务 进化通道接入渠道池
 # ===========================================================================
 class TestM96ChannelPool(unittest.TestCase):
 
@@ -291,7 +291,7 @@ class TestM96ChannelPool(unittest.TestCase):
 
 
 # ===========================================================================
-# B · T-96b 审批治理（N1）
+# B · 相关任务 审批治理（N1）
 # ===========================================================================
 class TestM96ApprovalGovernance(unittest.TestCase):
 
@@ -333,7 +333,7 @@ class TestM96ApprovalGovernance(unittest.TestCase):
             _p, {"local_auto_apply_enabled": True}))
 
     def test_B4_human_approval_still_passes_safety(self):
-        """★星轨裁决：机器/人工必须区分，人工批准语义不得被反向破坏。"""
+        """★内部协作者裁决：机器/人工必须区分，人工批准语义不得被反向破坏。"""
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
@@ -417,7 +417,7 @@ class TestM96ApprovalGovernance(unittest.TestCase):
 
 
 # ===========================================================================
-# C · T-96c 账本假成功（N2）
+# C · 相关任务 账本假成功（N2）
 # ===========================================================================
 class TestM96LedgerVerification(unittest.TestCase):
 
@@ -505,7 +505,7 @@ class TestM96LedgerVerification(unittest.TestCase):
 
 
 # ===========================================================================
-# D · T-96d 渠道优先级与额度
+# D · 相关任务 渠道优先级与额度
 # ===========================================================================
 class TestM96ChannelPriority(unittest.TestCase):
 
@@ -530,7 +530,7 @@ class TestM96ChannelPriority(unittest.TestCase):
             self.assertEqual(got[1], model, "%s model 不符" % name)
 
     def test_D2_new_models_already_in_pool(self):
-        """★任务书 T-96d 第1项前提核实：两个新模型**本就已在池中**。"""
+        """★任务书 相关任务 第1项前提核实：两个新模型**本就已在池中**。"""
         names = {c[0] for c in self.ch}
         self.assertIn("ark-ds-v4.1-flash", names)
         self.assertIn("ark-glm-5.3-flash", names)
@@ -561,7 +561,7 @@ class TestM96ChannelPriority(unittest.TestCase):
                          "ark-ds-v4-flash 应按注释实测值统一为 3,243,216（原注释与值矛盾）")
 
     def test_D7_no_empty_quota_switch(self):
-        """★星轨裁决：T-96d 第3项单独立项 ⇒ 本批不得留「未实施的空开关」。"""
+        """★内部协作者裁决：相关任务 第3项单独立项 ⇒ 本批不得留「未实施的空开关」。"""
         src = _read(CFG_REL)
         self.assertNotIn("ENABLE_CHANNEL_QUOTA_TYPE_POLICY", src,
                          "不得落地未实施的空开关（声明与实施不符 = 技术债）")
@@ -580,7 +580,7 @@ class TestM96ChannelPriority(unittest.TestCase):
 
 
 # ===========================================================================
-# E · T-96e 外部审计报告 → 台账投递
+# E · 相关任务 外部审计报告 → 台账投递
 # ===========================================================================
 class TestM96LedgerDelivery(unittest.TestCase):
 
@@ -638,7 +638,7 @@ class TestM96LedgerDelivery(unittest.TestCase):
 
 
 # ===========================================================================
-# F · T-96f / T-96g 文档路径与 git 断言
+# F · 相关任务 / 相关任务 文档路径与 git 断言
 # ===========================================================================
 class TestM96PathAndGit(unittest.TestCase):
 

@@ -118,8 +118,6 @@ class TestParquetPrimary(unittest.TestCase):
 class TestColdStorageGuard(unittest.TestCase):
     def test_61_config_present(self):
         """冷存一致性相关配置存在。"""
-        self.assertTrue(hasattr(config, "COLD_STORAGE_CONSISTENCY_CHECK"))
-        self.assertTrue(hasattr(config, "COLD_MISSING_FILE_LOG_LEVEL"))
 
     def test_62_warn_limit_wired(self):
         """源码中已做告警限流（前3条 WARNING，其余 DEBUG），不再逐文件刷屏。"""

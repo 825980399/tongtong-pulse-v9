@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★第146批 T146-7：JSON 读路径 BOM 兼容回归测试。
+"""★往期批次 T146-7：JSON 读路径 BOM 兼容回归测试。
 
 背景：带 UTF-8 BOM 的 JSON 用 strict `utf-8` 能解码成功，但 `json.loads` 会抛
 "Unexpected UTF-8 BOM"，表现为持续 ERROR / WARNING 且一律回落默认值

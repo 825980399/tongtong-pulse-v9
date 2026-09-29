@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""★主线第91批 T-91c：灰度开关**正式登记**进 config.py 的门控单测。
+"""★主线第91批 相关任务：灰度开关**正式登记**进 config.py 的门控单测。
 
-任务书 T-91c（P1）
+任务书 相关任务（P1）
 ------------------
 把三个开关 `ENABLE_M89_PATCH_SIM_THRESHOLD` / `ENABLE_M90_PATCH_FIELD_CONTRACT` /
 `ENABLE_M90_LOG_LOCATE_V2` 由「模块内联默认值 + `getattr` 兜底」改为**正式写入
 config.py**，默认值保持 True。验收：config.py 中能查到三个开关；默认值与当前一致。
-本批另登记 T-91a/T-91b 新增的两个开关（`ENABLE_M91_LOG_LOCATE_V3` /
+本批另登记 相关任务/相关任务 新增的两个开关（`ENABLE_M91_LOG_LOCATE_V3` /
 `ENABLE_M91_LLM_INDENT_REPAIR`），共 5 个。
 
 ★跨批影响（必须在报告里披露）
@@ -16,7 +16,7 @@ config.py**，默认值保持 True。验收：config.py 中能查到三个开关
     test_llm_patch_similarity_m89.py::test_42
     test_patch_field_contract_m90.py::test_51
     test_log_locate_fix_m90.py::test_71
-本批任务书 T-91c 明确解除该约束（只登记默认值、不改任何既有开关的值）
+本批任务书 相关任务 明确解除该约束（只登记默认值、不改任何既有开关的值）
 ⇒ 三条断言按新契约**反转**为 `assertIn` + 默认值 True，本文件 E 组做护栏。
 
 覆盖六组：
@@ -25,7 +25,7 @@ config.py**，默认值保持 True。验收：config.py 中能查到三个开关
   C. 登记本身零行为变化 —— 与 `.bak_batch91/config.py.bak`（登记前）对比：
      登记前该属性**不存在**（靠 getattr 兜底 True），登记后为 True，**生效值相同**；
   D. config.py 文件完整性（可编译、末段 marker、开关段落成组出现）；
-  E. 三处既有「开关契约」断言已按 T-91c 同步反转（旧 assertNotIn 文案不再存在）；
+  E. 三处既有「开关契约」断言已按 相关任务 同步反转（旧 assertNotIn 文案不再存在）；
   F. 运行时生效 —— 读取点每次重新 import config，改属性即时生效（无需重启）。
 """
 import ast
@@ -87,7 +87,7 @@ def _module_assign_counts():
 
 
 class TestSwitchRegistryM91(unittest.TestCase):
-    """★第91批 T-91c：开关登记契约。"""
+    """★第91批 相关任务：开关登记契约。"""
 
     # --------------------------------------------------------- A 登记唯一 + True
     def test_A1_registered_exactly_once_with_true(self):
@@ -165,7 +165,7 @@ class TestSwitchRegistryM91(unittest.TestCase):
 
     # --------------------------------------------------------- E 跨批断言已同步
     def test_E1_legacy_assertnotin_tests_inverted(self):
-        """★三条既有「红线 assertNotIn」断言已按 T-91c 同步反转（跨批影响护栏）。
+        """★三条既有「红线 assertNotIn」断言已按 相关任务 同步反转（跨批影响护栏）。
 
         若不反转，登记 config.py 会让这三个用例永久转红。
         """

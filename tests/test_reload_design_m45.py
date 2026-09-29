@@ -121,7 +121,7 @@ class TestNoImplementation(unittest.TestCase):
         self.assertIn("config_override.json", _t)
 
     def test_23_main_py_not_modified_by_this_design(self):
-        """本设计不得改动 main.py（除星轨自己的警告抑制外）。"""
+        """本设计不得改动 main.py（除内部协作者自己的警告抑制外）。"""
         _t = _read()
         self.assertIn("未修改", _t)
         self.assertIn("main.py", _t)

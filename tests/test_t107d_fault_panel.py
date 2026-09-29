@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""第107批 T-107d（D169）：故障面板补充验证（离线单测，不依赖框架运行）。
+"""往期批次 相关任务（Dxxx）：故障面板补充验证（离线单测，不依赖框架运行）。
 
-复用第104批 T-104c 的 ErrorCaptureHandler 机制，针对「真实故障经由器官 logger
+复用往期批次 相关任务 的 ErrorCaptureHandler 机制，针对「真实故障经由器官 logger
 （pulse.* 命名空间）注入 ERROR 后能否进 error_snapshots、并被 5051 面板数据通道读取」
 做回归锁定，确保故障面板对运行时 ERROR 不再全盲。
 """
@@ -22,7 +22,7 @@ def _snap_count():
 
 
 def test_organ_logger_error_reaches_panel_snapshots():
-    """★T-107d：器官 logger（pulse.* 命名空间）的 ERROR 自动进 error_snapshots（面板可见）。"""
+    """★相关任务：器官 logger（pulse.* 命名空间）的 ERROR 自动进 error_snapshots（面板可见）。"""
     install_error_capture("pulse")
     # 与器官 logger 同命名空间（BasePulseOrgan._log 走 pulse.*）
     lg = logging.getLogger("pulse.t107d_organ")
@@ -35,7 +35,7 @@ def test_organ_logger_error_reaches_panel_snapshots():
 
 
 def test_error_snapshots_exposed_to_health_panel():
-    """★T-107d：error_snapshots 是 5051 面板数据源，须可直接读取（面板不盲）。"""
+    """★相关任务：error_snapshots 是 5051 面板数据源，须可直接读取（面板不盲）。"""
     install_error_capture("pulse")
     lg = logging.getLogger("pulse.t107d_panel")
     before = _snap_count()
@@ -48,7 +48,7 @@ def test_error_snapshots_exposed_to_health_panel():
 
 
 def test_error_capture_still_idempotent():
-    """★T-107d：回归——重复安装不应挂多个 handler（防回潮）。"""
+    """★相关任务：回归——重复安装不应挂多个 handler（防回潮）。"""
     install_error_capture("pulse")
     second = install_error_capture("pulse")
     assert second is False

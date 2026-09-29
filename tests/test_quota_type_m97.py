@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第97批 T-97c 门控单测：额度类型（fixed / daily_reward）+ 每日 11 点补充。
+"""第97批 相关任务 门控单测：额度类型（fixed / daily_reward）+ 每日 11 点补充。
 
 覆盖：
   * quota_type 从 config 正确读取（协作奖励= daily_reward，固定/缺失= fixed）

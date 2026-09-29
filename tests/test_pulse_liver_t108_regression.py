@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""第108批 回归测试（门禁⑤-③ 先红后绿）。
+"""往期批次 回归测试（门禁⑤-③ 先红后绿）。
 
 专项验证 PulseLiver 代码学习 L1→L2 压缩通道的两处"数据毁灭"修复：
-  ★T-108b 去重跳过禁删源：与已有 L2 关键词 100% 重叠时，旧代码置 merged=True
+  ★相关任务 去重跳过禁删源：与已有 L2 关键词 100% 重叠时，旧代码置 merged=True
            并删除全部源 L1（"完全重复跳过但照样删除源节点"）；新代码 return False 不删源。
-  ★T-108f 分块上限：单次压缩 >40 条时旧代码一次性吞噬全组（单批删上千 L1）；
+  ★相关任务 分块上限：单次压缩 >40 条时旧代码一次性吞噬全组（单批删上千 L1）；
            新代码切片为每块≤40、逐块压缩（每块一个 L2）。
 
 全部外部依赖（节点池/知识树/快照/推理池/频率编码器）以 mock 隔离，**不写生产数据**。
@@ -42,7 +42,7 @@ class _FakeNodePool:
 
 
 class TestT108bDedupSkipNoDeleteSource(unittest.TestCase):
-    """★T-108b：完全重复跳过 → 不得删除源 L1 节点。"""
+    """★相关任务：完全重复跳过 → 不得删除源 L1 节点。"""
 
     def _make_liver(self, existing):
         _liver = PulseLiver(organ_name="肝")
@@ -81,7 +81,7 @@ class TestT108bDedupSkipNoDeleteSource(unittest.TestCase):
 
 
 class TestT108fChunkLimit(unittest.TestCase):
-    """★T-108f：单次压缩 >40 条须切片为每块≤40、逐块压缩。"""
+    """★相关任务：单次压缩 >40 条须切片为每块≤40、逐块压缩。"""
 
     def _run(self, liver, n):
         _nodes = [PulseNode(value="v%d" % _i, keywords=["a", "b"], evol_level="L1")

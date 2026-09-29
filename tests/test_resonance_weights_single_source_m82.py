@@ -1,4 +1,4 @@
-"""第82批 T-c：五维共振权重单一来源（D173/B宪法）。
+"""第82批 T-c：五维共振权重单一来源（Dxxx/B宪法）。
 
 背景：
   ResonanceEngine.py:38 的类属性 WEIGHTS 与 config.py:668 的 RESONANCE_WEIGHTS

@@ -2,9 +2,9 @@
 """第87批门控测试：LLM 修复预算上调 + 补丁 file 字段修复 + 验证决策校验日志采样。
 
 覆盖：
-  T-87a  SafeEvolutionExecutor._LLM_REPAIR_MAX_TOKENS / _LLM_REPAIR_MIN_TIMEOUT 取值
-  T-87b  非器官标签二级反查（真实源码块 exec）+ 补丁 file 必填校验 + PatchManager 告警上下文
-  T-87c  VerificationLearningHub 不一致日志采样（首条必打 + 每 N 条一条）
+  相关任务  SafeEvolutionExecutor._LLM_REPAIR_MAX_TOKENS / _LLM_REPAIR_MIN_TIMEOUT 取值
+  相关任务  非器官标签二级反查（真实源码块 exec）+ 补丁 file 必填校验 + PatchManager 告警上下文
+  相关任务  VerificationLearningHub 不一致日志采样（首条必打 + 每 N 条一条）
 
 全部离线、不触网、不写生产目录。
 """
@@ -36,7 +36,7 @@ def _code_only(text):
 
 
 class TestT87aBudget(unittest.TestCase):
-    """T-87a：推理模型预算与超时下限。"""
+    """相关任务：推理模型预算与超时下限。"""
 
     def test_10_max_tokens_raised_to_16384(self):
         see = importlib.import_module("nucleus.reasoning.SafeEvolutionExecutor")
@@ -59,7 +59,7 @@ class TestT87aBudget(unittest.TestCase):
 
 
 class TestT87bFileResolve(unittest.TestCase):
-    """T-87b：非器官标签二级反查 + 补丁 file 必填校验。"""
+    """相关任务：非器官标签二级反查 + 补丁 file 必填校验。"""
 
     def _extract_block(self):
         """从真实源码切出「非器官标签二级反查」块（源码删除即测试失败）。"""
@@ -134,10 +134,10 @@ class TestT87bFileResolve(unittest.TestCase):
         """file 为空的补丁不再构造（避免注定被沙箱拒绝的无效验证）。"""
         code = _code_only(_src(_SEE_PATH))
         self.assertEqual(code.count("_llm_no_file = not str(_issue.get(\"file\", \"\") or \"\").strip()"), 1)
-        # ★第88批 T-88a 扩展：构造条件在同一行追加了「素材非代码」守卫
+        # ★第88批 相关任务 扩展：构造条件在同一行追加了「素材非代码」守卫
         #   （... and not _llm_bad_material）。此处改为版本无关复算：
         #   仍必须恰好一次出现 _llm_no_file 闸门，且它位于构造条件内并以 `):` 收尾。
-        # ★第90批 T-90a 再扩展：条件又追加了 `and not _llm_no_snippet` 闸门，
+        # ★第90批 相关任务 再扩展：条件又追加了 `and not _llm_no_snippet` 闸门，
         #   原「`_i+80` 窗口内必见 `):`」的写法随条件换行而失效 ⇒
         #   改为先定位条件切片，再在切片内复算（不再依赖固定字符窗口）。
         _i = code.find("and not _llm_no_file")
@@ -188,7 +188,7 @@ class TestT87bFileResolve(unittest.TestCase):
 
 
 class TestT87cLogSampling(unittest.TestCase):
-    """T-87c：验证决策校验日志采样。"""
+    """相关任务：验证决策校验日志采样。"""
 
     def setUp(self):
         self._tmp = tempfile.mkdtemp(prefix="m87_vl_")

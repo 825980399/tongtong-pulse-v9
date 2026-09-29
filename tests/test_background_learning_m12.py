@@ -143,7 +143,7 @@ _CANDS = [
 def test_cheap_channel_preference_for_background():
     """★主线第32批 T1（P2-187）：白名单从 config 动态读取。
 
-    原断言硬编码了旧白名单 zhipu/doubao/deepseek 的排序结果；星轨调整
+    原断言硬编码了旧白名单 zhipu/doubao/deepseek 的排序结果；内部协作者调整
     `BACKGROUND_LEARNING_CHANNEL_CONFIG.preferred_channel_names` 后失效。
     现改为**从配置取白名单**，再验证排序语义本身：
       白名单命中项置前 + 命中项内部按 priority 升序 + 未命中项保持相对顺序 + 不丢候选。

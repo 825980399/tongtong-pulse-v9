@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""T-135b：LogAggregationFilter 单元测。
+"""相关任务：LogAggregationFilter 单元测。
 
 验证聚合 filter 只挂在 file_handler 上、对落盘日志生效：
   - 相同 DEBUG/INFO 消息在窗口内被抑制，窗口结束后再来一条触发「聚合 N 次」摘要；

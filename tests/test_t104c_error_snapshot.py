@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第104批 T-104c（D169）：ERROR -> error_snapshots 桥接 + 5051 存活感知。
+"""往期批次 相关任务（Dxxx）：ERROR -> error_snapshots 桥接 + 5051 存活感知。
 
 离线单测（不依赖框架运行）。验证：
 1. pulse.* 的 ERROR/CRITICAL 日志自动进入 error_snapshots（面板/HTTP 可见）。
@@ -24,7 +24,7 @@ def _snap_count():
 
 
 def test_error_capture_handler_bridges_error_to_snapshots():
-    """★D169 核心：logger.ERROR 不再"全盲"，自动进 error_snapshots。"""
+    """★Dxxx 核心：logger.ERROR 不再"全盲"，自动进 error_snapshots。"""
     install_error_capture("pulse")
     lg = logging.getLogger("pulse.test_t104c_err")
     before = _snap_count()
@@ -70,7 +70,7 @@ def test_install_error_capture_idempotent():
 
 
 def test_health_ui_watchdog_detects_5051_death():
-    """★D169 子项：5051 监控面板 serve 线程意外死亡 -> 记入 error_snapshots（治理零感知）。"""
+    """★Dxxx 子项：5051 监控面板 serve 线程意外死亡 -> 记入 error_snapshots（治理零感知）。"""
     import functions.health_ui as hui
 
     class _StubServer:

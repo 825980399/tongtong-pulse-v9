@@ -48,7 +48,7 @@ def setUpModule():
     for _ch in (_d.get("default_channels") or []):
         if isinstance(_ch, dict) and str(_ch.get("name")) == _ARK:
             _ch["quota_limit"] = _ARK_TEST_LIMIT
-            # ★第97批 T-97c：生产 ark-ds-v4-flash 现标注 quota_type=daily_reward
+            # ★第97批 相关任务：生产 ark-ds-v4-flash 现标注 quota_type=daily_reward
             # （协作奖励，每日重置、不降优先级/不暂停）。本测试验证的是「固定额度渠道
             # 的降优先级/暂停」逻辑，与生产 quota_type 解耦（同 quota_limit 的解耦思路），
             # 避免协作奖励豁免逻辑干扰固定额度断言。daily_reward 豁免由 test_quota_type_m97.py 覆盖。

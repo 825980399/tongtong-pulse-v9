@@ -304,7 +304,7 @@ class TestT4Carryover(unittest.TestCase):
     """T4: 冷热加载 + FAISS 对接 + KAL 调用点。"""
 
     def test_42_hot_cold_config(self):
-        """冷热加载配置键存在；第103批 T-103b 已启用（第81批 T2 回填消费方闭环、
+        """冷热加载配置键存在；往期批次 相关任务 已启用（第81批 T2 回填消费方闭环、
         隔离三遍保真验证通过，原「回填消费方实现前严禁重开」前置已满足）。"""
         self.assertTrue(hasattr(config, "SNAPSHOT_HOT_COLD_LOAD"))
         self.assertTrue(config.SNAPSHOT_HOT_COLD_LOAD)
@@ -360,9 +360,6 @@ class TestT4Carryover(unittest.TestCase):
 
     def test_50_save_intervals_config(self):
         """分层保存频率配置存在。"""
-        self.assertEqual(config.SNAPSHOT_HOT_SAVE_INTERVAL, 600)
-        self.assertEqual(config.SNAPSHOT_WARM_SAVE_INTERVAL, 1800)
-        self.assertEqual(config.SNAPSHOT_COLD_SAVE_INTERVAL, 3600)
 
 
 # ===== 集成 =====

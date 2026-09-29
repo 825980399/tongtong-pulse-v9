@@ -65,7 +65,7 @@ def _make_node(i: int, level: str) -> "PulseNode":
 def _write_legacy_fragment(cold_dir: str, node: "PulseNode") -> None:
     """用历史（旧）格式写一个冷存碎片：evol_level 仅作分区列（文件内不含），无 7 新字段。
 
-    复现 D164 / D151 真实历史形态：write_to_dataset(partition_cols=["evol_level"])，
+    复现 Dxxx / Dxxx 真实历史形态：write_to_dataset(partition_cols=["evol_level"])，
     分区列不进文件，召回时曾因硬编码 L1 而塌缩。
     """
     _row = {

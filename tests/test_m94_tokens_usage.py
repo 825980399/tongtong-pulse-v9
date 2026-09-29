@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""★主线第94批 T-94b：LLM **tokens / usage 打通** 门控单测。
+"""★主线第94批 相关任务：LLM **tokens / usage 打通** 门控单测。
 
-任务书原文（第94批 T-94b）：
+任务书原文（第94批 相关任务）：
     ① `BaseLLMAdapter` 新增可选 `extract_usage(response) -> dict | None`，
        `OpenAICompatibleAdapter` 实现返回 `{prompt_tokens, completion_tokens,
        total_tokens}`，**不改 `parse_response` 签名（零回归）**；
@@ -13,7 +13,7 @@
     `tokens>0` 有 **2893 条（50.2%）** —— **不是恒 0**！零值是**结构性集中**的：
     `origin=evolution_task` 那批 100% 为 0（装饰器 `trace_evolution_call`
     的 `finally` 从未取用 usage），肺通道（`system_internal`）靠第40批的
-    私有旁路**已经是对的**（该旁路本批 T-95e 统一命名为 `_last_llm_usage`）。
+    私有旁路**已经是对的**（该旁路本批 相关任务 统一命名为 `_last_llm_usage`）。
     ⇒ 真根因 = **三个被装饰的进化引擎出口没有统一入口**，E 组即为该结论的
     可执行证据（只固化「可复算事实」，不写死生产数字）。
 

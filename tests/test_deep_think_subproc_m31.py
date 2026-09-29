@@ -42,7 +42,7 @@ class _LL:
 
 
 class _Ctx:
-    """★第147批九刀拆分后：切片代码改用 ctx.question / ctx._reasoning_start_time
+    """★往期批次九刀拆分后：切片代码改用 ctx.question / ctx._reasoning_start_time
     字段访问，故 exec 命名空间需提供一个带这两个属性的 ctx 占位对象。"""
     pass
 
@@ -228,7 +228,7 @@ class TestCallSiteRealExec(unittest.TestCase):
             "主进程深度思考：完整答案" if subproc_result is _DEGRADED else "x")[1]
 
         # 切片来自方法体，需补齐其外层作用域变量。
-        # ★第147批：E 段（深度通道）已抽入 _ir_run_pipeline，局部变量
+        # ★往期批次：E 段（深度通道）已抽入 _ir_run_pipeline，局部变量
         #   question/_reasoning_start_time 改为 ctx.question/ctx._reasoning_start_time。
         _ctx = _Ctx()
         _ctx.question = "测试问题：数字生命的意义是什么？"

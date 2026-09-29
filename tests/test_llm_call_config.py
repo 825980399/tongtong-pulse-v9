@@ -27,7 +27,7 @@ def test_llm_call_config_block_exists():
     tp = cfg["timeout_by_purpose"]
     assert tp["evolution"] == 30
     assert tp["general"] == 60
-    # ★主线第24批：星轨为「免费渠道超时」同步修复了这两项超时
+    # ★主线第24批：内部协作者为「免费渠道超时」同步修复了这两项超时
     #   （inner_world_refine 15→30、inner_world_chat 20→45，见 config.LLM_CALL_CONFIG 注释），
     #   测试断言随之同步 —— 否则门禁恒不可达。改动前的断言值为 15 / 20。
     assert tp["inner_world_refine"] == 30

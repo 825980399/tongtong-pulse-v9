@@ -180,7 +180,7 @@ class TestHotReloadDesign(unittest.TestCase):
 
 
 class TestPatchAutoApproverDeprecated(unittest.TestCase):
-    """星轨裁决2·选项B：PatchAutoApprover 短期 deprecated（无生产调用点）。"""
+    """内部协作者裁决2·选项B：PatchAutoApprover 短期 deprecated（无生产调用点）。"""
 
     def _iter_py(self):
         for dp, dns, fns in os.walk(_ROOT):

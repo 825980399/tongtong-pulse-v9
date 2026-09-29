@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""T-133c 备份树扫描白名单单元测试（制度化 SCAN_EXCLUDE_*）。
+"""相关任务 备份树扫描白名单单元测试（制度化 SCAN_EXCLUDE_*）。
 
 验收判据：
   - .bak* 段（.bak_batchN / .bak_tmp 等）识别为备份目录；

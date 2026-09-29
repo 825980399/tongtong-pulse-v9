@@ -24,7 +24,7 @@ _IW_FAMILY = [
     os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_support.py"),
     os.path.join(_PROJECT_ROOT, "organs", "brain", "pulse_inner_world_knowledge.py"),
 ]
-# ★主线第139批 T-139b：知识检索簇已平移至 KnowledgeMixin，
+# ★主线往期批次 相关任务：知识检索簇已平移至 KnowledgeMixin，
 #   故源码断言须拼接 IW 全家族（主文件 + 两个 Mixin），否则平移即假失败。
 _IW_SRC = "\n".join(
     open(_p, encoding="utf-8").read() for _p in _IW_FAMILY

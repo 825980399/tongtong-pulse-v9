@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""T-112a 写锁优化并发压力自检（D186-A/D + 假死探测器可观测化配套验收）。
+"""相关任务 写锁优化并发压力自检（Dxxx-A/D + 假死探测器可观测化配套验收）。
 
 覆盖：
   1. 按路径分锁：同规范路径返回同一锁、不同路径返回不同锁（消除「写A阻塞写B」全局互斥 convoy）。
@@ -24,7 +24,7 @@ from nucleus.data.DataAccessLayer import (
 
 
 def test_path_lock_isolation():
-    """D186-A：同规范路径→同一锁；不同路径→不同锁（无全局唯一写锁）。"""
+    """Dxxx-A：同规范路径→同一锁；不同路径→不同锁（无全局唯一写锁）。"""
     a1 = _get_path_lock(os.path.join("x", "a.json"))
     a2 = _get_path_lock(os.path.join("x", "a.json"))
     b = _get_path_lock(os.path.join("x", "b.json"))
@@ -78,7 +78,7 @@ def test_concurrent_writes_no_loss(tmp_path):
 
 
 def test_replace_with_retry_transient_winerror(monkeypatch):
-    """D186-D：读者持句柄导致 os.replace 瞬时 WinError 32，重试后成功。"""
+    """Dxxx-D：读者持句柄导致 os.replace 瞬时 WinError 32，重试后成功。"""
     calls = {"n": 0}
     real_replace = os.replace
 

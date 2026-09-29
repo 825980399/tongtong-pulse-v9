@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""★主线第92批 T-92b：开关登记 门控单测（`ENABLE_NONORGAN_FILE_RESOLVE` + 本批两个新开关）。
+"""★主线第92批 相关任务：开关登记 门控单测（`ENABLE_NONORGAN_FILE_RESOLVE` + 本批两个新开关）。
 
-任务书原文（第92批 T-92b）
+任务书原文（第92批 相关任务）
 --------------------------
 「第87批引入的灰度开关 `ENABLE_NONORGAN_FILE_RESOLVE` 仍未写入 config.py，
   靠 `getattr` 兜底默认 True。
@@ -10,14 +10,14 @@
   验收：config.py 中能查到 `ENABLE_NONORGAN_FILE_RESOLVE = True`；
         相关 pytest 无新增失败。」
 
-本批另登记 T-92c / T-92d 的两个防御性开关（默认 **False**）—— 同属「加新开关」，
-不触碰任何既有开关值（红线）。★理由：T-92b 的存在本身就是「引入开关却不登记」
+本批另登记 相关任务 / 相关任务 的两个防御性开关（默认 **False**）—— 同属「加新开关」，
+不触碰任何既有开关值（红线）。★理由：相关任务 的存在本身就是「引入开关却不登记」
 欠下的债，本批不宜再造两个同类欠债。
 
 覆盖五组：
   A. 登记事实 —— AST 顶层赋值各自**恰好一次**、值符合预期、`# [M92-CFG]` marker 就位；
   B. 运行时一致 —— `getattr(config, ...)` 与登记值一致；两个 getter 返回预期；
-     T-87b 的 `ENABLE_NONORGAN_FILE_RESOLVE` 读取口径仍为 True；
+     相关任务 的 `ENABLE_NONORGAN_FILE_RESOLVE` 读取口径仍为 True；
   C. 改前对照 —— `.bak_batch92/config.py.bak` 中这三个名字**不存在**（证明是新增）；
      且既有开关值**逐个未变**（红线自证）；
   D. 可编译 —— config.py 通过 py_compile；
@@ -108,7 +108,7 @@ class TestT92bRuntimeConsistency(unittest.TestCase):
         self.assertIs(False, _m92_ast_struct_guard_on())
 
     def test_B3_nonorgan_resolve_reads_true(self):
-        """T-87b 消费点的读取口径（`getattr(config, 'ENABLE_NONORGAN_FILE_RESOLVE', True)`）仍为 True。"""
+        """相关任务 消费点的读取口径（`getattr(config, 'ENABLE_NONORGAN_FILE_RESOLVE', True)`）仍为 True。"""
         self.assertIs(True, bool(getattr(config, "ENABLE_NONORGAN_FILE_RESOLVE", True)))
 
     def test_B4_runtime_toggle_still_works_after_registration(self):
@@ -155,7 +155,7 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
 
         ★第94批修正：原断言硬编码「恰好 +3」，其含义是「本批新增 3 个开关」，
         但写成「全库新增数 == 3」后，**任何**后续批次合法地新增开关都会把它打红
-        （第94批 T-94a 的 `ENABLE_PENDING_QUEUE_AGING` 即此）。
+        （第94批 相关任务 的 `ENABLE_PENDING_QUEUE_AGING` 即此）。
         改为复算三项不变量：
           ① 既有开关**一个都没被删除**；
           ② 本批三个开关**都在**新增集合内；
@@ -223,7 +223,7 @@ class TestT92eOrderAndFallback(unittest.TestCase):
         self.assertLess(_src.index(_MARKER), len(_src) + 1)
 
     def test_E3_getattr_fallback_kept_in_consumer(self):
-        """T-87b 消费点的 `getattr(..., True)` 兜底保留（config 读取失败时仍为 True）。"""
+        """相关任务 消费点的 `getattr(..., True)` 兜底保留（config 读取失败时仍为 True）。"""
         _t = io.open(_SE, encoding="utf-8", errors="ignore").read()
         self.assertIn('"ENABLE_NONORGAN_FILE_RESOLVE", True', _t,
                       "消费点的 getattr 兜底被移除（应保留为第二道保险）")

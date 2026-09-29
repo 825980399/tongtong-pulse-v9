@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第86批 T-86a 门控测试：LLM 补丁路径「零产出」根因修复（推理模型 token 预算）。
+"""第86批 相关任务 门控测试：LLM 补丁路径「零产出」根因修复（推理模型 token 预算）。
 
 背景（已实测复现，见 tmp/m86_t0_llm5.txt）：
     REMOTE_API_CONFIG 指向的 deepseek-v4-flash 属推理模型，响应先产出
@@ -63,7 +63,7 @@ def _capture_call(response, captured):
 
 
 class TestLLMRepairPathM86(unittest.TestCase):
-    """T-86a：LLM 修复通道必须被触发且请求预算足够（推理模型）。"""
+    """相关任务：LLM 修复通道必须被触发且请求预算足够（推理模型）。"""
 
     def setUp(self):
         self._ex = SafeEvolutionExecutor()

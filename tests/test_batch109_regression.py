@@ -1,4 +1,4 @@
-"""第109批 回归测试：设计文件收口快赢（T-109a/b/c）。
+"""往期批次 回归测试：设计文件收口快赢（相关任务/b/c）。
 
 采用「源码级断言」：直接读取生产源码，验证修复已落地。
 - 在当前代码树上运行 → 全绿（GREEN）。
@@ -53,7 +53,7 @@ def test_t109c_evidence_chain_dict_wrap():
 
 
 def test_t109c_normalizer_keeps_dict():
-    """真实运行时：_normalize_struct_list 保留 dict 元素（T-109c 喂入的结构）。"""
+    """真实运行时：_normalize_struct_list 保留 dict 元素（相关任务 喂入的结构）。"""
     sys.path.insert(0, ROOT)
     try:
         from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot

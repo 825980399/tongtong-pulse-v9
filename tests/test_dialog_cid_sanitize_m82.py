@@ -1,10 +1,10 @@
-"""第82批 T-d：对话 cid 端到端（D167）+ 短答案净化白名单（D168）。
+"""第82批 T-d：对话 cid 端到端（Dxxx）+ 短答案净化白名单（Dxxx）。
 
-D167：搜索终止回退时 correlation_id 失配（注册键 search_query[:80] vs
+Dxxx：搜索终止回退时 correlation_id 失配（注册键 search_query[:80] vs
 控制器 preprocess 后的 search_topic），pop 恒空 → 后台静默不回用户。
 修复：cid 随 OPEN_URL payload 透传，控制器回传带回，消费端优先取。
 
-D168：S6 短答案净化——真短答案（问候/短事实/你是谁）不得被清空成"我还需要再想想"；
+Dxxx：S6 短答案净化——真短答案（问候/短事实/你是谁）不得被清空成"我还需要再想想"；
       含内部标记词（关联知识/[核心智慧]/代码片段:）一律硬清空不放行。
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _bare_iw():
     return iw
 
 
-# ---------- D167：cid 三分支 ----------
+# ---------- Dxxx：cid 三分支 ----------
 
 class TestSearchCidResolution:
     def test_prefers_passthrough_cid(self):
@@ -53,7 +53,7 @@ class TestSearchCidResolution:
         assert iw._pick_search_cid(payload, "不存在的主题") == ""
 
 
-# ---------- D167 补强1：控制器带 cid → 消费端真拿到（端到端链路） ----------
+# ---------- Dxxx 补强1：控制器带 cid → 消费端真拿到（端到端链路） ----------
 
 class TestControllerCarriesCid:
     def test_stage_feedback_payload_carries_cid(self):
@@ -103,7 +103,7 @@ class TestControllerCarriesCid:
         assert captured["payload"]["search_correlation_id"] == ""
 
 
-# ---------- D168：短答案净化 ----------
+# ---------- Dxxx：短答案净化 ----------
 
 class TestShortAnswerSanitize:
     @pytest.mark.parametrize("text", [
@@ -144,7 +144,7 @@ class TestShortAnswerSanitize:
 # ---------- 第82批 T-e：_search_deep 主线程路径不得丢 cid ----------
 
 class TestMainThreadPathCarriesCid:
-    """星轨独立终验抓到的主线程漏洞回归。
+    """内部协作者独立终验抓到的主线程漏洞回归。
 
     `_search_deep` 有两条进 `_search_deep_headless` 的路径：
     - 异步线程路径（非主线程 → executor.submit(_execute_headless_search)）已带 cid；

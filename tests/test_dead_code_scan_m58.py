@@ -7,7 +7,7 @@
 - ``collect_config_refs``：data/*.json 标识符字符串提取（排除 knowledge/models 等）
 - ``iter_source_files``：extra_excludes 生效
 - ``scan`` 回归：reset_llm_dependency_metrics 经 tmp 元组动态加载修正为 DYNAMIC_RISK；
-  PulseIntent 仅在其 docstring 出现，仍为 ZERO_REF（扫描器判定正确；FieldMode 已于 T-135c 死代码清理中摘除）
+  PulseIntent 仅在其 docstring 出现，仍为 ZERO_REF（扫描器判定正确；FieldMode 已于 相关任务 死代码清理中摘除）
 """
 import importlib.util
 import json
@@ -129,7 +129,7 @@ def test_scan_regression_reset_llm_dependency_metrics_dynamic():
 
 def test_collect_refs_excludes_docstring():
     """AST 引用统计不把 docstring 里的 'Class.method' 记为引用 —— 这正是
-    PulseIntent 仅在其自身 docstring 出现时仍判 ZERO_REF 的根因（FieldMode 已于 T-135c 摘除）
+    PulseIntent 仅在其自身 docstring 出现时仍判 ZERO_REF 的根因（FieldMode 已于 相关任务 摘除）
     （除非被配置/动态引用命中，而那属于保守的 DYNAMIC_RISK）。"""
     with tempfile.TemporaryDirectory() as d:
         src = (
@@ -145,7 +145,7 @@ def test_collect_refs_excludes_docstring():
 def test_scan_regression_pulseintent_not_over_reported_as_dynamic():
     """PulseIntent 不应仅因 docstring 被误判为 DYNAMIC_RISK；
 
-    （注：FieldMode 已于 T-135c 死代码清理中摘除。）
+    （注：FieldMode 已于 相关任务 死代码清理中摘除。）
     若运行期 data/*.json 配置引用了它，则会保守归入 DYNAMIC_RISK（安全方向），
     故此处只断言：它要么 ZERO_REF（无引用），要么 DYNAMIC_RISK（有反射风险信号），
     绝不可能是 TEST_ONLY（那意味着仅 tests 引用，与 docstring 事实矛盾）。

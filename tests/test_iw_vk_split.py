@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-第151批 T151-1 · _validate_knowledge_consistency 特征化测试（拆分前行为锁定）
+往期批次 T151-1 · _validate_knowledge_consistency 特征化测试（拆分前行为锁定）
 
 目的：在将 God 方法 `_validate_knowledge_consistency`（L11433-11789）纯结构拆分成编排器+helper 之前，
 锁定其「当前」可观测行为：两道 L2 阈值早退、维度1 多源确认（首次确认 emit 顿悟 pri=3 L3）、

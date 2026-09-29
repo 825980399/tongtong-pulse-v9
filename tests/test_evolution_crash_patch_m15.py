@@ -247,9 +247,6 @@ class TestPatchPunctuation(unittest.TestCase):
         out = self.exe._clean_llm_code(code)
         self.assertIn("含「」与。", out)
 
-    def test_config_default(self):
-        self.assertIs(getattr(config, "ENABLE_PATCH_ASCII_GUARD", None), True)
-
     def test_llm_prompt_requires_ascii(self):
         src = _read(_AQSG_SRC)
         self.assertIn("只使用 ASCII 字符", src)

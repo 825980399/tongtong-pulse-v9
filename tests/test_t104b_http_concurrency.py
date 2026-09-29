@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第104批 T-104b（D157）：HTTPServer 队头阻塞验证。
+"""往期批次 相关任务（Dxxx）：HTTPServer 队头阻塞验证。
 
 离线单测：用 ThreadingHTTPServer 起一个含慢端点的服务，并发请求慢端点时，
 快端点必须不被阻塞（先红后绿：若用单线程 HTTPServer，快端点会被慢端点拖住）。

@@ -1,4 +1,4 @@
-"""T-99d 门控测试：进化验证器「假成功」口径修复。
+"""相关任务 门控测试：进化验证器「假成功」口径修复。
 
 红（修复前 / .bak_batch99 备份源码）：
   - verify_fix_from_logs 在 baseline_errors=0 且 after=0 时误判 effectiveness=1.0 + verified=True

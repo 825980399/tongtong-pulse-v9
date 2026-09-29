@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """主线第11批 T1 P2-80：DeepSeek 模型名更新 —— 回归测试。
 
-星轨裁决（2026-09-10 20:45）：只改 advanced_model -> deepseek-flash；
+内部协作者裁决（2026-09-10 20:45）：只改 advanced_model -> deepseek-flash；
 default_model 保留 deepseek-v4-flash（旧名仍被官方临时路由到 V4.1 Flash）。
 
 覆盖：

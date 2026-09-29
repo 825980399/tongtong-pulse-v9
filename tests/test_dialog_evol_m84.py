@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""第84批：自主进化「修复率恒 0」根因修复（T-84a / T-84b / T-84c / T-84d）。
+"""第84批：自主进化「修复率恒 0」根因修复（相关任务 / 相关任务 / 相关任务 / 相关任务）。
 
 覆盖：
-- M84-1（T-84c①）`PulseInnerWorld._detect_simple_query_local` 的本地推理计数
+- M84-1（相关任务①）`PulseInnerWorld._detect_simple_query_local` 的本地推理计数
   从**函数入口无条件**下移到**模板真正命中**分支 —— 未命中不再污染
   `llm_dependency.json` 的「本地简单回答」计数。
-- M84-2（T-84c②）`ResonanceEngine._build_rule_map` 规则通道**查询级生效**时
+- M84-2（相关任务②）`ResonanceEngine._build_rule_map` 规则通道**查询级生效**时
   补记 `record_local_inference(KIND_RULE)` —— 此前全库无任何调用点，
   「规则通道」恒 0。
-- M84-3（T-84a）`SafeEvolutionExecutor` 运行时验证写回后重算 `problem_fixed`
+- M84-3（相关任务）`SafeEvolutionExecutor` 运行时验证写回后重算 `problem_fixed`
   —— 此前 `apply_split` 只在补丁落盘 history 时调用一次（`post_apply_errors`
   尚未产生），`problem_fixed` 恒 None（实测 63/64）→ `real_fix_rate` 恒 0。
-- M84-4（T-84b）补丁账本分层计数：`applied_total` / `problem_fixed_true` /
+- M84-4（相关任务）补丁账本分层计数：`applied_total` / `problem_fixed_true` /
   `problem_fixed_known` / `history_total` 与 `_repaired`（提交待审批数）分离。
 
 红线自检（本文件不改 config 开关、不写 data/knowledge、不触碰 data/ 任何文件）。
@@ -80,7 +80,7 @@ def _quiet_selfcalibrator(monkeypatch) -> None:
 
 
 # ======================================================================
-# M84-1（T-84c①）：本地简单回答计数只在"真正命中"时 +1
+# M84-1（相关任务①）：本地简单回答计数只在"真正命中"时 +1
 # ======================================================================
 
 class _Ctx:
@@ -180,7 +180,7 @@ class TestM84LocalInferenceCounting:
 
 
 # ======================================================================
-# M84-2（T-84c②）：规则通道生效时补记 KIND_RULE
+# M84-2（相关任务②）：规则通道生效时补记 KIND_RULE
 # ======================================================================
 
 class _RuleProvider:
@@ -279,7 +279,7 @@ class TestM84RuleChannelCounting:
 
 
 # ======================================================================
-# M84-3（T-84a）：运行时验证写回后重算 problem_fixed
+# M84-3（相关任务）：运行时验证写回后重算 problem_fixed
 # ======================================================================
 
 class _FakePM:
@@ -426,7 +426,7 @@ class TestM84ProblemFixedRecompute:
 
 
 # ======================================================================
-# M84-4（T-84b）：补丁账本分层计数（_repaired 与"已修复"分离）
+# M84-4（相关任务）：补丁账本分层计数（_repaired 与"已修复"分离）
 # ======================================================================
 
 class TestM84PatchLedger:

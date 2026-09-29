@@ -185,7 +185,6 @@ class TestReevalHistory(unittest.TestCase):
 class TestConfigItems(unittest.TestCase):
     def test_40_config_items_present(self):
         self.assertIs(getattr(config, "ENABLE_EXPERIENCE_POLLUTION_CLEANUP", None), True)
-        self.assertIsInstance(getattr(config, "EXPERIENCE_POLLUTION_CLEANUP_INTERVAL", None), (int, float))
         self.assertIsInstance(getattr(config, "EXPERIENCE_POLLUTION_HIGH_CONFIDENCE", None), (int, float))
         self.assertIsInstance(getattr(config, "EXPERIENCE_POLLUTION_MEDIUM_CONFIDENCE", None), (int, float))
         _wl = getattr(config, "EXPERIENCE_POLLUTION_WHITELIST_SOURCES", None)

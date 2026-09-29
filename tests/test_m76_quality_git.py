@@ -272,9 +272,9 @@ class TestT4GitInit(unittest.TestCase):
         self.assertTrue(so.strip(), "无任何提交")
 
     def test_32_commit_message_baseline(self):
-        """★第96批 T-96g（D95-8）：原断言**最新提交**的 message 含「初始提交」。
+        """★第96批 相关任务（D95-8）：原断言**最新提交**的 message 含「初始提交」。
 
-        第94批星轨在 HEAD 上新增了 commit（「第94批事故修复…」）⇒ HEAD 不再是
+        第94批内部协作者在 HEAD 上新增了 commit（「第94批事故修复…」）⇒ HEAD 不再是
         初始提交，该断言失去意义。改为**相对基线**：取 **root commit**
         （``git rev-list --max-parents=0 HEAD``）的 message —— 不依赖 HEAD，
         无论后续再有多少批次提交都不会失配，仍守护「仓库由初始提交建立」这一事实。
@@ -306,14 +306,14 @@ class TestT4GitInit(unittest.TestCase):
         self.assertEqual(bad, [], "备份目录被提交: %s" % bad[:5])
 
     def test_37_no_remote_configured(self):
-        """★约束6（第96批 T-96g 修订）：**不得由自动化流程擅自配置远程**。
+        """★约束6（第96批 相关任务 修订）：**不得由自动化流程擅自配置远程**。
 
-        原断言要求 ``git remote -v`` **恒为空**。第94批星轨**主动**配置了
+        原断言要求 ``git remote -v`` **恒为空**。第94批内部协作者**主动**配置了
         origin（gitee.com/tongtongkaiyuan/tongtong-pulse-v9.git）作为备份远程，
         该约束事实上已被人类决策解除 ⇒ 原断言必红（D95-8）。
         ⇒ 改为**白名单守护**：远程为空，或仅指向白名单主机。
         仍守护原始意图（自动化不得乱配远程、不得偷偷指向未知第三方），
-        同时不违背星轨的显式决策。
+        同时不违背内部协作者的显式决策。
         """
         _ALLOWED_HOSTS = ("gitee.com",)
         rc, so, _ = _git(["remote", "-v"])

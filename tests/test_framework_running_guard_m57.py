@@ -50,7 +50,7 @@ def test_detector_env_override_running():
 def test_detector_off_when_no_lock_and_no_process(monkeypatch):
     """框架停止（无 lock、无 main.py 进程）→ 返回 False。
 
-    ★第89批 T-89c 同步：原用例直接调 is_framework_running()，隐含依赖
+    ★第89批 相关任务 同步：原用例直接调 is_framework_running()，隐含依赖
     「本机没有 main.py 进程」这一**环境前提** —— 修复后进程探测能正确识别
     在跑的框架（实测框架在线时该前提不成立 → 恒失败）。
     改为**注入**两个信号（无 lock + 进程探测为假），断言强度不变（仍 `is False`），
@@ -63,7 +63,7 @@ def test_detector_off_when_no_lock_and_no_process(monkeypatch):
 
 
 def test_detector_on_when_process_detected(monkeypatch):
-    """★第89批 T-89c：无 lock 但进程探测命中 → True（进程分支接线有效）。"""
+    """★第89批 相关任务：无 lock 但进程探测命中 → True（进程分支接线有效）。"""
     monkeypatch.delenv("PULSE_TEST_FRAMEWORK_RUNNING", raising=False)
     monkeypatch.setattr(cf, "_framework_lock_present", lambda: False)
     monkeypatch.setattr(cf, "_detect_framework_process", lambda: True)
@@ -71,7 +71,7 @@ def test_detector_on_when_process_detected(monkeypatch):
 
 
 class TestCmdlineMatcher:
-    """★第89批 T-89c：命令行匹配语义（修复的核心判据）。"""
+    """★第89批 相关任务：命令行匹配语义（修复的核心判据）。"""
 
     def test_matches_main_py_argument(self):
         assert cf._cmdline_is_framework_main(
@@ -94,7 +94,7 @@ class TestCmdlineMatcher:
 
 
 def test_psutil_tier_detects_running_framework():
-    """★第89批 T-89c 端到端：框架在线时 psutil 分支必须能识别（离线环境 skip）。"""
+    """★第89批 相关任务 端到端：框架在线时 psutil 分支必须能识别（离线环境 skip）。"""
     _cl = cf._iter_main_py_cmdlines()
     if _cl is None:
         import pytest as _pt
@@ -108,7 +108,7 @@ def test_psutil_tier_detects_running_framework():
 def test_skip_helper_skips_when_running(monkeypatch):
     """框架运行时应抛出 skip。
 
-    ★第89批 T-89c 顺带修：`pytest.skip` 抛出的 Skipped 继承自 **BaseException**，
+    ★第89批 相关任务 顺带修：`pytest.skip` 抛出的 Skipped 继承自 **BaseException**，
     原用例写 `pytest.raises(Exception)` 根本捕获不到 —— 该用例此前**一直是 skip**
     （断言从未真正执行）。改用公开的 `pytest.skip.Exception` 精确捕获。
     """
@@ -125,7 +125,7 @@ def test_skip_helper_runs_when_stopped(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _m89_force_framework_stopped(monkeypatch):
-    """★第89批 T-89c：本模块默认把「框架是否在跑」强制判为**停止**（env=0）。
+    """★第89批 相关任务：本模块默认把「框架是否在跑」强制判为**停止**（env=0）。
 
     动机：修复进程探测后，真实在线框架会被正确识别，于是 `production_data`
     相关用例会在 **fixture 建立阶段** 就被 skip —— 本模块「停止态」的断言便不再执行。

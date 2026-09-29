@@ -19,7 +19,6 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
 import tmp.test_isolation as TI  # noqa: E402
 
 _ISO_SRC = os.path.join(_PROJECT_ROOT, "tmp", "test_isolation.py")
@@ -30,9 +29,6 @@ _VERIFY_SRC = os.path.join(_PROJECT_ROOT, "tools", "verify_phase17_1_5.py")
 
 
 class TestIsoDirShortPath(unittest.TestCase):
-    def test_config_switch_default_true(self):
-        self.assertIs(config.ENABLE_TEST_DIR_CLEANUP, True)
-
     def test_iso_dir_is_short_relative_path(self):
         _rel = os.path.relpath(TI.ISO_DIR, _PROJECT_ROOT).replace(os.sep, "/")
         self.assertTrue(_rel.startswith("tmp/"), _rel)

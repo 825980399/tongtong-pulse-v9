@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-"""★第105批 T-105a（P0）：进化闭环复通 —— 放行判据**时序负控** + 污染字段免疫。
+"""★往期批次 相关任务（P0）：进化闭环复通 —— 放行判据**时序负控** + 污染字段免疫。
 
-任务书原文（T-105a）：
+任务书原文（相关任务）：
     「单测补时序负控：
         * 断言『入队时 runtime_verify_result 不存在 ⇒ 不放行』；
         * 断言『验证后复查 ⇒ 放行』。」
 
-根因回顾（第105批 T0 实证）：
+根因回顾（往期批次 T0 实证）：
     * 旧放行判据读顶层 ``runtime_verified`` —— 该字段由 ``verify_submitted_patches``
       对所有处理过的补丁**无条件置 True**（含失败补丁），属污染字段；
       真验证结果在嵌套 ``runtime_verify_result.verified``。
     * 旧逻辑仅在「入队时」调用放行判据，彼时 ``runtime_verify_result`` 尚不存在
       ⇒ 判据恒假；验证写回后又无人复查 ⇒ 闭环断裂（实测 30 条 rv=True 仍 0 放行）。
-    * 第105批修复：①放行判据改读嵌套字段 + 要求 baseline_errors>0；
+    * 往期批次修复：①放行判据改读嵌套字段 + 要求 baseline_errors>0；
       ②``verify_submitted_patches`` 验证写回后**补回边**复查放行（调用
       ``PatchManager._m105_try_release_low_risk``）。
 
-本文件固化「改后的正确行为」，是 T-105a 复通的可执行验收证据：
+本文件固化「改后的正确行为」，是 相关任务 复通的可执行验收证据：
   A. 入队时仅有污染字段（无嵌套 verified）⇒ 绝不放行（断旧污染路径）。
   B. 入队时嵌套 verified=True + baseline>0 ⇒ 立刻放行（approved + auto_released）。
   C. 验证后复查（直接驱动补回边同款助手）⇒ 放行。
@@ -110,7 +110,7 @@ def test_C_post_verify_recheck_releases():
     """★C：验证后复查 ⇒ 放行（直接驱动补回边同款助手 _m105_try_release_low_risk）。
 
     对应 ``SafeEvolutionExecutor.verify_submitted_patches`` 尾部补回边循环：
-    遍历 status∈{pending, runtime_verified} 的条目，对满足 T-101a 判据者置 approved。
+    遍历 status∈{pending, runtime_verified} 的条目，对满足 相关任务 判据者置 approved。
     """
     tmp = tempfile.mkdtemp(prefix="t105a_C_")
     target = _make_target(tmp)

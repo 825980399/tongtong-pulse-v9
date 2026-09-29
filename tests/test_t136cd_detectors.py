@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第136批 T-136c/d：self_inspector 循环依赖 + 不可达代码检测器单元测。
+"""往期批次 相关任务/d：self_inspector 循环依赖 + 不可达代码检测器单元测。
 
 覆盖：
   C1 import_cycles：首扫建基线=0告警；新增环告警；Tarjan 能检出假循环
@@ -53,7 +53,7 @@ def test_c1_alert_on_new_cycle(tmp_path):
                for i in issues), "新增 c↔d 环应告警"
 
 
-# ---- ★第140批 T-140c②：边层级分账 ----
+# ---- ★往期批次 相关任务②：边层级分账 ----
 
 def test_c1_function_level_cycle_not_flagged(tmp_path):
     """函数体内延迟 import 构成的「环」不算模块级环（运行期才执行）。"""

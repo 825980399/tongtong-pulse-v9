@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""T-143d 回归测试：对外发布导出脚本 tools/export_public.py。
+"""相关任务 回归测试：对外发布导出脚本 tools/export_public.py。
 
 锁定三件事：
   1. 排除规则：data/tmp/logs/内部文档/备份/构建产物 一律不入包；
@@ -58,7 +58,7 @@ class TestDocsWhitelist(unittest.TestCase):
     """docs/ 白名单 fail-closed。"""
 
     def test_01_allow_files(self):
-        # ★第145批 T-145b：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
+        # ★往期批次 相关任务：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
         #   （该文档含批次交付确认/债务编号/第三方评分等内部运行资料），
         #   现断言其**被拒绝**（见 test_03）。
         for rel in ("README.md", "demo-quickstart.md", "项目架构总览_20260927.md",
@@ -73,7 +73,7 @@ class TestDocsWhitelist(unittest.TestCase):
 
     def test_03_unlisted_file_rejected(self):
         # 未在白名单里的根级文档 → 拒绝（fail-closed）
-        # ★第145批 T-145b：内部总账加入本列表（原在白名单，属越权公开）
+        # ★往期批次 相关任务：内部总账加入本列表（原在白名单，属越权公开）
         for rel in ("第三方全面分析报告_20260926.md",
                     "死代码检测报告_8大模块_v2.0.md",
                     "git_commit_hash_mapping.md",
@@ -105,8 +105,8 @@ class TestPiiScan(unittest.TestCase):
     def test_01_real_name_flagged(self):
         import json
         import tempfile
-        # D148-1：真实姓名模式改由脱敏配置（PULSE_OWNER_NAMES）加载，注入后验证。
-        # D150-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入），
+        # Dxxx-1：真实姓名模式改由脱敏配置（PULSE_OWNER_NAMES）加载，注入后验证。
+        # Dxxx-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入），
         #          避免依赖/泄露真实属主配置导致断言失真。
         old = os.environ.get("PULSE_OWNER_NAMES")
         old_file = os.environ.get("PULSE_OWNER_PII_FILE")
@@ -164,9 +164,9 @@ class TestPiiScan(unittest.TestCase):
     def test_04_real_path_flagged(self):
         import json
         import tempfile
-        # D148-1：真实路径模式改由脱敏配置（PULSE_OWNER_PATH_HINTS）加载，
+        # Dxxx-1：真实路径模式改由脱敏配置（PULSE_OWNER_PATH_HINTS）加载，
         # 注入后验证扫描器对真实项目路径的命中行为。
-        # D150-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入）。
+        # Dxxx-13：隔离本地真实 .owner_pii.json，使合并来源确定（仅 env 注入）。
         old = os.environ.get("PULSE_OWNER_PATH_HINTS")
         old_file = os.environ.get("PULSE_OWNER_PII_FILE")
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
@@ -197,7 +197,7 @@ class TestPiiScan(unittest.TestCase):
             os.unlink(cfg)
 
     def test_05_export_script_self_not_exempt(self):
-        # D148-1：扫描器自身不得再豁免，且源码内零真值（自复扫必过）。
+        # Dxxx-1：扫描器自身不得再豁免，且源码内零真值（自复扫必过）。
         self.assertNotIn("tools/export_public.py", ep.SCAN_EXEMPT_FILES)
         here = os.path.join(_ROOT, "tools", "export_public.py")
         self.assertEqual(ep.scan_text(here), [])

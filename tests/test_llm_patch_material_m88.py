@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第88批 T-88a 门控测试：LLM 补丁「素材来源」纠正 + 非代码素材守卫。
+"""第88批 相关任务 门控测试：LLM 补丁「素材来源」纠正 + 非代码素材守卫。
 
 根因（实测 2026-09-20 11:18:20）：
   `[补丁完整性检查失败: 与原文相似度过低(0.03 < 0.5)，疑似严重残缺/截断]`
@@ -217,7 +217,7 @@ def _run_guard_block(issue_file, src_label, switch_on=True, material="ERROR: boo
     return ns
 
 
-# ---------------------------------------------------------------- T-88a 素材层
+# ---------------------------------------------------------------- 相关任务 素材层
 
 class TestT88aMaterialSource(unittest.TestCase):
 
@@ -274,7 +274,7 @@ class TestT88aMaterialSource(unittest.TestCase):
                 "第88批不得写回 %s 形态（会改动 PHASE13 统计口径）" % _pat)
 
 
-# ---------------------------------------------------------------- T-88a 守卫层
+# ---------------------------------------------------------------- 相关任务 守卫层
 
 class TestT88aNonCodeMaterialGuard(unittest.TestCase):
 
@@ -284,7 +284,7 @@ class TestT88aNonCodeMaterialGuard(unittest.TestCase):
             1, "守卫标记必须存在且唯一")
 
     def test_21_build_condition_excludes_bad_material(self):
-        # ★第90批 T-90a：构造条件新增 `and not _llm_no_snippet` 闸门后，
+        # ★第90批 相关任务：构造条件新增 `and not _llm_no_snippet` 闸门后，
         #   原断言依赖「`_llm_bad_material):` 必须紧邻收尾」这一**脆弱文本模式**
         #   （任何后续增删一个守卫都会误报）。改为版本无关复算：
         #   在构造条件切片内该守卫恰好出现一次，且定义在条件之前。

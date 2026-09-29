@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第134批 T-134c：self_inspector 三检测器单元测。
+"""往期批次 相关任务：self_inspector 三检测器单元测。
 
 覆盖：
   B1 silent_growth：首扫建基线=0告警；周增超阈告警

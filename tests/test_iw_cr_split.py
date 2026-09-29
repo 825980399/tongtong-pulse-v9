@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-第151批 T151-1 · _cognitive_reflection 特征化测试（拆分前行为锁定）
+往期批次 T151-1 · _cognitive_reflection 特征化测试（拆分前行为锁定）
 
 目的：在将 God 方法 `_cognitive_reflection`（L4873-5226）纯结构拆分成编排器+helper 之前，
 用特征化测试锁定其「当前」可观测行为，保证后续拆分（零逻辑修改）后跑同套测试语义不变。

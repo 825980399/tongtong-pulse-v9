@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""★主线第93批 T-93a：`apply_all_pending` **写盘点**结构关 门控单测。
+"""★主线第93批 相关任务：`apply_all_pending` **写盘点**结构关 门控单测。
 
 被测对象 = **真实源码**（`nucleus/reasoning/PatchManager.py`），不复刻任何逻辑；
 `.bak_batch93` 仅用于「改前行为对照」，缺失时 skipTest（scratch 目录可被外部清理）。
 
-任务书原文（第93批 T-93a）：
+任务书原文（第93批 相关任务）：
     「第92批在 `_verify_in_copy` 加了结构关（基础缩进 + AST 不变量），但
       `apply_all_pending` 写盘点（`:2102` 附近）只有 `ast.parse` 复验。
       风险：补丁绕过 `_verify_in_copy` 直落活文件时，结构关不生效。
@@ -305,7 +305,7 @@ class TestT93bReachability(unittest.TestCase):
         self.assertLess(_i_v, _i_write, "副本验证必须早于写活文件")
 
     def test_B2_real_chain_blocked_by_verify_side_not_write_side(self):
-        """★核心：T-92c 开启时，真实链路被 `rejected_verify` 拦 ——
+        """★核心：相关任务 开启时，真实链路被 `rejected_verify` 拦 ——
         证明写盘点的 `rejected_base_indent_guard` **不可达**。"""
         _r = _run_apply(**{_SW_C: True})
         self.assertEqual(0, _r["applied"])

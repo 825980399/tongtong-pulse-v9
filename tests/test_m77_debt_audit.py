@@ -102,9 +102,9 @@ class TestT2GitRepo(unittest.TestCase):
         self.assertTrue(so)
 
     def test_12_no_remote(self):
-        """约束：只本地操作，不得推送 —— 第96批 T-96g 改为**白名单守护**。
+        """约束：只本地操作，不得推送 —— 第96批 相关任务 改为**白名单守护**。
 
-        原断言要求 ``git remote -v`` 恒为空；第94批星轨主动配置了 gitee 远程
+        原断言要求 ``git remote -v`` 恒为空；第94批内部协作者主动配置了 gitee 远程
         ⇒ 必红（D95-8）。改为「为空 或 仅白名单主机」，保留「自动化不得乱配
         远程」的守护意图（与 m76::test_37 同口径）。
         """

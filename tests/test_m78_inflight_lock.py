@@ -2,8 +2,8 @@
 """主线第78批 T1/P0 门控测试：队列深度 inflight 计数器竞态与泄漏根治。
 
 覆盖：
-1. publish 自增(+1) 使用 _task_count_lock（星轨点名的 L712 有锁）。
-2. _dispatch_handler 自减(-1) 现也使用 _task_count_lock（星轨点名的 L898 原无锁 → 漂移根因）。
+1. publish 自增(+1) 使用 _task_count_lock（内部协作者点名的 L712 有锁）。
+2. _dispatch_handler 自减(-1) 现也使用 _task_count_lock（内部协作者点名的 L898 原无锁 → 漂移根因）。
 3. _resize_layer_pool 池重建回收段(_recover 分支)按取消数精确递减 _inflight_dispatch_count
    （取消旧池排队任务 cancel_futures=True 导致其 -1 永不执行 → 原泄漏源）。
 4. ±对称加锁下高并发无漂移、不转负。
@@ -59,7 +59,7 @@ class TestInflightLockM78(unittest.TestCase):
     def test_02_dec_source_uses_task_count_lock(self):
         src = io.open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
                       encoding="utf-8", errors="replace").read()
-        # ★核心修复：_dispatch_handler 的 -1 现也带锁（与星轨点名的 L898 无锁漂移对应）
+        # ★核心修复：_dispatch_handler 的 -1 现也带锁（与内部协作者点名的 L898 无锁漂移对应）
         self.assertIn('with self._task_count_lock:\nself._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)',
                       _norm(src), "_dispatch_handler 的 -1 未使用 _task_count_lock（竞态漂移未根治）")
 

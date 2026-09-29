@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""★主线第89批 T-89a：LLM 补丁完整性「相似度阈值 0.5→0.3 + 长度下限」门控单测。
+"""★主线第89批 相关任务：LLM 补丁完整性「相似度阈值 0.5→0.3 + 长度下限」门控单测。
 
 被测对象 = **真实源码**（`PatchManager._check_llm_patch_completeness`），
 不复刻任何逻辑：用例直接构造 `PatchManager.__new__(PatchManager)` 轻量实例并调用真方法。
@@ -358,10 +358,10 @@ class TestT89aSwitchContract(unittest.TestCase):
             self.assertEqual(_m89_len_floor(), 0.0)
 
     def test_42_switch_since_m91_registered_in_config_py(self):
-        """★契约变更（第91批 T-91c）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
+        """★契约变更（第91批 相关任务）：本开关已**正式登记**进 config.py，默认 True。  # _m91_t91c_switch_registered
 
         ★历史：第89批的批内红线是「不改 config.py」⇒ 当时断言 `assertNotIn`；
-        第91批任务书 T-91c 明确解除该约束，要求把本开关（连同 M90/M91 共 5 个）
+        第91批任务书 相关任务 明确解除该约束，要求把本开关（连同 M90/M91 共 5 个）
         正式登记到 config.py 且**默认值保持 True 不变** ⇒ 原断言按新契约反转。
         """
         _src = io.open(os.path.join(ROOT, "config.py"), encoding="utf-8").read()

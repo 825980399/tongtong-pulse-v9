@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""★主线第94批 T-94c：依赖度**口径修正（方案 C + 方案 A）** 门控单测。
+"""★主线第94批 相关任务：依赖度**口径修正（方案 C + 方案 A）** 门控单测。
 
-任务书原文（第94批 T-94c）：
+任务书原文（第94批 相关任务）：
     方案C：``total_requests`` → ``answer_requests``（保留旧字段一个版本兼容）；
     方案A：新增 ``overall_llm_share = llm_total/(llm+local+search+digestion)``
            （实测 **12.72%**）
@@ -11,13 +11,13 @@
     llm 5382 / local 125 / search 774 / digestion 36032 ⇒ 旧口径 97.73%、
     新口径 **12.72%**，与任务书一致。E 组为可复算证据。
 
-★★第95批对本文件的**同步改写**（T-95b / T-95c，口径与别名均已变更）：
+★★第95批对本文件的**同步改写**（相关任务 / 相关任务，口径与别名均已变更）：
   ① ``total_requests`` 兼容别名**已彻底移除** ⇒ A3/B 组由「双键同值」改为
      「旧方法与旧键均不存在」；面板回落分支一并删除（A5）。
   ② ``evolution_local_rule_rate`` 分母由「local_rule 总数」改为
      「local_rule **可判定数**」⇒ 与 ``real_fix_rate`` **口径等价**
-     （62/62 = 1.0，不再是 62/65 = 0.9538）。方向由裁决确定：任务书 §T-95b
-     要求「统一为总数口径」，但那会**推翻第85批 T-85c 的刻意决策**并打红
+     （62/62 = 1.0，不再是 62/65 = 0.9538）。方向由裁决确定：任务书 §相关任务
+     要求「统一为总数口径」，但那会**推翻第85批 相关任务 的刻意决策**并打红
      5 个守护测试 ⇒ 改为**反向统一**（记 D95-2）。
 
   ★注意：E 组读的是**运行中框架写入的生产文件**，可能是本批之前的 schema ⇒
@@ -155,7 +155,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
 
 
 class TestM94RenameCompat(_Fresh):
-    """B 组（★第95批 T-95c 改写）：兼容别名已按裁决移除 ⇒ 断言「不存在」。"""
+    """B 组（★第95批 相关任务 改写）：兼容别名已按裁决移除 ⇒ 断言「不存在」。"""
 
     def test_B1_alias_method_removed(self):
         self.assertFalse(hasattr(self.m, "total_requests"),
@@ -264,7 +264,7 @@ class TestM94LocalRuleRate(_Fresh):
         return _d
 
     def test_D1_reproduces_task_book_95_4pct(self):
-        """★第95批 T-95b：任务书的 95.4% 源于**旧（含不可判定）**口径。
+        """★第95批 相关任务：任务书的 95.4% 源于**旧（含不可判定）**口径。
 
         62 条 True + 3 条不可判定（缺 `problem_fixed`）：
           * 旧口径（分母 = local_rule 总数 65）⇒ 62/65 = 0.9538 = 任务书 95.4%；
@@ -278,7 +278,7 @@ class TestM94LocalRuleRate(_Fresh):
                          "★可判定数口径：62 条 True / 62 条可判定")
 
     def test_D2_denominator_is_verifiable_count(self):
-        # ★第95批 T-95b：None（不可判定）**移出分母**、不计入分子 ⇒ 1/2
+        # ★第95批 相关任务：None（不可判定）**移出分母**、不计入分子 ⇒ 1/2
         _ps = [self._p(True), self._p(None), self._p(None), self._p(False)]
         self.assertEqual(0.5, self.m.evolution_local_rule_rate(_ps))
 
@@ -296,7 +296,7 @@ class TestM94LocalRuleRate(_Fresh):
                           "★无样本必须 None，不得编造 0.0")
 
     def test_D6_unjudgeable_excluded_from_denominator(self):
-        """★第95批 T-95b：不可判定**移出分母**（与 real_fix_rate 同口径）。"""
+        """★第95批 相关任务：不可判定**移出分母**（与 real_fix_rate 同口径）。"""
         _ps = [self._p(True), self._p(None, **{F_SPLIT_VERSION: 1})]
         self.assertEqual(1.0, self.m.evolution_local_rule_rate(_ps),
                          "★1 条可判定且为 True ⇒ 1/1")
@@ -307,7 +307,7 @@ class TestM94LocalRuleRate(_Fresh):
         self.assertIsNone(self.m.evolution_local_rule_rate(_ps))
 
     def test_D7_equivalent_to_real_fix_rate(self):
-        """★第95批 T-95b：两者分母口径已统一 ⇒ 同数据下**等价**（D95-2）。"""
+        """★第95批 相关任务：两者分母口径已统一 ⇒ 同数据下**等价**（D95-2）。"""
         _ps = [self._p(True) for _ in range(62)] + [self._p(None) for _ in range(3)]
         self.assertEqual(1.0, self.m.evolution_local_rule_rate(_ps))
         self.assertEqual(1.0, round(real_fix_rate(_ps), 4),
@@ -406,7 +406,7 @@ class TestM94ProductionSnapshot(unittest.TestCase):
                                  "★历史文件若残留旧键，值必须与新键一致")
 
     def test_E3_stable_keys_survive(self):
-        """★第95批 T-95c：稳定键继续落盘（消费方零回归）。
+        """★第95批 相关任务：稳定键继续落盘（消费方零回归）。
 
         ★此处**不**断言旧键 `total_requests` 不存在、也**不**强制
         `answer_requests` 存在 —— 生产文件由运行中的框架写入，可能是本批

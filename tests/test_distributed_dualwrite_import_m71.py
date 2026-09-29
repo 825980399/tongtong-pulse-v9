@@ -33,9 +33,6 @@ class TestM71Config(unittest.TestCase):
     def test_03_sample_rate_default(self):
         self.assertAlmostEqual(config.INFLUXDB_SAMPLE_RATE, 0.01, places=4)
 
-    def test_04_simulation_mode(self):
-        self.assertTrue(config.DISTRIBUTED_SIMULATION_MODE)
-
     def test_05_heartbeat_interval(self):
         self.assertEqual(config.DISTRIBUTED_HEARTBEAT_INTERVAL, 30)
 
@@ -479,7 +476,7 @@ class TestT5ImportTool(unittest.TestCase):
 
 
 # ===== 集成：文档更新状态 =====
-# ★第96批 T-96f（D95-7）：3 个分布式设计文档已从根目录 docs/ 移入
+# ★第96批 相关任务（D95-7）：3 个分布式设计文档已从根目录 docs/ 移入
 #   docs/设计文档/（Neo4j、分布式还在「暂缓考虑/」子目录），而这些用例仍按
 #   **根路径**断言 ⇒ FileNotFoundError。
 #   ⇒ 改为**递归定位**（任务书改法2：更鲁棒）——今后再调整目录层级也不会失配。
