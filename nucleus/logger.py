@@ -527,7 +527,8 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         _max = 1
         try:
             _max = int(getattr(config, "LOG_BACKUP_COUNT", 5))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L530")
             _max = 1
         # 1) 推移既有备份（已关闭文件，rename 安全）
         if _max >= 1:
@@ -546,8 +547,8 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         try:
             if os.path.exists(_backup):
                 os.remove(_backup)
-        except OSError:
-            pass
+        except OSError as e:
+            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L549")
         self.stream.flush()
         with _io.open(_base, "rb") as _fin:
             with _io.open(_backup, "wb") as _fout:

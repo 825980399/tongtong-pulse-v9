@@ -345,8 +345,8 @@ class HybridParallelScheduler(SilentLogMixin):
             try:
                 self._process_pool.shutdown(wait=wait)
                 _log("进程池已关闭")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.HybridParallelScheduler::shutdown L348")
             self._process_pool = None
             self._process_pool_initialized = False
         if self._thread_pool:

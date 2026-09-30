@@ -348,12 +348,14 @@ class KnowledgeAccessLayer:
             try:
                 import config
                 _path = getattr(config, "KNOWLEDGE_SNAPSHOT_PATH", None)
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L351")
                 _path = None
         if _path and os.path.isfile(_path):
             try:
                 return os.path.getsize(_path)
-            except OSError:
+            except OSError as e:
+                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L356")
                 return 0
         return 0
 

@@ -470,8 +470,8 @@ class FrameworkDiagnostics:
                 _m50_gml("Diagnostics").debug(
                     "[M50-T1] 健康报告发布失败（已忽略）: %s",
                     type(_m50_he).__name__)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.diagnostics::get_health_summary L473")
 
         parts = []
         health = diagnosis.get("overall_health", "unknown")

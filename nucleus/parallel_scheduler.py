@@ -160,7 +160,8 @@ class ParallelScheduler(SilentLogMixin):
             _snap = get_runtime_metrics().get_snapshot()
             _queue_depth = _snap.get("queue_max_depth", 0)
             _pulse_avg_ms = _snap.get("pulse_avg_ms", 0.0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L163")
             _queue_depth = 0
             _pulse_avg_ms = 0.0
 
@@ -214,8 +215,8 @@ class ParallelScheduler(SilentLogMixin):
                         _log.info(f"并行度平滑{_step_dir}: "
                                   f"{_old_parallelism} → {_target} "
                                   f"（压力={_hw_pressure}）")
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L217")
                 # ★三期：记录本次调整周期，接下来 _adjust_cooldown_cycles 个周期不再调整
                 self._last_adjust_cycle = self._adjust_cycle_counter
 

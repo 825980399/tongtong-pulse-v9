@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 
@@ -511,16 +512,16 @@ def shutdown_global_executor():
     try:
         if _OP_EXECUTOR is not None:
             _OP_EXECUTOR.shutdown(wait=False, cancel_futures=True)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L514")
     finally:
         _OP_EXECUTOR = None
     # ★A1【P0】：外层调度池一并关闭并复位
     try:
         if _SCHEDULER_EXECUTOR is not None:
             _SCHEDULER_EXECUTOR.shutdown(wait=False, cancel_futures=True)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L522")
     finally:
         _SCHEDULER_EXECUTOR = None
     _inst = _external_executor

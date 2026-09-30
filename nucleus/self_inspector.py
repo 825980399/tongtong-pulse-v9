@@ -1255,7 +1255,8 @@ class SelfInspector(SilentLogMixin):
             return
         try:
             _mtime = os.path.getmtime(file_path)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_put_method_body_cached L1258")
             return
         self._method_body_cache[(file_path, method_name)] = (dict(result), _mtime)
         if len(self._method_body_cache) > 1000:

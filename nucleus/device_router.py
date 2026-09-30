@@ -75,7 +75,8 @@ def _cpu_cores() -> int:
         try:
             import os
             return int(os.cpu_count() or 1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.device_router::_cpu_cores L78")
             return 1
 
 
@@ -96,8 +97,8 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
         try:
             cap["vram_total_mb"] = int(
                 torch.cuda.get_device_properties(0).total_memory / 1024 ** 2)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L99")
 
         # ① PCIe 带宽：拷 8MB 过去再拷回来，取较好值
         try:
@@ -111,8 +112,8 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
             if _ms > 0:
                 cap["pcie_bytes_per_s"] = (_n * 4) / (_ms / 1000.0)
             del _d, _src
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L114")
 
         # ② GPU 算力：1024³ matmul（2·N³ FLOPs）
         try:
@@ -126,8 +127,8 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
             if _ms > 0:
                 cap["gpu_flops"] = (2.0 * 1024 ** 3) / (_ms / 1000.0)
             del _a, _b, _c
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L129")
 
         # ③ launch 固定开销：连续 20 次极小 kernel，取均值
         try:
@@ -139,9 +140,10 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
             torch.cuda.synchronize()
             cap["gpu_launch_ms"] = ((time.perf_counter() - _t0) * 1000.0) / 20.0
             del _x, _y
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L142")
     except Exception as _e:
+        silent_exc(_e, where="nucleus.device_router::_measure_gpu L144")
         cap["probe_error"] = f"{type(_e).__name__}: {str(_e)[:80]}"
 
 

@@ -18,6 +18,7 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.logger import get_module_logger
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = get_module_logger("GPUCore")
@@ -143,7 +144,8 @@ class GPUCore(SilentLogMixin):
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             return "low"
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.GPUCore::get_vram_pressure L146")
             return "low"
 
     # ========== ★PHASE14：真正的 GPU 计算（此前本类只有「探测」） ==========
@@ -192,8 +194,8 @@ class GPUCore(SilentLogMixin):
         except Exception as _e:
             try:
                 self._log("DEBUG", f"GPU 批量余弦失败，回退 CPU: {_e}")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.GPUCore::batch_cosine_gpu L195")
             return None
 
     # ========== GPU 显存缓存（可选） ==========
@@ -224,7 +226,8 @@ class GPUCore(SilentLogMixin):
                     self._cache.pop(_oldest, None)
                 self._cache[key] = (time.time(), _val)
             return _val
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.GPUCore::gpu_cache L227")
             return None
 
 
