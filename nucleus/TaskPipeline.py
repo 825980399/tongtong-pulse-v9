@@ -196,7 +196,10 @@ _registry_lock = threading.Lock()
 
 def register_pipeline(pipeline: TaskPipeline) -> None:
     """★B5：把一个 TaskPipeline 实例登记到模块级环形缓冲（供 health_ui 端点读取）。"""
-    # TODO: 预留接口，待未来功能使用（当前 TaskPipeline 未接入真实任务流，register_pipeline 无生产调用方）
+    # ★封存（T155-4）：预留接口，全库无生产调用方
+    #   （grep 仅命中 def + 备份副本；读取端 get_recent_pipelines 已接入
+    #   health_ui/runtime_state_writer，但本写入端从未被调用 → 环形缓冲恒为空）。
+    #   通电（接入真实任务流）需星轨裁决；本批按"明确封存"标注，保留为实验性预埋接口。
     with _registry_lock:
         _pipeline_registry.append(pipeline)
 
