@@ -88,9 +88,10 @@ def _framework_status():
                     f.seek(max(0, _sz - 4096))
                     _tail = f.read().decode("utf-8", "ignore")
                 out["graceful_shutdown"] = ("优雅关闭" in _tail) or ("已优雅关闭" in _tail) or ("graceful" in _tail.lower())
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L91")
     except Exception as e:
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L93")
         out["error"] = "%s: %s" % (type(e).__name__, e)
     return out
 
@@ -411,7 +412,8 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
         _proc = psutil.Process(os.getpid())
         _mem0 = _proc.memory_info().rss
         _have_psutil = True
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L414")
         _mem0 = 0
         _have_psutil = False
 
@@ -441,7 +443,8 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
     # 真实节点数与分层统计
     try:
         _all = pool.snapshot_active_nodes()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L444")
         _all = []
     loaded = len(_all)
     res = {
@@ -459,8 +462,8 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
         fn = getattr(pool, "get_cache_stats", None)
         if callable(fn):
             res["tier_stats"] = fn()
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L462")
 
     # get 采样（冷加载后查询性能）
     import random

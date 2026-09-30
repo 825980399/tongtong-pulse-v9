@@ -456,15 +456,15 @@ def apply_b():
         try:
             if not os.access(VECTORS_NPZ, os.W_OK):
                 os.chmod(VECTORS_NPZ, 0o666)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="tools.m102_data_governance::apply_b L459")
         os.replace(tmp_npz, VECTORS_NPZ)
     except Exception:
         if os.path.exists(tmp_npz):
             try:
                 os.remove(tmp_npz)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tools.m102_data_governance::apply_b L466")
         raise
     _atomic_json(VECTORS_META, meta)
     print("T-102b 完成: 孤儿向量移除 %d 条 (%d -> %d)；npz %.2f MB -> %.2f MB；"

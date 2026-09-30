@@ -33,6 +33,7 @@ if ROOT not in sys.path:
 
 # ★第48批 T2（P2-320）：跨盘安全的相对路径
 from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 DEFAULT_POOL = os.path.join(ROOT, "data", "experience", "experience_pool.json")
 
@@ -266,8 +267,8 @@ def parse_since(value) -> float:
         return DEFAULT_HEMOSTASIS_SINCE
     try:
         return float(value)
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as e:
+        silent_exc(e, where="tools.serp_pollution_analyzer::parse_since L269")
     for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             return time.mktime(time.strptime(str(value), _fmt))

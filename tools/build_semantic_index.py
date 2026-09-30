@@ -11,6 +11,7 @@ import argparse
 import os
 import sys
 import time
+from nucleus._silent_except import silent_exc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -228,8 +229,8 @@ def cmd_status(args) -> int:
             print(f"\n  上次进度：{p.get('done')}/{p.get('total')} "
                   f"（{'已完成' if p.get('finished') else '未完成'}）"
                   f" 速度 {p.get('speed', 0):.1f} 条/秒")
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="tools.build_semantic_index::cmd_status L231")
     print("=" * 66)
     return 0
 

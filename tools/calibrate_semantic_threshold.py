@@ -100,7 +100,8 @@ def resolve_encoder(wait_sec: float = 120.0) -> Any:
     """取真实编码器；异步加载未就绪时**有界等待**。不可用返回 None。"""
     try:
         from nucleus.semantic.VectorEncoder import get_vector_encoder
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L103")
         return None
     _enc = get_vector_encoder()
     if _enc is None:
@@ -109,7 +110,8 @@ def resolve_encoder(wait_sec: float = 120.0) -> Any:
     while time.time() - _t0 < wait_sec:
         try:
             _v = _enc.encode_one("就绪探测")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L112")
             _v = None
         if _v is not None and len(_v) > 0:
             return _enc

@@ -40,6 +40,7 @@ import shutil
 import sys
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
@@ -156,7 +157,8 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
         return {"purged": 0, "freed_bytes": 0}
     try:
         _entries = json.load(io.open(_MANIFEST, encoding="utf-8")) or []
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L159")
         return {"purged": 0, "freed_bytes": 0}
     _kept = []
     _purged = 0
@@ -180,8 +182,8 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
                 else:
                     try:
                         _freed += os.path.getsize(_p)
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L183")
             _purged += 1
         else:
             _kept.append(_e)
@@ -249,12 +251,13 @@ def govern_backups(dry: bool = False) -> dict:
         if _gzip_file(_p, _dst):
             try:
                 _after = os.path.getsize(_dst)
-            except OSError:
+            except OSError as e:
+                silent_exc(e, where="tools.data_governance_m41::govern_backups L252")
                 _after = 0
             try:
                 os.remove(_p)
-            except OSError:
-                pass
+            except OSError as e:
+                silent_exc(e, where="tools.data_governance_m41::govern_backups L256")
             _archived += 1
             _freed += max(0, _sz - _after)
     return {"keep": _keep, "total": len(_rows), "archived": _archived,

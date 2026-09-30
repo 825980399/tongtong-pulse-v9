@@ -27,6 +27,7 @@ import os
 import sys
 import time
 import logging
+from nucleus._silent_except import silent_exc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -250,8 +251,8 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
         if checkpoint_path and os.path.isfile(checkpoint_path):
             try:
                 os.remove(checkpoint_path)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L253")
 
     for node in nodes:
         node_id = node.get("node_id") or node.get("id")
@@ -283,8 +284,8 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
     if not dry_run:
         try:
             writer.flush()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L286")
         if checkpoint_path:
             save_checkpoint(checkpoint_path, imported_ids, meta)
 

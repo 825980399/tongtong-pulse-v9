@@ -221,8 +221,8 @@ def collect_definitions(files: list[str], root: str = _PROJ) -> dict[str, list[d
                     if isinstance(_t, ast.Name) and _t.id == "__all__":
                         try:
                             _all |= set(ast.literal_eval(_n.value))
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            silent_exc(e, where="tools.dead_code_scan::collect_definitions L224")
             # 所有字符串常量（用于反射风险判定）
             if isinstance(_n, ast.Constant) and isinstance(_n.value, str):
                 if len(_n.value) < 64:
@@ -237,8 +237,8 @@ def collect_definitions(files: list[str], root: str = _PROJ) -> dict[str, list[d
             for _d in getattr(_n, "decorator_list", []):
                 try:
                     _deco.append(ast.unparse(_d))
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="tools.dead_code_scan::collect_definitions L240")
             defs.setdefault(_rel, []).append({
                 "name": _name,
                 "lineno": _n.lineno,
