@@ -66,6 +66,7 @@ MANIFEST = "MANIFEST.json"
 #   本文件原先自带的 ``_rel()`` 是第46批的本地补丁；现统一到权威实现，
 #   便于其他模块复用（避免每处各写一遍 try/except）。
 from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 
 def _rel(path: str, root: str = ROOT) -> str:
@@ -162,8 +163,8 @@ def list_backups(backup_root: str = BACKUP_ROOT) -> list:
                 _info.update({"created_str": _j.get("created_str"),
                               "file_count": _j.get("file_count"),
                               "label": _j.get("label", "")})
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as e:
+                silent_exc(e, where="tools.tmp_backup::list_backups L165")
         _info["bytes"] = _dir_size(_d)
         _out.append(_info)
     return _out
@@ -175,8 +176,8 @@ def _dir_size(path: str) -> int:
         for _f in _fns:
             try:
                 _t += os.path.getsize(os.path.join(_dp, _f))
-            except OSError:
-                pass
+            except OSError as e:
+                silent_exc(e, where="tools.tmp_backup::_dir_size L178")
     return _t
 
 
@@ -207,8 +208,8 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
     if os.path.isfile(_mf):
         try:
             _manifest = json.load(io.open(_mf, encoding="utf-8"))
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as e:
+            silent_exc(e, where="tools.tmp_backup::restore L210")
 
     os.makedirs(tmp_dir, exist_ok=True)
     _restored, _skipped, _errors = [], [], []
