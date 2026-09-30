@@ -35,6 +35,12 @@ import threading
 import time
 from typing import Any
 
+try:
+    from nucleus._silent_except import silent_exc
+except Exception:
+    def silent_exc(e, where="", level="debug"):
+        pass
+
 __all__ = [
     "AdjustableSemaphore",
     "ChannelConcurrencyManager",
@@ -149,6 +155,7 @@ class ChannelConcurrencyManager:
         "min_concurrent": 1,             # 下界
         "max_concurrent_default": 10,    # 默认上界（付费渠道可用更大值）
         "free_channel_max": 10,          # 免费渠道上界（避免免费渠道无限增长）
+        # 兜底；实际值由 __init__ 从 config.PAID_CHANNEL_NAMES 动态推导（P2-233，154批）
         "paid_channel_names": ["deepseek", "advanced"],
         "all_channels_full_wait": 1.0,   # 全部渠道并发满时的等待秒数
         "adjust_history_limit": 10,      # 调整历史保留条数
@@ -163,6 +170,16 @@ class ChannelConcurrencyManager:
             config = self.load_project_config()
         if isinstance(config, dict):
             self._cfg.update(config)
+        # ★P2-233（154批）：付费渠道名从 config.PAID_CHANNEL_NAMES 动态推导
+        #   （与 P2-187 同族：渠道名一律从配置读取，杜绝硬编码副本漂移）。
+        #   配置缺失回落保守默认 ["deepseek", "advanced"]。
+        try:
+            import config as _cfg
+            _paid = getattr(_cfg, "PAID_CHANNEL_NAMES", None)
+            if isinstance(_paid, (list, tuple)) and _paid:
+                self._cfg["paid_channel_names"] = list(_paid)
+        except Exception as _e:
+            silent_exc(_e, where="ChannelConcurrencyManager.__init__:paid_channels")
 
     # ------------------------------------------------------------------
     # 配置
