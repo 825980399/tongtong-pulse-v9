@@ -222,6 +222,21 @@ class ExperiencePool:
                         self._save()
                         return _existing.get("id", "")
 
+            # ★主线第155批 T155-7 P2-8：写入端污染终检闸门
+            #   复用 ExperiencePollutionGuard.detect 对写入条目做终检，
+            #   确定污染(polluted)→隔离(_write_quarantine)不入库；
+            #   可疑(suspect)→就地降级打标后入库（降级存）；正常(ok)→入库。
+            #   受 ENABLE_EXPERIENCE_AUTO_CLEAN 同源开关控制（关闭→零回归）。
+            if self._auto_clean_enabled():
+                _wf, _wr = self._screen_write_pollution(experience)
+                if _wf == "polluted":
+                    self._write_quarantine([experience])
+                    self._total_recorded -= 1
+                    _module_logger.info(
+                        f"[经验库防污染] 写入端拦截确定污染条目: "
+                        f"{experience.get('id')} 原因={_wr}")
+                    return ""
+
             self._experiences.append(experience)
 
             # 容量保护
@@ -387,6 +402,35 @@ class ExperiencePool:
         if len(_c) < 20:
             return "medium"
         return "low"
+
+    def _screen_write_pollution(self, experience: dict) -> tuple[str, str]:
+        """★主线第155批 T155-7 P2-8：写入端污染终检闸门。
+
+        复用 nucleus.evolution.ExperiencePollutionGuard.detect 规范判定单条经验：
+          - "ok"      → 正常，不改动既有标记（保留 SERP 标记等）
+          - "suspect" → 就地降级打标（polluted/quality_flag/quality_weight/pollution_reason）
+          - "polluted"→ 就地打标，由调用方隔离(_write_quarantine)不入库
+        返回 (flag, reason)。导入失败安全降级为 ("ok", "")。
+        """
+        if not isinstance(experience, dict):
+            return "ok", ""
+        try:
+            from nucleus.evolution.ExperiencePollutionGuard import (
+                detect as _detect,
+                WEIGHT_POLLUTED as _WP,
+                WEIGHT_SUSPECT as _WS,
+            )
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.experience_pool::_screen_write_pollution")
+            return "ok", ""
+        _flag, _reason = _detect(experience)
+        if _flag == "ok":
+            return _flag, _reason
+        experience["polluted"] = True
+        experience["quality_flag"] = _flag
+        experience["quality_weight"] = _WP if _flag == "polluted" else _WS
+        experience["pollution_reason"] = _reason
+        return _flag, _reason
 
     # ========== 衰减检查 ==========
 
