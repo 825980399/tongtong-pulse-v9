@@ -70,8 +70,11 @@ class TestFuseGuardM80(unittest.TestCase):
         """事故值 {} 下真实调用 _fuse_l2_to_l3 不抛 TypeError，且穿过守卫到达融合点。"""
         nodes = self._make_l2_nodes()
         # node_pool 为外部协作者：query 返回真实 L2 节点，其余方法安全桩
-        self.o.node_pool = mock.MagicMock()
-        self.o.node_pool.query = mock.MagicMock(return_value=nodes)
+        # 当前 _fuse_l2_to_l3 经 self._kal.query_nodes 取 L2 节点（第80批时取
+        # node_pool.query，153 批重构后数据来源改名）；桩掉数据来源与下游写库动作，
+        # 真实驱动融合守卫与 _fuse_group 调用。
+        self.o._kal = mock.MagicMock()
+        self.o._kal.query_nodes = mock.MagicMock(return_value=nodes)
         # 固定阈值=8，使 7 节点进入自适应分支（len>=5.6 且 <8）
         with mock.patch.object(self.o, "_get_l2_threshold", return_value=8), \
              mock.patch.object(self.o, "_fuse_group",
