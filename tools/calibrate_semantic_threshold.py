@@ -91,7 +91,8 @@ def _cosine(a: Any, b: Any) -> float:
         if _na <= 0.0 or _nb <= 0.0:
             return 0.0
         return _dot / (math.sqrt(_na) * math.sqrt(_nb))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.calibrate_semantic_threshold::_cosine L94")
         return 0.0
 
 

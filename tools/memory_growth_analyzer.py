@@ -16,6 +16,7 @@ import json
 import os
 import sys
 import time
+from nucleus._silent_except import silent_exc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -32,8 +33,8 @@ def get_process_memory() -> dict:
         _rss = _mi.rss / 1048576.0
         _vms = _mi.vms / 1048576.0
         _pct = _p.memory_percent()
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="tools.memory_growth_analyzer::get_process_memory L35")
     return {"rss_mb": round(_rss, 1), "vms_mb": round(_vms, 1), "percent": round(_pct, 1)}
 
 

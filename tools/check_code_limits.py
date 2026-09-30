@@ -33,6 +33,7 @@ from typing import Any
 # ★主线第12批 T2/P2-82：备份目录排除统一走共用模块（不再逐批次硬编码）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.audit_utils import is_backup_path, should_skip_dir  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 # -------- 默认配置（与 config.CODE_QUALITY_CONFIG 对齐；此处内联以便独立运行）--------
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -56,7 +57,8 @@ def _m55_unified_excludes() -> bool:
         import config as _m55_cfg
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.check_code_limits::_m55_unified_excludes L59")
         return True
 
 _M55_LEGACY_EXCLUDE_DIRS = {
@@ -104,7 +106,8 @@ def scan_file(path: str) -> FileReport | None:
     try:
         with open(path, encoding="utf-8") as fh:
             source = fh.read()
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as e:
+        silent_exc(e, where="tools.check_code_limits::scan_file L107")
         return None
 
     lines = source.splitlines()
@@ -112,8 +115,9 @@ def scan_file(path: str) -> FileReport | None:
 
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+    except SyntaxError as e:
         # 语法错误由 ruff 负责，此处跳过（不污染行数统计）
+        silent_exc(e, where="tools.check_code_limits::scan_file L115")
         return None
 
     funcs = _iter_functions(tree)

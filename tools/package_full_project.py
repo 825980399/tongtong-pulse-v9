@@ -28,6 +28,7 @@ from tools.audit_utils import is_backup_name, is_backup_path  # noqa: E402
 from tools.export_public import (  # noqa: E402
     RESERVED_DEVICE_NAMES, should_skip as _public_should_skip,
 )
+from nucleus._silent_except import silent_exc
 
 
 
@@ -37,7 +38,8 @@ def _m55_unified_excludes() -> bool:
         import config as _m55_cfg
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.package_full_project::_m55_unified_excludes L40")
         return True
 
 _M55_LEGACY_EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode", "node_modules",

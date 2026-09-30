@@ -19,6 +19,7 @@ from nucleus.data.exclude_dirs import COMMON_SCAN_EXCLUDED  # ★第55批 T4（�
 import os
 import re
 from nucleus.data.path_utils import safe_relpath  # ★第49批 T4
+from nucleus._silent_except import silent_exc
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +44,8 @@ def _m55_unified_excludes() -> bool:
         import config as _m55_cfg
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.audit_utils::_m55_unified_excludes L46")
         return True
 
 _M55_LEGACY_COMMON_EXCLUDE_DIRS: frozenset[str] = frozenset({

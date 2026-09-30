@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
@@ -44,7 +45,8 @@ def _m55_unified_excludes() -> bool:
         import config as _m55_cfg
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.quality_audit::_m55_unified_excludes L47")
         return True
 
 _M55_LEGACY__SKIP_DIRS = {".git", "__pycache__", ".workbuddy", "tmp", "node_modules",

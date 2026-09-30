@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
+from nucleus._silent_except import silent_exc
 
 # ============================================================
 # 黄金评测集（自包含语料库）
@@ -440,7 +441,8 @@ def _current_threshold():
     try:
         import config as CFG
         return CFG.SEMANTIC_KERNEL_CONFIG.get("similarity_threshold")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.verify_semantic_kernel::_current_threshold L443")
         return "?"
 
 

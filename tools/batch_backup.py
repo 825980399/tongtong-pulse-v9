@@ -38,6 +38,7 @@ import argparse
 import os
 import shutil
 import sys
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "SKIP_PATH_PREFIXES", "SKIP_DIR_NAMES", "BACKUP_DIR_PREFIXES",
@@ -76,7 +77,8 @@ def _m55_unified_excludes() -> bool:
         import config as _m55_cfg
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="tools.batch_backup::_m55_unified_excludes L79")
         return True
 
 _M55_LEGACY_SKIP_DIR_NAMES: frozenset[str] = frozenset({

@@ -26,6 +26,7 @@ import json
 import os
 import sys
 import time
+from nucleus._silent_except import silent_exc
 
 _OBSOLETE_MARKERS_FALLBACK = ("结构性失效", "obsolete", "已裁", "判定废弃")
 
@@ -146,8 +147,8 @@ def _cmd_obsolete(args, pm, pending, history, obsolete, obsolete_path):
     # 移出源账本（pending/history），并入 obsolete 归档，使活跃队列干净
     try:
         _lst.pop(_i)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="tools.adjudicate_patch::_cmd_obsolete L149")
     _seen = {str(o.get("id")) for o in obsolete if isinstance(o, dict)}
     if str(_p.get("id")) not in _seen:
         obsolete.append(_p)

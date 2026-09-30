@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import time
+from nucleus._silent_except import silent_exc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -135,8 +136,8 @@ def stage_node_pool(nodes=1000, seed=42):
         fn = getattr(pool, "get_cache_stats", None)
         if callable(fn):
             res["cache_stats"] = fn()
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool L138")
     return res
 
 
@@ -335,8 +336,8 @@ def stage_kal(nodes=50, seed=7):
             t0 = time.perf_counter()
             kal.get_node(nid)
             get_lat.append(time.perf_counter() - t0)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_kal L338")
     return {
         "status": "OK" if made else "NO_NODES_SAVED",
         "saved": len(made),
