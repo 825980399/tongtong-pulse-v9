@@ -2014,12 +2014,10 @@ class SelfInspector(SilentLogMixin):
                     return None
 
             try:
-                # ★P1：使用结构化并行调度器（任务组隔离+协调者汇总+完整生命周期日志）
-                from nucleus.StructuredParallelScheduler import (
-                    SubTask,
-                    get_structured_parallel_scheduler,
-                )
-                _sps = get_structured_parallel_scheduler()
+                # ★P2-64 并发收敛（D3-A）：改用唯一门面 parallel.run_group
+                # （内部委托 Structured，行为等价；脱离对弃用模块的直接 import）
+                from nucleus.parallel_scheduler import SubTask, get_parallel_scheduler
+                _ps = get_parallel_scheduler()
                 # 构建子任务列表（每个文件一个子任务，有独立名称）
                 _subtasks = [
                     SubTask(
@@ -2030,7 +2028,7 @@ class SelfInspector(SilentLogMixin):
                     for fp, dn in _files_to_parse
                 ]
                 # 执行任务组（结构化并行：协调者等待所有子任务完成后汇总）
-                _group_result = _sps.run_group(
+                _group_result = _ps.run_group(
                     name="器官扫描组",
                     subtasks=_subtasks,
                     aggregator=lambda results: [r for r in results.values() if r],
