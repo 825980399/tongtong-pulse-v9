@@ -1,41 +1,5 @@
 [
   {
-    "path": "nucleus/iw_text_guard.py",
-    "qualname": "_search_topic_guard_enabled",
-    "nth": 0,
-    "sha16": "37992c22232b4712",
-    "tname": "Exception",
-    "has_log": false,
-    "has_reraise": false,
-    "lineno": 36,
-    "legacy_lineno": 36,
-    "match": "exact"
-  },
-  {
-    "path": "nucleus/reasoning/PatchManager.py",
-    "qualname": "_write_readable_log",
-    "nth": 0,
-    "sha16": "d74ff0ee8da3b980",
-    "tname": "ImportError",
-    "has_log": false,
-    "has_reraise": false,
-    "lineno": 3364,
-    "legacy_lineno": 3364,
-    "match": "exact"
-  },
-  {
-    "path": "nucleus/reasoning/PatchManager.py",
-    "qualname": "_write_rollback_log",
-    "nth": 0,
-    "sha16": "d74ff0ee8da3b980",
-    "tname": "ImportError",
-    "has_log": false,
-    "has_reraise": false,
-    "lineno": 3493,
-    "legacy_lineno": 3493,
-    "match": "exact"
-  },
-  {
     "path": "nucleus/reasoning/PatchManager.py",
     "qualname": "_save_restart_counter",
     "nth": 0,
@@ -93,18 +57,6 @@
     "has_reraise": false,
     "lineno": 747,
     "legacy_lineno": 747,
-    "match": "exact"
-  },
-  {
-    "path": "nucleus/reasoning/ReasoningWorkerPool.py",
-    "qualname": "shutdown_reasoning_pool",
-    "nth": 0,
-    "sha16": "d74ff0ee8da3b980",
-    "tname": "Exception",
-    "has_log": false,
-    "has_reraise": false,
-    "lineno": 795,
-    "legacy_lineno": 795,
     "match": "exact"
   },
   {
