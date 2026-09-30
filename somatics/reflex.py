@@ -8,6 +8,7 @@
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 class ReflexRule:
@@ -312,7 +313,8 @@ class Reflex:
 
         try:
             value = float(value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            silent_exc(e, where="somatics.reflex::_check_condition L315")
             return False
 
         # 比较判断

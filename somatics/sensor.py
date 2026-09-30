@@ -8,6 +8,7 @@
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 class Sensor:
@@ -79,7 +80,8 @@ class Sensor:
         try:
             from utils.safe_hw_probe import safe_camera_devices
             res = safe_camera_devices()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="somatics.sensor::_detect_camera L82")
             return
         if not isinstance(res, dict):
             return
@@ -98,7 +100,8 @@ class Sensor:
         try:
             from utils.safe_hw_probe import safe_audio_devices
             res = safe_audio_devices(True)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="somatics.sensor::_detect_audio L101")
             return
         if not isinstance(res, dict):
             return
