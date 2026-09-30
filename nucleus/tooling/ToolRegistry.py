@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 
@@ -304,8 +305,8 @@ def register_default_tools() -> None:
             returns="安全问题列表",
             category="code_check",
         )
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L307")
 
     # 外部命令执行工具
     try:
@@ -320,8 +321,8 @@ def register_default_tools() -> None:
             returns="执行结果(stdout/stderr/returncode)",
             category="execution",
         )
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L323")
 
 
 if __name__ == "__main__":

@@ -54,7 +54,8 @@ def _m54_stale_days() -> float:
     try:
         import config as _c
         return float(getattr(_c, "PATCH_AUTO_APPROVE_STALE_DAYS", 7))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m54_stale_days L57")
         return 7.0
 
 
@@ -63,7 +64,8 @@ def _m54_stale_mark_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_PATCH_STALE_MARK", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m54_stale_mark_on L66")
         return True
 
 
@@ -74,7 +76,8 @@ def _m54_auto_apply_on() -> bool:
         if not getattr(_c, "ENABLE_PATCH_APPROVE_AUTO_APPLY", True):
             return False
         return bool(getattr(_c, "EVOLUTION_CONFIG", {}).get("auto_apply_enabled", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m54_auto_apply_on L77")
         return False
 
 
@@ -401,7 +404,8 @@ class PatchManager:
             try:
                 import config as _c
                 evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.PatchManager::_m80_auto_apply_enabled L404")
                 return False
         return bool(evo_cfg.get("auto_apply_enabled", False))
 
@@ -415,7 +419,8 @@ class PatchManager:
             try:
                 import config as _c
                 evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.PatchManager::_m80_allow_core_auto_apply L418")
                 return False
         return bool(evo_cfg.get("allow_core_auto_apply", False))
 
@@ -663,7 +668,8 @@ class PatchManager:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_PENDING_QUEUE_AGING", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m94_pending_aging_on L666")
             return False
 
     @staticmethod
@@ -747,7 +753,8 @@ class PatchManager:
             if PatchManager._m94_is_god_file(_fp):
                 return False
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m94_aging_eligible L750")
             return False
 
     @staticmethod
@@ -766,7 +773,8 @@ class PatchManager:
             if not _norm:
                 return True          # 无路径信息 → 保守视为受保护
             return any(m in _norm for m in PatchManager._M94_GOD_FILE_MARKERS)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m94_is_god_file L769")
             return True
 
     @staticmethod
@@ -1232,7 +1240,8 @@ class PatchManager:
                     + 0.3 * _trust_c
                     + 0.3 * _val_c, 1)
             return round(0.5 * _aes_c + 0.5 * _trust_c, 1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_composite_score L1235")
             return 0.0
 
     def _value_alignment_score(self, patch: dict[str, Any]) -> float:
@@ -1267,7 +1276,8 @@ class PatchManager:
             if _n == 0:
                 return 0.0
             return round(min(100.0, 100.0 * _hits / _n), 1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_value_alignment_score L1270")
             return 0.0
 
     def list_pending_patches(self) -> list[dict[str, Any]]:
@@ -1291,8 +1301,9 @@ class PatchManager:
                     and _p.get("method") == method_name
                 ):
                     return True
-        except Exception:
+        except Exception as e:
             # 读取失败不阻断生成（保守放行，交给入队阶段的去重兜底）
+            silent_exc(e, where="nucleus.reasoning.PatchManager::has_pending_patch_for L1294")
             return False
         return False
 
@@ -2281,7 +2292,8 @@ class PatchManager:
                 _lines.append(f"{_bad_label}(前{_n_bad}条):\n- "
                               + "\n- ".join(_bad[:_n_bad]))
             return "\n\n".join(_lines)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_load_history_experience L2284")
             return ""
 
     def get_history_failure_stats(self, limit: int = 100) -> dict[str, Any]:
@@ -2803,11 +2815,13 @@ class PatchManager:
             if isinstance(_v, dict):
                 try:
                     return float(_v.get("total", 0) or 0)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as e:
+                    silent_exc(e, where="nucleus.reasoning.PatchManager::_patch_aesthetic L2806")
                     return 0.0
             try:
                 return float(_v or 0)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as e:
+                silent_exc(e, where="nucleus.reasoning.PatchManager::_patch_aesthetic L2810")
                 return 0.0
 
         _sorted_pending = []
@@ -3361,8 +3375,8 @@ class PatchManager:
             from nucleus.data.write_guard import guard_write as _m44_gw
             if not _m44_gw(_log_path, component="PatchManager.change_log"):
                 return
-        except ImportError:
-            pass
+        except ImportError as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_write_readable_log L3364")
         with open(_log_path, "a", encoding="utf-8") as f:
             f.write("\n".join(_lines))
 
@@ -3376,7 +3390,8 @@ class PatchManager:
             _abs = os.path.abspath(target_file)
             _root = os.path.abspath(project_root)
             return os.path.commonpath([_abs, _root]) == _root
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m80_safe_target_path L3379")
             return False
 
     def rollback_last(self) -> bool:
@@ -3490,8 +3505,8 @@ class PatchManager:
             from nucleus.data.write_guard import guard_write as _m44_gw
             if not _m44_gw(_log_path, component="PatchManager.rollback_log"):
                 return
-        except ImportError:
-            pass
+        except ImportError as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_write_rollback_log L3493")
         with open(_log_path, "a", encoding="utf-8") as f:
             f.write("\n".join(_lines))
 
@@ -3631,7 +3646,8 @@ class PatchManager:
         try:
             with open(path, encoding='utf-8') as f:
                 return int(f.read().strip())
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_load_restart_counter L3634")
             return 0
 
     def _save_restart_counter(self, count: int) -> bool:
@@ -3700,14 +3716,14 @@ class PatchManager:
             if _env and _env.strip():
                 try:
                     return float(_env)
-                except ValueError:
-                    pass
+                except ValueError as e:
+                    silent_exc(e, where="nucleus.reasoning.PatchManager::_m113e_restart_cooldown_hours L3703")
             import config as _cfg
             _v = getattr(_cfg, "PATCH_RESTART_COOLDOWN_HOURS", None)
             if isinstance(_v, (int, float)):
                 return float(_v)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m113e_restart_cooldown_hours L3709")
         return 24.0
 
     def _load_restart_blocked_at(self) -> float:
@@ -3716,7 +3732,8 @@ class PatchManager:
         try:
             with open(_path, encoding="utf-8") as _f:
                 return float(_f.read().strip() or 0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_load_restart_blocked_at L3719")
             return 0.0
 
     def _save_restart_blocked_at(self, ts: float) -> bool:

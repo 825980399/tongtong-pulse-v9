@@ -21,6 +21,7 @@ from typing import Any
 # ★暂缓项1：脉冲结构 TypedDict 契约（编译期检查，零运行时开销）
 from nucleus.pulse_types import Pulse
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 # 层级默认映射表（当 emit 未指定 layer 时自动推断）
 _DEFAULT_LAYER_MAP = {
@@ -289,8 +290,8 @@ class PulseCore:
                 while len(self._completed_fingerprints) > self._max_fingerprints:
                     self._completed_fingerprints.popitem(last=False)
                 self._total_completed += 1
-        except Exception:
-            pass  # 统计失败不影响主流程
+        except Exception as e:
+            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L292")
 
     def _mark_completed(self, pulse_id: str):
         with self._execution_lock:

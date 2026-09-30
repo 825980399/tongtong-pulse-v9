@@ -21,6 +21,7 @@ import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
+from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -44,7 +45,8 @@ def _enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_INFLUXDB_TIMESERIES", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.timeseries_store.influxdb_store::_enabled L47")
         return False
 
 
@@ -121,13 +123,13 @@ class InfluxDBStore:
         with self._lock:
             try:
                 self.flush()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L124")
             if self._client is not None:
                 try:
                     self._client.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L129")
                 self._client = None
             self._available = False
 

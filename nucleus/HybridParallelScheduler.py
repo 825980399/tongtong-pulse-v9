@@ -29,6 +29,7 @@ from enum import Enum
 from typing import Any
 
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("HybridParallelScheduler")
@@ -121,14 +122,16 @@ class HybridParallelScheduler(SilentLogMixin):
         try:
             import psutil
             return round(psutil.virtual_memory().total / (1024 ** 3), 1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.HybridParallelScheduler::_detect_memory_gb L124")
             return 16.0
 
     def _get_cpu_usage(self) -> float:
         try:
             import psutil
             return psutil.cpu_percent(interval=0.1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.HybridParallelScheduler::_get_cpu_usage L131")
             return 50.0
 
     def _calc_target_processes(self, level: AdaptiveLevel) -> int:

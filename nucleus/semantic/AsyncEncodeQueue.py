@@ -21,6 +21,7 @@ from typing import Any
 from nucleus.logger import get_module_logger
 from nucleus.semantic.VectorEncoder import get_vector_encoder
 from nucleus.semantic.VectorStore import get_vector_store
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("AsyncEncodeQueue")
@@ -121,8 +122,8 @@ class AsyncEncodeQueue:
         try:
             store, _ = self._ensure_deps()
             store.flush(force=True)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::stop L124")
 
     # ---------------- 入队 ----------------
     def submit(self, node_id: str, text: str) -> bool:
@@ -299,7 +300,8 @@ class AsyncEncodeQueue:
             if kws:
                 value = value + " " + " ".join(str(k) for k in kws)
             return value.strip()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::_node_text L302")
             return ""
 
     def stats(self) -> dict[str, Any]:
@@ -319,5 +321,5 @@ def shutdown_encode_queue() -> None:
     try:
         if AsyncEncodeQueue._instance is not None:
             AsyncEncodeQueue._instance.stop()
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::shutdown_encode_queue L322")

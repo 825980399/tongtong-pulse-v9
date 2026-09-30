@@ -437,7 +437,8 @@ class RuntimeMetrics:
                 return 0.0
             _delta_mb = _win[-1]["mem_rss_mb"] - _win[0]["mem_rss_mb"]
             return _delta_mb / (_span_s / 60.0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_rate L440")
             return 0.0
 
     def check_memory_alarm_detailed(self, threshold_percent: float = 80.0,
@@ -579,7 +580,8 @@ def _adaptive_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_ADAPTIVE_FREQUENCY", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.runtime_metrics::_adaptive_enabled L582")
         return True
 
 

@@ -17,6 +17,7 @@ import threading
 import time
 from typing import Any
 from collections.abc import Callable
+from nucleus._silent_except import silent_exc
 
 
 # 常见周期事件 → 相关知识线索（关键词 / 主题）。高频事件优先覆盖。
@@ -71,8 +72,8 @@ class PatternPrewarmConsumer:
                 _r = self._resolver(event_type)
                 if _r:
                     return list(_r)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.PatternPrewarmConsumer::_resolve_hints L74")
         return list(EVENT_KNOWLEDGE_HINTS.get(event_type, []))
 
     # ---- 核心消费入口 ----

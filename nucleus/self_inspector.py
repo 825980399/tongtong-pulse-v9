@@ -66,7 +66,8 @@ def _m90_locate_v2_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_inspector::_m90_locate_v2_on L69")
         return True
 # ★第91批 T-91a：日志调用点定位 v3（logger 名 / 器官别名 两级**数据驱动**索引）。
 #   开启（默认）→ 在 v2（类索引 + 中文名包含）之上再接入两级新索引：
@@ -88,7 +89,8 @@ def _m91_log_locate_v3_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_M91_LOG_LOCATE_V3", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_inspector::_m91_log_locate_v3_on L91")
         return True
 
 
@@ -985,7 +987,8 @@ class SelfInspector(SilentLogMixin):
                 return "".join(body_lines).strip()
             return None
 
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_read_method_body_fallback L988")
             return None
     def _analyze_method_calls(self, file_path: str, method_name: str, 
                                start_line: int) -> list[str]:
@@ -1223,7 +1226,8 @@ class SelfInspector(SilentLogMixin):
                     if self._project_class_index is None:
                         self._project_class_index = self._build_project_class_index()
             return (self._project_class_index or {}).get(class_name)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_lookup_class_in_project L1226")
             return None
 
     # ========== ★主线第65批 T3/P2：get_method_body 文件级缓存 ==========
@@ -1572,7 +1576,8 @@ class SelfInspector(SilentLogMixin):
         try:
             if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
                 return _rel
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_logger_tag L1575")
             return None
         return None
 
@@ -1584,7 +1589,8 @@ class SelfInspector(SilentLogMixin):
         try:
             if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
                 return _rel
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_organ_alias L1587")
             return None
         return None
 
@@ -2080,7 +2086,8 @@ class SelfInspector(SilentLogMixin):
                     self._scan_cache_invalidations += 1
                     _module_logger.debug(f"[SelfInspector] 检测到器官文件变化，缓存失效: {_fp}")
                     return True
-            except OSError:
+            except OSError as e:
+                silent_exc(e, where="nucleus.self_inspector::_check_files_changed L2083")
                 return True
         return False
 
@@ -2252,7 +2259,8 @@ class SelfInspector(SilentLogMixin):
                         _file = _info.get("file_path") or None
                         return _file
             return None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::resolve_organ_file L2255")
             return None
         finally:
             if self._scan_cache_enabled and _file is not None:
@@ -2523,7 +2531,8 @@ class SelfInspector(SilentLogMixin):
             if not _lines or start_line < 1 or start_line > len(_lines):
                 return
             def_line = _lines[start_line - 1]
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_check_mutable_default L2526")
             return
         # 提取 def 签名括号内的参数串（兼容多行签名：取 def 行 + 后续补全括号）
         _sig = def_line

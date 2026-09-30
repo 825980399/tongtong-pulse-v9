@@ -16,6 +16,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 
@@ -239,5 +240,5 @@ def shutdown_search_scheduler() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.search_scheduler::shutdown_search_scheduler L242")

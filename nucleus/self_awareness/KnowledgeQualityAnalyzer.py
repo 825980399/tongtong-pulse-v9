@@ -31,6 +31,7 @@ import re
 import time
 from collections import Counter, defaultdict
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = ["KnowledgeQualityAnalyzer", "get_knowledge_quality_analyzer"]
 
@@ -624,8 +625,8 @@ class KnowledgeQualityAnalyzer:
                 _m = _VER_PATTERN.search(_v)
                 if _m:
                     return int(_m.group(1)), int(_m.group(2))
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_current_version L627")
         return 9, 5
 
     @staticmethod
@@ -763,8 +764,8 @@ def _has_any_link(node: dict) -> bool:
             return True
         if int(node.get("cooccurrence_count") or 0) > 0:
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_has_any_link L766")
     _sr = node.get("semantic_relations")
     return bool(isinstance(_sr, (list, tuple)) and len(_sr) > 0)
 

@@ -178,7 +178,8 @@ def _patch_true_fix_rate() -> float | None:
         if not isinstance(_ps, list) or not _ps:
             return None
         return true_fix_rate(_ps)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate L181")
         return None
 
 
@@ -359,7 +360,8 @@ def count_ruff_f() -> int | None:
                             encoding="utf-8", errors="replace", timeout=180)
         _lines = [x for x in (_r.stdout or "").splitlines() if ": F" in x]
         return len(_lines)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::count_ruff_f L362")
         return None
 
 

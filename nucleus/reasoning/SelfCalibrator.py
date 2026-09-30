@@ -37,8 +37,8 @@ def _log_debug(msg: str) -> None:
     if _logger is not None:
         try:
             _logger.debug(msg)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::_log_debug L40")
 
 
 class SelfCalibrator:
@@ -69,7 +69,8 @@ class SelfCalibrator:
         """
         try:
             _conf = float(confidence)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::calibrate L72")
             return 0.0
         with self._lock:
             _offset = self._data.get(source, {}).get("offset", 0.0)
@@ -240,13 +241,13 @@ class EvidenceCalibrator:
                 _cand = _p if os.path.isabs(_p) else os.path.join(base_dir, _p)
                 _save_path = _cand if _cand.lower().endswith(".json") \
                     else os.path.join(_cand, "self_calibration_evidence.json")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L243")
         self._save_path = _save_path
         try:
             os.makedirs(os.path.dirname(self._save_path), exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L248")
         # {rtype: {"samples": int, "success": int}}
         self._buckets: dict[str, dict[str, float]] = {}
         self._load()
@@ -325,7 +326,8 @@ class EvidenceCalibrator:
         """证据化置信度 = base × 历史成功率系数 × 证据强度系数。"""
         try:
             _base = float(base)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::compute L328")
             return 0.0
         _hist = 0.7 + 0.3 * self.success_rate(rtype)
         _ev = self.evidence_strength(evidence)
@@ -408,8 +410,8 @@ class EvidenceCalibrator:
         try:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::reset L411")
 
 
 # ---------- 证据化校准单例 ----------
@@ -526,8 +528,8 @@ def reset_evidence_calibrator() -> None:
     if _inst is not None:
         try:
             _inst.save()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::reset_evidence_calibrator L529")
 
 
 def evidence_confidence(base: float, rtype: str = "generic",

@@ -14,6 +14,7 @@ InsightBoard.py —— 洞察看板
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 
@@ -286,5 +287,5 @@ def shutdown_insight_board() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.InsightBoard::shutdown_insight_board L289")

@@ -387,7 +387,8 @@ class ClassificationFeedback:
                 return False
             store._matrix[i] = (v / n).astype("float32")
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.qica.IntentChannels::adjust_prototype L390")
             return False
 
 

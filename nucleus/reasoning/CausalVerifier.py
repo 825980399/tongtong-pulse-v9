@@ -15,6 +15,7 @@ from typing import Any
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 try:
@@ -271,7 +272,8 @@ class CausalVerifier(SilentLogMixin):
             if _trust is None:
                 _trust = getattr(_node, "trust", 50.0)
             return not (_trust < self.MIN_SOURCE_TRUST)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.CausalVerifier::_check_source L274")
             return None
 
     def _summary(self, status: str, broken_at: int | None) -> str:

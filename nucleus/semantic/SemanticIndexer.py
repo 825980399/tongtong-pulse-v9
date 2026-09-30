@@ -25,6 +25,7 @@ from nucleus.semantic.AsyncEncodeQueue import AsyncEncodeQueue
 from nucleus.semantic.VectorEncoder import get_vector_encoder
 from nucleus.semantic.VectorStore import get_vector_store
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("SemanticIndexer")
@@ -252,8 +253,8 @@ class SemanticIndexer:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(tmp, _PROGRESS_FILE)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.semantic.SemanticIndexer::_write_progress L255")
 
     @staticmethod
     def read_progress() -> dict[str, Any]:

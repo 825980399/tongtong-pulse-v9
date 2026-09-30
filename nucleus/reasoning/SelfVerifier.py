@@ -18,6 +18,7 @@ from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 
@@ -78,8 +79,8 @@ class SelfVerifier(SilentLogMixin):
         """验证通过后清除标记"""
         try:
             os.remove(self._verify_file)
-        except OSError:
-            pass
+        except OSError as e:
+            silent_exc(e, where="nucleus.reasoning.SelfVerifier::clear_pending L81")
 
     def increment_attempt(self):
         """验证失败时增加尝试次数"""

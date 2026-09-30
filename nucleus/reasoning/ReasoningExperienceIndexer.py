@@ -17,6 +17,7 @@ import threading
 from typing import Any
 
 from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
+from nucleus._silent_except import silent_exc
 
 
 _lock = threading.Lock()
@@ -197,8 +198,8 @@ class ReasoningExperienceIndexer:
                     "score": float(_exact.get("confidence", 0.0)),
                 })
                 _seen_questions.add(_eq)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L200")
 
         # ---- 2. 语义检索知识树 /推理经验/ 节点（需双写开启 + 有向量库）----
         if self._double_write_enabled and self._store is not None:
@@ -227,8 +228,8 @@ class ReasoningExperienceIndexer:
                         "score": float(_sim),
                         "node_id": _nid,
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L230")
 
         # ---- 3. 合并排序 ----
         results.sort(key=lambda r: r["score"], reverse=True)

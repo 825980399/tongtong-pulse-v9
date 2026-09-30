@@ -44,6 +44,7 @@ from typing import Any
 from nucleus.logger import get_module_logger
 from nucleus.data.exclude_dirs import (  # ★第49批 T5
     DISK_SCAN_EXCLUDED, SOURCE_SCAN_DIRS)
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("ProductionConsumptionMatcher")
@@ -1098,7 +1099,8 @@ def _disk_max_depth() -> int:
     try:
         import config
         return int(getattr(config, "PRODUCTION_CONSUMPTION_DISK_MAX_DEPTH", 0) or 0)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_disk_max_depth L1101")
         return 0
 
 

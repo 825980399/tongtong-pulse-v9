@@ -261,7 +261,8 @@ class ReportBus:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_REPORT_DISPATCH_BEFORE_WRITE",
                                 True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reporting.report_bus::_dispatch_before_write L264")
             return True
 
     def _dispatch(self, envelope: ReportEnvelope,
@@ -489,7 +490,8 @@ class ReportBus:
         try:
             _mv = float(metric_value)
             _th = float(threshold)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            silent_exc(e, where="nucleus.reporting.report_bus::_is_breaching L492")
             return False
         if _LOW_HINT_RE.search(anomaly_type or ""):
             return _mv < _th
@@ -581,7 +583,8 @@ class ReportBus:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_REPORT_DISK_PRUNE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reporting.report_bus::_disk_prune_enabled L584")
             return True
 
     def _prune_disk(self) -> dict[str, Any]:

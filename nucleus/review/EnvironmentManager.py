@@ -22,6 +22,7 @@ from typing import Any
 
 from nucleus.logger import get_module_logger
 from config import EXTERNAL_CALL_TIMEOUTS
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("EnvironmentManager")
@@ -100,7 +101,8 @@ class EnvironmentManager:
                 encoding="utf-8", errors="replace"
             )
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.review.EnvironmentManager::_check_pip L103")
             return False
 
     def check_package(self, package_name: str) -> PackageInfo:

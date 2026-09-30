@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 __all__ = ["CausalInferrer", "get_causal_inferrer"]
@@ -223,8 +224,8 @@ class CausalInferrer:
         if self._log_fn is not None:
             try:
                 self._log_fn(level, msg)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.CausalInferrer::_log L226")
 
 
 # ========== 模块级共享实例 ==========

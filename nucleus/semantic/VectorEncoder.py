@@ -346,7 +346,8 @@ class VectorEncoder:
             if out is None or len(out) != m.shape[0]:
                 return None
             return np.asarray(out, dtype=np.float32)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.semantic.VectorEncoder::_cosine_cython L349")
             return None
 
     @classmethod

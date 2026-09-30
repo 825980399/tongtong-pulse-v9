@@ -18,6 +18,7 @@ import time
 from collections import Counter, deque
 from typing import Any
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 
@@ -98,8 +99,8 @@ class StreamMiner:
         if auto_load:
             try:
                 self.load_patterns()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.StreamMiner::__init__ L101")
 
     # ========== 框架控制 ==========
 
@@ -357,7 +358,8 @@ class StreamMiner:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_STREAMMINER_CONSUMPTION", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_consume_enabled L360")
             return False
 
     def _consume_cfg(self, key: str, default: Any) -> Any:
@@ -395,7 +397,8 @@ class StreamMiner:
                 os.replace(_tmp, _path)
                 self._last_persist_at = time.time()
                 return True
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.StreamMiner::save_patterns L398")
                 return False
 
     def load_patterns(self, path: str | None = None) -> int:
@@ -630,8 +633,8 @@ def shutdown_stream_miner() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.StreamMiner::shutdown_stream_miner L633")
 
 
 # ========== 自测 ==========

@@ -21,6 +21,7 @@ import math
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 """
@@ -80,7 +81,8 @@ def _cy_cache_enabled() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_FREQUENCY_CODEC_CACHE", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.pulse.FrequencyCodec::_cy_cache_enabled L83")
         return True
 
 

@@ -18,6 +18,7 @@ from typing import Any, ClassVar
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 
@@ -63,8 +64,8 @@ class Interoception(SilentLogMixin):
             if getattr(_cfg, "ENABLE_RUNTIME_TRAJECTORY_PERSIST", False):
                 from nucleus.runtime.RuntimeTrajectory import get_runtime_trajectory
                 self.set_trajectory(get_runtime_trajectory())
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.Interoception::__init__ L66")
 
     # ========== 依赖注入 ==========
 

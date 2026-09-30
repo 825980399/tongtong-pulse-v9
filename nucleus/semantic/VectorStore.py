@@ -28,6 +28,7 @@ import numpy as np
 from nucleus.logger import get_module_logger
 from nucleus.semantic.VectorEncoder import PREPROCESS_ID, get_vector_encoder
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 _module_logger = logging.getLogger(__name__)
 _logger = get_module_logger("VectorStore")
@@ -65,7 +66,8 @@ def _text_hash(text: str) -> str:
     """文本指纹：内容变了才需要重新编码（避免重复编码浪费）。"""
     try:
         return hashlib.md5((text or "").encode("utf-8")).hexdigest()[:16]
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.semantic.VectorStore::_text_hash L68")
         return ""
 
 
@@ -167,7 +169,8 @@ class VectorStore:
             _st = os.stat(path)
             _mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_st.st_mtime))
             return f"mtime={_mtime}, size={_st.st_size}B, age={int(time.time() - _st.st_mtime)}s"
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.semantic.VectorStore::_file_fingerprint L170")
             return "mtime=未知"
 
     def _backup_polluted(self) -> None:

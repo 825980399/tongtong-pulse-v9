@@ -133,7 +133,8 @@ class ReasoningWorkerPool:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_DEEP_THINK_SUBPROCESS_BYPASS", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::_deep_think_bypass_enabled L136")
             return True
 
     def submit(self, func_name: str, *args, **kwargs) -> Future | None:
@@ -347,7 +348,8 @@ class ReasoningWorkerPool:
             return True
         try:
             return bool(getattr(self._pool, "_broken", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::_is_pool_broken L350")
             return True
 
     def _maybe_health_check(self) -> None:
@@ -482,17 +484,17 @@ class ReasoningWorkerPool:
         _parts: list[str] = []
         try:
             _parts.append(f"CPU核={os.cpu_count()}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::_collect_pool_sysinfo L485")
         try:
             import multiprocessing as _mp
             _parts.append(f"活跃子进程={len(_mp.active_children())}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::_collect_pool_sysinfo L490")
         try:
             _parts.append(f"pid={os.getpid()}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::_collect_pool_sysinfo L494")
         return ", ".join(_parts) or "不可用"
 
     def _maybe_recover_from_degraded(self) -> bool:
@@ -792,5 +794,5 @@ def shutdown_reasoning_pool() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::shutdown_reasoning_pool L795")

@@ -20,6 +20,7 @@ from nucleus.aibot_logger import get_aibot_logger  # ★v9.5压制AiBotSDK心跳
 from nucleus.logger import get_module_logger
 from nucleus.const import EyeEvent, LogLevel, MotorEvent
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 
@@ -80,8 +81,8 @@ class WeComChatBridge(SilentLogMixin):
         if self._reply_listener_id and self._info_field:
             try:
                 self._info_field.unregister_condition(self._reply_listener_id)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L83")
             self._reply_listener_id = None
         # ★LEAK-3修复: 先异步断开 WSClient 连接（disconnect 为异步方法，须 await），
         #   再停止事件循环，避免 WebSocket 连接泄漏（CLOSE_WAIT）
@@ -90,8 +91,8 @@ class WeComChatBridge(SilentLogMixin):
                 self._loop.call_soon_threadsafe(
                     lambda: asyncio.ensure_future(self._async_shutdown())
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L93")
 
     async def _async_shutdown(self):
         """异步关闭：断开 WSClient 连接并停止事件循环"""

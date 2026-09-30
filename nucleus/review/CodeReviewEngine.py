@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 
 from nucleus.logger import get_module_logger
 from config import EXTERNAL_CALL_TIMEOUTS
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("CodeReviewEngine")
@@ -129,7 +130,8 @@ class CodeReviewEngine:
                 cwd=self.project_root
             )
             return result.returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            silent_exc(e, where="nucleus.review.CodeReviewEngine::_check_tool L132")
             return False
 
     def _get_severity(self, rule: str, source: str) -> str:
@@ -322,8 +324,8 @@ class CodeReviewEngine:
                         mtime = os.path.getmtime(path)
                         if mtime > cutoff:
                             modified.append(_safe_relpath(path, self.project_root))
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        silent_exc(e, where="nucleus.review.CodeReviewEngine::_get_recently_modified_files L325")
         return modified
 
     def get_top_issues(self, n: int = 10, severity: str | None = None) -> list:

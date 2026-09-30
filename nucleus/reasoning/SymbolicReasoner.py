@@ -23,6 +23,7 @@ from typing import Any
 #   confidence = 0.9 × 该类型历史成功率系数 × 证据强度系数（证据 = 已产出的推理步）。
 #   开关关闭时 _evidence_conf 原值返回，行为与改动前逐字节一致。
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
+from nucleus._silent_except import silent_exc
 
 
 @dataclass
@@ -730,7 +731,8 @@ class SymbolicReasoner:
                 if isinstance(_result, float) and _result.is_integer():
                     return int(_result)
                 return round(_result, 6) if isinstance(_result, float) else _result
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SymbolicReasoner::_safe_eval L733")
             return None
         return None
 

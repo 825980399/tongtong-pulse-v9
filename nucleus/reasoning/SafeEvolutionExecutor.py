@@ -95,7 +95,8 @@ def _m91_indent_repair_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_M91_LLM_INDENT_REPAIR", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m91_indent_repair_on L98")
         return True
 
 
@@ -185,7 +186,8 @@ def _normalize_issue_type(raw_type: Any) -> str:
         return ""
     try:
         _name = str(raw_type).strip()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_normalize_issue_type L188")
         return ""
     if not _name:
         return ""
@@ -549,7 +551,8 @@ class SafeEvolutionExecutor:
         try:
             import config  # type: ignore[possibly-unbound]
             return bool(getattr(config, 'EVOLUTION_CONFIG', {}).get("allow_core_auto_apply", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_core_auto_apply_allowed L552")
             return False
 
     def _resolve_core_auto_apply_status(self, is_core: bool) -> str:
@@ -592,7 +595,8 @@ class SafeEvolutionExecutor:
                         _related.append(_ctx)
                 _i -= 1
             return "\n---\n".join(reversed(_related[-limit:]))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_find_related_logs L595")
             return ""
 
     @staticmethod
@@ -1092,7 +1096,8 @@ class SafeEvolutionExecutor:
         try:
             import config as _c96
             return bool(getattr(_c96, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m96_channel_pool_on L1095")
             return False
 
     @staticmethod
@@ -1322,7 +1327,8 @@ class SafeEvolutionExecutor:
         try:
             from nucleus.evolution.AestheticJudge import get_aesthetic_judge
             return get_aesthetic_judge().feedback_guidance()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_aesthetic_guidance L1325")
             return ""
 
     # ===== ★主线第58批 T1（P1）：自主进化健康度监控 =====
@@ -2288,7 +2294,8 @@ class SafeEvolutionExecutor:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_EVOLUTION_BASELINE_FIX", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m41_baseline_fix_on L2291")
             return True
 
     @staticmethod
@@ -3462,7 +3469,8 @@ class SafeEvolutionExecutor:
                 if len(_summary) >= max_events:
                     break
             return "\n".join(_summary)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_load_pulse_metadata_summary L3465")
             return ""
 
     def _call_llm_for_review(self, pulse_type: str, traceback_text: str,
@@ -4050,7 +4058,8 @@ class SafeEvolutionExecutor:
             if isinstance(_cfg, dict):
                 return bool(_cfg.get("learning_attempt_enabled", True))
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m85_learning_attempt_enabled L4053")
             return True
 
     @staticmethod
@@ -5446,7 +5455,8 @@ class SafeEvolutionExecutor:
             import shutil
             shutil.copy2(file_path, backup_path)
             return backup_path
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_create_backup_before_apply L5449")
             return ""
     
     def _apply_patch_to_file(self, file_path: str, 
@@ -5532,7 +5542,8 @@ class SafeEvolutionExecutor:
                 return ""
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()[-limit:]
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_read_text_tail L5535")
             return ""
 
     def _record_crash(self, mode: str, reason: str, detail: str = "") -> None:

@@ -22,6 +22,7 @@ import logging
 import os
 import threading
 from typing import Any, List, Optional, Tuple
+from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -45,7 +46,8 @@ def _enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.graph_store.neo4j_store::_enabled L48")
         return False
 
 
@@ -104,8 +106,8 @@ class Neo4jStore:
             if self._driver is not None:
                 try:
                     self._driver.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.graph_store.neo4j_store::close L107")
                 self._driver = None
             self._available = False
 

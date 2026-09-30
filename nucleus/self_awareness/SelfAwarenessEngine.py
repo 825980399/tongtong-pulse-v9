@@ -33,6 +33,7 @@ from typing import Any
 from collections.abc import Callable
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("SelfAwarenessEngine")
 
@@ -1593,7 +1594,8 @@ def _top_issues_limit() -> int:
     try:
         import config
         return max(1, int(getattr(config, "SELF_AWARENESS_TOP_ISSUES_LIMIT", 5) or 5))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_top_issues_limit L1596")
         return 5
 
 

@@ -56,6 +56,7 @@ from .report_envelope import (ACT_ALERT, ACT_CLEAN_DATA, ACT_LOG_ONLY,
                               SEV_P0, SEV_P1, TYPE_EVOLUTION, TYPE_GENERIC,
                               TYPE_HEALTH, TYPE_POLLUTION, TYPE_SELF_COGNITION,
                               Anomaly, make_envelope)
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "bus_enabled", "publish_health", "publish_pollution",
@@ -71,7 +72,8 @@ def bus_enabled() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_REPORT_BUS", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.reporting.publishers::bus_enabled L74")
         return True
 
 

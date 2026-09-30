@@ -29,6 +29,7 @@ from nucleus.logging.SilentLogMixin import (  # ★P0-1: _log签名兼容兜底
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
+from nucleus._silent_except import silent_exc
 
 # ===== 阶段一预埋的数据结构与钩子（保持不变，向后兼容） =====
 
@@ -406,8 +407,8 @@ class SurvivalOrchestrator(SilentLogMixin):
                 source_loop=source,
                 confidence=confidence,
             )
-        except Exception:
-            pass  # 埋点失败不影响编排主流程
+        except Exception as e:
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_post_insight L409")
 
     # ========== 日志 ==========
 
@@ -423,8 +424,8 @@ class SurvivalOrchestrator(SilentLogMixin):
             import logging
             logging.getLogger("pulse").log(
                 coerce_log_level(level), f"{LOG_TAG} {message}")
-        except Exception:
-            pass                          # 日志失败绝不能影响主流程
+        except Exception as e:
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log L426")
 
     def _log_error(self, level, message=None, **kwargs) -> None:
         try:
@@ -432,8 +433,8 @@ class SurvivalOrchestrator(SilentLogMixin):
                 level, message = "INFO", level
             import logging
             logging.getLogger("pulse").error(f"{LOG_TAG} {message}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log_error L435")
 
 
 # ===== 模块级单例 =====

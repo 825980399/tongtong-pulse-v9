@@ -22,6 +22,7 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.logger import exc_location  # ★第32批 T3：异常位置动态获取
+from nucleus._silent_except import silent_exc
 
 
 
@@ -54,7 +55,8 @@ class ParallelScheduler(SilentLogMixin):
         try:
             from config import FEATURE
             return bool(FEATURE.get("use_runtime_adaptive_tuning", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.parallel_scheduler::_read_adaptive_flag L57")
             return False
 
     def update_hardware_capability(self, tier: str | None = None, cores: int | None = None,
@@ -393,5 +395,5 @@ def shutdown_parallel_scheduler() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.parallel_scheduler::shutdown_parallel_scheduler L396")

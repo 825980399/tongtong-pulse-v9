@@ -174,8 +174,8 @@ class ResonanceEngine:
                 kw = query.get("keywords")
             if kw:
                 return " ".join(str(k) for k in kw)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_extract_query_text L177")
         return ""
 
     def _build_semantic_map(self, query: dict, candidate_nodes: list[dict]) -> dict[str, float]:
@@ -855,8 +855,8 @@ class ResonanceEngine:
                 try:
                     from nucleus.reasoning.PolarityGuard import GLOBAL_RULE_KEY
                     rule_sim = rule_map.get(GLOBAL_RULE_KEY)
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_fuse_memory_channels L858")
 
         # ---- 规则通道关闭：走阶段一双通道路径（与改造前逐字节等价） ----
         if not rule_enabled:
@@ -1200,7 +1200,8 @@ class ResonanceEngine:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_KNOWLEDGE_TIMELINESS", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_knowledge_timeliness_enabled L1203")
             return False
 
     def _is_potentially_stale(self, node: dict) -> bool:

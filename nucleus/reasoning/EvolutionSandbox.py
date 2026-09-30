@@ -15,6 +15,7 @@ import threading
 import time
 from typing import Any
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
+from nucleus._silent_except import silent_exc
 
 
 
@@ -151,8 +152,8 @@ class EvolutionSandbox:
                         f"(file={_os.path.basename(_file) or '未知'}, type={issue_type}, "
                         f"failures={_ft.get_failure_count(_sig)}): {plan['escalation_reason']}"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::_generate_plan L154")
         
         return plan
     
@@ -309,5 +310,5 @@ def shutdown_evolution_sandbox() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::shutdown_evolution_sandbox L312")

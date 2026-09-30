@@ -195,8 +195,8 @@ class RuntimeTrajectory:
         """确保持久化目录存在（lazy 创建，仅启用时产生目录）。"""
         try:
             os.makedirs(self._persist_dir, exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_ensure_dir L198")
 
     def load(self) -> int:
         """启动回读：从持久化目录加载历史轨迹，返回加载条数。
@@ -277,8 +277,8 @@ class RuntimeTrajectory:
                 self._last_persist_time = time.time()
                 self._persist_count += 1
             self._maybe_compact()
-        except Exception:
-            pass  # 持久化失败不影响主流程
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_persist L280")
 
     def _maybe_compact(self) -> None:
         """每小时合并+去重+截断最近7天，写回 active（避免文件无限增长）。"""

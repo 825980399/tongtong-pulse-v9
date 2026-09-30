@@ -15,6 +15,7 @@ import re
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 
@@ -198,7 +199,8 @@ class AutonomousDeriver:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_CAUSAL_INFERENCE", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_causal_inference_enabled L201")
             return False
 
     def _verify_deductions_with_graph(self, causal_pairs: list[dict],
@@ -257,8 +259,8 @@ class AutonomousDeriver:
         try:
             from nucleus.aibot_logger import get_logger
             get_logger().info(msg)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L260")
 
     def _inductive_derive(self, node_pool, knowledge_tree) -> list[dict[str, Any]]:
         """
@@ -940,7 +942,7 @@ def shutdown_autonomous_deriver() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::shutdown_autonomous_deriver L943")
 
 # _m51_t4_e

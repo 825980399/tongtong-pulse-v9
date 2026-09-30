@@ -21,6 +21,7 @@ from typing import Any
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 
@@ -210,5 +211,5 @@ def shutdown_tooling_runner() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.tooling_runner::shutdown_tooling_runner L213")

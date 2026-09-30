@@ -17,6 +17,7 @@ import importlib
 from collections import defaultdict, deque
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 # 框架基础组件符号名（非器官，装配时由框架直接提供，不参与拓扑排序）。
@@ -402,5 +403,5 @@ class OrganAssembler:
         if meta.attr_name:
             try:
                 setattr(framework, meta.attr_name, organ)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.organ_assembler::_set_attr L405")
