@@ -38,6 +38,27 @@ from nucleus.const import (
     QICAEvent,
     SystemEvent,
     VisualEvent,
+    BoneMarrowEvent,
+    ConsentEvent,
+    DNARepairEvent,
+    DeviceEvent,
+    EvolutionEvent,
+    GrowthEvent,
+    HandsEvent,
+    HealthEvent,
+    KnowledgeEvent,
+    MediaEvent,
+    MetricsEvent,
+    PersonaEvent,
+    PersonalityEvent,
+    ProprioceptionEvent,
+    ReflectionEvent,
+    ReproductionEthicsEvent,
+    RiskEvent,
+    SecurityEvent,
+    SpinalCordEvent,
+    ThymusEvent,
+    WhiteCellEvent,
 )
 from utils.time_utils import get_current_datetime
 from nucleus.events.EventTap import tap_publish  # ★第17批 T2：旁路事件发布入口
@@ -212,16 +233,16 @@ class PulseCortex(BasePulseOrgan):
         }
         self._created_tools: list[dict[str, Any]] = []  # 创造的工具有（观测）
         self._report_event_types = {      # ★P3-5：结果/报告类孤儿脉冲，统一由皮层汇总消费
-            "eyes.search_result", "hands.result", "narrative.reflection_result",
-            "persona.relation_changed", "metrics.snapshot", "growth.milestone_reached",
-            "reflection.issue_found", "spinal.inspection_report", "thymus.train_result",
-            "system.recovery_attempt", "knowledge.fused",
-            "bone_marrow.generate_result", "consent.result", "device.allocated",
-            "dna_repair.solution_generated", "evolution.mutation_success",
-            "reproduction.ethics_result", "security.passed",
+            EyeEvent.SEARCH_RESULT, HandsEvent.RESULT, NarrativeEvent.REFLECTION_RESULT,
+            PersonaEvent.RELATION_CHANGED, MetricsEvent.SNAPSHOT, GrowthEvent.MILESTONE_REACHED,
+            ReflectionEvent.ISSUE_FOUND, SpinalCordEvent.INSPECTION_REPORT, ThymusEvent.TRAIN_RESULT,
+            SystemEvent.RECOVERY_ATTEMPT, KnowledgeEvent.FUSED,
+            BoneMarrowEvent.GENERATE_RESULT, ConsentEvent.RESULT, DeviceEvent.ALLOCATED,
+            DNARepairEvent.SOLUTION_GENERATED, EvolutionEvent.MUTATION_SUCCESS,
+            ReproductionEthicsEvent.ETHICS_RESULT, SecurityEvent.PASSED,
             # ★跨模态融合：媒体检测/元数据孤儿脉冲（文件消化器发射，此前无订阅）
-            "media.metadata", "media.image.detected", "media.audio.detected",
-            "media.video.detected", "media.unknown",
+            MediaEvent.METADATA, MediaEvent.IMAGE_DETECTED, MediaEvent.AUDIO_DETECTED,
+            MediaEvent.VIDEO_DETECTED, MediaEvent.UNKNOWN,
         }
         self.risk_perception = None  # 风险感知引用（直觉系统）
         self.autonomous_deriver = None  # ★P0-3：自主推导引擎引用
@@ -513,13 +534,13 @@ class PulseCortex(BasePulseOrgan):
         # 此分支永不触发（若触发会抛 AttributeError）。皮层无 STOP 需释放的资源，无需补订阅。
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
-        elif event_type == "health.report":
+        elif event_type == HealthEvent.REPORT:
             return self._on_health_report(payload)
-        elif event_type == "personality.integrity_report":
+        elif event_type == PersonalityEvent.INTEGRITY_REPORT:
             return self._on_personality_integrity_report(payload)
-        elif event_type == "white_cell.scan_result":
+        elif event_type == WhiteCellEvent.SCAN_RESULT:
             return self._on_white_cell_scan_result(payload)
-        elif event_type == "proprioception.report":
+        elif event_type == ProprioceptionEvent.REPORT:
             return self._on_proprioception_report(payload)
         elif event_type == HormonesEvent.EMOTION_DETECTED:
             return self._on_emotion_update(payload)
@@ -533,7 +554,7 @@ class PulseCortex(BasePulseOrgan):
             return self._on_risk_terminate(payload)
         elif event_type == "risk.moderate":
             return self._on_risk_moderate(payload)
-        elif event_type == "risk.alert":  # ★P3-5补闭环：基础风险告警（≥0.3），此前无人订阅
+        elif event_type == RiskEvent.ALERT:  # ★P3-5补闭环：基础风险告警（≥0.3），此前无人订阅
             return self._on_risk_alert(payload)
         elif event_type == SystemEvent.SAFE_MODE:  # ★P3-5补闭环：L4 安全模式，停止高风险推理
             return self._on_safe_mode(payload)
@@ -553,7 +574,7 @@ class PulseCortex(BasePulseOrgan):
             if event_type.startswith("media."):
                 self._index_media_event(event_type, payload)
             return {"status": "report_recorded"}
-        elif event_type == "security.sandbox_violation":
+        elif event_type == SecurityEvent.SANDBOX_VIOLATION:
             # ★P3-5补闭环：沙箱违规升级为安全告警（此前有发射无订阅）
             self._emit(SystemEvent.ALARM, {
                 "type": "sandbox_violation",
@@ -637,7 +658,7 @@ class PulseCortex(BasePulseOrgan):
 
         # ★主线第17批 T2/P2-63：旁路事件（只发布，不改变任何现有逻辑）
         tap_publish(
-            "cortex.dialog.start",
+            Event.CORTEX_DIALOG_START,
             payload={"correlation_id": correlation_id,
                      "question_len": len(content or "")},
             source="PulseCortex",
@@ -1833,7 +1854,7 @@ class PulseCortex(BasePulseOrgan):
                          knowledge_paths: list | None = None) -> dict[str, Any]:
         """根据意图执行路由（v9.5: 所有发射脉冲标记L1实时交互层）"""
         # 按路由表分发
-        route_target = self._intent_routes.get(intent, "mouth.speak")  # noqa: F841
+        route_target = self._intent_routes.get(intent, MouthEvent.SPEAK)  # noqa: F841
 
         # ===== 新增: 工具认知判断 =====
         # 在发给内在世界之前，先判断"这个问题最适合用哪种工具"
@@ -1951,7 +1972,7 @@ class PulseCortex(BasePulseOrgan):
         return {
             "status": "routed",
             "intent": intent,
-            "target": "mouth.speak",
+            "target": MouthEvent.SPEAK,
             "reason": "inner_world_not_available",
         }
     def _assess_tool_suitability(self, content: str, intent: str) -> dict[str, Any]:
@@ -2704,12 +2725,12 @@ class PulseCortex(BasePulseOrgan):
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
         return {
-            "身份": "mouth.speak",
-            "关系": "mouth.speak",
-            "知识": "eyes.search",
-            "代码": "hands.execute",
+            "身份": MouthEvent.SPEAK,
+            "关系": MouthEvent.SPEAK,
+            "知识": EyeEvent.SEARCH,
+            "代码": HandsEvent.EXECUTE,
             # ★v23.0 与 config.INTENT_ROUTES 对齐：状态类意图路由到系统状态响应
-            "状态": "system.status.response",
+            "状态": SystemEvent.STATUS_RESPONSE,
         }
     def _load_emotion_tone_map(self) -> dict:
         """从config加载情绪-语气映射表，失败时使用兜底值"""
@@ -2894,7 +2915,7 @@ class PulseCortex(BasePulseOrgan):
             try:
                 # 从信息场获取最新的情绪脉冲，提取趋势
                 if self.info_field:
-                    latest_emotion = self.info_field.get_current("hormones.emotion_detected")
+                    latest_emotion = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                     if latest_emotion and isinstance(latest_emotion, dict):
                         trend_payload = latest_emotion.get("payload", {})
                         emotion_trend = trend_payload.get("emotion_trend", {})
@@ -2972,7 +2993,7 @@ class PulseCortex(BasePulseOrgan):
 
                 # 如果知识库无数据，回退到信息场缓存
                 if _trend_direction == "stable":
-                    _pulse = self.info_field.get_current("hormones.emotion_detected")
+                    _pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                     if _pulse and isinstance(_pulse, dict):
                         _trend = _pulse.get("payload", {}).get("emotion_trend", {})
                         _trend_direction = _trend.get("direction", "stable")
@@ -3424,41 +3445,41 @@ class PulseCortex(BasePulseOrgan):
                     QICAEvent.CLASSIFY_RESULT,
                     InferenceEvent.RESULT,
                     VisualEvent.ANALYSIS_DONE,
-                    "hormones.emotion_detected",
+                    HormonesEvent.EMOTION_DETECTED,
                     NarrativeEvent.UPDATED,
                     SystemEvent.BOOT,
                     SystemEvent.STATUS_REQUEST,
-                    "health.report",  # ★P3-5补闭环：健康报告
-                    "personality.integrity_report",  # ★P3-5补闭环：人格完整性报告
-                    "white_cell.scan_result",  # ★P3-5补闭环：免疫扫描结果
-                    "proprioception.report",  # ★P3-5补闭环：本体感知报告
-                    "eyes.search_result",  # ★P3-5补闭环：知识检索结果
-                    "hands.result",  # ★P3-5补闭环：双手任务结果
-                    "narrative.reflection_result",  # ★P3-5补闭环：叙事复盘结果
-                    "persona.relation_changed",  # ★P3-5补闭环：关系变化
-                    "metrics.snapshot",  # ★P3-5补闭环：指标快照
-                    "growth.milestone_reached",  # ★P3-5补闭环：成长里程碑
-                    "reflection.issue_found",  # ★P3-5补闭环：复盘发现问题
-                    "spinal.inspection_report",  # ★P3-5补闭环：脊髓巡检报告
-                    "thymus.train_result",  # ★P3-5补闭环：胸腺训练结果
-                    "system.recovery_attempt",  # ★P3-5补闭环：恢复尝试通知
-                    "knowledge.fused",  # ★P3-5补闭环：知识融合结果
-                    "bone_marrow.generate_result",  # ★P3-5补闭环：骨髓生成结果
-                    "consent.result",  # ★P3-5补闭环：共同决策结果
-                    "device.allocated",  # ★P3-5补闭环：设备分配结果
-                    "dna_repair.solution_generated",  # ★P3-5补闭环：DNA修复方案
-                    "evolution.mutation_success",  # ★P3-5补闭环：变异成功
-                    "reproduction.ethics_result",  # ★P3-5补闭环：伦理审查结果
-                    "security.passed",  # ★P3-5补闭环：安全检查通过
-                    "media.metadata",  # ★跨模态融合：媒体元数据
-                    "media.image.detected",  # ★跨模态融合：图片检测
-                    "media.audio.detected",  # ★跨模态融合：音频检测
-                    "media.video.detected",  # ★跨模态融合：视频检测
-                    "media.unknown",  # ★跨模态融合：未知媒体
-                    "security.sandbox_violation",  # ★P3-5补闭环：沙箱违规（升级告警）
+                    HealthEvent.REPORT,  # ★P3-5补闭环：健康报告
+                    PersonalityEvent.INTEGRITY_REPORT,  # ★P3-5补闭环：人格完整性报告
+                    WhiteCellEvent.SCAN_RESULT,  # ★P3-5补闭环：免疫扫描结果
+                    ProprioceptionEvent.REPORT,  # ★P3-5补闭环：本体感知报告
+                    EyeEvent.SEARCH_RESULT,  # ★P3-5补闭环：知识检索结果
+                    HandsEvent.RESULT,  # ★P3-5补闭环：双手任务结果
+                    NarrativeEvent.REFLECTION_RESULT,  # ★P3-5补闭环：叙事复盘结果
+                    PersonaEvent.RELATION_CHANGED,  # ★P3-5补闭环：关系变化
+                    MetricsEvent.SNAPSHOT,  # ★P3-5补闭环：指标快照
+                    GrowthEvent.MILESTONE_REACHED,  # ★P3-5补闭环：成长里程碑
+                    ReflectionEvent.ISSUE_FOUND,  # ★P3-5补闭环：复盘发现问题
+                    SpinalCordEvent.INSPECTION_REPORT,  # ★P3-5补闭环：脊髓巡检报告
+                    ThymusEvent.TRAIN_RESULT,  # ★P3-5补闭环：胸腺训练结果
+                    SystemEvent.RECOVERY_ATTEMPT,  # ★P3-5补闭环：恢复尝试通知
+                    KnowledgeEvent.FUSED,  # ★P3-5补闭环：知识融合结果
+                    BoneMarrowEvent.GENERATE_RESULT,  # ★P3-5补闭环：骨髓生成结果
+                    ConsentEvent.RESULT,  # ★P3-5补闭环：共同决策结果
+                    DeviceEvent.ALLOCATED,  # ★P3-5补闭环：设备分配结果
+                    DNARepairEvent.SOLUTION_GENERATED,  # ★P3-5补闭环：DNA修复方案
+                    EvolutionEvent.MUTATION_SUCCESS,  # ★P3-5补闭环：变异成功
+                    ReproductionEthicsEvent.ETHICS_RESULT,  # ★P3-5补闭环：伦理审查结果
+                    SecurityEvent.PASSED,  # ★P3-5补闭环：安全检查通过
+                    MediaEvent.METADATA,  # ★跨模态融合：媒体元数据
+                    MediaEvent.IMAGE_DETECTED,  # ★跨模态融合：图片检测
+                    MediaEvent.AUDIO_DETECTED,  # ★跨模态融合：音频检测
+                    MediaEvent.VIDEO_DETECTED,  # ★跨模态融合：视频检测
+                    MediaEvent.UNKNOWN,  # ★跨模态融合：未知媒体
+                    SecurityEvent.SANDBOX_VIOLATION,  # ★P3-5补闭环：沙箱违规（升级告警）
                     "risk.terminate",
                     "risk.moderate",
-                    "risk.alert",  # ★P3-5补闭环：基础风险告警
+                    RiskEvent.ALERT,  # ★P3-5补闭环：基础风险告警
                     SystemEvent.SAFE_MODE,  # ★P3-5补闭环：L4 安全模式
                     HeartEvent.BEAT,  # ★v24.0新增：心跳驱动清理
                 ],

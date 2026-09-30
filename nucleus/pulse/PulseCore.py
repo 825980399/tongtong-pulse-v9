@@ -20,34 +20,34 @@ from typing import Any
 
 # ★暂缓项1：脉冲结构 TypedDict 契约（编译期检查，零运行时开销）
 from nucleus.pulse_types import Pulse
-from nucleus.const import Event
+from nucleus.const import  Event, ChatEvent, EarEvent, HeartEvent, InterestEvent, KnowledgeEvent, MouthEvent, ReflectionEvent, SubconsciousEvent, SystemEvent, VascularEvent
 from nucleus._silent_except import silent_exc
 
 # 层级默认映射表（当 emit 未指定 layer 时自动推断）
 _DEFAULT_LAYER_MAP = {
-    "heart.beat": "L0",
-    "heart.alive": "L0",
-    "system.boot": "L0",
-    "system.stop": "L0",
-    "system.alarm": "L0",
-    "system.error": "L0",
-    "organ.silent": "L0",
-    "chat.message": "L1",
-    "chat.initiative": "L1",
-    "mouth.speak": "L1",
-    "mouth.reply": "L1",
-    "ears.heard": "L1",
-    "ears.intent_detected": "L1",
-    "reflection.insight": "L1",
-    "interest.changed": "L1",
-    "knowledge.written": "L2",
-    "knowledge.compressed": "L2",
-    "knowledge.raw": "L2",
-    "digest.knowledge": "L2",
+    HeartEvent.BEAT: "L0",
+    HeartEvent.ALIVE: "L0",
+    SystemEvent.BOOT: "L0",
+    SystemEvent.STOP: "L0",
+    SystemEvent.ALARM: "L0",
+    SystemEvent.ERROR: "L0",
+    VascularEvent.SILENT_ORGAN: "L0",
+    Event.CHAT_MESSAGE: "L1",
+    ChatEvent.INITIATIVE: "L1",
+    MouthEvent.SPEAK: "L1",
+    MouthEvent.REPLY: "L1",
+    EarEvent.HEARD: "L1",
+    EarEvent.INTENT_DETECTED: "L1",
+    ReflectionEvent.INSIGHT: "L1",
+    InterestEvent.CHANGED: "L1",
+    KnowledgeEvent.WRITTEN: "L2",
+    KnowledgeEvent.COMPRESSED: "L2",
+    KnowledgeEvent.RAW: "L2",
+    Event.DIGEST_KNOWLEDGE: "L2",
     "purge.check": "L3",
     "purge.result": "L3",
-    "curiosity.tick": "L3",
-    "subconscious.explore": "L3",
+    Event.CURIOSITY_TICK: "L3",
+    SubconsciousEvent.EXPLORE: "L3",
 }
 
 
@@ -110,7 +110,7 @@ class PulseCore:
         
         Args:
             source_organ: 来源器官名称
-            event_type:  事件类型（如 'heart.beat'）
+            event_type:  事件类型（如 HeartEvent.BEAT）
             payload:     载荷数据
             priority:    优先级 0-10
             ttl_ns:      有效期（纳秒），默认 5 秒
@@ -330,7 +330,7 @@ if __name__ == "__main__":
     core = PulseCore()
     
     # 1. layer 显式指定
-    p0 = core.emit("心脏", "heart.beat", priority=7, layer="L0")
+    p0 = core.emit("心脏", HeartEvent.BEAT, priority=7, layer="L0")
     assert p0["layer"] == "L0", "显式 layer 失败"
     print(f"1. 显式 L0: layer={p0['layer']} ✅")
     

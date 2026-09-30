@@ -33,6 +33,8 @@ from nucleus.const import (
     LogLevel,
     NarrativeEvent,
     SystemEvent,
+    HeartEvent,
+    InnerWorldEvent,
 )
 from nucleus.diagnostics import get_diagnostics
 
@@ -513,7 +515,7 @@ class PulseInnerWorld(
             return self._on_status_request()
         elif event_type == KnowledgeEvent.RAW:
             return self._on_knowledge_raw(payload)
-        elif event_type == "heart.beat":
+        elif event_type == HeartEvent.BEAT:
             return self._on_heartbeat(payload)
         elif event_type == KnowledgeEvent.WRITTEN:
             return self._on_knowledge_written(payload)
@@ -528,7 +530,7 @@ class PulseInnerWorld(
             return self._handle_search_terminated(payload)
         elif event_type == Event.CONTROLLER_SEARCH_STAGE_COMPLETED:
             return self._handle_search_stage_feedback(payload)
-        elif event_type == "inner_world.cache_clear":
+        elif event_type == InnerWorldEvent.CACHE_CLEAR:
             # ★v17.0新增：响应代码学习器官的缓存清理请求
             _cache_key = payload.get("cache_key", "")
             if _cache_key == "self_constitution_organ_list" and hasattr(self, '_self_constitution_cache'):

@@ -29,6 +29,26 @@ from nucleus.const import (
     LogLevel,
     PersonaEvent,
     SystemEvent,
+    BoneMarrowEvent,
+    DNARepairEvent,
+    DeviceEvent,
+    EnergyEvent,
+    EvolutionEvent,
+    GrowthEvent,
+    HealthEvent,
+    HormonesEvent,
+    MetricsEvent,
+    NarrativeEvent,
+    NurtureEvent,
+    PersonalityEvent,
+    ProprioceptionEvent,
+    PurgeEvent,
+    ReproductionEthicsEvent,
+    SkinEvent,
+    SpinalCordEvent,
+    ThymusEvent,
+    TouchEvent,
+    WhiteCellEvent,
 )
 
 try:
@@ -576,7 +596,7 @@ class PulseHeart(BasePulseOrgan):
         """
         try:
             if self.info_field:
-                latest_emotion = self.info_field.get_current("hormones.emotion_detected")
+                latest_emotion = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if latest_emotion and isinstance(latest_emotion, dict):
                     trend = latest_emotion.get("payload", {}).get("emotion_trend", {})
                     rate = trend.get("rate", 0.0)
@@ -600,7 +620,7 @@ class PulseHeart(BasePulseOrgan):
         """从信息场获取当前情绪"""
         try:
             if self.info_field:
-                pulse = self.info_field.get_current("hormones.emotion_detected")
+                pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if pulse and isinstance(pulse, dict):
                     return pulse.get("payload", {}).get("emotion", "中性")
         except Exception:
@@ -689,7 +709,7 @@ class PulseHeart(BasePulseOrgan):
             self._scheduled_tasks["knowledge_purge"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "kidney.purge.check",
+                "event_type": PurgeEvent.PURGE_CHECK,
             }
             # 注册快照自动保存任务
             self._scheduled_tasks["snapshot_auto_save"] = {
@@ -701,122 +721,122 @@ class PulseHeart(BasePulseOrgan):
             self._scheduled_tasks["immune_scan"] = {
                 "interval": 600,  # 每10分钟
                 "last_run": _jitter(600),
-                "event_type": "white_cell.scan",
+                "event_type": WhiteCellEvent.SCAN,
             }
             # ★v24.0唤醒健康闭环：人格完整性校验任务
             self._scheduled_tasks["personality_verify"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "personality.verify",
+                "event_type": PersonalityEvent.VERIFY,
             }
             # ★v24.0唤醒健康闭环：健康检查任务
             self._scheduled_tasks["health_check"] = {
                 "interval": 1800,  # 每30分钟
                 "last_run": _jitter(1800),
-                "event_type": "health.check",
+                "event_type": HealthEvent.CHECK,
             }
             # ★P3-5补闭环：指标采集任务（此前 metrics.collect 有订阅无发射）
             self._scheduled_tasks["metrics_collect"] = {
                 "interval": 300,  # 每5分钟
                 "last_run": _jitter(300),
-                "event_type": "metrics.collect",
+                "event_type": MetricsEvent.COLLECT,
             }
             # ★P3-5补闭环：胸腺训练任务（此前 thymus.train 有订阅无发射）
             self._scheduled_tasks["thymus_train"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "thymus.train",
+                "event_type": ThymusEvent.TRAIN,
             }
             # ===== 以下为 P3-5 批量补发射：此前这些命令有订阅无发射 =====
             # 能量评估任务
             self._scheduled_tasks["energy_assess"] = {
                 "interval": 300,  # 每5分钟
                 "last_run": _jitter(300),
-                "event_type": "energy.assess",
+                "event_type": EnergyEvent.ASSESS,
             }
             # 脊髓巡检任务
             self._scheduled_tasks["spinal_inspect"] = {
                 "interval": 600,  # 每10分钟
                 "last_run": _jitter(600),
-                "event_type": "spinal.inspect",
+                "event_type": SpinalCordEvent.INSPECT,
             }
             # 本体感知请求任务
             self._scheduled_tasks["proprioception_request"] = {
                 "interval": 300,  # 每5分钟
                 "last_run": _jitter(300),
-                "event_type": "proprioception.request",
+                "event_type": ProprioceptionEvent.REQUEST,
             }
             # 触觉快照任务
             self._scheduled_tasks["touch_snapshot"] = {
                 "interval": 300,  # 每5分钟
                 "last_run": _jitter(300),
-                "event_type": "touch.snapshot",
+                "event_type": TouchEvent.SNAPSHOT,
             }
             # 叙事复盘任务
             self._scheduled_tasks["narrative_reflect"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "narrative.reflect",
+                "event_type": NarrativeEvent.REFLECT,
             }
             # 成长评估任务
             self._scheduled_tasks["growth_assess"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "growth.assess",
+                "event_type": GrowthEvent.ASSESS,
             }
             # 养育推进任务
             self._scheduled_tasks["nurture_advance"] = {
                 "interval": 21600,  # 每6小时
                 "last_run": _jitter(21600),
-                "event_type": "nurture.advance",
+                "event_type": NurtureEvent.ADVANCE,
             }
             # 设备刷新任务（此前 device.refresh 有订阅无发射）
             self._scheduled_tasks["device_refresh"] = {
                 "interval": 600,  # 每10分钟
                 "last_run": _jitter(600),
-                "event_type": "device.refresh",
+                "event_type": DeviceEvent.REFRESH,
             }
             # 人格边界校验任务（此前 personality.boundary_check 有订阅无发射）
             self._scheduled_tasks["personality_boundary_check"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "personality.boundary_check",
+                "event_type": PersonalityEvent.BOUNDARY_CHECK,
             }
             # 皮肤补丁审查任务（此前 skin.review_patch 有订阅无发射）
             self._scheduled_tasks["skin_review_patch"] = {
                 "interval": 1800,  # 每30分钟
                 "last_run": _jitter(1800),
-                "event_type": "skin.review_patch",
+                "event_type": SkinEvent.REVIEW_PATCH,
             }
             # 骨髓生成免疫规则任务（此前 bone_marrow.generate 有订阅无发射）
             self._scheduled_tasks["bone_marrow_generate"] = {
                 "interval": 21600,  # 每6小时
                 "last_run": _jitter(21600),
-                "event_type": "bone_marrow.generate",
+                "event_type": BoneMarrowEvent.GENERATE,
             }
             # 保存基因蓝图任务（此前 evolution.save_blueprint 有订阅无发射）
             self._scheduled_tasks["evolution_save_blueprint"] = {
                 "interval": 21600,  # 每6小时
                 "last_run": _jitter(21600),
-                "event_type": "evolution.save_blueprint",
+                "event_type": EvolutionEvent.SAVE_BLUEPRINT,
             }
             # ★P3-5补发射：DNA修复任务（此前 dna_repair.fix 有订阅无发射）
             self._scheduled_tasks["dna_repair_fix"] = {
                 "interval": 3600,  # 每小时
                 "last_run": _jitter(3600),
-                "event_type": "dna_repair.fix",
+                "event_type": DNARepairEvent.FIX,
             }
             # ★P3-5补发射：进化变异任务（此前 evolution.mutate 有订阅无发射）
             self._scheduled_tasks["evolution_mutate"] = {
                 "interval": 21600,  # 每6小时
                 "last_run": _jitter(21600),
-                "event_type": "evolution.mutate",
+                "event_type": EvolutionEvent.MUTATE,
             }
             # ★P3-5补发射：生育伦理审查任务（此前 reproduction.ethics_check 有订阅无发射）
             self._scheduled_tasks["reproduction_ethics_check"] = {
                 "interval": 86400,  # 每24小时
                 "last_run": _jitter(86400),
-                "event_type": "reproduction.ethics_check",
+                "event_type": ReproductionEthicsEvent.ETHICS_CHECK,
             }
             # ★阶段三子任务2：若 TimeCore 主动调度已开启，从 Heart 调度队列移除被接管的任务，
             # 避免双重执行（TimeCore 成为唯一触发方）。执行逻辑仍由各器官 event_type 处理器负责，零改动。

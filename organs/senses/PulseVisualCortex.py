@@ -46,6 +46,7 @@ from nucleus.const import (
     MouthEvent,
     PersonaEvent,
     VisualEvent,
+    DeviceEvent,
 )
 from nucleus.data.DataAccessLayer import safe_read_json  # ★R5：视觉流日志读取
 from nucleus.security.face_codec import load_roster, save_roster  # ★T-134b 人脸名册加密存储
@@ -408,7 +409,7 @@ class PulseVisualCortex(BasePulseOrgan):
             return self._on_stream_frame(payload)
         elif event_type == EyeEvent.VISUAL_QUERY:          # 新增：视觉查询（OCR/PDF）
             return self._on_visual_query(payload)
-        elif event_type == "device.capability_update":
+        elif event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == ChatEvent.MESSAGE:
             return self._on_chat_message(payload)
@@ -428,7 +429,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     VisualEvent.SIMULATE,
                     EyeEvent.STREAM_FRAME,
                     EyeEvent.VISUAL_QUERY,      # 新增：视觉查询
-                    "device.capability_update",
+                    DeviceEvent.CAPABILITY_UPDATE,
                     ChatEvent.MESSAGE,
                 ],
                 "min_priority": 1,

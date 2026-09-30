@@ -747,7 +747,7 @@ class PulseController(BasePulseOrgan):
             return
         self.info_field.publish(self.pulse_core.emit(
             source_organ=self.organ_name,
-            event_type="controller.search_stage_completed",
+            event_type=ControllerEvent.SEARCH_STAGE_COMPLETED,
             payload={
                 "stage": stage,
                 "search_topic": search_topic,
@@ -2372,7 +2372,7 @@ class PulseController(BasePulseOrgan):
         elif event_type == SearchEvent.TERMINATED:
             # ★第86批 T-86b：搜索终止信号改为独立事件（信号分层）
             return self._on_search_terminate(payload)
-        elif event_type == "controller.search_stage_completed":
+        elif event_type == ControllerEvent.SEARCH_STAGE_COMPLETED:
             payload = pulse.get("payload", {})
             if payload.get("status") == "terminate":
                 return self._on_search_terminate(payload)

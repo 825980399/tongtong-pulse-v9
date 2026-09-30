@@ -33,6 +33,7 @@ from nucleus.const import (
     LogLevel,
     ReflectionEvent,
     SystemEvent,
+    Event,
 )
 from nucleus.knowledge_noise_filter import (
     DOMAIN_SUFFIXES,
@@ -241,7 +242,7 @@ class PulseLiver(BasePulseOrgan):
             if self.node_pool is not None:
                 _node = PulseNode(
                     value=str(_content)[:500],
-                    keywords=["digest.knowledge",
+                    keywords=[Event.DIGEST_KNOWLEDGE,
                               str((payload or {}).get("source_organ", "代码学习"))],
                     source_organ=self.organ_name,
                     evol_level=PulseNode.EVOL_L1,

@@ -22,7 +22,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import LogLevel, PersonalityEvent, SystemEvent
+from nucleus.const import  LogLevel, PersonalityEvent, SystemEvent, HeartEvent
 from nucleus._silent_except import silent_exc
 
 
@@ -162,7 +162,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
             return self._on_boundary_check(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
-        elif event_type == "heart.beat":
+        elif event_type == HeartEvent.BEAT:
             # ★P1-1修复：每次心跳确保核心身份锚点已固化到 L3 知识库（幂等自愈）
             self._ensure_identity_seeds()
             return self._on_boundary_scan(payload)
@@ -691,7 +691,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
                     PersonalityEvent.VERIFY,
                     PersonalityEvent.BOUNDARY_CHECK,
                     SystemEvent.STATUS_REQUEST,
-                    "heart.beat",  # ★v22.0 M3新增：心跳驱动边界扫描
+                    HeartEvent.BEAT,  # ★v22.0 M3新增：心跳驱动边界扫描
                 ],
                 "min_priority": 1,
             }

@@ -27,7 +27,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import HeartEvent, LogLevel, ProprioceptionEvent, SystemEvent
+from nucleus.const import  HeartEvent, LogLevel, ProprioceptionEvent, SystemEvent, DeviceEvent
 from nucleus._silent_except import silent_exc
 
 
@@ -105,7 +105,7 @@ class PulseProprioception(BasePulseOrgan):
             return self._on_heartbeat()
         elif event_type == ProprioceptionEvent.REQUEST:
             return self._generate_full_report(payload.get("format", "dict"))
-        elif event_type == "device.capability_update":
+        elif event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == SystemEvent.DEVICE_ATTACHED:
             self._on_device_attached(payload)
@@ -125,7 +125,7 @@ class PulseProprioception(BasePulseOrgan):
                 "event_types": [
                     HeartEvent.BEAT,
                     ProprioceptionEvent.REQUEST,
-                    "device.capability_update",
+                    DeviceEvent.CAPABILITY_UPDATE,
                     SystemEvent.DEVICE_ATTACHED,
                     SystemEvent.DEVICE_DETACHED,
                     SystemEvent.STATUS_REQUEST,

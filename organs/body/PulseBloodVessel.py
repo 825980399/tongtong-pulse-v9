@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 import config
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import SILENCE_EXEMPT_ORGANS, HeartEvent, LogLevel, VascularEvent
+from nucleus.const import  SILENCE_EXEMPT_ORGANS, HeartEvent, LogLevel, VascularEvent, KnowledgeEvent
 from nucleus.organ_identity import resolve_organ_key  # ★T-112d：器官名归一化
 
 
@@ -379,7 +379,7 @@ if __name__ == "__main__":
 
     print("1. 模拟胃和眼睛的活跃脉冲:")
     vessel.on_pulse({
-        "event_type": "knowledge.written",
+        "event_type": KnowledgeEvent.WRITTEN,
         "source_organ": "胃",
         "payload": {},
         "priority": 3,

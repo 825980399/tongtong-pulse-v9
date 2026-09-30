@@ -40,6 +40,10 @@ from nucleus.const import (
     LogLevel,
     SubconsciousEvent,
     SystemEvent,
+    ControllerEvent,
+    DeviceEvent,
+    Event,
+    TouchEvent,
 )
 from nucleus.knowledge_noise_filter import clean_content_text
 from nucleus.data.DataAccessLayer import safe_write_json
@@ -230,9 +234,9 @@ class PulseLegs(BasePulseOrgan):
             return self._on_curiosity_tick(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
-        elif event_type == "touch.hardware_snapshot":
+        elif event_type == TouchEvent.HARDWARE_SNAPSHOT:
             return self._on_hardware_snapshot(payload)
-        elif event_type == "device.capability_update":
+        elif event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == DigestEvent.KNOWLEDGE:
             # 收到灵感脉冲时触发定向学习
@@ -243,7 +247,7 @@ class PulseLegs(BasePulseOrgan):
                     direction = "跨领域探索: " + "、".join(keywords[:2])
                     self._add_learn_task(direction, "normal")
                     return {"status": "creative_learning_queued", "direction": direction}
-        elif event_type == "legs.learn_now":
+        elif event_type == Event.LEGS_LEARN_NOW:
             return self._on_learn_now(payload)
         return None
 
@@ -721,7 +725,7 @@ class PulseLegs(BasePulseOrgan):
                     search_query = direction
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
-                        event_type="controller.open_url",
+                        event_type=ControllerEvent.OPEN_URL,
                         payload={
                             "url": f"https://lite.duckduckgo.com/lite/?q={search_query}",
                             "reason": f"主动学习搜索: {search_query}",
@@ -1489,12 +1493,12 @@ class PulseLegs(BasePulseOrgan):
                     LegsEvent.FETCH,
                     InterestEvent.CHANGED,
                     SubconsciousEvent.CURIOSITY_TICK,
-                    "touch.hardware_snapshot",
-                    "device.capability_update",
-                    "legs.learn_now",
+                    TouchEvent.HARDWARE_SNAPSHOT,
+                    DeviceEvent.CAPABILITY_UPDATE,
+                    Event.LEGS_LEARN_NOW,
                     SystemEvent.STATUS_REQUEST,
                     DigestEvent.KNOWLEDGE,
-                    "legs.learn_now",
+                    Event.LEGS_LEARN_NOW,
                 ],
                 "min_priority": 1,
             }

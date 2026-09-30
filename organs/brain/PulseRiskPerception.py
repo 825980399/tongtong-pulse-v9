@@ -25,7 +25,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import EarEvent, HeartEvent, HormonesEvent, LogLevel, RiskEvent
+from nucleus.const import  EarEvent, HeartEvent, HormonesEvent, LogLevel, RiskEvent, Event, ReflectionEvent
 
 
 class PulseRiskPerception(BasePulseOrgan):
@@ -131,12 +131,12 @@ class PulseRiskPerception(BasePulseOrgan):
             user_input = payload.get("text", payload.get("user_input", ""))
             user_name = payload.get("user_name", "unknown")
             return self._scan_user_input(user_input, user_name)
-        elif event_type == "reflection.insight":
+        elif event_type == ReflectionEvent.INSIGHT:
             # 从复盘结果中提取直觉模式
             return self._extract_intuition_from_reflection(payload)
         elif event_type == HeartEvent.BEAT:
             return self._update_risk_decay()
-        elif event_type == "intuition.reinforce":
+        elif event_type == Event.INTUITION_REINFORCE:
             return self._on_intuition_reinforce(payload)
         return None
 
@@ -144,7 +144,7 @@ class PulseRiskPerception(BasePulseOrgan):
         return [
             {
                 "organ_name": self.organ_name,
-                "event_types": [EarEvent.HEARD, HeartEvent.BEAT, "intuition.reinforce", "reflection.insight"],
+                "event_types": [EarEvent.HEARD, HeartEvent.BEAT, Event.INTUITION_REINFORCE, ReflectionEvent.INSIGHT],
                 "min_priority": 1,
             },
         ]

@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import HandsEvent, LogLevel, MotorEvent, SystemEvent
+from nucleus.const import  HandsEvent, LogLevel, MotorEvent, SystemEvent, TouchEvent
 
 
 class PulseHands(BasePulseOrgan):
@@ -135,7 +135,7 @@ class PulseHands(BasePulseOrgan):
         if self.info_field is None:
             return False
 
-        snapshot = self.info_field.get_current("touch.hardware_snapshot")
+        snapshot = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
         if snapshot and isinstance(snapshot, dict):
             payload = snapshot.get("payload", {})
             gpu_info = payload.get("gpu", {})
@@ -147,7 +147,7 @@ class PulseHands(BasePulseOrgan):
         if self.info_field is None:
             return 0.0
 
-        snapshot = self.info_field.get_current("touch.hardware_snapshot")
+        snapshot = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
         if snapshot and isinstance(snapshot, dict):
             payload = snapshot.get("payload", {})
             cpu_info = payload.get("cpu", {})

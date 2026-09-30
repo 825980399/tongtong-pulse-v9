@@ -24,7 +24,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import LogLevel, QICAEvent, SystemEvent
+from nucleus.const import  LogLevel, QICAEvent, SystemEvent, Event
 from nucleus._silent_except import silent_exc
 
 
@@ -33,7 +33,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
     语义理解器（v24.0新增）
 
     工作流程:
-        1. 收到 "semantic.classify" 脉冲
+        1. 收到 Event.SEMANTIC_CLASSIFY 脉冲
         2. 调用 QICA._on_classify() 获取本地分类结果
         3. 计算本地分类的置信度
         4. 如果置信度 < 阈值(0.7) 或 高置信度抽样命中：
@@ -160,7 +160,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
         event_type = pulse.get("event_type", "")
         payload = pulse.get("payload", {})
 
-        if event_type == "semantic.classify":
+        if event_type == Event.SEMANTIC_CLASSIFY:
             return self._on_semantic_classify(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
@@ -834,7 +834,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
             {
                 "organ_name": self.organ_name,
                 "event_types": [
-                    "semantic.classify",
+                    Event.SEMANTIC_CLASSIFY,
                     SystemEvent.STATUS_REQUEST,
                 ],
                 "min_priority": 1,
@@ -927,7 +927,7 @@ if __name__ == "__main__":
     print("1. 高置信度输入:")
     comp._sample_counter = 999  # 避免抽样
     r1 = comp.on_pulse({
-        "event_type": "semantic.classify",
+        "event_type": Event.SEMANTIC_CLASSIFY,
         "payload": {"content": "你是谁", "user_name": "小林", "correlation_id": "test1"},
         "priority": 7,
     })
@@ -941,7 +941,7 @@ if __name__ == "__main__":
     mock_field.published.clear()
     comp._sample_counter = 999
     r2 = comp.on_pulse({
-        "event_type": "semantic.classify",
+        "event_type": Event.SEMANTIC_CLASSIFY,
         "payload": {"content": "随机乱写的文本xyz", "user_name": "小林", "correlation_id": "test2"},
         "priority": 7,
     })

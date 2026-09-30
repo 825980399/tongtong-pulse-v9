@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import HeartEvent, LogLevel, SystemEvent, VascularEvent
+from nucleus.const import  HeartEvent, LogLevel, SystemEvent, VascularEvent, DeviceEvent
 from nucleus.const import Event
 
 
@@ -44,7 +44,7 @@ class PulseEmergencyHandler(BasePulseOrgan):
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
         event_type = pulse.get("event_type", "")
         payload = pulse.get("payload", {})
-        if event_type == "device.capability_update":
+        if event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == SystemEvent.ALARM:
             return self._on_alarm(payload)
@@ -190,7 +190,7 @@ class PulseEmergencyHandler(BasePulseOrgan):
         return [{
             "organ_name": self.organ_name,
             "event_types": [
-                "device.capability_update",
+                DeviceEvent.CAPABILITY_UPDATE,
                 SystemEvent.ALARM,
                 VascularEvent.SILENT_ORGAN,
                 HeartEvent.BEAT,  # ★P3-5补闭环：心跳周期检测压力解除

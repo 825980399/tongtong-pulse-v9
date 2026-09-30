@@ -32,7 +32,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import EyeEvent, LogLevel, SystemEvent, VisualEvent
+from nucleus.const import  EyeEvent, LogLevel, SystemEvent, VisualEvent, DeviceEvent
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
@@ -211,7 +211,7 @@ class PulseEyes(BasePulseOrgan):
             return self._on_search(payload)
         elif event_type == EyeEvent.VISUAL_QUERY:
             return self._on_visual_query(payload)
-        elif event_type == "device.capability_update":
+        elif event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
@@ -450,7 +450,7 @@ class PulseEyes(BasePulseOrgan):
             if self.info_field and self.pulse_core:
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
-                    event_type="device.capability_update",
+                    event_type=DeviceEvent.CAPABILITY_UPDATE,
                     payload={
                         "capabilities": {"sensor.camera.available": False},
                         "timestamp": now,
@@ -615,7 +615,7 @@ class PulseEyes(BasePulseOrgan):
                 "event_types": [ 
                     EyeEvent.SEARCH,
                     EyeEvent.VISUAL_QUERY,
-                    "device.capability_update",
+                    DeviceEvent.CAPABILITY_UPDATE,
                     SystemEvent.STATUS_REQUEST,
                 ],
                 "min_priority": 1,

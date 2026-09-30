@@ -18,7 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import ChatEvent, HormonesEvent, LogLevel, SystemEvent
+from nucleus.const import  ChatEvent, HormonesEvent, LogLevel, SystemEvent, HeartEvent
 
 # 神经递质定义
 NEUROTRANSMITTERS = {
@@ -116,7 +116,7 @@ class PulseNeurotransmitters(BasePulseOrgan):
             self._on_emotion(payload)
         elif event_type == SystemEvent.BOOT:
             self._log(LogLevel.INFO, "神经递质系统已启动（6种递质调节就绪）")
-        elif event_type == "heart.beat":
+        elif event_type == HeartEvent.BEAT:
             self._decay()
         return None
 
@@ -124,7 +124,7 @@ class PulseNeurotransmitters(BasePulseOrgan):
         return [
             {
                 "organ_name": self.organ_name,
-                "event_types": [ChatEvent.MESSAGE, HormonesEvent.EMOTION_DETECTED, "heart.beat"],
+                "event_types": [ChatEvent.MESSAGE, HormonesEvent.EMOTION_DETECTED, HeartEvent.BEAT],
                 "min_priority": 1,
             },
         ]

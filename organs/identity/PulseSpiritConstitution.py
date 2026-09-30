@@ -27,6 +27,7 @@ from nucleus.const import (
     HeartEvent,
     LogLevel,
     SystemEvent,
+    Event,
 )
 
 
@@ -139,7 +140,7 @@ class PulseSpiritConstitution(BasePulseOrgan):
         elif event_type == "constitution.verify_request":
             # 外部请求执行宪法校验（如补丁应用前）
             return self._on_verify_request(payload)
-        elif event_type == "global_learner.drift_detected":
+        elif event_type == Event.GLOBAL_LEARNER_DRIFT_DETECTED:
             # ★v25.0新增：接收全局学习器的漂移检测告警
             return self._on_drift_detected(payload)
 
@@ -612,7 +613,7 @@ class PulseSpiritConstitution(BasePulseOrgan):
                 HeartEvent.BEAT,
                 SystemEvent.STATUS_REQUEST,
                 "constitution.verify_request",
-                "global_learner.drift_detected",  # ★v25.0新增：订阅全局学习器漂移告警
+                Event.GLOBAL_LEARNER_DRIFT_DETECTED,  # ★v25.0新增：订阅全局学习器漂移告警
             ],
             "min_priority": 1,
         }]

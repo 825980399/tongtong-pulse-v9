@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import GrowthEvent, SystemEvent
+from nucleus.const import  GrowthEvent, SystemEvent, HeartEvent
 from nucleus.mnemosyne.PulseNode import PulseNode
 
 
@@ -191,7 +191,7 @@ class PulseGrowth(BasePulseOrgan):
             self._current_level["l3_nodes"] = evol_dist.get("L3", 0)
 
         if self.info_field:
-            heartbeat = self.info_field.get_current("heart.beat")
+            heartbeat = self.info_field.get_current(HeartEvent.BEAT)
             if heartbeat:
                 interval = heartbeat.get("payload", {}).get("interval", 0)
                 self._current_level["heartbeat_stable"] = 5 <= interval <= 60
@@ -296,7 +296,7 @@ if __name__ == "__main__":
             return self._data.get(key)
 
     mock_field = MockInfoField()
-    mock_field._data["heart.beat"] = {"payload": {"interval": 10.0}}
+    mock_field._data[HeartEvent.BEAT] = {"payload": {"interval": 10.0}}
     pool = PulseNodePool()
     codec = FrequencyCodec()
 

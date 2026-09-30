@@ -32,6 +32,7 @@ from nucleus.const import (
     KnowledgeEvent,
     LogLevel,
     SystemEvent,
+    Event,
 )
 from nucleus.knowledge_noise_filter import (
     DOMAIN_SUFFIXES,
@@ -1039,7 +1040,7 @@ class PulseStomach(BasePulseOrgan):
         # 此处不得用「对话消化持久化」默认值覆盖它，否则噪音 L1 会永久占位（原 bug）。
         if source_organ == "双腿":
             node.ephemeral = True   # 网络抓取内容不持久化
-        elif trigger_reason in ("dream.deduction", "curiosity.explore"):
+        elif trigger_reason in (Event.DREAM_DEDUCTION, "curiosity.explore"):
             node.ephemeral = True   # 梦境推演和好奇心探索不持久化
         elif not getattr(node, 'ephemeral', False):
             node.ephemeral = False  # 仅当未被标记为临时时，对话消化和内置知识持久化到L1快照

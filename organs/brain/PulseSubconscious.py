@@ -37,6 +37,11 @@ from nucleus.const import (
     ReflectionEvent,
     SubconsciousEvent,
     SystemEvent,
+    ControllerEvent,
+    DeviceEvent,
+    EnergyEvent,
+    PersonaEvent,
+    TouchEvent,
 )
 from nucleus.knowledge_noise_filter import is_noise_keyword
 from utils.time_utils import get_current_datetime, get_weather
@@ -430,7 +435,7 @@ class PulseSubconscious(BasePulseOrgan):
             return {"status": "interaction_updated"}
         elif event_type == ChatEvent.USER_LEFT:
             return self._on_user_left(payload)
-        elif event_type == "device.capability_update":
+        elif event_type == DeviceEvent.CAPABILITY_UPDATE:
             return self._on_capability_update(payload)
         elif event_type == GrowthEvent.NEED_DETECTED:
             return self._on_growth_need(payload)
@@ -443,11 +448,11 @@ class PulseSubconscious(BasePulseOrgan):
         elif event_type == ReflectionEvent.INSIGHT:
             # 联动3：前额叶复盘发现薄弱领域，加入好奇心探索队列
             return self._on_reflection_insight(payload)
-        elif event_type == "environment.mutated":
+        elif event_type == Event.ENVIRONMENT_MUTATED:
             return self._on_environment_mutation(payload)
-        elif event_type == "express.urge":
+        elif event_type == Event.EXPRESS_URGE:
             return self._on_express_urge(payload)
-        elif event_type == "subconscious.search_feedback":
+        elif event_type == SubconsciousEvent.SEARCH_FEEDBACK:
             return self._on_search_feedback(payload)
         elif event_type == NarrativeEvent.REFLECTION_RESULT:
             # ★v25.1 P1补强：叙事自我反思发现的主题 → 潜意识探索队列
@@ -978,7 +983,7 @@ class PulseSubconscious(BasePulseOrgan):
         if self.info_field and self.pulse_core and topic:
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
-                event_type="controller.open_url",
+                event_type=ControllerEvent.OPEN_URL,
                 payload={
                     "url": f"https://lite.duckduckgo.com/lite/?q={topic}",
                     "reason": f"好奇心探索: {topic}",
@@ -1033,7 +1038,7 @@ class PulseSubconscious(BasePulseOrgan):
         # 从自我认知获取最近交互的用户
         try:
             if self.info_field:
-                snapshot = self.info_field.get_current("chat.message")
+                snapshot = self.info_field.get_current(Event.CHAT_MESSAGE)
                 if snapshot and isinstance(snapshot, dict):
                     payload = snapshot.get("payload", {})
                     return payload.get("user_name", "小林")
@@ -1156,7 +1161,7 @@ class PulseSubconscious(BasePulseOrgan):
         if env_config:
             try:
                 # 从信息场获取最新的环境数据
-                snapshot = self.info_field.get_current("touch.hardware_snapshot")
+                snapshot = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
                 if snapshot and isinstance(snapshot, dict):
                     env_data = snapshot.get("payload", {}).get("environment", {})
                     if env_data:
@@ -1615,7 +1620,7 @@ class PulseSubconscious(BasePulseOrgan):
         # 优先检查信息场中的设备能力表
         try:
             if self.info_field:
-                caps = self.info_field.get_current("device.capability_update")
+                caps = self.info_field.get_current(DeviceEvent.CAPABILITY_UPDATE)
                 if caps and isinstance(caps, dict):
                     payload = caps.get("payload", {})
                     capabilities = payload.get("capabilities", {})
@@ -2688,7 +2693,7 @@ class PulseSubconscious(BasePulseOrgan):
             if self.info_field:
                 # 通过信息场获取自我认知器官
                 _self_awareness = None
-                _pulse = self.info_field.get_current("persona.switched")
+                _pulse = self.info_field.get_current(PersonaEvent.SWITCHED)
                 if _pulse and isinstance(_pulse, dict):
                     # 从脉冲中无法直接获取器官引用，改用洞察黑板查询
                     pass
@@ -2909,7 +2914,7 @@ class PulseSubconscious(BasePulseOrgan):
         """获取当前情绪状态"""
         try:
             if self.info_field:
-                _pulse = self.info_field.get_current("hormones.emotion_detected")
+                _pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if _pulse and isinstance(_pulse, dict):
                     return _pulse.get("payload", {}).get("emotion", "中性")
         except Exception as e:
@@ -2919,7 +2924,7 @@ class PulseSubconscious(BasePulseOrgan):
         """获取当前情绪强度，失败时返回0.0"""
         try:
             if self.info_field:
-                _pulse = self.info_field.get_current("hormones.emotion_detected")
+                _pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if _pulse and isinstance(_pulse, dict):
                     return _pulse.get("payload", {}).get("intensity", 0.0)
         except Exception as e:
@@ -2951,7 +2956,7 @@ class PulseSubconscious(BasePulseOrgan):
 
             # ★v17.0 R8修复：方式二（备选通道）——从信息场获取激素脉冲
             if self.info_field:
-                pulse = self.info_field.get_current("hormones.emotion_detected")
+                pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if pulse and isinstance(pulse, dict):
                     trend = pulse.get("payload", {}).get("emotion_trend", {})
                     if trend and trend.get("direction"):
@@ -3167,7 +3172,7 @@ class PulseSubconscious(BasePulseOrgan):
         if self.info_field is None:
             return False
 
-        snapshot = self.info_field.get_current("touch.hardware_snapshot")
+        snapshot = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
         if snapshot and isinstance(snapshot, dict):
             payload = snapshot.get("payload", {})
             cpu = payload.get("cpu", {}).get("usage_percent", 0)
@@ -3175,7 +3180,7 @@ class PulseSubconscious(BasePulseOrgan):
             if cpu > 80 or mem > 85:
                 return True
 
-        energy_snapshot = self.info_field.get_current("energy.metabolism_snapshot")
+        energy_snapshot = self.info_field.get_current(EnergyEvent.METABOLISM_SNAPSHOT)
         if energy_snapshot and isinstance(energy_snapshot, dict):
             energy = energy_snapshot.get("payload", {}).get("energy_level", 1.0)
             if energy < 0.3:
@@ -3185,7 +3190,7 @@ class PulseSubconscious(BasePulseOrgan):
 
     def _adjust_interval(self):
         if self.info_field:
-            energy_snapshot = self.info_field.get_current("energy.metabolism_snapshot")
+            energy_snapshot = self.info_field.get_current(EnergyEvent.METABOLISM_SNAPSHOT)
             if energy_snapshot and isinstance(energy_snapshot, dict):
                 energy = energy_snapshot.get("payload", {}).get("energy_level", 0.5)
                 if energy > 0.8:
@@ -4666,13 +4671,13 @@ class PulseSubconscious(BasePulseOrgan):
                     KnowledgeEvent.COMPRESSED,
                     ChatEvent.USER_PRESENCE_DETECTED,
                     ChatEvent.USER_LEFT,
-                    "device.capability_update",
+                    DeviceEvent.CAPABILITY_UPDATE,
                     GrowthEvent.NEED_DETECTED,
                     Event.DREAM_DEDUCTION,              # ← 新增：梦境联动
                     PurgeEvent.PURGE_RESULT,         # ← 新增：肾脏淘汰联动
                     ReflectionEvent.INSIGHT,         # ← 新增：前额叶复盘联动
-                    "environment.mutated",          # 新增：环境突变
-                    "express.urge",                 # 新增：自主表达冲动
+                    Event.ENVIRONMENT_MUTATED,          # 新增：环境突变
+                    Event.EXPRESS_URGE,                 # 新增：自主表达冲动
                     SubconsciousEvent.SEARCH_FEEDBACK,  # ← 新增：搜索反馈
                 ],
                 "min_priority": 1,
@@ -4722,13 +4727,13 @@ if __name__ == "__main__":
             return True
 
     mock = MockInfoField()
-    mock._data["touch.hardware_snapshot"] = {
+    mock._data[TouchEvent.HARDWARE_SNAPSHOT] = {
         "payload": {
             "cpu": {"usage_percent": 30},
             "memory": {"usage_percent": 50},
         }
     }
-    mock._data["energy.metabolism_snapshot"] = {
+    mock._data[EnergyEvent.METABOLISM_SNAPSHOT] = {
         "payload": {"energy_level": 0.85}
     }
 

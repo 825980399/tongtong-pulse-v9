@@ -24,7 +24,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import ChatEvent, HeartEvent, LogLevel, MouthEvent, PersonaEvent
+from nucleus.const import  ChatEvent, HeartEvent, LogLevel, MouthEvent, PersonaEvent, Event
 from nucleus._silent_except import silent_exc
 
 
@@ -179,7 +179,7 @@ class PulseInitiative(BasePulseOrgan):
             return None
         elif event_type == ChatEvent.SILENCE_TIMEOUT:
             return self._on_silence_timeout(payload)
-        elif event_type == "care.initiative":
+        elif event_type == Event.CARE_INITIATIVE:
             return self._on_care_initiative(payload)
         return None
 
@@ -192,7 +192,7 @@ class PulseInitiative(BasePulseOrgan):
                     PersonaEvent.RECORD_INTERACTION,
                     ChatEvent.MESSAGE,
                     ChatEvent.SILENCE_TIMEOUT,
-                    "care.initiative",
+                    Event.CARE_INITIATIVE,
                 ],
                 "min_priority": 1,
             },

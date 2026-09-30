@@ -703,7 +703,7 @@ class PulseTouch(BasePulseOrgan):
         # 发射硬件快照脉冲给信息场和设备管理器
         # ★PHASE14-闭环修复：硬件快照是「状态型」数据，TTL 必须覆盖采集间隔。
         #   原实现沿用 _emit 默认 TTL=5s，而本器官采集间隔为 30s（可配），
-        #   导致消费方 get_current("touch.hardware_snapshot") 命中率仅 5/30≈17%——
+        #   导致消费方 get_current(TouchEvent.HARDWARE_SNAPSHOT) 命中率仅 5/30≈17%——
         #   PulseHardwareLauncher 每次评估都取不到「家底」，静默兜底 tier=standard。
         #   这里显式把 TTL 设为「采集间隔 ×2 + 5s 余量」，保证任意时刻至少有一份有效快照。
         _snap_ttl_ns = int(

@@ -119,7 +119,7 @@ class PulseDeviceManager(BasePulseOrgan):
         else:
             if self.info_field is None:
                 return
-            hw_pulse = self.info_field.get_current("touch.hardware_snapshot")
+            hw_pulse = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
             if hw_pulse is None:
                 return
             payload = hw_pulse.get("payload", {}) if isinstance(hw_pulse, dict) else {}
@@ -480,7 +480,7 @@ if __name__ == "__main__":
         def __init__(self):
             self.published = []
             self._data = {
-                "touch.hardware_snapshot": {
+                TouchEvent.HARDWARE_SNAPSHOT: {
                     "payload": {
                         "cpu": {"model": "AMD Ryzen 7 3700X", "cores": 16, "usage_percent": 35},
                         "memory": {"total_gb": 47.9, "usage_percent": 50},

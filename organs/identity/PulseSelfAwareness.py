@@ -31,6 +31,9 @@ from nucleus.const import (
     PersonaEvent,
     SelfAwarenessEvent,
     SystemEvent,
+    HormonesEvent,
+    NarrativeEvent,
+    ReflectionEvent,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: F401
 from nucleus.const import Event
@@ -346,7 +349,7 @@ class PulseSelfAwareness(BasePulseOrgan):
             return self._on_user_presence(payload)
         elif event_type == ChatEvent.USER_LEFT:
             return self._on_user_left(payload)
-        elif event_type == "reflection.insight":
+        elif event_type == ReflectionEvent.INSIGHT:
             return self._on_reflection_insight(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
@@ -556,7 +559,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                 if self.info_field and self.pulse_core:
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
-                        event_type="narrative.record",
+                        event_type=NarrativeEvent.RECORD,
                         payload={
                             "content": _learned,
                             "event_type": "social_growth",
@@ -2346,7 +2349,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         """★v17.0支点五：情绪趋势快照"""
         try:
             if self.info_field:
-                pulse = self.info_field.get_current("hormones.emotion_detected")
+                pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if pulse and isinstance(pulse, dict):
                     payload = pulse.get("payload", {})
                     trend = payload.get("emotion_trend", {})
@@ -2543,7 +2546,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         """情绪状态快照"""
         try:
             if self.info_field:
-                pulse = self.info_field.get_current("hormones.emotion_detected")
+                pulse = self.info_field.get_current(HormonesEvent.EMOTION_DETECTED)
                 if pulse and isinstance(pulse, dict):
                     payload = pulse.get("payload", {})
                     return {
@@ -2587,7 +2590,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         """生命周期阶段快照"""
         try:
             if self.info_field:
-                pulse = self.info_field.get_current("narrative.updated")
+                pulse = self.info_field.get_current(NarrativeEvent.UPDATED)
                 if pulse and isinstance(pulse, dict):
                     stage = pulse.get("payload", {}).get("life_stage_summary", "")
                     if stage:
@@ -2741,7 +2744,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                 SystemEvent.STATUS_REQUEST,
                 ChatEvent.USER_PRESENCE_DETECTED,
                 ChatEvent.USER_LEFT,
-                "reflection.insight",
+                ReflectionEvent.INSIGHT,
                 "organ_handbook_updated",  # ★v17.0 D6新增
                 HeartEvent.BEAT,
             ],

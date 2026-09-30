@@ -35,7 +35,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import LogLevel, SystemEvent, ThymusEvent
+from nucleus.const import  LogLevel, SystemEvent, ThymusEvent, HeartEvent
 
 
 class PulseThymus(BasePulseOrgan):
@@ -88,7 +88,7 @@ class PulseThymus(BasePulseOrgan):
             return self._on_train(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
-        elif event_type == "heart.beat":
+        elif event_type == HeartEvent.BEAT:
             return self._on_heartbeat(payload)
 
         return None
@@ -243,7 +243,7 @@ class PulseThymus(BasePulseOrgan):
                 "event_types": [
                     ThymusEvent.TRAIN,
                     SystemEvent.STATUS_REQUEST,
-                    "heart.beat",  # ★v22.0 M5新增：心跳驱动定期训练
+                    HeartEvent.BEAT,  # ★v22.0 M5新增：心跳驱动定期训练
                 ],
                 "min_priority": 1,
             }

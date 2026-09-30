@@ -30,6 +30,7 @@ from nucleus.const import (
     LogLevel,
     StressAxisEvent,
     SystemEvent,
+    TouchEvent,
 )
 
 
@@ -270,7 +271,7 @@ class PulseMotivationCycle(BasePulseOrgan):
             resource = 0.0
             try:
                 if self.info_field:
-                    snap = self.info_field.get_current("touch.hardware_snapshot")
+                    snap = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
                     if snap and isinstance(snap, dict):
                         payload = snap.get("payload", {})
                         cpu = payload.get("cpu", {}).get("usage_percent", 0)

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import HardwareEvent, SystemEvent
+from nucleus.const import  HardwareEvent, SystemEvent, EnergyEvent, TouchEvent
 
 
 class PulseHardwareLauncher(BasePulseOrgan):
@@ -46,7 +46,7 @@ class PulseHardwareLauncher(BasePulseOrgan):
         _hw = None
         if self.info_field:
             try:
-                _snap = self.info_field.get_current("touch.hardware_snapshot")
+                _snap = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
                 if _snap and isinstance(_snap, dict):
                     _hw = _snap.get("payload", _snap)  # 兼容两种包结构
             except Exception:
@@ -94,7 +94,7 @@ class PulseHardwareLauncher(BasePulseOrgan):
 
         # 兜底1：无真实硬件数据时回退到能量代谢分（保持原有行为）
         if tier is None and self.info_field:
-            es = self.info_field.get_current("energy.metabolism_snapshot")
+            es = self.info_field.get_current(EnergyEvent.METABOLISM_SNAPSHOT)
             if es and isinstance(es, dict):
                 overall = es.get("payload", {}).get("profile", {}).get("overall", 5)
                 if overall >= 7:
@@ -183,7 +183,7 @@ if __name__ == "__main__":
         def publish(self, p): self.published.append(p)
         def get_current(self, k): return self._data.get(k)
     m = MockInfoField()
-    m._data["energy.metabolism_snapshot"] = {"payload": {"profile": {"overall": 7.5}}}
+    m._data[EnergyEvent.METABOLISM_SNAPSHOT] = {"payload": {"profile": {"overall": 7.5}}}
     h = PulseHardwareLauncher("硬件启动器"); h.set_info_field(m); h.start()
     r = h.on_pulse({"event_type": HardwareEvent.ASSESS, "payload": {}, "priority": 5})
     print(f"1. 评估: {r['status']}, 等级={r['tier']}")

@@ -14,7 +14,7 @@ PulseMetricsCollector —— 多层级指标采集器 · 运行态可观测性�
 import os
 import sys
 
-from nucleus.const import LogLevel
+from nucleus.const import  LogLevel, ChatEvent, ControllerEvent, EnergyEvent, Event, EyeEvent, KnowledgeEvent, MouthEvent, PersonaEvent, ReflectionEvent, TouchEvent
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -115,13 +115,13 @@ class PulseMetricsCollector(BasePulseOrgan):
             return self._on_heartbeat_observe(payload)
         elif event_type == HeartEvent.ALIVE:
             return self._on_heartbeat_alive(payload)
-        elif event_type == "persona.switched":
+        elif event_type == PersonaEvent.SWITCHED:
             return self._on_persona_switched(payload)
-        elif event_type == "digest.knowledge":
+        elif event_type == Event.DIGEST_KNOWLEDGE:
             return self._on_digest_for_dream(payload)
-        elif event_type == "reflection.insight":
+        elif event_type == ReflectionEvent.INSIGHT:
             return self._on_reflection_insight(payload)
-        elif event_type == "knowledge.compressed":
+        elif event_type == KnowledgeEvent.COMPRESSED:
             return self._on_liver_compressed(payload)
         elif event_type == "instinct.upgraded":
             return self._on_instinct_upgraded(payload)
@@ -129,9 +129,9 @@ class PulseMetricsCollector(BasePulseOrgan):
             return self._on_emotion_detected(payload)
         elif event_type == InterestEvent.CHANGED:
             return self._on_interest_changed(payload)
-        elif event_type == "controller.search_completed":
+        elif event_type == ControllerEvent.SEARCH_COMPLETED:
             return self._on_search_completed(payload)
-        elif event_type == "life_state.changed":
+        elif event_type == Event.LIFE_STATE_CHANGED:
             # ★P0-6修复：补上订阅声明但缺失的处理分支，否则 _on_life_state_changed 成死代码、
             # 生命状态缓存永不被更新。
             return self._on_life_state_changed(payload)
@@ -186,7 +186,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             # 尝试从信息场获取最新用户身份
             if self.info_field:
                 try:
-                    persona_pulse = self.info_field.get_current("persona.switched")
+                    persona_pulse = self.info_field.get_current(PersonaEvent.SWITCHED)
                     if persona_pulse and isinstance(persona_pulse, dict):
                         user = persona_pulse.get("payload", {}).get("current_user", "")
                         if user:
@@ -233,7 +233,7 @@ class PulseMetricsCollector(BasePulseOrgan):
     def _on_digest_for_dream(self, payload: dict) -> dict[str, Any]:
         """缓存梦境推演数据"""
         trigger_reason = payload.get("trigger_reason", "")
-        if trigger_reason == "dream.deduction":
+        if trigger_reason == Event.DREAM_DEDUCTION:
             with self._cache_lock:
                 self._dream_count += 1
                 content = payload.get("content", "")
@@ -425,9 +425,9 @@ class PulseMetricsCollector(BasePulseOrgan):
                 history = self.info_field.get_history(limit=500)
                 for entry in history:
                     et = entry.get("event_type", "")
-                    if et == "controller.open_url":
+                    if et == ControllerEvent.OPEN_URL:
                         controller_stats["urls_opened"] += 1
-                    elif et == "controller.read_file":
+                    elif et == ControllerEvent.READ_FILE:
                         controller_stats["files_read"] += 1
                     elif et.startswith("controller."):
                         controller_stats["operations"] += 1
@@ -488,7 +488,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         # 兴趣光谱摘要
         if self.info_field:
             try:
-                interest_pulse = self.info_field.get_current("interest.changed")
+                interest_pulse = self.info_field.get_current(InterestEvent.CHANGED)
                 if interest_pulse and isinstance(interest_pulse, dict):
                     payload = interest_pulse.get("payload", {})
                     interests = payload.get("current_interests", {})
@@ -578,13 +578,13 @@ class PulseMetricsCollector(BasePulseOrgan):
     def _collect_link_status(self) -> dict[str, Any]:
         """采集核心脉冲链路的收发匹配状态"""
         links = {
-            "eye_to_visual": {"event": "eyes.stream_frame", "emitter": "眼睛", "receiver": "视觉皮层", "status": "unknown"},
-            "visual_to_chat": {"event": "chat.user_presence_detected", "emitter": "视觉皮层", "receiver": "对话模块", "status": "unknown"},
+            "eye_to_visual": {"event": EyeEvent.STREAM_FRAME, "emitter": "眼睛", "receiver": "视觉皮层", "status": "unknown"},
+            "visual_to_chat": {"event": ChatEvent.USER_PRESENCE_DETECTED, "emitter": "视觉皮层", "receiver": "对话模块", "status": "unknown"},
             # ★主线第50批 T3（P2-329）修正：原用 ``mouth.reply``（嘴巴→对话的回执）
             #   与链路名 ``chat_to_mouth``（对话→嘴巴）**方向相反**。
             #   真实链路 = 「对话/皮层 命令嘴巴说话」：
             #   事件 ``mouth.speak``，订阅者 = PulseMouth（MouthEvent.SPEAK）。
-            "chat_to_mouth": {"event": "mouth.speak", "emitter": "对话模块", "receiver": "嘴巴", "status": "unknown"},
+            "chat_to_mouth": {"event": MouthEvent.SPEAK, "emitter": "对话模块", "receiver": "嘴巴", "status": "unknown"},
         }
 
         if self.info_field:
@@ -825,10 +825,10 @@ class PulseMetricsCollector(BasePulseOrgan):
     def _collect_molecular(self) -> dict[str, Any]:
         result = {}
         if self.info_field:
-            es = self.info_field.get_current("energy.metabolism_snapshot")
+            es = self.info_field.get_current(EnergyEvent.METABOLISM_SNAPSHOT)
             if es and isinstance(es, dict):
                 result["energy_level"] = es.get("payload", {}).get("energy_level", 1.0)
-            hw = self.info_field.get_current("touch.hardware_snapshot")
+            hw = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)
             if hw and isinstance(hw, dict):
                 hp = hw.get("payload", {})
                 result["cpu_usage"] = hp.get("cpu", {}).get("usage_percent", 0)
@@ -868,12 +868,12 @@ class PulseMetricsCollector(BasePulseOrgan):
     def get_resonance_conditions(self) -> list:
         return [{"organ_name": self.organ_name,
                  "event_types": [MetricsEvent.COLLECT, SystemEvent.STATUS_REQUEST,
-                                HeartEvent.BEAT, HeartEvent.ALIVE, "persona.switched",
-                                "digest.knowledge", "reflection.insight",
-                                "knowledge.compressed", "instinct.upgraded",
+                                HeartEvent.BEAT, HeartEvent.ALIVE, PersonaEvent.SWITCHED,
+                                Event.DIGEST_KNOWLEDGE, ReflectionEvent.INSIGHT,
+                                KnowledgeEvent.COMPRESSED, "instinct.upgraded",
                                 HormonesEvent.EMOTION_DETECTED, InterestEvent.CHANGED,
-                                "controller.search_completed",
-                                "life_state.changed"  # 新增：生命状态广播
+                                ControllerEvent.SEARCH_COMPLETED,
+                                Event.LIFE_STATE_CHANGED  # 新增：生命状态广播
                                 ],
                  "min_priority": 1}]
 
@@ -917,8 +917,8 @@ if __name__ == "__main__":
             return {"total_emitted": 150, "total_completed": 147, "total_timeout": 3, "pending": 2}
     m = MockInfoField()
     m.pulse_core = MockPulseCore()
-    m._data["energy.metabolism_snapshot"] = {"payload": {"energy_level": 0.85}}
-    m._data["touch.hardware_snapshot"] = {"payload": {"cpu": {"usage_percent": 35}, "memory": {"usage_percent": 50}}}
+    m._data[EnergyEvent.METABOLISM_SNAPSHOT] = {"payload": {"energy_level": 0.85}}
+    m._data[TouchEvent.HARDWARE_SNAPSHOT] = {"payload": {"cpu": {"usage_percent": 35}, "memory": {"usage_percent": 50}}}
     c = PulseMetricsCollector("指标采集器")
     c.set_info_field(m)
     c.start()
