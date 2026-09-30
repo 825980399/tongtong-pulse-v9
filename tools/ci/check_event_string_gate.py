@@ -9,7 +9,8 @@ check_event_string_gate.py —— T155-R2 P2-78 事件常量收口（防回归�
 实现：
     1) 解析 nucleus/const.py，抽取所有「含 . 的字符串值」作为点分事件值集合；
     2) 扫描本次提交（staged diff）新增行中的字符串字面量，命中集合即 FAIL；
-    3) 豁免：const.py 自身（定义处）、tests/ 目录（测试断言）。
+    3) 仅检查 Python 源码文件（.py）；文档/CSV/数据等非代码文件不在范围内（举例引用事件名属正常说明）。
+    4) 豁免：const.py 自身（定义处）、tests/ 目录（测试断言）、tools/ci/ 目录（CI 工具脚本）。
 
 说明：仅检查“新增行”，不影响存量 200+ 处既有字面量；精确匹配 const.py 值集合，false-positive 极低。
 退出码：0=通过，1=阻断。
@@ -78,6 +79,11 @@ def scan_violations(root: str, values):
                 cur = cur[2:]
             if cur == "/dev/null":
                 cur = None
+                continue
+            # 仅检查 Python 源码：文档(.md)/CSV/数据等非代码文件引用事件名属正常说明，
+            # 误报率高，跳过。门禁初衷是拦「新代码」的裸事件名，非文档举例。
+            if not cur.endswith(".py"):
+                cur = None
             continue
         if line.startswith("+") and not line.startswith("+++"):
             added = line[1:]
@@ -90,7 +96,8 @@ def scan_violations(root: str, values):
                         continue  # 测试豁免
                     if cur and cur.startswith("tools/ci/"):
                         continue  # CI 工具脚本豁免（非事件发射生产码）
-                    violations.append((cur, s))
+                    if cur:  # 仅 Python 源码且非豁免目录才记录（None=非.py/已豁免）
+                        violations.append((cur, s))
     return violations
 
 
