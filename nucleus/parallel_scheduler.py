@@ -24,6 +24,18 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 from nucleus.logger import exc_location  # ★第32批 T3：异常位置动态获取
 from nucleus._silent_except import silent_exc
 
+# ★P2-64 并发收敛（D3-A）：parallel 作为唯一门面，内部委托保留实现的 Hybrid/Structured。
+#   nucleus/parallel_scheduler.py 已在 tools/ci/check_deprecated_imports.py 的 EXEMPT_FILES 中豁免。
+from nucleus.HybridParallelScheduler import TaskType as _HybridTaskType, get_hybrid_scheduler
+from nucleus.StructuredParallelScheduler import SubTask, get_structured_parallel_scheduler
+
+__all__ = [
+    "ParallelScheduler",
+    "get_parallel_scheduler",
+    "shutdown_parallel_scheduler",
+    "SubTask",
+]
+
 
 
 class ParallelScheduler(SilentLogMixin):
@@ -340,6 +352,31 @@ class ParallelScheduler(SilentLogMixin):
         _futures = [_pool.submit(_t) for _t in tasks]
         return [_f.result() for _f in _futures]
 
+
+    # ★P2-64 并发收敛（D3-A）：门面补全——CPU 密集（进程池）与任务组扇出，
+    #   内部委托给保留实现的 Hybrid/Structured（零行为变更，仅路由）。
+    def submit_cpu_bound(self, func: Callable[..., Any], *args: Any,
+                         task_name: str = "", **kwargs: Any):
+        """CPU 密集型任务走进程池后端（委托 HybridParallelScheduler）。
+
+        仅在确需真并行（绕过 GIL）时使用；IO/通用任务仍走 submit_parallel 线程池。
+        """
+        _hs = get_hybrid_scheduler()
+        return _hs.submit(func, *args, task_type=_HybridTaskType.CPU_BOUND,
+                          task_name=task_name, **kwargs)
+
+    def run_group(self, name: str, subtasks: list,
+                  aggregator: Callable[[dict], Any] | None = None,
+                  timeout: float = 30.0):
+        """任务组扇出 + 协调者汇总（委托 StructuredParallelScheduler）。
+
+        subtasks 为 nucleus.parallel_scheduler.SubTask 列表（本模块再导出）。
+        返回 StructuredParallelScheduler.TaskGroupResult（含 aggregated_result /
+        success_count / failed_count / duration_ms / group_id / status）。
+        """
+        _sps = get_structured_parallel_scheduler()
+        return _sps.run_group(name=name, subtasks=subtasks,
+                              aggregator=aggregator, timeout=timeout)
     def is_parallelizable(self, task_name: str) -> bool:
         """判断任务是否适合并行（有顺序依赖/副作用/写文件的任务返回 False）。"""
         _serial_markers = (
