@@ -10,6 +10,8 @@ import json
 import subprocess
 import sys
 
+from nucleus._silent_except import silent_exc
+
 
 def _run_isolated(script: str, timeout: float = 6.0):
     """在隔离子进程中执行探测脚本，返回解析后的 dict 或 None（崩溃/超时/异常）。
@@ -24,7 +26,8 @@ def _run_isolated(script: str, timeout: float = 6.0):
             text=True,
             encoding="utf-8", errors="replace",
         timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_short"], )
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="safe_hw_probe._run_isolated:spawn")
         return None
 
     try:
@@ -33,14 +36,15 @@ def _run_isolated(script: str, timeout: float = 6.0):
         # 超时：强制结束子进程，避免残留
         try:
             proc.kill()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="safe_hw_probe._run_isolated:kill")
         try:
             proc.communicate()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="safe_hw_probe._run_isolated:drain")
         return None
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="safe_hw_probe._run_isolated:final")
         return None
 
     if not out:

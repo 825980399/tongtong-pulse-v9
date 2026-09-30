@@ -8,6 +8,8 @@
 import threading
 import time
 
+from nucleus._silent_except import silent_exc
+
 
 class RobotBodyDriver:
     """自制躯体总驱动"""
@@ -149,8 +151,8 @@ class RobotBodyDriver:
         try:
             if self.info_field and hasattr(self.info_field, 'get_load_level'):
                 return self.info_field.get_load_level() in ("heavy", "critical")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="robot_body_driver._is_high_load:152")
         return False
     
     def get_stats(self) -> dict:

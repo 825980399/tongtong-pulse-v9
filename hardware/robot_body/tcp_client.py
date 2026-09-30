@@ -12,6 +12,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
+
 
 class RobotBodyTCP:
     """躯体TCP通信客户端"""
@@ -94,8 +96,8 @@ class RobotBodyTCP:
         if self._sock:
             try:
                 self._sock.close()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tcp_client.disconnect:97")
             self._sock = None
         print("[RobotBodyTCP] 已断开连接")
     
@@ -249,8 +251,8 @@ class RobotBodyTCP:
         if self._sock:
             try:
                 self._sock.close()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tcp_client._attempt_reconnect:252")
             self._sock = None
         
         time.sleep(2)
