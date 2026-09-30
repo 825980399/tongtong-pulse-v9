@@ -1,0 +1,4897 @@
+[
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260915030140_3e9c0361.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260915030151_7ab5ebf7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260916030409_13f6b590.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260916030605_2e8f1159.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260917203236_4ecef0ea.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260917203236_b2f673f9.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260917233238_282a6211.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260917233238_5c4eb7a8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260917233238_61a196b3.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260917233238_a4849c47.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260918033445_1c7e3539.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260918033843_25512804.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918122106_4bf29f51.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918122106_fd1c35a9.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918122107_bc16d7c4.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260918122107_eab1ddc6.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918131943_720d097c.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918131943_879dc017.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260918131943_df91375f.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260918131943_fabb8421.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260919142909_53794dea.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260919142910_d16cedf8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260920030130_4fea3eb8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260920030133_bdcfe49a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260921030102_b54acf96.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260921030106_f3dc0719.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260922030111_9ba78b4e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260922030116_ce7e1401.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260922200145_05ff257d.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260922200145_0a0b4b42.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260922200145_37636236.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260922200145_a32c5e45.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260923030057_9c7e6119.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260923030057_a15085bc.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260924112303_014dc6ba.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260924112303_23bf5654.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260925030113_c644c296.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260925030114_29877527.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260926083644_530cb385.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260926083648_56cbe584.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260927011033_3218ae35.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260927011034_49b903b8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260927011034_7e64bb62.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260927112018_82f7cf51.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260927112018_be334e85.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260929205155_17c3e0c3.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260929205155_500239ac.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260929205156_44ce13f5.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260930115036_364609f5.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115036_577c3aaf.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115036_8bdff025.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115036_95ecbec5.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115049_47d313d6.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115049_4bbbc19f.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115049_bb8c29bc.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115848_41b35d11.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260930115848_4d6b5dd9.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115848_9cb37845.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930115848_e3896ebb.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930120102_252b2bd0.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930120102_4101a63f.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260930120102_a7941f75.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930120102_ef56414c.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930121831_56102ddd.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930121831_a1d90706.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930121831_bea4a000.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930122746_2c3a7220.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930122746_baafe424.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930122746_f24b8ef7.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930124225_6630b904.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930124225_bfd0e13c.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930124225_e1e1b235.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260930132521_c46ce0e5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\evolution\\evolution_20260930132523_ee933d09.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930140635_2f14e477.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\evolution\\evolution_20260930140635_34addc67.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930140635_56bc5bb8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "evolution",
+  "gen": "test",
+  "path": "data\\reports\\evolution\\evolution_20260930140635_72894fc8.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260917233238_55d13f55.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260917233238_fa3dd05e.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260918122107_768fb889.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260918122107_a08a7282.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260918131943_35b8b4f0.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260918131943_7f2729be.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260922200145_0081fa8e.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260922200145_942704ad.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260927011035_49cb1744.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260927011036_b90513e6.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260929205156_447e1a9e.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260929205156_6af3d4e4.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930115036_265193be.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930115036_868fe73f.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930115049_a4f6825a.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930115049_b07225bd.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930115848_86be762d.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930115848_bf4a3944.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930120102_0d76a8c0.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930120102_21ff1786.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930121832_2a076755.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930121832_e315ce63.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930122746_a522f390.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930122747_2b648698.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930124226_10d0af92.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930124226_3e49f5b7.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "g",
+  "path": "data\\reports\\health\\health_20260930140635_228c8590.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\health\\health_20260930140635_7e3d79c6.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260915030140_e0fd026d.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260916030414_26cbd3d9.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260917203236_cf83cba4.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260917233238_3e8b9769.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260917233238_7d3d08e0.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260918033656_9dfeb7ea.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260918122107_74f541ca.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260918122107_bbc7c6c1.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260918131943_73142e60.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260918131943_feedaf48.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260919142910_6285753b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260920030130_682166ab.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260921030102_5de5f994.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260922030111_422a3f44.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260922200145_179b9211.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260922200145_a582ca59.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260923030057_4473543b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260924112303_ae85d0cc.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260925030113_9d3df21c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260926083647_71512711.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260927112018_6fb7f74c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260930115036_00a7fc87.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260930115036_d2b874e2.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260930115848_0adfa162.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260930115848_7aa9ca24.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260930120102_467aaca4.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260930120102_dd29db38.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\pollution\\pollution_20260930132522_fd0b9e8f.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\pollution\\pollution_20260930140635_24c050f0.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "pollution",
+  "gen": "g",
+  "path": "data\\reports\\pollution\\pollution_20260930140635_47c3e4ea.json",
+  "has_an": false,
+  "has_at": true,
+  "consumed": true,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260917233238_b3e3c274.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260918122107_524421ad.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260918131943_d8146778.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260922200146_6b98be1d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260929205157_609bd058.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930115037_19bd8b44.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930115050_ada27d01.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930115849_3431dc4c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930120103_10d803a1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930121832_e7f37f93.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930122747_56c76fe8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "guard_probe",
+  "path": "data\\reports\\runtime\\runtime_20260930124226_9b3506ed.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120119_672d0feb.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120119_d93d71d1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120140_e5cb3008.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120201_e63e17b2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120224_00981374.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120244_2ee6c77f.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120244_2fecde7b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120244_36d4c83c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120244_8ad73411.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930120245_15fbc547.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121259_411f16d1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121259_426b7bcc.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121310_ce4b44c2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121340_9914b3c8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121656_5e34a09b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121831_16656877.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121838_1f6a78cc.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121838_21de2a9b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121838_4a1da589.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121838_4b5343a9.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121838_f18fb26c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121841_8cc440be.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_1af7172d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_26738c13.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_29f73136.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_2a2fa404.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_67fe0527.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121848_91f41776.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121849_37730cc2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121849_51357beb.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930121849_d11bc3e2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122208_a9041862.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122208_d54eaaba.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122219_1d6dd301.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122240_f0301dd1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122607_dd43e649.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122746_f58e64ce.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122752_3276516a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122752_4c5513b8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122752_ac4c96a5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122752_d9e135d5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122753_aa02e435.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122754_d4de5ff1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_036fcfe2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_1a652dea.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_24660bfa.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_30d1dc9d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_32a59ce6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122757_eca40446.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122758_247a3d95.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122758_3c9fede3.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930122758_c74a5f22.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930123715_91be0aec.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930123715_ea2e696d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930123725_b6da8950.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930123746_25b0fd01.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124054_2f13f4c2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124226_fdd9261f.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124231_269aac1e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124232_5de8aaf3.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124232_be40a124.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124232_c73c3c16.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124232_e41afbd6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124233_36b38443.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_0d665a2b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_1f28f2a7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_590c3352.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_5a98cb9b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_74ffc5c0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_d75f5f90.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124236_dca817bf.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124237_a5bc0a90.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930124237_b0d209e5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930132519_070678be.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930132519_387be03c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140122_aec641bd.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140122_fbf460a5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140134_38222963.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140208_3b9c60fd.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140526_21c22d43.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140635_6aca85c2.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140635_8853fb6d.json",
+  "has_an": true,
+  "has_at": true,
+  "consumed": true,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": false,
+  "cls": "①事件"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140638_3d45e4e7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140638_646ee56d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140638_64f0ccd0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140638_86e6f2de.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140638_f0d33582.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140639_221adda5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140649_81ac8cf3.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140649_ace7d94c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140649_ae2f146e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140649_bd8437d5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140711_b4355c3e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140732_3d6125f0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140754_20ca99ed.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140816_57e7ea2a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140816_5a344b3a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140816_a7fb2868.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140816_e7c10e9b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine.generate_report",
+  "path": "data\\reports\\self_cognition\\self_cognition_20260930140816_ec53cd77.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": false,
+  "cls": "③观测"
+ },
+ {
+  "rt": "evolution",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173050_94e66ae3.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173050_d10d9701.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173132_38074c52.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173132_7068e63d.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173132_75d13902.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173132_9f656b85.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_05aac927.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_75b8cc1d.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_7dd1db96.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_99ab47e8.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_b92d2e2d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173155_ba17e7a6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_54e6950e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_5e3cb085.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_6e1884a7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_a0acd4cc.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_a14044a3.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914173156_d3d11b12.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_0c7b1417.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_163f4e2e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_3f9975c9.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_454d1055.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_45ccc31e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_4af79ce8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_7f298660.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_92eb196c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_a263ee26.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_a6ef6362.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174414_fdea5da6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914174415_5b009f6e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_27f5a51c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_32e119c9.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_43ba5163.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_6ad36ead.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_6c3eec56.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_70f58a53.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_85f8f37e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_a480dd99.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "log_only"
+  ],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_acfd8658.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_b5abf4fd.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "patch_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_d3bf70f8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "evolution",
+  "gen": "data_quality_evaluator",
+  "path": "data\\reports\\_archive_test_20260914\\evolution\\evolution_20260914175139_da36796f.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173050_3706d9d6.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173132_5e3db1cf.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173132_8d72b060.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173132_e4af6a9d.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173132_f2139f4d.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173155_00799053.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173155_a2bbde1b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173155_cbd2d7e4.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173155_ee7efd41.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173155_fef3049f.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173156_862f11d0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914173156_c62aef8a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_04d3bc95.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_09496652.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_2ee9ec0b.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_35168ab9.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_3f84f7e8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_61cae8c0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914174414_66ca75b6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_0ace3c15.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_28faf27c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_71fa67e1.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_8cb4da1a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_9de22dd1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_c6fb9a5c.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "health",
+  "gen": "diagnostics",
+  "path": "data\\reports\\_archive_test_20260914\\health\\health_20260914175139_e69befa2.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173050_5121b3d8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173050_d358dcb0.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173132_2605c7e8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173132_581345db.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173132_705d797a.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173132_caeb68a7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173132_dd4ee3a5.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_1034e074.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_317d7852.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_31cb402e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_32714e5e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_9668cb2f.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173155_ac91044e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173156_328bfc82.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914173156_b916c9f7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_027f5822.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_11154473.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_3810e153.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_3c682ca5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_72bf6439.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_9cb1bf75.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_c225d8d5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914174414_d2b8f95b.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_1a137e3e.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_1e559865.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_218fa4ba.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_889e9ab5.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_91c61d83.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "clean_data"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_ddf64414.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_f650613e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "pollution",
+  "gen": "experience_retriever",
+  "path": "data\\reports\\_archive_test_20260914\\pollution\\pollution_20260914175139_fae7e794.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\runtime\\runtime_20260914173132_ec29a959.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\runtime\\runtime_20260914173155_3812d229.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\runtime\\runtime_20260914174414_74dc93e1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "runtime",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\runtime\\runtime_20260914175139_0194301d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "probe",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173050_abb247b0.json",
+  "has_an": true,
+  "has_at": false,
+  "consumed": false,
+  "sug": [
+   "alert"
+  ],
+  "actionable": true,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173132_8a84f441.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173132_9cd82e57.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173132_b5fb439f.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173132_ffa1d2e1.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_417056f2.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_83d85a6a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_8eecb3ab.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_aff2e20b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_aff9f78a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173155_d156e5c4.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173156_1a7dd001.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "cls": "PARSEERR",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914173156_a40b7536.json",
+  "rt": "?"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_37ba472d.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "cls": "PARSEERR",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_3b9aceda.json",
+  "rt": "?"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_5412fea6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_5eaf7781.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_9e89d3f7.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_bb669a45.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_c332a327.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174414_d8bd17f0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174419_7032d213.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174419_b5c68e7e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174419_deb7e17b.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914174420_4184acf4.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_0cdb17a8.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_0f30328e.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_6118dd6a.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_7718ab96.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_8d90d682.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "cls": "PARSEERR",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_a86b2d42.json",
+  "rt": "?"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_d812b978.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "SelfAwarenessEngine",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175139_eb238cf0.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175143_258c45df.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175143_30747eea.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175143_aac390de.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ },
+ {
+  "rt": "self_cognition",
+  "gen": "DailyScheduler.run_once",
+  "path": "data\\reports\\_archive_test_20260914\\self_cognition\\self_cognition_20260914175143_b8e7e1f6.json",
+  "has_an": false,
+  "has_at": false,
+  "consumed": false,
+  "sug": [],
+  "actionable": false,
+  "arch": true,
+  "cls": "②存档"
+ }
+]
