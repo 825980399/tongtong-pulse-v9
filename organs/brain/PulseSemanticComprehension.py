@@ -25,6 +25,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import LogLevel, QICAEvent, SystemEvent
+from nucleus._silent_except import silent_exc
 
 
 class PulseSemanticComprehension(BasePulseOrgan):
@@ -181,7 +182,8 @@ class PulseSemanticComprehension(BasePulseOrgan):
             import config as _cfg
             if not getattr(_cfg, "ENABLE_DIALOG_SELECT_MODEL_DEDUP", True):
                 return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L184")
             return True
         try:
             import time as _time
@@ -196,7 +198,8 @@ class PulseSemanticComprehension(BasePulseOrgan):
                     return False
                 self._classify_claimed[correlation_id] = _now
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L199")
             return True
 
     def _on_semantic_classify(self, payload: dict) -> dict[str, Any]:
@@ -430,7 +433,8 @@ class PulseSemanticComprehension(BasePulseOrgan):
             def _f(v) -> float:
                 try:
                     return max(0.0, min(1.0, float(v or 0.0)))
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, where="organs.brain.PulseSemanticComprehension::_f L433")
                     return 0.0
 
             # 维度2：检索相关度（top1 相似度）

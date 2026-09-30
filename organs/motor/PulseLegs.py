@@ -44,6 +44,7 @@ from nucleus.const import (
 from nucleus.knowledge_noise_filter import clean_content_text
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 def budget_guard(consumer: str = "search"):
@@ -402,21 +403,24 @@ class PulseLegs(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_TOPIC_DEDUP", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_dedup_on L405")
             return True
 
     def _m49_topic_filter_on(self) -> bool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_TOPIC_FILTER", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_filter_on L412")
             return True
 
     def _m49_digest_feedback_on(self) -> bool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_DIGEST_FEEDBACK", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_digest_feedback_on L419")
             return True
 
     def _m49_dedup_cfg(self):
@@ -1116,9 +1120,9 @@ class PulseLegs(BasePulseOrgan):
         try:
             from nucleus.SearchIntentClassifier import get_intent_classifier
             get_intent_classifier().set_llm_callback(callback)
-        except Exception:
+        except Exception as e:
             # 注入失败不影响主搜索链路（分类器仍走本地规则快路径）
-            pass
+            silent_exc(e, where="organs.motor.PulseLegs::set_llm_callback L1119")
     # ========== 熔断与资源检查 ==========
 
     def _handle_failure(self, source: str, error: str):

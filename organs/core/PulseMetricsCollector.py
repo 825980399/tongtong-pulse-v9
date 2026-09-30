@@ -544,7 +544,8 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LINK_STATUS_ALIAS_MATCH", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseMetricsCollector::_m50_alias_match_on L547")
             return True
 
     @classmethod
@@ -657,7 +658,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             for _ in glob.glob("data/knowledge/pulse_knowledge_snapshot.json.*.bak"):
                 count += 1
             return count
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseMetricsCollector::_count_snapshot_backups L660")
             return 0
 
     def _flatten_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:

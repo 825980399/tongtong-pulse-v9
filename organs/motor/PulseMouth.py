@@ -33,6 +33,7 @@ from nucleus.const import (
 )
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 class PulseMouth(BasePulseOrgan):
@@ -60,8 +61,8 @@ class PulseMouth(BasePulseOrgan):
                 self._tts_max_fails = _rp['mouth_tts_max_fails']
             if 'mouth_tts_cooldown_seconds' in _rp and hasattr(self, '_tts_cooldown_seconds'):
                 self._tts_cooldown_seconds = _rp['mouth_tts_cooldown_seconds']
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseMouth::refresh_runtime_params L63")
 
 
     def __init__(self, organ_name: str = "嘴巴"):

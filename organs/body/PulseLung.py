@@ -111,7 +111,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_CALL_SOURCE_FIX", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m49_source_fix_on L114")
             return True
 
     def _m49_dialogue_presumption_on(self) -> bool:
@@ -119,7 +120,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_DIALOGUE_PRESUMPTION", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m49_dialogue_presumption_on L122")
             return True
 
     def _m49_tls_get(self):
@@ -691,7 +693,8 @@ class PulseLung(BasePulseOrgan):
             if total == 0:
                 return 1.0
             return q["success"] / total
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_get_model_health L694")
             return 1.0
 
     def _pick_best_chat_model(self, local_models: list, task_type: str = "chat",
@@ -800,7 +803,8 @@ class PulseLung(BasePulseOrgan):
             if not isinstance(_c, dict) or not _c.get("enabled", False):
                 return None
             return _c
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_channels_config L803")
             return None
 
     def _select_default_channel(self):
@@ -832,7 +836,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _cfg
             _pool = _cfg.get_active_channels()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_rotate_channel L835")
             return None
         _health = self._get_channel_health()
         for _ch in _pool:
@@ -1069,7 +1074,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _cfg
             return bool(getattr(_cfg, "DEBUG_CHANNEL_HTTP_DUMP", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_channel_http_dump_enabled L1072")
             return False
 
     def _apply_channel_field_policy(self, channel_name: str, kwargs: dict) -> dict:
@@ -1140,7 +1146,8 @@ class PulseLung(BasePulseOrgan):
             if _override:
                 _mt = min(_mt, int(_override))
             return _mt
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_resolve_ark_seed_max_tokens L1143")
             return 1024
 
     def _apply_ark_seed_complexity_routing(self, channel_name: str,
@@ -1258,7 +1265,8 @@ class PulseLung(BasePulseOrgan):
                 return True
             _adv_tasks = (_cfg.REMOTE_API_CONFIG or {}).get("advanced_tasks", []) or []
             return model in _adv_tasks
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_is_advanced_task L1261")
             return False
 
     def _build_advanced_channel(self):
@@ -1279,7 +1287,8 @@ class PulseLung(BasePulseOrgan):
                 "adapter": "openai_compatible",
                 "priority": -1,
             }
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_build_advanced_channel L1282")
             return None
 
     # ========== ★主线第65批 T2/P1：后台消化自适应 ==========
@@ -1288,7 +1297,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_BACKGROUND_DIGEST_ADAPTIVE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m65_digest_adaptive_enabled L1291")
             return True
 
     def _m65_get_load_level(self) -> str:
@@ -1296,7 +1306,8 @@ class PulseLung(BasePulseOrgan):
         try:
             from nucleus.runtime_metrics import get_runtime_metrics
             return get_runtime_metrics().get_system_load().get("load_level", "low")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L1299")
             return "low"
 
     def _append_background_learning_requirement(self, prompt: str,
@@ -1337,7 +1348,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_CHANNEL_CONCURRENCY", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m24_enabled L1340")
             return True
 
     def _m24_ensure_state(self) -> None:
@@ -1407,7 +1419,8 @@ class PulseLung(BasePulseOrgan):
         try:
             _mgr.ensure_channel(name)
             return _mgr.get_semaphore(name)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_get_channel_semaphore L1410")
             return None
 
     def _adjust_channel_concurrency(self, name: str, success: bool,
@@ -1445,7 +1458,8 @@ class PulseLung(BasePulseOrgan):
             return "[渠道并发] 未启用"
         try:
             return _mgr.summary_line()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::summary_channel_concurrency L1448")
             return "[渠道并发] 摘要生成失败"
 
     # --------------------------------------------------------------
@@ -1604,7 +1618,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_CALL_TRACE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m40_trace_enabled L1607")
             return True
 
     @staticmethod
@@ -1613,7 +1628,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_SEMANTIC_CACHE_OBSERVE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m41_cache_observe_enabled L1616")
             return True
 
     @staticmethod
@@ -1622,7 +1638,8 @@ class PulseLung(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_DEPENDENCY_TRACKING", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m40_dep_tracking_enabled L1625")
             return True
 
     @staticmethod
@@ -1637,7 +1654,8 @@ class PulseLung(BasePulseOrgan):
             from nucleus.llm.call_recorder import (ORIGIN_ALIASES,
                                                    ORIGIN_SYSTEM_INTERNAL)
             return ORIGIN_ALIASES.get(str(caller or ""), ORIGIN_SYSTEM_INTERNAL)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m40_resolve_origin L1640")
             return "system_internal"
 
     # ★主线第44批 T1（P1-285）：提示词版本号 —— 标识"prompt 由哪个构造点产生"。

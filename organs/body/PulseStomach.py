@@ -305,14 +305,16 @@ class PulseStomach(BasePulseOrgan):
             import config
             return bool(getattr(config, "ENABLE_INFLUXDB_TIMESERIES", False)
                        and getattr(config, "ENABLE_INFLUXDB_WRITE_ONLY", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m71_influx_enabled L308")
             return False
 
     def _m71_influx_store(self):
         try:
             from nucleus.timeseries_store.influxdb_store import get_influxdb_store
             return get_influxdb_store()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m71_influx_store L315")
             return None
 
     def _m71_record_query_executed(self, query_type, duration_ms=0.0, result_count=0) -> None:
@@ -1704,7 +1706,8 @@ class PulseStomach(BasePulseOrgan):
         try:
             import config as _cfg
             return bool(getattr(_cfg, 'ENABLE_STOMACH_PATH_OPTIMIZE', False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_path_optimize_enabled L1707")
             return False
 
     def _classify_keyword_domain(self, keywords: list[str]) -> str | None:
@@ -2019,7 +2022,8 @@ class PulseStomach(BasePulseOrgan):
                     return True
             _organs = _qc.get("background_source_organs") or []
             return bool(source_organ and source_organ in _organs)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_is_background_learning_source L2022")
             return False
 
     def _record_rejected_digestion(self, content: str, keywords: list,
@@ -2395,8 +2399,8 @@ class PulseStomach(BasePulseOrgan):
             _kal = get_kal()
             if _kal is not None:
                 return _kal.search_by_keywords(keywords or [], top_k=top_k)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m69_kal_query L2398")
         return None
 
 
@@ -2411,8 +2415,8 @@ class PulseStomach(BasePulseOrgan):
             _r = get_kal().get_node(node_id)
             if _r is not None:
                 return _r
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m70_kal_get_node L2414")
         return self._m70_direct_get_node(node_id)
 
     def _m70_kal_search_keywords(self, keywords, top_k=10):
@@ -2424,8 +2428,8 @@ class PulseStomach(BasePulseOrgan):
             _r = get_kal().search_by_keywords(keywords or [], top_k=top_k)
             if _r:
                 return _r
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m70_kal_search_keywords L2427")
         return []
 
     def _m70_direct_get_node(self, node_id):
@@ -2434,8 +2438,8 @@ class PulseStomach(BasePulseOrgan):
             _pool = getattr(self, "node_pool", None)
             if _pool is not None:
                 return _pool.get(node_id)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m70_direct_get_node L2437")
         return None
 
     def _m70_kal_callsites_on(self) -> bool:
@@ -2443,7 +2447,8 @@ class PulseStomach(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_KAL_CALL_SITES", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m70_kal_callsites_on L2446")
             return True
 
 # ========== 自测 ==========

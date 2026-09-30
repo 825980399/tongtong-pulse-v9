@@ -40,6 +40,7 @@ from nucleus.const import (
     SystemEvent,
     WhiteCellEvent,
 )
+from nucleus._silent_except import silent_exc
 
 
 class PulseWhiteCell(BasePulseOrgan):
@@ -439,8 +440,8 @@ class PulseWhiteCell(BasePulseOrgan):
                             if f'class {class_name}' in _fh.read():
                                 _class_file = _fp
                                 break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L442")
             if _class_file:
                 break
 
@@ -450,7 +451,8 @@ class PulseWhiteCell(BasePulseOrgan):
         try:
             with open(_class_file, encoding='utf-8') as _f:
                 _file_content = _f.read()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L453")
             return None
 
         import re as _re_gap

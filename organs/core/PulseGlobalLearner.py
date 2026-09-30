@@ -26,6 +26,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import Event, HeartEvent, LogLevel, SystemEvent
+from nucleus._silent_except import silent_exc
 
 
 class PulseGlobalLearner(BasePulseOrgan):
@@ -114,7 +115,8 @@ class PulseGlobalLearner(BasePulseOrgan):
         try:
             import config
             return bool(getattr(config, 'ENABLE_GLOBAL_LEARNER', False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseGlobalLearner::_is_enabled L117")
             return False
 
     # ========== 框架注入接口 ==========

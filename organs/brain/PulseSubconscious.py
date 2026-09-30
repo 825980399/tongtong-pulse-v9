@@ -42,6 +42,7 @@ from nucleus.knowledge_noise_filter import is_noise_keyword
 from utils.time_utils import get_current_datetime, get_weather
 from nucleus.const import Event
 from nucleus.runtime_tempo import get_runtime_tempo
+from nucleus._silent_except import silent_exc
 
 
 class PulseSubconscious(BasePulseOrgan):
@@ -2899,7 +2900,8 @@ class PulseSubconscious(BasePulseOrgan):
 
             return _random.choice(_templates)
 
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseSubconscious::_get_highlight_memory_share L2902")
             return None
 
     def _get_current_emotion(self) -> str:

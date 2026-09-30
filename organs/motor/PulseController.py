@@ -659,7 +659,8 @@ class PulseController(BasePulseOrgan):
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_SEARCH_KEYWORD_GUARD", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseController::_search_keyword_guard_enabled L662")
             return True
 
     def _purify_search_keywords(self, keywords: list, topic: str = "",
@@ -1994,7 +1995,8 @@ class PulseController(BasePulseOrgan):
         """域名黑白名单检查"""
         try:
             domain = url.split("/")[2] if "://" in url else ""
-        except IndexError:
+        except IndexError as e:
+            silent_exc(e, where="organs.motor.PulseController::_check_domain_permission L1997")
             return False
 
         blacklist = self._get_headless_config("domain_blacklist", [])
@@ -2096,7 +2098,8 @@ class PulseController(BasePulseOrgan):
         """
         try:
             return bool(self._get_headless_config("headless_owner_thread_mode", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseController::_owner_thread_mode L2099")
             return True
 
     def _keepalive_signal_mode(self) -> bool:
@@ -2106,7 +2109,8 @@ class PulseController(BasePulseOrgan):
         """
         try:
             return bool(self._get_headless_config("headless_keepalive_signal_mode", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseController::_keepalive_signal_mode L2109")
             return True
 
     def _signal_keepalive(self) -> None:

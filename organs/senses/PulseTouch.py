@@ -42,7 +42,8 @@ def _read_sys_file(path: str) -> str:
     try:
         with open(path) as f:
             return f.read().strip()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="organs.senses.PulseTouch::_read_sys_file L45")
         return ""
 
 
@@ -57,7 +58,8 @@ def _parse_size_kb(size_str: str) -> int:
         if _s.endswith("G"):
             return int(float(_s[:-1]) * 1024 * 1024)
         return int(float(_s))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="organs.senses.PulseTouch::_parse_size_kb L60")
         return 0
 
 
@@ -75,8 +77,8 @@ class PulseTouch(BasePulseOrgan):
                 self._alarm_cooldown = _rp['touch_alarm_cooldown']
             if 'touch_gpu_probe_interval' in _rp and hasattr(self, '_gpu_probe_interval'):
                 self._gpu_probe_interval = _rp['touch_gpu_probe_interval']
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.senses.PulseTouch::refresh_runtime_params L78")
 
 
     def __init__(self, organ_name: str = "触觉"):

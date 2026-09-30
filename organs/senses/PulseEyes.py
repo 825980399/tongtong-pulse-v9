@@ -35,6 +35,7 @@ from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import EyeEvent, LogLevel, SystemEvent, VisualEvent
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 class PulseEyes(BasePulseOrgan):
@@ -51,8 +52,8 @@ class PulseEyes(BasePulseOrgan):
                 self.min_score = _rp['eyes_min_score']
             if 'eyes_reopen_backoff' in _rp and hasattr(self, '_reopen_backoff'):
                 self._reopen_backoff = _rp['eyes_reopen_backoff']
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.senses.PulseEyes::refresh_runtime_params L54")
 
 
     def __init__(self, organ_name: str = "眼睛"):

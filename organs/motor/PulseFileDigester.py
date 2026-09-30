@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import KnowledgeEvent, LogLevel, MediaEvent, MotorEvent
+from nucleus._silent_except import silent_exc
 
 
 class PulseFileDigester(BasePulseOrgan):
@@ -296,8 +297,8 @@ class PulseFileDigester(BasePulseOrgan):
         if file_size == 0 and file_path and os.path.exists(file_path):
             try:
                 file_size = os.path.getsize(file_path)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.motor.PulseFileDigester::_digest_file L299")
 
         if ext in self.TEXT_FORMATS:
             return self._handle_text_file(file_path, file_content, file_name, ext,

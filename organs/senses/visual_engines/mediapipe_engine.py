@@ -8,6 +8,7 @@ import cv2
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 class MediaPipeEngine(SilentLogMixin):
@@ -26,8 +27,8 @@ class MediaPipeEngine(SilentLogMixin):
                 self._mp_tasks = mp_tasks
                 self._vision = vision
                 self._available = True
-        except ImportError:
-            pass
+        except ImportError as e:
+            silent_exc(e, where="organs.senses.visual_engines.mediapipe_engine::__init__ L29")
 
     def is_available(self) -> bool:
         return self._available

@@ -32,6 +32,7 @@ from nucleus.const import (
 )
 from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 class PulseHormones(BasePulseOrgan):
@@ -170,7 +171,8 @@ class PulseHormones(BasePulseOrgan):
             cfg = getattr(config, 'SOCIAL_EMOTIONS', {})
             inertia_cfg = cfg.get("emotion_inertia", {})
             return float(inertia_cfg.get("factor", 0.6))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.endocrine.PulseHormones::_load_emotion_inertia L173")
             return 0.6
 
     # ========== 脉冲入口 ==========
@@ -339,8 +341,8 @@ class PulseHormones(BasePulseOrgan):
                     confidence=0.7,
                     keywords=[*_attribution.get("keywords", []), effective_emotion]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L342")
         # ===== v22.0 M2新增结束 =====
         if effective_emotion in ("悲伤", "恐惧", "愤怒") and effective_intensity > 0.5:
             self._emit(HormonesEvent.CARE_NEEDED, {
@@ -399,8 +401,8 @@ class PulseHormones(BasePulseOrgan):
                     emotion_intensity=effective_intensity,
                     content=f"感受到{effective_emotion}(强度{effective_intensity:.2f})",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L402")
 
         # 写入情绪日志
         self._write_emotion_log(effective_emotion, effective_intensity, user_name)

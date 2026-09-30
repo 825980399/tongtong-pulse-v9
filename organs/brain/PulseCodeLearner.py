@@ -35,6 +35,7 @@ from nucleus.self_inspector import get_self_inspector
 from nucleus.data.DataAccessLayer import safe_read_json
 from config import TIMEOUT_CONFIG
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 # ★主线第16批 T3/P2-97：模块级 logger（必须放在全部 import 之后，
@@ -520,9 +521,9 @@ class PulseCodeLearner(BasePulseOrgan):
             self._log(LogLevel.WARNING,
                       "定期测试未运行: 调度器未初始化(PeriodicTestScheduler 构造失败)，"
                       "tools/ 验证脚本未纳入自动检测")
-        except Exception:
+        except Exception as e:
             # 日志本身不可用时绝不再抛，避免影响心跳主链路
-            pass
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_warn_periodic_scheduler_missing L523")
 
     def _maybe_trigger_health_driven_evolution(self):
         """健康度驱动的主动进化触发（★完美级全自主闭环入口）。"""
@@ -588,7 +589,8 @@ class PulseCodeLearner(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_CODE_LEARNING_ADAPTIVE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_code_learning_adaptive_enabled L591")
             return True
 
     def _m65_get_load_level(self) -> str:
@@ -596,7 +598,8 @@ class PulseCodeLearner(BasePulseOrgan):
         try:
             from nucleus.runtime_metrics import get_runtime_metrics
             return get_runtime_metrics().get_system_load().get("load_level", "low")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L599")
             return "low"
 
     def _learn_own_code_structure(self):
@@ -2483,7 +2486,8 @@ class PulseCodeLearner(BasePulseOrgan):
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_EXPERIENCE_TRANSFER", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_experience_transfer_enabled L2486")
             return False
 
     def _get_experience_transfer(self):

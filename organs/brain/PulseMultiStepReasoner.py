@@ -16,6 +16,7 @@ import re
 import time
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 class PulseMultiStepReasoner:
@@ -177,8 +178,8 @@ class PulseMultiStepReasoner:
                 "ts": time.time(),
             })
             node.evidence_chain = chain[-8:]  # 保留最近 8 条，防膨胀
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseMultiStepReasoner::attach_evidence_chain_to_node L180")
 
     # ========== 状态快照 ==========
 

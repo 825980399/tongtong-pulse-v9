@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 # 器官中文名 → 类名映射
 ORGAN_ALIAS_MAP = {
@@ -131,7 +132,8 @@ class PulseKnowledgeRetriever:
                 return None
             if not isinstance(value, str):
                 value = str(value)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseKnowledgeRetriever::clean_node_value L134")
             return None
 
         if len(value) < 5:

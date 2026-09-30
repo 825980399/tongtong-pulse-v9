@@ -27,6 +27,7 @@ from nucleus.const import (
     PurgeEvent,
     SystemEvent,
 )
+from nucleus._silent_except import silent_exc
 
 
 class PulseKidney(BasePulseOrgan):
@@ -745,7 +746,8 @@ class PulseKidney(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_KAL_CALL_SITES", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseKidney::_m70_kal_callsites_on L748")
             return True
 
 # ========== 自测 ==========

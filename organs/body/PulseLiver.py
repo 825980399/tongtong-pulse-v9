@@ -946,33 +946,38 @@ class PulseLiver(BasePulseOrgan):
         try:
             import config
             return config.LIVER_CONFIG.get("l1_to_l2_threshold", 20)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_get_l1_threshold L949")
             return 20
 
     def _get_l2_threshold(self) -> int:
         try:
             import config
             return config.LIVER_CONFIG.get("l2_to_l3_threshold", 8)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_get_l2_threshold L956")
             return 20
 
     def _get_fuse_cooldown(self) -> float:
         try:
             import config
             return config.LIVER_CONFIG.get("fuse_cooldown", 300.0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_get_fuse_cooldown L963")
             return 300.0
     def _get_adaptive_fuse_cooldown(self) -> float:
         try:
             import config
             return config.LIVER_CONFIG.get("adaptive_fuse_cooldown", 600.0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_get_adaptive_fuse_cooldown L969")
             return 600.0
     def _get_total_threshold(self) -> int:
         try:
             import config
             return config.LIVER_CONFIG.get("total_compress_threshold", 50)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_get_total_threshold L975")
             return 50
     def _compress_l1_to_l2(self):
         # ★主线第17批 T3/P2-63：旁路事件耗时计数起点（仅计时，不参与逻辑）
@@ -3674,7 +3679,8 @@ class PulseLiver(BasePulseOrgan):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_KAL_CALL_SITES", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_m70_kal_callsites_on L3677")
             return True
 
 # ========== 自测 ==========

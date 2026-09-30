@@ -33,6 +33,7 @@ from nucleus.const import (
     ReflectionEvent,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus._silent_except import silent_exc
 
 
 class PulseReflection(BasePulseOrgan):
@@ -371,8 +372,8 @@ class PulseReflection(BasePulseOrgan):
                         confidence=0.7,
                         keywords=["失败归因", _failure_attribution["type"], "坚韧"]
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L374")
         # ===== v21.0新增结束 =====
 
         has_issues = len(issues) > 0
@@ -440,8 +441,8 @@ class PulseReflection(BasePulseOrgan):
                 self._log(LogLevel.DEBUG,
                          f"复盘体验记录: 质量={reflection_result['quality_score']:.1f}, "
                          f"问题={len(issues)}个")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L443")
         # ===== 社会性情感触发：复盘发现身份侵蚀时触发愧疚，获得表扬时触发自豪 =====
         if self.info_field and self.pulse_core:
             social_triggers = {}

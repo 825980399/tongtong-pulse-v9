@@ -42,6 +42,7 @@ from nucleus.const import (
 from utils.time_utils import get_current_datetime
 from nucleus.events.EventTap import tap_publish  # ★第17批 T2：旁路事件发布入口
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 _module_logger = logging.getLogger(__name__)
@@ -484,7 +485,8 @@ class PulseCortex(BasePulseOrgan):
             if _sug:
                 _parts.append(f" 建议：{_sug}")
             return "".join(_parts)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_self_state_render L487")
             return ""
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
@@ -2647,7 +2649,8 @@ class PulseCortex(BasePulseOrgan):
         try:
             from nucleus.parallel_scheduler import get_parallel_scheduler
             return get_parallel_scheduler().get_parallelism()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::get_parallelism L2650")
             return 2
 
     def _on_status_request(self) -> dict[str, Any]:

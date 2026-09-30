@@ -31,6 +31,7 @@ from nucleus.const import (
 )
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: F401
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 class PulseNarrativeSelf(BasePulseOrgan):
@@ -169,8 +170,8 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     # 小步轴合：经验化值与现有值取加权平均（保持缓慢演变）
                     self._dynamic_values[_val_k] = max(
                         0.1, min(1.0, 0.85 * self._dynamic_values[_val_k] + 0.15 * _val_s))
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_on_record L172")
 
         # 步骤6: 生成当前人生阶段总结 + 行为建议
         life_stage = self._generate_life_stage_summary()
@@ -332,8 +333,8 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     f" 知识增长：总节点{_total}个"
                     f"（L2认知{_l2}个，L3智慧{_l3}个）。"
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L335")
         dominant_values = sorted(self._dynamic_values.items(), key=lambda x: x[1], reverse=True)
         top_values_str = "、".join(f"{v[0]}({v[1]:.2f})" for v in dominant_values[:3])
 
@@ -380,8 +381,8 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     _comment = _payload.get("self_comment", "")
                     if _comment and len(_comment) > 10:
                         _reasoning_skill_text = _comment
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L383")
 
         # ===== 新增: 生命叙事的意义建构——从经历中提炼成长感悟 =====
         life_lesson = self._distill_life_lesson(recent_events, values_changed, recent_themes)
@@ -1135,7 +1136,8 @@ class PulseNarrativeSelf(BasePulseOrgan):
         """行为指导（语气偏好/关注领域/回避话题）。消费方：内在世界价值判断/对话风格。"""
         try:
             return dict(self._generate_behavior_guidance(str(event_type or "general")))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::get_behavior_guidance L1138")
             return None
 
     def get_narrative_clues(self, limit: int = 2) -> list[str]:

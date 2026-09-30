@@ -25,6 +25,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import ChatEvent, HeartEvent, LogLevel, MouthEvent, PersonaEvent
+from nucleus._silent_except import silent_exc
 
 
 class PulseInitiative(BasePulseOrgan):
@@ -529,7 +530,8 @@ class PulseInitiative(BasePulseOrgan):
 
             return random.choice(templates)
 
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_knowledge_greeting L532")
             return None
 
     def _generate_interest_greeting(self, user_name: str, intimacy: int) -> str | None:
@@ -561,7 +563,8 @@ class PulseInitiative(BasePulseOrgan):
                     f"最近一直在琢磨「{_dim}」，你有什么想了解的吗？",
                 ]
             return random.choice(_templates)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_interest_greeting L564")
             return None
 
     def _generate_goal_greeting(self, user_name: str, intimacy: int) -> str | None:
@@ -589,7 +592,8 @@ class PulseInitiative(BasePulseOrgan):
             if _type == "avoidance":
                 return f"我最近有点想远离「{_desc}」…"
             return f"我有个想法：{_desc}。想和你说说。"
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_goal_greeting L592")
             return None
 
     # ========== 预留接口 ==========

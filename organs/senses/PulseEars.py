@@ -47,6 +47,7 @@ from nucleus.const import (
 )
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 class PulseEars(BasePulseOrgan):
@@ -59,8 +60,8 @@ class PulseEars(BasePulseOrgan):
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'ears_max_context' in _rp and hasattr(self, '_max_context'):
                 self._max_context = _rp['ears_max_context']
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.senses.PulseEars::refresh_runtime_params L62")
 
 
     def __init__(self, organ_name: str = "耳朵"):
