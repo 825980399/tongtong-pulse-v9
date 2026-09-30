@@ -714,18 +714,18 @@ class PulseNodePool(SilentLogMixin):
                         if "value" in _keep:
                             try:
                                 node.value = _keep["value"]
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L717")
                         if "linked_nodes" in _keep:
                             try:
                                 node.linked_nodes = _keep["linked_nodes"]
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L722")
                         node._m70_blanked = False
                         try:
                             self._cold_evicted.discard(getattr(node, "node_id", ""))
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L727")
                     else:
                         # 内存无 keep → 记录 id，锁外冷召回（不在持锁状态做 IO）
                         _m70_pending_recall = node
@@ -1332,13 +1332,13 @@ class PulseNodePool(SilentLogMixin):
                 if "value" in _keep:
                     try:
                         _n.value = _keep["value"]
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1335")
                 if "linked_nodes" in _keep:
                     try:
                         _n.linked_nodes = _keep["linked_nodes"]
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1340")
                 _n._m70_blanked = False
             else:
                 _nid = getattr(_n, "node_id", "")
@@ -1360,17 +1360,17 @@ class PulseNodePool(SilentLogMixin):
                         continue
                     try:
                         _n.value = getattr(_rn, "value", _n.value)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1363")
                     try:
                         _n.linked_nodes = getattr(_rn, "linked_nodes", _n.linked_nodes)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1367")
                     _n._m70_blanked = False
                     try:
                         self._cold_evicted.discard(_nid)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1372")
         return nodes
 
     def get_all_including_evicted(self) -> list[PulseNode]:
@@ -1748,8 +1748,8 @@ class PulseNodePool(SilentLogMixin):
                                     "node": _node,  # ★T-127b：缓存节点引用，供执行段动作段四同步降 L2 使用
                                 })
                                 # ★T-127b：_l3_fuse_record() 已从收集块挪到执行段（修 T-125a 误接位置 bug）
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::run_memory_verification L1751")
                     continue
 
                 _last = getattr(_node, "last_activated", 0.0) or _now
@@ -2395,8 +2395,8 @@ class PulseNodePool(SilentLogMixin):
                 _module_logger.info(
                     "[T1内存保护] 温缓存已缩小到 %d (内存使用率 %.1f%%)",
                     len(self._warm_lru), mem.percent)
-        except ImportError:
-            pass  # psutil 未安装，跳过内存保护
+        except ImportError as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_shrink_cache L2398")
         except Exception as e:
             _module_logger.debug("[T1内存保护] 异常已忽略: %s: %s", type(e).__name__, e)
 
@@ -2573,7 +2573,8 @@ class PulseNodePool(SilentLogMixin):
             return 0
         try:
             import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_flush_cold_buffer_nodes L2576")
             return 0
         try:
             _rows = [self._cold_node_to_row(_n) for _n in nodes]
@@ -2673,8 +2674,8 @@ class PulseNodePool(SilentLogMixin):
                 _ip = self._cold_dir.rstrip(os.sep) + ".index.json"
                 with open(_ip, "w", encoding="utf-8") as _f:
                     json.dump(_idx, _f)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_rebuild_cold_index L2676")
         except Exception as _e:
             _module_logger.debug(f"[第81批 T4] 重建冷存索引失败: {_e}")
 
@@ -2795,7 +2796,8 @@ class PulseNodePool(SilentLogMixin):
             return None
         try:
             import pyarrow.parquet as pq
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_recall_cold_node L2798")
             return None
         # ★第81批 T4：确保缓冲落盘 + 索引可用，再走单点索引召回（毫秒-百毫秒级）
         self.flush_cold_buffer()
@@ -2846,24 +2848,25 @@ class PulseNodePool(SilentLogMixin):
             if "value" in _keep:
                 try:
                     node.value = _keep["value"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2849")
             if "linked_nodes" in _keep:
                 try:
                     node.linked_nodes = _keep["linked_nodes"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2854")
             node._m70_blanked = False
             try:
                 self._cold_evicted.discard(_nid)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2859")
             return True
         # 内存无 keep → 走真冷存召回
         if _nid and getattr(self, "_cold_storage_enabled", False):
             try:
                 _recalled = self.recall_cold_nodes_batch([_nid])
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2866")
                 _recalled = []
             if _recalled:
                 _rn = _recalled[0]
@@ -2871,17 +2874,17 @@ class PulseNodePool(SilentLogMixin):
                 with self._lock:
                     try:
                         node.value = getattr(_rn, "value", node.value)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2874")
                     try:
                         node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2878")
                     node._m70_blanked = False
                     try:
                         self._cold_evicted.discard(_nid)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2883")
                 return True
         _module_logger.error(
             f"[第81批 T2] 节点池懒加载节点 {_nid} 无法回填（无 _m70_keep 且冷存无副本），保留空白")
@@ -2976,6 +2979,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
         except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L2978")
             return {"before_files": 0, "after_files": 0, "node_count": 0,
                     "dedup_count": 0, "success": False, "reason": f"pyarrow_unavailable:{_e}"}
         _dir = self._cold_parquet_dir()
@@ -3077,8 +3081,8 @@ class PulseNodePool(SilentLogMixin):
                         f"中止替换（保留旧数据，不静默丢节点）")
                     try:
                         shutil.rmtree(_tmp_dir)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3080")
                     return {"before_files": _before, "after_files": _before,
                             "before_per_level": _before_per_level,
                             "node_count": 0, "dedup_count": 0, "success": False,
@@ -3092,7 +3096,8 @@ class PulseNodePool(SilentLogMixin):
             try:
                 import config as _cfg_m60
                 _retry_on = bool(getattr(_cfg_m60, "ENABLE_COLD_COMPACT_WINDOWS_RETRY", True))
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3095")
                 _retry_on = True
             if not _retry_on:
                 # 灰度关闭：与改造前完全一致（单次 rmtree + rename）

@@ -1278,7 +1278,8 @@ class PulseSnapshot:
         """
         try:
             import pyarrow.parquet as _pq81
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1281")
             return None
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
@@ -1342,7 +1343,8 @@ class PulseSnapshot:
                 try:
                     _exp_n = int((_meta.get(("%s_count" % _k.lower()).encode("utf-8"))
                                  or b"0").decode("utf-8", "replace") or 0)
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1345")
                     _exp_n = 0
                 if _exp_n > 0 and _lv_loaded[_k] == 0:
                     self._log(LogLevel.ERROR,
@@ -1625,7 +1627,8 @@ class PulseSnapshot:
                 if fname.startswith(base_name) and ".bak" in fname:
                     fpath = os.path.join(snapshot_dir, fname)
                     backups.append((os.path.getmtime(fpath), fpath))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_cleanup_old_backups L1628")
             return
         
         backups.sort(reverse=True)  # 按时间倒序
@@ -1745,15 +1748,16 @@ class PulseSnapshot:
                         silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:1725", level="warning")
                     self._m70_lazy_node_map[getattr(_n, "node_id", "")] = _n
                     self._m70_hot_load_stats["lazy"] += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1748")
                 _out.append(_n)
             _st = self._m70_hot_load_stats
             self._log(LogLevel.INFO,
                       f"[第70批] 冷热加载: 共{_st['total']} 热(L1)={_st['hot']} "
                       f"懒加载(L2/L3)={_st['lazy']}")
             return _out
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1756")
             return nodes
 
     def set_cold_recall_source(self, recall_fn) -> None:
@@ -1779,13 +1783,13 @@ class PulseSnapshot:
             if "value" in _keep:
                 try:
                     node.value = _keep["value"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1782")
             if "linked_nodes" in _keep:
                 try:
                     node.linked_nodes = _keep["linked_nodes"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1787")
             node._m70_blanked = False
             _lazy_ids = getattr(self, "_m70_lazy_ids", None)
             if _lazy_ids is not None and _nid in _lazy_ids:
@@ -1800,12 +1804,12 @@ class PulseSnapshot:
                     _rn = _recalled[0]
                     try:
                         node.value = getattr(_rn, "value", node.value)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1803")
                     try:
                         node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1807")
                     node._m70_blanked = False
                     _lazy_ids = getattr(self, "_m70_lazy_ids", None)
                     if _lazy_ids is not None and _nid in _lazy_ids:

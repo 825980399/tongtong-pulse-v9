@@ -474,7 +474,8 @@ class ExperiencePool:
         try:
             import config as _c
             _wl = getattr(_c, "EXPERIENCE_POLLUTION_WHITELIST_SOURCES", []) or []
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L477")
             _wl = []
         if _src and _src in [str(s).lower() for s in _wl]:
             return ""
@@ -485,7 +486,8 @@ class ExperiencePool:
             from nucleus.data.experience_cleanup import (
                 classify as _serp_classify_fn,
                 CLASS_TEMPLATE, CLASS_WRITE_SIDE)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L488")
             _serp_classify_fn = None
             CLASS_TEMPLATE = "template_summary_legacy"
             CLASS_WRITE_SIDE = "write_side_boilerplate"
@@ -493,8 +495,8 @@ class ExperiencePool:
             try:
                 if _serp_classify_fn(experience) == CLASS_TEMPLATE:
                     return CLASS_TEMPLATE
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L496")
         # 3) write_side 收窄：仅真正含 SERP 样板 token 且覆盖度达标才判
         if not _s:
             return ""
@@ -553,13 +555,14 @@ class ExperiencePool:
                     _res["skipped"] = True
                     _res["reason"] = "adaptive_frequency_throttle"
                     return _res
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L556")
         try:
             import config as _c
             _hi = float(getattr(_c, "EXPERIENCE_POLLUTION_HIGH_CONFIDENCE", 0.9))
             _me = float(getattr(_c, "EXPERIENCE_POLLUTION_MEDIUM_CONFIDENCE", 0.7))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L562")
             _hi, _me = 0.9, 0.7
         _quarantine = []
         with self._lock:
@@ -1061,8 +1064,8 @@ class ExperiencePool:
                         explicit=getattr(self, "_m44_base_dir_explicit", False),
                         component="ExperiencePool"):
                     return
-            except ImportError:
-                pass
+            except ImportError as e:
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1064")
             os.makedirs(self._base_dir, exist_ok=True)
             # ★第54批 T4（P2-370）：合并保存 —— 保留停机期写入的清洗标记，
             #   不再用内存快照整体覆盖磁盘（灰度 ENABLE_EXPERIENCE_MERGE_SAVE）。
@@ -1108,8 +1111,8 @@ class ExperiencePool:
                 try:
                     if os.path.exists(tmp_file):
                         os.remove(tmp_file)
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1111")
                 _module_logger.error(f"保存失败（重试3次后仍失败）: {_last_error}")
         except Exception as e:
             _module_logger.error(f"保存失败: {e}")
