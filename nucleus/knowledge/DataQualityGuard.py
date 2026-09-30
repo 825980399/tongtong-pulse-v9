@@ -184,13 +184,14 @@ class DataQualityGuard:
         _flag, _reason = FLAG_CLEAN, ""
         try:
             _flag, _reason = self._tagger.classify(node)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L187")
             _flag, _reason = FLAG_CLEAN, "检查异常(降级clean)"
         _bad = _flag in (FLAG_SUSPECT, FLAG_POLLUTED)
         try:
             self._check_bad_counter = getattr(self, "_check_bad_counter", 0) + (1 if _bad else 0)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L192")
         _every = getattr(self, "_check_sample_every", 20)
         _logged = False
         if _bad or (self._check_counter % max(1, _every) == 0):
@@ -202,8 +203,8 @@ class DataQualityGuard:
                     f"{' - ' + _reason[:60] if _reason else ''}"
                     f"（累计异常 {getattr(self, '_check_bad_counter', 0)}/"
                     f"{self._check_counter}）")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L205")
         return {"flag": _flag, "reason": _reason,
                 "checked": self._check_counter, "logged": _logged}
 

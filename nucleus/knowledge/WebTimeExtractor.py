@@ -232,8 +232,8 @@ class WebTimeExtractor:
         try:
             _dt = datetime.fromisoformat(_s)
             return _dt.timestamp()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_iso L235")
         for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M",
                      "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d",
                      "%Y年%m月%d日", "%Y年%m月%d日 %H:%M", "%Y-%m-%dT%H:%M:%S.%f"):

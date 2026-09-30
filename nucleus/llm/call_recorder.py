@@ -343,8 +343,9 @@ class LLMCallRecorder:
                         os.remove(_fp)
                 except OSError:
                     continue
-        except Exception:
+        except Exception as e:
             # 清理失败不影响主流程（下一次触发会重试）
+            silent_exc(e, where="nucleus.llm.call_recorder::_rotate L346")
             return
 
     def record(self, *, origin: str, prompt: Any, response: Any,
@@ -560,7 +561,8 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                 _status = STATUS_FAILED
                 try:
                     _err = format_error(_e)
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L563")
                     _err = "%s: %s" % (type(_e).__name__, _e)
                 raise
             finally:
@@ -584,7 +586,7 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                         _self._last_llm_usage = None
                         if hasattr(_self, "_m44_last_usage"):
                             _self._m44_last_usage = None
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587")
         return _wrapper
     return _deco

@@ -21,6 +21,7 @@ import threading
 import time
 from typing import Any
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 # 确保项目根在 sys.path，便于复用 tools._framework_probe（独立运行脚本时亦需要）
@@ -139,8 +140,8 @@ class PeriodicTestScheduler:
             # 日志系统不可用时降级为标准输出，绝不让日志调用本身抛异常
             try:
                 print(f"[PeriodicTestScheduler][{level}] {message}", flush=True)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.evolution.PeriodicTestScheduler::_log L142")
 
     # ========== 脚本发现与分类 ==========
 

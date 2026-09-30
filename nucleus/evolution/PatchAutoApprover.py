@@ -478,8 +478,8 @@ class PatchAutoApprover:
                     auto_approved=_approved,
                     pending_count=_total,
                     by_decision=_by)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::scan_pending L481")
 
         return {"total": len(_patches), "auto_approved": _approved, "by_decision": _by,
                 "detail": _detail}

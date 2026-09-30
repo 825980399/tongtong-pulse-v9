@@ -229,7 +229,8 @@ class SemanticCache:
                     if _ttl > 0 and (_now - _e.ts) > _ttl:
                         continue
                     self._entries[_e.hash] = _e
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::_load L232")
             return
         self._evict()
 

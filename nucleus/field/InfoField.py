@@ -2241,7 +2241,8 @@ class InfoField(SilentLogMixin):
                 return
             _window = float(getattr(_cfg, "DUPLICATE_EVENT_WINDOW_SEC", 5.0) or 5.0)
             _depth = int(getattr(_cfg, "DUPLICATE_EVENT_STACK_DEPTH", 12) or 12)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_dup_trace_check L2244")
             return
         try:
             _payload = pulse.get("payload", {}) or {}

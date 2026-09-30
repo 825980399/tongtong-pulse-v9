@@ -379,10 +379,11 @@ class ParamPatchManager:
                         new_value=patch["new_value"],
                         source=f"param_patch:{patch.get('source', 'unknown')}"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L382")
 
         except Exception as e:
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L385")
             result["error"] = str(e)
             patch["status"] = "failed"
 
@@ -469,10 +470,11 @@ class ParamPatchManager:
                         new_value=patch["old_value"],
                         source="param_patch_rollback"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L472")
 
         except Exception as e:
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L475")
             result["error"] = str(e)
 
         return result
