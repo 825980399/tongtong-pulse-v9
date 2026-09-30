@@ -273,10 +273,12 @@ class ExperiencePool:
             self._experiences = [e for e in self._experiences if e["id"] not in to_remove_ids]
 
         # ★主线第49批 T3-1（P2-331）：情绪衰减检查接入。
-        #   背景：`check_decay()` 定义完整但**全库无生产调用方**
-        #   （实测：仅定义 + 2 处测试调用）→ 情绪强度 <0.05 的完整体验
-        #   永远不会被自动压缩。现**合并到容量保护**（每次写入后触发，
-        #   内部仍由 `_decay_check_interval`（3600s）限流，不增热路径开销）。
+        #   背景：`check_decay()` 原长期**无生产调用方**（旧注释称"仅定义 + 测试调用"）。
+        #   现**已合并到容量保护路径**：每次 `record_experience` 写入后，
+        #   当 `_m49_decay_on_trim_on()` 为真即调用，内部由 `_decay_check_interval`（3600s）限流，
+        #   不增热路径开销。
+        #   ★开关：`ENABLE_EXPERIENCE_DECAY_ON_TRIM`（config.py:4417）当前=True
+        #   → `check_decay()` 实际处于**激活**态（T155-4 核验确认，原"无调用方"前提已过时）。
         #   ★锁安全：`self._lock` 是 ``threading.RLock()``（可重入），
         #   因此在持锁的 `record_experience` 内调用不会死锁。
         if self._m49_decay_on_trim_on():
