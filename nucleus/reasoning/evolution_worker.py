@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import traceback
+from nucleus._silent_except import silent_exc
 
 # ★主线第15批 T3/P1-93：本模块是 **spawn 子进程的入口模块**，顶层一律只留
 #   stdlib 依赖。原因：实测 12h 子进程崩溃 109 次且 worker 内部 except 从未执行
@@ -144,7 +145,8 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
             #   需保持到子进程退出才能持续捕获崩溃栈；改为 with 会提前关闭而丢失日志。
             _stderr_fp = open(stderr_file, "w", encoding="utf-8", buffering=1)  # noqa: SIM115 - 见上
             sys.stderr = _stderr_fp
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L147")
             _stderr_fp = None
     try:
         run_evolution_worker(input_file, output_file)
@@ -161,16 +163,16 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
                 "phase": "worker_entry",
                 "pid": os.getpid(),
             })
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L164")
         raise
     finally:
         if _stderr_fp is not None:
             try:
                 _stderr_fp.flush()
                 _stderr_fp.close()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L172")
 
 
 def _write_output(output_file: str, result: dict) -> None:
@@ -185,8 +187,8 @@ def _write_output(output_file: str, result: dict) -> None:
         try:
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.evolution_worker::_write_output L188")
 
 
 if __name__ == "__main__":

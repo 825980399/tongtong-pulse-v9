@@ -339,8 +339,8 @@ class EvidenceCalibrator:
             import config as _cfg
             _fallback = float(getattr(_cfg, "CONFIDENCE_EVIDENCE_CONFIG", {}).get(
                 "history_similarity_fallback", 0.5) or 0.5)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::history_similarity L342")
         if not question:
             return _fallback
         try:

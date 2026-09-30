@@ -536,7 +536,8 @@ class SafeEvolutionExecutor:
             try:
                 return bool(self._patch_manager.has_pending_patch_for(
                     file_path, method_name))
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m94_pending_blocks_regeneration L539")
                 return False
 
     @staticmethod
@@ -5266,7 +5267,8 @@ class SafeEvolutionExecutor:
             _module_logger.info(
                 f"跨文件补丁验证通过({patch['status']}): {patch['id'][:16]}... → {patch['diff_summary'][:50]}")
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_verify_and_save_patch L5269")
             return False
 
     def _generate_diff_summary(self, original: str, modified: str) -> str:

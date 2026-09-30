@@ -57,8 +57,8 @@ class ContradictionResolver:
             if callable(ts):
                 try:
                     return float(ts())
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_timestamp_of L60")
             try:
                 return float(v)
             except (TypeError, ValueError):

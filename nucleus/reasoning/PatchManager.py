@@ -477,7 +477,8 @@ class PatchManager:
             try:
                 import config as _c
                 evo_cfg = getattr(_c, "EVOLUTION_CONFIG", {})
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.reasoning.PatchManager::_m85_local_low_risk_auto_apply L480")
                 return False
         if not isinstance(evo_cfg, dict):
             return False
