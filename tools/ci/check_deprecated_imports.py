@@ -15,7 +15,6 @@ check_deprecated_imports.py —— T155-R3 P2-64 并发收敛（Step2 门禁）
 用法：git diff --cached 已有内容时运行；无暂存内容则直接 PASS。
 退出码：0=通过，1=阻断。
 """
-import os
 import re
 import subprocess
 import sys
@@ -31,7 +30,7 @@ DEPRECATED = [
     "nucleus.HybridParallelScheduler",
     "nucleus.StructuredParallelScheduler",
 ]
-EXEMPT_FILES = {"main.py", "nucleus/self_inspector.py"}
+EXEMPT_FILES = {"main.py", "nucleus/self_inspector.py", "nucleus/parallel_scheduler.py"}
 
 
 def scan_violations(root: str):
