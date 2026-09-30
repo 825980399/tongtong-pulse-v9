@@ -36,6 +36,7 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+from nucleus._silent_except import silent_exc
 
 class GitBaselineUnavailable(Exception):
     """★T-112e#1：git 增量基线不可用（git diff 失败）时抛出，门禁据此 rc=2 中止（禁假绿）。"""
@@ -238,7 +239,8 @@ class Index:
     def line_of(self, p, n):
         try:
             return self.src(p).splitlines()[n - 1].strip()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="tools.ci.check_write_only_gates::line_of L241")
             return ""
 
     def build(self, files):
@@ -253,7 +255,8 @@ class Index:
     def _parse(self, f):
         try:
             return ast.parse(self.src(f), filename=f)
-        except (SyntaxError, ValueError):
+        except (SyntaxError, ValueError) as e:
+            silent_exc(e, where="tools.ci.check_write_only_gates::_parse L256")
             return None
 
     def _tokenize(self, f):
@@ -435,8 +438,8 @@ def _ext_index(ix: Index) -> dict:
                     try:
                         texts.append(io.open(os.path.join(root, n), encoding="utf-8",
                                              errors="replace").read())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="tools.ci.check_write_only_gates::_ext_index L438")
     blob = "\n".join(texts)
     if blob:
         for m in re.finditer(r"_[A-Za-z][A-Za-z0-9_]{2,}", blob):
@@ -632,8 +635,8 @@ def changed_files(base):
         if x.startswith('"') and x.endswith('"'):
             try:
                 x = x[1:-1].encode().decode("unicode_escape").encode("latin1").decode("utf-8")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="tools.ci.check_write_only_gates::changed_files L635")
         out.append(x)
     return out
 
