@@ -100,13 +100,15 @@ def _safe_get_insight_board():
     """
     try:
         _b = get_insight_board
-    except NameError:
+    except NameError as e:
+        silent_exc(e, where="main::_safe_get_insight_board L103")
         return None
     if not callable(_b):
         return None
     try:
         return _b()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="main::_safe_get_insight_board L109")
         return None
 
 from nucleus.mnemosyne.ContextSnapshot import (
@@ -3324,7 +3326,8 @@ def _is_self_restart_child(pid) -> bool:
     try:
         with _SELF_RESTART_PIDS_LOCK:
             return pid in _SELF_RESTART_CHILD_PIDS
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="main::_is_self_restart_child L3327")
         return False
 
 

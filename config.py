@@ -13,6 +13,7 @@ import threading
 import time
 
 from nucleus.const import LogLevel
+from nucleus._silent_except import silent_exc
 
 # ========== 项目根目录 ==========
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -3674,8 +3675,8 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(_json.dumps(log_entry, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="config::log_config_change L3677")
 
 def _watch_config_file():
     """后台线程：监听配置文件变更并自动重载"""
@@ -3820,7 +3821,8 @@ def _channels_enabled() -> bool:
             isinstance(c, dict) and c.get("enabled", True) and c.get("api_url")
             for c in _pool
         )
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="config::_channels_enabled L3823")
         return False
 
 def get_active_channels(include_disabled: bool = False) -> list:
@@ -4647,14 +4649,14 @@ def get_task_offset(key: str, default: float = 0):
         _rp = globals().get("RUNTIME_PARAMS")
         if isinstance(_rp, dict) and key in _rp:
             return _rp[key]
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="config::get_task_offset L4650")
     try:
         _c = globals().get("TASK_OFFSET_CONFIG")
         if isinstance(_c, dict) and key in _c:
             return _c[key]
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="config::get_task_offset L4656")
     return default
 # ★主线第63批 T1/P0（2026-09-16）：publish 步骤7 细粒度统计锁开关。
 #   True（默认）= 步骤7 用专用 _stats_lock，与全局 self._lock 解耦，消除高并发锁等待瓶颈；
