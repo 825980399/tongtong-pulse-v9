@@ -141,6 +141,56 @@ def govern_corrupted(dry: bool = False) -> dict:
             "freed_bytes": _sz_del, "quarantine_bytes": _sz_q}
 
 
+def govern_quarantine_expiry(dry: bool = False) -> dict:
+    """.corrupted 隔离件按龄清理：超过 ``config.CORRUPTED_QUARANTINE_DAYS`` 天的
+    隔离件删除并移除 manifest 记录。
+
+    ★154批 T154-7 M41 接线：原常量仅出现在 docstring，从未被消费 → 隔离件永不
+    清理（死配置 A6 案：manifest 1,274 条账 vs 实际 0 件）。本函数首次真正
+    消费该常量，使「保留 N 天」语义闭环。
+    与 govern_backups 共用 ``_cfg`` 延迟读 config，缺失回落 30 天。
+    """
+    _days = float(_cfg("CORRUPTED_QUARANTINE_DAYS", 30) or 30)
+    _cutoff = time.time() - _days * 86400.0
+    if not os.path.isfile(_MANIFEST):
+        return {"purged": 0, "freed_bytes": 0}
+    try:
+        _entries = json.load(io.open(_MANIFEST, encoding="utf-8")) or []
+    except Exception:
+        return {"purged": 0, "freed_bytes": 0}
+    _kept = []
+    _purged = 0
+    _freed = 0
+    for _e in _entries:
+        if not isinstance(_e, dict):
+            _kept.append(_e)
+            continue
+        _at = _e.get("at", 0.0)
+        _fname = _e.get("file")
+        if _fname and _at < _cutoff:
+            _p = os.path.join(_QUAR, _fname)
+            if os.path.isfile(_p):
+                if not dry:
+                    try:
+                        _freed += os.path.getsize(_p)
+                        os.remove(_p)
+                    except OSError:
+                        _kept.append(_e)
+                        continue
+                else:
+                    try:
+                        _freed += os.path.getsize(_p)
+                    except OSError:
+                        pass
+            _purged += 1
+        else:
+            _kept.append(_e)
+    if not dry:
+        with io.open(_MANIFEST, "w", encoding="utf-8") as f:
+            json.dump(_kept, f, ensure_ascii=False, indent=1)
+    return {"purged": _purged, "freed_bytes": _freed}
+
+
 def scan_knowledge_backups(kdir: str | None = None) -> list[tuple[float, str, int]]:
     """knowledge 目录下的 ``*.bak``（按 mtime 倒序）。"""
     _d = kdir or os.path.join(_DATA, "knowledge")
@@ -225,6 +275,10 @@ def main(argv: list[str]) -> int:
     print("    隔离（无副本）: %d  (%.2f MB) → %s"
           % (_c["quarantined"], _c["quarantine_bytes"] / 1024.0 / 1024.0,
              os.path.relpath(_QUAR, _ROOT)))
+
+    _qe = govern_quarantine_expiry(dry=_dry)
+    print("    隔离件到期清理: %d  (%.2f MB)"
+          % (_qe["purged"], _qe["freed_bytes"] / 1024.0 / 1024.0))
 
     _b = govern_backups(dry=_dry)
     print()
