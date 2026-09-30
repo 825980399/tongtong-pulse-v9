@@ -62,6 +62,13 @@ _TICKET_ERE = r"(Q[0-9]{2,3}-[0-9]+|D-[A-Z][0-9]+|D[0-9]{2,4}(-[A-Za-z0-9]+)?|P[
 _SCAN_EXTS = {".py", ".md", ".txt", ".csv", ".json", ".jsonl", ".yaml",
               ".yml", ".rst", ".toml"}
 
+#: 机器生成的「基线/快照件」目录：其中的内容不得当作票号来源。
+#: 原因（第156批实测）：ruff 规则码（形如 D### / F### 的 pydocstyle·pyflakes 码）
+#: 与债务票号语法 D\d{2,4} **撞型**，RUF100 三区基线件 tools/ci/baselines/ruff_ruf100_156.json
+#: 里的规则码会被误判为「新票未入册」而阻断提交。
+#: 该目录只放门禁基线数据，不是票的载体，故排除；对文档/代码的新票拦截不受影响。
+_SKIP_TICKET_SCAN_PREFIXES = ("tools/ci/baselines/",)
+
 
 def _register_ids(csv_path):
     """读取登记册 ID 列（去重集合）；不可读时返回空集合（不阻断既有校验）。"""
@@ -150,6 +157,9 @@ def check_new_ticket_registered():
             if "," in body and not body.startswith("ID,"):
                 register_added_rows += 1
         elif cur_file:
+            # 机器生成的基线件目录：规则码与票号撞型，不参与票号提取
+            if cur_file.startswith(_SKIP_TICKET_SCAN_PREFIXES):
+                continue
             for tid in TICKET_RE.findall(line):
                 introduced.add(tid)
     new_tickets = introduced - known
