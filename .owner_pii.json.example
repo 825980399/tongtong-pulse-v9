@@ -1,0 +1,5 @@
+{
+  "_comment": "属主脱敏 PII 配置模板（D148-1）。仅内部导出环境使用，绝不提交真实值、绝不进发布包。复制为 .owner_pii.json 并填入真实内容后用。扫描器从 PULSE_OWNER_NAMES / PULSE_OWNER_PATH_HINTS 环境变量或本文件读取属主专属真名与真实路径片段。",
+  "names": ["属主真实姓名", "属主昵称"],
+  "path_hints": ["X:/path/to/project", "Y:/Users/someuser"]
+}
