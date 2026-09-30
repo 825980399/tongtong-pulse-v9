@@ -14,6 +14,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from nucleus.const import ChatEvent, EyeEvent
+from nucleus._silent_except import silent_exc
 
 FUNCTION_META = {
     "name": "Web对话窗口",
@@ -448,8 +449,8 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     user = pulse.get("payload", {}).get("current_user", "")
                     if user:
                         return user
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.web_chat::_get_current_user_name L451")
         return "访客"
     
     def _handle_upload(self):

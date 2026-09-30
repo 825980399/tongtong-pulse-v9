@@ -12,6 +12,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 # 功能模块元数据声明
 FUNCTION_META = {
@@ -847,8 +848,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
-        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-            pass
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::do_GET L850")
 
     def _is_same_origin(self) -> bool:
         """同源校验：仅允许来自本面板的请求，防御 CSRF。"""
@@ -861,7 +862,8 @@ class HealthHandler(BaseHTTPRequestHandler):
                 _op = urlparse(_origin)
                 if _op.netloc and _op.netloc.split(':')[0] == _host and _host:
                     return True
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="functions.health_ui::_is_same_origin L864")
                 return False
             return False
         if _referer:
@@ -869,7 +871,8 @@ class HealthHandler(BaseHTTPRequestHandler):
                 _rp = urlparse(_referer)
                 if _rp.netloc and _rp.netloc.split(':')[0] == _host and _host:
                     return True
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="functions.health_ui::_is_same_origin L872")
                 return False
         # 无 Origin/Referer 的同源简单请求（如同源 fetch、测试）放行
         return True
@@ -887,8 +890,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
-        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-            pass
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::do_POST L890")
 
     def _serve_html(self):
         self.send_response(200)
@@ -1046,8 +1049,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             from nucleus.self_inspector import get_self_inspector
             _issues = get_self_inspector().detect_code_issues()
             _code_score = max(50, 95 - len(_issues))
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1049")
         _modules.append({"name": "代码健康", "score": _code_score})
 
         # 运行稳定性：脉冲错误数 + 重入次数
@@ -1058,8 +1061,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             _errors = _rt.get("pulse_errors", 0)
             _reentry = _rt.get("reentry_count", 0)
             _runtime_score = max(40, 95 - _errors * 2 - _reentry * 3)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1061")
         _modules.append({"name": "运行稳定性", "score": _runtime_score})
 
         # 资源管理：队列峰值深度
@@ -1069,8 +1072,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             _rt = get_runtime_metrics().get_snapshot()
             _depth = _rt.get("queue_max_depth", 0)
             _resource_score = max(50, 95 - max(0, _depth - 200) // 20)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1072")
         _modules.append({"name": "资源管理", "score": _resource_score})
 
         # 知识质量：知识节点总数
@@ -1079,8 +1082,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             if _node_pool:
                 _total = len(_node_pool.get_all())
                 _knowledge_score = 75 if _total > 0 else 50
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1082")
         _modules.append({"name": "知识质量", "score": _knowledge_score})
 
         return _modules
