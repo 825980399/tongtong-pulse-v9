@@ -38,6 +38,7 @@
 from __future__ import annotations
 
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 #: 语义拆分后的字段名（统一在此定义，避免各处硬编码）
 F_NO_REGRESSION = "no_regression"
@@ -66,7 +67,8 @@ def _as_int(value: Any) -> int | None:
         return int(value)
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
+        silent_exc(e, where="nucleus.evolution.patch_verification_split::_as_int L69")
         return None
 
 

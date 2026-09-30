@@ -209,7 +209,8 @@ class ParamTuningClosedLoop:
         try:
             from config import RUNTIME_PARAMS
             return RUNTIME_PARAMS.get(param)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_current_param_value L212")
             return None
 
     def _try_adjust(self, window_bad: list[tuple[float, str]], now: float) -> bool:
@@ -369,7 +370,8 @@ def _make_enabled(attr_name: str) -> Callable[[], bool]:
         try:
             import config
             return bool(getattr(config, attr_name, False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_enabled L372")
             return False
     return _enabled
 
@@ -393,14 +395,16 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
     def _cooldown_up(cur):
         try:
             _n = min(300, int(math.ceil(cur * 1.3)))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_up L396")
             return None
         return _n if _n > cur else None
 
     def _cooldown_down(cur):
         try:
             _n = max(5, int(math.floor(cur * 0.8)))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_down L403")
             return None
         return _n if _n < cur else None
 
@@ -445,14 +449,16 @@ def create_digestion_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
     def _min_len_down(cur):
         try:
             _n = max(1, int(cur) - 1)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_min_len_down L448")
             return None
         return _n if _n < cur else None
 
     def _purity_down(cur):
         try:
             _n = round(max(0.1, float(cur) - 0.05), 3)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_purity_down L455")
             return None
         return _n if _n < cur else None
 

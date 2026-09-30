@@ -18,6 +18,7 @@ from typing import Any, Optional
 from collections.abc import Iterator
 
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus._silent_except import silent_exc
 
 
 
@@ -202,13 +203,13 @@ class LazySnapshotView:
         try:
             if self._mm is not None:
                 self._mm.close()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L205")
         try:
             if self._file is not None:
                 self._file.close()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L210")
         self._mm = None
         self._file = None
 

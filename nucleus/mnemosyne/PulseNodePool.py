@@ -173,8 +173,8 @@ class PulseNodePool(SilentLogMixin):
                 self._max_warm = _rp['nodepool_max_warm']
             if 'nodepool_max_cold_cache' in _rp and hasattr(self, '_max_cold_cache'):
                 self._max_cold_cache = _rp['nodepool_max_cold_cache']
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::refresh_runtime_params L176")
 
 
     def set_resonance_engine(self, engine):
@@ -225,7 +225,8 @@ class PulseNodePool(SilentLogMixin):
             if abs(_new - _old) > 1e-6:
                 _node.hebbian_weight = _new
             return _new
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::sync_hebbian_weight L228")
             return 0.0
 
     def set_index_store(self, index_store):
@@ -834,7 +835,8 @@ class PulseNodePool(SilentLogMixin):
             import config
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_dw_enabled L837")
             return False
 
     def _m71_dw_stats(self) -> dict:
@@ -999,7 +1001,8 @@ class PulseNodePool(SilentLogMixin):
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False)
                        and getattr(config, "ENABLE_NEO4J_READ", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m72_neo4j_read_enabled L1002")
             return False
 
     def _m72_read_stats(self) -> dict:
@@ -1025,7 +1028,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             import config
             return float(getattr(config, "NEO4J_READ_COMPARE_RATE", 0.1))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m73_compare_rate L1028")
             return 0.1
 
     def _m73_compare_thresholds(self):
@@ -1184,7 +1188,8 @@ class PulseNodePool(SilentLogMixin):
             import config
             return bool(getattr(config, "ENABLE_INFLUXDB_TIMESERIES", False)
                        and getattr(config, "ENABLE_INFLUXDB_WRITE_ONLY", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_influx_enabled L1187")
             return False
 
     def _m71_influx_store(self):
@@ -2051,8 +2056,8 @@ class PulseNodePool(SilentLogMixin):
             _ctrl.register("cold_compaction", 600)
             if not _ctrl.should_execute("cold_compaction"):
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_enforce_cold_cache L2054")
         """★阶段B'：冷池超限时驱逐最久未激活节点到磁盘（LRU）。
 
         仅当冷存储启用时调用。驱逐直到冷池 ≤ _max_cold_cache。
@@ -2689,8 +2694,8 @@ class PulseNodePool(SilentLogMixin):
                     if isinstance(_loaded, dict):
                         with self._cold_buf_lock():
                             self._cold_index = _loaded
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_ensure_cold_index L2692")
         self._cold_index_loaded = True
 
     def _cold_row_to_node(self, row: dict) -> "PulseNode | None":
@@ -2935,7 +2940,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_COLD_COMPACTION_ADAPTIVE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_cold_compaction_adaptive_enabled L2938")
             return True
 
     def _get_system_load_level(self) -> str:
@@ -2943,7 +2949,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             from nucleus.runtime_metrics import get_runtime_metrics
             return get_runtime_metrics().get_system_load().get("load_level", "low")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_get_system_load_level L2946")
             return "low"
 
     def compact_cold_storage(self) -> dict[str, Any]:

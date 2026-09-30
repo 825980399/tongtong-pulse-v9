@@ -14,6 +14,7 @@ cython_status.py —— Cython状态监测
 from __future__ import annotations
 
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 # (模块名, 导入路径, 中文用途)
@@ -32,7 +33,8 @@ def _cython_switch_on() -> bool:
     try:
         from config import FEATURE
         return bool(FEATURE.get("use_cython_extensions", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.cython_status::_cython_switch_on L35")
         return False
 
 

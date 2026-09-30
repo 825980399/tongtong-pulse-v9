@@ -175,7 +175,8 @@ def _log_in_test_env() -> bool:
     """测试环境判定：pytest 下禁止向生产 logs/ 写盘（避免污染真实日志）。"""
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.logger::_log_in_test_env L178")
         return False
 
 
@@ -186,7 +187,8 @@ def log_retention_days() -> int:
             return 0
         _d = int(getattr(config, "LOG_RETENTION_DAYS", 7))
         return _d if _d > 0 else 0
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.logger::log_retention_days L189")
         return 0
 
 
@@ -242,7 +244,8 @@ def _fingerprint(path: str):
         return {"size": int(_st.st_size),
                 "ino": int(getattr(_st, "st_ino", 0) or 0),
                 "mtime": float(_st.st_mtime)}
-    except OSError:
+    except OSError as e:
+        silent_exc(e, where="nucleus.logger::_fingerprint L245")
         return None
 
 
@@ -705,7 +708,8 @@ def noise_reduction_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_LOG_NOISE_REDUCTION", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.logger::noise_reduction_enabled L708")
         return True
 
 
@@ -811,10 +815,11 @@ def exc_location(depth: int = 1) -> str:
             _rel = _safe_relpath(_file, _PROJECT_ROOT).replace("\\", "/")
             if not _rel.startswith(".."):
                 _file = _rel
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.logger::exc_location L814")
         return f"{_file}:{_line}"
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.logger::exc_location L817")
         return "<unknown>:0"
 # _m49_t3_3_class_done
 # _m49_t3_3_use_done

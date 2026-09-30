@@ -158,8 +158,8 @@ def _measure_cpu(cap: dict[str, Any]) -> None:
         if _ms > 0:
             cap["cpu_flops"] = (2.0 * _n ** 3) / (_ms / 1000.0)
         del _a, _b, _c
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.device_router::_measure_cpu L161")
 
 
 def get_capability(force: bool = False) -> dict[str, Any]:

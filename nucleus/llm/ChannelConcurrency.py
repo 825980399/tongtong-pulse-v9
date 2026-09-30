@@ -241,8 +241,8 @@ class ChannelConcurrencyManager:
             for _ch in getattr(_cfg, "REMOTE_API_CHANNELS", {}).get("default_channels", []):
                 if isinstance(_ch, dict) and _ch.get("name") == name:
                     return int(_ch.get("max_concurrent", 1) or 1)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelConcurrency::_read_channel_max L244")
         return 1
 
     def _clamp(self, name: str, value: int) -> int:

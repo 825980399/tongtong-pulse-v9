@@ -20,6 +20,7 @@ import threading
 import time
 from typing import Any
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 try:
@@ -34,8 +35,8 @@ def _log(level: str, msg: str) -> None:
         return
     try:
         getattr(_logger, level)(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::_log L37")
 
 
 # ==================== 关系代数 ====================
@@ -566,8 +567,8 @@ class IdentityKnowledgeManager:
         try:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::reset L569")
 
 
 # ==================== 单例 ====================
@@ -594,5 +595,5 @@ def reset_identity_manager() -> None:
     if _inst is not None:
         try:
             _inst.save()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::reset_identity_manager L597")

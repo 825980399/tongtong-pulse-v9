@@ -313,7 +313,8 @@ def record_audit_findings_to_hub(report: dict[str, Any], max_entries: int = 15) 
         from nucleus.mnemosyne.verification_learning_hub import (
             get_verification_learning_hub,
         )
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L316")
         return 0
     _hub = get_verification_learning_hub()
     _issues = report.get("issues", []) or []
@@ -351,6 +352,6 @@ def record_audit_findings_to_hub(report: dict[str, Any], max_entries: int = 15) 
                 lesson=_message,
             )
             _recorded += 1
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L354")
     return _recorded

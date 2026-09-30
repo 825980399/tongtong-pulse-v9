@@ -22,6 +22,7 @@ import time
 from typing import Any
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 __all__ = ["ExperienceTransfer", "get_experience_transfer"]
@@ -372,8 +373,8 @@ class ExperienceTransfer:
         if self._log_fn is not None:
             try:
                 self._log_fn(level, msg)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.evolution.ExperienceTransfer::_log L375")
 
 
 # ========== 模块级共享实例 ==========

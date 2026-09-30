@@ -90,7 +90,8 @@ def _checksum_debug_mode() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SNAPSHOT_CHECKSUM_DEBUG", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_checksum_debug_mode L93")
         return True
 
 
@@ -126,7 +127,8 @@ def _snapshot_path_whitelist_enabled() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SNAPSHOT_PATH_WHITELIST", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_path_whitelist_enabled L129")
         return True
 
 
@@ -135,7 +137,8 @@ def _temp_snapshot_cleanup_enabled() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_TEMP_SNAPSHOT_CLEANUP", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_temp_snapshot_cleanup_enabled L138")
         return True
 
 
@@ -158,7 +161,8 @@ def _is_temp_snapshot_path(path: str) -> bool:
         # 额外兜底：显式识别常见临时目录关键字（跨平台/自定义 TMPDIR 场景）
         _lower = _p_n.replace("/", os.sep)
         return any(_kw in _lower for _kw in ("\\appdata\\local\\temp\\", "/tmp/", "\\temp\\snap_t4_"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_is_temp_snapshot_path L161")
         return False
 
 
@@ -311,7 +315,8 @@ class PulseSnapshot:
             from nucleus.data.write_guard import guard_write as _m44_gw
             return _m44_gw(getattr(self, "snapshot_path", "") or "",
                            component="PulseSnapshot")
-        except ImportError:
+        except ImportError as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m44_write_allowed L314")
             return True
 
     def save(self, force_full: bool = False) -> bool:
@@ -741,7 +746,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return bool(getattr(_cfg67, "SNAPSHOT_ASYNC_SAVE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_async_save_enabled L744")
             return True
 
     def _m67_batch_size(self) -> int:
@@ -749,7 +755,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_BATCH_SIZE", 1000))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_batch_size L752")
             return 1000
 
     def _m67_full_save_interval(self) -> int:
@@ -905,7 +912,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return bool(getattr(_cfg67, "SNAPSHOT_USE_INCREMENTAL_LOG", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_enabled L908")
             return True
 
     def _m67_incremental_log_path(self) -> str:
@@ -916,7 +924,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_MAX_LINES", 10000))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_max L919")
             return 10000
 
     def _m67_incremental_delete_ratio_max(self) -> float:
@@ -924,7 +933,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return float(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX", 0.5))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_ratio_max L927")
             return 0.5
 
     def _m67_incremental_delete_abs_max(self) -> int:
@@ -932,7 +942,8 @@ class PulseSnapshot:
         try:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_ABS_MAX", 500))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_abs_max L935")
             return 500
 
     def _m67_incremental_log_lines(self) -> int:
@@ -946,7 +957,8 @@ class PulseSnapshot:
                     if _l.strip():
                         _n += 1
             return _n
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_lines L949")
             return 0
 
     def _m67_incremental_log_save(self, saved_nodes: list, current_checksum: str,
@@ -1194,7 +1206,8 @@ class PulseSnapshot:
         try:
             import config as _cfg68
             return bool(getattr(_cfg68, "PARQUET_AS_PRIMARY_STORAGE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_parquet_primary_enabled L1197")
             return True
 
     def _m68_json_backup_enabled(self) -> bool:
@@ -1204,7 +1217,8 @@ class PulseSnapshot:
         try:
             import config as _cfg68
             return bool(getattr(_cfg68, "SNAPSHOT_SAVE_JSON_BACKUP", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_json_backup_enabled L1207")
             return True
 
     def _m68_parquet_dir(self) -> str:
@@ -1218,14 +1232,16 @@ class PulseSnapshot:
         try:
             import config as _cfg81
             return bool(getattr(_cfg81, "PARQUET_SCHEMA_M81_COMPLETE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_schema_complete_enabled L1221")
             return True
 
     def _m81_parquet_expected_schema_version(self) -> str:
         try:
             import config as _cfg81
             return str(getattr(_cfg81, "PARQUET_VERIFY_SCHEMA_VERSION", "m81.v1"))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_expected_schema_version L1228")
             return "m81.v1"
 
     def _m81_parquet_required_columns(self) -> list[str]:
@@ -1677,7 +1693,8 @@ class PulseSnapshot:
         try:
             import config as _m70c
             return bool(getattr(_m70c, "SNAPSHOT_HOT_COLD_LOAD", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_hot_cold_enabled L1680")
             return True
 
     def _m70_apply_hot_cold_load(self, nodes):
@@ -2136,7 +2153,8 @@ class PulseSnapshot:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_SNAPSHOT_DIAGNOSTIC", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_diagnostic_enabled L2139")
             return True
 
     def _snapshot_diagnostic(self, data: dict[str, Any] | None = None) -> str:
@@ -2982,14 +3000,16 @@ def _m102_sidecar_node_ids(self) -> set:
     _ids = set()
     try:
         _all = _pool.get_all_including_evicted()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2985")
         return None
     try:
         for _n in (_all or []):
             _id = getattr(_n, "node_id", None)
             if _id:
                 _ids.add(str(_id))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2992")
         return None
     _ids |= _m102_cold_index_ids(getattr(self, "_m102_cold_cache", {})
                                  if isinstance(getattr(self, "_m102_cold_cache", None), dict)

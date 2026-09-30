@@ -72,7 +72,8 @@ class CheckedIssueMemory:
     def _mtime_of(file_path: str) -> float:
         try:
             return float(os.path.getmtime(file_path))
-        except OSError:
+        except OSError as e:
+            silent_exc(e, where="nucleus.code_learning_memory::_mtime_of L75")
             return 0.0
 
     def _load(self) -> None:

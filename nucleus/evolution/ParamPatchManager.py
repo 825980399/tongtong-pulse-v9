@@ -482,7 +482,8 @@ class ParamPatchManager:
         try:
             from config import RUNTIME_PARAMS
             return RUNTIME_PARAMS.get(param_name)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::_get_current_value L485")
             return None
 
     def _load_history(self):
@@ -1102,8 +1103,8 @@ class ParamPatchManager:
             for param, info in param_best.items():
                 optimal[param] = info["value"]
 
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::get_optimal_params L1105")
 
         return optimal
 

@@ -38,6 +38,7 @@ import threading
 import time
 import uuid
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 # ---------------------------------------------------------------------------
 # 常量：origin（四类调用来源，由调用方显式传入，本模块不做猜测）
@@ -105,7 +106,8 @@ def _in_test_env() -> bool:
     try:
         import sys as _sys
         return ("pytest" in _sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.call_recorder::_in_test_env L108")
         return False
 
 
@@ -116,7 +118,8 @@ def _is_production_trace_dir(path: str) -> bool:
         _root = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__)))).replace("\\", "/").lower()
         return _p.startswith(_root + "/data/")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.call_recorder::_is_production_trace_dir L119")
         return True
 
 
@@ -224,13 +227,15 @@ class LLMCallRecorder:
     def max_text_len(self) -> int:
         try:
             return int(_cfg("LLM_TRACE_MAX_TEXT_LEN", 8000) or 0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.call_recorder::max_text_len L227")
             return 8000
 
     def retention_days(self) -> int:
         try:
             return int(_cfg("LLM_TRACE_RETENTION_DAYS", 90) or 0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.call_recorder::retention_days L233")
             return 90
 
     def sanitize_enabled(self) -> bool:
@@ -270,7 +275,8 @@ class LLMCallRecorder:
             if not self.prompt_version_enabled():
                 return ""
             return self.default_prompt_version()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_prompt_version L273")
             return ""
 
     def _resolve_error(self, error: Any, status: str) -> str:
@@ -291,7 +297,8 @@ class LLMCallRecorder:
                 _raw = sanitize_text(_raw)
             _lim = self.error_max_len() if _cap else self.max_text_len()
             return _truncate(_raw, _lim or 0)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_error L294")
             return ""
 
     # ------------------------------------------------------------------
@@ -460,7 +467,8 @@ def get_call_recorder() -> LLMCallRecorder | None:
             if _recorder is None:
                 _recorder = LLMCallRecorder()
             return _recorder
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.call_recorder::get_call_recorder L463")
         return None
 
 
@@ -507,7 +515,8 @@ def record_evolution_call(*, prompt: Any, response: Any,
                            prompt_version=_pv, channel=channel, model=model,
                            duration=duration, tokens=tokens, status=status,
                            error=error, ts=ts, usage=usage)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.call_recorder::record_evolution_call L510")
         return None
 
 

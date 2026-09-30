@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections import deque
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 class ChannelSpeedProfiler:
@@ -42,8 +43,8 @@ class ChannelSpeedProfiler:
                 _bucket["min"] = _s
             if _s > _bucket["max"]:
                 _bucket["max"] = _s
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.channel_speed_profiler::record L45")
 
     def profile(self, name: str | None = None) -> dict:
         """返回画像。name=None 时返回 {渠道名: 画像} 的全量字典。"""
@@ -84,5 +85,5 @@ class ChannelSpeedProfiler:
                 self._stats.clear()
             else:
                 self._stats.pop(str(name), None)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.channel_speed_profiler::reset L87")

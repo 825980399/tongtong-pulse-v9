@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
 
 # ========== ★P0 新增：测试脚本模板常量 ==========
 
@@ -197,7 +198,8 @@ class TestGenerator:
             with open(_script_path, "w", encoding="utf-8") as _f:
                 _f.write(_script_content)
             return _script_path
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.TestGenerator::_generate_test_script L200")
             return None
 
     def _file_to_module(self, file_path: str) -> str:

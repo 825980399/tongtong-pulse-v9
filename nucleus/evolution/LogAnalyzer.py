@@ -20,6 +20,7 @@ from typing import Any
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 # 匹配 Traceback 的 File 行:  File "/path/to/file.py", line 123, in func_name
@@ -46,7 +47,8 @@ def _m90_log_locate_v2_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.evolution.LogAnalyzer::_m90_log_locate_v2_on L49")
         return True
 
 
@@ -229,8 +231,8 @@ class LogAnalyzer(SilentLogMixin):
                     _context_buf.append(_line)
                     if len(_context_buf) > 20:
                         _context_buf.pop(0)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_scan_log_file L232")
 
     def _scan_runtime_metrics(self, issues: dict[str, dict[str, Any]]) -> None:
         """从 runtime_metrics 的 error_snapshots 提取异常现场，关联代码位置。"""
@@ -380,7 +382,8 @@ class LogAnalyzer(SilentLogMixin):
             _ts_str = _m.group(1).replace("T", " ")
             _dt = datetime.datetime.strptime(_ts_str, "%Y-%m-%d %H:%M:%S")  # 日志时间戳为本地时间
             return _dt.timestamp()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_extract_ts L383")
             return 0.0
 
     def _count_lines(self, log_file: str) -> int:
@@ -389,7 +392,8 @@ class LogAnalyzer(SilentLogMixin):
         try:
             with open(log_file, encoding="utf-8", errors="ignore") as _f:
                 return sum(1 for _ in _f)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_count_lines L392")
             return 0
 
     def _summarize(self, sorted_issues: list[dict[str, Any]],

@@ -66,6 +66,7 @@ import os
 import re
 import shutil
 import time
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "F_IS_CLEANED", "F_POLLUTION_RISK", "F_CLEANUP_REASON", "F_CLEANUP_BATCH",
@@ -105,7 +106,8 @@ def filter_enabled() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, DEFAULT_SWITCH, True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.experience_cleanup::filter_enabled L108")
         return True
 
 

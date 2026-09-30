@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import os
+from nucleus._silent_except import silent_exc
 
 __all__ = ["safe_relpath", "safe_commonpath", "same_drive", "drive_of"]
 
@@ -45,7 +46,8 @@ def drive_of(path: str) -> str:
     """
     try:
         return os.path.splitdrive(os.path.abspath(path))[0]
-    except (TypeError, ValueError, OSError):
+    except (TypeError, ValueError, OSError) as e:
+        silent_exc(e, where="nucleus.data.path_utils::drive_of L48")
         return ""
 
 
@@ -85,5 +87,6 @@ def safe_commonpath(paths) -> str:
     """``os.path.commonpath`` 的跨盘安全版本；跨盘时返回空串。"""
     try:
         return os.path.commonpath([os.path.abspath(p) for p in paths])
-    except (ValueError, TypeError, OSError):
+    except (ValueError, TypeError, OSError) as e:
+        silent_exc(e, where="nucleus.data.path_utils::safe_commonpath L88")
         return ""

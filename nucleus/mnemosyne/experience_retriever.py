@@ -61,7 +61,8 @@ def retriever_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_EXPERIENCE_RETRIEVER_OBSERVE", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::retriever_enabled L64")
         return True
 
 
@@ -76,7 +77,8 @@ def _cfg(name: str, default: Any) -> Any:
 def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_in_test_env L79")
         return False
 
 
@@ -85,7 +87,8 @@ def _is_production_data_path(path: str) -> bool:
         _p = os.path.abspath(path).replace("\\", "/").lower()
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_is_production_data_path L88")
         return True
 
 
@@ -148,7 +151,8 @@ class ExperienceRetriever:
         """编码器是否就绪（未就绪时 :meth:`retrieve` 返回空列表）。"""
         try:
             return bool(self.encoder().is_available())
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_retriever::available L151")
             return False
 
     def top_k(self) -> int:

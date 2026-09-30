@@ -109,7 +109,8 @@ class ChannelQuotaMonitor:
         _c = self._cfg()
         try:
             return float(getattr(_c, "QUOTA_PAUSE_RATIO", 0.05))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::pause_ratio L112")
             return 0.05
 
     def alert_ratio(self) -> float:
@@ -120,7 +121,8 @@ class ChannelQuotaMonitor:
         _c = self._cfg()
         try:
             return float(getattr(_c, "QUOTA_ALERT_RATIO", 0.20))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::alert_ratio L123")
             return 0.20
 
     def safety_margin(self) -> float:
@@ -132,7 +134,8 @@ class ChannelQuotaMonitor:
         _c = self._cfg()
         try:
             return float(getattr(_c, "QUOTA_USAGE_SAFETY_MARGIN", 1.0))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::safety_margin L135")
             return 1.0
 
     def _force_enabled(self) -> set:
@@ -214,7 +217,8 @@ class ChannelQuotaMonitor:
             for _ch in (_c.REMOTE_API_CHANNELS or {}).get("default_channels") or []:
                 if str(_ch.get("name")) == str(channel_name):
                     return str(_ch.get("quota_type", "fixed") or "fixed")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::quota_type_of L217")
             return "fixed"
         return "fixed"
 
@@ -223,7 +227,8 @@ class ChannelQuotaMonitor:
         _c = self._cfg()
         try:
             return int(getattr(_c, "QUOTA_DAILY_RESET_HOUR", 11) or 11)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::daily_reset_hour L226")
             return 11
 
     def _ensure_daily_reset(self, channel_name: str,

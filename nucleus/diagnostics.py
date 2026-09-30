@@ -571,8 +571,8 @@ def shutdown_diagnostics() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.diagnostics::shutdown_diagnostics L574")
 # _m50_t1_diag_done
 
 # _m51_t2_wire

@@ -611,7 +611,8 @@ class EvolutionLoop(SilentLogMixin):
             with open(_path, "w", encoding="utf-8") as _f:
                 _f.write(record)
             return _path
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionLoop::write_evolution_record L614")
             return ""
 
     def update_panorama_status(self, completed_items: list[dict[str, Any]],
@@ -647,7 +648,8 @@ class EvolutionLoop(SilentLogMixin):
             with open(_path, "w", encoding="utf-8") as _f:
                 _json.dump(_update, _f, ensure_ascii=False, indent=2)
             return _path
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionLoop::update_panorama_status L650")
             return ""
 
 

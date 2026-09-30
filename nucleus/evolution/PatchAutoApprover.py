@@ -32,6 +32,7 @@ from typing import Any
 
 from nucleus.logger import get_module_logger
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("PatchAutoApprover")
@@ -163,8 +164,8 @@ class PatchAutoApprover:
             import config as _c
             if not getattr(_c, "PATCH_AUTO_APPROVE_ACCEPT_RUNTIME_VERIFIED", True):
                 return False
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_verified L166")
         if patch.get("runtime_verified") in _VERIFIED_TRUTHY:
             return True
         return str(patch.get("status", "")) == "runtime_verified"
@@ -173,7 +174,8 @@ class PatchAutoApprover:
     def _trust_ok(patch: dict[str, Any]) -> bool:
         try:
             return float(patch.get("trust_score", 0) or 0) >= _trust_threshold()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_trust_ok L176")
             return False
 
     @staticmethod

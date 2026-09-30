@@ -15,6 +15,7 @@ iw_text_guard —— 内在世界（PulseInnerWorld）搜索前缀文本守卫
 共同 import 使用，保持行为零变化。
 """
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 _SEARCH_PREFIX_ALT_NEW = (
     r"搜索(?:一下|下)?|查找(?:一下|下)?|查(?:一下|下)?|帮我[找查]|搜一下|"
@@ -33,7 +34,8 @@ def _search_topic_guard_enabled() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SEARCH_TOPIC_GUARD", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.iw_text_guard::_search_topic_guard_enabled L36")
         return True
 
 

@@ -289,7 +289,8 @@ class ExperiencePool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_DECAY_ON_TRIM", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_m49_decay_on_trim_on L292")
             return True
     
     #: 摘要算法版本（第47批起：保留原文，不再覆盖）
@@ -356,7 +357,8 @@ class ExperiencePool:
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_EXPERIENCE_DEDUP", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_dedup_enabled L359")
             return False
 
     def _has_duplicate(self, content: str) -> bool:
@@ -399,7 +401,8 @@ class ExperiencePool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_AUTO_CLEAN", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_auto_clean_enabled L402")
             return True
 
     # ★主线第65批 T1/P1：分类收窄常量
@@ -475,7 +478,8 @@ class ExperiencePool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_POLLUTION_CLEANUP", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_cleanup_enabled L478")
             return True
 
     def run_pollution_cleanup(self, dry_run: bool = False) -> dict:
@@ -604,7 +608,8 @@ class ExperiencePool:
         try:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_QUARANTINE_RESTORE", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_restore_enabled L607")
             return True
 
     def restore_from_quarantine(self, dry_run: bool = False,
@@ -1130,8 +1135,8 @@ def shutdown_experience_pool() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::shutdown_experience_pool L1133")
 
 
 # ========== 自测 ==========

@@ -11,6 +11,7 @@
 """
 import hashlib
 from typing import Any, Dict, List, Optional
+from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -32,7 +33,8 @@ def _distributed_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_DISTRIBUTED", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.distributed.sharding::_distributed_enabled L35")
         return False
 
 

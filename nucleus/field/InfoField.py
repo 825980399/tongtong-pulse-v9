@@ -27,6 +27,7 @@ from nucleus.logger import (
     noise_reduction_enabled as _noise_reduce,
 )
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 try:
@@ -1358,7 +1359,8 @@ class InfoField(SilentLogMixin):
         try:
             from config import FEATURE
             return bool(FEATURE.get("use_runtime_adaptive_tuning", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_read_adaptive_tuning_flag L1361")
             return False
 
     @staticmethod
@@ -1707,7 +1709,8 @@ class InfoField(SilentLogMixin):
             return True
         try:
             _depth = pool._work_queue.qsize()   # SimpleQueue/Queue 均支持 qsize
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_admit_layer_task L1710")
             return True                      # 拿不到深度就放行，不做无谓拦截
         # ★P2-31 水位预警：达上限 80% 即告警，不必等队列满（提前发现积压趋势）
         _warn_ratio = float(PULSE_LAYER.get("l2_warn_ratio", 0.8)) if layer == _PULSE_LAYER_L2 else 0.8
@@ -1815,7 +1818,8 @@ class InfoField(SilentLogMixin):
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_L3_QUEUE_LIMIT_ORDER_FIX", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_m33_queue_limit_order_fix_on L1818")
             return True
 
     @staticmethod
@@ -1824,7 +1828,8 @@ class InfoField(SilentLogMixin):
         try:
             from config import FEATURE
             return bool(FEATURE.get("l3_dynamic_scaling_enabled", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_read_l3_dynamic_scaling_flag L1827")
             return True
 
     def _auto_scale_l3_by_depth(self):
@@ -1862,7 +1867,8 @@ class InfoField(SilentLogMixin):
             return
         try:
             _depth = _pool._work_queue.qsize()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_auto_scale_l3_by_depth L1865")
             return
         _limit = self._layer_queue_limits.get(_PULSE_LAYER_L3, 0)
         if _limit <= 0:
@@ -2055,7 +2061,8 @@ class InfoField(SilentLogMixin):
         try:
             from config import FEATURE as _FEATURE
             return bool(_FEATURE.get("enable_concurrency_count_recovery", True))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.field.InfoField::_concurrency_recovery_enabled L2058")
             return True
 
     def _track_layer_inflight(self, layer_tag: str, organ_name: str, delta: int):

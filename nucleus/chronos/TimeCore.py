@@ -19,6 +19,7 @@ from typing import Any
 import config
 from nucleus.chronos.GlobalClock import GlobalClock
 from nucleus.const import SystemEvent
+from nucleus._silent_except import silent_exc
 
 
 
@@ -88,8 +89,8 @@ class TimeCore:
             if self._timer is not None:
                 try:
                     self._timer.cancel()
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="nucleus.chronos.TimeCore::stop L91")
                 self._timer = None
         self._log("TimeCore 已停止")
 
@@ -231,7 +232,8 @@ class TimeCore:
         """语义时间：将墙钟映射到一天中的语义阶段（粗粒度）。"""
         try:
             h = time.localtime().tm_hour
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.chronos.TimeCore::_semantic_phase L234")
             return "unknown"
         if 5 <= h < 11:
             return "morning"
@@ -249,8 +251,8 @@ class TimeCore:
             try:
                 self._logger.info(msg)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.chronos.TimeCore::_log L252")
         print(f"[TimeCore] {msg}")
 
 

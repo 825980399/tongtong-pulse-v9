@@ -65,7 +65,8 @@ def _try_gpu_search(query_vector: list, candidate_vectors: list, top_k: int):
         _GPU_STATE["gpu_ms_avg"] = (
             _GPU_STATE["gpu_ms_avg"] * 0.7 + _ms * 0.3)
         return [(i, float(_scores[i])) for i in _ranked], _ms
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.fast_ops::_try_gpu_search L68")
         return None
 
 

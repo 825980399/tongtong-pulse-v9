@@ -24,6 +24,7 @@ from nucleus.evolution.HealthScore import HealthScore
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 
 
@@ -276,7 +277,8 @@ class EvolutionDriver(SilentLogMixin):
             with open(_flag_path, "w", encoding="utf-8") as _f:
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionDriver::request_apply_now L279")
             return False
 
     def has_apply_request(self) -> bool:

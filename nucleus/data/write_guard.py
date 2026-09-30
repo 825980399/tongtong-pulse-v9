@@ -26,6 +26,7 @@ import os
 import sys
 import threading
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 #: 已告警过的组件名（每组件只记一次，避免日志刷屏）
 _warned: set[str] = set()
@@ -44,7 +45,8 @@ def guard_enabled() -> bool:
     """守卫总开关（``ENABLE_TEST_ENV_WRITE_GUARD``，默认 True）。"""
     try:
         return bool(_cfg("ENABLE_TEST_ENV_WRITE_GUARD", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::guard_enabled L47")
         return True
 
 
@@ -54,7 +56,8 @@ def is_test_env() -> bool:
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return True
         return "pytest" in sys.modules
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::is_test_env L57")
         return False
 
 
@@ -83,7 +86,8 @@ def is_framework_process() -> bool:
         _m = sys.modules.get("__main__")
         _f = getattr(_m, "__file__", "") or ""
         return bool(_f) and os.path.basename(_f).lower() == "main.py"
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::is_framework_process L86")
         return False
 
 
@@ -94,7 +98,8 @@ def is_test_mode() -> bool:
     """
     try:
         return bool(os.environ.get("PULSE_TEST_MODE"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::is_test_mode L97")
         return False
 
 
@@ -137,7 +142,8 @@ def env_reason() -> str:
                     else "pytest 环境(pytest in sys.modules)")
         return ("框架主进程(PULSE_FRAMEWORK/main.py)" if is_framework_process()
                 else "普通脚本(默认生产)")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::env_reason L140")
         return "判定异常(回退默认)"
 
 
@@ -187,7 +193,8 @@ def writer_kind() -> str:
         if is_test_mode():
             return "test_mode"
         return "script"
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::writer_kind L190")
         return "unknown"
 
 
@@ -199,7 +206,8 @@ def strict_enabled() -> bool:
     """
     try:
         return bool(_cfg("ENABLE_STRICT_WRITE_GUARD", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::strict_enabled L202")
         return True
 
 
@@ -221,7 +229,8 @@ def reject_reason(path: Any, explicit: bool = False) -> str:
         return ("非可信写入者(进程=%s) 默认只读；"
                 "如需写入请设 PULSE_FRAMEWORK=1 或 explicit=True"
                 % writer_kind())
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::reject_reason L224")
         return ""
 
 
@@ -236,7 +245,8 @@ def is_production_data_path(path: Any) -> bool:
         _p = os.path.abspath(str(path)).replace("\\", "/").lower()
         _root = project_root().replace("\\", "/").lower()
         return _p.startswith(_root + "/data/")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::is_production_data_path L239")
         return True
 
 
@@ -266,7 +276,8 @@ def reject_write(path: Any, explicit: bool = False,
         if not strict_enabled():
             return False
         return not is_framework_process()
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.write_guard::reject_write L269")
         return False
 
 

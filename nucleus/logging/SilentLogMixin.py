@@ -14,6 +14,7 @@ SilentLogMixin.py —— 静默日志混入
 from __future__ import annotations
 
 import logging
+from nucleus._silent_except import silent_exc
 
 
 __all__ = ["SilentLogMixin", "coerce_log_level"]
@@ -78,6 +79,6 @@ class SilentLogMixin:
             _logger = logging.getLogger(
                 f"{type(self).__module__}.{type(self).__name__}")
             _logger.log(coerce_log_level(level), _text)
-        except Exception:
+        except Exception as e:
             # 日志本身失败绝不能影响主流程 —— 静默到底
-            pass
+            silent_exc(e, where="nucleus.logging.SilentLogMixin::_log L81")

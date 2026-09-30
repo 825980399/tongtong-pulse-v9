@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 # ★v23.0新增：Cython加速模块加载标记
@@ -30,7 +31,8 @@ def _cython_extensions_enabled() -> bool:
     try:
         from config import FEATURE
         return bool(FEATURE.get("use_cython_extensions", False))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.OscillonField::_cython_extensions_enabled L33")
         return False
 
 

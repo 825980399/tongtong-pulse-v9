@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from nucleus.llm.base_adapter import BaseLLMAdapter
+from nucleus._silent_except import silent_exc
 
 
 
@@ -73,7 +74,8 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
                 return None
             _text = content.strip()
             return _text or None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::parse_response L76")
             return None
 
     def extract_usage(self, response: Any) -> dict | None:
@@ -113,7 +115,8 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
                 return None
             return {"prompt_tokens": _pi or 0, "completion_tokens": _ci or 0,
                     "total_tokens": _ti}
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::extract_usage L116")
             return None
 
     def check_availability(self, api_key: str) -> bool:

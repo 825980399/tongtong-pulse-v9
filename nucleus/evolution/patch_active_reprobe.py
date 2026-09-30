@@ -107,7 +107,8 @@ def _diff_scope_on() -> bool:
         import config as _cfg
 
         return bool(getattr(_cfg, "ENABLE_REPROBE_DIFF_SCOPE", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.evolution.patch_active_reprobe::_diff_scope_on L110")
         return True
 
 #: 日志类调用名（用于判断「是否留痕」）

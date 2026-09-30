@@ -46,6 +46,7 @@ import sys
 import time
 from collections import Counter
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_TRACE_DIR",
@@ -106,7 +107,8 @@ def evaluator_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_LLM_DATA_QUALITY_EVAL", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::evaluator_enabled L109")
         return True
 
 
@@ -116,15 +118,16 @@ def _trace_dir() -> str:
         _rel = str(getattr(config, "LLM_TRACE_DIR", "") or "")
         if _rel:
             return _rel if os.path.isabs(_rel) else os.path.join(_PROJECT_ROOT, _rel)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_trace_dir L119")
     return DEFAULT_TRACE_DIR
 
 
 def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_in_test_env L127")
         return False
 
 
@@ -133,7 +136,8 @@ def _is_production_path(path: str) -> bool:
         _p = os.path.abspath(path).replace("\\", "/").lower()
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_is_production_path L136")
         return True
 
 
@@ -148,8 +152,8 @@ def channel_whitelist() -> set:
                 _out.add(str(_c["name"]))
         if (getattr(config, "REMOTE_API_CHANNELS", {}) or {}).get("advanced_api_key"):
             _out.add("advanced")
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::channel_whitelist L151")
     return _out
 
 
@@ -161,8 +165,8 @@ def _stub_thresholds() -> tuple:
         import config as _c
         _r = int(getattr(_c, "LLM_DATA_QUALITY_STUB_REPEAT_MIN", _STUB_REPEAT_MIN_DEFAULT))
         _l = int(getattr(_c, "LLM_DATA_QUALITY_STUB_LEN_MAX", _STUB_LEN_MAX_DEFAULT))
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_stub_thresholds L164")
     return (_r if isinstance(_r, int) and _r > 0 else _STUB_REPEAT_MIN_DEFAULT,
             _l if isinstance(_l, int) and _l > 0 else _STUB_LEN_MAX_DEFAULT)
 
@@ -453,7 +457,8 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         with io.open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
-    except OSError:
+    except OSError as e:
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::save_report L456")
         return None
 
 

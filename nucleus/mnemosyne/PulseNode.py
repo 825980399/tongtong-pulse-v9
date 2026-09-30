@@ -20,6 +20,7 @@ import hashlib
 import time
 from typing import Any
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 """
@@ -507,8 +508,8 @@ class PulseNode:
                 _default_boost = SOURCE_URL_TRUST_CONFIG.get("default_boost", 0)
                 _boost = _domain_boost.get(_domain, _default_boost)
                 _source_score = max(0, min(30, _source_score + _boost))
-            except Exception:
-                pass  # ★R1：配置缺失/异常时静默降级，不影响原有逻辑
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNode::assess_trust L510")
         
         score = _source_score  # 直接替换基础分，来源是最重要的维度
         remaining = 70  # 剩余可分配分数
@@ -644,8 +645,8 @@ class PulseNode:
                 _default_boost = SOURCE_URL_TRUST_CONFIG.get("default_boost", 0)
                 _boost = _domain_boost.get(_domain, _default_boost)
                 _trust_base = max(10, min(100, _trust_base + _boost))
-            except Exception:
-                pass  # ★R1：配置缺失/异常时静默降级，不影响原有逻辑
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.PulseNode::evaluate_node_health L647")
         # 激活次数加成：每激活1次+1.5分，上限20分
         _activation_bonus = min(20, self.activation_count * 1.5)
         _trust_score = min(100, _trust_base + _activation_bonus)
@@ -821,7 +822,8 @@ class PulseNode:
             if max_len and max_len > 0 and isinstance(result, str):
                 result = result[:max_len]
             return result
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNode::get_value_str L824")
             return ""
     def __repr__(self):
         val_preview = str(self.value)[:50]

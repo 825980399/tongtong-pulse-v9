@@ -43,6 +43,7 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = ["RequestDeduplicator", "get_request_deduplicator", "reset_request_deduplicator"]
 
@@ -356,7 +357,8 @@ def get_request_deduplicator() -> RequestDeduplicator | None:
         _timeout = float(getattr(_cfg, "REQUEST_DEDUP_TIMEOUT_SEC", 30.0) or 30.0)
         _max_wait = int(getattr(_cfg, "REQUEST_DEDUP_MAX_WAITERS", 10) or 10)
         _ttl = float(getattr(_cfg, "REQUEST_DEDUP_REUSE_TTL_SEC", 5.0) or 5.0)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.RequestDeduplicator::get_request_deduplicator L359")
         return None
 
     with _DEDUP_LOCK:

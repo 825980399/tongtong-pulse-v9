@@ -90,7 +90,8 @@ def _cfg_float(name: str, default: float) -> float:
 def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.model_self_updater::_in_test_env L93")
         return False
 
 
@@ -99,7 +100,8 @@ def _is_production_path(path: str) -> bool:
         _p = os.path.abspath(path).replace("\\", "/").lower()
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.model_self_updater::_is_production_path L102")
         return True
 
 
@@ -196,7 +198,8 @@ class ModelSelfUpdater:
             with io.open(self.index_path(), "w", encoding="utf-8") as _f:
                 _f.write(json.dumps(idx, ensure_ascii=False, indent=2))
             return True
-        except OSError:
+        except OSError as e:
+            silent_exc(e, where="nucleus.llm.model_self_updater::_save_index L199")
             return False
 
     def list_versions(self) -> list:
@@ -218,7 +221,8 @@ class ModelSelfUpdater:
             try:
                 _v = self._quality_fn()
                 return float(_v) if isinstance(_v, (int, float)) else None
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.llm.model_self_updater::current_quality L221")
                 return None
         _cur = self.current_version() or {}
         _q = _cur.get("quality")

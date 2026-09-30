@@ -22,6 +22,7 @@ from typing import Any
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus._silent_except import silent_exc
 
 
 
@@ -172,7 +173,8 @@ class LLMEvolutionEngine(SilentLogMixin):
         try:
             from nucleus.evolution.AestheticJudge import get_aesthetic_judge
             return get_aesthetic_judge().feedback_guidance()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_aesthetic_guidance L175")
             return ""
 
     def _format_call_chain(self, call_chain: dict[str, Any] | None) -> str:
@@ -344,7 +346,8 @@ class LLMEvolutionEngine(SilentLogMixin):
         try:
             with open(_abs, encoding='utf-8', errors='ignore') as _f:
                 _content = _f.read()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_check_original_unique L347")
             return False
         # 统计出现次数（取 original_code 的前 50 字符作为匹配键，避免完全匹配失败）
         _key = original_code.strip()[:50]

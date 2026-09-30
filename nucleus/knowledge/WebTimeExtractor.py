@@ -17,6 +17,7 @@ import re
 import time
 from datetime import datetime
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 __all__ = ["WebTimeExtractor", "get_shared_extractor"]
@@ -257,13 +258,15 @@ class WebTimeExtractor:
                 _h, _mi = int(_hm.group(1)), int(_hm.group(2))
             try:
                 return datetime(_y, _mo, _d, _h, _mi).timestamp()
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L260")
                 return 0.0
         _m = re.search(r'(20\d{2})\s*[-/年.]\s*(\d{1,2})', _s)
         if _m:
             try:
                 return datetime(int(_m.group(1)), int(_m.group(2)), 1).timestamp()
-            except Exception:
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L266")
                 return 0.0
         # 无年份（上下文前缀可能只给"5月1日"）→ 用当前年兜底
         if default_year is None:
@@ -272,7 +275,8 @@ class WebTimeExtractor:
                 try:
                     _now_dt = datetime.now()
                     return datetime(_now_dt.year, int(_m.group(1)), int(_m.group(2))).timestamp()
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L275")
                     return 0.0
         return 0.0
 
@@ -282,8 +286,8 @@ class WebTimeExtractor:
         if self._log_fn is not None:
             try:
                 self._log_fn(level, msg)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_log L285")
 
 
 # ========== 模块级共享实例（与 RssCollector / WikiQuerier 同风格）==========

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.request import Request, urlopen
+from nucleus._silent_except import silent_exc
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -409,8 +410,8 @@ class RssCollector:
     def _log(self, msg: str):
         try:
             self._log_fn(f"[RSS采集器] {msg}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.RssCollector::_log L412")
 
 
 # ========== 模块级单例（供双腿等器官接线使用） ==========

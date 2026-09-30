@@ -15,6 +15,7 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 _PROJECT_ROOT = None  # 占位（如需持久化再启用；当前审计走 ParamPatchManager 历史文件）
@@ -62,7 +63,8 @@ class AutoParamApplier:
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_AUTO_PARAM_APPLY', False):
                 return 0
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.AutoParamApplier::submit_patches L65")
             return 0
         if not patches:
             return 0
@@ -178,8 +180,8 @@ class AutoParamApplier:
     def _log(self, msg: str):
         try:
             self._log_fn(f"[参数自动应用] {msg}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.AutoParamApplier::_log L181")
 
 
 # ========== 模块级单例 ==========

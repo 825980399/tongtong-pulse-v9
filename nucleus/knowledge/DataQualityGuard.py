@@ -29,6 +29,7 @@ from nucleus.knowledge.PollutionTagger import (
     PollutionTagger,
 )
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 __all__ = ["DataQualityGuard", "get_data_quality_guard", "reset_data_quality_guard"]
 
@@ -232,7 +233,8 @@ class DataQualityGuard:
                 if hasattr(node, "duplicate_of"):
                     node.duplicate_of = None
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::clear_flag L235")
             return False
 
     # ---------------- 内部 ----------------
@@ -248,8 +250,8 @@ class DataQualityGuard:
             else:
                 node.quality_flag = flag
                 node.quality_reason = reason
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::_write_flag L251")
 
 
 # ========== 模块级单例 ==========

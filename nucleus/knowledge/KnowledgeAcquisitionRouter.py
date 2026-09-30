@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 # 查询类型
@@ -181,7 +182,8 @@ class KnowledgeAcquisitionRouter:
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_KNOWLEDGE_ACQUISITION_ROUTER', False):
                 return None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::acquire L184")
             return None
 
         _q = str(query or "").strip()
@@ -270,7 +272,8 @@ class KnowledgeAcquisitionRouter:
                 if not getattr(_cfg, 'ENABLE_RSS_COLLECTOR', False):
                     return False
             return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_channel_enabled L273")
             return False
 
     def _try_channel(self, channel: str, query: str,
@@ -313,7 +316,8 @@ class KnowledgeAcquisitionRouter:
         """
         try:
             import jieba.posseg as _posseg
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L316")
             return None
         try:
             _q = str(query or "").strip()
@@ -324,7 +328,8 @@ class KnowledgeAcquisitionRouter:
                 if _w.flag.startswith("n") and 2 <= len(_w.word) <= 6
             ]
             return _cands[0] if _cands else None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L327")
             return None
 
     def _try_wiki(self, query: str) -> dict[str, Any] | None:
@@ -382,8 +387,8 @@ class KnowledgeAcquisitionRouter:
     def _log(self, msg: str):
         try:
             self._log_fn(f"[策略路由器] {msg}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_log L385")
 
 
 # ========== 模块级单例（供双腿/控制器接线使用） ==========

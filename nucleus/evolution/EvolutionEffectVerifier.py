@@ -36,8 +36,8 @@ def _log(level: str, msg: str) -> None:
         return
     try:
         getattr(_logger, level)(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::_log L39")
 
 
 # 低风险补丁的代码特征：只动日志/注释/字符串常量/数值参数
@@ -132,8 +132,8 @@ class EvolutionEffectVerifier:
             _c = getattr(_cfg, "EVOLUTION_EFFECT_VERIFY_CONFIG", {}) or {}
             low = float(_c.get("low_risk_min_trust", low) or low)
             high = float(_c.get("high_risk_min_trust", high) or high)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::trust_threshold_for L135")
         return low if cls.is_low_risk_patch(patch) else high
 
     # ==================== 效果验证 ====================
@@ -266,8 +266,8 @@ class EvolutionEffectVerifier:
             import config as _cfg
             _window = float(getattr(_cfg, "EVOLUTION_EFFECT_VERIFY_CONFIG", {}).get(
                 "recurrence_window_sec", _window) or _window)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::check_recurrence L269")
         with self._lock:
             _e = self._issues.get(signature)
             if _e is None:
@@ -335,8 +335,8 @@ class EvolutionEffectVerifier:
         try:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::reset L338")
 
 
 # ==================== 单例 ====================
@@ -362,5 +362,5 @@ def reset_effect_verifier() -> None:
     if _inst is not None:
         try:
             _inst.save()
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::reset_effect_verifier L365")

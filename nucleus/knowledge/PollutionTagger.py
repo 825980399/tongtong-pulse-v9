@@ -17,6 +17,7 @@ import re
 import time
 from collections.abc import Iterable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 try:
@@ -299,8 +300,8 @@ class PollutionTagger:
         if hasattr(node, "to_dict"):
             try:
                 return node.to_dict()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.knowledge.PollutionTagger::_to_dict L302")
         return {
             "node_id": getattr(node, "node_id", ""),
             "value": getattr(node, "value", ""),

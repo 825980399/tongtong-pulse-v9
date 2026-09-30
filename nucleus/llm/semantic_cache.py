@@ -88,7 +88,8 @@ class CacheEntry:
                        ts=float(d.get("ts", 0) or 0),
                        hit_count=int(d.get("hit_count", 0) or 0),
                        vec=[float(x) for x in (d.get("vec") or [])])
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::from_dict L91")
             return None
 
 
@@ -347,7 +348,8 @@ class SemanticCache:
             if os.environ.get("PYTEST_CURRENT_TEST"):
                 return True
             return "pytest" in sys.modules
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::_is_test_env L350")
             return False
 
     def observe_async(self, prompt: str, response: str,
@@ -449,7 +451,8 @@ def get_semantic_cache() -> SemanticCache | None:
             if _cache is None:
                 _cache = SemanticCache()
             return _cache
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.semantic_cache::get_semantic_cache L452")
         return None
 
 
@@ -460,8 +463,8 @@ def reset_semantic_cache() -> None:
         if _cache is not None:
             try:
                 _cache.close()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.llm.semantic_cache::reset_semantic_cache L463")
         _cache = None
 
 

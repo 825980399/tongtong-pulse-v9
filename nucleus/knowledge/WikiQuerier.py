@@ -54,7 +54,8 @@ def _rate_limit_enabled() -> bool:
     try:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_WIKI_QUERIER_RATE_LIMIT", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_rate_limit_enabled L57")
         return True
 
 
@@ -78,7 +79,8 @@ def _get_min_interval() -> float:
         import config as _cfg
         _v = float(getattr(_cfg, "WIKI_QUERIER_MIN_INTERVAL", 1.0))
         return max(0.0, _v)
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_get_min_interval L81")
         return 1.0
 
 
@@ -328,8 +330,8 @@ class WikiQuerier:
                 _punct = sum(_q.count(_c) for _c in "，。？！；：、（）()——…·\"'")
                 if _punct > 2:
                     return False, f"A-12收紧:标点>2(={_punct})"
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_should_query_reason L331")
         # 时效/方法类 → 不是实体查询
         if any(_k in _q for _k in ("最新", "新闻", "今天", "现在", "动态", "热点",
                                    "怎么", "如何", "教程", "步骤")):
@@ -485,8 +487,8 @@ class WikiQuerier:
     def _log(self, msg: str):
         try:
             self._log_fn(f"[百科查询器] {msg}")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_log L488")
 
 
 # ========== 模块级单例（供控制器等器官接线使用） ==========

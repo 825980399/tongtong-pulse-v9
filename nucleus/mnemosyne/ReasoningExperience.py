@@ -19,6 +19,7 @@ from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_write_json  # T-112a：复用硬化写通道
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 import threading
+from nucleus._silent_except import silent_exc
 
 
 
@@ -355,5 +356,5 @@ def shutdown_reasoning_experience() -> None:
         if _sd is not None:
             try:
                 _sd()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::shutdown_reasoning_experience L358")

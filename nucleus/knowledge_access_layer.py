@@ -45,7 +45,8 @@ def _kal_enabled() -> bool:
     try:
         import config
         return bool(getattr(config, "ENABLE_KAL", True))
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.knowledge_access_layer::_kal_enabled L48")
         return True
 
 
@@ -403,7 +404,8 @@ class KnowledgeAccessLayer:
             import config
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_dual_write_enabled L406")
             return False
 
     def get_neo4j_dual_write_stats(self) -> dict:
@@ -439,7 +441,8 @@ class KnowledgeAccessLayer:
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False)
                        and getattr(config, "ENABLE_NEO4J_READ", False))
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_read_enabled L442")
             return False
 
     def query_relationships(self, node_id: str, direction: str = "both") -> List[dict]:
