@@ -1,0 +1,5710 @@
+{
+  "schema": "ruff_ruf100_baseline/1",
+  "batch": 156,
+  "ruff_version_pinned": "0.16.5",
+  "ruff_version_actual": "0.16.5",
+  "generated_at_head": "018100f",
+  "scan_cmd": "ruff check --select RUF100 --output-format=json .",
+  "scan_scope": "全项目（遵循 ruff.toml 的 exclude，排除 data/code_backups、tmp/patch_*|scan_*|check_*、.bak*、.release-tmp*）",
+  "note": "RUF100 报告数量随「启用规则集」变化（同 noqa 在不同 select 下 used/unused 会翻转），故本基线固定用 --select RUF100 单规则口径生成，并与 ruff 版本硬钉绑定。三区：ZONE_A=门禁承重项(禁删) / ZONE_B=SIM·UP家族(留给专项批次) / ZONE_C=真死可清。",
+  "total": 632,
+  "zone_counts": {
+    "ZONE_A": 596,
+    "ZONE_B": 20,
+    "ZONE_C": 16
+  },
+  "zones": {
+    "ZONE_A": [
+      {
+        "file": "base/BasePulseOrgan.py",
+        "row": 13,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "base/BasePulseOrgan.py",
+        "row": 212,
+        "code": "RUF100",
+        "unused_codes": [
+          "RET501"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "config.py",
+        "row": 3668,
+        "code": "RUF100",
+        "unused_codes": [
+          "DTZ005"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "config.py",
+        "row": 5185,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 3,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 177,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 180,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 185,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 191,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 194,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 197,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 200,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 206,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 209,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 212,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 215,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 226,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 228,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 230,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 235,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 237,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 239,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 257,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 258,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 259,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 262,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 788,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "main.py",
+        "row": 795,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/CompanionBridge.py",
+        "row": 195,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/CompanionBridge.py",
+        "row": 251,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/evolution/HealthScore.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "RUF012"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/evolution/ParamAnalysisReport.py",
+        "row": 78,
+        "code": "RUF100",
+        "unused_codes": [
+          "C401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/evolution/ParamAnalysisReport.py",
+        "row": 141,
+        "code": "RUF100",
+        "unused_codes": [
+          "C401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/field/InfoField.py",
+        "row": 888,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/graph_store/neo4j_store.py",
+        "row": 75,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/hardware_probe.py",
+        "row": 84,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/knowledge/SynonymExpander.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "RUF012"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/knowledge_noise_filter.py",
+        "row": 15,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/logger.py",
+        "row": 477,
+        "code": "RUF100",
+        "unused_codes": [
+          "N802"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/IndexStore.py",
+        "row": 89,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/PulseNodePool.py",
+        "row": 2575,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/PulseNodePool.py",
+        "row": 2760,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/PulseNodePool.py",
+        "row": 2980,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/PulseSnapshot.py",
+        "row": 2627,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/pa_compat.py",
+        "row": 64,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/mnemosyne/pa_compat.py",
+        "row": 79,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/probe_registry.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/qica/QICA.py",
+        "row": 499,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/qica/QICA.py",
+        "row": 500,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/reasoning/AutonomousDeriver.py",
+        "row": 616,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/reporting/report_bus.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/security/face_codec.py",
+        "row": 85,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/security/face_codec.py",
+        "row": 120,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/timeseries_store/influxdb_store.py",
+        "row": 78,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/vector_store/faiss_store.py",
+        "row": 299,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "nucleus/vector_store/faiss_store.py",
+        "row": 335,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/body/PulseLung.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseCortex.py",
+        "row": 1857,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 131,
+        "code": "RUF100",
+        "unused_codes": [
+          "B010"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 133,
+        "code": "RUF100",
+        "unused_codes": [
+          "B010"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 3627,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 5964,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 8836,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 9078,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 9325,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 10691,
+        "code": "RUF100",
+        "unused_codes": [
+          "DTZ006"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 10746,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 15578,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 15762,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseSemanticComprehension.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseSubconscious.py",
+        "row": 1063,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseSubconscious.py",
+        "row": 1369,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/PulseSubconscious.py",
+        "row": 1575,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/brain/pulse_inner_world_support.py",
+        "row": 591,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseEmergencyHandler.py",
+        "row": 66,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseEnergyMetabolism.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseMetricsCollector.py",
+        "row": 270,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseProprioception.py",
+        "row": 331,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseProprioception.py",
+        "row": 332,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseProprioception.py",
+        "row": 333,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/core/PulseProprioception.py",
+        "row": 334,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/genetic/PulseDNARepair.py",
+        "row": 75,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/genetic/PulseEvolution.py",
+        "row": 95,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseEthics.py",
+        "row": 120,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseEthics.py",
+        "row": 121,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseEthics.py",
+        "row": 157,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseEthics.py",
+        "row": 420,
+        "code": "RUF100",
+        "unused_codes": [
+          "F821"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseNarrativeSelf.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseNarrativeSelf.py",
+        "row": 572,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseNarrativeSelf.py",
+        "row": 577,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 742,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 2270,
+        "code": "RUF100",
+        "unused_codes": [
+          "F811"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 2670,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 2686,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 2773,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/identity/PulseSelfAwareness.py",
+        "row": 2850,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/immune/PulseSkin.py",
+        "row": 134,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/immune/PulseWhiteCell.py",
+        "row": 324,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/immune/PulseWhiteCell.py",
+        "row": 690,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseCodeSandbox.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseCodeSandbox.py",
+        "row": 471,
+        "code": "RUF100",
+        "unused_codes": [
+          "PIE790"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseController.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseController.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseController.py",
+        "row": 56,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseController.py",
+        "row": 963,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseController.py",
+        "row": 966,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseFileDigester.py",
+        "row": 406,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseFileDigester.py",
+        "row": 713,
+        "code": "RUF100",
+        "unused_codes": [
+          "PIE790"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseMouth.py",
+        "row": 300,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/motor/PulseMouth.py",
+        "row": 301,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseTouch.py",
+        "row": 142,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseTouch.py",
+        "row": 653,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 235,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 252,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 263,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 269,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 609,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/PulseVisualCortex.py",
+        "row": 734,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "organs/senses/visual_engines/ocr_engine.py",
+        "row": 137,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "pulse_doctor.py",
+        "row": 279,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "pulse_doctor.py",
+        "row": 294,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "pulse_doctor.py",
+        "row": 303,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_adaptive_coverage_extension_m65.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_adaptive_coverage_extension_m65.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_adaptive_coverage_extension_m65.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_adaptive_coverage_extension_m65.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_adaptive_coverage_extension_m65.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ark_seed_routing_m58.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ark_seed_routing_m58.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ark_seed_routing_m58.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ark_seed_routing_m58.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_background_learning_m12.py",
+        "row": 14,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_background_learning_m12.py",
+        "row": 15,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_background_learning_m12.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_baseline_errors_m41.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_baseline_errors_m41.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_batch_backup_m50.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_benefit_score_m55.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_benefit_score_m55.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_branch_concurrency_m32.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_branch_concurrency_m32.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_branch_concurrency_m32.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_branch_concurrency_m32.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_branch_concurrency_m32.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_call_graph_m21.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_call_graph_m21.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_call_graph_m21.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_call_recorder_m40.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_call_recorder_m40.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_channel_concurrency_m24.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_channel_concurrency_m24.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_channel_concurrency_m24.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_distill_retry_m16.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_distill_retry_m16.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_learn_task_offset_m61.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_learn_task_offset_m61.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_learning_memory_m56.py",
+        "row": 15,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_limits_m9.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_code_limits_m9.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_compaction_windows_lock_m60.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_compaction_windows_lock_m60.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_compaction_windows_lock_m60.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_hot_faiss_freq_kal_m69.py",
+        "row": 172,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_hot_faiss_freq_kal_m69.py",
+        "row": 180,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_hot_faiss_freq_kal_m69.py",
+        "row": 205,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_hot_faiss_freq_kal_m69.py",
+        "row": 230,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_cold_storage_batch_m81.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_config_placeholder_t146.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_config_placeholder_t146.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_contradiction_resolve_m57.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_controller_keepalive_m12.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_controller_keepalive_m12.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_core_chain_m50.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_core_chain_m50.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_corefile_no_autoapprove_m80.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_corefile_no_autoapprove_m80.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_corefile_no_autoapprove_m80.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_data_governance_m41.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_data_governance_m41_t154.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_data_quality_guard_m12.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_data_quality_guard_m12.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_deep_think_routing_m29.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_deep_think_routing_m29.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_deep_think_subproc_m31.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_deep_think_subproc_m31.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_deep_think_subproc_m31.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_cid_sanitize_m82.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 36,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 37,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_evol_m84.py",
+        "row": 39,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_guard_m15.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_guard_m15.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialog_noise_m83.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialogue_routing_m49.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialogue_routing_m49.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dialogue_routing_m49.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_distributed_dualwrite_import_m71.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_distributed_e2e_m72.py",
+        "row": 14,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_distributed_e2e_m72.py",
+        "row": 15,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_dup_dialog_m25.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_entry_probe_m35.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_entry_probe_m35.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_bus_m14.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_bus_m14.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_bus_m14.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_const_m58.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_tap_m17.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_tap_m17.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_tap_m17.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_event_tap_m17.py",
+        "row": 43,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_backup_filter_m60.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_backup_filter_m60.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_crash_patch_m15.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_crash_patch_m15.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_generic_defense_m60.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_health_m58.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_issue_path_filter_m59.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_learning_m85.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_learning_m85.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_learning_m85.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_stats_unified_m40.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_stats_unified_m40.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_evolution_stats_unified_m40.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_exclude_dirs_unified_m55.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_exclude_dirs_unified_m55.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pollution_cleanup_m65.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pollution_cleanup_m65.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pollution_cleanup_m65.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pool_persistence_m54.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pool_persistence_m54.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_pool_persistence_m54.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_quarantine_m66.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_quarantine_m66.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_experience_summary_hemostasis_m47.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_export_public_t153_normalize.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_faiss_add_underflow_m82.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_faiss_index_fix_m73.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_fake_guard_regression_m51.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_frequency_codec_cache_m16.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_frequency_codec_cache_m16.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_frequency_codec_cache_m16.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_health_issue_tracker_m66.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_health_ui_do_post_m99.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_hemostasis_verify_m48.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_checkpoint_m81b2.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_checkpoint_m81b2.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_checkpoint_m81b2.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_checkpoint_m81b2.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_checkpoint_m81b2.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_log_delete_m81.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_log_delete_m81.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_incremental_log_delete_m81.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_infofield_exception_logging_m62.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ir_golden_t146.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ir_knowledge_retriever.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ir_reflection.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ir_reflection.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_cr_split.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_cr_split.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_cr_split.py",
+        "row": 80,
+        "code": "RUF100",
+        "unused_codes": [
+          "E731"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_ea_split.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_vk_split.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_vk_split.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_iw_vk_split.py",
+        "row": 65,
+        "code": "RUF100",
+        "unused_codes": [
+          "E731"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_json_key_m26.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_json_key_m26.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_knowledge_quality_m23.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_knowledge_quality_m23.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_knowledge_quality_m23.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_l2_queue_config_m57.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_l2_queue_config_m57.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_l3_backpressure_m16.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_l3_backpressure_m16.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_l3_queue_limit_m33.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_learning_goal_m57.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_legs_learning_governance_m49.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_legs_learning_governance_m49.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_indent_contract_m91.py",
+        "row": 69,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_patch_cleanup_m54.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_patch_cleanup_m54.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_patch_cleanup_m54.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_patch_cleanup_m54.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_trace_fields_m44.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_trace_fields_m44.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_llm_trace_fields_m44.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_load_path_switch_m81.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_load_path_switch_m81.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_load_path_switch_m81.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_decay_robustness_m49.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_decay_robustness_m49.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_decay_robustness_m49.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_level_m29.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_level_m29.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_level_m30.py",
+        "row": 15,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_line_dynamic_m32.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 41,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 42,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 48,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 49,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_log_stability_m22.py",
+        "row": 50,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_lung_trace_m40.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_lung_trace_m40.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_lung_trace_m40.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_lung_trace_m40.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m102_data_governance.py",
+        "row": 41,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m102_data_governance.py",
+        "row": 42,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m102_data_governance.py",
+        "row": 47,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_lazy_materialize_m81.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_lazy_materialize_m81.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_lazy_materialize_m81.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_lazy_materialize_m81.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_production_wiring_m81b.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_production_wiring_m81b.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_production_wiring_m81b.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m70_production_wiring_m81b.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m74_bugfix_robustness.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m74_bugfix_robustness.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m74_bugfix_robustness.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m74_bugfix_robustness.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_gate2_label.py",
+        "row": 49,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_patch_guards.py",
+        "row": 48,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_patch_guards.py",
+        "row": 49,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_patch_guards.py",
+        "row": 58,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_switch_registry.py",
+        "row": 39,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m92_switch_registry.py",
+        "row": 40,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m93_apply_guard.py",
+        "row": 48,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m93_apply_guard.py",
+        "row": 49,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_dependency_layers.py",
+        "row": 46,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_dependency_layers.py",
+        "row": 47,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_pending_aging.py",
+        "row": 55,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_pending_aging.py",
+        "row": 56,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 46,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 47,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 48,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 49,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 50,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m95_followups.py",
+        "row": 36,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m95_followups.py",
+        "row": 37,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m95_followups.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_m95_followups.py",
+        "row": 41,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_memory_growth_analyzer_m66.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_memory_growth_analyzer_m66.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_memory_growth_analyzer_m66.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_memory_verify_delay_semantics_m62.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_method_body_cache_m65.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_multi_step_fallback_m34.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_multi_step_retrieval_m31.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_multi_step_retrieval_m31.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_operational_admission_m33.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_organ_lifecycle_contract_t153.py",
+        "row": 129,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_organ_scan_cache_m64.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_orphan_consumer_m98.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_orphan_consumer_m98.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_output_length_m28.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_output_length_m28.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pa_compat_m140.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pa_compat_m140.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pa_compat_m140.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_cold_json_m68.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_cold_json_m68.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_cold_json_m68.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_cold_json_m68.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_parquet_schema_m81.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_active_reprobe_m51.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_active_reprobe_m51.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_auto_approve_p1_m54.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_auto_approve_p1_m54.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_auto_approve_p1_m54.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_auto_approve_p1_m54.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_auto_approve_p1_m54.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_template_helper_m56.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_patch_verification_split_m47.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_path_utils_m48.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_path_utils_wiring_m55.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_path_utils_wiring_m55.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_path_utils_wiring_m55.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pcl_risk_threshold_m54.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pcl_risk_threshold_m54.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pcl_risk_threshold_m54.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pcl_risk_threshold_m54.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pool_rebuild_m15.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pool_rebuild_m15.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pool_rebuild_m15.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_heart_m52.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_kidney_m52.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_m52.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_m79.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_m80_guard.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_m80_guard.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_t108_regression.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_liver_t108_regression.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_lung_m52.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_stomach_m52.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pulse_stomach_m52.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_pytest_shard_m56.py",
+        "row": 14,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_quality_score_v2_m51.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_quota_monitor_m32.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_quota_monitor_m32.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_quota_type_m97.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_r5_face_roster.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_r5_face_roster.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_random_initial_delay_m61.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_random_initial_delay_m61.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_random_initial_delay_m61.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_regression_baseline_m66.py",
+        "row": 13,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_closed_loop_m55.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_closed_loop_m55.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_closed_loop_m55.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_closed_loop_m55.py",
+        "row": 36,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_closed_loop_m55.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_consumption_m52.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_consumption_m52.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_m47.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_m47.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_m47.py",
+        "row": 142,
+        "code": "RUF100",
+        "unused_codes": [
+          "E731"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_wiring_m50.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_wiring_m50.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_wiring_m50.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_wiring_m50.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_bus_wiring_m50.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_disk_prune_m51.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_report_disk_prune_m51.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_reprobe_diff_scope_m55.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_reprobe_diff_scope_m55.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_request_dedup_m26.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_request_dedup_m26.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_request_dedup_m26.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_routing_length_m30.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_routing_length_m30.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_runtime_fixes_m14.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_runtime_fixes_m14.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_sa_interfaces_m40.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_sa_interfaces_m40.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_safe_evolution_executor_m79.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_safe_evolution_executor_m79.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_event_contract_m86.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_event_contract_m86.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_event_contract_m86.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_keyword_guard_m15.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_keyword_guard_m15.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_search_topic_guard_m16.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_contract_t153.py",
+        "row": 83,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m18.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m18.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m18.py",
+        "row": 36,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m18.py",
+        "row": 37,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m19.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m19.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m19.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m19.py",
+        "row": 39,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m20.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_m20.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_phase18_m36.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_phase18_m36.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_phase18_m36.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_phase18_m36.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_phase18_m36.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_publish_m50.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_publish_m50.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_self_awareness_publish_m50.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_semantic_cache_l2_m138.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_semantic_cache_m41.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_semantic_threshold_m45.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_semantic_threshold_m45.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_serp_cleanup_m50.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_serp_cleanup_m50.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_serp_cleanup_m50.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_serp_quality_report_m55.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_slice_governance_m32.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_diagnostic_m16.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_diagnostic_m16.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_kal_m67.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_kal_m67.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_kal_m67.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_kal_m67.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_kal_m67.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_safety_m80.py",
+        "row": 20,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_safety_m80.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_snapshot_safety_m80.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_ssrf_whitelist_m98.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_stomach_json_tolerance_m65.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_switch_registry_m91.py",
+        "row": 42,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105a_release_loop.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105b_deferred_read.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105c_stomach_json.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105c_stomach_json.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_t105d_wiki_querier.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_test_dir_cleanup_m18.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_test_dir_cleanup_m18.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_timeout_quality_m27.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_timeout_quality_m27.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_timeout_quality_m27.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_timeout_quality_m27.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_timeout_quality_m27.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_tmp_backup_m46.py",
+        "row": 25,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_tmp_backup_migration_m47.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_tmp_cleanup_guard_m46.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_tool_wiring_m49.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_tool_wiring_m49.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_unified_exclude_dirs_m47.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_validator_false_success_m99.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_validator_false_success_m99.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_vector_store_retry_m15.py",
+        "row": 16,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_vector_store_retry_m15.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m44.py",
+        "row": 26,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m44.py",
+        "row": 27,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m44.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m44.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m44.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_guard_m51.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tests/test_write_lock_contention_m112.py",
+        "row": 52,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/check_encoding_hygiene.py",
+        "row": 63,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/cleanup_alias_placeholder_nodes.py",
+        "row": 42,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/measure_batch17_questions.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/measure_batch17_questions.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/measure_batch17_questions.py",
+        "row": 36,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/measure_batch17_questions.py",
+        "row": 37,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/setup_local_databases.py",
+        "row": 70,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/setup_local_databases.py",
+        "row": 71,
+        "code": "RUF100",
+        "unused_codes": [
+          "F401"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/verify_phase17_1_4.py",
+        "row": 212,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/verify_phase17_1_4.py",
+        "row": 261,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/archive/verify_phase17_1_4.py",
+        "row": 328,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/backfill_patch_verification_split.py",
+        "row": 37,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/backfill_patch_verification_split.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/build_semantic_index.py",
+        "row": 77,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/build_semantic_index.py",
+        "row": 79,
+        "code": "RUF100",
+        "unused_codes": [
+          "F841"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/check_code_limits.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+        "row": 31,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 30,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/live_gold9_148.py",
+        "row": 139,
+        "code": "RUF100",
+        "unused_codes": [
+          "BLE001"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/migrate_whitelist_to_fingerprints.py",
+        "row": 18,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/migrate_whitelist_to_fingerprints.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/ci/verify_fingerprint_gate.py",
+        "row": 17,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/dedup_experience_pool.py",
+        "row": 29,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/dedup_experience_pool.py",
+        "row": 32,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/dedup_experience_pool.py",
+        "row": 33,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/dedup_patch_history.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/experience_cleanup.py",
+        "row": 42,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/mark_duplicate_nodes.py",
+        "row": 46,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/package_full_project.py",
+        "row": 21,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/package_full_project.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/package_full_project.py",
+        "row": 28,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/probe_term_collapse.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/reprobe_patches.py",
+        "row": 38,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_call_pattern_analysis.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_data_quality_eval.py",
+        "row": 23,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_experience_analysis.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_model_self_update.py",
+        "row": 24,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_patch_quality_eval.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_self_awareness_analysis.py",
+        "row": 34,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_self_awareness_analysis.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_self_awareness_analysis.py",
+        "row": 39,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/run_self_awareness_analysis.py",
+        "row": 43,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/serp_pollution_analyzer.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/serp_quality_report.py",
+        "row": 40,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/serp_quality_report.py",
+        "row": 43,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      },
+      {
+        "file": "tools/tmp_backup.py",
+        "row": 68,
+        "code": "RUF100",
+        "unused_codes": [
+          "E402"
+        ],
+        "zone": "ZONE_A"
+      }
+    ],
+    "ZONE_B": [
+      {
+        "file": "functions/health_ui.py",
+        "row": 923,
+        "code": "RUF100",
+        "unused_codes": [
+          "UP012"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "main.py",
+        "row": 3756,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/distributed/replication.py",
+        "row": 88,
+        "code": "RUF100",
+        "unused_codes": [
+          "UP031"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/distributed/replication.py",
+        "row": 115,
+        "code": "RUF100",
+        "unused_codes": [
+          "UP031"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/distributed/replication.py",
+        "row": 141,
+        "code": "RUF100",
+        "unused_codes": [
+          "UP031"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/events/EventTap.py",
+        "row": 62,
+        "code": "RUF100",
+        "unused_codes": [
+          "UP031"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/mnemosyne/KnowledgeTree.py",
+        "row": 279,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM118"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/mnemosyne/KnowledgeTree.py",
+        "row": 411,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM118"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/mnemosyne/lazy_snapshot.py",
+        "row": 191,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/reasoning/evolution_worker.py",
+        "row": 146,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "nucleus/synapsys/ResonanceEngine.py",
+        "row": 1273,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM103"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/brain/PulseInitiative.py",
+        "row": 171,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM114"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/brain/PulseInitiative.py",
+        "row": 174,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM114"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 14407,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM114"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 17587,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM103"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/brain/PulseReflection.py",
+        "row": 685,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM114"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "organs/motor/PulseLegs.py",
+        "row": 1109,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM113"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "tools/dead_code_scan.py",
+        "row": 95,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "tools/dead_code_scan.py",
+        "row": 209,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      },
+      {
+        "file": "tools/dead_code_scan.py",
+        "row": 273,
+        "code": "RUF100",
+        "unused_codes": [
+          "SIM115"
+        ],
+        "zone": "ZONE_B"
+      }
+    ],
+    "ZONE_C": [
+      {
+        "file": "config.py",
+        "row": 3683,
+        "code": "RUF100",
+        "unused_codes": [
+          "PLW0602"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "config.py",
+        "row": 3721,
+        "code": "RUF100",
+        "unused_codes": [
+          "PLW0602"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "main.py",
+        "row": 35,
+        "code": "RUF100",
+        "unused_codes": [
+          "I001"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "main.py",
+        "row": 1940,
+        "code": "RUF100",
+        "unused_codes": [
+          "PERF102"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "nucleus/evolution/ParamABTestEngine.py",
+        "row": 171,
+        "code": "RUF100",
+        "unused_codes": [
+          "DTZ007"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "nucleus/evolution/ParamABTestEngine.py",
+        "row": 214,
+        "code": "RUF100",
+        "unused_codes": [
+          "DTZ007"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "nucleus/evolution/ParamPatchEffectVerifier.py",
+        "row": 101,
+        "code": "RUF100",
+        "unused_codes": [
+          "DTZ007"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 10430,
+        "code": "RUF100",
+        "unused_codes": [
+          "PLC0206"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "organs/brain/PulseInnerWorld.py",
+        "row": 17776,
+        "code": "RUF100",
+        "unused_codes": [
+          "I001"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_llm_budget_patch_format_m87.py",
+        "row": 106,
+        "code": "RUF100",
+        "unused_codes": [
+          "S102"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_llm_budget_patch_format_m87.py",
+        "row": 128,
+        "code": "RUF100",
+        "unused_codes": [
+          "S102"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_llm_patch_material_m88.py",
+        "row": 181,
+        "code": "RUF100",
+        "unused_codes": [
+          "S102"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_llm_patch_material_m88.py",
+        "row": 215,
+        "code": "RUF100",
+        "unused_codes": [
+          "S102"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_m94_tokens_usage.py",
+        "row": 304,
+        "code": "RUF100",
+        "unused_codes": [
+          "D401"
+        ],
+        "zone": "ZONE_C"
+      },
+      {
+        "file": "tests/test_no_bare_noqa_p207.py",
+        "row": 19,
+        "code": "RUF100",
+        "unused_codes": [],
+        "zone": "ZONE_C",
+        "bare_noqa": true
+      },
+      {
+        "file": "tests/test_no_bare_noqa_p207.py",
+        "row": 22,
+        "code": "RUF100",
+        "unused_codes": [],
+        "zone": "ZONE_C",
+        "bare_noqa": true
+      }
+    ]
+  }
+}
