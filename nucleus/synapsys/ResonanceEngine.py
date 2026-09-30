@@ -352,7 +352,8 @@ class ResonanceEngine:
             import config as _cfg
             if not getattr(_cfg, "ENABLE_POLLUTION_TAGGING", False):
                 return None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_pollution_tagger L355")
             return None
         try:
             from nucleus.knowledge.PollutionTagger import get_shared_tagger
@@ -409,7 +410,8 @@ class ResonanceEngine:
             import config as _cfg
             if not getattr(_cfg, "ENABLE_DATA_QUALITY_GUARD", False):
                 return None
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L412")
             return None
         try:
             from nucleus.knowledge.DataQualityGuard import get_data_quality_guard
@@ -421,7 +423,8 @@ class ResonanceEngine:
                 if _pool is not None:
                     try:
                         _nodes = _pool.get_all()
-                    except Exception:
+                    except Exception as e:
+                        silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L424")
                         _nodes = None
                 try:
                     _report = _guard.scan_all(
@@ -651,7 +654,8 @@ class ResonanceEngine:
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_KNOWLEDGE_GRAPH_CONSUMPTION', False):
                 return 0
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_expand_by_association L654")
             return 0
         _pool = getattr(self, "node_pool", None)
         if _pool is None or not hasattr(_pool, "get_related_nodes"):

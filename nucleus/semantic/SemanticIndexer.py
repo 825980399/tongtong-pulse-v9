@@ -209,8 +209,8 @@ class SemanticIndexer:
                         try:
                             progress_cb({"done": done, "total": total,
                                          "pct": pct, "speed": speed, "eta_sec": eta})
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            silent_exc(e, where="nucleus.semantic.SemanticIndexer::build L212")
 
             result["ok"] = not result["cancelled"]
         except KeyboardInterrupt:

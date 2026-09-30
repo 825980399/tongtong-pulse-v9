@@ -24,6 +24,7 @@ from nucleus.logger import get_module_logger
 
 # ★8-2：复用主沙箱的资源限制模型（CPU/内存/文件描述符/进程数上限 + 内存看门狗）
 from nucleus.security.sandbox_limits import execute_code_in_subprocess
+from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("ScriptExecutor")
 
@@ -362,8 +363,8 @@ if __name__ == "__main__":
             if result.stdout.strip():
                 try:
                     result.output_data = json.loads(result.stdout.strip())
-                except (json.JSONDecodeError, ValueError):
-                    pass  # 不是JSON输出，保留原始文本
+                except (json.JSONDecodeError, ValueError) as e:
+                    silent_exc(e, where="nucleus.review.ScriptExecutor::execute L365")
 
             # 5. 记录执行历史
             self._execution_history.append({
@@ -380,8 +381,8 @@ if __name__ == "__main__":
             # 清理临时文件
             try:
                 os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as e:
+                silent_exc(e, where="nucleus.review.ScriptExecutor::execute L383")
 
         if result.success:
             _logger.debug(f"脚本执行成功: {result.execution_time:.2f}秒")

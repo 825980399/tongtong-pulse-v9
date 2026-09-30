@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from .report_envelope import ConsumeResult, SEV_P0, SEV_P1, ReportEnvelope
+from nucleus._silent_except import silent_exc
 
 #: 告警落盘位置（相对于项目根）
 ALERT_FILE = os.path.join("data", "reports", "alerts.jsonl")
@@ -52,7 +53,8 @@ def _append_jsonl(rel_path: str, record: dict[str, Any]) -> bool:
         with open(_p, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(record, ensure_ascii=False) + "\n")
         return True
-    except (OSError, IOError, TypeError, ValueError):
+    except (OSError, IOError, TypeError, ValueError) as e:
+        silent_exc(e, where="nucleus.reporting.consumers::_append_jsonl L55")
         return False
 
 

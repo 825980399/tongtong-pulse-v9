@@ -21,6 +21,7 @@ from dataclasses import dataclass
 
 from nucleus.logger import get_module_logger
 from config import EXTERNAL_CALL_TIMEOUTS
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("ToolAutoInstaller")
@@ -164,7 +165,8 @@ class ToolAutoInstaller:
             try:
                 __import__(tool.pip_package.replace("-", "_"))
                 tool.installed = True
-            except ImportError:
+            except ImportError as e:
+                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L167")
                 tool.installed = False
 
         # 获取版本
@@ -177,8 +179,8 @@ class ToolAutoInstaller:
                 )
                 if result.returncode == 0:
                     tool.version = result.stdout.strip().split("\n")[0][:50]
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L180")
 
         # 更新缓存
         self._installed_cache[tool_name] = (time.time(), tool)

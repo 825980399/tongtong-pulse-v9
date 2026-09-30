@@ -375,8 +375,8 @@ class VectorEncoder:
                                          [[float(x)] for x in arr.tolist()], k)
                     if r:
                         return [(int(i), float(s)) for i, s in r]
-                except Exception:
-                    pass  # 未编译或不兼容 → 回落 numpy
+                except Exception as e:
+                    silent_exc(e, where="nucleus.semantic.VectorEncoder::topk L378")
 
             idx = np.argpartition(-arr, k - 1)[:k]
             idx = idx[np.argsort(-arr[idx])]

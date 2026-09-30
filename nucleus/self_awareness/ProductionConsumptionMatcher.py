@@ -144,8 +144,8 @@ def _normalize_path(path: str, project_root: str) -> str:
         if os.path.isabs(_p):
             try:
                 _p = os.path.relpath(_p, project_root)
-            except ValueError:
-                pass
+            except ValueError as e:
+                silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_normalize_path L147")
         return _p.replace("\\", "/")
     except Exception as e:
         _logger.debug("路径归一化失败 %r: %s: %s", path, type(e).__name__, e)

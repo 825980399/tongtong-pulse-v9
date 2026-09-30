@@ -1933,7 +1933,8 @@ def _m114b_patch_state_snapshot(executor: Any) -> dict:
         return _snap
     try:
         _pending = _pm.load_json(_pm.get_pending_file(), [])
-    except Exception:
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1936")
         _pending = []
     if not isinstance(_pending, list):
         _pending = []
@@ -1961,8 +1962,8 @@ def _m114b_patch_state_snapshot(executor: Any) -> dict:
             _cd = _pm._m113e_restart_cooldown_hours() * 3600.0
             _elapsed = (_now - _blocked_at) if _blocked_at > 0 else float("inf")
             _snap["ratchet_locked"] = not (_blocked_at > 0 and _elapsed >= _cd)
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1964")
     return _snap
 
 

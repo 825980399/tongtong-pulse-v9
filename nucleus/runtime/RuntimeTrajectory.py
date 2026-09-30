@@ -250,7 +250,8 @@ class RuntimeTrajectory:
                     _et = _r.get("event_type", "other")
                     self._stats[_et] = self._stats.get(_et, 0) + 1
             return len(_loaded)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::load L253")
             return 0
 
     def _persist(self) -> None:
@@ -316,8 +317,8 @@ class RuntimeTrajectory:
             with self._lock:
                 self._records = deque(_loaded[-self._max_records:], maxlen=self._max_records)
                 self._persisted_total = len(_loaded)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_maybe_compact L319")
 
     def export(self, filepath: str,
                event_type: str | None = None,
@@ -349,13 +350,14 @@ def get_runtime_trajectory() -> RuntimeTrajectory:
         try:
             import config as _cfg
             _enabled = getattr(_cfg, "ENABLE_RUNTIME_TRAJECTORY_PERSIST", False)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L352")
             _enabled = False
         _trajectory = RuntimeTrajectory(enabled=_enabled)
         try:
             _trajectory.load()  # lazy-load 历史轨迹（启用时）；未启用则直接空启动
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L357")
     return _trajectory
 
 

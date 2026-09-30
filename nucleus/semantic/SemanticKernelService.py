@@ -17,6 +17,7 @@ import threading
 from typing import Any
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("SemanticKernelService")
@@ -160,8 +161,8 @@ def shutdown() -> None:
     try:
         from nucleus.semantic.AsyncEncodeQueue import shutdown_encode_queue
         shutdown_encode_queue()
-    except Exception:
-        pass
+    except Exception as e:
+        silent_exc(e, where="nucleus.semantic.SemanticKernelService::shutdown L163")
     try:
         from nucleus.semantic.VectorStore import shutdown_vector_store
         shutdown_vector_store()

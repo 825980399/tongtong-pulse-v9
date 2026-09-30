@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 
 _logger = get_module_logger("CodeAnalyzer")
@@ -165,8 +166,8 @@ class CodeAnalyzer:
                 current_mtime = os.path.getmtime(abs_path)
                 if current_mtime == cached_mtime:
                     return cached_result
-            except OSError:
-                pass
+            except OSError as e:
+                silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L168")
 
         result = FileAnalysis(file_path=_safe_relpath(abs_path, self.project_root))
         result.analyzed_at = time.time()
@@ -175,6 +176,7 @@ class CodeAnalyzer:
             with open(abs_path, encoding="utf-8") as f:
                 source = f.read()
         except (OSError, UnicodeDecodeError) as e:
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L177")
             result.has_syntax_error = True
             result.syntax_error = str(e)
             return result
@@ -195,6 +197,7 @@ class CodeAnalyzer:
         try:
             tree = ast.parse(source, filename=abs_path)
         except SyntaxError as e:
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L197")
             result.has_syntax_error = True
             result.syntax_error = str(e)
             return result
@@ -241,8 +244,8 @@ class CodeAnalyzer:
         # 更新缓存
         try:
             self._cache[abs_path] = (os.path.getmtime(abs_path), result)
-        except OSError:
-            pass
+        except OSError as e:
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L244")
 
         return result
 
