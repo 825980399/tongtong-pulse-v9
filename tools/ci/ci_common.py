@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CI 共用：静默 except handler 指纹化（D148-4，解决行号漂移 + 新文件盲区）。
+"""CI 共用：静默 except handler 指纹化（Dxxx-4，解决行号漂移 + 新文件盲区）。
 
 唯一标识一个「有意静默兜底」handler 的稳定键：
     (path, qualname, nth_in_function, body_sha256[:16])

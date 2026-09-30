@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """cw3 门禁 B 原型（第2版）：ctx 读写时序「陈旧读 = 0」CI 门禁（覆盖拆分层级）。
 
-缺陷类（148批 D148-12 实证）：某名字 N 属 InferenceContext.__slots__，
+缺陷类（148批 Dxxx-12 实证）：某名字 N 属 InferenceContext.__slots__，
   调用者 F（编排器 或 任一 _ir_ 方法）在第 k 行调用 self._ir_C(ctx)，
   _ir_C 内读取 ctx.N（Load），且：
     ① F 在 k 之前对局部名 N 有赋值（可能已改值），

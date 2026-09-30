@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """任务二 d：防回潮 CI 门禁 + pre-commit hook（真实可执行，非伪码）。
 
-规则（D148-4 指纹化改造后）：
+规则（Dxxx-4 指纹化改造后）：
   1. 对 base..HEAD（或工作树）的 diff，新增静默 except handler 数必须 = 0
      （只降不升 / 指纹豁免集合外新增 = 0）。匹配改为「handler 指纹」，
      行号漂移不再导致误报。
@@ -39,7 +39,7 @@ LEGACY_WHITELIST_BASELINE = os.path.join(os.path.dirname(__file__), "silent_exce
 # ---- 第132批 T-132d：静默except豁免白名单（8 处合理自举兜底） ----
 # 这些位置是框架有意的静默兜底（PM 的 ImportError 日志模块自举、RWP 的 shutdown 期落盘/回收保护），
 # 不应计入"待改造"清单，也不应在未来被重新引入时触发违规。
-# ★D148-4：本行号白名单已迁移为「handler 指纹」(silent_except_fingerprints.json)，
+# ★Dxxx-4：本行号白名单已迁移为「handler 指纹」(silent_except_fingerprints.json)，
 #   此处仅作一个批次的**双轨对照**保留，下一批可删除。键 = (relpath, 源文件行号)。
 LOCATION_WHITELIST = {
     ("nucleus/reasoning/PatchManager.py", 3364),   # except ImportError: pass（日志模块不可用兜底）

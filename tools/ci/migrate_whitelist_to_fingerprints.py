@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""D148-4：将旧行号白名单迁移为 handler 指纹表（双轨对照，保留一个批次）。
+"""Dxxx-4：将旧行号白名单迁移为 handler 指纹表（双轨对照，保留一个批次）。
 
 读取 cw2_t2e_ci_gate_silent_except.py 的 LOCATION_WHITELIST（23 条），
 对每条用 AST 在 HEAD 源码中定位静默 handler，生成指纹：
