@@ -629,8 +629,3 @@ def get_channel_quota_monitor() -> ChannelQuotaMonitor:
     return _monitor
 
 
-def reset_channel_quota_monitor() -> None:
-    """复位单例（测试用；不落盘）。"""
-    global _monitor
-    with _monitor_lock:
-        _monitor = None

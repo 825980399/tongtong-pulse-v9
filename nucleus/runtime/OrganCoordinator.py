@@ -197,6 +197,3 @@ class OrganCoordinator(SilentLogMixin):
         }
 
 
-def get_organ_coordinator() -> OrganCoordinator:
-    """获取器官协调器单例"""
-    return OrganCoordinator()

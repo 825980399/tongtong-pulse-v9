@@ -858,7 +858,3 @@ def get_knowledge_quality_analyzer(**kwargs: Any) -> KnowledgeQualityAnalyzer:
     return _analyzer_singleton
 
 
-def reset_knowledge_quality_analyzer() -> None:
-    """重置单例（测试用）。"""
-    global _analyzer_singleton
-    _analyzer_singleton = None

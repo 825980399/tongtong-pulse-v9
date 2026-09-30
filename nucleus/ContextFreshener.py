@@ -217,7 +217,3 @@ def get_context_freshener() -> ContextFreshener:
     return _instance
 
 
-def set_context_freshener(instance: ContextFreshener | None) -> None:
-    global _instance
-    with _instance_lock:
-        _instance = instance

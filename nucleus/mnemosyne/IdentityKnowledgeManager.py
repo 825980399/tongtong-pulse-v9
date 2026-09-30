@@ -587,13 +587,3 @@ def get_identity_manager(base_dir: str | None = None) -> IdentityKnowledgeManage
     return _manager
 
 
-def reset_identity_manager() -> None:
-    """重置单例（测试/重启时用）。"""
-    global _manager
-    _inst = _manager
-    _manager = None
-    if _inst is not None:
-        try:
-            _inst.save()
-        except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::reset_identity_manager L597")

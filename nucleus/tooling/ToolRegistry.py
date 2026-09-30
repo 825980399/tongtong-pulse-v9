@@ -253,11 +253,6 @@ def get_tool_registry() -> ToolRegistry:
     return _tool_registry
 
 
-def set_tool_registry(registry: ToolRegistry) -> None:
-    """设置工具注册表单例（用于测试/依赖注入）。"""
-    global _tool_registry
-    _tool_registry = registry
-
 
 # ========== 默认工具注册 ==========
 

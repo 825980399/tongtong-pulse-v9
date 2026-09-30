@@ -257,7 +257,3 @@ def get_reasoning_experience_indexer() -> ReasoningExperienceIndexer:
     return _indexer
 
 
-def shutdown_reasoning_experience_indexer() -> None:
-    """复位单例（满足器官零状态，规则4）。"""
-    global _indexer
-    _indexer = None

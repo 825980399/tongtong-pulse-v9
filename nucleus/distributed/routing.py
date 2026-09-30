@@ -225,6 +225,3 @@ def build_simulation_router(simulation: bool = True) -> "NodeRouter":
     return _router
 
 
-def get_router(nodes: Optional[List[str]] = None) -> NodeRouter:
-    """获取路由器实例。"""
-    return NodeRouter(nodes=nodes)

@@ -163,23 +163,3 @@ def safe_http_json(
         return False, f"响应解析失败: {_e}"
 
 
-def safe_http_text(
-    url: str,
-    *,
-    method: str = "GET",
-    data: bytes | None = None,
-    headers: dict[str, str] | None = None,
-    timeout: int = 30,
-) -> tuple[bool, str]:
-    """safe_http_json 的文本版本，返回 (是否成功, 响应文本或错误)。"""
-    _allowed, _reason = is_safe_http_url(url)
-    if not _allowed:
-        return False, f"SSRF 防护拦截: {_reason}"
-    try:
-        _req = urllib.request.Request(
-            url, data=data, headers=headers or {}, method=method
-        )
-        with urllib.request.urlopen(_req, timeout=timeout) as _resp:
-            return True, _resp.read().decode("utf-8")
-    except urllib.error.URLError as _e:
-        return False, f"请求失败: {_e}"

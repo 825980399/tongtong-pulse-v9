@@ -220,15 +220,6 @@ _search_scheduler: SearchScheduler | None = None
 _search_scheduler_lock = threading.Lock()
 
 
-def get_search_scheduler() -> SearchScheduler:
-    """获取SearchScheduler单例"""
-    global _search_scheduler
-    if _search_scheduler is None:
-        with _search_scheduler_lock:
-            if _search_scheduler is None:
-                _search_scheduler = SearchScheduler()
-    return _search_scheduler
-
 
 def shutdown_search_scheduler() -> None:
     """★P1: 复位 SearchScheduler 单例，满足器官零状态（规则4）。"""

@@ -397,10 +397,6 @@ def get_experience_transfer(config: dict[str, Any] | None = None,
     return _transfer
 
 
-def reset_experience_transfer():
-    global _transfer
-    _transfer = None
-
 
 # ========== 自测 ==========
 if __name__ == "__main__":

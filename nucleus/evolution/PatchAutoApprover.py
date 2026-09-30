@@ -582,13 +582,6 @@ _monitor: EvolutionEffectivenessMonitor | None = None
 _lock = threading.RLock()
 
 
-def get_patch_auto_approver() -> PatchAutoApprover:
-    global _approver
-    with _lock:
-        if _approver is None:
-            _approver = PatchAutoApprover()
-        return _approver
-
 
 def get_evolution_monitor() -> EvolutionEffectivenessMonitor:
     global _monitor

@@ -16,7 +16,6 @@ import logging
 import os
 import threading
 from typing import Any, List, Optional, Tuple
-from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -27,15 +26,6 @@ except Exception:
 # 单例
 _FAISS_STORE_INSTANCE: Optional["FAISSVectorStore"] = None
 
-
-def _faiss_enabled() -> bool:
-    """FAISS 总开关。"""
-    try:
-        import config
-        return bool(getattr(config, "ENABLE_FAISS_VECTOR_STORE", True))
-    except Exception as e:
-        silent_exc(e, where="nucleus.vector_store.faiss_store::_faiss_enabled L35")
-        return True
 
 
 def _cfg(name: str, default: Any) -> Any:

@@ -359,11 +359,6 @@ def get_runtime_trajectory() -> RuntimeTrajectory:
     return _trajectory
 
 
-def set_runtime_trajectory(trajectory: RuntimeTrajectory) -> None:
-    """设置 RuntimeTrajectory 单例（用于依赖注入/测试）。"""
-    global _trajectory
-    _trajectory = trajectory
-
 
 if __name__ == "__main__":
     # 自测

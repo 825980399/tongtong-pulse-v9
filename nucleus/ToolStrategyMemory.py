@@ -206,13 +206,3 @@ def get_tool_strategy_memory() -> ToolStrategyMemory:
     return _memory
 
 
-def reset_tool_strategy_memory() -> None:
-    """重置单例（供进程重启时干净重建）"""
-    global _memory
-    _inst = _memory
-    _memory = None
-    if _inst is not None:
-        try:
-            _inst.save()
-        except Exception as e:
-            _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")

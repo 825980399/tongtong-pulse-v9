@@ -326,18 +326,6 @@ class Interoception(SilentLogMixin):
 _interoception: Interoception | None = None
 
 
-def get_interoception() -> Interoception:
-    """获取 Interoception 单例。"""
-    global _interoception
-    if _interoception is None:
-        _interoception = Interoception()
-    return _interoception
-
-
-def set_interoception(interoception: Interoception) -> None:
-    """设置 Interoception 单例（用于依赖注入/测试）。"""
-    global _interoception
-    _interoception = interoception
 
 
 if __name__ == "__main__":

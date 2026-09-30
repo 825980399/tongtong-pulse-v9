@@ -40,10 +40,6 @@ _GPU_STATE = {
 }
 
 
-def _gpu_state_snapshot() -> dict:
-    """导出 GPU 自适应状态，供 health_ui / 运维观测消费。"""
-    return dict(_GPU_STATE)
-
 
 def _try_gpu_search(query_vector: list, candidate_vectors: list, top_k: int):
     """★PHASE14：GPU 批量余弦 + top-k。成功返回 [(idx, score)...]，否则返回 None。

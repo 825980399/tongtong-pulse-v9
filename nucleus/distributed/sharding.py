@@ -163,6 +163,3 @@ def sync_replicas(shard_id: int) -> bool:
     return False
 
 
-def get_sharding() -> ShardStrategy:
-    """获取分片策略实例（进程内单例语义由调用方持有）。"""
-    return ShardStrategy()

@@ -164,17 +164,6 @@ def get_self_calibrator() -> SelfCalibrator:
     return _calibrator
 
 
-def reset_self_calibrator() -> None:
-    """重置单例（进程重启时干净重建）"""
-    global _calibrator
-    _inst = _calibrator
-    _calibrator = None
-    if _inst is not None:
-        try:
-            _inst.save()
-        except Exception as e:
-            _logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-
 
 # ======================================================================
 # ★第九批 任务1（B-3 置信度证据化）
@@ -520,16 +509,6 @@ def get_evidence_calibrator(base_dir: str | None = None) -> EvidenceCalibrator:
                 _evidence = EvidenceCalibrator(base_dir=base_dir)
     return _evidence
 
-
-def reset_evidence_calibrator() -> None:
-    global _evidence
-    _inst = _evidence
-    _evidence = None
-    if _inst is not None:
-        try:
-            _inst.save()
-        except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::reset_evidence_calibrator L529")
 
 
 def evidence_confidence(base: float, rtype: str = "generic",

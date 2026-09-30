@@ -340,10 +340,6 @@ def get_shared_tagger(config: dict[str, Any] | None = None, log_fn=None) -> Poll
     return _tagger
 
 
-def reset_shared_tagger():
-    global _tagger
-    _tagger = None
-
 
 # ========== 自测 ==========
 if __name__ == "__main__":

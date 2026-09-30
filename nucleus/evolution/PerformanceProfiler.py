@@ -201,10 +201,6 @@ class PerformanceProfiler:
 
 # ========== 便捷函数 ==========
 
-def get_performance_profiler(project_root: str = ".") -> PerformanceProfiler:
-    """获取 PerformanceProfiler 实例。"""
-    return PerformanceProfiler(project_root)
-
 
 if __name__ == "__main__":
     # 自测：数据分布统计

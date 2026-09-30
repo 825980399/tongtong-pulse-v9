@@ -260,11 +260,6 @@ def get_self_corrector() -> SelfCorrector:
     return _self_corrector
 
 
-def set_self_corrector(corrector: SelfCorrector) -> None:
-    """设置 SelfCorrector 单例（用于依赖注入/测试）。"""
-    global _self_corrector
-    _self_corrector = corrector
-
 
 if __name__ == "__main__":
     # 自测

@@ -355,12 +355,3 @@ def get_effect_verifier(base_dir: str | None = None) -> EvolutionEffectVerifier:
     return _verifier
 
 
-def reset_effect_verifier() -> None:
-    global _verifier
-    _inst = _verifier
-    _verifier = None
-    if _inst is not None:
-        try:
-            _inst.save()
-        except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::reset_effect_verifier L365")

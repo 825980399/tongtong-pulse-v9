@@ -211,39 +211,6 @@ def get_recent_pipelines(limit: int = 50) -> list[dict[str, Any]]:
     return [p.to_dict() for p in _items]
 
 
-def distill_pipeline(pipeline: TaskPipeline) -> dict[str, Any]:
-    # TODO: 预留接口，待未来功能使用（详见下方 docstring 说明，当前不实际调用）
-    """★B4【P2】知识沉淀接口预留——TaskPipeline 闭环后调用 verification_learning_hub.record。
-
-    当前 TaskPipeline 尚未接入真实任务流（B1 刚建实体），本方法为「接口预留」，
-    只定义沉淀的数据结构与接入点，不实际调用（避免空转写入学习枢纽）。
-
-    接入点（后续 M4 落地时在此实现）：
-        from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
-        _hub = get_verification_learning_hub()
-        _hub.record(
-            organ="task_pipeline",
-            task_type=f"pattern_{pipeline.task_pattern.value}",
-            input_summary=pipeline.description,
-            local_result=pipeline.to_dict(),
-            confidence=0.5,
-            relevance_score=0.5,
-            needs_verification=pipeline.task_pattern == TaskPattern.UNKNOWN,
-            verification_result={"stage": pipeline.get_stage(), "result": pipeline.result},
-            lesson=f"任务模式={pipeline.task_pattern.value} 策略={pipeline.strategy}",
-        )
-
-    Returns:
-        预留的沉淀数据结构（当前仅描述，不落库）。
-    """
-    return {
-        "status": "reserved",
-        "task_id": pipeline.task_id,
-        "task_pattern": pipeline.task_pattern.value,
-        "strategy": pipeline.strategy,
-        "note": "接口预留：TaskPipeline 接入真实任务流后调用 verification_learning_hub.record 落库",
-    }
-
 
 # ========== 自测 ==========
 

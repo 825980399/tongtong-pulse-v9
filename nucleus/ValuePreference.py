@@ -192,7 +192,3 @@ def get_value_preference() -> ValuePreference:
     return _instance
 
 
-def set_value_preference(instance: ValuePreference | None) -> None:
-    global _instance
-    with _instance_lock:
-        _instance = instance

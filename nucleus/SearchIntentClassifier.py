@@ -298,7 +298,3 @@ def get_intent_classifier() -> SearchIntentClassifier:
     return _classifier
 
 
-def shutdown_intent_classifier() -> None:
-    """复位单例。"""
-    global _classifier
-    _classifier = None

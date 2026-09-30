@@ -266,18 +266,6 @@ class SelfModel(SilentLogMixin):
 _self_model: SelfModel | None = None
 
 
-def get_self_model() -> SelfModel:
-    """获取 SelfModel 单例。"""
-    global _self_model
-    if _self_model is None:
-        _self_model = SelfModel()
-    return _self_model
-
-
-def set_self_model(model: SelfModel) -> None:
-    """设置 SelfModel 单例（用于依赖注入/测试）。"""
-    global _self_model
-    _self_model = model
 
 
 if __name__ == "__main__":

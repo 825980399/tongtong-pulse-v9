@@ -80,21 +80,6 @@ class SurvivalSnapshot:
         }
 
 
-class SurvivalHookMixin:
-    # TODO: 预留接口，待未来功能使用（五层次生存动作钩子，当前未接入）
-    """五层次代表器官的统一定稿钩子接口。
-
-    阶段二填充逻辑时，只改方法体，不改函数签名、不改协议。
-    """
-
-    def on_survival_low(self, snapshot: SurvivalSnapshot) -> dict[str, Any]:
-        """存续低位动作。返回 dict 用于反馈回写（第二批启用），默认返回空。"""
-        return {}
-
-    def on_survival_high(self, snapshot: SurvivalSnapshot) -> dict[str, Any]:
-        """存续高位动作。返回 dict 用于反馈回写（第二批启用），默认返回空。"""
-        return {}
-
 
 # ===== 全局开关与常量 =====
 # ★R4阶段二治理：总开关已收编到 config.FEATURE["survival_orchestrator_enabled"]（唯一真源）。
@@ -452,7 +437,3 @@ def get_survival_orchestrator() -> SurvivalOrchestrator:
     return _orchestrator
 
 
-def reset_survival_orchestrator() -> None:
-    """复位单例（测试用）。"""
-    global _orchestrator
-    _orchestrator = None

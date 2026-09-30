@@ -92,22 +92,6 @@ class ViewMode:
     OUTER_VIEW = "OUTER_VIEW"   # 外视：物理世界、网络资讯、外部知识、对话交互
 
 
-class VisionEvent:
-    """视觉事件（三维视觉、目标追踪）【预留 v10.0】"""
-    TRACK_START = "vision.track_start"
-    TRACK_UPDATE = "vision.track_update"
-    TRACK_LOST = "vision.track_lost"
-    TRACK_STOP = "vision.track_stop"
-    DEPTH_FRAME = "vision.depth_frame"
-    STEREO_FRAME = "vision.stereo_frame"
-
-
-class TrackingEvent:
-    """躯体追踪运动事件【预留 v10.0】"""
-    EYES_MOVED = "motor.eyes_moved"
-    EYES_RESET = "motor.eyes_reset"
-    TARGET_LOCKED = "motor.target_locked"
-    TARGET_LOST = "motor.target_lost"
 
 # ========== 系统事件类型 ==========
 

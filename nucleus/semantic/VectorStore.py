@@ -800,41 +800,6 @@ def _build_default_quality_flag_provider():
     return _provider
 
 
-def build_snapshot_quality_flag_provider(snapshot_path: str | None = None):
-    """可选：从知识快照（大文件，流式读取+缓存）构建 provider，消费 placeholder_alias。
-    默认不挂载（避免 318MB 常驻/首次检索阻塞）；需要时显式 set_quality_flag_provider(...)。
-    """
-    if snapshot_path is None:
-        snapshot_path = os.path.join(_PROJECT_ROOT, "data", "knowledge",
-                                     "pulse_l1_snapshot.json")
-    _cache: dict = {}
-    _loaded = {"done": False}
-
-    def _load():
-        try:
-            from tools.mark_duplicate_nodes import iter_snapshot_nodes
-        except Exception:
-            return {}
-        try:
-            for _n in iter_snapshot_nodes(snapshot_path):
-                if not isinstance(_n, dict):
-                    continue
-                _id = _n.get("node_id")
-                _flag = _n.get("quality_flag")
-                if _id and _flag:
-                    _cache[str(_id)] = str(_flag)
-        except Exception:
-            return {}
-        return _cache
-
-    def _provider(node_id):
-        if not _loaded["done"]:
-            _cache.update(_load())
-            _loaded["done"] = True
-        return _cache.get(str(node_id))
-
-    return _provider
-
 
 # ============================ 便捷入口 ============================
 def get_vector_store() -> VectorStore:

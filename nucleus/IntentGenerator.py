@@ -205,7 +205,3 @@ def get_intent_generator() -> IntentGenerator:
     return _instance
 
 
-def set_intent_generator(instance: IntentGenerator | None) -> None:
-    global _instance
-    with _instance_lock:
-        _instance = instance

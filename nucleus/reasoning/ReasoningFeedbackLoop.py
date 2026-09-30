@@ -245,11 +245,6 @@ def get_reasoning_feedback_loop() -> ReasoningFeedbackLoop:
     return _feedback_loop
 
 
-def set_reasoning_feedback_loop(loop: ReasoningFeedbackLoop) -> None:
-    """设置 ReasoningFeedbackLoop 单例（用于依赖注入/测试）。"""
-    global _feedback_loop
-    _feedback_loop = loop
-
 
 if __name__ == "__main__":
     # 自测

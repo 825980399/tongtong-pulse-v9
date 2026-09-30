@@ -57,10 +57,6 @@ def is_path_within_data(path: str) -> bool:
     return _rp == _dr or _rp.startswith(_dr + os.sep)
 
 
-def resolve_roster_path() -> str:
-    """解析名册默认路径（data/identity/face_roster.json）。"""
-    return os.path.join(_DATA_ROOT, "identity", "face_roster.json")
-
 
 def load_roster(path: str) -> dict:
     """读名册：密文(Fernet token)优先；兼容旧明文 JSON（legacy）。失败上抛，由调用方降级。"""
