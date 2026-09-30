@@ -122,8 +122,8 @@ class PulseMultiStepReasoner:
                                 nid = str(h.node_id)
                             if nid:
                                 source_ids.append(nid)
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.brain.PulseMultiStepReasoner::build_evidence_chain_block L125")
 
             conf = max(0.0, min(1.0, float(confidence)))
             lines = ["", "⟦依据链⟧", f"type={derivation_type} confidence={conf:.2f}"]
@@ -135,7 +135,7 @@ class PulseMultiStepReasoner:
             try:
                 self._log("DEBUG", f"证据链块生成异常: {e}")
             except Exception as e:
-                pass
+                silent_exc(e, where="organs.brain.PulseMultiStepReasoner::build_evidence_chain_block L137")
             return ""
 
     # ========== 证据链挂载 ==========

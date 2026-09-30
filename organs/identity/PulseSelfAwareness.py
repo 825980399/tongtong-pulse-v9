@@ -34,6 +34,7 @@ from nucleus.const import (
 )
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: F401
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:
@@ -901,8 +902,8 @@ class PulseSelfAwareness(BasePulseOrgan):
                 if secondary_value in self._dynamic_values:
                     self._dynamic_values[secondary_value] = min(
                         1.0, self._dynamic_values[secondary_value] * 1.02)
-        except Exception:
-            pass  # 衰减失败不影响主流程
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseSelfAwareness::_generate_life_plan L904")
 
         return {
             "primary_direction": primary_direction,
@@ -1726,7 +1727,8 @@ class PulseSelfAwareness(BasePulseOrgan):
         try:
             from config import get_self_preservation_config
             _sp_cfg = get_self_preservation_config()
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulseSelfAwareness::_maybe_trigger_self_preservation L1729")
             return
 
         # 总开关：一键禁用整套动作

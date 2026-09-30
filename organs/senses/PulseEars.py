@@ -299,7 +299,7 @@ class PulseEars(BasePulseOrgan):
                     recognizer = vosk.KaldiRecognizer(model, 16000)
                     recognizer.SetWords(False)
                 except Exception as e:
-                    pass
+                    silent_exc(e, where="organs.senses.PulseEars::_voice_listen_loop L301")
                 has_speech = False
                 last_partial_text = ""
                 silence_count = 0

@@ -2098,7 +2098,8 @@ class PulseSubconscious(BasePulseOrgan):
             return None
         try:
             _clues.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseSubconscious::_generate_autonomous_exploration_goal L2101")
             return None
         _chosen = _clues[0]
 

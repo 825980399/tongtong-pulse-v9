@@ -360,7 +360,7 @@ class PulseMouth(BasePulseOrgan):
                 try:
                     self._play_beep()
                 except Exception as e:
-                    pass
+                    silent_exc(e, where="organs.motor.PulseMouth::_do_speak L362")
                 if self._tts_fail_count >= self._tts_max_fails:
                     self._log(LogLevel.WARNING, f"语音连续失败{self._tts_max_fails}次，进入{self._tts_cooldown_seconds}秒冷却")
                     self._tts_cooldown_until = time.time() + self._tts_cooldown_seconds

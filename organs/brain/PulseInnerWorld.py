@@ -2473,7 +2473,8 @@ class PulseInnerWorld(
             _tmpl = getattr(
                 _cfg30, "LOCAL_REASONING_LENGTH_HINT",
                 "请在回答中展开论述、分层说明，不少于{chars}字，避免只给结论。")
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2476")
             return ""
         if _target <= 0:
             return ""
@@ -2482,7 +2483,8 @@ class PulseInnerWorld(
             return ""
         try:
             return _tmpl.format(chars=_target)
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2485")
             return f"请在回答中展开论述，不少于{_target}字。"
 
     # ================================================================

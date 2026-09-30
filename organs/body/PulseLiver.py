@@ -441,22 +441,26 @@ class PulseLiver(BasePulseOrgan):
         """采样本进程 RSS / 句柄 / 线程 / 打开文件，超阈值告警并记录基线。"""
         try:
             import psutil
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L444")
             return  # psutil 不可用则跳过（不影响主流程）
         _proc = psutil.Process(os.getpid())
         _mem = _proc.memory_info()
         _rss = int(getattr(_mem, "rss", 0))
         try:
             _handles = int(_proc.num_handles())
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L451")
             _handles = None
         try:
             _open_files = len(_proc.open_files())
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L455")
             _open_files = None
         try:
             _threads = int(_proc.num_threads())
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L459")
             _threads = None
 
         self._rss_samples.append(_rss)

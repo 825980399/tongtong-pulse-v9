@@ -805,7 +805,8 @@ class PulseCortex(BasePulseOrgan):
             import config as _cfg
             if not getattr(_cfg, "ENABLE_DIALOG_SELECT_MODEL_DEDUP", True):
                 return True
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_claim_select_model_emit L808")
             return True
         try:
             import hashlib as _hashlib

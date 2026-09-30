@@ -409,8 +409,8 @@ class PulseController(BasePulseOrgan):
             if loop.is_running():
                 self._log(LogLevel.DEBUG, "异步循环运行中，跳过页面链接提取")
                 return []
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            silent_exc(e, where="organs.motor.PulseController::_get_page_links_headless L412")
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
@@ -3002,7 +3002,8 @@ class PulseController(BasePulseOrgan):
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_WEB_TIME_EXTRACTION', False):
                 return 0.0
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseController::_extract_web_time L3005")
             return 0.0
         try:
             from nucleus.knowledge.WebTimeExtractor import get_shared_extractor
@@ -3178,7 +3179,8 @@ class PulseController(BasePulseOrgan):
                         import chardet
                         detected = chardet.detect(response.content[:3000])
                         encoding = detected.get('encoding', 'utf-8') or 'utf-8'
-                    except ImportError:
+                    except ImportError as e:
+                        silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3181")
                         encoding = 'utf-8'
 
                 response.encoding = encoding
@@ -3189,7 +3191,8 @@ class PulseController(BasePulseOrgan):
                 text = re.sub(r'<[^>]+>', ' ', text)
                 text = re.sub(r'\s+', ' ', text).strip()
                 return text[:8000]
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3192")
             return None
 
     def _select_best_search_url(self, original_url: str, reason: str = "") -> str:

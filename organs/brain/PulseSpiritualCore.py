@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import HeartEvent, LogLevel, NarrativeEvent, SystemEvent
 from nucleus.const import Event
+from nucleus._silent_except import silent_exc
 
 
 class PulseSpiritualCore(BasePulseOrgan):
@@ -501,8 +502,8 @@ class PulseSpiritualCore(BasePulseOrgan):
                             _failure_text += "这只是暂时的信息不足，补充知识后你会做得更好。"
                         elif _failure_type == "capability":
                             _failure_text += "这不是'我不行'，而是'我还在成长'——每一个你还不擅长的领域，都是未来的成长空间。"
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.brain.PulseSpiritualCore::_generate_spiritual_narrative L504")
 
         if _failure_text:
             _prompt_parts.append(f"【你需要特别关注的自我状态】{_failure_text}")

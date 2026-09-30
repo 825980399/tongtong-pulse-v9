@@ -628,7 +628,8 @@ class PulseFileDigester(BasePulseOrgan):
                         return f.read()
                 except UnicodeDecodeError:
                     continue
-                except Exception:
+                except Exception as e:
+                    silent_exc(e, where="organs.motor.PulseFileDigester::_get_content L631")
                     return None
         return None
 

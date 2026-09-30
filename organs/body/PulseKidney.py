@@ -277,8 +277,8 @@ class PulseKidney(BasePulseOrgan):
                         if _q["total_score"] < 25 and age_days > 1:
                             nodes_to_remove.append(node)
                             continue
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        silent_exc(e, where="organs.body.PulseKidney::_on_purge_check L280")
                 if age_days > effective_max_age and node.activation_count < 2:
                     nodes_to_remove.append(node)
                     continue

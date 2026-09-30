@@ -610,8 +610,8 @@ class PulseCodeLearner(BasePulseOrgan):
             _ctrl.register("code_learning", 60)
             if not _ctrl.should_execute("code_learning"):
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L613")
         """
         代码自主理解（增强版）：批量、深度、结构化地理解自己的代码。
 
@@ -1149,7 +1149,8 @@ class PulseCodeLearner(BasePulseOrgan):
                                 self._layered_cache[_file_path_for_analysis] = inspector.analyze_code_layered(
                                     _file_path_for_analysis, node_pool=self.node_pool
                                 )
-                            except Exception:
+                            except Exception as e:
+                                silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L1152")
                                 self._layered_cache[_file_path_for_analysis] = None
                     _layered = self._layered_cache.get(_file_path_for_analysis)
                     if _layered:
@@ -2995,8 +2996,8 @@ class PulseCodeLearner(BasePulseOrgan):
                     import config as _pcfg
                     _thr = int(getattr(_pcfg, "EVOLUTION_CONFIG", {})
                                .get("pending_backlog_warn_threshold", 8))
-                except Exception:
-                    pass
+                except Exception as e:
+                    silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L2998")
                 if _cnt >= _thr:
                     _h = _oldest_s / 3600.0
                     _age = (f"{_h:.1f}小时" if _h >= 1.0
@@ -3006,8 +3007,8 @@ class PulseCodeLearner(BasePulseOrgan):
                               f"（最老已等待 {_age}）；未裁决前这些位置不会被"
                               f"再次尝试修复，也不会自动消失。"
                               f"如需放行/拒绝，请处理 pending_patches.json")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3009")
             _kept, _dropped = [], 0
             for _iss in issues:
                 _organ = str(_iss.get("organ") or "").strip()
@@ -3021,8 +3022,9 @@ class PulseCodeLearner(BasePulseOrgan):
                     continue
                 _kept.append(_iss)
             return _kept, _dropped
-        except Exception:
+        except Exception as e:
             # 门禁异常一律放行，宁可重复发现也不能漏发现
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3024")
             return issues, 0
 
     def _review_own_code_issues(self):

@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import HeartEvent, LogLevel, ProprioceptionEvent, SystemEvent
+from nucleus._silent_except import silent_exc
 
 
 class PulseProprioception(BasePulseOrgan):
@@ -191,8 +192,8 @@ class PulseProprioception(BasePulseOrgan):
                 if output.stdout and "Speakers" in output.stdout or "Headphones" in output.stdout:
                     result["has_output"] = True
                     result["output_devices"].append({"name": "系统默认扬声器", "detected_via": "powershell"})
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L194")
 
         # 方法3：Linux 系统命令
         if sys.platform.startswith("linux"):
@@ -200,8 +201,8 @@ class PulseProprioception(BasePulseOrgan):
                 if os.path.exists("/proc/asound/cards"):
                     result["has_output"] = True
                     result["output_devices"].append({"name": "ALSA音频设备", "detected_via": "/proc/asound"})
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L203")
 
         # 方法4：macOS
         if sys.platform == "darwin":
@@ -430,8 +431,8 @@ class PulseProprioception(BasePulseOrgan):
                 if "Camera" in output.stdout:
                     result["has_camera"] = True
                     result["devices"].append("Mac 内置摄像头")
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_camera L433")
 
         return result
 

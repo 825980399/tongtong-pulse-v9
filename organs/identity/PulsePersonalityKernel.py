@@ -23,6 +23,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import LogLevel, PersonalityEvent, SystemEvent
+from nucleus._silent_except import silent_exc
 
 
 def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:
@@ -185,7 +186,8 @@ class PulsePersonalityKernel(BasePulseOrgan):
             return 0
         try:
             from nucleus.mnemosyne.PulseNode import PulseNode
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_ensure_identity_seeds L188")
             return 0
 
         # 与 PulseSelfAwareness._core_identity_keywords 一一对应的校验关键词
@@ -508,8 +510,8 @@ class PulsePersonalityKernel(BasePulseOrgan):
                         "matched_signals": _matched_signals,
                         "time": _mem.get("posted_at", time.time()),
                     })
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_on_boundary_scan L511")
 
         if _erosion_detected:
             # 记录侵蚀事件

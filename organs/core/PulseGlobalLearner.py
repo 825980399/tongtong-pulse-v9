@@ -414,7 +414,8 @@ class PulseGlobalLearner(BasePulseOrgan):
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_NARRATIVE_CONSUMPTION', False):
                 return []
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseGlobalLearner::_collect_narrative_samples L417")
             return []
         _ns = self.narrative_self
         if _ns is None:
@@ -429,16 +430,16 @@ class PulseGlobalLearner(BasePulseOrgan):
                     _out.append({"source": "narrative_report", "content": _summary,
                                  "local_confidence": 0.6, "suggestion": "",
                                  "category": self._classify(_summary)})
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseGlobalLearner::_collect_narrative_samples L432")
         # ② 人生教训 → 经历→反思信号
         try:
             for _ls in (_ns.get_life_lessons(limit=2) or [])[:2]:
                 _out.append({"source": "narrative_lesson", "content": str(_ls)[:160],
                              "local_confidence": 0.55, "suggestion": "",
                              "category": self._classify(str(_ls))})
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseGlobalLearner::_collect_narrative_samples L440")
         # ③ 行为指导 → 偏好信号
         try:
             _g = _ns.get_behavior_guidance("general")
@@ -448,8 +449,8 @@ class PulseGlobalLearner(BasePulseOrgan):
                 _out.append({"source": "narrative_guidance", "content": _content[:160],
                              "local_confidence": 0.5, "suggestion": "",
                              "category": self._classify(_content)})
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="organs.core.PulseGlobalLearner::_collect_narrative_samples L451")
         return _out[:limit]
 
     def _collect_and_sample(self) -> list[dict[str, Any]]:

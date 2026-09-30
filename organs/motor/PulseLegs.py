@@ -858,7 +858,8 @@ class PulseLegs(BasePulseOrgan):
             import config as _cfg
             if not getattr(_cfg, 'ENABLE_WEB_TIME_EXTRACTION', False):
                 return 0.0
-        except Exception:
+        except Exception as e:
+            silent_exc(e, where="organs.motor.PulseLegs::_extract_web_time L861")
             return 0.0
         try:
             from nucleus.knowledge.WebTimeExtractor import get_shared_extractor
