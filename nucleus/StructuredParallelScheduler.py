@@ -9,6 +9,9 @@ StructuredParallelScheduler.py —— 结构化并行调度器
 职责: 结构化任务的并行调度与依赖管理
 机制: 基于TaskGroupStatus类实现，包含10个核心方法
 定位: 任务调度层
+
+⚠️ @deprecated (P2-64 并发收敛): 新代码请使用 nucleus.parallel_scheduler.get_parallel_scheduler()。
+本调度器保留实现，仅遗留调用点（main.py / self_inspector.py）使用，禁止新代码 import。
 """
 
 from __future__ import annotations
@@ -385,5 +388,6 @@ class StructuredParallelScheduler:
 
 
 # 全局单例
+# @deprecated (P2-64 并发收敛): 见模块 docstring；新代码用 parallel_scheduler.get_parallel_scheduler()
 def get_structured_parallel_scheduler() -> StructuredParallelScheduler:
     return StructuredParallelScheduler.get_instance()

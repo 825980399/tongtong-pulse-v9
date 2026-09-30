@@ -9,6 +9,9 @@ HybridParallelScheduler.py —— 混合并行调度器
 职责: 混合任务并行调度，支持同步/异步模式
 机制: 基于TaskType类实现，包含10个核心方法
 定位: 任务调度层
+
+⚠️ @deprecated (P2-64 并发收敛): 新代码请使用 nucleus.parallel_scheduler.get_parallel_scheduler()。
+本调度器保留实现，仅遗留调用点（main.py / self_inspector.py）使用，禁止新代码 import。
 """
 
 from __future__ import annotations
@@ -363,6 +366,7 @@ class HybridParallelScheduler(SilentLogMixin):
 _hybrid_scheduler: HybridParallelScheduler | None = None
 
 
+# @deprecated (P2-64 并发收敛): 见模块 docstring；新代码用 parallel_scheduler.get_parallel_scheduler()
 def get_hybrid_scheduler() -> HybridParallelScheduler:
     global _hybrid_scheduler
     if _hybrid_scheduler is None:
