@@ -11,6 +11,7 @@ import threading
 import time
 from datetime import datetime
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+from nucleus._silent_except import silent_exc
 
 
 class RuntimeStateWriter:
@@ -86,8 +87,8 @@ class RuntimeStateWriter:
             if metrics_obj and hasattr(metrics_obj, "get_snapshot"):
                 metrics = metrics_obj.get_snapshot()
                 state["runtime_metrics"] = metrics
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L89")
 
         # 2. 自检器（代码问题统计）
         try:
@@ -100,8 +101,8 @@ class RuntimeStateWriter:
                     "by_severity": issues.get("by_severity", {}),
                     "by_category": issues.get("by_category", {}),
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L103")
 
         # 3. 任务管道
         try:
@@ -111,8 +112,8 @@ class RuntimeStateWriter:
                 "recent_count": len(pipelines) if pipelines else 0,
                 "recent": pipelines[:5] if pipelines else [],
             }
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L114")
 
         # 4. 洞察板
         try:
@@ -124,8 +125,8 @@ class RuntimeStateWriter:
                     "insight_count": len(insights) if insights else 0,
                     "recent": insights[:5] if insights else [],
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L127")
 
         # 5. 进化状态（从健康快照读取，避免直接访问进化引擎）
         try:
@@ -151,8 +152,8 @@ class RuntimeStateWriter:
                 "count": len(presets) if presets else 0,
                 "names": [p.get("name", "") for p in presets[:10]] if presets else [],
             }
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L154")
 
         return state
 

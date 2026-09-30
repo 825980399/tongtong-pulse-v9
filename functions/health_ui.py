@@ -942,14 +942,14 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-cache')
             self.end_headers()
             self.wfile.write(_body)
-        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-            pass
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::_serve_json_file L945")
         except Exception:
             try:
                 self.send_response(500)
                 self.end_headers()
-            except Exception:
-                pass
+            except Exception as e:
+                silent_exc(e, where="functions.health_ui::_serve_json_file L951")
 
     def _serve_runtime_metrics(self):
         """提供真实运行时指标（★FIX: 反映框架真实运行状态，替代硬编码假数据）"""
@@ -1528,12 +1528,13 @@ setInterval(loadKGData, 30000);
             presets = ParamPresets()
             data["presets"] = presets.list_presets()
         except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1530")
             data["param_error"] = str(e)[:80]
         try:
             import config
             data["runtime_params_count"] = len(getattr(config, 'RUNTIME_PARAMS', {}))
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1535")
         try:
             changes = []
             log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'config_changes.log')
@@ -1544,20 +1545,20 @@ setInterval(loadKGData, 30000);
                         if line:
                             try:
                                 changes.append(json.loads(line))
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                silent_exc(e, where="functions.health_ui::_serve_params_data L1547")
             data["change_history"] = changes[-30:][::-1]
             data["config_changes"] = len(changes)
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1551")
         try:
             override_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'config_override.json')
             if os.path.exists(override_path):
                 override = safe_read_json(override_path, default={})
                 data["current_preset"] = override.get("_last_preset_applied", "custom")
                 data["preset_time"] = override.get("_last_preset_time", "--")
-        except Exception:
-            pass
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1559")
         result = json.dumps(data, ensure_ascii=False)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
