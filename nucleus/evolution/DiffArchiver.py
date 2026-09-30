@@ -3,7 +3,7 @@
 DiffArchiver.py —— 差异归档器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 代码变更差异的归档与版本管理
@@ -19,10 +19,8 @@ import time
 from typing import Any
 
 from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
-
 
 
 class DiffArchiver(SilentLogMixin):

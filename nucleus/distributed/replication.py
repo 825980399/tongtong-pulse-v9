@@ -85,7 +85,7 @@ class MasterSlaveReplication:
 
             _acks = 1  # 主节点自身
             for k in range(1, replica_count + 1):
-                _sid = "%s#slave-%d" % (node_id, k)
+                _sid = "%s#slave-%d" % (node_id, k)  # noqa: UP031
                 _slave = self._nodes.get(_sid)
                 if _slave is None:
                     _slave = ReplicationNode(_sid, "slave", master.data)
@@ -112,7 +112,7 @@ class MasterSlaveReplication:
             if consistency == "strong":
                 return dict(master.data)
             replica_count = replica_count or self.replica_count
-            _candidates = [master] + [self._nodes.get("%s#slave-%d" % (node_id, k))
+            _candidates = [master] + [self._nodes.get("%s#slave-%d" % (node_id, k))  # noqa: UP031
                                       for k in range(1, replica_count + 1)]
             _valid = [c for c in _candidates if c is not None]
             if not _valid:
@@ -138,7 +138,7 @@ class MasterSlaveReplication:
         with self._lock:
             _lags = []
             for k in range(1, replica_count + 1):
-                _s = self._nodes.get("%s#slave-%d" % (node_id, k))
+                _s = self._nodes.get("%s#slave-%d" % (node_id, k))  # noqa: UP031
                 if _s is not None:
                     _lags.append(_s.replication_lag_ms)
             return max(_lags) if _lags else 0.0

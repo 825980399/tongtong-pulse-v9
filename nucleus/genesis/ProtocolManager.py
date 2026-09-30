@@ -3,7 +3,7 @@
 ProtocolManager.py —— 协议管理器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 器官间通信协议管理与协商
@@ -14,7 +14,6 @@ ProtocolManager.py —— 协议管理器
 import time
 from enum import Enum
 from typing import Any
-
 
 
 class VersionStatus(Enum):

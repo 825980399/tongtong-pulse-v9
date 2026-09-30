@@ -33,21 +33,8 @@ class TestQuarantineExpiry(unittest.TestCase):
 
     def tearDown(self):
         gov._QUAR, gov._MANIFEST = self._saved
-        for _root, _dirs, _files in os.walk(self._tmp, topdown=False):
-            for _f in _files:
-                try:
-                    os.remove(os.path.join(_root, _f))
-                except OSError:
-                    pass
-            for _d in _dirs:
-                try:
-                    os.rmdir(os.path.join(_root, _d))
-                except OSError:
-                    pass
-        try:
-            os.rmdir(self._tmp)
-        except OSError:
-            pass
+        import shutil
+        shutil.rmtree(self._tmp, ignore_errors=True)
 
     def _write_manifest(self, entries):
         with open(self._manifest, "w", encoding="utf-8") as f:

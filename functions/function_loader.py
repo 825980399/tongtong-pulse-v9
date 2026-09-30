@@ -5,12 +5,12 @@
 日期: 2026年9月9日
 """
 
-from nucleus._silent_except import silent_exc
 import importlib
 import os
 import threading
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel, PulseLayer, SystemEvent
 
 

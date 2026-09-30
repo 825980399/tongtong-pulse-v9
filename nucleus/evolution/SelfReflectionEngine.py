@@ -3,7 +3,7 @@
 SelfReflectionEngine.py —— 自我反思引擎
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 框架自我反思与经验总结
@@ -12,14 +12,14 @@ SelfReflectionEngine.py —— 自我反思引擎
 """
 
 from __future__ import annotations
-from nucleus.LLMDependencyMetrics import (SCENE_EVOLUTION, record_llm_call)
-from nucleus.llm.call_recorder import trace_evolution_call
 
 import json
 import os
 import time
 from typing import Any
 
+from nucleus.llm.call_recorder import trace_evolution_call
+from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 
 
 class SelfReflectionEngine:
@@ -58,8 +58,8 @@ class SelfReflectionEngine:
                 'Content-Type': 'application/json; charset=utf-8',
                 'Authorization': 'Bearer ' + _api_key,
             }
+            from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
-            from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
             _cfg = get_llm_call_config()
             with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
                 _ok, _data = safe_http_json(
@@ -69,7 +69,7 @@ class SelfReflectionEngine:
             if not _ok or not isinstance(_data, dict):
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
-            # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存
+            # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
             self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
             _choices = _data.get("choices", [])
             if _choices:
@@ -78,7 +78,7 @@ class SelfReflectionEngine:
         except Exception as e:
             print(f"[WARNING] SelfReflectionEngine.py:65: {type(e).__name__}: {e}")
             # ★第44批 T1：把失败明细留给埋点装饰器
-            self._m44_last_error = "%s: %s" % (type(e).__name__, e)
+            self._m44_last_error = f"{type(e).__name__}: {e}"
             return None
 
     # ========== 阶段C核心：反思 + 改进 ==========

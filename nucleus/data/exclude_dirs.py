@@ -23,7 +23,7 @@
 from __future__ import annotations
 
 import os
-from typing import Iterator
+from collections.abc import Iterator
 
 #: 版本/进度控制类目录（原有，各测试已在用）
 VCS_DIRS = frozenset({

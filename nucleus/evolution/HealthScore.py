@@ -3,7 +3,7 @@
 HealthScore.py —— 健康评分
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 框架整体健康度量化评分
@@ -23,12 +23,11 @@ from nucleus.evolution.LogAnalyzer import extract_log_level  # ★第29批 T4：
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
-
 class HealthScore(SilentLogMixin):
     """多目标健康度评分器。"""
 
     # 默认维度权重（总和应为 1.0）
-    DEFAULT_WEIGHTS = {  # 权重表，只读常量
+    DEFAULT_WEIGHTS = {  # 权重表，只读常量  # noqa: RUF012
         "stability": 0.40,   # 稳定性
         "noise": 0.20,       # 日志噪音
         "performance": 0.20, # 性能

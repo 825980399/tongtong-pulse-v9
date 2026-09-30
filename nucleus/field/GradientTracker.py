@@ -3,7 +3,7 @@
 GradientTracker.py —— 梯度追踪器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 参数变化梯度追踪与趋势分析
@@ -18,7 +18,6 @@ from typing import Any
 
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-
 
 
 class GradientTracker(SilentLogMixin):

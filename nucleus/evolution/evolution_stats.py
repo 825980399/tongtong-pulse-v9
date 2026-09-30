@@ -37,7 +37,7 @@ from typing import Any
 
 from nucleus.evolution.patch_dedup import dedup_history
 
-__all__ = ["stats_from_patch_history", "EMPTY_STATS"]
+__all__ = ["EMPTY_STATS", "stats_from_patch_history"]
 
 
 def _blank() -> dict[str, Any]:

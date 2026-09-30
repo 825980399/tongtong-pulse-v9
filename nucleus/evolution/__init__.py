@@ -3,7 +3,7 @@
 __init__.py ——   Init  
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 工具函数集合
@@ -16,7 +16,6 @@ from nucleus.evolution.EvolutionDriver import EvolutionDriver, get_evolution_dri
 from nucleus.evolution.EvolutionLoop import EvolutionLoop, get_evolution_loop
 from nucleus.evolution.HealthScore import HealthScore, compute_health_score
 from nucleus.evolution.LLMEvolutionEngine import (
-
     LLMEvolutionEngine,
     get_llm_evolution_engine,
 )

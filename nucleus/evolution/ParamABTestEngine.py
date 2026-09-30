@@ -3,7 +3,7 @@
 ParamABTestEngine.py —— 参数AB测试引擎
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 参数优化的AB测试与效果对比
@@ -16,8 +16,8 @@ import os
 import re
 from datetime import datetime
 from typing import Any
-from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
 
+from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -168,7 +168,7 @@ def run_ab_test_in_process(test_config: dict) -> dict[str, Any]:
                     if not m:
                         continue
                     try:
-                        t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                        t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()  # noqa: DTZ007
                     except Exception:
                         continue
                     if start_time <= t <= end_time:
@@ -211,7 +211,7 @@ def run_ab_test_in_process(test_config: dict) -> dict[str, Any]:
                 m = re.match(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', line)
                 if m:
                     try:
-                        t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                        t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()  # noqa: DTZ007
                         if log_start is None or t < log_start:
                             log_start = t
                         if log_end is None or t > log_end:

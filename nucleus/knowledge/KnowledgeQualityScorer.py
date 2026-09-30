@@ -3,7 +3,7 @@
 KnowledgeQualityScorer.py —— 知识质量评分器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 对知识节点进行多维度质量评分
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import re
 from typing import Any
-
 
 
 class KnowledgeQualityScorer:

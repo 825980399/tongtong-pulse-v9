@@ -3,7 +3,7 @@
 ParamAnalysisReport.py —— 参数分析报告
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 参数变更影响分析报告生成
@@ -17,8 +17,8 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
-from nucleus.data.DataAccessLayer import safe_read_json
 
+from nucleus.data.DataAccessLayer import safe_read_json
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")

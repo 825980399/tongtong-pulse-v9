@@ -3,7 +3,7 @@
 SynonymExpander.py —— 同义词扩展器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 查询词的同义词扩展与语义增强
@@ -16,12 +16,11 @@ from __future__ import annotations
 from typing import Any
 
 
-
 class SynonymExpander:
     """同义词扩展器。"""
 
     # 内置同义词表（领域通用词对）
-    _BUILTIN_SYNONYMS: dict[str, list[str]] = {
+    _BUILTIN_SYNONYMS: dict[str, list[str]] = {  # noqa: RUF012
         # 电力/电气领域
         "电力": ["电气", "电能", "供电", "电网"],
         "电气": ["电力", "电能", "供电"],

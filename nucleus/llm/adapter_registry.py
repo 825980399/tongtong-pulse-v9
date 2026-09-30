@@ -3,7 +3,7 @@
 adapter_registry.py —— 适配器注册表
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: LLM渠道适配器的注册与发现
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from nucleus.llm.base_adapter import BaseLLMAdapter
 from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter
-
 
 
 class ExternalGatewayAdapter(BaseLLMAdapter):
@@ -40,7 +39,7 @@ class ExternalGatewayAdapter(BaseLLMAdapter):
         return OpenAICompatibleAdapter().parse_response(response)
 
     def extract_usage(self, response):  # type: ignore[override]  # _m94_extract_usage_marker
-        """★第94批 相关任务：网关对外即 OpenAI 兼容格式，直接复用兼容实现。"""
+        """★第94批 T-94b：网关对外即 OpenAI 兼容格式，直接复用兼容实现。"""
         return OpenAICompatibleAdapter().extract_usage(response)
 
     def check_availability(self, api_key: str) -> bool:

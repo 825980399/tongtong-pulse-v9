@@ -3,7 +3,7 @@
 EventStream.py —— 事件流
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 全局事件流总线与订阅发布机制
@@ -14,7 +14,6 @@ EventStream.py —— 事件流
 import threading
 import time
 from typing import Any
-
 
 
 class EventStream:

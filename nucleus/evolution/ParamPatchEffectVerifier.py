@@ -3,7 +3,7 @@
 ParamPatchEffectVerifier.py —— 参数补丁效果验证器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 验证参数补丁的效果与副作用
@@ -11,14 +11,14 @@ ParamPatchEffectVerifier.py —— 参数补丁效果验证器
 定位: 进化验证层
 """
 
-from nucleus._silent_except import silent_exc
 import os
 import re
 import time
 from datetime import datetime
 from typing import Any
-from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
 
+from nucleus._silent_except import silent_exc
+from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -98,7 +98,7 @@ def verify_patch_effect_in_process(patch_info: dict, log_file: str | None = None
                 if not m:
                     continue
                 try:
-                    t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                    t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()  # noqa: DTZ007
                 except Exception as e:
                     silent_exc(e, "ParamPatchEffectVerifier.py:101:verify_patch_effect_in_process", level="warning")
                     continue

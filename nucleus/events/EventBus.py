@@ -3,7 +3,7 @@
 EventBus.py —— 轻量级事件总线
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 提供统一的事件发布/订阅基础设施——同步发布、异步优先级队列投递、
@@ -33,10 +33,12 @@ import threading
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
-from collections.abc import Callable
+
+from typing_extensions import Self
 
 from nucleus.logger import get_module_logger
 
@@ -523,10 +525,10 @@ class EventBus:
             self._last_error = ""
 
     # 支持 with 语法（退出时停线程）
-    def __enter__(self) -> EventBus:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc: Any) -> bool:
+    def __exit__(self, *exc: object) -> bool:
         self.stop()
         return False
 

@@ -3,7 +3,7 @@
 EventTap.py —— 事件总线旁路监听器（P2-63 试点 / PHASE18 铺垫）
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 以 **只读旁路** 方式订阅事件总线的全部事件（`"**"`），做纯统计与留痕：
@@ -59,7 +59,7 @@ def _payload_summary(payload: Any) -> str:
             return "None"
         _t = type(payload).__name__
         if isinstance(payload, (str, bytes, bytearray, list, tuple, dict, set)):
-            return "%s(len=%d)" % (_t, len(payload))
+            return "%s(len=%d)" % (_t, len(payload))  # noqa: UP031
         return _t
     except Exception as e:  # 摘要失败不得影响计数
         _logger.debug("payload 摘要失败: %s: %s", type(e).__name__, e)

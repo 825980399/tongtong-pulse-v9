@@ -3,7 +3,7 @@
 ExperiencePollutionGuard.py —— 经验污染防护
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 防止低质量经验污染经验池
@@ -16,9 +16,8 @@ import shutil
 from collections import Counter
 from typing import Any
 
-from nucleus.logger import get_module_logger
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
-
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("ExperiencePollutionGuard")
 

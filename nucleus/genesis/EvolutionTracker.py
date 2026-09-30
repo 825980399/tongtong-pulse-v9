@@ -3,7 +3,7 @@
 EvolutionTracker.py —— 进化追踪器
 
 版本: v10 PulseNet
-设计: 内部协作者、内部协作者、内部协作者
+设计: 路灯、小林、星轨
 日期: 2026年9月11日
 
 职责: 追踪进化历史与演化轨迹
@@ -14,7 +14,6 @@ EvolutionTracker.py —— 进化追踪器
 import threading
 import time
 from typing import Any
-
 
 
 class EvolutionTracker:

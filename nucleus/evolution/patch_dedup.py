@@ -29,12 +29,12 @@ from typing import Any
 
 __all__ = [
     "TIME_KEYS",
-    "record_time",
-    "pick_keeper",
     "dedup_history",
     "dedup_stats",
     "fix_detail_consistency",
     "fix_details_in_history",
+    "pick_keeper",
+    "record_time",
 ]
 
 #: 时间字段优先级（取第一个可用者）。
@@ -169,7 +169,7 @@ def fix_detail_consistency(rec: dict) -> bool:
     _calc = None
     if _b is not None and _b > 0 and _a is not None:
         _calc = (_b - _a) / _b
-    _new = "修复前错误=%s, 修复后错误=%s, 效果=%s" % (
+    _new = "修复前错误={}, 修复后错误={}, 效果={}".format(
         "?" if _b is None else int(_b), "?" if _a is None else int(_a), _fmt_eff(_calc))
     _changed = str(_vr.get("detail") or "") != _new
     if _changed:
