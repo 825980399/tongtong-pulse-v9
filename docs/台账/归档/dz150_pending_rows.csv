@@ -1,0 +1,13 @@
+ID,提出方,提出批次,摘要,P级,状态,到期批次,裁决批次,裁决内容
+Q150-1,烛微,第150批,"是否批准按四步修复登记册：git checkout 回滚 16:36 的 12 条损坏追加行 → 用 csv 模块重放 dz150_register_repair_Q149_rows.csv → checker 加""列数≠表头列数即红""""第2个表头即红"" → 唯一写入方式定为 Python csv 模块（禁止手工粘贴与 Add-Content）",P0,待裁决,150,,
+Q150-2,星轨,第150批,check_pending_register.py 已能报错且 EXIT=2 但无任何执行点接入：是否本批写入 .git/hooks/pre-commit 与 .gitee/workflows/ci.yml（与 cw2 并列）,P1,待裁决,150,,
+Q150-3,烛微,第150批,tools/ci/test_fingerprint_gate.py 命名致 pytest 0 collected（全绿空跑）：改名 verify_fingerprint_gate.py 还是改造为真 test_ 用例,P1,待裁决,150,,
+Q150-4,路灯,第150批,节点值清洗存在两份不等价实现（PulseKnowledgeRetriever.clean_node_value:127 吞异常返 None vs Mixin _clean_node_value:1024 记 silent_exc 且定位串写死 PulseInnerWorld.py:8613 已失效）：以哪一份为权威,P2,待裁决,151,,
+Q150-5,小林,第150批,已下线器官 PulseInferenceEngine（organ_loader.py:181 黑名单，main.py:1743 恒为 None，IW 零调用）去留：删除 / 恢复装配并补测 / 标注为示例件（其 :56 缓存淘汰命名与实现不符）,P2,待裁决,151,,
+Q150-6,星轨,第150批,死代码规模首次可测：IW 13 个候选死方法合计 326 行 + PulseReflection 1 个 21 行（v3 口径，正负控自检通过）；是否入 152 批逐条裁决清单，并固化 tools/ci/check_dead_methods.py 每10批跑一次（不进 pre-commit）,P2,待裁决,152,,
+Q150-7,烛微,第150批,"审计工具资产长期躺在被 gitignore 的 tmp/ 内不可复用：是否把在用的 6 件（守恒/陈旧读/可达性/双轨/登记册/包扫）以""审计件转正""提交信息收进 tools/ci/",P2,待裁决,150,,
+Q150-8,星轨,第150批,是否采纳 150 批施工顺序 A1登记册→A5文档BOM→A4阻断清零→A2门禁接入→A3最小测试，并硬性规定 A2（门禁）与 A4（业务修复）分属两个提交，以便门禁红时可归因,P1,待裁决,150,,
+Q150-9,星轨,第150批,发布包不含 .gitee/workflows/（实测包内仅 .github/PULL_REQUEST_TEMPLATE.md）⇒ 新公开仓将无任何 CI 门禁：随包发布 CI 配置，还是 README 写明本地等价命令,P2,待裁决,150,,
+Q150-10,烛微,第150批,"两把锁读的 JSON 键不一致（旁路复扫器只取 names+birthdays 实测 4 条；导出闸门只取 names+path_hints）⇒ 属主真实路径在双签复扫中漏检（植入件 f3_path.md 实测 0 命中）：是否本批 1 行补齐 path_hints 循环并加""两把锁规则条数必须相等""自检",P0,待裁决,150,,
+Q150-11,烛微,第150批,"FILE_SCAN_SKIP_MARKERS 构成公开绕过开关（文件前 5 行含标记即整文件免检；实测第 1/5 行逃检、第 6 行正常扫）：改为行级豁免 / 标记值出仓 / 还是强制输出""被整文件跳过清单""",P1,待裁决,150,,
+Q150-12,星轨,第150批,"B4 用 resolution_rate 0.05→0.0 凑成权重和 1.000，该维度仍留在表内但恒不贡献：删除该键，还是保留并注释""预留位不计分""（对外五维/六维表述需与实现一致）",P3,待裁决,151,,

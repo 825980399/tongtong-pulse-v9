@@ -430,6 +430,17 @@ TimeCore时间中枢
 
 ### 6.1 新增开关清单
 
+> ★ **2026-09-30 落地状态实测附录（全盘摸底·微光/烛微双向核对）**：
+> - 本文共列 **19 个开关**，实测 config 顶层**仅 2 个真实存在**：`ENABLE_SELF_AWARENESS_ENGINE=True`、`ENABLE_FAKE_LOOP_DETECTOR=True`（认知层，第 37/38 批已通电）
+> - **其余 17 个全仓 0 命中（不是"默认关"，是设计壳——不存在于任何代码）**：身体层 7 个 + 认知层其余 5 个 + 灵感层 5 个
+> - **身体层封存决策（2026-09-30 小林拍板·方案A）**：器官关联图谱 / 生命形体指数 / Connectome 族**封存至 PHASE19**；本文档"设计壳"状态成立，不再计入 PHASE18 排期分母
+>
+> #### 附录·身体层启动条件（2026-09-30 星轨固化，全部满足才启动）
+> 1. 自我认知引擎 12 维度逐项验收通过（认知层先通电闭环）
+> 2. 内在模型数据管道建成（LLM 调用留存率达标，P0-253 污染治理完成）
+> 3. 器官契约 harness 覆盖率 ≥ 50%（153 批契约体系扩展）
+
+
 ```python
 # ===== PHASE18 身体层开关 =====
 ENABLE_ORGAN_HANDBOOK_V2 = False              # 器官说明书v2.0
@@ -440,7 +451,7 @@ ENABLE_CONNECTOME_DIALOG = False              # 对话生成出口
 ENABLE_CONNECTOME_CONSTITUTION_CHECK = False  # 宪法对齐出口
 ENABLE_MORPHOGENESIS = False                  # 形态发生（远期）
 
-# ===== PHASE18 认知层开关 =====
+# ===== PHASE18 认知层开关 =====   # ★ 仅 ENGINE / FAKE_LOOP_DETECTOR 已通电（True）；其余 5 个不存在（设计壳）
 ENABLE_SELF_AWARENESS_ENGINE = False          # 自我认知引擎核心
 ENABLE_PRODUCTION_CONSUMPTION_MATCH = False   # 产出-消费配对分析
 ENABLE_FAKE_LOOP_DETECTOR = False             # 虚假闭环检测
@@ -449,7 +460,7 @@ ENABLE_KNOWLEDGE_QUALITY_DEEPEN = False       # 知识质量深化
 ENABLE_EVOLUTION_DIRECTION_ANALYSIS = False   # 进化方向分析
 ENABLE_PERFORMANCE_BASELINE = False           # 性能基线与退化预警
 
-# ===== PHASE18 灵感层开关 =====
+# ===== PHASE18 灵感层开关 =====   # ★ 5 个全部不存在（设计壳，随 PHASE18 阶段推进评估）
 ENABLE_FREE_ENERGY_PROXY = False              # 自由能代理量化
 ENABLE_HOMEOSTASIS_PLASTICITY = False         # 内稳态可塑性
 ENABLE_THREE_FACTOR_LEARNING = False          # 三因子学习规则
