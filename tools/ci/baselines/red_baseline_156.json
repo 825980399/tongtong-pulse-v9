@@ -1,11 +1,9 @@
 {
-  "generated_at_head": "cbe558b",
-  "generated_at": "2026-10-01T11:44:01",
+  "generated_at_head": "8fe33d4",
+  "generated_at": "2026-10-01T06:29:41",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。",
   "collect_baseline": 4456,
   "known_fail": [
-    "tests/test_batch109_regression.py::test_t109b_face_welcome_switch",
-    "tests/test_batch_backup_m50.py::TestRealRepo::test_40_real_plan_includes_p234_targets",
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_analyze_returns_nodes_edges_stats",
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_config_default_enabled",
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_dynamic_call_marked",
@@ -46,7 +44,6 @@
     "tests/test_data_governance_m41.py::TestCorruptedGovernance::test_14_idempotent",
     "tests/test_data_governance_m41.py::TestCorruptedGovernance::test_15_manifest_accumulates",
     "tests/test_data_governance_m41.py::TestDryRunMain::test_30_dry_run_returns_zero",
-    "tests/test_design_docs_m44.py::TestNoRuntimeChange::test_31_no_l2_switch_introduced",
     "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
     "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_47_tool_cli_runs",
     "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_48_tool_cli_help",
@@ -64,7 +61,6 @@
     "tests/test_evolution_crash_patch_m15.py::TestStderrReader::test_read_tail",
     "tests/test_evolution_crash_patch_m15.py::TestWorkerEntry::test_worker_module_top_level_is_stdlib_only",
     "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
-    "tests/test_experience_summary_hemostasis_m47.py::TestWriteSideGuard::test_33_observe_mode_by_default",
     "tests/test_export_public_m143.py::TestRealTree::test_01_current_tree_clean",
     "tests/test_info_field_concurrency_m13.py::TestResizePoolRecovery::test_开启时精确递减",
     "tests/test_json_key_m26.py::TestJsonFailureReport::test_12_failure_logs_context_and_archives",
@@ -83,7 +79,6 @@
     "tests/test_log_retention_m42.py::TestRotation::test_30_rotates_and_caps_backups",
     "tests/test_m75_l3_queue_stability.py::TestT2LiverTypeGuard::test_异步优化异常日志含类型",
     "tests/test_orphan_consumer_m98.py::TestOrphanConsumerM98::test_on_digest_knowledge_adds_node",
-    "tests/test_parquet_cold_json_m68.py::TestParquetPrimary::test_12_switches_default_on",
     "tests/test_patch_auto_approve_p1_m54.py::TestAutoApplySwitchT33::test_13_approve_returns_auto_apply_flag",
     "tests/test_patch_auto_approve_p1_m54.py::TestStaleDetectionT32::test_08_approve_marks_stale",
     "tests/test_patch_dedup_m43.py::TestArtifacts::test_41_production_history_deduped",
@@ -152,18 +147,16 @@
     "tests/test_write_guard_m51.py::TestWriterKind::test_01_pytest_env_is_test_env"
   ],
   "env_fingerprint": {
-    "head": "cbe558b",
-    "git_status_short_lines": 3,
+    "head": "8fe33d4",
+    "git_status_short_lines": 7,
     "staged_count": 0,
     "pythonioencoding": "utf-8",
     "live_framework_pid": "NONE(框架停机)",
     "pytest_plugins": [],
-    "note": "工作树4项脏文件全为他会话遗留（未碰未提交）；staged=0"
+    "note": "B156-2 T-A04 5 红转绿（config 默认态 vs 测试锚对齐，test-only）；head 重锚 8fe33d4；known_fail 139→134"
   },
   "transparency": {
     "isolation_failed_raw": [
-      "tests/test_batch109_regression.py::test_t109b_face_welcome_switch",
-      "tests/test_batch_backup_m50.py::TestRealRepo::test_40_real_plan_includes_p234_targets",
       "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_analyze_returns_nodes_edges_stats",
       "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_config_default_enabled",
       "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_dynamic_call_marked",
@@ -204,7 +197,6 @@
       "tests/test_data_governance_m41.py::TestCorruptedGovernance::test_14_idempotent",
       "tests/test_data_governance_m41.py::TestCorruptedGovernance::test_15_manifest_accumulates",
       "tests/test_data_governance_m41.py::TestDryRunMain::test_30_dry_run_returns_zero",
-      "tests/test_design_docs_m44.py::TestNoRuntimeChange::test_31_no_l2_switch_introduced",
       "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
       "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_47_tool_cli_runs",
       "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_48_tool_cli_help",
@@ -222,7 +214,6 @@
       "tests/test_evolution_crash_patch_m15.py::TestStderrReader::test_read_tail",
       "tests/test_evolution_crash_patch_m15.py::TestWorkerEntry::test_worker_module_top_level_is_stdlib_only",
       "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
-      "tests/test_experience_summary_hemostasis_m47.py::TestWriteSideGuard::test_33_observe_mode_by_default",
       "tests/test_export_public_m143.py::TestRealTree::test_01_current_tree_clean",
       "tests/test_info_field_concurrency_m13.py::TestResizePoolRecovery::test_开启时精确递减",
       "tests/test_json_key_m26.py::TestJsonFailureReport::test_12_failure_logs_context_and_archives",
@@ -247,7 +238,6 @@
       "tests/test_m77_debt_audit.py::TestT2GitRepo::test_12_no_remote",
       "tests/test_m77_debt_audit.py::TestT2GitRepo::test_14_batch_backup_kept",
       "tests/test_orphan_consumer_m98.py::TestOrphanConsumerM98::test_on_digest_knowledge_adds_node",
-      "tests/test_parquet_cold_json_m68.py::TestParquetPrimary::test_12_switches_default_on",
       "tests/test_patch_auto_approve_p1_m54.py::TestAutoApplySwitchT33::test_13_approve_returns_auto_apply_flag",
       "tests/test_patch_auto_approve_p1_m54.py::TestStaleDetectionT32::test_08_approve_marks_stale",
       "tests/test_patch_dedup_m43.py::TestArtifacts::test_41_production_history_deduped",
