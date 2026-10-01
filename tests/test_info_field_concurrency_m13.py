@@ -41,6 +41,11 @@ def _make(pools=None, recovery=True):
     }
     inst._organ_concurrent_count = {}
     inst._organ_concurrent_lock = threading.Lock()
+    # ★B156-3 T-A08：补齐生产 __init__ 的并发计数属性——_resize_layer_pool 现引用
+    #   self._task_count_lock / self._inflight_dispatch_count（P2-87 新增），测试经 __new__ 跳过
+    #   __init__ 须显式提供，否则 2169 处 AttributeError 被 except 吞掉、精确递减整段跳过。
+    inst._task_count_lock = threading.Lock()
+    inst._inflight_dispatch_count = 0
     inst._organ_max_concurrent = 0
     inst._layer_organ_inflight = {}
     inst._layer_disabled = {}
