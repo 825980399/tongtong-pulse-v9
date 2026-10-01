@@ -189,7 +189,10 @@ class TestIncrementalLog(unittest.TestCase):
 
     def _snap(self, d):
         s = _mk_snap(d)
-        s._get_changed_nodes = lambda nodes: (nodes, [])
+        # ★B156-3 T-A09 接线点：生产 _m67_incremental_log_save 现以第二返回值
+        #   （当前节点 id 集合）计算存活数/删除集（D154 熔断）。原 stub 返回 []
+        #   使存活=0 触发「降级全量保存」→ 增量日志不落盘。改为回传真实 id 集合。
+        s._get_changed_nodes = lambda nodes: (nodes, {getattr(n, "node_id", None) for n in nodes})
         return s
 
     def test_21_log_written_and_counted(self):
