@@ -130,10 +130,18 @@ class TestCoreMethods(_Base):
 
     def test_21_on_pulse_digest_knowledge(self):
         """知识消化事件应返回 dict（status 字段）。"""
-        _r = self.o.on_pulse({"event_type": "digest.knowledge",
-                              "payload": {"content": "测试内容" * 6}})
-        self.assertIsInstance(_r, dict)
-        self.assertIn("status", _r)
+        # ★B156-3 T-A09 接线点：胃 on_pulse 顶部无条件检查 stomach_digest 节流（所有 pulse 类型共用该 key），
+        # 前序 on_pulse（即便 system.status.request）会记录 _last_run 武装 30s 节流，致本测试（同进程后续 digest）被误节流返 None；
+        # 本测试验证「digest 事件返回 dict」合约，故临时关闭 ENABLE_ADAPTIVE_FREQUENCY 隔离节流（环境隔离，非行为变更）。
+        _orig_af = getattr(config, "ENABLE_ADAPTIVE_FREQUENCY", None)
+        config.ENABLE_ADAPTIVE_FREQUENCY = False
+        try:
+            _r = self.o.on_pulse({"event_type": "digest.knowledge",
+                                  "payload": {"content": "测试内容" * 6}})
+            self.assertIsInstance(_r, dict)
+            self.assertIn("status", _r)
+        finally:
+            config.ENABLE_ADAPTIVE_FREQUENCY = _orig_af
 
 
 class TestDegradation(_Base):
@@ -178,18 +186,29 @@ class TestDegradation(_Base):
         ★铁律 32 反向同步：原 assertRaises(AttributeError) → 改为守「当前契约」：
         **不抛异常** + 返回 dict（与 test_37 同等严格度）。
         """
-        _bare = PulseStomach(organ_name="胃")
-        _r = _bare.on_pulse({"event_type": "digest.knowledge",
-                             "payload": {"content": "测试内容" * 6}})
-        self.assertIsInstance(_r, dict, "node_pool 未注入时不得抛 AttributeError")
+        # ★B156-3 T-A09 接线点：胃 on_pulse 已接自适应降频(stomach_digest 注册)，进程内前序 digest 触发节流返回 None；本测试验证「缺依赖降级」合约，故临时关闭 ENABLE_ADAPTIVE_FREQUENCY 隔离节流（环境隔离，非行为变更）。
+        _orig_af = getattr(config, "ENABLE_ADAPTIVE_FREQUENCY", None)
+        config.ENABLE_ADAPTIVE_FREQUENCY = False
+        try:
+            _bare = PulseStomach(organ_name="胃")
+            _r = _bare.on_pulse({"event_type": "digest.knowledge",
+                                 "payload": {"content": "测试内容" * 6}})
+            self.assertIsInstance(_r, dict, "node_pool 未注入时不得抛 AttributeError")
+        finally:
+            config.ENABLE_ADAPTIVE_FREQUENCY = _orig_af
 
     def test_37_ethics_unavailable_degrades(self):
         """伦理模块不可用 → 降级通过（不阻断消化）。"""
-        self.o.info_field = None
-        _r = self.o.on_pulse({"event_type": "digest.knowledge",
-                              "payload": {"content": "测试内容" * 6}})
-        self.assertIsInstance(_r, dict)
-
+        # ★B156-3 T-A09 接线点：同 test_36，隔离自适应降频节流（环境隔离）。
+        _orig_af = getattr(config, "ENABLE_ADAPTIVE_FREQUENCY", None)
+        config.ENABLE_ADAPTIVE_FREQUENCY = False
+        try:
+            self.o.info_field = None
+            _r = self.o.on_pulse({"event_type": "digest.knowledge",
+                                  "payload": {"content": "测试内容" * 6}})
+            self.assertIsInstance(_r, dict)
+        finally:
+            config.ENABLE_ADAPTIVE_FREQUENCY = _orig_af
 
 class TestBoundary(_Base):
     """边界条件。"""
