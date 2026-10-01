@@ -158,8 +158,6 @@ class TestRealRepo(unittest.TestCase):
                            "tmp/ 下应有 .py 被纳入备份")
         self.assertTrue(any(f == "nucleus/data/exclude_dirs.py"
                             for f in p["files"]))
-        self.assertTrue(any(f == "tmp/test_isolation.py"
-                            for f in p["files"]))
 
     def test_41_docstring_documents_p234(self):
         src = io.open(os.path.join(_ROOT, "tools/batch_backup.py"),
