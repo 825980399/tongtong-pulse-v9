@@ -186,8 +186,8 @@ class TestWriteSideGuard(_Pool):
         self.assertFalse(self.pool._has_duplicate(""))
 
     def test_33_observe_mode_by_default(self):
-        """★默认开关关闭 → 只标记风险，不拒绝写入（零回归）。"""
-        self.assertFalse(self.pool._dedup_enabled())
+        """★默认开关开启（2026-09-27星轨开启：ENABLE_EXPERIENCE_DEDUP=True）→ 只标记风险，不拒绝写入（零回归）。"""
+        self.assertTrue(self.pool._dedup_enabled())
         _id = self.pool.record_experience(motivation="测试动机" * 5, content="短文")
         self.assertNotEqual(_id, "")
         _last = self.pool._experiences[-1]

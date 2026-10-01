@@ -368,7 +368,7 @@ class ExperiencePool:
 
     @staticmethod
     def _dedup_enabled() -> bool:
-        """是否启用写入侧去重拦截（``ENABLE_EXPERIENCE_DEDUP``，默认 False=仅观测）。"""
+        """是否启用写入侧去重拦截（``ENABLE_EXPERIENCE_DEDUP``，默认 True=启用；2026-09-27星轨开启）。"""
         try:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_EXPERIENCE_DEDUP", False))
