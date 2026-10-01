@@ -230,12 +230,21 @@ class TestCortexObservation(unittest.TestCase):
         self.assertEqual(self._logs, [])
 
     def test_54_engine_without_api_silent(self):
+        """★B156-3 T-A09 接线点：生产 _m40_observe_self_awareness 经 T-113b 加固，
+        注入对象缺少 get_public_summary（假能力标记）时由「静默 return」改为
+        「首报 WARNING 并安全旁路」。本测试原守「空日志」合约已过期，改为守
+        「不堵溃 + 记录一条 WARNING（假能力标记拦截）。
+        """
         class _Bare:
             pass
 
         self._cx.self_awareness = _Bare()
         self._cx._m40_observe_self_awareness("回复", "cid-z")
-        self.assertEqual(self._logs, [])
+        # 不堵溃（观测旁路安全降级），且对假能力标记首报一条 WARNING
+        self.assertEqual(len(self._logs), 1)
+        _msg = self._logs[0][1]
+        self.assertIn("get_public_summary", _msg)
+        self.assertIn("假能力标记", _msg)
 
     def test_55_influence_flag_reflected_in_log(self):
         _orig = config.ENABLE_SELF_AWARENESS_INFLUENCE_DECISION
