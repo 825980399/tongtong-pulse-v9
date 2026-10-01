@@ -188,17 +188,27 @@ class TestPathUtilsWiring(unittest.TestCase):
     ]
 
     def test_30_all_callers_import(self):
+        _checked = 0
         for rel in self.CALLERS:
-            src = _read(os.path.join(_ROOT, rel))
+            _p = os.path.join(_ROOT, rel)
+            if not os.path.isfile(_p):
+                # git-ignored 易失件缺失时跳过该项（与 m18/m19/m22 一致）
+                continue
+            src = _read(_p)
             self.assertIn("nucleus.data.path_utils import safe_relpath", src, rel)
+            _checked += 1
+        self.assertGreater(_checked, 0, "无任何调用方可供校验")
 
     def test_31_at_least_five_callers(self):
-        """★任务书前提（零调用）不成立：第48批已接 3 处，本批 +2。"""
+        """★任务书前提（零调用）不成立：第48批已接 3 处，本批 +2。
+        B156-1 T-A03：第 5 个调用方 tmp/test_isolation.py 为 git-ignored 易失件，
+        缺失时不计入（与 m18/m19/m22 一致降级），仅校验 4 个已跟踪调用方全部在场。"""
+        _committed = self.CALLERS[:-1]  # 排除 git-ignored 易失件
         n = 0
-        for rel in self.CALLERS:
+        for rel in _committed:
             if os.path.isfile(os.path.join(_ROOT, rel)):
                 n += 1
-        self.assertGreaterEqual(n, 5)
+        self.assertGreaterEqual(n, 4, "已跟踪调用方应全部存在")
 
     def test_32_third_party_import_line_precedes_use(self):
         """audit_utils：导入必须在使用之前（E402 安全）。"""
