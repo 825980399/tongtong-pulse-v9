@@ -32,11 +32,15 @@ class TestOrphanConsumerM98:
         o = PulseLiver(organ_name="肝")
         o.is_running = True
         fake_pool = mock.MagicMock()
-        o.node_pool = fake_pool
+        o.node_pool = fake_pool  # 满足生产「node_pool is not None」前置守卫
+        kal = mock.MagicMock()
+        # ★B156-3 T-A09 接线点：生产已改走 self._kal.add_node（KAL 集成，8d9b95f 债务清偿既定形态）
+        o._kal = kal
         payload = {"content": "示例消化知识点", "source_organ": "代码学习"}
         o._on_digest_knowledge(payload)
-        fake_pool.add.assert_called_once()
-        node = fake_pool.add.call_args.args[0]
+        # 替身过时：原断言 fake_pool.add 已非当前接线点
+        kal.add_node.assert_called_once()
+        node = kal.add_node.call_args.args[0]
         assert "digest.knowledge" in node.keywords
         assert node.source_organ == "肝"
 
