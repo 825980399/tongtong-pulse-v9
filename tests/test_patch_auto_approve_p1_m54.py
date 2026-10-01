@@ -119,7 +119,9 @@ class TestStaleDetectionT32(unittest.TestCase):
         """★真实调用：审批过期补丁 → 返回 stale=True 并落盘标记。"""
         with open(self.mgr._pending_file, "w", encoding="utf-8") as f:
             json.dump([{"file": "a.py", "method": "m",
-                        "created_at": time.time() - (_m54_stale_days() + 1) * _DAY}], f)
+                        "created_at": time.time() - (_m54_stale_days() + 1) * _DAY,
+                        "original_code": "def m():\n    return 1\n",
+                        "modified_code": "def m():\n    return 2\n"}], f)
         _r = self.mgr.approve_patch(0)
         self.assertTrue(_r.get("ok"), _r)
         self.assertTrue(_r.get("stale"), "过期补丁审批应标记 stale")
@@ -164,7 +166,9 @@ class TestAutoApplySwitchT33(unittest.TestCase):
         _tmp = tempfile.mkdtemp(prefix="m54_pm2_")
         _mgr = PatchManager(_tmp)
         with open(_mgr._pending_file, "w", encoding="utf-8") as f:
-            json.dump([{"file": "a.py", "method": "m"}], f)
+            json.dump([{"file": "a.py", "method": "m",
+                        "original_code": "def m():\n    return 1\n",
+                        "modified_code": "def m():\n    return 2\n"}], f)
         _r = _mgr.approve_patch(0)
         self.assertTrue(_r.get("ok"), _r)
         self.assertIn("auto_apply", _r, "审批结果应带 auto_apply 字段")
