@@ -367,6 +367,36 @@ def publish_patch_quality(result: dict | None, generator: str = "patch_quality_e
                                anomalies=_anoms), "patch_quality")
 
 
+def publish_patch_verification_failed(summary: str,
+                                      generator: str = "PatchManager._run_regression_tests",
+                                      severity: str = SEV_P0,
+                                      extra: dict | None = None) -> dict | None:
+    """★B156-4（补丁验证空转·断链点②出口）：补丁验证脚本失败（缺失/崩溃/无关回归）
+    时，发出 ``PATCH_REAL_FIX_RATE_LOW`` 异常。
+
+    该异常类型在 ``consumers.evolution_anomaly_consumer`` 中被显式识别为
+    「补丁验证仍处空转（P0-2）」，会写 ``data/reports/alerts.jsonl``（``needs_human=True``）。
+    原实现在回归失败分支只记 warning、不改判 ``result['passed']``
+    （即"0通过/1失败 仅记录不影响判定"），导致验证工具损坏/缺失也被静默放行 →
+    补丁在**未经真实验证**下被批准，与 ``_clean_llm_code`` 38 次语法错、
+    ``avg_fix_rate=0.0039`` 共同构成"进化空转"。
+    此出口让验证失败从静默日志变为可观测告警（人工可介入）。
+    """
+    if not bus_enabled():
+        return None
+    _anom = Anomaly(
+        type="PATCH_REAL_FIX_RATE_LOW",
+        severity=severity if severity in (SEV_P0, SEV_P1) else SEV_P0,
+        description="补丁验证脚本失败，验证链路空转: %s" % (summary or "")[:200],
+        source="evolution", suggested_action=ACT_LOG_ONLY,
+        metric_value=None, threshold=None, target="patch_history")
+    _content: dict[str, Any] = {"verification": "regression_failed", "detail": summary}
+    if isinstance(extra, dict):
+        _content.update(extra)
+    return _emit(make_envelope(TYPE_EVOLUTION, generator, content=_content,
+                               anomalies=[_anom]), "patch_verification_failed")
+
+
 def publish_data_quality(result: dict | None, generator: str = "data_quality_evaluator",
                          extra: dict | None = None) -> dict | None:
     """发布 LLM 留存数据质量报告。"""

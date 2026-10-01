@@ -1745,18 +1745,50 @@ class PatchManager:
                         f"方法签名一致性验证失败: {_sig.get('reason', '')}")
                     return result
             else:
-                # ★T5(PHASE9)：回归脚本是项目全局脚本（parquet/覆盖率），与具体补丁无关。
-                #   星轨 PHASE9 判定标准（第4点）是「compileall通过 + import成功 + 无新增ERROR」，
-                #   这三项已由第 4/5 步的 py_compile + import 子进程硬门槛保证；
-                #   全局回归失败不构成补丁正确性的判据，故只记 warning、不影响 passed。
-                #   （「至少1个相关测试通过」的语义由 import 检查 + 无新增ERROR 兜底，
-                #     而非依赖这些环境敏感的全局脚本。）
+                # ★B156-4 修正（补丁验证空转·断链点②）：原实现在回归验证**失败**时
+                #   只记 warning、绝不改判 result["passed"]（即"0通过/1失败 仅记录不影响判定"），
+                #   导致「验证工具本身损坏/缺失」也被静默放行 → 补丁在**未经真实验证**下被批准，
+                #   与 _clean_llm_code 38 次语法错 / avg_fix_rate=0.0039 共同构成"进化空转"。
+                #   改判规则（接线点：regression_verified）：
+                #   ① 脚本**缺失/崩溃（非功能性失效）** → 验证不可用，fail-closed 改判
+                #      passed=False（绝不能基于"未被验证"批准补丁）；
+                #   ② 脚本**跑通但发现无关回归** → 保留 PHASE9「全局脚本不影响具体补丁」语义，
+                #      仍不改判 passed，但显式标记 regression_verified=False 并经报告总线
+                #      发出 PATCH_REAL_FIX_RATE_LOW（"补丁验证仍处空转"），结束静默遮掩。
                 result["regression"] = _regression["summary"]
-                result["regression_warning"] = (
-                    f"全局回归脚本有失败({_regression['failed']}个)，"
-                    f"与具体补丁无关，仅记录参考: {_regression['summary']}")
+                result["regression_verified"] = False
                 _module_logger.warning(
                     f"[补丁验证] 全局回归脚本失败(仅记录，不影响判定): {_regression['summary']}")
+                _non_functional = bool(_regression.get("missing")) \
+                    or "ModuleNotFoundError" in _regression["summary"] \
+                    or "Traceback" in _regression["summary"]
+                if _non_functional:
+                    # 验证工具非功能性失效：fail-closed，不得基于未验证状态批准补丁。
+                    result["passed"] = False
+                    result["stage"] = "regression_unavailable"
+                    result["failed_check"] = "regression"
+                    result["errors"].append(
+                        f"补丁验证脚本不可用(缺失/崩溃)，无法验证补丁: {_regression['summary']}")
+                else:
+                    # 脚本跑通但发现无关回归：保留 PHASE9 语义（不改判 passed）。
+                    result["regression_warning"] = (
+                        f"全局回归脚本有失败({_regression['failed']}个)，"
+                        f"与具体补丁无关，仅记录参考: {_regression['summary']}")
+                # ★B156-4：补丁验证失败 → 经报告总线发出 PATCH_REAL_FIX_RATE_LOW 出口，
+                #   由 evolution_anomaly_consumer 写 alerts.jsonl(needs_human=True)，
+                #   使"验证空转"从静默日志变为可观测告警。
+                try:
+                    from nucleus.reporting.publishers import publish_patch_verification_failed
+                    publish_patch_verification_failed(
+                        _regression["summary"],
+                        generator="PatchManager._run_regression_tests",
+                        severity="P0" if _non_functional else "P1",
+                        extra={"non_functional": _non_functional,
+                               "failed": _regression.get("failed", 0),
+                               "missing": _regression.get("missing", [])})
+                except Exception as _e:
+                    _module_logger.debug(
+                        f"PATCH_REAL_FIX_RATE_LOW 出口失败(忽略): {type(_e).__name__}: {_e}")
 
             # ★多入口验证: 汇总本补丁实际执行的验证入口（体现验证深度，供审计）。
             _entries = [k for k in ("completeness", "syntax", "compile", "import", "regression")
