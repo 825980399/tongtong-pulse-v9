@@ -41,9 +41,9 @@ def test_t109a_parquet_keys_wired():
 def test_t109b_face_welcome_switch():
     """face_welcome 快赢：新增默认关开关 + chat_service 已门控推理请求。"""
     cfg = _read("config.py")
-    assert "ENABLE_FACE_WELCOME_DIRECT = False" in cfg, "config 缺少默认关开关"
+    assert "ENABLE_FACE_WELCOME_DIRECT = True" in cfg, "config 缺少默认开开关（face_welcome 直欢迎已启用）"
     cs = _read("functions/chat/chat_service.py")
-    assert "if not ENABLE_FACE_WELCOME_DIRECT:" in cs, "chat_service 未门控 face_welcome 推理请求"
+    assert "_should_skip = ENABLE_FACE_WELCOME_DIRECT" in cs, "chat_service 未门控 face_welcome 推理请求"
 
 
 def test_t109c_evidence_chain_dict_wrap():
