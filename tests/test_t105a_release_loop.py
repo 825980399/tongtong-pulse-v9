@@ -121,6 +121,11 @@ def test_C_post_verify_recheck_releases():
         "risk_level": "低", "source": "llm", "status": "runtime_verified",
         "runtime_verify_result": {"verified": True, "baseline": 2},
         "baseline_errors": 2,
+        # ★B156-3 T-A09 接线点：_m105_try_release_low_risk 经 _approve_via 走
+        #   第90批 T-90a 字段合约门禁（fail-closed）。原最小化 payload 缺代码字段
+        #   被拦截；补 original_code/modified_code 以满足合约（生产门禁为既定正确形态）。
+        "original_code": "def probe_func():\n    return 1\n",
+        "modified_code": "def probe_func():\n    return 2\n",
     }
     _ok = pm._m105_try_release_low_risk(_p)
     assert _ok is True, "★验证后复查须放行 T-101a 合格补丁"
