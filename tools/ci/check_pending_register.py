@@ -4,8 +4,8 @@
 职责：
   1. 校验 docs/台账/待裁决登记册.csv：
      - ID 唯一且非空
-     - 状态 ∈ {待裁决, 已裁, 已排期, 已结案}
-     - 到期批次 非空且为整数
+     - 状态 ∈ {待裁决, 已裁, 已排期, 已结案, 已撤销, 已裁决待排期}
+     - 到期批次 非空且为整数；亦支持中文形态「第N批」（如 第157批）
   2. 输出「本批到期未裁项」= 状态=待裁决 且 到期批次 <= 本批；
      非空即阻断任务下发（exit 2）。
 
@@ -21,7 +21,7 @@ import re
 import subprocess
 import sys
 
-VALID_STATES = {"待裁决", "已裁", "已排期", "已结案"}
+VALID_STATES = {"待裁决", "已裁", "已排期", "已结案", "已撤销", "已裁决待排期"}
 DEFAULT_BATCH = 148
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,10 +40,21 @@ def fail(msg):
     sys.exit(2)
 
 
-def _safe_int(s):
-    """非负整数解析；非法返回 None。避免 except 被 CI 门禁记为静默 handler。"""
+_BATCH_CN_RE = re.compile(r"^第(\d+)批$")
+
+
+def _parse_batch(s):
+    """非负整数批次解析；支持 '157' 与 '第157批' 中文形态。非法返回 None。
+
+    避免引入 try/except（CI 门禁会记为新增静默 handler），改用纯正则/字符串判定。
+    """
     s = (s or "").strip()
-    return int(s) if s.isdigit() else None
+    if s.isdigit():
+        return int(s)
+    m = _BATCH_CN_RE.match(s)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 # ============================================================================
@@ -217,15 +228,16 @@ def main(argv=None):
         if st not in VALID_STATES:
             errors.append("行%d [%s]: 状态非法 %r（允许=%s）" % (i, rid, st, sorted(VALID_STATES)))
 
-        # 到期批次：仅「待裁决」必须非空（已裁决项无待办到期日，留空表示 N/A，不臆造批次号）；
-        # 非空时必须为非负整数。用 str.isdigit() 校验，避免引入 except 被 CI 门禁记为静默 handler。
+        # 到期批次：仅「待裁决」必须非空（已裁/已结案/已撤销 无待办到期日，留空表示 N/A，不臆造批次号）；
+        # 「已裁决待排期」可带目标批次（支持 第N批 中文形态），仅做格式校验不强制为空。
+        # 非空时须为非负整数或 第N批 中文形态；用 _parse_batch 校验，避免引入 except 被 CI 门禁记为静默 handler。
         due = (r.get("到期批次") or "").strip()
         if st == "待裁决":
             if not due:
                 errors.append("行%d [%s]: 状态=待裁决 但 到期批次为空" % (i, rid))
-            elif not due.isdigit():
+            elif _parse_batch(due) is None:
                 errors.append("行%d [%s]: 到期批次非整数 %r" % (i, rid, due))
-        elif due and not due.isdigit():
+        elif due and _parse_batch(due) is None:
             errors.append("行%d [%s]: 到期批次非整数 %r" % (i, rid, due))
 
         # 提出批次非空率必须 100%（T149-6 新增硬校验）
@@ -246,7 +258,7 @@ def main(argv=None):
     due_unresolved = []
     for r in rows:
         if r["状态"].strip() == "待裁决":
-            d = _safe_int(r["到期批次"])
+            d = _parse_batch(r["到期批次"])
             if d is not None and d <= args.batch:
                 due_unresolved.append(r["ID"].strip())
 
