@@ -139,13 +139,13 @@ class Test403Degrade(unittest.TestCase):
 
         def _fake_urlopen(req, timeout=None):
             _calls["n"] += 1
-            raise HTTPError("https://x", 403, "Forbidden", {}, None)
+            raise HTTPError("http://127.0.0.1/zh/wiki/x", 403, "Forbidden", {}, None)
 
         _orig_urlopen = _wq_mod.urlopen
         _wq_mod.urlopen = _fake_urlopen
         try:
             with self.assertRaises(HTTPError):
-                _wq_mod._default_fetch("https://x", timeout=1.0)
+                _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
             # ★主线第65批 T6：重试次数由 1 次提升至 2 次（共 3 次请求），降低 403 反爬瞬时失败率
             self.assertEqual(_calls["n"], 3, "开关开启时应重试 2 次（共 3 次请求）")
         finally:

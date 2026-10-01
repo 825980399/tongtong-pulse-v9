@@ -63,7 +63,7 @@ def _make_403(code=403, body="403 反爬验证文本 body",
               hdrs="Retry-After: 10\nX-Baidu-Error: captcha\nX-Baidu-Trace: abc\n"):
     _hdrs = email.message_from_string(hdrs)
     _fp = io.BytesIO(body.encode("utf-8"))
-    return HTTPError("https://x", code, "Forbidden", _hdrs, _fp)
+    return HTTPError("http://127.0.0.1/zh/wiki/x", code, "Forbidden", _hdrs, _fp)
 
 
 # ============================================================ 1) UA 收口
@@ -85,7 +85,7 @@ class TestUAConvergence(unittest.TestCase):
             return _FakeResp()
 
         with mock.patch.object(_wq_mod, "urlopen", _fake_urlopen):
-            _wq_mod._default_fetch("https://x", timeout=1.0)
+            _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
         self.assertEqual(_seen.get("ua"), _get_ua(),
                          "首次请求必须使用合规 UA（一处收口，避免被无条件轮换覆盖）")
 
@@ -102,7 +102,7 @@ class TestUAConvergence(unittest.TestCase):
 
         with mock.patch.object(_wq_mod, "urlopen", _fake_urlopen), \
                 mock.patch.object(time, "sleep", lambda *a, **k: None):
-            _wq_mod._default_fetch("https://x", timeout=1.0)
+            _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
         self.assertGreaterEqual(len(_calls), 2, "403 后应进入重试（轮换 UA）")
         self.assertEqual(_calls[0], _get_ua(), "首次仍用合规 UA")
         self.assertIn(_calls[1], _UA_POOL, "重试应轮换到 _UA_POOL")
@@ -130,7 +130,7 @@ class Test403Evidence(unittest.TestCase):
                 mock.patch.object(time, "sleep", lambda *a, **k: None), \
                 mock.patch.object(_wq_mod, "_logger", _logger_mock):
             with self.assertRaises(HTTPError):
-                _wq_mod._default_fetch("https://x", timeout=1.0)
+                _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
         _texts = [str(c.args[0]) for c in _logger_mock.warning.call_args_list]
         _joined = "\n".join(_texts)
         self.assertTrue(any("403 反爬命中" in t for t in _texts),
