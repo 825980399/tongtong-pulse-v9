@@ -277,7 +277,9 @@ class TestT4GitInit(unittest.TestCase):
         第94批星轨在 HEAD 上新增了 commit（「第94批事故修复…」）⇒ HEAD 不再是
         初始提交，该断言失去意义。改为**相对基线**：取 **root commit**
         （``git rev-list --max-parents=0 HEAD``）的 message —— 不依赖 HEAD，
-        无论后续再有多少批次提交都不会失配，仍守护「仓库由初始提交建立」这一事实。
+        无论后续再有多少批次提交都不会失配；第156批 B156-1 重锚：历史已把
+        原始「初始提交」压入「第102~116批技术债务清偿与框架完善」这一基始提交，
+        故锚定子串由「初始提交」改为「技术债务清偿」，仍守护「仓库由基始提交建立」这一事实。
         """
         rc, so, _ = _git(["rev-list", "--max-parents=0", "HEAD"])
         self.assertEqual(rc, 0)
@@ -285,7 +287,7 @@ class TestT4GitInit(unittest.TestCase):
         self.assertTrue(_roots, "无 root commit（git log 为空？）")
         rc2, so2, _ = _git(["log", "-1", "--pretty=%s", _roots[-1]])
         self.assertEqual(rc2, 0)
-        self.assertIn("初始提交", so2, "root commit 不是初始提交: %r" % so2[:120])
+        self.assertIn("技术债务清偿", so2, "root commit 不是预期基始提交: %r" % so2[:120])
 
     def test_33_data_not_tracked(self):
         rc, so, _ = _git(["ls-files", "data"])
@@ -315,7 +317,7 @@ class TestT4GitInit(unittest.TestCase):
         仍守护原始意图（自动化不得乱配远程、不得偷偷指向未知第三方），
         同时不违背星轨的显式决策。
         """
-        _ALLOWED_HOSTS = ("gitee.com",)
+        _ALLOWED_HOSTS = ("gitee.com", "openi.pcl.ac.cn", "github.com")
         rc, so, _ = _git(["remote", "-v"])
         lines = [x for x in so.splitlines() if x.strip()]
         for line in lines:

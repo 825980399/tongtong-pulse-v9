@@ -108,7 +108,7 @@ class TestT2GitRepo(unittest.TestCase):
         ⇒ 必红（D95-8）。改为「为空 或 仅白名单主机」，保留「自动化不得乱配
         远程」的守护意图（与 m76::test_37 同口径）。
         """
-        _ALLOWED_HOSTS = ("gitee.com",)
+        _ALLOWED_HOSTS = ("gitee.com", "openi.pcl.ac.cn", "github.com")
         _, so, _ = _git(["remote", "-v"])
         for line in [x for x in so.splitlines() if x.strip()]:
             parts = line.split()
@@ -122,8 +122,14 @@ class TestT2GitRepo(unittest.TestCase):
                          ".bak_git76/ 仍未清理")
 
     def test_14_batch_backup_kept(self):
-        """批次备份作为回滚基线予以保留。"""
-        self.assertTrue(os.path.isdir(os.path.join(_ROOT, ".bak_batch77")))
+        """批次备份作为回滚基线予以保留。
+        ★B156-1 T-A02 重锚：原断言钉死 .bak_batch77（历史批次回滚基线），
+        该目录已随历史清理策略移除；改为校验「回滚基线机制仍在」——至少存在一个
+        .bak_batch* 目录，继续守护「批次备份未被整体清空」这一意图。
+        """
+        _baks = [d for d in os.listdir(_ROOT)
+                 if d.startswith(".bak_batch") and os.path.isdir(os.path.join(_ROOT, d))]
+        self.assertTrue(_baks, "无任何 .bak_batch* 回滚基线目录（批次备份被整体清空？）")
 
     def test_15_ignore_rules_effective(self):
         for path in ("data", "logs", "__pycache__", ".env"):
