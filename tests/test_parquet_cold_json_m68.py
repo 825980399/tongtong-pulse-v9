@@ -74,10 +74,10 @@ class TestParquetPrimary(unittest.TestCase):
         self.assertTrue(s._m68_parquet_dir().endswith("parquet"))
 
     def test_12_switches_default_on(self):
-        """第80批 T1 止血后：Parquet 主存储默认关（G0 分层塌缩根因，第81批重开），
+        """第80批 T1 止血后：Parquet 主存储默认开（G0 分层塌缩根因，第81批重开并星轨2026-09-19开启），
         JSON 兼容备份默认仍开（双写安全兜底，防止 Parquet 失败时无回退）。"""
         s = _mk_snap(self._d())
-        self.assertFalse(s._m68_parquet_primary_enabled())
+        self.assertTrue(s._m68_parquet_primary_enabled())
         self.assertTrue(s._m68_json_backup_enabled())
 
     def test_13_switches_can_be_disabled(self):
