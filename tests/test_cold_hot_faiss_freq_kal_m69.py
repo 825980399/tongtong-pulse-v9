@@ -338,9 +338,11 @@ class TestKALMigration(unittest.TestCase):
         self.assertIn("_m69_kal_query", src)
 
     def test_32_kal_kidney_method(self):
-        """肾模块有KAL查询方法。"""
+        """肾模块有KAL查询方法（m70 命名 _m70_kal_search_by_level；m69 的 _m69_kal_query 仅胃/肝采用）。"""
         src = open(os.path.join(_ROOT, "organs/body/PulseKidney.py"), encoding="utf-8").read()
-        self.assertIn("_m69_kal_query", src)
+        # ★B156-3 T-A05 读码判定：肾采用 _m70_kal_* KAL 集成（git log -S 证实 _m69_kal_query
+        #   从未在 Kidney 落地），生产非回归、测试锚过时 → 对齐肾实际 KAL 查询方法名。
+        self.assertIn("_m70_kal_search_by_level", src)
 
     def test_33_kal_migration_config(self):
         """KAL迁移配置开关存在。"""

@@ -173,7 +173,10 @@ class TestT2LiverTypeGuard(unittest.TestCase):
     def test_异步优化异常日志含类型(self):
         inst = PulseLiver.__new__(PulseLiver)
         inst.node_pool = MagicMock()
-        inst.node_pool.get_stats.side_effect = ValueError("boom")
+        # ★B156-3 T-A05 读码判定：_do_optimize 已迁移至 self._kal.get_stats()（非 node_pool.get_stats），
+        #   生产 KAL 集成是既定形态（8d9b95f 引入），测试 mock 过时 → 对齐 self._kal。
+        inst._kal = MagicMock()
+        inst._kal.get_stats.side_effect = ValueError("boom")
         inst._lock = MagicMock()
         inst._lock.__enter__ = lambda s: s
         inst._lock.__exit__ = lambda *a: False

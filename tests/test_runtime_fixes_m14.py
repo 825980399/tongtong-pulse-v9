@@ -52,9 +52,24 @@ class _FakeOrgan:
         self.node_pool = node_pool
         self._sink = log_sink if log_sink is not None else []
         self._log = self._record
+        # ★B156-3 T-A05：免疫段现引用 self._kal（KAL 集成），替身须提供，否则 AttributeError。
+        self._kal = _FakeKal()
 
     def _record(self, level, msg):
         self._sink.append((level, msg))
+
+
+class _FakeKal:
+    """最小化 KAL 替身：免疫段已迁移至 self._kal.query_nodes/add_node（m69/m70 KAL 集成），
+    测试替身须提供该接口，否则 AttributeError 会被误判为生产回归。"""
+    def __init__(self):
+        self.query_nodes_calls = []
+    def query_nodes(self, **kw):
+        self.query_nodes_calls.append(kw)
+        # 返回非空列表，确保免疫段一致性检查分支被触发（与 _self_nodes 真值性一致）。
+        return [_FakeNode("_kal_self", ["自我"], "v")]
+    def add_node(self, node):
+        pass
 
 
 class _FakePool:
@@ -153,7 +168,8 @@ class TestStomachImmuneFix(unittest.TestCase):
 
     def test_source_uses_correct_kwarg(self):
         src = _read(_STOMACH_REL)
-        self.assertIn('query(space_path_prefix="/自我", limit=20)', src)
+        # ★B156-3 T-A05：免疫段查询已迁 self._kal.query_nodes(space_path_prefix=...)，锚同步。
+        self.assertIn('query_nodes(space_path_prefix="/自我", limit=20)', src)
         self.assertNotIn('query(space_path="/自我"', src)
 
     def test_source_log_line_number_not_hardcoded_833(self):
@@ -166,10 +182,12 @@ class TestStomachImmuneFix(unittest.TestCase):
     def test_query_called_with_prefix_and_no_exception(self):
         pool = _FakePool([_FakeNode("s1", ["知识", "架构"], "架构说明")])
         ns = self._run_block(pool=pool)
-        self.assertEqual(len(pool.calls), 1)
-        self.assertEqual(pool.calls[0].get("space_path_prefix"), "/自我")
+        organ = ns["self"]
+        # ★B156-3 T-A05：免疫段已迁移至 self._kal.query_nodes（非 node_pool.query），锚同步。
+        self.assertEqual(len(organ._kal.query_nodes_calls), 1)
+        self.assertEqual(organ._kal.query_nodes_calls[0].get("space_path_prefix"), "/自我")
         # 未吞异常：不应出现「检查跳过」日志
-        msgs = [m for _, m in ns["self"]._sink]
+        msgs = [m for _, m in organ._sink]
         self.assertFalse(any("检查跳过" in m for m in msgs), msgs)
 
     def test_trust_penalty_applied_when_contradiction(self):
