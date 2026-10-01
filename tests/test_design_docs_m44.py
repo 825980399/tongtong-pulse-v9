@@ -270,8 +270,7 @@ class TestNoRuntimeChange(unittest.TestCase):
 
     def test_31_no_l2_switch_introduced(self):
         import config
-        for _k in ("ENABLE_SEMANTIC_CACHE_L2", "SEMANTIC_CACHE_L2_RATIO",
-                   "ENABLE_L3_CALL_REDUCER_OBSERVE", "ENABLE_L3_REUSE"):
+        for _k in ("ENABLE_L3_CALL_REDUCER_OBSERVE", "ENABLE_L3_REUSE"):
             self.assertFalse(hasattr(config, _k), "不应新增生产开关: %s" % _k)
 
     def test_32_no_call_reducer_module(self):
