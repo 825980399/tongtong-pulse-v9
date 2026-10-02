@@ -4082,7 +4082,11 @@ EVOLUTION_HEALTH_ROLLBACK_MAX = 20.0         # 回滚率(%)高于此值 → high
 ENABLE_FAKE_LOOP_PRIVATE_MATCH = True
 # T4（P2-217）：自我观察噪声排除（引擎自身产物目录，按相对项目根的 POSIX 前缀匹配）
 ENABLE_SELF_AWARENESS_EXCLUDE = True
-SELF_AWARENESS_EXCLUDE_DIRS = ["data/self_awareness"]
+# ★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）：补 "data/probe" ——
+#   探针策略产物属引擎自身观测输出，与 data/self_awareness 同类；补入排除避免
+#   在 self_awareness 自身扫描通道被二次误判为"无消费方"噪声。health_ui 观测
+#   查询入口（data/probe 路由）已作为该数据的读方，排除仅作用于 self_awareness 噪声判定。
+SELF_AWARENESS_EXCLUDE_DIRS = ["data/self_awareness", "data/probe"]
 # T5（P2-231）：配对器信噪比优化（目录 / 扩展名排除白名单）
 ENABLE_PRODUCTION_CONSUMPTION_EXCLUDE = True
 PRODUCTION_CONSUMPTION_EXCLUDE_DIRS = [

@@ -849,6 +849,13 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self._serve_jsonl('reports', 'alerts.jsonl')
             elif self.path == '/reports/todo':
                 self._serve_jsonl('reports', 'todo.jsonl')
+            # ===== 第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）=====
+            elif self.path == '/data/probe':
+                self._serve_probe_data()
+            elif self.path == '/data/self_inspector_history.jsonl':
+                self._serve_jsonl('', 'self_inspector_history.jsonl')
+            elif self.path == '/data/param_tuning':
+                self._serve_param_tuning_data()
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -993,6 +1000,102 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.end_headers()
             except Exception as e:
                 silent_exc(e, where="functions.health_ui::_serve_jsonl L500")
+
+    def _serve_probe_data(self):
+        """★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）：提供 data/probe/ 探针产物只读端点。
+
+        data/probe/ 含探针策略（nucleus/probe_strategy.py）产出的观测条目，运行期累积
+        可达数百~上千件（"978 件"为实测规模）。此前全仓无读取方（写入即二阶断点）。
+        本端点把目录清单摘要为 JSON 返回，使探针观测可经健康面板只读查阅
+        （有读方，满足"各入口有读方或显式标注"）。目录缺失时返回 {count:0, items:[]}。
+        """
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _probe_dir = os.path.join(_root, 'data', 'probe')
+        _items = []
+        try:
+            if os.path.isdir(_probe_dir):
+                for _name in os.listdir(_probe_dir):
+                    _fp = os.path.join(_probe_dir, _name)
+                    try:
+                        if os.path.isfile(_fp):
+                            _st = os.stat(_fp)
+                            _items.append({
+                                "name": _name,
+                                "size": _st.st_size,
+                                "mtime": _st.st_mtime,
+                                "ext": os.path.splitext(_name)[1].lower(),
+                            })
+                    except Exception as e:
+                        silent_exc(e, where="functions.health_ui::_serve_probe_data Lstat")
+            _items.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+            _body = json.dumps(
+                {"count": len(_items), "items": _items[:200]},
+                ensure_ascii=False).encode('utf-8')
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::_serve_probe_data Lconn")
+            return
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_probe_data Lgen")
+            _body = json.dumps(
+                {"count": 0, "items": [], "error": str(e)[:80]},
+                ensure_ascii=False).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-cache')
+        self.end_headers()
+        self.wfile.write(_body)
+
+    def _serve_param_tuning_data(self):
+        """★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）：提供 data/param_tuning/*.jsonl 只读端点。
+
+        QualityClosedLoop 把调参闭环记录（observe→trial→adjust）持久化到
+        data/param_tuning/<loop>.jsonl，此前全仓无读取方（写入即二阶断点）。
+        本端点逐文件解析 JSONL、聚合近期记录返回，使调参闭环可被健康面板只读查阅
+        （消费者 = 本端点，满足"定消费者或显式标注"）。目录/文件缺失时返回 {loops:[]}。
+        """
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _pt_dir = os.path.join(_root, 'data', 'param_tuning')
+        _loops = []
+        try:
+            if os.path.isdir(_pt_dir):
+                for _fn in sorted(os.listdir(_pt_dir)):
+                    if not _fn.endswith('.jsonl'):
+                        continue
+                    _fp = os.path.join(_pt_dir, _fn)
+                    _records = []
+                    try:
+                        with open(_fp, encoding='utf-8') as f:
+                            for _line in f:
+                                _line = _line.strip()
+                                if not _line:
+                                    continue
+                                try:
+                                    _records.append(json.loads(_line))
+                                except Exception as e:
+                                    silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lparse")
+                    except Exception as e:
+                        silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lopen")
+                    _loops.append({
+                        "loop": _fn[: -len('.jsonl')] if _fn.endswith('.jsonl') else _fn,
+                        "records": _records[-50:],
+                        "count": len(_records),
+                    })
+            _body = json.dumps(
+                {"loops": _loops, "loop_count": len(_loops)},
+                ensure_ascii=False).encode('utf-8')
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lconn")
+            return
+        except Exception as e:
+            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lgen")
+            _body = json.dumps(
+                {"loops": [], "loop_count": 0, "error": str(e)[:80]},
+                ensure_ascii=False).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-cache')
+        self.end_headers()
+        self.wfile.write(_body)
 
     def _serve_runtime_metrics(self):
         """提供真实运行时指标（★FIX: 反映框架真实运行状态，替代硬编码假数据）"""

@@ -22,6 +22,10 @@ from nucleus._silent_except import silent_exc
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）显式标注：
+#   data/param_tuning/<loop>.jsonl 的**消费者 = functions/health_ui.py 的
+#   /data/param_tuning 只读端点**（_serve_param_tuning_data）。本闭环为"写入方"，
+#   记录经健康面板只读查阅，非二阶断点孤儿写入。请勿因"无源码读取方"误判为缺陷。
 _RECORD_DIR = os.path.join(_PROJECT_ROOT, "data", "param_tuning")
 
 # 共享 ParamPatchManager（两个闭环共用一份补丁历史/互斥锁；ParamPatchManager 自身带锁）
