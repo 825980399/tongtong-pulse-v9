@@ -1153,6 +1153,29 @@ class PulseFramework:
         self._log(LogLevel.INFO,
                   f"器官装配完成: {len(self.organs)} 器官（{_asm_mode}装配）")
 
+        # ★第158批第6刀（T-QICA声明-1 + N-6★）：装配具名差集自检
+        # 口径：声明集 = ORGAN_META 扫描（基线，统一定为器官计数基准）；装配集 = self.organs 实际实例。
+        # 具名差集 = 装配集 − 声明集；应全部属于 FRAMEWORK_QUASI_ORGANS（如 QICA，
+        # 框架组件以 _create_organ 实例化纳管，预期偏差），否则为「未声明却装配」真缺陷。
+        try:
+            from nucleus.organ_loader import OrganLoader
+            from nucleus.organ_assembler import OrganAssembler
+            _metas = OrganLoader(self).scan_organs_directory()
+            _diff = OrganAssembler(_metas).diff_declared_vs_instantiated(set(self.organs.keys()))
+            self._log(LogLevel.INFO,
+                      f"[装配具名差集] 声明基线(ORGAN_META)={_diff['declared_count']} "
+                      f"装配={_diff['instantiated_count']} "
+                      f"差集={_diff['named_diff']} "
+                      f"框架准器官={_diff['quasi_organ_extra']} "
+                      f"未声明异常={_diff['undeclared_instantiated']}")
+            if _diff["undeclared_instantiated"]:
+                self._log(LogLevel.WARNING,
+                          f"[装配具名差集] 发现未声明却实例化的器官"
+                          f"（需补 ORGAN_META 或归入 FRAMEWORK_QUASI_ORGANS）: "
+                          f"{_diff['undeclared_instantiated']}")
+        except Exception as _de:
+            silent_exc(_de, "main.py:1156 装配具名差集自检", level="warning")
+
     def _init_organs_declarative(self):
         """
         ★P3-2阶段3：声明式装配（实验性）。

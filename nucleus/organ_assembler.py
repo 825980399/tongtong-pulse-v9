@@ -29,13 +29,26 @@ FRAMEWORK_COMPONENTS: frozenset[str] = frozenset({
     "sensor", "expression", "context_snapshot", "companion_bridge",
     "autonomous_deriver", "oscillon_monitor", "reasoning_pool",
     # QICA 虽以 _create_organ 创建并存于 organs，但位于 nucleus/qica 而非 organs/，
-    # 不在 ORGAN_META 扫描范围，按「组件」对待。
+    # 不在 ORGAN_META 扫描范围，按「组件」对待（亦属 FRAMEWORK_QUASI_ORGANS 准器官）。
     "qica",
     # 框架实例自身（set_framework_ref 注入），非器官也非可装配组件。
     "framework",
     # 三级安全沙箱核心引擎（main.py 内联创建，非器官）。
     "sandbox_core",
 })
+
+
+# ★第158批第6刀（T-QICA声明-1 + N-6★）：框架「准器官」组件声明。
+# 这些符号位于 nucleus/ 而非 organs/ 注册表，不被 OrganLoader.scan_organs_directory
+# 扫描（故不计入 ORGAN_META 声明集），但被 main.py Phase 0 以 _create_organ 显式
+# 实例化为器官并纳管于 self.organs。其存在使「装配集(实例)」比「声明集(ORGAN_META)」
+# 多 N 个，属预期偏差——在此显式声明后，装配具名差集自检据此将其识别为「框架准器官」
+# 而非「未声明异常」。
+# 说明：本不应把 QICA 直接补进 ORGAN_META 扫描（organs/ 目录），因为 main.py Phase 0
+# 已用 _create_organ(QICA, "QICA") 实例化 QICA，若扫描再实例化会触发非幂等的
+# _create_organ 二次创建、覆盖已注入的 node_pool/knowledge_tree；故以本常量显式声明其
+# 准器官身份，既统一计数口径又避免重复实例化。当前唯一成员 = QICA。
+FRAMEWORK_QUASI_ORGANS: frozenset[str] = frozenset({"QICA"})
 
 
 class OrganAssembler:
@@ -259,6 +272,43 @@ class OrganAssembler:
                 "degradable_count": sum(1 for m in self.metas if not m.always_online),
             },
             "cycles": cycles,
+        }
+
+    # ========================================================================
+    # 装配具名差集（第158批第6刀 N-6★：声明集 vs 装配集口径统一）
+    # ========================================================================
+
+    def diff_declared_vs_instantiated(self, instantiated_names: set[str]) -> dict[str, Any]:
+        """
+        ★第158批第6刀（N-6★）：计算「声明集(ORGAN_META)」与「装配集(self.organs)」的具名差集。
+
+        口径统一：以 ORGAN_META 扫描数（self.metas 长度）为器官计数基线；
+        装配集 = 运行期实际实例化的器官名集合。二者差集即「装配但不在声明注册表内」的器官，
+        应全部属于 FRAMEWORK_QUASI_ORGANS（框架组件实例化为准器官），
+        否则即为「未声明却装配」的真实缺陷（需补 ORGAN_META 或归入 FRAMEWORK_QUASI_ORGANS）。
+
+        Args:
+            instantiated_names: 运行期 self.organs 的键集合（实际实例化器官名）。
+        Returns:
+            {
+                "declared_count": int,          # ORGAN_META 声明器官数（基线）
+                "instantiated_count": int,      # 实际实例化器官数
+                "named_diff": list[str],        # 装配集 − 声明集（具名差集）
+                "quasi_organ_extra": list[str],     # 差集中属框架准器官者（预期偏差）
+                "undeclared_instantiated": list[str],  # 差集中非框架准器官者（真实缺陷）
+            }
+        """
+        _declared: set[str] = set(self._organ_names)
+        _instantiated: set[str] = set(instantiated_names)
+        _named_diff = sorted(_instantiated - _declared)
+        _quasi = sorted(n for n in _named_diff if n in FRAMEWORK_QUASI_ORGANS)
+        _undeclared = sorted(n for n in _named_diff if n not in FRAMEWORK_QUASI_ORGANS)
+        return {
+            "declared_count": len(_declared),
+            "instantiated_count": len(_instantiated),
+            "named_diff": _named_diff,
+            "quasi_organ_extra": _quasi,
+            "undeclared_instantiated": _undeclared,
         }
 
     # ========================================================================
