@@ -1,3 +1,6 @@
+# ⚠️ @deprecated (157-D C-4 躯体/多机封存 / Q157-2 已裁):
+#   三壳·config_body：硬件躯体纯配置壳（228行），无独立语义；③弃用标注（原定②删除或③，选③）。
+#   复活须待 PHASE19（具身化/多机）专门批；禁止新代码 import 本模块（若仍在用请先接线）。
 """config_body —— 躯体全局硬件配置 config_body.py
 
 版本: v10 PulseNet

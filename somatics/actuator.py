@@ -1,3 +1,6 @@
+# ⚠️ @deprecated (157-D C-4 躯体/多机封存 / Q157-2 已裁):
+#   躯体半区·actuator：反射弧 sensor→reflex→actuator 三段闭环缺两端，现仅 sensor 在用；③封存待 PHASE19 具身化再启。
+#   复活须待 PHASE19（具身化/多机）专门批；禁止新代码 import 本模块（若仍在用请先接线）。
 """actuator —— 物理执行器抽象层（硬件抽象层 · 运动输出的物理基础）
 
 版本: v10 PulseNet

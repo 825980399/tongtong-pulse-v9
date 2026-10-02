@@ -1,3 +1,6 @@
+# ⚠️ @deprecated (157-D C-4 躯体/多机封存 / Q157-2 已裁):
+#   自制硬件躯体·robot_body_driver：依赖实体 TCP 设备，现网无设备即无触发路径；③封存。
+#   复活须待 PHASE19（具身化/多机）专门批；禁止新代码 import 本模块（若仍在用请先接线）。
 """robot_body_driver —— 自制躯体总驱动
 
 版本: v10 PulseNet

@@ -1,3 +1,6 @@
+# ⚠️ @deprecated (157-D C-4 躯体/多机封存 / Q157-2 已裁):
+#   自制硬件躯体·voice_handler：依赖实体音频设备，现网无触发路径；③封存。
+#   复活须待 PHASE19（具身化/多机）专门批；禁止新代码 import 本模块（若仍在用请先接线）。
 """voice_handler —— 躯体语音处理模块
 
 版本: v10 PulseNet
