@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+# ⚠️ @deprecated (157-D C-6 观测孤岛封存 / Q157-2 同域口径):
+#   观测孤岛·synapsys/VotingEngine（投票引擎）：多机协议未启用；③封存标注，标"预留-多机/协议未启用-拟接线批次=PHASE19"。
+#   复活须待对应专门批（PHASE19 / 构建脚本移出批）；禁止新代码 import 本模块（若仍在用请先接线）。
 """
 VotingEngine.py —— 投票引擎
 

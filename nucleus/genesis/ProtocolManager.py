@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+# ⚠️ @deprecated (157-D C-6 观测孤岛封存 / Q157-2 同域口径):
+#   观测孤岛·genesis/ProtocolManager（协议管理）：无生产读方；③封存。
+#   复活须待对应专门批（PHASE19 / 构建脚本移出批）；禁止新代码 import 本模块（若仍在用请先接线）。
 """
 ProtocolManager.py —— 协议管理器
 
