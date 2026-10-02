@@ -129,6 +129,8 @@ class PulseCortex(BasePulseOrgan):
         # 灰度 ENABLE_DIALOG_LOCK_GUARD（默认 True）；关闭时以下逻辑全部旁路、零副作用。
         self._latest_correlation_id: str = ""
         self._active_correlation_id: str = ""
+        # ★T-对话-1（157批）：缓存最近一次时间广播，供答复"今天几号"类提问取用时戳
+        self._latest_time: "dict | None" = None
         self._cancelled_correlations: deque[str] = deque(maxlen=200)
         self._cancelled_correlation_set: set[str] = set()
         self._dialog_queue: deque[str] = deque(maxlen=1000)  # ★补丁patch_1789115430_7fd6：防内存无限增长
@@ -302,8 +304,16 @@ class PulseCortex(BasePulseOrgan):
             if not getattr(config, "ENABLE_TIME_CORE", False):
                 return
             _p = (pulse or {}).get("payload", {})
+            # ★T-对话-1（157批）：缓存最近一次时间广播，供答复"今天几号"类提问取用时戳
+            self._latest_time = {
+                "wall_clock": _p.get("wall_clock"),
+                "semantic_time": _p.get("semantic_time"),
+                "uptime_display": _p.get("uptime_display"),
+                "tick_count": _p.get("tick_count"),
+                "ts": time.time(),
+            }
             self._log(
-                LogLevel.INFO,
+                LogLevel.DEBUG,
                 f"[time.tick] wall={_p.get('wall_clock')} up={_p.get('uptime_display')} "
                 f"phase={_p.get('semantic_time')} tick={_p.get('tick_count')}",
             )

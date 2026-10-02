@@ -196,11 +196,16 @@ class ChatService:
                     # 这样推理结果返回时能正确匹配到上下文，不再出现"无匹配上下文"警告
                     _cortex = self.framework.organs.get("大脑皮层") if hasattr(self.framework, 'organs') else None
                     if _cortex and hasattr(_cortex, 'register_pending_inner_world'):
+                        # ★T-对话-1（157批）：注入最近一次时间广播的 wall/semantic，
+                        #   使内在世界在被问"今天几号"等时间类问题时能取到正确时戳。
+                        _lt = getattr(_cortex, "_latest_time", None) or {}
                         _cortex.register_pending_inner_world(_correlation_id, {
                             "content": "你是谁",
                             "user_name": user_name,
                             "intent": "身份",
                             "timestamp": time.time(),
+                            "wall_clock": _lt.get("wall_clock"),
+                            "semantic_time": _lt.get("semantic_time"),
                             "file_paths": [],
                             "code_blocks": [],
                         })
