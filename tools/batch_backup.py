@@ -89,6 +89,7 @@ _M55_LEGACY_SKIP_DIR_NAMES: frozenset[str] = frozenset({
     "code_backups", "site-packages",
     # 备份/隔离落点（均为副本，非独立源码）
     ".tmp_backup", ".bak_tmp", ".pytest_tmp", ".release-tmp",
+    ".aionclaw-tmp",  # aionclaw 临时/克隆目录（157-E T-框架-1 纳入单一真相集）
 })
 
 #: ★第55批 T4：统一清单（基础项来自 exclude_dirs，新增目录只需改一处）

@@ -12,6 +12,7 @@ CodeReviewEngine.py —— 代码审查引擎
 """
 
 from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+from nucleus.data.exclude_dirs import prune  # ★157-E T-框架-1：统一排除集（单一真相集）
 from config import TIMEOUT_CONFIG
 import json
 import os
@@ -312,11 +313,8 @@ class CodeReviewEngine:
         modified = []
         cutoff = time.time() - hours * 3600
         for root, dirs, files in os.walk(self.project_root):
-            if "__pycache__" in root or ".git" in root:
-                continue
-            # ★修复：排除tmp目录（临时测试文件，不是正式代码）
-            if os.sep + "tmp" in root or root.endswith(os.sep + "tmp"):
-                continue
+            # ★157-E T-框架-1：改用统一排除集 prune()（单一真相集，排除副本/缓存/备份/tmp/.aionclaw-tmp 等）
+            dirs[:] = prune(dirs)
             for f in files:
                 if f.endswith(".py"):
                     path = os.path.join(root, f)

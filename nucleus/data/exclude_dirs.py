@@ -45,6 +45,7 @@ COPY_DIRS = frozenset({
     ".bak_tmp",              # 第47批 tmp 快照（新落点）
     ".pytest_tmp",           # 测试隔离目录（第46批起）
     "code_backups",
+    ".aionclaw-tmp",        # aionclaw 临时/克隆目录（157-E T-框架-1 纳入单一真相集）
 })
 
 #: 数据/输出目录（通常不含源码，但扫描时也应跳过以提速）
