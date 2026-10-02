@@ -332,6 +332,27 @@ class SelfAwarenessDailyScheduler:
                         "[自我认知调度] 补丁质量评估失败（忽略）: %s: %s",
                         type(_pqe).__name__, _pqe)
 
+            # ★第158批 上-A O-A2（P0）：分面成熟度台账登记（机读）。
+            #   「每批自动登记」的落点：低频（1 次/天）→ IO 可忽略；
+            #   台账件内部自带 test-env 保护，此处再套一层调度侧保护双保险。
+            #   修复率/不可验证率由台账件按 N-9 口径自行采集，本处不另立判据。
+            if not self._is_test_env():
+                try:
+                    # 函数内导入：规避巨型文件的存量 E402（第17批约定）
+                    from nucleus.self_awareness.maturity_ledger import register_daily
+                    _led = register_daily()
+                    if isinstance(_led, dict) and not _led.get("error"):
+                        _res["maturity_ledger"] = {
+                            "score": _led.get("score"),
+                            "level": _led.get("level"),
+                            "rates": _led.get("rates"),
+                            "probe_count": _led.get("probe_count"),
+                        }
+                except Exception as _mle:               # 登记失败不得影响调度
+                    _module_logger.warning(
+                        "[自我认知调度] 成熟度台账登记失败（忽略）: %s: %s",
+                        type(_mle).__name__, _mle)
+
             # ★主线第42批 T3（P1-265）：经验语义检索观测（L1 仅观测，不替换现有检索器）。
             #   仅在编码器**已就绪**时执行（observe_daily 内部自检）→ 首次加载不阻塞调度。
             if not self._is_test_env():
