@@ -3177,7 +3177,10 @@ class PatchManager:
                         )
                     _apply_detail = {
                         "id": patch["id"], "file": patch["file"],
-                        "status": "applied", "backup_path": patch.get("backup_path", "")
+                        "status": "applied", "backup_path": patch.get("backup_path", ""),
+                        # ★N-3①②（157批）：透出验证结论供 main 重启闸门判定
+                        "effect_verified": bool(patch.get("effect_verified")),
+                        "reprobe_verdict": patch.get("reprobe_verdict"),
                     }
                     if _aes_note:
                         _apply_detail["aesthetic_note"] = _aes_note
@@ -3237,6 +3240,18 @@ class PatchManager:
             self._save_patch_list(self._pending_file, [])
         # ★v23.0新增：写入人类可读的修改日志
         self._write_readable_log(results, history)
+        # ★N-3①②（157批）：不可判定场景禁止整机自重启。
+        #   任一已应用补丁缺乏明确效果验证(effect_verified 非真)即视为不可判定，
+        #   不再触发 3 秒后整机重启，避免无效/未证实变更引发重启抖动。
+        _restart_allowed = results["applied"] == 0 or all(
+            (d.get("status") != "applied") or bool(d.get("effect_verified"))
+            for d in results.get("details", [])
+        )
+        results["restart_allowed"] = _restart_allowed
+        if not _restart_allowed:
+            _module_logger.warning(
+                "[N-3①②] 存在验证不可判定的已应用补丁，抑制整机自重启（待人工/活体确认）"
+            )
         return results
 
     # 结构性失效（重试一万次也不会成功）的失败原因特征串

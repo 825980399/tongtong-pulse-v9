@@ -3371,8 +3371,10 @@ def _apply_pending_patches_and_restart(framework) -> bool:
                 _icon = "✅" if _detail['status'] == 'applied' else "❌"
                 _reason = _detail.get('reason', '')
                 print(f"  {_icon} {os.path.basename(_detail['file'])}{(' - ' + _reason) if _reason else ''}")
-            # 自动重启验证
-            if _patch_result["applied"] > 0:
+            # 自动重启验证（N-3①②：验证不可判定时抑制整机自重启）
+            if _patch_result.get("applied", 0) > 0 and not _patch_result.get("restart_allowed", True):
+                _logger.info("[N-3①②] 已应用补丁但验证不可判定，抑制整机自重启（待人工/活体核验）")
+            elif _patch_result.get("applied", 0) > 0:
                 # ★v23.0新增：发送补丁应用通知（复用桥接器连接）
                 if hasattr(framework, 'wecom_bridge') and framework.wecom_bridge:
                     _patch_files = [os.path.basename(d['file']) for d in _patch_result['details'] if d.get('status') == 'applied']
