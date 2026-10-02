@@ -1880,7 +1880,14 @@ class PulseInnerWorldSupportMixin:
             _min_answer_len = 20
             _min_confidence = 0.8
 
-        if answer and len(answer) >= _min_answer_len and confidence >= _min_confidence:
+        # ★T-对话-4（157批）："本轮是否入池"DEBUG 计数（门槛按 method 分档已在上方外置配置）
+        _pooled = bool(answer) and len(answer) >= _min_answer_len and confidence >= _min_confidence
+        self._log(
+            LogLevel.DEBUG,
+            f"[T-对话-4] 本轮是否入池={_pooled} "
+            f"(len={len(answer or '')}/{_min_answer_len}, conf={confidence:.2f}/{_min_confidence}, method={method})",
+        )
+        if _pooled:
             self._record_conversation(question, answer, user_name, method, confidence)
         # ===== 【v15.3新增】推理成功后自动沉淀经验 =====
         if confidence >= 0.5 and method.startswith("deriver_"):

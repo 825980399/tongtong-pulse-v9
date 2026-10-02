@@ -10370,7 +10370,9 @@ class PulseInnerWorld(
                 if _awareness is None:
                     # 兜底：构建简易版用户类型判断
                     _user_name = memory_entry.get("user_name", "")
-                    if _user_name in ("小林", "路灯"):
+                    # ★T-对话-4（157批）：原硬编码名单 ("小林","路灯") 收口为单点判定，
+                    #   待与 nucleus/mnemosyne/ContextSnapshot._get_relationship_type 统一来源判定。
+                    if self._is_core_user_fallback(_user_name):
                         self._context_snapshot.append_conversation_memory(
                             memory_entry, None
                         )
@@ -10381,6 +10383,12 @@ class PulseInnerWorld(
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         # ===== 实时持久化结束 =====
+    def _is_core_user_fallback(self, user_name: str) -> bool:
+        """★T-对话-4（157批）：兜底场景的核心用户判定（单点来源）。
+        当前为硬编码名单，后续应与 ContextSnapshot._get_relationship_type 统一，
+        避免多处维护同一份"核心用户/关系类型"真相。"""
+        return user_name in ("小林", "路灯")
+
     def get_organized_memories(self, user_name: str | None = None, limit: int = 10) -> dict[str, Any]:
         """
         ★v17.0杠杆支点：对话记忆智能组织。
