@@ -1,8 +1,8 @@
 {
   "generated_at_head": "c330246",
-  "generated_at": "2026-10-01T16:18:13",
-  "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。",
-  "collect_baseline": 4456,
+  "generated_at": "2026-10-02T11:31:23",
+  "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。",
+  "collect_baseline": 4471,
   "known_fail": [
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_analyze_returns_nodes_edges_stats",
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_config_default_enabled",
@@ -128,13 +128,13 @@
     "tests/test_write_guard_m51.py::TestWriterKind::test_01_pytest_env_is_test_env"
   ],
   "env_fingerprint": {
-    "head": "c330246",
+    "head": "84f1232",
     "git_status_short_lines": 3,
     "staged_count": 0,
     "pythonioencoding": "utf-8",
     "live_framework_pid": "NONE(框架停机)",
     "pytest_plugins": [],
-    "note": "B156-3 T-A05/T-A08/T-A09 读码片共 19 红节点全部转绿（替身过时：生产 KAL 集成/治理字段门禁/增量日志熔断/降频单例/假能力标记守卫/并发精确递减锁属性均既定正确，测试锚/替身/fixture/契约未同步）；head 重锚 c330246；known_fail 134→115（移除 T-A05 8 + T-A08 1 + T-A09 10；lazy_snapshot_m9 6 条他会话占用暂缓保留）"
+    "note": "B156-3 T-A05/T-A08/T-A09 读码片共 19 红节点全部转绿（替身过时：生产 KAL 集成/治理字段门禁/增量日志熔断/降频单例/假能力标记守卫/并发精确递减锁属性均既定正确，测试锚/替身/fixture/契约未同步）；head 重锚 c330246；known_fail 134→115（移除 T-A05 8 + T-A08 1 + T-A09 10；lazy_snapshot_m9 6 条他会话占用暂缓保留）。B156-5 collect re-anchor 4471（新增 15 测试节点），基线锚点 HEAD=84f1232（B156-5 票④补提交点）。"
   },
   "transparency": {
     "isolation_failed_raw": [
