@@ -187,6 +187,14 @@ class PulseNode:
                 self.value = str(self.value)        
             # 初始校验和
             self._update_checksum()
+            # ★157-D C-3：接 assess_trust 单一查询边进节点写入路径（最小可接面，Q157-3 已裁）
+            #   新节点入库即按来源/URL/内容计算可信度，不再恒为 50.0 默认；
+            #   还原路径(_restore)保留快照 trust_score，不在此覆盖。
+            try:
+                self.trust_score = self.assess_trust()
+            except Exception as _e:
+                silent_exc(_e, where="nucleus.mnemosyne.PulseNode::__init__ trust_score L189")
+                self.trust_score = 50.0
         else:
             self.checksum = ""  # from_dict 会从快照恢复
     

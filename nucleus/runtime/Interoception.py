@@ -9,6 +9,11 @@ Interoception.py —— 内感受
 职责: 框架内部状态感知与内省
 机制: 基于Interoception类实现，包含10个核心方法
 定位: 自省感知层
+
+⚠️ @deprecated (157-D C-3 自我感知三件 / Q157-3 已裁):
+    本模块为「自我感知三件套」之一，与 SelfModel / OrganCoordinator 同属冗余未接线能力——
+    全仓无任何外部 import / 实例化（仅模块内自引用单例）。决策：③ 弃用标注封存，不删除。
+    复活须走专门批（自我感知整体通电方案），禁止新代码 import 本模块。
 """
 
 from __future__ import annotations
