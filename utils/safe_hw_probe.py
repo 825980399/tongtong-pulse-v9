@@ -1,5 +1,4 @@
-from config import EXTERNAL_CALL_TIMEOUTS
-"""safe_hw_probe —— 安全硬件探测（v9.5 · 隔离子进程版）
+"""safe_hw_probe —— 安全硬件探测（v10 · 隔离子进程版）
 
 版本: v10 PulseNet
 设计: 路灯、小林、星轨
@@ -25,7 +24,7 @@ def _run_isolated(script: str, timeout: float = 6.0):
             stderr=subprocess.DEVNULL,
             text=True,
             encoding="utf-8", errors="replace",
-        timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_short"], )
+        )
     except Exception as e:
         silent_exc(e, where="safe_hw_probe._run_isolated:spawn")
         return None
