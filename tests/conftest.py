@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from nucleus.semantic.VectorStore import VectorStore
+from nucleus._silent_except import silent_exc
 
 
 class FakeEncoder:
@@ -71,6 +72,51 @@ def store_builder():
     return build_store
 
 
+def _mute_project_logs_handlers():
+    """★B156-6：给指向项目 logs/ 的 FileHandler 挂丢弃过滤器，返回 [(handler, filter)]。"""
+    import logging
+
+    _muted = []
+    try:
+        _logs_root = os.path.abspath(os.path.join(ROOT, "logs")).replace(
+            "\\", "/").lower()
+
+        def _is_logs_handler(h):
+            _bf = getattr(h, "baseFilename", None)
+            if not _bf:
+                return False
+            return os.path.abspath(_bf).replace("\\", "/").lower().startswith(
+                _logs_root + "/")
+
+        def _drop(_record):
+            return False
+
+        _loggers = [logging.getLogger()]
+        try:
+            _loggers += [logging.getLogger(_n)
+                         for _n in logging.root.manager.loggerDict]
+        except Exception as _e:
+            silent_exc(_e, where="tests.conftest._mute_project_logs_handlers:loggerDict")
+        for _lg in _loggers:
+            for _h in list(getattr(_lg, "handlers", []) or []):
+                if _is_logs_handler(_h):
+                    _h.addFilter(_drop)
+                    _muted.append((_h, _drop))
+    except Exception as _e:
+        silent_exc(_e, where="tests.conftest._mute_project_logs_handlers")
+        _muted = []
+    return _muted
+
+
+def _restore_muted_logs_handlers(muted):
+    """★B156-6：搜肉隔离期挂上的丢弃过滤器。"""
+    for _h, _f in (muted or []):
+        try:
+            _h.removeFilter(_f)
+        except Exception as _e:
+            silent_exc(_e, where="tests.conftest._restore_muted_logs_handlers")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _isolate_project_log_files():
     """★主线第22批 T3/P2-121：会话级静音「写往项目 logs/ 目录」的 FileHandler。
@@ -84,18 +130,13 @@ def _isolate_project_log_files():
     故 caplog / assertLogs 等测试内捕获能力完全不受影响。
     任何异常都不阻塞测试。
     """
-    _muted = []
-    try:
-        from tmp.test_log_isolation import mute_project_file_handlers
-        _muted = mute_project_file_handlers()
-    except Exception:
-        _muted = []
+    # ★B156-6 修正：原实现依赖 gitignored 的 tmp.test_log_isolation
+    #   （未入库 → 静默降级为 no-op，logs/ 隔离从未真正生效）。
+    #   改为内联实现，去除对 gitignored 模块的依赖
+    #   （符合前置分析 T-A03「改为测试自建 fixture」结论）。
+    _muted = _mute_project_logs_handlers()
     yield
-    try:
-        from tmp.test_log_isolation import restore_muted_handlers
-        restore_muted_handlers(_muted)
-    except Exception:
-        pass
+    _restore_muted_logs_handlers(_muted)
 
 
 # ============================================================ 框架运行期守卫（主线第57批 T1 / P2-391）
