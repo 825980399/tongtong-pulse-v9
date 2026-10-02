@@ -244,6 +244,23 @@ DigitalLifeSelfPortrait = {
 
 ### 4.2 四阶段实施计划
 
+#### 阶段 0：前置遥测件（遥测底座 · B156-7 标注）
+
+> ★B156-7（2026-10-02 路灯标注）：在阶段一之前，须先打通"**遥测三缺**"底座，
+> 否则后续阶段的数据都不可信。当前实测三真缺如下：
+
+| 真缺 | 现状 | 决策 |
+|------|------|------|
+| ① 开关 False | `ENABLE_PHASE18_SIGNALS = False`（config.py:417），`nucleus.telemetry.phase18_signals` 采集器存在但默认**不采集** | 维持 False，待 ② 消费方通电后随 PHASE18 阶段二评估开启 |
+| ② 零消费方 | `Phase18Signals.snapshot()`（nucleus/telemetry/phase18_signals.py:181）存在，但全仓**无调用方**（零消费） | 已在 phase18_signals 预留 `register_phase18_snapshot_consumer` 接口（B156-7 加），PHASE18 阶段二消费方接入点待批 |
+| ③ 降频链路无输入 | 降频闭环（B156-5）已通电，但其"输入源"链路无遥测喂入，无法验证真实降频是否发生 | 待 ② 消费方通电后，由 snapshot() 喂入降频指标形成闭环 |
+
+**目标**：预埋 PHASE18 信号采集管道（写-path 已接：QICA / IntentChannels / 进化 / 知识质量 / 字段背压 等 `record_*` 均已在位），仅差"开关通电 + 消费方接入"两步。
+**预期成果**：开关通电后，phase18_signals 开始累积真实运行分布；阶段二消费方可通过 `snapshot()` 读取。
+**依赖**：无（纯前置底座，不阻塞阶段一）。
+
+---
+
 #### 阶段一：认知觉醒基础（第1-2周）⭐ 最高优先级
 
 **目标**：让框架能发现"做得不对"的问题，不依赖器官关联图谱。
@@ -424,6 +441,17 @@ TimeCore时间中枢
     ↓ 违规→通知自主进化优先处理
 ```
 
+### 5.5 消费方接口待办（B156-7 标注 · 对应三真缺②零消费方）
+
+> 当前 `Phase18Signals.snapshot()`（nucleus/telemetry/phase18_signals.py:181）**仅定义、零消费方**。
+> 下列待办为 PHASE18 阶段二前置，须在开关通电前闭合：
+
+| 接口 | 状态 | 待办 |
+|------|------|------|
+| `register_phase18_snapshot_consumer(cb)` | 已预留（B156-7） | 阶段二消费方（器官关联图谱 / 自我认知画像）注册此回调读取 `snapshot()` |
+| 消费方读频 | 待定 | 明确消费方轮询 / 订阅 `snapshot()` 的频率与触发条件 |
+| 零消费方告警 | 待定 | 开关通电后若 `snapshot()` 仍零消费方，应产生"有产出无消费"告警（复用产出-消费配对器） |
+
 ---
 
 ## 六、灰度开关设计
@@ -467,6 +495,13 @@ ENABLE_THREE_FACTOR_LEARNING = False          # 三因子学习规则
 ENABLE_SLEEP_CONSOLIDATION = False            # 睡眠巩固机制
 ENABLE_HDC_CONCEPT_LAYER = False              # HDC概念结构层（探索）
 ```
+
+> #### ★B156-7 补充（2026-10-02 路灯标注 · 对应三真缺①开关 False）
+> 上述 19 开关清单**漏列 `ENABLE_PHASE18_SIGNALS`**——它不是设计壳，是**真实存在且为 False** 的开关，须单列避免误并入 19 壳账：
+> - **真实存在**：`config.py:417 ENABLE_PHASE18_SIGNALS = False`；采集器 `nucleus/telemetry/phase18_signals.py` 存在且生产热路径已接线 `record_*`（6 处 / 4 文件：`PatchAutoApprover.py:470-473`、`InfoField.py:2013-2017`、`IntentChannels.py:968`、`QICA.py:517`）。
+> - **默认关语义**：开关 False 时所有 `record_*` 立即 no-op（零开销、零副作用）；开关通电后开始累积真实运行分布。
+> - **决策**：维持 `False`。待三真缺②（零消费方）由 PHASE18 阶段二消费方通电、`register_phase18_snapshot_consumer`（B156-7 已在 `phase18_signals.py` 预留）接入后，随阶段二评估开启。
+> - **与 19 壳区分**：19 壳是"代码里不存在的开关"；`ENABLE_PHASE18_SIGNALS` 是"代码存在但未通电的真实开关"，属"遥测底座"而非 PHASE18 身体/认知/灵感三层体系。
 
 ### 6.2 开启顺序
 

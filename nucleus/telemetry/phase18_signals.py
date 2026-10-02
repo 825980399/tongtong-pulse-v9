@@ -18,6 +18,7 @@ import time
 from collections import defaultdict, deque
 from typing import Any, Optional
 
+from nucleus._silent_except import silent_exc
 
 
 # 每类信号最近事件上限，防止长生命周期进程内存膨胀
@@ -39,6 +40,8 @@ class Phase18Signals:
         self._l3_events: deque = deque(maxlen=_MAX_EVENTS)
         self._evolution_events: deque = deque(maxlen=_MAX_EVENTS)
         self._qica_events: deque = deque(maxlen=_MAX_EVENTS)
+        # B156-7：snapshot() 消费方注册表（PHASE18 阶段二前置接入点）
+        self._snapshot_consumers: list = []
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -210,6 +213,48 @@ class Phase18Signals:
             self._evolution_events.clear()
             self._qica_events.clear()
 
+    # ------------------------------------------------------------------
+    # 快照消费方注册（PHASE18 阶段二前置 · B156-7 接入点）
+    # ------------------------------------------------------------------
+    def register_snapshot_consumer(self, callback: Any) -> None:
+        """注册一个 ``snapshot()`` 消费方回调。
+
+        callback 签名：``callback(snapshot: dict) -> None``。
+        PHASE18 阶段二消费方（器官关联图谱 / 自我认知画像）通过此接口订阅
+        ``snapshot()`` 产出。当前无自动派发，消费方需显式调用
+        ``dispatch_snapshot()`` 或自行轮询 ``snapshot()``。
+
+        零消费方时采集器行为不变（record_* 仍受开关门控）。
+        """
+        if callback is None:
+            return
+        with self._lock:
+            if callback not in self._snapshot_consumers:
+                self._snapshot_consumers.append(callback)
+
+    @property
+    def snapshot_consumer_count(self) -> int:
+        """已注册消费方数量（供测试与零消费方告警判定）。"""
+        return len(self._snapshot_consumers)
+
+    def dispatch_snapshot(self) -> int:
+        """将当前 ``snapshot()`` 派发给所有已注册消费方，返回成功派发数。
+
+        仅在显式调用时触发，不改变既有采集/快照语义（默认零副作用）。
+        单个消费方异常不污染采集器，仅静默吞掉。
+        """
+        snap = self.snapshot()
+        sent = 0
+        with self._lock:
+            consumers = list(self._snapshot_consumers)
+        for cb in consumers:
+            try:
+                cb(snap)
+                sent += 1
+            except Exception as _e:  # 消费方异常不应影响采集器
+                silent_exc(_e, where="nucleus.telemetry.phase18_signals.dispatch_snapshot")
+        return sent
+
 
 _phase18_signals: Optional[Phase18Signals] = None
 
@@ -225,3 +270,12 @@ def get_phase18_signals() -> Phase18Signals:
         except Exception:
             _phase18_signals.enable(False)
     return _phase18_signals
+
+
+def register_phase18_snapshot_consumer(callback: Any) -> None:
+    """模块级便捷入口：向进程级单例注册 ``snapshot()`` 消费方（B156-7）。
+
+    PHASE18 阶段二消费方（器官关联图谱 / 自我认知画像）调用本函数订阅采集快照。
+    注册表随单例进程级存活；零消费方时采集器行为不变。
+    """
+    get_phase18_signals().register_snapshot_consumer(callback)
