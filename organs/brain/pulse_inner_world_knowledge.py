@@ -373,7 +373,12 @@ class PulseInnerWorldKnowledgeMixin:
                         question, unique_results[:3]  # 最多融合3个
                     )
                     if fused_answer:
-                        return fused_answer
+                        # ★T-对话-3（157批）：知识类回答加来源标注（节点 id + 信任分），
+                        #   经 correlation_id 同路回传，避免与自主生成内容混淆；同段不重复复用。
+                        _top = unique_results[0]["node"]
+                        _src_ann = (f"据知识库（节点 {_top.get('node_id', '?')}"
+                                    f"·信任 {float(_top.get('trust_score', 50.0)):.0f}）")
+                        return f"{_src_ann}：{fused_answer}" if not fused_answer.startswith("据知识库") else fused_answer
 
                 elif len(unique_results) == 1:
                     # 单节点 → 尝试寻找相关知识补充，形成更完整的回答
@@ -431,7 +436,10 @@ class PulseInnerWorldKnowledgeMixin:
                                          f"检索质量不足: 信任={_retrieved_trust:.0f}")
                                 return None  # 信任太低，走诚实兜底
                             # ===== 评估结束 =====
-                            return cleaned_value
+                            # ★T-对话-3（157批）：知识类回答加来源标注（节点 id + 信任分）
+                            _src_ann = (f"据知识库（节点 {best_node.get('node_id', '?')}"
+                                        f"·信任 {float(best_node.get('trust_score', 50.0)):.0f}）")
+                            return f"{_src_ann}：{cleaned_value}" if not cleaned_value.startswith("据知识库") else cleaned_value
 
         # 兜底：关键词匹配（需要至少匹配2个关键词，且关键词长度≥2，避免单字匹配）
         best_node = None
