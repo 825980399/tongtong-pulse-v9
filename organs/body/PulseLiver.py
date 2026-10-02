@@ -496,9 +496,15 @@ class PulseLiver(BasePulseOrgan):
             _warned = True
         if _warned:
             self._res_warn_count += 1
+        try:
+            _uptime_s = time.time() - _proc.create_time()
+        except Exception as _e:
+            silent_exc(_e, where="organs.body.PulseLiver::_sample_resource_usage L499")
+            _uptime_s = None
+        _uptime_str = f"进程启动≈{_uptime_s:.0f}s" if _uptime_s is not None else "进程启动时刻不可用"
         self._log(LogLevel.DEBUG,
                   f"[T-107a] 资源采样: RSS={_rss/1024**3:.2f}GB 句柄={_handles} "
-                  f"打开文件={_open_files} 线程={_threads} 基线增长={_growth/1024**3:.2f}GB")
+                  f"打开文件={_open_files} 线程={_threads} 基线增长={_growth/1024**3:.2f}GB {_uptime_str}")
 
     def _resource_stats(self) -> dict:
         """暴露资源看门狗最新快照（供 get_stats / 5051 面板消费）。"""

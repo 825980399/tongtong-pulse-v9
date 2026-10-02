@@ -455,7 +455,7 @@ class PulseHeart(BasePulseOrgan):
             if self._beat_count <= 3 or self._beat_count % 10 == 0:
                 _beat_interval = float(getattr(self, "current_interval", 30.0) or 30.0)
                 self._log(LogLevel.DEBUG,
-                          f"心跳节律: 第{self._beat_count}拍, 间隔={_beat_interval:.2f}s, "
+                          f"心跳节律: [pid={os.getpid()}] 第{self._beat_count}拍, 间隔={_beat_interval:.2f}s, "
                           f"心率≈{60.0 / max(_beat_interval, 0.1):.1f}次/分")
 
         except Exception as e:
