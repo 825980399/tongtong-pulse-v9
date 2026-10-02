@@ -110,6 +110,7 @@ class SemanticCache:
         # 统计
         self._stat = {"observed": 0, "hits": 0, "misses": 0,
                       "dropped": 0, "errors": 0, "writes": 0}
+        self._dirty: set = set()  # ★B156-10：需回写磁盘的条目 hash 集合
         if auto_start and self.enabled():
             self._ensure_worker()
 
@@ -258,6 +259,32 @@ class SemanticCache:
             self._stat["errors"] += 1
             return False
 
+    def flush(self) -> int:
+        """将内存中已变更的条目（如累加的 ``hit_count``）回写磁盘 jsonl。
+
+        ★B156-10 修正：原实现 ``hit_count`` 仅在内存累加、**从不落盘**，且 ``add``
+        会新建 ``CacheEntry(hit_count=0)`` 覆盖既有计数，导致「命中口径」跨写入/重启
+        后失真（死置）。本方法按当前 ``_entries`` 全量重写 jsonl（按 hash 去重），
+        使 ``hit_count`` 真正落盘。仅由守护线程（``_handle`` 后）与 ``close()`` 触发，
+        主推理流程零阻塞。
+        """
+        if not self._dirty and not self._entries:
+            return 0
+        try:
+            _d = self.base_dir()
+            if not os.path.isdir(_d):
+                os.makedirs(_d, exist_ok=True)
+            _fp = self.cache_file()
+            with self._lock:
+                _rows = [e.to_dict() for e in self._entries.values()]
+                self._dirty.clear()
+            with open(_fp, "w", encoding="utf-8") as f:
+                f.writelines(json.dumps(_r, ensure_ascii=False, default=str) + "\n" for _r in _rows)
+            return len(_rows)
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::flush")
+            return 0
+
     # ------------------------------------------------------------------
     # 核心：查询 / 写入
     # ------------------------------------------------------------------
@@ -313,6 +340,7 @@ class SemanticCache:
         if _best_sim >= _thr:
             _best.hit_count += 1
             self._stat["hits"] += 1
+            self._dirty.add(_best.hash)  # ★B156-10：标记待回写
             _out["hit"] = True
         else:
             self._stat["misses"] += 1
@@ -331,10 +359,14 @@ class SemanticCache:
         _v = vec if vec is not None else self._encode_one(prompt)
         if not _v:
             return False
-        _e = CacheEntry(hash=_h, prompt=self._truncate(prompt),
-                        response=self._truncate(response), ts=time.time(),
-                        vec=_v)
         with self._lock:
+            # ★B156-10：同 hash 已存在时保留既有 hit_count（避免 _handle 流程里
+            # lookup 累加的命中数被新建 CacheEntry 的 0 值覆盖，导致「命中口径」失真）
+            _existing = self._entries.get(_h)
+            _keep_hits = _existing.hit_count if _existing else 0
+            _e = CacheEntry(hash=_h, prompt=self._truncate(prompt),
+                            response=self._truncate(response), ts=time.time(),
+                            hit_count=_keep_hits, vec=_v)
             self._entries[_h] = _e
             self._evict()
         return self._append_line(_e)
@@ -394,6 +426,7 @@ class SemanticCache:
             self._stat["observed"] += 1
             self.lookup(item["prompt"])          # 只更新命中统计，返回值为统计
             self.add(item["prompt"], item.get("response", ""))
+            self.flush()                         # ★B156-10：hit_count 落盘回写
         except Exception:
             self._stat["errors"] += 1
 
@@ -418,6 +451,10 @@ class SemanticCache:
     def close(self, timeout: float = 3.0) -> None:
         """停止后台线程（测试收尾用）。"""
         self._stop_flag = True
+        try:
+            self.flush()  # ★B156-10：退出前把内存命中数落盘
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::close")
         _w = self._worker
         if _w is not None and _w.is_alive():
             _w.join(timeout=timeout)
