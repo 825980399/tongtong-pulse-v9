@@ -470,6 +470,7 @@ class PulseController(BasePulseOrgan):
                 for elem in self._headless_page.query_selector_all(sel):
                     _process_element(elem, is_primary=True)
             except Exception:
+                silent_exc(where="organs/motor/PulseController.py:472")
                 continue
 
         # 2. 处理辅助选择器
@@ -478,6 +479,7 @@ class PulseController(BasePulseOrgan):
                 for elem in self._headless_page.query_selector_all(sel):
                     _process_element(elem, is_primary=False)
             except Exception:
+                silent_exc(where="organs/motor/PulseController.py:480")
                 continue
 
         # 按得分排序（核心结果得分均为1.0，辅助结果可能更高或更低）
@@ -1960,6 +1962,7 @@ class PulseController(BasePulseOrgan):
                 _stats = self._search_engine_stats.get(engine_host, {"ema_rate": 0.5})
                 _reachable.append((engine_template, engine_host, _stats.get("ema_rate", 0.5)))
             except Exception:
+                silent_exc(where="organs/motor/PulseController.py:1962")
                 continue
         if _reachable:
             # 按历史成功率降序排序，选成功率最高的
@@ -3240,6 +3243,7 @@ class PulseController(BasePulseOrgan):
                 self._log(LogLevel.DEBUG, f"网络检测: {host} 可达，判定为国内网络")
                 return True
             except Exception:
+                silent_exc(where="organs/motor/PulseController.py:3242")
                 continue
 
         self._log(LogLevel.DEBUG, "国内网络不可达，使用国际搜索引擎")

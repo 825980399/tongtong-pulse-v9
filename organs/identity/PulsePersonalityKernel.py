@@ -217,6 +217,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
                 self.node_pool.add(_node)
                 _added += 1
             except Exception:
+                silent_exc(where="organs/identity/PulsePersonalityKernel.py:219")
                 continue
         return _added
 

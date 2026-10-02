@@ -320,6 +320,7 @@ class ChatService:
                 try:
                     user_input = input("💬 你: ").strip()
                 except EOFError:
+                    silent_exc(where="functions/chat/chat_service.py:322")
                     break
 
                 if not user_input:
