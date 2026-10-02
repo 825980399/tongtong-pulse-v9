@@ -261,15 +261,6 @@ class PulseStomach(BasePulseOrgan):
     # ========== 脉冲入口 ==========
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
-        # ★T3: 自适应降频接线——胃模块知识消化
-        try:
-            from nucleus.runtime_metrics import get_adaptive_controller
-            _ctrl = get_adaptive_controller()
-            _ctrl.register("stomach_digest", 30)
-            if not _ctrl.should_execute("stomach_digest"):
-                return None
-        except Exception as e:
-            self._log(LogLevel.WARNING, f"胃自适应降频注册失败(降级为不降频，保持常开): {type(e).__name__}: {e}")
         # ★第54批 T5（P2-371-2）：pulse / payload 为 None 时原会抛 AttributeError → 安全降级。
         try:
             import config as _stomach_cfg
@@ -280,6 +271,18 @@ class PulseStomach(BasePulseOrgan):
         payload = pulse.get("payload", {}) if isinstance(pulse, dict) else {}
         if getattr(_stomach_cfg, "ENABLE_STOMACH_NONE_GUARD", True) and payload is None:
             payload = {}
+
+        # ★T3: 自适应降频接线——仅 digest 类事件武装 30s 节流；
+        #      非 digest 事件（system.status.request / emotion / review）不抢占节流窗口，避免 digest 静默丢弃
+        if event_type in (DigestEvent.KNOWLEDGE, KnowledgeEvent.RAW):
+            try:
+                from nucleus.runtime_metrics import get_adaptive_controller
+                _ctrl = get_adaptive_controller()
+                _ctrl.register("stomach_digest", 30)
+                if not _ctrl.should_execute("stomach_digest"):
+                    return None
+            except Exception as e:
+                self._log(LogLevel.WARNING, f"胃自适应降频注册失败(降级为不降频，保持常开): {type(e).__name__}: {e}")
 
         if event_type == DigestEvent.KNOWLEDGE:
             return self._on_digest_knowledge(payload)
