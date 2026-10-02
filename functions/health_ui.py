@@ -845,6 +845,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self._serve_knowledge_graph_data()
             elif self.path == '/params/data':
                 self._serve_params_data()
+            elif self.path == '/reports/alerts':
+                self._serve_jsonl('reports', 'alerts.jsonl')
+            elif self.path == '/reports/todo':
+                self._serve_jsonl('reports', 'todo.jsonl')
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -950,6 +954,45 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.end_headers()
             except Exception as e:
                 silent_exc(e, where="functions.health_ui::_serve_json_file L951")
+
+    def _serve_jsonl(self, subdir: str, filename: str):
+        """★157 T-报告契约-3：提供 data/{subdir}/{filename} JSONL 的只读端点。
+
+        reports 消费者（nucleus/reporting/consumers.py）把 P0 告警 / 清洗建议待办 /
+        自认知跟进待办写入 data/reports/alerts.jsonl、data/reports/todo.jsonl，
+        但此前全仓无读取方（写入即二阶断点）。本端点把 JSONL 逐行解析为 JSON 数组
+        返回，使行为建议可经健康面板只读查阅。文件缺失时返回 []。
+        """
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _path = os.path.join(_root, 'data', subdir, filename)
+        try:
+            if os.path.exists(_path):
+                _rows = []
+                with open(_path, encoding='utf-8') as f:
+                    for _line in f:
+                        _line = _line.strip()
+                        if not _line:
+                            continue
+                        try:
+                            _rows.append(json.loads(_line))
+                        except Exception as e:
+                            silent_exc(e, where="functions.health_ui::_serve_jsonl Lparse")
+                _body = json.dumps(_rows, ensure_ascii=False).encode('utf-8')
+            else:
+                _body = b'[]'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(_body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            silent_exc(e, where="functions.health_ui::_serve_jsonl Lconn")
+        except Exception:
+            try:
+                self.send_response(500)
+                self.end_headers()
+            except Exception as e:
+                silent_exc(e, where="functions.health_ui::_serve_jsonl L500")
 
     def _serve_runtime_metrics(self):
         """提供真实运行时指标（★FIX: 反映框架真实运行状态，替代硬编码假数据）"""

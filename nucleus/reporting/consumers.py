@@ -26,6 +26,9 @@ from nucleus._silent_except import silent_exc
 ALERT_FILE = os.path.join("data", "reports", "alerts.jsonl")
 #: 待办落盘位置
 TODO_FILE = os.path.join("data", "reports", "todo.jsonl")
+#: ★157 T-报告契约-3：下游只读查询端点（消除「写入后全仓零读取」二阶断点）——
+#:   functions/health_ui.py 的 /reports/alerts、/reports/todo 把上述 JSONL 解析为
+#:   JSON 数组返回，使 258 条行为建议可经健康面板只读查阅。
 
 #: 污染率告警阈值（第46批实测基线 77.7%）
 POLLUTION_THRESHOLD = 0.50
