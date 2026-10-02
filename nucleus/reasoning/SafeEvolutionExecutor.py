@@ -340,6 +340,14 @@ class SafeEvolutionExecutor:
         from nucleus.reasoning.PatchManager import PatchManager
         self._patch_manager = PatchManager(self._project_root)
 
+        # ★第157批 N-2：生产启动即加载冷却落盘（闭环「冷却落盘→重启加载」）
+        #   修复 cooldown.json 只写不读 / 棘轮每轮归零 / [指纹咨询硬闸] 全窗 0 次。
+        #   活体验收（cooldown.json 轮次>0、硬闸可触发）待小林协调核验（D5 停框架）。
+        try:
+            self._m114a_load_cooldown()
+        except Exception as _n2e:
+            _module_logger.debug(f"[冷却落盘] 启动加载异常(已忽略): {type(_n2e).__name__}: {_n2e}")
+
     # ===== ★PHASE12-P1-1：进化参数外置读取（配置化优先）=====
     @staticmethod
     def _read_evolution_config_int(key: str, default: int,
