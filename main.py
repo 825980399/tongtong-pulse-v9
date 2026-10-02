@@ -1242,6 +1242,23 @@ class PulseFramework:
                 f"软接线={_vstats.get('soft_wiring_count', '?')} "
                 f"错误={len(_verrs)} 警告={len(_vwarns)}"
             )
+            # ★C-7(b) 声明-实例差集（等价校验）：load_organs 声明集 vs 实际装配器官
+            #   活体验收：重启后日志出现「[C-7b 声明-实例差集]」行（待小林协调核验，D5 停框架）
+            try:
+                _declared_names = {getattr(_m, "name", None) for _m in (metas or [])}
+                _declared_names.discard(None)
+                _wired_names = set(getattr(self, "organs", {}) or {})
+                _missing = sorted(_declared_names - _wired_names)
+                _extra = sorted(_wired_names - _declared_names)
+                if _missing or _extra:
+                    self._logger.warning(
+                        f"[装配自检][C-7b 声明-实例差集] 声明={len(_declared_names)} "
+                        f"装配={len(_wired_names)} 缺={_missing[:10]} 多={_extra[:10]}")
+                else:
+                    self._logger.info(
+                        f"[装配自检][C-7b 声明-实例差集] 一致({len(_declared_names)}个)")
+            except Exception as _c7be:
+                self._logger.debug(f"[装配自检][C-7b] 差集计算跳过: {_c7be}")
         except Exception as _ve:
             self._logger.debug(f"[装配自检] 跳过（校验器异常，不影响启动）: {_ve}")
 
