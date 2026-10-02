@@ -621,9 +621,9 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
                       snapshot_saving: bool = False) -> str:
     """★T4：评估系统负载等级 -> LOW / MEDIUM / HIGH / CRITICAL。
     各维度取最高等级（保守优先）：任一维度告急即整体升级。"""
-    _med = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_MEDIUM", 500)
-    _high = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_HIGH", 1500)
-    _crit = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_CRITICAL", 3000)
+    _med = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_MEDIUM", 100)
+    _high = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_HIGH", 200)
+    _crit = _adaptive_threshold("QUEUE_DEPTH_THRESHOLD_CRITICAL", 300)
     _level = "LOW"
 
     if queue_depth is not None:

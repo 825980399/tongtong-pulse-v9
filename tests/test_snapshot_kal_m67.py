@@ -363,9 +363,11 @@ class _FakePool:
 class TestAdaptiveFrequency(unittest.TestCase):
     def test_41_load_levels(self):
         """负载评估：四个等级边界正确。"""
-        self.assertEqual(_rm.assess_load_level(queue_depth=100), "LOW")
-        self.assertEqual(_rm.assess_load_level(queue_depth=800), "MEDIUM")
-        self.assertEqual(_rm.assess_load_level(queue_depth=2000), "HIGH")
+        self.assertEqual(_rm.assess_load_level(queue_depth=99), "LOW")
+        self.assertEqual(_rm.assess_load_level(queue_depth=100), "MEDIUM")
+        self.assertEqual(_rm.assess_load_level(queue_depth=199), "MEDIUM")
+        self.assertEqual(_rm.assess_load_level(queue_depth=200), "HIGH")
+        self.assertEqual(_rm.assess_load_level(queue_depth=300), "CRITICAL")
         self.assertEqual(_rm.assess_load_level(queue_depth=4000), "CRITICAL")
 
     def test_42_cpu_and_snapshot(self):

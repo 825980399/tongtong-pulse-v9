@@ -4765,9 +4765,13 @@ KAL_CACHE_SIZE = 10000
 # ★T4/P1：队列深度自适应降频。关键操作（对话/心跳/快照保存）走白名单，不受降频影响。
 #   ★T0偏差：实测 L3 队列 0~52/300，任务书「2000+」前提不成立；此处仍实现为防御性能力。
 ENABLE_ADAPTIVE_FREQUENCY = True
-QUEUE_DEPTH_THRESHOLD_MEDIUM = 500
-QUEUE_DEPTH_THRESHOLD_HIGH = 1500
-QUEUE_DEPTH_THRESHOLD_CRITICAL = 3000
+# ★B156-5 票②：阈值按 L3 物理上限（软 100 / 硬 300）重标。
+#   原 500/1500/3000 远超队列真实量级（实测 L3 0~52/300、整夜运行队列 max 72），
+#   导致 assess_load_level 永不达 MEDIUM+，降频闭环断链。重标后可达且锚定 L3 上限：
+#   MEDIUM=100（软上限压力）/ HIGH=200 / CRITICAL=300（硬上限→暂停非关键操作）。
+QUEUE_DEPTH_THRESHOLD_MEDIUM = 100
+QUEUE_DEPTH_THRESHOLD_HIGH = 200
+QUEUE_DEPTH_THRESHOLD_CRITICAL = 300
 
 # ★T5/P2：WriteGuard 环境强制指定（None=自动判断；"production"/"test" 强制覆盖）。
 WRITE_GUARD_FORCE_ENV = None
