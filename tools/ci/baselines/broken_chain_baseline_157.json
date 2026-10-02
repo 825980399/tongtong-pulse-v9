@@ -1,0 +1,25 @@
+{
+  "generated_at_head": "6478f8b",
+  "generated_at": "2026-10-02T18:30:00",
+  "tool": "tools/dead_code_scan.py --v3",
+  "methodology": "v3（C-8 prep）：方法级零引用 + 孤岛文件(call-ref 判定) + set_* 子集 + 动态判定收窄为真实动态加载信号(修复 v2 ZERO_REF=0 吞掉 register_pipeline 等真断链)。基线以 v3 实测为准，待 156 红数归零后由 check_broken_chain_gate.py 接线并以本文件为红线锚。",
+  "baseline": {
+    "island_files": 1,
+    "entry_zero_ref": 102,
+    "set_zero_ref": 35,
+    "method_zero_ref_all": 435,
+    "module_zero_ref": 25
+  },
+  "front_analysis_estimate": {
+    "island_files": 33,
+    "entry_zero_ref": 40,
+    "set_zero_ref": 28,
+    "note": "烛微第157批前置分析(20260930)用 qualname 解析+主类语义+157-D 封存 28 文件口径估计；与 v3 通用 AST 口径的差异见交付报告。"
+  },
+  "discrepancy_attribution": [
+    "entry_zero_ref 102 vs 40：v3 用全局名计数，跨类同名钩子(on_/handle_/register_/init_/setup/teardown)被合并计数；前置分析用 qualname 解析故更精准。",
+    "set_zero_ref 35 vs 28：差额 7 来自全局名碰撞 + 157-D 封存新增的弃用 set_*。",
+    "island_files 1 vs 33：v3 通用 AST 口径下多数文件主类仍被 import/调用(call-ref>0)故非岛；前置分析孤岛含'主类未实例化'+157-D 封存 28 文件，属人工/语义口径。"
+  ],
+  "red_line_rule": "孤岛文件数 / 零引用入口方法数 / 零引用 set_* 数 均不得较本基线上升；每批交付报告须含'本批引入机制断链增量=0'自证。"
+}
