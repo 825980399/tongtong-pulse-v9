@@ -9,6 +9,13 @@ search_scheduler.py —— 搜索调度器
 职责: 知识搜索任务调度与结果合并
 机制: 基于SearchScheduler类实现，包含10个核心方法
 定位: 搜索管理层
+
+⚠️ @deprecated (157-D C-9 只卸不装 / 第七型断链):
+    本模块整文件不可达——全仓无 `import nucleus.search_scheduler`、无 `SearchScheduler(` 实例化，
+    仅被 main.py 停机注册表以字符串引用。当前仅存在"卸载路径"（shutdown_search_scheduler），
+    无"装载路径"（无工厂函数、无装配接线）。
+    决策（Q157 定案）：③ 弃用标注封存，不补装载路径；若需复活，须待 B156-10 打通联网前置
+    （联网检索）后升①补工厂 + 装载点 + InnerWorld 检索入口接线。禁止新代码 import 本模块。
 """
 
 import threading
@@ -78,6 +85,9 @@ class SearchScheduler:
         
         Returns:
             调度结果，包含status和说明
+
+        ⚠️ 本方法当前不可达（157-D C-9 ③封存）：全仓无调用点；复活须待 B156-10 联网前置后
+        补工厂 + 装载点 + InnerWorld 检索入口接线（升①）。
         """
         self._total_submitted += 1
         
@@ -222,7 +232,10 @@ _search_scheduler_lock = threading.Lock()
 
 
 def shutdown_search_scheduler() -> None:
-    """★P1: 复位 SearchScheduler 单例，满足器官零状态（规则4）。"""
+    """★P1: 复位 SearchScheduler 单例，满足器官零状态（规则4）。
+
+    ⚠️ 本函数是本模块当前唯一的活跃路径（经 main.py 停机注册表字符串引用）。
+    157-D C-9 ③封存：search_scheduler 整文件不可达，仅"卸载"无"装载"；复活见模块 docstring。"""
     global _search_scheduler
     _inst = _search_scheduler
     _search_scheduler = None
