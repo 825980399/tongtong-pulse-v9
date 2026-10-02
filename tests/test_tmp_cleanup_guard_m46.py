@@ -162,14 +162,17 @@ class TestCriticalFilesProtected(unittest.TestCase):
 
 class TestCompatWithM45Guard(unittest.TestCase):
     def test_30_test_isolation_still_present(self):
-        """tmp/test_isolation.py 与 test_log_isolation.py 必须存在（verify 硬依赖）。
-        B156-1 T-A03：二者为 git-ignored 易失辅助模块，缺失时降级 skip（与
-        m18/m19/m22 一致），不阻断全量 pytest 收集；恢复该件后自动回归。"""
+        """157-T-基础-1：verify 硬依赖已迁入受控路径 tools/test_isolation_shim.py（git 跟踪）。
+        B156-1 T-A03：tmp/test_isolation.py / test_log_isolation.py 为 git-ignored 易失辅助模块，
+        缺失时降级 skip（与 m18/m19/m22 一致）；受控件 tools/test_isolation_shim.py 始终存在。"""
+        # 受控硬依赖（git 跟踪，必存在）
+        _shim = os.path.join(_ROOT, "tools", "test_isolation_shim.py")
+        self.assertTrue(os.path.isfile(_shim), "缺少受控隔离件 %s" % _shim)
+        # 历史 tmp/ 易失件：缺失则降级 skip
         for _n in ("test_isolation.py", "test_log_isolation.py"):
             _p = os.path.join(_ROOT, "tmp", _n)
             if not os.path.isfile(_p):
                 self.skipTest("生产 tmp 缺少 %s（git-ignored 易失件）→ 跳过" % _n)
-            self.assertTrue(os.path.isfile(_p), "缺少 %s" % _n)
 
     def test_31_deps_superset_of_m45_guard(self):
         """本判据识别出的受保护文件，应是 m45 守卫所要求集合的超集。"""

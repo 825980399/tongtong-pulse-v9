@@ -52,7 +52,7 @@ _LOW_RISK_RE = re.compile("|".join(_LOW_RISK_LINE_PATTERNS))
 _NUM_TUNING_RE = re.compile(r'[\d.]+|True|False|None')
 
 
-# ★第九批：测试隔离用默认目录（tmp/test_isolation.redirect_all 会重定向到 tmp/test_data）
+# ★第九批：测试隔离用默认目录（tools/test_isolation_shim.redirect_all 会重定向到 ISO_DIR）
 _ISO_BASE_DIR: str | None = None
 
 

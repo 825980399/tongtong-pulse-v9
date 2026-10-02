@@ -37,7 +37,7 @@ from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("PatchAutoApprover")
 
-# 测试隔离：tmp/test_isolation 的 redirect_all 会 patch 本模块的该变量
+# 测试隔离：tools/test_isolation_shim.redirect_all 会 patch 本模块的该变量
 _ISO_BASE_DIR: str | None = None
 
 # ============ 可配置门槛（★不写死，config.py 可热加载覆盖） ============
