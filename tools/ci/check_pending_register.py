@@ -16,6 +16,7 @@
 """
 import argparse
 import csv
+import json
 import os
 import re
 import subprocess
@@ -24,7 +25,41 @@ import sys
 VALID_STATES = {"待裁决", "已裁", "已排期", "已结案", "已撤销", "已裁决待排期"}
 DEFAULT_BATCH = 148
 
+# ★第158批 上-A 第13刀 T-登记册并发防护-1
+# 历史事故：登记册 19 票曾被"还原处置"删除，根因=状态词超白名单后误处置。
+# 本防护在**门禁层**兜底：把上次基线的 ID 集合与当前比对，成批消失即阻断并点名，
+# 杜绝"悄悄少了几票"。legit 删除须显式 `--update-baseline`（有据可查）。
+#: 允许一次性消失的 ID 数上限（超过即阻断）。
+MISSING_ID_LIMIT = 3
+
+
+def _load_baseline() -> dict | None:
+    """读取 ID 基线；不存在或损坏时返回 ``None``（首次运行将自动建立）。"""
+    if not os.path.isfile(BASELINE_PATH):
+        return None
+    try:
+        with open(BASELINE_PATH, "r", encoding="utf-8") as _f:
+            _d = json.load(_f)
+        return _d if isinstance(_d, dict) else None
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="check_pending_register._load_baseline", level="debug")
+        return None
+
+
+def _save_baseline(total: int, ids: list) -> None:
+    """写入 ID 基线（目录缺失时自动创建）。"""
+    try:
+        os.makedirs(os.path.dirname(BASELINE_PATH), exist_ok=True)
+        with open(BASELINE_PATH, "w", encoding="utf-8") as _f:
+            json.dump({"total": total, "ids": sorted(ids)}, _f, ensure_ascii=False, indent=2)
+    except OSError as _e:
+        # ★不得静默：基线写失败需留痕（不阻断校验本身）
+        sys.stderr.write("[登记册] 基线写入失败（不阻断）: %s: %s\n"
+                         % (type(_e).__name__, _e))
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+#: ★并发防护：ID 快照基线路径（须在 SCRIPT_DIR 之后定义）。
+BASELINE_PATH = os.path.join(SCRIPT_DIR, "baselines", "pending_register_baseline.json")
 DEFAULT_CSV = os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", "..", "docs", "台账", "待裁决登记册.csv")
 )
@@ -189,6 +224,8 @@ def main(argv=None):
     p.add_argument("--batch", type=int, default=DEFAULT_BATCH,
                    help="当前批次号（默认 %d）" % DEFAULT_BATCH)
     p.add_argument("--csv", default=DEFAULT_CSV, help="登记册 CSV 路径")
+    p.add_argument("--update-baseline", action="store_true",
+                   help="★并发防护：显式刷新 ID 基线（确认 legitimiate 删除后使用，须留痕）")
     args = p.parse_args(argv)
 
     if not os.path.isfile(args.csv):
@@ -247,7 +284,30 @@ def main(argv=None):
 
     # --- T153-7：新票同提交入册 硬校验（仅存在暂存差异时生效）---
     for e in check_new_ticket_registered():
-        errors.append(e)
+            errors.append(e)
+
+    # ★第158批 上-A 第13刀 T-登记册并发防护-1：ID 消失（批量误删/覆盖写）防护。
+    #   只在**无其它 error** 的干净状态下推进基线，避免把损坏状态钉成基线。
+    if not errors:
+        if args.update_baseline:
+            _save_baseline(len(rows), sorted(set(seen)))
+            sys.stderr.write("[登记册] 已显式刷新 ID 基线：%d 条 -> %s\n"
+                             % (len(rows), BASELINE_PATH))
+        else:
+            _bl = _load_baseline()
+            if _bl is None:
+                _save_baseline(len(rows), sorted(set(seen)))
+                sys.stderr.write("[登记册] 首次建立 ID 基线：%d 条\n" % len(rows))
+            else:
+                _gone = sorted(set(_bl.get("ids") or []) - set(seen))
+                if len(_gone) > MISSING_ID_LIMIT:
+                    errors.append(
+                        "★登记册并发防护：基线中的 ID 消失 %d 个（阈值 %d）——"
+                        "疑似批量误删/覆盖写，门禁阻断。若确为 legit 删除，请显式执行 "
+                        "--update-baseline 后重跑。消失 ID（前 15）：%s"
+                        % (len(_gone), MISSING_ID_LIMIT, ", ".join(_gone[:15])))
+                else:
+                    _save_baseline(len(rows), sorted(set(seen)))
 
     if errors:
         for e in errors:
