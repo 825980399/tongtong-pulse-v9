@@ -207,8 +207,32 @@ class RuntimeMetrics:
             if len(self._mem_percent_window) > self._mem_percent_window_max:
                 self._mem_percent_window.pop(0)
             self._history.append(_point)
+        # ★B156-5 票①：降频闭环生产者——周期性评估负载等级并下发到自适应控制器。
+        #   assess_load_level 汇总队列深度/CPU/内存 → LOW/MEDIUM/HIGH/CRITICAL，
+        #   经 set_level 推给 AdaptiveFrequencyController，使已接线的 5 个 should_execute
+        #   消费点（胃/器官扫描/代码学习/经验库清理/冷存 compaction）真正随负载降频。
+        #   等级恒 LOW 时因子 1.0，与改造前行为完全一致（防御性能力）。
+        self._sync_adaptive_level()
         # ★B3：告警检测（在锁外做，避免阻塞）
         self._check_alerts(_point)
+
+    def _sync_adaptive_level(self) -> None:
+        """★B156-5 票①：降频闭环生产者——采集当前负载并下发等级到自适应控制器。
+
+        每采样周期（_maybe_sample_history）调用一次。读取实时队列深度 / CPU / 内存，
+        经 assess_load_level 评估等级后 set_level 推给控制器。等级恒 LOW 时与改造前一致。
+        """
+        try:
+            _sys = self.get_system_load()
+            _lv = assess_load_level(
+                queue_depth=self.get_queue_depth(),
+                cpu_percent=_sys.get("cpu_percent"),
+                memory_percent=_sys.get("memory_percent"),
+                snapshot_saving=False,
+            )
+            get_adaptive_controller().set_level(_lv)
+        except Exception as _se:
+            silent_exc(_se, "runtime_metrics.py:_sync_adaptive_level")
 
     def _check_alerts(self, point: dict[str, Any]) -> None:
         """★B3：告警阈值联动——异常指标主动写告警日志，并记入快照。"""
