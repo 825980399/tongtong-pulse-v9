@@ -333,8 +333,8 @@ class ChatService:
                 # 等待用户输入 (可以设置超时以支持主动问候)
                 try:
                     user_input = input("💬 你: ").strip()
-                except EOFError:
-                    silent_exc(where="functions/chat/chat_service.py:322")
+                except EOFError as e:
+                    silent_exc(e, where="functions/chat/chat_service.py:322")
                     break
 
                 if not user_input:

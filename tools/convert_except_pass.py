@@ -3,7 +3,8 @@
 
 策略（遵循项目「pulse-edit-noop-guard」纪律）：
   - 对扫描出的「吸收型 except」(body 为 pass / continue / break / return None)，
-    在 body 之前插入 `silent_exc(where="<file>:<line>")`，
+    在 body 之前插入 `silent_exc(e, where="<file>:<line>")`，并把对应
+    `except X:` 改写为 `except X as e:`（绑定异常变量，供 silent_exc 必填参数 e 使用），
     **不改变控制流**（continue/break 仍执行），仅把被吞异常变为可见日志。
   - 不删除 except 子句、不改异常类型；纯「可见化」修复。
   - 文件已 import silent_exc 则复用；缺失则补 `from nucleus._silent_except import silent_exc`。
@@ -15,6 +16,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,7 +66,14 @@ def convert_file(path: str, hits: list, apply: bool) -> int:
         body_strip = body_line.strip()
         indent = len(body_line) - len(body_line.lstrip())
         where = f'{h["file"]}:{ln}'
-        inserted = (" " * indent) + f'silent_exc(where="{where}")'
+        # ★E-1 根因修复：绑定异常变量 `as e`，否则 silent_exc(e, ...) 缺必填实参。
+        # 仅处理简单 `except X:` 形态（无 as、无多异常括号），避免破坏既有语法。
+        _exc = lines[idx]
+        if " as " not in _exc and re.search(r"except\s+[A-Za-z_][\w.]*\s*:", _exc):
+            _es = _exc.rstrip()
+            if _es.endswith(":"):
+                lines[idx] = _es[:-1].rstrip() + " as e:"
+        inserted = (" " * indent) + f'silent_exc(e, where="{where}")'
         if body_strip in ("continue", "break"):
             lines.insert(j, inserted)
             print(f"  +{j+1:<5} {inserted}")

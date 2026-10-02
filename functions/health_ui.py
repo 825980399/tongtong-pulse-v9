@@ -1317,8 +1317,8 @@ setInterval(loadData, 60000);
                             "time": _label,
                             "event": _it.get("content", "")[:120],
                         })
-                except Exception:
-                    silent_exc(where="functions/health_ui.py:1277")
+                except Exception as e:
+                    silent_exc(e, where="functions/health_ui.py:1277")
                     continue
             
             # ★FIX: 模块评分由真实运行时指标 + 静态审查推导（替代硬编码假数据）

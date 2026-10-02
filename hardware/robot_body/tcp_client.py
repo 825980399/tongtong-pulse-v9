@@ -166,8 +166,8 @@ class RobotBodyTCP:
                     if data:
                         self._recv_buffer.extend(data)
                         self._parse_packets()
-            except TimeoutError:
-                silent_exc(where="hardware/robot_body/tcp_client.py:166")
+            except TimeoutError as e:
+                silent_exc(e, where="hardware/robot_body/tcp_client.py:166")
                 continue
             except Exception as e:
                 if self._running:

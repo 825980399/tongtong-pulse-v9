@@ -216,8 +216,8 @@ class PulsePersonalityKernel(BasePulseOrgan):
                 _node.ephemeral = False
                 self.node_pool.add(_node)
                 _added += 1
-            except Exception:
-                silent_exc(where="organs/identity/PulsePersonalityKernel.py:219")
+            except Exception as e:
+                silent_exc(e, where="organs/identity/PulsePersonalityKernel.py:219")
                 continue
         return _added
 
