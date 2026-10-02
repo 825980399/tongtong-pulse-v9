@@ -76,6 +76,8 @@ class VectorStore:
 
     _instance: VectorStore | None = None
     _cls_lock = threading.Lock()
+    # ★第158批第8刀（N-5）：关闭序列中拒绝复活重建（防停机竞态）。
+    _closing = False
 
     def __init__(self):
         self._cfg = _load_config()
@@ -104,6 +106,7 @@ class VectorStore:
         self._writes = 0
         self._encoder = None
         self._flush_error_logged = False   # 落盘失败日志节流标记
+        self._closed = False               # ★第158批第8刀 N-5：已关闭标记（拒绝复活重建）
 
         # ★主线第3批 任务3（P1-23）：quality_flag 检索消费（打通假闭环第5例）。
         #   默认挂载经验库 provider；为 None 时检索行为与原版完全一致。
@@ -128,10 +131,19 @@ class VectorStore:
 
     # ---------------- 单例 ----------------
     @classmethod
-    def get_instance(cls) -> VectorStore:
+    def get_instance(cls) -> "VectorStore | None":
+        """获取单例。
+
+        ★第158批第8刀 N-5：关闭序列进行中（``_closing`` 置位）且尚无实例时，
+        **拒绝新建**（返回 None），避免关机窗口内迟到的调用把向量库重建出来。
+        正常路径（未关闭 / 已有实例）行为与修复前完全一致，返回值不变。
+        """
         if cls._instance is None:
             with cls._cls_lock:
                 if cls._instance is None:
+                    if cls._closing:
+                        # ★第158批第8刀 N-5：关闭序列进行中，拒绝复活重建
+                        return None
                     cls._instance = cls()
         return cls._instance
 
@@ -143,6 +155,9 @@ class VectorStore:
 
     def _ensure_loaded(self) -> bool:
         """懒加载。返回是否已可用（未开关/文件不存在都算可用，只是空库）。"""
+        if self._closed:
+            # ★第158批第8刀 N-5：已关闭 → 不再触发懒加载（拒绝复活重建）
+            return self._loaded
         if self._loaded:
             return True
         with self._lock:
@@ -324,6 +339,9 @@ class VectorStore:
                 self.flush(force=True)
         except Exception as _e:
             _logger.debug(f"[向量库] 退出 flush 失败: {_e}")
+        finally:
+            # ★第158批第8刀 N-5：标记已关闭，配合 _closing 闸门拒绝复活重建
+            self._closed = True
 
     # ---------------- 写入 ----------------
     def has_vector(self, node_id: str) -> bool:
@@ -807,9 +825,23 @@ def get_vector_store() -> VectorStore:
 
 
 def shutdown_vector_store() -> None:
-    """供框架 shutdown 钩子显式调用（atexit 之外的双保险）。"""
+    """供框架 shutdown 钩子显式调用（atexit 之外的双保险）。
+
+    ★第158批第8刀 N-5：先置 _closing 闸门，在关闭窗口内拒绝任何 get_instance() 的
+    复活重建（main.py 以并行 _TPE 关闭单例，窗口内其它线程的迟到 get_vector_store 会
+    撞上此闸门直接返回 None，而非新建实例）。
+
+    注意：**不复位 _instance**。修复前本函数只做 flush、保留全局实例，shutdown 后
+    get_instance() 返回的仍是同一个已关闭实例（不会重建）。此处保持该语义——若改为
+    置 None，shutdown 之后的下一次 get_instance() 反而会新建出一个全新实例，
+    与「拒绝复活重建」目标背道而驰。已关闭实例由实例内 ``_closed`` 标记拒绝懒加载。
+    """
     try:
-        if VectorStore._instance is not None:
-            VectorStore._instance.shutdown()
+        VectorStore._closing = True
+        _inst = VectorStore._instance
+        if _inst is not None:
+            _inst.shutdown()
     except Exception as _exc:
         _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
+    finally:
+        VectorStore._closing = False

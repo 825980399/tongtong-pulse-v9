@@ -767,14 +767,31 @@ class ReasoningWorkerPool:
 # 模块级单例
 _reasoning_pool: ReasoningWorkerPool | None = None
 _reasoning_pool_lock = threading.Lock()
+# ★第158批第8刀（N-5）：关闭序列中拒绝复活重建（防停机竞态）。
+# shutdown_reasoning_pool 置位期间，get_reasoning_pool 不再创建新进程池（返回 None），
+# 避免关机流程（main.py 并行单例关闭 _TPE）中某次迟到的 get_reasoning_pool()
+# 又 spawn 出全新 worker 子进程（复活竞态）。
+_reasoning_pool_closing = False
 
 
-def get_reasoning_pool() -> ReasoningWorkerPool:
-    """获取推理进程池单例"""
-    global _reasoning_pool
+def get_reasoning_pool() -> "ReasoningWorkerPool | None":
+    """获取推理进程池单例。
+
+    ★第158批第8刀 N-5：关闭序列进行中（``_reasoning_pool_closing`` 置位）且全局尚无
+    实例时，**拒绝新建**（返回 None），避免关机窗口内迟到的调用又 spawn 出全新 worker
+    子进程（复活竞态）。若全局已有实例（含关闭窗口内正在 shutdown 的那个），仍返回该
+    实例，其 ``_closed`` 标记会拒绝内部重建——返回值与修复前一致。
+
+    调用方请注意：返回值可能为 None（仅关闭窗口内且实例已被复位时），main.py 关闭
+    序列的三处调用均已 ``if _pool:`` 判空。
+    """
+    global _reasoning_pool, _reasoning_pool_closing
     if _reasoning_pool is None:
         with _reasoning_pool_lock:
             if _reasoning_pool is None:
+                if _reasoning_pool_closing:
+                    # ★第158批第8刀 N-5：关闭序列进行中，拒绝复活重建
+                    return None
                 _reasoning_pool = ReasoningWorkerPool()
     return _reasoning_pool
 
@@ -785,14 +802,21 @@ def shutdown_reasoning_pool() -> None:
     原停机流程直接调用 get_reasoning_pool().shutdown() 关闭进程池，但全局变量
     _reasoning_pool 仍持有已关闭实例。此处显式置空，使重启时重建全新进程池，
     避免复用带残留子进程的旧实例（进程池子进程非 daemon，需主动 terminate）。
+
+    ★第158批第8刀 N-5：先置 _closing 闸门，在整个关闭窗口内拒绝任何 get_reasoning_pool()
+    的复活重建（main.py 以并行 _TPE 关闭单例，窗口内其它线程的迟到的 get_reasoning_pool
+    会撞上此闸门直接返回 None，而非 spawn 新 worker）；关闭收尾再解除闸门并复位全局。
     """
-    global _reasoning_pool
+    global _reasoning_pool, _reasoning_pool_closing
+    with _reasoning_pool_lock:
+        _reasoning_pool_closing = True
     _inst = _reasoning_pool
-    _reasoning_pool = None
-    if _inst is not None:
-        _sd = getattr(_inst, "shutdown", None) or getattr(_inst, "stop", None)
-        if _sd is not None:
-            try:
-                _sd()
-            except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::shutdown_reasoning_pool L795")
+    _inst_sd = getattr(_inst, "shutdown", None) or getattr(_inst, "stop", None) if _inst is not None else None
+    if _inst_sd is not None:
+        try:
+            _inst_sd()
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.ReasoningWorkerPool::shutdown_reasoning_pool L795")
+    with _reasoning_pool_lock:
+        _reasoning_pool = None
+        _reasoning_pool_closing = False
