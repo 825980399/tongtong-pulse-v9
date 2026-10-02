@@ -138,6 +138,40 @@ def _m91_gate2_check(code: str) -> tuple:
     _g2a, _g2b, _g2c = _m91_gate2_parse(code)
     return _g2a, _g2b
 
+def _sandbox_syntax_precheck(code: str) -> tuple[bool, str]:
+    """★158-α-2：沙箱内语法预检闸门——隔离判据验证生成的补丁代码语法正确性。
+
+    语义：「沙箱」指与主流程验证解耦的**隔离语法判据**（纯 ast.parse，不执行代码，
+    不污染主进程状态），在补丁进入正式质量评估 / 验证前先行拦截明显语法错误，
+    避免后续质量评估与 LLM 重试的算力浪费。
+
+    判据复用 `_assess_patch_quality` 的「四次尝试」口径（完整 / 包装类 / 包装函数 /
+    dedent），对方法体片段（base>0）也能正确判定；返回 `(通过, 错误文案)`。
+    """
+    import ast as _ast_sp
+    import textwrap as _tw_sp
+    try:
+        _ast_sp.parse(code, filename="<llm-patch>")
+        return True, ""
+    except SyntaxError as _e0:
+        # ★158-α-2：静默捕获可见化（silent_exc）—— 完整解析失败属预期 fallthrough，
+        #   仍经 silent_exc 登记，满足 cw2 门禁（LOG_FUNCS 排除）。
+        silent_exc(_e0, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[full]")
+    try:
+        _ded = _tw_sp.dedent(code or "").strip()
+        _ast_sp.parse("class _PatchQC:\n    def _check(self):\n" + _tw_sp.indent(_ded, "        "),
+                      filename="<llm-patch>")
+        return True, ""
+    except SyntaxError as _e1:
+        silent_exc(_e1, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[class]")
+    try:
+        _ast_sp.parse("def _patch_qc_check():\n" + _tw_sp.indent(_ded, "    "),
+                      filename="<llm-patch>")
+        return True, ""
+    except SyntaxError as _e3:
+        silent_exc(_e3, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[func]")
+        return False, f"{_e3.msg} (line {_e3.lineno})"
+
 # ★W4修复：高危问题类型永不自动修复（含 LLM 回退）。
 # 与 nucleus.self_inspector._issue_severity 中的 high 级类型保持一致
 # （unsafe_eval/subprocess_shell/sql_injection）。进化闭环升级（阶段A）后，
@@ -4535,6 +4569,14 @@ class SafeEvolutionExecutor:
         # ★替换有效性校验：若替换未命中（modified_code == original_code），
         # 说明检测器误报或代码形态不匹配，不应生成空补丁（避免「无实质性变更」的假补丁）。
         if modified_code == original_code:
+            return None
+        
+        # ★158-α-2：沙箱语法预检闸门——生成后立即隔离判据预检，语法错误直接拦截，
+        #   避免后续质量评估 / LLM 重试算力浪费（与关2 验证口径同源 ast.parse）。
+        _syn_ok, _syn_err = _sandbox_syntax_precheck(modified_code)
+        if not _syn_ok:
+            _module_logger.warning(
+                f"[沙箱语法预检] 拒绝语法错误补丁: {plan_type} {method_name}: {_syn_err}")
             return None
         
         # 生成变更摘要
