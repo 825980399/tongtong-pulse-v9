@@ -301,7 +301,8 @@ class RuntimeMetrics:
             #   (b) 重复：与上次同值告警间隔 < _QUEUE_DEPTH_ALERT_REPEAT_TTL 则抑制，
             #       根治 X-3「14890 逐字相同反复告警 8 次」。
             _age = _now - self._last_queue_depth_at
-            _stale = _age > _QUEUE_DEPTH_STALE_TTL
+            # 哨兵值 0.0 表示「无有效采样时刻」→ 不按陈旧抑制（fail-open，避免误吞真实告警）
+            _stale = self._last_queue_depth_at > 0.0 and _age > _QUEUE_DEPTH_STALE_TTL
             _repeat = (
                 self._queue_alert_last_depth is not None
                 and abs(_depth - (self._queue_alert_last_depth or 0)) <= _QUEUE_DEPTH_STALE_TOL
