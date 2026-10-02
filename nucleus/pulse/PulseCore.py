@@ -261,7 +261,7 @@ class PulseCore:
         import hashlib
         import json
         payload = pulse.get("payload") or {}
-        payload_key = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        payload_key = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
         source = pulse.get("source_organ", "")
         event_type = pulse.get("event_type", "")
         target = pulse.get("target_organ", "") or pulse.get("target", "")
@@ -291,7 +291,7 @@ class PulseCore:
                     self._completed_fingerprints.popitem(last=False)
                 self._total_completed += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L292")
+            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L294")
 
     def _mark_completed(self, pulse_id: str):
         with self._execution_lock:
