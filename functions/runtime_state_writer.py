@@ -147,7 +147,7 @@ class RuntimeStateWriter:
         # 6. 参数预设列表
         try:
             from nucleus.evolution.ParamAnalysisReport import ParamPresets
-            presets = getattr(ParamPresets, "list_presets", list)()
+            presets = ParamPresets().list_presets()
             state["param_presets"] = {
                 "count": len(presets) if presets else 0,
                 "names": [p.get("name", "") for p in presets[:10]] if presets else [],
