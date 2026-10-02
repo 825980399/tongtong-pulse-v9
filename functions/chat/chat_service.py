@@ -259,6 +259,15 @@ class ChatService:
         if not content:
             return
 
+        # ★T-对话-2（157批）：correlation_id 1:1 绑定保护（展示层显式来源前缀防抢占）。
+        #   回复携带非空 correlation_id 且不与 cortex 当前活跃会话匹配时，视为未命中
+        #   「等待中的提问」的异步/自主回复，显示时加 [异步] 前缀避免与 1:1 答复混淆。
+        #   （底层 1:1 绑定由 PulseCortex._dialog_should_output 把关，此处仅做展示层标注）
+        _reply_cid = payload.get("correlation_id", "")
+        _cortex2 = self.framework.organs.get("大脑皮层") if hasattr(self.framework, "organs") else None
+        _active_cid = getattr(_cortex2, "_active_correlation_id", "") if _cortex2 else ""
+        _is_unbound = bool(_reply_cid) and _reply_cid != _active_cid
+
         # 为了不打断用户正在输入的内容，先换行
         try:
             print()
@@ -276,7 +285,7 @@ class ChatService:
 
         # 显示回复（包 try-except，GBK 场景降级 ASCII 占位，不中断 handler）
         try:
-            print(f"{_icon} 曈曈: {content}\n")
+            print(f"{'[异步]' + _icon if _is_unbound else _icon} 曈曈: {content}\n")
         except UnicodeEncodeError:
             try:
                 print(f"[图标] 曈曈: {content}\n")
