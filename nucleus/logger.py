@@ -766,6 +766,53 @@ def get_smoke_logger(name: str = "smoke") -> logging.Logger:
     return _lg
 
 
+# ========== ★第158批 N-8（P1）：pytest / 验证脚本日志隔离 ==========
+PYTEST_TAG = "[PYTEST]"
+PYTEST_LOG_FILE = "pytest.log"
+
+
+def get_pytest_logger(name: str = "pytest") -> logging.Logger:
+    """★第158批 N-8（P1）：pytest / 验证脚本专用日志器。
+
+    背景（路灯触发指令第 4 刀）：pytest 运行会触发大量**测试专用**日志
+    （VectorStore 模拟磁盘写满 / 进程池「模拟重建失败」ERROR / CallGraphAnalyzer
+    语法错误跳过 等），经 root FileHandler 写进**生产** ``logs/pulse.log``，
+    淹没真实故障线索（原 conftest 用丢弃过滤器静音，虽保 pulse.log 干净但一并丢失）。
+
+    N-8 改为物理隔离到 ``logs/pytest.log``，使 ``pulse.log`` 只收真实运行事件。
+
+    三保险（与 get_smoke_logger 同构）：
+      ① 独立文件 ``logs/pytest.log``（与 pulse.log 物理隔离）；
+      ② 每条前缀 ``[PYTEST]``（即便被复制粘贴到别处也一眼可辨）；
+      ③ ``propagate = False``（绝不冒泡到 root 'pulse'，双重不污染）。
+
+    配合 ``tests/conftest.py`` 在 pytest 启动期设置的 ``PULSE_LOG_FILE`` 环境变量，
+    框架根日志器（含 VectorStore / 进程池）在 pytest 运行期即直接落 ``logs/pytest.log``；
+    本日志器供测试夹具 / 验证脚本显式写入诊断行。
+
+    用法（测试夹具 / 验证脚本）：
+        ``_lg = get_pytest_logger("my_case")``
+    """
+    _lg = logging.getLogger(f"pulse.pytest.{name}")
+    _lg.setLevel(logging.DEBUG)
+    _lg.propagate = False
+    if not any(getattr(_h, "_pulse_pytest", False) for _h in _lg.handlers):
+        try:
+            os.makedirs(_log_dir, exist_ok=True)
+            _h = logging.FileHandler(
+                os.path.join(_log_dir, PYTEST_LOG_FILE), encoding="utf-8")
+            _h.setLevel(logging.DEBUG)
+            _h.setFormatter(logging.Formatter(
+                "%(asctime)s " + PYTEST_TAG + " [%(name)s] %(levelname)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"))
+            _h._pulse_pytest = True
+            _h.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
+            _lg.addHandler(_h)
+        except Exception as _pe:
+            print(f"[logger] pytest 日志句柄初始化失败(降级为纯内存): {type(_pe).__name__}: {_pe}", file=sys.stderr)
+    return _lg
+
+
 # ========== ★主线第32批 T3（P2-190）：异常/调用位置动态获取 ==========
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

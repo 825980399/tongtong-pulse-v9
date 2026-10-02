@@ -14,10 +14,22 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# ★第158批 N-8（P1）：verify 运行期框架日志重定向到 logs/pytest.log
+#   （复用 PULSE_LOG_FILE 隔离机制，仅当未显式指定时设置，尊重调度器隔离）。
+os.environ.setdefault(
+    "PULSE_LOG_FILE",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                 "logs", "pytest.log"))
+
 import numpy as np
 
 import config as CFG
 from nucleus.semantic.VectorStore import VectorStore
+
+# ★第158批 N-8（P1）：验证脚本自身诊断行双写到 logs/pytest.log
+#   （与 stdout 实时输出并存；propagate=False 不污染 pulse.log）。
+from nucleus.logger import get_pytest_logger
+_pytest_lg = get_pytest_logger("verify_phase17_1_5")
 
 # ★157-T-基础-1：测试隔离模块已从 git-ignored 的 `tmp/test_isolation.py` 迁入
 #   受控路径 `tools/test_isolation_shim.py`（git 跟踪，完整隔离能力：redirect_all
@@ -60,12 +72,15 @@ _TMP = None
 
 
 def check(name: str, ok: bool, detail: str = ""):
+    _line = (f"  [PASS] {name}" + (f" —— {detail}" if detail else "")) if ok \
+        else f"  [FAIL] {name} —— {detail}"
     if ok:
         _PASS.append(name)
-        print(f"  [PASS] {name}" + (f" —— {detail}" if detail else ""))
     else:
         _FAIL.append(name)
-        print(f"  [FAIL] {name} —— {detail}")
+    print(_line)
+    # ★第158批 N-8（P1）：诊断行同时落 logs/pytest.log（持久化、不污染 pulse.log）
+    _pytest_lg.info(_line)
 
 
 DIM = 8          # 用小维度加速测试（真实环境 512）
@@ -410,6 +425,9 @@ def main():
     print("  PHASE17 阶段一 · 任务 1.5 验证")
     print("  向量独立持久化（vectors.npz + vectors_meta.json）")
     print("=" * 68)
+    # ★第158批 N-8（P1）：运行标识写入 logs/pytest.log
+    _pytest_lg.info("verify_phase17_1_5 启动（诊断归集至 logs/pytest.log，"
+                    "pulse.log 仅收真实运行事件）")
 
     # ★第五批 任务2B：框架运行检测。
     #   框架在跑时（生产 VectorStore 单例占用 512 维库并可能被 atexit flush），

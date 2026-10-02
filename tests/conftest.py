@@ -12,6 +12,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# ★第158批 N-8（P1）：pytest 运行期框架日志重定向到 logs/pytest.log，
+#   避免测试专用日志（VectorStore 模拟磁盘写满 / 进程池「模拟重建失败」等）
+#   污染生产 pulse.log。复用 logger.py 既有 PULSE_LOG_FILE 隔离机制
+#   （子进程通过环境变量指定独立日志文件）。仅当未由父进程显式指定时设置，
+#   以尊重 PeriodicTestScheduler 自身可能注入的隔离日志路径。
+os.environ.setdefault("PULSE_LOG_FILE", os.path.join(ROOT, "logs", "pytest.log"))
+
 import numpy as np
 import pytest
 
@@ -73,20 +80,30 @@ def store_builder():
 
 
 def _mute_project_logs_handlers():
-    """★B156-6：给指向项目 logs/ 的 FileHandler 挂丢弃过滤器，返回 [(handler, filter)]。"""
+    """★B156-6 + 第158批 N-8：给指向项目 logs/ 的 FileHandler 挂丢弃过滤器，返回 [(handler, filter)]。
+
+    ★N-8 修正：原实现对所有 logs/ 下的 FileHandler 一律丢弃（保 pulse.log 干净但
+    一并丢失测试日志）。现改为「允许 logs/pytest.log 写出」——因为 pytest 运行期
+    框架根日志器（经 PULSE_LOG_FILE 环境变量）即落 logs/pytest.log，
+    该文件本就是 N-8 规定的测试面日志归集点，不应被丢弃。
+    """
     import logging
 
     _muted = []
     try:
         _logs_root = os.path.abspath(os.path.join(ROOT, "logs")).replace(
             "\\", "/").lower()
+        _pytest_log = os.path.abspath(os.path.join(ROOT, "logs", "pytest.log")).replace(
+            "\\", "/").lower()
 
         def _is_logs_handler(h):
             _bf = getattr(h, "baseFilename", None)
             if not _bf:
                 return False
-            return os.path.abspath(_bf).replace("\\", "/").lower().startswith(
-                _logs_root + "/")
+            _abf = os.path.abspath(_bf).replace("\\", "/").lower()
+            if _abf == _pytest_log:
+                return False  # ★N-8：pytest.log 本身允许写入（不再丢弃）
+            return _abf.startswith(_logs_root + "/")
 
         def _drop(_record):
             return False
@@ -119,15 +136,20 @@ def _restore_muted_logs_handlers(muted):
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolate_project_log_files():
-    """★主线第22批 T3/P2-121：会话级静音「写往项目 logs/ 目录」的 FileHandler。
+    """★主线第22批 T3/P2-121 + 第158批 N-8：会话级隔离「写往项目 logs/ 目录」的 FileHandler。
 
     背景：pytest 运行会触发大量**测试专用**日志（VectorStore 模拟磁盘写满/
     模型变更/维度不符 50+ 条、进程池「模拟重建失败」ERROR 5 条、
     CallGraphAnalyzer 语法错误跳过 31 条），经 root FileHandler 写进**生产**
     logs/pulse.log，淹没真实故障线索。
 
-    做法：只给项目日志 FileHandler 挂丢弃过滤器（不替换 handler 结构），
-    故 caplog / assertLogs 等测试内捕获能力完全不受影响。
+    做法（第158批 N-8 演进）：
+      - pytest 启动期由本 conftest 顶部设置 ``PULSE_LOG_FILE=logs/pytest.log``，
+        框架根日志器（含 VectorStore / 进程池）在 pytest 运行期即直接落
+        ``logs/pytest.log``，``pulse.log`` 只收真实运行事件；
+      - 仅对指向生产 ``pulse.log`` 的 FileHandler 挂丢弃过滤器（不替换 handler 结构），
+        ``logs/pytest.log`` 目标被显式放行（见 ``_mute_project_logs_handlers``），
+        故 caplog / assertLogs 等测试内捕获能力完全不受影响。
     任何异常都不阻塞测试。
     """
     # ★B156-6 修正：原实现依赖 gitignored 的 tmp.test_log_isolation
