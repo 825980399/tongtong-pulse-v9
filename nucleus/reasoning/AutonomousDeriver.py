@@ -257,8 +257,17 @@ class AutonomousDeriver:
     def _log(self, level: str, msg: str):
         """轻量日志（AutonomousDeriver 原无 _log，B-2 补充，异常不冒泡）。"""
         try:
-            from nucleus.aibot_logger import get_logger
-            get_logger().info(msg)
+            from nucleus.aibot_logger import get_aibot_logger
+            _lg = get_aibot_logger()
+            _lv = (level or "info").lower()
+            if _lv == "debug":
+                _lg.debug(msg)
+            elif _lv in ("warning", "warn"):
+                _lg.warn(msg)
+            elif _lv == "error":
+                _lg.error(msg)
+            else:
+                _lg.info(msg)
         except Exception as e:
             silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L260")
 
