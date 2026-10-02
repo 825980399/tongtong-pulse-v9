@@ -673,8 +673,10 @@ class AdaptiveFrequencyController:
         self._base = dict(ADAPTIVE_FREQ_BASE)
         self._last_run = {}
         self._level = "LOW"
+        self._level_since = 0.0  # ★B156-5 票③：当前等级生效时刻（可观测）
         self._skipped = {}
         self._executed = {}
+        self._skip_log_at = {}   # ★B156-5 票③：各操作跳过日志节流时间戳
 
     def register(self, name: str, base_interval: float) -> None:
         """注册/覆盖一个非关键操作的正常间隔（秒）。"""
@@ -682,7 +684,16 @@ class AdaptiveFrequencyController:
 
     def set_level(self, level: str) -> None:
         if level in _VALID_LEVELS:
-            self._level = level
+            if level != self._level:
+                # ★B156-5 票③：等级变化可观测（闭环是否随负载升降一目了然）
+                try:
+                    import logging
+                    _logger = logging.getLogger("pulse.module.runtime_metrics")
+                    _logger.info(f"[自适应降频] 负载等级变化: {self._level} → {level}")
+                except Exception as _e:
+                    silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController.set_level")
+                self._level = level
+                self._level_since = time.time()
 
     def get_level(self) -> str:
         return self._level
@@ -713,15 +724,43 @@ class AdaptiveFrequencyController:
         _iv = self.get_interval(name)
         if _iv == float("inf"):
             self._skipped[str(name)] = self._skipped.get(str(name), 0) + 1
+            # ★B156-5 票③：CRITICAL 暂停属重要事件，按操作节流记 WARNING
+            self._log_skip(name, True)
             return False
         _now = float(now if now is not None else time.time())
         _last = float(self._last_run.get(str(name), 0.0) or 0.0)
         if _last > 0 and (_now - _last) < _iv:
             self._skipped[str(name)] = self._skipped.get(str(name), 0) + 1
+            # ★B156-5 票③：MEDIUM/HIGH 节流可观测（DEBUG，按操作节流）
+            self._log_skip(name, False)
             return False
         self._last_run[str(name)] = _now
         self._executed[str(name)] = self._executed.get(str(name), 0) + 1
         return True
+
+    def _log_skip(self, name: str, paused: bool) -> None:
+        """★B156-5 票③：should_execute 跳过可观测——节流后按级别记录。
+
+        paused=True（CRITICAL 暂停）记 WARNING；否则 DEBUG。每个操作每 300s 至多一条，
+        避免高频调用点（如代码学习每脉冲询问）刷屏。等级为 LOW 时不记录（无实际降频）。
+        """
+        if self._level == "LOW":
+            return
+        _now = time.time()
+        _key = str(name)
+        _last = float(self._skip_log_at.get(_key, 0.0) or 0.0)
+        if _now - _last < 300.0:
+            return
+        self._skip_log_at[_key] = _now
+        try:
+            import logging
+            _logger = logging.getLogger("pulse.module.runtime_metrics")
+            if paused:
+                _logger.warning(f"[自适应降频] 操作「{name}」已暂停(CRITICAL等级)")
+            else:
+                _logger.debug(f"[自适应降频] 操作「{name}」节流跳过(等级={self._level})")
+        except Exception as _e:
+            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._log_skip")
 
     def get_stats(self) -> dict:
         """控制器状态（等级 / 已注册操作 / 跳过与执行计数）。"""
