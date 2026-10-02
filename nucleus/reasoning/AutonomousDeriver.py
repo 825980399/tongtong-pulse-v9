@@ -269,7 +269,7 @@ class AutonomousDeriver:
             else:
                 _lg.info(msg)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L260")
+            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L272")
 
     def _inductive_derive(self, node_pool, knowledge_tree) -> list[dict[str, Any]]:
         """
