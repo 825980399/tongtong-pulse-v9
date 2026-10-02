@@ -491,14 +491,248 @@ def render_md(report: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+
+
+# ===========================================================================
+# v3（C-8 prep · 157 批）：方法级零引用 + 孤岛文件 + set_* 子集 + 收窄动态判定
+# ---------------------------------------------------------------------------
+# ★相对 v2 的关键修正：v2 把「全部字符串常量」并入 all_dynamic_names，导致几乎
+#   所有符号都被判 DYNAMIC_RISK（复现 ZERO_REF=0），真断链（如 register_pipeline）
+#   被「疑似钩子/字符串命中」吞掉。v3 仅把**真实动态加载信号**
+#   （import_module/__import__/getattr 字符串参数 + ("mod","fn") 元组 + data/*.json
+#   配置引用）视为 DYNAMIC_RISK，不再把日志/注释里的普通字符串算作反射风险。
+def _dotted_module_of(rel: str) -> str:
+    """``nucleus/foo/bar.py`` -> ``nucleus.foo.bar``。"""
+    _noext = rel[:-3] if rel.endswith(".py") else rel
+    return _noext.replace("/", ".")
+
+
+def _collect_imported_modules(files: list[str]) -> set[str]:
+    """收集全部文件的 import / import-from 模块路径（被 import 即非岛）。"""
+    out: set[str] = set()
+    for _f in files:
+        try:
+            _tree = ast.parse(open(_f, encoding="utf-8", errors="ignore").read(),
+                              filename=_f)
+        except Exception:
+            continue
+        for _n in ast.walk(_tree):
+            if isinstance(_n, ast.Import):
+                for _a in _n.names:
+                    out.add(_a.name)
+            elif isinstance(_n, ast.ImportFrom):
+                if _n.module:
+                    out.add(_n.module)
+    return out
+
+
+def _collect_methods(files: list[str]) -> dict[str, list[dict]]:
+    """返回 {rel: [{name, qualname, class, lineno}]}（仅 prod 文件的方法级定义）。"""
+    out: dict[str, list[dict]] = {}
+    for _f in files:
+        try:
+            _src = open(_f, encoding="utf-8", errors="ignore").read()
+            _tree = ast.parse(_src, filename=_f)
+        except Exception:
+            continue
+        _rel = safe_relpath(_f, _PROJ).replace("\\", "/")
+        for _node in ast.walk(_tree):
+            if isinstance(_node, ast.ClassDef):
+                for _m in _node.body:
+                    if isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        out.setdefault(_rel, []).append({
+                            "name": _m.name,
+                            "qualname": "%s.%s" % (_node.name, _m.name),
+                            "class": _node.name,
+                            "lineno": _m.lineno,
+                        })
+    return out
+
+
+def scan_v3(root: str = _PROJ, extra_excludes: set[str] | None = None) -> dict:
+    """v3 扫描：模块级零引用 + 方法级零引用（入口方法）+ set_* 子集 + 孤岛文件。
+
+    ★只读，绝不修改任何源码。
+    """
+    all_files = iter_source_files(root, extra_excludes)
+    in_modules: list[str] = []
+    test_files: list[str] = []
+    for _f in all_files:
+        _rel = safe_relpath(_f, root).replace("\\", "/")
+        if _rel.startswith("tests" + "/"):
+            test_files.append(_f)
+        elif _rel.split("/")[0] in MODULES:
+            in_modules.append(_f)
+
+    _test_set = set(test_files)
+    prod_files = [f for f in all_files if f not in _test_set]
+
+    defs = collect_definitions(in_modules, root=root)
+    methods = _collect_methods(in_modules)
+
+    prod_counter, _ps = collect_refs(prod_files)
+    test_counter, _ts = collect_refs(test_files)
+    # ★v3 岛程序判定专用：仅统计「调用引用」(Name + Attribute)，排除 import 别名
+    #   （否则 `from X import Y` 会把类名列为引用，使「只被 import 从未调用」的岛被误判非岛）
+    def _call_refs(files):
+        _c: dict[str, int] = {}
+        for _f in files:
+            try:
+                _t = ast.parse(open(_f, encoding="utf-8", errors="ignore").read(),
+                               filename=_f)
+            except Exception:
+                continue
+            for _n in ast.walk(_t):
+                if isinstance(_n, ast.Name):
+                    _c[_n.id] = _c.get(_n.id, 0) + 1
+                elif isinstance(_n, ast.Attribute):
+                    _c[_n.attr] = _c.get(_n.attr, 0) + 1
+        return _c
+    _call_pc = _call_refs(prod_files)
+    _call_tc = _call_refs(test_files)
+    # ★v3 收窄动态信号（修复 register_pipeline 等真断链被吞）
+    _tmp_files = _iter_tmp_py(root)
+    _dyn = (extract_dynamic_load_names(in_modules + test_files + _tmp_files)
+            | collect_config_refs(root))
+    _imported = _collect_imported_modules(prod_files + test_files)
+
+    # 全库引用计数（方法名作为 Name/Attribute 的出现次数，含定义处的调用）
+    all_counter: dict[str, int] = {}
+    for _k, _v in prod_counter.items():
+        all_counter[_k] = all_counter.get(_k, 0) + _v
+    for _k, _v in test_counter.items():
+        all_counter[_k] = all_counter.get(_k, 0) + _v
+
+    # ---- 模块级零引用（v3 收窄动态后才有意义）----
+    mod_zero_ref: list[tuple] = []
+    for _rel, _items in defs.items():
+        for _it in _items:
+            if "_strings" in _it:
+                continue
+            _n = _it["name"]
+            if (DUNDER_RE.match(_n) or _it["in_all"] or _it["decorators"]
+                    or _n in _dyn):
+                continue
+            if prod_counter.get(_n, 0) <= 0 and test_counter.get(_n, 0) <= 0:
+                mod_zero_ref.append((_rel, _n, _it["lineno"], _it["kind"]))
+
+    # ---- 方法级零引用：入口方法（HOOK_RE 命中 ∪ set_*） + 全方法参考 ----
+    # 全局名计数存在跨类同名碰撞；入口方法是 API 命名，多数名唯一，故用全局名。
+    method_zero_ref: list[tuple] = []      # 全方法零引用（参考）
+    entry_zero_ref: list[tuple] = []       # 入口方法（HOOK_RE ∪ set_*）零引用
+    set_zero_ref: list[tuple] = []         # set_* 子集
+    for _rel, _ms in methods.items():
+        for _m in _ms:
+            _n = _m["name"]
+            if DUNDER_RE.match(_n):
+                continue
+            _refs = all_counter.get(_n, 0)
+            if _refs <= 0:
+                method_zero_ref.append((_rel, _m["qualname"], _m["lineno"]))
+                if _n.startswith("set_") or HOOK_RE.match(_n):
+                    entry_zero_ref.append((_rel, _m["qualname"], _m["lineno"]))
+                    if _n.startswith("set_"):
+                        set_zero_ref.append((_rel, _m["qualname"], _m["lineno"]))
+
+    # ---- 孤岛文件（整文件无外部可达 API）----
+    island_files: list[str] = []
+    for _rel, _items in defs.items():
+        _names = [it["name"] for it in _items if "_strings" not in it]
+        if not _names:
+            continue
+        _dotted = _dotted_module_of(_rel)
+        # ★精确匹配：仅当本文件模块路径被「显式 import」才判非岛；
+        #   父包 import（如 import nucleus）不算抵达本文件（修正前缀误杀）。
+        if _dotted in _imported:
+            continue  # 被其它文件显式 import -> 非岛
+        _reachable = False
+        for _n in _names:
+            if _n in _dyn:
+                _reachable = True
+                break
+            # 仅「调用引用」>0 才算可达（排除 import 别名污染）
+            if (_call_pc.get(_n, 0) + _call_tc.get(_n, 0)) > 0:
+                _reachable = True
+                break
+        if not _reachable:
+            island_files.append(_rel)
+
+    return {
+        "module_zero_ref": len(mod_zero_ref),
+        "method_zero_ref": len(method_zero_ref),
+        "entry_zero_ref": len(entry_zero_ref),
+        "set_zero_ref": len(set_zero_ref),
+        "island_files": len(island_files),
+        "island_list": sorted(island_files),
+        "set_list": sorted(set_zero_ref),
+        "method_list": sorted(method_zero_ref),
+        "mod_list": sorted(mod_zero_ref),
+    }
+
+
+def render_md_v3(summary: dict) -> str:
+    lines = [
+        "# 死代码检测 v3（C-8 prep · 157 批）",
+        "",
+        "> ★只检测，不删除。本报表由 `tools/dead_code_scan.py --v3` 生成。",
+        "> 相对 v2 修正：动态判定收窄为「真实动态加载信号」，",
+        "> 修复 `register_pipeline` 等真断链被 `HOOK_RE`/字符串命中吞掉（v2 复现 ZERO_REF=0）。",
+        "",
+        "## 一、v3 基线（CI 红线，待 156 红数归零后由 check_broken_chain_gate 接线）",
+        "",
+        "| 指标 | v3 实测 | 前置分析基线 | 红线 |",
+        "|---|---|---|---|",
+        "| 孤岛文件数 | %d | 33 | 不得上升 |" % summary["island_files"],
+        "| 零引用入口方法数（HOOK_RE∪set_*） | %d | 40 | 不得上升 |" % summary["entry_zero_ref"],
+        "| 零引用方法数（全方法·参考） | %d | — | 参考 |" % summary["method_zero_ref"],
+        "| 零引用 set_* 数 | %d | 28 | 不得上升 |" % summary["set_zero_ref"],
+        "| 模块级零引用数 | %d | — | 参考 |" % summary["module_zero_ref"],
+        "",
+        "## 二、孤岛文件清单（%d）" % summary["island_files"],
+        "",
+    ]
+    for _r in summary["island_list"]:
+        lines.append("- `%s`" % _r)
+    lines += ["", "## 三、零引用 set_* 清单（%d）" % summary["set_zero_ref"], ""]
+    for _rel, _q, _ln in summary["set_list"]:
+        lines.append("- `%s:%d` `%s`" % (_rel, _ln, _q))
+    lines += ["", "## 四、零引用入口方法清单（%d，含 set_*）" % summary["entry_zero_ref"], ""]
+    for _rel, _q, _ln in summary["method_list"]:
+        lines.append("- `%s:%d` `%s`" % (_rel, _ln, _q))
+    lines += ["", "---", "",
+              "★删除/接线纪律：本报表不构成删除或接线授权；每条处置需单独提补丁、",
+              "带灰度开关、过五项门禁，并在交付报告中列明。"]
+    return "\n".join(lines) + "\n"
+
+
+def _main_v3(args) -> int:
+    summary = scan_v3()
+    md = render_md_v3(summary)
+    _out = os.path.join(_PROJ, "docs", "死代码检测报告_8大模块_v3.md")
+    os.makedirs(os.path.dirname(_out), exist_ok=True)
+    open(_out, "w", encoding="utf-8", newline="").write(md)
+    print("[v3] 孤岛文件=%d  零引用入口方法=%d  零引用 set_*=%d  模块级零引用=%d"
+          % (summary["island_files"], summary["method_zero_ref"],
+             summary["set_zero_ref"], summary["module_zero_ref"]))
+    print("[v3] 报告已写入：%s" % _out)
+    if args.json_out:
+        open(args.json_out, "w", encoding="utf-8", newline="").write(
+            json.dumps(summary, ensure_ascii=False, indent=2))
+        print("[v3] JSON 已写入：%s" % args.json_out)
+    return 0
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="8 大模块死代码检测（只检测不删除）")
     ap.add_argument("--out", default=os.path.join(
         _PROJ, "docs", "死代码检测报告_8大模块_v2.0.md"))
     ap.add_argument("--json", dest="json_out", default="")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--v3", action="store_true",
+                    help="C-8 prep: 跑 v3（方法级零引用+孤岛文件+set_* 子集）")
     args = ap.parse_args()
 
+    if args.v3:
+        return _main_v3(args)
     report = scan()
     md = render_md(report)
     if not args.quiet:
