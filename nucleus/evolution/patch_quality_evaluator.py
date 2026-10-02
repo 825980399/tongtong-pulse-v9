@@ -31,6 +31,41 @@ L1 仅观测（**不改变任何进化决策**）
   却被记为 ``runtime_verified=True``）。
 ★ ``unverifiable`` —— 验证通过但 **baseline=0，无参照物可比**，不能证明有效
   （本批 62/67 条属此类，是"判据缺陷"的下游后果，而非补丁本身的问题）。
+
+★N-9「假通过=2」复核结论（第158批 第9刀）
+------------------------------------------
+上两类标签依赖 ``baseline_errors`` / ``post_apply_errors`` 的**文件级**计数，
+会把「补丁已逐字落地」的方法也误判。本批逐条复核了被误判的 **2 条**（均在
+``organs/body/PulseLiver.py``，见 ``data/patches/patch_history.json``）：
+
+===============================  ==========  ==========  ==================  =============
+补丁 id / 方法                    文件级计数    原标签      方法级复现探针       复核结论
+===============================  ==========  ==========  ==================  =============
+``patch_1788590332_d156``        baseline=4  fake_pass   verdict=true_pass   **真通过**
+``_build_knowledge_association_graph``  post=4  eff=0.0   1 处 → 0 处        （摘除）
+``patch_1788765051_7ff3``        baseline=0  fake_pass   verdict=true_pass   **真通过**
+``_save_fuse_cooldown``          post=4      eff=**-1.0** 1 处 → 0 处        （摘除）
+                                             （claimed 0.5）
+===============================  ==========  ==========  ==================  =============
+
+两条的原标签**都是 ``fake_pass``**（这正是「假通过=2」的所指）：前者文件级 4→4
+算出 eff=0.0；后者 baseline=0 而 post=4，按 :func:`real_effectiveness` 的
+「baseline==0 且 post>0 → -1.0」规则算出 eff=-1.0（其补丁侧自记的 claimed
+effectiveness 为 0.5）。两者的 ``reprobe_verdict`` 均为 ``true_pass``（复现探针实测：修复前 1 处裸 pass
+无留痕 → 修复后 0 处），与第42批 T4 逐字比对结论（补丁 100% 落地，4→4 属文件级
+口径、与目标方法无关）一致。补丁历史清单一并已由门控测试
+``tests/test_liver_silent_fix_m42.py`` 固化（源码回退即失败）。
+
+因此本模块新增 :func:`reprobe_effectiveness`（方法级复现探针效果）与
+:data:`N9_REPROBE_EXEMPT`（N-9 复核清单）：**清单内条目**在复现证据成立时用复现
+探针作为效果判据，上述 2 条据此从 ``fake_pass`` / ``unverifiable`` 摘除，落入正常
+分数分级；**清单外条目**维持原文件级判据，行为完全不变。
+
+★为什么用显式清单、而不是对所有记录通用启用复现判据：实测共 **70** 条记录带
+``reprobe_verdict=true_pass``，通用启用会连带改写其中 68 条 ``unverifiable`` 的定性
+——那已超出本批授权（路灯口径「假通过=**2**」），且这些条目属「文件级 baseline=0
+无参照物」这一**已知判据缺陷**的下游后果，应由专门批次统一处理。本刀保持改动面
+精确可审计。
 """
 from __future__ import annotations
 from nucleus._silent_except import silent_exc
@@ -47,8 +82,11 @@ __all__ = [
     "DEFAULT_REPORT_PATH",
     "LABELS",
     "WEIGHTS",
+    "REPROBE_TRUE_PASS",
+    "N9_REPROBE_EXEMPT",
     "evaluator_enabled",
     "real_effectiveness",
+    "reprobe_effectiveness",
     "evaluate_patch",
     "evaluate_history",
     "summarize",
@@ -74,6 +112,23 @@ LABELS = ("fake_pass", "unverifiable", "not_applied", "good", "mediocre", "bad")
 
 #: ``baseline == 0`` 时的效果中性分（不给满分：无参照物 ≠ 有效）。
 _EFF_NO_BASELINE = 20.0
+
+#: ★第158批第9刀（N-9）：复现探针判定为「真通过」的取值（``reprobe_verdict``）。
+REPROBE_TRUE_PASS = "true_pass"
+
+#: ★第158批第9刀（N-9）复核清单：经逐条核实「文件级计数判据误判、方法级复现探针
+#: 证真通过」的补丁，元素为 ``(file, method)``。
+#:
+#: ★为什么是**显式清单**而不是对所有记录通用启用：实测有 70 条记录带
+#: ``reprobe_verdict=true_pass``，若通用启用会把其中 68 条 ``unverifiable`` 一并改写
+#: ——那已超出本批授权范围（路灯口径为「假通过=**2**」），且这些 ``unverifiable``
+#: 是「文件级 baseline=0 无参照物」这一**已知判据缺陷**的下游后果（见上文档，
+#: 本批 62/67 条属此类），其定性应由专门批次处理，不在本刀擅自扩大。
+#: 因此这里只收 N-9 指定的 2 条，保证改动面精确可审计。
+N9_REPROBE_EXEMPT = frozenset({
+    ("organs/body/PulseLiver.py", "_build_knowledge_association_graph"),
+    ("organs/body/PulseLiver.py", "_save_fuse_cooldown"),
+})
 
 
 # ------------------------------------------------------------------ 小工具
@@ -143,6 +198,49 @@ def real_effectiveness(baseline: Any, post_apply: Any) -> float | None:
     return (_b - _p) / _b
 
 
+def reprobe_effectiveness(p: dict) -> float | None:
+    """★第158批第9刀（N-9）：用**方法级复现探针**重算效果；证据不足时返回 None。
+
+    为什么需要它
+    ------------
+    ``baseline_errors`` / ``post_apply_errors`` 是**文件级**错误计数——同一文件里
+    其它方法的错误也会计入。于是出现两类误判（即 N-9「假通过=2」）：
+
+    * ``PulseLiver._build_knowledge_association_graph``：baseline=4 / post=4
+      → ``real_effectiveness`` = 0.0 → 被打成 ``fake_pass``；
+    * ``PulseLiver._save_fuse_cooldown``：baseline=0 → 效果不可判定
+      → 被打成 ``unverifiable``。
+
+    而两者的 **``reprobe_verdict`` 均为 ``true_pass``**：方法级复现探针实测
+    「修复前 1 处裸 pass（无留痕）→ 修复后 0 处」，与第42批 T4 的逐字比对结论
+    （补丁已 100% 落地）一致。``reprobe_*`` 的粒度与补丁目标（单个方法）一致，
+    因此**当复现探针成功时，其结论优先于文件级计数**。
+
+    Args:
+        p: 单条补丁历史记录（只读）。
+
+    Returns:
+        ``(reprobe_baseline_hits - reprobe_after_hits) / reprobe_baseline_hits``；
+        无复现证据、或证据不足以判定（基线为 0 / 字段缺失 / 非数值）时为 ``None``。
+    """
+    if not isinstance(p, dict):
+        return None
+    if str(p.get("reprobe_verdict") or "") != REPROBE_TRUE_PASS:
+        return None
+    _b = _num(p.get("reprobe_baseline_hits"))
+    _a = _num(p.get("reprobe_after_hits"))
+    if _b is None or _a is None or _b <= 0:
+        return None
+    return (_b - _a) / _b
+
+
+def _n9_exempt(p: Any) -> bool:
+    """该补丁是否在 N-9 复核清单（:data:`N9_REPROBE_EXEMPT`）内。"""
+    if not isinstance(p, dict):
+        return False
+    return (str(p.get("file") or ""), str(p.get("method") or "")) in N9_REPROBE_EXEMPT
+
+
 def _score_effectiveness(real_eff: float | None) -> tuple[float, str]:
     if real_eff is None:
         return _EFF_NO_BASELINE, "无基线可比（baseline=0）→ 效果不可判定"
@@ -197,16 +295,29 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
     _real = real_effectiveness(_baseline, _post)
     _verified = bool(p.get("runtime_verified")) or (_vr.get("verified") is True)
 
-    _s_eff, _r_eff = _score_effectiveness(_real)
+    # ★第158批第9刀（N-9）：方法级复现探针优先于文件级计数。
+    #   仅对 N-9 复核清单内的条目（见 ``N9_REPROBE_EXEMPT``）采纳复现探针结论；
+    #   其余记录维持原文件级判据，避免把影响面扩大到本批未授权的范围。
+    _reprobe = reprobe_effectiveness(p) if _n9_exempt(p) else None
+    _reprobe_ok = _reprobe is not None and _reprobe > 0
+    _eff_for_score = _reprobe if _reprobe_ok else _real
+
+    _s_eff, _r_eff = _score_effectiveness(_eff_for_score)
+    if _reprobe_ok:
+        _r_eff = ("方法级复现探针优先：真实效果 %.1f%%（文件级计数：%s）"
+                  % (_reprobe * 100.0,
+                     "不可判定" if _real is None else "%.1f%%" % (_real * 100.0)))
     _s_ver, _r_ver = _score_verification(_vr)
     _s_reg, _r_reg = _score_regression(_baseline, _post, _vr)
     _s_stb, _r_stb = _score_stability(repeats)
     _score = round(_s_eff + _s_ver + _s_reg + _s_stb, 2)
 
     # ---- 标签（优先级：fake_pass > unverifiable > not_applied > 分数分级）
-    if _verified and _real is not None and _real <= 0:
+    #   ★N-9：reprobe 证据成立时**不**判 fake_pass / unverifiable——二者都是文件级
+    #   计数的口径产物（4→4 得 0.0、baseline=0 得 None），已被方法级复现证伪。
+    if _verified and not _reprobe_ok and _real is not None and _real <= 0:
         _label = "fake_pass"
-    elif _verified and _real is None:
+    elif _verified and not _reprobe_ok and _real is None:
         _label = "unverifiable"
     elif not p.get("applied") and not _verified:
         _label = "not_applied"
@@ -227,6 +338,9 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
         "verified": _verified,
         "claimed_effectiveness": _claimed,
         "real_effectiveness": _real,
+        # ★第158批第9刀（N-9）：方法级复现探针效果 + 本次是否采纳它作为效果判据。
+        "reprobe_effectiveness": _reprobe,
+        "reprobe_used": _reprobe_ok,
         "baseline_errors": _baseline,
         "post_apply_errors": _post,
         "repeats": repeats,
