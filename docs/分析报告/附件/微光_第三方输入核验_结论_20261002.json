@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "task": "微光_第三方输入核验与路径归一化",
+    "date": "2026-10-02",
+    "role": "微光",
+    "tickets": ["T-路径归一化-1", "T-对外协作说明-1"],
+    "nature": "只读取证",
+    "source_inputs": ["docs/小林/tongtong-进化链路分析报告.md", "docs/小林/团队协作模式分析.md"],
+    "main_report": "docs/分析报告/微光_第三方输入核验与路径归一化_20261002.md",
+    "baseline": "HEAD 实测"
+  },
+  "taskA_path_normalization": {
+    "verdict": "部分属实",
+    "star_rail_anchor_reproduced": {
+      "profile_star_json_backslash": 881,
+      "profile_star_json_files": 39,
+      "self_inspector_history_backslash": 11938,
+      "probe_strategy_backslash": 4550,
+      "patch_reprobe_backslash": 14647,
+      "note": "四项锚点全部精确复现"
+    },
+    "format_styles_found": ["abs_bs", "abs_fs", "rel_bs", "rel_fs", "bare"],
+    "data_json_scanned": 2559,
+    "same_file_multi_form": {
+      "files_hit": 17,
+      "sample": [
+        {"file": "data/self_awareness/profile_20260913_075542.json", "forms": ["organs/brain/PulseInnerWorld.py", "organs\\brain\\PulseInnerWorld.py"]},
+        {"file": "data/self_awareness/profile_20260917_203202.json", "forms": ["nucleus/knowledge_access_layer.py", "nucleus\\knowledge_access_layer.py"]}
+      ]
+    },
+    "intra_file_field_mix": {
+      "file": "data/self_awareness/profile_20261002_030001.json",
+      "backslash_fields": ["code_health.top_files[].file"],
+      "slash_fields": ["runtime_health.top_issue.file_path", "call_graph_health.*.file"]
+    },
+    "dedup_failure_real_instance": "未找到（patch_history 86 全 rel_fs / pending 22 全 rel_fs / 0 冲突）",
+    "theoretical_risk_points": [
+      "nucleus/reasoning/PatchManager.py:352-376 _patch_dedup_key 裸file",
+      "nucleus/probe_strategy.py:107,112 record_round 裸file聚合",
+      "nucleus/exploration_audit.py:181 裸file:line:type 去重键",
+      "nucleus/exploration_audit.py:208 focus_files 字符串 in 匹配",
+      "main.py:2905 set() 字符串去重"
+    ],
+    "existing_normalizer": "nucleus/reasoning/SafeEvolutionExecutor.py:43-65 _normalize_file_key（仅内部使用）",
+    "fix": "提炼公共 norm_file_key + 写侧调用方前置归一化 + 读侧匹配统一归一化",
+    "priority": "P2",
+    "batch": "建议 158/159"
+  },
+  "taskB_team_collab": {
+    "verdict": "星轨初核成立",
+    "role_mapping": {
+      "路灯=架构设计": "不实（应为唯一编码执行体）",
+      "星轨=流程规范CI/CD质量控制": "需修正（应为协调与总控）",
+      "烛微=深度分析审查": "基本属实",
+      "微光=新人具体任务执行": "不实（应为阶段性分析职位/星轨验收人）",
+      "TongtongDev=自动化AI角色": "需修正（曈曈自身匿名提交身份，非团队成员）",
+      "小林": "第三方缺项"
+    },
+    "problems": {
+      "1_角色边界模糊": "部分属实",
+      "2_过度依赖核心人员": "部分属实",
+      "3_交接成本高": "属实",
+      "4_版本分支管理复杂": "部分属实",
+      "5_AI角色定位不清": "不实",
+      "6_缺少公开协作规范": "部分属实（缺对外版，非贡献层）"
+    },
+    "public_spec_layer": {
+      "contributor_layer_present": ["README.md(7281B)", "CONTRIBUTING.md(1851B)", "LICENSE(AGPL-3.0,34657B)", "SECURITY.md(1716B)", "CHANGELOG.md(1526B)", ".github/PULL_REQUEST_TEMPLATE.md"],
+      "team_governance_layer_internal": ["docs/路灯与星轨对话/协作模式说明_v1.0.md", "docs/星轨工作流程规范.md", "docs/微光入职引导与职责说明书.md", "docs/路灯与星轨对话/烛微_工作模式说明.md"]
+    },
+    "suggestions": {
+      "1_RACI": "改造后适用",
+      "2_GitHub_Issues替代台账": "不适用",
+      "3_简化批次层级": "改造后适用",
+      "4_知识传承人机边界": "适用"
+    },
+    "external_collab_doc": {
+      "missing": "部分成立（缺六方角色与制衡的对外可读版）",
+      "suggested_structure": ["项目定位", "角色定义(修正版6行)", "批次流程", "门禁体系", "如何参与"],
+      "decision_owner": "小林"
+    },
+    "final_proposals": [
+      {"id": "B-1", "priority": "P3", "desc": "补对外协作说明公开版"},
+      {"id": "B-2", "priority": "P3", "desc": "按修正映射更新六方角色权威说明"}
+    ]
+  },
+  "pii_self_check": "0 命中"
+}

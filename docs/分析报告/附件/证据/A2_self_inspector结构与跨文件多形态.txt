@@ -1,0 +1,120 @@
+########## self_inspector_history.jsonl STRUCTURE ##########
+line0 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=668
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=base\BasePulseOrgan.py
+    KEY=functions\function_loader.py
+    KEY=functions\function_meta.py
+  per_file key styles={'bare': 3, 'rel_bs': 665}
+line1 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=686
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=base\BasePulseOrgan.py
+    KEY=functions\function_loader.py
+    KEY=functions\function_meta.py
+  per_file key styles={'bare': 3, 'rel_bs': 683}
+line2 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=701
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=base\BasePulseOrgan.py
+    KEY=functions\function_loader.py
+    KEY=functions\function_meta.py
+  per_file key styles={'bare': 3, 'rel_bs': 698}
+line3 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=734
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=.aionclaw-tmp\audit1.py
+    KEY=.aionclaw-tmp\audit2.py
+    KEY=.aionclaw-tmp\audit3.py
+  per_file key styles={'bare': 3, 'rel_bs': 731}
+line4 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=734
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=.aionclaw-tmp\audit1.py
+    KEY=.aionclaw-tmp\audit2.py
+    KEY=.aionclaw-tmp\audit3.py
+  per_file key styles={'bare': 3, 'rel_bs': 731}
+line5 keys=['ts', 'loc', 'silent', 'per_file']
+  per_file count=734
+    KEY=config.py
+    KEY=main.py
+    KEY=pulse_doctor.py
+    KEY=.aionclaw-tmp\audit1.py
+    KEY=.aionclaw-tmp\audit2.py
+    KEY=.aionclaw-tmp\audit3.py
+  per_file key styles={'bare': 3, 'rel_bs': 731}
+
+########## CROSS-FILE: same file, multiple raw forms ##########
+files_with_mixed_path_forms=17
+  data\self_awareness\profile_20260913_075542.json        paths=48 multi=1
+     NORM=organs/brain/PulseInnerWorld.py
+       RAW=organs/brain/PulseInnerWorld.py
+       RAW=organs\brain\PulseInnerWorld.py
+  data\self_awareness\profile_20260914_030012.json        paths=49 multi=1
+     NORM=organs/brain/PulseInnerWorld.py
+       RAW=organs/brain/PulseInnerWorld.py
+       RAW=organs\brain\PulseInnerWorld.py
+  data\self_awareness\profile_20260915_030058.json        paths=49 multi=1
+     NORM=organs/brain/PulseInnerWorld.py
+       RAW=organs/brain/PulseInnerWorld.py
+       RAW=organs\brain\PulseInnerWorld.py
+  data\self_awareness\profile_20260917_203202.json        paths=49 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260919_142753.json        paths=51 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260920_030058.json        paths=51 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260921_030019.json        paths=51 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260922_030034.json        paths=50 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260923_030012.json        paths=51 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260924_112137.json        paths=50 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260925_030011.json        paths=51 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+  data\self_awareness\profile_20260926_083517.json        paths=50 multi=1
+     NORM=nucleus/knowledge_access_layer.py
+       RAW=nucleus/knowledge_access_layer.py
+       RAW=nucleus\knowledge_access_layer.py
+
+########## patch_reprobe structure ##########
+FILE patch_history.20260914_195051.json size=645119
+[
+  {
+    "id": "patch_1788744800_b982",
+    "file": "organs/body/PulseHeart.py",
+    "method": "refresh_runtime_params",
+    "issue_type": "silent_exception",
+    "risk_level": "?",
+    "description": "???????except Exception: pass???????",
+    "original_code": "        try:\n            import config as _cfg\n            _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})\n            if 'heart_base_interval' in _rp and hasattr(self, 'base_interval'):\n                self.base_interval = _rp['heart_base_interval']\n            if 'heart_min_interval' in _rp and hasattr(self, 'min_interval'):\n                self.min_interval = _rp['heart_min_interval']\n            if 'heart_max_interval' in _rp and hasattr(self, 'max_interval'):\n                self.max_interval = _rp['heart_max_interval']\n        except Exception:\n            pass",
+    "modified_code": "        try:\n            import c
+...

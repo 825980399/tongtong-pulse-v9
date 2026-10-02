@@ -1,0 +1,212 @@
+
+### nucleus\self_inspector.py [2775-2855] total=4883
+2775|                 with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+2776|                     _n += sum(1 for _ in _f)
+2777|             except OSError as _e:
+2778|                 silent_exc(_e, "self_inspector.py:_si_count_loc", level="debug")
+2779|         return _n
+2780| 
+2781|     def _si_collect_metrics(self):
+2782|         """?? + silent_exc( ???? + ??????B1 ??? per_file ?????????"""
+2783|         _loc = 0
+2784|         _silent = 0
+2785|         _per_file = {}
+2786|         _pat = re.compile(r"silent_exc\(")
+2787|         for _ap, _rel in self._si_walk_py():
+2788|             try:
+2789|                 _floc = 0
+2790|                 with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
+2791|                     for _line in _f:
+2792|                         _loc += 1
+2793|                         _floc += 1
+2794|                         if _pat.search(_line):
+2795|                             _silent += 1
+2796|                 _per_file[_rel] = _floc
+2797|             except OSError as _e:
+2798|                 silent_exc(_e, "self_inspector.py:_si_collect_metrics", level="debug")
+2799|         return _loc, _silent, _per_file
+2800| 
+2801|     def _si_count_branches(self, src: str) -> int:
+2802|         """AST ???????B3 ???"""
+2803|         try:
+2804|             _tree = ast.parse(src, filename="<self_inspector>")
+2805|         except (SyntaxError, ValueError) as _e:
+2806|             silent_exc(_e, "self_inspector.py:_si_count_branches", level="debug")
+2807|             return 0
+2808|         _n = 0
+2809|         for _node in ast.walk(_tree):
+2810|             if isinstance(_node, (ast.If, ast.For, ast.While, ast.With, ast.Try,
+2811|                                   ast.IfExp, ast.BoolOp, ast.ExceptHandler)):
+2812|                 _n += 1
+2813|         return _n
+2814| 
+2815|     def _si_read_jsonl(self, path: str) -> list[dict]:
+2816|         _out = []
+2817|         if not os.path.exists(path):
+2818|             return _out
+2819|         try:
+2820|             with open(path, "r", encoding="utf-8") as _f:
+2821|                 for _line in _f:
+2822|                     _line = _line.strip()
+2823|                     if not _line:
+2824|                         continue
+2825|                     try:
+2826|                         _out.append(json.loads(_line))
+2827|                     except ValueError:
+2828|                         continue
+2829|         except OSError as _e:
+2830|             silent_exc(_e, "self_inspector.py:_si_read_jsonl", level="debug")
+2831|         return _out
+2832| 
+2833|     # ---- B1 silent_growth ----
+2834| 
+2835|     def _detect_silent_growth(self) -> list[dict]:
+2836|         """B1 silent_growth???? + 6h ?? + boot ????????????????"""
+2837|         _now = time.time()
+2838|         if _now - self._boot_ts < SELF_INSPECTOR_BOOT_SILENCE_SEC:
+2839|             return []
+2840|         _root = self._project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+2841|         _hist = os.path.join(_root, SELF_INSPECTOR_HISTORY_PATH)
+2842|         _entries = self._si_read_jsonl(_hist)
+2843|         _loc, _silent, _per_file = self._si_collect_metrics()
+2844|         if not _entries:
+2845|             self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent, "per_file": _per_file})
+2846|             return []
+2847|         if _now - float(_entries[-1].get("ts", 0)) < SELF_INSPECTOR_B1_THROTTLE_SEC:
+2848|             return []  # 6h ????????
+2849|         self._si_append_jsonl(_hist, {"ts": _now, "loc": _loc, "silent": _silent, "per_file": _per_file})
+2850|         _week_ago = _now - 7 * 86400
+2851|         _base = None
+2852|         for _e in _entries:
+2853|             if float(_e.get("ts", 0)) <= _week_ago:
+2854|                 _base = _e
+2855|         if _base is None:
+
+### nucleus\probe_strategy.py [75-150] total=225
+  75|                 "version": "v1.0",
+  76|                 "updated_at": time.time(),
+  77|                 "round_seq": self._round_seq,
+  78|                 "rounds": self._rounds,
+  79|             }
+  80|             _tmp = self._file_path + ".tmp"
+  81|             with open(_tmp, "w", encoding="utf-8") as _f:
+  82|                 json.dump(_snapshot, _f, ensure_ascii=False, indent=2)
+  83|             os.replace(_tmp, self._file_path)
+  84|         except Exception as e:
+  85|             self._log(LogLevel.WARNING, f"??????????: {type(e).__name__}: {e}")
+  86| 
+  87|     # ------------------------------------------------------------------
+  88|     # ??????
+  89|     # ------------------------------------------------------------------
+  90|     def record_round(self, report: dict[str, Any]) -> None:
+  91|         """?????????? file/type ???? severity ?????????? window ??
+  92| 
+  93|         Args:
+  94|             report: run_parallel_audit ????????? issues ????
+  95|         """
+  96|         if not isinstance(report, dict):
+  97|             return
+  98|         _issues = report.get("issues", [])
+  99|         if not isinstance(_issues, list):
+ 100|             _issues = []
+ 101| 
+ 102|         _file_counts: dict[str, int] = {}
+ 103|         _type_counts: dict[str, int] = {}
+ 104|         for _issue in _issues:
+ 105|             if not isinstance(_issue, dict):
+ 106|                 continue
+ 107|             _file = str(_issue.get("file", "") or "")
+ 108|             _type = str(_issue.get("type", "unknown") or "unknown")
+ 109|             _sev = str(_issue.get("severity", "low") or "low")
+ 110|             _weight = _SEVERITY_WEIGHT.get(_sev, 1)
+ 111|             if _file:
+ 112|                 _file_counts[_file] = _file_counts.get(_file, 0) + _weight
+ 113|             _type_counts[_type] = _type_counts.get(_type, 0) + _weight
+ 114| 
+ 115|         with self._lock:
+ 116|             self._round_seq += 1
+ 117|             self._rounds.append({
+ 118|                 "round": self._round_seq,
+ 119|                 "ts": time.time(),
+ 120|                 "file_counts": _file_counts,
+ 121|                 "type_counts": _type_counts,
+ 122|             })
+ 123|             # ?????????? window ?
+ 124|             if len(self._rounds) > self._window:
+ 125|                 self._rounds = self._rounds[-self._window:]
+ 126|             self._save()
+ 127| 
+ 128|     # ------------------------------------------------------------------
+ 129|     # ??????
+ 130|     # ------------------------------------------------------------------
+ 131|     def compute_strategy(self) -> dict[str, Any]:
+ 132|         """???? window ??????????????? + ?????? + ??????
+ 133| 
+ 134|         ???????????????????????????????
+ 135|         ???????????????????? + 1 ?????????
+ 136|         ????????/????????
+ 137| 
+ 138|         Returns:
+ 139|             {
+ 140|                 "focus_files": set[str],   # ??????
+ 141|                 "focus_types": set[str],   # ??????
+ 142|                 "file_weights": {file: score},   # ???/????????
+ 143|                 "type_weights": {type: score},
+ 144|             }
+ 145|         """
+ 146|         with self._lock:
+ 147|             _rounds = list(self._rounds)
+ 148| 
+ 149|         _file_agg: dict[str, int] = {}
+ 150|         _type_agg: dict[str, int] = {}
+
+### nucleus\self_inspector.py /file_counts|focus_files|_rel\b|relpath/
+1404| idx[_cn] = os.path.relpath(
+1464| yield os.path.relpath(
+1509| for _rel in self._m91_iter_production_py():
+1510| _fp = os.path.join(self._m91_project_base(), _rel)
+1519| if _rel not in _lst:
+1520| _lst.append(_rel)
+1554| _rel = os.path.relpath(
+1566| idx[_cn] = _rel
+1574| _rel = self._build_logger_tag_index().get(str(tag or "").strip())
+1575| if not _rel:
+1578| if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
+1579| return _rel
+1587| _rel = self._build_organ_alias_index().get(str(tag or "").strip())
+1588| if not _rel:
+1591| if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
+1592| return _rel
+1670| _crel = os.path.relpath(_cfp, _base).replace(_bs, "/")
+1693| _tag_rel = self._m91_lookup_logger_tag(organ)
+1694| if _tag_rel:
+1695| _file = _tag_rel
+1700| _alias_rel = self._m91_lookup_organ_alias(organ)
+1701| if _alias_rel:
+1702| _file, _conf = _alias_rel, 0.8
+1784| _rel = os.path.relpath(_fp, _base).replace(_bs, "/")
+1788| "file": _rel,
+1789| "category": os.path.basename(os.path.dirname(_rel)),
+2741| """??????? .py ? (abspath, relpath)?
+2748| _rel_dp = os.path.relpath(_dp, _root)
+2754| yield _ap, os.path.relpath(_ap, _root)
+2773| for _ap, _rel in self._si_walk_py():
+2787| for _ap, _rel in self._si_walk_py():
+2796| _per_file[_rel] = _floc
+2936| for _ap, _rel in self._si_walk_py():
+2946| _cur[_rel] = {"loc": _lines, "branches": _branches}
+2949| _b = _baseline.get(_rel)
+2959| f"{_rel} ????? +{_loc_rise:.1f}%?>{SELF_INSPECTOR_B3_CEILING_PCT}%?", _root, file=_ap))
+2965| f"{_rel} ?????? +{_br_rise:.1f}%?>{SELF_INSPECTOR_B3_CEILING_PCT}%?", _root, file=_ap))
+3049| for _ap, _rel in self._si_walk_py():
+3050| _rel_nopy = _rel[:-3] if _rel.endswith(".py") else _rel
+3194| for _ap, _rel in self._si_walk_py():
+  ...
+
+
+==== focus_files consumers ====
+nucleus\exploration_audit.py:204: if isinstance(strategy, dict) and (strategy.get("focus_files") or strategy.get("focus_types")):
+nucleus\exploration_audit.py:205: _focus_files = set(strategy.get("focus_files") or set())
+nucleus\exploration_audit.py:208: _is_focus = (_i.get("file", "") in _focus_files) or (_i.get("type", "unknown") in _focus_types)
+nucleus\probe_strategy.py:140: "focus_files": set[str],   # ??????
+nucleus\probe_strategy.py:158: "focus_files": self._threshold_top(_file_agg),

@@ -1,0 +1,510 @@
+
+### nucleus\self_inspector.py  [140-215] (total 4883)
+ 140|         if not _BODY_LOC_ENABLED:
+ 141|             return
+ 142| 
+ 143|         if _total and _total % _BODY_LOC_LOG_EVERY == 0:
+ 144|             _elapsed = max(1e-6, _t.time() - _s["since"])
+ 145|             _dist = "?".join(f"{k}?{v}" for k, v in sorted(
+ 146|                 _s["offset_dist"].items(), key=lambda kv: -kv[1])[:5])
+ 147|             _module_logger.debug(
+ 148|                 f"[?????] ???? {_total} ?????"
+ 149|                 f"??{_s['exact']} / ????{_s['offset_probe']} / "
+ 150|                 f"?????{_s['fallback']} / ???{_s['miss']}"
+ 151|                 f"?{_total / _elapsed:.0f} ?/??"
+ 152|                 + (f"??????{_dist}" if _dist else ""))
+ 153|             # ?????????????????
+ 154|             for _k in ("fallback", "offset_probe", "exact", "miss"):
+ 155|                 _s[_k] = 0
+ 156|             _s["offset_dist"] = {}
+ 157|             _s["since"] = _t.time()
+ 158|     except Exception as _se:
+ 159|         silent_exc(_se, "self_inspector.py:100")
+ 160| 
+ 161| 
+ 162| def _issue_file_in_backup_dir(file_path: str) -> bool:
+ 163|     # ????60? T3????????????????.bak_batchN / .bak_tmp /
+ 164|     #   .bak_mainlineN ?????????? .bak??????????? .bak ???
+ 165|     #   ?????foo.py.bak??? self_inspector ????? glob ???????
+ 166|     # ?T-133c ?????? const.SCAN_EXCLUDE_DIR_BASENAMES / SCAN_EXCLUDE_PREFIX?
+ 167|     #   ?? backups/ data/code_backups/ tmp/ ???/??????? .bak ????????
+ 168|     if not file_path:
+ 169|         return False
+ 170|     _norm = file_path.replace("\\", "/")
+ 171|     for _seg in _norm.split("/"):
+ 172|         if (_seg.startswith(".bak")
+ 173|                 or _seg.startswith(tuple(SCAN_EXCLUDE_PREFIX))
+ 174|                 or _seg in SCAN_EXCLUDE_DIR_BASENAMES):
+ 175|             return True
+ 176|     return False
+ 177| 
+ 178| 
+ 179| class SelfInspector(SilentLogMixin):
+ 180|     """
+ 181|     ?????????
+ 182| 
+ 183|     ???????"???????""??????""??????"
+ 184|     ??????????????????????????
+ 185|     """
+ 186| 
+ 187|     def __init__(self):
+ 188|         self._config = None
+ 189|         self._project_root = ""
+ 190|         # ??134? T-134c?boot ????B1/B2 boot ? 30 ???????
+ 191|         self._boot_ts = time.time()
+ 192|         # ??64? T1??????????
+ 193|         self._scan_cache = {}
+ 194|         self._scan_cache_time = 0.0
+ 195|         self._scan_cache_ttl = 300.0
+ 196|         self._scan_cache_file_mtimes = {}
+ 197|         self._scan_cache_hits = 0
+ 198|         self._scan_cache_misses = 0
+ 199|         self._scan_cache_invalidations = 0
+ 200|         try:
+ 201|             import config as _m64_cfg
+ 202|             self._scan_cache_ttl = float(getattr(_m64_cfg, "ORGAN_SCAN_CACHE_TTL", 300.0))
+ 203|         except Exception as _m64_e:
+ 204|             _module_logger.debug(f"[SelfInspector] ??TTL?????????300s: {type(_m64_e).__name__}: {_m64_e}")
+ 205|         # _m64_t1_scan_cache_done
+ 206|         # ??64? T2???????????????????????
+ 207|         self._scan_cache_enabled = True
+ 208|         try:
+ 209|             import config as _m64_cfg2
+ 210|             self._scan_cache_enabled = bool(getattr(_m64_cfg2, "ENABLE_ORGAN_SCAN_CACHE", True))
+ 211|         except Exception as _m64_e2:
+ 212|             _module_logger.debug(f"[SelfInspector] ?????????????????: {type(_m64_e2).__name__}: {_m64_e2}")
+ 213|         self._organ_file_cache = {}
+ 214|         self._structure_cache = {}
+ 215|         self._method_info_cache = {}
+
+### nucleus\self_awareness\ProductionConsumptionMatcher.py  [120-160] (total 1214)
+ 120|         _parts.append(_cur.attr)
+ 121|         _cur = _cur.value
+ 122|     if isinstance(_cur, ast.Name):
+ 123|         _parts.append(_cur.id)
+ 124|     return ".".join(reversed(_parts))
+ 125| 
+ 126| 
+ 127| def _looks_like_data_path(path: str) -> bool:
+ 128|     """????????"??????"????????"""
+ 129|     if not path:
+ 130|         return False
+ 131|     _p = path.replace("\\", "/").strip()
+ 132|     if not _p:
+ 133|         return False
+ 134|     # ??18????"????????"??? ?? ?????????
+ 135|     #   ?? `os.path.join("data", name)` ??**????**??????
+ 136|     #   ?????? `data`????????????????
+ 137|     return _p.lower().endswith(_DATA_EXTS)
+ 138| 
+ 139| 
+ 140| def _normalize_path(path: str, project_root: str) -> str:
+ 141|     """??????????? + ?? ./ ../ + ???????????"""
+ 142|     try:
+ 143|         _p = os.path.normpath(path.replace("\\", os.sep))
+ 144|         if os.path.isabs(_p):
+ 145|             try:
+ 146|                 _p = os.path.relpath(_p, project_root)
+ 147|             except ValueError as e:
+ 148|                 silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_normalize_path L147")
+ 149|         return _p.replace("\\", "/")
+ 150|     except Exception as e:
+ 151|         _logger.debug("??????? %r: %s: %s", path, type(e).__name__, e)
+ 152|         return path
+ 153| 
+ 154| 
+ 155| def _join_literal_parts(node: Any, project_root: str) -> tuple[str | None, bool]:
+ 156|     """`os.path.join(...)` ?????????
+ 157| 
+ 158|     ????????????? `os.path.join(ROOT, "data", "x.json")` ?? ?????
+ 159|     ???**?????**???????? `data/x.json`??????????
+ 160|     ??????? static=False????"????"?????????????????
+
+### nucleus\self_awareness\ProductionConsumptionMatcher.py  [640-665] (total 1214)
+ 640|             entry["category"] = "excluded"
+ 641|             entry["exclude_reason"] = _reason
+ 642|             entry["suggestion"] = _EXCLUDE_SUGGEST.get(_reason, "????????")
+ 643|             return
+ 644|         # ? ?????????? ? ??????
+ 645|         if any(_m in path for _m in _DYNAMIC_PATH_MARKS):
+ 646|             entry["size"] = None
+ 647|             entry["abs_path"] = None
+ 648|             entry["path_kind"] = "dynamic"
+ 649|             entry["category"] = "dynamic_path"
+ 650|             entry["suggestion"] = ("?????????????????????"
+ 651|                                    "????????????")
+ 652|             return
+ 653|         # ? ???????Windows/Linux ??????+ ???
+ 654|         _norm = path.replace("/", os.sep).replace("\\", os.sep)
+ 655|         _abs = _norm if os.path.isabs(_norm) else os.path.join(self.project_root, _norm)
+ 656|         try:
+ 657|             _exists = os.path.isfile(_abs)
+ 658|             _size = os.path.getsize(_abs) if _exists else None
+ 659|         except Exception as e:      # ??????????
+ 660|             _exists = False
+ 661|             _size = None
+ 662|             _logger.debug("????/????? %r: %s: %s", path, type(e).__name__, e)
+ 663|         entry["abs_path"] = _abs
+ 664|         entry["size"] = _size
+ 665|         entry["path_kind"] = "existing" if _exists else "missing"
+
+### nucleus\self_awareness\ProductionConsumptionMatcher.py  [900-945] (total 1214)
+ 900| #:   ???39?T1??????????????????????????????????
+ 901| _EXCLUDE_FILES_DEFAULT = (
+ 902|     "data/channel_quota_usage.json",      # ????????
+ 903|     "data/config_override.json",          # ???????
+ 904|     "data/false_positive_rules.json",     # ????
+ 905|     "data/fuse_cooldown.json",            # ?????
+ 906|     "data/growth_comparisons.json",       # ????
+ 907|     "data/identity_knowledge.json",       # ????
+ 908|     "data/param_patch_history.json",      # ??????
+ 909|     "data/param_presets.json",            # ????
+ 910|     "data/probe_strategy.json",           # ????
+ 911|     "data/pulse_instinct_snapshot.json",  # ????
+ 912|     "data/runtime_state.json",            # ?????
+ 913|     "data/semantic_lessons.json",         # ????
+ 914|     "data/tool_strategy_memory.json",     # ??????
+ 915|     "data/verification_learning.json",    # ????
+ 916| )
+ 917| #: ?T5?P2-231??????????????????? / ????
+ 918| _EXCLUDE_EXTS_DEFAULT = (".md", ".txt", ".log")
+ 919| #: ?T4?P2-217???????????????????
+ 920| _SELF_OBSERVE_DEFAULT = ("data/self_awareness",)
+ 921| 
+ 922| #: ?T5????? ? ????
+ 923| _EXCLUDE_SUGGEST = {
+ 924|     "self_observation": "??????????????? ?????-????",
+ 925|     "dir_whitelist": "?????????????? / ???? / ?? / ??????? ??",
+ 926|     "ext_whitelist": "????????????? / ???? ??",
+ 927|     # ?T1??? ? ?? ?? ???**??**? no_consumer ??????
+ 928|     "ext_whitelist_exempted": "??????**??**??????? ? ???????",
+ 929|     "dir_whitelist_exempted": "?????**??**??????? ? ???????",
+ 930|     "file_whitelist": "??????????data???????? ??",
+ 931|     "file_whitelist_exempted": "?????**??**??????? ? ???????",
+ 932| }
+ 933| 
+ 934| 
+ 935| def _norm_prefix(x: Any) -> str:
+ 936|     """????????????? ? ?????????????"""
+ 937|     return str(x or "").replace("\\", "/").strip().strip("/").lower()
+ 938| 
+ 939| 
+ 940| def _match_prefix(rel_path: str, prefixes: tuple) -> bool:
+ 941|     """?????????????????????????????????"""
+ 942|     _p = str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+ 943|     if not _p:
+ 944|         return False
+ 945|     for _pre in prefixes:
+
+### nucleus\self_awareness\FakeLoopDetector.py  [400-430] (total 710)
+ 400| 
+ 401| 
+ 402| def _self_observe_excludes() -> tuple:
+ 403|     """?T4?P2-217????????????????? POSIX ?????? data/self_awareness?
+ 404| 
+ 405|     ?????????????**????**???????"?????????"
+ 406|     ??????? ?? ??????????????
+ 407|     """
+ 408|     try:
+ 409|         import config
+ 410|         if not bool(getattr(config, "ENABLE_SELF_AWARENESS_EXCLUDE", True)):
+ 411|             return ()
+ 412|         _v = getattr(config, "SELF_AWARENESS_EXCLUDE_DIRS", None)
+ 413|         if isinstance(_v, (list, tuple)):
+ 414|             return tuple(str(x).replace("\\", "/").strip("/").lower()
+ 415|                          for x in _v if str(x).strip())
+ 416|     except Exception as e:
+ 417|         _logger.debug("?????????????????: %s: %s",
+ 418|                       type(e).__name__, e)
+ 419|     return ("data/self_awareness",)
+ 420| 
+ 421| 
+ 422| def _is_self_observe(rel_path: str, prefixes: tuple = ()) -> bool:
+ 423|     """?T4?P2-217??????????????????????"""
+ 424|     _p = str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+ 425|     if not _p:
+ 426|         return False
+ 427|     for _pre in (prefixes or _self_observe_excludes()):
+ 428|         if _pre and (_p == _pre or _p.startswith(_pre + "/")):
+ 429|             return True
+ 430|     return False
+
+### nucleus\evolution\patch_dedup.py  [1-60] (total 198)
+   1| """???????????? ?? ???43? T4?P1-280 / P1-279??
+   2| 
+   3| ????42? T2 ???
+   4| ----------------------
+   5| ``data/patches/patch_history.json`` ? **67 ???**???? **60 ??? id** ??
+   6| 7 ? id ?? 2 ???? ``applied=False``?``apply_error=??????(30<60)``??
+   7| ?? ``applied=True``?10 ????????? ??????
+   8| ?"????"?"???"?"????"??????
+   9| 
+  10| ?????**???**??????????????
+  11|   ? :func:`pick_keeper`  ?? ? id ????"???"???
+  12|   ? :func:`dedup_history` ?? ??????? (????, ?????)
+  13|   ? :func:`fix_detail_consistency` ?? P1-279?``runtime_verify_result.detail``
+  14|     ? ``baseline``/``after_fix`` ?????**????? detail**
+  15| 
+  16| ?????????????
+  17| --------------------------
+  18| 1. **?? ``applied=True``**???????????????
+  19| 2. ???/??? ? ?**????**??``applied_at`` ? ``saved_at`` ?
+  20|    ``updated_at`` ? ``generated_at`` ? ``fixed_at`` ?????
+  21| 3. ??? ? ?**???**?????
+  22| 
+  23| ? ?? + ???????**??????**???? ``tools/dedup_patch_history.py`` ??
+  24| ?????????
+  25| """
+  26| from __future__ import annotations
+  27| 
+  28| from typing import Any
+  29| 
+  30| __all__ = [
+  31|     "TIME_KEYS",
+  32|     "dedup_history",
+  33|     "dedup_stats",
+  34|     "fix_detail_consistency",
+  35|     "fix_details_in_history",
+  36|     "pick_keeper",
+  37|     "record_time",
+  38| ]
+  39| 
+  40| #: ?????????????????
+  41| TIME_KEYS = ("applied_at", "saved_at", "updated_at", "generated_at", "fixed_at")
+  42| 
+  43| 
+  44| def record_time(rec: dict) -> float:
+  45|     """??????? :data:`TIME_KEYS` ????????? ``0.0``?"""
+  46|     if not isinstance(rec, dict):
+  47|         return 0.0
+  48|     for _k in TIME_KEYS:
+  49|         _v = rec.get(_k)
+  50|         if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+  51|             continue
+  52|         if _v:
+  53|             return float(_v)
+  54|     return 0.0
+  55| 
+  56| 
+  57| def pick_keeper(records: list) -> dict:
+  58|     """?**?? id** ???????????????
+  59| 
+  60|     Args:
+
+### nucleus\reasoning\SafeEvolutionExecutor.py  [40-70] (total 5904)
+  40|     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  41| 
+  42| 
+  43| def _normalize_file_key(file_val: str) -> str:
+  44|     """??117? T-117d??N4??? file ??????????????
+  45| 
+  46|     ????? 117 ?2-N4 ???????????????**??????** ??
+  47|         ``organs\\brain\\PulseSubconscious.py``????????
+  48|         ``organs/brain/PulseSubconscious.py``????????
+  49|         ``D:\\...\\organs\\brain\\PulseSubconscious.py``????????
+  50|     ?????????? / ?? / ???????? 2~3 ??????
+  51|     ???????????? ?? ??????? T-116a? ???
+  52|     ?**????**?????????
+  53| 
+  54|     ?????normpath?? ``.``/``..``/??????? safe_relpath(???)
+  55|     ??????????????? normcase??????? ????? ``/``?
+  56|     """
+  57|     if not file_val:
+  58|         return ""
+  59|     try:
+  60|         _p = os.path.normpath(str(file_val))
+  61|         _p = _safe_relpath(_p, _PROJECT_ROOT)
+  62|         _p = os.path.normcase(_p)
+  63|         return _p.replace(os.sep, "/").replace("\\", "/")
+  64|     except Exception:
+  65|         return str(file_val)
+  66| 
+  67| # ??86? T-86a?P0??LLM ??????????? ?? ???? token ???
+  68| #   ??????????REMOTE_API_CONFIG ??? deepseek-v4-flash ?**????**?
+  69| #   ????? reasoning_content ??? content?? max_tokens=1500 ?????
+  70| #   ???? ? finish_reason=length?content ????completion_tokens ?? 1500?
+
+### nucleus\reasoning\SafeEvolutionExecutor.py  [200-250] (total 5904)
+ 200|     return _name
+ 201| 
+ 202| 
+ 203| def _issue_filter_reason(file_path: str, project_root: str = "") -> str:
+ 204|     # ????60? T1????59? T2 ???????????????????
+ 205|     #   ?? ""????/ "stdlib"??????????/ "backup"??????/
+ 206|     #   "external"??????????????????????????? ""?
+ 207|     if not file_path:
+ 208|         return ""
+ 209|     _norm = file_path.replace("\\", "/")
+ 210|     try:
+ 211|         _patterns = list(getattr(config, "EVOLUTION_ISSUE_PATH_EXCLUDE_PATTERNS", []) or [])
+ 212|     except Exception:
+ 213|         _patterns = []
+ 214|     for _pat in _patterns:
+ 215|         _p = (_pat or "").replace("\\", "/")
+ 216|         if _p and _p in _norm:
+ 217|             return "stdlib"
+ 218|     # ????60? T1????????.bak_batchN / .bak_tmp / .bak_mainlineN ???
+ 219|     #   ??????? .bak????foo.py.bak ????????? .bak ??????
+ 220|     #   ? .bak_batch59/organs/... ?? ".bak_batch59" ? ".bak" ?? ? ???
+ 221|     try:
+ 222|         _bak_prefixes = list(
+ 223|             getattr(config, "EVOLUTION_ISSUE_BACKUP_DIR_PREFIXES", [".bak"]) or []) or [".bak"]
+ 224|     except Exception:
+ 225|         _bak_prefixes = [".bak"]
+ 226|     for _seg in _norm.split("/"):
+ 227|         if any(_seg.startswith(_bp) for _bp in _bak_prefixes):
+ 228|             return "backup"
+ 229|     # ???????Windows ?? `X:` ?? Unix ? `/`?
+ 230|     _is_abs = _norm.startswith("/") or (len(_norm) > 1 and _norm[1:2] == ":")
+ 231|     if _is_abs:
+ 232|         _root = (project_root or "").replace("\\", "/")
+ 233|         if _root and not _norm.startswith(_root):
+ 234|             return "external"
+ 235|     return ""
+ 236| 
+ 237| def _infer_organ_from_path(file_path: str) -> str:
+ 238|     # ????60? T5?organ/method ?????????????? organ?
+ 239|     #   ????????????????? ""?????????????????
+ 240|     if not file_path:
+ 241|         return ""
+ 242|     _norm = file_path.replace("\\", "/")
+ 243|     if "organs/body/" in _norm:
+ 244|         return "body"
+ 245|     if "organs/brain/" in _norm:
+ 246|         return "brain"
+ 247|     if "nucleus/" in _norm:
+ 248|         return "nucleus"
+ 249|     return ""
+ 250| 
+
+### nucleus\reasoning\PatchManager.py  [390-405] (total 3858)
+ 390|     @staticmethod
+ 391|     def _m80_is_core_file(file_path: str) -> bool:
+ 392|         """?T7(P0-3)????????????? SafeEvolutionExecutor ?????"""
+ 393|         try:
+ 394|             from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+ 395|             return SafeEvolutionExecutor._is_core_file(file_path or "")
+ 396|         except Exception:
+ 397|             _norm = (file_path or "").replace("\\", "/")
+ 398|             return any(m in _norm for m in PatchManager._M80_CORE_FILE_MARKERS)
+ 399| 
+ 400|     @staticmethod
+ 401|     def _m80_auto_apply_enabled(evo_cfg: dict | None = None) -> bool:
+ 402|         """?T7(P0-3)??? auto_apply_enabled ?????? False = ??????"""
+ 403|         if evo_cfg is None:
+ 404|             try:
+ 405|                 import config as _c
+
+### nucleus\reasoning\PatchManager.py  [1545-1560] (total 3858)
+1545|         #   - ???????????rule_bad?????? ? verify_depth="deep"??????
+1546|         #   - ?? ? "standard"???????
+1547|         #   deep ?????????/??????/??????????????????
+1548|         _verify_depth = "standard"
+1549|         try:
+1550|             _hist = self.get_strategy_effectiveness(patch.get("issue_type", ""))
+1551|             _norm_f = (patch.get("file") or "").replace("\\", "/")
+1552|             _core_markers = ("main.py", "config.py", "base/", "nucleus/pulse/",
+1553|                              "nucleus/field/", "nucleus/mnemosyne/", "nucleus/reasoning/")
+1554|             _is_core = any(m in _norm_f for m in _core_markers)
+1555|             if _hist.get("rule_bad") or _is_core:
+1556|                 _verify_depth = "deep"
+1557|         except Exception:
+1558|             _verify_depth = "standard"
+1559|         result["verify_depth"] = _verify_depth
+1560| 
+
+### nucleus\probe_strategy.py  [40-75] (total 225)
+  40|         _report = run_parallel_audit(inspector, strategy=_strategy)
+  41|         _mem.record_round(_report)                    # ???? ? ????
+  42|     """
+  43| 
+  44|     def __init__(self, file_path: str = "data/probe_strategy.json",
+  45|                  window: int = _DEFAULT_WINDOW) -> None:
+  46|         self._file_path = file_path
+  47|         self._window = max(1, window)
+  48|         # ??????? window ?? file/type ??????????
+  49|         # ????: {"round": int, "ts": float, "file_counts": {file: score}, "type_counts": {type: score}}
+  50|         self._rounds: list[dict[str, Any]] = []
+  51|         self._round_seq = 0
+  52|         self._lock = threading.Lock()
+  53|         self._load()
+  54| 
+  55|     # ------------------------------------------------------------------
+  56|     # ???
+  57|     # ------------------------------------------------------------------
+  58|     def _load(self) -> None:
+  59|         try:
+  60|             if os.path.exists(self._file_path):
+  61|                 _data = safe_read_json(self._file_path, default={})
+  62|                 self._rounds = list(_data.get("rounds", []))
+  63|                 self._round_seq = int(_data.get("round_seq", 0))
+  64|         except Exception as e:
+  65|             print(f"[WARNING] probe_strategy.py:57: {type(e).__name__}: {e}")
+  66|             self._rounds = []
+  67|             self._round_seq = 0
+  68| 
+  69|     def _save(self) -> None:
+  70|         try:
+  71|             _dir = os.path.dirname(self._file_path)
+  72|             if _dir:
+  73|                 os.makedirs(_dir, exist_ok=True)
+  74|             _snapshot = {
+  75|                 "version": "v1.0",
+
+### nucleus\probe_strategy.py  [150-205] (total 225)
+ 150|         _type_agg: dict[str, int] = {}
+ 151|         for _r in _rounds:
+ 152|             for _f, _s in (_r.get("file_counts") or {}).items():
+ 153|                 _file_agg[_f] = _file_agg.get(_f, 0) + int(_s)
+ 154|             for _t, _s in (_r.get("type_counts") or {}).items():
+ 155|                 _type_agg[_t] = _type_agg.get(_t, 0) + int(_s)
+ 156| 
+ 157|         return {
+ 158|             "focus_files": self._threshold_top(_file_agg),
+ 159|             "focus_types": self._threshold_top(_type_agg),
+ 160|             "file_weights": _file_agg,
+ 161|             "type_weights": _type_agg,
+ 162|         }
+ 163| 
+ 164|     @staticmethod
+ 165|     def _threshold_top(agg: dict[str, int]) -> set[str]:
+ 166|         """???????? + 1 ??????? key ??????????? top 2?"""
+ 167|         if not agg:
+ 168|             return set()
+ 169|         _vals = list(agg.values())
+ 170|         if len(_vals) <= 2:
+ 171|             # ???????????????????
+ 172|             return set(agg.keys())
+ 173|         _mean = sum(_vals) / len(_vals)
+ 174|         _var = sum((_v - _mean) ** 2 for _v in _vals) / len(_vals)
+ 175|         _std = _var ** 0.5
+ 176|         _threshold = _mean + _std
+ 177|         return {_k for _k, _v in agg.items() if _v > _threshold}
+ 178| 
+ 179|     # ------------------------------------------------------------------
+ 180|     # ?????
+ 181|     # ------------------------------------------------------------------
+ 182|     def reset(self) -> None:
+ 183|         """??????????????????????"""
+ 184|         with self._lock:
+ 185|             self._rounds = []
+ 186|             self._round_seq = 0
+ 187|             self._save()
+ 188| 
+ 189|     def get_stats(self) -> dict[str, Any]:
+ 190|         """????????????"""
+ 191|         with self._lock:
+ 192|             return {
+ 193|                 "rounds_kept": len(self._rounds),
+ 194|                 "round_seq": self._round_seq,
+ 195|                 "window": self._window,
+ 196|                 "file_exists": os.path.exists(self._file_path),
+ 197|             }
+ 198| 
+ 199| 
+ 200| # ??????????
+ 201| _memory: ProbeStrategyMemory | None = None
+ 202| _memory_lock = threading.Lock()
+ 203| 
+ 204| 
+ 205| def get_probe_strategy_memory() -> ProbeStrategyMemory:

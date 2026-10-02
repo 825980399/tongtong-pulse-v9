@@ -1,0 +1,79 @@
+
+########## patch_history.json ##########
+size=808586
+records=86
+file styles: {'rel_fs': 86}
+files_with_MULTIPLE_raw_forms=0
+dedup_key_collisions(norm)=7
+   x3  tests/test_lazy_snapshot_m9.py | test_full_load_regression_unchanged | 
+   x2  organs/body/pulsekidney.py | _m70_kal_get_node | local_rule
+   x2  organs/body/pulsekidney.py | _m70_kal_search_by_level | local_rule
+   x2  organs/body/pulsekidney.py | _m70_direct_get_node | local_rule
+   x2  organs/body/pulsekidney.py | _m69_kal_query | local_rule
+   x3  nucleus/data/dataaccesslayer.py | safe_write_json | 
+   x2  organs/body/pulseliver.py | _m70_kal_node_count | 
+
+########## pending_patches.json ##########
+size=135728
+records=22
+file styles: {'rel_fs': 22}
+files_with_MULTIPLE_raw_forms=0
+dedup_key_collisions(norm)=0
+
+
+########## profile_*.json structure (which fields have 2 forms) ##########
+profiles=19
+sample=profile_20261002_030001.json
+LIST /code_health/top_files len=10 samp=[{"file": "nucleus\\self_awareness\\SelfAwarenessEngine.py", "issues": 57}, {"file": "tests\\test_m94_pending_aging.py", "issues": 48}]
+STR /code_health/top_files[]/file = nucleus\self_awareness\SelfAwarenessEngine.py
+STR /code_health/top_files[]/file = tests\test_m94_pending_aging.py
+STR /code_health/top_files[]/file = tests\test_log_locate_m91.py
+LIST /code_health/tools_used len=1 samp=["ruff"]
+STR /runtime_health/top_issue/file_path = nucleus/reporting/consumers.py
+LIST /runtime_health/top_issue/related_lines len=0 samp=[]
+LIST /runtime_health/issues_preview len=10 samp=[{"organ": "ReportConsumers", "error_type": "ERROR", "file": "consumers.py", "line": 0, "count": 71, "message": "2026-09-30 11:50:36 [ReportConsumers]
+STR /runtime_health/issues_preview[]/file = consumers.py
+STR /runtime_health/issues_preview[]/file = python.py
+STR /runtime_health/issues_preview[]/message = Traceback ??? python.py:1707 ?? runtest
+STR /runtime_health/issues_preview[]/file = _hooks.py
+STR /runtime_health/issues_preview[]/message = Traceback ??? _hooks.py:512 ?? __call__
+LIST /knowledge_health/top_issues len=11 samp=[{"kind": "??", "detail": "???limit??????? 200.0 ? 10000.0???? 98%?", "severity": "medium", "type": "numeric_conflict"}, {"kind": "??", "detail": "???
+LIST /knowledge_health/suggestions len=6 samp=["???? 4 ?????????? L3 ???????", "????????????????? 1 ????"]
+LIST /evolution_health/issues len=1 samp=[{"severity": "info", "type": "healthy", "description": "?????????? 98.6% / ??? 0.0%?"}]
+LIST /production_consumption/no_consumer len=50 samp=["data/config_override.json", "data/stream/hormone_emotion_log.json"]
+STR /production_consumption/no_consumer[] = data/config_override.json
+STR /production_consumption/no_consumer[] = data/stream/hormone_emotion_log.json
+STR /production_consumption/no_consumer[] = data/stream/legs_learn_log.json
+LIST /production_consumption/no_producer len=1 samp=["pulses/pulse_config.yaml"]
+LIST /production_consumption/path_not_found len=10 samp=["pending_patches_resolved.json", "patch_history_obsolete.json"]
+STR /production_consumption/path_not_found[] = pending_patches_resolved.json
+STR /production_consumption/path_not_found[] = patch_history_obsolete.json
+LIST /production_consumption/dynamic_path len=0 samp=[]
+LIST /production_consumption/excluded len=50 samp=["data/runtime_state.json", "logs/pulse.log"]
+STR /production_consumption/excluded[] = data/runtime_state.json
+STR /production_consumption/excluded[] = data/patches/patch_history.json
+LIST /fake_loops/critical len=5 samp=[{"module": "nucleus.mnemosyne.PulseNodePool", "class": "PulseNodePool", "score": 0, "private": false}, {"module": "organs.brain.PulseCognitiveReflect
+LIST /call_graph_health/isolated/top20 len=20 samp=[{"id": "base.BasePulseOrgan:BasePulseOrgan.set_info_field", "name": "set_info_field", "file": "base/BasePulseOrgan.py", "line": 65, "type": "method",
+STR /call_graph_health/isolated/top20[]/file = base/BasePulseOrgan.py
+STR /call_graph_health/isolated/top20[]/file = base/BasePulseOrgan.py
+STR /call_graph_health/isolated/top20[]/file = base/BasePulseOrgan.py
+LIST /call_graph_health/hot/top20 len=20 samp=[{"id": "nucleus._silent_except:silent_exc", "name": "silent_exc", "file": "nucleus/_silent_except.py", "line": 19, "type": "function", "calls": 860},
+STR /call_graph_health/hot/top20[]/file = nucleus/_silent_except.py
+STR /call_graph_health/hot/top20[]/file = main.py
+STR /call_graph_health/hot/top20[]/file = nucleus/mnemosyne/PulseSnapshot.py
+LIST /call_graph_health/hot/super_functions len=3 samp=[{"id": "nucleus._silent_except:silent_exc", "name": "silent_exc", "file": "nucleus/_silent_except.py", "line": 19, "type": "function", "calls": 860},
+STR /call_graph_health/hot/super_functions[]/file = nucleus/_silent_except.py
+STR /call_graph_health/hot/super_functions[]/file = main.py
+STR /call_graph_health/hot/super_functions[]/file = nucleus/mnemosyne/PulseSnapshot.py
+LIST /call_graph_health/cyclic/chains len=2 samp=[{"nodes": ["nucleus.self_inspector:SelfInspector._si_scan_subblocks", "nucleus.self_inspector:SelfInspector._si_scan_unreachable_block"], "length": 2
+LIST /call_graph_health/cyclic/chains[]/nodes len=2 samp=["nucleus.self_inspector:SelfInspector._si_scan_subblocks", "nucleus.self_inspector:SelfInspector._si_scan_unreachable_block"]
+LIST /call_graph_health/cyclic/chains[]/files len=1 samp=["nucleus/self_inspector.py"]
+STR /call_graph_health/cyclic/chains[]/files[] = nucleus/self_inspector.py
+LIST /call_graph_health/cyclic/chains[]/nodes len=3 samp=["organs.motor.PulseController:PulseController._fallback_single_search", "organs.motor.PulseController:PulseController._on_open_url"]
+LIST /call_graph_health/cyclic/chains[]/files len=1 samp=["organs/motor/PulseController.py"]
+STR /call_graph_health/cyclic/chains[]/files[] = organs/motor/PulseController.py
+LIST /call_graph_health/depth/chain len=16 samp=["nucleus.mnemosyne.PulseSnapshot:PulseSnapshot.auto_save", "nucleus.mnemosyne.PulseSnapshot:PulseSnapshot.save"]
+LIST /call_graph_health/coupling/core_modules len=10 samp=[{"module": "nucleus._silent_except", "calls": 860}, {"module": "organs.brain.PulseInnerWorld", "calls": 398}]
+LIST /call_graph_health/coupling/edge_modules len=10 samp=[{"module": "nucleus.evolution.ParamPatchEffectVerifier", "calls": 1}, {"module": "nucleus.genesis.HebbianLearner", "calls": 1}]
+LIST /call_graph_health/recommendations len=5 samp=["?? 2411 ???????????????? 391 ????????????????????????????", "?? 3 ?????? 100 ???????????????????God Function ???"]
+LIST /top_issues len=5 samp=[{"dimension": "code_health", "dimension_label": "????", "severity": "high", "original_severity": "p1", "description": "?????? 405 ??ruff P1?[???]", "

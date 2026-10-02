@@ -1,0 +1,67 @@
+
+### nucleus\reasoning\SafeEvolutionExecutor.py /_normalize_file_key|def _normalize_file_key/ (total 5904)
+  43| def _normalize_file_key(file_val: str) -> str:
+4745|             # ??117? T-117d??file ????????? _normalize_file_key??
+4747|             return (_normalize_file_key(_f), _m,
+
+### nucleus\reasoning\SafeEvolutionExecutor.py /dedup|_seen|already|duplicate|\.get\([\"']file[\"']\)|\[[\"']file[\"']\]/ (total 5904)
+ 618|             "status_request_duplicate": "?????????????????????????????????????",
+ 824|         if _type and _type not in {"silent_exception", "bare_except", "status_request_duplicate",
+1380|                 _fp = _i.get("file") or _i.get("file_path") or _i.get("path") or ""
+1450|         # status_request_duplicate/unbounded_deque/thread_no_daemon/no_timeout_http??
+1452|             "silent_exception", "bare_except", "status_request_duplicate",
+1519|         _seen = set()
+1521|         _dedup_dropped = 0  # ?C3???????????????
+1526|             if _key not in _seen:
+1527|                 _seen.add(_key)
+1530|                 _dedup_dropped += 1
+1556|         if _dedup_dropped > 0:
+1579|                             _issue["file"] = _resolved_file
+1588|             #   organs/ ???????????? None ? issue["file"] ??????
+1595|             #   ? ?????**??? issue["file"]**?LLM/???? file ?????????
+1600|             if self_inspector and _organ and not _issue.get("file"):
+1615|                             _issue["file"] = _hit87_file
+1675|                     #   ?87??????????????????? issue["file"]
+1683|                     #   ? ????? issue["file"] ?????????????
+1873|                     #   ???????? issue["file"] ????? organ ?"?"??
+3732|                                         f"{patch['id'][:16]}... ? {patch['file']}")
+4394|         elif "status_request_duplicate" in plan_type:
+4985|         _complex_types = {"status_request_duplicate", "architecture", "performance",
+5342|             "type": "dedup_status_request",
+
+### nucleus\reasoning\PatchManager.py /dedup|_seen|duplicate|file_key|_norm_f|_m80_dedup/ (total 3858)
+ 353|     def _patch_dedup_key(patch: dict[str, Any]) -> tuple[str, str, str]:
+1101|         _new_key = self._patch_dedup_key(patch)
+1118|                 self._patch_dedup_key(_existing) == _new_key
+1140|                 self._patch_dedup_key(_existing) == _new_key
+1187|                 self._patch_dedup_key(_hist) == _new_key
+1551|             _norm_f = (patch.get("file") or "").replace("\\", "/")
+1554|             _is_core = any(m in _norm_f for m in _core_markers)
+2362|         ?????????exception/resource/timeout/duplicate/syntax/thread/other?
+2370|             ("duplicate", ("duplicate", "repeat", "idempot")),
+3292|             _seen = {str(_e.get("id")) for _e in _existing}
+3294|                 if str(_p.get("id")) not in _seen:
+3296|                     _seen.add(str(_p.get("id")))
+
+### nucleus\self_awareness\__init__.py /profile|write|save/ (total 49)
+nucleus\self_awareness\DailyScheduler.py:79: return str(_cfg("SELF_AWARENESS_OUTPUT_DIR", "data/self_awareness"))
+nucleus\self_awareness\DailyScheduler.py:96: output_dir: ?????None ???? `SELF_AWARENESS_OUTPUT_DIR`?
+nucleus\self_awareness\DailyScheduler.py:153: ??????**????**? `profile_/report_<ts>` ??????"???
+nucleus\self_awareness\DailyScheduler.py:160: """????????**??**?????`SELF_AWARENESS_OUTPUT_DIR`????????"""
+nucleus\self_awareness\DailyScheduler.py:261: `profile_path`?`report_path`?`dimensions`?`error`?
+nucleus\self_awareness\DailyScheduler.py:282: "profile_path": None, "report_path": None,
+nucleus\self_awareness\DailyScheduler.py:287: "status": "ok", "elapsed_ms": 0.0, "profile_path": None,
+nucleus\self_awareness\DailyScheduler.py:295: _pp = os.path.join(_out, "profile_%s.json" % _ts)
+nucleus\self_awareness\DailyScheduler.py:297: _res["profile_path"] = _pp
+nucleus\self_awareness\SelfAwarenessEngine.py:463: """????????????? ``SELF_AWARENESS_OUTPUT_DIR``??"""
+nucleus\self_awareness\SelfAwarenessEngine.py:467: _rel = str(getattr(config, "SELF_AWARENESS_OUTPUT_DIR", _rel) or _rel)
+nucleus\self_awareness\SelfAwarenessEngine.py:475: def _m40_latest_profile_file(self) -> str | None:
+nucleus\self_awareness\SelfAwarenessEngine.py:476: """?????**??**? ``profile_<ts>.json``?? mtime???? None?"""
+nucleus\self_awareness\SelfAwarenessEngine.py:483: if not (_fn.startswith("profile_") and _fn.endswith(".json")):
+nucleus\self_awareness\SelfAwarenessEngine.py:497: def _m40_memory_profile_usable(self) -> bool:
+nucleus\self_awareness\SelfAwarenessEngine.py:519: ? ???????? ``profile_<ts>.json``???? / ???????
+nucleus\self_awareness\SelfAwarenessEngine.py:522: if self._m40_memory_profile_usable():
+nucleus\self_awareness\SelfAwarenessEngine.py:524: _fp = self._m40_latest_profile_file()
+nucleus\self_awareness\SelfAwarenessEngine.py:689: ``json.loads(json.dumps(profile, default=str))``?? ``profile`` ?
+nucleus\self_awareness\SelfAwarenessEngine.py:729: json.dump(self.get_profile().to_dict(), f,
+nucleus\self_awareness\SelfAwarenessEngine.py:878: "profile_timestamp": self._profile.timestamp,

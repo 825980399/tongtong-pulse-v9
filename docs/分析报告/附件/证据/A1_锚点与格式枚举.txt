@@ -1,0 +1,62 @@
+########## ANCHOR COUNTS ##########
+DIR data\self_awareness                      files=39 bs=881 fs=6607
+FILE data\self_inspector_history.jsonl        size=183742 bs=11938 fs=0
+FILE data\probe_strategy.json                 size=61147 bs=4550 fs=15
+DIR data\_archive\patch_reprobe              files=1 bs=14647 fs=678
+
+########## FORMAT STYLES (data top-level json/jsonl) ##########
+scanned json/jsonl files=2559
+  unc                    x15492 
+      data\god_file_baseline.json :: \\audit1.py
+      data\god_file_baseline.json :: \\audit2.py
+      data\god_file_baseline.json :: \\audit3.py
+  rel_or_name            x2808  
+      data\cache\semantic_cache.jsonl :: .\n\n?????\n{\
+      data\cache\semantic_cache.jsonl :: .\n\n?????\n{\
+      data\cache\semantic_cache.jsonl :: .\n\n?????\n{\
+  abs_bs+has_bs          x2492  
+      data\probe_strategy.json :: D:\\xinrenlei\\tongtong-pulse-v9\\organs\\brain\\PulseInnerWorld.py
+      data\probe_strategy.json :: D:\\xinrenlei\\tongtong-pulse-v9\\organs\\identity\\PulseSelfAwareness.py
+      data\probe_strategy.json :: D:\\xinrenlei\\tongtong-pulse-v9\\organs\\body\\PulseLiver.py
+  rel_or_name+has_fs     x465   
+      data\llm_traces\calls_20260913.jsonl :: .\n\n????:\n```python\nDo not call `getattr` with a constant attribute value. It is not any safer than normal 
+      data\llm_traces\calls_20260914.jsonl :: .\n\n## ?????\n\n1. `except Exception:` ????? `logger.exception(...)`???????????? `channel name` ?????????/???
+      data\llm_traces\calls_20260914.jsonl :: .\n```\n\n?????????\n\n- ????? `target=` ????? `daemon=True` ??\n- ?? `threading.Thread` ????????? `__init__` 
+  abs_bs+has_bs+has_fs   x423   
+      data\evolution\test_runs\test_run_20260901_212703.json :: D:\\xinrenlei\\tongtong-pulse-v9\n? auto_fixable ???????6 ?? / 12 ????\n? ?? daemon ???????? daemon ???????\n?
+      data\evolution\test_runs\test_run_20260901_215405.json :: D:\\xinrenlei\\tongtong-pulse-v9\n? auto_fixable ???????6 ?? / 12 ????\n? ?? daemon ???????? daemon ???????\n?
+      data\evolution\test_runs\test_run_20260901_221133.json :: D:\\xinrenlei\\tongtong-pulse-v9\n? auto_fixable ???????6 ?? / 12 ????\n? ?? daemon ???????? daemon ???????\n?
+  unc+has_fs             x199   
+      data\cache\semantic_cache.jsonl :: \\\\u4e00-\\\\u9fff]{2,4}` ?????????2?4?????????2. ????????????????????????????????3. ???????????????4. ??????
+      data\cache\semantic_cache.jsonl :: \\n2. ??get_identity_manager()????????????\\n3. ??????ingest_text????question????????source?????(????????)??\\
+      data\cache\semantic_cache.jsonl :: \\-*/().%\\s]
+  abs_fs                 x115   
+      data\cache\semantic_cache.jsonl :: p://localhost:11434\
+      data\cache\semantic_cache.jsonl :: p://localhost:11434\
+      data\cache\semantic_cache.jsonl :: p://localhost:11434\
+  rel_or_name+has_bs+has_fs x8     
+      data\probe_strategy.json :: .\\tests/test_lazy_snapshot_m9.py
+      data\probe_strategy.json :: .\\tests/test_lazy_snapshot_m9.py
+      data\probe_strategy.json :: .\\tests/test_lazy_snapshot_m9.py
+  rel_or_name+has_bs     x7     
+      data\llm_traces\calls_20260915.jsonl :: .\\\
+      data\llm_traces\calls_20260915.jsonl :: .\\\
+      data\llm_traces\calls_20260919.jsonl :: .\n# Root cause: the approval state file was written straight into the\n# per-session Temp directory (C:\\...\
+  abs_fs+has_bs          x4     
+      data\evolution\effect_verify.json :: D:/xinrenlei/tongtong-pulse-v9\\tmp\\audit_evidence_20260920\\zw2_repro\\fakeproj\\organs\\FakeOrgan.py::::f
+      data\evolution\effect_verify.json :: D:/xinrenlei/tongtong-pulse-v9\\tmp\\audit_evidence_20260920\\zw2_repro\\fakeproj2\\organs\\FakeOrgan.py::::f
+      data\evolution\effect_verify.json :: D:/xinrenlei/tongtong-pulse-v9\\tmp\\audit_evidence_20260920\\zw2_repro\\fakeproj\\organs\\FakeOrgan.py
+
+########## DEDUP EVIDENCE: self_inspector_history.jsonl ##########
+lines=6
+sample keys={'ts': 6, 'loc': 6, 'silent': 6, 'per_file': 6}
+parsed=6 distinct_norm_paths=0
+raw styles: {}
+paths_with_MULTIPLE_raw_forms=0
+
+########## probe_strategy.json ##########
+size=61147 bs=4550 fs=15
+top type=dict
+top keys=['version', 'updated_at', 'round_seq', 'rounds']
+sample={"version": "v1.0", "updated_at": 1790908970.3473768, "round_seq": 2457, "rounds": [{"round": 2453, "ts": 1790906237.634378, "file_counts": {"D:\\xinrenlei\\tongtong-pulse-v9\\organs\\brain\\PulseInnerWorld.py": 10, "D:\\xinrenlei\\tongtong-pulse-v9\\organs\\identity\\PulseSelfAwareness.py": 11, "D:\\xinrenlei\\tongtong-pulse-v9\\organs\\body\\PulseLiver.py": 9, "D:\\xinrenlei\\tongtong-pulse-v9\\
+distinct_norm_keys=216 multi_form_keys=0

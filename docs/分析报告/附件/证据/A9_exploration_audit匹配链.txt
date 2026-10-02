@@ -1,0 +1,119 @@
+
+### nucleus\exploration_audit.py [160-260] total=357
+ 160|     except Exception:
+ 161|         return {"status": "error", "reviewed": 0, "distilled": 0, "report": []}
+ 162| 
+ 163| 
+ 164| def aggregate_audit_results(tool_issues: list, rule_issues: list,
+ 165|                             llm_report: dict, strategy: dict | None = None) -> dict[str, Any]:
+ 166|     """???????+??+?????????????????
+ 167| 
+ 168|     ?P1 ??????? issue ?????`_normalize_issue`????????????
+ 169|     ?????? `message` / ???? `description` ?????????????
+ 170| 
+ 171|     ?P3-L1??? `strategy` ???`probe_strategy.compute_strategy()` ??????
+ 172|     ??????????/??? issue ?? `strategy_focus=True` ?????
+ 173|     ??? + ???????????????? None ?????????????????
+ 174|     ??????? + ??????? issue ?????????????
+ 175|     """
+ 176|     _merged: dict[str, ProbeIssue] = {}
+ 177|     for _raw_issue in list(tool_issues) + list(rule_issues):
+ 178|         _issue = _normalize_issue(_raw_issue)
+ 179|         if _issue is None:
+ 180|             continue
+ 181|         _key = f"{_issue.get('file','')}:{_issue.get('line',0)}:{_issue.get('type','unknown')}"
+ 182|         if _key not in _merged:
+ 183|             _merged[_key] = _issue
+ 184|         else:
+ 185|             # ????????? severity???????????????
+ 186|             _sev_order = {"high": 3, "medium": 2, "low": 1}
+ 187|             _old = _merged[_key]
+ 188|             _old_sev = _sev_order.get(_old.get("severity", "low"), 1)
+ 189|             _new_sev = _sev_order.get(_issue.get("severity", "low"), 1)
+ 190|             if _new_sev > _old_sev or _new_sev == _old_sev and _issue.get("message") and not _old.get("message"):
+ 191|                 _merged[_key] = _issue
+ 192| 
+ 193|     _issues = list(_merged.values())
+ 194|     _severity_counts = {"high": 0, "medium": 0, "low": 0}
+ 195|     _type_counts: dict[str, int] = {}
+ 196|     for _i in _issues:
+ 197|         _sev = _i.get("severity", "low")
+ 198|         if _sev in _severity_counts:
+ 199|             _severity_counts[_sev] += 1
+ 200|         _t = _i.get("type", "unknown")
+ 201|         _type_counts[_t] = _type_counts.get(_t, 0) + 1
+ 202| 
+ 203|     # ?P3-L1???????????????/??? issue ?? + ???????
+ 204|     if isinstance(strategy, dict) and (strategy.get("focus_files") or strategy.get("focus_types")):
+ 205|         _focus_files = set(strategy.get("focus_files") or set())
+ 206|         _focus_types = set(strategy.get("focus_types") or set())
+ 207|         for _i in _issues:
+ 208|             _is_focus = (_i.get("file", "") in _focus_files) or (_i.get("type", "unknown") in _focus_types)
+ 209|             if _is_focus:
+ 210|                 _i["strategy_focus"] = True
+ 211|         # ????????strategy_focus????? severity ???????????????????
+ 212|         _sev_order = {"high": 0, "medium": 1, "low": 2}
+ 213|         _issues.sort(key=lambda _x: (
+ 214|             0 if _x.get("strategy_focus") else 1,
+ 215|             _sev_order.get(_x.get("severity", "low"), 2),
+ 216|         ))
+ 217| 
+ 218|     _llm_issues = llm_report.get("report", []) if isinstance(llm_report, dict) else []
+ 219|     return {
+ 220|         "total_issues": len(_issues),
+ 221|         "severity_counts": _severity_counts,
+ 222|         "type_counts": _type_counts,
+ 223|         "issues": _issues,
+ 224|         "llm_review": {
+ 225|             "reviewed": llm_report.get("reviewed", 0) if isinstance(llm_report, dict) else 0,
+ 226|             "distilled": llm_report.get("distilled", 0) if isinstance(llm_report, dict) else 0,
+ 227|             "report": _llm_issues,
+ 228|         },
+ 229|     }
+ 230| 
+ 231| 
+ 232| def run_parallel_audit(self_inspector=None, strategy: dict | None = None) -> dict[str, Any]:
+ 233|     """??????P1: ???? + ?????P2: ????????????
+ 234| 
+ 235|     ????????????????????????????????????
+ 236|     ?????????????/????/LLM ????????????????
+ 237| 
+ 238|     ?P3-L1: ?? `strategy` ???`probe_strategy.compute_strategy()` ?????
+ 239|     ???????????? issue ?? + ???? None ?????
+ 240|     """
+ 241|     # ?P2: ?????
+ 242|     try:
+ 243|         from nucleus.probe_registry import get_probe_registry
+ 244|         _reg = get_probe_registry()
+ 245|         _probes = _reg.list_probes()
+ 246|         if _probes:
+ 247|             # ?????????????????????????????????
+ 248|             _results = _reg.run_all(self_inspector)
+ 249|             return _aggregate_registry_results(_results, strategy)
+ 250|     except Exception as e:
+ 251|         _logger.warning(f"??????????: {type(e).__name__}: {e}")
+ 252| 
+ 253|     # ????????????
+ 254|     try:
+ 255|         from nucleus.parallel_scheduler import get_parallel_scheduler
+ 256|         _tasks = [
+ 257|             (lambda: _tool_channel(self_inspector)),
+ 258|             (lambda: _rule_channel(self_inspector)),
+ 259|             (lambda: _llm_channel(self_inspector)),
+ 260|         ]
+
+### nucleus\exploration_audit.py /def run_parallel_audit|record_round|probe_strategy|\"file\"|'file'/
+  64| _file = str(raw.get("file", "") or "")
+  84| "file": _file,
+ 105| "file": _issue["file"],
+ 171| ?P3-L1??? `strategy` ???`probe_strategy.compute_strategy()` ??????
+ 181| _key = f"{_issue.get('file','')}:{_issue.get('line',0)}:{_issue.get('type','unknown')}"
+ 208| _is_focus = (_i.get("file", "") in _focus_files) or (_i.get("type", "unknown") in _focus_types)
+ 232| def run_parallel_audit(self_inspector=None, strategy: dict | None = None) -> dict[str, Any]:
+ 238| ?P3-L1: ?? `strategy` ???`probe_strategy.compute_strategy()` ?????
+ 331| _summary = f"{_issue.get('file', '')}:{_issue.get('line', 0)}:{_issue.get('type', 'unknown')}"
+ 348| "file": _issue.get("file", ""),
+
+### nucleus\exploration_audit.py /relpath|abspath|replace\(|\.py/
+   3| exploration_audit.py ?? ?????
+  44| silent_exc(e, "exploration_audit.py:42:register_default_probes", level="warning")

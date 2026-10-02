@@ -1,0 +1,243 @@
+py_files=746
+
+##### ledger:self_awareness #####
+config.py:3876: def get_self_awareness_config() -> dict:
+config.py:4058: SELF_AWARENESS_OUTPUT_DIR = "data/self_awareness"
+config.py:4085: SELF_AWARENESS_EXCLUDE_DIRS = ["data/self_awareness"]
+config.py:4092: #   ????? data ?????????? data/self_awareness?? T4 ????????
+main.py:984: self._init_self_awareness()
+main.py:1010: def _init_self_awareness(self):
+main.py:1018: from nucleus.self_awareness import get_self_awareness_engine
+main.py:1019: from nucleus.self_awareness.FakeLoopDetector import analyze_fake_loops
+main.py:1020: from nucleus.self_awareness.ProductionConsumptionMatcher import (
+main.py:1024: _engine = get_self_awareness_engine()
+main.py:1045: #   tools/run_self_awareness_analysis.py ?? ? ??????????
+main.py:1070: from nucleus.self_awareness.DailyScheduler import start_daily_schedule
+main.py:1091: ???     ? self.self_awareness   (PulseSelfAwareness)
+main.py:1106: _awareness = getattr(self, "self_awareness", None)
+main.py:1112: "life": getattr(self, "self_awareness", None),
+main.py:1379: if hasattr(self, 'self_awareness') and self.self_awareness:
+main.py:1380: self.risk_perception.set_self_awareness(self.self_awareness)
+main.py:1505: self.self_awareness = self._create_organ(PulseSelfAwareness, "????",
+main.py:1509: if hasattr(self.self_awareness, 'set_framework_ref'):
+main.py:1510: self.self_awareness.set_framework_ref(self)
+main.py:1512: self.inner_world.set_self_awareness(self.self_awareness)
+main.py:1515: self.risk_perception.set_self_awareness(self.self_awareness)
+main.py:1534: self.cortex.set_self_awareness(self.self_awareness)
+main.py:1544: self_awareness=self.self_awareness,
+main.py:1568: self_awareness=self.self_awareness,
+main.py:1578: if hasattr(self, 'heart') and hasattr(self, 'self_awareness'):
+main.py:1579: self.heart.set_self_awareness(self.self_awareness)
+main.py:1583: if hasattr(self, 'self_awareness') and self.self_awareness:
+main.py:1584: self.subconscious.set_self_awareness(self.self_awareness)
+main.py:1607: if hasattr(self, 'self_awareness'):
+main.py:1608: self.hormones.set_self_awareness(self.self_awareness)
+main.py:1614: if hasattr(self, 'self_awareness') and hasattr(self.self_awareness, 'set_hormones_ref'):
+main.py:1615: self.self_awareness.set_hormones_ref(self.hormones)
+main.py:1691: if hasattr(self, 'self_awareness') and self.self_awareness:
+main.py:1692: self.motivation_cycle.set_self_awareness(self.self_awareness)
+main.py:2462: self_awareness=self.self_awareness if hasattr(self, 'self_awareness') else None
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:173: self.self_awareness = None
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:284: self._generate_self_awareness_snapshot, lambda: True, False),
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:459: def set_self_awareness(self, awareness):
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:460: self.self_awareness = awareness
+  total_hits=422
+
+##### ledger:profile #####
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:6601: if self.self_awareness and hasattr(self.self_awareness, 'get_knowledge_profile'):
+data\code_backups\backup_20260920_181309\organs\brain\PulseInnerWorld.py:6744: if self.self_awareness and hasattr(self.self_awareness, 'get_knowledge_profile'):
+nucleus\identity\SelfModel.py:127: if self._self_awareness and hasattr(self._self_awareness, "get_knowledge_profile"):
+nucleus\identity\SelfModel.py:128: _profile = self._self_awareness.get_knowledge_profile() or {}
+organs\brain\PulseSubconscious.py:328: if hasattr(self_awareness, 'get_knowledge_profile'):
+organs\brain\PulseSubconscious.py:329: self._knowledge_profile_provider = self_awareness.get_knowledge_profile
+organs\brain\pulse_inner_world_support.py:877: if self.self_awareness and hasattr(self.self_awareness, 'get_knowledge_profile'):
+organs\brain\pulse_inner_world_support.py:1020: if self.self_awareness and hasattr(self.self_awareness, 'get_knowledge_profile'):
+  total_hits=8
+
+##### ledger:inspector_hist #####
+nucleus\const.py:34: SELF_INSPECTOR_HISTORY_PATH = "data/self_inspector_history.jsonl"  # ????git-ignored?
+  total_hits=1
+
+##### ledger:probe_strategy #####
+config.py:1796: "use_probe_strategy": True,
+nucleus\exploration_audit.py:171: ?P3-L1??? `strategy` ???`probe_strategy.compute_strategy()` ??????
+nucleus\exploration_audit.py:238: ?P3-L1: ?? `strategy` ???`probe_strategy.compute_strategy()` ?????
+nucleus\probe_strategy.py:3: probe_strategy.py ?? ????
+nucleus\probe_strategy.py:38: _mem = get_probe_strategy_memory()
+nucleus\probe_strategy.py:44: def __init__(self, file_path: str = "data/probe_strategy.json",
+nucleus\probe_strategy.py:65: print(f"[WARNING] probe_strategy.py:57: {type(e).__name__}: {e}")
+nucleus\probe_strategy.py:205: def get_probe_strategy_memory() -> ProbeStrategyMemory:
+nucleus\probe_strategy.py:215: def reset_probe_strategy_memory() -> None:
+nucleus\probe_strategy.py:223: "get_probe_strategy_memory",
+nucleus\probe_strategy.py:224: "reset_probe_strategy_memory",
+nucleus\self_awareness\ProductionConsumptionMatcher.py:910: "data/probe_strategy.json",           # ????
+organs\brain\PulseCortex.py:2586: _strategy_enabled = bool(getattr(config, "FEATURE", {}).get("use_probe_strategy", False))
+organs\brain\PulseCortex.py:2591: from nucleus.probe_strategy import get_probe_strategy_memory
+organs\brain\PulseCortex.py:2592: _strategy = get_probe_strategy_memory().compute_strategy()
+organs\brain\PulseCortex.py:2617: from nucleus.probe_strategy import get_probe_strategy_memory
+organs\brain\PulseCortex.py:2618: get_probe_strategy_memory().record_round(_report)
+  total_hits=17
+
+##### ledger:patch_reprobe #####
+config.py:957: #   ???? ? ?????????? ? patch_history ? auto_approved ?????
+functions\health_ui.py:1516: patches = analyzer.load_patch_history()
+functions\chat\chat_service.py:399: #   patch_history ?????????????? approved / runtime_verified??
+nucleus\LLMDependencyMetrics.py:69: _M94_PATCH_FILES = ("data/patches/patch_history.json",
+nucleus\self_probe.py:56: self._patch_history = os.path.join(self._project_root, "data", "patches", "patch_history.json")
+nucleus\self_probe.py:219: if not os.path.exists(self._patch_history):
+nucleus\self_probe.py:222: _hist = safe_read_json(self._patch_history, default={})
+nucleus\evolution\evolution_stats.py:40: __all__ = ["EMPTY_STATS", "stats_from_patch_history"]
+nucleus\evolution\evolution_stats.py:62: def stats_from_patch_history(hist: Any) -> dict[str, Any]:
+nucleus\evolution\ParamAnalysisReport.py:24: _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
+nucleus\evolution\ParamAnalysisReport.py:35: def load_patch_history(self) -> list[dict[str, Any]]:
+nucleus\evolution\ParamAnalysisReport.py:64: patches = self.load_patch_history()
+nucleus\evolution\ParamPatchManager.py:28: _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
+nucleus\evolution\patch_dedup.py:5: ``data/patches/patch_history.json`` ? **67 ???**???? **60 ??? id** ??
+nucleus\evolution\patch_dedup.py:23: ? ?? + ???????**??????**???? ``tools/dedup_patch_history.py`` ??
+nucleus\evolution\patch_quality_evaluator.py:23: ???**??** `patch_history.json`??????? JSON????????????
+nucleus\evolution\patch_quality_evaluator.py:64: DEFAULT_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "patches", "patch_history.json")
+nucleus\reasoning\PatchManager.py:342: self._history_file = os.path.join(self._patch_dir, "patch_history.json")
+nucleus\reasoning\PatchManager.py:654: #   ?? patch_history ? applied=True?????????????????
+nucleus\reasoning\PatchManager.py:3262: """????????? history ?? patch_history_obsolete.json?
+nucleus\reasoning\PatchManager.py:3289: os.path.dirname(self._history_file), "patch_history_obsolete.json")
+nucleus\reasoning\PatchManager.py:3573: #   ???patch_history.json ? file ????? Windows ????
+nucleus\reasoning\SafeEvolutionExecutor.py:5865: #   ????? stats_from_patch_history() ????????????
+nucleus\reasoning\SafeEvolutionExecutor.py:5869: stats_from_patch_history)
+nucleus\reasoning\SafeEvolutionExecutor.py:5870: _st = stats_from_patch_history(_hist)
+nucleus\reporting\publishers.py:345: metric_value=_rate, threshold=_warn, target="patch_history"))
+nucleus\reporting\publishers.py:392: metric_value=None, threshold=None, target="patch_history")
+nucleus\self_awareness\ProductionConsumptionMatcher.py:908: "data/param_patch_history.json",      # ??????
+nucleus\self_awareness\quality_score_v2.py:173: _p = os.path.join(ROOT, "data", "patches", "patch_history.json")
+nucleus\self_awareness\quality_score_v2.py:220: "ReportBus(??/??) / patch_history(????)",
+nucleus\self_awareness\quality_score_v2.py:225: "ReportBus(??/??) / patch_history(????)",
+nucleus\self_awareness\SelfAwarenessEngine.py:1735: ?``stats_from_patch_history``??????"???? ``get_evolution_stats()``
+nucleus\self_awareness\SelfAwarenessEngine.py:1762: #   nucleus.evolution.evolution_stats.stats_from_patch_history??
+nucleus\self_awareness\SelfAwarenessEngine.py:1766: from nucleus.evolution.evolution_stats import stats_from_patch_history
+nucleus\self_awareness\SelfAwarenessEngine.py:1767: _st = stats_from_patch_history(_hist)
+tools\adjudicate_patch.py:48: os.path.dirname(pm.get_history_file()), "patch_history_obsolete.json")
+tools\adjudicate_patch.py:122: "patch_history_obsolete.json")
+tools\backfill_baseline_errors.py:40: _HIST = os.path.join(_ROOT, "data", "patches", "patch_history.json")
+tools\backfill_patch_verification_split.py:43: DEFAULT_TARGET = os.path.join("data", "patches", "patch_history.json")
+tools\check_patch_consistency.py:6: - data/patches/patch_history.json        ????/???
+  total_hits=54
+
+##### norm:normpath #####
+nucleus\mnemosyne\experience_pool.py:80: self._base_dir = os.path.abspath(os.path.normpath(_m44_base))
+nucleus\mnemosyne\PulseSnapshot.py:2975: _p = os.path.normpath(os.path.join(
+nucleus\reasoning\SafeEvolutionExecutor.py:54: ?????normpath?? ``.``/``..``/??????? safe_relpath(???)
+nucleus\reasoning\SafeEvolutionExecutor.py:60: _p = os.path.normpath(str(file_val))
+nucleus\reasoning\SafeEvolutionExecutor.py:850: _p = os.path.normpath(_p)
+nucleus\reasoning\SafeEvolutionExecutor.py:851: _root = os.path.normpath(self._project_root)
+nucleus\self_awareness\ProductionConsumptionMatcher.py:143: _p = os.path.normpath(path.replace("\\", os.sep))
+tmp\audit_evidence_154\dz154_t01_selfscan_threelane.py:89: CUR_N = os.path.normpath(CURRENT_REPORT)
+tmp\audit_evidence_154\dz154_t01_selfscan_threelane.py:90: L2 = [f for f in sorted(glob.glob('docs/????/??_*.md')) if os.path.normpath(f) != CUR_N] + \
+tmp\audit_evidence_154\dz154_t01_selfscan_threelane.py:98: if os.path.isdir(dd) and d.startswith('audit_evidence') and os.path.normpath(dd) != os.path.normpath(EVID_DIR):
+tmp\audit_evidence_154\dz154_t05_selfscan_v2_escapeaware.py:117: CUR_N = os.path.normpath(CURRENT_REPORT)
+tmp\audit_evidence_154\dz154_t05_selfscan_v2_escapeaware.py:118: L2 = [f for f in sorted(glob.glob('docs/????/??_*.md')) if os.path.normpath(f) != CUR_N] + \
+tmp\audit_evidence_154\dz154_t05_selfscan_v2_escapeaware.py:123: if os.path.isdir(dd) and d.startswith('audit_evidence') and os.path.normpath(dd) != os.path.normpath(EVID_DIR):
+tmp\audit_evidence_chain157\dzchain_a23_items.py:27: importers.setdefault(os.path.normpath(os.path.join(base, m.replace('.', '/'))).replace('\\', '/'), set()).add(rel)
+tools\ci\check_pending_register.py:28: DEFAULT_CSV = os.path.normpath(
+tools\ci\independent_rescan_148.py:179: abs_t = os.path.normpath(os.path.join(base, target))
+  total_hits=16
+
+##### norm:as_posix #####
+nucleus\wecom_chat_bridge.py:260: if not os.path.realpath(file_path).startswith(os.path.realpath(upload_dir)):
+nucleus\wecom_chat_bridge.py:308: if not os.path.realpath(file_path).startswith(os.path.realpath(upload_dir)):
+nucleus\reasoning\PatchManager.py:1497: _root = os.path.realpath(self._project_root)
+nucleus\reasoning\PatchManager.py:1499: _abs = os.path.realpath(
+nucleus\reasoning\PatchManager.py:3602: _root = os.path.realpath(self._project_root)
+nucleus\reasoning\PatchManager.py:3607: _abs = os.path.realpath(_p)
+nucleus\security\face_codec.py:55: _rp = os.path.realpath(path)
+nucleus\security\face_codec.py:56: _dr = os.path.realpath(_DATA_ROOT)
+organs\motor\PulseController.py:3394: real_path = os.path.realpath(path)
+organs\motor\PulseController.py:3417: pattern_real = os.path.realpath(pattern) if os.path.exists(pattern) else pattern
+organs\motor\PulseFileDigester.py:592: real_path = os.path.realpath(file_path)
+organs\motor\PulseFileDigester.py:600: pattern_real = os.path.realpath(pattern) if os.path.exists(pattern) else pattern
+organs\motor\PulseFileDigester.py:612: pattern_real = os.path.realpath(pattern) if os.path.exists(pattern) else pattern
+  total_hits=13
+
+##### norm:replace_bs #####
+nucleus\logger.py:812: _file = str(_file).replace("\\", "/")
+nucleus\logger.py:816: _rel = _safe_relpath(_file, _PROJECT_ROOT).replace("\\", "/")
+nucleus\self_inspector.py:170: _norm = file_path.replace("\\", "/")
+nucleus\data\write_guard.py:245: _p = os.path.abspath(str(path)).replace("\\", "/").lower()
+nucleus\data\write_guard.py:246: _root = project_root().replace("\\", "/").lower()
+nucleus\evolution\patch_quality_evaluator.py:99: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\evolution\patch_quality_evaluator.py:100: _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
+nucleus\evolution\TestGenerator.py:207: _norm = (file_path or "").replace("\\", "/")
+nucleus\llm\call_pattern_analyzer.py:77: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\llm\call_pattern_analyzer.py:78: _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
+nucleus\llm\call_recorder.py:117: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\llm\call_recorder.py:119: os.path.abspath(__file__)))).replace("\\", "/").lower()
+nucleus\llm\data_quality_evaluator.py:136: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\llm\data_quality_evaluator.py:137: _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
+nucleus\llm\model_self_updater.py:100: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\llm\model_self_updater.py:101: _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
+nucleus\mnemosyne\experience_retriever.py:87: _p = os.path.abspath(path).replace("\\", "/").lower()
+nucleus\mnemosyne\experience_retriever.py:88: _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
+nucleus\reasoning\PatchManager.py:397: _norm = (file_path or "").replace("\\", "/")
+nucleus\reasoning\PatchManager.py:773: _norm = str(file_path or "").replace("\\", "/")
+nucleus\reasoning\PatchManager.py:1551: _norm_f = (patch.get("file") or "").replace("\\", "/")
+nucleus\reasoning\PatchManager.py:3598: _is_posix_abs = os.path.isabs(file_path.replace("\\", "/"))
+nucleus\reasoning\PatchManager.py:3603: _p = file_path.replace("\\", "/")
+nucleus\reasoning\PatchManager.py:3609: return os.path.relpath(_abs, _root).replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:63: return _p.replace(os.sep, "/").replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:209: _norm = file_path.replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:215: _p = (_pat or "").replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:232: _root = (project_root or "").replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:242: _norm = file_path.replace("\\", "/")
+nucleus\reasoning\SafeEvolutionExecutor.py:481: _norm = (file_path or "").replace("\\", "/")
+nucleus\self_awareness\CallGraphAnalyzer.py:187: _p = rel_path.replace("\\", "/")
+nucleus\self_awareness\FakeLoopDetector.py:414: return tuple(str(x).replace("\\", "/").strip("/").lower()
+nucleus\self_awareness\FakeLoopDetector.py:424: _p = str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+nucleus\self_awareness\KnowledgeQualityAnalyzer.py:218: for _seg in _f.replace("\\", "/").split("/"):
+nucleus\self_awareness\ProductionConsumptionMatcher.py:131: _p = path.replace("\\", "/").strip()
+nucleus\self_awareness\ProductionConsumptionMatcher.py:143: _p = os.path.normpath(path.replace("\\", os.sep))
+nucleus\self_awareness\ProductionConsumptionMatcher.py:149: return _p.replace("\\", "/")
+nucleus\self_awareness\ProductionConsumptionMatcher.py:654: _norm = path.replace("/", os.sep).replace("\\", os.sep)
+nucleus\self_awareness\ProductionConsumptionMatcher.py:937: return str(x or "").replace("\\", "/").strip().strip("/").lower()
+nucleus\self_awareness\ProductionConsumptionMatcher.py:942: _p = str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+  total_hits=135
+
+##### dedup:seen_set #####
+config.py:156: "dedup_ttl": 604800,              # ??????7????
+config.py:2747: "dedup_cleanup_interval": 200,           # ???????????????
+config.py:2748: "dedup_cleanup_max_size": 50,            # ???????????????
+config.py:3168: "dedup_interval": 1800,           # ???????????30??
+config.py:3347: "enable_dedup": True,             # ??????
+config.py:3348: "dedup_interval": 1800,           # ????????30??
+main.py:2905: _has_duplicate = len(_parts) != len(set(_parts))
+main.py:2909: if _has_fragment or _has_duplicate or _is_search_noise:
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:12: ??: _on_select_model ?? _is_duplicate_request ????? _pick_best_chat_model / _pick_local_model ???????????????????????_call_remote_api ???????? _verify
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:80: self._dedup_window = 3.0  # ?v26.0??: 10s?3s???????????????
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:237: def _is_duplicate_request(self, prompt: str) -> bool:
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:243: if _now - ts < self._dedup_window]
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:259: if prompt and not _is_dialogue_req and self._is_duplicate_request(prompt):
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:261: return {"status": "duplicate_skipped", "answer": ""}
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:271: _stopgap_active = self._request_dedup() is None
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:273: and self._is_duplicate_request(prompt)):
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:275: return {"status": "duplicate_skipped", "answer": ""}
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:342: _dd = self._request_dedup()
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:345: _dd_key = self._dedup_key(prompt, user_name)
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:347: if _dd_state == "duplicate":
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:359: "dedup_reused": True,
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:362: "status": "dedup_reused",
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:1051: def _request_dedup(self):
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:1058: from nucleus.field.RequestDeduplicator import get_request_deduplicator
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:1059: return get_request_deduplicator()
+data\code_backups\backup_20260914_203541\organs\body\PulseLung.py:1065: def _dedup_key(self, prompt: str, user_name: str) -> str:
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:12: ??: _on_select_model ?? _is_duplicate_request ????? _pick_best_chat_model / _pick_local_model ???????????????????????_call_remote_api ???????? _verify
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:80: self._dedup_window = 3.0  # ?v26.0??: 10s?3s???????????????
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:237: def _is_duplicate_request(self, prompt: str) -> bool:
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:243: if _now - ts < self._dedup_window]
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:259: if prompt and not _is_dialogue_req and self._is_duplicate_request(prompt):
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:261: return {"status": "duplicate_skipped", "answer": ""}
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:271: _stopgap_active = self._request_dedup() is None
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:273: and self._is_duplicate_request(prompt)):
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:275: return {"status": "duplicate_skipped", "answer": ""}
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:342: _dd = self._request_dedup()
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:345: _dd_key = self._dedup_key(prompt, user_name)
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:347: if _dd_state == "duplicate":
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:359: "dedup_reused": True,
+data\code_backups\backup_20260914_203542\organs\body\PulseLung.py:362: "status": "dedup_reused",
+  total_hits=475
