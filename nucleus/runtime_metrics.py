@@ -60,6 +60,8 @@ class RuntimeMetrics:
         # ★B3：最近一次瞬时队列深度（区别于 queue_max_depth 的峰值），
         #   用于告警判断——峰值不会下降，若用峰值做阈值会「一旦超阈值就持续告警」。
         self._last_queue_depth = 0
+        # ★B156-5 票④：该瞬时值的真实采样时刻；陈旧锁存检测（值久未刷新即视为陈旧）。
+        self._last_queue_depth_at = 0.0
         # ★主线第78批 T1：队列深度趋势窗口（每采样点记录一次瞬时深度，供趋势告警）
         self._queue_depth_window: list = []
         self._queue_depth_window_max = 12
@@ -90,6 +92,9 @@ class RuntimeMetrics:
         self._max_alerts = 20               # 最近告警保留条数
         self._last_alert_at = 0.0           # 告警去抖时间戳
         self._alert_cooldown = 30.0         # 告警冷却（秒），避免刷屏
+        # ★B156-5 票④：队列深度告警去重状态（上次告警值/时刻）
+        self._queue_alert_last_depth = None
+        self._queue_alert_last_at = 0.0
 
     def start(self):
         """启动聚合线程。"""
@@ -151,6 +156,7 @@ class RuntimeMetrics:
                         self._lock_waits.append(_lock_wait)
                     self._metrics["queue_max_depth"] = max(self._metrics["queue_max_depth"], _depth)
                     self._last_queue_depth = _depth
+                    self._last_queue_depth_at = time.time()  # ★B156-5 票④：记录真实采样时刻
                     self._metrics["thread_count"] = threading.active_count()
                 elif _kind == "error":
                     _, _ptype, _err, _tb, _lock_held = _item
@@ -289,14 +295,31 @@ class RuntimeMetrics:
 
         _depth = self._last_queue_depth  # 用瞬时值而非峰值，避免超阈值后持续告警
         if _depth >= _thr["queue_max_depth"]:
-            _alerts.append({
-                "type": "queue_depth_high",
-                "level": "WARNING",
-                "message": f"队列深度过高: {_depth}",
-                "threshold": _thr["queue_max_depth"],
-                "actual": _depth,
-                "timestamp": _now,
-            })
+            # ★B156-5 票④：告警值过期标记——陈旧锁存不再反复告警。
+            #   (a) 陈旧：_last_queue_depth 距上次真实采样超过 _QUEUE_DEPTH_STALE_TTL 即视为
+            #       陈旧锁存（如队列已排空但仍报旧高值），不再告警；
+            #   (b) 重复：与上次同值告警间隔 < _QUEUE_DEPTH_ALERT_REPEAT_TTL 则抑制，
+            #       根治 X-3「14890 逐字相同反复告警 8 次」。
+            _age = _now - self._last_queue_depth_at
+            _stale = _age > _QUEUE_DEPTH_STALE_TTL
+            _repeat = (
+                self._queue_alert_last_depth is not None
+                and abs(_depth - (self._queue_alert_last_depth or 0)) <= _QUEUE_DEPTH_STALE_TOL
+                and (_now - self._queue_alert_last_at) < _QUEUE_DEPTH_ALERT_REPEAT_TTL
+            )
+            if not _stale and not _repeat:
+                _alerts.append({
+                    "type": "queue_depth_high",
+                    "level": "WARNING",
+                    "message": f"队列深度过高: {_depth}",
+                    "threshold": _thr["queue_max_depth"],
+                    "actual": _depth,
+                    "timestamp": _now,
+                    # ★B156-5 票④：告警值携带过期时间戳，供面板判断新鲜度
+                    "expires_at": _now + _QUEUE_DEPTH_ALERT_TTL,
+                })
+                self._queue_alert_last_depth = _depth
+                self._queue_alert_last_at = _now
         # ★主线第78批 T1：队列深度趋势告警（早期预警）。
         #   绝对阈值只能在「已破阈」后告警；趋势告警在深度持续爬升、尚未破阈时
         #   即提前示警，给运维缓冲窗口。窗口来自每采样点记录的 _last_queue_depth。
@@ -597,6 +620,12 @@ ADAPTIVE_FREQ_BASE = {
 # 负载等级 -> 间隔放大系数；None 表示暂停（不执行）
 ADAPTIVE_FREQ_FACTOR = {"LOW": 1.0, "MEDIUM": 1.3, "HIGH": 2.0, "CRITICAL": None}
 _VALID_LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+
+# ★B156-5 票④：队列深度告警值过期/去重参数
+_QUEUE_DEPTH_STALE_TTL = 120.0        # 距上次真实采样 >120s 视为陈旧锁存，不告警
+_QUEUE_DEPTH_STALE_TOL = 0            # 同值容差（=0：完全相同才判重复）
+_QUEUE_DEPTH_ALERT_REPEAT_TTL = 600.0  # 同值告警最小间隔 600s（防 X-3 反复告警）
+_QUEUE_DEPTH_ALERT_TTL = 600.0        # 告警值 fresh 窗口（写入 expires_at）
 
 
 def _adaptive_enabled() -> bool:
