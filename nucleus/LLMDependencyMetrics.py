@@ -399,6 +399,35 @@ class LLMDependencyMetrics:
         _t = threading.Thread(target=_loop, name="LLMDepMetrics-Hourly", daemon=True)
         _t.start()
 
+
+    # ============ ★B156 插批（P0-262）：依赖度三向拆分 ============
+
+    def dependency_three_way(self) -> dict[str, Any]:
+        """依赖度三向拆分（进化 / 对话 / 总），供日志与面板消费。
+
+        ★B156 插批（P0-262）：此前 `log_hourly` 只输出「LLM 依赖度 / 自持力」
+        两值，对话类(SCENE_LUNG)是否被统计、占比多少无从观测 → 依赖度基线
+        失真却无人可见。本方法把 llm_call_count 按场景拆为
+        进化(SCENE_EVOLUTION) / 对话(SCENE_LUNG) / 代码学习 / 其他，并给出
+        进化率与对话率（对话率 > 0 即证明对话类埋点已闭环）。
+        """
+        with self._lock:
+            _cc = dict(self._counters.get("llm_call_count", {}))
+        _ev = int(_cc.get(SCENE_EVOLUTION, 0) or 0)
+        _lung = int(_cc.get(SCENE_LUNG, 0) or 0)
+        _code = int(_cc.get(SCENE_CODE_LEARN, 0) or 0)
+        _other = int(_cc.get(SCENE_OTHER, 0) or 0)
+        _total = _ev + _lung + _code + _other
+        return {
+            "evolution": _ev,
+            "lung": _lung,
+            "code_learn": _code,
+            "other": _other,
+            "total": _total,
+            "evolution_ratio": round(_ev / _total, 4) if _total else 0.0,
+            "lung_ratio": round(_lung / _total, 4) if _total else 0.0,
+        }
+
     def log_hourly(self) -> None:
         """记录并输出一次小时级依赖度指标。"""
         _snap = self.get_snapshot()
@@ -418,6 +447,15 @@ class LLMDependencyMetrics:
             f"搜索={_d['search_total']} 消化={_d['digestion_total']} "
             f"回答请求={_d['answer_requests']}"
         )
+        # ★B156 插批（P0-262）：依赖度三向拆分日志（进化 / 对话 / 总）。
+        #   对话率 > 0 即对话类(SCENE_LUNG)埋点已闭环、口径真实化的直接证据。
+        _tw = self.dependency_three_way()
+        if _tw["total"] > 0:
+            _logger.info(
+                f"[依赖度量·三向] 进化={_tw['evolution_ratio']:.4f} "
+                f"对话={_tw['lung_ratio']:.4f} 总={_tw['total']} "
+                f"(进化={_tw['evolution']} 对话={_tw['lung']})"
+            )
         # 依赖度过高（>0.9 且有样本）时提示，服务"增强自持能力"目标
         if _d["answer_requests"] >= 20 and _d["llm_dependency_ratio"] > 0.9:
             _logger.warning(

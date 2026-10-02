@@ -217,5 +217,66 @@ class TestSwitches(_Base):
         self.assertIsInstance(PulseLung._m40_dep_tracking_enabled(), bool)
 
 
+
+
+class TestWriteFailureNonBlocking(_Base):
+    def test_44_write_failure_non_blocking(self):
+        """★B156 插批验证项：留存写盘异常不得阻断主推理流程。"""
+        class _BoomRec(cr.LLMCallRecorder):
+            def record(self, **kw):
+                raise RuntimeError("disk full / IO error")
+        self._rec = _BoomRec(base_dir=self._dir)
+        cr.get_call_recorder = lambda: self._rec
+        _l = _make_lung("正常回复")
+        # 主流程不受影响：仍返回回复，且不抛异常
+        self.assertEqual(_l._call_via_channels("问题", "m1",
+                                             caller="user_dialog"),
+                         "正常回复")
+
+
+class TestDependencyThreeWay(unittest.TestCase):
+    """★B156 插批（P0-262）：依赖度三向拆分（进化/对话/总）门控测试。"""
+
+    def setUp(self):
+        self._dir = tempfile.mkdtemp(prefix="b156_tw_")
+        dm._ISO_BASE_DIR = self._dir
+        dm.reset_llm_dependency_metrics()
+        # 隔离：避免触达生产 data/patches（hermetic + 提速）
+        self._orig_er = dm.LLMDependencyMetrics.evolution_local_rule_rate
+        dm.LLMDependencyMetrics.evolution_local_rule_rate = lambda self: None
+        self._m = dm.get_llm_dependency_metrics()
+
+    def tearDown(self):
+        dm.LLMDependencyMetrics.evolution_local_rule_rate = self._orig_er
+        dm._ISO_BASE_DIR = None
+        dm.reset_llm_dependency_metrics()
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def test_three_way_lung_positive(self):
+        self._m.record_llm_call(dm.SCENE_LUNG)
+        self._m.record_llm_call(dm.SCENE_EVOLUTION)
+        _tw = self._m.dependency_three_way()
+        self.assertGreater(_tw["lung"], 0)
+        self.assertGreater(_tw["evolution"], 0)
+        self.assertEqual(_tw["total"], 2)
+        self.assertGreater(_tw["lung_ratio"], 0)
+        self.assertGreater(_tw["evolution_ratio"], 0)
+
+    def test_three_way_empty_safe(self):
+        _tw = self._m.dependency_three_way()
+        self.assertEqual(_tw["total"], 0)
+        self.assertEqual(_tw["lung_ratio"], 0.0)
+        self.assertEqual(_tw["evolution_ratio"], 0.0)
+
+    def test_log_hourly_emits_three_way(self):
+        self._m.record_llm_call(dm.SCENE_LUNG)
+        self._m.record_llm_call(dm.SCENE_EVOLUTION)
+        with self.assertLogs(level="INFO") as _cm:
+            self._m.log_hourly()
+        _joined = "\n".join(_cm.output)
+        self.assertIn("[依赖度量·三向]", _joined)
+        self.assertIn("对话=", _joined)
+
+
 if __name__ == "__main__":
     unittest.main()
