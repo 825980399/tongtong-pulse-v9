@@ -5624,6 +5624,28 @@ class SafeEvolutionExecutor:
         _out["total"] = _total
         return _out
 
+    # ★第158批第7刀（N-4）：子进程退出码分类 —— NTSTATUS 控制类退出码
+    # 应判为「interrupted」（用户/系统主动中断）而非「crashed」（代码缺陷崩溃）。
+    #   0xC000013A = STATUS_CONTROL_C_EXIT（Ctrl+C / 控制台中断）
+    #   0xC0000409 = STATUS_FATAL_APP_EXIT（fast-fail / 主动终止）
+    # 仅这两个「主动中断」NTSTATUS 走 interrupted；其余崩溃型 NTSTATUS（如 0xC0000005
+    # 访问违规、0xC0000094 除零等）仍按 crashed 处理，避免漏报真崩溃。
+    _NTSTATUS_INTERRUPTED: frozenset[int] = frozenset({0xC000013A, 0xC0000409})
+
+    @staticmethod
+    def _classify_subprocess_exit(exitcode: int) -> str:
+        """★第158批第7刀 N-4：子进程退出码语义分类。
+
+        - 负数：POSIX 信号终止（SIGINT/SIGTERM/SIGKILL 等）→ interrupted（非崩溃）；
+        - 0xC000013A / 0xC0000409：NTSTATUS 主动中断 → interrupted；
+        - 其余：crashed（含真崩溃型 NTSTATUS）。
+        """
+        if exitcode < 0:
+            return "interrupted"
+        if exitcode in SafeEvolutionExecutor._NTSTATUS_INTERRUPTED:
+            return "interrupted"
+        return "crashed"
+
     def _run_subprocess_once(self, input_path: str, output_path: str,
                              stderr_path: str, mode: str,
                              timeout: float) -> dict[str, Any]:
@@ -5656,6 +5678,22 @@ class SafeEvolutionExecutor:
                     "stats": {}, "duration_ms": timeout * 1000}
 
         if proc.exitcode != 0:
+            # ★第158批第7刀 N-4：先判 NTSTATUS 控制类退出码 / POSIX 信号终止 → interrupted（非 crashed）。
+            #   主动中断（Ctrl+C / fast-fail / 信号终止）不应记崩溃统计、不应触发重试风暴与降级。
+            if self._classify_subprocess_exit(proc.exitcode) == "interrupted":
+                _int_code = (f"0x{proc.exitcode:08X}" if proc.exitcode >= 0 else str(proc.exitcode))
+                if proc.exitcode == 0xC000013A:
+                    _int_label = "Ctrl+C 中断(STATUS_CONTROL_C_EXIT)"
+                elif proc.exitcode == 0xC0000409:
+                    _int_label = "主动终止/fast-fail(STATUS_FATAL_APP_EXIT)"
+                else:
+                    _int_label = f"信号终止(exitcode={proc.exitcode})"
+                self._module_logger.info(
+                    f"[自主迭代] 子进程被主动中断(非崩溃): exitcode={_int_code}, "
+                    f"mode={mode}, 原因={_int_label}, 耗时={_elapsed:.1f}s")
+                return {"status": "interrupted",
+                        "error": f"子进程退出码={_int_code}({_int_label})",
+                        "stats": {}, "duration_ms": round(_elapsed * 1000, 1)}
             # ★T3：把「子进程 stderr 尾部 + 输出文件里的崩溃载荷」一并打出，
             #   彻底终结「只有 exitcode、没有原因」的长期盲区。
             _stderr_tail = self._read_text_tail(stderr_path)
@@ -5775,7 +5813,7 @@ class SafeEvolutionExecutor:
             max_issues: 最多处理的问题数，默认5个
 
         Returns:
-            {"status": "success"/"timeout"/"crashed"/"error", "stats": {...}, "error": "", "duration_ms": 1234}
+            {"status": "success"/"timeout"/"crashed"/"error"/"interrupted", "stats": {...}, "error": "", "duration_ms": 1234}
         """
         import json
         import tempfile
