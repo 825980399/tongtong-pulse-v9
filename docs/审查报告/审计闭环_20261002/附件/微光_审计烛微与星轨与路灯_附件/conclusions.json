@@ -1,0 +1,44 @@
+{
+ "audit": "微光·审计烛微+星轨+路灯157A",
+ "taskbook": "微光_审计烛微与路灯_任务书_20261002.md (v2 补审星轨)",
+ "auditor": "微光",
+ "date": "2026-10-02",
+ "head": "6b5708b",
+ "nature": "readonly",
+ "verdicts": {
+  "A_烛微": {"result": "通过", "P0": 0, "P1": 0, "P2": 2},
+  "B_星轨": {"result": "通过", "P0": 0, "P1": 0, "P2": 1},
+  "C_路灯157A": {"result": "通过", "P0": 0, "P1": 0, "P2": 0}
+ },
+ "A_caliber_recompute": [
+  {"item": "Ruff 非F", "烛微": 3748, "微光实测": 3750, "note": "ruff check . =3751(总)-F401(1); 0.16.5 pinned; 族级一致 UP031=1314/UP020=396/I001=495/SIM115=364/RUF100=486", "verdict": "±2 待订正"},
+  {"item": "_create_organ(main.py)", "烛微": 38, "微光实测": 39, "note": "行命中42=39调用+def+docstring+注释; 任务书39", "verdict": "少报1"},
+  {"item": "nucleus except_pass", "烛微": 63, "微光实测": 63, "note": "scan_except_pass.py by_layer 求和", "verdict": "精确"},
+  {"item": "77.9s", "烛微": "82487/42333ms", "微光实测": "82487.3/42332.7ms", "note": "pulse.log L28532/L41989; 族波动42.3~91.6s", "verdict": "精确"},
+  {"item": "PCM 行数", "烛微": 1215, "微光实测": 1214, "note": "EOF 差1; main.py:1020 导入懒加载确认", "verdict": "off-by-one"}
+ ],
+ "A_findings": [
+  "S-1 缺 ≤80 行摘要件（两件交付均缺；recon dir 有 conclusions.json+证据）",
+  "登记册 '122 行' 取工作树口径（HEAD=105 数据行；122=105+17 他会话未提交）",
+  "OpenClaw 内部锚点复核一致：ToolRegistry.py 存在; _created_tools 实 L236(引:234略偏); ensure_tool:267/save_to_library:394 生产零调用"
+ ],
+ "B_findings": [
+  "471b1d8 新增 20 行(任务书'19票'): A组7+O系10+路径协作2+T-登记册并发防护-1",
+  "状态词全白名单 125 数据行: 已结案77/已撤销3/已排期34/已裁决待排期11",
+  "QG158-1~4 与用户拍板一致; 审计烛微P2(Ruff候选未立票)已由471b1d8落实→闭环",
+  "协作模式说明 v1.2 六方角色表(L232-243)与微光B1核验一致(路灯=唯一编码执行体/星轨=协调总控/微光=阶段性分析职位+TongtongDev=曈曈身份)"
+ ],
+ "C_tickets": [
+  {"id": "T-运行异常-3", "commit": "7325689", "verdict": "通过"},
+  {"id": "T-运行异常-1", "commit": "c070590", "verdict": "通过"},
+  {"id": "T-运行异常-2", "commit": "0ea997b", "verdict": "通过"},
+  {"id": "N-1", "commit": "6f4f759", "verdict": "通过"},
+  {"id": "C-7(b)", "commit": "61166ef", "verdict": "通过", "note": "差集语义有效: metas L1212 在域, name 命名空间与 self.organs 键同域(中文名)"},
+  {"id": "N-2", "commit": "cca87af", "verdict": "通过", "note": "_module_logger L36 模块级在域"}
+ ],
+ "C_gates_recheck": {"event_string": "PASS", "pending_register": "PASS", "cw3_consistency": "PASS(行17884/AST 700eed06d8ab)", "cw3_ctx_stale": "PASS(陈旧读0)", "cw2_silent_except": "PASS", "deprecated_import": "PASS", "total": "6/6 PASS"},
+ "C_discipline": {"single_file_commits": true, "not_pushed": true, "bak_batch157_py": 765, "live_verify_pending": "C-7(b)/N-2 活体待小林协调(D5)"},
+ "evidence_dir": "docs/审查报告/审计闭环_20261002/附件/微光_审计烛微与星轨与路灯_附件/证据/",
+ "pii_zero": true,
+ "report_bytes": 7531
+}

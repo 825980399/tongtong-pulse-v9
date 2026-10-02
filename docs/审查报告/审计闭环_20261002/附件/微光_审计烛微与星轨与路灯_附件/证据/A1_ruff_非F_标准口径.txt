@@ -1,0 +1,71 @@
+1314	UP031   	[ ] printf-string-formatting
+ 495	I001    	[*] unsorted-imports
+ 486	RUF100  	[*] unused-noqa
+ 396	UP020   	[*] open-alias
+ 364	SIM115  	[ ] open-file-with-context-handler
+ 101	UP006   	[*] non-pep585-annotation
+  63	RUF012  	[ ] mutable-class-default
+  46	PLW1510 	[ ] subprocess-run-without-check
+  43	UP045   	[*] non-pep604-annotation-optional
+  31	DTZ001  	[ ] call-datetime-without-tzinfo
+  31	SIM117  	[-] multiple-with-statements
+  30	UP035   	[-] deprecated-import
+  24	B010    	[*] set-attr-with-constant
+  21	C401    	[ ] unnecessary-generator-set
+  20	B009    	[*] get-attr-with-constant
+  20	FURB167 	[*] regex-flag-alias
+  17	DTZ005  	[ ] call-datetime-now-without-tzinfo
+  16	RUF015  	[ ] unnecessary-iterable-allocation-for-first-element
+  16	RUF059  	[ ] unused-unpacked-variable
+  15	S102    	[ ] exec-builtin
+  15	PERF102 	[ ] incorrect-dict-iterator
+  15	RUF022  	[-] unsorted-dunder-all
+  13	SIM103  	[ ] needless-bool
+  11	FURB122 	[*] for-loop-writes
+  10	PIE810  	[ ] multiple-starts-ends-with
+  10	UP037   	[*] quoted-annotation
+   9	RET501  	[*] unnecessary-return-none
+   7	FURB188 	[*] slice-to-remove-prefix-or-suffix
+   6	UP032   	[*] f-string
+   6	UP012   	[*] unnecessary-encode-utf8
+   6	PLR1711 	[*] useless-return
+   5	SIM114  	[*] if-with-same-arms
+   5	SIM118  	[-] in-dict-keys
+   5	PLR0402 	[*] manual-from-import
+   5	PIE790  	[*] unnecessary-placeholder
+   4	DTZ007  	[ ] call-datetime-strptime-without-zone
+   4	PLW0602 	[ ] global-variable-not-assigned
+   4	PLR1730 	[*] if-stmt-min-max
+   4	UP024   	[*] os-error-alias
+   4	RUF046  	[ ] unnecessary-cast-to-int
+   3	PLC0206 	[ ] dict-index-missing-items
+   3	PERF402 	[ ] manual-list-copy
+   3	PIE807  	[*] reimplemented-container-builtin
+   3	FURB192 	[ ] sorted-min-max
+   3	UP041   	[*] timeout-error-alias
+   3	RUF023  	[*] unsorted-dunder-slots
+   3	RUF034  	[ ] useless-if-else
+   2	ASYNC230	[ ] blocking-open-call-in-async-function
+   2	DTZ006  	[ ] call-datetime-fromtimestamp
+   2	PLR0124 	[ ] comparison-with-itself
+   2	UP034   	[*] extraneous-parentheses
+   2	UP030   	[ ] format-literals
+   2	FURB136 	[*] if-expr-min-max
+   2	ISC004  	[ ] implicit-string-concatenation-in-collection-literal
+   2	FURB105 	[*] print-empty-string
+   2	UP022   	[ ] replace-stdout-stderr
+   2	TRY004  	[ ] type-check-without-type-error
+   2	UP028   	[ ] yield-in-for-loop
+   1	SIM101  	[ ] duplicate-isinstance-call
+   1	SIM222  	[ ] expr-or-true
+   1	B023    	[ ] function-uses-loop-variable
+   1	G201    	[ ] logging-exc-info
+   1	SIM201  	[ ] negate-equal-op
+   1	PYI034  	[ ] non-self-return-type
+   1	SIM905  	[*] split-static-string
+   1	C408    	[ ] unnecessary-collection-call
+   1	C405    	[ ] unnecessary-literal-set
+   1	F401    	[*] unused-import
+   1	TRY203  	[ ] useless-try-except
+Found 3751 errors.
+[*] 1718 fixable with the `--fix` option (986 hidden fixes can be enabled with the `--unsafe-fixes` option).

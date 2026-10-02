@@ -1,0 +1,322 @@
+{
+ "except_pass_total": null,
+ "except_pass_topkeys": [
+  "total_absorbs",
+  "by_layer",
+  "hits"
+ ],
+ "except_pass_head": "{\"total_absorbs\": 323, \"by_layer\": [{\"layer\": \"tests\", \"count\": 129}, {\"layer\": \"other\", \"count\": 106}, {\"layer\": \"tools\", \"count\": 25}, {\"layer\": \"nucleus/self_inspector.py\", \"count\": 10}, {\"layer\": \"nucleus/reasoning\", \"count\": 7}, {\"layer\": \"nucleus/knowledge\", \"count\": 6}, {\"layer\": \"nucleus/synapsys\", \"count\": 6}, {\"layer\": \"nucleus/data\", \"count\": 5}, {\"layer\": \"nucleus/llm\", \"count\": 5}, {\"layer\": \"nucleus/evolution\", \"count\": 4}, {\"layer\": \"nucleus/knowledge_access_layer.py\", \"count\": 3}, {\"layer\": \"nucleus/mnemosyne\", \"count\": 3}, {\"layer\": \"nucleus/self_awareness\", \"count\": 3}, {\"lay",
+ "create_organ_hits": 57,
+ "create_organ_main": [
+  [
+   "main.py",
+   837,
+   "return self._create_organ(organ_class, name, **extra_deps)"
+  ],
+  [
+   "main.py",
+   839,
+   "def _create_organ(self, organ_class, name, **extra_deps):"
+  ],
+  [
+   "main.py",
+   1161,
+   "用 OrganAssembler 做拓扑排序装配，替代硬编码 _create_organ。"
+  ],
+  [
+   "main.py",
+   1178,
+   "self.qica = self._create_organ(QICA, \"QICA\")"
+  ],
+  [
+   "main.py",
+   1215,
+   "# 说明：self.organs 已由 _create_organ 逐个填充；assemble() 返回的 created 仅含 None 占位，不覆盖。"
+  ],
+  [
+   "main.py",
+   1326,
+   "self.heart = self._create_organ(PulseHeart, \"心脏\")"
+  ],
+  [
+   "main.py",
+   1327,
+   "self.stomach = self._create_organ(PulseStomach, \"胃\","
+  ],
+  [
+   "main.py",
+   1331,
+   "self.lung = self._create_organ(PulseLung, \"肺\")"
+  ],
+  [
+   "main.py",
+   1347,
+   "self.liver = self._create_organ(PulseLiver, \"肝\","
+  ],
+  [
+   "main.py",
+   1359,
+   "self.kidney = self._create_organ(PulseKidney, \"肾\","
+  ],
+  [
+   "main.py",
+   1363,
+   "self.blood_vessel = self._create_organ(PulseBloodVessel, \"血管\")"
+  ],
+  [
+   "main.py",
+   1366,
+   "self.cortex = self._create_organ(PulseCortex, \"大脑皮层\")"
+  ],
+  [
+   "main.py",
+   1367,
+   "self.inner_world = self._create_organ(PulseInnerWorld, \"内在世界\","
+  ],
+  [
+   "main.py",
+   1374,
+   "self.subconscious = self._create_organ(PulseSubconscious, \"潜意识\","
+  ],
+  [
+   "main.py",
+   1378,
+   "self.reflection = self._create_organ(PulseReflection, \"前额叶\","
+  ],
+  [
+   "main.py",
+   1385,
+   "self.code_learner = self._create_organ(PulseCodeLearner, \"代码学习\","
+  ],
+  [
+   "main.py",
+   1391,
+   "self.risk_perception = self._create_organ(PulseRiskPerception, \"风险感知\")"
+  ],
+  [
+   "main.py",
+   1399,
+   "self.interest_model = self._create_organ(PulseInterestModel, \"兴趣模型\")"
+  ],
+  [
+   "main.py",
+   1406,
+   "self.qica = self._create_organ(QICA, \"QICA\")"
+  ],
+  [
+   "main.py",
+   1444,
+   "self.semantic_comprehension = self._create_organ("
+  ],
+  [
+   "main.py",
+   1457,
+   "self.touch = self._create_organ(PulseTouch, \"触觉\")"
+  ],
+  [
+   "main.py",
+   1458,
+   "self.eyes = self._create_organ(PulseEyes, \"眼睛\","
+  ],
+  [
+   "main.py",
+   1463,
+   "self.ears = self._create_organ(PulseEars, \"耳朵\")"
+  ],
+  [
+   "main.py",
+   1466,
+   "self.visual_cortex = self._create_organ(PulseVisualCortex, \"视觉皮层\","
+  ],
+  [
+   "main.py",
+   1475,
+   "self.mouth = self._create_organ(PulseMouth, \"嘴巴\",)"
+  ],
+  [
+   "main.py",
+   1483,
+   "self.hands = self._create_organ(PulseHands, \"双手\")"
+  ],
+  [
+   "main.py",
+   1484,
+   "self.legs = self._create_organ(PulseLegs, \"双腿\")"
+  ],
+  [
+   "main.py",
+   1516,
+   "self.code_sandbox = self._create_organ(PulseCodeSandbox, \"代码沙箱\")"
+  ],
+  [
+   "main.py",
+   1517,
+   "self.file_digester = self._create_organ(PulseFileDigester, \"文件消化器\")"
+  ],
+  [
+   "main.py",
+   1522,
+   "self.self_awareness = self._create_organ(PulseSelfAwareness, \"自我认知\","
+  ],
+  [
+   "main.py",
+   1560,
+   "self.initiative = self._create_organ(PulseInitiative, \"主动交互\","
+  ],
+  [
+   "main.py",
+   1566,
+   "self.ethics = self._create_organ(PulseEthics, \"伦理\")"
+  ],
+  [
+   "main.py",
+   1567,
+   "self.growth = self._create_organ(PulseGrowth, \"成长\","
+  ],
+  [
+   "main.py",
+   1570,
+   "self.narrative = self._create_organ(PulseNarrativeSelf, \"叙事自我\","
+  ],
+  [
+   "main.py",
+   1576,
+   "self.personality = self._create_organ(PulsePersonalityKernel, \"人格内核\","
+  ],
+  [
+   "main.py",
+   1583,
+   "self.spirit_constitution = self._create_organ("
+  ],
+  [
+   "main.py",
+   1623,
+   "self.hormones = self._create_organ(PulseHormones, \"激素\")"
+  ],
+  [
+   "main.py",
+   1636,
+   "self.neurotransmitters = self._create_organ(PulseNeurotransmitters, \"神经递质\")"
+  ],
+  [
+   "main.py",
+   1646,
+   "self.spiritual_core = self._create_organ(PulseSpiritualCore, \"精神核心\")"
+  ],
+  [
+   "main.py",
+   1701,
+   "self.motivation_cycle = self._create_organ("
+  ],
+  [
+   "main.py",
+   1726,
+   "self.global_learner = self._create_organ("
+  ],
+  [
+   "main.py",
+   1771,
+   "self.controller = self._create_organ(PulseController, \"控制器\")"
+  ]
+ ],
+ "create_organ_other": [
+  [
+   "nucleus/organ_assembler.py",
+   31,
+   "# QICA 虽以 _create_organ 创建并存于 organs，但位于 nucleus/qica 而非 organs/，"
+  ],
+  [
+   "nucleus/organ_assembler.py",
+   307,
+   "声明式装配器官（阶段3：替换 main.py 的硬编码 _create_organ）。"
+  ],
+  [
+   "nucleus/organ_assembler.py",
+   316,
+   "- framework._create_organ(organ_class, name, **extra_deps)"
+  ],
+  [
+   "nucleus/organ_loader.py",
+   147,
+   "说明：main.py 的器官装配完全通过「硬编码 _create_organ + load_organs_from_dir」完成，"
+  ],
+  [
+   "organs/brain/PulseCodeLearner.py",
+   1855,
+   "self._create_organ_alias_nodes(organ_name)"
+  ],
+  [
+   "organs/brain/PulseCodeLearner.py",
+   3932,
+   "def _create_organ_alias_nodes(self, organ_name: str):"
+  ],
+  [
+   "tmp/star_q158_landing.py",
+   52,
+   "- **Q158-3 裁决**：C-7 走 (b) 等价校验路线（不动创建语义，可回退）；_create_organ 退役排 158+"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   125,
+   "'create_organ_def': [x for x in defs('_create_organ', ['main.py'])],"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   126,
+   "'create_organ_calls': [[i, l.strip()[:120]] for i, l in enumerate(L, 1) if '_create_organ(' in l and"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   127,
+   "'n_create_organ_calls': len([l for l in L if '_create_organ(' in l and 'def ' not in l]),"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   38,
+   "# --- 3. _create_organ 39 处复测（HEAD 全仓）---"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   39,
+   "r = subprocess.run(['git', 'grep', '-n', '_create_organ', 'HEAD'], capture_output=True, text=True,"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   48,
+   "defs = [x for x in rows if 'def _create_organ' in x[2]]"
+  ],
+  [
+   "tmp/audit_evidence_chain157/dzchain_a16_write.py",
+   220,
+   "A('| `main.py:1215` 自述 | \"self.organs 已由 `_create_organ` 逐个填充；`assemble()` 返回的 created 仅含 None 占位，不覆"
+  ],
+  [
+   "tmp/audit_evidence_chain157/dzchain_a16_write.py",
+   222,
+   "A('**净含义**：器官注册表、`post_wiring` 软依赖、`extra_deps` 硬依赖、`set_*` 注入 setter（L3 中 %d 个）这一整套**声明式装配机制是齐的，但装配"
+  ]
+ ],
+ "pcm_lines": 1214,
+ "pcm_exists": true,
+ "main_1020_ctx": [
+  "from nucleus.self_awareness import get_self_awareness_engine",
+  "from nucleus.self_awareness.FakeLoopDetector import analyze_fake_loops",
+  "from nucleus.self_awareness.ProductionConsumptionMatcher import (",
+  "analyze_production_consumption,",
+  ")"
+ ],
+ "daily_779_found": [
+  [
+   "logs/pulse.log",
+   11962,
+   "2026-09-30 13:25:23 [SelfAwarenessDailyScheduler] INFO: [自我认知调度] 每日分析完成: 6 维度 / 77903.0ms → {'status': 'planned', 'version': 'v1.2.0', 'parent': 'v1.1.0', 'kept"
+  ],
+  [
+   "logs/pulse.log",
+   28532,
+   "2026-10-01 22:21:37 [SelfAwarenessDailyScheduler] INFO: [自我认知调度] 每日分析完成: 6 维度 / 82487.3ms → D:\\xinrenlei\\tongtong-pulse-v9\\data\\self_awareness\\report_20261001_2"
+  ]
+ ],
+ "register_lines_total": 126,
+ "register_data_rows": 125
+}

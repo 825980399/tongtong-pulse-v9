@@ -1,0 +1,344 @@
+{
+ "total_absorbs": 323,
+ "by_layer": [
+  {
+   "layer": "tests",
+   "count": 129
+  },
+  {
+   "layer": "other",
+   "count": 106
+  },
+  {
+   "layer": "tools",
+   "count": 25
+  },
+  {
+   "layer": "nucleus/self_inspector.py",
+   "count": 10
+  },
+  {
+   "layer": "nucleus/reasoning",
+   "count": 7
+  },
+  {
+   "layer": "nucleus/knowledge",
+   "count": 6
+  },
+  {
+   "layer": "nucleus/synapsys",
+   "count": 6
+  },
+  {
+   "layer": "nucleus/data",
+   "count": 5
+  },
+  {
+   "layer": "nucleus/llm",
+   "count": 5
+  },
+  {
+   "layer": "nucleus/evolution",
+   "count": 4
+  },
+  {
+   "layer": "nucleus/knowledge_access_layer.py",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/mnemosyne",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/self_awareness",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/semantic",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/logger.py",
+   "count": 2
+  },
+  {
+   "layer": "nucleus/security",
+   "count": 2
+  },
+  {
+   "layer": "nucleus/ssrf_guard.py",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/events",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/qica",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/runtime",
+   "count": 1
+  }
+ ],
+ "nucleus_sublayers": [
+  {
+   "layer": "nucleus/self_inspector.py",
+   "count": 10
+  },
+  {
+   "layer": "nucleus/reasoning",
+   "count": 7
+  },
+  {
+   "layer": "nucleus/knowledge",
+   "count": 6
+  },
+  {
+   "layer": "nucleus/synapsys",
+   "count": 6
+  },
+  {
+   "layer": "nucleus/data",
+   "count": 5
+  },
+  {
+   "layer": "nucleus/llm",
+   "count": 5
+  },
+  {
+   "layer": "nucleus/evolution",
+   "count": 4
+  },
+  {
+   "layer": "nucleus/knowledge_access_layer.py",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/mnemosyne",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/self_awareness",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/semantic",
+   "count": 3
+  },
+  {
+   "layer": "nucleus/logger.py",
+   "count": 2
+  },
+  {
+   "layer": "nucleus/security",
+   "count": 2
+  },
+  {
+   "layer": "nucleus/ssrf_guard.py",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/events",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/qica",
+   "count": 1
+  },
+  {
+   "layer": "nucleus/runtime",
+   "count": 1
+  }
+ ],
+ "nucleus_sum": 63,
+ "mainpy_create_organ": {
+  "call": 39,
+  "def": 1,
+  "other": 1,
+  "comment": 1,
+  "total": 42
+ },
+ "create_organ_other_files": [
+  [
+   "nucleus/organ_assembler.py",
+   31,
+   "# QICA 虽以 _create_organ 创建并存于 organs，但位于 nucleus/qica 而非 organs/，"
+  ],
+  [
+   "nucleus/organ_assembler.py",
+   307,
+   "声明式装配器官（阶段3：替换 main.py 的硬编码 _create_organ）。"
+  ],
+  [
+   "nucleus/organ_assembler.py",
+   316,
+   "- framework._create_organ(organ_class, name, **extra_deps)"
+  ],
+  [
+   "nucleus/organ_loader.py",
+   147,
+   "说明：main.py 的器官装配完全通过「硬编码 _create_organ + load_organs_from_dir」完成，"
+  ],
+  [
+   "organs/brain/PulseCodeLearner.py",
+   1855,
+   "self._create_organ_alias_nodes(organ_name)"
+  ],
+  [
+   "organs/brain/PulseCodeLearner.py",
+   3932,
+   "def _create_organ_alias_nodes(self, organ_name: str):"
+  ],
+  [
+   "tmp/star_q158_landing.py",
+   52,
+   "- **Q158-3 裁决**：C-7 走 (b) 等价校验路线（不动创建语义，可回退）；_create_organ 退役排 158+"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   125,
+   "'create_organ_def': [x for x in defs('_create_organ', ['main.py'])],"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   126,
+   "'create_organ_calls': [[i, l.strip()[:120]] for i, l in enumerate(L, 1) if '_cre"
+  ],
+  [
+   "tmp/audit_evidence_157/dz157_p01_tickets.py",
+   127,
+   "'n_create_organ_calls': len([l for l in L if '_create_organ(' in l and 'def ' no"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   38,
+   "# --- 3. _create_organ 39 处复测（HEAD 全仓）---"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   39,
+   "r = subprocess.run(['git', 'grep', '-n', '_create_organ', 'HEAD'], capture_outpu"
+  ],
+  [
+   "tmp/audit_evidence_158/ev158_p1_ab.py",
+   48,
+   "defs = [x for x in rows if 'def _create_organ' in x[2]]"
+  ],
+  [
+   "tmp/audit_evidence_chain157/dzchain_a16_write.py",
+   220,
+   "A('| `main.py:1215` 自述 | \"self.organs 已由 `_create_organ` 逐个填充；`assemble()` 返回的 c"
+  ],
+  [
+   "tmp/audit_evidence_chain157/dzchain_a16_write.py",
+   222,
+   "A('**净含义**：器官注册表、`post_wiring` 软依赖、`extra_deps` 硬依赖、`set_*` 注入 setter（L3 中 %d 个）"
+  ]
+ ],
+ "reg_total_lines": 126,
+ "reg_header": "ID,提出方,提出批次,摘要,P级,状态,到期批次,裁决批次,裁决内容",
+ "reg_data_rows": 125,
+ "rows_with_158": 22,
+ "reg_rows_at_5bb14b5": 105,
+ "reg_lines_at_5bb14b5": 106,
+ "daily_analysis_events": [
+  [
+   "logs/pulse.log",
+   26799,
+   [
+    "2",
+    "44.8"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   27994,
+   [
+    "2",
+    "52.7"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   27996,
+   [
+    "2",
+    "37.2"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   27998,
+   [
+    "2",
+    "36.9"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   28000,
+   [
+    "2",
+    "37.9"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   28005,
+   [
+    "2",
+    "42.2"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   28532,
+   [
+    "6",
+    "82487.3"
+   ]
+  ],
+  [
+   "logs/pulse.log",
+   41989,
+   [
+    "7",
+    "42332.7"
+   ]
+  ],
+  [
+   "logs/pulse.log.1",
+   11599,
+   [
+    "6",
+    "87695.1"
+   ]
+  ],
+  [
+   "logs/pulse.log.1",
+   38442,
+   [
+    "7",
+    "62721.6"
+   ]
+  ],
+  [
+   "logs/pulse.log.1",
+   39600,
+   [
+    "6",
+    "91573.5"
+   ]
+  ],
+  [
+   "logs/pulse.log.1",
+   75825,
+   [
+    "6",
+    "81081.5"
+   ]
+  ]
+ ]
+}

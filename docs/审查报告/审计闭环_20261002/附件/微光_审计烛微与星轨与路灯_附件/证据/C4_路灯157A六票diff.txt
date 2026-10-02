@@ -1,0 +1,138 @@
+=== 7325689 157-A T-运行异常-3: 移除 Popen 跨平台必抛的 timeout 形参，修复 30 生产探测点 100% 空转 ===
+
+diff --git a/utils/safe_hw_probe.py b/utils/safe_hw_probe.py
+index c2dbbb9..e6cf734 100644
+--- a/utils/safe_hw_probe.py
++++ b/utils/safe_hw_probe.py
+@@ -1,5 +1,4 @@
+-from config import EXTERNAL_CALL_TIMEOUTS
+-"""safe_hw_probe —— 安全硬件探测（v9.5 · 隔离子进程版）
++"""safe_hw_probe —— 安全硬件探测（v10 · 隔离子进程版）
+ 
+ 版本: v10 PulseNet
+ 设计: 路灯、小林、星轨
+@@ -25,7 +24,7 @@ def _run_isolated(script: str, timeout: float = 6.0):
+             stderr=subprocess.DEVNULL,
+             text=True,
+             encoding="utf-8", errors="replace",
+-        timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_short"], )
++        )
+     except Exception as e:
+         silent_exc(e, where="safe_hw_probe._run_isolated:spawn")
+         return None
+=== c070590 157-A T-运行异常-1: runtime_state_writer 裸调实例方法 list_presets 改为 ParamPresets().list_presets() ===
+
+diff --git a/functions/runtime_state_writer.py b/functions/runtime_state_writer.py
+index 807b262..6c6beec 100644
+--- a/functions/runtime_state_writer.py
++++ b/functions/runtime_state_writer.py
+@@ -147,7 +147,7 @@ class RuntimeStateWriter:
+         # 6. 参数预设列表
+         try:
+             from nucleus.evolution.ParamAnalysisReport import ParamPresets
+-            presets = getattr(ParamPresets, "list_presets", list)()
++            presets = ParamPresets().list_presets()
+             state["param_presets"] = {
+                 "count": len(presets) if presets else 0,
+                 "names": [p.get("name", "") for p in presets[:10]] if presets else [],
+=== 0ea997b 157-A T-运行异常-2: PulseCore json.dumps 加 default=str 防止 ndarray TypeError；更正 where 漂移 L292->L294 ===
+
+diff --git a/nucleus/pulse/PulseCore.py b/nucleus/pulse/PulseCore.py
+index c7d8b98..e073f34 100644
+--- a/nucleus/pulse/PulseCore.py
++++ b/nucleus/pulse/PulseCore.py
+@@ -261,7 +261,7 @@ class PulseCore:
+         import hashlib
+         import json
+         payload = pulse.get("payload") or {}
+-        payload_key = json.dumps(payload, sort_keys=True, ensure_ascii=False)
++        payload_key = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+         source = pulse.get("source_organ", "")
+         event_type = pulse.get("event_type", "")
+         target = pulse.get("target_organ", "") or pulse.get("target", "")
+@@ -291,7 +291,7 @@ class PulseCore:
+                     self._completed_fingerprints.popitem(last=False)
+                 self._total_completed += 1
+         except Exception as e:
+-            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L292")
++            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L294")
+ 
+     def _mark_completed(self, pulse_id: str):
+         with self._execution_lock:
+=== 6f4f759 157-A N-1: AutonomousDeriver 修正 aibot_logger 误用 get_logger->get_aibot_logger；_log level 路由生效 ===
+
+diff --git a/nucleus/reasoning/AutonomousDeriver.py b/nucleus/reasoning/AutonomousDeriver.py
+index dd52dfc..7bb5258 100644
+--- a/nucleus/reasoning/AutonomousDeriver.py
++++ b/nucleus/reasoning/AutonomousDeriver.py
+@@ -257,8 +257,17 @@ class AutonomousDeriver:
+     def _log(self, level: str, msg: str):
+         """轻量日志（AutonomousDeriver 原无 _log，B-2 补充，异常不冒泡）。"""
+         try:
+-            from nucleus.aibot_logger import get_logger
+-            get_logger().info(msg)
++            from nucleus.aibot_logger import get_aibot_logger
++            _lg = get_aibot_logger()
++            _lv = (level or "info").lower()
++            if _lv == "debug":
++                _lg.debug(msg)
++            elif _lv in ("warning", "warn"):
++                _lg.warn(msg)
++            elif _lv == "error":
++                _lg.error(msg)
++            else:
++                _lg.info(msg)
+         except Exception as e:
+             silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L260")
+ 
+=== 61166ef 157-A C-7(b): 装配自检追加声明-实例差集(等价校验)日志（非阻塞，活体验收待小林协调） ===
+
+diff --git a/main.py b/main.py
+index c0d1951..2e4e871 100644
+--- a/main.py
++++ b/main.py
+@@ -1242,6 +1242,23 @@ class PulseFramework:
+                 f"软接线={_vstats.get('soft_wiring_count', '?')} "
+                 f"错误={len(_verrs)} 警告={len(_vwarns)}"
+             )
++            # ★C-7(b) 声明-实例差集（等价校验）：load_organs 声明集 vs 实际装配器官
++            #   活体验收：重启后日志出现「[C-7b 声明-实例差集]」行（待小林协调核验，D5 停框架）
++            try:
++                _declared_names = {getattr(_m, "name", None) for _m in (metas or [])}
++                _declared_names.discard(None)
++                _wired_names = set(getattr(self, "organs", {}) or {})
++                _missing = sorted(_declared_names - _wired_names)
++                _extra = sorted(_wired_names - _declared_names)
++                if _missing or _extra:
++                    self._logger.warning(
++                        f"[装配自检][C-7b 声明-实例差集] 声明={len(_declared_names)} "
++                        f"装配={len(_wired_names)} 缺={_missing[:10]} 多={_extra[:10]}")
++                else:
++                    self._logger.info(
++                        f"[装配自检][C-7b 声明-实例差集] 一致({len(_declared_names)}个)")
++            except Exception as _c7be:
++                self._logger.debug(f"[装配自检][C-7b] 差集计算跳过: {_c7be}")
+         except Exception as _ve:
+             self._logger.debug(f"[装配自检] 跳过（校验器异常，不影响启动）: {_ve}")
+ 
+=== cca87af 157-A N-2: SafeEvolutionExecutor.__init__ 接生产调用点启动加载冷却落盘（闭环待活体核验） ===
+
+diff --git a/nucleus/reasoning/SafeEvolutionExecutor.py b/nucleus/reasoning/SafeEvolutionExecutor.py
+index 64df2e6..57586ec 100644
+--- a/nucleus/reasoning/SafeEvolutionExecutor.py
++++ b/nucleus/reasoning/SafeEvolutionExecutor.py
+@@ -340,6 +340,14 @@ class SafeEvolutionExecutor:
+         from nucleus.reasoning.PatchManager import PatchManager
+         self._patch_manager = PatchManager(self._project_root)
+ 
++        # ★第157批 N-2：生产启动即加载冷却落盘（闭环「冷却落盘→重启加载」）
++        #   修复 cooldown.json 只写不读 / 棘轮每轮归零 / [指纹咨询硬闸] 全窗 0 次。
++        #   活体验收（cooldown.json 轮次>0、硬闸可触发）待小林协调核验（D5 停框架）。
++        try:
++            self._m114a_load_cooldown()
++        except Exception as _n2e:
++            _module_logger.debug(f"[冷却落盘] 启动加载异常(已忽略): {type(_n2e).__name__}: {_n2e}")
++
+     # ===== ★PHASE12-P1-1：进化参数外置读取（配置化优先）=====
+     @staticmethod
+     def _read_evolution_config_int(key: str, default: int,
