@@ -2027,6 +2027,20 @@ class PulseCortex(BasePulseOrgan):
         if "deep_search" not in tool_hint["secondary_tools"]:
             tool_hint["secondary_tools"].append("deep_search")
 
+        # ★C-1 工具面合流：咨询统一工具注册表，将已知工具纳入候选（空则零行为变化）
+        try:
+            from nucleus.tooling.ToolRegistry import get_tool_registry as _get_unified_registry
+            _uni = _get_unified_registry()
+            _reg_tools = _uni.list_tools() if hasattr(_uni, "list_tools") else []
+            for _t in _reg_tools:
+                _tn = _t.get("name") if isinstance(_t, dict) else None
+                if _tn and _tn not in tool_hint["secondary_tools"]:
+                    tool_hint["secondary_tools"].append(_tn)
+            if _reg_tools:
+                tool_hint["registry_consulted"] = True
+        except Exception as _te:
+            silent_exc(_te, where="organs.brain.PulseCortex::_assess_tool_suitability C-1 registry consult L2036")
+
         # ★工具创造元能力：现有工具无法覆盖的未知意图 → 设计并注册新工具
         if intent in ("未分类", "unknown", ""):
             _new_tool = self._create_tool_for_unsolved(content, intent)
@@ -2043,6 +2057,15 @@ class PulseCortex(BasePulseOrgan):
         """★工具创造：注册一个新工具到工具注册表（能力描述 + 执行策略）。"""
         if not name or name in self._tool_registry:
             return False
+        # ★C-1 工具面合流：同步写入统一工具注册表（两套注册表合一）；失败不影响本地注册
+        try:
+            from nucleus.tooling.ToolRegistry import get_tool_registry as _get_unified_registry
+            _get_unified_registry().register_tool(
+                name, description, list(capabilities or []),
+                params=strategy or {}, category="cortex_auto",
+            )
+        except Exception as _te:
+            silent_exc(_te, where="organs.brain.PulseCortex::_register_tool C-1 unify L2046")
         self._tool_registry[name] = {
             "description": description,
             "capabilities": list(capabilities or []),
