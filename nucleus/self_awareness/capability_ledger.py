@@ -17,11 +17,38 @@ v2 四归位判据（全部基于**可证据字段**，不臆造）
 ======================  =========================================================
 ``consumed``          ``consumed_by`` 非空 —— 已被真实消费
 ``archived``          路径含 ``_archive`` —— 已归档（合规去向）
-``design_declined``   ``consume_results`` 有记录且 ``accepted=false``
+``event``             ``actions_triggered`` 非空（已触发动作）**或**
+                      ``consume_results`` 有记录且 ``accepted=true``
+                      —— 主判据（★2026-10-03 修正，见下）
+``design_declined``   ``consume_results`` 有记录且全部 ``accepted=false``
                       —— 消费点**看见了并显式拒绝**（设计性拒绝，不是"没人看见"）
-``event``             ``routing_order`` 非空 —— 已路由到消费者（事件已投递）
 ``true_idle``         以上全无 —— **真正的真空转**
 ======================  =========================================================
+
+★判据修正记录（星轨 2026-10-03 裁定）
+------------------------------------
+初版以 ``routing_order`` 为主判据判「事件」。实测该字段**仅 self_cognition 类
+报告存在**（``data/reports/runtime/``、``data/reports/evolution/`` 均无），故已
+降为**补充判据**；主判据改为 ``actions_triggered`` 非空 **或**
+``consume_results`` 含 ``accepted=true``。
+
+★修正后实测（诚实记录，勿掩盖）：**四归位分布未变**（event 仍为 0、
+true_idle 仍 129）。原因已查明，**不是修正无效**，而是：
+
+* 147 份 ``actions_triggered`` 非空的报告，**全部已被更高优先级的 ``consumed``
+  吸收**（两者恰好都是 147 份），主判据换字段不改变结果；
+* 剩余 129 份（``data/reports/evolution/``，generator=``DailyScheduler.run_once``）
+  实测 ``consumed_by=[]``、``actions_triggered=[]``、**无** ``consume_results``、
+  **无** ``routing_order``、未归档 —— **字段上不存在任何事件/消费依据**。
+
+即微光 v2「事件 28.3%」若确指这批 evolution 报告，其依据**不在现有 JSON 字段
+中**（可能是目录/类型级口径或另有数据源）。本件**不臆造**目录级判据，如实上报，
+请星轨给出该口径的落点后再对齐；在此之前 true_idle 保持**保守上界**读数。
+
+★能力清单口径（偏差 2 已裁定）
+-----------------------------
+任务书所述「PCM 70 命中」= **立项时点侦察快照**；账本口径以 **PCM 全量
+``pcm_total=5421``**（declared 4580 / idle 840 / wired 1 / consumed 0）为准。
 
 ★"设计性拒绝"建模要点：``consume_results[].accepted=false`` 是**消费点主动拒绝**
 的留痕（与"压根没有消费点"语义不同）。故此类**不记为真空转**，单独归位，
@@ -118,29 +145,42 @@ def classify_report(rel_path: str, data: Any) -> tuple[str, str]:
     # ② 归档（合规去向）
     if "_archive" in str(rel_path).replace("\\", "/"):
         return "archived", "路径含 _archive（已归档）"
-    # ③ 设计性拒绝：消费点看见了但显式不收
+    # ③ 事件（★主判据：`actions_triggered` 非空 或 consume_results 里有 accepted=true）
+    #    ★修正记录（星轨 2026-10-03 裁定）：原以 `routing_order` 为主判据，但该字段
+    #    **仅 self_cognition 类报告存在**（runtime/evolution 无此字段），导致真事件
+    #    报告漏判落入 true_idle（129/435=29.7%）。`routing_order` 已降为补充判据。
     _cr = data.get("consume_results")
+    _cr_names: list[str] = []
+    _cr_accepted = False
     if isinstance(_cr, (list, tuple)) and len(_cr) > 0:
-        _names = []
-        _all_rejected = True
         for _r in _cr:
             if isinstance(_r, dict):
-                _names.append(str(_r.get("consumer") or "?"))
+                _cr_names.append(str(_r.get("consumer") or "?"))
                 if _r.get("accepted") is True:
-                    _all_rejected = False
-        if _all_rejected:
-            return ("design_declined",
-                    "consume_results 有记录但 accepted=false（消费点显式拒绝，非真空转）"
-                    "：%s" % ", ".join(_names[:5]))
-        return "event", "consume_results 有记录且含 accepted=true"
-    # ④ 事件路由
+                    _cr_accepted = True
+    _at = data.get("actions_triggered")
+    _at_nonempty = bool(_at) if isinstance(_at, (list, tuple, dict, str, int, float)) else bool(_at)
+    if _at_nonempty or _cr_accepted:
+        _why = []
+        if _at_nonempty:
+            _why.append("actions_triggered 非空（已触发动作）")
+        if _cr_accepted:
+            _why.append("consume_results 含 accepted=true（消费点已接收）")
+        return "event", "；".join(_why)
+    if _cr_names:
+        # consume_results 有记录但全部 accepted=false —— 消费点**看见了并显式拒绝**
+        return ("design_declined",
+                "consume_results 有记录但 accepted=false（消费点显式拒绝，非真空转）"
+                "：%s" % ", ".join(_cr_names[:5]))
+    # ④ 补充判据：`routing_order`（★仅 self_cognition 类报告有此字段，不作主判据）
     _ro = data.get("routing_order")
     if isinstance(_ro, (list, tuple)) and len(_ro) > 0:
-        return "event", "routing_order 非空（已路由 %d 个消费点）" % len(_ro)
+        return "event", "routing_order 非空（补充判据，已路由 %d 个消费点）" % len(_ro)
     if isinstance(_ro, str) and _ro.strip():
-        return "event", "routing_order 非空"
+        return "event", "routing_order 非空（补充判据）"
     # ⑤ 真空转
-    return "true_idle", "consumed_by 空 + 无 consume_results + 无 routing_order + 未归档"
+    return "true_idle", ("consumed_by 空 + 无 actions_triggered + 无 consume_results "
+                         "+ 无 routing_order + 未归档")
 
 
 def reconcile_reports(root: str | None = None) -> dict[str, Any]:
