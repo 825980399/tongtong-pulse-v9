@@ -109,6 +109,19 @@ PCM_CATEGORY_TO_STATE = {
     "unknown": "declared",
 }
 
+#: ★true_idle 二级细分（星轨 2026-10-03 裁定追加，**判据字段不动**）：
+#: 周期调度型 generator —— 其产出的报告是「画像」而非「待办事件」，
+#: 设计上不追求被消费，归「观测型-周期画像」。
+PERIODIC_GENERATORS = frozenset({
+    "DailyScheduler.run_once",
+    "SelfAwarenessEngine.generate_report",
+})
+
+#: 二级子类名（并入 archived，不改五类守恒）。
+SUBCLASS_LOG_ONLY = "log_only_intent"      # 存档型-仅记录意图
+SUBCLASS_PERIODIC = "periodic_profile"      # 观测型-周期画像
+SUBCLASS_PLAIN = "archived"                 # 常规路径归档
+
 
 def reports_root() -> str:
     """报告根目录（``data/reports``）。"""
@@ -178,9 +191,46 @@ def classify_report(rel_path: str, data: Any) -> tuple[str, str]:
         return "event", "routing_order 非空（补充判据，已路由 %d 个消费点）" % len(_ro)
     if isinstance(_ro, str) and _ro.strip():
         return "event", "routing_order 非空（补充判据）"
-    # ⑤ 真空转
+    # ⑤★ true_idle **二级细分**（星轨 2026-10-03 裁定；判据字段不动，只加细分层）
+    #    此前 129 份落入 true_idle 的根因是**归位分类缺档**，不是判据漏判：
+    #    这批报告**设计上不消费**（周期画像 / 仅记录意图），此前无处归位。
+    _an = data.get("anomalies")
+    if isinstance(_an, list) and _an:
+        if all(isinstance(x, dict) and x.get("suggested_action") == "log_only"
+               for x in _an):
+            return ("archived",
+                    "存档型-仅记录意图（anomalies 全部 suggested_action=log_only，"
+                    "设计性不消费）：%s" % ",".join(
+                        str(x.get("type") or "?") for x in _an if isinstance(x, dict))[:80])
+    _gen = str(data.get("generator") or "")
+    if _gen in PERIODIC_GENERATORS:
+        return "archived", "观测型-周期画像（generator=%s，属周期产出、设计性不消费）" % _gen
+    # ⑥ 真空转（真正无处可归）
     return "true_idle", ("consumed_by 空 + 无 actions_triggered + 无 consume_results "
-                         "+ 无 routing_order + 未归档")
+                         "+ 无 routing_order + 未归档 + 非周期画像 + 无 log_only 意图")
+
+
+def subclass_of(dest, data, rel_path):
+    """★二级子类（细分层，**不改变五类守恒**，仅给出 ``archived`` 内的细分）。
+
+    Returns:
+        ``log_only_intent``（存档型-仅记录意图）/
+        ``periodic_profile``（观测型-周期画像）/
+        ``archived``（常规路径归档）/
+        ``archived_other``（归 archived 但子类未识别）/
+        非 archived 时原样返回其归位名。
+    """
+    if dest != "archived":
+        return dest
+    if "_archive" in str(rel_path).replace("\\", "/"):
+        return SUBCLASS_PLAIN
+    _an = data.get("anomalies") if isinstance(data, dict) else None
+    if isinstance(_an, list) and _an and all(
+            isinstance(x, dict) and x.get("suggested_action") == "log_only" for x in _an):
+        return SUBCLASS_LOG_ONLY
+    if str((data or {}).get("generator") or "") in PERIODIC_GENERATORS:
+        return SUBCLASS_PERIODIC
+    return "archived_other"
 
 
 def reconcile_reports(root: str | None = None) -> dict[str, Any]:
@@ -194,6 +244,7 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
     _out: dict[str, Any] = {
         "total": 0,
         "by_destination": {k: 0 for k in DESTINATIONS},
+        "by_subclass": {},
         "true_idle_rate": None,
         "unparsable": 0,
         "by_reason_sample": {},
@@ -219,6 +270,8 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
                            level="debug")
             _dest, _why = classify_report(_rel, _d)
             _out["by_destination"][_dest] = _out["by_destination"].get(_dest, 0) + 1
+            _sub = subclass_of(_dest, _d, _rel)
+            _out["by_subclass"][_sub] = _out["by_subclass"].get(_sub, 0) + 1
             _out["total"] += 1
             if _dest not in _out["by_reason_sample"]:
                 _out["by_reason_sample"][_dest] = {"sample_path": _rel, "reason": _why}
