@@ -3065,6 +3065,28 @@ class PatchManager:
                     patch["rollback_available"] = True
                     self._last_apply_time = time.time()
                     results["applied"] += 1
+                    # ★第159批上A 刀3（O-B7）：补丁生命周期表登记激活态
+                    try:
+                        from nucleus.evolution.patch_lifecycle import record_activation
+                        record_activation(
+                            patch.get("id"),
+                            risk_level=patch.get("risk_level", "低"),
+                            file=patch.get("file", ""),
+                            backup_path=patch.get("backup_path", ""),
+                            rollback_available=bool(patch.get("rollback_available")),
+                            owner=patch.get("owner")
+                            or (patch.get("meta") or {}).get("owner", ""),
+                            approver=patch.get("approver")
+                            or (patch.get("meta") or {}).get("approver", ""),
+                            approved_source=patch.get("approved_source", ""),
+                            approved_signer=patch.get("approved_signer", ""),
+                            approved_at=patch.get("approved_at", 0.0) or 0.0,
+                            meta=patch.get("meta"),
+                        )
+                    except Exception as _pl_e:
+                        _module_logger.warning(
+                            "[补丁生命周期] 登记激活失败（已忽略，不影响应用）: %s",
+                            _pl_e)
                     # ★第96批 T-96c（N2-① 烛微第1期）：applied 前**磁盘复核**。
                     #   账本曾出现 applied=True / effect_verified=True /
                     #   effectiveness=1.0，但目标文件与落地前备份**逐字节相同**
@@ -3469,6 +3491,13 @@ class PatchManager:
                         patch["rolled_back_at"] = time.time()
                         self._save_patch_list(self._history_file, history)
                         self._write_rollback_log(patch)
+                        # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）
+                        try:
+                            from nucleus.evolution.patch_lifecycle import record_rollback
+                            record_rollback(patch.get("id"), reason="rollback_last")
+                        except Exception as _pl_rb:
+                            _module_logger.warning(
+                                "[补丁生命周期] 登记回滚失败（已忽略）: %s", _pl_rb)
                         return True
                 elif os.path.exists(backup_path):
                     # 兼容旧版单文件备份
@@ -3478,6 +3507,13 @@ class PatchManager:
                     patch["rolled_back_at"] = time.time()
                     self._save_patch_list(self._history_file, history)
                     self._write_rollback_log(patch)
+                    # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）
+                    try:
+                        from nucleus.evolution.patch_lifecycle import record_rollback
+                        record_rollback(patch.get("id"), reason="rollback_last")
+                    except Exception as _pl_rb:
+                        _module_logger.warning(
+                            "[补丁生命周期] 登记回滚失败（已忽略）: %s", _pl_rb)
                     return True
         return False
 
@@ -3523,6 +3559,13 @@ class PatchManager:
             patch["rolled_back_reason"] = "runtime_verify_failed"
             self._save_patch_list(self._history_file, history)
             self._write_rollback_log(patch)
+            # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）
+            try:
+                from nucleus.evolution.patch_lifecycle import record_rollback
+                record_rollback(patch_id, reason="runtime_verify_failed")
+            except Exception as _pl_rb:
+                _module_logger.warning(
+                    "[补丁生命周期] 登记回滚失败（已忽略）: %s", _pl_rb)
             _module_logger.info(
                 f"[补丁回滚] {patch_id} 已回滚: "
                 f"{os.path.basename(patch.get('file',''))} 运行时验证失败自动撤销")

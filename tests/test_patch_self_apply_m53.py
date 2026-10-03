@@ -34,6 +34,8 @@ from nucleus.evolution.PatchAutoApprover import (
 from nucleus.reasoning.PatchManager import PatchManager
 from nucleus.reasoning.SelfVerifier import SelfVerifier
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.evolution import patch_lifecycle as _pl
+from nucleus.events.EventBus import get_event_bus, reset_event_bus
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -442,6 +444,106 @@ class TestD3RollbackQuota(unittest.TestCase):
         self.assertEqual(_d.get("rollback_failed_reason"), "backup_missing")
         self.assertFalse(self.ver.has_rolled_back(),
                          "has_rolled_back 必须为 False（额度保留给真实回退）")
+
+
+# ============================ 刀3：补丁生命周期表（O-B7）============================
+class TestPatchLifecycle(unittest.TestCase):
+    """★第159批 刀3（O-B7）：补丁生命周期表。
+
+    直接用 patch_lifecycle 模块函数 + 显式 tmp path 验证（测试环境
+    _writable 守卫禁止写生产 data/，故不依赖 PatchManager 的隐式路径）。
+    """
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="m53_k3_")
+        self.lp = os.path.join(self.tmp, "patch_lifecycle.json")
+        self.mgr = _mk_mgr(self.tmp)  # 集成测试需真实 PatchManager 实例（沙箱根）
+        reset_event_bus()  # 隔离事件总线
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_60_activated_written(self):
+        """验收 a：applied 补丁生命周期表可查 stage=activated + backup_path。"""
+        _pl.record_activation("p1", risk_level="低", file="config.py",
+                              backup_path=self.tmp, rollback_available=True,
+                              path=self.lp)
+        _e = _pl.load_lifecycle(self.lp)["patches"]["p1"]
+        self.assertEqual(_e["stage"], "activated")
+        self.assertEqual(_e["backup_path"], self.tmp)
+        self.assertTrue(_e["rollback_available"])
+        self.assertGreater(_e["observation_deadline"], time.time())
+
+    def test_61_rolled_back_written(self):
+        """验收 c/d：rolled_back_at 0→≥1；失败不置位由调用方保证。"""
+        _pl.record_activation("p1", rollback_available=True, path=self.lp)
+        _pl.record_rollback("p1", reason="test", path=self.lp)
+        _e = _pl.load_lifecycle(self.lp)["patches"]["p1"]
+        self.assertEqual(_e["stage"], "rolled_back")
+        self.assertGreater(_e.get("rolled_back_at", 0), 0)
+
+    def test_62_rollback_unavailable_rejected(self):
+        """验收 a 硬点：rollback_available=False 者不得进入 activated。"""
+        _pl.record_activation("p2", rollback_available=False, path=self.lp)
+        _e = _pl.load_lifecycle(self.lp)["patches"]["p2"]
+        self.assertEqual(_e["stage"], "rejected")
+        self.assertNotEqual(_e["stage"], "activated")
+
+    def test_63_reconcile_no_auto_rollback(self):
+        """验收 b：observing 条目超期不被改判/自动回滚，只出诊断回执。"""
+        _pl.record_activation("p3", rollback_available=True, path=self.lp)
+        _d = _pl.load_lifecycle(self.lp)
+        _d["patches"]["p3"]["stage"] = "observing"
+        _d["patches"]["p3"]["observation_deadline"] = time.time() - 10
+        with io.open(self.lp, "w", encoding="utf-8") as _f:
+            json.dump(_d, _f, ensure_ascii=False)
+        _res = _pl.reconcile_patches(path=self.lp)
+        self.assertEqual(_res["overdue"], 1)
+        _e = _pl.load_lifecycle(self.lp)["patches"]["p3"]
+        self.assertEqual(_e["stage"], "observing", "超期不得改判/回滚")
+        self.assertTrue(_e.get("overdue"))
+        self.assertFalse(
+            _e.get("overdue_receipts", [{}])[-1].get("auto_rollback"))
+
+    def test_64_handoff_event_published(self):
+        """验收 e：发布 evolution.patch_handoff 事件，订阅方收到。"""
+        _received = []
+        _bus = get_event_bus()
+        _bus.subscribe("evolution.patch_handoff",
+                       lambda ev: _received.append(ev))
+        _pl.record_activation("p4", rollback_available=True, path=self.lp)
+        self.assertEqual(len(_received), 1)
+        _ev = _received[0]
+        self.assertEqual(_ev.name, "evolution.patch_handoff")
+        self.assertEqual(_ev.payload["patch_id"], "p4")
+        self.assertEqual(_ev.payload["stage"], "activated")
+
+    def test_65_apply_all_pending_triggers_activation(self):
+        """写入点集成：apply_all_pending 成功应用后调用 record_activation。"""
+        import nucleus.evolution.patch_lifecycle as _plmod
+        _calls = []
+        _orig = _plmod.record_activation
+
+        def _spy(*a, **k):
+            _calls.append((a, k))
+            return _orig(*a, **k)
+
+        with mock.patch.object(_plmod, "record_activation", _spy):
+            _target = os.path.join(self.tmp, "target_mod.py")
+            with io.open(_target, "w", encoding="utf-8") as _f:
+                _f.write("X = 1\nY = 2\n")
+            _doc = {
+                "id": "int1", "file": _target, "method": "m",
+                "risk_level": "低", "confidence": "high", "trust_score": 99,
+                "status": "approved", "original_code": "X = 1",
+                "modified_code": "X = 1  # patched",
+            }
+            _write_pending(self.tmp, [_doc])
+            self.mgr._backup_manager = mock.MagicMock()
+            _r = self.mgr.apply_all_pending(only_approved=True)
+        self.assertEqual(_r["applied"], 1, "补丁应被成功应用")
+        self.assertEqual(len(_calls), 1, "record_activation 应被调用一次")
+        self.assertEqual(_calls[0][0][0], "int1")
+        self.assertTrue(_calls[0][1].get("rollback_available"))
 
 
 if __name__ == "__main__":
