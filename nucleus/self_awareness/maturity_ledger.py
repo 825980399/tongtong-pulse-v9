@@ -349,6 +349,25 @@ def build_entry(result: dict[str, Any], overrides: dict[str, Any] | None = None,
         silent_exc(e, where="nucleus.self_awareness.maturity_ledger::build_entry level")
         _level = "unknown"
 
+    # ★第158批 上-A T-唯一口径件-1：台账**只引唯一口径件的值**，不得自行重算。
+    #   延迟 import 避免与 metrics_spec → capability_ledger 形成加载期循环。
+    _metrics: dict[str, Any] = {}
+    try:
+        from nucleus.self_awareness.metrics_spec import all_metrics as _ms_all
+        for _m in _ms_all():
+            if _m.get("status") == "active":
+                _metrics[_m["id"]] = {
+                    "value": _m.get("value"),
+                    "unit": _m.get("unit"),
+                    "definition": _m.get("definition"),
+                    "source": _m.get("source"),
+                    "value_kind": _m.get("value_kind"),
+                }
+    except Exception as _me:
+        # ★不得静默：口径件不可用需留痕（台账照常写，只是缺 metrics 段）
+        silent_exc(_me, where="nucleus.self_awareness.maturity_ledger::build_entry metrics",
+                   level="warning")
+
     return {
         "ts": time.time(),
         "batch": str(batch or ""),
@@ -373,6 +392,8 @@ def build_entry(result: dict[str, Any], overrides: dict[str, Any] | None = None,
         },
         # ---- 修复率 / 不可验证率（★N-9 口径）
         "rates": patch_rates(),
+        # ---- 指标唯一口径件（T-唯一口径件-1：总账只引这里的值）
+        "metrics_canonical": _metrics,
         # ---- 挂载面读数
         "probe_count": probe_count(),
         "available": list(result.get("available") or []),
