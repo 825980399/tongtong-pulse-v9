@@ -115,6 +115,9 @@ PCM_CATEGORY_TO_STATE = {
 PERIODIC_GENERATORS = frozenset({
     "DailyScheduler.run_once",
     "SelfAwarenessEngine.generate_report",
+    # ★门禁探针产物（星轨 2026-10-03 终裁）：设计上不追求被消费，
+    #   与周期画像同类——并入「观测型-周期画像」。
+    "guard_probe",
 })
 
 #: 二级子类名（并入 archived，不改五类守恒）。
@@ -148,7 +151,9 @@ def classify_report(rel_path: str, data: Any) -> tuple[str, str]:
         ``(归位名, 依据)``，依据用于台账留痕、可复核。
     """
     if not isinstance(data, dict):
-        return "true_idle", "报告不可解析（JSON 非对象）"
+        # ★不可解析**单列**（星轨 2026-10-03 终裁）：不计入五类、不计真空转——
+        #   读不出内容不等于「写了没人读」，两者语义不同，不得混同。
+        return "unparseable", "JSON 不可解析（非 dict）——单列，不计真空转"
     # ① 真实消费
     _cb = data.get("consumed_by")
     if isinstance(_cb, (list, tuple)) and len(_cb) > 0:
@@ -269,10 +274,15 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
                 silent_exc(_e, where="nucleus.self_awareness.capability_ledger::reconcile",
                            level="debug")
             _dest, _why = classify_report(_rel, _d)
-            _out["by_destination"][_dest] = _out["by_destination"].get(_dest, 0) + 1
-            _sub = subclass_of(_dest, _d, _rel)
-            _out["by_subclass"][_sub] = _out["by_subclass"].get(_sub, 0) + 1
             _out["total"] += 1
+            if _dest == "unparseable":
+                # ★单列：不进五类、不计真空转（星轨 2026-10-03 终裁）
+                _out["unparseable"] = _out.get("unparseable", 0) + 1
+                _sub = "unparseable"
+            else:
+                _out["by_destination"][_dest] = _out["by_destination"].get(_dest, 0) + 1
+                _sub = subclass_of(_dest, _d, _rel)
+            _out["by_subclass"][_sub] = _out["by_subclass"].get(_sub, 0) + 1
             if _dest not in _out["by_reason_sample"]:
                 _out["by_reason_sample"][_dest] = {"sample_path": _rel, "reason": _why}
     if _out["total"]:
