@@ -35,12 +35,16 @@ import sys
 import time
 from typing import Any
 
+import hashlib
+import inspect
+
 from nucleus._silent_except import silent_exc
 
 __all__ = [
     "SEVERITIES",
     "RULE_REGISTRY",
     "engine_version",
+    "rule_sha16",
     "rule_signatures",
     "changed_files",
     "run_rules",
@@ -139,12 +143,41 @@ def engine_version() -> str:
     return "158A-T1-1"
 
 
+def rule_sha16(title, severity, scope, checker_src):
+    """★第159批上A 刀2（T-规则生命周期-1）统一规则签名口径。
+
+    与 ``tools/ci/verify_fingerprint_gate.py::fp_rule_sha16`` 逐字节一致
+    （同源归一：``" ".join((src or "").split())``），确保「改函数体→红、
+    改缩进/挪行→不红」在引擎侧与 CI 门禁侧判定一致。
+
+    归一逻辑与 ``tools/ci/ci_common.py::normalize_body`` 同源（折叠全部空白
+    为单空格），故改检测逻辑函数体 → 归一串变 → 指纹变红；仅改缩进/换行/
+    挪行 → 归一串不变 → 指纹不红。
+    """
+    _body = " ".join((checker_src or "").split())
+    _raw = "%s|%s|%s|%s" % (title, severity, scope, _body)
+    return hashlib.sha256(_raw.encode("utf-8")).hexdigest()[:16]
+
+
 def rule_signatures() -> dict[str, str]:
-    """★规则集指纹（T-规则生命周期-1 配套）：规则被意外修改时指纹即变。"""
-    return {
-        _rid: "%s|%s|%s" % (_r["title"], _r["severity"], _r["scope"])
-        for _rid, _r in sorted(RULE_REGISTRY.items())
-    }
+    """★规则集指纹（T-规则生命周期-1 配套，第159批上A 刀2 口径统一）。
+
+    旧口径仅拼接 ``title|severity|scope``，检测逻辑函数体变更不可见（缺陷）。
+    新口径 = ``sha16(title|severity|scope|normalize_body(checker_src))``：
+    改函数体 → 指纹变红；改缩进/挪行 → 归一后不变 → 不红。
+    """
+    _out: dict[str, str] = {}
+    for _rid, _r in sorted(RULE_REGISTRY.items()):
+        _checker = _r.get("checker")
+        _src = ""
+        if callable(_checker):
+            try:
+                _src = inspect.getsource(_checker)
+            except (OSError, TypeError) as _e:
+                silent_exc(_e, where="nucleus.self_awareness.rule_engine::rule_signatures",
+                           level="debug")
+        _out[_rid] = rule_sha16(_r["title"], _r["severity"], _r["scope"], _src)
+    return _out
 
 
 # ------------------------------------------------------------------ 增量档
