@@ -13427,6 +13427,16 @@ class PulseInnerWorld(
             _stripped_prefix = True
             self._log(LogLevel.DEBUG,
                      f"内部内容过滤: 删除'我了解到'前缀，剩余长度={len(answer)}")
+        # ★第159批 上B 刀B③：出口占位符净化（L-C 输出兜底）。
+        #   仅对**含方括号占位符字面量**生效（★红线：不按长度/前缀判定，
+        #   防误伤真回答——PollutionTagger 的 len>200 and startswith 组合即因此误伤）；
+        #   剥离后无实质内容 → 降级「未命中相关知识」引导语 + DEBUG 留痕，★不伪造内容。
+        try:
+            from nucleus.knowledge.PlaceholderSanitizer import sanitize_placeholder_text
+            answer = sanitize_placeholder_text(
+                answer, log=lambda _m: self._log(LogLevel.DEBUG, _m))
+        except Exception as _ph_e:
+            silent_exc(_ph_e, where="PulseInnerWorld::_sanitize_internal_content 占位符净化")
         # ★S6：记录进入正则清洗前的长度，用于判断过滤器是否真的删掉了东西
         _before_regex = answer
         # 1. 清理知识节点原文（从"关联知识："到下一个句号或结尾）

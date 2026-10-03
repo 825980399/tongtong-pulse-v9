@@ -2905,9 +2905,18 @@ class PulseLiver(BasePulseOrgan):
             kw_text = "、".join(core_keywords)
 
             # 新增：从源节点中提取一段实质内容作为L3摘要，避免生成纯元描述的空壳节点
+            # ★第159批 上B 刀B②：L3 融合「占位符封堵」（灰度开关
+            #   KNOWLEDGE_FUSION_SKIP_PLACEHOLDER，默认 False = 零行为变化）。
+            #   翻 True 后：①含占位符字面量的源节点不作融合素材；②产出内容仍含
+            #   占位符则该条不产出（治本：封堵融合模板扩散污染源）。
+            _skip_ph = bool(getattr(config, "KNOWLEDGE_FUSION_SKIP_PLACEHOLDER", False))
+            _ph_literal = "[器官别名]"  # ★与 tools/cleanup_alias_placeholder_nodes.py 同源判据
             _sample_value = ""
             for _n in quality_nodes[:10]:
                 _val = str(_n.value) if _n.value else ""
+                # ★刀B②-①：含占位符字面量的源节点不得作为融合素材（封堵扩散源）
+                if _skip_ph and _ph_literal in _val:
+                    continue
                 # 跳过元描述类的内部格式节点（这些节点本身就是压缩产生的无实质内容壳）
                 if any(_marker in _val for _marker in ["相关知识汇总", "核心智慧结晶", "复盘认知"]):
                     continue
@@ -2927,6 +2936,13 @@ class PulseLiver(BasePulseOrgan):
                     f"代表该领域的深层理解。"
                 )
 
+            # ★第159批 上B 刀B②-②：融合模板「占位符存在则不产出该条」守卫（治本）。
+            #   仅对含方括号占位符**字面量**生效（★红线：不得用 len>200 and
+            #   startswith("我了解到") 组合——PollutionTagger 用它判污染会误伤真回答）。
+            if _skip_ph and _ph_literal in concept:
+                self._log(LogLevel.WARNING,
+                          f"融合拦截: 产出内容含占位符字面量，路径={prefix}，跳过L3融合")
+                return False
             # ===== 用户输入污染终极防护：检测融合内容是否包含原始问题文本 =====
             _concept_lower = concept.lower()
             # ★v23.0优化：从config读取
