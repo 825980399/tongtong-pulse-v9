@@ -2020,6 +2020,13 @@ ENABLE_L3_BACKPRESSURE_OPTIMIZE = True
 L3_DEDUP_WINDOW_SEC = 30
 # 连续触发背压达该次数即打一次 WARNING（升级可观测性）。
 L3_BACKPRESSURE_WARN_EVERY = 3
+# ★第159批 上B 刀B②（T-对话模板-1）：L3 融合「占位符封堵」灰度开关。
+#   True ：融合拼接前先过滤含占位符字面量（如「[器官别名]」）的输入节点；
+#          若产出内容仍含占位符 → 该条不产出（治本：封堵融合模板扩散污染源）。
+#   False（默认·灰度观察）：融合行为零变化——防融合输入集变化导致融合节点数 /
+#          N 值漂移，影响 iw_consistency_baseline.json 等基线（任务书风险②）。
+# ★观察一周期后翻 True；开关变更须独立 commit（先例：158 批开关变更惯例）。
+KNOWLEDGE_FUSION_SKIP_PLACEHOLDER = False
 # 新输入与未完成旧任务冲突时的策略：
 #   "queue" （默认）：旧任务继续，新问题排队，待旧任务输出后自动派发，
 #                     并先给用户「正在处理上一个问题，请稍候」提示。
