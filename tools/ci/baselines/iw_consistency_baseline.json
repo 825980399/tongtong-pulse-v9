@@ -35,9 +35,11 @@
    "event_hist": {}
   }
  },
- "delta_reason": "第154批 T154-12：回收新孤儿方法 _project_autonomous_behavior_evolution（IW:7129-7161 方法体 33 行 + 尾随空行 1 行 = 34 行），methods -1 / return -1 / lines -34；控制流计数（if/for/while/try/except/emit_calls）与事件直方均不变。前置：生产代码 0 调用、无外部脚本启用、停机窗口成立（runtime_state 32.16h + pulse.log 20s Δbytes=0）。基准已锚定当前（e0e70be 之后状态），expected_delta 清空。历史已验收增量：153批 T153-5 删 6 死方法（methods -6 / return -6 / if -1 / for -1，烛微已签认 Q152-2） | 157-C T-对话-4: PulseInnerWorld 硬编码用户名单收口为 _is_core_user_fallback 单点判定方法，methods +1 / return +1（行为不变，纯结构重构，待与 ContextSnapshot._get_relationship_type 统一）。",
+ "delta_reason": "第154批 T154-12：回收新孤儿方法 _project_autonomous_behavior_evolution（IW:7129-7161 方法体 33 行 + 尾随空行 1 行 = 34 行），methods -1 / return -1 / lines -34；控制流计数（if/for/while/try/except/emit_calls）与事件直方均不变。前置：生产代码 0 调用、无外部脚本启用、停机窗口成立（runtime_state 32.16h + pulse.log 20s Δbytes=0）。基准已锚定当前（e0e70be 之后状态），expected_delta 清空。历史已验收增量：153批 T153-5 删 6 死方法（methods -6 / return -6 / if -1 / for -1，烛微已签认 Q152-2） | 157-C T-对话-4: PulseInnerWorld 硬编码用户名单收口为 _is_core_user_fallback 单点判定方法，methods +1 / return +1（行为不变，纯结构重构，待与 ContextSnapshot._get_relationship_type 统一）。 | 159上B 刀B③：PulseInnerWorld._sanitize_internal_content 接线出口占位符净化（新增 try/except 包裹的 sanitize_placeholder_text 调用），try +1 / except +1；行为不变——仅当 answer 含方括号占位符字面量时生效，其余原样返回（零副作用），控制流计数（if/for/while/return/emit_calls）与事件直方均不变。",
  "expected_delta": {
   "return": 1,
-  "methods": 1
+  "methods": 1,
+  "try": 1,
+  "except": 1
  }
 }

@@ -5,12 +5,15 @@
     "LEGACY_ASSEMBLY.DECLARATIVE_ALLOWED": "54e579fd0072f860",
     "LEGACY_ASSEMBLY.RETIRE_MARKER": "b770e402f94eea1a",
     "VERIFY_FP.FP_SKIP_DIRS": "2a968d7c8d6a708d",
-    "VERIFY_FP.FP_VERSION": "e8f4e8d3a2266c7d"
+    "VERIFY_FP.FP_VERSION": "e8f4e8d3a2266c7d",
+    "PLACEHOLDER.CLEANUP_PREDICATE": "3e0cd4b6bd8abeab",
+    "PLACEHOLDER.SANITIZE_FN": "244d0168d348b988",
+    "PLACEHOLDER.LITERALS": "6effaa01df8320cf"
   },
   "rules": {
     "TT001": "ccf50165dc1692b9",
     "TT002": "15ed658af5ebf322",
     "TT003": "e98ccd7a68bc2b6a"
   },
-  "version": "159A-K2-1"
+  "version": "159B-1"
 }

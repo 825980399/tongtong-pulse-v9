@@ -336,6 +336,43 @@ def fp_rule_signature_collect():
         "FP_SKIP_DIRS", "config", "ci", repr(sorted(FP_SKIP_DIRS)))
     _ci["VERIFY_FP.FP_VERSION"] = fp_rule_sha16(
         "FP_VERSION", "config", "ci", "158A-T5-1")
+    # ★第159批上B 刀B（T-对话模板-1）：占位符判据登记
+    #   防「修复本身成未登记规则」——刀B① 识别面判据、刀B③ 出口净化判据
+    #   与占位符字面量常量，均纳入签名采集面（改判据函数体即红）。
+    import importlib as _il
+    import inspect as _ins
+
+    def _src_of(_o):
+        try:
+            return _ins.getsource(_o)
+        except Exception as _e:
+            silent_exc(_e, where="verify_fingerprint_gate.fp_rule_signature_collect src",
+                       level="warning")
+            return ""
+
+    for _mod_name, _attr, _key in (
+            ("tools.cleanup_alias_placeholder_nodes", "is_placeholder_alias_node",
+             "PLACEHOLDER.CLEANUP_PREDICATE"),
+            ("nucleus.knowledge.PlaceholderSanitizer", "sanitize_placeholder_text",
+             "PLACEHOLDER.SANITIZE_FN"),
+    ):
+        try:
+            _m = _il.import_module(_mod_name)
+            _fn = getattr(_m, _attr, None)
+            if _fn is not None:
+                _ci[_key] = fp_rule_sha16(_attr, "config", "ci", _src_of(_fn))
+        except Exception as _e:
+            silent_exc(_e,
+                       where="verify_fingerprint_gate.fp_rule_signature_collect %s" % _mod_name,
+                       level="warning")
+    try:
+        _ps = _il.import_module("nucleus.knowledge.PlaceholderSanitizer")
+        _ci["PLACEHOLDER.LITERALS"] = fp_rule_sha16(
+            "PLACEHOLDER_LITERALS", "config", "ci",
+            repr(getattr(_ps, "PLACEHOLDER_LITERALS", ())))
+    except Exception as _e:
+        silent_exc(_e, where="verify_fingerprint_gate.fp_rule_signature_collect LITERALS",
+                   level="warning")
     return {"rules": _rules, "ci_gate_constants": _ci}
 
 
