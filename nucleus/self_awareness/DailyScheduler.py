@@ -480,6 +480,23 @@ class SelfAwarenessDailyScheduler:
                         "[自我认知调度] 模型自更新检查失败（忽略）: %s: %s",
                         type(_mue).__name__, _mue)
             _res["elapsed_ms"] = round((time.perf_counter() - _t0) * 1000.0, 2)
+            # ★第158批 77.9s 退化专项：耗时**阈值观测**（先立阈值，再按实测校准）。
+            #   参照系：P2-235 基线 5.4s / 微光观测 77.9s（≈14 倍）。
+            #   超阈值只**告警不阻断**（L1 观测），阈值可用 config 覆盖。
+            try:
+                _budget = float(_cfg("RUN_ONCE_BUDGET_SECONDS", 20.0))
+            except (TypeError, ValueError) as _be:
+                _module_logger.debug(
+                    "[自我认知调度] 预算阈值取值异常（回退 20s）: %s: %s",
+                    type(_be).__name__, _be)
+                _budget = 20.0
+            _res["budget_seconds"] = _budget
+            _res["over_budget"] = (_res["elapsed_ms"] / 1000.0) > _budget
+            if _res["over_budget"]:
+                _module_logger.warning(
+                    "[自我认知调度] 耗时超阈值: %.1fs > %.1fs"
+                    "（P2-235 基线 5.4s / 微光观测 77.9s）",
+                    _res["elapsed_ms"] / 1000.0, _budget)
             _module_logger.info(
                 "[自我认知调度] 每日分析完成: %d 维度 / %.1fms → %s",
                 _res["dimensions"], _res["elapsed_ms"], _rp)

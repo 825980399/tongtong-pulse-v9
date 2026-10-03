@@ -292,12 +292,35 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------ 能力四态
-def capability_states() -> dict[str, Any]:
-    """能力四态读数（清单来源 = PCM，任务书裁定）。
+#: ★第158批 77.9s 退化专项：PCM 全仓扫描是单次最贵的一步（实测 5.708s），
+#: 而每日调度只需一个"能力四态读数"——故加**短 TTL 缓存**，同一 TTL 窗口内
+#: 复用上次结果，避免每轮重复全仓扫描。TTL=0 即关闭缓存（始终实时）。
+PCM_CACHE_TTL = 600.0
+
+_CACHE: dict[str, Any] = {"ts": 0.0, "value": None}
+
+
+def invalidate_pcm_cache() -> None:
+    """手动失效 PCM 缓存（口径变更或需要实时值时调用）。"""
+    _CACHE["ts"] = 0.0
+    _CACHE["value"] = None
+
+
+def capability_states(use_cache: bool = True) -> dict[str, Any]:
+    """    能力四态读数（清单来源 = PCM，任务书裁定）。
 
     复用 ``ProductionConsumptionMatcher.scan()`` 的 category 统计，映射为
     declared / wired / consumed / idle 四态。PCM 不可用时返回 ``source=pcm_unavailable``。
+
+    ★77.9s 退化专项：PCM 全仓扫描实测 **5.708s**（单次最贵项），故默认带
+    ``PCM_CACHE_TTL``（600s）短缓存；``use_cache=False`` 或调
+    :func:`invalidate_pcm_cache` 可强制实时。
     """
+    if use_cache and PCM_CACHE_TTL > 0 and _CACHE.get("value") is not None \
+            and (time.time() - float(_CACHE.get("ts") or 0.0)) < PCM_CACHE_TTL:
+        _cached = dict(_CACHE["value"])
+        _cached["from_cache"] = True
+        return _cached
     _out: dict[str, Any] = {
         "states": {k: 0 for k in ("declared", "wired", "consumed", "idle")},
         "pcm_total": 0,
@@ -315,11 +338,15 @@ def capability_states() -> dict[str, Any]:
         silent_exc(_e, where="nucleus.self_awareness.capability_ledger::capability_states")
         _out["source"] = "pcm_unavailable"
         _out["note"] = "%s: %s" % (type(_e).__name__, _e)
+        _CACHE["ts"] = time.time()
+        _CACHE["value"] = dict(_out)
         return _out
 
     _sum = (_res or {}).get("summary") or _res or {}
     if not isinstance(_sum, dict):
         _out["source"] = "pcm_unexpected_shape"
+        _CACHE["ts"] = time.time()
+        _CACHE["value"] = dict(_out)
         return _out
     # ★白名单取 category 计数（黑名单会误排 no_consumer/excluded 等主计数）。
     #   实测 PCM summary 的 category 键：normal / no_consumer / no_producer /
@@ -334,6 +361,8 @@ def capability_states() -> dict[str, Any]:
             _out["states"][_st] += _n
             _out["by_category"][_cat] = _n
     _out["pcm_total"] = sum(_out["states"].values())
+    _CACHE["ts"] = time.time()
+    _CACHE["value"] = dict(_out)
     return _out
 
 
