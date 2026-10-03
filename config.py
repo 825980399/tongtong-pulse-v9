@@ -1824,7 +1824,14 @@ FEATURE = {
     #   再置 True 通电；第二批（反馈回写+创造层强锁）落地前也保持 False。
     # 热重载：支持通过 data/config_override.json 或环境变量 TTP_SURVIVAL_ORCHESTRATOR_ENABLED 覆盖。
     "survival_orchestrator_enabled": True,
-    "use_declarative_assembly": True,  # ★P3-2插件化阶段3启用：声明式装配（依赖图拓扑+post_wiring，一键改False回退legacy）
+    # ★第158批 _create_organ 退役★（P2·2026-10-03）：本开关现为**唯一装配路径**。
+    #   硬编码回退段 _init_organs_legacy()（main.py:1354，37 处 _create_organ 调用）
+    #   已标注为「已停用」，本开关=False 时该段**仍可回退执行**（尚未物理删除）。
+    #   ⚠️ 待 legacy 段真退役（需小林恢复运行后完成装配活体验证 + QICA 承接定稿）后，
+    #     本行注释将改为「legacy 已退役，False 不再可用」，届时本开关应硬钉 True。
+    #   防回潮门禁：tools/ci/check_legacy_assembly_gate.py（校验 legacy 段调用数 <= 37
+    #   且本开关为 True；若本开关被置 False，门禁将 FAIL 提示前提失效）。
+    "use_declarative_assembly": True,  # ★P3-2插件化阶段3启用：声明式装配（依赖图拓扑+post_wiring）｜legacy 回退段已停用待退役，见上方说明
     # ★登顶路线图-山1（可验证认知层）：推理证据链追踪开关
     # 作用：控制推理结论是否携带结构化「置信度 + 依据链（证据来源节点）」。
     #   - True：推理输出附加可追溯证据链，知识节点写入 evidence_chain，实现可验证推理。
