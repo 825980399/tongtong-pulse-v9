@@ -374,6 +374,30 @@ class SelfAwarenessDailyScheduler:
                         "[自我认知调度] 能力四态账本登记失败（忽略）: %s: %s",
                         type(_t2e).__name__, _t2e)
 
+            # ★第158批 上-A T-自我审计-1（P1）：运行时规则引擎（**增量档**）。
+            #   与 pre-commit 门禁**互补不重叠**：门禁是提交前红绿阻断，本件是
+            #   定时自我审计（只报告、不阻断、不改代码）。变更集为空时如实标记
+            #   skipped，不假装"扫了 0 个文件 = 全部通过"。
+            if not self._is_test_env():
+                try:
+                    from nucleus.self_awareness.rule_engine import run_rules as _t1_run
+                    _t1 = _t1_run()          # 默认增量档
+                    if _t1.get("scanned"):
+                        _res["rule_engine"] = {
+                            "mode": _t1.get("mode"),
+                            "scanned": _t1.get("scanned"),
+                            "by_severity": _t1.get("by_severity"),
+                        }
+                        if _t1["by_severity"].get("error"):
+                            _module_logger.warning(
+                                "[自我认知调度] 运行时规则引擎：%d 个 error 级发现"
+                                "（增量档 %d 文件）",
+                                _t1["by_severity"]["error"], _t1["scanned"])
+                except Exception as _t1e:               # 引擎失败不得影响调度
+                    _module_logger.warning(
+                        "[自我认知调度] 运行时规则引擎失败（忽略）: %s: %s",
+                        type(_t1e).__name__, _t1e)
+
             # ★主线第42批 T3（P1-265）：经验语义检索观测（L1 仅观测，不替换现有检索器）。
             #   仅在编码器**已就绪**时执行（observe_daily 内部自检）→ 首次加载不阻塞调度。
             if not self._is_test_env():
