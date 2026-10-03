@@ -3246,9 +3246,16 @@ class PulseFramework:
         try:
             self.snapshot.save()
             self.snapshot.save_l1()
+            # ★第159批 刀4 D-4：节流命中（pending_flush）表示未真正写盘，
+            #   不得误报「已保存」，据标志如实区分状态。
+            if getattr(self.snapshot, "pending_flush", False):
+                self._log(LogLevel.DEBUG,
+                          "自动保存延迟（节流命中，内存持有最新数据，pending_flush=True）")
+                return {"status": "auto_deferred"}
             self._log(LogLevel.INFO, "自动保存完成")
         except Exception as e:
             self._log(LogLevel.WARNING, f"自动保存失败: {e}")
+            return {"status": "auto_failed"}
         return {"status": "auto_saved"}            
 
     def _on_self_modify_constraint(self, pulse):

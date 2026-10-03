@@ -209,13 +209,25 @@ class PulseSnapshot:
     """
 
     # ★D4配置中心化：全量保存间隔与增量节点阈值从函数内局部魔法数字提升为类级常量
-    FULL_SAVE_INTERVAL = 600      # 全量保存间隔：10分钟
-    INCREMENTAL_MAX_NODES = 50    # 变更超过此数也触发全量
+    #   ★第159批 刀4：以下类常量仅为「config 缺失时」回退值；实际生效值由 config 提供
+    #     （SNAPSHOT_FULL_SAVE_INTERVAL / SNAPSHOT_INCREMENTAL_MAX_NODES）。原注释「10分钟/50」
+    #     为过期口径，现已 config 化（3600→21600s=6h / 200），此处注释同步避免误导。
+    FULL_SAVE_INTERVAL = 600      # 回退值（秒）；实际读 config.SNAPSHOT_FULL_SAVE_INTERVAL（现 21600s=6h）
+    INCREMENTAL_MAX_NODES = 50    # 回退值；实际读 config.SNAPSHOT_INCREMENTAL_MAX_NODES（现 200）
     # ★v29/14.44：最小保存间隔节流（秒）。PulseLiver 在压缩/融合后立即调 save()，
     #   高频活动时每 ~14s 触发一次全量 load(3.5s)+dump(2s)+写盘 → 几乎占满心跳周期。
     #   设 30s 最小间隔：间隔内变更延迟写盘（内存 node_pool 始终持有最新数据，不丢数据），
     #   既降峰值压力又保证最终持久化。
     INCREMENTAL_MIN_INTERVAL = 30
+    # ★第159批 刀4 D-4：写盘节流命中返回值（区别于 True/False）。调用方据此区分「未写盘（延迟）」
+    #   与「已保存」，杜绝把节流误报为「已保存」。配套 self._pending_flush 标志。
+    SAVE_THROTTLED = "throttled"
+
+    @property
+    def pending_flush(self) -> bool:
+        """★第159批 刀4 D-4：节流挂起标志（公开只读）。节流命中置 True，
+        任一次真实写盘成功后清零；调用方据其区分「已保存」与「待刷新」。"""
+        return self._pending_flush
 
     def __init__(self, snapshot_path: str = "data/knowledge/pulse_knowledge_snapshot.json"):
         self.snapshot_path = snapshot_path
@@ -237,6 +249,9 @@ class PulseSnapshot:
         self._last_full_save_time: float = 0.0       # 上次全量保存时间
         self._last_write_time: float = 0.0        # ★v29/14.44：上次实际写盘时间（节流用）
         self._last_saved_nodes_map: dict[str, str] = {}  # node_id → 上次保存时的节点校验和
+        # ★第159批 刀4 D-4：节流挂起标志。节流命中（延迟写盘）时置 True，
+        #   任一次真实写盘成功后清零；调用方据其区分「已保存」与「待刷新」。
+        self._pending_flush: bool = False
         # ===== 新增: 生命连续性状态 =====
         self._extra_state: dict[str, Any] = {}  
         # L1独立快照路径
@@ -399,13 +414,18 @@ class PulseSnapshot:
         # ★v29/14.44：写盘节流——距上次实际写盘 < 最小间隔且非强制 → 延迟写盘。
         #   内存 node_pool 始终持有最新数据，延迟写盘不丢数据；下次触发时 checksum 已变会继续。
         #   仅对「变更节点数小」的常规增量生效；全量保存（10分钟周期）不节流，保证周期落盘。
+        #   ★第159批 刀4 D-4：节流命中不再返回 True（否则调用方误判「已保存」），
+        #     改为返回 SAVE_THROTTLED 并置 _pending_flush=True，调用方可据标志区分「待刷新」。
+        #     force_full（退出/强制）恒走真实写盘，不受节流影响。
         if (time.time() - self._last_write_time < self.INCREMENTAL_MIN_INTERVAL
-                and self._last_write_time > 0):
+                and self._last_write_time > 0
+                and not force_full):
             elapsed = time.time() - start_time
+            self._pending_flush = True
             self._log(LogLevel.DEBUG,
                       f"快照写盘节流：距上次写盘{time.time()-self._last_write_time:.1f}s"
-                      f"<{self.INCREMENTAL_MIN_INTERVAL}s，延迟落盘（内存持有最新数据）")
-            return True
+                      f"<{self.INCREMENTAL_MIN_INTERVAL}s，延迟落盘（内存持有最新数据，pending_flush=True）")
+            return self.SAVE_THROTTLED
 
         # ★P0-4新增：判断使用增量还是全量模式（D4：改用类级常量 FULL_SAVE_INTERVAL / INCREMENTAL_MAX_NODES）
         _now = time.time()
@@ -424,6 +444,7 @@ class PulseSnapshot:
                 self._update_saved_nodes_map(saved_nodes)
                 self._last_save_time = time.time()
                 self._last_save_nodes = len(saved_nodes)
+                self._pending_flush = False
                 return True
             except Exception as _e:
                 self._log(LogLevel.ERROR, f"保护快照写入失败: {_e}")
@@ -476,6 +497,8 @@ class PulseSnapshot:
             #   只跟随全量节奏（约10分钟一次）刷新，与 JSON 主快照的轮转机制对齐。
             # ★第81批补2 T2：Parquet 刷新已移入 _m67_full_checkpoint（JSON 成功后按
             #   self._use_parquet 判定写入并据返回值决定清空增量日志），此处不再重复刷。
+            # ★第159批 刀4 D-4：真实写盘成功 → 清除节流挂起标志。
+            self._pending_flush = False
 
         return _success
         
