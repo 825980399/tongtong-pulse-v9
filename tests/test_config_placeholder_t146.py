@@ -127,3 +127,27 @@ def test_no_false_claim_about_shared_name():
     for _k, raw in rules.items():
         v = render_placeholders(str(raw))
         assert "共享同一个名字" not in v, "identity_rules 事实矛盾未清除：%s" % v[:80]
+
+
+# --------------------------------------------------------------------------
+# ★第159批 上B 刀C 判据4：语义不变量——占位符字面量不得被破坏
+# --------------------------------------------------------------------------
+def test_seed_keywords_and_path_keep_placeholder_literals():
+    """★刀C 判据4：SEED_MEMORIES 的 keywords / space_path 须仍是占位符原样。
+
+    背景：
+      * PII 脱敏 ``tools/export_public.py`` 依赖 ``<CREATOR_DAUGHTER>`` 字面量
+        做规则匹配，字面量被改写会直接破坏脱敏闭环；
+      * 刀C① 的 casefold 只作用于**比对期**大小写对齐，**不得**改变任何
+        存储字面量（本刀性质=修判定非补种，不动数据）。
+    """
+    _seeds = list(config.SEED_MEMORIES or [])[:5]
+    _kws_all = " ".join(str(k) for s in _seeds for k in (s.get("keywords") or []))
+    _paths_all = " ".join(str(s.get("space_path", "")) for s in _seeds)
+
+    assert "<CREATOR_DAUGHTER>" in _kws_all, \
+        "SEED_MEMORIES keywords 须保留 <CREATOR_DAUGHTER>（PII 脱敏依赖）"
+    assert "<SELF_NAME>" in _kws_all, "keywords 须保留 <SELF_NAME>"
+    assert "<CREATOR>" in _kws_all, "keywords 须保留 <CREATOR>"
+    assert "<CREATOR_DAUGHTER>" in _paths_all, \
+        "space_path 须保留 <CREATOR_DAUGHTER> 字面量（不得被渲染/改写）"
