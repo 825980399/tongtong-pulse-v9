@@ -1930,6 +1930,24 @@ class PulseFramework:
             _main_paths = [n.space_path for n in restored_nodes if hasattr(n, 'space_path') and n.space_path]
             _main_registered = self.knowledge_tree.register_paths_batch(_main_paths)
             self._log(LogLevel.INFO, f"知识树批量注册: {_main_registered}条路径(单次锁获取)")
+        # ★第158批 上-A O-A1（P0）：任务态账本恢复（重启对账）。
+        #   落点已裁定——「标 running 无存活任务」此前**无持久化载体**
+        #   （scheduler 纯内存 / cooldown.json 纯冷却账 / runtime_state 的 running
+        #   是器官计数），故本刀新建 data/evolution/task_ledger.json。此处挂在启动
+        #   恢复序列：load → 对账 → 「running 但存活 pid 已不在」者**单事务**改判
+        #   interrupted + 出诊断回执（★不回放不续跑；未送达回复随附、免重做）。
+        #   冷却账仅**只读核对**（不失明），绝不改写。恢复失败**不阻断启动**。
+        try:
+            from nucleus.evolution.task_ledger import reconcile_on_startup
+            _tl_res = reconcile_on_startup()
+            if _tl_res.get("reconciled"):
+                self._log(LogLevel.WARNING,
+                          f"任务态账本恢复: {_tl_res['reconciled']} 个任务改判 interrupted"
+                          f"（标 running 但无存活任务）")
+            else:
+                self._log(LogLevel.DEBUG, "任务态账本恢复: 无需改判")
+        except Exception as _tl_e:
+            silent_exc(_tl_e, where="main.py:start 任务态账本恢复（不阻断启动）")
         # ===== 新增: 恢复生命连续性状态 =====
         extra_state = self.snapshot.get_extra_state()
         if extra_state:
