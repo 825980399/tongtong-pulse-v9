@@ -1,0 +1,16 @@
+{
+  "algorithm": "sha256('title|severity|scope|' + ' '.join(checker_src.split()))[:16]",
+  "ci_gate_constants": {
+    "LEGACY_ASSEMBLY.BASELINE_LEGACY_CALLS": "92820599936f1b1a",
+    "LEGACY_ASSEMBLY.DECLARATIVE_ALLOWED": "54e579fd0072f860",
+    "LEGACY_ASSEMBLY.RETIRE_MARKER": "b770e402f94eea1a",
+    "VERIFY_FP.FP_SKIP_DIRS": "2a968d7c8d6a708d",
+    "VERIFY_FP.FP_VERSION": "e8f4e8d3a2266c7d"
+  },
+  "rules": {
+    "TT001": "ccf50165dc1692b9",
+    "TT002": "15ed658af5ebf322",
+    "TT003": "e98ccd7a68bc2b6a"
+  },
+  "version": "159A-K2-1"
+}

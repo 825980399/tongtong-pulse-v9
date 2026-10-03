@@ -246,5 +246,29 @@
     "has_log": false,
     "has_reraise": false,
     "lineno": 110
+  },
+  {
+    "path": "tools/ci/verify_fingerprint_gate.py",
+    "qualname": "main",
+    "nth": 0,
+    "sha16": "d74ff0ee8da3b980",
+    "tname": "OSError",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 534,
+    "legacy_lineno": 534,
+    "match": "exact"
+  },
+  {
+    "path": "tools/ci/verify_fingerprint_gate.py",
+    "qualname": "main",
+    "nth": 1,
+    "sha16": "d74ff0ee8da3b980",
+    "tname": "OSError",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 548,
+    "legacy_lineno": 548,
+    "match": "exact"
   }
 ]

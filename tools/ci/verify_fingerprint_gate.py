@@ -12,13 +12,21 @@
 """
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ci_common import extract_handlers, handler_identity  # noqa: E402
+import check_legacy_assembly_gate as _lg  # noqa: E402  (158 批新门禁，规则常量指纹源)
 
 # ★T-审计-5：静默异常统一走 CI 门禁认可通道（需项目根入 sys.path）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from nucleus._silent_except import silent_exc  # noqa: E402
+
+# ★第159批上A 刀2：规则签名基线复用引擎侧口径（同源 sha16，逐字节一致）
+from nucleus.self_awareness.rule_engine import (  # noqa: E402
+    rule_sha16 as _rule_sha16,
+    rule_signatures as _rule_signatures,
+)
 
 
 def file_added(old_src, new_src, known, rel="sample.py"):
@@ -293,6 +301,88 @@ def fp_rule_signature():
     }
 
 
+# ========== ★第159批上A 刀2（T-规则生命周期-1）：规则签名基线 ==========
+# 复用 rule_engine.rule_sha16 / rule_signatures（引擎侧与 CI 门禁侧同源口径）。
+def fp_rule_sha16(title, severity, scope, checker_src):
+    """规则签名 = sha16(title|severity|scope|normalize_body(checker_src))。
+
+    直接复用 ``rule_engine.rule_sha16`` —— 与引擎侧逐字节一致，确保
+    「改函数体→红、改缩进/挪行→不红」在两处判定一致。
+    """
+    return _rule_sha16(title, severity, scope, checker_src)
+
+
+def fp_rule_signature_baseline_path():
+    """规则签名基线路径（``tools/ci/baselines/rule_signature_baseline.json``）。"""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "baselines", "rule_signature_baseline.json")
+
+
+def fp_rule_signature_collect():
+    """采集当前规则签名（RULE_REGISTRY + 关键 CI 门禁常量/阈值）。
+
+    Returns:
+        ``{"rules": {id: sha16}, "ci_gate_constants": {name: sha16}}``
+    """
+    _rules = _rule_signatures()  # 已是 sha16 口径
+    _ci = {}
+    # 158 批新门禁 check_legacy_assembly_gate.py 的关键规则常量/阈值
+    for _n in ("BASELINE_LEGACY_CALLS", "RETIRE_MARKER", "DECLARATIVE_ALLOWED"):
+        if hasattr(_lg, _n):
+            _ci["LEGACY_ASSEMBLY.%s" % _n] = fp_rule_sha16(
+                _n, "config", "ci", repr(getattr(_lg, _n)))
+    # 本件自身的规则常量/阈值（FP_SKIP_DIRS 等）—— 第2.2.2「其他 ci 门禁常量」
+    _ci["VERIFY_FP.FP_SKIP_DIRS"] = fp_rule_sha16(
+        "FP_SKIP_DIRS", "config", "ci", repr(sorted(FP_SKIP_DIRS)))
+    _ci["VERIFY_FP.FP_VERSION"] = fp_rule_sha16(
+        "FP_VERSION", "config", "ci", "158A-T5-1")
+    return {"rules": _rules, "ci_gate_constants": _ci}
+
+
+def fp_rule_signature_verify(baseline_path=None):
+    """比对当前规则签名与基线，返回 ``(changed, unregistered, removed)``。
+
+    - changed: 签名漂移（含检测逻辑函数体被改）→ 红
+    - unregistered: RULE_REGISTRY / ci 常量新增但未入基线 → 报「未登记规则」
+    - removed: 基线有但当前无（规则被删）
+    """
+    _p = baseline_path or fp_rule_signature_baseline_path()
+    _cur = fp_rule_signature_collect()
+    _cur_rules = _cur["rules"]
+    _cur_ci = _cur["ci_gate_constants"]
+    if not os.path.isfile(_p):
+        _all = sorted(set(_cur_rules) | set(_cur_ci))
+        return ([], _all, [])
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            _base = json.load(_f)
+    except (OSError, ValueError) as _e:  # noqa: BLE001
+        silent_exc(_e, where="verify_fingerprint_gate.fp_rule_signature_verify",
+                   level="warning")
+        _all = sorted(set(_cur_rules) | set(_cur_ci))
+        return ([], _all, [])
+    _base_rules = _base.get("rules", {})
+    _base_ci = _base.get("ci_gate_constants", {})
+    _changed, _unreg, _removed = [], [], []
+    for _rid, _sig in _cur_rules.items():
+        if _rid not in _base_rules:
+            _unreg.append(_rid)            # 新增规则未登记 -> 红
+        elif _base_rules[_rid] != _sig:
+            _changed.append(_rid)          # 函数体变更 -> 红
+    for _rid in _base_rules:
+        if _rid not in _cur_rules:
+            _removed.append(_rid)
+    for _name, _sig in _cur_ci.items():
+        if _name not in _base_ci:
+            _unreg.append(_name)
+        elif _base_ci[_name] != _sig:
+            _changed.append(_name)
+    for _name in _base_ci:
+        if _name not in _cur_ci:
+            _removed.append(_name)
+    return (_changed, _unreg, _removed)
+
+
 def main():
     failures = []
 
@@ -409,13 +499,65 @@ def main():
         FP_SKIP_DIRS.clear()
         FP_SKIP_DIRS.update(_saved)
 
+    # ===== ★第159批上A 刀2：规则签名基线（第⑩项） =====
+    # ⑩-a 改函数体 -> 红（归一串变）
+    _src_a = "def chk():\n    return 1\n"
+    _src_b = "def chk():\n    return 2\n"   # 仅体不同
+    if fp_rule_sha16("T", "error", "py", _src_a) == fp_rule_sha16("T", "error", "py", _src_b):
+        failures.append("⑩ 改函数体应改签名（实际相同）")
+    # ⑩-b 改缩进/挪行 -> 绿（归一串不变）
+    _src_ind = "def chk():\n    return 1\n"
+    _src_ded = "def chk():\n  return 1\n"   # 仅缩进差异
+    if fp_rule_sha16("T", "error", "py", _src_ind) != fp_rule_sha16("T", "error", "py", _src_ded):
+        failures.append("⑩ 缩进变化不应改签名（实际不同）")
+    # ⑩-c 基线已登记且签名一致（活体比对；基线缺失则跳过）
+    _bl = fp_rule_signature_baseline_path()
+    if os.path.isfile(_bl):
+        _chg, _unreg, _rem = fp_rule_signature_verify(_bl)
+        if _chg:
+            failures.append("⑩ 基线比对检出签名变更（应为 0）: %s" % _chg)
+        if _unreg:
+            failures.append("⑩ 基线比对检出未登记规则（应为 0）: %s" % _unreg)
+        if _rem:
+            failures.append("⑩ 基线比对检出消失规则（应为 0）: %s" % _rem)
+    # ⑩-d 新增规则未登记 / ⑩-e 签名篡改 -> 门禁必报（unregistered / changed）
+    _cur = fp_rule_signature_collect()
+    # 基线缺 TT002/TT003（其余与当前一致）-> 应报 unregistered
+    _tmp_missing = {"rules": {"TT001": _cur["rules"]["TT001"]},
+                    "ci_gate_constants": _cur["ci_gate_constants"]}
+    _tf2 = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(_tmp_missing, _tf2)
+    _tf2.close()
+    _cm, _um, _rm = fp_rule_signature_verify(_tf2.name)
+    try:
+        os.unlink(_tf2.name)
+    except OSError:
+        pass
+    if "TT002" not in _um or "TT003" not in _um:
+        failures.append("⑩ 新增未登记规则应被报出（实际 %s）" % _um)
+    # 基线 TT001 签名被篡改 -> 应报 changed
+    _tmp_tampered = {"rules": {"TT001": "0" * 16, "TT002": _cur["rules"]["TT002"],
+                               "TT003": _cur["rules"]["TT003"]},
+                     "ci_gate_constants": _cur["ci_gate_constants"]}
+    _tf3 = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(_tmp_tampered, _tf3)
+    _tf3.close()
+    _cc, _uc, _rc = fp_rule_signature_verify(_tf3.name)
+    try:
+        os.unlink(_tf3.name)
+    except OSError:
+        pass
+    if "TT001" not in _cc:
+        failures.append("⑩ 签名篡改应被报 changed（实际 %s）" % _cc)
+
     if failures:
         for f in failures:
             print("FAIL: " + f)
         print("RESULT: %d 项验收未通过" % len(failures))
         sys.exit(1)
-    print("RESULT: 9 项验收全部通过（①改体红 ②插行绿 ③新增红 ④删handler红 "
-          "⑤未跟踪红 ⑥签名规范化 ⑦漂移检出 ⑧调用点破坏预检 ⑨规则签名）")
+    print("RESULT: 10 项验收全部通过（①改体红 ②插行绿 ③新增红 ④删handler红 "
+          "⑤未跟踪红 ⑥签名规范化 ⑦漂移检出 ⑧调用点破坏预检 ⑨规则签名 "
+          "⑩规则签名基线 checker体漂移红/缩进绿/未登记报红）")
     sys.exit(0)
 
 
