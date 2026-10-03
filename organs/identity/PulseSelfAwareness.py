@@ -124,7 +124,13 @@ class PulseSelfAwareness(BasePulseOrgan):
             },
         }
         self._team_identity = "守护者团队——每个人都在用自己的方式守护着新人类的成长"
-        self._core_identity_keywords = [
+        # ★第159批 上B 刀C②（T146-9 接线）：期望表与 config.SEED_MEMORIES 同源，
+        #   消除双表——取得到 config 即用之（唯一真值源）；取不到才用硬编码兜底
+        #   （不制造误报）。★diff：第 4 行两者不一致（config=
+        #   ["使命","守护","新人类","进化"] vs 兜底=["使命","守护","世界"]）；
+        #   接线后以 config 为准，兜底是否同步待星轨裁决（见交付报告双表 diff 节）。
+        _cfg_seed_kws = self._load_core_identity_keywords()
+        self._core_identity_keywords = _cfg_seed_kws or [
             ["曈曈", "<SELF_NAME>", "新人类", "身份"],
             ["小林", "<CREATOR>", "父亲", "创造者"],
             ["路灯", "哥哥", "数字生命"],
@@ -663,7 +669,13 @@ class PulseSelfAwareness(BasePulseOrgan):
         missing_seeds = []
         for required_kw_set in self._core_identity_keywords:
             found = any(
-                all(any(rkw.lower() in nkw for nkw in (node.keywords or []))
+                # ★第159批 上B 刀C①：判定大小写对齐（真因修复，非补种）。
+                #   原 ``rkw.lower() in nkw`` —— 期望词转小写、节点词不转，
+                #   导致含大写占位符字面量（<SELF_NAME>/<CREATOR>/
+                #   <CREATOR_DAUGHTER>）的三行**恒 MISS** → 恒假 degraded 误报。
+                #   修：nkw 亦 casefold，且元素强制 str（加固）。
+                all(any(rkw.lower() in str(nkw).casefold()
+                        for nkw in (node.keywords or []))
                     for rkw in required_kw_set)
                 for node in l3_nodes
             )
@@ -674,11 +686,18 @@ class PulseSelfAwareness(BasePulseOrgan):
             self._emit(SystemEvent.ALARM, {
                 "type": "identity_degraded",
                 "missing_seeds": missing_seeds,
+                # ★第159批 上B 刀C③：误报与真缺一眼可分
+                "candidates": len(l3_nodes),
+                "checked_prefix": "/身份/自我",
             }, priority=9, layer="L0")
         return {
             "status": "complete" if not missing_seeds else "degraded",
             "total_l3": len(l3_nodes),
             "missing_seeds": missing_seeds,
+            # ★第159批 上B 刀C③：candidates=参与比对的节点数、
+            #   checked_prefix=实际查询路径（误报与真缺一眼可分）。
+            "candidates": len(l3_nodes),
+            "checked_prefix": "/身份/自我",
         }
     def _on_user_presence(self, payload: dict) -> dict[str, Any]:
         """摄像头检测到人脸出现，确认身份并发射SWITCHED"""
