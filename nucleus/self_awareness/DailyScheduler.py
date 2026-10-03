@@ -353,6 +353,27 @@ class SelfAwarenessDailyScheduler:
                         "[自我认知调度] 成熟度台账登记失败（忽略）: %s: %s",
                         type(_mle).__name__, _mle)
 
+            # ★第158批 上-A T-自我审计-2（P1）：能力四态账本随批自动更新。
+            #   与 O-A2 **共基建**——落盘复用 maturity_ledger，本处只登记。
+            #   空转读数走 **v2 四归位**（存档/观测/事件/真空转）；71.1% 口径已证伪，
+            #   不再作为基线。登记失败只 warning，不得影响调度。
+            if not self._is_test_env():
+                try:
+                    from nucleus.self_awareness.capability_ledger import (
+                        register_capability_ledger as _t2_reg)
+                    _t2 = _t2_reg(batch="daily")
+                    if isinstance(_t2, dict) and not _t2.get("error"):
+                        _iv = _t2.get("idle_v2") or {}
+                        _res["capability_ledger"] = {
+                            "states": (_t2.get("capability") or {}).get("states"),
+                            "by_destination": _iv.get("by_destination"),
+                            "true_idle_rate": _iv.get("true_idle_rate"),
+                        }
+                except Exception as _t2e:               # 登记失败不得影响调度
+                    _module_logger.warning(
+                        "[自我认知调度] 能力四态账本登记失败（忽略）: %s: %s",
+                        type(_t2e).__name__, _t2e)
+
             # ★主线第42批 T3（P1-265）：经验语义检索观测（L1 仅观测，不替换现有检索器）。
             #   仅在编码器**已就绪**时执行（observe_daily 内部自检）→ 首次加载不阻塞调度。
             if not self._is_test_env():
