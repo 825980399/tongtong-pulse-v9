@@ -1980,6 +1980,22 @@ class PulseFramework:
                 self._log(LogLevel.DEBUG, "任务态账本恢复: 无需改判")
         except Exception as _tl_e:
             silent_exc(_tl_e, where="main.py:start 任务态账本恢复（不阻断启动）")
+        # ★第159批 上B 刀A（P1）：补丁段生命周期对账（启动期）。
+        #   reconcile_patches 与 task_ledger.reconcile_on_startup **解耦**：只读写
+        #   patch_lifecycle.json、不动任务态枚举（验收 c）；仅对 activated/observing
+        #   超 observation_deadline 未 committed 者出诊断回执 + 标记待人工，
+        #   ★绝不自动回滚（验收 b 根基）。对账失败不阻断启动。
+        try:
+            from nucleus.evolution.patch_lifecycle import reconcile_patches
+            _pl_res = reconcile_patches()
+            if _pl_res.get("overdue"):
+                self._log(LogLevel.WARNING,
+                          f"补丁段生命周期对账: {_pl_res['overdue']} 个补丁观察期超期"
+                          f"（已出诊断回执、标记待人工，不自动回滚）")
+            else:
+                self._log(LogLevel.DEBUG, "补丁段生命周期对账: 无超期补丁")
+        except Exception as _pl_e:
+            silent_exc(_pl_e, where="main.py:start 补丁段生命周期对账（不阻断启动）")
         # ===== 新增: 恢复生命连续性状态 =====
         extra_state = self.snapshot.get_extra_state()
         if extra_state:

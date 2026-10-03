@@ -545,6 +545,41 @@ class TestPatchLifecycle(unittest.TestCase):
         self.assertEqual(_calls[0][0][0], "int1")
         self.assertTrue(_calls[0][1].get("rollback_available"))
 
+    def test_66_reconcile_wired_and_activated_overdue(self):
+        """★第159批 上B 刀A 接线测试：启动链路调用 + activated 超期出回执不回滚。
+
+        (a) main.py 启动段在 reconcile_on_startup() **之后**调用 reconcile_patches()
+            （源码级接线断言，防脱链 / 防顺序错）。
+        (b) activated 且超 observation_deadline 未 committed → 出诊断回执：
+            回执含 patch_id + 超期状态（stage 仍 activated），auto_rollback=False。
+        """
+        # --- (a) 启动链路接线（源码级） ---
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with io.open(os.path.join(_root, "main.py"), encoding="utf-8") as _f:
+            _src = _f.read()
+        self.assertIn("reconcile_patches()", _src,
+                      "main.py 启动段应调用 reconcile_patches()")
+        self.assertLess(
+            _src.index("reconcile_on_startup()"),
+            _src.index("reconcile_patches()"),
+            "reconcile_patches() 应在 reconcile_on_startup() 之后追加")
+        # --- (b) activated 超期出回执、不自动回滚 ---
+        _pl.record_activation("p9", rollback_available=True, path=self.lp)
+        _d = _pl.load_lifecycle(self.lp)
+        self.assertEqual(_d["patches"]["p9"]["stage"], "activated")
+        _d["patches"]["p9"]["observation_deadline"] = time.time() - 10
+        with io.open(self.lp, "w", encoding="utf-8") as _f:
+            json.dump(_d, _f, ensure_ascii=False)
+        _res = _pl.reconcile_patches(path=self.lp)
+        self.assertEqual(_res["overdue"], 1)
+        _rcpt = _res["receipts"][0]
+        self.assertEqual(_rcpt["patch_id"], "p9", "回执须含 patch_id")
+        self.assertEqual(_rcpt["stage"], "activated", "回执须含超期状态")
+        self.assertFalse(_rcpt["auto_rollback"], "绝不自动回滚")
+        _e = _pl.load_lifecycle(self.lp)["patches"]["p9"]
+        self.assertEqual(_e["stage"], "activated", "超期不得改判/回滚")
+        self.assertTrue(_e.get("overdue"))
+
 
 if __name__ == "__main__":
     unittest.main()
