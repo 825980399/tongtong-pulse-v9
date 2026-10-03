@@ -841,6 +841,16 @@ class PulseFramework:
         通用器官创建方法（P0-1）。
         
         自动注入 info_field + pulse_core，然后注入额外依赖，存入 organs 字典。
+
+        ★第158批 _create_organ 退役（实测口径，2026-10-03）：本方法**不是**待退役的
+          硬编码装配残留，而是**声明式装配路径的底层创建原语**，全仓唯一创建实现。
+          证据：OrganAssembler.assemble()（nucleus/organ_assembler.py:420）与
+          OrganLoader（nucleus/organ_loader.py:194）均经 framework.create_organ()
+          转发至本方法；实测 56/56 声明器官经此创建成功。
+          因此「退役」的真实对象不是本方法，而是 legacy 硬编码段
+          _init_organs_legacy()（main.py:1344）——在 FEATURE
+          ['use_declarative_assembly']=True（config.py:1827）下已不执行。
+          保留本方法为声明式唯一创建原语；legacy 段的停用标注见其 def 处。
         """
         organ = organ_class(name)
         organ.set_info_field(self.info_field)
@@ -1342,7 +1352,29 @@ class PulseFramework:
             silent_exc(_se, "main.py:1257")
 
     def _init_organs_legacy(self):
-        """硬编码装配（原 _init_organs，作为声明式装配的回退路径）"""
+        """硬编码装配（原 _init_organs，作为声明式装配的回退路径）。
+
+        ★第158批 _create_organ 退役★（P2·2026-10-03 停框架施工期标注）：
+          本段 37 处硬编码 _create_organ 调用（实测口径：全仓 38 处 = 本段 37 处
+          + declarative Phase 0 的 QICA 1 处）**已被声明式装配取代**——
+          FEATURE['use_declarative_assembly']=True（config.py:1827）时本段不执行，
+          入口 _init_organs_with_feature()（main.py:1148）直接分流至
+          _init_organs_declarative()。
+
+          保留而不删除的理由（实测取证，非推测）：
+            1. 本段是唯一的一键回退通道（开关置 False 即回退），
+               删除会丧失装配层的故障兜底能力；
+            2. 框架处于停机状态，删除后无法做装配活体验证（纪律 D5：
+               不擅自启停框架），须待小林恢复运行后经实测回归方可移除；
+            3. 声明面等价性已实测：legacy 37 处中 36 处已被 ORGAN_META 声明覆盖
+               （唯一例外 QICA 不在 organs/ 扫描面，由 declarative Phase 0 承接，
+               见 FRAMEWORK_QUASI_ORGANS）。
+
+          防回潮：tools/ci/check_legacy_assembly_gate.py 门禁校验本段不得新增
+          _create_organ 调用行数（基线 37），防止已停用路径被重新扩张。
+          ★退役完成的前置条件 = 小林恢复运行后完成装配活体验证 + 声明面 100% 覆盖
+            （含 QICA 承接方案定稿），届时方可删除本段。
+        """
         FEATURE = self.config.FEATURE
 
         # ===== 核心脏器（始终在线） =====
