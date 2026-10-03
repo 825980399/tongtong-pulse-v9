@@ -3764,9 +3764,8 @@ def main():
                 from nucleus.reasoning.PatchManager import PatchManager
                 _patch_mgr = PatchManager(os.path.dirname(os.path.abspath(__file__)))
                 _rollback_ok = _patch_mgr.rollback_last()
-                _verifier.mark_rolled_back()
-
                 if _rollback_ok:
+                    _verifier.mark_rolled_back()
                     _logger.info("[自验证] 已回退最近补丁，3秒后重启...")
                     # ★v24.0修复：回退重启前先停止框架保存快照
                     if framework is not None:
@@ -3788,6 +3787,11 @@ def main():
                     _spawn_self_restart()
                     _sys.exit(0)
                 else:
+                    # ★第159批 D-3（T-回滚额度-1）：回滚失败不得置位 rolled_back，
+                    #   否则「每次待验证只自动回退一次」额度被凭空烧掉。
+                    #   记录失败原因备查，停止自动重启，转人工。
+                    _verifier.mark_rollback_failed(
+                        "rollback_last() 返回 False（无可用备份/路径越界/历史无已应用补丁）")
                     _logger.info("[自验证] 回退失败，停止自动重启，请人工介入检查日志")
     
     

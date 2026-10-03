@@ -2822,7 +2822,11 @@ class PatchManager:
                 # 不 return —— 继续向下应用补丁
             else:
                 # ★T-113e① 仍处冷却/锁死：记 WARNING + 事件遥测，拒绝
-                self._save_restart_blocked_at(_now)
+                # ★第159批 D-1（T-棘轮冷却续期-1）：仅首次锁死写入冷却起点，
+                #   后续拒绝不再刷新 _blocked_at → 冷却倒计时可正常推进至期满放行。
+                #   修复前每次拒绝都写 now，导致 _elapsed 恒近 0、冷却永不满期（现网活锁）。
+                if _blocked_at == 0:
+                    self._save_restart_blocked_at(_now)
                 _remain = (int(_cooldown_sec - _elapsed)
                            if _blocked_at > 0 else int(_cooldown_sec))
                 _module_logger.warning(

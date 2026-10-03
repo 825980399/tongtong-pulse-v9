@@ -32,6 +32,8 @@ from nucleus.evolution.PatchAutoApprover import (
     PatchAutoApprover,
 )
 from nucleus.reasoning.PatchManager import PatchManager
+from nucleus.reasoning.SelfVerifier import SelfVerifier
+from nucleus.data.DataAccessLayer import safe_read_json
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -305,6 +307,141 @@ class TestConfigWiring(unittest.TestCase):
     def test_51_config_flag_not_in_hot_blacklist(self):
         self.assertNotIn("ENABLE_PATCH_APPROVE_WRITE_CHECK",
                          getattr(config, "_HOT_RELOAD_BLACKLIST", set()))
+
+
+# ============================ 刀1：D-1 棘轮冷却续期 / D-3 回滚额度 ============================
+class TestD1RatchetCooldown(unittest.TestCase):
+    """★第159批 刀1：D-1 棘轮冷却续期（T-棘轮冷却续期-1）。
+
+    验收(a) 锁死后冷却期满必须一次期满即放行；(c) 重启后 blocked_at 不再被拨回。
+    日志守卫：patch 模块全局 _module_logger，杜绝测试串台污染生产日志口径
+    （与既有 test_23 同源的「停止自动应用」WARNING 在沙箱内被静默，不落生产日志）。
+    """
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="m53_d1_")
+        self.mgr = _mk_mgr(self.tmp)
+        self.mgr._max_restart_count = 0  # 强制首次即锁死
+        self.mgr._backup_manager = mock.MagicMock()  # 隔离真实备份管理器
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _blocked_at(self):
+        _p = os.path.join(self.tmp, "restart_blocked_at.txt")
+        if not os.path.exists(_p):
+            return 0.0
+        with io.open(_p, encoding="utf-8") as f:
+            return float(f.read().strip() or 0)
+
+    def test_d1_cooldown_not_refreshed(self):
+        """①冷却不续期：多次拒绝后 blocked_at 保持首锁时刻，倒计时正常推进。"""
+        _write_pending(self.tmp, [_patch(id="a", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            _r1 = self.mgr.apply_all_pending(only_approved=True)
+        self.assertIs(_r1.get("loop_protection"), True)
+        _t1 = self._blocked_at()
+        self.assertGreater(_t1, 0, "首次锁死应写入 blocked_at")
+
+        # 第二次拒绝：blocked_at 不得被刷新（修复前会每次写 now 导致永不满期）
+        _write_pending(self.tmp, [_patch(id="b", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            _r2 = self.mgr.apply_all_pending(only_approved=True)
+        self.assertIs(_r2.get("loop_protection"), True)
+        _t2 = self._blocked_at()
+        self.assertAlmostEqual(_t2, _t1, delta=1.0,
+                               msg="blocked_at 不应随拒绝刷新（否则冷却永不满期）")
+
+    def test_d1_cooldown_expiry_releases(self):
+        """验收(a)：预置 blocked_at 早于冷却窗口 → 一次期满即放行（不计 loop_protection）。"""
+        _old = time.time() - 100 * 3600.0  # 100h 前，远超默认 24h 冷却
+        with io.open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
+            f.write(str(_old))
+        _write_pending(self.tmp, [_patch(id="a", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            _r = self.mgr.apply_all_pending(only_approved=True)
+        self.assertIsNot(_r.get("loop_protection"), True,
+                         "冷却期满应放行重试一次，不得继续锁死")
+        # 期满重置：持久化计数文件应为 0（reset_restart_counter 只落盘不回写内存属性，
+        # 故查磁盘而非属性——这正是期满放行的实证）。
+        _rc_path = os.path.join(self.tmp, "restart_count.txt")
+        self.assertTrue(os.path.exists(_rc_path), "期满应持久化重置计数")
+        with io.open(_rc_path, encoding="utf-8") as f:
+            self.assertEqual(int(f.read().strip()), 0, "期满应重置棘轮计数（磁盘）")
+
+    def test_d1_blocked_at_not_reset_on_restart(self):
+        """验收(c)：现网重启后 blocked_at.txt 不再被拨回（保持首锁时刻）。"""
+        _write_pending(self.tmp, [_patch(id="a", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            self.mgr.apply_all_pending(only_approved=True)
+        _t_first = self._blocked_at()
+        self.assertGreater(_t_first, 0)
+        # 模拟"重启"：重新构造 mgr（_restart_counter 归零，blocked_at 在磁盘保留）
+        _m2 = _mk_mgr(self.tmp)
+        _m2._max_restart_count = 0
+        _m2._backup_manager = mock.MagicMock()
+        _write_pending(self.tmp, [_patch(id="b", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            _m2.apply_all_pending(only_approved=True)
+        _t_after = self._blocked_at()
+        self.assertAlmostEqual(_t_after, _t_first, delta=1.0,
+                               msg="重启后 blocked_at 不应被拨回（冷却正常推进）")
+
+    def test_d1_count_and_rollback_independent(self):
+        """③计数与回滚互不遮蔽：锁死计数路径与回滚额度路径独立、互不覆盖。"""
+        _write_pending(self.tmp, [_patch(id="a", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            self.mgr.apply_all_pending(only_approved=True)
+        _t = self._blocked_at()
+        self.assertGreater(_t, 0)
+        # 回滚侧 mark_rollback_failed 不得影响 has_rolled_back / 计数
+        _ver = SelfVerifier(self.tmp)
+        _ver.mark_pending(1)
+        _ver.mark_rollback_failed("x")
+        self.assertFalse(_ver.has_rolled_back())
+        # 计数仍可被期满重置（互不遮蔽）
+        _old = time.time() - 100 * 3600.0
+        with io.open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
+            f.write(str(_old))
+        _write_pending(self.tmp, [_patch(id="c", status="approved")])
+        with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
+            _r = self.mgr.apply_all_pending(only_approved=True)
+        self.assertIsNot(_r.get("loop_protection"), True)
+
+
+class TestD3RollbackQuota(unittest.TestCase):
+    """★第159批 刀1：D-3 回滚额度（T-回滚额度-1）。
+
+    验收(b)：回滚失败不得置 rolled_back（否则「每次待验证只自动回退一次」额度被烧）。
+    """
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="m53_d3_")
+        self.ver = SelfVerifier(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_mark_pending_initializes_reason(self):
+        self.ver.mark_pending(1)
+        _d = safe_read_json(self.ver._verify_file, default={})
+        self.assertEqual(_d.get("rollback_failed_reason", "MISSING"), "")
+
+    def test_mark_rolled_back_sets_flag_only(self):
+        self.ver.mark_pending(1)
+        self.ver.mark_rolled_back()
+        _d = safe_read_json(self.ver._verify_file, default={})
+        self.assertTrue(_d.get("rolled_back"))
+        self.assertEqual(_d.get("rollback_failed_reason", ""), "")
+
+    def test_mark_rollback_failed_burns_no_quota(self):
+        """②回滚失败不烧额度：mark_rollback_failed 置原因但不置 rolled_back。"""
+        self.ver.mark_pending(1)
+        self.ver.mark_rollback_failed("backup_missing")
+        _d = safe_read_json(self.ver._verify_file, default={})
+        self.assertFalse(_d.get("rolled_back", False),
+                         "回滚失败不得置位 rolled_back（额度不被烧）")
+        self.assertEqual(_d.get("rollback_failed_reason"), "backup_missing")
+        self.assertFalse(self.ver.has_rolled_back(),
+                         "has_rolled_back 必须为 False（额度保留给真实回退）")
 
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ class SelfVerifier(SilentLogMixin):
             "attempts": 0,
             "last_attempt_at": 0,
             "rolled_back": False,  # ★修复: 每次待验证只自动回退一次，防误退历史好补丁
+            "rollback_failed_reason": "",  # ★第159批 D-3：回滚失败原因留痕（缺省空）
         }
         safe_write_json(self._verify_file, data, indent=2)
 
@@ -62,6 +63,21 @@ class SelfVerifier(SilentLogMixin):
             except (ValueError, OSError) as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         data["rolled_back"] = True
+        safe_write_json(self._verify_file, data, indent=2)
+
+    def mark_rollback_failed(self, reason: str = ""):
+        """★第159批 D-3：回滚失败留痕（D-3 修复）。
+
+        与 mark_rolled_back 互斥：仅当 rollback_last() 返回 False 时调用，
+        绝不置位 rolled_back（否则「每次待验证只自动回退一次」额度被凭空烧掉）。
+        """
+        data = {}
+        if os.path.exists(self._verify_file):
+            try:
+                data = safe_read_json(self._verify_file, default={})
+            except (ValueError, OSError) as e:
+                self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+        data["rollback_failed_reason"] = reason or ""
         safe_write_json(self._verify_file, data, indent=2)
 
     def has_pending(self) -> bool:
