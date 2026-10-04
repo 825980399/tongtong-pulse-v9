@@ -163,7 +163,16 @@ class PulseInnerWorldKnowledgeMixin:
         # ★v25.0修复：第一阶段——全局语义检索（不限定路径）
         # 使用完整问题语句进行共振检索，避免路径推断错误导致检索漂移
         _global_results = self._global_semantic_search(question, emo_mod)
-        self._log(LogLevel.DEBUG, f"全局语义检索结果: {len(_global_results) if _global_results else 0}个候选")
+        # ★第160批 上A 刀2（票1①②）：:166 DEBUG 升级为可观测指标
+        #   （每次提问记录 top1 的 node_id + 五维分，否则命中判据永远无法被验证）
+        if _global_results:
+            _top1 = _global_results[0]
+            self._log(LogLevel.INFO,
+                      f"语义检索·可观测|提问='{question[:40]}' top1 node_id={_top1.get('node_id','')} "
+                      f"score={_top1.get('score', 0):.3f} candidates={len(_global_results)}")
+        else:
+            self._log(LogLevel.INFO,
+                      f"语义检索·可观测|提问='{question[:40]}' candidates=0")
         if _global_results:
             _best_global = _global_results[0]
             _global_value = _best_global.get("value", "")
@@ -172,12 +181,26 @@ class PulseInnerWorldKnowledgeMixin:
                 _global_relevance = self._calculate_match_relevance(
                     question, _global_clean, _best_global.get("keywords", [])
                 )
-                # ★FIX(检索准确性): 全局路径复用 _calculate_match_relevance 门槛，
-                #   避免 _is_relevant 的 2 字重叠 + 0.3 阈值过宽导致张冠李戴
-                if _global_relevance >= 0.35:
-                    self._log(LogLevel.DEBUG,
-                             f"全局语义检索命中: '{question[:40]}' (相关度={_global_relevance:.2f})")
+                # ★第160批 上A 刀2（票1①②）：命中判据接回打分结果（灰度开关，默认0.5；<0=退化旧逻辑）
+                import config as _cfg_k160
+                _hit_threshold = float(getattr(_cfg_k160, "KNOWLEDGE_GLOBAL_HIT_THRESHOLD", 0.5))
+                if _hit_threshold < 0:
+                    # 开关关闭（<0）：完全退化回旧逻辑——未命中 fall-through 路径目录前排，命中阈值取 0.35
+                    _do_new_miss = False
+                    _hit_threshold = 0.35
+                else:
+                    _do_new_miss = True
+                if _global_relevance >= _hit_threshold:
+                    self._log(LogLevel.INFO,
+                             f"全局语义检索命中: '{question[:40]}' (相关度={_global_relevance:.2f}≥阈值{_hit_threshold})")
                     return _global_clean
+                elif _do_new_miss:
+                    # ★相关度<阈值→明确未命中，交肺渠道 LLM，不再用路径目录前排（根治答非所问）
+                    self._log(LogLevel.INFO,
+                             f"语义检索·未命中|提问='{question[:40]}' top1相关度={_global_relevance:.2f}"
+                             f"<阈值{_hit_threshold}，转肺渠道")
+                    return None
+                # else: _do_new_miss is False → 旧逻辑 fall-through 到路径目录前排（仅应急回滚）
             # ★移除了原本在if块内的早期扩展，改到下面统一处理
 
         # ★v25.0常驻扩展：无论全局检索是否命中，都尝试语义关系扩展

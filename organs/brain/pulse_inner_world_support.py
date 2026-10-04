@@ -1696,11 +1696,23 @@ class PulseInnerWorldSupportMixin:
                     _seen.add(_prefix)
                     _prefixes.append(_prefix)
 
-        # ★v26.0修复：无法推断路径时返回通用兜底路径，避免知识检索完全跳过
+        # ★第160批 上A 刀2（票1①②·根因②）：兜底前缀不得覆盖 78% 全库。
+        #   原 ['/知识','/综合','/自我理解'] 覆盖 9,692/12,422=78% 全库 → 等于无过滤，
+        #   致组件类问题前排恒为「健康检查报告」节点 → 不同问题同答。
+        #   改为：无具体前缀命中即返回空集，交由调用方走全库共振检索
+        #   （经共振门禁 _top_score<0.30 转肺渠道），不再用宽前缀定死候选集。
+        #   应急宽兜底恢复：置 config.KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD=True。
+        import config as _cfg_prefix_k160
+        _broad_fallback = bool(getattr(_cfg_prefix_k160, "KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD", False))
         if not _prefixes:
-            _prefixes = ["/知识", "/综合", "/自我理解"]
-            self._log(LogLevel.DEBUG,
-                     f"路径前缀推断未命中，使用兜底路径: {_prefixes}")
+            if _broad_fallback:
+                _prefixes = ["/知识", "/综合", "/自我理解"]
+                self._log(LogLevel.DEBUG,
+                         f"路径前缀推断未命中，使用兜底路径(宽·应急): {_prefixes}")
+            else:
+                self._log(LogLevel.DEBUG,
+                         "路径前缀推断未命中，返回空集（交全库共振/肺渠道）")
+                # 返回空集：调用方 `if _path_prefixes:` 为 False → 走全库共振分支（不限定前缀）
 
         return _prefixes[:3]
     # ★第六批 任务3：语义扩展结果质量过滤阈值
