@@ -18,6 +18,9 @@ import time
 from collections.abc import Iterable
 from typing import Any
 from nucleus._silent_except import silent_exc
+# ★第160批 下上 刀0（0.4）：占位符判据统一走 PlaceholderSanitizer 唯一口径
+#   （禁在本文件再造字面量）；该模块不反向依赖本文件 ⇒ 无循环导入。
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 
 
 try:
@@ -35,6 +38,7 @@ except Exception:  # pragma: no cover
 
 __all__ = [
     "FLAG_CLEAN",
+    "FLAG_PLACEHOLDER_ALIAS",
     "FLAG_POLLUTED",
     "FLAG_SUSPECT",
     "PollutionTagger",
@@ -44,9 +48,19 @@ __all__ = [
 FLAG_CLEAN = "clean"
 FLAG_SUSPECT = "suspect"
 FLAG_POLLUTED = "polluted"
+# ★第160批 下上 刀0（0.1）：占位符别名污染标记（L-4 证实，A案硬前置）。
+#   与 159 上B --apply 落盘的 quality_flag=placeholder_alias 同名字面量；
+#   严重度最高（> polluted），由内容谓词现算（免疫落盘 flag 被 Parquet 覆盖丢失）。
+FLAG_PLACEHOLDER_ALIAS = "placeholder_alias"
+
+# ★刀0（0.5）：严重度序（写回「只升不降」护栏）
+#   placeholder_alias > polluted > suspect > clean
+_FLAG_SEVERITY = {FLAG_CLEAN: 0, FLAG_SUSPECT: 1, FLAG_POLLUTED: 2,
+                  FLAG_PLACEHOLDER_ALIAS: 3}
 
 # 降权系数（config.POLLUTION_TAGGING_CONFIG 可覆盖）
-DEFAULT_FACTORS = {FLAG_CLEAN: 1.0, FLAG_SUSPECT: 0.7, FLAG_POLLUTED: 0.3}
+DEFAULT_FACTORS = {FLAG_CLEAN: 1.0, FLAG_SUSPECT: 0.7, FLAG_POLLUTED: 0.3,
+                   FLAG_PLACEHOLDER_ALIAS: 0.3}
 
 _MARK_PREFIX = "[已标记错误"
 _RE_QUESTION = re.compile(r'^(什么是|什么是|如何|为什么|怎么|谁|哪个|能否|是否|哪里)|[？?]\s*$')
@@ -62,13 +76,16 @@ class PollutionTagger:
             FLAG_CLEAN: 1.0,
             FLAG_SUSPECT: float(_cfg.get("suspect_factor", DEFAULT_FACTORS[FLAG_SUSPECT])),
             FLAG_POLLUTED: float(_cfg.get("polluted_factor", DEFAULT_FACTORS[FLAG_POLLUTED])),
+            FLAG_PLACEHOLDER_ALIAS: float(
+                _cfg.get("placeholder_alias_factor", DEFAULT_FACTORS[FLAG_PLACEHOLDER_ALIAS])),
         }
         self._max_depth = int(_cfg.get("max_path_depth", 7))
         self._long_seed = int(_cfg.get("long_seed_threshold", 500))
         self._log_fn = log_fn
         # 统计
         self._scanned = 0
-        self._counts = {FLAG_CLEAN: 0, FLAG_SUSPECT: 0, FLAG_POLLUTED: 0}
+        self._counts = {FLAG_CLEAN: 0, FLAG_SUSPECT: 0, FLAG_POLLUTED: 0,
+                        FLAG_PLACEHOLDER_ALIAS: 0}
         self._reasons: dict[str, int] = {}
         # ★P2-25：显式标记命中的计数，以及"已打过降权日志"的 node_id 集合
         #   （降权在检索热路径上，按 node_id 去重，避免每轮检索重复刷屏）
@@ -116,15 +133,27 @@ class PollutionTagger:
         #   ⚠ 已知副作用：标记写入后会"粘住"——内容后来修好了也不会自动恢复，
         #      需显式改回 clean（`DataQualityGuard.clear_flag()` 提供该能力）。
         _explicit = str(_d.get("quality_flag", "") or "").strip().lower()
-        if _explicit in (FLAG_SUSPECT, FLAG_POLLUTED):
+        # ★刀0（0.3）：短路集合扩到 placeholder_alias（显式粘标优先，不再现算）
+        if _explicit in (FLAG_SUSPECT, FLAG_POLLUTED, FLAG_PLACEHOLDER_ALIAS):
             self._explicit_hits += 1
             _why = str(_d.get("quality_reason", "") or "").strip()
             return _explicit, (f"E1:显式标记({_explicit})"
                                + (f" {_why}" if _why else ""))
+        return self._classify_content(_d)
 
+    def _classify_content(self, _d: dict) -> tuple[str, str]:
+        """★第160批 下上 刀0（0.6 配套）：**纯内容谓词**判定（绕开显式标记短路）。
+
+        供「修好的节点自动摘标」使用——只有内容真的判干净（不再含占位符、
+        且不触发其它污染/可疑谓词）才允许摘掉 placeholder_alias 粘标，
+        避免把「已修好」与「仍污染但被短路」混为一谈。
+        """
         _v = str(_d.get("value", "") or "")
         _path = str(_d.get("space_path", "") or "/")
         _depth = self.path_depth(_path)
+        # ★刀0（0.4）：P0 占位符字面量（最高优先；现算，免疫落盘 flag 丢失）
+        if contains_placeholder_literal(_v):
+            return FLAG_PLACEHOLDER_ALIAS, "P0:占位符字面量"
 
         # ---- polluted ----
         if _MARK_PREFIX in _v:
@@ -181,11 +210,24 @@ class PollutionTagger:
 
             if apply_to_node and not isinstance(_n, dict):
                 try:
-                    if getattr(_n, "quality_flag", FLAG_CLEAN) != _flag:
+                    _old = str(getattr(_n, "quality_flag", FLAG_CLEAN) or FLAG_CLEAN).strip().lower()
+                    # ★刀0（0.6）：修好的节点自动摘标 —— 内容谓词判干净 且 旧粘标为
+                    #   placeholder_alias ⇒ 调唯一撤销入口 clear_flag（此前零调用点）。
+                    #   ★延迟导入：DataQualityGuard 反向依赖本模块（循环导入），
+                    #     只能在方法内导入，不可提到模块级。
+                    _unflagged = False
+                    if _old == FLAG_PLACEHOLDER_ALIAS:
+                        from nucleus.knowledge.DataQualityGuard import DataQualityGuard
+                        _cd = _n if isinstance(_n, dict) else self._to_dict(_n)
+                        if self._classify_content(_cd)[0] == FLAG_CLEAN:
+                            _unflagged = DataQualityGuard.clear_flag(_n)
+                    # ★刀0（0.5）：写回「严重度只升不降」护栏
+                    if (not _unflagged and _flag != _old
+                            and _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)):
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L187")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L188")
 
             if _flag != FLAG_CLEAN and _log is not None:
                 _nid = str((_n if isinstance(_n, dict) else getattr(_n, "node_id", "")) or "")
@@ -221,11 +263,20 @@ class PollutionTagger:
                 self._reasons[_key2] = self._reasons.get(_key2, 0) + 1
             if apply_to_node and not isinstance(_n, dict):
                 try:
-                    if getattr(_n, "quality_flag", FLAG_CLEAN) != _flag:
+                    _old = str(getattr(_n, "quality_flag", FLAG_CLEAN) or FLAG_CLEAN).strip().lower()
+                    # ★刀0（0.6/0.5）：同 scan_pool —— 先判「修好摘标」，再按严重度只升不降写回
+                    _unflagged = False
+                    if _old == FLAG_PLACEHOLDER_ALIAS:
+                        from nucleus.knowledge.DataQualityGuard import DataQualityGuard
+                        _cd = _n if isinstance(_n, dict) else self._to_dict(_n)
+                        if self._classify_content(_cd)[0] == FLAG_CLEAN:
+                            _unflagged = DataQualityGuard.clear_flag(_n)
+                    if (not _unflagged and _flag != _old
+                            and _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)):
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L227")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L228")
             if _flag != FLAG_CLEAN and _log is not None:
                 try:
                     _log("INFO", f"[污染标记] 标记={_flag} 原因={_reason}")
@@ -251,7 +302,7 @@ class PollutionTagger:
             try:
                 _d = node if isinstance(node, dict) else self._to_dict(node)
                 _explicit = str(_d.get("quality_flag", "") or "").strip().lower()
-                if _explicit in (FLAG_SUSPECT, FLAG_POLLUTED):
+                if _explicit in (FLAG_SUSPECT, FLAG_POLLUTED, FLAG_PLACEHOLDER_ALIAS):
                     _nid = str(_d.get("node_id", ""))[:18]
                     if _nid and _nid not in self._logged_nodes:
                         if len(self._logged_nodes) > 2000:
@@ -279,6 +330,8 @@ class PollutionTagger:
             "polluted": self._counts.get(FLAG_POLLUTED, 0),
             "suspect": self._counts.get(FLAG_SUSPECT, 0),
             "clean": self._counts.get(FLAG_CLEAN, 0),
+            # ★刀0：占位符别名计数（验收判据「placeholder_alias 计数不降」观测面）
+            "placeholder_alias": self._counts.get(FLAG_PLACEHOLDER_ALIAS, 0),
             "reasons": dict(self._reasons),
             "factors": dict(self._factors),
             # ★P2-25：显式标记命中数。>0 才说明"外部写入的标记"真的被读到了——
@@ -288,7 +341,8 @@ class PollutionTagger:
 
     def reset_stats(self):
         self._scanned = 0
-        self._counts = {FLAG_CLEAN: 0, FLAG_SUSPECT: 0, FLAG_POLLUTED: 0}
+        self._counts = {FLAG_CLEAN: 0, FLAG_SUSPECT: 0, FLAG_POLLUTED: 0,
+                        FLAG_PLACEHOLDER_ALIAS: 0}
         self._reasons = {}
         self._explicit_hits = 0
 
