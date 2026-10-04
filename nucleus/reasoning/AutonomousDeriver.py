@@ -353,7 +353,7 @@ class AutonomousDeriver:
                 induction = {
                     "type": "inductive",
                     "content": (
-                        f"[归纳升华] 从「{path_name}」领域的{len(nodes)}个知识点中，"
+                        f"[internal][归纳升华] 从「{path_name}」领域的{len(nodes)}个知识点中，"
                         f"发现「{'、'.join(common_kw[:3])}」是共同涉及的核心概念。"
                         f"这些知识揭示了该领域的{'、'.join(common_patterns[:2])}规律。"
                         f"{_insight_text}"
@@ -375,7 +375,7 @@ class AutonomousDeriver:
                 induction = {
                     "type": "inductive",
                     "content": (
-                        f"[归纳升华] 在「{path_name}」领域，{len(nodes)}个知识点"
+                        f"[internal][归纳升华] 在「{path_name}」领域，{len(nodes)}个知识点"
                         f"共同指向了「{'、'.join(common_kw[:3])}」。"
                         f"{_insight_text}"
                     ),

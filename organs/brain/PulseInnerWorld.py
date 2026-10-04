@@ -5979,7 +5979,7 @@ class PulseInnerWorld(
                     _reject_stats[_reject] = _reject_stats.get(_reject, 0) + 1
                     continue
             if self._is_relevant(question, target_val, target.keywords or []):
-                related_values.append(f"关联知识：{target_val[:200]}")
+                related_values.append(f"[internal]关联知识：{target_val[:200]}")
                 if len(related_values) >= 2:
                     break
 
@@ -13439,6 +13439,14 @@ class PulseInnerWorld(
             silent_exc(_ph_e, where="PulseInnerWorld::_sanitize_internal_content 占位符净化")
         # ★S6：记录进入正则清洗前的长度，用于判断过滤器是否真的删掉了东西
         _before_regex = answer
+
+        # ★第160批 上A 刀4（票2·4.5 灰度开关 DIALOG_SANITIZE_LEVEL）
+        #   literal(默认)=启用扩展字面量清洗（[internal] 整条丢弃 +
+        #   关联知识整段剥离 + 标点归一）；structured=关闭扩展清洗
+        #   （仅保留 [internal] 标记整条丢弃，应急回滚，旧节点未打标
+        #   内部前缀可能重新裸露）。
+        import config as _cfg_dlg4
+        _dialog_level = str(getattr(_cfg_dlg4, "DIALOG_SANITIZE_LEVEL", "literal"))
         # 1. 清理知识节点原文（从"关联知识："到下一个句号或结尾）
         answer = _re_s.sub(r'关联知识：\[.*?\].*?(?=[。！？]|$)', '', answer)
         answer = _re_s.sub(r'\[核心智慧\].*?(?=[。！？]|$)', '', answer)
@@ -13447,6 +13455,17 @@ class PulseInnerWorld(
         answer = _re_s.sub(r'功能: \(待大模型分析\).*?(?=[。！？]|$)', '', answer)
         answer = _re_s.sub(r'代码片段:.*?(?=[。！？]|$)', '', answer)
         answer = _re_s.sub(r'内部调用:.*?(?=[。！？]|$)', '', answer)
+        # ★第160批 上A 刀4（票2·4.1 治本 + 4.2 兜底）：内部片段整条丢弃。
+        # [internal] 标记片段（融合/归纳/代码自学习产物）整条丢弃到行尾
+        # （覆盖多句内部值，置顶剥离保证不裸露）。
+        answer = _re_s.sub(r'\[internal\].*', '', answer)
+        if _dialog_level == "literal":
+            # 兼容历史未打标内部前缀：整段剥离到句末（沿安全边界，不按长度判定）
+            answer = _re_s.sub(
+                r'(?:入口方法[:：]|叶子方法[:：]|内部调用|已理解)'
+                r'.*?(?=[。！？]|$)', '', answer)
+            # ★4.4 标点归一：修"规律。，值得"（句末标点后紧跟，、→。）
+            answer = _re_s.sub(r'[。！？]\s*[，、]', '。', answer)
         answer = _re_s.sub(r'参数:.*?(?=[。！？]|$)', '', answer)
         # 3. 清理哲学思考
         answer = _re_s.sub(r'我刚刚经历了一次重启——.*?(?=[。！？]|$)', '', answer)

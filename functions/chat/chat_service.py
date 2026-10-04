@@ -694,10 +694,12 @@ class ChatService:
                     _weak = _portrait.get("weak_types", [])
                     if _strong or _weak:
                         _parts = []
-                        if _strong:
-                            _parts.append("擅长:" + "、".join([s["name"] for s in _strong[:2]]))
-                        if _weak:
-                            _parts.append("待加强:" + "、".join([w["name"] for w in _weak[:2]]))
+                        _strong_names = [s.get("name") for s in _strong[:2] if s.get("name") not in ("", "unknown", None)]
+                        if _strong_names:
+                            _parts.append("擅长:" + "、".join(_strong_names))
+                        _weak_names = [w.get("name") for w in _weak[:2] if w.get("name") not in ("", "unknown", None)]
+                        if _weak_names:
+                            _parts.append("待加强:" + "、".join(_weak_names))
                         _reasoning_text = "推理技能: " + " | ".join(_parts)
         except Exception as _se:
             silent_exc(_se, "chat_service.py:624")

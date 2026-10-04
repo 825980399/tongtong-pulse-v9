@@ -2135,7 +2135,7 @@ class PulseCodeLearner(BasePulseOrgan):
             _leaf_str = "、".join(stats["leaf_methods"][:3]) if stats["leaf_methods"] else "无明确叶子"
 
             _flow_content = (
-                f"[数据流·{organ}] 已理解{stats['total_methods']}个方法。"
+                f"[internal][数据流·{organ}] 已理解{stats['total_methods']}个方法。"
                 f"入口方法: {_entry_str}。"
                 f"叶子方法: {_leaf_str}。"
                 f"内部调用{stats['calls_to_others']}次。"
@@ -2402,7 +2402,7 @@ class PulseCodeLearner(BasePulseOrgan):
 
         # 生成职责摘要
         _summary = (
-            f"[器官职责·自动分析] {organ_name}："
+            f"[internal][器官职责·自动分析] {organ_name}："
             f"由代码自学习自动生成。"
             f"已理解{_methods_count}个方法，"
             f"入口方法: {_entry_str}，"
