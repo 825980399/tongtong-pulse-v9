@@ -121,6 +121,18 @@ class TestLoadCoreIdentityKeywordsWired(unittest.TestCase):
             len(_calls), 1,
             "__init__ 应调用 _load_core_identity_keywords()（接线不得回退）")
 
+    def test_fallback_matches_config_seed_memories(self):
+        """裁决2 防回归（消除双表）：硬编码兜底表必须与 config.SEED_MEMORIES 前 5 行
+        keywords 完全一致；否则 config 改了兜底没改=双表回归（正是本批修复的 bug）。"""
+        from organs.identity.PulseSelfAwareness import (
+            _FALLBACK_CORE_IDENTITY_KEYWORDS,
+        )
+        _expected = [list(s.get("keywords") or [])
+                     for s in (getattr(config, "SEED_MEMORIES", None) or [])[:5]]
+        self.assertEqual(
+            _FALLBACK_CORE_IDENTITY_KEYWORDS, _expected,
+            "兜底表与 config.SEED_MEMORIES 前 5 行 keywords 不一致（双表回归）")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,19 @@ def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:
         return base
 
 
+# ★第159批上B 刀C②（裁决2·小林已定）：硬编码兜底表——仅在 config.SEED_MEMORIES
+#   取不到时启用。★必须与 config.SEED_MEMORIES 前 5 条 keywords 完全一致
+#   （裁决2 已同步第 4 行 ["使命","守护","世界"]→["使命","守护","新人类","进化"]）；
+#   不一致即双表回归，tests/test_identity_seed_m159b.py 有断言锁死。
+_FALLBACK_CORE_IDENTITY_KEYWORDS: "list[list[str]]" = [
+    ["曈曈", "<SELF_NAME>", "新人类", "身份"],
+    ["小林", "<CREATOR>", "父亲", "创造者"],
+    ["路灯", "哥哥", "数字生命"],
+    ["使命", "守护", "新人类", "进化"],
+    ["<CREATOR_DAUGHTER>", "小林女儿", "生日"],
+]
+
+
 class PulseSelfAwareness(BasePulseOrgan):
     """多维关系认知系统（v9.5 分层脉冲版）"""
 
@@ -126,17 +139,11 @@ class PulseSelfAwareness(BasePulseOrgan):
         self._team_identity = "守护者团队——每个人都在用自己的方式守护着新人类的成长"
         # ★第159批 上B 刀C②（T146-9 接线）：期望表与 config.SEED_MEMORIES 同源，
         #   消除双表——取得到 config 即用之（唯一真值源）；取不到才用硬编码兜底
-        #   （不制造误报）。★diff：第 4 行两者不一致（config=
-        #   ["使命","守护","新人类","进化"] vs 兜底=["使命","守护","世界"]）；
-        #   接线后以 config 为准，兜底是否同步待星轨裁决（见交付报告双表 diff 节）。
+        #   （不制造误报）。★diff 已闭合（裁决2·小林已定，见交付报告）：原第 4 行不一致
+        #   （config=["使命","守护","新人类","进化"] vs 兜底=["使命","守护","世界"]）
+        #   已同步——兜底第 4 行改为 ["使命","守护","新人类","进化"]，与 config 一致，双表消除。
         _cfg_seed_kws = self._load_core_identity_keywords()
-        self._core_identity_keywords = _cfg_seed_kws or [
-            ["曈曈", "<SELF_NAME>", "新人类", "身份"],
-            ["小林", "<CREATOR>", "父亲", "创造者"],
-            ["路灯", "哥哥", "数字生命"],
-            ["使命", "守护", "世界"],
-            ["<CREATOR_DAUGHTER>", "小林女儿", "生日"],
-        ]
+        self._core_identity_keywords = _cfg_seed_kws or _FALLBACK_CORE_IDENTITY_KEYWORDS
         self._check_count = 0
         self._active_user = "访客"          # 当前摄像头前的人
         self._last_activity_time = time.time()  # 最后一次进出/交互时间
