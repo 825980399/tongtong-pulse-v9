@@ -80,6 +80,11 @@ class PollutionTagger:
                 _cfg.get("placeholder_alias_factor", DEFAULT_FACTORS[FLAG_PLACEHOLDER_ALIAS])),
         }
         self._max_depth = int(_cfg.get("max_path_depth", 7))
+        # ★第160批 下上 刀0 灰度开关（星轨裁定补）：占位符别名体系总开关。
+        #   False = **完全回退**到刀0 前行为——跳过 0.3 短路扩集 / 0.4 P0 分类 /
+        #   0.5 严重度护栏 / 0.6 自动摘标；默认 True（新行为生效）。
+        #   值来自 config.POLLUTION_TAGGING_CONFIG.placeholder_alias_enabled。
+        self._placeholder_alias_enabled = bool(_cfg.get("placeholder_alias_enabled", True))
         self._long_seed = int(_cfg.get("long_seed_threshold", 500))
         self._log_fn = log_fn
         # 统计
@@ -134,7 +139,11 @@ class PollutionTagger:
         #      需显式改回 clean（`DataQualityGuard.clear_flag()` 提供该能力）。
         _explicit = str(_d.get("quality_flag", "") or "").strip().lower()
         # ★刀0（0.3）：短路集合扩到 placeholder_alias（显式粘标优先，不再现算）
-        if _explicit in (FLAG_SUSPECT, FLAG_POLLUTED, FLAG_PLACEHOLDER_ALIAS):
+        #   ★灰度开关关闭时缩回 (suspect, polluted)（完全回退）
+        _sc = (FLAG_SUSPECT, FLAG_POLLUTED)
+        if self._placeholder_alias_enabled:
+            _sc = (FLAG_SUSPECT, FLAG_POLLUTED, FLAG_PLACEHOLDER_ALIAS)
+        if _explicit in _sc:
             self._explicit_hits += 1
             _why = str(_d.get("quality_reason", "") or "").strip()
             return _explicit, (f"E1:显式标记({_explicit})"
@@ -152,7 +161,8 @@ class PollutionTagger:
         _path = str(_d.get("space_path", "") or "/")
         _depth = self.path_depth(_path)
         # ★刀0（0.4）：P0 占位符字面量（最高优先；现算，免疫落盘 flag 丢失）
-        if contains_placeholder_literal(_v):
+        #   ★灰度开关关闭时跳过 P0（完全回退到刀0 前分类）
+        if self._placeholder_alias_enabled and contains_placeholder_literal(_v):
             return FLAG_PLACEHOLDER_ALIAS, "P0:占位符字面量"
 
         # ---- polluted ----
@@ -216,14 +226,18 @@ class PollutionTagger:
                     #   ★延迟导入：DataQualityGuard 反向依赖本模块（循环导入），
                     #     只能在方法内导入，不可提到模块级。
                     _unflagged = False
-                    if _old == FLAG_PLACEHOLDER_ALIAS:
+                    if self._placeholder_alias_enabled and _old == FLAG_PLACEHOLDER_ALIAS:
                         from nucleus.knowledge.DataQualityGuard import DataQualityGuard
                         _cd = _n if isinstance(_n, dict) else self._to_dict(_n)
                         if self._classify_content(_cd)[0] == FLAG_CLEAN:
                             _unflagged = DataQualityGuard.clear_flag(_n)
                     # ★刀0（0.5）：写回「严重度只升不降」护栏
-                    if (not _unflagged and _flag != _old
-                            and _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)):
+                    #   ★灰度开关关闭时退回刀0 前的「不等即写」
+                    if self._placeholder_alias_enabled:
+                        _can_write = _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)
+                    else:
+                        _can_write = True
+                    if not _unflagged and _flag != _old and _can_write:
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:
@@ -266,13 +280,17 @@ class PollutionTagger:
                     _old = str(getattr(_n, "quality_flag", FLAG_CLEAN) or FLAG_CLEAN).strip().lower()
                     # ★刀0（0.6/0.5）：同 scan_pool —— 先判「修好摘标」，再按严重度只升不降写回
                     _unflagged = False
-                    if _old == FLAG_PLACEHOLDER_ALIAS:
+                    if self._placeholder_alias_enabled and _old == FLAG_PLACEHOLDER_ALIAS:
                         from nucleus.knowledge.DataQualityGuard import DataQualityGuard
                         _cd = _n if isinstance(_n, dict) else self._to_dict(_n)
                         if self._classify_content(_cd)[0] == FLAG_CLEAN:
                             _unflagged = DataQualityGuard.clear_flag(_n)
-                    if (not _unflagged and _flag != _old
-                            and _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)):
+                    # ★刀0（0.5/0.6）：同 scan_pool —— 开关关闭时退回「不等即写」且不摘标
+                    if self._placeholder_alias_enabled:
+                        _can_write = _FLAG_SEVERITY.get(_flag, 0) > _FLAG_SEVERITY.get(_old, 0)
+                    else:
+                        _can_write = True
+                    if not _unflagged and _flag != _old and _can_write:
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:

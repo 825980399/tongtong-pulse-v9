@@ -141,5 +141,40 @@ class TestSeverityGuardAndAutoUnflag(unittest.TestCase):
         self.assertEqual(_n.quality_flag, FLAG_POLLUTED, "clean 不得覆盖 polluted")
 
 
+class TestPlaceholderAliasSwitchOff(unittest.TestCase):
+    """刀0 灰度开关 placeholder_alias_enabled=False ⇒ **完全回退**到刀0 前行为。"""
+
+    _OFF = {"placeholder_alias_enabled": False}
+
+    def test_p0_skipped_when_disabled(self):
+        """0.4 跳过：占位符内容节点回退判 clean（不再被判 placeholder_alias）。"""
+        _t = PollutionTagger(config=self._OFF)
+        _flag, _ = _t.classify(
+            {"node_id": "d1", "value": "裸父路径节点的[器官别名]内容",
+             "keywords": [], "space_path": "/x"})
+        self.assertEqual(_flag, FLAG_CLEAN)
+
+    def test_explicit_not_short_circuited_when_disabled(self):
+        """0.3 缩回：显式 placeholder_alias 不再短路，explicit_hits 不增。"""
+        _t = PollutionTagger(config=self._OFF)
+        _flag, _ = _t.classify({
+            "node_id": "d2", "value": "这是一条完全正常的知识内容，不含任何占位符",
+            "keywords": ["正常"], "space_path": "/x",
+            "quality_flag": FLAG_PLACEHOLDER_ALIAS, "quality_reason": "159上B落盘",
+        })
+        self.assertEqual(_flag, FLAG_CLEAN)
+        self.assertEqual(_t.get_stats()["explicit_hits"], 0)
+
+    def test_rollback_differential_still_polluted_node(self):
+        """开关差分：仍污染节点 —— 开=受保护(placeholder_alias) / 关=回退(clean)。"""
+        _n_on = _Node("d3", "仍含[器官别名]的未修内容", quality_flag=FLAG_PLACEHOLDER_ALIAS)
+        PollutionTagger().scan_nodes([_n_on], log_fn=lambda l, m: None)
+        self.assertEqual(_n_on.quality_flag, FLAG_PLACEHOLDER_ALIAS, "开关开：应受保护")
+
+        _n_off = _Node("d4", "仍含[器官别名]的未修内容", quality_flag=FLAG_PLACEHOLDER_ALIAS)
+        PollutionTagger(config=self._OFF).scan_nodes([_n_off], log_fn=lambda l, m: None)
+        self.assertEqual(_n_off.quality_flag, FLAG_CLEAN, "开关关：完全回退（保护撤销）")
+
+
 if __name__ == "__main__":
     unittest.main()
