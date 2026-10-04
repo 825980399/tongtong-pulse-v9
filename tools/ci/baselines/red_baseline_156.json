@@ -1,8 +1,8 @@
 {
- "generated_at_head": "4c9659ca209e5588fe5b063aa440f18055b002a1",
- "generated_at": "2026-10-04T22:36",
- "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。",
- "collect_baseline": 4555,
+ "generated_at_head": "dafc85225babcf3e6ca05a47661c3280cbacb609",
+ "generated_at": "2026-10-04T23:01",
+ "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。",
+ "collect_baseline": 4560,
  "known_fail": [
   "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_analyze_returns_nodes_edges_stats",
   "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_config_default_enabled",
