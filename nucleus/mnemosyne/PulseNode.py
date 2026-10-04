@@ -166,6 +166,7 @@ class PulseNode:
         self.instinct_last_use = 0.0         # 最后使用时间
         
         self.view_mode = "OUTER_VIEW"    # 视角标记：INNER_VIEW / OUTER_VIEW
+        self.is_metadata = False                # ★第160批 上A 刀3（票1④）：自检/元数据节点标记；True=不进通用检索池
         self.trust_score = 50.0           # 初始可信度评分 0-100
         self.verification_history: list[dict[str, Any]] = []  # 验证历史记录
         # ★登顶路线图-山1：可验证推理证据链（依据链）。每条形如：
@@ -351,6 +352,7 @@ class PulseNode:
             "instinct_last_use": self.instinct_last_use,
             "ephemeral": getattr(self, 'ephemeral', False),
             "view_mode": getattr(self, 'view_mode', 'OUTER_VIEW'),
+            "is_metadata": getattr(self, 'is_metadata', False),   # ★第160批 上A 刀3：元数据标记持久化
             "trust_score": getattr(self, 'trust_score', 50.0),
             "verification_history": getattr(self, 'verification_history', []),
             "evidence_chain": getattr(self, 'evidence_chain', []),   # ★山1：可验证推理证据链（向前兼容）
@@ -425,6 +427,7 @@ class PulseNode:
         node.instinct_last_use = data.get("instinct_last_use", 0.0)
         node.ephemeral = data.get("ephemeral", False)
         node.view_mode = data.get("view_mode", "OUTER_VIEW")
+        node.is_metadata = bool(data.get("is_metadata", False))   # ★第160批 上A 刀3：元数据标记恢复
         node.trust_score = max(0.0, min(100.0, float(data.get("trust_score", 50.0))))  # ★知识污染治理：钳制信任分
         node.verification_history = data.get("verification_history", [])   
         node.source_url = data.get("source_url", "")   # ★R1：向前兼容——旧快照无此字段自动填充空串

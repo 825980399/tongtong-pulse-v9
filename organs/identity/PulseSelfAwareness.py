@@ -2314,6 +2314,7 @@ class PulseSelfAwareness(BasePulseOrgan):
             )
             _node.view_mode = "INNER_VIEW"
             _node.trust_score = 95.0
+            _node.is_metadata = True   # ★第160批 上A 刀3：自检元数据不进通用检索池
             _node.trigger_reason = "self_portrait_sync"
             if self.frequency_codec:
                 self.frequency_codec.encode_node(_node)
@@ -2339,6 +2340,7 @@ class PulseSelfAwareness(BasePulseOrgan):
             )
             _node.view_mode = "INNER_VIEW"
             _node.trust_score = 95.0
+            _node.is_metadata = True   # ★第160批 上A 刀3：自检元数据不进通用检索池
             _node.trigger_reason = "self_portrait_sync"
             if self.frequency_codec:
                 self.frequency_codec.encode_node(_node)
@@ -2366,6 +2368,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                 )
                 _node.view_mode = "INNER_VIEW"
                 _node.trust_score = 95.0
+                _node.is_metadata = True   # ★第160批 上A 刀3：自检元数据不进通用检索池
                 _node.trigger_reason = "self_portrait_sync"
                 if self.frequency_codec:
                     self.frequency_codec.encode_node(_node)

@@ -321,6 +321,16 @@ class PulseInnerWorldKnowledgeMixin:
                 self._log(LogLevel.DEBUG,
                          f"代码理解优先: 追加{len(_code_nodes)}个自我理解代码节点")
         # ===== 代码理解优先检索结束 =====
+        # ===== 【第160批 上A 刀3·票1④】自检/元数据节点不进通用检索池 =====
+        import config as _cfg_k160_meta
+        if getattr(_cfg_k160_meta, "KNOWLEDGE_EXCLUDE_METADATA_FROM_RETRIEVAL", True):
+            _before = len(all_candidates)
+            all_candidates = [n for n in all_candidates
+                              if not getattr(n, "is_metadata", False)]
+            _removed = _before - len(all_candidates)
+            if _removed:
+                self._log(LogLevel.DEBUG,
+                          f"元数据过滤(刀3): 从候选集剔除 {_removed} 个 is_metadata 节点")
         if not all_candidates:
             return None
 
@@ -1133,6 +1143,7 @@ class PulseInnerWorldKnowledgeMixin:
             "[元认知", "[推导元认知回放",
             "[心智理论·", "[多方向延展推理]",
             "[知识库健康检查报告]", "[元认知六维度评估报告]",
+            "📊 知识库健康检查报告",  # ★第160批 上A 刀3（票1④）：legacy 健康检查报告节点（含 emoji 前缀）不进对话
             "[元认知五维度评估报告]", "[元认知深度反思报告]",
         ]
 
