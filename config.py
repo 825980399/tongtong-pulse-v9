@@ -228,6 +228,11 @@ POLLUTION_TAGGING_CONFIG = {
     "max_path_depth": 7,         # 路径深度阈值（超过判 suspect）
     "long_seed_threshold": 500,  # 种子记忆节点长度阈值（超过判 polluted）
     "min_confidence": 0.0,       # 预留：最低置信度门槛
+    # ★第160批 下上 刀0 灰度开关：占位符别名（placeholder_alias）体系总开关。
+    #   True（默认）= 0.3 短路扩集 / 0.4 P0 占位符分类 / 0.5 严重度护栏 /
+    #   0.6 修好自动摘标 **四项全部生效**；
+    #   False = **完全回退**到刀0 前行为（四项全跳过），应急回滚用。
+    "placeholder_alias_enabled": True,
 }
 # A-15 延伸：统一脏数据治理入口（DataQualityGuard）接线开关。
 #   True=启动时对内存节点池 + 经验库做一次全量扫描标记（只标记不删除），
