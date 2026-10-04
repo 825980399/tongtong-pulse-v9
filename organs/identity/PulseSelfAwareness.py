@@ -666,10 +666,16 @@ class PulseSelfAwareness(BasePulseOrgan):
         self._check_count += 1
         if self.node_pool is None:
             return {"status": "error", "reason": "节点池未注入"}
-        # ★P1-1修复：核心身份锚点由人格内核统一固化到 /身份/自我 路径，
-        # 用路径精确查询，避免「limit=50 全局查 L3」在 L3 节点数 > 50 时把种子节点截断漏检，
-        # 导致每次心跳都误报 missing_seeds。
-        l3_nodes = self.node_pool.query(space_path_prefix="/身份/自我")
+        # ★P1-1修复：核心身份锚点由人格内核统一固化到 /身份 子树，
+        # 用路径查询覆盖 /身份/自我、/身份/家庭、/身份/使命 等全部子路径，
+        # 避免「仅查 /身份/自我」把落在 /身份/使命 等的种子（如"使命"种子
+        # 实际路径 /身份/使命/核心）排除在外，导致每次心跳恒报 missing_seeds。
+        # ★第160批 上A 刀5（T-身份种子使命-1）：查询范围灰度开关
+        #   IDENTITY_SEED_CHECK_PREFIX（config，默认 /身份 覆盖全部身份种子；
+        #   改回 /身份/自我 即退回旧严格域，应急回滚）。
+        import config as _cfg_ck
+        _seed_prefix = str(getattr(_cfg_ck, "IDENTITY_SEED_CHECK_PREFIX", "/身份")) or "/身份"
+        l3_nodes = self.node_pool.query(space_path_prefix=_seed_prefix)
         if not l3_nodes:
             # 兜底：路径索引未命中（如种子尚未写入）时，退回全局 L3 查询
             l3_nodes = self.node_pool.query(evol_level="L3", limit=200)
@@ -683,6 +689,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                 #   修：nkw 亦 casefold，且元素强制 str（加固）。
                 all(any(rkw.lower() in str(nkw).casefold()
                         for nkw in (node.keywords or []))
+                    or rkw.lower() in str(getattr(node, "value", "")).casefold()
                     for rkw in required_kw_set)
                 for node in l3_nodes
             )
@@ -695,7 +702,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                 "missing_seeds": missing_seeds,
                 # ★第159批 上B 刀C③：误报与真缺一眼可分
                 "candidates": len(l3_nodes),
-                "checked_prefix": "/身份/自我",
+                "checked_prefix": _seed_prefix,
             }, priority=9, layer="L0")
         return {
             "status": "complete" if not missing_seeds else "degraded",
@@ -704,7 +711,7 @@ class PulseSelfAwareness(BasePulseOrgan):
             # ★第159批 上B 刀C③：candidates=参与比对的节点数、
             #   checked_prefix=实际查询路径（误报与真缺一眼可分）。
             "candidates": len(l3_nodes),
-            "checked_prefix": "/身份/自我",
+            "checked_prefix": _seed_prefix,
         }
     def _on_user_presence(self, payload: dict) -> dict[str, Any]:
         """摄像头检测到人脸出现，确认身份并发射SWITCHED"""
