@@ -227,6 +227,7 @@ def main() -> int:
         _done = _rewrite_with_fix(_args.snapshot)
         print(f"\n[完成] 已修复 {_done} 个节点（占位符重写为真实别名）。")
     else:
+        _sha = _backup_with_sha256(_args.snapshot)  # 存证：落盘前备份 sha256（验收①）
         _marks = {str(h["node_id"]): {"quality_flag": "placeholder_alias",
                                       "trust_score": 0.0}
                   for h in _hits if h["node_id"]}
