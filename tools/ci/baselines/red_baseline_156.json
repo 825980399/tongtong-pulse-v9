@@ -1,8 +1,8 @@
 {
-  "generated_at_head": "bf53ec4",
-  "generated_at": "2026-10-04T20:50",
+  "generated_at_head": "a8f9767",
+  "generated_at": "2026-10-04T22:30",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归。",
-  "collect_baseline": 4535,
+  "collect_baseline": 4545,
   "known_fail": [
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_analyze_returns_nodes_edges_stats",
     "tests/test_call_graph_m21.py::TestAnalyzerBasics::test_config_default_enabled",
@@ -134,7 +134,7 @@
     "pythonioencoding": "utf-8",
     "live_framework_pid": "NONE(框架停机)",
     "pytest_plugins": [],
-    "note": "B156-3 T-A05/T-A08/T-A09 读码片共 19 红节点全部转绿（替身过时：生产 KAL 集成/治理字段门禁/增量日志熔断/降频单例/假能力标记守卫/并发精确递减锁属性均既定正确，测试锚/替身/fixture/契约未同步）；head 重锚 c330246；known_fail 134→115（移除 T-A05 8 + T-A08 1 + T-A09 10；lazy_snapshot_m9 6 条他会话占用暂缓保留）。B156-5 collect re-anchor 4471（新增 15 测试节点），基线锚点 HEAD=84f1232（B156-5 票④补提交点）。"
+    "note": "B156-3 T-A05/T-A08/T-A09 读码片共 19 红节点全部转绿（替身过时：生产 KAL 集成/治理字段门禁/增量日志熔断/降频单例/假能力标记守卫/并发精确递减锁属性均既定正确，测试锚/替身/fixture/契约未同步）；head 重锚 c330246；known_fail 134→115（移除 T-A05 8 + T-A08 1 + T-A09 10；lazy_snapshot_m9 6 条他会话占用暂缓保留）。B156-5 collect re-anchor 4471（新增 15 测试节点），基线锚点 HEAD=84f1232（B156-5 票④补提交点）。第160批上A 刀3 新增 tests/test_self_metadata_m160.py（6 节点）致 collect 4535→4545，非回归。"
   },
   "transparency": {
     "isolation_failed_raw": [
