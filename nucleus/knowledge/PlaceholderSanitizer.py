@@ -39,6 +39,29 @@ def contains_placeholder(text: str) -> bool:
     return any(_lit in text for _lit in PLACEHOLDER_LITERALS)
 
 
+def contains_placeholder_literal(value: str) -> bool:
+    """★第160批 上A 刀1（票3 B 案·运行时内容判据·唯一口径）。
+
+    检索层 / 排序层统一调用本函数，**禁止** support.py 与 VectorStore.py 各自
+    定义第二套字面量（与 T-唯一口径件-1 同治）。
+
+    命中以下任一即视同 ``placeholder_alias`` 处理（过滤 / 0.3 降权）：
+      1. ``"[器官别名]"`` 字面量 —— 核心污染本体（裸父路径 306 节点）；
+      2. value 以占位符前缀开头：
+         ``("关联知识：。", "[归纳升华]", "[数据流·")`` ——
+         融合/归纳产物在检索侧同样视为污染。
+
+    ★设计要点（与 159 上B 区别）：**不依赖落盘 flag**——
+    159 上B 的 ``placeholder_alias`` 标记被框架启动从 Parquet 覆盖丢失后，
+    纯靠 flag 的过滤/降权双双空转；本判据按 value 内容现算，免疫该覆盖。
+    """
+    if not value or not isinstance(value, str):
+        return False
+    if "[器官别名]" in value:
+        return True
+    return value.startswith(("关联知识：。", "[归纳升华]", "[数据流·"))
+
+
 def sanitize_placeholder_text(text: str, min_length: int | None = None,
                               log=None) -> str:
     """★出口占位符净化：剥离占位符字面量；剥离后过短则降级引导语。

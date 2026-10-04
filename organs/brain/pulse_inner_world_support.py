@@ -27,6 +27,7 @@ from nucleus.const import (
 )
 from nucleus.diagnostics import get_diagnostics
 from nucleus.iw_text_guard import _search_prefix_pattern
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 
 
 class PulseInnerWorldSupportMixin:
@@ -1756,6 +1757,13 @@ class PulseInnerWorldSupportMixin:
         _flag = str(getattr(node, "quality_flag", "") or "").lower()
         if _flag in ("polluted", "suspect", "placeholder_alias"):
             return f"quality_flag={_flag}"
+
+        # 1.5 ★第160批 上A 刀1（票3 B 案）：运行时内容判据（不依赖落盘 flag）
+        #   159 上B 的 placeholder_alias 标记被框架启动从 Parquet 覆盖丢失后，
+        #   纯靠 flag 的过滤/降权双双空转；此处按 value 内容现算，免疫该覆盖，
+        #   与 VectorStore._quality_weight 共用同一函数（禁止第二套字面量）。
+        if contains_placeholder_literal(value):
+            return "placeholder_content(运行时判据)"
 
         # 2. 已知污染/测试标记词
         for _mk in self._EXPAND_POLLUTION_MARKS:

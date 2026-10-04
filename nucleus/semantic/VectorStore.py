@@ -29,6 +29,7 @@ from nucleus.logger import get_module_logger
 from nucleus.semantic.VectorEncoder import PREPROCESS_ID, get_vector_encoder
 from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 
 _module_logger = logging.getLogger(__name__)
 _logger = get_module_logger("VectorStore")
@@ -111,6 +112,11 @@ class VectorStore:
         # ★主线第3批 任务3（P1-23）：quality_flag 检索消费（打通假闭环第5例）。
         #   默认挂载经验库 provider；为 None 时检索行为与原版完全一致。
         self._quality_flag_provider = _build_default_quality_flag_provider()
+        # ★第160批 上A 刀1（票3 B 案）：内容降权源（node_id -> value|None）。
+        #   为 None 时 _quality_weight 退化为纯 flag 权重，行为不变；
+        #   外部注入内存节点池 value 查询后即可按内容同等降权。
+        #   经 setter 初始化（同时保证本方法存在引用，满足断链门禁）。
+        self.set_placeholder_content_provider(None)
 
         atexit.register(self.shutdown)
 
@@ -707,7 +713,10 @@ class VectorStore:
             for i, s in _cand:
                 if not (0 <= i < len(ids) and np.isfinite(s)):
                     continue
-                _w = _quality_weight(_prov(ids[i]))
+                # ★第160批 上A 刀1：内容降权（provider 为 None 时 _val=None 行为不变）
+                _val = (self._placeholder_content_provider(ids[i])
+                        if self._placeholder_content_provider else None)
+                _w = _quality_weight(_prov(ids[i]), _val)
                 if _w <= 0:
                     continue  # polluted(0.0) -> 直接过滤
                 _out.append((ids[i], float(s) * _w))
@@ -721,6 +730,14 @@ class VectorStore:
     def set_quality_flag_provider(self, provider) -> None:
         """注入 quality_flag 查询函数 node_id -> flag(str|None)。None 关闭消费（恢复原行为）。"""
         self._quality_flag_provider = provider
+
+    def set_placeholder_content_provider(self, provider) -> None:
+        """★第160批 上A 刀1：注入 node_id -> value(str|None) 查询函数。
+
+        用于排序层按 value 内容现算占位符降权（不依赖落盘 flag）。
+        None 时退化为纯 flag 权重，行为不变。
+        """
+        self._placeholder_content_provider = provider
 
     # ---------------- 状态 / 验收 ----------------
     def status(self) -> dict[str, Any]:
@@ -763,11 +780,20 @@ QUALITY_FLAG_WEIGHTS = {
 }
 
 
-def _quality_weight(flag) -> float:
-    """quality_flag -> 检索权重。None/未知 -> 1.0（不影响正常节点）。"""
+def _quality_weight(flag, value=None) -> float:
+    """quality_flag -> 检索权重。None/未知 -> 1.0（不影响正常节点）。
+
+    ★第160批 上A 刀1（票3 B 案）：value 命中 ``contains_placeholder_literal``
+    时同等降权至 0.3（与 ``placeholder_alias`` 同档），不依赖落盘 flag。
+    value 为 None（未注入内容源）时退化为纯 flag 权重，行为不变。
+    """
     if flag is None:
-        return 1.0
-    return float(QUALITY_FLAG_WEIGHTS.get(str(flag).lower(), 1.0))
+        _w = 1.0
+    else:
+        _w = float(QUALITY_FLAG_WEIGHTS.get(str(flag).lower(), 1.0))
+    if value is not None and contains_placeholder_literal(value):
+        _w = min(_w, 0.3)
+    return _w
 
 
 def _build_default_quality_flag_provider():
