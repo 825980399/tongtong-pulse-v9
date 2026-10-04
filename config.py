@@ -2039,6 +2039,13 @@ KNOWLEDGE_GLOBAL_HIT_THRESHOLD = 0.5
 #   True=排除（默认，根治 trust 90.3 健康检查报告类节点成为「万能答案」）；
 #   设为 False 即关闭该过滤（应急回滚，让 self_portrait 等自检节点重新进检索池）。
 KNOWLEDGE_EXCLUDE_METADATA_FROM_RETRIEVAL = True
+
+# ★第160批 上A 刀4（票2·融合输出格式化·4.5 灰度开关）：对话出口净化级别。
+#   "literal"=默认，启用扩展字面量清洗（[internal] 片段整条丢弃 +
+#   关联知识整段剥离 + 标点归一）；设为 "structured" 关闭扩展字面量清洗
+#   （仅保留 [internal] 标记整条丢弃，应急回滚用，旧节点未打标内部
+#   前缀可能重新裸露）。
+DIALOG_SANITIZE_LEVEL = "literal"
 # ★同刀：路径前缀推断「兜底宽前缀」应急开关（根因②：['/知识','/综合','/自我理解'] 覆盖 78% 全库）。
 #   False（默认）：无具体前缀命中即返回空集，交全库共振/肺渠道，不再宽兜底定死候选集。
 #   True （仅应急回滚）：恢复旧宽兜底 ['/知识','/综合','/自我理解']。
