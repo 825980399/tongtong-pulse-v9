@@ -4839,6 +4839,12 @@ WRITE_GUARD_FORCE_ENV = None
 #     且 A1 分层保真端到端测试通过（真实 load→save→load 零偏移）。
 #   重启用批次：第81批（T2 收口并验证后）。
 PARQUET_AS_PRIMARY_STORAGE = True  # ★灰度第一步 2026-09-19 星轨开启（81批T2/T5已验证；SNAPSHOT_SAVE_JSON_BACKUP=True 仍保留JSON备份，可随时回退）
+# ★第160批 下下 刀2（T-双源合并-1）：快照加载源选择（SNAPSHOT_LOAD_SOURCE）。
+#   "parquet"=仅 Parquet 主存储（默认，等价于 PARQUET_AS_PRIMARY_STORAGE=True 行为）；
+#   "json"   =仅 JSON 主存储（等价于 PARQUET_AS_PRIMARY_STORAGE=False）；
+#   "dual"   =Parquet + JSON 双源加载并按 R1-R6 合并（A案 dual），任一源缺失自动回落。
+#   非法值回落 "parquet"；键缺失 → 按 PARQUET_AS_PRIMARY_STORAGE 映射（兼容别名）。
+SNAPSHOT_LOAD_SOURCE = "parquet"
 SNAPSHOT_SAVE_JSON_BACKUP = True
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
