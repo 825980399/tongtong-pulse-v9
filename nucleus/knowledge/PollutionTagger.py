@@ -63,7 +63,7 @@ DEFAULT_FACTORS = {FLAG_CLEAN: 1.0, FLAG_SUSPECT: 0.7, FLAG_POLLUTED: 0.3,
                    FLAG_PLACEHOLDER_ALIAS: 0.3}
 
 _MARK_PREFIX = "[已标记错误"
-_RE_QUESTION = re.compile(r'^(什么是|什么是|如何|为什么|怎么|谁|哪个|能否|是否|哪里)|[？?]\s*$')
+_RE_QUESTION = re.compile(r'^(什么是|如何|为什么|怎么|谁|哪个|能否|是否|哪里|给我讲讲|讲讲|介绍下|说下|说说|讲一讲)|[？?]\s*$')
 _RE_INVALID_EXP = re.compile(r'(未验证|无法判断|未知结论|不确定结论|无效经验|解析失败)')
 
 
@@ -146,8 +146,12 @@ class PollutionTagger:
         if _explicit in _sc:
             self._explicit_hits += 1
             _why = str(_d.get("quality_reason", "") or "").strip()
-            return _explicit, (f"E1:显式标记({_explicit})"
-                               + (f" {_why}" if _why else ""))
+            # ★刀5（5.1）：幂等——剥去已有「E1:显式标记(...)」整段前缀，防重复重扫累加（35→1）；总长≤200 截断
+            _why = re.sub(r"^E1:显式标记\([^)]*\)\s*", "", _why)
+            _out = f"E1:显式标记({_explicit})" + (f" {_why}" if _why else "")
+            if len(_out) > 200:
+                _out = _out[:200]
+            return _explicit, _out
         return self._classify_content(_d)
 
     def _classify_content(self, _d: dict) -> tuple[str, str]:
