@@ -2,22 +2,18 @@
   "generated_at_head": "e6a435598189b763d8735a009fcfe1461a501695",
   "generated_at": "2026-10-05T11:02",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons",
-  "collect_baseline": 4725,
+  "collect_baseline": 4750,
   "known_fail": [
     "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
-    "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_47_tool_cli_runs",
-    "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_48_tool_cli_help",
-    "tests/test_distributed_dualwrite_import_m71.py::TestT5ImportTool::test_57_main_cli_mock",
-    "tests/test_distributed_dualwrite_import_m71.py::TestT5ImportTool::test_58_main_empty_source",
-    "tests/test_event_tap_m17.py::TestOrganWiring::test_cortex_publish_blocks_execute_with_expected_payload",
-    "tests/test_event_tap_m17.py::TestOrganWiring::test_event_name_convention",
-    "tests/test_evolution_crash_patch_m15.py::TestWorkerEntry::test_worker_module_top_level_is_stdlib_only",
     "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
+    "tests/test_export_public_m143.py::TestRealTree::test_01_current_tree_clean",
     "tests/test_lazy_snapshot_m9.py::test_lazy_vs_full_equivalence",
     "tests/test_log_governance_m37.py::TestNoE402Regression::test_40_e402_counts",
-    "tests/test_patch_dedup_m43.py::TestArtifacts::test_41_production_history_deduped",
-    "tests/test_patch_verification_split_m47.py::TestProductionBackfilled::test_52_zero_baseline_not_marked_fixed",
-    "tests/test_t100a_pending_no_false_success.py::test_pending_queue_has_no_false_success"
+    "tests/test_pc_exclude_m38.py::TestExcludeReasonFn::test_11_reasons",
+    "tests/test_pc_exclude_m38.py::TestExcludeIntegration::test_20_dir_whitelist",
+    "tests/test_pc_exclude_m38.py::TestExcludeIntegration::test_25_three_categories",
+    "tests/test_pc_exempt_m39.py::TestExcludeReasonSignature::test_01_default_has_producer_false_backward_compatible",
+    "tests/test_reprobe_diff_scope_m55.py::TestDetectorCoverage::test_09_production_only_code_optimization_uncovered"
   ],
   "pollution_set": [
     "tests/test_write_guard_m44.py::TestPulseSnapshotGuard::test_30_production_path_rejected",
@@ -240,21 +236,18 @@
   "red_baseline_notes": {
     "reanchor_161C1": "第161批 段C C1（2026-10-05）：known_fail 104 → 14（回收 90 项已转绿）。权威数据=逐文件隔离 + 干净环境（PYTHONPATH/PYTHONHOME/PYTHONSTARTUP 已清空、PYTHONNOUSERSITE=1），20 文件全部有 pytest 汇总行、无截断、基线外新红=0。★废弃数据：批跑版因 WorkBuddy shim（sitecustomize.py:848）注入子进程产生假红（同文件手跑 3 次 20 passed×3，批内子进程跑却 failed），不得引用。",
     "known_fail_red_reasons": {
-      "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern": "源层 E402 扫描判据与实际不符（ValueError: substring not found）；属门禁判据缺陷，非被测代码缺陷，待专项票修复",
-      "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_47_tool_cli_runs": "benchmark CLI 工具需真实数据/子进程环境，本地无数据 ⇒ 保留红",
-      "tests/test_distributed_dualwrite_import_m71.py::TestT4BenchmarkTool::test_48_tool_cli_help": "同上（CLI help 路径依赖子进程环境）",
-      "tests/test_distributed_dualwrite_import_m71.py::TestT5ImportTool::test_57_main_cli_mock": "import 工具 CLI 需真实数据 ⇒ 保留红",
-      "tests/test_distributed_dualwrite_import_m71.py::TestT5ImportTool::test_58_main_empty_source": "同上（空源导入路径）",
-      "tests/test_event_tap_m17.py::TestOrganWiring::test_cortex_publish_blocks_execute_with_expected_payload": "事件接线断言与当前 PulseCortex 实际载荷不符；★需人工复核是否为真实装配缺陷",
-      "tests/test_event_tap_m17.py::TestOrganWiring::test_event_name_convention": "事件命名约定与现存实现不符；★需人工复核",
-      "tests/test_evolution_crash_patch_m15.py::TestWorkerEntry::test_worker_module_top_level_is_stdlib_only": "★真实生产缺陷：nucleus/reasoning/evolution_worker.py:21 顶层 from nucleus._silent_except import silent_exc（非 stdlib）。段C 烛微补正建议①移入函数内惰性导入，待专项修复",
-      "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable": "★真实数据依赖：data/experience/experience_pool.json 本地为空 ⇒ assertGreater(0,0) 失败。★该项已在第161批段A A4 中确认属「依赖真实数据」不属离线测试，已从 L1 CI 剔除",
-      "tests/test_lazy_snapshot_m9.py::test_lazy_vs_full_equivalence": "★已知遗留：test_lazy_snapshot_m9.py 为他方在途文件（协作红线第 1 条已定性遗留），其 M 状态由补丁机制产生，本刀不处置",
-      "tests/test_log_governance_m37.py::TestNoE402Regression::test_40_e402_counts": "E402 计数与实际不符（同 test_dialog_guard_m15 同源判据缺陷）",
-      "tests/test_patch_dedup_m43.py::TestArtifacts::test_41_production_history_deduped": "补丁历史需真实 data/ 数据 ⇒ 保留红",
-      "tests/test_patch_verification_split_m47.py::TestProductionBackfilled::test_52_zero_baseline_not_marked_fixed": "验证拆分需真实补丁基线 ⇒ 保留红",
-      "tests/test_t100a_pending_no_false_success.py::test_pending_queue_has_no_false_success": "★数据侧带红说明：实测检出 24 条假成功补丁仍在待审批队列（patch_llm_1790939* 系列）⇒ 属真实待治理问题，非测试缺陷，需另立修复票（补丁审批真值校验）"
+      "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern": "源层 E402 扫描判据与实际不符（ValueError: substring not found）；属门禁判据缺陷、非被测代码缺陷。★登记册行197「3 红无归属」之一，待专项票（162 批）",
+      "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable": "★实测 flaky：同一份代码+数据两次跑结论不同（一次 22 passed 全绿、隔离复核 RED）。保守留红并标注待人工复核（不按偶发绿回收，避免基线抖动）",
+      "tests/test_export_public_m143.py::TestRealTree::test_01_current_tree_clean": "★新发现：PII 残留 4 处 —— tests/test_a5_pii_final_scan_m161.py:58 与 tools/ci/check_pii_final_scan.py:46/179/222（dev@tongtong.local ×3、git@github.com ×1）。系第161批段A A5 的自证文件自带邮箱形态，需星轨裁定「掩码 or 加白名单」（与登记册行198 同类）",
+      "tests/test_lazy_snapshot_m9.py::test_lazy_vs_full_equivalence": "★星轨已裁定「已定性遗留」（approved 补丁目标文件，M 由补丁机制产生，处置在停窗经 PatchManager._set_approved）⇒ 路灯不碰、不夹带，保留红",
+      "tests/test_log_governance_m37.py::TestNoE402Regression::test_40_e402_counts": "E402 计数判据与实际不符（与 dialog_guard 同源的门禁判据类问题）。★登记册行197「3 红无归属」之一，待专项票（162 批）",
+      "tests/test_pc_exclude_m38.py::TestExcludeReasonFn::test_11_reasons": "★新发现：exclude_reason(\"data/probe/x.json\") 实得 'self_observation'、期望 'dir_whitelist' —— 路径分类判据命中顺序/白名单与用例期望不符。与第161批下本批改动无关（未触及路径分类），待专项票",
+      "tests/test_pc_exclude_m38.py::TestExcludeIntegration::test_20_dir_whitelist": "同上（dir_whitelist 判定同根因）",
+      "tests/test_pc_exclude_m38.py::TestExcludeIntegration::test_25_three_categories": "同上（三类分类同根因）",
+      "tests/test_pc_exempt_m39.py::TestExcludeReasonSignature::test_01_default_has_producer_false_backward_compatible": "同上（exclude_reason 签名兼容用例，同根因）",
+      "tests/test_reprobe_diff_scope_m55.py::TestDetectorCoverage::test_09_production_only_code_optimization_uncovered": "★新发现：检测器覆盖率 0.7831 < 重锚下限 0.80（疑似检测器静默退化）：['Traceback','bare_return_none_in_except','code_optimization','cross_module_singleton_call','sql_injection']。与第161批下本批改动无关，待专项票"
     },
-    "pollution_set_note": "pollution_set 5 项实测亦已全绿（tmp/c1_pollution_verdict.json），★但按裁定 pollution 不在「剔 known_fail」范围，故保留不动。"
+    "pollution_set_note": "pollution_set 5 项实测亦已全绿（tmp/c1_pollution_verdict.json），★但按裁定 pollution 不在「剔 known_fail」范围，故保留不动。",
+    "reanchor_161lower_k8": "第161批下 刀8（2026-10-05）：known_fail 14 → 10。权威数据 = 全量跑出候选 149 红 / 36 文件 → **逐文件隔离单跑复核**（清 PYTHONPATH/PYTHONHOME/PYTHONSTARTUP、PYTHONNOUSERSITE=1）：28 文件转绿（全量假红，因相互干扰/收尾钩子）、8 文件仍红共 10 条。回收 10 项（刀2 event_tap×2、刀3 evolution_worker、刀6 t100a、刀7 dualwrite CLI×4 + patch_dedup + patch_verification_split）；新增登记 4 条实测真红（export_public_m143 / pc_exclude_m38×3→计3条 / pc_exempt_m39 / reprobe_diff_scope_m55）。collect_baseline = 4750（实测，非历史值）。pollution_set=5 不动（星轨裁定）。"
   }
 }
