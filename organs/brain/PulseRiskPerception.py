@@ -427,9 +427,22 @@ class PulseRiskPerception(BasePulseOrgan):
     def _emit_crisis_referral(self, user_input: str, user_name: str,
                               risk_level: float, risks: list[dict[str, Any]],
                               crisis_level: str) -> None:
-        """发射危机转介脉冲（独立通道，不进入既有 risk.* 处置分支）。"""
+        """发射危机转介脉冲（独立通道，不进入既有 risk.* 处置分支）。
+
+        ★第161批段B：受 config.ENABLE_CRISIS_REFERRAL 总开关门控，
+        置 False 即一键回滚（不发射、不影响既有 risk.* 处置链）。
+        """
         if not (self.info_field and self.pulse_core):
             return
+        try:
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_CRISIS_REFERRAL", True)):
+                self._log(LogLevel.INFO, "危机转介已被 ENABLE_CRISIS_REFERRAL=False 关闭")
+                return
+        except Exception as _e:
+            # 开关读取失败按「启用」处理，fail-safe 偏向保护（不漏危机）
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, "PulseRiskPerception._emit_crisis_referral")
         _priority = {"L3": 10, "L2": 8, "L1": 6}[crisis_level]
         self.info_field.publish(self.pulse_core.emit(
             source_organ=self.organ_name,

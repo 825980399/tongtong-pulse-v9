@@ -2086,6 +2086,21 @@ class PulseSelfAwareness(BasePulseOrgan):
 
                 self._log(LogLevel.INFO, "首次启动: 生成初始主体感")
 
+                # ★第161批段B B4：E7a 首次启动声明——在此触发（主体感缺失=第一次醒来）。
+                #   声明消费走独立状态文件（nucleus/security/first_run_declaration.py），
+                #   **不依赖知识库节点**（节点会因 purge/轮转消失，用节点判据会误报首启）。
+                try:
+                    from nucleus.security.first_run_declaration import (
+                        claim_first_run_declaration,
+                    )
+                    _decl = claim_first_run_declaration()
+                    if _decl:
+                        self._log(LogLevel.INFO,
+                                 f"E7a 首次启动声明已注入（{len(_decl)} 字）")
+                except Exception as _de:
+                    from nucleus._silent_except import silent_exc
+                    silent_exc(_de, "PulseSelfAwareness.E7a_first_run_declaration")
+
             # 写入InsightBoard
             _board.post(  # type: ignore[possibly-unbound]
                 insight_type="first_person_experience",

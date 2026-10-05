@@ -2913,6 +2913,15 @@ ETHICS_CONFIG = {
     },
 }
 
+# ========== 危机转介总开关 ==========
+# ★第161批段B B2/B3：回滚开关。ENABLE_CRISIS_REFERRAL=False 时
+# PulseRiskPerception 不发射 RiskEvent.CRISIS_REFERRAL，全链路一键关闭。
+# 默认 True = 危机转介生效（回滚只需改本行为 False，无需改代码）。
+ENABLE_CRISIS_REFERRAL = True
+
+# ★第161批段B B4：E7a 首次启动声明总开关。False = 永不播报首启声明（一键回滚）。
+ENABLE_FIRST_RUN_DECLARATION = True
+
 # ========== 双腿/网络抓取安全配置 ==========
 # ★第161批段B B1：PulseLegs 安全词表纳入 config 治理。
 #   词表内容与原 PulseLegs 内联 11 词**完全一致**（零行为变更），
