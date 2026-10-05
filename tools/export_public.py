@@ -150,6 +150,84 @@ PUBLIC_DOCS_ALLOW_FILES: frozenset[str] = frozenset({
     #   内部叙事），属内部运行资料，不得进入对外发布包。
 })
 
+# ===== 第161批段A A3b：对外文本公开渲染 =====
+#: 对外渲染总开关。False = 完全跳过渲染（可撤回，导出结果与渲染前一致）。
+ENABLE_PUBLIC_RENDER = True
+
+#: 占位符 → 对外可读的**非真值**显示表。
+#: ★绝不使用真实身份/生日/路径；仅把尖括号占位符换成不指向具体真值的泛化措辞，
+#:   使对外文本读起来自然，同时不泄露「此处曾有一个真值」以外的信息。
+PUBLIC_PLACEHOLDER_VALUES: dict[str, str] = {
+    "<CREATOR_DAUGHTER>": "晓曈",
+    "<BIRTH_DATE>": "早几年",
+    "<CREATOR>": "创作者",
+    "<SELF_NAME>": "曈曈",
+}
+
+#: 只对**对外文本白名单**渲染；`.py` 等代码面一律保留占位符。
+PUBLIC_RENDER_EXTS: frozenset[str] = frozenset({".md", ".txt", ".rst"})
+
+#: 根级对外文档文件名白名单（小写比较）
+PUBLIC_RENDER_ROOT_FILES: frozenset[str] = frozenset({
+    "readme.md", "contributing.md", "security.md", "license", "changelog.md",
+})
+
+
+def public_render_enabled() -> bool:
+    """A3b 开关：ENABLE_PUBLIC_RENDER 默认 True。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_PUBLIC_RENDER", True))
+    except Exception as _e:
+        silent_exc(_e, where="export_public.public_render_enabled", level="debug")
+        return True
+
+
+def is_public_render_target(rel: str) -> bool:
+    """该相对路径是否属于对外文本白名单（fail-closed：不在白名单一律不渲染）。"""
+    rel_n = _norm(rel)
+    base = os.path.basename(rel_n).lower()
+    # 根级对外文档**先判**（LICENSE 无扩展名，不能用后缀白名单卡它）
+    if "/" not in rel_n:
+        return base in PUBLIC_RENDER_ROOT_FILES or base.startswith("license")
+    ext = os.path.splitext(base)[1]
+    if ext not in PUBLIC_RENDER_EXTS:
+        return False
+    # docs/ 下：仅白名单目录/文件
+    if not rel_n.startswith("docs/"):
+        return False
+    rel_from_docs = rel_n[len("docs/"):]
+    return docs_allowed(rel_from_docs)
+
+
+def public_render(text: str) -> str:
+    """把占位符替换为非真值显示值。开关关闭时原样返回。"""
+    if not public_render_enabled():
+        return text
+    if not text:
+        return text
+    for _ph, _val in PUBLIC_PLACEHOLDER_VALUES.items():
+        if _ph in text:
+            text = text.replace(_ph, _val)
+    return text
+
+
+def public_render_bytes(rel: str, data: bytes) -> bytes:
+    """对外白名单文本才渲染；其余原样返回。"""
+    if not is_public_render_target(rel):
+        return data
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as _ude:
+        # 非 UTF-8 文本不做渲染（原样返回），非静默：留痕便于排查
+        silent_exc(_ude, where="export_public.public_render_bytes", level="debug")
+        return data
+    rendered = public_render(text)
+    if rendered == text:
+        return data
+    return rendered.encode("utf-8")
+
+
 #: docs/ 下允许整目录带入的**子目录**（相对 docs/）
 PUBLIC_DOCS_ALLOW_DIRS: frozenset[str] = frozenset({
     "比赛准备",          # 第143批 T-143c 对外运行数据卡片
@@ -246,7 +324,7 @@ def all_pii_patterns() -> list[tuple[str, re.Pattern[str]]]:
 PII_PATTERNS = STATIC_PII_PATTERNS
 
 #: ★第146批 T146-2：**弱告警**模式 —— 只提示人工复核，**不阻断**导出。
-#:   背景：真实出生年份以裸四位数字（如 ``2020年``）写进 tracked 源码时，
+#:   背景：真实出生年份以裸四位数字（如 ``2020年``）写进 tracked 源码时，  # pii-scan-ignore
 #:   上面的强模式（精确日期）未必命中，但信息已经随公开包泄露。
 #:   判据：单行内同时命中「裸四位年份」**且**含出生/生日类上下文词。
 WEAK_PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -645,7 +723,9 @@ def export_zip(root: str, out_zip: str, files: list[str]) -> None:
             arc = _norm(os.path.join("tongtong-pulse-net", rel))
             with open(p, "rb") as fh:
                 raw = fh.read()
-            zf.writestr(arc, export_normalize_text(arc, raw))
+            # ★A3b：对外白名单文本在写包**前**渲染（.py 代码面不渲染）
+            _body = public_render_bytes(_norm(rel), export_normalize_text(arc, raw))
+            zf.writestr(arc, _body)
 
 
 def export_dir(root: str, out_dir: str, files: list[str]) -> None:
@@ -655,8 +735,100 @@ def export_dir(root: str, out_dir: str, files: list[str]) -> None:
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         with open(p, "rb") as fh:
             raw = fh.read()
+        # ★A3b：对外白名单文本在写盘**前**渲染（.py 代码面不渲染）
+        _body = public_render_bytes(_norm(rel), export_normalize_text(_norm(rel), raw))
         with open(dst, "wb") as fo:
-            fo.write(export_normalize_text(_norm(rel), raw))
+            fo.write(_body)
+
+
+def scan_package_bytes(data: bytes, name: str) -> list[tuple[str, int, str]]:
+    """★第161批段A A3a：对**写包后的包体字节**做 PII 扫描。
+
+    与 scan_text(path) 的区别：直接吃字节（已归一/已渲染的包内内容），
+    不读磁盘源文件——这是「扫描真看见包内容」的唯一可信口径。
+    """
+    try:
+        text = data.decode("utf-8", errors="ignore")
+    except Exception as e:
+        silent_exc(e, where="export_public.scan_package_bytes", level="debug")
+        return []
+    lines = text.split("\n")
+    # ★A3a 修正：文件级豁免（前 5 行），与源层 scan_text 同口径。
+    #   缺此条会把 PII 脱敏测试夹具（其"敏感数据"是构造的假数据）判脏，
+    #   形成「包体比源层更严 ⇒ 干净包也被阻断」的自锁。
+    _head = "\n".join(lines[:5])
+    if any(mk in _head for mk in FILE_SCAN_SKIP_MARKERS):
+        return []
+    out: list[tuple[str, int, str]] = []
+    for i, line in enumerate(lines, 1):
+        if any(mk in line for mk in SCAN_SKIP_MARKERS):
+            continue
+        # 与源层一致：先做 unicode 转义还原再匹配，否则 \uXXXX 形态漏检
+        line_u = _unicode_unescape(line)
+        # 强模式（手机/邮箱/身份证/API Key）——必阻断
+        _hit = None
+        _snip = ""
+        # ★A3a：与源层 scan_text 同口径用 all_pii_patterns()（10 条，含属主真名/
+        #   真实路径/生日），而非 PII_PATTERNS（4 条静态）——否则包体层比源层松，
+        #   归一后现形的属主 PII 会漏检。
+        for pat_name, pat in all_pii_patterns():
+            m = pat.search(line_u)
+            if not m:
+                continue
+            # ★A3a 修正四：保留域白名单（与源层 :431 完全同款）。
+            #   example.com / users.noreply.invalid 等 RFC 2606/6761 保留域
+            #   **不可能是真实身份**，漏这条会把保留域邮箱判成 PII（假阳性）。
+            _m_snip = m.group(0)
+            if any(d in _m_snip for d in ALLOW_DOMAINS):
+                continue
+            _hit = pat_name
+            _snip = _m_snip[:60] + ("…" if len(_m_snip) > 60 else "")
+            break
+        if _hit is not None:
+            out.append((_hit, i, _snip))
+            continue
+        # ★A3a 红队修正：弱模式（疑似出生年份/具体日期）也必须扫。
+        #   源文件层弱告警仅提示，但**包体层必须阻断**——TTP_BIRTH_DATE
+        #   注入的 <BIRTH_DATE> 真值正是出生年份形态，只扫强模式会漏。
+        #   条件同 scan_text_weak：需与「出生/生日」上下文同段。
+        lower = line_u.lower()
+        if any(m.lower() in lower for m in WEAK_CONTEXT_MARKERS):
+            for w_name, w_pat in WEAK_PII_PATTERNS:
+                wm = w_pat.search(line_u)
+                if not wm:
+                    continue
+                if any(d in wm.group(0) for d in ALLOW_DOMAINS):
+                    continue
+                out.append((f"weak:{w_name}", i, wm.group(0)[:60]))
+                break
+    return out
+
+
+def iter_package_entries(out_path: str, is_zip: bool):
+    """遍历写好的包体条目，产出 (arcname, bytes)。"""
+    if is_zip:
+        with zipfile.ZipFile(out_path, "r") as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                yield info.filename, zf.read(info.filename)
+    else:
+        base = os.path.join(out_path, "tongtong-pulse-net")
+        for dp, _dirs, fns in os.walk(base):
+            for fn in fns:
+                fp = os.path.join(dp, fn)
+                rel = os.path.relpath(fp, base).replace(os.sep, "/")
+                with open(fp, "rb") as fh:
+                    yield rel, fh.read()
+
+
+def verify_package(out_path: str, is_zip: bool) -> list[tuple[str, str, int, str]]:
+    """★A3a：对写好的包体做复扫，返回 [(arcname, 模式名, 行号, 片段)]。"""
+    out: list[tuple[str, str, int, str]] = []
+    for arc, data in iter_package_entries(out_path, is_zip):
+        for name, ln, snip in scan_package_bytes(data, arc):
+            out.append((arc, name, ln, snip))
+    return out
 
 
 #: Dxxx-1 闸门：扫描器自身文件的相对路径
@@ -767,6 +939,21 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print("[OK] PII 复扫通过：导出清单零敏感信息命中。")
 
+        # ---- ★第161批段A A3a：包体复扫（唯一可信口径 = 扫写包后的字节）----
+        #   此前 verify_clean 扫的是**源文件**，而源→包体要经过
+        #   export_normalize_text 归一（:648/:659），归一会改写内容；
+        #   归一后的包体与源文件不再等价 ⇒ 源文件扫描无法证明包体干净。
+        pkg_hits = verify_package(out, is_zip)
+        if pkg_hits:
+            print(f"\n[FAIL] 包体复扫发现 {len(pkg_hits)} 处敏感信息，发布包不干净：",
+                  file=sys.stderr)
+            for arc, name, ln, snip in pkg_hits[:50]:
+                print(f"  {arc}:{ln}  [{name}]  {snip}", file=sys.stderr)
+            if len(pkg_hits) > 50:
+                print(f"  ... 其余 {len(pkg_hits)-50} 处略", file=sys.stderr)
+            return 1
+        print("[OK] 包体复扫通过：source=post_render_package（扫描对象=写包后包体字节）")
+
         # ---- Dxxx-1 闸门：扫描器自身复扫（必须扫自己，自身命中即阻断） ----
         if SELF_SCAN_REL in SCAN_EXEMPT_FILES:
             print(f"\n[FAIL] SCAN_EXEMPT_FILES 仍含扫描器自身 {SELF_SCAN_REL}，"
@@ -788,7 +975,10 @@ def main(argv: list[str] | None = None) -> int:
         _cfg._apply_placeholder_render()
         print("[OK] 占位符渲染自检通过：config._apply_placeholder_render 可调用。")
     else:
-        print("[WARN] 已跳过 PII 复扫。")
+        # ★A3a：--no-scan 是包体复扫的完整旁路，此分支**不得**打印
+        #   [OK] …source=post_render_package 哨兵，否则红队演练可被 --no-scan 绕过而 CI 无感。
+        #   （本分支刻意不提及包体复扫标识串，避免机器检查把提示语误判为已执行）
+        print("[WARN] 已跳过 PII 复扫（--no-scan）：包体复扫未执行，不可据此判断发布包是否干净。")
 
     if is_zip:
         print(f"压缩包大小: {out_size/1024/1024:.2f} MB")

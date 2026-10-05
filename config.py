@@ -2922,6 +2922,10 @@ ENABLE_CRISIS_REFERRAL = True
 # ★第161批段B B4：E7a 首次启动声明总开关。False = 永不播报首启声明（一键回滚）。
 ENABLE_FIRST_RUN_DECLARATION = True
 
+# ========== 对外发布渲染开关 ==========
+# ★第161批段A A3b：对外文本占位符渲染总开关。False = 完全跳过渲染（可撤回）。
+ENABLE_PUBLIC_RENDER = True
+
 # ========== 双腿/网络抓取安全配置 ==========
 # ★第161批段B B1：PulseLegs 安全词表纳入 config 治理。
 #   词表内容与原 PulseLegs 内联 11 词**完全一致**（零行为变更），
