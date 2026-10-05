@@ -2073,6 +2073,14 @@ KNOWLEDGE_QICA_PATH_RELEVANCE_GATE = True
 #   ★语义命中阈值仍复用 KNOWLEDGE_GLOBAL_HIT_THRESHOLD（单一真相源，不新增第二套口径）。
 KNOWLEDGE_QICA_PATH_MIN_RELEVANCE = 0.05
 
+# ★第161批下 刀4（T-占位符空槽泄漏-1）：检索命中侧占位符闸门。
+#   True （默认）：QICA 路径检索命中节点须过 contains_placeholder 判据
+#                  （含空槽「」与截断占位 p...），命中即跳过不进合成链；
+#   False        ：回滚为旧行为（只判长度 + 内部节点）。
+#   判据复用 nucleus/knowledge/PlaceholderSanitizer.contains_placeholder 总入口
+#   （单一真相源，不另立词表）。
+KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER = True
+
 # ★刀9（T-对话模板拼接断裂-1）根因：IdentityKnowledgeManager.describe()
 #   直接 f-string 插值 _r.get('relation')，未校验是否为有效关系词 ⇒
 #   relation 缺失/脏值时输出「小林是我的您」类断裂句。
