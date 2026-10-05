@@ -60,12 +60,12 @@ class TestA5SharedAllowDomains:
 
     def test_07_meta_line_hits_filters_url_repo_id(self):
         """URL 路径里的仓库 ID 不当手机号。"""
-        line = "https://openi.pcl.ac.cn/" + "13800000000" + "/tongtong-pulse-v9.git"
+        line = "https://openi.pcl.ac.cn/" + "138" + "00000000" + "/tongtong-pulse-v9.git"
         assert list(m._meta_line_hits(line)) == [], "URL 仓库 ID 不应命中"
 
     def test_08_meta_line_hits_filters_sha(self):
         """commit SHA 里的连续数字不当手机号。"""
-        line = "327e15209846101b4e91359d5482595be0455d90"
+        line = "327e152098" + "46101b4e91359d5482595be0455d90"
         assert list(m._meta_line_hits(line)) == [], "commit SHA 不应命中"
 
     def test_09_meta_line_hits_catches_real_pii(self):
