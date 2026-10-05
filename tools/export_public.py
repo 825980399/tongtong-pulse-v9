@@ -66,6 +66,8 @@ EXCLUDE_DIRS: frozenset[str] = PACKAGE_EXCLUDED | frozenset({
     # 测试隔离与工作区元数据（临时产物）
     ".pytest_tmp", ".tmp_backup", ".bak_tmp", ".release-tmp",
     ".mpy-workbench", ".ruff_cache",
+    # 重建 / 临时产物（绝不包含发布包）
+    ".aionclaw-tmp", ".rebuilt_131",
     # 构建产物（Cython 编译中间件，内含真实绝对路径）
     "build", "temp.win-amd64-cpython-312", "Release",
     # CI/宿主平台配置（含内部流程，不进发布包）
