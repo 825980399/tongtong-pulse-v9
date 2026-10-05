@@ -7,7 +7,6 @@
   (d) rule_signatures() 幂等且覆盖 RULE_REGISTRY 全量
 日志守卫：本件为纯函数指纹，不触碰生产日志口径，无需 Temp\\m53_* 隔离标记。
 """
-import hashlib
 import os
 import sys
 
