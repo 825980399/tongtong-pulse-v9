@@ -1070,6 +1070,46 @@ class PulseInnerWorld(
 
     def _ir_qica_knowledge_retrieve(self, ctx: "PulseInnerWorld.InferenceContext", _qica_paths):
         _knowledge_result = None
+        # ★第161批 刀8（T-内在世界检索万能复用-1）：路径目录浏览接入语义相关性判据。
+        #   根因：原实现只判 len(_val)>30 + 非内部节点 ⇒ 纯目录浏览，
+        #   不同问题若 QICA 建议路径相同即返回**同一批节点**（题2/题15 同批）。
+        #   160上A 刀2 的判据只接在 pulse_inner_world_knowledge.py:186（全局共振路径），
+        #   未覆盖本分支 ⇒ 本刀补齐，且**复用同一判据与同一阈值口径**（单一真相源）。
+        try:
+            import config as _cfg_k89
+            _gate_on = bool(getattr(_cfg_k89, "KNOWLEDGE_QICA_PATH_RELEVANCE_GATE", True))
+            _min_rel = float(getattr(_cfg_k89, "KNOWLEDGE_QICA_PATH_MIN_RELEVANCE", 0.05))
+            # 语义命中阈值复用 160上A 刀2 的全局阈值口径，不新增第二套
+            _semantic_threshold = float(getattr(_cfg_k89, "KNOWLEDGE_GLOBAL_HIT_THRESHOLD", 0.5))
+            # 阈值 <0 是 160上A 刀2 的「关闭语义判据」语义 ⇒ 本路也不设限（完整回滚）
+            if _semantic_threshold < 0:
+                _min_rel = 0.0
+        except Exception as _k89_e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_k89_e, where="PulseInnerWorld._ir_qica_knowledge_retrieve 开关读取")
+            _gate_on, _min_rel = True, 0.05
+
+        def _k89_accept(_val: str, _node, _path: str, _tier: str) -> bool:
+            """路径命中节点的相关性闸门；闸门关闭时沿用旧长度判据。"""
+            if not _gate_on:
+                return True
+            _kw = list(getattr(_node, "keywords", []) or [])
+            _rel = self._calculate_match_relevance(ctx.question, _val, _kw)
+            if _rel >= _min_rel:
+                # ★任务书 8.4：补可观测 INFO 日志（此前本路径无任何「相关度=」输出）
+                self._log(
+                    LogLevel.INFO,
+                    f"QICA路径判据|路径={_path} 层级={_tier} node_id="
+                    f"{getattr(_node, 'node_id', '')} 相关度={_rel:.3f} ≥下限{_min_rel:.2f} 通过",
+                )
+                return True
+            self._log(
+                LogLevel.INFO,
+                f"QICA路径判据|路径={_path} 层级={_tier} node_id="
+                f"{getattr(_node, 'node_id', '')} 相关度={_rel:.3f} <下限{_min_rel:.2f} 跳过",
+            )
+            return False
+
         # ★v22.0修复：严格按QICA优先级顺序检索
         if _qica_paths and self.node_pool:  # type: ignore[possibly-unbound]
             for _path in _qica_paths[:3]:  # type: ignore[possibly-unbound]
@@ -1077,10 +1117,13 @@ class PulseInnerWorld(
                 if _l3_nodes:
                     for _node in _l3_nodes:
                         _val = self._clean_node_value(str(_node.value)) if _node.value else ""
-                        if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
-                            _knowledge_result = _val
-                            self._log(LogLevel.INFO, f"QICA路径检索: 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
-                            break
+                        if not _val or len(_val) <= 30 or self._is_internal_knowledge_node(_val):
+                            continue
+                        if not _k89_accept(_val, _node, _path, "L3"):
+                            continue
+                        _knowledge_result = _val
+                        self._log(LogLevel.INFO, f"QICA路径检索: 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
+                        break
                 if _knowledge_result:
                     break
                 # 该路径未命中，继续下一个路径
@@ -1089,10 +1132,13 @@ class PulseInnerWorld(
                     for _node in _l2_nodes:
                         _val = self._clean_node_value(str(_node.value)) if _node.value else ""
                         # ★质量修复B2：L2 路径与 L3 路径统一调用内部节点过滤器（修复仅查4前缀导致的漏检）
-                        if _val and len(_val) > 30 and not self._is_internal_knowledge_node(_val):
-                            _knowledge_result = _val
-                            self._log(LogLevel.INFO, f"QICA路径检索(L2): 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
-                            break
+                        if not _val or len(_val) <= 30 or self._is_internal_knowledge_node(_val):
+                            continue
+                        if not _k89_accept(_val, _node, _path, "L2"):
+                            continue
+                        _knowledge_result = _val
+                        self._log(LogLevel.INFO, f"QICA路径检索(L2): 路径={_path}, 命中节点")  # type: ignore[possibly-unbound]
+                        break
                 if _knowledge_result:
                     break
                 self._log(LogLevel.DEBUG, f"QICA路径检索未命中: 路径={_path}，尝试下一个路径")  # type: ignore[possibly-unbound]

@@ -466,7 +466,25 @@ class IdentityKnowledgeManager:
             _t = _r.get("target", "自己")
             _t_name = "我" if _t in ("自己", "我", "你") else _t
             _suffix = "（这是推出来的）" if _r.get("inferred") else ""
-            return f"{_name_part}是{_t_name}的{_r.get('relation')}{_suffix}。"
+            _rel = _r.get("relation")
+            # ★第161批 刀9（T-对话模板拼接断裂-1）：relation 缺失/非法时兜底为完整句。
+            #   根因：原实现直接插值 _r.get('relation')，脏值/缺失时输出
+            #   「小林（任桂林）是我的您」这类断裂句（9.2 禁输出）。
+            #   有效性判据**复用本模块已有的 RELATION_WORDS**（唯一真相源，不另立词表）。
+            try:
+                import config as _cfg_k9
+                _fb_on = bool(getattr(_cfg_k9, "IDENTITY_RELATION_FALLBACK_COMPLETE", True))
+            except Exception as _k9_e:
+                silent_exc(_k9_e, where="IdentityKnowledgeManager.describe 开关读取")
+                _fb_on = True
+            _rel_text = str(_rel or "").strip()
+            if _fb_on and (_rel_text not in RELATION_WORDS):
+                # 缺失或不在关系词表内 → 用泛称兜底，保证输出是完整句
+                _log("warning",
+                     f"身份关系词非法（person={_key} relation={_rel_text!r}），"
+                     f"已兜底为泛称；脏值不入库请复核抽取来源")
+                _rel_text = "家人"
+            return f"{_name_part}是{_t_name}的{_rel_text}{_suffix}。"
 
     # ==================== 路径与导出 ====================
 
