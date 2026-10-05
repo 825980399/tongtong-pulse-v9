@@ -35,6 +35,12 @@
    "event_hist": {}
   }
  },
- "delta_reason": "154/153/157-C/159上B/160上A刀4：PulseInnerWorld 受控增量。刀4 final=直引 config import（无新增 try/except，沿用文件内 15+ 处一致范式） + _dialog_level 灰度分支 if+1（literal/structured 接线，行为不变）。",
- "expected_delta": {}
+ "delta_reason": "第161批 刀8（T-内在世界检索万能复用-1）：PulseInnerWorld._ir_qica_knowledge_retrieve 的 QICA 路径检索接入语义相关性闸门——新增 _k89_accept 闭包（try/except 各 1、if 5：闸门开关 + 最低相关度 + L3/L2 四处 continue 判定、return 3、methods 1（嵌套闭包计入））。原目录浏览逻辑（长度判据 + 内部节点过滤）保留不变，仅在其后追加相关性判定。diff = +54/-8 行，已逐行核实无夹带他人改动。",
+ "expected_delta": {
+  "try": 1,
+  "except": 1,
+  "if": 5,
+  "return": 3,
+  "methods": 1
+ }
 }
