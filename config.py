@@ -2030,8 +2030,8 @@ L3_BACKPRESSURE_WARN_EVERY = 3
 #          若产出内容仍含占位符 → 该条不产出（治本：封堵融合模板扩散污染源）。
 #   False（默认·灰度观察）：融合行为零变化——防融合输入集变化导致融合节点数 /
 #          N 值漂移，影响 iw_consistency_baseline.json 等基线（任务书风险②）。
-# ★观察一周期后翻 True；开关变更须独立 commit（先例：158 批开关变更惯例）。
-KNOWLEDGE_FUSION_SKIP_PLACEHOLDER = False
+# ★160下下-刀1 已翻 True（污染封堵生效）；应急回滚改 False（独立 commit）。
+KNOWLEDGE_FUSION_SKIP_PLACEHOLDER = True
 # ★第160批 上A 刀2（票1①②·T-知识检索相关性-1）：全局语义检索「命中判据」灰度阈值。
 #   语义检索命中判据接回打分结果：全局语义检索候选数>0 时按五维分排序取 top-k，
 #   取 top1 计算匹配相关度（_calculate_match_relevance），>= 本阈值即判命中并直出该节点；
