@@ -13,12 +13,39 @@ evolution_worker.py —— 进化工作器
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
 import time
 import traceback
-from nucleus._silent_except import silent_exc
+
+# ★第161批下 刀3（T-evolution_worker顶层导入-1）：顶层**仅保留 stdlib**。
+#   本文件 :22 起的设计铁律即「spawn 子进程入口模块，顶层一律只留 stdlib」；
+#   此前顶层对 silent_exc 的非 stdlib 导入违反该铁律 ⇒
+#   spawn 期导入本模块时就可能失败，worker 无机会运行、亦无法报告失败原因。
+#   处置：改为**函数内惰性导入**（见 _get_silent_exc）。
+#   注：注释刻意不写出该导入语句的原文——测试 test_worker_module_top_level_is_stdlib_only
+#   以「前 30 行文本含该导入前缀」为判据，原文出现即误触红。
+
+def _get_silent_exc():
+    """★第161批下 刀3：惰性获取 silent_exc（顶层不依赖非 stdlib）。
+
+    spawn 期若本模块导入失败，此处也拿不到 silent_exc ⇒ 用print 兜底，
+    保证「导入失败」本身也能被报告，而不是静默崩溃。
+    """
+    try:
+        from nucleus._silent_except import silent_exc
+        return silent_exc
+    except Exception as _e:  # 极早期兜底：此时连日志通道都未必可用
+        def _fallback(exc, where=None, level=None):
+            # ★用 contextlib.suppress 表达「预期忽略」：此处连print 都可能失败
+            #   （stdout 未初始化/已关闭），再抛异常毫无意义。
+            with contextlib.suppress(Exception):
+                print(f"[evolution_worker] silent_exc 不可用({where}): "
+                      f"{type(exc).__name__}: {exc}")
+        return _fallback
+
 
 # ★主线第15批 T3/P1-93：本模块是 **spawn 子进程的入口模块**，顶层一律只留
 #   stdlib 依赖。原因：实测 12h 子进程崩溃 109 次且 worker 内部 except 从未执行
@@ -138,6 +165,7 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
         output_file: 结果 JSON 路径（崩溃时写崩溃载荷）。
         stderr_file: 子进程 stderr 落盘路径（可空）。
     """
+    _silent_exc = _get_silent_exc()  # ★刀3：惰性获取
     _stderr_fp = None
     if stderr_file:
         try:
@@ -146,7 +174,7 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
             _stderr_fp = open(stderr_file, "w", encoding="utf-8", buffering=1)  # noqa: SIM115 - 见上
             sys.stderr = _stderr_fp
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L147")
+            _silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L147")
             _stderr_fp = None
     try:
         run_evolution_worker(input_file, output_file)
@@ -164,7 +192,7 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
                 "pid": os.getpid(),
             })
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L164")
+            _silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L164")
         raise
     finally:
         if _stderr_fp is not None:
@@ -172,23 +200,24 @@ def run_evolution_worker_captured(input_file: str, output_file: str,
                 _stderr_fp.flush()
                 _stderr_fp.close()
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L172")
+                _silent_exc(e, where="nucleus.reasoning.evolution_worker::run_evolution_worker_captured L172")
 
 
 def _write_output(output_file: str, result: dict) -> None:
     """安全写入结果文件（先写临时文件再重命名，避免半写状态）。"""
+    _silent_exc = _get_silent_exc()  # ★刀3：惰性获取
     tmp_file = output_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         os.replace(tmp_file, output_file)
-    except Exception:
-        # 兜底：直接写
+    except Exception as _primary:
+        # 兜底：直接写（★刀3：原为静默 except，cw2 会拦；补留痕）
         try:
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.evolution_worker::_write_output L188")
+            _silent_exc(e, where="nucleus.reasoning.evolution_worker::_write_output L188")
 
 
 if __name__ == "__main__":
