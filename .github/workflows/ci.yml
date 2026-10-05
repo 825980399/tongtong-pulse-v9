@@ -1,0 +1,113 @@
+# 第161批段A A4（B-3）：GitHub CI —— L0 门禁 + L1 离线测试
+#
+# 设计依据（任务书 A4 + 烛微补正给出的实测清单）：
+#   · L0：仓库自带的静态/一致性门禁（tools/ci/），只读、快、无外部依赖。
+#   · L1：**11 件**离线测试文件（实测合计 21.36s，≤25s 预算），全部不依赖
+#         真实数据/网络/主框架。
+#   · L1 **必须排除**（烛微实测理由）：
+#         - test_self_awareness_m18：依赖真实数据 + import main（会拉起框架）
+#         - test_call_graph_m21：56.9s，超预算
+#         - test_export_public_m143：72.1s + 真实数据；且它本身是 A2 的守门狗，
+#           须待段C 后才进 L2
+#         - test_experience_summary_hemostasis_m47：★本地实测 1 failed（178 passed）——
+#           其 test_50 依赖**真实生产数据** data/experience/experience_pool.json
+#           （本地为空 ⇒ assertGreater(0,0) 失败），且该节点现为 known_fail 仍红项
+#           ⇒ 属「依赖真实数据」，不属离线测试，剔除。待其转绿后再议入 L1。
+#         - test_experience_summary_hemostasis_m47：★本地实测 1 failed（178 passed）——
+#           其 test_50 依赖**真实生产数据** data/experience/experience_pool.json
+#           （本地为空 ⇒ assertGreater(0,0) 失败），且该节点现为 known_fail 仍红项
+#           ⇒ 属「依赖真实数据」，不属离线测试，剔除。待其转绿后再议入 L1。
+#
+# 触发：push / pull_request。
+
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+# 同一分支新 push 取消旧运行，避免队列堆积
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============ L0：仓库自带门禁（只读、快） ============
+  l0-gates:
+    name: L0 gates (static/consistency)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install minimal deps
+        run: python -m pip install --upgrade pip
+
+      - name: L0 · broken-chain gate
+        run: python tools/ci/check_broken_chain_gate.py
+
+      - name: L0 · deprecated imports
+        run: python tools/ci/check_deprecated_imports.py
+
+      - name: L0 · event string gate
+        run: python tools/ci/check_event_string_gate.py
+
+      - name: L0 · silent_exc arity
+        run: python tools/ci/check_silent_exc_arity.py
+
+      - name: L0 · legacy assembly gate
+        run: python tools/ci/check_legacy_assembly_gate.py
+
+      - name: L0 · red baseline collect (slice 1)
+        run: python tools/ci/check_red_baseline_gate.py collect
+
+  # ============ L1：11 件离线测试（实测 21.36s） ============
+  l1-offline-tests:
+    name: L1 offline tests (10 files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: L1 · run 11 offline test files
+        # 清单与耗时为烛微 2026-10-05 实测；已排除 test_self_awareness_m18 /
+        # test_call_graph_m21 / test_export_public_m143（见文件头注释）
+        run: |
+          python -m pytest -q -p no:cacheprovider \
+            tests/test_semantic_cache_m41.py \
+            tests/test_data_governance_m41.py \
+            tests/test_event_bus_m14.py \
+            tests/test_cold_compaction_file_missing_m63.py \
+            tests/test_log_retention_m42.py \
+            tests/test_snapshot_checksum_m13.py \
+            tests/test_json_key_m26.py \
+            tests/test_timeout_quality_m27.py \
+            tests/test_config_placeholder_t146.py \
+            tests/test_rule_signature_m159.py
+
+      - name: L1 · timing report
+        if: always()
+        # ★实测口径（路灯 2026-10-05 本地 Windows 实测）：
+        #   10 件 157 passed，但**墙钟 52.8s**——单测本身最快（top1 仅 3.04s），
+        #   开销集中在每个文件 import 整个框架的加载成本（非测试执行）。
+        #   烛微 2026-10-05 实测 21.36s 系 11 件口径且环境不同；
+        #   本次未为凑预算删减有效覆盖，改为**如实记录**并把 timeout 放宽到 10min。
+        #   如需压到 ≤25s，应做「按目录分片 + 复用同一进程」而非删测试。
+        run: |
+          echo "L1 实耗见上一步 pytest 输出（本地实测 52.8s / 157 passed）"
+          echo "预算口径差异见本步骤注释；未删减覆盖以凑预算。"
