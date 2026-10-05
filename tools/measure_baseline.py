@@ -38,6 +38,7 @@ EXCLUDE_DIR_NAMES: frozenset[str] = frozenset({
     "node_modules", "venv", ".venv", "env", ".env_bak",
     "tmp", ".release-tmp", "workspace",
     "code_backups",            # data/code_backups/
+    ".aionclaw-tmp",           # ★段A A2：与 const.SCAN_EXCLUDE_DIRS 对齐（157-E 假修复订正，同步补点号目录名）
     "build", "dist", ".eggs",
 })
 

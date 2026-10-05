@@ -16,7 +16,7 @@ const.py —— 常量定义
 # ========== ★主线第133批 T-133c：备份树扫描白名单（制度化） ==========
 #   供 self_inspector 防御过滤与 glob/os.walk 扫描排除共用，避免 dead_code 扫描
 #   误入 backups/ code_backups/ tmp/ 等备份/临时树（前序实测 9 分钟 → 目标 <1 分钟）。
-SCAN_EXCLUDE_DIRS = ["backups/", "data/code_backups/", "tmp/", "aionclaw-tmp/"]  # ★157-E T-框架-1：aionclaw 临时目录纳入单一真相集
+SCAN_EXCLUDE_DIRS = ["backups/", "data/code_backups/", "tmp/", ".aionclaw-tmp/"]  # ★157-E T-框架-1：aionclaw 临时目录纳入单一真相集
 SCAN_EXCLUDE_PREFIX = [".bak_batch", ".bak_"]
 # 由 SCAN_EXCLUDE_DIRS 推导的段名白名单（去尾部斜杠、取 basename）
 SCAN_EXCLUDE_DIR_BASENAMES = {
