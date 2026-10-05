@@ -640,8 +640,17 @@ class ResonanceEngine:
         except Exception as _e:
             _logger.debug(f"[共振引擎] 关联扩展失败（不影响主流程）: {_e}")
 
-        return self.resonate(query_pulse, _candidates, top_k=top_k,
+        _topk = self.resonate(query_pulse, _candidates, top_k=top_k,
                              _semantic_map=_sem_map, _rule_map=_rule_map)
+        # ★第160批 下上 刀6.4 补桩：打分可观测（验证相关度= 是否 >0，配合 dialog_regression 回归）
+        if _topk:
+            _top_score = max(
+                (_n.get("score", 0.0) for _n in _topk if isinstance(_n, dict)),
+                default=0.0)
+            _logger.info(
+                f"[共振引擎] 打分可观测|top_k={len(_topk)} "
+                f"top1_score={_top_score:.3f}")
+        return _topk
 
     def _expand_by_association(self, candidates: list[dict[str, Any]],
                                top_k: int) -> int:

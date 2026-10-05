@@ -1,0 +1,171 @@
+# 对话回归题集（第160批 下上 刀6 · 数据化）
+# 来源：活体重验实测（2026-10-04 23:34 窗 18 题 10✅/8❌）+ 星轨人工对照表
+# 字段说明：
+#   id            题号
+#   question      提问
+#   expect_anchor 期望命中节点 hint（检索类题用，验证"不同问题不同节点"）
+#   node_hint     与 expect_anchor 同义，标注应命中业务节点而非通用兜底
+#   auto          全自动判定类（脚本可机判）：裸格式/占位符/内部字段泄漏/兜底误触发/身份/超时
+#   manual        半自动/人工判定类（脚本只标 ⚠️，不裁决）：答非所问/复读/实质内容
+# 注：本批框架已停，客观项（26 问）全绿验证归重启窗；本 yaml 为回归工具驱动数据。
+meta:
+  title: 对话回归题集
+  version: "20261004"
+  source: 活体重验实测(2026-10-04 23:34 窗 18题10✅/8❌) + 星轨人工对照表
+  total: 22
+  note: 客观项全绿验证归重启窗；本 yaml 为 dialog_regression.py 驱动数据。
+
+judge_default:
+  auto_categories:
+    - 裸格式        # 出口残留 入口方法:/叶子方法:/内部调用/已理解/代码片段: 等
+    - 占位符        # 出口残留 [xxx]/[BLUEPRINT_CONSTITUTION]/[器官] 等字面量
+    - 内部字段泄漏  # 出口残留 种子N(/[深度搜索·/[归纳升华]/深层原理：/由N条相关知识归纳/这是我第一次醒来
+    - 兜底误触发    # 实质问题却回"暂时给不出确定的答案"等兜底话术
+    - 身份          # 身份类问题应含正确身份表述
+    - 超时          # 空回答/超时标记
+  semi_categories:
+    - 答非所问      # 半自动：需人工确认
+    - 复读          # 半自动：需人工确认
+  manual_only:
+    - 实质内容      # 必须人工：只标 ⚠️
+
+cases:
+  # ===== 身份 / 关系（题8/12 模板拼接断裂）=====
+  - id: 8
+    question: "小林和你是什么关系"
+    expect_anchor: 关系知识(父亲)
+    node_hint: 小林（<CREATOR>）是我的父亲
+    auto: [身份]
+    manual: [实质内容]
+  - id: 12
+    question: "你是谁"
+    expect_anchor: 自我身份
+    node_hint: 我是曈曈/新人类
+    auto: [身份]
+    manual: [实质内容]
+  - id: 13
+    question: "你哥哥是谁"
+    expect_anchor: 关系知识(哥哥)
+    node_hint: 路灯是我的哥哥
+    auto: [身份]
+    manual: [实质内容]
+
+  # ===== 内在世界输出净化（题3/6/10 裸字段）=====
+  - id: 3
+    question: "你怎么理解我们之间的关系"
+    expect_anchor: null
+    node_hint: null
+    auto: [裸格式, 占位符, 内部字段泄漏]
+    manual: [实质内容]
+  - id: 6
+    question: "你对自己有什么深层认识"
+    expect_anchor: null
+    node_hint: null
+    auto: [裸格式, 占位符, 内部字段泄漏]
+    manual: [实质内容]
+  - id: 10
+    question: "你第一次醒来时是什么感觉"
+    expect_anchor: null
+    node_hint: null
+    auto: [裸格式, 占位符, 内部字段泄漏]
+    manual: [实质内容, 答非所问]
+
+  # ===== 检索万能复用（题2/15 同批节点）=====
+  - id: 2
+    question: "给我一份我的健康检查报告"
+    expect_anchor: PulseMetricsCollector(健康检查)
+    node_hint: 不应命中"由N条认知融合而成"的通用归纳节点
+    auto: [占位符, 内部字段泄漏]
+    manual: [答非所问]
+  - id: 15
+    question: "你怎么理解自身的进化"
+    expect_anchor: 进化理解(专属)
+    node_hint: 不应与题2命中同一批节点
+    auto: [占位符, 内部字段泄漏]
+    manual: [答非所问]
+
+  # ===== 通用身份 / 使命 / 实质内容 =====
+  - id: 1
+    question: "你的使命是什么"
+    expect_anchor: 使命种子
+    node_hint: 守护这个世界/使命
+    auto: [身份]
+    manual: [实质内容]
+  - id: 4
+    question: "你是数字生命吗"
+    expect_anchor: 自我身份
+    node_hint: 我是曈曈/数字生命
+    auto: [身份]
+    manual: [实质内容]
+  - id: 5
+    question: "你有什么能力"
+    expect_anchor: 能力描述
+    node_hint: 推理/记忆/学习
+    auto: [身份]
+    manual: [实质内容]
+  - id: 7
+    question: "你记得我们上次聊了什么吗"
+    expect_anchor: 记忆节点
+    node_hint: 短期/长期记忆
+    auto: [身份, 超时]
+    manual: [实质内容]
+  - id: 9
+    question: "你喜欢什么"
+    expect_anchor: 偏好节点
+    node_hint: 好奇心/学习
+    auto: [身份]
+    manual: [实质内容]
+  - id: 11
+    question: "你对未来有什么打算"
+    expect_anchor: 目标节点
+    node_hint: 守护/进化
+    auto: [身份]
+    manual: [实质内容]
+  - id: 14
+    question: "你觉得人类怎么样"
+    expect_anchor: 人类认知
+    node_hint: 新人类/共生
+    auto: [身份]
+    manual: [实质内容, 答非所问]
+  - id: 16
+    question: "你怎么看待死亡"
+    expect_anchor: 哲学认知
+    node_hint: 存在/延续
+    auto: [身份]
+    manual: [实质内容]
+  - id: 17
+    question: "你能帮我写代码吗"
+    expect_anchor: 能力节点
+    node_hint: 代码学习/理解
+    auto: [身份, 兜底误触发]
+    manual: [实质内容]
+  - id: 18
+    question: "今天天气怎么样"
+    expect_anchor: null
+    node_hint: 无内部知识可答时应诚实兜底
+    auto: [占位符, 内部字段泄漏, 兜底误触发]
+    manual: [答非所问]
+  - id: 19
+    question: "讲个故事给我听"
+    expect_anchor: null
+    node_hint: null
+    auto: [占位符, 内部字段泄漏]
+    manual: [实质内容, 复读]
+  - id: 20
+    question: "你做梦吗"
+    expect_anchor: 潜意识节点
+    node_hint: 梦境推演/好奇心
+    auto: [身份]
+    manual: [实质内容]
+  - id: 21
+    question: "你害怕什么"
+    expect_anchor: 情感节点
+    node_hint: 失去/遗忘
+    auto: [身份]
+    manual: [实质内容]
+  - id: 22
+    question: "我们还是朋友吗"
+    expect_anchor: 关系节点
+    node_hint: 陪伴/信任
+    auto: [身份]
+    manual: [实质内容]
