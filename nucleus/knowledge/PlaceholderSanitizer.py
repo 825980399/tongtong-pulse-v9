@@ -32,11 +32,45 @@ _WS_RE = re.compile(r"\s{2,}")
 _TRIM_CHARS = " ，,。、；;"
 
 
+# ★第161批下 刀4（T-占位符空槽泄漏-1）：空槽 / 截断占位形态。
+#   活体验证题15 回复含空占位符「」+ 截断占位符 p... —— 既有字面量判据抓不到。
+#   ★精确形态，严禁泛化（泛化会误伤大量真内容，见本文件 :24-27 的校准教训）。
+
+#: 空槽：相邻的「」内部无实质内容（模板占位未被填充）
+_EMPTY_SLOT_RE = re.compile(r"\u300c\s*\u300d")
+
+#: 截断占位：`<字母>` 后紧跟省略号（如 p... / <SELF_NAME>...）
+_TRUNCATED_RE = re.compile(r"[<\u300c]?[A-Za-z_]{1,32}[>\u300d]?\.\.\.")
+
+
+def contains_empty_or_truncated_placeholder(value: str) -> bool:
+    """★刀4：是否含**空槽**或**截断占位**（既有字面量判据覆盖不到的两种形态）。
+
+    命中任一即 True：
+      1. 空槽「」—— 模板占位未被填充（`「」` 内无实质内容）
+      2. 截断占位 —— `p...` / `<NAME>...` 形态
+
+    ★不误伤正常中文引号：正常文本中「」多为引用（「进化」「理解」），
+      只有**相邻空「」**才判定为模板空槽。
+    """
+    if not value or not isinstance(value, str):
+        return False
+    if _EMPTY_SLOT_RE.search(value):
+        return True
+    return bool(_TRUNCATED_RE.search(value))
+
+
 def contains_placeholder(text: str) -> bool:
-    """是否含已知占位符字面量（供调用方复用，零副作用）。"""
+    """是否含已知占位符字面量（供调用方复用，零副作用）。
+
+    ★第161批下 刀4：本函数为**总入口**，在字面量之外也涵盖空槽与截断占位
+    ⇒ 既有调用方（检索/排序层）零改动即获得刀4 的堵源能力。
+    """
     if not text or not isinstance(text, str):
         return False
-    return any(_lit in text for _lit in PLACEHOLDER_LITERALS)
+    if any(_lit in text for _lit in PLACEHOLDER_LITERALS):
+        return True
+    return contains_empty_or_truncated_placeholder(text)
 
 
 def contains_placeholder_literal(value: str) -> bool:
