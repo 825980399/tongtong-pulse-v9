@@ -1160,7 +1160,7 @@ class PulseInnerWorld(
                 "confidence_hint": "moderate",
                 "strategy_applied": ctx.payload.get("strategy_context", {}),
             }, priority=7, layer="L2")
-            return {"status": "qica_knowledge", "answer": _knowledge_result}
+            return {"status": "qica_knowledge", "answer": _final}
         return None
 
 
@@ -13464,6 +13464,17 @@ class PulseInnerWorld(
             answer = _re_s.sub(
                 r'(?:入口方法[:：]|叶子方法[:：]|内部调用|已理解)'
                 r'.*?(?=[。！？]|$)', '', answer)
+            # ★第160批 下上 刀7（T-内在世界输出净化-1）：扩展内部字段前缀/组装痕迹/碎片剥离
+            #   覆盖活体重验题3/6/10 实测裸字段（与 chat_service 出口同一清洗器，受 DIALOG_SANITIZE_LEVEL 门控）
+            answer = _re_s.sub(r'种子\d*\(.*?(?=[。！？]|$)', '', answer)  # 种子N(
+            answer = _re_s.sub(r'\[深度搜索·.*?(?=[。！？]|$)', '', answer)  # [深度搜索·
+            answer = _re_s.sub(r'\[归纳升华\].*?(?=[。！？]|$)', '', answer)  # [归纳升华]
+            answer = _re_s.sub(r'\[BLUEPRINT_CONSTITUTION\].*?(?=[。！？]|$)', '', answer)  # [BLUEPRINT_CONSTITUTION]
+            answer = _re_s.sub(r'深层原理：.*?(?=[。！？]|$)', '', answer)  # 深层原理：
+            answer = _re_s.sub(r'直接知识：.*?(?=[。！？]|$)', '', answer)  # 直接知识：
+            answer = _re_s.sub(r'由\d+条(?:相关知识归纳|认知融合而成).*?(?=[。！？]|$)', '', answer)  # 组装痕迹
+            answer = _re_s.sub(r'（由\d+条相关知识归纳）', '', answer)  # 组装痕迹（括号内）
+            answer = _re_s.sub(r'这是我第一次醒来.*?(?=[。！？]|$)', '', answer)  # 碎片
             # ★4.4 标点归一：修"规律。，值得"（句末标点后紧跟，、→。）
             answer = _re_s.sub(r'[。！？]\s*[，、]', '。', answer)
         answer = _re_s.sub(r'参数:.*?(?=[。！？]|$)', '', answer)
