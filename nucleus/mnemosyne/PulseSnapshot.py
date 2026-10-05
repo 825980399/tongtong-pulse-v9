@@ -1233,6 +1233,99 @@ class PulseSnapshot:
             silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_parquet_primary_enabled L1197")
             return True
 
+    def _m160_load_source(self) -> str:
+        """★第160批 下下 刀2（T-双源合并-1）：解析快照加载源。
+
+        返回 ∈ {"parquet","json","dual"}：
+          - 读 config.SNAPSHOT_LOAD_SOURCE；
+          - 非法值（非三选一）→ 回落 "parquet"；
+          - 键缺失 → 按 PARQUET_AS_PRIMARY_STORAGE 映射（True→parquet / False→json）。
+        """
+        try:
+            import config as _cfg160
+            _raw = getattr(_cfg160, "SNAPSHOT_LOAD_SOURCE", None)
+            if _raw not in ("parquet", "json", "dual"):
+                _legacy = bool(getattr(_cfg160, "PARQUET_AS_PRIMARY_STORAGE", True))
+                _raw = "parquet" if _legacy else "json"
+            return _raw
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m160_load_source")
+            return "parquet"
+
+    @staticmethod
+    def _m160_quality_severity(flag) -> int:
+        """R3 质量标记严重度：placeholder_alias>polluted>suspect>clean。"""
+        _SEV = {"placeholder_alias": 3, "polluted": 2, "suspect": 1, "clean": 0}
+        return _SEV.get(str(flag).strip().lower() if flag else "clean", 0)
+
+    @staticmethod
+    def _m160_node_newer(a, b) -> bool:
+        """R2 时间大者胜：比较 updated_at，相等则 created_at。"""
+        _ta = float(getattr(a, "updated_at", 0.0) or 0.0)
+        _tb = float(getattr(b, "updated_at", 0.0) or 0.0)
+        if _ta == _tb:
+            _ta2 = float(getattr(a, "created_at", 0.0) or 0.0)
+            _tb2 = float(getattr(b, "created_at", 0.0) or 0.0)
+            return _ta2 > _tb2
+        return _ta > _tb
+
+    def _m160_merge_dual(self, pq_nodes, js_nodes):
+        """★第160批 下下 刀2（T-双源合并-1）：Parquet + JSON 双源合并（A案 R1-R6 写死）。
+
+        R1 node_id 并集；R2 时间大者胜；R3 质量标记非 clean 取高；
+        R4 trust 0.0 取 0；R5 计数分歧只告警不阻断；
+        R6 全池上限不变式（合并集==并集）自检。
+        """
+        _by = {}
+        for _n in (pq_nodes or []):
+            _by[_n.node_id] = _n
+        _flag_conflict = 0
+        for _n in (js_nodes or []):
+            _jid = _n.node_id
+            if _jid not in _by:
+                _by[_jid] = _n
+                continue
+            _exist = _by[_jid]
+            # R2 时间大者胜
+            _winner = _n if self._m160_node_newer(_n, _exist) else _exist
+            # R3 质量标记例外：非 clean 取高
+            _eq = self._m160_quality_severity(getattr(_exist, "quality_flag", "clean"))
+            _nq = self._m160_quality_severity(getattr(_n, "quality_flag", "clean"))
+            if _eq != _nq:
+                _hi = _exist if _eq >= _nq else _n
+                _winner.quality_flag = _hi.quality_flag
+                if max(_eq, _nq) > 0:
+                    _flag_conflict += 1
+            # R4 trust 0.0 取 0
+            _et = float(getattr(_exist, "trust_score", 0.0) or 0.0)
+            _jt = float(getattr(_n, "trust_score", 0.0) or 0.0)
+            if _et == 0.0 or _jt == 0.0:
+                _winner.trust_score = 0.0
+            _by[_jid] = _winner
+        _merged = list(_by.values())
+        _pc, _jc = len(pq_nodes or []), len(js_nodes or [])
+        # R5 计数分歧只告警不阻断
+        if _pc != _jc:
+            self._log(LogLevel.WARNING,
+                      f"[A案dual] 双源计数分歧 parquet={_pc} json={_jc}（仅告警，不阻断）")
+        # R6 全池上限不变式：合并集 == 并集（防复活/丢失）
+        _union = (set(n.node_id for n in (pq_nodes or [])) |
+                  set(n.node_id for n in (js_nodes or [])))
+        _merged_ids = set(n.node_id for n in _merged)
+        if _merged_ids != _union:
+            self._log(LogLevel.ERROR,
+                      f"[A案dual] R6 不变式自检失败：合并 {len(_merged_ids)} vs 并集 "
+                      f"{len(_union)}，按并集兜底补回缺失节点")
+            _src = {n.node_id: n for n in (pq_nodes or [])}
+            _src.update({n.node_id: n for n in (js_nodes or [])})
+            for _id in (_union - _merged_ids):
+                _merged.append(_src[_id])
+        # INFO 日志（验收 ① 需要）
+        self._log(LogLevel.INFO,
+                  f"[A案dual] parquet={_pc} json={_jc} 合并={len(_merged)} "
+                  f"flag冲突取非clean={_flag_conflict}")
+        return _merged
+
     def _m68_json_backup_enabled(self) -> bool:
         """★T1：是否仍写 JSON 兼容备份（默认开）。
         ★安全提示：关闭后若 Parquet 写入同时失败将无 JSON 兜底，
@@ -1672,12 +1765,13 @@ class PulseSnapshot:
         #   命中则**完全不读** 479MB 的 JSON（这是主存储的核心收益）；
         #   未命中/失败 → 回退原 JSON 加载路径，零回归。
         self._m68_last_load_source = "json"
-        if self._m68_parquet_primary_enabled():
-            _pq = self._m68_load_from_parquet()
+        _src = self._m160_load_source()
+        if _src == "json":
+            _nodes = self._load_internal(full_load)
+        elif _src == "parquet":
+            _pq = self._m81_load_parquet_unified()
             if _pq:
-                # ★第80批 T2：FAIL-fast 分层保真校验。
-                #   若磁盘 Parquet 存在 L2/L3 分区（分层计数>0）但加载后内存 L2/L3==0，
-                #   说明发生塌缩（分区列未正确回填），拒绝采用 Parquet，回退 JSON 加载。
+                # ★第80批 T2：FAIL-fast 分层保真校验（同原 parquet 路径）。
                 _pq_disk_l2l3 = sum(self._m68_parquet_level_counts().get(_k, 0)
                                     for _k in ("L2", "L3"))
                 _mem_l2l3 = sum(1 for _n in _pq
@@ -1697,8 +1791,10 @@ class PulseSnapshot:
                     _nodes = self._load_internal(full_load)
             else:
                 _nodes = self._load_internal(full_load)
-        else:
-            _nodes = self._load_internal(full_load)
+        else:  # dual
+            _pq = self._m81_load_parquet_unified() or []
+            _js = self._load_internal(full_load) or []
+            _nodes = self._m160_merge_dual(_pq, _js)
         try:
             if self._m67_incremental_log_enabled():
                 _nodes = self._m67_apply_incremental_log(_nodes)
