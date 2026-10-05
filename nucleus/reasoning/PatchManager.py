@@ -597,6 +597,60 @@ class PatchManager:
                 return False
         return True
 
+    # ========== ★第161批下 刀6（T-补丁审批真值校验-1，P1）：真值校验第三关 ==========
+
+    @staticmethod
+    def _truth_check_enabled() -> bool:
+        """真值校验总开关（config.PATCH_APPROVE_TRUTH_CHECK，默认 True）。
+
+        False = 一键回退到施工前审批口径（只校字段契约与边界）。
+        读取失败按「启用」处理 —— fail-closed 偏向不放行可疑补丁。
+        """
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "PATCH_APPROVE_TRUTH_CHECK", True))
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, "PatchManager._truth_check_enabled")
+            return True
+
+    @staticmethod
+    def _is_false_success(patch: dict) -> bool:
+        """★判据与 tests/test_t100a_pending_no_false_success.py **逐字一致**（单一真相源）。
+
+        假成功 = baseline_errors==0（无错可修）却申报 verified=True，
+        且仍在待审批链路（status ∈ runtime_verified / approved / pending）。
+        """
+        if not isinstance(patch, dict):
+            return False
+        rv = patch.get("runtime_verify_result")
+        if not isinstance(rv, dict):
+            rv = {}
+        baseline = patch.get("baseline_errors") or 0
+        status = patch.get("status")
+        return (baseline == 0 and rv.get("verified") is True
+                and status in ("runtime_verified", "approved", "pending"))
+
+    @staticmethod
+    def _truth_ok(patch: dict) -> bool:
+        """纯函数·fail-closed 第三关：申报结果 vs 真值一致性校验。
+
+        未申报成功（verified 非 True）的补丁不涉及真值校验，一律放行 ——
+        本关只治「自称成功」，不拦「老实说没成功」的正常补丁。
+
+        ★磁盘真值（代码是否真的落地）由既有 disk_verified 读回机制负责
+        （SafeEvolutionExecutor），此处**不重复实现**，避免第二判据分叉。
+        """
+        if not PatchManager._truth_check_enabled():
+            return True
+        if not PatchManager._is_false_success(patch):
+            return True
+        # ★留痕：审批记录标注真值不符（任务书验收要求「审批记录标注真值不符」）
+        patch["truth_check_failed"] = True
+        patch["truth_reason"] = (
+            "baseline_errors==0 却申报 verified=True（无错可修的空转假成功）")
+        return False
+
     @staticmethod
     def _approve_via(patch: dict, source: str, signer) -> bool:
         """★第129批 唯一 approved 写入口（五口收敛器核心）。
@@ -608,6 +662,9 @@ class PatchManager:
         if not PatchManager._govern_fields_ok(patch):
             return False
         if not PatchManager._boundary_check(patch, source, signer):
+            return False
+        # ★第161批下 刀6：第三关——申报结果 vs 真值（假成功一律不升 approved）
+        if not PatchManager._truth_ok(patch):
             return False
         patch["status"] = "approved"
         patch["approved_source"] = source
