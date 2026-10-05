@@ -53,6 +53,23 @@ def load_baseline(path):
             "env_fingerprint": env, "collect_baseline": collect_baseline, "raw": d}
 
 
+#: pytest 汇总行形态：末尾形如 "27 failed, 40 passed, 4 errors in 110.08s"
+#:   或 "20 passed in 15.96s" / "no tests ran"。
+#: ★这是判定「pytest 是否真正跑完」的**唯一可靠信号**（第161批下 刀1）。
+_SUMMARY_RE = re.compile(r'\d+\s+(failed|passed|error)\b|\bno tests ran\b')
+
+
+def has_pytest_summary(text):
+    """★刀1：判断 pytest 输出是否含汇总行（= 是否真正跑完）。
+
+    截断（SystemExit / 超时 / 崩溃打断）时 pytest 来不及打汇总行，
+    此时 FAILED=0 是「根本没跑起来」的假象，绝不能当「全绿」。
+    """
+    if not text:
+        return False
+    return bool(_SUMMARY_RE.search(text))
+
+
 def parse_failed(text):
     failed = set(FAILED_RE.findall(text or ""))
     xfailed = set(XFAIL_RE.findall(text or ""))
@@ -142,7 +159,9 @@ def slice_isolation(baseline, input_path=None):
     if input_path and os.path.isfile(input_path):
         with open(input_path, "r", encoding="utf-8", errors="replace") as f:
             txt = f.read()
-        iso, _ = parse_failed(txt)
+        # ★刀1顺带修：parse_failed 返回 3 元（failed/xfailed/xpassed），原按 2 值解包
+        #   ⇒ ValueError 崩溃（160下下 6.1 实测发现，遗留至今）。
+        iso, _xf, _xp = parse_failed(txt)
         print(f"[slice2-isolation] 解析已捕获输出，隔离失败={len(iso)}", file=sys.stderr)
     else:
         files = list_test_files()
@@ -173,8 +192,25 @@ def slice_full(baseline, input_path=None):
     else:
         print(f"[slice3-full] 运行全量 pytest（节点≈{baseline.get('collect_baseline')}）…", file=sys.stderr)
         txt = run_pytest(["tests/", "-q", "--tb=line", "-rF", "-p", "no:cacheprovider"], timeout=1800)
+        # ★第161批下 刀1（T-门禁SystemExit截断假绿-1）：截断须 **FAIL 阻断**。
+        #   截断的可靠信号 = **pytest 汇总行缺失**（如 "N failed, M passed in Xs"）；
+        #   绝不以「输出含 SystemExit」判定——被测代码的 SAFE_DELETE_BULK_CONFIRM_REQUIRED
+        #   是**预期安全拦截**，此时 pytest 仍会正常打汇总行。
+        #   若仅看 SystemExit，会把「有汇总行的正常运行」误判为截断（160下下 6.1 实测
+        #   6 批全部被误判），从而把真实结果当成不可信而丢弃。
+        _truncated = not has_pytest_summary(txt)
+        if _truncated:
+            print("[slice3-full] ❌ 截断检测：pytest 汇总行缺失，结果不可信（未跑完即中断）",
+                  file=sys.stderr)
+            print("[slice3-full]    · 此时 FAILED=0 属「根本没跑起来」的假象，"
+                  "「基线转绿」统计全部作废", file=sys.stderr)
+            print("[slice3-full]    · 处方：改用 --input传入 isolation 逐文件实测结果，"
+                  "或排查触发截断的测试文件组合", file=sys.stderr)
+            print("[slice3-full] 结论：FAIL（截断，结果不可信）")
+            return 1
         if "SAFE_DELETE" in txt or "SystemExit" in txt:
-            print("[slice3-full] ⚠ 检测到 safe-delete 守卫 SystemExit 截断，全量失败集可能不完整（仅作参考）", file=sys.stderr)
+            print("[slice3-full] ℹ 检测到 safe-delete 守卫输出，但 pytest 汇总行完整"
+                  "（属预期安全拦截，非截断）", file=sys.stderr)
     failed, xfailed, xpassed = parse_failed(txt)
     new_red = failed - allowed
     turned_green = allowed - failed
