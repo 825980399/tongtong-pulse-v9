@@ -196,11 +196,14 @@ class PulseLegs(BasePulseOrgan):
         self._interest_weights: dict[str, float] = {}
 
         # 安全词表（网络内容第一道过滤）
+        # ★第161批段B B1：改为 config 优先 + 硬编码兜底（词表内容零变更）。
+        #   顺序约束见下方 :211-214 注释——默认值必须先于配置加载执行。
         self._unsafe_keywords = [
             "暴力", "色情", "赌博", "毒品", "武器制造",
             "黑客攻击", "病毒制作", "诈骗", "自杀",
             "歧视", "仇恨", "恐怖",
         ]
+        self._load_legs_config()
 
         # 知识重组兜底模板
         self._learn_templates = [
@@ -622,6 +625,19 @@ class PulseLegs(BasePulseOrgan):
             except Exception as e:
                 self._log(LogLevel.DEBUG, f"学习工作循环异常: {e}")
                 time.sleep(1)
+    def _load_legs_config(self):
+        """★第161批段B B1：从 LEGS_CONFIG 加载安全词表，失败时保留内联兜底值。"""
+        try:
+            import config as _cfg
+            _legs_cfg = getattr(_cfg, "LEGS_CONFIG", {}) or {}
+            _kw = _legs_cfg.get("unsafe_keywords")
+            if _kw:
+                self._unsafe_keywords = list(_kw)
+        except Exception as _cfg_err:
+            # 兜底：保留 __init__ 中的内联词表（零行为变更）
+            self._log(LogLevel.DEBUG,
+                      f"LEGS_CONFIG 加载失败，沿用内联安全词表: {_cfg_err}")
+
     def _load_builtin_knowledge(self):
         """从本地文件加载内置知识库，如果文件不存在则创建默认知识库"""
         import json as _json
