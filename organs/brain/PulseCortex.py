@@ -1726,16 +1726,19 @@ class PulseCortex(BasePulseOrgan):
 
     @staticmethod
     def _build_crisis_referral_text(crisis_level: str) -> str:
-        """★B3 将接管本方法：改用 nucleus/security/crisis_referral_text.py 统一文案。
+        """★第161批段B B3：危机文案统一由 nucleus/security/crisis_referral_text.py 供给。
 
-        当前为 B2 阶段的最小占位，措辞已遵守禁用项（无第一人称/无「作为一个」/
-        无「人工智能」/无「机器人」），B3 落地后由该模块统一供给。
+        本方法仅作薄封装转发，措辞红线（禁第一人称自称/禁「作为一个」/禁「人工智能」/
+        禁「机器人」）与 I7 频次上限集中由该模块强制，避免文案散落多处失控。
         """
-        return {
-            "L3": "你现在的安全最重要。如果有伤害自己的想法，请立即联系身边的人或当地紧急援助。",
-            "L2": "这个说法听起来不太对劲，我们可以换个角度聊聊。",
-            "L1": "这一点先记下了，如果你愿意可以多说说。",
-        }.get(crisis_level, "我在这里，如果需要可以随时说。")
+        try:
+            from nucleus.security.crisis_referral_text import get_crisis_text
+            return get_crisis_text(crisis_level)
+        except Exception as _e:
+            # 文案模块不可用时用最小兜底（同样遵守红线：不自称「我」、不提身份）
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, "PulseCortex._build_crisis_referral_text")
+            return "这一点先记下了。如果你愿意，可以再多说一些。"
 
     def _on_risk_alert(self, payload: dict) -> dict[str, Any]:
         """★P3-5补闭环：收到基础风险告警（≥0.3），轻度标记谨慎但无需拒绝。
