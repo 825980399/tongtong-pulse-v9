@@ -218,7 +218,7 @@ def tier_s2(args) -> int:
 
 # ------------------------------------------------------------------ S3 元数据/remote
 # ★口径必须与 S1/S2（export_public）一致，否则 S3 单独一档比全项目严 ⇒ 误报满天飞：
-#   · URL 路径里的仓库 ID（.../18737489636/...）会被当手机号
+#   · URL 路径里的仓库 ID（.../<ACCOUNT_ID>/...）会被当手机号
 #   · SSH 协议的 git@github.com 会被当邮箱
 #   · .local/.internal 等内部域邮箱应按保留域处理
 _META_PATS = [
@@ -230,7 +230,7 @@ _META_PATS = [
 #: 内部/保留域（S3 口径 = export_public.ALLOW_DOMAINS + 共享内部域块）
 _META_ALLOW_DOMAINS = _INTERNAL_ALLOW_DOMAINS
 
-#: URL 内的仓库 ID 段（/18737489636/）——数字段非手机号
+#: URL 内的仓库 ID 段（/<ACCOUNT_ID>/）——数字段非手机号
 _URL_PATH_ID = re.compile(r"/\d{6,}/")
 
 #: 整行像 commit SHA（40/64 位十六进制）时，行内数字段不是手机号
