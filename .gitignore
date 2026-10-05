@@ -172,6 +172,8 @@ docs/**/*.log
 # 3) Cython 构建辅助脚本（含本机 Python 绝对路径，由 _install_cython.bat 生成；跨环境无效）
 _install_cython.bat
 # 4) 其它 Cython 构建遗留（build/、*.c 由 .pyx 生成，已在第 2 节忽略 build/）
-*.pyx.bak
+*.pyx.bak
 
-
+# 第161批段A A6（E6）：.aionclaw-tmp/ 原先只被 .git/info/exclude 覆盖，
+# 该文件不入库 ⇒ 换机器/换人克隆会失去此规则（本地临时规则隐患）。
+.aionclaw-tmp/
