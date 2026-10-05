@@ -1081,6 +1081,8 @@ class PulseInnerWorld(
             _min_rel = float(getattr(_cfg_k89, "KNOWLEDGE_QICA_PATH_MIN_RELEVANCE", 0.05))
             # 语义命中阈值复用 160上A 刀2 的全局阈值口径，不新增第二套
             _semantic_threshold = float(getattr(_cfg_k89, "KNOWLEDGE_GLOBAL_HIT_THRESHOLD", 0.5))
+            # ★第161批下 刀4（T-占位符空槽泄漏-1）：命中节点须过占位符判据
+            _skip_ph = bool(getattr(_cfg_k89, "KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER", True))
             # 阈值 <0 是 160上A 刀2 的「关闭语义判据」语义 ⇒ 本路也不设限（完整回滚）
             if _semantic_threshold < 0:
                 _min_rel = 0.0
@@ -1088,9 +1090,31 @@ class PulseInnerWorld(
             from nucleus._silent_except import silent_exc
             silent_exc(_k89_e, where="PulseInnerWorld._ir_qica_knowledge_retrieve 开关读取")
             _gate_on, _min_rel = True, 0.05
+            _skip_ph = True
 
         def _k89_accept(_val: str, _node, _path: str, _tier: str) -> bool:
-            """路径命中节点的相关性闸门；闸门关闭时沿用旧长度判据。"""
+            """路径命中节点的相关性闸门 + 占位符闸门。
+
+            ★第161批下 刀4：在此**堵源**——占位符/空槽/截断占位节点不得进入合成链。
+              判据复用 PlaceholderSanitizer.contains_placeholder（总入口，步1 已扩展
+              涵盖「」空槽与 p... 截断），单一真相源，不另立词表。
+            """
+            if _skip_ph:
+                try:
+                    from nucleus.knowledge.PlaceholderSanitizer import (
+                        contains_placeholder,
+                    )
+                    if contains_placeholder(_val):
+                        self._log(
+                            LogLevel.INFO,
+                            f"QICA路径判据|路径={_path} 层级={_tier} "
+                            f"node_id={getattr(_node, 'node_id', '')} "
+                            f"命中占位符/空槽 ⇒ 跳过（刀4 堵源）",
+                        )
+                        return False
+                except Exception as _ph_e:
+                    from nucleus._silent_except import silent_exc
+                    silent_exc(_ph_e, where="PulseInnerWorld._k89_accept 占位符判据")
             if not _gate_on:
                 return True
             _kw = list(getattr(_node, "keywords", []) or [])
