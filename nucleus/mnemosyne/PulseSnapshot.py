@@ -1473,14 +1473,14 @@ class PulseSnapshot:
         成功返回节点列表；**失败或无数据返回 None**，由调用方回退 JSON 加载。"""
         return self._m81_load_parquet_unified()
 
-    def _m68_verify_parquet(self) -> int:
+    def _m68_verify_parquet(self, root: str | None = None) -> int:
         """★T1(第81批升级)：保存后校验 Parquet 完整性 + schema 双校验。
         返回总行数；缺列/版本过旧/分层塌缩任一失败返回 -1（调用方据此回退 JSON + ERROR）。"""
         try:
             import pyarrow.parquet as _pq68
         except Exception:
             return -1
-        _base = self._m68_parquet_dir()
+        _base = root if root is not None else self._m68_parquet_dir()
         if not os.path.isdir(_base):
             return -1
         _req = set(self._m81_parquet_required_columns())
@@ -2641,6 +2641,140 @@ class PulseSnapshot:
             _row["last_conflict_at"] = float(_d.get("last_conflict_at", 0.0) or 0.0)
             _rows.append(_row)
         return _rows
+
+    # ===== ★第160批 下下 刀4（T-重建Parquet主存储-1）：原子重刷 =====
+    def m160_rebuild_parquet_from_nodes(self, dry_run: bool = True, nodes=None,
+                                        _ts: str | None = None) -> dict:
+        """★第160批 下下 刀4（T-重建Parquet主存储-1）：从节点原子重刷 Parquet 主存储。
+
+        流程（实跑）：分片写 parquet.m160tmp-<ts>/ → _m68_verify_parquet(root=tmp) 校验
+        → 旧分区 rename 至 parquet.m160prev-<ts>/ → 逐分区 os.replace（NTFS 原子）
+        → 异常回滚 prev。默认 dry_run=True（只统计 + 自检，不写盘）。
+        写序由调用方保证：Parquet 先、JSON 后（防崩溃后读旧 Parquet 丢标记）。
+        可接受外部 nodes（独立工具路径）；缺省取 self.node_pool.get_all_including_evicted()。
+        """
+        if self.node_pool is None and nodes is None:
+            self._log(LogLevel.WARNING, "[刀4] node_pool 未注入且无外部 nodes，跳过重建")
+            return {"status": "skipped", "reason": "no_nodes"}
+        try:
+            import pyarrow.parquet as _pq4
+        except Exception as _e:
+            self._log(LogLevel.WARNING, f"[刀4] pyarrow 不可用，跳过重建: {_e}")
+            return {"status": "skipped", "reason": "no_pyarrow"}
+        _all = list(nodes) if nodes is not None else self.node_pool.get_all_including_evicted()
+        _saved = [n for n in _all if not getattr(n, "ephemeral", False)]
+        _rows = self._nodes_to_parquet_columns(_saved)
+        _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
+        for _r in _rows:
+            _lv = str(_r.get("evol_level", "L1")).upper()
+            if _lv in _lv_counts:
+                _lv_counts[_lv] += 1
+        _report = {
+            "status": "dry_run" if dry_run else "rebuilt",
+            "node_count": len(_rows),
+            "lv_counts": _lv_counts,
+        }
+        if dry_run:
+            self._log(LogLevel.INFO,
+                      f"[刀4] dry_run：拟重建 Parquet {len(_rows)} 节点 "
+                      f"(L1={_lv_counts['L1']} L2={_lv_counts['L2']} L3={_lv_counts['L3']})，不写盘")
+            return _report
+        # ---- 实跑：原子重刷 ----
+        _ts = _ts or time.strftime("%Y%m%d_%H%M%S")
+        _parent = os.path.dirname(self._m68_parquet_dir()) or "."
+        _base = self._m68_parquet_dir()
+        _tmp = os.path.join(_parent, f"parquet.m160tmp-{_ts}")
+        _prev = os.path.join(_parent, f"parquet.m160prev-{_ts}")
+        try:
+            # ① 写临时目录
+            if os.path.isdir(_tmp):
+                shutil.rmtree(_tmp, ignore_errors=True)
+            os.makedirs(_tmp, exist_ok=True)
+            _table = self._m160_build_parquet_table(_rows, _saved)
+            _pq4.write_to_dataset(
+                _table, root_path=_tmp,
+                partition_cols=["evol_level"] if PARQUET_SHARD_BY_EVOL_LEVEL else None,
+                compression=PARQUET_COMPRESSION if PARQUET_COMPRESSION else "snappy",
+            )
+            # ② 校验临时目录
+            _verified = self._m68_verify_parquet(root=_tmp)
+            if _verified < 0:
+                raise RuntimeError(
+                    f"Parquet 重建校验失败(_m68_verify_parquet={_verified})，触发回滚")
+            # ③ 旧分区 rename 至 prev（先清旧 prev）
+            if os.path.isdir(_prev):
+                shutil.rmtree(_prev, ignore_errors=True)
+            if os.path.isdir(_base):
+                os.makedirs(_parent, exist_ok=True)
+                os.replace(_base, _prev)
+            # ④ 逐分区原子 os.replace 新→正式
+            for _entry in os.listdir(_tmp):
+                _src = os.path.join(_tmp, _entry)
+                _dst = os.path.join(_base, _entry)
+                if os.path.isdir(_src):
+                    os.makedirs(_base, exist_ok=True)
+                    if os.path.exists(_dst):
+                        shutil.rmtree(_dst, ignore_errors=True)
+                    os.replace(_src, _dst)
+            self._log(LogLevel.INFO,
+                      f"[刀4] Parquet 重建完成: {len(_rows)} 节点 → {_base}"
+                      f"（prev 备份={_prev}）")
+            _report["status"] = "rebuilt"
+            _report["prev_backup"] = _prev
+            return _report
+        except Exception as _e:
+            self._log(LogLevel.ERROR,
+                      f"[刀4] Parquet 重建失败，尝试回滚: {type(_e).__name__}: {_e}")
+            try:
+                if os.path.isdir(_prev) and not os.path.isdir(_base):
+                    os.replace(_prev, _base)
+            except Exception as _re:
+                self._log(LogLevel.ERROR, f"[刀4] 回滚失败: {_re}")
+            _report["status"] = "failed"
+            _report["error"] = str(_e)
+            return _report
+        finally:
+            if os.path.isdir(_tmp):
+                shutil.rmtree(_tmp, ignore_errors=True)
+
+    def _m160_build_parquet_table(self, rows, saved_nodes):
+        """★刀4：构建带 schema 元数据的 Parquet table（同源复用 _save_parquet_locked 逻辑）。"""
+        try:
+            _table = table_from_rows(rows)
+        except Exception as _schema_e:
+            self._log(LogLevel.WARNING,
+                      f"[刀4] Parquet schema 推断失败，复杂列退化为JSON字符串列重试: {_schema_e}")
+            _bad_cols = ("semantic_relations", "verification_history")
+            for _r in rows:
+                for _c in _bad_cols:
+                    _v = _r.get(_c)
+                    if not isinstance(_v, str):
+                        _r[_c] = json.dumps(_v if isinstance(_v, list) else [_v],
+                                            ensure_ascii=False, default=str)
+            _table = table_from_rows(rows)
+        _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
+        for _r in rows:
+            _lv = str(_r.get("evol_level", "L1")).upper()
+            if _lv in _lv_counts:
+                _lv_counts[_lv] += 1
+        try:
+            _checksum = self._compute_node_list_checksum(saved_nodes)
+        except Exception as _ce:
+            self._log(LogLevel.WARNING, f"[刀4] 节点列表校验和计算失败(忽略): {_ce}")
+            _checksum = ""
+        try:
+            _table = _table.replace_schema_metadata({
+                b"m81_schema_version": self._m81_parquet_expected_schema_version().encode("utf-8"),
+                b"node_count": str(len(rows)).encode("utf-8"),
+                b"l1_count": str(_lv_counts["L1"]).encode("utf-8"),
+                b"l2_count": str(_lv_counts["L2"]).encode("utf-8"),
+                b"l3_count": str(_lv_counts["L3"]).encode("utf-8"),
+                b"node_list_checksum": str(_checksum).encode("utf-8"),
+                b"write_time": time.strftime("%Y-%m-%dT%H:%M:%S").encode("utf-8"),
+            })
+        except Exception as _md_e:
+            self._log(LogLevel.WARNING, f"[刀4] Parquet schema 元数据写入失败(忽略): {_md_e}")
+        return _table
 
     @staticmethod
     def _decode_parquet_value(raw: Any) -> str:
