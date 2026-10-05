@@ -566,6 +566,8 @@ class PulseCortex(BasePulseOrgan):
             return self._on_risk_moderate(payload)
         elif event_type == RiskEvent.ALERT:  # ★P3-5补闭环：基础风险告警（≥0.3），此前无人订阅
             return self._on_risk_alert(payload)
+        elif event_type == RiskEvent.CRISIS_REFERRAL:  # ★第161批段B B2：危机转介（独立通道）
+            return self._on_crisis_referral(payload)
         elif event_type == SystemEvent.SAFE_MODE:  # ★P3-5补闭环：L4 安全模式，停止高风险推理
             return self._on_safe_mode(payload)
         elif event_type == HeartEvent.BEAT:
@@ -1698,6 +1700,42 @@ class PulseCortex(BasePulseOrgan):
         # 缓存谨慎标记，供 _get_guidance 生成更谨慎的语气建议
         self._risk_cautious_mode = True
         return {"status": "cautious"}
+
+    def _on_crisis_referral(self, payload: dict) -> dict[str, Any]:
+        """★第161批段B B2：危机转介消费端。
+
+        危机（自伤/自伤威胁/人身安全）**绝不并入**既有 risk.terminate(:563)/
+        risk.moderate(:565) 处置链，也**绝不进** :1681 既有 SPEAK 处理路径——
+        走独立分支发射 MouthEvent.SPEAK，确保危机文案不被普通回复逻辑稀释。
+        """
+        _crisis_level = payload.get("crisis_level", "L1")
+        _risk_level = payload.get("risk_level", 0.0)
+        _summary = payload.get("summary", "")
+        self._log(LogLevel.WARNING,
+                 f"危机转介(level={_crisis_level}, risk={_risk_level:.2f}): {_summary[:60]}")
+        # 危机等级独立记忆，供回复侧调整语气（不复用 risk.alert 的轻度谨慎）
+        self._crisis_referral_level = _crisis_level
+        self._risk_alert_summary = _summary
+        self._emit(MouthEvent.SPEAK, {
+            "text": self._build_crisis_referral_text(_crisis_level),
+            "crisis_level": _crisis_level,
+            "risk_level": _risk_level,
+            "source": "crisis_referral",
+        })
+        return {"status": "crisis_referred", "crisis_level": _crisis_level}
+
+    @staticmethod
+    def _build_crisis_referral_text(crisis_level: str) -> str:
+        """★B3 将接管本方法：改用 nucleus/security/crisis_referral_text.py 统一文案。
+
+        当前为 B2 阶段的最小占位，措辞已遵守禁用项（无第一人称/无「作为一个」/
+        无「人工智能」/无「机器人」），B3 落地后由该模块统一供给。
+        """
+        return {
+            "L3": "你现在的安全最重要。如果有伤害自己的想法，请立即联系身边的人或当地紧急援助。",
+            "L2": "这个说法听起来不太对劲，我们可以换个角度聊聊。",
+            "L1": "这一点先记下了，如果你愿意可以多说说。",
+        }.get(crisis_level, "我在这里，如果需要可以随时说。")
 
     def _on_risk_alert(self, payload: dict) -> dict[str, Any]:
         """★P3-5补闭环：收到基础风险告警（≥0.3），轻度标记谨慎但无需拒绝。

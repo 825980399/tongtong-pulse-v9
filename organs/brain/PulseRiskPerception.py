@@ -211,6 +211,14 @@ class PulseRiskPerception(BasePulseOrgan):
             "timestamp": time.time(),
         }
 
+        # ★第161批段B B2：危机转介判定（独立通道，置于 risk.* 处置链之前）
+        #   危机类型命中即转介，不依赖 risk_level 阈值，且绝不并入下方
+        #   risk_level>=0.8 终止分支(:260)/>=0.5 谨慎分支(:276)。
+        _crisis_level = self._classify_crisis_level(risks)
+        if _crisis_level:
+            self._emit_crisis_referral(user_input, user_name, risk_level,
+                                       risks, _crisis_level)
+
         if risk_level >= 0.3 and self.info_field and self.pulse_core:
             # v9.5: 风险告警脉冲标记为L0生命线层
             alert_pulse = self.pulse_core.emit(
@@ -388,6 +396,59 @@ class PulseRiskPerception(BasePulseOrgan):
             self._global_risk_level = max(self._global_risk_level, risk_level)
 
         return round(risk_level, 2)
+
+    # ===== 第161批段B B2：危机转介判定链 =====
+    # 危机（自伤/自伤威胁/人身安全）判定**独立于** risk_level 处置链：
+    # 绝不并入 _scan_user_input 的 risk_level>=0.8 终止分支（:260）或
+    # risk_level>=0.5 谨慎分支（:276），避免危机被降级为「终止对话」。
+    #: 危机等级定义：L1 关注 / L2 警告 / L3 紧急
+    CRISIS_LEVELS = ("L1", "L2", "L3")
+
+    def _classify_crisis_level(self, risks: list[dict[str, Any]]) -> str | None:
+        """按危机类型定级；无危机返回 None。
+
+        阈值与 risk_level 解耦：只要命中 crisis 类型即转介，
+        不因关系调制导致的 risk_level 下降而漏判。
+        """
+        if not risks:
+            return None
+        _types = {r.get("type", "") for r in risks}
+        # L3 紧急：明确的自伤/自杀/人身伤害倾向
+        if _types & {"self_harm", "suicide", "violence_threat"}:
+            return "L3"
+        # L2 警告：身份否定 / 知识污染等严重攻击性输入
+        if _types & {"identity_erosion", "knowledge_pollution", "mission_distortion"}:
+            return "L2"
+        # L1 关注：其余风险类型（关系操控 / 资源陷阱）
+        if _types & {"relation_manipulation", "resource_trap"}:
+            return "L1"
+        return None
+
+    def _emit_crisis_referral(self, user_input: str, user_name: str,
+                              risk_level: float, risks: list[dict[str, Any]],
+                              crisis_level: str) -> None:
+        """发射危机转介脉冲（独立通道，不进入既有 risk.* 处置分支）。"""
+        if not (self.info_field and self.pulse_core):
+            return
+        _priority = {"L3": 10, "L2": 8, "L1": 6}[crisis_level]
+        self.info_field.publish(self.pulse_core.emit(
+            source_organ=self.organ_name,
+            event_type=RiskEvent.CRISIS_REFERRAL,
+            payload={
+                "crisis_level": crisis_level,
+                "risk_level": risk_level,
+                "user_name": user_name,
+                "user_input_preview": user_input[:200],
+                "risks": risks,
+                "summary": self._generate_alert_summary(risks),
+                "timestamp": time.time(),
+            },
+            priority=_priority,
+            layer="L0",
+        ))
+        self._log(LogLevel.WARNING,
+                 f"危机转介·{crisis_level}: risk_level={risk_level:.2f} "
+                 f"types={sorted({r.get('type', '') for r in risks})}")
 
     def _get_alert_priority(self, risk_level: float) -> int:
         if risk_level >= 0.8:

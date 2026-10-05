@@ -402,6 +402,8 @@ class EyeEvent:
 class RiskEvent:
     """风险感知相关事件"""
     ALERT = "risk.alert"
+    # ★第161批段B B2：危机转介事件（独立于 risk.alert / risk.terminate 处置链）
+    CRISIS_REFERRAL = "risk.crisis_referral"
 class MediaEvent:
     """媒体文件相关事件"""
     METADATA = "media.metadata"
