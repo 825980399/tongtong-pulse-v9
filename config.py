@@ -2060,6 +2060,24 @@ IDENTITY_SEED_CHECK_PREFIX = "/身份"
 #   False（默认）：无具体前缀命中即返回空集，交全库共振/肺渠道，不再宽兜底定死候选集。
 #   True （仅应急回滚）：恢复旧宽兜底 ['/知识','/综合','/自我理解']。
 KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD = False
+
+# ========== 第161批 刀8/刀9 灰度开关 ==========
+# ★刀8（T-内在世界检索万能复用-1）根因：inner_world 的 QICA 路径检索分支
+#   （PulseInnerWorld._ir_qica_knowledge_retrieve :1075-1098）是**纯目录浏览**——
+#   只判 len(_val)>30 且非内部节点，不做语义相关性判据 ⇒ 题2/题15 的 QICA 路径
+#   相同时返回同一批节点。160上A 刀2 的判据只接在 pulse_inner_world_knowledge.py:186
+#   （_knowledge_retrieve 全局共振路径），未覆盖本分支。
+#   True （默认）：路径命中节点须过相关性判据才可用；False：回滚旧行为（纯目录浏览）。
+KNOWLEDGE_QICA_PATH_RELEVANCE_GATE = True
+# 刀8 附：路径目录浏览这一路的最低相关度下限（0=不额外设限，沿用旧长度判据）。
+#   ★语义命中阈值仍复用 KNOWLEDGE_GLOBAL_HIT_THRESHOLD（单一真相源，不新增第二套口径）。
+KNOWLEDGE_QICA_PATH_MIN_RELEVANCE = 0.05
+
+# ★刀9（T-对话模板拼接断裂-1）根因：IdentityKnowledgeManager.describe()
+#   直接 f-string 插值 _r.get('relation')，未校验是否为有效关系词 ⇒
+#   relation 缺失/脏值时输出「小林（任桂林）是我的您」类断裂句。
+#   True （默认）：缺失/非法时兜底为完整句（如「家人」）；False：回滚旧行为。
+IDENTITY_RELATION_FALLBACK_COMPLETE = True
 # 新输入与未完成旧任务冲突时的策略：
 #   "queue" （默认）：旧任务继续，新问题排队，待旧任务输出后自动派发，
 #                     并先给用户「正在处理上一个问题，请稍候」提示。
