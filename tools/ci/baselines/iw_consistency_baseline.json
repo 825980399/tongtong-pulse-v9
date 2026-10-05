@@ -35,12 +35,12 @@
    "event_hist": {}
   }
  },
- "delta_reason": "第161批 刀8（T-内在世界检索万能复用-1）：PulseInnerWorld._ir_qica_knowledge_retrieve 的 QICA 路径检索接入语义相关性闸门——新增 _k89_accept 闭包（try/except 各 1、if 5：闸门开关 + 最低相关度 + L3/L2 四处 continue 判定、return 3、methods 1（嵌套闭包计入））。原目录浏览逻辑（长度判据 + 内部节点过滤）保留不变，仅在其后追加相关性判定。diff = +54/-8 行，已逐行核实无夹带他人改动。",
+ "delta_reason": "第161批 刀8 + 第161批下 刀4：PulseInnerWorld 语义守恒受控增量（累计）。\n① 刀8（T-内在世界检索万能复用-1）：_ir_qica_knowledge_retrieve 的 QICA 路径检索\n   接入语义相关性闸门——新增 _k89_accept 闭包。\n② 刀4 步2（T-占位符空槽泄漏-1）：同一闭包内再加**占位符闸门**——\n   命中节点须过 contains_placeholder（含空槽「」与截断 p...），阻断其进入合成链；\n   另加 KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER 开关读取（try/except 各一）。\n原目录浏览逻辑（长度判据 + 内部节点过滤）与语义闸门均保留不变。\ndiff 已逐行核实无夹带他人改动。",
  "expected_delta": {
-  "try": 1,
-  "except": 1,
-  "if": 5,
-  "return": 3,
+  "try": 2,
+  "except": 2,
+  "if": 7,
+  "return": 4,
   "methods": 1
  }
 }
