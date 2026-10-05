@@ -2968,6 +2968,14 @@ ENABLE_CRISIS_REFERRAL = True
 # ★第161批段B B4：E7a 首次启动声明总开关。False = 永不播报首启声明（一键回滚）。
 ENABLE_FIRST_RUN_DECLARATION = True
 
+# ========== 补丁审批真值校验开关 ==========
+# ★第161批下 刀6（T-补丁审批真值校验-1，P1）：补丁审批环节校验
+#   「申报的应用结果」与「真值」是否一致 —— baseline_errors==0（无错可修）
+#   却申报 verified=True 的补丁属**空转假成功**，一律拦下并标注真值不符，
+#   不再静默通过（t100a 数据侧带红 24 条即此因）。
+# False = 一键回退到施工前审批口径（只校字段契约与边界，不校真值）。
+PATCH_APPROVE_TRUTH_CHECK = True
+
 # ========== 对外发布渲染开关 ==========
 # ★第161批段A A3b：对外文本占位符渲染总开关。False = 完全跳过渲染（可撤回）。
 ENABLE_PUBLIC_RENDER = True
