@@ -96,9 +96,39 @@ def _iter_publish_blocks(path):
 
 
 def _first_str_arg(block):
-    """取 tap_publish 的第一个字符串实参（事件名）。"""
+    """取 tap_publish 的第一个实参作为事件名。
+
+    ★第161批下 刀2：原实现只认**字符串字面量**，而真实代码用常量
+    `Event.CORTEX_DIALOG_START` ⇒ 返回 None ⇒ assertIsNotNone 失败（判据缺陷，
+    非装配缺陷）。现支持两种形式，且常量形式**解析为真实值**
+    （不返回 "Event.X" 字面串，否则会违反小写点分格式 ⇒ 换一种红法）。
+    """
+    # ① 字符串字面量
     _m = re.search(r"tap_publish\(\s*\n?\s*[\"']([^\"']+)[\"']", block)
-    return _m.group(1) if _m else None
+    if _m:
+        return _m.group(1)
+    # ② 常量引用：Event.NAME / <其他类>.NAME ——解析为真实值
+    _m2 = re.search(r"tap_publish\(\s*\n?\s*([A-Za-z_][\w]*)\.([A-Z_][A-Z0-9_]*)", block)
+    if _m2:
+        return _resolve_const(_m2.group(1), _m2.group(2))
+    return None
+
+
+def _resolve_const(cls_name, attr):
+    """把 `Event.NAME` 解析为真实字符串值（用于事件名格式校验）。"""
+    try:
+        import importlib
+        _mod = importlib.import_module("nucleus.const")
+        _cls = getattr(_mod, cls_name, None)
+        if _cls is None:
+            return None
+        _v = getattr(_cls, attr, None)
+        return _v if isinstance(_v, str) else None
+    except Exception as _rc_e:
+        # 解析不了就交回 None（由调用方 assertIsNotNone 给出明确失败）
+        from nucleus._silent_except import silent_exc
+        silent_exc(_rc_e, where="test_event_tap_m17._resolve_const")
+        return None
 
 
 # ======================================================================
@@ -383,7 +413,10 @@ class TestOrganWiring(unittest.TestCase):
                            "switch_attr": switch_attr, "priority": priority})
             return True
 
-        _ns = {"tap_publish": _capture, "time": time}
+        # ★刀2：原 _ns 缺 Event ⇒ exec 真实代码块时 NameError: name 'Event' is not defined。
+        #   注入真实 Event（从 nucleus.const 导入，保持单一真相源，不硬编码字符串）。
+        from nucleus.const import Event as _Ev  # noqa: PLC0415 - 用例内惰性导入
+        _ns = {"tap_publish": _capture, "time": time, "Event": _Ev}
         _ns.update(ns_extra)
         for _b in _iter_publish_blocks(path):
             exec(compile(textwrap.dedent(_b), "<tap-block>", "exec"), _ns)
