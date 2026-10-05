@@ -27,9 +27,12 @@ import os
 import sys
 import time
 import logging
-from nucleus._silent_except import silent_exc
 
+# ★第161批下 刀7：仓库根入 sys.path **必须**先于任何本地包 import ——
+#   subprocess 直起本脚本时 sys.path[0] 是 tools/，否则 nucleus 不可见
+#   （原顺序颠倒 ⇒ CLI 测试 4 项 ModuleNotFoundError）。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from nucleus._silent_except import silent_exc
 
 _LOGGER = logging.getLogger("import_nodes_to_neo4j")
 if not _LOGGER.handlers:

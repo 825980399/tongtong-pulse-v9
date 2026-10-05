@@ -22,12 +22,13 @@ import json
 import os
 import sys
 import time
-from nucleus._silent_except import silent_exc
 
+# ★第161批下 刀7：同上——仓库根入 sys.path 必须先于本地包 import。
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+from nucleus._silent_except import silent_exc
 
 
 def _pct(values, p):
