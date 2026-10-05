@@ -396,6 +396,23 @@ class PulseNodePool(SilentLogMixin):
                 "[T4留痕] 知识写入前质量检查异常已忽略: %s: %s",
                 type(_e).__name__, _e)
 
+
+        # ★第160批 下下 刀1（T-污染封堵-1）：知识写入前占位符字面量拦截。
+        #   复用 PlaceholderSanitizer.contains_placeholder_literal（唯一口径，
+        #   见 160上A 刀1 运行时判据），命中即视为污染 → 跳过本次写入（不进池），
+        #   打 DEBUG 留痕，可回滚。受 KNOWLEDGE_FUSION_SKIP_PLACEHOLDER 门控
+        #   （与「融合层占位符封堵」同一开关；False 即退回零拦截）。
+        import config as _cfg
+        if getattr(_cfg, "KNOWLEDGE_FUSION_SKIP_PLACEHOLDER", False):
+            from nucleus.knowledge.PlaceholderSanitizer import (
+                contains_placeholder_literal as _is_ph_literal,
+            )
+            _ph_val = getattr(node, "value", None)
+            if _ph_val and _is_ph_literal(_ph_val):
+                _module_logger.debug(
+                    "[刀1拦截] 含占位符字面量节点跳过写入: node_id=%s",
+                    getattr(node, "node_id", "?"))
+                return node.node_id
         with self._lock:
             node_id = node.node_id
             # ★知识污染治理：钳制信任分到 [0, 100]，堵住快照恢复/越界写入的异常信任分
