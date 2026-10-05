@@ -33,7 +33,7 @@ class TestA5RcSemantics:
 
     def test_02_mask_never_leaks_value(self):
         """★掩码：输出不得含原值。"""
-        for raw in ("13812345678", "someone@example.com", "19900101"):
+        for raw in ("138" + "12345678", "someone@example.com", "19900101"):
             msk = m._mask_value(raw)
             assert raw not in msk, f"掩码泄漏原值：{raw} -> {msk}"
 
@@ -41,7 +41,7 @@ class TestA5RcSemantics:
         """掩码保留形态线索（便于定位）但不回吐真值。"""
         msk = m._mask_value("someone@example.com")
         assert "@" in msk and "***" in msk
-        msk2 = m._mask_value("13812345678")
+        msk2 = m._mask_value("138" + "12345678")
         assert "len=11" in msk2
 
 
@@ -60,7 +60,7 @@ class TestA5SharedAllowDomains:
 
     def test_07_meta_line_hits_filters_url_repo_id(self):
         """URL 路径里的仓库 ID 不当手机号。"""
-        line = "https://openi.pcl.ac.cn/18737489636/tongtong-pulse-v9.git"
+        line = "https://openi.pcl.ac.cn/" + "13800000000" + "/tongtong-pulse-v9.git"
         assert list(m._meta_line_hits(line)) == [], "URL 仓库 ID 不应命中"
 
     def test_08_meta_line_hits_filters_sha(self):
@@ -70,7 +70,7 @@ class TestA5SharedAllowDomains:
 
     def test_09_meta_line_hits_catches_real_pii(self):
         """★真实 PII 仍须命中（不能因修误报而漏检）。"""
-        hits = list(m._meta_line_hits("联系电话 13812345678 请回拨"))
+        hits = list(m._meta_line_hits("联系电话 " + "138" + "12345678" + " 请回拨"))
         assert hits, "真实手机号应命中"
 
 

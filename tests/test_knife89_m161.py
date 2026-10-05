@@ -23,7 +23,7 @@ ROOT = os.path.dirname(_HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-REPO = "D:/xinrenlei/tongtong-pulse-v9"
+REPO = ROOT
 
 
 def _load(name, relpath):
@@ -175,7 +175,7 @@ class TestKnife9RelationFallback:
         mgr._lock = __import__("threading").RLock()
         mgr._people = {
             "小林": {
-                "aliases": ["任桂林"],
+                "aliases": ["小贵"],
                 "relations": [{"relation": "您", "target": "自己", "confidence": 0.9}],
                 "updated": 0.0,
             }
@@ -255,7 +255,7 @@ class TestKnife9RelationFallback:
             mgr._lock = threading.RLock()
             mgr._people = {
                 "小林": {
-                    "aliases": ["任桂林"],
+                    "aliases": ["小贵"],
                     "relations": [{"relation": rel, "target": "自己", "confidence": 0.9}],
                     "updated": 0.0,
                 }

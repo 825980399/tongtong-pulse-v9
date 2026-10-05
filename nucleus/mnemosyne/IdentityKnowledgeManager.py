@@ -469,7 +469,7 @@ class IdentityKnowledgeManager:
             _rel = _r.get("relation")
             # ★第161批 刀9（T-对话模板拼接断裂-1）：relation 缺失/非法时兜底为完整句。
             #   根因：原实现直接插值 _r.get('relation')，脏值/缺失时输出
-            #   「小林（任桂林）是我的您」这类断裂句（9.2 禁输出）。
+            #   「小林是我的您」这类断裂句（9.2 禁输出）。
             #   有效性判据**复用本模块已有的 RELATION_WORDS**（唯一真相源，不另立词表）。
             try:
                 import config as _cfg_k9

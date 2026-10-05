@@ -2075,7 +2075,7 @@ KNOWLEDGE_QICA_PATH_MIN_RELEVANCE = 0.05
 
 # ★刀9（T-对话模板拼接断裂-1）根因：IdentityKnowledgeManager.describe()
 #   直接 f-string 插值 _r.get('relation')，未校验是否为有效关系词 ⇒
-#   relation 缺失/脏值时输出「小林（任桂林）是我的您」类断裂句。
+#   relation 缺失/脏值时输出「小林是我的您」类断裂句。
 #   True （默认）：缺失/非法时兜底为完整句（如「家人」）；False：回滚旧行为。
 IDENTITY_RELATION_FALLBACK_COMPLETE = True
 # 新输入与未完成旧任务冲突时的策略：
