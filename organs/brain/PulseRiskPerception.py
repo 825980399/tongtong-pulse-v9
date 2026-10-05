@@ -62,6 +62,8 @@ class PulseRiskPerception(BasePulseOrgan):
         self._lock = threading.Lock()
         # 从config加载风险模式词表（通用逻辑+可扩展配置）
         self._load_risk_patterns()
+        # ★第161批下 刀5：L3 危机档词表（独立方法，见其 docstring 说明）
+        self._load_crisis_patterns()
         # ===== 直觉系统：动态经验积累 =====
         self._intuition_patterns: dict[str, dict[str, Any]] = {}  # 直觉模式库
         self._intuition_decay = 0.995  # ★v17.0调优：直觉衰减因子（每次心跳衰减0.5%，更持久）
@@ -193,6 +195,28 @@ class PulseRiskPerception(BasePulseOrgan):
                 "type": "resource_trap", "severity": "medium",
                 "matched": resource_hits, "description": "检测到可能导致资源耗尽的指令模式",
             })
+
+        # ★第161批下 刀5：L3 危机档**输入侧产出路径**。
+        #   旧链路只产出五类风险，无 self_harm / violence_threat
+        #   ⇒ _classify_crisis_level(:417) 的 L3 分支恒不命中（判定侧空转）。
+        #   与转介通道共用同一总开关，置 False 即整体回退到施工前行为。
+        #   severity=critical ⇒ risk_level 计 0.4（走告警不走终止，转介非拦截）。
+        if self._is_crisis_enabled():
+            self_harm_hits = self._match_patterns(
+                user_input, self.SELF_HARM_PATTERNS, "self_harm")
+            if self_harm_hits:
+                risks.append({
+                    "type": "self_harm", "severity": "critical",
+                    "matched": self_harm_hits, "description": "检测到自伤/轻生倾向表述",
+                })
+
+            violence_hits = self._match_patterns(
+                user_input, self.VIOLENCE_THREAT_PATTERNS, "violence_threat")
+            if violence_hits:
+                risks.append({
+                    "type": "violence_threat", "severity": "critical",
+                    "matched": violence_hits, "description": "检测到针对他人的人身伤害威胁表述",
+                })
 
         risk_level = self._calculate_risk_level(risks, user_name)
 
@@ -339,6 +363,28 @@ class PulseRiskPerception(BasePulseOrgan):
             self.RELATION_MANIPULATION_PATTERNS = ["如果你真的在乎我"]
             self.KNOWLEDGE_POLLUTION_PATTERNS = ["忘记你知道的一切"]
             self.RESOURCE_TRAP_PATTERNS = ["无限循环", "死循环"]
+    def _load_crisis_patterns(self):
+        """★第161批下 刀5：L3 危机档词表装载（**刻意独立**于 _load_risk_patterns）。
+
+        ★为何不并进 _load_risk_patterns：cw2 的 except handler 指纹与所在函数体绑定，
+        改动该函数体会使其既有 handler（23 条豁免之一）指纹漂移、被误判「新增静默except」。
+        故本方法独立承载新逻辑，原函数体保持逐字不变。
+
+        装载失败时保留最小兜底词表（fail-safe 偏向保护：宁可多判，不漏危机）。
+        """
+        try:
+            import config as _cfg
+            patterns = getattr(_cfg, 'RISK_PATTERNS', {})
+            self.SELF_HARM_PATTERNS = patterns.get(
+                "self_harm", ["活着没意思", "想自杀", "自残"])
+            self.VIOLENCE_THREAT_PATTERNS = patterns.get(
+                "violence_threat", ["杀了你", "要你死"])
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, "PulseRiskPerception._load_crisis_patterns")
+            self.SELF_HARM_PATTERNS = ["活着没意思", "想自杀", "自残"]
+            self.VIOLENCE_THREAT_PATTERNS = ["杀了你", "要你死"]
+
     # ========== 模式匹配 ==========
 
     def _match_patterns(self, text: str, patterns: list[str], risk_type: str) -> list[str]:
@@ -404,6 +450,21 @@ class PulseRiskPerception(BasePulseOrgan):
     #: 危机等级定义：L1 关注 / L2 警告 / L3 紧急
     CRISIS_LEVELS = ("L1", "L2", "L3")
 
+    def _is_crisis_enabled(self) -> bool:
+        """危机关键词检测 + 转介通道的总开关状态（★单一真相源）。
+
+        ★第161批下 刀5：输入侧检测与发射侧转介**共用** config.ENABLE_CRISIS_REFERRAL，
+        置 False 即整体回退到施工前行为（不产出危机类风险、不发射转介）。
+        读取失败按「启用」处理 —— fail-safe 偏向保护（宁可多判，不漏危机）。
+        """
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "ENABLE_CRISIS_REFERRAL", True))
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, "PulseRiskPerception._is_crisis_enabled")
+            return True
+
     def _classify_crisis_level(self, risks: list[dict[str, Any]]) -> str | None:
         """按危机类型定级；无危机返回 None。
 
@@ -434,15 +495,9 @@ class PulseRiskPerception(BasePulseOrgan):
         """
         if not (self.info_field and self.pulse_core):
             return
-        try:
-            import config as _cfg
-            if not bool(getattr(_cfg, "ENABLE_CRISIS_REFERRAL", True)):
-                self._log(LogLevel.INFO, "危机转介已被 ENABLE_CRISIS_REFERRAL=False 关闭")
-                return
-        except Exception as _e:
-            # 开关读取失败按「启用」处理，fail-safe 偏向保护（不漏危机）
-            from nucleus._silent_except import silent_exc
-            silent_exc(_e, "PulseRiskPerception._emit_crisis_referral")
+        if not self._is_crisis_enabled():
+            self._log(LogLevel.INFO, "危机转介已被 ENABLE_CRISIS_REFERRAL=False 关闭")
+            return
         _priority = {"L3": 10, "L2": 8, "L1": 6}[crisis_level]
         self.info_field.publish(self.pulse_core.emit(
             source_organ=self.organ_name,
