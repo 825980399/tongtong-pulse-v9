@@ -1,8 +1,8 @@
 {
   "generated_at_head": "e6a435598189b763d8735a009fcfe1461a501695",
-  "generated_at": "2026-10-05T11:02",
+  "generated_at": "2026-10-06T12:14",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons",
-  "collect_baseline": 4770,
+  "collect_baseline": 4777,
   "known_fail": [
     "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
     "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
@@ -249,6 +249,7 @@
     },
     "pollution_set_note": "pollution_set 5 项实测亦已全绿（tmp/c1_pollution_verdict.json），★但按裁定 pollution 不在「剔 known_fail」范围，故保留不动。",
     "reanchor_161lower_k8": "第161批下 刀8（2026-10-05）：known_fail 14 → 10。权威数据 = 全量跑出候选 149 红 / 36 文件 → **逐文件隔离单跑复核**（清 PYTHONPATH/PYTHONHOME/PYTHONSTARTUP、PYTHONNOUSERSITE=1）：28 文件转绿（全量假红，因相互干扰/收尾钩子）、8 文件仍红共 10 条。回收 10 项（刀2 event_tap×2、刀3 evolution_worker、刀6 t100a、刀7 dualwrite CLI×4 + patch_dedup + patch_verification_split）；新增登记 4 条实测真红（export_public_m143 / pc_exclude_m38×3→计3条 / pc_exempt_m39 / reprobe_diff_scope_m55）。collect_baseline = 4750（实测，非历史值）。pollution_set=5 不动（星轨裁定）。",
-    "reanchor_162k3": "第162批刀3（2026-10-06）：collect_baseline 4759 → 4770。新增 6 例门控单测 tests/test_knife3_cold_index_m162.py（S1 重建失败 WARNING+stale / S2 写失败stale·成功复位 / S3 落后N天告警 / 接线节流早返回修复回归 / 真实驱逐→重建闭环），均非回归；另含独立 config 提交 COLD_INDEX_STALE_WARN_DAYS=3。collect-only 实测=4770。"
+    "reanchor_162k3": "第162批刀3（2026-10-06）：collect_baseline 4759 → 4770。新增 6 例门控单测 tests/test_knife3_cold_index_m162.py（S1 重建失败 WARNING+stale / S2 写失败stale·成功复位 / S3 落后N天告警 / 接线节流早返回修复回归 / 真实驱逐→重建闭环），均非回归；另含独立 config 提交 COLD_INDEX_STALE_WARN_DAYS=3。collect-only å®æµ=4770ã。",
+    "reanchor_162k7": "第162批刀7（2026-10-06）：collect_baseline 4770 → 4777。新增 7 例门控单测 tests/test_knife7_night_orch_m162.py（request/has/consume/clear + is_framework_running 三态 True/False/None + cmdline 判据），均非回归；另含 config 提交 NIGHT_ORCH_* 参数段与 main.py 主循环接线（每拍检测 data/shutdown_request.json）。"
   }
 }
