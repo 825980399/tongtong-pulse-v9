@@ -5339,3 +5339,10 @@ def _apply_placeholder_render():
 #     organs/identity/PulseSelfAwareness.py:2486
 #   ），源码与 config 模块状态保持占位符原样。
 # [M145-PLACEHOLDER-RENDER] [M146-NO-IMPORT-RENDER]
+
+# ── ★162批刀1·A1/N1：内存负载阈值配置化（默认=原硬编码 95/85/65，零回归；改此处即改分级边界）──
+MEMORY_LOAD_CRITICAL_PCT = 95.0    # 内存占用超此值 → critical（原 InfoField._get_load_level 硬编码 95）
+MEMORY_LOAD_HEAVY_PCT = 85.0       # 内存占用超此值 → heavy（原硬编码 85）
+MEMORY_LOAD_MODERATE_PCT = 65.0    # 内存占用超此值 → moderate（原硬编码 65）
+# ★162批刀1·A1链A：硬件探针失败可观测标记开关（False=回退为不打告警，仅置 load_probe_ok）
+ENABLE_INFOFIELD_LOAD_PROBE_MARKER = True
