@@ -14,3 +14,8 @@ ruff==0.16.5             # 快速 lint（本仓库 F 级门禁 / pre-commit）
 
 # ---- 测试 ----
 pytest==9.1.1            # 单元测试运行器（本仓库 pytest 全量门禁）
+
+# ---- 回归工具（第162批 刀4 补声明）----
+# yaml **仅**被 tools/regression/dialog_regression.py（对话回归工具）使用，
+# 生产代码（organs/nucleus/base/main.py/config.py）零 import ⇒ 归开发侧，不入运行期依赖。
+PyYAML>=6.0.1,<7.0.0            # YAML 解析（tools/regression/dialog_regression.py）

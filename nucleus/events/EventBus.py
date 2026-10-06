@@ -36,9 +36,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any
-
-from typing_extensions import Self
+from typing import Any, Self
 
 from nucleus.logger import get_module_logger
 
