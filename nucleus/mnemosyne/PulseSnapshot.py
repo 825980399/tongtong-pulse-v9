@@ -1820,31 +1820,44 @@ class PulseSnapshot:
             return True
 
     def _m70_apply_hot_cold_load(self, nodes):
-        """★第70批 T4.1：对已加载的节点做冷热分级。
+        """★第70批 T4.1 + ★162批刀2：对已加载的节点做冷热分级。
 
         - L1（热）   ：保持不变，完整 value 常驻内存。
         - L2 / L3    ：清掉大字段（value/linked_nodes），只留元数据，
                        并登记到 ``self._m70_lazy_ids``，供后续按需补全。
-
+        - 懒加载路径（nodes 为 LazySnapshotView）：该视图未实现 __iter__，
+          直接 ``for _n in nodes`` 会抛 TypeError，被 load() 捕获后原样返回，
+          导致 SNAPSHOT_HOT_COLD_LOAD=True 形同未开启（162批刀2 复现）。
+          改为按视图协议 iter_nodes() 迭代并就地分级，分级结果随视图 LRU
+          缓存持久化；返回原视图以维持 full_load=False 的懒加载契约（测试依赖）。
         ★安全边界：只清**可重建**的大字段；node_id / evol_level /
           space_path / keywords 一律保留，否则下游按路径/层级检索会失效。
-        ★降级：任何异常都会被 load() 捕获并退回全量加载，不会丢节点。
+        ★降级：任何异常/非可迭代输入都会被 load() 捕获（或本方法内部兜底）
+          退回全量加载，并产出可观测标记，不会丢节点。
         """
         self._m70_lazy_ids = set()
         self._m70_lazy_node_map = {}
         if not self._m70_hot_cold_enabled():
             return nodes
-        if not nodes:
+        self._m70_hot_load_stats = {"total": 0, "hot": 0, "lazy": 0}
+        _iterable, _is_view = self._m70_resolve_node_iterable(nodes)
+        if _iterable is None:
+            # 无法按视图协议迭代（非预期输入）→ 兜底原样返回，但产出可观测标记
+            self._m70_hot_load_stats["degraded"] = True
+            self._m70_hot_load_stats["reason"] = "non_iterable_input"
+            self._log(LogLevel.WARNING,
+                      "[第162批刀2] 冷热加载：输入非可迭代节点序列（%s），"
+                      "跳过分级维持原样返回（降级可观测）" % type(nodes).__name__)
             return nodes
         try:
-            self._m70_hot_load_stats = {"total": 0, "hot": 0, "lazy": 0}
             _out = []
-            for _n in nodes:
+            for _n in _iterable:
                 _lvl = str(getattr(_n, "evol_level", "") or "").upper()
                 self._m70_hot_load_stats["total"] += 1
                 if _lvl == "L1":
-                    _out.append(_n)
                     self._m70_hot_load_stats["hot"] += 1
+                    if not _is_view:
+                        _out.append(_n)
                     continue
                 # L2/L3 → 转轻量：清大字段，留元数据
                 try:
@@ -1869,15 +1882,54 @@ class PulseSnapshot:
                     self._m70_hot_load_stats["lazy"] += 1
                 except Exception as e:
                     silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1748")
-                _out.append(_n)
+                if not _is_view:
+                    _out.append(_n)
             _st = self._m70_hot_load_stats
             self._log(LogLevel.INFO,
                       f"[第70批] 冷热加载: 共{_st['total']} 热(L1)={_st['hot']} "
-                      f"懒加载(L2/L3)={_st['lazy']}")
+                      f"懒加载(L2/L3)={_st['lazy']}"
+                      + ("" if not _is_view else " [懒加载视图协议]"))
+            # 懒加载视图：分级已就地作用于视图缓存中的节点，返回原视图维持契约。
+            if _is_view:
+                return nodes
             return _out
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1756")
             return nodes
+
+    def _m70_resolve_node_iterable(self, nodes):
+        """★162批刀2：将输入节点统一解析为可迭代序列 + 是否视图标记。
+
+        - LazySnapshotView：提升 max_cache 以容纳全部节点（避免 LRU 逐出导致
+          分级结果丢失），返回其 iter_nodes() 生成器，is_view=True。
+        - list / tuple：原样返回，is_view=False。
+        - 其他可迭代（生成器 / 自定义视图）：包成 list 返回。
+        - 不可迭代：返回 (None, False)，由调用方兜底原样返回并打标记。
+        """
+        try:
+            from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
+        except Exception as _imp_err:
+            silent_exc(_imp_err,
+                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable import")
+            return None, False
+        if isinstance(nodes, LazySnapshotView):
+            try:
+                nodes.max_cache = max(
+                    int(getattr(nodes, "max_cache", 1000)),
+                    len(getattr(nodes, "_spans", [])) + 1)
+            except Exception as _mc_err:
+                silent_exc(_mc_err,
+                          where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable max_cache")
+            return nodes.iter_nodes(), True
+        if isinstance(nodes, (list, tuple)):
+            return nodes, False
+        try:
+            _iter = list(nodes)
+        except TypeError as _te:
+            silent_exc(_te,
+                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable non-iterable")
+            return None, False
+        return _iter, False
 
     def set_cold_recall_source(self, recall_fn) -> None:
         """★第81批 T2：注册冷存批量召回源（如 PulseNodePool.recall_cold_nodes_batch）。
