@@ -172,9 +172,16 @@ def health_anomalies(diagnosis: dict | None) -> list:
                 _score = float(_v)
                 break
     if _level in ("critical", "unhealthy", "error"):
+        _desc = "框架整体健康=%s（严重问题 %d 项）" % (_level, len(_issues))
+        if _issues:
+            # ★163批 刀5：落盘行补「问题明细」，使事后可分诊。
+            _detail = "; ".join(str(_i) for _i in _issues[:5])
+            _desc += "：" + _detail
+            if len(_issues) > 5:
+                _desc += " 等%d项" % len(_issues)
         _out.append(Anomaly(
             type="HEALTH_CRITICAL", severity=SEV_P0,
-            description="框架整体健康=%s（严重问题 %d 项）" % (_level, len(_issues)),
+            description=_desc,
             source="diagnostics", suggested_action=ACT_ALERT,
             metric_value=_score, target="framework"))
     elif _level in ("warning", "warn", "degraded"):
