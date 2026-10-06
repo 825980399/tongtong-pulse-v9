@@ -107,6 +107,8 @@ class PulseNodePool(SilentLogMixin):
         self._cold_last_flush_time = 0.0
         self._cold_compact_cooldown_until = 0.0
         self._cold_compact_fail_streak = 0
+        # ★第162批刀3：侧车索引陈旧标记（S2 写失败/重建失败置位，成功重建复位；S3 新鲜度判定写入）
+        self._cold_index_stale = False
         
         # ★P3-1新增：分层索引——按 evol_level 快速定位节点
         # 格式：{"L1": {node_id, ...}, "L2": {node_id, ...}, "L3": {node_id, ...}}
@@ -2066,24 +2068,36 @@ class PulseNodePool(SilentLogMixin):
                 self._cold[_victim.node_id] = _victim
 
     def _enforce_cold_cache(self):
-        # ★T3: 自适应降频接线——冷存compaction
+        """★阶段B'：冷池超限时驱逐最久未激活节点到磁盘（LRU）。
+
+        仅当冷存储启用时调用。驱逐直到冷池 ≤ _max_cold_cache。
+        ★第162批刀3 接线修复：原实现把 cold_compaction 自适应节流（should_execute）
+        误挂到驱逐入口并 `if not should_execute: return`，导致运行时（runtime_metrics 在位）
+        驱逐几乎恒被短路跳过（0 驱逐→0 flush→0 重建）。驱逐属内存容量保护，须随时可触发；
+        compaction 节流改由 compact_cold_storage 自行处理，此处不再阻断。
+        """
+        # ★第162批刀3：保留 cold_compaction 注册/探测（兼容既有接线锚点），但不以之阻断驱逐
         try:
             from nucleus.runtime_metrics import get_adaptive_controller
             _ctrl = get_adaptive_controller()
             _ctrl.register("cold_compaction", 600)
-            if not _ctrl.should_execute("cold_compaction"):
-                return
+            if _ctrl.should_execute("cold_compaction"):
+                _module_logger.debug(
+                    "[第162批刀3] 冷存compaction窗口可用（驱逐后由 compact_cold_storage 接管）")
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_enforce_cold_cache L2054")
-        """★阶段B'：冷池超限时驱逐最久未激活节点到磁盘（LRU）。
-
-        仅当冷存储启用时调用。驱逐直到冷池 ≤ _max_cold_cache。
-        """
-        while self._cold_storage_enabled and len(self._cold) > self._max_cold_cache:
+        if not self._cold_storage_enabled:
+            return
+        _evicted = 0
+        while len(self._cold) > self._max_cold_cache:
             _victim = min(self._cold.values(), key=lambda n: n.last_activated)
             if not self._evict_cold_node(_victim):
                 # 驱逐失败（如 pyarrow 缺失），停止避免死循环
                 break
+            _evicted += 1
+        if _evicted:
+            _module_logger.info(
+                f"[第162批刀3] 冷池超限驱逐 {_evicted} 个节点到磁盘（阈值 {self._max_cold_cache}）")
     # ========== ★P3-1新增：分层索引维护方法 ==========
     
     @staticmethod
@@ -2673,7 +2687,10 @@ class PulseNodePool(SilentLogMixin):
         return _rows
 
     def _rebuild_cold_index(self) -> None:
-        """★第81批 T4：重建侧车索引 node_id->(file,rg,offset,level) 并持久化 JSON。"""
+        """★第81批 T4：重建侧车索引 node_id->(file,rg,offset,level) 并持久化 JSON。
+        ★第162批刀3 S1/S2：重建失败升 WARNING 并写明维持条目数；写盘失败/重建失败置
+        _cold_index_stale=True（外置陈旧标记），写盘成功复位。
+        """
         if not self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
             return
         try:
@@ -2691,13 +2708,24 @@ class PulseNodePool(SilentLogMixin):
                 _ip = self._cold_dir.rstrip(os.sep) + ".index.json"
                 with open(_ip, "w", encoding="utf-8") as _f:
                     json.dump(_idx, _f)
+                # S2：写盘成功 → 索引新鲜，复位陈旧标记
+                self._cold_index_stale = False
             except Exception as e:
                 silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_rebuild_cold_index L2676")
+                # S2：json.dump 写失败 → 外置陈旧标记，供 S3 新鲜度告警与可观测面板读取
+                self._cold_index_stale = True
         except Exception as _e:
-            _module_logger.debug(f"[第81批 T4] 重建冷存索引失败: {_e}")
+            # S1：重建失败（读冷存/构建索引异常）→ 升级 WARNING 并写明维持条目数
+            _kept = len(getattr(self, "_cold_index", {}) or {})
+            _module_logger.warning(
+                f"[第162批刀3] 冷索引未重建，条目数维持 {_kept}: "
+                f"{type(_e).__name__}: {_e}")
+            self._cold_index_stale = True
 
     def _ensure_cold_index(self) -> None:
-        """★第81批 T4：懒加载侧车索引（进程重启后从 JSON 恢复，避免每次全扫）。"""
+        """★第81批 T4：懒加载侧车索引（进程重启后从 JSON 恢复，避免每次全扫）。
+        ★第162批刀3 S3：恢复后比对索引与冷存最新 parquet 的 mtime，落后即告警并置陈旧标记。
+        """
         # ★第81批 T4：轻量实例（绕过 __init__）缺这些属性，用 getattr 兜底
         if getattr(self, "_cold_index_loaded", False):
             return
@@ -2705,6 +2733,7 @@ class PulseNodePool(SilentLogMixin):
             self._cold_index = {}
         if self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
             _ip = self._cold_dir.rstrip(os.sep) + ".index.json"
+            _loaded_ok = False
             try:
                 if os.path.isfile(_ip):
                     with open(_ip, "r", encoding="utf-8") as _f:
@@ -2712,9 +2741,57 @@ class PulseNodePool(SilentLogMixin):
                     if isinstance(_loaded, dict):
                         with self._cold_buf_lock():
                             self._cold_index = _loaded
+                        _loaded_ok = True
             except Exception as e:
                 silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_ensure_cold_index L2692")
+            if _loaded_ok:
+                # S3：仅 getmtime 比较，不读 parquet 内容、不引入周期全扫
+                self._cold_index_stale = self._m162_cold_index_freshness_check(_ip)
         self._cold_index_loaded = True
+
+    def _m162_cold_index_freshness_check(self, index_path: str) -> bool:
+        """★第162批刀3 S3：比对侧车索引与冷存最新 parquet 的 mtime，落后超阈值则告警并返回 True（陈旧）。
+
+        仅做 getmtime 比较，不读 parquet 内容、不引入周期全扫（S3 只 getmtime 比较）。
+        """
+        try:
+            import config as _cfg
+            _warn_days = float(getattr(_cfg, "COLD_INDEX_STALE_WARN_DAYS", 3))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+            _warn_days = 3.0
+        try:
+            if not os.path.isfile(index_path):
+                return False
+            _idx_mtime = os.path.getmtime(index_path)
+            _latest = 0.0
+            _dir = self._cold_parquet_dir()
+            if os.path.isdir(_dir):
+                for _root, _dirs, _files in os.walk(_dir):
+                    for _fn in _files:
+                        if _fn.endswith(".parquet"):
+                            try:
+                                _m = os.path.getmtime(os.path.join(_root, _fn))
+                            except OSError as _oe:
+                                silent_exc(_oe, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+                                continue
+                            if _m > _latest:
+                                _latest = _m
+            if _latest <= 0.0:
+                return False  # 无冷存数据可比对
+            _lag_days = (_latest - _idx_mtime) / 86400.0
+            if _lag_days > _warn_days:
+                _module_logger.warning(
+                    f"[第162批刀3] 侧车索引落后 {_lag_days:.1f} 天（阈值 {_warn_days:.0f} 天），"
+                    f"建议触发重建: {index_path}")
+                return True
+            if _lag_days > 0:
+                _module_logger.info(
+                    f"[第162批刀3] 侧车索引落后 {_lag_days:.1f} 天（未超阈值 {_warn_days:.0f} 天）")
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+            return False
 
     def _cold_row_to_node(self, row: dict) -> "PulseNode | None":
         """★第81批 T4：冷存行 -> PulseNode（真实 evol_level + 7 新字段）。"""
