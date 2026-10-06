@@ -3976,7 +3976,16 @@ def main():
         _apply_check_counter = 0
         _shutdown_chan = None
         while not exit_requested:
-            time.sleep(1)
+            # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
+            #   （灰度 OFF 默认退化为 time.sleep(1)，零行为变化）
+            if getattr(config, "MAIN_LOOP_PULSE_ENABLED", False):
+                _ctrl = framework.controller if framework is not None else None
+                if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
+                    _ctrl.wait_heartbeat_pulse(1)
+                else:
+                    time.sleep(1)
+            else:
+                time.sleep(1)
             # ★第162批刀7：shutdown_request.json 优雅退出通道
             #   Windows 无可靠外部 SIGTERM，改用数据文件指令；每拍检测，存在即进入优雅退出。
             try:

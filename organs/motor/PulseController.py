@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
+from nucleus.const import HeartEvent
 """
 PulseController —— 控制器器官 · 网页深度搜索与本地文件/应用操纵
 
@@ -184,8 +185,11 @@ class PulseController(BasePulseOrgan):
         self._search_ab_stats = {}
         self._search_ab_total = 0
         self._search_engine_stats = {}
-        self._survival_state = {}
+        self.survival_state = {}
         self.stomach = None
+        # ★163批 刀8（P0★）：主循环/保活脉冲网关事件
+        #   框架心跳脉冲(heart.beat)到达时由 on_pulse 置位，唤醒阻塞的循环。
+        self._heartbeat_pulse = threading.Event()
     # ========== 依赖注入 ==========
 
     def set_white_cell(self, white_cell):
@@ -2056,7 +2060,12 @@ class PulseController(BasePulseOrgan):
         def _keepalive_loop():
             _last_restart = time.time()
             while self.is_running:
-                time.sleep(60)
+                # ★163批 刀8（P0★）：保活节拍改由心跳脉冲网关驱动
+                #   （灰度 OFF 默认退化为 time.sleep(60)，零行为变化）
+                if self._should_use_pulse_gateway():
+                    self.wait_heartbeat_pulse(60)
+                else:
+                    time.sleep(60)
                 if not self.is_running:
                     break
                 # ★主线第12批 T1/P2-81（裁决方案A）：保活线程只置信号，不碰浏览器。
@@ -2355,6 +2364,10 @@ class PulseController(BasePulseOrgan):
         event_type = pulse.get("event_type", "")
         payload = pulse.get("payload", {})
 
+        # ★163批 刀8（P0★）：心跳脉冲驱动主循环/保活网关
+        if event_type == HeartEvent.BEAT:
+            return self._on_heartbeat_pulse(payload)
+
         if event_type == ControllerEvent.OPEN_URL:
             # 将脉冲的 intent 元信息注入 payload，供后续处理使用
             pulse_intent = pulse.get("intent", "")
@@ -2382,6 +2395,28 @@ class PulseController(BasePulseOrgan):
             # 其他状态（如stage1_completed等）可以在此处处理或忽略
             return {"status": "acknowledged"}
         return None
+
+    # ========== 163批 刀8（P0★）：主循环/保活脉冲网关 ==========
+    def _should_use_pulse_gateway(self) -> bool:
+        """主循环/保活是否启用脉冲网关（灰度开关，默认关闭→零行为变化）。"""
+        import config as _cfg
+        return bool(getattr(_cfg, "MAIN_LOOP_PULSE_ENABLED", False))
+
+    def wait_heartbeat_pulse(self, timeout: float) -> bool:
+        """★163批 刀8（P0★）：阻塞等待心跳脉冲（或超时）。
+        框架心跳脉冲到达时由 _on_heartbeat_pulse 置位 _heartbeat_pulse 事件，
+        唤醒此处阻塞的主循环/保活循环，实现事件驱动而非固定轮询。
+        返回 True=被脉冲唤醒；False=超时（退化为原轮询节奏）。
+        """
+        _woke = self._heartbeat_pulse.wait(timeout)
+        if _woke:
+            self._heartbeat_pulse.clear()
+        return _woke
+
+    def _on_heartbeat_pulse(self, payload: dict) -> dict[str, Any]:
+        """★163批 刀8（P0★）：心跳脉冲到达 → 置位网关事件，唤醒阻塞的循环。"""
+        self._heartbeat_pulse.set()
+        return {"status": "acknowledged"}
 
     # ========== 事件处理 ==========
 

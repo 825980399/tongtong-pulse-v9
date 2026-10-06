@@ -5380,3 +5380,6 @@ NIGHT_ORCH_DIGEST_ENABLED = True
 #   True=verify_effect 执行真实效果验证（复用 worker 链路，按名派发，不 import 封存模块），
 #   验证率口径真实化；False=回退为原「应用即待验证」桩（零行为变化，默认）。
 PARAM_PATCH_EFFECT_VERIFY_ENABLED = False
+
+# ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（默认关闭→零行为变化）
+MAIN_LOOP_PULSE_ENABLED = False
