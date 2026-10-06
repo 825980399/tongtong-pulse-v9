@@ -51,6 +51,8 @@ except ImportError:
         "n_to_one_max_sources": 0, "n_to_one_queue_mode": "concurrent",
     }
 
+import config as _cfg  # ★162批刀1：config 恒可导入（既有 from config import 已证），无条件避免静默 except
+
 # v9.5: 脉冲层级常量
 _PULSE_LAYER_L0 = "L0"
 _PULSE_LAYER_L1 = "L1"
@@ -375,6 +377,10 @@ class InfoField(SilentLogMixin):
         self._cpu_usage = 0.0
         self._mem_usage = 0.0
         self._gpu_usage = 0.0
+        # ★162批刀1·A1链A：硬件探针健康度（无数据时置 False，对外状态可观测）
+        self._hardware_probe_ok = True
+        self._load_probe_failed = False
+        self._load_probe_fail_count = 0
         
         # ===== 持续时间保护相关 =====
         self._high_load_since_level = None
@@ -866,6 +872,7 @@ class InfoField(SilentLogMixin):
             "layer": layer,
             "in_storm": storm_result["in_storm"],
             "high_load": self._high_load,
+            "load_probe_ok": self._hardware_probe_ok,
         }
     
     # ========== ★相关任务：boot 完整率审计 ==========
@@ -1120,7 +1127,13 @@ class InfoField(SilentLogMixin):
                 mem_percent = psutil.virtual_memory().percent
             except ImportError:
                 cpu_percent = 0
-                mem_percent = 0        
+                mem_percent = 0
+            except Exception as _probe_err:
+                # ★162批刀1·A1链A：psutil 已装但运行时异常（OSError/PermissionError 等）
+                # 须兜底捕获并标记，否则会穿出 _check_high_load 到 publish() 热路径。
+                silent_exc(_probe_err, where="nucleus.field.InfoField::_check_high_load psutil fallback")
+                cpu_percent = 0
+                mem_percent = 0
         # 获取GPU使用率（使用正确的字段名）
         with self._hardware_lock:
             gpu_percent = self._hardware_snapshot.get("gpu_usage", 0.0)
@@ -1135,6 +1148,16 @@ class InfoField(SilentLogMixin):
                 self._high_load = False
                 self._adjust_adaptive_pool()
                 self._resize_layer_pools_by_level()
+            # ★162批刀1·A1链A：探针失败可观测标记（降级必带标记，避免静默失效）。
+            # 不得改成"无数据即视为 heavy"（反向故障）；仅置标记+限次告警。
+            self._hardware_probe_ok = False
+            if getattr(_cfg, "ENABLE_INFOFIELD_LOAD_PROBE_MARKER", True):
+                self._load_probe_failed = True
+                self._load_probe_fail_count += 1
+                if self._load_probe_fail_count <= 1:
+                    _module_logger.warning(
+                        "硬件探针无数据(0/0)：负载按 light 处理，降级标记已置 load_probe_ok=False"
+                    )
             return
 
         load_level = self._get_load_level(cpu_percent, mem_percent, gpu_percent, gpu_mem_percent)
@@ -1247,12 +1270,16 @@ class InfoField(SilentLogMixin):
 
         _hyst = self._load_threshold_hysteresis if self._adaptive_tuning_enabled else 0.0
 
+        # ★162批刀1·N1：内存阈值配置化（默认=原硬编码 95/85/65，零回归；改 config.MEMORY_LOAD_* 即改分级边界）
+        _mem_crit = getattr(_cfg, "MEMORY_LOAD_CRITICAL_PCT", 95.0) if _cfg is not None else 95.0
+        _mem_heavy = getattr(_cfg, "MEMORY_LOAD_HEAVY_PCT", 85.0) if _cfg is not None else 85.0
+        _mem_mod = getattr(_cfg, "MEMORY_LOAD_MODERATE_PCT", 65.0) if _cfg is not None else 65.0
         # 熔断红线（永久保留，不随 offset 变化——安全兜底）
-        if cpu > 95 or mem > 95 or gpu > 98 or gpu_mem > 98:
+        if cpu > 95 or mem > _mem_crit or gpu > 98 or gpu_mem > 98:
             return "critical"
-        elif cpu > (80 + _offset) or mem > (85 + _offset) or gpu > 90 or gpu_mem > 90:
+        elif cpu > (80 + _offset) or mem > (_mem_heavy + _offset) or gpu > 90 or gpu_mem > 90:
             return "heavy"
-        elif cpu > (50 + _offset + _hyst) or mem > (65 + _offset + _hyst) or gpu > 70 or gpu_mem > 70:
+        elif cpu > (50 + _offset + _hyst) or mem > (_mem_mod + _offset + _hyst) or gpu > 70 or gpu_mem > 70:
             return "moderate"
         return "light"
     
