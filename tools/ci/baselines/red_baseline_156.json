@@ -2,7 +2,7 @@
   "generated_at_head": "e6a435598189b763d8735a009fcfe1461a501695",
   "generated_at": "2026-10-05T11:02",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons",
-  "collect_baseline": 4750,
+  "collect_baseline": 4759,
   "known_fail": [
     "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
     "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
