@@ -255,10 +255,15 @@ def evolution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
     if _rate is not None and _rate > _thr:
         return ConsumeResult(consumer="evolution_anomaly_consumer",
                              report_id=envelope.report_id, accepted=False)
-    _msg = ("[自认知·补丁告警] 真实修复率 %s 低于阈值 %.0f%% → "
-            "补丁验证仍处空转（P0-2），本消费者只告警不自动修复"
-            % ("未知" if _rate is None else "%.1f%%" % (_rate * 100),
-               _thr * 100))
+    _anom_type = _hits[0].type if _hits else "PATCH_REAL_FIX_RATE_LOW"
+    if _anom_type == "LLM_DATA_QUALITY_LOW":
+        _msg = ("[数据质量·告警] LLM 留存数据质量偏低"
+                "（anomaly_type=LLM_DATA_QUALITY_LOW），本消费者只告警不自动修复")
+    else:
+        _msg = ("[自认知·补丁告警] 真实修复率 %s 低于阈值 %.0f%% → "
+                "补丁验证仍处空转（P0-2），本消费者只告警不自动修复"
+                % ("未知" if _rate is None else "%.1f%%" % (_rate * 100),
+                   _thr * 100))
     _log(_msg, "error")
     _append_jsonl(ALERT_FILE, {
         "ts": time.time(),
