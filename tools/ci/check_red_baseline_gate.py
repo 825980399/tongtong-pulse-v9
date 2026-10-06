@@ -25,6 +25,7 @@ import re
 import sys
 import json
 import subprocess
+import ast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # tools/ci -> tools -> root
@@ -129,8 +130,42 @@ def list_test_files():
 
 
 # ---------------------------------------------------------------- 片1 collect
-def slice_collect(baseline):
-    txt, _ = _run_once(["tests/", "--collect-only", "-q", "-p", "no:cacheprovider"], timeout=300)
+def _write_collect_trace(level, count, status):
+    """collect 节点数写入可追溯口径源（tmp/collect_count_trace.json，增量/全量均记录）。"""
+    try:
+        import datetime
+        _trace_dir = os.path.join(PROJECT_ROOT, "tmp")
+        os.makedirs(_trace_dir, exist_ok=True)
+        _trace_path = os.path.join(_trace_dir, "collect_count_trace.json")
+        _entry = {
+            "at": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "level": level,
+            "count": count,
+            "status": status,
+        }
+        _prev = []
+        if os.path.isfile(_trace_path):
+            try:
+                _prev = json.load(open(_trace_path, encoding="utf-8"))
+                if not isinstance(_prev, list):
+                    _prev = []
+            except Exception as _je:
+                silent_exc(_je, where="check_red_baseline_gate._write_collect_trace.load")
+                _prev = []
+        _prev.append(_entry)
+        json.dump(_prev[-50:], open(_trace_path, "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=2)
+    except Exception as _e:
+        silent_exc(_e, where="check_red_baseline_gate._write_collect_trace")
+
+
+def _collect_full(baseline):
+    """★刀9 全量门（批末收口 + 每日 04:00 + push 前）：原片1 ±5 漂移判定，完整保留。"""
+    txt, status = _run_once(["tests/", "--collect-only", "-q", "-p", "no:cacheprovider"], timeout=300)
+    if status == "timeout":
+        print("[slice1-collect] ❌ collect 收集超时（掩码修复：超时=FAIL，不得掩成 PASS）", file=sys.stderr)
+        _write_collect_trace("full", None, "timeout")
+        return 1
     errs = COLLECT_ERR_RE.findall(txt)
     m = COLLECT_COUNT_RE.search(txt)
     count = int(m.group(1) or m.group(2)) if m else None
@@ -139,15 +174,109 @@ def slice_collect(baseline):
         print("[slice1-collect] ❌ 存在收集错误（半成品/导入断链）：")
         for e in errs[:20]:
             print(f"   ! {e}")
+        _write_collect_trace("full", count, "collect_error")
         return 1
     cb = baseline.get("collect_baseline")
     if count is None:
         print("[slice1-collect] ⚠ 未能解析节点数，跳过漂移校验")
+        _write_collect_trace("full", None, "unresolved_count")
         return 0
     if cb is not None and abs(count - cb) > COLLECT_TOLERANCE:
         print(f"[slice1-collect] ❌ 节点数漂移 {count} vs 基线 {cb}（容差 ±{COLLECT_TOLERANCE}）")
+        _write_collect_trace("full", count, "drift")
         return 1
     print(f"[slice1-collect] ✅ PASS（0 收集错误，节点数 {count} 在基线 {cb}±{COLLECT_TOLERANCE} 内）")
+    _write_collect_trace("full", count, "pass")
+    return 0
+
+
+def compute_affected_test_files(changed_files=None):
+    """★刀9 增量门：基于改动文件的 import 反向依赖图，返回受影响测试文件（相对 PROJECT_ROOT 的 POSIX 路径）。
+
+    返回 list（可为空）/ None（依赖图无法解析 → 调用方 fail-safe 升级全量）。
+    """
+    try:
+        if changed_files is None:
+            out = subprocess.check_output(
+                ["git", "diff", "--cached", "--name-only"], cwd=PROJECT_ROOT
+            ).decode("utf-8", "replace")
+            changed_files = [l.strip() for l in out.splitlines() if l.strip()]
+        changed_modules = set()
+        for cf in changed_files:
+            if not cf.endswith(".py"):
+                continue
+            changed_modules.add(cf[:-3].replace("/", ".").replace("\\", "."))
+        if not changed_modules:
+            return []
+        affected = set()
+        for tf in list_test_files():
+            tf_mod = tf.replace("/", ".")
+            if tf_mod in changed_modules:
+                affected.add(tf)
+                continue
+            try:
+                src = open(os.path.join(PROJECT_ROOT, tf), "r",
+                           encoding="utf-8", errors="replace").read()
+                tree = ast.parse(src)
+            except Exception as _e:
+                silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files.parse")
+                continue
+            imported = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for n in node.names:
+                        imported.add(n.name)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported.add(node.module)
+            for imp in imported:
+                for cm in changed_modules:
+                    if cm == imp or cm.startswith(imp + ".") or imp.startswith(cm + "."):
+                        affected.add(tf)
+                        break
+        return sorted(affected)
+    except Exception as _e:
+        silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files")
+        return None
+
+
+def slice_collect(baseline, level=None, changed_files=None):
+    """★刀9 collect 两级化：
+
+    - level=full        → 全量门（±5 漂移，与原片1 一致），用于批末/每日/push 前；
+    - level=incremental（默认，受 env GATE_COLLECT_LEVEL 控制）→ 增量门：仅收集
+      受影响测试文件（import 反向依赖图），依赖图无法解析时 fail-safe 升级全量；
+      无受影响测试（纯文档/台账改动）→ 直接 PASS，跳过收集（提速）。
+    """
+    if level is None:
+        level = os.environ.get("GATE_COLLECT_LEVEL", "incremental")
+    if level == "full":
+        return _collect_full(baseline)
+    affected = compute_affected_test_files(changed_files)
+    if affected is None:
+        print("[slice1-collect] ⚠ 依赖图解析失败，fail-safe 升级全量", file=sys.stderr)
+        return _collect_full(baseline)
+    if not affected:
+        print("[slice1-collect] ✅ PASS（增量门：无受影响测试文件，跳过收集）", file=sys.stderr)
+        _write_collect_trace("incremental", 0, "no_affected")
+        return 0
+    args = list(affected) + ["--collect-only", "-q", "-p", "no:cacheprovider"]
+    txt, status = _run_once(args, timeout=300)
+    if status == "timeout":
+        print("[slice1-collect] ❌ 增量收集超时（掩码修复：超时=FAIL）", file=sys.stderr)
+        _write_collect_trace("incremental", None, "timeout")
+        return 1
+    errs = COLLECT_ERR_RE.findall(txt)
+    m = COLLECT_COUNT_RE.search(txt)
+    count = int(m.group(1) or m.group(2)) if m else None
+    print(f"[slice1-collect] 增量门受影响测试 {len(affected)} 个，收集节点数={count}", file=sys.stderr)
+    if errs:
+        print("[slice1-collect] ❌ 增量门存在收集错误（受影响测试导入断链）：")
+        for e in errs[:20]:
+            print(f"   ! {e}")
+        _write_collect_trace("incremental", count, "collect_error")
+        return 1
+    print("[slice1-collect] ✅ PASS（增量门：受影响测试收集无错误）", file=sys.stderr)
+    _write_collect_trace("incremental", count, "pass")
     return 0
 
 
@@ -283,6 +412,10 @@ def main(argv):
     if "--input" in argv:
         i = argv.index("--input")
         input_path = argv[i + 1]
+    level = None
+    if "--level" in argv:
+        i = argv.index("--level")
+        level = argv[i + 1]
     mode = "full"
     for a in argv[1:]:
         if not a.startswith("-"):
@@ -296,7 +429,7 @@ def main(argv):
           f"known_fail={len(baseline['known_fail'])} pollution={len(baseline['pollution_set'])} "
           f"collect基线={baseline['collect_baseline']}", file=sys.stderr)
     if mode == "collect":
-        return slice_collect(baseline)
+        return slice_collect(baseline, level=level)
     if mode == "isolation":
         return slice_isolation(baseline, input_path)
     if mode == "full":
