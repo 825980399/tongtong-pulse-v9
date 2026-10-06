@@ -177,6 +177,7 @@ class EventBus:
         self._dropped = 0
         self._sync_ms_max = 0.0
         self._last_error = ""
+        self._zero_match_events = 0
 
     # ------------------------------------------------------------------
     # 订阅
@@ -315,6 +316,8 @@ class EventBus:
         with self._lock:
             matched = [s for s in self._subs.values() if _match(s.pattern, event.name)]
             matched.sort(key=lambda s: (int(s.priority), s.created_at, s.sub_id))
+            if not matched:
+                self._zero_match_events += 1
         delivered = 0
         for sub in matched:
             if sub.once:
@@ -491,7 +494,7 @@ class EventBus:
     # ------------------------------------------------------------------
     # 自省
     # ------------------------------------------------------------------
-    def stats(self) -> dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """总线运行统计（供自省/诊断消费）。"""
         with self._lock:
             return {
@@ -505,9 +508,13 @@ class EventBus:
                 "delivered": self._delivered,
                 "failed": self._failed,
                 "dropped": self._dropped,
+                "zero_match_events": self._zero_match_events,
                 "sync_ms_max": round(self._sync_ms_max, 4),
                 "last_error": self._last_error,
             }
+
+    # 向后兼容别名（既有测试 test_event_bus_m14.py 仍调用 stats()）
+    stats = get_stats
 
     def reset(self) -> None:
         """清空订阅、历史与统计（**不停止**后台线程）；供测试使用。"""
@@ -521,6 +528,7 @@ class EventBus:
             self._dropped = 0
             self._sync_ms_max = 0.0
             self._last_error = ""
+            self._zero_match_events = 0
 
     # 支持 with 语法（退出时停线程）
     def __enter__(self) -> Self:

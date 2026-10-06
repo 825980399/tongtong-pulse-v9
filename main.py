@@ -680,7 +680,11 @@ class PulseFramework:
         
         # 创建最小具体实现——振荡场监视器
         class _FieldStatusMonitor(OscillonField):
+            # ★第162批刀5（B2-2）：propagate 空转计数（可观测；原空转返 [] 不可见）
+            _propagate_empty_count = 0
+
             def propagate(self, signal):
+                _FieldStatusMonitor._propagate_empty_count += 1
                 return []
             def register_node(self, node_id, resonant_frequencies=None):
                 self._nodes[node_id] = resonant_frequencies or []

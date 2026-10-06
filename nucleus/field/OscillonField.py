@@ -55,7 +55,7 @@ class OscillonField(ABC):
     定义了"场"这种通信介质的通用接口。
     所有具体的场实现（脉冲场、振荡场、量子混合场）都继承此类。
     
-    InfoField 继承关系（v9.0 经典脉冲场）:
+    InfoField 与 OscillonField 组合关系（v9.0 经典脉冲场，非继承）:
         OscillonField
             └── InfoField（经典脉冲场，已实现）
                 └── 器官通过 on_pulse() 感知离散脉冲
@@ -241,6 +241,9 @@ class OscillonField(ABC):
         
         返回场强度、场类型、趋势快照，供需要场感知的器官查询。
         当前阶段仅提供观测能力，不改变通信方式。
+
+        口径订正（B2-3）：本快照当前为「只写不读」——由 _FieldStatusMonitor 等写入，
+        仓内无内部读者消费其返回值，不实称有读者。
         """
         return {
             "field_name": self.field_name,
@@ -470,7 +473,7 @@ class FrequencyPhaseLock:
 EVOLUTION_ROADMAP = {
     "v9.0": {
         "name": "经典脉冲场",
-        "field_class": "InfoField（继承 OscillonField）",
+        "field_class": "InfoField（与 OscillonField 组合，非继承关系）",
         "hardware": "x86/ARM 通用CPU",
         "features": [
             "离散脉冲广播",

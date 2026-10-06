@@ -35,6 +35,7 @@ from typing import Any
 
 from nucleus.events.EventBus import EventPriority, get_event_bus
 from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("EventTap")
 
@@ -215,6 +216,13 @@ class EventTap:
     # ------------------------------------------------------------------
     def get_stats(self) -> dict[str, Any]:
         """返回当前统计快照（深拷贝，调用方可安全修改）。"""
+        _zm = 0
+        try:
+            _b = self._bus if self._bus is not None else get_event_bus()
+            _zm = _b.get_stats().get("zero_match_events", 0)
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.events.EventTap::get_stats", level="debug")
+            _zm = 0
         with self._lock:
             _avg = (self._interval_sum / self._interval_n) if self._interval_n else 0.0
             return {
@@ -238,6 +246,7 @@ class EventTap:
                 },
                 "filtered_off": self._filtered_off,
                 "export_count": self._export_count,
+                "matched_handlers_zero_events": _zm,
             }
 
     def get_recent(self, limit: int = 100) -> list[dict[str, Any]]:

@@ -66,10 +66,18 @@ VALID_PATCH_STAGES = frozenset({
 DEFAULT_OBSERVATION_TICKS = 1
 DEFAULT_OBSERVATION_TICK_S = 3600  # 1h 观察窗口
 
-#: handoff 事件名（EventBus publish，订阅方=星轨 + SelfAwarenessEngine 留痕）。
+#: handoff 事件名（EventBus publish，当前仅旁路遥测 EventTap 通配记账，无业务订阅者）。
 EVENT_PATCH_HANDOFF = "evolution.patch_handoff"
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ★第162批刀5（E2）：handoff 事件发布失败累计计数（可观测 + 门控读取）
+_handoff_publish_fail_count = 0
+
+
+def get_handoff_publish_fail_count() -> int:
+    """patch_lifecycle 自上线以来 handoff 事件发布失败累计次数（E2 升级 WARNING 后供读取）。"""
+    return _handoff_publish_fail_count
 
 
 # ------------------------------------------------------------------ 路径与读写
@@ -283,7 +291,7 @@ def reconcile_patches(path: str | None = None, dry_run: bool = False) -> dict[st
 def publish_handoff(patch_id: str, stage: str, entry: dict[str, Any] | None = None) -> int:
     """发布 ``evolution.patch_handoff`` 事件（验收 e）。
 
-    订阅方=星轨 + SelfAwarenessEngine 留痕。EventBus 未启用/不可用时不阻断主流程。
+    当前仅旁路遥测（EventTap 通配记账），无业务订阅者。EventBus 未启用/不可用时不阻断主流程。
     """
     try:
         from nucleus.events.EventBus import get_event_bus
@@ -301,8 +309,10 @@ def publish_handoff(patch_id: str, stage: str, entry: dict[str, Any] | None = No
         }
         return _bus.publish(EVENT_PATCH_HANDOFF, _payload, source="patch_lifecycle")
     except Exception as _e:  # 事件总线不可用不阻断补丁生命周期闭环
+        global _handoff_publish_fail_count
+        _handoff_publish_fail_count += 1
         silent_exc(_e, where="nucleus.evolution.patch_lifecycle::publish_handoff",
-                   level="debug")
+                   level="warning")
         return 0
 
 

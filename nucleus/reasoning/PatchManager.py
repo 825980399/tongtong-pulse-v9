@@ -31,6 +31,14 @@ from nucleus.logger import (
 
 _module_logger = get_module_logger("PatchManager")
 
+# ★第162批刀5（E2）：事件总线发布失败累计计数（可观测 + 门控读取）
+_publish_fail_count = 0
+
+
+def get_publish_fail_count() -> int:
+    """PatchManager 自上线以来事件总线发布失败累计次数（E2 升级 WARNING 后供读取）。"""
+    return _publish_fail_count
+
 
 def _m53_write_check_on() -> bool:
     """★第53批 T2（P0-补丁2）灰度开关：审批是否检查写入结果。
@@ -3923,7 +3931,9 @@ class PatchManager:
                 source="PatchManager",
             )
         except Exception as _e:
-            _module_logger.debug(f"[棘轮遥测] 事件总线发布失败（仅影响遥测，不影响锁死）: {_e}")
+            global _publish_fail_count
+            _publish_fail_count += 1
+            _module_logger.warning(f"[棘轮遥测] 事件总线发布失败（仅影响遥测，不影响锁死）: {_e}")
         self._restart_counter = 0    
     def _save_json(self, path, data):
         """保存 JSON 并**返回是否写入成功**（bool）。
