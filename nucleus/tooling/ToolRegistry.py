@@ -13,6 +13,9 @@ ToolRegistry.py —— 工具注册表
 
 from __future__ import annotations
 
+import io
+import json
+import os
 import time
 from collections.abc import Callable
 from typing import Any
@@ -42,6 +45,7 @@ class ToolRegistry:
         params: dict[str, Any] | None = None,
         returns: str = "",
         category: str = "general",
+        overwrite: bool = False,
     ) -> bool:
         """注册一个工具。
 
@@ -57,7 +61,7 @@ class ToolRegistry:
         Returns:
             True=注册成功，False=名称已存在
         """
-        if name in self._tools:
+        if name in self._tools and not overwrite:
             return False
 
         self._tools[name] = {
@@ -92,6 +96,61 @@ class ToolRegistry:
             if name in _names:
                 _names.remove(name)
         return True
+
+    # ========== 持久化（第162批 刀10 · C-1 收尾） ==========
+
+    def _default_path(self) -> str:
+        """持久化默认路径（可被 config.TOOL_REGISTRY_PATH 覆盖）。"""
+        import config as _cfg
+        return getattr(_cfg, "TOOL_REGISTRY_PATH", "data/tool_registry.json")
+
+    def save(self, path: str | None = None) -> bool:
+        """持久化注册表到磁盘（剔除不可序列化的 executor）。失败返回 False，不影响主流程。"""
+        _path = path or self._default_path()
+        try:
+            _data = {
+                "tools": {
+                    _n: {_k: _v for _k, _v in _t.items() if _k != "executor"}
+                    for _n, _t in self._tools.items()
+                },
+                "stats": self._stats,
+                "capability_index": self._capability_index,
+            }
+            _dir = os.path.dirname(_path) or "."
+            os.makedirs(_dir, exist_ok=True)
+            with io.open(_path, "w", encoding="utf-8", newline="") as _f:
+                json.dump(_data, _f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.tooling.ToolRegistry::save")
+            return False
+
+    def load(self, path: str | None = None) -> int:
+        """从磁盘恢复注册表（executor 置 None，由 register_default_tools/ensure_tool 重绑）。
+        返回恢复的工具数；文件不存在/失败返回 0。"""
+        _path = path or self._default_path()
+        if not os.path.isfile(_path):
+            return 0
+        try:
+            with io.open(_path, "r", encoding="utf-8", newline=None) as _f:
+                _data = json.load(_f)
+            for _n, _t in _data.get("tools", {}).items():
+                _t = dict(_t)
+                _t["executor"] = None
+                self._tools[_n] = _t
+                self._stats.setdefault(_n, {"calls": 0, "success": 0, "failed": 0, "total_time": 0.0})
+                for _cap in _t.get("capabilities", []):
+                    _key = _cap.lower().strip()
+                    if _key not in self._capability_index:
+                        self._capability_index[_key] = []
+                    if _n not in self._capability_index[_key]:
+                        self._capability_index[_key].append(_n)
+            for _n, _s in _data.get("stats", {}).items():
+                self._stats.setdefault(_n, _s)
+            return len(_data.get("tools", {}))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.tooling.ToolRegistry::load")
+            return 0
 
     # ========== 工具发现 ==========
 
@@ -259,12 +318,14 @@ def get_tool_registry() -> ToolRegistry:
 def register_default_tools() -> None:
     """注册框架默认工具（启动时调用一次）。"""
     _registry = get_tool_registry()
+    # ★第162批 刀10：启动先恢复持久化注册表（用户工具重启可恢复），默认工具随后 overwrite 重绑 executor
+    _registry.load()
 
     # 代码质量检查工具
     try:
         from nucleus.tooling_runner import get_tooling_runner
         _runner = get_tooling_runner()
-        _registry.register_tool(
+        _registry.register_tool(overwrite=True, 
             name="compile_check",
             description="Python代码编译检查，检测语法错误和编译问题",
             capabilities=["代码检查", "编译", "语法错误", "静态分析"],
@@ -273,7 +334,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(
+        _registry.register_tool(overwrite=True, 
             name="ruff_check",
             description="Python代码风格和质量检查，检测PEP8违规、复杂度、安全隐患",
             capabilities=["代码检查", "静态分析", "风格", "安全扫描", "ruff"],
@@ -282,7 +343,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(
+        _registry.register_tool(overwrite=True, 
             name="mypy_check",
             description="Python类型检查，检测类型注解错误和类型不匹配",
             capabilities=["代码检查", "类型检查", "静态分析", "mypy"],
@@ -291,7 +352,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(
+        _registry.register_tool(overwrite=True, 
             name="bandit_check",
             description="Python安全扫描，检测常见安全漏洞和风险代码",
             capabilities=["代码检查", "安全扫描", "漏洞检测", "bandit"],
@@ -307,7 +368,7 @@ def register_default_tools() -> None:
     try:
         from nucleus.external_executor import ExternalExecutor
         _ext = ExternalExecutor()
-        _registry.register_tool(
+        _registry.register_tool(overwrite=True, 
             name="external_command",
             description="执行外部系统命令，支持超时控制和安全沙箱",
             capabilities=["命令执行", "系统调用", "外部工具", "shell"],
@@ -318,6 +379,9 @@ def register_default_tools() -> None:
         )
     except Exception as e:
         silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L323")
+
+    # ★第162批 刀10：注册完成后持久化（重启可恢复）；失败不影响主流程
+    _registry.save()
 
 
 if __name__ == "__main__":

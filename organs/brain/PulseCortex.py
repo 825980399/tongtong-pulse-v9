@@ -2111,10 +2111,13 @@ class PulseCortex(BasePulseOrgan):
         # ★C-1 工具面合流：同步写入统一工具注册表（两套注册表合一）；失败不影响本地注册
         try:
             from nucleus.tooling.ToolRegistry import get_tool_registry as _get_unified_registry
-            _get_unified_registry().register_tool(
+            _reg = _get_unified_registry()
+            _reg.register_tool(
                 name, description, list(capabilities or []),
                 params=strategy or {}, category="cortex_auto",
             )
+            # ★第162批 刀10：统一写后持久化（重启可恢复）；失败由外层 except 兜
+            _reg.save()
         except Exception as _te:
             silent_exc(_te, where="organs.brain.PulseCortex::_register_tool C-1 unify L2046")
         self._tool_registry[name] = {
