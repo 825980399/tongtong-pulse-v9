@@ -5347,3 +5347,13 @@ MEMORY_LOAD_HEAVY_PCT = 85.0       # 内存占用超此值 → heavy（原硬编
 MEMORY_LOAD_MODERATE_PCT = 65.0    # 内存占用超此值 → moderate（原硬编码 65）
 # ★162批刀1·A1链A：硬件探针失败可观测标记开关（False=回退为不打告警，仅置 load_probe_ok）
 ENABLE_INFOFIELD_LOAD_PROBE_MARKER = True
+# ==================== ★第162批刀7：夜间编排前置通道-1（shutdown_request.json 优雅退出） ====================
+# 背景：Windows 无可靠外部 SIGTERM，data/runtime.lock 实测不存在且全仓无创建代码
+#       → 改用 data/shutdown_request.json 文件指令作为无人值守优雅退出通道。
+#       main.py 主循环每拍检测该文件 → 存在即进入优雅退出（触发 finally 清理）。
+NIGHT_ORCH_ENABLED = True                       # 总开关：是否启用夜间编排退出通道（False=回退为不检测 shutdown_request.json）
+NIGHT_ORCH_SHUTDOWN_TIMEOUT = 120.0            # 编排侧等待框架优雅退出的超时（秒）；退出时长基准≈21s（快照≈15s），须≥120s
+NIGHT_ORCH_MAX_RETRIES = 3                      # 编排侧写指令后轮询确认的最大重试次数（每次间隔 2s）
+NIGHT_ORCH_REPORT_PATH = "data/night_orch_report.json"  # 退出结果汇报文件路径（供外部编排读取）
+NIGHT_ORCH_CHECK_INTERVAL = 1                  # 主循环检测 shutdown_request.json 的节拍（秒），与主循环 1s sleep 对齐
+# _m162k7_config_done
