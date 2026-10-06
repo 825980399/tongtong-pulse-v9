@@ -3959,11 +3959,35 @@ def main():
     _lv_thread = threading.Thread(target=_liveness_watchdog, name="LivenessWatchdog", daemon=True)
     _lv_thread.start()
 
-    # 主循环：等待退出信号 + 周期检测「立即应用补丁」请求
+    # ★第162批刀7：启动清场——移除上一轮遗留的 shutdown_request.json，防粘滞触发
+    try:
+        from nucleus.evolution import night_orchestration as _night_orch_mod
+        _night_orch_mod.NightShutdownChannel(
+            os.path.dirname(os.path.abspath(__file__))).clear_stale_request()
+    except Exception as _sd_clear_e:
+        silent_exc(_sd_clear_e, "main.py:startup[刀7-clear]")
+
+    # 主循环：等待退出信号 + 周期检测「立即应用补丁」请求 + 第162批刀7 shutdown_request 退出通道
     try:
         _apply_check_counter = 0
+        _shutdown_chan = None
         while not exit_requested:
             time.sleep(1)
+            # ★第162批刀7：shutdown_request.json 优雅退出通道
+            #   Windows 无可靠外部 SIGTERM，改用数据文件指令；每拍检测，存在即进入优雅退出。
+            try:
+                if _shutdown_chan is None:
+                    from nucleus.evolution import night_orchestration as _night_orch
+                    if getattr(config, "NIGHT_ORCH_ENABLED", True):
+                        _shutdown_chan = _night_orch.NightShutdownChannel(
+                            os.path.dirname(os.path.abspath(__file__)))
+                if _shutdown_chan is not None and _shutdown_chan.has_shutdown_request():
+                    _req = _shutdown_chan.consume_shutdown_request() or {}
+                    print(f"[夜间编排] 检测到 shutdown_request.json（reason={_req.get('reason')}），进入优雅退出流程...")
+                    exit_requested = True
+                    break
+            except Exception as _sd_e:
+                silent_exc(_sd_e, "main.py:3965[刀7-shutdown]")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。
             #   审视生成的补丁若已批准，会写入 apply_now.json 标记，
             #   此处检测到后走「应用+重启」流程，不再被动等待框架退出。
