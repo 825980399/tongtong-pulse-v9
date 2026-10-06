@@ -2092,6 +2092,15 @@ IDENTITY_RELATION_FALLBACK_COMPLETE = True
 #   "cancel"         ：作废旧任务（其回复被丢弃），立即处理新问题。
 DIALOG_QUEUE_STRATEGY = "queue"
 
+# ========== ★主线第163批 刀1（T-推理路由入口放宽-1）：本地推理链兜底灰度开关 ==========
+# 推理路由入口（StrategySelector）在「检测器认不出」（question_type=="未知"）时，
+# 走本地推理链兜底：Symbolic → Causal → Analogy 全链兜底再 LLM。
+#   False（默认·前段静态接线，活体拦截率验收留待双 P0 后实测）：路由入口零行为变化，
+#         仅完成「判定链设计 + 静态接线」，不触发本地兜底链；
+#   True （★生产放宽需双 P0 活体验证后翻，应急回滚改 False）：
+#         未知问题经本地推理链兜底，预期本地拦截率 <2%→≥40%。
+REASONING_ROUTE_LOCAL_FALLBACK = False
+
 ENABLE_EVENT_BUS = False
 EVENT_BUS_CONFIG = {
     # 事件溯源历史上限（环形，超出丢弃最旧）。任务书要求 ≤10000。

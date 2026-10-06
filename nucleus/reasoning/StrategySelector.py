@@ -62,8 +62,14 @@ class StrategySelector:
         "未知": "rule_reason",
     }
 
+    # ★163批 刀1：检测器认不出时的本地推理兜底链（顺序即执行序）。
+    _LOCAL_FALLBACK_CHAIN: ClassVar[tuple[str, ...]] = (
+        "symbolic", "causal", "analogy", "llm",
+    )
+
     def __init__(self, enabled: bool = True,
-                 adapt_rate: float = 0.1) -> None:
+                 adapt_rate: float = 0.1,
+                 local_fallback_enabled: bool | None = None) -> None:
         """
         Args:
             enabled: 开关
@@ -83,6 +89,11 @@ class StrategySelector:
         # 选择历史
         self._selection_history: list[dict[str, Any]] = []
         self._stats = {"total_selections": 0, "adaptations": 0}
+
+        # ★163批 刀1：本地推理链兜底灰度开关（默认读 config，可被构造参数覆盖）。
+        self._local_fallback_enabled = (bool(local_fallback_enabled)
+                                        if local_fallback_enabled is not None
+                                        else self._read_cfg_fallback_flag())
 
     # ========== 核心：策略选择 ==========
 
@@ -151,6 +162,49 @@ class StrategySelector:
             self._selection_history = self._selection_history[-300:]
 
         return _result
+
+    # ========== ★163批 刀1：推理路由入口放宽（判定链设计 + 静态接线） ==========
+
+    def _read_cfg_fallback_flag(self) -> bool:
+        """读取 config.REASONING_ROUTE_LOCAL_FALLBACK（无 try/except，cw2 友好）。"""
+        import config as _cfg
+        return bool(getattr(_cfg, "REASONING_ROUTE_LOCAL_FALLBACK", False))
+
+    def set_local_fallback_enabled(self, value: bool) -> None:
+        """灰度开关运行时切换。"""
+        self._local_fallback_enabled = bool(value)
+
+    def _is_unrecognized(self, base: dict[str, Any],
+                        question_type: str) -> bool:
+        """检测器是否认不出：未分类（'未知'）即视为不可识别。"""
+        return question_type == "\u672a\u77e5"
+
+    def route_with_local_fallback(self, question: str,
+                                  complexity: float = 0.5,
+                                  question_type: str = "未知",
+                                  context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """推理路由入口（放宽版）：检测器认不出时走本地推理链兜底。
+
+        判定链（兜底序）：Symbolic → Causal → Analogy → LLM。
+        - 开关关闭（默认·前段静态接线）：行为等价于 select_strategy，零变化。
+        - 开关开启（★双 P0 活体验证后）：未知问题返回本地兜底链路由，
+          预期把本地拦截率从 <2% 拉到 ≥40%。
+
+        注：本方法只做**路由判定（静态接线）**，不执行引擎；
+        实际引擎调用与活体拦截率验收留待双 P0 后接入。
+        """
+        _base = self.select_strategy(question, complexity, question_type, context)
+        if self._local_fallback_enabled and self._is_unrecognized(_base, question_type):
+            return {
+                "route": "local_fallback",
+                "chain": list(self._LOCAL_FALLBACK_CHAIN),
+                "base_strategy": _base.get("strategy"),
+                "confidence": _base.get("confidence"),
+                "question_type": question_type,
+                "reason": ("检测器不可识别(%s)→启用本地推理兜底链 "
+                           "Symbolic→Causal→Analogy→LLM" % question_type),
+            }
+        return _base
 
     def report_result(self, strategy: str, success: bool) -> None:
         """报告策略执行结果，更新成功率统计（自适应学习）。"""
