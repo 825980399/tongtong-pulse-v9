@@ -5357,3 +5357,7 @@ NIGHT_ORCH_MAX_RETRIES = 3                      # 编排侧写指令后轮询确
 NIGHT_ORCH_REPORT_PATH = "data/night_orch_report.json"  # 退出结果汇报文件路径（供外部编排读取）
 NIGHT_ORCH_CHECK_INTERVAL = 1                  # 主循环检测 shutdown_request.json 的节拍（秒），与主循环 1s sleep 对齐
 # _m162k7_config_done
+
+# ★第162批刀8：编排退出前置补丁闸门开关
+#   True=启用（存在 approved 补丁时拦截退出并留痕 EXIT_BLOCKED_BY_PATCH）；False=回退为不拦截直接退出
+NIGHT_ORCH_PATCH_GATE_ENABLED = True
