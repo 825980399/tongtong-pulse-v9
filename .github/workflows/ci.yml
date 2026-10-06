@@ -13,10 +13,6 @@
 #           其 test_50 依赖**真实生产数据** data/experience/experience_pool.json
 #           （本地为空 ⇒ assertGreater(0,0) 失败），且该节点现为 known_fail 仍红项
 #           ⇒ 属「依赖真实数据」，不属离线测试，剔除。待其转绿后再议入 L1。
-#         - test_experience_summary_hemostasis_m47：★本地实测 1 failed（178 passed）——
-#           其 test_50 依赖**真实生产数据** data/experience/experience_pool.json
-#           （本地为空 ⇒ assertGreater(0,0) 失败），且该节点现为 known_fail 仍红项
-#           ⇒ 属「依赖真实数据」，不属离线测试，剔除。待其转绿后再议入 L1。
 #
 # 触发：push / pull_request。
 
@@ -67,6 +63,10 @@ jobs:
       - name: L0 · red baseline collect (slice 1)
         run: python tools/ci/check_red_baseline_gate.py collect
 
+      - name: L0 · requirements declared-imports gate (第162批 刀4)
+        # 断言：生产第三方 import ∧ 无 ImportError 保护 ⇒ 必须已在 requirements 声明
+        run: python tools/ci/check_requirements_declared_imports.py
+
   # ============ L1：11 件离线测试（实测 21.36s） ============
   l1-offline-tests:
     name: L1 offline tests (10 files)
@@ -111,3 +111,36 @@ jobs:
         run: |
           echo "L1 实耗见上一步 pytest 输出（本地实测 52.8s / 157 passed）"
           echo "预算口径差异见本步骤注释；未删减覆盖以凑预算。"
+
+  # ============ 可复现性（第162批 刀4）：依赖安装 + 一致性校验 ============
+  repro:
+    name: dependency reproducibility (pip install + pip check + freeze)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install declared deps (CI-installable subset)
+        # 用 requirements-ci.txt（已排除 aibot 等非 PyPI 包，见该文件头注释）。
+        # ★torch / faiss-cpu 等较大，安装耗时；如需加速可加 actions/cache 缓存
+        #   ~/.cache/pip。本步验证「声明可安装 + 无依赖冲突」，是 刀4 可复现性闭环。
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-ci.txt
+
+      - name: pip check (dependency conflict)
+        run: python -m pip check
+
+      - name: freeze snapshot artifact
+        run: python -m pip freeze > "freeze-${GITHUB_SHA}.txt"
+
+      - name: Upload freeze artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-freeze-${{ github.sha }}
+          path: "freeze-${{ github.sha }}.txt"
+
