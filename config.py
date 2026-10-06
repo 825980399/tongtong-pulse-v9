@@ -4840,6 +4840,7 @@ COLD_STARTUP_COMPACT_WAIT_SECONDS = 0.0      # 启动 compaction 有界等待（
 COLD_COMPACT_SKIP_ERROR_ENABLED = True       # True=compaction 跳过文件由 DEBUG 升 ERROR + 汇总；False=回退 DEBUG
 COLD_COMPACT_ROWCOUNT_VERIFY = True          # True=compaction 删旧目录前校验新文件行数==合并节点数，不一致则中止（防静默丢节点）
 COLD_INDEX_BACKOFF_BASE = 1.0                # 侧车索引读取失败退避基数（秒，指数上限 8s）
+COLD_INDEX_STALE_WARN_DAYS = 3                 # ★第162批刀３ S3：侧车索引与冷存最新 parquet mtime 落后超此天数则警告“侧车索引落后 X 天”（独立 commit 便回退）
 
 # _m64_t3_config_done
 
