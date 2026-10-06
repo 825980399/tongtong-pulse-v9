@@ -3983,6 +3983,21 @@ def main():
                             os.path.dirname(os.path.abspath(__file__)))
                 if _shutdown_chan is not None and _shutdown_chan.has_shutdown_request():
                     _req = _shutdown_chan.consume_shutdown_request() or {}
+                    # ★第162批刀8：编排退出前置补丁闸门
+                    #   防 approved 补丁在退出路径被自重启劫持（PULSE_QUIT_CONFIRM=0/非TTY 会应用并重启）。
+                    #   存在 approved 补丁 → 跳过退出、留痕 EXIT_BLOCKED_BY_PATCH，本轮保持运行（请求已消费，不反复触发）。
+                    if getattr(config, "NIGHT_ORCH_PATCH_GATE_ENABLED", True):
+                        try:
+                            from nucleus.evolution import night_orchestration as _no_mod
+                            _no_root = os.path.dirname(os.path.abspath(__file__))
+                            if _no_mod.orchestration_exit_blocked_by_patches(_no_root, True):
+                                _approved_n = _no_mod.count_approved_patches(_no_root)
+                                print(f"[夜间编排] 退出被 {_approved_n} 条 approved 补丁拦截，"
+                                      f"留痕 EXIT_BLOCKED_BY_PATCH，本轮不退出")
+                                _no_mod.write_exit_blocked_report(_approved_n, _no_root)
+                                continue
+                        except Exception as _pg_e:
+                            silent_exc(_pg_e, "main.py:3965[刀8-patch-gate]")
                     print(f"[夜间编排] 检测到 shutdown_request.json（reason={_req.get('reason')}），进入优雅退出流程...")
                     exit_requested = True
                     break

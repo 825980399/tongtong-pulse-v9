@@ -145,3 +145,52 @@ def is_framework_running(root=None):
         silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running")
         return None
     return False
+
+
+# ==================== ★第162批刀8：编排退出前置补丁闸门 ====================
+def count_approved_patches(project_root):
+    """统计当前 approved 状态的补丁数（供刀8 退出闸门判定）。
+
+    复用 PatchManager.list_pending_patches() 过滤 status=="approved"；
+    fail-open：任何异常（含 PatchManager 不可用）均返回 0（不阻断退出），
+    仅 silent_exc 留痕，绝不抛出。
+    """
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager
+        _pm = PatchManager(project_root)
+        return sum(1 for _p in _pm.list_pending_patches() if _p.get("status") == "approved")
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.count_approved_patches")
+        return 0
+
+
+def orchestration_exit_blocked_by_patches(project_root, enabled=True):
+    """★第162批刀8 闸门判定：编排退出是否被 approved 补丁拦截。
+
+    返回 True 表示应跳过退出（有 approved 补丁且开关开启）；否则 False。
+    fail-open：任何异常返回 False（不阻断退出）。
+    """
+    if not enabled:
+        return False
+    return count_approved_patches(project_root) > 0
+
+
+def write_exit_blocked_report(count, project_root, reason="EXIT_BLOCKED_BY_PATCH"):
+    """刀8：退出被 approved 补丁拦截时，写留痕文件 data/night_orch_exit_blocked.json。
+
+    供外部编排脚本读取，明确退出为何未生效（被补丁自重启劫持风险已规避）。
+    异常仅 silent_exc 留痕，绝不抛出。
+    """
+    try:
+        _dir = os.path.join(project_root, "data")
+        os.makedirs(_dir, exist_ok=True)
+        _path = os.path.join(_dir, "night_orch_exit_blocked.json")
+        _payload = {
+            "blocked_at": time.time(),
+            "approved_count": count,
+            "reason": reason,
+        }
+        with open(_path, "w", encoding="utf-8") as _f:
+            json.dump(_payload, _f, ensure_ascii=False, indent=2)
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.write_exit_blocked_report")
