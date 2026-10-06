@@ -1,0 +1,160 @@
+#!/bin/sh
+# 第126批 T-126c + 第150批 T150-1 / T150-5 + 第162批刀13/14/15 提速
+# 门禁链路（任一违规即阻断提交）：
+#   1) cw2  静默except + CRCRLF 行尾污染
+#   2) cw3-B ctx 陈旧读 = 0（每次提交，覆盖 _ir_→_ir_ 两级调用）
+#   3) cw3-A 语义守恒（仅当 organs/brain/PulseInnerWorld.py 变更时）
+#   4) T150-5 门禁隔离守卫：CI 门禁文件不得与业务代码同批暂存
+#
+# 第162批提速（刀13/14/15）：
+#   刀13 GATE_PATH_SPLIT — 仅文档路径提交跳过全部代码/collect 门禁（登记册+隔离守卫仍执行）
+#   刀14 GATE_PARALLEL   — 5 个静态门禁（弃用import/事件字符串/断链/silent_exc arity/legacy装配）并发执行
+#   刀15 重锚分类        — 见 commit-msg hook（消息级 A/B 分类 + 归因桶）
+# 回退开关（环境变量，默认启用）：
+#   GATE_PATH_SPLIT=0   恢复全串行（含文档提交也跑全套）
+#   GATE_PARALLEL=0     恢复 5 静态门串行
+#   GATE_COLLECT_LEVEL=full  红基线 collect 升级全量（刀9 增量门默认 incremental）
+
+# 强制使用已安装 pytest 的系统 Python（托管 3.13.12 无 pytest，会导致 collect 门禁失效）
+PY="D:/Program Files/Python312/python.exe"
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+overall=0
+fail() {
+  echo "[pre-commit] $1" >&2
+  overall=1
+}
+
+# ===== 第162批刀13 GATE_PATH_SPLIT：路径分级（暂存清单提前计算，供分级+隔离守卫共用）=====
+STAGED=$(git diff --cached --name-only)
+GATE_PATH_SPLIT="${GATE_PATH_SPLIT:-1}"
+SKIP_CODE_GATES=0
+if [ "$GATE_PATH_SPLIT" != "0" ]; then
+  # 是否含代码/测试/CI 文件（命中即按"就严"跑全套）
+  HAS_CODE=$(printf '%s\n' "$STAGED" | grep -E '\.py$|^config\.py$|^main\.py$|^tools/ci/|^tools/ci/baselines/|tests/' || true)
+  if [ -z "$HAS_CODE" ]; then
+    # 仅文档 / 台账 / md → 跳过代码与 collect 门禁
+    HAS_DOCS=$(printf '%s\n' "$STAGED" | grep -E '^docs/|\.md$|^docs/台账/' || true)
+    if [ -n "$HAS_DOCS" ]; then
+      SKIP_CODE_GATES=1
+      echo "[pre-commit] GATE_PATH_SPLIT：仅文档路径，跳过代码/collect 门禁（登记册与隔离守卫仍执行）"
+    fi
+  fi
+fi
+
+# ===== 代码门禁段（刀13：文档提交整段跳过）=====
+if [ "$SKIP_CODE_GATES" -ne 1 ]; then
+
+  # --- 1) cw2 静默except + CRCRLF 门禁 ---
+  GATE2="$ROOT/tools/ci/cw2_t2e_ci_gate_silent_except.py"
+  if [ ! -f "$GATE2" ]; then
+    echo "[pre-commit] 未找到 CI gate 脚本：$GATE2" >&2
+    exit 1
+  fi
+  "$PY" "$GATE2" --base HEAD --target worktree
+  st=$?
+  if [ "$st" -ne 0 ]; then
+    fail "cw2 静默except/CRCRLF 门禁未通过。调试：python tools/ci/cw2_t2e_ci_gate_silent_except.py --verbose"
+  fi
+
+  # --- 1.5 + 1.7 + 1.8 + 1.9 第162批刀14 GATE_PARALLEL：5 静态门并发 ---
+  GATE_DEP="$ROOT/tools/ci/check_deprecated_imports.py"
+  GATE_ES="$ROOT/tools/ci/check_event_string_gate.py"
+  GATE_BC="$ROOT/tools/ci/check_broken_chain_gate.py"
+  GATE_AE="$ROOT/tools/ci/check_silent_exc_arity.py"
+  GATE_LA="$ROOT/tools/ci/check_legacy_assembly_gate.py"
+  if [ "${GATE_PARALLEL:-1}" != "0" ]; then
+    echo "[pre-commit] GATE_PARALLEL：5 静态门并发执行"
+    if [ -f "$GATE_DEP" ]; then "$PY" "$GATE_DEP" >/tmp/_pc_dep.log 2>&1 & pid_dep=$!; else pid_dep=""; fi
+    if [ -f "$GATE_ES" ];  then "$PY" "$GATE_ES"  >/tmp/_pc_es.log 2>&1  & pid_es=$!;  else pid_es="";  fi
+    if [ -f "$GATE_BC" ];  then "$PY" "$GATE_BC"  >/tmp/_pc_bc.log 2>&1  & pid_bc=$!;  else pid_bc="";  fi
+    if [ -f "$GATE_AE" ];  then "$PY" "$GATE_AE"  >/tmp/_pc_ae.log 2>&1  & pid_ae=$!;  else pid_ae="";  fi
+    if [ -f "$GATE_LA" ];  then "$PY" "$GATE_LA"  >/tmp/_pc_la.log 2>&1  & pid_la=$!;  else pid_la="";  fi
+    if [ -n "$pid_dep" ]; then wait "$pid_dep"; st=$?; [ "$st" -ne 0 ] && fail "弃用 import 门禁未通过（详见 /tmp/_pc_dep.log）"; fi
+    if [ -n "$pid_es" ];  then wait "$pid_es";  st=$?; [ "$st" -ne 0 ] && fail "事件字符串门禁未通过（详见 /tmp/_pc_es.log）"; fi
+    if [ -n "$pid_bc" ];  then wait "$pid_bc";  st=$?; [ "$st" -ne 0 ] && fail "C-8 断链门禁未通过（详见 /tmp/_pc_bc.log）"; fi
+    if [ -n "$pid_ae" ];  then wait "$pid_ae";  st=$?; [ "$st" -ne 0 ] && fail "silent_exc arity 门禁未通过（详见 /tmp/_pc_ae.log）"; fi
+    if [ -n "$pid_la" ];  then wait "$pid_la";  st=$?; [ "$st" -ne 0 ] && fail "legacy 装配段防回潮门禁未通过（详见 /tmp/_pc_la.log）"; fi
+  else
+    # 串行回退
+    if [ -f "$GATE_DEP" ]; then "$PY" "$GATE_DEP"; st=$?; [ "$st" -ne 0 ] && fail "弃用 import 门禁未通过（新增非豁免 hybrid/structured scheduler import，应改用 parallel_scheduler.get_parallel_scheduler）"; fi
+    if [ -f "$GATE_ES" ];  then "$PY" "$GATE_ES";  st=$?; [ "$st" -ne 0 ] && fail "事件字符串门禁未通过（新增裸点分事件名字符串，应改用 const.py 枚举 Class.MEMBER.value）"; fi
+    if [ -f "$GATE_BC" ];  then "$PY" "$GATE_BC";  st=$?; [ "$st" -ne 0 ] && fail "C-8 断链门禁未通过（孤岛文件数/零引用入口方法数/零引用 set_* 数 任一较基线上升）"; fi
+    if [ -f "$GATE_AE" ];  then "$PY" "$GATE_AE";  st=$?; [ "$st" -ne 0 ] && fail "silent_exc arity 门禁未通过（存在 silent_exc(...) 缺必填 e 实参，应为 silent_exc(e, where=...)）"; fi
+    if [ -f "$GATE_LA" ];  then "$PY" "$GATE_LA";  st=$?; [ "$st" -ne 0 ] && fail "legacy 装配段防回潮门禁未通过（legacy 段 _create_organ 调用超基线/停用标注丢失/开关被置 False）"; fi
+  fi
+
+  # --- 1.6) B156-0 红基线 · 片1 collect 门禁（刀9 增量门默认；fail-safe 升级全量）---
+  GATE_RB="$ROOT/tools/ci/check_red_baseline_gate.py"
+  if [ -f "$GATE_RB" ]; then
+    "$PY" "$GATE_RB" collect
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      fail "红基线 collect 门禁未通过（收集错误或节点数漂移>±5；详见 python tools/ci/check_red_baseline_gate.py collect）"
+    fi
+  fi
+
+  # --- 1.10) 第162批刀3 S4 冷索引关系式断言巡检（无冷存/无索引/无 pyarrow/空索引 → SKIP，不阻断）---
+  GATE_S4="$ROOT/tools/ci/check_cold_index_relational.py"
+  if [ -f "$GATE_S4" ]; then
+    "$PY" "$GATE_S4"
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      fail "刀3 S4 冷索引关系式断言未通过（索引与冷存 Parquet 不一致，需修复后提交；详见 python tools/ci/check_cold_index_relational.py）"
+    fi
+  fi
+
+  # --- 2) cw3-B ctx 陈旧读门禁（每次提交）---
+  GATE_B="$ROOT/tools/ci/cw3_ctx_stale_read_gate.py"
+  if [ -f "$GATE_B" ]; then
+    "$PY" "$GATE_B" --root "$ROOT" --rev WORKTREE
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      fail "cw3-B ctx 陈旧读门禁未通过（陈旧读 > 0）"
+    fi
+  else
+    echo "[pre-commit] 未找到 cw3-B：$GATE_B（跳过）" >&2
+  fi
+
+fi  # end SKIP_CODE_GATES
+
+# --- 4) T150-5 门禁隔离守卫：CI 门禁文件与业务代码不得同提交 ---
+CI_FILES=$(printf '%s\n' "$STAGED" | grep -E '^tools/ci/|^tools/ci/baselines/' || true)
+BIZ_FILES=$(printf '%s\n' "$STAGED" | grep -vE '^tools/ci/|^tools/ci/baselines/' || true)
+if [ -n "$CI_FILES" ] && [ -n "$BIZ_FILES" ]; then
+  fail "门禁隔离守卫：检测到 CI 门禁文件与业务代码同批暂存（禁止项）。请拆分为独立提交。
+  CI 门禁: $(printf '%s' "$CI_FILES" | tr '\n' ' ')
+  业务代码: $(printf '%s' "$BIZ_FILES" | tr '\n' ' ')"
+fi
+
+# --- 3) cw3-A 语义守恒门禁（仅 IW 变更时）---
+IW_CHANGED=$(printf '%s\n' "$STAGED" | grep -Fx 'organs/brain/PulseInnerWorld.py' || true)
+if [ -n "$IW_CHANGED" ]; then
+  GATE_A="$ROOT/tools/ci/cw3_consistency_gate.py"
+  if [ -f "$GATE_A" ]; then
+    "$PY" "$GATE_A" --root "$ROOT" --base HEAD --target worktree --baseline "$ROOT/tools/ci/baselines/iw_consistency_baseline.json"
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      fail "cw3-A 语义守恒门禁未通过（IW 改动但守恒量漂移且无 delta_reason）"
+    fi
+  fi
+fi
+
+# --- 待裁决登记册完备性校验（每次提交，T150-3）---
+REG="$ROOT/tools/ci/check_pending_register.py"
+if [ -f "$REG" ]; then
+  "$PY" "$REG"
+  st=$?
+  if [ "$st" -ne 0 ]; then
+    fail "待裁决登记册校验未通过（提交被阻断）"
+  fi
+else
+  echo "[pre-commit] 未找到 check_pending_register：$REG（跳过）" >&2
+fi
+
+if [ "$overall" -ne 0 ]; then
+  echo "[pre-commit] 门禁未通过，提交被阻断。修复后重新提交。" >&2
+fi
+exit $overall

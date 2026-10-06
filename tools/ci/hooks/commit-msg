@@ -1,0 +1,27 @@
+#!/bin/sh
+# 第150批 T150-5：commit-msg 守卫
+# 若本次提交包含 CI 门禁文件（tools/ci/*.py 或 tools/ci/baselines/*.json），
+# 提交信息必须含 [ci-gate-change] 标记，且不得夹带业务代码（同提交隔离由 pre-commit 守卫）。
+# 第162批刀15：检测到 [ci-gate-change] + 基线文件时，调用 classify_reanchor 打印归因桶（非阻断）。
+
+MSG="$1"
+if [ -z "$MSG" ]; then
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+STAGED=$(git diff --cached --name-only)
+CI_FILES=$(printf '%s\n' "$STAGED" | grep -E '^tools/ci/|^tools/ci/baselines/' || true)
+if [ -n "$CI_FILES" ]; then
+  if ! grep -q '\[ci-gate-change\]' "$MSG"; then
+    echo "[commit-msg] 门禁隔离守卫：提交含 CI 门禁文件，提交信息必须包含 [ci-gate-change] 标记。" >&2
+    echo "[commit-msg] CI 文件：$(printf '%s' "$CI_FILES" | tr '\n' ' ')" >&2
+    exit 1
+  fi
+  # 第162批刀15：重锚分类（非阻断，仅信息输出到 stderr，供星轨核签）
+  PY="D:/Program Files/Python312/python.exe"
+  "$PY" "$ROOT/tools/ci/classify_reanchor.py"
+fi
+exit 0
