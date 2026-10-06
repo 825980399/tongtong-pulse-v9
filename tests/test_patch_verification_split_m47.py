@@ -192,8 +192,8 @@ class TestBackfill(unittest.TestCase):
     def test_35_empty_list(self):
         _r = _pvs.backfill([], apply=True)
         self.assertEqual(_r["total"], 0)
-        self.assertEqual(_r["real_fix_rate"], 0.0)
-        self.assertEqual(_pvs.real_fix_rate([]), 0.0)
+        self.assertIsNone(_r["real_fix_rate"])
+        self.assertIsNone(_pvs.real_fix_rate([]))
 
 
 # ==================== 展示层 ====================

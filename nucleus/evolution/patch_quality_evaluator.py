@@ -418,7 +418,7 @@ def summarize(items: list) -> dict[str, Any]:
                 if isinstance(x, dict) and _split(x).get("problem_fixed") is not None)
             / _n, 4) if _n else 0.0
         _out["fix_rate_gap"] = round(
-            _out["no_regression_rate"] - _out["real_fix_rate"], 4)
+            _out["no_regression_rate"] - (_out["real_fix_rate"] or 0.0), 4)
     except Exception as e:      # 拆分模块异常不影响既有汇总
         silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::summarize L305")
     return _out

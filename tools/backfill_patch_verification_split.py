@@ -173,7 +173,7 @@ def main() -> int:
     print()
     print("[4] ★修复率对比")
     print("    旧声称修复率 (verified)   : %.2f%%" % (_r["old_claimed_rate"] * 100))
-    print("    真实修复率 (problem_fixed): %.2f%%" % (_r["real_fix_rate"] * 100))
+    print("    真实修复率 (problem_fixed): %.2f%%" % ((_r.get("real_fix_rate") or 0.0) * 100))
     print("    可判定率                  : %.2f%%" % (_r["verifiable_rate"] * 100))
     print("    effectiveness 均值: %s（%d 条可算）"
           % (_r["effectiveness_mean"], _r["effectiveness_count"]))

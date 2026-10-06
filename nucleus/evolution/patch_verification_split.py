@@ -263,7 +263,9 @@ def backfill(patches: list[dict[str, Any]],
         "problem_fixed": {"true": _pf.get(True, 0), "false": _pf.get(False, 0),
                           "none": _pf.get(None, 0)},
         "granularity_dist": _gran,
-        "real_fix_rate": round(_pf.get(True, 0) / _verifiable, 4) if _verifiable else 0.0,
+        "real_fix_rate": (round(_pf.get(True, 0) / _verifiable, 4)
+                          if _verifiable
+                          else (None if not patches else 0.0)),
         "verifiable_rate": round(_verifiable / _n, 4) if _n else 0.0,
         "verifiable_count": _verifiable,
         "old_claimed_rate": round(_old_claimed / _n, 4) if _n else 0.0,
@@ -281,7 +283,7 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
     留在分母只会让指标永久接近 0，无助于判断本地修复能力的真实水平。
     """
     if not patches:
-        return 0.0
+        return None
     _n = sum(1 for _p in patches if isinstance(_p, dict))
     if not _n:
         return 0.0
