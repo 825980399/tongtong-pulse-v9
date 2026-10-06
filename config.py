@@ -5361,3 +5361,8 @@ NIGHT_ORCH_CHECK_INTERVAL = 1                  # 主循环检测 shutdown_reques
 # ★第162批刀8：编排退出前置补丁闸门开关
 #   True=启用（存在 approved 补丁时拦截退出并留痕 EXIT_BLOCKED_BY_PATCH）；False=回退为不拦截直接退出
 NIGHT_ORCH_PATCH_GATE_ENABLED = True
+
+# ★第162批刀16：自报 digest 开关（每晚 04:00 挂靠夜间编排）
+#   True=启用（对 needs_human 告警去重分级产出 digest_YYYYMMDD.md）；False=回退为不产出
+NIGHT_ORCH_DIGEST_ENABLED = True
+# _m162k16_config_done
