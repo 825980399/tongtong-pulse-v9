@@ -48,6 +48,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -57,6 +58,11 @@ from .report_envelope import (ACT_ALERT, ACT_CLEAN_DATA, ACT_LOG_ONLY,
                               TYPE_HEALTH, TYPE_POLLUTION, TYPE_SELF_COGNITION,
                               Anomaly, make_envelope)
 from nucleus._silent_except import silent_exc
+
+_LOG = logging.getLogger("ReportPublishers")
+# 生产侧类型白名单拒写（烛微分诊口径）：这些类型为测试夹具/分诊占位，
+# 不得进入生产队列（data/reports），避免污染生产。
+PRODUCTION_REJECT_TYPES = frozenset({"H_P0", "HEALTH_P0"})
 
 __all__ = [
     "bus_enabled", "publish_health", "publish_pollution",
@@ -88,6 +94,21 @@ def _thr(name: str, default: float) -> float:
 def _emit(envelope, _tag: str) -> dict[str, Any] | None:
     """统一发布出口：**绝不抛异常**。"""
     try:
+        # ★163批 刀2：生产侧类型白名单拒写（烛微分诊口径）。
+        #   H_P0/HEALTH_P0 等为测试夹具/分诊占位，不得进入生产队列，
+        #   避免污染生产；被拒类型打隔离标注后从待发布异常中剔除。
+        _rej = [a for a in (envelope.anomalies or [])
+                if getattr(a, "type", None) in PRODUCTION_REJECT_TYPES]
+        if _rej:
+            for _a in _rej:
+                setattr(_a, "_isolated", True)
+                setattr(_a, "_cleanup_ticket", _tag)
+            envelope.anomalies = [a for a in (envelope.anomalies or [])
+                                  if getattr(a, "type", None)
+                                  not in PRODUCTION_REJECT_TYPES]
+            _LOG.debug("[M163-刀2] 生产侧白名单拒写 %d 条(type=%s)，不落生产队列",
+                       len(_rej),
+                       sorted({getattr(a, "type", "") for a in _rej}))
         _r = get_report_bus().publish(envelope)
         return {
             "report_id": envelope.report_id,
