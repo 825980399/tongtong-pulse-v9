@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import time
+import logging
 from typing import Any
 
 import hashlib
@@ -52,6 +53,8 @@ __all__ = [
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+_LOG = logging.getLogger("rule_engine")
 
 #: 严重级（由重到轻）。
 SEVERITIES = ("error", "warn", "info")
@@ -192,21 +195,27 @@ def changed_files(base="HEAD~1", target="HEAD", root=None) -> list[str]:
     try:
         _r = subprocess.run(
             ["git", "diff", "--name-only", "%s..%s" % (base, target)],
-            cwd=_root, capture_output=True, text=True, timeout=60, check=False)
+            cwd=_root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60, check=False)
         if _r.returncode == 0:
             _out.extend([x.strip() for x in _r.stdout.splitlines() if x.strip()])
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.rule_engine::changed_files diff",
                    level="debug")
+        _LOG.warning("增量档读取失败(git diff %s..%s): %s: %s",
+                     base, target, type(_e).__name__, _e)
     try:
         _r2 = subprocess.run(["git", "diff", "--name-only", "HEAD"],
-                             cwd=_root, capture_output=True, text=True, timeout=60,
+                             cwd=_root, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=60,
                              check=False)
         if _r2.returncode == 0:
             _out.extend([x.strip() for x in _r2.stdout.splitlines() if x.strip()])
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.rule_engine::changed_files worktree",
                    level="debug")
+        _LOG.warning("增量档读取失败(git diff HEAD 工作树): %s: %s",
+                     type(_e).__name__, _e)
     return sorted({x for x in _out if x.endswith(".py")
                    and os.path.isfile(os.path.join(_root, x))})
 
