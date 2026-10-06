@@ -379,6 +379,17 @@ class PulseNodePool(SilentLogMixin):
         Returns:
             node_id
         """
+        # ★第162批 刀6：节点 state 取值校验（非法值拒绝入库并记日志）。
+        #   合法取值见 PulseNode.VALID_STATES = (active, dormant, locked)。
+        #   构造函数只产生合法值，本校验为入库前的防御性闸门；
+        #   命中即跳过写入、留 WARNING 并返回空串（调用方视为未入库）。
+        if not PulseNode.is_valid_state(getattr(node, "state", None)):
+            _module_logger.warning(
+                "[刀6状态校验] 拒绝入库非法 state 节点: node_id=%s state=%r "
+                "（合法取值 %s）",
+                getattr(node, "node_id", "?"), getattr(node, "state", None),
+                list(PulseNode.VALID_STATES))
+            return ""
         # ★主线第12批 T4/P2-31：调用点①「知识写入前」轻量质量检查（采样 INFO）。
         #   灰度 ENABLE_DATA_QUALITY_GUARD_CHECKPOINTS；关闭/异常 → 完全跳过，零副作用。
         #   热路径保护：采样计数命中才调用 Guard，避免逐节点开销。

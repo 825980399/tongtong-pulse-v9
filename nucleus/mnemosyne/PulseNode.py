@@ -78,6 +78,15 @@ class PulseNode:
     IMPORTANCE_B = "B"  # 中
     IMPORTANCE_C = "C"  # 低（L1 默认）
     
+    # ★第162批 刀6：节点 state 合法取值枚举（active / dormant / locked）。
+    #   非法值由 PulseNodePool.add 在入库前拒绝并记日志（见 刀6 落点）。
+    VALID_STATES = ("active", "dormant", "locked")
+
+    @classmethod
+    def is_valid_state(cls, state: Any) -> bool:
+        """校验节点 state 是否合法（∈ VALID_STATES）。"""
+        return state in cls.VALID_STATES
+
     def __init__(self, 
                  value: Any,
                  keywords: list[str] | None = None,
