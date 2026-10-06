@@ -417,7 +417,52 @@ class ParamPatchManager:
         # 等待参数生效并收集运行时指标
         time.sleep(min(wait_seconds, 5))  # 验证时最多等5秒，实际效果由后续监控完成
 
-        # 标记为待验证（实际效果验证由框架的健康度比较完成）
+        # ★163批 刀7：灰度开关（PARAM_PATCH_EFFECT_VERIFY_ENABLED，默认 False）→
+        #   开启时执行「真实效果验证」：复用既有 worker 验证链路（按名派发
+        #   "verify_patch_effect_in_process"，不 import 封存模块），使 effect_verified
+        #   反映真实结果而非硬编码 False；关闭时退化为原「待验证」桩（零行为变化）。
+        import config as _cfg
+        if getattr(_cfg, "PARAM_PATCH_EFFECT_VERIFY_ENABLED", False):
+            from nucleus.reasoning.ReasoningWorkerPool import get_reasoning_pool
+            try:
+                _pool = get_reasoning_pool()
+                _patch_info = {
+                    "id": patch.get("id"),
+                    "param": patch.get("param"),
+                    "applied_at": patch.get("applied_at"),
+                }
+                _log_file = os.path.join(_PROJECT_ROOT, "logs", "pulse.log")
+                _future = _pool.submit("verify_patch_effect_in_process", _patch_info, _log_file)
+                _vres = _future.result(timeout=30)
+                if _vres.get("error"):
+                    result["effect_verified"] = False
+                    patch["effect_verified"] = False
+                    result["recommended"] = "observe"
+                    result["reason"] = f"真实验证返回错误: {_vres.get('error')}"
+                else:
+                    _effect = _vres.get("effect", "unknown")
+                    _rec = _vres.get("recommendation", "observe")
+                    patch["effect_verified"] = True
+                    patch["effect_result"] = _effect
+                    patch["effect_verified_at"] = time.time()
+                    patch["before_metrics"] = _vres.get("before_metrics", {})
+                    patch["after_metrics"] = _vres.get("after_metrics", {})
+                    patch["delta"] = _vres.get("delta", {})
+                    result["effect_verified"] = True
+                    result["recommended"] = _rec
+                    result["post_metrics"] = patch["after_metrics"]
+                    result["delta"] = patch["delta"]
+                    result["reason"] = f"已执行真实效果验证(effect={_effect}, recommended={_rec})"
+            except Exception as _ve:
+                # 真实验证执行异常 → 维持待验证态（不谎报为已验证）
+                silent_exc(_ve, where="ParamPatchManager.verify_effect:real")
+                result["effect_verified"] = False
+                patch["effect_verified"] = False
+                result["recommended"] = "observe"
+                result["reason"] = "真实验证执行异常，维持待验证态"
+            return result
+
+        # 标记为待验证（默认态：开关关闭，实际效果验证由框架的健康度比较完成）
         patch["effect_verified"] = False
         patch["effect_verify_scheduled_at"] = time.time()
         patch["baseline_metrics"] = baseline_metrics

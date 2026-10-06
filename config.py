@@ -5375,3 +5375,8 @@ NIGHT_ORCH_PATCH_GATE_ENABLED = True
 #   True=启用（对 needs_human 告警去重分级产出 digest_YYYYMMDD.md）；False=回退为不产出
 NIGHT_ORCH_DIGEST_ENABLED = True
 # _m162k16_config_done
+
+# ★第163批 刀7：进化验证率真实验证开关
+#   True=verify_effect 执行真实效果验证（复用 worker 链路，按名派发，不 import 封存模块），
+#   验证率口径真实化；False=回退为原「应用即待验证」桩（零行为变化，默认）。
+PARAM_PATCH_EFFECT_VERIFY_ENABLED = False
