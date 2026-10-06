@@ -88,7 +88,18 @@ def main():
     ap.add_argument("--timeout", type=float, default=None,
                     help="等待框架退出超时（秒）；默认取 config.NIGHT_ORCH_SHUTDOWN_TIMEOUT")
     ap.add_argument("--report", default=None, help="汇报路径；默认 config.NIGHT_ORCH_REPORT_PATH")
+    ap.add_argument("--digest", action="store_true",
+                    help="第162批刀16：产出每日自报 digest（data/reports/digest_YYYYMMDD.md）并退出")
     args = ap.parse_args()
+
+    # 第162批刀16：每日 digest 挂靠点（与 collect 同段，由外部 04:00 调度调用）
+    if args.digest:
+        _path = _orch.generate_night_digest(_ROOT)
+        if _path:
+            print("[night_orch] digest 已产出：%s" % _path)
+            return 0
+        print("[night_orch] digest 产出失败（无数据或 NIGHT_ORCH_DIGEST_ENABLED=False）。")
+        return 1
 
     _timeout = float(args.timeout) if args.timeout else float(_read_config("NIGHT_ORCH_SHUTDOWN_TIMEOUT", 120))
     _report = args.report or _read_config("NIGHT_ORCH_REPORT_PATH", "data/night_orch_report.json")

@@ -194,3 +194,139 @@ def write_exit_blocked_report(count, project_root, reason="EXIT_BLOCKED_BY_PATCH
             json.dump(_payload, _f, ensure_ascii=False, indent=2)
     except Exception as _e:
         silent_exc(_e, where="nucleus.evolution.night_orchestration.write_exit_blocked_report")
+
+
+
+# ==================== ★第162批刀16：自报 digest（每晚 04:00 挂靠夜间编排） ====================
+def generate_night_digest(project_root, as_of=None, enabled=None):
+    """★第162批刀16（T-自报digest-1，P2，依赖刀7）每晚自认知报告后产出人读摘要。
+
+    只读 ``data/reports/alerts.jsonl`` 中 ``needs_human=True`` 条目，做
+    去重 + 分级（P0/P1 计数）+ Top5 问题 + 建议动作 + 复跑命令，
+    产出 ``data/reports/digest_YYYYMMDD.md``（一页内）。
+
+    约束（任务书）：
+      - 只读 alerts/todo/补丁队列，不修改任何业务数据；
+      - 不新增除 digest 外的任何文件；
+      - 由外部 04:00 调度经 ``tools/night_orch_shutdown.py --digest`` 调用，
+        不新增独立调度。
+
+    返回 digest 文件路径；关闭/无数据/异常时返回 None（all except → silent_exc）。
+    """
+    if enabled is None:
+        try:
+            import config as _cfg
+            enabled = getattr(_cfg, "NIGHT_ORCH_DIGEST_ENABLED", True)
+        except Exception as _e:
+            silent_exc(_e, where="night_orchestration.generate_night_digest.cfg")
+            enabled = True
+    if not enabled:
+        return None
+    try:
+        import json as _json
+        from datetime import datetime
+
+        _alerts_path = os.path.join(project_root, "data", "reports", "alerts.jsonl")
+        _as_of = as_of or datetime.now()
+        _ymd = _as_of.strftime("%Y%m%d")
+        _out_dir = os.path.join(project_root, "data", "reports")
+        os.makedirs(_out_dir, exist_ok=True)
+        _digest_path = os.path.join(_out_dir, "digest_%s.md" % _ymd)
+
+        # 1) 读取 needs_human 条目
+        _rows = []
+        if os.path.isfile(_alerts_path):
+            with open(_alerts_path, "r", encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _rec = _json.loads(_line)
+                    except Exception as _je:
+                        silent_exc(_je, where="night_orchestration.generate_night_digest.parse")
+                        continue
+                    if _rec.get("needs_human"):
+                        _rows.append(_rec)
+
+        # 2) 去重（按 report_id + anomaly_type + target；None 视为空串避免 TypeError）
+        _seen = set()
+        _deduped = []
+        for _r in _rows:
+            _key = (
+                _r.get("report_id") or "",
+                _r.get("anomaly_type") or "",
+                _r.get("target") or "",
+            )
+            if _key in _seen:
+                continue
+            _seen.add(_key)
+            _deduped.append(_r)
+
+        # 3) 分级 P0 / P1
+        def _sev(r):
+            return str(r.get("severity", "")).upper()
+        _p0 = [r for r in _deduped if _sev(r) == "P0"]
+        _p1 = [r for r in _deduped if _sev(r) == "P1"]
+
+        # 4) Top5（按 ts 倒序）
+        def _ts(r):
+            try:
+                return float(r.get("ts", 0) or 0)
+            except Exception as _e:
+                silent_exc(_e, where="night_orchestration.generate_night_digest._ts")
+                return 0.0
+        _top = sorted(_deduped, key=_ts, reverse=True)[:5]
+
+        # 5) 建议动作去重
+        _actions = []
+        _act_seen = set()
+        for _r in _deduped:
+            _a = _r.get("suggested_action")
+            if _a and _a not in _act_seen:
+                _act_seen.add(_a)
+                _actions.append(_a)
+
+        # 6) 拼装 markdown
+        _L = []
+        _L.append("# 曈曈自报消费闭环 · 每日 digest（%s）" % _as_of.strftime("%Y-%m-%d"))
+        _L.append("")
+        _L.append("> 由夜间编排 04:00 流程自动产出（只读 alerts.jsonl，不改写 alerts/todo/补丁队列）。")
+        _L.append("")
+        _L.append("## 一、概览")
+        _L.append("")
+        _L.append("- 需人工介入条目（去重后）：**%d** 条" % len(_deduped))
+        _L.append("- P0：**%d** 条 ｜ P1：**%d** 条" % (len(_p0), len(_p1)))
+        _L.append("- 原始 alerts.jsonl 中 needs_human 命中：**%d** 条（含重复）" % len(_rows))
+        _L.append("")
+        _L.append("## 二、Top5 问题（按时间倒序）")
+        _L.append("")
+        if _top:
+            for _i, _r in enumerate(_top, 1):
+                _L.append("%d. [%s] %s — %s（target=%s）" % (
+                    _i, _r.get("severity", "?"), _r.get("anomaly_type", "?"),
+                    _r.get("description", ""), _r.get("target", "")))
+        else:
+            _L.append("(无)")
+        _L.append("")
+        _L.append("## 三、建议动作")
+        _L.append("")
+        if _actions:
+            for _a in _actions:
+                _L.append("- %s" % _a)
+        else:
+            _L.append("(无)")
+        _L.append("")
+        _L.append("## 四、复跑命令")
+        _L.append("")
+        _L.append("```bash")
+        _L.append("python tools/night_orch_shutdown.py --digest")
+        _L.append("```")
+        _L.append("")
+
+        with open(_digest_path, "w", encoding="utf-8") as _f:
+            _f.write("\n".join(_L) + "\n")
+        return _digest_path
+    except Exception as _e:
+        silent_exc(_e, where="night_orchestration.generate_night_digest")
+        return None
