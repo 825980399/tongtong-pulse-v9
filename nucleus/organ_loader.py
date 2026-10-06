@@ -97,6 +97,7 @@ class OrganLoader:
         """
         self.framework = framework
         self._loaded_organs: dict[str, Any] = {}
+        self._scanned_metas: list[OrganMeta] | None = None
     
     def scan_organs_directory(self) -> list[OrganMeta]:
         """
@@ -156,6 +157,14 @@ class OrganLoader:
         # 保存注册表（供查询），不创建任何器官实例
         self._scanned_metas = metas
         return metas
+
+    def get_scanned_metas(self) -> list[OrganMeta] | None:
+        """返回最近一次 load_organs 扫描到的器官元数据（读方）。
+
+        供 main.py 装配自检「声明-实例差集」等消费；load_organs 未调用前返回 None。
+        """
+        return self._scanned_metas
+
     def load_organs_from_dir(self, dir_name: str) -> dict[str, Any]:
         """
         ★v18.0新增：从指定器官目录动态加载所有器官。

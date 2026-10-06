@@ -1282,7 +1282,7 @@ class PulseFramework:
             # ★C-7(b) 声明-实例差集（等价校验）：load_organs 声明集 vs 实际装配器官
             #   活体验收：重启后日志出现「[C-7b 声明-实例差集]」行（待小林协调核验，D5 停框架）
             try:
-                _declared_names = {getattr(_m, "name", None) for _m in (metas or [])}
+                _declared_names = {getattr(_m, "name", None) for _m in (self.organ_loader.get_scanned_metas() or [])}
                 _declared_names.discard(None)
                 _wired_names = set(getattr(self, "organs", {}) or {})
                 _missing = sorted(_declared_names - _wired_names)
