@@ -3,8 +3,8 @@
 """legacy 装配段防回潮门禁（第158批 _create_organ 退役★ 配套门禁）。
 
 背景（据第158批 _create_organ 退役实测结论）：
-  main.py 的 _init_organs_legacy()（:1344）内含 37 处硬编码 self._create_organ(...)
-  调用。在 FEATURE['use_declarative_assembly']=True（config.py:1827）下，该段
+  main.py 的 _init_organs_legacy()（区间以本脚本自报为准）内含 37 处硬编码 self._create_organ(...)
+  调用。在 FEATURE['use_declarative_assembly']=True（config.py:1839）下，该段
   已不执行（入口 _init_organs_with_feature() 直接分流至 _init_organs_declarative），
   属「已停用但保留的一键回退通道」。
 
@@ -39,8 +39,10 @@ from nucleus._silent_except import silent_exc  # noqa: E402
 MAIN_PY = os.path.join(PROJECT_ROOT, "main.py")
 CONFIG_PY = os.path.join(PROJECT_ROOT, "config.py")
 
-# ★基线：实测 legacy 段内 self._create_organ( 调用行数 = 37
-#   （全仓 38 处 = legacy 37 + declarative Phase 0 的 QICA 1 处）。
+# ★基线：实测 legacy 段内 self._create_organ( 调用行数 = 37（代码面口径）
+#   （全仓 .py 字面 75 = main 47 + gate 16 + organ_assembler 6 + config 2
+#    + PulseCodeLearner 2 + organ_loader 1 + metrics_spec 1；计数判据
+#    `git grep -c '_create_organ' -- main.py` = 47）。
 BASELINE_LEGACY_CALLS = 37
 
 # legacy 段停用标注的识别锚点（docstring 中的退役说明）
