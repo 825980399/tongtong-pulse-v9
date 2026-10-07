@@ -687,12 +687,14 @@ class PulseFramework:
         self._log(LogLevel.INFO, "体验记忆池已初始化")
         
         # ★v23.0新增：振荡场监视器——衔接OscillonField与GradientTracker
+        #   （壳降格声明·166批刀3：OscillonField 现为壳=未接线预留；全仓振荡场增强因子仅 3 处：ResonanceEngine:58 初始化 / :1309 setter / :1319 赋值，无 getter 消费读取点）
         from nucleus.field.OscillonField import FrequencyPhaseLock, OscillonField
         
         # 创建最小具体实现——振荡场监视器
         class _FieldStatusMonitor(OscillonField):
+            # 壳降级（166批刃3）：OscillonField 未接线预留，本子类仅 _propagate_empty_count 观测计数在用
             # ★第162批刀5（B2-2）：propagate 空转计数（可观测；原空转返 [] 不可见）
-            _propagate_empty_count = 0
+            _propagate_empty_count = 0  # 壳唯一在用观测面（OscillonField 未接线）
 
             def propagate(self, signal):
                 _FieldStatusMonitor._propagate_empty_count += 1
@@ -702,7 +704,17 @@ class PulseFramework:
                 return True
             def unregister_node(self, node_id):
                 return self._nodes.pop(node_id, None) is not None
-        
+
+            def get_stats(self) -> dict:
+                _s = super().get_stats()
+                _s["propagate_empty_count"] = _FieldStatusMonitor._propagate_empty_count
+                return _s
+
+            def update_field_snapshot(self, field_report) -> None:
+                field_report = dict(field_report)
+                field_report["propagate_empty_count"] = _FieldStatusMonitor._propagate_empty_count
+                super().update_field_snapshot(field_report)
+
         self.oscillon_monitor = _FieldStatusMonitor(field_name="pulse_net_monitor")
         self.gradient_tracker.set_oscillon_monitor(self.oscillon_monitor)
         
