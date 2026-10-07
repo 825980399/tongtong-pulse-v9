@@ -158,6 +158,11 @@ class ReportBus:
         except Exception:
             self._consumer_staleness_threshold = 3600.0
         self._last_staleness_warn_at: float = 0.0
+        # ★第169批 C1（T-报告契约-2）：发射方「期望消费类别」声明表
+        #   publish 后若「无订阅者」或「期望消费者未覆盖」→ 走既有
+        #   check_consumer_staleness 同族告警（WARNING + 节流）。
+        self._expected_consumers: dict[str, list[str]] = {}
+        self._last_missing_warn_at: float = 0.0
         # ★第111批 T-111b：闭环解决率（问题解决率）best-effort 跟踪
         self._issues: dict[str, dict] = {}            # key=类型::异常码 -> 问题状态
         self._resolution_events: int = 0              # 状态翻转(问题->已解决)事件计数
@@ -242,6 +247,8 @@ class ReportBus:
                 self._dispatch(envelope, _consumers, _errors)
 
             self._maybe_warn_staleness()  # ★T-111a 节流式消费者陈旧 WARNING
+            # ★第169批 C1：发射方期望消费类别校验 + 无订阅者告警（同族节流 WARNING）
+            self._maybe_warn_missing_consumers(envelope.report_type, _consumers)
             return {"report_id": envelope.report_id,
                     "persisted": _persisted,
                     "dispatched": bool(dispatch),
@@ -474,6 +481,100 @@ class ReportBus:
             return
         self._last_staleness_warn_at = _now
         self.check_consumer_staleness()
+
+    # ---------- 发射方期望消费类别（★第169批 C1） ----------
+
+    @staticmethod
+    def _m169_expected_consumers_on() -> bool:
+        """C1 灰度开关（内联默认，**不写 config.py**）。关闭 → 不告警、不校验。"""
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "ENABLE_REPORT_EXPECTED_CONSUMERS", True))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.reporting.report_bus::_m169_expected_consumers_on")
+            return True
+
+    def declare_expected_consumers(self, report_type: str,
+                                   consumers: list[str] | tuple[str, ...] | set[str]
+                                   ) -> None:
+        """发射方声明某报告类型的期望消费者名（纯声明，**不新建消费者**）。"""
+        if not report_type:
+            return
+        with self._lock:
+            _seen: list[str] = []
+            for _c in consumers or ():
+                _n = str(_c)
+                if _n and _n not in _seen:
+                    _seen.append(_n)
+            self._expected_consumers[str(report_type)] = _seen
+
+    def get_expected_consumers(self, report_type: str | None = None
+                               ) -> dict[str, list[str]] | list[str]:
+        """读回期望消费类别声明；传类型则只返回该类型的列表。"""
+        with self._lock:
+            if report_type is not None:
+                return list(self._expected_consumers.get(str(report_type), []))
+            return {_t: list(_v) for _t, _v in self._expected_consumers.items()}
+
+    def _has_any_subscriber(self, report_type: str) -> bool:
+        """该类型（或通配 "*"）是否存在任何订阅者。"""
+        return bool(self._subscribers.get(str(report_type)) or
+                    self._subscribers.get("*"))
+
+    def _missing_expected(self, report_type: str,
+                          actual: list[str]) -> list[str]:
+        """期望声明中未被本次 dispatch 覆盖的消费者名。"""
+        _exp = self._expected_consumers.get(str(report_type), [])
+        if not _exp:
+            return []
+        return [_c for _c in _exp if _c not in (actual or [])]
+
+    def _maybe_warn_missing_consumers(self, report_type: str,
+                                      actual: list[str]) -> list[str]:
+        """★C1：无订阅者 / 期望未覆盖 → 与 check_consumer_staleness 同族告警。
+
+        节流口径同 ``_maybe_warn_staleness``（每陈旧阈值窗口最多一次）。
+        Returns: 未被覆盖的期望消费者名（空 = 契约满足）。
+        """
+        if not self._m169_expected_consumers_on():
+            return []
+        _no_sub = not self._has_any_subscriber(report_type)
+        _missing = self._missing_expected(report_type, actual)
+        if not _no_sub and not _missing:
+            return []
+        _now = time.time()
+        if _now - self._last_missing_warn_at < self._consumer_staleness_threshold:
+            return _missing
+        self._last_missing_warn_at = _now
+        _reason = "无订阅者" if _no_sub else "期望消费者未覆盖"
+        try:
+            from nucleus.logger import get_module_logger
+            get_module_logger("ReportBus").warning(
+                "[消费契约机检] 类型=%s %s%s"
+                % (report_type, _reason,
+                   (" 缺失=%s" % ", ".join(_missing)) if _missing else ""))
+        except Exception as _le:
+            sys.stderr.write("[ReportBus] 消费契约告警失败: %s\n" % type(_le).__name__)
+        return _missing
+
+    def check_missing_consumers(self) -> list[str]:
+        """机检：期望消费类别声明与实际订阅者不匹配的类型列表。
+
+        判据：声明的期望消费者名若**不在**当前该类型（含 "*"）订阅者名集合中
+        → 契约缺口。未声明期望的类型不参与（零噪声）。
+        """
+        with self._lock:
+            _out: list[str] = []
+            for _t, _exp in sorted(self._expected_consumers.items()):
+                if not _exp:
+                    continue
+                _names = set()
+                for _fn in (self._subscribers.get(_t, []) +
+                            self._subscribers.get("*", [])):
+                    _names.add(getattr(_fn, "__name__", str(_fn)))
+                if any(_c not in _names for _c in _exp):
+                    _out.append(_t)
+            return _out
 
     # ---------- 闭环解决率（★第111批 T-111b） ----------
 
