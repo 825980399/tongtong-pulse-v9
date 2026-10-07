@@ -24,6 +24,8 @@ from nucleus._silent_except import silent_exc
 _module_logger = get_module_logger("OscillonField")
 _oscillon_cy_available = False
 _oscillon_cy = None
+# ★第169批 C3：导入失败原因留痕（供启动报告报出 fallback 原因）
+_oscillon_cy_import_error = ""
 
 
 def _cython_extensions_enabled() -> bool:
@@ -41,10 +43,48 @@ if _cython_extensions_enabled():
         from nucleus.field import _oscillon_cy  # type: ignore
         _oscillon_cy_available = True
         _module_logger.info("Cython加速模块已加载 (_oscillon_cy)")
-    except ImportError:
-        _module_logger.warning("Cython振荡场模块未编译，使用Python原生实现")
+    except ImportError as _cy_e:
+        _oscillon_cy_import_error = "%s: %s" % (type(_cy_e).__name__, _cy_e)
+        _module_logger.warning("Cython振荡场模块未编译，使用Python原生实现: %s"
+                               % _oscillon_cy_import_error)
 else:
     _module_logger.info("use_cython_extensions=False，使用Python原生实现")
+
+
+def cython_status() -> dict:
+    """★第169批 C3（T-Oscillon配置-1）：Cython 加速的**实际生效值** + 降级原因。
+
+    口径：``effective`` = 模块级 ``_oscillon_cy_available``（导入成功才算生效），
+    而非开关值本身 —— 开关开但模块未编译时应报 False + 降级原因。
+    """
+    _switch = _cython_extensions_enabled()
+    _eff = bool(_oscillon_cy_available)
+    if not _switch:
+        _reason = "use_cython_extensions=False（配置关闭，走 Python 原生实现）"
+    elif _eff:
+        _reason = "use_cython_extensions=True 且 _oscillon_cy 导入成功（加速生效）"
+    else:
+        _reason = ("use_cython_extensions=True 但 _oscillon_cy 导入失败"
+                   "（降级 Python 原生实现）: %s"
+                   % (_oscillon_cy_import_error or "unknown"))
+    return {"switch": _switch, "effective": _eff, "reason": _reason}
+
+
+def _m169_startup_report_on() -> bool:
+    """C3 灰度开关（内联默认，**不写 config.py**）；关闭 → 不打印启动报告行。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_OSCILLON_STARTUP_REPORT", True))
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.field.OscillonField::_m169_startup_report_on")
+        return True
+
+
+if _m169_startup_report_on():
+    _st = cython_status()
+    _module_logger.info(
+        "[OscillonField] cython_effective=%s fallback_reason=%s"
+        % (_st["effective"], _st["reason"]))
 
 # ========== 振荡场抽象基类 ==========
 
