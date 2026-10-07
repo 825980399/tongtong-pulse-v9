@@ -93,13 +93,13 @@ T-运行异常-2,星轨,第155批,PulseCore notify_completed L292 ndarray不可J
 T-运行异常-3,星轨,第155批,safe_hw_probe Popen传timeout关键字（Windows子进程不支持），硬件探测失败,P0,已结案,157,,20261006烛微C类核对：已修复漏结案——safe_hw_probe.py:15注释自证已删Popen非法timeout形参，超时改communicate(timeout)捕获TimeoutExpired，kill后回收
 T-运行异常-4,星轨,第155批,_clean_llm_code IndentationError（LLM生成代码缩进错，修复率0.39%族历史已知）,P3,已撤销,157,,历史已知·本窗复见
 T-检测器-1,路灯,第156批,CodeReviewEngine 补 sql_injection / cross_module_singleton_call 检测器（安全与结构性真实覆盖缺口；覆盖率已重锚 0.80 容差）,P1,已裁决待排期,167,第156批,小林拍板“补”，排 157 断链修复批实施
-C-1,烛微,第157批,工具面合流：cortex 工具评估改查统一注册表 + 两套注册表合一 + ensure_tool/save_to_library 接线（原 T-工具面-1/2/3 合流）,P0,已裁决待排期,162,162,20261006星轨裁定：按建议补C-1收尾（接线ensure_tool/save_to_library+ToolRegistry加save/load持久化），不回引T-工具面-3；排162补充段
+C-1,烛微,第157批,工具面合流：cortex 工具评估改查统一注册表 + 两套注册表合一 + ensure_tool/save_to_library 接线（原 T-工具面-1/2/3 合流）,P0,已排期,167,162,20261006星轨裁定：按建议补C-1收尾（接线ensure_tool/save_to_library+ToolRegistry加save/load持久化），不回引T-工具面-3；排162补充段
 C-2,烛微,第157批,负载感知链验收：assess_load_level→set_level（施工在 156 B156-5，157 只验收+R5 生产接线测试）,P0,已结案,157,第157批,20261006烛微C类核对：已修复漏结案——assess_load_level→set_level闭环已接线(runtime_metrics.py:221→239，内存>90参与分级)；活体等级流转样本待夜间编排首跑补录
-C-3,烛微,第157批,自我感知三件：SelfModel/Interoception ③弃用标注 + OrganCoordinator ②删除或③ + assess_trust ①接线（B 案改叙事）,P0,已裁决待排期,162,162,20261006星轨裁定：按建议补局部接线（get_self_model/get_interoception/get_organ_coordinator三调用点），排162补充段
+C-3,烛微,第157批,自我感知三件：SelfModel/Interoception ③弃用标注 + OrganCoordinator ②删除或③ + assess_trust ①接线（B 案改叙事）,P0,已结案,162,162,20261006星轨裁定：按建议补局部接线（get_self_model/get_interoception/get_organ_coordinator三调用点），排162补充段
 C-4,烛微,第157批,躯体层与多机层 2753 行逐件三选一（somatics 3 + robot_body 4 + distributed 5 + sensor 例外保持接线）,P1,已结案,157,第157批,Q157-2 定案：③封存为主+三壳②删除，与 Q155-9 PHASE18 合并裁，估工 2~3 天
 C-5,烛微,第157批,配置访问器 38 个零调用（141 行/2.7%）：③保留+弃用标注，避开 B156-8 config.py 同文件,P1,已排期,167,第157批,Q157-5 定案：C 案保留+标注，估工 0.5 天，_cfg 加未知键 WARNING
 C-6,烛微,第157批,观测与半成品孤岛封存：EventStream/synapsys/genesis 等 13 文件 ③标注 + setup_cython ②移出生产目录,P2,已结案,157,第157批,Q157 定案：③封存标注为主，估工 2 天
-C-7,烛微,第157批,装配回路通电：main.py 二次 loader 清理 + _scanned_metas 读方 + 声明-实例差集校验(b) + Sensor 双建清除,P0,已裁决待排期,162,162,20261006星轨裁定：按建议收尾（二次loader清理main.py:1647-1648+_scanned_metas补读方organ_loader.py:157）+活体验收并入夜间编排首跑一并取证
+C-7,烛微,第157批,装配回路通电：main.py 二次 loader 清理 + _scanned_metas 读方 + 声明-实例差集校验(b) + Sensor 双建清除,P0,已裁决待排期,169,162,20261006星轨裁定：按建议收尾（二次loader清理main.py:1647-1648+_scanned_metas补读方organ_loader.py:157）+活体验收并入夜间编排首跑一并取证
 C-8,烛微,第157批,扫描器 v3 + 接线门禁三件套：可达性闭包/方法级零引用/角色隔离/字符串通道/入口动词/表驱动豁免/接收者归属 + check_broken_chain_gate,P1,已结案,157,第158批,小林拍板20261003销案：门禁接线已交付（8a73ab4），157余票#1
 C-9,烛微,第157批,第七型断链：search_scheduler 只卸不装——补工厂+装载点（③标注为主，B156-10 打通联网则升①）,P1,已结案,157,第157批,Q157 定案：③弃用标注，估工 0.5~1 天
 T-节流-1,路灯,第156批,PulseStomach.on_pulse 节流 key 共用：所有事件类型共用 stomach_digest 节流 key，非 digest 事件（如 system.status.request）会武装 30s 节流致后续 digest 静默丢弃——建议按事件类型分流节流 key,P1,已结案,157,157,采纳-按事件类型分流节流 key（P1，157-B 施工）
