@@ -171,6 +171,11 @@ PUBLIC_RENDER_ROOT_FILES: frozenset[str] = frozenset({
     "readme.md", "contributing.md", "security.md", "license", "changelog.md",
 })
 
+#: ★第167批 C6：仓库根级对外文档白名单（独立于 docs/ 白名单，保证仓根公开文档稳定进发布包）
+PUBLIC_ROOT_FILES: frozenset[str] = frozenset({
+    "README.md", "SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md",
+})
+
 
 def public_render_enabled() -> bool:
     """A3b 开关：ENABLE_PUBLIC_RENDER 默认 True。"""
@@ -401,7 +406,9 @@ def docs_allowed(rel_from_docs: str) -> bool:
         if p in EXCLUDE_DOC_DIRS:
             return False
     if len(parts) == 1:
-        return parts[0] in PUBLIC_DOCS_ALLOW_FILES
+        # ★第167批 C6：仓根对外文档（SECURITY/CONTRIBUTING/CHANGELOG 等）显式匹配，
+        #   不与 docs/ 白名单耦合，保证仓库根级公开文档稳定进发布包。
+        return parts[0] in PUBLIC_DOCS_ALLOW_FILES or parts[0] in PUBLIC_ROOT_FILES
     # 精确文件白名单（含子目录路径，如 "工具类文档/公开说明.md"）
     if rel in PUBLIC_DOCS_ALLOW_FILES:
         return True

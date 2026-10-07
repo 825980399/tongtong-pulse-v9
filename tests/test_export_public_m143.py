@@ -61,8 +61,9 @@ class TestDocsWhitelist(unittest.TestCase):
         # ★第145批 T-145b：内部总账 `完整进化路线与技术债务清单_v1.0.md` 已移出白名单
         #   （该文档含批次交付确认/债务编号/第三方评分等内部运行资料），
         #   现断言其**被拒绝**（见 test_03）。
-        for rel in ("README.md", "demo-quickstart.md", "项目架构总览_20260927.md",
-                    "项目结构树.md"):
+        for rel in ("README.md", "demo-quickstart.md",
+                    "项目架构与结构总览_20261003.md",
+                    "SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md"):
             self.assertTrue(ep.docs_allowed(rel), rel)
 
     def test_02_allow_dirs(self):
@@ -89,6 +90,14 @@ class TestDocsWhitelist(unittest.TestCase):
                     "归档/x.md", "archive/x.md", "验收/x.md",
                     "审查报告/x.md", "性能报告/x.md", "台账/x.csv"):
             self.assertFalse(ep.docs_allowed(rel), rel)
+
+
+    def test_05_root_public_files_in_package(self):
+        # ★第167批 C6：仓根对外文档（SECURITY/CONTRIBUTING/CHANGELOG）须稳定进发布包；
+        #   经 PUBLIC_ROOT_FILES 显式匹配，即便未来从 docs 白名单移除也不影响仓根放行。
+        for rel in ("SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md"):
+            self.assertTrue(ep.docs_allowed(rel), rel)
+            self.assertFalse(ep.should_skip(rel), rel)
 
 
 class TestPiiScan(unittest.TestCase):
