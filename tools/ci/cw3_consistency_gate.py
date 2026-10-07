@@ -14,10 +14,50 @@ import argparse, ast, collections, io, json, os, subprocess, sys, datetime, hash
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-WATCH = ['organs/brain/PulseInnerWorld.py']          # 监控文件（可扩展）
+# 监控文件：精确路径 + 通配前缀（IW 拆分簇 pulse_inner_world_*.py，未来新增拆分自动纳入）
+# 165批刀A4：164批B1 将情感增强/回答润色簇拆出 pulse_inner_world_emotion_aug.py，
+# 原 WATCH 仅锁定主文件，拆分文件改动无法触发 cw3 语义守恒门禁 → 改为前缀通配。
+WATCH = [
+    'organs/brain/PulseInnerWorld.py',          # 主文件（精确）
+    'organs/brain/pulse_inner_world_*',         # IW 拆分簇（通配，磁盘列表 / git ls-tree 展开）
+]
 METRICS = ['try', 'except', 'except_pass', 'if', 'for', 'while', 'return', 'raise', 'await',
            'emit_calls', 'methods']
 
+
+def _expand_watch(root, rev):
+    """将 WATCH 中的通配项展开为实际文件路径（精确项原样保留）。
+
+    通配项（含 * 或尾斜杠）：worktree 用目录列表前缀匹配 .py；
+    git 版本用 ls-tree 前缀匹配。"""
+    _res = []
+    for _p in WATCH:
+        if '*' in _p or _p.endswith('/'):
+            if rev in ('WORKTREE', 'worktree'):
+                _d, _star = (_p.rsplit('/', 1) if '/' in _p else ('', _p))
+                _prefix = _star.split('*', 1)[0]
+                _dir = os.path.join(root, _d) if _d else root
+                if os.path.isdir(_dir):
+                    for _fn in sorted(os.listdir(_dir)):
+                        if _fn.startswith(_prefix) and _fn.endswith('.py'):
+                            _full = os.path.join(_dir, _fn)
+                            if os.path.isfile(_full):
+                                _res.append((_d + '/' + _fn) if _d else _fn)
+            else:
+                _r = subprocess.run(['git', 'ls-tree', '-r', '--name-only', rev],
+                                    cwd=root, capture_output=True, text=True)
+                if _r.returncode == 0:
+                    for _line in _r.stdout.splitlines():
+                        _base = _p.split('*', 1)[0].rstrip('/')
+                        if _line.startswith(_base) and _line.endswith('.py'):
+                            _res.append(_line)
+        else:
+            _res.append(_p)
+    _seen = set(); _uniq = []
+    for _p in _res:
+        if _p not in _seen:
+            _seen.add(_p); _uniq.append(_p)
+    return _uniq
 
 def read_blob(rev, path, root):
     if rev in ('WORKTREE', 'worktree'):
@@ -78,7 +118,7 @@ def metrics_of(src):
 
 def collect(root, rev):
     out = {}
-    for p in WATCH:
+    for p in _expand_watch(root, rev):
         src = read_blob(rev, p, root)
         if src is None:
             return None
@@ -127,8 +167,9 @@ def main():
     base = json.load(io.open(bl, encoding='utf-8-sig'))
     delta_reason = str(base.get('delta_reason', '')).strip()
     expected_delta = base.get('expected_delta') or {}
+    watched = _expand_watch(a.root, a.target)
     fails = []
-    for p in WATCH:
+    for p in watched:
         b = base['files'].get(p)
         if b is None:
             fails.append('%s 无基准（须先 --update）' % p)
@@ -153,7 +194,7 @@ def main():
           % (datetime.datetime.now().strftime('%H:%M:%S'), a.target, base.get('anchor_rev'), base.get('anchor_sha', '')[:7]))
     if not fails:
         print('  [OK] 硬门禁指标全部一致（参考：行数 %s / AST 指纹 %s）'
-              % (cur[WATCH[0]]['metrics']['lines'], cur[WATCH[0]]['metrics']['ast_sha256_12']))
+              % (cur[watched[0]]['metrics']['lines'], cur[watched[0]]['metrics']['ast_sha256_12']))
         return 0
     if not delta_reason:
         print('  [FAIL] %d 项漂移且无 delta_reason（须与代码同提交更新 %s 并填 delta_reason）'
