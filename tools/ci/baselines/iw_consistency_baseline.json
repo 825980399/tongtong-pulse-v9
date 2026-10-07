@@ -1,27 +1,27 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "4c9659ca209e5588fe5b063aa440f18055b002a1",
- "observed_at": "2026-10-04T22:44:56",
+ "anchor_sha": "08c029ea9396d5231c51143e0c05fe195fe1e1e2",
+ "observed_at": "2026-10-07T14:11:54",
  "watch": [
   "organs/brain/PulseInnerWorld.py"
  ],
  "files": {
   "organs/brain/PulseInnerWorld.py": {
    "metrics": {
-    "try": 208,
-    "except": 209,
+    "try": 203,
+    "except": 204,
     "except_pass": 0,
-    "if": 1875,
-    "for": 283,
+    "if": 1787,
+    "for": 282,
     "while": 1,
-    "return": 821,
+    "return": 776,
     "raise": 0,
     "await": 0,
     "emit_calls": 103,
-    "methods": 369,
-    "lines": 17913,
-    "ast_sha256_12": "7f59e6e3011b"
+    "methods": 342,
+    "lines": 17361,
+    "ast_sha256_12": "ee3b45c541fd"
    },
    "priority_hist": {
     "2": 4,
@@ -35,12 +35,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "第161批 刀8 + 第161批下 刀4：PulseInnerWorld 语义守恒受控增量（累计）。\n① 刀8（T-内在世界检索万能复用-1）：_ir_qica_knowledge_retrieve 的 QICA 路径检索\n   接入语义相关性闸门——新增 _k89_accept 闭包。\n② 刀4 步2（T-占位符空槽泄漏-1）：同一闭包内再加**占位符闸门**——\n   命中节点须过 contains_placeholder（含空槽「」与截断 p...），阻断其进入合成链；\n   另加 KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER 开关读取（try/except 各一）。\n原目录浏览逻辑（长度判据 + 内部节点过滤）与语义闸门均保留不变。\ndiff 已逐行核实无夹带他人改动。",
- "expected_delta": {
-  "try": 2,
-  "except": 2,
-  "if": 7,
-  "return": 4,
-  "methods": 1
- }
+ "delta_reason": "第161批 刀8 + 第161批下 刀4：PulseInnerWorld 语义守恒受控增量（累计）。\n① 刀8（T-内在世界检索万能复用-1）：_ir_qica_knowledge_retrieve 的 QICA 路径检索\n   接入语义相关性闸门——新增 _k89_accept 闭包。\n② 刀4 步2（T-占位符空槽泄漏-1）：同一闭包内再加**占位符闸门**——\n   命中节点须过 contains_placeholder（含空槽「」与截断 p...），阻断其进入合成链；\n   另加 KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER 开关读取（try/except 各一）。\n原目录浏览逻辑（长度判据 + 内部节点过滤）与语义闸门均保留不变。\ndiff 已逐行核实无夹带他人改动。\n\n第164批 刀B1（T-God文件拆分-1）：2026-10-07 重锚 cw3-A 基线至拆分后状态。\n将情感增强/回答润色方法簇（原 13603-14237 行，28 方法）从 PulseInnerWorld.py 迁至 organs/brain/pulse_inner_world_emotion_aug.py（PulseInnerWorldEmotionAugMixin），主文件 methods 369→342、try 208→203、except 209→204、if 1875→1787、for 283→282、return 821→776、lines 17913→17361，行为零变更（MRO 接入）。重锚后基线即当前快照，expected_delta 清空，后续 IW 改动须重新声明。",
+ "expected_delta": {}
 }
