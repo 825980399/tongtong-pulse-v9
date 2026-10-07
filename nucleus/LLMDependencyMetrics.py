@@ -95,6 +95,17 @@ def _m94_load_patch_records() -> list:
     return _out
 
 
+# ============ ★第169批 C5：依赖度阶段目标线（唯一口径件 = 本文件） ============
+#: 基线：2026-10-07 实测 derived.llm_dependency_ratio
+LLM_DEPENDENCY_BASELINE = 0.9694
+#: 阶段目标线（可核验的下降目标）：当前值 <= 阶段目标即视为该阶段达标
+LLM_DEPENDENCY_TARGETS: tuple[tuple[str, float], ...] = (
+    ("阶段一", 0.90),
+    ("阶段二", 0.80),
+    ("阶段三", 0.70),
+)
+
+
 class LLMDependencyMetrics:
     """LLM 依赖度量器：4 类计数器 + 依赖度 / 自持力派生指标。"""
 
@@ -304,6 +315,35 @@ class LLMDependencyMetrics:
             return 0.0
         return round(self.local_total() / _t, 4)
 
+    # ============ ★第169批 C5：本地决策率 + 依赖度阶段目标线 ============
+    def local_decision_rate(self) -> float:
+        """本地决策率 = 1 - llm_dependency_ratio（与依赖度同源、恒等互补）。
+
+        ★口径硬性要求：**禁止自算** —— 不得用 local/(llm+local) 另算一遍，
+        必须复用 :meth:`llm_dependency_ratio` 的唯一口径，保证同源。
+        """
+        return round(1.0 - self.llm_dependency_ratio(), 4)
+
+    def dependency_target(self) -> dict[str, Any]:
+        """依赖度「阶段目标线」读数：取**第一个尚未达标**的阶段。
+
+        ``gap`` = 当前 - 目标（>0 表示仍有差距）；``reached`` = 当前是否达标。
+        """
+        _cur = self.llm_dependency_ratio()
+        _stage, _target = LLM_DEPENDENCY_TARGETS[-1]
+        for _s, _t in LLM_DEPENDENCY_TARGETS:
+            if _cur > _t:
+                _stage, _target = _s, _t
+                break
+        return {
+            "baseline": LLM_DEPENDENCY_BASELINE,
+            "current": _cur,
+            "stage": _stage,
+            "target": _target,
+            "gap": round(_cur - _target, 4),
+            "reached": bool(_cur <= _target),
+        }
+
     # ============ ★第164批 刀A2：推理指标三联动 ============
     def local_intercept_rate(self) -> float:
         """★第164批 刀A2：本地拦截率 = 置信度守卫拦截 / 回答请求；无样本 0.0。
@@ -383,6 +423,10 @@ class LLMDependencyMetrics:
                     "answer_requests": self.answer_requests(),
                     "llm_dependency_ratio": self.llm_dependency_ratio(),
                     "self_sufficiency_score": self.self_sufficiency_score(),
+                    # ★第169批 C5：本地决策率 = 1 - llm_dependency_ratio（禁自算）
+                    "local_decision_rate": self.local_decision_rate(),
+                    # ★第169批 C5：依赖度阶段目标线（可核验下降目标）
+                    "dependency_target": self.dependency_target(),
                     "overall_llm_share": _m94_overall,
                     "evolution_local_rule_rate": _m94_lr_rate,
                     # ★第164批 刀A2：推理指标三联动 + 分场景北极星
@@ -519,6 +563,7 @@ class LLMDependencyMetrics:
         self.save()
         _logger.info(
             f"[依赖度量·小时] LLM依赖度={_d['llm_dependency_ratio']:.4f} "
+            f"本地决策率={_d['local_decision_rate']:.4f} "
             f"自持力={_d['self_sufficiency_score']:.4f} | "
             f"LLM={_d['llm_call_total']} 本地={_d['local_inference_total']} "
             f"搜索={_d['search_total']} 消化={_d['digestion_total']} "
