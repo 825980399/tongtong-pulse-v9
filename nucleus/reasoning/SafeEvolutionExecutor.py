@@ -18,6 +18,9 @@ import time
 from typing import Any
 
 from nucleus.evolution.LogAnalyzer import is_error_level_line  # ★第30批 T2
+from nucleus.evolution.patch_verification_split import (  # ★164批B2
+    is_genuine_reverify,
+)
 from nucleus.logger import get_module_logger
 
 
@@ -2535,14 +2538,47 @@ class SafeEvolutionExecutor:
                 _rfile = _patch.get("file", "")
                 _rmethod = _patch.get("method", "")
                 _rfixed = _patch.get("fixed_at", 0) or 0
+                # ★B2（164批 T-补丁真修复率回填未改值-1）：零验证样本防护。
+                #   无 genuine 修复时间戳(fixed_at)时，since=0 重采错误数恒为 0，
+                #   会伪造"已修复"并把真修复率虚标到 100%（实测 8/54=14.81%），
+                #   且同秒被反复改写（F-3 20:27:46 现象）。此类样本不进入修复判定，
+                #   标为 undecidable 并 parked（reverify_after 置远未来），杜绝空转与污染。
+                if not is_genuine_reverify(_patch):
+                    _patch["runtime_verify_result"] = {
+                        "verified": False,
+                        "baseline": _patch.get("baseline_errors"),
+                        "after_fix": None,
+                        "post_apply_errors": None,
+                        "effectiveness": None,
+                        "new_issues": None,
+                        "detail": ("[延迟复验] 零验证样本：无 genuine 修复时间戳"
+                                   "(fixed_at)，自 since=0 重采无意义，不可判定，"
+                                   "跳过修复判定"),
+                        "undecidable": True,
+                    }
+                    _patch["runtime_verified"] = False
+                    _patch["needs_runtime_verify"] = False
+                    _patch["status"] = "runtime_undecidable"
+                    _patch["reverify_after"] = time.time() + 365 * 24 * 3600
+                    _patch["reverify_count"] = int(_patch.get("reverify_count", 0)) + 1
+                    self._m84_recompute_split(_patch)
+                    _module_logger.info(
+                        f"[延迟复验] 零验证样本跳过(无fixed_at): "
+                        f"{os.path.basename(_rfile)}.{_rmethod}")
+                    _needs_reverify += 1
+                    continue
+                # —— 以下为 genuine 修复时间戳存在的正常延迟复验 ——
                 _rafter = self._count_errors_for_location(
-                    _rfile, _rmethod, since=_rfixed) if _rfixed else 0
+                    _rfile, _rmethod, since=_rfixed)
+                _rbaseline = _patch.get("baseline_errors") or 0
                 _rverdict = {
                     "verified": _rafter == 0,
-                    "baseline": 0,
+                    # ★B2：用真实 baseline（不再硬编码 0）；baseline=0 时问题仍不可判定
+                    "baseline": _rbaseline,
                     "after_fix": _rafter,
                     "post_apply_errors": _rafter,
-                    "effectiveness": 1.0 if _rafter == 0 else 0.0,
+                    "effectiveness": (round((_rbaseline - _rafter) / float(_rbaseline), 4)
+                                      if _rbaseline else None),
                     "new_issues": _rafter,
                     "detail": (f"[延迟复验] 重采基线: 修复后错误={_rafter}, "
                                f'{"通过" if _rafter == 0 else "未通过"}'),

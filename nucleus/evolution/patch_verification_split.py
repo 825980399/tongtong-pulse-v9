@@ -305,6 +305,23 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
     return round(_ok / _known, 4) if _known else 0.0
 
 
+def is_genuine_reverify(patch: dict[str, Any]) -> bool:
+    """★B2（164批 T-补丁真修复率回填未改值-1）：延迟复验是否具备 genuine 判定依据。
+
+    延迟复验以「修复时间戳 ``fixed_at`` 之后重采的错误数」作为问题是否消失的证据。
+    若补丁**没有 genuine 修复时间戳** (``fixed_at`` 为空/0)，则
+    ``_count_errors_for_location(since=0)`` 恒为 0 —— 会伪造"已修复"并把真修复率
+    虚标到 100%（实测 8/54=14.81%），且同秒被反复改写（F-3 的 20:27:46 现象）。
+
+    此类「零验证样本」**不应进入修复判定**：本函数返回 ``False`` 时，调用方须
+    将其标为 undecidable 并 parked，而非写入 ``runtime_verified=True`` /
+    ``problem_fixed=True``。
+
+    纯函数、无副作用、无 IO；不新增 try/except（异常上抛给调用方既有边界）。
+    """
+    return bool(patch.get("fixed_at"))
+
+
 def display_label(patch: dict[str, Any]) -> str:
     """展示层标签：区分「无回归」与「修复效果未验证」。
 
