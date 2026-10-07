@@ -66,6 +66,9 @@ jobs:
       - name: L0 · requirements declared-imports gate (第162批 刀4)
         # 断言：生产第三方 import ∧ 无 ImportError 保护 ⇒ 必须已在 requirements 声明
         run: python tools/ci/check_requirements_declared_imports.py
+      - name: L0 · requirements lock consistency (第166批 刀4)
+        # 断言：requirements.txt 的 PyPI 依赖必须全部在 requirements.lock 有 == 锁定
+        run: python tools/ci/check_requirements_lock_consistency.py
 
   # ============ L1：11 件离线测试（实测 21.36s） ============
   l1-offline-tests:
