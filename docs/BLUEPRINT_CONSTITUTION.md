@@ -260,7 +260,7 @@ Python运行环境	3.12
 2.2 九大系统器官划分（永久划分，v26.0 订正口径）
 所有器官归属永久固定，运行阶段不做跨系统迁移。v17 基线 53 个；v22-v25 新增动机循环、全局学习器、语义理解器、宪法守护、表达增强、沙箱核心等。**声明面口径（v26.0 修订）：56 个 ORGAN_META 声明器官 + 1 个准器官 QICA = 57**（`[装配具名差集]` 活体五轮实测 57/56/差集=['QICA']，logs/pulse.log:48405/49882；勿用 main.py 停止计数当第二出处）。
 
-大脑系统（10个）：大脑皮层、内在世界、潜意识、兴趣模型、前额叶、风险感知、QICA（准器官）、代码学习、精神核心、语义理解器(v24)
+大脑系统（9个声明器官 + 1 准器官）：大脑皮层、内在世界、潜意识、兴趣模型、主动性、风险感知、代码学习、精神核心、语义理解器(v24) —— 另计 QICA（准器官，第57，不占 ORGAN_META）
 核心脏器（6个）：心脏、胃、肝、肾、肺、血管
 感知系统（4个）：触觉、眼睛、耳朵、视觉皮层
 运动系统（6个）：嘴巴、双手、双腿、代码沙箱、文件消化器、控制器
@@ -370,7 +370,7 @@ hardware.launch_plan → 硬件启动计划落盘
 修复率真值口径：`SafeEvolutionExecutor.py:2444 M84-3 写回重算` + `patch_verification_split.py:254-268`（:266-268 三分支：`_verifiable>0`→比值／`==0 且 patches 非空`→0.0／`patches 空`→None）
 真修复率以 `problem_fixed_corrected` 剔除后 8/54=14.81% 为准（读数时刻 2026-10-06 19:27 / HEAD 156981f）；⚠️ 2026-10-06 20:27:46 起曾遭零验证样本改写致表面 100%（票 T-补丁真修复率回填未改值-1 修复后以登记册/指标出口为准）
 阈值锚：config.py:4613 REPORT_BUS_PATCH_FIX_RATE_WARN=0.10 + PatchAutoApprover.py:493 LOW_RATE_THRESHOLD=0.10
-本条仅描述既有"修复率口径"闭环，与刀7"补丁效果验证"（config.py:5382 PARAM_PATCH_EFFECT_VERIFY_ENABLED=False + ParamPatchManager.verify_effect 派发 verify_patch_effect_in_process，163批 7b231ae）为两套正交机制
+本条仅描述既有"修复率口径"闭环，与刀7"补丁效果验证"（config.py:5388 PARAM_PATCH_EFFECT_VERIFY_ENABLED=True + ParamPatchManager.verify_effect 派发 verify_patch_effect_in_process，163批 7b231ae，后经 163 三灰度开关定稿 d27ac1e 置 True）为两套正交机制
 2.8.11 声明式装配与 legacy 停用（v26.0 N1·试行）
 声明式装配（config.py:1839 use_declarative_assembly=True）为唯一装配路径；legacy 段（main.py:1358-1860，37 处 `_create_organ`）已停用
 防回潮门禁三判据在位（tools/ci/check_legacy_assembly_gate.py:16-18，基线 :44=37）；自检块 main.py:1170-1189
@@ -380,6 +380,10 @@ hardware.launch_plan → 硬件启动计划落盘
 三维阈值（CPU/内存/队列）均须走 `_adaptive_threshold`（nucleus/runtime_metrics.py:642/:654-656）；CPU 仍硬编码 85/70/50（:674-678）待接线后转正；内存侧键名已配置化（未核项）
 2.8.14 占位符治理与污染标签（v26.0 N7·试行）
 config.py:2082 KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER=True + PollutionTagger + nucleus/evolution/ExperiencePollutionGuard.py:28-30（三档权重 0.1/0.5/1.0）；提交 e0f0fa3/323cd9d
+2.8.15 数据隐私边界（v26.1 B-3·试行）
+用户对话数据一律不出本机；不入开源仓、不上传外部服务；对外导出唯走 `export_public.py` 白名单（精确文件白名单，fail-closed）。本地数据落位：`data/`（.gitignore:157 排除入库）、`logs/`（:125）、`.owner_pii.json`（:19，属主真值唯一来源，源码零真值）；属主信息仅来自环境变量/`.owner_pii.json`，经 `all_pii_patterns()` 扫描（export_public.py:317-319，STATIC 4 模式 + 属主 3 类）。侵犯隐私即违宪；PII 清史按历史 PII 清史纪律（修正案-12）执行。
+【v26.1修正案-01（试行）】2.2 枚举订正（A-5）：大脑系统枚举名与 ORGAN_META 对齐——删除"前额叶"（实指 `PulseCognitiveReflector`，无 ORGAN_META，非声明器官）、新增"主动性"（`PulseInitiative`，有 ORGAN_META，现声明内）；"10个"口径改为"9个声明器官+1准器官"，与全文"56+1=57"一致。
+【v26.1修正案-02（试行）】2.8.10 订正（B-5）：`PARAM_PATCH_EFFECT_VERIFY_ENABLED` 实况为 True（config.py:5388），原条文 False/config.py:5382 值相反、行号漂移 6 行，已订正。
 第三部分 · 未来百年演化方向
 九大维度，对应物种长期演进路线，当前均已打下基建。
 
