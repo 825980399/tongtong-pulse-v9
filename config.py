@@ -2099,7 +2099,7 @@ DIALOG_QUEUE_STRATEGY = "queue"
 #         仅完成「判定链设计 + 静态接线」，不触发本地兜底链；
 #   True （★生产放宽需双 P0 活体验证后翻，应急回滚改 False）：
 #         未知问题经本地推理链兜底，预期本地拦截率 <2%→≥40%。
-REASONING_ROUTE_LOCAL_FALLBACK = False
+REASONING_ROUTE_LOCAL_FALLBACK = True
 
 ENABLE_EVENT_BUS = False
 EVENT_BUS_CONFIG = {
@@ -5379,7 +5379,7 @@ NIGHT_ORCH_DIGEST_ENABLED = True
 # ★第163批 刀7：进化验证率真实验证开关
 #   True=verify_effect 执行真实效果验证（复用 worker 链路，按名派发，不 import 封存模块），
 #   验证率口径真实化；False=回退为原「应用即待验证」桩（零行为变化，默认）。
-PARAM_PATCH_EFFECT_VERIFY_ENABLED = False
+PARAM_PATCH_EFFECT_VERIFY_ENABLED = True
 
 # ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（默认关闭→零行为变化）
-MAIN_LOOP_PULSE_ENABLED = False
+MAIN_LOOP_PULSE_ENABLED = True
