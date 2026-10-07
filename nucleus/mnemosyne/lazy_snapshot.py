@@ -279,6 +279,12 @@ class LazySnapshotView:
                     self._cache.popitem(last=False)
             yield node
 
+    def __iter__(self) -> Iterator[PulseNode]:
+        """★167批 C1：补齐迭代协议，使 ``for node in view`` 可用（与 iter_nodes 等价）。
+        不改动 metadata() / node_ids() 语义。
+        """
+        return self.iter_nodes()
+
     @property
     def metadata(self) -> dict[str, Any]:
         return dict(self._metadata)
