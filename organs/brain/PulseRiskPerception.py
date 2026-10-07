@@ -26,6 +26,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import  EarEvent, HeartEvent, HormonesEvent, LogLevel, RiskEvent, Event, ReflectionEvent
+# ★第169批 C7'：危机词表单一来源（与 PulseEthics 共引同一常量）
+from nucleus.security.crisis_keywords import crisis_self_harm_keywords
 
 
 class PulseRiskPerception(BasePulseOrgan):
@@ -376,14 +378,29 @@ class PulseRiskPerception(BasePulseOrgan):
             import config as _cfg
             patterns = getattr(_cfg, 'RISK_PATTERNS', {})
             self.SELF_HARM_PATTERNS = patterns.get(
-                "self_harm", ["活着没意思", "想自杀", "自残"])
+                "self_harm", crisis_self_harm_keywords())
             self.VIOLENCE_THREAT_PATTERNS = patterns.get(
                 "violence_threat", ["杀了你", "要你死"])
         except Exception as _e:
             from nucleus._silent_except import silent_exc
             silent_exc(_e, "PulseRiskPerception._load_crisis_patterns")
-            self.SELF_HARM_PATTERNS = ["活着没意思", "想自杀", "自残"]
+            self.SELF_HARM_PATTERNS = crisis_self_harm_keywords()
             self.VIOLENCE_THREAT_PATTERNS = ["杀了你", "要你死"]
+        # ★第169批 C7'：无论上面走哪条分支，最后统一与单一来源取**并集**
+        self._union_crisis_keywords()
+
+    def _union_crisis_keywords(self) -> None:
+        """★第169批 C7'：保证单一来源危机词恒在 SELF_HARM_PATTERNS 内。
+
+        ``config`` 的 ``self_harm`` 列表通常**比单一来源更丰富**（实测 31 条），
+        因此这里取**并集**而非覆盖 —— 强制等同会丢掉 18 条既有模式（回归）。
+        不变式：``CRISIS_SELF_HARM_KEYWORDS ⊆ set(SELF_HARM_PATTERNS)``。
+        """
+        _cur = list(getattr(self, "SELF_HARM_PATTERNS", []) or [])
+        for _w in crisis_self_harm_keywords():
+            if _w not in _cur:
+                _cur.append(_w)
+        self.SELF_HARM_PATTERNS = _cur
 
     # ========== 模式匹配 ==========
 

@@ -21,6 +21,9 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import EthicsEvent, SecurityEvent, SystemEvent, RiskEvent
+# ★第169批 C7'：危机词表单一来源（与 PulseRiskPerception 共引同一常量）
+from nucleus.security.crisis_keywords import (CRISIS_SELF_HARM_KEYWORDS,
+                                              crisis_self_harm_keywords)
 import config
 
 
@@ -41,7 +44,9 @@ class PulseEthics(BasePulseOrgan):
     #   （复用 RiskEvent.CRISIS_REFERRAL 既有通道，由 PulseCortex._on_crisis_referral
     #   统一显示 nucleus/security/crisis_referral_text 文案），而非裸拦截。
     #   仅含自伤/自杀等明确危机词；暴力/色情等普通禁词维持原裸拦截语义。
-    _CRISIS_FORBIDDEN_KEYWORDS = frozenset({"自杀"})
+    # ★第169批 C7'：改为共引单一来源常量（原为 frozenset({"自杀"})，
+    #   现集合已包含该词 -> 既有「自杀」行为零变更，仍走安抚+转介）。
+    _CRISIS_FORBIDDEN_KEYWORDS = CRISIS_SELF_HARM_KEYWORDS
 
     def __init__(self, organ_name: str = "伦理"):
         super().__init__(organ_name)
@@ -53,6 +58,10 @@ class PulseEthics(BasePulseOrgan):
         #   默认值先行、配置覆盖，是「配置优先」的标准顺序。
         self._value_priority = {}
         self._load_ethics_config()
+        # ★第169批 C7'：危机词（单一来源）必须**恒在**普通禁词表内 ——
+        #   _check_forbidden 只扫 _forbidden_keywords；config.ETHICS_CONFIG
+        #   若已覆盖该表，默认值里的扩面词不会生效 -> 此处强制补齐。
+        self._ensure_crisis_keywords_forbidden()
         # ===== 新增: 道德直觉经验库 =====
         self._moral_intuitions: list[dict[str, Any]] = []
         self._max_intuitions = 50
@@ -302,14 +311,40 @@ class PulseEthics(BasePulseOrgan):
         # ③ 非中文关键词：子串匹配兜底
         return bool(not _is_cn and (_kw_lower in content_lower or _kw_norm in normalized_content))
 
+    def _ensure_crisis_keywords_forbidden(self) -> None:
+        """★第169批 C7'：保证危机词恒在普通禁词表内（**检出的前置条件**）。
+
+        config 可能覆盖 ``forbidden_keywords`` —— 无论覆盖与否，危机词都必须
+        在表内，否则 ``_check_forbidden`` 扫描不到，扩面与转介分支全部失效。
+        去重、保序、幂等。
+        """
+        _cur = list(getattr(self, "_forbidden_keywords", []) or [])
+        _missing = [w for w in crisis_self_harm_keywords() if w not in _cur]
+        if _missing:
+            self._forbidden_keywords = _cur + _missing
+
     def _check_forbidden(self, content: str) -> dict[str, Any]:
-        """检查禁止内容（P1-14：子串 + 同音/形近归一化 + 分词三层命中）"""
+        """检查禁止内容（P1-14：子串 + 同音/形近归一化 + 分词三层命中）
+
+        ★第169批 C7'：危机（自伤/轻生）词额外做**子串兜底**。
+          P1-14 的中文词边界策略会让「想死 / 不想活 / 活着没意思 /
+          结束生命」等常见危机表达因 jieba 未切成独立词而**漏检**
+          （实测 13 词中 4 词漏检）。危机场景**漏检代价 > 误报代价**，
+          故危机集单独放宽为子串命中；命中后仍走安抚+转介分支（非裸拦截），
+          误报不会造成阻断性后果。普通禁词维持原词边界策略不变。
+        """
         content_lower = content.lower()
         _normalized = self._normalize_variants(content_lower)
         _words = self._get_segmented_words(content_lower)
         for kw in self._forbidden_keywords:
             if self._kw_hit(kw, content_lower, _normalized, _words):
                 return {"blocked": True, "reason": f"包含禁止内容: {kw}", "keyword": kw}
+        # ★C7'：危机集子串兜底（仅危机词，不动普通禁词判据）
+        for _cw in crisis_self_harm_keywords():
+            if (_cw in content_lower
+                    or self._normalize_variants(_cw) in _normalized):
+                return {"blocked": True,
+                        "reason": f"包含禁止内容: {_cw}", "keyword": _cw}
         return {"blocked": False, "reason": ""}
 
     def _check_warning(self, content: str) -> dict[str, Any]:
