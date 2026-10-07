@@ -863,8 +863,8 @@ class PulseFramework:
           OrganLoader（nucleus/organ_loader.py:194）均经 framework.create_organ()
           转发至本方法；实测 56/56 声明器官经此创建成功。
           因此「退役」的真实对象不是本方法，而是 legacy 硬编码段
-          _init_organs_legacy()（main.py:1344）——在 FEATURE
-          ['use_declarative_assembly']=True（config.py:1827）下已不执行。
+          _init_organs_legacy()（区间以 tools/ci/check_legacy_assembly_gate.py 自报为准）——在 FEATURE
+          ['use_declarative_assembly']=True（config.py:1839）下已不执行。
           保留本方法为声明式唯一创建原语；legacy 段的停用标注见其 def 处。
         """
         organ = organ_class(name)
@@ -1370,10 +1370,10 @@ class PulseFramework:
         """硬编码装配（原 _init_organs，作为声明式装配的回退路径）。
 
         ★第158批 _create_organ 退役★（P2·2026-10-03 停框架施工期标注）：
-          本段 37 处硬编码 _create_organ 调用（实测口径：全仓 38 处 = 本段 37 处
-          + declarative Phase 0 的 QICA 1 处）**已被声明式装配取代**——
-          FEATURE['use_declarative_assembly']=True（config.py:1827）时本段不执行，
-          入口 _init_organs_with_feature()（main.py:1148）直接分流至
+          main.py 代码面 40 处 = 定义1 + 委托1 + declarative QICA1 + 本段37；另注释提及 7 处、全仓 .py 字面 75 处
+          （计数判据 `git grep -c '_create_organ' -- main.py` = 47；区间以 `python tools/ci/check_legacy_assembly_gate.py` 自报为准）**已被声明式装配取代**——
+          FEATURE['use_declarative_assembly']=True（config.py:1839）时本段不执行，
+          入口 _init_organs_with_feature()（main.py:1167）直接分流至
           _init_organs_declarative()。
 
           保留而不删除的理由（实测取证，非推测）：
