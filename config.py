@@ -1830,7 +1830,7 @@ FEATURE = {
     # 热重载：支持通过 data/config_override.json 或环境变量 TTP_SURVIVAL_ORCHESTRATOR_ENABLED 覆盖。
     "survival_orchestrator_enabled": True,
     # ★第158批 _create_organ 退役★（P2·2026-10-03）：本开关现为**唯一装配路径**。
-    #   硬编码回退段 _init_organs_legacy()（main.py:1354，37 处 _create_organ 调用）
+    #   硬编码回退段 _init_organs_legacy()（main.py:1369，37 处 _create_organ 调用）
     #   已标注为「已停用」，本开关=False 时该段**仍可回退执行**（尚未物理删除）。
     #   ⚠️ 待 legacy 段真退役（需小林恢复运行后完成装配活体验证 + QICA 承接定稿）后，
     #     本行注释将改为「legacy 已退役，False 不再可用」，届时本开关应硬钉 True。
@@ -4862,7 +4862,6 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   ENABLE_MEMORY_AUTO_GC：使用率/增长率超阈值时自动 gc.collect()（默认关，避免副作用/零回归）；
 #   MEMORY_GROWTH_ALARM_MB_PER_MIN：内存增长率告警阈值（MB/分钟），超此值即判疑似泄漏。
 #   ★生产生效需停机/重启窗口；在线运行期仅采集与告警，不自动回收。
-ENABLE_MEMORY_AUTO_GC = True  # 2026-09-27星轨开启：内存自动垃圾回收
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
 
 # ===== ★主线第67批（2026-09-16）：快照性能止血 + KAL + 自适应降频 + WriteGuard =====
