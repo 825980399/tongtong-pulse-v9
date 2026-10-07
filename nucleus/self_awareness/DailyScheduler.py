@@ -33,6 +33,21 @@ from datetime import datetime
 from typing import Any, Callable
 
 from nucleus.logger import get_module_logger
+def _a3_sample_rss_threads():
+    """165批A3：采样本进程 RSS（字节）与活跃线程数；psutil 不可用时优雅降级。"""
+    try:
+        import psutil
+        _rss = int(psutil.Process(os.getpid()).memory_info().rss)
+    except Exception as _e:
+        _module_logger.warning(f"异常已忽略（需关注）: {type(_e).__name__}: {_e}")
+        _rss = None
+    try:
+        _threads = threading.active_count()
+    except Exception as _e:
+        _module_logger.warning(f"异常已忽略（需关注）: {type(_e).__name__}: {_e}")
+        _threads = None
+    return _rss, _threads
+
 
 _module_logger = get_module_logger("SelfAwarenessDailyScheduler")
 
@@ -266,6 +281,8 @@ class SelfAwarenessDailyScheduler:
             True
         """
         _t0 = time.perf_counter()
+        # ★165批A3：采样「每日分析」开始前 RSS + 线程数（完成后比对释放量）
+        _a3_rss_start, _a3_threads_start = _a3_sample_rss_threads()
         _now = self._now_fn()
         _ts = _now.strftime("%Y%m%d_%H%M%S")
         _out = self.output_dir()
@@ -493,13 +510,25 @@ class SelfAwarenessDailyScheduler:
             _res["budget_seconds"] = _budget
             _res["over_budget"] = (_res["elapsed_ms"] / 1000.0) > _budget
             if _res["over_budget"]:
+                _a3_rss_now, _a3_threads_now = _a3_sample_rss_threads()
                 _module_logger.warning(
                     "[自我认知调度] 耗时超阈值: %.1fs > %.1fs"
-                    "（P2-235 基线 5.4s / 微光观测 77.9s）",
-                    _res["elapsed_ms"] / 1000.0, _budget)
+                    "（P2-235 基线 5.4s / 微光观测 77.9s）"
+                    " | RSS=%s 线程=%d",
+                    _res["elapsed_ms"] / 1000.0, _budget,
+                    f"{_a3_rss_now/1024**3:.2f}GB" if _a3_rss_now is not None else "N/A",
+                    _a3_threads_now if _a3_threads_now is not None else -1)
+            _a3_rss_end, _a3_threads_end = _a3_sample_rss_threads()
+            _a3_rel = (_a3_rss_start - _a3_rss_end) if (_a3_rss_start is not None and _a3_rss_end is not None) else None
+            _a3_rel_s = f"释放={_a3_rel/1024**3:.2f}GB" if _a3_rel is not None else "释放=N/A"
             _module_logger.info(
-                "[自我认知调度] 每日分析完成: %d 维度 / %.1fms → %s",
-                _res["dimensions"], _res["elapsed_ms"], _rp)
+                "[自我认知调度] 每日分析完成: %d 维度 / %.1fms → %s | "
+                "RSS起=%s 线程起=%d 线程末=%d %s（原因=每日分析结束 触发值=58.4s）",
+                _res["dimensions"], _res["elapsed_ms"], _rp,
+                f"{_a3_rss_start/1024**3:.2f}GB" if _a3_rss_start is not None else "N/A",
+                _a3_threads_start if _a3_threads_start is not None else -1,
+                _a3_threads_end if _a3_threads_end is not None else -1,
+                _a3_rel_s)
             self._runs += 1
         except Exception as _e:
             _res["status"] = "error"
@@ -609,7 +638,17 @@ def stop_daily_schedule() -> None:
     try:
         _s = _scheduler
         if _s is not None:
+            _a3_rss_b, _a3_th_b = _a3_sample_rss_threads()
             _s.stop()
+            _a3_rss_a, _a3_th_a = _a3_sample_rss_threads()
+            _a3_rel = (_a3_rss_b - _a3_rss_a) if (_a3_rss_b is not None and _a3_rss_a is not None) else None
+            _a3_rel_s = f"释放={_a3_rel/1024**3:.2f}GB" if _a3_rel is not None else "释放=N/A"
+            _module_logger.info(
+                "[自我认知调度] 每日调度停止: RSS起=%s 线程起=%d 线程末=%d %s（原因=调度停止）",
+                f"{_a3_rss_b/1024**3:.2f}GB" if _a3_rss_b is not None else "N/A",
+                _a3_th_b if _a3_th_b is not None else -1,
+                _a3_th_a if _a3_th_a is not None else -1,
+                _a3_rel_s)
     except Exception as _e:
         _module_logger.debug("[自我认知调度] 停止失败: %s: %s", type(_e).__name__, _e)
 
@@ -620,7 +659,17 @@ def reset_daily_scheduler() -> None:
     with _scheduler_lock:
         if _scheduler is not None:
             try:
+                _a3_rss_b, _a3_th_b = _a3_sample_rss_threads()
                 _scheduler.stop()
+                _a3_rss_a, _a3_th_a = _a3_sample_rss_threads()
+                _a3_rel = (_a3_rss_b - _a3_rss_a) if (_a3_rss_b is not None and _a3_rss_a is not None) else None
+                _a3_rel_s = f"释放={_a3_rel/1024**3:.2f}GB" if _a3_rel is not None else "释放=N/A"
+                _module_logger.info(
+                    "[自我认知调度] 每日调度重置停止: RSS起=%s 线程起=%d 线程末=%d %s（原因=调度重置）",
+                    f"{_a3_rss_b/1024**3:.2f}GB" if _a3_rss_b is not None else "N/A",
+                    _a3_th_b if _a3_th_b is not None else -1,
+                    _a3_th_a if _a3_th_a is not None else -1,
+                    _a3_rel_s)
             except Exception as _e:
                 _module_logger.debug("[自我认知调度] 重置时停止失败: %s: %s",
                                      type(_e).__name__, _e)

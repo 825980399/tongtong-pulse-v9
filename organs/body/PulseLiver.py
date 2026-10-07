@@ -151,6 +151,7 @@ class PulseLiver(BasePulseOrgan):
         self._last_rss_sample = 0.0
         self._rss_baseline = None
         self._rss_samples: list = []   # 最近 RSS 样本（滚动，约 8h 窗口）
+        self._rss_prev_sample_ts: float | None = None  # ★165批A3：上一 RSS 采样时间戳（回落间隔计算）
         self._res_handles = None
         self._res_threads = None
         self._res_open_files = None
@@ -501,6 +502,16 @@ class PulseLiver(BasePulseOrgan):
         except Exception as _e:
             silent_exc(_e, where="organs.body.PulseLiver::_sample_resource_usage L499")
             _uptime_s = None
+        # ★165批A3：RSS 下行台阶回落告警（与上一采样点比跌幅 >200MB 即告警，归因不再靠推定）
+        _prev_rss = self._rss_samples[-2] if len(self._rss_samples) >= 2 else None
+        if _prev_rss is not None and (_prev_rss - _rss) > 200 * 1024 ** 2:
+            _a3_interval = (time.time() - self._rss_prev_sample_ts) if self._rss_prev_sample_ts else None
+            _a3_interval_str = f"{_a3_interval:.0f}s" if _a3_interval is not None else "N/A"
+            self._log(LogLevel.WARNING,
+                      f"[T-107a] RSS 台阶回落: 前={_prev_rss/1024**3:.2f}GB "
+                      f"现={_rss/1024**3:.2f}GB Δ=-{(_prev_rss - _rss)/1024**3:.2f}GB "
+                      f"采样间隔={_a3_interval_str}")
+        self._rss_prev_sample_ts = time.time()
         _uptime_str = f"进程启动≈{_uptime_s:.0f}s" if _uptime_s is not None else "进程启动时刻不可用"
         self._log(LogLevel.DEBUG,
                   f"[T-107a] 资源采样: RSS={_rss/1024**3:.2f}GB 句柄={_handles} "

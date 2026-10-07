@@ -1212,9 +1212,27 @@ class SelfInspector(SilentLogMixin):
                             }
                     except Exception:
                         continue
+            try:
+                import psutil
+                _proc = psutil.Process(os.getpid())
+                _a3_rss = int(_proc.memory_info().rss)
+                _a3_threads = threading.active_count()
+                try:
+                    _a3_handles = int(_proc.num_handles())
+                except Exception as _e:
+                    _module_logger.warning(f"异常已忽略（需关注）: {type(_e).__name__}: {_e}")
+                    _a3_handles = None
+                import sys
+                _a3_idx_bytes = sys.getsizeof(index)
+            except Exception as _e:
+                _module_logger.warning(f"异常已忽略（需关注）: {type(_e).__name__}: {_e}")
+                _a3_rss, _a3_threads, _a3_handles, _a3_idx_bytes = None, None, None, None
+            _a3_idx_str = f"≈{_a3_idx_bytes/1024:.1f}KB" if _a3_idx_bytes is not None else "N/A"
             _module_logger.info(
                 f"[SelfInspector] 全项目类索引构建完成: {len(index)} 个类"
-                f"（organs/ 之外，供自主进化定位核心模块代码）")
+                f"（organs/ 之外，供自主进化定位核心模块代码）"
+                f" | RSS三要素: RSS={_a3_rss/1024**3:.2f}GB 线程={_a3_threads} 句柄={_a3_handles}"
+                f" 索引常驻={_a3_idx_str}")
         except Exception as _e:
             _module_logger.warning(f"[SelfInspector] 全项目类索引构建失败: {_e}")
         return index
