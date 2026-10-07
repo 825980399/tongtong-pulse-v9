@@ -45,6 +45,10 @@ _TYPE_LABEL = {
     QT_UNKNOWN: "未知类型",
 }
 
+# ========== ★第164批 刀A4：浏览器导航熔断（防 DNS 风暴反复选 browser） ==========
+KA_ROUTER_BROWSER_CIRCUIT_BREAKER_ENABLED = True   # 总开关（默认开）
+KA_ROUTER_BROWSER_FAIL_THRESHOLD = 5                # 连续失败次数阈值
+KA_ROUTER_BROWSER_COOLDOWN_SEC = 300.0             # 跳闸后冷却退避时长（秒）
 
 class KnowledgeAcquisitionRouter:
     """知识获取策略路由器（线程安全；无自建线程，按需同步调用）"""
@@ -58,6 +62,10 @@ class KnowledgeAcquisitionRouter:
         self._max_decisions = 50
         # ★A-14：分类统计（每类数量/命中路径）
         self._class_stats: dict[str, dict[str, Any]] = {}
+        # ★第164批 刀A4：浏览器熔断状态（线程安全，_lock 保护）
+        self._browser_fail_streak = 0
+        self._browser_open_until = 0.0
+        self._browser_trip_count = 0
 
     # ========== 对外接口 ==========
 
@@ -184,6 +192,13 @@ class KnowledgeAcquisitionRouter:
                 return None
         except Exception as e:
             silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::acquire L184")
+            return None
+
+        # ★第164批 刀A4：浏览器熔断——连续失败达阈值则退避，本次返回 None
+        #   由调用方走直连 wiki/RSS 降级路径，避免 DNS 风暴反复选 browser。
+        if self._browser_circuit_open():
+            self._log("浏览器熔断中（连续失败已达阈值，冷却退避中），本次 acquire 返回 None，"
+                      "由调用方走直连 wiki/RSS 降级路径，避免反复选 browser")
             return None
 
         _q = str(query or "").strip()
@@ -384,6 +399,63 @@ class KnowledgeAcquisitionRouter:
             if len(self._decisions) > self._max_decisions:
                 del self._decisions[:len(self._decisions) - self._max_decisions]
 
+    # ========== ★第164批 刀A4：浏览器熔断闭环 ==========
+
+    def record_browser_outcome(self, success: bool) -> None:
+        """★第164批 刀A4：浏览器尝试成败上报（调用方在浏览器操作结束后调用）。
+
+        连续失败达阈值 → 跳闸进入冷却（open）；冷却期间 acquire 返回 None。
+        任一次成功 → 重置失败计数并闭合熔断。半开探测（冷却到期）仍失败 → 延长冷却。
+        纯算术 + 已自身容错的 _log，无 try/except（规避 cw2 静默except 门禁）。
+        """
+        with self._lock:
+            if success:
+                if self._browser_fail_streak != 0 or self._browser_open_until > 0.0:
+                    self._log("浏览器熔断：检测到一次成功，重置失败计数并闭合熔断")
+                self._browser_fail_streak = 0
+                self._browser_open_until = 0.0
+                return
+            self._browser_fail_streak += 1
+            if self._browser_fail_streak >= KA_ROUTER_BROWSER_FAIL_THRESHOLD:
+                _now = time.time()
+                if self._browser_open_until <= _now:
+                    self._browser_open_until = _now + KA_ROUTER_BROWSER_COOLDOWN_SEC
+                    self._browser_trip_count += 1
+                    self._log(
+                        f"浏览器熔断触发：连续失败 {self._browser_fail_streak} 次，"
+                        f"退避 {KA_ROUTER_BROWSER_COOLDOWN_SEC:.0f}s（累计跳闸 {self._browser_trip_count} 次）")
+                else:
+                    # 半开探测仍失败 → 延长冷却
+                    self._browser_open_until = _now + KA_ROUTER_BROWSER_COOLDOWN_SEC
+                    self._log(
+                        f"浏览器熔断半开探测仍失败，延长冷却至 {KA_ROUTER_BROWSER_COOLDOWN_SEC:.0f}s")
+
+    def _browser_circuit_open(self) -> bool:
+        """★第164批 刀A4：熔断是否处于打开（冷却）态。"""
+        if not KA_ROUTER_BROWSER_CIRCUIT_BREAKER_ENABLED:
+            return False
+        return time.time() < self._browser_open_until
+
+    def get_browser_circuit_state(self) -> dict[str, Any]:
+        """★第164批 刀A4：熔断状态快照（可观测/单测）。"""
+        with self._lock:
+            return {
+                "enabled": KA_ROUTER_BROWSER_CIRCUIT_BREAKER_ENABLED,
+                "fail_streak": self._browser_fail_streak,
+                "open": self._browser_circuit_open(),
+                "open_until": self._browser_open_until,
+                "trip_count": self._browser_trip_count,
+                "threshold": KA_ROUTER_BROWSER_FAIL_THRESHOLD,
+                "cooldown_sec": KA_ROUTER_BROWSER_COOLDOWN_SEC,
+            }
+
+    def reset_browser_circuit(self) -> None:
+        """★第164批 刀A4：重置熔断状态（测试隔离用）。"""
+        with self._lock:
+            self._browser_fail_streak = 0
+            self._browser_open_until = 0.0
+            self._browser_trip_count = 0
+
     def _log(self, msg: str):
         try:
             self._log_fn(f"[策略路由器] {msg}")
@@ -403,3 +475,13 @@ def get_shared_knowledge_router(log_fn=None) -> KnowledgeAcquisitionRouter:
         if _shared_router is None:
             _shared_router = KnowledgeAcquisitionRouter(log_fn=log_fn)
         return _shared_router
+
+
+def report_browser_outcome(success: bool) -> None:
+    """★第164批 刀A4：浏览器熔断闭环反馈（调用方便捷入口，委托共享单例）。
+
+    无 try/except 包裹：record_browser_outcome 为纯算术 + 已自身容错的日志，
+    不会抛异常；调用方各自已有异常边界。
+    """
+    _r = get_shared_knowledge_router()
+    _r.record_browser_outcome(bool(success))

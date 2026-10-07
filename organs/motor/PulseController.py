@@ -2567,6 +2567,7 @@ class PulseController(BasePulseOrgan):
         Playwright 深度搜索的执行函数。
         此方法被 ExternalExecutor 在专用线程中调用，可以安全使用 Playwright 同步 API。
         """
+        from nucleus.knowledge.KnowledgeAcquisitionRouter import report_browser_outcome
         max_articles = self._get_headless_config(
             "heavy_max_articles" if self._current_load_level() == "heavy" else "max_articles_per_search", 3
         )
@@ -2608,10 +2609,18 @@ class PulseController(BasePulseOrgan):
                 return _wiki_result
         except Exception as e:
             self._log(LogLevel.DEBUG, f"百科优先查询异常已忽略（{type(e).__name__}: {e}）")
-        return self._search_deep_headless(
+        _result = self._search_deep_headless(
             actual_topic, reason, max_articles,
             correlation_id=payload.get("search_correlation_id", ""),
         )
+        # ★第164批 刀A4：浏览器熔断闭环反馈——仅浏览器深搜路径上报成败
+        _status = _result.get("status") if isinstance(_result, dict) else None
+        if _status in ("success", "hit", "ok"):
+            report_browser_outcome(True)
+        elif _status in ("error", "failed", "empty", "timeout", None):
+            report_browser_outcome(False)
+        # skipped/blocked/cooldown 等中性状态不计入熔断
+        return _result
 
     def _try_encyclopedia_first(self, topic: str) -> dict[str, Any] | None:
         """★任务6（2026-09-08）：实体/概念查询优先用百科查询器。

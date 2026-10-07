@@ -257,6 +257,7 @@ class PulseLegs(BasePulseOrgan):
     # ========== 事件处理 ==========
 
     def _on_fetch(self, payload: dict) -> dict[str, Any]:
+        from nucleus.knowledge.KnowledgeAcquisitionRouter import report_browser_outcome
         if time.time() < self._cooldown_until:
             remaining = int(self._cooldown_until - time.time())
             return {"status": "cooldown", "remaining_seconds": remaining}
@@ -293,13 +294,16 @@ class PulseLegs(BasePulseOrgan):
                 self._consecutive_failures = 0
 
                 self._log(LogLevel.DEBUG, f"抓取成功: {source_url} → {len(content)}字符")
+                report_browser_outcome(True)
                 return {"status": "success", "source": source_url, "content_length": len(content)}
             else:
                 self._handle_failure(source_url, "空内容")
+                report_browser_outcome(False)
                 return {"status": "empty", "source": source_url}
 
         except Exception as e:
             self._handle_failure(source_url, str(e))
+            report_browser_outcome(False)
             return {"status": "error", "source": source_url, "error": str(e)[:100]}
     # ========== 生命周期 ==========
 
