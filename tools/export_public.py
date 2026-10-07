@@ -138,8 +138,7 @@ RESERVED_DEVICE_NAMES: frozenset[str] = frozenset({
 PUBLIC_DOCS_ALLOW_FILES: frozenset[str] = frozenset({
     "README.md",                       # docs 索引
     "demo-quickstart.md",              # 演示快速启动（比赛/演示）
-    "项目架构总览_20260927.md",        # 一页看懂架构
-    "项目结构树.md",                   # 目录结构说明
+    "项目架构与结构总览_20261003.md",   # 一页看懂架构 + 目录结构（合并刷新版）
     # ★第148批 3.3：首发必需公开文档
     "部署指南_APIKey配置.md",          # 最小化部署 + 环境变量配置
     "SECURITY.md",                     # 漏洞上报方式
