@@ -656,6 +656,7 @@ class SelfAwarenessEngine:
         # ★主线第23批 T5：知识质量健康度（第五维，P3-4）+ 五维总览
         _lines.extend(SelfAwarenessEngine._report_knowledge_quality_section(_p))
         _lines.extend(SelfAwarenessEngine._report_five_dimension_overview(_p))
+        _lines.extend(SelfAwarenessEngine._report_reasoning_metrics_section(_p))
         _lines.append("—— 报告结束 ——")
         _text = "\n".join(_lines)
         if output_path:
@@ -1436,6 +1437,39 @@ class SelfAwarenessEngine:
                     _out.append("     建议: %s" % _x["suggestion"])
         else:
             _out.append("【最严重问题】无")
+        _out.append("")
+        return _out
+
+    @staticmethod
+    def _report_reasoning_metrics_section(profile: Any) -> list:
+        """★第164批 刀A2：推理能力指标段——本地拦截率 / 补救率 / 补救沉淀率三联动
+         + 分场景 LLM 依赖度北极星。
+
+        数据源自 nucleus.LLMDependencyMetrics.get_dependency_snapshot()；
+        get_dependency_snapshot 自身失败返回 {}，本方法以 .get() 兜底，无 try/except。
+        """
+        from nucleus.LLMDependencyMetrics import get_dependency_snapshot
+        _snap = get_dependency_snapshot() or {}
+        _d = _snap.get("derived", {}) or {}
+        _c = _snap.get("counters", {}) or {}
+        _rem = _c.get("remediation", {}) or {}
+        _out: list = ["【推理能力指标 · 三联动与分场景北极星】"]
+        _out.append("  · 本地拦截率(local_intercept_rate): %.4f"
+                    % float(_d.get("local_intercept_rate", 0) or 0))
+        _out.append("  · 补救率(remediation_rate, 复用 verification_learning_hub 唯一口径): %.4f"
+                    % float(_d.get("remediation_rate", 0) or 0))
+        _out.append("  · 补救沉淀率(remediation_distill_rate): %.4f"
+                    % float(_d.get("remediation_distill_rate", 0) or 0))
+        _out.append("  · 补救三态原始计数(attempt/success/distilled): %s / %s / %s"
+                    % (int(_rem.get("attempt", 0) or 0), int(_rem.get("success", 0) or 0),
+                       int(_rem.get("distilled", 0) or 0)))
+        _scenes = _d.get("scene_llm_dependency_ratio", {}) or {}
+        if _scenes:
+            _out.append("  · 分场景 LLM 依赖度北极星(scene_llm_dependency_ratio):")
+            for _s, _r in _scenes.items():
+                _out.append("      - %s: %.4f" % (_s, float(_r or 0)))
+        else:
+            _out.append("  · 分场景 LLM 依赖度北极星: 暂无样本")
         _out.append("")
         return _out
 

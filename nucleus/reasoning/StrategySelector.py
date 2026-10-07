@@ -16,6 +16,10 @@ from __future__ import annotations
 import time
 from typing import Any, ClassVar
 
+from nucleus.logger import get_module_logger
+
+_logger = get_module_logger("StrategySelector")
+
 
 
 class StrategySelector:
@@ -90,6 +94,11 @@ class StrategySelector:
         self._selection_history: list[dict[str, Any]] = []
         self._stats = {"total_selections": 0, "adaptations": 0}
 
+        # ★第164批 刀A2：自评驱动路由升降级连续计数 / 降级标记
+        self._consecutive_fail: dict[str, int] = {name: 0 for name in self._STRATEGIES}
+        self._consecutive_pass: dict[str, int] = {name: 0 for name in self._STRATEGIES}
+        self._degraded: dict[str, bool] = {name: False for name in self._STRATEGIES}
+
         # ★163批 刀1：本地推理链兜底灰度开关（默认读 config，可被构造参数覆盖）。
         self._local_fallback_enabled = (bool(local_fallback_enabled)
                                         if local_fallback_enabled is not None
@@ -136,6 +145,11 @@ class StrategySelector:
         if self._strategy_success.get(_candidate, 0.5) < 0.4:
             _lower = self._get_lower_cost_strategy(_candidate)
             if _lower and self._strategy_success.get(_lower, 0.5) > 0.5:
+                _candidate = _lower
+        # ★第164批 刀A2：候选策略若已被自评降级，则强制降级到次优
+        if self._degraded.get(_candidate):
+            _lower = self._get_lower_cost_strategy(_candidate)
+            if _lower:
                 _candidate = _lower
 
         # 5. 计算置信度
@@ -207,7 +221,11 @@ class StrategySelector:
         return _base
 
     def report_result(self, strategy: str, success: bool) -> None:
-        """报告策略执行结果，更新成功率统计（自适应学习）。"""
+        """报告策略执行结果，更新成功率统计（自适应学习）。
+
+        ★第164批 刀A2：自评驱动路由升降级 —— 连续 3 次失败→降级该策略；
+        连续 5 次通过→恢复（扩大）并清除降级标记。降级/恢复均记日志留痕。
+        """
         if strategy not in self._strategy_success:
             return
         _old = self._strategy_success[strategy]
@@ -217,6 +235,21 @@ class StrategySelector:
             _old * (1 - self._adapt_rate) + _delta * self._adapt_rate, 3)
         self._strategy_count[strategy] += 1
         self._stats["adaptations"] += 1
+        # ★第164批 刀A2：连续计数 → 升降级
+        if success:
+            self._consecutive_fail[strategy] = 0
+            self._consecutive_pass[strategy] += 1
+            if self._consecutive_pass[strategy] >= 5 and self._degraded.get(strategy):
+                self._degraded[strategy] = False
+                _logger.info(
+                    "[路由升降级] 策略=%s 连续5次通过→恢复(扩大)" % strategy)
+        else:
+            self._consecutive_pass[strategy] = 0
+            self._consecutive_fail[strategy] += 1
+            if self._consecutive_fail[strategy] >= 3 and not self._degraded.get(strategy):
+                self._degraded[strategy] = True
+                _logger.warning(
+                    "[路由升降级] 策略=%s 连续3次失败→降级" % strategy)
 
     # ========== 内部方法 ==========
 

@@ -62,6 +62,8 @@ def _blank_counters() -> dict[str, dict[str, int]]:
         "local_inference_count": {k: 0 for k in LOCAL_KINDS},
         "search_count": {k: 0 for k in SEARCH_KINDS},
         "digestion_count": {DIGEST_KNOWLEDGE: 0, DIGEST_FILE: 0},
+        # ★第164批 刀A2：补救三态计数（attempt/success/distilled）
+        "remediation": {"attempt": 0, "success": 0, "distilled": 0},
     }
 
 
@@ -140,6 +142,19 @@ class LLMDependencyMetrics:
     def record_digestion(self, kind: str = DIGEST_KNOWLEDGE, n: int = 1) -> None:
         """记录一次知识消化。"""
         self._bump("digestion_count", kind, n)
+
+    # ============ ★第164批 刀A2：补救三态埋点 ============
+    def record_remediation_attempt(self, n: int = 1) -> None:
+        """★第164批 刀A2：记录一次补救尝试（问题进入需补救路径）。"""
+        self._bump("remediation", "attempt", n)
+
+    def record_remediation_success(self, n: int = 1) -> None:
+        """★第164批 刀A2：记录一次补救成功（LLM 补救验证通过）。"""
+        self._bump("remediation", "success", n)
+
+    def record_remediation_distilled(self, n: int = 1) -> None:
+        """★第164批 刀A2：记录一次补救后蒸馏沉淀（L2 节点成功写入知识树）。"""
+        self._bump("remediation", "distilled", n)
 
     def _bump(self, group: str, key: str, n: int = 1) -> None:
         with self._lock:
@@ -289,6 +304,62 @@ class LLMDependencyMetrics:
             return 0.0
         return round(self.local_total() / _t, 4)
 
+    # ============ ★第164批 刀A2：推理指标三联动 ============
+    def local_intercept_rate(self) -> float:
+        """★第164批 刀A2：本地拦截率 = 置信度守卫拦截 / 回答请求；无样本 0.0。
+
+        本地推理中 KIND_GUARD（置信度守卫）即「本地拦截」语义；分母取
+        answer_requests（回答类请求 = LLM + 本地），与依赖度口径同源。
+        """
+        _guard = int(self._counters.get("local_inference_count", {}).get(KIND_GUARD, 0))
+        _den = self.answer_requests()
+        if _den <= 0:
+            return 0.0
+        return round(_guard / _den, 4)
+
+    def remediation_rate(self) -> float:
+        """★第164批 刀A2：补救率 = 补救成功 / 补救尝试。
+
+        复用 verification_learning_hub.get_stats()["remediation_rate"] 为**唯一口径**
+        （宪法 N3 口径一致性要求，不另造分母），无样本返回 0.0。
+        """
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import (
+                get_verification_learning_hub)
+            _stats = get_verification_learning_hub().get_stats()
+            _total = int(_stats.get("total", 0) or 0)
+            _rem = int(_stats.get("remediation_count", 0) or 0)
+            if _total <= 0:
+                return 0.0
+            return round(_rem / _total, 4)
+        except Exception:
+            return 0.0
+
+    def remediation_distill_rate(self) -> float:
+        """★第164批 刀A2：补救后沉淀率 = 蒸馏沉淀 / 补救成功；无样本 0.0。
+
+        沉淀由 ReasoningExperienceIndexer.record_remediation_success 在双写开启
+        且 L2 节点写入知识树时经 record_remediation_distilled 埋点计数。
+        """
+        _ok = int(self._counters.get("remediation", {}).get("success", 0))
+        _dist = int(self._counters.get("remediation", {}).get("distilled", 0))
+        if _ok <= 0:
+            return 0.0
+        return round(_dist / _ok, 4)
+
+    def scene_llm_dependency_ratio(self, scene: str) -> float:
+        """★第164批 刀A2：分场景 LLM 依赖度（北极星·分场景）。
+
+        = 该场景 llm_call / (该场景 llm_call + 全局本地推理)；无样本 0.0。
+        全局本地推理作为分母的本地部分（本地推理不按场景拆分计数）。
+        """
+        _llm = int(self._counters.get("llm_call_count", {}).get(scene, 0) or 0)
+        _local = self.local_total()
+        _den = _llm + _local
+        if _den <= 0:
+            return 0.0
+        return round(_llm / _den, 4)
+
     def get_snapshot(self) -> dict[str, Any]:
         """当前完整指标快照（供面板/日志/持久化）。"""
         # ★第94批 T-94c：`evolution_local_rule_rate` 可能触发补丁库文件读（带 60s
@@ -314,6 +385,12 @@ class LLMDependencyMetrics:
                     "self_sufficiency_score": self.self_sufficiency_score(),
                     "overall_llm_share": _m94_overall,
                     "evolution_local_rule_rate": _m94_lr_rate,
+                    # ★第164批 刀A2：推理指标三联动 + 分场景北极星
+                    "local_intercept_rate": self.local_intercept_rate(),
+                    "remediation_rate": self.remediation_rate(),
+                    "remediation_distill_rate": self.remediation_distill_rate(),
+                    "scene_llm_dependency_ratio": {
+                        s: self.scene_llm_dependency_ratio(s) for s in LLM_SCENES},
                 },
                 "history": list(self._history),
             }
@@ -519,6 +596,21 @@ def record_digestion(kind: str = DIGEST_KNOWLEDGE, n: int = 1) -> None:
         get_llm_dependency_metrics().record_digestion(kind, n)
     except Exception as e:
         _logger.debug(f"知识消化埋点异常已忽略: {type(e).__name__}: {e}")
+
+# ============ ★第164批 刀A2：补救三态模块级便捷入口（cw2 零新增静默 handler）============
+def record_remediation_attempt(n: int = 1) -> None:
+    """★第164批 刀A2：补救尝试埋点便捷入口（异常上抛，由调用方既有边界处理）。"""
+    get_llm_dependency_metrics().record_remediation_attempt(n)
+
+
+def record_remediation_success(n: int = 1) -> None:
+    """★第164批 刀A2：补救成功埋点便捷入口。"""
+    get_llm_dependency_metrics().record_remediation_success(n)
+
+
+def record_remediation_distilled(n: int = 1) -> None:
+    """★第164批 刀A2：补救蒸馏沉淀埋点便捷入口。"""
+    get_llm_dependency_metrics().record_remediation_distilled(n)
 
 
 def get_dependency_snapshot() -> dict[str, Any]:

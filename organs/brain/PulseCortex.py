@@ -1339,6 +1339,12 @@ class PulseCortex(BasePulseOrgan):
                                             question=ctx.get("content", ""),
                                             correct_answer=_corrected_answer,
                                             rule_candidate=f"self_correction:{_correction.get('strategy', '')}")
+                                        # ★第164批 刀A2：同步 LLM 依赖度量埋点（失败/成功）
+                                        from nucleus.LLMDependencyMetrics import (
+                                            record_remediation_attempt as _rec_att,
+                                            record_remediation_success as _rec_succ)
+                                        _rec_att(1)
+                                        _rec_succ(1)
 
                                     except Exception as e:
                                         self._log_ignored_exception(e)
@@ -1451,6 +1457,10 @@ class PulseCortex(BasePulseOrgan):
                             pattern=_verify.get("reason", "输出相关性低"),
                             question=ctx.get("content", ""),
                             context="cortex_output_blocked_to_lung")
+                        # ★第164批 刀A2：失败模式即一次补救尝试（补救率分母）
+                        from nucleus.LLMDependencyMetrics import (
+                            record_remediation_attempt as _rec_att)
+                        _rec_att(1)
 
                     except Exception as e:
                         self._log_ignored_exception(e)

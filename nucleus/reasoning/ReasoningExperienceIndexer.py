@@ -282,6 +282,9 @@ class ReasoningExperienceIndexer:
             self._nodes_written += 1
             if self._queue is not None:
                 self._queue.submit(_nid, _value)
+            # ★第164批 刀A2：蒸馏沉淀埋点（L2 节点已写入知识树）
+            from nucleus.LLMDependencyMetrics import record_remediation_distilled
+            record_remediation_distilled(1)
 
     def record_failure_mode(self, pattern: str, question: str | None = None,
                             context: str | None = None, confidence: float = 0.3) -> None:
