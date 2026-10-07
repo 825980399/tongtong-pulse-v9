@@ -1014,6 +1014,20 @@ class PulseCortex(BasePulseOrgan):
             self._log(LogLevel.DEBUG, f"清理异常已忽略: {type(e).__name__}: {e}")
             return 0
 
+    def _compute_offline_survival(self, question: str) -> str | None:
+        """★A3（T-断网生存协议-1）：预跑本地 Symbolic→Causal→Analogy 链。
+
+        仅作「候选答案」计算，不直接改变行为；结果由 _on_inference_result 的
+        委派分支决定是否采用。无 try/except（调用方既有边界保护）：
+        - 外脑在线（有回复）→ 此处不会被调用（调用方传入 llm_reply=None 才走本地）；
+        - 本地链异常 → 上抛给 _on_inference_result 既有 except，不新增静默 handler。
+        """
+        from nucleus.reasoning.offline_survival_protocol import survive_offline
+        _used, _res = survive_offline(question, None)
+        if _used and _res is not None and _res.display:
+            return _res.display
+        return None
+
     def _on_inference_result(self, payload: dict) -> dict[str, Any]:
         """收到内在世界的推理结果（L2认知思考层），路由到嘴巴输出"""
         correlation_id = payload.get("correlation_id", "")
@@ -1127,31 +1141,47 @@ class PulseCortex(BasePulseOrgan):
                         self._log(LogLevel.WARNING, "无法获取回退上下文，放弃调用肺模型")
                         return {"status": "no_pending_match", "correlation_id": correlation_id}
 
-                    _memory_context = payload.get("memory_context", None)
-                    # ★第25批 T1：发射幂等（对话兜底路径）
-                    if not self._claim_select_model_emit(
-                            correlation_id, fallback_prompt,
-                            is_background=False, is_remediation=False):
-                        self._log(LogLevel.INFO,
-                                  f"重复发射防护: 本轮对话 SELECT_MODEL 已发过，抑制 "
-                                  f"cid={str(correlation_id)[:16]}")
-                        return {"status": "suppressed_duplicate_select_model",
-                                "correlation_id": correlation_id}
-                    self._emit(LungEvent.SELECT_MODEL, {
-                        "task_type": "chat",
-                        "prompt": fallback_prompt,
-                        "user_name": fallback_user,
-                        "memory_context": _memory_context,
-                        "is_dialogue": not _is_inner_autonomous,
-                        "correlation_id": correlation_id,
-                        # 新增：传递推理类型提示
-                        "derivation_type_hint": payload.get("derivation_type_hint"),
-                    }, priority=7, layer="L1")
-                    return {
-                        "status": "delegated_to_lung",
-                        "intent": "fallback",
-                        "reason": "inner_world_fallback_no_context",
-                    }
+                    # ★A3（T-断网生存协议-1）：外脑（肺模型）不可达时，优先采用
+                    #   本地 Symbolic→Causal→Analogy 链结果（已标 [本地推理·待验证]），
+                    #   而非静默委派 / 模板降级；本地也未解出则仍委派外脑。
+                    #   直调（无 try/except，cw2 零新增；模块纯函数对正常输入不抛异常）。
+                    _offline = self._compute_offline_survival(fallback_prompt)
+                    if _offline:
+                        answer = _offline
+                        method = "offline_local"
+                        ctx = {
+                            "content": fallback_prompt,
+                            "user_name": fallback_user,
+                            "file_paths": [],
+                            "code_blocks": [],
+                        }
+                        # 落入下方 `if answer:` 统一输出路径，不委派外脑
+                    else:
+                        _memory_context = payload.get("memory_context", None)
+                        # ★第25批 T1：发射幂等（对话兜底路径）
+                        if not self._claim_select_model_emit(
+                                correlation_id, fallback_prompt,
+                                is_background=False, is_remediation=False):
+                            self._log(LogLevel.INFO,
+                                      f"重复发射防护: 本轮对话 SELECT_MODEL 已发过，抑制 "
+                                      f"cid={str(correlation_id)[:16]}")
+                            return {"status": "suppressed_duplicate_select_model",
+                                    "correlation_id": correlation_id}
+                        self._emit(LungEvent.SELECT_MODEL, {
+                            "task_type": "chat",
+                            "prompt": fallback_prompt,
+                            "user_name": fallback_user,
+                            "memory_context": _memory_context,
+                            "is_dialogue": not _is_inner_autonomous,
+                            "correlation_id": correlation_id,
+                            # 新增：传递推理类型提示
+                            "derivation_type_hint": payload.get("derivation_type_hint"),
+                        }, priority=7, layer="L1")
+                        return {
+                            "status": "delegated_to_lung",
+                            "intent": "fallback",
+                            "reason": "inner_world_fallback_no_context",
+                        }
             else:
                 # ★修复：无匹配上下文但有答案，构造临时上下文以便统一验证和输出
                 self._log(LogLevel.DEBUG, f"无匹配上下文但有答案，构造临时上下文进行验证: correlation_id={correlation_id}")
