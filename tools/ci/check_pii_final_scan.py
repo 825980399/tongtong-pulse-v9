@@ -305,7 +305,30 @@ def _load_ep():
     return _EP
 
 
+def selftest():
+    # 核心纯函数自证：_mask_value 打码绝不回吐真值；_meta_line_hits 正例命中/反例空/豁免忽略。
+    # 正例：手机号被掩码，且原始号码不出现在输出
+    m = _mask_value("13800138000")
+    assert "****" in m and "13800138000" not in m, "正例：手机号须打码且不回吐真值"
+    # 反例：普通词也走安全打码形态，绝不原样返回
+    n = _mask_value("hello")
+    assert "hello" not in n and "***" in n, "反例：非 PII 也须安全打码、不回吐原值"
+    # 邮箱打码
+    e = _mask_value("john@example.com")
+    assert "john@example.com" not in e and e.startswith("jo***@"), "邮箱须局部打码"
+    # _meta_line_hits 正例：含手机号行命中
+    assert list(_meta_line_hits("call 13800138000 now")), "正例：手机号行应命中"
+    # _meta_line_hits 反例：普通代码行无命中
+    assert not list(_meta_line_hits("def foo(): return 1")), "反例：普通行应无命中"
+    # 豁免例：内部匿名域邮箱不计入
+    assert not list(_meta_line_hits("contact dev@tongtong.local")), "豁免：内部域邮箱应忽略"
+    print("[selftest] pii-final-scan 自证通过")
+    return 0
+
+
 def main(argv=None) -> int:
+    if "--selftest" in (argv if argv is not None else sys.argv):
+        return selftest()
     ap = argparse.ArgumentParser(description="PII 终扫三档（S1 包体 / S2 HEAD blob / S3 元数据）")
     ap.add_argument("--tier", default="all", choices=["s1", "s2", "s3", "all"])
     ap.add_argument("--package", default="", help="S1：发布包路径（.zip 或目录）")

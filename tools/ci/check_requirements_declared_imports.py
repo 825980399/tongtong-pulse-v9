@@ -163,7 +163,49 @@ def _is_violation(top, declared, project_tops, node, protected):
     return True
 
 
-def main():
+def selftest():
+    # 核心判定自证：未声明第三方 import 必报违规；已声明不报；try/except ImportError
+    # 保护的 import 豁免。用 tempfile 写受控 .py，驱动 scan_file / scan_tree。
+    import tempfile
+
+    declared = {"allowedpkg"}
+    project_tops = {"nucleus", "organs", "base", "config", "main", "tools", "tests"}
+
+    # 正例：未声明第三方包 → 违规
+    f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
+    f1.write("import nonexistentpkg123\n")
+    f1.close()
+    try:
+        vs = scan_file(f1.name, declared, project_tops, set())
+        assert vs, "正例：未声明包应报违规"
+    finally:
+        os.unlink(f1.name)
+
+    # 反例：已声明包 → 不报
+    f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
+    f2.write("import allowedpkg\n")
+    f2.close()
+    try:
+        vs2 = scan_file(f2.name, declared, project_tops, set())
+        assert not vs2, "反例：已声明包不应报违规"
+    finally:
+        os.unlink(f2.name)
+
+    # 豁免例：try/except ImportError 保护的 import → 不报
+    src = "try:\n    import fragilepkg\nexcept ImportError:\n    pass\n"
+    tree = ast.parse(src)
+    prot = _collect_protected(tree)
+    vs3 = scan_tree(tree, declared, project_tops, prot)
+    assert not vs3, "豁免：有 ImportError 降级保护的 import 不应报违规"
+    print("[selftest] declared-imports 自证通过")
+    return 0
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    if "--selftest" in argv:
+        return selftest()
     project_tops = _collect_project_tops()
     declared = _load_declared()
 

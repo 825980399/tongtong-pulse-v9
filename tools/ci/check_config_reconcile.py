@@ -199,8 +199,25 @@ def reconcile(root: str = PROJECT_ROOT) -> dict[str, Any]:
     }
 
 
+def selftest() -> int:
+    # 核心自证：reconcile() 返回含预期键的 dict；_skip_dir 正确跳过 .git/tmp/.bak*。
+    _res = reconcile()
+    assert isinstance(_res, dict), "reconcile 应返回 dict"
+    for _k in ("declared", "static_read", "never_read", "never_read_names"):
+        assert _k in _res, "reconcile 结果应含键 %s" % _k
+    # _skip_dir：跳过 .git / tmp / .bak* 前缀；非跳过目录返回 False
+    assert _skip_dir(".git") is True
+    assert _skip_dir("tmp") is True
+    assert _skip_dir(".bak_batch160lower") is True
+    assert _skip_dir("nucleus") is False
+    print("[selftest] config-reconcile 自证通过")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _argv = list(sys.argv[1:] if argv is None else argv)
+    if "--selftest" in _argv:
+        return selftest()
     _out = None
     if "--out" in _argv:
         _i = _argv.index("--out")

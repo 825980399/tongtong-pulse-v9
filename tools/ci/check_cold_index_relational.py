@@ -51,7 +51,28 @@ def _collect_parquet(cold_dir):
     return _rows
 
 
-def main():
+def selftest():
+    # 核心自证：_collect_parquet 对不存在目录 / 空目录优雅返回 {}（不抛、不误判）。
+    import shutil
+    import tempfile
+
+    # 不存在目录 → {}
+    assert _collect_parquet("/nonexistent/path/xyz_123") == {}, "不存在目录应返回 {}"
+    # 空目录 → {}
+    d = tempfile.mkdtemp()
+    try:
+        assert _collect_parquet(d) == {}, "空目录应返回 {}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    print("[selftest] cold-index-relational 自证通过")
+    return 0
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    if "--selftest" in argv:
+        return selftest()
     ap = argparse.ArgumentParser(description="冷索引关系式断言巡检（刀3 S4）")
     ap.add_argument("--cold-dir", default=None, help="冷存目录（默认 data/knowledge/cold）")
     args = ap.parse_args()

@@ -69,7 +69,41 @@ def parse_lock_names(path: str):
     return names
 
 
+def selftest() -> int:
+    # 核心纯函数自证：normalize / parse_requirement_names / parse_lock_names。
+    import tempfile
+
+    # normalize：小写 + [-_.] 折叠为单个 -
+    assert normalize("Flask") == "flask", "normalize(Flask) 应得 flask"
+    assert normalize("foo.bar") == "foo-bar", "normalize(foo.bar) 应得 foo-bar"
+
+    # parse_requirement_names：临时 requirements 文件
+    rf = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    rf.write("# comment line\nFlask>=2.0\nfoo.bar==1.0\nrequests\n-git+https://x\n")
+    rf.close()
+    try:
+        names = parse_requirement_names(rf.name)
+        assert set(names) == {"flask", "foo-bar", "requests"}, "应解析出三个归一包名"
+    finally:
+        os.unlink(rf.name)
+
+    # parse_lock_names：临时 lock 文件
+    lf = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    lf.write("flask==2.0.3\nfoo-bar==1.0\n# not-a-lock-line\n")
+    lf.close()
+    try:
+        locks = parse_lock_names(lf.name)
+        assert locks == {"flask", "foo-bar"}, "应解析出两个 == 锁定名"
+    finally:
+        os.unlink(lf.name)
+
+    print("[selftest] lock-consistency 自证通过")
+    return 0
+
+
 def main(argv) -> int:
+    if "--selftest" in argv:
+        return selftest()
     req_path = argv[1] if len(argv) > 1 else REQ_TXT
     lock_path = argv[2] if len(argv) > 2 else REQ_LOCK
     ci_path = argv[3] if len(argv) > 3 else REQ_CI

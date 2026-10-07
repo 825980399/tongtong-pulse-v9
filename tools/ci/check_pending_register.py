@@ -219,7 +219,45 @@ def check_new_ticket_registered():
     ]
 
 
+def selftest():
+    # 核心判定自证：_parse_batch 中文/数字形态、_register_ids 读临时 CSV、
+    # check_new_ticket_registered 健全性（返回 list 不抛）。
+    import csv
+    import tempfile
+
+    # 正例：第N批 中文形态
+    assert _parse_batch("第167批") == 167, "正例 第167批 应解析为 167"
+    assert _parse_batch("167") == 167, "正例 167 应解析为 167"
+    # 反例：纯数字 / 非法串
+    assert _parse_batch("第160批下") is None, "畸形 第160批下 应返回 None"
+    assert _parse_batch("abc") is None, "非数字串应返回 None"
+
+    # _register_ids 读临时 CSV
+    tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv",
+                                     encoding="utf-8-sig", delete=False)
+    try:
+        w = csv.writer(tf)
+        w.writerow(["ID", "状态"])
+        w.writerow(["Q153-1", "待裁决"])
+        w.writerow(["D-A4", "已裁"])
+        tf.close()
+        ids = _register_ids(tf.name)
+        # 注意：_register_ids 不跳过表头行，故首列 "ID" 也会进入集合（既有行为，不改）；
+        # 这里验证数据行 ID 被正确读回即可。
+        assert {"Q153-1", "D-A4"}.issubset(ids), "应读回两个数据行 ID"
+    finally:
+        os.unlink(tf.name)
+
+    # check_new_ticket_registered 健全性：返回 list（无暂存差异时为 []），不抛
+    res = check_new_ticket_registered()
+    assert isinstance(res, list), "check_new_ticket_registered 应返回 list"
+    print("[selftest] pending-register 自证通过")
+    return 0
+
+
 def main(argv=None):
+    if "--selftest" in (argv if argv is not None else sys.argv):
+        return selftest()
     p = argparse.ArgumentParser(description="待裁决登记册校验")
     p.add_argument("--batch", type=int, default=DEFAULT_BATCH,
                    help="当前批次号（默认 %d）" % DEFAULT_BATCH)

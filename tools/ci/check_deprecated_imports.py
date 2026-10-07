@@ -57,7 +57,66 @@ def scan_violations(root: str):
     return violations
 
 
-def main():
+def selftest():
+    # 核心判定自证：monkeypatch 注入伪 git diff，驱动 scan_violations 的
+    # 弃用 import 检测（正例必命中 / 豁免必忽略 / 反例必无）。
+    import subprocess as _sp
+
+    # 健全性：对真实仓库返回 list
+    assert isinstance(scan_violations(repo_root()), list)
+
+    # 动态拼出弃用 import 字面量：避免源码静态出现被禁 import 文本
+    # （如 HybridParallelScheduler / StructuredParallelScheduler 的 from import 行），
+    # 否则本门在提交自身时会被自身扫描命中（check_deprecated_imports
+    # 不在 EXEMPT_FILES）。运行时 _line_a/_line_b 才拼成完整弃用 import 行。
+    _mod_a = "HybridParallel" + "Scheduler"
+    _mod_b = "StructuredParallel" + "Scheduler"
+    _line_a = "+from nucleus.%s import Foo\n" % _mod_a
+    _line_b = "+from nucleus.%s import Bar\n" % _mod_b
+    fake_diff = (
+        "+++ b/prod/use_dep.py\n"
+        "@@ -0,0 +1 @@\n"
+        + _line_a +
+        "+++ b/main.py\n"
+        "@@ -0,0 +1 @@\n"
+        + _line_b +
+        "+++ b/prod/clean.py\n"
+        "@@ -0,0 +1 @@\n"
+        "+import os\n"
+    )
+
+    class _FakeDiff:
+        stdout = fake_diff
+        returncode = 0
+
+    _real_run = _sp.run
+
+    def _fake_run(cmd, **kw):
+        if isinstance(cmd, (list, tuple)) and cmd[:2] == ["git", "diff"]:
+            return _FakeDiff()
+        return _real_run(cmd, **kw)
+
+    _sp.run = _fake_run
+    try:
+        v = scan_violations(repo_root())
+        files = {rel for rel, src, dep in v}
+        # 正例：生产代码新引入弃用 import → 命中
+        assert "prod/use_dep.py" in files, "正例应检测弃用 import"
+        # 豁免例：EXEMPT_FILES 中的 main.py → 忽略
+        assert "main.py" not in files, "main.py 应豁免"
+        # 反例：普通 import 不误报
+        assert "prod/clean.py" not in files, "普通 import 不应误报"
+    finally:
+        _sp.run = _real_run
+    print("[selftest] deprecated-import 自证通过")
+    return 0
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    if "--selftest" in argv:
+        return selftest()
     root = repo_root()
     violations = scan_violations(root)
     if not violations:

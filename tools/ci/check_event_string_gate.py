@@ -101,7 +101,60 @@ def scan_violations(root: str, values):
     return violations
 
 
-def main():
+def selftest():
+    # _is_reserved_name / 核心判定自证：用 monkeypatch 注入一段伪 git diff，
+    # 直接驱动 scan_violations 的核心判定（正例必命中 / 反例必无 / 豁免必忽略）。
+    import subprocess as _sp
+
+    # dot_event_values 应返回 set（类型自证）
+    assert isinstance(dot_event_values(REPO_ROOT), set)
+
+    # 构造一段伪 git diff --cached 输出
+    fake_diff = (
+        "+++ b/prod/mod.py\n"
+        "@@ -0,0 +1 @@\n"
+        '+x.emit("EthicsEvent.REVIEW")\n'
+        "+++ b/tests/mod_test.py\n"
+        "@@ -0,0 +1 @@\n"
+        '+y.emit("EthicsEvent.REVIEW")\n'
+        "+++ b/prod/clean.py\n"
+        "@@ -0,0 +1 @@\n"
+        '+z.emit("OtherEvent.NOPE")\n'
+    )
+
+    class _FakeDiff:
+        stdout = fake_diff
+        returncode = 0
+
+    _real_run = _sp.run
+
+    def _fake_run(cmd, **kw):
+        if isinstance(cmd, (list, tuple)) and cmd[:2] == ["git", "diff"]:
+            return _FakeDiff()
+        return _real_run(cmd, **kw)
+
+    _sp.run = _fake_run
+    try:
+        vals = {"EthicsEvent.REVIEW"}
+        # 正例：生产代码裸点分事件名 → 命中
+        v = scan_violations(REPO_ROOT, vals)
+        assert any(rel == "prod/mod.py" for rel, s in v), "正例应命中 prod/mod.py"
+        # 反例：values 为空 → 无命中
+        v2 = scan_violations(REPO_ROOT, set())
+        assert not v2, "反例(values 空)应无命中"
+        # 豁免例：tests/ 目录 → 跳过
+        assert not any(rel.startswith("tests/") for rel, s in v), "豁免例 tests/ 应跳过"
+    finally:
+        _sp.run = _real_run
+    print("[selftest] event-string 自证通过")
+    return 0
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    if "--selftest" in argv:
+        return selftest()
     root = repo_root()
     values = dot_event_values(root)
     if not values:
