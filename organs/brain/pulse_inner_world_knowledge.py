@@ -13,6 +13,8 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder
+import config as _cfg
 from nucleus.const import (
     InferenceEvent,
     KnowledgeEvent,
@@ -440,9 +442,9 @@ class PulseInnerWorldKnowledgeMixin:
                     if isinstance(value, str) and len(value) > 0:
                         cleaned_value = self._clean_node_value(value)
                         # ★修复：过滤不适宜直接展示的内部标记节点
-                        if cleaned_value and self._is_internal_knowledge_node(cleaned_value):
+                        if cleaned_value and self._recall_node_is_skippable(cleaned_value):
                             self._log(LogLevel.DEBUG,
-                                     f"知识检索过滤(内部标记): 跳过节点'{cleaned_value[:50]}...'")
+                                     f"知识检索过滤(内部标记/占位符): 跳过节点'{cleaned_value[:50]}...'")
                             # 跳过此节点，不返回，让流程继续
                             cleaned_value = None
 
@@ -501,9 +503,9 @@ class PulseInnerWorldKnowledgeMixin:
             if isinstance(value, str) and len(value) > 0:
                 cleaned_value = self._clean_node_value(value)
                 # ★修复：过滤不适宜直接展示的内部标记节点
-                if cleaned_value and self._is_internal_knowledge_node(cleaned_value):
+                if cleaned_value and self._recall_node_is_skippable(cleaned_value):
                     self._log(LogLevel.DEBUG,
-                             f"知识检索过滤(内部标记): 跳过节点'{cleaned_value[:50]}...'")
+                             f"知识检索过滤(内部标记/占位符): 跳过节点'{cleaned_value[:50]}...'")
                     cleaned_value = None
 
                 if cleaned_value and self._is_relevant(question, cleaned_value, best_node.keywords or []):
@@ -1104,6 +1106,22 @@ class PulseInnerWorldKnowledgeMixin:
         if chinese_chars < 3:
             return None
         return cleaned
+    def _recall_node_is_skippable(self, cleaned_value: str) -> bool:
+        """★第167批 C3：召回侧节点过滤（统一出口，避免重复过滤列表）。
+
+        返回 True（应跳过，不进入融合/直出）当节点为：
+          - 空 / 内部标记节点（复用既有 _is_internal_knowledge_node）；
+          - 含占位符（空槽「」/截断 p.../字面量，复用 PlaceholderSanitizer.contains_placeholder
+            总入口），且开关 KNOWLEDGE_RECALL_SKIP_PLACEHOLDER 开启（默认开启）。
+        """
+        if not cleaned_value:
+            return True
+        if self._is_internal_knowledge_node(cleaned_value):
+            return True
+        if getattr(_cfg, "KNOWLEDGE_RECALL_SKIP_PLACEHOLDER", True) and contains_placeholder(cleaned_value):
+            return True
+        return False
+
     def _is_internal_knowledge_node(self, value: str) -> bool:
         """
         ★v23.0新增：统一内部知识节点过滤器。

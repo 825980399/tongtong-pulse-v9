@@ -2032,6 +2032,13 @@ L3_BACKPRESSURE_WARN_EVERY = 3
 #          N 值漂移，影响 iw_consistency_baseline.json 等基线（任务书风险②）。
 # ★160下下-刀1 已翻 True（污染封堵生效）；应急回滚改 False（独立 commit）。
 KNOWLEDGE_FUSION_SKIP_PLACEHOLDER = True
+# ★第167批 C3（T-内在世界检索万能复用-1 ＋ T-占位符空槽泄漏-1）：召回侧占位符过滤灰度开关。
+#   与 KNOWLEDGE_FUSION_SKIP_PLACEHOLDER 同源（知识路径占位符封堵），补召回（检索返回）侧
+#   最后一公里：检索返回节点若含占位符（空槽「」/截断 p.../字面量，复用
+#   PlaceholderSanitizer.contains_placeholder 总入口），在 _knowledge_retrieve 出口过滤，
+#   避免占位符节点进入融合/直出（治本 + 与出口净化 DIALOG_SANITIZE_LEVEL 双保险）。
+#   True（默认）：召回侧过滤占位符节点；False：退回（应急回滚，依赖出口净化兜底）。
+KNOWLEDGE_RECALL_SKIP_PLACEHOLDER = True
 # ★第160批 上A 刀2（票1①②·T-知识检索相关性-1）：全局语义检索「命中判据」灰度阈值。
 #   语义检索命中判据接回打分结果：全局语义检索候选数>0 时按五维分排序取 top-k，
 #   取 top1 计算匹配相关度（_calculate_match_relevance），>= 本阈值即判命中并直出该节点；
