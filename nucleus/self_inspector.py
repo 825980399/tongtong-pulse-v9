@@ -270,6 +270,9 @@ class SelfInspector(SilentLogMixin):
         self._max_issue_history = 10
         # ★v17.0 D5新增：问题生命周期跟踪
         self._issue_states: dict[str, dict[str, Any]] = {}
+        # ★165批A2：读写锁，保护 _issue_states / _last_issue_ids 的并发一致性
+        #   （防「字典迭代中尺寸变化」RuntimeError；读侧亦经此锁 + list() 快照）
+        self._issue_states_lock = threading.RLock()
         # key: "file:line:type" → {status, first_seen, last_seen, count, resolved_at}
         self._last_issue_ids: set = set()  # 上次扫描的所有问题ID集合
         # ★v23.0新增：AST解析缓存——避免每个方法都重新解析整个文件
@@ -3403,74 +3406,75 @@ class SelfInspector(SilentLogMixin):
         _current_issue_ids = set()
         _now = time.time()
         
-        for _issue in all_issues:
-            _issue_id = f"{_issue.get('file', '')}:{_issue.get('line', 0)}:{_issue.get('type', 'unknown')}"
-            _current_issue_ids.add(_issue_id)
-            
-            if _issue_id in self._issue_states:
-                # 已跟踪的问题：更新状态
-                _state = self._issue_states[_issue_id]
-                _state["last_seen"] = _now
-                _state["count"] = _state.get("count", 0) + 1
+        with self._issue_states_lock:
+            for _issue in all_issues:
+                _issue_id = f"{_issue.get('file', '')}:{_issue.get('line', 0)}:{_issue.get('type', 'unknown')}"
+                _current_issue_ids.add(_issue_id)
                 
-                if _state["status"] == "resolved":
-                    # 之前标记为已修复但现在又出现了 → 重新打开
-                    _state["status"] = "reopened"
-                    _issue["lifecycle"] = "reopened"
-                elif _state["status"] in ("confirmed", "reopened", "legacy"):
-                    _issue["lifecycle"] = _state["status"]
+                if _issue_id in self._issue_states:
+                    # 已跟踪的问题：更新状态
+                    _state = self._issue_states[_issue_id]
+                    _state["last_seen"] = _now
+                    _state["count"] = _state.get("count", 0) + 1
+                    
+                    if _state["status"] == "resolved":
+                        # 之前标记为已修复但现在又出现了 → 重新打开
+                        _state["status"] = "reopened"
+                        _issue["lifecycle"] = "reopened"
+                    elif _state["status"] in ("confirmed", "reopened", "legacy"):
+                        _issue["lifecycle"] = _state["status"]
+                    else:
+                        _issue["lifecycle"] = "persistent"
                 else:
-                    _issue["lifecycle"] = "persistent"
-            else:
-                # 新问题：首次发现
-                # 检查是否是历史遗留（上次扫描中也存在）
-                if _issue_id in self._last_issue_ids:
-                    # 上次存在但未跟踪的 → 标记为历史遗留
-                    _is_legacy = _issue.get("type") in (
-                        "long_method", "status_request_duplicate"
-                    )
-                    _status = "legacy" if _is_legacy else "new"
-                else:
-                    _status = "new"
+                    # 新问题：首次发现
+                    # 检查是否是历史遗留（上次扫描中也存在）
+                    if _issue_id in self._last_issue_ids:
+                        # 上次存在但未跟踪的 → 标记为历史遗留
+                        _is_legacy = _issue.get("type") in (
+                            "long_method", "status_request_duplicate"
+                        )
+                        _status = "legacy" if _is_legacy else "new"
+                    else:
+                        _status = "new"
+                    
+                    self._issue_states[_issue_id] = {
+                        "status": _status,
+                        "first_seen": _now,
+                        "last_seen": _now,
+                        "count": 1,
+                        "type": _issue.get("type", "unknown"),
+                        "file": _issue.get("file", ""),
+                        "organ": _issue.get("organ", ""),
+                        "method": _issue.get("method", ""),
+                        "line": _issue.get("line", 0),
+                    }
+                    _issue["lifecycle"] = _status
                 
-                self._issue_states[_issue_id] = {
-                    "status": _status,
-                    "first_seen": _now,
-                    "last_seen": _now,
-                    "count": 1,
-                    "type": _issue.get("type", "unknown"),
-                    "file": _issue.get("file", ""),
-                    "organ": _issue.get("organ", ""),
-                    "method": _issue.get("method", ""),
-                    "line": _issue.get("line", 0),
-                }
-                _issue["lifecycle"] = _status
+                # 容量保护
+                if len(self._issue_states) > self._max_issue_states:
+                    _oldest = sorted(self._issue_states.keys(),
+                                    key=lambda k: self._issue_states[k].get("last_seen", 0))[:100]
+                    for _old_key in _oldest:
+                        del self._issue_states[_old_key]
             
-            # 容量保护
-            if len(self._issue_states) > self._max_issue_states:
-                _oldest = sorted(self._issue_states.keys(),
-                                key=lambda k: self._issue_states[k].get("last_seen", 0))[:100]
-                for _old_key in _oldest:
-                    del self._issue_states[_old_key]
-        
-        # 检测已修复的问题：上次存在但本次不存在的问题
-        _resolved_ids = self._last_issue_ids - _current_issue_ids
-        for _resolved_id in _resolved_ids:
-            if _resolved_id in self._issue_states:
-                _state = self._issue_states[_resolved_id]
-                if _state["status"] not in ("resolved", "legacy"):
-                    _state["status"] = "resolved"
-                    _state["resolved_at"] = _now
-        
-        # 更新上次扫描记录
-        self._last_issue_ids = _current_issue_ids
-        
-        # 统计各生命周期状态的数量
-        _lifecycle_counts = {"new": 0, "persistent": 0, "resolved": 0, "legacy": 0, "reopened": 0}
-        for _state in self._issue_states.values():
-            _status = _state.get("status", "new")
-            if _status in _lifecycle_counts:
-                _lifecycle_counts[_status] += 1
+            # 检测已修复的问题：上次存在但本次不存在的问题
+            _resolved_ids = self._last_issue_ids - _current_issue_ids
+            for _resolved_id in _resolved_ids:
+                if _resolved_id in self._issue_states:
+                    _state = self._issue_states[_resolved_id]
+                    if _state["status"] not in ("resolved", "legacy"):
+                        _state["status"] = "resolved"
+                        _state["resolved_at"] = _now
+            
+            # 更新上次扫描记录
+            self._last_issue_ids = _current_issue_ids
+            
+            # 统计各生命周期状态的数量
+            _lifecycle_counts = {"new": 0, "persistent": 0, "resolved": 0, "legacy": 0, "reopened": 0}
+            for _state in list(self._issue_states.values()):
+                _status = _state.get("status", "new")
+                if _status in _lifecycle_counts:
+                    _lifecycle_counts[_status] += 1
         
         _record = {
             "timestamp": _now,
@@ -3754,7 +3758,9 @@ class SelfInspector(SilentLogMixin):
             {"new": N, "persistent": N, "resolved": N, "legacy": N, "reopened": N}
         """
         _counts = {"new": 0, "persistent": 0, "resolved": 0, "legacy": 0, "reopened": 0}
-        for _state in self._issue_states.values():
+        with self._issue_states_lock:
+            _states_snapshot = list(self._issue_states.values())
+        for _state in _states_snapshot:
             _status = _state.get("status", "new")
             if _status in _counts:
                 _counts[_status] += 1
@@ -3765,7 +3771,9 @@ class SelfInspector(SilentLogMixin):
         ★v17.0 D5新增：获取最近已修复的问题列表。
         """
         _resolved = []
-        for _issue_id, _state in self._issue_states.items():
+        with self._issue_states_lock:
+            _items_snapshot = list(self._issue_states.items())
+        for _issue_id, _state in _items_snapshot:
             if _state.get("status") == "resolved":
                 _resolved.append({
                     "issue_id": _issue_id,
