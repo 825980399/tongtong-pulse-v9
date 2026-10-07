@@ -118,16 +118,30 @@ def split_verification(patch: dict[str, Any]) -> dict[str, Any]:
         if _after is None:
             _after = _as_int(_rvr.get("after_fix"))
 
-    # ---------- ⓪ ★第51批 T1：主动复现优先（代码级，不受日志轮转影响） ----------
+    # ---------- ⓪ ★第51批 T1 + 165批B1：主动复现优先（代码级，不受日志轮转影响） ----------
+    # ★165批B1 真值口径互斥修复：采信 reprobe_verdict 必须同时具备复现基线命中
+    #   （reprobe_baseline_hits > 0）；无复现基线说明"复现"未真正发生，
+    #   不得据 reprobe_verdict 判 True（否则与日志基线两套口径互斥、同 verdict 落两值）。
     _rp = patch.get(F_REPROBE_VERDICT)
+    _rp_hits = _as_int(patch.get("reprobe_baseline_hits"))
     if _rp == "true_pass":
-        _problem_fixed = True
-        _gran = GRAN_ACTIVE_REPROBE
-        _pf_note = "主动复现：目标问题**完全消失**"
+        if _rp_hits is not None and _rp_hits > 0:
+            _problem_fixed = True
+            _gran = GRAN_ACTIVE_REPROBE
+            _pf_note = "主动复现：目标问题**完全消失**（复现基线命中）"
+        else:
+            # ★165批B1：标记为 true_pass 但复现基线未命中 → 不可判定，绝不落 True
+            _problem_fixed = None
+            _gran = GRAN_ACTIVE_REPROBE
+            _pf_note = ("主动复现：标记为 true_pass 但复现基线未命中"
+                        "（reprobe_baseline_hits<=0），不可判定")
     elif _rp == "partial_fix":
-        _problem_fixed = True
+        # ★165批B1：partial_fix 不再等同"已修复" —— 问题只减少未清零，
+        #   严格口径下不归类为 problem_fixed=True，落 None 保留粒度供审计。
+        _problem_fixed = None
         _gran = GRAN_REPRODUCTION
-        _pf_note = "主动复现：问题**减少但未清零**（部分修复）"
+        _pf_note = ("主动复现：问题**减少但未清零**（部分修复，"
+                    "按 strict 口径不判为已修复，计为不可判定）")
     elif _rp in ("false_pass", "ineffective"):
         _problem_fixed = False
         _gran = GRAN_ACTIVE_REPROBE
@@ -347,3 +361,39 @@ def display_label(patch: dict[str, Any]) -> str:
     return _head + " " + _tail
 
 # _m51_t1_wire
+def is_split_override_locked(patch: dict[str, Any]) -> bool:
+    """★165批B1：幂等保护判定。
+
+    当补丁带 ``problem_fixed_corrected`` 修正标记为真时，应用闭环
+    （``PatchManager.apply_all_pending``）不得覆写其 ``problem_fixed``
+    判定（防止回填 / 人工修正后被自动复算覆写回错误值）。
+
+    Returns:
+        bool: 为真表示**跳过** ``apply_split`` 写回。
+    """
+    return bool(patch.get("problem_fixed_corrected"))
+
+
+def audit_verdict_consistency(history) -> tuple[int, list[str]]:
+    """★165批B1：同-verdict 一致性校验。
+
+    遍历 history，若补丁存储的 ``problem_fixed`` 与按当前 split 规则重算的
+    结果不一致，计入不一致（暴露此前「同 true_pass 落 True(43)/None(11) 两值」
+    的静默问题）。
+
+    Returns:
+        tuple: ``(inconsistent_count, sample_ids)`` —— 不一致条数 + 示例
+        补丁 id（最多 10 条）。
+    """
+    _inc = 0
+    _samples = []
+    for _p in (history or []):
+        if not isinstance(_p, dict):
+            continue
+        _stored = _p.get(F_PROBLEM_FIXED)
+        _expected = split_verification(_p).get(F_PROBLEM_FIXED)
+        if _stored != _expected:
+            _inc += 1
+            if len(_samples) < 10:
+                _samples.append(str(_p.get("id", ""))[:12])
+    return _inc, _samples

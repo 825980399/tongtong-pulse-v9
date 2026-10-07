@@ -3244,8 +3244,16 @@ class PatchManager:
                             try:
                                 from nucleus.evolution.patch_verification_split import (
                                     apply_split as _apply_split,
+                                    is_split_override_locked,
                                 )
-                                _apply_split(patch)
+                                # ★165批B1：幂等保护 —— 既有修正标记为真时，
+                                #   不让我方 apply_split 覆盖其 problem_fixed 判定。
+                                if is_split_override_locked(patch):
+                                    _module_logger.debug(
+                                        "[语义拆分] 跳过写回（problem_fixed_corrected 为真，幂等保护）"
+                                        f": {patch.get('id', '')[:12]}")
+                                else:
+                                    _apply_split(patch)
                             except Exception as _se:  # 拆分失败不阻断应用闭环
                                 _module_logger.warning(
                                     f"[语义拆分] 写入失败（已忽略）: {_se}")
@@ -3320,6 +3328,24 @@ class PatchManager:
                     f"[补丁归档] 已归档 {_arch['archived']} 条失效补丁"
                     f"（原因: {_arch.get('reason_top') or '目标片段不存在'}）")
         except Exception as e:
+            _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+
+        # ★165批B1：同-verdict 一致性校验 —— 落盘前检查每个补丁的
+        #   problem_fixed 是否与当前 split 规则重算一致，不一致 WARNING + 计数
+        #   （此前 43 True / 11 None 的静默不一致由此暴露）。
+        try:
+            from nucleus.evolution.patch_verification_split import (
+                audit_verdict_consistency,
+            )
+            _inc_cnt, _inc_samples = audit_verdict_consistency(history)
+            if _inc_cnt:
+                _module_logger.warning(
+                    f"[165批B1 一致性校验] 发现 {_inc_cnt} 条 problem_fixed 与重算不一致"
+                    f"（示例: {_inc_samples[:5]}），建议核查")
+            else:
+                _module_logger.info(
+                    "[165批B1 一致性校验] 0 条不一致（同 verdict 不再落两值）")
+        except Exception as e:  # 校验失败不阻断落盘
             _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
         self._save_patch_list(self._history_file, history)

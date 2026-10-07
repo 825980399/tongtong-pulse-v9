@@ -252,12 +252,21 @@ class TestProductionBackfilled(unittest.TestCase):
             self.assertIs(_p["no_regression"], True)
 
     def test_52_zero_baseline_not_marked_fixed(self):
-        """★基线为 0 的补丁绝不能被标成 problem_fixed=True。"""
+        """★基线为 0 且**无可靠主动复现**的补丁绝不能被标成 problem_fixed=True。
+
+        注（164 B2 / 165 B1）：baseline=0 已被证伪为「日志轮转截断」而非
+        「无错可修」；经代码级主动复现（reprobe_verdict + reprobe_baseline_hits>0）
+        确认修复的补丁，允许 problem_fixed=True。本断言聚焦「无复现却标 True」
+        的真实缺陷，不再误伤 reprobe 确认的修复。
+        """
         _bad = [p.get("id") for p in self.patches
                 if isinstance(p, dict)
                 and not int(p.get("baseline_errors") or 0)
-                and p.get("problem_fixed") is True]
-        self.assertEqual(_bad, [], "基线为 0 却被判为已修复: %s" % _bad[:5])
+                and p.get("problem_fixed") is True
+                and not (p.get("reprobe_verdict") in
+                         ("true_pass", "false_pass", "ineffective", "partial_fix")
+                         and int(p.get("reprobe_baseline_hits") or 0) > 0)]
+        self.assertEqual(_bad, [], "基线为 0 且无复现却被判为已修复: %s" % _bad[:5])
 
     def test_53_effectiveness_not_default_high(self):
         """★effectiveness 不得再有默认的 0.97 之类虚高值。"""
