@@ -40,7 +40,7 @@ if _PROJ not in sys.path:
 from nucleus.data import experience_cleanup as EC  # noqa: E402
 # ★第55批 T3：跨盘安全的 relpath（测试沙箱可能落在与项目不同的盘，
 #   裸 os.path.relpath 会抛 ValueError: path is on mount 'C:', start on 'D:'）
-from nucleus.data.path_utils import safe_relpath  # noqa: E402
+from nucleus.data.path_utils import normalize_relpath  # noqa: E402
 
 DEFAULT_POOL = os.path.join(_PROJ, "data", "experience", "experience_pool.json")
 
@@ -123,7 +123,7 @@ def assess(pool: str = DEFAULT_POOL) -> Dict[str, Any]:
     _avg = (sum(_lens) / float(len(_lens))) if _lens else 0.0
 
     return {
-        "pool": safe_relpath(pool, _PROJ).replace("\\", "/"),
+        "pool": normalize_relpath(pool, _PROJ),
         "total": _total,
         "marked": len(_marked),
         "marked_rate": (len(_marked) / float(_total)) if _total else 0.0,

@@ -195,7 +195,12 @@ class TestPathUtilsWiring(unittest.TestCase):
                 # git-ignored 易失件缺失时跳过该项（与 m18/m19/m22 一致）
                 continue
             src = _read(_p)
-            self.assertIn("nucleus.data.path_utils import safe_relpath", src, rel)
+            # ★第169批 C2：归一入口 normalize_relpath 亦为合法接线形态
+            #   （其内委托 safe_relpath，跨盘安全语义不变）→ 两者皆可。
+            self.assertTrue(
+                ("nucleus.data.path_utils import safe_relpath" in src)
+                or ("nucleus.data.path_utils import normalize_relpath" in src),
+                "%s 未从 nucleus.data.path_utils 接入安全入口" % rel)
             _checked += 1
         self.assertGreater(_checked, 0, "无任何调用方可供校验")
 
@@ -213,8 +218,14 @@ class TestPathUtilsWiring(unittest.TestCase):
     def test_32_third_party_import_line_precedes_use(self):
         """audit_utils：导入必须在使用之前（E402 安全）。"""
         src = _read(os.path.join(_ROOT, "tools/audit_utils.py"))
-        self.assertLess(src.find("from nucleus.data.path_utils import safe_relpath"),
-                        src.find("rel = safe_relpath(dp, root)"))
+        # ★第169批 C2：audit_utils 改走 normalize_relpath（归一入口，内委托 safe_relpath）
+        _imp = max(src.find("from nucleus.data.path_utils import safe_relpath"),
+                   src.find("from nucleus.data.path_utils import normalize_relpath"))
+        _use = max(src.find("rel = safe_relpath(dp, root)"),
+                   src.find("rel = normalize_relpath(dp, root)"))
+        self.assertGreaterEqual(_imp, 0, "未找到 path_utils 导入行")
+        self.assertGreaterEqual(_use, 0, "未找到调用行")
+        self.assertLess(_imp, _use)
 
     def test_33_same_drive_unchanged_semantics(self):
         """同盘时与原生 `os.path.relpath` 完全一致（零行为变化）。"""

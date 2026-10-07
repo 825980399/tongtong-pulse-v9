@@ -868,9 +868,9 @@ def exc_location(depth: int = 1) -> str:
             _line = _fr.f_lineno
         _file = str(_file).replace("\\", "/")
         try:
-            from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全）
+            from nucleus.data.path_utils import normalize_relpath as _normalize_relpath  # ★第55批 T3（跨盘安全）+ 第169批 C2 归一
 
-            _rel = _safe_relpath(_file, _PROJECT_ROOT).replace("\\", "/")
+            _rel = _normalize_relpath(_file, _PROJECT_ROOT)
             if not _rel.startswith(".."):
                 _file = _rel
         except Exception as e:

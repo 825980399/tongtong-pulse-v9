@@ -18,7 +18,7 @@ from nucleus.data.exclude_dirs import COMMON_SCAN_EXCLUDED  # ★第55批 T4（�
 
 import os
 import re
-from nucleus.data.path_utils import safe_relpath  # ★第49批 T4
+from nucleus.data.path_utils import normalize_relpath  # ★第49批 T4 + 第169批 C2 归一
 from nucleus._silent_except import silent_exc
 
 
@@ -132,7 +132,7 @@ def iter_source_py(root: str, extra_exclude_dirs: frozenset[str] | None = None,
         # ★主线第49批 T4（P2-320）：`root` 是**可被外部传入**的参数
         #   （如沙箱测试传 C: 临时目录，而项目在 D: 盘）→ 原 `os.path.relpath`
         #   会抛 ValueError。改用跨盘安全版；**同盘行为与原实现完全一致**。
-        rel = safe_relpath(dp, root).replace("\\", "/")
+        rel = normalize_relpath(dp, root)
         parts = [] if rel == "." else rel.split("/")
         if parts and should_skip_top(parts[0]):
             dn[:] = []

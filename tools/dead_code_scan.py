@@ -49,7 +49,7 @@ from nucleus.data import exclude_dirs as E
 
 # ★第55批 T3：跨盘安全的 relpath（同盘行为与 os.path.relpath 一致，
 #   跨盘降级绝对路径而不抛 ValueError —— 测试沙箱可能落在别的盘）
-from nucleus.data.path_utils import safe_relpath
+from nucleus.data.path_utils import normalize_relpath
 from nucleus._silent_except import silent_exc
 
 MODULES: tuple[str, ...] = (
@@ -210,7 +210,7 @@ def collect_definitions(files: list[str], root: str = _PROJ) -> dict[str, list[d
             _tree = ast.parse(_src, filename=_f)
         except (SyntaxError, ValueError, UnicodeDecodeError):
             continue
-        _rel = safe_relpath(_f, root).replace("\\", "/")
+        _rel = normalize_relpath(_f, root)
         _all: set[str] = set()
         _strings: set[str] = set()
 
@@ -305,7 +305,7 @@ def scan(root: str = _PROJ, extra_excludes: set[str] | None = None) -> dict:
     in_modules: list[str] = []
     test_files: list[str] = []
     for _f in all_files:
-        _rel = safe_relpath(_f, root).replace("\\", "/")
+        _rel = normalize_relpath(_f, root)
         if _rel.startswith("tests" + "/"):
             test_files.append(_f)
         elif _rel.split("/")[0] in MODULES:
@@ -535,7 +535,7 @@ def _collect_methods(files: list[str]) -> dict[str, list[dict]]:
             _tree = ast.parse(_src, filename=_f)
         except Exception:
             continue
-        _rel = safe_relpath(_f, _PROJ).replace("\\", "/")
+        _rel = normalize_relpath(_f, _PROJ)
         for _node in ast.walk(_tree):
             if isinstance(_node, ast.ClassDef):
                 for _m in _node.body:
@@ -558,7 +558,7 @@ def scan_v3(root: str = _PROJ, extra_excludes: set[str] | None = None) -> dict:
     in_modules: list[str] = []
     test_files: list[str] = []
     for _f in all_files:
-        _rel = safe_relpath(_f, root).replace("\\", "/")
+        _rel = normalize_relpath(_f, root)
         if _rel.startswith("tests" + "/"):
             test_files.append(_f)
         elif _rel.split("/")[0] in MODULES:

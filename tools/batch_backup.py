@@ -33,7 +33,7 @@ from __future__ import annotations
 from nucleus.data.exclude_dirs import BACKUP_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
 
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+from nucleus.data.path_utils import normalize_relpath as _normalize_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）+ 第169批 C2 归一
 import argparse
 import os
 import shutil
@@ -133,13 +133,13 @@ def iter_py_files(root: str = ROOT):
     """遍历应备份的 ``.py`` 文件，返回**相对路径**（POSIX 分隔符）。"""
     root = os.path.abspath(root)
     for dp, dns, fns in os.walk(root):
-        rel_dir = _safe_relpath(dp, root).replace("\\", "/")
+        rel_dir = _normalize_relpath(dp, root)
         dns[:] = [d for d in dns if not should_skip_dir(
             d if rel_dir in (".", "") else "%s/%s" % (rel_dir, d))]
         for fn in fns:
             if not fn.endswith(".py"):
                 continue
-            rel = _safe_relpath(os.path.join(dp, fn), root).replace("\\", "/")
+            rel = _normalize_relpath(os.path.join(dp, fn), root)
             yield rel
 
 

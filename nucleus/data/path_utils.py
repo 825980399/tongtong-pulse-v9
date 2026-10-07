@@ -35,7 +35,8 @@ from __future__ import annotations
 import os
 from nucleus._silent_except import silent_exc
 
-__all__ = ["safe_relpath", "safe_commonpath", "same_drive", "drive_of"]
+__all__ = ["safe_relpath", "normalize_path", "normalize_relpath",
+           "safe_commonpath", "same_drive", "drive_of"]
 
 
 def drive_of(path: str) -> str:
@@ -90,3 +91,40 @@ def safe_commonpath(paths) -> str:
     except (ValueError, TypeError, OSError) as e:
         silent_exc(e, where="nucleus.data.path_utils::safe_commonpath L88")
         return ""
+
+
+def normalize_path(path: str) -> str:
+    """★第169批 C2（T-路径归一化-1）：路径归一（同一逻辑路径 -> 同一 key）。
+
+    归一规则（只做**分隔符层面**归一，不改语义、不解析 ".."）：
+
+      1. 反斜杠统一为正斜杠；
+      2. 折叠重复斜杠（双反斜杠 -> 双斜杠 -> 单斜杠）；
+      3. 去尾部斜杠（根路径 "/" 除外）。
+
+    ★UNC（//server/share）保留前导双斜杠。
+
+    Returns: 归一后的路径；空输入返回空串。
+    """
+    if not path:
+        return ""
+    _s = str(path).replace("\\", "/")
+    if _s.startswith("//"):          # UNC 前导双斜杠保留
+        _head, _tail = "//", _s[2:]
+    else:
+        _head, _tail = "", _s
+    while "//" in _tail:
+        _tail = _tail.replace("//", "/")
+    _s = _head + _tail
+    if len(_s) > 1:
+        _s = _s.rstrip("/")
+    return _s
+
+
+def normalize_relpath(path: str, start: str | None = None) -> str:
+    """``safe_relpath`` + ``normalize_path`` 的组合便利函数。
+
+    取代各调用点手搓的「safe_relpath 之后再手工替换分隔符」写法，
+    保证「同一逻辑路径不同分隔符 -> 同一 key」的不变式。
+    """
+    return normalize_path(safe_relpath(path, start))
