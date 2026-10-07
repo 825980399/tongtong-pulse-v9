@@ -646,6 +646,16 @@ def _init_root_logger():
     file_handler.setFormatter(file_format)
     file_handler.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
     root.addHandler(file_handler)
+    # ★第164批 刀A5（P1）：日志→告警落盘桥（ERROR/WARNING 入档）
+    #   根因：既有告警链路仅信封/P0 异常驱动，ERROR/WARNING 日志流从未入档。
+    #   挂一个去重+限流的 Handler 到根日志器，受 write_guard 约束（测试环境不挂载）。
+    try:
+        from nucleus.reporting.alert_log_bridge import install_alert_log_bridge
+        install_alert_log_bridge(root)
+    except (ImportError, OSError, IOError, ValueError, TypeError) as _alb_e:
+        print("[logger] 告警落盘桥挂载失败（降级跳过）: %s: %s"
+              % (type(_alb_e).__name__, _alb_e), file=sys.stderr)
+
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
     # filter 仅挂在 file_handler 上，只作用于落盘的文件日志（避免误伤 console 实时输出）；
