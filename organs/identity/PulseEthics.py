@@ -20,7 +20,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import EthicsEvent, SecurityEvent, SystemEvent
+from nucleus.const import EthicsEvent, SecurityEvent, SystemEvent, RiskEvent
+import config
 
 
 class PulseEthics(BasePulseOrgan):
@@ -35,6 +36,12 @@ class PulseEthics(BasePulseOrgan):
         → 价值冲突评估
         → 发射 EthicsEvent.REVIEW_RESULT 脉冲
     """
+
+    # ★第167批 C4（T-紧急词拦截接线-1）：危机类禁词子集——命中后走安抚+转介分支
+    #   （复用 RiskEvent.CRISIS_REFERRAL 既有通道，由 PulseCortex._on_crisis_referral
+    #   统一显示 nucleus/security/crisis_referral_text 文案），而非裸拦截。
+    #   仅含自伤/自杀等明确危机词；暴力/色情等普通禁词维持原裸拦截语义。
+    _CRISIS_FORBIDDEN_KEYWORDS = frozenset({"自杀"})
 
     def __init__(self, organ_name: str = "伦理"):
         super().__init__(organ_name)
@@ -53,6 +60,7 @@ class PulseEthics(BasePulseOrgan):
         self._review_count = 0
         self._forbidden_count = 0
         self._warning_count = 0
+        self._referral_count = 0  # ★第167批 C4：危机转介计数（与 forbidden_count 各自增长）
     def _load_ethics_config(self):
         """从config加载伦理配置，失败时使用兜底值"""
         try:
@@ -132,7 +140,22 @@ class PulseEthics(BasePulseOrgan):
         if forbidden_result["blocked"]:
             # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
             self._forbidden_count += 1
-            # v9.5: 安全拦截告警标记为L0生命线层
+            _kw = forbidden_result.get("keyword", "")
+            # ★第167批 C4：危机类禁词（自伤/自杀）命中 ⇒ 走安抚+转介分支，而非裸拦截。
+            #   复用 RiskEvent.CRISIS_REFERRAL 既有通道（PulseCortex 统一显示危机文案），
+            #   受 config.ENABLE_CRISIS_REFERRAL 总开关门控（一键回退到裸拦截）。
+            if _kw in self._CRISIS_FORBIDDEN_KEYWORDS and getattr(config, "ENABLE_CRISIS_REFERRAL", True):
+                self._referral_count += 1
+                self._emit(RiskEvent.CRISIS_REFERRAL, {
+                    "crisis_level": "L3",
+                    "risk_level": 1.0,
+                    "summary": f"伦理禁词命中（{_kw}）：{content[:60]}",
+                    "source": "ethics_forbidden",
+                }, priority=9, layer="L0")
+                self._emit_review_result(correlation_id, "forbidden", False)
+                return {"status": "crisis_referral", "keyword": _kw,
+                        "reason": forbidden_result["reason"]}
+            # v9.5: 安全拦截告警标记为L0生命线层（非危机禁词，维持裸拦截）
             self._emit(SecurityEvent.BLOCKED, {
                 "content": content[:100],
                 "verdict": "forbidden",
@@ -188,6 +211,7 @@ class PulseEthics(BasePulseOrgan):
             "organ": self.organ_name,
             "review_count": self._review_count,
             "forbidden_count": self._forbidden_count,
+            "referral_count": self._referral_count,
             "warning_count": self._warning_count,
             "value_priorities": self._value_priority,
             "is_running": self.is_running,
@@ -285,7 +309,7 @@ class PulseEthics(BasePulseOrgan):
         _words = self._get_segmented_words(content_lower)
         for kw in self._forbidden_keywords:
             if self._kw_hit(kw, content_lower, _normalized, _words):
-                return {"blocked": True, "reason": f"包含禁止内容: {kw}"}
+                return {"blocked": True, "reason": f"包含禁止内容: {kw}", "keyword": kw}
         return {"blocked": False, "reason": ""}
 
     def _check_warning(self, content: str) -> dict[str, Any]:
