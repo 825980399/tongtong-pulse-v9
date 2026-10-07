@@ -279,6 +279,19 @@ class ToolAutoInstaller:
             _logger.info(f"工具 {tool_name} 缺失，尝试自动安装")
             self.install_tool(tool_name)
             tool = self.check_tool(tool_name)
+        # ★167批 B2（C-1 工具面合流）：确保成功后同步统一注册表，使工具可被发现
+        try:
+            from nucleus.tooling.ToolRegistry import get_tool_registry
+            _reg = get_tool_registry()
+            if _reg.register_tool(
+                name=tool_name,
+                description=f"自动确保/安装的工具: {tool_name}",
+                capabilities=[tool_name, "auto_install", "external_tool"],
+                category="external_tool",
+            ):
+                _reg.save()  # 仅新注册时持久化（重启可恢复）
+        except Exception as e:
+            silent_exc(e, where="nucleus.review.ToolAutoInstaller::ensure_tool register")
         return tool
 
     def get_tools_by_category(self, category: str) -> list:
@@ -321,15 +334,33 @@ class ToolAutoInstaller:
 
             checked = self.check_tool(name)
             if not checked.installed:
-                result = self.install_tool(name)
-                if result["success"]:
+                # ★167批 B2：改用 ensure_tool（检查+安装+同步注册表一体化）
+                tool = self.ensure_tool(name)
+                if tool.installed:
                     results["installed"].append(name)
                 else:
-                    results["failed"].append({"name": name, "error": result["error"]})
+                    results["failed"].append({"name": name, "error": "ensure_tool 未能安装"})
 
         _logger.info(f"自动安装完成: 成功={len(results['installed'])}, "
                      f"失败={len(results['failed'])}, 跳过={len(results['skipped'])}")
         return results
+
+    def ensure_required_tools(self) -> dict:
+        """确保所有 required 工具可用（缺失自动安装），并同步统一注册表。
+
+        Returns:
+            ``{"ensured": [...], "failed": [...]}``
+        """
+        _out: dict[str, list[str]] = {"ensured": [], "failed": []}
+        for _name, _tool in self.TOOL_REGISTRY.items():
+            if not _tool.required:
+                continue
+            _t = self.ensure_tool(_name)
+            if _t.installed:
+                _out["ensured"].append(_name)
+            else:
+                _out["failed"].append(_name)
+        return _out
 
     def get_capabilities(self, category: str | None = None) -> list:
         """获取可用的工具能力"""

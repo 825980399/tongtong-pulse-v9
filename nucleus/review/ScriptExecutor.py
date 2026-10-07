@@ -436,6 +436,20 @@ if __name__ == "__main__":
         )
         self._script_cache[script_id] = meta
 
+        # ★167批 B2（C-1 工具面合流）：脚本入库后同步统一注册表，使脚本可被发现（重启可恢复）
+        try:
+            from nucleus.tooling.ToolRegistry import get_tool_registry
+            _reg = get_tool_registry()
+            if _reg.register_tool(
+                name=script_id,
+                description=(description or name),
+                capabilities=[name, "script", category],
+                category="script_library",
+            ):
+                _reg.save()
+        except Exception as e:
+            silent_exc(e, where="nucleus.review.ScriptExecutor::save_to_library register")
+
         _logger.info(f"脚本已保存到库: {name} ({script_id})")
         return script_id
 
