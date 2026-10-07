@@ -646,6 +646,17 @@ class PulseFramework:
         self.instinct_snapshot.set_node_pool(self.node_pool)
         # KnowledgeTree: 知识树（五维空间坐标系）
         self.knowledge_tree = KnowledgeTree()
+        # ★第165批 刀A5：知识树接线到推理经验索引器。
+        #   knowledge_tree 在 648 装配，晚于 442 处 indexer 装配（仅注入 node_pool），
+        #   故此处补充注入 knowledge_tree，使蒸馏写节点前 register_path 生效。
+        #   失败不阻断启动（复用 silent_exc 白名单）。
+        try:
+            from nucleus.reasoning.ReasoningExperienceIndexer import (
+                get_reasoning_experience_indexer,
+            )
+            get_reasoning_experience_indexer().set_dependencies(knowledge_tree=self.knowledge_tree)
+        except Exception as _e:
+            silent_exc(_e, "main.py:A5 indexer knowledge_tree wiring")
         # ★v23.0新增：梯度追踪器——激活v10预埋的场梯度感知能力
         from nucleus.field.GradientTracker import GradientTracker
         self.gradient_tracker = GradientTracker(window_size=120, sample_interval_seconds=10.0)

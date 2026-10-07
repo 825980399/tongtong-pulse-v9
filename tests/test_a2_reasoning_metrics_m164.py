@@ -17,6 +17,10 @@
 """
 from __future__ import annotations
 
+import os
+
+import pytest
+
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -29,12 +33,26 @@ from nucleus.LLMDependencyMetrics import (
     record_remediation_distilled,
     record_remediation_success,
 )
-from nucleus.reasoning.ReasoningExperienceIndexer import ReasoningExperienceIndexer
+from nucleus.reasoning.ReasoningExperienceIndexer import (
+    ReasoningExperienceIndexer,
+    _STATE_PATH,
+)
 
 
 # ---------------------------------------------------------------------------
 # 工具
 # ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _clean_indexer_state():
+    """★第165批 刀A5：测试前清空计数持久化状态文件，避免跨测试 base 累计污染断言。"""
+    if os.path.exists(_STATE_PATH):
+        os.remove(_STATE_PATH)
+    yield
+    if os.path.exists(_STATE_PATH):
+        os.remove(_STATE_PATH)
+
+
+
 def _make_metrics():
     d = tempfile.mkdtemp(prefix="a2_metrics_")
     return LLMDependencyMetrics(base_dir=d, auto_hourly_log=False)

@@ -12,6 +12,10 @@ node_pool.add 接收真实 PulseNode（纯内存数据结构，构造无副作�
 """
 from __future__ import annotations
 
+import os
+
+import pytest
+
 from unittest.mock import MagicMock
 
 from nucleus.mnemosyne.PulseNode import PulseNode
@@ -19,7 +23,19 @@ from nucleus.reasoning.ReasoningExperienceIndexer import (
     PATH_FAILURE,
     PATH_REMEDIATION,
     ReasoningExperienceIndexer,
+    _STATE_PATH,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clean_indexer_state():
+    """★第165批 刀A5：测试前清空计数持久化状态文件，避免跨测试 base 累计污染断言。"""
+    if os.path.exists(_STATE_PATH):
+        os.remove(_STATE_PATH)
+    yield
+    if os.path.exists(_STATE_PATH):
+        os.remove(_STATE_PATH)
+
 
 
 class _StubNodePool:

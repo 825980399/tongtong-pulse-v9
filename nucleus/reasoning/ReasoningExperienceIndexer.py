@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import threading
 import time
+import json
+import os
+import re
+import io
 from typing import Any
 
 from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
@@ -36,6 +40,35 @@ SOURCE_ORGAN = "reasoning_experience_indexer"
 PATH_REMEDIATION = "/推理经验/补救成功/"
 PATH_FAILURE = "/推理经验/失败模式/"
 
+# ★第165批 刀A5：计数持久化状态文件（git-ignored 运行时状态，data/ 下）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_STATE_PATH = os.path.join(_PROJECT_ROOT, "data", "reasoning_experience_indexer_state.json")
+
+# ★第165批 刀A5：关键词切分（分词/去停用词），替代整句作关键词
+_STOPWORDS = frozenset(
+    "的 了 和 与 及 或 在 是 我 你 他 她 它 们 这 那 有 把 被 让 给 对 从 到 以 为 之 其 此 "
+    "个 种 项 条 次 下 上 中 也 都 就 还 很 最 不 没 别 请 您 我们 你们 他们 这个 那个".split()
+)
+_TOKEN_RE = re.compile(r"[一-鿿]+|[a-zA-Z0-9_]+")
+
+def _split_keywords(text):
+    """将句子拆为关键词（CJK 整段 + 英文词，去停用词/单字噪声），最多 16 个。"""
+    if not text:
+        return []
+    _out = []
+    _seen = set()
+    for _tok in _TOKEN_RE.findall(str(text)):
+        _t = _tok.strip().lower()
+        if not _t or _t in _STOPWORDS:
+            continue
+        if len(_t) == 1 and not _t.isalnum():
+            continue
+        if _t not in _seen:
+            _seen.add(_t)
+            _out.append(_t)
+        if len(_out) >= 16:
+            break
+    return _out
 
 class ReasoningExperienceIndexer:
     """推理经验双写索引器（规则通道层，不改 ReasoningExperience.py）。"""
@@ -46,25 +79,36 @@ class ReasoningExperienceIndexer:
         self._node_pool = node_pool
         self._store = vector_store
         self._queue = encode_queue
+        self._knowledge_tree = None
         self._double_write_enabled = False
         self._records = 0          # 双写次数（验收用）
-        self._nodes_written = 0    # 节点副本写入次数（验收用）
+        self._nodes_written = 0    # 节点副本写入次数（本会话增量）
+        self._state_lock = threading.RLock()
         # ★第164批 刀A1：补救/失败模式计数与内存索引
         self._remediation_count = 0
         self._remediation_log: list[dict[str, Any]] = []
         self._failure_modes: list[dict[str, Any]] = []
+        self._failure_mode_total = 0   # 失败模式累计（本会话增量）
+        # ★第165批 刀A5：累计计数基线（自 data/ 状态文件载入，重启不归零）
+        self._base_remediation = 0
+        self._base_nodes = 0
+        self._base_failure = 0
+        self._load_state()
 
     # ------------------------------------------------------------------
     # 依赖注入（main.py 装配时调用）
     # ------------------------------------------------------------------
-    def set_dependencies(self, node_pool=None, vector_store=None, encode_queue=None):
-        """注入知识树 / 向量库 / 编码队列依赖（可多次调用，逐步装配）。"""
+    def set_dependencies(self, node_pool=None, vector_store=None,
+                         encode_queue=None, knowledge_tree=None):
+        """注入知识树 / 向量库 / 编码队列 / 知识树依赖（可多次调用，逐步装配）。"""
         if node_pool is not None:
             self._node_pool = node_pool
         if vector_store is not None:
             self._store = vector_store
         if encode_queue is not None:
             self._queue = encode_queue
+        if knowledge_tree is not None:
+            self._knowledge_tree = knowledge_tree
 
     def set_enabled(self, enabled: bool):
         """设置双写开关（main.py 从 config 读取后注入）。"""
@@ -261,7 +305,9 @@ class ReasoningExperienceIndexer:
         if not _q or not _a:
             return
         self._exp.record(_q, "remediation_success", source="remediation", confidence=float(confidence))
-        self._remediation_count += 1
+        with self._state_lock:
+            self._remediation_count += 1
+            self._persist_state()
         self._remediation_log.append({
             "question": _q, "answer": _a, "rule": rule_candidate, "ts": time.time()})
         if len(self._remediation_log) > 500:
@@ -272,14 +318,18 @@ class ReasoningExperienceIndexer:
             from nucleus.mnemosyne.PulseNode import PulseNode
             _node = PulseNode(
                 value=_value,
-                keywords=[_q] if _q else [],
+                keywords=_split_keywords(_q) if _q else [],
                 source_organ=SOURCE_ORGAN,
                 evol_level=PulseNode.EVOL_L2,
                 importance=PulseNode.IMPORTANCE_B,
                 space_path=PATH_REMEDIATION,
             )
+            if self._knowledge_tree is not None:
+                self._knowledge_tree.register_path(PATH_REMEDIATION)
             _nid = self._node_pool.add(_node)
-            self._nodes_written += 1
+            with self._state_lock:
+                self._nodes_written += 1
+                self._persist_state()
             if self._queue is not None:
                 self._queue.submit(_nid, _value)
             # ★第164批 刀A2：蒸馏沉淀埋点（L2 节点已写入知识树）
@@ -308,14 +358,19 @@ class ReasoningExperienceIndexer:
             from nucleus.mnemosyne.PulseNode import PulseNode
             _node = PulseNode(
                 value=_value,
-                keywords=[_q] if _q else [_p],
+                keywords=_split_keywords(_q) if _q else _split_keywords(_p),
                 source_organ=SOURCE_ORGAN,
                 evol_level=PulseNode.EVOL_L1,
                 importance=PulseNode.IMPORTANCE_B,
                 space_path=PATH_FAILURE,
             )
+            if self._knowledge_tree is not None:
+                self._knowledge_tree.register_path(PATH_FAILURE)
             _nid = self._node_pool.add(_node)
-            self._nodes_written += 1
+            with self._state_lock:
+                self._nodes_written += 1
+                self._failure_mode_total += 1
+                self._persist_state()
             if self._queue is not None:
                 self._queue.submit(_nid, _value)
 
@@ -333,11 +388,44 @@ class ReasoningExperienceIndexer:
         return {
             "double_write_enabled": self._double_write_enabled,
             "records": self._records,
-            "nodes_written": self._nodes_written,
-            "remediation_count": self._remediation_count,
+            "nodes_written": self._base_nodes + self._nodes_written,
+            "remediation_count": self._base_remediation + self._remediation_count,
             "failure_mode_count": len(self._failure_modes),
+            "failure_mode_total": self._base_failure + self._failure_mode_total,
         }
 
+    # ------------------------------------------------------------------
+    # ★第165批 刀A5：计数落盘持久化（重启不归零）
+    # ------------------------------------------------------------------
+    def _load_state(self) -> None:
+        """启动时从 data/ 状态文件载入累计计数基线（git-ignored 运行时状态）。"""
+        try:
+            if os.path.exists(_STATE_PATH):
+                with io.open(_STATE_PATH, encoding='utf-8') as _f:
+                    _s = json.load(_f)
+                self._base_remediation = int(_s.get('remediation_count', 0) or 0)
+                self._base_nodes = int(_s.get('nodes_written', 0) or 0)
+                self._base_failure = int(_s.get('failure_mode_total', 0) or 0)
+        except Exception as _e:
+            silent_exc(_e, "nucleus.reasoning.ReasoningExperienceIndexer::_load_state")
+
+    def _persist_state(self) -> None:
+        """原子写回累计计数（基线 + 本会话增量）。"""
+        try:
+            _d = os.path.dirname(_STATE_PATH)
+            if _d:
+                os.makedirs(_d, exist_ok=True)
+            _payload = {
+                "remediation_count": self._base_remediation + self._remediation_count,
+                "nodes_written": self._base_nodes + self._nodes_written,
+                "failure_mode_total": self._base_failure + self._failure_mode_total,
+            }
+            _tmp = _STATE_PATH + ".tmp"
+            with io.open(_tmp, 'w', encoding='utf-8') as _f:
+                json.dump(_payload, _f, ensure_ascii=False)
+            os.replace(_tmp, _STATE_PATH)
+        except Exception as _e:
+            silent_exc(_e, "nucleus.reasoning.ReasoningExperienceIndexer::_persist_state")
 
 # ==================================================================
 # 单例
