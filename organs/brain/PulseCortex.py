@@ -1331,6 +1331,15 @@ class PulseCortex(BasePulseOrgan):
                                             api_better=False,
                                             lesson=f"自我纠错策略{_correction.get('strategy','')}验证通过，无需大模型补救",
                                         )
+                                        # ★第164批 刀A1：补救成功 → 蒸馏为 L2 节点 + 候选规则（闭环沉淀）
+                                        from nucleus.reasoning.ReasoningExperienceIndexer import (
+                                            get_reasoning_experience_indexer)
+                                        _idx = get_reasoning_experience_indexer()
+                                        _idx.record_remediation_success(
+                                            question=ctx.get("content", ""),
+                                            correct_answer=_corrected_answer,
+                                            rule_candidate=f"self_correction:{_correction.get('strategy', '')}")
+
                                     except Exception as e:
                                         self._log_ignored_exception(e)
                                 # 直接返回纠错后的答案，跳过肺模型补救
@@ -1434,6 +1443,15 @@ class PulseCortex(BasePulseOrgan):
                             api_better=True,
                             lesson="本地输出相关性低被阻断，已转交肺模型补救",
                         )
+                        # ★第164批 刀A1：记录推理失败模式，供检测器认领
+                        from nucleus.reasoning.ReasoningExperienceIndexer import (
+                            get_reasoning_experience_indexer)
+                        _idx = get_reasoning_experience_indexer()
+                        _idx.record_failure_mode(
+                            pattern=_verify.get("reason", "输出相关性低"),
+                            question=ctx.get("content", ""),
+                            context="cortex_output_blocked_to_lung")
+
                     except Exception as e:
                         self._log_ignored_exception(e)
 

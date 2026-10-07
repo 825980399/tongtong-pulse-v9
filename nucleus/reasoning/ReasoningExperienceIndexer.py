@@ -14,6 +14,7 @@ ReasoningExperienceIndexer.py —— 推理经验索引器
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
@@ -31,6 +32,10 @@ PATH_ANALOGY = "/推理经验/类比/"
 # 来源器官标记（写入节点副本的 source_organ，便于溯源）
 SOURCE_ORGAN = "reasoning_experience_indexer"
 
+# ★第164批 刀A1：补救成功 / 失败模式 路径
+PATH_REMEDIATION = "/推理经验/补救成功/"
+PATH_FAILURE = "/推理经验/失败模式/"
+
 
 class ReasoningExperienceIndexer:
     """推理经验双写索引器（规则通道层，不改 ReasoningExperience.py）。"""
@@ -44,6 +49,10 @@ class ReasoningExperienceIndexer:
         self._double_write_enabled = False
         self._records = 0          # 双写次数（验收用）
         self._nodes_written = 0    # 节点副本写入次数（验收用）
+        # ★第164批 刀A1：补救/失败模式计数与内存索引
+        self._remediation_count = 0
+        self._remediation_log: list[dict[str, Any]] = []
+        self._failure_modes: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # 依赖注入（main.py 装配时调用）
@@ -236,11 +245,94 @@ class ReasoningExperienceIndexer:
         return results[:top_k]
 
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # ★第164批 刀A1：补救成功蒸馏 + 失败模式索引
+    # ------------------------------------------------------------------
+    def record_remediation_success(self, question: str, correct_answer: str,
+                                   rule_candidate: str | None = None,
+                                   confidence: float = 0.8) -> None:
+        """★第164批 刀A1：LLM 补救成功路径——(问题, 正确答案) 蒸馏为 L2 节点 + 候选规则。
+
+        仅当双写开启且 node_pool 就绪时写 L2 节点副本；JSON 经验始终记录。
+        无 try/except：异常上抛给调用方既有异常边界（不新增静默 except 处理）。
+        """
+        _q = str(question or "").strip()
+        _a = str(correct_answer or "").strip()
+        if not _q or not _a:
+            return
+        self._exp.record(_q, "remediation_success", source="remediation", confidence=float(confidence))
+        self._remediation_count += 1
+        self._remediation_log.append({
+            "question": _q, "answer": _a, "rule": rule_candidate, "ts": time.time()})
+        if len(self._remediation_log) > 500:
+            self._remediation_log = self._remediation_log[-300:]
+        if self._double_write_enabled and self._node_pool is not None:
+            _value = (f"补救成功｜问题：{_q}｜正确答案：{_a}"
+                      + (f"｜候选规则：{rule_candidate}" if rule_candidate else ""))
+            from nucleus.mnemosyne.PulseNode import PulseNode
+            _node = PulseNode(
+                value=_value,
+                keywords=[_q] if _q else [],
+                source_organ=SOURCE_ORGAN,
+                evol_level=PulseNode.EVOL_L2,
+                importance=PulseNode.IMPORTANCE_B,
+                space_path=PATH_REMEDIATION,
+            )
+            _nid = self._node_pool.add(_node)
+            self._nodes_written += 1
+            if self._queue is not None:
+                self._queue.submit(_nid, _value)
+
+    def record_failure_mode(self, pattern: str, question: str | None = None,
+                            context: str | None = None, confidence: float = 0.3) -> None:
+        """★第164批 刀A1：记录推理失败模式，供检测器认领。
+
+        写入 JSON 经验 + 内存索引（get_failure_modes 可查询）；双写开启时
+        额外写 L1 节点副本（/推理经验/失败模式/）。无 try/except（异常上抛）。
+        """
+        _p = str(pattern or "").strip()
+        _q = str(question or "").strip()
+        if not _p and not _q:
+            return
+        self._exp.record(_q or _p, "failure_mode", source="remediation", confidence=float(confidence))
+        self._failure_modes.append({
+            "pattern": _p, "question": _q, "context": context,
+            "confidence": float(confidence), "ts": time.time()})
+        if len(self._failure_modes) > 500:
+            self._failure_modes = self._failure_modes[-300:]
+        if self._double_write_enabled and self._node_pool is not None:
+            _value = f"推理失败模式｜{_p}｜问题：{_q}｜上下文：{context or ''}"
+            from nucleus.mnemosyne.PulseNode import PulseNode
+            _node = PulseNode(
+                value=_value,
+                keywords=[_q] if _q else [_p],
+                source_organ=SOURCE_ORGAN,
+                evol_level=PulseNode.EVOL_L1,
+                importance=PulseNode.IMPORTANCE_B,
+                space_path=PATH_FAILURE,
+            )
+            _nid = self._node_pool.add(_node)
+            self._nodes_written += 1
+            if self._queue is not None:
+                self._queue.submit(_nid, _value)
+
+    def get_failure_modes(self, limit: int = 20) -> list[dict[str, Any]]:
+        """★第164批 刀A1：返回近期失败模式（供检测器认领）。"""
+        _lim = max(1, int(limit))
+        return list(self._failure_modes[-_lim:])
+
+    def get_remediation_successes(self, limit: int = 20) -> list[dict[str, Any]]:
+        """★第164批 刀A1：返回近期补救成功记录（验收用）。"""
+        _lim = max(1, int(limit))
+        return list(self._remediation_log[-_lim:])
+
     def get_stats(self) -> dict[str, Any]:
         return {
             "double_write_enabled": self._double_write_enabled,
             "records": self._records,
             "nodes_written": self._nodes_written,
+            "remediation_count": self._remediation_count,
+            "failure_mode_count": len(self._failure_modes),
         }
 
 
