@@ -55,6 +55,7 @@ __all__ = [
     "append_entry",
     "load_ledger",
     "register_daily",
+    "effect_verify_rate",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -189,6 +190,50 @@ def probe_count() -> int:
     except Exception as e:
         silent_exc(e, where="nucleus.self_awareness.maturity_ledger::probe_count")
         return 0
+
+
+# ------------------------------------------------------------------ 进化验证率（B1：唯一口径挂账）
+def effect_verify_rate(hist_path: str | None = None) -> dict[str, Any]:
+    """进化验证率 —— **★唯一口径：直接读 ``data/param_patch_history.json`` 的
+    ``applied`` 数组**，本件不另立判据、绝不自算。
+
+    值域 = ``applied`` 数组中 ``effect_verified`` 为真的条目数 / ``applied`` 总条数
+    （如现网 98/100=0.98）。验收（B1）：台账 ``effect_verify_rate`` 字段值 ==
+    此读数；引用须带「applied 数组口径 + 读时」。
+
+    Returns:
+        ``{"total", "verified", "rate", "read_at", "source"}``；
+        采集失败时 ``rate=None`` 且 ``source`` 标明原因。
+    """
+    _out: dict[str, Any] = {
+        "total": 0, "verified": 0, "rate": None,
+        "read_at": None, "source": "unavailable",
+    }
+    _p = hist_path or os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
+    if not os.path.isfile(_p):
+        _out["source"] = "history_missing"
+        return _out
+    try:
+        _hist = json.load(io.open(_p, encoding="utf-8"))
+        _applied = _hist.get("applied")
+        if not isinstance(_applied, list):
+            _out["source"] = "applied_not_list"
+            return _out
+        _total = len(_applied)
+        _verified = sum(1 for x in _applied
+                        if isinstance(x, dict) and x.get("effect_verified"))
+        _out.update({
+            "total": _total,
+            "verified": _verified,
+            "rate": (round(_verified / float(_total), 4) if _total > 0 else None),
+            "read_at": time.time(),
+            "source": "param_patch_history.applied(effect_verified)",
+        })
+        return _out
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::effect_verify_rate")
+        _out["source"] = "read_failed"
+        return _out
 
 
 # ------------------------------------------------------------------ human_override
@@ -392,6 +437,8 @@ def build_entry(result: dict[str, Any], overrides: dict[str, Any] | None = None,
         },
         # ---- 修复率 / 不可验证率（★N-9 口径）
         "rates": patch_rates(),
+        # ---- 进化验证率（★B1 唯一口径：param_patch_history applied 数组，禁止自算）
+        "effect_verify_rate": effect_verify_rate(),
         # ---- 指标唯一口径件（T-唯一口径件-1：总账只引这里的值）
         "metrics_canonical": _metrics,
         # ---- 挂载面读数

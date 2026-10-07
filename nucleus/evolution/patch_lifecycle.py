@@ -153,6 +153,27 @@ def _risk_numeric(risk_level: Any) -> int:
 
 
 # ------------------------------------------------------------------ 写入侧
+def _read_effect_verified(patch_id: str) -> Any:
+    """★B1(吸收 O-B7)：从 ``data/param_patch_history.json`` 的 ``applied`` 数组
+    读取该补丁的 ``effect_verified`` 标志，供 ``record_activation`` 落册。
+
+    **非门控**：仅读数、不改任何 stage 逻辑；读取失败或缺席返回 ``None``。
+    """
+    _p = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
+    try:
+        if not os.path.isfile(_p):
+            return None
+        _hist = json.load(io.open(_p, encoding="utf-8"))
+        _applied = _hist.get("applied") or []
+        for _x in _applied:
+            if isinstance(_x, dict) and str(_x.get("id")) == str(patch_id):
+                return _x.get("effect_verified")
+        return None
+    except Exception as e:
+        silent_exc(e, where="nucleus.evolution.patch_lifecycle::_read_effect_verified")
+        return None
+
+
 def record_activation(
     patch_id: str,
     *,
@@ -185,6 +206,9 @@ def record_activation(
     _e = _d["patches"].get(_pid, _new_entry())
     _now = time.time()
     _risk = _risk_numeric(risk_level)
+
+    # ★B1(吸收 O-B7)：激活登记**前置**读取 effect_verified 落册（非门控，仅读数）
+    _e["effect_verified"] = _read_effect_verified(_pid)
 
     if not rollback_available:
         # ★验收 a：无回滚能力者禁止进入 activated
