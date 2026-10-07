@@ -270,5 +270,17 @@
     "lineno": 548,
     "legacy_lineno": 548,
     "match": "exact"
+  },
+  {
+    "path": "nucleus/LLMDependencyMetrics.py",
+    "qualname": "remediation_rate",
+    "nth": 0,
+    "sha16": "8725d058f45489d4",
+    "tname": "Exception",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 335,
+    "legacy_lineno": 335,
+    "match": "exact"
   }
 ]
