@@ -340,7 +340,7 @@ class PulseInnerWorldKnowledgeMixin:
             query_freq = self.frequency_codec.encode(question)
             query_pulse = {
                 "event_type": InferenceEvent.REQUEST,
-                "payload": {"question": question},
+                "payload": {"question": question, "content": question},
                 "memory_dim": {"frequency_signature": query_freq},
                 "space_dim": {"path": "/"},  # 搜索全局空间，不偏向单一路径
             }
@@ -637,7 +637,7 @@ class PulseInnerWorldKnowledgeMixin:
             query_freq = self.frequency_codec.encode(question)
             query_pulse = {
                 "event_type": InferenceEvent.REQUEST,
-                "payload": {"question": question},
+                "payload": {"question": question, "content": question},
                 "memory_dim": {"frequency_signature": query_freq},
                 "space_dim": {"path": "/"},  # 全局搜索
             }

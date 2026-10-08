@@ -1336,6 +1336,8 @@ class ResonanceEngine:
         
         return {
             "total_queries": self._total_queries,
+            "rule_calls": self._rule_calls,
+            "rule_fallbacks": self._rule_fallbacks,
             "total_resonated": self._total_resonated,
             "freq_index_size": len(self._freq_index),
             "space_index_size": len(self._space_index),
