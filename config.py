@@ -4454,6 +4454,21 @@ LLM_TRACE_ERROR_MAX_LEN = 500                 # error 字段截断长度（字�
 ENABLE_EVOLUTION_CALL_TRACE = True            # 进化引擎调用留存（关闭 → 零 IO）
 EVOLUTION_PROMPT_VERSION = "evolution.v1"     # 进化引擎提示词版本号
 
+# ★第170批 C9（进化费用追踪下半）：计费常量表
+#   口径（星轨裁定 + 第93批设计）：每次进化 LLM 调用记录「模型 × tokens → 费用」，
+#   费用由 call_recorder 按本表即时估算并写入 ``cost_estimate`` 字段。
+#   单价表单位：人民币 ¥ / 1K tokens（费用 = 单价 × tokens / 1000）。
+#   默认空表：未配置单价时 cost_estimate=null（**绝不猜价**，见第93批设计
+#   「cost_estimate 仅当显式配置单价时写入；未配置则缺省 null」）。
+#   ★任务书称「本次任务书已附」单价表，但任务书文件实际未含该表 →
+#     真实单价待星轨补齐，此处不伪造任何数值。表结构示例（仅示意，非生效值）：
+#     EVOLUTION_LLM_PRICE_TABLE = {
+#         "deepseek-chat": 0.001,      # ¥/1K tokens 示意
+#         "deepseek-reasoner": 0.004,  # ¥/1K tokens 示意
+#     }
+ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 → cost_estimate 恒 null）
+EVOLUTION_LLM_PRICE_TABLE = {}               # 模型名 → ¥/1K tokens；空=不估算（不猜价）
+
 # ============================================================================
 # ★主线第44批 T4（P2-290）：测试环境污染防护推广
 # ============================================================================
@@ -5403,3 +5418,4 @@ PARAM_PATCH_EFFECT_VERIFY_ENABLED = True
 
 # ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（默认关闭→零行为变化）
 MAIN_LOOP_PULSE_ENABLED = True
+

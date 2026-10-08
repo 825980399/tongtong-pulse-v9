@@ -192,6 +192,38 @@ def _m94_normalize_usage(usage: Any) -> dict[str, int] | None:  # _m94_extract_u
             "total_tokens": _ti}
 
 
+def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_cost
+    """★第170批 C9（进化费用追踪下半）：按「模型 × tokens → 费用」估算单次调用费用。
+
+    口径（星轨裁定 + 第93批设计）：单价取自 ``config.EVOLUTION_LLM_PRICE_TABLE``
+    （模型名 → ¥/1K tokens）。仅当以下条件**全部满足**才返回数值，否则返回 ``None``：
+
+    * 总开关 ``ENABLE_EVOLUTION_COST_ESTIMATE`` 为 True；
+    * 单价表命中该 ``model``；
+    * 单价与用量均为合法正数。
+
+    未配置单价 / 模型未知时**绝不猜价**（`cost_estimate=None`），与第93批设计
+    「cost_estimate 仅当显式配置单价时写入；未配置则缺省 null（不猜）」一致。
+    单价表单位：¥ / 1K tokens → 费用 = 单价 × tokens / 1000。
+
+    ★零 try/except（与 ``_m94_normalize_usage`` 同范式）：避免新增静默 except
+    handler 触发 cw2 门禁；所有异常分支用显式类型判断兜底。
+    """
+    if not _cfg("ENABLE_EVOLUTION_COST_ESTIMATE", True):
+        return None
+    _tbl = _cfg("EVOLUTION_LLM_PRICE_TABLE", None) or {}
+    if not isinstance(_tbl, dict) or not model:
+        return None
+    _price = _tbl.get(str(model))
+    if isinstance(_price, bool) or not isinstance(_price, (int, float)):
+        return None
+    _tok = tokens if (isinstance(tokens, (int, float))
+                      and not isinstance(tokens, bool)) else 0
+    if _price <= 0 or _tok <= 0:
+        return None
+    return round(_price * _tok / 1000.0, 6)
+
+
 class LLMCallRecorder:
     """LLM 调用对留存器（JSONL 追加写 + 滚窗清理）。
 
@@ -374,6 +406,8 @@ class LLMCallRecorder:
         _m94_tokens = int(tokens or 0)
         if not _m94_tokens and _m94_usage:
             _m94_tokens = int(_m94_usage.get("total_tokens", 0) or 0)
+        # ★第170批 C9：费用估算（模型 × tokens → 费用）；未配置单价/模型未知 → None。
+        _m94_cost = _compute_cost_estimate(model, _m94_tokens)
         _rec = {
             "trace_id": _tid,
             "ts": _ts,
@@ -386,6 +420,7 @@ class LLMCallRecorder:
             "duration": round(float(duration or 0.0), 4),
             "tokens": _m94_tokens,
             "usage": _m94_usage,
+            "cost_estimate": _m94_cost,
             "status": str(status or STATUS_SUCCESS),
             "error": self._resolve_error(error, str(status or STATUS_SUCCESS)),
             "feedback": None,
@@ -590,3 +625,5 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                     silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587")
         return _wrapper
     return _deco
+
+
