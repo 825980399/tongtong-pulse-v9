@@ -1,0 +1,30 @@
+# ============ PulseNet 超算镜像依赖子集（20261008 星轨版） ============
+# 说明：从 requirements.txt 分层中选取 Linux 可安装 + 框架主链必需项。
+# 剔除理由（对应烛微 171 C2 三阻塞）：
+#   aibot          → 无 PyPI 包，pip 必失败；WeComChatBridge 有 ImportError 降级保护
+#   pyaudio        → 需系统 portaudio，Linux 构建需 apt；音频输出可选，缺失自动降级
+#   Cython         → setup_cython.py 仅 mingw32/win32 分支，Linux 回落纯 Python；运行期可选
+#   torch/opencv/mediapipe/playwright/face_recognition → 体积大且有降级保护，先不装
+#   vosk/pyttsx3   → 语音可选，需模型/系统组件
+# 172 批刀5 追加：influxdb-client（172 刀2 InfluxDB 接线测试用，开关默认关）
+
+# ============ [核心必需] ============
+requests>=2.28.0,<3.0.0
+
+# ============ [功能必需] ============
+psutil>=5.9.0,<6.0.0
+numpy>=1.24.0,<2.0.0
+pyarrow>=12.0.0,<13.0.0
+cryptography>=41.0.0,<42.0.0
+faiss-cpu>=1.7.4,<2.0.0
+
+# ============ [可选功能·轻量项] ============
+jieba>=0.42.1,<1.0.0
+feedparser>=6.0.10,<7.0.0
+orjson>=3.9.0,<4.0.0
+chardet>=5.1.0,<6.0.0
+urllib3>=2.0.0,<3.0.0
+Pillow>=9.5.0,<10.0.0
+
+# ============ [172 刀2 关联] ============
+influxdb-client>=1.30.0,<2.0.0

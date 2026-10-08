@@ -1,0 +1,59 @@
+# 镜像构建上下文排除（SCNet 超算镜像 · 20261008 星轨版）
+# 原则：代码全量 + 依赖锁定 + 观测脚本进镜像；data/logs/.git/密钥/中间件全排除
+
+# ===== 版本控制 =====
+.git/
+.gitignore
+.github/
+
+# ===== 运行数据与日志（黑名单硬排除） =====
+data/
+logs/
+tmp/
+*.log
+runtime_state.json
+pending_patches.json
+patch_history.json
+
+# ===== 密钥与凭证（硬排除） =====
+.env
+.env.*
+*.pem
+*.key
+.owner_pii.json
+*_API_KEY*
+
+# ===== 测试与 CI（运行期不需要） =====
+tests/
+tools/ci/
+dev-requirements.txt
+
+# ===== 本地工作产物 =====
+.bak_*/
+.aionclaw-tmp/
+.rebuilt_131/
+.mpy-workbench/
+.mypy_cache/
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.idea/
+.vscode/
+.workbuddy/
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== 内部文档（不进对外包） =====
+docs/
+*.md
+
+# ===== 模型/大文件（按需单独 COPY） =====
+models/
+*.onnx
+*.bin
+*.zip
+*.7z
+
+# ===== 观测脚本例外（白名单，在 Dockerfile 内显式 COPY） =====
+# !tmp/_observe_snapshot.py
