@@ -282,5 +282,17 @@
     "lineno": 335,
     "legacy_lineno": 335,
     "match": "exact"
+  },
+  {
+    "path": "functions/chat/chat_service.py",
+    "qualname": "<module>",
+    "nth": 0,
+    "sha16": "7394554ac1518141",
+    "tname": "Exception",
+    "has_log": false,
+    "has_reraise": false,
+    "lineno": 28,
+    "legacy_lineno": 28,
+    "match": "exact"
   }
 ]
