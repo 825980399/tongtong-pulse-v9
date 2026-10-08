@@ -97,13 +97,70 @@ def selftest() -> int:
     finally:
         os.unlink(lf.name)
 
+    # import_check：临时文件含一个必然已安装包（setuptools）
+    rf2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    rf2.write("setuptools\n")
+    rf2.close()
+    cf2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    cf2.write("setuptools\n")
+    cf2.close()
+    try:
+        _rc = import_check(rf2.name, cf2.name, cf2.name)
+        assert _rc == 0, "import_check 对已安装包应返回 0"
+    finally:
+        os.unlink(rf2.name)
+        os.unlink(cf2.name)
+
     print("[selftest] lock-consistency 自证通过")
     return 0
+
+
+def import_check(req_path: str, lock_path: str, ci_path: str) -> int:
+    """★172刀5：镜像内导入自检——校验 PyPI 子集依赖确实已安装（可导入）。
+
+    对 requirements.txt ∩ requirements-ci.txt 的 PyPI 子集每个归一包名：
+      1) importlib.metadata.distribution 校验确实安装（缺失即 FAIL）；
+      2) 尽力尝试 importlib.import_module（包名 -/_ 归一），失败仅 WARNING
+         （多为导入名映射差异，如 PyYAML→yaml，非真实缺失）。
+    退出码：0=全部就绪；1=存在未安装依赖。
+    """
+    import importlib
+    import importlib.metadata as _md
+    req_names = parse_requirement_names(req_path)
+    ci_names = set(parse_requirement_names(ci_path))
+    subset = sorted(set(n for n in req_names if n in ci_names))
+    missing = []
+    warned = []
+    for _n in subset:
+        try:
+            _md.distribution(_n)
+        except _md.PackageNotFoundError:
+            missing.append(_n)
+            continue
+        try:
+            importlib.import_module(_n.replace("-", "_"))
+        except ImportError:
+            warned.append(_n)
+    if missing:
+        print(f"[FAIL] 镜像内导入自检：{len(missing)} 个 PyPI 依赖未安装：")
+        for _m in missing:
+            print(f"  - {_m}")
+    if warned:
+        print(f"[WARN] {len(warned)} 个包已安装但按归一名导入失败"
+              f"（可能为导入名映射差异）：{', '.join(warned)}")
+    if not missing and not warned:
+        print(f"[PASS] 镜像内导入自检：{len(subset)} 个 PyPI 依赖均已安装且可导入")
+    elif not missing:
+        print(f"[PASS] 镜像内导入自检：{len(subset)} 个 PyPI 依赖均已安装"
+              f"（{len(warned)} 个导入名待人工核对）")
+    return 1 if missing else 0
 
 
 def main(argv) -> int:
     if "--selftest" in argv:
         return selftest()
+    if "--import-check" in argv:
+        return import_check(REQ_TXT, REQ_LOCK, REQ_CI)
     req_path = argv[1] if len(argv) > 1 else REQ_TXT
     lock_path = argv[2] if len(argv) > 2 else REQ_LOCK
     ci_path = argv[3] if len(argv) > 3 else REQ_CI
