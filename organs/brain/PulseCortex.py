@@ -3623,6 +3623,7 @@ class PulseCortex(BasePulseOrgan):
                     "risk.terminate",
                     "risk.moderate",
                     RiskEvent.ALERT,  # ★P3-5补闭环：基础风险告警
+                    RiskEvent.CRISIS_REFERRAL,  # ★第170批 C7：危机转介消费端接线（L569→_on_crisis_referral，置 _crisis_referral_level + 激活文案通道）
                     SystemEvent.SAFE_MODE,  # ★P3-5补闭环：L4 安全模式
                     HeartEvent.BEAT,  # ★v24.0新增：心跳驱动清理
                 ],
