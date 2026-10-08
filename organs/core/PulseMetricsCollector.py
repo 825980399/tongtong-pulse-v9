@@ -295,6 +295,30 @@ class PulseMetricsCollector(BasePulseOrgan):
             self._reflection_last_domain = payload.get("domain", "通用")
         return {"status": "cached", "reflection_count": self._reflection_count}
 
+    def _collect_memory_pressure(self) -> dict[str, Any]:
+        """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
+
+        返回 {"ok", "process_rss_mb", "system_percent", "reason"}；
+        InfoField 未就绪 / 采集失败 → ok=False、数值为 None（不阻塞快照构建、不抛异常）。
+        """
+        _out: dict[str, Any] = {
+            "ok": False, "process_rss_mb": None,
+            "system_percent": None, "reason": "",
+        }
+        if not self.info_field:
+            _out["reason"] = "info_field 未就绪"
+            return _out
+        try:
+            _m = self.info_field._m169_memory_pressure()
+            _out["ok"] = bool(_m.get("ok"))
+            _out["process_rss_mb"] = _m.get("process_rss_mb")
+            _out["system_percent"] = _m.get("system_percent")
+            _out["reason"] = _m.get("reason", "")
+        except Exception as _e:
+            silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
+            _out["reason"] = "采集异常: %s" % type(_e).__name__
+        return _out
+
     def _build_observability_snapshot(self) -> dict[str, Any]:
         """构建完整的可观测性快照"""
         snapshot = {
@@ -320,6 +344,9 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "matched": field_stats.get("total_matched", 0),
                 "active_conditions": field_stats.get("active_conditions", 0),
             }
+
+        # 172刀3：内存压力双口径读数（进程 RSS MB + 系统内存占比）
+        snapshot["memory_pressure"] = self._collect_memory_pressure()
 
         # 系统级：节点池统计
         node_stats = {}
