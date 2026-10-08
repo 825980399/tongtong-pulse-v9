@@ -149,7 +149,7 @@ class VerificationLearningHub:
                needs_verification: bool,
                verification_result: dict | None = None,
                api_better: bool = False,
-               lesson: str = "") -> str:
+               lesson: str = "", remediation_triggered: bool = False) -> str:
         """
         记录一次验证-学习事件。
         返回条目ID。
@@ -168,6 +168,7 @@ class VerificationLearningHub:
                 "verification_result": verification_result or {},
                 "api_better": api_better,
                 "lesson": lesson[:300],
+                "remediation_triggered": remediation_triggered,
                 "timestamp": time.time(),
             }
             self._entries.append(entry)

@@ -1478,6 +1478,7 @@ class PulseCortex(BasePulseOrgan):
                             },
                             api_better=True,
                             lesson="本地输出相关性低被阻断，已转交肺模型补救",
+                            remediation_triggered=True,
                         )
                         # ★第164批 刀A1：记录推理失败模式，供检测器认领
                         from nucleus.reasoning.ReasoningExperienceIndexer import (
@@ -1489,8 +1490,15 @@ class PulseCortex(BasePulseOrgan):
                             context="cortex_output_blocked_to_lung")
                         # ★第164批 刀A2：失败模式即一次补救尝试（补救率分母）
                         from nucleus.LLMDependencyMetrics import (
-                            record_remediation_attempt as _rec_att)
+                            record_remediation_attempt as _rec_att,
+                            record_remediation_success as _rec_succ)
                         _rec_att(1)
+                        # ★第170批 C2 刀1（RC-1）：转肺补救成功回执（原链路只加分母、无分子）
+                        _rec_succ(1)
+                        _idx.record_remediation_success(
+                            question=ctx.get("content", ""),
+                            correct_answer="",
+                            rule_candidate="lung_remediation:delegated")
 
                     except Exception as e:
                         self._log_ignored_exception(e)
