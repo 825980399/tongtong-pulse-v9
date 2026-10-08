@@ -252,3 +252,7 @@ T-Cython Linux编译分支-1,P1,洞鉴,172,"172四件套·决定性阻塞：setu
 T-InfluxDB接线含RSS-1,P2,洞鉴,172,InfluxDB双开关同开才生效(config.py:5014 ENABLE_INFLUXDB_TIMESERIES + :5044 WRITE_ONLY)；现有4写方法无内存/RSS点——补RSS采样点(复用InfoField.py:1133-1135取数)+接线，供内存长稳取证,已排期,172,172,172批拍板(洞鉴1.1)
 T-LLM调用复用器-1,P2,洞鉴,172,"原""L3精简器""命名消歧(禁用L3前缀,L1-L4独占知识级)：新键 ENABLE_CALL_REUSE/ENABLE_CALL_REUSE_OBSERVE/CALL_MERGE_MIN_GAP_SECONDS/CALL_MERGE_MAX_BATCH；先出设计稿(含S1/S2通道层更名建议)再施工；不建ENABLE_L3_BACKOFF",已排期,172,172,172批拍板(洞鉴1.2)
 T-历史PII全历史只读扫描-1,P3,洞鉴,171,"历史PII清史前置只读取证：扫描全历史提交内容PII(邮箱/身份证/手机号)，确认""历史里到底有没有""；成本低、不重写历史；结果入T-历史PII清史-1触发条件判定",已排期,171,171,171批拍板(洞鉴2.2)
+T-进化费用单价补全-1,P2,星轨,171,170批C9遗留L-1：EVOLUTION_LLM_PRICE_TABLE={}致cost_estimate恒null——补真实LLM单价表(模型×tokens计价)，配置后费用统计生效；未配置前保持null不猜价,已排期,171,171,170收口拍板
+T-冷池灰度活体验证-1,P2,星轨,172,170批C10遗留L-2：ENABLE_COLD_POOL_PERCENTILE_SHRINK默认False——172长窗停窗翻True重启，收percentile驱逐活体证据(容量下限+批上限+批间间隔防风暴实测),已排期,172,172,170收口拍板
+T-定时器回收五子刀-1,P2,星轨,172,170批C11遗留L-3：收敛方案已出(threading.Thread 49处/37文件实测)——C11-1~C11-5五子刀施工，涉及框架线程停窗批，逐刀独立验收,已排期,172,172,170收口拍板
+T-offline_survival_F401清理-1,P3,星轨,171,170批C12遗留L-C12-1：offline_survival_protocol.py顶部import time未使用(ruff F401，164A3残留)——零风险清理，随171批小刀,已排期,171,171,170收口拍板
