@@ -27,7 +27,7 @@ try:
     from config import ENABLE_FACE_WELCOME_DIRECT, FACE_WELCOME_SHADOW
 except Exception:
     ENABLE_FACE_WELCOME_DIRECT = False  # ★第109批 T-109b：config 键缺失时回落默认关
-    FACE_WELCOME_SHADOW = True  # ★第115批 T-115e：config 键缺失时回落默认影子开
+    FACE_WELCOME_SHADOW = False  # ★第115批 T-115e：config 键缺失时回落默认影子关（172刀7 退出影子，与 config 同值）
 
 # 导入Web对话推送（如果模块未加载则降级）
 try:

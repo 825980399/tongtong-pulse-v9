@@ -1561,8 +1561,8 @@ DIALOG_TIMEOUT_FALLBACK_SEC = 60              # 大脑皮层看门狗：对话�
 # ★第109批 T-109b：face_welcome 快赢开关（方案A：人脸识别后直接欢迎，跳过"你是谁"推理请求，省 1 次 LLM 调用）
 #   True（默认，已启用；第130批 T-130b 启用）= 跳过推理请求，仅打印欢迎 + L1 欢迎脉冲；False = 保持原行为（发射 InferenceEvent.REQUEST 融入自我画像）。
 ENABLE_FACE_WELCOME_DIRECT = True
-# ★第115批 T-115e：face_welcome 影子半态开关（默认开=只记日志不真跳，观察 1 天后由星轨翻 False 真生效）
-FACE_WELCOME_SHADOW = True
+# ★第115批 T-115e：face_welcome 影子半态开关（172刀7 退出影子：默认关=真实跳过生效；原观察期已结束）
+FACE_WELCOME_SHADOW = False
 
 # ★主线第28批 T1/P2-171：大模型输出长度优化（详见交付报告）
 #   背景（实测）：`PulseLung._build_chat_prompt` 结尾硬编码「建议3-6句话，50字以上」，
