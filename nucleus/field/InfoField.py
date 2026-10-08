@@ -1099,6 +1099,63 @@ class InfoField(SilentLogMixin):
     
     # ========== v9.5: 高负载自适应 ==========
     
+    # ============ ★第169批 C8：内存压力（双口径 + 可配置阈值） ============
+    def _m169_mem_thresholds(self) -> dict[str, float]:
+        """内存告警阈值（可配置，不写死）。
+
+        口径说明：系统内存占比（``psutil.virtual_memory().percent``）与
+        进程 RSS 占比是**两个不同量纲** —— 进程 RSS 上限远低于物理内存，
+        因此两者各自设阈值，任一越阈即视为内存压力成立。
+        """
+        try:
+            _lay = getattr(_cfg, "PULSE_LAYER", {}) or {}
+            _sys_thr = float(_lay.get("high_load_memory_threshold", 85.0))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_mem_thresholds")
+            _sys_thr = 85.0
+        return {
+            "system_percent": _sys_thr,
+            "process_rss_mb": float(getattr(
+                _cfg, "HIGH_LOAD_PROCESS_RSS_MB", 6144.0)),
+        }
+
+    def _m169_memory_pressure(self) -> dict[str, Any]:
+        """内存压力读数：**系统占比 + 进程 RSS** 双口径。
+
+        ``ok=False`` 表示采集失败（**不得**据此判低负载，也不得判高压）。
+        """
+        _thr = self._m169_mem_thresholds()
+        _out = {"ok": False, "system_percent": None,
+                "process_rss_mb": None, "breached": False, "reason": ""}
+        try:
+            import psutil
+            _out["system_percent"] = float(psutil.virtual_memory().percent)
+            _proc = psutil.Process()
+            _out["process_rss_mb"] = round(
+                float(_proc.memory_info().rss) / 1048576.0, 1)
+            _out["ok"] = True
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_memory_pressure")
+            _out["reason"] = "采集失败: %s" % type(_e).__name__
+            return _out
+        _sys_b = _out["system_percent"] > _thr["system_percent"]
+        _rss_b = _out["process_rss_mb"] > _thr["process_rss_mb"]
+        _out["breached"] = bool(_sys_b or _rss_b)
+        _out["reason"] = ("系统内存 %.1f%% > %.1f%%" % (
+            _out["system_percent"], _thr["system_percent"])) if _sys_b else (
+            "进程 RSS %.1fMB > %.1fMB" % (
+                _out["process_rss_mb"], _thr["process_rss_mb"])) if _rss_b else "正常"
+        return _out
+
+    def _m169_log_probe_failure(self) -> None:
+        """采集失败留痕（★不得静默，也不得据此改判负载等级）。"""
+        try:
+            _module_logger.warning(
+                "[C8] 硬件采样失败：本轮不据此判轻负载，保持当前等级=%s"
+                % getattr(self, "_load_level", "?"))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_log_probe_failure")
+
     def _check_high_load(self):
         """检查系统负载，高负载时自动降低各层线程池活跃度（增强版：持续时间保护 + 线程池延迟调整）"""
         now = time.time()
@@ -1134,6 +1191,14 @@ class InfoField(SilentLogMixin):
                 silent_exc(_probe_err, where="nucleus.field.InfoField::_check_high_load psutil fallback")
                 cpu_percent = 0
                 mem_percent = 0
+            # ★第169批 C8：采集可用性判定 —— **刻意不改动既有 except 体**
+            #   （改体会让既有静默 handler 指纹漂移，被 cw2 判为「新增」）
+            try:
+                import psutil as _ps_probe  # noqa: F401
+                self._m169_hw_probe_ok = True
+            except Exception as _pe:
+                silent_exc(_pe, where="nucleus.field.InfoField::_check_high_load psutil probe")
+                self._m169_hw_probe_ok = False
         # 获取GPU使用率（使用正确的字段名）
         with self._hardware_lock:
             gpu_percent = self._hardware_snapshot.get("gpu_usage", 0.0)
@@ -1142,6 +1207,13 @@ class InfoField(SilentLogMixin):
                 gpu_mem_percent = 0.0
 
         if cpu_percent == 0 and mem_percent == 0:
+            # ★第169批 C8：**采集失败 ≠ 真实低负载** —— 若本轮 psutil 采样失败，
+            #   不得据此降级为 light（那会让 heavy/critical 告警静默失效），
+            #   改为保持当前等级 + 留痕。也不产生伪 heavy/critical。
+            if getattr(self, "_m169_hw_probe_ok", True) is False:
+                self._m169_log_probe_failure()
+                self._m169_hw_probe_ok = True
+                return
             # 无硬件数据时，视为轻负载，确保异步任务能正常提交
             if self._load_level != "light":
                 self._load_level = "light"

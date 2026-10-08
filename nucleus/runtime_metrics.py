@@ -416,11 +416,14 @@ class RuntimeMetrics:
         except Exception as _se:
             silent_exc(_se, "runtime_metrics.py:326")
         _level = "low"
-        if _cpu > 85.0 or _qd > 10000:
+        # ★第169批 C8：内存维度参与分级（与 InfoField 口径对齐）。
+        #   默认阈值较高 -> 既有 CPU/队列判定**零回归**；内存真的高时才升档。
+        _mc, _mh, _mm = self._m169_mem_level_thresholds()
+        if _cpu > 85.0 or _qd > 10000 or _mem > _mc:
             _level = "critical"
-        elif _cpu > 70.0 or _qd > 5000:
+        elif _cpu > 70.0 or _qd > 5000 or _mem > _mh:
             _level = "high"
-        elif _cpu > 40.0 or _qd > 2000:
+        elif _cpu > 40.0 or _qd > 2000 or _mem > _mm:
             _level = "medium"
         return {
             "cpu_percent": round(_cpu, 1),
@@ -428,6 +431,22 @@ class RuntimeMetrics:
             "memory_percent": round(_mem, 1),
             "load_level": _level,
         }
+
+    def _m169_mem_level_thresholds(self) -> tuple[float, float, float]:
+        """★第169批 C8：内存分级阈值（critical / high / medium），可配置。
+
+        默认取 95 / 90 / 85（系统内存占比），与 InfoField 的
+        ``high_load_memory_threshold`` 同族；阈值较高以保证既有
+        CPU/队列驱动的判定**零回归**。
+        """
+        try:
+            import config as _c
+            return (float(getattr(_c, "RUNTIME_MEM_LEVEL_CRITICAL", 95.0)),
+                    float(getattr(_c, "RUNTIME_MEM_LEVEL_HIGH", 90.0)),
+                    float(getattr(_c, "RUNTIME_MEM_LEVEL_MEDIUM", 85.0)))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.runtime_metrics::_m169_mem_level_thresholds")
+            return (95.0, 90.0, 85.0)
 
     def get_memory_usage(self) -> dict[str, Any]:
         """★主线第65批 T5/P2：进程内存占用快照（排查内存增长用）。
