@@ -2455,6 +2455,33 @@ class PulseNodePool(SilentLogMixin):
             "cold_size": len(self._cold),
         }
 
+    # ========== ★169批 C11（T-冷池驱逐无运行留痕-1）：运行留痕 + 计数 ==========
+    def _m169_cold_trace(self, action: str, node_id: str, ok: bool,
+                         detail: str = "") -> None:
+        """冷池驱逐/召回的**运行留痕 + 计数**（★只补留痕，不接线任何策略）。
+
+        任务书动因：cold.index.json 5530 条 4 天 0 驱逐 0 召回（12 次启动恒
+        「0 按需召回」）——**无运行留痕**导致无法判别是「真没发生」还是
+        「发生了但看不见」。本方法给出可查的运行侧证据。
+
+        计数落在 ``_cold_stats``（与 recall_hits/recall_misses 同源，
+        由 get_cold_stats 统一对外暴露），不新增持久化、不改驱逐策略。
+        ★本方法自身异常一律留痕不抛（观测代码不得影响主链路）。
+        """
+        try:
+            _st = getattr(self, "_cold_stats", None)
+            if _st is None:
+                _st = {"recall_hits": 0, "recall_misses": 0}
+                self._cold_stats = _st
+            _key = "evict_count" if action == "evict" else "recall_count"
+            if ok:
+                _st[_key] = _st.get(_key, 0) + 1
+            _module_logger.info(
+                "[169批 C11] 冷池%s %s ok=%s detail=%s",
+                action, node_id, ok, detail or "-")
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m169_cold_trace")
+
     def _evict_cold_node(self, node: PulseNode) -> bool:
         """把单个冷节点驱逐到磁盘冷存（增量追加 Parquet），返回是否成功。
 
@@ -2462,13 +2489,18 @@ class PulseNodePool(SilentLogMixin):
         并在外置索引表（若注入）标记 evicted=True。
         """
         if not self._cold_storage_enabled:
+            self._m169_cold_trace("evict", getattr(node, "node_id", "?"),
+                                  False, "冷存储未启用")
             return False
         _node_id = node.node_id
         # 先写盘（复用 _write_cold_node_to_disk），成功后再从冷池移除 + 登记驱逐
         if not self._write_cold_node_to_disk(node):
+            self._m169_cold_trace("evict", _node_id, False, "写盘失败")
             return False
         self._cold.pop(_node_id, None)
         self._cold_evicted.add(_node_id)
+        self._m169_cold_trace("evict", _node_id, True,
+                              "evol_level=%s" % getattr(node, "evol_level", "?"))
         # 外置索引标记 evicted（★第81批 T4：用真实 evol_level，不再恒 L1）
         if self._index_store is not None:
             self._index_store.record_change(
@@ -2920,6 +2952,8 @@ class PulseNodePool(SilentLogMixin):
                         if consume:
                             self._cold_evicted.discard(node_id)
                             self._cold_stats["recall_hits"] += 1
+                            self._m169_cold_trace("recall", node_id, True,
+                                                  "侧车索引命中")
                             if self._index_store is not None:
                                 self._index_store.record_change(
                                     "remove", "level_index",
@@ -2937,6 +2971,7 @@ class PulseNodePool(SilentLogMixin):
             return _nodes[0]
         if consume:
             self._cold_stats["recall_misses"] += 1
+            self._m169_cold_trace("recall", node_id, False, "批量回退未命中")
         return None
 
     def _m70_materialize_lazy_node(self, node) -> bool:
@@ -3025,6 +3060,9 @@ class PulseNodePool(SilentLogMixin):
                 "recall_hits": _hits,
                 "recall_misses": _misses,
                 "recall_hit_rate": round(_hits / _total, 4) if _total else 0.0,
+                # ★169批 C11：运行留痕计数（补可查证据，不改既有键）
+                "evict_count": self._cold_stats.get("evict_count", 0),
+                "recall_count": self._cold_stats.get("recall_count", 0),
             }
 
     def count_cold_parquet_files(self) -> int:
