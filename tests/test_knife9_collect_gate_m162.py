@@ -106,3 +106,29 @@ def test_incremental_fail_safe_upgrade(monkeypatch, capsys):
     assert "升级全量" in out
     # 升级后确实走了全量收集（以 "tests/" 开头）
     assert any(c and c[0] == "tests/" for c in calls)
+
+
+def test_gbk_console_print_no_crash(monkeypatch):
+    """C9：GBK(cp936) 严格编码控制台下，collect 门输出不得 UnicodeEncodeError 崩溃。"""
+    import io as _io
+    _buf = _io.BytesIO()
+    _wrap = _io.TextIOWrapper(_buf, encoding="gbk", errors="strict")
+    monkeypatch.setattr(gate_mod, "_run_once",
+                        lambda args, timeout=300: ("collected 4785 items\n", None))
+    _old = sys.stderr
+    sys.stderr = _wrap
+    try:
+        assert gate_mod.slice_collect(_base(), level="full") == 0
+        assert gate_mod.slice_collect(_base(), level="incremental",
+                                      changed_files=["docs/foo.md"]) == 0
+    finally:
+        try:
+            _wrap.flush()
+        except Exception as _fe:
+            import nucleus._silent_except as _se
+            _se.silent_exc(_fe, where="test_knife9_collect_gate_m162.gbk_flush")
+        sys.stderr = _old
+    _out = _buf.getvalue().decode("gbk", "replace")
+    assert "[FAIL]" in _out or "[PASS]" in _out or "[WARN]" in _out or "[INFO]" in _out
+    for _g in ("❌", "✅", "⚠", "ℹ"):
+        assert _g not in _out, "GBK 输出仍含非 ASCII 字形 %r" % _g
