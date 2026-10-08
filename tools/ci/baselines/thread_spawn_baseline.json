@@ -1,0 +1,10 @@
+{
+  "metric": "production_thread_spawn_points",
+  "pattern": "threading.Thread(",
+  "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
+  "total_occurrences": 63,
+  "file_count": 43,
+  "anchored_by": "172刀0",
+  "anchored_at": "2026-10-08",
+  "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber"
+}
