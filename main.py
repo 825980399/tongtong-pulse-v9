@@ -3596,12 +3596,25 @@ def _prompt_with_timeout(prompt: str, timeout: float):
     return True, _val
 
 
+def _quit_patch_gate_allow(channel_registered: bool, non_tty: bool) -> bool:
+    """★172刀4：编排补丁闸门纯函数。
+
+    仅当「无人值守通道已注册」（channel_registered）且「stdin 非 TTY」（non_tty）
+    同时满足时，才允许非交互默认放行（退出时应用并自重启）；任一不满足返回 False。
+
+    放行权来自通道注册，不来自超时（任务书刀4 纪律）。
+    """
+    return bool(channel_registered) and bool(non_tty)
+
+
 def _confirm_apply_pending_on_quit(framework) -> bool:
     """★主线第59批 T4：用户主动退出（SIGINT/SIGTERM）时的待应用补丁确认提示。
 
     仅在交互终端（sys.stdin.isatty()）弹确认提示，默认 Y（应用并重启验证）；
-    非交互终端（作为服务/后台进程运行）或无已批准补丁时，维持原「退出即应用」语义，
-    返回 True；任何异常（无 TTY、import 失败、输入中断）一律返回 False 且不阻断退出。
+    非交互终端（作为服务/后台进程运行）的默认放行须以「无人值守通道已注册」
+    （NIGHT_ORCH_ENABLED）为前提——通道未注册时不再默认自重启，返回 False；
+    无已批准补丁时返回 False；任何异常（无 TTY、import 失败、输入中断）一律
+    返回 False 且不阻断退出。
 
     返回 True 表示应继续调用 _apply_pending_patches_and_restart 应用并重启；
     返回 False 表示跳过应用，直接退出。
@@ -3612,9 +3625,14 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
         _confirm_env = os.environ.get(PULSE_QUIT_CONFIRM_ENV, "").strip().lower()
         if _confirm_env in ("0", "false", "no", "off"):
             return True
-        # 非交互终端（服务/后台）：无法交互，保持原行为直接应用
-        if not sys.stdin.isatty():
-            return True
+        # ★172刀4 编排补丁闸门：非交互终端默认放行须以「无人值守通道已注册」为前提。
+        #   通道注册由 NIGHT_ORCH_ENABLED 判定（与 main.py:4051 启动接线同口径）；
+        #   通道未注册时非 TTY 不再默认自重启（防退出被劫持），改为直接退出（False）。
+        #   —— 放行权来自通道注册，不来自超时（任务书刀4 纪律）。
+        _non_tty = not sys.stdin.isatty()
+        _channel_registered = bool(getattr(config, "NIGHT_ORCH_ENABLED", True))
+        if _non_tty:
+            return _quit_patch_gate_allow(_channel_registered, _non_tty)
         from nucleus.reasoning.PatchManager import PatchManager
         _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
         _approved = [p for p in _pm.list_pending_patches()
