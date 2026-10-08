@@ -177,6 +177,8 @@ def tier_s2(args) -> int:
                     continue
                 if any(d in m.group(0) for d in _INTERNAL_ALLOW_DOMAINS):
                     continue  # 内部匿名域（dev@tongtong.local）非真实 PII
+                if _is_test_fake(m.group(0)):
+                    continue  # 测试假号/假邮箱（13800138000 等），非真实 PII
                 if is_changed and in_pkg:
                     new_pkg_hits += 1
                     print(f"  [本次变更·进包] {name}:{ln}  [{pname}]  "
@@ -233,8 +235,28 @@ _META_ALLOW_DOMAINS = _INTERNAL_ALLOW_DOMAINS
 #: URL 内的仓库 ID 段（/<ACCOUNT_ID>/）——数字段非手机号
 _URL_PATH_ID = re.compile(r"/\d{6,}/")
 
-#: 整行像 commit SHA（40/64 位十六进制）时，行内数字段不是手机号
+#: 整行像 commit SHA（40/64 位十六进制）时，行内数字段不是手机号/身份证
 _SHA_LINE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$", re.I)
+
+#: 标准测试假号白名单（业界通用测试号码，非真实 PII；测试夹具/扫描器自测使用）
+_TEST_PHONES = {
+    "13800138000",  # 工信部公示测试号段
+    "13812345678",  # 常规测试夹具假号
+    "10000000000",  # 边界测试
+}
+
+#: 标准测试假邮箱白名单（测试夹具/文档示例）
+_TEST_MAILS = {
+    "admin@example.com",
+    "test@example.com",
+    "user@example.com",
+    "example@example.com",
+}
+
+
+def _is_test_fake(frag):
+    """判定片段是否为测试假号/假邮箱（S2/S3 均豁免）。"""
+    return frag in _TEST_PHONES or frag.lower() in _TEST_MAILS
 
 
 def _meta_line_hits(line):
@@ -244,10 +266,12 @@ def _meta_line_hits(line):
             frag = m.group(0)
             if any(d in frag for d in _META_ALLOW_DOMAINS):
                 continue
+            if _is_test_fake(frag):
+                continue  # 测试假号/假邮箱，非真实 PII
+            if name in ("疑似手机号", "疑似身份证") and _SHA_LINE.match(line.strip()):
+                continue  # 整行是 commit SHA，其内数字段非手机号/身份证
             if name == "疑似手机号" and _URL_PATH_ID.search(line):
                 continue
-            if name == "疑似手机号" and _SHA_LINE.match(line.strip()):
-                continue  # 整行是 commit SHA，其内数字段非手机号
             yield name, frag
 
 
