@@ -34,14 +34,18 @@ setup_cython.py —— Cython编译脚本（v23.0增强版）
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PYX_PATH = os.path.join(_CURRENT_DIR, "_frequency_codec_cy.pyx")
 
-# ★v23.0新增：根据编译器选择优化参数
+# ★v23.0新增：根据编译器/平台选择优化参数
 # Windows MinGW 使用 -O3，MSVC 使用 /O2
 if sys.platform == "win32" and "--compiler=mingw32" in sys.argv:
     _extra_args = ["-O3"]
 elif sys.platform == "win32":
     # /O2 最大化速度 + /GL 全程序优化（配合链接 /LTCG 实现 LTO）
     _extra_args = ["/O2", "/GL"]
+elif sys.platform.startswith("linux"):
+    # ★v25.1/★172刀5：Linux/gcc 分支（镜像/SCNet 构建路径）——与 MinGW 同取 -O3
+    _extra_args = ["-O3"]
 else:
+    # ★v25.1/★172刀5：回落基线（macOS/其他未验证平台）——标注为未验证，沿用 gcc -O3
     _extra_args = ["-O3"]
 
 # ★v25.1新增：LTO 链接优化（MSVC /LTCG，MinGW/GCC -flto）
@@ -49,7 +53,11 @@ if sys.platform == "win32" and "--compiler=mingw32" in sys.argv:
     _lto_link_args = ["-flto"]
 elif sys.platform == "win32":
     _lto_link_args = ["/LTCG"]
+elif sys.platform.startswith("linux"):
+    # ★v25.1/★172刀5：Linux/gcc LTO 分支（与 MinGW 同取 -flto）
+    _lto_link_args = ["-flto"]
 else:
+    # ★v25.1/★172刀5：回落基线（macOS/其他未验证平台）——沿用 -flto
     _lto_link_args = ["-flto"]
 
 ext_modules = [
