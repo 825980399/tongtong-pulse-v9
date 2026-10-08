@@ -5108,6 +5108,7 @@ INFLUXDB_ORG = "tongtong"
 INFLUXDB_BUCKET = "pulse_metrics"
 INFLUXDB_BATCH_SIZE = 5000
 INFLUXDB_FLUSH_INTERVAL = 5  # 秒
+ENABLE_INFLUXDB_RSS_SAMPLING = True  # 172刀2：InfluxDB 启用时随写附 RSS(MB)/系统内存占比采样；关闭则仅写原字段
 
 # ---- 分布式架构（第70批设计，第71批+实施，默认关闭）----
 ENABLE_DISTRIBUTED = False

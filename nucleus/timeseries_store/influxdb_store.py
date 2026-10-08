@@ -136,6 +136,32 @@ class InfluxDBStore:
     def is_available(self) -> bool:
         return bool(self._available and self._write_api is not None)
 
+    # ---------- RSS 采样（复用 InfoField 双口径读数） ----------
+    def _sample_rss(self) -> Optional[dict]:
+        """复用 InfoField 双口径内存读数（system_percent + process_rss_mb）。
+
+        返回 ``{"process_rss_mb": float, "system_percent": float}``；
+        任意环节失败（未启用 / InfoField 未就绪 / psutil 缺失 / 采集失败）返回 None，
+        绝不抛异常、绝不阻塞写路径（时序库为增强项，不可拖垮主流程）。
+        """
+        try:
+            if not bool(_cfg("ENABLE_INFLUXDB_RSS_SAMPLING", True)):
+                return None
+            from nucleus.field.InfoField import get_info_field
+            _field = get_info_field()
+            if _field is None:
+                return None
+            _m = _field._m169_memory_pressure()
+            if not _m.get("ok"):
+                return None
+            return {
+                "process_rss_mb": float(_m.get("process_rss_mb") or 0.0),
+                "system_percent": float(_m.get("system_percent") or 0.0),
+            }
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.timeseries_store.influxdb_store::_sample_rss")
+            return None
+
     # ---------- 写入 ----------
     def write_point(self, measurement: str, tags: Optional[dict] = None,
                     fields: Optional[dict] = None, timestamp: Optional[int] = None) -> bool:
@@ -177,12 +203,16 @@ class InfluxDBStore:
         try:
             from influxdb_client import Point
             _pts = []
+            _rss = self._sample_rss()
             for _p in self._buffer:
                 _pt = Point(_p["measurement"])
                 for _k, _v in (_p.get("tags") or {}).items():
                     _pt = _pt.tag(_k, str(_v))
                 for _k, _v in (_p.get("fields") or {}).items():
                     _pt = _pt.field(_k, _v)
+                if _rss:
+                    for _k, _v in _rss.items():
+                        _pt = _pt.field(_k, _v)
                 _pts.append(_pt.time(_p.get("time", int(time.time() * 1e9))))
             self._write_api.write(bucket=self._bucket, org=self._org, record=_pts)
             _n = len(self._buffer)
@@ -223,6 +253,15 @@ class InfluxDBStore:
                                 {"query_type": query_type or "unknown"},
                                 {"duration_ms": float(duration_ms),
                                  "result_count": int(result_count)})
+
+    def record_process_rss(self) -> bool:
+        """补 RSS 采样点：写当前进程 RSS(MB) 与系统内存占比。
+
+        测量点名为 ``process_rss``，字段含 ``process_rss_mb`` / ``system_percent``
+        （由 ``_flush_locked`` 经 ``_sample_rss`` 自动附入）。仅作采样点、不依赖调度器；
+        开关关闭 / InfoField 未就绪 / psutil 缺失时退化为一次普通 ``write_point``（零副作用）。
+        """
+        return self.write_point("process_rss", {}, {})
 
     # ---------- 查询 ----------
     @staticmethod
