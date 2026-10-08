@@ -23,6 +23,7 @@
 import os
 import re
 import sys
+import io
 import json
 import subprocess
 import ast
@@ -163,7 +164,7 @@ def _collect_full(baseline):
     """★刀9 全量门（批末收口 + 每日 04:00 + push 前）：原片1 ±5 漂移判定，完整保留。"""
     txt, status = _run_once(["tests/", "--collect-only", "-q", "-p", "no:cacheprovider"], timeout=300)
     if status == "timeout":
-        print("[slice1-collect] ❌ collect 收集超时（掩码修复：超时=FAIL，不得掩成 PASS）", file=sys.stderr)
+        print("[slice1-collect] [FAIL] collect 收集超时（掩码修复：超时=FAIL，不得掩成 PASS）", file=sys.stderr)
         _write_collect_trace("full", None, "timeout")
         return 1
     errs = COLLECT_ERR_RE.findall(txt)
@@ -171,21 +172,21 @@ def _collect_full(baseline):
     count = int(m.group(1) or m.group(2)) if m else None
     print(f"[slice1-collect] 收集错误={len(errs)} 收集节点数={count}", file=sys.stderr)
     if errs:
-        print("[slice1-collect] ❌ 存在收集错误（半成品/导入断链）：")
+        print("[slice1-collect] [FAIL] 存在收集错误（半成品/导入断链）：")
         for e in errs[:20]:
             print(f"   ! {e}")
         _write_collect_trace("full", count, "collect_error")
         return 1
     cb = baseline.get("collect_baseline")
     if count is None:
-        print("[slice1-collect] ⚠ 未能解析节点数，跳过漂移校验")
+        print("[slice1-collect] [WARN] 未能解析节点数，跳过漂移校验")
         _write_collect_trace("full", None, "unresolved_count")
         return 0
     if cb is not None and abs(count - cb) > COLLECT_TOLERANCE:
-        print(f"[slice1-collect] ❌ 节点数漂移 {count} vs 基线 {cb}（容差 ±{COLLECT_TOLERANCE}）")
+        print(f"[slice1-collect] [FAIL] 节点数漂移 {count} vs 基线 {cb}（容差 ±{COLLECT_TOLERANCE}）")
         _write_collect_trace("full", count, "drift")
         return 1
-    print(f"[slice1-collect] ✅ PASS（0 收集错误，节点数 {count} 在基线 {cb}±{COLLECT_TOLERANCE} 内）")
+    print(f"[slice1-collect] [PASS] PASS（0 收集错误，节点数 {count} 在基线 {cb}±{COLLECT_TOLERANCE} 内）")
     _write_collect_trace("full", count, "pass")
     return 0
 
@@ -253,16 +254,16 @@ def slice_collect(baseline, level=None, changed_files=None):
         return _collect_full(baseline)
     affected = compute_affected_test_files(changed_files)
     if affected is None:
-        print("[slice1-collect] ⚠ 依赖图解析失败，fail-safe 升级全量", file=sys.stderr)
+        print("[slice1-collect] [WARN] 依赖图解析失败，fail-safe 升级全量", file=sys.stderr)
         return _collect_full(baseline)
     if not affected:
-        print("[slice1-collect] ✅ PASS（增量门：无受影响测试文件，跳过收集）", file=sys.stderr)
+        print("[slice1-collect] [PASS] PASS（增量门：无受影响测试文件，跳过收集）", file=sys.stderr)
         _write_collect_trace("incremental", 0, "no_affected")
         return 0
     args = list(affected) + ["--collect-only", "-q", "-p", "no:cacheprovider"]
     txt, status = _run_once(args, timeout=300)
     if status == "timeout":
-        print("[slice1-collect] ❌ 增量收集超时（掩码修复：超时=FAIL）", file=sys.stderr)
+        print("[slice1-collect] [FAIL] 增量收集超时（掩码修复：超时=FAIL）", file=sys.stderr)
         _write_collect_trace("incremental", None, "timeout")
         return 1
     errs = COLLECT_ERR_RE.findall(txt)
@@ -270,12 +271,12 @@ def slice_collect(baseline, level=None, changed_files=None):
     count = int(m.group(1) or m.group(2)) if m else None
     print(f"[slice1-collect] 增量门受影响测试 {len(affected)} 个，收集节点数={count}", file=sys.stderr)
     if errs:
-        print("[slice1-collect] ❌ 增量门存在收集错误（受影响测试导入断链）：")
+        print("[slice1-collect] [FAIL] 增量门存在收集错误（受影响测试导入断链）：")
         for e in errs[:20]:
             print(f"   ! {e}")
         _write_collect_trace("incremental", count, "collect_error")
         return 1
-    print("[slice1-collect] ✅ PASS（增量门：受影响测试收集无错误）", file=sys.stderr)
+    print("[slice1-collect] [PASS] PASS（增量门：受影响测试收集无错误）", file=sys.stderr)
     _write_collect_trace("incremental", count, "pass")
     return 0
 
@@ -297,15 +298,15 @@ def slice_isolation(baseline, input_path=None):
         print(f"[slice2-isolation] 逐文件单跑 {len(files)} 个测试文件…", file=sys.stderr)
         iso, errs = run_pytest_per_file(files)
         if errs:
-            print(f"[slice2-isolation] ⚠ {len(errs)} 个文件运行异常（安全删除守卫/超时），结果仅供参考", file=sys.stderr)
+            print(f"[slice2-isolation] [WARN] {len(errs)} 个文件运行异常（安全删除守卫/超时），结果仅供参考", file=sys.stderr)
     new = iso - allowed
     if new:
-        print(f"[slice2-isolation] ❌ 检出隔离新确定性红（不在 known_fail∪pollution_set，共 {len(new)}）：")
+        print(f"[slice2-isolation] [FAIL] 检出隔离新确定性红（不在 known_fail∪pollution_set，共 {len(new)}）：")
         for n in sorted(new):
             print(f"   + {n}")
         print("[slice2-isolation] 结论：FAIL（存在新增确定性红）")
         return 1
-    print(f"[slice2-isolation] ✅ PASS（隔离失败 {len(iso)} 全部落在已知基线，无新增确定性红）")
+    print(f"[slice2-isolation] [PASS] PASS（隔离失败 {len(iso)} 全部落在已知基线，无新增确定性红）")
     return 0
 
 
@@ -329,7 +330,7 @@ def slice_full(baseline, input_path=None):
         #   6 批全部被误判），从而把真实结果当成不可信而丢弃。
         _truncated = not has_pytest_summary(txt)
         if _truncated:
-            print("[slice3-full] ❌ 截断检测：pytest 汇总行缺失，结果不可信（未跑完即中断）",
+            print("[slice3-full] [FAIL] 截断检测：pytest 汇总行缺失，结果不可信（未跑完即中断）",
                   file=sys.stderr)
             print("[slice3-full]    · 此时 FAILED=0 属「根本没跑起来」的假象，"
                   "「基线转绿」统计全部作废", file=sys.stderr)
@@ -338,7 +339,7 @@ def slice_full(baseline, input_path=None):
             print("[slice3-full] 结论：FAIL（截断，结果不可信）")
             return 1
         if "SAFE_DELETE" in txt or "SystemExit" in txt:
-            print("[slice3-full] ℹ 检测到 safe-delete 守卫输出，但 pytest 汇总行完整"
+            print("[slice3-full] [INFO] 检测到 safe-delete 守卫输出，但 pytest 汇总行完整"
                   "（属预期安全拦截，非截断）", file=sys.stderr)
     failed, xfailed, xpassed = parse_failed(txt)
     new_red = failed - allowed
@@ -346,16 +347,16 @@ def slice_full(baseline, input_path=None):
     print(f"[slice3-full] 本轮 FAILED={len(failed)}  XFAIL={len(xfailed)}  XPASS={len(xpassed)}")
     print(f"[slice3-full] 基线允许集(known_fail∪pollution)={len(allowed)}  新增红={len(new_red)}  基线转绿={len(turned_green)}")
     if turned_green:
-        print("[slice3-full] ℹ️ 以下基线红节点本轮未以 FAILED 出现（已修复/转态，正向，仅报告）：")
+        print("[slice3-full] [INFO] 以下基线红节点本轮未以 FAILED 出现（已修复/转态，正向，仅报告）：")
         for n in sorted(turned_green):
             print(f"   - {n}")
     if new_red:
-        print("\n[slice3-full] ❌ 检出新红（known_fail∪pollution_set 之外）：")
+        print("\n[slice3-full] [FAIL] 检出新红（known_fail∪pollution_set 之外）：")
         for n in sorted(new_red):
             print(f"   + {n}")
         print("[slice3-full] 结论：FAIL（存在新增失败）")
         return 1
-    print("\n[slice3-full] ✅ PASS（新增红=0；xfail 不计 fail；基线转绿已正向报告）")
+    print("\n[slice3-full] [PASS] PASS（新增红=0；xfail 不计 fail；基线转绿已正向报告）")
     return 0
 
 
@@ -371,15 +372,28 @@ def verify_env(baseline):
     print(f"[verify-env] 基线HEAD={base_head} 当前HEAD={cur_head} 工作树脏={dirty} staged={staged} PYTHONIOENCODING={pyenc}")
     rc = 0
     if base_head and base_head != cur_head:
-        print(f"[verify-env] ❌ HEAD 漂移：基线 {base_head} ≠ 当前 {cur_head}（基线须在对应 HEAD 重建）")
+        print(f"[verify-env] [FAIL] HEAD 漂移：基线 {base_head} ≠ 当前 {cur_head}（基线须在对应 HEAD 重建）")
         rc = 1
     if dirty != env.get("git_status_short_lines"):
-        print(f"[verify-env] ⚠ 工作树脏文件数 {dirty} 与基线 {env.get('git_status_short_lines')} 不一致（基线生成时须干净窗）")
+        print(f"[verify-env] [WARN] 工作树脏文件数 {dirty} 与基线 {env.get('git_status_short_lines')} 不一致（基线生成时须干净窗）")
     if pyenc != env.get("pythonioencoding"):
-        print("[verify-env] ⚠ PYTHONIOENCODING 与基线不一致（输出解析口径差异）")
+        print("[verify-env] [WARN] PYTHONIOENCODING 与基线不一致（输出解析口径差异）")
     if rc == 0:
-        print("[verify-env] ✅ HEAD 匹配（其余字段仅供参考）")
+        print("[verify-env] [PASS] HEAD 匹配（其余字段仅供参考）")
     return rc
+
+
+def _base_for_selftest():
+    """selftest 专用极简基线（仅 collect 门所需字段）。"""
+    try:
+        _b = load_baseline(BASELINE_PATH)
+        return {"collect_baseline": _b.get("collect_baseline"),
+                "known_fail": _b["known_fail"], "pollution_set": _b["pollution_set"],
+                "env_fingerprint": _b.get("env_fingerprint", {}), "raw": _b.get("raw", {})}
+    except Exception as _be:
+        silent_exc(_be, where="check_red_baseline_gate._base_for_selftest")
+        return {"collect_baseline": 4785, "known_fail": set(), "pollution_set": set(),
+                "env_fingerprint": {}, "raw": {}}
 
 
 def selftest():
@@ -397,7 +411,34 @@ def selftest():
     assert xpassed == {"tests/test_c.py::test_y"}, xpassed
     m = COLLECT_COUNT_RE.search(sample)
     assert m and int(m.group(1) or m.group(2)) == 4456
-    print("[selftest] 解析单测通过")
+    # --- C9：collect 超时掩码自测（正反例）---
+    _mod = sys.modules[__name__]
+    _orig = _mod._run_once
+    _cb = _base_for_selftest().get("collect_baseline") or 4785
+    try:
+        _mod._run_once = staticmethod(lambda args, timeout=300: ("", "timeout"))
+        assert slice_collect(_base_for_selftest(), level="full") == 1
+        assert slice_collect(_base_for_selftest(), level="incremental",
+                             changed_files=["nucleus/foo.py"]) == 1
+        _mod._run_once = staticmethod(
+            lambda args, timeout=300: ("collected %d items\n" % _cb, None))
+        assert slice_collect(_base_for_selftest(), level="full") == 0
+    finally:
+        _mod._run_once = _orig
+    # --- C9：GBK 控制台打印不崩（编码安全）---
+    _gbk_buf = io.BytesIO()
+    _gbk_wrap = io.TextIOWrapper(_gbk_buf, encoding="gbk", errors="strict")
+    _old_stderr = sys.stderr
+    sys.stderr = _gbk_wrap
+    try:
+        slice_collect(_base_for_selftest(), level="full")
+    finally:
+        try:
+            _gbk_wrap.flush()
+        except Exception as _fe:
+            silent_exc(_fe, where="check_red_baseline_gate.selftest.gbk_flush")
+        sys.stderr = _old_stderr
+    print("[selftest] 解析单测通过；超时掩码+GBK 编码安全通过")
 
 
 def main(argv):
