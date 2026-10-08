@@ -1205,6 +1205,17 @@ class PulseFramework:
                       f"差集={_diff['named_diff']} "
                       f"框架准器官={_diff['quasi_organ_extra']} "
                       f"未声明异常={_diff['undeclared_instantiated']}")
+            # ★169批 C-7（P0）：装配回路通电可观测口径 —— sensor 实例数必须为 1。
+            #   Sensor 有真实设备探测副作用，重复建实例会泄漏句柄，故显式自检。
+            _sensor_n = 1 if hasattr(self, "sensor") else 0
+            _diff["sensor_instances"] = _sensor_n
+            self._log(LogLevel.INFO,
+                      f"[装配具名差集] sensor 实例数={_sensor_n}"
+                      f"（应为 1；0=未装配，>1=重复装配泄漏句柄）")
+            if _sensor_n != 1:
+                self._log(LogLevel.WARNING,
+                          f"[装配具名差集] sensor 实例数异常({_sensor_n})，"
+                          f"应为 1：0=未装配 / >1=重复装配")
             if _diff["undeclared_instantiated"]:
                 self._log(LogLevel.WARNING,
                           f"[装配具名差集] 发现未声明却实例化的器官"
@@ -1230,8 +1241,10 @@ class PulseFramework:
         from nucleus.reasoning.ReasoningWorkerPool import get_reasoning_pool
 
         # ===== Phase 0: 装配前组件（原在硬编码装配中内联创建） =====
-        from somatics.sensor import Sensor
-        self.sensor = Sensor()
+        # ★169批 C-7（P0）：守卫式复用（与 legacy 段对称，见该处说明）
+        if not hasattr(self, "sensor"):
+            from somatics.sensor import Sensor
+            self.sensor = Sensor()
         from organs.brain.PulseExpression import PulseExpression
         self.expression = PulseExpression()
         # QICA 作为组件创建（位于 nucleus/qica，不在 organs/ 注册表内）
@@ -1268,7 +1281,10 @@ class PulseFramework:
             return None
 
         # ===== Phase 1-3: 声明式装配 =====
-        self.organ_loader = OrganLoader(self)
+        # ★169批 C-7（P0）：二次 loader 守卫 —— 幂等，防回退切换/复用时
+        #   重复扫描器官目录（两分支互斥故当前不重复，但守卫后恒等）。
+        if not hasattr(self, "organ_loader"):
+            self.organ_loader = OrganLoader(self)
         metas = self.organ_loader.load_organs()
         assembler = OrganAssembler(metas)
         assembler.assemble(self, component_resolver=_resolve_component)
@@ -1533,8 +1549,12 @@ class PulseFramework:
         # 修改大脑皮层的发射逻辑（见下面）
         # ===== v24.0新增结束 =====        
         # ===== 躯体硬件层（提前创建，供视觉皮层和设备管理器使用） =====
-        from somatics.sensor import Sensor
-        self.sensor = Sensor()        
+        # ★169批 C-7（P0）：守卫式复用 —— Sensor 有真实设备探测副作用
+        #   （自动检测设备/建实例/热插拔），两分支都走到会重复建实例、泄漏句柄。
+        #   声明式分支已在 :1234 建过则直接复用，零行为差异。
+        if not hasattr(self, "sensor"):
+            from somatics.sensor import Sensor
+            self.sensor = Sensor()
         # ===== 感知系统 =====
         self.touch = self._create_organ(PulseTouch, "触觉")
         self.eyes = self._create_organ(PulseEyes, "眼睛",
@@ -1671,8 +1691,10 @@ class PulseFramework:
         )
         # ===== v24.0新增结束 =====
         # ===== P2-3: 插件化自动加载 =====
-        self.organ_loader = OrganLoader(self)
-        self.organ_loader.load_organs()        
+        # ★169批 C-7（P0）：二次 loader 守卫（与声明式段对称）
+        if not hasattr(self, "organ_loader"):
+            self.organ_loader = OrganLoader(self)
+        self.organ_loader.load_organs()
         # ===== 心脏注入自我认知（动态心率需要） =====
         if hasattr(self, 'heart') and hasattr(self, 'self_awareness'):
             self.heart.set_self_awareness(self.self_awareness)
