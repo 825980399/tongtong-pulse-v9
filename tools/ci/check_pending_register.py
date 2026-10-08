@@ -360,6 +360,24 @@ def main(argv=None):
             if d is not None and d <= args.batch:
                 due_unresolved.append(r["ID"].strip())
 
+    # ★M2 排期逾期硬门禁（洞鉴 171 治理刀 / 星轨侧 2026-10-08）：
+    #   排期票（已排期/已裁决待排期）到期批次 < 当前批−1 且未结案 → FAIL 并留痕，
+    #   杜绝「排期承诺永不执行、到期字段从不回收」的滚动平移（洞鉴 2.1 实证：
+    #   161 批 13 张排期票随批滚动十批未执行）。
+    #   判据：due < batch - 1 即视为逾期（到期批次 ≤ 当前批−2 仍未交付）。
+    #   处置：裁决→排期→施工→销账四步必须闭环；逾期票须重排期/撤销/施工，
+    #   禁止继续逐批平移到期字段。本门禁挂 CI 硬阻断（exit 2）。
+    overdue_sched = []
+    for r in rows:
+        st = r["状态"].strip()
+        if st not in ("已排期", "已裁决待排期"):
+            continue
+        d = _parse_batch(r["到期批次"])
+        if d is None:
+            continue  # 无到期批次（待定）不判逾期，交由人工
+        if d < args.batch - 1:
+            overdue_sched.append((r["ID"].strip(), st, d, r["摘要"].strip()[:50]))
+
     total = len(rows)
     by_status = {}
     for r in rows:
@@ -371,8 +389,17 @@ def main(argv=None):
             args.batch, len(due_unresolved), ", ".join(due_unresolved)))
         sys.stderr.write("CHECK_FAIL: 存在到期未裁项，须先裁后派（阻断任务下发）\n")
         sys.exit(2)
+    if overdue_sched:
+        sys.stderr.write("★M2 排期逾期硬门禁：%d 张排期票到期批次 < 当前批−1 仍未交付：\n"
+                         % len(overdue_sched))
+        for rid, st, due, summ in sorted(overdue_sched, key=lambda x: x[2]):
+            sys.stderr.write("  %s [%s] 到期%d: %s\n" % (rid, st, due, summ))
+        sys.stderr.write("CHECK_FAIL: 存在 %d 张逾期排期票，须处置（施工/销账/重排期/撤销）"
+                         "后方可通过（M2 禁逐批平移）\n" % len(overdue_sched))
+        sys.exit(2)
     else:
         sys.stderr.write("本批（%d）到期未裁项：0（无阻断）\n" % args.batch)
+        sys.stderr.write("M2 排期逾期：0（无阻断）\n")
         sys.exit(0)
 
 
