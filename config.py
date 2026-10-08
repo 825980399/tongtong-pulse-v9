@@ -4533,7 +4533,7 @@ EVOLUTION_LLM_PRICE_TABLE = {
 #   COLD_POOL_SHRINK_BATCH_INTERVAL_SEC（默认 600=10min）防风暴。
 #   ★默认 False：保留原有固定阈值行为，零回归；停窗期翻 True 后重启生效
 #     （改驱逐逻辑需重启；运行期观测见验收项）。
-ENABLE_COLD_POOL_PERCENTILE_SHRINK = False   # 冷池分位动态化驱逐总开关（默认关，零回归）
+ENABLE_COLD_POOL_PERCENTILE_SHRINK = True  # 冷池分位动态化驱逐总开关（★第173批刀0 窗前定值：开启，取灰度档；原默认关/零回归，需重启生效）
 COLD_POOL_SHRINK_PERCENTILE = 0.20           # 驱逐目标分位（最低 last_access 的占比）
 COLD_POOL_SHRINK_BATCH_MAX = 1000            # 单次驱逐批上限（防风暴）
 COLD_POOL_SHRINK_BATCH_INTERVAL_SEC = 600    # 批间最小间隔（秒，10min）防风暴
@@ -5101,7 +5101,7 @@ NEO4J_BATCH_SIZE = 1000
 NEO4J_CONNECTION_POOL_SIZE = 10
 
 # ---- InfluxDB 时序数据库（默认关闭）----
-ENABLE_INFLUXDB_TIMESERIES = False
+ENABLE_INFLUXDB_TIMESERIES = True  # ★第173批刀0 窗前定值：开启（长稳窗采集 process_rss_mb 时序，重启带入）
 INFLUXDB_URL = "http://localhost:8086"
 INFLUXDB_TOKEN = ""  # 从环境变量 INFLUXDB_TOKEN 读取
 INFLUXDB_ORG = "tongtong"
@@ -5132,7 +5132,7 @@ ENABLE_KAL_CALL_SITES = True    # 胃/肝/肾实际调用点替换为 KAL
 
 # ---- 主线第71批 T1/T2/T3 新增配置（默认全部关闭）----
 ENABLE_NEO4J_DUAL_WRITE = False  # Neo4j 双写（与 ENABLE_NEO4J_GRAPH_STORE 同开才生效）
-ENABLE_INFLUXDB_WRITE_ONLY = False  # InfluxDB 只写（与 ENABLE_INFLUXDB_TIMESERIES 同开才生效）
+ENABLE_INFLUXDB_WRITE_ONLY = True  # InfluxDB 只写（与 ENABLE_INFLUXDB_TIMESERIES 同开才生效）；★第173批刀0 窗前定值：开启
 INFLUXDB_SAMPLE_RATE = 0.01  # 高频事件（节点访问）采样率，默认 1%
 DISTRIBUTED_HEARTBEAT_INTERVAL = 30  # 心跳间隔（秒）
 DISTRIBUTED_HEALTH_THRESHOLD = 0.5  # 健康分阈值，低于此值不参与路由
