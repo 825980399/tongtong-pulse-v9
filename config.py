@@ -4276,6 +4276,14 @@ ENABLE_LUNG_DEPENDENCY_TRACKING = True   # 补 record_llm_call(SCENE_LUNG)（对
 ENABLE_SELF_AWARENESS_INFLUENCE_DECISION = False   # 总开关（阶段二逐步开启；默认关）
 ENABLE_SELF_AWARENESS_OBSERVATION = True           # L1 观测级（仅记日志，不影响决策）
 
+# ★第170批 C5（T-阶段二结果接入-1）：PHASE18 阶段二 L2/L3 影响级「四键」配置接入
+#   遵循 FACE_WELCOME_SHADOW 范式（config.py:1565）：默认均为影子/未启用态，
+#   **全 0 命中（新建）、不影响主链路**；真实降级/增益行为在阶段二实施批逐步开启。
+SELF_AWARENESS_DECISION_DEGRADE_THRESHOLD = 50    # 场景2：触发降级的综合分阈值（仅声明，未接线）
+SELF_AWARENESS_DEGRADE = False                     # 场景2：降级启用开关（影子态，默认关）
+SELF_AWARENESS_EVOLUTION_BOOST_ENABLED = False     # 场景3：进化加成开关（影子态，默认关）
+SELF_AWARENESS_EVOLUTION_BOOST_MAX = 0.3           # 场景3：单条最大加成比例（仅声明，未接线）
+
 # ★第115批 T-115f：PHASE18 阶段二 L2 对话主动提及开关（设计文档 §3.3 / §4.1 / §5）
 #   默认关 = 零行为变化（关闭时 _maybe_append_self_state 直接返回原回复，不进主 prompt）。
 #   触发条件（按设计原文"仅 concerning/critical 才提"）：画像新鲜(is_fresh) 且
