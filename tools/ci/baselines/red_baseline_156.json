@@ -1,6 +1,6 @@
 {
-  "generated_at_head": "bc9289ef89c56838ad675d085dfd8196d7ac7fec",
-  "generated_at": "2026-10-07T17:57",
+  "generated_at_head": "1b55642738e65b4786711fcf2c3e79b10758b64d",
+  "generated_at": "2026-10-08T21:52",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons；2026-10-07 第167批 C1 重锚：test_lazy_snapshot_m9::test_lazy_vs_full_equivalence 复验转绿（162批刀2 iter_nodes 走线已缓解，167 C1 补 __iter__ 闭环），known_fail 10→9 非回归；collect_baseline 4928 不变",
   "collect_baseline": 4928,
   "known_fail": [
@@ -22,13 +22,13 @@
     "tests/test_write_guard_m51.py::TestWriterKind::test_01_pytest_env_is_test_env"
   ],
   "env_fingerprint": {
-    "head": "84f1232",
-    "git_status_short_lines": 3,
+    "head": "1b55642",
+    "git_status_short_lines": 10,
     "staged_count": 0,
     "pythonioencoding": "utf-8",
     "live_framework_pid": "NONE(框架停机)",
     "pytest_plugins": [],
-    "note": "B156-3 T-A05/T-A08/T-A09 读码片共 19 红节点全部转绿（替身过时：生产 KAL 集成/治理字段门禁/增量日志熔断/降频单例/假能力标记守卫/并发精确递减锁属性均既定正确，测试锚/替身/fixture/契约未同步）；head 重锚 c330246；known_fail 134→115（移除 T-A05 8 + T-A08 1 + T-A09 10；lazy_snapshot_m9 6 条他会话占用暂缓保留）。B156-5 collect re-anchor 4471（新增 15 测试节点），基线锚点 HEAD=84f1232（B156-5 票④补提交点）。第160批上A 刀3 新增 tests/test_self_metadata_m160.py（6 节点）致 collect 4535→4545，非回归。"
+    "note": "B156-3/B156-5 历史锚点见各 reanchor_* 注。171批刀3 重锚(2026-10-08T21:52)：方案B逐文件隔离实测 known_fail 9 项——8 项确定性失败(与判据缺陷/PII待裁定/检测器退化根因一致，均非本批代码缺陷，待专项票)，1 项(test_experience_summary_hemostasis_m47::test_50_production_pool_still_loadable)实测偶发绿但基线既定『不按偶发绿回收避免抖动』策略故保留待人工复核；方案B 7文件新增红=0。HEAD 重锚 1b55642；框架停机干净窗；known_fail 保持 9、pollution 保持 5、collect_baseline 保持 4928(片1 collect 重锚归他刀)。"
   },
   "transparency": {
     "isolation_failed_raw": [
@@ -258,6 +258,30 @@
     "reanchor_162k10": "第162批刀10（C-1 收尾·2026-10-06）：collect_baseline 4806 → 4810。新增 4 例门控单测 tests/test_knife10_toolreg_persist_m162.py（重启后注册表可恢复 / overwrite 重绑 executor 并更新描述 / 缺失文件返回 0 / save 剔除不可序列化 executor），均非回归；另含 nucleus/tooling/ToolRegistry.py 增 save/load/_default_path 持久化能力（executor 不入库、load 重置 None）+ register_default_tools 启动先 load 再 overwrite 重绑 + 注册后 save、organs/brain/PulseCortex.py _register_tool 统一写后 _reg.save() 持久化。",
     "reanchor_162k12": "第162批刀12（C-7 收尾·2026-10-06）：collect_baseline 4810 → 4813。新增 3 例门控单测 tests/test_knife12_scanned_metas_m162.py（_scanned_metas 初始 None / load 后 getter 返回一致 / 直接设值可读），均非回归；另含 nucleus/organ_loader.py 增 get_scanned_metas 读方 + __init__ 初始化 _scanned_metas、main.py 装配自检声明-实例差集改用 get_scanned_metas()（行为不变）。注：刀12 仅完成 Part A（读方）；Part B 清理二次 loader 因任务书锚点 main.py:1647-1648 实为 spirit_constitution 创建段、目标错位，待星轨确认真实冗余 loader 后再施工。",
     "reanchor_162k13": "刀13/14/15 提速新增 tests/test_knife13_speed_gate_m162.py（3 例）计入 collect，baseline 4813→4816",
-    "2026-10-07_164_165收口": "collect重锚 4816→4928（含他方WIP在途测试，待落盘复核）"
+    "2026-10-07_164_165收口": "collect重锚 4816→4928（含他方WIP在途测试，待落盘复核）",
+    "reanchor_171k3": {
+      "date": "2026-10-08",
+      "ticket": "T-红基线归零重锚-1 (171批刀3, P1)",
+      "method": "方案B: 仅对 known_fail 所在 7 测试文件逐文件单跑 pytest(-q --tb=line -rF, 干净环境 PYTHONNOUSERSITE=1 清 PYTHONPATH/PYTHONHOME)",
+      "verified_known_fail": 9,
+      "deterministic_fail": 8,
+      "flaky_retained": [
+        "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable"
+      ],
+      "new_red_in_scope": 0,
+      "head": "1b55642",
+      "framework": "NONE(停机)",
+      "files_scanned": [
+        "test_dialog_guard_m15",
+        "test_experience_summary_hemostasis_m47",
+        "test_export_public_m143",
+        "test_log_governance_m37",
+        "test_pc_exclude_m38",
+        "test_pc_exempt_m39",
+        "test_reprobe_diff_scope_m55"
+      ],
+      "decision": "known_fail 保持 9（8 确定性失败保留待专项票；1 flaky 按基线既定策略保留待人工复核）；collect_baseline 4928 不动(片1 collect 重锚不属本刀)；env_fingerprint 重锚至当前 HEAD 干净窗",
+      "transparency_note": "isolation_failed_raw(129) 为 10-07 生成时历史原始，本重锚不覆盖；171 实测真实失败集=8(均在 known_fail)，见上 deterministic_fail"
+    }
   }
 }
