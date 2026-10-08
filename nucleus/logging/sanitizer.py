@@ -56,6 +56,18 @@ def sanitize_full(text: str, mask_win_path: bool = False) -> str:
     return text
 
 
+def sanitize_outbound(text: str) -> str:
+    """★第170批 C8a（O-B4 出站哨兵）：生成期 / 出站哨兵。
+
+    对用户**可见输出**文本执行敏感引用脱敏（复用 7 条核心正则：密钥 / token /
+    Bearer / 手机号 / 邮箱 / face_roster 路径 / identity 路径）。幂等、零副作用；
+    命中即掩码，未命中原样返回。生成链路在发射前调用本函数，防止凭据 / PII
+    经回复文本外泄。
+    ★b 票（坏引用有效面过滤，P2）本批不并入，后续排期。
+    """
+    return sanitize(text)
+
+
 class SanitizingFilter(logging.Filter):
     """handler 级脱敏 Filter。
 
