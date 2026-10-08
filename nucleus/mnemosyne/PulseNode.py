@@ -414,7 +414,14 @@ class PulseNode:
         node.quality_flag = data.get("quality_flag", "clean") or "clean"
         node.quality_reason = data.get("quality_reason", "") or ""
         node.activation_count = data.get("activation_count", 0)
-        node.state = data.get("state", "active")
+        _raw_state = data.get("state", "active")
+        if not cls.is_valid_state(_raw_state):
+            # ★第171批 刀4：加载路径 state 校验（非法取值告警+回退 active，不中断加载）
+            _module_logger.warning(
+                "[刀4状态校验] 节点 %s 加载到非法 state=%r，回退 active（合法取值 %s）",
+                node.node_id, _raw_state, list(cls.VALID_STATES))
+            _raw_state = "active"
+        node.state = _raw_state
         node.trigger_reason = data.get("trigger_reason", "")
         node.frequency_signature = data.get("frequency_signature", 0.0)
         node.linked_nodes = data.get("linked_nodes", [])
