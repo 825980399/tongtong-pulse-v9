@@ -392,6 +392,7 @@ class PulseController(BasePulseOrgan):
                     human_cfg.get("think_time_min", 0.5),
                     human_cfg.get("think_time_max", 1.8)
                 )
+                # [pulse-sleep-exempt] 拟人思考延时（headless 导航），非脉冲纪律
                 time.sleep(wait_time)
 
             return self._headless_page.content()
@@ -852,6 +853,7 @@ class PulseController(BasePulseOrgan):
             search_url = self._select_headless_search_url(search_topic)
             page_source = self._navigate_headless(search_url)
             if not page_source:
+                # [pulse-sleep-exempt] 导航失败重试退避，非脉冲纪律
                 time.sleep(1)
                 page_source = self._navigate_headless(search_url)
             if not page_source:
@@ -931,6 +933,7 @@ class PulseController(BasePulseOrgan):
                 while time.time() - _wait_start < 1.5:
                     if self._search_terminated:
                         break
+                    # [pulse-sleep-exempt] 终止信号轮询间隔，非脉冲纪律
                     time.sleep(0.1)
                 if self._search_terminated:
                     self._log(LogLevel.INFO, "搜索已被内在世界终止（阶段1审查超时前收到终止信号），跳过阶段2")
@@ -988,6 +991,7 @@ class PulseController(BasePulseOrgan):
                         human_cfg = self._get_headless_config("human_behavior", {})
                         if human_cfg.get("move_mouse_simulation", True):
                             import random as _random
+                            # [pulse-sleep-exempt] 拟人点击间隔，非脉冲纪律
                             time.sleep(_random.uniform(
                                 human_cfg.get("click_delay_min", 0.1),
                                 human_cfg.get("click_delay_max", 0.4)
@@ -1044,6 +1048,7 @@ class PulseController(BasePulseOrgan):
                                         if deep_links:
                                             for _j, deep_link in enumerate(deep_links[:1]):
                                                 self._log(LogLevel.INFO, f"🔍 阶段3·精读: {deep_link['title'][:40]}")
+                                                # [pulse-sleep-exempt] 拟人翻页间隔，非脉冲纪律
                                                 time.sleep(0.5)
                                                 deep_html = self._navigate_headless(deep_link["url"])
                                                 if deep_html:
@@ -1079,6 +1084,7 @@ class PulseController(BasePulseOrgan):
             while time.time() - _wait_start2 < 1.0:
                 if self._search_terminated:
                     break
+                # [pulse-sleep-exempt] 终止信号轮询间隔，非脉冲纪律
                 time.sleep(0.1)
             if self._search_terminated:
                 self._log(LogLevel.INFO, "搜索已被内在世界终止（阶段2审查超时前收到终止信号），跳过兜底提取")
@@ -2235,6 +2241,7 @@ class PulseController(BasePulseOrgan):
                     if "greenlet" in _err_str or "Cannot switch" in _err_str:
                         pass
                     if _retry < 2:
+                        # [pulse-sleep-exempt] 浏览器重试退避，非脉冲纪律
                         time.sleep(0.5)
                         continue
             # 三次重试均失败，确认浏览器已断开，清理后重建（记录断开原因）
@@ -2832,6 +2839,7 @@ class PulseController(BasePulseOrgan):
                         "source_timestamp": self._last_web_time,
                     })
 
+                # [pulse-sleep-exempt] 搜索阶段间隔（拟人节奏），非脉冲纪律
                 time.sleep(1.5)
 
             stages_completed = min(stages_completed + 1, 3)
@@ -2862,6 +2870,7 @@ class PulseController(BasePulseOrgan):
             self._cleanup_browser_windows()
             # 额外保障：如果浏览器窗口列表不为空，1秒后再次尝试清理
             if self._browser_windows:
+                # [pulse-sleep-exempt] 窗口清理前消化延时，非脉冲纪律
                 time.sleep(1)
                 self._cleanup_browser_windows()
 
@@ -3120,6 +3129,7 @@ class PulseController(BasePulseOrgan):
         close_delay = 3  # 搜索完成后3秒自动关闭，给页面消化留一点时间
 
         def _do_cleanup():
+            # [pulse-sleep-exempt] 关窗前页面消化延时，非脉冲纪律
             time.sleep(close_delay)
             for pid in list(self._browser_windows):
                 try:
