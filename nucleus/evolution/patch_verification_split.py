@@ -289,7 +289,7 @@ def backfill(patches: list[dict[str, Any]],
     }
 
 
-def real_fix_rate(patches: list[dict[str, Any]]) -> float:
+def real_fix_rate(patches: list[dict[str, Any]]) -> float | None:
     """**真实**修复率 = ``problem_fixed is True`` / **可判定补丁数**。
 
     ★取代旧的「基于 verified 的修复率」。
@@ -300,7 +300,7 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
         return None
     _n = sum(1 for _p in patches if isinstance(_p, dict))
     if not _n:
-        return 0.0
+        return None
     _ok = 0
     _known = 0
     for _p in patches:
@@ -316,7 +316,7 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float:
             _known += 1
     # ★M85-3（第85批 相关任务 / D84-2）：分母 = 可判定补丁数（True + False）；
     #   无可判定样本时返回 0.0（不返回 0/0 的 NaN，也不虚报满分）。
-    return round(_ok / _known, 4) if _known else 0.0
+    return round(_ok / _known, 4) if _known else None
 
 
 def is_genuine_reverify(patch: dict[str, Any]) -> bool:
