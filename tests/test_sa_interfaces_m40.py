@@ -229,6 +229,22 @@ class TestCortexObservation(unittest.TestCase):
         self._cx._m40_observe_self_awareness("回复", "cid-y")
         self.assertEqual(self._logs, [])
 
+    def test_55_influence_switch_shadow_only(self):
+        """★170 C5（T-阶段二结果接入-1）：ENABLE_SELF_AWARENESS_INFLUENCE_DECISION
+        即便翻 True，观测旁路仍只记日志、绝不改动决策（影子态），且日志标注
+        「影响级=开」。配合 test_40_defaults 钉死的 False 默认，构成 True/False
+        双分支覆盖，守住「开关 True 侧仅影子观测不干预主链路」。
+        """
+        _orig = config.ENABLE_SELF_AWARENESS_INFLUENCE_DECISION
+        config.ENABLE_SELF_AWARENESS_INFLUENCE_DECISION = True
+        try:
+            _r = self._cx._m40_observe_self_awareness("回复", "cid-z")
+            self.assertIsNone(_r, "影响级开关开启也不得干预决策（仅影子观测）")
+            self.assertEqual(len(self._logs), 1)
+            self.assertIn("影响级=开", self._logs[0][1])
+        finally:
+            config.ENABLE_SELF_AWARENESS_INFLUENCE_DECISION = _orig
+
     def test_54_engine_without_api_silent(self):
         """★B156-3 T-A09 接线点：生产 _m40_observe_self_awareness 经 T-113b 加固，
         注入对象缺少 get_public_summary（假能力标记）时由「静默 return」改为
