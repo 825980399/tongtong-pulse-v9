@@ -2389,7 +2389,11 @@ class PulseFramework:
                 while getattr(self, '_evolution_loop_running', False):
                     try:
                         # ★第61批 T2：每轮重新取随机间隔，避免长期与心跳任务共振
-                        _time.sleep(_m61_evo_next)
+                        _ctrl = self.controller if self is not None else None
+                        if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
+                            _ctrl.wait_heartbeat_pulse(_m61_evo_next)
+                        else:
+                            _time.sleep(_m61_evo_next)
                         if _m61_evo_on:
                             _m61_evo_next = _rd61e.uniform(_m61_evo_lo, _m61_evo_hi)
                         if not getattr(self, '_evolution_loop_running', False):
@@ -3289,7 +3293,11 @@ class PulseFramework:
                     _probe_once()
                     while getattr(self, "_running", False):
                         try:
-                            time.sleep(_probe_interval)
+                            _ctrl = self.controller if self is not None else None
+                            if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
+                                _ctrl.wait_heartbeat_pulse(_probe_interval)
+                            else:
+                                time.sleep(_probe_interval)
                         except Exception:
                             break
                         if not getattr(self, "_running", False):
@@ -3950,7 +3958,11 @@ def main():
         _stall = 0
         _grace = time.time() + 25  # 启动宽限 25s
         while not exit_requested:
-            time.sleep(10)
+            _ctrl = getattr(_lv_fw, "controller", None)
+            if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
+                _ctrl.wait_heartbeat_pulse(10)
+            else:
+                time.sleep(10)
             if time.time() < _grace:
                 continue
             try:
