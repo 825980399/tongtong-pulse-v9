@@ -4341,6 +4341,12 @@ SEMANTIC_CACHE_L2_TTL_SEC = 3600          # L2 条目 TTL（1 小时）
 SEMANTIC_CACHE_L2_CAPACITY = 2000         # L2 内存条目上限（超限 LRU 淘汰）
 SEMANTIC_CACHE_L2_MIN_LEN = 8             # 短 prompt（<此长度）不入缓存（指代/寒暄高发区）
 SEMANTIC_CACHE_L2_RATIO = 1.0             # 灰度流量比例（0.0~1.0，确定性分桶）
+# ★第170批 C6（T-语义缓存L2校准落地-1）：语义缓存 L2「影子双跑」观测键
+#   （照 FACE_WELCOME_SHADOW 范式 config.py:1565；设计文档《语义缓存升L2方案_v1.0.md》§B 阶段）。
+#   默认 True = 命中判定照常执行、只记 similarity 分布日志、**不返回缓存内容（返回 0%）**；
+#   设计 §B：观测 ≥3 天后据语义一致率再决定放量。
+#   ★本批仅「新增键」，**未接线**（全 0 命中）；真实 return-0% 行为在后续放量阶段逐步开启。
+ENABLE_SEMANTIC_CACHE_L2_SHADOW = True    # L2 影子双跑观测键（默认开；只观测不返回）
 
 # ★主线第19批 T3/T4：与现有分析模块的整合开关（"整合而非替代"）==========
 #   · LogAnalyzer（nucleus/evolution/LogAnalyzer.py）→ runtime_health
