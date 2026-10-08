@@ -1,0 +1,221 @@
+{
+  "encoder_ready": true,
+  "probe": {
+    "encoded": 40,
+    "pairs_each": 10,
+    "same_min": 0.8602,
+    "same_max": 0.9673,
+    "diff_max": 0.3883,
+    "diff_min": 0.1048,
+    "same_sims": [
+      0.9432,
+      0.8602,
+      0.9002,
+      0.9407,
+      0.8852,
+      0.8742,
+      0.9217,
+      0.9322,
+      0.9673,
+      0.9468
+    ],
+    "diff_sims": [
+      0.1651,
+      0.3883,
+      0.2837,
+      0.1048,
+      0.1242,
+      0.125,
+      0.3405,
+      0.2953,
+      0.1282,
+      0.192
+    ],
+    "rows": [
+      {
+        "threshold": 0.85,
+        "tp": 10,
+        "fp": 0,
+        "fn": 0,
+        "tn": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      {
+        "threshold": 0.88,
+        "tp": 8,
+        "fp": 0,
+        "fn": 2,
+        "tn": 10,
+        "precision": 1.0,
+        "recall": 0.8,
+        "f1": 0.8889
+      },
+      {
+        "threshold": 0.9,
+        "tp": 7,
+        "fp": 0,
+        "fn": 3,
+        "tn": 10,
+        "precision": 1.0,
+        "recall": 0.7,
+        "f1": 0.8235
+      },
+      {
+        "threshold": 0.92,
+        "tp": 6,
+        "fp": 0,
+        "fn": 4,
+        "tn": 10,
+        "precision": 1.0,
+        "recall": 0.6,
+        "f1": 0.75
+      },
+      {
+        "threshold": 0.95,
+        "tp": 1,
+        "fp": 0,
+        "fn": 9,
+        "tn": 10,
+        "precision": 1.0,
+        "recall": 0.1,
+        "f1": 0.1818
+      }
+    ],
+    "recommended": 0.85,
+    "recommended_row": {
+      "threshold": 0.85,
+      "tp": 10,
+      "fp": 0,
+      "fn": 0,
+      "tn": 10,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "safe_precision_0_95": true
+  },
+  "sweep": [
+    {
+      "threshold": 0.6,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.62,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.64,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.66,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.68,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.7,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.72,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.74,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.76,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.78,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.8,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.82,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.84,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.86,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "threshold": 0.88,
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889
+    },
+    {
+      "threshold": 0.9,
+      "precision": 1.0,
+      "recall": 0.7,
+      "f1": 0.8235
+    },
+    {
+      "threshold": 0.92,
+      "precision": 1.0,
+      "recall": 0.6,
+      "f1": 0.75
+    },
+    {
+      "threshold": 0.94,
+      "precision": 1.0,
+      "recall": 0.4,
+      "f1": 0.5714
+    },
+    {
+      "threshold": 0.96,
+      "precision": 1.0,
+      "recall": 0.1,
+      "f1": 0.1818
+    },
+    {
+      "threshold": 0.98,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  ]
+}
