@@ -206,6 +206,14 @@ class PulseRiskPerception(BasePulseOrgan):
         if self._is_crisis_enabled():
             self_harm_hits = self._match_patterns(
                 user_input, self.SELF_HARM_PATTERNS, "self_harm")
+            # 169批停窗段：否定语境豁免（「我不想死」不应判危机）——
+            # 置于 self_harm 专属分支，不影响 violence_threat 等其他类型。
+            if self_harm_hits:
+                from nucleus.security.crisis_keywords import is_negated_harm_mention
+                self_harm_hits = [
+                    _w for _w in self_harm_hits
+                    if not is_negated_harm_mention(user_input, _w)
+                ]
             if self_harm_hits:
                 risks.append({
                     "type": "self_harm", "severity": "critical",

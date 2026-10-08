@@ -20,7 +20,8 @@ try:
 except Exception as _e:
     silent_exc(_e, "chat_service.py:19")
 
-from nucleus.const import ChatEvent, LogLevel, MotorEvent, MouthEvent, PersonaEvent
+from nucleus.const import (ChatEvent, LogLevel, MotorEvent, MouthEvent,
+                          PersonaEvent, RiskEvent)
 
 try:
     from config import ENABLE_FACE_WELCOME_DIRECT, FACE_WELCOME_SHADOW
@@ -61,6 +62,8 @@ class ChatService:
         # 短期对话记忆 —— 按用户分区存储，不同用户记忆隔离（★FIX: 移除重复初始化死代码）
         self._short_term_memory: dict[str, deque] = {}
         self._max_memory_per_user = 20
+        # 169批停窗段：对话入口危机转介计数（可观测）
+        self._crisis_referral_count = 0
         # 全局监听器ID
         self._global_listener_id: str | None = None
         self._silence_timer = None
@@ -874,6 +877,10 @@ class ChatService:
 
         self._remember("user", text)
 
+        # 169批停窗段：对话入口危机快检（命中即安抚 + 短路，不进认知链路）
+        if self._m169_crisis_guard(text):
+            return
+
         if self._is_simple_question(text):
             self._send_chat_message(text, user_input, is_complex=False,
                                     code_blocks=parsed.get("code_blocks", []),
@@ -886,6 +893,62 @@ class ChatService:
 
         for code_block in parsed.get("code_blocks", []):
             self._send_code_execute(code_block["code"], code_block.get("language", "python"))
+    # ========== 169批停窗段：对话入口 -> 伦理审查（原链路断链修复） ==========
+
+    def _m169_crisis_guard(self, text: str) -> bool:
+        """对话入口危机快检（纯同步本地判据，命中即短路，不发脉冲）。
+
+        与 `PulseStomach._local_ethics_check` 同一范式：危机场景漏检代价 > 误报代价，
+        故对危机集用**子串**匹配（长词优先），不经 jieba 词边界，避免长短语漏检。
+
+        返回 True = 已按危机转介处理（调用方应立即 return，不再发聊天脉冲）；
+        返回 False = 未命中危机词（调用方照原流程走）。
+
+        灰度：`DIALOG_CRISIS_GUARD_ENABLED`（默认 True）；关闭即完全回到改造前行为。
+        本方法自身异常一律放行（fail-open + silent_exc 留痕）：
+        审查代码不得阻断正常对话（安全与可用性权衡：宁漏一次，不可对话全挂）。
+        """
+        try:
+            import config as _cfg
+            if not bool(getattr(_cfg, "DIALOG_CRISIS_GUARD_ENABLED", True)):
+                return False
+            if not text:
+                return False
+            from nucleus.security.crisis_keywords import (
+                crisis_self_harm_keywords, is_negated_harm_mention)
+            _hit = next((w for w in crisis_self_harm_keywords() if w in text), None)
+            # 否定语境豁免（如「我不想死，我还想看着曈曈长大」）：
+            # 误把无害表述当危机 = 误安抚，比漏检更伤信任。
+            if _hit is not None and is_negated_harm_mention(text, _hit):
+                _hit = None
+            if _hit is None:
+                return False
+            from nucleus.security.crisis_referral_text import get_crisis_text
+            _text = get_crisis_text("L3", {"content": text})
+            self._crisis_referral_count += 1
+            self._log(LogLevel.INFO,
+                      "[169批] 危机转介短路命中 keyword=%s count=%s"
+                      % (_hit, self._crisis_referral_count))
+            print("💭 曈曈: %s" % _text)
+            if self.info_field and self.pulse_core:
+                try:
+                    self.info_field.publish(self.pulse_core.emit(
+                        source_organ="对话模块",
+                        event_type=RiskEvent.CRISIS_REFERRAL,
+                        payload={"crisis_level": "L3", "risk_level": 1.0,
+                                 "summary": "对话入口检测到危机表达: %s" % _hit,
+                                 "source": "dialogue_crisis_guard",
+                                 "content": text[:200]},
+                        priority=9,
+                        layer="L0",
+                    ))
+                except Exception as _pe:
+                    silent_exc(_pe, where="functions.chat.chat_service._m169_crisis_guard emit")
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="functions.chat.chat_service._m169_crisis_guard")
+            return False
+
     def _send_chat_message(self, text: str, original_input: str, is_complex: bool = False,
                            code_blocks: list | None = None, file_paths: list | None = None):
         """
