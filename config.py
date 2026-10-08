@@ -3874,46 +3874,57 @@ def stop_config_watcher():
 # 解决热重载后 from config import PULSE 等解引用导入不更新的问题。
 # ========================================================================
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_pulse() -> dict:
     """获取当前PULSE配置"""
     return PULSE
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_pulse_layer() -> dict:
     """获取当前PULSE_LAYER配置"""
     return PULSE_LAYER
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_concurrent_comm() -> dict:
     """获取当前CONCURRENT_COMM配置"""
     return CONCURRENT_COMM
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_node_pool_config() -> dict:
     """获取当前NODE_POOL配置"""
     return NODE_POOL
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_snapshot_config() -> dict:
     """获取当前SNAPSHOT配置"""
     return SNAPSHOT
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_purge_config() -> dict:
     """获取当前PURGE配置"""
     return PURGE
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_knowledge_tree_config() -> dict:
     """获取当前KNOWLEDGE_TREE配置"""
     return KNOWLEDGE_TREE
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_hebbian_config() -> dict:
     """获取当前HEBBIAN配置"""
     return HEBBIAN
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_feature_switches() -> dict:
     """获取当前FEATURE开关配置"""
     return FEATURE
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_observability_config() -> dict:
     """获取当前OBSERVABILITY配置"""
     return OBSERVABILITY
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_controller_permission() -> dict:
     """获取当前控制器权限配置"""
     return CONTROLLER_PERMISSION
@@ -4002,102 +4013,127 @@ def get_external_gateway_config() -> dict:
         "priority": 0,  # 开关打开时优先级最高
     }
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_evolution_config() -> dict:
     """获取当前自我进化配置"""
     return EVOLUTION_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_liver_config() -> dict:
     """获取当前肝脏配置"""
     return LIVER_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_stomach_config() -> dict:
     """获取当前胃配置"""
     return STOMACH_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_instinct_config() -> dict:
     """获取当前本能配置"""
     return INSTINCT
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_self_awareness_config() -> dict:
     """获取当前自我认知配置"""
     return SELF_AWARENESS_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_inner_world_config() -> dict:
     """获取当前内在世界配置"""
     return INNER_WORLD_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_inner_world_advanced_config() -> dict:
     """获取当前内在世界高级配置"""
     return INNER_WORLD_ADVANCED_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_narrative_config() -> dict:
     """获取当前叙事自我配置"""
     return NARRATIVE_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_growth_config() -> dict:
     """获取当前成长模块配置"""
     return GROWTH_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_risk_patterns() -> dict:
     """获取当前风险感知模式配置"""
     return RISK_PATTERNS
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_headless_browser_config() -> dict:
     """获取当前无头浏览器配置"""
     return HEADLESS_BROWSER
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_social_emotions_config() -> dict:
     """获取当前社会性情感配置"""
     return SOCIAL_EMOTIONS
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_ethics_config() -> dict:
     """获取当前伦理模块配置"""
     return ETHICS_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_skin_config() -> dict:
     """获取当前皮肤安全模块配置"""
     return SKIN_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_hardware_alert_config() -> dict:
     """获取当前硬件告警配置"""
     return HARDWARE_ALERT
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_life_state_config() -> dict:
     """获取当前生命状态配置"""
     return LIFE_STATE
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_environment_config() -> dict:
     """获取当前环境感知配置"""
     return ENVIRONMENT
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_question_detection_config() -> dict:
     """获取当前疑问句检测配置"""
     return QUESTION_DETECTION
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_subconscious_config() -> dict:
     """获取当前潜意识配置"""
     return SUBCONSCIOUS_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_cortex_config() -> dict:
     """获取当前大脑皮层配置"""
     return CORTEX_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_interest_model_config() -> dict:
     """获取当前兴趣模型配置"""
     return INTEREST_MODEL_CONFIG
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_heart_emotion_modulation() -> dict:
     """获取当前心脏情绪调制配置"""
     return HEART_EMOTION_MODULATION
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_narrative_values_config() -> dict:
     """获取当前叙事自我价值观配置"""
     return NARRATIVE_VALUES
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_search_scheduler_config() -> dict:
     """获取当前搜索调度器配置"""
     return SEARCH_SCHEDULER
 
+# ⚠️ @deprecated (171批刀5 C-5 / Q157-5 已裁): 零调用配置访问器，保留不删
 def get_external_executor_config() -> dict:
     """获取当前外部操作调度器配置"""
     return EXTERNAL_EXECUTOR
