@@ -4467,7 +4467,27 @@ EVOLUTION_PROMPT_VERSION = "evolution.v1"     # 进化引擎提示词版本号
 #         "deepseek-reasoner": 0.004,  # ¥/1K tokens 示意
 #     }
 ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 → cost_estimate 恒 null）
-EVOLUTION_LLM_PRICE_TABLE = {}               # 模型名 → ¥/1K tokens；空=不估算（不猜价）
+EVOLUTION_LLM_PRICE_TABLE = {
+    # 单位：Â¥ / 1K tokens（费用 = 单价 Ã tokens / 1000）。单价取自各模型官方价目（输入档 / 非高峰参考）。
+    # 来源核验日期 2026-10-08；USDâCNY 按 ~7.1 折算官方 USD 价。仅填可溯源真实单价；
+    # 无法核验官方价的模型（GLM-5.x / 部分 Doubao-Seed 变体）留作注释「待补」，不臆造。
+    # â生产生效前提：record_evolution_call 的 model 须透传引擎实际模型名；当前 _m44_last_model
+    #   在生产路径未赋值 â model 恒空串 â cost_estimate 仍恒 null。此接线缺口独立于本刀（170 C9 L-1
+    #   仅要求补单价表），需独立票修复后方可生效。
+    "deepseek-v4-flash": 0.0011,    # DeepSeek V4.1-Flash 输入档(非高峰 cache-miss) $0.15/M â â¥Â¥0.0011/1K；输出 $0.60/Mâ¥Â¥0.0043/1K；来源 api-docs.deepseek.com 计价页(核验 2026-09-18)
+    "deepseek-flash": 0.0011,       # 同 V4.1-Flash（advanced_model 路由名，旧名仍路由到 V4.1 Flash）
+    "deepseek-v4-pro": 0.0047,      # DeepSeek V4-Pro 输入档 $0.66/M â â¥Â¥0.0047/1K；输出 $1.98/Mâ¥Â¥0.0141/1K；同源
+    "glm-4-flash": 0.0,             # æºè°± GLM-4-Flash å®æ¹åè´¹é¢åº¦(100ä¸T/å¤©)è®¡è´¹â 0ÿ1bæ¥æº docs.bigmodel.cn
+    "Doubao-Seed-2.1-pro": 0.0008,  # ç«å±±æ¹è Doubao-Seed è¾å¥æ¡£ Â¥0.8/M â Â¥0.0008/1K；è¾åº Â¥8/MâÂ¥0.008/1K；æ¥æº volcengine.com è®¡ä»·ææ¡£
+    "qwen2:7b-instruct-q4_K_M": 0.0,  # æ¬å°èªæç®¡ qwen2 æ¨çï¼é¶ API ææ¬
+    # å¾è¡¥ï¼å®æ¹ä»·æ ¸éªå¾æè½¨ç¡®è®¤ï¼ä¸æ¬é ）ï¼
+    # "GLM-5.2": <å¾è¡¥>,
+    # "GLM-5.3-Flash": <å¾è¡¥>,
+    # "Doubao-Seed-Evolving": <å¾è¡¥>,
+    # "Doubao-Seed-2.1-turbo": <å¾è¡¥>,
+    # "Doubao-Seed-Character": <å¾è¡¥>,
+    # "Doubao-Seed-2.0-pro": <å¾è¡¥>,
+}
 
 # ★第170批 C10（冷池分位动态化 / L-7）：冷池驱逐策略切换
 #   旧策略：冷池超 _max_cold_cache 固定阈值 → LRU 驱逐最久未激活节点。
