@@ -4469,6 +4469,19 @@ EVOLUTION_PROMPT_VERSION = "evolution.v1"     # 进化引擎提示词版本号
 ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 → cost_estimate 恒 null）
 EVOLUTION_LLM_PRICE_TABLE = {}               # 模型名 → ¥/1K tokens；空=不估算（不猜价）
 
+# ★第170批 C10（冷池分位动态化 / L-7）：冷池驱逐策略切换
+#   旧策略：冷池超 _max_cold_cache 固定阈值 → LRU 驱逐最久未激活节点。
+#   新策略（ENABLE_COLD_POOL_PERCENTILE_SHRINK=True）：按最近访问分位数动态驱逐
+#   —— 驱逐 last_access 最低 COLD_POOL_SHRINK_PERCENTILE 分位（默认 20%），
+#   每批上限 COLD_POOL_SHRINK_BATCH_MAX（默认 1000），批间间隔
+#   COLD_POOL_SHRINK_BATCH_INTERVAL_SEC（默认 600=10min）防风暴。
+#   ★默认 False：保留原有固定阈值行为，零回归；停窗期翻 True 后重启生效
+#     （改驱逐逻辑需重启；运行期观测见验收项）。
+ENABLE_COLD_POOL_PERCENTILE_SHRINK = False   # 冷池分位动态化驱逐总开关（默认关，零回归）
+COLD_POOL_SHRINK_PERCENTILE = 0.20           # 驱逐目标分位（最低 last_access 的占比）
+COLD_POOL_SHRINK_BATCH_MAX = 1000            # 单次驱逐批上限（防风暴）
+COLD_POOL_SHRINK_BATCH_INTERVAL_SEC = 600    # 批间最小间隔（秒，10min）防风暴
+
 # ============================================================================
 # ★主线第44批 T4（P2-290）：测试环境污染防护推广
 # ============================================================================
@@ -5418,4 +5431,5 @@ PARAM_PATCH_EFFECT_VERIFY_ENABLED = True
 
 # ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（默认关闭→零行为变化）
 MAIN_LOOP_PULSE_ENABLED = True
+
 

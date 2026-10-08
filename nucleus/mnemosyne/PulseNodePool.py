@@ -93,6 +93,7 @@ class PulseNodePool(SilentLogMixin):
         self._max_cold_cache = 5000
         self._cold_dir = "data/knowledge/cold"
         self._cold_evicted: set[str] = set()
+        self._last_cold_shrink_ts = 0.0  # ★第170批 C10：分位驱逐批间间隔戳（风暴防护）
         self._cold_stats = {"recall_hits": 0, "recall_misses": 0}
         # ★P1修复：冷节点召回失败聚合计数
         self._cold_recall_fail_count = 0
@@ -2099,6 +2100,15 @@ class PulseNodePool(SilentLogMixin):
             silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_enforce_cold_cache L2054")
         if not self._cold_storage_enabled:
             return
+        # ★第170批 C10（L-7）：分位动态化驱逐替代固定阈值（灰度开关）
+        import config as _cfg_c10
+        if getattr(_cfg_c10, "ENABLE_COLD_POOL_PERCENTILE_SHRINK", False):
+            self._enforce_cold_cache_percentile()
+        else:
+            self._enforce_cold_cache_lru()
+
+    def _enforce_cold_cache_lru(self):
+        """旧策略（默认）：冷池超 ``_max_cold_cache`` 固定阈值 → LRU 驱逐最久未激活节点。"""
         _evicted = 0
         while len(self._cold) > self._max_cold_cache:
             _victim = min(self._cold.values(), key=lambda n: n.last_activated)
@@ -2109,6 +2119,48 @@ class PulseNodePool(SilentLogMixin):
         if _evicted:
             _module_logger.info(
                 f"[第162批刀3] 冷池超限驱逐 {_evicted} 个节点到磁盘（阈值 {self._max_cold_cache}）")
+
+    def _enforce_cold_cache_percentile(self):
+        """★第170批 C10（L-7）：按最近访问分位数动态驱逐，防风暴。
+
+        驱逐 ``last_access`` 最低 ``COLD_POOL_SHRINK_PERCENTILE`` 分位（默认 20%），
+        每批上限 ``COLD_POOL_SHRINK_BATCH_MAX``（默认 1000），批间间隔
+        ``COLD_POOL_SHRINK_BATCH_INTERVAL_SEC``（默认 600s=10min）防护风暴：
+        距上次驱逐不足间隔则本次跳过，等待下一触发窗口自然收敛（分两次每次 -1000）。
+        ★零 try/except：避免新增静默 except handler（cw2 门禁）。
+        """
+        _now = time.time()
+        _last = getattr(self, "_last_cold_shrink_ts", 0.0) or 0.0
+        import config as _cfg_c10
+        _interval = float(getattr(_cfg_c10, "COLD_POOL_SHRINK_BATCH_INTERVAL_SEC", 600))
+        if _now - _last < _interval:
+            return  # 风暴防护：间隔不足，跳过本次
+        _n = len(self._cold)
+        if _n == 0:
+            return
+        # 容量下限门槛：仅当冷池超出 _max_cold_cache 才触发分位收缩，
+        # 保留容量下限（避免池被持续抽干）；同时承接「替代固定阈值」的触发语义——
+        # 旧逻辑是「超阈值就 LRU 一路删到 ≤ 阈值」，新逻辑改为「超阈值时按分位批量删」。
+        if _n <= self._max_cold_cache:
+            return
+        _pct = max(0.0, min(1.0, float(getattr(_cfg_c10, "COLD_POOL_SHRINK_PERCENTILE", 0.20))))
+        _target = int(_n * _pct)
+        if _target <= 0:
+            return
+        _batch = min(_target, int(getattr(_cfg_c10, "COLD_POOL_SHRINK_BATCH_MAX", 1000)))
+        _victims = sorted(self._cold.values(),
+                          key=lambda n: getattr(n, "last_activated", 0.0))[:_batch]
+        _evicted = 0
+        for _v in _victims:
+            if not self._evict_cold_node(_v):
+                break
+            _evicted += 1
+        if _evicted:
+            self._last_cold_shrink_ts = _now
+            _module_logger.info(
+                f"[第170批 C10] 冷池分位驱逐 {_evicted} 个节点"
+                f"（最低 {int(_pct * 100)}% 分位，批上限 {int(_batch)}，"
+                f"间隔 {int(_interval)}s）")
     # ========== ★P3-1新增：分层索引维护方法 ==========
     
     @staticmethod
@@ -3597,3 +3649,5 @@ if __name__ == "__main__":
 # _m69_t1_methods
 # _m69_t1_capacity
 # _m69_t3_coldcompact
+
+
