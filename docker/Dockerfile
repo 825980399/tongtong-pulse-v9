@@ -32,5 +32,5 @@ COPY pulses/ ./pulses/
 COPY somatics/ ./somatics/
 COPY utils/ ./utils/
 
-# 默认启动：框架主入口
-CMD ["python", "main.py"]
+# 默认启动：框架主入口（绝对路径，兼容平台自定义工作目录）
+CMD ["python", "/app/main.py"]
