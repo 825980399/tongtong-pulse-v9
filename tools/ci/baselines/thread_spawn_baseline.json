@@ -2,9 +2,27 @@
   "metric": "production_thread_spawn_points",
   "pattern": "threading.Thread(",
   "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
+  "exclude_dirs": [
+    ".git",
+    "__pycache__",
+    ".ruff_cache",
+    ".pytest_cache",
+    "tmp",
+    "node_modules",
+    ".venv",
+    "venv",
+    "data",
+    ".bak*",
+    "tests/"
+  ],
+  "exclude_dirs_semantics": "条目按目录名剪枝（os.walk 任意层级）；'.bak*' 为前缀通配（命中 .bak_<name> 等）；'tests/' 按仓库根相对路径前缀跳过（rel.startswith('tests/')），非目录名剪枝。已核实全部嵌套 tests/ 目录均位于 data/ 之下，两种语义结果一致。",
+  "exclude_files": [
+    "tools/ci/check_thread_spawn_baseline.py"
+  ],
+  "exclude_dirs_anchored_by": "173刀1",
   "total_occurrences": 63,
   "file_count": 43,
   "anchored_by": "172刀0",
   "anchored_at": "2026-10-08",
-  "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber"
+  "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber；173刀1 补 exclude_dirs/exclude_files 机械可复现清单（原仅 caliber 自然语言描述，不可机械复现）；清单与 check_thread_spawn_baseline.py 的 SKIP_DIRS 一致，脚本逻辑未改动即已复现 63。"
 }
