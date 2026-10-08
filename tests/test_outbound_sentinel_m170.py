@@ -18,9 +18,9 @@ from nucleus.logging.sanitizer import sanitize_outbound  # noqa: E402
 
 class TestOutboundSentinel(unittest.TestCase):
     def test_masks_phone(self):
-        _out = sanitize_outbound("请回拨 13812345678 联系我")
+        _out = sanitize_outbound("请回拨 13800138000 联系我")
         self.assertIn("<REDACTED_PHONE>", _out)
-        self.assertNotIn("13812345678", _out)
+        self.assertNotIn("13800138000", _out)
 
     def test_masks_email(self):
         _out = sanitize_outbound("可邮件联系 admin@example.com 处理")
@@ -36,7 +36,7 @@ class TestOutboundSentinel(unittest.TestCase):
         self.assertEqual(sanitize_outbound(_text), _text)
 
     def test_idempotent(self):
-        _text = "联系 13812345678 或 admin@example.com"
+        _text = "联系 13800138000 或 admin@example.com"
         _once = sanitize_outbound(_text)
         _twice = sanitize_outbound(_once)
         self.assertEqual(_once, _twice)
