@@ -602,7 +602,13 @@ class PulseFramework:
                                 self._log(LogLevel.INFO, f"[B3意图队列] 待处理意图数={len(_pending_intent_queue)}（仅记录，不执行）")
                         except Exception as _e2:
                             self._log(LogLevel.DEBUG, f"自主意图生成异常: {_e2}")
-                        _tm.sleep(2700.0)
+                        # ★176批段6（#246）：自主意图环定长睡眠 → 心跳脉冲驱动（C11-1 族 449651c 范式）
+                        #   脉冲网关未启用时 wait 超时回落 = 原 2700s 节奏（零回归）。
+                        _ctrl = self.controller if self is not None else None
+                        if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
+                            _ctrl.wait_heartbeat_pulse(2700.0)
+                        else:
+                            _tm.sleep(2700.0)
 
                 _intent_thread = _th.Thread(target=_autonomous_intent_loop, name="IntentGenerator", daemon=True)
                 _intent_thread.start()
