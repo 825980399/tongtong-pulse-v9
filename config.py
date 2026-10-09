@@ -4967,7 +4967,11 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   ENABLE_MEMORY_AUTO_GC：使用率/增长率超阈值时自动 gc.collect()（默认关，避免副作用/零回归）；
 #   MEMORY_GROWTH_ALARM_MB_PER_MIN：内存增长率告警阈值（MB/分钟），超此值即判疑似泄漏。
 #   ★生产生效需停机/重启窗口；在线运行期仅采集与告警，不自动回收。
+#   MEMORY_AUTO_GC_RSS_MB：自动 GC 触发的进程 RSS 上限（MB）；高于此值且
+#     ENABLE_MEMORY_AUTO_GC=True 时回收（175刀1 接入已活采集链，防 167 死开关）。
+ENABLE_MEMORY_AUTO_GC = False
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
+MEMORY_AUTO_GC_RSS_MB = 8192.0
 
 # ===== ★主线第67批（2026-09-16）：快照性能止血 + KAL + 自适应降频 + WriteGuard =====
 
