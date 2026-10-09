@@ -865,7 +865,14 @@ class HealthHandler(BaseHTTPRequestHandler):
     def _is_same_origin(self) -> bool:
         """同源校验：仅允许来自本面板的请求，防御 CSRF。"""
         from urllib.parse import urlparse
+        import sys as _sys
+        _cfg = _sys.modules.get("config")
+        _allowed = tuple(getattr(_cfg, "HEALTH_UI_ALLOWED_HOSTS",
+                                 ("127.0.0.1", "localhost"))) if _cfg is not None else ("127.0.0.1", "localhost")
         _host = (self.headers.get('Host') or '').split(':')[0]
+        # 175刀3：若绑定非本机，Host 必须落在可信白名单（第二道门，防远程 CSRF 改参）
+        if _host and _host not in _allowed:
+            return False
         _origin = self.headers.get('Origin', '')
         _referer = self.headers.get('Referer', '')
         if _origin:
@@ -1746,7 +1753,12 @@ class HealthUIServer:
         self.node_pool = None
 
     def start(self):
-        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), HealthHandler)
+        import os as _os
+        import sys as _sys
+        _cfg = _sys.modules.get("config")
+        _bind_host = _os.environ.get("TTP_HEALTH_UI_BIND_HOST") or (
+            getattr(_cfg, "HEALTH_UI_BIND_HOST", "127.0.0.1") if _cfg is not None else "127.0.0.1")
+        self._server = ThreadingHTTPServer((_bind_host, self.port), HealthHandler)
         self._running = True
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()

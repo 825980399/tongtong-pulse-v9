@@ -391,17 +391,22 @@ class WebChatHandler(BaseHTTPRequestHandler):
         """
         ★v24.0安全修复：只允许来自 localhost 的请求。
         防止本机恶意网页通过 CSRF 访问 5052 端口。
+        175刀3：可信 Host 改由配置驱动（WEB_CHAT_ALLOWED_HOSTS，默认本机）；
+        Origin 校验支持 http/https 双 scheme 白名单。
         """
+        import sys as _sys
+        _cfg = _sys.modules.get("config")
+        allowed_hosts = tuple(getattr(_cfg, "WEB_CHAT_ALLOWED_HOSTS",
+                                     ("127.0.0.1", "localhost"))) if _cfg is not None else ("127.0.0.1", "localhost")
         host = self.headers.get('Host', '')
         origin = self.headers.get('Origin', '')
-        allowed_hosts = ('127.0.0.1', 'localhost')
         if host:
             host_name = host.split(':')[0]
             if host_name not in allowed_hosts:
                 return False
         if origin:
-            # 允许同源或本地
-            if not any(origin.startswith(f'http://{h}') for h in allowed_hosts):
+            # 175刀3：scheme 白名单 http/https 均支持
+            if not any(origin.startswith(f'{_s}://{h}') for h in allowed_hosts for _s in ("http", "https")):
                 return False
         return True    
     def do_GET(self):
@@ -635,7 +640,12 @@ class WebChatServer:
         self._running = False
     
     def start(self, info_field=None, pulse_core=None):
-        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), WebChatHandler)
+        import os as _os
+        import sys as _sys
+        _cfg = _sys.modules.get("config")
+        _bind_host = _os.environ.get("TTP_WEB_CHAT_BIND_HOST") or (
+            getattr(_cfg, "WEB_CHAT_BIND_HOST", "127.0.0.1") if _cfg is not None else "127.0.0.1")
+        self._server = ThreadingHTTPServer((_bind_host, self.port), WebChatHandler)
         self._server.info_field = info_field
         self._server.pulse_core = pulse_core
         self._running = True
