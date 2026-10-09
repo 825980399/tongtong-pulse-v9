@@ -46,6 +46,7 @@ def _main():
         return 2
     pidx = header.index("P级")
     eidx = header.index("到期批次")
+    sidx = header.index("状态")
     fails = []
     for ln, r in enumerate(rows[1:], start=2):
         if len(r) != EXPECTED_COLS:
@@ -54,9 +55,11 @@ def _main():
         p = (r[pidx] or "").strip()
         if p not in P_LEVELS:
             fails.append((ln, "P级='%s' 不在 {P0..P3}" % p))
-        exp = (r[eidx] or "").strip()
-        if not exp.isdigit() or int(exp) <= 0:
-            fails.append((ln, "到期批次='%s' 非正整数" % exp))
+        # 已撤销票无排期语义：到期批次为空属合法，豁免检查（其余状态必须正整数）
+        if (r[sidx] or "").strip() != "已撤销":
+            exp = (r[eidx] or "").strip()
+            if not exp.isdigit() or int(exp) <= 0:
+                fails.append((ln, "到期批次='%s' 非正整数" % exp))
     if fails:
         print("[register-cols] 发现 %d 处列完整性违规（数据修复后须归零）：" % len(fails))
         for ln, msg in fails:
