@@ -228,31 +228,39 @@ class InfluxDBStore:
     def node_activated(self, node_id: str, evol_level: str = "",
                        source: str = "") -> bool:
         """记录节点激活。"""
-        return self.write_point("node_activated",
+        _ok = self.write_point("node_activated",
                                 {"node_id": node_id, "evol_level": evol_level},
                                 {"source": source or "unknown", "count": 1})
+        self.record_process_rss()  # ★174刀1：每次事件附 process_rss 采样点（恢复 T-InfluxDB接线含RSS-1 取证面）
+        return _ok
 
     def node_accessed(self, node_id: str, access_type: str = "",
                       duration_ms: float = 0.0) -> bool:
         """记录节点访问。"""
-        return self.write_point("node_accessed",
+        _ok = self.write_point("node_accessed",
                                 {"node_id": node_id, "access_type": access_type or "get"},
                                 {"duration_ms": float(duration_ms), "count": 1})
+        self.record_process_rss()  # ★174刀1：每次事件附 process_rss 采样点（恢复 T-InfluxDB接线含RSS-1 取证面）
+        return _ok
 
     def node_modified(self, node_id: str, field: str = "",
                       old_value: Any = "", new_value: Any = "") -> bool:
         """记录节点修改。"""
-        return self.write_point("node_modified",
+        _ok = self.write_point("node_modified",
                                 {"node_id": node_id, "field": field or "unknown"},
                                 {"old": str(old_value), "new": str(new_value), "count": 1})
+        self.record_process_rss()  # ★174刀1：每次事件附 process_rss 采样点（恢复 T-InfluxDB接线含RSS-1 取证面）
+        return _ok
 
     def query_executed(self, query_type: str, duration_ms: float = 0.0,
                        result_count: int = 0) -> bool:
         """记录查询执行。"""
-        return self.write_point("query_executed",
+        _ok = self.write_point("query_executed",
                                 {"query_type": query_type or "unknown"},
                                 {"duration_ms": float(duration_ms),
                                  "result_count": int(result_count)})
+        self.record_process_rss()  # ★174刀1：每次事件附 process_rss 采样点（恢复 T-InfluxDB接线含RSS-1 取证面）
+        return _ok
 
     def record_process_rss(self) -> bool:
         """补 RSS 采样点：写当前进程 RSS(MB) 与系统内存占比。
@@ -400,4 +408,10 @@ def get_influxdb_store() -> "InfluxDBStore":
     global _INFLUX_STORE
     if _INFLUX_STORE is None:
         _INFLUX_STORE = InfluxDBStore()
+        # ★第174批刀1 T-InfluxDB连接接线-1：启用时连接（灰度开关 ENABLE_INFLUXDB_AUTO_CONNECT）。
+        # 默认 False：保持旧行为（不连接、is_available 恒 False、零副作用）。True 才在首次
+        # 获取单例时主动 connect()，使 is_available() 返回 True、恢复写点与 T-InfluxDB接线含RSS-1
+        # 取证面。connect() 内部已捕获全部异常并记日志（不静默），此处无需再包 try。
+        if bool(_cfg("ENABLE_INFLUXDB_AUTO_CONNECT", False)):
+            _INFLUX_STORE.connect()
     return _INFLUX_STORE
