@@ -55,8 +55,8 @@ def _main():
         p = (r[pidx] or "").strip()
         if p not in P_LEVELS:
             fails.append((ln, "P级='%s' 不在 {P0..P3}" % p))
-        # 已撤销票无排期语义：到期批次为空属合法，豁免检查（其余状态必须正整数）
-        if (r[sidx] or "").strip() != "已撤销":
+        # 到期批次仅"已排期"状态强制正整数；已撤销/已裁决待排期/待裁决 无排期语义，为空合法
+        if (r[sidx] or "").strip() == "已排期":
             exp = (r[eidx] or "").strip()
             if not exp.isdigit() or int(exp) <= 0:
                 fails.append((ln, "到期批次='%s' 非正整数" % exp))
