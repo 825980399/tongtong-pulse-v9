@@ -1096,7 +1096,14 @@ class PatchManager:
         _risk_ok_a1 = isinstance(_risk_val, (int, float)) and (
             _risk_val <= _max_risk_a1 or _m85_allow)
         _trust_ok_a1 = (_trust_val_a1 >= _min_trust_a1) or _m85_allow
-        if _risk_ok_a1 and _trust_ok_a1:
+        # ★176批段3 B1 进化保守·类型白名单守门（SAFE_TO_AUTO_FIX）：
+        #   当列表非空时，仅 issue_type ∈ SAFE_TO_AUTO_FIX 的补丁可免签自动审批，
+        #   其余一律转人工（即使 risk/trust 达标也不再自动写入源码）。
+        #   默认空列表 ⇒ 不施加限制（零回归）。
+        _safe_list_a1 = list(_evo_cfg_a1.get("SAFE_TO_AUTO_FIX", []) or [])
+        _issue_type_a1 = str(patch.get("issue_type", "") or "")
+        _whitelist_ok_a1 = (not _safe_list_a1) or (_issue_type_a1 in _safe_list_a1)
+        if _risk_ok_a1 and _trust_ok_a1 and _whitelist_ok_a1:
             # ★主线第80批 T7 (P0-3)：免签改写闸门——verified 或核心文件或总开关关闭，
             #   禁止升 approved；核心/关闭场景下未 verified 的补丁强制置 verified 待人工。
             # ★M85-4：总开关关闭时，本地低风险补丁仍放行（_m85_allow 认定）；
@@ -1127,7 +1134,8 @@ class PatchManager:
             _module_logger.debug(
                 f"[补丁入队] 未自动审批(转人工): {patch.get('file','')}:{patch.get('method','')} "
                 f"risk={_risk_raw}(需<={_max_risk_a1}, {'通过' if _risk_ok_a1 else '超限'}), "
-                f"trust={_trust_val_a1}(需>={_min_trust_a1}, {'通过' if _trust_ok_a1 else '不足'})")
+                f"trust={_trust_val_a1}(需>={_min_trust_a1}, {'通过' if _trust_ok_a1 else '不足'}), "
+                f"白名单={'通过' if _whitelist_ok_a1 else '不在SAFE_TO_AUTO_FIX'}")
 
         # ★第101批 T-101a（P0）：低风险可放行路径——打通进化闭环最后一环。
         #   现状：18 条补丁（多为 LLM 来源）提交后因 T7 闸门 + auto_apply_enabled=False

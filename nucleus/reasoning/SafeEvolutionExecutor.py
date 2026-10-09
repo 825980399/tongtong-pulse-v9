@@ -3317,6 +3317,11 @@ class SafeEvolutionExecutor:
             "「类体/函数体被提前终止」风险 %s", _bm, _bo, _delta, context)
         return _fixed, _delta
 
+    # ★176批段3 A3 埋点：LLM 代码归一化三段计数（类级累计，供真实失败率量化）
+    _A3_normalize_entered = 0
+    _A3_normalize_places = 0
+    _A3_normalize_still_failed = 0
+
     def _clean_llm_code(self, text: str) -> str:
         """LLM 输出代码清理：去 markdown 围栏 +（必要时）全角标点归一化。
 
@@ -3331,10 +3336,12 @@ class SafeEvolutionExecutor:
             _ast_clean.parse(_code)
             return _code          # 语法已合法，不动一个字符
         except SyntaxError as e:
-            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3239:_clean_llm_code", level="debug")
+            silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3320:_clean_llm_code", level="debug")
             pass                  # 语法有问题，尝试归一化
         except Exception:
             return _code          # 其他异常（如 ValueError 空源码）不处理
+        # ★176批段3 A3 埋点：进入归一化计数（类级累计，供真实失败率量化）
+        SafeEvolutionExecutor._A3_normalize_entered += 1
         # ★主线第15批 T5/P2-96：最多两轮预检重试
         #   第 1 轮 = 映射表 + 通用兜底；第 2 轮 = 在上一轮结果上再跑一次
         #   （兜底规则可能级联，例如 NFKC 后暴露新的可归一化字符）。
@@ -3351,9 +3358,23 @@ class SafeEvolutionExecutor:
                 _module_logger.info(
                     f"[LLM代码清理] 全角标点归一化 {_total_n} 处（第{_round}轮），"
                     f"语法检查由失败转为通过（P0-10/P2-96）")
+                SafeEvolutionExecutor._A3_normalize_places += _total_n
                 return _fixed
             except SyntaxError:
                 _cur = _fixed
+        # ★176批段3 A3 埋点：归一化后仍失败判定 + 词面可检日志
+        #   到达此处且 _total_n>0 ⇒ 归一化发生过但循环内 parse 未通过（通过会提前 return），
+        #   故直接判为「仍失败=1」，无需再 try/except 触发 cw2 静默except门禁。
+        if _total_n > 0:
+            _a3_still_failed = 1
+            SafeEvolutionExecutor._A3_normalize_places += _total_n
+            SafeEvolutionExecutor._A3_normalize_still_failed += _a3_still_failed
+            _module_logger.info(
+                f"[A3埋点] _clean_llm_code 进入归一化=1, 归一化处数={_total_n}, "
+                f"归一化后仍失败={_a3_still_failed} "
+                f"(累计 进入={SafeEvolutionExecutor._A3_normalize_entered}, "
+                f"处数={SafeEvolutionExecutor._A3_normalize_places}, "
+                f"仍失败={SafeEvolutionExecutor._A3_normalize_still_failed})")
         # ★第91批 T-91b 阶段3：缩进修复（灰度 ENABLE_M91_LLM_INDENT_REPAIR）。
         #   T0 实测：4 次 LLM 补丁尝试全部因
         #   `IndentationError: unindent does not match any outer indentation level
