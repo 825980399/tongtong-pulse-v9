@@ -258,3 +258,6 @@ T-定时器回收五子刀-1,P2,星轨,172,170批C11遗留L-3：收敛方案已�
 T-offline_survival_F401清理-1,P3,星轨,171,170批C12遗留L-C12-1：offline_survival_protocol.py顶部import time未使用(ruff F401，164A3残留)——零风险清理，随171批小刀,已排期,171,171,170收口拍板
 T-InfluxDB连接接线-1,星轨,第173批,173长稳窗实测：get_influxdb_store()只建单例不连接、全仓零connect()调用=>is_available()恒False=>_m71_influx_write静默返回零写点；补启用时连接/首次写惰性连接接线，恢复T-InfluxDB接线含RSS-1取证面,P2,已排期,174,174,173批段B裁决：选A单列后续票补connect()接线；本窗该票记为接线缺口·未取证
 T-内存自动GC接线-1,星轨,173,167批承诺GC接线立独立票至今未落地：ENABLE_MEMORY_AUTO_GC未定义默认关+全仓gc.collect()仅1处；173长稳窗实测确认无自动回收仅告警（T-107a RSS>6GB与66批增长率10MB/min与169批C8 RSS>6144MB均只告警不回收）；处置=补RSS上限自动gc.collect()+可选自动重启开关需停窗批,P2,已排期,175,175,173批段C收口立票（星轨裁定）
+T-check_pii_selftest断言矛盾-1,星轨,172,172收口复核发现L-172-附-1：check_pii_final_scan.py selftest 把13800138000作正例却在白名单内被豁免，断言自我矛盾（预存在缺陷，附刀D已回退）；修断言或改豁免逻辑,P3,已排期,175,175,173批段C收口整理立票
+T-Web服务绑定可配置化-1,星轨,173,SCNet超算验证暴露：health_ui.py:1749/web_chat.py:638与:397 allowed_hosts 三处127.0.0.1绑定，超算端临时sed改0.0.0.0未入库（公网人体UI依赖）；建议BIND_HOST配置键化避免超算端漂移与公网暴露风险,P3,已排期,175,175,173批段C收口整理立票
+T-requirements_aibot残留-1,星轨,173,SCNet超算验证暴露：requirements.txt仍含pip无此包aibot致pip install必败（超算端实测ERROR:No matching distribution found）；移除或optional化标注,P3,已排期,175,175,173批段C收口整理立票
