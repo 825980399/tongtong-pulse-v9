@@ -18,6 +18,8 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+# ★ 2026-10-09 SCNet 一键部署：shell 脚本必须 LF（Linux 部署环境硬要求，CRLF 会导致 bash 执行报错）
+*.sh text eol=lf
 
 # 二进制文件（不转换换行符）
 *.png binary
