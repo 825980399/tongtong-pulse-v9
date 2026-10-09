@@ -340,8 +340,19 @@ def selftest():
     # 邮箱打码
     e = _mask_value("john@example.com")
     assert "john@example.com" not in e and e.startswith("jo***@"), "邮箱须局部打码"
-    # _meta_line_hits 正例：含手机号行命中
-    assert list(_meta_line_hits("call 13800138000 now")), "正例：手机号行应命中"
+    # 175刀2订正：正例号须「手机形态但不在 _TEST_PHONES 白名单」——
+    # 动态由白名单号做 1[3-9] 段补集生成，避免硬编码假号日后入白名单再次触发矛盾
+    _wl_phone = next(iter(_TEST_PHONES))
+    _alt = None
+    for _d in "3456789":  # 1[3-9] 段补集（排除白名单所用前缀）
+        if _d != _wl_phone[1]:
+            _alt = "1" + _d + _wl_phone[2:]
+            break
+    assert _alt is not None and _alt not in _TEST_PHONES, "自检构造号不应落入白名单"
+    # _meta_line_hits 正例：含手机号行命中（非白名单号）
+    assert list(_meta_line_hits("call %s now" % _alt)), "正例：手机号行应命中"
+    # 豁免例：白名单测试号经 _meta_line_hits 返回空（与下条同型）
+    assert not list(_meta_line_hits("call %s now" % _wl_phone)), "豁免：白名单测试号应忽略"
     # _meta_line_hits 反例：普通代码行无命中
     assert not list(_meta_line_hits("def foo(): return 1")), "反例：普通行应无命中"
     # 豁免例：内部匿名域邮箱不计入
