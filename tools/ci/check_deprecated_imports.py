@@ -30,7 +30,16 @@ DEPRECATED = [
     "nucleus.HybridParallelScheduler",
     "nucleus.StructuredParallelScheduler",
 ]
-EXEMPT_FILES = {"main.py", "nucleus/self_inspector.py", "nucleus/parallel_scheduler.py"}
+# 豁免条目（175刀5 起携带元数据：到期批次 / 复核日期 / 豁免理由）
+#   expires_batch="—" 表示永久豁免，需主动销账；review_date 为最近复核日期。
+EXEMPT_FILES = {
+    "main.py": {"expires_batch": "—", "review_date": "2026-10-09",
+                "reason": "入口装配，弃用调度器桥接豁免"},
+    "nucleus/self_inspector.py": {"expires_batch": "—", "review_date": "2026-10-09",
+                                  "reason": "自检器历史桥接豁免"},
+    "nucleus/parallel_scheduler.py": {"expires_batch": "—", "review_date": "2026-10-09",
+                                      "reason": "并行调度器历史桥接豁免"},
+}
 
 
 def scan_violations(root: str):
@@ -126,7 +135,11 @@ def main(argv=None):
           "nucleus.parallel_scheduler.get_parallel_scheduler）：")
     for rel, src, dep in violations:
         print("    %s  %s  (弃用: %s)" % (rel, src, dep))
-    print("[deprecated-import] 豁免文件仅限: %s" % ", ".join(sorted(EXEMPT_FILES)))
+    print("[deprecated-import] 豁免文件（到期批次/复核日期）:")
+    for _f in sorted(EXEMPT_FILES):
+        _m = EXEMPT_FILES[_f]
+        print("  - %s  [到期:%s 复核:%s]  %s" % (
+            _f, _m.get("expires_batch", "—"), _m.get("review_date", "—"), _m.get("reason", "")))
     return 1
 
 
