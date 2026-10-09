@@ -297,23 +297,60 @@ class PulseMetricsCollector(BasePulseOrgan):
 
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
+        175刀1：在已活采集链上接入 RSS 上限自动回收（避免 167 死开关事故——
+        只接心跳活链，不接告警族/InfluxDB 未连接路径），并补瞬时峰值留痕。
 
-        返回 {"ok", "process_rss_mb", "system_percent", "reason"}；
+        返回 {"ok", "process_rss_mb", "system_percent", "reason",
+              "gc_triggered", "gc_last_rss_mb",
+              "rss_peak_mb", "rss_peak_ts", "instant_drop_mb"}；
         InfoField 未就绪 / 采集失败 → ok=False、数值为 None（不阻塞快照构建、不抛异常）。
         """
         _out: dict[str, Any] = {
             "ok": False, "process_rss_mb": None,
             "system_percent": None, "reason": "",
+            "gc_triggered": getattr(self, "_mem_gc_triggered", 0),
+            "gc_last_rss_mb": None,
+            "rss_peak_mb": getattr(self, "_mem_peak_rss_mb", None),
+            "rss_peak_ts": getattr(self, "_mem_peak_ts", None),
+            "instant_drop_mb": None,
         }
         if not self.info_field:
             _out["reason"] = "info_field 未就绪"
             return _out
         try:
+            # 175刀1：配置读取走已加载的 config 模块（sys.modules，避免热路径重复 import / 阈值悬空）
+            _cfg = sys.modules.get("config")
+            _enable_gc = bool(getattr(_cfg, "ENABLE_MEMORY_AUTO_GC", False)) if _cfg is not None else False
+            _gc_rss_mb = float(getattr(_cfg, "MEMORY_AUTO_GC_RSS_MB", 8192.0)) if _cfg is not None else 8192.0
+
             _m = self.info_field._m169_memory_pressure()
             _out["ok"] = bool(_m.get("ok"))
             _out["process_rss_mb"] = _m.get("process_rss_mb")
             _out["system_percent"] = _m.get("system_percent")
             _out["reason"] = _m.get("reason", "")
+
+            _rss = _m.get("process_rss_mb")
+            # 175刀1：瞬时峰值留痕 + 落差标注（吸收 T-107a 瞬时峰值口径；洞鉴实测 03:01 7.35GB→03:06 5.39GB 近 2GB 无解释）
+            if _rss is not None:
+                _rss = float(_rss)
+                _prev_peak = getattr(self, "_mem_peak_rss_mb", None)
+                if _prev_peak is None or _rss > _prev_peak:
+                    self._mem_peak_rss_mb = _rss
+                    self._mem_peak_ts = time.time()
+                _prev_rss = getattr(self, "_mem_last_rss_mb", None)
+                if _prev_rss is not None and (_prev_rss - _rss) >= 1024.0:
+                    _out["instant_drop_mb"] = round(_prev_rss - _rss, 1)
+                self._mem_last_rss_mb = _rss
+                _out["rss_peak_mb"] = self._mem_peak_rss_mb
+                _out["rss_peak_ts"] = self._mem_peak_ts
+
+                # 175刀1：RSS 上限自动回收（仅 ENABLE_MEMORY_AUTO_GC=True 且越阈时触发，默认关=零回归）
+                if _enable_gc and _rss > _gc_rss_mb:
+                    import gc as _gc_mod
+                    _gc_mod.collect()
+                    self._mem_gc_triggered = getattr(self, "_mem_gc_triggered", 0) + 1
+                    _out["gc_triggered"] = self._mem_gc_triggered
+                    _out["gc_last_rss_mb"] = round(_rss, 1)
         except Exception as _e:
             silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
             _out["reason"] = "采集异常: %s" % type(_e).__name__
