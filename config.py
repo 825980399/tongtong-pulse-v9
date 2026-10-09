@@ -980,6 +980,12 @@ EVOLUTION_CONFIG = {
     #   显式登记 False ⇒ 语义与既有兜底**完全一致**（零行为变化）。
     #   读取点：nucleus/reasoning/PatchManager.py::_m80_allow_core_auto_apply
     "allow_core_auto_apply": False,
+    # ★176批段3 B1 进化保守·类型白名单（默认空=零回归）：
+    #   当列表非空时，仅 issue_type ∈ SAFE_TO_AUTO_FIX 的补丁可免签自动审批，
+    #   其余一律转人工（即使 risk/trust 达标也不再自动写入源码）。
+    #   默认空列表 ⇒ 不施加任何限制，与历史行为完全一致（零回归）；
+    #   启用保守策略时填入安全类型（如未用导入/纯格式化类）。
+    "SAFE_TO_AUTO_FIX": [],
 
     # 自动执行前是否需要创建快照备份
     "auto_apply_backup_required": True,
