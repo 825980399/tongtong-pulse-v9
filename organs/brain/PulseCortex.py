@@ -847,6 +847,16 @@ class PulseCortex(BasePulseOrgan):
             _ph = _hashlib.md5(str(prompt or "").encode("utf-8")).hexdigest()[:12]
             _key = (f"{correlation_id}|{_ph}|{int(bool(is_background))}"
                     f"|{int(bool(is_remediation))}")
+            # ★177批刀1（T-对话并行双调用-1）：对话路径追加 **cid 级**去重键。
+            #   实测双响应根因：同一轮长输入被切分（如「先总结一下…」被截为子问句）或
+            #   经不同兜底路径发射时，两次 SELECT_MODEL 的 prompt 不同 ⇒ prompt_hash
+            #   不同 ⇒ 旧键无法收敛 ⇒ 肺渠道并行两调用 → 两条控制台输出（双响应）。
+            #   故对话（非后台/非补救且 cid 非空）收敛为「同一 cid 仅一次委派」，与 prompt 无关。
+            #   ★安全边界：后台(is_background)/补救(is_remediation)/空 cid（内在自主）
+            #     均不套 cid 键，保持既有语义零回归。
+            _cid_key = None
+            if (not is_background) and (not is_remediation) and correlation_id:
+                _cid_key = f"cid|{correlation_id}|0|0"
             _now = _time.time()
             with self._turn_emit_lock:
                 self._turn_emit_seen = {
@@ -856,7 +866,13 @@ class PulseCortex(BasePulseOrgan):
                 if _key in self._turn_emit_seen:
                     self._turn_emit_dedup_count += 1
                     return False
+                if _cid_key is not None and _cid_key in self._turn_emit_seen:
+                    # 同一轮对话已委派过一次 ⇒ 抑制（长输入切分/双兜底路径收敛）
+                    self._turn_emit_dedup_count += 1
+                    return False
                 self._turn_emit_seen[_key] = _now
+                if _cid_key is not None:
+                    self._turn_emit_seen[_cid_key] = _now
             return True
         except Exception as _e:
             self._log_ignored_exception(_e, "SELECT_MODEL 发射幂等")
