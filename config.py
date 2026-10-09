@@ -4989,6 +4989,11 @@ ENABLE_MEMORY_AUTO_RESTART = False
 MEMORY_AUTO_RESTART_RSS_MB = 9216.0
 MEMORY_RESTART_COOLDOWN_HOURS = 24.0
 
+# ★176批段4 A1（2026-10-09）：真多步推理每步补写 _last_deep_think_partial 的灰度开关。
+#   默认 False（零回归）：开启后 _multi_step_execute_v2 每步复用 _m27_cache_partial(:15795)
+#   写部分结果，供看门狗超时复用，消除「硬兜底先行 + 完整答案后到」双响应。
+ENABLE_MULTISTEP_PARTIAL_WRITE = False
+
 # ★主线第175批 刀3（2026-10-09）：Web 服务绑定与可信 Host 可配置化（默认本机，安全优先）
 #   HEALTH_UI_BIND_HOST / WEB_CHAT_BIND_HOST：HTTP 监听绑定地址（默认 127.0.0.1 仅本机）；
 #     超算/容器部署经环境变量 TTP_HEALTH_UI_BIND_HOST / TTP_WEB_CHAT_BIND_HOST 覆写为 0.0.0.0（替代原 sed 改源码）。
