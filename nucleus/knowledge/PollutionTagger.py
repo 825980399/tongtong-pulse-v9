@@ -17,6 +17,18 @@ import re
 import time
 from collections.abc import Iterable
 from typing import Any
+# ★177批刀3（T-PollutionTagger直接运行入口-1）：直接运行（python <本文件>）时，
+#   Python 仅把「本文件所在目录」(nucleus/knowledge/) 加入 sys.path，仓根不在其中，
+#   ⇒ 下方 :20/:23 的 `from nucleus...` 无条件顶层导入会 ModuleNotFoundError。
+#   此处补仓根注入（照 main.py:50 范式），使 `python 本文件` 与 `python -m` 两种方式皆通。
+#   ★与 main.py 的差异：此处**不做 os.chdir()** —— 本文件会被框架正常导入，
+#     import 期改写 cwd 属危险副作用；且仅在仓根尚未入 path 时才插入（幂等、零副作用）。
+import os as _pt_os
+import sys as _pt_sys
+_PT_ROOT = _pt_os.path.dirname(
+    _pt_os.path.dirname(_pt_os.path.dirname(_pt_os.path.abspath(__file__))))
+if _PT_ROOT not in _pt_sys.path:
+    _pt_sys.path.insert(0, _PT_ROOT)
 from nucleus._silent_except import silent_exc
 # ★第160批 下上 刀0（0.4）：占位符判据统一走 PlaceholderSanitizer 唯一口径
 #   （禁在本文件再造字面量）；该模块不反向依赖本文件 ⇒ 无循环导入。
