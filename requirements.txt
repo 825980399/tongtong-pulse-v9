@@ -47,12 +47,11 @@ GPUtil>=1.4.0,<2.0.0             # GPU 显存监控
 playwright>=1.40.0,<2.0.0        # 浏览器自动化（控制器）
 
 # ---- 企业微信 ----
-# ★第162批 刀4：aibot 为企业微信机器人 SDK（WeComChatBridge 依赖）。
-#   来源：企业微信官方/项目内置 SDK；**pip 上可能无此包**（pip install 会失败）。
-#   ⇒ 此处补声明以保证「生产 import ∧ 无降级保护 ⇒ 必须已声明」的对账闭环成立；
-#     但**不纳入 CI 可安装子集 requirements-ci.txt**（否则 CI pip install 必红）。
-#   若部署环境无该包，请从企业微信开放平台获取后放入 site-packages 或随项目内置。
-aibot                     # 企业微信机器人 SDK（nucleus/wecom_chat_bridge.py，pip 可能无此包）
+# ★第162批 刀4 / 175刀4：aibot 为企业微信机器人 SDK（nucleus/wecom_chat_bridge.py 硬依赖）。
+#   该包**不在 PyPI**（pip install 必失败），须企业微信开放平台获取后自备 site-packages 或随项目内置，
+#   故**此处不再声明**（175刀4 已移除旧声明），亦不纳入 CI 可安装子集 requirements-ci.txt。
+#   启动保护：main.py 在 WeCom 凭证缺失/包缺失时 try→raise 捕获，移除声明不阻断启动（烛微实测）。
+#   部署与自带 SDK 说明见 nucleus/wecom_chat_bridge.py 顶部注释。
 
 # ---- 语义/向量（第162批 刀4 补声明）----
 # 以下均有 try/ImportError 降级保护（缺失时功能降级、不阻断启动），故属可选功能层。
