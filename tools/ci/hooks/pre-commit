@@ -130,7 +130,7 @@ if [ -n "$CI_FILES" ] && [ -n "$BIZ_FILES" ]; then
 fi
 
 # --- 3) cw3-A 语义守恒门禁（仅 IW 变更时）---
-IW_CHANGED=$(printf '%s\n' "$STAGED" | grep -Fx 'organs/brain/PulseInnerWorld.py' || true)
+IW_CHANGED=$(printf '%s\n' "$STAGED" | grep -E '^organs/brain/(PulseInnerWorld\.py|pulse_inner_world_)' || true)
 if [ -n "$IW_CHANGED" ]; then
   GATE_A="$ROOT/tools/ci/cw3_consistency_gate.py"
   if [ -f "$GATE_A" ]; then
@@ -152,6 +152,18 @@ if [ -f "$REG" ]; then
   fi
 else
   echo "[pre-commit] 未找到 check_pending_register：$REG（跳过）" >&2
+fi
+
+# --- 登记册列完整性校验（每次提交，176批段7-2 · 与 T150-3 登记册完备性同族）---
+REGCOLS="$ROOT/tools/ci/check_register_columns.py"
+if [ -f "$REGCOLS" ]; then
+  "$PY" "$REGCOLS" --root "$ROOT"
+  st=$?
+  if [ "$st" -ne 0 ]; then
+    fail "登记册列完整性校验未通过（须 9 列、P级∈{P0..P3}、到期批次为整数；详见 python tools/ci/check_register_columns.py --root <repo>）"
+  fi
+else
+  echo "[pre-commit] 未找到 check_register_columns：$REGCOLS（跳过）" >&2
 fi
 
 if [ "$overall" -ne 0 ]; then
