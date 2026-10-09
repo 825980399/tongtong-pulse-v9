@@ -14356,6 +14356,12 @@ class PulseInnerWorld(
                       f"来源={_source} {'成功' if _ok else '失败: ' + _fail_reason} "
                       f"耗时{time.time() - _t_step:.1f}s "
                       f"输入=\"{_prompt[:36]}\" 输出=\"{str(_result)[:36]}\"")
+            # ★176批段4 A1 部分结果补写：真多步推理每步写 _last_deep_think_partial
+            #   （复用 _m27_cache_partial :15795 同构），供看门狗超时复用，
+            #   消除「硬兜底先行 + 完整答案后到」双响应。灰度键默认 False → 零回归。
+            if self._m176_a1_multistep_partial_on():
+                self._m27_cache_partial(
+                    question, [None] * (_i + 1), _result, time.time() - _t_step)
 
         # ★主线第34批 T1（P2-196）：全步失败 → 返回 None，交回上层单次大模型兜底。
         #   原实现返回「分N步、每步⚠️失败」的降级叙述，会**阻断**上层兜底：
@@ -15825,6 +15831,16 @@ class PulseInnerWorld(
         if _q and _p.get("question", "")[:30] != _q[:30]:
             return None
         return dict(_p)
+
+    def _m176_a1_multistep_partial_on(self) -> bool:
+        """★176批段4 A1：真多步推理每步补写 _last_deep_think_partial 的灰度开关。
+
+        默认 False（零回归）：开启后 _multi_step_execute_v2 每步复用
+        _m27_cache_partial(:15795) 写部分结果，供看门狗超时复用，
+        消除「硬兜底先行 + 完整答案后到」双响应（T-多步推理超时双响应-1）。
+        """
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_MULTISTEP_PARTIAL_WRITE", False))
 
     def _deep_think(self, question: str, max_rounds: int = 3, deadline: float | None = None) -> str | None:
         """
