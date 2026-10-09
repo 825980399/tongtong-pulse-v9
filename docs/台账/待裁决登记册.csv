@@ -256,3 +256,4 @@ T-进化费用单价补全-1,P2,星轨,171,170批C9遗留L-1：EVOLUTION_LLM_PRI
 T-冷池灰度活体验证-1,P2,星轨,172,170批C10遗留L-2：ENABLE_COLD_POOL_PERCENTILE_SHRINK默认False——172长窗停窗翻True重启，收percentile驱逐活体证据(容量下限+批上限+批间间隔防风暴实测),已排期,172,172,170收口拍板
 T-定时器回收五子刀-1,P2,星轨,172,170批C11遗留L-3：收敛方案已出(threading.Thread 49处/37文件实测)——C11-1~C11-5五子刀施工，涉及框架线程停窗批，逐刀独立验收,已排期,172,172,170收口拍板
 T-offline_survival_F401清理-1,P3,星轨,171,170批C12遗留L-C12-1：offline_survival_protocol.py顶部import time未使用(ruff F401，164A3残留)——零风险清理，随171批小刀,已排期,171,171,170收口拍板
+T-InfluxDB连接接线-1,星轨,第173批,173长稳窗实测：get_influxdb_store()只建单例不连接、全仓零connect()调用=>is_available()恒False=>_m71_influx_write静默返回零写点；补启用时连接/首次写惰性连接接线，恢复T-InfluxDB接线含RSS-1取证面,P2,已排期,174,174,173批段B裁决：选A单列后续票补connect()接线；本窗该票记为接线缺口·未取证
