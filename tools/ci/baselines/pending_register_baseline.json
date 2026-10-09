@@ -1,5 +1,5 @@
 {
-  "total": 259,
+  "total": 262,
   "ids": [
     "C-1",
     "C-2",
@@ -114,10 +114,13 @@
     "T-PyMuPDF开源合规-1",
     "T-QICA声明-1",
     "T-Ruff基线-1",
+    "T-Web服务绑定可配置化-1",
+    "T-check_pii_selftest断言矛盾-1",
     "T-collect超时掩码-1",
     "T-event_tap事件断言复核-1",
     "T-evolution_worker顶层导入-1",
     "T-offline_survival_F401清理-1",
+    "T-requirements_aibot残留-1",
     "T-三弃用类清理-1",
     "T-主循环总线脉冲化-1",
     "T-人格伦理前置-1",
