@@ -3915,6 +3915,75 @@ class PatchManager:
             silent_exc(e, where="nucleus.reasoning.PatchManager::_m113e_restart_cooldown_hours L3709")
         return 24.0
 
+    # ============ ★176批段2 内存自动重启·共用 3 次上限计数桶 ============
+    def memory_restart_bucket_state(self) -> dict:
+        """176批段2：内存自动重启与补丁重启共用同一持久化计数桶(restart_count.txt)。
+        返回桶状态供内存重启判定互斥/冷却锁；读失败返回未锁默认态。"""
+        try:
+            _counter = self._load_restart_counter()
+            _cooldown_h = self._memory_restart_cooldown_hours()
+            _blocked_at = self._load_restart_blocked_at()
+            _now = time.time()
+            _cooldown_sec = _cooldown_h * 3600.0
+            _elapsed = (_now - _blocked_at) if _blocked_at > 0 else float("inf")
+            _locked = False
+            _remain = int(_cooldown_sec)
+            if _counter > self._max_restart_count:
+                if _blocked_at > 0 and _elapsed >= _cooldown_sec:
+                    # 冷却期满：不锁（与 apply_all_pending 冷却期满放行一致）
+                    _locked = False
+                    _remain = 0
+                else:
+                    _locked = True
+                    _remain = int(_cooldown_sec - _elapsed) if _blocked_at > 0 else int(_cooldown_sec)
+            return {
+                "counter": _counter,
+                "max": self._max_restart_count,
+                "cooldown_h": _cooldown_h,
+                "locked": bool(_locked),
+                "remain_sec": max(0, _remain),
+            }
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::memory_restart_bucket_state")
+            return {"counter": 0, "max": self._max_restart_count,
+                    "cooldown_h": 24.0, "locked": False, "remain_sec": 0}
+
+    def _memory_restart_cooldown_hours(self) -> float:
+        """176批段2：内存重启冷却窗口（小时）。优先 MEMORY_RESTART_COOLDOWN_HOURS，
+        未设置回退到与补丁重启同一桶的 _m113e_restart_cooldown_hours（共享冷却口径）。"""
+        try:
+            _env = os.environ.get("PULSE_MEMORY_RESTART_COOLDOWN_HOURS")
+            if _env and _env.strip():
+                try:
+                    return float(_env)
+                except ValueError as e:
+                    silent_exc(e, where="nucleus.reasoning.PatchManager::_memory_restart_cooldown_hours env")
+            import config as _cfg
+            _v = getattr(_cfg, "MEMORY_RESTART_COOLDOWN_HOURS", None)
+            if isinstance(_v, (int, float)):
+                return float(_v)
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_memory_restart_cooldown_hours")
+        # 回退：与补丁重启同桶冷却口径
+        return self._m113e_restart_cooldown_hours()
+
+    def bump_restart_counter_for_memory_restart(self) -> int:
+        """176批段2：内存重启与补丁重启共用同一持久化计数桶(restart_count.txt)。
+        返回递增后的计数值；写失败 fail-closed 返回 -1（调用方据此抑制重启）。
+        越上限首次锁死时写入冷却起点（与 apply_all_pending 一致，避免冷却倒计时被刷新）。"""
+        try:
+            _c = self._load_restart_counter() + 1
+            if not self._save_restart_counter(_c):
+                return -1
+            if _c > self._max_restart_count:
+                _blocked_at = self._load_restart_blocked_at()
+                if _blocked_at == 0:
+                    self._save_restart_blocked_at(time.time())
+            return _c
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::bump_restart_counter_for_memory_restart")
+            return -1
+
     def _load_restart_blocked_at(self) -> float:
         """读取上次棘轮锁死的 epoch（无记录返回 0）。"""
         _path = os.path.join(self._patch_dir, "restart_blocked_at.txt")

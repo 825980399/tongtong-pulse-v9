@@ -3596,6 +3596,42 @@ def _apply_pending_patches_and_restart(framework) -> bool:
     return False
 
 
+def _maybe_memory_restart(framework) -> bool:
+    """176批段2：内存自动重启触发（默认 ENABLE_MEMORY_AUTO_RESTART=False 不进入）。
+
+    与补丁重启互斥：主循环同区顺序执行，仅一者会 sys.exit（先查内存重启，再查补丁重启）。
+    复用 PatchManager 同一 3 次上限计数桶(restart_count.txt)，经 _spawn_self_restart
+    触发（子进程 PID 登记于 _SELF_RESTART_CHILD_PIDS，清理段精确跳过＝不回归）。
+    """
+    try:
+        _cfg = sys.modules.get("config")
+        if not bool(getattr(_cfg, "ENABLE_MEMORY_AUTO_RESTART", False)):
+            return False
+        # 互斥（防御）：补丁重启在途则跳过，避免双重启
+        if getattr(framework, "_patch_restart_requested", False):
+            _logger.info("[内存重启] 补丁重启在途，跳过本次内存重启（互斥）")
+            return False
+        from nucleus.reasoning.PatchManager import PatchManager
+        _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
+        _state = _pm.memory_restart_bucket_state()
+        if _state.get("locked"):
+            _logger.warning(
+                f"[内存重启] 已达{_state['max']}次上限且冷却未期满，抑制重启"
+                f"（剩余约{_state['remain_sec'] // 3600}h{_state['remain_sec'] % 3600 // 60}m）")
+            return False
+        # 触发（显式 WARNING 标注原因，不吞异常）
+        _logger.warning("[内存重启] RSS 连续超限，触发内存自动重启自愈（reason=内存超限）")
+        _new = _pm.bump_restart_counter_for_memory_restart()
+        if _new < 0:
+            _logger.error("[内存重启] 计数桶持久化失败，放弃重启（fail-closed 安全）")
+            return False
+        _spawn_self_restart()
+        return True
+    except Exception as _me:
+        _logger.error(f"[内存重启] 触发异常(已忽略): {_me}")
+        return False
+
+
 def _prompt_with_timeout(prompt: str, timeout: float):
     """★主线往期批次 相关任务：带超时的 input 包装。
 
@@ -4135,6 +4171,14 @@ def main():
             #   此处检测到后走「应用+重启」流程，不再被动等待框架退出。
             _apply_check_counter += 1
             if _apply_check_counter % 10 == 0:  # 每 10 秒检查一次，避免频繁磁盘 IO
+                # 176批段2 内存自动重启动线（与下方补丁重启互斥：同区顺序执行，仅一者 sys.exit）
+                try:
+                    _mc = getattr(framework, "metrics_collector", None)
+                    if _mc is not None and getattr(_mc, "_last_restart_armed", False):
+                        if _maybe_memory_restart(framework):
+                            sys.exit(0)
+                except Exception as _mr_e:
+                    logging.getLogger("pulse").warning(f"[内存重启] 主循环检测异常(忽略): {_mr_e}")
                 try:
                     from nucleus.evolution.EvolutionDriver import EvolutionDriver
                     _evo_driver = EvolutionDriver(os.path.dirname(os.path.abspath(__file__)))

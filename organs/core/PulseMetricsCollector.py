@@ -313,6 +313,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             "rss_peak_mb": getattr(self, "_mem_peak_rss_mb", None),
             "rss_peak_ts": getattr(self, "_mem_peak_ts", None),
             "instant_drop_mb": None,
+            "restart_armed": False,
+            "restart_count": 0,
         }
         if not self.info_field:
             _out["reason"] = "info_field 未就绪"
@@ -351,6 +353,21 @@ class PulseMetricsCollector(BasePulseOrgan):
                     self._mem_gc_triggered = getattr(self, "_mem_gc_triggered", 0) + 1
                     _out["gc_triggered"] = self._mem_gc_triggered
                     _out["gc_last_rss_mb"] = round(_rss, 1)
+
+                # 176批段2 内存自动重启判定（ENABLE_MEMORY_AUTO_RESTART 默认 False=零回归）：
+                # 条件＝连续 2 次 GC 后 RSS 仍 > 上限 → restart_armed=True。
+                # 注：本块与上方 GC if 平级（不依赖 GC 是否触发），GC 仅作回收手段。
+                _enable_restart = (bool(getattr(_cfg, "ENABLE_MEMORY_AUTO_RESTART", False))
+                                   if _cfg is not None else False)
+                _restart_rss_mb = (float(getattr(_cfg, "MEMORY_AUTO_RESTART_RSS_MB", 9216.0))
+                                   if _cfg is not None else 9216.0)
+                if _enable_restart and _rss > _restart_rss_mb:
+                    self._mem_restart_streak = getattr(self, "_mem_restart_streak", 0) + 1
+                else:
+                    self._mem_restart_streak = 0
+                _out["restart_count"] = self._mem_restart_streak
+                _out["restart_armed"] = bool(_enable_restart and self._mem_restart_streak >= 2)
+                self._last_restart_armed = _out["restart_armed"]
         except Exception as _e:
             silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
             _out["reason"] = "采集异常: %s" % type(_e).__name__
