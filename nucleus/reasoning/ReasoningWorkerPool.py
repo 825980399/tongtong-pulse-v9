@@ -773,6 +773,15 @@ _reasoning_pool_lock = threading.Lock()
 # 又 spawn 出全新 worker 子进程（复活竞态）。
 _reasoning_pool_closing = False
 
+# ★第176批段1 A2（甲）：停止后持久拒绝复活重建（治 158批N-5 因缺陷）。
+# 158批N-5 仅在 shutdown_reasoning_pool() 调用期间置位 _reasoning_pool_closing，
+# 函数返回即复位 False → 关后至下次 start 之间的窗口，迟到 get_reasoning_pool()
+# 撞不上闸门而新建池=复活竞态。
+# 本旗由 arm_reasoning_pool_after_stop()（main.py 停止序列调用）置 True 且**不复位**，
+# 仅由 reset_reasoning_pool_refusal()（main.py start 显式调用）清除，
+# 覆盖「关后→下次start前」整段窗口；start 经 get_reasoning_pool() 建池时一并解除。
+_reasoning_pool_refused_after_stop = False
+
 
 def get_reasoning_pool() -> "ReasoningWorkerPool | None":
     """获取推理进程池单例。
@@ -785,14 +794,16 @@ def get_reasoning_pool() -> "ReasoningWorkerPool | None":
     调用方请注意：返回值可能为 None（仅关闭窗口内且实例已被复位时），main.py 关闭
     序列的三处调用均已 ``if _pool:`` 判空。
     """
-    global _reasoning_pool, _reasoning_pool_closing
+    global _reasoning_pool, _reasoning_pool_closing, _reasoning_pool_refused_after_stop
     if _reasoning_pool is None:
         with _reasoning_pool_lock:
             if _reasoning_pool is None:
-                if _reasoning_pool_closing:
-                    # ★第158批第8刀 N-5：关闭序列进行中，拒绝复活重建
+                if _reasoning_pool_closing or _reasoning_pool_refused_after_stop:
+                    # ★第176批段1 A2（甲）：关闭中或停止后持久拒绝复活重建
                     return None
                 _reasoning_pool = ReasoningWorkerPool()
+                # ★第176批段1 A2（甲）：合法 start 建池即解除「停止后拒绝」旗
+                _reasoning_pool_refused_after_stop = False
     return _reasoning_pool
 
 
@@ -820,3 +831,34 @@ def shutdown_reasoning_pool() -> None:
     with _reasoning_pool_lock:
         _reasoning_pool = None
         _reasoning_pool_closing = False
+
+
+def reset_reasoning_pool_refusal() -> None:
+    """★第176批段1 A2（甲）：框架 start 显式解除「停止后拒绝复活」旗。
+
+    仅在框架合法启动时调用（main.py start），解除 arm_reasoning_pool_after_stop()
+    置位的持久拒绝旗，使后续 get_reasoning_pool() 可正常惰性建池。
+    关后未 start 前的窗口内，任何迟到 get_reasoning_pool() 仍返回 None（拒绝复活）。
+    """
+    global _reasoning_pool_refused_after_stop
+    with _reasoning_pool_lock:
+        _reasoning_pool_refused_after_stop = False
+
+
+def is_reasoning_pool_refused() -> bool:
+    """★第176批段1 A2（甲）：查询「停止后拒绝复活」旗（供 main.py 停止序列留痕）。"""
+    return _reasoning_pool_refused_after_stop
+
+
+def arm_reasoning_pool_after_stop() -> None:
+    """★第176批段1 A2（甲）：停止后持久置位「拒绝复活」旗（治 158批N-5 因缺陷）。
+
+    由 main.py 停止序列（shutdown_reasoning_pool 之后）显式调用，覆盖
+    「关后→下次start前」整段窗口，使任何迟到 get_reasoning_pool() 返回 None
+    （拒绝新建推理进程池=拒绝停机复活）。仅 reset_reasoning_pool_refusal()
+    （main.py start）解除。与 shutdown_reasoning_pool 内既有 silent_exc 解耦，
+    避免 cw2 指纹漂移，故独立成函数。
+    """
+    global _reasoning_pool_refused_after_stop
+    with _reasoning_pool_lock:
+        _reasoning_pool_refused_after_stop = True

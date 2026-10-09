@@ -1946,6 +1946,14 @@ class PulseFramework:
             return
         self._running = True
 
+        # ★第176批段1 A2（甲）：框架合法启动 → 显式解除「停止后拒绝复活」旗，
+        # 使后续 get_reasoning_pool() 可正常惰性建池（关后→start前的复活拒绝窗口结束）。
+        try:
+            from nucleus.reasoning.ReasoningWorkerPool import reset_reasoning_pool_refusal
+            reset_reasoning_pool_refusal()
+        except Exception as _a2r_e:
+            self._log(LogLevel.DEBUG, f"重置推理池拒绝旗异常（不影响启动）: {_a2r_e}")
+
         print(f"\n{'='*50}")
         print(f"  {config.SYSTEM_NAME} {config.SYSTEM_VERSION} 启动中...")
         print(f"{'='*50}\n")
@@ -3036,6 +3044,37 @@ class PulseFramework:
                         silent_exc(_se, "main.py:2786")
         except Exception as _diag_e:
             self._log(LogLevel.DEBUG, f"退出诊断异常: {_diag_e}")
+        # ★第176批段1 A2（乙）：停止序列末尾显式置「停止后拒绝复活」持久旗。
+        # shutdown_reasoning_pool 已执行；此处将旗置 True 覆盖「关后→下次start前」
+        # 整段窗口，任何迟到 get_reasoning_pool() 必返回 None（拒绝复活），并清点强清残留。
+        # 独立无 try 块，始终执行；get_reasoning_pool() 关后必返回 None（不新建池）。
+        import threading as _th_a2diag
+        import multiprocessing as _mp_a2diag
+        from nucleus.reasoning.ReasoningWorkerPool import (
+            get_reasoning_pool, is_reasoning_pool_refused, arm_reasoning_pool_after_stop,
+        )
+        arm_reasoning_pool_after_stop()
+        _rp_refused = is_reasoning_pool_refused()
+        _rp_pool = get_reasoning_pool()
+        _nd_threads = len([t for t in _th_a2diag.enumerate() if t.is_alive() and not t.daemon])
+        _nd_children = _mp_a2diag.active_children()
+        # 残留子进程强清：经 _is_self_restart_child 精确排除「自重启接班进程」
+        # （其 PID 登记于 _SELF_RESTART_CHILD_PIDS，受 _SELF_RESTART_PIDS_LOCK 保护），
+        # 避免退出清理误杀刚拉起的接班进程导致自重启 100% 失败（P0-3 修复）。
+        _killed = 0
+        for _c in _nd_children:
+            if _is_self_restart_child(_c.pid):
+                continue
+            try:
+                _c.terminate()
+                _killed += 1
+            except Exception as _se:
+                silent_exc(_se, "main.py:stop[A2]强制终止残留子进程")
+        self._log(LogLevel.INFO,
+                  f"停止序列清点[A2]: 推理池拒绝复活={_rp_refused}, "
+                  f"关后get_reasoning_pool()={_rp_pool}, "
+                  f"残留非守护线程={_nd_threads}, 残留子进程={len(_nd_children)}, 强清={_killed}")
+
 
         # ★FIX(退出顺序): 改为"停止指令已发出"，真正的"已关闭"在 main.py 的 os._exit 前输出
         #   避免"已关闭"消息后还有后台异步任务（肝融合、Snapshot 增量保存等）在运行造成的歧义
