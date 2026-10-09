@@ -5133,6 +5133,7 @@ ENABLE_KAL_CALL_SITES = True    # 胃/肝/肾实际调用点替换为 KAL
 # ---- 主线第71批 T1/T2/T3 新增配置（默认全部关闭）----
 ENABLE_NEO4J_DUAL_WRITE = False  # Neo4j 双写（与 ENABLE_NEO4J_GRAPH_STORE 同开才生效）
 ENABLE_INFLUXDB_WRITE_ONLY = True  # InfluxDB 只写（与 ENABLE_INFLUXDB_TIMESERIES 同开才生效）；★第173批刀0 窗前定值：开启
+ENABLE_INFLUXDB_AUTO_CONNECT = False  # ★第174批刀1 T-InfluxDB连接接线-1：get_influxdb_store() 首次获取单例时主动 connect() 的灰度开关。默认 False=保持旧行为（不连接、is_available 恒 False、零副作用）；True 才启用连接、恢复写点与 T-InfluxDB接线含RSS-1 取证面。
 INFLUXDB_SAMPLE_RATE = 0.01  # 高频事件（节点访问）采样率，默认 1%
 DISTRIBUTED_HEARTBEAT_INTERVAL = 30  # 心跳间隔（秒）
 DISTRIBUTED_HEALTH_THRESHOLD = 0.5  # 健康分阈值，低于此值不参与路由
