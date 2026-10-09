@@ -4973,6 +4973,16 @@ ENABLE_MEMORY_AUTO_GC = False
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
 MEMORY_AUTO_GC_RSS_MB = 8192.0
 
+# ★主线第175批 刀3（2026-10-09）：Web 服务绑定与可信 Host 可配置化（默认本机，安全优先）
+#   HEALTH_UI_BIND_HOST / WEB_CHAT_BIND_HOST：HTTP 监听绑定地址（默认 127.0.0.1 仅本机）；
+#     超算/容器部署经环境变量 TTP_HEALTH_UI_BIND_HOST / TTP_WEB_CHAT_BIND_HOST 覆写为 0.0.0.0（替代原 sed 改源码）。
+#   HEALTH_UI_ALLOWED_HOSTS / WEB_CHAT_ALLOWED_HOSTS：可信 Host 白名单（默认本机），
+#     允许非本机绑定时须显式加入平台域名（防远程改参 CSRF；POST /params/apply_preset 高危）。
+HEALTH_UI_BIND_HOST = "127.0.0.1"
+WEB_CHAT_BIND_HOST = "127.0.0.1"
+HEALTH_UI_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+WEB_CHAT_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+
 # ===== ★主线第67批（2026-09-16）：快照性能止血 + KAL + 自适应降频 + WriteGuard =====
 
 # ★T1/P0：快照保存性能止血。
