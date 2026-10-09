@@ -4973,6 +4973,16 @@ ENABLE_MEMORY_AUTO_GC = False
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
 MEMORY_AUTO_GC_RSS_MB = 8192.0
 
+# ★主线第176批 段2（2026-10-09）：内存超限自动重启开关（默认全关，零回归）
+#   ENABLE_MEMORY_AUTO_RESTART：连续 2 次 GC 仍越阈（RSS 仍 > MEMORY_AUTO_RESTART_RSS_MB）
+#     时自动触发框架自重启；与补丁自重启「共用 3 次上限计数桶」，见 PatchManager._m113e_restart_cooldown_hours。
+#   MEMORY_AUTO_RESTART_RSS_MB：触发自动重启的进程 RSS 上限（MB）= GC 线 8192 + 1GB 梯度。
+#   MEMORY_RESTART_COOLDOWN_HOURS：重启冷却窗口（小时），与补丁重启冷却（_m113e 默认 24h）对齐。
+#   ★三层默认全 False/0 → 启动行为与 175 一致（零回归）；活体验证需停窗翻 True 重启框架。
+ENABLE_MEMORY_AUTO_RESTART = False
+MEMORY_AUTO_RESTART_RSS_MB = 9216.0
+MEMORY_RESTART_COOLDOWN_HOURS = 24.0
+
 # ★主线第175批 刀3（2026-10-09）：Web 服务绑定与可信 Host 可配置化（默认本机，安全优先）
 #   HEALTH_UI_BIND_HOST / WEB_CHAT_BIND_HOST：HTTP 监听绑定地址（默认 127.0.0.1 仅本机）；
 #     超算/容器部署经环境变量 TTP_HEALTH_UI_BIND_HOST / TTP_WEB_CHAT_BIND_HOST 覆写为 0.0.0.0（替代原 sed 改源码）。
