@@ -108,6 +108,7 @@ python main.py
 - **配置注入链**：启动期配置按 **环境变量 > `data/config_override.json` > 内置默认** 的优先级加载（`config.py`）；参数预设（`high_performance`／`energy_saving` 等，仅含白名单参数键）由 `nucleus/evolution/ParamAnalysisReport.py` 的 `apply_preset` 写入 override 文件，**环境变量始终可覆盖**，预设经重启生效。
 - **器官装配与差集自检**：器官以 `ORGAN_META` 声明式注册；启动时打印装配模式与器官数，并做**具名差集自检**——`具名差集 = 装配集 − 声明集`，正常应为空或仅含白名单准器官；另有「声明-实例差集」等价校验，可挡漏装与未声明却实例化（`main.py`）。声明面口径：**57 个仿生器官 = `ORGAN_META` 56 ＋ 准器官 `QICA` 1**。
 - **通道命名（0–3）与 `L1`–`L4` 的归属**：上文「六档优先级队列」决定**投递次序**，**通道（0–3）**决定**执行线程池分层**（各带队列上限，`nucleus/field/InfoField.py`）——统一称**通道层**：**通道0 生命线／通道1–3 后台·低优先级流量**。**`L1`–`L4` 专属知识演化级**（认知分级，由稳态规则 5 锁定），**两者不可混用**；新增代码不再以 `L3` 命名调度类键（既有键名不强制重命名，语义归属以设计文档为准）。
+- **事件面分工（177批刀2 · A组甲案）**：`EventBus` ＝ **旁路遥测面**（观测 / 诊断 / 旁路订阅，**不承载业务分发**）；`InfoField` ＝ **脉冲分发主脉**（业务事件投递）。二者为遥测与主脉的互补分工，非双轨冗余。
 - **扩展点（默认关闭 · 规划中）**：
   - **时序库双开关**：`ENABLE_INFLUXDB_TIMESERIES` 与 `ENABLE_INFLUXDB_WRITE_ONLY` **同开才生效**，默认均关；节点事件与查询执行两条**写入端已在位**，高频事件采样率默认 1%（`INFLUXDB_SAMPLE_RATE = 0.01`）；运行内存等指标采样点待补（`config.py`）。
   - **「LLM 调用复用器」（规划中）**：键位按功能命名（`ENABLE_CALL_REUSE`／`ENABLE_CALL_REUSE_OBSERVE`／`CALL_MERGE_MIN_GAP_SECONDS`／`CALL_MERGE_MAX_BATCH`），**不以 `L3` 作前缀**；上游信号沿用已在位的调用记录与语义缓存观测开关。

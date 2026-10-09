@@ -3080,6 +3080,23 @@ class PulseFramework:
                   f"停止序列清点[A2]: 推理池拒绝复活={_rp_refused}, "
                   f"关后get_reasoning_pool()={_rp_pool}, "
                   f"残留非守护线程={_nd_threads}, 残留子进程={len(_nd_children)}, 强清={_killed}")
+        # ★177批刀2（A组 EventBus 甲案·停止序列接入）：优雅停止末尾先 drain 再 stop，
+        #   与上方 [A2] 清点同处，**不造第二套停机面**；留痕 drained/pending 供残留线程对账。
+        #   ★仅在总线启用时动作：ENABLE_EVENT_BUS=False 时调 get_event_bus() 会新建总线
+        #     并拉起 EventBusWorker 守护线程，反而在停机时制造残留线程。
+        #   独立无 try 块（cw2 零新增；drain/stop 内部自保，不抛异常）。
+        import config as _cfg_eb
+        if bool(getattr(_cfg_eb, "ENABLE_EVENT_BUS", False)):
+            from nucleus.events.EventBus import get_event_bus
+            _eb = get_event_bus()
+            _eb_pending = int(_eb.get_stats().get("queue_size", 0) or 0)
+            _eb_drained = _eb.drain(timeout=5.0)
+            _eb.stop(timeout=2.0)
+            self._log(LogLevel.INFO,
+                      f"停止序列清点[EventBus]: drained={int(_eb_drained)}, pending={_eb_pending}")
+        else:
+            self._log(LogLevel.INFO,
+                      "停止序列清点[EventBus]: 总线未启用(ENABLE_EVENT_BUS=False)，跳过 drain/stop")
 
 
         # ★FIX(退出顺序): 改为"停止指令已发出"，真正的"已关闭"在 main.py 的 os._exit 前输出

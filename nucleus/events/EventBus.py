@@ -8,6 +8,10 @@ EventBus.py —— 轻量级事件总线
 
 职责: 提供统一的事件发布/订阅基础设施——同步发布、异步优先级队列投递、
       订阅过滤（精确名 + 分段通配符）、事件溯源历史（供 LogAnalyzer 分析）。
+定位: ★177批刀2（A组 EventBus 甲案）—— EventBus 属**旁路遥测面**：仅供
+      观测 / 诊断 / 旁路事件订阅消费；**业务事件分发主脉为 InfoField**
+      （脉冲分发主脉）。EventBus **不承载业务分发**职责，二者为遥测与主脉的
+      互补分工，非双轨冗余。
 机制: 基于 EventBus 单例类实现。订阅表按 sub_id 组织为 dict，投递时按
       （优先级, 注册时间, sub_id）稳定排序回调；同步事件在发布线程内**直接**
       调用处理器（实测 <1ms），异步事件写入 PriorityQueue 由单一 daemon
@@ -554,6 +558,8 @@ def get_event_bus() -> EventBus:
         EVENT_BUS_CONFIG.max_history / async_enabled
 
     ★该单例创建后不会随 config 热更新改变；如需切换请 reset_event_bus() 后重取。
+    ★用途注记（177批刀2 · A组甲案）：本总线为**旁路遥测面**——供观测 / 诊断 /
+      旁路订阅消费，不承担业务事件分发；业务分发主脉为 InfoField。
     """
     global _bus
     if _bus is not None:
