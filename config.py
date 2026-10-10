@@ -1614,8 +1614,8 @@ LATE_NIGHT_TRUNCATE_SENTENCES = 2
 #   `nucleus/field/RequestDeduplicator.py`）。
 #   解决的问题：原「3 秒内相同请求直接跳过」在第一个请求**卡住或失败**时会让用户
 #   永远等不到答案；去重器改为「等待复用 / 超时接管 / 直接复用」。
-#   ★总开关默认 False（灰度）：可用环境变量 PULSE_REQUEST_DEDUP=1 临时开启。
-ENABLE_REQUEST_DEDUP = os.environ.get("PULSE_REQUEST_DEDUP", "0") == "1"
+#   ★总开关默认 True（ 179B 判据 R 收口·灰度验证通过）：可用环境变量 PULSE_REQUEST_DEDUP=0 临时关闭回退。
+ENABLE_REQUEST_DEDUP = os.environ.get("PULSE_REQUEST_DEDUP", "1") == "1"
 REQUEST_DEDUP_TIMEOUT_SEC = 30.0     # 单请求超时（秒），超时后新调用接管
 REQUEST_DEDUP_MAX_WAITERS = 10       # 同 key 最大等待者（超出按新请求处理，防雪崩）
 REQUEST_DEDUP_REUSE_TTL_SEC = 5.0    # 结果复用窗口（秒）
