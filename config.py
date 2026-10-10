@@ -994,6 +994,21 @@ OB1_FACET_RULES = {
     ],
 }
 
+# ========== 179批 刀1（O-A4）：Active Memory 双路三态 ==========
+# 来源：177批《O-A4 Active Memory 双路设计稿》；179A 刀1 实装三态接口 + DETERMINISTIC 免 LLM 路径。
+# 总开关关闭（默认 False）→ 完全回到原单路，零行为变化。
+# 三态：DETERMINISTIC（命中确定性规则→免 LLM，落 matched_rule_id）/
+#       SUBAGENT（复用 evolution_worker + O-B1 策略面，本刀仅留接口，真起子代理推后续批）/
+#       NONE（无匹配且无授权→不动作，留痕待裁决）。
+ENABLE_O_A4_DUAL_PATH = False      # 总开关（关闭 → 回到单路，零回归）
+O_A4_MODE = "NONE"                 # 当前激活态：DETERMINISTIC / SUBAGENT / NONE（默认 NONE）
+O_A4_SUBAGENT_ENABLED = False      # SUBAGENT 受限子代理（默认关，真起子代理推后续批）
+# 声明式确定性规则表（与 tools/export_public.py 白名单同面维护；命中即返回 matched_rule_id，不调 LLM）
+O_A4_DETERMINISTIC_RULES = [
+    ("当前时间", "rule_current_time"),
+    ("现在几点", "rule_current_time"),
+    ("你是谁", "rule_identity"),
+]
 # ========== 推理经验双写（PHASE17 阶段二子任务4.1） ==========
 # 不改 ReasoningExperience.py（JSON 版推理经验库），在规则通道层新增双写索引器：
 # 写 JSON 成功后，额外往知识树 /推理经验/ 路径写节点副本 + 提交语义编码，
