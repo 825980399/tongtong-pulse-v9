@@ -22,6 +22,7 @@ from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from nucleus.mnemosyne.episode_tag import build_episode, normalize_episode
 
 """
 PulseNode —— 脉冲知识节点数据结构（v9.5 适配版）
@@ -148,6 +149,9 @@ class PulseNode:
         # ★P2-5修复：L3 降级所需字段（规则5：连续60天无激活 + 三次推导冲突可降级回L2）
         self.conflict_count = 0               # 推导冲突次数
         self.last_conflict_at = 0.0           # 最近一次推导冲突时间戳
+        # ★第181批 刀4：记忆情景标签 {timestamp, context, participants}
+        #   None = 非对话情景节点（向前兼容：旧快照无此键即 None）。
+        self.episode = None
         self.space_path = space_path
         self.state = "active"                 # active / dormant / locked
         self.source_organ = source_organ
@@ -368,6 +372,8 @@ class PulseNode:
             # ★第120批 T-120e：D040 第一步（序列化层），旧快照无此键向前兼容
             "conflict_count": getattr(self, "conflict_count", 0),
             "last_conflict_at": getattr(self, "last_conflict_at", 0.0),
+            # ★第181批 刀4：情景标签持久化（向前兼容：旧快照无此键 → None）
+            "episode": getattr(self, "episode", None),
         }
     
     @classmethod
@@ -451,7 +457,23 @@ class PulseNode:
         node.conflict_count = int(data.get("conflict_count", 0))  # ★第121批 T-121d int() 加固（防快照写非整型）
         node.last_conflict_at = float(data.get("last_conflict_at", 0.0) or 0.0)
         node.evidence_chain = data.get("evidence_chain", [])   # ★山1：向前兼容——旧快照无此字段自动填充空列表
+        # ★第181批 刀4：情景标签读回（非 dict → None，绝不静默吞字段）
+        node.episode = normalize_episode(data.get("episode", None))
         return node
+
+    # ========== 情景标签（★第181批 刀4） ==========
+
+    def attach_episode(self, context="", participants=None, timestamp=None):
+        """写入情景标签 {timestamp, context, participants} 并返回该标签。
+
+        ★零回退：未打标节点 episode 恒为 None，序列化/检索侧按缺省处理。
+        """
+        self.episode = build_episode(context, participants, timestamp)
+        return self.episode
+
+    def has_episode(self) -> bool:
+        """是否已带情景标签（对话情景节点判据）。"""
+        return isinstance(getattr(self, "episode", None), dict)
     
     # ========== 内部方法 ==========
     

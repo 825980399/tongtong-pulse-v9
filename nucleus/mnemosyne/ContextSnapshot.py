@@ -24,6 +24,7 @@ from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.logger import get_module_logger
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus.mnemosyne.episode_tag import tag_dialog_entry  # ★第181批 刀4：对话记忆情景标签
 
 _module_logger = get_module_logger("ContextSnapshot")
 
@@ -135,6 +136,8 @@ class ContextSnapshot(SilentLogMixin):
                     for mem in user_memories:
                         mem_id = mem.get("question", "") + str(mem.get("timestamp", 0))
                         if mem_id not in existing_ids:
+                            # ★第181批 刀4：批量落盘同样自动打情景标签（同口径）
+                            tag_dialog_entry(mem, participants=[user_name])
                             filtered_mem = self._filter_memory_by_privacy(
                                 mem, relationship_type
                             )
@@ -217,6 +220,8 @@ class ContextSnapshot(SilentLogMixin):
                     if m.get("question", "") + str(m.get("timestamp", 0)) == mem_id:
                         return True  # 已存在，跳过
                 
+                # ★第181批 刀4：对话记忆写入前自动打情景标签（幂等，已有则不覆盖）
+                tag_dialog_entry(memory_entry, participants=[user_name])
                 user_partition["memories"].append(memory_entry)
                 
                 if len(user_partition["memories"]) > self._max_conversation_per_user:

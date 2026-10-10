@@ -122,6 +122,7 @@ from nucleus.mnemosyne.KnowledgeTree import KnowledgeTree  # 知识树: 五维�
 from nucleus.mnemosyne.PulseInstinctSnapshot import PulseInstinctSnapshot  # L4 本能快照
 from nucleus.mnemosyne.PulseNode import PulseNode  # 知识节点: L1/L2/L3分级
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # 节点池: 热/温/冷三层管理
+from nucleus.mnemosyne.recent_context import load_recent_context  # ★181刀4: 最近30条对话
 from nucleus.mnemosyne.PulseSnapshot import (
     PulseSnapshot,  # 快照持久化: 增量保存+历史轮转
 )
@@ -2104,6 +2105,11 @@ class PulseFramework:
         # ===== 新增: 恢复上下文数据（对话记忆/推理链/搜索经验/学习目标/代码进度）=====
         _ctx_snapshot = get_context_snapshot()
         _ctx_data = _ctx_snapshot.load_all()
+        # ★第181批 刀4：启动时加载最近30条对话记忆 → 标记「近期上下文」
+        #   （只读加载 + 内存缓存，零写盘；异常面由 load_recent_context 内部兜底）
+        _recent_ctx = load_recent_context(limit=30)
+        if _recent_ctx:
+            self._log(LogLevel.INFO, f"上下文恢复: 最近{len(_recent_ctx)}条对话已标记近期上下文")
         if hasattr(self, 'inner_world') and self.inner_world:
             # 恢复对话记忆
             _conv_data = _ctx_data.get("conversation_memory", {})
