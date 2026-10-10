@@ -483,7 +483,7 @@ def main():
             if os.path.exists(_TMP):
                 shutil.rmtree(_TMP, ignore_errors=True)
                 if os.path.exists(_TMP):
-                    print("\n[警告] 隔离目录清理失败，请检查 tmp/ 残留: %s" % _TMP)
+                    print("\n[警告] 隔离目录清理失败，请检查 tmp/ 残留: {}".format(_TMP))
             # 还原生产 config（子进程退出即失效，但保持干净状态）
             CFG.SEMANTIC_KERNEL_CONFIG.clear()
             CFG.SEMANTIC_KERNEL_CONFIG.update(_orig_cfg)

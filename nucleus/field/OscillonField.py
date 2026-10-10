@@ -43,9 +43,8 @@ if _cython_extensions_enabled():
         _oscillon_cy_available = True
         _module_logger.info("Cython加速模块已加载 (_oscillon_cy)")
     except ImportError as _cy_e:
-        _oscillon_cy_import_error = "%s: %s" % (type(_cy_e).__name__, _cy_e)
-        _module_logger.warning("Cython振荡场模块未编译，使用Python原生实现: %s"
-                               % _oscillon_cy_import_error)
+        _oscillon_cy_import_error = "{}: {}".format(type(_cy_e).__name__, _cy_e)
+        _module_logger.warning("Cython振荡场模块未编译，使用Python原生实现: {}".format(_oscillon_cy_import_error))
 else:
     _module_logger.info("use_cython_extensions=False，使用Python原生实现")
 
@@ -82,8 +81,7 @@ def _m169_startup_report_on() -> bool:
 if _m169_startup_report_on():
     _st = cython_status()
     _module_logger.info(
-        "[OscillonField] cython_effective=%s fallback_reason=%s"
-        % (_st["effective"], _st["reason"]))
+        "[OscillonField] cython_effective={} fallback_reason={}".format(_st["effective"], _st["reason"]))
 
 # ========== 振荡场抽象基类 ==========
 

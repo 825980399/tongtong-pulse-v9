@@ -157,7 +157,7 @@ class TestQuarantineRestore(unittest.TestCase):
         self.p.restore_from_quarantine(dry_run=False)
         _q = [x for x in self.p._experiences if x["id"] == "q"][0]
         for _k in ("id", "summary", "polluted", "cleanup_at"):
-            self.assertIn(_k, _q, "恢复记录须保留原字段 %s" % _k)
+            self.assertIn(_k, _q, "恢复记录须保留原字段 {}".format(_k))
         self.assertEqual(_q["id"], "q")
         self.assertTrue(_q["summary"].startswith("搜索结果"))
 

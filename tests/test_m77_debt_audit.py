@@ -114,7 +114,7 @@ class TestT2GitRepo(unittest.TestCase):
             parts = line.split()
             url = parts[1] if len(parts) > 1 else ""
             self.assertTrue(any(h in url for h in _ALLOWED_HOSTS),
-                            "远程不在白名单: %s" % url)
+                            "远程不在白名单: {}".format(url))
 
     def test_13_corrupt_backup_removed(self):
         """★T2 验收：损坏的 .bak_git76/ 已清理。"""
@@ -134,7 +134,7 @@ class TestT2GitRepo(unittest.TestCase):
     def test_15_ignore_rules_effective(self):
         for path in ("data", "logs", "__pycache__", ".env"):
             rc, so, _ = _git(["check-ignore", "-v", path])
-            self.assertEqual(rc, 0, "%s 未被忽略" % path)
+            self.assertEqual(rc, 0, "{} 未被忽略".format(path))
             self.assertTrue(so)
 
     def test_16_source_tracked(self):
@@ -148,7 +148,7 @@ class TestT2GitRepo(unittest.TestCase):
         bad = [x for x in so.splitlines()
                if x.startswith(("data/", "logs/")) or "__pycache__" in x
                or x.startswith(".bak")]
-        self.assertEqual(bad, [], "敏感/数据被提交: %s" % bad[:5])
+        self.assertEqual(bad, [], "敏感/数据被提交: {}".format(bad[:5]))
 
 
 # =====================================================================
@@ -232,7 +232,7 @@ class TestT4SsrfAndComments(unittest.TestCase):
         hits = [i + 1 for i, l in enumerate(lines)
                 if re.search(r"except[^:]*:\s*$", l.rstrip())
                 and i + 1 < len(lines) and lines[i + 1].strip() == "pass"]
-        self.assertEqual(hits, [], "ssrf_guard 仍有静默 except: %s" % hits)
+        self.assertEqual(hits, [], "ssrf_guard 仍有静默 except: {}".format(hits))
 
     def test_33_ssrf_fail_closed_semantics(self):
         """★fail-closed 语义不变：异常时受信任集合退化为最小集合。"""

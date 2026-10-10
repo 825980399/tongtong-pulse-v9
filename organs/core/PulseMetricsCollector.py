@@ -382,7 +382,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._last_restart_armed = _out["restart_armed"]
         except Exception as _e:
             silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
-            _out["reason"] = "采集异常: %s" % type(_e).__name__
+            _out["reason"] = "采集异常: {}".format(type(_e).__name__)
         return _out
 
     def _build_observability_snapshot(self) -> dict[str, Any]:

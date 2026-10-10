@@ -222,14 +222,13 @@ def reject_reason(path: Any, explicit: bool = False) -> str:
         if not is_production_data_path(path):
             return ""
         if is_test_like_env():
-            return "测试类环境(进程=%s) 不得写生产 data/" % writer_kind()
+            return "测试类环境(进程={}) 不得写生产 data/".format(writer_kind())
         if not strict_enabled():
             return ""
         if is_trusted_writer():
             return ""
-        return ("非可信写入者(进程=%s) 默认只读；"
-                "如需写入请设 PULSE_FRAMEWORK=1 或 explicit=True"
-                % writer_kind())
+        return ("非可信写入者(进程={}) 默认只读；"
+                "如需写入请设 PULSE_FRAMEWORK=1 或 explicit=True".format(writer_kind()))
     except Exception as e:
         silent_exc(e, where="nucleus.data.write_guard::reject_reason L224")
         return ""
@@ -303,13 +302,11 @@ def guard_write(path: Any, explicit: bool = False,
                 from nucleus.logger import get_module_logger
                 # ★主线第51批 T3：拒写必须留痕（进程名 + 路径 + 原因）
                 get_module_logger("WriteGuard").warning(
-                    "[写盘守卫] 拒写生产目录（组件=%s, 进程=%s, 路径=%s, 原因=%s）"
-                    % (_name, writer_kind(), path,
+                    "[写盘守卫] 拒写生产目录（组件={}, 进程={}, 路径={}, 原因={}）".format(_name, writer_kind(), path,
                        reject_reason(path, explicit) or "未判定"))
             except Exception as _wlog_e:
                 # 日志不可用时退化为 stderr 一行（不得静默）
-                sys.stderr.write("[WriteGuard] 拒写日志失败: %s: %s\n"
-                                 % (type(_wlog_e).__name__, _wlog_e))
+                sys.stderr.write("[WriteGuard] 拒写日志失败: {}: {}\n".format(type(_wlog_e).__name__, _wlog_e))
         return False
     except Exception:
         # 守卫自身故障 → 放行（绝不阻断正常功能）

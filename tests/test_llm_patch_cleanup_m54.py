@@ -104,7 +104,7 @@ class TestLlmPatchCleanupM54(unittest.TestCase):
         raw = "def f（x）：\n    return 1 + "
         out = self.exe._clean_llm_code(raw)
         self.assertTrue(any(ch in out for ch in "（）"),
-                        "应返回原始代码（保留全角括号），实际=%r" % out)
+                        "应返回原始代码（保留全角括号），实际={!r}".format(out))
         self.assertEqual(out.strip(), raw.strip())
 
     def test_04_switch_off_returns_normalized(self):
@@ -113,7 +113,7 @@ class TestLlmPatchCleanupM54(unittest.TestCase):
         with _cfg_switch("ENABLE_LLM_PATCH_RETURN_ORIGINAL", False):
             out = self.exe._clean_llm_code(raw)
             self.assertFalse(any(ch in out for ch in "（）"),
-                             "关闭开关时应返回归一化后代码，实际=%r" % out)
+                             "关闭开关时应返回归一化后代码，实际={!r}".format(out))
             self.assertIn("(x)", out, "归一化应把全角括号转为半角")
 
     def test_05_valid_code_untouched(self):

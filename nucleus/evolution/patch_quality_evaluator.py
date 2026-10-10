@@ -305,8 +305,7 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
 
     _s_eff, _r_eff = _score_effectiveness(_eff_for_score)
     if _reprobe_ok:
-        _r_eff = ("方法级复现探针优先：真实效果 %.1f%%（文件级计数：%s）"
-                  % (_reprobe * 100.0,
+        _r_eff = ("方法级复现探针优先：真实效果 {:.1f}%（文件级计数：{}）".format(_reprobe * 100.0,
                      "不可判定" if _real is None else "%.1f%%" % (_real * 100.0)))
     _s_ver, _r_ver = _score_verification(_vr)
     _s_reg, _r_reg = _score_regression(_baseline, _post, _vr)
@@ -439,7 +438,7 @@ def _build_findings(items: list, summary: dict) -> list:
             "根因见第41批 T1（判据要求错误行同时含文件名与方法名，而日志从不输出方法名）。"
             % (_unv, _n, 100.0 * _unv / _n))
     if summary.get("fake_pass"):
-        _names = ", ".join("%s.%s" % (os.path.basename(str(x.get("file"))), x.get("method"))
+        _names = ", ".join("{}.{}".format(os.path.basename(str(x.get("file"))), x.get("method"))
                            for x in items if x.get("label") == "fake_pass")[:200]
         _f.append("发现 %d 条**假通过**（声称验证通过但真实效果<=0）：%s"
                   % (summary["fake_pass"], _names))
@@ -454,8 +453,8 @@ def _build_findings(items: list, summary: dict) -> list:
 
 def format_summary_line(summary: dict) -> str:
     """生成任务书要求的日志行。"""
-    return ("[补丁评估] 总补丁=%s 优质=%s 中等=%s 劣质=%s 假通过=%s"
-            "（不可验证=%s 未应用=%s 平均分=%s）" % (
+    return ("[补丁评估] 总补丁={} 优质={} 中等={} 劣质={} 假通过={}"
+            "（不可验证={} 未应用={} 平均分={}）".format(
                 summary.get("history_records", 0), summary.get("good", 0),
                 summary.get("mediocre", 0), summary.get("bad", 0),
                 summary.get("fake_pass", 0), summary.get("unverifiable", 0),
@@ -512,6 +511,6 @@ def evaluate_and_report(history_path: str | None = None, report_path: str | None
             for _f in _ev["findings"]:
                 logger.info("[补丁评估] %s", _f)
         except Exception as _e:                      # 日志失败不得影响评估结果
-            print("[补丁评估] 日志输出失败: %s: %s" % (type(_e).__name__, _e),
+            print("[补丁评估] 日志输出失败: {}: {}".format(type(_e).__name__, _e),
                   file=sys.stderr)
     return _ev

@@ -51,7 +51,7 @@ class TestListCompleteness(unittest.TestCase):
     def test_01_all_must_exclude_covered(self):
         for _d in MUST_EXCLUDE:
             self.assertTrue(_ed.is_excluded(_d),
-                            "★未排除: %s（会导致全库扫描误计）" % _d)
+                            "★未排除: {}（会导致全库扫描误计）".format(_d))
 
     def test_02_bak_prefix_rule(self):
         """.bak* 前缀（.bak_batch44 / .bak_batch47 ...）一律排除。"""
@@ -91,7 +91,7 @@ class TestIterPythonFiles(unittest.TestCase):
             _d = os.path.join(self._sand, _sub)
             os.makedirs(_d, exist_ok=True)
             with io.open(os.path.join(_d, "a.py"), "w", encoding="utf-8") as _f:
-                _f.write("# %s\n" % _sub)
+                _f.write("# {}\n".format(_sub))
 
     def tearDown(self):
         shutil.rmtree(self._sand, ignore_errors=True)
@@ -180,7 +180,7 @@ class TestEventOrphanAudit(unittest.TestCase):
                             errors="replace", timeout=300)
         _out = (_r.stdout or "") + (_r.stderr or "")
         self.assertIn("零引用候选: 24", _out,
-                      "★零引用数回退。实际输出: %s" % _out[:200])
+                      "★零引用数回退。实际输出: {}".format(_out[:200]))
 
 
 # ==================== 防复发：新增目录的兜底 ====================
@@ -203,7 +203,7 @@ class TestFutureProof(unittest.TestCase):
             if {"nucleus", "organs"} & _sub:
                 _suspect.append(_n)
         self.assertEqual(_suspect, [],
-                         "发现疑似源码副本目录但未排除: %s" % _suspect)
+                         "发现疑似源码副本目录但未排除: {}".format(_suspect))
 
 
 if __name__ == "__main__":

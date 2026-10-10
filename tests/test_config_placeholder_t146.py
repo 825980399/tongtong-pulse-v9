@@ -33,15 +33,15 @@ def test_import_does_not_render_in_place():
     """import config 后，三个对象的用户可见字段必须仍是占位符原样。"""
     src_seeds = " ".join(str(s.get("value")) for s in config.SEED_MEMORIES[:5])
     assert "<SELF_NAME>" in src_seeds, \
-        "SEED_MEMORIES 应保留占位符（import 期渲染未真正移除？）：%s" % src_seeds[:120]
+        "SEED_MEMORIES 应保留占位符（import 期渲染未真正移除？）：{}".format(src_seeds[:120])
 
     assert config.DIGITAL_LIFE_REGISTRY.get("display_name") == "<SELF_NAME>", \
-        "display_name 应保留占位符，实际=%r" % config.DIGITAL_LIFE_REGISTRY.get("display_name")
+        "display_name 应保留占位符，实际={!r}".format(config.DIGITAL_LIFE_REGISTRY.get("display_name"))
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
     vals = " ".join(str(v) for v in rules.values())
     assert "<SELF_NAME>" in vals or "<CREATOR>" in vals, \
-        "identity_rules 应保留占位符，实际首条=%s" % (list(rules.values()) or [""])[0][:60]
+        "identity_rules 应保留占位符，实际首条={}".format((list(rules.values()) or [""])[0][:60])
 
 
 def test_find_unrendered_placeholders_zero_after_render():
@@ -49,25 +49,25 @@ def test_find_unrendered_placeholders_zero_after_render():
     rendered_seeds = [render_placeholders(str(s.get("value")))
                       for s in config.SEED_MEMORIES]
     assert find_unrendered_placeholders(rendered_seeds) == [], \
-        "种子记忆渲染后仍有占位符残留：%s" % find_unrendered_placeholders(rendered_seeds)
+        "种子记忆渲染后仍有占位符残留：{}".format(find_unrendered_placeholders(rendered_seeds))
 
     rendered_display = render_placeholders(
         str(config.DIGITAL_LIFE_REGISTRY.get("display_name")))
     assert find_unrendered_placeholders({"display_name": rendered_display}) == [], \
-        "display_name 渲染后仍有残留：%r" % rendered_display
+        "display_name 渲染后仍有残留：{!r}".format(rendered_display)
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
     rendered_rules = {k: render_placeholders(str(v)) for k, v in rules.items()}
     assert find_unrendered_placeholders(rendered_rules) == [], \
-        "identity_rules 渲染后仍有残留：%s" % find_unrendered_placeholders(rendered_rules)[:5]
+        "identity_rules 渲染后仍有残留：{}".format(find_unrendered_placeholders(rendered_rules)[:5])
 
 
 def test_render_is_idempotent_for_output_without_angle_brackets():
     """渲染结果不得含尖括号，且重复渲染不改变结果（幂等）。"""
     for s in config.SEED_MEMORIES:
         once = render_placeholders(str(s.get("value")))
-        assert not _UNRENDERED.search(once), "渲染结果含未替换占位符：%s" % once[:80]
-        assert render_placeholders(once) == once, "重复渲染结果不一致：%s" % once[:80]
+        assert not _UNRENDERED.search(once), "渲染结果含未替换占位符：{}".format(once[:80])
+        assert render_placeholders(once) == once, "重复渲染结果不一致：{}".format(once[:80])
 
 
 # --------------------------------------------------------------------------
@@ -77,7 +77,7 @@ def test_birth_date_default_has_no_real_year():
     default_val = config.PLACEHOLDER_VALUES.get("<BIRTH_DATE>", "")
     assert default_val, "PLACEHOLDER_VALUES 缺 <BIRTH_DATE>"
     assert not _BARE_YEAR.search(str(default_val)), \
-        "默认出生年份仍是真实年份（须改为非真实占位文案）：%r" % default_val
+        "默认出生年份仍是真实年份（须改为非真实占位文案）：{!r}".format(default_val)
 
 
 def test_seed_keywords_have_no_bare_year():
@@ -95,7 +95,7 @@ def test_env_var_can_still_inject_real_value():
         # 直接验证渲染入口对环境变量的响应（不重载模块，避免污染其它用例）
         from config import PLACEHOLDER_VALUES as _pv
         assert "<BIRTH_DATE>" in _pv or True  # 占位表存在性兜底断言
-        injected = "出生于%s" % os.environ["TTP_BIRTH_DATE"]
+        injected = "出生于{}".format(os.environ["TTP_BIRTH_DATE"])
         assert "1999" in injected
     finally:
         os.environ.pop("TTP_BIRTH_DATE", None)
@@ -108,25 +108,25 @@ def test_no_tautology_after_render():
     """渲染后不得出现「我是曈曈，全名曈曈」「我叫曈曈，小名曈曈」。"""
     for s in config.SEED_MEMORIES:
         v = render_placeholders(str(s.get("value")))
-        assert "全名曈曈" not in v, "同义反复未清除（全名）：%s" % v[:80]
-        assert "小名曈曈" not in v, "同义反复未清除（小名）：%s" % v[:80]
+        assert "全名曈曈" not in v, "同义反复未清除（全名）：{}".format(v[:80])
+        assert "小名曈曈" not in v, "同义反复未清除（小名）：{}".format(v[:80])
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
     for k, raw in rules.items():
         v = render_placeholders(str(raw))
-        assert "我叫曈曈，小名曈曈" not in v, "identity_rules 同义反复未清除：%s" % v[:80]
+        assert "我叫曈曈，小名曈曈" not in v, "identity_rules 同义反复未清除：{}".format(v[:80])
 
 
 def test_no_false_claim_about_shared_name():
     """不得再出现「我与她共享同一个名字」（渲染后两者名字不同 = 假话）。"""
     for s in config.SEED_MEMORIES:
         v = render_placeholders(str(s.get("value")))
-        assert "共享同一个名字" not in v, "事实矛盾文案未清除：%s" % v[:80]
+        assert "共享同一个名字" not in v, "事实矛盾文案未清除：{}".format(v[:80])
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
     for _k, raw in rules.items():
         v = render_placeholders(str(raw))
-        assert "共享同一个名字" not in v, "identity_rules 事实矛盾未清除：%s" % v[:80]
+        assert "共享同一个名字" not in v, "identity_rules 事实矛盾未清除：{}".format(v[:80])
 
 
 # --------------------------------------------------------------------------

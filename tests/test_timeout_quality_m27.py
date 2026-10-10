@@ -227,7 +227,7 @@ class TestRequestDedupBoundary(unittest.TestCase):
         d.complete("k5", "唯一答案")
         for _t in _threads:
             _t.join(timeout=5)
-        self.assertEqual(_results.count(CLAIMED), 1, "只允许一个 owner：%r" % _results)
+        self.assertEqual(_results.count(CLAIMED), 1, "只允许一个 owner：{!r}".format(_results))
         self.assertEqual(_results.count(DUPLICATE), 9)
 
     def test_15_complete_is_idempotent_and_safe(self):
@@ -270,7 +270,7 @@ class TestRequestDedupBoundary(unittest.TestCase):
         _st = d.stats()
         for _f in ("claimed", "duplicate", "waiting", "takeover", "completed",
                    "cancelled", "expired", "inflight", "cached", "timeout", "max_wait"):
-            self.assertIn(_f, _st, "stats 缺字段 %s" % _f)
+            self.assertIn(_f, _st, "stats 缺字段 {}".format(_f))
         self.assertEqual(_st["inflight"], 1)
         self.assertEqual(_st["timeout"], 7.0)
         _gs = d.get_state("k9")
@@ -342,7 +342,7 @@ class TestJsonExtractBoundary(unittest.TestCase):
         _out = PulseStomach._balanced_json_extract(_big)
         _cost = time.time() - _t0
         self.assertEqual(_out, _big)
-        self.assertLess(_cost, 0.5, "10KB 提取耗时 %.3fs 过慢" % _cost)
+        self.assertLess(_cost, 0.5, "10KB 提取耗时 {:.3f}s 过慢".format(_cost))
 
     def test_37_report_json_failure_dumps_sample(self):
         """开关开启时归档失败样本（写入隔离目录），关闭时不写。"""
@@ -355,7 +355,7 @@ class TestJsonExtractBoundary(unittest.TestCase):
             _st._report_json_failure('{"坏样本": 1,', ValueError("Expecting ','"), "单测")
         self.assertTrue(os.path.isdir(_JSON_TMP_DIR), "应创建归档目录")
         _files = os.listdir(_JSON_TMP_DIR)
-        self.assertEqual(len(_files), 1, "应写入 1 个样本：%r" % _files)
+        self.assertEqual(len(_files), 1, "应写入 1 个样本：{!r}".format(_files))
         _body = open(os.path.join(_JSON_TMP_DIR, _files[0]), encoding="utf-8").read()
         self.assertIn("坏样本", _body)
 

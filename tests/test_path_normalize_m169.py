@@ -39,7 +39,7 @@ class TestNormalizePath(unittest.TestCase):
             "nucleus\\\\data\\\\x.py",     # 双反斜杠（JSON 转义后的形态）
         ]
         _keys = {normalize_path(v) for v in _variants}
-        self.assertEqual(len(_keys), 1, "不同分隔符应归一到同一 key: %s" % _keys)
+        self.assertEqual(len(_keys), 1, "不同分隔符应归一到同一 key: {}".format(_keys))
         self.assertEqual(_keys.pop(), "nucleus/data/x.py")
 
     def test_02_mixed_separators_same_key(self):
@@ -87,7 +87,7 @@ class TestNormalizeRelpath(unittest.TestCase):
             _ROOT + "\\\\nucleus\\\\data\\\\x.py",
         ]
         _keys = {normalize_relpath(v, _ROOT) for v in _variants}
-        self.assertEqual(len(_keys), 1, "相对化后仍应同一 key: %s" % _keys)
+        self.assertEqual(len(_keys), 1, "相对化后仍应同一 key: {}".format(_keys))
         self.assertEqual(_keys.pop(), "nucleus/data/x.py")
         del _tail
 
@@ -110,7 +110,7 @@ class TestWiringInvariant(unittest.TestCase):
             _t = io.open(_p, encoding="utf-8", errors="replace").read()
             if re.search(r"safe_relpath\([^)]*\)\.replace", _t):
                 _bad.append(_rel)
-        self.assertEqual(_bad, [], "这些文件仍手搓归一: %s" % _bad)
+        self.assertEqual(_bad, [], "这些文件仍手搓归一: {}".format(_bad))
 
     def test_21_normalize_relpath_used_in_wired(self):
         """被统一的文件确实引用了归一化入口（证明接线落地，非只加函数）。"""
@@ -122,8 +122,7 @@ class TestWiringInvariant(unittest.TestCase):
             _t = io.open(_p, encoding="utf-8", errors="replace").read()
             if "normalize_relpath" not in _t:
                 _missing.append(_rel)
-        self.assertEqual(_missing, [], "这些文件未接入 normalize_relpath: %s"
-                         % _missing)
+        self.assertEqual(_missing, [], "这些文件未接入 normalize_relpath: {}".format(_missing))
 
 
 if __name__ == "__main__":

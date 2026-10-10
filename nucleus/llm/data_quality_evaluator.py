@@ -263,7 +263,7 @@ def _score_completeness(recs: list) -> tuple[float, dict, list]:
     _findings = []
     for _k, _v in _rates.items():
         if _v < 0.9:
-            _findings.append("字段 `%s` 非空率仅 %.1f%%" % (_k, _v * 100.0))
+            _findings.append("字段 `{}` 非空率仅 {:.1f}%".format(_k, _v * 100.0))
     _pv = sum(1 for r in recs if str(r.get("prompt_version") or "").strip()) / _n
     if _pv < 0.5:
         _findings.append("`prompt_version` 非空率仅 %.1f%%（元数据缺失，"
@@ -304,7 +304,7 @@ def _score_sanitization(recs: list) -> tuple[float, dict, list]:
     _by_pat: Counter = Counter()
     _samples = []
     for _r in recs:
-        _blob = "%s %s %s" % (str(_r.get("prompt") or ""), str(_r.get("response") or ""),
+        _blob = "{} {} {}".format(str(_r.get("prompt") or ""), str(_r.get("response") or ""),
                               str(_r.get("error") or ""))
         for _p in _SECRET_PATTERNS:
             if _p.search(_blob):
@@ -386,7 +386,7 @@ def evaluate_records(records: list, *, drop_suspect: bool = True) -> dict:
         _s, _d, _f = _fn(_scope)
         _scores[_name] = _s
         _details[_name] = _d
-        _findings.extend("[%s] %s" % (_name, x) for x in _f)
+        _findings.extend("[{}] {}".format(_name, x) for x in _f)
 
     _total = round(sum(_scores.get(k, 0.0) for k in SCORE_DIMENSIONS), 2)
     _purity = {
@@ -435,8 +435,8 @@ def format_summary_line(report: dict) -> str:
     _s = (report.get("details", {}) or {}).get("sanitization", {}) or {}
     _comp = sum(_c.values()) / len(_c) if _c else 0.0
     _pred = 1.0 - sum(1 for v in _d.values() if v <= 0) / max(1, len(_d))
-    return ("[数据质量] 评分=%s 完整率=%.0f%% 重复率=%.0f%% 脱敏遗漏=%s"
-            "（样本=%s 纯度=%.0f%% 各维=%s）" % (
+    return ("[数据质量] 评分={} 完整率={:.0f}% 重复率={:.0f}% 脱敏遗漏={}"
+            "（样本={} 纯度={:.0f}% 各维={}）".format(
                 report.get("score", 0.0), _comp * 100.0,
                 (_u.get("redundancy", 0.0) or 0.0) * 100.0,
                 _s.get("hits", 0),
@@ -477,5 +477,5 @@ def evaluate_and_report(day: str | None = None, trace_dir: str | None = None,
             for _f in _rep.get("findings", []):
                 logger.info("[数据质量] %s", _f)
         except Exception as _e:
-            print("[数据质量] 日志输出失败: %s: %s" % (type(_e).__name__, _e), file=sys.stderr)
+            print("[数据质量] 日志输出失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
     return _rep

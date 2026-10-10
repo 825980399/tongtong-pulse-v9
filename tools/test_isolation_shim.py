@@ -26,7 +26,7 @@ import tempfile
 from nucleus._silent_except import silent_exc
 
 #: 每进程唯一隔离目录（短随机，避免 Windows 长路径 / WinError 5）
-ISO_DIR = os.path.join(tempfile.gettempdir(), "p17_iso_%s" % os.urandom(4).hex())
+ISO_DIR = os.path.join(tempfile.gettempdir(), "p17_iso_{}".format(os.urandom(4).hex()))
 
 #: 需要重定向 ``_ISO_BASE_DIR`` 的 5 个消费模块（其默认数据目录会被隔离）
 _ISO_BASE_DIR_MODULES = (
@@ -89,7 +89,7 @@ def _patch(mod_name: str, attr: str, val) -> None:
         _PATCHED.append((_m, attr, getattr(_m, attr, None)))
         setattr(_m, attr, val)
     except Exception as e:
-        silent_exc(e, where="tools.test_isolation_shim::_patch L%s" % mod_name)
+        silent_exc(e, where="tools.test_isolation_shim::_patch L{}".format(mod_name))
 
 
 def _restore_all(iso: _Isolation | None = None) -> None:

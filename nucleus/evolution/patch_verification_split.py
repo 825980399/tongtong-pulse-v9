@@ -192,7 +192,7 @@ def split_verification(patch: dict[str, Any]) -> dict[str, Any]:
         F_EFFECTIVENESS: _eff,
         F_VERIFIED: _no_regression,      # deprecated：等于 no_regression
         F_SPLIT_VERSION: SPLIT_VERSION,
-        "reason": "%s；%s" % (_nr_note, _pf_note),
+        "reason": "{}；{}".format(_nr_note, _pf_note),
     }
 
 

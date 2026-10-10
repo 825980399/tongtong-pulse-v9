@@ -42,14 +42,14 @@ def main(argv=None) -> int:
     _ev = evaluate_history(_hist)
     _ev["history_path"] = _args.history or DEFAULT_HISTORY_PATH
 
-    print("历史文件: %s" % _ev["history_path"])
+    print("历史文件: {}".format(_ev["history_path"]))
     print("记录条数: %d" % _ev["summary"].get("history_records", 0))
     print()
     print(format_summary_line(_ev["summary"]))
     print()
     print("=== 结论 ===")
     for _f in _ev["findings"]:
-        print("  - %s" % _f)
+        print("  - {}".format(_f))
     print()
     print("=== 评分最低 %d 条 ===" % _args.top)
     for _x in _ev["patches"][:_args.top]:
@@ -70,7 +70,7 @@ def main(argv=None) -> int:
     _out = _args.out or DEFAULT_REPORT_PATH
     _written = save_report(_ev, _args.out)
     print()
-    print("报告: %s" % (_written if _written else "未写入（%s）" % _out))
+    print("报告: %s" % (_written if _written else "未写入（{}）".format(_out)))
     return 0 if _written or _args.out else 0
 
 

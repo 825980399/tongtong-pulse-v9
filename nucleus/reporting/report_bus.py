@@ -177,7 +177,7 @@ class ReportBus:
 
     def _report_path(self, env: ReportEnvelope) -> str:
         return os.path.join(self._base_dir, str(env.report_type),
-                            "%s.json" % env.report_id)
+                            "{}.json".format(env.report_id))
 
     def _write(self, env: ReportEnvelope) -> bool:
         """落盘一份报告（受 write_guard 约束）。"""
@@ -193,17 +193,17 @@ class ReportBus:
                 if not _gw(os.path.abspath(_p),
                            explicit=self._explicit_base_dir,
                            component="ReportBus"):
-                    self._last_error = "write_guard 拒绝写入: %s" % _p
+                    self._last_error = "write_guard 拒绝写入: {}".format(_p)
                     return False
             except Exception as _gw_e:
                 # 守卫不可用时按原行为继续（不使用裸 pass）
-                self._last_error = "write_guard 不可用: %s" % type(_gw_e).__name__
+                self._last_error = "write_guard 不可用: {}".format(type(_gw_e).__name__)
             os.makedirs(os.path.dirname(_p), exist_ok=True)
             with io.open(_p, "w", encoding="utf-8") as _f:
                 _f.write(json.dumps(env.to_dict(), ensure_ascii=False, indent=2))
             return True
         except (OSError, IOError, TypeError, ValueError) as _e:
-            self._last_error = "%s: %s" % (type(_e).__name__, _e)
+            self._last_error = "{}: {}".format(type(_e).__name__, _e)
             return False
 
     # ---------- 发布 / 订阅 ----------
@@ -309,11 +309,11 @@ class ReportBus:
                     if _name not in envelope.consumed_by:
                         envelope.consumed_by.append(_name)
             except Exception as _e:      # 单个消费者失败不影响其他
-                errors.append("%s: %s" % (_name, _e))
+                errors.append("{}: {}".format(_name, _e))
                 envelope.record_consume_result(
                     ConsumeResult(consumer=_name, report_id=envelope.report_id,
                                   accepted=False,
-                                  note="dispatch exception: %s" % _e))
+                                  note="dispatch exception: {}".format(_e)))
 
     def subscribe(self, report_type: str,
                   consumer: Callable[[ReportEnvelope], Any]) -> None:
@@ -470,7 +470,7 @@ class ReportBus:
                     "[消费者陈旧机检] %d 个消费者超阈值(%.0fs)未被调用: %s"
                     % (len(_stale), _thr, ", ".join(_stale)))
             except Exception as _le:
-                sys.stderr.write("[ReportBus] 陈旧机检日志失败: %s\n" % type(_le).__name__)
+                sys.stderr.write("[ReportBus] 陈旧机检日志失败: {}\n".format(type(_le).__name__))
         return _stale
 
     def _maybe_warn_staleness(self) -> None:
@@ -549,11 +549,10 @@ class ReportBus:
         try:
             from nucleus.logger import get_module_logger
             get_module_logger("ReportBus").warning(
-                "[消费契约机检] 类型=%s %s%s"
-                % (report_type, _reason,
-                   (" 缺失=%s" % ", ".join(_missing)) if _missing else ""))
+                "[消费契约机检] 类型={} {}{}".format(report_type, _reason,
+                   (" 缺失={}".format(", ".join(_missing))) if _missing else ""))
         except Exception as _le:
-            sys.stderr.write("[ReportBus] 消费契约告警失败: %s\n" % type(_le).__name__)
+            sys.stderr.write("[ReportBus] 消费契约告警失败: {}\n".format(type(_le).__name__))
         return _missing
 
     def check_missing_consumers(self) -> list[str]:
@@ -611,7 +610,7 @@ class ReportBus:
             # 需同时具备 metric/threshold 才能判定越阈（best-effort，默认「高即差」）
             if _a.metric_value is None or _a.threshold is None:
                 continue
-            _key = "%s::%s" % (envelope.report_type, _a.type)
+            _key = "{}::{}".format(envelope.report_type, _a.type)
             _breaching = self._is_breaching(_a.metric_value, _a.threshold, _a.type)
             _iss = self._issues.get(_key)
             if _iss is not None and not _iss.get("resolved"):
@@ -720,7 +719,7 @@ class ReportBus:
                         if os.path.isfile(_fp):
                             _files.append((os.path.getmtime(_fp), _fp))
                 except OSError as _e:
-                    _out["errors"].append("%s: %s" % (_t, _e))
+                    _out["errors"].append("{}: {}".format(_t, _e))
                     continue
                 _files.sort()                       # 旧 → 新
                 _excess = len(_files) - _limit
@@ -733,7 +732,7 @@ class ReportBus:
                         _out["pruned"] += 1
                         _kept_names.append(os.path.basename(_fp))
                     except OSError as _e:
-                        _out["errors"].append("%s: %s" % (_fp, _e))
+                        _out["errors"].append("{}: {}".format(_fp, _e))
                 _out["kept"] += min(_limit, len(_files))
             if _out["pruned"]:
                 self._disk_prune_total += _out["pruned"]
@@ -745,10 +744,9 @@ class ReportBus:
                         % (_out["pruned"], self._max_on_disk,
                            self._disk_prune_total, ", ".join(_kept_names[:3])))
                 except Exception as _le:
-                    sys.stderr.write("[ReportBus] 回收日志失败: %s\n"
-                                     % type(_le).__name__)
+                    sys.stderr.write("[ReportBus] 回收日志失败: {}\n".format(type(_le).__name__))
         except Exception as _e:                      # 回收失败不影响发布
-            _out["errors"].append("%s: %s" % (type(_e).__name__, _e))
+            _out["errors"].append("{}: {}".format(type(_e).__name__, _e))
         return _out
 
     def get_disk_stats(self) -> dict[str, Any]:
@@ -772,7 +770,7 @@ class ReportBus:
                 _res["total_files"] += _n
                 _res["total_bytes"] += _b
         except Exception as _e:
-            _res["error"] = "%s: %s" % (type(_e).__name__, _e)
+            _res["error"] = "{}: {}".format(type(_e).__name__, _e)
         return _res
 
     # ---------- 便捷构造 ----------

@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     print("渠道白名单（config 推导）:", sorted(channel_whitelist()) or "(空)")
     _rep = evaluate_day(_args.day, _args.dir, drop_suspect=not _args.all)
     print()
-    print("源文件: %s（存在=%s）" % (_rep.get("source_file"), _rep.get("file_exists")))
+    print("源文件: {}（存在={}）".format(_rep.get("source_file"), _rep.get("file_exists")))
     print(format_summary_line(_rep))
     print()
     print("=== 五维度 ===")
@@ -52,8 +52,7 @@ def main(argv=None) -> int:
     print()
     print("=== 数据纯度 ===")
     _p = _rep.get("purity", {})
-    print("  总记录=%s 生产=%s 疑似测试=%s 纯度=%.1f%%"
-          % (_p.get("total"), _p.get("production"), _p.get("suspect"),
+    print("  总记录={} 生产={} 疑似测试={} 纯度={:.1f}%".format(_p.get("total"), _p.get("production"), _p.get("suspect"),
              (_p.get("purity") or 0) * 100.0))
     for _s in _p.get("suspect_samples", [])[:5]:
         print("    疑似: ch=%-14s model=%-16s prompt=%r"
@@ -61,7 +60,7 @@ def main(argv=None) -> int:
     print()
     print("=== 结论 ===")
     for _f in _rep.get("findings", []):
-        print("  - %s" % _f)
+        print("  - {}".format(_f))
 
     if _args.json:
         print()

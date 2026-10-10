@@ -127,7 +127,7 @@ def snapshot(tmp_dir: str = TMP_DIR, backup_root: str = BACKUP_ROOT,
             _files.append({"name": _n, "bytes": os.path.getsize(_fp),
                            "sha256": _sha256(_fp)})
         except (OSError, IOError) as _e:
-            _files.append({"name": _n, "error": "%s: %s" % (type(_e).__name__, _e)})
+            _files.append({"name": _n, "error": "{}: {}".format(type(_e).__name__, _e)})
 
     _dirs = [_n for _n, _ in iter_tmp_dirs(tmp_dir)]
     _rep = {
@@ -192,7 +192,7 @@ def prune(keep: int = 5, backup_root: str = BACKUP_ROOT) -> dict:
             _removed.append(_b["snapshot"])
         except OSError as _e:
             _removed.append({"snapshot": _b["snapshot"],
-                             "error": "%s: %s" % (type(_e).__name__, _e)})
+                             "error": "{}: {}".format(type(_e).__name__, _e)})
     return {"keep": keep, "total": len(_all), "removed": _removed,
             "remaining": [x["snapshot"] for x in _all[:keep]]}
 
@@ -202,7 +202,7 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
     """从指定备份恢复文件到 tmp/（默认覆盖）。"""
     _src = os.path.join(backup_root, snapshot_id)
     if not os.path.isdir(_src):
-        return {"ok": False, "error": "备份不存在: %s" % snapshot_id}
+        return {"ok": False, "error": "备份不存在: {}".format(snapshot_id)}
     _mf = os.path.join(_src, MANIFEST)
     _manifest = None
     if os.path.isfile(_mf):
@@ -227,7 +227,7 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
             shutil.copy2(_s, _d)
             _restored.append({"name": _n, "sha256": _sha256(_d)})
         except (OSError, IOError) as _e:
-            _errors.append({"name": _n, "error": "%s: %s" % (type(_e).__name__, _e)})
+            _errors.append({"name": _n, "error": "{}: {}".format(type(_e).__name__, _e)})
 
     # 校验：与 MANIFEST 记录的 sha256 比对
     _mismatch = []
@@ -370,7 +370,7 @@ def migrate_legacy(legacy_root: str = LEGACY_BACKUP_ROOT,
             continue
         _d = os.path.join(backup_root, _n)
         if os.path.isdir(_d):
-            _out["skipped"].append("%s（目标已存在）" % _n)
+            _out["skipped"].append("{}（目标已存在）".format(_n))
             continue
         # 校验：MANIFEST 可解析（存在时）
         _mf = os.path.join(_s, MANIFEST)
@@ -378,13 +378,13 @@ def migrate_legacy(legacy_root: str = LEGACY_BACKUP_ROOT,
             try:
                 json.load(io.open(_mf, encoding="utf-8"))
             except ValueError as _e:
-                _out["errors"].append("%s MANIFEST 损坏: %s" % (_n, _e))
+                _out["errors"].append("{} MANIFEST 损坏: {}".format(_n, _e))
                 continue
         try:
             shutil.move(_s, _d)
             _out["moved"].append(_n)
         except (OSError, shutil.Error) as _e:
-            _out["errors"].append("%s: %s: %s" % (_n, type(_e).__name__, _e))
+            _out["errors"].append("{}: {}: {}".format(_n, type(_e).__name__, _e))
 
     # 仅当全部成功且旧目录为空时才删除
     if not _out["errors"]:
@@ -396,7 +396,7 @@ def migrate_legacy(legacy_root: str = LEGACY_BACKUP_ROOT,
             else:
                 _out["skipped"].append("旧目录仍残留 %d 项，保留" % len(_left))
         except OSError as _e:
-            _out["errors"].append("删除旧目录失败: %s" % _e)
+            _out["errors"].append("删除旧目录失败: {}".format(_e))
     return _out
 
 
@@ -433,7 +433,7 @@ def main() -> int:
 
     if _ns.cmd == "migrate":
         _r = migrate_legacy()
-        print("[migrate] %s → %s" % (_r["from"], _r["to"]))
+        print("[migrate] {} → {}".format(_r["from"], _r["to"]))
         print("   移动 %d 个: %s" % (len(_r["moved"]), _r["moved"]))
         if _r["skipped"]:
             print("   跳过:", _r["skipped"])
@@ -456,7 +456,7 @@ def main() -> int:
         _r = restore(_ns.snapshot_id, overwrite=not _ns.no_overwrite)
         print("[restore] ok=%s  恢复 %d 个%s"
               % (_r["ok"], _r.get("restored_count", 0),
-                 "  sha不匹配: %s" % _r["sha_mismatch"] if _r["sha_mismatch"] else ""))
+                 "  sha不匹配: {}".format(_r["sha_mismatch"]) if _r["sha_mismatch"] else ""))
         if _r.get("errors"):
             print("   errors:", _r["errors"])
     elif _ns.cmd == "prune":
@@ -470,7 +470,7 @@ def main() -> int:
             print("   ", _n)
         for _k in ("by_import", "by_subprocess", "by_open"):
             if _r[_k]:
-                print("  %s: %s" % (_k, _r[_k]))
+                print("  {}: {}".format(_k, _r[_k]))
         if _ns.json:
             with io.open(_ns.json, "w", encoding="utf-8") as _f:
                 _f.write(json.dumps(_r, ensure_ascii=False, indent=2))

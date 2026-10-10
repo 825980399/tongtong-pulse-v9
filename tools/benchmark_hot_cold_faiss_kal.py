@@ -67,7 +67,7 @@ def _config_snapshot():
             "ENABLE_DISTRIBUTED": g("ENABLE_DISTRIBUTED"),
         }
     except Exception as e:  # pragma: no cover
-        return {"error": "%s: %s" % (type(e).__name__, e)}
+        return {"error": "{}: {}".format(type(e).__name__, e)}
 
 
 def _framework_status():
@@ -93,7 +93,7 @@ def _framework_status():
                 silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L91")
     except Exception as e:
         silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L93")
-        out["error"] = "%s: %s" % (type(e).__name__, e)
+        out["error"] = "{}: {}".format(type(e).__name__, e)
     return out
 
 
@@ -370,7 +370,7 @@ def _load_real_nodes(parquet_dir):
                 import pandas as pd
                 _rows = pd.read_parquet(f).to_dict(orient="records")
             except Exception as e:
-                return {"error": "%s: %s" % (type(e).__name__, e)}
+                return {"error": "{}: {}".format(type(e).__name__, e)}
         for _r in _rows:
             if _lv83:
                 _r.setdefault("evol_level", _lv83)
@@ -407,7 +407,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
     if isinstance(raw, dict) and "error" in raw:
         return {"status": "SKIPPED", "reason": raw["error"]}
     if not raw:
-        return {"status": "SKIPPED", "reason": "Parquet 无节点（路径=%s）" % parquet_dir}
+        return {"status": "SKIPPED", "reason": "Parquet 无节点（路径={}）".format(parquet_dir)}
 
     try:
         import psutil
@@ -521,7 +521,7 @@ def main():
         except Exception as e:
             result["stages"][name] = {
                 "status": "SKIPPED",
-                "reason": "%s: %s" % (type(e).__name__, str(e)[:300]),
+                "reason": "{}: {}".format(type(e).__name__, str(e)[:300]),
             }
 
     if a.real_data:
@@ -530,7 +530,7 @@ def main():
         except Exception as e:
             result["stages"]["node_pool_real"] = {
                 "status": "SKIPPED",
-                "reason": "%s: %s" % (type(e).__name__, str(e)[:300]),
+                "reason": "{}: {}".format(type(e).__name__, str(e)[:300]),
             }
 
     if a.faiss_fix:
@@ -544,14 +544,14 @@ def main():
         except Exception as e:
             result["stages"]["faiss_fix"] = {
                 "status": "SKIPPED",
-                "reason": "%s: %s" % (type(e).__name__, str(e)[:300]),
+                "reason": "{}: {}".format(type(e).__name__, str(e)[:300]),
             }
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if a.json_out:
         with open(a.json_out, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
-        print("[benchmark] JSON 已写入 %s" % a.json_out, file=sys.stderr)
+        print("[benchmark] JSON 已写入 {}".format(a.json_out), file=sys.stderr)
     return 0
 
 

@@ -137,7 +137,7 @@ def iter_py_files(root: str = ROOT):
     for dp, dns, fns in os.walk(root):
         rel_dir = _normalize_relpath(dp, root)
         dns[:] = [d for d in dns if not should_skip_dir(
-            d if rel_dir in (".", "") else "%s/%s" % (rel_dir, d))]
+            d if rel_dir in (".", "") else "{}/{}".format(rel_dir, d))]
         for fn in fns:
             if not fn.endswith(".py"):
                 continue
@@ -180,7 +180,7 @@ def backup(batch_no: int, root: str = ROOT, dry_run: bool = False) -> dict:
                 shutil.copy2(src, dst)
             copied += 1
         except Exception as _e:                      # 单个文件失败不中断整批
-            errors.append("%s: %s: %s" % (rel, type(_e).__name__, _e))
+            errors.append("{}: {}: {}".format(rel, type(_e).__name__, _e))
     return {
         "batch": batch_no,
         "dst": dst_root,
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     print("  nucleus/data/ 纳入: %d    tmp/ 纳入: %d"
           % (_r["nucleus_data_included"], _r["tmp_included"]))
     for _e in _r["errors"][:10]:
-        print("  [ERR] %s" % _e)
+        print("  [ERR] {}".format(_e))
     return 1 if _r["errors"] else 0
 
 

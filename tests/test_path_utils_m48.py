@@ -93,7 +93,7 @@ class TestSafeRelpath(unittest.TestCase):
             safe_relpath(tempfile.gettempdir(), _ROOT)
         except (ValueError, OSError, TypeError) as _e:
             _raised = _e
-        self.assertIsNone(_raised, "safe_relpath 不应抛异常，实得 %r" % _raised)
+        self.assertIsNone(_raised, "safe_relpath 不应抛异常，实得 {!r}".format(_raised))
 
     def test_14_start_none(self):
         """start=None 时等价于 os.path.relpath(path)（基于 cwd）。"""
@@ -146,7 +146,7 @@ class TestToolIntegration(unittest.TestCase):
                 encoding="utf-8", errors="replace", timeout=180)
             _out = (_r.stdout or "") + (_r.stderr or "")
             self.assertNotIn("ValueError", _out,
-                             "跨盘路径导致 ValueError: %s" % _out[-300:])
+                             "跨盘路径导致 ValueError: {}".format(_out[-300:]))
             self.assertEqual(_r.returncode, 0, _out[-300:])
         finally:
             shutil.rmtree(_d, ignore_errors=True)
@@ -169,7 +169,7 @@ class TestToolIntegration(unittest.TestCase):
                 encoding="utf-8", errors="replace", timeout=180)
             _out = (_r.stdout or "") + (_r.stderr or "")
             self.assertNotIn("ValueError", _out,
-                             "跨盘路径导致 ValueError: %s" % _out[-300:])
+                             "跨盘路径导致 ValueError: {}".format(_out[-300:]))
             self.assertEqual(_r.returncode, 0, _out[-300:])
         finally:
             shutil.rmtree(_d, ignore_errors=True)

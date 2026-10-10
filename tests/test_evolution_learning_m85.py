@@ -170,7 +170,7 @@ class TestM85LearningAttempt(unittest.TestCase):
         _r = _rows[0]
         for _f in ("ts", "issue_type", "file", "method", "strategy", "result",
                    "llm_fallback"):
-            self.assertIn(_f, _r, "学习记录缺字段 %s" % _f)
+            self.assertIn(_f, _r, "学习记录缺字段 {}".format(_f))
         self.assertEqual(_r["issue_type"], "long_method")
         self.assertEqual(_r["result"], "success")
         self.assertFalse(_r["llm_fallback"])
@@ -234,7 +234,7 @@ class TestM85LearningAttempt(unittest.TestCase):
             self.executor._m85_learning_attempt(
                 self._issue(), os.path.join(self.tmp, "x.py"), "f", _code, "PulseLiver")
         except Exception as e:  # pragma: no cover
-            self.fail("异常逃出学习通道: %s: %s" % (type(e).__name__, e))
+            self.fail("异常逃出学习通道: {}: {}".format(type(e).__name__, e))
 
     def test_18_wired_into_main_loop(self):
         """源码级接线断言：主循环内确实调用了学习通道。"""

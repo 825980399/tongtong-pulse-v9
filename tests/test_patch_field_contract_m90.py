@@ -224,7 +224,7 @@ class TestT90aGateZeroSemantics(unittest.TestCase):
         """字段可能是 None/int/list —— 关0 必须健壮（不得抛异常）。"""
         for _bad in (None, 0, [], {}, ""):
             _r = _check(self.pm, {"original_code": _bad, "modified_code": "def f():\n    return 1\n"})
-            self.assertFalse(_r["complete"], "original_code=%r 应被拒" % (_bad,))
+            self.assertFalse(_r["complete"], "original_code={!r} 应被拒".format(_bad))
 
 
 # ============================================================ B 零回归证明
@@ -255,7 +255,7 @@ class TestT90aZeroRegression(unittest.TestCase):
             _old = _leg_pm._check_llm_patch_completeness(dict(_patch))
             _new = _check(self.pm, dict(_patch))
             self.assertEqual(_old["complete"], _new["complete"],
-                             "[%s] 结论漂移：改前=%r 改后=%r" % (_name, _old, _new))
+                             "[{}] 结论漂移：改前={!r} 改后={!r}".format(_name, _old, _new))
         self.assertTrue(True)
 
     def test_21_legacy_reported_wrong_reason(self):
@@ -287,7 +287,7 @@ class TestT90aProductionLibrary(unittest.TestCase):
     def test_30_library_not_empty(self):
         """自检：真的读到了补丁（否则后面的断言是空转）。"""
         self.assertGreater(len(self.patches), 0,
-                           "补丁库为空：%s / %s" % (_PENDING, _HISTORY))
+                           "补丁库为空：{} / {}".format(_PENDING, _HISTORY))
 
     def test_31_no_verdict_drift_on_real_patches(self):
         """★核心零回归：75 条真实补丁「改前判定 == 改后判定」逐条相等。"""
@@ -304,7 +304,7 @@ class TestT90aProductionLibrary(unittest.TestCase):
                 _drift.append((_p.get("id", "?"), _old, _new))
             if not _new["complete"] and "必填字段" in _new["reason"]:
                 _rej_gate0 += 1
-        self.assertEqual(_drift, [], "存在判定漂移：%s" % (_drift[:3],))
+        self.assertEqual(_drift, [], "存在判定漂移：{}".format(_drift[:3]))
         # 真实数据里不应有关0 拒绝（生产者一直传齐字段）—— 这是 T0 结论的回归护栏
         self.assertEqual(_rej_gate0, 0,
                          "生产补丁被关0 拒绝 %d 条 ⇒ 存在字段契约不完整的生产者" % _rej_gate0)
@@ -337,7 +337,7 @@ class TestT90aFieldContractSweep(unittest.TestCase):
                 _offenders.append("%s:%d" % (_rel, _ln))
         self.assertGreater(_total, 0, "穷举到 0 个构造点 ⇒ 扫描逻辑失效，断言无效")
         self.assertEqual(_offenders, [],
-                         "以下补丁 dict 字面量缺 original_code：%s" % (_offenders,))
+                         "以下补丁 dict 字面量缺 original_code：{}".format(_offenders))
 
     def test_41_safe_evolution_executor_gate_present(self):
         """生产者侧同型闸 `_llm_no_snippet` 必须存在且参与构造条件。"""
@@ -363,7 +363,7 @@ class TestT90aFieldContractSweep(unittest.TestCase):
                     _found.append(sorted(_keys))
         self.assertTrue(_found, "TestGenerator 里找不到补丁夹具")
         for _keys in _found:
-            self.assertIn("original_code", _keys, "夹具字段不全：%s" % (_keys,))
+            self.assertIn("original_code", _keys, "夹具字段不全：{}".format(_keys))
 
 
 # ============================================================ E 开关契约
@@ -386,8 +386,8 @@ class TestT90aSwitchContract(unittest.TestCase):
         _cfg = os.path.join(ROOT, "config.py")
         _src = io.open(_cfg, encoding="utf-8", errors="ignore").read()
         self.assertIn(_SWITCH, _src,
-                      "第91批 T-91c 起 %s 必须正式登记在 config.py" % _SWITCH)
-        self.assertIn("%s = True" % _SWITCH, _src, "登记默认值必须为 True（与登记前一致）")
+                      "第91批 T-91c 起 {} 必须正式登记在 config.py".format(_SWITCH))
+        self.assertIn("{} = True".format(_SWITCH), _src, "登记默认值必须为 True（与登记前一致）")
         import config as _cfg_mod
         self.assertTrue(getattr(_cfg_mod, _SWITCH))
 
@@ -399,7 +399,7 @@ class TestT90aSwitchContract(unittest.TestCase):
             _r = _check(self.pm, dict(_patch))
             self.assertFalse(_r["complete"], "关闭后仍应被拒（改前行为）")
             self.assertNotIn("必填字段", _r["reason"],
-                             "关闭后仍在走关0：%s" % _r["reason"])
+                             "关闭后仍在走关0：{}".format(_r["reason"]))
         # 退出上下文 → 恢复默认（开）
         self.assertTrue(_m90_patch_field_contract_on())
 
@@ -410,7 +410,7 @@ class TestT90aSwitchContract(unittest.TestCase):
             with _Switch(_v):
                 _r = _check(self.pm, dict(_patch))
                 self.assertEqual("必填字段" in _r["reason"], _v,
-                                 "开关=%r 时理由=%r" % (_v, _r["reason"]))
+                                 "开关={!r} 时理由={!r}".format(_v, _r["reason"]))
 
 
 if __name__ == "__main__":

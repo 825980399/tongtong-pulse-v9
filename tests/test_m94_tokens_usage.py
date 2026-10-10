@@ -160,12 +160,12 @@ class TestM94TokensStaticWiring(_Base):
                            ("adapter_registry.py", "ExternalGatewayAdapter")):
             _bak = os.path.join(_BAK, _rel + ".bak")
             if not os.path.isfile(_bak):
-                self.skipTest("改前备份缺失: %s" % _rel)
+                self.skipTest("改前备份缺失: {}".format(_rel))
             _new_args = _def_args(os.path.join(_LLM, _rel), _cls, "parse_response")
             _old_args = _def_args(_bak, _cls, "parse_response")
             self.assertIsNotNone(_new_args)
             self.assertEqual(_old_args, _new_args,
-                             "★%s.parse_response 签名必须与改前一致" % _cls)
+                             "★{}.parse_response 签名必须与改前一致".format(_cls))
 
     def test_A3_subclasses_implement_extract_usage(self):
         _oa = OpenAICompatibleAdapter()
@@ -211,8 +211,7 @@ class TestM94TokensStaticWiring(_Base):
         for _name, _p in _ENGINES.items():
             _hits = _decorated_funcs_with_assign(_p, "_last_llm_usage")
             self.assertEqual(1, len(_hits),
-                             "★%s 必须恰有 1 个被装饰的出口暂存 usage，实得 %r"
-                             % (_name, _hits))
+                             "★{} 必须恰有 1 个被装饰的出口暂存 usage，实得 {!r}".format(_name, _hits))
             self.assertTrue(any("trace_evolution_call" in d
                                 for d in _hits[0][1]))
 
@@ -252,13 +251,13 @@ class TestM94ExtractUsage(_Base):
                    {"prompt_tokens": 0},
                    {}):
             self.assertIsNone(self.oa.extract_usage({"usage": _u}),
-                              "★不写假数据：%r ⇒ None" % (_u,))
+                              "★不写假数据：{!r} ⇒ None".format(_u))
 
     def test_B4_non_dict_response_or_usage(self):
         for _v in (None, [], "x", 0, {"usage": None}, {"usage": []},
                    {"choices": []}):
             self.assertIsNone(self.oa.extract_usage(_v),
-                              "★%r ⇒ None（结构防御）" % (_v,))
+                              "★{!r} ⇒ None（结构防御）".format(_v))
 
     def test_B5_non_numeric_and_bool_are_rejected(self):
         self.assertIsNone(self.oa.extract_usage(
@@ -350,7 +349,7 @@ class TestM94RecorderUsage(_Base):
                                             "completion_tokens": 0,
                                             "total_tokens": 0}, "x", 5, []):
             _rec = self._rec(usage=_u)
-            self.assertIsNone(_rec["usage"], "★%r ⇒ usage 必须为 None" % (_u,))
+            self.assertIsNone(_rec["usage"], "★{!r} ⇒ usage 必须为 None".format(_u))
             self.assertEqual(0, _rec["tokens"])
 
     def test_C6_usage_is_json_serialisable(self):

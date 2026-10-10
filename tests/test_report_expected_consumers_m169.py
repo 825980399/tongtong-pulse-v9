@@ -91,7 +91,7 @@ class TestMissingConsumerAlert(unittest.TestCase):
         b = _new_bus()
         _w = self._publish_capture(b)
         self.assertTrue(any("消费契约机检" in x and "无订阅者" in x for x in _w),
-                        "无订阅者应触发同族告警: %s" % _w)
+                        "无订阅者应触发同族告警: {}".format(_w))
 
     def test_11_expected_covered_no_warn(self):
         b = _new_bus()
@@ -103,7 +103,7 @@ class TestMissingConsumerAlert(unittest.TestCase):
         b.declare_expected_consumers("health", ["c1"])
         _w = self._publish_capture(b)
         self.assertFalse([x for x in _w if "消费契约机检" in x],
-                         "期望被覆盖时不应告警: %s" % _w)
+                         "期望被覆盖时不应告警: {}".format(_w))
 
     def test_12_expected_missing_warns(self):
         b = _new_bus()
@@ -117,7 +117,7 @@ class TestMissingConsumerAlert(unittest.TestCase):
         self.assertTrue(
             any("消费契约机检" in x and "期望消费者未覆盖" in x and "c2" in x
                 for x in _w),
-            "期望未覆盖应告警且点名缺失者: %s" % _w)
+            "期望未覆盖应告警且点名缺失者: {}".format(_w))
 
     def test_13_switch_off_zero_regression(self):
         """开关关闭 → 不告警、不校验（行为回到 C1 之前）。"""
@@ -127,7 +127,7 @@ class TestMissingConsumerAlert(unittest.TestCase):
             self.assertFalse(rb.ReportBus._m169_expected_consumers_on())
             _w = self._publish_capture(b)
         self.assertFalse([x for x in _w if "消费契约机检" in x],
-                         "开关关闭时不得告警: %s" % _w)
+                         "开关关闭时不得告警: {}".format(_w))
 
     def test_14_throttled_within_window(self):
         """同族节流：窗口内只告警一次。"""
@@ -137,7 +137,7 @@ class TestMissingConsumerAlert(unittest.TestCase):
             b.publish_simple("health", "m169_test")
             b.publish_simple("health", "m169_test")
         _hits = [x for x in _rec.warnings if "消费契约机检" in x]
-        self.assertEqual(len(_hits), 1, "节流失效: %s" % _rec.warnings)
+        self.assertEqual(len(_hits), 1, "节流失效: {}".format(_rec.warnings))
 
 
 class TestCheckMissingConsumers(unittest.TestCase):

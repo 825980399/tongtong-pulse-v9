@@ -2662,8 +2662,7 @@ class PulseInnerWorld(
                 #   例：「打开微信，进入张总的聊天窗口，把这段话发送给他。」
                 #   ★主线第35批 T4（P2-204）：分隔符 `[，,、]` 改为**可选**，
                 #     支持无逗号变体（「打开设置把蓝牙关掉」）；开关关闭 → 恢复必选（零回归）。
-                r'(?:%s).{0,20}?%s(?:把|将).{0,20}?(?:%s)'
-                % ("|".join(_verbs),
+                r'(?:{}).{{0,20}}?{}(?:把|将).{{0,20}}?(?:{})'.format("|".join(_verbs),
                    (r'[，,、]?\s*' if PulseInnerWorld._m35_ba_chain_loose_on()
                     else r'[，,、]\s*'),
                    "|".join(_ba_tail)),
@@ -14158,7 +14157,7 @@ class PulseInnerWorld(
             _trust_n = 0
             for _n in _sample:
                 try:
-                    _blob = "%s %s" % (
+                    _blob = "{} {}".format(
                         str(getattr(_n, "value", "") or ""),
                         " ".join(str(_k) for _k in (getattr(_n, "keywords", None) or [])),
                     )
@@ -14172,13 +14171,12 @@ class PulseInnerWorld(
                     except Exception as _e:
                         # ★核心文件禁止静默吞异常（m7 门禁）→ 记 DEBUG（自愈即降级）
                         self._log(LogLevel.DEBUG,
-                                  "多步入口预判: 信任度累加跳过 %s: %s"
-                                  % (type(_e).__name__, _e))
+                                  "多步入口预判: 信任度累加跳过 {}: {}".format(type(_e).__name__, _e))
             _avg_trust = (_trust_sum / _trust_n) if _trust_n else 0.0
             _domain_weak = (_hits < _min_nodes) and (_avg_trust < _min_trust)
 
             # ---------- ② 命中率探针（本地检索，零模型） ----------
-            _probe_prompt = ("%s %s" % (" ".join(_terms), question)).strip() if _terms else question
+            _probe_prompt = ("{} {}".format(" ".join(_terms), question)).strip() if _terms else question
             try:
                 _probe = self._knowledge_retrieve(_probe_prompt)
             except Exception as e:
@@ -14207,7 +14205,7 @@ class PulseInnerWorld(
         except Exception as _e:
             # ★预判本身异常 → 统统降级为“不确定”，绝不把正常多步拦掉
             self._log(LogLevel.DEBUG,
-                      "多步入口预判跳过(异常降级): %s: %s" % (type(_e).__name__, _e))
+                      "多步入口预判跳过(异常降级): {}: {}".format(type(_e).__name__, _e))
             return None
 
     def _multi_step_execute_v2(self, question: str, user_name: str = "") -> str | None:

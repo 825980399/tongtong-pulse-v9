@@ -203,7 +203,7 @@ class TestAnalysisScript(unittest.TestCase):
         for _prefix in ("profile_", "report_", "production_consumption_",
                         "fake_loops_"):
             _hit = [f for f in _files if f.startswith(_prefix)]
-            self.assertTrue(_hit, "缺少 %s* 落盘: %s" % (_prefix, _files))
+            self.assertTrue(_hit, "缺少 {}* 落盘: {}".format(_prefix, _files))
             _p = os.path.join(self.out, _hit[0])
             self.assertGreater(os.path.getsize(_p), 0, _p)
 

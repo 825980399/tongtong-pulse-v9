@@ -234,7 +234,7 @@ class TestM96ChannelPool(unittest.TestCase):
                         txt = ast.unparse(v)
                         found = True
                         self.assertIn("model or", txt,
-                                      "payload.model 必须是 `model or <默认>`: %s" % txt)
+                                      "payload.model 必须是 `model or <默认>`: {}".format(txt))
         self.assertTrue(found, "未找到 payload 的 model 键")
 
     def test_A5_select_channel_uses_same_judges(self):
@@ -245,7 +245,7 @@ class TestM96ChannelPool(unittest.TestCase):
         calls = _call_attrs(fn)
         for required in ("get_active_channels", "apply_to_channels", "is_available"):
             self.assertIn(required, calls,
-                          "_m96_select_channel 必须调用 %s（与生产同源）" % required)
+                          "_m96_select_channel 必须调用 {}（与生产同源）".format(required))
 
     def test_A6_result_recorded_back_to_health(self):
         cls = _cls(_tree(SE_REL), "SafeEvolutionExecutor")
@@ -284,7 +284,7 @@ class TestM96ChannelPool(unittest.TestCase):
             if s.startswith("#"):
                 continue
             self.assertFalse(s.startswith("from organs") or s.startswith("import organs"),
-                             "nucleus 不得静态依赖 organs: %r" % s[:80])
+                             "nucleus 不得静态依赖 organs: {!r}".format(s[:80]))
 
     def test_A10_injection_hook_exists(self):
         cls = _cls(_tree(SE_REL), "SafeEvolutionExecutor")
@@ -325,7 +325,7 @@ class TestM96ApprovalGovernance(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         _p = {"file": "organs/body/PulseLiver.py", "method": "f",
               "source": "local_rule", "confidence": "high", "risk_level": "低"}
         self.assertFalse(PatchManager._m85_local_low_risk_auto_apply(_p),
@@ -339,7 +339,7 @@ class TestM96ApprovalGovernance(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         pm = object.__new__(PatchManager)
         pm._last_apply_time = 0.0
         _p = {"status": "approved", "trust_score": 10, "risk_level": "高"}
@@ -352,7 +352,7 @@ class TestM96ApprovalGovernance(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         pm = object.__new__(PatchManager)
         pm._last_apply_time = 0.0
         # 信任分不足 ⇒ 必须被拦（旧的"无条件放行"会返回 safe=True）
@@ -366,12 +366,12 @@ class TestM96ApprovalGovernance(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         pm = object.__new__(PatchManager)
         pm._last_apply_time = 0.0
         _r = pm._check_patch_safety({"status": "approved", "auto_approved": True,
                                      "trust_score": 90, "risk_level": "低"})
-        self.assertTrue(_r["safe"], "三关全过应放行: %s" % _r)
+        self.assertTrue(_r["safe"], "三关全过应放行: {}".format(_r))
 
     def test_B7_entry_gate_source_wired(self):
         """apply_all_pending 入口必须 _load 之后立即做 auto_approved 收口。"""
@@ -457,7 +457,7 @@ class TestM96LedgerVerification(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         names = getattr(PatchManager, "_M96_NO_AUTO_PATCH_METHODS", None)
         self.assertTrue(names, "缺 _M96_NO_AUTO_PATCH_METHODS")
         self.assertIn("_safe_eval_arithmetic", names,
@@ -467,7 +467,7 @@ class TestM96LedgerVerification(unittest.TestCase):
         try:
             from nucleus.reasoning.PatchManager import PatchManager
         except Exception as e:
-            self.skipTest("PatchManager 不可导入: %s" % e)
+            self.skipTest("PatchManager 不可导入: {}".format(e))
         _p = {"file": "organs/brain/PulseInnerWorld.py", "method": "_safe_eval_arithmetic",
               "source": "local_rule", "confidence": "high", "risk_level": "低"}
         self.assertFalse(PatchManager._m85_local_low_risk_auto_apply(
@@ -478,10 +478,10 @@ class TestM96LedgerVerification(unittest.TestCase):
     def test_C5_trace_file_persists(self):
         """★双写的核心：独立留痕副本必须存在（运行态可能被覆盖）。"""
         self.assertTrue(os.path.isfile(os.path.join(ROOT, TRACE_REL)),
-                        "缺独立留痕报告 %s" % TRACE_REL)
+                        "缺独立留痕报告 {}".format(TRACE_REL))
         txt = _read(TRACE_REL)
         for _id in ("patch_llm_1789886168_789a", "patch_llm_1789890006_e8ba"):
-            self.assertIn(_id, txt, "留痕报告缺 %s" % _id)
+            self.assertIn(_id, txt, "留痕报告缺 {}".format(_id))
         self.assertIn("original_code", txt)
 
     def test_C6_ledger_correction_if_present(self):
@@ -495,7 +495,7 @@ class TestM96LedgerVerification(unittest.TestCase):
         try:
             d = json.load(io.open(p, encoding="utf-8"))
         except Exception as e:
-            self.skipTest("patch_history.json 解析失败（可能被并发写）: %s" % e)
+            self.skipTest("patch_history.json 解析失败（可能被并发写）: {}".format(e))
         tgt = [r for r in d if r.get("id") in
                ("patch_llm_1789886168_789a", "patch_llm_1789890006_e8ba")]
         if not tgt:
@@ -527,10 +527,10 @@ class TestM96ChannelPriority(unittest.TestCase):
         ]
         by_name = {c[0]: c for c in self.ch}
         for prio, name, model in want:
-            self.assertIn(name, by_name, "渠道缺失: %s" % name)
+            self.assertIn(name, by_name, "渠道缺失: {}".format(name))
             got = by_name[name]
-            self.assertEqual(got[2], prio, "%s 优先级应为 %s，实际 %s" % (name, prio, got[2]))
-            self.assertEqual(got[1], model, "%s model 不符" % name)
+            self.assertEqual(got[2], prio, "{} 优先级应为 {}，实际 {}".format(name, prio, got[2]))
+            self.assertEqual(got[1], model, "{} model 不符".format(name))
 
     def test_D2_new_models_already_in_pool(self):
         """★任务书 T-96d 第1项前提核实：两个新模型**本就已在池中**。"""
@@ -545,7 +545,7 @@ class TestM96ChannelPriority(unittest.TestCase):
             seen.setdefault(c[2], []).append(c[0])
         dup = {k: v for k, v in seen.items() if len(v) > 1}
         self.assertEqual(dup, {}, "优先级 1~7 内不得重号（原配置存在 arch-seed-21-turbo "
-                                  "与 deepseek 同为 6）: %s" % dup)
+                                  "与 deepseek 同为 6）: {}".format(dup))
 
     def test_D4_free_channel_is_first(self):
         self.assertEqual(self.ch and min(self.ch, key=lambda c: c[2])[0], "zhipu",
@@ -603,7 +603,7 @@ class TestM96LedgerDelivery(unittest.TestCase):
         blob = "\n".join(",".join(r) for r in body)
         for i in range(1, 12):
             n = "N%d" % i
-            self.assertIn(n, blob, "台账缺烛微 %s" % n)
+            self.assertIn(n, blob, "台账缺烛微 {}".format(n))
 
     @pytest.mark.xfail(reason="151批长期红基线(IW)，已知不修 [T155-2]", strict=False)
     def test_E3_unique_N_to_D_mapping(self):
@@ -617,12 +617,12 @@ class TestM96LedgerDelivery(unittest.TestCase):
             if "映射：烛微第1期" in advice:
                 import re as _re
                 mm = _re.search(r"映射：烛微第1期\s*(N\d+)\s*↔\s*台账\s*(D\d+)", advice)
-                self.assertTrue(mm, "映射格式不合规: %r" % advice[:80])
+                self.assertTrue(mm, "映射格式不合规: {!r}".format(advice[:80]))
                 n, d = mm.group(1), mm.group(2)
-                self.assertEqual(d, r[0], "%s 的映射编号与行 id 不一致" % r[0])
-                self.assertNotIn(n, mapping, "%s 重复映射: %s / %s" % (n, mapping.get(n), d))
+                self.assertEqual(d, r[0], "{} 的映射编号与行 id 不一致".format(r[0]))
+                self.assertNotIn(n, mapping, "{} 重复映射: {} / {}".format(n, mapping.get(n), d))
                 mapping[n] = d
-                self.assertIn(n, claim, "%s 行「文档声称状态」未标注外部编号" % d)
+                self.assertIn(n, claim, "{} 行「文档声称状态」未标注外部编号".format(d))
         self.assertEqual(len(mapping), 11, "N↔D 映射应恰为 11 条，实际 %d" % len(mapping))
 
     @pytest.mark.xfail(reason="151批长期红基线(IW)，已知不修 [T155-2]", strict=False)
@@ -631,7 +631,7 @@ class TestM96LedgerDelivery(unittest.TestCase):
                         "缺固定投递工序 SOP")
         txt = _read(SOP_REL)
         for kw in ("固定投递工序", "P 级映射", "实查状态", "验收判据"):
-            self.assertIn(kw, txt, "SOP 缺关键节: %s" % kw)
+            self.assertIn(kw, txt, "SOP 缺关键节: {}".format(kw))
 
     @pytest.mark.xfail(reason="151批长期红基线(IW)，已知不修 [T155-2]", strict=False)
     def test_E5_sop_mapping_table_matches(self):
@@ -666,7 +666,7 @@ class TestM96PathAndGit(unittest.TestCase):
                     found.append(os.path.join(dp, fname))
             hits[fname] = found
         for k, v in hits.items():
-            self.assertTrue(v, "docs/ 下递归仍未找到 %s" % k)
+            self.assertTrue(v, "docs/ 下递归仍未找到 {}".format(k))
 
     def test_F3_m76_baseline_uses_root_commit(self):
         """不再依赖 HEAD commit message（D95-8）。"""
@@ -680,8 +680,8 @@ class TestM96PathAndGit(unittest.TestCase):
     def test_F4_remote_whitelist_both_files(self):
         for rel in ("tests/test_m76_quality_git.py", "tests/test_m77_debt_audit.py"):
             src = _read(rel)
-            self.assertIn("_ALLOWED_HOSTS", src, "%s 未改为白名单守护" % rel)
-            self.assertIn("gitee.com", src, "%s 白名单应含星轨已配置的主机" % rel)
+            self.assertIn("_ALLOWED_HOSTS", src, "{} 未改为白名单守护".format(rel))
+            self.assertIn("gitee.com", src, "{} 白名单应含星轨已配置的主机".format(rel))
 
     def test_F5_no_bare_empty_remote_assert(self):
         """原「remote 必须为空」的断言必须已移除（否则下一次提交必红）。"""

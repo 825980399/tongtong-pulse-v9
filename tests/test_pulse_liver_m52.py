@@ -160,7 +160,7 @@ class TestBoundary(_Base):
                     self.o.on_pulse({"event_type": "heart.beat",
                                      "payload": {}})
             except Exception as _e:
-                _errs.append("%s: %s" % (type(_e).__name__, _e))
+                _errs.append("{}: {}".format(type(_e).__name__, _e))
 
         _ts = [threading.Thread(target=_w) for _ in range(4)]
         for _t in _ts:

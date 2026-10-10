@@ -64,7 +64,7 @@ def cmd_plan(ns) -> int:
     print("=" * 70)
     print("清洗预案（只读，不修改任何数据）")
     print("=" * 70)
-    print("  经验库: %s" % ns.pool)
+    print("  经验库: {}".format(ns.pool))
     print("  总记录 %d  污染 %d (%.1f%%)  干净 %d"
           % (s["total"], s["polluted"], s["polluted_rate"] * 100,
              s["total"] - s["polluted"]))
@@ -72,7 +72,7 @@ def cmd_plan(ns) -> int:
     print("  分类:", r["by_class"])
     print("  ★预计清洗后可检索: %d 条 (%.1f%%)"
           % (s["total"] - s["polluted"], (1 - s["polluted_rate"]) * 100))
-    print("  ★策略: 标记不删除；备份路径 %s" % ns.backup)
+    print("  ★策略: 标记不删除；备份路径 {}".format(ns.backup))
     return 0
 
 
@@ -99,7 +99,7 @@ def cmd_verify(ns) -> int:
         io.open(ns.report, "w", encoding="utf-8").write(
             json.dumps({"cleanup": s, "clean_records": len(_clean),
                         "clean_retrievable": len(_clean_ok)}, ensure_ascii=False, indent=2))
-        print("  报告已写出 → %s" % ns.report)
+        print("  报告已写出 → {}".format(ns.report))
     return 0
 
 
@@ -115,11 +115,11 @@ def cmd_apply(ns) -> int:
     _r = _ec.cleanup_file(ns.pool, batch_no=ns.batch, backup=ns.backup,
                           dry_run=False)
     _b, _a = _r["stats_before"], _r["stats_after"]
-    print("  备份: %s" % _r.get("backup"))
-    print("  sha256 前 : %s" % str(_r.get("sha256_before"))[:32])
-    print("  sha256 备份: %s  一致=%s" % (str(_r.get("sha256_backup"))[:32],
+    print("  备份: {}".format(_r.get("backup")))
+    print("  sha256 前 : {}".format(str(_r.get("sha256_before"))[:32]))
+    print("  sha256 备份: {}  一致={}".format(str(_r.get("sha256_backup"))[:32],
                                           _r.get("backup_matches_source")))
-    print("  sha256 后 : %s" % str(_r.get("sha256_after"))[:32])
+    print("  sha256 后 : {}".format(str(_r.get("sha256_after"))[:32]))
     print()
     print("  清洗前: 总 %d  污染 %d (%.1f%%)  可检索 %d"
           % (_b["total"], _b["polluted"], _b["polluted_rate"] * 100, _b["retrievable"]))
@@ -138,10 +138,10 @@ def cmd_rollback(ns) -> int:
         print("★这是写操作。确认请加 --yes")
         return 2
     if not os.path.isfile(ns.backup):
-        print("★备份不存在，无法回滚: %s" % ns.backup)
+        print("★备份不存在，无法回滚: {}".format(ns.backup))
         return 3
     _r = _ec.rollback_file(ns.pool, ns.backup)
-    print("  已回滚: %s" % _r)
+    print("  已回滚: {}".format(_r))
     return 0
 
 

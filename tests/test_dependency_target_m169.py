@@ -49,7 +49,7 @@ class TestLocalDecisionRate(unittest.TestCase):
         """★禁自算守卫：实现必须复用 llm_dependency_ratio()，不得另算分母。"""
         _src = inspect.getsource(m.LLMDependencyMetrics.local_decision_rate)
         self.assertIn("self.llm_dependency_ratio()", _src,
-                      "本地决策率必须复用唯一口径，禁止自算: %s" % _src)
+                      "本地决策率必须复用唯一口径，禁止自算: {}".format(_src))
         # 不得出现 local_total / (llm_total + local_total) 形式的自算
         self.assertNotIn("self.local_total()", _src)
         self.assertNotIn("self.llm_total()", _src)
@@ -135,7 +135,7 @@ class TestSnapshotAndHourlyLog(unittest.TestCase):
         with mock.patch.object(m, "_logger", _L()):
             self.x.log_hourly()
         self.assertTrue(any("本地决策率" in x for x in _rec),
-                        "小时日志未出现本地决策率: %s" % _rec)
+                        "小时日志未出现本地决策率: {}".format(_rec))
 
 
 if __name__ == "__main__":

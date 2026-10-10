@@ -226,7 +226,7 @@ class TestT90bBug1MessageTimingAndRetry(unittest.TestCase):
     def test_11_new_first_call_receives_real_message(self):
         """★后绿：改后首次定位拿到的 message 非空，且带得动方法名推断。"""
         _seen, _issues, _la = _spy_scan(sys.modules[LogAnalyzer.__module__], "now")
-        self.assertEqual(len(_seen), 1, "两行同 key 日志只应触发一次定位：%s" % (_seen,))
+        self.assertEqual(len(_seen), 1, "两行同 key 日志只应触发一次定位：{}".format(_seen))
         self.assertEqual(_seen[0][0], "胃")
         self.assertTrue(_seen[0][1].strip(), "改后首调 message 不得为空（绿）")
         self.assertIn("JSON 解析失败", _seen[0][1])
@@ -301,7 +301,7 @@ class TestT90bBug1MessageTimingAndRetry(unittest.TestCase):
         self.assertEqual(_iss["method"], "f")
         self.assertAlmostEqual(_iss["locate_confidence"], 0.4)
         self.assertTrue(_iss["needs_human_confirm"],
-                        "0.4 < 阈值 %.1f 应标记需人工确认" % LogAnalyzer._LOCATE_CONF_THRESHOLD)
+                        "0.4 < 阈值 {:.1f} 应标记需人工确认".format(LogAnalyzer._LOCATE_CONF_THRESHOLD))
         # 命中高置信度 → 不需人工确认
         _iss2 = {"message": "m"}
         _la._m90_apply_location(_iss2, {"file": "a/b.py", "confidence": 0.9})
@@ -335,13 +335,13 @@ class TestT90bBug3PrefixToContains(unittest.TestCase):
         for _tag in ("胃", "心脏", "肺", "框架"):
             # 前提：确有某个头部中文名**包含**该标签
             _hosts = [_cn for _cn in _idx if _tag in _cn]
-            self.assertTrue(_hosts, "%r 不在任何头部名里 ⇒ 样本失效" % _tag)
+            self.assertTrue(_hosts, "{!r} 不在任何头部名里 ⇒ 样本失效".format(_tag))
             # 结论：改前算法对它们恒不命中（红）
             self.assertFalse(_legacy_cn_prefix_hit(_tag, _idx),
-                             "改前算法不该命中 %r（红）" % _tag)
+                             "改前算法不该命中 {!r}（红）".format(_tag))
             # 且「包含」而「非前缀」是常态：逐对确认宿主名并非以该标签开头
             self.assertFalse(any(_legacy_pair_prefix(_cn, _tag) for _cn in _hosts),
-                             "%r 其实是前缀型，样本选错" % _tag)
+                             "{!r} 其实是前缀型，样本选错".format(_tag))
 
     def test_31_suffix_inclusion_pairs_exist(self):
         """结构性事实（动态）：索引里普遍存在「后缀包含」型键对，
@@ -368,16 +368,16 @@ class TestT90bBug3PrefixToContains(unittest.TestCase):
         for _cn in _has:
             _short = _cn.replace("脉冲驱动", "")
             _r = _insp.locate_issue(_short, "")
-            self.assertTrue(_r.get("file"), "%r 应命中（绿）" % _short)
+            self.assertTrue(_r.get("file"), "{!r} 应命中（绿）".format(_short))
             self.assertTrue(os.path.isfile(os.path.join(ROOT, _r["file"])),
-                            "命中路径必须真实存在：%s" % _r["file"])
+                            "命中路径必须真实存在：{}".format(_r["file"]))
 
     def test_33_known_real_cases(self):
         """真实日志里出现过的包含型标签（胃/心脏/肺/框架）逐一命中。"""
         _insp = _inspector()
         for _tag in ("胃", "心脏", "肺", "框架"):
             _r = _insp.locate_issue(_tag, "")
-            self.assertTrue(_r.get("file"), "%r 应命中" % _tag)
+            self.assertTrue(_r.get("file"), "{!r} 应命中".format(_tag))
 
 
 # ============================================================ C bug#2
@@ -392,20 +392,20 @@ class TestT90bBug2ClassIndexWired(unittest.TestCase):
         _insp = _inspector()
         for _tag in self._CLS_TAGS:
             _r = _insp.locate_issue(_tag, "")
-            self.assertTrue(_r.get("file"), "%r 应命中（绿）" % _tag)
+            self.assertTrue(_r.get("file"), "{!r} 应命中（绿）".format(_tag))
             _abs = os.path.join(ROOT, _r["file"])
-            self.assertTrue(os.path.isfile(_abs), "命中路径不存在：%s" % _abs)
+            self.assertTrue(os.path.isfile(_abs), "命中路径不存在：{}".format(_abs))
             _src = io.open(_abs, encoding="utf-8", errors="ignore").read()
-            self.assertIn("class %s" % _tag, _src,
-                          "%s 里查无 `class %s`" % (_r["file"], _tag))
+            self.assertIn("class {}".format(_tag), _src,
+                          "{} 里查无 `class {}`".format(_r["file"], _tag))
 
     def test_41_legacy_could_not_hit_class_names(self):
         """★先红：改前实现（真跑）对类名标签恒 MISS，且中文索引里根本没有这类键。"""
         _idx = _inspector()._build_organ_name_index()
         for _tag in self._CLS_TAGS:
-            self.assertNotIn(_tag, _idx, "中文名索引不该含类名 %r" % _tag)
+            self.assertNotIn(_tag, _idx, "中文名索引不该含类名 {!r}".format(_tag))
             self.assertFalse(_legacy_cn_prefix_hit(_tag, _idx),
-                             "改前算法不该命中 %r（红）" % _tag)
+                             "改前算法不该命中 {!r}（红）".format(_tag))
         _leg = _load(_BAK_SI, "m90_legacy_self_inspector_b2")
         if _leg is None:
             self.skipTest(".bak_batch90 缺失，跳过改前真跑对照")
@@ -413,7 +413,7 @@ class TestT90bBug2ClassIndexWired(unittest.TestCase):
         _old._project_root = ROOT
         _miss = [_t for _t in self._CLS_TAGS if not _old.locate_issue(_t, "").get("file")]
         self.assertEqual(_miss, self._CLS_TAGS,
-                         "改前应全部 MISS，实际只 MISS %s" % (_miss,))
+                         "改前应全部 MISS，实际只 MISS {}".format(_miss))
 
     def test_42_confidence_priority_ordering(self):
         """置信度优先级：消息带路径 > 类索引(0.75) > 中文名精确(0.7) > 模糊包含(0.6)。
@@ -429,12 +429,12 @@ class TestT90bBug2ClassIndexWired(unittest.TestCase):
         _c_cls = _insp.locate_issue("InfoField", "")["confidence"]
         _c_cn = _insp.locate_issue(_exact_tag, "")["confidence"]
         _c_fuzz = _insp.locate_issue("胃", "")["confidence"]
-        self.assertGreater(_c_path, _c_cls, "带路径(%s) 应高于类索引(%s)" % (_c_path, _c_cls))
+        self.assertGreater(_c_path, _c_cls, "带路径({}) 应高于类索引({})".format(_c_path, _c_cls))
         self.assertGreater(_c_cls, _c_cn,
-                           "类索引(%s) 应高于中文名精确(%s, tag=%s)" % (_c_cls, _c_cn, _exact_tag))
-        self.assertGreater(_c_cn, _c_fuzz, "中文名精确(%s) 应高于模糊包含(%s)" % (_c_cn, _c_fuzz))
+                           "类索引({}) 应高于中文名精确({}, tag={})".format(_c_cls, _c_cn, _exact_tag))
+        self.assertGreater(_c_cn, _c_fuzz, "中文名精确({}) 应高于模糊包含({})".format(_c_cn, _c_fuzz))
         self.assertGreaterEqual(_c_fuzz, 0.5,
-                                "模糊包含 %s 低于「需人工确认」阈值，会挡掉自动修复" % _c_fuzz)
+                                "模糊包含 {} 低于「需人工确认」阈值，会挡掉自动修复".format(_c_fuzz))
 
     def test_43_class_tag_also_yields_method(self):
         """类名标签命中后还能给出方法名（供补丁素材提取使用）。"""
@@ -450,7 +450,7 @@ class TestT90bBug4TracebackLastFrame(unittest.TestCase):
     def test_50_regex_group_order_is_file_line_func(self):
         """自检：`findall` 的元组顺序必须是 (file, line, func)。"""
         _frames = _TRACEBACK_FILE_RE.findall(_TB3)
-        self.assertEqual(len(_frames), 3, "应识别出 3 帧：%s" % (_frames,))
+        self.assertEqual(len(_frames), 3, "应识别出 3 帧：{}".format(_frames))
         self.assertEqual(_frames[0][0], "a_first_level1.py")
         self.assertEqual(_frames[-1][0], "c_third_level3.py")
         self.assertEqual(_frames[-1][1], "33")
@@ -470,7 +470,7 @@ class TestT90bBug4TracebackLastFrame(unittest.TestCase):
     def test_52_new_picks_error_site_frame(self):
         """★后绿：改后真跑取末帧 = 致错点（绿）。"""
         _r = _run_runtime_metrics(sys.modules[LogAnalyzer.__module__])
-        self.assertEqual(len(_r), 1, "三层嵌套应只产出一条问题：%s" % (_r,))
+        self.assertEqual(len(_r), 1, "三层嵌套应只产出一条问题：{}".format(_r))
         _iss = _r[0]
         self.assertEqual(_iss["method"], "_level3")
         self.assertEqual(_iss["line"], 33)
@@ -542,8 +542,8 @@ class TestT90bSwitchContract(unittest.TestCase):
         _src = io.open(os.path.join(ROOT, "config.py"), encoding="utf-8",
                        errors="ignore").read()
         self.assertIn(_SWITCH, _src,
-                      "第91批 T-91c 起 %s 必须正式登记在 config.py" % _SWITCH)
-        self.assertIn("%s = True" % _SWITCH, _src, "登记默认值必须为 True（与登记前一致）")
+                      "第91批 T-91c 起 {} 必须正式登记在 config.py".format(_SWITCH))
+        self.assertIn("{} = True".format(_SWITCH), _src, "登记默认值必须为 True（与登记前一致）")
         import config as _cfg_mod2
         self.assertTrue(getattr(_cfg_mod2, _SWITCH))
 
@@ -559,7 +559,7 @@ class TestT90bSwitchContract(unittest.TestCase):
             with _Switch(False):
                 self.assertEqual(_la._m90_should_locate(dict(_iss)),
                                  _legacy_should_locate(dict(_iss)),
-                                 "开关关闭时判据应与改前一致：%s" % (_iss,))
+                                 "开关关闭时判据应与改前一致：{}".format(_iss))
 
     def test_73_switch_on_defers_and_retries(self):
         """开启 → 与改前**不同**（空 message 不试；message 变化可重试）。"""

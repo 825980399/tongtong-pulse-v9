@@ -90,7 +90,7 @@ class TestPostponeSemantics(unittest.TestCase):
     def test_05_subsequent_runs_use_interval(self):
         """第二轮起恢复 interval（推迟量只影响第一轮）。"""
         _calls = _probe(600.0 / 3600.0)
-        self.assertGreaterEqual(len(_calls), 2, "未观测到第二轮: %s" % (_calls,))
+        self.assertGreaterEqual(len(_calls), 2, "未观测到第二轮: {}".format(_calls))
         self.assertAlmostEqual(_calls[1], _INTERVAL_S, delta=2.0)
 
     def test_06_interval_change_still_respected(self):

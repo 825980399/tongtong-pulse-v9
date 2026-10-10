@@ -53,7 +53,7 @@ def _make_pm(tmp):
 
 def _make_target(tmp):
     os.makedirs(os.path.join(PROJECT_ROOT, "tmp"), exist_ok=True)
-    return os.path.join(PROJECT_ROOT, "tmp", "t105a_loop_target_%s.py" % __import__("uuid").uuid4().hex)
+    return os.path.join(PROJECT_ROOT, "tmp", "t105a_loop_target_{}.py".format(__import__("uuid").uuid4().hex))
 
 
 def _low_risk_patch(target, **kw):

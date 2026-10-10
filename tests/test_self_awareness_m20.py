@@ -117,7 +117,7 @@ class TestIntegrateEventTap(unittest.TestCase):
         for _k in ("total_events", "distinct_event_names", "active_sources",
                    "top_event_names", "top_sources", "by_priority", "interval",
                    "tap_enabled", "tap_started"):
-            self.assertIn(_k, r, "缺少字段 %s" % _k)
+            self.assertIn(_k, r, "缺少字段 {}".format(_k))
         self.assertEqual(r["total_events"], 1000)
         self.assertEqual(r["distinct_event_names"], 4)
         self.assertEqual(r["active_sources"], 5)
@@ -198,7 +198,7 @@ class TestOrganActivity(unittest.TestCase):
     def test_empty_and_missing_source(self):
         for _bad in ({}, None, {"no_by_source": 1}, {"by_source": {}}):
             r = self.e.analyze_organ_activity(_bad)
-            self.assertTrue(r.get("no_data"), "输入 %r 应判 no_data" % (_bad,))
+            self.assertTrue(r.get("no_data"), "输入 {!r} 应判 no_data".format(_bad))
 
     def test_thresholds_configurable(self):
         r = self.e.analyze_organ_activity(

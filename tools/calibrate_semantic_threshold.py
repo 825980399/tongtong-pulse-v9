@@ -333,21 +333,18 @@ def main(argv: list[str] | None = None) -> int:
     _p = _rep["probe"]
     print("[校准] 探针集 同义对=%d 异类对=%d 已编码=%d"
           % (_p["pairs_each"], _p["pairs_each"], _p["encoded"]))
-    print("[校准] 同类相似度 min=%.4f max=%.4f | 异类相似度 max=%.4f min=%.4f"
-          % (_p["same_min"], _p["same_max"], _p["diff_max"], _p["diff_min"]))
+    print("[校准] 同类相似度 min={:.4f} max={:.4f} | 异类相似度 max={:.4f} min={:.4f}".format(_p["same_min"], _p["same_max"], _p["diff_max"], _p["diff_min"]))
     print("[校准] 阈值   precision recall  f1")
     for _r in _p["rows"]:
-        print("        %.2f   %.4f    %.4f   %.4f"
-              % (_r["threshold"], _r["precision"], _r["recall"], _r["f1"]))
-    print("[校准] ★推荐阈值 = %.2f（precision=%.4f recall=%.4f f1=%.4f）"
-          % (_p["recommended"], _p["recommended_row"]["precision"],
+        print("        {:.2f}   {:.4f}    {:.4f}   {:.4f}".format(_r["threshold"], _r["precision"], _r["recall"], _r["f1"]))
+    print("[校准] ★推荐阈值 = {:.2f}（precision={:.4f} recall={:.4f} f1={:.4f}）".format(_p["recommended"], _p["recommended_row"]["precision"],
              _p["recommended_row"]["recall"], _p["recommended_row"]["f1"]))
     if "corpus" in _rep and _rep["corpus"].get("n"):
         _c = _rep["corpus"]
         print("[校准] 真实语料 n=%d 最近邻相似度 min=%.4f 中位=%.4f max=%.4f"
               % (_c["n"], _c["nn_min"], _c["nn_median"], _c["nn_max"]))
         for _r in _c["rows"]:
-            print("        阈值 %.2f → 命中率 %.4f" % (_r["threshold"], _r["hit_rate"]))
+            print("        阈值 {:.2f} → 命中率 {:.4f}".format(_r["threshold"], _r["hit_rate"]))
     if _ns.report:
         with io.open(_ns.report, "w", encoding="utf-8") as f:
             f.write(json.dumps(_rep, ensure_ascii=False, indent=2))

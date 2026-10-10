@@ -141,7 +141,7 @@ class TestReportBusClosedLoopM55(unittest.TestCase):
         _pub.publish_self_cognition("正文", summary={"headline_issue": "空转"})
         _st = self.bus.get_stats()
         self.assertGreater(_st["consumption_rate"], 0,
-                           "四类报告发布后仍有报告无人消费：%s" % _st)
+                           "四类报告发布后仍有报告无人消费：{}".format(_st))
 
 
 if __name__ == "__main__":

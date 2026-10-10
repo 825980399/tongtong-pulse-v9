@@ -267,7 +267,7 @@ class TestProductionBackfilled(unittest.TestCase):
                 and not (p.get("reprobe_verdict") in
                          ("true_pass", "false_pass", "ineffective", "partial_fix")
                          and int(p.get("reprobe_baseline_hits") or 0) > 0)]
-        self.assertEqual(_bad, [], "基线为 0 且无复现却被判为已修复: %s" % _bad[:5])
+        self.assertEqual(_bad, [], "基线为 0 且无复现却被判为已修复: {}".format(_bad[:5]))
 
     def test_53_effectiveness_not_default_high(self):
         """★effectiveness 不得再有默认的 0.97 之类虚高值。"""

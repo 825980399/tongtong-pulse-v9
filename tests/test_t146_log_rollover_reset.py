@@ -49,7 +49,7 @@ def test_doRollover_resets_state_so_next_check_is_ok(tmp_path):
     after = check_log_integrity(log_dir=str(tmp_path), log_file=log,
                                 state_path=str(tmp_path / _LOG_STATE_FILE))
     assert after["status"] == "ok", (
-        "轮转后仍被误判为 %s —— 状态未同步复位" % after["status"])
+        "轮转后仍被误判为 {} —— 状态未同步复位".format(after["status"]))
 
 
 def test_state_fingerprint_reset_to_post_rollover_value(tmp_path):

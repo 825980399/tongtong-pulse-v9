@@ -60,7 +60,7 @@ class TestDesignDocL2(unittest.TestCase):
 
     def test_02_required_sections_present(self):
         _miss = [k for k in self.REQUIRED if k not in self._t]
-        self.assertEqual(_miss, [], "缺少章节关键词: %s" % _miss)
+        self.assertEqual(_miss, [], "缺少章节关键词: {}".format(_miss))
 
     def test_03_design_only_declared(self):
         """必须显式声明"仅设计不实施"（任务书验收标准）。"""
@@ -107,7 +107,7 @@ class TestDesignDocL3(unittest.TestCase):
 
     def test_11_required_sections_present(self):
         _miss = [k for k in self.REQUIRED if k not in self._t]
-        self.assertEqual(_miss, [], "缺少章节关键词: %s" % _miss)
+        self.assertEqual(_miss, [], "缺少章节关键词: {}".format(_miss))
 
     def test_12_relation_with_t2_explicit(self):
         self.assertIn("架构位置", self._t)
@@ -271,12 +271,12 @@ class TestNoRuntimeChange(unittest.TestCase):
     def test_31_no_l2_switch_introduced(self):
         import config
         for _k in ("ENABLE_L3_CALL_REDUCER_OBSERVE", "ENABLE_L3_REUSE"):
-            self.assertFalse(hasattr(config, _k), "不应新增生产开关: %s" % _k)
+            self.assertFalse(hasattr(config, _k), "不应新增生产开关: {}".format(_k))
 
     def test_32_no_call_reducer_module(self):
         for _p in (os.path.join(_ROOT, "nucleus", "llm", "call_reducer.py"),
                    os.path.join(_ROOT, "nucleus", "llm", "semantic_cache_l2.py")):
-            self.assertFalse(os.path.exists(_p), "不应新建模块: %s" % _p)
+            self.assertFalse(os.path.exists(_p), "不应新建模块: {}".format(_p))
 
 
 if __name__ == "__main__":

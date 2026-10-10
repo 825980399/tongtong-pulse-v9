@@ -309,11 +309,10 @@ class _LoopClassVisitor(ast.NodeVisitor):
                 _problems.append({
                     "type": "path_mismatch",
                     "severity": "medium",
-                    "method": "%s/%s" % (_concrete_savers[0], _concrete_loaders[0]),
+                    "method": "{}/{}".format(_concrete_savers[0], _concrete_loaders[0]),
                     "line": int(getattr(_methods[_concrete_savers[0]],
                                         "lineno", 0) or 0),
-                    "detail": "save 用 %s，load 用 %s —— 路径可能不一致"
-                              % (sorted(_s_attrs), sorted(_l_attrs)),
+                    "detail": "save 用 {}，load 用 {} —— 路径可能不一致".format(sorted(_s_attrs), sorted(_l_attrs)),
                 })
 
         # ---- d 异常静默 ----
@@ -501,11 +500,11 @@ class FakeLoopDetector:
                     _src = f.read()
                 _tree = ast.parse(_src, filename=_rel)
             except SyntaxError as e:
-                _parse_errors.append({"file": _rel, "error": "SyntaxError: %s" % e})
+                _parse_errors.append({"file": _rel, "error": "SyntaxError: {}".format(e)})
                 continue
             except Exception as e:
                 _parse_errors.append({"file": _rel,
-                                      "error": "%s: %s" % (type(e).__name__, e)})
+                                      "error": "{}: {}".format(type(e).__name__, e)})
                 continue
 
             _v = _LoopClassVisitor(_mod, _rel, self.project_root,
@@ -577,8 +576,8 @@ class FakeLoopDetector:
         _lines = [
             "=" * 68,
             "曈曈 PulseNet · 虚假闭环检测报告",
-            "生成时间: %s" % _r["generated_at"],
-            "扫描范围: %s" % ", ".join(_r["scan_dirs"]),
+            "生成时间: {}".format(_r["generated_at"]),
+            "扫描范围: {}".format(", ".join(_r["scan_dirs"])),
             "=" * 68,
             "",
             "【概览】候选 %d 个（严重 %d），问题分布: %s，耗时 %.1fms"
@@ -600,28 +599,26 @@ class FakeLoopDetector:
             _lines.append("【%d 分】%s.%s   (%s:%d)"
                           % (_c["score"], _c["module"], _c["class"],
                              _c["file"], _c["line"]))
-            _lines.append("  save: %s | load: %s"
-                          % (", ".join(_c["save_methods"]) or "-",
+            _lines.append("  save: {} | load: {}".format(", ".join(_c["save_methods"]) or "-",
                              ", ".join(_c["load_methods"]) or "-"))
             # ★T3（P2-215）：区分「公开方法命中」与「私有方法命中」
             _ps = _c.get("private_save_methods") or []
             _pl = _c.get("private_load_methods") or []
             if _ps or _pl:
-                _lines.append("  ★私有命中: save=%s | load=%s"
-                              % (", ".join(_ps) or "-", ", ".join(_pl) or "-"))
+                _lines.append("  ★私有命中: save={} | load={}".format(", ".join(_ps) or "-", ", ".join(_pl) or "-"))
             for _p in _c["problems"]:
                 _lines.append("  [%s] %s (%s:%d%s) —— %s"
                               % (_p["severity"], _p["type"], _p["method"],
                                  _p["line"],
                                  "·私有" if _p.get("private") else "",
                                  _p["detail"]))
-            _lines.append("  建议: %s" % _suggest(_c))
+            _lines.append("  建议: {}".format(_suggest(_c)))
             _lines.append("")
 
         if _r["parse_errors"]:
             _lines.append("【解析失败文件】(%d)" % len(_r["parse_errors"]))
             for _pe in _r["parse_errors"][:20]:
-                _lines.append("  · %s: %s" % (_pe["file"], _pe["error"]))
+                _lines.append("  · {}: {}".format(_pe["file"], _pe["error"]))
             _lines.append("")
 
         _lines.append("—— 报告结束 ——")

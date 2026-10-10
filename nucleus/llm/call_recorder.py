@@ -153,7 +153,7 @@ def format_error(exc: Any, limit: int | None = None) -> str:
     if exc is None:
         return ""
     if isinstance(exc, BaseException):
-        _txt = "%s: %s" % (type(exc).__name__, exc)
+        _txt = "{}: {}".format(type(exc).__name__, exc)
     else:
         _txt = str(exc)
     _lim = DEFAULT_ERROR_MAX_LEN if limit is None else int(limit)
@@ -342,7 +342,7 @@ class LLMCallRecorder:
 
     def _path_for(self, ts: float, prefix: str = "calls") -> str:
         return os.path.join(self.base_dir(),
-                            "%s_%s.jsonl" % (prefix, self._day_str(ts)))
+                            "{}_{}.jsonl".format(prefix, self._day_str(ts)))
 
     def _prepare_text(self, text: Any) -> str:
         _s = text if isinstance(text, str) else ("" if text is None else str(text))
@@ -599,7 +599,7 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                     _err = format_error(_e)
                 except Exception as e:
                     silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L563")
-                    _err = "%s: %s" % (type(_e).__name__, _e)
+                    _err = "{}: {}".format(type(_e).__name__, _e)
                 raise
             finally:
                 try:

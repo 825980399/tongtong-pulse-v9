@@ -79,7 +79,7 @@ class TestToolInterface(_Base):
     def test_03_constants_present(self):
         for _k in ("BACKFILL_PROMPT_VERSION", "BACKFILL_NO_DETAIL",
                    "BACKUP_SUFFIX", "BACKFILL_ERROR_LIMIT"):
-            self.assertTrue(hasattr(BF, _k), "缺少常量 %s" % _k)
+            self.assertTrue(hasattr(BF, _k), "缺少常量 {}".format(_k))
 
 
 class TestDryRunStability(_Base):
@@ -249,7 +249,7 @@ class TestManualAndReport(unittest.TestCase):
         _t = io.open(_MANUAL, encoding="utf-8").read()
         for _k in ("前置条件", "执行步骤", "回滚", "验证清单", "常见问题",
                    "框架必须已停止运行"):
-            self.assertIn(_k, _t, "手册缺少章节: %s" % _k)
+            self.assertIn(_k, _t, "手册缺少章节: {}".format(_k))
 
     def test_51_manual_documents_backup_naming(self):
         _t = io.open(_MANUAL, encoding="utf-8").read()
@@ -259,11 +259,10 @@ class TestManualAndReport(unittest.TestCase):
     def test_52_verify_report_all_ok(self):
         # ★主线第62批 T4-3：产物缺失 → skip（同 T4-2 处理，非逻辑失败）
         if not os.path.isfile(_VERIFY_REPORT):
-            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: %s"
-                          % _VERIFY_REPORT)
+            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {}".format(_VERIFY_REPORT))
         self.assertTrue(os.path.isfile(_VERIFY_REPORT), "缺少工具验证报告")
         _r = json.load(io.open(_VERIFY_REPORT, encoding="utf-8"))
-        self.assertTrue(_r["all_ok"], "工具验证存在不符项: %s" % _r["checks"])
+        self.assertTrue(_r["all_ok"], "工具验证存在不符项: {}".format(_r["checks"]))
         self.assertTrue(_r["checks"]["dry_run_stability_3x"]["stable"])
         self.assertTrue(_r["checks"]["idempotency"]["ok"])
         self.assertTrue(_r["checks"]["archive_backup"]["ok"])
@@ -273,8 +272,7 @@ class TestManualAndReport(unittest.TestCase):
         """★本批**不实际执行**回填 → 生产仍应有未回填的历史记录。"""
         # ★主线第62批 T4-3：产物缺失 → skip（同 T4-2 处理，非逻辑失败）
         if not os.path.isfile(_VERIFY_REPORT):
-            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: %s"
-                          % _VERIFY_REPORT)
+            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {}".format(_VERIFY_REPORT))
         _r = json.load(io.open(_VERIFY_REPORT, encoding="utf-8"))
         _pt = _r["checks"]["production_untouched"]
         self.assertFalse(_pt["backfilled"])

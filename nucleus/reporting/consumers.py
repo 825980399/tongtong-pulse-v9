@@ -51,8 +51,7 @@ def _append_jsonl(rel_path: str, record: dict[str, Any]) -> bool:
                        component="ReportConsumers"):
                 return False
         except Exception as _gw_e:
-            _log("[ReportConsumers] 写盘守卫不可用（按允许处理）: %s"
-                 % type(_gw_e).__name__)
+            _log("[ReportConsumers] 写盘守卫不可用（按允许处理）: {}".format(type(_gw_e).__name__))
         os.makedirs(os.path.dirname(_p), exist_ok=True)
         with open(_p, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -68,7 +67,7 @@ def _log(msg: str, level: str = "warning") -> None:
         _lg = get_module_logger("ReportConsumers")
         getattr(_lg, level, _lg.warning)(msg)
     except Exception:
-        print("[ReportConsumers] %s" % msg)
+        print("[ReportConsumers] {}".format(msg))
 
 
 # ==================== 健康异常消费者 ====================
@@ -92,8 +91,7 @@ def health_anomaly_consumer(envelope: ReportEnvelope) -> bool:
                              report_id=envelope.report_id, accepted=False)
 
     for _a in _p0 or envelope.anomalies:
-        _msg = ("[自认知·P0告警] %s | %s | 建议动作=%s | target=%s"
-                % (_a.type, _a.description, _a.suggested_action, _a.target))
+        _msg = ("[自认知·P0告警] {} | {} | 建议动作={} | target={}".format(_a.type, _a.description, _a.suggested_action, _a.target))
         _log(_msg, "error")
         _append_jsonl(ALERT_FILE, {
             "ts": time.time(),
@@ -107,11 +105,11 @@ def health_anomaly_consumer(envelope: ReportEnvelope) -> bool:
             "target": _a.target,
             "needs_human": True,
         })
-        envelope.actions_triggered.append("alert:%s" % _a.type)
+        envelope.actions_triggered.append("alert:{}".format(_a.type))
     return ConsumeResult(consumer="health_anomaly_consumer",
                          report_id=envelope.report_id, accepted=True,
                          action_taken=True, action_ref=ALERT_FILE,
-                         note="P0 告警已写入 %s" % ALERT_FILE)
+                         note="P0 告警已写入 {}".format(ALERT_FILE))
 
 
 # ==================== 污染异常消费者 ====================
@@ -143,9 +141,8 @@ def pollution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
         return ConsumeResult(consumer="pollution_anomaly_consumer",
                              report_id=envelope.report_id, accepted=False)
 
-    _msg = ("[自认知·污染告警] 污染率 %.1f%% 超过阈值 %.0f%% → "
-            "建议安排停机窗口执行 SERP 清洗（本消费者不会自动清洗）"
-            % (_rate * 100, POLLUTION_THRESHOLD * 100))
+    _msg = ("[自认知·污染告警] 污染率 {:.1f}% 超过阈值 {:.0f}% → "
+            "建议安排停机窗口执行 SERP 清洗（本消费者不会自动清洗）".format(_rate * 100, POLLUTION_THRESHOLD * 100))
     _log(_msg)
     _append_jsonl(TODO_FILE, {
         "ts": time.time(),
@@ -161,7 +158,7 @@ def pollution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
     return ConsumeResult(consumer="pollution_anomaly_consumer",
                          report_id=envelope.report_id, accepted=True,
                          action_taken=True, action_ref=TODO_FILE,
-                         note="污染清洗建议已写入 %s" % TODO_FILE)
+                         note="污染清洗建议已写入 {}".format(TODO_FILE))
 
 
 # ==================== 自认知消费者（★第55批 T2） ====================
@@ -209,8 +206,7 @@ def self_cognition_consumer(envelope: ReportEnvelope) -> bool:
     if not _need:
         return ConsumeResult(consumer="self_cognition_consumer",
                              report_id=envelope.report_id, accepted=False)
-    _log("[自认知·待办] 报告 %s 需人工跟进：首要问题=%s 评分=%s"
-         % (envelope.report_id, _head[:60] or "(无)", _score))
+    _log("[自认知·待办] 报告 {} 需人工跟进：首要问题={} 评分={}".format(envelope.report_id, _head[:60] or "(无)", _score))
     _append_jsonl(TODO_FILE, {
         "ts": time.time(),
         "ts_str": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -226,7 +222,7 @@ def self_cognition_consumer(envelope: ReportEnvelope) -> bool:
     return ConsumeResult(consumer="self_cognition_consumer",
                          report_id=envelope.report_id, accepted=True,
                          action_taken=True, action_ref=TODO_FILE,
-                         note="自认知待办已写入 %s" % TODO_FILE)
+                         note="自认知待办已写入 {}".format(TODO_FILE))
 
 
 def evolution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
@@ -261,9 +257,8 @@ def evolution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
         _msg = ("[数据质量·告警] LLM 留存数据质量偏低"
                 "（anomaly_type=LLM_DATA_QUALITY_LOW），本消费者只告警不自动修复")
     else:
-        _msg = ("[自认知·补丁告警] 真实修复率 %s 低于阈值 %.0f%% → "
-                "补丁验证仍处空转（P0-2），本消费者只告警不自动修复"
-                % ("未知" if _rate is None else "%.1f%%" % (_rate * 100),
+        _msg = ("[自认知·补丁告警] 真实修复率 {} 低于阈值 {:.0f}% → "
+                "补丁验证仍处空转（P0-2），本消费者只告警不自动修复".format("未知" if _rate is None else "%.1f%%" % (_rate * 100),
                    _thr * 100))
     _log(_msg, "error")
     _append_jsonl(ALERT_FILE, {
@@ -282,7 +277,7 @@ def evolution_anomaly_consumer(envelope: ReportEnvelope) -> bool:
     return ConsumeResult(consumer="evolution_anomaly_consumer",
                          report_id=envelope.report_id, accepted=True,
                          action_taken=True, action_ref=ALERT_FILE,
-                         note="补丁质量告警已写入 %s" % ALERT_FILE)
+                         note="补丁质量告警已写入 {}".format(ALERT_FILE))
 
 
 # ==================== 注册助手 ====================

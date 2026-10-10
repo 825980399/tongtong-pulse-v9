@@ -382,7 +382,7 @@ class PulseNode:
                 for _fr in reversed(_tb_m83.extract_stack()[:-1]):
                     _fn = str(getattr(_fr, "filename", "") or "")
                     if not _fn.endswith("PulseNode.py"):
-                        _m83_caller = "%s:%s" % (
+                        _m83_caller = "{}:{}".format(
                             _fn.replace(chr(92), "/"), getattr(_fr, "lineno", 0))
                         break
             except Exception:
@@ -390,7 +390,7 @@ class PulseNode:
             _module_logger.warning(
                 "[第80批 T2/第83批 T-d1] from_dict 缺失 evol_level，将静默默认 L1"
                 "（疑似分层塌缩；_m68_load_from_parquet 已回填，此为其他调用方兜底）"
-                " 调用方=%s 样本 node_id=%s" % (_m83_caller, data.get("node_id", "?")))
+                " 调用方={} 样本 node_id={}".format(_m83_caller, data.get("node_id", "?")))
             _m80_evol_missing["n"] += 1
         node = cls(
             value=data.get("value", ""),

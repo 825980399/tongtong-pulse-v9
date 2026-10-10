@@ -183,18 +183,18 @@ def extract_key_fields(text: str) -> Dict[str, Any]:
     _out: Dict[str, Any] = {}
     for _key in KEY_FIELDS:
         # 字符串值
-        _m = re.search(r'"%s"\s*:\s*"((?:[^"\\]|\\.)*)"' % re.escape(_key), text)
+        _m = re.search(r'"{}"\s*:\s*"((?:[^"\\]|\\.)*)"'.format(re.escape(_key)), text)
         if _m:
             _out[_key] = _m.group(1)
             continue
         # 数组值（尽力提取到匹配的 ]）
-        _m2 = re.search(r'"%s"\s*:\s*\[(.*?)\]' % re.escape(_key), text, re.S)
+        _m2 = re.search(r'"{}"\s*:\s*\[(.*?)\]'.format(re.escape(_key)), text, re.S)
         if _m2:
             _items = re.findall(r'"((?:[^"\\]|\\.)*)"', _m2.group(1))
             _out[_key] = _items
             continue
         # 对象值（形如 { "k": "v" ... } 或非法 [ "k": "v" ]）
-        _m3 = re.search(r'"%s"\s*:\s*[\[{](.*?)[\]}]' % re.escape(_key), text, re.S)
+        _m3 = re.search(r'"{}"\s*:\s*[\[{{](.*?)[\]}}]'.format(re.escape(_key)), text, re.S)
         if _m3:
             _pairs = re.findall(r'"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"',
                                 _m3.group(1))

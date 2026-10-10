@@ -263,7 +263,7 @@ class FrameworkDiagnostics:
             return _r
         except Exception as _e:      # 只读入口，异常不得冒泡
             return {"score": None, "dimensions": {}, "available": [],
-                    "error": "%s: %s" % (type(_e).__name__, _e)}
+                    "error": "{}: {}".format(type(_e).__name__, _e)}
 
     @staticmethod
     def _get_alert_thresholds() -> dict[str, Any]:

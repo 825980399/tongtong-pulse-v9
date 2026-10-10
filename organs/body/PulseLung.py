@@ -1909,7 +1909,7 @@ class PulseLung(BasePulseOrgan):
                         from nucleus.llm.call_recorder import format_error as _m44_fe
                         _m44_err = _m44_fe(_call_e)
                     except Exception:
-                        _m44_err = "%s: %s" % (type(_call_e).__name__, _call_e)
+                        _m44_err = "{}: {}".format(type(_call_e).__name__, _call_e)
                 finally:
                     # ★第24批 T2：异常路径也必须归还许可（防许可泄漏）
                     if _mgr is not None and _slot:

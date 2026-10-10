@@ -1407,7 +1407,7 @@ class PulseSnapshot:
         _lv_real = {"L1": 0, "L2": 0, "L3": 0}     # 内存实际加载节点数（from_dict 成功）
         _meta = None
         for _lv in ("L1", "L2", "L3"):
-            _d = os.path.join(_base, "evol_level=%s" % _lv)
+            _d = os.path.join(_base, "evol_level={}".format(_lv))
             if not os.path.isdir(_d):
                 continue
             try:
@@ -1457,7 +1457,7 @@ class PulseSnapshot:
         if _meta is not None:
             for _k in ("L1", "L2", "L3"):
                 try:
-                    _exp_n = int((_meta.get(("%s_count" % _k.lower()).encode("utf-8"))
+                    _exp_n = int((_meta.get(("{}_count".format(_k.lower())).encode("utf-8"))
                                  or b"0").decode("utf-8", "replace") or 0)
                 except Exception as e:
                     silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1345")
@@ -1489,7 +1489,7 @@ class PulseSnapshot:
         _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
         try:
             for _lv in ("L1", "L2", "L3"):
-                _d = os.path.join(_base, "evol_level=%s" % _lv)
+                _d = os.path.join(_base, "evol_level={}".format(_lv))
                 if not os.path.isdir(_d):
                     continue
                 _tbl = _pq68.read_table(_d)
@@ -1511,7 +1511,7 @@ class PulseSnapshot:
                 _lv_counts[_lv] = _n
             # ③ 分层分布校验：总量>0 但某层元数据期望>0 实际=0（塌缩）
             for _k in ("L1", "L2", "L3"):
-                _mc = (_md.get(("%s_count" % _k.lower()).encode("utf-8")) if _md else None)
+                _mc = (_md.get(("{}_count".format(_k.lower())).encode("utf-8")) if _md else None)
                 if _mc is not None:
                     try:
                         _exp_n = int(_mc.decode("utf-8", "replace") or 0)
@@ -1540,7 +1540,7 @@ class PulseSnapshot:
         _counts = {"L1": 0, "L2": 0, "L3": 0}
         try:
             for _lv in ("L1", "L2", "L3"):
-                _d = os.path.join(_base, "evol_level=%s" % _lv)
+                _d = os.path.join(_base, "evol_level={}".format(_lv))
                 if os.path.isdir(_d):
                     _counts[_lv] = _pq68.read_table(_d).num_rows
         except Exception as _e:
@@ -1846,8 +1846,8 @@ class PulseSnapshot:
             self._m70_hot_load_stats["degraded"] = True
             self._m70_hot_load_stats["reason"] = "non_iterable_input"
             self._log(LogLevel.WARNING,
-                      "[第162批刀2] 冷热加载：输入非可迭代节点序列（%s），"
-                      "跳过分级维持原样返回（降级可观测）" % type(nodes).__name__)
+                      "[第162批刀2] 冷热加载：输入非可迭代节点序列（{}），"
+                      "跳过分级维持原样返回（降级可观测）".format(type(nodes).__name__))
             return nodes
         try:
             _out = []

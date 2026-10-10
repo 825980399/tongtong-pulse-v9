@@ -863,9 +863,9 @@ class PatchManager:
                              for p in pending) if isinstance(a, float)]
         _maxh = PatchManager._m94_aging_max_hours()
         if _ages and max(_ages) >= _maxh:
-            return True, "max_age=%.1fh>=%.1fh" % (max(_ages), _maxh)
+            return True, "max_age={:.1f}h>={:.1f}h".format(max(_ages), _maxh)
         return False, "below_threshold(n=%d,max_age=%s)" % (
-            _n, ("%.1fh" % max(_ages)) if _ages else "unknown")
+            _n, ("{:.1f}h".format(max(_ages))) if _ages else "unknown")
 
     def pending_aging_preview(self, now: float | None = None) -> dict[str, Any]:
         """★T-94a：只读预览——当前 pending 队列在老化策略下会放行哪些补丁。
@@ -883,7 +883,7 @@ class PatchManager:
         try:
             _pending = self._load_patch_list(self._pending_file)
         except Exception as _e:
-            _out["reason"] = "load_failed:%s" % type(_e).__name__
+            _out["reason"] = "load_failed:{}".format(type(_e).__name__)
             return _out
         if not isinstance(_pending, list):
             return _out

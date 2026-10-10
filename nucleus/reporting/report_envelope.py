@@ -55,7 +55,7 @@ SCHEMA_VERSION = "1.0"
 
 def new_report_id(prefix: str = "rep") -> str:
     """生成报告唯一 ID。"""
-    return "%s_%s_%s" % (prefix, time.strftime("%Y%m%d%H%M%S"),
+    return "{}_{}_{}".format(prefix, time.strftime("%Y%m%d%H%M%S"),
                          uuid.uuid4().hex[:8])
 
 

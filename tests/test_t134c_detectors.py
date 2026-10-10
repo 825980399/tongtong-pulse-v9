@@ -48,7 +48,7 @@ def test_b2_first_scan_zero(tmp_path, monkeypatch):
     rs = os.path.join(str(tmp_path), "data", "runtime_state.json")
     os.makedirs(os.path.dirname(rs), exist_ok=True)
     with open(rs, "w", encoding="utf-8") as f:
-        f.write('{"timestamp": %s}' % (time.time(),))
+        f.write('{{"timestamp": {}}}'.format(time.time()))
     assert ins._detect_l3_inversion() == []
     # B2 不再自建旧的 L3 心跳文件
     hb = os.path.join(str(tmp_path), "data", "mnemosyne", "l3_heartbeat.timestamp")
@@ -60,7 +60,7 @@ def test_b2_stale_alert(tmp_path, monkeypatch):
     rs = os.path.join(str(tmp_path), "data", "runtime_state.json")
     os.makedirs(os.path.dirname(rs), exist_ok=True)
     with open(rs, "w", encoding="utf-8") as f:
-        f.write('{"timestamp": %s}' % (time.time() - 1000,))  # 陈旧 1000s
+        f.write('{{"timestamp": {}}}'.format(time.time() - 1000))  # 陈旧 1000s
     monkeypatch.setattr(ins, "_si_count_loc", lambda: 9999)
     issues = ins._detect_l3_inversion()
     assert any(i["type"] == "runtime_state_stale" for i in issues), "运行态时间戳陈旧应告警"

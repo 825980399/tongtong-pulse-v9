@@ -46,7 +46,7 @@ def main(argv=None) -> int:
     _args = _ap.parse_args(argv)
 
     if not os.path.isfile(_args.history):
-        print("历史文件不存在: %s" % _args.history)
+        print("历史文件不存在: {}".format(_args.history))
         return 1
     with io.open(_args.history, encoding="utf-8", errors="replace") as _f:
         _hist = json.loads(_f.read())
@@ -77,9 +77,9 @@ def main(argv=None) -> int:
     # ① 完整备份（含重复）
     if not os.path.isfile(BAK_ALL):
         shutil.copy2(_args.history, BAK_ALL)
-        print("完整备份: %s" % BAK_ALL)
+        print("完整备份: {}".format(BAK_ALL))
     else:
-        print("完整备份已存在: %s" % BAK_ALL)
+        print("完整备份已存在: {}".format(BAK_ALL))
     # ② 被移除记录单独备份（追加保留历史）
     _prev = []
     if os.path.isfile(BAK_DUP):
@@ -110,7 +110,7 @@ def main(argv=None) -> int:
     }
     with io.open(REPORT, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
-    print("报告: %s" % REPORT)
+    print("报告: {}".format(REPORT))
     print("去重后条数: %d（原 %d）" % (len(_kept), _st["before"]))
 
     if _args.json:

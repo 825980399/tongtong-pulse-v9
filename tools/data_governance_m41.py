@@ -225,7 +225,7 @@ def _gzip_file(src: str, dst: str, chunk: int = 4 * 1024 * 1024) -> bool:
                 _fo.write(_b)
         return True
     except Exception as e:
-        print("  [WARN] 压缩失败 %s: %s: %s" % (os.path.basename(src),
+        print("  [WARN] 压缩失败 {}: {}: {}".format(os.path.basename(src),
                                                type(e).__name__, e))
         return False
 
@@ -290,11 +290,11 @@ def main(argv: list[str]) -> int:
     print("    现有备份数   : %d" % _b["total"])
     print("    压缩归档     : %d 份" % _b["archived"])
     print("    释放空间     : %.1f MB" % (_b["freed_bytes"] / 1024.0 / 1024.0))
-    print("    归档目录     : %s" % os.path.relpath(_ARCH, _ROOT))
+    print("    归档目录     : {}".format(os.path.relpath(_ARCH, _ROOT)))
 
     print()
     _tot = (_c["freed_bytes"] + _b["freed_bytes"]) / 1024.0 / 1024.0
-    print("合计释放空间   : %.1f MB" % _tot)
+    print("合计释放空间   : {:.1f} MB".format(_tot))
     if _dry:
         print()
         print("[DRY-RUN] 未改动任何文件。")

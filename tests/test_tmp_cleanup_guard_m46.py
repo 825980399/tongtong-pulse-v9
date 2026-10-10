@@ -133,7 +133,7 @@ class TestCriticalFilesProtected(unittest.TestCase):
         for _n in CRITICAL:
             if not os.path.isfile(os.path.join(_tmp, _n)):
                 raise unittest.SkipTest(
-                    "生产 tmp 缺少 %s（可能已被清理）→ 无法验证" % _n)
+                    "生产 tmp 缺少 {}（可能已被清理）→ 无法验证".format(_n))
         cls.deps = _tb.scan_test_dependencies(
             os.path.join(_ROOT, "tests"), _tmp)
 
@@ -149,7 +149,7 @@ class TestCriticalFilesProtected(unittest.TestCase):
     def test_23_all_three_still_on_disk(self):
         for _n in CRITICAL:
             self.assertTrue(os.path.isfile(os.path.join(_ROOT, "tmp", _n)),
-                            "生产 tmp 缺少 %s" % _n)
+                            "生产 tmp 缺少 {}".format(_n))
 
     def test_24_import_and_subprocess_both_covered(self):
         """三类依赖里，import 与 subprocess 这两类必须都有命中（第45批就是栽在这两类）。"""
@@ -167,12 +167,12 @@ class TestCompatWithM45Guard(unittest.TestCase):
         缺失时降级 skip（与 m18/m19/m22 一致）；受控件 tools/test_isolation_shim.py 始终存在。"""
         # 受控硬依赖（git 跟踪，必存在）
         _shim = os.path.join(_ROOT, "tools", "test_isolation_shim.py")
-        self.assertTrue(os.path.isfile(_shim), "缺少受控隔离件 %s" % _shim)
+        self.assertTrue(os.path.isfile(_shim), "缺少受控隔离件 {}".format(_shim))
         # 历史 tmp/ 易失件：缺失则降级 skip
         for _n in ("test_isolation.py", "test_log_isolation.py"):
             _p = os.path.join(_ROOT, "tmp", _n)
             if not os.path.isfile(_p):
-                self.skipTest("生产 tmp 缺少 %s（git-ignored 易失件）→ 跳过" % _n)
+                self.skipTest("生产 tmp 缺少 {}（git-ignored 易失件）→ 跳过".format(_n))
 
     def test_31_deps_superset_of_m45_guard(self):
         """本判据识别出的受保护文件，应是 m45 守卫所要求集合的超集。"""
@@ -181,7 +181,7 @@ class TestCompatWithM45Guard(unittest.TestCase):
         for _n in ("test_isolation.py", "test_log_isolation.py"):
             if os.path.isfile(os.path.join(_tmp, _n)):
                 self.assertIn(_n, _d["protected"],
-                              "%s 未被识别为受保护" % _n)
+                              "{} 未被识别为受保护".format(_n))
 
 
 # ==================== tmp 隔离目录迁移（T4-A/B 成果） ====================
@@ -200,7 +200,7 @@ class TestIsolationDirMigrated(unittest.TestCase):
                 continue
             _t = io.open(_p, encoding="utf-8", errors="replace").read()
             self.assertIn("_pytest_tmp_root", _t,
-                          "%s 未改用 _pytest_tmp_root()" % _f)
+                          "{} 未改用 _pytest_tmp_root()".format(_f))
 
     def test_41_helper_points_outside_project_tmp(self):
         """辅助函数不得再指向项目 tmp/（否则残留必然复现）。"""
@@ -220,7 +220,7 @@ class TestIsolationDirMigrated(unittest.TestCase):
             self.skipTest("无 .gitignore")
         _g = io.open(_gi, encoding="utf-8", errors="replace").read()
         for _n in (".pytest_tmp/", ".bak_tmp/"):
-            self.assertIn(_n, _g, ".gitignore 缺少 %s" % _n)
+            self.assertIn(_n, _g, ".gitignore 缺少 {}".format(_n))
 
     def test_43_helper_same_disk_as_project(self):
         """落点必须与项目同盘（Windows 跨盘 move 触发沙箱删除配额）。"""

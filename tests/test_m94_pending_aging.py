@@ -125,7 +125,7 @@ class TestM94AgingStaticWiring(_SwBase):
     def test_A1_all_new_members_inside_class(self):
         _names = _class_names(_PM, "PatchManager")
         for _w in _M94_MEMBERS:
-            self.assertIn(_w, _names, "★%s 必须挂在 PatchManager 类内" % _w)
+            self.assertIn(_w, _names, "★{} 必须挂在 PatchManager 类内".format(_w))
         # 不得出现模块级 M94 函数（AST 归属硬约束）
         _top = [n.name for n in ast.parse(_read(_PM)).body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
@@ -180,7 +180,7 @@ class TestM94AgingStaticWiring(_SwBase):
                     if isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         _found[_m.name] = _m
         for _w in _M94_MEMBERS:
-            self.assertIsNotNone(_found.get(_w), "★%s 必须在类内" % _w)
+            self.assertIsNotNone(_found.get(_w), "★{} 必须在类内".format(_w))
         # 纯判据（无 self、无 IO）
         for _w in ("_m94_pending_aging_on", "_m94_aging_max_count",
                    "_m94_aging_max_hours", "_m94_patch_age_hours",
@@ -188,13 +188,13 @@ class TestM94AgingStaticWiring(_SwBase):
                    "_m94_aging_should_run"):
             _deco = [ast.unparse(d) for d in _found[_w].decorator_list]
             self.assertIn("staticmethod", _deco,
-                          "★%s 必须是 staticmethod（纯判据，无 self 状态）" % _w)
+                          "★{} 必须是 staticmethod（纯判据，无 self 状态）".format(_w))
         # IO 侧（读 pending / 写盘）必须是实例方法且首参为 self
         for _w in ("pending_aging_preview", "_m94_apply_pending_aging",
                    "find_blocking_pending_patch"):
             _a = _found[_w].args
             self.assertEqual(["self"], [x.arg for x in _a.args][:1],
-                             "★%s 需要访问实例状态，首参必须为 self" % _w)
+                             "★{} 需要访问实例状态，首参必须为 self".format(_w))
 
 
 class TestM94AgingCriteria(_SwBase):
@@ -232,7 +232,7 @@ class TestM94AgingCriteria(_SwBase):
                    {"source": "local_rule", "runtime_verified": "True",
                     "risk_level": "低"}):
             self.assertFalse(PatchManager._m94_aging_eligible(_v),
-                             "★保守：%r 必须不放行" % (_v,))
+                             "★保守：{!r} 必须不放行".format(_v))
 
     def test_B3_core_gate_reuses_single_source(self):
         """★非核心文件判定必须复用 `_m80_is_core_file`（单一真源），不自造清单。"""
@@ -245,14 +245,14 @@ class TestM94AgingCriteria(_SwBase):
                    "generated_at"):
             _p = {"id": "x", _k: _NOW - 2 * 3600}
             self.assertAlmostEqual(2.0, PatchManager._m94_patch_age_hours(_p, _NOW),
-                                   places=3, msg="时间戳候选 %s 未被识别" % _k)
+                                   places=3, msg="时间戳候选 {} 未被识别".format(_k))
         self.assertIsNone(PatchManager._m94_patch_age_hours({"id": "x"}, _NOW))
         self.assertIsNone(PatchManager._m94_patch_age_hours(None, _NOW))
         # 布尔/字符串/负数 不得被当成时间戳（否则 0 小时误判）
         for _v in (True, "1700000000", -1, 0):
             self.assertIsNone(
                 PatchManager._m94_patch_age_hours({"saved_at": _v}, _NOW),
-                "★%r 不应被当作有效时间戳" % (_v,))
+                "★{!r} 不应被当作有效时间戳".format(_v))
 
     def test_B5_saved_at_wins_over_generated_at(self):
         _p = {"saved_at": _NOW - 5 * 3600, "generated_at": _NOW - 99 * 3600}
@@ -313,7 +313,7 @@ class TestM94AgingCriteria(_SwBase):
         for _f in ("nucleus/reasoning/x.py", "main.py",
                    "organs/brain/PulseInnerWorld.py"):
             self.assertFalse(PatchManager._m94_aging_eligible(self._base(file=_f)),
-                             "★%s 绝不可被放行" % _f)
+                             "★{} 绝不可被放行".format(_f))
 
 
 class TestM94AgingEndToEnd(_SwBase):
@@ -395,7 +395,7 @@ class TestM94AgingEndToEnd(_SwBase):
         _d = self._disk()
         self.assertEqual("approved", _d["ok"]["status"])
         for _k in ("llm", "core", "god", "hi"):
-            self.assertEqual("pending", _d[_k]["status"], "★%s 不应被放行" % _k)
+            self.assertEqual("pending", _d[_k]["status"], "★{} 不应被放行".format(_k))
         self.assertEqual("pending", _d["fresh"]["status"],
                          "★自身未超期不应被顺手放行（时长触发不冲刷新补丁）")
         self.assertTrue(_d["ok"].get("aged_approved"))
@@ -457,7 +457,7 @@ class TestM94AgingEndToEnd(_SwBase):
         _old = _read(_BAK_PM)
         for _w in ("_m94_pending_aging_on", "find_blocking_pending_patch",
                    "_m94_aging_eligible", "_m94_is_god_file"):
-            self.assertNotIn(_w, _old, "★改前不应有 %s" % _w)
+            self.assertNotIn(_w, _old, "★改前不应有 {}".format(_w))
         self.assertIn("_m94_pending_aging_on", _read(_PM))
         if os.path.isfile(_BAK_SE):
             self.assertNotIn("_m94_pending_blocks_regeneration", _read(_BAK_SE))
@@ -499,7 +499,7 @@ class TestM94Blocking(_SwBase):
             _old = bool(self.pm.has_pending_patch_for(_f, _m))
             _new = self.pm.find_blocking_pending_patch(_f, _m) is not None
             self.assertEqual(_old, _new,
-                             "★零行为变化：%s/%s 两口径必须同值" % (_f, _m))
+                             "★零行为变化：{}/{} 两口径必须同值".format(_f, _m))
 
     def test_D2_on_expired_unblocks_in_window_blocks(self):
         config.ENABLE_PENDING_QUEUE_AGING = True

@@ -73,13 +73,13 @@ def main(argv=None) -> int:
     _ns = _ap.parse_args(argv)
 
     if not os.path.isfile(HISTORY):
-        print("[ERR] 补丁历史不存在: %s" % HISTORY)
+        print("[ERR] 补丁历史不存在: {}".format(HISTORY))
         return 2
 
     _doc, _ps = _load(HISTORY)
     _target = _ps[:_ns.limit] if _ns.limit > 0 else _ps
     print("=== 补丁主动复现（%s）===" % ("回填" if _ns.apply else "只报告"))
-    print("  补丁历史: %s" % os.path.relpath(HISTORY, ROOT))
+    print("  补丁历史: {}".format(os.path.relpath(HISTORY, ROOT)))
     print("  补丁总数: %d（本次验证 %d）" % (len(_ps), len(_target)))
     print()
 
@@ -90,8 +90,8 @@ def main(argv=None) -> int:
     print()
     _strict = true_fix_rate(_target, strict=True)
     _loose = true_fix_rate(_target, strict=False)
-    print("  ★严格口径修复率（问题完全清零）: %s" % _strict)
-    print("  ★宽松口径修复率（含部分修复）  : %s" % _loose)
+    print("  ★严格口径修复率（问题完全清零）: {}".format(_strict))
+    print("  ★宽松口径修复率（含部分修复）  : {}".format(_loose))
     print()
 
     # 明细（非 true_pass 优先展示，便于人工复核）
@@ -103,7 +103,7 @@ def main(argv=None) -> int:
         print("   %-28s %-20s base=%-4s after=%-4s" % (
             str(_r.get("id"))[:28], _r[F_REPROBE_VERDICT],
             _r[F_REPROBE_BASELINE], _r[F_REPROBE_AFTER]))
-        print("        %s" % str(_r[F_REPROBE_DETAIL])[:130])
+        print("        {}".format(str(_r[F_REPROBE_DETAIL])[:130]))
     if len(_rows) > 15:
         print("   ...（共 %d 条）" % len(_rows))
     print()
@@ -122,7 +122,7 @@ def main(argv=None) -> int:
     _ts = time.strftime("%Y%m%d_%H%M%S")
     _bak_dir = os.path.join(ROOT, "data", "_archive", "patch_reprobe")
     os.makedirs(_bak_dir, exist_ok=True)
-    _bak = os.path.join(_bak_dir, "patch_history.%s.json" % _ts)
+    _bak = os.path.join(_bak_dir, "patch_history.{}.json".format(_ts))
     _before_sha = _sha256(HISTORY)
     shutil.copy2(HISTORY, _bak)
     assert _sha256(_bak) == _before_sha, "备份 sha256 不一致，中止"
@@ -156,8 +156,8 @@ def main(argv=None) -> int:
 
     _after_sha = _sha256(HISTORY)
     print("[回填] %d 条已写入（备份: %s）" % (_n, os.path.relpath(_bak, ROOT)))
-    print("  sha256 before=%s" % _before_sha[:32])
-    print("  sha256 after =%s" % _after_sha[:32])
+    print("  sha256 before={}".format(_before_sha[:32]))
+    print("  sha256 after ={}".format(_after_sha[:32]))
     print("  变更: %s" % ("是" if _before_sha != _after_sha else "否"))
     if _ns.report:
         io.open(_ns.report, "w", encoding="utf-8").write(json.dumps(

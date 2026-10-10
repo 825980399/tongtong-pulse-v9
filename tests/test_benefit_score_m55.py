@@ -83,7 +83,7 @@ class TestBenefitScoreConstantM55(unittest.TestCase):
         """7 处兜底全部引用常量（**按内容断言，不按行号**）。"""
         for rel, expect in FILES:
             src = _read(rel)
-            self.assertIn("_DEF_BENEFIT_SCORE", src, "%s 未引用常量" % rel)
+            self.assertIn("_DEF_BENEFIT_SCORE", src, "{} 未引用常量".format(rel))
             self.assertEqual(src.count('"benefit_score", _DEF_BENEFIT_SCORE)'), expect,
                              "%s 引用处数不符（期望 %d）" % (rel, expect))
 
@@ -91,14 +91,14 @@ class TestBenefitScoreConstantM55(unittest.TestCase):
         """无 `"benefit_score", 3` 硬编码残留。"""
         for rel, _ in FILES:
             self.assertNotIn('"benefit_score", 3)', _read(rel),
-                             "%s 仍残留硬编码兜底 3" % rel)
+                             "{} 仍残留硬编码兜底 3".format(rel))
 
     def test_05_sample_values_untouched(self):
         """★防误伤：EvolutionSandbox 的 6 个 plan 样例值（`"benefit_score": N`）保持原样。"""
         src = _read("nucleus/reasoning/EvolutionSandbox.py")
         import re
         hits = re.findall(r'"benefit_score":\s*(\d+)', src)
-        self.assertEqual(len(hits), 6, "样例值数量变化：%s" % hits)
+        self.assertEqual(len(hits), 6, "样例值数量变化：{}".format(hits))
         self.assertIn("3", hits, "样例值 3 被误改（它是样例不是默认值）")
 
     def test_06_follows_config_at_runtime(self):

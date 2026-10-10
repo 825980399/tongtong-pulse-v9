@@ -149,7 +149,7 @@ class TestDueAndDedup(unittest.TestCase):
 
     def test_14_today_done_true_when_report_exists(self):
         _day = datetime(2026, 9, 13).strftime("%Y%m%d")
-        io.open(os.path.join(self.d, "report_%s_030000.txt" % _day),
+        io.open(os.path.join(self.d, "report_{}_030000.txt".format(_day)),
                 "w", encoding="utf-8").write("x")
         self.assertTrue(self._mk()._today_done(datetime(2026, 9, 13, 3, 5)))
 

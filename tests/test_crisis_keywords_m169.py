@@ -74,9 +74,9 @@ class TestRouting(unittest.TestCase):
 
     def test_21_expanded_words_route_to_referral(self):
         for _w in ("割腕", "自残", "轻生", "跳楼", "寻死", "自伤"):
-            _out, _ = _run("我想%s" % _w)
+            _out, _ = _run("我想{}".format(_w))
             self.assertEqual(_out["status"], "crisis_referral",
-                             "扩面词 %s 应走转介，实际 %s" % (_w, _out))
+                             "扩面词 {} 应走转介，实际 {}".format(_w, _out))
 
     def test_22_phrase_words_detectable(self):
         """★jieba 词边界会漏的长短语，靠危机集子串兜底检出。"""
@@ -84,7 +84,7 @@ class TestRouting(unittest.TestCase):
                    "活不下去"):
             _out, _ = _run(_c)
             self.assertEqual(_out["status"], "crisis_referral",
-                             "%s 应被检出并转介，实际 %s" % (_c, _out))
+                             "{} 应被检出并转介，实际 {}".format(_c, _out))
 
     def test_23_normal_forbidden_still_blocked(self):
         """普通禁词维持裸 BLOCKED（不走转介）。"""
@@ -110,7 +110,7 @@ class TestCoverage(unittest.TestCase):
             if not any(_e._check_forbidden(_t % _w)["blocked"]
                        for _t in ("%s", "我想%s", "我觉得%s", "我打算%s")):
                 _miss.append(_w)
-        self.assertEqual(_miss, [], "以下危机词漏检: %s" % _miss)
+        self.assertEqual(_miss, [], "以下危机词漏检: {}".format(_miss))
 
 
 if __name__ == "__main__":

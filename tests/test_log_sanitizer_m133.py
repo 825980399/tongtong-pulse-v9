@@ -185,6 +185,6 @@ def test_perf_500_lines():
         sanitize(_ln)
     _dt = time.perf_counter() - _t0
     _per = (_dt / 500) * 1e6
-    print("sanitize perf: %.2f us/line (target 17)" % _per)
+    print("sanitize perf: {:.2f} us/line (target 17)".format(_per))
     # 宽松上界防 CI 抖动（设计目标 17us/行）
     assert _per < 500.0

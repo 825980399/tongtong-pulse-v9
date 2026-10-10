@@ -104,7 +104,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
     def test_A1_new_members_inside_class(self):
         _names = _class_methods(_METRICS_SRC, "LLMDependencyMetrics")
         for _w in _NEW_MEMBERS:
-            self.assertIn(_w, _names, "★%s 必须挂在 LLMDependencyMetrics 类内" % _w)
+            self.assertIn(_w, _names, "★{} 必须挂在 LLMDependencyMetrics 类内".format(_w))
 
     def test_A2_before_has_none_of_this(self):
         """先红后绿：改前源码不含本批任何新名字。"""
@@ -113,7 +113,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
         _old = _read(_BAK)
         for _w in ("answer_requests", "overall_llm_share",
                    "evolution_local_rule_rate", "_M94_PATCH_FILES"):
-            self.assertNotIn(_w, _old, "★改前不应有 %s" % _w)
+            self.assertNotIn(_w, _old, "★改前不应有 {}".format(_w))
             self.assertIn(_w, _read(_METRICS_SRC))
 
     def test_A3_snapshot_has_derived_keys(self):
@@ -124,7 +124,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
                    "digestion_total", "answer_requests",
                    "llm_dependency_ratio", "self_sufficiency_score",
                    "overall_llm_share", "evolution_local_rule_rate"):
-            self.assertIn(_k, _d, "★derived 必须含 %s" % _k)
+            self.assertIn(_k, _d, "★derived 必须含 {}".format(_k))
         self.assertNotIn("total_requests", _d,
                          "★第95批 T-95c：旧键已彻底移除")
         import shutil
@@ -144,7 +144,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
                   and n.name == "_m94_load_patch_records")
         _body = ast.unparse(_f)
         for _w in ("open(", "safe_write_json", "os.replace", "shutil", "write("):
-            self.assertNotIn(_w, _body, "★读取器必须只读（出现 %s）" % _w)
+            self.assertNotIn(_w, _body, "★读取器必须只读（出现 {}）".format(_w))
 
     def test_A5_health_panel_exposes_overall_share(self):
         _h = _read(_HEALTH)

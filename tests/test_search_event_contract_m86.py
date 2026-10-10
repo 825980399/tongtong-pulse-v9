@@ -106,7 +106,7 @@ class TestTerminateNotReadAsResult:
         out = iw.on_pulse({"event_type": _TERMINATED, "payload": dict(_TERMINATE_PAYLOAD)})
         assert out is not None, "订阅点未响应 SEARCH_TERMINATED（事件未被处理）"
         assert out.get("action") == "none", (
-            "终止信号被读成了结果通路动作: %r（终止不得进入结果审查/兜底）" % (out,))
+            "终止信号被读成了结果通路动作: {!r}（终止不得进入结果审查/兜底）".format(out))
         assert iw._fallback_calls == [], "终止信号订阅通路不得触发兜底回退"
 
     def test_legacy_terminate_payload_still_layered(self):
@@ -115,9 +115,9 @@ class TestTerminateNotReadAsResult:
         out = iw.on_pulse({"event_type": _LEGACY, "payload": dict(_TERMINATE_PAYLOAD)})
         assert out is not None
         assert out.get("action") != "continue", (
-            "旧格式终止信号被误读为结果通路（accepted/continue）: %r" % (out,))
+            "旧格式终止信号被误读为结果通路（accepted/continue）: {!r}".format(out))
         assert out.get("status") in ("search_terminated", "stage1_irrelevant"), (
-            "终止判定口径异常: %r" % (out,))
+            "终止判定口径异常: {!r}".format(out))
         assert iw._fallback_calls == []
 
 
@@ -144,9 +144,9 @@ class TestTerminateEmitPoint:
         assert out is not None
         _types = [t for t, _ in iw._emitted]
         assert _TERMINATED in _types, (
-            "终止分支未发独立终止事件（实发: %r）——终止与结果信号仍混用同一事件类型" % (_types,))
+            "终止分支未发独立终止事件（实发: {!r}）——终止与结果信号仍混用同一事件类型".format(_types))
         assert _LEGACY not in _types, (
-            "终止分支仍复用「阶段完成」结果事件（实发: %r）" % (_types,))
+            "终止分支仍复用「阶段完成」结果事件（实发: {!r}）".format(_types))
         _payload = [p for t, p in iw._emitted if t == _TERMINATED][0]
         assert _payload.get("status") == "terminate", "终止事件须保留 status=terminate（控制器兼容）"
 

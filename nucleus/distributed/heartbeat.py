@@ -177,7 +177,7 @@ class HeartbeatManager:
                 _logger.warning("[T3] 心跳线程异常退出(已忽略): %s: %s",
                                 type(_e).__name__, _e)
 
-        _t = threading.Thread(target=_loop, name="heartbeat-%s" % node_id,
+        _t = threading.Thread(target=_loop, name="heartbeat-{}".format(node_id),
                               daemon=True)
         _t.start()
         with self._lock:

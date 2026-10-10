@@ -73,9 +73,9 @@ class TestEventConstValues(unittest.TestCase):
 
     def test_const_values_match_originals(self):
         for name, value in CONST_TO_VALUE.items():
-            self.assertTrue(hasattr(Event, name), "Event 缺少常量 %s" % name)
+            self.assertTrue(hasattr(Event, name), "Event 缺少常量 {}".format(name))
             self.assertEqual(getattr(Event, name), value,
-                             "Event.%s 值应为 %r，实为 %r" % (name, value, getattr(Event, name)))
+                             "Event.{} 值应为 {!r}，实为 {!r}".format(name, value, getattr(Event, name)))
 
     def test_const_values_unique(self):
         values = list(CONST_TO_VALUE.values())
@@ -160,7 +160,7 @@ class TestNoRawEventLiterals(unittest.TestCase):
         hits = self._scan_raw_literals()
         self.assertEqual(
             hits, [],
-            "以下位置仍存在裸字符串事件名（应已替换为 Event 常量）：%s" % hits,
+            "以下位置仍存在裸字符串事件名（应已替换为 Event 常量）：{}".format(hits),
         )
 
 

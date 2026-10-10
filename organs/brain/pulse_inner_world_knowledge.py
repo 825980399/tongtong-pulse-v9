@@ -755,7 +755,7 @@ class PulseInnerWorldKnowledgeMixin:
             if _rest:
                 _body = "；".join(
                     (v if len(v) <= 80 else v[:80]) for v in _rest[:4])
-                return "%s。此外，%s。" % (_head.rstrip("。"), _body)
+                return "{}。此外，{}。".format(_head.rstrip("。"), _body)
             return _head
 
         # —— 2. 关键词重叠融合：按与问题的重叠度排序 + 句子级去重 ——

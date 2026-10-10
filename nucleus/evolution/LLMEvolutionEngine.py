@@ -107,7 +107,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             # 修复：用框架日志系统代替print，确保写入日志文件
             self._log(LogLevel.WARNING, f"LLM调用失败: {type(e).__name__}: {e}")
             # ★第44批 T1：把失败明细留给埋点装饰器（此前只进日志，留存里恒空）
-            self._m44_last_error = "%s: %s" % (type(e).__name__, e)
+            self._m44_last_error = "{}: {}".format(type(e).__name__, e)
             return None
 
     # ========== 阶段B核心1：跨文件补丁包 ==========

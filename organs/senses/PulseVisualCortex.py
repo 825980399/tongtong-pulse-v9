@@ -167,7 +167,7 @@ class PulseVisualCortex(BasePulseOrgan):
             if not _raw:
                 self._log(LogLevel.INFO, "[R5] 人脸册不存在/为空 → 空册启动（首次运行属正常）")
             elif _raw.get("version") != 1:
-                raise ValueError("未知册版本 %r（不加载、不回写）" % (_raw.get("version"),))
+                raise ValueError("未知册版本 {!r}（不加载、不回写）".format(_raw.get("version")))
             else:
                 _faces = _raw.get("faces") or {}
                 _loaded = _dropped = 0
@@ -209,8 +209,7 @@ class PulseVisualCortex(BasePulseOrgan):
             self._roster_meta = {}
             self._roster_hits = {}
             self._log(LogLevel.WARNING,
-                      "[R5] 人脸册加载失败，按空册启动（不影响其它功能）: %s: %s"
-                      % (type(_e_r5).__name__, _e_r5))
+                      "[R5] 人脸册加载失败，按空册启动（不影响其它功能）: {}: {}".format(type(_e_r5).__name__, _e_r5))
 
 
         self._mp_face_detection = None        
@@ -1004,7 +1003,7 @@ class PulseVisualCortex(BasePulseOrgan):
                 self._log(LogLevel.WARNING, "[R5] 人脸册落盘返回 False（内存册仍有效）")
         except (Exception, SystemExit) as _e:
             self._log(LogLevel.WARNING,
-                      "[R5] 人脸册落盘异常（内存册仍有效）: %s: %s" % (type(_e).__name__, _e))
+                      "[R5] 人脸册落盘异常（内存册仍有效）: {}: {}".format(type(_e).__name__, _e))
 
     # ========== ★R5-8 隐私接口：只回元数据，绝不回显 encoding ==========
     def _list_faces(self) -> list:
@@ -1046,11 +1045,11 @@ class PulseVisualCortex(BasePulseOrgan):
                 if not save_roster(self._face_roster_path(),
                                    {"version": 1, "updated_at": time.time(), "faces": _faces}):
                     self._log(LogLevel.WARNING,
-                              "[R5] 遗忘落盘失败：'%s' 内存已删，磁盘册可能残留 → 需人工删文件" % user_name)
+                              "[R5] 遗忘落盘失败：'{}' 内存已删，磁盘册可能残留 → 需人工删文件".format(user_name))
             return {"status": "forgotten", "name": user_name, "was_in_memory": _existed_mem}
         except (Exception, SystemExit) as _e:
             self._log(LogLevel.WARNING,
-                      "[R5] 遗忘落盘异常（内存已删）: %s: %s" % (type(_e).__name__, _e))
+                      "[R5] 遗忘落盘异常（内存已删）: {}: {}".format(type(_e).__name__, _e))
             return {"status": "forgotten_partial", "name": user_name, "was_in_memory": _existed_mem}
 
     def get_stats(self) -> dict[str, Any]:

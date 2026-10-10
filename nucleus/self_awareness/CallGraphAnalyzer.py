@@ -160,7 +160,7 @@ def _dotted(node: Any) -> str:
         return node.id
     if isinstance(node, ast.Attribute):
         _base = _dotted(node.value)
-        return ("%s.%s" % (_base, node.attr)) if _base else node.attr
+        return ("{}.{}".format(_base, node.attr)) if _base else node.attr
     return ""
 
 
@@ -197,7 +197,7 @@ def _module_id(rel_path: str) -> str:
 
 def _qual_id(module: str, qualname: str) -> str:
     """组装节点 id：`module:qualname`。"""
-    return "%s:%s" % (module, qualname)
+    return "{}:{}".format(module, qualname)
 
 
 # ----------------------------------------------------------------------
@@ -222,7 +222,7 @@ class _Collector(ast.NodeVisitor):
 
     def _visit_func(self, node: Any) -> None:
         _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
-        _qual = ("%s.%s" % (_cls, node.name)) if _cls else node.name
+        _qual = ("{}.{}".format(_cls, node.name)) if _cls else node.name
         self.defs.append({
             "id": _qual_id(self.module, _qual),
             "name": node.name,
@@ -269,7 +269,7 @@ class _Collector(ast.NodeVisitor):
             if _a.name == "*":
                 continue
             _alias = _a.asname or _a.name
-            self.bindings[_alias] = ("%s.%s" % (_base, _a.name)) if _base else _a.name
+            self.bindings[_alias] = ("{}.{}".format(_base, _a.name)) if _base else _a.name
 
     # ---------------- 调用 ----------------
     def visit_Call(self, node: ast.Call) -> None:
@@ -283,7 +283,7 @@ class _Collector(ast.NodeVisitor):
                              if x[0] == "func"), "")
                 _cls0 = ".".join(x[1] for x in self._scope if x[0] == "class")
                 self.raw_calls.append({
-                    "caller_qual": (("%s.%s" % (_cls0, _fn0)) if _cls0 else _fn0)
+                    "caller_qual": (("{}.{}".format(_cls0, _fn0)) if _cls0 else _fn0)
                     or _MODULE_SCOPE,
                     "parts": [],
                     "line": node.lineno,
@@ -295,7 +295,7 @@ class _Collector(ast.NodeVisitor):
         _fn = next((x[1] for x in reversed(self._scope) if x[0] == "func"), "")
         _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
         if _fn:
-            _caller_qual = ("%s.%s" % (_cls, _fn)) if _cls else _fn
+            _caller_qual = ("{}.{}".format(_cls, _fn)) if _cls else _fn
         else:
             _caller_qual = _MODULE_SCOPE
         self.raw_calls.append({
@@ -478,7 +478,7 @@ class CallGraphAnalyzer:
             _caller_id = _qual_id(_caller_mod, _caller_qual)
             if _caller_id not in self._defs:
                 # 模块级调用：用虚拟调用者，不入 nodes
-                _caller_id = "%s:%s" % (_caller_mod, _MODULE_SCOPE)
+                _caller_id = "{}:{}".format(_caller_mod, _MODULE_SCOPE)
             if _callee == _caller_id:
                 continue                      # 自调用不计边（避免噪声）
             _tgt = self._graph.setdefault(_caller_id, {})
@@ -531,7 +531,7 @@ class CallGraphAnalyzer:
 
         # 1) self.method() → 当前类的方法
         if _head == "self" and len(_parts) >= 2 and rc.get("in_class"):
-            _q = "%s.%s" % (rc["in_class"], _parts[1])
+            _q = "{}.{}".format(rc["in_class"], _parts[1])
             _hit = self._by_module.get(_cur_mod, {}).get(_q)
             if _hit:
                 return _hit
@@ -576,7 +576,7 @@ class CallGraphAnalyzer:
             _first = _target.rsplit(".", 1)[0] if "." in _target else ""
             _sym = _target.rsplit(".", 1)[-1]
             if _first and _sym:
-                _hit = self._lookup_in_module(_first, "%s.%s" % (_sym, ".".join(_rest)))
+                _hit = self._lookup_in_module(_first, "{}.{}".format(_sym, ".".join(_rest)))
                 if _hit:
                     return _hit
             # 3d) 目标是 `pkg.mod` 且 rest 只是符号（from m import f 后 f()）

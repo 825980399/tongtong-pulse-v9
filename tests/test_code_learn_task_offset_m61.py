@@ -127,7 +127,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         for _ in range(5):
             _c = PulseCodeLearner()
             _seen.add((_c._test_heartbeat_offset, _c._review_heartbeat_offset))
-        self.assertGreater(len(_seen), 1, "偏移未随机化: %s" % _seen)
+        self.assertGreater(len(_seen), 1, "偏移未随机化: {}".format(_seen))
 
     # ---- 3. 配置化 ----
     def test_04_offset_bounds_from_config(self):
@@ -187,7 +187,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         """★加偏移后，三任务不再在同一心跳点同时触发（真实 _on_heartbeat 扫描）。"""
         _c = _mk_learner(37, 211)
         _hits = _scan_simultaneous(_c, 3000)
-        self.assertEqual(_hits, {}, "存在三任务同点触发: %s" % _hits)
+        self.assertEqual(_hits, {}, "存在三任务同点触发: {}".format(_hits))
 
     def test_08_without_offset_they_overlap(self):
         """★反证（对照实验）：偏移=0 的旧行为下确实存在三任务同点触发。
@@ -197,7 +197,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         """
         _c = _mk_learner(0, 0)
         _hits = _scan_simultaneous(_c, 1500)
-        self.assertIn(1500, _hits, "旧行为下第1500次心跳本应三者同点: %s" % _hits)
+        self.assertIn(1500, _hits, "旧行为下第1500次心跳本应三者同点: {}".format(_hits))
 
 
 if __name__ == "__main__":

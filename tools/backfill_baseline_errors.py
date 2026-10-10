@@ -131,7 +131,7 @@ def main(argv: list[str]) -> int:
     print("本次改变条数           : %d（跳过已回填 %d）" % (_changed, _skipped))
     _bavg = sum(_before_eff) / max(1, len(_before_eff))
     _aavg = sum(_after_eff) / max(1, len(_after_eff))
-    print("avg_effectiveness 前→后: %.4f → %.4f" % (_bavg, _aavg))
+    print("avg_effectiveness 前→后: {:.4f} → {:.4f}".format(_bavg, _aavg))
     print()
     if _rows:
         print("--- 重算明细（非零基线优先）---")

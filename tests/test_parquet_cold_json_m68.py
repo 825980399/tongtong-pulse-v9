@@ -245,7 +245,7 @@ class TestFaissFallback(unittest.TestCase):
         """FAISS 配置项已就位（含索引类型/路径/批量/阈值）。"""
         for _k in ["ENABLE_FAISS_VECTOR_STORE", "FAISS_INDEX_TYPE",
                    "FAISS_INDEX_PATH", "FAISS_BATCH_SIZE", "VECTOR_DIMENSION"]:
-            self.assertTrue(hasattr(config, _k), "缺少配置: %s" % _k)
+            self.assertTrue(hasattr(config, _k), "缺少配置: {}".format(_k))
 
 
 if __name__ == "__main__":

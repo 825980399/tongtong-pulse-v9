@@ -290,7 +290,7 @@ def do_scan(out_path=None):
     }
 
     print("=" * 72)
-    print("第102批 数据治理扫描（只读）  %s" % rep["scanned_at"])
+    print("第102批 数据治理扫描（只读）  {}".format(rep["scanned_at"]))
     print("=" * 72)
     print("节点 ID 全集        : %d" % rep["node_id_universe"])
     print("主快照              : %s  %.2f MB / %d 节点" % (
@@ -314,7 +314,7 @@ def do_scan(out_path=None):
         rep["redundancy"]["linked_only_non_dangling"]))
     print("-" * 72)
     print("悬空边合计          : %d" % rep["dangling_total"])
-    print("耗时 %.1fs" % rep["elapsed_sec"])
+    print("耗时 {:.1f}s".format(rep["elapsed_sec"]))
 
     if out_path:
         d = os.path.dirname(out_path)
@@ -322,7 +322,7 @@ def do_scan(out_path=None):
             os.makedirs(d, exist_ok=True)
         with io.open(out_path, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=2)
-        print("报告已写入: %s" % out_path)
+        print("报告已写入: {}".format(out_path))
     return rep
 
 
@@ -335,7 +335,7 @@ def _require_backup():
     if not subs:
         print("!! 未发现 data/knowledge 全量备份，拒绝执行 --apply")
         return False
-    print("备份校验通过: %s" % subs[0])
+    print("备份校验通过: {}".format(subs[0]))
     return True
 
 

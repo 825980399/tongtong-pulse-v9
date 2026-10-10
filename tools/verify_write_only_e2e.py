@@ -32,10 +32,10 @@ FAIL = []
 def _check(name, cond, detail=""):
     if cond:
         PASS.append(name)
-        print("[PASS] %s%s" % (name, ("  " + detail) if detail else ""))
+        print("[PASS] {}{}".format(name, ("  " + detail) if detail else ""))
     else:
         FAIL.append(name)
-        print("[FAIL] %s%s" % (name, ("  " + detail) if detail else ""))
+        print("[FAIL] {}{}".format(name, ("  " + detail) if detail else ""))
 
 
 class MockInfluxDBStore:
@@ -178,7 +178,7 @@ def run(backend):
             mock = _build_real_writer()
             print("[INFO] 使用真实 InfluxDB 后端")
         except RuntimeError as e:
-            print("[WARN] %s；自动降级为 mock。" % e)
+            print("[WARN] {}；自动降级为 mock。".format(e))
             mock = MockInfluxDBStore()
             influx_mod.get_influxdb_store = lambda: mock
     else:
@@ -236,7 +236,7 @@ def run(backend):
             mock.query_executed("digest_knowledge", 1.5, 1)
             _check("只写-query_executed写入(store直连)",
                    mock.counts["query_executed"] == qe0 + 1,
-                   "Stomach构造异常(%s)，改走store直连" % type(e).__name__)
+                   "Stomach构造异常({})，改走store直连".format(type(e).__name__))
 
         # 5. 异常场景：服务不可用 → 主流程不抛异常
         mock_fail = MockInfluxDBStore(fail_mode=True)
@@ -246,7 +246,7 @@ def run(backend):
             pool.add(m)
             _check("异常场景-主流程不抛异常", True)
         except Exception as e:
-            _check("异常场景-主流程不抛异常", False, "意外抛异常: %s" % e)
+            _check("异常场景-主流程不抛异常", False, "意外抛异常: {}".format(e))
 
         # 6. 开关关闭 → 零副作用
         config.ENABLE_INFLUXDB_TIMESERIES = False
@@ -257,7 +257,7 @@ def run(backend):
         pool.add(p)
         _check("开关关闭-零副作用",
                sum(mock2.counts.values()) == 0,
-               "counts=%s" % mock2.counts)
+               "counts={}".format(mock2.counts))
 
     finally:
         config.ENABLE_INFLUXDB_TIMESERIES = _og_t
@@ -269,7 +269,7 @@ def run(backend):
         except Exception as e:
             silent_exc(e, "verify_write_only_e2e:267:还原influxdb_store异常", level="warning")
 
-    print("\n只写统计快照: %s" % mock.get_stats())
+    print("\n只写统计快照: {}".format(mock.get_stats()))
     return 0 if not FAIL else 1
 
 

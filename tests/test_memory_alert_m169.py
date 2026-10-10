@@ -60,9 +60,9 @@ class TestProbeFailureNotSilent(unittest.TestCase):
         with self.assertLogs("pulse.module.InfoField", level="WARNING") as _cm:
             _f._m169_log_probe_failure()
         self.assertTrue(any("硬件采样失败" in x for x in _cm.output),
-                        "采集失败必须留痕: %s" % _cm.output)
+                        "采集失败必须留痕: {}".format(_cm.output))
         self.assertTrue(any("heavy" in x for x in _cm.output),
-                        "留痕须带当前等级: %s" % _cm.output)
+                        "留痕须带当前等级: {}".format(_cm.output))
 
     def test_21_guard_precedes_light_downgrade(self):
         """★结构守卫：采集失败时**先**返回，不得落到「降级为 light」分支。"""
@@ -128,7 +128,7 @@ class TestRuntimeMetricsGrading(unittest.TestCase):
             _out = _r.get_system_load()
         self.assertGreater(_out["memory_percent"], 90.0)
         self.assertEqual(_out["load_level"], "high",
-                         "高内存低 CPU 应升档到 high: %s" % _out)
+                         "高内存低 CPU 应升档到 high: {}".format(_out))
 
     def test_41_low_memory_no_regression(self):
         """内存正常 -> 分级仍由 CPU/队列决定（零回归）。"""

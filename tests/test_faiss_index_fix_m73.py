@@ -85,7 +85,7 @@ class TestT1FaissAutoBuild(unittest.TestCase):
                   "id_map_size", "index_type", "dimension", "trained_count",
                   "last_build_time_sec", "rebuild_count", "search_faiss_count",
                   "search_brute_count", "search_path"):
-            self.assertIn(k, st, "get_index_stats 缺少字段 %s" % k)
+            self.assertIn(k, st, "get_index_stats 缺少字段 {}".format(k))
         self.assertEqual(st["trained_count"], 10)
 
     def test_06_rebuild_index(self):
@@ -180,7 +180,7 @@ class TestT2Benchmark(unittest.TestCase):
         try:
             import tools.benchmark_hot_cold_faiss_kal as bm
         except Exception as e:
-            self.skipTest("benchmark 模块不可导入: %s" % e)
+            self.skipTest("benchmark 模块不可导入: {}".format(e))
         self.assertTrue(hasattr(bm, "main"))
         self.assertTrue(callable(bm.main))
 
@@ -188,7 +188,7 @@ class TestT2Benchmark(unittest.TestCase):
         try:
             import tools.benchmark_hot_cold_faiss_kal as bm
         except Exception as e:
-            self.skipTest("benchmark 模块不可导入: %s" % e)
+            self.skipTest("benchmark 模块不可导入: {}".format(e))
         # stage_node_pool_real 存在说明 FAISS 真实物化阶段已就绪
         self.assertTrue(hasattr(bm, "stage_node_pool_real") or hasattr(bm, "_load_real_nodes"))
 

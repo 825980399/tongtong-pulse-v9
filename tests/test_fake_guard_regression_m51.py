@@ -155,12 +155,12 @@ class TestNoFakeGuard(unittest.TestCase):
     def test_02_no_silent_guard(self):
         """★无「守卫调用 + 静默 except」结构。"""
         self.assertEqual(self.silent, [],
-                         "发现守卫被静默 except 吞：%s" % self.silent[:5])
+                         "发现守卫被静默 except 吞：{}".format(self.silent[:5]))
 
     def test_03_no_wrong_keyword(self):
         """★A 类假防护（守卫调用参数名错误）= 0。"""
         self.assertEqual(self.badkw, [],
-                         "守卫调用参数名不符：%s" % self.badkw[:5])
+                         "守卫调用参数名不符：{}".format(self.badkw[:5]))
 
 
 class TestFixesInPlace(unittest.TestCase):

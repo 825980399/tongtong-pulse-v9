@@ -231,7 +231,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _ymd = _as_of.strftime("%Y%m%d")
         _out_dir = os.path.join(project_root, "data", "reports")
         os.makedirs(_out_dir, exist_ok=True)
-        _digest_path = os.path.join(_out_dir, "digest_%s.md" % _ymd)
+        _digest_path = os.path.join(_out_dir, "digest_{}.md".format(_ymd))
 
         # 1) 读取 needs_human 条目
         _rows = []
@@ -289,7 +289,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
 
         # 6) 拼装 markdown
         _L = []
-        _L.append("# 曈曈自报消费闭环 · 每日 digest（%s）" % _as_of.strftime("%Y-%m-%d"))
+        _L.append("# 曈曈自报消费闭环 · 每日 digest（{}）".format(_as_of.strftime("%Y-%m-%d")))
         _L.append("")
         _L.append("> 由夜间编排 04:00 流程自动产出（只读 alerts.jsonl，不改写 alerts/todo/补丁队列）。")
         _L.append("")
@@ -313,7 +313,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _L.append("")
         if _actions:
             for _a in _actions:
-                _L.append("- %s" % _a)
+                _L.append("- {}".format(_a))
         else:
             _L.append("(无)")
         _L.append("")

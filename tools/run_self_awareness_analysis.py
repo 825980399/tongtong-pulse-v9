@@ -147,34 +147,26 @@ def _summary_lines(profile, elapsed_s: float, runs: dict) -> list:
     _lines = [
         "",
         "【关键指标】",
-        "  数据文件        : %s 个（疑似无消费 %s / 无产出 %s）"
-        % (_pc_s.get("data_files", "-"), _pc_s.get("no_consumer", "-"),
+        "  数据文件        : {} 个（疑似无消费 {} / 无产出 {}）".format(_pc_s.get("data_files", "-"), _pc_s.get("no_consumer", "-"),
            _pc_s.get("no_producer", "-")),
-        "  动态路径调用    : %s 处（需运行时验证）" % _pc_s.get("dynamic_calls", "-"),
-        "  虚假闭环候选    : %s 个（严重 %s）"
-        % (_fl_s.get("candidates", "-"), _fl_s.get("critical", "-")),
+        "  动态路径调用    : {} 处（需运行时验证）".format(_pc_s.get("dynamic_calls", "-")),
+        "  虚假闭环候选    : {} 个（严重 {}）".format(_fl_s.get("candidates", "-"), _fl_s.get("critical", "-")),
         "  虚假闭环问题分布: %s" % (_fl_s.get("by_problem", {}) or "-"),
-        "  运行时错误      : %s 次（严重 %s / Traceback %s）"
-        % (_rt.get("errors", "-"), _rt.get("criticals", "-"),
+        "  运行时错误      : {} 次（严重 {} / Traceback {}）".format(_rt.get("errors", "-"), _rt.get("criticals", "-"),
            _rt.get("tracebacks", "-")),
-        "  代码问题        : %s 个（%s）"
-        % (_ch.get("total_issues", "-"),
-           " / ".join("%s=%s" % (k, v) for k, v in sorted(_sev.items())) or "-"),
-        "  运行时事件      : %s 个（种类 %s / 活跃来源 %s）"
-        % (_re.get("total_events", "-"), _re.get("distinct_event_names", "-"),
+        "  代码问题        : {} 个（{}）".format(_ch.get("total_issues", "-"),
+           " / ".join("{}={}".format(k, v) for k, v in sorted(_sev.items())) or "-"),
+        "  运行时事件      : {} 个（种类 {} / 活跃来源 {}）".format(_re.get("total_events", "-"), _re.get("distinct_event_names", "-"),
            _re.get("active_sources", "-")),
-        "  器官活跃度      : 沉默 %s / 过热 %s（集中度 %s）"
-        % (len(_oa.get("silent_organs") or []) if _oa else "-",
+        "  器官活跃度      : 沉默 {} / 过热 {}（集中度 {}）".format(len(_oa.get("silent_organs") or []) if _oa else "-",
            len(_oa.get("overactive_organs") or []) if _oa else "-",
            _oa.get("concentration_ratio", "-") if _oa else "-"),
-        "  代码结构健康度  : %s/100 %s（孤立 %s / 循环 %s / 最深 %s 层 / 跨文件 %.2f%%）"
-        % (_cg.get("score", "-"), _cg.get("grade", "-"),
+        "  代码结构健康度  : {}/100 {}（孤立 {} / 循环 {} / 最深 {} 层 / 跨文件 {:.2f}%）".format(_cg.get("score", "-"), _cg.get("grade", "-"),
            (_cg.get("isolated") or {}).get("count", "-"),
            (_cg.get("cyclic") or {}).get("count", "-"),
            (_cg.get("depth") or {}).get("deepest", "-"),
            float((_cg.get("coupling") or {}).get("cross_file_ratio", 0) or 0) * 100),
-        "  知识质量健康度  : %s/100 %s（冲突 %s / 盲区 %s / 孤岛 %s / 老化 %s）"
-        % (_kq.get("score", "-"), _kq.get("level", "-"),
+        "  知识质量健康度  : {}/100 {}（冲突 {} / 盲区 {} / 孤岛 {} / 老化 {}）".format(_kq.get("score", "-"), _kq.get("level", "-"),
            ((_kq.get("stats") or {}).get("conflicts") or {}).get("total", "-"),
            (_kq.get("stats") or {}).get("blind_spots", "-"),
            (_kq.get("stats") or {}).get("islands", "-"),
@@ -186,7 +178,7 @@ def _summary_lines(profile, elapsed_s: float, runs: dict) -> list:
         _lines.append("  %-22s %-8s %.2fs"
                       % (_name, _info.get("status", "?"),
                          float(_info.get("elapsed_ms", 0)) / 1000.0))
-    _lines.append("  总计 %.2fs" % elapsed_s)
+    _lines.append("  总计 {:.2f}s".format(elapsed_s))
     return _lines
 
 
@@ -233,8 +225,8 @@ def main(argv: list | None = None) -> int:
     print("=" * 68)
     print("  曈曈 PulseNet · 自我认知全量分析（PHASE18 阶段一）")
     print("=" * 68)
-    print("  项目根: %s" % _PROJECT_ROOT)
-    print("  引擎开关: %s" % getattr(config, "ENABLE_SELF_AWARENESS_ENGINE", True))
+    print("  项目根: {}".format(_PROJECT_ROOT))
+    print("  引擎开关: {}".format(getattr(config, "ENABLE_SELF_AWARENESS_ENGINE", True)))
 
     # ★主线第20批 T4：EventTap 重置（用户主动行为，必须在分析前）
     if _args.reset_event_tap:
@@ -244,14 +236,14 @@ def main(argv: list | None = None) -> int:
             get_event_tap().reset_stats()
             print("  [EventTap] 统计已重置（订阅保留）")
         except Exception as _e:  # 重置失败不阻断分析
-            print("[警告] EventTap 重置失败: %s: %s" % (type(_e).__name__, _e))
+            print("[警告] EventTap 重置失败: {}: {}".format(type(_e).__name__, _e))
     if _args.event_tap_window and int(_args.event_tap_window) > 0:
         print("[警告] 时间窗口过滤暂未实现，使用全量统计（参数已预留）")
 
     _engine = _build_engine(_args.skip_code_review, _args.include_event_tap,
                             _args.include_call_graph, _args.call_graph_only,
                             _args.include_knowledge_quality)
-    print("  已注册分析器: %s" % ", ".join(_engine.list_analyzers()))
+    print("  已注册分析器: {}".format(", ".join(_engine.list_analyzers())))
     print("-" * 68)
 
     _t0 = time.perf_counter()
@@ -268,13 +260,13 @@ def main(argv: list | None = None) -> int:
     _dir = _out_dir(_args.out_dir)
     _stamp = _ts()
     _paths = {}
-    _paths["profile"] = os.path.join(_dir, "profile_%s.json" % _stamp)
-    _paths["report"] = os.path.join(_dir, "report_%s.txt" % _stamp)
+    _paths["profile"] = os.path.join(_dir, "profile_{}.json".format(_stamp))
+    _paths["report"] = os.path.join(_dir, "report_{}.txt".format(_stamp))
     _paths["production_consumption"] = os.path.join(
-        _dir, "production_consumption_%s.json" % _stamp)
-    _paths["fake_loops"] = os.path.join(_dir, "fake_loops_%s.json" % _stamp)
+        _dir, "production_consumption_{}.json".format(_stamp))
+    _paths["fake_loops"] = os.path.join(_dir, "fake_loops_{}.json".format(_stamp))
     # ★主线第21批 T4：完整调用图数据（供后续可视化）
-    _paths["call_graph"] = os.path.join(_dir, "call_graph_%s.json" % _stamp)
+    _paths["call_graph"] = os.path.join(_dir, "call_graph_{}.json".format(_stamp))
 
     _engine.save_profile(_paths["profile"])
     _report_text = _engine.generate_report(_paths["report"])
@@ -295,7 +287,7 @@ def main(argv: list | None = None) -> int:
             _cg_obj.analyze()
             _dump_json(_paths["call_graph"], _cg_obj._graph_data)
         except Exception as _e:  # 落盘失败不影响主流程
-            print("[警告] 调用图落盘失败: %s: %s" % (type(_e).__name__, _e))
+            print("[警告] 调用图落盘失败: {}: {}".format(type(_e).__name__, _e))
 
     # ---- 基线（T5）----
     _baseline_p = os.path.join(_dir, "baseline.json")
@@ -303,7 +295,7 @@ def main(argv: list | None = None) -> int:
     _baseline = None
     if _args.update_baseline:
         _engine.save_profile(_baseline_p)
-        print("[基线] 已用本次结果**更新**基线: %s" % _baseline_p)
+        print("[基线] 已用本次结果**更新**基线: {}".format(_baseline_p))
     elif os.path.isfile(_baseline_p):
         _baseline = _engine.load_profile(_baseline_p)
         if _baseline is None:
@@ -312,7 +304,7 @@ def main(argv: list | None = None) -> int:
             _cmp_result = SelfAwarenessEngine.compare_profiles(_baseline, _profile)
     else:
         _engine.save_profile(_baseline_p)
-        print("[基线] 首份报告已建立基线: %s" % _baseline_p)
+        print("[基线] 首份报告已建立基线: {}".format(_baseline_p))
 
     # ---- 对比结果追加到报告尾部 ----
     if _cmp_result:
@@ -325,7 +317,7 @@ def main(argv: list | None = None) -> int:
             with open(_paths["report"], "a", encoding="utf-8") as f:
                 f.write("\n".join(_tail) + "\n")
         except Exception as _e:  # 追加失败不影响主流程
-            print("[警告] 趋势对比写入报告失败: %s: %s" % (type(_e).__name__, _e))
+            print("[警告] 趋势对比写入报告失败: {}: {}".format(type(_e).__name__, _e))
         print("\n".join(_tail))
 
     # ---- 控制台摘要 ----
@@ -338,8 +330,7 @@ def main(argv: list | None = None) -> int:
         _flag = "OK " if _size > 0 else "空!"
         print("  [%s] %-24s %8d B  %s" % (_flag, _k, _size, _p))
     print("")
-    print("完成：总耗时 %.2fs%s"
-          % (_elapsed, "" if _cmp_result else "（无基线对比）"))
+    print("完成：总耗时 {:.2f}s{}".format(_elapsed, "" if _cmp_result else "（无基线对比）"))
     return 0
 
 

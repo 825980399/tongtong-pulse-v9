@@ -107,7 +107,7 @@ def _method_node(name):
             for _y in _nd.body:
                 if isinstance(_y, (ast.FunctionDef, ast.AsyncFunctionDef)) and _y.name == name:
                     return _y
-    raise AssertionError("未找到 PatchManager.%s" % name)
+    raise AssertionError("未找到 PatchManager.{}".format(name))
 
 
 def _calls_in(node):
@@ -255,8 +255,8 @@ class TestT93aStaticWiring(unittest.TestCase):
         _apply = _calls_in(_method_node("apply_all_pending"))
         _verify = _calls_in(_method_node("_verify_in_copy"))
         for _f in ("_m92_base_indent", "_m92_ast_struct_guard"):
-            self.assertIn(_f, _apply, "写盘点未调用 %s" % _f)
-            self.assertIn(_f, _verify, "验证侧未调用 %s" % _f)
+            self.assertIn(_f, _apply, "写盘点未调用 {}".format(_f))
+            self.assertIn(_f, _verify, "验证侧未调用 {}".format(_f))
 
     def test_A5_guards_live_inside_py_only_branch(self):
         """两关必须在 `if patch["file"].endswith(".py"):` 分支内（非 .py 文件无意义）。"""
@@ -283,13 +283,13 @@ class TestT93aStaticWiring(unittest.TestCase):
                    'results["failed"] += 1',
                    'results["details"].append({',
                    'continue'):
-            self.assertIn(_k, _seg, "写盘点拒绝体缺少：%s" % _k)
+            self.assertIn(_k, _seg, "写盘点拒绝体缺少：{}".format(_k))
 
     def test_A7_guard_functions_are_module_level_pure(self):
         _names = {_n.name for _n in _tree().body if isinstance(_n, ast.FunctionDef)}
         for _f in ("_m92_base_indent", "_m92_ast_struct_guard",
                    "_m92_base_indent_guard_on", "_m92_ast_struct_guard_on"):
-            self.assertIn(_f, _names, "%s 必须在模块级" % _f)
+            self.assertIn(_f, _names, "{} 必须在模块级".format(_f))
 
 
 # ==========================================================================
@@ -483,7 +483,7 @@ class TestT93eZeroRegression(unittest.TestCase):
         _old = (_r2.get("applied"), _r2.get("failed"),
                 [_d.get("status") for _d in _r2.get("details", [])], _b2 != _a2)
 
-        self.assertEqual(_old, _new, "开关全关时结论漂移：改前=%r 改后=%r" % (_old, _new))
+        self.assertEqual(_old, _new, "开关全关时结论漂移：改前={!r} 改后={!r}".format(_old, _new))
 
 
 # ==========================================================================

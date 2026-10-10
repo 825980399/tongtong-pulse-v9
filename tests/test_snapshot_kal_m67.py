@@ -283,7 +283,7 @@ class TestKAL(unittest.TestCase):
                 "save_node", "delete_node", "trigger_full_save",
                 "trigger_incremental_save", "get_storage_backend", "get_cache_stats"]
         for m in need:
-            self.assertTrue(hasattr(_kal.KnowledgeAccessLayer, m), "缺少接口: %s" % m)
+            self.assertTrue(hasattr(_kal.KnowledgeAccessLayer, m), "缺少接口: {}".format(m))
 
     def test_32_singleton(self):
         """KAL 单例：多次 get_kal() 返回同一实例。"""

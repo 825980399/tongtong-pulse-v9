@@ -93,7 +93,7 @@ def apply_plan(plan: dict, base: str = REPORTS_DIR,
 
     ★同盘 rename → 不触发沙箱删除配额，且完整可回滚。
     """
-    _dest = os.path.join(base, "_archive_%s" % label)
+    _dest = os.path.join(base, "_archive_{}".format(label))
     _out = {"moved": 0, "errors": [], "dest": _dest}
     for _x in plan.get("targets", []):
         try:
@@ -103,16 +103,16 @@ def apply_plan(plan: dict, base: str = REPORTS_DIR,
             shutil.move(_x["path"], _to)
             _out["moved"] += 1
         except (OSError, shutil.Error) as _e:
-            _out["errors"].append("%s: %s" % (_x["path"], _e))
+            _out["errors"].append("{}: {}".format(_x["path"], _e))
     return _out
 
 
 def restore_archive(label: str = "test", base: str = REPORTS_DIR) -> dict:
     """从归档目录**回滚**（把文件移回原位）。"""
-    _src = os.path.join(base, "_archive_%s" % label)
+    _src = os.path.join(base, "_archive_{}".format(label))
     _out = {"restored": 0, "errors": [], "src": _src}
     if not os.path.isdir(_src):
-        _out["errors"].append("归档目录不存在: %s" % _src)
+        _out["errors"].append("归档目录不存在: {}".format(_src))
         return _out
     for _dp, _dns, _fns in os.walk(_src):
         for _fn in _fns:
@@ -124,7 +124,7 @@ def restore_archive(label: str = "test", base: str = REPORTS_DIR) -> dict:
                 shutil.move(_fp, _to)
                 _out["restored"] += 1
             except (OSError, shutil.Error) as _e:
-                _out["errors"].append("%s: %s" % (_fp, _e))
+                _out["errors"].append("{}: {}".format(_fp, _e))
     return _out
 
 
@@ -152,14 +152,14 @@ def main(argv=None) -> int:
         try:
             _before = time.mktime(time.strptime(_ns.before, "%Y-%m-%d %H:%M"))
         except ValueError as _e:
-            print("[ERR] --before 格式应为 'YYYY-MM-DD HH:MM': %s" % _e)
+            print("[ERR] --before 格式应为 'YYYY-MM-DD HH:MM': {}".format(_e))
             return 2
 
     _plan = build_plan(REPORTS_DIR, keep=_ns.keep, before=_before)
     print("=== 报告磁盘清理预案（%s）===" % ("执行" if _ns.yes else "预览 dry-run"))
-    print("  报告根目录: %s" % REPORTS_DIR)
+    print("  报告根目录: {}".format(REPORTS_DIR))
     print("  待处理文件: %d 份 / %.1f KB" % (_plan["total"], _plan["bytes"] / 1024))
-    print("  按类型分布: %s" % _plan["by_type"])
+    print("  按类型分布: {}".format(_plan["by_type"]))
     _disk = sum(1 for _ in _iter_reports(REPORTS_DIR))
     print("  当前磁盘总数: %d 份" % _disk)
     print()

@@ -66,11 +66,11 @@ def _safe_rmtree(path):
                 try:
                     os.remove(os.path.join(dp, f))
                 except BaseException as e:
-                    print("cleanup warn: %s: %s" % (type(e).__name__, e))
+                    print("cleanup warn: {}: {}".format(type(e).__name__, e))
         try:
             os.rmdir(dp)
         except BaseException as e:
-            print("cleanup warn: %s: %s" % (type(e).__name__, e))
+            print("cleanup warn: {}: {}".format(type(e).__name__, e))
 
 
 class _MockEncoder:
@@ -118,7 +118,7 @@ class _FakePool:
 
 
 def _mk(eid, motive, ts, polluted=False, qw=1.0, act=0, no_text=False):
-    _e = {"id": eid, "motivation": motive, "summary": "我曾因%s而行动" % motive,
+    _e = {"id": eid, "motivation": motive, "summary": "我曾因{}而行动".format(motive),
           "timestamp": ts, "polluted": polluted, "quality_weight": qw,
           "activation_count": act, "is_summarized": True}
     if no_text:

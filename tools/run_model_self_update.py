@@ -42,9 +42,9 @@ def main(argv=None) -> int:
     _args = _ap.parse_args(argv)
 
     _u = ModelSelfUpdater()
-    print("启用=%s  版本目录=%s  可写=%s" % (
+    print("启用={}  版本目录={}  可写={}".format(
         updater_enabled(), _u.base_dir(), _u._writable()))
-    print("（默认目录: %s）" % DEFAULT_BASE_DIR)
+    print("（默认目录: {}）".format(DEFAULT_BASE_DIR))
 
     _samples = None
     if _args.samples and os.path.isfile(_args.samples):
@@ -71,7 +71,7 @@ def main(argv=None) -> int:
         if _k == "plan":
             print("  plan:")
             for _p in _v:
-                print("     %s" % _p)
+                print("     {}".format(_p))
         else:
             print("  %-24s %s" % (_k, _v))
 

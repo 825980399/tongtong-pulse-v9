@@ -67,11 +67,11 @@ def _safe_rmtree(path):
                 try:
                     os.remove(os.path.join(dp, f))
                 except BaseException as e:
-                    print("cleanup warn: %s: %s" % (type(e).__name__, e))
+                    print("cleanup warn: {}: {}".format(type(e).__name__, e))
         try:
             os.rmdir(dp)
         except BaseException as e:
-            print("cleanup warn: %s: %s" % (type(e).__name__, e))
+            print("cleanup warn: {}: {}".format(type(e).__name__, e))
 
 
 def _rec(i=0, prompt="正常提问内容ABC", response="正常回答内容XYZ", channel="zhipu",
@@ -268,7 +268,7 @@ class TestIO(unittest.TestCase):
         os.makedirs(_d, exist_ok=True)
         import time as _t
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_%s.jsonl" % _day), "w", encoding="utf-8") as f:
+        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
             for i in range(30):
                 f.write(json.dumps(_rec(i)) + "\n")
         _r = evaluate_day(day=_day, trace_dir=_d)
@@ -289,7 +289,7 @@ class TestIO(unittest.TestCase):
         os.makedirs(_d, exist_ok=True)
         import time as _t
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_%s.jsonl" % _day), "w", encoding="utf-8") as f:
+        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
             for i in range(30):
                 f.write(json.dumps(_rec(i)) + "\n")
         _out = os.path.join(self.dir, "out.json")

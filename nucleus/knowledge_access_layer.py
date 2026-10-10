@@ -173,7 +173,7 @@ class KnowledgeAccessLayer:
             return []
         _out = []
         for _n in self._all_nodes():
-            _hay = "%s %s" % (getattr(_n, "value", "") or "",
+            _hay = "{} {}".format(getattr(_n, "value", "") or "",
                               " ".join(getattr(_n, "keywords", None) or []))
             if any(str(_k) in _hay for _k in keywords):
                 _out.append(_n)

@@ -42,10 +42,10 @@ FAIL = []
 def _check(name, cond, detail=""):
     if cond:
         PASS.append(name)
-        print("[PASS] %s%s" % (name, ("  " + detail) if detail else ""))
+        print("[PASS] {}{}".format(name, ("  " + detail) if detail else ""))
     else:
         FAIL.append(name)
-        print("[FAIL] %s%s" % (name, ("  " + detail) if detail else ""))
+        print("[FAIL] {}{}".format(name, ("  " + detail) if detail else ""))
 
 
 # ===== 内存 Mock Neo4j 后端（复用真实 Neo4jStore 接口）=====
@@ -140,7 +140,7 @@ def run(backend):
             mock = _build_real_writer()
             print("[INFO] 使用真实 Neo4j 后端")
         except RuntimeError as e:
-            print("[WARN] %s；自动降级为 mock。" % e)
+            print("[WARN] {}；自动降级为 mock。".format(e))
             mock = MockNeo4jStore()
             neo4j_mod.get_neo4j_store = lambda: mock
     else:
@@ -179,14 +179,14 @@ def run(backend):
             _ts = mock.nodes.get(a.node_id, {}).get("trust_score")
             _check("节点双写-更新属性(路径迁移触发)",
                    _ts in (0.95, "0.95"),
-                   "trust_score=%s updated=%s" % (_ts, _ok_upd))
+                   "trust_score={} updated={}".format(_ts, _ok_upd))
         except Exception as e:
-            _check("节点双写-更新属性(路径迁移触发)", False, "更新异常: %s" % e)
+            _check("节点双写-更新属性(路径迁移触发)", False, "更新异常: {}".format(e))
 
         # 4. 一致性检查
         cc = pool.check_consistency(a.node_id)
         _check("一致性检查-节点一致", cc.get("consistent", False),
-               "detail=%s" % cc.get("detail", ""))
+               "detail={}".format(cc.get("detail", "")))
 
         # 5. 删除节点（DETACH DELETE 行为）
         pool.remove(a.node_id)
@@ -203,9 +203,9 @@ def run(backend):
             _check("异常场景-主流程不抛异常", True)
             st = pool.get_dual_write_stats()
             _check("异常场景-双写统计记失败", st.get("node_fail", 0) > 0,
-                   "node_fail=%s" % st.get("node_fail"))
+                   "node_fail={}".format(st.get("node_fail")))
         except Exception as e:
-            _check("异常场景-主流程不抛异常", False, "意外抛异常: %s" % e)
+            _check("异常场景-主流程不抛异常", False, "意外抛异常: {}".format(e))
 
         # 7. 开关关闭 → 零副作用
         config.ENABLE_NEO4J_GRAPH_STORE = False
@@ -230,7 +230,7 @@ def run(backend):
         except Exception as e:
             silent_exc(e, "verify_dual_write_e2e:228:还原neo4j_store异常", level="warning")
 
-    print("\n双写统计快照: %s" % mock.get_stats())
+    print("\n双写统计快照: {}".format(mock.get_stats()))
     return 0 if not FAIL else 1
 
 

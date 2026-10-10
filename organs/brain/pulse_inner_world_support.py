@@ -119,7 +119,7 @@ class PulseInnerWorldSupportMixin:
         self._log(LogLevel.INFO,
                   f"[B2策略] 建议方法={method} → 实际执行={handler_name} "
                   f"→ 已采纳(结果{len(text)}字)")
-        return {"status": "qica_%s" % method, "answer": text}
+        return {"status": "qica_{}".format(method), "answer": text}
 
     def _execute_health_check(self, question: str, user_name: str = "") -> str | None:
         """★P1-41：health_check 专用执行器（此前退化为 _knowledge_retrieve）。

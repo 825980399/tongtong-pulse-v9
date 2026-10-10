@@ -33,11 +33,11 @@ def test_safe_read_json_handles_bom(tmp_path):
     _write_with_bom(str(p), {"patches": [{"id": "D1", "needs_repair": True}]})
     with open(p, "rb") as f:
         head = f.read(3)
-    assert head == b"\xef\xbb\xbf", "夹具未真正写出 BOM：%r" % head
+    assert head == b"\xef\xbb\xbf", "夹具未真正写出 BOM：{!r}".format(head)
 
     data = safe_read_json(str(p), {})
-    assert isinstance(data, dict), "BOM 文件应解析为 dict，实际=%r" % type(data)
-    assert data.get("patches"), "BOM 文件应读出内容，实际=%r" % data
+    assert isinstance(data, dict), "BOM 文件应解析为 dict，实际={!r}".format(type(data))
+    assert data.get("patches"), "BOM 文件应读出内容，实际={!r}".format(data)
 
 
 def test_patch_manager_load_json_handles_bom(tmp_path):
@@ -51,7 +51,7 @@ def test_patch_manager_load_json_handles_bom(tmp_path):
     sentinel = {"__default__": True}
     got = pm._load_json(str(p), sentinel)
     assert got is not sentinel, "BOM 文件不应回落默认值（说明仍报 Unexpected BOM）"
-    assert got.get("total") == 7, "读出内容不符：%r" % got
+    assert got.get("total") == 7, "读出内容不符：{!r}".format(got)
     assert got.get("note") == "带BOM"
 
 

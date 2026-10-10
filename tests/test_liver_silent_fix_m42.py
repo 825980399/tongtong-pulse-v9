@@ -39,7 +39,7 @@ def _method_body(src, name):
     """按缩进切片取出方法体（到下一个同级 def / class 为止）。"""
     lines = src.splitlines()
     _start = next((i for i, l in enumerate(lines)
-                   if re.match(r"^\s*def %s\b" % re.escape(name), l)), None)
+                   if re.match(r"^\s*def {}\b".format(re.escape(name)), l)), None)
     if _start is None:
         return None
     _end = len(lines)
@@ -57,7 +57,7 @@ class TestLiverSilentFix(unittest.TestCase):
     def test_01_file_exists_and_has_methods(self):
         self.assertTrue(self.src, "PulseLiver.py 应可读且非空")
         for _m in _METHODS:
-            self.assertIsNotNone(_method_body(self.src, _m), "缺少方法 %s" % _m)
+            self.assertIsNotNone(_method_body(self.src, _m), "缺少方法 {}".format(_m))
 
     def test_02_target_methods_have_no_silent_except(self):
         """★防回归：三个方法体内不得出现 `except ...: pass`。"""
@@ -66,7 +66,7 @@ class TestLiverSilentFix(unittest.TestCase):
             _hits = [i for i, l in enumerate(_body)
                      if _SILENT_RE.search(l.rstrip())
                      and i + 1 < len(_body) and _body[i + 1].strip() == "pass"]
-            self.assertEqual(_hits, [], "%s 内仍有静默 except: pass" % _m)
+            self.assertEqual(_hits, [], "{} 内仍有静默 except: pass".format(_m))
 
     def test_03_whole_file_has_no_silent_except(self):
         """★全文件静默点应为 0（T4 修复前后实测：1 → 0）。"""
@@ -74,7 +74,7 @@ class TestLiverSilentFix(unittest.TestCase):
         _hits = [i + 1 for i, l in enumerate(_lines)
                  if _SILENT_RE.search(l.rstrip())
                  and i + 1 < len(_lines) and _lines[i + 1].strip() == "pass"]
-        self.assertEqual(_hits, [], "PulseLiver.py 仍存在静默吞异常: %s" % _hits)
+        self.assertEqual(_hits, [], "PulseLiver.py 仍存在静默吞异常: {}".format(_hits))
 
     def test_04_patch_fix_present_verbatim(self):
         """补丁 modified_code 的修复形态必须仍在源码中（逐字）。"""

@@ -27,7 +27,7 @@ class TestKnife6M163(unittest.TestCase):
             out = RE.changed_files(base="HEAD~1", target="HEAD")
         self.assertEqual(out, [])
         self.assertTrue(any("git diff" in _m for _m in _cm.output),
-                        "WARNING 未携带 git diff 命令: %r" % _cm.output)
+                        "WARNING 未携带 git diff 命令: {!r}".format(_cm.output))
 
     def test_git_diff_decoded_utf8_no_crash(self):
         _d = tempfile.mkdtemp()

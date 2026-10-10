@@ -80,7 +80,7 @@ def _method_src(name):
     for _n in ast.walk(_t):
         if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)) and _n.name == name:
             return ast.get_source_segment(_src(), _n)
-    raise AssertionError("PatchManager 中找不到方法 %s" % name)
+    raise AssertionError("PatchManager 中找不到方法 {}".format(name))
 
 
 def _load_legacy_pm():
@@ -131,10 +131,10 @@ class TestT92aLabelFormat(unittest.TestCase):
                                   ("tab/空格混用", _TAB, "TabError"),
                                   ("其他语法错", _SYNTAX, "SyntaxError")):
             _r = _reason(_ORIG, _mod)
-            self.assertFalse(_r["complete"], "%s 应被关2 拒" % _tag)
+            self.assertFalse(_r["complete"], "{} 应被关2 拒".format(_tag))
             _m = _LABEL_RE.match(_r["reason"])
-            self.assertIsNotNone(_m, "[%s] 文案不含异常类名: %r" % (_tag, _r["reason"]))
-            self.assertEqual(_want, _m.group(1), "[%s] 异常类名不符" % _tag)
+            self.assertIsNotNone(_m, "[{}] 文案不含异常类名: {!r}".format(_tag, _r["reason"]))
+            self.assertEqual(_want, _m.group(1), "[{}] 异常类名不符".format(_tag))
 
     def test_A2_original_message_preserved(self):
         """★零信息损失：原有 message 必须逐字保留在类名之后。"""
@@ -163,15 +163,15 @@ class TestT92bRedThenGreen(unittest.TestCase):
                 {"original_code": _ORIG, "modified_code": _mod})
             self.assertFalse(_r["complete"], _tag)
             self.assertIsNone(_LABEL_RE.match(_r["reason"]),
-                              "[%s] 改前文案不应含类名: %r" % (_tag, _r["reason"]))
+                              "[{}] 改前文案不应含类名: {!r}".format(_tag, _r["reason"]))
             self.assertTrue(_r["reason"].startswith("语法错误: "),
-                            "[%s] 改前文案应为裸 message: %r" % (_tag, _r["reason"]))
+                            "[{}] 改前文案应为裸 message: {!r}".format(_tag, _r["reason"]))
 
     def test_B2_current_reason_has_class_name(self):
         for _tag, _mod in (("漂移", _DRIFT), ("tab", _TAB), ("语法", _SYNTAX)):
             _r = _reason(_ORIG, _mod)
             self.assertIsNotNone(_LABEL_RE.match(_r["reason"]),
-                                 "[%s] 改后文案应含类名: %r" % (_tag, _r["reason"]))
+                                 "[{}] 改后文案应含类名: {!r}".format(_tag, _r["reason"]))
 
     def test_B3_verdicts_identical_to_legacy(self):
         """零回归：改前/改后对同一输入的 `complete` 结论必须**逐例相等**。"""
@@ -192,7 +192,7 @@ class TestT92bRedThenGreen(unittest.TestCase):
                 {"original_code": _o, "modified_code": _m})
             if _old["complete"] != _new["complete"]:
                 _drift.append((_tag, _old["complete"], _new["complete"]))
-        self.assertEqual([], _drift, "结论漂移：%s" % _drift[:5])
+        self.assertEqual([], _drift, "结论漂移：{}".format(_drift[:5]))
 
 
 class TestT92cWiringGate(unittest.TestCase):
@@ -212,7 +212,7 @@ class TestT92cWiringGate(unittest.TestCase):
         """★防漏改：PatchManager 内不得再出现裸 `f"语法错误: {`。"""
         _bad = [i for i, _l in enumerate(_src().split("\n"), 1)
                 if re.search(r'f"语法错误: \{', _l)]
-        self.assertEqual([], _bad, "PatchManager 内仍有裸文案 @ 行 %s" % _bad)
+        self.assertEqual([], _bad, "PatchManager 内仍有裸文案 @ 行 {}".format(_bad))
 
     def test_C4_label_is_derived_not_hardcoded(self):
         """类名必须由 `type(...).__name__` **推导**，不得硬编码字符串（否则会失真）。"""
@@ -239,7 +239,7 @@ class TestT92dEndToEnd(unittest.TestCase):
         self.assertEqual("syntax_check_failed", _r.get("stage"), _r)
         _errs = [str(_e) for _e in _r.get("errors", [])]
         _hit = [_e for _e in _errs if _LABEL_RE.match(_e)]
-        self.assertTrue(_hit, "step3 报错未带异常类名: %s" % _errs)
+        self.assertTrue(_hit, "step3 报错未带异常类名: {}".format(_errs))
 
     def test_D2_legacy_version_had_no_label(self):
         """★先红证据（永久可复现）：改前版走到同一 stage，但文案无类名。"""
@@ -251,7 +251,7 @@ class TestT92dEndToEnd(unittest.TestCase):
         _errs = [str(_e) for _e in _r.get("errors", [])]
         self.assertTrue(_errs)
         self.assertTrue(all(_LABEL_RE.match(_e) is None for _e in _errs),
-                        "改前文案不应含类名: %s" % _errs)
+                        "改前文案不应含类名: {}".format(_errs))
 
 
 if __name__ == "__main__":

@@ -468,7 +468,7 @@ def render_md(report: dict) -> str:
     for _r in _items:
         if _r["level"] != _cur:
             _cur = _r["level"]
-            lines += ["", "### %s" % _cur, "",
+            lines += ["", "### {}".format(_cur), "",
                       "| 模块 | 文件:行 | 名称 | 类型 | 生产引用 | 测试引用 | 备注 |",
                       "|---|---|---|---|---|---|---|"]
         _note = []
@@ -542,7 +542,7 @@ def _collect_methods(files: list[str]) -> dict[str, list[dict]]:
                     if isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         out.setdefault(_rel, []).append({
                             "name": _m.name,
-                            "qualname": "%s.%s" % (_node.name, _m.name),
+                            "qualname": "{}.{}".format(_node.name, _m.name),
                             "class": _node.name,
                             "lineno": _m.lineno,
                         })
@@ -692,7 +692,7 @@ def render_md_v3(summary: dict) -> str:
         "",
     ]
     for _r in summary["island_list"]:
-        lines.append("- `%s`" % _r)
+        lines.append("- `{}`".format(_r))
     lines += ["", "## 三、零引用 set_* 清单（%d）" % summary["set_zero_ref"], ""]
     for _rel, _q, _ln in summary["set_list"]:
         lines.append("- `%s:%d` `%s`" % (_rel, _ln, _q))
@@ -714,11 +714,11 @@ def _main_v3(args) -> int:
     print("[v3] 孤岛文件=%d  零引用入口方法=%d  零引用 set_*=%d  模块级零引用=%d"
           % (summary["island_files"], summary["method_zero_ref"],
              summary["set_zero_ref"], summary["module_zero_ref"]))
-    print("[v3] 报告已写入：%s" % _out)
+    print("[v3] 报告已写入：{}".format(_out))
     if args.json_out:
         open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(summary, ensure_ascii=False, indent=2))
-        print("[v3] JSON 已写入：%s" % args.json_out)
+        print("[v3] JSON 已写入：{}".format(args.json_out))
     return 0
 
 def main() -> int:
@@ -738,16 +738,16 @@ def main() -> int:
     if not args.quiet:
         print("扫描文件 %d，模块级定义 %d" % (
             report["summary"]["scanned_files"], report["summary"]["total_defs"]))
-        print("分级：%s" % report["summary"]["by_level"])
+        print("分级：{}".format(report["summary"]["by_level"]))
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     open(args.out, "w", encoding="utf-8", newline="").write(md)
-    print("报告已写入：%s" % args.out)
+    print("报告已写入：{}".format(args.out))
 
     if args.json_out:
         open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(report, ensure_ascii=False, indent=2))
-        print("JSON 已写入：%s" % args.json_out)
+        print("JSON 已写入：{}".format(args.json_out))
     return 0
 
 

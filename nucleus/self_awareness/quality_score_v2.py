@@ -139,8 +139,7 @@ def _report_consumption_rate() -> float | None:
                 return float(_r)
     except Exception as _e:
         # ★不得静默：内存态采集失败需留痕（随后走磁盘兜底）
-        sys.stderr.write("[quality_v2] 内存态消费率采集失败: %s: %s\n"
-                         % (type(_e).__name__, _e))
+        sys.stderr.write("[quality_v2] 内存态消费率采集失败: {}: {}\n".format(type(_e).__name__, _e))
     return _disk_consumption_rate()
 
 
@@ -198,8 +197,7 @@ def _report_resolution_rate() -> float | None:
         if isinstance(_r, (int, float)):
             return float(_r)
     except Exception as _e:
-        sys.stderr.write("[quality_v2] 内存态解决率采集失败: %s: %s\n"
-                         % (type(_e).__name__, _e))
+        sys.stderr.write("[quality_v2] 内存态解决率采集失败: {}: {}\n".format(type(_e).__name__, _e))
     return None
 
 
@@ -477,7 +475,7 @@ def evaluate_v2(dimensions: dict[str, dict] | None = None) -> dict[str, Any]:
         "weights": dict(DIMENSION_WEIGHTS_V2),
         "available": _used,
         "reason": ("" if _tw >= 0.5 else
-                   "可用维度权重不足（%.2f），结果仅供参考" % _tw),
+                   "可用维度权重不足（{:.2f}），结果仅供参考".format(_tw)),
         "version": QUALITY_V2_VERSION,
     }
 
@@ -522,8 +520,7 @@ def record_trend(result: dict[str, Any], path: str | None = None) -> str:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
     except OSError as _e:
         # ★不得静默：趋势写入失败（评估本身已完成，不影响返回值）
-        sys.stderr.write("[quality_v2] 趋势记录写入失败: %s: %s\n"
-                         % (type(_e).__name__, _e))
+        sys.stderr.write("[quality_v2] 趋势记录写入失败: {}: {}\n".format(type(_e).__name__, _e))
     return _p
 
 

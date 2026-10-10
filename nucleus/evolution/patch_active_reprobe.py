@@ -306,7 +306,7 @@ def active_reprobe(patch: dict[str, Any]) -> dict[str, Any]:
     _det = detector_for(_issue)
     if _det is None:
         return _result(V_NOT_APPLICABLE, _issue, -1, -1,
-                       "无对应检测器（issue_type=%s）→ 不判通过" % _issue,
+                       "无对应检测器（issue_type={}）→ 不判通过".format(_issue),
                        _scope_unknown())
 
     # ① 代码片段必须可解析
@@ -319,7 +319,7 @@ def active_reprobe(patch: dict[str, Any]) -> dict[str, Any]:
         if _t_modi is None:
             _bad.append("modified_code")
         return _result(V_VERIFY_FAILED, _issue, -1, -1,
-                       "代码片段无法解析: %s" % ", ".join(_bad))
+                       "代码片段无法解析: {}".format(", ".join(_bad)))
 
     # ② 修复前复现
     _base_hits = _det(_orig)

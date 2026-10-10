@@ -1137,14 +1137,14 @@ class InfoField(SilentLogMixin):
             _out["ok"] = True
         except Exception as _e:
             silent_exc(_e, where="nucleus.field.InfoField::_m169_memory_pressure")
-            _out["reason"] = "采集失败: %s" % type(_e).__name__
+            _out["reason"] = "采集失败: {}".format(type(_e).__name__)
             return _out
         _sys_b = _out["system_percent"] > _thr["system_percent"]
         _rss_b = _out["process_rss_mb"] > _thr["process_rss_mb"]
         _out["breached"] = bool(_sys_b or _rss_b)
-        _out["reason"] = ("系统内存 %.1f%% > %.1f%%" % (
+        _out["reason"] = ("系统内存 {:.1f}% > {:.1f}%".format(
             _out["system_percent"], _thr["system_percent"])) if _sys_b else (
-            "进程 RSS %.1fMB > %.1fMB" % (
+            "进程 RSS {:.1f}MB > {:.1f}MB".format(
                 _out["process_rss_mb"], _thr["process_rss_mb"])) if _rss_b else "正常"
         return _out
 
@@ -1152,8 +1152,7 @@ class InfoField(SilentLogMixin):
         """采集失败留痕（★不得静默，也不得据此改判负载等级）。"""
         try:
             _module_logger.warning(
-                "[C8] 硬件采样失败：本轮不据此判轻负载，保持当前等级=%s"
-                % getattr(self, "_load_level", "?"))
+                "[C8] 硬件采样失败：本轮不据此判轻负载，保持当前等级={}".format(getattr(self, "_load_level", "?")))
         except Exception as _e:
             silent_exc(_e, where="nucleus.field.InfoField::_m169_log_probe_failure")
 

@@ -165,8 +165,7 @@ class TestExperiencePoolGuard(_GuardBase):
         _after = _count()
         if _before is not None and _before > 0:
             self.assertNotEqual(_after, 0,
-                                "★守卫失效：生产记录被空池覆盖（%s → %s）"
-                                % (_before, _after))
+                                "★守卫失效：生产记录被空池覆盖（{} → {}）".format(_before, _after))
 
     def test_12_explicit_injection_allows(self):
         self.assertTrue(wg.guard_write(_PROD_EXP, explicit=True,

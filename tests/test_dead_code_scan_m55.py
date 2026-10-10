@@ -177,7 +177,7 @@ class TestDeadCodeScan(unittest.TestCase):
             self.assertIn(_m, DCS.MODULES)
         for _m in DCS.MODULES:
             self.assertTrue(os.path.isdir(os.path.join(_ROOT, _m)),
-                            "模块目录不存在：%s" % _m)
+                            "模块目录不存在：{}".format(_m))
 
 
 if __name__ == "__main__":

@@ -95,16 +95,15 @@ class TestSwitchRegistryM91(unittest.TestCase):
         _cnt = _module_assign_counts()
         for _s in _SWITCHES:
             self.assertEqual(_cnt.get(_s, 0), 1,
-                             "★%s 在 config.py 中的顶层赋值次数应为 1（实际 %s）"
-                             % (_s, _cnt.get(_s, 0)))
-            self.assertIn("%s = True" % _s, _read(_CFG_REL),
-                          "★%s 的登记默认值必须为 True" % _s)
+                             "★{} 在 config.py 中的顶层赋值次数应为 1（实际 {}）".format(_s, _cnt.get(_s, 0)))
+            self.assertIn("{} = True".format(_s), _read(_CFG_REL),
+                          "★{} 的登记默认值必须为 True".format(_s))
 
     def test_A2_runtime_values_are_true(self):
         """★验收：运行时读取到的默认值与登记前一致（均为 True）。"""
         for _s in _SWITCHES:
-            self.assertTrue(hasattr(config, _s), "config 缺少属性 %s" % _s)
-            self.assertIs(getattr(config, _s), True, "%s 运行时值应为 True" % _s)
+            self.assertTrue(hasattr(config, _s), "config 缺少属性 {}".format(_s))
+            self.assertIs(getattr(config, _s), True, "{} 运行时值应为 True".format(_s))
 
     # --------------------------------------------------------- B 各读取函数口径
     def test_B1_reader_functions_return_true(self):
@@ -123,7 +122,7 @@ class TestSwitchRegistryM91(unittest.TestCase):
              getattr(_se, "_m91_indent_repair_on")),
         )
         for _name, _fn in _checks:
-            self.assertTrue(_fn(), "%s() 应为 True" % _name)
+            self.assertTrue(_fn(), "{}() 应为 True".format(_name))
 
     def test_B2_m89_threshold_values(self):
         """登记后阈值语义不变（0.3 + 长度下限 1/3）。"""
@@ -147,7 +146,7 @@ class TestSwitchRegistryM91(unittest.TestCase):
             _new_val = getattr(config, _s, None)
             # 登记前两个 M91 开关与 M90/M89 开关都不在 config.py ⇒ 靠 getattr 兜底 True
             self.assertIsNone(_old_val,
-                              "★登记前 %s 本不应存在于 config.py（实测 %r）" % (_s, _old_val))
+                              "★登记前 {} 本不应存在于 config.py（实测 {!r}）".format(_s, _old_val))
             # 生效值 = 登记前 getattr 兜底值 == 登记后的显式值
             self.assertEqual(_new_val, True)
             self.assertEqual(_new_val, bool(getattr(_old, _s, True)),
@@ -171,13 +170,13 @@ class TestSwitchRegistryM91(unittest.TestCase):
         """
         for _rel, _old_name, _new_name in _INVERTED_TESTS:
             _src = _read(_rel)
-            self.assertNotIn("def %s(" % _old_name, _src,
-                             "%s 仍保留旧方法名（应已更名）" % _rel)
-            self.assertIn("def %s(" % _new_name, _src,
-                          "%s 缺少反转后的新用例" % _rel)
-            self.assertIn(_MARK_T, _src, "%s 缺少 T-91c 变更说明标记" % _rel)
+            self.assertNotIn("def {}(".format(_old_name), _src,
+                             "{} 仍保留旧方法名（应已更名）".format(_rel))
+            self.assertIn("def {}(".format(_new_name), _src,
+                          "{} 缺少反转后的新用例".format(_rel))
+            self.assertIn(_MARK_T, _src, "{} 缺少 T-91c 变更说明标记".format(_rel))
             self.assertIn("assertIn(_SWITCH, _src", _src,
-                          "%s 的反转断言应为 assertIn(_SWITCH, _src...)" % _rel)
+                          "{} 的反转断言应为 assertIn(_SWITCH, _src...)".format(_rel))
 
     # --------------------------------------------------------- F 运行时生效
     def test_F1_change_takes_effect_without_restart(self):

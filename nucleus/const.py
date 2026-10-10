@@ -701,8 +701,7 @@ def register_event(name, value):
     if name in _EVENT_CONSTANTS:
         if _EVENT_CONSTANTS[name] != value:
             raise ValueError(
-                "事件常量 %s 已存在且值不一致: %r != %r"
-                % (name, _EVENT_CONSTANTS[name], value)
+                "事件常量 {} 已存在且值不一致: {!r} != {!r}".format(name, _EVENT_CONSTANTS[name], value)
             )
         return
     setattr(Event, name, value)

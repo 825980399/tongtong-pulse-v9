@@ -79,11 +79,11 @@ def main() -> int:
     if missing or extra or dup:
         print("校验失败：")
         if missing:
-            print("  层次缺失: %s" % missing)
+            print("  层次缺失: {}".format(missing))
         if extra:
-            print("  层次多余: %s" % extra)
+            print("  层次多余: {}".format(extra))
         if dup:
-            print("  重复归属: %s" % dup)
+            print("  重复归属: {}".format(dup))
         return 1
 
     payload = {
@@ -101,7 +101,7 @@ def main() -> int:
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    print("OK -> %s" % OUT_PATH)
+    print("OK -> {}".format(OUT_PATH))
     print("  L1=%d  L2=%d  L3(意图)=%d  全覆盖校验通过" % (
         payload["l1_count"], payload["l2_count"], payload["intent_count"]))
     return 0

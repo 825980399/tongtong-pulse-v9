@@ -60,7 +60,7 @@ def _sha256(path: str) -> str:
 def _load(path: str) -> tuple[Any, list[dict]]:
     """返回 (文档对象, 补丁列表)。"""
     if not os.path.isfile(path):
-        raise SystemExit("[回填] 目标不存在: %s" % path)
+        raise SystemExit("[回填] 目标不存在: {}".format(path))
     _doc = json.load(io.open(path, encoding="utf-8"))
     if isinstance(_doc, list):
         return _doc, _doc
@@ -68,7 +68,7 @@ def _load(path: str) -> tuple[Any, list[dict]]:
         for _k in ("patches", "records", "items", "data"):
             if isinstance(_doc.get(_k), list):
                 return _doc, _doc[_k]
-    raise SystemExit("[回填] 无法识别结构: %s" % path)
+    raise SystemExit("[回填] 无法识别结构: {}".format(path))
 
 
 def _backup(path: str, archive_root: str) -> dict:
@@ -131,8 +131,7 @@ def build_report(path: str, apply: bool = False,
             #   但**必须可观测** —— 否则"守卫是否生效"无从判断（第50批 P2-339 教训）。
             import sys as _sys
             _sys.stderr.write(
-                "[backfill] 写盘守卫不可用（按 fail-open 继续）: %s: %s\n"
-                % (type(_e).__name__, _e))
+                "[backfill] 写盘守卫不可用（按 fail-open 继续）: {}: {}\n".format(type(_e).__name__, _e))
         _rep2 = backfill(_ps, apply=True)
         with io.open(path, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(_doc, ensure_ascii=False, indent=2))
@@ -191,8 +190,7 @@ def main() -> int:
     if _ns.apply:
         print()
         print("[6] 已写入；备份:", _r.get("backup", {}).get("dir", "(未备份)"))
-        print("    sha256 %s → %s"
-              % (_r.get("sha256_before", "")[:16], _r.get("sha256_after", "")[:16]))
+        print("    sha256 {} → {}".format(_r.get("sha256_before", "")[:16], _r.get("sha256_after", "")[:16]))
     else:
         print()
         print("[6] dry-run：未写盘。加 --apply 执行。")

@@ -44,15 +44,15 @@ INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET", "pulse_metrics")
 
 
 def _ok(msg):
-    print("[OK]   %s" % msg)
+    print("[OK]   {}".format(msg))
 
 
 def _warn(msg):
-    print("[WARN] %s" % msg)
+    print("[WARN] {}".format(msg))
 
 
 def _fail(msg):
-    print("[FAIL] %s" % msg)
+    print("[FAIL] {}".format(msg))
 
 
 def install_drivers():
@@ -63,29 +63,29 @@ def install_drivers():
             [sys.executable, "-m", "pip", "install", "--quiet", "neo4j", "influxdb-client"]
         )
     except subprocess.CalledProcessError as e:
-        _fail("驱动安装失败：%s" % e)
+        _fail("驱动安装失败：{}".format(e))
         return 2
     # 校验导入
     try:
         import influxdb_client  # noqa: F401
         import neo4j  # noqa: F401
-        _ok("neo4j=%s influxdb_client=%s 导入成功" % (
+        _ok("neo4j={} influxdb_client={} 导入成功".format(
             getattr(neo4j, "__version__", "?"),
             getattr(influxdb_client, "__version__", "?"),
         ))
     except Exception as e:
-        _fail("驱动安装后导入失败：%s: %s" % (type(e).__name__, e))
+        _fail("驱动安装后导入失败：{}: {}".format(type(e).__name__, e))
         return 2
     return 0
 
 
 def check_neo4j():
     """检查 Neo4j 驱动与本地服务可用性。"""
-    print("== 检查 Neo4j (%s) ==" % NEO4J_URI)
+    print("== 检查 Neo4j ({}) ==".format(NEO4J_URI))
     try:
         from neo4j import GraphDatabase
     except Exception as e:
-        _fail("neo4j 驱动未安装：%s。请先运行 install-drivers。" % e)
+        _fail("neo4j 驱动未安装：{}。请先运行 install-drivers。".format(e))
         return 2
     if not NEO4J_PASSWORD:
         _warn("环境变量 NEO4J_PASSWORD 为空；若数据库已设密码请先导出。")
@@ -100,18 +100,18 @@ def check_neo4j():
         _driver.close()
         return 0
     except Exception as e:
-        _fail("Neo4j 连接失败：%s: %s" % (type(e).__name__, e))
+        _fail("Neo4j 连接失败：{}: {}".format(type(e).__name__, e))
         _warn("请确认 Neo4j Community/Enterprise 已启动且 bolt 端口可达。")
         return 2
 
 
 def check_influxdb():
     """检查 InfluxDB 驱动与本地服务可用性。"""
-    print("== 检查 InfluxDB (%s) ==" % INFLUXDB_URL)
+    print("== 检查 InfluxDB ({}) ==".format(INFLUXDB_URL))
     try:
         from influxdb_client import InfluxDBClient
     except Exception as e:
-        _fail("influxdb-client 驱动未安装：%s。请先运行 install-drivers。" % e)
+        _fail("influxdb-client 驱动未安装：{}。请先运行 install-drivers。".format(e))
         return 2
     if not INFLUXDB_TOKEN:
         _warn("环境变量 INFLUXDB_TOKEN 为空；请先导出（influxd 启动时打印的 operator token）。")
@@ -126,7 +126,7 @@ def check_influxdb():
         _client.close()
         return 2
     except Exception as e:
-        _fail("InfluxDB 连接失败：%s: %s" % (type(e).__name__, e))
+        _fail("InfluxDB 连接失败：{}: {}".format(type(e).__name__, e))
         _warn("请确认 InfluxDB 2.x 已启动且 http 端口可达。")
         return 2
 
@@ -137,7 +137,7 @@ def init_neo4j():
     try:
         from neo4j import GraphDatabase
     except Exception as e:
-        _fail("neo4j 驱动未安装：%s" % e)
+        _fail("neo4j 驱动未安装：{}".format(e))
         return 2
     try:
         _driver = GraphDatabase.driver(
@@ -155,7 +155,7 @@ def init_neo4j():
         _driver.close()
         return 0
     except Exception as e:
-        _fail("Neo4j 初始化失败：%s: %s" % (type(e).__name__, e))
+        _fail("Neo4j 初始化失败：{}: {}".format(type(e).__name__, e))
         return 2
 
 
@@ -166,7 +166,7 @@ def init_influxdb():
         from influxdb_client import InfluxDBClient
         from influxdb_client.client.bucket_api import BucketsApi
     except Exception as e:
-        _fail("influxdb-client 驱动未安装：%s" % e)
+        _fail("influxdb-client 驱动未安装：{}".format(e))
         return 2
     try:
         _client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
@@ -174,15 +174,15 @@ def init_influxdb():
         _found = _buckets.find_bucket_by_name(INFLUXDB_BUCKET)
         if _found is None:
             _buckets.create_bucket(bucket_name=INFLUXDB_BUCKET, org=INFLUXDB_ORG)
-            _ok("bucket '%s' 已创建" % INFLUXDB_BUCKET)
+            _ok("bucket '{}' 已创建".format(INFLUXDB_BUCKET))
         else:
-            _ok("bucket '%s' 已存在，跳过创建" % INFLUXDB_BUCKET)
+            _ok("bucket '{}' 已存在，跳过创建".format(INFLUXDB_BUCKET))
         # 备注：降采样保留策略（raw 7d / 1m 30d / 1h 365d）由 InfluxDB 任务(Downsampling)
         # 在服务端配置；脚本仅确保主 bucket 存在。详细策略见 InfluxDB 集成设计文档。
         _client.close()
         return 0
     except Exception as e:
-        _fail("InfluxDB 初始化失败：%s: %s" % (type(e).__name__, e))
+        _fail("InfluxDB 初始化失败：{}: {}".format(type(e).__name__, e))
         return 2
 
 

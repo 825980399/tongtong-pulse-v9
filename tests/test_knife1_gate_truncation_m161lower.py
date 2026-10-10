@@ -114,13 +114,13 @@ class TestKnife1TruncationBlocks:
 
     def test_05_truncation_returns_fail(self):
         rc, out = _run_slice_full(TRUNC)
-        assert rc == 1, '截断场景必须 return 1，实际 %s\n%s' % (rc, out[:400])
+        assert rc == 1, '截断场景必须 return 1，实际 {}\n{}'.format(rc, out[:400])
         assert '截断检测' in out, '应打印截断检测提示'
         assert 'FAIL' in out
 
     def test_06_normal_run_not_flagged_as_truncation(self):
         rc, out = _run_slice_full(NORMAL)
-        assert '截断检测' not in out, '★正常运行被误判为截断：%s' % out[:300]
+        assert '截断检测' not in out, '★正常运行被误判为截断：{}'.format(out[:300])
         assert '汇总行完整' in out or 'PASS' in out
 
     def test_07_truncation_message_explains_false_green(self):
@@ -149,7 +149,7 @@ class TestKnife1IsolationUnpackFix:
         try:
             base = g.load_baseline(g.BASELINE_PATH)
             rc = g.slice_isolation(base, input_path=sample)
-            assert rc in (0, 1), '★不得因 ValueError 崩溃，实际 rc=%s' % rc
+            assert rc in (0, 1), '★不得因 ValueError 崩溃，实际 rc={}'.format(rc)
         finally:
             os.unlink(sample)
 
@@ -164,4 +164,4 @@ class TestKnife1Regression:
         r = subprocess.run([sys.executable, os.path.join(REPO, GATE_REL), '--selftest'],
                            capture_output=True, text=True, encoding='utf-8',
                            errors='replace', env=ENV, cwd=REPO, timeout=300)
-        assert r.returncode == 0, '内置 selftest 须通过：%s' % (r.stdout or '')[:300]
+        assert r.returncode == 0, '内置 selftest 须通过：{}'.format((r.stdout or '')[:300])

@@ -143,7 +143,7 @@ def write_overdue(result: dict, out: str | None = None,
         json.dump(result, _f, ensure_ascii=False, indent=2)
     # ★强制落盘断言
     if not os.path.isfile(_out):
-        raise RuntimeError("逾期清单未落盘: %s" % _out)
+        raise RuntimeError("逾期清单未落盘: {}".format(_out))
     with open(_out, encoding="utf-8") as _f:
         _back = json.loads(_f.read())
     if _back.get("overdue_count") != result.get("overdue_count"):
@@ -170,13 +170,13 @@ def main(argv=None) -> int:
     try:
         _out = write_overdue(_res, args.out)
     except RuntimeError as _e:
-        print("[report_dwell_audit] 落盘断言失败: %s" % _e)
+        print("[report_dwell_audit] 落盘断言失败: {}".format(_e))
         return 2
 
     print("[report_dwell_audit] 时限=%.2f天 扫描=%d 逾期=%d -> %s"
           % (_res["limit_days"], _res["total"], _res["overdue_count"], _out))
     for _it in _res["overdue"][:10]:
-        print("  逾期 %.1f天  %s" % (_it["age_days"], _it["path"]))
+        print("  逾期 {:.1f}天  {}".format(_it["age_days"], _it["path"]))
     if _res["overdue_count"] > 10:
         print("  ...（其余 %d 件见清单）" % (_res["overdue_count"] - 10))
     if args.strict and _res["overdue_count"] > 0:

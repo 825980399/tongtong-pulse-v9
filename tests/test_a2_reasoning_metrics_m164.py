@@ -178,7 +178,7 @@ def test_snapshot_extends_three_link_and_scene():
     d = snap["derived"]
     for k in ("local_intercept_rate", "remediation_rate",
               "remediation_distill_rate", "scene_llm_dependency_ratio"):
-        assert k in d, "快照 derived 缺失键: %s" % k
+        assert k in d, "快照 derived 缺失键: {}".format(k)
     assert isinstance(d["scene_llm_dependency_ratio"], dict)
     assert snap["counters"]["remediation"] == {"attempt": 2, "success": 1, "distilled": 1}
 

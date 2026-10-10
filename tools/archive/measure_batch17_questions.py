@@ -127,9 +127,9 @@ def main() -> int:
             local_answers += 1
 
         print("%-22s %-10s %-18s %-18s %-8s %s%s" % (
-            q[:20], intent, fpath, method, "%.2f" % conf,
+            q[:20], intent, fpath, method, "{:.2f}".format(conf),
             "是" if is_local else "否",
-            "" if hit else "  ← 期望%s" % expect_intent))
+            "" if hit else "  ← 期望{}".format(expect_intent)))
 
     n = len(CASES)
     print("-" * 100)

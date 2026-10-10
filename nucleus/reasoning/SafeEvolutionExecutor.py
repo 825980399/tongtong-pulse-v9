@@ -4194,9 +4194,8 @@ class SafeEvolutionExecutor:
                 _exc = _m85_re.sub(r"\s+as\s+\w+\s*$", "", _exc).strip()
                 if not _exc:
                     _exc = "Exception"
-                return ("%sexcept %s as e:\n%s    self._log("
-                        "LogLevel.ERROR, f'异常: {e}')"
-                        % (_m.group(1), _exc, _m.group(1)))
+                return ("{}except {} as e:\n{}    self._log("
+                        "LogLevel.ERROR, f'异常: {{e}}')".format(_m.group(1), _exc, _m.group(1)))
 
             _cand1 = _pat_pass.sub(_repl_pass, code)
             if _cand1 != code:
@@ -4309,7 +4308,7 @@ class SafeEvolutionExecutor:
                     "method": method,
                     "issue_type": _type,
                     "risk_level": "低",
-                    "description": "本地学习尝试(%s): %s" % (_strategy, _type),
+                    "description": "本地学习尝试({}): {}".format(_strategy, _type),
                     "original_code": snippet,
                     "modified_code": _modified,
                     "diff_summary": self._generate_diff_summary(snippet, _modified),
@@ -4348,7 +4347,7 @@ class SafeEvolutionExecutor:
             _module_logger.debug(
                 "[M85 学习尝试] 异常已忽略: %s: %s", type(_e).__name__, _e)
             _res["result"] = "error"
-            _verify_reason = "%s: %s" % (type(_e).__name__, _e)
+            _verify_reason = "{}: {}".format(type(_e).__name__, _e)
         try:
             self._m85_record_learning_attempt(
                 _type, file_path, method, _strategy, _res, _verify_reason)
@@ -4600,10 +4599,10 @@ class SafeEvolutionExecutor:
                     r'([ \t]+)return None[ \t]*$')
 
                 def _brne_repl(_m):
-                    return ("%sexcept %s as %s:\n"
-                            "%sself._log(LogLevel.WARNING, "
-                            "f\"[异常已忽略] {type(%s).__name__}: {%s}\")\n"
-                            "%sreturn None" % (_m.group(1), _m.group(2), _m.group(3),
+                    return ("{}except {} as {}:\n"
+                            "{}self._log(LogLevel.WARNING, "
+                            "f\"[异常已忽略] {{type({}).__name__}}: {{{}}}\")\n"
+                            "{}return None".format(_m.group(1), _m.group(2), _m.group(3),
                                                _m.group(4), _m.group(3), _m.group(3),
                                                _m.group(4)))
 

@@ -67,18 +67,18 @@ RUF100_BASELINE_PATH = os.path.join(
 def _ruf100_total() -> tuple[Any, str, str]:
     """RUF100 计数：读基线快照（**不实时跑 ruff**，成本高且结果随工作树抖动）。"""
     if not os.path.isfile(RUF100_BASELINE_PATH):
-        return None, "missing", "RUF100 基线文件缺失：%s" % RUF100_BASELINE_PATH
+        return None, "missing", "RUF100 基线文件缺失：{}".format(RUF100_BASELINE_PATH)
     try:
         with io.open(RUF100_BASELINE_PATH, encoding="utf-8") as _f:
             _d = json.load(_f)
     except (OSError, ValueError) as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_ruf100_total",
                    level="warning")
-        return None, "error", "基线不可读：%s: %s" % (type(_e).__name__, _e)
+        return None, "error", "基线不可读：{}: {}".format(type(_e).__name__, _e)
     _total = _d.get("total")
     if not isinstance(_total, int):
         return None, "error", "基线缺 total 字段"
-    return _total, "snapshot", "基线 batch=%s ruff=%s head=%s" % (
+    return _total, "snapshot", "基线 batch={} ruff={} head={}".format(
         _d.get("batch"), _d.get("ruff_version_actual"), _d.get("generated_at_head"))
 
 
@@ -92,7 +92,7 @@ def _organ_declared() -> tuple[Any, str, str]:
     """
     _organs_dir = os.path.join(_PROJECT_ROOT, "organs")
     if not os.path.isdir(_organs_dir):
-        return None, "error", "organs/ 目录不存在：%s" % _organs_dir
+        return None, "error", "organs/ 目录不存在：{}".format(_organs_dir)
     _n = 0
     try:
         for _dp, _dns, _fns in os.walk(_organs_dir):
@@ -114,7 +114,7 @@ def _organ_declared() -> tuple[Any, str, str]:
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_organ_declared walk",
                    level="warning")
-        return None, "error", "扫描 organs/ 失败：%s: %s" % (type(_e).__name__, _e)
+        return None, "error", "扫描 organs/ 失败：{}: {}".format(type(_e).__name__, _e)
     _quasi = 0
     try:
         from nucleus.organ_assembler import FRAMEWORK_QUASI_ORGANS
@@ -133,10 +133,10 @@ def _idle_rate_v2() -> tuple[Any, str, str]:
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_idle_rate_v2",
                    level="warning")
-        return None, "error", "capability_ledger 不可用：%s: %s" % (type(_e).__name__, _e)
+        return None, "error", "capability_ledger 不可用：{}: {}".format(type(_e).__name__, _e)
     _v = _r.get("true_idle_rate")
     _bd = _r.get("by_destination") or {}
-    return _v, "live", "true_idle=%s / total=%s（v2 五类，unparseable 单列不计）" % (
+    return _v, "live", "true_idle={} / total={}（v2 五类，unparseable 单列不计）".format(
         _bd.get("true_idle", 0), _r.get("total"))
 
 
@@ -218,11 +218,11 @@ def cite(metric_id: str) -> str:
     """生成可引用的口径串（含值 + 口径 + 数据源），供总账/报告直接贴。"""
     _r = get(metric_id)
     if _r.get("status") == "deprecated":
-        return "【已废弃】%s：%s（改引 %s）" % (
+        return "【已废弃】{}：{}（改引 {}）".format(
             _r["id"], _r["value_note"], _r.get("superseded_by"))
     if _r.get("value") is None:
-        return "【不可用】%s：%s" % (_r["id"], _r.get("value_note") or _r.get("error"))
-    return "%s = %s %s（口径：%s｜来源：%s｜%s）" % (
+        return "【不可用】{}：{}".format(_r["id"], _r.get("value_note") or _r.get("error"))
+    return "{} = {} {}（口径：{}｜来源：{}｜{}）".format(
         _r["id"], _r["value"], _r["unit"], _r["definition"], _r["source"],
         _r["value_kind"])
 

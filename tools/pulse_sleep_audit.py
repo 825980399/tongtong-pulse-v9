@@ -111,8 +111,7 @@ def audit():
         violations.append("未找到 wait_heartbeat_pulse 网关调用（脉冲纪律未落地）")
     if keepalive and not keepalive_has_gateway:
         violations.append(
-            "%s 的保活 sleep 未与 wait_heartbeat_pulse 分流（纪律未落地）"
-            % KEEPALIVE_DEF)
+            "{} 的保活 sleep 未与 wait_heartbeat_pulse 分流（纪律未落地）".format(KEEPALIVE_DEF))
 
     return {
         "target": TARGET,
@@ -136,7 +135,7 @@ def main():
     if a.json:
         print(json.dumps(r, ensure_ascii=False, indent=2))
     else:
-        print("[pulse-sleep-audit] 目标: %s" % r["target"])
+        print("[pulse-sleep-audit] 目标: {}".format(r["target"]))
         print("  time.sleep 总数        : %d" % r["total_sleep"])
         print("  保活节拍 sleep         : %d（脉冲纪律范畴）" % r["keepalive_sleep"])
         print("  业务延时（已豁免标记） : %d" % r["business_exempt"])
@@ -146,7 +145,7 @@ def main():
         if r["violations"]:
             print("[pulse-sleep-audit] [FAIL] 违规 %d 项：" % len(r["violations"]))
             for v in r["violations"]:
-                print("   ! %s" % v)
+                print("   ! {}".format(v))
         else:
             print("[pulse-sleep-audit] [PASS] 主循环保活走心跳网关；业务延时全部已分类豁免。")
     return 0 if r["pass"] else 1

@@ -147,7 +147,7 @@ class TestIncrementalCheckpointM81b2(unittest.TestCase):
         for n in nodes:
             _lv = str(getattr(n, "evol_level", "L1")).upper()
             _c[_lv] = _c.get(_lv, 0) + 1
-        self.assertEqual(_c, expect, "分层计数应保真: %s vs %s" % (_c, expect))
+        self.assertEqual(_c, expect, "分层计数应保真: {} vs {}".format(_c, expect))
 
     # ==================== C1 全量检查点清空 jsonl + 清空安全（先红） ====================
     def test_C1_full_checkpoint_clears_jsonl(self):

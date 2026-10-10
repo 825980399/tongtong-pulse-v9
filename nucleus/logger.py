@@ -279,7 +279,7 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
         with open(_p, "a", encoding="utf-8") as _f:
             _f.write(sanitize(_line) + "\n")
     except OSError as _e:
-        print("[logger] 完整性事件写入失败: %s: %s" % (type(_e).__name__, _e),
+        print("[logger] 完整性事件写入失败: {}: {}".format(type(_e).__name__, _e),
               file=sys.stderr)
 
 
@@ -310,7 +310,7 @@ def _reset_log_state(log_dir: str, log_file: str) -> None:
                        "size": _fp.get("size"), "ino": _fp.get("ino"),
                        "mtime": _fp.get("mtime")}, _f, ensure_ascii=False)
     except OSError as _e:
-        print("[logger] 轮转后状态复位失败: %s: %s" % (type(_e).__name__, _e),
+        print("[logger] 轮转后状态复位失败: {}: {}".format(type(_e).__name__, _e),
               file=sys.stderr)
 
 
@@ -454,7 +454,7 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
                            "size": _st2.get("size"), "ino": _st2.get("ino"),
                            "mtime": _st2.get("mtime")}, _f, ensure_ascii=False)
         except OSError as _e:
-            print("[logger] 日志状态写入失败: %s: %s" % (type(_e).__name__, _e),
+            print("[logger] 日志状态写入失败: {}: {}".format(type(_e).__name__, _e),
                   file=sys.stderr)
     return _res
 
@@ -654,8 +654,7 @@ def _init_root_logger():
         from nucleus.reporting.alert_log_bridge import install_alert_log_bridge
         install_alert_log_bridge(root)
     except (ImportError, OSError, IOError, ValueError, TypeError) as _alb_e:
-        print("[logger] 告警落盘桥挂载失败（降级跳过）: %s: %s"
-              % (type(_alb_e).__name__, _alb_e), file=sys.stderr)
+        print("[logger] 告警落盘桥挂载失败（降级跳过）: {}: {}".format(type(_alb_e).__name__, _alb_e), file=sys.stderr)
 
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
@@ -679,17 +678,15 @@ def _init_root_logger():
                 # ★D017 / 相关任务：框架内轮转自感知，正常行为，不告警
                 root.info(
                     "[日志完整性] 日志轮转自感知：识别为框架内轮转（非外部截断），"
-                    "已留痕 %s" % _LOG_INTEGRITY_FILE)
+                    "已留痕 {}".format(_LOG_INTEGRITY_FILE))
             elif _ir.get("status") in ("truncated", "replaced", "missing"):
                 _prv = (_ir.get("previous") or {}).get("size")
                 _now = (_ir.get("current") or {}).get("size")
                 root.warning(
-                    "[日志完整性] ★检测到日志被外部%s：上次 size=%s → 本次 size=%s"
-                    "（框架内无此逻辑，已留痕 %s）"
-                    % (_ir["status"], _prv, _now, _LOG_INTEGRITY_FILE))
+                    "[日志完整性] ★检测到日志被外部{}：上次 size={} → 本次 size={}"
+                    "（框架内无此逻辑，已留痕 {}）".format(_ir["status"], _prv, _now, _LOG_INTEGRITY_FILE))
         except Exception as _e:
-            print("[logger] 日志治理初始化异常（忽略）: %s: %s"
-                  % (type(_e).__name__, _e), file=sys.stderr)
+            print("[logger] 日志治理初始化异常（忽略）: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
 
 
 def get_organ_logger(organ_name: str) -> logging.Logger:

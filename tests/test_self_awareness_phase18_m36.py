@@ -568,7 +568,7 @@ class TestSourceWiring(unittest.TestCase):
         """第36批 T1 补齐后：main.py 应注册 6 个分析器（原 4 + call_graph + knowledge_quality）。"""
         for name in ("production_consumption", "fake_loops", "log_analyzer",
                      "code_review", "call_graph", "knowledge_quality"):
-            self.assertIn('"%s"' % name, self.main, name)
+            self.assertIn('"{}"'.format(name), self.main, name)
 
     def test_74_registration_is_side_effect_free(self):
         """注册分析器不得触发扫描（启动期零开销）。"""

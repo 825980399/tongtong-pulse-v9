@@ -101,7 +101,7 @@ def experience_text(exp: dict) -> str:
     _m = str(exp.get("motivation") or "").strip()
     _s = str(exp.get("summary") or "").strip()
     if _m and _s:
-        return "%s。%s" % (_m, _s)
+        return "{}。{}".format(_m, _s)
     return _m or _s
 
 
@@ -260,7 +260,7 @@ class ExperienceRetriever:
                 _out.append(_e)
             return _out
         except Exception as _e:                      # 检索失败不得影响调用方
-            print("[经验检索] 检索异常: %s: %s" % (type(_e).__name__, _e), file=sys.stderr)
+            print("[经验检索] 检索异常: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
             return []
 
     # -------------------------------------------------- 对比（L1 观测核心）
@@ -275,7 +275,7 @@ class ExperienceRetriever:
             if callable(_q):
                 return list(_q(limit=_lim) or [])
         except Exception as _e:
-            print("[经验检索] 现有检索器调用失败: %s: %s" % (type(_e).__name__, _e),
+            print("[经验检索] 现有检索器调用失败: {}: {}".format(type(_e).__name__, _e),
                   file=sys.stderr)
         return []
 
@@ -314,7 +314,7 @@ class ExperienceRetriever:
             try:
                 logger.info(_line)
             except Exception as _e:
-                print("[经验检索] 日志失败: %s: %s" % (type(_e).__name__, _e), file=sys.stderr)
+                print("[经验检索] 日志失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
         return _cmp
 
     def observe_daily(self, sample: int = 3, logger: Any = None) -> dict:
@@ -351,7 +351,7 @@ class ExperienceRetriever:
                             % (_sum["samples"], _sum["avg_new"], _sum["avg_old"],
                                _sum["avg_overlap"], _sum["old_polluted_ratio_avg"] * 100.0))
             except Exception as _e:
-                print("[经验检索] 日志失败: %s: %s" % (type(_e).__name__, _e), file=sys.stderr)
+                print("[经验检索] 日志失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
         return _sum
 
     def stats(self) -> dict:
@@ -396,7 +396,7 @@ def analyze_pollution(pool: Any = None) -> dict:
             _q = getattr(pool, "query_experiences", None)
             _raw = list(_q(limit=100000) or []) if callable(_q) else []
     except Exception as _e:
-        return {"status": "error", "error": "%s: %s" % (type(_e).__name__, _e), "total": 0}
+        return {"status": "error", "error": "{}: {}".format(type(_e).__name__, _e), "total": 0}
 
     from collections import Counter
     _total = len(_raw)
@@ -424,8 +424,7 @@ def analyze_pollution(pool: Any = None) -> dict:
             "结果极易被同质模板文本占满。" % (_rep["pollution_rate"] * 100.0,
                                               _rep["polluted"], _rep["total"]))
     if _reasons:
-        _rep["findings"].append("污染原因分布：%s"
-                                % "、".join("%s×%d" % (k, v) for k, v in _reasons.most_common(3)))
+        _rep["findings"].append("污染原因分布：{}".format("、".join("%s×%d" % (k, v) for k, v in _reasons.most_common(3))))
     return _rep
 
 

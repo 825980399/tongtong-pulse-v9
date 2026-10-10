@@ -902,7 +902,7 @@ class PulseNodePool(SilentLogMixin):
             _s["node_success"] += 1
         except Exception as _e:
             _s["node_fail"] += 1
-            _s["last_error"] = "%s: %s" % (type(_e).__name__, _e)
+            _s["last_error"] = "{}: {}".format(type(_e).__name__, _e)
             _module_logger.debug("[T1] Neo4j 节点双写失败(%s): %s", op, _s["last_error"])
 
     def _dual_write_neo4j_relationship(self, from_id, to_id, rel_type, op) -> None:
@@ -921,7 +921,7 @@ class PulseNodePool(SilentLogMixin):
             _s["rel_success"] += 1
         except Exception as _e:
             _s["rel_fail"] += 1
-            _s["last_error"] = "%s: %s" % (type(_e).__name__, _e)
+            _s["last_error"] = "{}: {}".format(type(_e).__name__, _e)
             _module_logger.debug("[T1] Neo4j 关系双写失败(%s): %s", op, _s["last_error"])
 
     def add_relationship(self, from_id, to_id, rel_type, properties=None) -> bool:
@@ -999,7 +999,7 @@ class PulseNodePool(SilentLogMixin):
                 _out["consistent"] = False
                 _out["detail"] = "单边存在"
         except Exception as _e:
-            _out["detail"] = "比对异常: %s: %s" % (type(_e).__name__, _e)
+            _out["detail"] = "比对异常: {}: {}".format(type(_e).__name__, _e)
         return _out
 
     def full_consistency_check(self) -> dict:
@@ -1093,7 +1093,7 @@ class PulseNodePool(SilentLogMixin):
                     return _rels
                 except Exception as _e:
                     self._m72_read_stats()["fail"] += 1
-                    self._m72_read_stats()["last_error"] = "%s: %s" % (type(_e).__name__, _e)
+                    self._m72_read_stats()["last_error"] = "{}: {}".format(type(_e).__name__, _e)
                     _module_logger.debug("[T4] Neo4j 关系查询失败回退节点内: %s", _e)
         # 回退：节点内 linked_nodes（出边/双向）
         self._m72_read_stats()["pool_fallback"] += 1
@@ -1145,11 +1145,11 @@ class PulseNodePool(SilentLogMixin):
         if _cs["mismatch_rate"] > _fallback:
             if not _cs["force_fallback"]:
                 _cs["force_fallback"] = True
-                _cs["last_warn"] = "不一致率 %.2f 超回退阈值 %.2f，已自动回退节点内查询" % (
+                _cs["last_warn"] = "不一致率 {:.2f} 超回退阈值 {:.2f}，已自动回退节点内查询".format(
                     _cs["mismatch_rate"], _fallback)
                 _module_logger.warning("[M73-T4] %s", _cs["last_warn"])
         elif _cs["mismatch_rate"] > _warn:
-            _cs["last_warn"] = "不一致率 %.2f 超告警阈值 %.2f" % (_cs["mismatch_rate"], _warn)
+            _cs["last_warn"] = "不一致率 {:.2f} 超告警阈值 {:.2f}".format(_cs["mismatch_rate"], _warn)
             _module_logger.warning("[M73-T4] %s", _cs["last_warn"])
 
     def get_read_compare_stats(self) -> dict:
@@ -1242,7 +1242,7 @@ class PulseNodePool(SilentLogMixin):
             getattr(_s, method)(*args)
         except Exception as _e:
             _module_logger.debug("[T2] InfluxDB 写入失败(%s): %s", method,
-                                "%s: %s" % (type(_e).__name__, _e))
+                                "{}: {}".format(type(_e).__name__, _e))
 
     def _m71_influx_sample(self) -> bool:
         """高频事件采样（INFLUXDB_SAMPLE_RATE）；<=0 不采，>=1 全采。"""
@@ -2554,7 +2554,7 @@ class PulseNodePool(SilentLogMixin):
         self._cold.pop(_node_id, None)
         self._cold_evicted.add(_node_id)
         self._m169_cold_trace("evict", _node_id, True,
-                              "evol_level=%s" % getattr(node, "evol_level", "?"))
+                              "evol_level={}".format(getattr(node, "evol_level", "?")))
         # 外置索引标记 evicted（★第81批 T4：用真实 evol_level，不再恒 L1）
         if self._index_store is not None:
             self._index_store.record_change(

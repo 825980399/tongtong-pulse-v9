@@ -157,13 +157,13 @@ class TestM70ProductionWiringM81b(unittest.TestCase):
             _t.join(timeout=30)
         _dt = time.time() - _t0
 
-        self.assertEqual(_errors, [], "并发 get 不应出错/死锁: %s" % _errors)
+        self.assertEqual(_errors, [], "并发 get 不应出错/死锁: {}".format(_errors))
         for _id in _ids:
             _filled = _pool._hot.get(_id) or _pool._warm.get(_id)
-            self.assertIsNotNone(_filled, "%s 不应丢失（可能已降级到温池）" % _id)
+            self.assertIsNotNone(_filled, "{} 不应丢失（可能已降级到温池）".format(_id))
             self.assertEqual(_filled.value, "value_" + _id + "_L2",
-                             "%s 应经并发 get 回填" % _id)
-        self.assertLess(_dt, 15.0, "并发冷召回不应锁饥饿恶化（耗时 %.2fs）" % _dt)
+                             "{} 应经并发 get 回填".format(_id))
+        self.assertLess(_dt, 15.0, "并发冷召回不应锁饥饿恶化（耗时 {:.2f}s）".format(_dt))
 
     # ---------- D：关开关零回归 ----------
     def test_D_switch_off_no_regression(self):

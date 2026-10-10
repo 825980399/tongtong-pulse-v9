@@ -93,7 +93,7 @@ class TestStartupReport(unittest.TestCase):
             "nucleus", "field", "OscillonField.py")
         with mock.patch("nucleus.logger.get_module_logger", return_value=_rec):
             _spec = importlib.util.spec_from_file_location(
-                "of_m169_%s" % uuid.uuid4().hex, _src)
+                "of_m169_{}".format(uuid.uuid4().hex), _src)
             _mod = importlib.util.module_from_spec(_spec)
             _spec.loader.exec_module(_mod)
         return _rec
@@ -101,7 +101,7 @@ class TestStartupReport(unittest.TestCase):
     def test_20_startup_line_emitted(self):
         _rec = self._reload_capture()
         _hits = [x for x in _rec.infos if "cython_effective=" in x]
-        self.assertTrue(_hits, "未打印启动报告生效值: %s" % _rec.infos)
+        self.assertTrue(_hits, "未打印启动报告生效值: {}".format(_rec.infos))
         self.assertIn("fallback_reason=", _hits[0])
 
     def test_21_switch_off_no_startup_line(self):
@@ -111,7 +111,7 @@ class TestStartupReport(unittest.TestCase):
             self.assertFalse(of._m169_startup_report_on())
             _rec = self._reload_capture()
         _hits = [x for x in _rec.infos if "cython_effective=" in x]
-        self.assertEqual(_hits, [], "开关关闭时不得打印: %s" % _rec.infos)
+        self.assertEqual(_hits, [], "开关关闭时不得打印: {}".format(_rec.infos))
 
 
 if __name__ == "__main__":

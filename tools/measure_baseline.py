@@ -211,10 +211,10 @@ def main(argv: list[str] | None = None) -> int:
     print("| 仿生器官文件数 | %d |" % m["organ_files"])
     print("| 测试文件数 | %d |" % m["test_files"])
     print("| 测试用例数 | %d |" % m["test_cases"])
-    print("| data/ 目录体积 | %.2f MB |" % m["data_dir_mb"])
+    print("| data/ 目录体积 | {:.2f} MB |".format(m["data_dir_mb"]))
     print("-" * 58)
-    print("版本号(HEAD): %s" % m["git_head"])
-    print("运行时间: %s   Python: %s" % (m["generated_at"], m["python_version"]))
+    print("版本号(HEAD): {}".format(m["git_head"]))
+    print("运行时间: {}   Python: {}".format(m["generated_at"], m["python_version"]))
     print("机读输出: python tools/measure_baseline.py --json")
     return 0
 

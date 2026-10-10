@@ -126,4 +126,4 @@ def test_a5_on_pulse_exception_safe(organ):
         try:
             organ.on_pulse({"event_type": ev, "payload": {}})
         except Exception as e:  # noqa: BLE001
-            pytest.fail("on_pulse(%r) 不应抛出未捕获异常: %r" % (ev, e))
+            pytest.fail("on_pulse({!r}) 不应抛出未捕获异常: {!r}".format(ev, e))

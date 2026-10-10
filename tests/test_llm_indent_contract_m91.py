@@ -123,7 +123,7 @@ def _gate2(code):
         ast.parse("def _wrap():\n" + textwrap.indent(_n, "    "), filename="<llm-patch>")
         return True, ""
     except SyntaxError as _e:
-        return False, "%s: %s" % (type(_e).__name__, _e)
+        return False, "{}: {}".format(type(_e).__name__, _e)
 
 
 def _load_legacy_se():
@@ -236,7 +236,7 @@ class TestIndentContractM91(unittest.TestCase):
                      _SAMPLE_SHALLOW_FIRST.replace("x = 1", "x = 2")):
             _r = _pm()._check_llm_patch_completeness(
                 {"original_code": _SAMPLE_ORIG, "modified_code": _mod})
-            self.assertTrue(_r["complete"], "本应通过的补丁被新逻辑拒绝: %s" % _r["reason"])
+            self.assertTrue(_r["complete"], "本应通过的补丁被新逻辑拒绝: {}".format(_r["reason"]))
 
     # --------------------------------------------------- B 缩进漂移修复算法契约
     def test_B1_minimal_diff_one_line_only(self):
@@ -258,7 +258,7 @@ class TestIndentContractM91(unittest.TestCase):
                       "    x = 「a」。b → c", "    def g(self):\n        pass"):
             _out = self.exe._m91_repair_indentation(_code)
             if _out != _code:
-                self.assertTrue(_gate2(_out)[0], "改了就必须改好: %r -> %r" % (_code, _out))
+                self.assertTrue(_gate2(_out)[0], "改了就必须改好: {!r} -> {!r}".format(_code, _out))
 
     def test_B4_clean_code_untouched(self):
         """★零误伤：已能过关2 的代码逐字返回（不制造无意义 diff）。"""
@@ -453,7 +453,7 @@ class TestIndentContractM91(unittest.TestCase):
         for _code in (_SAMPLE_DRIFT, _SAMPLE_TAB, _SAMPLE_DRIFT_LAST):
             _out = self.exe._clean_llm_code(_code)
             _ok, _err = _gate2(_out)
-            self.assertTrue(_ok, "端到端未修复: %s" % _err)
+            self.assertTrue(_ok, "端到端未修复: {}".format(_err))
 
     def test_E2_legacy_clean_llm_code_fails(self):
         """★先红：改前实现（`.bak_batch91`）对同一输入**无法修复**（关2 同口径仍失败）。"""
@@ -464,7 +464,7 @@ class TestIndentContractM91(unittest.TestCase):
         for _code in (_SAMPLE_DRIFT, _SAMPLE_TAB, _SAMPLE_DRIFT_LAST):
             _out = _lexe._clean_llm_code(_code)
             self.assertFalse(_gate2(_out)[0],
-                             "改前实现本应无法修复（红），实际修好了: %r" % _code[:30])
+                             "改前实现本应无法修复（红），实际修好了: {!r}".format(_code[:30]))
 
     def test_E3_gate2_passing_input_untouched_vs_legacy(self):
         """★零回归：对**关2 本就能过**的输入，新实现与改前逐字一致。
@@ -481,7 +481,7 @@ class TestIndentContractM91(unittest.TestCase):
         for _c in _cases:
             self.assertTrue(_gate2(_c)[0], "用例前提：必须能过关2 同口径")
             self.assertEqual(self.exe._clean_llm_code(_c), _lexe._clean_llm_code(_c),
-                             "★关2 可过的输入不得被新逻辑改动: %r" % _c[:30])
+                             "★关2 可过的输入不得被新逻辑改动: {!r}".format(_c[:30]))
 
     def test_E4_clean_llm_code_keeps_docstring(self):
         """★端到端字符串安全：修复缩进时 docstring 逐字不变。"""
@@ -556,7 +556,7 @@ class TestIndentContractM91(unittest.TestCase):
                 continue
             _n += 1
             self.assertTrue(_GATE2_CHECK(_p.get("modified_code") or "")[0],
-                            "关2 放行但同口径 helper 判失败: %s" % _p.get("id"))
+                            "关2 放行但同口径 helper 判失败: {}".format(_p.get("id")))
         self.assertGreater(_n, 0, "生产补丁库中应有至少 1 条关2 通过的补丁")
 
     def test_G2_gate2_helper_matches_independent_reimplementation(self):
@@ -565,7 +565,7 @@ class TestIndentContractM91(unittest.TestCase):
                   _SAMPLE_SHALLOW_FIRST, "", "def f(:\n1", "    if True:\n   pass"]
         for _c in _cases:
             self.assertEqual(_GATE2_CHECK(_c)[0], _gate2(_c)[0],
-                             "helper 与独立实现不一致: %r" % _c[:30])
+                             "helper 与独立实现不一致: {!r}".format(_c[:30]))
 
     def test_G3_real_llm_patches_align_invariants(self):
         """★生产 LLM 补丁全量不变量：平移只在更浅时发生，且平移后基础缩进相等。"""

@@ -46,7 +46,7 @@ def _bare_iw():
 ])
 def test_knife7_leak_patterns_stripped(text, needle):
     out = _bare_iw()._sanitize_internal_content(text, "q")
-    assert needle not in out, "残留泄漏模式 %r -> %r" % (needle, out)
+    assert needle not in out, "残留泄漏模式 {!r} -> {!r}".format(needle, out)
 
 
 # ---- 7.2 反向：合法正文不被误伤 ----
@@ -58,10 +58,10 @@ def test_knife7_leak_patterns_stripped(text, needle):
 ])
 def test_knife7_legit_text_preserved(text):
     out = _bare_iw()._sanitize_internal_content(text, "q")
-    assert out.strip(), "合法正文被清空: %r" % text
+    assert out.strip(), "合法正文被清空: {!r}".format(text)
     # 清洗器会剥离尾标点（既有行为），比对去尾标点后的核心文本
     _core = text.rstrip("。！？，、")
-    assert out == _core, "合法正文被改动: %r -> %r" % (text, out)
+    assert out == _core, "合法正文被改动: {!r} -> {!r}".format(text, out)
 
 
 def _iw_routing():
@@ -110,7 +110,7 @@ def test_knife7_qica_exit_goes_through_sanitizer():
     ans = result["answer"]
     # 原 _knowledge_result 含这些泄漏标记；清洗后必须全部消失
     for needle in ("种子", "深度搜索", "第一次醒来", "相关知识归纳", "深层原理"):
-        assert needle not in ans, "出口仍泄漏 %r -> %r" % (needle, ans)
+        assert needle not in ans, "出口仍泄漏 {!r} -> {!r}".format(needle, ans)
 
 
 def test_knife7_qica_exit_rollback_in_structured():
@@ -123,7 +123,7 @@ def test_knife7_qica_exit_rollback_in_structured():
         # 新增模式种子N( 在 structured 下应保留
         out = iw._sanitize_internal_content(
             "种子1(综合): 内部内容[internal]碎片", "q")
-        assert "种子" in out, "structured 回退不应剥离种子N(, 但被剥: %r" % out
-        assert "[internal]" not in out, "structured 仍须剥离 [internal]: %r" % out
+        assert "种子" in out, "structured 回退不应剥离种子N(, 但被剥: {!r}".format(out)
+        assert "[internal]" not in out, "structured 仍须剥离 [internal]: {!r}".format(out)
     finally:
         config.DIALOG_SANITIZE_LEVEL = _orig

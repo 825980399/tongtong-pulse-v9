@@ -131,4 +131,4 @@ def test_gbk_console_print_no_crash(monkeypatch):
     _out = _buf.getvalue().decode("gbk", "replace")
     assert "[FAIL]" in _out or "[PASS]" in _out or "[WARN]" in _out or "[INFO]" in _out
     for _g in ("❌", "✅", "⚠", "ℹ"):
-        assert _g not in _out, "GBK 输出仍含非 ASCII 字形 %r" % _g
+        assert _g not in _out, "GBK 输出仍含非 ASCII 字形 {!r}".format(_g)

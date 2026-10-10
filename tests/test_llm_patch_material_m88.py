@@ -271,7 +271,7 @@ class TestT88aMaterialSource(unittest.TestCase):
         for _pat in (r"(?m)^\s*_file\s*=(?!=)", r"(?m)^\s*_resolved_file\s*=(?!=)"):
             self.assertIsNone(
                 re.search(_pat, blk),
-                "第88批不得写回 %s 形态（会改动 PHASE13 统计口径）" % _pat)
+                "第88批不得写回 {} 形态（会改动 PHASE13 统计口径）".format(_pat))
 
 
 # ---------------------------------------------------------------- T-88a 守卫层
@@ -290,12 +290,12 @@ class TestT88aNonCodeMaterialGuard(unittest.TestCase):
         #   在构造条件切片内该守卫恰好出现一次，且定义在条件之前。
         _start = "if (_llm_clean and _llm_clean.strip() != _snippet.strip()"
         _i = _SRC.find(_start)
-        self.assertGreaterEqual(_i, 0, "找不到补丁构造条件起始：%s" % _start)
+        self.assertGreaterEqual(_i, 0, "找不到补丁构造条件起始：{}".format(_start))
         _j = _SRC.find("):", _i)
         self.assertGreater(_j, _i, "构造条件未以 `):` 收尾")
         _cond = _SRC[_i:_j]
         self.assertEqual(_cond.count("and not _llm_bad_material"), 1,
-                         "补丁构造条件必须恰好一次排除「素材非代码」：%r" % _cond)
+                         "补丁构造条件必须恰好一次排除「素材非代码」：{!r}".format(_cond))
         self.assertLess(_SRC.find("_llm_bad_material = bool("), _i,
                         "守卫必须在构造条件之前定义")
 

@@ -112,7 +112,7 @@ class TestPublishSubscribe(_Bus):
         _r = self.bus.publish_simple("health", "g", {"x": 1})
         self.assertTrue(_r["persisted"])
         _p = os.path.join(self._sand, "reports", "health",
-                          "%s.json" % _r["report_id"])
+                          "{}.json".format(_r["report_id"]))
         self.assertTrue(os.path.isfile(_p))
 
     def test_12_subscriber_called(self):

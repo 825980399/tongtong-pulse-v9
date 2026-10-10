@@ -157,7 +157,7 @@ def render_md(a: Dict[str, Any]) -> str:
         "",
         "| 指标 | 值 |",
         "|---|---|",
-        "| 经验池 | `%s` |" % a["pool"],
+        "| 经验池 | `{}` |".format(a["pool"]),
         "| 记录总数 | %d |" % a["total"],
         "| 已标记污染 | %d（%.2f%%） |" % (a["marked"], 100 * a["marked_rate"]),
         "| **可用（通过检索闸门）** | **%d（%.2f%%）** |" % (
@@ -191,7 +191,7 @@ def render_md(a: Dict[str, Any]) -> str:
     if a["missed"]:
         _L += ["| id | 特征类 | 摘要预览 |", "|---|---|---|"]
         for _m in a["missed"][:30]:
-            _L.append("| `%s` | `%s` | %s |" % (
+            _L.append("| `{}` | `{}` | {} |".format(
                 _m["id"], _m["reason_class"],
                 (_m["summary"] or "—").replace("|", "\\|")))
         if a["missed_count"] > 30:
@@ -207,7 +207,7 @@ def render_md(a: Dict[str, Any]) -> str:
         "|---|---|",
         "| 空摘要 | %d |" % _q["empty_summary"],
         "| 摘要 < 20 字 | %d |" % _q["short_lt20"],
-        "| 平均长度 | %.1f 字 |" % _q["avg_len"],
+        "| 平均长度 | {:.1f} 字 |".format(_q["avg_len"]),
         "| 中位数 (p50) | %d |" % _q["p50"],
         "| p90 | %d |" % _q["p90"],
         "| 最长 | %d |" % _q["max"],
@@ -235,12 +235,12 @@ def main() -> int:
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     io.open(args.out, "w", encoding="utf-8", newline="").write(render_md(_a))
-    print("报告已写入：%s" % args.out)
+    print("报告已写入：{}".format(args.out))
 
     if args.json_out:
         io.open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(_a, ensure_ascii=False, indent=2))
-        print("JSON 已写入：%s" % args.json_out)
+        print("JSON 已写入：{}".format(args.json_out))
     return 0
 
 

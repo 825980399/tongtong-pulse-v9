@@ -166,7 +166,7 @@ def main(argv=None) -> int:
         print("     - %-52s %.1f MB" % (_u["path"], _u["size"] / 1048576.0))
     print("  合计 %.1f MB | 超额=%s (受管超出 %d 件)" % (
         _r["total_mb"], _r["over_limit"], _r["over_by"]))
-    print("  归因: %s" % _r["cause"])
+    print("  归因: {}".format(_r["cause"]))
 
     if args.json_out:
         _out = args.json_out
@@ -177,7 +177,7 @@ def main(argv=None) -> int:
             os.makedirs(_d, exist_ok=True)
         with open(_out, "w", encoding="utf-8") as _f:
             json.dump(_r, _f, ensure_ascii=False, indent=2)
-        print("  已写出: %s" % _out)
+        print("  已写出: {}".format(_out))
     return 0
 
 

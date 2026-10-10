@@ -50,7 +50,7 @@ def _fn_node(src: str, name: str):
     for _n in ast.walk(ast.parse(src)):
         if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)) and _n.name == name:
             return _n
-    raise AssertionError("源码中找不到方法 %s" % name)
+    raise AssertionError("源码中找不到方法 {}".format(name))
 
 
 def _method_source(path: str, name: str) -> str:
@@ -89,7 +89,7 @@ def _append_only_sample(path: str, name: str, lo: float = 0.30, hi: float = 0.50
         _r = _ratio(_full, _mod)
         if lo <= _r < hi:
             return _full, _mod, _r
-    raise AssertionError("构造失败：追加式样本无法落入 [%.2f, %.2f)" % (lo, hi))
+    raise AssertionError("构造失败：追加式样本无法落入 [{:.2f}, {:.2f})".format(lo, hi))
 
 
 def _ratio(a: str, b: str) -> float:
@@ -193,15 +193,15 @@ class TestT89aThresholdSemantics(unittest.TestCase):
 
     def test_10_constructed_sample_is_in_band(self):
         """自检：构造样本 ratio ∈ [0.3,0.5) 且长度比 ≥ 1/3 且语法合法。"""
-        self.assertGreaterEqual(self.ratio_band, 0.30, "ratio=%.4f" % self.ratio_band)
-        self.assertLess(self.ratio_band, 0.50, "ratio=%.4f" % self.ratio_band)
+        self.assertGreaterEqual(self.ratio_band, 0.30, "ratio={:.4f}".format(self.ratio_band))
+        self.assertLess(self.ratio_band, 0.50, "ratio={:.4f}".format(self.ratio_band))
         self.assertGreaterEqual(len(self.mod_band), len(self.orig) / 3.0)
         self.assertTrue(_syntax_ok(self.mod_band))
 
     def test_11_band_patch_passes_after(self):
         """★核心：0.3 阈值下，[0.3,0.5) 的真实代码补丁通过验证。"""
         _r = _check(self.pm, self.orig, self.mod_band)
-        self.assertTrue(_r["complete"], "应通过，实际 reason=%s" % _r["reason"])
+        self.assertTrue(_r["complete"], "应通过，实际 reason={}".format(_r["reason"]))
 
     def test_12_band_patch_rejected_before(self):
         """★先红证据：同一补丁在**改前**（0.5）实现下被拒。"""
@@ -254,14 +254,13 @@ class TestT89aSafetyGuards(unittest.TestCase):
                                   (0.03, 158, "ERROR 日志文本(第88批实测)")):
             _l2 = _r_v * _l1 / (2 - _r_v)
             self.assertLess(_l2, _l1 / 3.0,
-                            "%s: ratio=%.2f 反推 L2=%.0f 应低于 L1/3=%.0f"
-                            % (_label, _r_v, _l2, _l1 / 3.0))
+                            "{}: ratio={:.2f} 反推 L2={:.0f} 应低于 L1/3={:.0f}".format(_label, _r_v, _l2, _l1 / 3.0))
 
     def test_22_length_floor_blocks_what_similarity_allows(self):
         """★长度下限的唯一价值场景：ratio 已过 0.3 但长度不足原文 1/3 → 仍拒。"""
         _mod = _statement_prefix(_PULSE_LIVER, _LONG_METHOD, 10)
         _r_sim = _ratio(self.long_orig, _mod)
-        self.assertGreaterEqual(_r_sim, 0.30, "构造应已过相似度关（ratio=%.4f）" % _r_sim)
+        self.assertGreaterEqual(_r_sim, 0.30, "构造应已过相似度关（ratio={:.4f}）".format(_r_sim))
         self.assertLess(len(_mod), len(self.long_orig) / 3.0, "构造应长度不足")
         self.assertTrue(_syntax_ok(_mod))
         _r = _check(self.pm, self.long_orig, _mod)
@@ -280,7 +279,7 @@ class TestT89aSafetyGuards(unittest.TestCase):
             if _ratio(self.long_orig, _mod) >= 0.5 and \
                     len(_mod) < len(self.long_orig) / 3.0:
                 _bad.append(_n)
-        self.assertEqual(_bad, [], "存在「相似度≥0.5 却长度<1/3」的样本 ⇒ 证明不成立: %s" % _bad)
+        self.assertEqual(_bad, [], "存在「相似度≥0.5 却长度<1/3」的样本 ⇒ 证明不成立: {}".format(_bad))
 
     def test_24_error_log_material_far_below_new_threshold(self):
         """误判率不上升：ERROR 日志文本素材的相似度远低于 0.3（第88批 0.03 型）。"""
@@ -288,7 +287,7 @@ class TestT89aSafetyGuards(unittest.TestCase):
                      "patch_llm_178988... → ['补丁完整性检查失败: 与原文相似度过低']")
         _mod = _method_source(_PULSE_LIVER, _SMALL_METHOD)
         _r = difflib.SequenceMatcher(None, _log_text, _mod).ratio()
-        self.assertLess(_r, 0.3, "日志文本 vs 代码的 ratio=%.4f 应远低于 0.3" % _r)
+        self.assertLess(_r, 0.3, "日志文本 vs 代码的 ratio={:.4f} 应远低于 0.3".format(_r))
         self.assertFalse(_check(self.pm, _log_text, _mod)["complete"])
 
 
@@ -309,7 +308,7 @@ class TestT89aRealData(unittest.TestCase):
             _r = _check(self.pm, _p.get("original_code", ""), _p.get("modified_code", ""))
             if not _r["complete"]:
                 _fail.append((_p.get("id"), _r["reason"]))
-        self.assertEqual(_fail, [], "真实 LLM 补丁被改后实现拒绝: %s" % _fail)
+        self.assertEqual(_fail, [], "真实 LLM 补丁被改后实现拒绝: {}".format(_fail))
 
     def test_31_no_patch_regressed_vs_legacy(self):
         """★零回归（真实数据）：改前接受的集合 ⊆ 改后接受的集合。"""
@@ -325,7 +324,7 @@ class TestT89aRealData(unittest.TestCase):
             _new = _check(self.pm, _o, _m)["complete"]
             if _old and not _new:
                 _regressed.append(_p.get("id"))
-        self.assertEqual(_regressed, [], "改前通过、改后被拒 ⇒ 安全回归: %s" % _regressed)
+        self.assertEqual(_regressed, [], "改前通过、改后被拒 ⇒ 安全回归: {}".format(_regressed))
 
     def test_32_tightest_real_sample_is_real_code_and_passes(self):
         """记录最紧样本：其原文必须是**代码**（非日志文本）且改后过闸。"""
@@ -338,9 +337,9 @@ class TestT89aRealData(unittest.TestCase):
                               _p.get("id"), _o[:24]))
         self.assertTrue(_rows, "应至少有一个可复算样本")
         _min = min(_rows, key=lambda x: x[0])
-        self.assertLess(_min[0], 0.62, "最紧样本 ratio 应接近阈值区（实测 %.4f）" % _min[0])
+        self.assertLess(_min[0], 0.62, "最紧样本 ratio 应接近阈值区（实测 {:.4f}）".format(_min[0]))
         self.assertNotRegex(_min[2], r"^\d{4}-\d{2}-\d{2}",
-                            "最紧样本的原文应是代码而非日志文本（实际 %r）" % _min[2])
+                            "最紧样本的原文应是代码而非日志文本（实际 {!r}）".format(_min[2]))
 
 
 # ============================================================ D 开关契约
@@ -366,7 +365,7 @@ class TestT89aSwitchContract(unittest.TestCase):
         """
         _src = io.open(os.path.join(ROOT, "config.py"), encoding="utf-8").read()
         self.assertIn(_SWITCH, _src, "第91批 T-91c 起开关必须登记在 config.py")
-        self.assertIn("%s = True" % _SWITCH, _src, "登记默认值必须为 True（与登记前一致）")
+        self.assertIn("{} = True".format(_SWITCH), _src, "登记默认值必须为 True（与登记前一致）")
         import config as _cfg
         self.assertTrue(getattr(_cfg, _SWITCH), "登记后的生效默认值应为 True")
 

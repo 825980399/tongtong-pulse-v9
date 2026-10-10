@@ -128,7 +128,7 @@ class TestExcludeSetsEquivalent(unittest.TestCase):
             _old = _old_set(_rel, _var)
             if _old is None:
                 self.fail("基线目录存在但集合未提取到 → 佐证失效")
-            self.assertEqual(_old, set(_const), "%s 与固化常量不一致" % _var)
+            self.assertEqual(_old, set(_const), "{} 与固化常量不一致".format(_var))
 
     def test_14_call_graph_is_superset_of_source(self):
         self.assertTrue(_ed.SOURCE_SCAN_DIRS <= _ed.CALL_GRAPH_EXCLUDED)
@@ -162,8 +162,8 @@ class TestExcludeWiring(unittest.TestCase):
             ("nucleus/self_awareness/ProductionConsumptionMatcher.py", "_DISK_EXCLUDE_DIRS"),
         ):
             src = _read(os.path.join(_ROOT, rel))
-            self.assertNotIn("%s = {" % var, src, "%s 仍有本地集合字面量" % rel)
-            self.assertNotIn("%s = frozenset((" % var, src, "%s 仍有本地集合字面量" % rel)
+            self.assertNotIn("{} = {{".format(var), src, "{} 仍有本地集合字面量".format(rel))
+            self.assertNotIn("{} = frozenset((".format(var), src, "{} 仍有本地集合字面量".format(rel))
 
     def test_22_module_import_still_works(self):
         """三个模块可导入（无循环导入 / 无 NameError）。"""
@@ -200,7 +200,7 @@ class TestPathUtilsWiring(unittest.TestCase):
             self.assertTrue(
                 ("nucleus.data.path_utils import safe_relpath" in src)
                 or ("nucleus.data.path_utils import normalize_relpath" in src),
-                "%s 未从 nucleus.data.path_utils 接入安全入口" % rel)
+                "{} 未从 nucleus.data.path_utils 接入安全入口".format(rel))
             _checked += 1
         self.assertGreater(_checked, 0, "无任何调用方可供校验")
 
@@ -242,7 +242,7 @@ class TestPathUtilsWiring(unittest.TestCase):
         try:
             _r = safe_relpath(_t, _ROOT)
         except Exception as e:
-            self.fail("safe_relpath 不应抛异常: %s" % e)
+            self.fail("safe_relpath 不应抛异常: {}".format(e))
         self.assertTrue(os.path.isabs(_r))
 
     def test_35_no_bare_relpath_in_audit_utils_walk(self):

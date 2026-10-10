@@ -114,7 +114,7 @@ class TestCoreMethods(_Base):
         _kws = getattr(self.o, "_unsafe_keywords", None) or []
         if not _kws:
             self.skipTest("无黑名单")
-        self.assertFalse(self.o._is_safe_knowledge("包含 %s 的内容" % _kws[0]))
+        self.assertFalse(self.o._is_safe_knowledge("包含 {} 的内容".format(_kws[0])))
 
     def test_18_safety_allows_normal(self):
         self.assertTrue(self.o._is_safe_knowledge("今天天气不错"))
@@ -224,7 +224,7 @@ class TestBoundary(_Base):
         """
         for _bad in (None, 123, ["a"], {"k": "v"}):
             self.assertIsInstance(self.o._is_safe_knowledge(_bad), bool,
-                                  "非字符串 %r 应安全降级为 bool" % (_bad,))
+                                  "非字符串 {!r} 应安全降级为 bool".format(_bad))
 
     def test_55_none_guard_switch_off_reproduces_defect(self):
         """★灰度验证：ENABLE_STOMACH_NONE_GUARD 关闭 → 复现改造前行为（仍抛 TypeError）。
@@ -252,7 +252,7 @@ class TestBoundary(_Base):
                     self.o.on_pulse({"event_type": "digest.knowledge",
                                      "payload": {"content": "并发测试内容" * 3}})
             except Exception as _e:
-                _errs.append("%s: %s" % (type(_e).__name__, _e))
+                _errs.append("{}: {}".format(type(_e).__name__, _e))
 
         _ts = [threading.Thread(target=_w) for _ in range(4)]
         for _t in _ts:

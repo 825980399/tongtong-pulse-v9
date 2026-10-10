@@ -49,8 +49,8 @@ class TestExcludeDirsUnified(unittest.TestCase):
         for _n in ("WORKSPACE_META_DIRS", "AUDIT_BULK_DIRS", "AUDIT_SCAN_EXCLUDED",
                    "BACKUP_SCAN_EXCLUDED", "PACKAGE_EXCLUDED",
                    "QUALITY_AUDIT_EXCLUDED", "COMMON_SCAN_EXCLUDED"):
-            self.assertTrue(hasattr(E, _n), "exclude_dirs 缺少 %s" % _n)
-            self.assertGreater(len(getattr(E, _n)), 0, "%s 不应为空" % _n)
+            self.assertTrue(hasattr(E, _n), "exclude_dirs 缺少 {}".format(_n))
+            self.assertGreater(len(getattr(E, _n)), 0, "{} 不应为空".format(_n))
 
     def test_02_all_tools_imported_exclude_dirs(self):
         """5 个工具的源码里都能找到 exclude_dirs 的 import（防回退）。"""
@@ -59,9 +59,9 @@ class TestExcludeDirsUnified(unittest.TestCase):
             _p = os.path.join(_ROOT, _rel)
             _t = open(_p, encoding="utf-8").read()
             self.assertIn("nucleus.data.exclude_dirs", _t,
-                          "%s 未接入 exclude_dirs" % _rel)
+                          "{} 未接入 exclude_dirs".format(_rel))
             self.assertIn("_m55_unified_excludes", _t,
-                          "%s 缺少灰度开关函数" % _rel)
+                          "{} 缺少灰度开关函数".format(_rel))
 
     def test_03_no_shrink_legacy_subset_of_new(self):
         """★核心：原集合逐项 ⊆ 新集合（只增不减，不缩小排除范围）。"""
@@ -69,12 +69,12 @@ class TestExcludeDirsUnified(unittest.TestCase):
             _m = importlib.import_module(_mod)
             _old = getattr(_m, _legacy, None)
             _new = getattr(_m, _name, None)
-            self.assertIsNotNone(_old, "%s 缺少 %s" % (_mod, _legacy))
-            self.assertIsNotNone(_new, "%s 缺少 %s" % (_mod, _name))
+            self.assertIsNotNone(_old, "{} 缺少 {}".format(_mod, _legacy))
+            self.assertIsNotNone(_new, "{} 缺少 {}".format(_mod, _name))
             _miss = set(_old) - set(_new)
             self.assertEqual(
                 set(), _miss,
-                "%s.%s 缩小了排除范围，丢失：%s" % (_mod, _name, sorted(_miss)))
+                "{}.{} 缩小了排除范围，丢失：{}".format(_mod, _name, sorted(_miss)))
 
     def test_04_new_sets_contain_base_dirs(self):
         """新集合必须包含 exclude_dirs 的基础项（证明真接入，非复制常量）。"""
@@ -85,7 +85,7 @@ class TestExcludeDirsUnified(unittest.TestCase):
             _miss = _base - _new
             self.assertEqual(
                 set(), _miss,
-                "%s.%s 未包含 %s 的全部项：%s" % (_mod, _name, _src, sorted(_miss)))
+                "{}.{} 未包含 {} 的全部项：{}".format(_mod, _name, _src, sorted(_miss)))
 
     def test_05_backup_scan_equals_exclude_dirs_base(self):
         """batch_backup 的 BACKUP_SCAN_EXCLUDED 应与原集合**完全等价**。
@@ -109,7 +109,7 @@ class TestExcludeDirsUnified(unittest.TestCase):
         for _mod, _name, _legacy, _src in self.TOOLS:
             _rel = _mod.replace(".", os.sep) + ".py"
             _t = open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
-            self.assertIn(_src, _t, "%s 未引用 %s（未真正接入）" % (_rel, _src))
+            self.assertIn(_src, _t, "{} 未引用 {}（未真正接入）".format(_rel, _src))
 
         # exclude_dirs 的具名集合确实由基础集合派生（不是复制字面量）
         _t = open(os.path.join(_ROOT, "nucleus", "data", "exclude_dirs.py"),
@@ -118,12 +118,12 @@ class TestExcludeDirsUnified(unittest.TestCase):
                    "COMMON_SCAN_EXCLUDED", "QUALITY_AUDIT_EXCLUDED",
                    "PACKAGE_EXCLUDED"):
             _i = _t.find(_n + " =")
-            self.assertGreater(_i, 0, "%s 未定义" % _n)
+            self.assertGreater(_i, 0, "{} 未定义".format(_n))
             _seg = _t[_i:_i + 200]
             self.assertTrue(
                 any(_b in _seg for _b in ("DEFAULT_EXCLUDED", "VCS_DIRS",
                                           "CACHE_DIRS", "COPY_DIRS", "DATA_DIRS")),
-                "%s 应由 exclude_dirs 基础集合派生，而非复制字面量" % _n)
+                "{} 应由 exclude_dirs 基础集合派生，而非复制字面量".format(_n))
 
     def test_07_backup_prefix_rule_shared(self):
         """.bak* 前缀规则：新增批次备份目录（.bak_batch99）应被统一排除。"""
@@ -141,10 +141,10 @@ class TestExcludeDirsUnified(unittest.TestCase):
                 _m = importlib.import_module(_mod)
                 # ★必须在块内断言：_m55_unified_excludes() 每次调用都重读 config
                 self.assertFalse(_m._m55_unified_excludes(),
-                                 "%s 开关关闭后应返回 False" % _mod)
+                                 "{} 开关关闭后应返回 False".format(_mod))
                 _lg = set(getattr(_m, _legacy))
                 self.assertGreater(len(_lg), 0,
-                                   "%s legacy 集合不应为空" % _mod)
+                                   "{} legacy 集合不应为空".format(_mod))
                 # legacy 集合是第55批前的原样（不含新增的副本类目录）
                 self.assertNotIn(".release-tmp", _lg - set(_lg),
                                  "legacy 应保持原样")
@@ -181,10 +181,10 @@ class TestExcludeDirsUnified(unittest.TestCase):
             _added = set(getattr(_m, _name)) - set(getattr(_m, _legacy))
             for _d in _added:
                 self.assertNotIn(_d, _source_dirs,
-                                 "%s.%s 新增排除了源码目录 %s" % (_mod, _name, _d))
+                                 "{}.{} 新增排除了源码目录 {}".format(_mod, _name, _d))
                 self.assertTrue(
                     _d.startswith(".bak") or _d in _allowed_new,
-                    "%s.%s 新增项 %s 不在允许类别内" % (_mod, _name, _d))
+                    "{}.{} 新增项 {} 不在允许类别内".format(_mod, _name, _d))
 
 
 if __name__ == "__main__":

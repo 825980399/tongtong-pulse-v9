@@ -108,8 +108,7 @@ class TestIdentitySeedMissionScope(unittest.TestCase):
         self.assertIsNotNone(_mission, "应存在含'使命'的种子")
         self.assertFalse(
             _mission.get("space_path", "").startswith("/身份/自我"),
-            "使命种子路径 %r 不在 /身份/自我 下（旧查询盲区根因）"
-            % _mission.get("space_path"))
+            "使命种子路径 {!r} 不在 /身份/自我 下（旧查询盲区根因）".format(_mission.get("space_path")))
 
 
 class TestIdentitySeedValueFallback(unittest.TestCase):

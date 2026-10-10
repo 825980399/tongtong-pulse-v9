@@ -138,7 +138,7 @@ class TestT1Neo4jDualWritePool(unittest.TestCase):
         try:
             self.pool._m71_influx_write("node_activated", "n1", "L1", "test")
         except Exception as e:
-            self.fail("influx write raised when off: %s" % e)
+            self.fail("influx write raised when off: {}".format(e))
 
 
 # ===== T1: KAL 双写接口 =====

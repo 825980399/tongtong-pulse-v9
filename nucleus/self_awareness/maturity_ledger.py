@@ -98,7 +98,7 @@ def _is_production_data_path(path: str) -> bool:
 def _writable(path: str) -> bool:
     """是否允许写入该路径（生产区 + 测试环境 → 拒绝）。"""
     if _is_test_env() and _is_production_data_path(path):
-        sys.stderr.write("[maturity_ledger] 测试环境跳过生产写入: %s\n" % path)
+        sys.stderr.write("[maturity_ledger] 测试环境跳过生产写入: {}\n".format(path))
         return False
     return True
 
@@ -259,8 +259,7 @@ def _save_overrides(data: dict[str, Any], path: str | None = None) -> str:
         with io.open(_p, "w", encoding="utf-8") as _f:
             json.dump(data, _f, ensure_ascii=False, indent=2)
     except OSError as e:
-        sys.stderr.write("[maturity_ledger] 覆写表写入失败: %s: %s\n"
-                         % (type(e).__name__, e))
+        sys.stderr.write("[maturity_ledger] 覆写表写入失败: {}: {}\n".format(type(e).__name__, e))
     return _p
 
 
@@ -458,7 +457,7 @@ def append_entry(entry: dict[str, Any], path: str | None = None) -> str:
         with io.open(_p, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError as e:
-        sys.stderr.write("[maturity_ledger] 台账写入失败: %s: %s\n" % (type(e).__name__, e))
+        sys.stderr.write("[maturity_ledger] 台账写入失败: {}: {}\n".format(type(e).__name__, e))
     return _p
 
 
@@ -503,7 +502,7 @@ def register_daily(result: dict[str, Any] | None = None, batch: str = "",
         _res = result if isinstance(result, dict) else evaluate_v2()
     except Exception as e:
         silent_exc(e, where="nucleus.self_awareness.maturity_ledger::register_daily evaluate")
-        return {"error": "%s: %s" % (type(e).__name__, e), "version": LEDGER_VERSION}
+        return {"error": "{}: {}".format(type(e).__name__, e), "version": LEDGER_VERSION}
     _entry = build_entry(_res, batch=batch)
     append_entry(_entry, path)
     return _entry

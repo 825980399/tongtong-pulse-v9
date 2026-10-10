@@ -145,7 +145,7 @@ class TestLinkStatus(unittest.TestCase):
         links = _collector()._collect_link_status()
         for k, v in links.items():
             self.assertEqual(v["status"], "connected",
-                             "%s 判定=%s（期望 connected）" % (k, v["status"]))
+                             "{} 判定={}（期望 connected）".format(k, v["status"]))
 
     def test_31_chat_to_mouth_uses_mouth_speak(self):
         """★修正：事件应为 `mouth.speak`（对话→嘴巴），而非 `mouth.reply`。"""

@@ -65,7 +65,7 @@ class _BusBase(unittest.TestCase):
         return ReportBus(base_dir=self._base, persist=persist)
 
     def _disk(self, report_id, rtype="health"):
-        _p = os.path.join(self._base, rtype, "%s.json" % report_id)
+        _p = os.path.join(self._base, rtype, "{}.json".format(report_id))
         if not os.path.isfile(_p):
             return None
         return json.load(io.open(_p, encoding="utf-8"))

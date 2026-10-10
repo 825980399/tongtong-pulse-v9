@@ -211,18 +211,18 @@ class TestT91aIndexBuild(unittest.TestCase):
         self.assertGreater(len(_rels), 250, "生产源码清单过少：%d" % len(_rels))
         for _must in ("nucleus/self_inspector.py", "nucleus/data/write_guard.py",
                       "organs/senses/PulseEyes.py", "config.py", "main.py"):
-            self.assertIn(_must, _rels, "生产源码清单缺少 %s" % _must)
+            self.assertIn(_must, _rels, "生产源码清单缺少 {}".format(_must))
 
     def test_11_no_backup_or_cache_paths(self):
         """★危险解析防护：`.bak_batch75/...` 这类**陈旧副本**一旦入选，
         后续取方法体/生成补丁全部作用在错误路径上（T0 实测踩过）。"""
         _rels = list(self.insp._m91_iter_production_py())
         for _r in _rels:
-            self.assertNotIn(".bak", _r, "备份目录混入扫描结果：%s" % _r)
-            self.assertNotIn("__pycache__", _r, "缓存目录混入扫描结果：%s" % _r)
+            self.assertNotIn(".bak", _r, "备份目录混入扫描结果：{}".format(_r))
+            self.assertNotIn("__pycache__", _r, "缓存目录混入扫描结果：{}".format(_r))
             for _part in _r.split("/")[:-1]:
                 self.assertFalse(_part.startswith("."),
-                                 "点目录混入扫描结果：%s" % _r)
+                                 "点目录混入扫描结果：{}".format(_r))
 
     def test_12_skip_rule_does_not_hurt_legit_subpackages(self):
         """★只排除「点目录 + 缓存 + 虚拟环境」——不按 data/logs/build/tmp 名字排除。
@@ -232,9 +232,9 @@ class TestT91aIndexBuild(unittest.TestCase):
         """
         _re_ = self.insp._M91_SKIP_DIR_RE
         for _keep in ("nucleus", "organs", "data", "logs", "build", "tmp", "dist"):
-            self.assertIsNone(_re_.search(_keep), "合法目录 %r 被误排除" % _keep)
+            self.assertIsNone(_re_.search(_keep), "合法目录 {!r} 被误排除".format(_keep))
         for _skip in ("__pycache__", "venv", ".venv", "node_modules", ".bak_batch91"):
-            self.assertIsNotNone(_re_.search(_skip), "目录 %r 应被排除" % _skip)
+            self.assertIsNotNone(_re_.search(_skip), "目录 {!r} 应被排除".format(_skip))
 
     def test_13_indexes_are_non_trivial_and_cached(self):
         self.assertGreater(len(self.idx), 60, "logger tag 索引条目过少：%d" % len(self.idx))
@@ -246,10 +246,10 @@ class TestT91aIndexBuild(unittest.TestCase):
         """索引里绝不允许出现**不存在的文件**（否则定位会产出死路径）。"""
         for _tag, _rel in self.idx.items():
             self.assertTrue(os.path.isfile(os.path.join(ROOT, _rel)),
-                            "logger 索引死路径：%r -> %r" % (_tag, _rel))
+                            "logger 索引死路径：{!r} -> {!r}".format(_tag, _rel))
         for _tag, _rel in self.alias.items():
             self.assertTrue(os.path.isfile(os.path.join(ROOT, _rel)),
-                            "别名索引死路径：%r -> %r" % (_tag, _rel))
+                            "别名索引死路径：{!r} -> {!r}".format(_tag, _rel))
 
     def test_15_lookup_never_returns_dead_path_and_none_for_unknown(self):
         for _tag in ("self_inspector", "WriteGuard", "胸腺", "眼睛"):
@@ -260,9 +260,9 @@ class TestT91aIndexBuild(unittest.TestCase):
                     self.assertTrue(os.path.isfile(os.path.join(ROOT, _r)))
         for _junk in ("不存在的标签XYZ", "", "   ", None, 12345):
             self.assertIsNone(self.insp._m91_lookup_logger_tag(_junk),
-                              "未知标签应返回 None：%r" % (_junk,))
+                              "未知标签应返回 None：{!r}".format(_junk))
             self.assertIsNone(self.insp._m91_lookup_organ_alias(_junk),
-                              "未知标签应返回 None：%r" % (_junk,))
+                              "未知标签应返回 None：{!r}".format(_junk))
 
     def test_16_ambiguity_is_recorded(self):
         """同一字面量出现在多个文件 ⇒ 本质歧义，必须留痕（供降置信）。"""
@@ -280,7 +280,7 @@ class TestT91aIndexBuild(unittest.TestCase):
         故此处显式单列并说明（`框架` 标签实际由中文名 0.6 层命中）。
         """
         _lits = _production_literals()
-        self.assertGreater(len(_lits), 15, "抽取到的 logger 字面量过少：%s" % _lits)
+        self.assertGreater(len(_lits), 15, "抽取到的 logger 字面量过少：{}".format(_lits))
         _checked = 0
         for _lit in _lits:
             if _lit == "pulse.framework":
@@ -288,8 +288,7 @@ class TestT91aIndexBuild(unittest.TestCase):
                 continue
             _tag = _formatter_tag(_lit)
             self.assertIn(_tag, SelfInspector._m91_logger_literal_to_tags(_lit),
-                          "字面量 %r 的日志 TAG %r 反推失败：%s"
-                          % (_lit, _tag, SelfInspector._m91_logger_literal_to_tags(_lit)))
+                          "字面量 {!r} 的日志 TAG {!r} 反推失败：{}".format(_lit, _tag, SelfInspector._m91_logger_literal_to_tags(_lit)))
             _checked += 1
         self.assertGreater(_checked, 10, "实际校验的字面量过少：%d" % _checked)
 
@@ -308,7 +307,7 @@ class TestT91aIndexBuild(unittest.TestCase):
                             ("pulse.module.PulseSnapshot", "Snapshot"),
                             ("pulse.structured_parallel", "pulse.structured_parallel"),
                             ("get_x", "get_x")):
-            self.assertIn(_must, _f(_lit), "%r 应产出 %r" % (_lit, _must))
+            self.assertIn(_must, _f(_lit), "{!r} 应产出 {!r}".format(_lit, _must))
         # 反向确认：字面量层**不**产出中文器官名（中文名由 alias 索引负责）
         self.assertNotIn("心脏", _f("pulse.organ.PulseHeart"))
         self.assertEqual(_f(""), [])
@@ -329,13 +328,13 @@ class TestT91aTwoLevelIndexHits(unittest.TestCase):
         """第一级：模块名 / logger 名型（9 个）。"""
         for _tag, _exp in _LOGGER_EXPECT.items():
             self.assertEqual(self.insp._m91_lookup_logger_tag(_tag), _exp,
-                             "%r 的 logger 索引落点错误" % _tag)
+                             "{!r} 的 logger 索引落点错误".format(_tag))
 
     def test_21_organ_alias_type_hits(self):
         """第二级：中文标签别名型（7 个，来自 `organ_name` 声明）。"""
         for _tag, _exp in _ALIAS_EXPECT.items():
             self.assertEqual(self.insp._m91_lookup_organ_alias(_tag), _exp,
-                             "%r 的别名索引落点错误" % _tag)
+                             "{!r} 的别名索引落点错误".format(_tag))
 
     def test_22_both_levels_are_complementary_not_overlapping(self):
         """两级索引职责不重叠：别名型不应落在 logger 索引里（反之亦然）。
@@ -345,14 +344,14 @@ class TestT91aTwoLevelIndexHits(unittest.TestCase):
         """
         for _t in _ALIAS_EXPECT:
             self.assertIsNone(self.insp._m91_lookup_logger_tag(_t),
-                              "%r 同时落在两级索引（职责重叠）" % _t)
+                              "{!r} 同时落在两级索引（职责重叠）".format(_t))
         for _t in ("write_guard_tag_placeholder",):
             self.assertIsNone(self.insp._m91_lookup_organ_alias(_t))
 
     def test_23_all_gap_tags_locate_from_empty_message(self):
         """★任务书验收主语：16 个缺口标签在 `msg=""` / `file_hint=""` 下必须全部命中。"""
         _miss = [t for t in _GAP_TAGS if not self.insp.locate_issue(t, "").get("file")]
-        self.assertEqual(_miss, [], "仍不可定位：%s" % _miss)
+        self.assertEqual(_miss, [], "仍不可定位：{}".format(_miss))
 
     def test_24_confidence_contract(self):
         """置信度分层契约：logger/alias 精确 = 0.8；歧义 = 0.55。
@@ -364,10 +363,10 @@ class TestT91aTwoLevelIndexHits(unittest.TestCase):
                 continue
             _c = self.insp.locate_issue(_tag, "").get("confidence", 0.0)
             self.assertAlmostEqual(_c, 0.8, places=3,
-                                   msg="%r 置信度应为 0.8，实得 %.3f" % (_tag, _c))
+                                   msg="{!r} 置信度应为 0.8，实得 {:.3f}".format(_tag, _c))
         _cp = self.insp.locate_issue("pulse", "").get("confidence", 0.0)
         self.assertAlmostEqual(_cp, 0.55, places=3,
-                               msg="歧义标签 `pulse` 必须降置信到 0.55，实得 %.3f" % _cp)
+                               msg="歧义标签 `pulse` 必须降置信到 0.55，实得 {:.3f}".format(_cp))
 
     def test_25_deterministic_pick_and_confidence_before_method_boost(self):
         """确定性择一（同输入同输出）+ 置信度上界不被方法名加权突破 1.0。"""
@@ -438,7 +437,7 @@ class TestT91aCoverage(unittest.TestCase):
     def test_32_frozen_gap_tags_are_all_hittable(self):
         """不依赖真实日志：16 个缺口标签 + 6 个既有标签 100% 命中。"""
         _miss = [t for t in _FROZEN_TAGS if not self.insp.locate_issue(t, "").get("file")]
-        self.assertEqual(_miss, [], "冻结清单仍不可定位：%s" % _miss)
+        self.assertEqual(_miss, [], "冻结清单仍不可定位：{}".format(_miss))
 
     def test_33_先红_v3_off_reproduces_the_16_misses(self):
         """★先红证据（运行期）：V3 关闭 ⇒ 16 个缺口标签**全部**回到不可定位。
@@ -451,7 +450,7 @@ class TestT91aCoverage(unittest.TestCase):
                         if not self.insp.locate_issue(t, "").get("file"))
         _still = [t for t in _GAP_TAGS if t not in _miss]
         self.assertEqual(_still, [],
-                         "以下标签在 V3 关闭时竟然命中（说明先红证据不成立）：%s" % _still)
+                         "以下标签在 V3 关闭时竟然命中（说明先红证据不成立）：{}".format(_still))
 
     def test_34_v3_strictly_improves_over_v2(self):
         with _Switch(_SWITCH, False):
@@ -475,7 +474,7 @@ class TestT91aCoverage(unittest.TestCase):
             if (_now.get("file"), _now.get("confidence")) != \
                     (_r.get("file"), _r.get("confidence")):
                 _diff.append((_t, _r, _now))
-        self.assertEqual(_diff, [], "V3 改写了既有命中（越权抢占）：%s" % _diff)
+        self.assertEqual(_diff, [], "V3 改写了既有命中（越权抢占）：{}".format(_diff))
 
     def test_36_switch_off_is_verbatim_legacy(self):
         """关闭 ⇒ 与「改前算法」逐字一致（内联固化的判据，不依赖 scratch 目录）。"""
@@ -484,7 +483,7 @@ class TestT91aCoverage(unittest.TestCase):
                 _r = self.insp.locate_issue(_t, "")
                 if _t in _GAP_TAGS:
                     self.assertEqual(_r.get("file"), "",
-                                     "%r 在关闭状态下仍命中 %r" % (_t, _r.get("file")))
+                                     "{!r} 在关闭状态下仍命中 {!r}".format(_t, _r.get("file")))
                     self.assertEqual(_r.get("confidence"), 0.0)
                     self.assertEqual(_r.get("method"), "")
 
@@ -497,8 +496,8 @@ class TestT91aSwitchContract(unittest.TestCase):
     def test_41_registered_in_config_py_with_true(self):
         """★第91批 T-91c：本开关已**正式登记**进 config.py（默认值与登记前一致）。"""
         _src = _read(_CFG)
-        self.assertIn(_SWITCH, _src, "T-91c 起 %s 必须正式登记在 config.py" % _SWITCH)
-        self.assertIn("%s = True" % _SWITCH, _src, "登记默认值必须为 True")
+        self.assertIn(_SWITCH, _src, "T-91c 起 {} 必须正式登记在 config.py".format(_SWITCH))
+        self.assertIn("{} = True".format(_SWITCH), _src, "登记默认值必须为 True")
         self.assertIn("# [M91-CFG]", _src, "缺少第91批登记段标记")
         self.assertTrue(getattr(config, _SWITCH))
 
@@ -538,11 +537,11 @@ class TestT91aSwitchContract(unittest.TestCase):
         for _sym in ("_m91_lookup_logger_tag", "_m91_lookup_organ_alias",
                      "_build_organ_alias_index", "_m91_log_locate_v3_on",
                      "_M91_TAG_SCAN_ROOTS", "_m91_v3"):
-            self.assertNotIn(_sym, _old, "改前源码竟已存在 %s（先红证据不成立）" % _sym)
+            self.assertNotIn(_sym, _old, "改前源码竟已存在 {}（先红证据不成立）".format(_sym))
         _new = _read(_SI)
         for _sym in ("_m91_lookup_logger_tag", "_m91_lookup_organ_alias",
                      "_build_organ_alias_index", "_m91_log_locate_v3_on"):
-            self.assertIn(_sym, _new, "改后源码缺少 %s" % _sym)
+            self.assertIn(_sym, _new, "改后源码缺少 {}".format(_sym))
 
 
 # ============================================================ E 与既有能力共存
@@ -559,19 +558,19 @@ class TestT91aCoexistWithM90(unittest.TestCase):
         _r = self.insp.locate_issue("TaskOrchestrator", "")
         self.assertTrue(_r.get("file"))
         self.assertGreater(_r.get("confidence", 0.0), 0.55,
-                           "V3 抢占/拉低了类索引结果：%s" % _r)
+                           "V3 抢占/拉低了类索引结果：{}".format(_r))
         self.assertAlmostEqual(_r.get("confidence", 0.0), 0.75, places=3,
-                               msg="类索引层（0.75）应优先命中：%s" % _r)
+                               msg="类索引层（0.75）应优先命中：{}".format(_r))
 
     def test_51_chinese_fuzzy_layer_not_stolen_by_alias(self):
         """`心脏` 的 `organ_name` 别名也指向 PulseHeart.py；
         若 V3 前置则置信度会被抬到 0.8 ⇒ 断言必须仍为 **0.6**（中文名模糊层）。"""
         for _tag, (_exp_file, _exp_conf) in _PRIORITY_GUARD.items():
             _r = self.insp.locate_issue(_tag, "")
-            self.assertEqual(_r.get("file"), _exp_file, "%r 落点错误：%s" % (_tag, _r))
+            self.assertEqual(_r.get("file"), _exp_file, "{!r} 落点错误：{}".format(_tag, _r))
             self.assertAlmostEqual(
                 _r.get("confidence", 0.0), _exp_conf, places=3,
-                msg="%r 置信度被 V3 改写（应为 %.2f）：%s" % (_tag, _exp_conf, _r))
+                msg="{!r} 置信度被 V3 改写（应为 {:.2f}）：{}".format(_tag, _exp_conf, _r))
 
     def test_52_message_file_path_still_wins(self):
         """消息里带真实 `.py` 路径（1a 段 0.9）仍压过 V3。"""
@@ -579,7 +578,7 @@ class TestT91aCoexistWithM90(unittest.TestCase):
         _r = self.insp.locate_issue("self_inspector", _msg)
         self.assertEqual(_r.get("file"), "nucleus/self_inspector.py")
         self.assertGreaterEqual(_r.get("confidence", 0.0), 0.75,
-                                "1a/类索引层被 V3 覆盖：%s" % _r)
+                                "1a/类索引层被 V3 覆盖：{}".format(_r))
 
     def test_53_existing_m90_gap_fixed_by_class_index_is_unchanged(self):
         """第90批成果（类索引）零回归：`InfoField` / `PulseSnapshot` 依旧是 0.75。"""
@@ -588,9 +587,9 @@ class TestT91aCoexistWithM90(unittest.TestCase):
                            ("SafeEvolutionExecutor",
                             "nucleus/reasoning/SafeEvolutionExecutor.py")):
             _r = self.insp.locate_issue(_tag, "")
-            self.assertEqual(_r.get("file"), _exp, "%r 落点漂移：%s" % (_tag, _r))
+            self.assertEqual(_r.get("file"), _exp, "{!r} 落点漂移：{}".format(_tag, _r))
             self.assertAlmostEqual(_r.get("confidence", 0.0), 0.75, places=3,
-                                   msg="%r 置信度漂移：%s" % (_tag, _r))
+                                   msg="{!r} 置信度漂移：{}".format(_tag, _r))
 
 
 if __name__ == "__main__":

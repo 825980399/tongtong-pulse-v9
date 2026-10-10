@@ -687,11 +687,11 @@ class PulseFramework:
                 from nucleus.reporting.consumers import register_builtin_consumers as _m50_reg
                 _m50_types = _m50_reg(_m50_gb())
                 self._log(LogLevel.INFO,
-                          "自认知报告总线已启用，已注册消费者: %s" % _m50_types)
+                          "自认知报告总线已启用，已注册消费者: {}".format(_m50_types))
         except Exception as _m50_re:
             try:
                 self._log(LogLevel.WARNING,
-                          "自认知报告总线注册失败（已忽略）: %s" % type(_m50_re).__name__)
+                          "自认知报告总线注册失败（已忽略）: {}".format(type(_m50_re).__name__))
             except Exception as _se:
                 silent_exc(_se, "main.py:634")
         self._log(LogLevel.INFO, "体验记忆池已初始化")

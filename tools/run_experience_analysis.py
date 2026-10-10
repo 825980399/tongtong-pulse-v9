@@ -41,11 +41,11 @@ def main(argv=None) -> int:
                "text_coverage", "generated_at"):
         if _k in _rep:
             print("  %-22s %s" % (_k, _rep[_k]))
-    print("  by_reason             %s" % _rep.get("by_reason"))
-    print("  by_quality_flag       %s" % _rep.get("by_quality_flag"))
-    print("  is_summarized         %s" % _rep.get("is_summarized"))
+    print("  by_reason             {}".format(_rep.get("by_reason")))
+    print("  by_quality_flag       {}".format(_rep.get("by_quality_flag")))
+    print("  is_summarized         {}".format(_rep.get("is_summarized")))
     for _f in _rep.get("findings", []):
-        print("  - %s" % _f)
+        print("  - {}".format(_f))
 
     _written = save_pollution_report(_rep, _args.out)
     print()
@@ -67,7 +67,7 @@ def main(argv=None) -> int:
         print(json.dumps(_rep, ensure_ascii=False, indent=2))
 
     print()
-    print("默认报告路径: %s" % DEFAULT_POLLUTION_REPORT_PATH)
+    print("默认报告路径: {}".format(DEFAULT_POLLUTION_REPORT_PATH))
     return 0
 
 

@@ -173,7 +173,7 @@ class NodeRouter:
                 _ok = True
                 break
             except Exception as _e:
-                _last_err = "%s: %s" % (type(_e).__name__, _e)
+                _last_err = "{}: {}".format(type(_e).__name__, _e)
                 _logger.debug("[T3] 转发请求失败(重试 %d/%d): %s", _i, retries, _last_err)
         _latency = (time.time() - _start) * 1000.0
         with self._lock:

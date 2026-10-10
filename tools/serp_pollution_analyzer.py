@@ -55,7 +55,7 @@ def _norm_tpl(text: str) -> str:
 def load_pool(path: str) -> list:
     """只读载入经验记录列表。"""
     if not os.path.isfile(path):
-        raise SystemExit("[SERP] 经验库不存在: %s" % path)
+        raise SystemExit("[SERP] 经验库不存在: {}".format(path))
     _doc = json.load(io.open(path, encoding="utf-8"))
     if isinstance(_doc, list):
         return _doc
@@ -63,7 +63,7 @@ def load_pool(path: str) -> list:
         for _k in ("experiences", "records", "items", "data", "pool"):
             if isinstance(_doc.get(_k), list):
                 return _doc[_k]
-    raise SystemExit("[SERP] 无法识别经验库结构: %s" % path)
+    raise SystemExit("[SERP] 无法识别经验库结构: {}".format(path))
 
 
 def basic_stats(recs: list) -> dict:
@@ -337,9 +337,8 @@ def hemostasis_section(recs: list, since: float | None = None) -> dict:
     _verdict, _reason = "unknown", ""
     if not _after:
         _verdict = "not_yet_effective"
-        _reason = ("基准线（%s）之后**零新增记录**。代码已实施但测试期无新数据，"
-                   "无法确认止血效果 —— 需 **重启框架** 后继续观察。"
-                   % time.strftime("%Y-%m-%d %H:%M", time.localtime(_since)))
+        _reason = ("基准线（{}）之后**零新增记录**。代码已实施但测试期无新数据，"
+                   "无法确认止血效果 —— 需 **重启框架** 后继续观察。".format(time.strftime("%Y-%m-%d %H:%M", time.localtime(_since))))
     else:
         _new_pol = _a.get("polluted", 0)
         _cov = _a.get("raw_summary_coverage", 0.0)
@@ -416,8 +415,7 @@ def main() -> int:
     print("=" * 70)
     print("SERP 经验库污染分析（只读）")
     print("=" * 70)
-    print("数据源: %s  (%.2f MB, mtime %s)"
-          % (_rep["meta"]["pool_path"],
+    print("数据源: {}  ({:.2f} MB, mtime {})".format(_rep["meta"]["pool_path"],
              _rep["meta"]["pool_size_bytes"] / 1024.0 / 1024,
              _rep["meta"]["pool_mtime"]))
     print()
@@ -449,7 +447,7 @@ def main() -> int:
     print()
     _h = _rep["hemostasis"]
     print()
-    print("[5] ★摘要止血效果验证（基准线 %s）" % _h["since_str"])
+    print("[5] ★摘要止血效果验证（基准线 {}）".format(_h["since_str"]))
     _b, _a = _h["before"], _h["after"]
     print("    止血前: %5d 条  污染 %4d (%.1f%%)  raw_summary 覆盖 %.1f%%"
           % (_b.get("count", 0), _b.get("polluted", 0),
@@ -462,8 +460,8 @@ def main() -> int:
                  _a.get("raw_summary_coverage", 0) * 100))
     else:
         print("    止血后:     0 条（无新增数据）")
-    print("    判定: **%s**" % _h["verdict"])
-    print("    说明: %s" % _h["reason"])
+    print("    判定: **{}**".format(_h["verdict"]))
+    print("    说明: {}".format(_h["reason"]))
     print("    可否执行清洗: %s" % ("是" if _h["can_proceed_cleanup"] else "否"))
     print()
     print("[6] 干净记录质量")

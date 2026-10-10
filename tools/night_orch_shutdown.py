@@ -96,7 +96,7 @@ def main():
     if args.digest:
         _path = _orch.generate_night_digest(_ROOT)
         if _path:
-            print("[night_orch] digest 已产出：%s" % _path)
+            print("[night_orch] digest 已产出：{}".format(_path))
             return 0
         print("[night_orch] digest 产出失败（无数据或 NIGHT_ORCH_DIGEST_ENABLED=False）。")
         return 1
@@ -131,7 +131,7 @@ def main():
         if not _chan.request_shutdown(reason=args.reason):
             print("[night_orch] 写入 shutdown_request.json 失败。")
             return 1
-        print("[night_orch] 已写入 shutdown_request.json（reason=%s），等待框架退出（超时 %.0fs）..." % (args.reason, _timeout))
+        print("[night_orch] 已写入 shutdown_request.json（reason={}），等待框架退出（超时 {:.0f}s）...".format(args.reason, _timeout))
 
         # 4) 轮询等待
         _deadline = time.time() + _timeout
@@ -153,7 +153,7 @@ def main():
                 silent_exc(_e, where="tools.night_orch_shutdown.main.poll")
             time.sleep(2)
 
-        print("[night_orch] 等待超时（%.0fs），框架仍未退出。" % _timeout)
+        print("[night_orch] 等待超时（{:.0f}s），框架仍未退出。".format(_timeout))
         _write_report(_report, False, "timeout")
         return 1
     finally:

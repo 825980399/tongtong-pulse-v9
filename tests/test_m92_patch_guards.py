@@ -285,8 +285,8 @@ class TestT92aSwitchContract(unittest.TestCase):
     def test_A2_runtime_toggle_takes_effect_immediately(self):
         for _sw, _fn in ((_SW_C, _m92_base_indent_guard_on), (_SW_D, _m92_ast_struct_guard_on)):
             with _switches(**{_sw: True}):
-                self.assertIs(True, _fn(), "%s=True 应即时生效" % _sw)
-            self.assertIs(False, _fn(), "%s 恢复后应回到 False" % _sw)
+                self.assertIs(True, _fn(), "{}=True 应即时生效".format(_sw))
+            self.assertIs(False, _fn(), "{} 恢复后应回到 False".format(_sw))
 
     def test_A3_getattr_fallback_when_config_attr_absent(self):
         """config 无该属性（如旧配置）时须按默认 False 兜底，而非抛异常。"""
@@ -295,7 +295,7 @@ class TestT92aSwitchContract(unittest.TestCase):
             if _old is not _MISSING:
                 delattr(config, _sw)
             try:
-                self.assertIs(False, _fn(), "%s 缺失时应兜底 False" % _sw)
+                self.assertIs(False, _fn(), "{} 缺失时应兜底 False".format(_sw))
             finally:
                 if _old is not _MISSING:
                     setattr(config, _sw, _old)
@@ -317,7 +317,7 @@ class TestT92bBaseIndentParity(unittest.TestCase):
                 _b = SafeEvolutionExecutor._m91_base_indent(_x[_k])
                 if _a != _b:
                     _diff.append((_x.get("id"), _k, _a, _b))
-        self.assertEqual([], _diff[:5], "两把尺子口径漂移：%s" % _diff[:5])
+        self.assertEqual([], _diff[:5], "两把尺子口径漂移：{}".format(_diff[:5]))
 
     def test_B2_identical_on_edge_samples(self):
         _samples = ["", None, "\n\n", "# c only\n", "    # c only\n        x = 1",
@@ -325,7 +325,7 @@ class TestT92bBaseIndentParity(unittest.TestCase):
                     "      return x", "        return None"]
         for _s in _samples:
             self.assertEqual(SafeEvolutionExecutor._m91_base_indent(_s), _m92_base_indent(_s),
-                             "样本 %r 口径不一致" % (_s,))
+                             "样本 {!r} 口径不一致".format(_s))
 
     def test_B3_skips_blank_and_comment_lines(self):
         """首行 col 0 **注释** + 其后 8 缩进 ⇒ base 必须是 8（注释不构成缩进层级）。"""
@@ -429,10 +429,10 @@ class TestT92eRealIncidentArtifacts(unittest.TestCase):
 
     def test_E1_green_t92c_judgement_hits_both(self):
         for _tag, _oc, _mc in (("A", A_ORIGINAL, A_MODIFIED), ("B", B_ORIGINAL, B_MODIFIED)):
-            self.assertEqual(8, _m92_base_indent(_oc), "%s original base 应为 8" % _tag)
-            self.assertEqual(0, _m92_base_indent(_mc), "%s modified base 应为 0（事故指纹）" % _tag)
+            self.assertEqual(8, _m92_base_indent(_oc), "{} original base 应为 8".format(_tag))
+            self.assertEqual(0, _m92_base_indent(_mc), "{} modified base 应为 0（事故指纹）".format(_tag))
             self.assertNotEqual(_m92_base_indent(_oc), _m92_base_indent(_mc),
-                                "%s 必须命中 T-92c 判据" % _tag)
+                                "{} 必须命中 T-92c 判据".format(_tag))
 
     def test_E2_green_t92d_judgement_hits_both(self):
         _root, _fp = _make_project(A_ORIGINAL)
@@ -511,7 +511,7 @@ class TestT92fWiringGate(unittest.TestCase):
                     and _n.func.id == "_m92_ast_struct_guard"):
                 _args.append([_a.id for _a in _n.args if isinstance(_a, ast.Name)])
         self.assertEqual([["full_content", "modified_full"]], _args,
-                         "T-92d 判据实参必须恰为 (full_content, modified_full)，实得 %s" % _args)
+                         "T-92d 判据实参必须恰为 (full_content, modified_full)，实得 {}".format(_args))
 
     def test_F4_guard_blocks_precede_copy_write(self):
         """两道关都必须在 `with open(tmp_target, 'w', ...)` 写副本**之前**。"""
@@ -529,7 +529,7 @@ class TestT92fWiringGate(unittest.TestCase):
         _names = {_n.name for _n in _t.body if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         for _f in ("_m92_base_indent", "_m92_count_class_methods", "_m92_ast_struct_guard",
                    "_m92_base_indent_guard_on", "_m92_ast_struct_guard_on"):
-            self.assertIn(_f, _names, "%s 必须在模块级" % _f)
+            self.assertIn(_f, _names, "{} 必须在模块级".format(_f))
         _seg = ast.get_source_segment(_src(), next(
             _n for _n in _t.body if isinstance(_n, ast.FunctionDef) and _n.name == "_m92_ast_struct_guard"))
         self.assertNotIn("_module_logger", _seg, "判据函数应为纯函数（不打日志）")
@@ -552,7 +552,7 @@ class TestT92gEndToEnd(unittest.TestCase):
         self.assertNotIn(_r.get("stage"), ("base_indent_guard_failed",
                                           "ast_structure_guard_failed"),
                          "开关关闭时不应新增拦截（零回归）")
-        self.assertTrue(_r.get("passed"), "★事故补丁在改前被判定**通过**：%s" % _r)
+        self.assertTrue(_r.get("passed"), "★事故补丁在改前被判定**通过**：{}".format(_r))
 
     def test_G2_green_t92c_blocks(self):
         _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED, **{_SW_C: True})
@@ -570,9 +570,9 @@ class TestT92gEndToEnd(unittest.TestCase):
         for _tag, _pid, _oc, _mc in (("A", A_ID, A_ORIGINAL, A_MODIFIED),
                                      ("B", B_ID, B_ORIGINAL, B_MODIFIED)):
             _rc = self._run(_pid, _oc, _mc, **{_SW_C: True})
-            self.assertEqual("base_indent_guard_failed", _rc.get("stage"), "%s T-92c" % _tag)
+            self.assertEqual("base_indent_guard_failed", _rc.get("stage"), "{} T-92c".format(_tag))
             _rd = self._run(_pid, _oc, _mc, **{_SW_D: True})
-            self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), "%s T-92d" % _tag)
+            self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), "{} T-92d".format(_tag))
 
     def test_G5_corpus_zero_false_block_by_judgement(self):
         """★零误拦（判据层面）：72 条生产补丁里只有事故那 2 条命中 T-92c 判据。"""
@@ -598,7 +598,7 @@ class TestT92gEndToEnd(unittest.TestCase):
         _old._project_root = _root
         _old_r = _old._verify_in_copy(dict(_patch))
         self.assertEqual(_old_r.get("stage"), _new.get("stage"),
-                         "开关全关时 stage 漂移：改前=%r 改后=%r" % (_old_r.get("stage"), _new.get("stage")))
+                         "开关全关时 stage 漂移：改前={!r} 改后={!r}".format(_old_r.get("stage"), _new.get("stage")))
         self.assertEqual(_old_r.get("passed"), _new.get("passed"))
         self.assertIn("base_indent_guard_failed", _src(), "守卫名须在源码中")  # 提醒：改前版本无此串
         self.assertNotIn("base_indent_guard_failed",

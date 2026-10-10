@@ -69,7 +69,7 @@ class TestGenerateReportPublishes(unittest.TestCase):
         for _v in (_p, {"overall_score": 88.0, "health_level": "healthy"}, None,
                    "str", 123, []):
             _r = self._eng._m50_report_summary(_v)
-            self.assertIsInstance(_r, dict, "%r 应降级为空 dict" % type(_v))
+            self.assertIsInstance(_r, dict, "{!r} 应降级为空 dict".format(type(_v)))
 
     def test_73_no_json_dumps_default_str_antipattern(self):
         """★防回归：`_m50_report_summary` 内不得再用 `json.dumps/loads` 提取字段。
@@ -92,7 +92,7 @@ class TestGenerateReportPublishes(unittest.TestCase):
                     and _n.func.value.id == "json"):
                 _bad.append(_n.lineno)
         self.assertEqual(
-            _bad, [], "★函数体内仍用 json.dumps/loads 提取字段 @%s" % _bad)
+            _bad, [], "★函数体内仍用 json.dumps/loads 提取字段 @{}".format(_bad))
 
     def test_74_publish_failure_logs_message_not_only_type(self):
         """★防回归：发布失败日志必须带**异常消息**（原只记类型 → 故障难定位）。"""

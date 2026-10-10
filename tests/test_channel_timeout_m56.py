@@ -43,9 +43,9 @@ class TestChannelTimeoutM56(unittest.TestCase):
                 continue
             _t = ch.get("timeout")
             self.assertIsInstance(_t, (int, float),
-                                  "%s 的 timeout 非数值: %r" % (ch["name"], _t))
+                                  "{} 的 timeout 非数值: {!r}".format(ch["name"], _t))
             self.assertGreater(float(_t), 0,
-                               "%s 的 timeout 非正数: %r" % (ch["name"], _t))
+                               "{} 的 timeout 非正数: {!r}".format(ch["name"], _t))
 
     def test_override_on_uses_channel_timeout(self):
         c = self._ch(name="ark-seed-evolving", timeout=120)

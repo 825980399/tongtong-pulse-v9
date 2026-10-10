@@ -925,16 +925,15 @@ class ChatService:
             _text = get_crisis_text("L3", {"content": text})
             self._crisis_referral_count += 1
             self._log(LogLevel.INFO,
-                      "[169批] 危机转介短路命中 keyword=%s count=%s"
-                      % (_hit, self._crisis_referral_count))
-            print("💭 曈曈: %s" % _text)
+                      "[169批] 危机转介短路命中 keyword={} count={}".format(_hit, self._crisis_referral_count))
+            print("💭 曈曈: {}".format(_text))
             if self.info_field and self.pulse_core:
                 try:
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ="对话模块",
                         event_type=RiskEvent.CRISIS_REFERRAL,
                         payload={"crisis_level": "L3", "risk_level": 1.0,
-                                 "summary": "对话入口检测到危机表达: %s" % _hit,
+                                 "summary": "对话入口检测到危机表达: {}".format(_hit),
                                  "source": "dialogue_crisis_guard",
                                  "content": text[:200]},
                         priority=9,

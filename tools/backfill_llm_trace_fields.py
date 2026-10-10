@@ -59,7 +59,7 @@ BACKUP_SUFFIX = ".bak_batch44"
 
 def _day_files(directory: str, prefix: str = "calls") -> list[str]:
     """按文件名排序返回 ``<directory>/<prefix>_*.jsonl``。"""
-    return sorted(glob.glob(os.path.join(directory, "%s_*.jsonl" % prefix)))
+    return sorted(glob.glob(os.path.join(directory, "{}_*.jsonl".format(prefix))))
 
 def archive_backup(src_dir: str,
                    archive_root: str | None = None) -> dict[str, Any]:
@@ -73,7 +73,7 @@ def archive_backup(src_dir: str,
     import hashlib as _hl
     _root = archive_root or os.path.join(_ROOT, "data", "_archive")
     _stamp = _dt2.datetime.now().strftime("%Y%m%d_%H%M%S")
-    _dest = os.path.join(_root, "llm_traces_backup_%s" % _stamp)
+    _dest = os.path.join(_root, "llm_traces_backup_{}".format(_stamp))
     os.makedirs(_dest, exist_ok=True)
     _manifest: list[dict[str, Any]] = []
     _mismatch: list[str] = []
@@ -247,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     _dir = _ns.dir or _default_dir()
     _rep = run(_dir, apply=_ns.apply, version=_ns.version,
                backup=not _ns.no_backup, archive_root=_ns.archive_root)
-    print("[回填] dir=%s apply=%s" % (_dir, _ns.apply))
+    print("[回填] dir={} apply={}".format(_dir, _ns.apply))
     for _f in _rep["files"]:
         print("  - %s 记录=%d prompt_version补=%d error补=%d"
               % (os.path.basename(_f["file"]), _f["total"],
@@ -259,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     if _ab:
         print("[回填] 归档备份 → %s（%d 文件 / %.2f MB，校验=%s）"
               % (_ab["dest"], _ab["files"], _ab["total_bytes"] / 1048576.0,
-                 "OK" if _ab["ok"] else "MISMATCH:%s" % _ab["mismatch"]))
+                 "OK" if _ab["ok"] else "MISMATCH:{}".format(_ab["mismatch"])))
     if _ns.report:
         with io.open(_ns.report, "w", encoding="utf-8") as f:
             f.write(json.dumps(_rep, ensure_ascii=False, indent=2))

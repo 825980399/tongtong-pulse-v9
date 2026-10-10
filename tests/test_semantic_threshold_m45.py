@@ -169,8 +169,7 @@ class TestNoHardcode(unittest.TestCase):
         _lits = _numeric_literals(_p, 0.92)
         _lines = io.open(_p, encoding="utf-8").read().split("\n")
         self.assertEqual(_lits, [],
-                         "semantic_cache.py 存在 0.92 数值字面量 @%s: %s"
-                         % (_lits, [_lines[i - 1].strip()[:100] for i in _lits]))
+                         "semantic_cache.py 存在 0.92 数值字面量 @{}: {}".format(_lits, [_lines[i - 1].strip()[:100] for i in _lits]))
 
     def test_31_semantic_cache_default_is_085_literal(self):
         _p = os.path.join(_ROOT, "nucleus", "llm", "semantic_cache.py")
@@ -225,11 +224,11 @@ class TestCalibrationEvidence(unittest.TestCase):
     def setUpClass(cls):
         if not os.path.isfile(_CALIB_REPORT):
             raise unittest.SkipTest(
-                "第45批校准复跑报告产物缺失（证据缺失，非逻辑失败）: %s" % _CALIB_REPORT)
+                "第45批校准复跑报告产物缺失（证据缺失，非逻辑失败）: {}".format(_CALIB_REPORT))
 
     def test_40_recalibration_report_exists(self):
         self.assertTrue(os.path.isfile(_CALIB_REPORT),
-                        "缺少校准复跑报告: %s" % _CALIB_REPORT)
+                        "缺少校准复跑报告: {}".format(_CALIB_REPORT))
 
     def test_41_recommended_threshold_is_085(self):
         _r = json.load(io.open(_CALIB_REPORT, encoding="utf-8"))

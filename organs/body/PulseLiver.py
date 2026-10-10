@@ -3242,7 +3242,7 @@ class PulseLiver(BasePulseOrgan):
                             _l3 = self._kal.get_node(_l3_id) if self._kal else None
                             if _l3 is None or getattr(_l3, "evol_level", "") != PulseNode.EVOL_L3:
                                 continue  # 97%死引用条款：池中已不存在的 L3 不计数
-                            _pair_key = "%s|%s" % (min(node_a.node_id, node_b.node_id),
+                            _pair_key = "{}|{}".format(min(node_a.node_id, node_b.node_id),
                                                    max(node_a.node_id, node_b.node_id))
                             _seen = getattr(self, "_conflict_pair_seen", None)
                             if _seen is None:

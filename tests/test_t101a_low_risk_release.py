@@ -41,7 +41,7 @@ def _make_target(tmp):
     # 探针目标必须落在与项目同盘的目录（路径沙箱禁止跨盘符改写），
     # 故置于项目内 tmp/，而非系统 C: 盘临时目录。
     os.makedirs(os.path.join(PROJECT_ROOT, "tmp"), exist_ok=True)
-    return os.path.join(PROJECT_ROOT, "tmp", "t101a_target_%s.py" % uuid.uuid4().hex)
+    return os.path.join(PROJECT_ROOT, "tmp", "t101a_target_{}.py".format(uuid.uuid4().hex))
 
 
 def test_low_risk_release_promotes_and_lands_on_disk():

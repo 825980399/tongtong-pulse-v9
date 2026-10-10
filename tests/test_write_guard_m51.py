@@ -170,7 +170,7 @@ class TestLogging(unittest.TestCase):
         self.assertTrue(_captured, "拒写必须留痕")
         _msg = _captured[0]
         for _must in ("UT_M51", "script", "_m51_never.json", "原因"):
-            self.assertIn(_must, _msg, "日志缺少 %s: %s" % (_must, _msg))
+            self.assertIn(_must, _msg, "日志缺少 {}: {}".format(_must, _msg))
 
     def test_31_never_raises(self):
         """守卫永不抛出（故障 → 放行）。"""
@@ -186,12 +186,11 @@ class TestSubprocessEnv(unittest.TestCase):
 
     _PROBE = (
         "import json, os, sys;"
-        "sys.path.insert(0, r'%s');"
+        "sys.path.insert(0, r'{}');"
         "from nucleus.data import write_guard as wg;"
-        "P=os.path.join(r'%s','data','reports','_m51_sp.json');"
-        "print(json.dumps({'kind':wg.writer_kind(),"
-        "'reject':wg.reject_write(P),'guard':wg.guard_write(P,component='sp')}))"
-        % (_ROOT, _ROOT)
+        "P=os.path.join(r'{}','data','reports','_m51_sp.json');"
+        "print(json.dumps({{'kind':wg.writer_kind(),"
+        "'reject':wg.reject_write(P),'guard':wg.guard_write(P,component='sp')}}))".format(_ROOT, _ROOT)
     )
 
     def _run(self, env_extra):
@@ -247,7 +246,7 @@ class TestSourceWiring(unittest.TestCase):
                     "def is_test_like_env", "def is_trusted_writer",
                     "def writer_kind", "def strict_enabled",
                     "def reject_reason"):
-            self.assertIn(_fn, _w, "缺少 %s" % _fn)
+            self.assertIn(_fn, _w, "缺少 {}".format(_fn))
 
     def test_53_no_bare_except_pass_in_reject(self):
         """守卫内不得有裸 except:pass（留痕失败要退化到 stderr）。"""

@@ -330,25 +330,25 @@ class _CallCollector(ast.NodeVisitor):
         if _last in ("savez", "savez_compressed", "save") and _name.startswith("np"):
             _path, _static = _first_path()
             self._record(self.producers, "produce", _path,
-                         "np.%s" % _last, _line, _static)
+                         "np.{}".format(_last), _line, _static)
             return
         if _last in ("load", "loadtxt", "genfromtxt") and _name.startswith("np"):
             _path, _static = _first_path()
             self._record(self.consumers, "consume", _path,
-                         "np.%s" % _last, _line, _static)
+                         "np.{}".format(_last), _line, _static)
             return
 
         # ---- pandas ----
         if _last in ("to_csv", "to_json", "to_parquet", "to_pickle", "to_excel"):
             _path, _static = _first_path()
             self._record(self.producers, "produce", _path,
-                         "df.%s" % _last, _line, _static)
+                         "df.{}".format(_last), _line, _static)
             return
         if _last in ("read_csv", "read_json", "read_parquet", "read_pickle",
                      "read_excel"):
             _path, _static = _first_path()
             self._record(self.consumers, "consume", _path,
-                         "pd.%s" % _last, _line, _static)
+                         "pd.{}".format(_last), _line, _static)
             return
 
         # ---- shutil.copy(src, dst) ----
@@ -358,9 +358,9 @@ class _CallCollector(ast.NodeVisitor):
                 _src, _s_static = _static_path_of(_args[0], self.project_root, self._local_paths)
                 _dst, _d_static = _static_path_of(_args[1], self.project_root, self._local_paths)
                 self._record(self.consumers, "consume", _src,
-                             "shutil.%s(src)" % _last, _line, _s_static)
+                             "shutil.{}(src)".format(_last), _line, _s_static)
                 self._record(self.producers, "produce", _dst,
-                             "shutil.%s(dst)" % _last, _line, _d_static)
+                             "shutil.{}(dst)".format(_last), _line, _d_static)
             return
 
         # ---- 方法名启发式（save/write/dump... / load/read/fetch...）----
@@ -385,10 +385,10 @@ class _CallCollector(ast.NodeVisitor):
             _path, _static = _static_path_of(_args[0], self.project_root, self._local_paths)
             if _is_producer and not _is_consumer:
                 self._record(self.producers, "produce", _path,
-                             "method:%s" % _last, _line, _static)
+                             "method:{}".format(_last), _line, _static)
             elif _is_consumer and not _is_producer:
                 self._record(self.consumers, "consume", _path,
-                             "method:%s" % _last, _line, _static)
+                             "method:{}".format(_last), _line, _static)
 
 
 def _iter_scan_files(project_root: str, scan_dirs: list[str]) -> list[str]:
@@ -444,11 +444,11 @@ class ProductionConsumptionMatcher:
                     _src = f.read()
                 _tree = ast.parse(_src, filename=_rel)
             except SyntaxError as e:
-                _parse_errors.append({"file": _rel, "error": "SyntaxError: %s" % e})
+                _parse_errors.append({"file": _rel, "error": "SyntaxError: {}".format(e)})
                 continue
             except Exception as e:  # 单文件失败不中断全盘扫描
                 _parse_errors.append({"file": _rel,
-                                      "error": "%s: %s" % (type(e).__name__, e)})
+                                      "error": "{}: {}".format(type(e).__name__, e)})
                 continue
 
             _col = _CallCollector(_mod, _rel, self.project_root)
@@ -704,8 +704,8 @@ class ProductionConsumptionMatcher:
         _lines = [
             "=" * 68,
             "曈曈 PulseNet · 产出-消费配对报告",
-            "生成时间: %s" % _r["generated_at"],
-            "扫描范围: %s" % ", ".join(_r["scan_dirs"]),
+            "生成时间: {}".format(_r["generated_at"]),
+            "扫描范围: {}".format(", ".join(_r["scan_dirs"])),
             "=" * 68,
             "",
             # ★T2（P2-218）：来源口径分开显示，避免「255 文件」与「数据文件 17」
@@ -739,8 +739,7 @@ class ProductionConsumptionMatcher:
             % (_s.get("effective_no_consumer", 0),
                _s.get("disk_only_unexcluded", 0), _s.get("excluded", 0),
                _s.get("excluded_self_observation", 0)),
-            "        · 真问题占比 %s ｜ 噪声过滤率 %s"
-            % (("%.1f%%" % (_s["signal_ratio"] * 100.0))
+            "        · 真问题占比 {} ｜ 噪声过滤率 {}".format(("%.1f%%" % (_s["signal_ratio"] * 100.0))
                if _s.get("signal_ratio") is not None else "N/A",
                ("%.1f%%" % (_s["noise_filtered_ratio"] * 100.0))
                if _s.get("noise_filtered_ratio") is not None else "N/A"),
@@ -765,14 +764,14 @@ class ProductionConsumptionMatcher:
             for _e in rows[:limit]:
                 _size = _e.get("size")
                 _size_s = "未知" if _size is None else _fmt_size(_size)
-                _lines.append("  · %s  [%s]" % (_e["path"], _size_s))
+                _lines.append("  · {}  [{}]".format(_e["path"], _size_s))
                 for _p in _e["producers"][:3]:
                     _lines.append("      写 ← %s  (%s:%d, %s)"
                                   % (_p["location"], _p["file"], _p["line"], _p["how"]))
                 for _c in _e["consumers"][:3]:
                     _lines.append("      读 → %s  (%s:%d, %s)"
                                   % (_c["location"], _c["file"], _c["line"], _c["how"]))
-                _lines.append("      建议: %s" % _e["suggestion"])
+                _lines.append("      建议: {}".format(_e["suggestion"]))
             _lines.append("")
 
         def _dump(cat: str, title: str, sort_by_size: bool = False) -> None:
@@ -815,7 +814,7 @@ class ProductionConsumptionMatcher:
         if _r["parse_errors"]:
             _lines.append("【解析失败文件】(%d)" % len(_r["parse_errors"]))
             for _pe in _r["parse_errors"][:20]:
-                _lines.append("  · %s: %s" % (_pe["file"], _pe["error"]))
+                _lines.append("  · {}: {}".format(_pe["file"], _pe["error"]))
             _lines.append("")
 
         _lines.append("—— 报告结束 ——")
@@ -868,8 +867,8 @@ def _fmt_size(n: int) -> str:
         _f = float(n)
         for _unit in ("B", "KB", "MB", "GB"):
             if _f < 1024 or _unit == "GB":
-                return ("%.0f %s" % (_f, _unit)) if _unit == "B" else \
-                    ("%.1f %s" % (_f, _unit))
+                return ("{:.0f} {}".format(_f, _unit)) if _unit == "B" else \
+                    ("{:.1f} {}".format(_f, _unit))
             _f /= 1024.0
     except Exception as e:
         _logger.debug("大小格式化失败: %s: %s", type(e).__name__, e)

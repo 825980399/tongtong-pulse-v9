@@ -246,7 +246,7 @@ class TestWiring(_Base):
         s = _SRC["nucleus/self_awareness/DailyScheduler.py"]
         for fn in ("publish_pollution", "publish_patch_quality",
                    "publish_data_quality", "publish_generic"):
-            self.assertIn(fn, s, "run_once 应发布 %s" % fn)
+            self.assertIn(fn, s, "run_once 应发布 {}".format(fn))
 
     def test_42_diagnostics_publishes_health(self):
         s = _SRC["nucleus/diagnostics.py"]
@@ -283,7 +283,7 @@ class TestWiring(_Base):
                    "publish_data_quality"):
             i = s.find(fn)
             self.assertGreater(i, 0)
-            self.assertIn("try:", s[max(0, i - 700):i], "%s 未包 try" % fn)
+            self.assertIn("try:", s[max(0, i - 700):i], "{} 未包 try".format(fn))
 
 
 # ============================================================ 契约
@@ -329,7 +329,7 @@ class TestWriteGuardNotBypassed(_Base):
                         if _kw.arg == "explicit_base_dir":
                             _bad.append(_n.lineno)
             self.assertEqual(
-                _bad, [], "%s 仍把 explicit_base_dir 当关键字传参 @%s" % (_rel, _bad))
+                _bad, [], "{} 仍把 explicit_base_dir 当关键字传参 @{}".format(_rel, _bad))
 
     def test_61_guard_signature_matches_call(self):
         """守卫参数名必须是 `explicit`（调用方与签名一致）。"""
@@ -342,7 +342,7 @@ class TestWriteGuardNotBypassed(_Base):
         try:
             guard_write("", explicit=False, component="t")
         except TypeError as _e:
-            self.fail("参数名不匹配会抛 TypeError: %s" % _e)
+            self.fail("参数名不匹配会抛 TypeError: {}".format(_e))
 
     def test_62_default_bus_is_not_explicit(self):
         """默认总线（生产 data/reports）应判为**未显式注入**。"""
@@ -384,7 +384,7 @@ class TestWriteGuardNotBypassed(_Base):
             _s = io.open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
             self.assertEqual(
                 len(re.findall(r"except\s+[^\n:]+:\s*\n\s*pass\s*(\n|$)", _s)),
-                0, "%s 仍有裸 except: pass（会再次吞掉守卫异常）" % _rel)
+                0, "{} 仍有裸 except: pass（会再次吞掉守卫异常）".format(_rel))
 
     def test_68_guard_signature_accepts_real_component(self):
         """守卫可被真实组件名调用（签名与调用方契约一致）。"""

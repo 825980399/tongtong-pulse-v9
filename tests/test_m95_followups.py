@@ -203,7 +203,7 @@ class TestM95DeadConfig(unittest.TestCase):
             "no_fix_cooldown_seconds"])
         for _r in _REACHABLE_REASONS:
             self.assertEqual(_old[_r.split("(")[0]], _obj._cooldown_ttl_for(_r),
-                             "★可达 reason %s 的 TTL 必须与改前一致" % _r)
+                             "★可达 reason {} 的 TTL 必须与改前一致".format(_r))
         self.assertEqual(float(_old["_default"]),
                          _obj._cooldown_ttl_for("完全未知的原因xyz"))
 
@@ -533,7 +533,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
         for _f in ("nucleus/evolution/LLMEvolutionEngine.py",
                    "nucleus/evolution/SelfReflectionEngine.py"):
             self.assertIn("self." + self._NEW + " =", _read(os.path.join(
-                ROOT, _f.replace("/", os.sep))), "★%s 未同步" % _f)
+                ROOT, _f.replace("/", os.sep))), "★{} 未同步".format(_f))
         self.assertIn("self." + self._NEW + " = _m94_usage", _read(_LUNG))
 
     def test_E3_recorder_reads_new_with_legacy_fallback(self):
@@ -554,7 +554,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
                      "tests/test_lung_trace_m40.py"):
             _t = _read(os.path.join(ROOT, _rel.replace("/", os.sep)))
             for _w in self._LEGACY:
-                self.assertNotIn(_w, _t, "★%s 残留旧名 %s" % (_rel, _w))
+                self.assertNotIn(_w, _t, "★{} 残留旧名 {}".format(_rel, _w))
 
     def test_E6_adapter_doc_updated(self):
         _p = os.path.join(ROOT, "nucleus", "llm", "openai_compatible_adapter.py")

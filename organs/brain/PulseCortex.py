@@ -342,10 +342,10 @@ class PulseCortex(BasePulseOrgan):
         except Exception:
             _loc = "位置解析失败"
 
-        _msg = "异常已忽略（需关注）: %s: %s | 位置=%s" % (
+        _msg = "异常已忽略（需关注）: {}: {} | 位置={}".format(
             type(e).__name__, e, _loc)
         if ctx:
-            _msg += " | 上下文=%s" % ctx
+            _msg += " | 上下文={}".format(ctx)
         self._log(LogLevel.WARNING, _msg)
 
     # ==================== ★主线第40批 T4（P2-261 / P2-216）====================

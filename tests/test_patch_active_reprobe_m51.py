@@ -216,7 +216,7 @@ class TestProductionSmoke(unittest.TestCase):
         _allowed = {M.V_TRUE_PASS, M.V_PARTIAL_FIX, M.V_FALSE_PASS,
                     M.V_INEFFECTIVE, M.V_VERIFY_FAILED, M.V_NOT_APPLICABLE}
         self.assertTrue(set(_r["by_verdict"]) <= _allowed,
-                        "意外结论: %s" % (_r["by_verdict"],))
+                        "意外结论: {}".format(_r["by_verdict"]))
 
     def test_41_no_verdict_missing_fields(self):
         _p = os.path.join(_ROOT, "data", "patches", "patch_history.json")

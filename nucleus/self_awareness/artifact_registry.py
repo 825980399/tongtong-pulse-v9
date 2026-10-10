@@ -140,7 +140,7 @@ def save_registry(specs: list[dict], path: str | None = None) -> str:
     _p = path or registry_path()
     try:
         if ("pytest" in sys.modules) or os.environ.get("PYTEST_CURRENT_TEST"):
-            sys.stderr.write("[artifact_registry] 测试环境跳过生产写入: %s\n" % _p)
+            sys.stderr.write("[artifact_registry] 测试环境跳过生产写入: {}\n".format(_p))
             return _p
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.artifact_registry::save_registry env")

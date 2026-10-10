@@ -85,7 +85,7 @@ class TestChatReasoningUnknownSkip:
         try:
             from functions.chat.chat_service import ChatService
         except Exception as _e:  # 重依赖环境下优雅跳过，不阻断其他验收
-            pytest.skip("chat_service 不可导入（环境依赖），跳过 ③: %r" % _e)
+            pytest.skip("chat_service 不可导入（环境依赖），跳过 ③: {!r}".format(_e))
 
         cs = ChatService.__new__(ChatService)
         _iw = type("O", (), {})()

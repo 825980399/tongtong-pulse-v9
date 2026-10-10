@@ -292,10 +292,10 @@ class TestPoolQueriesGated(unittest.TestCase):
     def test_53_gate_wired_in_source(self):
         for m in ("query_experiences", "get_experiences_for_narrative",
                   "get_positive_experiences", "get_negative_experiences"):
-            i = _POOL_SRC.find("def %s" % m)
+            i = _POOL_SRC.find("def {}".format(m))
             self.assertGreater(i, 0, m)
             _seg = _POOL_SRC[i:i + 1400]
-            self.assertIn("_m50_retrievable", _seg, "%s 未接入闸门" % m)
+            self.assertIn("_m50_retrievable", _seg, "{} 未接入闸门".format(m))
 
     def test_54_gate_helper_present(self):
         self.assertIn("def _m50_retrievable", _POOL_SRC)

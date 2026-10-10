@@ -93,7 +93,7 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
                     "nucleus/mnemosyne/pool.py"):
             p = os.path.join(self.d, rel.replace("/", os.sep))
             os.makedirs(os.path.dirname(p), exist_ok=True)
-            io.open(p, "w", encoding="utf-8").write("# %s\n" % rel)
+            io.open(p, "w", encoding="utf-8").write("# {}\n".format(rel))
         # 应当被跳过
         for rel in ("data/x.py", "logs/y.py", "__pycache__/z.py",
                     "nucleus/__pycache__/w.py", ".bak_batch49/old.py",
@@ -113,11 +113,11 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
         print("     实际:", got)
         for want in ("nucleus/data/exclude_dirs.py", "nucleus/data/path_utils.py",
                      "tmp/test_isolation.py", "tools/a.py", "config.py"):
-            self.assertIn(want, got, "应备份但缺失: %s" % want)
+            self.assertIn(want, got, "应备份但缺失: {}".format(want))
         for bad in ("data/x.py", "logs/y.py", "__pycache__/z.py",
                     "nucleus/__pycache__/w.py", ".bak_batch49/old.py",
                     ".pytest_tmp/q.py", "node_modules/n.py", "tmp/note.txt"):
-            self.assertNotIn(bad, got, "不应备份但出现了: %s" % bad)
+            self.assertNotIn(bad, got, "不应备份但出现了: {}".format(bad))
 
     def test_31_backup_writes_relative_structure(self):
         r = _bb.backup(99, root=self.d)
@@ -128,7 +128,7 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
         for rel in ("nucleus/data/exclude_dirs.py", "tmp/test_isolation.py",
                     "tools/a.py", "config.py"):
             self.assertTrue(os.path.isfile(os.path.join(dst, rel.replace("/", os.sep))),
-                            "备份缺失: %s" % rel)
+                            "备份缺失: {}".format(rel))
         # 内容一致（可回滚）
         a = io.open(os.path.join(self.d, "tmp/test_isolation.py"), encoding="utf-8").read()
         b = io.open(os.path.join(dst, "tmp", "test_isolation.py"), encoding="utf-8").read()

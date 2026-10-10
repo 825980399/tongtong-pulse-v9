@@ -245,7 +245,7 @@ class SelfAwarenessProfile:
         if _o.timestamp and _o.timestamp > (self.timestamp or ""):
             self.timestamp = _o.timestamp
         if _o.summary:
-            self.summary = ("%s | %s" % (self.summary, _o.summary)).strip(" |") \
+            self.summary = ("{} | {}".format(self.summary, _o.summary)).strip(" |") \
                 if self.summary else _o.summary
         # ★主线第38批 T1（P2-213）：标量/列表字段的合并语义（other 优先，空值不覆盖）
         if getattr(_o, "overall_score", None) is not None:
@@ -336,7 +336,7 @@ class SelfAwarenessEngine:
             except Exception as e:  # 单分析器失败不得影响整体
                 _err["error"] = e
 
-        _t = threading.Thread(target=_target, name="SelfAwareness-%s" % name,
+        _t = threading.Thread(target=_target, name="SelfAwareness-{}".format(name),
                               daemon=True)
         _t.start()
         _t.join(max(0.001, float(timeout)))
@@ -344,7 +344,7 @@ class SelfAwarenessEngine:
             return None, "timeout"
         if "error" in _err:
             _e = _err["error"]
-            return None, "error: %s: %s" % (type(_e).__name__, _e)
+            return None, "error: {}: {}".format(type(_e).__name__, _e)
         return _box.get("value"), None
 
     def run_all_analyses(self, scope: str = "all") -> SelfAwarenessProfile:
@@ -645,9 +645,9 @@ class SelfAwarenessEngine:
             for _k in sorted(_v.keys(), key=lambda x: str(x))[:50]:
                 _vv = _v[_k]
                 if isinstance(_vv, (dict, list)):
-                    _lines.append("  · %s: %s" % (_k, _brief(_vv)))
+                    _lines.append("  · {}: {}".format(_k, _brief(_vv)))
                 else:
-                    _lines.append("  · %s: %s" % (_k, _vv))
+                    _lines.append("  · {}: {}".format(_k, _vv))
             _lines.append("")
         # ★主线第20批 T3：动静结合 —— 运行时事件统计 + 器官活跃度分析
         _lines.extend(SelfAwarenessEngine._report_runtime_sections(_p))
@@ -1269,30 +1269,26 @@ class SelfAwarenessEngine:
         elif not _rt.get("total_events"):
             _out.append("  · 运行时数据不可用（EventTap 统计为空）")
         else:
-            _out.append("  · 总事件数: %s（种类 %s / 活跃来源 %s）"
-                        % (_rt.get("total_events"),
+            _out.append("  · 总事件数: {}（种类 {} / 活跃来源 {}）".format(_rt.get("total_events"),
                            _rt.get("distinct_event_names"),
                            _rt.get("active_sources")))
             _tops = (_rt.get("top_event_names") or [])[:5]
             if _tops:
-                _out.append("  · Top5 事件名: %s"
-                            % ", ".join("%s=%s" % (x.get("name"), x.get("count"))
-                                        for x in _tops))
+                _out.append("  · Top5 事件名: {}".format(", ".join("{}={}".format(x.get("name"), x.get("count"))
+                                        for x in _tops)))
             _topsrc = (_rt.get("top_sources") or [])[:5]
             _tot = int(_rt.get("total_events", 0) or 0)
             if _topsrc:
-                _out.append("  · Top5 来源器官: %s"
-                            % ", ".join(
-                                "%s=%s (%s%%)" % (x.get("source"), x.get("count"),
+                _out.append("  · Top5 来源器官: {}".format(", ".join(
+                                "{}={} ({}%)".format(x.get("source"), x.get("count"),
                                                   round(int(x.get("count", 0)) * 100.0
                                                         / _tot, 1) if _tot else 0)
-                                for x in _topsrc))
+                                for x in _topsrc)))
             _iv = _rt.get("interval") or {}
-            _out.append("  · 到达间隔: min=%s / max=%ss / avg=%ss（样本 %s）"
-                        % (_iv.get("min"), _iv.get("max"), _iv.get("avg"),
+            _out.append("  · 到达间隔: min={} / max={}s / avg={}s（样本 {}）".format(_iv.get("min"), _iv.get("max"), _iv.get("avg"),
                            _iv.get("samples")))
             if _rt.get("by_priority"):
-                _out.append("  · 优先级分布: %s" % _rt.get("by_priority"))
+                _out.append("  · 优先级分布: {}".format(_rt.get("by_priority")))
             _out.append("  · 说明: %s" % (_rt.get("note") or "累积统计"))
         _out.append("")
         # --- 器官活跃度 ---
@@ -1300,23 +1296,19 @@ class SelfAwarenessEngine:
         if not _oa or _oa.get("no_data"):
             _out.append("  · 运行时数据不可用（EventTap未启用或统计为空）")
         else:
-            _out.append("  · 参与器官: %s 个（事件合计 %s）"
-                        % (_oa.get("total_organs"), _oa.get("total_events")))
+            _out.append("  · 参与器官: {} 个（事件合计 {}）".format(_oa.get("total_organs"), _oa.get("total_events")))
             _sil = _oa.get("silent_organs") or []
-            _out.append("  · 沉默器官（<%s%%）: %s"
-                        % (round(float(_oa.get("silent_threshold", 0.01)) * 100, 1),
-                           ", ".join("%s=%s" % (x.get("organ"), x.get("count"))
+            _out.append("  · 沉默器官（<{}%）: {}".format(round(float(_oa.get("silent_threshold", 0.01)) * 100, 1),
+                           ", ".join("{}={}".format(x.get("organ"), x.get("count"))
                                      for x in _sil[:10]) if _sil else "无"))
             _ovr = _oa.get("overactive_organs") or []
-            _out.append("  · 过热器官（>%s%%）: %s"
-                        % (round(float(_oa.get("overactive_threshold", 0.2)) * 100, 1),
-                           ", ".join("%s=%s (%s%%)"
-                                     % (x.get("organ"), x.get("count"),
+            _out.append("  · 过热器官（>{}%）: {}".format(round(float(_oa.get("overactive_threshold", 0.2)) * 100, 1),
+                           ", ".join("{}={} ({}%)".format(x.get("organ"), x.get("count"),
                                         x.get("percentage"))
                                      for x in _ovr[:10]) if _ovr else "无"))
             _c = float(_oa.get("concentration_ratio", 0.0) or 0.0)
             _verdict = "正常" if _c < 0.5 else ("偏高" if _c < 0.8 else "过高")
-            _out.append("  · 集中度（Top1 占比）: %.4f（%s）" % (_c, _verdict))
+            _out.append("  · 集中度（Top1 占比）: {:.4f}（{}）".format(_c, _verdict))
         _out.append("")
         return _out
 
@@ -1329,39 +1321,32 @@ class SelfAwarenessEngine:
             _out.append("  · 调用图数据不可用（分析未执行或项目为空）")
             _out.append("")
             return _out
-        _out.append("  · 综合评分: %s / 100（%s）"
-                    % (_cg.get("score"), _cg.get("grade")))
+        _out.append("  · 综合评分: {} / 100（{}）".format(_cg.get("score"), _cg.get("grade")))
         _iso = _cg.get("isolated") or {}
-        _out.append("  · 孤立函数: %s 个（占比 %.2f%%，内部孤立 %s 个）——%s"
-                    % (_iso.get("count", 0),
+        _out.append("  · 孤立函数: {} 个（占比 {:.2f}%，内部孤立 {} 个）——{}".format(_iso.get("count", 0),
                        float(_iso.get("ratio", 0.0) or 0.0) * 100,
                        _iso.get("internal_count", "-"), _iso.get("level", "-")))
         _top_iso = (_iso.get("top20") or [])[:5]
         for _x in _top_iso:
-            _out.append("      - %s  (%s:%s)"
-                        % (_x.get("name"), _x.get("file"), _x.get("line")))
+            _out.append("      - {}  ({}:{})".format(_x.get("name"), _x.get("file"), _x.get("line")))
         _hot = _cg.get("hot") or {}
         _top_hot = (_hot.get("top20") or [])[:5]
         if _top_hot:
-            _out.append("  · 热点函数 Top5: %s"
-                        % ", ".join("%s=%s" % (x.get("name"), x.get("calls"))
-                                    for x in _top_hot))
-        _out.append("  · 超级函数（>100 次）: %s 个"
-                    % len(_hot.get("super_functions") or []))
+            _out.append("  · 热点函数 Top5: {}".format(", ".join("{}={}".format(x.get("name"), x.get("calls"))
+                                    for x in _top_hot)))
+        _out.append("  · 超级函数（>100 次）: {} 个".format(len(_hot.get("super_functions") or [])))
         _cyc = _cg.get("cyclic") or {}
         _chains = _cyc.get("chains") or []
         if _chains:
             _shortest = min(_chains, key=lambda c: c.get("length", 99))
-            _out.append("  · 循环调用: %s 组（%s）；最短链（%s）: %s"
-                        % (_cyc.get("count", 0), _cyc.get("level", "-"),
+            _out.append("  · 循环调用: {} 组（{}）；最短链（{}）: {}".format(_cyc.get("count", 0), _cyc.get("level", "-"),
                            _shortest.get("kind"),
                            " -> ".join(str(x).split(":")[-1]
                                        for x in (_shortest.get("nodes") or [])[:6])))
         else:
             _out.append("  · 循环调用: 0 组（正常）")
         _dep = _cg.get("depth") or {}
-        _out.append("  · 调用深度: 最深 %s 层 / 平均 %s"
-                    % (_dep.get("deepest"), _dep.get("average")))
+        _out.append("  · 调用深度: 最深 {} 层 / 平均 {}".format(_dep.get("deepest"), _dep.get("average")))
         _cpl = _cg.get("coupling") or {}
         _out.append("  · 跨文件调用占比: %.2f%%"
                     % (float(_cpl.get("cross_file_ratio", 0.0) or 0.0) * 100))
@@ -1381,28 +1366,23 @@ class SelfAwarenessEngine:
             _out.append("")
             return _out
         _dim = _kq.get("dimensions") or {}
-        _out.append("  · 综合评分: %s / 100（%s）"
-                    % (_kq.get("score"), _kq.get("level")))
-        _out.append("  · 五维分解: 一致性 %s｜覆盖率 %s｜老化 %s｜知识深度 %s｜知识广度 %s"
-                    % (_dim.get("consistency"), _dim.get("coverage"),
+        _out.append("  · 综合评分: {} / 100（{}）".format(_kq.get("score"), _kq.get("level")))
+        _out.append("  · 五维分解: 一致性 {}｜覆盖率 {}｜老化 {}｜知识深度 {}｜知识广度 {}".format(_dim.get("consistency"), _dim.get("coverage"),
                        _dim.get("aging"), _dim.get("depth"), _dim.get("breadth")))
         _st = _kq.get("stats") or {}
         _conf = _st.get("conflicts") or {}
-        _out.append("  · 冲突 %s 处（高危 %s / 待人工确认 %s）｜盲区领域 %s 个"
-                    "｜孤岛节点 %s 个｜老化节点 %s 个"
-                    % (_conf.get("total", 0),
+        _out.append("  · 冲突 {} 处（高危 {} / 待人工确认 {}）｜盲区领域 {} 个"
+                    "｜孤岛节点 {} 个｜老化节点 {} 个".format(_conf.get("total", 0),
                        (_conf.get("severity") or {}).get("high", 0),
                        _conf.get("needs_review", 0),
                        _st.get("blind_spots", 0), _st.get("islands", 0),
                        _st.get("aged", 0)))
         _ld = _st.get("level_dist") or {}
         if _ld:
-            _out.append("  · 知识层级分布: %s"
-                        % ", ".join("%s=%s" % (k, v) for k, v in sorted(_ld.items())))
+            _out.append("  · 知识层级分布: {}".format(", ".join("{}={}".format(k, v) for k, v in sorted(_ld.items()))))
         _tops = (_kq.get("top_issues") or [])[:5]
         for _x in _tops:
-            _out.append("      - [%s/%s] %s"
-                        % (_x.get("kind"), _x.get("severity"), _x.get("detail")))
+            _out.append("      - [{}/{}] {}".format(_x.get("kind"), _x.get("severity"), _x.get("detail")))
         _recs = (_kq.get("suggestions") or [])[:4]
         for _i, _r in enumerate(_recs, 1):
             _out.append("  · 建议%d: %s" % (_i, _r))
@@ -1416,8 +1396,7 @@ class SelfAwarenessEngine:
         _lv = str(getattr(profile, "health_level", "unknown") or "unknown")
         _lv_zh = {"healthy": "健康", "moderate": "中等", "concerning": "堪忧",
                   "critical": "危急", "unknown": "未知"}.get(_lv, _lv)
-        _out: list = ["【综合评分】%s / 100 （%s）"
-                      % (("%.2f" % _sc) if isinstance(_sc, (int, float)) else "不可用",
+        _out: list = ["【综合评分】{} / 100 （{}）".format(("{:.2f}".format(_sc)) if isinstance(_sc, (int, float)) else "不可用",
                          _lv_zh)]
         if not isinstance(_sc, (int, float)):
             _out.append("  · 说明：可用维度不足 2 个，无法给出综合评分")
@@ -1433,7 +1412,7 @@ class SelfAwarenessEngine:
                                _x.get("severity", "?"),
                                _x.get("description", "")))
                 if _x.get("suggestion"):
-                    _out.append("     建议: %s" % _x["suggestion"])
+                    _out.append("     建议: {}".format(_x["suggestion"]))
         else:
             _out.append("【最严重问题】无")
         _out.append("")
@@ -1453,20 +1432,16 @@ class SelfAwarenessEngine:
         _c = _snap.get("counters", {}) or {}
         _rem = _c.get("remediation", {}) or {}
         _out: list = ["【推理能力指标 · 三联动与分场景北极星】"]
-        _out.append("  · 本地拦截率(local_intercept_rate): %.4f"
-                    % float(_d.get("local_intercept_rate", 0) or 0))
-        _out.append("  · 补救率(remediation_rate, 复用 verification_learning_hub 唯一口径): %.4f"
-                    % float(_d.get("remediation_rate", 0) or 0))
-        _out.append("  · 补救沉淀率(remediation_distill_rate): %.4f"
-                    % float(_d.get("remediation_distill_rate", 0) or 0))
-        _out.append("  · 补救三态原始计数(attempt/success/distilled): %s / %s / %s"
-                    % (int(_rem.get("attempt", 0) or 0), int(_rem.get("success", 0) or 0),
+        _out.append("  · 本地拦截率(local_intercept_rate): {:.4f}".format(float(_d.get("local_intercept_rate", 0) or 0)))
+        _out.append("  · 补救率(remediation_rate, 复用 verification_learning_hub 唯一口径): {:.4f}".format(float(_d.get("remediation_rate", 0) or 0)))
+        _out.append("  · 补救沉淀率(remediation_distill_rate): {:.4f}".format(float(_d.get("remediation_distill_rate", 0) or 0)))
+        _out.append("  · 补救三态原始计数(attempt/success/distilled): {} / {} / {}".format(int(_rem.get("attempt", 0) or 0), int(_rem.get("success", 0) or 0),
                        int(_rem.get("distilled", 0) or 0)))
         _scenes = _d.get("scene_llm_dependency_ratio", {}) or {}
         if _scenes:
             _out.append("  · 分场景 LLM 依赖度北极星(scene_llm_dependency_ratio):")
             for _s, _r in _scenes.items():
-                _out.append("      - %s: %.4f" % (_s, float(_r or 0)))
+                _out.append("      - {}: {:.4f}".format(_s, float(_r or 0)))
         else:
             _out.append("  · 分场景 LLM 依赖度北极星: 暂无样本")
         _out.append("")
@@ -1492,12 +1467,11 @@ class SelfAwarenessEngine:
         for _name, _v in _rows:
             if isinstance(_v, (int, float)):
                 _vals.append(float(_v))
-                _out.append("  · %s: %.2f / 100" % (_name, float(_v)))
+                _out.append("  · {}: {:.2f} / 100".format(_name, float(_v)))
             else:
-                _out.append("  · %s: 不可用（该维度未执行或无数据）" % _name)
+                _out.append("  · {}: 不可用（该维度未执行或无数据）".format(_name))
         if _vals:
-            _out.append("  · 五维综合（可用维度均值）: %.2f / 100（%s）"
-                        % (sum(_vals) / len(_vals), _grade(sum(_vals) / len(_vals))))
+            _out.append("  · 五维综合（可用维度均值）: {:.2f} / 100（{}）".format(sum(_vals) / len(_vals), _grade(sum(_vals) / len(_vals))))
         _out.append("")
         return _out
 
@@ -1671,15 +1645,14 @@ def _dimension_issues(field: str, data: Any) -> list[dict]:
         if isinstance(_it, dict):
             _sc = _it.get("score")
             _sev = "high" if (isinstance(_sc, (int, float)) and _sc <= 30) else "medium"
-            _add(_sev, "%s.%s 闭环健康度 %s 分"
-                 % (_it.get("module", "?"), _it.get("class", "?"), _sc),
+            _add(_sev, "{}.{} 闭环健康度 {} 分".format(_it.get("module", "?"), _it.get("class", "?"), _sc),
                  "检查 save/load 闭环实现（空操作/路径不一致/异常静默）")
     _bysev = data.get("by_severity")                # ④ code_health（汇总口径）
     if isinstance(_bysev, dict):
         for _k, _v in _bysev.items():
             # ★T4：5 级下「warning 及以上」= rank ≤ 2（critical/high/medium）
             if _severity_rank(_k) <= 2 and isinstance(_v, (int, float)) and _v > 0:
-                _add(_k, "代码质量问题 %s 条（ruff %s）[汇总型]" % (int(_v), _k))
+                _add(_k, "代码质量问题 {} 条（ruff {}）[汇总型]".format(int(_v), _k))
     _sum = data.get("summary")                      # ⑤ production_consumption
     if isinstance(_sum, dict):
         _wp = _sum.get("no_consumer_with_producer")
@@ -1914,13 +1887,11 @@ def _score_evolution_health(raw: Any) -> dict:
 
     if _success_rate < _smin:
         _issues.append({"severity": "high", "type": "low_success_rate",
-                        "description": "进化补丁成功率 %.1f%%（< %.0f%%）"
-                                       % (_success_rate, _smin),
+                        "description": "进化补丁成功率 {:.1f}%（< {:.0f}%）".format(_success_rate, _smin),
                         "suggestion": "检查失败补丁的根因/回滚原因，收紧自动应用阈值"})
     if _rollback_rate > _rmax:
         _issues.append({"severity": "high", "type": "high_rollback_rate",
-                        "description": "进化补丁回滚率 %.1f%%（> %.0f%%）"
-                                       % (_rollback_rate, _rmax),
+                        "description": "进化补丁回滚率 {:.1f}%（> {:.0f}%）".format(_rollback_rate, _rmax),
                         "suggestion": "提高补丁验证门槛；复核被回滚补丁的类型分布"})
     if _crash > 0:
         _issues.append({"severity": ("medium" if _crash_rate >= 10.0 else "low"),
@@ -1929,8 +1900,7 @@ def _score_evolution_health(raw: Any) -> dict:
                         "suggestion": "查看 get_crash_stats 的原因分布，修复高频崩溃点"})
     if not _issues:
         _issues.append({"severity": "info", "type": "healthy",
-                        "description": "进化执行健康（成功率 %.1f%% / 回滚率 %.1f%%）"
-                                       % (_success_rate, _rollback_rate)})
+                        "description": "进化执行健康（成功率 {:.1f}% / 回滚率 {:.1f}%）".format(_success_rate, _rollback_rate)})
 
     return {
         "status": "ok", "score": _score, "issues": _issues,
@@ -2030,10 +2000,10 @@ def _brief(value: Any, limit: int = 3) -> str:
         if isinstance(value, dict):
             _keys = list(value.keys())[:limit]
             _more = "" if len(value) <= limit else ", …"
-            return "{%s%s}" % (", ".join(str(k) for k in _keys), _more)
+            return "{{{}{}}}".format(", ".join(str(k) for k in _keys), _more)
         if isinstance(value, list):
             _more = "" if len(value) <= limit else ", …"
-            return "[%s%s]" % (", ".join(str(x) for x in value[:limit]), _more)
+            return "[{}{}]".format(", ".join(str(x) for x in value[:limit]), _more)
         return str(value)
     except Exception as e:
         _logger.debug("报告摘要失败: %s: %s", type(e).__name__, e)

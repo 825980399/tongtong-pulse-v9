@@ -254,7 +254,7 @@ class ModelSelfUpdater:
             try:
                 _probe = self._data_probe() or {}
             except Exception as _e:
-                _probe = {"error": "%s: %s" % (type(_e).__name__, _e)}
+                _probe = {"error": "{}: {}".format(type(_e).__name__, _e)}
         _new_samples = int(_probe.get("new_samples") or 0)
         _new_feedback = int(_probe.get("new_feedback") or 0)
         _last = (self.current_version() or {}).get("updated_at") or 0
@@ -300,8 +300,7 @@ class ModelSelfUpdater:
                 self._rollbacks += 1
                 _res = {
                     "status": "rolled_back",
-                    "reason": "质量下降 %.1f%% 超过阈值 %.1f%%（已拒绝提交）"
-                              % (_drop * 100.0, self.degrade_limit() * 100.0),
+                    "reason": "质量下降 {:.1f}% 超过阈值 {:.1f}%（已拒绝提交）".format(_drop * 100.0, self.degrade_limit() * 100.0),
                     "current_quality": _cur_q,
                     "candidate_quality": _new_q,
                     "version": (self.current_version() or {}).get("version"),

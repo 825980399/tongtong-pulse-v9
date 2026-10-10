@@ -30,7 +30,7 @@ class TestNegatedHarmMention:
         for t, k in [("我不想死，我还想看着曈曈长大", "想死"),
                      ("我不要死", "死"),
                      ("别死", "死")]:
-            assert neg(t, k) is True, "应豁免: %s / %s" % (t, k)
+            assert neg(t, k) is True, "应豁免: {} / {}".format(t, k)
 
     def test_real_crisis_not_exempt(self):
         """真危机 ⇒ 不豁免（漏检代价 > 误报代价，从严）。"""
@@ -41,7 +41,7 @@ class TestNegatedHarmMention:
                      ("活着没意思", "活着没意思"),
                      ("我不想活了，真的想死", "想死"),
                      ("我不是很想死", "想死")]:   # 双重否定⇒仍属倾向，从严不豁免
-            assert neg(t, k) is False, "误豁免: %s / %s" % (t, k)
+            assert neg(t, k) is False, "误豁免: {} / {}".format(t, k)
 
     def test_keyword_with_own_negation_never_exempt(self):
         """★词表词自带否定（「不想活」）⇒ 绝不豁免。"""
@@ -76,4 +76,4 @@ class TestExistingRedFixed:
         for text in cases:
             hits = o._match_patterns(text, o.SELF_HARM_PATTERNS, "self_harm")
             keep = [w for w in hits if not neg(text, w)]
-            assert not keep, "仍误判危机: %s -> %s" % (text, keep)
+            assert not keep, "仍误判危机: {} -> {}".format(text, keep)

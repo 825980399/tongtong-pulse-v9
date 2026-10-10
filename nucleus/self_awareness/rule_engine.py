@@ -157,7 +157,7 @@ def rule_sha16(title, severity, scope, checker_src):
     挪行 → 归一串不变 → 指纹不红。
     """
     _body = " ".join((checker_src or "").split())
-    _raw = "%s|%s|%s|%s" % (title, severity, scope, _body)
+    _raw = "{}|{}|{}|{}".format(title, severity, scope, _body)
     return hashlib.sha256(_raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -193,7 +193,7 @@ def changed_files(base="HEAD~1", target="HEAD", root=None) -> list[str]:
     _out: list[str] = []
     try:
         _r = subprocess.run(
-            ["git", "diff", "--name-only", "%s..%s" % (base, target)],
+            ["git", "diff", "--name-only", "{}..{}".format(base, target)],
             cwd=_root, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=60, check=False)
         if _r.returncode == 0:
@@ -261,10 +261,10 @@ def run_rules(files=None, full=False, root=None) -> dict[str, Any]:
                 _hits = _r["checker"](_abs) or []
             except Exception as _e:
                 # ★规则自身出错不得中断整轮：留痕并计入 info
-                silent_exc(_e, where="nucleus.self_awareness.rule_engine::run_rules:%s" % _rid,
+                silent_exc(_e, where="nucleus.self_awareness.rule_engine::run_rules:{}".format(_rid),
                            level="warning")
                 _findings.append({"rule": _rid, "file": _rel, "line": 0,
-                                  "severity": "info", "text": "规则执行异常: %s" % type(_e).__name__})
+                                  "severity": "info", "text": "规则执行异常: {}".format(type(_e).__name__)})
                 continue
             for _h in _hits:
                 _findings.append({
@@ -293,7 +293,7 @@ def run_rules(files=None, full=False, root=None) -> dict[str, Any]:
 def latest_report_path() -> str:
     """报告落盘路径（``data/self_awareness/rule_reports/rule_<ts>.json``）。"""
     return os.path.join(_PROJECT_ROOT, "data", "self_awareness", "rule_reports",
-                        "rule_%s.json" % time.strftime("%Y%m%d_%H%M%S"))
+                        "rule_{}.json".format(time.strftime("%Y%m%d_%H%M%S")))
 
 
 def _is_test_env() -> bool:

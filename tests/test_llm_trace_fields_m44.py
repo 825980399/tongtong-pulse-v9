@@ -261,7 +261,7 @@ class TestEvolutionEntry(_RecBase):
             with io.open(_fp, "r", encoding="utf-8") as f:
                 _t = f.read()
             self.assertEqual(_t.count("@trace_evolution_call("), _n,
-                             "%s 装饰器数不符" % os.path.basename(_fp))
+                             "{} 装饰器数不符".format(os.path.basename(_fp)))
 
 
 # ---------------------------------------------------------------------------

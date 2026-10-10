@@ -281,16 +281,16 @@ def _wait_ready(enc, timeout: float = 300.0) -> bool:
             return True
         _st = enc.status()
         if _st.get("state") == "disabled":
-            print("ERROR: 编码器已禁用: %s | %s" % (
+            print("ERROR: 编码器已禁用: {} | {}".format(
                 _st.get("reason"), _st.get("last_error")))
             return False
         _reason = _st.get("reason", "")
         if _reason != _last:
-            print("[wait] 模型加载中... state=%s reason=%s" % (
+            print("[wait] 模型加载中... state={} reason={}".format(
                 _st.get("state"), _reason))
             _last = _reason
         _time.sleep(1.0)
-    print("ERROR: 等待模型加载超时（%.0fs）" % timeout)
+    print("ERROR: 等待模型加载超时（{:.0f}s）".format(timeout))
     return False
 
 
@@ -309,7 +309,7 @@ def _build() -> int:
     for intent, samples in INTENT_CORPUS.items():
         arr = enc.encode(samples)
         if arr is None or len(arr) == 0:
-            print("WARN: 意图[%s] 编码失败，跳过" % intent)
+            print("WARN: 意图[{}] 编码失败，跳过".format(intent))
             continue
         vec = np.asarray(arr, dtype=np.float32).mean(axis=0)
         norm = float(np.linalg.norm(vec))

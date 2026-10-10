@@ -138,8 +138,7 @@ def _emit(envelope, _tag: str) -> dict[str, Any] | None:
         except Exception as _log_e:
             # ★日志本身也可能失败（如日志系统未初始化）。
             #   不使用裸 ``except: pass``（项目约定）：力求**可观测**。
-            print("[ReportPublishers] %s 发布失败（日志不可用）: %s"
-                  % (_tag, type(_log_e).__name__))
+            print("[ReportPublishers] {} 发布失败（日志不可用）: {}".format(_tag, type(_log_e).__name__))
         return None
 
 
@@ -228,7 +227,7 @@ def health_anomalies(diagnosis: dict | None) -> list:
         _out.append(Anomaly(
             type="HEALTH_SCORE_LOW",
             severity=SEV_P0 if _score < _thr_warn * 0.5 else SEV_P1,
-            description="健康分 %.1f 低于阈值 %.1f" % (_score, _thr_warn),
+            description="健康分 {:.1f} 低于阈值 {:.1f}".format(_score, _thr_warn),
             source="diagnostics", suggested_action=ACT_ALERT,
             metric_value=_score, threshold=_thr_warn, target="framework"))
     if _issues and not any(a.severity == SEV_P0 for a in _out):
@@ -288,7 +287,7 @@ def pollution_anomalies(report: dict | None) -> list:
     return [Anomaly(
         type="EXPERIENCE_POLLUTION_HIGH",
         severity=SEV_P1 if _rate < 0.9 else SEV_P0,
-        description="经验库污染率 %.1f%% 超过阈值 %.1f%%" % (_rate * 100, _warn * 100),
+        description="经验库污染率 {:.1f}% 超过阈值 {:.1f}%".format(_rate * 100, _warn * 100),
         source="pollution", suggested_action=ACT_CLEAN_DATA,
         metric_value=_rate, threshold=_warn, target="experience_pool")]
 
@@ -329,20 +328,20 @@ def self_cognition_anomalies(summary: dict | None) -> list:
     if _level in ("critical", "严重", "危急"):
         _out.append(Anomaly(
             type="SELF_COGNITION_CRITICAL", severity=SEV_P0,
-            description="自我认知健康等级=%s" % _level,
+            description="自我认知健康等级={}".format(_level),
             source="self_awareness", suggested_action=ACT_ALERT,
             metric_value=_score, target="self_cognition"))
     if _score is not None and _score < _thr_warn:
         _out.append(Anomaly(
             type="SELF_COGNITION_SCORE_LOW",
             severity=SEV_P0 if _score < _thr_warn * 0.5 else SEV_P1,
-            description="自我认知综合评分 %.1f 低于阈值 %.1f" % (_score, _thr_warn),
+            description="自我认知综合评分 {:.1f} 低于阈值 {:.1f}".format(_score, _thr_warn),
             source="self_awareness", suggested_action=ACT_ALERT,
             metric_value=_score, threshold=_thr_warn, target="self_cognition"))
     if _head and not _out:
         _out.append(Anomaly(
             type="SELF_COGNITION_HEADLINE_ISSUE", severity=SEV_P1,
-            description="首要问题: %s" % _head[:120],
+            description="首要问题: {}".format(_head[:120]),
             source="self_awareness", suggested_action=ACT_LOG_ONLY,
             target="self_cognition"))
     return _out
@@ -379,7 +378,7 @@ def publish_patch_quality(result: dict | None, generator: str = "patch_quality_e
         _anoms.append(Anomaly(
             type="PATCH_REAL_FIX_RATE_LOW",
             severity=SEV_P1 if _rate > 0 else SEV_P0,
-            description="补丁真实修复率 %.1f%% 低于阈值 %.1f%%" % (_rate * 100, _warn * 100),
+            description="补丁真实修复率 {:.1f}% 低于阈值 {:.1f}%".format(_rate * 100, _warn * 100),
             source="evolution", suggested_action=ACT_LOG_ONLY,
             metric_value=_rate, threshold=_warn, target="patch_history"))
     _content: dict[str, Any] = {}
@@ -426,7 +425,7 @@ def publish_patch_verification_failed(summary: str,
     _anom = Anomaly(
         type="PATCH_REAL_FIX_RATE_LOW",
         severity=severity if severity in (SEV_P0, SEV_P1) else SEV_P0,
-        description="补丁验证脚本失败，验证链路空转: %s" % (summary or "")[:200],
+        description="补丁验证脚本失败，验证链路空转: {}".format((summary or "")[:200]),
         source="evolution", suggested_action=ACT_LOG_ONLY,
         metric_value=None, threshold=None, target="patch_history")
     _content: dict[str, Any] = {"verification": "regression_failed", "detail": summary}
@@ -453,7 +452,7 @@ def publish_data_quality(result: dict | None, generator: str = "data_quality_eva
     if _score is not None and _score < _warn:
         _anoms.append(Anomaly(
             type="LLM_DATA_QUALITY_LOW", severity=SEV_P1,
-            description="LLM 留存数据质量 %.2f 低于阈值 %.2f" % (_score, _warn),
+            description="LLM 留存数据质量 {:.2f} 低于阈值 {:.2f}".format(_score, _warn),
             source="data_quality", suggested_action=ACT_LOG_ONLY,
             metric_value=_score, threshold=_warn, target="llm_traces"))
     _content: dict[str, Any] = {}

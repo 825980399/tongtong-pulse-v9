@@ -111,16 +111,15 @@ def main():
                 print('    ✓ 增量门跳过全库收集（无受影响测试文件），节点数无漂移可能，视为通过')
             else:
                 print('    ⚠ 未取到节点数且门禁非零退出（门禁输出异常），请手工跑一次确认')
-                print('      门禁 stdout: %s' % (r.stdout or '').strip()[:120])
-                print('      门禁 stderr: %s' % (r.stderr or '').strip()[:120])
+                print('      门禁 stdout: {}'.format((r.stdout or '').strip()[:120]))
+                print('      门禁 stderr: {}'.format((r.stderr or '').strip()[:120]))
                 must_fix.append('collect 节点数未取到，需手工确认')
         else:
             actual = int(m.group(1))
             delta = actual - cur_collect
             print('    实测 collect=%d  基线=%d  增量=%+d' % (actual, cur_collect, delta))
             if abs(delta) > COLLECT_TOLERANCE:
-                print('    ✗ 超出容差 ⇒ 必须先重锚 %s，否则提交必被拦'
-                      % BASELINE)
+                print('    ✗ 超出容差 ⇒ 必须先重锚 {}，否则提交必被拦'.format(BASELINE))
                 print('      处方：把 collect_baseline 改为 %d（同批或独立'
                       ' [ci-gate-change] commit）' % actual)
                 must_fix.append('collect 需重锚 %d → %d' % (cur_collect, actual))
@@ -140,7 +139,7 @@ def main():
             print('    ✗ FAIL ⇒ 需按门禁处方处理：')
             for line in out.split('\n'):
                 if '指标' in line or 'delta_reason' in line or 'FAIL' in line:
-                    print('      %s' % line.strip())
+                    print('      {}'.format(line.strip()))
             print('      处方：① 误伤 ⇒ 在 iw_consistency_baseline.json填'
                   ' delta_reason + expected_delta；')
             print('            ② 真漂移 ⇒ 回退该改动')
@@ -160,7 +159,7 @@ def main():
                if ('静默' in ln or 'FAIL' in ln) and ln.strip()][:8]
         print('    ✗ FAIL ⇒ 新写的 except 需补日志：')
         for ln in bad:
-            print('      %s' % ln)
+            print('      {}'.format(ln))
         print('      合规形态：except Exception as e: + silent_exc(e, where="模块.函数")')
         print('                或 with contextlib.suppress(SomeError):')
         must_fix.append('cw2 有新增静默 except')
@@ -174,9 +173,9 @@ def main():
     if ci_files and biz_files:
         print('    ✗ 暂存区同时含 CI 门禁件与业务代码：')
         for f in ci_files:
-            print('       CI  : %s' % f)
+            print('       CI  : {}'.format(f))
         for f in biz_files[:6]:
-            print('       业务: %s' % f)
+            print('       业务: {}'.format(f))
         print('      处方：git reset HEAD -- <CI 件路径>，先单独提 CI 笔')
         must_fix.append('CI 件与业务同批暂存')
     else:

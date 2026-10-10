@@ -217,7 +217,7 @@ class IntentPrototypeStore:
                 if not os.path.isabs(_p):
                     _p = os.path.join(_PROJECT_ROOT, _p)
                 if not os.path.exists(_p):
-                    self._load_error = "原型库文件不存在: %s" % _p
+                    self._load_error = "原型库文件不存在: {}".format(_p)
                     self._loaded = True
                     return False
                 payload = safe_read_json(_p, default={})
@@ -234,7 +234,7 @@ class IntentPrototypeStore:
                 self._loaded = True
                 return True
             except Exception as e:
-                self._load_error = "%s: %s" % (type(e).__name__, e)
+                self._load_error = "{}: {}".format(type(e).__name__, e)
                 self._loaded = True
                 return False
 
@@ -444,7 +444,7 @@ class IntentHierarchy:
                     getattr(config, "QICA_INTENT_HIERARCHY_PATH",
                             "data/qica/intent_hierarchy.json"))
                 if not os.path.exists(_p):
-                    self._error = "层次文件不存在: %s" % _p
+                    self._error = "层次文件不存在: {}".format(_p)
                     self._loaded = True
                     return False
                 _d = safe_read_json(_p, default={})
@@ -453,7 +453,7 @@ class IntentHierarchy:
                 self._loaded = True
                 return bool(self._l1)
             except Exception as e:
-                self._error = "%s: %s" % (type(e).__name__, e)
+                self._error = "{}: {}".format(type(e).__name__, e)
                 self._loaded = True
                 return False
 
@@ -492,7 +492,7 @@ def ch_keyword(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float]:
                 prio = float(rule.get("priority", 1))
                 scores[intent] += hit * (1.0 + prio * 0.1)
     except Exception as e:
-        ctx.setdefault("errors", []).append("keyword: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("keyword: {}: {}".format(type(e).__name__, e))
     return _norm_scores(scores)
 
 
@@ -585,7 +585,7 @@ def ch_expansion(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float
         ext = ext / w_sum
         return _norm_scores(store.similarities(ext))
     except Exception as e:
-        ctx.setdefault("errors", []).append("expansion: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("expansion: {}: {}".format(type(e).__name__, e))
         return _zero_scores()
 
 
@@ -616,7 +616,7 @@ def ch_entity(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float]:
                 w in text for w in ("现在几点", "什么时候", "多久", "日程", "提醒")):
             scores["时间日程"] += 0.7
     except Exception as e:
-        ctx.setdefault("errors", []).append("entity: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("entity: {}: {}".format(type(e).__name__, e))
     return _norm_scores(scores)
 
 
@@ -653,7 +653,7 @@ def ch_sentence(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float]
         if len(text) <= 12 and any(w in text for w in ("然后", "为什么", "具体", "什么意思", "接着")):
             scores["追问澄清"] += 0.7
     except Exception as e:
-        ctx.setdefault("errors", []).append("sentence: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("sentence: {}: {}".format(type(e).__name__, e))
     return _norm_scores(scores)
 
 
@@ -678,7 +678,7 @@ def ch_context(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float]:
                 scores[prev] += 0.3
             scores["追问澄清"] += 0.3
     except Exception as e:
-        ctx.setdefault("errors", []).append("context: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("context: {}: {}".format(type(e).__name__, e))
     return _norm_scores(scores)
 
 
@@ -712,7 +712,7 @@ def ch_complexity(qica: Any, text: str, words: set, ctx: dict) -> dict[str, floa
         scores["情感问候"] += (1.0 - complexity) * 0.5
         scores["追问澄清"] += (1.0 - complexity) * 0.4
     except Exception as e:
-        ctx.setdefault("errors", []).append("complexity: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("complexity: {}: {}".format(type(e).__name__, e))
     return _norm_scores(scores)
 
 
@@ -739,7 +739,7 @@ def ch_feedback(qica: Any, text: str, words: set, ctx: dict) -> dict[str, float]
         if not any_data:
             return {k: 0.5 for k in ALL_INTENTS}
     except Exception as e:
-        ctx.setdefault("errors", []).append("feedback: %s: %s" % (type(e).__name__, e))
+        ctx.setdefault("errors", []).append("feedback: {}: {}".format(type(e).__name__, e))
         return {k: 0.5 for k in ALL_INTENTS}
     return _norm_scores(scores)
 
@@ -1026,7 +1026,7 @@ def run_channels(qica: Any, text: str, anchor: dict[str, Any],
         channel_scores["keyword"] = ch_keyword(qica, text, words, ctx)
         ctx["kw_scores"] = channel_scores["keyword"]
     except Exception as e:
-        ctx["errors"].append("keyword(pre): %s: %s" % (type(e).__name__, e))
+        ctx["errors"].append("keyword(pre): {}: {}".format(type(e).__name__, e))
         channel_scores["keyword"] = _zero_scores()
         ctx["kw_scores"] = channel_scores["keyword"]
 
@@ -1038,10 +1038,10 @@ def run_channels(qica: Any, text: str, anchor: dict[str, Any],
                 try:
                     channel_scores[n] = f.result()
                 except Exception as e:
-                    ctx["errors"].append("%s: %s: %s" % (n, type(e).__name__, e))
+                    ctx["errors"].append("{}: {}: {}".format(n, type(e).__name__, e))
                     channel_scores[n] = _zero_scores()
     except Exception as e:
-        ctx["errors"].append("executor: %s: %s" % (type(e).__name__, e))
+        ctx["errors"].append("executor: {}: {}".format(type(e).__name__, e))
         for n in rest:
             channel_scores.setdefault(n, _zero_scores())
 
@@ -1057,12 +1057,12 @@ def run_channels(qica: Any, text: str, anchor: dict[str, Any],
         _log(None, "[QICA][多通道] 意图精修 → 关系查询（人名+关系词）")
 
     if ctx["errors"]:
-        _log(None, "[QICA][多通道] 通道异常: %s" % "; ".join(ctx["errors"]))
+        _log(None, "[QICA][多通道] 通道异常: {}".format("; ".join(ctx["errors"])))
 
     _log(None, (
-        "[QICA][多通道] 意图=%s 路径=%s 分=%.3f | 次选=%s 分=%.3f "
-        "差值=%.3f%s | method=%s"
-    ) % (
+        "[QICA][多通道] 意图={} 路径={} 分={:.3f} | 次选={} 分={:.3f} "
+        "差值={:.3f}{} | method={}"
+    ).format(
         result["top_intent"], result["top_path"], result["top_score"],
         result["second_path"] or "-", result["second_score"],
         result["margin"], " →触发探索" if result["need_explore"] else "",
