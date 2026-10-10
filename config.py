@@ -5665,7 +5665,10 @@ ENABLE_INNER_WORLD_QUALITY_ESCALATION = False
 #             （入口 OrganHealthLeaderboard.on_heartbeat）
 # 刀5 读取点：nucleus/cognitive/organ_inventory.py::_inventory_on
 #             （纯查询接口 export_organ_inventory 不受开关限制，仅日志输出受限）
-# 依赖：复用既有 nucleus.self_inspector.scan_all_organs（未新增扫描器）
+# 依赖：★实测订正（偏差 D#6）——既有 nucleus.self_inspector.scan_all_organs 的 key 是
+#       **类名**（如 PulseBloodVessel）而非 organ_name，且带 300s 自适应降频（二次调用
+#       返回 {}），不能用作清单源；故改为**确定性 AST 扫描** BasePulseOrgan 子类
+#       （organ_inventory.scan_organ_classes），零运行时依赖、两次调用结果完全一致。
 # 零行为变化：两者默认 False -> 不主动日志、不影响任何决策（未开 INFLUENCE_DECISION）
 ENABLE_ORGAN_HEALTH_LEADERBOARD = False
 ENABLE_ORGAN_INVENTORY_EXPORT = False
