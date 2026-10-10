@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
@@ -40,14 +41,28 @@ def _run(args, timeout=1800):
                           encoding='utf-8', errors='replace',
                           env=ENV, timeout=timeout, cwd=ROOT)
 
+def _run_git(args, timeout=60):
+    """运行 git 命令（不预置 PY，避免把 git 当 python 脚本执行）。"""
+    return subprocess.run(['git'] + args, capture_output=True, text=True,
+                          encoding='utf-8', errors='replace',
+                          env=ENV, timeout=timeout, cwd=ROOT)
+
+def _run_timed(args, timeout=1800, label=''):
+    """带超时与耗时自报的 _run 包装（耗时输出到自检日志）。"""
+    t0 = time.time()
+    r = _run(args, timeout=timeout)
+    elapsed = time.time() - t0
+    print('    [耗时自报][%s] 超时=%ds 实测=%.1fs' % (label, timeout, elapsed))
+    return r
+
 
 def _staged():
-    r = _run(['git', 'diff', '--cached', '--name-only'], timeout=60)
+    r = _run_git(['diff', '--cached', '--name-only'], timeout=60)
     return [x for x in (r.stdout or '').split('\n') if x.strip()]
 
 
 def _unstaged():
-    r = _run(['git', 'status', '--porcelain'], timeout=60)
+    r = _run_git(['status', '--porcelain'], timeout=60)
     out = []
     for line in (r.stdout or '').split('\n'):
         if not line.strip():
@@ -77,34 +92,47 @@ def main():
 
     # ---- ① collect 增量 ----
     print('[1/4] collect 节点数（门禁容差 ±%d）' % COLLECT_TOLERANCE)
-    r = _run(['tools/ci/check_red_baseline_gate.py', 'collect'], timeout=1800)
-    # ★门禁的「收集节点数」写在 **stderr**（stdout 只有结论行）—— 两都要读
-    out = (r.stdout or '') + '\n' + (r.stderr or '')
-    m = re.search(r'收集节点数=(\d+)', out)
-    if not m:
-        print('    ⚠ 未取到节点数（门禁输出异常），请手工跑一次确认')
-        print('      门禁 stdout: %s' % (r.stdout or '').strip()[:120])
-        print('      门禁 stderr: %s' % (r.stderr or '').strip()[:120])
-        must_fix.append('collect 节点数未取到，需手工确认')
+    has_py = any(f.endswith('.py') for f in touched)
+    if not has_py:
+        # ★docs-only / 纯配置 短路：无 .py 变更则不跑全库 collect 收集，
+        #   显著缩短门禁耗时（collect 收集是全库 pytest 收集，最重一段）。
+        print('    - 纯文档/纯配置提交（无 .py 变更），跳过 collect 全库收集判定（docs-only 短路）')
+        print('    [耗时自报][collect] 短路：跳过（0 全库收集）')
+        print('    ✓ 短路通过（无需全库收集，门禁耗时显著下降）')
     else:
-        actual = int(m.group(1))
-        delta = actual - cur_collect
-        print('    实测 collect=%d  基线=%d  增量=%+d' % (actual, cur_collect, delta))
-        if abs(delta) > COLLECT_TOLERANCE:
-            print('    ✗ 超出容差 ⇒ 必须先重锚 %s，否则提交必被拦'
-                  % BASELINE)
-            print('      处方：把 collect_baseline 改为 %d（同批或独立'
-                  ' [ci-gate-change] commit）' % actual)
-            must_fix.append('collect 需重锚 %d → %d' % (cur_collect, actual))
+        r = _run_timed(['tools/ci/check_red_baseline_gate.py', 'collect'],
+                       timeout=1800, label='collect')
+        # ★门禁的「收集节点数」写在 **stderr**（stdout 只有结论行）—— 两都要读
+        out = (r.stdout or '') + '\n' + (r.stderr or '')
+        m = re.search(r'收集节点数=(\d+)', out)
+        if not m:
+            if r.returncode == 0:
+                # 增量门跳过全库收集（无受影响测试文件）→ 节点数不可能漂移，视为通过
+                print('    ✓ 增量门跳过全库收集（无受影响测试文件），节点数无漂移可能，视为通过')
+            else:
+                print('    ⚠ 未取到节点数且门禁非零退出（门禁输出异常），请手工跑一次确认')
+                print('      门禁 stdout: %s' % (r.stdout or '').strip()[:120])
+                print('      门禁 stderr: %s' % (r.stderr or '').strip()[:120])
+                must_fix.append('collect 节点数未取到，需手工确认')
         else:
-            print('    ✓ 在容差内，无需重锚')
+            actual = int(m.group(1))
+            delta = actual - cur_collect
+            print('    实测 collect=%d  基线=%d  增量=%+d' % (actual, cur_collect, delta))
+            if abs(delta) > COLLECT_TOLERANCE:
+                print('    ✗ 超出容差 ⇒ 必须先重锚 %s，否则提交必被拦'
+                      % BASELINE)
+                print('      处方：把 collect_baseline 改为 %d（同批或独立'
+                      ' [ci-gate-change] commit）' % actual)
+                must_fix.append('collect 需重锚 %d → %d' % (cur_collect, actual))
+            else:
+                print('    ✓ 在容差内，无需重锚')
 
     # ---- ② cw3-A（仅 IW 变更触发）----
     print()
     print('[2/4] cw3-A 语义守恒（仅改 PulseInnerWorld.py 时触发）')
     iw_hit = [f for f in touched if f.endswith('PulseInnerWorld.py')]
     if iw_hit:
-        r = _run(['tools/ci/cw3_consistency_gate.py'], timeout=600)
+        r = _run_timed(['tools/ci/cw3_consistency_gate.py'], timeout=600, label='cw3-A')
         out = (r.stdout or '') + (r.stderr or '')
         if r.returncode == 0:
             print('    ✓ PASS')
@@ -123,7 +151,7 @@ def main():
     # ---- ③ cw2 静默 except ----
     print()
     print('[3/4] cw2 静默 except 指纹（须非沙箱跑）')
-    r = _run(['tools/ci/cw2_t2e_ci_gate_silent_except.py'], timeout=1800)
+    r = _run_timed(['tools/ci/cw2_t2e_ci_gate_silent_except.py'], timeout=1800, label='cw2')
     out = (r.stdout or '') + (r.stderr or '')
     if r.returncode == 0:
         print('    ✓ PASS')
