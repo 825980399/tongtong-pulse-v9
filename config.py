@@ -1009,6 +1009,14 @@ O_A4_DETERMINISTIC_RULES = [
     ("现在几点", "rule_current_time"),
     ("你是谁", "rule_identity"),
 ]
+# ========== 179批 刀2（O-B2）：Standing Orders 四字段 ==========
+# 来源：177批《O-B2 Standing Orders 设计稿》；179A 刀2 实装四字段结构 + 闸引用 O-B1 键。
+# 总开关关闭（默认 False）→ 不加载/不生效，零行为变化。
+# 四字段：grant(扩授权) / trigger(触发) / gate(闸，引用 O-B1 键) / escalate(升级)。
+ENABLE_STANDING_ORDERS = False     # 总开关（关闭 → 不加载，零回归）
+# 运行时由登记册/配置注入；结构字段见 nucleus.field.standing_orders.StandingOrder
+STANDING_ORDERS = []               # 每项为 {grant, trigger, gate, escalate}；gate 引用 OB1_* 键
+
 # ========== 推理经验双写（PHASE17 阶段二子任务4.1） ==========
 # 不改 ReasoningExperience.py（JSON 版推理经验库），在规则通道层新增双写索引器：
 # 写 JSON 成功后，额外往知识树 /推理经验/ 路径写节点副本 + 提交语义编码，
