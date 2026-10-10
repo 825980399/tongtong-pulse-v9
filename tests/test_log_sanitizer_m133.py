@@ -125,10 +125,10 @@ def test_scope_child_logger_handler():
     _h.addFilter(SanitizingFilter(enabled=True))
     _lg.addHandler(_h)
     try:
-        _lg.warning("异常手机号 13900001111 已记录")
+        _lg.warning("异常手机号 13800138000 已记录")
         assert len(_h.records) == 1
         assert "<REDACTED_PHONE>" in _h.records[0].msg
-        assert "13900001111" not in _h.records[0].msg
+        assert "13800138000" not in _h.records[0].msg
     finally:
         _lg.handlers.clear()
 
