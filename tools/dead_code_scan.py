@@ -439,10 +439,10 @@ def render_md(report: dict) -> str:
         "",
         "| 项 | 值 |",
         "|---|---|",
-        "| 扫描文件总数（已排除副本/缓存/备份） | %d |" % s["scanned_files"],
-        "| 8 大模块文件数 | %d |" % s["module_files"],
-        "| tests 文件数 | %d |" % s["test_files"],
-        "| 模块级定义总数 | %d |" % s["total_defs"],
+        f"| 扫描文件总数（已排除副本/缓存/备份） | {s['scanned_files']} |",
+        f"| 8 大模块文件数 | {s['module_files']} |",
+        f"| tests 文件数 | {s['test_files']} |",
+        f"| 模块级定义总数 | {s['total_defs']} |",
         "",
         "## 二、分级统计",
         "",
@@ -455,10 +455,10 @@ def render_md(report: dict) -> str:
         "DYNAMIC_RISK": "**不可删**：dunder / `__all__` / 装饰器 / 名字以字符串出现（反射风险）",
     }
     for _k in ("ZERO_REF", "TEST_ONLY", "DYNAMIC_RISK"):
-        lines.append("| %s | %d | %s |" % (_k, s["by_level"].get(_k, 0), _desc[_k]))
+        lines.append(f"| {_k} | {s['by_level'].get(_k, 0)} | {_desc[_k]} |")
     lines += ["", "## 三、按模块分布", "", "| 模块 | 疑似死代码数 |", "|---|---|"]
     for _m, _c in sorted(s["by_module"].items(), key=lambda x: -x[1]):
-        lines.append("| `%s` | %d |" % (_m, _c))
+        lines.append(f"| `{_m}` | {_c} |")
     lines += ["", "## 四、明细（ZERO_REF 优先）", ""]
 
     _order = {"ZERO_REF": 0, "TEST_ONLY": 1, "DYNAMIC_RISK": 2}
@@ -482,9 +482,9 @@ def render_md(report: dict) -> str:
             _note.append("★字符串命中（反射）")
         if _r["hook_like"]:
             _note.append("疑似框架钩子")
-        lines.append("| `%s` | `%s:%d` | `%s` | %s | %d | %d | %s |" % (
-            _r["module"], _r["file"], _r["lineno"], _r["name"], _r["kind"],
-            _r["prod_refs"], _r["test_refs"], "、".join(_note) or "—"))
+        lines.append(f"| `{_r['module']}` | `{_r['file']}:{_r['lineno']}` | "
+                      f"`{_r['name']}` | {_r['kind']} | {_r['prod_refs']} | "
+                      f"{_r['test_refs']} | {'、'.join(_note) or '—'} |")
     lines += ["", "---", "",
               "★**删除纪律**：本报告不构成删除授权。每一条删除都需单独提补丁、",
               "带灰度开关、过五项门禁，并在交付报告中列明。"]
@@ -682,23 +682,23 @@ def render_md_v3(summary: dict) -> str:
         "",
         "| 指标 | v3 实测 | 前置分析基线 | 红线 |",
         "|---|---|---|---|",
-        "| 孤岛文件数 | %d | 33 | 不得上升 |" % summary["island_files"],
-        "| 零引用入口方法数（HOOK_RE∪set_*） | %d | 40 | 不得上升 |" % summary["entry_zero_ref"],
-        "| 零引用方法数（全方法·参考） | %d | — | 参考 |" % summary["method_zero_ref"],
-        "| 零引用 set_* 数 | %d | 28 | 不得上升 |" % summary["set_zero_ref"],
-        "| 模块级零引用数 | %d | — | 参考 |" % summary["module_zero_ref"],
+        f"| 孤岛文件数 | {summary['island_files']} | 33 | 不得上升 |",
+        f"| 零引用入口方法数（HOOK_RE∪set_*） | {summary['entry_zero_ref']} | 40 | 不得上升 |",
+        f"| 零引用方法数（全方法·参考） | {summary['method_zero_ref']} | — | 参考 |",
+        f"| 零引用 set_* 数 | {summary['set_zero_ref']} | 28 | 不得上升 |",
+        f"| 模块级零引用数 | {summary['module_zero_ref']} | — | 参考 |",
         "",
-        "## 二、孤岛文件清单（%d）" % summary["island_files"],
+        f"## 二、孤岛文件清单（{summary['island_files']}）",
         "",
     ]
     for _r in summary["island_list"]:
         lines.append("- `{}`".format(_r))
-    lines += ["", "## 三、零引用 set_* 清单（%d）" % summary["set_zero_ref"], ""]
+    lines += ["", f"## 三、零引用 set_* 清单（{summary['set_zero_ref']}）", ""]
     for _rel, _q, _ln in summary["set_list"]:
-        lines.append("- `%s:%d` `%s`" % (_rel, _ln, _q))
-    lines += ["", "## 四、零引用入口方法清单（%d，含 set_*）" % summary["entry_zero_ref"], ""]
+        lines.append(f"- `{_rel}:{_ln}` `{_q}`")
+    lines += ["", f"## 四、零引用入口方法清单（{summary['entry_zero_ref']}，含 set_*）", ""]
     for _rel, _q, _ln in summary["method_list"]:
-        lines.append("- `%s:%d` `%s`" % (_rel, _ln, _q))
+        lines.append(f"- `{_rel}:{_ln}` `{_q}`")
     lines += ["", "---", "",
               "★删除/接线纪律：本报表不构成删除或接线授权；每条处置需单独提补丁、",
               "带灰度开关、过五项门禁，并在交付报告中列明。"]
@@ -711,9 +711,10 @@ def _main_v3(args) -> int:
     _out = os.path.join(_PROJ, "docs", "死代码检测报告_8大模块_v3.md")
     os.makedirs(os.path.dirname(_out), exist_ok=True)
     open(_out, "w", encoding="utf-8", newline="").write(md)
-    print("[v3] 孤岛文件=%d  零引用入口方法=%d  零引用 set_*=%d  模块级零引用=%d"
-          % (summary["island_files"], summary["method_zero_ref"],
-             summary["set_zero_ref"], summary["module_zero_ref"]))
+    print(f"[v3] 孤岛文件={summary['island_files']}  "
+          f"零引用入口方法={summary['method_zero_ref']}  "
+          f"零引用 set_*={summary['set_zero_ref']}  "
+          f"模块级零引用={summary['module_zero_ref']}")
     print("[v3] 报告已写入：{}".format(_out))
     if args.json_out:
         open(args.json_out, "w", encoding="utf-8", newline="").write(
@@ -736,8 +737,8 @@ def main() -> int:
     report = scan()
     md = render_md(report)
     if not args.quiet:
-        print("扫描文件 %d，模块级定义 %d" % (
-            report["summary"]["scanned_files"], report["summary"]["total_defs"]))
+        print(f"扫描文件 {report['summary']['scanned_files']}，"
+              f"模块级定义 {report['summary']['total_defs']}")
         print("分级：{}".format(report["summary"]["by_level"]))
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -753,3 +754,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# [M182-BD2-UP031] 第182批补刀2：UP031 19 处（% 格式化 -> f-string，纯语法转换）
