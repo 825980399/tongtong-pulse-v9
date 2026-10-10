@@ -5619,3 +5619,53 @@ PARAM_PATCH_EFFECT_VERIFY_ENABLED = True
 MAIN_LOOP_PULSE_ENABLED = True
 
 
+
+# ===== [M181-ROUTING] 181批刀1：分层路由白名单（零停窗·配置面）=====
+# 权威源：nucleus/qica/IntentChannels.py:31-40 ALL_INTENTS（24 项，实测）
+#         分类依据：烛微181前置 §6（维持本地12 / 升级LLM 7 / 灰度5，合计24全覆盖）
+# ★偏差D#2：任务书刀1 所列"代码/创作/多步推理/实时性问题"不在 ALL_INTENTS 内，
+#           且"技术推理"被误列入灰度（权威源属升级LLM）→ 本刀以代码权威源落地。
+# 零行为变化：总开关默认 False，读取点未接线前不产生任何行为。
+ENABLE_ROUTING_LAYERED = False          # 总开关（False -> 全部走既有路径，零行为变化）
+
+# 维持本地 12 项（不升级 LLM）：自我知识/本地数据高覆盖，LLM 无增益
+ROUTING_LOCAL_INTENTS = (
+    "身份确认", "关系查询", "情感表达", "情感问候", "规则查阅", "系统命令",
+    "状态查询", "健康检查", "元认知报告", "学习成长", "记忆回想", "时间日程",
+)
+
+# 升级 LLM 7 项（命中即落 SELECT_MODEL，不本地答）：超出本地图谱推演能力边界
+ROUTING_LLM_INTENTS = (
+    "技术推理", "深度分析", "对比分析", "创造性思考", "任务执行", "请求帮助", "搜索获取",
+)
+
+# 灰度 5 项（仅在触发条件命中时升级，否则维持本地）
+ROUTING_GRAY_INTENTS = (
+    "一般对话", "知识查询", "概念解释", "追问澄清", "否定质疑",
+)
+
+# 灰度触发条件（三选一命中即升级；★复用既有判据口径，不新开第四套复杂度）
+ROUTING_GRAY_MIN_LEN = 50                 # ①长度阈值（任务书给 50；Cortex 深度通道现用 60，本处按任务书）
+ROUTING_GRAY_COMPLEXITY_MIN = 0.25        # ②复杂度下限（沿用既有复杂度标度）
+ROUTING_INFERENCE_STRUCTURE_PATTERNS = (  # ③推理结构词（★与 PulseCortex._has_inference_structure 同形）
+    r"规则\s*\d+.*(?:→|->|=>)",
+    r"请.*(?:推导|演绎|归纳|推演|判断|分析)",
+    r"已知.*请.*结论|请完整分步|逐条列出",
+)
+
+# ===== [M181-ESCALATION] 181批刀2：内在世界沉思质量分触发升级（共窗验证后翻 True）=====
+# 读取点：organs/brain/PulseInnerWorld.py::_m181_quality_escalation_on
+#         （调用点 _m181_should_escalate_on_quality，位于沉思成功分支 :1187）
+# 依赖：与刀1 ROUTING_* 同面；本开关仅控制「质量分触发」，不影响既有「沉思失败降级」
+# 零行为变化：False -> 判据恒 False -> 调用点走原分支
+ENABLE_INNER_WORLD_QUALITY_ESCALATION = False
+
+# ===== [M181-COGNITIVE] 181批刀3/刀5：自我认知器官维度（观测级·零停窗）=====
+# 刀3 读取点：nucleus/cognitive/organ_health_leaderboard.py::_leaderboard_on
+#             （入口 OrganHealthLeaderboard.on_heartbeat）
+# 刀5 读取点：nucleus/cognitive/organ_inventory.py::_inventory_on
+#             （纯查询接口 export_organ_inventory 不受开关限制，仅日志输出受限）
+# 依赖：复用既有 nucleus.self_inspector.scan_all_organs（未新增扫描器）
+# 零行为变化：两者默认 False -> 不主动日志、不影响任何决策（未开 INFLUENCE_DECISION）
+ENABLE_ORGAN_HEALTH_LEADERBOARD = False
+ENABLE_ORGAN_INVENTORY_EXPORT = False

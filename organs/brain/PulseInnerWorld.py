@@ -1183,8 +1183,23 @@ class PulseInnerWorld(
                          f"QICA检索结果不相关(相关度={_relevance:.2f})，尝试内在沉思")
                 _contemplation = self._contemplative_reason(ctx.question)
                 if _contemplation and len(_contemplation) > 30:
-                    _knowledge_result = _contemplation
-                    self._log(LogLevel.INFO, "降级到内在沉思成功")
+                    # ★181批刀2：质量分触发扩展——沉思虽成功但质量不足（高复杂度/代码/创作类）时仍升级LLM
+                    if _m181_should_escalate_on_quality(ctx.question, _contemplation):
+                        self._log(LogLevel.INFO, "181刀2·质量分触发：本地沉思质量不足，升级到大模型")
+                        _q_model = self._generate_branch_with_model(
+                            original_question=ctx.question,
+                            branch_name="质量分触发升级",
+                            branch_prompt=ctx.question,
+                        )
+                        if _q_model and len(_q_model) > 20:
+                            _knowledge_result = _q_model
+                            self._log(LogLevel.INFO, f"181刀2·质量分升级成功: {_knowledge_result[:60]}...")
+                        else:
+                            _knowledge_result = _contemplation
+                            self._log(LogLevel.INFO, "降级到内在沉思成功")
+                    else:
+                        _knowledge_result = _contemplation
+                        self._log(LogLevel.INFO, "降级到内在沉思成功")
                 else:
                     # 沉思也不行，调用大模型
                     self._log(LogLevel.INFO, "内在沉思失败，降级到大模型")
@@ -17373,3 +17388,48 @@ def is_meta_skill_goal(target_area: str) -> bool:
     if target_area in META_SKILL_GOAL_AREAS:
         return True
     return any(_kw in target_area for _kw in META_SKILL_GOAL_KEYWORDS)
+
+
+# ===== [M181-QUALITY-ESCALATION] 181批刀2：内在世界沉思质量分触发升级 =====
+# 开关默认 False -> 判据恒 False -> 调用点走原分支（零行为变化）
+_M181_ESCALATION_KEYWORDS = (
+    "代码", "写一段", "写代码", "编程", "函数", "算法实现",
+    "创作", "写一首", "写个故事", "科幻", "小说", "诗歌",
+    "深度分析", "对比分析", "多步", "推演", "架构设计",
+)
+
+
+def _m181_quality_escalation_on() -> bool:
+    """读取开关（默认 False；config 未登记时亦为 False）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_INNER_WORLD_QUALITY_ESCALATION", False))
+    except Exception as _e:
+        import sys
+        sys.stderr.write("[181刀2] 开关读取失败，按关闭处理: %s: %s\n" % (type(_e).__name__, _e))
+        return False
+
+
+def _m181_should_escalate_on_quality(question: str, contemplation: str) -> bool:
+    """判据：高复杂度 / 代码 / 创作类 或 本地答质量虚 -> True（触发升级LLM）。
+
+    ★零回归：开关关闭时本函数不被判定路径采纳（调用点恒走原分支）。
+    """
+    if not _m181_quality_escalation_on():
+        return False
+    _q = (question or "").strip()
+    _c = (contemplation or "").strip()
+    # ① 命中「代码/创作/深度分析」类关键词 -> 本地图谱推演能力边界外
+    if any(_k in _q for _k in _M181_ESCALATION_KEYWORDS):
+        return True
+    # ② 推理结构词命中（与 PulseCortex._has_inference_structure 同形，复用既有口径）
+    import re as _re
+    for _pat in (r"规则\s*\d+.*(?:→|->|=>)",
+                 r"请.*(?:推导|演绎|归纳|推演|判断|分析)",
+                 r"已知.*请.*结论|请完整分步|逐条列出"):
+        if _re.search(_pat, _q):
+            return True
+    # ③ 长问题 + 短本地答 => 质量虚（高复杂度问题本地答被压缩）
+    if len(_q) > 50 and len(_c) < max(30, len(_q) // 3):
+        return True
+    return False
