@@ -4,7 +4,6 @@
 覆盖：闸门判据 / 标记策略（不删数据）/ 回滚 / 分类 / 4 个查询方法接入 / 零回归。
 """
 import io
-import pytest
 import json
 import os
 import shutil
@@ -12,13 +11,15 @@ import sys
 import tempfile
 import unittest
 
+import pytest
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                     # noqa: E402
-from nucleus.data import experience_cleanup as _ec                # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool      # noqa: E402
+import config  # noqa: E402
+from nucleus.data import experience_cleanup as _ec  # noqa: E402
+from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
 
 _POOL_SRC = io.open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
                     encoding="utf-8", errors="replace").read().replace("\r\n", "\n")

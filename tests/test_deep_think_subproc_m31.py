@@ -20,8 +20,8 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 from nucleus.reasoning.ReasoningWorkerPool import ReasoningWorkerPool  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 
 _IW_SRC_PATH = os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py")
 _IW_SRC = open(_IW_SRC_PATH, encoding="utf-8").read()

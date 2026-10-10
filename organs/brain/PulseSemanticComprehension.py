@@ -11,9 +11,10 @@ PulseSemanticComprehension —— 语义理解器官
 定位: QICA 与大脑皮层之间的语义理解层，是「本地回答 vs 转大模型」的判定闸门。
 """
 
-from nucleus.LLMDependencyMetrics import (SCENE_OTHER, record_llm_call)
 import os
 import sys
+
+from nucleus.LLMDependencyMetrics import SCENE_OTHER, record_llm_call
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -24,8 +25,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  LogLevel, QICAEvent, SystemEvent, Event
 from nucleus._silent_except import silent_exc
+from nucleus.const import Event, LogLevel, QICAEvent, SystemEvent
 
 
 class PulseSemanticComprehension(BasePulseOrgan):

@@ -5,11 +5,10 @@
 快端点必须不被阻塞（先红后绿：若用单线程 HTTPServer，快端点会被慢端点拖住）。
 T0 实测：生产仅 health_ui/web_chat 两处且均为 ThreadingHTTPServer，无裸 HTTPServer 残留。
 """
-import time
 import threading
+import time
 import urllib.request
-
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 

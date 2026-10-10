@@ -18,6 +18,7 @@ if ROOT not in sys.path:
 
 import pyarrow as pa  # noqa: E402
 import pyarrow.parquet as pq  # noqa: E402
+
 from nucleus.mnemosyne.PulseNodePool import (  # noqa: E402
     COLD_COMPACT_MIN_FILES,
     PulseNodePool,

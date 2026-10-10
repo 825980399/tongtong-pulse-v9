@@ -14,13 +14,13 @@
 """
 
 from __future__ import annotations
-from nucleus.data.exclude_dirs import COMMON_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
 
 import os
 import re
-from nucleus.data.path_utils import normalize_relpath  # ★第49批 T4 + 第169批 C2 归一
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.exclude_dirs import COMMON_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
+from nucleus.data.path_utils import normalize_relpath  # ★第49批 T4 + 第169批 C2 归一
 
 # ---------------------------------------------------------------------------
 # 目录级排除（按“叶子目录名”匹配）

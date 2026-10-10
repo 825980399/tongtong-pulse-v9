@@ -9,7 +9,6 @@ import ast
 import os
 import sys
 
-
 TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS_CI = os.path.join(TOOLS, 'tools', 'ci')
 sys.path.insert(0, TOOLS_CI)

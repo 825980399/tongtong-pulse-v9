@@ -6,22 +6,22 @@
 - PulseSnapshot 用 __new__ 轻量实例化（避免重依赖），只挂被测方法需要的属性。
 """
 import json
-import os
-import sys
-import time
-import shutil
 import logging
+import os
+import shutil
+import sys
 import tempfile
 import threading
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                             # noqa: E402
+import config  # noqa: E402
+import nucleus.data.write_guard as _wg  # noqa: E402
+import nucleus.knowledge_access_layer as _kal  # noqa: E402
+import nucleus.runtime_metrics as _rm  # noqa: E402
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
-import nucleus.knowledge_access_layer as _kal              # noqa: E402
-import nucleus.runtime_metrics as _rm                      # noqa: E402
-import nucleus.data.write_guard as _wg                     # noqa: E402
 
 
 class _FakeNode:

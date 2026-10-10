@@ -18,10 +18,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import threading
 from typing import Any
-from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import LogLevel, QICAEvent, SystemEvent
+
 import config
+from base.BasePulseOrgan import BasePulseOrgan
 from nucleus._silent_except import silent_exc
+from nucleus.const import LogLevel, QICAEvent, SystemEvent
 
 _module_logger = logging.getLogger(__name__)
 
@@ -533,9 +534,9 @@ class QICA(BasePulseOrgan):
         cur = anchor.get("task_type", "")
         try:
             from nucleus.qica.IntentChannels import (
-                linguistic_refine_intent,
                 INTENT_TO_PATH,
                 PATH_TO_CHANNEL,
+                linguistic_refine_intent,
             )
         except Exception:
             return anchor

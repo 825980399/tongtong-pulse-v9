@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
+
 """
 PatchManager.py —— 补丁管理器
 
@@ -25,9 +26,10 @@ from typing import Any
 
 from nucleus.logger import (
     get_module_logger,
+)
+from nucleus.logger import (
     noise_reduction_enabled as _noise_reduce,
 )
-
 
 _module_logger = get_module_logger("PatchManager")
 
@@ -3252,6 +3254,8 @@ class PatchManager:
                             try:
                                 from nucleus.evolution.patch_verification_split import (
                                     apply_split as _apply_split,
+                                )
+                                from nucleus.evolution.patch_verification_split import (
                                     is_split_override_locked,
                                 )
                                 # ★165批B1：幂等保护 —— 既有修正标记为真时，

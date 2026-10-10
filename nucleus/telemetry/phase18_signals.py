@@ -20,7 +20,6 @@ from typing import Any, Optional
 
 from nucleus._silent_except import silent_exc
 
-
 # 每类信号最近事件上限，防止长生命周期进程内存膨胀
 _MAX_EVENTS = 200
 

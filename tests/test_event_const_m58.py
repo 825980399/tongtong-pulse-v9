@@ -8,8 +8,8 @@
 3. 全库范围内，这 20 个事件名字符串不再以裸字符串形式出现于
    _emit / emit / publish / dispatch / trigger 等调用首参（替换已完成、无遗漏）。
 """
-import os
 import ast
+import os
 import sys
 import unittest
 
@@ -19,9 +19,9 @@ if _PROJECT_ROOT not in sys.path:
 
 from nucleus.const import (  # noqa: E402
     Event,
-    register_event,
-    is_registered_event,
     all_event_values,
+    is_registered_event,
+    register_event,
 )
 
 # 常量名 -> 原硬编码事件名（值）

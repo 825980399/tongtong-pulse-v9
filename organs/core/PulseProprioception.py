@@ -27,8 +27,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  HeartEvent, LogLevel, ProprioceptionEvent, SystemEvent, DeviceEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import DeviceEvent, HeartEvent, LogLevel, ProprioceptionEvent, SystemEvent
 
 
 class PulseProprioception(BasePulseOrgan):

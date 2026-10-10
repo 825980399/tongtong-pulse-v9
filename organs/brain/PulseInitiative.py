@@ -24,8 +24,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  ChatEvent, HeartEvent, LogLevel, MouthEvent, PersonaEvent, Event
 from nucleus._silent_except import silent_exc
+from nucleus.const import ChatEvent, Event, HeartEvent, LogLevel, MouthEvent, PersonaEvent
 
 
 class PulseInitiative(BasePulseOrgan):

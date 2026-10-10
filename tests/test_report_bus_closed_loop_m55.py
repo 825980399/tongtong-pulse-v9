@@ -33,8 +33,9 @@ import unittest  # noqa: E402
 from unittest import mock  # noqa: E402
 
 import config  # noqa: E402
-from nucleus.reporting import (consumers as _cons,  # noqa: E402
-                               publishers as _pub, report_bus as _rb)
+from nucleus.reporting import consumers as _cons  # noqa: E402
+from nucleus.reporting import publishers as _pub
+from nucleus.reporting import report_bus as _rb
 from nucleus.reporting.report_envelope import Anomaly  # noqa: E402
 
 # 真实结构：DailyScheduler → evaluate_and_report() 的返回值

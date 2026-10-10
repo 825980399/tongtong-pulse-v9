@@ -24,10 +24,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from organs.body.PulseStomach import PulseStomach  # noqa: E402
 from nucleus.parsing.json_fault_tolerant import (  # noqa: E402
     parse_json_fault_tolerant as _ft_parse,
 )
+from organs.body.PulseStomach import PulseStomach  # noqa: E402
 
 _STOMACH = os.path.join(ROOT, "organs", "body", "PulseStomach.py")
 

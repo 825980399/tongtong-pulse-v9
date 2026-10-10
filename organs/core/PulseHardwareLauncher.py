@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  HardwareEvent, SystemEvent, EnergyEvent, TouchEvent
+from nucleus.const import EnergyEvent, HardwareEvent, SystemEvent, TouchEvent
 
 
 class PulseHardwareLauncher(BasePulseOrgan):

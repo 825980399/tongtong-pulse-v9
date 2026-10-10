@@ -11,10 +11,10 @@ PulseLegs —— 双腿器官 · 网络抓取与主动自学循环
 定位: 运动层的「长时行走器官」，是曈曈在无人值守时持续自学的双腿。
 """
 import difflib
-from config import TIMEOUT_CONFIG
-
 import os
 import sys
+
+from config import TIMEOUT_CONFIG
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -33,22 +33,21 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
+    ControllerEvent,
+    DeviceEvent,
     DigestEvent,
+    Event,
     InterestEvent,
     LegsEvent,
     LogLevel,
     SubconsciousEvent,
     SystemEvent,
-    ControllerEvent,
-    DeviceEvent,
-    Event,
     TouchEvent,
 )
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.knowledge_noise_filter import clean_content_text
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
 
 
 def budget_guard(consumer: str = "search"):

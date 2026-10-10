@@ -19,7 +19,8 @@ if ROOT not in sys.path:
 
 from nucleus.security import first_run_declaration as frd  # noqa: E402
 from nucleus.security.crisis_referral_text import (  # noqa: E402
-    violates_red_line, _starts_with_first_person,
+    _starts_with_first_person,
+    violates_red_line,
 )
 
 # 测试用隔离状态文件（避免污染真实 data/）

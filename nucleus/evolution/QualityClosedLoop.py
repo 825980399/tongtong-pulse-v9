@@ -18,8 +18,8 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # ★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）显式标注：

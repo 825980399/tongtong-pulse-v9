@@ -11,7 +11,6 @@ tooling_runner.py —— 工具运行器
 定位: 工具管理层
 """
 
-from config import TIMEOUT_CONFIG
 import json
 import os
 import re
@@ -19,10 +18,10 @@ import subprocess
 import threading
 from typing import Any
 
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 
 class ToolingRunner(SilentLogMixin):

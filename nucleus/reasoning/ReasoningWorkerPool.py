@@ -19,9 +19,8 @@ from concurrent.futures import Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any
 
-from nucleus.logger import get_module_logger
 from nucleus._silent_except import silent_exc
-
+from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("ReasoningWorkerPool")
 

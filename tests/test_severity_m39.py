@@ -14,9 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 
 from nucleus.self_awareness.SelfAwarenessEngine import (
+    _SEV_LEVELS,
     SelfAwarenessEngine,
     SelfAwarenessProfile,
-    _SEV_LEVELS,
     _collect_top_issues,
     _dimension_issues,
     _normalize_severity,

@@ -1,4 +1,5 @@
 from config import EXTERNAL_CALL_TIMEOUTS
+
 """PulseTouch —— _read_sys_file 相关实现
 
 版本: v10 PulseNet
@@ -33,8 +34,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import Event, LogLevel, SystemEvent, TouchEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import Event, LogLevel, SystemEvent, TouchEvent
 
 
 def _read_sys_file(path: str) -> str:

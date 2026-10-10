@@ -11,10 +11,9 @@
 """
 import pytest
 
+import nucleus.mnemosyne.PulseNodePool as PNP
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-
-import nucleus.mnemosyne.PulseNodePool as PNP
 
 
 def _make_node(state="active", idx=0):

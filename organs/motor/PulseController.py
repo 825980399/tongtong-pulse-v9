@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
 from nucleus.const import HeartEvent
+
 """
 PulseController —— 控制器器官 · 网页深度搜索与本地文件/应用操纵
 
@@ -13,9 +14,10 @@ PulseController —— 控制器器官 · 网页深度搜索与本地文件/应�
 定位: 运动层的「浏览器与文件系统代理」，是曈曈主动获取外部世界信息的主通道。
 """
 
-from nucleus.LLMDependencyMetrics import (SEARCH_HEADLESS, record_search)
 import os
 import sys
+
+from nucleus.LLMDependencyMetrics import SEARCH_HEADLESS, record_search
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -44,7 +46,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.logger import exc_location
 from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 from nucleus.const import (
     ControllerEvent,
@@ -58,6 +59,7 @@ from nucleus.external_executor import (  # noqa: F401
     OperationPriority,
     get_external_executor,
 )
+from nucleus.logger import exc_location
 
 
 def budget_guard(consumer: str = "search"):
@@ -108,9 +110,9 @@ class PulseController(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'search_cooldown_seconds' in _rp and hasattr(self, '_search_cooldown'):
-                setattr(self, '_search_cooldown', _rp['search_cooldown_seconds'])
+                self._search_cooldown = _rp['search_cooldown_seconds']
             if 'search_max_per_hour' in _rp and hasattr(self, '_search_max_per_hour'):
-                setattr(self, '_search_max_per_hour', _rp['search_max_per_hour'])
+                self._search_max_per_hour = _rp['search_max_per_hour']
             # ★A-9死参数清理：search_quality_threshold 已从 RUNTIME_PARAMS 移除
             #   （仅 refresh 写属性、无任何消费点——留空防误导）
         except Exception as e:
@@ -1656,8 +1658,8 @@ class PulseController(BasePulseOrgan):
                 'Authorization': 'Bearer ' + _api_key,
             }
 
+            from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
-            from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
             _cfg = get_llm_call_config()
             with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
                 _ok, _data = safe_http_json(

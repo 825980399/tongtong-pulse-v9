@@ -19,9 +19,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
 
 # ★第87批 T-87c：验证决策校验日志的采样间隔（每 N 条不一致打 1 条 DEBUG）。
 #   原实现「每次不一致都打一条」，实测单次进化轮次可产出上百条

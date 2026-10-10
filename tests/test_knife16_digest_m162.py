@@ -7,11 +7,11 @@
   - 只读约束：不修改 alerts.jsonl；
   - 关闭开关（NIGHT_ORCH_DIGEST_ENABLED=False）→ 返回 None 且不产文件。
 """
-import os
-import sys
 import json
-import tempfile
+import os
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

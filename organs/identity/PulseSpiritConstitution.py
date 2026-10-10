@@ -24,10 +24,10 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import (
+    Event,
     HeartEvent,
     LogLevel,
     SystemEvent,
-    Event,
 )
 
 

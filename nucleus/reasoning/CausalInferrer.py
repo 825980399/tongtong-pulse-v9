@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 __all__ = ["CausalInferrer", "get_causal_inferrer"]
 

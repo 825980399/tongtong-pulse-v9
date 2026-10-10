@@ -19,10 +19,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.parsing.JsonRepair import parse_with_repair, classify_json_error  # noqa: E402
 import nucleus.logger as logger_mod  # noqa: E402
-from nucleus.logger import SafeRotatingFileHandler  # noqa: E402
 import organs.motor.PulseLegs as legs_mod  # noqa: E402
+from nucleus.logger import SafeRotatingFileHandler  # noqa: E402
+from nucleus.parsing.JsonRepair import classify_json_error, parse_with_repair  # noqa: E402
 
 
 # ===================== T1：双腿 dict.append =====================
@@ -154,6 +154,7 @@ def test_t4_log_rollover_exponential_backoff(tmp_path):
 def test_t4_compaction_permissionerror_no_crash(tmp_path):
     """冷存 compaction 删除旧目录遇 PermissionError 应被捕获返回 dict，不抛。"""
     import pyarrow as pa
+
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
     pool = PulseNodePool()

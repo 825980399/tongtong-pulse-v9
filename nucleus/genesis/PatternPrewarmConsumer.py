@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
 from collections.abc import Callable
-from nucleus._silent_except import silent_exc
+from typing import Any
 
+from nucleus._silent_except import silent_exc
 
 # 常见周期事件 → 相关知识线索（关键词 / 主题）。高频事件优先覆盖。
 # 这是确定性的默认解析表，不依赖外部知识库即可工作，保证链路在默认配置下

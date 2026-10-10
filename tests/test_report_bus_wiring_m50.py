@@ -5,23 +5,23 @@
      4 处生产接入点接线（源码级）。
 """
 import io
-import pytest
 import os
 import shutil
 import sys
 import tempfile
 import unittest
 
+import pytest
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                       # noqa: E402
-from nucleus.reporting import consumers as _cons                    # noqa: E402
-from nucleus.reporting import publishers as _pub                    # noqa: E402
-from nucleus.reporting.report_bus import (ReportBus,               # noqa: E402
-                                          reset_report_bus)
-from nucleus.reporting.report_envelope import SEV_P0, SEV_P1   # noqa: E402
+import config  # noqa: E402
+from nucleus.reporting import consumers as _cons  # noqa: E402
+from nucleus.reporting import publishers as _pub  # noqa: E402
+from nucleus.reporting.report_bus import ReportBus, reset_report_bus  # noqa: E402
+from nucleus.reporting.report_envelope import SEV_P0, SEV_P1  # noqa: E402
 
 _SRC = {}
 for _rel in ("nucleus/self_awareness/SelfAwarenessEngine.py",
@@ -334,6 +334,7 @@ class TestWriteGuardNotBypassed(_Base):
     def test_61_guard_signature_matches_call(self):
         """守卫参数名必须是 `explicit`（调用方与签名一致）。"""
         import inspect
+
         from nucleus.data.write_guard import guard_write
         _p = inspect.signature(guard_write).parameters
         self.assertIn("explicit", _p)
@@ -387,8 +388,9 @@ class TestWriteGuardNotBypassed(_Base):
 
     def test_68_guard_signature_accepts_real_component(self):
         """守卫可被真实组件名调用（签名与调用方契约一致）。"""
-        from nucleus.data.write_guard import guard_write
         import tempfile
+
+        from nucleus.data.write_guard import guard_write
         _d = tempfile.mkdtemp(prefix="m50gw_")
         try:
             self.assertTrue(guard_write(os.path.join(_d, "x.json"),

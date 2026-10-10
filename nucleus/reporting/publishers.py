@@ -52,12 +52,23 @@ import logging
 import time
 from typing import Any
 
-from .report_bus import get_report_bus
-from .report_envelope import (ACT_ALERT, ACT_CLEAN_DATA, ACT_LOG_ONLY,
-                              SEV_P0, SEV_P1, TYPE_EVOLUTION, TYPE_GENERIC,
-                              TYPE_HEALTH, TYPE_POLLUTION, TYPE_SELF_COGNITION,
-                              Anomaly, make_envelope)
 from nucleus._silent_except import silent_exc
+
+from .report_bus import get_report_bus
+from .report_envelope import (
+    ACT_ALERT,
+    ACT_CLEAN_DATA,
+    ACT_LOG_ONLY,
+    SEV_P0,
+    SEV_P1,
+    TYPE_EVOLUTION,
+    TYPE_GENERIC,
+    TYPE_HEALTH,
+    TYPE_POLLUTION,
+    TYPE_SELF_COGNITION,
+    Anomaly,
+    make_envelope,
+)
 
 _LOG = logging.getLogger("ReportPublishers")
 # 生产侧类型白名单拒写（烛微分诊口径）：这些类型为测试夹具/分诊占位，
@@ -101,8 +112,8 @@ def _emit(envelope, _tag: str) -> dict[str, Any] | None:
                 if getattr(a, "type", None) in PRODUCTION_REJECT_TYPES]
         if _rej:
             for _a in _rej:
-                setattr(_a, "_isolated", True)
-                setattr(_a, "_cleanup_ticket", _tag)
+                _a._isolated = True
+                _a._cleanup_ticket = _tag
             envelope.anomalies = [a for a in (envelope.anomalies or [])
                                   if getattr(a, "type", None)
                                   not in PRODUCTION_REJECT_TYPES]

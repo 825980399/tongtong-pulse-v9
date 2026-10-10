@@ -20,8 +20,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                     # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool      # noqa: E402
+import config  # noqa: E402
+from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
 
 # 仅由 SERP 样板 token 构成 → 覆盖度 1.0（≥0.9 高置信 → 隔离）
 _SERP_ALL = "搜索结果相关搜索广告赞助商链接百度一下相关推荐"

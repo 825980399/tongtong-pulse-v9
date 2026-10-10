@@ -27,6 +27,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
+from nucleus.const import Event  # noqa: E402
 from nucleus.events.EventBus import (  # noqa: E402
     EventBus,
     EventPriority,
@@ -39,8 +40,6 @@ from nucleus.events.EventTap import (  # noqa: E402
     reset_event_tap,
     tap_publish,
 )
-
-from nucleus.const import Event  # noqa: E402
 
 _SCRATCH = os.path.join(_PROJECT_ROOT, "tmp", "_event_tap_m17")
 

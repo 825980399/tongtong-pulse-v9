@@ -20,13 +20,12 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.logger import get_module_logger
 from nucleus.semantic.AsyncEncodeQueue import AsyncEncodeQueue
 from nucleus.semantic.VectorEncoder import get_vector_encoder
 from nucleus.semantic.VectorStore import get_vector_store
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
-
 
 _logger = get_module_logger("SemanticIndexer")
 

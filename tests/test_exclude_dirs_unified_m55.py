@@ -23,7 +23,6 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 import config  # noqa: E402
-
 from nucleus.data import exclude_dirs as E  # noqa: E402
 
 

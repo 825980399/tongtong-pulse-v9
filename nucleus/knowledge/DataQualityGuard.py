@@ -14,11 +14,11 @@ DataQualityGuard.py —— 数据质量守卫
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.knowledge.DuplicateNodeDetector import (
-
     FLAG_DUPLICATE,
     DuplicateNodeDetector,
 )
@@ -29,7 +29,6 @@ from nucleus.knowledge.PollutionTagger import (
     PollutionTagger,
 )
 from nucleus.logger import get_module_logger
-from nucleus._silent_except import silent_exc
 
 __all__ = ["DataQualityGuard", "get_data_quality_guard", "reset_data_quality_guard"]
 
@@ -73,7 +72,8 @@ class DataQualityGuard:
                     _it.pop(_k, None)
             else:
                 from nucleus.evolution.ExperiencePollutionGuard import (
-                    WEIGHT_POLLUTED, WEIGHT_SUSPECT,
+                    WEIGHT_POLLUTED,
+                    WEIGHT_SUSPECT,
                 )
                 _it["polluted"] = True
                 _it["quality_flag"] = _flag

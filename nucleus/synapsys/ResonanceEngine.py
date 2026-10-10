@@ -12,19 +12,15 @@ ResonanceEngine.py —— 共振引擎
 """
 
 import math
-
-# ★第82批 T-c：五维权重单一来源（Dxxx）。唯一数值定义在 config.RESONANCE_WEIGHTS。
-from config import RESONANCE_WEIGHTS
-
-from nucleus.logger import get_module_logger
-from nucleus.mnemosyne.PulseNode import PulseNode
-
-
 import threading
 import time
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+# ★第82批 T-c：五维权重单一来源（Dxxx）。唯一数值定义在 config.RESONANCE_WEIGHTS。
+from config import RESONANCE_WEIGHTS
+from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 _logger = get_module_logger("ResonanceEngine")
 
@@ -258,6 +254,8 @@ class ResonanceEngine:
             try:
                 from nucleus.LLMDependencyMetrics import (
                     KIND_RULE as _KIND_RULE84,
+                )
+                from nucleus.LLMDependencyMetrics import (
                     record_local_inference as _rec_local84,
                 )
                 _rec_local84(_KIND_RULE84)
@@ -1024,6 +1022,8 @@ class ResonanceEngine:
             try:
                 from nucleus.LLMDependencyMetrics import (
                     KIND_GUARD as _m95_kind_guard,
+                )
+                from nucleus.LLMDependencyMetrics import (
                     record_local_inference as _m95_rec_local,
                 )
                 _m95_rec_local(_m95_kind_guard)

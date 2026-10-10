@@ -11,8 +11,8 @@ import os
 import time
 
 from cryptography.fernet import Fernet, InvalidToken
-from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DATA_ROOT = os.path.join(_PROJECT_ROOT, "data")

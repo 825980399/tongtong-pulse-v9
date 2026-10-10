@@ -24,6 +24,9 @@ from unittest import mock
 
 import config
 import nucleus.data.write_guard as _wg
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.events.EventBus import get_event_bus, reset_event_bus
+from nucleus.evolution import patch_lifecycle as _pl
 from nucleus.evolution.PatchAutoApprover import (
     DECISION_APPROVE,
     DECISION_HUMAN,
@@ -33,9 +36,6 @@ from nucleus.evolution.PatchAutoApprover import (
 )
 from nucleus.reasoning.PatchManager import PatchManager
 from nucleus.reasoning.SelfVerifier import SelfVerifier
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus.evolution import patch_lifecycle as _pl
-from nucleus.events.EventBus import get_event_bus, reset_event_bus
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

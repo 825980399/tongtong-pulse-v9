@@ -23,10 +23,10 @@
 """
 import argparse
 import json
+import logging
 import os
 import sys
 import time
-import logging
 
 # ★第161批下 刀7：仓库根入 sys.path **必须**先于任何本地包 import ——
 #   subprocess 直起本脚本时 sys.path[0] 是 tools/，否则 nucleus 不可见

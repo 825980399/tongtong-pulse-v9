@@ -8,19 +8,18 @@
 - 接线修复：_enforce_cold_cache 不再被 cold_compaction 节流早返回阻断（runtime_metrics
   在位且 should_execute=False 时驱逐仍须跑）→ 验证"驱逐→flush→索引重建→新鲜度复位"闭环。
 """
-import os
-import time
-import json
-import tempfile
 import importlib
+import json
+import os
 import shutil
+import tempfile
+import time
 
 import pytest
 
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-from nucleus.mnemosyne.PulseNode import PulseNode
-
 import nucleus.mnemosyne.PulseNodePool as PNP
+from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
 
 def _capture_logger():

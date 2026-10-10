@@ -20,7 +20,6 @@ from enum import Enum
 from typing import Any
 
 
-
 # 投票层级定义（未来演化预留）
 class VoteTier(Enum):
     REFLEX = "autonomic_reflex"     # 自主反射：器官级快速决策（如心脏调速）

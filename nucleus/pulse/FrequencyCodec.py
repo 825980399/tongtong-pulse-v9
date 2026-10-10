@@ -16,13 +16,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import hashlib
-from nucleus.logger import get_module_logger
 import math
 import threading
 import time
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
 
 """
 FrequencyCodec —— 频率编码/解码器（v9.5 分层共振版）

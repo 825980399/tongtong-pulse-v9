@@ -37,7 +37,6 @@
      与既有 `has_pending_patch_for` **逐例同值**；
   E. 生产队列取证（只读）。
 """
-import pytest
 import ast
 import io
 import json
@@ -47,6 +46,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:

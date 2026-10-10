@@ -13,12 +13,13 @@
   - 持久化失败只记 WARNING，不抛异常给调用方；
   - 线程安全（内部 RLock）。
 """
-from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
+
+from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger

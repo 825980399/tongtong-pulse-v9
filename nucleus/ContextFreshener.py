@@ -17,8 +17,8 @@ import os
 import threading
 import time
 from typing import Any
-from nucleus.data.DataAccessLayer import safe_read_json
 
+from nucleus.data.DataAccessLayer import safe_read_json
 
 
 class ContextFreshener:

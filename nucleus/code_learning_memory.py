@@ -28,12 +28,13 @@ API
 存储路径可注入（测试用临时目录），默认落在 ``<项目根>/data/code_learning/``。
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import io
 import json
 import os
 import time
+
+from nucleus._silent_except import silent_exc
 
 __all__ = ["CheckedIssueMemory", "default_storage_path"]
 

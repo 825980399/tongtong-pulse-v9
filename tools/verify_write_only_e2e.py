@@ -18,6 +18,7 @@
 import argparse
 import os
 import sys
+
 from nucleus._silent_except import silent_exc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -168,9 +169,9 @@ def _build_real_writer():
 
 def run(backend):
     import config
-    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    from nucleus.mnemosyne.PulseNode import PulseNode
     import nucleus.timeseries_store.influxdb_store as influx_mod
+    from nucleus.mnemosyne.PulseNode import PulseNode
+    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
     if backend == "real":
         try:

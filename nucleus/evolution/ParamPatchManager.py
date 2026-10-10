@@ -11,16 +11,16 @@ ParamPatchManager.py —— 参数补丁管理器
 定位: 进化管理层
 """
 
-from nucleus._silent_except import silent_exc
-from config import TIMEOUT_CONFIG
 import json
 import os
 import threading
 import time
 from typing import Any
-from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
-from nucleus.data.DataAccessLayer import safe_read_json
 
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
 
 # 项目根目录
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

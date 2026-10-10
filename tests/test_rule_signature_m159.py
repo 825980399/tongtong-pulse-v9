@@ -13,9 +13,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nucleus.self_awareness.rule_engine import (  # noqa: E402
+    RULE_REGISTRY,
     rule_sha16,
     rule_signatures,
-    RULE_REGISTRY,
 )
 
 

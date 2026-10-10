@@ -23,21 +23,21 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     ChatEvent,
+    Event,
     GrowthEvent,
     HeartEvent,
+    HormonesEvent,
     LogLevel,
+    NarrativeEvent,
     PersonaEvent,
+    ReflectionEvent,
     SelfAwarenessEvent,
     SystemEvent,
-    HormonesEvent,
-    NarrativeEvent,
-    ReflectionEvent,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: F401
-from nucleus.const import Event
-from nucleus._silent_except import silent_exc
 
 
 def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:

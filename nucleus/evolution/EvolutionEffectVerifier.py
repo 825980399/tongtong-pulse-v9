@@ -12,7 +12,6 @@ EvolutionEffectVerifier.py —— 进化效果验证器
 """
 
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import difflib
 import json
@@ -21,8 +20,9 @@ import re
 import threading
 import time
 from typing import Any
-from nucleus.data.DataAccessLayer import safe_read_json
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
 
 try:
     from nucleus.logger import get_module_logger

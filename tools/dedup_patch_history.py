@@ -25,8 +25,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.evolution.patch_dedup import (      # noqa: E402
-    dedup_history, dedup_stats, fix_details_in_history,
+from nucleus.evolution.patch_dedup import (  # noqa: E402
+    dedup_history,
+    dedup_stats,
+    fix_details_in_history,
 )
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

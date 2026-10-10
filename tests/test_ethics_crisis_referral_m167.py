@@ -4,9 +4,9 @@
 验收（任务书原文）：输入危机词 ⇒ 走安抚＋转介分支而非裸拦截；
 断言拦截计数 forbidden_count 与转介计数各自增长。
 """
-from nucleus.const import SecurityEvent, RiskEvent
-from organs.identity.PulseEthics import PulseEthics
 import config
+from nucleus.const import RiskEvent, SecurityEvent
+from organs.identity.PulseEthics import PulseEthics
 
 
 class _Recorder:

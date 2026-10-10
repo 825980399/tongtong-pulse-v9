@@ -15,15 +15,11 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import Any, Self
 
 from nucleus.const import LogLevel
 from nucleus.logger import get_module_logger
-
-
-from typing import Any, Self
-
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-
 
 _logger = get_module_logger("runtime_tempo")
 

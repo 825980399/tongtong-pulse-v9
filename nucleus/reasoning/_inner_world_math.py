@@ -17,7 +17,6 @@ import math
 from typing import Any
 
 
-
 def calc_trust_boost(current_trust: float, base_boost: float) -> float:
     """信任分边际递减：信任>80时加分减半，信任>90时仅给10%"""
     if current_trust >= 90.0:

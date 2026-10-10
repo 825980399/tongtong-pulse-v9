@@ -12,18 +12,17 @@ LLMEvolutionEngine.py —— LLM进化引擎
 """
 
 from __future__ import annotations
-from nucleus.LLMDependencyMetrics import (SCENE_EVOLUTION, record_llm_call)
-from nucleus.llm.call_recorder import trace_evolution_call
 
 import json
 import os
 import time
 from typing import Any
 
-from nucleus.const import LogLevel
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus._silent_except import silent_exc
-
+from nucleus.const import LogLevel
+from nucleus.llm.call_recorder import trace_evolution_call
+from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
 class LLMEvolutionEngine(SilentLogMixin):
@@ -69,8 +68,8 @@ class LLMEvolutionEngine(SilentLogMixin):
                 'Content-Type': 'application/json; charset=utf-8',
                 'Authorization': 'Bearer ' + _api_key,
             }
+            from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
-            from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
             _cfg = get_llm_call_config()
             _timeout = _cfg["timeout_by_purpose"]["general"]
             

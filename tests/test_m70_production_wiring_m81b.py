@@ -17,21 +17,21 @@ get() 内 0 处调用、main.py 对 materialize/set_cold_recall/recall_cold 0 �
 
 隔离：全部真实 PulseNode + 真实临时冷存（写 tmp，不碰真实 data/ 与救命备份）；不 mock 召回。
 """
+import logging
 import os
+import shutil
 import sys
 import tempfile
 import threading
 import time
 import unittest
-import logging
-import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 
 def _mk_snap(tmpdir):

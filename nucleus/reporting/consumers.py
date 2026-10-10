@@ -19,8 +19,9 @@ import os
 import time
 from typing import Any
 
-from .report_envelope import ConsumeResult, SEV_P0, SEV_P1, ReportEnvelope
 from nucleus._silent_except import silent_exc
+
+from .report_envelope import SEV_P0, SEV_P1, ConsumeResult, ReportEnvelope
 
 #: 告警落盘位置（相对于项目根）
 ALERT_FILE = os.path.join("data", "reports", "alerts.jsonl")

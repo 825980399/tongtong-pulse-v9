@@ -39,7 +39,7 @@ class TestExperienceAutoCleanM56(unittest.TestCase):
             if hasattr(self._cfg, "ENABLE_EXPERIENCE_AUTO_CLEAN"):
                 delattr(self._cfg, "ENABLE_EXPERIENCE_AUTO_CLEAN")
         else:
-            setattr(self._cfg, "ENABLE_EXPERIENCE_AUTO_CLEAN", self._saved)
+            self._cfg.ENABLE_EXPERIENCE_AUTO_CLEAN = self._saved
 
     def _pool(self):
         pool, d = _make_pool()

@@ -26,8 +26,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.evolution import night_orchestration as _orch
 from nucleus._silent_except import silent_exc
+from nucleus.evolution import night_orchestration as _orch
 
 
 def _read_config(name, default):

@@ -15,19 +15,19 @@
 """
 
 from __future__ import annotations
-import pytest
 
 import json
 import os
 import sys
 import unittest
 
+import pytest
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 import config  # noqa: E402
-
 from nucleus.evolution import patch_active_reprobe as R  # noqa: E402
 
 _HIST = os.path.join(_ROOT, "data", "patches", "patch_history.json")

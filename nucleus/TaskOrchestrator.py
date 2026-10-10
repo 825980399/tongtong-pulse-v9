@@ -22,7 +22,6 @@ from enum import Enum
 from typing import Any
 
 
-
 class TaskStatus(Enum):
     """子任务状态"""
     PENDING = "pending"

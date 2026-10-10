@@ -11,7 +11,6 @@ SearchIntentClassifier.py —— 搜索意图分类器
 定位: 搜索管理层
 """
 
-from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
@@ -19,6 +18,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 
 # ===== 内置基础规则（不可被进化覆盖） =====
 BUILTIN_RULES: dict[str, dict[str, Any]] = {

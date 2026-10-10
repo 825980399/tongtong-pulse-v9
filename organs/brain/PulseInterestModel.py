@@ -27,6 +27,7 @@ from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import (
     ChatEvent,
     EarEvent,
+    Event,
     HeartEvent,
     HormonesEvent,
     InterestEvent,
@@ -36,8 +37,6 @@ from nucleus.const import (
     SubconsciousEvent,
     SystemEvent,
 )
-
-from nucleus.const import Event
 
 
 class PulseInterestModel(BasePulseOrgan):
@@ -50,11 +49,11 @@ class PulseInterestModel(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'interest_decay_rate' in _rp and hasattr(self, '_decay_rate'):
-                setattr(self, '_decay_rate', _rp['interest_decay_rate'])
+                self._decay_rate = _rp['interest_decay_rate']
             if 'interest_boost_amount' in _rp and hasattr(self, '_boost_amount'):
-                setattr(self, '_boost_amount', _rp['interest_boost_amount'])
+                self._boost_amount = _rp['interest_boost_amount']
             if 'interest_explore_success_boost' in _rp and hasattr(self, '_explore_success_boost'):
-                setattr(self, '_explore_success_boost', _rp['interest_explore_success_boost'])
+                self._explore_success_boost = _rp['interest_explore_success_boost']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
     def __init__(self, organ_name: str = "兴趣模型"):

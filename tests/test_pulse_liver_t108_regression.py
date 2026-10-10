@@ -19,8 +19,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.body.PulseLiver import PulseLiver  # noqa: E402
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
+from organs.body.PulseLiver import PulseLiver  # noqa: E402
 
 
 class _FakeNodePool:

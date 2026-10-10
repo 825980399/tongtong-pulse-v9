@@ -23,9 +23,14 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     ChatEvent,
+    ControllerEvent,
+    DeviceEvent,
     DigestEvent,
+    EnergyEvent,
+    Event,
     GrowthEvent,
     HormonesEvent,
     InterestEvent,
@@ -33,21 +38,16 @@ from nucleus.const import (
     LegsEvent,
     LogLevel,
     NarrativeEvent,
+    PersonaEvent,
     PurgeEvent,
     ReflectionEvent,
     SubconsciousEvent,
     SystemEvent,
-    ControllerEvent,
-    DeviceEvent,
-    EnergyEvent,
-    PersonaEvent,
     TouchEvent,
 )
 from nucleus.knowledge_noise_filter import is_noise_keyword
-from utils.time_utils import get_current_datetime, get_weather
-from nucleus.const import Event
 from nucleus.runtime_tempo import get_runtime_tempo
-from nucleus._silent_except import silent_exc
+from utils.time_utils import get_current_datetime, get_weather
 
 
 class PulseSubconscious(BasePulseOrgan):
@@ -59,13 +59,13 @@ class PulseSubconscious(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'subconscious_curiosity_interval' in _rp and hasattr(self, '_curiosity_interval'):
-                setattr(self, '_curiosity_interval', _rp['subconscious_curiosity_interval'])
+                self._curiosity_interval = _rp['subconscious_curiosity_interval']
             if 'subconscious_inspiration_chance' in _rp and hasattr(self, '_inspiration_chance'):
-                setattr(self, '_inspiration_chance', _rp['subconscious_inspiration_chance'])
+                self._inspiration_chance = _rp['subconscious_inspiration_chance']
             if 'subconscious_creative_chance' in _rp and hasattr(self, '_creative_chance'):
-                setattr(self, '_creative_chance', _rp['subconscious_creative_chance'])
+                self._creative_chance = _rp['subconscious_creative_chance']
             if 'subconscious_counterfactual_chance' in _rp and hasattr(self, '_counterfactual_chance'):
-                setattr(self, '_counterfactual_chance', _rp['subconscious_counterfactual_chance'])
+                self._counterfactual_chance = _rp['subconscious_counterfactual_chance']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
 

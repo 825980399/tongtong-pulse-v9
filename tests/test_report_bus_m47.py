@@ -22,9 +22,17 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.reporting import (ACT_ALERT, SEV_P0, SEV_P1, SEV_P2,  # noqa: E402
-                               MAX_REPORTS, Anomaly, ReportBus,
-                               ReportEnvelope, make_envelope)
+from nucleus.reporting import (  # noqa: E402
+    ACT_ALERT,
+    MAX_REPORTS,
+    SEV_P0,
+    SEV_P1,
+    SEV_P2,
+    Anomaly,
+    ReportBus,
+    ReportEnvelope,
+    make_envelope,
+)
 from nucleus.reporting import consumers as _C  # noqa: E402
 
 

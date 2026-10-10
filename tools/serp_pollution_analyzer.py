@@ -32,8 +32,8 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 # ★第48批 T2（P2-320）：跨盘安全的相对路径
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
 from nucleus._silent_except import silent_exc
+from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
 
 DEFAULT_POOL = os.path.join(ROOT, "data", "experience", "experience_pool.json")
 

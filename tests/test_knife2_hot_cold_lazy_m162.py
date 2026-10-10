@@ -8,11 +8,11 @@ LazySnapshotView 契约；非可迭代输入兜底原样返回并产出可观测
 import os
 import tempfile
 
+from nucleus._silent_except import silent_exc
 from nucleus.data.DataAccessLayer import safe_write_json
+from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
-from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
-from nucleus._silent_except import silent_exc
 
 _SCRATCH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

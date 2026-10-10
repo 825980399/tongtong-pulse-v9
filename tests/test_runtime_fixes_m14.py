@@ -160,8 +160,9 @@ class TestStomachImmuneFix(unittest.TestCase):
     # --- 根因证明：旧参数名确实会抛 TypeError ---
     def test_old_kwarg_raises_typeerror(self):
         """证伪：query(space_path=...) 不被接受（这正是 995 次静默异常的根因）。"""
-        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         import inspect
+
+        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         params = inspect.signature(PulseNodePool.query).parameters
         self.assertIn("space_path_prefix", params)
         self.assertNotIn("space_path", params)

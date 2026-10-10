@@ -17,11 +17,9 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
-
-from nucleus.security.crisis_keywords import (CRISIS_SELF_HARM_KEYWORDS,
-                                              crisis_self_harm_keywords)
-from organs.identity.PulseEthics import PulseEthics
+from nucleus.security.crisis_keywords import CRISIS_SELF_HARM_KEYWORDS, crisis_self_harm_keywords
 from organs.brain.PulseRiskPerception import PulseRiskPerception
+from organs.identity.PulseEthics import PulseEthics
 
 
 class _Rec:

@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 import config
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  SILENCE_EXEMPT_ORGANS, HeartEvent, LogLevel, VascularEvent, KnowledgeEvent
+from nucleus.const import SILENCE_EXEMPT_ORGANS, HeartEvent, KnowledgeEvent, LogLevel, VascularEvent
 from nucleus.organ_identity import resolve_organ_key  # ★T-112d：器官名归一化
 
 

@@ -12,7 +12,6 @@ RuntimeTrajectory.py —— 运行轨迹
 """
 
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import json
 import os
@@ -21,6 +20,7 @@ import time
 from collections import deque
 from typing import Any, ClassVar
 
+from nucleus._silent_except import silent_exc
 
 
 class RuntimeTrajectory:

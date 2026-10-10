@@ -8,7 +8,6 @@
 import unittest
 
 import config as _cfg
-
 from organs.motor.PulseController import PulseController
 
 

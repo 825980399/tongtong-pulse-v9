@@ -14,8 +14,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                     # noqa: E402
-from organs.motor.PulseLegs import PulseLegs      # noqa: E402
+import config  # noqa: E402
+from organs.motor.PulseLegs import PulseLegs  # noqa: E402
 
 _LS = io.open(os.path.join(_ROOT, "organs/motor/PulseLegs.py"),
               encoding="utf-8", errors="replace").read().replace("\r\n", "\n")

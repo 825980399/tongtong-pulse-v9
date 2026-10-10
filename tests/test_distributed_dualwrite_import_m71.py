@@ -6,9 +6,9 @@
   验证的是接口存在性、默认关闭、双写/只写逻辑在关闭时不写库、导入工具的
   全量/增量/断点续传/去重/checkpoint 正确性（mock 后端），不依赖真实数据库。
 """
+import json
 import os
 import sys
-import json
 import tempfile
 import unittest
 
@@ -371,8 +371,7 @@ class TestT5ImportTool(unittest.TestCase):
         self.assertEqual(len(w.nodes), 0)
 
     def test_51_checkpoint_resume_skip(self):
-        from tools.import_nodes_to_neo4j import (
-            MockWriter, import_nodes, load_checkpoint)
+        from tools.import_nodes_to_neo4j import MockWriter, import_nodes, load_checkpoint
         ck = os.path.join(tempfile.gettempdir(), "m71_ckpt.json")
         if os.path.isfile(ck):
             os.remove(ck)
@@ -432,7 +431,7 @@ class TestT5ImportTool(unittest.TestCase):
         self.assertEqual(len(nodes), 3)
 
     def test_56_build_writer_mock(self):
-        from tools.import_nodes_to_neo4j import build_writer, MockWriter
+        from tools.import_nodes_to_neo4j import MockWriter, build_writer
         w = build_writer(use_mock=True, require_real=False)
         self.assertIsInstance(w, MockWriter)
 

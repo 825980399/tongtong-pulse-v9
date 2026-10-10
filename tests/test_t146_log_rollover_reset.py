@@ -17,10 +17,10 @@ import time
 
 import nucleus.logger as _lg
 from nucleus.logger import (
-    SafeRotatingFileHandler,
-    check_log_integrity,
     _LOG_STATE_FILE,
+    SafeRotatingFileHandler,
     _write_rollover_marker,
+    check_log_integrity,
 )
 
 

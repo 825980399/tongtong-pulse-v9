@@ -15,7 +15,6 @@ sys.path.insert(0, ROOT)
 
 from organs.brain.PulseInnerWorld import PulseInnerWorld
 
-
 _DETECTOR_NAMES = [
     "_detect_simple_query_local",
     "_detect_pure_emotion",

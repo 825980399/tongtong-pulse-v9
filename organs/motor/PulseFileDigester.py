@@ -26,8 +26,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import KnowledgeEvent, LogLevel, MediaEvent, MotorEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import KnowledgeEvent, LogLevel, MediaEvent, MotorEvent
 
 
 class PulseFileDigester(BasePulseOrgan):

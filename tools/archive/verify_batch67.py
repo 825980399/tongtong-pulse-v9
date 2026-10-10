@@ -1,9 +1,11 @@
 """第67批验收测试 - 配置项和模块导入验证"""
 import sys
+
 sys.path.insert(0, r'<PROJECT_ROOT>')
 
 print("=== 1. 配置项验证 ===")
 import config
+
 config_items = [
     'SNAPSHOT_ASYNC_SAVE',
     'SNAPSHOT_SAVE_TIMEOUT',
@@ -53,7 +55,7 @@ except Exception as e:
 
 print("\n=== 4. WriteGuard环境判定验证 ===")
 try:
-    from nucleus.data.write_guard import resolve_env, env_reason
+    from nucleus.data.write_guard import env_reason, resolve_env
     env = resolve_env()
     reason = env_reason()
     print(f"  ✅ 当前环境判定: {env}")

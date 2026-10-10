@@ -21,9 +21,10 @@ import threading
 import time
 
 import config
-from nucleus.const import LogLevel
 from nucleus._silent_except import silent_exc
-from nucleus.logging.sanitizer import sanitize, SanitizingFilter
+from nucleus.const import LogLevel
+from nucleus.logging.sanitizer import SanitizingFilter, sanitize
+
 
 def _m153_sanitizer_enabled() -> bool:
     """第153批 T153-2：ENABLE_LOG_SANITIZER 总开关接线。
@@ -868,7 +869,9 @@ def exc_location(depth: int = 1) -> str:
             _line = _fr.f_lineno
         _file = str(_file).replace("\\", "/")
         try:
-            from nucleus.data.path_utils import normalize_relpath as _normalize_relpath  # ★第55批 T3（跨盘安全）+ 第169批 C2 归一
+            from nucleus.data.path_utils import (
+                normalize_relpath as _normalize_relpath,  # ★第55批 T3（跨盘安全）+ 第169批 C2 归一
+            )
 
             _rel = _normalize_relpath(_file, _PROJECT_ROOT)
             if not _rel.startswith(".."):

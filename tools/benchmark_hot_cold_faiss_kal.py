@@ -99,8 +99,9 @@ def _framework_status():
 
 def stage_node_pool(nodes=1000, seed=42):
     import random
-    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
+
     from nucleus.mnemosyne.PulseNode import PulseNode
+    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
     rng = random.Random(seed)
     pool = PulseNodePool()
@@ -203,8 +204,8 @@ def stage_faiss_fix(count=None, dim=512, topks=(100, 500, 1000, 5000, 10000),
     if count is None:
         count = _real_node_count() or 2000
     import random
-    import tempfile
     import shutil
+    import tempfile
     rng = random.Random(seed)
     from nucleus.vector_store.faiss_store import FAISSVectorStore
 

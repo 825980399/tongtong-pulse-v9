@@ -36,7 +36,8 @@ if ROOT not in sys.path:
 import config  # noqa: E402
 from nucleus import LLMDependencyMetrics as M  # noqa: E402
 from nucleus.evolution.patch_verification_split import (  # noqa: E402
-    F_SPLIT_VERSION, real_fix_rate,
+    F_SPLIT_VERSION,
+    real_fix_rate,
 )
 from nucleus.llm import call_recorder as cr  # noqa: E402
 

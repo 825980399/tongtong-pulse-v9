@@ -11,16 +11,17 @@ CodeAnalyzer.py —— 代码分析器
 定位: 代码审查层
 """
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 import ast
 import json
 import os
 import time
 from dataclasses import dataclass, field
 
-from nucleus.logger import get_module_logger
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.path_utils import (
+    safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+)
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("CodeAnalyzer")
 

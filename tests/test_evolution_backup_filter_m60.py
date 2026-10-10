@@ -23,7 +23,6 @@ from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
 )
 from nucleus.self_inspector import _issue_file_in_backup_dir  # noqa: E402
 
-
 # ---------- T1：_issue_filter_reason 备份目录段前缀判定 ----------
 
 def test_filter_reason_backup_segment_prefixes():

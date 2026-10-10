@@ -18,12 +18,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 
 # ★第九批 B-3：符号推理的置信度不再硬编码——
 #   confidence = 0.9 × 该类型历史成功率系数 × 证据强度系数（证据 = 已产出的推理步）。
 #   开关关闭时 _evidence_conf 原值返回，行为与改动前逐字节一致。
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
-from nucleus._silent_except import silent_exc
 
 
 @dataclass

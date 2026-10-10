@@ -30,15 +30,17 @@
 """
 
 from __future__ import annotations
-from nucleus.data.exclude_dirs import BACKUP_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
 
-
-from nucleus.data.path_utils import normalize_relpath as _normalize_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）+ 第169批 C2 归一
 import argparse
 import os
 import shutil
 import sys
+
 from nucleus._silent_except import silent_exc
+from nucleus.data.exclude_dirs import BACKUP_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
+from nucleus.data.path_utils import (
+    normalize_relpath as _normalize_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）+ 第169批 C2 归一
+)
 
 __all__ = [
     "SKIP_PATH_PREFIXES", "SKIP_DIR_NAMES", "BACKUP_DIR_PREFIXES",

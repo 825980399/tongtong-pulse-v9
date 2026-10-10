@@ -24,7 +24,6 @@
 ``findings``（结论文本）与 ``recommendations``（按预期收益排序的建议）。
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import hashlib
 import io
@@ -34,6 +33,8 @@ import sys
 import time
 from collections import Counter
 from typing import Any
+
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_REPORT_PATH",
@@ -92,7 +93,7 @@ def _pkey(prompt: Any) -> str:
 # ------------------------------------------------------------------ 主分析
 def analyze_records(records: list, *, include_suspect: bool = True) -> dict:
     """分析调用记录，返回分布 / 重复模式 / 失败模式 / 可优化清单。"""
-    from nucleus.llm.data_quality_evaluator import classify_record, channel_whitelist
+    from nucleus.llm.data_quality_evaluator import channel_whitelist, classify_record
     _all = [r for r in (records if isinstance(records, (list, tuple)) else [])
             if isinstance(r, dict)]
     _wl = channel_whitelist()
@@ -272,7 +273,7 @@ def analyze_records(records: list, *, include_suspect: bool = True) -> dict:
 def analyze_day(day: str | None = None, trace_dir: str | None = None,
                 *, include_suspect: bool = True) -> dict:
     """分析某一天的留存文件。"""
-    from nucleus.llm.data_quality_evaluator import DEFAULT_TRACE_DIR, load_records, _trace_dir
+    from nucleus.llm.data_quality_evaluator import DEFAULT_TRACE_DIR, _trace_dir, load_records
     _d = trace_dir or _trace_dir() or DEFAULT_TRACE_DIR
     _path = os.path.join(_d, "calls_%s.jsonl" % (day or time.strftime("%Y%m%d")))
     _recs = load_records(_path)

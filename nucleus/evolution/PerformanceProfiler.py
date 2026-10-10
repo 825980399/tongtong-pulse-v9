@@ -25,7 +25,6 @@ from collections.abc import Callable
 from typing import Any
 
 
-
 class PerformanceProfiler:
     """性能热点定位与数据分布统计工具。"""
 

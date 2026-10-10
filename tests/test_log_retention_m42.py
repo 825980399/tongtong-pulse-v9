@@ -23,12 +23,12 @@ import unittest
 
 import config
 from nucleus.logger import (
-    cleanup_old_logs,
-    check_log_integrity,
-    log_retention_days,
-    _is_log_file,
     _LOG_INTEGRITY_FILE,
     _LOG_STATE_FILE,
+    _is_log_file,
+    check_log_integrity,
+    cleanup_old_logs,
+    log_retention_days,
 )
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

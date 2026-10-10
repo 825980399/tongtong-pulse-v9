@@ -11,7 +11,6 @@ parallel_scheduler.py —— 并行调度器
 定位: 任务调度层
 """
 
-from config import TIMEOUT_CONFIG
 import os
 import threading
 import time
@@ -19,14 +18,16 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from nucleus.const import LogLevel
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.logger import exc_location  # ★第32批 T3：异常位置动态获取
+from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
+from nucleus.const import LogLevel
 
 # ★P2-64 并发收敛（D3-A）：parallel 作为唯一门面，内部委托保留实现的 Hybrid/Structured。
 #   nucleus/parallel_scheduler.py 已在 tools/ci/check_deprecated_imports.py 的 EXEMPT_FILES 中豁免。
-from nucleus.HybridParallelScheduler import TaskType as _HybridTaskType, get_hybrid_scheduler
+from nucleus.HybridParallelScheduler import TaskType as _HybridTaskType
+from nucleus.HybridParallelScheduler import get_hybrid_scheduler
+from nucleus.logger import exc_location  # ★第32批 T3：异常位置动态获取
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.StructuredParallelScheduler import SubTask, get_structured_parallel_scheduler
 
 __all__ = [

@@ -19,8 +19,6 @@
 退出码：0 = 无超限；1 = 存在红线上限超限（仅 --strict）；2 = 参数/运行错误。
 """
 from __future__ import annotations
-from nucleus.data.exclude_dirs import AUDIT_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
-
 
 import argparse
 import ast
@@ -30,10 +28,12 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
+from nucleus.data.exclude_dirs import AUDIT_SCAN_EXCLUDED  # ★第55批 T4（统一排除清单）
+
 # ★主线第12批 T2/P2-82：备份目录排除统一走共用模块（不再逐批次硬编码）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools.audit_utils import is_backup_path, should_skip_dir  # noqa: E402
 from nucleus._silent_except import silent_exc
+from tools.audit_utils import is_backup_path, should_skip_dir  # noqa: E402
 
 # -------- 默认配置（与 config.CODE_QUALITY_CONFIG 对齐；此处内联以便独立运行）--------
 DEFAULT_CONFIG: dict[str, Any] = {

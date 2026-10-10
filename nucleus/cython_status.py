@@ -14,8 +14,8 @@ cython_status.py —— Cython状态监测
 from __future__ import annotations
 
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 # (模块名, 导入路径, 中文用途)
 _EXTENSIONS: list[tuple[str, str, str]] = [

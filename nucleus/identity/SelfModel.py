@@ -22,10 +22,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 
 class SelfModel(SilentLogMixin):

@@ -19,12 +19,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import time
 from typing import Any
 
-from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import EthicsEvent, SecurityEvent, SystemEvent, RiskEvent
-# ★第169批 C7'：危机词表单一来源（与 PulseRiskPerception 共引同一常量）
-from nucleus.security.crisis_keywords import (CRISIS_SELF_HARM_KEYWORDS,
-                                              crisis_self_harm_keywords)
 import config
+from base.BasePulseOrgan import BasePulseOrgan
+from nucleus.const import EthicsEvent, RiskEvent, SecurityEvent, SystemEvent
+
+# ★第169批 C7'：危机词表单一来源（与 PulseRiskPerception 共引同一常量）
+from nucleus.security.crisis_keywords import CRISIS_SELF_HARM_KEYWORDS, crisis_self_harm_keywords
 
 
 class PulseEthics(BasePulseOrgan):

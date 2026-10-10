@@ -20,7 +20,6 @@ from typing import Any, TypedDict
 from nucleus.probe_types import ProbeIssue  # noqa: F401
 
 
-
 class Probe(TypedDict):
     """探查器契约（注册表内登记单元）。"""
     name: str                          # 探查器唯一名称（如 'tool_channel'）

@@ -21,7 +21,6 @@ from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
-
 class AibotSilentLogger(SilentLogMixin):
     """AiBotSDK 日志适配器：DEBUG/INFO 静默，WARN/ERROR 转框架日志。"""
 

@@ -17,7 +17,6 @@ import time
 from typing import Any, ClassVar
 
 
-
 class SelfCorrector:
     """推理自我纠错引擎。"""
 

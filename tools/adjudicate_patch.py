@@ -26,6 +26,7 @@ import json
 import os
 import sys
 import time
+
 from nucleus._silent_except import silent_exc
 
 _OBSOLETE_MARKERS_FALLBACK = ("结构性失效", "obsolete", "已裁", "判定废弃")

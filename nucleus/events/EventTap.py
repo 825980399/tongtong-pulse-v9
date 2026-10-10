@@ -33,9 +33,9 @@ import time
 from collections import deque
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.events.EventBus import EventPriority, get_event_bus
 from nucleus.logger import get_module_logger
-from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("EventTap")
 

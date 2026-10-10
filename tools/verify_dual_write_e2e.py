@@ -28,6 +28,7 @@
 import argparse
 import os
 import sys
+
 from nucleus._silent_except import silent_exc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -129,9 +130,9 @@ def _build_real_writer():
 
 def run(backend):
     import config
-    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    from nucleus.mnemosyne.PulseNode import PulseNode
     import nucleus.graph_store.neo4j_store as neo4j_mod
+    from nucleus.mnemosyne.PulseNode import PulseNode
+    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
     # 注入后端
     if backend == "real":

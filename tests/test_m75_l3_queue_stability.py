@@ -7,8 +7,8 @@ T3 self_inspector 精确匹配；T4 RSS 超时/慢源降级/优先级。
 """
 import os
 import sys
-import time
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import MagicMock, patch
@@ -17,11 +17,11 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from nucleus.field.InfoField import _PULSE_LAYER_L3, InfoField
-from organs.body.PulseLiver import PulseLiver
-from nucleus.self_inspector import SelfInspector, _BODY_LOC_STATS
 import nucleus.runtime_tempo as _rt
+from nucleus.field.InfoField import _PULSE_LAYER_L3, InfoField
 from nucleus.knowledge.RssCollector import RssCollector
+from nucleus.self_inspector import _BODY_LOC_STATS, SelfInspector
+from organs.body.PulseLiver import PulseLiver
 
 try:
     import feedparser  # 解析相关测试需要

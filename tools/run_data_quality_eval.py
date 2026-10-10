@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.llm.data_quality_evaluator import (      # noqa: E402
+from nucleus.llm.data_quality_evaluator import (  # noqa: E402
     DEFAULT_REPORT_PATH,
     SCORE_DIMENSIONS,
     channel_whitelist,

@@ -68,7 +68,6 @@ effectiveness 为 0.5）。两者的 ``reprobe_verdict`` 均为 ``true_pass``（
 精确可审计。
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import io
 import json
@@ -76,6 +75,8 @@ import os
 import sys
 import time
 from typing import Any
+
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_HISTORY_PATH",
@@ -404,6 +405,8 @@ def summarize(items: list) -> dict[str, Any]:
     try:
         from nucleus.evolution.patch_verification_split import (
             real_fix_rate as _real_fix_rate,
+        )
+        from nucleus.evolution.patch_verification_split import (
             split_verification as _split,
         )
         _n = sum(1 for x in items if isinstance(x, dict))

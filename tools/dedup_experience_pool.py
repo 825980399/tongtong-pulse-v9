@@ -26,11 +26,11 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
+from nucleus.data.DataAccessLayer import safe_read_json  # noqa: E402
 from nucleus.logger import get_module_logger  # noqa: E402
 
 # ★第五批：框架运行探测统一复用 tools._framework_probe，避免重复实现
 from tools._framework_probe import _framework_looks_running  # noqa: E402
-from nucleus.data.DataAccessLayer import safe_read_json  # noqa: E402
 
 _logger = get_module_logger("dedup_experience_pool")
 

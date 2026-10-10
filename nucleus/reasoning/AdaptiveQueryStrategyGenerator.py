@@ -16,8 +16,8 @@ from __future__ import annotations
 import hashlib
 import time
 from typing import Any
-from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
+from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 
 
 class AdaptiveQueryStrategyGenerator:

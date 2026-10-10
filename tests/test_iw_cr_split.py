@@ -24,8 +24,8 @@ os.environ.setdefault(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "test_iw_cr.log"),
 )
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 from nucleus.const import GrowthEvent  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 
 # 在默认 node_pool=None 场景下、且 r=1 时会被无条件调用的洞察生成 helper；
 # 统一 mock 为 None 以隔离编排逻辑。r%N 门控项也一并 mock（实例属性遮蔽，无害）。

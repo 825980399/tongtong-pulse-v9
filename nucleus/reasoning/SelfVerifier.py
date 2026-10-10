@@ -14,12 +14,10 @@ SelfVerifier.py —— 自我验证器
 import os
 from typing import Any
 
-from nucleus.const import LogLevel
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
-
+from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
 class SelfVerifier(SilentLogMixin):

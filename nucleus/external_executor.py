@@ -13,8 +13,6 @@ external_executor.py —— 外部执行器
 import concurrent.futures
 import os
 import threading
-from nucleus.const import LogLevel
-from nucleus.logger import get_module_logger
 import time
 import uuid
 from collections import deque
@@ -22,12 +20,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+
 from nucleus._silent_except import silent_exc
-
-
-
-
+from nucleus.const import LogLevel
+from nucleus.logger import get_module_logger
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 _logger = get_module_logger("external_executor")
 

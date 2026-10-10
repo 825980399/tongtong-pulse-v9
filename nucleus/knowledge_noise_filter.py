@@ -11,13 +11,12 @@ knowledge_noise_filter.py —— 知识噪声过滤器
 定位: 知识治理层
 """
 
-from nucleus._silent_except import silent_exc
 import time  # noqa: F401
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import ViewMode
 from nucleus.logger import get_module_logger
-
 
 _logger = get_module_logger("knowledge_noise_filter")
 

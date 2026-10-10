@@ -16,8 +16,8 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 # ── 每类运算的「每元素浮点运算数」（用于估算 FLOPs）──
 #   余弦 = 归一化(3·N·D) + 点积(2·N·D)，取 4 作保守近似。

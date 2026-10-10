@@ -17,11 +17,23 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
+from nucleus.const import (
+    ChatEvent,
+    EarEvent,
+    Event,
+    HeartEvent,
+    InterestEvent,
+    KnowledgeEvent,
+    MouthEvent,
+    ReflectionEvent,
+    SubconsciousEvent,
+    SystemEvent,
+    VascularEvent,
+)
 
 # ★暂缓项1：脉冲结构 TypedDict 契约（编译期检查，零运行时开销）
 from nucleus.pulse_types import Pulse
-from nucleus.const import  Event, ChatEvent, EarEvent, HeartEvent, InterestEvent, KnowledgeEvent, MouthEvent, ReflectionEvent, SubconsciousEvent, SystemEvent, VascularEvent
-from nucleus._silent_except import silent_exc
 
 # 层级默认映射表（当 emit 未指定 layer 时自动推断）
 _DEFAULT_LAYER_MAP = {

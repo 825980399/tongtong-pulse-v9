@@ -13,17 +13,16 @@ node_pool.add 接收真实 PulseNode（纯内存数据结构，构造无副作�
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 
 import pytest
 
-from unittest.mock import MagicMock
-
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.reasoning.ReasoningExperienceIndexer import (
+    _STATE_PATH,
     PATH_FAILURE,
     PATH_REMEDIATION,
     ReasoningExperienceIndexer,
-    _STATE_PATH,
 )
 
 

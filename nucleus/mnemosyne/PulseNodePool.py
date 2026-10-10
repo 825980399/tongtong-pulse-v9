@@ -14,25 +14,25 @@ PulseNodePool.py —— 脉冲节点池管理器
 import json
 import os
 import sys
+
 from nucleus.const import LogLevel
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import threading
 import time
 from typing import Any
-from nucleus.logger import get_module_logger
 
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.mnemosyne.PulseNode import PulseNode
-from nucleus.mnemosyne.pa_compat import table_from_rows
-
-from nucleus.data.DataAccessLayer import safe_write_json  # ★T-125a：原子写复用（原子写）
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.DataAccessLayer import safe_write_json  # ★T-125a：原子写复用（原子写）
+from nucleus.logger import get_module_logger
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from nucleus.mnemosyne.pa_compat import table_from_rows
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 _module_logger = get_module_logger("PulseNodePool")
 
 try:
-    from config import PARQUET_COMPRESSION, PARQUET_BATCH_SIZE
+    from config import PARQUET_BATCH_SIZE, PARQUET_COMPRESSION
 except Exception:
     PARQUET_COMPRESSION = "snappy"  # ★第109批 T-109a：config 键缺失时回落
     PARQUET_BATCH_SIZE = 5000
@@ -1907,8 +1907,8 @@ class PulseNodePool(SilentLogMixin):
 
     def _l3_fuse_state(self) -> dict:
         """读取保险丝持久化状态（date + count），文件缺失/损坏即返回空态。"""
-        import os as _os
         import json as _json
+        import os as _os
         _here = _os.path.dirname(_os.path.abspath(__file__))
         _root = _os.path.dirname(_os.path.dirname(_here))  # ★T-125a：修正越界（原三级dirname落到项目根父目录）
         _path = _os.path.join(_root, "data", "l3_downgrade_fuse.json")

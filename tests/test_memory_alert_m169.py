@@ -17,7 +17,6 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
-
 from nucleus.field.InfoField import InfoField
 from nucleus.runtime_metrics import RuntimeMetrics
 

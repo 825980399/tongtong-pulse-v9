@@ -27,6 +27,7 @@ if _PROJECT_ROOT not in sys.path:
 import pytest  # noqa: E402
 
 import config  # noqa: E402
+
 try:
     import tmp.test_isolation as TI  # noqa: E402
 except ImportError:

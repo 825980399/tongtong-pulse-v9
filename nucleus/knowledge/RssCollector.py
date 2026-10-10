@@ -20,8 +20,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.request import Request, urlopen
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _SEEN_PATH = os.path.join(_PROJECT_ROOT, "data", "rss_cache", "seen_hashes.json")

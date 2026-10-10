@@ -1,6 +1,7 @@
+from config import EXTERNAL_CALL_TIMEOUTS  # noqa: F401
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 from nucleus._warn_throttle import should_warn
-from config import EXTERNAL_CALL_TIMEOUTS  # noqa: F401
+
 """main —— v9.5 PulseNet 脉冲框架总入口（自进化基座版）
 
 版本: v10 PulseNet
@@ -10,10 +11,11 @@ from config import EXTERNAL_CALL_TIMEOUTS  # noqa: F401
 
 import os
 import sys
-from typing import Any
 
 # ===== 第三方库弃用警告抑制（不影响功能，仅净化启动日志）=====
 import warnings
+from typing import Any
+
 # jieba 内部使用已弃用的 pkg_resources API（setuptools>=81 触发）
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API")
 # PyTorch 旧版 pynvml 弃用警告（已卸载 pynvml，保留作双保险）
@@ -35,10 +37,10 @@ except ImportError as _se:
 import re as _re  # noqa: I001
 _re._cache = {}  # 预留给后续正则优化
 # ===== 性能优化结束 =====
+import logging
 import signal
 import threading
 import time
-import logging
 
 # ★P1修复: 启动时把当前工作目录归一化到项目根目录
 # 背景: 知识快照/parquet/日志/本能快照均使用相对路径（如 data/knowledge/...），
@@ -74,6 +76,7 @@ from nucleus.const import LogLevel, PulseLayer, SystemEvent  # v9.5新增PulseLa
 from nucleus.field.InfoField import (
     InfoField,  # 全局信息场: 脉冲广播/条件匹配/历史查询（v9.5分层异步调度）
 )
+
 try:
     from nucleus.InsightBoard import (
         get_insight_board,  # 闭环间洞察共享黑板
@@ -89,6 +92,7 @@ from nucleus.logger import (
     get_module_logger,  # 模块级日志器（★主线第20批 T6）
     init_framework_logger,  # 框架日志器
 )
+
 # ★主线第20批 T6/P2-113：模块级 logger —— 补丁应用 / 自验证流程改用 logger 落盘
 #   （原为 print()，只进控制台不进日志文件，事后无法追溯自动回退/自验证过程）
 _logger = get_module_logger("main")
@@ -257,6 +261,7 @@ from organs.identity.PulseSpiritConstitution import (
 from organs.immune.PulseBoneMarrow import PulseBoneMarrow  # 骨髓: 错误特征库生成 # noqa: F401
 from organs.immune.PulseSkin import PulseSkin  # 皮肤: 补丁预检/安全沙箱 # noqa: F401
 from organs.immune.PulseThymus import PulseThymus  # 胸腺: T细胞训练/策略优化 # noqa: F401
+
 # -- 免疫系统（4个） --
 from organs.immune.PulseWhiteCell import (
     PulseWhiteCell,  # 白细胞: 异常检测/自动修复/免疫记忆 # noqa: F401
@@ -679,8 +684,7 @@ class PulseFramework:
             import config as _m50_cfg
             if getattr(_m50_cfg, "ENABLE_REPORT_BUS", True):
                 from nucleus.reporting import get_report_bus as _m50_gb
-                from nucleus.reporting.consumers import (
-                    register_builtin_consumers as _m50_reg)
+                from nucleus.reporting.consumers import register_builtin_consumers as _m50_reg
                 _m50_types = _m50_reg(_m50_gb())
                 self._log(LogLevel.INFO,
                           "自认知报告总线已启用，已注册消费者: %s" % _m50_types)
@@ -1201,8 +1205,8 @@ class PulseFramework:
         # 具名差集 = 装配集 − 声明集；应全部属于 FRAMEWORK_QUASI_ORGANS（如 QICA，
         # 框架组件以 _create_organ 实例化纳管，预期偏差），否则为「未声明却装配」真缺陷。
         try:
-            from nucleus.organ_loader import OrganLoader
             from nucleus.organ_assembler import OrganAssembler
+            from nucleus.organ_loader import OrganLoader
             _metas = OrganLoader(self).scan_organs_directory()
             _diff = OrganAssembler(_metas).diff_declared_vs_instantiated(set(self.organs.keys()))
             self._log(LogLevel.INFO,
@@ -3054,10 +3058,13 @@ class PulseFramework:
         # shutdown_reasoning_pool 已执行；此处将旗置 True 覆盖「关后→下次start前」
         # 整段窗口，任何迟到 get_reasoning_pool() 必返回 None（拒绝复活），并清点强清残留。
         # 独立无 try 块，始终执行；get_reasoning_pool() 关后必返回 None（不新建池）。
-        import threading as _th_a2diag
         import multiprocessing as _mp_a2diag
+        import threading as _th_a2diag
+
         from nucleus.reasoning.ReasoningWorkerPool import (
-            get_reasoning_pool, is_reasoning_pool_refused, arm_reasoning_pool_after_stop,
+            arm_reasoning_pool_after_stop,
+            get_reasoning_pool,
+            is_reasoning_pool_refused,
         )
         arm_reasoning_pool_after_stop()
         _rp_refused = is_reasoning_pool_refused()

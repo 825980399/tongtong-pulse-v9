@@ -31,6 +31,7 @@ import re
 import time
 from collections import Counter, defaultdict
 from typing import Any
+
 from nucleus._silent_except import silent_exc
 
 __all__ = ["KnowledgeQualityAnalyzer", "get_knowledge_quality_analyzer"]

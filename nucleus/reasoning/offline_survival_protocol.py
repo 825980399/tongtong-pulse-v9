@@ -25,10 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from nucleus.reasoning.SymbolicReasoner import SymbolicReasoner
-from nucleus.reasoning.CausalInferrer import get_causal_inferrer
 from nucleus.reasoning.analogy_engine import AnalogyEngine
-
+from nucleus.reasoning.CausalInferrer import get_causal_inferrer
+from nucleus.reasoning.SymbolicReasoner import SymbolicReasoner
 
 # ★模块级开关（不触碰 config.py）：False → 完全退化为原有委派行为。
 OFFLINE_SURVIVAL_ENABLED: bool = True

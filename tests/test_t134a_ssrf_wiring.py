@@ -9,10 +9,9 @@
 并验证 RssCollector / WikiQuerier 的 _default_fetch 在守卫拒绝时 fail-closed 上抛。
 """
 import config as _cfg
-import nucleus.ssrf_guard as _sg
-
 import nucleus.knowledge.RssCollector as _rss
 import nucleus.knowledge.WikiQuerier as _wiki
+import nucleus.ssrf_guard as _sg
 
 
 def test_scheme_rejected():

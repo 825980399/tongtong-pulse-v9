@@ -17,10 +17,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.reporting import publishers as _pub                      # noqa: E402
-from nucleus.reporting.report_bus import ReportBus                    # noqa: E402
-from nucleus.self_awareness.SelfAwarenessEngine import (              # noqa: E402
-    SelfAwarenessEngine)
+from nucleus.reporting import publishers as _pub  # noqa: E402
+from nucleus.reporting.report_bus import ReportBus  # noqa: E402
+from nucleus.self_awareness.SelfAwarenessEngine import SelfAwarenessEngine  # noqa: E402
 
 _SA_SRC = io.open(os.path.join(_ROOT, "nucleus/self_awareness/SelfAwarenessEngine.py"),
                   encoding="utf-8", errors="replace").read().replace("\r\n", "\n")

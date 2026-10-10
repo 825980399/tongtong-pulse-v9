@@ -15,25 +15,21 @@ HybridParallelScheduler.py —— 混合并行调度器
 """
 
 from __future__ import annotations
-from config import TIMEOUT_CONFIG
 
 import os
 import threading
 import time
-
-from nucleus.const import LogLevel
-from nucleus.logger import get_module_logger
-
-
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from enum import Enum
 from typing import Any
 
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
-
+from nucleus.const import LogLevel
+from nucleus.logger import get_module_logger
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 _logger = get_module_logger("HybridParallelScheduler")
 

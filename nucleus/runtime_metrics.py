@@ -11,17 +11,17 @@ runtime_metrics.py —— 运行时指标
 定位: 监控层
 """
 
-from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
-from nucleus.logging.sanitizer import sanitize
-from config import TIMEOUT_CONFIG
+import logging
 import queue
 import threading
 import time
-import logging
 import traceback
 from collections import deque
 from typing import Any
 
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
+from nucleus.logging.sanitizer import sanitize
 
 
 class RuntimeMetrics:

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
+
 """
 PulseStomach —— 脉冲驱动胃 · 知识消化器官
 
@@ -24,16 +25,16 @@ from typing import Any
 
 import config
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.logger import exc_location
 from nucleus.const import (
     DigestEvent,
     EthicsEvent,
+    Event,
     HormonesEvent,
     KnowledgeEvent,
     LogLevel,
     SystemEvent,
-    Event,
 )
+from nucleus.events.EventTap import tap_publish  # ★第17批 T4：旁路事件发布入口
 from nucleus.knowledge_noise_filter import (
     DOMAIN_SUFFIXES,
     check_self_consistency_for_node,  # ★v26.0新增：知识免疫自我一致性检查
@@ -44,9 +45,8 @@ from nucleus.knowledge_noise_filter import (
     is_path_fragment_word,  # ★v25.0新增：路径碎片检测
 )
 from nucleus.LLMDependencyMetrics import DIGEST_KNOWLEDGE, record_digestion
+from nucleus.logger import exc_location
 from nucleus.mnemosyne.PulseNode import PulseNode
-from nucleus.events.EventTap import tap_publish  # ★第17批 T4：旁路事件发布入口
-
 
 
 def _re_match_candidate(text: str):
@@ -71,13 +71,13 @@ class PulseStomach(BasePulseOrgan):
             #   （refresh 写入 _min_keywords 后从未读取；实际语义由
             #     stomach_keyword_min_length 承担，该参数有真实消费点）
             if 'stomach_keyword_min_length' in _rp and hasattr(self, '_keyword_min_length'):
-                setattr(self, '_keyword_min_length', _rp['stomach_keyword_min_length'])
+                self._keyword_min_length = _rp['stomach_keyword_min_length']
             if 'stomach_keyword_max_length' in _rp and hasattr(self, '_keyword_max_length'):
-                setattr(self, '_keyword_max_length', _rp['stomach_keyword_max_length'])
+                self._keyword_max_length = _rp['stomach_keyword_max_length']
             if 'stomach_purity_threshold' in _rp and hasattr(self, '_purity_threshold'):
-                setattr(self, '_purity_threshold', _rp['stomach_purity_threshold'])
+                self._purity_threshold = _rp['stomach_purity_threshold']
             if 'stomach_quality_warn_threshold' in _rp and hasattr(self, '_quality_warn_threshold'):
-                setattr(self, '_quality_warn_threshold', _rp['stomach_quality_warn_threshold'])
+                self._quality_warn_threshold = _rp['stomach_quality_warn_threshold']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
 
@@ -659,7 +659,9 @@ class PulseStomach(BasePulseOrgan):
                 _classify_json_error = None
                 if _json_repair_on:
                     try:
-                        from nucleus.parsing.JsonRepair import get_json_failure_tracker as _get_tracker, classify_json_error as _classify_json_error, parse_with_repair as _parse_with_repair
+                        from nucleus.parsing.JsonRepair import classify_json_error as _classify_json_error
+                        from nucleus.parsing.JsonRepair import get_json_failure_tracker as _get_tracker
+                        from nucleus.parsing.JsonRepair import parse_with_repair as _parse_with_repair
                         _tracker = _get_tracker()
                         # 同内容 60s 窗口内只允许 1 条 WARNING（去重预算，消费即失效）
                         _warn_budget = _tracker.should_warn(cleaned_content)
@@ -778,8 +780,9 @@ class PulseStomach(BasePulseOrgan):
                 #     （nucleus/parsing/json_fault_tolerant.py）。
                 if _parsed is None:
                     try:
-                        import config as _cfg68_st
                         import json as _json105
+
+                        import config as _cfg68_st
                         _ft_on = bool(getattr(_cfg68_st, "STOMACH_JSON_FAULT_TOLERANT", True))
                     except Exception:
                         _ft_on = True

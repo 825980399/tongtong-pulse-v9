@@ -14,12 +14,13 @@
   迁移说明见交付报告。
 """
 import contextlib
-import pytest
 import json
 import os
 import sys
 import tempfile
 import time
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

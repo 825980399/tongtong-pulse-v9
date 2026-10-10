@@ -9,10 +9,6 @@ import os
 from typing import Any
 
 
-
-
-
-
 def process(file_path: str, max_pages: int = 10) -> dict[str, Any]:
     """
     提取PDF文件中的文字内容。

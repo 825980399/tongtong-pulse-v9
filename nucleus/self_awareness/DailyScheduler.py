@@ -33,6 +33,8 @@ from datetime import datetime
 from typing import Any, Callable
 
 from nucleus.logger import get_module_logger
+
+
 def _a3_sample_rss_threads():
     """165批A3：采样本进程 RSS（字节）与活跃线程数；psutil 不可用时优雅降级。"""
     try:
@@ -337,8 +339,7 @@ class SelfAwarenessDailyScheduler:
                         _res["patch_quality"] = _pq["summary"]
                         # ★主线第50批 T1（P0-1）：补丁质量 → ReportBus
                         try:
-                            from nucleus.reporting.publishers import (
-                                publish_patch_quality as _m50_ppq)
+                            from nucleus.reporting.publishers import publish_patch_quality as _m50_ppq
                             _m50_ppq(_pq, generator="DailyScheduler.run_once")
                         except Exception as _m50_pqe:
                             _module_logger.debug(
@@ -376,8 +377,7 @@ class SelfAwarenessDailyScheduler:
             #   不再作为基线。登记失败只 warning，不得影响调度。
             if not self._is_test_env():
                 try:
-                    from nucleus.self_awareness.capability_ledger import (
-                        register_capability_ledger as _t2_reg)
+                    from nucleus.self_awareness.capability_ledger import register_capability_ledger as _t2_reg
                     _t2 = _t2_reg(batch="daily")
                     if isinstance(_t2, dict) and not _t2.get("error"):
                         _iv = _t2.get("idle_v2") or {}
@@ -429,8 +429,7 @@ class SelfAwarenessDailyScheduler:
                     # ★主线第50批 T1（P0-1）：污染报告 → ReportBus
                     #   消费者端：污染率 > 50% → 写入清洗建议待办（不自动清洗）
                     try:
-                        from nucleus.reporting.publishers import (
-                            publish_pollution as _m50_pp)
+                        from nucleus.reporting.publishers import publish_pollution as _m50_pp
                         if isinstance(_repo, dict):
                             _m50_pp(_repo, generator="DailyScheduler.run_once")
                     except Exception as _m50_pe:
@@ -454,8 +453,7 @@ class SelfAwarenessDailyScheduler:
                     if _dq:
                         # ★主线第50批 T1（P0-1）：LLM 留存数据质量 → ReportBus
                         try:
-                            from nucleus.reporting.publishers import (
-                                publish_data_quality as _m50_pdq)
+                            from nucleus.reporting.publishers import publish_data_quality as _m50_pdq
                             _m50_pdq(_dq, generator="DailyScheduler.run_once")
                         except Exception as _m50_dqe:
                             _module_logger.debug(

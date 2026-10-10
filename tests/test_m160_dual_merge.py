@@ -8,8 +8,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 
 class FakeSnap(PulseSnapshot):

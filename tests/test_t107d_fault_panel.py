@@ -5,15 +5,15 @@
 （pulse.* 命名空间）注入 ERROR 后能否进 error_snapshots、并被 5051 面板数据通道读取」
 做回归锁定，确保故障面板对运行时 ERROR 不再全盲。
 """
-import time
 import logging
+import time
 
 import pytest
 
 from nucleus.runtime_metrics import (
+    ErrorCaptureHandler,
     get_runtime_metrics,
     install_error_capture,
-    ErrorCaptureHandler,
 )
 
 

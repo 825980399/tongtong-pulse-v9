@@ -11,10 +11,10 @@
 
 纪律：每器官<=1文件（本文件为 P0 rich 专项契约文件）；仅精确暂存本文件。
 """
+from organs.brain.PulseCognitiveReflector import PulseCognitiveReflector
 from organs.brain.PulseMultiStepReasoner import PulseMultiStepReasoner
 from organs.brain.PulseReasoningFormatter import PulseReasoningFormatter
 from organs.brain.PulseRiskPerception import PulseRiskPerception
-from organs.brain.PulseCognitiveReflector import PulseCognitiveReflector
 from organs.motor.PulseCodeSandbox import PulseCodeSandbox
 
 

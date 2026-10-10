@@ -22,7 +22,9 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
+    Event,
     HeartEvent,
     HormonesEvent,
     LogLevel,
@@ -30,8 +32,6 @@ from nucleus.const import (
     SystemEvent,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: F401
-from nucleus.const import Event
-from nucleus._silent_except import silent_exc
 
 
 class PulseNarrativeSelf(BasePulseOrgan):

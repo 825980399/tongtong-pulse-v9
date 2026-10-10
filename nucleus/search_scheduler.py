@@ -23,8 +23,8 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 
 class SearchScheduler:

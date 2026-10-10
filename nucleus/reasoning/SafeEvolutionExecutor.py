@@ -11,30 +11,29 @@ SafeEvolutionExecutor.py —— 安全进化执行器
 定位: 进化执行层
 """
 
-from nucleus.LLMDependencyMetrics import (SCENE_EVOLUTION, record_llm_call)
-from nucleus.llm.call_recorder import trace_evolution_call
 import os
 import time
 from typing import Any
 
+import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
+from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
+from nucleus._silent_except import silent_exc
+from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
+from nucleus.data.DataAccessLayer import safe_read_json
+
+# ★第117批 T-117d①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
+from nucleus.data.path_utils import safe_relpath as _safe_relpath
 from nucleus.evolution.LogAnalyzer import is_error_level_line  # ★第30批 T2
 from nucleus.evolution.patch_verification_split import (  # ★164批B2
     is_genuine_reverify,
 )
+from nucleus.llm.call_recorder import trace_evolution_call
+from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 from nucleus.logger import get_module_logger
-
 
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
-from nucleus.data.DataAccessLayer import safe_read_json
-# ★第117批 T-117d①：跨盘安全 relpath（path_utils 只依赖 os，无循环导入风险）
-from nucleus.data.path_utils import safe_relpath as _safe_relpath
-from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
-from nucleus._silent_except import silent_exc
-import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
-from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
-
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
@@ -6010,8 +6009,7 @@ class SafeEvolutionExecutor:
                 #   本段口径与 stats_from_patch_history() 完全一致（纯等价重构），
                 #   与 SelfAwarenessEngine._evolution_raw_stats() 共用同一实现。
                 # _m40_t3_executor
-                from nucleus.evolution.evolution_stats import (
-                    stats_from_patch_history)
+                from nucleus.evolution.evolution_stats import stats_from_patch_history
                 _st = stats_from_patch_history(_hist)
                 _out["total_patches"] = _st["total"]
                 _out["applied_patches"] = _st["applied"]

@@ -13,14 +13,13 @@ setup_cython.py —— Cython配置
 机制: 函数式模块，包含0个工具函数
 定位: 性能基础设施层
 """
+import glob
 import os
+import shutil
 import sys
+
 from Cython.Build import cythonize
 from setuptools import Extension, setup
-import glob
-import shutil
-
-
 
 """
 setup_cython.py —— Cython编译脚本（v23.0增强版）

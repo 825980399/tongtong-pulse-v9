@@ -20,19 +20,18 @@
 
 from __future__ import annotations
 
-from nucleus._silent_except import silent_exc
-
 import io
 import json
 import os
+import re
 import sys
 import threading
 import time
-import re
 from typing import Any, Callable
 
-from .report_envelope import (ConsumeResult, SEV_P0, SEV_P1,  # noqa: F401
-                              ReportEnvelope, make_envelope)
+from nucleus._silent_except import silent_exc
+
+from .report_envelope import SEV_P0, SEV_P1, ConsumeResult, ReportEnvelope, make_envelope  # noqa: F401
 
 MAX_REPORTS = 100
 # ★主线第51批 T5（P2-357）：**磁盘**保留份数（原 MAX_REPORTS 仅约束内存）。

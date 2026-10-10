@@ -8,8 +8,8 @@
 import json
 import os
 
+from nucleus.const import SELF_INSPECTOR_B6_GATE_MIN, SELF_INSPECTOR_B6_OBS_MIN
 from nucleus.self_inspector import SelfInspector
-from nucleus.const import SELF_INSPECTOR_B6_OBS_MIN, SELF_INSPECTOR_B6_GATE_MIN
 
 
 def _make_inspector(root, boot_ts=0.0):

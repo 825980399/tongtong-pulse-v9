@@ -13,23 +13,23 @@ C7 分层保真贯穿
 
 隔离：tempfile.mkdtemp() + 真实临时 parquet；绝不写生产 data/。
 """
-import os
-import sys
 import json
+import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                                    # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode                # noqa: E402
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool        # noqa: E402
+import config  # noqa: E402
+from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 try:
-    import pyarrow.parquet as pq                                # noqa: E402
+    import pyarrow.parquet as pq  # noqa: E402
     HAS_PYARROW = True
 except Exception:
     HAS_PYARROW = False

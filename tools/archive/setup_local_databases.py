@@ -67,8 +67,8 @@ def install_drivers():
         return 2
     # 校验导入
     try:
-        import neo4j  # noqa: F401
         import influxdb_client  # noqa: F401
+        import neo4j  # noqa: F401
         _ok("neo4j=%s influxdb_client=%s 导入成功" % (
             getattr(neo4j, "__version__", "?"),
             getattr(influxdb_client, "__version__", "?"),

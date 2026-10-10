@@ -15,9 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from nucleus.llm.base_adapter import BaseLLMAdapter
 from nucleus._silent_except import silent_exc
-
+from nucleus.llm.base_adapter import BaseLLMAdapter
 
 
 class OpenAICompatibleAdapter(BaseLLMAdapter):

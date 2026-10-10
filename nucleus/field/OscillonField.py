@@ -16,9 +16,8 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-from nucleus.logger import get_module_logger
 from nucleus._silent_except import silent_exc
-
+from nucleus.logger import get_module_logger
 
 # ★v23.0新增：Cython加速模块加载标记
 _module_logger = get_module_logger("OscillonField")

@@ -19,7 +19,6 @@ import time
 from typing import Any
 
 
-
 class ResonanceDetector:
     """
     器官共振检测器

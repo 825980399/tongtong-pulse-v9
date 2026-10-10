@@ -1,4 +1,5 @@
 from nucleus._silent_except import silent_exc
+
 # -*- coding: utf-8 -*-
 """
 fast_ops.py —— 快速操作集
@@ -213,6 +214,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
         if _faiss_on and _n >= _faiss_min and _n > 0 and _dim > 0:
             try:
                 import numpy as _np70
+
                 from nucleus.vector_store.faiss_store import get_faiss_store as _get_fs
                 _store = _get_fs()
                 if _store is not None and _store._faiss_available:

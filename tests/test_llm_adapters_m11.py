@@ -68,8 +68,7 @@ def test_openai_adapter_parse_response_defensive():
 
 
 def test_registry_builtin_and_fallback():
-    from nucleus.llm.adapter_registry import (get_adapter_registry,
-                                              reset_adapter_registry)
+    from nucleus.llm.adapter_registry import get_adapter_registry, reset_adapter_registry
     reset_adapter_registry()
     r = get_adapter_registry()
     assert "openai_compatible" in r.list_types()
@@ -99,8 +98,7 @@ def test_registry_external_gateway_reserved():
 
 def test_registry_register_custom():
     """注册自定义适配器可覆盖/扩展。"""
-    from nucleus.llm.adapter_registry import (AdapterRegistry,
-                                              reset_adapter_registry)
+    from nucleus.llm.adapter_registry import AdapterRegistry, reset_adapter_registry
     from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 
     class MyAdapter(OpenAICompatibleAdapter):

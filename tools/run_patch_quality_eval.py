@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.evolution.patch_quality_evaluator import (      # noqa: E402
+from nucleus.evolution.patch_quality_evaluator import (  # noqa: E402
     DEFAULT_HISTORY_PATH,
     DEFAULT_REPORT_PATH,
     evaluate_history,

@@ -18,12 +18,12 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from nucleus.knowledge.PollutionTagger import (  # noqa: E402
+    _FLAG_SEVERITY,
     FLAG_CLEAN,
     FLAG_PLACEHOLDER_ALIAS,
     FLAG_POLLUTED,
     FLAG_SUSPECT,
     PollutionTagger,
-    _FLAG_SEVERITY,
 )
 
 

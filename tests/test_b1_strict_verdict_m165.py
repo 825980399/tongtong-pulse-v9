@@ -12,11 +12,11 @@
   * 宪法 N9 strict 口径 = 54/61 ≈ 0.8852 可从生产数据复算
   * 回填归一后同 verdict 不再落两值（audit=0 WARNING）
 """
-import os
-import sys
+import copy
 import io
 import json
-import copy
+import os
+import sys
 import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

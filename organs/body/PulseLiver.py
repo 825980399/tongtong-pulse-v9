@@ -10,9 +10,6 @@ PulseLiver —— 肝器官 · 知识自我优化（共享记忆版）
 机制: _check_and_optimize 按后台节奏触发两级压缩——_compress_l1_to_l2 走 _group_by_path_prefix 分组、_collect_group_features 取特征、_build_l2_summary 生成摘要、_compress_group 落盘；_fuse_l2_to_l3 先 _build_knowledge_association_graph 构图再 _fuse_group 融合；全过程经 _assess_node_quality 质量门控，通过后发射 KnowledgeEvent.COMPRESSED / KnowledgeEvent.FUSED。
 定位: 知识层的「代谢中枢」，上接胃写入的原始节点，下为共振检索提供高质量的 L2/L3 候选。
 """
-import config
-from config import TIMEOUT_CONFIG
-
 import os
 import re
 import sys
@@ -22,27 +19,30 @@ import traceback
 from collections import Counter
 from typing import Any
 
+import config
+from config import TIMEOUT_CONFIG
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     DigestEvent,
     ErrorCode,
+    Event,
     HeartEvent,
     KnowledgeEvent,
     LogLevel,
     ReflectionEvent,
     SystemEvent,
-    Event,
 )
+from nucleus.events.EventTap import tap_publish  # ★第17批 T3：旁路事件发布入口
 from nucleus.knowledge_noise_filter import (
     DOMAIN_SUFFIXES,
     get_top_valuable_keywords,
     is_path_fragment_word,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode
-from nucleus.events.EventTap import tap_publish  # ★第17批 T3：旁路事件发布入口
-from nucleus._silent_except import silent_exc
 
 # ★往期批次 相关任务（Dxxx）：无人值守资源看门狗（被动、节流、零副作用）
 #   随心跳节流采样进程 RSS / 句柄 / 线程 / 打开文件，超阈值告警，
@@ -1320,8 +1320,8 @@ class PulseLiver(BasePulseOrgan):
                           path_name: str, kw_text: str) -> str:
         """L2 摘要生成。★主线第4批 任务4(P2-42)：升级为语义摘要（关键词提取+句子重要性评分），
         失败时回退到原有截断逻辑（向后兼容）。"""
-        from nucleus.knowledge_noise_filter import clean_content_text
         import config
+        from nucleus.knowledge_noise_filter import clean_content_text
 
         def _truncate_fallback():
             # 原有截断逻辑（向后兼容回退）

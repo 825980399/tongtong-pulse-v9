@@ -1,4 +1,5 @@
 from config import EXTERNAL_CALL_TIMEOUTS
+
 # -*- coding: utf-8 -*-
 """
 PulseSystemManager —— 系统自主管理器 · 整机生命周期与自愈
@@ -33,6 +34,7 @@ from nucleus.const import (
     VascularEvent,
 )
 from nucleus.organ_identity import resolve_organ_key, resolve_organ_keys
+
 # ★T-112d：豁免表统一归一化为规范 key 集合（命名空间对齐）
 _SILENCE_EXEMPT_KEYS = resolve_organ_keys(SILENCE_EXEMPT_ORGANS)
 

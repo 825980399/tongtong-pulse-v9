@@ -12,7 +12,6 @@ __init__.py ——   Init
 """
 
 from nucleus.review.CapabilityFramework import (
-
     CapabilityFramework,
     get_capability_framework,
     init_default_capabilities,

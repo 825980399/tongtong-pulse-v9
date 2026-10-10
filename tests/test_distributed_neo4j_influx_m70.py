@@ -137,6 +137,7 @@ class TestInfluxDBStore(unittest.TestCase):
     def test_18_token_not_hardcoded(self):
         """Token 不硬编码：隔离宿主 setx 的真实 INFLUXDB_TOKEN 后，默认应为空。"""
         from unittest import mock
+
         from nucleus.timeseries_store.influxdb_store import InfluxDBStore
         with mock.patch.dict(os.environ, {"INFLUXDB_TOKEN": ""}):
             _store = InfluxDBStore(token="")
@@ -221,8 +222,7 @@ class TestSharding(unittest.TestCase):
 
     def test_31_consistency_ops_disabled(self):
         """未启用分布式时一致性接口返回未实施。"""
-        from nucleus.distributed.sharding import (
-            write_with_consistency, read_with_consistency, sync_replicas)
+        from nucleus.distributed.sharding import read_with_consistency, sync_replicas, write_with_consistency
         self.assertFalse(write_with_consistency("n1", {}, "eventual"))
         self.assertIsNone(read_with_consistency("n1"))
         self.assertFalse(sync_replicas(0))

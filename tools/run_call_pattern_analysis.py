@@ -19,8 +19,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.llm.call_pattern_analyzer import (      # noqa: E402
-    DEFAULT_REPORT_PATH, analyze_day, format_summary_line, save_report,
+from nucleus.llm.call_pattern_analyzer import (  # noqa: E402
+    DEFAULT_REPORT_PATH,
+    analyze_day,
+    format_summary_line,
+    save_report,
 )
 
 

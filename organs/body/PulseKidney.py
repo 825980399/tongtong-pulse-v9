@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     InterestEvent,
     KnowledgeEvent,
@@ -27,7 +28,6 @@ from nucleus.const import (
     PurgeEvent,
     SystemEvent,
 )
-from nucleus._silent_except import silent_exc
 
 
 class PulseKidney(BasePulseOrgan):

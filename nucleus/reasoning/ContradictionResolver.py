@@ -12,12 +12,12 @@ ContradictionResolver.py —— 矛盾解决器
 """
 
 from __future__ import annotations
+
 import time
-
-from typing import Any, Optional
 from collections.abc import Callable
-from nucleus._silent_except import silent_exc
+from typing import Any, Optional
 
+from nucleus._silent_except import silent_exc
 
 # 来源声誉基准表（模糊匹配 source_organ，命中越高优先级越高）
 _SOURCE_REPUTATION = {

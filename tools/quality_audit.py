@@ -21,7 +21,6 @@
   - 不引入裸 except Exception:（只记录异常类型）。
 """
 from __future__ import annotations
-from nucleus.data.exclude_dirs import QUALITY_AUDIT_EXCLUDED  # ★第55批 T4（统一排除清单）
 
 import argparse
 import json
@@ -29,8 +28,10 @@ import os
 import re
 import subprocess
 import sys
-from nucleus.data.DataAccessLayer import safe_read_json
+
 from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.data.exclude_dirs import QUALITY_AUDIT_EXCLUDED  # ★第55批 T4（统一排除清单）
 
 _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:

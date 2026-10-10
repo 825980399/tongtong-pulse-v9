@@ -45,12 +45,12 @@ if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
 # ★第55批 T4：统一排除清单（新增目录只需改 exclude_dirs 一处）
+from nucleus._silent_except import silent_exc
 from nucleus.data import exclude_dirs as E
 
 # ★第55批 T3：跨盘安全的 relpath（同盘行为与 os.path.relpath 一致，
 #   跨盘降级绝对路径而不抛 ValueError —— 测试沙箱可能落在别的盘）
 from nucleus.data.path_utils import normalize_relpath
-from nucleus._silent_except import silent_exc
 
 MODULES: tuple[str, ...] = (
     "base", "functions", "hardware", "nucleus",

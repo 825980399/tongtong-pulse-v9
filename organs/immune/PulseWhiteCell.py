@@ -5,9 +5,12 @@
 日期: 2026年9月9日
 """
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 import os
 import sys
+
+from nucleus.data.path_utils import (
+    safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -33,6 +36,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     HeartEvent,
     LogLevel,
@@ -40,7 +44,6 @@ from nucleus.const import (
     SystemEvent,
     WhiteCellEvent,
 )
-from nucleus._silent_except import silent_exc
 
 
 class PulseWhiteCell(BasePulseOrgan):

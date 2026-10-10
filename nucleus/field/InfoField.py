@@ -22,13 +22,14 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.logger import (
     get_module_logger,
+)
+from nucleus.logger import (
     noise_reduction_enabled as _noise_reduce,
 )
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 try:
     from config import CONCURRENT_COMM, PULSE_LAYER, PULSE_PRIORITY
@@ -2651,8 +2652,7 @@ class InfoField(SilentLogMixin):
                     # ★主线第3批 任务4(P1-18)：将即将发生的周期事件真正交给
                     #   消费方执行「知识预加载」——此前 pattern_prewarm 仅被发射、无人消费。
                     try:
-                        from nucleus.genesis.PatternPrewarmConsumer import (
-                            get_pattern_prewarm_consumer)
+                        from nucleus.genesis.PatternPrewarmConsumer import get_pattern_prewarm_consumer
                         _loaded = get_pattern_prewarm_consumer().on_prewarm(_prewarm)
                         if _loaded:
                             _module_logger.info(

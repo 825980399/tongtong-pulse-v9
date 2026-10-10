@@ -8,8 +8,8 @@ A5 增量日志安全 / A7 崩溃恢复。
 验收唯一标准：真实 load→save→load 端到端保真，分层/内容零偏移。
 """
 import os
-import sys
 import shutil
+import sys
 import uuid
 
 import pytest

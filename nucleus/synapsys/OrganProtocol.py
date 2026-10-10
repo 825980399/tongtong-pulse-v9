@@ -20,7 +20,6 @@ from enum import Enum
 from typing import Any
 
 
-
 class OrganProtocolType(Enum):
     PUBLISH_SUBSCRIBE = "pub_sub"       # 发布/订阅（当前v9.0模式）
     REQUEST_RESPONSE = "req_resp"       # 请求/响应

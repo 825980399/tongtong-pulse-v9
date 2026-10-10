@@ -11,19 +11,19 @@ CodeReviewEngine.py —— 代码审查引擎
 定位: 代码审查层
 """
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
-from nucleus.data.exclude_dirs import prune  # ★157-E T-框架-1：统一排除集（单一真相集）
-from config import TIMEOUT_CONFIG
 import json
 import os
 import subprocess
 import time
 from dataclasses import dataclass, field
 
-from nucleus.logger import get_module_logger
-from config import EXTERNAL_CALL_TIMEOUTS
+from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.exclude_dirs import prune  # ★157-E T-框架-1：统一排除集（单一真相集）
+from nucleus.data.path_utils import (
+    safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+)
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("CodeReviewEngine")
 

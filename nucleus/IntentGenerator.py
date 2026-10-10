@@ -19,7 +19,6 @@ from collections.abc import Callable
 from typing import Any
 
 
-
 class IntentGenerator:
     """真正意图自主生成器。"""
 

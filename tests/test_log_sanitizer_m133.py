@@ -17,7 +17,7 @@
 import logging
 import time
 
-from nucleus.logging.sanitizer import sanitize, SanitizingFilter
+from nucleus.logging.sanitizer import SanitizingFilter, sanitize
 
 _BS = chr(92)  # 反斜杠，规避 \ 在字面量/heredoc 中被归一化
 

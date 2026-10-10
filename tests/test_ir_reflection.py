@@ -23,7 +23,7 @@ os.environ.setdefault(
     ),
 )
 
-from nucleus.const import MouthEvent, HeartEvent  # noqa: E402
+from nucleus.const import HeartEvent, MouthEvent  # noqa: E402
 from organs.brain.PulseReflection import PulseReflection  # noqa: E402
 
 

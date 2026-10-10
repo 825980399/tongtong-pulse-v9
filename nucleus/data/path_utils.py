@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import os
+
 from nucleus._silent_except import silent_exc
 
 __all__ = ["safe_relpath", "normalize_path", "normalize_relpath",

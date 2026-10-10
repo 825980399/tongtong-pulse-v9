@@ -31,20 +31,23 @@ CallGraphAnalyzer.py —— PHASE18 阶段二：跨文件调用图构建（P3-3�
 
 from __future__ import annotations
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 import ast
 import json
 import os
 import time
 from typing import Any
 
+from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
+from nucleus.data.path_utils import (
+    safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+)
 from nucleus.logger import (
     get_module_logger,
+)
+from nucleus.logger import (
     noise_reduction_enabled as _noise_reduce,
 )
 
-
-from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
 _logger = get_module_logger("CallGraphAnalyzer")
 
 

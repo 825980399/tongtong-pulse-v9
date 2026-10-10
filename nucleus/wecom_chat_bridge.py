@@ -14,18 +14,15 @@ import asyncio
 import os
 import threading
 import time
+
 from aibot import WSClient
 from aibot.types import WSClientOptions
-from nucleus.aibot_logger import get_aibot_logger  # ★v9.5压制AiBotSDK心跳DEBUG日志
-from nucleus.logger import get_module_logger
-from nucleus.const import EyeEvent, LogLevel, MotorEvent
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
+
 from nucleus._silent_except import silent_exc
-
-
-
-
-
+from nucleus.aibot_logger import get_aibot_logger  # ★v9.5压制AiBotSDK心跳DEBUG日志
+from nucleus.const import EyeEvent, LogLevel, MotorEvent
+from nucleus.logger import get_module_logger
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 _logger = get_module_logger("wecom_chat_bridge")
 

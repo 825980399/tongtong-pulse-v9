@@ -14,12 +14,11 @@ lazy_snapshot.py —— 懒加载快照
 import json
 import mmap
 from collections import OrderedDict
-from typing import Any, Optional
 from collections.abc import Iterator
+from typing import Any, Optional
 
-from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus._silent_except import silent_exc
-
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 
 def _skip_ws(mm: mmap.mmap, i: int, n: int) -> int:

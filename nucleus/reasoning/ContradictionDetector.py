@@ -16,7 +16,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # 完整否定词对（原 knowledge_noise_filter.NEGATION_PAIRS，15 对）
 NEGATION_PAIRS = [
     ("是", "不是"), ("可以", "不可以"), ("能", "不能"),

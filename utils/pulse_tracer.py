@@ -10,8 +10,9 @@ import atexit
 import os
 import threading
 import time
-from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+
 from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
 _MAX_EVENTS = 200
 _MAX_ORPHANS = 100

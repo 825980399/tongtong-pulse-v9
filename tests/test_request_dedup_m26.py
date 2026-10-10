@@ -304,6 +304,7 @@ class TestLungIntegration(unittest.TestCase):
         不再依赖全局 ``get_request_deduplicator()`` 单例状态，消除隔离缺陷。
         """
         from unittest.mock import patch
+
         from nucleus.field.RequestDeduplicator import RequestDeduplicator
 
         _calls = []

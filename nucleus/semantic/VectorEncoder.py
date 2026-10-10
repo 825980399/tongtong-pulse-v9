@@ -21,9 +21,8 @@ from typing import Any
 
 import numpy as np
 
-from nucleus.logger import get_module_logger
 from nucleus._silent_except import silent_exc
-
+from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("VectorEncoder")
 

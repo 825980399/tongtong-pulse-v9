@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-
 @dataclass
 class Skeleton:
     """文本片段的结构骨架。"""

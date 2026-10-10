@@ -25,7 +25,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  EarEvent, HeartEvent, HormonesEvent, LogLevel, RiskEvent, Event, ReflectionEvent
+from nucleus.const import EarEvent, Event, HeartEvent, HormonesEvent, LogLevel, ReflectionEvent, RiskEvent
+
 # ★第169批 C7'：危机词表单一来源（与 PulseEthics 共引同一常量）
 from nucleus.security.crisis_keywords import crisis_self_harm_keywords
 
@@ -40,9 +41,9 @@ class PulseRiskPerception(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'risk_false_positive_threshold' in _rp and hasattr(self, '_false_positive_threshold'):
-                setattr(self, '_false_positive_threshold', _rp['risk_false_positive_threshold'])
+                self._false_positive_threshold = _rp['risk_false_positive_threshold']
             if 'risk_false_positive_min_samples' in _rp and hasattr(self, '_false_positive_min_samples'):
-                setattr(self, '_false_positive_min_samples', _rp['risk_false_positive_min_samples'])
+                self._false_positive_min_samples = _rp['risk_false_positive_min_samples']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
     def __init__(self, organ_name: str = "风险感知"):

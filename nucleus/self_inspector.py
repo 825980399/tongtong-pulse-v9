@@ -11,7 +11,6 @@ self_inspector.py —— 自省检查器
 定位: 自省治理层
 """
 
-from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 import ast
 import json
 import os
@@ -21,30 +20,29 @@ import time
 from datetime import datetime
 from typing import Any
 
+from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 from nucleus.const import (
-    LogLevel,
+    GOD_FILE_EXEMPT,
     SCAN_EXCLUDE_DIR_BASENAMES,
     SCAN_EXCLUDE_PREFIX,
-    SELF_INSPECTOR_BOOT_SILENCE_SEC,
+    SELF_INSPECTOR_B1_SILENT_RISE_PCT,
     SELF_INSPECTOR_B1_THROTTLE_SEC,
     SELF_INSPECTOR_B1_WEEKLY_LOC_DELTA,
-    SELF_INSPECTOR_B1_SILENT_RISE_PCT,
-    SELF_INSPECTOR_HISTORY_PATH,
-    SELF_INSPECTOR_B2_STALE_SEC,
     SELF_INSPECTOR_B2_L1_FLOOR,
-    SELF_INSPECTOR_B3_CEILING_PCT,
+    SELF_INSPECTOR_B2_STALE_SEC,
     SELF_INSPECTOR_B3_BASELINE_REL,
+    SELF_INSPECTOR_B3_CEILING_PCT,
+    SELF_INSPECTOR_B6_BASELINE_REL,
+    SELF_INSPECTOR_B6_GATE_MIN,
+    SELF_INSPECTOR_B6_OBS_MIN,
+    SELF_INSPECTOR_BOOT_SILENCE_SEC,
     SELF_INSPECTOR_C1_BASELINE_REL,
     SELF_INSPECTOR_D1_BASELINE_REL,
-    SELF_INSPECTOR_B6_OBS_MIN,
-    SELF_INSPECTOR_B6_GATE_MIN,
-    SELF_INSPECTOR_B6_BASELINE_REL,
-    GOD_FILE_EXEMPT,
+    SELF_INSPECTOR_HISTORY_PATH,
+    LogLevel,
 )
-from config import EXTERNAL_CALL_TIMEOUTS
-from config import TIMEOUT_CONFIG
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-
 
 
 # ★2026-09-04修复：使用框架logging，替代print，确保日志写入后台文件

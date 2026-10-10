@@ -13,8 +13,8 @@ import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from nucleus.const import ChatEvent, EyeEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import ChatEvent, EyeEvent
 
 FUNCTION_META = {
     "name": "Web对话窗口",

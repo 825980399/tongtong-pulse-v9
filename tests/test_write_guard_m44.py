@@ -11,7 +11,6 @@
 不真的触发一次生产落盘。
 """
 import glob
-import pytest
 import io
 import json
 import os
@@ -20,14 +19,16 @@ import sys
 import tempfile
 import unittest
 
+import pytest
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
 import config  # noqa: E402
 from nucleus.data import write_guard as wg  # noqa: E402
 from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
 
 _PROD_DATA = os.path.join(_ROOT, "data")
 _PROD_EXP = os.path.join(_PROD_DATA, "experience", "experience_pool.json")

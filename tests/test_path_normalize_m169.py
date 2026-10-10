@@ -15,8 +15,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.data.path_utils import (normalize_path, normalize_relpath,
-                                     safe_relpath)
+from nucleus.data.path_utils import normalize_path, normalize_relpath, safe_relpath
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

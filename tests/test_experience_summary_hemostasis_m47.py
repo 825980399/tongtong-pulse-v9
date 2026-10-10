@@ -15,7 +15,6 @@
 """
 
 import io
-import pytest
 import json
 import os
 import shutil
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+import pytest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:

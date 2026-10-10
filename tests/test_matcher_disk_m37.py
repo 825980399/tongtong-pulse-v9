@@ -340,8 +340,7 @@ class TestFileWhitelistP258(unittest.TestCase):
 
     def test_04_all_default_whitelist_files_excluded(self):
         """默认白名单中的所有文件都应被排除（无产出方时）。"""
-        from nucleus.self_awareness.ProductionConsumptionMatcher import (
-            _EXCLUDE_FILES_DEFAULT, exclude_reason)
+        from nucleus.self_awareness.ProductionConsumptionMatcher import _EXCLUDE_FILES_DEFAULT, exclude_reason
         for _f in _EXCLUDE_FILES_DEFAULT:
             _reason = exclude_reason(_f, has_producer=False)
             self.assertEqual(_reason, "file_whitelist",
@@ -349,8 +348,7 @@ class TestFileWhitelistP258(unittest.TestCase):
 
     def test_05_config_override_works(self):
         """配置项 PRODUCTION_CONSUMPTION_EXCLUDE_FILES 可覆盖默认值。"""
-        from nucleus.self_awareness.ProductionConsumptionMatcher import (
-            _exclude_files, exclude_reason)
+        from nucleus.self_awareness.ProductionConsumptionMatcher import _exclude_files, exclude_reason
         with _Switch(PRODUCTION_CONSUMPTION_EXCLUDE_FILES=["data/custom_file.json"]):
             _files = _exclude_files()
             self.assertIn("data/custom_file.json", _files)

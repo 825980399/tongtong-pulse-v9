@@ -7,8 +7,8 @@
   3) wiki 双腿断点复通：_rss_collect_for_direction 在 channel=='wiki' 时经
      DigestEvent.KNOWLEDGE 走正常消化链路（不再 return False 丢弃）。
 """
-import io
 import email
+import io
 import os
 import sys
 import unittest
@@ -18,17 +18,18 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                  # noqa: E402
-import time                                                    # noqa: E402
-from urllib.error import HTTPError                            # noqa: E402
+import time  # noqa: E402
+from urllib.error import HTTPError  # noqa: E402
 
-from nucleus.knowledge import WikiQuerier as _wq_mod          # noqa: E402
-from nucleus.knowledge.WikiQuerier import (                   # noqa: E402
-    _get_ua, _UA_POOL,
-)
-from nucleus.knowledge.WikiQuerier import WikiResult          # noqa: E402
-from organs.motor.PulseLegs import PulseLegs, DigestEvent     # noqa: E402
+import config  # noqa: E402
 import nucleus.knowledge.KnowledgeAcquisitionRouter as _router_mod  # noqa: E402
+from nucleus.knowledge import WikiQuerier as _wq_mod  # noqa: E402
+from nucleus.knowledge.WikiQuerier import (  # noqa: E402
+    _UA_POOL,
+    WikiResult,  # noqa: E402
+    _get_ua,
+)
+from organs.motor.PulseLegs import DigestEvent, PulseLegs  # noqa: E402
 
 
 def _isolate_cache(testcase):

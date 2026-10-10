@@ -14,8 +14,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from organs.brain.PulseCortex import PulseCortex  # noqa: E402
 from nucleus.const import RiskEvent  # noqa: E402
+from organs.brain.PulseCortex import PulseCortex  # noqa: E402
 
 
 class TestCrisisReferralRegistration(unittest.TestCase):

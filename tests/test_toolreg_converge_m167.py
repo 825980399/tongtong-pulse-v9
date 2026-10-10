@@ -5,9 +5,8 @@
 统一注册表持久化路径经 config.TOOL_REGISTRY_PATH 重定向到 tmp，避免触碰生产 data/。
 """
 import config
-
-from nucleus.review.ToolAutoInstaller import ToolAutoInstaller, ToolInfo
 from nucleus.review.ScriptExecutor import ScriptExecutor
+from nucleus.review.ToolAutoInstaller import ToolAutoInstaller, ToolInfo
 from nucleus.tooling.ToolRegistry import ToolRegistry, get_tool_registry
 
 

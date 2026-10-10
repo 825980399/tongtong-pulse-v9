@@ -15,13 +15,14 @@
      此时断言「独立留痕副本仍在」；
   3. `.bak_batch96/` 用于「先红后绿」复算（ Jude 见 tmp/m96_red_proof.py）。
 """
-import pytest
 import ast
 import csv
 import io
 import json
 import os
 import unittest
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BAK = os.path.join(ROOT, ".bak_batch96")

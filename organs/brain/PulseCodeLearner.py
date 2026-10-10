@@ -21,22 +21,21 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     DigestEvent,
+    Event,
     HeartEvent,
     InterestEvent,
     LogLevel,
     LungEvent,
     SystemEvent,
 )
+from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.knowledge_noise_filter import clean_content_text
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.self_inspector import get_self_inspector
-from nucleus.data.DataAccessLayer import safe_read_json
-from config import TIMEOUT_CONFIG
-from nucleus.const import Event
-from nucleus._silent_except import silent_exc
-
 
 # ★主线第16批 T3/P2-97：模块级 logger（必须放在全部 import 之后，
 #   否则赋值语句会关闭 ruff 的 import 区 → 其后 import 全部判 E402）
@@ -57,16 +56,16 @@ class PulseCodeLearner(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'code_learn_scan_interval' in _rp and hasattr(self, '_scan_interval'):
-                setattr(self, '_scan_interval', _rp['code_learn_scan_interval'])
+                self._scan_interval = _rp['code_learn_scan_interval']
             if 'code_learn_max_methods_per_scan' in _rp and hasattr(self, '_max_methods_per_scan'):
-                setattr(self, '_max_methods_per_scan', _rp['code_learn_max_methods_per_scan'])
+                self._max_methods_per_scan = _rp['code_learn_max_methods_per_scan']
             if 'code_learn_distill_threshold' in _rp and hasattr(self, '_distill_threshold'):
-                setattr(self, '_distill_threshold', _rp['code_learn_distill_threshold'])
+                self._distill_threshold = _rp['code_learn_distill_threshold']
             if 'code_learn_param_audit_enabled' in _rp and hasattr(self, '_param_audit_enabled'):
-                setattr(self, '_param_audit_enabled', _rp['code_learn_param_audit_enabled'])
+                self._param_audit_enabled = _rp['code_learn_param_audit_enabled']
             # ★P3-1修复（第十批）：批次超时时间支持热加载
             if 'code_learn_batch_timeout' in _rp and hasattr(self, '_batch_timeout_seconds'):
-                setattr(self, '_batch_timeout_seconds', _rp['code_learn_batch_timeout'])
+                self._batch_timeout_seconds = _rp['code_learn_batch_timeout']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
 

@@ -17,8 +17,8 @@ import re
 import time
 from datetime import datetime
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 __all__ = ["WebTimeExtractor", "get_shared_extractor"]
 

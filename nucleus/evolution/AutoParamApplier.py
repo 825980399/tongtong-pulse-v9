@@ -15,8 +15,8 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = None  # 占位（如需持久化再启用；当前审计走 ParamPatchManager 历史文件）
 

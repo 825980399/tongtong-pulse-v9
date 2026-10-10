@@ -20,9 +20,8 @@ import time
 from typing import Any
 
 from nucleus.const import LogLevel
-from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 from nucleus.data.DataAccessLayer import safe_read_json
-
+from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 # 严重级别权重：high 高权重，medium 中，low 低
 _SEVERITY_WEIGHT = {"high": 3, "medium": 2, "low": 1}

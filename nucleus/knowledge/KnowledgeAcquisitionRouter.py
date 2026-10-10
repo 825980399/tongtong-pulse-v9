@@ -16,8 +16,8 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 # 查询类型
 QT_ENTITY = "entity"          # 实体/概念定义

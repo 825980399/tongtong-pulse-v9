@@ -4,20 +4,20 @@
 隔离约定：一律使用 tempfile.mkdtemp()，绝不写生产 data/。
 """
 import json
+import logging
 import os
-import sys
 import shutil
+import sys
 import tempfile
 import threading
 import unittest
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                                    # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
-from nucleus.parsing import json_fault_tolerant as _ft           # noqa: E402
-import nucleus.knowledge_access_layer as _kal                    # noqa: E402
+import config  # noqa: E402
+import nucleus.knowledge_access_layer as _kal  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+from nucleus.parsing import json_fault_tolerant as _ft  # noqa: E402
 
 
 def _mk_snap(tmpdir):

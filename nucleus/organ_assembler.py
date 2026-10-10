@@ -17,8 +17,8 @@ import importlib
 from collections import defaultdict, deque
 from collections.abc import Callable
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 # 框架基础组件符号名（非器官，装配时由框架直接提供，不参与拓扑排序）。
 # 这些是「被注入的公共服务」，不属于 organs/ 扫描的器官注册表。

@@ -10,7 +10,6 @@
 import os
 import sys
 
-
 # 保证仓库根目录在 sys.path，便于直接 `python -m pytest`
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -48,7 +47,7 @@ def test_get_llm_call_config_fallback():
 
 
 def test_api_rate_limited_acquire_release():
-    from nucleus.api_rate_limiter import get_api_limiter, api_rate_limited
+    from nucleus.api_rate_limiter import api_rate_limited, get_api_limiter
 
     lim = get_api_limiter()
     before = lim.get_stats()["in_use"]

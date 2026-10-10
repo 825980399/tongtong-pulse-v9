@@ -16,6 +16,7 @@ nucleus.self_awareness —— PHASE18 阶段一：自我认知引擎包
 """
 
 from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
+
 # _m37_t1_scheduler_wired
 from nucleus.self_awareness.DailyScheduler import (
     SelfAwarenessDailyScheduler,

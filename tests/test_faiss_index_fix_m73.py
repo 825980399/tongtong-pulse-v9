@@ -7,10 +7,10 @@ T4（双读一致性实时比对）。所有新增代码默认关闭，测试中
 import os
 import sys
 import time
-
-import numpy as np
 import unittest
 from unittest import mock
+
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -197,8 +197,8 @@ class TestT3SnapshotCaliber(unittest.TestCase):
     """T3：snapshot_active_nodes 口径确认（设计行为，非 bug）。"""
 
     def test_30_snapshot_returns_hot_plus_warm(self):
-        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         from nucleus.mnemosyne.PulseNode import PulseNode
+        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         pool = PulseNodePool()
         a = PulseNode(value="t3-a", evol_level="L1")
         b = PulseNode(value="t3-b", evol_level="L2")
@@ -228,8 +228,8 @@ class TestT4DualReadCompare(unittest.TestCase):
         config.NEO4J_READ_COMPARE_WARN_THRESHOLD = 0.05
         config.NEO4J_READ_COMPARE_FALLBACK_THRESHOLD = 0.10
         # 注入 MockNeo4jStore
-        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         from nucleus.mnemosyne.PulseNode import PulseNode
+        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         self.pool = PulseNodePool()
         self.mock = _MockNeo4jStore()
         self._patch = mock.patch(

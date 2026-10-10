@@ -10,25 +10,25 @@
 隔离约定：一律 tempfile.mkdtemp()，绝不写生产 data/；真实 pyarrow + 真实临时文件，
 不 mock 被测函数本身（仅路由测试 mock 下游统一入口以验证接线）。
 """
+import logging
 import os
-import sys
 import shutil
+import sys
 import tempfile
 import threading
 import unittest
-import logging
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                                    # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode                # noqa: E402
-from nucleus.mnemosyne.pa_compat import table_from_rows          # noqa: E402
+import config  # noqa: E402
+from nucleus.mnemosyne.pa_compat import table_from_rows  # noqa: E402
+from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 try:
-    import pyarrow as pa                                        # noqa: E402
-    import pyarrow.parquet as pq                                # noqa: E402
+    import pyarrow as pa  # noqa: E402
+    import pyarrow.parquet as pq  # noqa: E402
     HAS_PYARROW = True
 except Exception:
     HAS_PYARROW = False

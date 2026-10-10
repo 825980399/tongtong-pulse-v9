@@ -19,9 +19,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                    # noqa: E402
-import nucleus.logger as _lg                                      # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool      # noqa: E402
+import config  # noqa: E402
+import nucleus.logger as _lg  # noqa: E402
+from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
 
 _EXP = io.open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
                encoding="utf-8", errors="replace").read().replace("\r\n", "\n")

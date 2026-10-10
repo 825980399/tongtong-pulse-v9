@@ -12,10 +12,11 @@
   - 线程异常被守护，绝不让后台线程退出主流程；
   - 开关关闭时仍可本地计算健康分（用于测试与诊断）。
 """
-from nucleus._silent_except import silent_exc
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
+
+from nucleus._silent_except import silent_exc
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger

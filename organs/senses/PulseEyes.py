@@ -32,10 +32,9 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  EyeEvent, LogLevel, SystemEvent, VisualEvent, DeviceEvent
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
+from nucleus.const import DeviceEvent, EyeEvent, LogLevel, SystemEvent, VisualEvent
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
 
 class PulseEyes(BasePulseOrgan):

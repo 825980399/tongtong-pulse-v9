@@ -5,9 +5,9 @@
   ✅ 至少 1 条补丁走完全链（提交→批准→落盘→复验）
   ✅ 落盘后磁盘探针验证 modified_code 在盘
 """
+import io
 import os
 import sys
-import io
 import tempfile
 import uuid
 

@@ -31,8 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import io  # noqa: E402
 import unittest  # noqa: E402
 
-from nucleus.data.path_utils import (drive_of, safe_commonpath,  # noqa: E402
-                                     safe_relpath, same_drive)
+from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive  # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

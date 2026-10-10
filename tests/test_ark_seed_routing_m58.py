@@ -18,9 +18,9 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
-from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter  # noqa: E402
 from nucleus.llm.channel_speed_profiler import ChannelSpeedProfiler  # noqa: E402
+from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter  # noqa: E402
+from organs.body.PulseLung import PulseLung  # noqa: E402
 
 
 def _make_lung():

@@ -17,7 +17,6 @@ import threading
 import time
 from typing import Any
 
-
 # 价值语义词典：价值维度 → 触发词（正向肯定）
 _POSITIVE_VALUE_WORDS: dict[str, list[str]] = {
     "守护": ["守护", "保护", "护卫", "捍卫", "坚守", "维护"],

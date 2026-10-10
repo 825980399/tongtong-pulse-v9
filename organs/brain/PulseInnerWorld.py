@@ -28,13 +28,13 @@ from nucleus.const import (
     DigestEvent,
     Event,
     GrowthEvent,
+    HeartEvent,
     InferenceEvent,
+    InnerWorldEvent,
     KnowledgeEvent,
     LogLevel,
     NarrativeEvent,
     SystemEvent,
-    HeartEvent,
-    InnerWorldEvent,
 )
 from nucleus.diagnostics import get_diagnostics
 

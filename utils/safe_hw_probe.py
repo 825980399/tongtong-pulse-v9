@@ -9,14 +9,13 @@ import json
 import subprocess
 import sys
 
-from nucleus._silent_except import silent_exc
-
 # ★157-E P2-1 修复 T-运行异常-3 后遗症：超时旋钮断线。
 #   T-运行异常-3 删除了 Popen 的非法的 timeout= 形参，但 communicate(timeout=timeout)
 #   的默认参数此前写死 6.0s，与 config.EXTERNAL_CALL_TIMEOUTS["subprocess_short"]=5s 脱节。
 #   现把默认参数接回配置旋钮（直接 import，无裸 except，避免 cw2 误判新增静默 handler），
 #   使探测超时由 config 单一真源驱动（不再静默 6.0s）。
 from config import EXTERNAL_CALL_TIMEOUTS
+from nucleus._silent_except import silent_exc
 
 _PROBE_TIMEOUT = float(EXTERNAL_CALL_TIMEOUTS["subprocess_short"])
 

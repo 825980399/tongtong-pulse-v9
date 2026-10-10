@@ -23,48 +23,47 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
-    ChatEvent,
-    ControllerEvent,
-    EyeEvent,
-    HeartEvent,  # ★v24.0新增：心跳事件用于清理待处理条目
-    HormonesEvent,
-    InferenceEvent,
-    LogLevel,
-    LungEvent,
-    MotorEvent,
-    MouthEvent,
-    NarrativeEvent,
-    QICAEvent,
-    SystemEvent,
-    VisualEvent,
     BoneMarrowEvent,
+    ChatEvent,
     ConsentEvent,
-    DNARepairEvent,
+    ControllerEvent,
     DeviceEvent,
+    DNARepairEvent,
+    Event,
     EvolutionEvent,
+    EyeEvent,
     GrowthEvent,
     HandsEvent,
     HealthEvent,
+    HeartEvent,  # ★v24.0新增：心跳事件用于清理待处理条目
+    HormonesEvent,
+    InferenceEvent,
     KnowledgeEvent,
+    LogLevel,
+    LungEvent,
     MediaEvent,
     MetricsEvent,
+    MotorEvent,
+    MouthEvent,
+    NarrativeEvent,
     PersonaEvent,
     PersonalityEvent,
     ProprioceptionEvent,
+    QICAEvent,
     ReflectionEvent,
     ReproductionEthicsEvent,
     RiskEvent,
     SecurityEvent,
     SpinalCordEvent,
+    SystemEvent,
     ThymusEvent,
+    VisualEvent,
     WhiteCellEvent,
 )
-from utils.time_utils import get_current_datetime
 from nucleus.events.EventTap import tap_publish  # ★第17批 T2：旁路事件发布入口
-from nucleus.const import Event
-from nucleus._silent_except import silent_exc
-
+from utils.time_utils import get_current_datetime
 
 _module_logger = logging.getLogger(__name__)
 
@@ -1379,16 +1378,16 @@ class PulseCortex(BasePulseOrgan):
                                         )
                                         # ★第164批 刀A1：补救成功 → 蒸馏为 L2 节点 + 候选规则（闭环沉淀）
                                         from nucleus.reasoning.ReasoningExperienceIndexer import (
-                                            get_reasoning_experience_indexer)
+                                            get_reasoning_experience_indexer,
+                                        )
                                         _idx = get_reasoning_experience_indexer()
                                         _idx.record_remediation_success(
                                             question=ctx.get("content", ""),
                                             correct_answer=_corrected_answer,
                                             rule_candidate=f"self_correction:{_correction.get('strategy', '')}")
                                         # ★第164批 刀A2：同步 LLM 依赖度量埋点（失败/成功）
-                                        from nucleus.LLMDependencyMetrics import (
-                                            record_remediation_attempt as _rec_att,
-                                            record_remediation_success as _rec_succ)
+                                        from nucleus.LLMDependencyMetrics import record_remediation_attempt as _rec_att
+                                        from nucleus.LLMDependencyMetrics import record_remediation_success as _rec_succ
                                         _rec_att(1)
                                         _rec_succ(1)
 
@@ -1497,17 +1496,15 @@ class PulseCortex(BasePulseOrgan):
                             remediation_triggered=True,
                         )
                         # ★第164批 刀A1：记录推理失败模式，供检测器认领
-                        from nucleus.reasoning.ReasoningExperienceIndexer import (
-                            get_reasoning_experience_indexer)
+                        from nucleus.reasoning.ReasoningExperienceIndexer import get_reasoning_experience_indexer
                         _idx = get_reasoning_experience_indexer()
                         _idx.record_failure_mode(
                             pattern=_verify.get("reason", "输出相关性低"),
                             question=ctx.get("content", ""),
                             context="cortex_output_blocked_to_lung")
                         # ★第164批 刀A2：失败模式即一次补救尝试（补救率分母）
-                        from nucleus.LLMDependencyMetrics import (
-                            record_remediation_attempt as _rec_att,
-                            record_remediation_success as _rec_succ)
+                        from nucleus.LLMDependencyMetrics import record_remediation_attempt as _rec_att
+                        from nucleus.LLMDependencyMetrics import record_remediation_success as _rec_succ
                         _rec_att(1)
                         # ★第170批 C2 刀1（RC-1）：转肺补救成功回执（原链路只加分母、无分子）
                         _rec_succ(1)

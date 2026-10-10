@@ -11,8 +11,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
-from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
 
 # 功能模块元数据声明
 FUNCTION_META = {
@@ -864,8 +864,8 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _is_same_origin(self) -> bool:
         """同源校验：仅允许来自本面板的请求，防御 CSRF。"""
-        from urllib.parse import urlparse
         import sys as _sys
+        from urllib.parse import urlparse
         _cfg = _sys.modules.get("config")
         _allowed = tuple(getattr(_cfg, "HEALTH_UI_ALLOWED_HOSTS",
                                  ("127.0.0.1", "localhost"))) if _cfg is not None else ("127.0.0.1", "localhost")

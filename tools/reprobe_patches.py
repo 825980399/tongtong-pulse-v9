@@ -36,9 +36,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from nucleus.evolution.patch_active_reprobe import (  # noqa: E402
-    F_REPROBE_AFTER, F_REPROBE_BASELINE, F_REPROBE_DETAIL, F_REPROBE_ISSUE,
-    F_REPROBE_VERSION, F_REPROBE_VERDICT, V_TRUE_PASS,
-    reprobe_batch, true_fix_rate, verdict_label)
+    F_REPROBE_AFTER,
+    F_REPROBE_BASELINE,
+    F_REPROBE_DETAIL,
+    F_REPROBE_ISSUE,
+    F_REPROBE_VERDICT,
+    F_REPROBE_VERSION,
+    V_TRUE_PASS,
+    reprobe_batch,
+    true_fix_rate,
+    verdict_label,
+)
 
 HISTORY = os.path.join(ROOT, "data", "patches", "patch_history.json")
 

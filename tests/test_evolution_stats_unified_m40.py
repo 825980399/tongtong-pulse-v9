@@ -15,8 +15,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-from nucleus.evolution.evolution_stats import (  # noqa: E402
-    EMPTY_STATS, stats_from_patch_history)
+from nucleus.evolution.evolution_stats import EMPTY_STATS, stats_from_patch_history  # noqa: E402
 from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
 
 # ★包 __init__ 导出同名类 → 取模块用 importlib

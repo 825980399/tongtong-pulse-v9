@@ -19,9 +19,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                     # noqa: E402
-from nucleus.data import experience_cleanup as _ec                # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool      # noqa: E402
+import config  # noqa: E402
+from nucleus.data import experience_cleanup as _ec  # noqa: E402
+from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
 
 _TPL = "我曾因维持系统平衡而行动，获得了cognitive奖赏，感受到平静"
 # 仅由 SERP 样板 token 构成 → 覆盖度 1.0（≥0.8 阈值）

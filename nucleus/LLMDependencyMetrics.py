@@ -11,16 +11,15 @@ LLMDependencyMetrics.py —— LLM依赖度指标
 定位: 自省监测层
 """
 
-from nucleus._silent_except import silent_exc
 import json
 import os
 import threading
 import time
 from typing import Any
 
-from nucleus.logger import get_module_logger
+from nucleus._silent_except import silent_exc
 from nucleus.data.DataAccessLayer import safe_read_json
-
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("LLMDependencyMetrics")
 
@@ -364,8 +363,7 @@ class LLMDependencyMetrics:
         （宪法 N3 口径一致性要求，不另造分母），无样本返回 0.0。
         """
         try:
-            from nucleus.mnemosyne.verification_learning_hub import (
-                get_verification_learning_hub)
+            from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
             _stats = get_verification_learning_hub().get_stats()
             _total = int(_stats.get("total", 0) or 0)
             _rem = int(_stats.get("remediation_count", 0) or 0)

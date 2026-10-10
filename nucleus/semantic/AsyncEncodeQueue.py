@@ -18,11 +18,10 @@ import threading
 import time
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 from nucleus.semantic.VectorEncoder import get_vector_encoder
 from nucleus.semantic.VectorStore import get_vector_store
-from nucleus._silent_except import silent_exc
-
 
 _logger = get_module_logger("AsyncEncodeQueue")
 

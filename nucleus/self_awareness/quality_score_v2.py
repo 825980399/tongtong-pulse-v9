@@ -64,7 +64,6 @@ v2 设计原则
 """
 from __future__ import annotations
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 import glob
 import io
 import json
@@ -74,7 +73,11 @@ import re
 import sys
 import time
 from typing import Any, Callable
+
 from nucleus._silent_except import silent_exc
+from nucleus.data.path_utils import (
+    safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+)
 
 _log = logging.getLogger(__name__)
 

@@ -22,8 +22,8 @@ os.environ.setdefault("PULSE_LOG_FILE", os.path.join(ROOT, "logs", "pytest.log")
 import numpy as np
 import pytest
 
-from nucleus.semantic.VectorStore import VectorStore
 from nucleus._silent_except import silent_exc
+from nucleus.semantic.VectorStore import VectorStore
 
 
 class FakeEncoder:

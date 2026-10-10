@@ -1,7 +1,9 @@
 import logging
+
 _module_logger = logging.getLogger(__name__)
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
+
 """
 PulseLung —— 脉冲驱动肺 · 模型调用器官
 
@@ -25,11 +27,12 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import DigestEvent, LogLevel, LungEvent, MouthEvent, SystemEvent
 from config import EXTERNAL_CALL_TIMEOUTS
+
 # ★第145批 T-145a：system prompt 中的身份占位符须在运行时渲染，
 #   否则「你是谁」会把 <SELF_NAME> 等尖括号直接念给用户。
 from config import render_placeholders as _render_placeholders  # noqa: E402
+from nucleus.const import DigestEvent, LogLevel, LungEvent, MouthEvent, SystemEvent
 
 
 class PulseLung(BasePulseOrgan):
@@ -1651,8 +1654,7 @@ class PulseLung(BasePulseOrgan):
         if origin:
             return str(origin)
         try:
-            from nucleus.llm.call_recorder import (ORIGIN_ALIASES,
-                                                   ORIGIN_SYSTEM_INTERNAL)
+            from nucleus.llm.call_recorder import ORIGIN_ALIASES, ORIGIN_SYSTEM_INTERNAL
             return ORIGIN_ALIASES.get(str(caller or ""), ORIGIN_SYSTEM_INTERNAL)
         except Exception as e:
             silent_exc(e, where="organs.body.PulseLung::_m40_resolve_origin L1640")

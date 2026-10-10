@@ -27,29 +27,30 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 #     3. 帧分析 —— 接收 VisualEvent.CAMERA_FRAME 脉冲，提取帧元数据
 #     4. 物体/文字检测 —— 为未来接入 YOLO/OCR 预留接口
 
+import logging
 import os
 import sys
 import threading
-import logging
 import time
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.logger import exc_location
 from nucleus.const import (
     ChatEvent,
+    DeviceEvent,
     DigestEvent,
     EyeEvent,
     LogLevel,
     MouthEvent,
     PersonaEvent,
     VisualEvent,
-    DeviceEvent,
 )
 from nucleus.data.DataAccessLayer import safe_read_json  # ★R5：视觉流日志读取
+from nucleus.logger import exc_location
 from nucleus.security.face_codec import load_roster, save_roster  # ★T-134b 人脸名册加密存储
+
 _DIRTY_FACE_KEYS = ("用户", "访客", "小林")  # ★R5-1 脏键唯一真相源（:362 守卫/load 过滤/save 过滤三处共用）
 
 

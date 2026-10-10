@@ -45,7 +45,8 @@ if ROOT not in sys.path:
 
 from nucleus import LLMDependencyMetrics as M  # noqa: E402
 from nucleus.evolution.patch_verification_split import (  # noqa: E402
-    F_SPLIT_VERSION, real_fix_rate,
+    F_SPLIT_VERSION,
+    real_fix_rate,
 )
 
 _METRICS_SRC = os.path.join(ROOT, "nucleus", "LLMDependencyMetrics.py")

@@ -15,6 +15,7 @@ iw_text_guard —— 内在世界（PulseInnerWorld）搜索前缀文本守卫
 共同 import 使用，保持行为零变化。
 """
 from __future__ import annotations
+
 from nucleus._silent_except import silent_exc
 
 _SEARCH_PREFIX_ALT_NEW = (

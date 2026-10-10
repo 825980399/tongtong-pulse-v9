@@ -18,10 +18,9 @@ import re
 import time
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 # 匹配 Traceback 的 File 行:  File "/path/to/file.py", line 123, in func_name
 _TRACEBACK_FILE_RE = re.compile(

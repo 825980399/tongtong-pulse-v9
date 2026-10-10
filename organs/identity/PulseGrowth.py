@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  GrowthEvent, SystemEvent, HeartEvent
+from nucleus.const import GrowthEvent, HeartEvent, SystemEvent
 from nucleus.mnemosyne.PulseNode import PulseNode
 
 

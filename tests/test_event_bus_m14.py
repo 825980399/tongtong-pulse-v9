@@ -18,6 +18,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
+from nucleus.const import Event as PulseEvent  # noqa: E402
 from nucleus.events.EventBus import (  # noqa: E402
     Event,
     EventBus,
@@ -26,8 +27,6 @@ from nucleus.events.EventBus import (  # noqa: E402
     get_event_bus,
     reset_event_bus,
 )
-
-from nucleus.const import Event as PulseEvent  # noqa: E402
 
 _SCRATCH_DIR = os.path.join(_PROJECT_ROOT, "tmp", "_eventbus_m14")
 

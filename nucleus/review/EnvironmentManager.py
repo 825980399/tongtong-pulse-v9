@@ -11,7 +11,6 @@ EnvironmentManager.py —— 环境管理器
 定位: 环境管理层
 """
 
-from config import TIMEOUT_CONFIG
 import importlib
 import os
 import subprocess
@@ -20,10 +19,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from nucleus.logger import get_module_logger
-from config import EXTERNAL_CALL_TIMEOUTS
+from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
-
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("EnvironmentManager")
 

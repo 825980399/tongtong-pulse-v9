@@ -13,17 +13,14 @@ ReasoningExperience.py —— 推理经验
 import json
 import os
 import re
+import threading
 import time
 from typing import Any
+
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_write_json  # T-112a：复用硬化写通道
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-import threading
-from nucleus._silent_except import silent_exc
-
-
-
-
 
 
 class ReasoningExperience(SilentLogMixin):

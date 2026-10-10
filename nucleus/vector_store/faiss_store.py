@@ -99,6 +99,7 @@ class FAISSVectorStore:
             return
         try:
             import time
+
             import faiss
             import numpy as np
 
@@ -296,8 +297,9 @@ class FAISSVectorStore:
         if not self._faiss_available or self._index is None:
             return False
         try:
-            import faiss  # noqa: F401
             import json
+
+            import faiss  # noqa: F401
             import numpy as np
             p = path or self._index_path
             if not p:
@@ -332,8 +334,9 @@ class FAISSVectorStore:
         if not self._faiss_available:
             return False
         try:
-            import faiss  # noqa: F401
             import json
+
+            import faiss  # noqa: F401
             import numpy as np
             p = path or self._index_path
             if not p or not os.path.isfile(p):

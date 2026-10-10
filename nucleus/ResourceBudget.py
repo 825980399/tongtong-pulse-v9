@@ -19,7 +19,6 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 
-
 # ★superseded(2026-09-02): 本模块为早期「通用资源闸门」设计，能力已被
 #   nucleus/parallel_scheduler.py 的「硬件自适应 + 双向平滑升降级 + CPU核物理约束」
 #   完整取代（该实现更先进且已在主链路运行）。为避免双闸门冲突，**勿再接线本模块**，

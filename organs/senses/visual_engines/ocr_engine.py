@@ -7,11 +7,8 @@
 
 import os
 from typing import Any
+
 from config import EXTERNAL_CALL_TIMEOUTS
-
-
-
-
 
 
 def process(file_path: str, remote_api_config: dict | None = None) -> dict[str, Any]:

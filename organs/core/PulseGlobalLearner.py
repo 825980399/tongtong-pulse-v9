@@ -25,8 +25,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import Event, HeartEvent, LogLevel, SystemEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import Event, HeartEvent, LogLevel, SystemEvent
 
 
 class PulseGlobalLearner(BasePulseOrgan):

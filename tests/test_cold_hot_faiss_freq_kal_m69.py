@@ -23,8 +23,8 @@ class TestColdHotSeparation(unittest.TestCase):
     """T1: 冷热分离三层架构测试。"""
 
     def setUp(self):
-        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         from nucleus.mnemosyne.PulseNode import PulseNode
+        from nucleus.mnemosyne.PulseNodePool import PulseNodePool
         self.PulseNode = PulseNode
         self.pool = PulseNodePool.__new__(PulseNodePool)
         self.pool._hot = {}
@@ -205,8 +205,9 @@ class TestFAISSStore(unittest.TestCase):
             import faiss  # noqa: F401
         except ImportError:
             self.skipTest("faiss not installed in this Python runtime")
-        import numpy as np
         import tempfile
+
+        import numpy as np
         ids = ["n1", "n2"]
         vecs = [np.random.rand(4).astype(np.float32) for _ in range(2)]
         self.store._build_index(list(zip(ids, vecs)))
@@ -358,7 +359,7 @@ class TestKALMigration(unittest.TestCase):
 
     def test_35_kal_singleton(self):
         """KAL单例可获取。"""
-        from nucleus.knowledge_access_layer import get_kal, KnowledgeAccessLayer
+        from nucleus.knowledge_access_layer import KnowledgeAccessLayer, get_kal
         kal = get_kal()
         self.assertIsInstance(kal, KnowledgeAccessLayer)
 

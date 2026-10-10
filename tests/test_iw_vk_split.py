@@ -23,8 +23,8 @@ os.environ.setdefault(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "test_iw_vk.log"),
 )
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 from nucleus.const import Event  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 
 
 class FakeNode:

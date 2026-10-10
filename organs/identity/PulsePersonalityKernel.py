@@ -22,8 +22,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  LogLevel, PersonalityEvent, SystemEvent, HeartEvent
 from nucleus._silent_except import silent_exc
+from nucleus.const import HeartEvent, LogLevel, PersonalityEvent, SystemEvent
 
 
 def _evidence_conf(base: float, rtype: str = "generic", evidence=None) -> float:

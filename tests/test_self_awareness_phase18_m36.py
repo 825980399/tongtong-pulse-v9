@@ -21,13 +21,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 import nucleus.self_awareness as _sa_pkg  # noqa: E402
 from nucleus.self_awareness.FakeLoopDetector import (  # noqa: E402
-    FakeLoopDetector, analyze_fake_loops, score_of,
+    FakeLoopDetector,
+    analyze_fake_loops,
+    score_of,
 )
 from nucleus.self_awareness.ProductionConsumptionMatcher import (  # noqa: E402
-    ProductionConsumptionMatcher, analyze_production_consumption,
+    ProductionConsumptionMatcher,
+    analyze_production_consumption,
 )
 from nucleus.self_awareness.SelfAwarenessEngine import (  # noqa: E402
-    SelfAwarenessEngine, SelfAwarenessProfile, get_self_awareness_engine,
+    SelfAwarenessEngine,
+    SelfAwarenessProfile,
+    get_self_awareness_engine,
     reset_self_awareness_engine,
 )
 

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """主线第9批 T4 / P2-48：知识快照流式读取 + LRU 缓存测试。"""
+import logging
 import os
 import tempfile
-import logging
 
 logger = logging.getLogger(__name__)
 
 from nucleus.data.DataAccessLayer import safe_write_json
+from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView, stream_nodes
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
-from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView, stream_nodes
 
 
 def _make_snapshot(path, n=5, with_tricky_value=True):

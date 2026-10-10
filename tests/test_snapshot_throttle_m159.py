@@ -9,10 +9,10 @@
 落盘全部指向沙箱目录，绝不触碰生产 data/。
 """
 import os
-import sys
-import time
-import tempfile
 import shutil
+import sys
+import tempfile
+import time
 import unittest
 from unittest import mock
 

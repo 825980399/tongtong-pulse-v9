@@ -14,9 +14,9 @@ EvolutionSandbox.py —— 进化沙箱
 import threading
 import time
 from typing import Any
+
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 from nucleus._silent_except import silent_exc
-
 
 
 class EvolutionSandbox:

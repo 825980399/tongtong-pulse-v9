@@ -17,7 +17,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import config  # noqa: E402
-from tools.check_code_limits import collect, build_report, DEFAULT_CONFIG  # noqa: E402
+from tools.check_code_limits import DEFAULT_CONFIG, build_report, collect  # noqa: E402
 
 
 def test_code_quality_config_block_exists():

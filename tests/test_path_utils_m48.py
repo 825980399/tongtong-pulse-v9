@@ -23,8 +23,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data.path_utils import (drive_of,  # noqa: E402
-                                     safe_commonpath, safe_relpath, same_drive)
+from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive  # noqa: E402
 
 #: 本项目（D:）与系统临时目录（通常 C:）—— 真实跨盘场景
 _PROJECT_DRIVE = drive_of(_ROOT)

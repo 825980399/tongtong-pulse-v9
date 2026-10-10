@@ -18,13 +18,13 @@
     「真在跑」与「探测失败被迫保守」。安全契约不变：失败仍返回 True。
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import logging
 import subprocess
 from typing import Iterable
 
 from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
 
 logger = logging.getLogger(__name__)
 

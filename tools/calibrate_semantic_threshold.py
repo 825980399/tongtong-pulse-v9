@@ -25,7 +25,6 @@ bge-small-zh 上「同类最小 0.7220 / 异类最大 0.6746」——若属实�
 ★编码器不可用（模型未就绪/开关关闭）时明确报错退出，**不伪造数据**。
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import argparse
 import glob
@@ -36,6 +35,8 @@ import os
 import sys
 import time
 from typing import Any
+
+from nucleus._silent_except import silent_exc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

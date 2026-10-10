@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import time
+
 from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

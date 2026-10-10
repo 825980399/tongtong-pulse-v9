@@ -26,7 +26,6 @@ from enum import Enum
 from typing import Any
 
 
-
 class TaskGroupStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"

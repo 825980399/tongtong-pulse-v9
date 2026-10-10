@@ -17,7 +17,6 @@ from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
-
 class UpgradeWindow(SilentLogMixin):
     """自动升级时间窗口控制器"""
 

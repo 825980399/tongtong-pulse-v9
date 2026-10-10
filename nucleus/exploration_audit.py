@@ -11,16 +11,13 @@ exploration_audit.py —— 探索审计器
 定位: 安全治理层
 """
 
-from nucleus._silent_except import silent_exc
-from config import TIMEOUT_CONFIG
-from nucleus.logger import get_module_logger
-
-
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
 from nucleus.probe_types import ProbeIssue
-
 
 _logger = get_module_logger(__name__)
 

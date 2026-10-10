@@ -13,17 +13,16 @@ ReasoningExperienceIndexer.py —— 推理经验索引器
 
 from __future__ import annotations
 
-import threading
-import time
+import io
 import json
 import os
 import re
-import io
+import threading
+import time
 from typing import Any
 
-from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
 from nucleus._silent_except import silent_exc
-
+from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
 
 _lock = threading.Lock()
 _indexer: ReasoningExperienceIndexer | None = None

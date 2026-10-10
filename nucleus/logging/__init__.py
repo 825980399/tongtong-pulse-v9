@@ -13,5 +13,4 @@ __init__.py ——   Init
 
 from .SilentLogMixin import SilentLogMixin, coerce_log_level
 
-
 __all__ = ["SilentLogMixin", "coerce_log_level"]

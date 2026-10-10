@@ -9,8 +9,9 @@
   ⑤ PatchAutoApprover 无生产调用点（deprecated 依据）
 """
 import os
-import pytest
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

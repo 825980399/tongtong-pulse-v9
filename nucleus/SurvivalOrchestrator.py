@@ -19,9 +19,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import (  # ★P0-1: _log签名兼容兜底
-
     SilentLogMixin,
     coerce_log_level,
 )
@@ -29,7 +29,6 @@ from nucleus.logging.SilentLogMixin import (  # ★P0-1: _log签名兼容兜底
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
-from nucleus._silent_except import silent_exc
 
 # ===== 阶段一预埋的数据结构与钩子（保持不变，向后兼容） =====
 

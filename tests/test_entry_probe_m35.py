@@ -7,13 +7,14 @@
   T5  两个目标方法的 docstring 三段齐备
   T2  承重 noqa 未被误删 + 死规则 noqa 未残留在非热文件
 """
-import pytest
 import collections
 import io
 import os
 import re
 import sys
 import unittest
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

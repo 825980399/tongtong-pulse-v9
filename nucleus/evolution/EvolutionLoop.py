@@ -11,10 +11,13 @@ EvolutionLoop.py —— 进化循环
 定位: 进化核心层
 """
 from __future__ import annotations
+
 import logging
 import os
 import time
 from typing import Any
+
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.evolution.DiffArchiver import DiffArchiver
 from nucleus.evolution.EvolutionDriver import EvolutionDriver
@@ -26,8 +29,6 @@ from nucleus.evolution.TestGenerator import TestGenerator
 #   AttributeError，把真正的原始异常完全掩盖，是本类最难排查的失败模式。
 #   补 SilentLogMixin 兜底，与全项目其余 32 个类保持同一修复口径。
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 _module_logger = logging.getLogger("EvolutionLoop")
 

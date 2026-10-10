@@ -12,12 +12,12 @@ hardware_probe.py —— 硬件探测器
 """
 
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
-from config import TIMEOUT_CONFIG
 
 import os
 from typing import Any
 
+from config import TIMEOUT_CONFIG
+from nucleus._silent_except import silent_exc
 
 
 def detect_hardware_tier() -> dict[str, Any]:

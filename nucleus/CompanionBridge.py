@@ -14,8 +14,8 @@ CompanionBridge.py —— 伴侣桥接器
 import threading
 import time
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 
 class CompanionBridge:

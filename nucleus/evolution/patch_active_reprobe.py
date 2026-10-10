@@ -66,13 +66,14 @@ modified_code（修复后）  ──检测器──▶  问题应当**消失**  
     true_fix_rate(patches, strict=False)      # 含部分修复   → 1.0
 """
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import ast
 import difflib
 import re
 import textwrap
 from typing import Any, Callable
+
+from nucleus._silent_except import silent_exc
 
 #: 复现结论（取值）
 V_TRUE_PASS: str = "true_pass"

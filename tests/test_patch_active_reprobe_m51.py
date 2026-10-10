@@ -11,19 +11,19 @@
 * 真实数据 smoke（生产补丁历史可跑通 + 不产生 false_pass 之外的意外）
 """
 import io
-import pytest
 import json
 import os
 import sys
 import unittest
+
+import pytest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from nucleus.evolution import patch_active_reprobe as M  # noqa: E402
-from nucleus.evolution.patch_verification_split import (  # noqa: E402
-    GRAN_ACTIVE_REPROBE, split_verification)
+from nucleus.evolution.patch_verification_split import GRAN_ACTIVE_REPROBE, split_verification  # noqa: E402
 
 _SILENT_BEFORE = """try:
     risky()

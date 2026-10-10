@@ -9,19 +9,19 @@
 
 隔离约定：tempfile.mkdtemp()；路由测试仅 mock 下游统一入口以验证接线，不 mock 被测函数本身。
 """
+import logging
 import os
 import sys
 import tempfile
 import threading
 import unittest
-import logging
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                                    # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode                # noqa: E402
+import config  # noqa: E402
+from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 _PULSE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                       "nucleus", "mnemosyne", "PulseSnapshot.py")

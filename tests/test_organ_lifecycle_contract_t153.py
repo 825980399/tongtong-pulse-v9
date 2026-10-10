@@ -28,7 +28,6 @@ import pytest
 
 from nucleus.const import SystemEvent
 
-
 # ── STATUS_REQUEST 订阅表（实测，决定 A1 是否施加正向断言）────────────────────
 # 判定标准：器官在 get_resonance_conditions() 的 event_types/event_type 中显式列出
 #   SystemEvent.STATUS_REQUEST 即视为"声明订阅"，A1 要求 on_pulse(STATUS_REQUEST) 返回非 None dict；

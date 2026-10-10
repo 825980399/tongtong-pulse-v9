@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
+
 """
 PulseSnapshot.py —— 脉冲快照
 
@@ -22,11 +23,10 @@ import traceback
 from typing import Any
 
 from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.logger import get_module_logger
-from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.pa_compat import table_from_rows
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 try:
     from config import PARQUET_COMPRESSION, PARQUET_SHARD_BY_EVOL_LEVEL

@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.mnemosyne.experience_retriever import (      # noqa: E402
+from nucleus.mnemosyne.experience_retriever import (  # noqa: E402
     DEFAULT_POLLUTION_REPORT_PATH,
     ExperienceRetriever,
     analyze_pollution,

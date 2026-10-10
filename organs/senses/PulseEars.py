@@ -4,10 +4,10 @@
 设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
-from config import TIMEOUT_CONFIG
-
 import os
 import sys
+
+from config import TIMEOUT_CONFIG
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -36,6 +36,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     ChatEvent,
     DigestEvent,
@@ -45,9 +46,7 @@ from nucleus.const import (
     PersonaEvent,
     SystemEvent,
 )
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
 
 class PulseEars(BasePulseOrgan):

@@ -25,11 +25,11 @@ from typing import Any
 
 import numpy as np
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 from nucleus.logger import get_module_logger
 from nucleus.semantic.VectorEncoder import PREPROCESS_ID, get_vector_encoder
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
-from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 
 _module_logger = logging.getLogger(__name__)
 _logger = get_module_logger("VectorStore")

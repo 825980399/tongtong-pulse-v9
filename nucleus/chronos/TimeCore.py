@@ -17,10 +17,9 @@ import time
 from typing import Any
 
 import config
+from nucleus._silent_except import silent_exc
 from nucleus.chronos.GlobalClock import GlobalClock
 from nucleus.const import SystemEvent
-from nucleus._silent_except import silent_exc
-
 
 
 class TimeCore:

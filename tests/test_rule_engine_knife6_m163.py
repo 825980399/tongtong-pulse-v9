@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 sys_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import sys
+
 sys.path.insert(0, sys_path)
 
 import nucleus.self_awareness.rule_engine as RE

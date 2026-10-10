@@ -15,8 +15,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config                                                       # noqa: E402
-import importlib                                                    # noqa: E402
+import importlib  # noqa: E402
+
+import config  # noqa: E402
 
 _MC = importlib.import_module("organs.core.PulseMetricsCollector")
 _SRC = io.open(os.path.join(_ROOT, "organs/core/PulseMetricsCollector.py"),

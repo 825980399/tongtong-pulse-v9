@@ -20,8 +20,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.security.crisis_keywords import (  # noqa: E402
-    CRISIS_SELF_HARM_KEYWORDS, is_negated_harm_mention as neg)
+from nucleus.security.crisis_keywords import CRISIS_SELF_HARM_KEYWORDS  # noqa: E402
+from nucleus.security.crisis_keywords import is_negated_harm_mention as neg
 
 
 class TestNegatedHarmMention:

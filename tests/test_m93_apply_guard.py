@@ -30,7 +30,6 @@
   E. 零行为变化 —— 开关默认关闭；改前/改后开关全关时结论一致；
   F. 先红后绿 —— 改前（`.bak_batch93`）不含写盘点结构关。
 """
-import pytest
 import ast
 import io
 import json
@@ -41,14 +40,16 @@ import tempfile
 import unittest
 from unittest import mock
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import config  # noqa: E402
 from nucleus.reasoning.PatchManager import (  # noqa: E402
-    PatchManager,
     _M92_STRUCT_SHRINK_RATIO,
+    PatchManager,
     _m92_ast_struct_guard,
     _m92_ast_struct_guard_on,
     _m92_base_indent,

@@ -7,11 +7,12 @@ test_search_topic_guard_m16.py —— 主线第16批 任务1 门控单测（P2-1
 
 设计：直接**切片执行真实源码的模块级函数**（而非复刻逻辑），源码回退即失败。
 """
-import pytest
 import os
 import re
 import sys
 import unittest
+
+import pytest
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:

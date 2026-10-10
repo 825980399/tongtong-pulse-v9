@@ -12,15 +12,14 @@ import re
 import time
 from typing import Any
 
-from nucleus._silent_except import silent_exc
-from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder
 import config as _cfg
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     InferenceEvent,
     KnowledgeEvent,
     LogLevel,
 )
-
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder
 
 # ★主线第139批 T-139b：模块级 logger（平移自主文件同名模块变量）
 _module_logger = logging.getLogger(__name__)
@@ -1037,8 +1036,8 @@ class PulseInnerWorldKnowledgeMixin:
                 'Authorization': 'Bearer ' + _api_key,
             }
 
+            from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
-            from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
             _cfg = get_llm_call_config()
             with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
                 _ok, _data = safe_http_json(

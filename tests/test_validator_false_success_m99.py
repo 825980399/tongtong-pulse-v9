@@ -8,13 +8,14 @@
   - baseline>0 且 after=0 仍正确判为成功（不影响真实有效修复）
   - fix_detail_consistency 在 baseline=0 时把 effectiveness 字段同步为 None
 """
-import pytest
 import io
 import logging
 import os
 import sys
 import time
 import unittest
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:

@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  HandsEvent, LogLevel, MotorEvent, SystemEvent, TouchEvent
+from nucleus.const import HandsEvent, LogLevel, MotorEvent, SystemEvent, TouchEvent
 
 
 class PulseHands(BasePulseOrgan):

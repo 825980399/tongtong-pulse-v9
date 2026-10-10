@@ -11,19 +11,17 @@ IntentChannels.py —— 意图通道
 定位: 意图分类层
 """
 
-from nucleus._silent_except import silent_exc
 import os
 import re
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
-from collections.abc import Callable
 
 import config
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
-
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
 # ========== 路径与常量 ==========
 _HERE = os.path.dirname(os.path.abspath(__file__))

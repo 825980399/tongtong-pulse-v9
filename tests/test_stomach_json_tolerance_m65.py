@@ -14,7 +14,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.body.PulseStomach import PulseStomach             # noqa: E402
+from organs.body.PulseStomach import PulseStomach  # noqa: E402
 
 _TEXT_ALL = ('功能：解析用户输入并归类。关键步骤：分词、向量化、检索。'
              '依赖的外部数据：经验库与百科。潜在风险：噪声样本导致误标。')

@@ -13,10 +13,10 @@ import json
 import threading
 import time
 from typing import Any
-from nucleus.logger import get_module_logger
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.logger import get_module_logger
 
 """
 ExperiencePool —— 体验记忆库（v24.0新增）
@@ -416,9 +416,13 @@ class ExperiencePool:
             return "ok", ""
         try:
             from nucleus.evolution.ExperiencePollutionGuard import (
-                detect as _detect,
                 WEIGHT_POLLUTED as _WP,
+            )
+            from nucleus.evolution.ExperiencePollutionGuard import (
                 WEIGHT_SUSPECT as _WS,
+            )
+            from nucleus.evolution.ExperiencePollutionGuard import (
+                detect as _detect,
             )
         except Exception as _e:
             silent_exc(_e, where="nucleus.mnemosyne.experience_pool::_screen_write_pollution")
@@ -483,9 +487,8 @@ class ExperiencePool:
                  or experience.get("raw_summary") or "")
         # 2) 摘要模板（原文已丢失的 legacy 模板句）—— 沿用既有判据
         try:
-            from nucleus.data.experience_cleanup import (
-                classify as _serp_classify_fn,
-                CLASS_TEMPLATE, CLASS_WRITE_SIDE)
+            from nucleus.data.experience_cleanup import CLASS_TEMPLATE, CLASS_WRITE_SIDE
+            from nucleus.data.experience_cleanup import classify as _serp_classify_fn
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L488")
             _serp_classify_fn = None
@@ -849,8 +852,8 @@ class ExperiencePool:
         开关关闭时恒 True。
         """
         try:
-            from nucleus.data.experience_cleanup import (
-                filter_enabled as _fe, is_retrievable as _ir)
+            from nucleus.data.experience_cleanup import filter_enabled as _fe
+            from nucleus.data.experience_cleanup import is_retrievable as _ir
             if not _fe():
                 return True
             return _ir(exp)

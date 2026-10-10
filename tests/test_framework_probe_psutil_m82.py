@@ -20,7 +20,6 @@ import logging
 import tools._framework_probe as probe_mod
 from tools._framework_probe import _framework_looks_running
 
-
 # ---------- 4. cmdline 判定语义（纯函数，最关键：防自检误报） ----------
 
 class TestCmdlineIsFramework:

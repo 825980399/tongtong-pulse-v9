@@ -65,8 +65,8 @@ MANIFEST = "MANIFEST.json"
 # ★第48批 T2（P2-320）：委托给统一实现 ``nucleus.data.path_utils.safe_relpath``。
 #   本文件原先自带的 ``_rel()`` 是第46批的本地补丁；现统一到权威实现，
 #   便于其他模块复用（避免每处各写一遍 try/except）。
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
 from nucleus._silent_except import silent_exc
+from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
 
 
 def _rel(path: str, root: str = ROOT) -> str:

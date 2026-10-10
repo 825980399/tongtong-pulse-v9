@@ -39,7 +39,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.data import experience_cleanup as _ec   # noqa: E402
+from nucleus.data import experience_cleanup as _ec  # noqa: E402
 
 DEFAULT_POOL = os.path.join(ROOT, "data", "experience", "experience_pool.json")
 DEFAULT_BACKUP = DEFAULT_POOL + ".backup_20260914_pre_cleanup"

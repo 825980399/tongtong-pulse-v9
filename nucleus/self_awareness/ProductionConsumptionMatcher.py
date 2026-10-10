@@ -41,11 +41,9 @@ import os
 import time
 from typing import Any
 
-from nucleus.logger import get_module_logger
-from nucleus.data.exclude_dirs import (  # ★第49批 T5
-    DISK_SCAN_EXCLUDED, SOURCE_SCAN_DIRS)
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.exclude_dirs import DISK_SCAN_EXCLUDED, SOURCE_SCAN_DIRS  # ★第49批 T5
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("ProductionConsumptionMatcher")
 

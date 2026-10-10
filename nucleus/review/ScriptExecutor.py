@@ -19,12 +19,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
-
 
 # ★8-2：复用主沙箱的资源限制模型（CPU/内存/文件描述符/进程数上限 + 内存看门狗）
 from nucleus.security.sandbox_limits import execute_code_in_subprocess
-from nucleus._silent_except import silent_exc
 
 _logger = get_module_logger("ScriptExecutor")
 

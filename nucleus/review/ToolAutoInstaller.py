@@ -11,7 +11,6 @@ ToolAutoInstaller.py —— 工具自动安装器
 定位: 工具管理层
 """
 
-from config import TIMEOUT_CONFIG
 import os
 import shutil
 import subprocess
@@ -19,10 +18,9 @@ import sys
 import time
 from dataclasses import dataclass
 
-from nucleus.logger import get_module_logger
-from config import EXTERNAL_CALL_TIMEOUTS
+from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
-
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("ToolAutoInstaller")
 

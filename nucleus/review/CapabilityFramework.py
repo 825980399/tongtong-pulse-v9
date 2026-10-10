@@ -20,7 +20,6 @@ from typing import Any
 
 from nucleus.logger import get_module_logger
 
-
 _logger = get_module_logger("CapabilityFramework")
 
 

@@ -14,8 +14,8 @@ diagnostics.py —— 诊断工具集
 import threading
 import time
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 
 class FrameworkDiagnostics:
@@ -255,8 +255,8 @@ class FrameworkDiagnostics:
             ``{score, dimensions, weights, available, reason, version}``
         """
         try:
-            from nucleus.self_awareness.quality_score_v2 import (
-                evaluate_v2, record_trend as _m51_rec)
+            from nucleus.self_awareness.quality_score_v2 import evaluate_v2
+            from nucleus.self_awareness.quality_score_v2 import record_trend as _m51_rec
             _r = evaluate_v2()
             if record_trend:
                 _m51_rec(_r)

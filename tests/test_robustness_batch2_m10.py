@@ -64,8 +64,9 @@ def test_safe_json_col_handles_corrupt():
 
 def test_lazy_snapshot_corrupt_node_degrades():
     """惰性快照：单节点 JSON 损坏时 get_node 返回 None 而不抛异常。"""
-    from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
     import tempfile
+
+    from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
     # 构造一个合法快照文件，然后手工破坏其中一个节点 span 的内容
     path = os.path.join(tempfile.gettempdir(), "m10_corrupt_snap.json")
     snap = {"version": 1, "nodes": [

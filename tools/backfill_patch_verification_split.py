@@ -36,8 +36,13 @@ if ROOT not in sys.path:
 
 from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
 from nucleus.evolution.patch_verification_split import (  # noqa: E402
-    F_EFFECTIVENESS, F_GRANULARITY, F_NO_REGRESSION, F_PROBLEM_FIXED,
-    backfill, display_label, real_fix_rate,
+    F_EFFECTIVENESS,
+    F_GRANULARITY,
+    F_NO_REGRESSION,
+    F_PROBLEM_FIXED,
+    backfill,
+    display_label,
+    real_fix_rate,
 )
 
 DEFAULT_TARGET = os.path.join("data", "patches", "patch_history.json")

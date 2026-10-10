@@ -17,10 +17,8 @@ import time
 from typing import Any
 
 from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.data.DataAccessLayer import safe_read_json
-
 
 
 class CodeBackupManager(SilentLogMixin):

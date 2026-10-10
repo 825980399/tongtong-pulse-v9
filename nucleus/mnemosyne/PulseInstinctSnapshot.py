@@ -18,10 +18,9 @@ import time
 from typing import Any
 
 from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.logger import get_module_logger
 from nucleus.mnemosyne.PulseNode import PulseNode
-from nucleus.data.DataAccessLayer import safe_read_json
-
 
 
 class PulseInstinctSnapshot:

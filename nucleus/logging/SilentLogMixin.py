@@ -14,8 +14,8 @@ SilentLogMixin.py —— 静默日志混入
 from __future__ import annotations
 
 import logging
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 __all__ = ["SilentLogMixin", "coerce_log_level"]
 

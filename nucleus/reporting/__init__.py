@@ -15,19 +15,39 @@
 ★本包在 import 时**不创建任何目录、不做任何 IO**，便于安全导入。
 """
 
-from .report_bus import (MAX_REPORTS, ReportBus, get_report_bus,
-                         reset_report_bus)
-from .report_envelope import (ACT_ALERT, ACT_CLEAN_DATA, ACT_ENQUEUE_TASK,
-                              ACT_GENERATE_PATCH, ACT_LOG_ONLY, SEV_P0, SEV_P1,
-                              SEV_P2, SEVERITIES, TYPE_EVOLUTION, TYPE_GENERIC,
-                              TYPE_HEALTH, TYPE_KNOWLEDGE, TYPE_POLLUTION,
-                              TYPE_RUNTIME, TYPE_SELF_COGNITION, Anomaly,
-                              ReportEnvelope, make_envelope, new_report_id)
 # ★主线第50批 T1（P0-1）：报告 → 信封适配器
 from . import publishers
-from .publishers import (publish_data_quality, publish_generic, publish_health,
-                         publish_patch_quality, publish_pollution,
-                         publish_self_cognition)
+from .publishers import (
+                         publish_data_quality,
+                         publish_generic,
+                         publish_health,
+                         publish_patch_quality,
+                         publish_pollution,
+                         publish_self_cognition,
+)
+from .report_bus import MAX_REPORTS, ReportBus, get_report_bus, reset_report_bus
+from .report_envelope import (
+                         ACT_ALERT,
+                         ACT_CLEAN_DATA,
+                         ACT_ENQUEUE_TASK,
+                         ACT_GENERATE_PATCH,
+                         ACT_LOG_ONLY,
+                         SEV_P0,
+                         SEV_P1,
+                         SEV_P2,
+                         SEVERITIES,
+                         TYPE_EVOLUTION,
+                         TYPE_GENERIC,
+                         TYPE_HEALTH,
+                         TYPE_KNOWLEDGE,
+                         TYPE_POLLUTION,
+                         TYPE_RUNTIME,
+                         TYPE_SELF_COGNITION,
+                         Anomaly,
+                         ReportEnvelope,
+                         make_envelope,
+                         new_report_id,
+)
 
 __all__ = [
     "ReportEnvelope", "Anomaly", "make_envelope", "new_report_id",

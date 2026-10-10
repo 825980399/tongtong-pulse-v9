@@ -20,14 +20,13 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from nucleus.logger import get_module_logger
-from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("WikiQuerier")
 

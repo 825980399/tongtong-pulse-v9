@@ -14,8 +14,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-import nucleus.LLMDependencyMetrics as dm  # noqa: E402
 import nucleus.llm.call_recorder as cr  # noqa: E402
+import nucleus.LLMDependencyMetrics as dm  # noqa: E402
 from organs.body.PulseLung import PulseLung  # noqa: E402
 
 

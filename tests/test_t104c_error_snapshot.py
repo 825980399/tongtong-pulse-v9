@@ -7,15 +7,15 @@
 3. install_error_capture 幂等。
 4. HealthUIServer 看门狗在 serve 线程意外死亡时记录 5051 故障。
 """
-import time
 import logging
+import time
 
 import pytest
 
 from nucleus.runtime_metrics import (
+    ErrorCaptureHandler,
     get_runtime_metrics,
     install_error_capture,
-    ErrorCaptureHandler,
 )
 
 

@@ -21,8 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  HeartEvent, LogLevel, SystemEvent, VascularEvent, DeviceEvent
-from nucleus.const import Event
+from nucleus.const import DeviceEvent, Event, HeartEvent, LogLevel, SystemEvent, VascularEvent
 
 
 class PulseEmergencyHandler(BasePulseOrgan):

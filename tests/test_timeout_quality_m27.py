@@ -20,15 +20,15 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
-from organs.body.PulseStomach import PulseStomach  # noqa: E402
-from organs.brain.PulseCortex import PulseCortex  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 from nucleus.field.RequestDeduplicator import (  # noqa: E402
     CLAIMED,
     DUPLICATE,
     WAITING,
     RequestDeduplicator,
 )
+from organs.body.PulseStomach import PulseStomach  # noqa: E402
+from organs.brain.PulseCortex import PulseCortex  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
 
 # JSON 归档测试用的隔离目录（项目内 tmp/，退出时清理）
 _JSON_TMP_DIR = os.path.join(_PROJECT_ROOT, "tmp", "_m27_jsonfail_test")

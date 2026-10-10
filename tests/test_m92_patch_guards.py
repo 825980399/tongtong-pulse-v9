@@ -47,8 +47,8 @@ if ROOT not in sys.path:
 
 import config  # noqa: E402
 from nucleus.reasoning.PatchManager import (  # noqa: E402
-    PatchManager,
     _M92_STRUCT_SHRINK_RATIO,
+    PatchManager,
     _m92_ast_struct_guard,
     _m92_ast_struct_guard_on,
     _m92_base_indent,

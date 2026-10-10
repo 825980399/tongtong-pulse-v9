@@ -4,8 +4,9 @@
 覆盖：保留规则 / 去重 / 统计口径 / detail 一致性修复 / 工具与备份产物。
 """
 import os
-import pytest
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

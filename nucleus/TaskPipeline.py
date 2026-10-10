@@ -21,7 +21,6 @@ from enum import Enum
 from typing import Any
 
 
-
 class TaskStage(Enum):
     """元流程五阶段（通用处理骨架）。"""
     REQUIREMENT = "requirement"      # 需求归集

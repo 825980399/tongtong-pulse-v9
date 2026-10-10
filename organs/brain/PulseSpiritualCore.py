@@ -19,9 +19,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import HeartEvent, LogLevel, NarrativeEvent, SystemEvent
-from nucleus.const import Event
 from nucleus._silent_except import silent_exc
+from nucleus.const import Event, HeartEvent, LogLevel, NarrativeEvent, SystemEvent
 
 
 class PulseSpiritualCore(BasePulseOrgan):
@@ -543,8 +542,8 @@ class PulseSpiritualCore(BasePulseOrgan):
                 'Authorization': 'Bearer ' + _api_key,
             }
 
+            from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
-            from nucleus.api_rate_limiter import get_llm_call_config, api_rate_limited
             _cfg = get_llm_call_config()
             with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
                 _ok, _data = safe_http_json(

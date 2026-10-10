@@ -24,7 +24,6 @@ from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
     _infer_organ_from_path,
 )
 
-
 # ---------- T5：_infer_organ_from_path ----------
 
 def test_infer_organ_from_path():

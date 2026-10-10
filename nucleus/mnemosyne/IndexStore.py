@@ -20,7 +20,6 @@ from typing import Any
 
 from nucleus.mnemosyne.pa_compat import table_from_rows
 
-
 _MODULE_LOGGER = __import__("logging").getLogger("IndexStore")
 
 try:

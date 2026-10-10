@@ -19,9 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import hashlib
 import time
 from typing import Any
-from nucleus.logger import get_module_logger
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
 
 """
 PulseNode —— 脉冲知识节点数据结构（v9.5 适配版）

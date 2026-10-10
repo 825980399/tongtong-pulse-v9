@@ -30,10 +30,9 @@ import threading
 import time
 from typing import Any
 
-from nucleus.logger import get_module_logger
-from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus._silent_except import silent_exc
-
+from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("PatchAutoApprover")
 

@@ -30,9 +30,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import organs.brain.PulseInnerWorld as _iw_mod  # noqa: E402
-import nucleus.LLMDependencyMetrics as _llm_metrics  # noqa: E402
 import nucleus.evolution.patch_verification_split as _pvs  # noqa: E402
+import nucleus.LLMDependencyMetrics as _llm_metrics  # noqa: E402
+import organs.brain.PulseInnerWorld as _iw_mod  # noqa: E402
 from nucleus.LLMDependencyMetrics import KIND_RULE, KIND_SIMPLE  # noqa: E402
 from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
 from nucleus.synapsys.ResonanceEngine import ResonanceEngine  # noqa: E402

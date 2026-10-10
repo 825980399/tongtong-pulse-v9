@@ -17,7 +17,6 @@ import random
 from typing import Any
 
 
-
 class AdaptiveDecision:
     """通用自适应决策器。
 

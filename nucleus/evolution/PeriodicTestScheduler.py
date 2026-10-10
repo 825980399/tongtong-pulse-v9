@@ -20,9 +20,9 @@ import sys
 import threading
 import time
 from typing import Any
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
 
 # 确保项目根在 sys.path，便于复用 tools._framework_probe（独立运行脚本时亦需要）
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

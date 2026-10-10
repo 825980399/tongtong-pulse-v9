@@ -14,7 +14,19 @@ PulseMetricsCollector —— 多层级指标采集器 · 运行态可观测性�
 import os
 import sys
 
-from nucleus.const import  LogLevel, ChatEvent, ControllerEvent, EnergyEvent, Event, EyeEvent, KnowledgeEvent, MouthEvent, PersonaEvent, ReflectionEvent, TouchEvent
+from nucleus.const import (
+    ChatEvent,
+    ControllerEvent,
+    EnergyEvent,
+    Event,
+    EyeEvent,
+    KnowledgeEvent,
+    LogLevel,
+    MouthEvent,
+    PersonaEvent,
+    ReflectionEvent,
+    TouchEvent,
+)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -24,6 +36,8 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
+from nucleus._warn_throttle import should_warn
 from nucleus.const import (
     HeartEvent,
     HormonesEvent,
@@ -35,8 +49,6 @@ from nucleus.const import (
 )
 from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.organ_identity import ORGAN_ALIASES  # ★T-112d：器官名归一化单源真相
-from nucleus._silent_except import silent_exc
-from nucleus._warn_throttle import should_warn
 
 # 尝试读取配置，缺失时使用默认值
 try:

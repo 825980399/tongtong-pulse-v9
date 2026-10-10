@@ -8,8 +8,8 @@
 落点：PulseNode.from_dict（第171批 刀4 新增加载路径校验）。
 与 162批刀6 的 入库拒绝闸门 互补（入库拒绝 / 加载回退）。
 """
-from nucleus.mnemosyne.PulseNode import PulseNode
 import nucleus.mnemosyne.PulseNode as PN
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 
 def _capture_warning():

@@ -22,17 +22,17 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     BondingEvent,
     ChatEvent,
+    Event,
     HormonesEvent,
     LogLevel,
     PersonaEvent,
     SystemEvent,
 )
 from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus.const import Event
-from nucleus._silent_except import silent_exc
 
 
 class PulseHormones(BasePulseOrgan):

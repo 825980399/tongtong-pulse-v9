@@ -13,10 +13,9 @@ CausalVerifier.py —— 因果验证器
 
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 try:
     from nucleus.logger import get_module_logger

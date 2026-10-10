@@ -21,8 +21,8 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
 
 # ==================== 资源上限默认值 ====================
 # 数值依据：星轨《第八批任务书》8-1 限制参数表。

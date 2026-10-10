@@ -23,6 +23,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     HeartEvent,
     HormonesEvent,
@@ -33,7 +34,6 @@ from nucleus.const import (
     ReflectionEvent,
 )
 from nucleus.mnemosyne.PulseNode import PulseNode
-from nucleus._silent_except import silent_exc
 
 
 class PulseReflection(BasePulseOrgan):
@@ -46,11 +46,11 @@ class PulseReflection(BasePulseOrgan):
             import config as _cfg
             _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})
             if 'reflection_min_issues_to_store' in _rp and hasattr(self, '_min_issues_to_store'):
-                setattr(self, '_min_issues_to_store', _rp['reflection_min_issues_to_store'])
+                self._min_issues_to_store = _rp['reflection_min_issues_to_store']
             if 'reflection_success_importance' in _rp and hasattr(self, '_success_importance'):
-                setattr(self, '_success_importance', _rp['reflection_success_importance'])
+                self._success_importance = _rp['reflection_success_importance']
             if 'reflection_issue_importance' in _rp and hasattr(self, '_issue_importance'):
-                setattr(self, '_issue_importance', _rp['reflection_issue_importance'])
+                self._issue_importance = _rp['reflection_issue_importance']
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
     def __init__(self, organ_name: str = "前额叶"):

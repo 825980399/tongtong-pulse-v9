@@ -28,12 +28,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable
 
-from nucleus.logger import get_module_logger
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("SelfAwarenessEngine")
 
@@ -1036,8 +1036,7 @@ class SelfAwarenessEngine:
             return {}
         try:
             if executor is None:
-                from nucleus.reasoning.SafeEvolutionExecutor import (
-                    get_safe_evolution_executor)
+                from nucleus.reasoning.SafeEvolutionExecutor import get_safe_evolution_executor
                 executor = get_safe_evolution_executor()
             if executor is None:
                 return {}

@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import TypedDict
 
 
-
 class ProbeIssue(TypedDict, total=False):
     """探查 issue 的统一契约（三通道归一后的权威字段）。
 

@@ -24,11 +24,12 @@ os.environ.setdefault(
 import numpy as np
 
 import config as CFG
-from nucleus.semantic.VectorStore import VectorStore
 
 # ★第158批 N-8（P1）：验证脚本自身诊断行双写到 logs/pytest.log
 #   （与 stdout 实时输出并存；propagate=False 不污染 pulse.log）。
 from nucleus.logger import get_pytest_logger
+from nucleus.semantic.VectorStore import VectorStore
+
 _pytest_lg = get_pytest_logger("verify_phase17_1_5")
 
 # ★157-T-基础-1：测试隔离模块已从 git-ignored 的 `tmp/test_isolation.py` 迁入
@@ -36,7 +37,7 @@ _pytest_lg = get_pytest_logger("verify_phase17_1_5")
 #   真实重定向 data/logs + VectorStore + 5 个消费模块 _ISO_BASE_DIR + 单例重置）。
 #   优先用受控真实模块；仅当其亦缺失时（不应发生）才退回 B156-4 内联最小兜底，保 rc=0。
 try:  # noqa: E402
-    from tools.test_isolation_shim import TestIsolation, ISO_DIR
+    from tools.test_isolation_shim import ISO_DIR, TestIsolation
 except Exception:  # 兜底：受控模块亦缺失（极端情况，保脚本可独立跑通）
     import tempfile
 
@@ -53,8 +54,8 @@ except Exception:  # 兜底：受控模块亦缺失（极端情况，保脚本�
     ISO_DIR = tempfile.mkdtemp(prefix="p17_iso_")
 
 # ★第五批 任务2B：框架运行探测统一复用 tools._framework_probe
-from tools._framework_probe import _framework_looks_running
 from nucleus.data.DataAccessLayer import safe_read_json
+from tools._framework_probe import _framework_looks_running
 
 _PASS, _FAIL = [], []
 
@@ -497,8 +498,8 @@ def main():
 
     # ---- 主线第9批 T3 / P2-66：代码行数红线（警告模式，绝不阻断 43/43）----
     try:
-        from tools.check_code_limits import collect, build_report, DEFAULT_CONFIG
         import config as _m9_cfg_mod
+        from tools.check_code_limits import DEFAULT_CONFIG, build_report, collect
         _m9_cfg = dict(DEFAULT_CONFIG)
         if hasattr(_m9_cfg_mod, "CODE_QUALITY_CONFIG"):
             _m9_cfg.update(_m9_cfg_mod.CODE_QUALITY_CONFIG)

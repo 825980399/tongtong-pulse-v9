@@ -15,8 +15,8 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import config  # noqa: E402
-import nucleus.ssrf_guard as _ssrf  # noqa: E402
 import nucleus.api_rate_limiter as _rl  # noqa: E402
+import nucleus.ssrf_guard as _ssrf  # noqa: E402
 from nucleus.llm.ChannelConcurrency import (  # noqa: E402
     get_channel_concurrency_manager,
     reset_channel_concurrency_manager,

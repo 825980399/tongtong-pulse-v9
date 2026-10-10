@@ -21,10 +21,9 @@ from __future__ import annotations
 import time
 from typing import Any, ClassVar
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus._silent_except import silent_exc
-
 
 
 class Interoception(SilentLogMixin):

@@ -38,6 +38,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from nucleus._silent_except import silent_exc
 
 #: 语义拆分后的字段名（统一在此定义，避免各处硬编码）

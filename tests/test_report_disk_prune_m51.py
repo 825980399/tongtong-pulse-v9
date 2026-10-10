@@ -9,7 +9,6 @@
 * 源码接线（config 开关、publish 调用）
 """
 import importlib.util
-import pytest
 import io
 import os
 import shutil
@@ -18,13 +17,14 @@ import tempfile
 import time
 import unittest
 
+import pytest
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 import config  # noqa: E402
-from nucleus.reporting.report_bus import (  # noqa: E402
-    MAX_REPORTS_ON_DISK, ReportBus)
+from nucleus.reporting.report_bus import MAX_REPORTS_ON_DISK, ReportBus  # noqa: E402
 
 # 加载 tools/cleanup_reports.py（tools 非包）
 _spec = importlib.util.spec_from_file_location(

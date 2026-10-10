@@ -12,8 +12,8 @@ SSRF 防护误拦（火山渠道失败率 33%）。
 - 安全底线不破：云元数据 169.254.169.254 始终硬拒绝；公网地址仍放行。
 """
 import os
-import sys
 import socket
+import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:

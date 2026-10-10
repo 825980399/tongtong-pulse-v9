@@ -20,8 +20,7 @@ try:
 except Exception as _e:
     silent_exc(_e, "chat_service.py:19")
 
-from nucleus.const import (ChatEvent, LogLevel, MotorEvent, MouthEvent,
-                          PersonaEvent, RiskEvent)
+from nucleus.const import ChatEvent, LogLevel, MotorEvent, MouthEvent, PersonaEvent, RiskEvent
 
 try:
     from config import ENABLE_FACE_WELCOME_DIRECT, FACE_WELCOME_SHADOW
@@ -914,8 +913,7 @@ class ChatService:
                 return False
             if not text:
                 return False
-            from nucleus.security.crisis_keywords import (
-                crisis_self_harm_keywords, is_negated_harm_mention)
+            from nucleus.security.crisis_keywords import crisis_self_harm_keywords, is_negated_harm_mention
             _hit = next((w for w in crisis_self_harm_keywords() if w in text), None)
             # 否定语境豁免（如「我不想死，我还想看着曈曈长大」）：
             # 误把无害表述当危机 = 误安抚，比漏检更伤信任。

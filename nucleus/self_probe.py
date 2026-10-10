@@ -12,7 +12,6 @@ self_probe.py —— 自我探测
 """
 
 from __future__ import annotations
-from nucleus._silent_except import silent_exc
 
 import json
 import os
@@ -21,11 +20,11 @@ import time
 from collections import Counter
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
+from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.logger import get_module_logger
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-from nucleus.data.DataAccessLayer import safe_read_json
-
 
 _module_logger = get_module_logger("自主探查")
 

@@ -7,21 +7,21 @@
 核心回归（先红后绿）：旧逻辑把 _get_changed_nodes 第二返回值（当前全部存活 ID）当删除集，
 4 活节点 1 变更 → 日志含 4 条误 delete → 重放得 0 节点。本批修正后：1 upsert / 0 delete，重放得 4 节点。
 """
-import os
-import sys
 import json
-import time
+import logging
+import os
 import shutil
+import sys
 import tempfile
 import threading
+import time
 import unittest
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config                                                    # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot        # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode                # noqa: E402
+import config  # noqa: E402
+from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 
 class _CfgSwitch:

@@ -38,10 +38,11 @@ if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
 from mark_duplicate_nodes import (  # noqa: E402
-    iter_snapshot_nodes,
     iter_node_spans,
+    iter_snapshot_nodes,
     mark_and_rewrite,
 )
+
 from nucleus._silent_except import silent_exc  # noqa: E402
 
 # ★已知核心污染字面量（不限路径，污染本体）

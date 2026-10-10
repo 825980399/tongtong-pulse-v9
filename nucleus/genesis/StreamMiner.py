@@ -17,9 +17,9 @@ import threading
 import time
 from collections import Counter, deque
 from typing import Any
-from nucleus.data.DataAccessLayer import safe_read_json
-from nucleus._silent_except import silent_exc
 
+from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_read_json
 
 
 class StreamMiner:

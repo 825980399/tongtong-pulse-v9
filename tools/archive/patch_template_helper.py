@@ -39,7 +39,6 @@ import os
 
 from nucleus.data.path_utils import safe_relpath as _safe_relpath
 
-
 __all__ = [
     "detect_eol", "eol_bytes", "find_first_top_import_line", "balance_paren",
     "safe_relpath", "assert_structure", "apply_patches",

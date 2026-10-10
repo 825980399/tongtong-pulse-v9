@@ -18,18 +18,22 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #   且 PYTHONPATH 含根目录时才能运行（`python tools/package_full_project.py`
 #   直接 ModuleNotFoundError: No module named 'nucleus'），工具可用性依赖调用姿势。
 sys.path.insert(0, PROJECT_ROOT)
+from nucleus._silent_except import silent_exc
 from nucleus.data.exclude_dirs import PACKAGE_EXCLUDED  # noqa: E402
+
 # ★主线第12批 T2/P2-82：备份目录统一排除（含未来批次），避免备份快照打进交付 zip
 from tools.audit_utils import is_backup_name, is_backup_path  # noqa: E402
+
 # ★第145批 T-145c：复用对外发布工具的 fail-closed 白名单（单一真值源）。
 #   背景：本工具原以黑名单排除，实测把 内部总账 / docs 分析报告97 / 归档91 /
 #   archive21 / 第三方分析 / .pytest_tmp 等大面积内部资产打进了包。
 #   改为直接复用 export_public.should_skip（docs 只放行白名单），杜绝漂移。
 from tools.export_public import (  # noqa: E402
-    RESERVED_DEVICE_NAMES, should_skip as _public_should_skip,
+    RESERVED_DEVICE_NAMES,
 )
-from nucleus._silent_except import silent_exc
-
+from tools.export_public import (
+    should_skip as _public_should_skip,
+)
 
 
 def _m55_unified_excludes() -> bool:

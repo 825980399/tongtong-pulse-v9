@@ -11,8 +11,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
 import pytest  # noqa: E402
+
+import config  # noqa: E402
 
 
 # ===================== 共享 mock 后端 =====================
@@ -151,8 +152,8 @@ def neo4j_env():
     config.ENABLE_NEO4J_GRAPH_STORE = True
     config.ENABLE_NEO4J_DUAL_WRITE = True
     config.ENABLE_NEO4J_READ = True
-    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
     from nucleus.knowledge_access_layer import get_kal
+    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
     pool = PulseNodePool()
     kal = get_kal()
     orig_pool = getattr(kal, "_node_pool", None)
@@ -268,9 +269,9 @@ def test_dw_switch_off_zero_side_effect():
 
 def test_dw_exception_safe(neo4j_env):
     pool, _, _ = neo4j_env
-    from nucleus.mnemosyne.PulseNode import PulseNode
     # 用 fail_mode mock 替换：直接操作模块单例
     import nucleus.graph_store.neo4j_store as nm
+    from nucleus.mnemosyne.PulseNode import PulseNode
     nm.get_neo4j_store = lambda: MockNeo4jStore(fail_mode=True)
     try:
         a = PulseNode(value="t1-exc", evol_level="L1")
@@ -372,8 +373,8 @@ def test_ow_switch_off_zero_side_effect():
 
 def test_ow_exception_safe(influx_env):
     pool, _ = influx_env
-    from nucleus.mnemosyne.PulseNode import PulseNode
     import nucleus.timeseries_store.influxdb_store as im
+    from nucleus.mnemosyne.PulseNode import PulseNode
     im.get_influxdb_store = lambda: MockInfluxDBStore(fail_mode=True)
     n = PulseNode(value="t1-io-exc", evol_level="L1")
     pool.add(n)  # 不应抛异常
@@ -483,9 +484,9 @@ def test_read_stats_counts(neo4j_env):
 
 
 def test_kal_query_relationships_fallback():
+    from nucleus.knowledge_access_layer import get_kal
     from nucleus.mnemosyne.PulseNode import PulseNode
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    from nucleus.knowledge_access_layer import get_kal
     orr = getattr(config, "ENABLE_NEO4J_READ", False)
     config.ENABLE_NEO4J_READ = False
     pool = PulseNodePool()
@@ -512,9 +513,9 @@ def test_kal_query_relationships_enabled_prefers_neo4j(neo4j_env):
 
 
 def test_kal_query_multi_hop_fallback():
+    from nucleus.knowledge_access_layer import get_kal
     from nucleus.mnemosyne.PulseNode import PulseNode
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    from nucleus.knowledge_access_layer import get_kal
     orr = getattr(config, "ENABLE_NEO4J_READ", False)
     config.ENABLE_NEO4J_READ = False
     pool = PulseNodePool()
@@ -536,9 +537,9 @@ def test_kal_query_multi_hop_fallback():
 
 
 def test_kal_query_common_neighbors_fallback():
+    from nucleus.knowledge_access_layer import get_kal
     from nucleus.mnemosyne.PulseNode import PulseNode
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    from nucleus.knowledge_access_layer import get_kal
     orr = getattr(config, "ENABLE_NEO4J_READ", False)
     config.ENABLE_NEO4J_READ = False
     pool = PulseNodePool()

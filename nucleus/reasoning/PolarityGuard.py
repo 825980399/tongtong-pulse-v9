@@ -16,7 +16,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # 默认破坏性操作模式清单（星轨 2026-09-07 建议 + 补充，共 20 个）
 # ★保守原则：只收录「明确的破坏性指令短语」，宁可漏拦不能误拦。
 DESTRUCTIVE_PATTERNS = [

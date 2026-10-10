@@ -5,14 +5,14 @@
 覆盖：dry_run 统计+不写盘+幂等；实跑写盘+校验+分区目录出现；verify 失败→回滚。
 """
 import os
+import shutil
 import sys
 import tempfile
-import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 
 class FakeSnap(PulseSnapshot):

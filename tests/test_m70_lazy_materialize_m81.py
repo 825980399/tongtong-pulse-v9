@@ -12,20 +12,20 @@
 
 隔离：全部真实 PulseNode + 真实临时文件 + 真实 PulseNodePool 冷存；不 mock 被测函数。
 """
+import logging
 import os
+import shutil
 import sys
 import tempfile
 import threading
 import unittest
-import logging
-import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
 
 
 def _mk_snap(tmpdir):

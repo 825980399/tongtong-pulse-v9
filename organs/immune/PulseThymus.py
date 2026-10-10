@@ -35,7 +35,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import  LogLevel, SystemEvent, ThymusEvent, HeartEvent
+from nucleus.const import HeartEvent, LogLevel, SystemEvent, ThymusEvent
 
 
 class PulseThymus(BasePulseOrgan):
