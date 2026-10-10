@@ -15,6 +15,47 @@ import threading
 from typing import Any
 
 import config as _cfg
+import time
+
+from nucleus.logger import get_module_logger
+
+_log = get_module_logger("observe.external_dependency")
+
+# ★180刀6（X1 缺口闭合）：周期性将观测快照以 INFO 落日志。
+_periodic_interval = 300  # 周期快照日志间隔（秒）
+_periodic_thread = None
+_periodic_lock = threading.Lock()
+
+
+def log_snapshot() -> None:
+    """将当前观测快照以 INFO 级落日志（解决 179B「snapshot 无日志落点」X1 缺口）。"""
+    _snap = snapshot()
+    _log.info("[external_dependency_observe] snapshot external_channel_calls=%s llm_total=%s "
+              "llm_used_false=%s llm_used_false_ratio=%s delegate_browser=%s",
+              _snap.get("external_channel_calls"), _snap.get("llm_total"),
+              _snap.get("llm_used_false"), _snap.get("llm_used_false_ratio"),
+              _snap.get("delegate_browser"))
+
+
+def _periodic_loop(interval: int) -> None:
+    while True:
+        time.sleep(interval)
+        log_snapshot()
+
+
+def start_periodic_snapshot(interval_seconds: int = _periodic_interval) -> None:
+    global _periodic_thread
+    if not _enabled():
+        return
+    with _periodic_lock:
+        if _periodic_thread is not None and _periodic_thread.is_alive():
+            return
+        _periodic_thread = threading.Thread(target=_periodic_loop, args=(interval_seconds,), daemon=True)
+        _periodic_thread.start()
+
+
+def _maybe_start_periodic() -> None:
+    start_periodic_snapshot()
 
 _lock = threading.Lock()
 _stats = {
@@ -33,6 +74,7 @@ def observe_external_channel_call() -> None:
     """旁路记录一次外部渠道调用发起（仅统计，无异常分支）。"""
     if not _enabled():
         return
+    _maybe_start_periodic()
     with _lock:
         _stats["external_channel_calls"] += 1
 

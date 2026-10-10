@@ -14,6 +14,48 @@ import threading
 from typing import Any
 
 import config as _cfg
+import time
+
+from nucleus.logger import get_module_logger
+
+_log = get_module_logger("observe.request_dedup")
+
+# ★180刀6（X1 缺口闭合）：周期性将观测快照以 INFO 落日志（此前 snapshot() 从未被调用落盘）。
+_periodic_interval = 300  # 周期快照日志间隔（秒）
+_periodic_thread = None
+_periodic_lock = threading.Lock()
+
+
+def log_snapshot() -> None:
+    """将当前观测快照以 INFO 级落日志（解决 179B「snapshot 无日志落点」X1 缺口）。"""
+    _snap = snapshot()
+    _log.info("[request_dedup_observe] snapshot inflight=%s inflight_peak=%s observed=%s "
+              "distinct_fingerprints=%s fingerprint_top=%s",
+              _snap.get("inflight"), _snap.get("inflight_peak"), _snap.get("observed"),
+              _snap.get("distinct_fingerprints"), _snap.get("fingerprint_top"))
+
+
+def _periodic_loop(interval: int) -> None:
+    # 守护线程循环：周期性落快照日志；无 try/except（异常上抛，符合 cw2 红线——不新增静默 except）。
+    while True:
+        time.sleep(interval)
+        log_snapshot()
+
+
+def start_periodic_snapshot(interval_seconds: int = _periodic_interval) -> None:
+    """启动周期快照日志守护线程（幂等；仅开关开启时生效；开关关则零 IO）。"""
+    global _periodic_thread
+    if not _enabled():
+        return
+    with _periodic_lock:
+        if _periodic_thread is not None and _periodic_thread.is_alive():
+            return
+        _periodic_thread = threading.Thread(target=_periodic_loop, args=(interval_seconds,), daemon=True)
+        _periodic_thread.start()
+
+
+def _maybe_start_periodic() -> None:
+    start_periodic_snapshot()
 
 # 线程局部：承载当前请求的 user_name（由 PulseLung._on_select_model 写入）
 _tls = threading.local()
@@ -49,6 +91,7 @@ def observe_request(user_name: str, prompt: str) -> None:
     """旁路记录一次外部调用发起（仅统计，无异常分支）。"""
     if not _enabled():
         return
+    _maybe_start_periodic()
     _fp = _fingerprint(user_name, prompt)
     with _lock:
         _stats["observed"] += 1
