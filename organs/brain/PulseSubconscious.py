@@ -1782,6 +1782,16 @@ class PulseSubconscious(BasePulseOrgan):
                 limit=3
             )
             _board_insights = _weak_insights + _quality_warnings
+            # ★182批刀2：认知反思洞察注册进消费表（烛微182前置 §1.3 断裂点1）
+            #   此前 cognitive_reflection 入板后既无查询也无分支 —— 零下游读取。
+            _cognitive_reflections = self._insight_board.query(
+                insight_type="cognitive_reflection",
+                max_age_seconds=3600,
+                min_confidence=0.5,
+                limit=2
+            )
+            if _cognitive_reflections:
+                _board_insights = _board_insights + _cognitive_reflections
 
         r = random.random()
         # ===== 新增: 长期规划驱动 =====
@@ -1841,6 +1851,9 @@ class PulseSubconscious(BasePulseOrgan):
                     topic = f"{_insight_dimension} 基础 概念 入门"
                 elif _insight_type == "search_quality_warning":
                     topic = f"{_insight_dimension} 详解 原理 高质量"
+                elif _insight_type == "cognitive_reflection":
+                    # ★182批刀2：认知反思（related_dimension=思考模式）→ 推理方法改进方向
+                    topic = f"{_insight_dimension} 推理方法 认知反思 改进"
                 else:
                     topic = f"{_insight_dimension} 深度学习"
 

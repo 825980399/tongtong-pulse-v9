@@ -521,6 +521,66 @@ class QICA(BasePulseOrgan):
                 anchor.get("suggested_method", "unknown"), success=True)
         except Exception as _exc:
             _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
+        # ★182批刀4：181刀1 分层路由白名单消费侧接线（开关默认关 -> 原样返回）
+        anchor = self._m182_apply_routing_layer(anchor, raw_text)
+        return anchor
+
+    def _m182_apply_routing_layer(self, anchor: dict, raw_text: str = "") -> dict:
+        """★182批刀4：分层路由白名单（181刀1 配置面）的消费侧接线。
+
+        三档分派（意图 -> 档位）：
+          LOCAL 白名单 -> 维持本地通道（channel=fast）
+          LLM   白名单 -> 升级大模型通道（channel=deep）
+          GRAY  白名单 -> 按「问题长度 >= ROUTING_GRAY_MIN_LEN」或「命中推理结构正则」
+                          （181刀1 已配置的 ROUTING_INFERENCE_STRUCTURE_PATTERNS，
+                            与 PulseCortex._has_inference_structure 同形，不新开口径）分派
+        未登记意图 -> 不动（保持既有 PATH_TO_CHANNEL 结果）。
+
+        ★零回归：开关 ENABLE_ROUTING_LAYERED 默认 False -> 直接返回 anchor。
+        """
+        try:
+            import config as _cfg182
+            if not bool(getattr(_cfg182, "ENABLE_ROUTING_LAYERED", False)):
+                return anchor
+        except Exception as _exc:
+            _module_logger.debug("[182刀4] 开关读取失败，按关闭处理: %s: %s",
+                                type(_exc).__name__, _exc)
+            return anchor
+        _intent = anchor.get("task_type", "") or ""
+        if not _intent:
+            return anchor
+        _local = set(getattr(_cfg182, "ROUTING_LOCAL_INTENTS", ()) or ())
+        _llm = set(getattr(_cfg182, "ROUTING_LLM_INTENTS", ()) or ())
+        _gray = set(getattr(_cfg182, "ROUTING_GRAY_INTENTS", ()) or ())
+        if _intent in _local:
+            anchor["channel"] = "fast"
+            anchor["routing_layer"] = "local"
+        elif _intent in _llm:
+            anchor["channel"] = "deep"
+            anchor["routing_layer"] = "llm"
+        elif _intent in _gray:
+            _text = raw_text or anchor.get("raw_input", "") or ""
+            _min_len = int(getattr(_cfg182, "ROUTING_GRAY_MIN_LEN", 50) or 50)
+            _hit_struct = False
+            import re as _re182
+            for _pat in (getattr(_cfg182, "ROUTING_INFERENCE_STRUCTURE_PATTERNS", ()) or ()):
+                try:
+                    if _re182.search(_pat, _text):
+                        _hit_struct = True
+                        break
+                except Exception as _exc:
+                    _module_logger.debug("[182刀4] 正则异常已忽略: %s: %s",
+                                        type(_exc).__name__, _exc)
+            if len(_text) >= _min_len or _hit_struct:
+                anchor["channel"] = "deep"
+                anchor["routing_layer"] = "gray_upgrade"
+            else:
+                anchor["channel"] = "fast"
+                anchor["routing_layer"] = "gray_local"
+        if "routing_layer" in anchor:
+            self._log(LogLevel.INFO,
+                      f"[QICA][分层路由] {_intent} -> {anchor['routing_layer']} "
+                      f"(channel={anchor.get('channel', '')})")
         return anchor
 
     def _apply_intent_refine(self, text: str, anchor: dict) -> dict:

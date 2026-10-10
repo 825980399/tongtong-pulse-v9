@@ -1184,7 +1184,10 @@ class PulseInnerWorld(
                 _contemplation = self._contemplative_reason(ctx.question)
                 if _contemplation and len(_contemplation) > 30:
                     # ★181批刀2：质量分触发扩展——沉思虽成功但质量不足（高复杂度/代码/创作类）时仍升级LLM
-                    if _m181_should_escalate_on_quality(ctx.question, _contemplation):
+                    # ★182批刀1：反思低置信盲区信号并入同一触发源（不新建第二条升级线）
+                    if _m181_should_escalate_on_quality(
+                            ctx.question, _contemplation,
+                            blind_domains=_m182_reflection_blind_domains(self)):
                         self._log(LogLevel.INFO, "181刀2·质量分触发：本地沉思质量不足，升级到大模型")
                         _q_model = self._generate_branch_with_model(
                             original_question=ctx.question,
@@ -17410,8 +17413,12 @@ def _m181_quality_escalation_on() -> bool:
         return False
 
 
-def _m181_should_escalate_on_quality(question: str, contemplation: str) -> bool:
+def _m181_should_escalate_on_quality(question: str, contemplation: str,
+                                     blind_domains: tuple = ()) -> bool:
     """判据：高复杂度 / 代码 / 创作类 或 本地答质量虚 -> True（触发升级LLM）。
+
+    blind_domains：★182批刀1 新增——反思低置信盲区领域词表（来自既有反思产出/
+    失败领域记录，经 _m182_reflection_blind_domains 提取）。命中则升级 LLM。
 
     ★零回归：开关关闭时本函数不被判定路径采纳（调用点恒走原分支）。
     """
@@ -17432,4 +17439,79 @@ def _m181_should_escalate_on_quality(question: str, contemplation: str) -> bool:
     # ③ 长问题 + 短本地答 => 质量虚（高复杂度问题本地答被压缩）
     if len(_q) > 50 and len(_c) < max(30, len(_q) // 3):
         return True
+    # ④ ★182批刀1：问题命中「反思低置信盲区领域」=> 本地知识储备不足，升级 LLM
+    #    词表来自既有反思产出（_last_reflection_insights）与失败领域记录
+    #    （_failed_domain_records），不硬编码清单、不新建判据源。
+    for _d in (blind_domains or ()):
+        if _d and _d in _q:
+            return True
     return False
+
+# ===== [M182-QUALITY-REFLECTION] 182批刀1：反思低置信盲区信号（并入181刀2触发源） =====
+# 依据：烛微182前置 §2 方案A——不新建第二条升级线，只在既有质量分框架并入反思信号。
+# 开关沿用 181刀2 的 ENABLE_INNER_WORLD_QUALITY_ESCALATION（默认 False）：
+#   关闭 -> 本函数恒返回空词表，调用点判据不变（零行为变化、零额外开销）。
+_M182_BLIND_CACHE_TTL = 600.0
+
+
+def _m182_reflection_blind_domains(organ) -> tuple:
+    """★182批刀1：从既有反思产出提取「低置信盲区领域」词表（只读，不新建数据源）。
+
+    数据源（全部既有）：
+      ① organ._failed_domain_records —— 推理失败领域计数（PulseInnerWorld.__init__ 初始化）
+      ② organ._last_reflection_insights —— 最近 10 条认知反思文本（含盲区/低置信陈述）
+    返回 (领域词 tuple, 是否命中低置信/盲区信号 bool)；带 600s 进程内缓存。
+    """
+    if not _m181_quality_escalation_on():
+        return (), False
+    import re as _re182
+    import time as _time182
+    _now = _time182.time()
+    _cache = getattr(organ, "_m182_blind_cache", None)
+    if isinstance(_cache, dict) and (_now - float(_cache.get("ts", 0.0))) < _M182_BLIND_CACHE_TTL:
+        return tuple(_cache.get("domains", ())), bool(_cache.get("flag", False))
+    _domains = []
+    _flag = False
+    try:
+        _recs = getattr(organ, "_failed_domain_records", None)
+        if isinstance(_recs, dict):
+            for _kw, _cnt in _recs.items():
+                if isinstance(_kw, str) and len(_kw) >= 2 and int(_cnt or 0) >= 2:
+                    _domains.append(_kw)
+    except Exception as _e:
+        _module_logger.debug("[182刀1] 失败领域记录读取异常（已忽略）: %s: %s",
+                             type(_e).__name__, _e)
+    try:
+        _ins = getattr(organ, "_last_reflection_insights", None)
+        if isinstance(_ins, list):
+            for _txt in _ins[-3:]:
+                if not isinstance(_txt, str):
+                    continue
+                if ("置信度较低" in _txt) or ("知识盲区" in _txt) or ("薄弱区" in _txt):
+                    _flag = True
+                for _m in _re182.finditer(r'最需要关注的是「([^」]{1,20})」', _txt):
+                    _domains.append(_m.group(1))
+                for _m in _re182.finditer(r'薄弱区:\s*([^\s（(]{1,20})', _txt):
+                    _domains.append(_m.group(1))
+    except Exception as _e:
+        _module_logger.debug("[182刀1] 反思洞察解析异常（已忽略）: %s: %s",
+                             type(_e).__name__, _e)
+    _seen = set()
+    _out = []
+    for _d in _domains:
+        if _d and _d not in _seen:
+            _seen.add(_d)
+            _out.append(_d)
+    _res = (tuple(_out[:20]), _flag)
+    try:
+        organ._m182_blind_cache = {"ts": _now, "domains": _res[0], "flag": _res[1]}
+    except Exception as _e:
+        _module_logger.debug("[182刀1] 盲区词表缓存写入失败（已忽略）: %s: %s",
+                             type(_e).__name__, _e)
+    return _res
+
+# [M182-REGEX-EOL-FIX] 182批刀1：盲区领域正则转义订正
+
+# [M182-D1-HANDLER-LOG] 182批刀1：兜底 handler 改为 _module_logger.debug 留痕（cw2 LOG_FUNCS 口径）
+
+# [M182-D1-HANDLER-LOG2] 182批刀1：缓存写入兜底由 pass 改为 debug 留痕

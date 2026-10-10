@@ -4414,10 +4414,11 @@ ENABLE_SELF_AWARENESS_OBSERVATION = True           # L1 观测级（仅记日志
 # ★第170批 C5（T-阶段二结果接入-1）：PHASE18 阶段二 L2/L3 影响级「四键」配置接入
 #   遵循 FACE_WELCOME_SHADOW 范式（config.py:1565）：默认均为影子/未启用态，
 #   **全 0 命中（新建）、不影响主链路**；真实降级/增益行为在阶段二实施批逐步开启。
-SELF_AWARENESS_DECISION_DEGRADE_THRESHOLD = 50    # 场景2：触发降级的综合分阈值（仅声明，未接线）
-SELF_AWARENESS_DEGRADE = False                     # 场景2：降级启用开关（影子态，默认关）
-SELF_AWARENESS_EVOLUTION_BOOST_ENABLED = False     # 场景3：进化加成开关（影子态，默认关）
-SELF_AWARENESS_EVOLUTION_BOOST_MAX = 0.3           # 场景3：单条最大加成比例（仅声明，未接线）
+# ★第182批刀5：原「阶段二四键」中的三键已删除（星轨裁决：删影子键防孤儿键漂移）——
+#   SELF_AWARENESS_DECISION_DEGRADE_THRESHOLD / SELF_AWARENESS_DEGRADE /
+#   SELF_AWARENESS_EVOLUTION_BOOST_ENABLED / SELF_AWARENESS_EVOLUTION_BOOST_MAX
+#   烛微182前置 §1.3 断裂点2 + 路灯实测复核：organs/nucleus/tools 全库 grep 0 命中（纯孤儿键）。
+#   第四键 SELF_AWARENESS_MENTION_ENABLED 已有消费方（PulseCortex 读取），**保留**。
 
 # ★第115批 T-115f：PHASE18 阶段二 L2 对话主动提及开关（设计文档 §3.3 / §4.1 / §5）
 #   默认关 = 零行为变化（关闭时 _maybe_append_self_state 直接返回原回复，不进主 prompt）。
@@ -5672,3 +5673,19 @@ ENABLE_INNER_WORLD_QUALITY_ESCALATION = False
 # 零行为变化：两者默认 False -> 不主动日志、不影响任何决策（未开 INFLUENCE_DECISION）
 ENABLE_ORGAN_HEALTH_LEADERBOARD = False
 ENABLE_ORGAN_INVENTORY_EXPORT = False
+
+
+# ===== [M182-LOCAL-EVIDENCE] 182批补刀3：DETERMINISTIC 本地确定性凭证（O-A4 续）=====
+# 来源：182批补充任务书补刀3；179A 已实装三态接口 + DETERMINISTIC 免 LLM 路径（落 matched_rule_id）。
+# 本刀只补「命中之后的本地确定性凭证」产出映射：走本地时钟 / 本地常量——
+#   - 不走 SUBAGENT 子进程（真起子代理推 183，依赖 O-B1 三层策略面）
+#   - 不调用任何外部 LLM
+# 读取点：nucleus/field/active_memory_dual.py::_m182_local_evidence（调用点：DETERMINISTIC 命中分支）
+# 零行为变化：ENABLE_O_A4_LOCAL_EVIDENCE=False（默认）→ 命中仅落 matched_rule_id，与 179A 完全一致；
+#             且总开关 ENABLE_O_A4_DUAL_PATH=False、O_A4_MODE="NONE" → 根本不进入该分支。
+ENABLE_O_A4_LOCAL_EVIDENCE = False
+# rule_id -> 本地产出器名（见 active_memory_dual._M182_LOCAL_PROVIDERS）
+O_A4_LOCAL_EVIDENCE_PROVIDERS = {
+    "rule_current_time": "local_time",
+    "rule_identity": "local_identity",
+}
