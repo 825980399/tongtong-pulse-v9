@@ -1,0 +1,619 @@
+{
+  "schema": "ruff_nonf_baseline/1",
+  "batch": 177,
+  "ruff_version_pinned": "0.16.5",
+  "ruff_version_actual": "0.16.5",
+  "generated_at_head": "6cc16d3",
+  "scan_cmd": "ruff check --output-format=json . （按 ruff.toml 默认规则集 + exclude/ignore 生效；事后过滤 F 类，得非 F 全量）",
+  "scan_scope": "全项目（遵循 ruff.toml 的 exclude，排除 data/code_backups、tmp/patch_*|scan_*|check_*、.bak*、.release-tmp*）",
+  "note": "非 F 全量基线件（177批 刀6）。与 ruff_ruf100_156.json 同构，但本件为【汇总式】而非逐行枚举：非 F 违规共 3775 处 / 63 类，逐行枚举不可审查且不实用于基线，故 zones 改为【逐码聚合】（code+count+sample_files），复跑一致=ruff check 非 F 总数与逐码计数可证一致。分类：ZONE_AUTO=命令式自动可修（其中 RUF100/UP020/UP006/UP045 经 177批刀5 实测会级联 F 回归，须先清底层 F 再批修；UP031 体量最大归刀13 人工类）；ZONE_IGNORE=设计内忽略或待裁定忽略（含 ruff.toml 已 ignore 集与 DTZ/SIM 等候选）；ZONE_MANUAL=其余人工类。F 类（pyflakes）不纳入本基线，单独由门禁 ruff F=5 承载。",
+  "total": 3775,
+  "zone_counts": {
+    "ZONE_AUTO": 2930,
+    "ZONE_IGNORE": 698,
+    "ZONE_MANUAL": 147
+  },
+  "zones": [
+    {
+      "code": "UP031",
+      "count": 1636,
+      "sample_files": [
+        "config.py",
+        "config.py",
+        "config.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "RUF100",
+      "count": 543,
+      "sample_files": [
+        "nucleus/field/InfoField.py",
+        "nucleus/logger.py",
+        "nucleus/mnemosyne/IndexStore.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "UP020",
+      "count": 453,
+      "sample_files": [
+        "nucleus/code_learning_memory.py",
+        "nucleus/code_learning_memory.py",
+        "nucleus/data/experience_cleanup.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "SIM115",
+      "count": 415,
+      "sample_files": [
+        "main.py",
+        "main.py",
+        "nucleus/evolution/patch_lifecycle.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "UP006",
+      "count": 103,
+      "sample_files": [
+        "nucleus/distributed/heartbeat.py",
+        "nucleus/distributed/heartbeat.py",
+        "nucleus/distributed/heartbeat.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "RUF012",
+      "count": 64,
+      "sample_files": [
+        "nucleus/evolution/EvolutionLoop.py",
+        "nucleus/evolution/ParamAnalysisReport.py",
+        "nucleus/knowledge/KnowledgeAcquisitionRouter.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PLW1510",
+      "count": 60,
+      "sample_files": [
+        "nucleus/evolution/PeriodicTestScheduler.py",
+        "nucleus/reasoning/PatchManager.py",
+        "nucleus/self_awareness/quality_score_v2.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "UP045",
+      "count": 48,
+      "sample_files": [
+        "nucleus/distributed/heartbeat.py",
+        "nucleus/distributed/node_registry.py",
+        "nucleus/distributed/node_registry.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "UP035",
+      "count": 32,
+      "sample_files": [
+        "nucleus/distributed/heartbeat.py",
+        "nucleus/distributed/heartbeat.py",
+        "nucleus/distributed/node_registry.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "DTZ001",
+      "count": 31,
+      "sample_files": [
+        "nucleus/knowledge/WebTimeExtractor.py",
+        "nucleus/knowledge/WebTimeExtractor.py",
+        "nucleus/knowledge/WebTimeExtractor.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "SIM117",
+      "count": 31,
+      "sample_files": [
+        "nucleus/llm/call_recorder.py",
+        "nucleus/llm/semantic_cache.py",
+        "nucleus/logger.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "RUF059",
+      "count": 30,
+      "sample_files": [
+        "tests/test_a1_remediation_distill_m164.py",
+        "tests/test_a1_remediation_distill_m164.py",
+        "tests/test_a1_remediation_distill_m164.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "C401",
+      "count": 28,
+      "sample_files": [
+        "nucleus/mnemosyne/PulseNode.py",
+        "nucleus/mnemosyne/PulseSnapshot.py",
+        "nucleus/mnemosyne/PulseSnapshot.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "RUF022",
+      "count": 22,
+      "sample_files": [
+        "nucleus/data/experience_cleanup.py",
+        "nucleus/data/path_utils.py",
+        "nucleus/evolution/patch_lifecycle.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "B009",
+      "count": 20,
+      "sample_files": [
+        "tests/test_design_docs_m44.py",
+        "tests/test_llm_indent_contract_m91.py",
+        "tests/test_llm_indent_contract_m91.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "DTZ005",
+      "count": 20,
+      "sample_files": [
+        "config.py",
+        "functions/runtime_state_writer.py",
+        "nucleus/evolution/ParamAnalysisReport.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "SIM103",
+      "count": 20,
+      "sample_files": [
+        "nucleus/data/experience_cleanup.py",
+        "nucleus/reasoning/PatchManager.py",
+        "nucleus/reasoning/PatchManager.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "PERF102",
+      "count": 16,
+      "sample_files": [
+        "nucleus/self_awareness/artifact_registry.py",
+        "organs/brain/PulseCodeLearner.py",
+        "organs/brain/PulseReflection.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "RUF015",
+      "count": 16,
+      "sample_files": [
+        "tests/test_dup_dialog_m25.py",
+        "tests/test_event_tap_m17.py",
+        "tests/test_event_tap_m17.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "S102",
+      "count": 15,
+      "sample_files": [
+        "nucleus/evolution/PerformanceProfiler.py",
+        "nucleus/reasoning/PatchManager.py",
+        "nucleus/reasoning/PatchManager.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "PIE810",
+      "count": 12,
+      "sample_files": [
+        "nucleus/self_inspector.py",
+        "nucleus/self_inspector.py",
+        "tests/test_m77_debt_audit.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "I001",
+      "count": 11,
+      "sample_files": [
+        "tools/ci/check_broken_chain_gate.py",
+        "tools/ci/check_red_baseline_gate.py",
+        "tools/ci/check_red_baseline_gate.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "UP037",
+      "count": 11,
+      "sample_files": [
+        "main.py",
+        "nucleus/reporting/report_bus.py",
+        "nucleus/reporting/report_bus.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "RET501",
+      "count": 10,
+      "sample_files": [
+        "nucleus/distributed/sharding.py",
+        "nucleus/distributed/sharding.py",
+        "nucleus/distributed/sharding.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "UP024",
+      "count": 10,
+      "sample_files": [
+        "nucleus/logger.py",
+        "nucleus/reporting/alert_log_bridge.py",
+        "nucleus/reporting/alert_log_bridge.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "UP012",
+      "count": 8,
+      "sample_files": [
+        "tests/test_a3a_package_rescan_m161.py",
+        "tests/test_a3a_package_rescan_m161.py",
+        "tests/test_export_public_t153_normalize.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "PLR1711",
+      "count": 7,
+      "sample_files": [
+        "tests/test_cold_compaction_windows_lock_m60.py",
+        "tests/test_crisis_keywords_m169.py",
+        "tests/test_ir_timeout_t147.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "PLW0602",
+      "count": 7,
+      "sample_files": [
+        "config.py",
+        "config.py",
+        "config.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "UP032",
+      "count": 7,
+      "sample_files": [
+        "tests/test_health_ui_do_post_m99.py",
+        "tests/test_health_ui_do_post_m99.py",
+        "tests/test_health_ui_do_post_m99.py"
+      ],
+      "zone": "ZONE_AUTO"
+    },
+    {
+      "code": "PIE790",
+      "count": 6,
+      "sample_files": [
+        "nucleus/logger.py",
+        "nucleus/reasoning/PatchManager.py",
+        "nucleus/reasoning/PatchManager.py"
+      ],
+      "zone": "ZONE_IGNORE"
+    },
+    {
+      "code": "PIE807",
+      "count": 5,
+      "sample_files": [
+        "nucleus/self_awareness/KnowledgeQualityAnalyzer.py",
+        "tests/test_knife3_cold_index_m162.py",
+        "tests/test_knife3_cold_index_m162.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PLR0402",
+      "count": 5,
+      "sample_files": [
+        "tests/test_cold_compaction_windows_lock_m60.py",
+        "tests/test_evolution_backup_filter_m60.py",
+        "tests/test_evolution_generic_defense_m60.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PLR1730",
+      "count": 5,
+      "sample_files": [
+        "nucleus/llm/channel_speed_profiler.py",
+        "nucleus/llm/channel_speed_profiler.py",
+        "nucleus/llm/channel_speed_profiler.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM114",
+      "count": 5,
+      "sample_files": [
+        "tests/test_distributed_e2e_m72.py",
+        "tests/test_distributed_e2e_m72.py",
+        "tools/measure_baseline.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM118",
+      "count": 5,
+      "sample_files": [
+        "nucleus/llm/channel_speed_profiler.py",
+        "nucleus/mnemosyne/PulseSnapshot.py",
+        "nucleus/reasoning/PatchManager.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "DTZ007",
+      "count": 4,
+      "sample_files": [
+        "nucleus/evolution/LogAnalyzer.py",
+        "nucleus/evolution/ParamAnalysisReport.py",
+        "nucleus/evolution/ParamPatchManager.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "RUF034",
+      "count": 4,
+      "sample_files": [
+        "nucleus/llm/channel_speed_profiler.py",
+        "nucleus/self_awareness/capability_ledger.py",
+        "organs/body/PulseLung.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "RUF046",
+      "count": 4,
+      "sample_files": [
+        "nucleus/evolution/QualityClosedLoop.py",
+        "nucleus/evolution/QualityClosedLoop.py",
+        "nucleus/llm/channel_speed_profiler.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PERF402",
+      "count": 3,
+      "sample_files": [
+        "nucleus/probe_hypothesis.py",
+        "organs/body/PulseLung.py",
+        "tools/ci/check_pending_register.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PLC0206",
+      "count": 3,
+      "sample_files": [
+        "nucleus/mnemosyne/ReasoningExperience.py",
+        "organs/brain/PulseSubconscious.py",
+        "organs/brain/PulseSubconscious.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "RUF023",
+      "count": 3,
+      "sample_files": [
+        "nucleus/field/RequestDeduplicator.py",
+        "nucleus/self_awareness/ProductionConsumptionMatcher.py",
+        "organs/brain/PulseInnerWorld.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP022",
+      "count": 3,
+      "sample_files": [
+        "tools/ci/check_delivery_settle.py",
+        "tools/ci/check_pending_register.py",
+        "tools/ci/check_pending_register.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP028",
+      "count": 3,
+      "sample_files": [
+        "nucleus/knowledge_access_layer.py",
+        "nucleus/self_awareness/rule_engine.py",
+        "tests/test_m96_followups.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP041",
+      "count": 3,
+      "sample_files": [
+        "tests/test_m75_l3_queue_stability.py",
+        "tests/test_m75_l3_queue_stability.py",
+        "tests/test_m75_l3_queue_stability.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "ASYNC230",
+      "count": 2,
+      "sample_files": [
+        "nucleus/wecom_chat_bridge.py",
+        "nucleus/wecom_chat_bridge.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "DTZ006",
+      "count": 2,
+      "sample_files": [
+        "nucleus/knowledge/WebTimeExtractor.py",
+        "nucleus/llm/call_recorder.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "ISC004",
+      "count": 2,
+      "sample_files": [
+        "organs/brain/PulseInnerWorld.py",
+        "tests/test_backfill_verify_m45.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PLR0124",
+      "count": 2,
+      "sample_files": [
+        "nucleus/device_router.py",
+        "nucleus/llm/channel_speed_profiler.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM905",
+      "count": 2,
+      "sample_files": [
+        "nucleus/reasoning/ReasoningExperienceIndexer.py",
+        "organs/body/PulseLiver.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "TRY004",
+      "count": 2,
+      "sample_files": [
+        "nucleus/security/face_codec.py",
+        "tools/archive/patch_template_helper.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP026",
+      "count": 2,
+      "sample_files": [
+        "tests/test_identity_seed_m159b.py",
+        "tests/test_identity_seed_mission_m160.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP030",
+      "count": 2,
+      "sample_files": [
+        "tests/test_lazy_snapshot_m9.py",
+        "tests/test_lazy_snapshot_m9.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "UP034",
+      "count": 2,
+      "sample_files": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "organs/brain/pulse_inner_world_knowledge.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "B023",
+      "count": 1,
+      "sample_files": [
+        "tests/test_parquet_schema_m81.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "C405",
+      "count": 1,
+      "sample_files": [
+        "tests/test_r5_face_roster.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "C408",
+      "count": 1,
+      "sample_files": [
+        "tests/test_incremental_checkpoint_m81b2.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "G201",
+      "count": 1,
+      "sample_files": [
+        "nucleus/field/InfoField.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "PYI034",
+      "count": 1,
+      "sample_files": [
+        "nucleus/security/sandbox_limits.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "RUF019",
+      "count": 1,
+      "sample_files": [
+        "tests/test_knife6_patch_truth_m161lower.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM101",
+      "count": 1,
+      "sample_files": [
+        "nucleus/self_awareness/ProductionConsumptionMatcher.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM201",
+      "count": 1,
+      "sample_files": [
+        "nucleus/reasoning/PatchManager.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "SIM222",
+      "count": 1,
+      "sample_files": [
+        "tests/test_config_placeholder_t146.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    },
+    {
+      "code": "TRY203",
+      "count": 1,
+      "sample_files": [
+        "tools/ci/check_write_only_gates.py"
+      ],
+      "zone": "ZONE_MANUAL"
+    }
+  ]
+}
