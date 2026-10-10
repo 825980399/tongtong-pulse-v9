@@ -943,6 +943,57 @@ POLARITY_GUARD_CONFIG = {
     "extra_patterns": [],
 }
 
+# ========== 178批 刀3（O-B1）：sandbox / tool-policy / elevated 三层正交配置面 ==========
+# 来源：177批《O-B1+B6 正交配置面与子代理隔离设计稿》。
+# 纯配置面：仅声明三层键段、默认值与互斥/继承关系；elevated 实装推 179（本批只声明关闭态）。
+# 三层正交：任意组合可声明，互相不耦合；后续闸引用 OB1_* 键名。
+# 默认档（与设计稿一致）：sandbox=strict / tool-policy=conservative / elevated=off(False)。
+
+# 三层主开关（单一驱动，便于灰度与审计）
+OB1_SANDBOX_LEVEL = "strict"            # 代码执行沙箱等级：strict(禁网+资源上限) / loose / off
+OB1_TOOL_POLICY_LEVEL = "conservative"  # 工具调用白/黑名单与频率闸：conservative / permissive
+OB1_ELEVATED_ENABLED = False            # 提权动作（写盘/重启/外部API）审批闸：默认关闭（实装推 179）
+
+# 三层键段划分：键段 → 归属层 + 语义 + 子键清单
+OB1_CONFIG_FACETS = {
+    "sandbox": {
+        "desc": "代码执行沙箱等级（禁网/资源上限）",
+        "level_key": "OB1_SANDBOX_LEVEL",
+        "keys": ["OB1_SANDBOX_LEVEL", "OB1_SANDBOX_NET_OFF",
+                 "OB1_SANDBOX_MEM_MB", "OB1_SANDBOX_CPU_CAP"],
+        "default": "strict",
+    },
+    "tool_policy": {
+        "desc": "工具调用白/黑名单与频率闸",
+        "level_key": "OB1_TOOL_POLICY_LEVEL",
+        "keys": ["OB1_TOOL_POLICY_LEVEL", "OB1_TOOL_ALLOW",
+                 "OB1_TOOL_DENY", "OB1_TOOL_RATE_PER_MIN"],
+        "default": "conservative",
+    },
+    "elevated": {
+        "desc": "提权动作（写盘/重启/外部API）审批闸",
+        "level_key": "OB1_ELEVATED_ENABLED",
+        "keys": ["OB1_ELEVATED_ENABLED", "OB1_ELEVATED_REQUIRE_HUMAN",
+                 "OB1_ELEVATED_SCOPES"],
+        "default": "off",
+    },
+}
+
+# 互斥/继承表（纯声明，供 179 实装与审计引用，不影响运行行为）
+# 互斥：elevated 开启时，sandbox 不得为 off（提权须有沙箱兜底）；
+#       elevated 开启时，tool_policy 不得为 permissive（提权须有工具闸）。
+# 继承：tool_policy 继承 sandbox 的网络策略基线；elevated 继承 tool_policy 的审批前置。
+OB1_FACET_RULES = {
+    "mutex": [
+        ("elevated=on", "sandbox!=off"),
+        ("elevated=on", "tool_policy!=permissive"),
+    ],
+    "inherit": [
+        ("tool_policy", "sandbox.net_off"),
+        ("elevated", "tool_policy.approval_precheck"),
+    ],
+}
+
 # ========== 推理经验双写（PHASE17 阶段二子任务4.1） ==========
 # 不改 ReasoningExperience.py（JSON 版推理经验库），在规则通道层新增双写索引器：
 # 写 JSON 成功后，额外往知识树 /推理经验/ 路径写节点副本 + 提交语义编码，
