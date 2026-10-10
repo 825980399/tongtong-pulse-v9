@@ -31,28 +31,11 @@ from nucleus.logger import (
 )
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
-try:
-    from config import CONCURRENT_COMM, PULSE_LAYER, PULSE_PRIORITY
-except ImportError:
-    PULSE_PRIORITY = {"LIGHT_SPEED": 10, "CRITICAL": 9, "HIGH": 7, "NORMAL": 5, "LOW": 3, "BACKGROUND": 1}
-    PULSE_LAYER = {
-        "l0_threads": 1, "l1_threads": 4, "l2_threads": 4, "l3_threads": 2,
-        "l0_queue_max": 0, "l1_queue_soft_limit": 500, "l2_queue_limit": 200, "l3_queue_hard_limit": 100,
-        "l0_enabled": True, "l1_enabled": True, "l2_enabled": True, "l3_enabled": True,
-        "high_load_cpu_threshold": 80.0, "high_load_memory_threshold": 85.0,
-        "idle_cooldown_seconds": 60.0, "field_mode": "PULSE",
-        "l0_l1_use_lockfree_queue": True, "cpu_affinity_enabled": False,
-        "cpu_affinity_cores": [], "disable_ttl_for_l0_l1": True,  # type: ignore[possibly-unbound]
-        "organ_max_concurrent_pulses": 0, "pulse_storm_threshold": 500,
-        "pulse_storm_action": "aggregate",
-    }
-    CONCURRENT_COMM = {
-        "multi_subscribe_enabled": True, "parallel_dispatch_enabled": True,
-        "topology_multi_inbound": True, "dual_route_default": "parallel",
-        "n_to_one_max_sources": 0, "n_to_one_queue_mode": "concurrent",
-    }
+from config import CONCURRENT_COMM, PULSE_LAYER, PULSE_PRIORITY
 
 import config as _cfg  # ★162批刀1：config 恒可导入（既有 from config import 已证），无条件避免静默 except
+# ★180刀4：删除上方 except ImportError 死分支（config 恒可导入，该分支永不触发）；
+#          queue 两键（l2_queue_limit/l3_queue_hard_limit）现唯一定义于 config.py（300/300），单源对齐。
 
 # v9.5: 脉冲层级常量
 _PULSE_LAYER_L0 = "L0"
