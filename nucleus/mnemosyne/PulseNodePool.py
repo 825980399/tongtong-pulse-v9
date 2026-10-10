@@ -2157,10 +2157,12 @@ class PulseNodePool(SilentLogMixin):
             _evicted += 1
         if _evicted:
             self._last_cold_shrink_ts = _now
+            _ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(_now))
             _module_logger.info(
-                f"[第170批 C10] 冷池分位驱逐 {_evicted} 个节点"
-                f"（最低 {int(_pct * 100)}% 分位，批上限 {int(_batch)}，"
-                f"间隔 {int(_interval)}s）")
+                f"[第170批 C10] 冷池分位驱逐完成 ts={_ts} "
+                f"收缩节点数={_target} 实驱逐={_evicted} "
+                f"(最低 {int(_pct * 100)}% 分位，批上限 {int(_batch)}，"
+                f"间隔 {int(_interval)}s)")
     # ========== ★P3-1新增：分层索引维护方法 ==========
     
     @staticmethod
