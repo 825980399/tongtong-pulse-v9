@@ -1009,6 +1009,20 @@ O_A4_DETERMINISTIC_RULES = [
     ("现在几点", "rule_current_time"),
     ("你是谁", "rule_identity"),
 ]
+# ========== 180批 刀2（O-A3）：SKILL.md 文件夹规范 + 资源清单声明 ==========
+# 来源：177批《O-A3 SKILL规范与资源清单设计稿》；180刀2 纯加法默认关（声明段）。
+# 声明式：SKILL.md 字段集（name/scope/entry/resources/risk）与
+#        tools/export_public.py 白名单同面维护；不实装自动加载执行逻辑（设计稿 §七），
+#        不与 OB1_FACET_RULES / OB1_CONFIG_FACETS 新开第四套配置面（178刀3 同面共存，取值互斥复核）。
+ENABLE_OA3_SKILL_MANIFEST = False        # 总开关（关闭 -> 不实装，零行为变化）
+OA3_SKILL_MANIFEST_DIRS = []             # 参与 SKILL.md 资源清单的能力目录（默认空，零作用）
+
+# ========== 180批 刀3（O-B6）：子代理隔离面键声明 ==========
+# 来源：烛微180前置 §1 反假——evolution_worker.py:102 进程隔离已在位、:90/:92 深度上限已参数化；
+# 本刀只补两键声明（无消息工具开关 + 廉价模型指定键），默认关（真起子代理推后续批，不重复排已有能力）。
+ENABLE_SUBAGENT_NO_MESSAGE_TOOL = False  # 子代理无消息工具隔离面（默认关）
+SUBAGENT_CHEAP_MODEL = ""                # 子代理廉价模型指定（空=不指定，沿用主模型）
+
 # ========== 179批 刀2（O-B2）：Standing Orders 四字段 ==========
 # 来源：177批《O-B2 Standing Orders 设计稿》；179A 刀2 实装四字段结构 + 闸引用 O-B1 键。
 # 总开关关闭（默认 False）→ 不加载/不生效，零行为变化。
