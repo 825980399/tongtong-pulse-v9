@@ -1798,6 +1798,10 @@ class PulseLung(BasePulseOrgan):
                           f"[依赖度] SCENE_LUNG 埋点失败（已忽略）: "
                           f"{type(_m40_de).__name__}")
 
+        # ★178批 刀4：外部依赖度埋点——外部渠道调用计数（shadow 由 ENABLE_SEMANTIC_CACHE_OBSERVE 控制，零行为变化）
+        from nucleus.field.external_dependency_observe import observe_external_channel_call
+        observe_external_channel_call()
+
         _candidates: list = []
         _is_bg_call = bool(getattr(self, "_current_call_is_background", False))
         # ★第24批 T4：caller 缺省时按「是否后台学习」推断（兼容既有调用方）

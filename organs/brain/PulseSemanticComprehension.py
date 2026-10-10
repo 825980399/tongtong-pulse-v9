@@ -284,6 +284,10 @@ class PulseSemanticComprehension(BasePulseOrgan):
                     elif llm_result.get("confidence", 0) > confidence:
                         confidence = llm_result["confidence"]
 
+            # ★178批 刀4：外部依赖度埋点——语义理解判定（need_llm 即是否外部 LLM）计数
+            from nucleus.field.external_dependency_observe import observe_semantic_decision
+            observe_semantic_decision(need_llm)
+
             # 5. 发射结果给大脑皮层
             self._emit(QICAEvent.CLASSIFY_RESULT, {
                 "raw_input": content,

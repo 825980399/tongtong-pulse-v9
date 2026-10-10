@@ -212,6 +212,8 @@ class KnowledgeAcquisitionRouter:
         for _ch in _plan:
             if _ch == "browser":
                 # 委托调用方走原浏览器路径（路由器不拥有 Playwright）
+                from nucleus.field.external_dependency_observe import observe_delegate_browser
+                observe_delegate_browser()
                 _tried.append("browser→委托")
                 break
             if _ch == "local":
