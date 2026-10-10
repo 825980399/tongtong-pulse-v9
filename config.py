@@ -7,13 +7,13 @@
 import copy
 import json
 import os
-import re
 import os as _os
+import re
 import threading
 import time
 
-from nucleus.const import LogLevel
 from nucleus._silent_except import silent_exc
+from nucleus.const import LogLevel
 
 # ========== 项目根目录 ==========
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -3816,7 +3816,7 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
         import json as _json
         from datetime import datetime as _dt
         log_entry = {
-            "timestamp": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),  # noqa: DTZ005
+            "timestamp": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
             "param": param_name,
             "old_value": old_value,
             "new_value": new_value,
@@ -3831,7 +3831,7 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
 
 def _watch_config_file():
     """后台线程：监听配置文件变更并自动重载"""
-    global _last_config_mtime, _config_watcher_running  # noqa: PLW0602
+    global _last_config_mtime, _config_watcher_running
 
     while _config_watcher_running:
         try:
@@ -3869,7 +3869,7 @@ def start_config_watcher():
 
 def stop_config_watcher():
     """停止配置文件监听（由 main.py 在退出时调用）"""
-    global _config_watcher_running, _config_watcher_thread  # noqa: PLW0602
+    global _config_watcher_running, _config_watcher_thread
     _config_watcher_running = False
     if _config_watcher_thread and _config_watcher_thread.is_alive():
         _config_watcher_thread.join(timeout=3)
@@ -5444,7 +5444,7 @@ def find_unrendered_placeholders(obj, _path="", _acc=None):
             find_unrendered_placeholders(x, "%s[%d]" % (_path, i), _acc)
     elif isinstance(obj, dict):
         for k, v in obj.items():
-            find_unrendered_placeholders(v, "%s.%s" % (_path, k), _acc)
+            find_unrendered_placeholders(v, "{}.{}".format(_path, k), _acc)
     return _acc
 
 # 此函数为导出阶段兜底渲染，生产路径已迁移至render_placeholders，保留不删除，供导出脚本使用
@@ -5476,8 +5476,8 @@ def _apply_placeholder_render():
                 for k, v in list(rules.items()):
                     if isinstance(v, str):
                         rules[k] = render_placeholders(v)
-    except Exception as _e:  # noqa: BLE001
-        print("[Config] 占位符渲染失败（已跳过，不影响启动）: %s" % _e)
+    except Exception as _e:
+        print("[Config] 占位符渲染失败（已跳过，不影响启动）: {}".format(_e))
 
 # ★第146批 T146-3：**删除**此处的 import 期原地渲染。
 #   原副作用：import config 即把 SEED_MEMORIES[*].value / display_name /
