@@ -317,7 +317,9 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float | None:
             _known += 1
     # ★M85-3（第85批 相关任务 / D84-2）：分母 = 可判定补丁数（True + False）；
     #   无可判定样本时返回 0.0（不返回 0/0 的 NaN，也不虚报满分）。
-    return round(_ok / _known, 4) if _known else None
+    # ★180刀5（星轨裁定 #1）：非空但全 None（_known==0）的"无可判定样本"统一返回 0.0 而非 None，
+    #   与 backfill() 同口径契约一致（契约 0.0）。
+    return round(_ok / _known, 4) if _known else 0.0
 
 
 def is_genuine_reverify(patch: dict[str, Any]) -> bool:

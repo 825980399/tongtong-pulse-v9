@@ -2,7 +2,7 @@
 
 验收口径（施工任务书 C3 / 烛微 170）：
 - 空集输入（[] 或无 dict 元素）-> real_fix_rate 返回 None（不再虚报 0.0%）。
-- 非空但无可判定样本（problem_fixed 均为 None）-> 返回 None（杜绝"空补丁池刷 P0"）。
+- 非空但无可判定样本（problem_fixed 均为 None）-> 返回 0.0（★180刀5 星轨裁定 #1：全 None 统一返 0.0，与 backfill 契约一致；杜绝 NaN/虚报）。
 - 真有可判定样本且全部 False -> 仍返回 float 0.0（真 0% 应告警，区别于 None）。
 - 真有可判定样本且全部 True -> 返回 1.0。
 
@@ -22,10 +22,10 @@ class TestRealFixRateEmptyM170(unittest.TestCase):
         # 命中 :302-303 分支（_n == 0），改后返 None
         self.assertIsNone(real_fix_rate([1, "x", None]))
 
-    def test_nonempty_all_unverifiable_returns_none(self):
-        # 无可判定样本（problem_fixed 恒 None）-> 命中 :318 分支，改后返 None
+    def test_nonempty_all_unverifiable_returns_zero(self):
+        # 非空但无可判定样本（problem_fixed 恒 None）-> ★180刀5 星轨裁定 #1：统一返 0.0（非 None）
         ps = [{"verification": {"passed": False}}]
-        self.assertIsNone(real_fix_rate(ps))
+        self.assertEqual(real_fix_rate(ps), 0.0)
 
     def test_genuine_zero_returns_float_zero(self):
         # 真有可判定样本且全部 False -> 仍是 float 0.0（真 0% 应告警，区别于 None）
