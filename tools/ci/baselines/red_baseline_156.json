@@ -1,8 +1,8 @@
 {
-  "generated_at_head": "f662547ee6341816affec9fe829e14f8425210c4",
+  "generated_at_head": "fe11d4188945a69a3a2d343a734dfb06b9b4d24a",
   "generated_at": "2026-10-09T18:35",
   "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons；2026-10-07 第167批 C1 重锚：test_lazy_snapshot_m9::test_lazy_vs_full_equivalence 复验转绿（162批刀2 iter_nodes 走线已缓解，167 C1 补 __iter__ 闭环），known_fail 10→9 非回归；collect_baseline 4928 不变；2026-10-09 173批段C收口补锚（星轨，框架停机干净窗）：172批刀1-7 五文件（test_main_loop_pulse_knife1_m172/test_influxdb_rss_knife2_m172/test_metrics_memory_knife3_m172/test_quit_patch_gate_knife4_m172/test_face_welcome_shadow_exit_m172）+174刀1（test_influxdb_connect_wiring_m174）入库后未重锚，collect 实测 4928→5119（+191，六文件全绿非回归）；known_fail 9 不变、pollution 5 不变",
-  "collect_baseline": 5119,
+  "collect_baseline": 5189,
   "known_fail": [
     "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
     "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
@@ -233,6 +233,7 @@
     }
   },
   "red_baseline_notes": {
+    "reanchor_181": "第181批（2026-10-10）重锚：collect 5119 → 5189（+70）。漂移来源=176~181 批累计新增测试节点（非回归），本批新增 tests/test_organ_inventory_m181.py（+4）与 tests/test_episode_context_m181.py（+6）。权威数据=GATE_COLLECT_LEVEL=full 全量 --collect-only 实测 0 收集错误，新增用例隔离单跑全绿（刀3/刀5 4 passed、刀4 6 passed）。",
     "reanchor_161C1": "第161批 段C C1（2026-10-05）：known_fail 104 → 14（回收 90 项已转绿）。权威数据=逐文件隔离 + 干净环境（PYTHONPATH/PYTHONHOME/PYTHONSTARTUP 已清空、PYTHONNOUSERSITE=1），20 文件全部有 pytest 汇总行、无截断、基线外新红=0。★废弃数据：批跑版因 WorkBuddy shim（sitecustomize.py:848）注入子进程产生假红（同文件手跑 3 次 20 passed×3，批内子进程跑却 failed），不得引用。",
     "known_fail_red_reasons": {
       "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern": "源层 E402 扫描判据与实际不符（ValueError: substring not found）；属门禁判据缺陷、非被测代码缺陷。★登记册行197「3 红无归属」之一，待专项票（162 批）",
