@@ -334,6 +334,10 @@ ENABLE_QICA_STRATEGY_EXECUTION = True
 #   （本次已修复：原实现只返回 4 个字段，导致 0.7 档恒不可达）。
 # 关闭时：_calculate_confidence 行为与改造前完全一致。
 ENABLE_CONFIDENCE_CALIBRATION = True
+# 178批 阈值单点化：融合至 0.7 档单一驱动阈值（唯一真值）。
+# 同时作为 CONFIDENCE_CALIBRATION_WEIGHTS["fusion_as_rule"] 的同源引用，
+# 消除「注释称同源、实为两值」（旧 fusion_as_rule=0.55 / QICA_FUSION_AS_RULE_THRESHOLD=0.50）。
+QICA_FUSION_AS_RULE_THRESHOLD = 0.50
 CONFIDENCE_CALIBRATION_WEIGHTS = {
     "relevance": 0.30,   # 检索 top1 相似度
     "coverage": 0.15,    # 知识覆盖度
@@ -341,7 +345,7 @@ CONFIDENCE_CALIBRATION_WEIGHTS = {
     "fusion": 0.15,      # 任务1 多通道融合置信度
     # 融合 top_score ≥ 该值时，视为「语义规则命中」，基础分提升到 0.7 档
     # （融合接管时无 matched_rule_id，否则只能拿 0.5 档 → 恒 <0.7 → 必调大模型）
-    "fusion_as_rule": 0.55,
+    "fusion_as_rule": QICA_FUSION_AS_RULE_THRESHOLD,  # 单一驱动（178批阈值单点化·同源引用）
 }
 # top1 与 top2 融合置信度差值小于该值时，准备 top2 作为降级方案
 QICA_FUSION_MARGIN = 0.1
@@ -372,16 +376,17 @@ QICA_COGNITIVE_BROADEN_INTENTS = (
     "对比分析", "深度分析", "创造性思考",
 )
 
-# 简单问题快速路径：一般对话/情感表达走 rule_reason（轻量），
+# 简单问题快速路径：一般对话/情感表达/情感问候/规则查阅 走 rule_reason（轻量），
 # 避免走 knowledge_retrieve → 知识检索 → knowledge_low（实测 ~3.5s）的复杂路径。
-# 关闭时：一般对话/情感表达沿用 knowledge_retrieve（改造前行为）。
+# 关闭时：上述意图沿用 knowledge_retrieve（改造前行为）。
 ENABLE_QICA_FAST_PATH_SIMPLE = True
-QICA_FAST_PATH_SIMPLE_INTENTS = ("一般对话", "情感表达")
+# 178批 扩面：新增 情感问候（寒暄类）、规则查阅（规则查阅类）试点；
+# 短句类（如"你好""在吗"）通常归类为 情感问候/一般对话，已被覆盖。
+QICA_FAST_PATH_SIMPLE_INTENTS = ("一般对话", "情感表达", "情感问候", "规则查阅")
 
-# 融合置信度→0.7 档阈值（CONFIDENCE_CALIBRATION_WEIGHTS.fusion_as_rule 的同源开关）。
-# 融合 top_score ≥ 该值时视为「语义规则命中」，基础置信度提升到 0.7 档，
-# 使更多高确定度分类免于强制 API 比对。留余量避免误提。
-QICA_FUSION_AS_RULE_THRESHOLD = 0.50
+# 178批 阈值单点化：QICA_FUSION_AS_RULE_THRESHOLD 已上移至 CONFIDENCE_CALIBRATION_WEIGHTS
+# 定义之前作为唯一驱动源；CONFIDENCE_CALIBRATION_WEIGHTS["fusion_as_rule"] 与其同源引用，
+# 消除旧 0.55/0.50 两值漂移（词面可检两值已收敛为单一 0.50）。
 
 # ========== 主线第4批 任务2(P1-44)：大脑皮层意图维度策略选择 ==========
 # 此前策略选择仅由复杂度估计驱动（question_type 恒为"未知"），
