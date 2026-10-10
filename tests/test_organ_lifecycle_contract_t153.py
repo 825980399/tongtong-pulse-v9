@@ -18,6 +18,12 @@
   批次3（本提交）：immune/genetic/motor/body 4 件（PulseBoneMarrow / PulseEvolution /
       PulseFileDigester / PulseBloodVessel）
   其余 P0/P1 器官于后续子批次补齐（纪律：每批 <=4 件、每器官 <=1 文件）
+  批次10（第182批刀3 · always_online 零覆盖补缺第一梯队 4 件）：
+     PulsePersonalityKernel / PulseSpiritConstitution / PulseSubconscious /
+     PulseGlobalLearner —— 洞鉴覆盖率审计：4 件均 always_online=True 且零覆盖（C 级）。
+  批次11（第182批补刀1 · 感知系统 4 件）：
+     PulseMouth / PulseEars / PulseEyes / PulseTouch —— 洞鉴审计 §1 感知系统 4 件全 C 级，
+     其中 PulseMouth always_online=True 却零覆盖（洞鉴 §3 风险分层：高）。
 """
 import os
 import sys
@@ -38,6 +44,10 @@ from nucleus.const import SystemEvent
 #     PulseDNARepair / PulseReproductionEthics / PulseEvolution / PulseBoneMarrow /
 #     PulseSelfAwareness / PulseHormones / PulseMotivationCycle / PulseGrowth
 #   未声明(NO, A1 不强制, 3 件)：PulseFileDigester / PulseBloodVessel / PulseNeurotransmitters
+#   ★第182批刀3 追加 4 件（均实测声明订阅 STATUS_REQUEST → A1 施加正向断言）：
+#     PulsePersonalityKernel / PulseSpiritConstitution / PulseSubconscious / PulseGlobalLearner
+#   ★第182批补刀1 追加 4 件（均实测声明订阅 STATUS_REQUEST → A1 施加正向断言）：
+#     PulseMouth / PulseEars / PulseEyes / PulseTouch
 #   （PulseNeurotransmitters 实测仅声明 chat.message/hormones.emotion_detected/heart.beat，未订阅 STATUS_REQUEST）
 ORGAN_MODULES = {
     "PulseInferenceEngine": "organs.core.PulseInferenceEngine",
@@ -57,6 +67,14 @@ ORGAN_MODULES = {
     "PulseNeurotransmitters": "organs.endocrine.PulseNeurotransmitters",
     "PulseMotivationCycle": "organs.core.PulseMotivationCycle",
     "PulseGrowth": "organs.identity.PulseGrowth",
+    "PulsePersonalityKernel": "organs.identity.PulsePersonalityKernel",
+    "PulseSpiritConstitution": "organs.identity.PulseSpiritConstitution",
+    "PulseSubconscious": "organs.brain.PulseSubconscious",
+    "PulseGlobalLearner": "organs.core.PulseGlobalLearner",
+    "PulseMouth": "organs.motor.PulseMouth",
+    "PulseEars": "organs.senses.PulseEars",
+    "PulseEyes": "organs.senses.PulseEyes",
+    "PulseTouch": "organs.senses.PulseTouch",
 }
 
 
@@ -127,3 +145,7 @@ def test_a5_on_pulse_exception_safe(organ):
             organ.on_pulse({"event_type": ev, "payload": {}})
         except Exception as e:  # noqa: BLE001
             pytest.fail("on_pulse({!r}) 不应抛出未捕获异常: {!r}".format(ev, e))
+
+# [M182-D3-HARNESS-BATCH10] 第182批刀3：4 件 always_online 零覆盖器官入册（洞鉴覆盖率审计第一梯队）
+
+# [M182-BD1-HARNESS-BATCH11] 第182批补刀1：感知系统 4 件入册（严格口径 24/56 = 42.9%）
