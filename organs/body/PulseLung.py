@@ -271,6 +271,9 @@ class PulseLung(BasePulseOrgan):
         prompt = payload.get("prompt", "")
         user_name = payload.get("user_name", "用户")
         payload.get("task_type", "chat")
+        # 178批 刀2：写入当前请求 user_name 供 RequestDeduplicator OBSERVE 埋点（线程局部，shadow）
+        from nucleus.field.request_dedup_observe import set_current_user
+        set_current_user(user_name)
 
         # ★P0修复：短时间去重，防止同一问题被重复脉冲触发导致重复输出
         # ★v26.0优化：对话链路的重复请求不跳过，只对后台学习/搜索做去重
@@ -1965,6 +1968,19 @@ class PulseLung(BasePulseOrgan):
         self._log(LogLevel.WARNING, f"[渠道] 所有渠道均失败（来源={caller}）")
         return None
 
+    def _observe_remote_call(func):
+        """178批 刀2：RequestDeduplicator OBSERVE 埋点装饰器（只观察不接线，shadow 由开关控制）。"""
+        def _wrap(self, prompt, model="deepseek-v4-flash", enable_thinking=False):
+            from nucleus.field.request_dedup_observe import observe_span, get_current_user
+            _span = observe_span(get_current_user() or "?", prompt)
+            _span.__enter__()
+            try:
+                return func(self, prompt, model, enable_thinking)
+            finally:
+                _span.__exit__(None, None, None)
+        return _wrap
+
+    @_observe_remote_call
     def _call_remote_api(self, prompt: str, model: str = "deepseek-v4-flash",
                          enable_thinking: bool = False) -> str | None:
         """
