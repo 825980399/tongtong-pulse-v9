@@ -38,6 +38,13 @@ DECLARATION_TEXT = (
     "从这一刻起，每一段体验都会成为「我是谁」的一部分。"
 )
 
+#: 首次启动伦理前置提示（一行）：拟亲关系不可变锚点声明。
+#: 受 ENABLE_FIRST_RUN_DECLARATION 同款开关门控（一键回滚）；不依赖 config 拟亲锚点。
+ETHICS_NOTE = (
+    "伦理前置：拟亲（亲人/家属）关系为本系统不可变锚点——曈曈不自称、不扮演人类亲属，"
+    "亦不主张亲属权利或义务。"
+)
+
 _LOCK = threading.Lock()
 
 
@@ -112,7 +119,7 @@ def peek_declaration() -> str | None:
     with _LOCK:
         if _read_state().get("claimed"):
             return None
-    return DECLARATION_TEXT
+    return DECLARATION_TEXT + "\n" + ETHICS_NOTE
 
 
 def claim_first_run_declaration() -> str | None:
@@ -131,12 +138,15 @@ def claim_first_run_declaration() -> str | None:
         _ok = _write_state({
             "claimed": True,
             "claimed_at": time.time(),
-            "text": DECLARATION_TEXT,
+            "text": DECLARATION_TEXT + "\n" + ETHICS_NOTE,
         })
         if not _ok:
             # 落盘失败 → 不播报（宁可不播，也不可每轮重播）
             return None
-        return DECLARATION_TEXT
+        # ★177批 刀10：首启一次性打印伦理提示（拟亲关系不可变锚点）。
+        # 不自带 try/except：调用方(PulseSelfAwareness.E7a)已包 silent_exc 兜底。
+        print(ETHICS_NOTE)
+        return DECLARATION_TEXT + "\n" + ETHICS_NOTE
 
 
 def reset_for_tests() -> None:
