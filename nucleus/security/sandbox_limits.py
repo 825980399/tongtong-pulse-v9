@@ -91,6 +91,52 @@ class SandboxMemoryError(SandboxResourceError):
     error_code = "sandbox_memory_limit"
 
 
+# ==================== O-B1 档位放宽参数（187批刀1 · sandbox绑键） ====================
+# SandboxLimits 默认上限改从 O-B1 配置键取（使 OB1_SANDBOX_LEVEL 三档名实相符）。
+# - strict（默认）→ 当前 DEFAULT_*（行为不变）
+# - loose / off   → 放宽档
+# - 显式键 OB1_SANDBOX_CPU_CAP / OB1_SANDBOX_MEM_MB 存在时优先于档位默认值
+# - getattr 兜底：键缺失时回落到 DEFAULT_*，保证零行为变化
+RELAXED_CPU_SECONDS = 120       # loose 档 CPU 时间（非墙上时钟）
+RELAXED_MEMORY_MB = 1024        # loose 档地址空间 / 提交内存
+RELAXED_NOFILE = 256            # loose 档文件描述符
+RELAXED_NPROC = 4               # loose 档进程数（防 fork 炸弹）
+
+OFF_CPU_SECONDS = 600           # off 档 CPU 时间
+OFF_MEMORY_MB = 4096            # off 档地址空间
+OFF_NOFILE = 1024               # off 档文件描述符
+OFF_NPROC = 16                  # off 档进程数
+
+
+def _resolve_default_sandbox_limits() -> "SandboxLimits":
+    """从 O-B1 配置键解析沙箱默认上限，使 OB1_SANDBOX_LEVEL 三档名实相符。
+
+    默认 OB1_SANDBOX_LEVEL="strict" → 解析为当前 DEFAULT_* → 行为完全不变。
+    仅当该键被改为 loose / off 时，默认上限才放宽。显式键
+    OB1_SANDBOX_CPU_CAP / OB1_SANDBOX_MEM_MB 经 getattr 兜底优先于档位默认值。
+    """
+    import config as _cfg
+    _level = (getattr(_cfg, "OB1_SANDBOX_LEVEL", "strict") or "strict").lower()
+    _cpu = getattr(_cfg, "OB1_SANDBOX_CPU_CAP", None)
+    _mem = getattr(_cfg, "OB1_SANDBOX_MEM_MB", None)
+    if _level == "strict":
+        _cpu = _cpu if _cpu is not None else DEFAULT_CPU_SECONDS
+        _mem = _mem if _mem is not None else DEFAULT_MEMORY_MB
+        _nofile, _nproc = DEFAULT_NOFILE, DEFAULT_NPROC
+    elif _level == "loose":
+        _cpu = _cpu if _cpu is not None else RELAXED_CPU_SECONDS
+        _mem = _mem if _mem is not None else RELAXED_MEMORY_MB
+        _nofile, _nproc = RELAXED_NOFILE, RELAXED_NPROC
+    else:  # off 及其他未知档 → 最放宽
+        _cpu = _cpu if _cpu is not None else OFF_CPU_SECONDS
+        _mem = _mem if _mem is not None else OFF_MEMORY_MB
+        _nofile, _nproc = OFF_NOFILE, OFF_NPROC
+    return SandboxLimits(
+        cpu_seconds=int(_cpu), memory_mb=int(_mem),
+        nofile=int(_nofile), nproc=int(_nproc),
+    )
+
+
 # ==================== 限制参数 ====================
 @dataclass(frozen=True)
 class SandboxLimits:
@@ -111,7 +157,7 @@ class SandboxLimits:
         return int(self.memory_mb * 1024 * 1024)
 
 
-DEFAULT_LIMITS = SandboxLimits()
+DEFAULT_LIMITS = _resolve_default_sandbox_limits()
 
 
 @dataclass
