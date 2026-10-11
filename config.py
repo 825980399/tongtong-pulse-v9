@@ -5627,7 +5627,7 @@ MAIN_LOOP_PULSE_ENABLED = True
 # ★偏差D#2：任务书刀1 所列"代码/创作/多步推理/实时性问题"不在 ALL_INTENTS 内，
 #           且"技术推理"被误列入灰度（权威源属升级LLM）→ 本刀以代码权威源落地。
 # 零行为变化：总开关默认 False，读取点未接线前不产生任何行为。
-ENABLE_ROUTING_LAYERED = False          # 总开关（False -> 全部走既有路径，零行为变化）
+ENABLE_ROUTING_LAYERED = True           # 总开关（小林共窗验证 2026-10-11：分层路由白名单生效）
 
 # 维持本地 12 项（不升级 LLM）：自我知识/本地数据高覆盖，LLM 无增益
 ROUTING_LOCAL_INTENTS = (
@@ -5659,7 +5659,7 @@ ROUTING_INFERENCE_STRUCTURE_PATTERNS = (  # ③推理结构词（★与 PulseCor
 #         （调用点 _m181_should_escalate_on_quality，位于沉思成功分支 :1187）
 # 依赖：与刀1 ROUTING_* 同面；本开关仅控制「质量分触发」，不影响既有「沉思失败降级」
 # 零行为变化：False -> 判据恒 False -> 调用点走原分支
-ENABLE_INNER_WORLD_QUALITY_ESCALATION = False
+ENABLE_INNER_WORLD_QUALITY_ESCALATION = True  # 小林共窗验证 2026-10-11：沉思质量分升级LLM生效
 
 # ===== [M181-COGNITIVE] 181批刀3/刀5：自我认知器官维度（观测级·零停窗）=====
 # 刀3 读取点：nucleus/cognitive/organ_health_leaderboard.py::_leaderboard_on
