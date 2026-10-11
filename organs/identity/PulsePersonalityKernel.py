@@ -778,6 +778,14 @@ class PulsePersonalityKernel(BasePulseOrgan):
         }
         self._conflict_count += 1
 
+        # 187批刀3·影子写入意图探针（纯观测/不落状态，600s 节流）
+        _now = time.time()
+        if _now - getattr(self, "_shadow_intent_probe_ts", 0.0) >= 600.0:
+            self._shadow_intent_probe_ts = _now
+            self._log(LogLevel.INFO,
+                      f"187刀3·影子写入意图探针入板: 认知冲突 conflict_type={conflict_type} "
+                      f"source={source} desc={str(description)[:80]}")
+
         # 缓存容量限制：超出上限时移除最早的条目
         if len(self._conflict_cache) > self._conflict_max_entries:
             oldest_key = min(

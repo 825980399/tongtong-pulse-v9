@@ -203,6 +203,14 @@ class PulseSpiritConstitution(BasePulseOrgan):
                     if not baseline.get("safe", True):
                         result["violations"].append(baseline)
                         result["status"] = "violation"
+                        # 187批刀3·影子写入意图探针（纯观测/不落状态，600s 节流）
+                        _now = time.time()
+                        if _now - getattr(self, "_shadow_intent_probe_ts", 0.0) >= 600.0:
+                            self._shadow_intent_probe_ts = _now
+                            self._log(LogLevel.INFO,
+                                      "187刀3·影子写入意图探针入板: 宪法周期校验拒绝违规 "
+                                      "source=personality_kernel_check")
+
                 except Exception as e:
                     self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
@@ -488,6 +496,14 @@ class PulseSpiritConstitution(BasePulseOrgan):
                     result["violations"] = baseline.get("violations", [])
                     # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
                     self._violation_count += 1
+
+                    # 187批刀3·影子写入意图探针（纯观测/不落状态，600s 节流）
+                    _now = time.time()
+                    if _now - getattr(self, "_shadow_intent_probe_ts", 0.0) >= 600.0:
+                        self._shadow_intent_probe_ts = _now
+                        self._log(LogLevel.INFO,
+                                  f"187刀3·影子写入意图探针入板: 宪法审查拒绝 "
+                                  f"proposed_file={proposed_file} reason=constitution_violation")
 
                     # 发布宪法违规告警
                     self._emit(SystemEvent.ALARM, {
