@@ -158,10 +158,9 @@ def render_md(a: Dict[str, Any]) -> str:
         "| 指标 | 值 |",
         "|---|---|",
         "| 经验池 | `{}` |".format(a["pool"]),
-        "| 记录总数 | %d |" % a["total"],
-        "| 已标记污染 | %d（%.2f%%） |" % (a["marked"], 100 * a["marked_rate"]),
-        "| **可用（通过检索闸门）** | **%d（%.2f%%）** |" % (
-            a["usable"], 100 * a["usable_rate"]),
+        f"| 记录总数 | {a['total']:} |",
+        f"| 已标记污染 | {a['marked']:}（{100 * a['marked_rate']:.2f}%） |",
+        f"| **可用（通过检索闸门）** | **{a['usable']:}（{100 * a['usable_rate']:.2f}%）** |",
         "| 检索闸门开关 | `%s` |" % ("开启" if a["gate_enabled"] else "关闭"),
         "",
         "## 二、污染标记分布",
@@ -170,19 +169,17 @@ def render_md(a: Dict[str, Any]) -> str:
         "|---|---|",
     ]
     for _k, _v in sorted(a["by_reason"].items(), key=lambda x: -x[1]):
-        _L.append("| `%s` | %d |" % (_k, _v))
+        _L.append(f"| `{_k:}` | {_v:} |")
     _L += ["", "| `pollution_risk` | 条数 |", "|---|---|"]
     for _k, _v in sorted(a["by_risk"].items(), key=lambda x: -x[1]):
-        _L.append("| `%s` | %d |" % (_k, _v))
+        _L.append(f"| `{_k:}` | {_v:} |")
 
     _L += [
         "",
         "## 三、★漏网检测（可用池中的疑似污染）",
         "",
-        "对**通过了检索闸门**的 %d 条重跑 `classify()`，命中**明确污染特征**"
-        % a["usable"],
-        "（模板摘要 / 写入侧样板）的有 **%d 条（%.2f%%）**。"
-        % (a["missed_count"], 100 * a["missed_rate"]),
+        f"对**通过了检索闸门**的 {a['usable']:} 条重跑 `classify()`，命中**明确污染特征**",
+        f"（模板摘要 / 写入侧样板）的有 **{a['missed_count']:} 条（{100 * a['missed_rate']:.2f}%）**。",
         "",
         "> ★判据说明：`classify()` 的 `other_polluted` 是**兜底类**（无明确特征），",
         "> 不能据此判污染 —— 本节只统计两类**明确特征**命中。",
@@ -195,7 +192,7 @@ def render_md(a: Dict[str, Any]) -> str:
                 _m["id"], _m["reason_class"],
                 (_m["summary"] or "—").replace("|", "\\|")))
         if a["missed_count"] > 30:
-            _L.append("| … | 其余 %d 条略 | |" % (a["missed_count"] - 30))
+            _L.append(f"| … | 其余 {a['missed_count'] - 30:} 条略 | |")
     else:
         _L.append("**未发现漏网** —— 可用池中无记录命中明确污染特征。")
 
@@ -205,12 +202,12 @@ def render_md(a: Dict[str, Any]) -> str:
         "",
         "| 指标 | 值 |",
         "|---|---|",
-        "| 空摘要 | %d |" % _q["empty_summary"],
-        "| 摘要 < 20 字 | %d |" % _q["short_lt20"],
+        f"| 空摘要 | {_q['empty_summary']:} |",
+        f"| 摘要 < 20 字 | {_q['short_lt20']:} |",
         "| 平均长度 | {:.1f} 字 |".format(_q["avg_len"]),
-        "| 中位数 (p50) | %d |" % _q["p50"],
-        "| p90 | %d |" % _q["p90"],
-        "| 最长 | %d |" % _q["max"],
+        f"| 中位数 (p50) | {_q['p50']:} |",
+        f"| p90 | {_q['p90']:} |",
+        f"| 最长 | {_q['max']:} |",
         "",
         "---",
         "",
@@ -229,9 +226,7 @@ def main() -> int:
     args = _ap.parse_args()
 
     _a = assess(args.pool)
-    print("总数 %d / 已标记 %d (%.2f%%) / 可用 %d (%.2f%%) / 漏网 %d" % (
-        _a["total"], _a["marked"], 100 * _a["marked_rate"],
-        _a["usable"], 100 * _a["usable_rate"], _a["missed_count"]))
+    print(f"总数 {_a['total']:} / 已标记 {_a['marked']:} ({100 * _a['marked_rate']:.2f}%) / 可用 {_a['usable']:} ({100 * _a['usable_rate']:.2f}%) / 漏网 {_a['missed_count']:}")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     io.open(args.out, "w", encoding="utf-8", newline="").write(render_md(_a))

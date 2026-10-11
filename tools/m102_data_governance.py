@@ -292,28 +292,19 @@ def do_scan(out_path=None):
     print("=" * 72)
     print("第102批 数据治理扫描（只读）  {}".format(rep["scanned_at"]))
     print("=" * 72)
-    print("节点 ID 全集        : %d" % rep["node_id_universe"])
-    print("主快照              : %s  %.2f MB / %d 节点" % (
-        rep["main_json"]["file"], rep["main_json"]["bytes"] / 2 ** 20,
-        rep["main_json"]["nodes"]))
-    print("  sem    %d 条，悬空 %d" % (rep["main_json"]["sem_total"], rep["main_json"]["sem_dangling"]))
-    print("  linked %d 条，悬空 %d" % (rep["main_json"]["linked_total"], rep["main_json"]["linked_dangling"]))
-    print("L1 快照             : %s  %.2f MB / %d 节点" % (
-        rep["l1_json"]["file"], rep["l1_json"]["bytes"] / 2 ** 20,
-        rep["l1_json"]["nodes"]))
-    print("  sem    %d 条，悬空 %d" % (rep["l1_json"]["sem_total"], rep["l1_json"]["sem_dangling"]))
-    print("  linked %d 条，悬空 %d" % (rep["l1_json"]["linked_total"], rep["l1_json"]["linked_dangling"]))
+    print(f"节点 ID 全集        : {rep['node_id_universe']:}")
+    print(f"主快照              : {rep['main_json']['file']:}  {rep['main_json']['bytes'] / 2 ** 20:.2f} MB / {rep['main_json']['nodes']:} 节点")
+    print(f"  sem    {rep['main_json']['sem_total']:} 条，悬空 {rep['main_json']['sem_dangling']:}")
+    print(f"  linked {rep['main_json']['linked_total']:} 条，悬空 {rep['main_json']['linked_dangling']:}")
+    print(f"L1 快照             : {rep['l1_json']['file']:}  {rep['l1_json']['bytes'] / 2 ** 20:.2f} MB / {rep['l1_json']['nodes']:} 节点")
+    print(f"  sem    {rep['l1_json']['sem_total']:} 条，悬空 {rep['l1_json']['sem_dangling']:}")
+    print(f"  linked {rep['l1_json']['linked_total']:} 条，悬空 {rep['l1_json']['linked_dangling']:}")
     for p in rep["parquet"]:
-        print("Parquet %-14s: %d 行  悬空 sem=%d linked=%d" % (
-            p["level"], p["rows"], p["sem_dangling"], p["linked_dangling"]))
-    print("向量                : %d 条，孤儿 %d (%.2f%%)，无向量节点 %d" % (
-        rep["vectors"]["count"], rep["vectors"]["orphan"],
-        rep["vectors"]["orphan_pct"], rep["vectors"]["nodes_without_vector"]))
-    print("冗余度(Jaccard)     : %.4f  (sem独有 %d / linked独有 %d)" % (
-        rep["redundancy"]["jaccard"], rep["redundancy"]["sem_only_non_dangling"],
-        rep["redundancy"]["linked_only_non_dangling"]))
+        print(f"Parquet {p['level']:<14}: {p['rows']:} 行  悬空 sem={p['sem_dangling']:} linked={p['linked_dangling']:}")
+    print(f"向量                : {rep['vectors']['count']:} 条，孤儿 {rep['vectors']['orphan']:} ({rep['vectors']['orphan_pct']:.2f}%)，无向量节点 {rep['vectors']['nodes_without_vector']:}")
+    print(f"冗余度(Jaccard)     : {rep['redundancy']['jaccard']:.4f}  (sem独有 {rep['redundancy']['sem_only_non_dangling']:} / linked独有 {rep['redundancy']['linked_only_non_dangling']:})")
     print("-" * 72)
-    print("悬空边合计          : %d" % rep["dangling_total"])
+    print(f"悬空边合计          : {rep['dangling_total']:}")
     print("耗时 {:.1f}s".format(rep["elapsed_sec"]))
 
     if out_path:
@@ -375,7 +366,7 @@ def apply_a():
         total_sem += srm
         total_ln += lrm
         _atomic_json(path, data, indent, MAIN_SNAPSHOT_SEP if name == "main" else None)
-        print("  %-5s 清理 sem=%d linked=%d" % (name, srm, lrm))
+        print(f"  {name:<5} 清理 sem={srm:} linked={lrm:}")
 
     import pyarrow.parquet as pq
     for lv, f, fp in pq_files:
@@ -399,13 +390,10 @@ def apply_a():
         total_sem += srm
         total_ln += lrm
         _atomic_parquet(fp, rows, t.schema)
-        print("  %-5s 清理 sem=%d linked=%d" % (lv, srm, lrm))
+        print(f"  {lv:<5} 清理 sem={srm:} linked={lrm:}")
 
     after = os.path.getsize(MAIN_SNAPSHOT)
-    print("T-102a 完成: sem 悬空清理 %d 条 / linked 悬空清理 %d 条；"
-          "主快照 %.2f MB -> %.2f MB (-%.2f MB)" % (
-              total_sem, total_ln, before / 2 ** 20, after / 2 ** 20,
-              (before - after) / 2 ** 20))
+    print(f"T-102a 完成: sem 悬空清理 {total_sem:} 条 / linked 悬空清理 {total_ln:} 条；主快照 {before / 2 ** 20:.2f} MB -> {after / 2 ** 20:.2f} MB (-{(before - after) / 2 ** 20:.2f} MB)")
     return 0
 
 
@@ -468,11 +456,7 @@ def apply_b():
                 silent_exc(e, where="tools.m102_data_governance::apply_b L466")
         raise
     _atomic_json(VECTORS_META, meta)
-    print("T-102b 完成: 孤儿向量移除 %d 条 (%d -> %d)；npz %.2f MB -> %.2f MB；"
-          "meta %.2f MB -> %.2f MB" % (
-              removed, len(vids), len(new_ids),
-              before_npz / 2 ** 20, os.path.getsize(VECTORS_NPZ) / 2 ** 20,
-              before_meta / 2 ** 20, os.path.getsize(VECTORS_META) / 2 ** 20))
+    print(f"T-102b 完成: 孤儿向量移除 {removed:} 条 ({len(vids):} -> {len(new_ids):})；npz {before_npz / 2 ** 20:.2f} MB -> {os.path.getsize(VECTORS_NPZ) / 2 ** 20:.2f} MB；meta {before_meta / 2 ** 20:.2f} MB -> {os.path.getsize(VECTORS_META) / 2 ** 20:.2f} MB")
     return 0
 
 
@@ -551,13 +535,10 @@ def apply_c():
             emptied += len(r.get("linked_nodes") or [])
             r["linked_nodes"] = []
         _atomic_parquet(fp, rows, t.schema)
-        print("  %-5s 分区已去冗余" % lv)
+        print(f"  {lv:<5} 分区已去冗余")
 
     after = os.path.getsize(MAIN_SNAPSHOT)
-    print("T-102c 完成: linked 独有边并入 sem %d 条；linked_nodes 清空 %d 条；"
-          "主快照 %.2f MB -> %.2f MB (-%.2f MB)" % (
-              merged, emptied, before / 2 ** 20, after / 2 ** 20,
-              (before - after) / 2 ** 20))
+    print(f"T-102c 完成: linked 独有边并入 sem {merged:} 条；linked_nodes 清空 {emptied:} 条；主快照 {before / 2 ** 20:.2f} MB -> {after / 2 ** 20:.2f} MB (-{(before - after) / 2 ** 20:.2f} MB)")
     return 0
 
 
@@ -570,8 +551,8 @@ def do_verify():
     print("完整性校验")
     print("=" * 72)
     ok = True
-    print("悬空边            : %d   %s" % (dang, "OK" if dang == 0 else "REMAIN"))
-    print("孤儿向量          : %d   %s" % (orph, "OK" if orph == 0 else "REMAIN"))
+    print(f"悬空边            : {dang:}   {'OK' if dang == 0 else 'REMAIN':}")
+    print(f"孤儿向量          : {orph:}   {'OK' if orph == 0 else 'REMAIN':}")
     if dang:
         ok = False
     if orph:

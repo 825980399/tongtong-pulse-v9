@@ -344,18 +344,13 @@ def hemostasis_section(recs: list, since: float | None = None) -> dict:
         _cov = _a.get("raw_summary_coverage", 0.0)
         if _new_pol == 0 and _cov >= 0.9:
             _verdict = "effective"
-            _reason = ("止血后新增 %d 条：**0 条污染**，raw_summary 覆盖率 %.1f%% "
-                       "→ 止血生效。" % (_a["count"], _cov * 100))
+            _reason = (f"止血后新增 {_a['count']:} 条：**0 条污染**，raw_summary 覆盖率 {_cov * 100:.1f}% → 止血生效。")
         elif _new_pol == 0 and _cov < 0.9:
             _verdict = "partial"
-            _reason = ("止血后新增 %d 条：0 条污染，但 raw_summary 覆盖率仅 %.1f%% "
-                       "（<90%%）→ 可能未重启或摘要路径未触发。"
-                       % (_a["count"], _cov * 100))
+            _reason = (f"止血后新增 {_a['count']:} 条：0 条污染，但 raw_summary 覆盖率仅 {_cov * 100:.1f}% （<90%）→ 可能未重启或摘要路径未触发。")
         else:
             _verdict = "not_yet_effective"
-            _reason = ("止血后新增 %d 条中仍有 **%d 条污染** → 止血未生效"
-                       "（框架可能未重启，或存在其他污染源）。"
-                       % (_a["count"], _new_pol))
+            _reason = (f"止血后新增 {_a['count']:} 条中仍有 **{_new_pol:} 条污染** → 止血未生效（框架可能未重启，或存在其他污染源）。")
 
     return {
         "since": _since,
@@ -420,44 +415,29 @@ def main() -> int:
              _rep["meta"]["pool_mtime"]))
     print()
     print("[1] 基础统计")
-    print("    总记录 %d  污染 %d (%.1f%%)  干净 %d"
-          % (_b["total"], _b["polluted"], _b["pollution_rate"] * 100, _b["clean"]))
+    print(f"    总记录 {_b['total']:}  污染 {_b['polluted']:} ({_b['pollution_rate'] * 100:.1f}%)  干净 {_b['clean']:}")
     print("    污染原因分布:", _b["reason_dist"])
     print()
     print("[2] 时间分布（按天，污染最多的前 10 天）")
     for _r in sorted(_t["rows"], key=lambda x: -x["polluted"])[:10]:
-        print("    %s  总 %4d  污染 %4d  (%.1f%%)"
-              % (_r["date"], _r["total"], _r["polluted"], _r["rate"] * 100))
+        print(f"    {_r['date']:}  总 {_r['total']:>4}  污染 {_r['polluted']:>4}  ({_r['rate'] * 100:.1f}%)")
     print()
     print("[3] 重复形态")
-    print("    L1 完全重复  : %d 组，涉及 %d 条，冗余 %d 条"
-          % (_d["L1_exact"]["duplicate_groups"],
-             _d["L1_exact"]["records_in_dup_groups"],
-             _d["L1_exact"]["wasted_records"]))
-    print("    L2 模板化    : %d 组，涉及 %d 条"
-          % (_d["L2_template"]["template_groups"],
-             _d["L2_template"]["records_in_tpl_groups"]))
-    print("    L3 高度相似  : %d 对" % _d["L3_near"]["pairs"])
+    print(f"    L1 完全重复  : {_d['L1_exact']['duplicate_groups']:} 组，涉及 {_d['L1_exact']['records_in_dup_groups']:} 条，冗余 {_d['L1_exact']['wasted_records']:} 条")
+    print(f"    L2 模板化    : {_d['L2_template']['template_groups']:} 组，涉及 {_d['L2_template']['records_in_tpl_groups']:} 条")
+    print(f"    L3 高度相似  : {_d['L3_near']['pairs']:} 对")
     print()
     print("[4] 不可逆污染")
-    print("    污染 %d 条中，带依赖标记的 %d 条 (%.1f%%) → 可安全删除 %d 条"
-          % (_i["polluted_total"], _i["irreversible_count"],
-             _i["irreversible_rate"] * 100, _i["safely_deletable"]))
+    print(f"    污染 {_i['polluted_total']:} 条中，带依赖标记的 {_i['irreversible_count']:} 条 ({_i['irreversible_rate'] * 100:.1f}%) → 可安全删除 {_i['safely_deletable']:} 条")
     print("    依赖标记:", _i["flag_counts"])
     print()
     _h = _rep["hemostasis"]
     print()
     print("[5] ★摘要止血效果验证（基准线 {}）".format(_h["since_str"]))
     _b, _a = _h["before"], _h["after"]
-    print("    止血前: %5d 条  污染 %4d (%.1f%%)  raw_summary 覆盖 %.1f%%"
-          % (_b.get("count", 0), _b.get("polluted", 0),
-             _b.get("pollution_rate", 0) * 100,
-             _b.get("raw_summary_coverage", 0) * 100))
+    print(f"    止血前: {_b.get('count', 0):>5} 条  污染 {_b.get('polluted', 0):>4} ({_b.get('pollution_rate', 0) * 100:.1f}%)  raw_summary 覆盖 {_b.get('raw_summary_coverage', 0) * 100:.1f}%")
     if _a.get("count"):
-        print("    止血后: %5d 条  污染 %4d (%.1f%%)  raw_summary 覆盖 %.1f%%"
-              % (_a["count"], _a.get("polluted", 0),
-                 _a.get("pollution_rate", 0) * 100,
-                 _a.get("raw_summary_coverage", 0) * 100))
+        print(f"    止血后: {_a['count']:>5} 条  污染 {_a.get('polluted', 0):>4} ({_a.get('pollution_rate', 0) * 100:.1f}%)  raw_summary 覆盖 {_a.get('raw_summary_coverage', 0) * 100:.1f}%")
     else:
         print("    止血后:     0 条（无新增数据）")
     print("    判定: **{}**".format(_h["verdict"]))
@@ -466,12 +446,9 @@ def main() -> int:
     print()
     print("[6] 干净记录质量")
     if _c.get("count"):
-        print("    %d 条  weight: min=%.3f p25=%.3f med=%.3f p75=%.3f max=%.3f mean=%.3f"
-              % (_c["count"], _c["weight_min"], _c["weight_p25"], _c["weight_median"],
-                 _c["weight_p75"], _c["weight_max"], _c["weight_mean"]))
-        print("    零权重 %d 条；已摘要 %d 条；被激活 %d 条"
-              % (_c["zero_weight"], _c["summarized"], _c["activated"]))
-        print("    ★干净记录内部完全重复组: %d" % _c["internal_exact_dup_groups"])
+        print(f"    {_c['count']:} 条  weight: min={_c['weight_min']:.3f} p25={_c['weight_p25']:.3f} med={_c['weight_median']:.3f} p75={_c['weight_p75']:.3f} max={_c['weight_max']:.3f} mean={_c['weight_mean']:.3f}")
+        print(f"    零权重 {_c['zero_weight']:} 条；已摘要 {_c['summarized']:} 条；被激活 {_c['activated']:} 条")
+        print(f"    ★干净记录内部完全重复组: {_c['internal_exact_dup_groups']:}")
 
     if _ns.report:
         _os_dir = os.path.dirname(os.path.abspath(_ns.report))
