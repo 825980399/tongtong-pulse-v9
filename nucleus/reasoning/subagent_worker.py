@@ -18,7 +18,7 @@
   input  : {"task": <dict|str>, "budget_tokens": <int>, "timeout": <seconds>, "model": <str>, ...}
             （runner 将 task 规格展开合并到顶层，故 task 缺省时取整个 spec）
 输出约定：
-  output : {"result": <any>, "exit_code": <int>}
+  output : {"result": <any>, "exit_code": <int>, "stats": <any>}  # 187批刀5：stats 与 runner 对齐
   exit code: 0=成功；非0=失败（约定 2=输入读取/解析失败）。
 
 确定性操作（task.op 可选）：
@@ -107,7 +107,7 @@ def run_once(spec: Any) -> "Tuple[dict, int]":
 
 def _write_output(output_file: str, result: dict, exit_code: int) -> None:
     """安全写入 output json（先写临时文件再重命名，避免半写）。"""
-    payload = {"result": result, "exit_code": exit_code}
+    payload = {"result": result, "exit_code": exit_code, "stats": result}  # 187批刀5：补 stats 键对齐 runner（runner 读 result.get("stats", {})，否则产出被丢弃）
     tmp = output_file + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
