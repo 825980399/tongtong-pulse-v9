@@ -786,6 +786,7 @@ class PulseSubconscious(BasePulseOrgan):
         # 创造性联想：概率触发（不抢占资源，低频率运行）
         if random.random() < 0.3:  # 30%概率触发，不强制每次探索都产生联想
             self._trigger_creative_insight()
+            self._m183_observations_tick()
 
         # ===== 新增: 灵感涌现——潜意识中的创造性重组（极低概率） =====
         if random.random() < 0.06:  # 6%概率，极低频
@@ -4700,6 +4701,157 @@ class PulseSubconscious(BasePulseOrgan):
     def on_field_oscillation(self, frequency: float, amplitude: float,
                               phase: float, field_strength: float) -> dict[str, Any] | None:
         return None
+
+    # ========== 183批观测刀（刀3/4/5/6）：零行为变化，仅日志，默认关闭 ==========
+    def _m183_observations_tick(self) -> None:
+        """183批建设期观测总闸：在探索tick内低频运行四项观测，仅输出日志、不改变任何行为。
+
+        四项观测均受 config 开关控制，默认全部关闭（红线：零停窗）。
+        """
+        try:
+            import config as _cfg
+        except Exception as _e:
+            silent_exc(_e, where="PulseSubconscious._m183_observations_tick")
+            return
+        # 刀3：认知状态机温度观测
+        if getattr(_cfg, "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE", False):
+            try:
+                self._m183_cognitive_temperature_observe(_cfg)
+            except Exception as _e:
+                silent_exc(_e, where="PulseSubconscious._m183_cognitive_temperature_observe")
+        # 刀4：记忆强度衰减影子排序观测
+        if getattr(_cfg, "ENABLE_MEMORY_STRENGTH_SHADOW", False):
+            try:
+                self._m183_memory_strength_shadow(_cfg)
+            except Exception as _e:
+                silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow")
+        # 刀5：顿悟触发器碰撞扫描观测
+        if getattr(_cfg, "ENABLE_HEBBIAN_COLLISION_SCAN", False):
+            try:
+                self._m183_scan_hebbian_collision(_cfg)
+            except Exception as _e:
+                silent_exc(_e, where="PulseSubconscious._m183_scan_hebbian_collision")
+        # 刀6：赫布边衰减心跳调度
+        if getattr(_cfg, "ENABLE_HEBBIAN_APPLY_DECAY", False):
+            try:
+                self._m183_apply_hebbian_decay(_cfg)
+            except Exception as _e:
+                silent_exc(_e, where="PulseSubconscious._m183_apply_hebbian_decay")
+
+    def _m183_cognitive_temperature_observe(self, _cfg) -> None:
+        """刀3：把(energy,mood,focus,hour)映射为建议温度并记日志。
+
+        energy/focus 无统一消费引用（洞鉴§2），取近似占位仅观测；mood 取真实情绪强度近似。
+        不进任何请求、不改变行为。
+        """
+        from nucleus.cognitive.cognitive_state_utils import suggested_temperature
+        _hour = time.localtime().tm_hour
+        _mood = max(0.0, min(1.0, self._get_emotion_intensity()))  # 情绪强度近似 mood
+        _energy = 0.6   # 近似（无统一能量消费源）
+        _focus = 0.5    # 近似（focus 挂空）
+        _base = getattr(_cfg, "LLM_TEMPERATURE_BASE", 0.7)
+        _temp = suggested_temperature(_energy, _mood, _focus, _hour, base=_base)
+        self._log(LogLevel.INFO,
+                  f"[M183-温度观测] hour={_hour} energy≈{_energy:.2f}(近似) "
+                  f"mood={_mood:.2f}(情绪强度近似) focus≈{_focus:.2f}(近似) "
+                  f"base={_base} suggested_temperature={_temp}")
+
+    def _m183_memory_strength_shadow(self, _cfg) -> None:
+        """刀4：对节点做影子排序对比（现排序 vs 加入 memory_strength 的排序），
+
+        仅输出 top10 重合率到日志；不改检索返回结果/权重/Parquet。
+        """
+        from nucleus.memory_strength import memory_strength
+        if not self.node_pool:
+            return
+        _tau = getattr(_cfg, "MEMORY_STRENGTH_TAU", 30.0)
+        try:
+            _nodes = self.node_pool.get_all()
+        except Exception as _e:
+            silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow")
+            return
+        if not _nodes:
+            return
+        # 现排序口径（近似）：按 activation_count 降序取 top10
+        _cur_top = [getattr(n, "node_id", "") for n in
+                    sorted(_nodes, key=lambda n: getattr(n, "activation_count", 0), reverse=True)[:10]]
+        def _score(n):
+            return memory_strength(getattr(n, "last_activated", 0.0),
+                                  getattr(n, "activation_count", 0), tau=_tau)
+        _shadow_top = [getattr(n, "node_id", "") for n in
+                       sorted(_nodes, key=_score, reverse=True)[:10]]
+        _overlap = len(set(_cur_top) & set(_shadow_top))
+        self._log(LogLevel.INFO,
+                  f"[M183-记忆强度影子] tau={_tau} nodes={len(_nodes)} "
+                  f"top10重合率={_overlap}/10 ({_overlap * 10}%)")
+
+    def _m183_scan_hebbian_collision(self, _cfg) -> None:
+        """刀5：遍历高权重 hebbian 对，命中'异域+双高激活'只记日志
+
+        （节点对/双方激活量/质量分），不入库不推理不外搜。复用 _evaluate_inspiration_quality。
+        """
+        if not self.node_pool:
+            return
+        _learner = getattr(self.node_pool, "_hebbian_learner", None)
+        if _learner is None:
+            return
+        _conns = getattr(_learner, "_connections", None)
+        if not _conns:
+            return
+        _HIGH = 5            # 双高激活阈值（activation_count）
+        _MAX_SCAN = 200      # 安全上限：仅扫描权重最高的前 N 对
+        _MAX_HITS = 20       # 命中日志上限
+        _current_focus = self._get_current_creative_focus()
+        _hits = 0
+        _scanned = 0
+        for (_a, _b), _w in sorted(_conns.items(), key=lambda kv: kv[1], reverse=True):
+            _scanned += 1
+            if _scanned > _MAX_SCAN:
+                break
+            _na = self.node_pool.get(_a)
+            _nb = self.node_pool.get(_b)
+            if _na is None or _nb is None:
+                continue
+            _pa = getattr(_na, "space_path", "") or ""
+            _pb = getattr(_nb, "space_path", "") or ""
+            _da = _pa.split("/")[1] if _pa.startswith("/") and len(_pa.split("/")) > 1 else _pa
+            _db = _pb.split("/")[1] if _pb.startswith("/") and len(_pb.split("/")) > 1 else _pb
+            if _da == _db or not _da or not _db:
+                continue
+            _aa = getattr(_na, "activation_count", 0)
+            _ab = getattr(_nb, "activation_count", 0)
+            if not (_aa >= _HIGH and _ab >= _HIGH):
+                continue
+            _concepts = [
+                {"keywords": list(getattr(_na, "keywords", []) or [])},
+                {"keywords": list(getattr(_nb, "keywords", []) or [])},
+            ]
+            _domains = [x for x in (_da, _db) if x]
+            _q = self._evaluate_inspiration_quality(_concepts, _domains, _current_focus)
+            self._log(LogLevel.INFO,
+                      f"[M183-碰撞扫描] pair=({_a},{_b}) w={_w:.4f} "
+                      f"act=({_aa},{_ab}) quality={_q.get('score')}")
+            _hits += 1
+            if _hits >= _MAX_HITS:
+                break
+        if _hits:
+            self._log(LogLevel.INFO, f"[M183-碰撞扫描] 命中异域双高激活对={_hits}")
+
+    def _m183_apply_hebbian_decay(self, _cfg) -> None:
+        """刀6：心跳周期调度赫布边衰减，以 force=True 绕过 _enabled 闸门。
+
+        不改 5000 上限硬修剪、不调衰减速率（τ 走 config 默认值）。
+        """
+        if not self.node_pool:
+            return
+        _learner = getattr(self.node_pool, "_hebbian_learner", None)
+        if _learner is None:
+            return
+        _before = getattr(_learner, "_total_decays", 0)
+        _learner.apply_decay(force=True)
+        _after = getattr(_learner, "_total_decays", 0)
+        self._log(LogLevel.INFO,
+                  f"[M183-赫布衰减调度] force=True total_decays {_before}->{_after}")
 
 
 # ========== 自测 ==========

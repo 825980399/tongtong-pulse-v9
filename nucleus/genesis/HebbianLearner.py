@@ -222,14 +222,18 @@ class HebbianLearner:
 
     # ========== 权重衰减与修剪 ==========
 
-    def apply_decay(self):
+    def apply_decay(self, force: bool = False):
         """
         对所有赫布连接应用权重衰减。
         
         长期未共现的连接权重逐渐降低， 
         低于最小阈值的连接被移除（突触修剪）。
+        
+        Args:
+            force: 当为 True 时绕过 _enabled 闸门（供心跳调度在开关打开后调用）；
+                  默认 False，保持与原逻辑一致的早退行为。
         """
-        if not self._enabled:
+        if not self._enabled and not force:
             return
 
         with self._lock:
