@@ -1185,9 +1185,14 @@ class PulseInnerWorld(
                 if _contemplation and len(_contemplation) > 30:
                     # ★181批刀2：质量分触发扩展——沉思虽成功但质量不足（高复杂度/代码/创作类）时仍升级LLM
                     # ★182批刀1：反思低置信盲区信号并入同一触发源（不新建第二条升级线）
+                    # ★185批刀1·卫生刀①：盲区领域命中日志（判据触发领域+低置信标记），守开关默认关、不改判定逻辑
+                    _blind_domains, _blind_flag = _m182_reflection_blind_domains(self)
                     if _m181_should_escalate_on_quality(
                             ctx.question, _contemplation,
-                            blind_domains=_m182_reflection_blind_domains(self)):
+                            blind_domains=_blind_domains):
+                        _blind_hits = [d for d in _blind_domains if d and d in (ctx.question or "")]
+                        if _blind_hits:
+                            self._log(LogLevel.INFO, f"182刀1·④判据命中(反思低置信盲区→升级LLM): 触发领域={_blind_hits} 低置信标记={_blind_flag}")
                         self._log(LogLevel.INFO, "181刀2·质量分触发：本地沉思质量不足，升级到大模型")
                         _q_model = self._generate_branch_with_model(
                             original_question=ctx.question,
@@ -5412,6 +5417,8 @@ class PulseInnerWorld(
                         confidence=_conf,
                         keywords=["认知反思", "推理方法", "思考模式", "自我优化"],
                     )
+                    # ★185批刀1·卫生刀②：cognitive_reflection 入板计数日志（烛微§4.2）
+                    self._log(LogLevel.INFO, f"182刀2·cognitive_reflection入板: 节点对=(self_reflection_loop,思考模式) 置信度={_conf:.2f} 下游消费max_age=3600")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             # 2) 沉淀为反思知识节点（结构化、可检索）

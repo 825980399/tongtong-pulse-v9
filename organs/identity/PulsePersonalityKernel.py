@@ -93,6 +93,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
         # ===== P1-4: 数字生命注册表 =====
         # ★第184批刀1：L3 锚点哈希（真计算，兑现占位）
         _l3_hash = self._compute_l3_anchors_hash()
+        self._l3_hash = _l3_hash  # ★185批刀2：保留当前构造哈希供启动比对
         self._digital_life_registry: dict[str, dict[str, Any]] = {
             "tongtong": {
                 "global_personality_id": "tongtong_v1",
@@ -147,6 +148,24 @@ class PulsePersonalityKernel(BasePulseOrgan):
         # 统计
         self._verify_count = 0
         self._integrity_violations = 0
+
+        # ★185批刀2：人格快照落盘 + 启动哈希比对告警（不自动回滚，人工裁决）
+        try:
+            from tools.export_personality_snapshot import (
+                write_personality_snapshot,
+                compare_personality_snapshot_at_startup,
+            )
+            _disk_hash, _cur_hash, _mismatch = compare_personality_snapshot_at_startup(self)
+            if _mismatch:
+                self._log(LogLevel.CRITICAL,
+                          f"人格快照哈希漂移: 落盘={_disk_hash} 当前构造={_cur_hash}"
+                          f"（不自动回滚，待人工裁决）")
+            elif _disk_hash is None:
+                # 首次启动（无基线）：落盘当前快照作基线；不覆盖已有基线（保留漂移供人工裁决）
+                write_personality_snapshot(self)
+        except Exception as _e:
+            self._log(LogLevel.WARNING,
+                      f"人格快照启动比对异常(已忽略): {type(_e).__name__}: {_e}")
 
     def _compute_l3_anchors_hash(self) -> str:
         """★第184批刀1：L3 锚点哈希真计算（兑现占位）。
