@@ -121,6 +121,8 @@
    "event_hist": {}
   }
  },
- "delta_reason": "",
- "expected_delta": {}
+ "delta_reason": "185批刀1·卫生刀①：182刀1第④判据命中盲区升级时新增一行 INFO 日志，需在盲区分支内增一层 if _blind_hits 判空守卫，故 if 计数 +1；判定逻辑与 ENABLE_INNER_WORLD_QUALITY_ESCALATION 开关默认关均不变，属受控卫生增补。",
+ "expected_delta": {
+  "if": 1
+ }
 }
