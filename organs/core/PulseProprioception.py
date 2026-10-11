@@ -95,10 +95,16 @@ class PulseProprioception(BasePulseOrgan):
     # ========== 脉冲入口 ==========
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
+        # ★183批刀2：STATUS_REQUEST 状态查询优先于 is_running 检查
+        #   （声明订阅即服务；未运行态也应能回答状态，零行为变化：运行态完全一致）
+        _et = pulse.get("event_type", "")
+        if _et == SystemEvent.STATUS_REQUEST:
+            return self._on_status_request()
+
         if not self.is_running:
             return None
 
-        event_type = pulse.get("event_type", "")
+        event_type = _et
         payload = pulse.get("payload", {})
 
         if event_type == HeartEvent.BEAT:
@@ -113,8 +119,6 @@ class PulseProprioception(BasePulseOrgan):
         elif event_type == SystemEvent.DEVICE_DETACHED:
             self._on_device_detached(payload)
             return None
-        elif event_type == SystemEvent.STATUS_REQUEST:
-            return self._on_status_request()
 
         return None
 

@@ -24,6 +24,10 @@
   批次11（第182批补刀1 · 感知系统 4 件）：
      PulseMouth / PulseEars / PulseEyes / PulseTouch —— 洞鉴审计 §1 感知系统 4 件全 C 级，
      其中 PulseMouth always_online=True 却零覆盖（洞鉴 §3 风险分层：高）。
+  批次12（第183批刀2 · always_online 零覆盖补缺第二梯队 4 件）：
+     PulseNarrativeSelf / PulseProprioception / PulseStressAxis / PulseSystemManager ——
+     洞鉴§3 建议清单「零引用前四」；其中 Proprioception 经本批修复 on_pulse 契约
+     （STATUS_REQUEST 前置到 is_running 检查之前）后方通过 A1 正向断言。
 """
 import os
 import sys
@@ -48,6 +52,8 @@ from nucleus.const import SystemEvent
 #     PulsePersonalityKernel / PulseSpiritConstitution / PulseSubconscious / PulseGlobalLearner
 #   ★第182批补刀1 追加 4 件（均实测声明订阅 STATUS_REQUEST → A1 施加正向断言）：
 #     PulseMouth / PulseEars / PulseEyes / PulseTouch
+#   ★第183批刀2 追加 4 件（均实测声明订阅 STATUS_REQUEST → A1 施加正向断言）：
+#     PulseNarrativeSelf / PulseProprioception / PulseStressAxis / PulseSystemManager
 #   （PulseNeurotransmitters 实测仅声明 chat.message/hormones.emotion_detected/heart.beat，未订阅 STATUS_REQUEST）
 ORGAN_MODULES = {
     "PulseInferenceEngine": "organs.core.PulseInferenceEngine",
@@ -75,6 +81,11 @@ ORGAN_MODULES = {
     "PulseEars": "organs.senses.PulseEars",
     "PulseEyes": "organs.senses.PulseEyes",
     "PulseTouch": "organs.senses.PulseTouch",
+    # ★183批刀2（批次12 · always_online 零覆盖补缺第二梯队 4 件）
+    "PulseNarrativeSelf": "organs.identity.PulseNarrativeSelf",
+    "PulseProprioception": "organs.core.PulseProprioception",
+    "PulseStressAxis": "organs.core.PulseStressAxis",
+    "PulseSystemManager": "organs.core.PulseSystemManager",
 }
 
 
