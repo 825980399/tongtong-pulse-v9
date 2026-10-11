@@ -1191,6 +1191,67 @@ EVOLUTION_CONFIG = {
 }
 
 # ========== PatchAutoApprover 门槛常量（第五批 任务4，P1-4） ==========
+
+# ========== 184批 刀5（O-B1 衍生）：自我修改等级 SELF_MOD_LEVELS 声明 ==========
+# 来源：184批《第184批_施工任务书》刀5；纯声明映射（零运行行为，不改任何判定逻辑）。
+# 目的：把「自我修改（源码自动改写）」的三档处置策略以单一映射表固化，
+#       供 PatchManager 各判定分支（_m80_allow_core_auto_apply / _m85_local_low_risk_auto_apply
+#       / 审批队列 / O-B1 elevated 域）引用与审计，避免散落常量语义漂移。
+# 互斥约束：本表档位与 OB1_FACET_RULES（:986）正交——elevated=on 时
+#           L1/L2 的自动路径被互斥抑制（sandbox!=off ∧ tool_policy!=permissive），
+#           即 L3 人工闸优先于 L1/L2 自动；绝不新开第四套配置面（与 178刀3/180刀2 同面共存）。
+# 引用的闸键均已在 EVOLUTION_CONFIG（:1045）或 O-B1 段（:952）声明；
+#   OB1_ELEVATED_REQUIRE_HUMAN 当前仅在 OB1_CONFIG_FACETS["elevated"]["keys"]（:976）
+#   声明为 elevated 子键，实装推 179（读取端届时绑定），本表仅引用其名。
+SELF_MOD_LEVELS = {
+    # L1 免签自动：低风险补丁在满足全部条件时由 PatchAutoApprover 直接自动应用，不入审批队列。
+    "L1_AUTO_APPROVE": {
+        "desc": "免签自动：非核心文件 + 票面阈值内（trust/risk/类型全达标）直接自动应用",
+        "gate_keys": {
+            # 总开关（EVOLUTION_CONFIG["auto_apply_enabled"]，:1051，默认 False）
+            "auto_apply_enabled": True,
+            # 非核心文件放行由本地低风险开关控制（EVOLUTION_CONFIG["local_auto_apply_enabled"]，:1070，默认 False）
+            "local_auto_apply_enabled": True,
+            # 核心文件专用红线（EVOLUTION_CONFIG["allow_core_auto_apply"]，:1075，默认 False）——L1 必须为非核心
+            "allow_core_auto_apply": False,
+            # 票面阈值（EVOLUTION_CONFIG）
+            "auto_apply_min_trust": 40,   # :1058 信任分下限
+            "auto_apply_max_risk": 2,     # :1061 风险上限（1~2）
+            "SAFE_TO_AUTO_FIX": "subset_or_empty",  # :1081 非空时须 issue_type ∈ 该表
+        },
+        "semantics": "非核心 ∧ trust>=40 ∧ risk<=2 ∧ (SAFE_TO_AUTO_FIX 空 或 issue_type∈表) ⇒ 自动写入源码，零人工介入",
+        "excludes": ["L2", "L3"],
+    },
+    # L2 审批队列：核心文件或超阈补丁转人工审批队列，不自动写入。
+    "L2_MANUAL_APPROVE": {
+        "desc": "审批队列：核心文件或超票面阈值 ⇒ 入待审批队列，人工/STANDING_ORDERS gate 裁决",
+        "gate_keys": {
+            # 核心文件红线开启即落入 L2（EVOLUTION_CONFIG["allow_core_auto_apply"]，:1075）
+            "allow_core_auto_apply": True,   # 命中核心文件 ⇒ 必走审批
+            # 或任一阈值越界（trust<40 / risk>2 / 类型不在 SAFE_TO_AUTO_FIX）
+            "auto_apply_min_trust_breach": True,
+            "auto_apply_max_risk_breach": True,
+            # 审批队列受 STANDING_ORDERS gate（:1030，引用 OB1_* 键）约束
+            "standing_orders_gate": "OB1_*",
+        },
+        "semantics": "核心文件 或 (trust<40 ∨ risk>2 ∨ 类型越界) ⇒ 转 pending 队列，人工裁决后方可应用",
+        "excludes": ["L1", "L3"],
+    },
+    # L3 人工强闸：elevated 提权域，纯人工，禁止任何自动路径。
+    "L3_HUMAN_ONLY": {
+        "desc": "人工强闸：elevated 提权域（写盘/重启/外部API）纯人工，禁自动",
+        "gate_keys": {
+            # 提权总闸（OB1_ELEVATED_ENABLED，:955，默认 False）
+            "OB1_ELEVATED_ENABLED": True,
+            # 强人工闸（OB1_CONFIG_FACETS["elevated"]["keys"] 声明，:976，实装推 179）
+            "OB1_ELEVATED_REQUIRE_HUMAN": True,
+        },
+        "semantics": "OB1_ELEVATED_ENABLED=True ∧ OB1_ELEVATED_REQUIRE_HUMAN=True ⇒ 任何源码改动须纯人工，L1/L2 自动路径被互斥抑制",
+        "excludes": ["L1", "L2"],
+        "mutex_ref": "OB1_FACET_RULES",  # :986 互斥/继承表——elevated=on 时 sandbox!=off ∧ tool_policy!=permissive
+    },
+}
+
 # ★配置化 + 热加载：PatchAutoApprover 在每次裁决时动态读取（import config 实时取值），
 #   修改下述常量无需重启框架即可生效。默认值见下方常量，亦可被 EVOLUTION_CONFIG 之外的
 #   独立常量直接覆盖。

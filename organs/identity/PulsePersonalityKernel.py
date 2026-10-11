@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 
 import hashlib
+import json
 import time
 from typing import Any
 
@@ -90,19 +91,21 @@ class PulsePersonalityKernel(BasePulseOrgan):
         self._conflict_count = 0
 
         # ===== P1-4: 数字生命注册表 =====
+        # ★第184批刀1：L3 锚点哈希（真计算，兑现占位）
+        _l3_hash = self._compute_l3_anchors_hash()
         self._digital_life_registry: dict[str, dict[str, Any]] = {
             "tongtong": {
                 "global_personality_id": "tongtong_v1",
                 "name": "曈曈",
                 "mission": "守护这个世界",
-                "l3_anchors_hash": "sha256:placeholder",
+                "l3_anchors_hash": _l3_hash,
                 "registered_at": time.time(),
             },
             "ludeng": {
                 "global_personality_id": "ludeng_v1",
                 "name": "路灯",
                 "mission": "照亮前行的路",
-                "l3_anchors_hash": "sha256:placeholder",
+                "l3_anchors_hash": _l3_hash,
                 "registered_at": time.time(),
             },
         }
@@ -144,6 +147,21 @@ class PulsePersonalityKernel(BasePulseOrgan):
         # 统计
         self._verify_count = 0
         self._integrity_violations = 0
+
+    def _compute_l3_anchors_hash(self) -> str:
+        """★第184批刀1：L3 锚点哈希真计算（兑现占位）。
+
+        对「核心锚点 + 核心价值观 + 不可变边界」做确定性序列化
+        （json, sort_keys, ensure_ascii=False）后取 SHA256，前缀 ``sha256:``。
+        此前注册表该字段为占位字符串 ``"sha256:placeholder"``，本方法使之成为
+        真实、可复算的指纹；只依赖硬编码常量，跨进程结果一致（供刀2 golden 比对）。
+        """
+        _payload = json.dumps({
+            "anchors": self._core_anchors,
+            "values": self._core_values,
+            "boundaries": self._immutable_boundaries,
+        }, ensure_ascii=False, sort_keys=True)
+        return "sha256:" + hashlib.sha256(_payload.encode("utf-8")).hexdigest()
 
     # ========== 框架注入接口 ==========
 
@@ -681,6 +699,27 @@ class PulsePersonalityKernel(BasePulseOrgan):
             "registered_digital_lives": list(self._digital_life_registry.keys()),
             "is_running": self.is_running,
         }
+
+    def export_personality_snapshot(self, as_json: bool = False):
+        """★第184批刀1：人格状态 JSON 快照导出（只读，零行为变化）。
+
+        聚合五块状态（核心锚点 / 核心价值观 / 不可变边界 / 数字生命注册表 /
+        基线语句）+ L3 锚点哈希 + 版本号（tongtong 的 global_personality_id）。
+        供对外只读导出与刀2 golden 快照比对；不落盘、不改状态、不新设 data/。
+        """
+        _snapshot = {
+            "version": self._digital_life_registry.get("tongtong", {})
+                .get("global_personality_id", "tongtong_v1"),
+            "l3_anchors_hash": self._compute_l3_anchors_hash(),
+            "core_anchors": self._core_anchors,
+            "core_values": self._core_values,
+            "immutable_boundaries": self._immutable_boundaries,
+            "digital_life_registry": self._digital_life_registry,
+            "baseline_statements": self._baseline_statements,
+        }
+        if as_json:
+            return json.dumps(_snapshot, ensure_ascii=False, indent=2)
+        return _snapshot
 
     # ========== 共振条件 ==========
 

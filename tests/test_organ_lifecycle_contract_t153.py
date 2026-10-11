@@ -86,6 +86,11 @@ ORGAN_MODULES = {
     "PulseProprioception": "organs.core.PulseProprioception",
     "PulseStressAxis": "organs.core.PulseStressAxis",
     "PulseSystemManager": "organs.core.PulseSystemManager",
+    # ★184批刀4（批次13 · always_online 零覆盖补缺第三梯队 2 件）：
+    #   PulseInterestModel / PulseHardwareLauncher —— 洞鉴§3 建议清单剩余两件，
+    #   always_online 高频/低频通电器官，T153-6 契约入册（纯测试刀·零业务改动）。
+    "PulseInterestModel": "organs.brain.PulseInterestModel",
+    "PulseHardwareLauncher": "organs.core.PulseHardwareLauncher",
 }
 
 

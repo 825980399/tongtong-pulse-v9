@@ -25,6 +25,7 @@ import ast
 import io
 import json
 import os
+import re
 from typing import Any
 
 from nucleus.logger import get_module_logger
@@ -231,3 +232,179 @@ def log_organ_inventory(organs: Any = None) -> None:
         "[器官清单] 总数=%d 核心(九大中真实存在)=%d 脑器官=%d 核心命中=%s",
         _p["total"], _p["core_count"], _p["brain_count"], ",".join(_p["core_present"]) or "无",
     )
+
+
+# =============================================================================
+# 184批刀3：器官关联图谱 v0 构建器（零停窗 · 纯静态 AST · 导出面）
+# -----------------------------------------------------------------------------
+# 复用 181刀5 的 scan_organ_classes() 作为权威器官清单数据源；
+# - 静态边表：扫描各器官模块对其它器官类名的 import / 实例化 / 属性引用；
+# - 元数据聚合：cn_name / category 沿用 self_inspector 的同款头注释正则，
+#   不调用 self_inspector.build_organ_metadata（避免 LogAnalyzer 健康扫描的
+#   时间/日志非确定性副作用），保证导出结果确定性；
+# - 合并调用图边：ENABLE_CALL_GRAPH_ANALYSIS 开启时 best-effort 合并
+#   CallGraphAnalyzer 的函数级调用边映射到器官级（kind="call"）。
+# 不接任何消费、不翻 PHASE18_SIGNALS、不落盘。
+_HEAD_CN_RE_M184 = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)[ \t]*——[ \t]*([^ \t\r\n（）()]+)"
+)
+
+
+def _organ_cn_name_of(file_rel: str) -> "str | None":
+    """从器官模块头注释提取中文名（与 self_inspector._HEAD_CN_RE 同口径）。"""
+    _p = os.path.join(os.path.dirname(_organs_root()), file_rel)
+    if not os.path.isfile(_p):
+        return None
+    with io.open(_p, encoding="utf-8", errors="ignore") as _f:
+        _head = _f.read(800)
+    _m = _HEAD_CN_RE_M184.search(_head)
+    return _m.group(2) if _m else None
+
+
+def _organ_edges_static(organs: list[dict]) -> "dict[tuple, dict]":
+    """静态 AST 扫描器官模块，产出 organ→organ 边（import / usage）。
+
+    Returns: {(from_cls, to_cls): {"from","to","kinds":set,"refs":int}}
+    """
+    _cls_set = {o["class_name"] for o in organs}
+    _edges: dict = {}
+    for _o in organs:
+        _from = _o["class_name"]
+        _fp = os.path.join(os.path.dirname(_organs_root()), _o["file_path"])
+        if not os.path.isfile(_fp):
+            continue
+        _src = io.open(_fp, encoding="utf-8", errors="replace").read()
+        _tree = ast.parse(_src)
+        _refd: set = set()  # (to_cls, kind)
+        for _node in ast.walk(_tree):
+            if isinstance(_node, ast.Import):
+                for _a in _node.names:
+                    _nm = _a.name.split(".")[-1]
+                    if _nm in _cls_set:
+                        _refd.add((_nm, "import"))
+            elif isinstance(_node, ast.ImportFrom):
+                for _a in _node.names:
+                    if _a.name in _cls_set:
+                        _refd.add((_a.name, "import"))
+            elif isinstance(_node, ast.Call):
+                _func = _node.func
+                if isinstance(_func, ast.Name) and _func.id in _cls_set:
+                    _refd.add((_func.id, "usage"))
+                elif isinstance(_func, ast.Attribute) and _func.attr in _cls_set:
+                    _refd.add((_func.attr, "usage"))
+            elif isinstance(_node, ast.Attribute) and _node.attr in _cls_set:
+                _refd.add((_node.attr, "usage"))
+        for (_to, _kind) in _refd:
+            if _to == _from:
+                continue
+            _k = (_from, _to)
+            _e = _edges.get(_k)
+            if _e is None:
+                _e = {"from": _from, "to": _to, "kinds": set(), "refs": 0}
+                _edges[_k] = _e
+            _e["kinds"].add(_kind)
+            _e["refs"] += 1
+    return _edges
+
+
+def _organ_edges_call_graph(organs: list[dict]) -> "dict[tuple, dict]":
+    """★184批刀3 线2：合并调用图边（ENABLE_CALL_GRAPH_ANALYSIS 已在产）。
+
+    best-effort：开关关闭 / 任何异常都返回空 dict，绝不破坏导出。
+    把 CallGraphAnalyzer 的函数级调用边按模块归属映射到器官级（kind="call"）。
+    """
+    import config as _cfg
+    if not getattr(_cfg, "ENABLE_CALL_GRAPH_ANALYSIS", False):
+        return {}
+    from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
+    # 模块路径(organs.identity.X) -> 器官类名 的索引
+    # 注：scan_organ_classes 的 file_path 已含 "organs/" 前缀，故 _key 直接为
+    #     "organs.body.PulseX"，与 CallGraphAnalyzer 的 module 字段同款，勿再加 "organs."
+    _mod_to_cls: dict = {}
+    for _o in organs:
+        _key = _o["file_path"][:-3].replace("/", ".")
+        _mod_to_cls.setdefault(_key, _o["class_name"])
+    _g = CallGraphAnalyzer().analyze()
+    _edges: dict = {}
+    _by_id = {n["id"]: n for n in _g.get("nodes", [])}
+    for _edge in _g.get("edges", []):
+        _cn = _by_id.get(_edge.get("caller"))
+        _ce = _by_id.get(_edge.get("callee"))
+        if not _cn or not _ce:
+            continue
+        _from = _mod_to_cls.get(_cn.get("module", ""))
+        _to = _mod_to_cls.get(_ce.get("module", ""))
+        if not _from or not _to or _from == _to:
+            continue
+        _k = (_from, _to)
+        _e = _edges.get(_k)
+        if _e is None:
+            _e = {"from": _from, "to": _to, "refs": 0}
+            _edges[_k] = _e
+        _e["refs"] += int(_edge.get("count", 1))
+    return _edges
+
+
+def export_organ_graph(organs: "Any" = None, as_json: bool = False,
+                       include_call_graph: "bool | None" = None) -> "Any":
+    """导出器官关联图谱 v0（确定性 organ→organ 边表）。
+
+    Args:
+        organs: 可选运行时实例映射（v0 以 AST 清单为准，预留扩展）。
+        as_json: True 返回 JSON 字符串。
+        include_call_graph: 是否合并调用图边；None 时跟随
+            config.ENABLE_CALL_GRAPH_ANALYSIS。
+
+    Returns:
+        dict：{"version", "organ_count", "edge_count", "nodes", "edges"}
+        nodes = 器官元数据（class_name/name/type/category/cn_name/method_count/
+            is_core/is_brain_organ）；
+        edges = [{from,to,kinds:[...],refs}]（kinds ⊂ {import,usage,call}）。
+    不落盘、不改状态；未开启调用图或异常时回退纯静态边表，结果仍确定性。
+    """
+    _rows = scan_organ_classes()
+    _nodes = []
+    for _r in _rows:
+        _rel = _r["file_path"]
+        _nodes.append({
+            "class_name": _r["class_name"],
+            "name": _r["organ_name"],
+            "type": _type_of(_rel),
+            "category": os.path.basename(os.path.dirname(_rel)),
+            "cn_name": _organ_cn_name_of(_rel),
+            "method_count": _r["method_count"],
+            "is_core": _r["organ_name"] in TASKBOOK_CORE_BRAIN,
+            "is_brain_organ": "/brain/" in ("/" + _rel),
+        })
+    _nodes.sort(key=lambda n: n["class_name"])
+
+    _edges = _organ_edges_static(_rows)
+    if include_call_graph is None:
+        import config as _cfg
+        include_call_graph = bool(getattr(_cfg, "ENABLE_CALL_GRAPH_ANALYSIS", False))
+    if include_call_graph:
+        for _k, _e in _organ_edges_call_graph(_rows).items():
+            _cur = _edges.get(_k)
+            if _cur is None:
+                _cur = {"from": _e["from"], "to": _e["to"], "kinds": set(), "refs": 0}
+                _edges[_k] = _cur
+            _cur["kinds"].add("call")
+            _cur["refs"] += _e["refs"]
+
+    _edge_list = sorted(
+        ({"from": v["from"], "to": v["to"],
+          "kinds": sorted(v["kinds"]), "refs": v["refs"]}
+         for v in _edges.values()),
+        key=lambda e: (e["from"], e["to"]),
+    )
+    _payload = {
+        "version": "v0",
+        "organ_count": len(_nodes),
+        "edge_count": len(_edge_list),
+        "nodes": _nodes,
+        "edges": _edge_list,
+    }
+    if as_json:
+        return json.dumps(_payload, ensure_ascii=False, indent=2)
+    return _payload
+
