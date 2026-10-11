@@ -5689,3 +5689,38 @@ O_A4_LOCAL_EVIDENCE_PROVIDERS = {
     "rule_current_time": "local_time",
     "rule_identity": "local_identity",
 }
+
+# ===== [M183-SUBAGENT] 183批刀1：SUBAGENT 协议刀A（runner 封装）=====
+# 读取点：nucleus/reasoning/subagent_runner.py::run_subagent
+# 硬条款：①强制exit code检查 ②NO_MESSAGE_TOOL闸先于真起 ③预算校验 ④timeout清理
+# 零行为变化：ENABLE_SUBAGENT_RUNNER=False（默认）→ 调用方 dry_run（不真起）；
+#             ENABLE_SUBAGENT_NO_MESSAGE_TOOL=False 未翻开 → 拒绝真起（硬条款②先行）
+ENABLE_SUBAGENT_RUNNER = False
+SUBAGENT_BUDGET_TOKENS = 0          # 0=不限制单次预算（硬条款③仅校验 CHEAP_MODEL 非空）
+SUBAGENT_TIMEOUT_SECONDS = 300
+
+# ===== [M183-TEMP] 183批刀3：认知状态机观测（纯函数 + 统一温度单一来源）=====
+# 读取点：nucleus/cognitive/cognitive_state_utils.py::suggested_temperature
+#         organs/body/PulseLung.py 两处硬编码 0.7 统一为本常量（不动态）
+# 零行为变化：ENABLE_COGNITIVE_TEMPERATURE_OBSERVE=False → 仅心跳日志，不进任何请求
+LLM_TEMPERATURE_BASE = 0.7
+ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False
+
+# ===== [M183-STRENGTH] 183批刀4：记忆强度衰减观测（纯函数 + 影子排序）=====
+# 读取点：nucleus/memory_strength.py::memory_strength
+#         organs/brain/PulseSubconscious.py 探索tick 影子排序对比
+# 零行为变化：ENABLE_MEMORY_STRENGTH_SHADOW=False → 仅日志，不改返回结果/权重/Parquet
+MEMORY_STRENGTH_TAU = 30.0
+ENABLE_MEMORY_STRENGTH_SHADOW = False
+
+# ===== [M183-COLLISION] 183批刀5：顿悟触发器观测（碰撞扫描器）=====
+# 读取点：organs/brain/PulseSubconscious.py::_m183_scan_hebbian_collision
+# 零行为变化：ENABLE_HEBBIAN_COLLISION_SCAN=False → 仅日志（节点对/激活量/质量分），不入库不推理不外搜
+ENABLE_HEBBIAN_COLLISION_SCAN = False
+
+# ===== [M183-DECAY] 183批刀6：apply_decay 死代码接线（心跳周期调用）=====
+# 读取点：nucleus/genesis/HebbianLearner.py::apply_decay(force=True)
+#         organs/brain/PulseSubconscious.py::_m183_apply_hebbian_decay
+# 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
+#             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
+ENABLE_HEBBIAN_APPLY_DECAY = False
