@@ -573,6 +573,29 @@ def _l2_prompt_is_session_private(prompt: str) -> bool:
     return False
 
 
+def _l2_classify_scene(prompt: str) -> str:
+    """★188刀1：将 prompt 粗分为 代码类/闲聊类/推理类（确定性启发式，仅供遥测分桶）。
+
+    不依赖任何外部调用，纯本地字符串判定；分类结果仅用于遥测计数，
+    不参与任何缓存命中/拒绝判定（零行为变化）。
+    """
+    if not prompt:
+        return "chat"
+    _code_markers = ("def ", "class ", "import ", "function", "=>", "```",
+                     "Traceback", "Exception", "Error:", "return ", "SELECT ",
+                     "{", "}", "print(", "var ", "const ", "public ", "=>")
+    _reason_markers = ("为什么", "如何", "分析", "因为", "所以", "逻辑", "推导",
+                       "原因", "解释", "原理", "比较", "区别", "vs", "?",
+                       "？", "怎么", "怎样", "论证", "结论")
+    _code = sum(1 for m in _code_markers if m in prompt)
+    _reason = sum(1 for m in _reason_markers if m in prompt)
+    if _code >= 2:
+        return "code"
+    if _reason >= 1:
+        return "reasoning"
+    return "chat"
+
+
 @dataclass
 class L2Entry:
     """L2 缓存条目（内存；含向量供余弦比对）。"""
@@ -583,6 +606,7 @@ class L2Entry:
     ts: float
     last_hit_ts: float
     origin: str = ""
+    scene: str = ""
     vec: list = field(default_factory=list)
 
 
@@ -606,6 +630,15 @@ class SemanticCacheL2:
         self._cache = cache                    # 可选：复用 L1 编码器与阈值
         self._encoder_override = encoder
         self._stat = {"hits": 0, "misses": 0, "rejected": 0, "stores": 0}
+        # ★188刀1：L2 只读遥测（命中率/污染率·按场景分桶：代码类/闲聊类/推理类）。
+        #   纯计数、零行为变化（不影响四闸命中判定/阈值/开关）。下游负反馈经
+        #   record_feedback() 回填，未被调用时 neg 恒为 0（跑 2-3 批出分布）。
+        self._telemetry = {
+            "overall":   {"hits": 0, "misses": 0, "neg": 0},
+            "code":      {"hits": 0, "misses": 0, "neg": 0},
+            "chat":      {"hits": 0, "misses": 0, "neg": 0},
+            "reasoning": {"hits": 0, "misses": 0, "neg": 0},
+        }
 
     # ---------------- 配置 ----------------
     def enabled(self) -> bool:
@@ -713,8 +746,10 @@ class SemanticCacheL2:
         if not _v:
             return False
         _now = time.time()
+        _scene = _l2_classify_scene(prompt)
         _e = L2Entry(hash=_hash_text(prompt), prompt=prompt, response=response,
-                     ts=_now, last_hit_ts=_now, origin=str(origin), vec=_v)
+                     ts=_now, last_hit_ts=_now, origin=str(origin),
+                     scene=_scene, vec=_v)
         with self._lock:
             self._entries[_e.hash] = _e
             self._purge_expired(_now)
@@ -725,7 +760,12 @@ class SemanticCacheL2:
     # ---------------- 查询（四闸） ----------------
     def lookup(self, prompt: str, origin: str = "",
                vec: list | None = None) -> dict | None:
-        """命中且过四闸 → 返回 ``{…, "response": …}``；否则 ``None``（静默回落）。"""
+        """命中且过四闸 → 返回 ``{…, "response": …}``；否则 ``None``（静默回落）。
+
+        ★188刀1：仅在计数层追加只读遥测（命中/未命中/拒绝按场景分桶），
+        不改变四闸判定、阈值或任何返回内容（零行为变化）。
+        """
+        _scene = _l2_classify_scene(prompt)
         try:
             if not self.enabled() or not prompt:
                 return None
@@ -733,9 +773,11 @@ class SemanticCacheL2:
                 return None
             if len(prompt) < self.min_len():
                 self._stat["rejected"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             if _l2_prompt_is_session_private(prompt):
                 self._stat["rejected"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             _now = time.time()
             with self._lock:
@@ -743,10 +785,12 @@ class SemanticCacheL2:
                 _entries = list(self._entries.values())
             if not _entries:
                 self._stat["misses"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             _v = vec if vec is not None else self._encode_one(prompt)
             if not _v:
                 self._stat["misses"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             _best: L2Entry | None = None
             _best_sim = -2.0
@@ -758,19 +802,23 @@ class SemanticCacheL2:
                     _best_sim, _best = _s, _e
             if _best is None:
                 self._stat["misses"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             # ① 置信闸
             if _best_sim < self.threshold():
                 self._stat["misses"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             # ② 时效闸
             _ttl = self.ttl_sec()
             if _ttl > 0 and (_now - _best.ts) > _ttl:
                 self._stat["misses"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             # ④ 质量闸
             if not _best.response:
                 self._stat["rejected"] += 1
+                self._tele_bump(_scene, "misses")
                 return None
             # 流量分桶（确定性）
             _r = self.ratio()
@@ -778,15 +826,56 @@ class SemanticCacheL2:
                 _bucket = int(_hash_text(prompt)[:8], 16) % 100
                 if _bucket >= int(_r * 100):
                     self._stat["rejected"] += 1
+                    self._tele_bump(_scene, "misses")
                     return None
             _best.last_hit_ts = _now
             self._stat["hits"] += 1
+            self._tele_bump(_scene, "hits")
             return {"response": _best.response, "similarity": round(_best_sim, 4),
                     "entry_hash": _best.hash, "origin": _best.origin}
         except Exception as e:
             silent_exc(e, "nucleus/llm/semantic_cache.py:SemanticCacheL2.lookup",
                        level="debug")
             return None
+
+    def _tele_bump(self, scene: str, kind: str) -> None:
+        """★188刀1：遥测计数累加（命中/未命中按场景分桶）。零副作用。"""
+        _key = {"hit": "hits", "miss": "misses"}.get(kind, kind)
+        try:
+            _s = scene if scene in self._telemetry else "chat"
+            self._telemetry[_s][_key] += 1
+            self._telemetry["overall"][_key] += 1
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::_tele_bump")
+
+    def record_feedback(self, entry_hash: str, negative: bool = True) -> None:
+        """★188刀1：下游对一次 L2 命中（已返回缓存响应）的负反馈回填。
+
+        仅供遥测（污染率 = neg / hits）；不改动任何命中判定或存储。
+        未被下游调用时 neg 恒为 0（跑 2-3 批出分布）。
+        """
+        try:
+            with self._lock:
+                _e = self._entries.get(entry_hash)
+                _scene = getattr(_e, "scene", "") or "chat" if _e else "chat"
+            if negative:
+                self._telemetry[_scene]["neg"] += 1
+                self._telemetry["overall"]["neg"] += 1
+        except Exception as e:
+            silent_exc(e,
+                       "nucleus/llm/semantic_cache.py:SemanticCacheL2.record_feedback",
+                       level="debug")
+
+    def telemetry(self) -> dict:
+        """★188刀1：只读遥测快照（命中率/污染率·按场景分桶）。零副作用。"""
+        with self._lock:
+            _t = {_k: dict(_v) for _k, _v in self._telemetry.items()}
+        for _v in _t.values():
+            _h = _v.get("hits", 0)
+            _m = _v.get("misses", 0)
+            _v["hit_rate"] = round(_h / (_h + _m), 4) if (_h + _m) else 0.0
+            _v["pollution_rate"] = round(_v.get("neg", 0) / _h, 4) if _h else 0.0
+        return _t
 
     # ---------------- 观测 ----------------
     def stats(self) -> dict:
@@ -796,6 +885,7 @@ class SemanticCacheL2:
         return {"enabled": self.enabled(), "entries": _n, "capacity": self.capacity(),
                 "ttl_sec": self.ttl_sec(), "threshold": self.threshold(),
                 "hit_rate": round(self._stat["hits"] / _o, 4) if _o else 0.0,
+                "telemetry": self.telemetry(),
                 **self._stat}
 
     def clear(self) -> None:

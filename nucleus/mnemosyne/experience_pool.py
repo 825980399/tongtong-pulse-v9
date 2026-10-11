@@ -219,6 +219,10 @@ class ExperiencePool:
                         _existing["activation_count"] = \
                             int(_existing.get("activation_count", 0) or 0) + 1
                         _existing["timestamp"] = time.time()
+                        # ★188刀2：指纹去重命中即合并（不再新增条目），须回退
+                        #   L153 已自增的 total_recorded，否则标量计数 > 实际条目数
+                        #   （盘存不一致）。与 L204 完全重复拒绝、L234 污染拒绝同口径。
+                        self._total_recorded -= 1
                         self._save()
                         return _existing.get("id", "")
 
@@ -1155,8 +1159,33 @@ class ExperiencePool:
                 "file_exists": os.path.exists(self._pool_file),
             }
 
+    def get_inventory_consistency_report(self) -> dict[str, Any]:
+        """★188刀2：只读盘存一致性诊断（零副作用，不改动任何经验数据）。
 
-# ========== 模块级单例 ==========
+        用于 KPI 评估前明确数据源口径、归因'97条'类盘存矛盾：
+        - 主经验池(experience_pool.json)与推理经验库
+          (data/context/reasoning_experience.json)为**独立数据源**；
+        - 主池 experiences 列表长度应与 total_recorded 等标量保持口径一致
+          （修复 L153/L214 过计后，total_recorded >= len(experiences) 恒成立，
+           因 trimming/summarization 只减列表不减标量）；
+        - '97条'类口径应溯源至推理经验库（约 99 条），非主池。
+        """
+        with self._lock:
+            _n = len(self._experiences)
+            _tr = self._total_recorded
+            return {
+                "experiences_len": _n,
+                "total_recorded": _tr,
+                "total_summarized": self._total_summarized,
+                "total_decayed": self._total_decayed,
+                # 一致性判据：修复后 total_recorded 不应低于实际条目数
+                "consistent": _tr >= _n,
+                "note": ("主经验池(experience_pool.json)与推理经验库"
+                         "(data/context/reasoning_experience.json)为独立数据源；"
+                         "'97条'类口径应溯源至推理经验库（约 99 条），非主池。"),
+            }
+
+    # ========== 模块级单例 ==========
 _experience_pool: ExperiencePool | None = None
 _experience_pool_lock = threading.Lock()
 

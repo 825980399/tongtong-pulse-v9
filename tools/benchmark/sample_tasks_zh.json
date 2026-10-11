@@ -1,0 +1,25 @@
+[
+  {
+    "id": "zh_code_01",
+    "category": "code",
+    "prompt": "用 Python 写一个返回两数之和的函数。",
+    "grading": {"method": "contains", "expected": "def add", "max_score": 1.0}
+  },
+  {
+    "id": "zh_reason_01",
+    "category": "reasoning",
+    "prompt": "为什么天空是蓝色的？请解释原理。",
+    "grading": {
+      "method": "rule",
+      "keywords": ["瑞利散射", "波长", "蓝光"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_know_01",
+    "category": "knowledge",
+    "prompt": "中国的首都是哪里？",
+    "grading": {"method": "exact_match", "expected": "北京", "max_score": 1.0}
+  }
+]

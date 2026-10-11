@@ -225,6 +225,55 @@ def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_co
     return round(_price * _tok / 1000.0, 6)
 
 
+def build_training_pair(rec: dict) -> dict | None:
+    """★188刀4：把一条已留存的调用对（prompt/response）转为可训数据（input/output）。
+    仅成功且含输入/输出的调用可转；失败/空响应不转。不建向量、不接微调管道。"""
+    if not isinstance(rec, dict):
+        return None
+    if rec.get("status") != STATUS_SUCCESS:
+        return None
+    _inp = (rec.get("prompt") or "").strip()
+    _out = (rec.get("response") or "").strip()
+    if not _inp or not _out:
+        return None
+    return {
+        "trace_id": rec.get("trace_id"),
+        "ts": rec.get("ts"),
+        "origin": rec.get("origin"),
+        "model": rec.get("model"),
+        "input": _inp,
+        "output": _out,
+        "prompt_version": rec.get("prompt_version"),
+        "channel": rec.get("channel"),
+    }
+
+
+def convert_calls_to_training_pairs(src_path: str, out_path: str) -> int:
+    """★188刀4：批量把已有 calls JSONL 转可训数据落盘（不建向量、不接微调）。
+    返回转换条数；best-effort，异常静默计数失败。用于把历史调用对沉淀为训练素材，
+    使'转化率'可测。"""
+    _n = 0
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+        with open(src_path, "r", encoding="utf-8") as _sf,              open(out_path, "a", encoding="utf-8") as _of:
+            for _line in _sf:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _rec = json.loads(_line)
+                except Exception:
+                    continue
+                _pair = build_training_pair(_rec)
+                if _pair is None:
+                    continue
+                _of.write(json.dumps(_pair, ensure_ascii=False, default=str) + "\n")
+                _n += 1
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.call_recorder::convert_calls_to_training_pairs")
+    return _n
+
+
 class LLMCallRecorder:
     """LLM 调用对留存器（JSONL 追加写 + 滚窗清理）。
 
@@ -238,6 +287,9 @@ class LLMCallRecorder:
         self._base_dir_override = base_dir
         self._written = 0
         self._failed = 0
+        # ★188刀4：训练对物化计数（影子通道）
+        self._materialized = 0
+        self._materialized_failed = 0
         self._last_rotate_day = ""
 
     # ------------------------------------------------------------------
@@ -440,6 +492,8 @@ class LLMCallRecorder:
                     _f.write(_line + "\n")
                 self._written += 1
             self._rotate(_ts)
+            # ★188刀4：训练对物化（影子通道）。best-effort，绝不改变 record 返回值。
+            self._materialize_training_pair(_rec, _ts)
             return _tid
         except Exception:
             self._failed += 1
@@ -472,6 +526,30 @@ class LLMCallRecorder:
             self._failed += 1
             return False
 
+    def _materialize_training_pair(self, rec: dict, ts: float) -> None:
+        """★188刀4：训练对沉淀物化（影子通道）。把已留存的调用对转可训数据落盘
+        training_pairs_*.jsonl；best-effort，绝不改变 record() 返回值与既有 calls
+        落盘行为（零行为变化）。不建向量、不接微调管道、不翻生产开关。"""
+        try:
+            _pair = build_training_pair(rec)
+            if _pair is None:
+                return
+            # 测试环境且不显式注入目录 → 不写生产训练对（与 calls 守卫一致）
+            if self._base_dir_override is None and _in_test_env() \
+                    and _is_production_trace_dir(self.base_dir()):
+                return
+            _line = json.dumps(_pair, ensure_ascii=False, default=str)
+            _d = self.base_dir()
+            os.makedirs(_d, exist_ok=True)
+            with self._lock:
+                with open(self._path_for(ts, prefix="training_pairs"),
+                          "a", encoding="utf-8") as _f:
+                    _f.write(_line + "\n")
+            self._materialized += 1
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.call_recorder::_materialize_training_pair")
+            self._materialized_failed += 1
+
     def stats(self) -> dict[str, Any]:
         """运行期统计（不触发任何 IO 扫描）。"""
         return {
@@ -486,6 +564,8 @@ class LLMCallRecorder:
             "default_prompt_version": self.default_prompt_version(),
             "error_capture_enabled": self.error_capture_enabled(),
             "error_max_len": self.error_max_len(),
+            "materialized": self._materialized,
+            "materialized_failed": self._materialized_failed,
         }
 
 
@@ -626,5 +706,4 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                     silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587")
         return _wrapper
     return _deco
-
 
