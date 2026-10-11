@@ -1840,6 +1840,8 @@ class SelfInspector(SilentLogMixin):
             silent_exc(_se, "self_inspector.py:1509")
 
         # ---- 3) 健康指标（异常次数取 LogAnalyzer；响应时间待埋点） ----
+        _blast = self._build_event_graph_adjacency()
+
         health: dict[str, Any] = {}
         try:
             from nucleus.evolution.LogAnalyzer import LogAnalyzer
@@ -1851,11 +1853,13 @@ class SelfInspector(SilentLogMixin):
                         if _i.get("file_path") == _o["file"]
                         or _o["class_name"] in (_i.get("message") or "")),
                     "avg_response_ms": None,   # 待埋点
+                    "blast_radius": _blast.get(_o["class_name"], 0),
                 }
         except Exception:
             for _o in organs:
                 health[_o["class_name"]] = {
-                    "recent_errors": 0, "avg_response_ms": None}
+                    "recent_errors": 0, "avg_response_ms": None,
+                    "blast_radius": _blast.get(_o["class_name"], 0)}
 
         return {
             "version": "v1.0",
@@ -1866,6 +1870,58 @@ class SelfInspector(SilentLogMixin):
             "dependencies": dependencies,
             "health": health,
         }
+
+    # ==================== 187批刀2：图谱邻接只读查询（报告面两翼之一） ====================
+    def _build_event_graph_adjacency(self) -> "dict[str, int]":
+        """装载事件图谱导出，构建一阶邻接计数（blast_radius）。
+
+        只读：调用 tools.export_event_graph.export_event_graph() 静态 AST 提取，
+        不落盘、不改状态。失败降级为 {}（blast_radius=0）。
+        """
+        try:
+            from tools.export_event_graph import export_event_graph
+            _g = export_event_graph()
+            _affects: dict[str, set[str]] = {}
+            _driven: dict[str, set[str]] = {}
+            for _e in _g.get("edges", []):
+                _em = _e.get("emitter")
+                _sub = _e.get("subscriber")
+                if _em:
+                    _affects.setdefault(_em, set()).add(_sub)
+                if _sub:
+                    _driven.setdefault(_sub, set()).add(_em)
+            return {_o: len(_affects.get(_o, set()) | _driven.get(_o, set()))
+                    for _o in (set(_affects) | set(_driven))}
+        except Exception as _e:
+            silent_exc(_e, "self_inspector.py:_build_event_graph_adjacency")
+            return {}
+
+    def query_event_graph_adjacency(self, organ: str) -> "dict[str, Any]":
+        """图谱邻接只读查询：回答「改 X 波及谁 / 谁驱动 X」。
+
+        Args: organ: 器官类名（如 "PulsePersonalityKernel"）。
+        Returns: {"organ", "affects", "driven_by", "blast_radius"}（纯只读，零行为变化）。
+        """
+        try:
+            from tools.export_event_graph import export_event_graph
+            _g = export_event_graph()
+            _affects: set[str] = set()
+            _driven: set[str] = set()
+            for _e in _g.get("edges", []):
+                if _e.get("emitter") == organ:
+                    _affects.add(_e.get("subscriber"))
+                if _e.get("subscriber") == organ:
+                    _driven.add(_e.get("emitter"))
+            return {
+                "organ": organ,
+                "affects": sorted(_affects),
+                "driven_by": sorted(_driven),
+                "blast_radius": len(_affects | _driven),
+            }
+        except Exception as _e:
+            silent_exc(_e, "self_inspector.py:query_event_graph_adjacency")
+            return {"organ": organ, "affects": [], "driven_by": [],
+                    "blast_radius": 0, "error": str(_e)[:80]}
 
     def analyze_code_layered(self, file_path: str, node_pool=None) -> dict[str, Any]:
 
