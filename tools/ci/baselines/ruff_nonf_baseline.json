@@ -1,15 +1,15 @@
 {
   "schema": "ruff_nonf_baseline/1",
-  "batch": 182,
+  "batch": 186,
   "ruff_version_pinned": "0.16.5",
   "ruff_version_actual": "0.16.5",
-  "generated_at_head": "de4442a",
+  "generated_at_head": "6c08f4d",
   "scan_cmd": "ruff check --output-format=json . （按 ruff.toml 默认规则集 + exclude/ignore 生效；事后过滤 F 类，得非 F 全量）",
   "scan_scope": "全项目（遵循 ruff.toml 的 exclude，排除 data/code_backups、tmp/patch_*|scan_*|check_*、.bak*、.release-tmp*）",
-  "note": "非 F 全量基线件（177批 刀6 建立；182批补刀2 重锚）。与 ruff_ruf100_156.json 同构，但本件为【汇总式】而非逐行枚举：非 F 违规共 3619 处 / 64 类，逐行枚举不可审查且不实用于基线，故 zones 改为【逐码聚合】（code+count+sample_files），复跑一致=ruff check 非 F 总数与逐码计数可证一致。分类：ZONE_AUTO=命令式自动可修（其中 RUF100/UP020/UP006/UP045 经 177批刀5 实测会级联 F 回归，须先清底层 F 再批修；UP031 体量最大，182批补刀2 起按文件切片慢排）；ZONE_IGNORE=设计内忽略或待裁定忽略（含 ruff.toml 已 ignore 集与 DTZ/SIM 等候选）；ZONE_MANUAL=其余人工类。F 类（pyflakes）不纳入本基线，单独由门禁 ruff F=5 承载。★182批补刀2：tools/dead_code_scan.py 19 处 UP031 已修（百分号格式化改为 f-string），本基线相应重锚（UP031 1636 -> 649）。",
-  "total": 3619,
+  "note": "非 F 全量基线件（177批 刀6 建立；182批补刀2 重锚）。与 ruff_ruf100_156.json 同构，但本件为【汇总式】而非逐行枚举：非 F 违规共 3619 处 / 64 类，逐行枚举不可审查且不实用于基线，故 zones 改为【逐码聚合】（code+count+sample_files），复跑一致=ruff check 非 F 总数与逐码计数可证一致。分类：ZONE_AUTO=命令式自动可修（其中 RUF100/UP020/UP006/UP045 经 177批刀5 实测会级联 F 回归，须先清底层 F 再批修；UP031 体量最大，182批补刀2 起按文件切片慢排）；ZONE_IGNORE=设计内忽略或待裁定忽略（含 ruff.toml 已 ignore 集与 DTZ/SIM 等候选）；ZONE_MANUAL=其余人工类。F 类（pyflakes）不纳入本基线，单独由门禁 ruff F=5 承载。★182批补刀2：tools/dead_code_scan.py 19 处 UP031 已修（百分号格式化改为 f-string），本基线相应重锚（UP031 1636 -> 649）。★186批刀3：tools/m102_data_governance.py(19)/serp_pollution_analyzer.py(14)/serp_quality_report.py(14) 共 47 处 UP031 已修（百分号格式化改为 f-string，自写 ast 等价转换器，逐字节校验）；全仓 UP031 现状 600（含 182->186 间前期批次另修 2 处），本基线相应重锚（UP031 649 -> 600，total 3619 -> 3570，ZONE_AUTO 2763 -> 2714）。",
+  "total": 3570,
   "zone_counts": {
-    "ZONE_AUTO": 2763,
+    "ZONE_AUTO": 2714,
     "ZONE_IGNORE": 703,
     "ZONE_MANUAL": 153
   },
@@ -26,7 +26,7 @@
     },
     {
       "code": "UP031",
-      "count": 649,
+      "count": 600,
       "sample_files": [
         "D:\\xinrenlei\\tongtong-pulse-v9\\config.py",
         "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus\\evolution\\night_orchestration.py",
