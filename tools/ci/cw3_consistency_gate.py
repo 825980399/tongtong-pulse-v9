@@ -62,7 +62,7 @@ def _expand_watch(root, rev):
 def read_blob(rev, path, root):
     if rev in ('WORKTREE', 'worktree'):
         return io.open(os.path.join(root, path), encoding='utf-8', errors='replace').read()
-    r = subprocess.run(['git', 'show', '%s:%s' % (rev, path)], cwd=root, capture_output=True)
+    r = subprocess.run(['git', 'show', '{}:{}'.format(rev, path)], cwd=root, capture_output=True)
     if r.returncode != 0:
         return None
     return r.stdout.decode('utf-8', errors='replace')
@@ -110,7 +110,7 @@ def metrics_of(src):
                     ev[nd.args[0].value] += 1
                 for a in nd.args[1:]:
                     if isinstance(a, ast.Constant) and isinstance(a.value, int):
-                        pri['pos-%d' % a.value] += 1
+                        pri[f'pos-{a.value}'] += 1
     d['lines'] = len(src.splitlines())
     d['ast_sha256_12'] = hashlib.sha256(ast.dump(tree, annotate_fields=False).encode('utf-8')).hexdigest()[:12]
     return d, pri, ev
@@ -159,7 +159,7 @@ def main():
         os.makedirs(os.path.dirname(bl), exist_ok=True) if a.update else None
         if a.update:
             io.open(bl, 'w', encoding='utf-8', newline='\n').write(json.dumps(payload, ensure_ascii=False, indent=1))
-            print('CW3-A 基准已写入 %s' % bl)
+            print('CW3-A 基准已写入 {}'.format(bl))
         else:
             print(json.dumps(payload, ensure_ascii=False, indent=1))
         return 0
@@ -172,7 +172,7 @@ def main():
     for p in watched:
         b = base['files'].get(p)
         if b is None:
-            fails.append('%s 无基准（须先 --update）' % p)
+            fails.append('{} 无基准（须先 --update）'.format(p))
             continue
         for k in METRICS:                       # 硬门禁：11 个语义计数（lines / ast_sha 仅展示，不参与判定）
             bv, cv = b['metrics'].get(k, 0), cur[p]['metrics'].get(k, 0)
@@ -183,30 +183,26 @@ def main():
             _exp = expected_delta.get(k) if (isinstance(expected_delta, dict) and delta_reason) else None
             if _exp is not None and _delta == _exp:
                 continue
-            fails.append('%s: 指标 %s 基准 %s → 当前 %s%s' % (
-                p, k, bv, cv, ' (预期增量 %s)' % _exp if _exp is not None else ''))
+            fails.append('{}: 指标 {} 基准 {} → 当前 {}{}'.format(
+                p, k, bv, cv, ' (预期增量 {})'.format(_exp) if _exp is not None else ''))
         for key, lbl in (('priority_hist', 'emit priority 直方'), ('event_hist', '事件名直方')):
             if b.get(key) != cur[p].get(key):
                 bk, ck = b.get(key, {}), cur[p].get(key, {})
                 diff = {x: (bk.get(x, 0), ck.get(x, 0)) for x in set(bk) | set(ck) if bk.get(x, 0) != ck.get(x, 0)}
-                fails.append('%s: %s 漂移 %s' % (p, lbl, diff))
-    print('CW3-A 语义守恒门禁 @%s  target=%s  基准锚=%s(%s)'
-          % (datetime.datetime.now().strftime('%H:%M:%S'), a.target, base.get('anchor_rev'), base.get('anchor_sha', '')[:7]))
+                fails.append('{}: {} 漂移 {}'.format(p, lbl, diff))
+    print('CW3-A 语义守恒门禁 @{}  target={}  基准锚={}({})'.format(datetime.datetime.now().strftime('%H:%M:%S'), a.target, base.get('anchor_rev'), base.get('anchor_sha', '')[:7]))
     if not fails:
-        print('  [OK] 硬门禁指标全部一致（参考：行数 %s / AST 指纹 %s）'
-              % (cur[watched[0]]['metrics']['lines'], cur[watched[0]]['metrics']['ast_sha256_12']))
+        print('  [OK] 硬门禁指标全部一致（参考：行数 {} / AST 指纹 {}）'.format(cur[watched[0]]['metrics']['lines'], cur[watched[0]]['metrics']['ast_sha256_12']))
         return 0
     if not delta_reason:
-        print('  [FAIL] %d 项漂移且无 delta_reason（须与代码同提交更新 %s 并填 delta_reason）'
-              % (len(fails), os.path.relpath(bl, a.root)))
+        print(f'  [FAIL] {len(fails)} 项漂移且无 delta_reason（须与代码同提交更新 {os.path.relpath(bl, a.root)} 并填 delta_reason）')
         for f in fails[:12]:
             print('     - ' + f)
         return 2
-    print('  [FAIL] %d 项非预期漂移（expected_delta 未覆盖即视为夹带，须回退或补白名单）：' % len(fails))
+    print(f'  [FAIL] {len(fails)} 项非预期漂移（expected_delta 未覆盖即视为夹带，须回退或补白名单）：')
     for f in fails[:12]:
         print('     - ' + f)
-    print('  处方：① 若为误伤 ⇒ 在 %s 的 expected_delta 补声明该增量；② 若为真漂移 ⇒ 回退该改动。'
-          % os.path.relpath(bl, a.root))
+    print('  处方：① 若为误伤 ⇒ 在 {} 的 expected_delta 补声明该增量；② 若为真漂移 ⇒ 回退该改动。'.format(os.path.relpath(bl, a.root)))
     return 2
 
 

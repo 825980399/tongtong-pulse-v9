@@ -33,16 +33,16 @@ def _main():
     args = ap.parse_args()
     path = args.csv or os.path.join(args.root, DEFAULT_CSV)
     if not os.path.isfile(path):
-        print("[register-cols] 未找到登记册：%s" % path)
+        print("[register-cols] 未找到登记册：{}".format(path))
         return 2
     with open(path, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     if not rows:
-        print("[register-cols] 空文件：%s" % path)
+        print("[register-cols] 空文件：{}".format(path))
         return 2
     header = rows[0]
     if len(header) != EXPECTED_COLS:
-        print("[register-cols] 表头列数=%d（期望 %d）：%s" % (len(header), EXPECTED_COLS, header))
+        print(f"[register-cols] 表头列数={len(header)}（期望 {EXPECTED_COLS}）：{header}")
         return 2
     pidx = header.index("P级")
     eidx = header.index("到期批次")
@@ -50,22 +50,22 @@ def _main():
     fails = []
     for ln, r in enumerate(rows[1:], start=2):
         if len(r) != EXPECTED_COLS:
-            fails.append((ln, "列数=%d（期望 %d）" % (len(r), EXPECTED_COLS)))
+            fails.append((ln, f"列数={len(r)}（期望 {EXPECTED_COLS}）"))
             continue
         p = (r[pidx] or "").strip()
         if p not in P_LEVELS:
-            fails.append((ln, "P级='%s' 不在 {P0..P3}" % p))
+            fails.append((ln, "P级='{}' 不在 {{P0..P3}}".format(p)))
         # 到期批次仅"已排期"状态强制正整数；已撤销/已裁决待排期/待裁决 无排期语义，为空合法
         if (r[sidx] or "").strip() == "已排期":
             exp = (r[eidx] or "").strip()
             if not exp.isdigit() or int(exp) <= 0:
-                fails.append((ln, "到期批次='%s' 非正整数" % exp))
+                fails.append((ln, "到期批次='{}' 非正整数".format(exp)))
     if fails:
-        print("[register-cols] 发现 %d 处列完整性违规（数据修复后须归零）：" % len(fails))
+        print(f"[register-cols] 发现 {len(fails)} 处列完整性违规（数据修复后须归零）：")
         for ln, msg in fails:
-            print("  行 %d: %s" % (ln, msg))
+            print(f"  行 {ln}: {msg}")
         return 2
-    print("[register-cols] OK：%d 行全部列完整（9列 / P级∈P0..P3 / 到期批次正整数）" % (len(rows) - 1))
+    print(f"[register-cols] OK：{len(rows) - 1} 行全部列完整（9列 / P级∈P0..P3 / 到期批次正整数）")
     return 0
 
 

@@ -62,8 +62,7 @@ def _load_register(csv_path):
                 states[rid] = (r[5].strip() if len(r) > 5 else "")
                 rows[rid] = r
     except OSError as _e:
-        sys.stderr.write("[M1] 登记册不可读（跳过对账）: %s: %s\n"
-                         % (type(_e).__name__, _e))
+        sys.stderr.write("[M1] 登记册不可读（跳过对账）: {}: {}\n".format(type(_e).__name__, _e))
         return states, rows
     return states, rows
 
@@ -72,7 +71,7 @@ def _scan_report_dir(report_dir):
     """扫描交付报告目录，返回 {票号: 出现次数} 与 {票号: 来源文件列表}。"""
     hits, sources = {}, {}
     if not os.path.isdir(report_dir):
-        sys.stderr.write("[M1] 交付报告目录不存在: %s\n" % report_dir)
+        sys.stderr.write("[M1] 交付报告目录不存在: {}\n".format(report_dir))
         return hits, sources
     for fn in sorted(os.listdir(report_dir)):
         if not fn.lower().endswith(".md"):
@@ -82,7 +81,7 @@ def _scan_report_dir(report_dir):
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
         except OSError as _e:
-            sys.stderr.write("[M1] 报告不可读（跳过）: %s\n" % fn)
+            sys.stderr.write("[M1] 报告不可读（跳过）: {}\n".format(fn))
             continue
         for tid in _TICKET_RE.findall(text):
             hits[tid] = hits.get(tid, 0) + 1
@@ -110,12 +109,11 @@ def _scan_commits(max_count=500):
     _KNIFE_RE = re.compile(r"(?:C\d+｜|★\d+ *C\d+[a-z]?|刀\d+|B\d+（|A\d+（)")
     try:
         r = subprocess.run(
-            ["git", "log", "--max-count=%d" % max_count, "--pretty=%h %s"],
+            ["git", "log", f"--max-count={max_count}", "--pretty=%h %s"],
             cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
     except OSError as _e:
-        sys.stderr.write("[M1] git log 不可用（跳过提交扫描）: %s\n"
-                         % type(_e).__name__)
+        sys.stderr.write("[M1] git log 不可用（跳过提交扫描）: {}\n".format(type(_e).__name__))
         return hits, commits
     if r.returncode != 0:
         sys.stderr.write("[M1] git log 失败（跳过提交扫描）\n")
@@ -157,7 +155,7 @@ def selftest():
     }
     for s, expect in cases.items():
         got = bool(_TICKET_RE.search(s))
-        assert got == expect, "票号 %s: 期望 %s 实得 %s" % (s, expect, got)
+        assert got == expect, "票号 {}: 期望 {} 实得 {}".format(s, expect, got)
     # 登记册读取（临时 CSV）
     import tempfile
     tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv",
@@ -205,7 +203,7 @@ def main(argv=None):
         refs = commit_refs.get(tid, [])
         if refs:
             all_sources.setdefault(tid, []).extend(
-                "[commit %s]" % c for c in refs)
+                "[commit {}]".format(c) for c in refs)
     if not all_hits:
         sys.stderr.write("[M1] 交付报告/提交信息未解析到任何票号（目录空或格式异常）\n")
         return 0
@@ -225,26 +223,20 @@ def main(argv=None):
         else:
             unsettled.append(tid)
 
-    sys.stderr.write("[M1] 票号命中 %d 个（报告源+提交源）：已结案 %d / 已撤销 %d / "
-                     "未入册 %d / 欠销账候选 %d\n"
-                     % (len(all_hits), settled,
-                        sum(1 for t in all_hits if states.get(t) == "已撤销"),
-                        len(unknown), len(unsettled)))
+    sys.stderr.write(f"[M1] 票号命中 {len(all_hits)} 个（报告源+提交源）：已结案 {settled} / 已撤销 {sum(1 for t in all_hits if states.get(t) == '已撤销')} / "
+                     f"未入册 {len(unknown)} / 欠销账候选 {len(unsettled)}\n")
     if unknown:
         sys.stderr.write("[M1] 提示：以下票号未在登记册入册"
-                         "（可能为任务书刀号/历史命名，不阻断）：%s\n"
-                         % "、".join(unknown[:15]))
+                         "（可能为任务书刀号/历史命名，不阻断）：{}\n".format("、".join(unknown[:15])))
     if unsettled:
         sys.stderr.write("[M1] ⚠ 欠销账候选（已交付、登记册未结案）：\n")
         for tid in unsettled:
             src = "、".join(all_sources[tid][:3])
-            sys.stderr.write("    %s  <- %s\n" % (tid, src))
+            sys.stderr.write(f"    {tid}  <- {src}\n")
         if args.strict:
-            sys.stderr.write("CHECK_FAIL: M1 二期档——欠销账 %d 个，阻断。\n"
-                             % len(unsettled))
+            sys.stderr.write(f"CHECK_FAIL: M1 二期档——欠销账 {len(unsettled)} 个，阻断。\n")
             return 2
-        sys.stderr.write("[M1] 告警档：以上 %d 项列入星轨销账待办（不阻断）。\n"
-                         % len(unsettled))
+        sys.stderr.write(f"[M1] 告警档：以上 {len(unsettled)} 项列入星轨销账待办（不阻断）。\n")
     else:
         sys.stderr.write("[M1] ✅ 无欠销账候选（交付票号均已结案/已撤销）。\n")
     return 0

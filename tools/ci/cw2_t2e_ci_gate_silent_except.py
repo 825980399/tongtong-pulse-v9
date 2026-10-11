@@ -85,11 +85,11 @@ LOCATION_WHITELIST = {
 
 
 def _log(level, msg):
-    sys.stderr.write("[ci_gate_silent_except][%s] %s\n" % (level, msg))
+    sys.stderr.write("[ci_gate_silent_except][{}] {}\n".format(level, msg))
 
 
 def git_show(ref, relpath):
-    r = subprocess.run(["git", "show", "%s:%s" % (ref, relpath)], cwd=ROOT,
+    r = subprocess.run(["git", "show", "{}:{}".format(ref, relpath)], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.stdout if r.returncode == 0 else None
 
@@ -144,7 +144,7 @@ def check_crcrlf(files):
 
 def load_known_fingerprints():
     if not os.path.exists(FINGERPRINT_BASELINE):
-        _log("error", "缺失指纹基线 %s，请先运行 tools/ci/migrate_whitelist_to_fingerprints.py" % FINGERPRINT_BASELINE)
+        _log("error", "缺失指纹基线 {}，请先运行 tools/ci/migrate_whitelist_to_fingerprints.py".format(FINGERPRINT_BASELINE))
         return None
     with io.open(FINGERPRINT_BASELINE, encoding="utf-8") as _f:
         data = json.load(_f)
@@ -196,12 +196,12 @@ def emit_baseline(path):
             base[rel] = hs
     with io.open(path, "w", encoding="utf-8") as _f:
         json.dump(base, _f, ensure_ascii=False, indent=2)
-    print("BASELINE_EMITTED -> %s  files=%d" % (path, len(git_ls_files_py())))
+    print(f"BASELINE_EMITTED -> {path}  files={len(git_ls_files_py())}")
 
 
 def _fmt_identity(ident):
     path, qualname, nth, sha16 = ident
-    return "%s::%s[#%d]%s" % (path, qualname, nth, sha16)
+    return f"{path}::{qualname}[#{nth}]{sha16}"
 
 
 def main():
@@ -223,8 +223,7 @@ def main():
     files = changed_files(args.base)
     print("=" * 74)
     print("CI / pre-commit 门禁：防静默except回潮（指纹化）+ rot + 未跟踪盲区 + CRCRLF")
-    print("  base=%s  target=%s  变更 .py 文件数=%d  已知豁免=%d"
-          % (args.base, args.target, len(files), len(KNOWN)))
+    print(f"  base={args.base}  target={args.target}  变更 .py 文件数={len(files)}  已知豁免={len(KNOWN)}")
     print("=" * 74)
 
     total_added = 0
@@ -264,37 +263,37 @@ def main():
         print("  [1] 静默except（diff 指纹差集）：PASS —— 本次变更未新增（只降不升 / 豁免外新增=0）")
     else:
         ok = False
-        print("  [1] 静默except（diff 指纹差集）：FAIL —— 新增 %d 处" % total_added)
+        print(f"  [1] 静默except（diff 指纹差集）：FAIL —— 新增 {total_added} 处")
         if args.verbose:
             for rel, gens in added_details:
                 for g in gens:
-                    print("        %s  %s" % (rel, _fmt_identity(g)))
+                    print("        {}  {}".format(rel, _fmt_identity(g)))
     if parse_errs == 0:
         print("  [2] parse_err：PASS —— 变更 .py 均可解析")
     else:
         ok = False
-        print("  [2] parse_err：FAIL —— %d 个文件解析失败" % parse_errs)
+        print(f"  [2] parse_err：FAIL —— {parse_errs} 个文件解析失败")
     if not rot:
-        print("  [3] 白名单 rot：PASS —— 已知豁免 %d 条全部仍存在于仓库" % len(KNOWN))
+        print(f"  [3] 白名单 rot：PASS —— 已知豁免 {len(KNOWN)} 条全部仍存在于仓库")
     else:
         ok = False
-        print("  [3] 白名单 rot：FAIL —— %d 条已知豁免在仓库中消失（须显式 shrink 提交）：" % len(rot))
+        print(f"  [3] 白名单 rot：FAIL —— {len(rot)} 条已知豁免在仓库中消失（须显式 shrink 提交）：")
         if args.verbose:
             for k in rot:
-                print("        %s" % _fmt_identity(k))
+                print("        {}".format(_fmt_identity(k)))
     if not untracked_bad:
         print("  [4] 未跟踪盲区：PASS —— 无未跟踪 .py 含非豁免静默 handler")
     else:
         ok = False
-        print("  [4] 未跟踪盲区：FAIL —— %d 处未跟踪 .py 含静默 handler：" % len(untracked_bad))
+        print(f"  [4] 未跟踪盲区：FAIL —— {len(untracked_bad)} 处未跟踪 .py 含静默 handler：")
         if args.verbose:
             for rel, ident in untracked_bad:
-                print("        %s  %s" % (rel, _fmt_identity(ident)))
+                print("        {}  {}".format(rel, _fmt_identity(ident)))
     if not crcrlf_bad:
         print("  [5] CRCRLF(双CR行尾)：PASS —— 无 CRCRLF 行尾污染")
     else:
         ok = False
-        print("  [5] CRCRLF(双CR行尾)：FAIL —— %d 文件含双CR：%s" % (len(crcrlf_bad), crcrlf_bad))
+        print(f"  [5] CRCRLF(双CR行尾)：FAIL —— {len(crcrlf_bad)} 文件含双CR：{crcrlf_bad}")
     print("=" * 74)
     print("  结论: PASS" if ok else "  结论: FAIL —— 提交被阻断，请整改后重试")
     sys.exit(0 if ok else 1)
