@@ -34,10 +34,14 @@ import queue
 import sys
 import threading
 import time
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+
+# ★191刀2：L2 遥测 INFO 日志输出（命中率/污染率·按场景分布）
+_L = logging.getLogger("semantic_cache_l2")
 
 # ---------------------------------------------------------------------------
 # 默认值
@@ -875,6 +879,17 @@ class SemanticCacheL2:
             _m = _v.get("misses", 0)
             _v["hit_rate"] = round(_h / (_h + _m), 4) if (_h + _m) else 0.0
             _v["pollution_rate"] = round(_v.get("neg", 0) / _h, 4) if _h else 0.0
+        # ★191刀2：INFO 日志输出（命中率/污染率·按场景分布），方便观测共窗收证。
+        #   仅新增日志，不改任何命中判定 / 存储 / 返回。
+        try:
+            for _k, _v in _t.items():
+                _L.info(
+                    "[semantic_cache_l2] telemetry scene=%s hits=%s misses=%s neg=%s hit_rate=%s pollution_rate=%s",
+                    _k, _v.get("hits", 0), _v.get("misses", 0),
+                    _v.get("neg", 0), _v.get("hit_rate", 0.0), _v.get("pollution_rate", 0.0),
+                )
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.semantic_cache::SemanticCacheL2.telemetry.log")
         return _t
 
     # ---------------- 观测 ----------------
