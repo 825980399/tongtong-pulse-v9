@@ -26,6 +26,8 @@ import sys
 import tempfile
 import time
 
+from nucleus.security.sandbox_limits import build_child_wrapper
+
 _L = logging.getLogger("subagent_runner")
 
 # 子进程入口模块（复用 evolution_worker 模式：subprocess + JSON 文件 in/out）。
@@ -126,7 +128,7 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
     if not cheap:
         _L.warning("[subagent_runner] 拒绝真起：SUBAGENT_CHEAP_MODEL 为空"
                    "（禁止子代理直连最贵主模型）")
-        return SubagentRunResult("budget_exceeded",
+        return SubagentRunResult("refused",
                                  error="SUBAGENT_CHEAP_MODEL empty (main model forbidden for subagent)",
                                  duration_ms=_ms(started))
     budget = getattr(cfg, "SUBAGENT_BUDGET_TOKENS", 0)
@@ -158,8 +160,27 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
         timeout = getattr(cfg, "SUBAGENT_TIMEOUT_SECONDS", 300)
 
     try:
+        # —— 刀1（191）：串接沙箱限制到子进程 ——
+        # build_child_wrapper 生成含资源上限（RLIMIT 四维）+ CPU 信号兜底的包装器源码；
+        # 子进程以 python -I -c <wrapper_src> <launcher> 启动，把沙箱限制套到真起的
+        # SUBAGENT 子进程上。Windows 层资源上限为空串（父进程看门狗兜底），限制真生效
+        # 留 Linux 窗（见烛微191前置）。allow_full_builtins=True 使 worker 可正常 import
+        # 自身依赖（nucleus 等），沙箱强度由资源上限这一层保证。
+        _wrapper_src = build_child_wrapper(source_label="<subagent_worker>",
+                                           allow_full_builtins=True)
+        # launcher：把原 -m 入口等价改写为可被包装器 exec 的源码文件，
+        # 并向 worker 透传 input/output/stderr 实参（sys.argv[1:]）。
+        _launcher_file = tempfile.mktemp(suffix=".py", prefix="subagent_launcher_")
+        with open(_launcher_file, "w", encoding="utf-8") as _lf:
+            _lf.write(
+                "import sys\n"
+                "sys.argv = sys.argv[1:]\n"
+                "from nucleus.reasoning.subagent_worker import main\n"
+                "sys.exit(main())\n"
+            )
         proc = subprocess.run(
-            [sys.executable, "-m", _SUBAGENT_ENTRY, input_file, output_file, stderr_file],
+            [sys.executable, "-c", _wrapper_src, _launcher_file,
+             input_file, output_file, stderr_file],
             capture_output=True, text=True, timeout=timeout,
         )
         # —— 硬条款①：强制检查退出码（立法禁止"不检查exit code"）——
@@ -167,11 +188,11 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
             _L.error("[subagent_runner] 子代理非零退出 code=%s，弃结果", proc.returncode)
             return SubagentRunResult("failure", returncode=proc.returncode,
                                     error=f"subagent exited with code {proc.returncode}",
-                                    duration_ms=_ms(started), pid=proc.pid)
+                                    duration_ms=_ms(started), pid=getattr(proc, "pid", None))
         result = _read_json(output_file)
         return SubagentRunResult("success", returncode=0,
                                  stats=result.get("stats", {}),
-                                 duration_ms=_ms(started), pid=proc.pid)
+                                 duration_ms=_ms(started), pid=getattr(proc, "pid", None))
     except subprocess.TimeoutExpired as exc:
         # —— 硬条款④：timeout 清理 ——
         _cleanup_on_timeout(exc)

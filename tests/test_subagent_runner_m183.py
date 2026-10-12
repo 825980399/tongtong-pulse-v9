@@ -32,10 +32,10 @@ def test_no_message_tool_gate_refuses():
 
 
 def test_cheap_model_required():
-    """硬条款③：SUBAGENT_CHEAP_MODEL 为空（直连主模型）→ budget_exceeded。"""
+    """硬条款③：SUBAGENT_CHEAP_MODEL 为空（直连主模型）→ refused（191刀1 修正原 budget_exceeded 错标）。"""
     cfg = _cfg(ENABLE_SUBAGENT_NO_MESSAGE_TOOL=True, SUBAGENT_CHEAP_MODEL="")
     r = runner.run_subagent({"prompt": "x"}, cfg=cfg, dry_run=False)
-    assert r.status == "budget_exceeded"
+    assert r.status == "refused"
     assert "CHEAP_MODEL" in (r.error or "")
 
 
