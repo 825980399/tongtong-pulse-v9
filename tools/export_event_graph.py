@@ -313,7 +313,27 @@ def derive_event_edges(organs: "Any" = None) -> dict[str, Any]:
     }
 
 
-def export_event_graph(organs: "Any" = None, as_json: bool = False) -> "Any":
+def _wire_event_traffic(edges: "list[dict]", publish_count: "dict[str, int] | None") -> "list[dict]":
+    """将运行态事件流量发布计数接入事件图谱边（第二根接线刀）。
+
+    Args:
+        edges: derive_event_edges 产出的边表。
+        publish_count: InfoField._event_publish_count（event_type->发布次数）；
+            None 表示未接入（纯静态现状，零行为变化）。
+    Returns:
+        边表（接入后每个 edge 增加 publish_count 字段；未接入时原样返回）。
+    """
+    if not publish_count:
+        return edges
+    _out = []
+    for _e in edges:
+        _ne = dict(_e)
+        _ne["publish_count"] = publish_count.get(_e.get("event_type"))
+        _out.append(_ne)
+    return _out
+
+
+def export_event_graph(organs: "Any" = None, as_json: bool = False, runtime_event_publish_count: "dict[str, int] | None" = None) -> "Any":
     """导出事件路由图谱 v0.5（事件路由边表）。
 
     Args:
@@ -334,11 +354,11 @@ def export_event_graph(organs: "Any" = None, as_json: bool = False) -> "Any":
         "event_type_count": len({t for s in _res["emits"].values() for t in s}
                                 | {t for s in _res["subscribes"].values() for t in s}),
         "edge_count": len(_res["edges"]),
-        "edges": _res["edges"],
+        "edges": _wire_event_traffic(_res["edges"], runtime_event_publish_count),
         "emits": _res["emits"],
         "subscribes": _res["subscribes"],
         "wildcards": _res["wildcards"],
-        "stats": _res["stats"],
+        "stats": {**_res["stats"], "event_traffic_wired": bool(runtime_event_publish_count)},
     }
     if as_json:
         return json.dumps(_payload, ensure_ascii=False, indent=2)

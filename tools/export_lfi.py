@@ -88,7 +88,7 @@ def _get_health() -> "dict[str, Any]":
     return _HEALTH_CACHE
 
 
-def compute_lfi() -> dict[str, Any]:
+def compute_lfi(runtime_activity: "dict[str, int] | None" = None) -> dict[str, Any]:
     """计算 57 节点五维原始值（纯静态 · 秒级）。
 
     Returns: {"version", "node_count", "nodes": [...], "meta": {...}}
@@ -108,6 +108,7 @@ def compute_lfi() -> dict[str, Any]:
 
     _adj_out, _adj_in = _get_adjacency()
     _health = _get_health()
+    _act = runtime_activity  # 运行态活跃度源（BloodVessel.get_stats()["organ_activity"]）；None 则回退 method_count
 
     _denom = (_n - 1) if _n > 1 else 1
     _out_nodes: list[dict[str, Any]] = []
@@ -140,8 +141,8 @@ def compute_lfi() -> dict[str, Any]:
                     "status": "未装配" if _h is None else "已装配",
                 },
                 "activity": {
-                    "value": _mc,
-                    "approx": "静态近似(method_count)",
+                    "value": (_act.get(_name, _mc) if _act is not None else _mc),
+                    "approx": ("运行态(pulse计数)" if (_act is not None and _name in _act) else "静态近似(method_count)"),
                 },
             },
         })
@@ -156,7 +157,7 @@ def compute_lfi() -> dict[str, Any]:
             "centrality_def": "度中心性 = (入度+出度)/(N-1)，N=器官总数",
             "redundancy_def": "同类 category 下其它器官数量（organ_inventory 口径）",
             "health_def": "organ_health_leaderboard(181刀3)；纯静态导出无运行态=未装配(None)",
-            "activity_def": "静态近似=method_count（导出时无活体心跳）",
+            "activity_def": "运行态活跃度(BloodVessel.organ_activity, pulse计数)；未注入运行态活跃度时回退静态近似=method_count",
             "weighted": False,
             "overall_score": False,
             "production_switch_flipped": False,
@@ -164,14 +165,14 @@ def compute_lfi() -> dict[str, Any]:
     }
 
 
-def export_lfi(as_json: bool = False) -> "Any":
+def export_lfi(as_json: bool = False, runtime_activity: "dict[str, int] | None" = None) -> "Any":
     """导出 LFI 五维原始值。
 
     Args:
         as_json: True 返回 JSON 字符串。
     不落盘、不改状态。
     """
-    _payload = compute_lfi()
+    _payload = compute_lfi(runtime_activity=runtime_activity)
     if as_json:
         return json.dumps(_payload, ensure_ascii=False, indent=2)
     return _payload

@@ -6,6 +6,60 @@
     "grading": {"method": "contains", "expected": "def add", "max_score": 1.0}
   },
   {
+    "id": "zh_code_02",
+    "category": "code",
+    "prompt": "写一个 Python 函数，判断一个字符串是否为回文（正读反读相同）。",
+    "grading": {"method": "contains", "expected": "def is_palindrome", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_03",
+    "category": "code",
+    "prompt": "用 Python 实现一个函数，返回列表中的最大值。",
+    "grading": {"method": "contains", "expected": "def max_of", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_04",
+    "category": "code",
+    "prompt": "写一个 Python 函数，读取一个文本文件并统计其中行数。",
+    "grading": {"method": "contains", "expected": "open(", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_05",
+    "category": "code",
+    "prompt": "用 Python 实现一个冒泡排序函数，对整数列表升序排列。",
+    "grading": {"method": "contains", "expected": "for", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_06",
+    "category": "code",
+    "prompt": "写一个 Python 函数，判断给定年份是否为闰年。",
+    "grading": {"method": "contains", "expected": "def is_leap", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_07",
+    "category": "code",
+    "prompt": "用 Python 写一个递归函数计算斐波那契数列第 n 项。",
+    "grading": {"method": "contains", "expected": "def fib", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_08",
+    "category": "code",
+    "prompt": "实现一个 Python 函数，将两个字典按 key 合并（后者覆盖前者）。",
+    "grading": {"method": "rule", "keywords": ["def", "merge", "update"], "threshold": 0.5, "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_09",
+    "category": "code",
+    "prompt": "用 Python 写一个生成器函数，逐个产出 1 到 n 的平方。",
+    "grading": {"method": "contains", "expected": "yield", "max_score": 1.0}
+  },
+  {
+    "id": "zh_code_10",
+    "category": "code",
+    "prompt": "写一个 Python 函数，使用列表推导式筛选出列表中的偶数。",
+    "grading": {"method": "contains", "expected": "for", "max_score": 1.0}
+  },
+  {
     "id": "zh_reason_01",
     "category": "reasoning",
     "prompt": "为什么天空是蓝色的？请解释原理。",
@@ -17,9 +71,167 @@
     }
   },
   {
+    "id": "zh_reason_02",
+    "category": "reasoning",
+    "prompt": "为什么冬天在室外呼出的白气会凝结成小水滴？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["水蒸气", "凝结", "温度"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_03",
+    "category": "reasoning",
+    "prompt": "为什么在大海中航行的船只会在远处先看到桅杆再看到船身？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["地球", "曲率", "球形"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_04",
+    "category": "reasoning",
+    "prompt": "为什么把冰块放在盐水中会比放在纯水中融化得更快？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["熔点", "凝固点", "降低"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_05",
+    "category": "reasoning",
+    "prompt": "为什么电梯加速上升时人会感觉变重？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["加速度", "重力", "惯性"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_06",
+    "category": "reasoning",
+    "prompt": "为什么在高原地区煮鸡蛋比在平原更难煮熟？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["气压", "沸点", "降低"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_07",
+    "category": "reasoning",
+    "prompt": "为什么磁铁能吸引铁但不能吸引铜和铝？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["铁磁", "磁性", "电子"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_08",
+    "category": "reasoning",
+    "prompt": "为什么彩虹总是呈弧形且红色在外侧、紫色在内侧？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["折射", "波长", "红", "紫"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_09",
+    "category": "reasoning",
+    "prompt": "为什么人在月球上跳得比在地球上高？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["重力", "质量", "引力"],
+      "threshold": 0.5,
+      "max_score": 1.0
+    }
+  },
+  {
+    "id": "zh_reason_10",
+    "category": "reasoning",
+    "prompt": "为什么保温瓶能长时间保持热水的温度？",
+    "grading": {
+      "method": "rule",
+      "keywords": ["真空", "传导", "对流", "辐射"],
+      "threshold": 0.4,
+      "max_score": 1.0
+    }
+  },
+  {
     "id": "zh_know_01",
     "category": "knowledge",
     "prompt": "中国的首都是哪里？",
     "grading": {"method": "exact_match", "expected": "北京", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_02",
+    "category": "knowledge",
+    "prompt": "水的化学式是什么？",
+    "grading": {"method": "exact_match", "expected": "H2O", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_03",
+    "category": "knowledge",
+    "prompt": "《红楼梦》的作者是谁？",
+    "grading": {"method": "exact_match", "expected": "曹雪芹", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_04",
+    "category": "knowledge",
+    "prompt": "光在真空中的传播速度约为多少？",
+    "grading": {"method": "contains", "expected": "3×10^8", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_05",
+    "category": "knowledge",
+    "prompt": "端午节是为了纪念哪位历史人物？",
+    "grading": {"method": "exact_match", "expected": "屈原", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_06",
+    "category": "knowledge",
+    "prompt": "太阳系中体积最大的行星是哪一颗？",
+    "grading": {"method": "exact_match", "expected": "木星", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_07",
+    "category": "knowledge",
+    "prompt": "人体中负责泵血的器官是什么？",
+    "grading": {"method": "exact_match", "expected": "心脏", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_08",
+    "category": "knowledge",
+    "prompt": "一年中有多少个节气？",
+    "grading": {"method": "exact_match", "expected": "24", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_09",
+    "category": "knowledge",
+    "prompt": "世界上最高的山峰叫什么？",
+    "grading": {"method": "exact_match", "expected": "珠穆朗玛峰", "max_score": 1.0}
+  },
+  {
+    "id": "zh_know_10",
+    "category": "knowledge",
+    "prompt": "中国的四大发明包括哪些？（答出至少两项即可）",
+    "grading": {
+      "method": "rule",
+      "keywords": ["造纸术", "指南针", "火药", "印刷术"],
+      "threshold": 0.45,
+      "max_score": 1.0
+    }
   }
 ]
