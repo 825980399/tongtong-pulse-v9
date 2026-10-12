@@ -176,6 +176,10 @@ class SelfAwarenessProfile:
     overall_score: float | None = None
     health_level: str = "unknown"
     top_issues: list = field(default_factory=list)
+    # ★193刀1：LFI 五维原值影子拍（灰度四拍第一拍）—— 独立字段，零权重参与 overall_score。
+    #   存 LFI 五维原始值（连通性/中心性/冗余度/健康度，活跃度暂不入）；
+    #   diff 核验用，不影响综合评分（compute_overall_score 只遍历 _PROFILE_DICT_FIELDS）。
+    lfi_raw: dict | None = None
 
     # ------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
@@ -198,6 +202,8 @@ class SelfAwarenessProfile:
             "health_level": self.health_level,
             "top_issues": [dict(x) for x in (self.top_issues or [])
                            if isinstance(x, dict)],
+            # ★193刀1：LFI 五维原值影子拍字段（连通性/中心性/冗余度/健康度，活跃度暂不入）
+            "lfi_raw": (dict(self.lfi_raw) if isinstance(self.lfi_raw, dict) else None),
         }
 
     @classmethod
@@ -222,6 +228,9 @@ class SelfAwarenessProfile:
         _ti = data.get("top_issues")
         _p.top_issues = ([dict(x) for x in _ti if isinstance(x, dict)]
                          if isinstance(_ti, list) else [])
+        # ★193刀1：LFI 五维原值影子拍字段（容错解析，非 dict 视为 None）
+        _lfi = data.get("lfi_raw")
+        _p.lfi_raw = dict(_lfi) if isinstance(_lfi, dict) else None
         return _p
 
     def merge(self, other: Any) -> SelfAwarenessProfile:
@@ -391,6 +400,31 @@ class SelfAwarenessEngine:
                     setattr(_profile, _key, dict(_value))
                 else:
                     _profile.extra[_key] = dict(_value)
+
+        # ★193刀1：LFI 五维原值影子拍 —— 写独立字段 lfi_raw（零权重，不影响 overall_score）。
+        try:
+            from tools.export_lfi import compute_lfi as _compute_lfi
+            _lfi_payload = _compute_lfi() or {}
+            _lfi_nodes = []
+            for _nd in (_lfi_payload.get("nodes") or []):
+                _d = dict(_nd.get("dims") or {})
+                _d.pop("activity", None)  # 活跃度暂不入
+                _lfi_nodes.append({
+                    "class_name": _nd.get("class_name"),
+                    "name": _nd.get("name"),
+                    "category": _nd.get("category"),
+                    "dims": _d,
+                })
+            _profile.lfi_raw = {
+                "version": _lfi_payload.get("version", "v1"),
+                "node_count": _lfi_payload.get("node_count", 0),
+                "nodes": _lfi_nodes,
+                "meta": _lfi_payload.get("meta", {}),
+                "lfi_step": "shadow_snapshot_1",
+                "weighted": False,
+            }
+        except Exception as _lfi_e:
+            silent_exc(_lfi_e, where="nucleus.self_awareness.SelfAwarenessEngine::run_all_analyses LFI_raw_shadow L393")
 
         # ★主线第38批 T1（P2-213）：汇总后计算综合评分 / 健康等级 / 最严重问题
         if _overall_enabled():

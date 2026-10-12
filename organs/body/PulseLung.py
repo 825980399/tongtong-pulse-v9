@@ -2835,7 +2835,20 @@ class PulseLung(BasePulseOrgan):
                 timeout=int(self.ollama_timeout),
             )
             if _ok and isinstance(_data, dict):
-                return _data.get("response", "").strip()
+                _reply = _data.get("response", "").strip()
+                # ★193刀2：本地视觉档（llava）产出属"内在模型输出"，
+                #   须以 system_internal 标记入 recorder，勿以 user_query 物化。
+                if image_b64 and _reply:
+                    try:
+                        from nucleus.llm.call_recorder import (
+                            record_call, ORIGIN_SYSTEM_INTERNAL)
+                        record_call(origin=ORIGIN_SYSTEM_INTERNAL,
+                                    prompt=prompt, response=_reply,
+                                    model=model, status="success",
+                                    channel="ollama_local")
+                    except Exception as _rec_e:
+                        silent_exc(_rec_e, where="organs.body.PulseLung::_call_ollama vision record L2840")
+                return _reply
         except Exception as e:
             self._log(LogLevel.DEBUG, f"Ollama调用失败({model}): {e}")
         return None
