@@ -18,9 +18,9 @@
   python tools/ci/check_silent_exc_arity.py            # 默认扫描
   python tools/ci/check_silent_exc_arity.py --selftest
 """
+import ast
 import os
 import sys
-import ast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -42,7 +42,7 @@ def _iter_py_files(root):
                 yield os.path.join(dirpath, fn)
 
 
-from nucleus._silent_except import silent_exc  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 
 def _is_silent_exc_call(node):

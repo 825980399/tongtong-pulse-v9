@@ -17,7 +17,6 @@
 """
 import argparse
 import csv
-import json
 import os
 import re
 import subprocess
@@ -62,7 +61,7 @@ def _load_register(csv_path):
                 states[rid] = (r[5].strip() if len(r) > 5 else "")
                 rows[rid] = r
     except OSError as _e:
-        sys.stderr.write("[M1] 登记册不可读（跳过对账）: {}: {}\n".format(type(_e).__name__, _e))
+        sys.stderr.write(f"[M1] 登记册不可读（跳过对账）: {type(_e).__name__}: {_e}\n")
         return states, rows
     return states, rows
 
@@ -71,7 +70,7 @@ def _scan_report_dir(report_dir):
     """扫描交付报告目录，返回 {票号: 出现次数} 与 {票号: 来源文件列表}。"""
     hits, sources = {}, {}
     if not os.path.isdir(report_dir):
-        sys.stderr.write("[M1] 交付报告目录不存在: {}\n".format(report_dir))
+        sys.stderr.write(f"[M1] 交付报告目录不存在: {report_dir}\n")
         return hits, sources
     for fn in sorted(os.listdir(report_dir)):
         if not fn.lower().endswith(".md"):
@@ -81,7 +80,7 @@ def _scan_report_dir(report_dir):
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
         except OSError as _e:
-            sys.stderr.write("[M1] 报告不可读（跳过）: {}\n".format(fn))
+            sys.stderr.write(f"[M1] 报告不可读（跳过）: {fn}\n")
             continue
         for tid in _TICKET_RE.findall(text):
             hits[tid] = hits.get(tid, 0) + 1
@@ -113,7 +112,7 @@ def _scan_commits(max_count=500):
             cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
     except OSError as _e:
-        sys.stderr.write("[M1] git log 不可用（跳过提交扫描）: {}\n".format(type(_e).__name__))
+        sys.stderr.write(f"[M1] git log 不可用（跳过提交扫描）: {type(_e).__name__}\n")
         return hits, commits
     if r.returncode != 0:
         sys.stderr.write("[M1] git log 失败（跳过提交扫描）\n")
@@ -155,7 +154,7 @@ def selftest():
     }
     for s, expect in cases.items():
         got = bool(_TICKET_RE.search(s))
-        assert got == expect, "票号 {}: 期望 {} 实得 {}".format(s, expect, got)
+        assert got == expect, f"票号 {s}: 期望 {expect} 实得 {got}"
     # 登记册读取（临时 CSV）
     import tempfile
     tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv",
@@ -203,7 +202,7 @@ def main(argv=None):
         refs = commit_refs.get(tid, [])
         if refs:
             all_sources.setdefault(tid, []).extend(
-                "[commit {}]".format(c) for c in refs)
+                f"[commit {c}]" for c in refs)
     if not all_hits:
         sys.stderr.write("[M1] 交付报告/提交信息未解析到任何票号（目录空或格式异常）\n")
         return 0

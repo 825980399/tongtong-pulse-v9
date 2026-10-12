@@ -11,10 +11,9 @@
 避免「自扫自查」盲区。退出码 0=全部通过，1=存在违规。
 """
 import argparse
-import io
+import json
 import os
 import re
-import json
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -87,7 +86,7 @@ def _load_owner_patterns():
     pats = []
     if os.path.isfile(cfg):
         try:
-            with io.open(cfg, encoding="utf-8") as fh:
+            with open(cfg, encoding="utf-8") as fh:
                 data = json.load(fh)
             for n in data.get("names", []):
                 pats.append(("真名·属主", re.compile(re.escape(n))))
@@ -103,7 +102,7 @@ def scan_text(path: str) -> list[tuple[str, int, str]]:
     if ext in BINARY_EXT:
         return []
     try:
-        with io.open(path, encoding="utf-8", errors="ignore") as fh:
+        with open(path, encoding="utf-8", errors="ignore") as fh:
             lines = fh.readlines()
     except OSError as e:
         silent_exc(e, where="independent_rescan.scan_text", level="warning")
@@ -160,7 +159,7 @@ def check_links(pkg: str) -> list[str]:
         if os.path.splitext(path)[1].lower() != ".md":
             continue
         try:
-            with io.open(path, encoding="utf-8", errors="ignore") as fh:
+            with open(path, encoding="utf-8", errors="ignore") as fh:
                 text = fh.read()
         except OSError as e:
             silent_exc(e, where="independent_rescan.check_links", level="warning")

@@ -75,8 +75,7 @@ def scan_violations(root: str, values):
     for line in r.stdout.splitlines():
         if line.startswith("+++ "):
             cur = line[4:].strip()
-            if cur.startswith("b/"):
-                cur = cur[2:]
+            cur = cur.removeprefix("b/")
             if cur == "/dev/null":
                 cur = None
                 continue

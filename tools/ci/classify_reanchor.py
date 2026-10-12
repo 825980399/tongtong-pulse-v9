@@ -69,7 +69,6 @@ def _test_changes(staged):
         deleted = [l.strip() for l in d.splitlines() if l.strip()]
     except Exception as e:
         print(f"[刀15-分类] 解析异常（不影响分类，exit 0）：{e}", file=sys.stderr)
-        pass
     return added, deleted
 
 

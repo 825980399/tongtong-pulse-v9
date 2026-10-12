@@ -9,14 +9,13 @@
     silent_except_legacy_whitelist.json  —— 旧行号表（双轨对照，下批可删）
 """
 import ast
-import io
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ci_common import extract_handlers, handler_identity, _enclosing_func  # noqa: E402
-import cw2_t2e_ci_gate_silent_except as gate  # noqa: E402
+import cw2_t2e_ci_gate_silent_except as gate
+from ci_common import _enclosing_func, extract_handlers, handler_identity
 
 ROOT = gate.ROOT
 FINGERPRINT_BASELINE = gate.FINGERPRINT_BASELINE
@@ -74,9 +73,9 @@ def main():
             print("  MISS %s:%d %s" % (rel, lineno, how))
         sys.exit(1)
 
-    with io.open(FINGERPRINT_BASELINE, "w", encoding="utf-8") as _f:
+    with open(FINGERPRINT_BASELINE, "w", encoding="utf-8") as _f:
         json.dump(fps, _f, ensure_ascii=False, indent=2)
-    with io.open(LEGACY_WHITELIST_BASELINE, "w", encoding="utf-8") as _f:
+    with open(LEGACY_WHITELIST_BASELINE, "w", encoding="utf-8") as _f:
         json.dump(legacy_rows, _f, ensure_ascii=False, indent=2)
 
     uniq = set(handler_identity(fp) for fp in fps)

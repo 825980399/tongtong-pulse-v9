@@ -15,7 +15,15 @@
 用法：python cw3_ctx_stale_read_gate.py [--root .] [--rev HEAD|WORKTREE] [--file PATH] [--json OUT]
 退出码：0=PASS / 2=FAIL(有陈旧读) / 3=解析错误
 """
-import argparse, ast, collections, io, json, os, re, subprocess, sys, datetime
+import argparse
+import ast
+import collections
+import datetime
+import json
+import os
+import re
+import subprocess
+import sys
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 TARGET = 'organs/brain/PulseInnerWorld.py'
@@ -26,9 +34,9 @@ CTX_NAMES = ('ctx', '_ctx')
 
 def load(a):
     if a.file:
-        return io.open(a.file, encoding='utf-8', errors='replace').read()
+        return open(a.file, encoding='utf-8', errors='replace').read()
     if a.rev.upper() == 'WORKTREE':
-        return io.open(os.path.join(a.root, TARGET), encoding='utf-8', errors='replace').read()
+        return open(os.path.join(a.root, TARGET), encoding='utf-8', errors='replace').read()
     r = subprocess.run(['git', 'show', '%s:%s' % (a.rev, TARGET)], cwd=a.root, capture_output=True)
     return None if r.returncode else r.stdout.decode('utf-8', errors='replace')
 
@@ -168,7 +176,7 @@ def main():
     for r in exempted[:6]:
         print('  [EXEMPT] %s@%s ctx.%s 理由=%s' % (r['caller'], r['call_line'], r['name'], str(r['exempt_at'][1])[:60]))
     if a.json:
-        io.open(a.json, 'w', encoding='utf-8').write(json.dumps(
+        open(a.json, 'w', encoding='utf-8').write(json.dumps(
             {'observed_at': datetime.datetime.now().isoformat(timespec='seconds'),
              'source': a.file or a.rev, 'slots': sorted(SLOTS), 'ir': IR,
              'checked_calls': total_calls, 'risks': risks, 'exempted': exempted}, ensure_ascii=False, indent=1))

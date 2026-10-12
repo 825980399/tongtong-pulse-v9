@@ -15,16 +15,18 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ci_common import extract_handlers, handler_identity  # noqa: E402
-import check_legacy_assembly_gate as _lg  # noqa: E402  (158 批新门禁，规则常量指纹源)
+import check_legacy_assembly_gate as _lg
+from ci_common import extract_handlers, handler_identity
 
 # ★T-审计-5：静默异常统一走 CI 门禁认可通道（需项目根入 sys.path）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from nucleus._silent_except import silent_exc  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 # ★第159批上A 刀2：规则签名基线复用引擎侧口径（同源 sha16，逐字节一致）
-from nucleus.self_awareness.rule_engine import (  # noqa: E402
+from nucleus.self_awareness.rule_engine import (
     rule_sha16 as _rule_sha16,
+)
+from nucleus.self_awareness.rule_engine import (
     rule_signatures as _rule_signatures,
 )
 
@@ -393,7 +395,7 @@ def fp_rule_signature_verify(baseline_path=None):
     try:
         with open(_p, encoding="utf-8") as _f:
             _base = json.load(_f)
-    except (OSError, ValueError) as _e:  # noqa: BLE001
+    except (OSError, ValueError) as _e:
         silent_exc(_e, where="verify_fingerprint_gate.fp_rule_signature_verify",
                    level="warning")
         _all = sorted(set(_cur_rules) | set(_cur_ci))

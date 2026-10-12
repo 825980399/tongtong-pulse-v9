@@ -21,14 +21,13 @@
                                             [--emit-baseline PATH] [--verbose]
 """
 import argparse
-import io
 import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ci_common import extract_handlers, handler_identity  # noqa: E402
+from ci_common import extract_handlers, handler_identity
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -85,11 +84,11 @@ LOCATION_WHITELIST = {
 
 
 def _log(level, msg):
-    sys.stderr.write("[ci_gate_silent_except][{}] {}\n".format(level, msg))
+    sys.stderr.write(f"[ci_gate_silent_except][{level}] {msg}\n")
 
 
 def git_show(ref, relpath):
-    r = subprocess.run(["git", "show", "{}:{}".format(ref, relpath)], cwd=ROOT,
+    r = subprocess.run(["git", "show", f"{ref}:{relpath}"], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.stdout if r.returncode == 0 else None
 
@@ -98,7 +97,7 @@ def git_read_worktree(relpath):
     p = os.path.join(ROOT, relpath)
     if not os.path.exists(p):
         return None
-    return io.open(p, encoding="utf-8", errors="replace").read()
+    return open(p, encoding="utf-8", errors="replace").read()
 
 
 def changed_files(base):
@@ -135,7 +134,7 @@ def check_crcrlf(files):
         p = os.path.join(ROOT, rel)
         if not os.path.exists(p):
             continue
-        with io.open(p, "rb") as _f:
+        with open(p, "rb") as _f:
             _data = _f.read()
         if b"\r\r\n" in _data:
             bad.append(rel)
@@ -144,9 +143,9 @@ def check_crcrlf(files):
 
 def load_known_fingerprints():
     if not os.path.exists(FINGERPRINT_BASELINE):
-        _log("error", "缺失指纹基线 {}，请先运行 tools/ci/migrate_whitelist_to_fingerprints.py".format(FINGERPRINT_BASELINE))
+        _log("error", f"缺失指纹基线 {FINGERPRINT_BASELINE}，请先运行 tools/ci/migrate_whitelist_to_fingerprints.py")
         return None
-    with io.open(FINGERPRINT_BASELINE, encoding="utf-8") as _f:
+    with open(FINGERPRINT_BASELINE, encoding="utf-8") as _f:
         data = json.load(_f)
     return set(handler_identity(x) for x in data)
 
@@ -194,7 +193,7 @@ def emit_baseline(path):
             continue
         if hs:
             base[rel] = hs
-    with io.open(path, "w", encoding="utf-8") as _f:
+    with open(path, "w", encoding="utf-8") as _f:
         json.dump(base, _f, ensure_ascii=False, indent=2)
     print(f"BASELINE_EMITTED -> {path}  files={len(git_ls_files_py())}")
 
@@ -267,7 +266,7 @@ def main():
         if args.verbose:
             for rel, gens in added_details:
                 for g in gens:
-                    print("        {}  {}".format(rel, _fmt_identity(g)))
+                    print(f"        {rel}  {_fmt_identity(g)}")
     if parse_errs == 0:
         print("  [2] parse_err：PASS —— 变更 .py 均可解析")
     else:
@@ -280,7 +279,7 @@ def main():
         print(f"  [3] 白名单 rot：FAIL —— {len(rot)} 条已知豁免在仓库中消失（须显式 shrink 提交）：")
         if args.verbose:
             for k in rot:
-                print("        {}".format(_fmt_identity(k)))
+                print(f"        {_fmt_identity(k)}")
     if not untracked_bad:
         print("  [4] 未跟踪盲区：PASS —— 无未跟踪 .py 含非豁免静默 handler")
     else:
@@ -288,7 +287,7 @@ def main():
         print(f"  [4] 未跟踪盲区：FAIL —— {len(untracked_bad)} 处未跟踪 .py 含静默 handler：")
         if args.verbose:
             for rel, ident in untracked_bad:
-                print("        {}  {}".format(rel, _fmt_identity(ident)))
+                print(f"        {rel}  {_fmt_identity(ident)}")
     if not crcrlf_bad:
         print("  [5] CRCRLF(双CR行尾)：PASS —— 无 CRCRLF 行尾污染")
     else:

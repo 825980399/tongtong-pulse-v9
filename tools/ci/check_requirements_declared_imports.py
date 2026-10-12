@@ -17,7 +17,6 @@
 退出码：0 = 干净；1 = 存在未声明硬缺口（阻断）。
 """
 import ast
-import io
 import os
 import sys
 
@@ -63,7 +62,7 @@ def _load_declared():
         fp = os.path.join(REPO_ROOT, fn)
         if not os.path.isfile(fp):
             continue
-        for ln in io.open(fp, encoding='utf-8', newline=None):
+        for ln in open(fp, encoding='utf-8', newline=None):
             ln = ln.split('#')[0].strip()
             if not ln or ln.startswith('-') or ln.startswith('git+') or ln.startswith('http'):
                 continue
@@ -143,7 +142,7 @@ def scan_file(path, declared, project_tops, protected):
     import contextlib
     with contextlib.suppress(OSError, SyntaxError):
         # 读/解析失败（权限/语法）不在此门禁范围（另有编译门禁）；跳过避免误阻
-        src = io.open(path, encoding='utf-8', newline=None).read()
+        src = open(path, encoding='utf-8', newline=None).read()
         tree = ast.parse(src, filename=path)
         return scan_tree(tree, declared, project_tops, protected)
     return []
@@ -221,7 +220,7 @@ def main(argv=None):
                     continue
                 fp = os.path.join(root, fn)
                 try:
-                    src = io.open(fp, encoding='utf-8', newline=None).read()
+                    src = open(fp, encoding='utf-8', newline=None).read()
                     tree = ast.parse(src, filename=fp)
                 except (OSError, SyntaxError):
                     continue
@@ -235,7 +234,7 @@ def main(argv=None):
         if not os.path.isfile(fp):
             continue
         try:
-            src = io.open(fp, encoding='utf-8', newline=None).read()
+            src = open(fp, encoding='utf-8', newline=None).read()
             tree = ast.parse(src, filename=fp)
         except (OSError, SyntaxError):
             continue

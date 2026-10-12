@@ -18,9 +18,9 @@
   python tools/ci/check_broken_chain_gate.py            # 默认比对（pre-commit 调用）
   python tools/ci/check_broken_chain_gate.py --selftest
 """
+import json
 import os
 import sys
-import json
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))

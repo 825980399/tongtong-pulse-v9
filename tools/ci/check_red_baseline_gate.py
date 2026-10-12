@@ -20,27 +20,28 @@
   python tools/ci/check_red_baseline_gate.py --input out.txt full   # 片3 解析已捕获输出
   python tools/ci/check_red_baseline_gate.py --selftest         # 内置单测
 """
-import os
-import re
-import sys
+import ast
 import io
 import json
+import os
+import re
 import subprocess
-import ast
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # tools/ci -> tools -> root
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 from nucleus._silent_except import silent_exc  # 静默异常走 CI 门禁认可通道
+
 BASELINE_PATH = os.path.join(SCRIPT_DIR, "baselines", "red_baseline_156.json")
 COLLECT_TOLERANCE = 5
 
-FAILED_RE = re.compile(r"^\s*FAILED\s+(\S+)", re.M)
-XFAIL_RE = re.compile(r"^\s*XFAIL\s+(\S+)", re.M)
-XPASS_RE = re.compile(r"^\s*XPASS\s+(\S+)", re.M)
-COLLECT_ERR_RE = re.compile(r"ERROR collecting (\S+)", re.M)
-COLLECT_COUNT_RE = re.compile(r"(\d+)\s+tests?\s+collected|collected\s+(\d+)\s+(?:item|items|tests?)", re.M)
+FAILED_RE = re.compile(r"^\s*FAILED\s+(\S+)", re.MULTILINE)
+XFAIL_RE = re.compile(r"^\s*XFAIL\s+(\S+)", re.MULTILINE)
+XPASS_RE = re.compile(r"^\s*XPASS\s+(\S+)", re.MULTILINE)
+COLLECT_ERR_RE = re.compile(r"ERROR collecting (\S+)", re.MULTILINE)
+COLLECT_COUNT_RE = re.compile(r"(\d+)\s+tests?\s+collected|collected\s+(\d+)\s+(?:item|items|tests?)", re.MULTILINE)
 
 
 def load_baseline(path):
@@ -112,10 +113,10 @@ def _run_once(args, timeout):
             env=env, timeout=timeout,
         )
         return proc.stdout + "\n" + proc.stderr, None
-    except subprocess.TimeoutExpired as _te:  # noqa: BLE001
+    except subprocess.TimeoutExpired as _te:
         silent_exc(_te, where="check_red_baseline_gate._run_once", level="debug")
         return "", "timeout"
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="check_red_baseline_gate._run_once", level="debug")
         return "", "err:%s" % e
 

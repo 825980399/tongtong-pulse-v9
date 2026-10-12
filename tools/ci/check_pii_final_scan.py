@@ -236,7 +236,7 @@ _META_ALLOW_DOMAINS = _INTERNAL_ALLOW_DOMAINS
 _URL_PATH_ID = re.compile(r"/\d{6,}/")
 
 #: 整行像 commit SHA（40/64 位十六进制）时，行内数字段不是手机号/身份证
-_SHA_LINE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$", re.I)
+_SHA_LINE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$", re.IGNORECASE)
 
 #: 标准测试假号白名单（业界通用测试号码，非真实 PII；测试夹具/扫描器自测使用）
 _TEST_PHONES = {

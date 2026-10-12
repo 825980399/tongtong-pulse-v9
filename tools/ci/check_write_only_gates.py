@@ -30,13 +30,14 @@ from __future__ import annotations
 import argparse
 import ast
 import difflib
-import io
 import os
 import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+
 from nucleus._silent_except import silent_exc
+
 
 class GitBaselineUnavailable(Exception):
     """★T-112e#1：git 增量基线不可用（git diff 失败）时抛出，门禁据此 rc=2 中止（禁假绿）。"""
@@ -47,7 +48,7 @@ CONFIG_PY = os.path.join(ROOT, CONFIG_REL)
 
 EXCLUDE_TOP = {"tmp", "backups", "logs", "data", "models"}
 EXCLUDE_ANY = {"__pycache__", "build", "dist", ".git", "node_modules", ".venv", "venv"}
-BAK_RE = re.compile(r"\.bak", re.I)
+BAK_RE = re.compile(r"\.bak", re.IGNORECASE)
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 POSCtl_ATTR = ["_beat_count", "_silence_threshold", "_organ_last_active",
@@ -230,7 +231,7 @@ class Index:
     def src(self, p):
         if p not in self.srcs:
             try:
-                with io.open(p, "r", encoding="utf-8", errors="replace") as fh:
+                with open(p, "r", encoding="utf-8", errors="replace") as fh:
                     self.srcs[p] = fh.read()
             except Exception:
                 self.srcs[p] = ""
@@ -357,7 +358,7 @@ class Index:
 def d1_dead_config(ix: Index) -> dict:
     src = ix.src(CONFIG_PY)
     keys, seen = [], set()
-    for m in re.finditer(r"^(?P<n>[A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=", src, re.M):
+    for m in re.finditer(r"^(?P<n>[A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=", src, re.MULTILINE):
         n = m.group("n")
         if n in seen:
             continue
@@ -436,7 +437,7 @@ def _ext_index(ix: Index) -> dict:
             for n in names:
                 if n.endswith((".pyx", ".pxd", ".pyi")):
                     try:
-                        texts.append(io.open(os.path.join(root, n), encoding="utf-8",
+                        texts.append(open(os.path.join(root, n), encoding="utf-8",
                                              errors="replace").read())
                     except Exception as e:
                         silent_exc(e, where="tools.ci.check_write_only_gates::_ext_index L438")
@@ -619,7 +620,7 @@ def git_read_worktree(relpath):
     p = os.path.join(ROOT, relpath)
     if not os.path.exists(p):
         return None
-    return io.open(p, encoding="utf-8", errors="replace").read()
+    return open(p, encoding="utf-8", errors="replace").read()
 
 
 def changed_files(base):
@@ -657,7 +658,7 @@ def added_lines(old_text, new_text):
 def config_top_keys(text):
     """config.py 顶层 UPPER 键集合（行首，形如 KEY = ... / KEY: type = ...）。"""
     return {m.group("n") for m in re.finditer(
-        r"^(?P<n>[A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=", text, re.M)}
+        r"^(?P<n>[A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=", text, re.MULTILINE)}
 
 
 # ============================================================ 增量门禁核心

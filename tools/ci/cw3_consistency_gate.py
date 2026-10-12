@@ -10,7 +10,15 @@
   python cw3_consistency_gate.py --target worktree [--base HEAD] [--baseline FILE] [--update]
 退出码：0=PASS / 2=FAIL(守恒量漂移) / 3=用法或解析错误
 """
-import argparse, ast, collections, io, json, os, subprocess, sys, datetime, hashlib
+import argparse
+import ast
+import collections
+import datetime
+import hashlib
+import json
+import os
+import subprocess
+import sys
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
@@ -61,8 +69,8 @@ def _expand_watch(root, rev):
 
 def read_blob(rev, path, root):
     if rev in ('WORKTREE', 'worktree'):
-        return io.open(os.path.join(root, path), encoding='utf-8', errors='replace').read()
-    r = subprocess.run(['git', 'show', '{}:{}'.format(rev, path)], cwd=root, capture_output=True)
+        return open(os.path.join(root, path), encoding='utf-8', errors='replace').read()
+    r = subprocess.run(['git', 'show', f'{rev}:{path}'], cwd=root, capture_output=True)
     if r.returncode != 0:
         return None
     return r.stdout.decode('utf-8', errors='replace')
@@ -146,7 +154,7 @@ def main():
         _old = {}
         if os.path.exists(bl):
             try:
-                _old = json.load(io.open(bl, encoding='utf-8-sig'))
+                _old = json.load(open(bl, encoding='utf-8-sig'))
             except Exception:
                 _old = {}
         payload = {'schema': 'cw3-consistency/1', 'anchor_rev': a.base,
@@ -158,13 +166,13 @@ def main():
                    'expected_delta': _old.get('expected_delta', {})}
         os.makedirs(os.path.dirname(bl), exist_ok=True) if a.update else None
         if a.update:
-            io.open(bl, 'w', encoding='utf-8', newline='\n').write(json.dumps(payload, ensure_ascii=False, indent=1))
-            print('CW3-A 基准已写入 {}'.format(bl))
+            open(bl, 'w', encoding='utf-8', newline='\n').write(json.dumps(payload, ensure_ascii=False, indent=1))
+            print(f'CW3-A 基准已写入 {bl}')
         else:
             print(json.dumps(payload, ensure_ascii=False, indent=1))
         return 0
 
-    base = json.load(io.open(bl, encoding='utf-8-sig'))
+    base = json.load(open(bl, encoding='utf-8-sig'))
     delta_reason = str(base.get('delta_reason', '')).strip()
     expected_delta = base.get('expected_delta') or {}
     watched = _expand_watch(a.root, a.target)
@@ -172,7 +180,7 @@ def main():
     for p in watched:
         b = base['files'].get(p)
         if b is None:
-            fails.append('{} 无基准（须先 --update）'.format(p))
+            fails.append(f'{p} 无基准（须先 --update）')
             continue
         for k in METRICS:                       # 硬门禁：11 个语义计数（lines / ast_sha 仅展示，不参与判定）
             bv, cv = b['metrics'].get(k, 0), cur[p]['metrics'].get(k, 0)
@@ -184,12 +192,12 @@ def main():
             if _exp is not None and _delta == _exp:
                 continue
             fails.append('{}: 指标 {} 基准 {} → 当前 {}{}'.format(
-                p, k, bv, cv, ' (预期增量 {})'.format(_exp) if _exp is not None else ''))
+                p, k, bv, cv, f' (预期增量 {_exp})' if _exp is not None else ''))
         for key, lbl in (('priority_hist', 'emit priority 直方'), ('event_hist', '事件名直方')):
             if b.get(key) != cur[p].get(key):
                 bk, ck = b.get(key, {}), cur[p].get(key, {})
                 diff = {x: (bk.get(x, 0), ck.get(x, 0)) for x in set(bk) | set(ck) if bk.get(x, 0) != ck.get(x, 0)}
-                fails.append('{}: {} 漂移 {}'.format(p, lbl, diff))
+                fails.append(f'{p}: {lbl} 漂移 {diff}')
     print('CW3-A 语义守恒门禁 @{}  target={}  基准锚={}({})'.format(datetime.datetime.now().strftime('%H:%M:%S'), a.target, base.get('anchor_rev'), base.get('anchor_sha', '')[:7]))
     if not fails:
         print('  [OK] 硬门禁指标全部一致（参考：行数 {} / AST 指纹 {}）'.format(cur[watched[0]]['metrics']['lines'], cur[watched[0]]['metrics']['ast_sha256_12']))
@@ -202,7 +210,7 @@ def main():
     print(f'  [FAIL] {len(fails)} 项非预期漂移（expected_delta 未覆盖即视为夹带，须回退或补白名单）：')
     for f in fails[:12]:
         print('     - ' + f)
-    print('  处方：① 若为误伤 ⇒ 在 {} 的 expected_delta 补声明该增量；② 若为真漂移 ⇒ 回退该改动。'.format(os.path.relpath(bl, a.root)))
+    print(f'  处方：① 若为误伤 ⇒ 在 {os.path.relpath(bl, a.root)} 的 expected_delta 补声明该增量；② 若为真漂移 ⇒ 回退该改动。')
     return 2
 
 

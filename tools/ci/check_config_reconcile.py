@@ -36,7 +36,6 @@
 from __future__ import annotations
 
 import ast
-import io
 import json
 import os
 import sys
@@ -45,7 +44,7 @@ from typing import Any
 # 项目根入 sys.path，使 `import nucleus...` 在 tools/ci 下可用（与同目录门禁件一致）
 sys.path.insert(0, PROJECT_ROOT_SENTINEL := os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from nucleus._silent_except import silent_exc  # 静默异常统一走 CI 门禁认可通道  # noqa: E402
+from nucleus._silent_except import silent_exc  # 静默异常统一走 CI 门禁认可通道
 
 PROJECT_ROOT = PROJECT_ROOT_SENTINEL
 
@@ -78,7 +77,7 @@ def _iter_py_files(root: str, include_tools: bool = False):
 
 def _parse(fp: str):
     try:
-        src = io.open(fp, encoding="utf-8", errors="ignore").read()
+        src = open(fp, encoding="utf-8", errors="ignore").read()
         return ast.parse(src, filename=fp)
     except (OSError, SyntaxError, ValueError) as _e:
         # ★不得静默：语法/读取失败须留痕（该文件被跳过，会影响对账完整性）
@@ -234,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     if _out:
         try:
             os.makedirs(os.path.dirname(os.path.abspath(_out)), exist_ok=True)
-            with io.open(_out, "w", encoding="utf-8") as _f:
+            with open(_out, "w", encoding="utf-8") as _f:
                 json.dump(_res, _f, ensure_ascii=False, indent=2)
             print("written -> %s" % _out)
         except OSError as _e:

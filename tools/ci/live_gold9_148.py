@@ -27,12 +27,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import re  # noqa: E402
+import re
 
-import config  # noqa: E402
-from nucleus._silent_except import silent_exc  # noqa: E402
-from nucleus.llm.adapter_registry import get_adapter_registry  # noqa: E402
-from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter  # noqa: E402
+import config
+from nucleus._silent_except import silent_exc
+from nucleus.llm.adapter_registry import get_adapter_registry
+from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 
 # 金标9类场景（与 test_ir_golden_t146.KEY_ROUTES 对齐，加 identity 共 9 类）
 GOLD_SCENARIOS = [
@@ -136,7 +136,7 @@ def main() -> int:
                 eb = ""
             print(f"[FAIL] {cid}: HTTP {he.code} {eb}")
             results.append((cid, f"http{he.code}", None, time.time() - t0, 0))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             silent_exc(exc, where="live_gold9_148.main")
             print(f"[FAIL] {cid}: {type(exc).__name__}: {exc}")
             results.append((cid, "err", None, time.time() - t0, 0))

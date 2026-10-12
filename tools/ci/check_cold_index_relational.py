@@ -20,7 +20,7 @@ import json
 import os
 import sys
 
-import pyarrow.parquet as pq  # noqa: F401
+import pyarrow.parquet as pq
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:

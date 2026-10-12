@@ -33,12 +33,12 @@ def _main():
     args = ap.parse_args()
     path = args.csv or os.path.join(args.root, DEFAULT_CSV)
     if not os.path.isfile(path):
-        print("[register-cols] 未找到登记册：{}".format(path))
+        print(f"[register-cols] 未找到登记册：{path}")
         return 2
     with open(path, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     if not rows:
-        print("[register-cols] 空文件：{}".format(path))
+        print(f"[register-cols] 空文件：{path}")
         return 2
     header = rows[0]
     if len(header) != EXPECTED_COLS:
@@ -54,12 +54,12 @@ def _main():
             continue
         p = (r[pidx] or "").strip()
         if p not in P_LEVELS:
-            fails.append((ln, "P级='{}' 不在 {{P0..P3}}".format(p)))
+            fails.append((ln, f"P级='{p}' 不在 {{P0..P3}}"))
         # 到期批次仅"已排期"状态强制正整数；已撤销/已裁决待排期/待裁决 无排期语义，为空合法
         if (r[sidx] or "").strip() == "已排期":
             exp = (r[eidx] or "").strip()
             if not exp.isdigit() or int(exp) <= 0:
-                fails.append((ln, "到期批次='{}' 非正整数".format(exp)))
+                fails.append((ln, f"到期批次='{exp}' 非正整数"))
     if fails:
         print(f"[register-cols] 发现 {len(fails)} 处列完整性违规（数据修复后须归零）：")
         for ln, msg in fails:

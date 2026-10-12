@@ -34,7 +34,7 @@ if PROJECT_ROOT not in sys.path:
 
 # 门禁件位于 tools/ci/，属 cw2「未跟踪盲区」范围：
 # 任何 except 块体若无 silent_exc / 日志调用即 FAIL。统一走 _silent_except。
-from nucleus._silent_except import silent_exc  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 MAIN_PY = os.path.join(PROJECT_ROOT, "main.py")
 CONFIG_PY = os.path.join(PROJECT_ROOT, "config.py")
@@ -114,10 +114,10 @@ def check_declarative_qica(lines):
 def check_switch_on():
     """读 config.FEATURE['use_declarative_assembly']；返回 (值 或 None, 错误信息)。"""
     try:
-        import config  # noqa: PLC0415
+        import config
         val = (getattr(config, "FEATURE", {}) or {}).get("use_declarative_assembly", None)
         return val, None
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="check_legacy_assembly_gate::check_switch_on", level="warning")
         return None, f"读取 config.FEATURE 失败: {type(e).__name__}"
 

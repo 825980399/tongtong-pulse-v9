@@ -37,8 +37,8 @@ if REPO_ROOT not in sys.path:
 _SCAN_EXTS = (".py", ".json", ".yaml", ".yml", ".toml")
 
 #: 移除模型引用正则（词边界，大小写不敏感）
-_JINA_RE = re.compile(r"\bjina", re.I)
-_PARA_RE = re.compile(r"\bparaphrase", re.I)
+_JINA_RE = re.compile(r"\bjina", re.IGNORECASE)
+_PARA_RE = re.compile(r"\bparaphrase", re.IGNORECASE)
 
 #: 豁免路径子串（本门自身 / 合法说明文档 / 台账）
 ALLOWLIST = (
