@@ -14,8 +14,13 @@ import time
 from nucleus._silent_except import silent_exc
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
-_MAX_EVENTS = 200
-_MAX_ORPHANS = 100
+# ★第201批 刀1（环窗参数化）：以下三值是「config 键缺失/非法时的回退默认值」，
+#   取值 = 改造前实测值 → 默认零行为变化；扩容请调 config.py 对应三键。
+_MAX_EVENTS = 200           # 事件环容量（槽） ← PULSE_TRACER_EVENT_RING_SIZE
+_MAX_ORPHANS = 100          # 孤儿上限（条）   ← PULSE_TRACER_MAX_ORPHANS
+#   ★偏差D#2：任务书称判定窗「1s」，实测生产路径 flush_to_file 原传 1.5s
+#     （_detect_orphans 形参默认才是 1.0s）→ 判定窗回退默认取 1.5，零行为变化。
+_DEFAULT_MIN_AGE_SEC = 1.5  # 判定窗（秒）     ← PULSE_TRACER_MIN_AGE_SEC
 _FLUSH_INTERVAL = 2.0  # 写入频率限制：每2秒最多一次，避免竞态条件
 _events = []
 _lock = threading.Lock()
@@ -48,6 +53,48 @@ def set_subscription_provider(fn):
     """
     global _subscription_provider
     _subscription_provider = fn
+
+
+# ---- ★第201批 刀1：环/窗 参数化读取（防观测面吞噬）----
+# 背景：类脑改造（加密脉冲流）会加剧「事件环 + 判定窗」竞争 → 假孤儿爆发、
+#       观测面被新脉冲淹没（烛微200前置§3.1）。故三值改为 config 可配置。
+# 纪律：
+#   · 惰性 import config —— 本模块红线「禁止 import 期起线程/做 IO」，而 config
+#     导入会读 data/config_override.json，故绝不在模块顶层引入；
+#   · 键缺失/非数值/非法值一律回退默认（绝不抛）—— 故**不用 try/except**，
+#     改以 isinstance 守卫实现（铁律150：新 handler 须无 except 或含 LOG_FUNCS）。
+def _cfg_positive_int(name, default):
+    """读 config 正整型配置；键缺失/布尔/非 int/<=0 → 回退 default。"""
+    import config
+    _v = getattr(config, name, default)
+    if isinstance(_v, bool) or not isinstance(_v, int):
+        return default
+    return _v if _v > 0 else default
+
+
+def _cfg_nonneg_float(name, default):
+    """读 config 非负数值配置；键缺失/布尔/非数值/<0 → 回退 default。"""
+    import config
+    _v = getattr(config, name, default)
+    if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+        return default
+    _f = float(_v)
+    return _f if _f >= 0 else default
+
+
+def _ring_size():
+    """事件环容量（槽）← PULSE_TRACER_EVENT_RING_SIZE，回退 _MAX_EVENTS。"""
+    return _cfg_positive_int("PULSE_TRACER_EVENT_RING_SIZE", _MAX_EVENTS)
+
+
+def _max_orphans():
+    """孤儿记录上限（条）← PULSE_TRACER_MAX_ORPHANS，回退 _MAX_ORPHANS。"""
+    return _cfg_positive_int("PULSE_TRACER_MAX_ORPHANS", _MAX_ORPHANS)
+
+
+def _min_age_sec():
+    """孤儿判定窗（秒）← PULSE_TRACER_MIN_AGE_SEC，回退 _DEFAULT_MIN_AGE_SEC。"""
+    return _cfg_nonneg_float("PULSE_TRACER_MIN_AGE_SEC", _DEFAULT_MIN_AGE_SEC)
 
 
 def _default_bus_sub_provider(event_type):
@@ -110,7 +157,7 @@ def log_emit(organ_name, event_type, layer, pulse_id=""):
     }
     with _lock:
         _events.append(event)
-        if len(_events) > _MAX_EVENTS:
+        if len(_events) > _ring_size():
             _events.pop(0)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
@@ -129,18 +176,24 @@ def log_receive(organ_name, event_type, source_organ):
             "event_type": event_type,
             "from": source_organ,
         })
-        if len(_events) > _MAX_EVENTS:
+        if len(_events) > _ring_size():
             _events.pop(0)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
-def _detect_orphans(events, min_age=1.0, subscription_provider=None):
+def _detect_orphans(events, min_age=None, subscription_provider=None):
     """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件。
 
     ★第200批 刀1（判定撤销机制）：新增 subscription_provider 形参。
     若提供器对某 event_type 返回 True（存在订阅方 → 旁路遥测面已登记接收方），
     则该 emit 视为"判定面伪孤儿"予以平反（压掉 B 路异构发射假阳性），不再计入孤儿。
     提供器返回 None（未知/查询失败）时维持原判定（保守）。
+
+    ★第201批 刀1（环窗参数化）：min_age 改为 None 哨兵 —— 未显式传入时取
+    ``_min_age_sec()``（config PULSE_TRACER_MIN_AGE_SEC，默认 1.5s，与原生产路径一致）。
+    判定用 ``is None`` 而非真值判断：min_age=0.0 是合法值（零窗仍须生效）。
     """
+    if min_age is None:
+        min_age = _min_age_sec()
     orphans = []
     now = time.time()
     for evt in events:
@@ -267,8 +320,10 @@ def flush_to_file(force: bool = False):
         safe_write_json(path, events_snapshot[-150:], backup=False)
         
         # 检测孤儿脉冲（★200刀1：传入订阅方提供器做判定撤销兜底）
+        #   ★201刀1：判定窗不再硬编码 1.5，改由 _detect_orphans 取 config
+        #     PULSE_TRACER_MIN_AGE_SEC（默认 1.5 → 零行为变化）
         new_orphans = _detect_orphans(
-            events_snapshot, min_age=1.5, subscription_provider=_subscription_provider)
+            events_snapshot, subscription_provider=_subscription_provider)
         
         # 读取已有孤儿记录，合并去重（修复：default=[]而不是{}）
         existing_orphans = []
@@ -296,9 +351,10 @@ def flush_to_file(force: bool = False):
                 existing_orphans.append(o)
                 existing_keys.add(key)
         
-        # 限制总数
-        if len(existing_orphans) > _MAX_ORPHANS:
-            existing_orphans = existing_orphans[-_MAX_ORPHANS:]
+        # 限制总数（★201刀1：上限改由 config PULSE_TRACER_MAX_ORPHANS 驱动）
+        _orphan_cap = _max_orphans()
+        if len(existing_orphans) > _orphan_cap:
+            existing_orphans = existing_orphans[-_orphan_cap:]
         
         # 原子写孤儿记录
         safe_write_json(orphan_path, existing_orphans, backup=False)
