@@ -918,6 +918,14 @@ class PulseLung(BasePulseOrgan):
         _m28_len = self._m28_system_length_suffix(prompt)
         if _m28_len:
             _sys = _sys + "\n" + _m28_len
+        # ★197刀1：实时注入三要素「影子」（先影子后实弹，196 窗方法论产物）
+        #   仅日志化记录本会注入内容，不落 prompt / 不翻开关 / 不改 L2 缓存（零行为变化）。
+        #   实弹刀（把三要素真正嵌入 _sys）推 198，须待：阈值(要素②)与预算(要素③)两定数 + L2 命中率遥测基线齐备。
+        self._log(
+            LogLevel.INFO,
+            "[实时注入影子] 本会注入(影子,不落prompt): 要素①=注入点@Lung系统prompt组装区; "
+            "要素②=相关性复用retriever阈值先例; 要素③=token预算3条×≤120字",
+        )
         # ★T-145a：运行时渲染身份占位符（_sys 可能含 <SELF_NAME>）
         _sys = _render_placeholders(_sys)
         _msgs: list = [{"role": "system", "content": _sys}]

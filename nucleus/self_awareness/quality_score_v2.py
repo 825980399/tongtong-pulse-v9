@@ -513,6 +513,7 @@ def record_trend(result: dict[str, Any], path: str | None = None) -> str:
             "ts": time.time(),
             "score": result.get("score"),
             "level": quality_level(result.get("score")),
+            "caliber_version": "v2",  # ★197刀2：口径统一层③——断代标注（v2 综合分主标准）
             "dimensions": {k: v.get("score")
                            for k, v in (result.get("dimensions") or {}).items()},
         }

@@ -204,6 +204,8 @@ class SelfAwarenessProfile:
                            if isinstance(x, dict)],
             # ★193刀1：LFI 五维原值影子拍字段（连通性/中心性/冗余度/健康度，活跃度暂不入）
             "lfi_raw": (dict(self.lfi_raw) if isinstance(self.lfi_raw, dict) else None),
+            # ★197刀2：口径统一层③——断代标注（本画像为 v1 引擎口径快照；v2 记录见 quality_trend.jsonl）
+            "caliber_version": "v1",
         }
 
     @classmethod
@@ -404,11 +406,24 @@ class SelfAwarenessEngine:
         # ★193刀1：LFI 五维原值影子拍 —— 写独立字段 lfi_raw（零权重，不影响 overall_score）。
         try:
             from tools.export_lfi import compute_lfi as _compute_lfi
-            _lfi_payload = _compute_lfi() or {}
+            from organs.body.PulseBloodVessel import get_blood_vessel as _get_blood_vessel
+            # ★197刀3：补齐「消费」半步——取活体血管运行态 organ_activity（pulse 计数）传入 LFI；
+            #   vessel.get_stats()["organ_activity"] 为 {器官:{sent,received}}，归并成
+            #   {器官: 总交互数(int)} 以匹配 compute_lfi(runtime_activity=dict[str,int]) 契约
+            #   （195刀2 参数 runtime_activity 就位✓，本次补齐传参这一半步）。
+            _vessel = _get_blood_vessel()
+            _oa_raw = (_vessel.get_stats().get("organ_activity")
+                       if _vessel is not None else None) or {}
+            _organ_activity = {
+                _o: int((_v.get("sent", 0) if isinstance(_v, dict) else 0)
+                        + (_v.get("received", 0) if isinstance(_v, dict) else 0))
+                for _o, _v in _oa_raw.items()
+            } if _oa_raw else None
+            _lfi_payload = _compute_lfi(runtime_activity=_organ_activity) or {}
             _lfi_nodes = []
             for _nd in (_lfi_payload.get("nodes") or []):
                 _d = dict(_nd.get("dims") or {})
-                _d.pop("activity", None)  # 活跃度暂不入
+                # ★197刀3：活跃度运行态已注入（vessel.organ_activity）→ 不再剔除 activity 维
                 _lfi_nodes.append({
                     "class_name": _nd.get("class_name"),
                     "name": _nd.get("name"),
@@ -1712,6 +1727,8 @@ def _collect_top_issues(profile: Any, limit: int = 5) -> list[dict]:
 
 
 def compute_overall_score(profile: Any) -> dict:
+    # ★197刀2：口径统一层①——本函数已降级为「维度级诊断」（仅保留逐维明细供诊断回填）；
+    #   v2 evaluate_v2 为综合分唯一主标准，不再作为对外主综合分（兼容：from_dict float 解析路径不动）。
     """★主线第38批 T1（P2-213）：各**可用**维度评分的加权平均。
 
     可用维度 = `_score_of()` 取到数值 **且** 未显式标 ``status == "unavailable"``

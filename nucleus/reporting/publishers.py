@@ -70,6 +70,19 @@ from .report_envelope import (
     make_envelope,
 )
 
+
+def _v2_quality() -> "tuple[float | None, str]":
+    """★197刀2：口径统一层①——返回 (v2综合分, v2等级)。"""
+    try:
+        from nucleus.diagnostics import FrameworkDiagnostics
+        from nucleus.self_awareness.quality_score_v2 import quality_level
+        _r = FrameworkDiagnostics().get_quality_score_v2()
+        return _r.get("score"), quality_level(_r.get("score"))
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.reporting.publishers::_v2_quality")
+        return None, ""
+
+
 _LOG = logging.getLogger("ReportPublishers")
 # 生产侧类型白名单拒写（烛微分诊口径）：这些类型为测试夹具/分诊占位，
 # 不得进入生产队列（data/reports），避免污染生产。
@@ -197,11 +210,8 @@ def health_anomalies(diagnosis: dict | None) -> list:
     if isinstance(_hs, (int, float)):
         _score = float(_hs)
     else:
-        for _k in ("score", "overall_score"):
-            _v = _metrics.get(_k)
-            if isinstance(_v, (int, float)):
-                _score = float(_v)
-                break
+        # ★197刀2：口径统一层①——统一读取 v2 综合分
+        _score = _v2_quality()[0]
     if _level in ("critical", "unhealthy", "error"):
         _desc = "框架整体健康=%s（严重问题 %d 项）" % (_level, len(_issues))
         if _issues:
@@ -321,8 +331,10 @@ def self_cognition_anomalies(summary: dict | None) -> list:
     if not isinstance(summary, dict):
         return []
     _out: list = []
-    _level = str(summary.get("health_level") or "")
-    _score = _num(summary.get("overall_score"))
+    # ★197刀2：口径统一层①——统一读取 v2 综合分与等级（不再用画像内 v1 health_level/overall_score）
+    _v2_s, _v2_l = _v2_quality()
+    _level = _v2_l
+    _score = _v2_s
     _head = str(summary.get("headline_issue") or "")
     _thr_warn = _thr("REPORT_BUS_HEALTH_SCORE_WARN", 60.0)
     if _level in ("critical", "严重", "危急"):

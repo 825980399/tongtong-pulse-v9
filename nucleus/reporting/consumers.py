@@ -23,6 +23,16 @@ from nucleus._silent_except import silent_exc
 
 from .report_envelope import SEV_P0, SEV_P1, ConsumeResult, ReportEnvelope
 
+
+def _v2_quality_score() -> "float | None":
+    """★197刀2：口径统一层①——统一读取 v2 综合分（quality_score_v2 为唯一主标准）。"""
+    try:
+        from nucleus.diagnostics import FrameworkDiagnostics
+        return FrameworkDiagnostics().get_quality_score_v2().get("score")
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.reporting.consumers::_v2_quality_score")
+        return None
+
 #: 告警落盘位置（相对于项目根）
 ALERT_FILE = os.path.join("data", "reports", "alerts.jsonl")
 #: 待办落盘位置
@@ -193,12 +203,8 @@ def self_cognition_consumer(envelope: ReportEnvelope) -> bool:
         return ConsumeResult(consumer="self_cognition_consumer",
                              report_id=envelope.report_id, accepted=False)
     _head = str(_c.get("headline_issue") or "").strip()
-    _score = None
-    for _k in ("overall_score", "score"):
-        _v = _c.get(_k)
-        if isinstance(_v, (int, float)) and not isinstance(_v, bool):
-            _score = float(_v)
-            break
+    # ★197刀2：口径统一层①——统一读取 v2 综合分（不再用报告内 v1 overall_score）
+    _score = _v2_quality_score()
     _p0 = [a for a in envelope.anomalies if a.severity == SEV_P0]
     _thr = _cfg_f("REPORT_BUS_HEALTH_SCORE_WARN", SELF_COGNITION_SCORE_WARN)
     _need = bool(_p0) or bool(_head) or (
@@ -213,7 +219,7 @@ def self_cognition_consumer(envelope: ReportEnvelope) -> bool:
         "report_id": envelope.report_id,
         "kind": "self_cognition_followup",
         "headline_issue": _head[:200],
-        "overall_score": _score,
+        "overall_score": _score,  # ★197刀2 v2 口径（维度级诊断降级）
         "worst_dimension": _c.get("worst_dimension"),
         "severity": envelope.max_severity,
         "auto_executed": False,

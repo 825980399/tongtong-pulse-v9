@@ -332,6 +332,28 @@ class PulseBloodVessel(BasePulseOrgan):
         """【预留 v10.0】"""
 
 
+# ========== 模块级单例 getter（★197刀3：供 SelfAwarenessEngine 取运行态 organ_activity） ==========
+_instance: "PulseBloodVessel | None" = None
+
+
+def get_blood_vessel() -> "PulseBloodVessel | None":
+    """模块级单例 getter（仓内 get_experience_pool / get_semantic_cache_l2 同惯例）。
+
+    返回全局唯一血管器官实例；main.py 装配时经 ``set_blood_vessel_instance`` 注册活体实例，
+    未注册时惰性创建（离线/测试场景，活跃度为空脉冲计数，LFI 活跃度回退静态近似）。
+    """
+    global _instance
+    if _instance is None:
+        _instance = PulseBloodVessel("血管")
+    return _instance
+
+
+def set_blood_vessel_instance(inst: "PulseBloodVessel") -> None:
+    """由 main.py 装配时注册活体实例（确保引擎取到的是运行态脉冲计数的同一实例）。"""
+    global _instance
+    _instance = inst
+
+
 # ========== 自测 ==========
 
 # ★插件化阶段1：器官注册表声明（供 organ_loader.scan_organs_directory 扫描发现）

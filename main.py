@@ -145,7 +145,7 @@ from nucleus.self_inspector import (
 from nucleus.synapsys.ResonanceEngine import (
     ResonanceEngine,  # 五维共振引擎: 记忆40%/空间30%/逻辑15%/时间10%/状态5%
 )
-from organs.body.PulseBloodVessel import PulseBloodVessel  # 血管: 场数据循环连通性监测
+from organs.body.PulseBloodVessel import PulseBloodVessel, set_blood_vessel_instance  # 血管: 场数据循环连通性监测
 
 # ===== 仿生器官层（50个器官，9大系统） =====
 # -- 核心脏器（6个） --
@@ -1470,6 +1470,8 @@ class PulseFramework:
                                          knowledge_tree=self.knowledge_tree,
                                          resonance_engine=self.resonance_engine)
         self.blood_vessel = self._create_organ(PulseBloodVessel, "血管")
+        # ★197刀3：注册活体血管实例到模块单例，供 SelfAwarenessEngine 取运行态 organ_activity
+        set_blood_vessel_instance(self.blood_vessel)
 
         # ===== 大脑系统（始终在线） =====
         self.cortex = self._create_organ(PulseCortex, "大脑皮层")
