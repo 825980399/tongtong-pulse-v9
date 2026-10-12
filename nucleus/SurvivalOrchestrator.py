@@ -25,6 +25,7 @@ from nucleus.logging.SilentLogMixin import (  # ★P0-1: _log签名兼容兜底
     SilentLogMixin,
     coerce_log_level,
 )
+from nucleus.llm.semantic_cache import get_semantic_cache_l2
 
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
@@ -183,6 +184,14 @@ class SurvivalOrchestrator(SilentLogMixin):
         self._beat_count = beat_count
         if beat_count % DETECT_EVERY_BEATS != 0:
             return  # 未到检测拍，跳过（轻量化）
+
+        # ★194刀1：低频拍（每 DETECT_EVERY_BEATS 拍）触发语义缓存 L2 只读遥测。
+        #   修复「有出口无扳机」——此前 telemetry() 仅被 stats() 内部调用，无外部观测扳机。
+        #   零副作用：仅读取遥测快照并经 INFO 日志输出，不改动任何命中判定/存储/返回。
+        try:
+            get_semantic_cache_l2().telemetry()
+        except Exception as _tele_e:  # noqa: BLE001
+            silent_exc(_tele_e, where="nucleus.SurvivalOrchestrator::on_heartbeat.telemetry")
 
         self.tick()
 
