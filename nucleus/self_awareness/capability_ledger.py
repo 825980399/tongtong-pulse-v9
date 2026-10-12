@@ -74,7 +74,6 @@ L1 只读性质：只写 maturity_ledger 的台账文件；不改进化决策、
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -86,11 +85,11 @@ from nucleus._silent_except import silent_exc
 __all__ = [
     "DESTINATIONS",
     "PCM_CATEGORY_TO_STATE",
-    "reports_root",
+    "capability_states",
     "classify_report",
     "reconcile_reports",
-    "capability_states",
     "register_capability_ledger",
+    "reports_root",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -209,7 +208,7 @@ def classify_report(rel_path: str, data: Any) -> tuple[str, str]:
                         str(x.get("type") or "?") for x in _an if isinstance(x, dict))[:80]))
     _gen = str(data.get("generator") or "")
     if _gen in PERIODIC_GENERATORS:
-        return "archived", "观测型-周期画像（generator={}，属周期产出、设计性不消费）".format(_gen)
+        return "archived", f"观测型-周期画像（generator={_gen}，属周期产出、设计性不消费）"
     # ⑥ 真空转（真正无处可归）
     return "true_idle", ("consumed_by 空 + 无 actions_triggered + 无 consume_results "
                          "+ 无 routing_order + 未归档 + 非周期画像 + 无 log_only 意图")
@@ -267,7 +266,7 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
             _rel = os.path.relpath(_fp, _base).replace("\\", "/")
             _d: Any = None
             try:
-                with io.open(_fp, encoding="utf-8") as _f:
+                with open(_fp, encoding="utf-8") as _f:
                     _d = json.load(_f)
             except (OSError, ValueError) as _e:
                 _out["unparsable"] += 1
@@ -337,7 +336,7 @@ def capability_states(use_cache: bool = True) -> dict[str, Any]:
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.capability_ledger::capability_states")
         _out["source"] = "pcm_unavailable"
-        _out["note"] = "{}: {}".format(type(_e).__name__, _e)
+        _out["note"] = f"{type(_e).__name__}: {_e}"
         _CACHE["ts"] = time.time()
         _CACHE["value"] = dict(_out)
         return _out
@@ -378,7 +377,7 @@ def register_capability_ledger(batch: str = "", pcm_result: dict | None = None) 
         from nucleus.self_awareness import maturity_ledger as ML
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.capability_ledger::register import")
-        return {"error": "{}: {}".format(type(_e).__name__, _e)}
+        return {"error": f"{type(_e).__name__}: {_e}"}
 
     _reports = reconcile_reports()
     _caps = pcm_result if isinstance(pcm_result, dict) else capability_states()

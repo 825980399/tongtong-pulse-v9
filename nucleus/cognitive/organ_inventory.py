@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import ast
-import io
 import json
 import os
 import re
@@ -103,7 +102,7 @@ def scan_organ_classes() -> list[dict[str, Any]]:
                 continue
             _p = os.path.join(_dp, _fn)
             try:
-                _src = io.open(_p, encoding="utf-8", errors="replace").read()
+                _src = open(_p, encoding="utf-8", errors="replace").read()
                 _tree = ast.parse(_src)
             except SyntaxError as _e:
                 _module_logger.debug("[181刀5] 解析失败 %s: %s", _p, _e)
@@ -250,18 +249,18 @@ _HEAD_CN_RE_M184 = re.compile(
 )
 
 
-def _organ_cn_name_of(file_rel: str) -> "str | None":
+def _organ_cn_name_of(file_rel: str) -> str | None:
     """从器官模块头注释提取中文名（与 self_inspector._HEAD_CN_RE 同口径）。"""
     _p = os.path.join(os.path.dirname(_organs_root()), file_rel)
     if not os.path.isfile(_p):
         return None
-    with io.open(_p, encoding="utf-8", errors="ignore") as _f:
+    with open(_p, encoding="utf-8", errors="ignore") as _f:
         _head = _f.read(800)
     _m = _HEAD_CN_RE_M184.search(_head)
     return _m.group(2) if _m else None
 
 
-def _organ_edges_static(organs: list[dict]) -> "dict[tuple, dict]":
+def _organ_edges_static(organs: list[dict]) -> dict[tuple, dict]:
     """静态 AST 扫描器官模块，产出 organ→organ 边（import / usage）。
 
     Returns: {(from_cls, to_cls): {"from","to","kinds":set,"refs":int}}
@@ -273,7 +272,7 @@ def _organ_edges_static(organs: list[dict]) -> "dict[tuple, dict]":
         _fp = os.path.join(os.path.dirname(_organs_root()), _o["file_path"])
         if not os.path.isfile(_fp):
             continue
-        _src = io.open(_fp, encoding="utf-8", errors="replace").read()
+        _src = open(_fp, encoding="utf-8", errors="replace").read()
         _tree = ast.parse(_src)
         _refd: set = set()  # (to_cls, kind)
         for _node in ast.walk(_tree):
@@ -307,7 +306,7 @@ def _organ_edges_static(organs: list[dict]) -> "dict[tuple, dict]":
     return _edges
 
 
-def _organ_edges_call_graph(organs: list[dict]) -> "dict[tuple, dict]":
+def _organ_edges_call_graph(organs: list[dict]) -> dict[tuple, dict]:
     """★184批刀3 线2：合并调用图边（ENABLE_CALL_GRAPH_ANALYSIS 已在产）。
 
     best-effort：开关关闭 / 任何异常都返回空 dict，绝不破坏导出。
@@ -345,8 +344,8 @@ def _organ_edges_call_graph(organs: list[dict]) -> "dict[tuple, dict]":
     return _edges
 
 
-def export_organ_graph(organs: "Any" = None, as_json: bool = False,
-                       include_call_graph: "bool | None" = None) -> "Any":
+def export_organ_graph(organs: Any = None, as_json: bool = False,
+                       include_call_graph: bool | None = None) -> Any:
     """导出器官关联图谱 v0（确定性 organ→organ 边表）。
 
     Args:

@@ -11,9 +11,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config as cfg  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
-from organs.body.PulseStomach import PulseStomach  # noqa: E402
+import config as cfg
+from organs.body.PulseLung import PulseLung
+from organs.body.PulseStomach import PulseStomach
 
 
 class _SilentLog:

@@ -28,10 +28,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io  # noqa: E402
-import unittest  # noqa: E402
+import unittest
 
-from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive  # noqa: E402
+from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -50,7 +49,7 @@ WIRED = [
 
 
 def _read(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8",
+    return open(os.path.join(_ROOT, rel), encoding="utf-8",
                    errors="replace").read()
 
 
@@ -63,7 +62,7 @@ class TestPathUtilsM55(unittest.TestCase):
         _d = os.path.join("D:" + os.sep, "proj")
         _out = safe_relpath(_c, _d)
         self.assertEqual(_out, os.path.abspath(_c),
-                         "跨盘应降级为绝对路径，实际={!r}".format(_out))
+                         f"跨盘应降级为绝对路径，实际={_out!r}")
 
     def test_02_cross_drive_plain_relpath_raises(self):
         """证明风险真实：原生 relpath 在跨盘时确实抛 ValueError。"""
@@ -97,7 +96,7 @@ class TestWiringM55(unittest.TestCase):
         """9 个文件都导入了 safe_relpath。"""
         for rel, _ in WIRED:
             self.assertIn("from nucleus.data.path_utils import safe_relpath",
-                          _read(rel), "{} 未导入 safe_relpath".format(rel))
+                          _read(rel), f"{rel} 未导入 safe_relpath")
 
     def test_06_call_count_matches(self):
         """各文件调用数与接入时一致（防止后续被改回去）。"""
@@ -114,7 +113,7 @@ class TestWiringM55(unittest.TestCase):
                     continue
                 if "os.path.relpath(" in _line and "_safe_relpath" not in _line:
                     # logger.py 的注释除外；此处只看代码行
-                    self.fail("{} 仍残留原生 relpath: {}".format(rel, _line.strip()[:80]))
+                    self.fail(f"{rel} 仍残留原生 relpath: {_line.strip()[:80]}")
 
 
 if __name__ == "__main__":

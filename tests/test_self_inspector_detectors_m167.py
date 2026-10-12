@@ -23,7 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.self_inspector import SelfInspector  # noqa: E402
+from nucleus.self_inspector import SelfInspector
 
 
 class TestSqlInjectionDetector(unittest.TestCase):

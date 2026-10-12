@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.llm.data_quality_evaluator import (  # noqa: E402
+from nucleus.llm.data_quality_evaluator import (
     DEFAULT_REPORT_PATH,
     SCORE_DIMENSIONS,
     channel_whitelist,
@@ -60,7 +60,7 @@ def main(argv=None) -> int:
     print()
     print("=== 结论 ===")
     for _f in _rep.get("findings", []):
-        print("  - {}".format(_f))
+        print(f"  - {_f}")
 
     if _args.json:
         print()

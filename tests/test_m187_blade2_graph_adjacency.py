@@ -11,9 +11,8 @@ import types
 
 sys.path.insert(0, ".")
 
-import tools.export_event_graph as eg
 import nucleus.self_inspector as si
-
+import tools.export_event_graph as eg
 
 _FAKE_GRAPH = {
     "edges": [

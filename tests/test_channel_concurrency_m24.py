@@ -18,11 +18,11 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.llm.ChannelConcurrency import (  # noqa: E402
+import config
+from nucleus.llm.ChannelConcurrency import (
     reset_channel_concurrency_manager,
 )
-from organs.body.PulseLung import PulseLung  # noqa: E402
+from organs.body.PulseLung import PulseLung
 
 
 def _mk_lung(call_impl):

@@ -14,14 +14,14 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-import nucleus.api_rate_limiter as _rl  # noqa: E402
-import nucleus.ssrf_guard as _ssrf  # noqa: E402
-from nucleus.llm.ChannelConcurrency import (  # noqa: E402
+import config
+import nucleus.api_rate_limiter as _rl
+import nucleus.ssrf_guard as _ssrf
+from nucleus.llm.ChannelConcurrency import (
     get_channel_concurrency_manager,
     reset_channel_concurrency_manager,
 )
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 _IW_SRC = open(os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py"),
                encoding="utf-8").read()

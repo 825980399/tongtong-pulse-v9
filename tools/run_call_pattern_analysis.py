@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.llm.call_pattern_analyzer import (  # noqa: E402
+from nucleus.llm.call_pattern_analyzer import (
     DEFAULT_REPORT_PATH,
     analyze_day,
     format_summary_line,
@@ -53,7 +53,7 @@ def main(argv=None) -> int:
             if _k in _p:
                 print("      %-10s %s" % (_k, _p[_k]))
         for _t in (_p.get("top") or [])[:3]:
-            print("      top: {}".format(_t))
+            print(f"      top: {_t}")
     print()
     print("=== 建议（按收益）===")
     for _i, _r in enumerate(_rep.get("recommendations", []), 1):
@@ -63,7 +63,7 @@ def main(argv=None) -> int:
     print()
     print("=== 结论 ===")
     for _f in _rep.get("findings", []):
-        print("  - {}".format(_f))
+        print(f"  - {_f}")
 
     if _args.json:
         print()

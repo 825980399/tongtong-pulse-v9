@@ -40,10 +40,8 @@ class ChannelSpeedProfiler:
                            "min": _s, "max": _s}
                 self._stats[_name] = _bucket
             _bucket["samples"].append(_s)
-            if _s < _bucket["min"]:
-                _bucket["min"] = _s
-            if _s > _bucket["max"]:
-                _bucket["max"] = _s
+            _bucket["min"] = min(_bucket["min"], _s)
+            _bucket["max"] = max(_bucket["max"], _s)
         except Exception as e:
             silent_exc(e, where="nucleus.llm.channel_speed_profiler::record L45")
 
@@ -67,8 +65,7 @@ class ChannelSpeedProfiler:
         _sorted = sorted(_samples)
         # p95：取 95% 分位（向上取整索引）
         _idx = min(_n - 1, int(round(0.95 * _n)) - 1)
-        if _idx < 0:
-            _idx = 0
+        _idx = max(_idx, 0)
         _p95 = _sorted[_idx]
         return {
             "count": _n,

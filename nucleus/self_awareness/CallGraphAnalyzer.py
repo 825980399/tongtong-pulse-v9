@@ -160,7 +160,7 @@ def _dotted(node: Any) -> str:
         return node.id
     if isinstance(node, ast.Attribute):
         _base = _dotted(node.value)
-        return ("{}.{}".format(_base, node.attr)) if _base else node.attr
+        return (f"{_base}.{node.attr}") if _base else node.attr
     return ""
 
 
@@ -188,16 +188,14 @@ def _iter_py_files(project_root: str, scan_dirs: list) -> list:
 def _module_id(rel_path: str) -> str:
     """`a/b/c.py` → `a.b.c`；`a/b/__init__.py` → `a.b`。"""
     _p = rel_path.replace("\\", "/")
-    if _p.endswith(".py"):
-        _p = _p[:-3]
-    if _p.endswith("/__init__"):
-        _p = _p[:-len("/__init__")]
+    _p = _p.removesuffix(".py")
+    _p = _p.removesuffix("/__init__")
     return _p.replace("/", ".")
 
 
 def _qual_id(module: str, qualname: str) -> str:
     """组装节点 id：`module:qualname`。"""
-    return "{}:{}".format(module, qualname)
+    return f"{module}:{qualname}"
 
 
 # ----------------------------------------------------------------------
@@ -222,7 +220,7 @@ class _Collector(ast.NodeVisitor):
 
     def _visit_func(self, node: Any) -> None:
         _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
-        _qual = ("{}.{}".format(_cls, node.name)) if _cls else node.name
+        _qual = (f"{_cls}.{node.name}") if _cls else node.name
         self.defs.append({
             "id": _qual_id(self.module, _qual),
             "name": node.name,
@@ -269,7 +267,7 @@ class _Collector(ast.NodeVisitor):
             if _a.name == "*":
                 continue
             _alias = _a.asname or _a.name
-            self.bindings[_alias] = ("{}.{}".format(_base, _a.name)) if _base else _a.name
+            self.bindings[_alias] = (f"{_base}.{_a.name}") if _base else _a.name
 
     # ---------------- 调用 ----------------
     def visit_Call(self, node: ast.Call) -> None:
@@ -283,7 +281,7 @@ class _Collector(ast.NodeVisitor):
                              if x[0] == "func"), "")
                 _cls0 = ".".join(x[1] for x in self._scope if x[0] == "class")
                 self.raw_calls.append({
-                    "caller_qual": (("{}.{}".format(_cls0, _fn0)) if _cls0 else _fn0)
+                    "caller_qual": ((f"{_cls0}.{_fn0}") if _cls0 else _fn0)
                     or _MODULE_SCOPE,
                     "parts": [],
                     "line": node.lineno,
@@ -295,7 +293,7 @@ class _Collector(ast.NodeVisitor):
         _fn = next((x[1] for x in reversed(self._scope) if x[0] == "func"), "")
         _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
         if _fn:
-            _caller_qual = ("{}.{}".format(_cls, _fn)) if _cls else _fn
+            _caller_qual = (f"{_cls}.{_fn}") if _cls else _fn
         else:
             _caller_qual = _MODULE_SCOPE
         self.raw_calls.append({
@@ -478,7 +476,7 @@ class CallGraphAnalyzer:
             _caller_id = _qual_id(_caller_mod, _caller_qual)
             if _caller_id not in self._defs:
                 # 模块级调用：用虚拟调用者，不入 nodes
-                _caller_id = "{}:{}".format(_caller_mod, _MODULE_SCOPE)
+                _caller_id = f"{_caller_mod}:{_MODULE_SCOPE}"
             if _callee == _caller_id:
                 continue                      # 自调用不计边（避免噪声）
             _tgt = self._graph.setdefault(_caller_id, {})

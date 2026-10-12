@@ -8,7 +8,6 @@
 ★全部只读 / 注入隔离目录，**不写生产数据**。
 """
 import importlib.util
-import io
 import json
 import os
 import shutil
@@ -25,7 +24,7 @@ _TOOL = os.path.join(_ROOT, "tools", "calibrate_semantic_threshold.py")
 
 
 def _read(path):
-    with io.open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         return f.read()
 
 
@@ -60,7 +59,7 @@ class TestDesignDocL2(unittest.TestCase):
 
     def test_02_required_sections_present(self):
         _miss = [k for k in self.REQUIRED if k not in self._t]
-        self.assertEqual(_miss, [], "缺少章节关键词: {}".format(_miss))
+        self.assertEqual(_miss, [], f"缺少章节关键词: {_miss}")
 
     def test_03_design_only_declared(self):
         """必须显式声明"仅设计不实施"（任务书验收标准）。"""
@@ -107,7 +106,7 @@ class TestDesignDocL3(unittest.TestCase):
 
     def test_11_required_sections_present(self):
         _miss = [k for k in self.REQUIRED if k not in self._t]
-        self.assertEqual(_miss, [], "缺少章节关键词: {}".format(_miss))
+        self.assertEqual(_miss, [], f"缺少章节关键词: {_miss}")
 
     def test_12_relation_with_t2_explicit(self):
         self.assertIn("架构位置", self._t)
@@ -213,9 +212,8 @@ class TestCalibrationTool(unittest.TestCase):
         _d = tempfile.mkdtemp(prefix="m44_calib_")
         try:
             _fp = os.path.join(_d, "calls_20260101.jsonl")
-            with io.open(_fp, "w", encoding="utf-8") as f:
-                for _p in ["深度学习原理", "深度学习原理", "ab", "注意力机制"]:
-                    f.write(json.dumps({"prompt": _p}, ensure_ascii=False) + "\n")
+            with open(_fp, "w", encoding="utf-8") as f:
+                f.writelines(json.dumps({"prompt": _p}, ensure_ascii=False) + "\n" for _p in ["深度学习原理", "深度学习原理", "ab", "注意力机制"])
             _got = self.mod.load_corpus(_d)
             # 去重（"深度学习原理" 只留 1 条）+ 过滤 <4 字符（"ab"）
             self.assertEqual(_got, ["深度学习原理", "注意力机制"])
@@ -266,17 +264,17 @@ class TestNoRuntimeChange(unittest.TestCase):
         """★第45批 T1 反向同步：第44批"仅设计不实施"的守卫已随实施改为
         "必须等于校准值 0.85"（保持 `==` 而非放宽）。"""
         import config
-        self.assertEqual(float(getattr(config, "SEMANTIC_CACHE_THRESHOLD")), 0.85)
+        self.assertEqual(float(config.SEMANTIC_CACHE_THRESHOLD), 0.85)
 
     def test_31_no_l2_switch_introduced(self):
         import config
         for _k in ("ENABLE_L3_CALL_REDUCER_OBSERVE", "ENABLE_L3_REUSE"):
-            self.assertFalse(hasattr(config, _k), "不应新增生产开关: {}".format(_k))
+            self.assertFalse(hasattr(config, _k), f"不应新增生产开关: {_k}")
 
     def test_32_no_call_reducer_module(self):
         for _p in (os.path.join(_ROOT, "nucleus", "llm", "call_reducer.py"),
                    os.path.join(_ROOT, "nucleus", "llm", "semantic_cache_l2.py")):
-            self.assertFalse(os.path.exists(_p), "不应新建模块: {}".format(_p))
+            self.assertFalse(os.path.exists(_p), f"不应新建模块: {_p}")
 
 
 if __name__ == "__main__":

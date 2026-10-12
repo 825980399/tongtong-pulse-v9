@@ -13,7 +13,6 @@ ToolRegistry.py —— 工具注册表
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import time
@@ -118,7 +117,7 @@ class ToolRegistry:
             }
             _dir = os.path.dirname(_path) or "."
             os.makedirs(_dir, exist_ok=True)
-            with io.open(_path, "w", encoding="utf-8", newline="") as _f:
+            with open(_path, "w", encoding="utf-8", newline="") as _f:
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return True
         except Exception as _e:
@@ -132,7 +131,7 @@ class ToolRegistry:
         if not os.path.isfile(_path):
             return 0
         try:
-            with io.open(_path, "r", encoding="utf-8", newline=None) as _f:
+            with open(_path, "r", encoding="utf-8", newline=None) as _f:
                 _data = json.load(_f)
             for _n, _t in _data.get("tools", {}).items():
                 _t = dict(_t)

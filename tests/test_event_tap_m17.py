@@ -26,14 +26,14 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.const import Event  # noqa: E402
-from nucleus.events.EventBus import (  # noqa: E402
+import config
+from nucleus.const import Event
+from nucleus.events.EventBus import (
     EventBus,
     EventPriority,
     reset_event_bus,
 )
-from nucleus.events.EventTap import (  # noqa: E402
+from nucleus.events.EventTap import (
     _OTHER_BUCKET,
     EventTap,
     get_event_tap,
@@ -414,7 +414,7 @@ class TestOrganWiring(unittest.TestCase):
 
         # ★刀2：原 _ns 缺 Event ⇒ exec 真实代码块时 NameError: name 'Event' is not defined。
         #   注入真实 Event（从 nucleus.const 导入，保持单一真相源，不硬编码字符串）。
-        from nucleus.const import Event as _Ev  # noqa: PLC0415 - 用例内惰性导入
+        from nucleus.const import Event as _Ev
         _ns = {"tap_publish": _capture, "time": time, "Event": _Ev}
         _ns.update(ns_extra)
         for _b in _iter_publish_blocks(path):

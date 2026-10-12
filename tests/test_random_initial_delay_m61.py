@@ -19,9 +19,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.evolution.ParamPatchManager import ParamPatchManager  # noqa: E402
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+import config
+from nucleus.evolution.ParamPatchManager import ParamPatchManager
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _MAIN = os.path.join(_ROOT, "main.py")
@@ -183,7 +183,7 @@ class TestRandomInitialDelay(unittest.TestCase):
     def test_06b_memory_verify_subsequent_uses_interval(self):
         """★首跑延迟只影响第一轮，其后恢复 interval（6h）——不改变任务周期。"""
         _calls = _probe_nodepool(600.0 / 3600.0)
-        self.assertGreaterEqual(len(_calls), 2, "未观测到第二轮: {}".format(_calls))
+        self.assertGreaterEqual(len(_calls), 2, f"未观测到第二轮: {_calls}")
         # ★第62批 T1：首跑推迟 → 21600 + 600
         self.assertAlmostEqual(_calls[0], 21600.0 + 600.0, delta=2.0)
         # 第二轮起恢复原周期（未受推迟影响）

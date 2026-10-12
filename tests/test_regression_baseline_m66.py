@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tools.pytest_shard as _ps  # noqa: E402
+import tools.pytest_shard as _ps
 
 _M66_FILES = [
     "tests/test_memory_growth_analyzer_m66.py",

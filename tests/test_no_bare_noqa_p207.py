@@ -4,7 +4,6 @@
 裸 # noqa 会抑制所有规则，无法审计实际抑制了什么。
 所有 # noqa 必须带规则码，如 # noqa: F401。
 """
-import io
 import os
 import re
 import unittest
@@ -15,10 +14,10 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 需要检查的目录
 _SCAN_DIRS = ["nucleus", "organs", "base", "tools", "tests"]
 
-# 允许裸 # noqa 的文件白名单（空=不允许）
+# 允许裸
 _ALLOWED_FILES = set()
 
-# 裸 # noqa 模式：行尾的 # noqa，后面没有 :规则码
+# 裸
 _BARE_NOQA_PATTERN = re.compile(r"#\s*noqa\s*$", re.MULTILINE)
 
 
@@ -50,7 +49,7 @@ class TestNoBareNoqaP207(unittest.TestCase):
             if rel in _ALLOWED_FILES:
                 continue
             try:
-                with io.open(fpath, "r", encoding="utf-8") as f:
+                with open(fpath, "r", encoding="utf-8") as f:
                     content = f.read()
             except (UnicodeDecodeError, OSError):
                 continue
@@ -77,7 +76,7 @@ class TestNoBareNoqaP207(unittest.TestCase):
         main_path = os.path.join(_PROJECT_ROOT, "main.py")
         if not os.path.exists(main_path):
             self.skipTest("main.py not found")
-        with io.open(main_path, "r", encoding="utf-8") as f:
+        with open(main_path, "r", encoding="utf-8") as f:
             content = f.read()
         bare = _BARE_NOQA_PATTERN.findall(content)
         self.assertEqual(

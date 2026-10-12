@@ -16,8 +16,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from tools.check_code_limits import DEFAULT_CONFIG, build_report, collect  # noqa: E402
+import config
+from tools.check_code_limits import DEFAULT_CONFIG, build_report, collect
 
 
 def test_code_quality_config_block_exists():

@@ -28,7 +28,6 @@
 import ast
 import importlib.machinery
 import importlib.util
-import io
 import json
 import os
 import sys
@@ -97,7 +96,7 @@ def _load_patch_library():
         if not os.path.isfile(_p):
             continue
         try:
-            _d = json.loads(io.open(_p, encoding="utf-8").read())
+            _d = json.loads(open(_p, encoding="utf-8").read())
         except Exception:
             continue
         _stack = [_d]
@@ -130,7 +129,7 @@ def _iter_production_patch_dicts():
                 continue
             _fp = os.path.join(_dp, _f)
             try:
-                _src = io.open(_fp, encoding="utf-8", errors="ignore").read()
+                _src = open(_fp, encoding="utf-8", errors="ignore").read()
                 _tree = ast.parse(_src, filename=_fp)
             except Exception:
                 continue
@@ -224,7 +223,7 @@ class TestT90aGateZeroSemantics(unittest.TestCase):
         """字段可能是 None/int/list —— 关0 必须健壮（不得抛异常）。"""
         for _bad in (None, 0, [], {}, ""):
             _r = _check(self.pm, {"original_code": _bad, "modified_code": "def f():\n    return 1\n"})
-            self.assertFalse(_r["complete"], "original_code={!r} 应被拒".format(_bad))
+            self.assertFalse(_r["complete"], f"original_code={_bad!r} 应被拒")
 
 
 # ============================================================ B 零回归证明
@@ -255,7 +254,7 @@ class TestT90aZeroRegression(unittest.TestCase):
             _old = _leg_pm._check_llm_patch_completeness(dict(_patch))
             _new = _check(self.pm, dict(_patch))
             self.assertEqual(_old["complete"], _new["complete"],
-                             "[{}] 结论漂移：改前={!r} 改后={!r}".format(_name, _old, _new))
+                             f"[{_name}] 结论漂移：改前={_old!r} 改后={_new!r}")
         self.assertTrue(True)
 
     def test_21_legacy_reported_wrong_reason(self):
@@ -287,7 +286,7 @@ class TestT90aProductionLibrary(unittest.TestCase):
     def test_30_library_not_empty(self):
         """自检：真的读到了补丁（否则后面的断言是空转）。"""
         self.assertGreater(len(self.patches), 0,
-                           "补丁库为空：{} / {}".format(_PENDING, _HISTORY))
+                           f"补丁库为空：{_PENDING} / {_HISTORY}")
 
     def test_31_no_verdict_drift_on_real_patches(self):
         """★核心零回归：75 条真实补丁「改前判定 == 改后判定」逐条相等。"""
@@ -304,7 +303,7 @@ class TestT90aProductionLibrary(unittest.TestCase):
                 _drift.append((_p.get("id", "?"), _old, _new))
             if not _new["complete"] and "必填字段" in _new["reason"]:
                 _rej_gate0 += 1
-        self.assertEqual(_drift, [], "存在判定漂移：{}".format(_drift[:3]))
+        self.assertEqual(_drift, [], f"存在判定漂移：{_drift[:3]}")
         # 真实数据里不应有关0 拒绝（生产者一直传齐字段）—— 这是 T0 结论的回归护栏
         self.assertEqual(_rej_gate0, 0,
                          "生产补丁被关0 拒绝 %d 条 ⇒ 存在字段契约不完整的生产者" % _rej_gate0)
@@ -337,12 +336,12 @@ class TestT90aFieldContractSweep(unittest.TestCase):
                 _offenders.append("%s:%d" % (_rel, _ln))
         self.assertGreater(_total, 0, "穷举到 0 个构造点 ⇒ 扫描逻辑失效，断言无效")
         self.assertEqual(_offenders, [],
-                         "以下补丁 dict 字面量缺 original_code：{}".format(_offenders))
+                         f"以下补丁 dict 字面量缺 original_code：{_offenders}")
 
     def test_41_safe_evolution_executor_gate_present(self):
         """生产者侧同型闸 `_llm_no_snippet` 必须存在且参与构造条件。"""
         _p = os.path.join(ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
-        _src = io.open(_p, encoding="utf-8", errors="ignore").read()
+        _src = open(_p, encoding="utf-8", errors="ignore").read()
         self.assertIn("_llm_no_snippet", _src, "缺少 _llm_no_snippet 闸")
         self.assertIn("and not _llm_no_snippet", _src,
                       "闸未接入构造条件（存在但不生效 = 伪闸）")
@@ -352,7 +351,7 @@ class TestT90aFieldContractSweep(unittest.TestCase):
     def test_42_test_generator_fixture_completed(self):
         """`TestGenerator.__main__` 自测夹具历史上是唯一缺字段的构造点，已补齐。"""
         _p = os.path.join(ROOT, "nucleus", "evolution", "TestGenerator.py")
-        _src = io.open(_p, encoding="utf-8", errors="ignore").read()
+        _src = open(_p, encoding="utf-8", errors="ignore").read()
         _tree = ast.parse(_src, filename=_p)
         _found = []
         for _n in ast.walk(_tree):
@@ -363,7 +362,7 @@ class TestT90aFieldContractSweep(unittest.TestCase):
                     _found.append(sorted(_keys))
         self.assertTrue(_found, "TestGenerator 里找不到补丁夹具")
         for _keys in _found:
-            self.assertIn("original_code", _keys, "夹具字段不全：{}".format(_keys))
+            self.assertIn("original_code", _keys, f"夹具字段不全：{_keys}")
 
 
 # ============================================================ E 开关契约
@@ -384,10 +383,10 @@ class TestT90aSwitchContract(unittest.TestCase):
         第91批任务书 T-91c 解除该约束（登记默认值不变，仍为 True）⇒ 断言反转。
         """
         _cfg = os.path.join(ROOT, "config.py")
-        _src = io.open(_cfg, encoding="utf-8", errors="ignore").read()
+        _src = open(_cfg, encoding="utf-8", errors="ignore").read()
         self.assertIn(_SWITCH, _src,
-                      "第91批 T-91c 起 {} 必须正式登记在 config.py".format(_SWITCH))
-        self.assertIn("{} = True".format(_SWITCH), _src, "登记默认值必须为 True（与登记前一致）")
+                      f"第91批 T-91c 起 {_SWITCH} 必须正式登记在 config.py")
+        self.assertIn(f"{_SWITCH} = True", _src, "登记默认值必须为 True（与登记前一致）")
         import config as _cfg_mod
         self.assertTrue(getattr(_cfg_mod, _SWITCH))
 

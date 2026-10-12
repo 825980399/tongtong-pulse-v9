@@ -31,7 +31,6 @@
   F. 先红后绿 —— 改前（`.bak_batch93`）不含写盘点结构关。
 """
 import ast
-import io
 import json
 import os
 import shutil
@@ -46,8 +45,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.reasoning.PatchManager import (  # noqa: E402
+import config
+from nucleus.reasoning.PatchManager import (
     _M92_STRUCT_SHRINK_RATIO,
     PatchManager,
     _m92_ast_struct_guard,
@@ -93,7 +92,7 @@ _MC = (
 
 # --------------------------------------------------------------- 基础设施
 def _src():
-    return io.open(_PM_SRC_PATH, encoding="utf-8").read()
+    return open(_PM_SRC_PATH, encoding="utf-8").read()
 
 
 def _tree():
@@ -107,7 +106,7 @@ def _method_node(name):
             for _y in _nd.body:
                 if isinstance(_y, (ast.FunctionDef, ast.AsyncFunctionDef)) and _y.name == name:
                     return _y
-    raise AssertionError("未找到 PatchManager.{}".format(name))
+    raise AssertionError(f"未找到 PatchManager.{name}")
 
 
 def _calls_in(node):
@@ -155,7 +154,7 @@ def _make_project(oc, tail=6):
         _lines += ["    def after%d(self):" % _k, "        return %d" % _k, ""]
     os.makedirs(os.path.join(_root, "organs", "brain"), exist_ok=True)
     _fp = os.path.join(_root, "organs", "brain", "PulseInnerWorld.py")
-    io.open(_fp, "w", encoding="utf-8").write("\n".join(_lines))
+    open(_fp, "w", encoding="utf-8").write("\n".join(_lines))
     return _root, _fp
 
 
@@ -183,9 +182,9 @@ def _run_apply(oc=_OC, mc=_MC, mock_gates=False, **sw):
     _p = {"id": "p93", "source": "llm", "file": _fp, "method": "target",
           "original_code": oc, "modified_code": mc,
           "status": "approved", "line": 10}
-    io.open(_pmg.get_pending_file(), "w", encoding="utf-8").write(
+    open(_pmg.get_pending_file(), "w", encoding="utf-8").write(
         json.dumps([_p], ensure_ascii=False))
-    _before = io.open(_fp, encoding="utf-8").read()
+    _before = open(_fp, encoding="utf-8").read()
 
     _ctx = mock.patch.object(PatchManager, "_check_personality_baseline",
                              return_value={"safe": True, "reason": ""}), \
@@ -205,7 +204,7 @@ def _run_apply(oc=_OC, mc=_MC, mock_gates=False, **sw):
             if mock_gates:
                 for _c in _ctx:
                     _c.stop()
-        _after = io.open(_fp, encoding="utf-8").read()
+        _after = open(_fp, encoding="utf-8").read()
     finally:
         shutil.rmtree(_root, True)
 
@@ -255,8 +254,8 @@ class TestT93aStaticWiring(unittest.TestCase):
         _apply = _calls_in(_method_node("apply_all_pending"))
         _verify = _calls_in(_method_node("_verify_in_copy"))
         for _f in ("_m92_base_indent", "_m92_ast_struct_guard"):
-            self.assertIn(_f, _apply, "写盘点未调用 {}".format(_f))
-            self.assertIn(_f, _verify, "验证侧未调用 {}".format(_f))
+            self.assertIn(_f, _apply, f"写盘点未调用 {_f}")
+            self.assertIn(_f, _verify, f"验证侧未调用 {_f}")
 
     def test_A5_guards_live_inside_py_only_branch(self):
         """两关必须在 `if patch["file"].endswith(".py"):` 分支内（非 .py 文件无意义）。"""
@@ -283,13 +282,13 @@ class TestT93aStaticWiring(unittest.TestCase):
                    'results["failed"] += 1',
                    'results["details"].append({',
                    'continue'):
-            self.assertIn(_k, _seg, "写盘点拒绝体缺少：{}".format(_k))
+            self.assertIn(_k, _seg, f"写盘点拒绝体缺少：{_k}")
 
     def test_A7_guard_functions_are_module_level_pure(self):
         _names = {_n.name for _n in _tree().body if isinstance(_n, ast.FunctionDef)}
         for _f in ("_m92_base_indent", "_m92_ast_struct_guard",
                    "_m92_base_indent_guard_on", "_m92_ast_struct_guard_on"):
-            self.assertIn(_f, _names, "{} 必须在模块级".format(_f))
+            self.assertIn(_f, _names, f"{_f} 必须在模块级")
 
 
 # ==========================================================================
@@ -418,7 +417,7 @@ class TestT93dParityWithVerifySide(unittest.TestCase):
     def test_D3_struct_judgement_identical_value(self):
         _root, _fp = _make_project(_OC)
         self.addCleanup(shutil.rmtree, _root, True)
-        _full = io.open(_fp, encoding="utf-8").read()
+        _full = open(_fp, encoding="utf-8").read()
         _mod = _full.replace(_OC, _MC)
         _v = _m92_ast_struct_guard(_full, _mod)
         self.assertIsNotNone(_v)
@@ -442,7 +441,7 @@ class TestT93eZeroRegression(unittest.TestCase):
     def test_E1_write_point_guard_absent_before_batch(self):
         if not os.path.isfile(_BAK_PM):
             self.skipTest(".bak_batch93 缺失（scratch 目录可被外部清理）")
-        _old = io.open(_BAK_PM, encoding="utf-8").read()
+        _old = open(_BAK_PM, encoding="utf-8").read()
         self.assertNotIn("rejected_base_indent_guard", _old)
         self.assertNotIn("rejected_ast_structure_guard", _old)
         self.assertIn("rejected_base_indent_guard", _src())
@@ -460,11 +459,11 @@ class TestT93eZeroRegression(unittest.TestCase):
 
         def _run(_cls):
             _m = _cls(_root)
-            io.open(_m.get_pending_file(), "w", encoding="utf-8").write(
+            open(_m.get_pending_file(), "w", encoding="utf-8").write(
                 json.dumps([dict(_p)], ensure_ascii=False))
-            _b = io.open(_fp, encoding="utf-8").read()
+            _b = open(_fp, encoding="utf-8").read()
             _r = _m.apply_all_pending(only_approved=False)
-            _a = io.open(_fp, encoding="utf-8").read()
+            _a = open(_fp, encoding="utf-8").read()
             return (_r.get("applied"), _r.get("failed"),
                     [_d.get("status") for _d in _r.get("details", [])], _b != _a)
 
@@ -475,15 +474,15 @@ class TestT93eZeroRegression(unittest.TestCase):
         _p2 = dict(_p)
         _p2["file"] = _fp2
         _m2 = _leg.PatchManager(_root2)
-        io.open(_m2.get_pending_file(), "w", encoding="utf-8").write(
+        open(_m2.get_pending_file(), "w", encoding="utf-8").write(
             json.dumps([_p2], ensure_ascii=False))
-        _b2 = io.open(_fp2, encoding="utf-8").read()
+        _b2 = open(_fp2, encoding="utf-8").read()
         _r2 = _m2.apply_all_pending(only_approved=False)
-        _a2 = io.open(_fp2, encoding="utf-8").read()
+        _a2 = open(_fp2, encoding="utf-8").read()
         _old = (_r2.get("applied"), _r2.get("failed"),
                 [_d.get("status") for _d in _r2.get("details", [])], _b2 != _a2)
 
-        self.assertEqual(_old, _new, "开关全关时结论漂移：改前={!r} 改后={!r}".format(_old, _new))
+        self.assertEqual(_old, _new, f"开关全关时结论漂移：改前={_old!r} 改后={_new!r}")
 
 
 # ==========================================================================
@@ -494,7 +493,7 @@ class TestT93fRedGreen(unittest.TestCase):
     def test_F1_legacy_apply_all_pending_lacks_struct_guard(self):
         if not os.path.isfile(_BAK_PM):
             self.skipTest(".bak_batch93 缺失")
-        _old = io.open(_BAK_PM, encoding="utf-8").read()
+        _old = open(_BAK_PM, encoding="utf-8").read()
         _t = ast.parse(_old)
         _node = None
         for _nd in _t.body:

@@ -42,17 +42,17 @@ import json
 import re
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
 __all__ = [
-    "repair_json_text",
-    "parse_with_repair",
-    "extract_json_block",
-    "classify_json_error",
     "JsonFailureTracker",
+    "classify_json_error",
+    "extract_json_block",
     "get_json_failure_tracker",
+    "parse_with_repair",
+    "repair_json_text",
     "reset_json_failure_tracker",
 ]
 
@@ -107,7 +107,7 @@ def _strip_code_fence(text: str) -> str:
     return text
 
 
-def extract_json_block(text: str) -> Optional[str]:
+def extract_json_block(text: str) -> str | None:
     """提取最外层大括号平衡块（字符串内的括号已做转义感知跳过）。
 
     Returns:
@@ -264,7 +264,7 @@ def _apply_structural_fixes(text: str, *,
     return _t
 
 
-def _try_loads(text: str) -> Optional[Any]:
+def _try_loads(text: str) -> Any | None:
     """尝试解析；成功且为 dict/list 时返回对象，否则 None。"""
     try:
         _obj = json.loads(text)
@@ -274,7 +274,7 @@ def _try_loads(text: str) -> Optional[Any]:
     return _obj if isinstance(_obj, (dict, list)) else None
 
 
-def repair_json_text(text: str) -> Optional[str]:
+def repair_json_text(text: str) -> str | None:
     """尝试把**格式有瑕疵**的 JSON 文本修复为可解析文本。
 
     修复链（逐候选验证，返回第一个 ``json.loads`` 成功的文本）：
@@ -335,7 +335,7 @@ def repair_json_text(text: str) -> Optional[str]:
     return None
 
 
-def parse_with_repair(text: str) -> tuple[Optional[Any], str]:
+def parse_with_repair(text: str) -> tuple[Any | None, str]:
     """三策略串联解析：direct -> extract -> repair。
 
     Args:
@@ -460,7 +460,7 @@ class JsonFailureTracker:
                 f"失败{self._fail}次（成功率{_rate:.1f}%）"
                 + (f"，失败分类：{_detail}" if _detail else ""))
 
-    def maybe_summary(self) -> Optional[str]:
+    def maybe_summary(self) -> str | None:
         """每 ``summary_every`` 次调用返回一次摘要，其余返回 None。"""
         with self._lock:
             self._call_count += 1
@@ -494,7 +494,7 @@ class JsonFailureTracker:
 # 四、进程级单例
 # ============================================================
 
-_TRACKER: Optional[JsonFailureTracker] = None
+_TRACKER: JsonFailureTracker | None = None
 _TRACKER_LOCK = threading.Lock()
 
 

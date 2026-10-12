@@ -3,7 +3,6 @@
 
 验收：_scanned_metas 有读取方（get_scanned_metas）；差集校验行为不变。
 """
-import pytest
 
 from nucleus.organ_loader import OrganLoader, OrganMeta
 

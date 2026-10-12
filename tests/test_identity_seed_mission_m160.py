@@ -21,10 +21,10 @@ if ROOT not in sys.path:
 try:
     from unittest import mock
 except ImportError:
-    import mock
+    from unittest import mock
 
-import config  # noqa: E402
-from organs.identity.PulseSelfAwareness import PulseSelfAwareness  # noqa: E402
+import config
+from organs.identity.PulseSelfAwareness import PulseSelfAwareness
 
 
 class _FakeNode:

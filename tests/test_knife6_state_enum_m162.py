@@ -9,7 +9,6 @@
 落点：PulseNode.VALID_STATES + is_valid_state；PulseNodePool.add 入库前闸门。
 登记册侧 check_pending_register.py:25 合法枚举不动。
 """
-import pytest
 
 import nucleus.mnemosyne.PulseNodePool as PNP
 from nucleus.mnemosyne.PulseNode import PulseNode

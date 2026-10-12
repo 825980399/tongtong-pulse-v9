@@ -52,7 +52,7 @@ def test_dashboard_three_metrics():
     _tm = _p["three_metrics"]
     assert "external_dependency" in _tm
     assert 0.0 <= float(_tm["external_dependency"]) <= 1.0
-    assert "note" in _tm and _tm["note"]
+    assert _tm.get("note")
 
 
 def test_dashboard_retention_not_old_24():

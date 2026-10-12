@@ -25,7 +25,6 @@
      开关关闭时悬空边照旧落盘（证明 E 组断言非恒真）。
 """
 import ast
-import io
 import json
 import os
 import sys
@@ -38,13 +37,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.mnemosyne.PulseNode import (  # noqa: E402
+import config
+from nucleus.mnemosyne.PulseNode import (
     PulseNode,
     _m102_derive_linked_nodes,
     _m102_linked_derived_on,
 )
-from nucleus.mnemosyne.PulseSnapshot import (  # noqa: E402
+from nucleus.mnemosyne.PulseSnapshot import (
     PulseSnapshot,
     _m102_dangling_guard_on,
     _m102_filter_dangling_edges,
@@ -58,7 +57,7 @@ VEC_PY = os.path.join(ROOT, "nucleus", "semantic", "VectorStore.py")
 
 
 def _read(path):
-    with io.open(path, encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
 
 
@@ -282,7 +281,7 @@ class E_EndToEndWrite(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             inst = self._instance(tmp)
             inst._atomic_write_with_rotation(self._snapshot(), compact=True, rotate=False)
-            with io.open(inst.snapshot_path, encoding="utf-8") as f:
+            with open(inst.snapshot_path, encoding="utf-8") as f:
                 text = f.read()
             self.assertNotIn("node:ghost", text, "悬空边不得落盘")
             data = json.loads(text)
@@ -295,7 +294,7 @@ class E_EndToEndWrite(unittest.TestCase):
             inst = self._instance(tmp)
             with mock.patch.object(config, "ENABLE_M102_DANGLING_EDGE_GUARD", False):
                 inst._atomic_write_with_rotation(self._snapshot(), compact=True, rotate=False)
-            with io.open(inst.snapshot_path, encoding="utf-8") as f:
+            with open(inst.snapshot_path, encoding="utf-8") as f:
                 text = f.read()
             self.assertIn("node:ghost", text, "开关关闭时行为应与改造前一致")
 
@@ -305,7 +304,7 @@ class E_EndToEndWrite(unittest.TestCase):
             inst = self._instance(tmp)
             inst.node_pool = None
             inst._atomic_write_with_rotation(self._snapshot(), compact=True, rotate=False)
-            with io.open(inst.snapshot_path, encoding="utf-8") as f:
+            with open(inst.snapshot_path, encoding="utf-8") as f:
                 text = f.read()
             self.assertIn("node:ghost", text)
 

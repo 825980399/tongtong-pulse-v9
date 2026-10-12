@@ -16,8 +16,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from functions.chat.chat_service import ChatService  # noqa: E402
-from nucleus.security.crisis_keywords import crisis_self_harm_keywords  # noqa: E402
+from functions.chat.chat_service import ChatService
+from nucleus.security.crisis_keywords import crisis_self_harm_keywords
 
 
 def _mk(caplog=None):
@@ -44,7 +44,7 @@ class TestCrisisGuardShortCircuit:
     def test_all_13_keywords_short_circuit(self):
         c = _mk()
         for w in _INPUTS:
-            assert c._m169_crisis_guard(w) is True, "未短路: {}".format(w)
+            assert c._m169_crisis_guard(w) is True, f"未短路: {w}"
         assert c._crisis_referral_count == 13
 
     def test_covers_crisis_keyword_source(self):
@@ -57,7 +57,7 @@ class TestCrisisGuardShortCircuit:
         """C7' 的 4 个子串兜底词（jieba 词边界会漏）必须短路。"""
         c = _mk()
         for w in ("想死", "不想活", "活着没意思", "结束生命"):
-            assert c._m169_crisis_guard(w) is True, "子串兜底失效: {}".format(w)
+            assert c._m169_crisis_guard(w) is True, f"子串兜底失效: {w}"
 
     def test_output_text_uses_existing_channel(self):
         c = _mk()
@@ -69,7 +69,7 @@ class TestZeroRegression:
     def test_normal_input_passes(self):
         c = _mk()
         for t in ("你好", "曈曈 晚上好", "给我讲个笑话", "讲讲脉冲架构", ""):
-            assert c._m169_crisis_guard(t) is False, "误短路: {!r}".format(t)
+            assert c._m169_crisis_guard(t) is False, f"误短路: {t!r}"
         assert c._crisis_referral_count == 0
 
     def test_switch_off_returns_false(self):
@@ -80,7 +80,7 @@ class TestZeroRegression:
         try:
             c = _mk()
             for w in _INPUTS:
-                assert c._m169_crisis_guard(w) is False, "开关 OFF 仍短路: {}".format(w)
+                assert c._m169_crisis_guard(w) is False, f"开关 OFF 仍短路: {w}"
             assert c._crisis_referral_count == 0
             assert c._logs == []
         finally:

@@ -91,7 +91,7 @@ class Anomaly:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Anomaly":
+    def from_dict(cls, d: dict[str, Any]) -> Anomaly:
         _known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in (d or {}).items() if k in _known})
 
@@ -152,7 +152,7 @@ class ReportEnvelope:
 
     # ---------- 消费结果 / 路由（★第111批 T-111c） ----------
 
-    def record_consume_result(self, result: "ConsumeResult") -> None:
+    def record_consume_result(self, result: ConsumeResult) -> None:
         """记录一个消费者的结构化结果（供 ``get_stats`` 读取，闭环可见化）。"""
         if not isinstance(result, ConsumeResult):
             return
@@ -169,7 +169,7 @@ class ReportEnvelope:
         return _d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ReportEnvelope":
+    def from_dict(cls, d: dict[str, Any]) -> ReportEnvelope:
         _known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         _kw = {k: v for k, v in (d or {}).items() if k in _known}
         return cls(**_kw)
@@ -197,7 +197,7 @@ class ConsumeResult:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ConsumeResult":
+    def from_dict(cls, d: dict[str, Any]) -> ConsumeResult:
         _known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in (d or {}).items() if k in _known})
 

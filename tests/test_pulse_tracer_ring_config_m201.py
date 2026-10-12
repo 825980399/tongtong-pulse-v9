@@ -13,7 +13,6 @@
 import time
 
 import config
-
 from utils import pulse_tracer as pt
 
 

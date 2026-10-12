@@ -37,7 +37,6 @@ L1 只读性质：本件只做「口径声明 + 取值」，不写任何数据�
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import re
@@ -48,12 +47,12 @@ from nucleus._silent_except import silent_exc
 __all__ = [
     "METRICS",
     "RUF100_BASELINE_PATH",
+    "active_metrics",
+    "all_metrics",
+    "cite",
+    "deprecated_metrics",
     "get",
     "get_value",
-    "cite",
-    "all_metrics",
-    "active_metrics",
-    "deprecated_metrics",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -67,14 +66,14 @@ RUF100_BASELINE_PATH = os.path.join(
 def _ruf100_total() -> tuple[Any, str, str]:
     """RUF100 计数：读基线快照（**不实时跑 ruff**，成本高且结果随工作树抖动）。"""
     if not os.path.isfile(RUF100_BASELINE_PATH):
-        return None, "missing", "RUF100 基线文件缺失：{}".format(RUF100_BASELINE_PATH)
+        return None, "missing", f"RUF100 基线文件缺失：{RUF100_BASELINE_PATH}"
     try:
-        with io.open(RUF100_BASELINE_PATH, encoding="utf-8") as _f:
+        with open(RUF100_BASELINE_PATH, encoding="utf-8") as _f:
             _d = json.load(_f)
     except (OSError, ValueError) as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_ruf100_total",
                    level="warning")
-        return None, "error", "基线不可读：{}: {}".format(type(_e).__name__, _e)
+        return None, "error", f"基线不可读：{type(_e).__name__}: {_e}"
     _total = _d.get("total")
     if not isinstance(_total, int):
         return None, "error", "基线缺 total 字段"
@@ -92,7 +91,7 @@ def _organ_declared() -> tuple[Any, str, str]:
     """
     _organs_dir = os.path.join(_PROJECT_ROOT, "organs")
     if not os.path.isdir(_organs_dir):
-        return None, "error", "organs/ 目录不存在：{}".format(_organs_dir)
+        return None, "error", f"organs/ 目录不存在：{_organs_dir}"
     _n = 0
     try:
         for _dp, _dns, _fns in os.walk(_organs_dir):
@@ -102,19 +101,19 @@ def _organ_declared() -> tuple[Any, str, str]:
                 if not _fn.endswith(".py"):
                     continue
                 try:
-                    with io.open(os.path.join(_dp, _fn), encoding="utf-8",
+                    with open(os.path.join(_dp, _fn), encoding="utf-8",
                                  errors="ignore") as _f:
                         _src = _f.read()
                 except OSError as _e:
                     silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_organ_declined",
                                level="debug")
                     continue
-                if re.search(r"^ORGAN_META\s*[:=]", _src, re.M):
+                if re.search(r"^ORGAN_META\s*[:=]", _src, re.MULTILINE):
                     _n += 1
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_organ_declared walk",
                    level="warning")
-        return None, "error", "扫描 organs/ 失败：{}: {}".format(type(_e).__name__, _e)
+        return None, "error", f"扫描 organs/ 失败：{type(_e).__name__}: {_e}"
     _quasi = 0
     try:
         from nucleus.organ_assembler import FRAMEWORK_QUASI_ORGANS
@@ -133,7 +132,7 @@ def _idle_rate_v2() -> tuple[Any, str, str]:
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.metrics_spec::_idle_rate_v2",
                    level="warning")
-        return None, "error", "capability_ledger 不可用：{}: {}".format(type(_e).__name__, _e)
+        return None, "error", f"capability_ledger 不可用：{type(_e).__name__}: {_e}"
     _v = _r.get("true_idle_rate")
     _bd = _r.get("by_destination") or {}
     return _v, "live", "true_idle={} / total={}（v2 五类，unparseable 单列不计）".format(

@@ -14,7 +14,6 @@
 """
 import ast
 import inspect
-import io
 import os
 import sys
 import unittest
@@ -23,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data import write_guard as wg  # noqa: E402
+from nucleus.data import write_guard as wg
 
 #: 关键扫描目录（守卫相关）
 _SCAN_DIRS = ("nucleus/data", "nucleus/reporting", "nucleus/mnemosyne",
@@ -111,7 +110,7 @@ def _scan_key_dirs():
                 _fp = os.path.join(_dp, _fn)
                 _rel = os.path.relpath(_fp, _ROOT).replace("\\", "/")
                 try:
-                    _tree = ast.parse(io.open(_fp, encoding="utf-8",
+                    _tree = ast.parse(open(_fp, encoding="utf-8",
                                               errors="replace").read())
                 except (SyntaxError, OSError):
                     continue
@@ -155,19 +154,19 @@ class TestNoFakeGuard(unittest.TestCase):
     def test_02_no_silent_guard(self):
         """★无「守卫调用 + 静默 except」结构。"""
         self.assertEqual(self.silent, [],
-                         "发现守卫被静默 except 吞：{}".format(self.silent[:5]))
+                         f"发现守卫被静默 except 吞：{self.silent[:5]}")
 
     def test_03_no_wrong_keyword(self):
         """★A 类假防护（守卫调用参数名错误）= 0。"""
         self.assertEqual(self.badkw, [],
-                         "守卫调用参数名不符：{}".format(self.badkw[:5]))
+                         f"守卫调用参数名不符：{self.badkw[:5]}")
 
 
 class TestFixesInPlace(unittest.TestCase):
     """5 处修复的留痕代码在位（回归防护）。"""
 
     def _src(self, rel):
-        return io.open(os.path.join(_ROOT, rel), encoding="utf-8",
+        return open(os.path.join(_ROOT, rel), encoding="utf-8",
                        errors="replace").read()
 
     def test_10_backfill_guard_logged(self):

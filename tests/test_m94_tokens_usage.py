@@ -30,7 +30,6 @@
 """
 import ast
 import glob
-import io
 import json
 import os
 import shutil
@@ -43,11 +42,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.llm import call_recorder as cr  # noqa: E402
-from nucleus.llm.adapter_registry import ExternalGatewayAdapter  # noqa: E402
-from nucleus.llm.base_adapter import BaseLLMAdapter  # noqa: E402
-from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter  # noqa: E402
+import config
+from nucleus.llm import call_recorder as cr
+from nucleus.llm.adapter_registry import ExternalGatewayAdapter
+from nucleus.llm.base_adapter import BaseLLMAdapter
+from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 
 _LLM = os.path.join(ROOT, "nucleus", "llm")
 _BAK = os.path.join(ROOT, ".bak_batch94")
@@ -64,7 +63,7 @@ _LUNG = os.path.join(ROOT, "organs", "body", "PulseLung.py")
 
 
 def _read(path):
-    with io.open(path, encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -137,7 +136,7 @@ class _Base(unittest.TestCase):
         _fp = self.r._path_for(time.time(), prefix=prefix)
         if not os.path.isfile(_fp):
             return []
-        with io.open(_fp, encoding="utf-8") as f:
+        with open(_fp, encoding="utf-8") as f:
             return [json.loads(x) for x in f if x.strip()]
 
 
@@ -160,12 +159,12 @@ class TestM94TokensStaticWiring(_Base):
                            ("adapter_registry.py", "ExternalGatewayAdapter")):
             _bak = os.path.join(_BAK, _rel + ".bak")
             if not os.path.isfile(_bak):
-                self.skipTest("改前备份缺失: {}".format(_rel))
+                self.skipTest(f"改前备份缺失: {_rel}")
             _new_args = _def_args(os.path.join(_LLM, _rel), _cls, "parse_response")
             _old_args = _def_args(_bak, _cls, "parse_response")
             self.assertIsNotNone(_new_args)
             self.assertEqual(_old_args, _new_args,
-                             "★{}.parse_response 签名必须与改前一致".format(_cls))
+                             f"★{_cls}.parse_response 签名必须与改前一致")
 
     def test_A3_subclasses_implement_extract_usage(self):
         _oa = OpenAICompatibleAdapter()
@@ -211,7 +210,7 @@ class TestM94TokensStaticWiring(_Base):
         for _name, _p in _ENGINES.items():
             _hits = _decorated_funcs_with_assign(_p, "_last_llm_usage")
             self.assertEqual(1, len(_hits),
-                             "★{} 必须恰有 1 个被装饰的出口暂存 usage，实得 {!r}".format(_name, _hits))
+                             f"★{_name} 必须恰有 1 个被装饰的出口暂存 usage，实得 {_hits!r}")
             self.assertTrue(any("trace_evolution_call" in d
                                 for d in _hits[0][1]))
 
@@ -251,13 +250,13 @@ class TestM94ExtractUsage(_Base):
                    {"prompt_tokens": 0},
                    {}):
             self.assertIsNone(self.oa.extract_usage({"usage": _u}),
-                              "★不写假数据：{!r} ⇒ None".format(_u))
+                              f"★不写假数据：{_u!r} ⇒ None")
 
     def test_B4_non_dict_response_or_usage(self):
         for _v in (None, [], "x", 0, {"usage": None}, {"usage": []},
                    {"choices": []}):
             self.assertIsNone(self.oa.extract_usage(_v),
-                              "★{!r} ⇒ None（结构防御）".format(_v))
+                              f"★{_v!r} ⇒ None（结构防御）")
 
     def test_B5_non_numeric_and_bool_are_rejected(self):
         self.assertIsNone(self.oa.extract_usage(
@@ -300,7 +299,7 @@ class TestM94ExtractUsage(_Base):
 
     def test_B10_never_raises(self):
         class _Boom(dict):
-            def get(self, *a, **k):     # noqa: D401
+            def get(self, *a, **k):
                 raise RuntimeError("boom")
         self.assertIsNone(self.oa.extract_usage(_Boom()))
 
@@ -349,7 +348,7 @@ class TestM94RecorderUsage(_Base):
                                             "completion_tokens": 0,
                                             "total_tokens": 0}, "x", 5, []):
             _rec = self._rec(usage=_u)
-            self.assertIsNone(_rec["usage"], "★{!r} ⇒ usage 必须为 None".format(_u))
+            self.assertIsNone(_rec["usage"], f"★{_u!r} ⇒ usage 必须为 None")
             self.assertEqual(0, _rec["tokens"])
 
     def test_C6_usage_is_json_serialisable(self):
@@ -449,7 +448,7 @@ class TestM94ProductionTraces(_Base):
         _files = sorted(glob.glob(os.path.join(_TRACES, "calls_*.jsonl")))
         _out = []
         for _fp in _files:
-            with io.open(_fp, encoding="utf-8", errors="ignore") as _f:
+            with open(_fp, encoding="utf-8", errors="ignore") as _f:
                 for _ln in _f:
                     _ln = _ln.strip()
                     if not _ln:

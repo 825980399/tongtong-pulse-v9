@@ -10,7 +10,6 @@
   **绝不碰生产 ``tmp/`` 或 ``.tmp_backup/``**。
 """
 
-import io
 import json
 import os
 import shutil
@@ -22,7 +21,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from tools import tmp_backup as _tb  # noqa: E402
+from tools import tmp_backup as _tb
 
 
 class _Sandbox(unittest.TestCase):
@@ -39,7 +38,7 @@ class _Sandbox(unittest.TestCase):
 
     def _put(self, name, content="x = 1\n"):
         _p = os.path.join(self.tmp, name)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             _f.write(content)
         return _p
 
@@ -58,14 +57,14 @@ class TestSnapshot(_Sandbox):
         _r = _tb.snapshot(tmp_dir=self.tmp, backup_root=self.bak)
         _d = os.path.join(self.bak, _r["snapshot"], "patch_probe_m99.py")
         self.assertTrue(os.path.isfile(_d))
-        self.assertEqual(io.open(_d, encoding="utf-8").read(), "print(1)\n")
+        self.assertEqual(open(_d, encoding="utf-8").read(), "print(1)\n")
 
     def test_03_manifest_written_and_valid(self):
         self._put("check_probe_m99.py", "y = 2\n")
         _r = _tb.snapshot(tmp_dir=self.tmp, backup_root=self.bak)
         _mf = os.path.join(self.bak, _r["snapshot"], _tb.MANIFEST)
         self.assertTrue(os.path.isfile(_mf))
-        _j = json.load(io.open(_mf, encoding="utf-8"))
+        _j = json.load(open(_mf, encoding="utf-8"))
         self.assertEqual(_j["file_count"], 1)
         self.assertEqual(_j["files"][0]["name"], "check_probe_m99.py")
         self.assertTrue(_j["files"][0]["sha256"])
@@ -174,7 +173,7 @@ class TestRestore(_Sandbox):
         os.remove(os.path.join(self.tmp, "check_d_m99.py"))
         _tb.restore(_r["snapshot"], tmp_dir=self.tmp, backup_root=self.bak)
         self.assertEqual(
-            io.open(os.path.join(self.tmp, "check_d_m99.py"), encoding="utf-8").read(),
+            open(os.path.join(self.tmp, "check_d_m99.py"), encoding="utf-8").read(),
             "w = 8\n")
 
     def test_32_restore_detects_sha_mismatch(self):
@@ -182,7 +181,7 @@ class TestRestore(_Sandbox):
         _r = _tb.snapshot(tmp_dir=self.tmp, backup_root=self.bak)
         # 篡改备份内容
         _bp = os.path.join(self.bak, _r["snapshot"], "scan_d_m99.py")
-        with io.open(_bp, "w", encoding="utf-8") as _f:
+        with open(_bp, "w", encoding="utf-8") as _f:
             _f.write("tampered\n")
         _r2 = _tb.restore(_r["snapshot"], tmp_dir=self.tmp, backup_root=self.bak)
         self.assertIn("scan_d_m99.py", _r2["sha_mismatch"])
@@ -196,14 +195,14 @@ class TestRestore(_Sandbox):
     def test_34_restore_no_overwrite_skips(self):
         self._put("update_d_m99.py", "old\n")
         _r = _tb.snapshot(tmp_dir=self.tmp, backup_root=self.bak)
-        with io.open(os.path.join(self.tmp, "update_d_m99.py"), "w",
+        with open(os.path.join(self.tmp, "update_d_m99.py"), "w",
                      encoding="utf-8") as _f:
             _f.write("new\n")
         _r2 = _tb.restore(_r["snapshot"], tmp_dir=self.tmp, backup_root=self.bak,
                           overwrite=False)
         self.assertIn("update_d_m99.py", _r2["skipped"])
         self.assertEqual(
-            io.open(os.path.join(self.tmp, "update_d_m99.py"), encoding="utf-8").read(),
+            open(os.path.join(self.tmp, "update_d_m99.py"), encoding="utf-8").read(),
             "new\n")
 
     def test_35_restore_creates_tmp_if_missing(self):

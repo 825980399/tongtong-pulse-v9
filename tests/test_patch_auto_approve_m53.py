@@ -16,7 +16,6 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ast
-import io
 import json
 import unittest
 
@@ -31,7 +30,7 @@ _SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv",
 
 
 def _read(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
 
 
 def _module_const(rel, name):
@@ -123,7 +122,7 @@ class TestEnqueueAutoApprove(unittest.TestCase):
         p = os.path.join(_ROOT, "data", "patches", "patch_history.json")
         if not os.path.isfile(p):
             self.skipTest("无补丁历史")
-        d = json.load(io.open(p, encoding="utf-8"))
+        d = json.load(open(p, encoding="utf-8"))
         ps = d["patches"] if isinstance(d, dict) and "patches" in d else d
         _now = sum(1 for x in ps if self._would(x.get("risk_level"), x.get("trust_score", 0)))
         _before = sum(1 for x in ps if self._would(x.get("risk_level"), 0)
@@ -200,7 +199,7 @@ class TestPatchAutoApproverDeprecated(unittest.TestCase):
             #   → 不参与「生产调用点」判定，否则工具脚本文本里的字符串会误伤 deprecated 结论。
             if rel == _self_rel or rel.startswith(("tests" + os.sep, "tmp" + os.sep)):
                 continue
-            _t = io.open(fp, encoding="utf-8", errors="replace").read()
+            _t = open(fp, encoding="utf-8", errors="replace").read()
             for _pat in ("scan_pending(", "prune_pending(", "get_patch_auto_approver(",
                          "PatchAutoApprover("):
                 if _pat in _t:

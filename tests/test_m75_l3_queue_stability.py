@@ -274,18 +274,16 @@ class TestT4RssCollector(unittest.TestCase):
         self.assertEqual(self._collector({"emit_priority": 2})._emit_priority, 2)
 
     def test_超时源记慢源(self):
-        import socket
         def _slow(u, timeout=15):
-            raise socket.timeout("too slow")
+            raise TimeoutError("too slow")
         c = RssCollector(cfg={"feeds": [{"name": "慢源", "url": "http://x"}]},
                         fetch_fn=_slow)
         c.pull_all(push=False)
         self.assertEqual(c._feeds[0]["slow_count"], 1)
 
     def test_慢源阈值降级(self):
-        import socket
         def _slow(u, timeout=15):
-            raise socket.timeout("too slow")
+            raise TimeoutError("too slow")
         c = RssCollector(cfg={"feeds": [{"name": "慢源", "url": "http://x"}],
                                  "slow_source_threshold": 3},
                         fetch_fn=_slow)
@@ -294,11 +292,10 @@ class TestT4RssCollector(unittest.TestCase):
         self.assertTrue(c._feeds[0]["deprioritized"])
 
     def test_成功重置慢源(self):
-        import socket
         _state = {"slow": True}
         def _fetch(u, timeout=15):
             if _state["slow"]:
-                raise socket.timeout("slow")
+                raise TimeoutError("slow")
             return b"<rss></rss>"
         c = RssCollector(cfg={"feeds": [{"name": "源", "url": "http://x"}]},
                         fetch_fn=_fetch)

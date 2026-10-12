@@ -20,8 +20,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.llm.ChannelQuotaMonitor import ChannelQuotaMonitor  # noqa: E402
+import config
+from nucleus.llm.ChannelQuotaMonitor import ChannelQuotaMonitor
 
 _LUNG_SRC = open(os.path.join(_PROJECT_ROOT, "organs", "body", "PulseLung.py"),
                  encoding="utf-8").read()

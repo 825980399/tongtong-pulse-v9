@@ -43,7 +43,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from nucleus.knowledge.DuplicateNodeDetector import (  # noqa: E402
+from nucleus.knowledge.DuplicateNodeDetector import (
     FLAG_DUPLICATE,
     DuplicateNodeDetector,
 )

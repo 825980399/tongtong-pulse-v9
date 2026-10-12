@@ -6,7 +6,6 @@
 """
 import hashlib
 import importlib
-import io
 import json
 import os
 import shutil
@@ -17,7 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
+import config
 
 _sc = importlib.import_module("nucleus.llm.semantic_cache")
 
@@ -187,7 +186,7 @@ class TestPersistence(_Base):
         _c.add("q2", "a2", vec=_vec(0, 1, 0, 0))
         _fp = _c.cache_file()
         self.assertTrue(os.path.isfile(_fp))
-        _rows = [json.loads(x) for x in io.open(_fp, encoding="utf-8") if x.strip()]
+        _rows = [json.loads(x) for x in open(_fp, encoding="utf-8") if x.strip()]
         self.assertEqual(len(_rows), 2)
         for _k in ("hash", "prompt", "response", "ts", "hit_count", "vec"):
             self.assertIn(_k, _rows[0])
@@ -223,11 +222,10 @@ class TestPersistence(_Base):
         _c.add("q", "a", vec=_vec(1, 0, 0, 0))
         # 手工把 ts 改老 → 新实例加载时应过滤
         _fp = _c.cache_file()
-        _rows = [json.loads(x) for x in io.open(_fp, encoding="utf-8") if x.strip()]
+        _rows = [json.loads(x) for x in open(_fp, encoding="utf-8") if x.strip()]
         _rows[0]["ts"] = time.time() - 5 * 86400
-        with io.open(_fp, "w", encoding="utf-8") as f:
-            for _r in _rows:
-                f.write(json.dumps(_r, ensure_ascii=False) + "\n")
+        with open(_fp, "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(_r, ensure_ascii=False) + "\n" for _r in _rows)
         _c2 = self._cache(_MapEncoder({}))
         self.assertEqual(_c2.stats()["entries"], 0)
 
@@ -235,7 +233,7 @@ class TestPersistence(_Base):
         config.SEMANTIC_CACHE_MAX_TEXT = 10
         _c = self._cache(_MapEncoder({}))
         _c.add("q" * 100, "a" * 100, vec=_vec(1, 0, 0, 0))
-        _rows = [json.loads(x) for x in io.open(_c.cache_file(), encoding="utf-8")
+        _rows = [json.loads(x) for x in open(_c.cache_file(), encoding="utf-8")
                  if x.strip()]
         self.assertEqual(len(_rows[0]["prompt"]), 10)
         self.assertEqual(len(_rows[0]["response"]), 10)

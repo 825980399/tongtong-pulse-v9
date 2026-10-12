@@ -10,7 +10,6 @@
 * 接入验证（split_verification **优先**采信 reaprobe_verdict）
 * 真实数据 smoke（生产补丁历史可跑通 + 不产生 false_pass 之外的意外）
 """
-import io
 import json
 import os
 import sys
@@ -22,8 +21,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.evolution import patch_active_reprobe as M  # noqa: E402
-from nucleus.evolution.patch_verification_split import GRAN_ACTIVE_REPROBE, split_verification  # noqa: E402
+from nucleus.evolution import patch_active_reprobe as M
+from nucleus.evolution.patch_verification_split import GRAN_ACTIVE_REPROBE, split_verification
 
 _SILENT_BEFORE = """try:
     risky()
@@ -207,7 +206,7 @@ class TestProductionSmoke(unittest.TestCase):
         _p = os.path.join(_ROOT, "data", "patches", "patch_history.json")
         if not os.path.isfile(_p):
             self.skipTest("生产补丁历史不存在")
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _ps = _d.get("patches") if isinstance(_d, dict) else _d
         if not isinstance(_ps, list) or not _ps:
             self.skipTest("无补丁记录")
@@ -222,7 +221,7 @@ class TestProductionSmoke(unittest.TestCase):
         _p = os.path.join(_ROOT, "data", "patches", "patch_history.json")
         if not os.path.isfile(_p):
             self.skipTest("无生产历史")
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _ps = _d.get("patches") if isinstance(_d, dict) else _d
         if not isinstance(_ps, list):
             self.skipTest("格式不符")
@@ -235,14 +234,14 @@ class TestProductionSmoke(unittest.TestCase):
 
 class TestSourceWiring(unittest.TestCase):
     def test_50_split_module_imports_reprobe_verdict(self):
-        _s = io.open(os.path.join(
+        _s = open(os.path.join(
             _ROOT, "nucleus/evolution/patch_verification_split.py"),
             encoding="utf-8").read()
         self.assertIn("reprobe_verdict", _s)
 
     def test_51_no_bare_except_pass(self):
         import re
-        _s = io.open(os.path.join(
+        _s = open(os.path.join(
             _ROOT, "nucleus/evolution/patch_active_reprobe.py"),
             encoding="utf-8").read()
         self.assertEqual(

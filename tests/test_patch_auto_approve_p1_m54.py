@@ -24,20 +24,19 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import importlib  # noqa: E402
-import io  # noqa: E402
-import unittest  # noqa: E402
-from unittest import mock  # noqa: E402
+import importlib
+import unittest
+from unittest import mock
 
-import config  # noqa: E402
+import config
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ★铁律 33：包 __init__ 可能导出同名类 → 用 importlib 取模块
 _pm_mod = importlib.import_module("nucleus.reasoning.PatchManager")
-PatchManager = getattr(_pm_mod, "PatchManager")
-_m54_stale_days = getattr(_pm_mod, "_m54_stale_days")
-_m54_auto_apply_on = getattr(_pm_mod, "_m54_auto_apply_on")
+PatchManager = _pm_mod.PatchManager
+_m54_stale_days = _pm_mod._m54_stale_days
+_m54_auto_apply_on = _pm_mod._m54_auto_apply_on
 
 _CHAT_REL = os.path.join("functions", "chat", "chat_service.py")
 
@@ -45,7 +44,7 @@ _DAY = 86400.0
 
 
 def _read(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
 
 
 @contextlib.contextmanager

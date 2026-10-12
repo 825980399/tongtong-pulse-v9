@@ -32,7 +32,6 @@ N-9 口径对齐（第158批 触发指令第9刀 ``8666e24``）
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -43,19 +42,19 @@ from nucleus._silent_except import silent_exc
 
 __all__ = [
     "LEDGER_VERSION",
+    "append_entry",
+    "build_entry",
+    "clear_override",
+    "effect_verify_rate",
     "ledger_path",
+    "load_ledger",
+    "load_overrides",
+    "lts_snapshot",
     "override_path",
     "patch_rates",
     "probe_count",
-    "load_overrides",
-    "set_override",
-    "clear_override",
-    "lts_snapshot",
-    "build_entry",
-    "append_entry",
-    "load_ledger",
     "register_daily",
-    "effect_verify_rate",
+    "set_override",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -98,7 +97,7 @@ def _is_production_data_path(path: str) -> bool:
 def _writable(path: str) -> bool:
     """是否允许写入该路径（生产区 + 测试环境 → 拒绝）。"""
     if _is_test_env() and _is_production_data_path(path):
-        sys.stderr.write("[maturity_ledger] 测试环境跳过生产写入: {}\n".format(path))
+        sys.stderr.write(f"[maturity_ledger] 测试环境跳过生产写入: {path}\n")
         return False
     return True
 
@@ -134,7 +133,7 @@ def patch_rates(hist_path: str | None = None) -> dict[str, Any]:
         _out["source"] = "history_missing"
         return _out
     try:
-        _hist = json.load(io.open(_p, encoding="utf-8"))
+        _hist = json.load(open(_p, encoding="utf-8"))
         _res = evaluate_history(_hist)
         _items = [x for x in (_res.get("patches") or []) if isinstance(x, dict)]
     except Exception as e:
@@ -214,7 +213,7 @@ def effect_verify_rate(hist_path: str | None = None) -> dict[str, Any]:
         _out["source"] = "history_missing"
         return _out
     try:
-        _hist = json.load(io.open(_p, encoding="utf-8"))
+        _hist = json.load(open(_p, encoding="utf-8"))
         _applied = _hist.get("applied")
         if not isinstance(_applied, list):
             _out["source"] = "applied_not_list"
@@ -243,7 +242,7 @@ def load_overrides(path: str | None = None) -> dict[str, Any]:
     if not os.path.isfile(_p):
         return {}
     try:
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         return _d if isinstance(_d, dict) else {}
     except Exception as e:
         silent_exc(e, where="nucleus.self_awareness.maturity_ledger::load_overrides")
@@ -256,10 +255,10 @@ def _save_overrides(data: dict[str, Any], path: str | None = None) -> str:
         return _p
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             json.dump(data, _f, ensure_ascii=False, indent=2)
     except OSError as e:
-        sys.stderr.write("[maturity_ledger] 覆写表写入失败: {}: {}\n".format(type(e).__name__, e))
+        sys.stderr.write(f"[maturity_ledger] 覆写表写入失败: {type(e).__name__}: {e}\n")
     return _p
 
 
@@ -454,10 +453,10 @@ def append_entry(entry: dict[str, Any], path: str | None = None) -> str:
         return _p
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
-        with io.open(_p, "a", encoding="utf-8") as _f:
+        with open(_p, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError as e:
-        sys.stderr.write("[maturity_ledger] 台账写入失败: {}: {}\n".format(type(e).__name__, e))
+        sys.stderr.write(f"[maturity_ledger] 台账写入失败: {type(e).__name__}: {e}\n")
     return _p
 
 
@@ -468,7 +467,7 @@ def load_ledger(path: str | None = None, limit: int = 50) -> list[dict]:
         return []
     _out: list[dict] = []
     try:
-        for _line in io.open(_p, encoding="utf-8", errors="replace"):
+        for _line in open(_p, encoding="utf-8", errors="replace"):
             _line = _line.strip()
             if not _line:
                 continue
@@ -502,7 +501,7 @@ def register_daily(result: dict[str, Any] | None = None, batch: str = "",
         _res = result if isinstance(result, dict) else evaluate_v2()
     except Exception as e:
         silent_exc(e, where="nucleus.self_awareness.maturity_ledger::register_daily evaluate")
-        return {"error": "{}: {}".format(type(e).__name__, e), "version": LEDGER_VERSION}
+        return {"error": f"{type(e).__name__}: {e}", "version": LEDGER_VERSION}
     _entry = build_entry(_res, batch=batch)
     append_entry(_entry, path)
     return _entry

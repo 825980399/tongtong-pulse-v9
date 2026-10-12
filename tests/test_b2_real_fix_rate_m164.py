@@ -35,13 +35,13 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.evolution.patch_verification_split import (  # noqa: E402
+from nucleus.evolution.patch_verification_split import (
     apply_split,
     backfill,
     is_genuine_reverify,
     real_fix_rate,
 )
-from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import (
     SafeEvolutionExecutor,
 )
 

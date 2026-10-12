@@ -17,11 +17,11 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-import nucleus.data.write_guard as _wg  # noqa: E402
-import nucleus.knowledge_access_layer as _kal  # noqa: E402
-import nucleus.runtime_metrics as _rm  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+import config
+import nucleus.data.write_guard as _wg
+import nucleus.knowledge_access_layer as _kal
+import nucleus.runtime_metrics as _rm
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 
 class _FakeNode:
@@ -283,7 +283,7 @@ class TestKAL(unittest.TestCase):
                 "save_node", "delete_node", "trigger_full_save",
                 "trigger_incremental_save", "get_storage_backend", "get_cache_stats"]
         for m in need:
-            self.assertTrue(hasattr(_kal.KnowledgeAccessLayer, m), "缺少接口: {}".format(m))
+            self.assertTrue(hasattr(_kal.KnowledgeAccessLayer, m), f"缺少接口: {m}")
 
     def test_32_singleton(self):
         """KAL 单例：多次 get_kal() 返回同一实例。"""

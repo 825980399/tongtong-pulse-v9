@@ -14,10 +14,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-import nucleus.knowledge_access_layer as _kal  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
-from nucleus.parsing import json_fault_tolerant as _ft  # noqa: E402
+import config
+import nucleus.knowledge_access_layer as _kal
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
+from nucleus.parsing import json_fault_tolerant as _ft
 
 
 def _mk_snap(tmpdir):
@@ -245,7 +245,7 @@ class TestFaissFallback(unittest.TestCase):
         """FAISS 配置项已就位（含索引类型/路径/批量/阈值）。"""
         for _k in ["ENABLE_FAISS_VECTOR_STORE", "FAISS_INDEX_TYPE",
                    "FAISS_INDEX_PATH", "FAISS_BATCH_SIZE", "VECTOR_DIMENSION"]:
-            self.assertTrue(hasattr(config, _k), "缺少配置: {}".format(_k))
+            self.assertTrue(hasattr(config, _k), f"缺少配置: {_k}")
 
 
 if __name__ == "__main__":

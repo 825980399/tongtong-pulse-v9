@@ -71,11 +71,11 @@ def _safe_rmtree(path):
                 try:
                     os.remove(os.path.join(dp, f))
                 except BaseException as e:
-                    print("cleanup warn: {}: {}".format(type(e).__name__, e))
+                    print(f"cleanup warn: {type(e).__name__}: {e}")
         try:
             os.rmdir(dp)
         except BaseException as e:
-            print("cleanup warn: {}: {}".format(type(e).__name__, e))
+            print(f"cleanup warn: {type(e).__name__}: {e}")
 
 
 class _Base(unittest.TestCase):

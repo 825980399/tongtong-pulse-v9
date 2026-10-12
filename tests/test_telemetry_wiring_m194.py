@@ -5,7 +5,6 @@
 """
 import os
 
-
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -23,7 +22,7 @@ def test_telemetry_external_caller_exists_in_source():
 
 def test_on_heartbeat_triggers_telemetry(monkeypatch):
     """启用 orchestrator 后，每 DETECT_EVERY_BEATS 拍的 on_heartbeat 触发 telemetry() 读取。"""
-    import unittest.mock as mock
+    from unittest import mock
 
     import nucleus.SurvivalOrchestrator as so
     from nucleus.SurvivalOrchestrator import SurvivalOrchestrator
@@ -40,7 +39,7 @@ def test_on_heartbeat_triggers_telemetry(monkeypatch):
 
 def test_on_heartbeat_no_telemetry_when_disabled(monkeypatch):
     """默认关闭（_orchestrator_enabled 为假）时，on_heartbeat 不触发 telemetry（零行为变化）。"""
-    import unittest.mock as mock
+    from unittest import mock
 
     import nucleus.SurvivalOrchestrator as so
     from nucleus.SurvivalOrchestrator import SurvivalOrchestrator

@@ -29,7 +29,10 @@ import re
 import subprocess
 
 __all__ = [
-    "classify_exit_code", "parse_summary", "evaluate_shard", "run_shard",
+    "classify_exit_code",
+    "evaluate_shard",
+    "parse_summary",
+    "run_shard",
 ]
 
 # pytest exit code 语义（见 pytest 文档）

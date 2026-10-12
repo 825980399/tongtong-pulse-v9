@@ -290,7 +290,7 @@ def _wait_ready(enc, timeout: float = 300.0) -> bool:
                 _st.get("state"), _reason))
             _last = _reason
         _time.sleep(1.0)
-    print("ERROR: 等待模型加载超时（{:.0f}s）".format(timeout))
+    print(f"ERROR: 等待模型加载超时（{timeout:.0f}s）")
     return False
 
 
@@ -309,7 +309,7 @@ def _build() -> int:
     for intent, samples in INTENT_CORPUS.items():
         arr = enc.encode(samples)
         if arr is None or len(arr) == 0:
-            print("WARN: 意图[{}] 编码失败，跳过".format(intent))
+            print(f"WARN: 意图[{intent}] 编码失败，跳过")
             continue
         vec = np.asarray(arr, dtype=np.float32).mean(axis=0)
         norm = float(np.linalg.norm(vec))

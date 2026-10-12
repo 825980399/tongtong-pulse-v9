@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import importlib.util
-import io
 import json
 import os
 import sys
@@ -25,7 +24,7 @@ _SPEC = importlib.util.spec_from_file_location(
 SQR = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(SQR)
 
-from nucleus.data import experience_cleanup as EC  # noqa: E402
+from nucleus.data import experience_cleanup as EC
 
 
 def _rmtree(path: str) -> None:
@@ -57,13 +56,13 @@ class TestSerpQualityReport(unittest.TestCase):
         _rmtree(self.sb)
 
     def _w(self, recs: list) -> None:
-        with io.open(self.pool, "w", encoding="utf-8", newline="") as _f:
+        with open(self.pool, "w", encoding="utf-8", newline="") as _f:
             _f.write(json.dumps({"experiences": recs}, ensure_ascii=False))
 
     # ------------------------------------------------------------------
     def test_01_load_pool_variants(self):
         """能加载 list 与 dict(experiences=) 两种形态。"""
-        with io.open(self.pool, "w", encoding="utf-8") as _f:
+        with open(self.pool, "w", encoding="utf-8") as _f:
             _f.write(json.dumps([{"id": "a"}]))
         self.assertEqual(len(SQR.load_pool(self.pool)), 1)
         self._w([{"id": "a"}, {"id": "b"}])
@@ -131,10 +130,10 @@ class TestSerpQualityReport(unittest.TestCase):
     def test_07_assess_does_not_modify_pool(self):
         """★核心纪律：只评估不修改 —— 评估前后文件**字节不变**。"""
         self._w([{"id": "1", "summary": "x" * 30}])
-        _before = io.open(self.pool, "rb").read()
+        _before = open(self.pool, "rb").read()
         SQR.assess(self.pool)
         SQR.render_md(SQR.assess(self.pool))
-        _after = io.open(self.pool, "rb").read()
+        _after = open(self.pool, "rb").read()
         self.assertEqual(_before, _after, "评估不得修改经验池")
 
     def test_08_render_contains_sections(self):

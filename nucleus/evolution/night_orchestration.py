@@ -231,7 +231,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _ymd = _as_of.strftime("%Y%m%d")
         _out_dir = os.path.join(project_root, "data", "reports")
         os.makedirs(_out_dir, exist_ok=True)
-        _digest_path = os.path.join(_out_dir, "digest_{}.md".format(_ymd))
+        _digest_path = os.path.join(_out_dir, f"digest_{_ymd}.md")
 
         # 1) 读取 needs_human 条目
         _rows = []
@@ -313,7 +313,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _L.append("")
         if _actions:
             for _a in _actions:
-                _L.append("- {}".format(_a))
+                _L.append(f"- {_a}")
         else:
             _L.append("(无)")
         _L.append("")

@@ -20,8 +20,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.security.face_codec import load_roster  # noqa: E402
-from organs.senses.PulseVisualCortex import PulseVisualCortex  # noqa: E402
+from nucleus.security.face_codec import load_roster
+from organs.senses.PulseVisualCortex import PulseVisualCortex
 
 
 def _in_data_path(name):

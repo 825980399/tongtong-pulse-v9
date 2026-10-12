@@ -10,7 +10,6 @@ T4(P2) 债务摸底结论 + 本批顺手修复（ssrf_guard 静默点 / 过期�
 
 ★测真实源码与真实行为；环境不可用时 skip，不伪造通过。
 """
-import io
 import os
 import re
 import subprocess
@@ -31,7 +30,7 @@ _VERIFY = os.path.join(_ROOT, "tools", "verify_write_only_e2e.py")
 
 
 def _rd(path):
-    with io.open(path, encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -114,7 +113,7 @@ class TestT2GitRepo(unittest.TestCase):
             parts = line.split()
             url = parts[1] if len(parts) > 1 else ""
             self.assertTrue(any(h in url for h in _ALLOWED_HOSTS),
-                            "远程不在白名单: {}".format(url))
+                            f"远程不在白名单: {url}")
 
     def test_13_corrupt_backup_removed(self):
         """★T2 验收：损坏的 .bak_git76/ 已清理。"""
@@ -134,7 +133,7 @@ class TestT2GitRepo(unittest.TestCase):
     def test_15_ignore_rules_effective(self):
         for path in ("data", "logs", "__pycache__", ".env"):
             rc, so, _ = _git(["check-ignore", "-v", path])
-            self.assertEqual(rc, 0, "{} 未被忽略".format(path))
+            self.assertEqual(rc, 0, f"{path} 未被忽略")
             self.assertTrue(so)
 
     def test_16_source_tracked(self):
@@ -148,7 +147,7 @@ class TestT2GitRepo(unittest.TestCase):
         bad = [x for x in so.splitlines()
                if x.startswith(("data/", "logs/")) or "__pycache__" in x
                or x.startswith(".bak")]
-        self.assertEqual(bad, [], "敏感/数据被提交: {}".format(bad[:5]))
+        self.assertEqual(bad, [], f"敏感/数据被提交: {bad[:5]}")
 
 
 # =====================================================================
@@ -232,7 +231,7 @@ class TestT4SsrfAndComments(unittest.TestCase):
         hits = [i + 1 for i, l in enumerate(lines)
                 if re.search(r"except[^:]*:\s*$", l.rstrip())
                 and i + 1 < len(lines) and lines[i + 1].strip() == "pass"]
-        self.assertEqual(hits, [], "ssrf_guard 仍有静默 except: {}".format(hits))
+        self.assertEqual(hits, [], f"ssrf_guard 仍有静默 except: {hits}")
 
     def test_33_ssrf_fail_closed_semantics(self):
         """★fail-closed 语义不变：异常时受信任集合退化为最小集合。"""
@@ -285,7 +284,7 @@ class TestT4SsrfAndComments(unittest.TestCase):
                 if not f.endswith(".py"):
                     continue
                 try:
-                    ls = io.open(os.path.join(dp, f), encoding="utf-8",
+                    ls = open(os.path.join(dp, f), encoding="utf-8",
                                  errors="replace").read().replace("\r\n", "\n").splitlines()
                 except OSError:
                     continue

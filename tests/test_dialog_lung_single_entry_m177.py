@@ -19,9 +19,9 @@ os.environ.pop("PYTHONHOME", None)
 os.environ.pop("PYTHONSTARTUP", None)
 os.environ["PYTHONNOUSERSITE"] = "1"
 
-import threading  # noqa: E402
+import threading
 
-import config as _cfg_mod  # noqa: E402
+import config as _cfg_mod
 
 _CID = "ctx:1:1791565609139"
 

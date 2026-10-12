@@ -11,7 +11,6 @@
 4. 当前保存结束后 → 恰好补一次（总调用=2，最大并发=1）。
 5. 源码含 _m67_pending_save 合并分支。
 """
-import io
 import os
 import threading
 import time
@@ -98,7 +97,7 @@ class TestSnapshotCoalesceM78(unittest.TestCase):
         self.assertEqual(calls[0], 2, "pending 幂等：多次触发仍只补一次（共2次）")
 
     def test_04_source_has_pending_branch(self):
-        src = io.open(os.path.join(ROOT, "nucleus/mnemosyne/PulseSnapshot.py"),
+        src = open(os.path.join(ROOT, "nucleus/mnemosyne/PulseSnapshot.py"),
                       encoding="utf-8", errors="replace").read()
         self.assertIn("_m67_pending_save = True", src,
                       "保存进行中未置 _m67_pending_save（合并分支缺失）")

@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import glob
-import io
 import json
 import os
 import time
@@ -158,17 +157,17 @@ def _read_external_dependency_metrics() -> dict[str, Any]:
     }
 
 
-def _read_last_external_dependency_snapshot_from_logs() -> "dict[str, Any] | None":
+def _read_last_external_dependency_snapshot_from_logs() -> dict[str, Any] | None:
     """best-effort：从 logs/ 解析最近一条 [external_dependency_observe] snapshot 行。"""
     _logs = os.path.join(_proj_root(), "logs")
     if not os.path.isdir(_logs):
         return None
     _marker = "[external_dependency_observe] snapshot"
-    _last: "dict[str, Any] | None" = None
+    _last: dict[str, Any] | None = None
     try:
         for _f in glob.glob(os.path.join(_logs, "*.log")):
             try:
-                with io.open(_f, encoding="utf-8", errors="replace") as _fh:
+                with open(_f, encoding="utf-8", errors="replace") as _fh:
                     _lines = _fh.read().splitlines()[-2000:]
             except OSError as _e:
                 silent_exc(_e, where="dashboard.read_logs.open")
@@ -206,7 +205,7 @@ def _compute_retention() -> dict[str, Any]:
     _pairs = 0
     for _f in glob.glob(os.path.join(_base, "training_pairs_*.jsonl")):
         try:
-            with io.open(_f, encoding="utf-8", errors="replace") as _fh:
+            with open(_f, encoding="utf-8", errors="replace") as _fh:
                 for _ in _fh:
                     _pairs += 1
         except OSError as _e:
@@ -214,7 +213,7 @@ def _compute_retention() -> dict[str, Any]:
     _elig = 0
     for _f in glob.glob(os.path.join(_base, "calls_*.jsonl")):
         try:
-            with io.open(_f, encoding="utf-8", errors="replace") as _fh:
+            with open(_f, encoding="utf-8", errors="replace") as _fh:
                 for _ln in _fh:
                     _ln = _ln.strip()
                     if not _ln:
@@ -284,7 +283,7 @@ def compute_dashboard() -> dict[str, Any]:
     }
 
 
-def export_internal_model_dashboard(as_json: bool = False) -> "Any":
+def export_internal_model_dashboard(as_json: bool = False) -> Any:
     """导出内在模型进度仪表盘。
 
     Args:
@@ -297,7 +296,7 @@ def export_internal_model_dashboard(as_json: bool = False) -> "Any":
     return _payload
 
 
-def render_dashboard_md(payload: "dict[str, Any] | None" = None) -> str:
+def render_dashboard_md(payload: dict[str, Any] | None = None) -> str:
     """渲染一页 Markdown 仪表盘。"""
     if payload is None:
         payload = compute_dashboard()

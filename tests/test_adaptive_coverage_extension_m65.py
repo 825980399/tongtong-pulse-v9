@@ -15,11 +15,11 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.mnemosyne import PulseNodePool as _pnp_mod  # noqa: E402
-from nucleus.runtime_metrics import get_runtime_metrics  # noqa: E402
-from organs.body import PulseLung as _pl_mod  # noqa: E402
-from organs.brain import PulseCodeLearner as _pcl  # noqa: E402
+import config
+from nucleus.mnemosyne import PulseNodePool as _pnp_mod
+from nucleus.runtime_metrics import get_runtime_metrics
+from organs.body import PulseLung as _pl_mod
+from organs.brain import PulseCodeLearner as _pcl
 
 _LEVELS = ("low", "medium", "high", "critical")
 
@@ -163,8 +163,7 @@ class TestDigestAdaptive(unittest.TestCase):
 
 
 def io___read(path):
-    import io as _io
-    return _io.open(path, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
+    return open(path, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
 if __name__ == "__main__":

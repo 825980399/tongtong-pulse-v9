@@ -22,6 +22,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import config as _cfg  # ★162批刀1：config 恒可导入（既有 from config import 已证），无条件避免静默 except
+from config import CONCURRENT_COMM, PULSE_LAYER, PULSE_PRIORITY
 from nucleus._silent_except import silent_exc
 from nucleus.logger import (
     get_module_logger,
@@ -31,9 +33,6 @@ from nucleus.logger import (
 )
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
-from config import CONCURRENT_COMM, PULSE_LAYER, PULSE_PRIORITY
-
-import config as _cfg  # ★162批刀1：config 恒可导入（既有 from config import 已证），无条件避免静默 except
 # ★180刀4：删除上方 except ImportError 死分支（config 恒可导入，该分支永不触发）；
 #          queue 两键（l2_queue_limit/l3_queue_hard_limit）现唯一定义于 config.py（300/300），单源对齐。
 
@@ -876,7 +875,7 @@ class InfoField(SilentLogMixin):
             try:
                 _fut.result(timeout=20.0)
                 _results.append((_org, "handled"))
-            except Exception as _e:  # noqa: BLE001
+            except Exception as _e:
                 _name = type(_e).__name__
                 if _name == "CancelledError":
                     _results.append((_org, "cancelled"))
@@ -1120,7 +1119,7 @@ class InfoField(SilentLogMixin):
             _out["ok"] = True
         except Exception as _e:
             silent_exc(_e, where="nucleus.field.InfoField::_m169_memory_pressure")
-            _out["reason"] = "采集失败: {}".format(type(_e).__name__)
+            _out["reason"] = f"采集失败: {type(_e).__name__}"
             return _out
         _sys_b = _out["system_percent"] > _thr["system_percent"]
         _rss_b = _out["process_rss_mb"] > _thr["process_rss_mb"]

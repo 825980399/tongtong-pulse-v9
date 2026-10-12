@@ -16,7 +16,7 @@ class TestM199Blade1ShadowV2(unittest.TestCase):
     def _capture_shadow(self, lung, retriever):
         # 避免重依赖：长度控制返回空串、历史为空
         lung._m28_system_length_suffix = lambda prompt: ""
-        lung.get_dialog_history = lambda: []
+        lung.get_dialog_history = list
         lung._shadow_v2_retriever = retriever
         _records = []
         _orig = lung._log

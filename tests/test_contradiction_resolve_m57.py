@@ -15,7 +15,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.reasoning import ContradictionResolver as R  # noqa: E402
+from nucleus.reasoning import ContradictionResolver as R
 
 
 def _entry(node_a, node_b, ctype, age_days=0.0, detail_extra=None, **extra):

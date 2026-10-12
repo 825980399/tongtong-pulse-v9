@@ -14,7 +14,6 @@
 
 退出码：0=全部通过可提交；1=有必须先修的项。
 """
-import io
 import json
 import os
 import re
@@ -78,7 +77,7 @@ def main():
     print('提交前三检自检（collect 增量 / cw3-A / cw2 / 隔离守卫）')
     print('=' * 70)
 
-    base = json.load(io.open(BASELINE, encoding='utf-8'))
+    base = json.load(open(BASELINE, encoding='utf-8'))
     cur_collect = base.get('collect_baseline', 0)
     kf = len(base.get('known_fail', []))
     staged = _staged()
@@ -119,7 +118,7 @@ def main():
             delta = actual - cur_collect
             print('    实测 collect=%d  基线=%d  增量=%+d' % (actual, cur_collect, delta))
             if abs(delta) > COLLECT_TOLERANCE:
-                print('    ✗ 超出容差 ⇒ 必须先重锚 {}，否则提交必被拦'.format(BASELINE))
+                print(f'    ✗ 超出容差 ⇒ 必须先重锚 {BASELINE}，否则提交必被拦')
                 print('      处方：把 collect_baseline 改为 %d（同批或独立'
                       ' [ci-gate-change] commit）' % actual)
                 must_fix.append('collect 需重锚 %d → %d' % (cur_collect, actual))
@@ -139,7 +138,7 @@ def main():
             print('    ✗ FAIL ⇒ 需按门禁处方处理：')
             for line in out.split('\n'):
                 if '指标' in line or 'delta_reason' in line or 'FAIL' in line:
-                    print('      {}'.format(line.strip()))
+                    print(f'      {line.strip()}')
             print('      处方：① 误伤 ⇒ 在 iw_consistency_baseline.json填'
                   ' delta_reason + expected_delta；')
             print('            ② 真漂移 ⇒ 回退该改动')
@@ -159,7 +158,7 @@ def main():
                if ('静默' in ln or 'FAIL' in ln) and ln.strip()][:8]
         print('    ✗ FAIL ⇒ 新写的 except 需补日志：')
         for ln in bad:
-            print('      {}'.format(ln))
+            print(f'      {ln}')
         print('      合规形态：except Exception as e: + silent_exc(e, where="模块.函数")')
         print('                或 with contextlib.suppress(SomeError):')
         must_fix.append('cw2 有新增静默 except')
@@ -173,9 +172,9 @@ def main():
     if ci_files and biz_files:
         print('    ✗ 暂存区同时含 CI 门禁件与业务代码：')
         for f in ci_files:
-            print('       CI  : {}'.format(f))
+            print(f'       CI  : {f}')
         for f in biz_files[:6]:
-            print('       业务: {}'.format(f))
+            print(f'       业务: {f}')
         print('      处方：git reset HEAD -- <CI 件路径>，先单独提 CI 笔')
         must_fix.append('CI 件与业务同批暂存')
     else:

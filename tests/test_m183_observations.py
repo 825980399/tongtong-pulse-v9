@@ -10,8 +10,8 @@
 遵循铁律151：本文件独立运行，不依赖全量 pytest 收集。
 """
 from nucleus.cognitive.cognitive_state_utils import suggested_temperature
-from nucleus.memory_strength import memory_strength
 from nucleus.genesis.HebbianLearner import HebbianLearner
+from nucleus.memory_strength import memory_strength
 
 
 # ========== 刀3 纯函数 ==========

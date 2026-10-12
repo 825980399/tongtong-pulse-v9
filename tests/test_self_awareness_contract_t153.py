@@ -80,5 +80,5 @@ def test_dependency_injection_methods_do_not_raise():
         fn = getattr(organ, setter)
         try:
             fn(None)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise AssertionError(f"{setter}(None) 不应抛出: {type(e).__name__}: {e}")

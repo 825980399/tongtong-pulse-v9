@@ -33,7 +33,6 @@
 import ast
 import importlib.machinery
 import importlib.util
-import io
 import json
 import os
 import re
@@ -46,7 +45,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
+from nucleus.reasoning.PatchManager import PatchManager
 
 _PM_SRC_PATH = os.path.join(ROOT, "nucleus", "reasoning", "PatchManager.py")
 _BAK_PM = os.path.join(ROOT, ".bak_batch92", "nucleus", "reasoning", "PatchManager.py.bak")
@@ -72,7 +71,7 @@ def _reason(orig, mod):
 
 
 def _src():
-    return io.open(_PM_SRC_PATH, encoding="utf-8").read()
+    return open(_PM_SRC_PATH, encoding="utf-8").read()
 
 
 def _method_src(name):
@@ -80,7 +79,7 @@ def _method_src(name):
     for _n in ast.walk(_t):
         if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)) and _n.name == name:
             return ast.get_source_segment(_src(), _n)
-    raise AssertionError("PatchManager 中找不到方法 {}".format(name))
+    raise AssertionError(f"PatchManager 中找不到方法 {name}")
 
 
 def _load_legacy_pm():
@@ -99,7 +98,7 @@ def _patch_library(limit=40):
         if not os.path.isfile(_p):
             continue
         try:
-            _d = json.load(io.open(_p, encoding="utf-8"))
+            _d = json.load(open(_p, encoding="utf-8"))
         except Exception:
             continue
         _ls = _d.get("patches") if isinstance(_d, dict) else _d
@@ -113,7 +112,7 @@ def _make_project():
     _root = tempfile.mkdtemp(prefix="m92_lbl_")
     os.makedirs(os.path.join(_root, "organs", "brain"), exist_ok=True)
     _fp = os.path.join(_root, "organs", "brain", "PulseInnerWorld.py")
-    io.open(_fp, "w", encoding="utf-8").write(
+    open(_fp, "w", encoding="utf-8").write(
         "# synthetic\nclass C:\n    def m(self):\n        return 1\n")
     return _root, _fp
 
@@ -131,10 +130,10 @@ class TestT92aLabelFormat(unittest.TestCase):
                                   ("tab/空格混用", _TAB, "TabError"),
                                   ("其他语法错", _SYNTAX, "SyntaxError")):
             _r = _reason(_ORIG, _mod)
-            self.assertFalse(_r["complete"], "{} 应被关2 拒".format(_tag))
+            self.assertFalse(_r["complete"], f"{_tag} 应被关2 拒")
             _m = _LABEL_RE.match(_r["reason"])
             self.assertIsNotNone(_m, "[{}] 文案不含异常类名: {!r}".format(_tag, _r["reason"]))
-            self.assertEqual(_want, _m.group(1), "[{}] 异常类名不符".format(_tag))
+            self.assertEqual(_want, _m.group(1), f"[{_tag}] 异常类名不符")
 
     def test_A2_original_message_preserved(self):
         """★零信息损失：原有 message 必须逐字保留在类名之后。"""
@@ -192,7 +191,7 @@ class TestT92bRedThenGreen(unittest.TestCase):
                 {"original_code": _o, "modified_code": _m})
             if _old["complete"] != _new["complete"]:
                 _drift.append((_tag, _old["complete"], _new["complete"]))
-        self.assertEqual([], _drift, "结论漂移：{}".format(_drift[:5]))
+        self.assertEqual([], _drift, f"结论漂移：{_drift[:5]}")
 
 
 class TestT92cWiringGate(unittest.TestCase):
@@ -212,7 +211,7 @@ class TestT92cWiringGate(unittest.TestCase):
         """★防漏改：PatchManager 内不得再出现裸 `f"语法错误: {`。"""
         _bad = [i for i, _l in enumerate(_src().split("\n"), 1)
                 if re.search(r'f"语法错误: \{', _l)]
-        self.assertEqual([], _bad, "PatchManager 内仍有裸文案 @ 行 {}".format(_bad))
+        self.assertEqual([], _bad, f"PatchManager 内仍有裸文案 @ 行 {_bad}")
 
     def test_C4_label_is_derived_not_hardcoded(self):
         """类名必须由 `type(...).__name__` **推导**，不得硬编码字符串（否则会失真）。"""
@@ -239,7 +238,7 @@ class TestT92dEndToEnd(unittest.TestCase):
         self.assertEqual("syntax_check_failed", _r.get("stage"), _r)
         _errs = [str(_e) for _e in _r.get("errors", [])]
         _hit = [_e for _e in _errs if _LABEL_RE.match(_e)]
-        self.assertTrue(_hit, "step3 报错未带异常类名: {}".format(_errs))
+        self.assertTrue(_hit, f"step3 报错未带异常类名: {_errs}")
 
     def test_D2_legacy_version_had_no_label(self):
         """★先红证据（永久可复现）：改前版走到同一 stage，但文案无类名。"""
@@ -251,7 +250,7 @@ class TestT92dEndToEnd(unittest.TestCase):
         _errs = [str(_e) for _e in _r.get("errors", [])]
         self.assertTrue(_errs)
         self.assertTrue(all(_LABEL_RE.match(_e) is None for _e in _errs),
-                        "改前文案不应含类名: {}".format(_errs))
+                        f"改前文案不应含类名: {_errs}")
 
 
 if __name__ == "__main__":

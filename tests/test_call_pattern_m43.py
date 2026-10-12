@@ -64,11 +64,11 @@ def _safe_rmtree(path):
                 try:
                     os.remove(os.path.join(dp, f))
                 except BaseException as e:
-                    print("cleanup warn: {}: {}".format(type(e).__name__, e))
+                    print(f"cleanup warn: {type(e).__name__}: {e}")
         try:
             os.rmdir(dp)
         except BaseException as e:
-            print("cleanup warn: {}: {}".format(type(e).__name__, e))
+            print(f"cleanup warn: {type(e).__name__}: {e}")
 
 
 def _rec(prompt="正常提问", channel="zhipu", model="glm-4-flash", status="success",
@@ -205,9 +205,8 @@ class TestIOAndWiring(unittest.TestCase):
         _d = os.path.join(self.dir, "t")
         os.makedirs(_d, exist_ok=True)
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
-            for i in range(10):
-                f.write(json.dumps(_rec(prompt="问题%d" % i)) + "\n")
+        with open(os.path.join(_d, f"calls_{_day}.jsonl"), "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(_rec(prompt="问题%d" % i)) + "\n" for i in range(10))
         _r = analyze_day(day=_day, trace_dir=_d)
         self.assertEqual(_r["scored"], 10)
         self.assertTrue(_r["file_exists"])
@@ -230,9 +229,8 @@ class TestIOAndWiring(unittest.TestCase):
         _d = os.path.join(self.dir, "t2")
         os.makedirs(_d, exist_ok=True)
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
-            for i in range(10):
-                f.write(json.dumps(_rec(prompt="q%d" % i)) + "\n")
+        with open(os.path.join(_d, f"calls_{_day}.jsonl"), "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(_rec(prompt="q%d" % i)) + "\n" for i in range(10))
         _out = os.path.join(self.dir, "o.json")
         _r = analyze_and_report(day=_day, trace_dir=_d, report_path=_out)
         self.assertIsNotNone(_r)

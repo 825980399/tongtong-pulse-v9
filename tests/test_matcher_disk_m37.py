@@ -11,7 +11,6 @@ import sys
 #   `_ROOT = ...` 这类赋值会关闭 → 其后所有 import 报 E402。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io
 import tempfile
 import unittest
 
@@ -92,7 +91,7 @@ def _mk_proj():
 
 
 def _w(p, s):
-    io.open(p, "w", encoding="utf-8").write(s)
+    open(p, "w", encoding="utf-8").write(s)
 
 
 class TestDiskEnumeration(unittest.TestCase):

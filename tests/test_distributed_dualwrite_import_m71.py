@@ -14,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
+import config
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -138,7 +138,7 @@ class TestT1Neo4jDualWritePool(unittest.TestCase):
         try:
             self.pool._m71_influx_write("node_activated", "n1", "L1", "test")
         except Exception as e:
-            self.fail("influx write raised when off: {}".format(e))
+            self.fail(f"influx write raised when off: {e}")
 
 
 # ===== T1: KAL 双写接口 =====

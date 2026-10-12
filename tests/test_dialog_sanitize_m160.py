@@ -18,7 +18,7 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 
 def _bare_iw():
@@ -85,7 +85,7 @@ class TestChatReasoningUnknownSkip:
         try:
             from functions.chat.chat_service import ChatService
         except Exception as _e:  # 重依赖环境下优雅跳过，不阻断其他验收
-            pytest.skip("chat_service 不可导入（环境依赖），跳过 ③: {!r}".format(_e))
+            pytest.skip(f"chat_service 不可导入（环境依赖），跳过 ③: {_e!r}")
 
         cs = ChatService.__new__(ChatService)
         _iw = type("O", (), {})()

@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.offline_survival_protocol import (  # noqa: E402
+from nucleus.reasoning.offline_survival_protocol import (
     OFFLINE_TAG,
     OfflineResult,
     drain_recheck,

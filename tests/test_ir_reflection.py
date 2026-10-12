@@ -23,8 +23,8 @@ os.environ.setdefault(
     ),
 )
 
-from nucleus.const import HeartEvent, MouthEvent  # noqa: E402
-from organs.brain.PulseReflection import PulseReflection  # noqa: E402
+from nucleus.const import HeartEvent, MouthEvent
+from organs.brain.PulseReflection import PulseReflection
 
 
 class _DeferredField:

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -34,8 +33,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
-from nucleus.evolution.patch_verification_split import (  # noqa: E402
+from nucleus.data.path_utils import safe_relpath as _safe_relpath
+from nucleus.evolution.patch_verification_split import (
     F_EFFECTIVENESS,
     F_GRANULARITY,
     F_NO_REGRESSION,
@@ -60,15 +59,15 @@ def _sha256(path: str) -> str:
 def _load(path: str) -> tuple[Any, list[dict]]:
     """返回 (文档对象, 补丁列表)。"""
     if not os.path.isfile(path):
-        raise SystemExit("[回填] 目标不存在: {}".format(path))
-    _doc = json.load(io.open(path, encoding="utf-8"))
+        raise SystemExit(f"[回填] 目标不存在: {path}")
+    _doc = json.load(open(path, encoding="utf-8"))
     if isinstance(_doc, list):
         return _doc, _doc
     if isinstance(_doc, dict):
         for _k in ("patches", "records", "items", "data"):
             if isinstance(_doc.get(_k), list):
                 return _doc, _doc[_k]
-    raise SystemExit("[回填] 无法识别结构: {}".format(path))
+    raise SystemExit(f"[回填] 无法识别结构: {path}")
 
 
 def _backup(path: str, archive_root: str) -> dict:
@@ -79,7 +78,7 @@ def _backup(path: str, archive_root: str) -> dict:
     _dst = os.path.join(_d, os.path.basename(path))
     shutil.copy2(path, _dst)
     _h = _sha256(path)
-    with io.open(os.path.join(_d, "MANIFEST.json"), "w", encoding="utf-8") as _f:
+    with open(os.path.join(_d, "MANIFEST.json"), "w", encoding="utf-8") as _f:
         _f.write(json.dumps({
             # ★第48批 T2（P2-320）：--target / archive_root 可传任意盘路径
             "source": _safe_relpath(path, ROOT),
@@ -131,9 +130,9 @@ def build_report(path: str, apply: bool = False,
             #   但**必须可观测** —— 否则"守卫是否生效"无从判断（第50批 P2-339 教训）。
             import sys as _sys
             _sys.stderr.write(
-                "[backfill] 写盘守卫不可用（按 fail-open 继续）: {}: {}\n".format(type(_e).__name__, _e))
+                f"[backfill] 写盘守卫不可用（按 fail-open 继续）: {type(_e).__name__}: {_e}\n")
         _rep2 = backfill(_ps, apply=True)
-        with io.open(path, "w", encoding="utf-8") as _f:
+        with open(path, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(_doc, ensure_ascii=False, indent=2))
         _rep.update(_rep2)
         _rep.update({"applied": True, "backup": _bk,
@@ -199,7 +198,7 @@ def main() -> int:
         _d = os.path.dirname(os.path.abspath(_ns.report))
         if _d and not os.path.isdir(_d):
             os.makedirs(_d, exist_ok=True)
-        with io.open(_ns.report, "w", encoding="utf-8") as _f:
+        with open(_ns.report, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(_r, ensure_ascii=False, indent=2))
         print()
         print("报告已写出 →", _ns.report)

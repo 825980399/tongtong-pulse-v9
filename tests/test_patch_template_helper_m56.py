@@ -3,7 +3,6 @@
 
 不依赖框架重启；全部用临时文件，不触碰生产代码。
 """
-import io
 import os
 import sys
 import tempfile
@@ -19,11 +18,11 @@ _ARCHIVE = os.path.join(_TOOLS, "archive")
 for _p in (_ARCHIVE, _TOOLS):
     if os.path.isdir(_p) and _p not in sys.path:
         sys.path.insert(0, _p)
-import patch_template_helper as H  # noqa: E402
+import patch_template_helper as H
 
 
 def _write(path, text, eol):
-    with io.open(path, "w", encoding="utf-8", newline="") as f:
+    with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(text.replace("\n", eol))
 
 
@@ -132,9 +131,9 @@ class TestApplyPatches(unittest.TestCase):
     def test_dry_run_no_write(self):
         """★dry_run 不写盘，文件内容不变。"""
         p = self._crlf_file()
-        _before = io.open(p, "r", encoding="utf-8", newline="").read()
+        _before = open(p, "r", encoding="utf-8", newline="").read()
         _r = H.apply_patches(p, [("b = 2\n", "b = 99\n")], dry_run=True)
-        _after = io.open(p, "r", encoding="utf-8", newline="").read()
+        _after = open(p, "r", encoding="utf-8", newline="").read()
         self.assertTrue(_r["dry_run"])
         self.assertEqual(_before, _after)
 

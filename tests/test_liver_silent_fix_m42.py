@@ -39,7 +39,7 @@ def _method_body(src, name):
     """按缩进切片取出方法体（到下一个同级 def / class 为止）。"""
     lines = src.splitlines()
     _start = next((i for i, l in enumerate(lines)
-                   if re.match(r"^\s*def {}\b".format(re.escape(name)), l)), None)
+                   if re.match(rf"^\s*def {re.escape(name)}\b", l)), None)
     if _start is None:
         return None
     _end = len(lines)
@@ -57,7 +57,7 @@ class TestLiverSilentFix(unittest.TestCase):
     def test_01_file_exists_and_has_methods(self):
         self.assertTrue(self.src, "PulseLiver.py 应可读且非空")
         for _m in _METHODS:
-            self.assertIsNotNone(_method_body(self.src, _m), "缺少方法 {}".format(_m))
+            self.assertIsNotNone(_method_body(self.src, _m), f"缺少方法 {_m}")
 
     def test_02_target_methods_have_no_silent_except(self):
         """★防回归：三个方法体内不得出现 `except ...: pass`。"""
@@ -66,7 +66,7 @@ class TestLiverSilentFix(unittest.TestCase):
             _hits = [i for i, l in enumerate(_body)
                      if _SILENT_RE.search(l.rstrip())
                      and i + 1 < len(_body) and _body[i + 1].strip() == "pass"]
-            self.assertEqual(_hits, [], "{} 内仍有静默 except: pass".format(_m))
+            self.assertEqual(_hits, [], f"{_m} 内仍有静默 except: pass")
 
     def test_03_whole_file_has_no_silent_except(self):
         """★全文件静默点应为 0（T4 修复前后实测：1 → 0）。"""
@@ -74,7 +74,7 @@ class TestLiverSilentFix(unittest.TestCase):
         _hits = [i + 1 for i, l in enumerate(_lines)
                  if _SILENT_RE.search(l.rstrip())
                  and i + 1 < len(_lines) and _lines[i + 1].strip() == "pass"]
-        self.assertEqual(_hits, [], "PulseLiver.py 仍存在静默吞异常: {}".format(_hits))
+        self.assertEqual(_hits, [], f"PulseLiver.py 仍存在静默吞异常: {_hits}")
 
     def test_04_patch_fix_present_verbatim(self):
         """补丁 modified_code 的修复形态必须仍在源码中（逐字）。"""
@@ -92,7 +92,7 @@ class TestLiverSilentFix(unittest.TestCase):
     def test_06_imports_log_level(self):
         """修复用到 LogLevel，必须已导入（否则 F821）。"""
         self.assertIn("LogLevel", self.src)
-        self.assertTrue(re.search(r"^\s*(from|import).*LogLevel", self.src, re.M)
+        self.assertTrue(re.search(r"^\s*(from|import).*LogLevel", self.src, re.MULTILINE)
                         or "LogLevel" in self.src.split("\n")[0:40].__str__())
 
 

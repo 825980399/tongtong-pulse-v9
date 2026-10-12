@@ -82,7 +82,7 @@ def load_roster(path: str) -> dict:
         try:
             _fernet = _load_fernet()
             _text = _fernet.decrypt(_raw).decode("utf-8")
-        except (InvalidToken, Exception) as _e:  # noqa: BLE001
+        except (InvalidToken, Exception) as _e:
             raise ValueError(f"[face_codec] 名册解密失败: {type(_e).__name__}: {_e}")
     try:
         _doc = json.loads(_text)
@@ -117,7 +117,7 @@ def save_roster(path: str, data: dict) -> bool:
         if _last_exc is not None:
             raise _last_exc
         return False
-    except Exception as _e:  # noqa: BLE001
+    except Exception as _e:
         try:
             if _tmp and os.path.exists(_tmp):
                 os.remove(_tmp)

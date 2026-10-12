@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.mnemosyne.experience_retriever import (  # noqa: E402
+from nucleus.mnemosyne.experience_retriever import (
     DEFAULT_POLLUTION_REPORT_PATH,
     ExperienceRetriever,
     analyze_pollution,
@@ -45,7 +45,7 @@ def main(argv=None) -> int:
     print("  by_quality_flag       {}".format(_rep.get("by_quality_flag")))
     print("  is_summarized         {}".format(_rep.get("is_summarized")))
     for _f in _rep.get("findings", []):
-        print("  - {}".format(_f))
+        print(f"  - {_f}")
 
     _written = save_pollution_report(_rep, _args.out)
     print()
@@ -67,7 +67,7 @@ def main(argv=None) -> int:
         print(json.dumps(_rep, ensure_ascii=False, indent=2))
 
     print()
-    print("默认报告路径: {}".format(DEFAULT_POLLUTION_REPORT_PATH))
+    print(f"默认报告路径: {DEFAULT_POLLUTION_REPORT_PATH}")
     return 0
 
 

@@ -17,7 +17,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from nucleus.const import (  # noqa: E402
+from nucleus.const import (
     Event,
     all_event_values,
     is_registered_event,
@@ -73,9 +73,9 @@ class TestEventConstValues(unittest.TestCase):
 
     def test_const_values_match_originals(self):
         for name, value in CONST_TO_VALUE.items():
-            self.assertTrue(hasattr(Event, name), "Event 缺少常量 {}".format(name))
+            self.assertTrue(hasattr(Event, name), f"Event 缺少常量 {name}")
             self.assertEqual(getattr(Event, name), value,
-                             "Event.{} 值应为 {!r}，实为 {!r}".format(name, value, getattr(Event, name)))
+                             f"Event.{name} 值应为 {value!r}，实为 {getattr(Event, name)!r}")
 
     def test_const_values_unique(self):
         values = list(CONST_TO_VALUE.values())
@@ -160,7 +160,7 @@ class TestNoRawEventLiterals(unittest.TestCase):
         hits = self._scan_raw_literals()
         self.assertEqual(
             hits, [],
-            "以下位置仍存在裸字符串事件名（应已替换为 Event 常量）：{}".format(hits),
+            f"以下位置仍存在裸字符串事件名（应已替换为 Event 常量）：{hits}",
         )
 
 

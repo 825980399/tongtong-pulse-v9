@@ -18,11 +18,12 @@ import argparse
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 # 轻量静默上报（与全库一致）；缺失时退化为 no-op，保证模块可独立加载。
-try:  # noqa: E402
+try:
     from nucleus._silent_except import silent_exc
 except Exception:  # pragma: no cover
     def silent_exc(e, where="", level="debug"):  # type: ignore
@@ -184,9 +185,9 @@ def snapshot_dependency_and_l2() -> dict[str, Any]:
     回退到运行期指标文件 data/metrics/llm_dependency.json；
     L2 命中率取自 L2 单例 stats（内存口径；骨架阶段为 0 亦可）。
     """
-    dep: Optional[float] = None
+    dep: float | None = None
     try:
-        from nucleus.LLMDependencyMetrics import LLM_DEPENDENCY_BASELINE  # noqa: F401
+        from nucleus.LLMDependencyMetrics import LLM_DEPENDENCY_BASELINE
 
         dep = float(LLM_DEPENDENCY_BASELINE)
     except Exception:
@@ -201,7 +202,7 @@ def snapshot_dependency_and_l2() -> dict[str, Any]:
             silent_exc(e, where="tools.benchmark.external_bench_harness::snapshot_dependency_and_l2[dep]")
             dep = None
 
-    l2: Optional[float] = None
+    l2: float | None = None
     try:
         from nucleus.llm.semantic_cache import get_semantic_cache_l2
 
@@ -220,14 +221,13 @@ def snapshot_dependency_and_l2() -> dict[str, Any]:
 def _write_jsonl(path: str, records: list[dict[str, Any]]) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        f.writelines(json.dumps(rec, ensure_ascii=False) + "\n" for rec in records)
 
 
 def run_benchmark(
     task_set_path: str,
     output_path: str,
-    candidate_provider: Optional[Callable[[BenchTask], str]] = None,
+    candidate_provider: Callable[[BenchTask], str] | None = None,
 ) -> dict[str, Any]:
     """执行基准首考闭环（骨架）：加载任务集 → 逐条评分（调用方提供候选答案）→ 落盘。
 
@@ -295,7 +295,7 @@ def _sample_task_set() -> list[dict[str, Any]]:
     ]
 
 
-def main(argv: Optional[list[str]] = None) -> int:  # pragma: no cover
+def main(argv: list[str] | None = None) -> int:  # pragma: no cover
     ap = argparse.ArgumentParser(description="188·刀3 外部基准首考 harness（离线骨架）")
     ap.add_argument("--task-set", help="任务集 JSON 路径（缺省写入内置示例）")
     ap.add_argument("--out", required=True, help="成绩落盘 JSONL 路径")

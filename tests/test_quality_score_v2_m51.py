@@ -10,7 +10,6 @@
 * 接入验证（diagnostics 只读入口 + 旧方法零回归）
 * 真实数据 smoke
 """
-import io
 import os
 import sys
 import tempfile
@@ -20,7 +19,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.self_awareness import quality_score_v2 as Q  # noqa: E402
+from nucleus.self_awareness import quality_score_v2 as Q
 
 
 class TestDimensions(unittest.TestCase):
@@ -50,7 +49,7 @@ class TestDimensions(unittest.TestCase):
     def test_04_count_open_debts_dedup(self):
         with tempfile.TemporaryDirectory(prefix="m51_t2_") as _td:
             _p = os.path.join(_td, "d.md")
-            io.open(_p, "w", encoding="utf-8").write(
+            open(_p, "w", encoding="utf-8").write(
                 "| **P0-1** | a |\U0001F534待修复 |\n"
                 "| **P0-1** | dup |\U0001F534待修复 |\n"      # 重复编号 → 去重
                 "| **P1-7** | b |\U0001F534 |\n"
@@ -173,7 +172,7 @@ class TestTrend(unittest.TestCase):
         self.assertEqual(Q.load_trend(os.path.join(self._td, "nope.jsonl")), [])
 
     def test_42_load_skips_corrupt_lines(self):
-        io.open(self._p, "w", encoding="utf-8").write(
+        open(self._p, "w", encoding="utf-8").write(
             '{"score":1}\nnot-json\n{"score":2}\n')
         self.assertEqual(len(Q.load_trend(self._p)), 2)
 
@@ -216,7 +215,7 @@ class TestProductionSmoke(unittest.TestCase):
 
     def test_61_no_bare_except_pass(self):
         import re
-        _s = io.open(os.path.join(
+        _s = open(os.path.join(
             _ROOT, "nucleus/self_awareness/quality_score_v2.py"),
             encoding="utf-8").read()
         self.assertEqual(

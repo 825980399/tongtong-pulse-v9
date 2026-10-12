@@ -52,7 +52,7 @@ def test_config_value_matches_fallback_default():
     cfg = _read(CONFIG_PATH)
     chat = _read(CHAT_PATH)
 
-    m_cfg = re.search(r"^FACE_WELCOME_SHADOW\s*=\s*(True|False)", cfg, re.M)
+    m_cfg = re.search(r"^FACE_WELCOME_SHADOW\s*=\s*(True|False)", cfg, re.MULTILINE)
     assert m_cfg is not None, "config.py 缺少 FACE_WELCOME_SHADOW 赋值"
     cfg_val = (m_cfg.group(1) == "True")
 

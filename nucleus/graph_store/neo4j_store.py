@@ -21,7 +21,7 @@
 import logging
 import os
 import threading
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from nucleus._silent_except import silent_exc
 
@@ -116,7 +116,7 @@ class Neo4jStore:
         """连接是否可用。"""
         return bool(self._available and self._driver is not None)
 
-    def _run(self, cypher: str, params: Optional[dict] = None) -> List[dict]:
+    def _run(self, cypher: str, params: dict | None = None) -> list[dict]:
         """执行 Cypher，返回记录字典列表。不可用 → 空列表。"""
         if not self.is_available():
             return []
@@ -129,7 +129,7 @@ class Neo4jStore:
             return []
 
     # ---------- 节点 CRUD ----------
-    def add_node(self, node_id: str, properties: Optional[dict] = None) -> bool:
+    def add_node(self, node_id: str, properties: dict | None = None) -> bool:
         """添加/更新节点（MERGE 幂等）。"""
         if not self.is_available():
             return False
@@ -151,7 +151,7 @@ class Neo4jStore:
                   {"node_id": node_id})
         return True
 
-    def get_node(self, node_id: str) -> Optional[dict]:
+    def get_node(self, node_id: str) -> dict | None:
         """获取节点属性。"""
         rows = self._run("MATCH (n:KnowledgeNode {node_id: $node_id}) RETURN n",
                          {"node_id": node_id})
@@ -159,7 +159,7 @@ class Neo4jStore:
 
     # ---------- 关系 CRUD ----------
     def add_relationship(self, from_id: str, to_id: str, rel_type: str,
-                         properties: Optional[dict] = None) -> bool:
+                         properties: dict | None = None) -> bool:
         """添加关系（MERGE 幂等）。"""
         if not self.is_available():
             return False
@@ -183,7 +183,7 @@ class Neo4jStore:
         self._run(_cy, {"from_id": from_id, "to_id": to_id})
         return True
 
-    def get_relationships(self, node_id: str, direction: str = "both") -> List[dict]:
+    def get_relationships(self, node_id: str, direction: str = "both") -> list[dict]:
         """获取节点的所有关系。direction: out / in / both。"""
         if not self.is_available():
             return []
@@ -200,7 +200,7 @@ class Neo4jStore:
 
     # ---------- 图查询 ----------
     def query_multi_hop(self, node_id: str, max_depth: int = 2,
-                        top_k: int = 100) -> List[str]:
+                        top_k: int = 100) -> list[str]:
         """查询 N 跳关联节点，返回 node_id 列表（不含自身）。"""
         if not self.is_available() or max_depth < 1:
             return []
@@ -210,7 +210,7 @@ class Neo4jStore:
         rows = self._run(_cy, {"node_id": node_id, "top_k": int(top_k)})
         return [_r["nid"] for _r in rows if _r.get("nid") and _r["nid"] != node_id]
 
-    def query_shortest_path(self, from_id: str, to_id: str) -> List[str]:
+    def query_shortest_path(self, from_id: str, to_id: str) -> list[str]:
         """查询最短路径（节点 id 序列）。无路径 → 空列表。"""
         if not self.is_available():
             return []
@@ -220,7 +220,7 @@ class Neo4jStore:
         rows = self._run(_cy, {"from_id": from_id, "to_id": to_id})
         return list(rows[0]["path"]) if rows else []
 
-    def query_common_neighbors(self, node_id_1: str, node_id_2: str) -> List[str]:
+    def query_common_neighbors(self, node_id_1: str, node_id_2: str) -> list[str]:
         """查询两节点的共同邻居。"""
         if not self.is_available():
             return []
@@ -229,12 +229,12 @@ class Neo4jStore:
         rows = self._run(_cy, {"n1": node_id_1, "n2": node_id_2})
         return [_r["nid"] for _r in rows if _r.get("nid")]
 
-    def execute_cypher(self, query: str, parameters: Optional[dict] = None) -> List[dict]:
+    def execute_cypher(self, query: str, parameters: dict | None = None) -> list[dict]:
         """执行自定义 Cypher（转义能力有限，仅内部可信调用）。"""
         return self._run(query, parameters)
 
     # ---------- 批量同步 ----------
-    def sync_from_nodes(self, nodes: List[Any]) -> Tuple[int, int]:
+    def sync_from_nodes(self, nodes: list[Any]) -> tuple[int, int]:
         """从现有节点批量同步关联网络到 Neo4j。
 
         Args:

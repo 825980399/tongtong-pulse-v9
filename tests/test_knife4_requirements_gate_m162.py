@@ -12,7 +12,7 @@ import sys
 TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS_CI = os.path.join(TOOLS, 'tools', 'ci')
 sys.path.insert(0, TOOLS_CI)
-import check_requirements_declared_imports as G  # noqa: E402  pylint: disable=import-error
+import check_requirements_declared_imports as G
 
 DECLARED = G._load_declared()
 PROJ_TOPS = G._collect_project_tops()

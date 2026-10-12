@@ -15,7 +15,6 @@
   2. 异常发生时**有日志输出**，且包含异常类型与 workers 值
   3. 异常不得中断流程 —— 仍返回 _cfg（保留原 return 语义）
 """
-import io
 import os
 import re
 import sys
@@ -25,9 +24,9 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import nucleus.field.InfoField as IF  # noqa: E402
+import nucleus.field.InfoField as IF
 
-_SRC = io.open(os.path.join(_PROJECT_ROOT, "nucleus", "field", "InfoField.py"),
+_SRC = open(os.path.join(_PROJECT_ROOT, "nucleus", "field", "InfoField.py"),
                encoding="utf-8").read()
 
 # 与 tests/test_robustness_m7.py 保持一致的静默异常检测

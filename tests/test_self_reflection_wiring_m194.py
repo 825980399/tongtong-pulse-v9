@@ -12,7 +12,6 @@ import ast
 import json
 import os
 
-
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

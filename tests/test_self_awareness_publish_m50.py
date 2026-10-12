@@ -6,7 +6,6 @@
 被 except 吞成 DEBUG 日志 → **报告发布恒失败而测试全绿**。
 本测试补齐该缺口。
 """
-import io
 import os
 import shutil
 import sys
@@ -17,11 +16,11 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.reporting import publishers as _pub  # noqa: E402
-from nucleus.reporting.report_bus import ReportBus  # noqa: E402
-from nucleus.self_awareness.SelfAwarenessEngine import SelfAwarenessEngine  # noqa: E402
+from nucleus.reporting import publishers as _pub
+from nucleus.reporting.report_bus import ReportBus
+from nucleus.self_awareness.SelfAwarenessEngine import SelfAwarenessEngine
 
-_SA_SRC = io.open(os.path.join(_ROOT, "nucleus/self_awareness/SelfAwarenessEngine.py"),
+_SA_SRC = open(os.path.join(_ROOT, "nucleus/self_awareness/SelfAwarenessEngine.py"),
                   encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
@@ -69,7 +68,7 @@ class TestGenerateReportPublishes(unittest.TestCase):
         for _v in (_p, {"overall_score": 88.0, "health_level": "healthy"}, None,
                    "str", 123, []):
             _r = self._eng._m50_report_summary(_v)
-            self.assertIsInstance(_r, dict, "{!r} 应降级为空 dict".format(type(_v)))
+            self.assertIsInstance(_r, dict, f"{type(_v)!r} 应降级为空 dict")
 
     def test_73_no_json_dumps_default_str_antipattern(self):
         """★防回归：`_m50_report_summary` 内不得再用 `json.dumps/loads` 提取字段。
@@ -92,7 +91,7 @@ class TestGenerateReportPublishes(unittest.TestCase):
                     and _n.func.value.id == "json"):
                 _bad.append(_n.lineno)
         self.assertEqual(
-            _bad, [], "★函数体内仍用 json.dumps/loads 提取字段 @{}".format(_bad))
+            _bad, [], f"★函数体内仍用 json.dumps/loads 提取字段 @{_bad}")
 
     def test_74_publish_failure_logs_message_not_only_type(self):
         """★防回归：发布失败日志必须带**异常消息**（原只记类型 → 故障难定位）。"""

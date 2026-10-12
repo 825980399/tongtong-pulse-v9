@@ -32,9 +32,9 @@ from nucleus.StructuredParallelScheduler import SubTask, get_structured_parallel
 
 __all__ = [
     "ParallelScheduler",
+    "SubTask",
     "get_parallel_scheduler",
     "shutdown_parallel_scheduler",
-    "SubTask",
 ]
 
 

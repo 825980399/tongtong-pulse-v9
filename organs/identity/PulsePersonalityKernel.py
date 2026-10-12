@@ -152,8 +152,8 @@ class PulsePersonalityKernel(BasePulseOrgan):
         # ★185批刀2：人格快照落盘 + 启动哈希比对告警（不自动回滚，人工裁决）
         try:
             from tools.export_personality_snapshot import (
-                write_personality_snapshot,
                 compare_personality_snapshot_at_startup,
+                write_personality_snapshot,
             )
             _disk_hash, _cur_hash, _mismatch = compare_personality_snapshot_at_startup(self)
             if _mismatch:

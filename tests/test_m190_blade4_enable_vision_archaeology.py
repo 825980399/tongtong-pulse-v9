@@ -11,7 +11,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
+import config
 
 
 def test_enable_vision_in_feature_section_and_true():

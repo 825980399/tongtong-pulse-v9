@@ -17,9 +17,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
-from nucleus.mnemosyne import recent_context as rc  # noqa: E402
-from nucleus.mnemosyne.episode_tag import build_episode, tag_dialog_entry  # noqa: E402
+from nucleus.mnemosyne import recent_context as rc
+from nucleus.mnemosyne.episode_tag import build_episode, tag_dialog_entry
+from nucleus.mnemosyne.PulseNode import PulseNode
 
 
 def test_build_episode_three_keys():

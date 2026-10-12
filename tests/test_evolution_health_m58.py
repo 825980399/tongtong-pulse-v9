@@ -19,7 +19,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor, _module_logger  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor, _module_logger
 
 _SEE_MODULE = "nucleus.reasoning.SafeEvolutionExecutor"
 # 与 SafeEvolutionExecutor.__init__ 中一致的项目根计算方式
@@ -86,7 +86,7 @@ class TestLogEvolutionHealth(unittest.TestCase):
         try:
             exe._log_evolution_health(3, 1, None)
         except Exception as _e:  # pragma: no cover
-            self.fail("extra=None 时不应抛异常: {!r}".format(_e))
+            self.fail(f"extra=None 时不应抛异常: {_e!r}")
 
     def test_bad_skip_reasons_shape_is_safe(self):
         # skip_reasons 为非 dict（如 list）时，失败分布应为空，不报错
@@ -94,7 +94,7 @@ class TestLogEvolutionHealth(unittest.TestCase):
         try:
             exe._log_evolution_health(2, 1, {"skip_reasons": ["a", "b"]})
         except Exception as _e:  # pragma: no cover
-            self.fail("skip_reasons 非 dict 时不应抛异常: {!r}".format(_e))
+            self.fail(f"skip_reasons 非 dict 时不应抛异常: {_e!r}")
 
     def test_string_found_coerced(self):
         # found 传入字符串也应安全（int(found or 0)）

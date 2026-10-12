@@ -13,7 +13,7 @@
   即使被导入也不会改变任何现有行为。
 """
 import hashlib
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -89,7 +89,7 @@ class ShardStrategy:
 
         return self._hash(node_id) % self._shard_count
 
-    def get_shard_nodes(self, shard_id: int) -> List[str]:
+    def get_shard_nodes(self, shard_id: int) -> list[str]:
         """获取分片所在的存储节点（副本列表）。
 
         ★第70批为设计实现：返回按副本数推导的逻辑节点名，
@@ -106,7 +106,7 @@ class ShardStrategy:
         return False
 
     # ---------- 元数据 ----------
-    def get_shard_stats(self) -> Dict[str, Any]:
+    def get_shard_stats(self) -> dict[str, Any]:
         """分片元数据概览。"""
         return {
             "enabled": _distributed_enabled(),
@@ -116,10 +116,10 @@ class ShardStrategy:
             "level_shards": dict(self._level_shards),
         }
 
-    def get_distribution(self, node_ids: List[str],
-                         evol_levels: Optional[Dict[str, str]] = None) -> Dict[int, int]:
+    def get_distribution(self, node_ids: list[str],
+                         evol_levels: dict[str, str] | None = None) -> dict[int, int]:
         """统计给定节点的分片分布（用于验证是否倾斜）。"""
-        _dist: Dict[int, int] = {}
+        _dist: dict[int, int] = {}
         for _nid in node_ids:
             _lvl = (evol_levels or {}).get(_nid, "")
             _sid = self.get_shard_id(_nid, _lvl)
@@ -155,10 +155,10 @@ def read_with_consistency(node_id: str,
                           consistency_level: str = ConsistencyLevel.EVENTUAL):
     """带一致性级别的读取（第70批：接口定义，返回 None 表示未实施）。"""
     if not _distributed_enabled():
-        return None
+        return
     if not ConsistencyLevel.validate(consistency_level):
-        return None
-    return None
+        return
+    return
 
 
 def sync_replicas(shard_id: int) -> bool:

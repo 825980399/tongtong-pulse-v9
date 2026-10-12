@@ -14,7 +14,6 @@
   **绝不碰生产 ``data/experience/``**。
 """
 
-import io
 import json
 import os
 import shutil
@@ -29,7 +28,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
 
 def _exp(**kw):
@@ -253,7 +252,7 @@ class TestProductionNotTouched(unittest.TestCase):
         _p = os.path.join(_ROOT, "data", "experience", "experience_pool.json")
         if not os.path.isfile(_p):
             self.skipTest("生产经验库不存在")
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _r = _d["experiences"] if isinstance(_d, dict) and "experiences" in _d else _d
         self.assertGreater(len(_r), 0)
         _with_raw = [x for x in _r if isinstance(x, dict) and "raw_summary" in x]

@@ -14,7 +14,6 @@
 
 验收（对应任务书 T1 验收标准 1~5）。
 """
-import io
 import os
 import sys
 import time
@@ -24,11 +23,11 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
-_SRC = io.open(os.path.join(_PROJECT_ROOT, "nucleus", "mnemosyne", "PulseNodePool.py"),
+_SRC = open(os.path.join(_PROJECT_ROOT, "nucleus", "mnemosyne", "PulseNodePool.py"),
                encoding="utf-8").read()
-_MAIN = io.open(os.path.join(_PROJECT_ROOT, "main.py"), encoding="utf-8").read()
+_MAIN = open(os.path.join(_PROJECT_ROOT, "main.py"), encoding="utf-8").read()
 
 _INTERVAL_H = 6.0
 _INTERVAL_S = _INTERVAL_H * 3600.0          # 21600 秒
@@ -90,7 +89,7 @@ class TestPostponeSemantics(unittest.TestCase):
     def test_05_subsequent_runs_use_interval(self):
         """第二轮起恢复 interval（推迟量只影响第一轮）。"""
         _calls = _probe(600.0 / 3600.0)
-        self.assertGreaterEqual(len(_calls), 2, "未观测到第二轮: {}".format(_calls))
+        self.assertGreaterEqual(len(_calls), 2, f"未观测到第二轮: {_calls}")
         self.assertAlmostEqual(_calls[1], _INTERVAL_S, delta=2.0)
 
     def test_06_interval_change_still_respected(self):

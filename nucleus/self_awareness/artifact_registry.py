@@ -33,7 +33,6 @@
 from __future__ import annotations
 
 import fnmatch
-import io
 import json
 import os
 import sys
@@ -44,10 +43,10 @@ from nucleus._silent_except import silent_exc
 
 __all__ = [
     "ARTIFACT_SPECS",
-    "registry_path",
-    "load_registry",
-    "save_registry",
     "audit",
+    "load_registry",
+    "registry_path",
+    "save_registry",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -124,7 +123,7 @@ def load_registry(path: str | None = None) -> list[dict]:
     if not os.path.isfile(_p):
         return [dict(_s) for _s in ARTIFACT_SPECS]
     try:
-        with io.open(_p, encoding="utf-8") as _f:
+        with open(_p, encoding="utf-8") as _f:
             _d = json.load(_f)
         _specs = _d.get("specs") if isinstance(_d, dict) else _d
         if isinstance(_specs, list) and _specs:
@@ -140,13 +139,13 @@ def save_registry(specs: list[dict], path: str | None = None) -> str:
     _p = path or registry_path()
     try:
         if ("pytest" in sys.modules) or os.environ.get("PYTEST_CURRENT_TEST"):
-            sys.stderr.write("[artifact_registry] 测试环境跳过生产写入: {}\n".format(_p))
+            sys.stderr.write(f"[artifact_registry] 测试环境跳过生产写入: {_p}\n")
             return _p
     except Exception as _e:
         silent_exc(_e, where="nucleus.self_awareness.artifact_registry::save_registry env")
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             json.dump({"version": "158A-T4-1", "generated_at": time.time(),
                        "specs": specs}, _f, ensure_ascii=False, indent=2)
     except OSError as _e:

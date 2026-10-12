@@ -8,7 +8,6 @@
   - baseline>0 且 after=0 仍正确判为成功（不影响真实有效修复）
   - fix_detail_consistency 在 baseline=0 时把 effectiveness 字段同步为 None
 """
-import io
 import logging
 import os
 import sys
@@ -21,14 +20,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.evolution.patch_dedup import fix_detail_consistency  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
+from nucleus.evolution.patch_dedup import fix_detail_consistency
+from nucleus.reasoning.SafeEvolutionExecutor import (
     SafeEvolutionExecutor,
 )
 
 
 def _read_src(rel):
-    with io.open(os.path.join(ROOT, rel), "r", encoding="utf-8") as f:
+    with open(os.path.join(ROOT, rel), "r", encoding="utf-8") as f:
         return f.read()
 
 

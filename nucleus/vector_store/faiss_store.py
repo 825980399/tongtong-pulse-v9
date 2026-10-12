@@ -15,7 +15,7 @@
 import logging
 import os
 import threading
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -55,7 +55,7 @@ class FAISSVectorStore:
         self._batch_size = int(batch_size)
         self._lock = threading.Lock()
         self._index = None
-        self._id_map: List[str] = []  # FAISS 内部 id → node_id
+        self._id_map: list[str] = []  # FAISS 内部 id → node_id
         self._reverse_map: dict[str, int] = {}  # node_id → faiss internal id
         self._vectors: dict[str, Any] = {}  # node_id → vector (用于回退+增量更新)
         self._initialized = False
@@ -88,7 +88,7 @@ class FAISSVectorStore:
             return "FlatL2"
         return "IVFFlat"
 
-    def _build_index(self, vectors: List[Tuple[str, Any]]) -> None:
+    def _build_index(self, vectors: list[tuple[str, Any]]) -> None:
         """构建 FAISS 索引。
 
         [M73-T1] 修复：该方法现在会在 add_vectors 首次添加向量时自动被调用，
@@ -157,7 +157,7 @@ class FAISSVectorStore:
             _logger.warning("[M73-T1] FAISS 索引构建失败: %s: %s", type(e).__name__, e)
             self._index = None
 
-    def add_vectors(self, node_ids: List[str], vectors: List[Any]) -> bool:
+    def add_vectors(self, node_ids: list[str], vectors: list[Any]) -> bool:
         """批量添加向量。
 
         [M73-T1] 修复核心：当索引尚未构建（_index is None）时，自动把「已存内存的向量
@@ -238,7 +238,7 @@ class FAISSVectorStore:
                 self._index = None
                 _logger.debug("[T2] 向量删除标记索引需重建: %s", node_id)
 
-    def search(self, query_vector: Any, top_k: int = 10) -> List[Tuple[str, float]]:
+    def search(self, query_vector: Any, top_k: int = 10) -> list[tuple[str, float]]:
         """语义检索，返回 [(node_id, similarity), ...]。"""
         with self._lock:
             if self._faiss_available and self._index is not None:
@@ -266,7 +266,7 @@ class FAISSVectorStore:
             self._search_brute_count += 1
             return self._brute_force_search(query_vector, top_k)
 
-    def _brute_force_search(self, query_vector: Any, top_k: int) -> List[Tuple[str, float]]:
+    def _brute_force_search(self, query_vector: Any, top_k: int) -> list[tuple[str, float]]:
         """暴力余弦相似度搜索。"""
         try:
             import numpy as np
@@ -299,7 +299,7 @@ class FAISSVectorStore:
         try:
             import json
 
-            import faiss  # noqa: F401
+            import faiss
             import numpy as np
             p = path or self._index_path
             if not p:
@@ -336,7 +336,7 @@ class FAISSVectorStore:
         try:
             import json
 
-            import faiss  # noqa: F401
+            import faiss
             import numpy as np
             p = path or self._index_path
             if not p or not os.path.isfile(p):

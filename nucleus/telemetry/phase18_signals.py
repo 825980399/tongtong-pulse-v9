@@ -16,7 +16,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Any, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -57,7 +57,7 @@ class Phase18Signals:
     # 1. 推理模式使用数据
     # ------------------------------------------------------------------
     def record_reasoning_mode(self, mode: str, success: bool = True,
-                              elapsed: Optional[float] = None) -> None:
+                              elapsed: float | None = None) -> None:
         """记录一次推理模式使用。
 
         Args:
@@ -80,8 +80,8 @@ class Phase18Signals:
     # 2. 策略选择数据
     # ------------------------------------------------------------------
     def record_strategy_selection(self, intent: str, strategy: str,
-                                 basis: Optional[str] = None,
-                                 confidence: Optional[float] = None) -> None:
+                                 basis: str | None = None,
+                                 confidence: float | None = None) -> None:
         """记录一次大脑皮层策略选择。"""
         if not self._enabled or not strategy:
             return
@@ -110,8 +110,8 @@ class Phase18Signals:
     # 4. L3 背压数据（生命形体指数）
     # ------------------------------------------------------------------
     def record_l3_backpressure(self, depth: int, limit: int, workers: int,
-                              producer_top5: Optional[list] = None,
-                              consumer_rate_per_sec: Optional[float] = None) -> None:
+                              producer_top5: list | None = None,
+                              consumer_rate_per_sec: float | None = None) -> None:
         """记录一次 L3 队列背压快照（供 PHASE18 生命形体指数使用）。
 
         Args:
@@ -154,7 +154,7 @@ class Phase18Signals:
     def record_qica_channel_contrib(self, contributions: dict[str, float],
                                    top_intent: str | None = None,
                                    top_score: float | None = None,
-                                   extra: Optional[dict] = None) -> None:
+                                   extra: dict | None = None) -> None:
         """记录一次 QICA 分类的 8 通道贡献度分布（供 PHASE18 器官关联图谱使用）。
 
         Args:
@@ -255,7 +255,7 @@ class Phase18Signals:
         return sent
 
 
-_phase18_signals: Optional[Phase18Signals] = None
+_phase18_signals: Phase18Signals | None = None
 
 
 def get_phase18_signals() -> Phase18Signals:

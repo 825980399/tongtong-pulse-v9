@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import time
 from typing import Any
 
 import config as _cfg
-import time
-
 from nucleus.logger import get_module_logger
 
 _log = get_module_logger("observe.request_dedup")
@@ -96,8 +95,7 @@ def observe_request(user_name: str, prompt: str) -> None:
     with _lock:
         _stats["observed"] += 1
         _stats["_inflight"] += 1
-        if _stats["_inflight"] > _stats["inflight_peak"]:
-            _stats["inflight_peak"] = _stats["_inflight"]
+        _stats["inflight_peak"] = max(_stats["inflight_peak"], _stats["_inflight"])
         _stats["fingerprints"][_fp] = _stats["fingerprints"].get(_fp, 0) + 1
 
 
@@ -113,17 +111,17 @@ def complete_request(user_name: str, prompt: str) -> None:
 class _ObserveSpan:
     """上下文管理器：进入时 observe，退出时 complete。"""
 
-    __slots__ = ("_user", "_prompt")
+    __slots__ = ("_prompt", "_user")
 
     def __init__(self, user_name: str, prompt: str) -> None:
         self._user = user_name
         self._prompt = prompt
 
-    def __enter__(self) -> "_ObserveSpan":
+    def __enter__(self) -> _ObserveSpan:
         observe_request(self._user, self._prompt)
         return self
 
-    def __exit__(self, *exc: Any) -> bool:
+    def __exit__(self, *exc: object) -> bool:
         complete_request(self._user, self._prompt)
         return False
 

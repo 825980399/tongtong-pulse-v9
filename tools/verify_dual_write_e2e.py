@@ -107,11 +107,7 @@ class MockNeo4jStore:
     def get_relationships(self, node_id, direction="both"):
         out = []
         for f, t, rt in self.rels:
-            if direction == "both" and (f == node_id or t == node_id):
-                out.append({"from": f, "to": t, "rel_type": rt})
-            elif direction == "out" and f == node_id:
-                out.append({"from": f, "to": t, "rel_type": rt})
-            elif direction == "in" and t == node_id:
+            if direction == "both" and (f == node_id or t == node_id) or direction == "out" and f == node_id or direction == "in" and t == node_id:
                 out.append({"from": f, "to": t, "rel_type": rt})
         return out
 
@@ -140,7 +136,7 @@ def run(backend):
             mock = _build_real_writer()
             print("[INFO] 使用真实 Neo4j 后端")
         except RuntimeError as e:
-            print("[WARN] {}；自动降级为 mock。".format(e))
+            print(f"[WARN] {e}；自动降级为 mock。")
             mock = MockNeo4jStore()
             neo4j_mod.get_neo4j_store = lambda: mock
     else:
@@ -179,9 +175,9 @@ def run(backend):
             _ts = mock.nodes.get(a.node_id, {}).get("trust_score")
             _check("节点双写-更新属性(路径迁移触发)",
                    _ts in (0.95, "0.95"),
-                   "trust_score={} updated={}".format(_ts, _ok_upd))
+                   f"trust_score={_ts} updated={_ok_upd}")
         except Exception as e:
-            _check("节点双写-更新属性(路径迁移触发)", False, "更新异常: {}".format(e))
+            _check("节点双写-更新属性(路径迁移触发)", False, f"更新异常: {e}")
 
         # 4. 一致性检查
         cc = pool.check_consistency(a.node_id)
@@ -205,7 +201,7 @@ def run(backend):
             _check("异常场景-双写统计记失败", st.get("node_fail", 0) > 0,
                    "node_fail={}".format(st.get("node_fail")))
         except Exception as e:
-            _check("异常场景-主流程不抛异常", False, "意外抛异常: {}".format(e))
+            _check("异常场景-主流程不抛异常", False, f"意外抛异常: {e}")
 
         # 7. 开关关闭 → 零副作用
         config.ENABLE_NEO4J_GRAPH_STORE = False
@@ -230,7 +226,7 @@ def run(backend):
         except Exception as e:
             silent_exc(e, "verify_dual_write_e2e:228:还原neo4j_store异常", level="warning")
 
-    print("\n双写统计快照: {}".format(mock.get_stats()))
+    print(f"\n双写统计快照: {mock.get_stats()}")
     return 0 if not FAIL else 1
 
 

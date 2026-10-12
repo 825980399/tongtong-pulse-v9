@@ -13,7 +13,7 @@
 """
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -49,18 +49,18 @@ class NodeRouter:
     这样既避免每次请求都过代理（单点+延迟），又不会因客户端路由表过期而失败。
     """
 
-    def __init__(self, nodes: Optional[List[str]] = None,
+    def __init__(self, nodes: list[str] | None = None,
                  strategy: str = "least_conn") -> None:
-        self._nodes: List[str] = list(nodes or [])
+        self._nodes: list[str] = list(nodes or [])
         self._strategy = strategy or "least_conn"
         self._lock = threading.RLock()
         # 健康分：1.0=健康，0.0=不可用；动态路由按此加权
-        self._health: Dict[str, float] = {_n: 1.0 for _n in self._nodes}
+        self._health: dict[str, float] = {_n: 1.0 for _n in self._nodes}
         # 最少连接：当前连接数
-        self._conns: Dict[str, int] = {_n: 0 for _n in self._nodes}
+        self._conns: dict[str, int] = {_n: 0 for _n in self._nodes}
         self._rr_index = 0
-        self._local_handlers: Dict[str, Any] = {}
-        self._load_stats: Dict[str, Dict[str, float]] = {}
+        self._local_handlers: dict[str, Any] = {}
+        self._load_stats: dict[str, dict[str, float]] = {}
 
     # ---------- 节点管理 ----------
     def add_node(self, node_id: str) -> None:
@@ -82,7 +82,7 @@ class NodeRouter:
         with self._lock:
             self._health[node_id] = max(0.0, min(1.0, float(health_score)))
 
-    def get_healthy_nodes(self, min_health: float = 0.5) -> List[str]:
+    def get_healthy_nodes(self, min_health: float = 0.5) -> list[str]:
         """获取健康节点列表。"""
         with self._lock:
             return [_n for _n in self._nodes
@@ -90,7 +90,7 @@ class NodeRouter:
 
     # ---------- 路由 ----------
     def route_request(self, request_type: str = "", node_id: str = "",
-                      data: Any = None) -> Optional[str]:
+                      data: Any = None) -> str | None:
         """路由请求，返回目标节点；无健康节点 → None。
 
         Args:
@@ -148,7 +148,7 @@ class NodeRouter:
 
     def forward_request(self, target_node: str, request_type: str = "",
                        data: Any = None, timeout: float = 30.0,
-                       retries: int = 2) -> Dict[str, Any]:
+                       retries: int = 2) -> dict[str, Any]:
         """转发请求到目标节点（第一阶段：单机模拟本地调用）。
 
         - 开关关闭或目标节点不存在：返回对应状态（不抛异常）
@@ -173,7 +173,7 @@ class NodeRouter:
                 _ok = True
                 break
             except Exception as _e:
-                _last_err = "{}: {}".format(type(_e).__name__, _e)
+                _last_err = f"{type(_e).__name__}: {_e}"
                 _logger.debug("[T3] 转发请求失败(重试 %d/%d): %s", _i, retries, _last_err)
         _latency = (time.time() - _start) * 1000.0
         with self._lock:
@@ -191,10 +191,10 @@ class NodeRouter:
         return {"status": "fallback", "node": target_node,
                 "attempts": _attempts, "error": _last_err, "latency_ms": _latency}
 
-    def get_load_stats(self) -> Dict[str, Any]:
+    def get_load_stats(self) -> dict[str, Any]:
         """各节点负载统计（请求数 / 成功率 / 平均延迟）。"""
         with self._lock:
-            _out: Dict[str, Any] = {}
+            _out: dict[str, Any] = {}
             for _n, _s in self._load_stats.items():
                 _req = _s["requests"]
                 _avg = (_s["latency_sum"] / _req) if _req else 0.0
@@ -208,7 +208,7 @@ class NodeRouter:
             return _out
 
     # [M71-ROUTING]
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """路由状态。"""
         with self._lock:
             return {

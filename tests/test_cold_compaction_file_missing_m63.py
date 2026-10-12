@@ -9,7 +9,6 @@
 5. 删旧目录遇 WinError 145（rmtree 反复失败）时走 ignore_errors 强制删除兜底，compaction 仍成功
 6. 灰度开关 ENABLE_COLD_COMPACT_WINDOWS_RETRY 关闭时回到单次 rmtree（零回归路径）
 """
-import io
 import os
 import shutil
 import tempfile
@@ -20,7 +19,7 @@ import pyarrow.parquet as pq
 
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
-SRC = io.open(
+SRC = open(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                  "nucleus/mnemosyne/PulseNodePool.py"),
     encoding="utf-8", errors="replace").read()
@@ -74,7 +73,7 @@ def _write_good_parquet(pdir, fname, node_id):
 
 
 def _write_corrupt_parquet(pdir, fname):
-    with io.open(os.path.join(pdir, fname), "wb") as _f:
+    with open(os.path.join(pdir, fname), "wb") as _f:
         _f.write(b"this is not a valid parquet file\x00\x00")
 
 

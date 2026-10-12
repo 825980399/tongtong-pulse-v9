@@ -19,9 +19,9 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.reasoning.ReasoningWorkerPool import ReasoningWorkerPool  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+import config
+from nucleus.reasoning.ReasoningWorkerPool import ReasoningWorkerPool
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 _IW_SRC_PATH = os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py")
 _IW_SRC = open(_IW_SRC_PATH, encoding="utf-8").read()
@@ -44,7 +44,6 @@ class _LL:
 class _Ctx:
     """★第147批九刀拆分后：切片代码改用 ctx.question / ctx._reasoning_start_time
     字段访问，故 exec 命名空间需提供一个带这两个属性的 ctx 占位对象。"""
-    pass
 
 
 class _Switch:

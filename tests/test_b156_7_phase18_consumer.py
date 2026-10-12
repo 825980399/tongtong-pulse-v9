@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.telemetry.phase18_signals import (  # noqa: E402
+from nucleus.telemetry.phase18_signals import (
     Phase18Signals,
     get_phase18_signals,
     register_phase18_snapshot_consumer,

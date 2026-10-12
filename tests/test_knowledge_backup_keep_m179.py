@@ -16,7 +16,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
+import config
 
 
 def test_keep_value_is_two():

@@ -20,7 +20,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.body.PulseKidney import PulseKidney  # noqa: E402
+from organs.body.PulseKidney import PulseKidney
 
 
 class _Base(unittest.TestCase):
@@ -154,7 +154,7 @@ class TestBoundary(_Base):
                     self.o.on_pulse({"event_type": "system.status.request",
                                      "payload": {}})
             except Exception as _e:
-                _errs.append("{}: {}".format(type(_e).__name__, _e))
+                _errs.append(f"{type(_e).__name__}: {_e}")
 
         _ts = [threading.Thread(target=_w) for _ in range(4)]
         for _t in _ts:
@@ -174,7 +174,7 @@ class TestBoundary(_Base):
     def test_55_biased_branches_key_present(self):
         _st = self.o.get_stats()
         self.assertTrue(any("biased" in _k or "purge" in _k for _k in _st),
-                        "get_stats 应含偏移/清除相关计数: {}".format(sorted(_st)))
+                        f"get_stats 应含偏移/清除相关计数: {sorted(_st)}")
 
 
 if __name__ == "__main__":

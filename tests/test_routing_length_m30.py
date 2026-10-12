@@ -14,8 +14,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+import config
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 # InnerWorld 标度：技术域(系统/架构) + 因果(为什么) + 价值(意义) + 身份(意义) + 长度>30
 _Q_INNER_HIGH = "请分析数字生命的系统架构与自我认知的意义，为什么成长会影响身份认同？"

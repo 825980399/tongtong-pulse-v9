@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import re
@@ -66,7 +65,7 @@ MANIFEST = "MANIFEST.json"
 #   本文件原先自带的 ``_rel()`` 是第46批的本地补丁；现统一到权威实现，
 #   便于其他模块复用（避免每处各写一遍 try/except）。
 from nucleus._silent_except import silent_exc
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
+from nucleus.data.path_utils import safe_relpath as _safe_relpath
 
 
 def _rel(path: str, root: str = ROOT) -> str:
@@ -126,8 +125,8 @@ def snapshot(tmp_dir: str = TMP_DIR, backup_root: str = BACKUP_ROOT,
             shutil.copy2(_fp, _d)
             _files.append({"name": _n, "bytes": os.path.getsize(_fp),
                            "sha256": _sha256(_fp)})
-        except (OSError, IOError) as _e:
-            _files.append({"name": _n, "error": "{}: {}".format(type(_e).__name__, _e)})
+        except OSError as _e:
+            _files.append({"name": _n, "error": f"{type(_e).__name__}: {_e}"})
 
     _dirs = [_n for _n, _ in iter_tmp_dirs(tmp_dir)]
     _rep = {
@@ -141,7 +140,7 @@ def snapshot(tmp_dir: str = TMP_DIR, backup_root: str = BACKUP_ROOT,
         "dirs_observed": _dirs,
         "dir_count": len(_dirs),
     }
-    with io.open(os.path.join(_dst, MANIFEST), "w", encoding="utf-8") as _f:
+    with open(os.path.join(_dst, MANIFEST), "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
     return _rep
 
@@ -159,7 +158,7 @@ def list_backups(backup_root: str = BACKUP_ROOT) -> list:
         _info = {"snapshot": _n, "path": _d}
         if os.path.isfile(_mf):
             try:
-                _j = json.load(io.open(_mf, encoding="utf-8"))
+                _j = json.load(open(_mf, encoding="utf-8"))
                 _info.update({"created_str": _j.get("created_str"),
                               "file_count": _j.get("file_count"),
                               "label": _j.get("label", "")})
@@ -192,7 +191,7 @@ def prune(keep: int = 5, backup_root: str = BACKUP_ROOT) -> dict:
             _removed.append(_b["snapshot"])
         except OSError as _e:
             _removed.append({"snapshot": _b["snapshot"],
-                             "error": "{}: {}".format(type(_e).__name__, _e)})
+                             "error": f"{type(_e).__name__}: {_e}"})
     return {"keep": keep, "total": len(_all), "removed": _removed,
             "remaining": [x["snapshot"] for x in _all[:keep]]}
 
@@ -202,12 +201,12 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
     """从指定备份恢复文件到 tmp/（默认覆盖）。"""
     _src = os.path.join(backup_root, snapshot_id)
     if not os.path.isdir(_src):
-        return {"ok": False, "error": "备份不存在: {}".format(snapshot_id)}
+        return {"ok": False, "error": f"备份不存在: {snapshot_id}"}
     _mf = os.path.join(_src, MANIFEST)
     _manifest = None
     if os.path.isfile(_mf):
         try:
-            _manifest = json.load(io.open(_mf, encoding="utf-8"))
+            _manifest = json.load(open(_mf, encoding="utf-8"))
         except (ValueError, OSError) as e:
             silent_exc(e, where="tools.tmp_backup::restore L210")
 
@@ -226,8 +225,8 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
         try:
             shutil.copy2(_s, _d)
             _restored.append({"name": _n, "sha256": _sha256(_d)})
-        except (OSError, IOError) as _e:
-            _errors.append({"name": _n, "error": "{}: {}".format(type(_e).__name__, _e)})
+        except OSError as _e:
+            _errors.append({"name": _n, "error": f"{type(_e).__name__}: {_e}"})
 
     # 校验：与 MANIFEST 记录的 sha256 比对
     _mismatch = []
@@ -292,7 +291,7 @@ def scan_test_dependencies(tests_dir: str | None = None,
     for _fn in sorted(os.listdir(tests_dir)):
         if not _fn.endswith(".py"):
             continue
-        _t = io.open(os.path.join(tests_dir, _fn), encoding="utf-8",
+        _t = open(os.path.join(tests_dir, _fn), encoding="utf-8",
                      errors="replace").read()
         # ★放宽：``"tmp"`` / ``"tmp/..."`` / ``tmp\...`` / ``_TMP`` 均视为引用了 tmp
         _uses_tmp = (bool(re.search(r"""["']tmp[/\\"']""", _t))
@@ -309,12 +308,12 @@ def scan_test_dependencies(tests_dir: str | None = None,
         _cands = {c for c in _cands if c in _py_names and c not in _mods}
         # 候选 B：`import xxx`（无 .py 后缀）→ 反查 tmp 中的同名模块
         _imp_cands = set()
-        for _m in re.finditer(r"^\s*import\s+([A-Za-z_]\w*)\s*$", _t, re.M):
+        for _m in re.finditer(r"^\s*import\s+([A-Za-z_]\w*)\s*$", _t, re.MULTILINE):
             _n = _m.group(1)
             if _n in _stems and _stems[_n] not in _mods:
                 _imp_cands.add(_stems[_n])
         # 候选 C：`from xxx import ...`
-        for _m in re.finditer(r"^\s*from\s+([A-Za-z_]\w*)\s+import\s", _t, re.M):
+        for _m in re.finditer(r"^\s*from\s+([A-Za-z_]\w*)\s+import\s", _t, re.MULTILINE):
             _n = _m.group(1)
             if _n in _stems and _stems[_n] not in _mods:
                 _imp_cands.add(_stems[_n])
@@ -322,7 +321,7 @@ def scan_test_dependencies(tests_dir: str | None = None,
         _all = _cands | _imp_cands
         if not _all:
             continue
-        if _imp_cands or (re.search(r"^\s*import\s+\w+", _t, re.M) and "sys.path" in _t):
+        if _imp_cands or (re.search(r"^\s*import\s+\w+", _t, re.MULTILINE) and "sys.path" in _t):
             _imports[_fn] = sorted(_all)
         if "subprocess" in _t:
             _subs[_fn] = sorted(_all)
@@ -370,21 +369,21 @@ def migrate_legacy(legacy_root: str = LEGACY_BACKUP_ROOT,
             continue
         _d = os.path.join(backup_root, _n)
         if os.path.isdir(_d):
-            _out["skipped"].append("{}（目标已存在）".format(_n))
+            _out["skipped"].append(f"{_n}（目标已存在）")
             continue
         # 校验：MANIFEST 可解析（存在时）
         _mf = os.path.join(_s, MANIFEST)
         if os.path.isfile(_mf):
             try:
-                json.load(io.open(_mf, encoding="utf-8"))
+                json.load(open(_mf, encoding="utf-8"))
             except ValueError as _e:
-                _out["errors"].append("{} MANIFEST 损坏: {}".format(_n, _e))
+                _out["errors"].append(f"{_n} MANIFEST 损坏: {_e}")
                 continue
         try:
             shutil.move(_s, _d)
             _out["moved"].append(_n)
         except (OSError, shutil.Error) as _e:
-            _out["errors"].append("{}: {}: {}".format(_n, type(_e).__name__, _e))
+            _out["errors"].append(f"{_n}: {type(_e).__name__}: {_e}")
 
     # 仅当全部成功且旧目录为空时才删除
     if not _out["errors"]:
@@ -396,7 +395,7 @@ def migrate_legacy(legacy_root: str = LEGACY_BACKUP_ROOT,
             else:
                 _out["skipped"].append("旧目录仍残留 %d 项，保留" % len(_left))
         except OSError as _e:
-            _out["errors"].append("删除旧目录失败: {}".format(_e))
+            _out["errors"].append(f"删除旧目录失败: {_e}")
     return _out
 
 
@@ -470,9 +469,9 @@ def main() -> int:
             print("   ", _n)
         for _k in ("by_import", "by_subprocess", "by_open"):
             if _r[_k]:
-                print("  {}: {}".format(_k, _r[_k]))
+                print(f"  {_k}: {_r[_k]}")
         if _ns.json:
-            with io.open(_ns.json, "w", encoding="utf-8") as _f:
+            with open(_ns.json, "w", encoding="utf-8") as _f:
                 _f.write(json.dumps(_r, ensure_ascii=False, indent=2))
             print("  →", _ns.json)
     return 0

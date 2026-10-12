@@ -3,7 +3,6 @@
 
 覆盖：闸门判据 / 标记策略（不删数据）/ 回滚 / 分类 / 4 个查询方法接入 / 零回归。
 """
-import io
 import json
 import os
 import shutil
@@ -17,11 +16,11 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.data import experience_cleanup as _ec  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+import config
+from nucleus.data import experience_cleanup as _ec
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
-_POOL_SRC = io.open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
+_POOL_SRC = open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
                     encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 _TPL = ("我曾因维持系统平衡而行动，获得了cognitive奖赏，感受到平静")
@@ -182,7 +181,7 @@ class TestCleanupFile(unittest.TestCase):
             _e(id="p2", polluted=True, summary=_BOILER),
             _e(id="p3", polluted=True, summary="杂项"),
         ]}
-        io.open(self.pool, "w", encoding="utf-8").write(
+        open(self.pool, "w", encoding="utf-8").write(
             json.dumps(doc, ensure_ascii=False))
 
     def tearDown(self):
@@ -196,26 +195,26 @@ class TestCleanupFile(unittest.TestCase):
         self.assertEqual(r["stats_before"]["total"], 4)
         self.assertEqual(r["stats_after"]["total"], 4, "★记录数不变（未删除）")
         self.assertEqual(r["stats_after"]["retrievable"], 1)
-        _d = json.load(io.open(self.pool, encoding="utf-8"))
+        _d = json.load(open(self.pool, encoding="utf-8"))
         self.assertEqual(len(_d["experiences"]), 4)
         self.assertEqual(_d["cleanup_batch"], 50)
 
     def test_41_rollback_restores_exactly(self):
-        _before = io.open(self.pool, "rb").read()
+        _before = open(self.pool, "rb").read()
         _ec.cleanup_file(self.pool, batch_no=50, backup=self.bk)
-        _mid = io.open(self.pool, "rb").read()
+        _mid = open(self.pool, "rb").read()
         self.assertNotEqual(_before, _mid, "清洗应改变文件")
         r = _ec.rollback_file(self.pool, self.bk)
         self.assertTrue(r["rolled_back"])
-        _after = io.open(self.pool, "rb").read()
+        _after = open(self.pool, "rb").read()
         self.assertEqual(_after, _before, "★回滚后应逐字节等于清洗前")
 
     def test_42_clean_record_content_preserved(self):
         """★干净记录完整性：字段逐字不变。"""
-        _d0 = json.load(io.open(self.pool, encoding="utf-8"))
+        _d0 = json.load(open(self.pool, encoding="utf-8"))
         _c0 = [x for x in _d0["experiences"] if x["id"] == "c1"][0]
         _ec.cleanup_file(self.pool, batch_no=50, backup=self.bk)
-        _d1 = json.load(io.open(self.pool, encoding="utf-8"))
+        _d1 = json.load(open(self.pool, encoding="utf-8"))
         _c1 = [x for x in _d1["experiences"] if x["id"] == "c1"][0]
         self.assertEqual(_c0, _c1)
 
@@ -292,10 +291,10 @@ class TestPoolQueriesGated(unittest.TestCase):
     def test_53_gate_wired_in_source(self):
         for m in ("query_experiences", "get_experiences_for_narrative",
                   "get_positive_experiences", "get_negative_experiences"):
-            i = _POOL_SRC.find("def {}".format(m))
+            i = _POOL_SRC.find(f"def {m}")
             self.assertGreater(i, 0, m)
             _seg = _POOL_SRC[i:i + 1400]
-            self.assertIn("_m50_retrievable", _seg, "{} 未接入闸门".format(m))
+            self.assertIn("_m50_retrievable", _seg, f"{m} 未接入闸门")
 
     def test_54_gate_helper_present(self):
         self.assertIn("def _m50_retrievable", _POOL_SRC)
@@ -334,7 +333,7 @@ class TestProductionState(unittest.TestCase):
         self._skip_if_rewritten()
         if not os.path.isfile(self.POOL):
             self.skipTest("生产库不存在")
-        _d = io.open(self.POOL, encoding="utf-8").read()
+        _d = open(self.POOL, encoding="utf-8").read()
         doc = json.loads(_d)
         recs = doc.get("experiences", [])
         _marked = [x for x in recs if x.get("is_cleaned") is False]
@@ -352,15 +351,15 @@ class TestProductionState(unittest.TestCase):
         self._skip_if_rewritten()
         if not (os.path.isfile(self.POOL) and os.path.isfile(self.BK)):
             self.skipTest("缺文件")
-        _a = json.load(io.open(self.POOL, encoding="utf-8")).get("experiences", [])
-        _b = json.load(io.open(self.BK, encoding="utf-8")).get("experiences", [])
+        _a = json.load(open(self.POOL, encoding="utf-8")).get("experiences", [])
+        _b = json.load(open(self.BK, encoding="utf-8")).get("experiences", [])
         self.assertEqual(len(_a), len(_b), "★清洗不得删除任何记录")
 
     def test_63_clean_records_retrievable(self):
         self._skip_if_rewritten()
         if not os.path.isfile(self.POOL):
             self.skipTest("缺文件")
-        recs = json.load(io.open(self.POOL, encoding="utf-8")).get("experiences", [])
+        recs = json.load(open(self.POOL, encoding="utf-8")).get("experiences", [])
         _clean = [x for x in recs if not x.get("polluted")]
         _ok = [x for x in _clean if _ec.is_retrievable(x)]
         self.assertEqual(len(_ok), len(_clean),

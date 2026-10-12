@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import shutil
@@ -25,7 +24,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.evolution.patch_dedup import (  # noqa: E402
+from nucleus.evolution.patch_dedup import (
     dedup_history,
     dedup_stats,
     fix_details_in_history,
@@ -46,9 +45,9 @@ def main(argv=None) -> int:
     _args = _ap.parse_args(argv)
 
     if not os.path.isfile(_args.history):
-        print("历史文件不存在: {}".format(_args.history))
+        print(f"历史文件不存在: {_args.history}")
         return 1
-    with io.open(_args.history, encoding="utf-8", errors="replace") as _f:
+    with open(_args.history, encoding="utf-8", errors="replace") as _f:
         _hist = json.loads(_f.read())
     if not isinstance(_hist, list):
         print("历史文件格式异常（非 list）")
@@ -77,25 +76,25 @@ def main(argv=None) -> int:
     # ① 完整备份（含重复）
     if not os.path.isfile(BAK_ALL):
         shutil.copy2(_args.history, BAK_ALL)
-        print("完整备份: {}".format(BAK_ALL))
+        print(f"完整备份: {BAK_ALL}")
     else:
-        print("完整备份已存在: {}".format(BAK_ALL))
+        print(f"完整备份已存在: {BAK_ALL}")
     # ② 被移除记录单独备份（追加保留历史）
     _prev = []
     if os.path.isfile(BAK_DUP):
         try:
-            with io.open(BAK_DUP, encoding="utf-8") as _f:
+            with open(BAK_DUP, encoding="utf-8") as _f:
                 _prev = json.loads(_f.read())
             if not isinstance(_prev, list):
                 _prev = []
         except (OSError, ValueError):
             _prev = []
-    with io.open(BAK_DUP, "w", encoding="utf-8") as _f:
+    with open(BAK_DUP, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_prev + _removed, ensure_ascii=False, indent=2))
     print("重复记录备份: %s（本次 %d 条，累计 %d 条）"
           % (BAK_DUP, len(_removed), len(_prev) + len(_removed)))
     # ③ 写回去重后历史
-    with io.open(_args.history, "w", encoding="utf-8") as _f:
+    with open(_args.history, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_kept, ensure_ascii=False, indent=2))
     # ④ 报告
     _rep = {
@@ -108,9 +107,9 @@ def main(argv=None) -> int:
         "backup_full": BAK_ALL,
         "backup_removed": BAK_DUP,
     }
-    with io.open(REPORT, "w", encoding="utf-8") as _f:
+    with open(REPORT, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
-    print("报告: {}".format(REPORT))
+    print(f"报告: {REPORT}")
     print("去重后条数: %d（原 %d）" % (len(_kept), _st["before"]))
 
     if _args.json:

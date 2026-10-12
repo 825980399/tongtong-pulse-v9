@@ -18,7 +18,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import tools.data_governance_m41 as gov  # noqa: E402
+import tools.data_governance_m41 as gov
 
 
 class TestQuarantineExpiry(unittest.TestCase):

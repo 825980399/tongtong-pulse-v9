@@ -13,7 +13,6 @@
   * 回填归一后同 verdict 不再落两值（audit=0 WARNING）
 """
 import copy
-import io
 import json
 import os
 import sys
@@ -23,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import nucleus.evolution.patch_verification_split as PVS  # noqa: E402
+import nucleus.evolution.patch_verification_split as PVS
 
 
 class TestSplitReprobeGuards(unittest.TestCase):
@@ -113,7 +112,7 @@ class TestProductionStrict(unittest.TestCase):
     def setUpClass(cls):
         if not os.path.isfile(cls.TARGET):
             raise unittest.SkipTest("生产补丁历史不存在")
-        with io.open(cls.TARGET, encoding="utf-8") as _f:
+        with open(cls.TARGET, encoding="utf-8") as _f:
             _d = json.load(_f)
         cls.patches = _d["patches"] if isinstance(_d, dict) and "patches" in _d else _d
 

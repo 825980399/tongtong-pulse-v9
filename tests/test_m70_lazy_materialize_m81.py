@@ -22,10 +22,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+import config
+from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 
 def _mk_snap(tmpdir):

@@ -26,11 +26,11 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.self_awareness.CallGraphAnalyzer import (  # noqa: E402
+import config
+from nucleus.self_awareness.CallGraphAnalyzer import (
     CallGraphAnalyzer,
 )
-from nucleus.self_awareness.SelfAwarenessEngine import (  # noqa: E402
+from nucleus.self_awareness.SelfAwarenessEngine import (
     SelfAwarenessEngine,
     SelfAwarenessProfile,
 )
@@ -368,7 +368,7 @@ class TestReport(unittest.TestCase):
         _rep = e.generate_report()
         for _k in ("曈曈 PulseNet · 自我认知画像报告", "【总结】",
                    "【代码健康】", "—— 报告结束 ——"):
-            self.assertIn(_k, _rep, "现有段落被破坏: {}".format(_k))
+            self.assertIn(_k, _rep, f"现有段落被破坏: {_k}")
 
 
 # ======================================================================
@@ -415,7 +415,7 @@ class TestBoundary(unittest.TestCase):
         _t0 = time.perf_counter()
         d = CallGraphAnalyzer(project_root=_root, scan_dirs=["pkg"]).analyze()
         _elapsed = time.perf_counter() - _t0
-        self.assertLess(_elapsed, 30.0, "100 文件分析超时: {:.2f}s".format(_elapsed))
+        self.assertLess(_elapsed, 30.0, f"100 文件分析超时: {_elapsed:.2f}s")
         self.assertGreater(d["stats"]["total_functions"], 200)
         shutil.rmtree(_root, ignore_errors=True)
 

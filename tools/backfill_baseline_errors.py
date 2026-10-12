@@ -25,7 +25,6 @@
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import shutil
@@ -78,7 +77,7 @@ def main(argv: list[str]) -> int:
     if not os.path.isfile(_HIST):
         print("[FAIL] 补丁历史不存在:", _HIST)
         return 1
-    _data = json.load(io.open(_HIST, encoding="utf-8", errors="replace"))
+    _data = json.load(open(_HIST, encoding="utf-8", errors="replace"))
     if not isinstance(_data, list):
         print("[FAIL] 补丁历史顶层非 list")
         return 1
@@ -131,7 +130,7 @@ def main(argv: list[str]) -> int:
     print("本次改变条数           : %d（跳过已回填 %d）" % (_changed, _skipped))
     _bavg = sum(_before_eff) / max(1, len(_before_eff))
     _aavg = sum(_after_eff) / max(1, len(_after_eff))
-    print("avg_effectiveness 前→后: {:.4f} → {:.4f}".format(_bavg, _aavg))
+    print(f"avg_effectiveness 前→后: {_bavg:.4f} → {_aavg:.4f}")
     print()
     if _rows:
         print("--- 重算明细（非零基线优先）---")
@@ -150,7 +149,7 @@ def main(argv: list[str]) -> int:
         shutil.copy2(_HIST, _bak)
         print()
         print("已备份原文件 →", os.path.basename(_bak))
-    with io.open(_HIST, "w", encoding="utf-8") as _f:
+    with open(_HIST, "w", encoding="utf-8") as _f:
         json.dump(_data, _f, ensure_ascii=False, indent=2)
     print("已写回:", _HIST)
     return 0

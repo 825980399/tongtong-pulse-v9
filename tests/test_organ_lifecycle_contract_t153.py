@@ -159,8 +159,8 @@ def test_a5_on_pulse_exception_safe(organ):
     for ev in (SystemEvent.STATUS_REQUEST, "__t153_unknown__"):
         try:
             organ.on_pulse({"event_type": ev, "payload": {}})
-        except Exception as e:  # noqa: BLE001
-            pytest.fail("on_pulse({!r}) 不应抛出未捕获异常: {!r}".format(ev, e))
+        except Exception as e:
+            pytest.fail(f"on_pulse({ev!r}) 不应抛出未捕获异常: {e!r}")
 
 # [M182-D3-HARNESS-BATCH10] 第182批刀3：4 件 always_online 零覆盖器官入册（洞鉴覆盖率审计第一梯队）
 

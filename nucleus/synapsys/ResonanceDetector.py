@@ -18,6 +18,12 @@ import threading
 import time
 from typing import Any
 
+# 权重四元组默认值（202批 · 三层预留架构 第二层：权重表示层）
+# encoding_type 默认与 pulse_types.DEFAULT_SPIKE_TYPE 对齐（同为 'rate'）
+DEFAULT_WEIGHT = 1.0
+DEFAULT_DELAY = 0.0
+DEFAULT_ENCODING_TYPE = 'rate'
+
 
 class ResonanceDetector:
     """
@@ -48,6 +54,11 @@ class ResonanceDetector:
         
         # 功能开关
         self._enabled = False
+
+        # 类脑架构三层预留 · 第二层（权重表示层）四元组映射
+        #   键 = (pre_id, post_id)；值 = (weight, delay, encoding_type)
+        #   默认空字典 —— 纯数据结构，不接入任何脉冲流，零行为变化
+        self._weight_map: dict[tuple[str, str], tuple[float, float, str]] = {}
 
     def enable(self):
         self._enabled = True
@@ -138,6 +149,70 @@ class ResonanceDetector:
                 {"organs": list(pair), "count": count}
                 for pair, count in sorted_pairs[:top_k]
             ]
+
+    def get_weight(self, pre_id: str, post_id: str) -> tuple[float, float, str]:
+        """查询突触权重四元组。
+
+        Args:
+            pre_id:  突触前 ID（神经元 / 器官）
+            post_id: 突触后 ID（神经元 / 器官）
+
+        Returns:
+            (weight, delay, encoding_type)；未登记时返回默认语义三元组
+            (DEFAULT_WEIGHT, DEFAULT_DELAY, DEFAULT_ENCODING_TYPE)。
+        """
+        with self._lock:
+            return self._weight_map.get(
+                (pre_id, post_id),
+                (DEFAULT_WEIGHT, DEFAULT_DELAY, DEFAULT_ENCODING_TYPE),
+            )
+
+    def set_weight(self, pre_id: str, post_id: str, weight: float,
+                   delay: float = DEFAULT_DELAY,
+                   encoding_type: str = DEFAULT_ENCODING_TYPE) -> None:
+        """设置（或覆盖）突触权重四元组。
+
+        Args:
+            pre_id:        突触前 ID
+            post_id:       突触后 ID
+            weight:        突触权重
+            delay:         突触延迟（秒），默认 DEFAULT_DELAY=0.0
+            encoding_type: 编码类型，默认 DEFAULT_ENCODING_TYPE='rate'
+        """
+        with self._lock:
+            self._weight_map[(pre_id, post_id)] = (weight, delay, encoding_type)
+
+    def update_weight(self, pre_id: str, post_id: str, delta: float) -> float:
+        """按增量更新突触权重（STDP 预留，本批不含学习规则）。
+
+        未登记的突触以 DEFAULT_WEIGHT 为起点累加；delay / encoding_type 保持不变。
+
+        Args:
+            pre_id:  突触前 ID
+            post_id: 突触后 ID
+            delta:    权重增量
+
+        Returns:
+            更新后的新权重。
+        """
+        # ★不在持锁内调用 get_weight：self._lock 是 threading.Lock（非可重入），
+        #   嵌套获取会自死锁 —— 此处直接内联查表。
+        with self._lock:
+            weight, delay, enc = self._weight_map.get(
+                (pre_id, post_id),
+                (DEFAULT_WEIGHT, DEFAULT_DELAY, DEFAULT_ENCODING_TYPE),
+            )
+            new_weight = weight + delta
+            self._weight_map[(pre_id, post_id)] = (new_weight, delay, enc)
+            return new_weight
+
+    def get_weight_stats(self) -> dict[str, Any]:
+        """获取权重映射统计（只读观测）。"""
+        with self._lock:
+            return {
+                "synapses": len(self._weight_map),
+                "total_weight": sum(w for w, _d, _e in self._weight_map.values()),
+            }
 
     def get_stats(self) -> dict[str, Any]:
         """获取检测器统计"""

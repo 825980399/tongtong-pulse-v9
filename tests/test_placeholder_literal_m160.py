@@ -8,8 +8,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal  # noqa: E402
-from nucleus.semantic.VectorStore import _quality_weight  # noqa: E402
+from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
+from nucleus.semantic.VectorStore import _quality_weight
 
 
 # ---------- 验收①：判据唯一口径（含防误伤） ----------

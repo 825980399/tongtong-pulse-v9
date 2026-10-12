@@ -13,13 +13,13 @@
 import logging
 import os
 import sys
-import unittest.mock as mock
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import (
     SafeEvolutionExecutor,
     _infer_organ_from_path,
 )
@@ -86,13 +86,11 @@ def test_repair_logs_method_not_exist(caplog):
         {"type": "print_instead_of_log", "organ": "body",
          "method": "nonexistent_method", "file": "organs/body/foo.py"},
     ]
-    with caplog.at_level(_lg.DEBUG, logger="SafeEvolutionExecutor"):
-        with mock.patch(
-            "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
-            return_value=_fake_hub,
-        ):
-            with mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
-                _ex.repair_with_distillation(_issues, self_inspector=_inspector)
+    with caplog.at_level(_lg.DEBUG, logger="SafeEvolutionExecutor"), mock.patch(
+        "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
+        return_value=_fake_hub,
+    ), mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
+        _ex.repair_with_distillation(_issues, self_inspector=_inspector)
     assert "[代码片段] 方法不存在" in caplog.text
 
 
@@ -105,13 +103,11 @@ def test_organ_method_empty_uninferable_skipped(caplog):
     _issues = [
         {"type": "print_instead_of_log", "file": "utils/helper.py"},
     ]
-    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"):
-        with mock.patch(
-            "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
-            return_value=_fake_hub,
-        ):
-            with mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
-                _res = _ex.repair_with_distillation(_issues)
+    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"), mock.patch(
+        "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
+        return_value=_fake_hub,
+    ), mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
+        _res = _ex.repair_with_distillation(_issues)
     assert isinstance(_res, dict)
     assert "organ/method空跳过1个" in caplog.text
     assert _res.get("skipped", 0) >= 1
@@ -127,9 +123,8 @@ def test_organ_method_empty_inferable_backfilled():
     with mock.patch(
         "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
         return_value=_fake_hub,
-    ):
-        with mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
-            _res = _ex.repair_with_distillation(_issues)
+    ), mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
+        _res = _ex.repair_with_distillation(_issues)
     assert isinstance(_res, dict)
     # 入口回填了 organ，问题被保留（未计入 skipped）
     assert _issues[0].get("organ") == "body"
@@ -144,13 +139,11 @@ def test_repair_combines_backup_filter_and_empty_om(caplog):
         {"type": "print_instead_of_log", "file": ".bak_batch59/organs/body/x.py"},
         {"type": "bare_except", "file": "utils/helper.py"},
     ]
-    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"):
-        with mock.patch(
-            "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
-            return_value=_fake_hub,
-        ):
-            with mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
-                _res = _ex.repair_with_distillation(_issues)
+    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"), mock.patch(
+        "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
+        return_value=_fake_hub,
+    ), mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
+        _res = _ex.repair_with_distillation(_issues)
     assert isinstance(_res, dict)
     assert "备份目录1个" in caplog.text
     assert "organ/method空跳过1个" in caplog.text

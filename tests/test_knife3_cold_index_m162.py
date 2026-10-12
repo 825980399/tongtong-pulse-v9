@@ -70,7 +70,7 @@ def test_knife3_s2_write_failure_stale():
         pool._cold_storage_enabled = True
         pool._cold_index_stale = False
         pool._cold_index = {}
-        pool._read_cold_all_rows = lambda: []
+        pool._read_cold_all_rows = list
         pool._rebuild_cold_index()
         assert pool._cold_index_stale is True
     finally:
@@ -86,7 +86,7 @@ def test_knife3_s2_success_resets_stale():
         pool._cold_storage_enabled = True
         pool._cold_index_stale = True  # 模拟此前陈旧
         pool._cold_index = {}
-        pool._read_cold_all_rows = lambda: []
+        pool._read_cold_all_rows = list
         pool._rebuild_cold_index()
         assert pool._cold_index_stale is False
         assert os.path.isfile(_d + ".index.json")

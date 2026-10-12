@@ -31,10 +31,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.qica import IntentChannels as IC  # noqa: E402
-from nucleus.qica.QICA import INTENT_RULES, QICA  # noqa: E402
-from organs.brain.PulseSemanticComprehension import PulseSemanticComprehension  # noqa: E402
+import config
+from nucleus.qica import IntentChannels as IC
+from nucleus.qica.QICA import INTENT_RULES, QICA
+from organs.brain.PulseSemanticComprehension import PulseSemanticComprehension
 
 # ★星轨 2026-09-10 拍板的期望标签表
 CASES = [
@@ -127,9 +127,9 @@ def main() -> int:
             local_answers += 1
 
         print("%-22s %-10s %-18s %-18s %-8s %s%s" % (
-            q[:20], intent, fpath, method, "{:.2f}".format(conf),
+            q[:20], intent, fpath, method, f"{conf:.2f}",
             "是" if is_local else "否",
-            "" if hit else "  ← 期望{}".format(expect_intent)))
+            "" if hit else f"  ← 期望{expect_intent}"))
 
     n = len(CASES)
     print("-" * 100)

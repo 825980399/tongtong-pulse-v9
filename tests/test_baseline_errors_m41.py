@@ -4,7 +4,6 @@
 ★测试隔离：轻量实例的 ``_project_root`` 指向 ``tempfile.mkdtemp()``，
 在临时目录内造 ``logs/pulse.log`` —— **绝不读生产日志**。
 """
-import io
 import os
 import shutil
 import sys
@@ -14,8 +13,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
+import config
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
 _LOG_FMT = "%s [SafeEvolutionExecutor] %s: %s"
 
@@ -45,9 +44,8 @@ class _Base(unittest.TestCase):
 
     def _write_log(self, rows, name="pulse.log"):
         _p = os.path.join(self._root, "logs", name)
-        with io.open(_p, "w", encoding="utf-8") as f:
-            for _r in rows:
-                f.write(_r + "\n")
+        with open(_p, "w", encoding="utf-8") as f:
+            f.writelines(_r + "\n" for _r in rows)
         return _p
 
 

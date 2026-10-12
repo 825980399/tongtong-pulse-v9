@@ -23,8 +23,8 @@ os.environ.setdefault(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "test_iw_vk.log"),
 )
 
-from nucleus.const import Event  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from nucleus.const import Event
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 
 class FakeNode:
@@ -62,7 +62,7 @@ class TestValidateKnowledgeConsistencySplit(unittest.TestCase):
         self.iw._contradiction_tracking = []
         self.iw._max_contradiction_tracking = 20
         self._emits = []
-        self.iw._emit = lambda event_type, payload=None, priority=5, ttl_ns=5_000_000_000, layer="L1": self._emits.append(  # noqa: E731
+        self.iw._emit = lambda event_type, payload=None, priority=5, ttl_ns=5_000_000_000, layer="L1": self._emits.append(
             (event_type, priority, layer)
         )
 

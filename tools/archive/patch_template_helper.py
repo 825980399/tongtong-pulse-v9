@@ -34,14 +34,18 @@
 """
 from __future__ import annotations
 
-import io
 import os
 
 from nucleus.data.path_utils import safe_relpath as _safe_relpath
 
 __all__ = [
-    "detect_eol", "eol_bytes", "find_first_top_import_line", "balance_paren",
-    "safe_relpath", "assert_structure", "apply_patches",
+    "apply_patches",
+    "assert_structure",
+    "balance_paren",
+    "detect_eol",
+    "eol_bytes",
+    "find_first_top_import_line",
+    "safe_relpath",
 ]
 
 
@@ -190,7 +194,7 @@ def apply_patches(path: str, pairs, idempotency_tag: str | None = None,
     Returns: dict {"applied", "eol", "pairs", "skipped"/"dry_run"}
     """
     _eol = detect_eol(path)
-    with io.open(path, "r", encoding="utf-8", newline="") as f:
+    with open(path, "r", encoding="utf-8", newline="") as f:
         _t = f.read()
     if idempotency_tag and idempotency_tag in _t:
         return {"applied": False, "eol": _eol, "pairs": 0, "skipped": True}
@@ -213,7 +217,7 @@ def apply_patches(path: str, pairs, idempotency_tag: str | None = None,
             _out = _out + idempotency_tag
         else:
             _out = _out + _eol + idempotency_tag
-    with io.open(path, "w", encoding="utf-8", newline="") as f:
+    with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(_out)
     return {"applied": True, "eol": _eol, "pairs": len(pairs)}
 
@@ -222,7 +226,7 @@ if __name__ == "__main__":  # pragma: no cover - 自演示（dry-run，不碰生
     import tempfile
     _d = tempfile.mkdtemp(prefix="m56_helper_demo_")
     _demo = os.path.join(_d, "demo_mod.py")
-    with io.open(_demo, "w", encoding="utf-8", newline="") as f:
+    with open(_demo, "w", encoding="utf-8", newline="") as f:
         f.write("from __future__ import annotations\n"
                 "import os\n"
                 "sys.path.insert(0, 'x')\n"
@@ -231,7 +235,7 @@ if __name__ == "__main__":  # pragma: no cover - 自演示（dry-run，不碰生
                 "    return 1\n")
     print("detect_eol =>", repr(detect_eol(_demo)))
     _ins = find_first_top_import_line(
-        io.open(_demo, "r", encoding="utf-8", newline="").read())
+        open(_demo, "r", encoding="utf-8", newline="").read())
     print("insertion line index =>", _ins, "(应在 import os 之后)")
     print("safe_relpath cross-drive =>",
           repr(safe_relpath("C:/a/b.py", "D:/root")))

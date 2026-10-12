@@ -10,7 +10,6 @@
   A. 写 marker 时**同步复位** .log_state.json 的 size/ino → 下一次直接判 ok；
   B. 补充判据：prev.size >= LOG_MAX_BYTES 且 <log>.1 归档存在 → 判 rollover。
 """
-import io
 import json
 import os
 import time
@@ -25,12 +24,12 @@ from nucleus.logger import (
 
 
 def _write_file(path, content):
-    with io.open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
 def _read_state(tmp_path):
-    with io.open(str(tmp_path / _LOG_STATE_FILE), encoding="utf-8") as f:
+    with open(str(tmp_path / _LOG_STATE_FILE), encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -57,7 +56,7 @@ def test_state_fingerprint_reset_to_post_rollover_value(tmp_path):
     log = str(tmp_path / "pulse.log")
     _write_file(log, "y" * 400)
     old_state = str(tmp_path / _LOG_STATE_FILE)
-    with io.open(old_state, "w", encoding="utf-8") as f:
+    with open(old_state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 400,
                    "ino": 1, "mtime": time.time()}, f)
 
@@ -78,7 +77,7 @@ def test_criterion_b_maxsize_plus_archive_means_rollover(tmp_path, monkeypatch):
     log = str(tmp_path / "pulse.log")
     _write_file(log, "small after rollover")
     state = str(tmp_path / _LOG_STATE_FILE)
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 999,
                    "mtime": time.time()}, f)
     # 轮转归档确实存在
@@ -97,7 +96,7 @@ def test_criterion_b_does_not_mask_real_truncation(tmp_path, monkeypatch):
     log = str(tmp_path / "pulse.log")
     _write_file(log, "small")
     state = str(tmp_path / _LOG_STATE_FILE)
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 999,
                    "mtime": time.time()}, f)
     # 故意也放一个 .1 —— 但 size 没到上限，不该被判成轮转

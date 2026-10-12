@@ -23,18 +23,17 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io  # noqa: E402
-import unittest  # noqa: E402
+import unittest
 
-import config  # noqa: E402
-from nucleus.data import exclude_dirs  # noqa: E402
+import config
+from nucleus.data import exclude_dirs
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _PCL_REL = os.path.join("organs", "brain", "PulseCodeLearner.py")
 
 
 def _read(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
 
 
 def _compute_risk_max(cfg_ev, ev_cfg):
@@ -117,7 +116,7 @@ class TestPclRiskThresholdM54(unittest.TestCase):
             if rel.startswith(("tests/", "tmp/", ".bak")):
                 continue
             try:
-                txt = io.open(path, encoding="utf-8", errors="replace").read()
+                txt = open(path, encoding="utf-8", errors="replace").read()
             except OSError:
                 continue
             for i, line in enumerate(txt.splitlines(), 1):

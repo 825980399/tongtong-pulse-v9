@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import io
 import json
 import math
 import os
@@ -208,7 +207,7 @@ def load_corpus(directory: str, limit: int = 400) -> list[str]:
     _out: list[str] = []
     for _fp in sorted(glob.glob(os.path.join(directory, "calls_*.jsonl"))):
         try:
-            with io.open(_fp, "r", encoding="utf-8", errors="replace") as f:
+            with open(_fp, "r", encoding="utf-8", errors="replace") as f:
                 for _line in f:
                     _line = _line.strip()
                     if not _line:
@@ -257,8 +256,7 @@ def corpus_stats(encoder: Any, prompts: list[str],
             if _i == _j:
                 continue
             _s = _cosine(_vs[_i], _vs[_j])
-            if _s > _best:
-                _best = _s
+            _best = max(_best, _s)
         _nn.append(_best)
     _nn_sorted = sorted(_nn)
     _rows = []
@@ -346,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         for _r in _c["rows"]:
             print("        阈值 {:.2f} → 命中率 {:.4f}".format(_r["threshold"], _r["hit_rate"]))
     if _ns.report:
-        with io.open(_ns.report, "w", encoding="utf-8") as f:
+        with open(_ns.report, "w", encoding="utf-8") as f:
             f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
         print("[校准] 报告 →", _ns.report)
     return 0

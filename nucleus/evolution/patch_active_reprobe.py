@@ -71,7 +71,8 @@ import ast
 import difflib
 import re
 import textwrap
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -306,7 +307,7 @@ def active_reprobe(patch: dict[str, Any]) -> dict[str, Any]:
     _det = detector_for(_issue)
     if _det is None:
         return _result(V_NOT_APPLICABLE, _issue, -1, -1,
-                       "无对应检测器（issue_type={}）→ 不判通过".format(_issue),
+                       f"无对应检测器（issue_type={_issue}）→ 不判通过",
                        _scope_unknown())
 
     # ① 代码片段必须可解析

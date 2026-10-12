@@ -9,7 +9,6 @@
 全部离线、不触网、不写生产目录。
 """
 import importlib
-import io
 import os
 import shutil
 import sys
@@ -26,7 +25,7 @@ _VL_PATH = os.path.join(_ROOT, "nucleus", "mnemosyne", "verification_learning_hu
 
 
 def _src(path):
-    return io.open(path, encoding="utf-8", errors="replace").read()
+    return open(path, encoding="utf-8", errors="replace").read()
 
 
 def _code_only(text):

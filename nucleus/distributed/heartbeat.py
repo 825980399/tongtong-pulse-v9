@@ -14,7 +14,8 @@
 """
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -61,9 +62,9 @@ class HeartbeatManager:
         self._interval = _heartbeat_interval()
         self._threshold = _health_threshold()
         # 每个节点的本地心跳状态：{node_id: {"last_beat": ts, "health": float}}
-        self._state: Dict[str, Dict[str, Any]] = {}
-        self._threads: Dict[str, threading.Thread] = {}
-        self._stops: Dict[str, bool] = {}
+        self._state: dict[str, dict[str, Any]] = {}
+        self._threads: dict[str, threading.Thread] = {}
+        self._stops: dict[str, bool] = {}
         self._lock = threading.RLock()
 
     # ---------- 健康分计算 ----------
@@ -91,7 +92,7 @@ class HeartbeatManager:
                   + 0.25 * (1.0 - _mem) + 0.20 * (1.0 - _queue))
         return max(0.0, min(1.0, _score))
 
-    def check_health(self, node_id: str) -> Dict[str, Any]:
+    def check_health(self, node_id: str) -> dict[str, Any]:
         """检查节点健康状态，返回结构化结果（含是否超时 / 健康分 / 是否可路由）。"""
         with self._lock:
             _st = self._state.get(node_id)
@@ -148,7 +149,7 @@ class HeartbeatManager:
 
     # ---------- 心跳发送线程（主动）----------
     def start_heartbeat(self, node_id: str, interval: float = 0.0,
-                        sender: Optional[Callable[[str], None]] = None) -> bool:
+                        sender: Callable[[str], None] | None = None) -> bool:
         """启动后台心跳线程（每 interval 秒上报一次）。"""
         if not node_id:
             return False
@@ -177,7 +178,7 @@ class HeartbeatManager:
                 _logger.warning("[T3] 心跳线程异常退出(已忽略): %s: %s",
                                 type(_e).__name__, _e)
 
-        _t = threading.Thread(target=_loop, name="heartbeat-{}".format(node_id),
+        _t = threading.Thread(target=_loop, name=f"heartbeat-{node_id}",
                               daemon=True)
         _t.start()
         with self._lock:

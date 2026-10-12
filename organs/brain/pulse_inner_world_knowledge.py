@@ -790,12 +790,12 @@ class PulseInnerWorldKnowledgeMixin:
                     s = _sim(v, values[0])
                     if s is None or s < 0.85:   # 不相似 → 视为互补，保留
                         _keep.append(v)
-                return " ".join((v[:150] for v in _keep[:4]))
+                return " ".join(v[:150] for v in _keep[:4])
         except Exception as e:
             self._log(LogLevel.DEBUG,
                       f"[多节点融合] 语义融合不可用: {type(e).__name__}: {e}")
 
-        return " ".join((v[:150] for v in values[:3])) or None
+        return " ".join(v[:150] for v in values[:3]) or None
 
     @staticmethod
     def _fusion_keywords(text: str, n: int = 3) -> set:

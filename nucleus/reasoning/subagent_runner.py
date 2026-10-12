@@ -42,7 +42,7 @@ class SubagentRunRefused(Exception):
 class SubagentRunResult:
     """一次子代理运行的归一化结果。"""
 
-    __slots__ = ("status", "returncode", "error", "stats", "duration_ms", "pid")
+    __slots__ = ("duration_ms", "error", "pid", "returncode", "stats", "status")
 
     def __init__(self, status, returncode=None, error=None, stats=None,
                  duration_ms=0.0, pid=None):
@@ -199,7 +199,7 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
         _L.error("[subagent_runner] 子代理超时（%ss），已清理", timeout)
         return SubagentRunResult("timeout", error="subagent exceeded timeout",
                                  duration_ms=_ms(started))
-    except Exception as exc:  # noqa: BLE001 - 归一为 failure，绝不静默忽略
+    except Exception as exc:
         _L.error("[subagent_runner] 子代理运行异常: %s: %s",
                  type(exc).__name__, exc)
         return SubagentRunResult("failure",

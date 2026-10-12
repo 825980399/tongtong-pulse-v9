@@ -20,8 +20,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.field import active_memory_dual as am  # noqa: E402
+import config
+from nucleus.field import active_memory_dual as am
 
 _TIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 _BASE_KEYS = ("state", "matched_rule_id", "llm_used", "action", "detail")

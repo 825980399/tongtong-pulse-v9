@@ -13,8 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config as cfg  # noqa: E402
-from nucleus.knowledge.DataQualityGuard import (  # noqa: E402
+import config as cfg
+from nucleus.knowledge.DataQualityGuard import (
     get_data_quality_guard,
     reset_data_quality_guard,
 )

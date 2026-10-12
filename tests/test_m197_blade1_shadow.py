@@ -15,7 +15,7 @@ class TestM197Blade1Shadow(unittest.TestCase):
         _lung = PulseLung(organ_name="肺")
         # 避免重依赖：长度控制返回空串、历史为空
         _lung._m28_system_length_suffix = lambda prompt: ""
-        _lung.get_dialog_history = lambda: []
+        _lung.get_dialog_history = list
 
         _records = []
         _orig = _lung._log

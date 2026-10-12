@@ -15,8 +15,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+import config
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 # 高复杂度（估算 0.7：基础 0.3 + 分析/系统/架构/设计/优化/方案/对比/综合 ×0.05）且长度 ≥30
 _HIGH_Q = "请分析当前系统的架构设计与优化方向，对比多种方案的优劣，综合权衡后给出建议。"

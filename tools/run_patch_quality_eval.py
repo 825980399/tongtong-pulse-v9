@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.evolution.patch_quality_evaluator import (  # noqa: E402
+from nucleus.evolution.patch_quality_evaluator import (
     DEFAULT_HISTORY_PATH,
     DEFAULT_REPORT_PATH,
     evaluate_history,
@@ -49,7 +49,7 @@ def main(argv=None) -> int:
     print()
     print("=== 结论 ===")
     for _f in _ev["findings"]:
-        print("  - {}".format(_f))
+        print(f"  - {_f}")
     print()
     print("=== 评分最低 %d 条 ===" % _args.top)
     for _x in _ev["patches"][:_args.top]:
@@ -70,7 +70,7 @@ def main(argv=None) -> int:
     _out = _args.out or DEFAULT_REPORT_PATH
     _written = save_report(_ev, _args.out)
     print()
-    print("报告: %s" % (_written if _written else "未写入（{}）".format(_out)))
+    print("报告: %s" % (_written if _written else f"未写入（{_out}）"))
     return 0 if _written or _args.out else 0
 
 

@@ -13,8 +13,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.field import InfoField as R  # noqa: E402
+import config
+from nucleus.field import InfoField as R
 
 
 class TestResolveL2Config(unittest.TestCase):

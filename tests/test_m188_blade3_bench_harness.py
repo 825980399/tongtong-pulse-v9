@@ -20,7 +20,6 @@ sys.path.insert(0, ".")
 
 import tools.benchmark.external_bench_harness as bh
 
-
 SAMPLE = [
     {"id": "zh_code_01", "category": "code", "prompt": "x",
      "grading": {"method": "contains", "expected": "def add", "max_score": 1.0}},

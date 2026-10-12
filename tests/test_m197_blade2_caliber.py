@@ -9,8 +9,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from nucleus.reporting import consumers
-from nucleus.reporting import publishers
+from nucleus.reporting import consumers, publishers
 from nucleus.self_awareness import quality_score_v2
 from nucleus.self_awareness.SelfAwarenessEngine import SelfAwarenessProfile
 

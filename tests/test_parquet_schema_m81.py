@@ -21,14 +21,14 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.mnemosyne.pa_compat import table_from_rows  # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+import config
+from nucleus.mnemosyne.pa_compat import table_from_rows
+from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 try:
-    import pyarrow as pa  # noqa: E402
-    import pyarrow.parquet as pq  # noqa: E402
+    import pyarrow as pa
+    import pyarrow.parquet as pq
     HAS_PYARROW = True
 except Exception:
     HAS_PYARROW = False
@@ -148,7 +148,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         by_id = {n.node_id: n for n in out}
         for n in nodes:
             loaded = by_id.get(n.node_id)
-            self.assertIsNotNone(loaded, "节点 {} 应完整读回".format(n.node_id))
+            self.assertIsNotNone(loaded, f"节点 {n.node_id} 应完整读回")
             self.assertEqual(getattr(loaded, "source_url", ""), n.source_url)
             self.assertEqual(getattr(loaded, "evidence_chain", []), n.evidence_chain)
             self.assertAlmostEqual(float(getattr(loaded, "source_time", 0) or 0), n.source_time)
@@ -163,7 +163,7 @@ class TestParquetSchemaM81(unittest.TestCase):
         cols = s._m81_parquet_required_columns()
         for c in ("source_url", "evidence_chain", "source_time",
                   "acquired_time", "source_timestamp", "quality_flag", "quality_reason"):
-            self.assertIn(c, cols, "灰度开应要求列 {}".format(c))
+            self.assertIn(c, cols, f"灰度开应要求列 {c}")
 
     def test_23_required_columns_exclude_7_when_off(self):
         """★A7：灰度关时必需列集合不含 7 新字段（复现旧 29 列行为，可回退）。"""
@@ -172,7 +172,7 @@ class TestParquetSchemaM81(unittest.TestCase):
             cols = s._m81_parquet_required_columns()
             for c in ("source_url", "evidence_chain", "source_time",
                       "acquired_time", "source_timestamp", "quality_flag", "quality_reason"):
-                self.assertNotIn(c, cols, "灰度关不应要求列 {}".format(c))
+                self.assertNotIn(c, cols, f"灰度关不应要求列 {c}")
 
     def test_26_old_parquet_compat_defaults(self):
         """★A1：旧 parquet 无 7 列时，_parquet_row_to_dict 补默认，不炸。"""

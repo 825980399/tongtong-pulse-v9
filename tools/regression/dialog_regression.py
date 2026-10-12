@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import re
@@ -45,7 +44,7 @@ _TIMEOUT_MARKERS = ["[timeout]", "（超时）", "超时了", "请求超时"]
 
 def load_cases(yaml_path: str) -> dict:
     import yaml
-    with io.open(yaml_path, "r", encoding="utf-8") as f:
+    with open(yaml_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -73,7 +72,7 @@ def judge(answer: str, case: dict) -> dict:
         elif cat == "超时":
             result["auto"]["超时"] = not any(m in ans for m in _TIMEOUT_MARKERS)
         else:
-            result["warn"].append("未知判定类: {}".format(cat))
+            result["warn"].append(f"未知判定类: {cat}")
     if not ans.strip():
         result["warn"].append("空回答")
     return result
@@ -98,7 +97,7 @@ def run_selftest(yaml_path: str) -> dict:
     # 2) 合法正文全过
     _clean = judge_all("今天天气很好，我想出去走走。",
                        {"auto": ["内部字段泄漏", "占位符", "裸格式", "兜底误触发", "身份", "超时"]})
-    assert _clean["passed"] is True, "合法正文被误判: {!r}".format(_clean)
+    assert _clean["passed"] is True, f"合法正文被误判: {_clean!r}"
     # 3) 占位符检出
     _ph = judge_all("参考 [BLUEPRINT_CONSTITUTION] 与 [核心智慧] 内容",
                     {"auto": ["占位符"]})
@@ -118,27 +117,26 @@ def _drive_live(yaml_path: str, out_dir: str) -> int:
         # 懒导入：避免离线环境依赖失败
         import main  # noqa: F401
     except Exception as _e:  # 框架不可用（离线/停框架），优雅退出
-        print("[live] 框架不可导入（离线环境/停框架），跳过 live: {!r}".format(_e))
+        print(f"[live] 框架不可导入（离线环境/停框架），跳过 live: {_e!r}")
         return 2
     data = load_cases(yaml_path)
     os.makedirs(out_dir, exist_ok=True)
     _ts = time.strftime("%Y%m%d_%H%M%S")
-    _json_path = os.path.join(out_dir, "dialog_regression_{}.json".format(_ts))
-    _md_path = os.path.join(out_dir, "dialog_regression_{}.md".format(_ts))
+    _json_path = os.path.join(out_dir, f"dialog_regression_{_ts}.json")
+    _md_path = os.path.join(out_dir, f"dialog_regression_{_ts}.md")
     _records = []
     for _case in data.get("cases", []):
         _q = _case.get("question", "")
         # TODO(框架侧): 经 chat_service 对话通道发问并取出口回答，再 judge_all
         _records.append({"id": _case.get("id"), "question": _q, "answer": None,
                          "judge": None, "status": "pending_framework"})
-    with io.open(_json_path, "w", encoding="utf-8") as f:
+    with open(_json_path, "w", encoding="utf-8") as f:
         json.dump({"meta": data.get("meta"), "records": _records}, f,
                   ensure_ascii=False, indent=2)
-    with io.open(_md_path, "w", encoding="utf-8") as f:
-        f.write("# 对话回归报告 {}\n\n".format(_ts))
-        for _r in _records:
-            f.write("- 题%d %s → %s\n" % (_r["id"], _r["question"], _r["status"]))
-    print("[live] 报告已写出: {} / {}".format(_json_path, _md_path))
+    with open(_md_path, "w", encoding="utf-8") as f:
+        f.write(f"# 对话回归报告 {_ts}\n\n")
+        f.writelines("- 题%d %s → %s\n" % (_r["id"], _r["question"], _r["status"]) for _r in _records)
+    print(f"[live] 报告已写出: {_json_path} / {_md_path}")
     return 0
 
 

@@ -11,7 +11,6 @@
 # export-scan-skip-file  （本文件占位符均为构造夹具，非真实内容）
 
 import importlib.util
-import io
 import os
 import sys
 
@@ -72,7 +71,7 @@ class TestKnife4RetrievalGate:
 
     def test_07_source_wired_in_retrieval(self):
         """★堵源必须在检索命中侧（_ir_qica_knowledge_retrieve / _k89_accept）。"""
-        src = io.open(os.path.join(REPO, 'organs', 'brain', 'PulseInnerWorld.py'),
+        src = open(os.path.join(REPO, 'organs', 'brain', 'PulseInnerWorld.py'),
                       encoding='utf-8', newline=None).read()
         assert 'KNOWLEDGE_RETRIEVE_SKIP_PLACEHOLDER' in src, '检索侧未接开关'
         assert 'contains_placeholder' in src, '检索侧未调判据'

@@ -92,7 +92,7 @@ def main(argv=None):
     _before = sum(1 for _r in _records
                   if isinstance(_r, dict) and _r.get("_isolated"))
     _marked = mark(_records, _criterion)
-    print("[isolate_alert_fixtures] 文件: {}".format(ALERT_FILE))
+    print(f"[isolate_alert_fixtures] 文件: {ALERT_FILE}")
     print("[isolate_alert_fixtures] criterion=%s, 总行=%d, 已隔离前=%d, 本次新标记=%d"
           % (_criterion, len(_records), _before, _marked))
     if not _apply:
@@ -103,12 +103,11 @@ def main(argv=None):
         return 0
     os.makedirs(BACKUP_DIR, exist_ok=True)
     _stamp = time.strftime("%Y%m%d_%H%M%S")
-    _bak = os.path.join(BACKUP_DIR, "alerts_{}.jsonl".format(_stamp))
+    _bak = os.path.join(BACKUP_DIR, f"alerts_{_stamp}.jsonl")
     shutil.copy2(ALERT_FILE, _bak)
     with open(ALERT_FILE, "w", encoding="utf-8") as _f:
-        for _r in _records:
-            _f.write(json.dumps(_r, ensure_ascii=False) + "\n")
-    print("[isolate_alert_fixtures] 已备份原文件 -> {}".format(_bak))
+        _f.writelines(json.dumps(_r, ensure_ascii=False) + "\n" for _r in _records)
+    print(f"[isolate_alert_fixtures] 已备份原文件 -> {_bak}")
     print("[isolate_alert_fixtures] 已写回（新增隔离标记 %d 行）。" % _marked)
     return 0
 

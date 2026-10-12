@@ -21,8 +21,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from organs.brain.PulseCortex import PulseCortex  # noqa: E402
+import config
+from organs.brain.PulseCortex import PulseCortex
 
 _eng = importlib.import_module("nucleus.self_awareness.SelfAwarenessEngine")
 _Profile = _eng.SelfAwarenessProfile

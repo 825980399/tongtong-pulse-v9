@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import re
@@ -33,7 +32,7 @@ if ROOT not in sys.path:
 
 # ★第48批 T2（P2-320）：跨盘安全的相对路径
 from nucleus._silent_except import silent_exc
-from nucleus.data.path_utils import safe_relpath as _safe_relpath  # noqa: E402
+from nucleus.data.path_utils import safe_relpath as _safe_relpath
 
 DEFAULT_POOL = os.path.join(ROOT, "data", "experience", "experience_pool.json")
 
@@ -55,15 +54,15 @@ def _norm_tpl(text: str) -> str:
 def load_pool(path: str) -> list:
     """只读载入经验记录列表。"""
     if not os.path.isfile(path):
-        raise SystemExit("[SERP] 经验库不存在: {}".format(path))
-    _doc = json.load(io.open(path, encoding="utf-8"))
+        raise SystemExit(f"[SERP] 经验库不存在: {path}")
+    _doc = json.load(open(path, encoding="utf-8"))
     if isinstance(_doc, list):
         return _doc
     if isinstance(_doc, dict):
         for _k in ("experiences", "records", "items", "data", "pool"):
             if isinstance(_doc.get(_k), list):
                 return _doc[_k]
-    raise SystemExit("[SERP] 无法识别经验库结构: {}".format(path))
+    raise SystemExit(f"[SERP] 无法识别经验库结构: {path}")
 
 
 def basic_stats(recs: list) -> dict:
@@ -454,7 +453,7 @@ def main() -> int:
         _os_dir = os.path.dirname(os.path.abspath(_ns.report))
         if _os_dir and not os.path.isdir(_os_dir):
             os.makedirs(_os_dir, exist_ok=True)
-        with io.open(_ns.report, "w", encoding="utf-8") as _f:
+        with open(_ns.report, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
         print()
         print("报告已写出 →", _ns.report)

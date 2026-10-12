@@ -71,14 +71,54 @@ class PulsePayload(TypedDict, total=False):
 
 
 # ========================================================================
+# 类脑架构三层预留 · 第一层（脉冲语义层）—— 芯片无关中间表示
+# ========================================================================
+# 202批：为类脑芯片（SNN 仿真 / 光脉冲硬件）预留的脉冲语义字段默认语义值。
+# Pulse 是 TypedDict（**类型契约，非运行时类**）——TypedDict 语法不支持字段默认值，
+# 故「默认值」以模块级常量承载，消费方用 pulse.get(k, DEFAULT_X) 兜底；
+# 新字段一律声明为 NotRequired：既有 emit 未提供时类型检查仍通过，运行时零行为变化。
+DEFAULT_AMPLITUDE: float = 1.0          # 脉冲幅度（SNN 膜电位强度 / 光脉冲功率）
+DEFAULT_SPIKE_TYPE: str = 'rate'        # 编码类型：'rate' | 'temporal' | 'graded'
+DEFAULT_WIRE_FORMAT: str = 'json'       # 序列化格式：'json' | 'binary'
+
+SPIKE_TYPES = ('rate', 'temporal', 'graded')   # spike_type 取值域（枚举预留）
+WIRE_FORMATS = ('json', 'binary')              # wire_format 取值域（枚举预留）
+
+# ========================================================================
 # 脉冲完整结构（PulseCore.emit 权威返回）
 # ========================================================================
 
-class Pulse(TypedDict):
+class ChipAgnosticDims(TypedDict, total=False):
+    """芯片无关中间表示（202批 · 三层预留架构 第一层：脉冲语义层）。
+
+    所有字段一律可选（total=False）：既有脉冲未提供时类型检查仍通过，
+    运行时零行为变化。默认语义值见模块级常量 DEFAULT_*。
+    """
+    amplitude: float       # 脉冲幅度（SNN 膜电位强度 / 光脉冲功率），默认 1.0
+    spike_type: str        # 编码类型 'rate' | 'temporal' | 'graded'，默认 'rate'
+    wire_format: str       # 序列化格式 'json' | 'binary'，默认 'json'
+
+
+class Pulse(ChipAgnosticDims):
     """完整脉冲字典契约（对应 PulseCore.emit 的返回 dict）。
 
     字段与 PulseCore.emit 第 150-169 行逐一对应，是跨器官脉冲传递的
     唯一权威结构。任何新增字段须先在此声明，再改 emit。
+
+    芯片无关中间表示（202批 · 类脑架构三层预留 · 第一层脉冲语义层）:
+        为类脑芯片（SNN 仿真 / 光脉冲硬件）预留三个可选字段，由
+        ChipAgnosticDims（total=False）混入承载 —— 既有 emit 未提供时
+        静态检查通过，且 TypedDict 运行时不校验、不注入，故零行为变化。
+        默认语义值由模块级常量承载，消费方以
+        ``pulse.get('amplitude', DEFAULT_AMPLITUDE)`` 兜底:
+
+        ★为何不用 NotRequired: 本模块有 ``from __future__ import annotations``，
+        注解被字符串化为 ForwardRef，CPython 3.12 的 TypedDict 在类创建期
+        无法识别 NotRequired → 三字段会被判为**必填**（实测 __optional_keys__ 为空）。
+        total=False 是类创建参数、不受 PEP563 影响，运行时与静态检查口径一致。
+        - amplitude:   脉冲幅度（SNN 膜电位强度 / 光脉冲功率），默认 1.0
+        - spike_type:  编码类型 'rate' | 'temporal' | 'graded'，默认 'rate'
+        - wire_format: 序列化格式 'json' | 'binary'，默认 'json'
     """
     pulse_id: str                    # 唯一脉冲 ID：pulse:{source}:{event}:{ts}:{seq}
     source_organ: str                # 来源器官名（中文或英文类名）
@@ -95,6 +135,7 @@ class Pulse(TypedDict):
     payload: PulsePayload            # 载荷
     ttl_ns: int                      # 有效期（纳秒）
     status: str                      # 生命周期状态 'created' 等
+
 
 
 # ========================================================================
@@ -121,7 +162,13 @@ class ChatMessagePayload(PulsePayload):
 PulseHandler = Any  # 保留为 Any，避免与 Callable 泛型在 3.11 的兼容问题
 
 __all__ = [
+    "DEFAULT_AMPLITUDE",
+    "DEFAULT_SPIKE_TYPE",
+    "DEFAULT_WIRE_FORMAT",
+    "SPIKE_TYPES",
+    "WIRE_FORMATS",
     "ChatMessagePayload",
+    "ChipAgnosticDims",
     "HeartBeatPayload",
     "LogicDim",
     "MemoryDim",

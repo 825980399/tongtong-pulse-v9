@@ -3,7 +3,6 @@
 
 覆盖任务书四项修复方向，全部开关双向门控。
 """
-import io
 import os
 import sys
 import threading
@@ -14,10 +13,10 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from organs.motor.PulseLegs import PulseLegs  # noqa: E402
+import config
+from organs.motor.PulseLegs import PulseLegs
 
-_LS = io.open(os.path.join(_ROOT, "organs/motor/PulseLegs.py"),
+_LS = open(os.path.join(_ROOT, "organs/motor/PulseLegs.py"),
               encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
@@ -242,7 +241,7 @@ class TestDigestFeedback(unittest.TestCase):
     def test_57_stomach_ring_is_existing_api(self):
         """★本批零改动胃：复用既有 `_rejected_digestion_ring`。"""
         p = os.path.join(_ROOT, "organs/body/PulseStomach.py")
-        src = io.open(p, encoding="utf-8", errors="replace").read()
+        src = open(p, encoding="utf-8", errors="replace").read()
         self.assertIn("_rejected_digestion_ring", src)
 
 
@@ -252,7 +251,7 @@ class TestWiring(unittest.TestCase):
         self.assertEqual(_LS.count("def set_stomach(self, stomach)"), 1)
 
     def test_61_main_injects_stomach(self):
-        main = io.open(os.path.join(_ROOT, "main.py"),
+        main = open(os.path.join(_ROOT, "main.py"),
                        encoding="utf-8", errors="replace").read()
         self.assertIn("callable(_m49_set)", main)
         self.assertIn('getattr(self.legs, "set_stomach", None)', main)

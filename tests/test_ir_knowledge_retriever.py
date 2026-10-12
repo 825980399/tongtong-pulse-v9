@@ -15,7 +15,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from organs.brain.PulseKnowledgeRetriever import (  # noqa: E402
+from organs.brain.PulseKnowledgeRetriever import (
     ORGAN_ALIAS_MAP,
     PulseKnowledgeRetriever,
 )

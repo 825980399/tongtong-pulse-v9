@@ -27,14 +27,13 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
+import logging
 import os
 import queue
 import sys
 import threading
 import time
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -224,7 +223,7 @@ class SemanticCache:
         _now = time.time()
         _ttl = self.ttl_sec()
         try:
-            with io.open(_fp, encoding="utf-8", errors="replace") as f:
+            with open(_fp, encoding="utf-8", errors="replace") as f:
                 for _line in f:
                     _line = _line.strip()
                     if not _line:
@@ -257,10 +256,9 @@ class SemanticCache:
             _d = self.base_dir()
             if not os.path.isdir(_d):
                 os.makedirs(_d, exist_ok=True)
-            with self._lock:
-                with io.open(self.cache_file(), "a", encoding="utf-8") as f:
-                    f.write(json.dumps(entry.to_dict(), ensure_ascii=False,
-                                       default=str) + "\n")
+            with self._lock, open(self.cache_file(), "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry.to_dict(), ensure_ascii=False,
+                                   default=str) + "\n")
             self._stat["writes"] += 1
             return True
         except Exception:

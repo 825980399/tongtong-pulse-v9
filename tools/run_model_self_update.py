@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.llm.model_self_updater import (  # noqa: E402
+from nucleus.llm.model_self_updater import (
     DEFAULT_BASE_DIR,
     ModelSelfUpdater,
     training_guard,
@@ -42,9 +42,8 @@ def main(argv=None) -> int:
     _args = _ap.parse_args(argv)
 
     _u = ModelSelfUpdater()
-    print("启用={}  版本目录={}  可写={}".format(
-        updater_enabled(), _u.base_dir(), _u._writable()))
-    print("（默认目录: {}）".format(DEFAULT_BASE_DIR))
+    print(f"启用={updater_enabled()}  版本目录={_u.base_dir()}  可写={_u._writable()}")
+    print(f"（默认目录: {DEFAULT_BASE_DIR}）")
 
     _samples = None
     if _args.samples and os.path.isfile(_args.samples):
@@ -71,7 +70,7 @@ def main(argv=None) -> int:
         if _k == "plan":
             print("  plan:")
             for _p in _v:
-                print("     {}".format(_p))
+                print(f"     {_p}")
         else:
             print("  %-24s %s" % (_k, _v))
 

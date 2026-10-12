@@ -15,8 +15,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.llm import call_recorder as cr  # noqa: E402
+import config
+from nucleus.llm import call_recorder as cr
 
 
 class _Base(unittest.TestCase):
@@ -143,8 +143,8 @@ class TestRotation(_Base):
         try:
             # 造 1 个 200 天前的旧文件 + 1 个 10 天前的新文件
             _now = time.time()
-            _old = os.path.join(self._dir, "calls_{}.jsonl".format(self.r._day_str(_now - 200 * 86400)))
-            _new = os.path.join(self._dir, "calls_{}.jsonl".format(self.r._day_str(_now - 10 * 86400)))
+            _old = os.path.join(self._dir, f"calls_{self.r._day_str(_now - 200 * 86400)}.jsonl")
+            _new = os.path.join(self._dir, f"calls_{self.r._day_str(_now - 10 * 86400)}.jsonl")
             for _fp in (_old, _new):
                 with open(_fp, "w", encoding="utf-8") as f:
                     f.write("{}\n")

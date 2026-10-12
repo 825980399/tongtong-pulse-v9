@@ -15,7 +15,7 @@ import json
 import mmap
 from collections import OrderedDict
 from collections.abc import Iterator
-from typing import Any, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.mnemosyne.PulseNode import PulseNode
@@ -98,7 +98,7 @@ def _iter_snapshot(mm: mmap.mmap, array_key: bytes = b"nodes"):
         raise ValueError("快照顶层不是 JSON 对象")
     i = i + 1  # 进入顶层对象
     metadata: dict[str, Any] = {}
-    spans: list[tuple[Optional[str], tuple[int, int]]] = []
+    spans: list[tuple[str | None, tuple[int, int]]] = []
     index: OrderedDict[str, tuple[int, int]] = OrderedDict()
 
     while True:
@@ -177,11 +177,11 @@ class LazySnapshotView:
         self.path = snapshot_path
         self.max_cache = max(1, int(max_cache))
         self._metadata: dict[str, Any] = {}
-        self._spans: list[tuple[Optional[str], tuple[int, int]]] = []
+        self._spans: list[tuple[str | None, tuple[int, int]]] = []
         self._index: OrderedDict[str, tuple[int, int]] = OrderedDict()
         self._cache: OrderedDict[str, PulseNode] = OrderedDict()
         self._file = None
-        self._mm: Optional[mmap.mmap] = None
+        self._mm: mmap.mmap | None = None
         self._build()
 
     def _build(self):
@@ -246,7 +246,7 @@ class LazySnapshotView:
                   f"{type(_je).__name__}: {_je}")
             return None
 
-    def get_node(self, nid: str) -> Optional[PulseNode]:
+    def get_node(self, nid: str) -> PulseNode | None:
         """按 node_id 取单个节点；命中 LRU 直接返回，未命中按需反序列化并缓存。"""
         if nid in self._cache:
             self._cache.move_to_end(nid)

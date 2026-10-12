@@ -9,7 +9,6 @@
 4. ±对称加锁下高并发无漂移、不转负。
 5. max(0, ...) 守卫保证计数不为负。
 """
-import io
 import os
 import threading
 import unittest
@@ -50,21 +49,21 @@ def _dispatch_dec(obj):
 class TestInflightLockM78(unittest.TestCase):
     # ---- 静态确认：生产源码 ± 均加锁 ----
     def test_01_inc_source_uses_task_count_lock(self):
-        src = io.open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
+        src = open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
                       encoding="utf-8", errors="replace").read()
         # publish 提交 +1 块（与缩进无关断言）
         self.assertIn('with self._task_count_lock:\nself._inflight_dispatch_count += 1',
                       _norm(src), "publish 提交 +1 未使用 _task_count_lock")
 
     def test_02_dec_source_uses_task_count_lock(self):
-        src = io.open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
+        src = open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
                       encoding="utf-8", errors="replace").read()
         # ★核心修复：_dispatch_handler 的 -1 现也带锁（与星轨点名的 L898 无锁漂移对应）
         self.assertIn('with self._task_count_lock:\nself._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)',
                       _norm(src), "_dispatch_handler 的 -1 未使用 _task_count_lock（竞态漂移未根治）")
 
     def test_03_resize_recover_decrements_inflight(self):
-        src = io.open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
+        src = open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
                       encoding="utf-8", errors="replace").read()
         self.assertIn("_cancelled = sum(_layer_pending.values())", src,
                       "_resize_layer_pool 未计算取消数")

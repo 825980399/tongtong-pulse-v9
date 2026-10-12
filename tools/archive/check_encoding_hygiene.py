@@ -60,7 +60,7 @@ def main():
             ast.parse(src, filename=path)
         except SyntaxError as e:
             broken_files.append((path, f"SyntaxError: {e.msg} (line {e.lineno})"))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             broken_files.append((path, f"{type(e).__name__}: {e}"))
 
     dt = time.time() - t0

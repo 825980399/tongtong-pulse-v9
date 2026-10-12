@@ -65,20 +65,20 @@ v2 设计原则
 from __future__ import annotations
 
 import glob
-import io
 import json
 import logging
 import os
 import re
 import sys
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
-from nucleus.self_awareness.health_bands import level_v2  # ★199刀2：层②分级带单一真源
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 )
+from nucleus.self_awareness.health_bands import level_v2  # ★199刀2：层②分级带单一真源
 
 _log = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def _report_consumption_rate() -> float | None:
                 return float(_r)
     except Exception as _e:
         # ★不得静默：内存态采集失败需留痕（随后走磁盘兜底）
-        sys.stderr.write("[quality_v2] 内存态消费率采集失败: {}: {}\n".format(type(_e).__name__, _e))
+        sys.stderr.write(f"[quality_v2] 内存态消费率采集失败: {type(_e).__name__}: {_e}\n")
     return _disk_consumption_rate()
 
 
@@ -155,7 +155,7 @@ def _disk_consumption_rate() -> float | None:
             if not _fn.endswith(".json"):
                 continue
             try:
-                _j = json.load(io.open(os.path.join(_dp, _fn),
+                _j = json.load(open(os.path.join(_dp, _fn),
                                        encoding="utf-8"))
             except (OSError, ValueError):
                 continue
@@ -176,7 +176,7 @@ def _patch_true_fix_rate() -> float | None:
         _p = os.path.join(ROOT, "data", "patches", "patch_history.json")
         if not os.path.isfile(_p):
             return None
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _ps = _d.get("patches") if isinstance(_d, dict) and "patches" in _d else _d
         if not isinstance(_ps, list) or not _ps:
             return None
@@ -198,7 +198,7 @@ def _report_resolution_rate() -> float | None:
         if isinstance(_r, (int, float)):
             return float(_r)
     except Exception as _e:
-        sys.stderr.write("[quality_v2] 内存态解决率采集失败: {}: {}\n".format(type(_e).__name__, _e))
+        sys.stderr.write(f"[quality_v2] 内存态解决率采集失败: {type(_e).__name__}: {_e}\n")
     return None
 
 
@@ -269,7 +269,7 @@ def count_open_debts(doc_path: str | None = None) -> dict[str, int]:
         _log.warning("债务清单缺失 %s：问题严重度维度降级为无数据（score=None）", _p)
         return _out
     try:
-        _t = io.open(_p, encoding="utf-8", errors="replace").read()
+        _t = open(_p, encoding="utf-8", errors="replace").read()
     except OSError as _e:
         _log.warning("读取债务清单失败 %s：严重度维度降级（%s）", _p, _e)
         return _out
@@ -388,7 +388,7 @@ def experience_pollution() -> dict[str, Any]:
     if not os.path.isfile(_p):
         return {"rate": None, "marked_ratio": None, "total": 0}
     try:
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _r = _d.get("experiences") if isinstance(_d, dict) else _d
         if not isinstance(_r, list) or not _r:
             return {"rate": None, "marked_ratio": None, "total": 0}
@@ -476,7 +476,7 @@ def evaluate_v2(dimensions: dict[str, dict] | None = None) -> dict[str, Any]:
         "weights": dict(DIMENSION_WEIGHTS_V2),
         "available": _used,
         "reason": ("" if _tw >= 0.5 else
-                   "可用维度权重不足（{:.2f}），结果仅供参考".format(_tw)),
+                   f"可用维度权重不足（{_tw:.2f}），结果仅供参考"),
         "version": QUALITY_V2_VERSION,
     }
 
@@ -511,11 +511,11 @@ def record_trend(result: dict[str, Any], path: str | None = None) -> str:
             "dimensions": {k: v.get("score")
                            for k, v in (result.get("dimensions") or {}).items()},
         }
-        with io.open(_p, "a", encoding="utf-8") as _f:
+        with open(_p, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
     except OSError as _e:
         # ★不得静默：趋势写入失败（评估本身已完成，不影响返回值）
-        sys.stderr.write("[quality_v2] 趋势记录写入失败: {}: {}\n".format(type(_e).__name__, _e))
+        sys.stderr.write(f"[quality_v2] 趋势记录写入失败: {type(_e).__name__}: {_e}\n")
     return _p
 
 
@@ -526,7 +526,7 @@ def load_trend(path: str | None = None, limit: int = 50) -> list[dict]:
         return []
     _out = []
     try:
-        for _line in io.open(_p, encoding="utf-8", errors="replace"):
+        for _line in open(_p, encoding="utf-8", errors="replace"):
             _line = _line.strip()
             if not _line:
                 continue

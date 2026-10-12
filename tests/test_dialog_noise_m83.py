@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import ast
-import io
 import os
 import sys
 
@@ -23,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 
 def _bare_iw():
@@ -183,7 +182,7 @@ class TestTa2AstParseFilename:
     def test_no_bare_ast_parse_without_filename(self, rel):
         """任何 ast.parse 调用不得缺 filename（否则告警显示 <unknown>）。"""
         path = os.path.join(_ROOT, rel)
-        with io.open(path, encoding="utf-8", errors="replace") as _f:
+        with open(path, encoding="utf-8", errors="replace") as _f:
             src = _f.read()
         tree = ast.parse(src, filename=rel)
         _bad = []

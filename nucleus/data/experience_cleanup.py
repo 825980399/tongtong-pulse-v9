@@ -60,7 +60,6 @@ Top1 出现 791 次；``raw_summary`` **全为空** → 原文已永久丢失、
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import re
@@ -70,10 +69,23 @@ import time
 from nucleus._silent_except import silent_exc
 
 __all__ = [
-    "F_IS_CLEANED", "F_POLLUTION_RISK", "F_CLEANUP_REASON", "F_CLEANUP_BATCH",
-    "F_CLEANUP_AT", "CLASS_TEMPLATE", "CLASS_WRITE_SIDE", "CLASS_OTHER",
-    "classify", "is_retrievable", "filter_retrievable", "filter_enabled",
-    "mark_polluted", "restore", "cleanup_file", "rollback_file", "stats",
+    "CLASS_OTHER",
+    "CLASS_TEMPLATE",
+    "CLASS_WRITE_SIDE",
+    "F_CLEANUP_AT",
+    "F_CLEANUP_BATCH",
+    "F_CLEANUP_REASON",
+    "F_IS_CLEANED",
+    "F_POLLUTION_RISK",
+    "classify",
+    "cleanup_file",
+    "filter_enabled",
+    "filter_retrievable",
+    "is_retrievable",
+    "mark_polluted",
+    "restore",
+    "rollback_file",
+    "stats",
 ]
 
 # ---------------------------------------------------------------- 字段名
@@ -232,11 +244,11 @@ def stats(records) -> dict:
 
 # ---------------------------------------------------------------- 文件级操作
 def _read_pool(path: str) -> dict:
-    return json.load(io.open(path, encoding="utf-8"))
+    return json.load(open(path, encoding="utf-8"))
 
 
 def _sha256(path: str) -> str:
-    return hashlib.sha256(io.open(path, "rb").read()).hexdigest()
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
 def cleanup_file(path: str, batch_no: int = 50, backup: str | None = None,
@@ -274,7 +286,7 @@ def cleanup_file(path: str, batch_no: int = 50, backup: str | None = None,
         _d["cleanup_batch"] = batch_no
         _d["cleanup_at"] = time.time()
         _tmp = path + ".m50tmp"
-        with io.open(_tmp, "w", encoding="utf-8") as f:
+        with open(_tmp, "w", encoding="utf-8") as f:
             json.dump(_d, f, ensure_ascii=False, indent=2)
         os.replace(_tmp, path)
         _out["sha256_after"] = _sha256(path)

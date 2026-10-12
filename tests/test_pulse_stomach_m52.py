@@ -22,13 +22,13 @@ import threading
 import unittest
 from unittest import mock
 
-import config  # noqa: E402  ★第54批 T5：灰度开关用例需要
+import config
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.body.PulseStomach import PulseStomach  # noqa: E402
+from organs.body.PulseStomach import PulseStomach
 
 
 class _Base(unittest.TestCase):
@@ -114,7 +114,7 @@ class TestCoreMethods(_Base):
         _kws = getattr(self.o, "_unsafe_keywords", None) or []
         if not _kws:
             self.skipTest("无黑名单")
-        self.assertFalse(self.o._is_safe_knowledge("包含 {} 的内容".format(_kws[0])))
+        self.assertFalse(self.o._is_safe_knowledge(f"包含 {_kws[0]} 的内容"))
 
     def test_18_safety_allows_normal(self):
         self.assertTrue(self.o._is_safe_knowledge("今天天气不错"))
@@ -224,16 +224,15 @@ class TestBoundary(_Base):
         """
         for _bad in (None, 123, ["a"], {"k": "v"}):
             self.assertIsInstance(self.o._is_safe_knowledge(_bad), bool,
-                                  "非字符串 {!r} 应安全降级为 bool".format(_bad))
+                                  f"非字符串 {_bad!r} 应安全降级为 bool")
 
     def test_55_none_guard_switch_off_reproduces_defect(self):
         """★灰度验证：ENABLE_STOMACH_NONE_GUARD 关闭 → 复现改造前行为（仍抛 TypeError）。
 
         （★铁律 9：每个修复点都要能用开关复现修复前行为，保证零回归可验证。）
         """
-        with mock.patch.object(config, "ENABLE_STOMACH_NONE_GUARD", False):
-            with self.assertRaises(TypeError):
-                self.o._is_safe_knowledge(None)
+        with mock.patch.object(config, "ENABLE_STOMACH_NONE_GUARD", False), self.assertRaises(TypeError):
+            self.o._is_safe_knowledge(None)
 
     def test_52_safety_huge_input(self):
         self.assertIsInstance(self.o._is_safe_knowledge("测试" * 20000), bool)
@@ -252,7 +251,7 @@ class TestBoundary(_Base):
                     self.o.on_pulse({"event_type": "digest.knowledge",
                                      "payload": {"content": "并发测试内容" * 3}})
             except Exception as _e:
-                _errs.append("{}: {}".format(type(_e).__name__, _e))
+                _errs.append(f"{type(_e).__name__}: {_e}")
 
         _ts = [threading.Thread(target=_w) for _ in range(4)]
         for _t in _ts:

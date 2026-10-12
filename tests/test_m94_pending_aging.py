@@ -38,7 +38,6 @@
   E. 生产队列取证（只读）。
 """
 import ast
-import io
 import json
 import os
 import shutil
@@ -53,8 +52,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
+import config
+from nucleus.reasoning.PatchManager import PatchManager
 
 _PM = os.path.join(ROOT, "nucleus", "reasoning", "PatchManager.py")
 _SE = os.path.join(ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
@@ -76,7 +75,7 @@ _M94_MEMBERS = (
 
 
 def _read(path):
-    with io.open(path, encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -125,7 +124,7 @@ class TestM94AgingStaticWiring(_SwBase):
     def test_A1_all_new_members_inside_class(self):
         _names = _class_names(_PM, "PatchManager")
         for _w in _M94_MEMBERS:
-            self.assertIn(_w, _names, "★{} 必须挂在 PatchManager 类内".format(_w))
+            self.assertIn(_w, _names, f"★{_w} 必须挂在 PatchManager 类内")
         # 不得出现模块级 M94 函数（AST 归属硬约束）
         _top = [n.name for n in ast.parse(_read(_PM)).body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
@@ -180,7 +179,7 @@ class TestM94AgingStaticWiring(_SwBase):
                     if isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         _found[_m.name] = _m
         for _w in _M94_MEMBERS:
-            self.assertIsNotNone(_found.get(_w), "★{} 必须在类内".format(_w))
+            self.assertIsNotNone(_found.get(_w), f"★{_w} 必须在类内")
         # 纯判据（无 self、无 IO）
         for _w in ("_m94_pending_aging_on", "_m94_aging_max_count",
                    "_m94_aging_max_hours", "_m94_patch_age_hours",
@@ -188,13 +187,13 @@ class TestM94AgingStaticWiring(_SwBase):
                    "_m94_aging_should_run"):
             _deco = [ast.unparse(d) for d in _found[_w].decorator_list]
             self.assertIn("staticmethod", _deco,
-                          "★{} 必须是 staticmethod（纯判据，无 self 状态）".format(_w))
+                          f"★{_w} 必须是 staticmethod（纯判据，无 self 状态）")
         # IO 侧（读 pending / 写盘）必须是实例方法且首参为 self
         for _w in ("pending_aging_preview", "_m94_apply_pending_aging",
                    "find_blocking_pending_patch"):
             _a = _found[_w].args
             self.assertEqual(["self"], [x.arg for x in _a.args][:1],
-                             "★{} 需要访问实例状态，首参必须为 self".format(_w))
+                             f"★{_w} 需要访问实例状态，首参必须为 self")
 
 
 class TestM94AgingCriteria(_SwBase):
@@ -232,7 +231,7 @@ class TestM94AgingCriteria(_SwBase):
                    {"source": "local_rule", "runtime_verified": "True",
                     "risk_level": "低"}):
             self.assertFalse(PatchManager._m94_aging_eligible(_v),
-                             "★保守：{!r} 必须不放行".format(_v))
+                             f"★保守：{_v!r} 必须不放行")
 
     def test_B3_core_gate_reuses_single_source(self):
         """★非核心文件判定必须复用 `_m80_is_core_file`（单一真源），不自造清单。"""
@@ -245,14 +244,14 @@ class TestM94AgingCriteria(_SwBase):
                    "generated_at"):
             _p = {"id": "x", _k: _NOW - 2 * 3600}
             self.assertAlmostEqual(2.0, PatchManager._m94_patch_age_hours(_p, _NOW),
-                                   places=3, msg="时间戳候选 {} 未被识别".format(_k))
+                                   places=3, msg=f"时间戳候选 {_k} 未被识别")
         self.assertIsNone(PatchManager._m94_patch_age_hours({"id": "x"}, _NOW))
         self.assertIsNone(PatchManager._m94_patch_age_hours(None, _NOW))
         # 布尔/字符串/负数 不得被当成时间戳（否则 0 小时误判）
         for _v in (True, "1700000000", -1, 0):
             self.assertIsNone(
                 PatchManager._m94_patch_age_hours({"saved_at": _v}, _NOW),
-                "★{!r} 不应被当作有效时间戳".format(_v))
+                f"★{_v!r} 不应被当作有效时间戳")
 
     def test_B5_saved_at_wins_over_generated_at(self):
         _p = {"saved_at": _NOW - 5 * 3600, "generated_at": _NOW - 99 * 3600}
@@ -313,7 +312,7 @@ class TestM94AgingCriteria(_SwBase):
         for _f in ("nucleus/reasoning/x.py", "main.py",
                    "organs/brain/PulseInnerWorld.py"):
             self.assertFalse(PatchManager._m94_aging_eligible(self._base(file=_f)),
-                             "★{} 绝不可被放行".format(_f))
+                             f"★{_f} 绝不可被放行")
 
 
 class TestM94AgingEndToEnd(_SwBase):
@@ -332,7 +331,7 @@ class TestM94AgingEndToEnd(_SwBase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _write(self, items):
-        with io.open(self.pf, "w", encoding="utf-8") as f:
+        with open(self.pf, "w", encoding="utf-8") as f:
             f.write(json.dumps(items, ensure_ascii=False))
 
     def _mk(self, _id, **kw):
@@ -353,10 +352,10 @@ class TestM94AgingEndToEnd(_SwBase):
                 self._mk("hi", risk_level="高")]
 
     def _disk(self):
-        return {p["id"]: p for p in json.load(io.open(self.pf, encoding="utf-8"))}
+        return {p["id"]: p for p in json.load(open(self.pf, encoding="utf-8"))}
 
     def test_C1_off_means_zero_behaviour_change(self):
-        _before = io.open(self.pf, "rb").read()
+        _before = open(self.pf, "rb").read()
         _mt = os.path.getmtime(self.pf)
         config.ENABLE_PENDING_QUEUE_AGING = False
         _r = self.pm._m94_apply_pending_aging(self.pm._load_patch_list(self.pf))
@@ -364,7 +363,7 @@ class TestM94AgingEndToEnd(_SwBase):
             {"enabled": False, "triggered": False, "released": []},
             {k: _r[k] for k in ("enabled", "triggered", "released")})
         self.assertFalse(_r["persisted"])
-        self.assertEqual(_before, io.open(self.pf, "rb").read(),
+        self.assertEqual(_before, open(self.pf, "rb").read(),
                          "★开关关闭时不得改写 pending 文件")
         self.assertEqual(_mt, os.path.getmtime(self.pf))
         # 关闭时 preview 的 enabled 也必须是 False（真实开关状态，非假设）
@@ -375,12 +374,12 @@ class TestM94AgingEndToEnd(_SwBase):
                   for i in range(5)]
         self._write(_fresh)
         config.ENABLE_PENDING_QUEUE_AGING = True
-        _before = io.open(self.pf, "rb").read()
+        _before = open(self.pf, "rb").read()
         _r = self.pm._m94_apply_pending_aging(self.pm._load_patch_list(self.pf))
         self.assertTrue(_r["enabled"])
         self.assertFalse(_r["triggered"], "★5 条 / 10 分钟：双阈值都不该触发")
         self.assertEqual([], _r["released"])
-        self.assertEqual(_before, io.open(self.pf, "rb").read())
+        self.assertEqual(_before, open(self.pf, "rb").read())
 
     @pytest.mark.xfail(reason="151批长期红基线(IW)，已知不修 [T155-2]", strict=False)
     def test_C3_age_trigger_releases_only_self_expired(self):
@@ -395,7 +394,7 @@ class TestM94AgingEndToEnd(_SwBase):
         _d = self._disk()
         self.assertEqual("approved", _d["ok"]["status"])
         for _k in ("llm", "core", "god", "hi"):
-            self.assertEqual("pending", _d[_k]["status"], "★{} 不应被放行".format(_k))
+            self.assertEqual("pending", _d[_k]["status"], f"★{_k} 不应被放行")
         self.assertEqual("pending", _d["fresh"]["status"],
                          "★自身未超期不应被顺手放行（时长触发不冲刷新补丁）")
         self.assertTrue(_d["ok"].get("aged_approved"))
@@ -411,7 +410,7 @@ class TestM94AgingEndToEnd(_SwBase):
         for _p in _q:
             self.assertTrue(os.path.isabs(_p["file"]),
                             "★内存对象必须保持绝对路径（后续 apply 循环依赖）")
-        _disk = json.load(io.open(self.pf, encoding="utf-8"))
+        _disk = json.load(open(self.pf, encoding="utf-8"))
         self.assertTrue(all(not os.path.isabs(p["file"]) for p in _disk),
                         "★落盘仍是相对路径（与改造前格式一致）")
 
@@ -429,9 +428,9 @@ class TestM94AgingEndToEnd(_SwBase):
 
     def test_C6_preview_read_only(self):
         config.ENABLE_PENDING_QUEUE_AGING = True
-        _before = io.open(self.pf, "rb").read()
+        _before = open(self.pf, "rb").read()
         _pv = self.pm.pending_aging_preview()
-        self.assertEqual(_before, io.open(self.pf, "rb").read(),
+        self.assertEqual(_before, open(self.pf, "rb").read(),
                          "★preview 绝不写盘")
         self.assertEqual(6, _pv["checked"])
         self.assertEqual(1, _pv["eligible"])
@@ -457,7 +456,7 @@ class TestM94AgingEndToEnd(_SwBase):
         _old = _read(_BAK_PM)
         for _w in ("_m94_pending_aging_on", "find_blocking_pending_patch",
                    "_m94_aging_eligible", "_m94_is_god_file"):
-            self.assertNotIn(_w, _old, "★改前不应有 {}".format(_w))
+            self.assertNotIn(_w, _old, f"★改前不应有 {_w}")
         self.assertIn("_m94_pending_aging_on", _read(_PM))
         if os.path.isfile(_BAK_SE):
             self.assertNotIn("_m94_pending_blocks_regeneration", _read(_BAK_SE))
@@ -480,7 +479,7 @@ class TestM94Blocking(_SwBase):
             {"id": "new", "file": "organs/body/B.py", "method": "m2",
              "status": "pending", "saved_at": _now - 3600},
         ]
-        with io.open(self.pf, "w", encoding="utf-8") as f:
+        with open(self.pf, "w", encoding="utf-8") as f:
             f.write(json.dumps(_items, ensure_ascii=False))
         # ★必须用真实解析后的绝对路径（`_load_patch_list` 会把 file 解析为绝对）
         _abs = {p["id"]: p["file"] for p in self.pm._load_patch_list(self.pf)}
@@ -499,7 +498,7 @@ class TestM94Blocking(_SwBase):
             _old = bool(self.pm.has_pending_patch_for(_f, _m))
             _new = self.pm.find_blocking_pending_patch(_f, _m) is not None
             self.assertEqual(_old, _new,
-                             "★零行为变化：{}/{} 两口径必须同值".format(_f, _m))
+                             f"★零行为变化：{_f}/{_m} 两口径必须同值")
 
     def test_D2_on_expired_unblocks_in_window_blocks(self):
         config.ENABLE_PENDING_QUEUE_AGING = True
@@ -529,9 +528,9 @@ class TestM94Blocking(_SwBase):
                                                 "m9"))
 
     def _append(self, item):
-        _items = json.load(io.open(self.pf, encoding="utf-8"))
+        _items = json.load(open(self.pf, encoding="utf-8"))
         _items.append(item)
-        with io.open(self.pf, "w", encoding="utf-8") as f:
+        with open(self.pf, "w", encoding="utf-8") as f:
             f.write(json.dumps(_items, ensure_ascii=False))
 
     def test_D5_se_wiring_surface(self):
@@ -549,7 +548,7 @@ class TestM94Production(_SwBase):
         """固化「pending 里 local_rule 为 0」这一可复算事实（不写死具体条数）。"""
         if not os.path.isfile(_PENDING_REAL):
             self.skipTest("生产 pending 文件缺失")
-        _ps = json.load(io.open(_PENDING_REAL, encoding="utf-8"))
+        _ps = json.load(open(_PENDING_REAL, encoding="utf-8"))
         if not isinstance(_ps, list) or not _ps:
             self.skipTest("生产 pending 为空")
         _src = {}
@@ -561,7 +560,7 @@ class TestM94Production(_SwBase):
         # local_rule 补丁确实进过补丁库，但**在 history 而非 pending**
         if not os.path.isfile(_HISTORY_REAL):
             self.skipTest("生产 history 文件缺失")
-        _h = json.load(io.open(_HISTORY_REAL, encoding="utf-8"))
+        _h = json.load(open(_HISTORY_REAL, encoding="utf-8"))
         _h = _h if isinstance(_h, list) else []
         _lr = [p for p in _h if isinstance(p, dict)
                and str(p.get("source")) == "local_rule"]
@@ -597,11 +596,11 @@ class TestM94Production(_SwBase):
     def test_E2_real_preview_is_read_only(self):
         if not os.path.isfile(_PENDING_REAL):
             self.skipTest("生产 pending 文件缺失")
-        _b = io.open(_PENDING_REAL, "rb").read()
+        _b = open(_PENDING_REAL, "rb").read()
         _mt = os.path.getmtime(_PENDING_REAL)
         _pv = PatchManager(ROOT).pending_aging_preview()
         self.assertIn("checked", _pv)
-        self.assertEqual(_b, io.open(_PENDING_REAL, "rb").read(),
+        self.assertEqual(_b, open(_PENDING_REAL, "rb").read(),
                          "★preview 绝不写生产队列")
         self.assertEqual(_mt, os.path.getmtime(_PENDING_REAL))
 

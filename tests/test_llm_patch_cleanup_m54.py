@@ -25,18 +25,17 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import importlib  # noqa: E402
-import io  # noqa: E402
-import unittest  # noqa: E402
+import importlib
+import unittest
 
-import config  # noqa: E402
+import config
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SEE_REL = os.path.join("nucleus", "reasoning", "SafeEvolutionExecutor.py")
 
 # ★铁律 33：包 __init__ 可能导出同名类 → 用 importlib 取模块
 _SEE_MOD = importlib.import_module("nucleus.reasoning.SafeEvolutionExecutor")
-_SEE_CLS = getattr(_SEE_MOD, "SafeEvolutionExecutor")
+_SEE_CLS = _SEE_MOD.SafeEvolutionExecutor
 
 _OLD_PROMPT = "你是曈曈的代码自学习助手，负责生成精确的代码修复建议。"
 _NEW_PROMPT = (
@@ -47,7 +46,7 @@ _NEW_PROMPT = (
 
 
 def _read(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
 
 
 def _pick_prompt(cfg):
@@ -104,7 +103,7 @@ class TestLlmPatchCleanupM54(unittest.TestCase):
         raw = "def f（x）：\n    return 1 + "
         out = self.exe._clean_llm_code(raw)
         self.assertTrue(any(ch in out for ch in "（）"),
-                        "应返回原始代码（保留全角括号），实际={!r}".format(out))
+                        f"应返回原始代码（保留全角括号），实际={out!r}")
         self.assertEqual(out.strip(), raw.strip())
 
     def test_04_switch_off_returns_normalized(self):
@@ -113,7 +112,7 @@ class TestLlmPatchCleanupM54(unittest.TestCase):
         with _cfg_switch("ENABLE_LLM_PATCH_RETURN_ORIGINAL", False):
             out = self.exe._clean_llm_code(raw)
             self.assertFalse(any(ch in out for ch in "（）"),
-                             "关闭开关时应返回归一化后代码，实际={!r}".format(out))
+                             f"关闭开关时应返回归一化后代码，实际={out!r}")
             self.assertIn("(x)", out, "归一化应把全角括号转为半角")
 
     def test_05_valid_code_untouched(self):

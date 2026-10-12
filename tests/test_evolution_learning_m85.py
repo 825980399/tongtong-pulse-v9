@@ -10,7 +10,6 @@
 ★行尾：本文件 LF（与 tests/ 惯例一致）。
 ★先红后绿：改前上述符号/行为均不存在或行为相反 → 红。
 """
-import io
 import json
 import os
 import shutil
@@ -20,9 +19,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.evolution import patch_verification_split as PVS  # noqa: E402
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
+from nucleus.evolution import patch_verification_split as PVS
+from nucleus.reasoning.PatchManager import PatchManager
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_SEE = os.path.join(_ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
@@ -30,7 +29,7 @@ SRC_PM = os.path.join(_ROOT, "nucleus", "reasoning", "PatchManager.py")
 
 
 def _src(path):
-    with io.open(path, "r", encoding="utf-8", newline="") as fh:
+    with open(path, "r", encoding="utf-8", newline="") as fh:
         return fh.read().replace("\r\n", "\n")
 
 
@@ -164,13 +163,13 @@ class TestM85LearningAttempt(unittest.TestCase):
             self.executor._m85_learning_attempt(
                 self._issue(), os.path.join(self.tmp, "x.py"), "f", _code, "PulseLiver")
         self.assertTrue(os.path.isfile(self.jsonl), "学习日志必须落盘")
-        with io.open(self.jsonl, encoding="utf-8") as fh:
+        with open(self.jsonl, encoding="utf-8") as fh:
             _rows = [json.loads(x) for x in fh if x.strip()]
         self.assertEqual(len(_rows), 2)
         _r = _rows[0]
         for _f in ("ts", "issue_type", "file", "method", "strategy", "result",
                    "llm_fallback"):
-            self.assertIn(_f, _r, "学习记录缺字段 {}".format(_f))
+            self.assertIn(_f, _r, f"学习记录缺字段 {_f}")
         self.assertEqual(_r["issue_type"], "long_method")
         self.assertEqual(_r["result"], "success")
         self.assertFalse(_r["llm_fallback"])
@@ -181,7 +180,7 @@ class TestM85LearningAttempt(unittest.TestCase):
             "def f(self):\n    return 1\n", "PulseLiver")
         self.assertEqual(_r.get("result"), "no_safe_fix")
         self.assertEqual(self.calls["enqueue"], 0, "无安全修复不得入队")
-        with io.open(self.jsonl, encoding="utf-8") as fh:
+        with open(self.jsonl, encoding="utf-8") as fh:
             _r0 = json.loads(fh.readline())
         self.assertEqual(_r0["result"], "no_safe_fix")
         self.assertTrue(_r0["llm_fallback"], "无安全修复应记 llm_fallback=True")
@@ -194,7 +193,7 @@ class TestM85LearningAttempt(unittest.TestCase):
             self._issue(), os.path.join(self.tmp, "x.py"), "f", _code, "PulseLiver")
         self.assertEqual(_r.get("result"), "failed")
         self.assertEqual(self.calls["enqueue"], 0, "验证未通过不得入队")
-        with io.open(self.jsonl, encoding="utf-8") as fh:
+        with open(self.jsonl, encoding="utf-8") as fh:
             _r0 = json.loads(fh.readline())
         self.assertEqual(_r0["result"], "failed")
         self.assertTrue(_r0["llm_fallback"])
@@ -234,7 +233,7 @@ class TestM85LearningAttempt(unittest.TestCase):
             self.executor._m85_learning_attempt(
                 self._issue(), os.path.join(self.tmp, "x.py"), "f", _code, "PulseLiver")
         except Exception as e:  # pragma: no cover
-            self.fail("异常逃出学习通道: {}: {}".format(type(e).__name__, e))
+            self.fail(f"异常逃出学习通道: {type(e).__name__}: {e}")
 
     def test_18_wired_into_main_loop(self):
         """源码级接线断言：主循环内确实调用了学习通道。"""

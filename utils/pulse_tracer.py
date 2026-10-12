@@ -110,7 +110,7 @@ def _default_bus_sub_provider(event_type):
         except Exception as _re:
             silent_exc(_re, "utils/pulse_tracer.py:_default_bus_sub_provider:注册确保失败",
                        level="debug")
-        from nucleus.events.EventBus import get_event_bus, _match
+        from nucleus.events.EventBus import _match, get_event_bus
         bus = get_event_bus()
         if bus.subscription_count("**") > 0:
             return True

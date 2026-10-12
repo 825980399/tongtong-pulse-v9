@@ -16,7 +16,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tools.health_issue_tracker as _hit  # noqa: E402
+import tools.health_issue_tracker as _hit
 
 # 样例 statistics（格式：count\trule\t[mark]\tname；末尾 Found 行忽略）
 _SAMPLE = """\

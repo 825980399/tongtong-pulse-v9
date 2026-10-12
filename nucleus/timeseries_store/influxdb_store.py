@@ -20,7 +20,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from nucleus._silent_except import silent_exc
 
@@ -73,7 +73,7 @@ class InfluxDBStore:
         self._query_api = None
         self._available = False
         self._client_missing = False
-        self._buffer: List[dict] = []
+        self._buffer: list[dict] = []
         self._last_flush = 0.0
         try:
             import influxdb_client  # noqa: F401
@@ -138,7 +138,7 @@ class InfluxDBStore:
         return bool(self._available and self._write_api is not None)
 
     # ---------- RSS 采样（复用 InfoField 双口径读数） ----------
-    def _sample_rss(self) -> Optional[dict]:
+    def _sample_rss(self) -> dict | None:
         """复用 InfoField 双口径内存读数（system_percent + process_rss_mb）。
 
         返回 ``{"process_rss_mb": float, "system_percent": float}``；
@@ -164,8 +164,8 @@ class InfluxDBStore:
             return None
 
     # ---------- 写入 ----------
-    def write_point(self, measurement: str, tags: Optional[dict] = None,
-                    fields: Optional[dict] = None, timestamp: Optional[int] = None) -> bool:
+    def write_point(self, measurement: str, tags: dict | None = None,
+                    fields: dict | None = None, timestamp: int | None = None) -> bool:
         """写入单条时序数据（进入缓冲区，按批/定时冲刷）。"""
         if not self.is_available():
             return False
@@ -182,7 +182,7 @@ class InfluxDBStore:
                 return self._flush_locked()
         return True
 
-    def write_points(self, points: List[dict]) -> bool:
+    def write_points(self, points: list[dict]) -> bool:
         """批量写入。"""
         if not self.is_available():
             return False
@@ -274,16 +274,16 @@ class InfluxDBStore:
 
     # ---------- 查询 ----------
     @staticmethod
-    def _build_tag_filter(tags: Optional[dict]) -> str:
+    def _build_tag_filter(tags: dict | None) -> str:
         """构造 Flux 的 tag 过滤片段（各查询方法共用，避免散落的重复拼接）。"""
         _tag_f = ""
         for _k, _v in (tags or {}).items():
             _tag_f += f' |> filter(fn: (r) => r["{_k}"] == "{_v}")'
         return _tag_f
 
-    def query_range(self, measurement: str, tags: Optional[dict] = None,
+    def query_range(self, measurement: str, tags: dict | None = None,
                     start: str = "-7d", end: str = "now()",
-                    aggregation: str = "") -> List[dict]:
+                    aggregation: str = "") -> list[dict]:
         """时间范围查询。"""
         if not self.is_available():
             return []
@@ -306,8 +306,8 @@ class InfluxDBStore:
             _logger.warning("[T2] 范围查询失败: %s: %s", type(e).__name__, e)
             return []
 
-    def query_latest(self, measurement: str, tags: Optional[dict] = None,
-                     limit: int = 10) -> List[dict]:
+    def query_latest(self, measurement: str, tags: dict | None = None,
+                     limit: int = 10) -> list[dict]:
         """查询最新 N 条。"""
         if not self.is_available():
             return []
@@ -329,22 +329,22 @@ class InfluxDBStore:
             _logger.warning("[T2] 最新查询失败: %s: %s", type(e).__name__, e)
             return []
 
-    def query_count(self, measurement: str, tags: Optional[dict] = None,
+    def query_count(self, measurement: str, tags: dict | None = None,
                     start: str = "-7d", end: str = "now()") -> int:
         """统计时间范围内记录数。"""
         rows = self.query_range(measurement, tags, start, end)
         return len(rows)
 
     # ---------- 趋势 / 异常 ----------
-    def query_trend(self, measurement: str, tags: Optional[dict] = None,
+    def query_trend(self, measurement: str, tags: dict | None = None,
                     start: str = "-7d", end: str = "now()",
-                    interval: str = "1h") -> List[dict]:
+                    interval: str = "1h") -> list[dict]:
         """趋势分析：按时间间隔聚合。"""
         return self.query_range(measurement, tags, start, end,
                                 aggregation=f'aggregateWindow(every: {interval}, fn: mean)')
 
-    def query_anomaly(self, measurement: str, tags: Optional[dict] = None,
-                      window_size: int = 10, threshold: float = 2.0) -> List[dict]:
+    def query_anomaly(self, measurement: str, tags: dict | None = None,
+                      window_size: int = 10, threshold: float = 2.0) -> list[dict]:
         """异常检测：滑动窗口均值 + 阈值倍数。
 
         纯客户端实现（不依赖 InfluxDB 的异常检测插件），
@@ -371,9 +371,9 @@ class InfluxDBStore:
             _logger.warning("[T2] 异常检测失败: %s: %s", type(e).__name__, e)
             return []
 
-    def query_top_k(self, measurement: str, tags: Optional[dict] = None,
+    def query_top_k(self, measurement: str, tags: dict | None = None,
                     start: str = "-7d", end: str = "now()", k: int = 10,
-                    order_by: str = "desc") -> List[dict]:
+                    order_by: str = "desc") -> list[dict]:
         """Top K 查询（按值排序）。"""
         rows = self.query_range(measurement, tags, start, end)
         try:
@@ -384,7 +384,7 @@ class InfluxDBStore:
             return rows[:int(k)]
 
     # ---------- 降采样保留策略（设计） ----------
-    def get_retention_policy(self) -> Dict[str, str]:
+    def get_retention_policy(self) -> dict[str, str]:
         """返回降采样保留策略（第70批为设计，第71批+落到 InfluxDB 任务）。"""
         return {
             "raw": "7d",           # 原始数据保留 7 天

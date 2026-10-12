@@ -33,7 +33,6 @@ import ast
 import hashlib
 import importlib.machinery
 import importlib.util
-import io
 import json
 import os
 import shutil
@@ -45,8 +44,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.reasoning.PatchManager import (  # noqa: E402
+import config
+from nucleus.reasoning.PatchManager import (
     _M92_STRUCT_SHRINK_RATIO,
     PatchManager,
     _m92_ast_struct_guard,
@@ -55,7 +54,7 @@ from nucleus.reasoning.PatchManager import (  # noqa: E402
     _m92_base_indent_guard_on,
     _m92_count_class_methods,
 )
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
 _PM_SRC_PATH = os.path.join(ROOT, "nucleus", "reasoning", "PatchManager.py")
 _BAK_PM = os.path.join(ROOT, ".bak_batch92", "nucleus", "reasoning", "PatchManager.py.bak")
@@ -77,7 +76,7 @@ def _pm(root=None):
 
 
 def _src():
-    return io.open(_PM_SRC_PATH, encoding="utf-8").read()
+    return open(_PM_SRC_PATH, encoding="utf-8").read()
 
 
 def _load_legacy_pm():
@@ -120,7 +119,7 @@ def _patch_library():
         if not os.path.isfile(_p):
             continue
         try:
-            _d = json.load(io.open(_p, encoding="utf-8"))
+            _d = json.load(open(_p, encoding="utf-8"))
         except Exception:
             continue
         _ls = _d.get("patches") if isinstance(_d, dict) else _d
@@ -143,7 +142,7 @@ def _make_project(oc, tail=6):
         _lines += ["    def after%d(self):" % _k, "        return %d" % _k, ""]
     os.makedirs(os.path.join(_root, "organs", "brain"), exist_ok=True)
     _fp = os.path.join(_root, "organs", "brain", "PulseInnerWorld.py")
-    io.open(_fp, "w", encoding="utf-8").write("\n".join(_lines))
+    open(_fp, "w", encoding="utf-8").write("\n".join(_lines))
     return _root, _fp
 
 
@@ -285,8 +284,8 @@ class TestT92aSwitchContract(unittest.TestCase):
     def test_A2_runtime_toggle_takes_effect_immediately(self):
         for _sw, _fn in ((_SW_C, _m92_base_indent_guard_on), (_SW_D, _m92_ast_struct_guard_on)):
             with _switches(**{_sw: True}):
-                self.assertIs(True, _fn(), "{}=True 应即时生效".format(_sw))
-            self.assertIs(False, _fn(), "{} 恢复后应回到 False".format(_sw))
+                self.assertIs(True, _fn(), f"{_sw}=True 应即时生效")
+            self.assertIs(False, _fn(), f"{_sw} 恢复后应回到 False")
 
     def test_A3_getattr_fallback_when_config_attr_absent(self):
         """config 无该属性（如旧配置）时须按默认 False 兜底，而非抛异常。"""
@@ -295,7 +294,7 @@ class TestT92aSwitchContract(unittest.TestCase):
             if _old is not _MISSING:
                 delattr(config, _sw)
             try:
-                self.assertIs(False, _fn(), "{} 缺失时应兜底 False".format(_sw))
+                self.assertIs(False, _fn(), f"{_sw} 缺失时应兜底 False")
             finally:
                 if _old is not _MISSING:
                     setattr(config, _sw, _old)
@@ -317,7 +316,7 @@ class TestT92bBaseIndentParity(unittest.TestCase):
                 _b = SafeEvolutionExecutor._m91_base_indent(_x[_k])
                 if _a != _b:
                     _diff.append((_x.get("id"), _k, _a, _b))
-        self.assertEqual([], _diff[:5], "两把尺子口径漂移：{}".format(_diff[:5]))
+        self.assertEqual([], _diff[:5], f"两把尺子口径漂移：{_diff[:5]}")
 
     def test_B2_identical_on_edge_samples(self):
         _samples = ["", None, "\n\n", "# c only\n", "    # c only\n        x = 1",
@@ -325,7 +324,7 @@ class TestT92bBaseIndentParity(unittest.TestCase):
                     "      return x", "        return None"]
         for _s in _samples:
             self.assertEqual(SafeEvolutionExecutor._m91_base_indent(_s), _m92_base_indent(_s),
-                             "样本 {!r} 口径不一致".format(_s))
+                             f"样本 {_s!r} 口径不一致")
 
     def test_B3_skips_blank_and_comment_lines(self):
         """首行 col 0 **注释** + 其后 8 缩进 ⇒ base 必须是 8（注释不构成缩进层级）。"""
@@ -412,7 +411,7 @@ class TestT92dGuardJudgement(unittest.TestCase):
         _p = os.path.join(ROOT, "organs", "brain", "PulseInnerWorld.py")
         if not os.path.isfile(_p):
             self.skipTest("活文件缺失")
-        _s = io.open(_p, encoding="utf-8").read()
+        _s = open(_p, encoding="utf-8").read()
         self.assertEqual(_m92_count_class_methods(_s)[0], _m92_count_class_methods(_s)[0])
         self.assertTrue(_m92_ast_struct_guard(_s, _s)["ok"], "自身对自身必须放行")
 
@@ -429,15 +428,15 @@ class TestT92eRealIncidentArtifacts(unittest.TestCase):
 
     def test_E1_green_t92c_judgement_hits_both(self):
         for _tag, _oc, _mc in (("A", A_ORIGINAL, A_MODIFIED), ("B", B_ORIGINAL, B_MODIFIED)):
-            self.assertEqual(8, _m92_base_indent(_oc), "{} original base 应为 8".format(_tag))
-            self.assertEqual(0, _m92_base_indent(_mc), "{} modified base 应为 0（事故指纹）".format(_tag))
+            self.assertEqual(8, _m92_base_indent(_oc), f"{_tag} original base 应为 8")
+            self.assertEqual(0, _m92_base_indent(_mc), f"{_tag} modified base 应为 0（事故指纹）")
             self.assertNotEqual(_m92_base_indent(_oc), _m92_base_indent(_mc),
-                                "{} 必须命中 T-92c 判据".format(_tag))
+                                f"{_tag} 必须命中 T-92c 判据")
 
     def test_E2_green_t92d_judgement_hits_both(self):
         _root, _fp = _make_project(A_ORIGINAL)
         self.addCleanup(shutil.rmtree, _root, True)
-        _full = io.open(_fp, encoding="utf-8").read()
+        _full = open(_fp, encoding="utf-8").read()
         _mod = _full.replace(A_ORIGINAL, A_MODIFIED)
         _r = _m92_ast_struct_guard(_full, _mod)
         self.assertIsNotNone(_r)
@@ -450,11 +449,11 @@ class TestT92eRealIncidentArtifacts(unittest.TestCase):
         import py_compile
         _root, _fp = _make_project(A_ORIGINAL)
         self.addCleanup(shutil.rmtree, _root, True)
-        _mod = io.open(_fp, encoding="utf-8").read().replace(A_ORIGINAL, A_MODIFIED)
+        _mod = open(_fp, encoding="utf-8").read().replace(A_ORIGINAL, A_MODIFIED)
         ast.parse(_mod, filename="<incident>")                       # 不抛
         compile(_mod, "<incident>", "exec")                          # 不抛
         _tmp = _fp + ".incident"
-        io.open(_tmp, "w", encoding="utf-8").write(_mod)
+        open(_tmp, "w", encoding="utf-8").write(_mod)
         try:
             py_compile.compile(_tmp, doraise=True)                   # 不抛
         finally:
@@ -511,7 +510,7 @@ class TestT92fWiringGate(unittest.TestCase):
                     and _n.func.id == "_m92_ast_struct_guard"):
                 _args.append([_a.id for _a in _n.args if isinstance(_a, ast.Name)])
         self.assertEqual([["full_content", "modified_full"]], _args,
-                         "T-92d 判据实参必须恰为 (full_content, modified_full)，实得 {}".format(_args))
+                         f"T-92d 判据实参必须恰为 (full_content, modified_full)，实得 {_args}")
 
     def test_F4_guard_blocks_precede_copy_write(self):
         """两道关都必须在 `with open(tmp_target, 'w', ...)` 写副本**之前**。"""
@@ -529,7 +528,7 @@ class TestT92fWiringGate(unittest.TestCase):
         _names = {_n.name for _n in _t.body if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         for _f in ("_m92_base_indent", "_m92_count_class_methods", "_m92_ast_struct_guard",
                    "_m92_base_indent_guard_on", "_m92_ast_struct_guard_on"):
-            self.assertIn(_f, _names, "{} 必须在模块级".format(_f))
+            self.assertIn(_f, _names, f"{_f} 必须在模块级")
         _seg = ast.get_source_segment(_src(), next(
             _n for _n in _t.body if isinstance(_n, ast.FunctionDef) and _n.name == "_m92_ast_struct_guard"))
         self.assertNotIn("_module_logger", _seg, "判据函数应为纯函数（不打日志）")
@@ -552,7 +551,7 @@ class TestT92gEndToEnd(unittest.TestCase):
         self.assertNotIn(_r.get("stage"), ("base_indent_guard_failed",
                                           "ast_structure_guard_failed"),
                          "开关关闭时不应新增拦截（零回归）")
-        self.assertTrue(_r.get("passed"), "★事故补丁在改前被判定**通过**：{}".format(_r))
+        self.assertTrue(_r.get("passed"), f"★事故补丁在改前被判定**通过**：{_r}")
 
     def test_G2_green_t92c_blocks(self):
         _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED, **{_SW_C: True})
@@ -570,9 +569,9 @@ class TestT92gEndToEnd(unittest.TestCase):
         for _tag, _pid, _oc, _mc in (("A", A_ID, A_ORIGINAL, A_MODIFIED),
                                      ("B", B_ID, B_ORIGINAL, B_MODIFIED)):
             _rc = self._run(_pid, _oc, _mc, **{_SW_C: True})
-            self.assertEqual("base_indent_guard_failed", _rc.get("stage"), "{} T-92c".format(_tag))
+            self.assertEqual("base_indent_guard_failed", _rc.get("stage"), f"{_tag} T-92c")
             _rd = self._run(_pid, _oc, _mc, **{_SW_D: True})
-            self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), "{} T-92d".format(_tag))
+            self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), f"{_tag} T-92d")
 
     def test_G5_corpus_zero_false_block_by_judgement(self):
         """★零误拦（判据层面）：72 条生产补丁里只有事故那 2 条命中 T-92c 判据。"""
@@ -602,7 +601,7 @@ class TestT92gEndToEnd(unittest.TestCase):
         self.assertEqual(_old_r.get("passed"), _new.get("passed"))
         self.assertIn("base_indent_guard_failed", _src(), "守卫名须在源码中")  # 提醒：改前版本无此串
         self.assertNotIn("base_indent_guard_failed",
-                         io.open(_BAK_PM, encoding="utf-8").read() if os.path.isfile(_BAK_PM) else "")
+                         open(_BAK_PM, encoding="utf-8").read() if os.path.isfile(_BAK_PM) else "")
 
 
 if __name__ == "__main__":

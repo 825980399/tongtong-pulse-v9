@@ -12,7 +12,6 @@
 4. helper 在包内可导入、且为 callable。
 """
 import ast
-import io
 import os
 import unittest
 
@@ -29,7 +28,7 @@ _TARGETS = [
 
 def _silent_pass_count(path):
     """统计 body 仅为单个 Pass 的 except handler 数量。"""
-    src = io.open(path, encoding="utf-8", errors="replace").read()
+    src = open(path, encoding="utf-8", errors="replace").read()
     tree = ast.parse(src)
     n = 0
     for node in ast.walk(tree):
@@ -50,7 +49,7 @@ class TestSilentExceptM78(unittest.TestCase):
     def test_02_helper_imported_in_targets(self):
         for rel in _TARGETS:
             p = os.path.join(ROOT, rel)
-            src = io.open(p, encoding="utf-8", errors="replace").read()
+            src = open(p, encoding="utf-8", errors="replace").read()
             self.assertIn("silent_exc", src,
                           f"{rel} 未引用 silent_exc helper（静默异常未转换）")
 

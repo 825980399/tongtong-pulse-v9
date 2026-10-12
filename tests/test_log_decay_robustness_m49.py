@@ -5,7 +5,6 @@ T3-1 情绪衰减死代码接入（check_decay → _trim_capacity）
 T3-2 眼睛推流统计日志级别（INFO → DEBUG + 低频摘要）
 T3-3 日志轮转 PermissionError 静默处理（自定义 handler）
 """
-import io
 import logging
 import logging.handlers
 import os
@@ -19,15 +18,15 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-import nucleus.logger as _lg  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+import config
+import nucleus.logger as _lg
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
-_EXP = io.open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
+_EXP = open(os.path.join(_ROOT, "nucleus/mnemosyne/experience_pool.py"),
                encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
-_EYES = io.open(os.path.join(_ROOT, "organs/senses/PulseEyes.py"),
+_EYES = open(os.path.join(_ROOT, "organs/senses/PulseEyes.py"),
                 encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
-_LOG = io.open(os.path.join(_ROOT, "nucleus/logger.py"),
+_LOG = open(os.path.join(_ROOT, "nucleus/logger.py"),
                encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
@@ -304,9 +303,9 @@ class TestSafeRollover(unittest.TestCase):
             finally:
                 logging.handlers.RotatingFileHandler.doRollover = _orig
             self.assertTrue(os.path.exists(self.log + ".1"), "应轮转出 .1 备份")
-            _cur = io.open(self.log, encoding="utf-8", errors="replace").read()
+            _cur = open(self.log, encoding="utf-8", errors="replace").read()
             self.assertNotIn("HELLO_BEFORE_ROLLOVER", _cur, "当前文件应已清空")
-            _bk = io.open(self.log + ".1", encoding="utf-8", errors="replace").read()
+            _bk = open(self.log + ".1", encoding="utf-8", errors="replace").read()
             self.assertIn("HELLO_BEFORE_ROLLOVER", _bk, "旧内容应在 .1 备份中")
         finally:
             lg.removeHandler(h)

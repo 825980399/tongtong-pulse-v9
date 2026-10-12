@@ -13,7 +13,6 @@ ReasoningExperienceIndexer.py —— 推理经验索引器
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import re
@@ -45,8 +44,7 @@ _STATE_PATH = os.path.join(_PROJECT_ROOT, "data", "reasoning_experience_indexer_
 
 # ★第165批 刀A5：关键词切分（分词/去停用词），替代整句作关键词
 _STOPWORDS = frozenset(
-    "的 了 和 与 及 或 在 是 我 你 他 她 它 们 这 那 有 把 被 让 给 对 从 到 以 为 之 其 此 "
-    "个 种 项 条 次 下 上 中 也 都 就 还 很 最 不 没 别 请 您 我们 你们 他们 这个 那个".split()
+    ["的", "了", "和", "与", "及", "或", "在", "是", "我", "你", "他", "她", "它", "们", "这", "那", "有", "把", "被", "让", "给", "对", "从", "到", "以", "为", "之", "其", "此", "个", "种", "项", "条", "次", "下", "上", "中", "也", "都", "就", "还", "很", "最", "不", "没", "别", "请", "您", "我们", "你们", "他们", "这个", "那个"]
 )
 _TOKEN_RE = re.compile(r"[一-鿿]+|[a-zA-Z0-9_]+")
 
@@ -400,7 +398,7 @@ class ReasoningExperienceIndexer:
         """启动时从 data/ 状态文件载入累计计数基线（git-ignored 运行时状态）。"""
         try:
             if os.path.exists(_STATE_PATH):
-                with io.open(_STATE_PATH, encoding='utf-8') as _f:
+                with open(_STATE_PATH, encoding='utf-8') as _f:
                     _s = json.load(_f)
                 self._base_remediation = int(_s.get('remediation_count', 0) or 0)
                 self._base_nodes = int(_s.get('nodes_written', 0) or 0)
@@ -420,7 +418,7 @@ class ReasoningExperienceIndexer:
                 "failure_mode_total": self._base_failure + self._failure_mode_total,
             }
             _tmp = _STATE_PATH + ".tmp"
-            with io.open(_tmp, 'w', encoding='utf-8') as _f:
+            with open(_tmp, 'w', encoding='utf-8') as _f:
                 json.dump(_payload, _f, ensure_ascii=False)
             os.replace(_tmp, _STATE_PATH)
         except Exception as _e:

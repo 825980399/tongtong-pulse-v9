@@ -18,7 +18,7 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 
 def _bare_iw():

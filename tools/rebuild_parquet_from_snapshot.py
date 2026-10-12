@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
@@ -22,7 +21,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus._silent_except import silent_exc  # noqa: E402
+from nucleus._silent_except import silent_exc
 
 _DEFAULT_SNAPSHOT = os.path.join(_ROOT, "data", "knowledge",
                                  "pulse_knowledge_snapshot.json")
@@ -52,7 +51,7 @@ def _framework_looks_running(snapshot: str, threshold_sec: int = 600) -> bool:
 
 def _load_nodes(snapshot: str):
     from nucleus.mnemosyne.PulseNode import PulseNode
-    with io.open(snapshot, "r", encoding="utf-8") as _f:
+    with open(snapshot, "r", encoding="utf-8") as _f:
         _data = json.load(_f)
     _nodes = []
     for _nd in _data.get("nodes", []):

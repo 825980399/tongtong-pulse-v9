@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-import io
 import logging
 import os
 import subprocess
@@ -41,14 +40,14 @@ from typing import Any
 from nucleus._silent_except import silent_exc
 
 __all__ = [
-    "SEVERITIES",
     "RULE_REGISTRY",
+    "SEVERITIES",
+    "changed_files",
     "engine_version",
+    "latest_report_path",
     "rule_sha16",
     "rule_signatures",
-    "changed_files",
     "run_rules",
-    "latest_report_path",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,7 +61,7 @@ SEVERITIES = ("error", "warn", "info")
 # ------------------------------------------------------------------ 规则实现
 def _iter_lines(path):
     """读文件并按 CRLF 归一，返回 (行号, 行文本) 迭代器。"""
-    with io.open(path, encoding="utf-8", errors="replace") as _f:
+    with open(path, encoding="utf-8", errors="replace") as _f:
         for _i, _line in enumerate(_f.read().replace("\r\n", "\n").split("\n"), 1):
             yield _i, _line
 
@@ -157,7 +156,7 @@ def rule_sha16(title, severity, scope, checker_src):
     挪行 → 归一串不变 → 指纹不红。
     """
     _body = " ".join((checker_src or "").split())
-    _raw = "{}|{}|{}|{}".format(title, severity, scope, _body)
+    _raw = f"{title}|{severity}|{scope}|{_body}"
     return hashlib.sha256(_raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -193,7 +192,7 @@ def changed_files(base="HEAD~1", target="HEAD", root=None) -> list[str]:
     _out: list[str] = []
     try:
         _r = subprocess.run(
-            ["git", "diff", "--name-only", "{}..{}".format(base, target)],
+            ["git", "diff", "--name-only", f"{base}..{target}"],
             cwd=_root, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=60, check=False)
         if _r.returncode == 0:
@@ -261,10 +260,10 @@ def run_rules(files=None, full=False, root=None) -> dict[str, Any]:
                 _hits = _r["checker"](_abs) or []
             except Exception as _e:
                 # ★规则自身出错不得中断整轮：留痕并计入 info
-                silent_exc(_e, where="nucleus.self_awareness.rule_engine::run_rules:{}".format(_rid),
+                silent_exc(_e, where=f"nucleus.self_awareness.rule_engine::run_rules:{_rid}",
                            level="warning")
                 _findings.append({"rule": _rid, "file": _rel, "line": 0,
-                                  "severity": "info", "text": "规则执行异常: {}".format(type(_e).__name__)})
+                                  "severity": "info", "text": f"规则执行异常: {type(_e).__name__}"})
                 continue
             for _h in _hits:
                 _findings.append({

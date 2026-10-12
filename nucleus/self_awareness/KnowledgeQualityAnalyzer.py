@@ -807,7 +807,7 @@ def _extract_scores(data: Any) -> dict[str, float]:
         return {}
     _d = data
     if not isinstance(_d, dict):
-        _d = getattr(data, "to_dict", lambda: {})() or {}
+        _d = getattr(data, "to_dict", dict)() or {}
         if hasattr(data, "knowledge_quality"):
             _kq = data.knowledge_quality
             if isinstance(_kq, dict):

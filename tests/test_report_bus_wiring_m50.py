@@ -4,7 +4,6 @@
 覆盖：适配器发布 / 异常抽取 / 消费者触发 / 开关零回归 / 消费率可度量 /
      4 处生产接入点接线（源码级）。
 """
-import io
 import os
 import shutil
 import sys
@@ -17,18 +16,18 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.reporting import consumers as _cons  # noqa: E402
-from nucleus.reporting import publishers as _pub  # noqa: E402
-from nucleus.reporting.report_bus import ReportBus, reset_report_bus  # noqa: E402
-from nucleus.reporting.report_envelope import SEV_P0, SEV_P1  # noqa: E402
+import config
+from nucleus.reporting import consumers as _cons
+from nucleus.reporting import publishers as _pub
+from nucleus.reporting.report_bus import ReportBus, reset_report_bus
+from nucleus.reporting.report_envelope import SEV_P0, SEV_P1
 
 _SRC = {}
 for _rel in ("nucleus/self_awareness/SelfAwarenessEngine.py",
              "nucleus/self_awareness/DailyScheduler.py",
              "nucleus/diagnostics.py",
              "main.py"):
-    _SRC[_rel] = io.open(os.path.join(_ROOT, _rel), encoding="utf-8",
+    _SRC[_rel] = open(os.path.join(_ROOT, _rel), encoding="utf-8",
                          errors="replace").read().replace("\r\n", "\n")
 
 
@@ -246,7 +245,7 @@ class TestWiring(_Base):
         s = _SRC["nucleus/self_awareness/DailyScheduler.py"]
         for fn in ("publish_pollution", "publish_patch_quality",
                    "publish_data_quality", "publish_generic"):
-            self.assertIn(fn, s, "run_once 应发布 {}".format(fn))
+            self.assertIn(fn, s, f"run_once 应发布 {fn}")
 
     def test_42_diagnostics_publishes_health(self):
         s = _SRC["nucleus/diagnostics.py"]
@@ -283,14 +282,14 @@ class TestWiring(_Base):
                    "publish_data_quality"):
             i = s.find(fn)
             self.assertGreater(i, 0)
-            self.assertIn("try:", s[max(0, i - 700):i], "{} 未包 try".format(fn))
+            self.assertIn("try:", s[max(0, i - 700):i], f"{fn} 未包 try")
 
 
 # ============================================================ 契约
 class TestContract(unittest.TestCase):
     def test_50_publishers_never_import_heavy_modules(self):
         """适配器不应在 import 期引入重型框架模块（可安全导入）。"""
-        src = io.open(os.path.join(_ROOT, "nucleus/reporting/publishers.py"),
+        src = open(os.path.join(_ROOT, "nucleus/reporting/publishers.py"),
                       encoding="utf-8").read()
         top = src.split("__all__")[0]
         for bad in ("import main", "from main", "import config\n"):
@@ -298,7 +297,7 @@ class TestContract(unittest.TestCase):
 
     def test_51_no_bare_except_pass(self):
         import re
-        src = io.open(os.path.join(_ROOT, "nucleus/reporting/publishers.py"),
+        src = open(os.path.join(_ROOT, "nucleus/reporting/publishers.py"),
                       encoding="utf-8").read()
         self.assertEqual(
             len(re.findall(r"except\s+[^\n:]+:\s*\n\s*pass\s*(\n|$)", src)), 0)
@@ -321,7 +320,7 @@ class TestWriteGuardNotBypassed(_Base):
         import ast
         for _rel in ("nucleus/reporting/report_bus.py",
                      "nucleus/reporting/consumers.py"):
-            _s = io.open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
+            _s = open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
             _bad = []
             for _n in ast.walk(ast.parse(_s)):
                 if isinstance(_n, ast.Call):
@@ -329,7 +328,7 @@ class TestWriteGuardNotBypassed(_Base):
                         if _kw.arg == "explicit_base_dir":
                             _bad.append(_n.lineno)
             self.assertEqual(
-                _bad, [], "{} 仍把 explicit_base_dir 当关键字传参 @{}".format(_rel, _bad))
+                _bad, [], f"{_rel} 仍把 explicit_base_dir 当关键字传参 @{_bad}")
 
     def test_61_guard_signature_matches_call(self):
         """守卫参数名必须是 `explicit`（调用方与签名一致）。"""
@@ -342,7 +341,7 @@ class TestWriteGuardNotBypassed(_Base):
         try:
             guard_write("", explicit=False, component="t")
         except TypeError as _e:
-            self.fail("参数名不匹配会抛 TypeError: {}".format(_e))
+            self.fail(f"参数名不匹配会抛 TypeError: {_e}")
 
     def test_62_default_bus_is_not_explicit(self):
         """默认总线（生产 data/reports）应判为**未显式注入**。"""
@@ -381,10 +380,10 @@ class TestWriteGuardNotBypassed(_Base):
         import re
         for _rel in ("nucleus/reporting/report_bus.py",
                      "nucleus/reporting/consumers.py"):
-            _s = io.open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
+            _s = open(os.path.join(_ROOT, _rel), encoding="utf-8").read()
             self.assertEqual(
                 len(re.findall(r"except\s+[^\n:]+:\s*\n\s*pass\s*(\n|$)", _s)),
-                0, "{} 仍有裸 except: pass（会再次吞掉守卫异常）".format(_rel))
+                0, f"{_rel} 仍有裸 except: pass（会再次吞掉守卫异常）")
 
     def test_68_guard_signature_accepts_real_component(self):
         """守卫可被真实组件名调用（签名与调用方契约一致）。"""

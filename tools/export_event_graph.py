@@ -28,7 +28,6 @@
 from __future__ import annotations
 
 import ast
-import io
 import json
 import os
 from typing import Any
@@ -64,7 +63,7 @@ def load_event_taxonomy() -> dict[str, Any]:
         _module_logger.debug("[186刀1] const.py 不存在: %s", _const)
         return _out
     try:
-        _src = io.open(_const, encoding="utf-8", errors="replace").read()
+        _src = open(_const, encoding="utf-8", errors="replace").read()
         _tree = ast.parse(_src)
     except SyntaxError as _e:
         _module_logger.debug("[186刀1] const.py 解析失败: %s", _e)
@@ -99,7 +98,7 @@ def _taxonomy() -> dict[str, Any]:
     return _TAXONOMY
 
 
-def _resolve_event_type(node: Any) -> "tuple[str | None, str]":
+def _resolve_event_type(node: Any) -> tuple[str | None, str]:
     """将 AST 节点解析为规范化事件类型字符串。
 
     Returns: (canonical_string, kind)
@@ -132,7 +131,7 @@ def _is_pulse_core_emit(call: ast.Call) -> bool:
     return False
 
 
-def _emit_types_of(src: str) -> "tuple[set[str], int]":
+def _emit_types_of(src: str) -> tuple[set[str], int]:
     """提取模块内经 pulse_core.emit 发射的事件类型（规范化字符串集合）。
 
     Returns: (resolved_types:set, unresolved_count:int)
@@ -164,7 +163,7 @@ def _emit_types_of(src: str) -> "tuple[set[str], int]":
     return _types, _unresolved
 
 
-def _subscribe_types_of(src: str) -> "tuple[set[str], bool, int]":
+def _subscribe_types_of(src: str) -> tuple[set[str], bool, int]:
     """提取模块内订阅的事件类型。
 
     来源 1：get_resonance_conditions() 返回的 event_types 列表
@@ -216,9 +215,7 @@ def _subscribe_types_of(src: str) -> "tuple[set[str], bool, int]":
                     if (isinstance(_val, ast.Call) and isinstance(_val.func, ast.Attribute)
                             and _val.func.attr == "get" and _val.args
                             and isinstance(_val.args[0], ast.Constant)
-                            and _val.args[0].value == "event_type"):
-                        _ev_var = _a.targets[0].id
-                    elif (isinstance(_val, ast.Subscript)
+                            and _val.args[0].value == "event_type") or (isinstance(_val, ast.Subscript)
                           and isinstance(getattr(_val, "slice", None), ast.Constant)
                           and getattr(_val.slice, "value", None) == "event_type"):
                         _ev_var = _a.targets[0].id
@@ -238,7 +235,7 @@ def _subscribe_types_of(src: str) -> "tuple[set[str], bool, int]":
 # =============================================================================
 # derive_event_edges：Y→T→X
 # -----------------------------------------------------------------------------
-def derive_event_edges(organs: "Any" = None) -> dict[str, Any]:
+def derive_event_edges(organs: Any = None) -> dict[str, Any]:
     """推导事件路由边（Y→T→X）。
 
     对每个器官模块做静态 AST 扫描：
@@ -273,7 +270,7 @@ def derive_event_edges(organs: "Any" = None) -> dict[str, Any]:
             continue
         _stats["files_scanned"] += 1
         try:
-            _src = io.open(_fp, encoding="utf-8", errors="replace").read()
+            _src = open(_fp, encoding="utf-8", errors="replace").read()
         except OSError:
             continue
         _et, _eu = _emit_types_of(_src)
@@ -313,7 +310,7 @@ def derive_event_edges(organs: "Any" = None) -> dict[str, Any]:
     }
 
 
-def _wire_event_traffic(edges: "list[dict]", publish_count: "dict[str, int] | None") -> "list[dict]":
+def _wire_event_traffic(edges: list[dict], publish_count: dict[str, int] | None) -> list[dict]:
     """将运行态事件流量发布计数接入事件图谱边（第二根接线刀）。
 
     Args:
@@ -333,7 +330,7 @@ def _wire_event_traffic(edges: "list[dict]", publish_count: "dict[str, int] | No
     return _out
 
 
-def export_event_graph(organs: "Any" = None, as_json: bool = False, runtime_event_publish_count: "dict[str, int] | None" = None) -> "Any":
+def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_publish_count: dict[str, int] | None = None) -> Any:
     """导出事件路由图谱 v0.5（事件路由边表）。
 
     Args:

@@ -28,9 +28,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config as _cfg  # noqa: E402  # 真实 config 模块（仅切 EVOLUTION_CONFIG 字典，不 mock 逻辑）
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
+import config as _cfg  # 真实 config 模块（仅切 EVOLUTION_CONFIG 字典，不 mock 逻辑）
+from nucleus.reasoning.PatchManager import PatchManager
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
 
 class TestCoreFileNoAutoApproveM80:

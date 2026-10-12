@@ -25,7 +25,6 @@
 """
 import argparse
 import ast
-import io
 import json
 import os
 import sys
@@ -42,7 +41,7 @@ KEEPALIVE_DEF = "_keepalive_loop"
 
 def _read_lines():
     p = os.path.join(PROJECT_ROOT, TARGET)
-    with io.open(p, "r", encoding="utf-8") as f:
+    with open(p, "r", encoding="utf-8") as f:
         return f.read().replace("\r\n", "\n").split("\n")
 
 
@@ -111,7 +110,7 @@ def audit():
         violations.append("未找到 wait_heartbeat_pulse 网关调用（脉冲纪律未落地）")
     if keepalive and not keepalive_has_gateway:
         violations.append(
-            "{} 的保活 sleep 未与 wait_heartbeat_pulse 分流（纪律未落地）".format(KEEPALIVE_DEF))
+            f"{KEEPALIVE_DEF} 的保活 sleep 未与 wait_heartbeat_pulse 分流（纪律未落地）")
 
     return {
         "target": TARGET,
@@ -145,7 +144,7 @@ def main():
         if r["violations"]:
             print("[pulse-sleep-audit] [FAIL] 违规 %d 项：" % len(r["violations"]))
             for v in r["violations"]:
-                print("   ! {}".format(v))
+                print(f"   ! {v}")
         else:
             print("[pulse-sleep-audit] [PASS] 主循环保活走心跳网关；业务延时全部已分类豁免。")
     return 0 if r["pass"] else 1

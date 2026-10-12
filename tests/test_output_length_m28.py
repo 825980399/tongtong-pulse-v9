@@ -14,8 +14,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
+import config
+from organs.body.PulseLung import PulseLung
 
 _LONG_Q = "请深入分析并论述：为什么说知识的沉淀与知识的反复验证之间存在内在张力？"
 _SHORT_Q = "你好"

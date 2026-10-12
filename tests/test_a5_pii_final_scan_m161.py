@@ -11,7 +11,6 @@
   5) 排除规则不误伤：RFC 2606 保留域、内部匿名域、URL 仓库 ID、commit SHA。
 """
 import importlib.util
-import io
 import os
 import sys
 
@@ -89,13 +88,13 @@ class TestA5S2Tiering:
 
     def test_11_in_package_criterion_exists(self):
         """S2 的进包判据须复用导出器 should_skip（与 S1 同口径）。"""
-        src = io.open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
+        src = open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
                       encoding="utf-8", newline=None).read()
         assert "should_skip" in src, "S2 未复用导出器进包判据"
 
     def test_12_tier_labels_present(self):
         """三档标签必须在输出中可区分。"""
-        src = io.open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
+        src = open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
                       encoding="utf-8", newline=None).read()
         for label in ("本次变更·进包", "本次变更·不进包", "历史存量"):
             assert label in src, f"缺分档标签：{label}"
@@ -107,7 +106,7 @@ class TestA5NoWrites:
 
         注意只查**写盘**模式；`print(json.dumps(...))` 是打印到 stdout，非写盘。
         """
-        src = io.open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
+        src = open(os.path.join(ROOT, "tools", "ci", "check_pii_final_scan.py"),
                       encoding="utf-8", newline=None).read()
         for bad in ("open(OUT", 'open(path, "w"', "open(base, \"w\"",
                     ".write_text(", "os.remove(", "shutil.rmtree"):

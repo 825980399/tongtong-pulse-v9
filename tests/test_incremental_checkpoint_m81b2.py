@@ -23,13 +23,13 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
+import config
+from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
 try:
-    import pyarrow.parquet as pq  # noqa: E402
+    import pyarrow.parquet as pq
     HAS_PYARROW = True
 except Exception:
     HAS_PYARROW = False
@@ -147,7 +147,7 @@ class TestIncrementalCheckpointM81b2(unittest.TestCase):
         for n in nodes:
             _lv = str(getattr(n, "evol_level", "L1")).upper()
             _c[_lv] = _c.get(_lv, 0) + 1
-        self.assertEqual(_c, expect, "分层计数应保真: {} vs {}".format(_c, expect))
+        self.assertEqual(_c, expect, f"分层计数应保真: {_c} vs {expect}")
 
     # ==================== C1 全量检查点清空 jsonl + 清空安全（先红） ====================
     def test_C1_full_checkpoint_clears_jsonl(self):

@@ -309,10 +309,10 @@ class _LoopClassVisitor(ast.NodeVisitor):
                 _problems.append({
                     "type": "path_mismatch",
                     "severity": "medium",
-                    "method": "{}/{}".format(_concrete_savers[0], _concrete_loaders[0]),
+                    "method": f"{_concrete_savers[0]}/{_concrete_loaders[0]}",
                     "line": int(getattr(_methods[_concrete_savers[0]],
                                         "lineno", 0) or 0),
-                    "detail": "save 用 {}，load 用 {} —— 路径可能不一致".format(sorted(_s_attrs), sorted(_l_attrs)),
+                    "detail": f"save 用 {sorted(_s_attrs)}，load 用 {sorted(_l_attrs)} —— 路径可能不一致",
                 })
 
         # ---- d 异常静默 ----
@@ -500,11 +500,11 @@ class FakeLoopDetector:
                     _src = f.read()
                 _tree = ast.parse(_src, filename=_rel)
             except SyntaxError as e:
-                _parse_errors.append({"file": _rel, "error": "SyntaxError: {}".format(e)})
+                _parse_errors.append({"file": _rel, "error": f"SyntaxError: {e}"})
                 continue
             except Exception as e:
                 _parse_errors.append({"file": _rel,
-                                      "error": "{}: {}".format(type(e).__name__, e)})
+                                      "error": f"{type(e).__name__}: {e}"})
                 continue
 
             _v = _LoopClassVisitor(_mod, _rel, self.project_root,
@@ -612,7 +612,7 @@ class FakeLoopDetector:
                                  _p["line"],
                                  "·私有" if _p.get("private") else "",
                                  _p["detail"]))
-            _lines.append("  建议: {}".format(_suggest(_c)))
+            _lines.append(f"  建议: {_suggest(_c)}")
             _lines.append("")
 
         if _r["parse_errors"]:

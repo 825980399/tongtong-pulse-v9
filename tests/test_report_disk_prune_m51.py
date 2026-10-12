@@ -9,7 +9,6 @@
 * 源码接线（config 开关、publish 调用）
 """
 import importlib.util
-import io
 import os
 import shutil
 import sys
@@ -23,8 +22,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.reporting.report_bus import MAX_REPORTS_ON_DISK, ReportBus  # noqa: E402
+import config
+from nucleus.reporting.report_bus import MAX_REPORTS_ON_DISK, ReportBus
 
 # 加载 tools/cleanup_reports.py（tools 非包）
 _spec = importlib.util.spec_from_file_location(
@@ -34,7 +33,7 @@ _spec.loader.exec_module(cr)
 
 
 def _src(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8").read()
 
 
 class _BusBase(unittest.TestCase):
@@ -114,7 +113,7 @@ class TestPruneDisk(_BusBase):
         _arch = os.path.join(self._base, "_archive_x", "runtime")
         os.makedirs(_arch, exist_ok=True)
         _sentinel = os.path.join(_arch, "keep_me.json")
-        io.open(_sentinel, "w", encoding="utf-8").write("{}")
+        open(_sentinel, "w", encoding="utf-8").write("{}")
         _b._prune_disk()
         self.assertTrue(os.path.exists(_sentinel), "归档目录内的文件不得被删")
         self.assertEqual(_b.get_disk_stats()["by_type"]["runtime"]["files"], 2)
@@ -129,7 +128,7 @@ class TestPruneDisk(_BusBase):
         for _i in range(3):
             _b.publish_simple("runtime", "ut", content={"i": _i})
         _keep = os.path.join(self._base, "runtime", "notes.txt")
-        io.open(_keep, "w", encoding="utf-8").write("x")
+        open(_keep, "w", encoding="utf-8").write("x")
         _b._prune_disk()
         self.assertTrue(os.path.exists(_keep))
 
@@ -159,7 +158,7 @@ class TestCleanupTool(unittest.TestCase):
             os.makedirs(_d, exist_ok=True)
             for _i in range(_n):
                 _p = os.path.join(_d, "%s_%02d.json" % (_t, _i))
-                io.open(_p, "w", encoding="utf-8").write("{}")
+                open(_p, "w", encoding="utf-8").write("{}")
                 os.utime(_p, (time.time() - 100 + _i, time.time() - 100 + _i))
 
     def tearDown(self):

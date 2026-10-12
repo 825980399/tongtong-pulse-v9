@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
@@ -57,7 +56,7 @@ def _atomic_json(path, data, indent=None, separators=None):
     重写主快照时显式传 separators=(",", ":") 复刻磁盘现有格式。
     """
     tmp = path + ".m102.tmp"
-    with io.open(tmp, "w", encoding="utf-8") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         if separators is None:
             json.dump(data, f, ensure_ascii=False, indent=indent)
         else:
@@ -82,8 +81,8 @@ def _atomic_parquet(path, rows, schema):
 
 # ---------------------------------------------------------------- 数据加载
 def load_all_nodes():
-    main = json.load(io.open(MAIN_SNAPSHOT, encoding="utf-8", errors="replace"))
-    l1 = json.load(io.open(L1_SNAPSHOT, encoding="utf-8", errors="replace"))
+    main = json.load(open(MAIN_SNAPSHOT, encoding="utf-8", errors="replace"))
+    l1 = json.load(open(L1_SNAPSHOT, encoding="utf-8", errors="replace"))
     return main, l1
 
 
@@ -143,7 +142,7 @@ def load_cold_ids():
                             ids.add(str(r["node_id"]))
     if os.path.isfile(COLD_INDEX):
         try:
-            d = json.load(io.open(COLD_INDEX, encoding="utf-8", errors="replace"))
+            d = json.load(open(COLD_INDEX, encoding="utf-8", errors="replace"))
             if isinstance(d, dict):
                 ids |= set(str(k) for k in d.keys())
         except Exception as e:
@@ -230,7 +229,7 @@ def do_scan(out_path=None):
         t = pq.read_table(fp)
         pq_stats.append((lv, f, t.num_rows) + parquet_row_edges(t.to_pylist(), ids))
 
-    meta = json.load(io.open(VECTORS_META, encoding="utf-8", errors="replace"))
+    meta = json.load(open(VECTORS_META, encoding="utf-8", errors="replace"))
     vids = [str(x) for x in (meta.get("node_ids") or [])]
     orphan = [x for x in vids if x not in ids]
     novec = [x for x in ids if x not in set(vids)]
@@ -311,9 +310,9 @@ def do_scan(out_path=None):
         d = os.path.dirname(out_path)
         if d:
             os.makedirs(d, exist_ok=True)
-        with io.open(out_path, "w", encoding="utf-8") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=2)
-        print("报告已写入: {}".format(out_path))
+        print(f"报告已写入: {out_path}")
     return rep
 
 
@@ -326,7 +325,7 @@ def _require_backup():
     if not subs:
         print("!! 未发现 data/knowledge 全量备份，拒绝执行 --apply")
         return False
-    print("备份校验通过: {}".format(subs[0]))
+    print(f"备份校验通过: {subs[0]}")
     return True
 
 
@@ -409,7 +408,7 @@ def apply_b():
     cold_ids = load_cold_ids()
     ids = collect_node_ids(main, l1, pq_ids, cold_ids)
 
-    meta = json.load(io.open(VECTORS_META, encoding="utf-8", errors="replace"))
+    meta = json.load(open(VECTORS_META, encoding="utf-8", errors="replace"))
     vids = [str(x) for x in (meta.get("node_ids") or [])]
     keep_idx = [i for i, x in enumerate(vids) if x in ids]
     removed = len(vids) - len(keep_idx)

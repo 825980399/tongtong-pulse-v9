@@ -40,10 +40,9 @@ import uuid
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+
 try:  # ★190刀1：接入 188刀4 内在模型产出判据（防御性兜底，避免导入环）
-    from nucleus.llm.model_self_updater import (
-        is_internal_model_output as _is_internal_model_output
-    )
+    from nucleus.llm.model_self_updater import is_internal_model_output as _is_internal_model_output
 except Exception as _imp_e:  # pragma: no cover
     silent_exc(_imp_e, where="nucleus.llm.call_recorder::import is_internal_model_output")
     _is_internal_model_output = None  # 兜底：判据不可用时退化为仅 origin 排除
@@ -160,7 +159,7 @@ def format_error(exc: Any, limit: int | None = None) -> str:
     if exc is None:
         return ""
     if isinstance(exc, BaseException):
-        _txt = "{}: {}".format(type(exc).__name__, exc)
+        _txt = f"{type(exc).__name__}: {exc}"
     else:
         _txt = str(exc)
     _lim = DEFAULT_ERROR_MAX_LEN if limit is None else int(limit)
@@ -408,7 +407,7 @@ class LLMCallRecorder:
 
     def _path_for(self, ts: float, prefix: str = "calls") -> str:
         return os.path.join(self.base_dir(),
-                            "{}_{}.jsonl".format(prefix, self._day_str(ts)))
+                            f"{prefix}_{self._day_str(ts)}.jsonl")
 
     def _prepare_text(self, text: Any) -> str:
         _s = text if isinstance(text, str) else ("" if text is None else str(text))
@@ -531,10 +530,9 @@ class LLMCallRecorder:
             _d = self.base_dir()
             if not os.path.isdir(_d):
                 os.makedirs(_d, exist_ok=True)
-            with self._lock:
-                with open(self._path_for(_ts, prefix="feedback"),
-                          "a", encoding="utf-8") as _f:
-                    _f.write(_line + "\n")
+            with self._lock, open(self._path_for(_ts, prefix="feedback"),
+                      "a", encoding="utf-8") as _f:
+                _f.write(_line + "\n")
             return True
         except Exception:
             self._failed += 1
@@ -555,10 +553,9 @@ class LLMCallRecorder:
             _line = json.dumps(_pair, ensure_ascii=False, default=str)
             _d = self.base_dir()
             os.makedirs(_d, exist_ok=True)
-            with self._lock:
-                with open(self._path_for(ts, prefix="training_pairs"),
-                          "a", encoding="utf-8") as _f:
-                    _f.write(_line + "\n")
+            with self._lock, open(self._path_for(ts, prefix="training_pairs"),
+                      "a", encoding="utf-8") as _f:
+                _f.write(_line + "\n")
             self._materialized += 1
         except Exception as e:
             silent_exc(e, where="nucleus.llm.call_recorder::_materialize_training_pair")
@@ -693,7 +690,7 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                     _err = format_error(_e)
                 except Exception as e:
                     silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L563")
-                    _err = "{}: {}".format(type(_e).__name__, _e)
+                    _err = f"{type(_e).__name__}: {_e}"
                 raise
             finally:
                 try:

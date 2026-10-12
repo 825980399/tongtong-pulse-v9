@@ -4,8 +4,7 @@
 验证四条硬条款：①强制exit code检查 ②NO_MESSAGE_TOOL闸先行 ③预算校验 ④timeout清理。
 """
 import types
-
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from nucleus.reasoning import subagent_runner as runner
 

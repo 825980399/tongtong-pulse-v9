@@ -39,7 +39,7 @@ if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
 
 # 复用既有流式扫描与「边读边写标记」工具（其 __main__ 守卫保证 import 安全）
-from mark_duplicate_nodes import (  # noqa: E402
+from mark_duplicate_nodes import (
     iter_node_spans,
     iter_snapshot_nodes,
     mark_and_rewrite,

@@ -5,7 +5,6 @@
 而对话侧真实注册名是「Web对话-人脸监听」/「对话模块-全局回复监听」→ 恒判 mismatch；
 且 `chat_to_mouth` 的**事件与方向写反**（用了 `mouth.reply`）。
 """
-import io
 import os
 import sys
 import unittest
@@ -15,12 +14,12 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import importlib  # noqa: E402
+import importlib
 
-import config  # noqa: E402
+import config
 
 _MC = importlib.import_module("organs.core.PulseMetricsCollector")
-_SRC = io.open(os.path.join(_ROOT, "organs/core/PulseMetricsCollector.py"),
+_SRC = open(os.path.join(_ROOT, "organs/core/PulseMetricsCollector.py"),
                encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
@@ -220,7 +219,7 @@ class TestWiring(unittest.TestCase):
 
     def test_44_ui_labels_unchanged(self):
         """UI 仍显示 畅通/错配/断裂（不改变用户可见语义）。"""
-        ui = io.open(os.path.join(_ROOT, "functions/health_ui.py"),
+        ui = open(os.path.join(_ROOT, "functions/health_ui.py"),
                      encoding="utf-8", errors="replace").read()
         for lab in ("畅通", "错配", "断裂"):
             self.assertIn(lab, ui)

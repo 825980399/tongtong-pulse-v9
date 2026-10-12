@@ -21,25 +21,24 @@ import os
 from typing import Any
 
 from nucleus._silent_except import silent_exc
-from nucleus.cognitive.organ_inventory import scan_organ_classes
 from nucleus.cognitive.organ_health_leaderboard import OrganHealthLeaderboard
+from nucleus.cognitive.organ_inventory import scan_organ_classes
 from tools.export_event_graph import derive_event_edges
 
-
 # ---- 模块级缓存（单进程内复用，避免重复全量 AST 扫描）----
-_ORGANS_CACHE: "list[dict] | None" = None
-_ADJ_CACHE: "tuple[dict, dict] | None" = None
-_HEALTH_CACHE: "dict[str, Any] | None" = None
+_ORGANS_CACHE: list[dict] | None = None
+_ADJ_CACHE: tuple[dict, dict] | None = None
+_HEALTH_CACHE: dict[str, Any] | None = None
 
 
-def _get_organs() -> "list[dict]":
+def _get_organs() -> list[dict]:
     global _ORGANS_CACHE
     if _ORGANS_CACHE is None:
         _ORGANS_CACHE = scan_organ_classes()
     return _ORGANS_CACHE
 
 
-def _build_adjacency(organs: "list[dict]") -> "tuple[dict[str, set[str]], dict[str, set[str]]]":
+def _build_adjacency(organs: list[dict]) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     """从事件图谱导出有向邻接（emitter/subscriber 均为 class_name）。
 
     Returns: (adj_out, adj_in)
@@ -62,14 +61,14 @@ def _build_adjacency(organs: "list[dict]") -> "tuple[dict[str, set[str]], dict[s
     return _out, _in
 
 
-def _get_adjacency() -> "tuple[dict[str, set[str]], dict[str, set[str]]]":
+def _get_adjacency() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     global _ADJ_CACHE
     if _ADJ_CACHE is None:
         _ADJ_CACHE = _build_adjacency(_get_organs())
     return _ADJ_CACHE
 
 
-def _static_health_map() -> "dict[str, Any]":
+def _static_health_map() -> dict[str, Any]:
     """健康度静态采集：无运行态 => 全部 score=None（未装配）。按 organ_name 索引。"""
     _h: dict[str, Any] = {}
     try:
@@ -81,14 +80,14 @@ def _static_health_map() -> "dict[str, Any]":
     return _h
 
 
-def _get_health() -> "dict[str, Any]":
+def _get_health() -> dict[str, Any]:
     global _HEALTH_CACHE
     if _HEALTH_CACHE is None:
         _HEALTH_CACHE = _static_health_map()
     return _HEALTH_CACHE
 
 
-def compute_lfi(runtime_activity: "dict[str, int] | None" = None) -> dict[str, Any]:
+def compute_lfi(runtime_activity: dict[str, int] | None = None) -> dict[str, Any]:
     """计算 57 节点五维原始值（纯静态 · 秒级）。
 
     Returns: {"version", "node_count", "nodes": [...], "meta": {...}}
@@ -165,7 +164,7 @@ def compute_lfi(runtime_activity: "dict[str, int] | None" = None) -> dict[str, A
     }
 
 
-def export_lfi(as_json: bool = False, runtime_activity: "dict[str, int] | None" = None) -> "Any":
+def export_lfi(as_json: bool = False, runtime_activity: dict[str, int] | None = None) -> Any:
     """导出 LFI 五维原始值。
 
     Args:

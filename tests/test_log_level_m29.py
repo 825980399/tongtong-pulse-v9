@@ -18,8 +18,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from nucleus.evolution.HealthScore import HealthScore  # noqa: E402
-from nucleus.evolution.LogAnalyzer import LogAnalyzer, extract_log_level  # noqa: E402
+from nucleus.evolution.HealthScore import HealthScore
+from nucleus.evolution.LogAnalyzer import LogAnalyzer, extract_log_level
 
 # 关键回归样本：WARNING 级别，但消息正文含 "JSONDecodeError"（含 ERROR 子串）
 _LINE_WARNING_WITH_ERROR_WORD = (

@@ -21,11 +21,11 @@ if ROOT not in sys.path:
 try:
     from unittest import mock
 except ImportError:  # pragma: no cover
-    import mock  # type: ignore
+    from unittest import mock  # type: ignore
 
-import config  # noqa: E402
-from nucleus._silent_except import silent_exc  # noqa: E402
-from organs.identity.PulseSelfAwareness import PulseSelfAwareness  # noqa: E402
+import config
+from nucleus._silent_except import silent_exc
+from organs.identity.PulseSelfAwareness import PulseSelfAwareness
 
 
 class _FakeNode:

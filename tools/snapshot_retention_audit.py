@@ -40,7 +40,7 @@ DEFAULT_KEEP = 3
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PROJECT_ROOT)
 # ★第169批 C2：统一归一入口（内委托 safe_relpath，跨盘降级绝对路径 + 分隔符归一）
-from nucleus.data.path_utils import normalize_relpath  # noqa: E402
+from nucleus.data.path_utils import normalize_relpath
 
 
 def _keep_from_config() -> int:
@@ -177,7 +177,7 @@ def main(argv=None) -> int:
             os.makedirs(_d, exist_ok=True)
         with open(_out, "w", encoding="utf-8") as _f:
             json.dump(_r, _f, ensure_ascii=False, indent=2)
-        print("  已写出: {}".format(_out))
+        print(f"  已写出: {_out}")
     return 0
 
 

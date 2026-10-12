@@ -5,7 +5,6 @@
   ✅ 至少 1 条补丁走完全链（提交→批准→落盘→复验）
   ✅ 落盘后磁盘探针验证 modified_code 在盘
 """
-import io
 import os
 import sys
 import tempfile
@@ -41,14 +40,14 @@ def _make_target(tmp):
     # 探针目标必须落在与项目同盘的目录（路径沙箱禁止跨盘符改写），
     # 故置于项目内 tmp/，而非系统 C: 盘临时目录。
     os.makedirs(os.path.join(PROJECT_ROOT, "tmp"), exist_ok=True)
-    return os.path.join(PROJECT_ROOT, "tmp", "t101a_target_{}.py".format(uuid.uuid4().hex))
+    return os.path.join(PROJECT_ROOT, "tmp", f"t101a_target_{uuid.uuid4().hex}.py")
 
 
 def test_low_risk_release_promotes_and_lands_on_disk():
     tmp = tempfile.mkdtemp(prefix="t101a_")
     target = _make_target(tmp)
     original = "def probe_func():\n    return 'ORIGINAL_MARKER'\n"
-    with io.open(target, "w", encoding="utf-8") as f:
+    with open(target, "w", encoding="utf-8") as f:
         f.write(original)
     modified = "def probe_func():\n    return 'T101A_LANDED_MARKER'\n"
 
@@ -83,7 +82,7 @@ def test_low_risk_release_promotes_and_lands_on_disk():
     # ③ 复验：磁盘探针确认 modified_code 已落盘、original 已替换
     #   （apply_all_pending 改写的是 _pending_file 加载出的副本并落盘到目标文件，
     #    故以磁盘探针为最终证据，而非输入 patch 变量的 in-memory 字段）
-    with io.open(target, "r", encoding="utf-8") as f:
+    with open(target, "r", encoding="utf-8") as f:
         content = f.read()
     assert "T101A_LANDED_MARKER" in content, "disk probe: modified_code NOT landed"
     assert "ORIGINAL_MARKER" not in content, "disk probe: original_code still present"
@@ -93,7 +92,7 @@ def test_high_risk_or_unverified_not_auto_released():
     """回归：高风险 / 未通过复现的补丁不应被低风险路径放行。"""
     tmp = tempfile.mkdtemp(prefix="t101a_neg_")
     target = _make_target(tmp)
-    with io.open(target, "w", encoding="utf-8") as f:
+    with open(target, "w", encoding="utf-8") as f:
         f.write("def f():\n    return 1\n")
     pm = _make_pm(tmp)
 

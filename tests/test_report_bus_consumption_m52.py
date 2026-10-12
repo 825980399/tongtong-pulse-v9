@@ -13,7 +13,6 @@
 * 源码接线（dispatch 在 `_write` 之前）
 """
 import ast
-import io
 import json
 import os
 import shutil
@@ -25,8 +24,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.reporting.report_bus import ReportBus  # noqa: E402
+import config
+from nucleus.reporting.report_bus import ReportBus
 
 _SWITCH = "ENABLE_REPORT_DISPATCH_BEFORE_WRITE"
 
@@ -65,10 +64,10 @@ class _BusBase(unittest.TestCase):
         return ReportBus(base_dir=self._base, persist=persist)
 
     def _disk(self, report_id, rtype="health"):
-        _p = os.path.join(self._base, rtype, "{}.json".format(report_id))
+        _p = os.path.join(self._base, rtype, f"{report_id}.json")
         if not os.path.isfile(_p):
             return None
-        return json.load(io.open(_p, encoding="utf-8"))
+        return json.load(open(_p, encoding="utf-8"))
 
 
 class TestConsumedByOnDisk(_BusBase):
@@ -184,7 +183,7 @@ class TestLoadFromDisk(_BusBase):
     def _write_json(self, rtype, name, rid, consumed):
         _d = os.path.join(self._base, rtype)
         os.makedirs(_d, exist_ok=True)
-        io.open(os.path.join(_d, name), "w", encoding="utf-8").write(
+        open(os.path.join(_d, name), "w", encoding="utf-8").write(
             json.dumps({"report_id": rid, "report_type": rtype,
                         "generator": "ut", "consumed_by": consumed,
                         "anomalies": [], "content": {},
@@ -234,7 +233,7 @@ class TestLoadFromDisk(_BusBase):
     def test_35_corrupt_json_skipped(self):
         _d = os.path.join(self._base, "health")
         os.makedirs(_d, exist_ok=True)
-        io.open(os.path.join(_d, "bad.json"), "w", encoding="utf-8").write("{")
+        open(os.path.join(_d, "bad.json"), "w", encoding="utf-8").write("{")
         self.assertEqual(self._bus(persist=False).load_from_disk(), 0)
 
 
@@ -260,7 +259,7 @@ class TestStats(_BusBase):
 class TestSourceWiring(_BusBase):
     def test_50_dispatch_before_write_in_source(self):
         """★源码接线：`_dispatch` 调用应出现在 `_write` 之前。"""
-        _s = io.open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
+        _s = open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
                      encoding="utf-8").read()
         _i = _s.find("def publish(")
         _seg = _s[_i:_i + 2600]
@@ -272,18 +271,18 @@ class TestSourceWiring(_BusBase):
                         "★dispatch 必须在 _write 之前（P2-366）")
 
     def test_51_has_switch_helper(self):
-        _s = io.open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
+        _s = open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
                      encoding="utf-8").read()
         self.assertIn("def _dispatch_before_write", _s)
         self.assertIn("ENABLE_REPORT_DISPATCH_BEFORE_WRITE", _s)
 
     def test_52_config_has_switch(self):
-        _c = io.open(os.path.join(_ROOT, "config.py"), encoding="utf-8").read()
+        _c = open(os.path.join(_ROOT, "config.py"), encoding="utf-8").read()
         self.assertIn(_SWITCH, _c)
 
     def test_53_publish_ast_structure(self):
         """AST 复核：publish 内 if dispatch 分支存在且 _write 调用存在。"""
-        _tree = ast.parse(io.open(
+        _tree = ast.parse(open(
             os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
             encoding="utf-8").read())
         _pub = None
@@ -300,7 +299,7 @@ class TestSourceWiring(_BusBase):
 
     def test_54_no_bare_except_pass(self):
         import re
-        _s = io.open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
+        _s = open(os.path.join(_ROOT, "nucleus/reporting/report_bus.py"),
                      encoding="utf-8").read()
         self.assertEqual(
             len(re.findall(r"except\s+[^\n:]+:\s*\n\s*pass\s*(\n|$)", _s)), 0)

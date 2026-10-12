@@ -26,7 +26,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import sys
@@ -38,12 +37,12 @@ from nucleus._silent_except import silent_exc
 
 __all__ = [
     "DEFAULT_REPORT_PATH",
-    "analyze_records",
-    "analyze_day",
-    "save_report",
     "analyze_and_report",
-    "format_summary_line",
+    "analyze_day",
+    "analyze_records",
     "analyzer_enabled",
+    "format_summary_line",
+    "save_report",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -241,8 +240,8 @@ def analyze_records(records: list, *, include_suspect: bool = True) -> dict:
     if _repeats:
         _findings.append("★最高频 prompt 出现 %d 次（`%s`）—— 属确定性任务，"
                          "可结果复用" % (_repeats[0][1], _sample.get(_repeats[0][0], "")[:60]))
-    _findings.append("场景分布：{}".format(dict(_origin.most_common(5))))
-    _findings.append("渠道分布：{}".format(dict(_channel.most_common(5))))
+    _findings.append(f"场景分布：{dict(_origin.most_common(5))}")
+    _findings.append(f"渠道分布：{dict(_channel.most_common(5))}")
     if _failed:
         _findings.append("失败 %d/%d（%.1f%%），其中 %d 条**未记录原因**"
                          % (len(_failed), _n, 100.0 * len(_failed) / _n, _no_reason))
@@ -299,7 +298,7 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         _d = os.path.dirname(_p)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
     except OSError as e:
@@ -321,5 +320,5 @@ def analyze_and_report(day: str | None = None, trace_dir: str | None = None,
             for _f in _rep.get("findings", []):
                 logger.info("[调用模式] %s", _f)
         except Exception as _e:
-            print("[调用模式] 日志输出失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+            print(f"[调用模式] 日志输出失败: {type(_e).__name__}: {_e}", file=sys.stderr)
     return _rep

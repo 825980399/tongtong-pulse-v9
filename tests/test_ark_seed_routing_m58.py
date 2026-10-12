@@ -17,10 +17,10 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.llm.channel_speed_profiler import ChannelSpeedProfiler  # noqa: E402
-from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
+import config
+from nucleus.llm.channel_speed_profiler import ChannelSpeedProfiler
+from nucleus.llm.openai_compatible_adapter import OpenAICompatibleAdapter
+from organs.body.PulseLung import PulseLung
 
 
 def _make_lung():

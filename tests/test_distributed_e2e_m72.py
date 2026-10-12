@@ -11,9 +11,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import pytest  # noqa: E402
+import pytest
 
-import config  # noqa: E402
+import config
 
 
 # ===================== 共享 mock 后端 =====================
@@ -70,11 +70,7 @@ class MockNeo4jStore:
     def get_relationships(self, nid, direction="both"):
         out = []
         for f, t, rt in self.rels:
-            if direction == "both" and (f == nid or t == nid):
-                out.append({"from": f, "to": t, "rel_type": rt})
-            elif direction == "out" and f == nid:
-                out.append({"from": f, "to": t, "rel_type": rt})
-            elif direction == "in" and t == nid:
+            if direction == "both" and (f == nid or t == nid) or direction == "out" and f == nid or direction == "in" and t == nid:
                 out.append({"from": f, "to": t, "rel_type": rt})
         return out
 

@@ -9,7 +9,6 @@
 5. 高并发下无死锁（能在超时内完成）
 6. 灰度开关默认开启（从 config 读取）
 """
-import io
 import os
 import threading
 import time
@@ -56,7 +55,7 @@ class TestPublishStatsLockM63(unittest.TestCase):
         self.assertIsInstance(obj._stats_lock, type(threading.Lock()), "细粒度锁必须是 threading.Lock 实例")
 
     def test_02_source_uses_fine_lock(self):
-        src = io.open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
+        src = open(os.path.join(ROOT, "nucleus/field/InfoField.py"),
                        encoding="utf-8", errors="replace").read()
         self.assertIn(
             'self._stats_lock if getattr(self, "_use_stats_fine_lock", True) else self._lock',

@@ -12,7 +12,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io
 import json
 import shutil
 import tempfile
@@ -40,13 +39,13 @@ def _write_pending(tmp, n=2, status="pending"):
               "status": status, "risk_level": "低", "trust_score": 40,
               "original_code": "x", "modified_code": "y"}
              for i in range(n)]
-    with io.open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False)
     return items
 
 
 def _read_pending(tmp):
-    with io.open(os.path.join(tmp, "pending_patches.json"), encoding="utf-8") as f:
+    with open(os.path.join(tmp, "pending_patches.json"), encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -200,7 +199,7 @@ class TestSwitchZeroRegression(_Base):
 class TestSourceWiring(unittest.TestCase):
 
     def _src(self):
-        return io.open(os.path.join(_ROOT, "nucleus/reasoning/PatchManager.py"),
+        return open(os.path.join(_ROOT, "nucleus/reasoning/PatchManager.py"),
                        encoding="utf-8", errors="replace").read()
 
     def test_40_helper_and_calls(self):

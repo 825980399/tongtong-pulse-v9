@@ -48,7 +48,6 @@ class TestIrDetectorTimeoutT147(unittest.TestCase):
         for name in _DETECTOR_NAMES:
             def _stub(ctx, _name=name):
                 self._detector_calls.append(_name)
-                return None
             setattr(iw, name, _stub)
         return iw
 

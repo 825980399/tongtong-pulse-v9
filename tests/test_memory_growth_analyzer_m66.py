@@ -14,9 +14,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.runtime_metrics import RuntimeMetrics  # noqa: E402
-from tools.memory_growth_analyzer import (  # noqa: E402
+import config
+from nucleus.runtime_metrics import RuntimeMetrics
+from tools.memory_growth_analyzer import (
     analyze_top_object_types,
     build_report,
     compare_snapshots,

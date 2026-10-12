@@ -10,18 +10,18 @@
 """
 import os
 import sys
-import unittest.mock as mock
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import (
     SafeEvolutionExecutor,
     _issue_file_out_of_scope,
     _issue_filter_reason,
 )
-from nucleus.self_inspector import _issue_file_in_backup_dir  # noqa: E402
+from nucleus.self_inspector import _issue_file_in_backup_dir
 
 # ---------- T1：_issue_filter_reason 备份目录段前缀判定 ----------
 
@@ -117,13 +117,11 @@ def test_repair_filters_backup_dir_issues(caplog):
         {"type": "print_instead_of_log", "file": ".bak_batch59/organs/body/x.py"},
         {"type": "bare_except", "file": ".bak_tmp/nucleus/reasoning/y.py"},
     ]
-    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"):
-        with mock.patch(
-            "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
-            return_value=_fake_hub,
-        ):
-            with mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
-                _res = _ex.repair_with_distillation(_issues)
+    with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"), mock.patch(
+        "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
+        return_value=_fake_hub,
+    ), mock.patch.object(_ex, "_call_llm_for_repair", return_value=""):
+        _res = _ex.repair_with_distillation(_issues)
     assert isinstance(_res, dict)
     assert "过滤2个" in caplog.text
     assert "备份目录2个" in caplog.text

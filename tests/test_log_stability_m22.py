@@ -24,13 +24,13 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-import nucleus.reasoning.ReasoningWorkerPool as RWP  # noqa: E402
+import config
+import nucleus.reasoning.ReasoningWorkerPool as RWP
 
 try:
-    import tmp.test_log_isolation as TL  # noqa: E402
-    from tmp.test_isolation import ISO_DIR as _ISO_DIR  # noqa: E402
-    from tmp.test_isolation import TestIsolation as _TestIsolation  # noqa: E402
+    import tmp.test_log_isolation as TL
+    from tmp.test_isolation import ISO_DIR as _ISO_DIR
+    from tmp.test_isolation import TestIsolation as _TestIsolation
 except ImportError:
     import pytest
     pytest.skip(
@@ -39,16 +39,16 @@ except ImportError:
         "此处降级为 skip 以免阻断全量 pytest 收集。",
         allow_module_level=True,
     )
-from nucleus.logger import noise_reduction_enabled  # noqa: E402
-from nucleus.parsing.JsonRepair import (  # noqa: E402
+from nucleus.logger import noise_reduction_enabled
+from nucleus.parsing.JsonRepair import (
     JsonFailureTracker,
     classify_json_error,
     parse_with_repair,
     repair_json_text,
 )
-from nucleus.reasoning.ReasoningWorkerPool import ReasoningWorkerPool  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
-from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer  # noqa: E402
+from nucleus.reasoning.ReasoningWorkerPool import ReasoningWorkerPool
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
 
 # （上述两导入已在上方 importorskip 守卫块内统一处理，避免重复导入）
 

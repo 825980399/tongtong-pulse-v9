@@ -10,7 +10,6 @@
   * 生产数据已回填的落盘校验
 """
 
-import io
 import json
 import os
 import sys
@@ -22,7 +21,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.evolution import patch_verification_split as _pvs  # noqa: E402
+from nucleus.evolution import patch_verification_split as _pvs
 
 
 def _patch(**kw):
@@ -237,7 +236,7 @@ class TestProductionBackfilled(unittest.TestCase):
     def setUpClass(cls):
         if not os.path.isfile(cls.TARGET):
             raise unittest.SkipTest("生产补丁历史不存在")
-        with io.open(cls.TARGET, encoding="utf-8") as _f:
+        with open(cls.TARGET, encoding="utf-8") as _f:
             _d = json.load(_f)
         cls.patches = _d["patches"] if isinstance(_d, dict) and "patches" in _d else _d
 
@@ -267,7 +266,7 @@ class TestProductionBackfilled(unittest.TestCase):
                 and not (p.get("reprobe_verdict") in
                          ("true_pass", "false_pass", "ineffective", "partial_fix")
                          and int(p.get("reprobe_baseline_hits") or 0) > 0)]
-        self.assertEqual(_bad, [], "基线为 0 且无复现却被判为已修复: {}".format(_bad[:5]))
+        self.assertEqual(_bad, [], f"基线为 0 且无复现却被判为已修复: {_bad[:5]}")
 
     def test_53_effectiveness_not_default_high(self):
         """★effectiveness 不得再有默认的 0.97 之类虚高值。"""

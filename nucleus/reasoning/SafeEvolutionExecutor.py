@@ -3336,7 +3336,7 @@ class SafeEvolutionExecutor:
             return _code          # 语法已合法，不动一个字符
         except SyntaxError as e:
             silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3320:_clean_llm_code", level="debug")
-            pass                  # 语法有问题，尝试归一化
+            # 语法有问题，尝试归一化
         except Exception:
             return _code          # 其他异常（如 ValueError 空源码）不处理
         # ★176批段3 A3 埋点：进入归一化计数（类级累计，供真实失败率量化）
@@ -4194,8 +4194,8 @@ class SafeEvolutionExecutor:
                 _exc = _m85_re.sub(r"\s+as\s+\w+\s*$", "", _exc).strip()
                 if not _exc:
                     _exc = "Exception"
-                return ("{}except {} as e:\n{}    self._log("
-                        "LogLevel.ERROR, f'异常: {{e}}')".format(_m.group(1), _exc, _m.group(1)))
+                return (f"{_m.group(1)}except {_exc} as e:\n{_m.group(1)}    self._log("
+                        "LogLevel.ERROR, f'异常: {e}')")
 
             _cand1 = _pat_pass.sub(_repl_pass, code)
             if _cand1 != code:
@@ -4308,7 +4308,7 @@ class SafeEvolutionExecutor:
                     "method": method,
                     "issue_type": _type,
                     "risk_level": "低",
-                    "description": "本地学习尝试({}): {}".format(_strategy, _type),
+                    "description": f"本地学习尝试({_strategy}): {_type}",
                     "original_code": snippet,
                     "modified_code": _modified,
                     "diff_summary": self._generate_diff_summary(snippet, _modified),
@@ -4347,7 +4347,7 @@ class SafeEvolutionExecutor:
             _module_logger.debug(
                 "[M85 学习尝试] 异常已忽略: %s: %s", type(_e).__name__, _e)
             _res["result"] = "error"
-            _verify_reason = "{}: {}".format(type(_e).__name__, _e)
+            _verify_reason = f"{type(_e).__name__}: {_e}"
         try:
             self._m85_record_learning_attempt(
                 _type, file_path, method, _strategy, _res, _verify_reason)
@@ -4599,12 +4599,10 @@ class SafeEvolutionExecutor:
                     r'([ \t]+)return None[ \t]*$')
 
                 def _brne_repl(_m):
-                    return ("{}except {} as {}:\n"
-                            "{}self._log(LogLevel.WARNING, "
-                            "f\"[异常已忽略] {{type({}).__name__}}: {{{}}}\")\n"
-                            "{}return None".format(_m.group(1), _m.group(2), _m.group(3),
-                                               _m.group(4), _m.group(3), _m.group(3),
-                                               _m.group(4)))
+                    return (f"{_m.group(1)}except {_m.group(2)} as {_m.group(3)}:\n"
+                            f"{_m.group(4)}self._log(LogLevel.WARNING, "
+                            f"f\"[异常已忽略] {{type({_m.group(3)}).__name__}}: {{{_m.group(3)}}}\")\n"
+                            f"{_m.group(4)}return None")
 
                 modified_code = _pat_brne.sub(_brne_repl, original_code)
                 _applied_strategy = ("bare_return_none_add_log"

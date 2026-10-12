@@ -11,7 +11,6 @@
 # export-scan-skip-file  （本文件 PII 均为构造的假夹具，非真实身份）
 
 import importlib.util
-import json
 import os
 import subprocess
 import sys
@@ -69,16 +68,15 @@ def _run_slice_full(sample_text):
     with open(drv_path, 'w', encoding='utf-8') as f:
         f.write(
             'import sys, json, importlib.util\n'
-            'sys.path.insert(0, {repo!r})\n'
-            'spec = importlib.util.spec_from_file_location("gate", {gate!r})\n'
+            f'sys.path.insert(0, {REPO!r})\n'
+            f'spec = importlib.util.spec_from_file_location("gate", {os.path.join(REPO, GATE_REL)!r})\n'
             'g = importlib.util.module_from_spec(spec); spec.loader.exec_module(g)\n'
-            'sample = open({sample!r}, encoding="utf-8").read()\n'
+            f'sample = open({sample_path!r}, encoding="utf-8").read()\n'
             'g.run_pytest = lambda args, timeout=None: sample\n'
             'base = json.load(open(g.BASELINE_PATH, encoding="utf-8"))\n'
             'base["known_fail"] = set(base["known_fail"])\n'
             'base["pollution_set"] = set(base["pollution_set"])\n'
-            'sys.exit(g.slice_full(base))\n'.format(
-                repo=REPO, gate=os.path.join(REPO, GATE_REL), sample=sample_path))
+            'sys.exit(g.slice_full(base))\n')
 
     r = subprocess.run([sys.executable, drv_path], capture_output=True, text=True,
                        encoding='utf-8', errors='replace', env=ENV, cwd=REPO,
@@ -114,13 +112,13 @@ class TestKnife1TruncationBlocks:
 
     def test_05_truncation_returns_fail(self):
         rc, out = _run_slice_full(TRUNC)
-        assert rc == 1, '截断场景必须 return 1，实际 {}\n{}'.format(rc, out[:400])
+        assert rc == 1, f'截断场景必须 return 1，实际 {rc}\n{out[:400]}'
         assert '截断检测' in out, '应打印截断检测提示'
         assert 'FAIL' in out
 
     def test_06_normal_run_not_flagged_as_truncation(self):
         rc, out = _run_slice_full(NORMAL)
-        assert '截断检测' not in out, '★正常运行被误判为截断：{}'.format(out[:300])
+        assert '截断检测' not in out, f'★正常运行被误判为截断：{out[:300]}'
         assert '汇总行完整' in out or 'PASS' in out
 
     def test_07_truncation_message_explains_false_green(self):
@@ -149,7 +147,7 @@ class TestKnife1IsolationUnpackFix:
         try:
             base = g.load_baseline(g.BASELINE_PATH)
             rc = g.slice_isolation(base, input_path=sample)
-            assert rc in (0, 1), '★不得因 ValueError 崩溃，实际 rc={}'.format(rc)
+            assert rc in (0, 1), f'★不得因 ValueError 崩溃，实际 rc={rc}'
         finally:
             os.unlink(sample)
 

@@ -14,7 +14,6 @@
 # export-scan-skip-file  （本文件 PII 均为构造的假夹具，非真实身份）
 
 import importlib.util
-import io
 import os
 import sys
 
@@ -105,7 +104,7 @@ class TestKnife8RelevanceGate:
 
     def test_02_threshold_reused_not_duplicated(self):
         """★单一真相源：语义阈值复用 160上A 刀2 的全局开关，不新增第二套口径。"""
-        src = io.open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
+        src = open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
                       encoding="utf-8", newline=None).read()
         assert "KNOWLEDGE_GLOBAL_HIT_THRESHOLD" in src, "应复用全局阈值开关"
         # 不得出现自造的第二个语义阈值常量
@@ -113,7 +112,7 @@ class TestKnife8RelevanceGate:
 
     def test_03_relevance_log_observable(self):
         """★任务书 8.4：本路径须有「相关度=」INFO 级可观测日志。"""
-        src = io.open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
+        src = open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
                       encoding="utf-8", newline=None).read()
         assert "相关度=" in src, "刀8 须补 相关度= 日志"
         assert "QICA路径判据" in src
@@ -142,7 +141,7 @@ class TestKnife8RelevanceGate:
         old = config.KNOWLEDGE_QICA_PATH_RELEVANCE_GATE
         try:
             config.KNOWLEDGE_QICA_PATH_RELEVANCE_GATE = False
-            src = io.open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
+            src = open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
                           encoding="utf-8", newline=None).read()
             assert "if not _gate_on:" in src and "return True" in src, "须保留闸门关闭分支"
         finally:
@@ -150,7 +149,7 @@ class TestKnife8RelevanceGate:
 
     def test_07_threshold_negative_disables_gate(self):
         """★复用 160上A 刀2 语义：全局阈值 <0 = 关闭语义判据 ⇒ 本路也不设限。"""
-        src = io.open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
+        src = open(os.path.join(REPO, "organs", "brain", "PulseInnerWorld.py"),
                       encoding="utf-8", newline=None).read()
         assert "if _semantic_threshold < 0:" in src, "须沿用 160上A 刀2 的关闭语义"
 
@@ -165,7 +164,7 @@ class TestKnife9RelationFallback:
 
     def test_02_relation_words_is_single_source(self):
         """★单一真相源：有效性判据复用本模块 RELATION_WORDS，不另立词表。"""
-        src = io.open(os.path.join(REPO, "nucleus", "mnemosyne", "IdentityKnowledgeManager.py"),
+        src = open(os.path.join(REPO, "nucleus", "mnemosyne", "IdentityKnowledgeManager.py"),
                       encoding="utf-8", newline=None).read()
         assert "_rel_text not in RELATION_WORDS" in src, "应复用 RELATION_WORDS 判有效"
 

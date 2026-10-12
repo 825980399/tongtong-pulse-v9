@@ -37,7 +37,6 @@ L1 仅观测
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import math
 import os
@@ -50,18 +49,18 @@ from typing import Any
 from nucleus._silent_except import silent_exc
 
 __all__ = [
-    "DEFAULT_TRACE_DIR",
     "DEFAULT_REPORT_PATH",
-    "WEIGHTS",
+    "DEFAULT_TRACE_DIR",
     "SCORE_DIMENSIONS",
+    "WEIGHTS",
     "classify_record",
-    "load_records",
-    "evaluate_records",
-    "evaluate_day",
-    "save_report",
     "evaluate_and_report",
-    "format_summary_line",
+    "evaluate_day",
+    "evaluate_records",
     "evaluator_enabled",
+    "format_summary_line",
+    "load_records",
+    "save_report",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -82,7 +81,7 @@ SCORE_DIMENSIONS = ("completeness", "uniqueness", "sanitization", "diversity", "
 _SECRET_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),
     re.compile(r"Bearer\s+[A-Za-z0-9_\-\.]{12,}"),
-    re.compile(r"api[_-]?key[\"'\s:=]{1,4}[A-Za-z0-9_\-]{12,}", re.I),
+    re.compile(r"api[_-]?key[\"'\s:=]{1,4}[A-Za-z0-9_\-]{12,}", re.IGNORECASE),
     re.compile(r"[A-Za-z0-9]{32,}"),          # 长随机串（可能是密钥/哈希）
 )
 
@@ -211,7 +210,7 @@ def load_records(path: str, limit: int = 0) -> list:
     if not path or not os.path.isfile(path):
         return _out
     try:
-        with io.open(path, encoding="utf-8", errors="replace") as _f:
+        with open(path, encoding="utf-8", errors="replace") as _f:
             for _i, _line in enumerate(_f):
                 if limit and _i >= limit:
                     break
@@ -263,7 +262,7 @@ def _score_completeness(recs: list) -> tuple[float, dict, list]:
     _findings = []
     for _k, _v in _rates.items():
         if _v < 0.9:
-            _findings.append("字段 `{}` 非空率仅 {:.1f}%".format(_k, _v * 100.0))
+            _findings.append(f"字段 `{_k}` 非空率仅 {_v * 100.0:.1f}%")
     _pv = sum(1 for r in recs if str(r.get("prompt_version") or "").strip()) / _n
     if _pv < 0.5:
         _findings.append("`prompt_version` 非空率仅 %.1f%%（元数据缺失，"
@@ -386,7 +385,7 @@ def evaluate_records(records: list, *, drop_suspect: bool = True) -> dict:
         _s, _d, _f = _fn(_scope)
         _scores[_name] = _s
         _details[_name] = _d
-        _findings.extend("[{}] {}".format(_name, x) for x in _f)
+        _findings.extend(f"[{_name}] {x}" for x in _f)
 
     _total = round(sum(_scores.get(k, 0.0) for k in SCORE_DIMENSIONS), 2)
     _purity = {
@@ -455,7 +454,7 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         _d = os.path.dirname(_p)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
     except OSError as e:
@@ -477,5 +476,5 @@ def evaluate_and_report(day: str | None = None, trace_dir: str | None = None,
             for _f in _rep.get("findings", []):
                 logger.info("[数据质量] %s", _f)
         except Exception as _e:
-            print("[数据质量] 日志输出失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+            print(f"[数据质量] 日志输出失败: {type(_e).__name__}: {_e}", file=sys.stderr)
     return _rep

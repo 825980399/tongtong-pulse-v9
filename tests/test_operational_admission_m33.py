@@ -20,7 +20,7 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-import config  # noqa: E402
+import config
 
 _PIW = importlib.import_module("organs.brain.PulseInnerWorld")
 PulseInnerWorld = _PIW.PulseInnerWorld
@@ -66,7 +66,6 @@ def _mk(retrieval_hit=False):
 
     def _fake_branch(**kw):
         iw._model_calls.append(kw.get("branch_name", "?"))
-        return None            # 模拟「模型兜底同样失败」的最坏情形
     iw._generate_branch_with_model = _fake_branch
     return iw
 

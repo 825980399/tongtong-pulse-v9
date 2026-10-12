@@ -13,7 +13,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
+import config
 
 
 class TestSemanticCacheL2ShadowConfig(unittest.TestCase):

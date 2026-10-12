@@ -71,8 +71,7 @@ def test_convert_filters_internal_in_batch():
         src = os.path.join(d, "src.jsonl")
         out = os.path.join(d, "out.jsonl")
         with open(src, "w", encoding="utf-8") as f:
-            for r in lines:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in lines)
         n = convert_calls_to_training_pairs(src, out)
         assert n == 2, f"应仅物化 2 条正常样本，实际 {n}"
         with open(out, "r", encoding="utf-8") as f:

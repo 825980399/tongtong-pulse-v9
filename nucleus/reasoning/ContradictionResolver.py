@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -43,7 +43,7 @@ class ContradictionResolver:
     # 属性归一化
     # ------------------------------------------------------------------
     @staticmethod
-    def _timestamp_of(node: Any) -> Optional[float]:
+    def _timestamp_of(node: Any) -> float | None:
         """取节点时间戳（created_at / updated_at / timestamp / detected_at）。
         支持 datetime 或数值；无法解析返回 None。"""
         if node is None:
@@ -250,7 +250,7 @@ _AUTO_RESOLVE_TYPES = frozenset({"numeric"})
 _AUTO_RESOLVE_KEYWORDS = frozenset({"配置", "文档", "代码", "config", "doc", "注释", "参数"})
 
 
-def _to_ts(value) -> Optional[float]:
+def _to_ts(value) -> float | None:
     """将跟踪项中的时间字段（float / datetime / 字符串）归一为时间戳；无法解析返回 None。"""
     if value is None:
         return None

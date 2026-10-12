@@ -11,7 +11,6 @@
 不真的触发一次生产落盘。
 """
 import glob
-import io
 import json
 import os
 import shutil
@@ -24,11 +23,11 @@ import pytest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.data import write_guard as wg  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
-from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot  # noqa: E402
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
+import config
+from nucleus.data import write_guard as wg
+from nucleus.mnemosyne.experience_pool import ExperiencePool
+from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
+from nucleus.reasoning.PatchManager import PatchManager
 
 _PROD_DATA = os.path.join(_ROOT, "data")
 _PROD_EXP = os.path.join(_PROD_DATA, "experience", "experience_pool.json")
@@ -136,7 +135,7 @@ class TestExperiencePoolGuard(_GuardBase):
         fp = os.path.join(self._tmp, "experience_pool.json")
         self._light(fp)._save()
         self.assertTrue(os.path.isfile(fp))
-        self.assertIn("experiences", json.load(io.open(fp, encoding="utf-8")))
+        self.assertIn("experiences", json.load(open(fp, encoding="utf-8")))
 
     def test_11_test_env_production_rejected(self):
         """★判据修正（第45批）：不能断言"生产文件 mtime 不变"。
@@ -150,7 +149,7 @@ class TestExperiencePoolGuard(_GuardBase):
         import json as _json
         def _count():
             try:
-                with io.open(_PROD_EXP, encoding="utf-8") as _f:
+                with open(_PROD_EXP, encoding="utf-8") as _f:
                     _d = _json.load(_f)
                 return len(_d.get("experiences", [])) if isinstance(_d, dict) else -1
             except Exception:
@@ -165,7 +164,7 @@ class TestExperiencePoolGuard(_GuardBase):
         _after = _count()
         if _before is not None and _before > 0:
             self.assertNotEqual(_after, 0,
-                                "★守卫失效：生产记录被空池覆盖（{} → {}）".format(_before, _after))
+                                f"★守卫失效：生产记录被空池覆盖（{_before} → {_after}）")
 
     def test_12_explicit_injection_allows(self):
         self.assertTrue(wg.guard_write(_PROD_EXP, explicit=True,
@@ -235,7 +234,7 @@ class TestPatchManagerGuard(_GuardBase):
         p = self._pm(self._tmp)
         self.assertTrue(p._save_restart_counter(5))
         _fp = os.path.join(self._tmp, "restart_count.txt")
-        self.assertEqual(io.open(_fp, encoding="utf-8").read().strip(), "5")
+        self.assertEqual(open(_fp, encoding="utf-8").read().strip(), "5")
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +295,7 @@ class TestPollutionArchive(unittest.TestCase):
         self.assertTrue(os.path.isdir(_base), "归档目录不存在")
         _mans = glob.glob(os.path.join(_base, "*", "MANIFEST.json"))
         self.assertTrue(_mans, "缺少 MANIFEST.json")
-        self._man = json.load(io.open(_mans[0], encoding="utf-8"))
+        self._man = json.load(open(_mans[0], encoding="utf-8"))
 
     def test_41_manifest_records_moved_and_deferred(self):
         self.test_40_archive_exists_with_manifest()

@@ -106,9 +106,7 @@ def count_test_cases(path: str) -> int:
         return 0
     n = 0
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name.startswith("test"):
-            n += 1
-        elif isinstance(node, ast.AsyncFunctionDef) and node.name.startswith("test"):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test") or isinstance(node, ast.AsyncFunctionDef) and node.name.startswith("test"):
             n += 1
         elif isinstance(node, ast.ClassDef):
             for sub in node.body:

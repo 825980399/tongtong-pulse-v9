@@ -20,7 +20,6 @@
   * T-95e **成立**：6 处源码 + 3 个测试文件，两个属性分属不同类、重命名无冲突（E 组）。
 """
 import ast
-import io
 import json
 import os
 import shutil
@@ -33,13 +32,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus import LLMDependencyMetrics as M  # noqa: E402
-from nucleus.evolution.patch_verification_split import (  # noqa: E402
+import config
+from nucleus import LLMDependencyMetrics as M
+from nucleus.evolution.patch_verification_split import (
     F_SPLIT_VERSION,
     real_fix_rate,
 )
-from nucleus.llm import call_recorder as cr  # noqa: E402
+from nucleus.llm import call_recorder as cr
 
 _BAK = os.path.join(ROOT, ".bak_batch95")
 _CFG = os.path.join(ROOT, "config.py")
@@ -58,7 +57,7 @@ _REACHABLE_REASONS = ("高危·安全拦截", "高危·安全拦截(unsafe_eval)
 
 
 def _read(path):
-    with io.open(path, encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -203,7 +202,7 @@ class TestM95DeadConfig(unittest.TestCase):
             "no_fix_cooldown_seconds"])
         for _r in _REACHABLE_REASONS:
             self.assertEqual(_old[_r.split("(")[0]], _obj._cooldown_ttl_for(_r),
-                             "★可达 reason {} 的 TTL 必须与改前一致".format(_r))
+                             f"★可达 reason {_r} 的 TTL 必须与改前一致")
         self.assertEqual(float(_old["_default"]),
                          _obj._cooldown_ttl_for("完全未知的原因xyz"))
 
@@ -533,7 +532,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
         for _f in ("nucleus/evolution/LLMEvolutionEngine.py",
                    "nucleus/evolution/SelfReflectionEngine.py"):
             self.assertIn("self." + self._NEW + " =", _read(os.path.join(
-                ROOT, _f.replace("/", os.sep))), "★{} 未同步".format(_f))
+                ROOT, _f.replace("/", os.sep))), f"★{_f} 未同步")
         self.assertIn("self." + self._NEW + " = _m94_usage", _read(_LUNG))
 
     def test_E3_recorder_reads_new_with_legacy_fallback(self):
@@ -554,7 +553,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
                      "tests/test_lung_trace_m40.py"):
             _t = _read(os.path.join(ROOT, _rel.replace("/", os.sep)))
             for _w in self._LEGACY:
-                self.assertNotIn(_w, _t, "★{} 残留旧名 {}".format(_rel, _w))
+                self.assertNotIn(_w, _t, f"★{_rel} 残留旧名 {_w}")
 
     def test_E6_adapter_doc_updated(self):
         _p = os.path.join(ROOT, "nucleus", "llm", "openai_compatible_adapter.py")
@@ -591,7 +590,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
             _e = _Eng()
             _e._call_llm("s", "p")
             _fp = cr._recorder._path_for(time.time(), prefix="calls")
-            _recs = [json.loads(x) for x in io.open(_fp, encoding="utf-8")
+            _recs = [json.loads(x) for x in open(_fp, encoding="utf-8")
                      if x.strip()]
             self.assertEqual(21, _recs[-1]["tokens"])
             self.assertEqual(21, _recs[-1]["usage"]["total_tokens"])
@@ -624,7 +623,7 @@ class TestM95UsageAttrRename(unittest.TestCase):
             _e = _Eng()
             _e._call_llm("s", "p")
             _fp = cr._recorder._path_for(time.time(), prefix="calls")
-            _recs = [json.loads(x) for x in io.open(_fp, encoding="utf-8")
+            _recs = [json.loads(x) for x in open(_fp, encoding="utf-8")
                      if x.strip()]
             self.assertEqual(33, _recs[-1]["tokens"], "★旧名回落读取必须生效")
         finally:

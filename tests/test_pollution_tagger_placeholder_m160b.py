@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.knowledge.PollutionTagger import (  # noqa: E402
+from nucleus.knowledge.PollutionTagger import (
     _FLAG_SEVERITY,
     FLAG_CLEAN,
     FLAG_PLACEHOLDER_ALIAS,
@@ -84,7 +84,7 @@ class TestP0PlaceholderPredicate(unittest.TestCase):
         for _v in ("[归纳升华]融合产物内容", "[数据流·某器官]", "关联知识：。空壳"):
             _flag, _ = self._t.classify(
                 {"node_id": "a2", "value": _v, "keywords": [], "space_path": "/x"})
-            self.assertEqual(_flag, FLAG_PLACEHOLDER_ALIAS, "应命中 P0: {!r}".format(_v))
+            self.assertEqual(_flag, FLAG_PLACEHOLDER_ALIAS, f"应命中 P0: {_v!r}")
 
     def test_normal_node_stays_clean(self):
         """防误伤：正常知识不得被 P0 误判。"""

@@ -129,7 +129,7 @@ class PulseCortex(BasePulseOrgan):
         self._latest_correlation_id: str = ""
         self._active_correlation_id: str = ""
         # ★T-对话-1（157批）：缓存最近一次时间广播，供答复"今天几号"类提问取用时戳
-        self._latest_time: "dict | None" = None
+        self._latest_time: dict | None = None
         self._cancelled_correlations: deque[str] = deque(maxlen=200)
         self._cancelled_correlation_set: set[str] = set()
         self._dialog_queue: deque[str] = deque(maxlen=1000)  # ★补丁patch_1789115430_7fd6：防内存无限增长
@@ -342,10 +342,9 @@ class PulseCortex(BasePulseOrgan):
         except Exception:
             _loc = "位置解析失败"
 
-        _msg = "异常已忽略（需关注）: {}: {} | 位置={}".format(
-            type(e).__name__, e, _loc)
+        _msg = f"异常已忽略（需关注）: {type(e).__name__}: {e} | 位置={_loc}"
         if ctx:
-            _msg += " | 上下文={}".format(ctx)
+            _msg += f" | 上下文={ctx}"
         self._log(LogLevel.WARNING, _msg)
 
     # ==================== ★主线第40批 T4（P2-261 / P2-216）====================

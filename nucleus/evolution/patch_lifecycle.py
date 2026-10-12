@@ -18,7 +18,6 @@
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import time
@@ -29,21 +28,21 @@ from nucleus.evolution.task_ledger import _atomic_save
 
 __all__ = [
     "PATCH_LIFECYCLE_VERSION",
-    "VALID_PATCH_STAGES",
-    "STAGE_PROPOSED",
-    "STAGE_VALIDATED",
     "STAGE_ACTIVATED",
-    "STAGE_OBSERVING",
     "STAGE_COMMITTED",
-    "STAGE_ROLLED_BACK",
+    "STAGE_OBSERVING",
+    "STAGE_PROPOSED",
     "STAGE_REJECTED",
+    "STAGE_ROLLED_BACK",
+    "STAGE_VALIDATED",
+    "VALID_PATCH_STAGES",
     "lifecycle_path",
     "load_lifecycle",
+    "publish_handoff",
+    "reconcile_patches",
     "record_activation",
     "record_rollback",
     "touch_patch",
-    "reconcile_patches",
-    "publish_handoff",
 ]
 
 #: 账本结构版本（结构变更时递增）。
@@ -96,7 +95,7 @@ def load_lifecycle(path: str | None = None) -> dict[str, Any]:
     if not os.path.isfile(_p):
         return _empty_lifecycle()
     try:
-        with io.open(_p, encoding="utf-8") as _f:
+        with open(_p, encoding="utf-8") as _f:
             _d = json.load(_f)
     except (OSError, ValueError) as _e:
         silent_exc(_e, where="nucleus.evolution.patch_lifecycle::load_lifecycle",
@@ -163,7 +162,7 @@ def _read_effect_verified(patch_id: str) -> Any:
     try:
         if not os.path.isfile(_p):
             return None
-        _hist = json.load(io.open(_p, encoding="utf-8"))
+        _hist = json.load(open(_p, encoding="utf-8"))
         _applied = _hist.get("applied") or []
         for _x in _applied:
             if isinstance(_x, dict) and str(_x.get("id")) == str(patch_id):

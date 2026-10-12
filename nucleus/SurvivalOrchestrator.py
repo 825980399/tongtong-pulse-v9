@@ -21,11 +21,11 @@ from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
+from nucleus.llm.semantic_cache import get_semantic_cache_l2
 from nucleus.logging.SilentLogMixin import (  # ★P0-1: _log签名兼容兜底
     SilentLogMixin,
     coerce_log_level,
 )
-from nucleus.llm.semantic_cache import get_semantic_cache_l2
 
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
@@ -200,7 +200,7 @@ class SurvivalOrchestrator(SilentLogMixin):
         #   零副作用：仅读取遥测快照并经 INFO 日志输出，不改动任何命中判定/存储/返回。
         try:
             get_semantic_cache_l2().telemetry()
-        except Exception as _tele_e:  # noqa: BLE001
+        except Exception as _tele_e:
             silent_exc(_tele_e, where="nucleus.SurvivalOrchestrator::on_heartbeat.telemetry")
 
         self.tick()

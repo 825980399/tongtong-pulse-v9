@@ -8,7 +8,6 @@
     T5（选项 A 第 1 项）：L3 分层队列上限边界
 """
 import importlib
-import io
 import os
 import sys
 import unittest
@@ -18,13 +17,13 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-import config  # noqa: E402
+import config
 
 _PIW = importlib.import_module("organs.brain.PulseInnerWorld")
 PulseInnerWorld = _PIW.PulseInnerWorld
 _IF = importlib.import_module("nucleus.field.InfoField")
 InfoField = _IF.InfoField
-_SRC = io.open(os.path.join(_PROJ, "organs", "brain", "PulseInnerWorld.py"),
+_SRC = open(os.path.join(_PROJ, "organs", "brain", "PulseInnerWorld.py"),
                encoding="utf-8").read()
 
 _OP = "先打开设置，再点击蓝牙，然后配对设备。"
@@ -67,7 +66,6 @@ def _mk(hit=False):
 
     def _fake_branch(**kw):
         iw._model_calls.append(kw.get("branch_name", "?"))
-        return None            # 模拟「模型兜底同样失败」的最坏情形
     iw._generate_branch_with_model = _fake_branch
     return iw
 

@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import tools.export_public as ep  # noqa: E402
+import tools.export_public as ep
 
 
 def test_comment_role_and_batch_normalized():
@@ -62,18 +62,18 @@ def test_isolated_road_name_in_comment_retained():
 
 def test_dotfile_gitignore_normalized():
     # T153-3② 修复点：os.path.splitext('.gitignore') 返空 ext，原写法永远匹配不到
-    raw = "# ===== 15. data目录整体忽略（2026-09-15 星轨完善）=====\n".encode("utf-8")
+    raw = "# ===== 15. data目录整体忽略（2026-09-15 星轨完善）=====\n".encode()
     out = ep.export_normalize_text(".gitignore", raw)
     assert out != raw, ".gitignore 必须被归一"
-    assert "星轨".encode("utf-8") not in out and "内部协作者".encode("utf-8") in out
+    assert "星轨".encode() not in out and "内部协作者".encode() in out
     # .gitattributes 同样按 basename 收口
-    raw2 = "# 由星轨维护的属性和路径\n".encode("utf-8")
+    raw2 = "# 由星轨维护的属性和路径\n".encode()
     out2 = ep.export_normalize_text(".gitattributes", raw2)
-    assert out2 != raw2 and "星轨".encode("utf-8") not in out2
+    assert out2 != raw2 and "星轨".encode() not in out2
 
 
 def test_nonpy_document_line_normalized():
-    raw = "由星轨在第153批裁决，路灯是第一个数字生命保持不变。".encode("utf-8")
+    raw = "由星轨在第153批裁决，路灯是第一个数字生命保持不变。".encode()
     out = ep.export_normalize_text("docs/x.md", raw).decode("utf-8")
     assert "内部协作者" in out and "第153批" not in out
     assert "路灯是第一个数字生命" in out

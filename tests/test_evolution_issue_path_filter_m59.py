@@ -10,13 +10,13 @@
 import logging
 import os
 import sys
-import unittest.mock as mock
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.SafeEvolutionExecutor import (  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import (
     SafeEvolutionExecutor,
     _issue_file_out_of_scope,
 )
@@ -90,12 +90,11 @@ def test_repair_with_distillation_filters_stdlib(caplog):
             {"type": "bare_except", "file": "/usr/lib/python3.9/socket.py"},
         ]
         _fake_hub = mock.MagicMock()
-        with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"):
-            with mock.patch(
-                "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
-                return_value=_fake_hub,
-            ):
-                _res = _ex.repair_with_distillation(_issues)
+        with caplog.at_level(logging.DEBUG, logger="SafeEvolutionExecutor"), mock.patch(
+            "nucleus.mnemosyne.verification_learning_hub.get_verification_learning_hub",
+            return_value=_fake_hub,
+        ):
+            _res = _ex.repair_with_distillation(_issues)
         assert isinstance(_res, dict)
         assert "过滤2个" in caplog.text
     finally:

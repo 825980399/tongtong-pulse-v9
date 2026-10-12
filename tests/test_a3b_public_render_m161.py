@@ -11,7 +11,6 @@
   5) 挂载点在写包/写盘**之前**（确保 A3a 包体复扫能扫到渲染后内容）。
 """
 import importlib.util
-import io
 import os
 import sys
 
@@ -121,7 +120,7 @@ class TestA3bSwitch:
 class TestA3bWiring:
     def test_13_hooked_before_write(self):
         """挂载点必须在写包/写盘之前（包体复扫才扫得到渲染后内容）。"""
-        src = io.open(os.path.join(ROOT, "tools", "export_public.py"),
+        src = open(os.path.join(ROOT, "tools", "export_public.py"),
                       encoding="utf-8", newline=None).read()
         assert "public_render_bytes" in src
         # zip 路径：渲染调用出现在 writestr 之前

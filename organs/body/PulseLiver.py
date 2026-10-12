@@ -1271,7 +1271,7 @@ class PulseLiver(BasePulseOrgan):
         对组内 L1 取值做 2~4 字中文 n-gram 词频统计，并合并组已有 top 关键词（加权），
         返回前 top_n 个关键词，供句子重要性评分使用。
         """
-        _stop = set("的了在是和与及或我对你他她它这那有个也都很再上中下内外前后续把被这些那些".split())
+        _stop = set(["的了在是和与及或我对你他她它这那有个也都很再上中下内外前后续把被这些那些"])
         _counter = {}
         for v in all_values[:15]:
             if not v:
@@ -3242,8 +3242,7 @@ class PulseLiver(BasePulseOrgan):
                             _l3 = self._kal.get_node(_l3_id) if self._kal else None
                             if _l3 is None or getattr(_l3, "evol_level", "") != PulseNode.EVOL_L3:
                                 continue  # 97%死引用条款：池中已不存在的 L3 不计数
-                            _pair_key = "{}|{}".format(min(node_a.node_id, node_b.node_id),
-                                                   max(node_a.node_id, node_b.node_id))
+                            _pair_key = f"{min(node_a.node_id, node_b.node_id)}|{max(node_a.node_id, node_b.node_id)}"
                             _seen = getattr(self, "_conflict_pair_seen", None)
                             if _seen is None:
                                 _seen = set()

@@ -13,7 +13,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import nucleus.social.shadow_profile_observer as obs  # noqa: E402
+import nucleus.social.shadow_profile_observer as obs
 
 
 class TestBlade3ShadowProfile(unittest.TestCase):

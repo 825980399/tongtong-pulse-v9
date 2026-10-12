@@ -16,8 +16,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.field.RequestDeduplicator import (  # noqa: E402
+import config
+from nucleus.field.RequestDeduplicator import (
     CLAIMED,
     DUPLICATE,
     WAITING,
@@ -25,7 +25,7 @@ from nucleus.field.RequestDeduplicator import (  # noqa: E402
     get_request_deduplicator,
     reset_request_deduplicator,
 )
-from organs.body.PulseLung import PulseLung  # noqa: E402
+from organs.body.PulseLung import PulseLung
 
 
 class _Switch:
@@ -281,7 +281,7 @@ class TestLungIntegration(unittest.TestCase):
         _l._m24_ensure_state()
         _l._emitted = []
         _l._emit = lambda ev, payload, **kw: _l._emitted.append((ev, payload)) or ""
-        _l._get_local_models = lambda: []
+        _l._get_local_models = list
         _l._call_remote_api = remote_impl
         _l._current_call_is_background = False
         _l._call_success_count = 0

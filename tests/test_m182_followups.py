@@ -7,7 +7,6 @@
 刀5 config 阶段二三孤儿键删除
 """
 import ast
-import io
 import os
 import sys
 import unittest
@@ -15,7 +14,7 @@ import unittest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
+import config
 
 _IW_PATH = os.path.join(_ROOT, "organs", "brain", "PulseInnerWorld.py")
 _SC_PATH = os.path.join(_ROOT, "organs", "brain", "PulseSubconscious.py")
@@ -23,7 +22,7 @@ _QI_PATH = os.path.join(_ROOT, "nucleus", "qica", "QICA.py")
 
 
 def _src(path):
-    return io.open(path, encoding="utf-8").read()
+    return open(path, encoding="utf-8").read()
 
 
 def _module_of(rel):
@@ -140,7 +139,7 @@ class TestD1ReflectionBlindSignal(unittest.TestCase):
     def test_08_switch_is_shared_with_181_d2(self):
         """复用 181刀2 灰度键（不新建开关）。"""
         self.assertTrue(hasattr(config, "ENABLE_INNER_WORLD_QUALITY_ESCALATION"))
-        self.assertFalse(getattr(config, "ENABLE_INNER_WORLD_QUALITY_ESCALATION"))
+        self.assertFalse(config.ENABLE_INNER_WORLD_QUALITY_ESCALATION)
 
 
 # ══════════════════ B 组：刀2 黑板类型注册 ══════════════════
@@ -332,7 +331,7 @@ class TestD5OrphanKeysDropped(unittest.TestCase):
                         continue
                     p = os.path.join(dp, f)
                     try:
-                        t = io.open(p, encoding="utf-8", errors="replace").read()
+                        t = open(p, encoding="utf-8", errors="replace").read()
                     except OSError:
                         continue
                     for k in self.DROPPED:

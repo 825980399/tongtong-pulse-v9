@@ -3699,6 +3699,12 @@ PULSE_TRACER_EVENT_RING_SIZE = 200   # 事件环容量（槽）     建议 500-1
 #     （_detect_orphans 的形参默认才是 1.0s）→ 默认取 1.5 以保证零行为变化。
 PULSE_TRACER_MIN_AGE_SEC = 1.5       # 孤儿判定窗（秒）     建议 2-5
 
+# ========== 类脑架构三层预留 · 第三层（执行后端层）· ★第202批 刀3 ==========
+# 脉冲执行后端选择。当前仅 'python'（PythonSNNBackend，接口占位实现）；
+# 未来光脉冲硬件成熟后可扩展 'photonic'（PhotonicBackend）。
+# 本批仅定义配置项与接口，**不接入任何器官代码** —— 未接线即零运行时开销。
+SPIKE_BACKEND = 'python'
+
 # ========== 统一日志系统 ==========
 LOG_DIR = "logs"
 LOG_FILE = "pulse.log"
@@ -5611,7 +5617,7 @@ def find_unrendered_placeholders(obj, _path="", _acc=None):
             find_unrendered_placeholders(x, "%s[%d]" % (_path, i), _acc)
     elif isinstance(obj, dict):
         for k, v in obj.items():
-            find_unrendered_placeholders(v, "{}.{}".format(_path, k), _acc)
+            find_unrendered_placeholders(v, f"{_path}.{k}", _acc)
     return _acc
 
 # 此函数为导出阶段兜底渲染，生产路径已迁移至render_placeholders，保留不删除，供导出脚本使用
@@ -5644,7 +5650,7 @@ def _apply_placeholder_render():
                     if isinstance(v, str):
                         rules[k] = render_placeholders(v)
     except Exception as _e:
-        print("[Config] 占位符渲染失败（已跳过，不影响启动）: {}".format(_e))
+        print(f"[Config] 占位符渲染失败（已跳过，不影响启动）: {_e}")
 
 # ★第146批 T146-3：**删除**此处的 import 期原地渲染。
 #   原副作用：import config 即把 SEED_MEMORIES[*].value / display_name /

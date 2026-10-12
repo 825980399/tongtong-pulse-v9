@@ -47,7 +47,7 @@ def load_real_nodes(parquet_dir):
                 import pandas as pd
                 nodes.extend(pd.read_parquet(f).to_dict(orient="records"))
             except Exception as e:
-                print("[WARN] 读取 {} 失败: {}".format(f, e))
+                print(f"[WARN] 读取 {f} 失败: {e}")
     return nodes
 
 
@@ -122,7 +122,7 @@ def run(parquet_dir, backend, json_out):
     t0 = time.time()
     nodes = load_real_nodes(parquet_dir)
     if not nodes:
-        print("[FAIL] Parquet 无节点（路径={}）".format(parquet_dir))
+        print(f"[FAIL] Parquet 无节点（路径={parquet_dir}）")
         return 2
 
     if backend == "real":
@@ -130,7 +130,7 @@ def run(parquet_dir, backend, json_out):
             writer = imp.Neo4jWriter()
             print("[INFO] 使用真实 Neo4j 后端")
         except RuntimeError as e:
-            print("[WARN] {}；自动降级为 mock。".format(e))
+            print(f"[WARN] {e}；自动降级为 mock。")
             writer = imp.MockWriter()
     else:
         writer = imp.MockWriter()
@@ -158,7 +158,7 @@ def run(parquet_dir, backend, json_out):
         with open(json_out, "w", encoding="utf-8") as f:
             import json
             json.dump(result, f, ensure_ascii=False, indent=2)
-        print("结果已写入 {}".format(json_out))
+        print(f"结果已写入 {json_out}")
     return 0 if ok else 1
 
 

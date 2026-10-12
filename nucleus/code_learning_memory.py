@@ -29,7 +29,6 @@ API
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import time
@@ -82,7 +81,7 @@ class CheckedIssueMemory:
             return
         try:
             if os.path.exists(self.storage_path):
-                with io.open(self.storage_path, "r", encoding="utf-8") as f:
+                with open(self.storage_path, "r", encoding="utf-8") as f:
                     _d = json.load(f)
                 if isinstance(_d, dict) and isinstance(_d.get("issues"), dict):
                     self._data = _d
@@ -100,7 +99,7 @@ class CheckedIssueMemory:
             if _dir:
                 os.makedirs(_dir, exist_ok=True)
             _tmp = self.storage_path + ".tmp"
-            with io.open(_tmp, "w", encoding="utf-8") as f:
+            with open(_tmp, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
             os.replace(_tmp, self.storage_path)
         except Exception as e:

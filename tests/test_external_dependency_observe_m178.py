@@ -14,8 +14,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config as _cfg  # noqa: E402
-from nucleus.field.external_dependency_observe import (  # noqa: E402
+import config as _cfg
+from nucleus.field.external_dependency_observe import (
     observe_delegate_browser,
     observe_external_channel_call,
     observe_semantic_decision,

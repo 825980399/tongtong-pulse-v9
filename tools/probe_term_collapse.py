@@ -19,7 +19,7 @@ import config as CFG
 from tools.verify_semantic_kernel import CORPUS, TERM_QUERIES
 
 CFG.SEMANTIC_KERNEL_CONFIG["enable_semantic_kernel"] = True
-from nucleus.semantic.VectorEncoder import get_vector_encoder  # noqa: E402
+from nucleus.semantic.VectorEncoder import get_vector_encoder
 
 enc = get_vector_encoder()
 t0 = time.time()

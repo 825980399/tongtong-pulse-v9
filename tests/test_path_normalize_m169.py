@@ -7,7 +7,6 @@
 - normalize_relpath：safe_relpath + 归一（取代各调用点手搓的 replace）。
 - 接线不变式：被统一的文件中不再出现「safe_relpath(...) 之后手工 replace 分隔符」形态。
 """
-import io
 import os
 import re
 import sys
@@ -39,7 +38,7 @@ class TestNormalizePath(unittest.TestCase):
             "nucleus\\\\data\\\\x.py",     # 双反斜杠（JSON 转义后的形态）
         ]
         _keys = {normalize_path(v) for v in _variants}
-        self.assertEqual(len(_keys), 1, "不同分隔符应归一到同一 key: {}".format(_keys))
+        self.assertEqual(len(_keys), 1, f"不同分隔符应归一到同一 key: {_keys}")
         self.assertEqual(_keys.pop(), "nucleus/data/x.py")
 
     def test_02_mixed_separators_same_key(self):
@@ -87,7 +86,7 @@ class TestNormalizeRelpath(unittest.TestCase):
             _ROOT + "\\\\nucleus\\\\data\\\\x.py",
         ]
         _keys = {normalize_relpath(v, _ROOT) for v in _variants}
-        self.assertEqual(len(_keys), 1, "相对化后仍应同一 key: {}".format(_keys))
+        self.assertEqual(len(_keys), 1, f"相对化后仍应同一 key: {_keys}")
         self.assertEqual(_keys.pop(), "nucleus/data/x.py")
         del _tail
 
@@ -107,10 +106,10 @@ class TestWiringInvariant(unittest.TestCase):
             _p = os.path.join(_ROOT, _rel.replace("/", os.sep))
             if not os.path.isfile(_p):
                 continue
-            _t = io.open(_p, encoding="utf-8", errors="replace").read()
+            _t = open(_p, encoding="utf-8", errors="replace").read()
             if re.search(r"safe_relpath\([^)]*\)\.replace", _t):
                 _bad.append(_rel)
-        self.assertEqual(_bad, [], "这些文件仍手搓归一: {}".format(_bad))
+        self.assertEqual(_bad, [], f"这些文件仍手搓归一: {_bad}")
 
     def test_21_normalize_relpath_used_in_wired(self):
         """被统一的文件确实引用了归一化入口（证明接线落地，非只加函数）。"""
@@ -119,10 +118,10 @@ class TestWiringInvariant(unittest.TestCase):
             _p = os.path.join(_ROOT, _rel.replace("/", os.sep))
             if not os.path.isfile(_p):
                 continue
-            _t = io.open(_p, encoding="utf-8", errors="replace").read()
+            _t = open(_p, encoding="utf-8", errors="replace").read()
             if "normalize_relpath" not in _t:
                 _missing.append(_rel)
-        self.assertEqual(_missing, [], "这些文件未接入 normalize_relpath: {}".format(_missing))
+        self.assertEqual(_missing, [], f"这些文件未接入 normalize_relpath: {_missing}")
 
 
 if __name__ == "__main__":

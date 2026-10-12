@@ -15,11 +15,10 @@
 - 大小写/空白不敏感；命中别名表即返回规范 key；
 - 未登记名返回小写原文，保证调用方可区分「已知豁免」与「未知器官」，且大小写不敏感比对。
 """
-from typing import Dict, FrozenSet, Tuple
 
 #: 规范 key -> 别名元组（单源真相，全部按小写匹配）。
 #: 新增/重命名器官时，在此处同时登记规范 key 与所有变体即可，消费方无需改动。
-ORGAN_ALIASES: Dict[str, Tuple[str, ...]] = {
+ORGAN_ALIASES: dict[str, tuple[str, ...]] = {
     "对话模块": (
         "对话模块", "web对话", "网页对话", "chat_service",
         "对话服务", "企业微信", "企微", "wecom", "微信",
@@ -35,7 +34,7 @@ ORGAN_ALIASES: Dict[str, Tuple[str, ...]] = {
 }
 
 #: 小写别名 -> 规范 key（模块加载时构建一次）
-_ALIAS_INDEX: Dict[str, str] = {}
+_ALIAS_INDEX: dict[str, str] = {}
 for _key, _aliases in ORGAN_ALIASES.items():
     _ALIAS_INDEX[_key.lower()] = _key
     for _a in _aliases:
@@ -50,6 +49,6 @@ def resolve_organ_key(name: str) -> str:
     return _ALIAS_INDEX.get(_n, _n)
 
 
-def resolve_organ_keys(names) -> FrozenSet[str]:
+def resolve_organ_keys(names) -> frozenset[str]:
     """批量归一（用于把豁免表转成规范 key 集合）。"""
     return frozenset(resolve_organ_key(_n) for _n in (names or ()))

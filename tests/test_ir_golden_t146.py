@@ -30,7 +30,7 @@ ROOT = __import__("os").path.dirname(__import__("os").path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 #: 未渲染占位符模式（与 config._PLACEHOLDER_RE 同口径）
 _UNRENDERED = re.compile(r"<[A-Z_]{2,32}>")
@@ -192,8 +192,8 @@ def test_golden_route(case_id: str):
     res = iw._on_inference_request(payload)
 
     # ---- 结构断言 ----
-    assert isinstance(res, dict), "推理入口必须返回 dict，实际={!r}".format(type(res))
-    assert "status" in res, "返回结构缺 status 键：{!r}".format(sorted(res))
+    assert isinstance(res, dict), f"推理入口必须返回 dict，实际={type(res)!r}"
+    assert "status" in res, f"返回结构缺 status 键：{sorted(res)!r}"
 
     # ---- 路由断言 ----
     assert res["status"] == spec["expect_status"], (
@@ -206,15 +206,15 @@ def test_golden_route(case_id: str):
 
     # ---- correlation_id 透传断言（RESULT 事件必须带上，供上层串联） ----
     result_events = [p for name, p in events if name == "inference.result"]
-    assert result_events, "[{}] 未发出 inference.result".format(case_id)
+    assert result_events, f"[{case_id}] 未发出 inference.result"
     assert result_events[0].get("correlation_id") == case_id, \
-        "[{}] RESULT 事件未透传 correlation_id".format(case_id)
+        f"[{case_id}] RESULT 事件未透传 correlation_id"
 
     # ---- 占位符泄漏断言（联动 T146-3 验收） ----
     answer = res.get("answer")
     if isinstance(answer, str) and answer:
         assert not _UNRENDERED.search(answer), \
-            "[{}] 答案残留未渲染占位符：{}".format(case_id, answer[:80])
+            f"[{case_id}] 答案残留未渲染占位符：{answer[:80]}"
 
 
 def test_identity_answer_has_no_placeholder():
@@ -224,8 +224,8 @@ def test_identity_answer_has_no_placeholder():
                                     "correlation_id": "identity"})
     answer = str(res.get("answer") or "")
     assert answer, "身份问答必须给出非空答案"
-    assert not _UNRENDERED.search(answer), "答案出现未渲染占位符：{}".format(answer[:120])
-    assert "<" not in answer and ">" not in answer, "答案出现尖括号：{}".format(answer[:120])
-    assert "我叫曈曈" in answer, "身份锚点缺失：{}".format(answer[:60])
+    assert not _UNRENDERED.search(answer), f"答案出现未渲染占位符：{answer[:120]}"
+    assert "<" not in answer and ">" not in answer, f"答案出现尖括号：{answer[:120]}"
+    assert "我叫曈曈" in answer, f"身份锚点缺失：{answer[:60]}"
     # 同义反复自检：不应再出现「我叫X，小名X」
     assert "小名曈曈" not in answer, "仍存在「小名曈曈」同义反复"

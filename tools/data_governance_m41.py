@@ -32,7 +32,6 @@
 from __future__ import annotations
 
 import gzip
-import io
 import json
 import os
 import re
@@ -64,7 +63,7 @@ def _cfg(name: str, default: Any) -> Any:
 
 def origin_name(fname: str) -> str:
     """``bad2.json.20260910_174016.corrupted`` → ``bad2.json``。"""
-    _base = fname[: -len(".corrupted")] if fname.endswith(".corrupted") else fname
+    _base = fname.removesuffix(".corrupted")
     _m = _TS_SUFFIX.match(_base)
     return _m.group("origin") if _m else _base
 
@@ -134,10 +133,10 @@ def govern_corrupted(dry: bool = False) -> dict:
         _old = []
         if os.path.isfile(_MANIFEST):
             try:
-                _old = json.load(io.open(_MANIFEST, encoding="utf-8")) or []
+                _old = json.load(open(_MANIFEST, encoding="utf-8")) or []
             except Exception:
                 _old = []
-        with io.open(_MANIFEST, "w", encoding="utf-8") as f:
+        with open(_MANIFEST, "w", encoding="utf-8") as f:
             json.dump(_old + _moved, f, ensure_ascii=False, indent=1)
     return {"total": len(_items), "deleted": _del, "quarantined": _quar,
             "freed_bytes": _sz_del, "quarantine_bytes": _sz_q}
@@ -157,7 +156,7 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
     if not os.path.isfile(_MANIFEST):
         return {"purged": 0, "freed_bytes": 0}
     try:
-        _entries = json.load(io.open(_MANIFEST, encoding="utf-8")) or []
+        _entries = json.load(open(_MANIFEST, encoding="utf-8")) or []
     except Exception as e:
         silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L159")
         return {"purged": 0, "freed_bytes": 0}
@@ -189,7 +188,7 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
         else:
             _kept.append(_e)
     if not dry:
-        with io.open(_MANIFEST, "w", encoding="utf-8") as f:
+        with open(_MANIFEST, "w", encoding="utf-8") as f:
             json.dump(_kept, f, ensure_ascii=False, indent=1)
     return {"purged": _purged, "freed_bytes": _freed}
 
@@ -225,8 +224,7 @@ def _gzip_file(src: str, dst: str, chunk: int = 4 * 1024 * 1024) -> bool:
                 _fo.write(_b)
         return True
     except Exception as e:
-        print("  [WARN] 压缩失败 {}: {}: {}".format(os.path.basename(src),
-                                               type(e).__name__, e))
+        print(f"  [WARN] 压缩失败 {os.path.basename(src)}: {type(e).__name__}: {e}")
         return False
 
 
@@ -290,11 +288,11 @@ def main(argv: list[str]) -> int:
     print("    现有备份数   : %d" % _b["total"])
     print("    压缩归档     : %d 份" % _b["archived"])
     print("    释放空间     : %.1f MB" % (_b["freed_bytes"] / 1024.0 / 1024.0))
-    print("    归档目录     : {}".format(os.path.relpath(_ARCH, _ROOT)))
+    print(f"    归档目录     : {os.path.relpath(_ARCH, _ROOT)}")
 
     print()
     _tot = (_c["freed_bytes"] + _b["freed_bytes"]) / 1024.0 / 1024.0
-    print("合计释放空间   : {:.1f} MB".format(_tot))
+    print(f"合计释放空间   : {_tot:.1f} MB")
     if _dry:
         print()
         print("[DRY-RUN] 未改动任何文件。")

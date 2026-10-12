@@ -85,7 +85,7 @@ class IndexStore:
     def _write_table(self, table: str, rows: list[dict[str, Any]]) -> bool:
         """写单张索引表（全量重写）。空 rows 也写空表（标记已落盘）。"""
         try:
-            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
+            import pyarrow.parquet as pq
         except Exception as _e:
             _MODULE_LOGGER.warning(f"pyarrow 不可用，索引表 {table} 写入跳过: {_e}")
             return False

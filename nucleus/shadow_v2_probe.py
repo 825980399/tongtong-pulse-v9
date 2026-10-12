@@ -10,7 +10,8 @@ Lung 系统 prompt 组装区对 retriever 做一次**只读**查询（不落 pro
 片段），绝不向上抛，避免污染主链路。
 """
 import time
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -18,11 +19,11 @@ from nucleus._silent_except import silent_exc
 THROTTLE_BUCKET_SECONDS = 600
 
 # Lung 默认不接线真实 retriever（实弹刀推 200 注入）；模块级可被覆盖。
-DEFAULT_RETRIEVER: Optional[Callable[[str, int], List[Any]]] = None
+DEFAULT_RETRIEVER: Callable[[str, int], list[Any]] | None = None
 
 
-def _extract_scores(hits: List[Any]) -> List[float]:
-    _scores: List[float] = []
+def _extract_scores(hits: list[Any]) -> list[float]:
+    _scores: list[float] = []
     for _h in hits or []:
         _s = _h.get("score") if isinstance(_h, dict) else getattr(_h, "score", None)
         if isinstance(_s, (int, float)) and not isinstance(_s, bool):
@@ -30,7 +31,7 @@ def _extract_scores(hits: List[Any]) -> List[float]:
     return _scores
 
 
-def _distribution(hits: List[Any]) -> dict:
+def _distribution(hits: list[Any]) -> dict:
     _scores = _extract_scores(hits)
     _n = len(_scores)
     if _n == 0:
@@ -48,7 +49,7 @@ def throttle_key() -> str:
     return "tk=%d" % int(time.time() // THROTTLE_BUCKET_SECONDS)
 
 
-def build_shadow_v2_fragment(retriever: Optional[Callable[[str, int], List[Any]]],
+def build_shadow_v2_fragment(retriever: Callable[[str, int], list[Any]] | None,
                              query_hint: str,
                              top_k: int = 3) -> str:
     """对 retriever 做一次只读查询，返回待并入影子 INFO 的片段字符串。

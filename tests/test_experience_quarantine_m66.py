@@ -7,7 +7,6 @@
 
 隔离：ExperiencePool 用显式 base_dir（临时目录），写盘守卫放行；生产恢复须停机窗口。
 """
-import io
 import json
 import os
 import shutil
@@ -20,8 +19,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+import config
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
 # 仅由 SERP 样板 token 构成 → 覆盖度 1.0（≥0.9 高置信 → 隔离）
 _SERP_ALL = "搜索结果相关搜索广告赞助商链接百度一下相关推荐"
@@ -84,7 +83,7 @@ class TestQuarantineIsolation(unittest.TestCase):
         self.assertTrue(os.path.isdir(_qdir), "隔离目录须创建")
         _files = [f for f in os.listdir(_qdir) if f.startswith("quarantine_")]
         self.assertEqual(len(_files), 1, "应写出 1 个隔离文件")
-        _qdoc = json.load(io.open(os.path.join(_qdir, _files[0]), encoding="utf-8"))
+        _qdoc = json.load(open(os.path.join(_qdir, _files[0]), encoding="utf-8"))
         self.assertEqual(len(_qdoc), 1)
         self.assertEqual(_qdoc[0]["id"], "q")
 
@@ -126,7 +125,7 @@ class TestQuarantineRestore(unittest.TestCase):
         _qdir = os.path.join(self.d, "_quarantine")
         os.makedirs(_qdir, exist_ok=True)
         _stale = os.path.join(_qdir, "quarantine_%d.json" % int(time.time()))
-        with io.open(_stale, "w", encoding="utf-8") as _f:
+        with open(_stale, "w", encoding="utf-8") as _f:
             _f.write(json.dumps([_e(id="q", polluted=True)], ensure_ascii=False))
         _res = self.p.restore_from_quarantine(dry_run=False)
         self.assertEqual(_res["skipped"], 1, "同 id 须跳过")
@@ -157,7 +156,7 @@ class TestQuarantineRestore(unittest.TestCase):
         self.p.restore_from_quarantine(dry_run=False)
         _q = [x for x in self.p._experiences if x["id"] == "q"][0]
         for _k in ("id", "summary", "polluted", "cleanup_at"):
-            self.assertIn(_k, _q, "恢复记录须保留原字段 {}".format(_k))
+            self.assertIn(_k, _q, f"恢复记录须保留原字段 {_k}")
         self.assertEqual(_q["id"], "q")
         self.assertTrue(_q["summary"].startswith("搜索结果"))
 

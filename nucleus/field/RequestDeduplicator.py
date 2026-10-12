@@ -62,8 +62,15 @@ _ABANDONED = "abandoned"
 class _Entry:
     """一次请求在途记录。"""
 
-    __slots__ = ("request_id", "status", "owner_started", "result",
-                 "completed_at", "waiters", "takeovers")
+    __slots__ = (
+        "completed_at",
+        "owner_started",
+        "request_id",
+        "result",
+        "status",
+        "takeovers",
+        "waiters",
+    )
 
     def __init__(self, request_id: str) -> None:
         self.request_id = request_id

@@ -12,7 +12,6 @@ import sys
 #   故先做路径注入，再 import 其余模块。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io
 import shutil
 import tempfile
 import time
@@ -63,12 +62,12 @@ class _FakeEngine:
 
     def save_profile(self, path):
         self.saved.append(path)
-        io.open(path, "w", encoding="utf-8").write("{}")
+        open(path, "w", encoding="utf-8").write("{}")
         return True
 
     def generate_report(self, path):
         self.reports.append(path)
-        io.open(path, "w", encoding="utf-8").write("report")
+        open(path, "w", encoding="utf-8").write("report")
         return "report"
 
     def get_stats(self):
@@ -149,12 +148,12 @@ class TestDueAndDedup(unittest.TestCase):
 
     def test_14_today_done_true_when_report_exists(self):
         _day = datetime(2026, 9, 13).strftime("%Y%m%d")
-        io.open(os.path.join(self.d, "report_{}_030000.txt".format(_day)),
+        open(os.path.join(self.d, f"report_{_day}_030000.txt"),
                 "w", encoding="utf-8").write("x")
         self.assertTrue(self._mk()._today_done(datetime(2026, 9, 13, 3, 5)))
 
     def test_15_yesterday_report_does_not_block(self):
-        io.open(os.path.join(self.d, "report_20260912_030000.txt"),
+        open(os.path.join(self.d, "report_20260912_030000.txt"),
                 "w", encoding="utf-8").write("x")
         self.assertFalse(self._mk()._today_done(datetime(2026, 9, 13, 3, 5)))
 
@@ -299,7 +298,7 @@ class TestMainWiring(unittest.TestCase):
     """6) main.py 接线（源码级）。"""
 
     def setUp(self):
-        self.src = io.open(os.path.join(_ROOT, "main.py"),
+        self.src = open(os.path.join(_ROOT, "main.py"),
                            encoding="utf-8").read()
 
     def test_50_main_calls_start_daily_schedule(self):
@@ -355,7 +354,7 @@ class TestDayBoundary(unittest.TestCase):
     def test_63_cross_day_today_done_uses_new_date(self):
         """跨日后 _today_done 使用新日期检查，昨天的报告不阻塞今天。"""
         # 9月13日有报告
-        io.open(os.path.join(self.d, "report_20260913_030000.txt"),
+        open(os.path.join(self.d, "report_20260913_030000.txt"),
                 "w", encoding="utf-8").write("x")
         _s = self._mk()
         # 9月13日23:59：当天已完成 → True
@@ -368,7 +367,7 @@ class TestDayBoundary(unittest.TestCase):
     def test_64_cross_day_full_flow_skip_then_run(self):
         """完整跨日流程：23:59当天已完成→跳过；次日03:00→执行。"""
         # 9月13日有报告（当天已完成）
-        io.open(os.path.join(self.d, "report_20260913_030000.txt"),
+        open(os.path.join(self.d, "report_20260913_030000.txt"),
                 "w", encoding="utf-8").write("x")
         _s = self._mk()
         # 23:59：due=True 但 today_done=True → 跳过

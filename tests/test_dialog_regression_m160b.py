@@ -17,7 +17,7 @@ _REG = os.path.join(_PROJ, "tools", "regression", "dialog_regression.py")
 _YAML = os.path.join(_PROJ, "docs", "测试", "对话回归题集_20261004.yaml")
 
 # 离线导入脚本模块（__main__ 保护下不会执行 main）
-import importlib.util  # noqa: E402
+import importlib.util
 
 _spec = importlib.util.spec_from_file_location("dialog_regression_m160b", _REG)
 dialog_regression = importlib.util.module_from_spec(_spec)

@@ -8,13 +8,14 @@
 - compute_overall_score 不受 lfi_raw 影响；
 - LFI 四维原值结构（连通性/中心性/冗余度/健康度，剔除活跃度）。
 """
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.getcwd())
 
 from nucleus.self_awareness.SelfAwarenessEngine import (
-    SelfAwarenessProfile,
     _PROFILE_DICT_FIELDS,
+    SelfAwarenessProfile,
     compute_overall_score,
 )
 from tools.export_lfi import compute_lfi

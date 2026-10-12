@@ -26,7 +26,7 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from nucleus.field.InfoField import (  # noqa: E402
+from nucleus.field.InfoField import (
     _PULSE_LAYER_L3,
     InfoField,
 )

@@ -14,7 +14,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import io
 import json
 import shutil
 import tempfile
@@ -56,12 +55,12 @@ def _mk_mgr(tmp):
 
 
 def _write_pending(tmp, items):
-    with io.open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False)
 
 
 def _read_pending(tmp):
-    with io.open(os.path.join(tmp, "pending_patches.json"), encoding="utf-8") as f:
+    with open(os.path.join(tmp, "pending_patches.json"), encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -332,7 +331,7 @@ class TestD1RatchetCooldown(unittest.TestCase):
         _p = os.path.join(self.tmp, "restart_blocked_at.txt")
         if not os.path.exists(_p):
             return 0.0
-        with io.open(_p, encoding="utf-8") as f:
+        with open(_p, encoding="utf-8") as f:
             return float(f.read().strip() or 0)
 
     def test_d1_cooldown_not_refreshed(self):
@@ -356,7 +355,7 @@ class TestD1RatchetCooldown(unittest.TestCase):
     def test_d1_cooldown_expiry_releases(self):
         """验收(a)：预置 blocked_at 早于冷却窗口 → 一次期满即放行（不计 loop_protection）。"""
         _old = time.time() - 100 * 3600.0  # 100h 前，远超默认 24h 冷却
-        with io.open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
             f.write(str(_old))
         _write_pending(self.tmp, [_patch(id="a", status="approved")])
         with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
@@ -367,7 +366,7 @@ class TestD1RatchetCooldown(unittest.TestCase):
         # 故查磁盘而非属性——这正是期满放行的实证）。
         _rc_path = os.path.join(self.tmp, "restart_count.txt")
         self.assertTrue(os.path.exists(_rc_path), "期满应持久化重置计数")
-        with io.open(_rc_path, encoding="utf-8") as f:
+        with open(_rc_path, encoding="utf-8") as f:
             self.assertEqual(int(f.read().strip()), 0, "期满应重置棘轮计数（磁盘）")
 
     def test_d1_blocked_at_not_reset_on_restart(self):
@@ -402,7 +401,7 @@ class TestD1RatchetCooldown(unittest.TestCase):
         self.assertFalse(_ver.has_rolled_back())
         # 计数仍可被期满重置（互不遮蔽）
         _old = time.time() - 100 * 3600.0
-        with io.open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(self.tmp, "restart_blocked_at.txt"), "w", encoding="utf-8") as f:
             f.write(str(_old))
         _write_pending(self.tmp, [_patch(id="c", status="approved")])
         with mock.patch("nucleus.reasoning.PatchManager._module_logger"):
@@ -494,7 +493,7 @@ class TestPatchLifecycle(unittest.TestCase):
         _d = _pl.load_lifecycle(self.lp)
         _d["patches"]["p3"]["stage"] = "observing"
         _d["patches"]["p3"]["observation_deadline"] = time.time() - 10
-        with io.open(self.lp, "w", encoding="utf-8") as _f:
+        with open(self.lp, "w", encoding="utf-8") as _f:
             json.dump(_d, _f, ensure_ascii=False)
         _res = _pl.reconcile_patches(path=self.lp)
         self.assertEqual(_res["overdue"], 1)
@@ -529,7 +528,7 @@ class TestPatchLifecycle(unittest.TestCase):
 
         with mock.patch.object(_plmod, "record_activation", _spy):
             _target = os.path.join(self.tmp, "target_mod.py")
-            with io.open(_target, "w", encoding="utf-8") as _f:
+            with open(_target, "w", encoding="utf-8") as _f:
                 _f.write("X = 1\nY = 2\n")
             _doc = {
                 "id": "int1", "file": _target, "method": "m",
@@ -555,7 +554,7 @@ class TestPatchLifecycle(unittest.TestCase):
         """
         # --- (a) 启动链路接线（源码级） ---
         _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with io.open(os.path.join(_root, "main.py"), encoding="utf-8") as _f:
+        with open(os.path.join(_root, "main.py"), encoding="utf-8") as _f:
             _src = _f.read()
         self.assertIn("reconcile_patches()", _src,
                       "main.py 启动段应调用 reconcile_patches()")
@@ -568,7 +567,7 @@ class TestPatchLifecycle(unittest.TestCase):
         _d = _pl.load_lifecycle(self.lp)
         self.assertEqual(_d["patches"]["p9"]["stage"], "activated")
         _d["patches"]["p9"]["observation_deadline"] = time.time() - 10
-        with io.open(self.lp, "w", encoding="utf-8") as _f:
+        with open(self.lp, "w", encoding="utf-8") as _f:
             json.dump(_d, _f, ensure_ascii=False)
         _res = _pl.reconcile_patches(path=self.lp)
         self.assertEqual(_res["overdue"], 1)

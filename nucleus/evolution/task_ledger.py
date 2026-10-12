@@ -34,7 +34,6 @@
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -46,13 +45,13 @@ from nucleus._silent_except import silent_exc
 __all__ = [
     "TASK_LEDGER_VERSION",
     "VALID_TASK_STATUS",
-    "ledger_path",
     "cooldown_path",
-    "register_task",
-    "heartbeat_task",
     "finish_task",
+    "heartbeat_task",
+    "ledger_path",
     "load_ledger",
     "reconcile_on_startup",
+    "register_task",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -92,7 +91,7 @@ def _writable(path: str) -> bool:
     """是否允许写入（pytest 环境 + 生产 data/ → 拒绝，防测试污染）。"""
     if _is_test_env() and os.path.abspath(path).replace("\\", "/").lower().startswith(
             _PROJECT_ROOT.replace("\\", "/").lower() + "/data/"):
-        sys.stderr.write("[task_ledger] 测试环境跳过生产写入: {}\n".format(path))
+        sys.stderr.write(f"[task_ledger] 测试环境跳过生产写入: {path}\n")
         return False
     return True
 
@@ -108,7 +107,7 @@ def load_ledger(path: str | None = None) -> dict[str, Any]:
     if not os.path.isfile(_p):
         return _empty_ledger()
     try:
-        with io.open(_p, encoding="utf-8") as _f:
+        with open(_p, encoding="utf-8") as _f:
             _d = json.load(_f)
     except (OSError, ValueError) as _e:
         silent_exc(_e, where="nucleus.evolution.task_ledger::load_ledger", level="warning")
@@ -135,7 +134,7 @@ def _atomic_save(data: dict, path: str | None = None) -> str:
     _tmp = _p + ".tmp"
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
-        with io.open(_tmp, "w", encoding="utf-8") as _f:
+        with open(_tmp, "w", encoding="utf-8") as _f:
             json.dump(data, _f, ensure_ascii=False, indent=2)
             _f.flush()
             try:
@@ -147,7 +146,7 @@ def _atomic_save(data: dict, path: str | None = None) -> str:
         os.replace(_tmp, _p)          # ← 原子 rename
     except OSError as _e:
         silent_exc(_e, where="nucleus.evolution.task_ledger::_atomic_save", level="warning")
-        sys.stderr.write("[task_ledger] 账本写入失败: {}: {}\n".format(type(_e).__name__, _e))
+        sys.stderr.write(f"[task_ledger] 账本写入失败: {type(_e).__name__}: {_e}\n")
     return _p
 
 
@@ -262,14 +261,13 @@ def check_cooldown_intact(path: str | None = None) -> dict[str, Any]:
         _out["note"] = "冷却账不存在（首次运行属正常）"
         return _out
     try:
-        with io.open(_p, encoding="utf-8") as _f:
+        with open(_p, encoding="utf-8") as _f:
             _d = json.load(_f)
         _out["parseable"] = True
         _out["entries"] = len(_d) if hasattr(_d, "__len__") else None
     except (OSError, ValueError) as _e:
         _out["parseable"] = False
-        _out["note"] = "冷却账**不可解析**——账目失明，需人工核查：{}: {}".format(
-            type(_e).__name__, _e)
+        _out["note"] = f"冷却账**不可解析**——账目失明，需人工核查：{type(_e).__name__}: {_e}"
         silent_exc(_e, where="nucleus.evolution.task_ledger::check_cooldown_intact",
                    level="warning")
     return _out
@@ -348,7 +346,7 @@ def reconcile_on_startup(path: str | None = None, dry_run: bool = False) -> dict
             # ★未送达回复随附 + 免重做标记（调用方无需重算）
             "undelivered": _pend,
             "no_redo": True,
-            "dedup_key": "{}@{}".format(_tid, _lw),   # 任务 id + 最后写时间戳
+            "dedup_key": f"{_tid}@{_lw}",   # 任务 id + 最后写时间戳
             "replay": "forbidden",                 # ★不回放、不续跑
             "reason": "重启后标 running 但存活 pid 已不存在（无存活任务）",
         })

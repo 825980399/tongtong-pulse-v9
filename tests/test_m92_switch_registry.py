@@ -26,7 +26,6 @@
 import ast
 import importlib.machinery
 import importlib.util
-import io
 import os
 import py_compile
 import sys
@@ -36,8 +35,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-from nucleus.reasoning.PatchManager import (  # noqa: E402
+import config
+from nucleus.reasoning.PatchManager import (
     _m92_ast_struct_guard_on,
     _m92_base_indent_guard_on,
 )
@@ -57,7 +56,7 @@ _EXPECT = {
 
 
 def _cfg_src():
-    return io.open(_CFG, encoding="utf-8").read()
+    return open(_CFG, encoding="utf-8").read()
 
 
 def _top_level_enable_assigns(src):
@@ -81,9 +80,9 @@ class TestT92aRegistrationFact(unittest.TestCase):
         _all = _top_level_enable_assigns(_cfg_src())
         for _name, _want in _EXPECT.items():
             _vals = _all.get(_name)
-            self.assertIsNotNone(_vals, "config.py 未登记 {}".format(_name))
+            self.assertIsNotNone(_vals, f"config.py 未登记 {_name}")
             self.assertEqual(1, len(_vals), "%s 被登记 %d 次（应恰好 1 次）" % (_name, len(_vals)))
-            self.assertIs(_want, _vals[0], "{} 期望 {!r}，实际 {!r}".format(_name, _want, _vals[0]))
+            self.assertIs(_want, _vals[0], f"{_name} 期望 {_want!r}，实际 {_vals[0]!r}")
 
     def test_A2_taskbook_acceptance_literal(self):
         """任务书验收原句：config.py 中能查到 `ENABLE_NONORGAN_FILE_RESOLVE = True`。"""
@@ -101,7 +100,7 @@ class TestT92bRuntimeConsistency(unittest.TestCase):
     def test_B1_config_attributes_match(self):
         for _name, _want in _EXPECT.items():
             self.assertIs(_want, getattr(config, _name, None),
-                          "运行时 {} 与登记值不一致".format(_name))
+                          f"运行时 {_name} 与登记值不一致")
 
     def test_B2_getters_return_registered_values(self):
         self.assertIs(False, _m92_base_indent_guard_on())
@@ -129,12 +128,12 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
     def _require_bak(self):
         if not os.path.isfile(_CFG_BAK):
             self.skipTest(".bak_batch92 缺失（scratch 目录可被外部清理），跳过改前对照")
-        return io.open(_CFG_BAK, encoding="utf-8").read()
+        return open(_CFG_BAK, encoding="utf-8").read()
 
     def test_C1_switches_absent_before_m92(self):
         _old = _top_level_enable_assigns(self._require_bak())
         for _name in _EXPECT:
-            self.assertNotIn(_name, _old, "{} 在改前就已登记（与任务书前提不符）".format(_name))
+            self.assertNotIn(_name, _old, f"{_name} 在改前就已登记（与任务书前提不符）")
 
     def test_C2_existing_switches_unchanged(self):
         """★红线：改前的每个 `ENABLE_* = <常量>` 在改后必须**逐字同值**。"""
@@ -147,7 +146,7 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
                 _drift.append((_name, _vals, "MISSING"))
             elif _n[: len(_vals)] != _vals:
                 _drift.append((_name, _vals, _n))
-        self.assertEqual([], _drift[:10], "既有开关值被改动：{}".format(_drift[:10]))
+        self.assertEqual([], _drift[:10], f"既有开关值被改动：{_drift[:10]}")
         self.assertGreater(len(_old), 150, "改前开关数异常（%d）" % len(_old))
 
     def test_C3_switch_count_grows_by_at_least_three(self):
@@ -166,9 +165,9 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
         _added = set(_new) - set(_old)
         _removed = set(_old) - set(_new)
         self.assertEqual(set(), _removed,
-                         "既有开关被删除：{}".format(sorted(_removed)[:10]))
+                         f"既有开关被删除：{sorted(_removed)[:10]}")
         self.assertEqual(set(), set(_EXPECT) - _added,
-                         "本批三个开关必须都在新增集合内，缺：{}".format(sorted(set(_EXPECT) - _added)))
+                         f"本批三个开关必须都在新增集合内，缺：{sorted(set(_EXPECT) - _added)}")
         self.assertGreaterEqual(len(_added), 3,
                                 "新增开关数应 ≥3（本批 3 个），实际 %d" % len(_added))
 
@@ -184,11 +183,11 @@ class TestT92cLegacyDiffAndRedline(unittest.TestCase):
                 if not _f.endswith(".py"):
                     continue
                 _p = os.path.join(_dp, _f)
-                _t = io.open(_p, encoding="utf-8", errors="ignore").read()
+                _t = open(_p, encoding="utf-8", errors="ignore").read()
                 for _i, _l in enumerate(_t.replace("\r\n", "\n").split("\n"), 1):
                     if any(_n in _l for _n in _EXPECT) and "assertNotIn" in _l:
                         _hits.append("%s:%d: %s" % (os.path.relpath(_p, ROOT), _i, _l.strip()[:100]))
-        self.assertEqual([], _hits, "存在对本批开关的 assertNotIn 断言，需同步反转：{}".format(_hits))
+        self.assertEqual([], _hits, f"存在对本批开关的 assertNotIn 断言，需同步反转：{_hits}")
 
 
 class TestT92dCompilable(unittest.TestCase):
@@ -213,8 +212,8 @@ class TestT92eOrderAndFallback(unittest.TestCase):
         _src = _cfg_src()
         _i91 = _src.index(_MARKER_M91)
         for _name in _EXPECT:
-            self.assertGreater(_src.index("{} = ".format(_name)), _i91,
-                               "{} 应登记在 M91-CFG 之后".format(_name))
+            self.assertGreater(_src.index(f"{_name} = "), _i91,
+                               f"{_name} 应登记在 M91-CFG 之后")
 
     def test_E2_m92_marker_is_last_registration_block(self):
         _src = _cfg_src()
@@ -223,7 +222,7 @@ class TestT92eOrderAndFallback(unittest.TestCase):
 
     def test_E3_getattr_fallback_kept_in_consumer(self):
         """T-87b 消费点的 `getattr(..., True)` 兜底保留（config 读取失败时仍为 True）。"""
-        _t = io.open(_SE, encoding="utf-8", errors="ignore").read()
+        _t = open(_SE, encoding="utf-8", errors="ignore").read()
         self.assertIn('"ENABLE_NONORGAN_FILE_RESOLVE", True', _t,
                       "消费点的 getattr 兜底被移除（应保留为第二道保险）")
 
@@ -234,7 +233,7 @@ class TestT92eOrderAndFallback(unittest.TestCase):
         for _need in ("SafeEvolutionExecutor.py::repair_with_distillation",
                       "PatchManager.py::_m92_base_indent_guard_on",
                       "PatchManager.py::_m92_ast_struct_guard_on"):
-            self.assertIn(_need, _seg, "登记注释缺少读取点：{}".format(_need))
+            self.assertIn(_need, _seg, f"登记注释缺少读取点：{_need}")
 
 
 if __name__ == "__main__":

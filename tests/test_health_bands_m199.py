@@ -7,9 +7,8 @@
 """
 import unittest
 
-from nucleus.self_awareness import health_bands
+from nucleus.self_awareness import health_bands, quality_score_v2
 from nucleus.self_awareness.SelfAwarenessEngine import _health_level
-from nucleus.self_awareness import quality_score_v2
 
 
 class TestM199HealthBands(unittest.TestCase):

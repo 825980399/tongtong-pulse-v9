@@ -7,7 +7,6 @@
   3. rollover 事件写入 log_integrity_events.log（event="rollover"，区别于外部截断）；
   4. 无标记 / 标记过期时，size 下降仍正确判为 truncated（不掩盖真实外部截断）。
 """
-import io
 import json
 import os
 import time
@@ -25,7 +24,7 @@ from nucleus.logger import (
 
 
 def _write_file(path, content):
-    with io.open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
@@ -50,7 +49,7 @@ def test_integrity_reclassifies_truncated_to_rollover(tmp_path):
     _write_file(log, "small after rollover")  # 当前小
     state = os.path.join(tmp_path, _LOG_STATE_FILE)
     # 上次指纹：size 远大于当前（轮转把大文件截小了）；不写 ino 以走 truncated 分支
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 99999,
                    "mtime": time.time()}, f)
     # 写入近期轮转标记
@@ -64,7 +63,7 @@ def test_integrity_reclassifies_truncated_to_rollover(tmp_path):
     # 事件留痕：应为 rollover（非外部截断）
     ev_path = os.path.join(tmp_path, _LOG_INTEGRITY_FILE)
     assert os.path.isfile(ev_path)
-    lines = [json.loads(x) for x in io.open(ev_path, encoding="utf-8").read().splitlines() if x.strip()]
+    lines = [json.loads(x) for x in open(ev_path, encoding="utf-8").read().splitlines() if x.strip()]
     assert any(e.get("event") == "rollover" for e in lines), lines
 
 
@@ -74,7 +73,7 @@ def test_integrity_replaced_reclassified_with_marker(tmp_path):
     _write_file(log, "small")
     state = os.path.join(tmp_path, _LOG_STATE_FILE)
     # 上次 ino 与当前不同（rename 轮转会新建文件 → inode 变化）
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 99999,
                    "ino": 12345, "mtime": time.time()}, f)
     _write_rollover_marker(str(tmp_path), log + ".1", 99999)
@@ -88,12 +87,12 @@ def test_integrity_stale_marker_still_truncated(tmp_path):
     log = str(tmp_path / "pulse.log")
     _write_file(log, "small")
     state = os.path.join(tmp_path, _LOG_STATE_FILE)
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 99999,
                    "mtime": time.time()}, f)
     # 过期标记
     marker = os.path.join(tmp_path, _LOG_ROLLOVER_MARKER)
-    with io.open(marker, "w", encoding="utf-8") as f:
+    with open(marker, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time() - 3600, "archive": log + ".1",
                    "prev_size": 99999}, f)
 
@@ -106,7 +105,7 @@ def test_integrity_no_marker_still_truncated(tmp_path):
     log = str(tmp_path / "pulse.log")
     _write_file(log, "small")
     state = os.path.join(tmp_path, _LOG_STATE_FILE)
-    with io.open(state, "w", encoding="utf-8") as f:
+    with open(state, "w", encoding="utf-8") as f:
         json.dump({"ts": time.time(), "file": log, "size": 99999,
                    "mtime": time.time()}, f)
     # 不写任何标记

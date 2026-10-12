@@ -13,7 +13,6 @@
 （``reject_write(...) is False`` / ``guard_write(...) is True``），
 绝不在 pytest 里真触发一次生产落盘。
 """
-import io
 import json
 import os
 import subprocess
@@ -25,7 +24,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data import write_guard as wg  # noqa: E402
+from nucleus.data import write_guard as wg
 
 _PROD = os.path.join(_ROOT, "data", "reports", "_m51_never.json")
 _OTHER = os.path.join(_ROOT, "tmp", "_m51_other.json")
@@ -34,7 +33,7 @@ _PY = sys.executable
 
 
 def _src(rel):
-    return io.open(os.path.join(_ROOT, rel), encoding="utf-8").read()
+    return open(os.path.join(_ROOT, rel), encoding="utf-8").read()
 
 
 class TestWriterKind(unittest.TestCase):
@@ -170,7 +169,7 @@ class TestLogging(unittest.TestCase):
         self.assertTrue(_captured, "拒写必须留痕")
         _msg = _captured[0]
         for _must in ("UT_M51", "script", "_m51_never.json", "原因"):
-            self.assertIn(_must, _msg, "日志缺少 {}: {}".format(_must, _msg))
+            self.assertIn(_must, _msg, f"日志缺少 {_must}: {_msg}")
 
     def test_31_never_raises(self):
         """守卫永不抛出（故障 → 放行）。"""
@@ -186,11 +185,11 @@ class TestSubprocessEnv(unittest.TestCase):
 
     _PROBE = (
         "import json, os, sys;"
-        "sys.path.insert(0, r'{}');"
+        f"sys.path.insert(0, r'{_ROOT}');"
         "from nucleus.data import write_guard as wg;"
-        "P=os.path.join(r'{}','data','reports','_m51_sp.json');"
-        "print(json.dumps({{'kind':wg.writer_kind(),"
-        "'reject':wg.reject_write(P),'guard':wg.guard_write(P,component='sp')}}))".format(_ROOT, _ROOT)
+        f"P=os.path.join(r'{_ROOT}','data','reports','_m51_sp.json');"
+        "print(json.dumps({'kind':wg.writer_kind(),"
+        "'reject':wg.reject_write(P),'guard':wg.guard_write(P,component='sp')}))"
     )
 
     def _run(self, env_extra):
@@ -246,7 +245,7 @@ class TestSourceWiring(unittest.TestCase):
                     "def is_test_like_env", "def is_trusted_writer",
                     "def writer_kind", "def strict_enabled",
                     "def reject_reason"):
-            self.assertIn(_fn, _w, "缺少 {}".format(_fn))
+            self.assertIn(_fn, _w, f"缺少 {_fn}")
 
     def test_53_no_bare_except_pass_in_reject(self):
         """守卫内不得有裸 except:pass（留痕失败要退化到 stderr）。"""

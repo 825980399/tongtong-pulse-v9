@@ -24,12 +24,12 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import pytest  # noqa: E402
+import pytest
 
-import config  # noqa: E402
+import config
 
 try:
-    import tmp.test_isolation as TI  # noqa: E402
+    import tmp.test_isolation as TI
 except ImportError:
     pytest.skip(
         "环境依赖缺失：tmp/test_isolation 为 git-ignored 易失辅助模块"
@@ -37,7 +37,7 @@ except ImportError:
         "此处降级为 skip 以免阻断全量 pytest 收集。",
         allow_module_level=True,
     )
-from nucleus.self_awareness.SelfAwarenessEngine import (  # noqa: E402
+from nucleus.self_awareness.SelfAwarenessEngine import (
     SelfAwarenessEngine,
     SelfAwarenessProfile,
 )
@@ -203,7 +203,7 @@ class TestAnalysisScript(unittest.TestCase):
         for _prefix in ("profile_", "report_", "production_consumption_",
                         "fake_loops_"):
             _hit = [f for f in _files if f.startswith(_prefix)]
-            self.assertTrue(_hit, "缺少 {}* 落盘: {}".format(_prefix, _files))
+            self.assertTrue(_hit, f"缺少 {_prefix}* 落盘: {_files}")
             _p = os.path.join(self.out, _hit[0])
             self.assertGreater(os.path.getsize(_p), 0, _p)
 

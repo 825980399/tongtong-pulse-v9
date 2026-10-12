@@ -84,7 +84,7 @@ _PATH_HINTS = ("path", "file", "dir", "dst", "target", "output")
 class _Context:
     """AST 遍历过程中的位置上下文（模块.类.方法）。"""
 
-    __slots__ = ("module", "cls", "func")
+    __slots__ = ("cls", "func", "module")
 
     def __init__(self, module: str = "") -> None:
         self.module = module
@@ -330,25 +330,25 @@ class _CallCollector(ast.NodeVisitor):
         if _last in ("savez", "savez_compressed", "save") and _name.startswith("np"):
             _path, _static = _first_path()
             self._record(self.producers, "produce", _path,
-                         "np.{}".format(_last), _line, _static)
+                         f"np.{_last}", _line, _static)
             return
         if _last in ("load", "loadtxt", "genfromtxt") and _name.startswith("np"):
             _path, _static = _first_path()
             self._record(self.consumers, "consume", _path,
-                         "np.{}".format(_last), _line, _static)
+                         f"np.{_last}", _line, _static)
             return
 
         # ---- pandas ----
         if _last in ("to_csv", "to_json", "to_parquet", "to_pickle", "to_excel"):
             _path, _static = _first_path()
             self._record(self.producers, "produce", _path,
-                         "df.{}".format(_last), _line, _static)
+                         f"df.{_last}", _line, _static)
             return
         if _last in ("read_csv", "read_json", "read_parquet", "read_pickle",
                      "read_excel"):
             _path, _static = _first_path()
             self._record(self.consumers, "consume", _path,
-                         "pd.{}".format(_last), _line, _static)
+                         f"pd.{_last}", _line, _static)
             return
 
         # ---- shutil.copy(src, dst) ----
@@ -358,9 +358,9 @@ class _CallCollector(ast.NodeVisitor):
                 _src, _s_static = _static_path_of(_args[0], self.project_root, self._local_paths)
                 _dst, _d_static = _static_path_of(_args[1], self.project_root, self._local_paths)
                 self._record(self.consumers, "consume", _src,
-                             "shutil.{}(src)".format(_last), _line, _s_static)
+                             f"shutil.{_last}(src)", _line, _s_static)
                 self._record(self.producers, "produce", _dst,
-                             "shutil.{}(dst)".format(_last), _line, _d_static)
+                             f"shutil.{_last}(dst)", _line, _d_static)
             return
 
         # ---- 方法名启发式（save/write/dump... / load/read/fetch...）----
@@ -385,10 +385,10 @@ class _CallCollector(ast.NodeVisitor):
             _path, _static = _static_path_of(_args[0], self.project_root, self._local_paths)
             if _is_producer and not _is_consumer:
                 self._record(self.producers, "produce", _path,
-                             "method:{}".format(_last), _line, _static)
+                             f"method:{_last}", _line, _static)
             elif _is_consumer and not _is_producer:
                 self._record(self.consumers, "consume", _path,
-                             "method:{}".format(_last), _line, _static)
+                             f"method:{_last}", _line, _static)
 
 
 def _iter_scan_files(project_root: str, scan_dirs: list[str]) -> list[str]:
@@ -444,11 +444,11 @@ class ProductionConsumptionMatcher:
                     _src = f.read()
                 _tree = ast.parse(_src, filename=_rel)
             except SyntaxError as e:
-                _parse_errors.append({"file": _rel, "error": "SyntaxError: {}".format(e)})
+                _parse_errors.append({"file": _rel, "error": f"SyntaxError: {e}"})
                 continue
             except Exception as e:  # 单文件失败不中断全盘扫描
                 _parse_errors.append({"file": _rel,
-                                      "error": "{}: {}".format(type(e).__name__, e)})
+                                      "error": f"{type(e).__name__}: {e}"})
                 continue
 
             _col = _CallCollector(_mod, _rel, self.project_root)
@@ -867,8 +867,8 @@ def _fmt_size(n: int) -> str:
         _f = float(n)
         for _unit in ("B", "KB", "MB", "GB"):
             if _f < 1024 or _unit == "GB":
-                return ("{:.0f} {}".format(_f, _unit)) if _unit == "B" else \
-                    ("{:.1f} {}".format(_f, _unit))
+                return (f"{_f:.0f} {_unit}") if _unit == "B" else \
+                    (f"{_f:.1f} {_unit}")
             _f /= 1024.0
     except Exception as e:
         _logger.debug("大小格式化失败: %s: %s", type(e).__name__, e)

@@ -36,8 +36,14 @@ import os
 
 from nucleus._silent_except import silent_exc
 
-__all__ = ["safe_relpath", "normalize_path", "normalize_relpath",
-           "safe_commonpath", "same_drive", "drive_of"]
+__all__ = [
+    "drive_of",
+    "normalize_path",
+    "normalize_relpath",
+    "safe_commonpath",
+    "safe_relpath",
+    "same_drive",
+]
 
 
 def drive_of(path: str) -> str:

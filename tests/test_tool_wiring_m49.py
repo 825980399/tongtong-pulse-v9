@@ -6,7 +6,6 @@ T5：exclude_dirs 统一来源（★语义等价性：三模块排除集必须�
 """
 import ast
 import importlib
-import io
 import os
 import sys
 import unittest
@@ -15,8 +14,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data import exclude_dirs as _ed  # noqa: E402
-from nucleus.data.path_utils import safe_relpath, same_drive  # noqa: E402
+from nucleus.data import exclude_dirs as _ed
+from nucleus.data.path_utils import safe_relpath, same_drive
 
 # ★包 `__init__` 导出的同名符号是**类**，`from pkg import X` 会拿到类而非模块
 #   （项目既有坑，第18/22/26批均踩过）→ 取模块必须用 importlib。
@@ -57,7 +56,7 @@ _BAK = os.path.join(_ROOT, ".bak_batch49")
 
 
 def _read(p):
-    return io.open(p, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
+    return open(p, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
 def _old_set(rel_path, var_name):
@@ -128,7 +127,7 @@ class TestExcludeSetsEquivalent(unittest.TestCase):
             _old = _old_set(_rel, _var)
             if _old is None:
                 self.fail("基线目录存在但集合未提取到 → 佐证失效")
-            self.assertEqual(_old, set(_const), "{} 与固化常量不一致".format(_var))
+            self.assertEqual(_old, set(_const), f"{_var} 与固化常量不一致")
 
     def test_14_call_graph_is_superset_of_source(self):
         self.assertTrue(_ed.SOURCE_SCAN_DIRS <= _ed.CALL_GRAPH_EXCLUDED)
@@ -162,8 +161,8 @@ class TestExcludeWiring(unittest.TestCase):
             ("nucleus/self_awareness/ProductionConsumptionMatcher.py", "_DISK_EXCLUDE_DIRS"),
         ):
             src = _read(os.path.join(_ROOT, rel))
-            self.assertNotIn("{} = {{".format(var), src, "{} 仍有本地集合字面量".format(rel))
-            self.assertNotIn("{} = frozenset((".format(var), src, "{} 仍有本地集合字面量".format(rel))
+            self.assertNotIn(f"{var} = {{", src, f"{rel} 仍有本地集合字面量")
+            self.assertNotIn(f"{var} = frozenset((", src, f"{rel} 仍有本地集合字面量")
 
     def test_22_module_import_still_works(self):
         """三个模块可导入（无循环导入 / 无 NameError）。"""
@@ -200,7 +199,7 @@ class TestPathUtilsWiring(unittest.TestCase):
             self.assertTrue(
                 ("nucleus.data.path_utils import safe_relpath" in src)
                 or ("nucleus.data.path_utils import normalize_relpath" in src),
-                "{} 未从 nucleus.data.path_utils 接入安全入口".format(rel))
+                f"{rel} 未从 nucleus.data.path_utils 接入安全入口")
             _checked += 1
         self.assertGreater(_checked, 0, "无任何调用方可供校验")
 
@@ -242,7 +241,7 @@ class TestPathUtilsWiring(unittest.TestCase):
         try:
             _r = safe_relpath(_t, _ROOT)
         except Exception as e:
-            self.fail("safe_relpath 不应抛异常: {}".format(e))
+            self.fail(f"safe_relpath 不应抛异常: {e}")
         self.assertTrue(os.path.isabs(_r))
 
     def test_35_no_bare_relpath_in_audit_utils_walk(self):

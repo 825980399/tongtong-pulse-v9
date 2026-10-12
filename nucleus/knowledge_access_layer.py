@@ -26,7 +26,8 @@ KAL 定义统一的知识访问接口，使**底层存储可透明替换**：
 import logging
 import os
 import time
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from collections.abc import Iterator
+from typing import Any, Optional
 
 from nucleus._silent_except import silent_exc
 
@@ -76,20 +77,20 @@ class KnowledgeAccessLayer:
     """
 
     def __init__(self, node_pool: Any = None, snapshot: Any = None,
-                 cache_size: Optional[int] = None) -> None:
+                 cache_size: int | None = None) -> None:
         self._node_pool = node_pool
         self._snapshot = snapshot
         self._cache_size = int(cache_size if cache_size is not None
                                else _cfg_int("KAL_CACHE_SIZE", 10000))
         # LRU 缓存：dict 保序，命中移到末尾，超容量淘汰最前
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._hits = 0
         self._misses = 0
         self._created_at = time.time()
 
     # ---------------- 内部辅助 ----------------
 
-    def _all_nodes(self) -> List[Any]:
+    def _all_nodes(self) -> list[Any]:
         """从节点池取全部节点（duck typing 兼容多种方法名，取不到返回空列表）。"""
         _pool = self._node_pool
         if _pool is None:
@@ -125,7 +126,7 @@ class KnowledgeAccessLayer:
 
     # ---------------- 节点基础操作 ----------------
 
-    def get_node(self, node_id: str) -> Optional[Any]:
+    def get_node(self, node_id: str) -> Any | None:
         """按 ID 获取节点（带 LRU 缓存）。"""
         if not _kal_enabled() or not node_id:
             return None
@@ -138,7 +139,7 @@ class KnowledgeAccessLayer:
                 return _n
         return None
 
-    def get_nodes_batch(self, node_ids: List[str]) -> List[Any]:
+    def get_nodes_batch(self, node_ids: list[str]) -> list[Any]:
         """批量获取节点。"""
         if not _kal_enabled():
             return []
@@ -149,7 +150,7 @@ class KnowledgeAccessLayer:
                 _out.append(_n)
         return _out
 
-    def get_all_nodes(self) -> List[Any]:
+    def get_all_nodes(self) -> list[Any]:
         """获取所有节点（数据量大时请改用 iter_nodes）。"""
         if not _kal_enabled():
             return []
@@ -167,7 +168,7 @@ class KnowledgeAccessLayer:
 
     # ---------------- 节点查询操作 ----------------
 
-    def search_by_keywords(self, keywords: List[str], top_k: int = 100) -> List[Any]:
+    def search_by_keywords(self, keywords: list[str], top_k: int = 100) -> list[Any]:
         """按关键词搜索节点（匹配 value / keywords 字段）。"""
         if not _kal_enabled() or not keywords:
             return []
@@ -181,21 +182,21 @@ class KnowledgeAccessLayer:
                     break
         return _out
 
-    def search_by_path(self, path_prefix: str) -> List[Any]:
+    def search_by_path(self, path_prefix: str) -> list[Any]:
         """按知识路径前缀搜索节点。"""
         if not _kal_enabled() or not path_prefix:
             return []
         return [_n for _n in self._all_nodes()
                 if str(getattr(_n, "space_path", "") or "").startswith(str(path_prefix))]
 
-    def search_by_evol_level(self, evol_level: Any) -> List[Any]:
+    def search_by_evol_level(self, evol_level: Any) -> list[Any]:
         """按进化层级搜索节点。"""
         if not _kal_enabled():
             return []
         return [_n for _n in self._all_nodes()
                 if getattr(_n, "evol_level", None) == evol_level]
 
-    def search_by_time_range(self, start_time: Any, end_time: Any) -> List[Any]:
+    def search_by_time_range(self, start_time: Any, end_time: Any) -> list[Any]:
         """按创建时间范围搜索节点（created_at 支持 datetime 或时间戳）。"""
         if not _kal_enabled():
             return []
@@ -214,7 +215,7 @@ class KnowledgeAccessLayer:
             _out.append(_n)
         return _out
 
-    def search_by_source_organ(self, source_organ: str) -> List[Any]:
+    def search_by_source_organ(self, source_organ: str) -> list[Any]:
         """按来源器官搜索节点。"""
         if not _kal_enabled() or not source_organ:
             return []
@@ -223,12 +224,12 @@ class KnowledgeAccessLayer:
 
     # ---------------- 语义检索（未来对接向量库） ----------------
 
-    def semantic_search(self, query_vector: List[float],
-                        top_k: int = 1000) -> List[Tuple[Any, float]]:
+    def semantic_search(self, query_vector: list[float],
+                        top_k: int = 1000) -> list[tuple[Any, float]]:
         """语义相似度搜索。当前使用暴力余弦，未来对接 FAISS / Milvus。"""
         if not _kal_enabled() or not query_vector:
             return []
-        _out: List[Tuple[Any, float]] = []
+        _out: list[tuple[Any, float]] = []
         for _n in self._all_nodes():
             _v = getattr(_n, "vector", None) or getattr(_n, "embedding", None)
             if not _v or len(_v) != len(query_vector):
@@ -248,18 +249,18 @@ class KnowledgeAccessLayer:
     # ---------------- 图遍历（未来对接图数据库） ----------------
 
     def get_linked_nodes(self, node_id: str,
-                         max_depth: int = 1) -> List[Tuple[Any, int]]:
+                         max_depth: int = 1) -> list[tuple[Any, int]]:
         """获取关联节点（当前基于 linked_nodes 字段做 BFS，未来对接 Neo4j）。"""
         if not _kal_enabled() or not node_id:
             return []
         _by_id = {getattr(_n, "node_id", ""): _n for _n in self._all_nodes()}
-        _out: List[Tuple[Any, int]] = []
+        _out: list[tuple[Any, int]] = []
         _seen = {node_id}
         _frontier = [node_id]
         _depth = 0
         while _frontier and _depth < int(max_depth or 1):
             _depth += 1
-            _next: List[str] = []
+            _next: list[str] = []
             for _cur in _frontier:
                 _node = _by_id.get(_cur)
                 if _node is None:
@@ -276,7 +277,7 @@ class KnowledgeAccessLayer:
         return _out
 
     def find_path(self, source_id: str, target_id: str,
-                  max_depth: int = 5) -> List[str]:
+                  max_depth: int = 5) -> list[str]:
         """查找两节点间路径（BFS，未来对接 Neo4j）。找不到返回空列表。"""
         if not _kal_enabled() or not source_id or not target_id:
             return []
@@ -288,7 +289,7 @@ class KnowledgeAccessLayer:
         _depth = 0
         while _frontier and _depth < int(max_depth or 5):
             _depth += 1
-            _next: List[str] = []
+            _next: list[str] = []
             for _cur in _frontier:
                 for _lid in (getattr(_by_id.get(_cur), "linked_nodes", None) or []):
                     _lid = str(_lid)
@@ -307,7 +308,7 @@ class KnowledgeAccessLayer:
     # ---------------- 时序分析（未来对接时序库） ----------------
 
     def get_activation_history(self, node_id: str, start_time: Any,
-                               end_time: Any) -> List[dict]:
+                               end_time: Any) -> list[dict]:
         """获取节点激活历史（当前基于节点自身字段，未来对接 InfluxDB）。"""
         if not _kal_enabled():
             return []
@@ -329,10 +330,10 @@ class KnowledgeAccessLayer:
             return 0
         return len(self._all_nodes())
 
-    def get_node_count_by_evol_level(self) -> Dict[Any, int]:
+    def get_node_count_by_evol_level(self) -> dict[Any, int]:
         if not _kal_enabled():
             return {}
-        _out: Dict[Any, int] = {}
+        _out: dict[Any, int] = {}
         for _n in self._all_nodes():
             _lv = getattr(_n, "evol_level", None)
             _out[_lv] = _out.get(_lv, 0) + 1
@@ -448,7 +449,7 @@ class KnowledgeAccessLayer:
             silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_read_enabled L442")
             return False
 
-    def query_relationships(self, node_id: str, direction: str = "both") -> List[dict]:
+    def query_relationships(self, node_id: str, direction: str = "both") -> list[dict]:
         """查询节点关联关系：优先 Neo4j，回退节点内 linked_nodes。"""
         if not _kal_enabled() or not node_id:
             return []
@@ -469,7 +470,7 @@ class KnowledgeAccessLayer:
             _out.append({"from": node_id, "to": _tid, "rel_type": "RELATED"})
         return _out
 
-    def query_multi_hop(self, node_id: str, max_depth: int = 2) -> List[str]:
+    def query_multi_hop(self, node_id: str, max_depth: int = 2) -> list[str]:
         """多跳关联查询：优先 Neo4j，回退节点内 BFS。"""
         if not _kal_enabled() or not node_id:
             return []
@@ -493,7 +494,7 @@ class KnowledgeAccessLayer:
         except Exception:
             return []
 
-    def query_common_neighbors(self, node_id_1: str, node_id_2: str) -> List[str]:
+    def query_common_neighbors(self, node_id_1: str, node_id_2: str) -> list[str]:
         """共同邻居查询：优先 Neo4j，回退集合交集。"""
         if not _kal_enabled() or not node_id_1 or not node_id_2:
             return []
@@ -595,7 +596,7 @@ class KnowledgeAccessLayer:
         """当前存储后端类型（json / parquet / distributed）。"""
         return _cfg_str("KAL_STORAGE_BACKEND", "json")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """缓存命中统计（命中率可观测）。"""
         _total = self._hits + self._misses
         return {

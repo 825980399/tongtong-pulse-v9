@@ -27,10 +27,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from unittest import mock  # noqa: E402
+from unittest import mock
 
-import config  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+import config
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
 
 def _rmtree(path):

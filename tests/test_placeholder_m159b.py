@@ -17,11 +17,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.knowledge.PlaceholderSanitizer import (  # noqa: E402
+from nucleus.knowledge.PlaceholderSanitizer import (
     PLACEHOLDER_FALLBACK_TEXT,
     sanitize_placeholder_text,
 )
-from tools.cleanup_alias_placeholder_nodes import (  # noqa: E402
+from tools.cleanup_alias_placeholder_nodes import (
     is_placeholder_alias_node,
 )
 

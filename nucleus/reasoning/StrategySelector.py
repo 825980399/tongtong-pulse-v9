@@ -215,8 +215,8 @@ class StrategySelector:
                 "base_strategy": _base.get("strategy"),
                 "confidence": _base.get("confidence"),
                 "question_type": question_type,
-                "reason": ("检测器不可识别({})→启用本地推理兜底链 "
-                           "Symbolic→Causal→Analogy→LLM".format(question_type)),
+                "reason": (f"检测器不可识别({question_type})→启用本地推理兜底链 "
+                           "Symbolic→Causal→Analogy→LLM"),
             }
         return _base
 
@@ -242,14 +242,14 @@ class StrategySelector:
             if self._consecutive_pass[strategy] >= 5 and self._degraded.get(strategy):
                 self._degraded[strategy] = False
                 _logger.info(
-                    "[路由升降级] 策略={} 连续5次通过→恢复(扩大)".format(strategy))
+                    f"[路由升降级] 策略={strategy} 连续5次通过→恢复(扩大)")
         else:
             self._consecutive_pass[strategy] = 0
             self._consecutive_fail[strategy] += 1
             if self._consecutive_fail[strategy] >= 3 and not self._degraded.get(strategy):
                 self._degraded[strategy] = True
                 _logger.warning(
-                    "[路由升降级] 策略={} 连续3次失败→降级".format(strategy))
+                    f"[路由升降级] 策略={strategy} 连续3次失败→降级")
 
     # ========== 内部方法 ==========
 

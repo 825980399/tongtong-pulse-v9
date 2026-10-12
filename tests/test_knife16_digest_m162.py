@@ -25,8 +25,7 @@ def _make_root(records):
     os.makedirs(rep_dir, exist_ok=True)
     path = os.path.join(rep_dir, "alerts.jsonl")
     with open(path, "w", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
     return root, path
 
 

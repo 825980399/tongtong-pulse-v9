@@ -15,14 +15,14 @@ import os
 import sys
 import unittest
 
-import pytest  # noqa: E402
+import pytest
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 try:
-    import tmp.test_isolation as TI  # noqa: E402
+    import tmp.test_isolation as TI
 except ImportError:
     pytest.skip(
         "环境依赖缺失：tmp/test_isolation 为 git-ignored 易失辅助模块"
@@ -42,7 +42,7 @@ class TestIsoDirShortPath(unittest.TestCase):
     def test_iso_dir_is_short_relative_path(self):
         _rel = os.path.relpath(TI.ISO_DIR, _PROJECT_ROOT).replace(os.sep, "/")
         self.assertTrue(_rel.startswith("tmp/"), _rel)
-        self.assertLess(len(_rel), 40, "隔离目录相对路径必须 <40 字符: {}".format(_rel))
+        self.assertLess(len(_rel), 40, f"隔离目录相对路径必须 <40 字符: {_rel}")
         self.assertRegex(os.path.basename(TI.ISO_DIR), r"^t_[0-9a-f]{6}$")
 
     def test_iso_dir_is_under_tmp(self):

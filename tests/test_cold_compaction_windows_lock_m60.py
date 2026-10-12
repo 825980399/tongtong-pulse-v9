@@ -10,16 +10,16 @@ shutil.rmtree（删除旧目录）/ os.rename（重命名临时目录）做异�
 import os
 import sys
 import time
-import unittest.mock as mock
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import pyarrow as pa  # noqa: E402
-import pyarrow.parquet as pq  # noqa: E402
+import pyarrow as pa
+import pyarrow.parquet as pq
 
-from nucleus.mnemosyne.PulseNodePool import (  # noqa: E402
+from nucleus.mnemosyne.PulseNodePool import (
     COLD_COMPACT_MIN_FILES,
     PulseNodePool,
 )
@@ -89,10 +89,9 @@ def test_cold_compact_delete_ok_rename_exhausted(tmp_path):
     _cold = str(tmp_path / "cold")
     _make_fixtures(_cold)
     _p = _new_pool(_cold)
-    with mock.patch("time.sleep", lambda *a, **k: None):
-        with mock.patch("shutil.rmtree", return_value=None):
-            with mock.patch("os.rename", side_effect=OSError("locked")) as _rn:
-                _r = _p.compact_cold_storage()
+    with mock.patch("time.sleep", lambda *a, **k: None), mock.patch("shutil.rmtree", return_value=None):
+        with mock.patch("os.rename", side_effect=OSError("locked")) as _rn:
+            _r = _p.compact_cold_storage()
     assert _r.get("success") is False
     assert _r.get("reason") == "rename_retry_exhausted"
     assert _rn.call_count == 5
@@ -109,12 +108,10 @@ def test_cold_compact_rename_success_after_retries(tmp_path):
         _calls["n"] += 1
         if _calls["n"] < 5:
             raise OSError("locked")
-        return None
 
-    with mock.patch("time.sleep", lambda *a, **k: None):
-        with mock.patch("shutil.rmtree", return_value=None):
-            with mock.patch("os.rename", side_effect=_rename_fail4) as _rn:
-                _r = _p.compact_cold_storage()
+    with mock.patch("time.sleep", lambda *a, **k: None), mock.patch("shutil.rmtree", return_value=None):
+        with mock.patch("os.rename", side_effect=_rename_fail4) as _rn:
+            _r = _p.compact_cold_storage()
     assert _r.get("success") is True
     assert _rn.call_count == 5
 
@@ -125,9 +122,8 @@ def test_cold_compact_cooldown_skip(tmp_path):
     _make_fixtures(_cold)
     _p = _new_pool(_cold)
     _p._cold_compact_cooldown_until = time.time() + 3600
-    with mock.patch("shutil.rmtree") as _rm:
-        with mock.patch("os.rename") as _rn:
-            _r = _p.compact_cold_storage()
+    with mock.patch("shutil.rmtree") as _rm, mock.patch("os.rename") as _rn:
+        _r = _p.compact_cold_storage()
     assert _r.get("reason") == "cooldown"
     assert _r.get("success") is False
     _rm.assert_not_called()

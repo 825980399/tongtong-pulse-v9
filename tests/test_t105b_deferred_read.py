@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
 
 def _issue(iid, method, deferred=False, itype="print_instead_of_log"):

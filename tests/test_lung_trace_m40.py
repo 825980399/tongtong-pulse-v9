@@ -13,10 +13,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-import nucleus.llm.call_recorder as cr  # noqa: E402
-import nucleus.LLMDependencyMetrics as dm  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
+import config
+import nucleus.llm.call_recorder as cr
+import nucleus.LLMDependencyMetrics as dm
+from organs.body.PulseLung import PulseLung
 
 
 def _make_lung(reply="模拟回复"):
@@ -206,7 +206,7 @@ class TestSwitches(_Base):
                          "x")
 
     def test_42_no_channel(self):
-        config.get_active_channels = lambda: []
+        config.get_active_channels = list
         _l = _make_lung("x")
         self.assertIsNone(_l._call_via_channels("q", "m1"))
         # 依赖度仍记一次（进入方法即计）；无调用对

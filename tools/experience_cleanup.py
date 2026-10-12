@@ -29,7 +29,6 @@ L3 检索闸门由 ``nucleus/data/experience_cleanup.py`` 提供，
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
@@ -39,14 +38,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.data import experience_cleanup as _ec  # noqa: E402
+from nucleus.data import experience_cleanup as _ec
 
 DEFAULT_POOL = os.path.join(ROOT, "data", "experience", "experience_pool.json")
 DEFAULT_BACKUP = DEFAULT_POOL + ".backup_20260914_pre_cleanup"
 
 
 def _load(path: str):
-    return json.load(io.open(path, encoding="utf-8"))
+    return json.load(open(path, encoding="utf-8"))
 
 
 def _recs(doc):
@@ -64,7 +63,7 @@ def cmd_plan(ns) -> int:
     print("=" * 70)
     print("清洗预案（只读，不修改任何数据）")
     print("=" * 70)
-    print("  经验库: {}".format(ns.pool))
+    print(f"  经验库: {ns.pool}")
     print("  总记录 %d  污染 %d (%.1f%%)  干净 %d"
           % (s["total"], s["polluted"], s["polluted_rate"] * 100,
              s["total"] - s["polluted"]))
@@ -72,7 +71,7 @@ def cmd_plan(ns) -> int:
     print("  分类:", r["by_class"])
     print("  ★预计清洗后可检索: %d 条 (%.1f%%)"
           % (s["total"] - s["polluted"], (1 - s["polluted_rate"]) * 100))
-    print("  ★策略: 标记不删除；备份路径 {}".format(ns.backup))
+    print(f"  ★策略: 标记不删除；备份路径 {ns.backup}")
     return 0
 
 
@@ -96,10 +95,10 @@ def cmd_verify(ns) -> int:
         _d = os.path.dirname(os.path.abspath(ns.report))
         if _d:
             os.makedirs(_d, exist_ok=True)
-        io.open(ns.report, "w", encoding="utf-8").write(
+        open(ns.report, "w", encoding="utf-8").write(
             json.dumps({"cleanup": s, "clean_records": len(_clean),
                         "clean_retrievable": len(_clean_ok)}, ensure_ascii=False, indent=2))
-        print("  报告已写出 → {}".format(ns.report))
+        print(f"  报告已写出 → {ns.report}")
     return 0
 
 
@@ -138,10 +137,10 @@ def cmd_rollback(ns) -> int:
         print("★这是写操作。确认请加 --yes")
         return 2
     if not os.path.isfile(ns.backup):
-        print("★备份不存在，无法回滚: {}".format(ns.backup))
+        print(f"★备份不存在，无法回滚: {ns.backup}")
         return 3
     _r = _ec.rollback_file(ns.pool, ns.backup)
-    print("  已回滚: {}".format(_r))
+    print(f"  已回滚: {_r}")
     return 0
 
 

@@ -29,8 +29,9 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
@@ -264,7 +265,7 @@ class SelfAwarenessDailyScheduler:
         try:
             if not os.path.isdir(_d):
                 return False
-            _prefix = "report_{}_".format(_day)
+            _prefix = f"report_{_day}_"
             for _fn in os.listdir(_d):
                 if _fn.startswith(_prefix) and _fn.endswith(".txt"):
                     return True
@@ -314,10 +315,10 @@ class SelfAwarenessDailyScheduler:
             _profile = _eng.run_all_analyses()
             _res["dimensions"] = self._count_dimensions(_profile, _eng)
             os.makedirs(_out, exist_ok=True)
-            _pp = os.path.join(_out, "profile_{}.json".format(_ts))
+            _pp = os.path.join(_out, f"profile_{_ts}.json")
             if _eng.save_profile(_pp):
                 _res["profile_path"] = _pp
-            _rp = os.path.join(_out, "report_{}.txt".format(_ts))
+            _rp = os.path.join(_out, f"report_{_ts}.txt")
             _eng.generate_report(_rp)
             _res["report_path"] = _rp
             # ★主线第50批 T1（P0-1）：自认知报告 → ReportBus
@@ -538,7 +539,7 @@ class SelfAwarenessDailyScheduler:
             self._runs += 1
         except Exception as _e:
             _res["status"] = "error"
-            _res["error"] = "{}: {}".format(type(_e).__name__, _e)
+            _res["error"] = f"{type(_e).__name__}: {_e}"
             _res["elapsed_ms"] = round((time.perf_counter() - _t0) * 1000.0, 2)
             self._errors += 1
             _module_logger.warning("[自我认知调度] 每日分析失败: %s", _res["error"])

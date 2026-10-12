@@ -3122,7 +3122,7 @@ class SelfInspector(SilentLogMixin):
         _file_to_mod: dict[str, str] = {}
         _file_src: dict[str, str] = {}
         for _ap, _rel in self._si_walk_py():
-            _rel_nopy = _rel[:-3] if _rel.endswith(".py") else _rel
+            _rel_nopy = _rel.removesuffix(".py")
             if os.path.basename(_rel_nopy) == "__init__":
                 _mod = _rel_nopy[: -len("__init__")].rstrip(".")
             else:

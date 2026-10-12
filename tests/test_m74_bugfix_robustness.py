@@ -19,10 +19,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import nucleus.logger as logger_mod  # noqa: E402
-import organs.motor.PulseLegs as legs_mod  # noqa: E402
-from nucleus.logger import SafeRotatingFileHandler  # noqa: E402
-from nucleus.parsing.JsonRepair import classify_json_error, parse_with_repair  # noqa: E402
+import nucleus.logger as logger_mod
+import organs.motor.PulseLegs as legs_mod
+from nucleus.logger import SafeRotatingFileHandler
+from nucleus.parsing.JsonRepair import classify_json_error, parse_with_repair
 
 
 # ===================== T1：双腿 dict.append =====================
@@ -121,15 +121,14 @@ def test_t4_log_rollover_permissionerror_no_crash(tmp_path):
     logf.write_text("x" * 20, encoding="utf-8")
     h = SafeRotatingFileHandler(str(logf), maxBytes=10, backupCount=2)
     with mock.patch.object(logging.handlers.RotatingFileHandler, "doRollover",
-                           side_effect=PermissionError("WinError 32")):
-        with mock.patch.object(logger_mod, "time") as mt:
-            mt.sleep = mock.MagicMock()
-            try:
-                h.doRollover()
-            except Exception as e:
-                pytest.fail(f"doRollover 抛异常(应优雅降级): {e}")
-            # 至少尝试了退避重试
-            assert mt.sleep.called
+                           side_effect=PermissionError("WinError 32")), mock.patch.object(logger_mod, "time") as mt:
+        mt.sleep = mock.MagicMock()
+        try:
+            h.doRollover()
+        except Exception as e:
+            pytest.fail(f"doRollover 抛异常(应优雅降级): {e}")
+        # 至少尝试了退避重试
+        assert mt.sleep.called
 
 
 def test_t4_log_rollover_exponential_backoff(tmp_path):
@@ -139,13 +138,12 @@ def test_t4_log_rollover_exponential_backoff(tmp_path):
     h = SafeRotatingFileHandler(str(logf), maxBytes=10, backupCount=2)
     sleeps = []
     with mock.patch.object(logging.handlers.RotatingFileHandler, "doRollover",
-                           side_effect=PermissionError("WinError 32")):
-        with mock.patch.object(logger_mod, "time") as mt:
-            mt.sleep = lambda s: sleeps.append(s)
-            try:
-                h.doRollover()
-            except Exception:
-                pass
+                           side_effect=PermissionError("WinError 32")), mock.patch.object(logger_mod, "time") as mt:
+        mt.sleep = lambda s: sleeps.append(s)
+        try:
+            h.doRollover()
+        except Exception:
+            pass
     # 至少两次退避，且呈递增（0.2, 0.4, ...）
     assert len(sleeps) >= 2
     assert sleeps[1] > sleeps[0]

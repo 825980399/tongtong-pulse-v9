@@ -1083,7 +1083,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                     except Exception as e:
                         silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lopen")
                     _loops.append({
-                        "loop": _fn[: -len('.jsonl')] if _fn.endswith('.jsonl') else _fn,
+                        "loop": _fn.removesuffix('.jsonl'),
                         "records": _records[-50:],
                         "count": len(_records),
                     })

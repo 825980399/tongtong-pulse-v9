@@ -5,7 +5,6 @@
 """
 import gzip
 import importlib
-import io
 import os
 import shutil
 import sys
@@ -15,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
+import config
 
 _gov = importlib.import_module("tools.data_governance_m41")
 
@@ -70,16 +69,16 @@ class _Base(unittest.TestCase):
 
     def _mk_corrupted(self, name, payload="x", origin_file=None):
         _cd = os.path.join(self._data, "corrupted")
-        with io.open(os.path.join(_cd, name), "w", encoding="utf-8") as f:
+        with open(os.path.join(_cd, name), "w", encoding="utf-8") as f:
             f.write(payload)
         if origin_file:
-            with io.open(os.path.join(_cd, origin_file), "w", encoding="utf-8") as f:
+            with open(os.path.join(_cd, origin_file), "w", encoding="utf-8") as f:
                 f.write("intact")
 
     def _mk_backup(self, name, size=200, age=0.0):
         _kd = os.path.join(self._data, "knowledge")
         _p = os.path.join(_kd, name)
-        with io.open(_p, "w", encoding="utf-8") as f:
+        with open(_p, "w", encoding="utf-8") as f:
             f.write("a" * size)
         _t = time.time() - age
         os.utime(_p, (_t, _t))
@@ -151,7 +150,7 @@ class TestCorruptedGovernance(_Base):
         self._mk_corrupted("b.json.20260101_000000.corrupted")
         _gov.govern_corrupted()
         import json
-        _m = json.load(io.open(_gov._MANIFEST, encoding="utf-8"))
+        _m = json.load(open(_gov._MANIFEST, encoding="utf-8"))
         self.assertEqual(len(_m), 2)
 
 

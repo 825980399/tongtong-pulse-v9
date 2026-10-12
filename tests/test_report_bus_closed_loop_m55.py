@@ -29,14 +29,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import unittest  # noqa: E402
-from unittest import mock  # noqa: E402
+import unittest
+from unittest import mock
 
-import config  # noqa: E402
-from nucleus.reporting import consumers as _cons  # noqa: E402
+import config
+from nucleus.reporting import consumers as _cons
 from nucleus.reporting import publishers as _pub
 from nucleus.reporting import report_bus as _rb
-from nucleus.reporting.report_envelope import Anomaly  # noqa: E402
+from nucleus.reporting.report_envelope import Anomaly
 
 # 真实结构：DailyScheduler → evaluate_and_report() 的返回值
 REAL_PQ = {
@@ -141,7 +141,7 @@ class TestReportBusClosedLoopM55(unittest.TestCase):
         _pub.publish_self_cognition("正文", summary={"headline_issue": "空转"})
         _st = self.bus.get_stats()
         self.assertGreater(_st["consumption_rate"], 0,
-                           "四类报告发布后仍有报告无人消费：{}".format(_st))
+                           f"四类报告发布后仍有报告无人消费：{_st}")
 
 
 if __name__ == "__main__":

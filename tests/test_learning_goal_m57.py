@@ -14,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from organs.brain.PulseInnerWorld import (  # noqa: E402
+from organs.brain.PulseInnerWorld import (
     PulseInnerWorld,
     is_meta_skill_goal,
 )

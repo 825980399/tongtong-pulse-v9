@@ -13,7 +13,6 @@
 ★全部隔离到 `tempfile.mkdtemp()` → **绝不写生产 `data/llm_traces/`**。
 """
 import importlib.util
-import io
 import json
 import os
 import shutil
@@ -43,15 +42,14 @@ BF = _load_tool()
 
 def _mk(d, name, recs):
     fp = os.path.join(d, name)
-    with io.open(fp, "w", encoding="utf-8") as f:
-        for r in recs:
-            f.write((r if isinstance(r, str)
-                     else json.dumps(r, ensure_ascii=False)) + "\n")
+    with open(fp, "w", encoding="utf-8") as f:
+        f.writelines((r if isinstance(r, str)
+                     else json.dumps(r, ensure_ascii=False)) + "\n" for r in recs)
     return fp
 
 
 def _read(p):
-    return [json.loads(x) for x in io.open(p, encoding="utf-8") if x.strip()]
+    return [json.loads(x) for x in open(p, encoding="utf-8") if x.strip()]
 
 
 class _Base(unittest.TestCase):
@@ -79,7 +77,7 @@ class TestToolInterface(_Base):
     def test_03_constants_present(self):
         for _k in ("BACKFILL_PROMPT_VERSION", "BACKFILL_NO_DETAIL",
                    "BACKUP_SUFFIX", "BACKFILL_ERROR_LIMIT"):
-            self.assertTrue(hasattr(BF, _k), "缺少常量 {}".format(_k))
+            self.assertTrue(hasattr(BF, _k), f"缺少常量 {_k}")
 
 
 class TestDryRunStability(_Base):
@@ -109,9 +107,9 @@ class TestDryRunStability(_Base):
         _fp = _mk(_d, "calls_20260101.jsonl",
                   [{"trace_id": "a", "prompt_version": "", "status": "failed",
                     "error": "", "response": "", "prompt": "p"}])
-        _before = io.open(_fp, encoding="utf-8").read()
+        _before = open(_fp, encoding="utf-8").read()
         BF.run(_d, apply=False)
-        self.assertEqual(io.open(_fp, encoding="utf-8").read(), _before)
+        self.assertEqual(open(_fp, encoding="utf-8").read(), _before)
         self.assertFalse(os.path.exists(_fp + BF.BACKUP_SUFFIX))
 
 
@@ -137,7 +135,7 @@ class TestBoundary(_Base):
         self.assertEqual(_p["total"], 1)
         self.assertEqual(_p["bad_lines"], 2)
         BF.run(_d, apply=True, backup=False)
-        _raw = io.open(_fp, encoding="utf-8").read().split("\n")
+        _raw = open(_fp, encoding="utf-8").read().split("\n")
         self.assertIn("NOT JSON AT ALL", _raw)
         self.assertIn("[1,2,3]", _raw)
 
@@ -183,12 +181,12 @@ class TestIdempotency(_Base):
                   [{"trace_id": "a", "prompt_version": "", "status": "failed",
                     "error": "", "response": "", "prompt": "p"}])
         _r1 = BF.run(_d, apply=True, backup=True, archive_root=self._arch())
-        _snap = io.open(_fp, encoding="utf-8").read()
+        _snap = open(_fp, encoding="utf-8").read()
         _r2 = BF.run(_d, apply=True, backup=True, archive_root=self._arch())
         self.assertEqual(_r1["total_prompt_version_fill"], 1)
         self.assertEqual(_r2["total_prompt_version_fill"], 0)
         self.assertEqual(_r2["total_error_fill"], 0)
-        self.assertEqual(io.open(_fp, encoding="utf-8").read(), _snap)
+        self.assertEqual(open(_fp, encoding="utf-8").read(), _snap)
 
     def test_31_apply_backs_up_single_file(self):
         _d = os.path.join(self._tmp, "bak")
@@ -210,7 +208,7 @@ class TestArchiveBackup(_Base):
         self.assertTrue(os.path.basename(_ab["dest"]).startswith(
             "llm_traces_backup_"))
         self.assertTrue(os.path.isfile(_ab["manifest"]))
-        _mf = json.load(io.open(_ab["manifest"], encoding="utf-8"))
+        _mf = json.load(open(_ab["manifest"], encoding="utf-8"))
         self.assertEqual(_mf["mismatch"], [])
         self.assertTrue(_mf["files"][0]["sha256"])
 
@@ -246,22 +244,22 @@ class TestArchiveBackup(_Base):
 class TestManualAndReport(unittest.TestCase):
     def test_50_manual_exists_with_sections(self):
         self.assertTrue(os.path.isfile(_MANUAL), "操作手册缺失")
-        _t = io.open(_MANUAL, encoding="utf-8").read()
+        _t = open(_MANUAL, encoding="utf-8").read()
         for _k in ("前置条件", "执行步骤", "回滚", "验证清单", "常见问题",
                    "框架必须已停止运行"):
-            self.assertIn(_k, _t, "手册缺少章节: {}".format(_k))
+            self.assertIn(_k, _t, f"手册缺少章节: {_k}")
 
     def test_51_manual_documents_backup_naming(self):
-        _t = io.open(_MANUAL, encoding="utf-8").read()
+        _t = open(_MANUAL, encoding="utf-8").read()
         self.assertIn("llm_traces_backup_YYYYMMDD_HHMMSS", _t)
         self.assertIn("BACKUP_MANIFEST.json", _t)
 
     def test_52_verify_report_all_ok(self):
         # ★主线第62批 T4-3：产物缺失 → skip（同 T4-2 处理，非逻辑失败）
         if not os.path.isfile(_VERIFY_REPORT):
-            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {}".format(_VERIFY_REPORT))
+            self.skipTest(f"第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {_VERIFY_REPORT}")
         self.assertTrue(os.path.isfile(_VERIFY_REPORT), "缺少工具验证报告")
-        _r = json.load(io.open(_VERIFY_REPORT, encoding="utf-8"))
+        _r = json.load(open(_VERIFY_REPORT, encoding="utf-8"))
         self.assertTrue(_r["all_ok"], "工具验证存在不符项: {}".format(_r["checks"]))
         self.assertTrue(_r["checks"]["dry_run_stability_3x"]["stable"])
         self.assertTrue(_r["checks"]["idempotency"]["ok"])
@@ -272,8 +270,8 @@ class TestManualAndReport(unittest.TestCase):
         """★本批**不实际执行**回填 → 生产仍应有未回填的历史记录。"""
         # ★主线第62批 T4-3：产物缺失 → skip（同 T4-2 处理，非逻辑失败）
         if not os.path.isfile(_VERIFY_REPORT):
-            self.skipTest("第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {}".format(_VERIFY_REPORT))
-        _r = json.load(io.open(_VERIFY_REPORT, encoding="utf-8"))
+            self.skipTest(f"第45批回填工具验证报告产物缺失（证据缺失，非逻辑失败）: {_VERIFY_REPORT}")
+        _r = json.load(open(_VERIFY_REPORT, encoding="utf-8"))
         _pt = _r["checks"]["production_untouched"]
         self.assertFalse(_pt["backfilled"])
         self.assertGreater(_pt["pv_empty"], 0)

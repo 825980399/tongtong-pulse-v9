@@ -67,11 +67,11 @@ def _safe_rmtree(path):
                 try:
                     os.remove(os.path.join(dp, f))
                 except BaseException as e:
-                    print("cleanup warn: {}: {}".format(type(e).__name__, e))
+                    print(f"cleanup warn: {type(e).__name__}: {e}")
         try:
             os.rmdir(dp)
         except BaseException as e:
-            print("cleanup warn: {}: {}".format(type(e).__name__, e))
+            print(f"cleanup warn: {type(e).__name__}: {e}")
 
 
 def _rec(i=0, prompt="正常提问内容ABC", response="正常回答内容XYZ", channel="zhipu",
@@ -268,9 +268,8 @@ class TestIO(unittest.TestCase):
         os.makedirs(_d, exist_ok=True)
         import time as _t
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
-            for i in range(30):
-                f.write(json.dumps(_rec(i)) + "\n")
+        with open(os.path.join(_d, f"calls_{_day}.jsonl"), "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(_rec(i)) + "\n" for i in range(30))
         _r = evaluate_day(day=_day, trace_dir=_d)
         self.assertEqual(_r["total_records"], 30)
         self.assertTrue(_r["file_exists"])
@@ -289,9 +288,8 @@ class TestIO(unittest.TestCase):
         os.makedirs(_d, exist_ok=True)
         import time as _t
         _day = _t.strftime("%Y%m%d")
-        with open(os.path.join(_d, "calls_{}.jsonl".format(_day)), "w", encoding="utf-8") as f:
-            for i in range(30):
-                f.write(json.dumps(_rec(i)) + "\n")
+        with open(os.path.join(_d, f"calls_{_day}.jsonl"), "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(_rec(i)) + "\n" for i in range(30))
         _out = os.path.join(self.dir, "out.json")
         _r = evaluate_and_report(day=_day, trace_dir=_d, report_path=_out)
         self.assertIsNotNone(_r)

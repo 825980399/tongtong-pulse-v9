@@ -5,7 +5,7 @@
 """
 from unittest.mock import patch
 
-from organs.body.PulseLung import PulseLung, VISION_MODEL_NAME
+from organs.body.PulseLung import VISION_MODEL_NAME, PulseLung
 
 
 def _mk_lung():

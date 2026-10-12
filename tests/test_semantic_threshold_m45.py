@@ -10,7 +10,6 @@
 
 ★全部隔离到 `tempfile.mkdtemp()` → **不写生产 `data/cache/`**。
 """
-import io
 import json
 import math
 import os
@@ -22,8 +21,8 @@ import unittest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-import nucleus.llm.semantic_cache as _sc  # noqa: E402
+import config
+import nucleus.llm.semantic_cache as _sc
 
 _CALIB_REPORT = os.path.join(_ROOT, "docs", "分析报告", "m45_阈值校准复跑报告.json")
 
@@ -152,7 +151,7 @@ def _numeric_literals(path, value=0.92):
     只认 ``ast.Constant`` 的数值节点 —— 这才是"生效值"。
     """
     import ast as _ast
-    _tree = _ast.parse(io.open(path, encoding="utf-8").read())
+    _tree = _ast.parse(open(path, encoding="utf-8").read())
     _out = []
     for _n in _ast.walk(_tree):
         if isinstance(_n, _ast.Constant) and isinstance(_n.value, (int, float)) \
@@ -167,9 +166,9 @@ class TestNoHardcode(unittest.TestCase):
         """★任务书验收项：`semantic_cache.py` 内**生效值**不得是 0.92。"""
         _p = os.path.join(_ROOT, "nucleus", "llm", "semantic_cache.py")
         _lits = _numeric_literals(_p, 0.92)
-        _lines = io.open(_p, encoding="utf-8").read().split("\n")
+        _lines = open(_p, encoding="utf-8").read().split("\n")
         self.assertEqual(_lits, [],
-                         "semantic_cache.py 存在 0.92 数值字面量 @{}: {}".format(_lits, [_lines[i - 1].strip()[:100] for i in _lits]))
+                         f"semantic_cache.py 存在 0.92 数值字面量 @{_lits}: {[_lines[i - 1].strip()[:100] for i in _lits]}")
 
     def test_31_semantic_cache_default_is_085_literal(self):
         _p = os.path.join(_ROOT, "nucleus", "llm", "semantic_cache.py")
@@ -180,7 +179,7 @@ class TestNoHardcode(unittest.TestCase):
         """config.py 的 0.92 数值字面量**只允许 1 处**（校准前回退项）。"""
         _p = os.path.join(_ROOT, "config.py")
         _lits = _numeric_literals(_p, 0.92)
-        _lines = io.open(_p, encoding="utf-8").read().split("\n")
+        _lines = open(_p, encoding="utf-8").read().split("\n")
         _srcs = [_lines[i - 1].strip() for i in _lits]
         self.assertEqual(len(_lits), 1,
                          "0.92 数值字面量应恰有 1 处（回退项），实际 %d: %s"
@@ -190,7 +189,7 @@ class TestNoHardcode(unittest.TestCase):
     def test_33_config_comments_may_mention_092(self):
         """反例保护：注释里写 `0.92` 属**文档**，不得被判为残留。"""
         _p = os.path.join(_ROOT, "config.py")
-        _raw = io.open(_p, encoding="utf-8").read()
+        _raw = open(_p, encoding="utf-8").read()
         self.assertIn("0.92", _raw, "校准说明注释应保留（便于回溯）")
         self.assertEqual(len(_numeric_literals(_p, 0.92)), 1)
 
@@ -224,18 +223,18 @@ class TestCalibrationEvidence(unittest.TestCase):
     def setUpClass(cls):
         if not os.path.isfile(_CALIB_REPORT):
             raise unittest.SkipTest(
-                "第45批校准复跑报告产物缺失（证据缺失，非逻辑失败）: {}".format(_CALIB_REPORT))
+                f"第45批校准复跑报告产物缺失（证据缺失，非逻辑失败）: {_CALIB_REPORT}")
 
     def test_40_recalibration_report_exists(self):
         self.assertTrue(os.path.isfile(_CALIB_REPORT),
-                        "缺少校准复跑报告: {}".format(_CALIB_REPORT))
+                        f"缺少校准复跑报告: {_CALIB_REPORT}")
 
     def test_41_recommended_threshold_is_085(self):
-        _r = json.load(io.open(_CALIB_REPORT, encoding="utf-8"))
+        _r = json.load(open(_CALIB_REPORT, encoding="utf-8"))
         self.assertEqual(float(_r["probe"]["recommended"]), 0.85)
 
     def test_42_f1_at_085_is_one(self):
-        _r = json.load(io.open(_CALIB_REPORT, encoding="utf-8"))
+        _r = json.load(open(_CALIB_REPORT, encoding="utf-8"))
         _row = [x for x in _r["probe"]["rows"]
                 if abs(x["threshold"] - 0.85) < 1e-9][0]
         self.assertEqual(_row["f1"], 1.0)
@@ -244,7 +243,7 @@ class TestCalibrationEvidence(unittest.TestCase):
 
     def test_43_separation_band_intact(self):
         """同义对下界 > 异类对上界（两族可分离）→ 证明 0.85 落在安全区。"""
-        _p = json.load(io.open(_CALIB_REPORT, encoding="utf-8"))["probe"]
+        _p = json.load(open(_CALIB_REPORT, encoding="utf-8"))["probe"]
         self.assertGreater(_p["same_min"], _p["diff_max"])
         self.assertLessEqual(0.85, _p["same_min"])
         self.assertGreater(0.85, _p["diff_max"])

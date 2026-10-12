@@ -27,8 +27,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.evolution import patch_active_reprobe as R  # noqa: E402
+import config
+from nucleus.evolution import patch_active_reprobe as R
 
 _HIST = os.path.join(_ROOT, "data", "patches", "patch_history.json")
 
@@ -197,7 +197,7 @@ class TestDetectorCoverage(unittest.TestCase):
         # ★建议：sql_injection / cross_module_singleton_call 是否应补检测器，交星轨裁决。
         _unc = set(_c["uncovered_types"].keys())
         self.assertIn("code_optimization", _unc,
-                      "code_optimization 应仍在未覆盖集合中: {}".format(sorted(_unc)))
+                      f"code_optimization 应仍在未覆盖集合中: {sorted(_unc)}")
         # B156-1 重锚：0.90 → 0.80（生产历史演化，新 issue_type 无检测器属预期漂移）
         self.assertGreaterEqual(_c["coverage_rate"], 0.80,
                                 "覆盖率 {:.4f} 低于重锚下限 0.80（疑似检测器静默退化）：{}".format(_c["coverage_rate"], sorted(_unc)))
@@ -244,7 +244,7 @@ class TestForceRecompute(unittest.TestCase):
             _rates[_on] = (_tot - _na) / float(_tot) if _tot else 0.0
         self.assertGreaterEqual(
             _rates[True], _rates[False],
-            "开启 diff 限定后可判定率下降了：{}".format(_rates))
+            f"开启 diff 限定后可判定率下降了：{_rates}")
         self.assertGreaterEqual(_rates[True], 0.30,
                                 "可判定率应 > 30%%（实测 %.2f%%）"
                                 % (100 * _rates[True]))
@@ -260,7 +260,7 @@ class TestForceRecompute(unittest.TestCase):
             _r[_on] = R.true_fix_rate(_recs, strict=True, force=True) or 0.0
         self.assertGreaterEqual(
             _r[True], _r[False],
-            "开启 diff 限定后 strict 修复率下降：{}".format(_r))
+            f"开启 diff 限定后 strict 修复率下降：{_r}")
 
 
 if __name__ == "__main__":

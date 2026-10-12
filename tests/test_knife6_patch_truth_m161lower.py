@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
+from nucleus.reasoning.PatchManager import PatchManager
 
 PM = PatchManager
 
@@ -90,7 +90,7 @@ class TestK6ApproveGate:
         assert PM._approve_via(p, "auto", "auto:t101a") is False
         assert p.get("status") == "runtime_verified", "假成功被升 approved！"
         assert p.get("truth_check_failed") is True
-        assert "truth_reason" in p and p["truth_reason"]
+        assert p.get("truth_reason")
 
     def test_08_normal_patch_still_approved(self):
         """正常补丁不受影响（防过度拦截）。"""

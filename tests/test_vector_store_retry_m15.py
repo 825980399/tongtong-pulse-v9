@@ -13,8 +13,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.semantic.VectorStore import VectorStore  # noqa: E402
+import config
+from nucleus.semantic.VectorStore import VectorStore
 
 _VS_SRC = os.path.join(_PROJECT_ROOT, "nucleus", "semantic", "VectorStore.py")
 

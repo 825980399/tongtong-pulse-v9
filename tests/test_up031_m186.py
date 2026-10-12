@@ -11,9 +11,9 @@ from __future__ import annotations
 import re
 import subprocess
 
-import tools.m102_data_governance  # noqa: F401  (导入即编译校验)
-import tools.serp_pollution_analyzer  # noqa: F401
-import tools.serp_quality_report  # noqa: F401
+import tools.m102_data_governance
+import tools.serp_pollution_analyzer
+import tools.serp_quality_report
 
 FILES = [
     "tools/m102_data_governance.py",

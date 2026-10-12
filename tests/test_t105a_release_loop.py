@@ -22,7 +22,6 @@
   C. 验证后复查（直接驱动补回边同款助手）⇒ 放行。
   D. 顶层污染字段 runtime_verified=True 即使嵌套 verified=False 也不放行（双保险）。
 """
-import io
 import os
 import sys
 import tempfile
@@ -31,7 +30,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from nucleus.reasoning.PatchManager import PatchManager  # noqa: E402
+from nucleus.reasoning.PatchManager import PatchManager
 
 
 class _DummyBackup:
@@ -77,7 +76,7 @@ def test_A_enqueue_without_nested_verify_not_released():
     """★A：入队时仅有污染字段 runtime_verified=True（无嵌套 verified）⇒ 绝不放行。"""
     tmp = tempfile.mkdtemp(prefix="t105a_A_")
     target = _make_target(tmp)
-    with io.open(target, "w", encoding="utf-8") as f:
+    with open(target, "w", encoding="utf-8") as f:
         f.write("def probe_func():\n    return 1\n")
     pm = _make_pm(tmp)
     # 仅顶层污染字段，嵌套 runtime_verify_result 不存在
@@ -92,7 +91,7 @@ def test_B_enqueue_nested_verified_and_baseline_released():
     """★B：入队时嵌套 verified=True + baseline>0 ⇒ 立刻放行（闭环入口打通）。"""
     tmp = tempfile.mkdtemp(prefix="t105a_B_")
     target = _make_target(tmp)
-    with io.open(target, "w", encoding="utf-8") as f:
+    with open(target, "w", encoding="utf-8") as f:
         f.write("def probe_func():\n    return 1\n")
     pm = _make_pm(tmp)
     _p = _low_risk_patch(

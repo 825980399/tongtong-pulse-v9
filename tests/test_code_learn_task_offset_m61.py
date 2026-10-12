@@ -20,8 +20,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from organs.brain.PulseCodeLearner import PulseCodeLearner  # noqa: E402
+import config
+from organs.brain.PulseCodeLearner import PulseCodeLearner
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _PCL = importlib.import_module("organs.brain.PulseCodeLearner")
@@ -127,7 +127,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         for _ in range(5):
             _c = PulseCodeLearner()
             _seen.add((_c._test_heartbeat_offset, _c._review_heartbeat_offset))
-        self.assertGreater(len(_seen), 1, "偏移未随机化: {}".format(_seen))
+        self.assertGreater(len(_seen), 1, f"偏移未随机化: {_seen}")
 
     # ---- 3. 配置化 ----
     def test_04_offset_bounds_from_config(self):
@@ -187,7 +187,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         """★加偏移后，三任务不再在同一心跳点同时触发（真实 _on_heartbeat 扫描）。"""
         _c = _mk_learner(37, 211)
         _hits = _scan_simultaneous(_c, 3000)
-        self.assertEqual(_hits, {}, "存在三任务同点触发: {}".format(_hits))
+        self.assertEqual(_hits, {}, f"存在三任务同点触发: {_hits}")
 
     def test_08_without_offset_they_overlap(self):
         """★反证（对照实验）：偏移=0 的旧行为下确实存在三任务同点触发。
@@ -197,7 +197,7 @@ class TestCodeLearnTaskOffset(unittest.TestCase):
         """
         _c = _mk_learner(0, 0)
         _hits = _scan_simultaneous(_c, 1500)
-        self.assertIn(1500, _hits, "旧行为下第1500次心跳本应三者同点: {}".format(_hits))
+        self.assertIn(1500, _hits, f"旧行为下第1500次心跳本应三者同点: {_hits}")
 
 
 if __name__ == "__main__":

@@ -24,8 +24,8 @@ os.environ.setdefault(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "test_iw_cr.log"),
 )
 
-from nucleus.const import GrowthEvent  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from nucleus.const import GrowthEvent
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 # 在默认 node_pool=None 场景下、且 r=1 时会被无条件调用的洞察生成 helper；
 # 统一 mock 为 None 以隔离编排逻辑。r%N 门控项也一并 mock（实例属性遮蔽，无害）。
@@ -77,7 +77,7 @@ class TestCognitiveReflectionSplit(unittest.TestCase):
         self.iw._max_goal_queue = 5
         # 捕获 emit
         self._emits = []
-        self.iw._emit = lambda event_type, payload=None, priority=5, ttl_ns=5_000_000_000, layer="L1": self._emits.append(  # noqa: E731
+        self.iw._emit = lambda event_type, payload=None, priority=5, ttl_ns=5_000_000_000, layer="L1": self._emits.append(
             (event_type, priority, layer)
         )
         # 屏蔽所有洞察生成 helper

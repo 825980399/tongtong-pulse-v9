@@ -19,7 +19,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import nucleus.ssrf_guard as sg  # noqa: E402
+import nucleus.ssrf_guard as sg
 
 
 def _fake_getaddrinfo(internal_ip):

@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, ".")
 
-from nucleus.reasoning.subagent_worker import run_once, _write_output
+from nucleus.reasoning.subagent_worker import _write_output, run_once
 
 
 def test_worker_output_has_stats_equal_result():

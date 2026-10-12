@@ -4,7 +4,6 @@
 核心缺陷：裸目录名匹配 → `nucleus/data/` 与 `tmp/` 被误跳过 → 无基线。
 本测试同时守「判据正确」与「端到端真的备份到」。
 """
-import io
 import os
 import shutil
 import sys
@@ -15,7 +14,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from tools import batch_backup as _bb  # noqa: E402
+from tools import batch_backup as _bb
 
 
 # ============================================================ 判据
@@ -93,17 +92,17 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
                     "nucleus/mnemosyne/pool.py"):
             p = os.path.join(self.d, rel.replace("/", os.sep))
             os.makedirs(os.path.dirname(p), exist_ok=True)
-            io.open(p, "w", encoding="utf-8").write("# {}\n".format(rel))
+            open(p, "w", encoding="utf-8").write(f"# {rel}\n")
         # 应当被跳过
         for rel in ("data/x.py", "logs/y.py", "__pycache__/z.py",
                     "nucleus/__pycache__/w.py", ".bak_batch49/old.py",
                     ".pytest_tmp/q.py", "node_modules/n.py"):
             p = os.path.join(self.d, rel.replace("/", os.sep))
             os.makedirs(os.path.dirname(p), exist_ok=True)
-            io.open(p, "w", encoding="utf-8").write("# skip\n")
+            open(p, "w", encoding="utf-8").write("# skip\n")
         # 非 .py 不参与
         p = os.path.join(self.d, "tmp", "note.txt")
-        io.open(p, "w", encoding="utf-8").write("x")
+        open(p, "w", encoding="utf-8").write("x")
 
     def tearDown(self):
         shutil.rmtree(self.d, ignore_errors=True)
@@ -113,11 +112,11 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
         print("     实际:", got)
         for want in ("nucleus/data/exclude_dirs.py", "nucleus/data/path_utils.py",
                      "tmp/test_isolation.py", "tools/a.py", "config.py"):
-            self.assertIn(want, got, "应备份但缺失: {}".format(want))
+            self.assertIn(want, got, f"应备份但缺失: {want}")
         for bad in ("data/x.py", "logs/y.py", "__pycache__/z.py",
                     "nucleus/__pycache__/w.py", ".bak_batch49/old.py",
                     ".pytest_tmp/q.py", "node_modules/n.py", "tmp/note.txt"):
-            self.assertNotIn(bad, got, "不应备份但出现了: {}".format(bad))
+            self.assertNotIn(bad, got, f"不应备份但出现了: {bad}")
 
     def test_31_backup_writes_relative_structure(self):
         r = _bb.backup(99, root=self.d)
@@ -128,10 +127,10 @@ class TestIterPyFilesSynthetic(unittest.TestCase):
         for rel in ("nucleus/data/exclude_dirs.py", "tmp/test_isolation.py",
                     "tools/a.py", "config.py"):
             self.assertTrue(os.path.isfile(os.path.join(dst, rel.replace("/", os.sep))),
-                            "备份缺失: {}".format(rel))
+                            f"备份缺失: {rel}")
         # 内容一致（可回滚）
-        a = io.open(os.path.join(self.d, "tmp/test_isolation.py"), encoding="utf-8").read()
-        b = io.open(os.path.join(dst, "tmp", "test_isolation.py"), encoding="utf-8").read()
+        a = open(os.path.join(self.d, "tmp/test_isolation.py"), encoding="utf-8").read()
+        b = open(os.path.join(dst, "tmp", "test_isolation.py"), encoding="utf-8").read()
         self.assertEqual(a, b)
         shutil.rmtree(dst, ignore_errors=True)
 
@@ -160,7 +159,7 @@ class TestRealRepo(unittest.TestCase):
                             for f in p["files"]))
 
     def test_41_docstring_documents_p234(self):
-        src = io.open(os.path.join(_ROOT, "tools/batch_backup.py"),
+        src = open(os.path.join(_ROOT, "tools/batch_backup.py"),
                       encoding="utf-8", errors="replace").read()
         self.assertIn("P2-334", src)
         self.assertIn("SKIP_PATH_PREFIXES", src)

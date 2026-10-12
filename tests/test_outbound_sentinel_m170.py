@@ -13,7 +13,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.logging.sanitizer import sanitize_outbound  # noqa: E402
+from nucleus.logging.sanitizer import sanitize_outbound
 
 
 class TestOutboundSentinel(unittest.TestCase):

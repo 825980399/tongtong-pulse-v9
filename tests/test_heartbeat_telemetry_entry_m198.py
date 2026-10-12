@@ -8,7 +8,7 @@
 （_log / _L.info），不依赖 handler 派发，保证确定性。
 """
 import os
-import unittest.mock as mock
+from unittest import mock
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

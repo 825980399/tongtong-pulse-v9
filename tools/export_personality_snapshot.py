@@ -44,7 +44,7 @@ def write_personality_snapshot(kernel, path=None):
         with open(_path, "w", encoding="utf-8") as f:
             json.dump(_data, f, ensure_ascii=False, indent=2)
         return True
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.warning("人格快照落盘失败(已忽略): %s: %s", type(e).__name__, e)
         return False
 
@@ -57,7 +57,7 @@ def read_personality_snapshot_hash(path=None):
     try:
         with open(_path, "r", encoding="utf-8") as f:
             return json.load(f).get("l3_anchors_hash")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.debug("快照读取失败(忽略): %s: %s", type(e).__name__, e)
         return None
 

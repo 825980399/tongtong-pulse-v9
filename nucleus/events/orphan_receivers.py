@@ -24,7 +24,7 @@ _registered = False
 
 def _noop_handler(event) -> None:
     """no-op 接收方：仅用于把 event_type 登记进订阅表，不改变任何生产行为。"""
-    return None
+    return
 
 
 def register_growth_need_detected_receiver(bus=None) -> str | None:

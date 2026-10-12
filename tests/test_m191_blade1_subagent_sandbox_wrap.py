@@ -10,8 +10,7 @@
 import json
 import sys
 import types
-
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from nucleus.reasoning import subagent_runner as runner
 

@@ -33,7 +33,6 @@
   E. 生产快照只读取证 + 自洽不变量。
 """
 import ast
-import io
 import json
 import os
 import sys
@@ -43,8 +42,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus import LLMDependencyMetrics as M  # noqa: E402
-from nucleus.evolution.patch_verification_split import (  # noqa: E402
+from nucleus import LLMDependencyMetrics as M
+from nucleus.evolution.patch_verification_split import (
     F_SPLIT_VERSION,
     real_fix_rate,
 )
@@ -59,7 +58,7 @@ _NEW_MEMBERS = ("search_total", "digestion_total", "answer_requests",
 
 
 def _read(path):
-    with io.open(path, encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -104,7 +103,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
     def test_A1_new_members_inside_class(self):
         _names = _class_methods(_METRICS_SRC, "LLMDependencyMetrics")
         for _w in _NEW_MEMBERS:
-            self.assertIn(_w, _names, "★{} 必须挂在 LLMDependencyMetrics 类内".format(_w))
+            self.assertIn(_w, _names, f"★{_w} 必须挂在 LLMDependencyMetrics 类内")
 
     def test_A2_before_has_none_of_this(self):
         """先红后绿：改前源码不含本批任何新名字。"""
@@ -113,7 +112,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
         _old = _read(_BAK)
         for _w in ("answer_requests", "overall_llm_share",
                    "evolution_local_rule_rate", "_M94_PATCH_FILES"):
-            self.assertNotIn(_w, _old, "★改前不应有 {}".format(_w))
+            self.assertNotIn(_w, _old, f"★改前不应有 {_w}")
             self.assertIn(_w, _read(_METRICS_SRC))
 
     def test_A3_snapshot_has_derived_keys(self):
@@ -124,7 +123,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
                    "digestion_total", "answer_requests",
                    "llm_dependency_ratio", "self_sufficiency_score",
                    "overall_llm_share", "evolution_local_rule_rate"):
-            self.assertIn(_k, _d, "★derived 必须含 {}".format(_k))
+            self.assertIn(_k, _d, f"★derived 必须含 {_k}")
         self.assertNotIn("total_requests", _d,
                          "★第95批 T-95c：旧键已彻底移除")
         import shutil
@@ -144,7 +143,7 @@ class TestM94DepStaticWiring(unittest.TestCase):
                   and n.name == "_m94_load_patch_records")
         _body = ast.unparse(_f)
         for _w in ("open(", "safe_write_json", "os.replace", "shutil", "write("):
-            self.assertNotIn(_w, _body, "★读取器必须只读（出现 {}）".format(_w))
+            self.assertNotIn(_w, _body, f"★读取器必须只读（出现 {_w}）")
 
     def test_A5_health_panel_exposes_overall_share(self):
         _h = _read(_HEALTH)
@@ -371,7 +370,7 @@ class TestM94ProductionSnapshot(unittest.TestCase):
     def _snap(self):
         if not os.path.isfile(_PROD_SNAP):
             self.skipTest("生产指标文件缺失")
-        with io.open(_PROD_SNAP, encoding="utf-8") as f:
+        with open(_PROD_SNAP, encoding="utf-8") as f:
             return json.load(f)
 
     def test_E1_read_only(self):

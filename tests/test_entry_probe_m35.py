@@ -8,7 +8,6 @@
   T2  承重 noqa 未被误删 + 死规则 noqa 未残留在非热文件
 """
 import collections
-import io
 import os
 import re
 import sys
@@ -18,12 +17,12 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+import config
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _IW_PATH = os.path.join(_ROOT, "organs", "brain", "PulseInnerWorld.py")
-_IW_SRC = io.open(_IW_PATH, encoding="utf-8").read()
+_IW_SRC = open(_IW_PATH, encoding="utf-8").read()
 
 
 class _Switch:
@@ -277,7 +276,7 @@ class TestNoqaPolicyGuard(unittest.TestCase):
                 if not f.endswith(".py"):
                     continue
                 try:
-                    t = io.open(os.path.join(dp, f), encoding="utf-8").read()
+                    t = open(os.path.join(dp, f), encoding="utf-8").read()
                 except Exception:
                     continue
                 for line in t.split("\n"):

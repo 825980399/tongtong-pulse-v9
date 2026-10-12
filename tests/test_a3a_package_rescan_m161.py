@@ -9,7 +9,6 @@
   3) ★红队演练：四位数字 PII 进入包体后必被命中（rc=1 语义）；
   4) --no-scan 分支不得打印 source=post_render_package 哨兵。
 """
-import io
 import os
 import sys
 import zipfile
@@ -18,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import importlib.util  # noqa: E402
+import importlib.util
 
 _spec = importlib.util.spec_from_file_location(
     "ep_a3a", os.path.join(ROOT, "tools", "export_public.py"))
@@ -45,7 +44,7 @@ class TestA3aScanBytes:
 
     def test_02_detects_four_digit_birthdate(self):
         """★红队：四位年份 + 出生上下文，包体字节必被命中。"""
-        payload = "我的出生年份是 1990 年\n".encode("utf-8")
+        payload = "我的出生年份是 1990 年\n".encode()
         hits = ep.scan_package_bytes(payload, "t.md")
         assert hits, "包体中的出生年份未被命中，红队演练失败"
         assert any("1990" in h[2] or "1990" in str(h) for h in hits)
@@ -53,7 +52,7 @@ class TestA3aScanBytes:
     def test_03_respects_scan_skip_markers(self):
         """带扫描跳过标记的行不应命中。"""
         mk = ep.SCAN_SKIP_MARKERS[0] if ep.SCAN_SKIP_MARKERS else "SKIP"
-        payload = f"{mk} 出生年份 1990\n".encode("utf-8")
+        payload = f"{mk} 出生年份 1990\n".encode()
         assert ep.scan_package_bytes(payload, "t.md") == []
 
     def test_04_handles_non_utf8_bytes(self):
@@ -97,7 +96,7 @@ class TestA3aVerifyPackage:
 class TestA3aSentinel:
     def test_08_no_scan_branch_has_no_sentinel(self):
         """★--no-scan 是包体复扫完整旁路：其提示语中不得含哨兵字符串。"""
-        src = io.open(os.path.join(ROOT, "tools", "export_public.py"),
+        src = open(os.path.join(ROOT, "tools", "export_public.py"),
                       encoding="utf-8", newline=None).read()
         # 取 --no-scan 的 else 分支文本
         idx = src.find('print("[WARN] 已跳过 PII 复扫')
@@ -108,7 +107,7 @@ class TestA3aSentinel:
 
     def test_09_sentinel_printed_in_scan_path(self):
         """正常复扫路径必须打印哨兵（证明扫的是包体）。"""
-        src = io.open(os.path.join(ROOT, "tools", "export_public.py"),
+        src = open(os.path.join(ROOT, "tools", "export_public.py"),
                       encoding="utf-8", newline=None).read()
         assert "source=post_render_package" in src, "缺少包体复扫哨兵"
         assert "verify_package(out, is_zip)" in src, "main 未调用包体复扫"

@@ -30,7 +30,6 @@ config.py**，默认值保持 True。验收：config.py 中能查到三个开关
 """
 import ast
 import importlib
-import io
 import os
 import sys
 import unittest
@@ -39,7 +38,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
+import config
 
 _CFG_REL = "config.py"
 _CFG_PATH = os.path.join(ROOT, _CFG_REL)
@@ -71,7 +70,7 @@ _INVERTED_TESTS = (
 
 
 def _read(rel):
-    return io.open(os.path.join(ROOT, rel), encoding="utf-8", errors="replace").read()
+    return open(os.path.join(ROOT, rel), encoding="utf-8", errors="replace").read()
 
 
 def _module_assign_counts():
@@ -95,15 +94,15 @@ class TestSwitchRegistryM91(unittest.TestCase):
         _cnt = _module_assign_counts()
         for _s in _SWITCHES:
             self.assertEqual(_cnt.get(_s, 0), 1,
-                             "★{} 在 config.py 中的顶层赋值次数应为 1（实际 {}）".format(_s, _cnt.get(_s, 0)))
-            self.assertIn("{} = True".format(_s), _read(_CFG_REL),
-                          "★{} 的登记默认值必须为 True".format(_s))
+                             f"★{_s} 在 config.py 中的顶层赋值次数应为 1（实际 {_cnt.get(_s, 0)}）")
+            self.assertIn(f"{_s} = True", _read(_CFG_REL),
+                          f"★{_s} 的登记默认值必须为 True")
 
     def test_A2_runtime_values_are_true(self):
         """★验收：运行时读取到的默认值与登记前一致（均为 True）。"""
         for _s in _SWITCHES:
-            self.assertTrue(hasattr(config, _s), "config 缺少属性 {}".format(_s))
-            self.assertIs(getattr(config, _s), True, "{} 运行时值应为 True".format(_s))
+            self.assertTrue(hasattr(config, _s), f"config 缺少属性 {_s}")
+            self.assertIs(getattr(config, _s), True, f"{_s} 运行时值应为 True")
 
     # --------------------------------------------------------- B 各读取函数口径
     def test_B1_reader_functions_return_true(self):
@@ -113,22 +112,22 @@ class TestSwitchRegistryM91(unittest.TestCase):
         _si = importlib.import_module("nucleus.self_inspector")
         _se = importlib.import_module("nucleus.reasoning.SafeEvolutionExecutor")
         _checks = (
-            ("_m89_patch_sim_switch_on", getattr(_pm, "_m89_patch_sim_switch_on")),
-            ("_m90_patch_field_contract_on", getattr(_pm, "_m90_patch_field_contract_on")),
-            ("LogAnalyzer._m90_log_locate_v2_on", getattr(_la, "_m90_log_locate_v2_on")),
-            ("self_inspector._m90_locate_v2_on", getattr(_si, "_m90_locate_v2_on")),
-            ("self_inspector._m91_log_locate_v3_on", getattr(_si, "_m91_log_locate_v3_on")),
+            ("_m89_patch_sim_switch_on", _pm._m89_patch_sim_switch_on),
+            ("_m90_patch_field_contract_on", _pm._m90_patch_field_contract_on),
+            ("LogAnalyzer._m90_log_locate_v2_on", _la._m90_log_locate_v2_on),
+            ("self_inspector._m90_locate_v2_on", _si._m90_locate_v2_on),
+            ("self_inspector._m91_log_locate_v3_on", _si._m91_log_locate_v3_on),
             ("SafeEvolutionExecutor._m91_indent_repair_on",
-             getattr(_se, "_m91_indent_repair_on")),
+             _se._m91_indent_repair_on),
         )
         for _name, _fn in _checks:
-            self.assertTrue(_fn(), "{}() 应为 True".format(_name))
+            self.assertTrue(_fn(), f"{_name}() 应为 True")
 
     def test_B2_m89_threshold_values(self):
         """登记后阈值语义不变（0.3 + 长度下限 1/3）。"""
         _pm = importlib.import_module("nucleus.reasoning.PatchManager")
-        self.assertEqual(getattr(_pm, "_m89_min_similarity")(), 0.3)
-        self.assertAlmostEqual(getattr(_pm, "_m89_len_floor")(), 1.0 / 3.0, places=6)
+        self.assertEqual(_pm._m89_min_similarity(), 0.3)
+        self.assertAlmostEqual(_pm._m89_len_floor(), 1.0 / 3.0, places=6)
 
     # --------------------------------------------------------- C 登记零行为变化
     def test_C1_registration_is_behavior_neutral(self):
@@ -146,7 +145,7 @@ class TestSwitchRegistryM91(unittest.TestCase):
             _new_val = getattr(config, _s, None)
             # 登记前两个 M91 开关与 M90/M89 开关都不在 config.py ⇒ 靠 getattr 兜底 True
             self.assertIsNone(_old_val,
-                              "★登记前 {} 本不应存在于 config.py（实测 {!r}）".format(_s, _old_val))
+                              f"★登记前 {_s} 本不应存在于 config.py（实测 {_old_val!r}）")
             # 生效值 = 登记前 getattr 兜底值 == 登记后的显式值
             self.assertEqual(_new_val, True)
             self.assertEqual(_new_val, bool(getattr(_old, _s, True)),
@@ -170,19 +169,19 @@ class TestSwitchRegistryM91(unittest.TestCase):
         """
         for _rel, _old_name, _new_name in _INVERTED_TESTS:
             _src = _read(_rel)
-            self.assertNotIn("def {}(".format(_old_name), _src,
-                             "{} 仍保留旧方法名（应已更名）".format(_rel))
-            self.assertIn("def {}(".format(_new_name), _src,
-                          "{} 缺少反转后的新用例".format(_rel))
-            self.assertIn(_MARK_T, _src, "{} 缺少 T-91c 变更说明标记".format(_rel))
+            self.assertNotIn(f"def {_old_name}(", _src,
+                             f"{_rel} 仍保留旧方法名（应已更名）")
+            self.assertIn(f"def {_new_name}(", _src,
+                          f"{_rel} 缺少反转后的新用例")
+            self.assertIn(_MARK_T, _src, f"{_rel} 缺少 T-91c 变更说明标记")
             self.assertIn("assertIn(_SWITCH, _src", _src,
-                          "{} 的反转断言应为 assertIn(_SWITCH, _src...)".format(_rel))
+                          f"{_rel} 的反转断言应为 assertIn(_SWITCH, _src...)")
 
     # --------------------------------------------------------- F 运行时生效
     def test_F1_change_takes_effect_without_restart(self):
         """读取点每次重新 import config ⇒ 改属性即时生效（无需重启框架）。"""
         _si = importlib.import_module("nucleus.self_inspector")
-        _fn = getattr(_si, "_m91_log_locate_v3_on")
+        _fn = _si._m91_log_locate_v3_on
         _had = hasattr(config, "ENABLE_M91_LOG_LOCATE_V3")
         _old = getattr(config, "ENABLE_M91_LOG_LOCATE_V3", None)
         try:

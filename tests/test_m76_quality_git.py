@@ -10,7 +10,6 @@ T4(P1) git 仓库初始化 + 首次提交内容安全
 
 ★测真实源码（切片 exec / 源码扫描 / 真实 subprocess），源码回退即失败。
 """
-import io
 import os
 import re
 import subprocess
@@ -30,7 +29,7 @@ _EXEC = os.path.join(_ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
 
 
 def _rd(path):
-    with io.open(path, encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -60,7 +59,7 @@ class TestT1LiverSilentExcept(unittest.TestCase):
     def test_01_no_silent_except_pass(self):
         """★全文件不得再有 `except ...: pass`（与 m42 门控同口径）。"""
         self.assertEqual(self._silent_hits(), [],
-                         "PulseLiver.py 仍存在静默吞异常: {}".format(self._silent_hits()))
+                         f"PulseLiver.py 仍存在静默吞异常: {self._silent_hits()}")
 
     def test_02_all_five_now_log_exception(self):
         """★原 5 处均改为 `except Exception as e:`。"""
@@ -79,7 +78,7 @@ class TestT1LiverSilentExcept(unittest.TestCase):
         """5 处修复点的日志文案均存在。"""
         for kw in ("KAL获取节点异常", "KAL节点统计异常", "节点池统计异常",
                    "直连获取节点异常", "KAL查询异常"):
-            self.assertIn(kw, self.src, "缺少日志文案: {}".format(kw))
+            self.assertIn(kw, self.src, f"缺少日志文案: {kw}")
 
     def test_05_control_flow_preserved(self):
         """★容错行为不变：except 之后仍走回退/返回 None。"""
@@ -89,14 +88,14 @@ class TestT1LiverSilentExcept(unittest.TestCase):
 
     def test_06_loglevel_still_imported(self):
         self.assertIn("LogLevel", self.src)
-        self.assertTrue(re.search(r"^\s*LogLevel,", self.src, re.M),
+        self.assertTrue(re.search(r"^\s*LogLevel,", self.src, re.MULTILINE),
                         "LogLevel 应从 nucleus.const 导入")
 
     def test_07_no_new_bare_except(self):
         """不得新引入裸 `except:`（宽口径）。"""
         hits = [i + 1 for i, l in enumerate(self.lines)
                 if re.match(r"^\s*except\s*:\s*$", l)]
-        self.assertEqual(hits, [], "出现裸 except: {}".format(hits))
+        self.assertEqual(hits, [], f"出现裸 except: {hits}")
 
 
 # =====================================================================
@@ -263,7 +262,7 @@ class TestT3LocalFixRule(unittest.TestCase):
 class TestT4GitInit(unittest.TestCase):
     def test_30_repo_is_valid(self):
         rc, so, _ = _git(["rev-parse", "--is-inside-work-tree"])
-        self.assertEqual(rc, 0, "git 仓库无效: {}".format(so))
+        self.assertEqual(rc, 0, f"git 仓库无效: {so}")
         self.assertEqual(so.strip(), "true")
 
     def test_31_has_commit(self):
@@ -287,25 +286,25 @@ class TestT4GitInit(unittest.TestCase):
         self.assertTrue(_roots, "无 root commit（git log 为空？）")
         rc2, so2, _ = _git(["log", "-1", "--pretty=%s", _roots[-1]])
         self.assertEqual(rc2, 0)
-        self.assertIn("技术债务清偿", so2, "root commit 不是预期基始提交: {!r}".format(so2[:120]))
+        self.assertIn("技术债务清偿", so2, f"root commit 不是预期基始提交: {so2[:120]!r}")
 
     def test_33_data_not_tracked(self):
         rc, so, _ = _git(["ls-files", "data"])
-        self.assertEqual(so.strip(), "", "data/ 被提交: {}".format(so[:200]))
+        self.assertEqual(so.strip(), "", f"data/ 被提交: {so[:200]}")
 
     def test_34_logs_not_tracked(self):
         rc, so, _ = _git(["ls-files", "logs"])
-        self.assertEqual(so.strip(), "", "logs/ 被提交: {}".format(so[:200]))
+        self.assertEqual(so.strip(), "", f"logs/ 被提交: {so[:200]}")
 
     def test_35_no_pycache_tracked(self):
         _, so, _ = _git(["ls-files"])
         bad = [x for x in so.splitlines() if "__pycache__" in x]
-        self.assertEqual(bad, [], "__pycache__ 被提交: {}".format(bad[:5]))
+        self.assertEqual(bad, [], f"__pycache__ 被提交: {bad[:5]}")
 
     def test_36_no_bak_tracked(self):
         _, so, _ = _git(["ls-files"])
         bad = [x for x in so.splitlines() if x.startswith(".bak")]
-        self.assertEqual(bad, [], "备份目录被提交: {}".format(bad[:5]))
+        self.assertEqual(bad, [], f"备份目录被提交: {bad[:5]}")
 
     def test_37_no_remote_configured(self):
         """★约束6（第96批 T-96g 修订）：**不得由自动化流程擅自配置远程**。
@@ -325,12 +324,12 @@ class TestT4GitInit(unittest.TestCase):
             url = parts[1] if len(parts) > 1 else ""
             self.assertTrue(
                 any(h in url for h in _ALLOWED_HOSTS),
-                "远程不在白名单 {}（约束：自动化不得乱配远程）: {}".format(_ALLOWED_HOSTS, url))
+                f"远程不在白名单 {_ALLOWED_HOSTS}（约束：自动化不得乱配远程）: {url}")
 
     def test_38_gitignore_covers_keys(self):
         gi = _rd(os.path.join(_ROOT, ".gitignore"))
         for kw in ("data/", "logs/", "__pycache__", ".env"):
-            self.assertIn(kw, gi, ".gitignore 缺少 {}".format(kw))
+            self.assertIn(kw, gi, f".gitignore 缺少 {kw}")
 
     def test_39_source_is_tracked(self):
         """源码确实被纳入版本管理（不是空提交）。"""

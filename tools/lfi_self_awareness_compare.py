@@ -39,7 +39,7 @@ def _load_frozen_ref(ref_path: str) -> float | None:
         try:
             with open(ref_path, "r", encoding="utf-8") as f:
                 return float(json.load(f)["ref"])
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             silent_exc(e, where="lfi_self_awareness_compare._load_frozen_ref")
     return None
 
@@ -49,7 +49,7 @@ def _save_frozen_ref(ref: float, ref_path: str) -> None:
         os.makedirs(os.path.dirname(ref_path), exist_ok=True)
         with open(ref_path, "w", encoding="utf-8") as f:
             json.dump({"ref": ref}, f, ensure_ascii=False, indent=2)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare._save_frozen_ref")
 
 
@@ -65,7 +65,7 @@ def fetch_runtime_activity() -> dict:
         stats = inst.get_stats()
         act = stats.get("organ_activity") or {}
         return {str(k): float(v) for k, v in act.items()}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare.fetch_runtime_activity")
         return {}
 
@@ -127,7 +127,7 @@ def _span_days(curve_path: str) -> float:
         if len(ts) < 2:
             return 0.0
         return (max(ts) - min(ts)) / 86400.0
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare._span_days")
         return 0.0
 
@@ -222,7 +222,7 @@ def _append_curve(record: dict, curve_path: str) -> None:
         os.makedirs(os.path.dirname(curve_path), exist_ok=True)
         with open(curve_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare._append_curve")
 
 
@@ -253,7 +253,7 @@ def register_with_daily_schedule(scheduler=None):
             _sched.add_daily_hook(DAILY_SCHEDULE_HOOK, run_once)
         else:
             # 兜底（调度器无扩展点时仅记归属，不修改其内部）
-            setattr(_sched, "_lfi_compare_attached", True)
+            _sched._lfi_compare_attached = True
     except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule")
         return _sched

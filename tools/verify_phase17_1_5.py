@@ -36,7 +36,7 @@ _pytest_lg = get_pytest_logger("verify_phase17_1_5")
 #   受控路径 `tools/test_isolation_shim.py`（git 跟踪，完整隔离能力：redirect_all
 #   真实重定向 data/logs + VectorStore + 5 个消费模块 _ISO_BASE_DIR + 单例重置）。
 #   优先用受控真实模块；仅当其亦缺失时（不应发生）才退回 B156-4 内联最小兜底，保 rc=0。
-try:  # noqa: E402
+try:
     from tools.test_isolation_shim import ISO_DIR, TestIsolation
 except Exception:  # 兜底：受控模块亦缺失（极端情况，保脚本可独立跑通）
     import tempfile
@@ -483,7 +483,7 @@ def main():
             if os.path.exists(_TMP):
                 shutil.rmtree(_TMP, ignore_errors=True)
                 if os.path.exists(_TMP):
-                    print("\n[警告] 隔离目录清理失败，请检查 tmp/ 残留: {}".format(_TMP))
+                    print(f"\n[警告] 隔离目录清理失败，请检查 tmp/ 残留: {_TMP}")
             # 还原生产 config（子进程退出即失效，但保持干净状态）
             CFG.SEMANTIC_KERNEL_CONFIG.clear()
             CFG.SEMANTIC_KERNEL_CONFIG.update(_orig_cfg)

@@ -16,8 +16,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.field import standing_orders as so  # noqa: E402
+import config
+from nucleus.field import standing_orders as so
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,6 @@
 
 ★全部只读。
 """
-import io
 import os
 import re
 import sys
@@ -19,7 +18,7 @@ _DOC = os.path.join(_ROOT, "docs", "设计文档", "模块热重载机制_v1.0.m
 
 
 def _read():
-    return io.open(_DOC, encoding="utf-8", errors="replace").read()
+    return open(_DOC, encoding="utf-8", errors="replace").read()
 
 
 class TestReloadDesignDoc(unittest.TestCase):
@@ -42,7 +41,7 @@ class TestReloadDesignDoc(unittest.TestCase):
 
     def test_02_required_sections_present(self):
         _miss = [k for k in self.REQUIRED if k not in self._t]
-        self.assertEqual(_miss, [], "缺少章节关键词: {}".format(_miss))
+        self.assertEqual(_miss, [], f"缺少章节关键词: {_miss}")
 
     def test_03_design_only_declared(self):
         self.assertIn("纯设计文档", self._t)
@@ -52,7 +51,7 @@ class TestReloadDesignDoc(unittest.TestCase):
     def test_04_three_tier_scope_explicit(self):
         """三级范围必须各自有明确小节且含 ❌/⚠️/✅ 标记。"""
         for _k in ("✅ 可热重载", "⚠️ 谨慎热重载", "❌ 不可热重载"):
-            self.assertIn(_k, self._t, "缺少三级范围小节: {}".format(_k))
+            self.assertIn(_k, self._t, f"缺少三级范围小节: {_k}")
 
     def test_05_forbidden_list_covers_main_and_config(self):
         self.assertIn("main.py", self._t)
@@ -61,11 +60,11 @@ class TestReloadDesignDoc(unittest.TestCase):
     def test_06_five_safety_mechanisms(self):
         for _k in ("① 语法检查", "② 依赖检查", "③ 状态保留",
                    "④ 回滚", "⑤ 灰度策略"):
-            self.assertIn(_k, self._t, "缺少安全机制: {}".format(_k))
+            self.assertIn(_k, self._t, f"缺少安全机制: {_k}")
 
     def test_07_risks_at_least_five_with_mitigation(self):
         """任务书要求 ≥5 项风险 + 缓解措施。"""
-        _rows = re.findall(r"^\|\s*\*\*R\d\*\*", self._t, re.M)
+        _rows = re.findall(r"^\|\s*\*\*R\d\*\*", self._t, re.MULTILINE)
         self.assertGreaterEqual(len(_rows), 5, "风险项不足 5 条")
         self.assertIn("缓解措施", self._t)
 
@@ -106,13 +105,13 @@ class TestNoImplementation(unittest.TestCase):
                    "nucleus/reload/module_reloader.py"):
             self.assertFalse(
                 os.path.exists(os.path.join(_ROOT, _p.replace("/", os.sep))),
-                "★不应创建实现模块: {}".format(_p))
+                f"★不应创建实现模块: {_p}")
 
     def test_21_no_reload_switch_introduced(self):
         import config
         for _k in ("ENABLE_MODULE_HOT_RELOAD", "ENABLE_MODULE_RELOAD",
                    "MODULE_RELOAD_AUTO"):
-            self.assertFalse(hasattr(config, _k), "不应新增生产开关: {}".format(_k))
+            self.assertFalse(hasattr(config, _k), f"不应新增生产开关: {_k}")
 
     def test_22_config_hot_reload_capability_documented(self):
         """必须如实记录"配置热重载已有、模块热重载没有"这一现状区分。"""

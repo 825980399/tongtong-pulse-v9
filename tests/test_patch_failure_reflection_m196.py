@@ -3,6 +3,7 @@
 import importlib
 
 import nucleus.reasoning.PatchManager as _pm
+
 _sre = importlib.import_module("nucleus.evolution.SelfReflectionEngine")
 
 

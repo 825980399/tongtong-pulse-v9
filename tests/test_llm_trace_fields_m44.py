@@ -23,9 +23,9 @@ import unittest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.llm import call_recorder as cr  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
+import config
+from nucleus.llm import call_recorder as cr
+from organs.body.PulseLung import PulseLung
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +250,6 @@ class TestEvolutionEntry(_RecBase):
 
     def test_36_evolution_engines_are_wired(self):
         """三个进化引擎的 ``_call_llm`` 均已挂上埋点装饰器（源码级核实）。"""
-        import io
         _targets = {
             os.path.join(_ROOT, "nucleus", "evolution", "LLMEvolutionEngine.py"): 1,
             os.path.join(_ROOT, "nucleus", "evolution", "SelfReflectionEngine.py"): 1,
@@ -258,10 +257,10 @@ class TestEvolutionEntry(_RecBase):
                          "SafeEvolutionExecutor.py"): 1,
         }
         for _fp, _n in _targets.items():
-            with io.open(_fp, "r", encoding="utf-8") as f:
+            with open(_fp, "r", encoding="utf-8") as f:
                 _t = f.read()
             self.assertEqual(_t.count("@trace_evolution_call("), _n,
-                             "{} 装饰器数不符".format(os.path.basename(_fp)))
+                             f"{os.path.basename(_fp)} 装饰器数不符")
 
 
 # ---------------------------------------------------------------------------
@@ -394,8 +393,7 @@ class TestBackfillTool(unittest.TestCase):
              "error": "TimeoutError: x", "response": "", "prompt": "p3"},
         ]
         with open(self._fp, "w", encoding="utf-8") as f:
-            for _r in _recs:
-                f.write(json.dumps(_r, ensure_ascii=False) + "\n")
+            f.writelines(json.dumps(_r, ensure_ascii=False) + "\n" for _r in _recs)
         self._bf = _load_backfill()
 
     def tearDown(self):

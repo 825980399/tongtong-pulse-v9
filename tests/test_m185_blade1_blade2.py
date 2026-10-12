@@ -18,12 +18,12 @@ import sys
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
-from organs.identity.PulsePersonalityKernel import PulsePersonalityKernel  # noqa: E402
-from tools.export_personality_snapshot import (  # noqa: E402
-    write_personality_snapshot,
-    read_personality_snapshot_hash,
+from organs.brain.PulseInnerWorld import PulseInnerWorld
+from organs.identity.PulsePersonalityKernel import PulsePersonalityKernel
+from tools.export_personality_snapshot import (
     compare_personality_snapshot_at_startup,
+    read_personality_snapshot_hash,
+    write_personality_snapshot,
 )
 
 _IW_PATH = os.path.join(_ROOT, "organs", "brain", "PulseInnerWorld.py")

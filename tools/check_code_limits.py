@@ -33,7 +33,7 @@ from nucleus.data.exclude_dirs import AUDIT_SCAN_EXCLUDED  # ★第55批 T4（�
 # ★主线第12批 T2/P2-82：备份目录排除统一走共用模块（不再逐批次硬编码）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from nucleus._silent_except import silent_exc
-from tools.audit_utils import is_backup_path, should_skip_dir  # noqa: E402
+from tools.audit_utils import is_backup_path, should_skip_dir
 
 # -------- 默认配置（与 config.CODE_QUALITY_CONFIG 对齐；此处内联以便独立运行）--------
 DEFAULT_CONFIG: dict[str, Any] = {

@@ -25,8 +25,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.self_awareness.SelfAwarenessEngine import (  # noqa: E402
+import config
+from nucleus.self_awareness.SelfAwarenessEngine import (
     SelfAwarenessEngine,
     SelfAwarenessProfile,
 )
@@ -117,7 +117,7 @@ class TestIntegrateEventTap(unittest.TestCase):
         for _k in ("total_events", "distinct_event_names", "active_sources",
                    "top_event_names", "top_sources", "by_priority", "interval",
                    "tap_enabled", "tap_started"):
-            self.assertIn(_k, r, "缺少字段 {}".format(_k))
+            self.assertIn(_k, r, f"缺少字段 {_k}")
         self.assertEqual(r["total_events"], 1000)
         self.assertEqual(r["distinct_event_names"], 4)
         self.assertEqual(r["active_sources"], 5)
@@ -198,7 +198,7 @@ class TestOrganActivity(unittest.TestCase):
     def test_empty_and_missing_source(self):
         for _bad in ({}, None, {"no_by_source": 1}, {"by_source": {}}):
             r = self.e.analyze_organ_activity(_bad)
-            self.assertTrue(r.get("no_data"), "输入 {!r} 应判 no_data".format(_bad))
+            self.assertTrue(r.get("no_data"), f"输入 {_bad!r} 应判 no_data")
 
     def test_thresholds_configurable(self):
         r = self.e.analyze_organ_activity(

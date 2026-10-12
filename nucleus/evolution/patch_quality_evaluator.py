@@ -69,7 +69,6 @@ effectiveness 为 0.5）。两者的 ``reprobe_verdict`` 均为 ``true_pass``（
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -82,19 +81,19 @@ __all__ = [
     "DEFAULT_HISTORY_PATH",
     "DEFAULT_REPORT_PATH",
     "LABELS",
-    "WEIGHTS",
-    "REPROBE_TRUE_PASS",
     "N9_REPROBE_EXEMPT",
+    "REPROBE_TRUE_PASS",
+    "WEIGHTS",
+    "evaluate_and_report",
+    "evaluate_history",
+    "evaluate_patch",
     "evaluator_enabled",
+    "format_summary_line",
+    "load_history",
     "real_effectiveness",
     "reprobe_effectiveness",
-    "evaluate_patch",
-    "evaluate_history",
-    "summarize",
-    "format_summary_line",
     "save_report",
-    "load_history",
-    "evaluate_and_report",
+    "summarize",
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -466,7 +465,7 @@ def load_history(path: str | None = None) -> list:
     """读取补丁历史；失败返回空列表（绝不抛出）。"""
     _p = path or DEFAULT_HISTORY_PATH
     try:
-        with io.open(_p, encoding="utf-8", errors="replace") as _f:
+        with open(_p, encoding="utf-8", errors="replace") as _f:
             _d = json.loads(_f.read())
         return _d if isinstance(_d, list) else []
     except (OSError, ValueError):
@@ -482,7 +481,7 @@ def save_report(report: dict, path: str | None = None) -> str | None:
         _d = os.path.dirname(_p)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
     except OSError as e:
@@ -511,6 +510,6 @@ def evaluate_and_report(history_path: str | None = None, report_path: str | None
             for _f in _ev["findings"]:
                 logger.info("[补丁评估] %s", _f)
         except Exception as _e:                      # 日志失败不得影响评估结果
-            print("[补丁评估] 日志输出失败: {}: {}".format(type(_e).__name__, _e),
+            print(f"[补丁评估] 日志输出失败: {type(_e).__name__}: {_e}",
                   file=sys.stderr)
     return _ev

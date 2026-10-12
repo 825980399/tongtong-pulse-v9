@@ -48,7 +48,7 @@ def test_concurrent_writes_no_loss(tmp_path):
             try:
                 ok = safe_write_json(str(f), payload, backup=False)
                 results.append(ok)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 errors.append(f"fid={fid} k={k} {type(e).__name__}: {e}")
 
     threads = []

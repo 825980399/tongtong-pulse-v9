@@ -17,7 +17,7 @@ import json
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -67,7 +67,7 @@ class NodeRegistry:
         self._simulation = bool(simulation_mode)
         self._auto_persist = bool(auto_persist)
         self._lock = threading.RLock()
-        self._nodes: Dict[str, dict] = {}
+        self._nodes: dict[str, dict] = {}
         self._load()
         if self._simulation and not self._nodes:
             self._setup_simulation()
@@ -131,8 +131,8 @@ class NodeRegistry:
 
     # ---------- 节点管理 ----------
     def register(self, node_id: str, host: str = "localhost", port: int = 0,
-                 shard_ids: Optional[List[int]] = None,
-                 capacity: Optional[Dict[str, Any]] = None) -> bool:
+                 shard_ids: list[int] | None = None,
+                 capacity: dict[str, Any] | None = None) -> bool:
         """注册节点。已存在则更新。"""
         if not node_id:
             return False
@@ -167,20 +167,20 @@ class NodeRegistry:
                 return True
             return False
 
-    def get_node(self, node_id: str) -> Optional[dict]:
+    def get_node(self, node_id: str) -> dict | None:
         with self._lock:
             return dict(self._nodes[node_id]) if node_id in self._nodes else None
 
-    def get_all_nodes(self) -> List[dict]:
+    def get_all_nodes(self) -> list[dict]:
         with self._lock:
             return [dict(v) for v in self._nodes.values()]
 
-    def get_nodes_by_shard(self, shard_id: int) -> List[dict]:
+    def get_nodes_by_shard(self, shard_id: int) -> list[dict]:
         with self._lock:
             return [dict(v) for v in self._nodes.values()
                     if int(shard_id) in (v.get("shard_ids") or [])]
 
-    def get_active_nodes(self) -> List[dict]:
+    def get_active_nodes(self) -> list[dict]:
         with self._lock:
             return [dict(v) for v in self._nodes.values()
                     if v.get("status") == "active"]
@@ -223,7 +223,7 @@ class NodeRegistry:
             self._maybe_persist()
             return True
 
-    def get_load_stats(self) -> Dict[str, Any]:
+    def get_load_stats(self) -> dict[str, Any]:
         """注册表负载统计（节点数 / 健康分布 / 分片覆盖）。"""
         with self._lock:
             _total = len(self._nodes)
@@ -231,7 +231,7 @@ class NodeRegistry:
                           if v.get("status") == "active")
             _healthy = sum(1 for v in self._nodes.values()
                            if float(v.get("health_score", 0.0)) >= 0.5)
-            _shards: Dict[int, int] = {}
+            _shards: dict[int, int] = {}
             for _v in self._nodes.values():
                 for _s in (_v.get("shard_ids") or []):
                     _shards[int(_s)] = _shards.get(int(_s), 0) + 1

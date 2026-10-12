@@ -17,8 +17,6 @@ quality_score_v2 安全引用，不引入循环依赖。
     <40 critical / <70 warning / <90 attention / ≥90 healthy
   —— critical<40 / warning<70 / attention<90 / healthy≥90。
 """
-from typing import Optional
-
 
 # ---- V2 新口径边界（任务书主口径）----
 V2_CRITICAL_MAX = 40   # score < 40 -> critical
@@ -48,7 +46,7 @@ def level_v1(score) -> str:
     return "critical"
 
 
-def level_v2(score: Optional[float]) -> str:
+def level_v2(score: float | None) -> str:
     """V2 健康等级（新口径，critical<40/warning<70/attention<90/healthy≥90）。"""
     if score is None:
         return "unknown"

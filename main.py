@@ -122,10 +122,10 @@ from nucleus.mnemosyne.KnowledgeTree import KnowledgeTree  # 知识树: 五维�
 from nucleus.mnemosyne.PulseInstinctSnapshot import PulseInstinctSnapshot  # L4 本能快照
 from nucleus.mnemosyne.PulseNode import PulseNode  # 知识节点: L1/L2/L3分级
 from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # 节点池: 热/温/冷三层管理
-from nucleus.mnemosyne.recent_context import load_recent_context  # ★181刀4: 最近30条对话
 from nucleus.mnemosyne.PulseSnapshot import (
     PulseSnapshot,  # 快照持久化: 增量保存+历史轮转
 )
+from nucleus.mnemosyne.recent_context import load_recent_context  # ★181刀4: 最近30条对话
 from nucleus.organ_loader import OrganLoader  # P2-3: 插件化器官加载器
 from nucleus.pulse.FrequencyCodec import FrequencyCodec  # 频率编解码: MD5+正弦映射
 
@@ -688,11 +688,11 @@ class PulseFramework:
                 from nucleus.reporting.consumers import register_builtin_consumers as _m50_reg
                 _m50_types = _m50_reg(_m50_gb())
                 self._log(LogLevel.INFO,
-                          "自认知报告总线已启用，已注册消费者: {}".format(_m50_types))
+                          f"自认知报告总线已启用，已注册消费者: {_m50_types}")
         except Exception as _m50_re:
             try:
                 self._log(LogLevel.WARNING,
-                          "自认知报告总线注册失败（已忽略）: {}".format(type(_m50_re).__name__))
+                          f"自认知报告总线注册失败（已忽略）: {type(_m50_re).__name__}")
             except Exception as _se:
                 silent_exc(_se, "main.py:634")
         self._log(LogLevel.INFO, "体验记忆池已初始化")
@@ -3680,7 +3680,7 @@ def _prompt_with_timeout(prompt: str, timeout: float):
     工作线程设为 daemon，主线程超时后立即返回，不会因残留线程阻塞进程退出。
     """
     _ev = threading.Event()
-    _box: "dict[str, Any]" = {}
+    _box: dict[str, Any] = {}
 
     def _worker() -> None:
         try:

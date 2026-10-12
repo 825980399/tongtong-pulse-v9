@@ -17,7 +17,6 @@
   * ``iter_python_files`` 不会走进被排除目录
 """
 
-import io
 import json
 import os
 import re
@@ -31,7 +30,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data import exclude_dirs as _ed  # noqa: E402
+from nucleus.data import exclude_dirs as _ed
 
 #: 必须被排除的目录（第46批三次事故的主角 + 既有同类）
 MUST_EXCLUDE = (
@@ -51,7 +50,7 @@ class TestListCompleteness(unittest.TestCase):
     def test_01_all_must_exclude_covered(self):
         for _d in MUST_EXCLUDE:
             self.assertTrue(_ed.is_excluded(_d),
-                            "★未排除: {}（会导致全库扫描误计）".format(_d))
+                            f"★未排除: {_d}（会导致全库扫描误计）")
 
     def test_02_bak_prefix_rule(self):
         """.bak* 前缀（.bak_batch44 / .bak_batch47 ...）一律排除。"""
@@ -90,8 +89,8 @@ class TestIterPythonFiles(unittest.TestCase):
                      ".pytest_tmp"):
             _d = os.path.join(self._sand, _sub)
             os.makedirs(_d, exist_ok=True)
-            with io.open(os.path.join(_d, "a.py"), "w", encoding="utf-8") as _f:
-                _f.write("# {}\n".format(_sub))
+            with open(os.path.join(_d, "a.py"), "w", encoding="utf-8") as _f:
+                _f.write(f"# {_sub}\n")
 
     def tearDown(self):
         shutil.rmtree(self._sand, ignore_errors=True)
@@ -120,7 +119,7 @@ class TestAdoption(unittest.TestCase):
         _p = os.path.join(_ROOT, rel)
         if not os.path.isfile(_p):
             return None
-        return io.open(_p, encoding="utf-8", errors="replace").read()
+        return open(_p, encoding="utf-8", errors="replace").read()
 
     def test_20_entry_probe_m35_uses_unified(self):
         _t = self._read(os.path.join("tests", "test_entry_probe_m35.py"))
@@ -149,7 +148,7 @@ class TestAdoption(unittest.TestCase):
         if _t is None:
             self.skipTest("文件不存在")
         # 允许出现在注释里，但不应出现在排除判断的元组中
-        _bad = re.search(r'\(\s*"tmp".*?\.tmp_backup.*?\)', _t, re.S)
+        _bad = re.search(r'\(\s*"tmp".*?\.tmp_backup.*?\)', _t, re.DOTALL)
         self.assertIsNone(_bad, "m35 仍有硬编码的 .tmp_backup 排除元组")
 
 
@@ -162,7 +161,7 @@ class TestEventOrphanAudit(unittest.TestCase):
         _p = os.path.join(_ROOT, "tmp", "orphan_event_m10.json")
         if not os.path.isfile(_p):
             self.skipTest("审计报告不存在（需先跑 scan_orphan_event_m10.py）")
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        _d = json.load(open(_p, encoding="utf-8"))
         _all = _d.get("all", [])
         if not _all:
             self.skipTest("报告为空")
@@ -180,7 +179,7 @@ class TestEventOrphanAudit(unittest.TestCase):
                             errors="replace", timeout=300)
         _out = (_r.stdout or "") + (_r.stderr or "")
         self.assertIn("零引用候选: 24", _out,
-                      "★零引用数回退。实际输出: {}".format(_out[:200]))
+                      f"★零引用数回退。实际输出: {_out[:200]}")
 
 
 # ==================== 防复发：新增目录的兜底 ====================
@@ -203,7 +202,7 @@ class TestFutureProof(unittest.TestCase):
             if {"nucleus", "organs"} & _sub:
                 _suspect.append(_n)
         self.assertEqual(_suspect, [],
-                         "发现疑似源码副本目录但未排除: {}".format(_suspect))
+                         f"发现疑似源码副本目录但未排除: {_suspect}")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from organs.body.PulseLiver import PulseLiver  # noqa: E402
+from organs.body.PulseLiver import PulseLiver
 
 
 class _Base(unittest.TestCase):
@@ -160,7 +160,7 @@ class TestBoundary(_Base):
                     self.o.on_pulse({"event_type": "heart.beat",
                                      "payload": {}})
             except Exception as _e:
-                _errs.append("{}: {}".format(type(_e).__name__, _e))
+                _errs.append(f"{type(_e).__name__}: {_e}")
 
         _ts = [threading.Thread(target=_w) for _ in range(4)]
         for _t in _ts:

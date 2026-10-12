@@ -22,7 +22,6 @@ import os
 import sys
 import time
 import types
-import typing
 
 import pytest
 
@@ -30,13 +29,13 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import nucleus.evolution.patch_verification_split as _pvs  # noqa: E402
-import nucleus.LLMDependencyMetrics as _llm_metrics  # noqa: E402
-import organs.brain.PulseInnerWorld as _iw_mod  # noqa: E402
-from nucleus.LLMDependencyMetrics import KIND_RULE, KIND_SIMPLE  # noqa: E402
-from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor  # noqa: E402
-from nucleus.synapsys.ResonanceEngine import ResonanceEngine  # noqa: E402
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+import nucleus.evolution.patch_verification_split as _pvs
+import nucleus.LLMDependencyMetrics as _llm_metrics
+import organs.brain.PulseInnerWorld as _iw_mod
+from nucleus.LLMDependencyMetrics import KIND_RULE, KIND_SIMPLE
+from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+from nucleus.synapsys.ResonanceEngine import ResonanceEngine
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 SRC_IW = os.path.join(_ROOT, "organs", "brain", "PulseInnerWorld.py")
 SRC_RE = os.path.join(_ROOT, "nucleus", "synapsys", "ResonanceEngine.py")
@@ -64,7 +63,7 @@ class _Recorder:
     """替身 record_local_inference：只记录 kind，不落盘。"""
 
     def __init__(self) -> None:
-        self.calls: typing.List[str] = []
+        self.calls: list[str] = []
 
     def __call__(self, kind: str = KIND_SIMPLE, n: int = 1) -> None:
         self.calls.append(kind)

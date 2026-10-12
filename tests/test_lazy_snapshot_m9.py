@@ -7,7 +7,7 @@ import tempfile
 logger = logging.getLogger(__name__)
 
 from nucleus.data.DataAccessLayer import safe_write_json
-from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView, stream_nodes
+from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
@@ -208,10 +208,10 @@ def test_full_load_regression_unchanged():
         if result is None:
             result = []
 
-        assert len(result) == 4, "expected 4 records, got {0}".format(len(result))
+        assert len(result) == 4, f"expected 4 records, got {len(result)}"
         checksum = getattr(ps, "_last_saved_checksum", None)
         assert checksum in (None, "deadbeef"), (
-            "unexpected _last_saved_checksum: {0!r}".format(checksum)
+            f"unexpected _last_saved_checksum: {checksum!r}"
         )
     finally:
         _cleanup(path)

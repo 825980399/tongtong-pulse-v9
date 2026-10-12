@@ -12,11 +12,10 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import config as _cfg
-import time
-
 from nucleus.logger import get_module_logger
 
 _log = get_module_logger("observe.external_dependency")

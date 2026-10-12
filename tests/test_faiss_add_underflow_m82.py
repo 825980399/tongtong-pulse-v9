@@ -23,7 +23,7 @@ _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from nucleus.vector_store.faiss_store import FAISSVectorStore  # noqa: E402
+from nucleus.vector_store.faiss_store import FAISSVectorStore
 
 
 def _vecs(n, dim, seed=0):

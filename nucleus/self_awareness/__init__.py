@@ -36,15 +36,15 @@ from nucleus.self_awareness.SelfAwarenessEngine import (
 )
 
 __all__ = [
+    "CallGraphAnalyzer",
+    "FakeLoopDetector",
+    "ProductionConsumptionMatcher",
+    "SelfAwarenessDailyScheduler",
     "SelfAwarenessEngine",
     "SelfAwarenessProfile",
+    "get_daily_scheduler",
     "get_self_awareness_engine",
     "reset_self_awareness_engine",
-    "ProductionConsumptionMatcher",
-    "FakeLoopDetector",
-    "CallGraphAnalyzer",
-    "SelfAwarenessDailyScheduler",
-    "get_daily_scheduler",
     "start_daily_schedule",
     "stop_daily_schedule",
 ]

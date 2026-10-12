@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -35,7 +34,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from nucleus.evolution.patch_active_reprobe import (  # noqa: E402
+from nucleus.evolution.patch_active_reprobe import (
     F_REPROBE_AFTER,
     F_REPROBE_BASELINE,
     F_REPROBE_DETAIL,
@@ -53,14 +52,14 @@ HISTORY = os.path.join(ROOT, "data", "patches", "patch_history.json")
 
 def _sha256(path: str) -> str:
     _h = hashlib.sha256()
-    with io.open(path, "rb") as _f:
+    with open(path, "rb") as _f:
         for _chunk in iter(lambda: _f.read(65536), b""):
             _h.update(_chunk)
     return _h.hexdigest()
 
 
 def _load(path: str):
-    _d = json.load(io.open(path, encoding="utf-8"))
+    _d = json.load(open(path, encoding="utf-8"))
     _ps = _d.get("patches") if isinstance(_d, dict) and "patches" in _d else _d
     return _d, (_ps if isinstance(_ps, list) else [])
 
@@ -73,13 +72,13 @@ def main(argv=None) -> int:
     _ns = _ap.parse_args(argv)
 
     if not os.path.isfile(HISTORY):
-        print("[ERR] 补丁历史不存在: {}".format(HISTORY))
+        print(f"[ERR] 补丁历史不存在: {HISTORY}")
         return 2
 
     _doc, _ps = _load(HISTORY)
     _target = _ps[:_ns.limit] if _ns.limit > 0 else _ps
     print("=== 补丁主动复现（%s）===" % ("回填" if _ns.apply else "只报告"))
-    print("  补丁历史: {}".format(os.path.relpath(HISTORY, ROOT)))
+    print(f"  补丁历史: {os.path.relpath(HISTORY, ROOT)}")
     print("  补丁总数: %d（本次验证 %d）" % (len(_ps), len(_target)))
     print()
 
@@ -90,8 +89,8 @@ def main(argv=None) -> int:
     print()
     _strict = true_fix_rate(_target, strict=True)
     _loose = true_fix_rate(_target, strict=False)
-    print("  ★严格口径修复率（问题完全清零）: {}".format(_strict))
-    print("  ★宽松口径修复率（含部分修复）  : {}".format(_loose))
+    print(f"  ★严格口径修复率（问题完全清零）: {_strict}")
+    print(f"  ★宽松口径修复率（含部分修复）  : {_loose}")
     print()
 
     # 明细（非 true_pass 优先展示，便于人工复核）
@@ -103,7 +102,7 @@ def main(argv=None) -> int:
         print("   %-28s %-20s base=%-4s after=%-4s" % (
             str(_r.get("id"))[:28], _r[F_REPROBE_VERDICT],
             _r[F_REPROBE_BASELINE], _r[F_REPROBE_AFTER]))
-        print("        {}".format(str(_r[F_REPROBE_DETAIL])[:130]))
+        print(f"        {str(_r[F_REPROBE_DETAIL])[:130]}")
     if len(_rows) > 15:
         print("   ...（共 %d 条）" % len(_rows))
     print()
@@ -111,7 +110,7 @@ def main(argv=None) -> int:
     if not _ns.apply:
         print("（只报告：未改动补丁历史。加 --apply 回填）")
         if _ns.report:
-            io.open(_ns.report, "w", encoding="utf-8").write(json.dumps(
+            open(_ns.report, "w", encoding="utf-8").write(json.dumps(
                 {"mode": "dry_run", "summary": _rep,
                  "true_fix_rate_strict": _strict,
                  "true_fix_rate_loose": _loose},
@@ -122,7 +121,7 @@ def main(argv=None) -> int:
     _ts = time.strftime("%Y%m%d_%H%M%S")
     _bak_dir = os.path.join(ROOT, "data", "_archive", "patch_reprobe")
     os.makedirs(_bak_dir, exist_ok=True)
-    _bak = os.path.join(_bak_dir, "patch_history.{}.json".format(_ts))
+    _bak = os.path.join(_bak_dir, f"patch_history.{_ts}.json")
     _before_sha = _sha256(HISTORY)
     shutil.copy2(HISTORY, _bak)
     assert _sha256(_bak) == _before_sha, "备份 sha256 不一致，中止"
@@ -151,16 +150,16 @@ def main(argv=None) -> int:
         _out = _doc
     else:
         _out = _ps
-    with io.open(HISTORY, "w", encoding="utf-8") as _f:
+    with open(HISTORY, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(_out, ensure_ascii=False, indent=2))
 
     _after_sha = _sha256(HISTORY)
     print("[回填] %d 条已写入（备份: %s）" % (_n, os.path.relpath(_bak, ROOT)))
-    print("  sha256 before={}".format(_before_sha[:32]))
-    print("  sha256 after ={}".format(_after_sha[:32]))
+    print(f"  sha256 before={_before_sha[:32]}")
+    print(f"  sha256 after ={_after_sha[:32]}")
     print("  变更: %s" % ("是" if _before_sha != _after_sha else "否"))
     if _ns.report:
-        io.open(_ns.report, "w", encoding="utf-8").write(json.dumps(
+        open(_ns.report, "w", encoding="utf-8").write(json.dumps(
             {"mode": "apply", "summary": _rep,
              "true_fix_rate_strict": _strict,
              "true_fix_rate_loose": _loose,

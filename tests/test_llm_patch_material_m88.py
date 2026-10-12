@@ -18,7 +18,6 @@
 本测试用「从真实源码切片 + exec」的方式测真实实现，源码回退即失败。
 """
 
-import io
 import os
 import sys
 import textwrap
@@ -28,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SRC_PATH = os.path.join(_ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
-_SRC = io.open(_SRC_PATH, encoding="utf-8").read()
+_SRC = open(_SRC_PATH, encoding="utf-8").read()
 
 # 真实目标文件（用于「素材必须是文件子串」的端到端断言）
 _TARGET_REL = "nucleus/reasoning/PatchManager.py"
@@ -223,7 +222,7 @@ class TestT88aMaterialSource(unittest.TestCase):
 
     def test_10_resolved_issue_file_is_used_as_material(self):
         """★核心：_file/_resolved_file 为空时，必须用第87批已解析的 issue['file']。"""
-        _real = io.open(_TARGET_ABS, encoding="utf-8", errors="ignore").read()
+        _real = open(_TARGET_ABS, encoding="utf-8", errors="ignore").read()
         ns = _run_material_block(file_attr="", resolved_attr="", issue_file=_TARGET_ABS)
         snip = ns["_snippet"]
         self.assertTrue(snip, "素材不得为空")
@@ -237,7 +236,7 @@ class TestT88aMaterialSource(unittest.TestCase):
         self.assertEqual(ns["_m88_mat_on"], False)
         self.assertEqual(ns["_m88_src"], "")
         self.assertNotIn(ns["_snippet"],
-                         io.open(_TARGET_ABS, encoding="utf-8", errors="ignore").read(),
+                         open(_TARGET_ABS, encoding="utf-8", errors="ignore").read(),
                          "开关关闭时不得读取 issue['file']")
 
     def test_12_source_label_is_code_from_file(self):
@@ -271,7 +270,7 @@ class TestT88aMaterialSource(unittest.TestCase):
         for _pat in (r"(?m)^\s*_file\s*=(?!=)", r"(?m)^\s*_resolved_file\s*=(?!=)"):
             self.assertIsNone(
                 re.search(_pat, blk),
-                "第88批不得写回 {} 形态（会改动 PHASE13 统计口径）".format(_pat))
+                f"第88批不得写回 {_pat} 形态（会改动 PHASE13 统计口径）")
 
 
 # ---------------------------------------------------------------- T-88a 守卫层
@@ -290,12 +289,12 @@ class TestT88aNonCodeMaterialGuard(unittest.TestCase):
         #   在构造条件切片内该守卫恰好出现一次，且定义在条件之前。
         _start = "if (_llm_clean and _llm_clean.strip() != _snippet.strip()"
         _i = _SRC.find(_start)
-        self.assertGreaterEqual(_i, 0, "找不到补丁构造条件起始：{}".format(_start))
+        self.assertGreaterEqual(_i, 0, f"找不到补丁构造条件起始：{_start}")
         _j = _SRC.find("):", _i)
         self.assertGreater(_j, _i, "构造条件未以 `):` 收尾")
         _cond = _SRC[_i:_j]
         self.assertEqual(_cond.count("and not _llm_bad_material"), 1,
-                         "补丁构造条件必须恰好一次排除「素材非代码」：{!r}".format(_cond))
+                         f"补丁构造条件必须恰好一次排除「素材非代码」：{_cond!r}")
         self.assertLess(_SRC.find("_llm_bad_material = bool("), _i,
                         "守卫必须在构造条件之前定义")
 
@@ -354,7 +353,7 @@ class TestT88aPatchContract(unittest.TestCase):
         out = _mat({"description": "ERROR: 与原文无关的日志文本 " + "z" * 60},
                    "", _TARGET_ABS, "")
         self.assertTrue(out, "有真实文件时素材不得为空")
-        _real = io.open(_TARGET_ABS, encoding="utf-8", errors="ignore").read()
+        _real = open(_TARGET_ABS, encoding="utf-8", errors="ignore").read()
         self.assertIn(out, _real,
                       "★素材必须是目标文件子串，否则补丁 original_code 无法应用")
         # 反证：ERROR 文本作为素材时不是子串（这就是 0.03 的现场）
@@ -387,7 +386,7 @@ class TestT88aSwitchContract(unittest.TestCase):
         self.assertEqual(
             _SRC.count('getattr(\n                            _cfg_m88, '
                        '"ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE", True))'), 1)
-        _cfg = io.open(os.path.join(_ROOT, "config.py"), encoding="utf-8").read()
+        _cfg = open(os.path.join(_ROOT, "config.py"), encoding="utf-8").read()
         self.assertNotIn("ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE", _cfg,
                          "红线：不得改 config.py（开关仅内联默认值）")
 

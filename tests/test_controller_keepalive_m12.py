@@ -14,8 +14,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config as cfg  # noqa: E402
-from organs.motor.PulseController import PulseController  # noqa: E402
+import config as cfg
+from organs.motor.PulseController import PulseController
 
 
 class _SilentLog:

@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import io
 import json
 import os
 import sys
@@ -59,7 +58,7 @@ BACKUP_SUFFIX = ".bak_batch44"
 
 def _day_files(directory: str, prefix: str = "calls") -> list[str]:
     """按文件名排序返回 ``<directory>/<prefix>_*.jsonl``。"""
-    return sorted(glob.glob(os.path.join(directory, "{}_*.jsonl".format(prefix))))
+    return sorted(glob.glob(os.path.join(directory, f"{prefix}_*.jsonl")))
 
 def archive_backup(src_dir: str,
                    archive_root: str | None = None) -> dict[str, Any]:
@@ -73,7 +72,7 @@ def archive_backup(src_dir: str,
     import hashlib as _hl
     _root = archive_root or os.path.join(_ROOT, "data", "_archive")
     _stamp = _dt2.datetime.now().strftime("%Y%m%d_%H%M%S")
-    _dest = os.path.join(_root, "llm_traces_backup_{}".format(_stamp))
+    _dest = os.path.join(_root, f"llm_traces_backup_{_stamp}")
     os.makedirs(_dest, exist_ok=True)
     _manifest: list[dict[str, Any]] = []
     _mismatch: list[str] = []
@@ -94,7 +93,7 @@ def archive_backup(src_dir: str,
         _manifest.append({"file": _fn, "size": len(_raw), "ok": _ok,
                           "sha256": _hl.sha256(_raw).hexdigest()[:16]})
     _mf = os.path.join(_dest, "BACKUP_MANIFEST.json")
-    with io.open(_mf, "w", encoding="utf-8") as f:
+    with open(_mf, "w", encoding="utf-8") as f:
         f.write(json.dumps({"src": src_dir, "stamp": _stamp,
                             "files": _manifest, "mismatch": _mismatch,
                             "total_bytes": _total},
@@ -128,7 +127,7 @@ def plan_file(path: str, version: str = BACKFILL_PROMPT_VERSION) -> dict[str, An
     _err_fill = 0
     _bad_lines = 0
     _samples: list[dict[str, Any]] = []
-    with io.open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for _ln, _line in enumerate(f, 1):
             _s = _line.strip()
             if not _s:
@@ -170,7 +169,7 @@ def apply_file(path: str, version: str = BACKFILL_PROMPT_VERSION) -> dict[str, A
         with open(_bak, "wb") as _f:
             _f.write(_raw)
     _out: list[str] = []
-    with io.open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for _line in f:
             _s = _line.strip()
             if not _s:
@@ -189,7 +188,7 @@ def apply_file(path: str, version: str = BACKFILL_PROMPT_VERSION) -> dict[str, A
             if _err_need:
                 _rec["error"] = _derive_error(_rec)
             _out.append(json.dumps(_rec, ensure_ascii=False, default=str))
-    with io.open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(_out) + ("\n" if _out else ""))
     # ★口径与 plan_file 对齐（拍平）—— run() 的合计依赖 total/prompt_version_fill/error_fill
     return {**_plan, "backup": _bak, "applied": True}
@@ -247,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
     _dir = _ns.dir or _default_dir()
     _rep = run(_dir, apply=_ns.apply, version=_ns.version,
                backup=not _ns.no_backup, archive_root=_ns.archive_root)
-    print("[回填] dir={} apply={}".format(_dir, _ns.apply))
+    print(f"[回填] dir={_dir} apply={_ns.apply}")
     for _f in _rep["files"]:
         print("  - %s 记录=%d prompt_version补=%d error补=%d"
               % (os.path.basename(_f["file"]), _f["total"],
@@ -261,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
               % (_ab["dest"], _ab["files"], _ab["total_bytes"] / 1048576.0,
                  "OK" if _ab["ok"] else "MISMATCH:{}".format(_ab["mismatch"])))
     if _ns.report:
-        with io.open(_ns.report, "w", encoding="utf-8") as f:
+        with open(_ns.report, "w", encoding="utf-8") as f:
             f.write(json.dumps(_rep, ensure_ascii=False, indent=2))
         print("[回填] 报告 →", _ns.report)
     if not _ns.apply:

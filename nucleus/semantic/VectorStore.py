@@ -137,7 +137,7 @@ class VectorStore:
 
     # ---------------- 单例 ----------------
     @classmethod
-    def get_instance(cls) -> "VectorStore | None":
+    def get_instance(cls) -> VectorStore | None:
         """获取单例。
 
         ★第158批第8刀 N-5：关闭序列进行中（``_closing`` 置位）且尚无实例时，

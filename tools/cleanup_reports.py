@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import shutil
@@ -93,7 +92,7 @@ def apply_plan(plan: dict, base: str = REPORTS_DIR,
 
     ★同盘 rename → 不触发沙箱删除配额，且完整可回滚。
     """
-    _dest = os.path.join(base, "_archive_{}".format(label))
+    _dest = os.path.join(base, f"_archive_{label}")
     _out = {"moved": 0, "errors": [], "dest": _dest}
     for _x in plan.get("targets", []):
         try:
@@ -109,10 +108,10 @@ def apply_plan(plan: dict, base: str = REPORTS_DIR,
 
 def restore_archive(label: str = "test", base: str = REPORTS_DIR) -> dict:
     """从归档目录**回滚**（把文件移回原位）。"""
-    _src = os.path.join(base, "_archive_{}".format(label))
+    _src = os.path.join(base, f"_archive_{label}")
     _out = {"restored": 0, "errors": [], "src": _src}
     if not os.path.isdir(_src):
-        _out["errors"].append("归档目录不存在: {}".format(_src))
+        _out["errors"].append(f"归档目录不存在: {_src}")
         return _out
     for _dp, _dns, _fns in os.walk(_src):
         for _fn in _fns:
@@ -124,7 +123,7 @@ def restore_archive(label: str = "test", base: str = REPORTS_DIR) -> dict:
                 shutil.move(_fp, _to)
                 _out["restored"] += 1
             except (OSError, shutil.Error) as _e:
-                _out["errors"].append("{}: {}".format(_fp, _e))
+                _out["errors"].append(f"{_fp}: {_e}")
     return _out
 
 
@@ -152,12 +151,12 @@ def main(argv=None) -> int:
         try:
             _before = time.mktime(time.strptime(_ns.before, "%Y-%m-%d %H:%M"))
         except ValueError as _e:
-            print("[ERR] --before 格式应为 'YYYY-MM-DD HH:MM': {}".format(_e))
+            print(f"[ERR] --before 格式应为 'YYYY-MM-DD HH:MM': {_e}")
             return 2
 
     _plan = build_plan(REPORTS_DIR, keep=_ns.keep, before=_before)
     print("=== 报告磁盘清理预案（%s）===" % ("执行" if _ns.yes else "预览 dry-run"))
-    print("  报告根目录: {}".format(REPORTS_DIR))
+    print(f"  报告根目录: {REPORTS_DIR}")
     print("  待处理文件: %d 份 / %.1f KB" % (_plan["total"], _plan["bytes"] / 1024))
     print("  按类型分布: {}".format(_plan["by_type"]))
     _disk = sum(1 for _ in _iter_reports(REPORTS_DIR))
@@ -167,7 +166,7 @@ def main(argv=None) -> int:
     if not _ns.yes:
         print("（预览模式：未做任何改动。加 --yes 执行归档）")
         if _ns.report:
-            io.open(_ns.report, "w", encoding="utf-8").write(
+            open(_ns.report, "w", encoding="utf-8").write(
                 json.dumps({"mode": "dry_run", "plan": _plan},
                            ensure_ascii=False, indent=2))
         return 0
@@ -180,7 +179,7 @@ def main(argv=None) -> int:
     _after = sum(1 for _ in _iter_reports(REPORTS_DIR))
     print("  归档后活动报告数: %d 份" % _after)
     if _ns.report:
-        io.open(_ns.report, "w", encoding="utf-8").write(json.dumps(
+        open(_ns.report, "w", encoding="utf-8").write(json.dumps(
             {"mode": "apply", "label": _ns.label, "plan": _plan,
              "result": _res, "after_count": _after},
             ensure_ascii=False, indent=2))

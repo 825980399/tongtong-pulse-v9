@@ -17,9 +17,9 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import config  # noqa: E402
-from nucleus.const import Event as PulseEvent  # noqa: E402
-from nucleus.events.EventBus import (  # noqa: E402
+import config
+from nucleus.const import Event as PulseEvent
+from nucleus.events.EventBus import (
     Event,
     EventBus,
     EventPriority,

@@ -42,8 +42,8 @@ DEFAULT_OUT = os.path.join("tmp", "report_dwell_overdue.json")
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PROJECT_ROOT)
 # ★第169批 C2：统一归一入口（内委托 safe_relpath，跨盘降级绝对路径 + 分隔符归一）
-from nucleus._silent_except import silent_exc  # noqa: E402
-from nucleus.data.path_utils import normalize_relpath  # noqa: E402
+from nucleus._silent_except import silent_exc
+from nucleus.data.path_utils import normalize_relpath
 
 
 def _m169_dwell_enabled() -> bool:
@@ -143,7 +143,7 @@ def write_overdue(result: dict, out: str | None = None,
         json.dump(result, _f, ensure_ascii=False, indent=2)
     # ★强制落盘断言
     if not os.path.isfile(_out):
-        raise RuntimeError("逾期清单未落盘: {}".format(_out))
+        raise RuntimeError(f"逾期清单未落盘: {_out}")
     with open(_out, encoding="utf-8") as _f:
         _back = json.loads(_f.read())
     if _back.get("overdue_count") != result.get("overdue_count"):
@@ -170,7 +170,7 @@ def main(argv=None) -> int:
     try:
         _out = write_overdue(_res, args.out)
     except RuntimeError as _e:
-        print("[report_dwell_audit] 落盘断言失败: {}".format(_e))
+        print(f"[report_dwell_audit] 落盘断言失败: {_e}")
         return 2
 
     print("[report_dwell_audit] 时限=%.2f天 扫描=%d 逾期=%d -> %s"

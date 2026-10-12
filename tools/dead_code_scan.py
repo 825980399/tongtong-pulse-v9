@@ -468,7 +468,7 @@ def render_md(report: dict) -> str:
     for _r in _items:
         if _r["level"] != _cur:
             _cur = _r["level"]
-            lines += ["", "### {}".format(_cur), "",
+            lines += ["", f"### {_cur}", "",
                       "| 模块 | 文件:行 | 名称 | 类型 | 生产引用 | 测试引用 | 备注 |",
                       "|---|---|---|---|---|---|---|"]
         _note = []
@@ -503,7 +503,7 @@ def render_md(report: dict) -> str:
 #   配置引用）视为 DYNAMIC_RISK，不再把日志/注释里的普通字符串算作反射风险。
 def _dotted_module_of(rel: str) -> str:
     """``nucleus/foo/bar.py`` -> ``nucleus.foo.bar``。"""
-    _noext = rel[:-3] if rel.endswith(".py") else rel
+    _noext = rel.removesuffix(".py")
     return _noext.replace("/", ".")
 
 
@@ -542,7 +542,7 @@ def _collect_methods(files: list[str]) -> dict[str, list[dict]]:
                     if isinstance(_m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         out.setdefault(_rel, []).append({
                             "name": _m.name,
-                            "qualname": "{}.{}".format(_node.name, _m.name),
+                            "qualname": f"{_node.name}.{_m.name}",
                             "class": _node.name,
                             "lineno": _m.lineno,
                         })
@@ -692,7 +692,7 @@ def render_md_v3(summary: dict) -> str:
         "",
     ]
     for _r in summary["island_list"]:
-        lines.append("- `{}`".format(_r))
+        lines.append(f"- `{_r}`")
     lines += ["", f"## 三、零引用 set_* 清单（{summary['set_zero_ref']}）", ""]
     for _rel, _q, _ln in summary["set_list"]:
         lines.append(f"- `{_rel}:{_ln}` `{_q}`")
@@ -715,11 +715,11 @@ def _main_v3(args) -> int:
           f"零引用入口方法={summary['method_zero_ref']}  "
           f"零引用 set_*={summary['set_zero_ref']}  "
           f"模块级零引用={summary['module_zero_ref']}")
-    print("[v3] 报告已写入：{}".format(_out))
+    print(f"[v3] 报告已写入：{_out}")
     if args.json_out:
         open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(summary, ensure_ascii=False, indent=2))
-        print("[v3] JSON 已写入：{}".format(args.json_out))
+        print(f"[v3] JSON 已写入：{args.json_out}")
     return 0
 
 def main() -> int:
@@ -743,12 +743,12 @@ def main() -> int:
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     open(args.out, "w", encoding="utf-8", newline="").write(md)
-    print("报告已写入：{}".format(args.out))
+    print(f"报告已写入：{args.out}")
 
     if args.json_out:
         open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(report, ensure_ascii=False, indent=2))
-        print("JSON 已写入：{}".format(args.json_out))
+        print(f"JSON 已写入：{args.json_out}")
     return 0
 
 

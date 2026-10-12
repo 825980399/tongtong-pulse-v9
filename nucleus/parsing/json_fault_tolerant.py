@@ -28,13 +28,13 @@
 """
 import json
 import re
-from typing import Any, Dict, Tuple
+from typing import Any
 
 __all__ = [
-    "strip_code_fence",
-    "repair_json_text",
-    "parse_json_fault_tolerant",
     "extract_key_fields",
+    "parse_json_fault_tolerant",
+    "repair_json_text",
+    "strip_code_fence",
 ]
 
 # 需要降级提取的关键字段（即使 JSON 完全解析失败，也尽量保住这些知识）
@@ -45,7 +45,7 @@ def strip_code_fence(text: str) -> str:
     """去掉 markdown 代码块围栏（```json ... ```），返回内部文本。"""
     if not text:
         return ""
-    _m = re.search(r"```(?:json|JSON)?\s*(.*?)```", text, re.S)
+    _m = re.search(r"```(?:json|JSON)?\s*(.*?)```", text, re.DOTALL)
     if _m:
         return _m.group(1).strip()
     return text.strip()
@@ -122,14 +122,14 @@ def repair_json_text(text: str) -> str:
     return text
 
 
-def _try_loads(text: str) -> Tuple[bool, Any]:
+def _try_loads(text: str) -> tuple[bool, Any]:
     try:
         return True, json.loads(text)
     except Exception:
         return False, None
 
 
-def parse_json_fault_tolerant(text: str) -> Tuple[bool, Any, str]:
+def parse_json_fault_tolerant(text: str) -> tuple[bool, Any, str]:
     """多策略容错解析。
 
     返回 ``(ok, data, strategy)``：
@@ -171,7 +171,7 @@ def parse_json_fault_tolerant(text: str) -> Tuple[bool, Any, str]:
     return False, None, "failed"
 
 
-def extract_key_fields(text: str) -> Dict[str, Any]:
+def extract_key_fields(text: str) -> dict[str, Any]:
     """JSON 完全解析失败时的**降级提取**：用正则捞出关键字段。
 
     支持两种形态：
@@ -180,21 +180,21 @@ def extract_key_fields(text: str) -> Dict[str, Any]:
     """
     if not text:
         return {}
-    _out: Dict[str, Any] = {}
+    _out: dict[str, Any] = {}
     for _key in KEY_FIELDS:
         # 字符串值
-        _m = re.search(r'"{}"\s*:\s*"((?:[^"\\]|\\.)*)"'.format(re.escape(_key)), text)
+        _m = re.search(rf'"{re.escape(_key)}"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
         if _m:
             _out[_key] = _m.group(1)
             continue
         # 数组值（尽力提取到匹配的 ]）
-        _m2 = re.search(r'"{}"\s*:\s*\[(.*?)\]'.format(re.escape(_key)), text, re.S)
+        _m2 = re.search(rf'"{re.escape(_key)}"\s*:\s*\[(.*?)\]', text, re.DOTALL)
         if _m2:
             _items = re.findall(r'"((?:[^"\\]|\\.)*)"', _m2.group(1))
             _out[_key] = _items
             continue
         # 对象值（形如 { "k": "v" ... } 或非法 [ "k": "v" ]）
-        _m3 = re.search(r'"{}"\s*:\s*[\[{{](.*?)[\]}}]'.format(re.escape(_key)), text, re.S)
+        _m3 = re.search(rf'"{re.escape(_key)}"\s*:\s*[\[{{](.*?)[\]}}]', text, re.DOTALL)
         if _m3:
             _pairs = re.findall(r'"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"',
                                 _m3.group(1))

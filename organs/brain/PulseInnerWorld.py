@@ -79,20 +79,22 @@ class PulseInnerWorld(
         __slots__ = (
             "_context_mode",
             "_context_signal",
-            "_emotion_modulation",
             "_derivation_answer",
-            "_meta_state",
+            "_emotion_modulation",
             "_explicit_inference_result",
+            "_has_remote_api",
             "_memory_context",
+            "_meta_state",
             "_question_complexity",
             "_question_length",
             "_reasoning_start_time",
-            "_supplement_topic",
-            "_stress_modulation",
             "_strategy_context",
+            "_stress_modulation",
+            "_supplement_topic",
+            "contemplative_answer",
             "correlation_id",
             "empathetic_note",
-            "contemplative_answer",
+            "fallback_tools",
             "guidance",
             "payload",
             "question",
@@ -100,8 +102,6 @@ class PulseInnerWorld(
             "search_query",
             "tool_hint",
             "tool_requested",
-            "fallback_tools",
-            "_has_remote_api",
             "user_name",
         )
 
@@ -6057,7 +6057,7 @@ class PulseInnerWorld(
             import config as _cfg_exp
             _exp_filter = bool(
                 getattr(_cfg_exp, "ENABLE_SEMANTIC_EXPAND_QUALITY_FILTER", False))
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             _exp_filter = False
             self._log(LogLevel.DEBUG,
                       f"扩展质量过滤开关读取失败(按关闭处理): {type(_e).__name__}: {_e}")
@@ -14196,7 +14196,7 @@ class PulseInnerWorld(
                     except Exception as _e:
                         # ★核心文件禁止静默吞异常（m7 门禁）→ 记 DEBUG（自愈即降级）
                         self._log(LogLevel.DEBUG,
-                                  "多步入口预判: 信任度累加跳过 {}: {}".format(type(_e).__name__, _e))
+                                  f"多步入口预判: 信任度累加跳过 {type(_e).__name__}: {_e}")
             _avg_trust = (_trust_sum / _trust_n) if _trust_n else 0.0
             _domain_weak = (_hits < _min_nodes) and (_avg_trust < _min_trust)
 
@@ -14230,7 +14230,7 @@ class PulseInnerWorld(
         except Exception as _e:
             # ★预判本身异常 → 统统降级为“不确定”，绝不把正常多步拦掉
             self._log(LogLevel.DEBUG,
-                      "多步入口预判跳过(异常降级): {}: {}".format(type(_e).__name__, _e))
+                      f"多步入口预判跳过(异常降级): {type(_e).__name__}: {_e}")
             return None
 
     def _multi_step_execute_v2(self, question: str, user_name: str = "") -> str | None:
@@ -15089,7 +15089,7 @@ class PulseInnerWorld(
             import config as _cfg_rel
             _rel_enhance = bool(
                 getattr(_cfg_rel, "ENABLE_QICA_RELEVANCE_ENHANCE", False))
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             _rel_enhance = False
             self._log(LogLevel.DEBUG,
                       f"相关度增强开关读取失败(按关闭处理): {type(_e).__name__}: {_e}")
@@ -15273,7 +15273,7 @@ class PulseInnerWorld(
         except ImportError as _e:
             self._log(LogLevel.DEBUG,
                       f"语义相似度跳过(编码器不可用): ImportError: {_e}")
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             self._log(LogLevel.DEBUG,
                       f"语义相似度跳过(异常): {type(_e).__name__}: {_e}")
 

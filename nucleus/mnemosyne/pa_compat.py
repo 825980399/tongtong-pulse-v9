@@ -61,7 +61,7 @@ def table_from_rows(rows: list[dict[str, Any]], schema: Any = None) -> Any:
         else:
             _rb = _rb_from_pylist(rows)
         return pa.table(_rb)
-    except Exception as _e:  # noqa: BLE001 - 降级通道，记录后继续
+    except Exception as _e:
         silent_exc(_e, "pa_compat.py:table_from_rows:channel2", level="debug")
         _last_err = _e
 
@@ -76,7 +76,7 @@ def table_from_rows(rows: list[dict[str, Any]], schema: Any = None) -> Any:
         if schema is not None:
             return pa.table(_cols, schema=schema)
         return pa.table(_cols)
-    except Exception as _e:  # noqa: BLE001 - 末次降级，抛出原始异常链
+    except Exception as _e:
         if _last_err is not None:
             raise _last_err from _e
         raise

@@ -7,7 +7,6 @@
 
 隔离：ExperiencePool 用显式 base_dir（临时目录），写盘守卫放行；生产清理须在停机窗口执行。
 """
-import io
 import json
 import os
 import shutil
@@ -19,9 +18,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.data import experience_cleanup as _ec  # noqa: E402
-from nucleus.mnemosyne.experience_pool import ExperiencePool  # noqa: E402
+import config
+from nucleus.data import experience_cleanup as _ec
+from nucleus.mnemosyne.experience_pool import ExperiencePool
 
 _TPL = "我曾因维持系统平衡而行动，获得了cognitive奖赏，感受到平静"
 # 仅由 SERP 样板 token 构成 → 覆盖度 1.0（≥0.8 阈值）
@@ -138,7 +137,7 @@ class TestCleanupLoop(unittest.TestCase):
         self.assertTrue(os.path.isdir(_qdir), "隔离目录须创建")
         _files = [f for f in os.listdir(_qdir) if f.startswith("quarantine_")]
         self.assertEqual(len(_files), 1, "应写出 1 个隔离文件")
-        _qdoc = json.load(io.open(os.path.join(_qdir, _files[0]), encoding="utf-8"))
+        _qdoc = json.load(open(os.path.join(_qdir, _files[0]), encoding="utf-8"))
         _q = [x for x in _qdoc if x.get("id") == "q"]
         self.assertEqual(len(_q), 1)
         self.assertIs(_q[0]["is_cleaned"], True, "隔离记录 is_cleaned 须置 True")

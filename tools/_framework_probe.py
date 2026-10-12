@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
-from typing import Iterable
+from collections.abc import Iterable
 
 from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc

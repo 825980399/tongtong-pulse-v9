@@ -257,7 +257,7 @@ class SelfAwarenessProfile:
         if _o.timestamp and _o.timestamp > (self.timestamp or ""):
             self.timestamp = _o.timestamp
         if _o.summary:
-            self.summary = ("{} | {}".format(self.summary, _o.summary)).strip(" |") \
+            self.summary = (f"{self.summary} | {_o.summary}").strip(" |") \
                 if self.summary else _o.summary
         # ★主线第38批 T1（P2-213）：标量/列表字段的合并语义（other 优先，空值不覆盖）
         if getattr(_o, "overall_score", None) is not None:
@@ -348,7 +348,7 @@ class SelfAwarenessEngine:
             except Exception as e:  # 单分析器失败不得影响整体
                 _err["error"] = e
 
-        _t = threading.Thread(target=_target, name="SelfAwareness-{}".format(name),
+        _t = threading.Thread(target=_target, name=f"SelfAwareness-{name}",
                               daemon=True)
         _t.start()
         _t.join(max(0.001, float(timeout)))
@@ -356,7 +356,7 @@ class SelfAwarenessEngine:
             return None, "timeout"
         if "error" in _err:
             _e = _err["error"]
-            return None, "error: {}: {}".format(type(_e).__name__, _e)
+            return None, f"error: {type(_e).__name__}: {_e}"
         return _box.get("value"), None
 
     def run_all_analyses(self, scope: str = "all") -> SelfAwarenessProfile:
@@ -406,8 +406,8 @@ class SelfAwarenessEngine:
 
         # ★193刀1：LFI 五维原值影子拍 —— 写独立字段 lfi_raw（零权重，不影响 overall_score）。
         try:
-            from tools.export_lfi import compute_lfi as _compute_lfi
             from organs.body.PulseBloodVessel import get_blood_vessel as _get_blood_vessel
+            from tools.export_lfi import compute_lfi as _compute_lfi
             # ★197刀3：补齐「消费」半步——取活体血管运行态 organ_activity（pulse 计数）传入 LFI；
             #   vessel.get_stats()["organ_activity"] 为 {器官:{sent,received}}，归并成
             #   {器官: 总交互数(int)} 以匹配 compute_lfi(runtime_activity=dict[str,int]) 契约
@@ -695,9 +695,9 @@ class SelfAwarenessEngine:
             for _k in sorted(_v.keys(), key=lambda x: str(x))[:50]:
                 _vv = _v[_k]
                 if isinstance(_vv, (dict, list)):
-                    _lines.append("  · {}: {}".format(_k, _brief(_vv)))
+                    _lines.append(f"  · {_k}: {_brief(_vv)}")
                 else:
-                    _lines.append("  · {}: {}".format(_k, _vv))
+                    _lines.append(f"  · {_k}: {_vv}")
             _lines.append("")
         # ★主线第20批 T3：动静结合 —— 运行时事件统计 + 器官活跃度分析
         _lines.extend(SelfAwarenessEngine._report_runtime_sections(_p))
@@ -1358,7 +1358,7 @@ class SelfAwarenessEngine:
                                      for x in _ovr[:10]) if _ovr else "无"))
             _c = float(_oa.get("concentration_ratio", 0.0) or 0.0)
             _verdict = "正常" if _c < 0.5 else ("偏高" if _c < 0.8 else "过高")
-            _out.append("  · 集中度（Top1 占比）: {:.4f}（{}）".format(_c, _verdict))
+            _out.append(f"  · 集中度（Top1 占比）: {_c:.4f}（{_verdict}）")
         _out.append("")
         return _out
 
@@ -1429,7 +1429,7 @@ class SelfAwarenessEngine:
                        _st.get("aged", 0)))
         _ld = _st.get("level_dist") or {}
         if _ld:
-            _out.append("  · 知识层级分布: {}".format(", ".join("{}={}".format(k, v) for k, v in sorted(_ld.items()))))
+            _out.append("  · 知识层级分布: {}".format(", ".join(f"{k}={v}" for k, v in sorted(_ld.items()))))
         _tops = (_kq.get("top_issues") or [])[:5]
         for _x in _tops:
             _out.append("      - [{}/{}] {}".format(_x.get("kind"), _x.get("severity"), _x.get("detail")))
@@ -1446,7 +1446,7 @@ class SelfAwarenessEngine:
         _lv = str(getattr(profile, "health_level", "unknown") or "unknown")
         _lv_zh = {"healthy": "健康", "moderate": "中等", "concerning": "堪忧",
                   "critical": "危急", "unknown": "未知"}.get(_lv, _lv)
-        _out: list = ["【综合评分】{} / 100 （{}）".format(("{:.2f}".format(_sc)) if isinstance(_sc, (int, float)) else "不可用",
+        _out: list = ["【综合评分】{} / 100 （{}）".format((f"{_sc:.2f}") if isinstance(_sc, (int, float)) else "不可用",
                          _lv_zh)]
         if not isinstance(_sc, (int, float)):
             _out.append("  · 说明：可用维度不足 2 个，无法给出综合评分")
@@ -1491,7 +1491,7 @@ class SelfAwarenessEngine:
         if _scenes:
             _out.append("  · 分场景 LLM 依赖度北极星(scene_llm_dependency_ratio):")
             for _s, _r in _scenes.items():
-                _out.append("      - {}: {:.4f}".format(_s, float(_r or 0)))
+                _out.append(f"      - {_s}: {float(_r or 0):.4f}")
         else:
             _out.append("  · 分场景 LLM 依赖度北极星: 暂无样本")
         _out.append("")
@@ -1517,11 +1517,11 @@ class SelfAwarenessEngine:
         for _name, _v in _rows:
             if isinstance(_v, (int, float)):
                 _vals.append(float(_v))
-                _out.append("  · {}: {:.2f} / 100".format(_name, float(_v)))
+                _out.append(f"  · {_name}: {float(_v):.2f} / 100")
             else:
-                _out.append("  · {}: 不可用（该维度未执行或无数据）".format(_name))
+                _out.append(f"  · {_name}: 不可用（该维度未执行或无数据）")
         if _vals:
-            _out.append("  · 五维综合（可用维度均值）: {:.2f} / 100（{}）".format(sum(_vals) / len(_vals), _grade(sum(_vals) / len(_vals))))
+            _out.append(f"  · 五维综合（可用维度均值）: {sum(_vals) / len(_vals):.2f} / 100（{_grade(sum(_vals) / len(_vals))}）")
         _out.append("")
         return _out
 
@@ -1695,7 +1695,7 @@ def _dimension_issues(field: str, data: Any) -> list[dict]:
         for _k, _v in _bysev.items():
             # ★T4：5 级下「warning 及以上」= rank ≤ 2（critical/high/medium）
             if _severity_rank(_k) <= 2 and isinstance(_v, (int, float)) and _v > 0:
-                _add(_k, "代码质量问题 {} 条（ruff {}）[汇总型]".format(int(_v), _k))
+                _add(_k, f"代码质量问题 {int(_v)} 条（ruff {_k}）[汇总型]")
     _sum = data.get("summary")                      # ⑤ production_consumption
     if isinstance(_sum, dict):
         _wp = _sum.get("no_consumer_with_producer")
@@ -1932,11 +1932,11 @@ def _score_evolution_health(raw: Any) -> dict:
 
     if _success_rate < _smin:
         _issues.append({"severity": "high", "type": "low_success_rate",
-                        "description": "进化补丁成功率 {:.1f}%（< {:.0f}%）".format(_success_rate, _smin),
+                        "description": f"进化补丁成功率 {_success_rate:.1f}%（< {_smin:.0f}%）",
                         "suggestion": "检查失败补丁的根因/回滚原因，收紧自动应用阈值"})
     if _rollback_rate > _rmax:
         _issues.append({"severity": "high", "type": "high_rollback_rate",
-                        "description": "进化补丁回滚率 {:.1f}%（> {:.0f}%）".format(_rollback_rate, _rmax),
+                        "description": f"进化补丁回滚率 {_rollback_rate:.1f}%（> {_rmax:.0f}%）",
                         "suggestion": "提高补丁验证门槛；复核被回滚补丁的类型分布"})
     if _crash > 0:
         _issues.append({"severity": ("medium" if _crash_rate >= 10.0 else "low"),
@@ -1945,7 +1945,7 @@ def _score_evolution_health(raw: Any) -> dict:
                         "suggestion": "查看 get_crash_stats 的原因分布，修复高频崩溃点"})
     if not _issues:
         _issues.append({"severity": "info", "type": "healthy",
-                        "description": "进化执行健康（成功率 {:.1f}% / 回滚率 {:.1f}%）".format(_success_rate, _rollback_rate)})
+                        "description": f"进化执行健康（成功率 {_success_rate:.1f}% / 回滚率 {_rollback_rate:.1f}%）"})
 
     return {
         "status": "ok", "score": _score, "issues": _issues,

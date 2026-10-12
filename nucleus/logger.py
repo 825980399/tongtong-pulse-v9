@@ -187,7 +187,7 @@ def log_retention_days() -> int:
         if not bool(getattr(config, "ENABLE_LOG_RETENTION_CLEANUP", True)):
             return 0
         _d = int(getattr(config, "LOG_RETENTION_DAYS", 7))
-        return _d if _d > 0 else 0
+        return max(0, _d)
     except Exception as e:
         silent_exc(e, where="nucleus.logger::log_retention_days L189")
         return 0
@@ -279,7 +279,7 @@ def _append_integrity_event(log_dir: str, res: dict, force: bool = False) -> Non
         with open(_p, "a", encoding="utf-8") as _f:
             _f.write(sanitize(_line) + "\n")
     except OSError as _e:
-        print("[logger] 完整性事件写入失败: {}: {}".format(type(_e).__name__, _e),
+        print(f"[logger] 完整性事件写入失败: {type(_e).__name__}: {_e}",
               file=sys.stderr)
 
 
@@ -291,7 +291,7 @@ def _log_max_bytes() -> int:
         # ★相关任务：门禁友好——非静默上报（配置读取失败按「未知」处理，不臆断）
         logging.getLogger(__name__).debug("LOG_MAX_BYTES 读取失败，按未知处理")
         return 0
-    return _v if _v > 0 else 0
+    return max(0, _v)
 
 
 def _reset_log_state(log_dir: str, log_file: str) -> None:
@@ -310,7 +310,7 @@ def _reset_log_state(log_dir: str, log_file: str) -> None:
                        "size": _fp.get("size"), "ino": _fp.get("ino"),
                        "mtime": _fp.get("mtime")}, _f, ensure_ascii=False)
     except OSError as _e:
-        print("[logger] 轮转后状态复位失败: {}: {}".format(type(_e).__name__, _e),
+        print(f"[logger] 轮转后状态复位失败: {type(_e).__name__}: {_e}",
               file=sys.stderr)
 
 
@@ -342,7 +342,6 @@ def _write_rollover_marker(log_dir: str, archive_path: str, prev_size,
     except OSError:
         # ★相关任务：门禁友好——非静默上报（轮转标记写入失败属非致命，但须留痕）
         logging.getLogger(__name__).debug("rollover 标记写入失败(非致命): %s", log_dir)
-        pass
 
 
 def _read_rollover_marker(log_dir: str) -> dict | None:
@@ -454,7 +453,7 @@ def check_log_integrity(log_dir: str | None = None, log_file: str | None = None,
                            "size": _st2.get("size"), "ino": _st2.get("ino"),
                            "mtime": _st2.get("mtime")}, _f, ensure_ascii=False)
         except OSError as _e:
-            print("[logger] 日志状态写入失败: {}: {}".format(type(_e).__name__, _e),
+            print(f"[logger] 日志状态写入失败: {type(_e).__name__}: {_e}",
                   file=sys.stderr)
     return _res
 
@@ -475,7 +474,7 @@ _log_init_lock = threading.Lock()
 class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """★第49批 T3-3：轮转失败不打印调用栈、不中断写入。"""
 
-    def doRollover(self) -> None:      # noqa: N802 (logging 基类命名)
+    def doRollover(self) -> None:
         # ★主线第59批 T1（方案B）：先尝试标准库 rename 式轮转，
         #   失败（Windows 文件锁 → WinError 32）后改用「复制+截断」兜底，
         #   从根本上避免重命名被占用文件。
@@ -523,7 +522,6 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # PermissionError[WinError 32]。本方法不重命名打开的文件：
         # 先把当前内容复制为 .1 备份，再就地截断当前文件为空。
         # 调用点已持 self.lock（emit 内），无需额外加锁防并发写入。
-        import io as _io
         _base = self.baseFilename
         _max = 1
         try:
@@ -551,9 +549,8 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         except OSError as e:
             silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L549")
         self.stream.flush()
-        with _io.open(_base, "rb") as _fin:
-            with _io.open(_backup, "wb") as _fout:
-                _fout.write(_fin.read())
+        with open(_base, "rb") as _fin, open(_backup, "wb") as _fout:
+            _fout.write(_fin.read())
         # 3) 截断当前文件（self.stream 已持有句柄，就地清空，不重命名）
         self.stream.seek(0)
         self.stream.truncate(0)
@@ -653,8 +650,8 @@ def _init_root_logger():
     try:
         from nucleus.reporting.alert_log_bridge import install_alert_log_bridge
         install_alert_log_bridge(root)
-    except (ImportError, OSError, IOError, ValueError, TypeError) as _alb_e:
-        print("[logger] 告警落盘桥挂载失败（降级跳过）: {}: {}".format(type(_alb_e).__name__, _alb_e), file=sys.stderr)
+    except (ImportError, OSError, ValueError, TypeError) as _alb_e:
+        print(f"[logger] 告警落盘桥挂载失败（降级跳过）: {type(_alb_e).__name__}: {_alb_e}", file=sys.stderr)
 
 
     # ★F3：重复日志聚合降噪（受 config 开关控制，默认开启）
@@ -678,7 +675,7 @@ def _init_root_logger():
                 # ★D017 / 相关任务：框架内轮转自感知，正常行为，不告警
                 root.info(
                     "[日志完整性] 日志轮转自感知：识别为框架内轮转（非外部截断），"
-                    "已留痕 {}".format(_LOG_INTEGRITY_FILE))
+                    f"已留痕 {_LOG_INTEGRITY_FILE}")
             elif _ir.get("status") in ("truncated", "replaced", "missing"):
                 _prv = (_ir.get("previous") or {}).get("size")
                 _now = (_ir.get("current") or {}).get("size")
@@ -686,7 +683,7 @@ def _init_root_logger():
                     "[日志完整性] ★检测到日志被外部{}：上次 size={} → 本次 size={}"
                     "（框架内无此逻辑，已留痕 {}）".format(_ir["status"], _prv, _now, _LOG_INTEGRITY_FILE))
         except Exception as _e:
-            print("[logger] 日志治理初始化异常（忽略）: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+            print(f"[logger] 日志治理初始化异常（忽略）: {type(_e).__name__}: {_e}", file=sys.stderr)
 
 
 def get_organ_logger(organ_name: str) -> logging.Logger:

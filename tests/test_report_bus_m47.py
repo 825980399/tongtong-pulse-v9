@@ -22,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.reporting import (  # noqa: E402
+from nucleus.reporting import (
     ACT_ALERT,
     MAX_REPORTS,
     SEV_P0,
@@ -33,7 +33,7 @@ from nucleus.reporting import (  # noqa: E402
     ReportEnvelope,
     make_envelope,
 )
-from nucleus.reporting import consumers as _C  # noqa: E402
+from nucleus.reporting import consumers as _C
 
 
 class _Bus(unittest.TestCase):
@@ -147,7 +147,7 @@ class TestPublishSubscribe(_Bus):
         self.assertEqual(len(_got), 1)          # 另一个消费者仍执行
 
     def test_16_unsubscribe(self):
-        _fn = lambda e: None  # noqa: E731
+        _fn = lambda e: None
         self.bus.subscribe("health", _fn)
         self.assertTrue(self.bus.unsubscribe("health", _fn))
         self.assertFalse(self.bus.unsubscribe("health", _fn))

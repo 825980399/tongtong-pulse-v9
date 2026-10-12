@@ -18,18 +18,18 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import time  # noqa: E402
-from urllib.error import HTTPError  # noqa: E402
+import time
+from urllib.error import HTTPError
 
-import config  # noqa: E402
-import nucleus.knowledge.KnowledgeAcquisitionRouter as _router_mod  # noqa: E402
-from nucleus.knowledge import WikiQuerier as _wq_mod  # noqa: E402
-from nucleus.knowledge.WikiQuerier import (  # noqa: E402
+import config
+import nucleus.knowledge.KnowledgeAcquisitionRouter as _router_mod
+from nucleus.knowledge import WikiQuerier as _wq_mod
+from nucleus.knowledge.WikiQuerier import (
     _UA_POOL,
-    WikiResult,  # noqa: E402
+    WikiResult,
     _get_ua,
 )
-from organs.motor.PulseLegs import DigestEvent, PulseLegs  # noqa: E402
+from organs.motor.PulseLegs import DigestEvent, PulseLegs
 
 
 def _isolate_cache(testcase):
@@ -129,9 +129,8 @@ class Test403Evidence(unittest.TestCase):
 
         with mock.patch.object(_wq_mod, "urlopen", _raise_403), \
                 mock.patch.object(time, "sleep", lambda *a, **k: None), \
-                mock.patch.object(_wq_mod, "_logger", _logger_mock):
-            with self.assertRaises(HTTPError):
-                _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
+                mock.patch.object(_wq_mod, "_logger", _logger_mock), self.assertRaises(HTTPError):
+            _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
         _texts = [str(c.args[0]) for c in _logger_mock.warning.call_args_list]
         _joined = "\n".join(_texts)
         self.assertTrue(any("403 反爬命中" in t for t in _texts),

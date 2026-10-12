@@ -11,7 +11,6 @@
 ★测试隔离：迁移测试在沙箱内构造 fake 根目录，**不动生产目录**。
 """
 
-import io
 import json
 import os
 import shutil
@@ -23,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from tools import tmp_backup as _tb  # noqa: E402
+from tools import tmp_backup as _tb
 
 
 class TestDefaultLocation(unittest.TestCase):
@@ -53,10 +52,10 @@ class _MigrateSandbox(unittest.TestCase):
         os.makedirs(os.path.join(self.legacy, "20260101_000000"), exist_ok=True)
         # 造一个带 MANIFEST 的快照
         _d = os.path.join(self.legacy, "20260101_000000")
-        with io.open(os.path.join(_d, "patch_x_m99.py"), "w",
+        with open(os.path.join(_d, "patch_x_m99.py"), "w",
                      encoding="utf-8") as _f:
             _f.write("x = 1\n")
-        with io.open(os.path.join(_d, _tb.MANIFEST), "w", encoding="utf-8") as _f:
+        with open(os.path.join(_d, _tb.MANIFEST), "w", encoding="utf-8") as _f:
             _f.write(json.dumps({"snapshot": "20260101_000000",
                                  "file_count": 1, "files": []}))
 
@@ -73,7 +72,7 @@ class TestMigrate(_MigrateSandbox):
     def test_11_content_preserved(self):
         _tb.migrate_legacy(self.legacy, self.new)
         _p = os.path.join(self.new, "20260101_000000", "patch_x_m99.py")
-        self.assertEqual(io.open(_p, encoding="utf-8").read(), "x = 1\n")
+        self.assertEqual(open(_p, encoding="utf-8").read(), "x = 1\n")
 
     def test_12_legacy_dir_removed_when_empty(self):
         _r = _tb.migrate_legacy(self.legacy, self.new)
@@ -96,7 +95,7 @@ class TestMigrate(_MigrateSandbox):
         """MANIFEST 损坏的快照不迁移（避免污染新落点），且保留现场。"""
         _d = os.path.join(self.legacy, "20260102_000000")
         os.makedirs(_d, exist_ok=True)
-        with io.open(os.path.join(_d, _tb.MANIFEST), "w", encoding="utf-8") as _f:
+        with open(os.path.join(_d, _tb.MANIFEST), "w", encoding="utf-8") as _f:
             _f.write("{broken json")
         _r = _tb.migrate_legacy(self.legacy, self.new)
         self.assertIn("20260101_000000", _r["moved"])
@@ -119,14 +118,14 @@ class TestGitignore(unittest.TestCase):
         _gi = os.path.join(_ROOT, ".gitignore")
         if not os.path.isfile(_gi):
             self.skipTest("无 .gitignore")
-        _g = io.open(_gi, encoding="utf-8", errors="replace").read()
+        _g = open(_gi, encoding="utf-8", errors="replace").read()
         self.assertIn(".bak_tmp/", _g)
 
     def test_21_pytest_tmp_ignored(self):
         _gi = os.path.join(_ROOT, ".gitignore")
         if not os.path.isfile(_gi):
             self.skipTest("无 .gitignore")
-        _g = io.open(_gi, encoding="utf-8", errors="replace").read()
+        _g = open(_gi, encoding="utf-8", errors="replace").read()
         self.assertIn(".pytest_tmp/", _g)
 
 
@@ -151,7 +150,7 @@ class TestProductionState(unittest.TestCase):
         for _n in os.listdir(_d):
             _mf = os.path.join(_d, _n, _tb.MANIFEST)
             if os.path.isfile(_mf):
-                _j = json.load(io.open(_mf, encoding="utf-8"))
+                _j = json.load(open(_mf, encoding="utf-8"))
                 self.assertTrue(_j.get("file_count") is not None)
 
 

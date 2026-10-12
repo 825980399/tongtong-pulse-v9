@@ -29,14 +29,14 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from typing import Any, Tuple
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
 _MODULE_TAG = "subagent_worker"
 
 
-def _open_stderr_log(stderr_file: "str | None"):
+def _open_stderr_log(stderr_file: str | None):
     """打开 stderr 诊断日志（可选）；返回可写句柄或 None。"""
     if not stderr_file:
         return None
@@ -47,7 +47,7 @@ def _open_stderr_log(stderr_file: "str | None"):
         return None
 
 
-def run_once(spec: Any) -> "Tuple[dict, int]":
+def run_once(spec: Any) -> tuple[dict, int]:
     """单次确定性调用（DETERMINISTIC 路径，不调 LLM）。
 
     Args:
@@ -115,7 +115,7 @@ def _write_output(output_file: str, result: dict, exit_code: int) -> None:
     os.replace(tmp, output_file)
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI 入口：读 input → run_once → 写 output → 返回 exit_code。
 
     约定 argv = [input_file, output_file, stderr_file?]
@@ -139,7 +139,7 @@ def main(argv: "list[str] | None" = None) -> int:
     try:
         with open(input_file, encoding="utf-8") as f:
             spec = json.load(f)
-    except Exception as exc:  # noqa: BLE001 - 输入失败归一为 exit_code=2，写 output 后退出
+    except Exception as exc:
         _log_line(f"[{_MODULE_TAG}] input read failed: {type(exc).__name__}: {exc}")
         _write_output(output_file, {
             "error": f"input read failed: {type(exc).__name__}: {exc}",

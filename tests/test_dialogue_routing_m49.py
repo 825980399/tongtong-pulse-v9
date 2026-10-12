@@ -10,7 +10,6 @@
 
 本测试同时守护「语义」与「结构」，开关双向门控。
 """
-import io
 import os
 import sys
 import textwrap
@@ -21,13 +20,13 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import config  # noqa: E402
-from nucleus.const import LogLevel as _LogLevel  # noqa: E402
-from organs.body.PulseLung import PulseLung  # noqa: E402
+import config
+from nucleus.const import LogLevel as _LogLevel
+from organs.body.PulseLung import PulseLung
 
-_SRC = io.open(os.path.join(_ROOT, "organs/body/PulseLung.py"),
+_SRC = open(os.path.join(_ROOT, "organs/body/PulseLung.py"),
                encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
-_MAIN_SRC = io.open(os.path.join(_ROOT, "main.py"),
+_MAIN_SRC = open(os.path.join(_ROOT, "main.py"),
                     encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
 
 
@@ -43,9 +42,9 @@ def _bare():
 def _slice(src, start_marker, end_marker):
     """从真实源码切出整段（含首尾），回退即测试失败。"""
     i = src.find(start_marker)
-    assert i >= 0, "起始锚点未找到: {!r}".format(start_marker[:60])
+    assert i >= 0, f"起始锚点未找到: {start_marker[:60]!r}"
     j = src.find(end_marker, i)
-    assert j >= 0, "结束锚点未找到: {!r}".format(end_marker[:60])
+    assert j >= 0, f"结束锚点未找到: {end_marker[:60]!r}"
     return src[i:j + len(end_marker)]
 
 
@@ -142,7 +141,7 @@ class TestCrossThreadIsolation(unittest.TestCase):
         for t in ts:
             t.join()
         self.assertEqual(res, {"t0": False, "t1": True, "t2": False, "t3": True},
-                         "跨线程串味！实得 {}".format(res))
+                         f"跨线程串味！实得 {res}")
 
     def test_11_shared_attr_would_bleed(self):
         """对照：证明「共享实例属性」确有串味风险（记录根因）。"""

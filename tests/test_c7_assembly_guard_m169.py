@@ -9,7 +9,6 @@
   - 门禁契约：legacy 段 `_create_organ` 数仍为 37（不得扩张/收缩）。
 """
 import ast
-import io
 import os
 import sys
 
@@ -21,7 +20,7 @@ MAIN = os.path.join(_ROOT, "main.py")
 
 
 def _src():
-    with io.open(MAIN, "r", encoding="utf-8") as f:
+    with open(MAIN, "r", encoding="utf-8") as f:
         return f.read().replace("\r\n", "\n")
 
 
@@ -31,7 +30,7 @@ def _func_body(name):
         if isinstance(node, ast.FunctionDef) and node.name == name:
             seg = ast.get_source_segment(_src(), node) or ""
             return seg
-    raise AssertionError("未找到函数 {}".format(name))
+    raise AssertionError(f"未找到函数 {name}")
 
 
 class TestSensorGuard:
@@ -39,7 +38,7 @@ class TestSensorGuard:
         for fn in ("_init_organs_declarative", "_init_organs_legacy"):
             seg = _func_body(fn)
             assert 'if not hasattr(self, "sensor"):' in seg, \
-                "{} 缺 Sensor 守卫".format(fn)
+                f"{fn} 缺 Sensor 守卫"
 
     def test_no_bare_sensor_assign_in_legacy(self):
         """★legacy 段（停用路径）的 Sensor 赋值必须在 hasattr 守卫内。"""
@@ -75,7 +74,7 @@ class TestSensorGuard:
                         assigns.append(node.lineno)
         assert assigns, "未找到任何 self.sensor = Sensor() 赋值"
         naked = [ln for ln in assigns if ln not in guarded]
-        assert not naked, "未守卫的 Sensor 赋值行: {}".format(naked)
+        assert not naked, f"未守卫的 Sensor 赋值行: {naked}"
 
 
 class TestLoaderGuard:
@@ -83,13 +82,13 @@ class TestLoaderGuard:
         for fn in ("_init_organs_declarative", "_init_organs_legacy"):
             seg = _func_body(fn)
             assert 'if not hasattr(self, "organ_loader"):' in seg, \
-                "{} 缺 organ_loader 守卫".format(fn)
+                f"{fn} 缺 organ_loader 守卫"
 
     def test_loader_still_loaded(self):
         """守卫后仍必须真正 load（不能被守卫吞掉装配）。"""
         for fn in ("_init_organs_declarative", "_init_organs_legacy"):
             seg = _func_body(fn)
-            assert "load_organs()" in seg, "{} 未调用 load_organs".format(fn)
+            assert "load_organs()" in seg, f"{fn} 未调用 load_organs"
 
 
 class TestDiffCheckEnhancement:

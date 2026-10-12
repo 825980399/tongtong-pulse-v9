@@ -13,7 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.knowledge.PollutionTagger import PollutionTagger  # noqa: E402
+from nucleus.knowledge.PollutionTagger import PollutionTagger
 
 
 class TestKnife5E1Idempotent(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestKnife5E1Idempotent(unittest.TestCase):
         _flag, _reason = _t.classify(_d)
         self.assertEqual(_flag, "suspect")
         # 只应出现一次 E1:显式标记 前缀（杜绝 35 次累加）
-        self.assertEqual(_reason.count("E1:显式标记"), 1, "不应重复累加 E1 前缀: {!r}".format(_reason))
+        self.assertEqual(_reason.count("E1:显式标记"), 1, f"不应重复累加 E1 前缀: {_reason!r}")
         self.assertTrue(_reason.startswith("E1:显式标记(suspect)"))
         self.assertIn("原始原因文本", _reason)
         # 幂等：再判一次结果完全一致（无累加）
@@ -53,8 +53,8 @@ class TestKnife5NaQuestionPrefix(unittest.TestCase):
         for _v in ("给我讲讲今天的天气", "讲讲你的故事", "介绍下这个知识点", "说下你的看法"):
             _flag, _reason = _t.classify(
                 {"node_id": "k3", "value": _v, "keywords": [], "space_path": "/知识/测试"})
-            self.assertEqual(_flag, "suspect", "问句应判 suspect: {!r}".format(_v))
-            self.assertTrue(_reason.startswith("S3"), "应为 S3: {!r} -> {!r}".format(_v, _reason))
+            self.assertEqual(_flag, "suspect", f"问句应判 suspect: {_v!r}")
+            self.assertTrue(_reason.startswith("S3"), f"应为 S3: {_v!r} -> {_reason!r}")
 
     def test_na_question_mark_still_caught(self):
         """回归：原问号结尾判定不受影响。"""

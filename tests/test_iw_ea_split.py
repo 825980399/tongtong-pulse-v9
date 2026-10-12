@@ -27,7 +27,7 @@ os.environ.setdefault(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "test_iw_ea.log"),
 )
 
-from organs.brain.PulseInnerWorld import PulseInnerWorld  # noqa: E402
+from organs.brain.PulseInnerWorld import PulseInnerWorld
 
 
 class _RaisingEnhancer:

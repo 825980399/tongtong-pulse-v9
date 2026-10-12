@@ -11,7 +11,6 @@
 ★测试隔离：全部使用 ``tempfile.mkdtemp()``。
 """
 
-import io
 import os
 import shutil
 import subprocess
@@ -23,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive  # noqa: E402
+from nucleus.data.path_utils import drive_of, safe_commonpath, safe_relpath, same_drive
 
 #: 本项目（D:）与系统临时目录（通常 C:）—— 真实跨盘场景
 _PROJECT_DRIVE = drive_of(_ROOT)
@@ -93,7 +92,7 @@ class TestSafeRelpath(unittest.TestCase):
             safe_relpath(tempfile.gettempdir(), _ROOT)
         except (ValueError, OSError, TypeError) as _e:
             _raised = _e
-        self.assertIsNone(_raised, "safe_relpath 不应抛异常，实得 {!r}".format(_raised))
+        self.assertIsNone(_raised, f"safe_relpath 不应抛异常，实得 {_raised!r}")
 
     def test_14_start_none(self):
         """start=None 时等价于 os.path.relpath(path)（基于 cwd）。"""
@@ -136,7 +135,7 @@ class TestToolIntegration(unittest.TestCase):
         _d = tempfile.mkdtemp(prefix="m48serp_")
         try:
             _pool = os.path.join(_d, "pool.json")
-            with io.open(_pool, "w", encoding="utf-8") as _f:
+            with open(_pool, "w", encoding="utf-8") as _f:
                 _f.write('{"experiences": []}')
             _r = subprocess.run(
                 [sys.executable,
@@ -146,7 +145,7 @@ class TestToolIntegration(unittest.TestCase):
                 encoding="utf-8", errors="replace", timeout=180)
             _out = (_r.stdout or "") + (_r.stderr or "")
             self.assertNotIn("ValueError", _out,
-                             "跨盘路径导致 ValueError: {}".format(_out[-300:]))
+                             f"跨盘路径导致 ValueError: {_out[-300:]}")
             self.assertEqual(_r.returncode, 0, _out[-300:])
         finally:
             shutil.rmtree(_d, ignore_errors=True)
@@ -158,7 +157,7 @@ class TestToolIntegration(unittest.TestCase):
         _d = tempfile.mkdtemp(prefix="m48bf_")
         try:
             _t = os.path.join(_d, "patch_history.json")
-            with io.open(_t, "w", encoding="utf-8") as _f:
+            with open(_t, "w", encoding="utf-8") as _f:
                 _f.write('{"patches": []}')
             _r = subprocess.run(
                 [sys.executable,
@@ -169,7 +168,7 @@ class TestToolIntegration(unittest.TestCase):
                 encoding="utf-8", errors="replace", timeout=180)
             _out = (_r.stdout or "") + (_r.stderr or "")
             self.assertNotIn("ValueError", _out,
-                             "跨盘路径导致 ValueError: {}".format(_out[-300:]))
+                             f"跨盘路径导致 ValueError: {_out[-300:]}")
             self.assertEqual(_r.returncode, 0, _out[-300:])
         finally:
             shutil.rmtree(_d, ignore_errors=True)
@@ -180,7 +179,7 @@ class TestToolIntegration(unittest.TestCase):
 class TestAdoption(unittest.TestCase):
     def _read(self, rel):
         _p = os.path.join(_ROOT, rel)
-        return io.open(_p, encoding="utf-8", errors="replace").read() \
+        return open(_p, encoding="utf-8", errors="replace").read() \
             if os.path.isfile(_p) else None
 
     def test_40_serp_uses_safe(self):

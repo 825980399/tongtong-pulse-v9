@@ -12,7 +12,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ast
-import io
 import json
 import logging
 import subprocess
@@ -184,20 +183,20 @@ class TestWordingDisambiguation(unittest.TestCase):
     """2) 日志措辞消歧（P2-218）。"""
 
     def test_20_matcher_log_has_source_caliber(self):
-        _t = io.open(os.path.join(
+        _t = open(os.path.join(
             _ROOT, "nucleus/self_awareness/ProductionConsumptionMatcher.py"),
             encoding="utf-8").read()
         self.assertIn("源码文件 / %d 源码数据路径", _t)
         self.assertIn("覆盖率", _t)
 
     def test_21_matcher_report_has_channel_section(self):
-        _t = io.open(os.path.join(
+        _t = open(os.path.join(
             _ROOT, "nucleus/self_awareness/ProductionConsumptionMatcher.py"),
             encoding="utf-8").read()
         self.assertIn("【扫描渠道】", _t)
 
     def test_22_fakeloop_log_has_source_caliber(self):
-        _t = io.open(os.path.join(
+        _t = open(os.path.join(
             _ROOT, "nucleus/self_awareness/FakeLoopDetector.py"),
             encoding="utf-8").read()
         self.assertIn("扫描 %d 个源码文件", _t)
@@ -210,7 +209,7 @@ class TestOrganLogGovernance(unittest.TestCase):
     @staticmethod
     def _prints(path):
         """返回 (自测块内 print 数, 业务代码 print 数)。"""
-        src = io.open(path, encoding="utf-8").read()
+        src = open(path, encoding="utf-8").read()
         tree = ast.parse(src)
         main_r = []
         for n in tree.body:
@@ -247,13 +246,13 @@ class TestOrganLogGovernance(unittest.TestCase):
 
     def test_32_selftest_blocks_documented(self):
         for _k, _p in ORGS.items():
-            _t = io.open(os.path.join(_ROOT, _p), encoding="utf-8").read()
+            _t = open(os.path.join(_ROOT, _p), encoding="utf-8").read()
             self.assertIn("主线第37批 T5（P2-229）：本块是**开发自测**", _t, _p)
 
     def test_33_zero_log_organs_now_have_business_logs(self):
         for _k in ZERO_LOG_ORGS:
             _p = os.path.join(_ROOT, ORGS[_k])
-            _src = io.open(_p, encoding="utf-8").read()
+            _src = open(_p, encoding="utf-8").read()
             _tree = ast.parse(_src)
             main_r = []
             for n in _tree.body:
@@ -277,19 +276,19 @@ class TestOrganLogGovernance(unittest.TestCase):
 
     def test_34_log_level_imported(self):
         for _k in ZERO_LOG_ORGS:
-            _src = io.open(os.path.join(_ROOT, ORGS[_k]),
+            _src = open(os.path.join(_ROOT, ORGS[_k]),
                            encoding="utf-8").read()
             self.assertIn("LogLevel", _src.split("class ")[0], _k)
 
     def test_35_existing_organs_logs_intact(self):
         for _k in ("PulseHands", "PulseSkin", "PulseMouth", "PulseEars",
                    "PulseWhiteCell"):
-            _t = io.open(os.path.join(_ROOT, ORGS[_k]), encoding="utf-8").read()
+            _t = open(os.path.join(_ROOT, ORGS[_k]), encoding="utf-8").read()
             self.assertGreaterEqual(_t.count("self._log("), 1, _k)
 
     def test_36_thymus_e402_fixed(self):
         """★顺手治理：悬空第二 docstring → 注释块，E402 5 → 0。"""
-        _t = io.open(os.path.join(_ROOT, ORGS["PulseThymus"]),
+        _t = open(os.path.join(_ROOT, ORGS["PulseThymus"]),
                      encoding="utf-8").read()
         self.assertIn("_m37_t5_e402", _t)
 

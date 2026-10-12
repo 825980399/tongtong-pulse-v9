@@ -23,7 +23,8 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from nucleus._silent_except import silent_exc
 
@@ -69,7 +70,7 @@ class AlertBridgePolicy:
         self.min_levelno = int(min_levelno)
         self._lock = threading.Lock()
         # 键 -> {"last": 上次入档时间戳, "count": 当前窗口计数}
-        self._state: Dict[str, Dict[str, float]] = {}
+        self._state: dict[str, dict[str, float]] = {}
 
     @staticmethod
     def _key(name: str, levelno: int, message: str) -> str:
@@ -107,8 +108,8 @@ class AlertJsonlHandler(logging.Handler):
     写盘守卫。生产路径走 ``_default_write``，受 ``write_guard`` 约束。
     """
 
-    def __init__(self, policy: Optional[AlertBridgePolicy] = None,
-                 sink: Optional[Callable[[dict], Any]] = None,
+    def __init__(self, policy: AlertBridgePolicy | None = None,
+                 sink: Callable[[dict], Any] | None = None,
                  enabled: bool = ALERT_LOG_BRIDGE_ENABLED):
         super().__init__()
         self.policy = policy or AlertBridgePolicy()
@@ -116,7 +117,7 @@ class AlertJsonlHandler(logging.Handler):
         self._sink = sink
         try:
             self.setLevel(self.policy.min_levelno)
-        except (OSError, IOError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             silent_exc(e, where="alert_log_bridge::AlertJsonlHandler.__init__")
             self.setLevel(logging.WARNING)
         self.setFormatter(logging.Formatter("%(message)s"))
@@ -126,7 +127,7 @@ class AlertJsonlHandler(logging.Handler):
             return
         try:
             _msg = self.format(record)
-        except (OSError, IOError, ValueError, TypeError, AttributeError) as e:
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             silent_exc(e, where="alert_log_bridge::emit.format")
             return
         if not self.policy.should_emit(record.name, record.levelno, _msg):
@@ -145,7 +146,7 @@ class AlertJsonlHandler(logging.Handler):
         if self._sink is not None:
             try:
                 self._sink(_doc)
-            except (OSError, IOError, ValueError, TypeError) as e:
+            except (OSError, ValueError, TypeError) as e:
                 silent_exc(e, where="alert_log_bridge::emit.sink")
             return
         self._default_write(_doc)
@@ -160,7 +161,7 @@ class AlertJsonlHandler(logging.Handler):
             os.makedirs(os.path.dirname(_p), exist_ok=True)
             with open(_p, "a", encoding="utf-8") as _f:
                 _f.write(json.dumps(doc, ensure_ascii=False) + "\n")
-        except (OSError, IOError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             silent_exc(e, where="alert_log_bridge::_default_write")
 
 
@@ -168,8 +169,8 @@ _INSTALLED = False
 _INSTALL_LOCK = threading.Lock()
 
 
-def install_alert_log_bridge(logger: Optional[logging.Logger] = None,
-                             policy: Optional[AlertBridgePolicy] = None) -> bool:
+def install_alert_log_bridge(logger: logging.Logger | None = None,
+                             policy: AlertBridgePolicy | None = None) -> bool:
     """把 ``AlertJsonlHandler`` 挂到根日志器 ``pulse``（进程内仅一次）。
 
     返回是否**实际挂载**（已挂载 / 未启用 / 测试环境跳过 均返回 False）。
@@ -198,7 +199,7 @@ def install_alert_log_bridge(logger: Optional[logging.Logger] = None,
             _lg.addHandler(_h)
             _INSTALLED = True
             return True
-        except (OSError, IOError, ValueError, TypeError, AttributeError) as e:
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             silent_exc(e, where="alert_log_bridge::install")
             return False
 

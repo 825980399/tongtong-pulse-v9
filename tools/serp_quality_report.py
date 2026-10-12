@@ -27,21 +27,20 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any
 
 _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJ not in sys.path:
     sys.path.insert(0, _PROJ)
 
-from nucleus.data import experience_cleanup as EC  # noqa: E402
+from nucleus.data import experience_cleanup as EC
 
 # ★第55批 T3：跨盘安全的 relpath（测试沙箱可能落在与项目不同的盘，
 #   裸 os.path.relpath 会抛 ValueError: path is on mount 'C:', start on 'D:'）
-from nucleus.data.path_utils import normalize_relpath  # noqa: E402
+from nucleus.data.path_utils import normalize_relpath
 
 DEFAULT_POOL = os.path.join(_PROJ, "data", "experience", "experience_pool.json")
 
@@ -64,9 +63,9 @@ def _ts_of(exp: dict) -> Any:
     return None
 
 
-def load_pool(path: str) -> List[dict]:
+def load_pool(path: str) -> list[dict]:
     """加载经验池（只读）。"""
-    with io.open(path, encoding="utf-8") as _f:
+    with open(path, encoding="utf-8") as _f:
         _d = json.load(_f)
     if isinstance(_d, dict):
         for _k in ("experiences", "records", "items", "data"):
@@ -75,7 +74,7 @@ def load_pool(path: str) -> List[dict]:
     return [x for x in _d if isinstance(x, dict)] if isinstance(_d, list) else []
 
 
-def assess(pool: str = DEFAULT_POOL) -> Dict[str, Any]:
+def assess(pool: str = DEFAULT_POOL) -> dict[str, Any]:
     """执行评估（★只读）。"""
     _recs = load_pool(pool)
     _total = len(_recs)
@@ -83,12 +82,12 @@ def assess(pool: str = DEFAULT_POOL) -> Dict[str, Any]:
     # 1) 清洗覆盖度（★铁律 59：区分「字段不存在」与「值为 False」）
     _marked = [r for r in _recs if r.get("polluted") is True
                or r.get(EC.F_IS_CLEANED) is False]
-    _by_reason: Dict[str, int] = {}
+    _by_reason: dict[str, int] = {}
     for _r in _marked:
         _k = str(_r.get(EC.F_CLEANUP_REASON) or "(未填 reason)")
         _by_reason[_k] = _by_reason.get(_k, 0) + 1
 
-    _risk: Dict[str, int] = {}
+    _risk: dict[str, int] = {}
     for _r in _recs:
         _k = str(_r.get(EC.F_POLLUTION_RISK) or "(无)")
         _risk[_k] = _risk.get(_k, 0) + 1
@@ -97,7 +96,7 @@ def assess(pool: str = DEFAULT_POOL) -> Dict[str, Any]:
     _usable = [r for r in _recs if EC.is_retrievable(r)]
 
     # 3) ★漏网检测：可用池里命中**明确污染特征**的
-    _missed: List[dict] = []
+    _missed: list[dict] = []
     for _r in _usable:
         _cls = EC.classify(_r)
         # 只有「模板」与「写入侧样板」是**明确特征**；
@@ -145,7 +144,7 @@ def assess(pool: str = DEFAULT_POOL) -> Dict[str, Any]:
     }
 
 
-def render_md(a: Dict[str, Any]) -> str:
+def render_md(a: dict[str, Any]) -> str:
     _q = a["quality"]
     _L = [
         "# SERP 清洗后经验库质量评估报告（主线第55批 T7）",
@@ -229,13 +228,13 @@ def main() -> int:
     print(f"总数 {_a['total']:} / 已标记 {_a['marked']:} ({100 * _a['marked_rate']:.2f}%) / 可用 {_a['usable']:} ({100 * _a['usable_rate']:.2f}%) / 漏网 {_a['missed_count']:}")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    io.open(args.out, "w", encoding="utf-8", newline="").write(render_md(_a))
-    print("报告已写入：{}".format(args.out))
+    open(args.out, "w", encoding="utf-8", newline="").write(render_md(_a))
+    print(f"报告已写入：{args.out}")
 
     if args.json_out:
-        io.open(args.json_out, "w", encoding="utf-8", newline="").write(
+        open(args.json_out, "w", encoding="utf-8", newline="").write(
             json.dumps(_a, ensure_ascii=False, indent=2))
-        print("JSON 已写入：{}".format(args.json_out))
+        print(f"JSON 已写入：{args.json_out}")
     return 0
 
 

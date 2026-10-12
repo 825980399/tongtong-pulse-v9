@@ -15,7 +15,6 @@
   C. 正常抽取不受闸影响（真实值仍被抽取）。
   D. 策略5 容错解析能力：能消化「数组里放键值对」的真错误（parse_json_fault_tolerant）。
 """
-import io
 import os
 import sys
 import unittest
@@ -24,16 +23,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.parsing.json_fault_tolerant import (  # noqa: E402
+from nucleus.parsing.json_fault_tolerant import (
     parse_json_fault_tolerant as _ft_parse,
 )
-from organs.body.PulseStomach import PulseStomach  # noqa: E402
+from organs.body.PulseStomach import PulseStomach
 
 _STOMACH = os.path.join(ROOT, "organs", "body", "PulseStomach.py")
 
 
 def _read_src():
-    with io.open(_STOMACH, encoding="utf-8", errors="ignore") as f:
+    with open(_STOMACH, encoding="utf-8", errors="ignore") as f:
         return f.read().replace("\r\n", "\n")
 
 

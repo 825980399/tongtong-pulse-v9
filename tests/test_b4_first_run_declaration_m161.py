@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from nucleus.security import first_run_declaration as frd  # noqa: E402
-from nucleus.security.crisis_referral_text import (  # noqa: E402
+from nucleus.security import first_run_declaration as frd
+from nucleus.security.crisis_referral_text import (
     _starts_with_first_person,
     violates_red_line,
 )

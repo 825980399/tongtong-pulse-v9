@@ -12,8 +12,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nucleus.cognitive.organ_health_leaderboard import OrganHealthLeaderboard  # noqa: E402
-from nucleus.cognitive.organ_inventory import (  # noqa: E402
+from nucleus.cognitive.organ_health_leaderboard import OrganHealthLeaderboard
+from nucleus.cognitive.organ_inventory import (
     TASKBOOK_CORE_BRAIN,
     export_organ_inventory,
     organ_names_all,

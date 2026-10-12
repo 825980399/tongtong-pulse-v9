@@ -26,13 +26,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pyarrow.parquet as pq  # noqa: E402
+import pyarrow.parquet as pq
 
-import config  # noqa: E402
-import nucleus.mnemosyne.PulseNodePool as PNP  # noqa: E402
-from nucleus.mnemosyne.pa_compat import table_from_rows  # noqa: E402
-from nucleus.mnemosyne.PulseNode import PulseNode  # noqa: E402
-from nucleus.mnemosyne.PulseNodePool import PulseNodePool  # noqa: E402
+import config
+import nucleus.mnemosyne.PulseNodePool as PNP
+from nucleus.mnemosyne.pa_compat import table_from_rows
+from nucleus.mnemosyne.PulseNode import PulseNode
+from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
 # 5483 历史碎文件规模在隔离测试中完整复现成本过高（逐文件 pyarrow 写盘），
 # 此处用代表性规模验证同一代码路径的收敛比；生产 5483 文件走完全相同的 compact_cold_storage。
