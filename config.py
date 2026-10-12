@@ -5765,23 +5765,23 @@ SUBAGENT_TIMEOUT_SECONDS = 300
 #         organs/body/PulseLung.py 两处硬编码 0.7 统一为本常量（不动态）
 # 零行为变化：ENABLE_COGNITIVE_TEMPERATURE_OBSERVE=False → 仅心跳日志，不进任何请求
 LLM_TEMPERATURE_BASE = 0.7
-ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False
+ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False  # 190共窗收证完成，翻回
 
 # ===== [M183-STRENGTH] 183批刀4：记忆强度衰减观测（纯函数 + 影子排序）=====
 # 读取点：nucleus/memory_strength.py::memory_strength
 #         organs/brain/PulseSubconscious.py 探索tick 影子排序对比
 # 零行为变化：ENABLE_MEMORY_STRENGTH_SHADOW=False → 仅日志，不改返回结果/权重/Parquet
 MEMORY_STRENGTH_TAU = 30.0
-ENABLE_MEMORY_STRENGTH_SHADOW = False
+ENABLE_MEMORY_STRENGTH_SHADOW = False  # 190共窗收证完成，翻回
 
 # ===== [M183-COLLISION] 183批刀5：顿悟触发器观测（碰撞扫描器）=====
 # 读取点：organs/brain/PulseSubconscious.py::_m183_scan_hebbian_collision
 # 零行为变化：ENABLE_HEBBIAN_COLLISION_SCAN=False → 仅日志（节点对/激活量/质量分），不入库不推理不外搜
-ENABLE_HEBBIAN_COLLISION_SCAN = False
+ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
 
 # ===== [M183-DECAY] 183批刀6：apply_decay 死代码接线（心跳周期调用）=====
 # 读取点：nucleus/genesis/HebbianLearner.py::apply_decay(force=True)
 #         organs/brain/PulseSubconscious.py::_m183_apply_hebbian_decay
 # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
 #             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
-ENABLE_HEBBIAN_APPLY_DECAY = False
+ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
