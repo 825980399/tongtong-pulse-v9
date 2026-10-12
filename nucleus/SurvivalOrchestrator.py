@@ -130,6 +130,9 @@ class SurvivalOrchestrator(SilentLogMixin):
         "spirit",         # 精神层：精神宪法/自我叙事
     )
 
+    # ★198刀1：on_heartbeat 入口一次性 INFO 去重标记（进程内仅首拍记录「目标读数出现」）。
+    _HB_TELEMETRY_LOGGED = False
+
     def __init__(self, get_existential_state: Callable[[], dict[str, Any]] | None = None):
         self._get_existential_state = get_existential_state
         self._layer_organs: dict[str, Any] = {}
@@ -184,6 +187,13 @@ class SurvivalOrchestrator(SilentLogMixin):
         self._beat_count = beat_count
         if beat_count % DETECT_EVERY_BEATS != 0:
             return  # 未到检测拍，跳过（轻量化）
+
+        # ★198刀1：一次性 INFO 标记「目标读数出现」（验收：on_heartbeat 已抵达低频遥测扳机分支）。
+        #   进程内仅首拍记录，配合 telemetry() 入口一次性 INFO 收窄断点至
+        #   「分支未及（on_heartbeat 入口 INFO 缺失）/ 异常吞（telemetry 入口有而场景 INFO 无）」两候选。
+        if not type(self)._HB_TELEMETRY_LOGGED:
+            type(self)._HB_TELEMETRY_LOGGED = True
+            self._log(LogLevel.INFO, "[survival_orchestrator] 目标读数出现：on_heartbeat 进入低频遥测扳机分支")
 
         # ★194刀1：低频拍（每 DETECT_EVERY_BEATS 拍）触发语义缓存 L2 只读遥测。
         #   修复「有出口无扳机」——此前 telemetry() 仅被 stats() 内部调用，无外部观测扳机。

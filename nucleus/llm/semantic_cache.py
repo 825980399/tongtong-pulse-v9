@@ -43,6 +43,9 @@ from nucleus._silent_except import silent_exc
 # ★191刀2：L2 遥测 INFO 日志输出（命中率/污染率·按场景分布）
 _L = logging.getLogger("semantic_cache_l2")
 
+# ★198刀1：telemetry() 入口一次性 INFO 去重标记（进程内仅首调记录）。
+_TELEMETRY_ENTRY_LOGGED = False
+
 # ---------------------------------------------------------------------------
 # 默认值
 # ---------------------------------------------------------------------------
@@ -872,6 +875,12 @@ class SemanticCacheL2:
 
     def telemetry(self) -> dict:
         """★188刀1：只读遥测快照（命中率/污染率·按场景分桶）。零副作用。"""
+        # ★198刀1：入口一次性 INFO（验收：telemetry() 确被进入，用于区分「分支未及」与「异常吞」）。
+        #   进程内仅首调记录；不改任何命中判定 / 存储 / 返回。
+        global _TELEMETRY_ENTRY_LOGGED
+        if not _TELEMETRY_ENTRY_LOGGED:
+            _TELEMETRY_ENTRY_LOGGED = True
+            _L.info("[semantic_cache_l2] telemetry 入口被调用（目标读数采集启动）")
         with self._lock:
             _t = {_k: dict(_v) for _k, _v in self._telemetry.items()}
         for _v in _t.values():
