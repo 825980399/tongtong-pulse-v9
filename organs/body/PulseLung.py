@@ -875,7 +875,8 @@ class PulseLung(BasePulseOrgan):
         except Exception as _exc:
             self._log(LogLevel.DEBUG, f"[渠道] 健康度更新异常: {type(_exc).__name__}")
 
-    def _build_channel_messages(self, prompt: str, history: list | None = None) -> list:
+    def _build_channel_messages(self, prompt: str, history: list | None = None,
+                               image_b64: str | None = None) -> list:
         """构造渠道请求的 messages（复用既有系统提示词，保证人格一致）。
 
         ★主线第24批 T5（修复第三方报告 P0-9「无真实多轮对话」）：
@@ -906,7 +907,17 @@ class PulseLung(BasePulseOrgan):
         except Exception as _hist_e:
             self._log(LogLevel.DEBUG,
                       f"[多轮对话] 历史上下文注入失败: {type(_hist_e).__name__}")
-        _msgs.append({"role": "user", "content": prompt})
+        # ★190刀2：多模态序列化层零行为扩展 —— 可选 image_b64 入参。
+        #   有图时 user.content 转 array 形态（text + image_url data-URL），
+        #   无图（image_b64 为空）时保持原字符串分支，纯形状扩展、零行为变化。
+        if image_b64:
+            _user_content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+            ]
+        else:
+            _user_content = prompt
+        _msgs.append({"role": "user", "content": _user_content})
         return _msgs
 
     # ★主线第56批 T1/P2-393：渠道级超时解析（静态方法，便于单测）。
@@ -1977,8 +1988,16 @@ class PulseLung(BasePulseOrgan):
         """178批 刀2：RequestDeduplicator OBSERVE 埋点装饰器（只观察不接线，shadow 由开关控制）。"""
         def _wrap(self, prompt, model="deepseek-v4-flash", enable_thinking=False):
             from nucleus.field.request_dedup_observe import observe_span, get_current_user
-            _span = observe_span(get_current_user() or "?", prompt)
+            _user = get_current_user() or "?"
+            _span = observe_span(_user, prompt)
             _span.__enter__()
+            # ★190刀3：社会层刀A 影子画像观测（内存态、零落盘、零LLM、零副作用）
+            try:
+                from nucleus.social.shadow_profile_observer import observe as _observe_shadow
+                _observe_shadow(_user, summary=prompt)
+            except Exception as _sp_e:
+                from nucleus._silent_except import silent_exc
+                silent_exc(_sp_e, where="organs.body.PulseLung::_observe_remote_call shadow_profile")
             try:
                 return func(self, prompt, model, enable_thinking)
             finally:
