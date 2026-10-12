@@ -40,6 +40,13 @@ import uuid
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+try:  # ★190刀1：接入 188刀4 内在模型产出判据（防御性兜底，避免导入环）
+    from nucleus.llm.model_self_updater import (
+        is_internal_model_output as _is_internal_model_output
+    )
+except Exception as _imp_e:  # pragma: no cover
+    silent_exc(_imp_e, where="nucleus.llm.call_recorder::import is_internal_model_output")
+    _is_internal_model_output = None  # 兜底：判据不可用时退化为仅 origin 排除
 
 # ---------------------------------------------------------------------------
 # 常量：origin（四类调用来源，由调用方显式传入，本模块不做猜测）
@@ -229,6 +236,13 @@ def build_training_pair(rec: dict) -> dict | None:
     """★188刀4：把一条已留存的调用对（prompt/response）转为可训数据（input/output）。
     仅成功且含输入/输出的调用可转；失败/空响应不转。不建向量、不接微调管道。"""
     if not isinstance(rec, dict):
+        return None
+    # ★190刀1：188刀4剔除判据缺口修复 —— 系统内部调用（自检/监控/后台学习）
+    #   及内在模型自身产出，一律不物化入训练集（防自我蒸馏退化螺旋，P1-256）。
+    #   依据：烛微§1.2 头号审计发现 call_recorder 此前未接入 is_internal_model_output 判据。
+    if rec.get("origin") == ORIGIN_SYSTEM_INTERNAL:
+        return None
+    if _is_internal_model_output is not None and _is_internal_model_output(rec):
         return None
     if rec.get("status") != STATUS_SUCCESS:
         return None
