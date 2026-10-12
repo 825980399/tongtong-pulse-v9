@@ -4,6 +4,11 @@ _module_logger = logging.getLogger(__name__)
 # -*- coding: utf-8 -*-
 from nucleus._silent_except import silent_exc
 
+# ★192刀2：本地视觉档完整 tag 常量（烛微192前置实测：本机入库为完整 tag，
+#   llava:7b 简称会报 model not found）。仅请求携带 image_b64 时由视觉能力闸旁路使用，
+#   不触碰 avoid_keywords 过滤，零回归。
+VISION_MODEL_NAME = "llava:7b-v1.6-mistral-q3_K_M"
+
 """
 PulseLung —— 脉冲驱动肺 · 模型调用器官
 
@@ -396,6 +401,15 @@ class PulseLung(BasePulseOrgan):
         # 获取本地实际安装的模型 (备用)
         local_models = self._get_local_models()
 
+        # ★192刀2：视觉能力闸旁路 —— 请求携带 image_b64 时跳过远程优先与 avoid 过滤，
+        #   直接走本地视觉档（VISION_MODEL_NAME），零回归（无图走原逻辑一字不动）。
+        if payload.get("image_b64"):
+            if local_models:
+                self._log(LogLevel.INFO, "视觉能力闸旁路：跳过远程优先，直接走本地视觉档")
+                return self._fallback_to_local(local_models, prompt, user_name, payload,
+                                               is_background=_is_background)
+            self._log(LogLevel.WARNING, "视觉请求但本地无模型，回落原逻辑")
+
         # 检查远程API是否可用
         _remote_available = False
         _remote_model_name = ""
@@ -631,8 +645,14 @@ class PulseLung(BasePulseOrgan):
                            is_background: bool = False):
         """回退到本地模型的逻辑"""
         task_type = payload.get("task_type", "chat")
-        # ★修复：使用智能选择算法而非直接取第一个
-        model_name = self._pick_local_model(local_models, task_type)
+        # ★192刀2：视觉能力闸旁路 —— 请求携带 image_b64 时直接选视觉档，
+        #   avoid 面（avoid_keywords / _pick_local_model）一字不动，零回归。
+        if payload.get("image_b64"):
+            model_name = VISION_MODEL_NAME
+            self._log(LogLevel.INFO, f"视觉能力闸旁路 → 直接选视觉档: {model_name}")
+        else:
+            # ★修复：使用智能选择算法而非直接取第一个
+            model_name = self._pick_local_model(local_models, task_type)
         if not model_name:
             self._call_fail_count += 1
             if is_background:
@@ -656,7 +676,8 @@ class PulseLung(BasePulseOrgan):
         #   直接引用 payload，导致 NameError）
         reply = self._do_chat(model_name, prompt, user_name, memory_context,
                              is_background=is_background,
-                             correlation_id=payload.get("correlation_id", ""))
+                             correlation_id=payload.get("correlation_id", ""),
+                             image_b64=payload.get("image_b64"))
 
         if reply:  # type: ignore[possibly-unbound]
             self._call_success_count += 1
@@ -2556,7 +2577,8 @@ class PulseLung(BasePulseOrgan):
     def _do_chat(self, model_name: str, user_message: str, user_name: str,
                  memory_context: dict | None = None, use_remote: bool = False,
                  is_background: bool = False,
-                 correlation_id: str = "") -> str | None:
+                 correlation_id: str = "",
+                 image_b64: str | None = None) -> str | None:
         """本地/远程模型统一对话入口。
 
         ★第26批 P0 抢修：v8.3 热修复在本方法 3 处 ``MouthEvent.SPEAK`` 中引用了
@@ -2575,9 +2597,9 @@ class PulseLung(BasePulseOrgan):
             reply = self._call_remote_api(prompt, model_name)
             if not reply and self._local_fallback:  # type: ignore[possibly-unbound]
                 self._log(LogLevel.INFO, f"远程API失败，回退到本地模型: {self._local_fallback}")
-                reply = self._call_ollama(self._local_fallback, prompt)
+                reply = self._call_ollama(self._local_fallback, prompt, image_b64)
         else:
-            reply = self._call_ollama(model_name, prompt)
+            reply = self._call_ollama(model_name, prompt, image_b64)
 
         if reply:  # type: ignore[possibly-unbound]
             # ★v19.0新增：本地模型回复也经过质量评估
@@ -2785,8 +2807,9 @@ class PulseLung(BasePulseOrgan):
 
         return prompt
 
-    def _call_ollama(self, model: str, prompt: str) -> str | None:
-        """调用Ollama API"""
+    def _call_ollama(self, model: str, prompt: str,
+                     image_b64: str | None = None) -> str | None:
+        """调用Ollama API（★192刀1：可选 image_b64 走视觉档，裸 base64 注入顶层 images 键）"""
         try:
             import json as _json
 
@@ -2801,6 +2824,10 @@ class PulseLung(BasePulseOrgan):
                     "num_predict": 256,
                 }
             }
+            # ★192刀1：有图时注入 Ollama 视觉约定（顶层 images，裸 base64 无 data-URL 前缀）；
+            #   无图（image_b64 为空）零行为变化。
+            if image_b64:
+                payload_data["images"] = [image_b64]
             _payload_bytes = _json.dumps(payload_data, ensure_ascii=False).encode('utf-8')
             _headers = {'Content-Type': 'application/json; charset=utf-8'}
             _ok, _data = safe_http_json(
