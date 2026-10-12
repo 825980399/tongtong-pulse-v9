@@ -37,6 +37,39 @@ _module_logger = get_module_logger("PatchManager")
 _publish_fail_count = 0
 
 
+def _reflect_on_failed_patches(failed_details: list, project_root: str | None = None) -> None:
+    """196刀2 运行时失败路→反思（半根刀补齐）。
+
+    启动期接线 main.py:3934（SelfVerifier 验证失败路径）已通电；运行期 PatchManager
+    失败路此前未接（半根刀）。本函数补齐运行期失败路：对 apply_all_pending 收集到的
+    每条失败补丁触发 SelfReflectionEngine 维度级诊断。
+
+    零行为变化：仅当 config.ENABLE_PATCH_FAILURE_REFLECTION 显式开启（默认 False /
+    未设置）时触发；引擎不可用或任何异常均经 silent_exc 静默吞掉，绝不阻断主流程。
+    """
+    if not failed_details:
+        return
+    try:
+        import config as _cfg
+        if not getattr(_cfg, "ENABLE_PATCH_FAILURE_REFLECTION", False):
+            return
+        from nucleus.evolution.SelfReflectionEngine import get_self_reflection_engine
+        _engine = get_self_reflection_engine(project_root=project_root or "")
+        for _d in failed_details:
+            _status = _d.get("status", "")
+            if not (_status.startswith("rejected") or _status == "failed"):
+                continue
+            try:
+                _engine.reflect_and_improve(
+                    {"id": _d.get("id"), "file": _d.get("file"), "reason": _d.get("reason")},
+                    verification_detail=_d.get("reason", ""),
+                )
+            except Exception as _e:
+                silent_exc(_e, where="nucleus.reasoning.PatchManager::_reflect_on_failed_patches")
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.reasoning.PatchManager::_reflect_on_failed_patches")
+
+
 def get_publish_fail_count() -> int:
     """PatchManager 自上线以来事件总线发布失败累计次数（E2 升级 WARNING 后供读取）。"""
     return _publish_fail_count
@@ -3382,6 +3415,13 @@ class PatchManager:
                 "[N-3①②] 存在验证不可判定的已应用补丁，抑制整机自重启（待人工/活体确认）"
             )
         return results
+
+        # ★196刀2：运行时失败路→反思（半根刀补齐）。
+        #   启动期接线 main.py:3934（SelfVerifier 验证失败路径）已通电；
+        #   此处补齐运行期 PatchManager 失败路：对 apply_all_pending 收集到的
+        #   每条失败补丁触发 SelfReflectionEngine 维度级诊断（不写盘/不回滚/零副作用）。
+        #   零行为变化：默认开关 ENABLE_PATCH_FAILURE_REFLECTION 未设置(=False) 时直接返回。
+        _reflect_on_failed_patches(results.get("details", []), project_root=self._project_root)
 
     # 结构性失效（重试一万次也不会成功）的失败原因特征串
     _OBSOLETE_MARKERS = (
