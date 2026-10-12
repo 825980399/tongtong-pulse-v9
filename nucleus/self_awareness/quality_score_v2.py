@@ -75,6 +75,7 @@ import time
 from typing import Any, Callable
 
 from nucleus._silent_except import silent_exc
+from nucleus.self_awareness.health_bands import level_v2  # ★199刀2：层②分级带单一真源
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
 )
@@ -481,16 +482,9 @@ def evaluate_v2(dimensions: dict[str, dict] | None = None) -> dict[str, Any]:
 
 
 def quality_level(score: float | None) -> str:
-    """质量分 → 等级标签（★与旧引擎同档位，便于对比）。"""
-    if score is None:
-        return "unknown"
-    if score < 40:
-        return "critical"
-    if score < 70:
-        return "warning"
-    if score < 90:
-        return "attention"
-    return "healthy"
+    """质量分 → 等级标签（★与旧引擎同档位，便于对比）。
+    ★199刀2：层②分级带单一真源——委托 health_bands.level_v2（零行为，保留 v2 词面与阈值）。"""
+    return level_v2(score)
 
 
 # ==================== 趋势记录 ====================

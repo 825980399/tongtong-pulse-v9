@@ -34,6 +34,7 @@ from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from nucleus.self_awareness.health_bands import level_v1  # ★199刀2：层②分级带单一真源
 
 _logger = get_module_logger("SelfAwarenessEngine")
 
@@ -170,7 +171,7 @@ class SelfAwarenessProfile:
     #   · overall_score：各**可用**维度评分的加权平均（权重可配置，默认等权）；
     #     可用维度 < 2 个时为 None（不可用维度不参与，见 compute_overall_score）。
     #   · health_level：≥80 healthy / 60-79 moderate / 40-59 concerning /
-    #     <40 critical；overall_score 为 None 时 "unknown"。
+    #     <40 critical（档位定义见 health_bands.level_v1）；overall_score 为 None 时 "unknown"。
     #   · top_issues：跨维度按归一化 severity 排序的前 N 条（默认 5）。
     # _m38_t1t2
     overall_score: float | None = None
@@ -1612,16 +1613,9 @@ def _severity_rank(severity: Any) -> int:
 
 
 def _health_level(score: Any) -> str:
-    """★主线第38批 T1（P2-213）：综合评分 → 健康等级（任务书 §T1.3）。"""
-    if not isinstance(score, (int, float)) or isinstance(score, bool):
-        return "unknown"
-    if score >= 80:
-        return "healthy"
-    if score >= 60:
-        return "moderate"
-    if score >= 40:
-        return "concerning"
-    return "critical"
+    """★主线第38批 T1（P2-213）：综合评分 → 健康等级（任务书 §T1.3）。
+    ★199刀2：层②分级带单一真源——委托 health_bands.level_v1（零行为，保留 v1 词面与阈值）。"""
+    return level_v1(score)
 
 
 def _overall_enabled() -> bool:

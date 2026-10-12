@@ -39,6 +39,7 @@ from config import EXTERNAL_CALL_TIMEOUTS
 from config import render_placeholders as _render_placeholders  # noqa: E402
 from config import LLM_TEMPERATURE_BASE  # 183批刀3：统一温度单一来源（接 config.LLM_TEMPERATURE_BASE）
 from nucleus.const import DigestEvent, LogLevel, LungEvent, MouthEvent, SystemEvent
+from nucleus.shadow_v2_probe import build_shadow_v2_fragment  # ★199刀1：影子 v2 只读检索探针
 
 
 class PulseLung(BasePulseOrgan):
@@ -90,6 +91,7 @@ class PulseLung(BasePulseOrgan):
         self._quality_correction_memory: dict[str, dict[str, Any]] = {}
         self._correction_memory_max = 200
         self._correction_memory_lock = threading.Lock()
+        self._shadow_v2_retriever = None  # ★199刀1：影子 v2 只读检索 retriever（默认未接线，实弹刀推 200 注入）
         # ★P0修复：短时间去重缓存，防止同一问题被重复处理导致重复输出
         self._recent_requests: list[tuple[float, str]] = []
         self._dedup_window = 3.0  # ★v26.0优化: 10s→3s，避免用户快速连续输入被误拦截
@@ -921,10 +923,20 @@ class PulseLung(BasePulseOrgan):
         # ★197刀1：实时注入三要素「影子」（先影子后实弹，196 窗方法论产物）
         #   仅日志化记录本会注入内容，不落 prompt / 不翻开关 / 不改 L2 缓存（零行为变化）。
         #   实弹刀（把三要素真正嵌入 _sys）推 198，须待：阈值(要素②)与预算(要素③)两定数 + L2 命中率遥测基线齐备。
+        # ★199刀1：影子 v2 升级——组装区对 retriever 做一次只读查询（不落 prompt），
+        #   把检索命中 score 分布与条数并入同一条 INFO（含节流键）。retriever 默认
+        #   未接线（None→记 unavailable），零行为；实弹刀（推 200）注入真实 retriever。
+        _v2_frag = ""
+        try:
+            _v2_frag = build_shadow_v2_fragment(
+                getattr(self, "_shadow_v2_retriever", None), prompt, top_k=3)
+        except Exception as _e:
+            silent_exc(_e, "organs/body/PulseLung.py:_build_channel_messages:shadow_v2",
+                       level="debug")
         self._log(
             LogLevel.INFO,
             "[实时注入影子] 本会注入(影子,不落prompt): 要素①=注入点@Lung系统prompt组装区; "
-            "要素②=相关性复用retriever阈值先例; 要素③=token预算3条×≤120字",
+            "要素②=相关性复用retriever阈值先例; 要素③=token预算3条×≤120字 | " + _v2_frag,
         )
         # ★T-145a：运行时渲染身份占位符（_sys 可能含 <SELF_NAME>）
         _sys = _render_placeholders(_sys)
