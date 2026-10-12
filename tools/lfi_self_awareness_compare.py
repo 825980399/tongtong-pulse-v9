@@ -226,6 +226,53 @@ def _append_curve(record: dict, curve_path: str) -> None:
         silent_exc(e, where="lfi_self_awareness_compare._append_curve")
 
 
+# ★第200批 刀3：调度归属 —— 挂 DailyScheduler 每日调度点（不翻生产开关、不改 compare 件本体）
+DAILY_SCHEDULE_HOOK = "lfi_self_awareness_compare"
+
+
+def register_with_daily_schedule(scheduler=None):
+    """将本离线对照拍件挂入 DailyScheduler 每日调度（DailyScheduler挂载）。
+
+    不做：不改 compare 件本体逻辑 / 不翻生产开关 / 不在此启动线程。
+    由调用方（人约窗或 main 接线）负责 start()。
+
+    Args:
+        scheduler: 已存在的 SelfAwarenessDailyScheduler 实例；为 None 时取进程内单例。
+
+    Returns:
+        挂载后的调度器实例；总线/调度器不可用时返回 None。
+    """
+    try:
+        from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+    except Exception as e:
+        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule")
+        return None
+    _sched = scheduler or get_daily_scheduler()
+    try:
+        if hasattr(_sched, "add_daily_hook"):
+            _sched.add_daily_hook(DAILY_SCHEDULE_HOOK, run_once)
+        else:
+            # 兜底（调度器无扩展点时仅记归属，不修改其内部）
+            setattr(_sched, "_lfi_compare_attached", True)
+    except Exception as e:
+        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule")
+        return _sched
+    return _sched
+
+
+def is_scheduled(scheduler=None) -> bool:
+    """查询本件是否已挂入每日调度（供测试与运维断言）。"""
+    try:
+        from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+        _sched = scheduler or get_daily_scheduler()
+        if hasattr(_sched, "has_daily_hook"):
+            return _sched.has_daily_hook(DAILY_SCHEDULE_HOOK)
+        return bool(getattr(_sched, "_lfi_compare_attached", False))
+    except Exception as e:
+        silent_exc(e, where="lfi_self_awareness_compare.is_scheduled")
+        return False
+
+
 if __name__ == "__main__":
     rec = run_once()
     print(json.dumps(rec, ensure_ascii=False, indent=2))

@@ -32,6 +32,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable
 
+from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 
 
@@ -138,6 +139,8 @@ class SelfAwarenessDailyScheduler:
         self._skipped = 0
         self._errors = 0
         self._last_result: dict[str, Any] | None = None
+        # ★第200批 刀3：每日钩子扩展点（如离线对照拍件挂载）
+        self._daily_hooks: list = []
 
     # ------------------------------------------------------------------ 配置
     def enabled(self) -> bool:
@@ -527,6 +530,11 @@ class SelfAwarenessDailyScheduler:
                 _a3_threads_start if _a3_threads_start is not None else -1,
                 _a3_threads_end if _a3_threads_end is not None else -1,
                 _a3_rel_s)
+            # ★第200批 刀3：每日钩子（扩展点）—— 如离线对照拍件 lfi_self_awareness_compare。
+            #   测试环境不跑（防污染生产 data/）；单个钩子失败只 warning，不影响调度主流程。
+            if not self._is_test_env():
+                self._run_daily_hooks(_res)
+
             self._runs += 1
         except Exception as _e:
             _res["status"] = "error"
@@ -536,6 +544,43 @@ class SelfAwarenessDailyScheduler:
             _module_logger.warning("[自我认知调度] 每日分析失败: %s", _res["error"])
         self._last_result = _res
         return _res
+
+    # ---------------------------------------------------------- 每日钩子扩展点
+    def add_daily_hook(self, name: str, fn: Callable[[], Any]) -> str:
+        """注册一个每日钩子（如离线对照拍件），run_once 在每日分析后按序调用。
+
+        同名重复注册会覆盖旧钩子。永不抛异常（调度侧扩展点，失败不影响主流程）。
+
+        Args:
+            name: 钩子唯一名（如 "lfi_self_awareness_compare"）。
+            fn: 无参可调用，返回任意（结果记入 _res["hooks"][name]）。
+
+        Returns:
+            钩子名（便于调用方断言已挂载）。
+        """
+        with self._lock:
+            self._daily_hooks = [h for h in self._daily_hooks if h[0] != name]
+            self._daily_hooks.append((name, fn))
+        return name
+
+    def has_daily_hook(self, name: str) -> bool:
+        """查询某名钩子是否已挂载。"""
+        return any(h[0] == name for h in self._daily_hooks)
+
+    def _run_daily_hooks(self, res: dict[str, Any]) -> None:
+        """依次调用所有已注册每日钩子，结果/异常记入 res["hooks"]。
+
+        每个钩子独立 try；失败仅记 error 并 warning，不中断其余钩子与调度主流程。
+        """
+        _hooks = list(self._daily_hooks)
+        for _name, _fn in _hooks:
+            try:
+                _r = _fn()
+                res.setdefault("hooks", {})[_name] = {"status": "ok", "result": _r}
+            except Exception as _he:
+                silent_exc(_he, f"SelfAwarenessDailyScheduler._run_daily_hooks:{_name}")
+                res.setdefault("hooks", {})[_name] = {
+                    "status": "error", "error": type(_he).__name__}
 
     @staticmethod
     def _count_dimensions(profile: Any, engine: Any) -> int:

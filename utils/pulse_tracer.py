@@ -33,6 +33,56 @@ _flusher_lock = threading.Lock()
 _flusher_stop = threading.Event()
 _FLUSHER_TICK = 0.5  # 后台刷巡检间隔（秒）；真闸仍是 _FLUSH_INTERVAL=2.0
 
+# ★第200批 刀1：判定撤销机制基础设施
+#   订阅方提供器：给定 event_type 返回 True/False/None（None=未知，维持原判定）。
+#   默认提供器惰性查询 EventBus 订阅表（旁路遥测面，ENABLE_EVENT_BUS=False 时无生产
+#   接线 → 对运行路径零副作用）。命中订阅即平反该 emit（压掉 B 路异构发射假阳性）。
+_subscription_provider = None
+
+
+def set_subscription_provider(fn):
+    """注入订阅方提供器（测试可注入假提供器；None 恢复默认）。
+
+    提供器签名：``fn(event_type: str) -> bool | None``。
+    返回 True 表示「存在订阅方」→ 该 emit 在判定撤销环节被平反（不算孤儿）。
+    """
+    global _subscription_provider
+    _subscription_provider = fn
+
+
+def _default_bus_sub_provider(event_type):
+    """默认订阅方提供器：惰性查询 EventBus 订阅表（旁路遥测面）。
+
+    返回 True=存在匹配订阅（精确或通配）；False=无订阅；None=查询失败（维持原判定）。
+    对任意异常静默降级为 None，绝不扰动运行路径。
+    """
+    try:
+        from nucleus.events.orphan_receivers import register_growth_need_detected_receiver
+        try:
+            register_growth_need_detected_receiver()
+        except Exception as _re:
+            silent_exc(_re, "utils/pulse_tracer.py:_default_bus_sub_provider:注册确保失败",
+                       level="debug")
+        from nucleus.events.EventBus import get_event_bus, _match
+        bus = get_event_bus()
+        if bus.subscription_count("**") > 0:
+            return True
+        if bus.subscription_count(event_type) > 0:
+            return True
+        try:
+            return any(_match(s.pattern, event_type) for s in bus._subs.values())
+        except Exception as _we:
+            silent_exc(_we, "utils/pulse_tracer.py:_default_bus_sub_provider:通配匹配失败", level="debug")
+            return False
+    except Exception as e:
+        silent_exc(e, "utils/pulse_tracer.py:_default_bus_sub_provider", level="debug")
+        return None
+
+
+# 启用默认提供器（★200刀1：判定撤销机制默认生效；查询失败自动降级为原判定）
+_subscription_provider = _default_bus_sub_provider
+
+
 def _get_output_path():
     global _output_path
     if _output_path is None:
@@ -83,8 +133,14 @@ def log_receive(organ_name, event_type, source_organ):
             _events.pop(0)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
-def _detect_orphans(events, min_age=1.0):
-    """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件"""
+def _detect_orphans(events, min_age=1.0, subscription_provider=None):
+    """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件。
+
+    ★第200批 刀1（判定撤销机制）：新增 subscription_provider 形参。
+    若提供器对某 event_type 返回 True（存在订阅方 → 旁路遥测面已登记接收方），
+    则该 emit 视为"判定面伪孤儿"予以平反（压掉 B 路异构发射假阳性），不再计入孤儿。
+    提供器返回 None（未知/查询失败）时维持原判定（保守）。
+    """
     orphans = []
     now = time.time()
     for evt in events:
@@ -92,15 +148,26 @@ def _detect_orphans(events, min_age=1.0):
             continue
         if (now - evt["timestamp"]) < min_age:
             continue
-        if not evt.get("matched_organs"):
-            orphans.append({
-                "timestamp": evt["timestamp"],
-                "organ": evt["organ"],
-                "event_type": evt["event_type"],
-                "layer": evt.get("layer", ""),
-                "pulse_id": evt.get("pulse_id", ""),
-                "error": "孤儿脉冲: 发射后无器官接收"
-            })
+        if evt.get("matched_organs"):
+            # 迟到 receive 已平反（log_receive 在匹配时回填 matched_organs）
+            continue
+        # ★200刀1：订阅表兜底 —— 存在订阅方则平反
+        if subscription_provider is not None:
+            try:
+                _has_sub = subscription_provider(evt["event_type"])
+            except Exception as _pe:
+                silent_exc(_pe, "utils/pulse_tracer.py:_detect_orphans:提供器异常", level="debug")
+                _has_sub = None
+            if _has_sub is True:
+                continue
+        orphans.append({
+            "timestamp": evt["timestamp"],
+            "organ": evt["organ"],
+            "event_type": evt["event_type"],
+            "layer": evt.get("layer", ""),
+            "pulse_id": evt.get("pulse_id", ""),
+            "error": "孤儿脉冲: 发射后无器官接收"
+        })
     return orphans
 
 def _claim_flush_gate() -> bool:
@@ -199,8 +266,9 @@ def flush_to_file(force: bool = False):
         # 写入实时事件（原子写）
         safe_write_json(path, events_snapshot[-150:], backup=False)
         
-        # 检测孤儿脉冲
-        new_orphans = _detect_orphans(events_snapshot, min_age=1.5)
+        # 检测孤儿脉冲（★200刀1：传入订阅方提供器做判定撤销兜底）
+        new_orphans = _detect_orphans(
+            events_snapshot, min_age=1.5, subscription_provider=_subscription_provider)
         
         # 读取已有孤儿记录，合并去重（修复：default=[]而不是{}）
         existing_orphans = []
