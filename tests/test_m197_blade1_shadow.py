@@ -5,6 +5,7 @@
 """
 import unittest
 
+from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from organs.body.PulseLung import PulseLung
 
@@ -23,8 +24,8 @@ class TestM197Blade1Shadow(unittest.TestCase):
             _records.append((level, str(msg)))
             try:
                 _orig(level, msg, *a, **k)
-            except Exception:
-                pass
+            except Exception as _exc:
+                silent_exc(_exc, where="tests/test_m197_blade1_shadow.py:_cap")
 
         _lung._log = _cap
         _lung._build_channel_messages("测试 prompt")
