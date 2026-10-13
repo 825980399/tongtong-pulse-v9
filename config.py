@@ -4605,6 +4605,17 @@ SEMANTIC_CACHE_TTL_DAYS = 7              # 条目过期天数
 SEMANTIC_CACHE_MAX_TEXT = 4000           # 单条 prompt/response 截断长度
 # _m41_t2
 
+# ==================== 第205批 刀2：LIF 影子观测（类脑改造 P2 · 默认关闭） ====================
+# 漏积分发放（LIF）膜电位影子观测：纯观测、不门控、不参与路由/熔断。
+# 首批 6 件承载器官（SA 四件 30/60/100/150 + CL 两件 50/200）按运行时 organ_name 灰度启用。
+ENABLE_LIF_SHADOW = False         # 总开关（默认关：观测不门控，开启需显式灰度）
+LIF_TAU = 60.0                    # s，膜电位时间常数 τ
+LIF_THETA = 5.0                    # 阈值 θ（仅观测记录 crossed，不门控）
+LIF_W_IN = 1.0                     # 每个入脉冲注入权重 w_in
+LIF_SHADOW_MAXLEN = 10000          # 内存样本上限（deque maxlen）
+LIF_SHADOW_FLUSH_EVERY = 200       # 每 N 样本落盘一次（行追加至 data/experiments/lif_shadow_YYYYMMDD.jsonl）
+LIF_SHADOW_ORGANS = ["自我认知", "代码学习"]   # 灰度白名单（承载 6 件调度项的器官）
+
 # ★主线第138批 T-138d（D138-4/步骤1-2）：语义缓存升 L2（**返回级**，命中直接返回缓存响应）====
 #   依据：`docs/设计文档/语义缓存升L2方案_v1.0.md`（第44批设计）+ 第138批前置分析 §3。
 #   ★L1→L2 的实质：L1 结构上**不可能**返回内容（只回统计），故可生产常开；
@@ -5863,3 +5874,4 @@ ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
 # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
 #             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
 ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
+

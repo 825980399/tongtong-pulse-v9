@@ -40,7 +40,8 @@ from typing import Any
 from nucleus._silent_except import silent_exc
 
 # ★191刀2：L2 遥测 INFO 日志输出（命中率/污染率·按场景分布）
-_L = logging.getLogger("semantic_cache_l2")
+# ★205刀1：logger名改挂 pulse 子树，使 telemetry() 输出落盘 pulse.log
+_L = logging.getLogger("pulse.semantic_cache_l2")
 
 # ★198刀1：telemetry() 入口一次性 INFO 去重标记（进程内仅首调记录）。
 _TELEMETRY_ENTRY_LOGGED = False

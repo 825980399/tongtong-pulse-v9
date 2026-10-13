@@ -13,6 +13,7 @@ from typing import Any
 import config  # noqa: F401
 from nucleus.const import ErrorCode, LogLevel, OrganStatus, SystemEvent
 from nucleus.logger import exc_location, get_organ_logger
+from nucleus.lif_shadow import LIFShadow
 
 
 class BasePulseOrgan(ABC):
@@ -59,6 +60,8 @@ class BasePulseOrgan(ABC):
         self._trace_buffer: list[dict[str, Any]] = []  # 追踪缓冲区
         self._trace_max_buffer = 100         # 缓冲区上限
         self._trace_lock = threading.Lock()  # 追踪缓冲区锁        
+        # ★205刀2：LIF 影子观测器（默认 None，lazy 创建；观测不门控）
+        self._lif_shadow = None
     
     # ========== 框架注入接口（基类防御性空实现） ==========
     
@@ -448,8 +451,34 @@ class BasePulseOrgan(ABC):
     # ========== 追踪方法结束 ==========
     # ========== 熔断机制（P1-1 · v9.5并发安全增强） ==========
     
+    # ========== 第205批 刀2：LIF 影子观测（观测不门控） ==========
+
+    def _lif_observe(self, pulse: dict[str, Any]) -> None:
+        """★205刀2：LIF 影子观测挂载点。
+
+        在每个入脉冲进入分发链前记录一次 LIF 膜电位采样。
+        仅当 config.ENABLE_LIF_SHADOW 开启且器官在白名单时才记录；
+        纯观测、不门控、不抛异常（observe 内部为纯计算 + 追加）。
+        """
+        if not getattr(config, "ENABLE_LIF_SHADOW", False):
+            return
+        if self.organ_name not in getattr(config, "LIF_SHADOW_ORGANS", []):
+            return
+        if self._lif_shadow is None:
+            self._lif_shadow = LIFShadow(
+                tau=getattr(config, "LIF_TAU", 60.0),
+                theta=getattr(config, "LIF_THETA", 5.0),
+                w_in=getattr(config, "LIF_W_IN", 1.0),
+                maxlen=getattr(config, "LIF_SHADOW_MAXLEN", 10000),
+                flush_every=getattr(config, "LIF_SHADOW_FLUSH_EVERY", 200),
+            )
+        self._lif_shadow.observe(
+            time.time(), self.organ_name, pulse.get("event_type", "?"),
+        )
+
     def handle_pulse_safe(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
         """公开封装 _handle_pulse_safe，供信息场安全分发调用（规则14）"""
+        self._lif_observe(pulse)  # ★205刀2：LIF 影子观测（所有入脉冲，含 TIME_TICK）
         return self._handle_pulse_safe(pulse)
 
     def _handle_pulse_safe(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
