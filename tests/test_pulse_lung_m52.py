@@ -168,5 +168,47 @@ class TestBoundary(_Base):
         self.assertEqual(sorted(self.o.get_stats()), sorted(self.o.get_stats()))
 
 
+
+
+class TestRoutingDecisionM204(_Base):
+    """第204批 刀1：路由翻转后「默认对话侧（宁多答不误吞）」验证。
+
+    注：470 行 _is_background_learning 翻转对 _enable_thinking 运行时无直接影响
+    （475-477 已用正确逻辑覆盖 473，见交付报告 D#8）；本测试以同源实例属性
+    self._current_task_is_background（451 行）断言「编程题走对话侧 / 显式后台学习走静默」。
+    """
+    def _route(self, payload):
+        import config
+        with mock.patch.dict(
+            config.__dict__,
+            {"REMOTE_API_CONFIG": {"enabled": True, "api_key": "x",
+                                   "default_model": "m", "advanced_model": "a"}},
+        ):
+            with mock.patch.object(self.o, "_call_remote_api", return_value="ok"), \
+                 mock.patch.object(self.o, "_assess_remote_reply_quality",
+                                   return_value={"passed": True, "level": "mid", "score": 3, "issues": []}), \
+                 mock.patch.object(self.o, "_append_background_learning_requirement",
+                                   return_value="p"), \
+                 mock.patch.object(self.o, "_build_chat_prompt", return_value="p"), \
+                 mock.patch.object(self.o, "_feedback_quality_result", return_value=None):
+                return self.o._on_select_model(payload)
+
+    def test_code_routes_to_dialogue(self):
+        self._route({"prompt": "q", "task_type": "code", "is_dialogue": True})
+        self.assertFalse(self.o._current_task_is_background,
+                         "编程题（对话侧）应为非后台学习，走直接回答")
+
+    def test_explicit_background_learning(self):
+        self._route({"prompt": "q", "is_background_learning": True, "is_dialogue": False})
+        self.assertTrue(self.o._current_task_is_background,
+                        "显式后台学习应为后台侧（沉默消化）")
+
+    def test_default_presumed_dialogue(self):
+        # 缺标记时主线第49批无罪推定 → 视为对话 → 非后台
+        self._route({"prompt": "q", "task_type": "chat"})
+        self.assertFalse(self.o._current_task_is_background,
+                         "缺标记应推定对话侧（宁多答不误吞）")
+
+
 if __name__ == "__main__":
     unittest.main()

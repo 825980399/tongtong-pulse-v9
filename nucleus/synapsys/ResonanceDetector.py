@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-# ⚠️ @deprecated (157-D C-6 观测孤岛封存 / Q157-2 同域口径):
-#   观测孤岛·synapsys/ResonanceDetector（共振探测）：多机协议未启用；③封存标注，标"预留-多机/协议未启用-拟接线批次=PHASE19"。
-#   复活须待对应专门批（PHASE19 / 构建脚本移出批）；禁止新代码 import 本模块（若仍在用请先接线）。
 """
 ResonanceDetector.py —— 共振检测器
 
@@ -226,6 +223,17 @@ class ResonanceDetector:
 
 
 # ========== 自测 ==========
+# ===== 204批·刀3：D#2 封存解封 + 模块级单例（供 PulseCore.emit 接入实际脉冲流）=====
+_detector_instance = None
+
+def get_detector():
+    """模块级单例：解封后供 PulseCore.emit 调用，跨 emit 共享同一 _weight_map。"""
+    global _detector_instance
+    if _detector_instance is None:
+        _detector_instance = ResonanceDetector()
+    return _detector_instance
+
+
 if __name__ == "__main__":
     print("=== ResonanceDetector 自测 ===\n")
     

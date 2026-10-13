@@ -141,6 +141,13 @@ TIMECORE_SCHEDULE_CONFIG = {
     "runtime_metrics": {"interval": 60, "event_type": "runtime.metrics.collect"},
     "metrics_collector": {"interval": 300, "event_type": "metrics.collector.tick"},
     "snapshot_rotate": {"interval": 1800, "event_type": "snapshot.rotate.tick"},
+    # ===== 204批·刀2：A类纯周期件（SelfAwareness）时效闸登记 =====
+    # 源码无现成 %60/%30/%150 tick 周期件（D#6）：本批为在时效闸新登记三个触发项，
+    # 类比203批刀3（B类Top3），消费侧接线待观察窗。interval = N × 标称拍长(13.5s)（D#7）。
+    "self_awareness_30": {"interval": 405, "event_type": "self_awareness.tick.30"},
+    "self_awareness_60": {"interval": 810, "event_type": "self_awareness.tick.60"},
+    "self_awareness_150": {"interval": 2025, "event_type": "self_awareness.tick.150"},
+
 }
 # ===== 阶段三子任务3.0：知识时效性（来源时间融合 + 可能过时标记） =====
 # 默认关闭：time 维仅用激活新鲜度（last_activated），行为与现状完全一致（零回退）。
@@ -3754,6 +3761,9 @@ SPIKE_BACKEND = 'python'
 # 开启后 PulseCore.emit/on_spike 调用 PythonSNNBackend（当前为空实现，
 # 真实脉冲流接线待后续批次，仅占位转发）。不接入 ResonanceDetector（封存）。
 SPIKE_BACKEND_ENABLED = False
+
+# 204批·刀3·D#2解封：共振权重映射接入实际脉冲流开关（默认关闭，观测不门控）
+RESONANCE_WEIGHT_MAP_ENABLED = False
 
 # ========== 统一日志系统 ==========
 LOG_DIR = "logs"

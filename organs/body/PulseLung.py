@@ -467,7 +467,7 @@ class PulseLung(BasePulseOrgan):
                         f"原始问题：{_enhanced_prompt}"
                     )
             # ★v23.0优化：根据任务类型决定是否启用思考模式
-            _is_background_learning = payload.get("is_background_learning", False) or not payload.get("is_dialogue", False)
+            _is_background_learning = payload.get("is_background_learning", False) and payload.get("is_dialogue", False) == False
             _task_type = payload.get("task_type", "chat")
             # 代码任务和后台学习不需要思考模式
             _enable_thinking = not _is_background_learning and _task_type in ("deep_think", "complex_reasoning")

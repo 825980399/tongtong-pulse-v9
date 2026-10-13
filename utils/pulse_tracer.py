@@ -13,6 +13,13 @@ import time
 
 from nucleus._silent_except import silent_exc
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+from nucleus.const import EnergyEvent  # 204批·刀4：报告即终点白名单（常量属性访问）
+
+# 204批·刀4：报告即终点白名单（快照类事件本就'报告即终点'，不参与孤儿检测）
+_REPORT_ENDPOINT_WHITELIST = {
+    EnergyEvent.METABOLISM_SNAPSHOT,  # 代谢快照族（孤儿榜首）
+}
+
 
 # ★第201批 刀1（环窗参数化）：以下三值是「config 键缺失/非法时的回退默认值」，
 #   取值 = 改造前实测值 → 默认零行为变化；扩容请调 config.py 对应三键。
@@ -213,6 +220,9 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
                 _has_sub = None
             if _has_sub is True:
                 continue
+        # ★204批·刀4：报告即终点白名单 —— 快照类事件本就'报告即终点'
+        if evt.get("event_type") in _REPORT_ENDPOINT_WHITELIST:
+            continue
         orphans.append({
             "timestamp": evt["timestamp"],
             "organ": evt["organ"],

@@ -13,6 +13,10 @@ PulseCore.py —— 脉冲核心
 
 import threading
 import time
+
+# 204批·刀3：共振权重映射默认增量（发射频次语义；pulse 无 amplitude，固定步长）
+_RESONANCE_DEFAULT_DELTA = 1.0
+
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
@@ -183,6 +187,7 @@ class PulseCore:
         # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
         # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。
         self._spike_backend_emit(pulse)
+        self._resonance_weight_update(pulse)  # 204批·刀3：共振权重映射接入（默认关）
         return pulse
     
     # ========== 执行后端接入（203批） ==========
@@ -213,6 +218,31 @@ class PulseCore:
         backend = self._get_spike_backend()
         if backend is not None:
             backend.on_spike(spike)
+
+    # ========== 共振权重映射接入（204批·刀3·D#2解封）==========
+
+    def _get_resonance_detector(self):
+        """惰性取共振检测器单例；默认关闭返回 None（零运行时开销）。"""
+        import config
+        if not getattr(config, "RESONANCE_WEIGHT_MAP_ENABLED", False):
+            return None
+        from nucleus.synapsys.ResonanceDetector import get_detector
+        return get_detector()
+
+    def _resonance_weight_update(self, pulse) -> None:
+        """发射侧接入共振权重映射（默认关闭即零行为）。
+
+        D#5 简化映射：pre=source_organ（突触前=发射源），
+        post=event_type（突触后靶点=事件类型），delta=固定步长（发射频次语义）。
+        pulse 无 target_organ/amplitude，真实语义待星轨裁定。
+        """
+        detector = self._get_resonance_detector()
+        if detector is not None:
+            detector.update_weight(
+                pulse.get("source_organ", ""),
+                pulse.get("event_type", ""),
+                _RESONANCE_DEFAULT_DELTA,
+            )
 
     def _infer_layer(self, event_type: str) -> str:
         """
