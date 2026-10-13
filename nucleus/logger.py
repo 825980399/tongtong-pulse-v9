@@ -593,6 +593,61 @@ def _warn_rollover_blocked_cooled(exc: BaseException) -> None:
         print(f"[Logger] 日志轮转失败且告警失败: {type(_le).__name__}")
 
 
+# ========== ★206批 刀1：树外 logger 根治（案C 显式名单注册） ==========
+# 显式名单注册 16 个生产模块（来自205刀1普查黑盒名录；semantic_cache_l2 已在205改名入树故不在名单）。
+# 仅当各名字自身无 handler 时挂共享 FileHandler（尊重模块自配）；propagate=False 避免回灌 root 造成
+# 重复输出；console 面不单独挂 handler（由全局 WARNING 阈值兜底）。设计为一次性幂等装配。
+_TREE_OUTSIDE_LOGGER_NAMES = (
+    "Config", "config", "TaskOrchestrator", "nucleus.data.DataAccessLayer",
+    "EvolutionLoop", "rt", "compat", "PollutionTagger", "IndexStore",
+    "subagent_runner", "ReportPublishers", "rule_engine", "self_inspector",
+    "PulseCodeLearner", "import_nodes_to_neo4j", "tools.measure_baseline",
+)
+_OUTSIDE_BRIDGE_INSTALLED = False
+_OUTSIDE_BRIDGE_LOCK = threading.Lock()
+
+
+def install_tree_outside_logger_bridges() -> None:
+    """★206批 刀1：一次性点亮 16 个树外生产 logger 的文件通道。
+
+    仅对「自身无 handler」的名字挂共享 FileHandler；模块若已自配 handler 则尊重不动。
+    ENABLE_LOGGER_ROOT_CAUSE=False 时整体跳过（零副作用）。调用幂等（全局只生效一次）。
+    """
+    global _OUTSIDE_BRIDGE_INSTALLED
+    if _OUTSIDE_BRIDGE_INSTALLED:
+        return
+    with _OUTSIDE_BRIDGE_LOCK:
+        if _OUTSIDE_BRIDGE_INSTALLED:
+            return
+        _OUTSIDE_BRIDGE_INSTALLED = True
+    try:
+        if _log_in_test_env():
+            return  # 测试环境不挂载，避免污染生产 pulse.log
+        if not bool(getattr(config, "ENABLE_LOGGER_ROOT_CAUSE", True)):
+            return
+        _log_file = os.path.join(_log_dir, getattr(config, "LOG_FILE", "pulse.log"))
+        _fh = logging.FileHandler(_log_file, encoding="utf-8")
+        _fh.setLevel(_LEVEL_MAP.get(getattr(config, "LOG_LEVEL_FILE", LogLevel.DEBUG), logging.DEBUG))
+        _fh.setFormatter(PulseFormatter(
+            fmt="%(asctime)s [%(organ_tag)s] %(levelname)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"))
+        _fh.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
+        _attached = 0
+        for _name in _TREE_OUTSIDE_LOGGER_NAMES:
+            _lg = logging.getLogger(_name)
+            if _lg.handlers:
+                continue  # 尊重模块自配
+            _lg.setLevel(logging.DEBUG)
+            _lg.propagate = False
+            _lg.addHandler(_fh)  # 共享同一 FileHandler 实例
+            _attached += 1
+        logging.getLogger("pulse.framework").info(
+            "[树外logger根治] 已点亮 %d/%d 个树外生产 logger 文件通道"
+            % (_attached, len(_TREE_OUTSIDE_LOGGER_NAMES)))
+    except Exception as e:
+        silent_exc(e, where="nucleus.logger::install_tree_outside_logger_bridges")
+
+
 def _init_root_logger():
     """初始化根 logger 'pulse'，添加控制台和文件 handler（仅执行一次）"""
     global _log_initialized
@@ -684,6 +739,9 @@ def _init_root_logger():
                     "（框架内无此逻辑，已留痕 {}）".format(_ir["status"], _prv, _now, _LOG_INTEGRITY_FILE))
         except Exception as _e:
             print(f"[logger] 日志治理初始化异常（忽略）: {type(_e).__name__}: {_e}", file=sys.stderr)
+
+    # ★206批 刀1：树外 logger 根治（案C 显式名单注册）—— 一次性点亮 16 生产模块文件通道
+    install_tree_outside_logger_bridges()
 
 
 def get_organ_logger(organ_name: str) -> logging.Logger:

@@ -24,6 +24,7 @@ from base.BasePulseOrgan import BasePulseOrgan
 from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
 from nucleus.const import (
+    CodeEvent,
     DigestEvent,
     Event,
     HeartEvent,
@@ -314,6 +315,9 @@ class PulseCodeLearner(BasePulseOrgan):
             return self._on_heartbeat(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
+        elif event_type == CodeEvent.TICK_200:
+            self._do_runtime_patch_verify()
+            return {"status": "ok"}
 
         return None
 
@@ -324,6 +328,7 @@ class PulseCodeLearner(BasePulseOrgan):
                 "event_types": [
                     HeartEvent.BEAT,
                     SystemEvent.STATUS_REQUEST,
+                    CodeEvent.TICK_200,
                 ],
                 "min_priority": 1,
             }
@@ -390,44 +395,55 @@ class PulseCodeLearner(BasePulseOrgan):
         #   补充 HealthScore 的「日志层」评分。测试失败时记录并触发告警。
         self._maybe_run_periodic_tests()
 
-        # ★P1-2(2026-09-03): 运行时日志验证——每200次心跳验证已提交补丁的修复效果
-        #   给补丁足够运行时间（约27分钟）后验证，确认修复是否真正有效
-        if self._heartbeat_count > 0 and self._heartbeat_count % 200 == 0:
-            try:
-                from nucleus.reasoning.SafeEvolutionExecutor import (
-                    SafeEvolutionExecutor,
-                )
-                _executor = SafeEvolutionExecutor()
-                _verify_result = _executor.verify_submitted_patches()
-                if _verify_result.get("total", 0) > 0:
-                    self._log(LogLevel.INFO,
-                             f"运行时补丁验证: 总数={_verify_result['total']}, "
-                             f"通过={_verify_result['verified']}, "
-                             f"失败={_verify_result['failed']}, "
-                             f"平均效果={_verify_result.get('avg_effectiveness', 0):.0%}")
-            except Exception as _verify_err:
-                self._log(LogLevel.DEBUG, f"运行时补丁验证异常: {_verify_err}")
-
-        # ★A2修复（主线A）：验证「已应用补丁」的运行时效果，失败自动回滚。
-        #   与上面 verify_submitted_patches 互补——上面验证 pending（未应用），
-        #   此处验证 history（已应用），补上「应用后回归确认 + 失败回滚」闭环。
-        if self._heartbeat_count > 0 and self._heartbeat_count % 200 == 0:
-            try:
-                from nucleus.reasoning.SafeEvolutionExecutor import (
-                    SafeEvolutionExecutor,
-                )
-                _executor2 = SafeEvolutionExecutor()
-                _applied_result = _executor2.verify_applied_patches()
-                if _applied_result.get("total", 0) > 0:
-                    self._log(LogLevel.INFO,
-                             f"已应用补丁运行时验证: 总数={_applied_result['total']}, "
-                             f"通过={_applied_result['verified']}, "
-                             f"失败={_applied_result['failed']}, "
-                             f"自动回滚={_applied_result['rolled_back']}")
-            except Exception as _verify_err2:
-                self._log(LogLevel.DEBUG, f"已应用补丁验证异常: {_verify_err2}")
+        # ★P1-2 / A2修复（206批·刀2：迁移至 TimeCore 时效闸）=====
+        # 原「每200次心跳」高频触发已迁移至 CodeEvent.TICK_200
+        # (TimeCore interval=2700s≈200×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_cl_tick_200_run", 0.0) >= 86400:
+            self._last_cl_tick_200_run = now
+            self._do_runtime_patch_verify()
 
         return {"status": "ok", "heartbeat_count": self._heartbeat_count}
+
+    # ===== 206批·刀2：由 _on_heartbeat 内心跳取模块抽取（双写对照：on_pulse + 24h兜底共用）=====
+    def _do_runtime_patch_verify(self) -> None:
+        """运行时补丁验证：每200次心跳验证已提交/已应用补丁的修复效果。
+        ★P1-2(2026-09-03): 验证已提交(pending)补丁——给补丁足够运行时间（约27分钟）后验证。
+        ★A2修复（主线A）: 验证已应用(history)补丁，失败自动回滚，与上面互补形成闭环。
+        由 TimeCore 时效闸(CodeEvent.TICK_200)或24h兜底触发。"""
+        # 验证「已提交补丁」的运行时效果
+        try:
+            from nucleus.reasoning.SafeEvolutionExecutor import (
+                SafeEvolutionExecutor,
+            )
+            _executor = SafeEvolutionExecutor()
+            _verify_result = _executor.verify_submitted_patches()
+            if _verify_result.get("total", 0) > 0:
+                self._log(LogLevel.INFO,
+                          f"运行时补丁验证: 总数={_verify_result['total']}, "
+                          f"通过={_verify_result['verified']}, "
+                          f"失败={_verify_result['failed']}, "
+                          f"平均效果={_verify_result.get('avg_effectiveness', 0):.0%}")
+        except Exception as _verify_err:
+            self._log(LogLevel.DEBUG, f"运行时补丁验证异常: {_verify_err}")
+
+        # 验证「已应用补丁」的运行时效果，失败自动回滚
+        try:
+            from nucleus.reasoning.SafeEvolutionExecutor import (
+                SafeEvolutionExecutor,
+            )
+            _executor2 = SafeEvolutionExecutor()
+            _applied_result = _executor2.verify_applied_patches()
+            if _applied_result.get("total", 0) > 0:
+                self._log(LogLevel.INFO,
+                          f"已应用补丁运行时验证: 总数={_applied_result['total']}, "
+                          f"通过={_applied_result['verified']}, "
+                          f"失败={_applied_result['failed']}, "
+                          f"自动回滚={_applied_result['rolled_back']}")
+        except Exception as _verify_err2:
+            self._log(LogLevel.DEBUG, f"已应用补丁验证异常: {_verify_err2}")
+    # ===== 206批·刀2抽取结束 =====
 
     def _maybe_run_periodic_tests(self):
         """定期测试调度（★阶段A: tools/ 测试工具纳入框架检测体系）。"""

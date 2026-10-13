@@ -37,7 +37,7 @@ from nucleus.const import (
 )
 
 # ★暂缓项1：脉冲结构 TypedDict 契约（编译期检查，零运行时开销）
-from nucleus.pulse_types import Pulse
+from nucleus.pulse_types import DEFAULT_AMPLITUDE, Pulse
 
 # 层级默认映射表（当 emit 未指定 layer 时自动推断）
 _DEFAULT_LAYER_MAP = {
@@ -183,6 +183,7 @@ class PulseCore:
             "payload": payload or {},
             "ttl_ns": ttl_ns,
             "status": "created",
+            "amplitude": DEFAULT_AMPLITUDE,
         }
         # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
         # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。

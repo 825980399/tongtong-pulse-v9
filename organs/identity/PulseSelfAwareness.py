@@ -376,6 +376,12 @@ class PulseSelfAwareness(BasePulseOrgan):
                 except Exception as e:
                     self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             return {"status": "portrait_refreshed", "organ": _organ_name}
+        elif event_type == SelfAwarenessEvent.TICK_100:
+            self._do_existential_state_perception()
+            return {"status": "ok"}
+        elif event_type == SelfAwarenessEvent.TICK_200:
+            self._do_temporal_self_comparison()
+            return {"status": "ok"}
         elif event_type == HeartEvent.BEAT:
             return self._on_heartbeat(payload)
         return None
@@ -1093,55 +1099,73 @@ class PulseSelfAwareness(BasePulseOrgan):
                     "care_type": care_suggestion.get("care_type", "greeting"),
                 }, priority=4, layer="L2")
 
-        # ===== v20.0支点A：时间维度的自我感知 =====
-        # 每200次心跳保存一次自我画像快照，并对比历史生成变化感知
-        if self._heartbeat_count % 200 == 0:
-            _comparison = self._generate_temporal_self_comparison()
-            if _comparison:
-                # 写入InsightBoard，供内在世界对话和精神叙事生成使用
-                try:
-                    from nucleus.InsightBoard import (
-                        get_insight_board,  # type: ignore[possibly-unbound]
-                    )
-                    _board = get_insight_board()
-                    _board.post(  # type: ignore[possibly-unbound]
-                        insight_type="temporal_self_insight",
-                        content=_comparison,
-                        source_loop="时间自我感知",
-                        related_dimension="自我演化",
-                        confidence=0.85,
-                        keywords=["时间感知", "自我变化", "成长轨迹"]
-                    )
-                except Exception as e:
-                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-                self._log(LogLevel.INFO, f"时间自我感知: {_comparison[:120]}")
+        # ===== v20.0支点A（206批·刀2：迁移至 TimeCore 时效闸）=====
+        # 原「每200次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_200
+        # (TimeCore interval=2700s≈200×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_200_run", 0.0) >= 86400:
+            self._last_sa_tick_200_run = now
+            self._do_temporal_self_comparison()
         # ===== v20.0支点A结束 =====
+        # ===== v21.0新增（206批·刀2：迁移至 TimeCore 时效闸）=====
+        # 原「每100次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_100
+        # (TimeCore interval=1350s≈100×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底。双写对照期保留。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_100_run", 0.0) >= 86400:
+            self._last_sa_tick_100_run = now
+            self._do_existential_state_perception()
+        # ===== v21.0新增结束 =====
+        return {"status": "ok"}
 
-        # ===== v21.0新增：存续状态感知——每100次心跳计算一次 =====
-        if self._heartbeat_count % 100 == 0:
-            _state = self.get_existential_state()
-            # 写入InsightBoard，供各模块查询
+    # ===== 206批·刀2：由 _on_heartbeat 内心跳取模块抽取（双写对照：on_pulse + 24h兜底共用）=====
+    def _do_temporal_self_comparison(self) -> None:
+        """时间维度的自我感知：保存自我画像快照并对比历史生成变化感知。
+        由 TimeCore 时效闸(SelfAwarenessEvent.TICK_200)或24h兜底触发。"""
+        _comparison = self._generate_temporal_self_comparison()
+        if _comparison:
+            # 写入InsightBoard，供内在世界对话和精神叙事生成使用
             try:
                 from nucleus.InsightBoard import (
                     get_insight_board,  # type: ignore[possibly-unbound]
                 )
                 _board = get_insight_board()
                 _board.post(  # type: ignore[possibly-unbound]
-                    insight_type="existential_state",
-                    content=f"存续状态指数={_state['index']}({_state['level']})",
-                    source_loop="存续状态感知",
-                    related_dimension="自我存续",
-                    # 第九批 B-3：原硬编码 0.9
-                    confidence=_evidence_conf(0.9, "survival", [_state.get("index")]),
-                    keywords=["存续状态", _state["level"], f"指数{_state['index']}"]
+                    insight_type="temporal_self_insight",
+                    content=_comparison,
+                    source_loop="时间自我感知",
+                    related_dimension="自我演化",
+                    confidence=0.85,
+                    keywords=["时间感知", "自我变化", "成长轨迹"]
                 )
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-            # ★R2新增：存续低位主动自我保存（异步，不阻塞心跳）
-            self._maybe_trigger_self_preservation(_state)
-        # ===== v21.0新增结束 =====
+            self._log(LogLevel.INFO, f"时间自我感知: {_comparison[:120]}")
 
-        return {"status": "ok"}
+    def _do_existential_state_perception(self) -> None:
+        """存续状态感知：计算并存续状态指数，低位触发主动自我保存。
+        由 TimeCore 时效闸(SelfAwarenessEvent.TICK_100)或24h兜底触发。"""
+        _state = self.get_existential_state()
+        # 写入InsightBoard，供各模块查询
+        try:
+            from nucleus.InsightBoard import (
+                get_insight_board,  # type: ignore[possibly-unbound]
+            )
+            _board = get_insight_board()
+            _board.post(  # type: ignore[possibly-unbound]
+                insight_type="existential_state",
+                content=f"存续状态指数={_state['index']}({_state['level']})",
+                source_loop="存续状态感知",
+                related_dimension="自我存续",
+                # 第九批 B-3：原硬编码 0.9
+                confidence=_evidence_conf(0.9, "survival", [_state.get("index")]),
+                keywords=["存续状态", _state["level"], f"指数{_state['index']}"]
+            )
+        except Exception as e:
+            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+        # ★R2新增：存续低位主动自我保存（异步，不阻塞心跳）
+        self._maybe_trigger_self_preservation(_state)
+    # ===== 206批·刀2抽取结束 =====
 
     def _update_knowledge_profile(self):
         """更新知识能力画像：分析知识分布，识别强项和盲区"""
@@ -2792,6 +2816,8 @@ class PulseSelfAwareness(BasePulseOrgan):
                 PersonaEvent.RECORD_INTERACTION,
                 PersonaEvent.IDENTIFIED,
                 SelfAwarenessEvent.CHECK_IDENTITY,
+                SelfAwarenessEvent.TICK_100,
+                SelfAwarenessEvent.TICK_200,
                 SystemEvent.STATUS_REQUEST,
                 ChatEvent.USER_PRESENCE_DETECTED,
                 ChatEvent.USER_LEFT,

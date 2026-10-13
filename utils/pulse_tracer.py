@@ -151,7 +151,7 @@ def _get_orphan_path():
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
 
-def log_emit(organ_name, event_type, layer, pulse_id=""):
+def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None):
     """记录脉冲发射事件"""
     event = {
         "timestamp": time.time(),
@@ -160,6 +160,7 @@ def log_emit(organ_name, event_type, layer, pulse_id=""):
         "event_type": event_type,
         "layer": layer,
         "pulse_id": pulse_id,
+        "amplitude": amplitude,
         "matched_organs": []
     }
     with _lock:

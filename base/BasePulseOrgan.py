@@ -14,6 +14,7 @@ import config  # noqa: F401
 from nucleus.const import ErrorCode, LogLevel, OrganStatus, SystemEvent
 from nucleus.logger import exc_location, get_organ_logger
 from nucleus.lif_shadow import LIFShadow
+from nucleus.pulse_types import DEFAULT_AMPLITUDE
 
 
 class BasePulseOrgan(ABC):
@@ -315,7 +316,7 @@ class BasePulseOrgan(ABC):
                     #   排队），写盘改由 tracer 内部 daemon 线程承担。
                     from utils.pulse_tracer import log_emit
                     _trace_id = pulse.get("pulse_id", "") if isinstance(pulse, dict) else ""
-                    log_emit(self.organ_name, event_type, layer, _trace_id)
+                    log_emit(self.organ_name, event_type, layer, _trace_id, pulse.get("amplitude", DEFAULT_AMPLITUDE))
             except Exception:
                 self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
             
@@ -337,6 +338,7 @@ class BasePulseOrgan(ABC):
             "timestamp_ns": time.time_ns(),
             "payload": payload or {},
             "ttl_ns": ttl_ns,
+            "amplitude": DEFAULT_AMPLITUDE,
         }
         
         self.info_field.publish(pulse)

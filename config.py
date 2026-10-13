@@ -33,6 +33,8 @@ from nucleus.const import (
     ThymusEvent,
     TouchEvent,
     WhiteCellEvent,
+    SelfAwarenessEvent,
+    CodeEvent,
 )
 
 # ========== 项目根目录 ==========
@@ -147,6 +149,12 @@ TIMECORE_SCHEDULE_CONFIG = {
     "self_awareness_30": {"interval": 405, "event_type": "self_awareness.tick.30"},
     "self_awareness_60": {"interval": 810, "event_type": "self_awareness.tick.60"},
     "self_awareness_150": {"interval": 2025, "event_type": "self_awareness.tick.150"},
+    # ===== 206批·刀2：A类纯时效件迁移（SA %100/%200 + CL %200×2）=====
+    # 迁移自 _on_heartbeat 内心跳取模高频触发；现由 TimeCore 时效闸统一调度，
+    # interval = N × 标称拍长(13.5s)。消费侧 on_pulse 已接线（双写对照期保留24h兜底）。
+    "sa_tick_100": {"interval": 1350, "event_type": SelfAwarenessEvent.TICK_100},
+    "sa_tick_200": {"interval": 2700, "event_type": SelfAwarenessEvent.TICK_200},
+    "cl_tick_200": {"interval": 2700, "event_type": CodeEvent.TICK_200},
 
 }
 # ===== 阶段三子任务3.0：知识时效性（来源时间融合 + 可能过时标记） =====
@@ -3787,6 +3795,7 @@ LOG_AGGREGATION_ENABLED = True    # 是否启用重复日志聚合
 LOG_AGGREGATION_WINDOW = 60.0     # 聚合窗口（秒）：窗口内同类重复日志静默，窗口结束输出摘要
 # ★主线第133批 T-133a（fc133 七卡）：日志脱敏层
 ENABLE_LOG_SANITIZER = True              # 总开关：关闭后全库不脱敏（调试用）
+ENABLE_LOGGER_ROOT_CAUSE = True          # ★206批 刀1：树外 logger 根治（案C 显式名单注册）总开关；开启后一次性点亮 16 个生产模块文件通道
 LOG_SANITIZER_DEBUG_MODE = False         # 调试模式：控制台 handler 不脱敏（保留现场）
 OUTPUT_WINDOWS_PATH_MASK = False         # 可选：额外屏蔽 Windows 绝对路径（默认 OFF）
 # ★F4收尾：沉默器官分级自愈总开关（默认开；关闭后仅保留沉默告警，不再发射处置脉冲）

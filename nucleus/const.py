@@ -189,6 +189,8 @@ class EarEvent:
 class CodeEvent:
     """代码执行事件"""
     RESULT = "code.result"
+    # ===== 206批·刀2：纯时效件迁移（CL %200×2 → TimeCore 时效闸）=====
+    TICK_200 = "code_learner.tick.200"
 
 
 class VisualEvent:
@@ -466,6 +468,9 @@ class PersonalityEvent:
 class SelfAwarenessEvent:
     """自我认知相关事件"""
     CHECK_IDENTITY = "self_awareness.check_identity"
+    # ===== 206批·刀2：纯时效件迁移（心跳取模 → TimeCore 时效闸）=====
+    TICK_100 = "self_awareness.tick.100"
+    TICK_200 = "self_awareness.tick.200"
 
 class ThymusEvent:
     """胸腺相关事件"""
