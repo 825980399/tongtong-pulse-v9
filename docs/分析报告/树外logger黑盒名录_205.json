@@ -1,0 +1,186 @@
+{
+  "batch": 205,
+  "knife": "刀1 半刀：树外logger黑盒名录",
+  "scan_root": ".",
+  "exclude": [
+    ".bak*",
+    "tmp",
+    "docker_build_ctx",
+    ".git",
+    "data/code_backups (stale)"
+  ],
+  "summary": {
+    "production_non_pulse": 16,
+    "test_probe": 14,
+    "stale_backup_copy": 2,
+    "total_non_pulse": 32,
+    "target_fixed_this_batch": "semantic_cache_l2"
+  },
+  "production_blacklist": [
+    {
+      "file": "config.py",
+      "line": 4084,
+      "name": "Config"
+    },
+    {
+      "file": "config.py",
+      "line": 4805,
+      "name": "config"
+    },
+    {
+      "file": "nucleus/TaskOrchestrator.py",
+      "line": 144,
+      "name": "TaskOrchestrator"
+    },
+    {
+      "file": "nucleus/data/DataAccessLayer.py",
+      "line": 21,
+      "name": "nucleus.data.DataAccessLayer"
+    },
+    {
+      "file": "nucleus/evolution/EvolutionLoop.py",
+      "line": 33,
+      "name": "EvolutionLoop"
+    },
+    {
+      "file": "nucleus/evolution/TestGenerator.py",
+      "line": 43,
+      "name": "rt"
+    },
+    {
+      "file": "nucleus/evolution/TestGenerator.py",
+      "line": 77,
+      "name": "compat"
+    },
+    {
+      "file": "nucleus/knowledge/PollutionTagger.py",
+      "line": 50,
+      "name": "PollutionTagger"
+    },
+    {
+      "file": "nucleus/mnemosyne/IndexStore.py",
+      "line": 23,
+      "name": "IndexStore"
+    },
+    {
+      "file": "nucleus/reasoning/subagent_runner.py",
+      "line": 31,
+      "name": "subagent_runner"
+    },
+    {
+      "file": "nucleus/reporting/publishers.py",
+      "line": 86,
+      "name": "ReportPublishers"
+    },
+    {
+      "file": "nucleus/self_awareness/rule_engine.py",
+      "line": 55,
+      "name": "rule_engine"
+    },
+    {
+      "file": "nucleus/self_inspector.py",
+      "line": 55,
+      "name": "self_inspector"
+    },
+    {
+      "file": "organs/brain/PulseCodeLearner.py",
+      "line": 42,
+      "name": "PulseCodeLearner"
+    },
+    {
+      "file": "tools/import_nodes_to_neo4j.py",
+      "line": 37,
+      "name": "import_nodes_to_neo4j"
+    },
+    {
+      "file": "tools/measure_baseline.py",
+      "line": 32,
+      "name": "tools.measure_baseline"
+    }
+  ],
+  "test_probe_loggers": [
+    {
+      "file": "tests/test_adaptive_coverage_extension_m65.py",
+      "line": 123,
+      "name": "test.m65.cold"
+    },
+    {
+      "file": "tests/test_incremental_log_delete_m81.py",
+      "line": 56,
+      "name": "test_m81_incr"
+    },
+    {
+      "file": "tests/test_load_path_switch_m81.py",
+      "line": 59,
+      "name": "test_m81_switch"
+    },
+    {
+      "file": "tests/test_log_decay_robustness_m49.py",
+      "line": 262,
+      "name": "m49_t33_norm"
+    },
+    {
+      "file": "tests/test_log_decay_robustness_m49.py",
+      "line": 288,
+      "name": "m59_t1_copy"
+    },
+    {
+      "file": "tests/test_log_decay_robustness_m49.py",
+      "line": 324,
+      "name": "nucleus.logger"
+    },
+    {
+      "file": "tests/test_log_retention_m42.py",
+      "line": 248,
+      "name": "m42_test_rot"
+    },
+    {
+      "file": "tests/test_log_stability_m22.py",
+      "line": 266,
+      "name": "m22.test.probe"
+    },
+    {
+      "file": "tests/test_m70_lazy_materialize_m81.py",
+      "line": 35,
+      "name": "test_m70"
+    },
+    {
+      "file": "tests/test_m70_production_wiring_m81b.py",
+      "line": 41,
+      "name": "test_m70b"
+    },
+    {
+      "file": "tests/test_parquet_cold_json_m68.py",
+      "line": 26,
+      "name": "test_m68"
+    },
+    {
+      "file": "tests/test_parquet_schema_m81.py",
+      "line": 42,
+      "name": "test_m81"
+    },
+    {
+      "file": "tests/test_snapshot_kal_m67.py",
+      "line": 48,
+      "name": "test_m67"
+    },
+    {
+      "file": "tests/test_validator_false_success_m99.py",
+      "line": 36,
+      "name": "t99d_fake"
+    }
+  ],
+  "stale_backup_copies": [
+    {
+      "file": "data/code_backups/backup_20260924_215050/nucleus/data/DataAccessLayer.py",
+      "line": 22,
+      "name": "nucleus.data.DataAccessLayer"
+    },
+    {
+      "file": "data/code_backups/backup_20260926_165842/nucleus/data/DataAccessLayer.py",
+      "line": 22,
+      "name": "nucleus.data.DataAccessLayer"
+    }
+  ],
+  "note": "production_blacklist 为后续'顶层logger自动挂树'根治刀的对象；test_probe 为测试探针（intentional）；stale_backup 为历史备份副本（排除）。"
+}
