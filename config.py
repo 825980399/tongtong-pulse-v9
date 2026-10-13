@@ -146,15 +146,17 @@ TIMECORE_SCHEDULE_CONFIG = {
     # ===== 204批·刀2：A类纯周期件（SelfAwareness）时效闸登记 =====
     # 源码无现成 %60/%30/%150 tick 周期件（D#6）：本批为在时效闸新登记三个触发项，
     # 类比203批刀3（B类Top3），消费侧接线待观察窗。interval = N × 标称拍长(13.5s)（D#7）。
-    "self_awareness_30": {"interval": 405, "event_type": "self_awareness.tick.30"},
-    "self_awareness_60": {"interval": 810, "event_type": "self_awareness.tick.60"},
-    "self_awareness_150": {"interval": 2025, "event_type": "self_awareness.tick.150"},
+    "self_awareness_30": {"interval": 405, "event_type": SelfAwarenessEvent.TICK_30},
+    "self_awareness_60": {"interval": 810, "event_type": SelfAwarenessEvent.TICK_60},
+    "self_awareness_150": {"interval": 2025, "event_type": SelfAwarenessEvent.TICK_150},
     # ===== 206批·刀2：A类纯时效件迁移（SA %100/%200 + CL %200×2）=====
     # 迁移自 _on_heartbeat 内心跳取模高频触发；现由 TimeCore 时效闸统一调度，
     # interval = N × 标称拍长(13.5s)。消费侧 on_pulse 已接线（双写对照期保留24h兜底）。
     "sa_tick_100": {"interval": 1350, "event_type": SelfAwarenessEvent.TICK_100},
     "sa_tick_200": {"interval": 2700, "event_type": SelfAwarenessEvent.TICK_200},
     "cl_tick_200": {"interval": 2700, "event_type": CodeEvent.TICK_200},
+    # ===== 208批·刀3：CHECK_IDENTITY 时效闸登记（原 _on_heartbeat %100 周期触发 → TimeCore）=====
+    "sa_check_identity": {"interval": 1350, "event_type": SelfAwarenessEvent.CHECK_IDENTITY},
 
 }
 # ===== 阶段三子任务3.0：知识时效性（来源时间融合 + 可能过时标记） =====

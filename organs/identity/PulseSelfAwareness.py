@@ -376,6 +376,15 @@ class PulseSelfAwareness(BasePulseOrgan):
                 except Exception as e:
                     self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             return {"status": "portrait_refreshed", "organ": _organ_name}
+        elif event_type == SelfAwarenessEvent.TICK_30:
+            self._do_knowledge_profile_update()
+            return {"status": "ok"}
+        elif event_type == SelfAwarenessEvent.TICK_60:
+            self._do_relationship_maintenance()
+            return {"status": "ok"}
+        elif event_type == SelfAwarenessEvent.TICK_150:
+            self._do_relation_review()
+            return {"status": "ok"}
         elif event_type == SelfAwarenessEvent.TICK_100:
             self._do_existential_state_perception()
             return {"status": "ok"}
@@ -1037,15 +1046,21 @@ class PulseSelfAwareness(BasePulseOrgan):
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._heartbeat_count += 1
 
-        # ★G5修复：周期性执行身份校验。原 CHECK_IDENTITY 事件订阅了但全库无发射点
-        # （幽灵代码），此处直接周期性触发，使身份种子完整性校验真正运行。
-        if self._heartbeat_count % 100 == 0 and self.node_pool:
-            try:
-                _id_check = self._on_check_identity({})
-                if _id_check.get("status") == "degraded":
-                    self._log(LogLevel.WARNING, f"身份校验异常: {_id_check}")
-            except Exception as e:
-                self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+        # ★G5修复（208批·刀3：迁移至 TimeCore 时效闸）=====
+        # 原「每100次心跳」周期触发已迁移至 SelfAwarenessEvent.CHECK_IDENTITY
+        # (TimeCore interval=1350s≈100×13.5s，键 sa_check_identity)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_check_identity_run", 0.0) >= 86400:
+            self._last_check_identity_run = now
+            if self.node_pool:
+                try:
+                    _id_check = self._on_check_identity({})
+                    if _id_check.get("status") == "degraded":
+                        self._log(LogLevel.WARNING, f"身份校验异常: {_id_check}")
+                except Exception as e:
+                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+        # ★G5修复（208批·刀3 迁移）结束 =====
 
         # ===== v22.0 M1新增：跨重启自我连续性确认 =====
         if (not self._continuity_checked
@@ -1054,50 +1069,35 @@ class PulseSelfAwareness(BasePulseOrgan):
             self._confirm_restart_continuity()
         # ===== v22.0 M1新增结束 =====
 
-        # ===== v22.0 M4新增：关系联结深化——周期性回顾与核心人物的温暖记忆 =====
-        if self._heartbeat_count % 150 == 0:
-            _relation_review = self._generate_relation_review()
-            if _relation_review:
-                # 以express.urge脉冲发射，让主动交互器官在合适时机表达
-                self._emit(Event.EXPRESS_URGE, {
-                    "source": "relation_bonding",
-                    "emotion": "温暖",
-                    "intensity": 0.35,
-                    "trigger": _relation_review,
-                    "priority": "low",
-                }, priority=3, layer="L3")
-                self._log(LogLevel.INFO, f"关系回顾: {_relation_review[:80]}")
-        # ===== v22.0 M4新增结束 =====
+        # ===== v22.0 M4新增（208批·刀2：迁移至 TimeCore 时效闸）=====
+        # 原「每150次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_150
+        # (TimeCore interval=2025s≈150×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_150_run", 0.0) >= 86400:
+            self._last_sa_tick_150_run = now
+            self._do_relation_review()
+        # ===== v22.0 M4新增（208批·刀2 迁移）结束 =====
 
-        if self._heartbeat_count % 30 == 0 and self.node_pool:
-            self._update_knowledge_profile()
+        # ===== v24.0修复（208批·刀2：迁移至 TimeCore 时效闸）=====
+        # 原「每30次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_30
+        # (TimeCore interval=405s≈30×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_30_run", 0.0) >= 86400:
+            self._last_sa_tick_30_run = now
+            self._do_knowledge_profile_update()
+        # ===== v24.0修复（208批·刀2 迁移）结束 =====
 
-            # ===== v24.0修复：梯度追踪器采样——知识增长数据接入 =====
-            if self._framework_ref:
-                _gt = getattr(self._framework_ref, 'gradient_tracker', None)
-                if _gt and _gt.is_enabled():
-                    try:
-                        _stats = self.node_pool.get_stats()
-                        _evol = _stats.get("evol_distribution", {})
-                        _gt.sample_knowledge_growth(
-                            current_total=_stats.get("total_nodes", 0),
-                            current_l2=_evol.get("L2", 0),
-                            current_l3=_evol.get("L3", 0),
-                        )
-                    except Exception as e:
-                        self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-            # ===== v24.0修复结束 =====
-
-        # 每60次心跳检查一次关系是否需要维护
-        if self._heartbeat_count % 60 == 0:
-            care_suggestion = self._check_relationship_maintenance()
-            if care_suggestion:
-                self._emit(Event.CARE_INITIATIVE, {
-                    "user_name": care_suggestion.get("user_name", "小林"),
-                    "message": care_suggestion.get("message", ""),
-                    "reason": care_suggestion.get("reason", ""),
-                    "care_type": care_suggestion.get("care_type", "greeting"),
-                }, priority=4, layer="L2")
+        # ===== 208批·刀2：迁移至 TimeCore 时效闸 =====
+        # 原「每60次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_60
+        # (TimeCore interval=810s≈60×13.5s)，由 on_pulse 主入口接收。
+        # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
+        # 双写对照期保留，确认新路径稳定后可移除。
+        if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_60_run", 0.0) >= 86400:
+            self._last_sa_tick_60_run = now
+            self._do_relationship_maintenance()
+        # ===== 208批·刀2 迁移结束 =====
 
         # ===== v20.0支点A（206批·刀2：迁移至 TimeCore 时效闸）=====
         # 原「每200次心跳」高频触发已迁移至 SelfAwarenessEvent.TICK_200
@@ -1166,6 +1166,57 @@ class PulseSelfAwareness(BasePulseOrgan):
         # ★R2新增：存续低位主动自我保存（异步，不阻塞心跳）
         self._maybe_trigger_self_preservation(_state)
     # ===== 206批·刀2抽取结束 =====
+
+    # ===== 208批·刀2：由 _on_heartbeat 内心跳取模块抽取（双写对照：on_pulse + 24h兜底共用）=====
+    def _do_relationship_maintenance(self) -> None:
+        """关系维护检查：周期性检查关系是否需要维护并主动关怀。
+        由 TimeCore 时效闸(SelfAwarenessEvent.TICK_60)或24h兜底触发。"""
+        care_suggestion = self._check_relationship_maintenance()
+        if care_suggestion:
+            self._emit(Event.CARE_INITIATIVE, {
+                "user_name": care_suggestion.get("user_name", "小林"),
+                "message": care_suggestion.get("message", ""),
+                "reason": care_suggestion.get("reason", ""),
+                "care_type": care_suggestion.get("care_type", "greeting"),
+            }, priority=4, layer="L2")
+
+    def _do_relation_review(self) -> None:
+        """关系联结深化：周期性回顾与核心人物的温暖记忆并触发表达。
+        由 TimeCore 时效闸(SelfAwarenessEvent.TICK_150)或24h兜底触发。"""
+        _relation_review = self._generate_relation_review()
+        if _relation_review:
+            # 以express.urge脉冲发射，让主动交互器官在合适时机表达
+            self._emit(Event.EXPRESS_URGE, {
+                "source": "relation_bonding",
+                "emotion": "温暖",
+                "intensity": 0.35,
+                "trigger": _relation_review,
+                "priority": "low",
+            }, priority=3, layer="L3")
+            self._log(LogLevel.INFO, f"关系回顾: {_relation_review[:80]}")
+
+    def _do_knowledge_profile_update(self) -> None:
+        """知识能力画像更新 + 梯度追踪器采样。
+        由 TimeCore 时效闸(SelfAwarenessEvent.TICK_30)或24h兜底触发。"""
+        if not self.node_pool:
+            return
+        self._update_knowledge_profile()
+        # ===== v24.0修复：梯度追踪器采样——知识增长数据接入 =====
+        if self._framework_ref:
+            _gt = getattr(self._framework_ref, 'gradient_tracker', None)
+            if _gt and _gt.is_enabled():
+                try:
+                    _stats = self.node_pool.get_stats()
+                    _evol = _stats.get("evol_distribution", {})
+                    _gt.sample_knowledge_growth(
+                        current_total=_stats.get("total_nodes", 0),
+                        current_l2=_evol.get("L2", 0),
+                        current_l3=_evol.get("L3", 0),
+                    )
+                except Exception as e:
+                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+        # ===== v24.0修复结束 =====
+    # ===== 208批·刀2抽取结束 =====
 
     def _update_knowledge_profile(self):
         """更新知识能力画像：分析知识分布，识别强项和盲区"""
@@ -2818,6 +2869,9 @@ class PulseSelfAwareness(BasePulseOrgan):
                 SelfAwarenessEvent.CHECK_IDENTITY,
                 SelfAwarenessEvent.TICK_100,
                 SelfAwarenessEvent.TICK_200,
+                SelfAwarenessEvent.TICK_30,
+                SelfAwarenessEvent.TICK_60,
+                SelfAwarenessEvent.TICK_150,
                 SystemEvent.STATUS_REQUEST,
                 ChatEvent.USER_PRESENCE_DETECTED,
                 ChatEvent.USER_LEFT,

@@ -471,6 +471,10 @@ class SelfAwarenessEvent:
     # ===== 206批·刀2：纯时效件迁移（心跳取模 → TimeCore 时效闸）=====
     TICK_100 = "self_awareness.tick.100"
     TICK_200 = "self_awareness.tick.200"
+    # ===== 208批·刀1：纯时效件口径统一（self_awareness_30/60/150 时效闸 → const 引用）=====
+    TICK_30 = "self_awareness.tick.30"
+    TICK_60 = "self_awareness.tick.60"
+    TICK_150 = "self_awareness.tick.150"
 
 class ThymusEvent:
     """胸腺相关事件"""
