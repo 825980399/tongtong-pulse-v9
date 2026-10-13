@@ -79,7 +79,8 @@ class PulsePayload(TypedDict, total=False):
 # 新字段一律声明为 NotRequired：既有 emit 未提供时类型检查仍通过，运行时零行为变化。
 DEFAULT_AMPLITUDE: float = 1.0          # 脉冲幅度（SNN 膜电位强度 / 光脉冲功率）
 DEFAULT_SPIKE_TYPE: str = 'rate'        # 编码类型：'rate' | 'temporal' | 'graded'
-DEFAULT_WIRE_FORMAT: str = 'json'       # 序列化格式：'json' | 'binary'
+DEFAULT_WIRE_FORMAT: str = 'json'       # 序列化格式：'json' | 'binary'，默认 'json'
+DEFAULT_TARGET_ORGAN: str = ''         # 标注制目标器官（语义标注，非路由键），默认空串       # 序列化格式：'json' | 'binary'
 
 SPIKE_TYPES = ('rate', 'temporal', 'graded')   # spike_type 取值域（枚举预留）
 WIRE_FORMATS = ('json', 'binary')              # wire_format 取值域（枚举预留）
@@ -97,6 +98,7 @@ class ChipAgnosticDims(TypedDict, total=False):
     amplitude: float       # 脉冲幅度（SNN 膜电位强度 / 光脉冲功率），默认 1.0
     spike_type: str        # 编码类型 'rate' | 'temporal' | 'graded'，默认 'rate'
     wire_format: str       # 序列化格式 'json' | 'binary'，默认 'json'
+    target_organ: str      # 标注制目标器官（语义标注，非路由键），默认空串       # 序列化格式 'json' | 'binary'，默认 'json'
 
 
 class Pulse(ChipAgnosticDims):
@@ -119,6 +121,7 @@ class Pulse(ChipAgnosticDims):
         - amplitude:   脉冲幅度（SNN 膜电位强度 / 光脉冲功率），默认 1.0
         - spike_type:  编码类型 'rate' | 'temporal' | 'graded'，默认 'rate'
         - wire_format: 序列化格式 'json' | 'binary'，默认 'json'
+        - target_organ: 标注制目标器官（语义标注，非路由键），默认空串
     """
     pulse_id: str                    # 唯一脉冲 ID：pulse:{source}:{event}:{ts}:{seq}
     source_organ: str                # 来源器官名（中文或英文类名）

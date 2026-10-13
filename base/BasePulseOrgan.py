@@ -263,7 +263,8 @@ class BasePulseOrgan(ABC):
     # ========== 状态快照接口结束 ==========    
     # ========== 子类可用的工具方法 ==========
     
-    def _emit(self, event_type: str, payload: dict | None = None, 
+    def _emit(self, event_type: str, payload: dict | None = None,
+              target_organ: str = "", 
               priority: int = 5, ttl_ns: int = 5_000_000_000,
               layer: str = "L1") -> str | None:
         """
@@ -285,9 +286,10 @@ class BasePulseOrgan(ABC):
         Returns:
             发射的 pulse_id，如果信息场未注入则返回 None
         """
-        return self._send(event_type, payload, priority, ttl_ns, layer)
+        return self._send(event_type, payload, priority, ttl_ns, layer, target_organ)
         
     def _send(self, event_type: str, payload: dict | None = None,
+              target_organ: str = "",
               priority: int = 5, ttl_ns: int = 5_000_000_000,
               layer: str = "L1") -> str | None:
         """
@@ -306,6 +308,7 @@ class BasePulseOrgan(ABC):
                 payload=payload or {},
                 priority=priority,
                 layer=layer,
+                target_organ=target_organ,
             )
             # 脉冲追踪（先获取pulse_id再使用）
             try:
@@ -316,7 +319,7 @@ class BasePulseOrgan(ABC):
                     #   排队），写盘改由 tracer 内部 daemon 线程承担。
                     from utils.pulse_tracer import log_emit
                     _trace_id = pulse.get("pulse_id", "") if isinstance(pulse, dict) else ""
-                    log_emit(self.organ_name, event_type, layer, _trace_id, pulse.get("amplitude", DEFAULT_AMPLITUDE))
+                    log_emit(self.organ_name, event_type, layer, _trace_id, pulse.get("amplitude", DEFAULT_AMPLITUDE), pulse.get("target_organ", ""))
             except Exception:
                 self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
             
@@ -339,6 +342,7 @@ class BasePulseOrgan(ABC):
             "payload": payload or {},
             "ttl_ns": ttl_ns,
             "amplitude": DEFAULT_AMPLITUDE,
+            "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
         
         self.info_field.publish(pulse)
@@ -510,7 +514,7 @@ class BasePulseOrgan(ABC):
                 from utils.pulse_tracer import log_receive
                 event_type = pulse.get("event_type", "?")
                 source = pulse.get("source_organ", "?")
-                log_receive(self.organ_name, event_type, source)
+                log_receive(self.organ_name, event_type, source, pulse.get("pulse_id", ""))
         except Exception:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         # === 执行业务逻辑（锁外，其他线程可同时进入） ===

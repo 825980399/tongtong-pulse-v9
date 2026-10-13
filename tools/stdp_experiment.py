@@ -192,6 +192,105 @@ def _default_out_path() -> str:
     )
 
 
+# ===================== 207批·刀3：脉冲成对流源（pulse_pairs.jsonl） =====================
+STDP_PAIR_WINDOW_MS = 100.0   # 成对流窗 ±WINDOW_MS（毫秒档；τ 维持 20ms 已在 10~50ms 区间）
+
+
+def load_pulse_pairs(paths: List[str]) -> Dict[str, Any]:
+    """读取 pulse_pairs.jsonl（成对流记录），按 pulse_id 聚合 emit(pre) 与 receive(post)。
+
+    每行含 pulse_id/type/organ/event_type/ts；返回 {pulse_id: {"emit":..,"receives":[..]}}。
+    """
+    _groups: Dict[str, Any] = {}
+    for _p in paths:
+        if not os.path.exists(_p):
+            continue
+        try:
+            with open(_p, encoding="utf-8") as _f:
+                for _ln in _f:
+                    _ln = _ln.strip()
+                    if not _ln:
+                        continue
+                    try:
+                        _o = json.loads(_ln)
+                    except Exception as e:
+                        silent_exc(e)
+                        continue
+                    _pid = _o.get("pulse_id")
+                    if not _pid:
+                        continue
+                    _g = _groups.setdefault(_pid, {"emit": None, "receives": []})
+                    if _o.get("type") == "emit":
+                        _g["emit"] = _o
+                    elif _o.get("type") == "receive":
+                        _g["receives"].append(_o)
+        except Exception as e:
+            silent_exc(e)
+    return _groups
+
+
+def run_pair_experiment(input_paths: List[str], out_path: Optional[str] = None,
+                        window_ms: float = STDP_PAIR_WINDOW_MS,
+                        weights: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    """以 pulse_pairs.jsonl 为源回放 STDP：emit(pre) ↔ receive(post) 按 pulse_id 精确配对。
+
+    窗 ±window_ms 内候选对参与；权重仅落本地 dict，绝不触碰生产单例（红线）。
+    τ 维持 STDP_TAU_PLUS_MS/STDP_TAU_MINUS_MS（20ms，已在 10~50ms 区间），
+    A± 维持 STDP_A_PLUS/STDP_A_MINUS（0.01/0.012）；窗由调用方指定（默认 ±100ms）。
+    """
+    fp = param_fingerprint()
+    _groups = load_pulse_pairs(input_paths)
+    _weights: Dict[str, float] = weights if weights is not None else {}
+    results: List[Dict[str, Any]] = []
+    _pair_count = 0
+    for _pid, _g in _groups.items():
+        _emit = _g["emit"]
+        if not _emit:
+            continue
+        _e_ts = _emit.get("ts")
+        if _e_ts is None:
+            continue
+        _pre = _emit.get("organ", "?")
+        for _rec in _g["receives"]:
+            _r_ts = _rec.get("ts")
+            if _r_ts is None:
+                continue
+            _dt_ms = (_r_ts - _e_ts) * 1000.0
+            if abs(_dt_ms) > window_ms:
+                continue
+            _post = _rec.get("organ", "?")
+            _key = "%s->%s" % (_pre, _post)
+            _dw = stdp_delta_w(_dt_ms)
+            _wb = _weights.get(_key, 0.0)
+            _wa = _wb + _dw
+            _weights[_key] = _wa
+            results.append({
+                "pulse_id": _pid,
+                "pre_organ": _pre,
+                "post_organ": _post,
+                "delta_t_ms": round(_dt_ms, 6),
+                "delta_w": round(_dw, 10),
+                "w_before": round(_wb, 10),
+                "w_after": round(_wa, 10),
+                "synapse": _key,
+                "params": fp,
+            })
+            _pair_count += 1
+    if out_path:
+        try:
+            os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+            with open(out_path, "a", encoding="utf-8") as _of:
+                for _r in results:
+                    _of.write(json.dumps(_r, ensure_ascii=False))
+                    _of.write("\n")
+        except Exception as e:
+            silent_exc(e)
+    return {
+        "results": results, "weights": _weights, "params": fp,
+        "pair_count": _pair_count, "out_path": out_path,
+    }
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="STDP 离线回放实验（第205批 刀3）")
     ap.add_argument("--input", nargs="+", required=True,
@@ -199,9 +298,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--out", default=None,
                     help="结果落盘路径（默认 data/experiments/stdp_YYYYMMDD.jsonl）")
     ap.add_argument("--window-ms", type=float, default=STDP_WINDOW_MS)
+    ap.add_argument("--pair", action="store_true",
+                    help="成对源模式：将 --input 视为 pulse_pairs.jsonl，按 pulse_id 精确配对回放 STDP")
+    ap.add_argument("--pair-window-ms", type=float, default=STDP_PAIR_WINDOW_MS)
     args = ap.parse_args(argv)
 
     out = args.out or _default_out_path()
+    if args.pair:
+        exp = run_pair_experiment(args.input, out_path=out, window_ms=args.pair_window_ms)
+        sys.stderr.write(
+            "[stdp_experiment:pair] groups=%d pairs=%d out=%s\n"
+            % (len(load_pulse_pairs(args.input)), exp["pair_count"], out)
+        )
+        return 0
     exp = run_experiment(args.input, out_path=out, window_ms=args.window_ms)
     sys.stderr.write(
         "[stdp_experiment] records=%d pairs=%d out=%s\n"

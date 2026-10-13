@@ -179,15 +179,18 @@ class ResonanceDetector:
         with self._lock:
             self._weight_map[(pre_id, post_id)] = (weight, delay, encoding_type)
 
-    def update_weight(self, pre_id: str, post_id: str, delta: float) -> float:
+    def update_weight(self, pre_id: str, post_id: str, delta: float,
+                     encoding_type: str = DEFAULT_ENCODING_TYPE) -> float:
         """按增量更新突触权重（STDP 预留，本批不含学习规则）。
 
-        未登记的突触以 DEFAULT_WEIGHT 为起点累加；delay / encoding_type 保持不变。
+        未登记的突触以 DEFAULT_WEIGHT 为起点累加；delay 保持不变，encoding_type
+        由调用方按映射口径写入（'real' / 'simplified'）。
 
         Args:
-            pre_id:  突触前 ID
-            post_id: 突触后 ID
-            delta:    权重增量
+            pre_id:         突触前 ID
+            post_id:        突触后 ID
+            delta:          权重增量
+            encoding_type:  映射口径（'real'=真实 target_organ，'simplified'=回退 event_type）
 
         Returns:
             更新后的新权重。
@@ -195,13 +198,33 @@ class ResonanceDetector:
         # ★不在持锁内调用 get_weight：self._lock 是 threading.Lock（非可重入），
         #   嵌套获取会自死锁 —— 此处直接内联查表。
         with self._lock:
-            weight, delay, enc = self._weight_map.get(
+            weight, delay, _enc = self._weight_map.get(
                 (pre_id, post_id),
                 (DEFAULT_WEIGHT, DEFAULT_DELAY, DEFAULT_ENCODING_TYPE),
             )
             new_weight = weight + delta
-            self._weight_map[(pre_id, post_id)] = (new_weight, delay, enc)
+            # 207批·刀2：写入调用方声明的映射口径（覆盖默认 enc）
+            self._weight_map[(pre_id, post_id)] = (new_weight, delay, encoding_type)
             return new_weight
+
+    def get_mapping_distribution(self) -> dict[str, Any]:
+        """207批·刀2：统计 weight_map 中映射口径分布（real / simplified）。
+
+        仅观测用；encoding_type 第三槽记录每条突触的映射口径。
+        """
+        with self._lock:
+            _real = 0
+            _simplified = 0
+            for _w, _d, _enc in self._weight_map.values():
+                if _enc == "real":
+                    _real += 1
+                elif _enc == "simplified":
+                    _simplified += 1
+            return {
+                "synapses": len(self._weight_map),
+                "real": _real,
+                "simplified": _simplified,
+            }
 
     def get_weight_stats(self) -> dict[str, Any]:
         """获取权重映射统计（只读观测）。"""

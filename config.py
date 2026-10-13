@@ -3773,6 +3773,18 @@ SPIKE_BACKEND_ENABLED = False
 # 204批·刀3·D#2解封：共振权重映射接入实际脉冲流开关（默认关闭，观测不门控）
 RESONANCE_WEIGHT_MAP_ENABLED = False
 
+# 207批·刀1：target_organ 标注制字段开关（默认关闭，观测不门控）。
+# 关闭时 emit 注入空串、tracer 不统计填充率，零行为变化；开启后 producer 可声明
+# 目标器官（语义标注，非路由键，禁数组形态），用于后续路由/配对观测。
+ENABLE_TARGET_ORGAN_FIELD = False
+
+# 207批·刀2：B5 真实语义映射模式（案C回退式）。
+# 'case_c' = post = target_organ if 非空 else event_type（时间轴自然插值，无迁移刀）。
+RESONANCE_MAPPING_MODE = 'case_c'
+
+# 207批·刀3：脉冲成对流落盘开关（默认关闭，观测不门控）。
+ENABLE_PULSE_PAIR_DUMP = False
+
 # ========== 统一日志系统 ==========
 LOG_DIR = "logs"
 LOG_FILE = "pulse.log"

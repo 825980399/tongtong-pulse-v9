@@ -13,9 +13,13 @@ PulseCore.py —— 脉冲核心
 
 import threading
 import time
+import sys
 
 # 204批·刀3：共振权重映射默认增量（发射频次语义；pulse 无 amplitude，固定步长）
 _RESONANCE_DEFAULT_DELTA = 1.0
+
+# 207批·刀2：共振映射分布 INFO 采样周期（仅 RESONANCE_WEIGHT_MAP_ENABLED=True 时计数）
+_RESONANCE_DISTRIBUTE_EVERY = 500
 
 from collections import OrderedDict
 from collections.abc import Callable
@@ -120,7 +124,8 @@ class PulseCore:
              payload: dict | None = None, priority: int = 5,
              ttl_ns: int = 5_000_000_000,
              layer: str | None = None,
-             intent: str | None = None) -> Pulse:
+             intent: str | None = None,
+             target_organ: str = "") -> Pulse:
         """
         创建一个脉冲（v9.5: 原生支持 layer）。
         
@@ -184,6 +189,7 @@ class PulseCore:
             "ttl_ns": ttl_ns,
             "status": "created",
             "amplitude": DEFAULT_AMPLITUDE,
+            "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
         # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
         # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。
@@ -233,17 +239,34 @@ class PulseCore:
     def _resonance_weight_update(self, pulse) -> None:
         """发射侧接入共振权重映射（默认关闭即零行为）。
 
-        D#5 简化映射：pre=source_organ（突触前=发射源），
-        post=event_type（突触后靶点=事件类型），delta=固定步长（发射频次语义）。
-        pulse 无 target_organ/amplitude，真实语义待星轨裁定。
+        207批·刀2（B5 案C回退式）：post = target_organ if 非空 else event_type
+        （时间轴自然插值，无迁移刀）。encoding_type 记双口径：
+        'real' = post 取自器官声明的真实 target_organ；
+        'simplified' = target_organ 为空、回退到 event_type（简化对）。
+        仅 RESONANCE_WEIGHT_MAP_ENABLED=True 时执行；每 N 次更新打分布 INFO（生死闸）。
         """
         detector = self._get_resonance_detector()
         if detector is not None:
+            _tgt = pulse.get("target_organ", "") or ""
+            if _tgt:
+                _post = _tgt
+                _enc = "real"
+            else:
+                _post = pulse.get("event_type", "")
+                _enc = "simplified"
             detector.update_weight(
                 pulse.get("source_organ", ""),
-                pulse.get("event_type", ""),
+                _post,
                 _RESONANCE_DEFAULT_DELTA,
+                encoding_type=_enc,
             )
+            # 207批·刀2：映射点分布生死闸（仅启用时计数）
+            self._resonance_update_count = getattr(self, "_resonance_update_count", 0) + 1
+            if self._resonance_update_count % _RESONANCE_DISTRIBUTE_EVERY == 0:
+                _dist = detector.get_mapping_distribution()
+                print("[INFO] PulseCore.resonance 映射分布: 累计=%d 突触=%d real=%d simplified=%d"
+                      % (self._resonance_update_count, _dist["synapses"],
+                         _dist["real"], _dist["simplified"]), file=sys.stderr)
 
     def _infer_layer(self, event_type: str) -> str:
         """

@@ -7,7 +7,9 @@
 """
 
 import atexit
+import json
 import os
+import sys
 import threading
 import time
 
@@ -31,6 +33,19 @@ _DEFAULT_MIN_AGE_SEC = 1.5  # 判定窗（秒）     ← PULSE_TRACER_MIN_AGE_SE
 _FLUSH_INTERVAL = 2.0  # 写入频率限制：每2秒最多一次，避免竞态条件
 _events = []
 _lock = threading.Lock()
+
+# 207批·刀1：target_organ 标注制填充率观测（仅 ENABLE_TARGET_ORGAN_FIELD 时计数，生死闸）
+_TO_FILL_RATE_EVERY = 500   # 每 N 次 emit 打一行填充率 INFO
+_TO_EMIT_TOTAL = 0
+_TO_EMIT_FILLED = 0
+
+# 207批·刀3：成对流落盘（STDP 换源）观测态全局
+_EVENT_SEQ = 0                 # 事件单调递增序号（落盘去重用）
+_LAST_PAIR_SEQ = -1            # 已落盘的最后一笔事件序号（哨兵，首笔 seq=0 亦落盘）
+_LAST_PAIR_FLUSH_TS = 0.0      # 上次成对流强制 flush 时间戳（10min 双保险）
+_PAIR_FILE_CAP = 20000         # pulse_pairs.jsonl 行数上限（扩到 2 万量级）
+_PAIR_FLUSH_EVERY_SEC = 600.0  # 10 分钟强制 flush 双保险
+_pair_path = None
 _output_path = None
 _orphan_path = None
 _last_flush_time = 0.0
@@ -103,6 +118,77 @@ def _min_age_sec():
     """孤儿判定窗（秒）← PULSE_TRACER_MIN_AGE_SEC，回退 _DEFAULT_MIN_AGE_SEC。"""
     return _cfg_nonneg_float("PULSE_TRACER_MIN_AGE_SEC", _DEFAULT_MIN_AGE_SEC)
 
+def _target_organ_field_enabled():
+    """读 config 布尔开关 ENABLE_TARGET_ORGAN_FIELD（207批·刀1）；缺省 False。"""
+    import config
+    return bool(getattr(config, "ENABLE_TARGET_ORGAN_FIELD", False))
+
+
+def _pulse_pair_dump_enabled():
+    """读 config 布尔开关 ENABLE_PULSE_PAIR_DUMP（207批·刀3）；缺省 False。"""
+    import config
+    return bool(getattr(config, "ENABLE_PULSE_PAIR_DUMP", False))
+
+
+def _get_pair_path():
+    global _pair_path
+    if _pair_path is None:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _pair_path = os.path.join(base, "data", "monitor", "pulse_pairs.jsonl")
+    return _pair_path
+
+
+def _dump_pairs():
+    """207批·刀3：将环内未落盘的 emit/receive 事件追加至 pulse_pairs.jsonl。
+
+    按事件序号增量落盘（避免重复）；行含 pulse_id/type/organ/event_type/ts。
+    超过 _PAIR_FILE_CAP 行时回写为最近 _PAIR_FILE_CAP 行（观测采样，非全量）。
+    仅 ENABLE_PULSE_PAIR_DUMP=True 时由 flush_to_file 调用（默认关，零 IO）。
+    """
+    global _LAST_PAIR_SEQ
+    with _lock:
+        _pending = [e for e in _events if e.get("seq", 0) > _LAST_PAIR_SEQ]
+        if not _pending:
+            return
+        _rows = []
+        for e in _pending:
+            _LAST_PAIR_SEQ = max(_LAST_PAIR_SEQ, e.get("seq", 0))
+            _rows.append({
+                "pulse_id": e.get("pulse_id", ""),
+                "type": e.get("type", ""),
+                "organ": e.get("organ", ""),
+                "event_type": e.get("event_type", ""),
+                "ts": e.get("timestamp", 0.0),
+            })
+    try:
+        _path = _get_pair_path()
+        os.makedirs(os.path.dirname(_path), exist_ok=True)
+        with open(_path, "a", encoding="utf-8") as _pf:
+            for _r in _rows:
+                _pf.write(json.dumps(_r, ensure_ascii=False))
+                _pf.write("\n")
+        # 超容回写（仅在序号跨过整倍数时偶发执行，控制频率）
+        if _LAST_PAIR_SEQ % _PAIR_FILE_CAP == 0:
+            _trim_pair_file(_path)
+    except Exception as e:
+        print(f"[WARNING] pulse_tracer._dump_pairs: {type(e).__name__}: {e}")
+
+
+def _trim_pair_file(path):
+    """pulse_pairs.jsonl 超容时回写为最近 _PAIR_FILE_CAP 行（观测采样）。"""
+    try:
+        with open(path, "r", encoding="utf-8") as _f:
+            _lines = _f.readlines()
+        if len(_lines) <= _PAIR_FILE_CAP:
+            return
+        _keep = _lines[-_PAIR_FILE_CAP:]
+        _tmp = path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            _f.writelines(_keep)
+        os.replace(_tmp, path)
+    except Exception as e:
+        print(f"[WARNING] pulse_tracer._trim_pair_file: {type(e).__name__}: {e}")
+
 
 def _default_bus_sub_provider(event_type):
     """默认订阅方提供器：惰性查询 EventBus 订阅表（旁路遥测面）。
@@ -151,8 +237,9 @@ def _get_orphan_path():
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
 
-def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None):
-    """记录脉冲发射事件"""
+def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ=""):
+    """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
+    global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
     event = {
         "timestamp": time.time(),
         "type": "emit",
@@ -161,29 +248,67 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None):
         "layer": layer,
         "pulse_id": pulse_id,
         "amplitude": amplitude,
+        "target_organ": target_organ,
         "matched_organs": []
     }
     with _lock:
+        event["seq"] = _EVENT_SEQ
+        _EVENT_SEQ += 1
         _events.append(event)
         if len(_events) > _ring_size():
             _events.pop(0)
+        # 207批·刀1：仅当字段启用时统计填充率（否则恒空无意义，生死闸）
+        if _target_organ_field_enabled():
+            _TO_EMIT_TOTAL += 1
+            if target_organ:
+                _TO_EMIT_FILLED += 1
+            if _TO_EMIT_TOTAL % _TO_FILL_RATE_EVERY == 0:
+                _ratio = (_TO_EMIT_FILLED / _TO_EMIT_TOTAL) * 100.0
+                print("[INFO] pulse_tracer.target_organ 填充率: 窗口=%d 非空=%d 占比=%.1f%%"
+                      % (_TO_EMIT_TOTAL, _TO_EMIT_FILLED, _ratio), file=sys.stderr)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
-def log_receive(organ_name, event_type, source_organ):
-    """记录脉冲接收事件"""
+def log_receive(organ_name, event_type, source_organ, pulse_id=""):
+    """记录脉冲接收事件（207批·刀3：补 pulse_id 直连，配对从启发式变精确）。
+
+    - pulse_id 非空时按 pulse_id 精确回填对应 emit 的 matched_organs（替代事件类型
+      反扫启发式）；为空时维持原有事件类型启发式（向后兼容）。
+    - 接收记录直记 pulse_id，供 STDP 成对流落盘精确配对。
+    """
     with _lock:
-        for evt in reversed(_events):
-            if evt.get("type") == "emit" and evt.get("event_type") == event_type:
-                if organ_name not in evt["matched_organs"]:
-                    evt["matched_organs"].append(organ_name)
-                break
-        _events.append({
+        global _EVENT_SEQ
+        # 207批·刀3：优先按 pulse_id 精确匹配 emit；失败回退事件类型启发式
+        if pulse_id:
+            _hit = False
+            for evt in reversed(_events):
+                if evt.get("type") == "emit" and evt.get("pulse_id") == pulse_id:
+                    if organ_name not in evt["matched_organs"]:
+                        evt["matched_organs"].append(organ_name)
+                    _hit = True
+                    break
+            if not _hit:
+                for evt in reversed(_events):
+                    if evt.get("type") == "emit" and evt.get("event_type") == event_type:
+                        if organ_name not in evt["matched_organs"]:
+                            evt["matched_organs"].append(organ_name)
+                        break
+        else:
+            for evt in reversed(_events):
+                if evt.get("type") == "emit" and evt.get("event_type") == event_type:
+                    if organ_name not in evt["matched_organs"]:
+                        evt["matched_organs"].append(organ_name)
+                    break
+        _evt = {
             "timestamp": time.time(),
             "type": "receive",
             "organ": organ_name,
             "event_type": event_type,
             "from": source_organ,
-        })
+            "pulse_id": pulse_id,
+        }
+        _evt["seq"] = _EVENT_SEQ
+        _EVENT_SEQ += 1
+        _events.append(_evt)
         if len(_events) > _ring_size():
             _events.pop(0)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
@@ -316,6 +441,13 @@ def flush_to_file(force: bool = False):
     """
     # ★第117批 T-117a（方案A）：原「本处判、函数尾更」的头判尾更已改为原子占闸，
     #   详见 _claim_flush_gate 的注释。force=True（atexit 终刷）绕过 2s 闸。
+    # 207批·刀3：成对流落盘双保险（10min 强制 flush，绕过 2s 闸）
+    if _pulse_pair_dump_enabled():
+        global _LAST_PAIR_FLUSH_TS
+        _now = time.time()
+        if _now - _LAST_PAIR_FLUSH_TS >= _PAIR_FLUSH_EVERY_SEC:
+            _dump_pairs()
+            _LAST_PAIR_FLUSH_TS = _now
     if not force and not _claim_flush_gate():
         return
     
@@ -323,6 +455,9 @@ def flush_to_file(force: bool = False):
         path = _get_output_path()
         orphan_path = _get_orphan_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        # 207批·刀3：成对流随 2s 闸落盘（增量、去重、超容回写）
+        if _pulse_pair_dump_enabled():
+            _dump_pairs()
         
         with _lock:
             events_snapshot = list(_events)
