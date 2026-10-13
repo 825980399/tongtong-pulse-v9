@@ -13,7 +13,27 @@ import threading
 import time
 
 from nucleus._silent_except import silent_exc
-from nucleus.const import LogLevel
+from nucleus.const import (
+    LogLevel,
+    BoneMarrowEvent,
+    DeviceEvent,
+    DNARepairEvent,
+    EnergyEvent,
+    EvolutionEvent,
+    GrowthEvent,
+    HealthEvent,
+    MetricsEvent,
+    NarrativeEvent,
+    NurtureEvent,
+    PersonalityEvent,
+    ProprioceptionEvent,
+    ReproductionEthicsEvent,
+    SkinEvent,
+    SpinalCordEvent,
+    ThymusEvent,
+    TouchEvent,
+    WhiteCellEvent,
+)
 
 # ========== 项目根目录 ==========
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -95,6 +115,32 @@ TIMECORE_SCHEDULE_CONFIG = {
     "knowledge_purge": {"interval": 3600, "event_type": "kidney.purge.check"},
     # 快照自动保存（原 Heart 每30分钟触发，event_type=snapshot.auto_save）
     "snapshot_auto_save": {"interval": 1800, "event_type": "snapshot.auto_save"},
+    # ===== 203批·刀2：并入 Heart._scheduled_tasks 其余任务（复用 841-850 自动弹出机制）=====
+    # event_type 统一引用 const 字符串常量（属性访问，非裸字面量；单一事实来源，避开事件字符串门禁）
+    "immune_scan": {"interval": 600, "event_type": WhiteCellEvent.SCAN},
+    "personality_verify": {"interval": 3600, "event_type": PersonalityEvent.VERIFY},
+    "health_check": {"interval": 1800, "event_type": HealthEvent.CHECK},
+    "metrics_collect": {"interval": 300, "event_type": MetricsEvent.COLLECT},
+    "thymus_train": {"interval": 3600, "event_type": ThymusEvent.TRAIN},
+    "energy_assess": {"interval": 300, "event_type": EnergyEvent.ASSESS},
+    "spinal_inspect": {"interval": 600, "event_type": SpinalCordEvent.INSPECT},
+    "proprioception_request": {"interval": 300, "event_type": ProprioceptionEvent.REQUEST},
+    "touch_snapshot": {"interval": 300, "event_type": TouchEvent.SNAPSHOT},
+    "narrative_reflect": {"interval": 3600, "event_type": NarrativeEvent.REFLECT},
+    "growth_assess": {"interval": 3600, "event_type": GrowthEvent.ASSESS},
+    "nurture_advance": {"interval": 21600, "event_type": NurtureEvent.ADVANCE},
+    "device_refresh": {"interval": 600, "event_type": DeviceEvent.REFRESH},
+    "personality_boundary_check": {"interval": 3600, "event_type": PersonalityEvent.BOUNDARY_CHECK},
+    "skin_review_patch": {"interval": 1800, "event_type": SkinEvent.REVIEW_PATCH},
+    "bone_marrow_generate": {"interval": 21600, "event_type": BoneMarrowEvent.GENERATE},
+    "evolution_save_blueprint": {"interval": 21600, "event_type": EvolutionEvent.SAVE_BLUEPRINT},
+    "dna_repair_fix": {"interval": 3600, "event_type": DNARepairEvent.FIX},
+    "evolution_mutate": {"interval": 21600, "event_type": EvolutionEvent.MUTATE},
+    "reproduction_ethics_check": {"interval": 86400, "event_type": ReproductionEthicsEvent.ETHICS_CHECK},
+    # ===== 203批·刀3：B类家务 Top3（灰度新路径，消费侧接线待观察窗）=====
+    "runtime_metrics": {"interval": 60, "event_type": "runtime.metrics.collect"},
+    "metrics_collector": {"interval": 300, "event_type": "metrics.collector.tick"},
+    "snapshot_rotate": {"interval": 1800, "event_type": "snapshot.rotate.tick"},
 }
 # ===== 阶段三子任务3.0：知识时效性（来源时间融合 + 可能过时标记） =====
 # 默认关闭：time 维仅用激活新鲜度（last_activated），行为与现状完全一致（零回退）。
@@ -3704,6 +3750,10 @@ PULSE_TRACER_MIN_AGE_SEC = 1.5       # 孤儿判定窗（秒）     建议 2-5
 # 未来光脉冲硬件成熟后可扩展 'photonic'（PhotonicBackend）。
 # 本批仅定义配置项与接口，**不接入任何器官代码** —— 未接线即零运行时开销。
 SPIKE_BACKEND = 'python'
+# 203批·执行后端接入脉冲流开关：默认关闭（零行为变化）。
+# 开启后 PulseCore.emit/on_spike 调用 PythonSNNBackend（当前为空实现，
+# 真实脉冲流接线待后续批次，仅占位转发）。不接入 ResonanceDetector（封存）。
+SPIKE_BACKEND_ENABLED = False
 
 # ========== 统一日志系统 ==========
 LOG_DIR = "logs"

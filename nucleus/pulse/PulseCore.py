@@ -180,8 +180,40 @@ class PulseCore:
             "ttl_ns": ttl_ns,
             "status": "created",
         }
+        # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
+        # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。
+        self._spike_backend_emit(pulse)
         return pulse
     
+    # ========== 执行后端接入（203批） ==========
+
+    def _get_spike_backend(self):
+        """惰性取脉冲执行后端；默认关闭返回 None（零运行时开销）。
+
+        接入点仅 PulseCore（守 202 批「未授权接入点」口径），不触碰器官代码。
+        """
+        import config
+        if not getattr(config, "SPIKE_BACKEND_ENABLED", False):
+            return None
+        from nucleus.synapsys.SpikeExecutionBackend import get_spike_backend
+        return get_spike_backend()
+
+    def _spike_backend_emit(self, pulse) -> None:
+        """发射侧接入：将脉冲交给执行后端（默认关闭即零行为）。"""
+        backend = self._get_spike_backend()
+        if backend is not None:
+            backend.emit(pulse)
+
+    def on_spike(self, spike) -> None:
+        """收到一个脉冲（203批·接入执行后端，仅转发，不改分发逻辑）。
+
+        任务书称 PulseCore 有 on_spike 方法，实测为前置分析误记（PulseCore 无此方法）；
+        此处按意图补一个纯转发薄方法，受同一开关门控。
+        """
+        backend = self._get_spike_backend()
+        if backend is not None:
+            backend.on_spike(spike)
+
     def _infer_layer(self, event_type: str) -> str:
         """
         根据事件类型推断默认层级（v9.5 新增）。

@@ -93,15 +93,24 @@ def test_not_wired_into_organs():
 
     root = pathlib.Path(config.__file__).parent
     pat = re.compile(r"SpikeExecutionBackend|get_spike_backend")
+    # 203批·刀1：唯一授权接入点（PulseCore.emit/on_spike 调用后端，受 SPIKE_BACKEND_ENABLED 门控）
+    SANCTIONED = {"nucleus/pulse/PulseCore.py"}
     hits = []
     for base in ("organs", "nucleus", "functions"):
         for p in (root / base).rglob("*.py"):
             if p.name == "SpikeExecutionBackend.py":
+                continue
+            rel = str(p.relative_to(root)).replace("\\", "/")
+            if rel in SANCTIONED:
                 continue
             try:
                 txt = p.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
             if pat.search(txt):
-                hits.append(str(p.relative_to(root)).replace("\\", "/"))
-    assert hits == [], "发现未授权的后端接入点（本批应仅预埋不接线）: %s" % hits
+                hits.append(rel)
+    assert hits == [], "发现未授权的后端接入点（203批仅 PulseCore.py 授权）: %s" % hits
+    # 正断言：授权接入点确实存在且含接入调用
+    core = root / "nucleus/pulse/PulseCore.py"
+    assert core.is_file() and pat.search(core.read_text(encoding="utf-8", errors="ignore")), \
+        "PulseCore.py 应含后端接入点（接入失败）"
