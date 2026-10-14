@@ -1,4 +1,4 @@
-"""config —— v9.5 PulseNet 全局配置（自进化基座版）
+﻿"""config —— v9.5 PulseNet 全局配置（自进化基座版）
 
 版本: v10 PulseNet
 设计: 路灯、小林、星轨
@@ -3778,7 +3778,7 @@ SPIKE_BACKEND_ENABLED = False
 ENABLE_SPIKE_BACKEND_STATS = False
 
 # 204批·刀3·D#2解封：共振权重映射接入实际脉冲流开关（默认关闭，观测不门控）
-RESONANCE_WEIGHT_MAP_ENABLED = False
+RESONANCE_WEIGHT_MAP_ENABLED = True
 
 # 207批·刀1：target_organ 标注制字段开关（212批·刀2 开闸：默认开启，观测不门控）。
 # 关闭时 emit 注入空串、tracer 不统计填充率，零行为变化；开启后 producer 可声明
