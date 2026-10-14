@@ -266,7 +266,7 @@ class PulseCore:
             self._resonance_update_count = getattr(self, "_resonance_update_count", 0) + 1
             if self._resonance_update_count % _RESONANCE_DISTRIBUTE_EVERY == 0:
                 _dist = detector.get_mapping_distribution()
-                logger.info("[INFO] PulseCore.resonance 映射分布: 累计=%d 突触=%d real=%d simplified=%d",
+                logger.info("PulseCore.resonance 映射分布: 累计=%d 突触=%d real=%d simplified=%d",
                             self._resonance_update_count, _dist["synapses"],
                             _dist["real"], _dist["simplified"])
 
@@ -465,4 +465,5 @@ if __name__ == "__main__":
     
     print(f"\n8. 总览: 发射{stats['total_emitted']} 完成{stats['total_completed']} 超时{stats['total_timeout']} 重复{stats['total_duplicated']}")
     print("=== 自测全部通过 ===")
+
 

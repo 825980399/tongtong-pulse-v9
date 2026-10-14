@@ -166,6 +166,9 @@ def _dump_pairs():
                 "organ": e.get("organ", ""),
                 "event_type": e.get("event_type", ""),
                 "ts": e.get("timestamp", 0.0),
+                "seq": e.get("seq", 0),
+                "target_organ": e.get("target_organ", ""),
+                "amplitude": e.get("amplitude", None),
             })
     try:
         _path = _get_pair_path()
@@ -175,7 +178,7 @@ def _dump_pairs():
                 _pf.write(json.dumps(_r, ensure_ascii=False))
                 _pf.write("\n")
         # 超容回写（仅在序号跨过整倍数时偶发执行，控制频率）
-        if _LAST_PAIR_SEQ % _PAIR_FILE_CAP == 0:
+        if _LAST_PAIR_SEQ > _PAIR_FILE_CAP:
             _trim_pair_file(_path)
     except Exception as e:
         print(f"[WARNING] pulse_tracer._dump_pairs: {type(e).__name__}: {e}")
@@ -271,7 +274,7 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
                 _TO_EMIT_FILLED += 1
             if _TO_EMIT_TOTAL % _TO_FILL_RATE_EVERY == 0:
                 _ratio = (_TO_EMIT_FILLED / _TO_EMIT_TOTAL) * 100.0
-                logger.info("[INFO] pulse_tracer.target_organ 填充率: 窗口=%d 非空=%d 占比=%.1f%%",
+                logger.info("pulse_tracer.target_organ 填充率: 窗口=%d 非空=%d 占比=%.1f%%",
                             _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _ratio)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
@@ -515,5 +518,6 @@ def flush_to_file(force: bool = False):
         #   占位统一在 _claim_flush_gate 内「判完即占」完成。
     except Exception as e:
         print(f"[WARNING] pulse_tracer.py:152: {type(e).__name__}: {e}")
+
 
 

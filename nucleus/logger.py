@@ -626,6 +626,8 @@ _OUTSIDE_BRIDGE_INSTALLED = False
 _OUTSIDE_BRIDGE_LOCK = threading.Lock()
 
 
+_ASSEMBLY_COUNT = 0  # 215批·刀3：树外logger装配(已点亮)累计计数（每进程启动累加）
+
 def install_tree_outside_logger_bridges() -> None:
     """★206批 刀1：一次性点亮 16 个树外生产 logger 的文件通道。
 
@@ -664,6 +666,11 @@ def install_tree_outside_logger_bridges() -> None:
             logging.getLogger("pulse.framework").info(
                 "[树外logger根治] 已点亮 %d/%d 个树外生产 logger 文件通道"
                 % (_attached, len(_TREE_OUTSIDE_LOGGER_NAMES)))
+            global _ASSEMBLY_COUNT
+            _ASSEMBLY_COUNT += _attached
+            logging.getLogger("pulse.framework").info(
+                "[装配计数] 本窗已点亮=%d 累计装配=%d 树外通道总数=%d"
+                % (_attached, _ASSEMBLY_COUNT, len(_TREE_OUTSIDE_LOGGER_NAMES)))
     except Exception as e:
         silent_exc(e, where="nucleus.logger::install_tree_outside_logger_bridges")
 
@@ -956,3 +963,4 @@ def exc_location(depth: int = 1) -> str:
         return "<unknown>:0"
 # _m49_t3_3_class_done
 # _m49_t3_3_use_done
+
