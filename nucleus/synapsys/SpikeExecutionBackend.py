@@ -53,20 +53,38 @@ class SpikeExecutionBackend(ABC):
 class PythonSNNBackend(SpikeExecutionBackend):
     """当前实现：纯 Python SNN 仿真后端。
 
-    本批为接口占位实现（方法体为空）—— 不接入实际脉冲流，
-    实际接线待 P1 批完成。
+    212批·刀4：补读数出口——emit/on_spike/update_weight 各计一次，
+    get_backend_stats() 返回三类计数（即使后端未启用也能返回计数，满足「不可验的闸不许开」前置）。
+    计数开销极低（整数自增），不参与任何路由/门控。
     """
 
     name = BACKEND_PYTHON
 
+    def __init__(self) -> None:
+        self._emit_count = 0
+        self._on_spike_count = 0
+        self._update_weight_count = 0
+
     def emit(self, spike) -> None:
-        """发射一个脉冲（TODO(P1批): 接入实际脉冲流，本批为空实现）。"""
+        """发射一个脉冲（TODO(P1批): 接入实际脉冲流）；212批·刀4 计次。"""
+        self._emit_count += 1
 
     def on_spike(self, spike) -> None:
-        """收到一个脉冲（TODO(P1批): 接入实际脉冲流，本批为空实现）。"""
+        """收到一个脉冲（TODO(P1批): 接入实际脉冲流）；212批·刀4 计次。"""
+        self._on_spike_count += 1
 
     def update_weight(self, pre, post, delta: float) -> None:
-        """更新权重（TODO(P1批): 接入实际权重更新，本批为空实现）。"""
+        """更新权重（TODO(P1批): 接入实际权重更新）；212批·刀4 计次。"""
+        self._update_weight_count += 1
+
+    def get_backend_stats(self) -> dict:
+        """212批·刀4：读数出口——返回 emit/on_spike/update_weight 计数快照。"""
+        return {
+            "backend": self.name,
+            "emit": self._emit_count,
+            "on_spike": self._on_spike_count,
+            "update_weight": self._update_weight_count,
+        }
 
 
 def get_spike_backend(backend_name=None):

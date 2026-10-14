@@ -12,6 +12,7 @@ import os
 import sys
 import threading
 import time
+from datetime import datetime
 
 from nucleus._silent_except import silent_exc
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
@@ -131,16 +132,20 @@ def _pulse_pair_dump_enabled():
 
 
 def _get_pair_path():
-    global _pair_path
-    if _pair_path is None:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        _pair_path = os.path.join(base, "data", "monitor", "pulse_pairs.jsonl")
-    return _pair_path
+    """207批·刀3 原单文件 pulse_pairs.jsonl；212批·刀1 改为按日分文件轮转。
+
+    返回 data/monitor/pulse_pairs_YYYYMMDD.jsonl（每日首次 flush 创建新文件，同日追加）。
+    不缓存路径：跨日（跨午夜）调用须重算日期，故每次实时拼装当日文件名。
+    """
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    day = datetime.now().strftime("%Y%m%d")
+    return os.path.join(base, "data", "monitor", "pulse_pairs_%s.jsonl" % day)
 
 
 def _dump_pairs():
-    """207批·刀3：将环内未落盘的 emit/receive 事件追加至 pulse_pairs.jsonl。
+    """207批·刀3：将环内未落盘的 emit/receive 事件追加至当日 pulse_pairs_YYYYMMDD.jsonl。
 
+    212批·刀1：路径改为按日分文件（见 _get_pair_path），每日首次 flush 创建新文件、同日追加。
     按事件序号增量落盘（避免重复）；行含 pulse_id/type/organ/event_type/ts。
     超过 _PAIR_FILE_CAP 行时回写为最近 _PAIR_FILE_CAP 行（观测采样，非全量）。
     仅 ENABLE_PULSE_PAIR_DUMP=True 时由 flush_to_file 调用（默认关，零 IO）。
@@ -175,7 +180,7 @@ def _dump_pairs():
 
 
 def _trim_pair_file(path):
-    """pulse_pairs.jsonl 超容时回写为最近 _PAIR_FILE_CAP 行（观测采样）。"""
+    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 _PAIR_FILE_CAP 行（观测采样）。"""
     try:
         with open(path, "r", encoding="utf-8") as _f:
             _lines = _f.readlines()

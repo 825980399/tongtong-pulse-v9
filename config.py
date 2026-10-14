@@ -3772,13 +3772,19 @@ SPIKE_BACKEND = 'python'
 # 真实脉冲流接线待后续批次，仅占位转发）。不接入 ResonanceDetector（封存）。
 SPIKE_BACKEND_ENABLED = False
 
+# 212批·刀4：SPIKE 后端读数出口开关（默认关闭，开闸前默认关）。
+# 后端 PythonSNNBackend 新增 get_backend_stats() 计数出口（emit/on_spike/update_weight）；
+# 此键仅作「开闸前默认关」占位，避免后端未启用时产出读数噪声；开 SPIKE 闸后再置 True。
+ENABLE_SPIKE_BACKEND_STATS = False
+
 # 204批·刀3·D#2解封：共振权重映射接入实际脉冲流开关（默认关闭，观测不门控）
 RESONANCE_WEIGHT_MAP_ENABLED = False
 
-# 207批·刀1：target_organ 标注制字段开关（默认关闭，观测不门控）。
+# 207批·刀1：target_organ 标注制字段开关（212批·刀2 开闸：默认开启，观测不门控）。
 # 关闭时 emit 注入空串、tracer 不统计填充率，零行为变化；开启后 producer 可声明
 # 目标器官（语义标注，非路由键，禁数组形态），用于后续路由/配对观测。
-ENABLE_TARGET_ORGAN_FIELD = False
+# 212批·刀2：开启后每 500 次 emit 由 pulse_tracer 打一行「填充率 INFO」（填充率=0 判「闸开、无人声明」，不判缺陷不回退）。
+ENABLE_TARGET_ORGAN_FIELD = True
 
 # 207批·刀2：B5 真实语义映射模式（案C回退式）。
 # 'case_c' = post = target_organ if 非空 else event_type（时间轴自然插值，无迁移刀）。

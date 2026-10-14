@@ -28,6 +28,7 @@ import json
 import math
 import os
 import threading
+import time
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Deque
@@ -40,6 +41,7 @@ DEFAULT_THETA = 5.0          # 阈值（仅观测记录，不门控）
 DEFAULT_W_IN = 1.0           # 每个入脉冲注入权重
 DEFAULT_MAXLEN = 10000       # 内存样本上限
 DEFAULT_FLUSH_EVERY = 200    # 每 N 样本落盘一次（避免逐脉冲 IO）
+DEFAULT_FLUSH_INTERVAL = 300.0  # 212批·刀3：时间兜底 flush 间隔（秒），即使样本未达 flush_every 也强制落盘，防低频器官饿死
 DEFAULT_OUT_DIR = "data/experiments"
 
 
@@ -70,17 +72,20 @@ class LIFShadow:
     def __init__(self, tau: float = DEFAULT_TAU, theta: float = DEFAULT_THETA,
                  w_in: float = DEFAULT_W_IN, maxlen: int = DEFAULT_MAXLEN,
                  flush_every: int = DEFAULT_FLUSH_EVERY,
+                 flush_interval: float = DEFAULT_FLUSH_INTERVAL,
                  out_dir: str = DEFAULT_OUT_DIR) -> None:
         self.tau = tau
         self.theta = theta
         self.w_in = w_in
         self.maxlen = maxlen
         self.flush_every = flush_every
+        self.flush_interval = flush_interval
         self.out_dir = out_dir
         self._v: float | None = None
         self._last_ts: float | None = None
         self._count = 0
         self._samples: Deque[dict[str, Any]] = deque(maxlen=maxlen)
+        self._last_flush_ts: float | None = None  # 212批·刀3：时间兜底计时锚点
         self._lock = threading.Lock()
 
     def observe(self, now_ts: float, organ_name: str, event_type: str) -> float:
@@ -100,12 +105,21 @@ class LIFShadow:
             "theta": self.theta,
             "crossed": crossed,
         })
+        if self._last_flush_ts is None:
+            self._last_flush_ts = now_ts
         if self.flush_every and self._count % self.flush_every == 0:
             self.flush()
+        # 212批·刀3：时间兜底 flush（即使样本数未达 flush_every，防低频器官饿死）
+        elif self.flush_interval and self._samples:
+            if now_ts - self._last_flush_ts >= self.flush_interval:
+                self.flush()
         return self._v
 
     def flush(self) -> int:
-        """将内存样本落盘（行追加），返回落盘条数；IO 失败静默吸收。"""
+        """将内存样本落盘（行追加），返回落盘条数；IO 失败静默吸收。
+
+        212批·刀3：落盘成功后更新 _last_flush_ts，供 observe() 时间兜底计时。
+        """
         with self._lock:
             batch = list(self._samples)
             self._samples.clear()
@@ -124,6 +138,7 @@ class LIFShadow:
         except Exception as e:
             silent_exc(e)
             return 0
+        self._last_flush_ts = time.time()  # 212批·刀3：成功落盘后重置时间兜底锚点
         return len(batch)
 
     def snapshot(self) -> dict[str, Any]:
