@@ -475,44 +475,63 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """★第49批 T3-3：轮转失败不打印调用栈、不中断写入。"""
 
     def doRollover(self) -> None:
-        # ★主线第59批 T1（方案B）：先尝试标准库 rename 式轮转，
-        #   失败（Windows 文件锁 → WinError 32）后改用「复制+截断」兜底，
-        #   从根本上避免重命名被占用文件。
-        # ★D017 / 相关任务：轮转成功后写唯一标记，供 check_log_integrity 自感知（避免误判外部截断）。
         _base = self.baseFilename
         _dir = os.path.dirname(_base) or "."
-        _prev_fp = _fingerprint(_base)
-        _prev_size = _prev_fp.get("size") if isinstance(_prev_fp, dict) else None
+        _prev_size = None
+        try:
+            _prev_fp = _fingerprint(_base)
+            if isinstance(_prev_fp, dict):
+                _prev_size = _prev_fp.get("size")
+        except Exception:
+            _prev_size = None
         _retry = 3
         _wait = 0.2
         try:
             _retry = int(getattr(config, "LOG_ROLLOVER_RETRY", 3))
             _wait = float(getattr(config, "LOG_ROLLOVER_RETRY_WAIT", 0.2))
         except Exception as _rc:
+            _retry = 3
             _wait = 0.2
-            _log_rollover_cfg_error(_rc)
-        # 阶段一：rename 式重试（文件可能瞬间被释放）
-        for _attempt in range(max(1, _retry)):
+            try:
+                _log_rollover_cfg_error(_rc)
+            except Exception:
+                pass
+        if _retry < 1:
+            _retry = 1
+        if _wait < 0.0:
+            _wait = 0.0
+        for _attempt in range(_retry):
             try:
                 super().doRollover()
-                _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
+                try:
+                    _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
+                except Exception:
+                    pass
                 return
             except PermissionError as _pe:
-                if _attempt < max(1, _retry) - 1:
-                    # ★主线第74批 T4：指数退避（0.2/0.4/0.8…上限2s），避免高频重试刷屏
-                    time.sleep(min(_wait * (2 ** _attempt), 2.0))
+                if _attempt < _retry - 1:
+                    try:
+                        time.sleep(min(_wait * (2 ** _attempt), 2.0))
+                    except Exception:
+                        pass
                     continue
                 break
             except OSError as _oe:
                 break
-        # 阶段二：方案B（复制+截断）——不重命名打开的文件，规避 Windows 锁
+            except Exception as _ue:
+                break
         try:
             self._copy_truncate_rollover()
-            _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
+            try:
+                _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
+            except Exception:
+                pass
             return
         except Exception as _ce:
-            # 彻底降级：记一条冷却 WARNING 后继续写当前文件（不中断运行）
-            _warn_rollover_blocked_cooled(_ce)
+            try:
+                _warn_rollover_blocked_cooled(_ce)
+            except Exception:
+                pass
             return
 
     def _copy_truncate_rollover(self) -> None:
