@@ -13,7 +13,9 @@ PulseCore.py —— 脉冲核心
 
 import threading
 import time
-import sys
+import logging
+
+logger = logging.getLogger("pulse.resonance")
 
 # 204批·刀3：共振权重映射默认增量（发射频次语义；pulse 无 amplitude，固定步长）
 _RESONANCE_DEFAULT_DELTA = 1.0
@@ -264,9 +266,9 @@ class PulseCore:
             self._resonance_update_count = getattr(self, "_resonance_update_count", 0) + 1
             if self._resonance_update_count % _RESONANCE_DISTRIBUTE_EVERY == 0:
                 _dist = detector.get_mapping_distribution()
-                print("[INFO] PulseCore.resonance 映射分布: 累计=%d 突触=%d real=%d simplified=%d"
-                      % (self._resonance_update_count, _dist["synapses"],
-                         _dist["real"], _dist["simplified"]), file=sys.stderr)
+                logger.info("[INFO] PulseCore.resonance 映射分布: 累计=%d 突触=%d real=%d simplified=%d",
+                            self._resonance_update_count, _dist["synapses"],
+                            _dist["real"], _dist["simplified"])
 
     def _infer_layer(self, event_type: str) -> str:
         """
@@ -463,3 +465,4 @@ if __name__ == "__main__":
     
     print(f"\n8. 总览: 发射{stats['total_emitted']} 完成{stats['total_completed']} 超时{stats['total_timeout']} 重复{stats['total_duplicated']}")
     print("=== 自测全部通过 ===")
+

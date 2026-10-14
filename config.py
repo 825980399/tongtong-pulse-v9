@@ -3791,7 +3791,7 @@ ENABLE_TARGET_ORGAN_FIELD = True
 RESONANCE_MAPPING_MODE = 'case_c'
 
 # 207批·刀3：脉冲成对流落盘开关（默认关闭，观测不门控）。
-ENABLE_PULSE_PAIR_DUMP = False
+ENABLE_PULSE_PAIR_DUMP = True
 
 # ========== 统一日志系统 ==========
 LOG_DIR = "logs"
@@ -4637,7 +4637,7 @@ SEMANTIC_CACHE_MAX_TEXT = 4000           # 单条 prompt/response 截断长度
 # ==================== 第205批 刀2：LIF 影子观测（类脑改造 P2 · 默认关闭） ====================
 # 漏积分发放（LIF）膜电位影子观测：纯观测、不门控、不参与路由/熔断。
 # 首批 6 件承载器官（SA 四件 30/60/100/150 + CL 两件 50/200）按运行时 organ_name 灰度启用。
-ENABLE_LIF_SHADOW = False         # 总开关（默认关：观测不门控，开启需显式灰度）
+ENABLE_LIF_SHADOW = True         # 总开关（默认关：观测不门控，开启需显式灰度）
 LIF_TAU = 60.0                    # s，膜电位时间常数 τ
 LIF_THETA = 5.0                    # 阈值 θ（仅观测记录 crossed，不门控）
 LIF_W_IN = 1.0                     # 每个入脉冲注入权重 w_in
@@ -5903,4 +5903,5 @@ ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
 # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
 #             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
 ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
+
 

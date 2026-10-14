@@ -9,7 +9,9 @@
 import atexit
 import json
 import os
-import sys
+import logging
+
+logger = logging.getLogger("pulse.tracer")
 import threading
 import time
 from datetime import datetime
@@ -269,8 +271,8 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
                 _TO_EMIT_FILLED += 1
             if _TO_EMIT_TOTAL % _TO_FILL_RATE_EVERY == 0:
                 _ratio = (_TO_EMIT_FILLED / _TO_EMIT_TOTAL) * 100.0
-                print("[INFO] pulse_tracer.target_organ 填充率: 窗口=%d 非空=%d 占比=%.1f%%"
-                      % (_TO_EMIT_TOTAL, _TO_EMIT_FILLED, _ratio), file=sys.stderr)
+                logger.info("[INFO] pulse_tracer.target_organ 填充率: 窗口=%d 非空=%d 占比=%.1f%%",
+                            _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _ratio)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
 
 def log_receive(organ_name, event_type, source_organ, pulse_id=""):
@@ -513,3 +515,5 @@ def flush_to_file(force: bool = False):
         #   占位统一在 _claim_flush_gate 内「判完即占」完成。
     except Exception as e:
         print(f"[WARNING] pulse_tracer.py:152: {type(e).__name__}: {e}")
+
+
