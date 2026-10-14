@@ -261,6 +261,7 @@ class PulseInitiative(BasePulseOrgan):
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=ChatEvent.INITIATIVE,
+                target_organ="PulseMouth",
                 payload={
                     "user_name": user_name,
                     "greeting": topic,

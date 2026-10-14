@@ -243,6 +243,7 @@ class PulseProprioception(BasePulseOrgan):
                 report_pulse = self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type=ProprioceptionEvent.REPORT,
+                    target_organ="PulseCortex",
                     payload=report,
                     priority=3,
                     layer="L3"

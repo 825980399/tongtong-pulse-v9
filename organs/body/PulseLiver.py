@@ -3053,6 +3053,7 @@ class PulseLiver(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type="narrative.record",
+                    target_organ="PulseNarrativeSelf",
                     payload={
                         "content": evolution_narrative,
                         "event_type": "knowledge_evolution",
@@ -3576,6 +3577,7 @@ class PulseLiver(BasePulseOrgan):
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type="instinct.upgraded",
+                        target_organ="PulseMetricsCollector",
                         payload={
                             "node_id": node.node_id,
                             "value_preview": str(node.value)[:100],

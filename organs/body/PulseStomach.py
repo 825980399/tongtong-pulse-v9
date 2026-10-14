@@ -1313,6 +1313,7 @@ class PulseStomach(BasePulseOrgan):
                 review_pulse = self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type=EthicsEvent.REVIEW,
+                    target_organ="PulseEthics",
                     payload={
                         "content": content[:500],
                         "user_name": "系统",

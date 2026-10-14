@@ -745,6 +745,7 @@ class PulseLegs(BasePulseOrgan):
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type=ControllerEvent.OPEN_URL,
+                        target_organ="PulseController",
                         payload={
                             "url": f"https://lite.duckduckgo.com/lite/?q={search_query}",
                             "reason": f"主动学习搜索: {search_query}",

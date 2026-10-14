@@ -430,6 +430,7 @@ class PulseCodeSandbox(BasePulseOrgan):
             result_pulse = self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=CodeEvent.RESULT,
+                target_organ="PulseMouth",
                 payload=result,
                 priority=4,
                 layer="L1"

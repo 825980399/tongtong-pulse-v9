@@ -511,6 +511,7 @@ class PulseReflection(BasePulseOrgan):
                     self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type=ReflectionEvent.ISSUE_FOUND,
+                        target_organ="PulseCortex",
                         payload={
                             "issues": issues,
                             "insights": insights,

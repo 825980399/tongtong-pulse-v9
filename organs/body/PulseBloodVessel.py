@@ -278,6 +278,7 @@ class PulseBloodVessel(BasePulseOrgan):
                     escalation_pulse = self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type=VascularEvent.ORGAN_ESCALATION,
+                        target_organ="PulseSystemManager",
                         payload={
                             "organs": _need_action,
                             "action": "restart" if any(

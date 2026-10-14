@@ -417,6 +417,7 @@ class PulseFileDigester(BasePulseOrgan):
             media_pulse = self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=MediaEvent.METADATA,
+                target_organ="PulseCortex",
                 payload=metadata,
                 priority=3,
                 layer="L3"

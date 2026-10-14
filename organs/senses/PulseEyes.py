@@ -367,6 +367,7 @@ class PulseEyes(BasePulseOrgan):
                             self.info_field.publish(self.pulse_core.emit(
                                 source_organ=self.organ_name,
                                 event_type=EyeEvent.STREAM_FRAME,
+                                target_organ="PulseVisualCortex",
                                 payload={
                                     "raw_data": frame_data,
                                     "frame_seq": self._frame_seq,

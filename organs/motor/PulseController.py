@@ -1266,6 +1266,7 @@ class PulseController(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type="controller.search_completed",
+                    target_organ="PulseMetricsCollector",
                     payload={
                         "status": result["status"],
                         "search_topic": search_topic,
