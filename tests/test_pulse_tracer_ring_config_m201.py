@@ -31,9 +31,10 @@ def _emit(event_type="evt.ring", age=0.0, matched=None):
 
 # ---------------------------------------------------------------- 1 默认零回归
 def test_defaults_preserve_current_behavior():
-    # 默认值 = 改造前实测值（200 槽 / 100 条 / 1.5s）→ 默认零行为变化
-    assert pt._ring_size() == 200
-    assert pt._max_orphans() == 100
+    # ★210批：环容/孤儿上限 config 默认值已上调（1000 槽 / 200 条），测试跟随任务书口径
+    assert pt._ring_size() == 1000
+    assert pt._max_orphans() == 200
+    # 判定窗回退默认仍 1.5（210批未动）
     assert pt._min_age_sec() == 1.5
 
 
@@ -108,7 +109,7 @@ def test_explicit_min_age_overrides_config(monkeypatch):
 
 # ---------------------------------------------------------------- 7 三键声明
 def test_config_keys_declared_with_defaults():
-    # 任务书要求：新增 config.py 三键；默认取改造前实测值（零回归）
-    assert config.PULSE_TRACER_MAX_ORPHANS == 100
-    assert config.PULSE_TRACER_EVENT_RING_SIZE == 200
+    # ★210批：config 默认值已上调（孤儿上限 200 / 环容 1000），判定窗仍 1.5
+    assert config.PULSE_TRACER_MAX_ORPHANS == 200
+    assert config.PULSE_TRACER_EVENT_RING_SIZE == 1000
     assert config.PULSE_TRACER_MIN_AGE_SEC == 1.5

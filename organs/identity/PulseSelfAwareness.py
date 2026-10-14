@@ -1052,6 +1052,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
         # 双写对照期保留，确认新路径稳定后可移除。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_check_identity_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：CHECK_IDENTITY 身份校验")
             self._last_check_identity_run = now
             if self.node_pool:
                 try:
@@ -1075,6 +1076,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
         # 双写对照期保留，确认新路径稳定后可移除。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_150_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：TICK_150 关系复核")
             self._last_sa_tick_150_run = now
             self._do_relation_review()
         # ===== v22.0 M4新增（208批·刀2 迁移）结束 =====
@@ -1085,6 +1087,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
         # 双写对照期保留，确认新路径稳定后可移除。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_30_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：TICK_30 知识画像更新")
             self._last_sa_tick_30_run = now
             self._do_knowledge_profile_update()
         # ===== v24.0修复（208批·刀2 迁移）结束 =====
@@ -1095,6 +1098,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
         # 双写对照期保留，确认新路径稳定后可移除。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_60_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：TICK_60 关系维护")
             self._last_sa_tick_60_run = now
             self._do_relationship_maintenance()
         # ===== 208批·刀2 迁移结束 =====
@@ -1105,6 +1109,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底，避免高频重复。
         # 双写对照期保留，确认新路径稳定后可移除。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_200_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：TICK_200 时间自我比较")
             self._last_sa_tick_200_run = now
             self._do_temporal_self_comparison()
         # ===== v20.0支点A结束 =====
@@ -1113,6 +1118,7 @@ class PulseSelfAwareness(BasePulseOrgan):
         # (TimeCore interval=1350s≈100×13.5s)，由 on_pulse 主入口接收。
         # 此处降频为 24h 兜底扫描：仅当新事件路径未投递时兜底。双写对照期保留。
         if self._heartbeat_count > 0 and (now := time.time()) - getattr(self, "_last_sa_tick_100_run", 0.0) >= 86400:
+            self._log(LogLevel.INFO, "[双写兜底] 24h 兜底触发：TICK_100 存在状态感知")
             self._last_sa_tick_100_run = now
             self._do_existential_state_perception()
         # ===== v21.0新增结束 =====

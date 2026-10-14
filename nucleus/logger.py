@@ -641,9 +641,10 @@ def install_tree_outside_logger_bridges() -> None:
             _lg.propagate = False
             _lg.addHandler(_fh)  # 共享同一 FileHandler 实例
             _attached += 1
-        logging.getLogger("pulse.framework").info(
-            "[树外logger根治] 已点亮 %d/%d 个树外生产 logger 文件通道"
-            % (_attached, len(_TREE_OUTSIDE_LOGGER_NAMES)))
+        if _attached > 0:
+            logging.getLogger("pulse.framework").info(
+                "[树外logger根治] 已点亮 %d/%d 个树外生产 logger 文件通道"
+                % (_attached, len(_TREE_OUTSIDE_LOGGER_NAMES)))
     except Exception as e:
         silent_exc(e, where="nucleus.logger::install_tree_outside_logger_bridges")
 

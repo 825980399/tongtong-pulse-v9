@@ -1117,6 +1117,10 @@ class PulseFramework:
             try:
                 from nucleus.self_awareness.DailyScheduler import start_daily_schedule
                 _sched_ok = start_daily_schedule()
+                # ★210批 刀1：对照拍件生产注册（第200批仅建函数未接线；挂入 DailyScheduler 每日调度点）。
+                #   复用本 try 的 except，不新增静默 handler（cw2 门禁友好）。
+                from tools.lfi_self_awareness_compare import register_with_daily_schedule
+                register_with_daily_schedule()
                 self._log(LogLevel.INFO,
                           f"[SelfAwareness] 每日调度"
                           f"{'已启动' if _sched_ok else '未启动（开关关闭或已在运行）'}")
