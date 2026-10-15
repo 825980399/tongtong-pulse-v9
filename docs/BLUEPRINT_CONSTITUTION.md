@@ -525,7 +525,7 @@ v26.0 新增工程原则（试行）
 | 8 | 语义理解器 | brain | organs/brain/PulseSemanticComprehension.py | 大脑系统 |
 | 9 | 精神核心 | brain | organs/brain/PulseSpiritualCore.py | 大脑系统 |
 | 10 | 潜意识 | brain | organs/brain/PulseSubconscious.py | 大脑系统 |
-| 11 | 血管 | body | organs/body/PulseBloodVessel.py | 核心脏器 |
+| 11 | 血管 | body | organs/body/PulseBloodVessel.py | 核心脏器；系统总线观察者（wild=* 活跃追踪，设计非缺陷） |
 | 12 | 心脏 | body | organs/body/PulseHeart.py | 核心脏器 |
 | 13 | 肾 | body | organs/body/PulseKidney.py | 核心脏器 |
 | 14 | 肝 | body | organs/body/PulseLiver.py | 核心脏器 |

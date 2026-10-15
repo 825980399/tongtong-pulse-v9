@@ -290,6 +290,9 @@ def derive_event_edges(organs: Any = None) -> dict[str, Any]:
         _known_types |= _s
 
     _edges: dict[tuple, dict] = {}
+    # ★227批注记：wildcards 列出订阅通配 "*" 的器官（例：PulseBloodVessel 订阅 ["*"]）。
+    #   此为"系统总线观察者（活跃追踪）"设计，非噪音——217 批投影剔除 wildcard 边进入 E_proj 是对的，
+    #   但"剔除出边集"≠"接收面异常"；不得为降噪移除该通配订阅（详见 烛微227批前置分析 §2）。
     _wildcards = [c for c, w in _wild.items() if w]
     for _emitter, _ts in _emits.items():
         for _t in _ts:
