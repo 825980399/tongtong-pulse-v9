@@ -169,6 +169,8 @@ def _dump_pairs():
                 "seq": e.get("seq", 0),
                 "target_organ": e.get("target_organ", ""),
                 "amplitude": e.get("amplitude", None),
+                "from": e.get("from", ""),
+                "matched_organs": e.get("matched_organs", []),
             })
     try:
         _path = _get_pair_path()
@@ -250,6 +252,12 @@ def _get_orphan_path():
 def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ=""):
     """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
     global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
+    # ★第222批·刀1：int-3幽灵追踪——target_organ 必须为 str，非 str 视为幽灵来源并告警+归一
+    if not isinstance(target_organ, str):
+        logger.warning(
+            "pulse_tracer.log_emit: target_organ 非 str 类型=%.80r（organ=%s event=%s→疑似幽灵源，已归一为空串）",
+            target_organ, organ_name, event_type)
+        target_organ = ""
     event = {
         "timestamp": time.time(),
         "type": "emit",

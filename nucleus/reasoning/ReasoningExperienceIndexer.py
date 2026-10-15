@@ -309,6 +309,20 @@ class ReasoningExperienceIndexer:
             "question": _q, "answer": _a, "rule": rule_candidate, "ts": time.time()})
         if len(self._remediation_log) > 500:
             self._remediation_log = self._remediation_log[-300:]
+        # ★第221批 刀1：蒸馏沉淀埋点 + 产物落 L2 —— 解耦 node_pool 闸门
+        #   distilled 计数只由「双写开关」决定（过守护测试
+        #   test_indexer_double_write_off_no_distilled：双写关闭时零调用）；
+        #   节点副本写入仍受 node_pool 门控（下方保留，与 L2 落盘并存）。
+        #   此解耦修复了生产态 distilled 恒为 0 的根因：main.py 已 set_enabled(True)，
+        #   但 node_pool 注入时机/缺失会令原双重闸门永不进入 → 蒸馏计数卡死。
+        if self._double_write_enabled:
+            from nucleus.LLMDependencyMetrics import record_remediation_distilled
+            record_remediation_distilled(1)
+            # 蒸馏产物进 SemanticCacheL2（内在模型 L2 实现载体）：
+            #   问题→正确答案 的可复用校正，命中后过四闸直接返回，替代 LLM 调用。
+            #   store_l2 永不抛出；L2 关闭时静默返回 False（蒸馏计数已落，不阻断主链路）。
+            from nucleus.llm.semantic_cache import store_l2
+            store_l2(prompt=_q, response=_a, origin="user_query")
         if self._double_write_enabled and self._node_pool is not None:
             _value = (f"补救成功｜问题：{_q}｜正确答案：{_a}"
                       + (f"｜候选规则：{rule_candidate}" if rule_candidate else ""))
@@ -329,9 +343,6 @@ class ReasoningExperienceIndexer:
                 self._persist_state()
             if self._queue is not None:
                 self._queue.submit(_nid, _value)
-            # ★第164批 刀A2：蒸馏沉淀埋点（L2 节点已写入知识树）
-            from nucleus.LLMDependencyMetrics import record_remediation_distilled
-            record_remediation_distilled(1)
 
     def record_failure_mode(self, pattern: str, question: str | None = None,
                             context: str | None = None, confidence: float = 0.3) -> None:

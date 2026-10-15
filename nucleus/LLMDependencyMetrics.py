@@ -298,11 +298,21 @@ class LLMDependencyMetrics:
         return _rate
 
     def llm_dependency_ratio(self) -> float:
-        """LLM 依赖度 = llm / (llm + local)；无样本时返回 0.0。"""
-        _t = self.llm_total() + self.local_total()
-        if _t <= 0:
+        """LLM 依赖度 = llm / (llm + local)；无样本时返回 0.0。
+
+        ★第221批 刀2：分母剔除「自主进化」空转面。
+        进化调用（SCENE_EVOLUTION）实测占 llm 调用约 50.8%，而
+        evolution_effectiveness 实测真实修复率仅 7.3% —— 属「进化空转」，
+        不进入回答通道，不应虚高 LLM 依赖度。故分子与分母同步排除进化调用，
+        口径变为「回答通道内（肺/代码/其他）依赖度」。
+        基线常量 LLM_DEPENDENCY_BASELINE（0.9694）不在此重锚。
+        """
+        _evo = int(self._counters.get("llm_call_count", {}).get(SCENE_EVOLUTION, 0))
+        _llm = max(0, self.llm_total() - _evo)
+        _den = _llm + self.local_total()
+        if _den <= 0:
             return 0.0
-        return round(self.llm_total() / _t, 4)
+        return round(_llm / _den, 4)
 
     def self_sufficiency_score(self) -> float:
         """自持力 = local / answer_requests；无样本时返回 0.0。
