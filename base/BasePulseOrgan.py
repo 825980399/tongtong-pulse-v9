@@ -286,7 +286,19 @@ class BasePulseOrgan(ABC):
         Returns:
             发射的 pulse_id，如果信息场未注入则返回 None
         """
-        return self._send(event_type, payload, priority, ttl_ns, layer, target_organ)
+        # ★第225批 刀1：四向串味修复——改为关键字传参
+        # 根因：_emit 形参序 (event_type,payload,target_organ,priority,ttl_ns,layer)
+        #       与下方调用位置序 (event_type,payload,priority,ttl_ns,layer,target_organ) 错位
+        #       → 第3位 _send.target_organ 收到整型 priority（int幽灵源），
+        #         priority/ttl_ns/layer 同步串味。关键字传参彻底消解位置耦合。
+        return self._send(
+            event_type=event_type,
+            payload=payload,
+            target_organ=target_organ,
+            priority=priority,
+            ttl_ns=ttl_ns,
+            layer=layer,
+        )
         
     def _send(self, event_type: str, payload: dict | None = None,
               target_organ: str = "",
