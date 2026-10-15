@@ -51,6 +51,11 @@ _PAIR_FLUSH_EVERY_SEC = 60.0    # 1 分钟强制 flush 双保险（210批·刀2�
 _pair_path = None
 _output_path = None
 _orphan_path = None
+
+# ★第224批·刀3：测试隔离——tmp/test_isolation 的 redirect 会 patch 本模块的该变量，
+#   防止测试夹具（如 222 隔离验证进程把环 flush 进当日生产 pairs 文件 / OrganY 案）污染生产面。
+#   同 nucleus/LLMDependencyMetrics.py 的 _ISO_BASE_DIR 先例。
+_ISO_BASE_DIR: str | None = None
 _last_flush_time = 0.0
 # ★第117批 T-117a（方案A）：占闸专用锁。刻意与 _events 的 _lock 分开，
 #   避免「拿事件快照」与「抢刷闸」互相排队（原实现的 convoy 正是锁串联造成）。
@@ -139,7 +144,7 @@ def _get_pair_path():
     返回 data/monitor/pulse_pairs_YYYYMMDD.jsonl（每日首次 flush 创建新文件，同日追加）。
     不缓存路径：跨日（跨午夜）调用须重算日期，故每次实时拼装当日文件名。
     """
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = _ISO_BASE_DIR if _ISO_BASE_DIR is not None else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     day = datetime.now().strftime("%Y%m%d")
     return os.path.join(base, "data", "monitor", "pulse_pairs_%s.jsonl" % day)
 
@@ -238,14 +243,14 @@ _subscription_provider = _default_bus_sub_provider
 def _get_output_path():
     global _output_path
     if _output_path is None:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base = _ISO_BASE_DIR if _ISO_BASE_DIR is not None else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _output_path = os.path.join(base, "data", "monitor", "pulse_trace_events.json")
     return _output_path
 
 def _get_orphan_path():
     global _orphan_path
     if _orphan_path is None:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base = _ISO_BASE_DIR if _ISO_BASE_DIR is not None else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
 

@@ -147,6 +147,16 @@ class PulseCore:
             完整的 Pulse 字典
             
         """
+        # ★第224批·刀1：wire 侧断言——target_organ 必须为 str。
+        #   追源根因：BasePulseOrgan._emit(...)→_send(...) 位置参数错位（_send 第3位形参
+        #   恰为 target_organ，却收到 _emit 传入的整型 priority）→ int 3 幽灵注入 wire 本体。
+        #   共振入口 _resonance_weight_update 直读 wire 本体（不经 log_emit 归一层），
+        #   故须在 emit 构建处拦截：非 str 归一为空串并告警，闭环幽灵突触。
+        if not isinstance(target_organ, str):
+            logger.warning(
+                "PulseCore.emit: target_organ 非 str 类型=%.80r（疑似 _emit→_send 位置参数错位幽灵源，已归一为空串；organ=%s event=%s）",
+                target_organ, source_organ, event_type)
+            target_organ = ""
         with self._counter_lock:
             self._total_emitted += 1
             # 立刻取回本次自增后的序号供下方 pulse_id 使用。
