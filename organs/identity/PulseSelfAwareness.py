@@ -588,6 +588,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type=NarrativeEvent.RECORD,
+                        target_organ="PulseNarrativeSelf",
                         payload={
                             "content": _learned,
                             "event_type": "social_growth",

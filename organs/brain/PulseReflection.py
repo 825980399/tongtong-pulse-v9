@@ -461,6 +461,7 @@ class PulseReflection(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type=HormonesEvent.DETECT,
+                    target_organ="PulseHormones",
                     payload={
                         "content": f"复盘触发{social_type}: {reflection_result.get('issues', [''])[0] if social_type == '愧疚' else '表现良好'}",
                         "user_name": user_name,
@@ -552,6 +553,7 @@ class PulseReflection(BasePulseOrgan):
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=NarrativeEvent.RECORD,
+                target_organ="PulseNarrativeSelf",
                 payload={
                     "content": narrative_content,
                     "event_type": "reflection",

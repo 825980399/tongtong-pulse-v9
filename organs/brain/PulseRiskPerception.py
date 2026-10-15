@@ -259,6 +259,7 @@ class PulseRiskPerception(BasePulseOrgan):
             alert_pulse = self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=RiskEvent.ALERT,
+                target_organ="PulseCortex",
                 payload={
                     "risk_level": risk_level,
                     "risks": risks,
@@ -286,6 +287,7 @@ class PulseRiskPerception(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type=HormonesEvent.DETECT,
+                    target_organ="PulseHormones",
                     payload={
                         "content": f"检测到{risks[0].get('type', '风险')}",
                         "user_name": user_name,
@@ -305,6 +307,7 @@ class PulseRiskPerception(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type="risk.terminate",
+                    target_organ="PulseCortex",
                     payload={
                         "risk_level": risk_level,
                         "reason": self._generate_alert_summary(risks),
@@ -321,6 +324,7 @@ class PulseRiskPerception(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type="risk.moderate",
+                    target_organ="PulseCortex",
                     payload={
                         "risk_level": risk_level,
                         "reason": self._generate_alert_summary(risks),
@@ -528,6 +532,7 @@ class PulseRiskPerception(BasePulseOrgan):
         self.info_field.publish(self.pulse_core.emit(
             source_organ=self.organ_name,
             event_type=RiskEvent.CRISIS_REFERRAL,
+            target_organ="PulseCortex",
             payload={
                 "crisis_level": crisis_level,
                 "risk_level": risk_level,

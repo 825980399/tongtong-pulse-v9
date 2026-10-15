@@ -985,6 +985,7 @@ class PulseSubconscious(BasePulseOrgan):
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=ControllerEvent.OPEN_URL,
+                target_organ="PulseController",
                 payload={
                     "url": f"https://lite.duckduckgo.com/lite/?q={topic}",
                     "reason": f"好奇心探索: {topic}",

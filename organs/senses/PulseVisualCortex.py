@@ -686,6 +686,7 @@ class PulseVisualCortex(BasePulseOrgan):
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=VisualEvent.ANALYSIS_DONE,
+                target_organ="PulseCortex",
                 payload=analysis,
                 priority=3,
                 layer="L3"
@@ -740,6 +741,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         self.info_field.publish(self.pulse_core.emit(
                             source_organ=self.organ_name,
                             event_type=PersonaEvent.IDENTIFIED,
+                            target_organ="PulseSelfAwareness",
                             payload={
                                 "sensor_type": "visual",
                                 "user_id": self._current_user_name,
@@ -828,6 +830,7 @@ class PulseVisualCortex(BasePulseOrgan):
                             self.info_field.publish(self.pulse_core.emit(
                                 source_organ=self.organ_name,
                                 event_type=PersonaEvent.IDENTIFIED,
+                                target_organ="PulseSelfAwareness",
                                 payload={
                                     "sensor_type": "visual",
                                     "user_id": self._current_user_name,
@@ -926,6 +929,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         self.info_field.publish(self.pulse_core.emit(
                             source_organ=self.organ_name,
                             event_type=VisualEvent.ANALYSIS_DONE,
+                            target_organ="PulseCortex",
                             payload=result,
                             priority=3,
                             layer="L3"
@@ -951,6 +955,7 @@ class PulseVisualCortex(BasePulseOrgan):
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
                 event_type=VisualEvent.ANALYSIS_DONE,
+                target_organ="PulseCortex",
                 payload=result,
                 priority=3,
                 layer="L3"

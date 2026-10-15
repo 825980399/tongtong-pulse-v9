@@ -3028,6 +3028,7 @@ class PulseLiver(BasePulseOrgan):
                 self.info_field.publish(self.pulse_core.emit(
                     source_organ=self.organ_name,
                     event_type="hormones.detect",
+                    target_organ="PulseHormones",
                     payload={
                         "content": f"我成功将{len(quality_nodes)}条认知融合为一条关于'{path_name}'的智慧结晶",
                         "user_name": "系统",
@@ -3359,6 +3360,7 @@ class PulseLiver(BasePulseOrgan):
                         self.info_field.publish(self.pulse_core.emit(
                             source_organ=self.organ_name,
                             event_type="growth.need_detected",
+                            target_organ="PulseSubconscious",
                             payload={
                                 "milestone": "本能知识深化",
                                 "gaps": [{
@@ -3383,6 +3385,7 @@ class PulseLiver(BasePulseOrgan):
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type="growth.need_detected",
+                        target_organ="PulseSubconscious",
                         payload={
                             "milestone": "本能子概念反思",
                             "gaps": [{
@@ -3409,6 +3412,7 @@ class PulseLiver(BasePulseOrgan):
                         self.info_field.publish(self.pulse_core.emit(
                             source_organ=self.organ_name,
                             event_type="growth.need_detected",
+                            target_organ="PulseSubconscious",
                             payload={
                                 "milestone": "本能内化反思",
                                 "gaps": [{
@@ -3592,6 +3596,7 @@ class PulseLiver(BasePulseOrgan):
                     self.info_field.publish(self.pulse_core.emit(
                         source_organ=self.organ_name,
                         event_type="hormones.detect",
+                        target_organ="PulseHormones",
                         payload={
                             "content": f"我的认知根基又深了一层——'{str(node.value)[:40]}'已内化为本能",
                             "user_name": "系统",
