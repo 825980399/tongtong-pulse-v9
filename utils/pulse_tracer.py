@@ -46,7 +46,7 @@ _TO_EMIT_FILLED = 0
 _EVENT_SEQ = 0                 # 事件单调递增序号（落盘去重用）
 _LAST_PAIR_SEQ = -1            # 已落盘的最后一笔事件序号（哨兵，首笔 seq=0 亦落盘）
 _LAST_PAIR_FLUSH_TS = 0.0      # 上次成对流强制 flush 时间戳（10min 双保险）
-_PAIR_FILE_CAP = 20000         # pulse_pairs.jsonl 行数上限（扩到 2 万量级）
+_PAIR_FILE_CAP = 200000        # pulse_pairs.jsonl 行数上限（230批改正-a：从2万扩到20万，防止下沉后emit采样被receive洪流挤饿）
 _PAIR_FLUSH_EVERY_SEC = 60.0    # 1 分钟强制 flush 双保险（210批·刀2：环容调大后配套收紧）
 _pair_path = None
 _output_path = None
