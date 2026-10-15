@@ -322,18 +322,7 @@ class BasePulseOrgan(ABC):
                 layer=layer,
                 target_organ=target_organ,
             )
-            # 脉冲追踪（先获取pulse_id再使用）
-            try:
-                import config
-                if getattr(config, 'DEBUG_PULSE_TRACE', False):
-                    # ★第117批 T-117a（方案B）：同步 flush_to_file() 已移除 ——
-                    #   它让器官发射线程直面 per-path 写锁（19:35 块实测 11 个参与者
-                    #   排队），写盘改由 tracer 内部 daemon 线程承担。
-                    from utils.pulse_tracer import log_emit
-                    _trace_id = pulse.get("pulse_id", "") if isinstance(pulse, dict) else ""
-                    log_emit(self.organ_name, event_type, layer, _trace_id, pulse.get("amplitude", DEFAULT_AMPLITUDE), pulse.get("target_organ", ""))
-            except Exception:
-                self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
+
             
             # 发布脉冲并返回ID（正常路径，不依赖异常）
             self.info_field.publish(pulse)
@@ -357,6 +346,16 @@ class BasePulseOrgan(ABC):
             "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
         
+        # ★第226批（新方向）：兜底路径（pulse_core 不可用）亦经此打点，确保无 emit 漏记
+        try:
+            import config
+            if getattr(config, 'DEBUG_PULSE_TRACE', False):
+                from utils.pulse_tracer import log_emit
+                log_emit(self.organ_name, event_type, layer, pulse_id,
+                         pulse.get("amplitude", DEFAULT_AMPLITUDE),
+                         pulse.get("target_organ", ""))
+        except Exception:
+            self._log(LogLevel.DEBUG, f"[226批] 兜底打点异常已记录: {exc_location()}")
         self.info_field.publish(pulse)
         return pulse_id
         

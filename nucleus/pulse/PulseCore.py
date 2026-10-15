@@ -28,6 +28,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from utils.pulse_tracer import log_emit
 from nucleus.const import (
     ChatEvent,
     EarEvent,
@@ -203,6 +204,15 @@ class PulseCore:
             "amplitude": DEFAULT_AMPLITUDE,
             "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
+        # ★第226批（新方向·方向调整引导）：log_emit 下沉到 emit 内部 → 单点全覆盖双轨
+        #   原打点仅挂 BasePulseOrgan._send 且受 DEBUG_PULSE_TRACE 门控；直连 pulse_core.emit
+        #   的轨B（PulseEyes.stream_frame / heart.beat / info_field.publish(emit) 等）绕过 _send
+        #   → 97.5% emit 未命中（join 断裂）。下沉后两轨合一（均经此单点打点）。
+        import config
+        if getattr(config, "DEBUG_PULSE_TRACE", False):
+            log_emit(source_organ, event_type, layer, pulse_id,
+                     pulse.get("amplitude", DEFAULT_AMPLITUDE),
+                     pulse.get("target_organ", ""))
         # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
         # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。
         self._spike_backend_emit(pulse)
