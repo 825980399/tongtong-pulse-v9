@@ -116,3 +116,22 @@ def test_timeout_cleanup(tmp_path):
                                 output_file=str(out))
         assert r.status == "timeout"
         assert getattr(proc, "killed", False) is True
+
+
+def test_dry_run_observation_window_counts():
+    """档三（243）：dry_run 拦截计数（观测窗质检）。"""
+    before = runner.get_dry_run_hit_count()
+    cfg = _cfg(ENABLE_SUBAGENT_NO_MESSAGE_TOOL=False, SUBAGENT_CHEAP_MODEL="")
+    r = runner.run_subagent({"prompt": "digest task"}, cfg=cfg, dry_run=True)
+    assert r.status == "success"
+    assert r.stats.get("dry_run") is True
+    assert r.stats.get("dry_run_hits", 0) > before
+    assert runner.get_dry_run_hit_count() == before + 1
+
+
+def test_dry_run_gate_still_refuses_on_real_exec():
+    """真起（dry_run=False）仍受硬条款闸约束，dry_run 短路不改变真起保护。"""
+    cfg = _cfg(ENABLE_SUBAGENT_NO_MESSAGE_TOOL=False, SUBAGENT_CHEAP_MODEL="")
+    r = runner.run_subagent({"prompt": "x"}, cfg=cfg, dry_run=False)
+    assert r.status == "refused"
+

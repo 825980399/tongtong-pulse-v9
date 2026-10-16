@@ -25,10 +25,28 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 
 from nucleus.security.sandbox_limits import build_child_wrapper
 
 _L = logging.getLogger("subagent_runner")
+
+# 档三（243）：dry_run 观测窗累计计数（需求真实性质检，非精确计费）
+_DRY_RUN_HITS = 0
+_DRY_RUN_LOCK = threading.Lock()
+
+
+def _bump_dry_run_hits() -> int:
+    """原子自增并返回当前 dry_run 累计（观测窗质检用）。"""
+    global _DRY_RUN_HITS
+    _DRY_RUN_HITS += 1
+    return _DRY_RUN_HITS
+
+
+def get_dry_run_hit_count() -> int:
+    """返回本进程 dry_run 拦截累计次数（观测窗质检用）。"""
+    with _DRY_RUN_LOCK:
+        return _DRY_RUN_HITS
 
 # 子进程入口模块（复用 evolution_worker 模式：subprocess + JSON 文件 in/out）。
 # 真起推刀B共窗实证；本刀 dry_run 默认不真起，故该 worker 是否就绪不影响就位。
@@ -114,6 +132,23 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
     if dry_run is None:
         dry_run = not getattr(cfg, "ENABLE_SUBAGENT_RUNNER", False)
     started = time.time()
+
+    # —— 档三（243）：dry_run 观测窗 ——
+    # 调用方上线但开关不翻：撞 dry_run 即计数日志（需求真实性质检），
+    # 不真起、不触硬条款闸（真起保护仅在 dry_run=False 时生效）。
+    if dry_run:
+        with _DRY_RUN_LOCK:
+            _hits = _bump_dry_run_hits()
+        _L.info(
+            "[subagent_runner] dry_run 拦截（观测窗）：prompt=%r 本窗累计=%d",
+            str(task.get("prompt", task.get("task", "<unknown>")))[:80], _hits,
+        )
+        return SubagentRunResult(
+            "success", returncode=0,
+            stats={"dry_run": True, "dry_run_hits": _hits},
+            duration_ms=_ms(started),
+        )
+
 
     # —— 硬条款②：NO_MESSAGE_TOOL 闸先于真起翻开 ——
     if not getattr(cfg, "ENABLE_SUBAGENT_NO_MESSAGE_TOOL", False):

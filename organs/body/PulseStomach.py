@@ -431,6 +431,17 @@ class PulseStomach(BasePulseOrgan):
                    source_timestamp: float = 0.0,
                    source_time: float = 0.0) -> dict[str, Any]:
         """执行知识消化（核心逻辑，可在异步线程中运行）"""
+        # ===== 243批 档一：子代理通电观测窗（零行为探针） =====
+        # 把消化任务作为子代理潜在调用方登记：开关不翻（ENABLE_SUBAGENT_RUNNER 仍 False），
+        # run_subagent(dry_run=True) 走 dry_run 拦截计数，不真起、不改消化行为。
+        try:
+            from nucleus.reasoning.subagent_runner import run_subagent
+            _sa_res = run_subagent({"prompt": (content or "")[:200]}, dry_run=True)
+            self._log(LogLevel.DEBUG,
+                      f"[243观测窗] 代谢digest触发子代理dry_run探针: {_sa_res.status}")
+        except Exception as _sa_e:
+            self._log(LogLevel.DEBUG,
+                      f"[243观测窗] 子代理探针异常(忽略): {type(_sa_e).__name__}: {_sa_e}")
         # ★主线第17批 T4/P2-63：旁路事件（只发布，不改变任何现有逻辑）
         _tap_t0 = time.perf_counter()
         tap_publish(

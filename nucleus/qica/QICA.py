@@ -453,6 +453,8 @@ class QICA(BasePulseOrgan):
             "状态查询": {"method": "rule_reason", "paths": ["/自我/状态"]},
             "健康检查": {"method": "health_check", "paths": ["/自我/状态"]},
             "元认知报告": {"method": "meta_cognitive_report", "paths": ["/自我/状态", "/自我/架构"]},
+            # [243批] 子代理(subagent) 通电槽位：与 IntentChannels 同步登记，避免落入 knowledge_retrieve 残差桶
+            "子代理任务": {"method": "multi_step_execute", "paths": ["/自我/状态", "/技术"]},
         }
         # ===== 映射结束 =====
 
