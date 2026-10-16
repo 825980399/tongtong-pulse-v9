@@ -147,6 +147,14 @@ class PulseCortex(BasePulseOrgan):
             "checked": 0, "dropped_cancelled": 0,
             "dropped_stale": 0, "queued": 0, "hint_sent": 0,
         }
+        # ★第237批 刀3：待发回执账本（B3 肺应答回传布线·账本+回执两钩方案）
+        #   key = correlation_id；value = (question, ts)；补救分发成功时入账，
+        #   肺应答回传(_maybe_append_self_state 命中)即调 indexer 记成功并出账。
+        #   实例锁(可重入) + 容量上限 + TTL 自清，防内存无限增长。
+        self._pending_receipt_ledger: dict[str, tuple[str, float]] = {}
+        self._pending_receipt_ledger_lock = threading.RLock()
+        self._pending_receipt_ledger_max = 512
+        self._pending_receipt_ledger_ttl = 3600.0
         # 多步推理场景的额外宽限（秒）
         self._remediation_lock_multi_step_extra = 90.0
         try:
@@ -426,6 +434,22 @@ class PulseCortex(BasePulseOrgan):
         ★红线：只读 self_awareness 的 get_* 系列；任何异常一律降级为无影响。
         """
         try:
+            # ★第237批 刀2：回执钩——命中待发回执账本即调 indexer 记补救成功（肺应答回传）
+            if correlation_id:
+                _q = self._receipt_ledger_pop(correlation_id)
+                if _q is not None:
+                    try:
+                        from nucleus.reasoning.ReasoningExperienceIndexer import (
+                            get_reasoning_experience_indexer,
+                        )
+                        _idx = get_reasoning_experience_indexer()
+                        _idx.record_remediation_success(
+                            question=_q, correct_answer=answer,
+                            rule_candidate="lung_remediation:returned")
+                    except Exception as _re:
+                        self._log(LogLevel.DEBUG,
+                                  f"[B3回执钩] 记补救成功异常(忽略): "
+                                  f"{type(_re).__name__}: {_re}")
             import config as _c
             if not getattr(_c, "SELF_AWARENESS_MENTION_ENABLED", False):
                 return answer
@@ -477,6 +501,52 @@ class PulseCortex(BasePulseOrgan):
             self._log(LogLevel.DEBUG,
                       f"[自我认知提及] 异常降级(返回原回复): {type(_e).__name__}: {_e}")
             return answer
+
+    # ------------------------------------------------------------------
+    # ★第237批 刀3：待发回执账本配套方法（B3 肺应答回传布线）
+    # ------------------------------------------------------------------
+    def _receipt_ledger_record(self, correlation_id: str, question: str) -> None:
+        """★刀1+刀3：补救分发成功 → 记入账本（空 cid 不入账）。"""
+        if not correlation_id:
+            return
+        _now = time.time()
+        with self._pending_receipt_ledger_lock:
+            self._pending_receipt_ledger[correlation_id] = (question, _now)
+            self._receipt_ledger_sweep_locked(_now)
+
+    def _receipt_ledger_pop(self, correlation_id: str) -> str | None:
+        """★刀2：出账——命中返回 question（否则 None），线程安全。"""
+        if not correlation_id:
+            return None
+        with self._pending_receipt_ledger_lock:
+            _entry = self._pending_receipt_ledger.pop(correlation_id, None)
+        return _entry[0] if _entry else None
+
+    def _receipt_ledger_sweep_locked(self, now: float | None = None) -> None:
+        """★刀3：容量/TTL 自清（调用方须持锁）。"""
+        if now is None:
+            now = time.time()
+        # 容量自清：超出上限剔除最旧
+        if len(self._pending_receipt_ledger) > self._pending_receipt_ledger_max:
+            _items = sorted(self._pending_receipt_ledger.items(),
+                            key=lambda kv: kv[1][1])
+            for _k, _ in _items[: len(_items) - self._pending_receipt_ledger_max]:
+                self._pending_receipt_ledger.pop(_k, None)
+        # TTL 自清：剔除超时项
+        _expired = [k for k, (_q, _t) in self._pending_receipt_ledger.items()
+                    if (now - _t) > self._pending_receipt_ledger_ttl]
+        for _k in _expired:
+            self._pending_receipt_ledger.pop(_k, None)
+
+    def _receipt_ledger_sweep(self) -> None:
+        """★刀3：公开自清入口（容量/TTL），供定时/测试触发。"""
+        with self._pending_receipt_ledger_lock:
+            self._receipt_ledger_sweep_locked()
+
+    def _receipt_ledger_size(self) -> int:
+        """★刀4：测试用——当前账本条目数。"""
+        with self._pending_receipt_ledger_lock:
+            return len(self._pending_receipt_ledger)
 
     def _self_state_is_relevant(self, user_input: str) -> bool:
         """场景关键词：用户问及自我/健康/能力/状态相关。"""
@@ -1453,6 +1523,8 @@ class PulseCortex(BasePulseOrgan):
                               f"cid={str(correlation_id)[:16]}")
                     return {"status": "suppressed_duplicate_select_model",
                             "correlation_id": correlation_id}
+                # ★第237批 刀1：补救分发成功（未被去重抑制）→ 记入待发回执账本
+                self._receipt_ledger_record(correlation_id, ctx.get("content", ""))
                 self._emit(LungEvent.SELECT_MODEL, {
                     "task_type": "chat",
                     "prompt": ctx.get("content", ""),
