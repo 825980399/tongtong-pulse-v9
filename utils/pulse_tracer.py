@@ -256,7 +256,7 @@ def _get_orphan_path():
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
 
-def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ=""):
+def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None):
     """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
     global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
     # ★第222批·刀1：int-3幽灵追踪——target_organ 必须为 str，非 str 视为幽灵来源并告警+归一
@@ -274,6 +274,7 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
         "pulse_id": pulse_id,
         "amplitude": amplitude,
         "target_organ": target_organ,
+        "ttl_ns": ttl_ns,
         "matched_organs": []
     }
     with _lock:

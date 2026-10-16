@@ -353,7 +353,8 @@ class BasePulseOrgan(ABC):
                 from utils.pulse_tracer import log_emit
                 log_emit(self.organ_name, event_type, layer, pulse_id,
                          pulse.get("amplitude", DEFAULT_AMPLITUDE),
-                         pulse.get("target_organ", ""))
+                         pulse.get("target_organ", ""),
+                         ttl_ns=pulse.get("ttl_ns", None))
         except Exception:
             self._log(LogLevel.DEBUG, f"[226批] 兜底打点异常已记录: {exc_location()}")
         self.info_field.publish(pulse)
