@@ -28,6 +28,19 @@ logger = logging.getLogger("nucleus.reasoning.ReasoningExperienceIndexer")
 
 # ★第232批 刀2：旁路哨兵窗口（成功增量计数达此值即核一次蒸馏滞后，连续两窗>0 即告警）
 _SENTINEL_WINDOW = 50
+# ★第245批 刀1：哨兵确认窗数默认（连续多少窗缺口>0 即告警）；刀2 读取函数带 config 回退
+_SENTINEL_CONSEC_DEFAULT = 2
+
+
+# ★第245批 刀2：config 正整型读取（零发明，同款 utils/pulse_tracer._cfg_positive_int 模式）
+#   惰性 import config（避免导入期 IO）；键缺失/布尔/非 int/<=0 -> 回退 default（绝不抛，无 try/except）。
+def _cfg_positive_int(name, default):
+    """读 config 正整型配置；键缺失/布尔/非 int/<=0 -> 回退 default。"""
+    import config
+    _v = getattr(config, name, default)
+    if isinstance(_v, bool) or not isinstance(_v, int):
+        return default
+    return _v if _v > 0 else default
 
 _lock = threading.Lock()
 _indexer: ReasoningExperienceIndexer | None = None
@@ -94,6 +107,7 @@ class ReasoningExperienceIndexer:
         self._sentinel_distilled = 0
         self._sentinel_distilled_delegated = 0
         self._sentinel_consec = 0
+        self._sentinel_cfg_logged = False   # ★第245批 刀2：哨兵配置 DEBUG 行仅首窗打一次
         self._remediation_log: list[dict[str, Any]] = []
         self._failure_modes: list[dict[str, Any]] = []
         self._failure_mode_total = 0   # 失败模式累计（本会话增量）
@@ -441,12 +455,18 @@ class ReasoningExperienceIndexer:
         缺口连续两窗为正→证明仍有未蒸馏的补救成功（如空答案早返回），与"旁路已修"
         预言相悖（修复彻底后该哨兵应静默）。双写关闭时不计数，蒸馏恒0属预期。
         """
-        if self._sentinel_success < _SENTINEL_WINDOW:
+        # ★第245批 刀2+刀3：窗长/确认数读 config（守卫灵敏度非旁路探针），首窗打 DEBUG 可见性行
+        _window = _cfg_positive_int("REASONING_SENTINEL_WINDOW", _SENTINEL_WINDOW)
+        _consec = _cfg_positive_int("REASONING_SENTINEL_CONSEC", _SENTINEL_CONSEC_DEFAULT)
+        if not self._sentinel_cfg_logged:
+            self._sentinel_cfg_logged = True
+            logger.debug("旁路哨兵配置 window=%s consec=%s", _window, _consec)
+        if self._sentinel_success < _window:
             return
         _gap = self._sentinel_success - (self._sentinel_distilled + self._sentinel_distilled_delegated)
         if _gap > 0:
             self._sentinel_consec += 1
-            if self._sentinel_consec >= 2:
+            if self._sentinel_consec >= _consec:
                 logger.warning(
                     "ReasoningExperienceIndexer 旁路哨兵：蒸馏增量滞后补救成功 %d "
                     "(连续 %d 窗>0)，仍存未蒸馏的补救成功——疑似空答案早返回或其他旁路",

@@ -1,4 +1,4 @@
-﻿"""config —— v9.5 PulseNet 全局配置（自进化基座版）
+"""config —— v9.5 PulseNet 全局配置（自进化基座版）
 
 版本: v10 PulseNet
 设计: 路灯、小林、星轨
@@ -1103,6 +1103,13 @@ REASONING_EXPERIENCE_INDEX_CONFIG = {
     #   False = 只写 JSON 版，行为与现状**完全一致**（零风险回退）。
     "enable_reasoning_double_write": True,  # 2026-09-08 10:05开启：规则通道稳定30分钟0ERROR，推理经验双写
 }
+
+# ========== ★第245批 刀1：旁路哨兵灵敏度（守卫非旁路探针） ==========
+# 蒸馏滞后补救成功的窗口长度与确认窗数；读取端带正整型回退（键缺失/<=0->回默认）。
+# 默认值=现状（窗口50、连续2窗），配置化仅为「未来重构拆散 success<->delegated 配对」时
+# 可调灵敏度，恒等 gap 下哨兵仍静默（详见烛微244前置分析）。
+REASONING_SENTINEL_WINDOW = 50     # 成功增量累计达此值即核一次蒸馏滞后（守卫灵敏度，非旁路探针）
+REASONING_SENTINEL_CONSEC = 2      # 缺口连续多少窗>0 即告警（守卫灵敏度，非旁路探针）
 
 # ========== 自我进化配置 ==========
 EVOLUTION_CONFIG = {
