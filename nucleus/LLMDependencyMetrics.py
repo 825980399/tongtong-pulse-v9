@@ -62,7 +62,10 @@ def _blank_counters() -> dict[str, dict[str, int]]:
         "search_count": {k: 0 for k in SEARCH_KINDS},
         "digestion_count": {DIGEST_KNOWLEDGE: 0, DIGEST_FILE: 0},
         # ★第164批 刀A2：补救三态计数（attempt/success/distilled）
-        "remediation": {"attempt": 0, "success": 0, "distilled": 0, "distilled_delegated": 0},
+        # ★第241批 刀2（C案一刀三得）：扩展 returned/missed 两键
+        #   returned = 补救答案已回执/交付用户；missed = sweep TTL 过期未回执
+        "remediation": {"attempt": 0, "success": 0, "distilled": 0,
+                        "distilled_delegated": 0, "returned": 0, "missed": 0},
     }
 
 
@@ -169,6 +172,15 @@ class LLMDependencyMetrics:
     def record_remediation_distilled_delegated(self, n: int = 1) -> None:
         """★第233批 刀1.1：记录一次 delegated 补救（空答案旁路，无真产物）蒸馏计数。"""
         self._bump("remediation", "distilled_delegated", n)
+
+    # ★第241批 刀2（C案一刀三得）：returned / missed 两态埋点
+    def record_remediation_returned(self, n: int = 1) -> None:
+        """★第241批 刀2：记录一次补救答案已回执/交付用户（兑现率 = returned / attempt）。"""
+        self._bump("remediation", "returned", n)
+
+    def record_remediation_missed(self, n: int = 1) -> None:
+        """★第241批 刀3：记录一次补救分发后 TTL 过期未回执（失约率 = missed / attempt）。"""
+        self._bump("remediation", "missed", n)
 
     def _bump(self, group: str, key: str, n: int = 1) -> None:
         with self._lock:
@@ -673,6 +685,17 @@ def record_remediation_distilled(n: int = 1) -> None:
 def record_remediation_distilled_delegated(n: int = 1) -> None:
     """★第233批 刀1.1：delegated 补救蒸馏计数便捷入口。"""
     get_llm_dependency_metrics().record_remediation_distilled_delegated(n)
+
+
+# ★第241批 刀2/刀3（C案一刀三得）：returned / missed 模块级便捷入口
+def record_remediation_returned(n: int = 1) -> None:
+    """★第241批 刀2：补救答案已回执埋点便捷入口（异常上抛，由调用方既有边界处理）。"""
+    get_llm_dependency_metrics().record_remediation_returned(n)
+
+
+def record_remediation_missed(n: int = 1) -> None:
+    """★第241批 刀3：补救 TTL 过期未回执埋点便捷入口。"""
+    get_llm_dependency_metrics().record_remediation_missed(n)
 
 
 def get_dependency_snapshot() -> dict[str, Any]:

@@ -30,8 +30,8 @@ class TestB3ReceiptLedger(unittest.TestCase):
         c._receipt_ledger_record("", "问题X")
         self.assertEqual(c._receipt_ledger_size(), 0)
 
-    # 例2：命中回执 → 调 indexer.record_remediation_success 且出账
-    def test_hit_records_remediation_success(self):
+    # 例2：命中回执 → 调 indexer.record_remediation_returned（灭双记）且出账
+    def test_hit_records_remediation_returned(self):
         c = _FakeCortex()
         c._receipt_ledger_record("cid1", "问题A")
         _mock_idx = mock.MagicMock()
@@ -39,10 +39,10 @@ class TestB3ReceiptLedger(unittest.TestCase):
                 _idx_mod, "get_reasoning_experience_indexer",
                 return_value=_mock_idx):
             _out = c._maybe_append_self_state("真答123", "cid1", "用户问")
-        self.assertTrue(_mock_idx.record_remediation_success.called)
-        _kw = _mock_idx.record_remediation_success.call_args.kwargs
+        self.assertTrue(_mock_idx.record_remediation_returned.called)
+        _kw = _mock_idx.record_remediation_returned.call_args.kwargs
         self.assertEqual(_kw.get("question"), "问题A")
-        self.assertEqual(_kw.get("correct_answer"), "真答123")
+        self.assertEqual(_kw.get("answer"), "真答123")
         self.assertEqual(_kw.get("rule_candidate"), "lung_remediation:returned")
         self.assertEqual(c._receipt_ledger_size(), 0)  # 出账后清空
         self.assertEqual(_out, "真答123")  # self_awareness 缺省→原样返回
@@ -55,7 +55,7 @@ class TestB3ReceiptLedger(unittest.TestCase):
                 _idx_mod, "get_reasoning_experience_indexer",
                 return_value=_mock_idx):
             _out = c._maybe_append_self_state("答", "cid_unknown", "问")
-        self.assertFalse(_mock_idx.record_remediation_success.called)
+        self.assertFalse(_mock_idx.record_remediation_returned.called)
         self.assertEqual(_out, "答")
 
     # 例4：TTL 清理

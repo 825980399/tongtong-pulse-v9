@@ -443,12 +443,15 @@ class PulseCortex(BasePulseOrgan):
                             get_reasoning_experience_indexer,
                         )
                         _idx = get_reasoning_experience_indexer()
-                        _idx.record_remediation_success(
-                            question=_q, correct_answer=answer,
+                        # ★第241批 刀1/刀3（C案一刀三得）：回执钩改调 returned 专用方法
+                        #   —— 灭原 record_remediation_success 非空答案对同条补救的双记
+                        #   （_remediation_count 不再 +1），并埋点 remediation.returned。
+                        _idx.record_remediation_returned(
+                            question=_q, answer=answer,
                             rule_candidate="lung_remediation:returned")
                     except Exception as _re:
                         self._log(LogLevel.DEBUG,
-                                  f"[B3回执钩] 记补救成功异常(忽略): "
+                                  f"[B3回执钩] 记补救回执异常(忽略): "
                                   f"{type(_re).__name__}: {_re}")
             import config as _c
             if not getattr(_c, "SELF_AWARENESS_MENTION_ENABLED", False):
@@ -532,9 +535,13 @@ class PulseCortex(BasePulseOrgan):
                             key=lambda kv: kv[1][1])
             for _k, _ in _items[: len(_items) - self._pending_receipt_ledger_max]:
                 self._pending_receipt_ledger.pop(_k, None)
-        # TTL 自清：剔除超时项
+        # TTL 自清：剔除超时项（超时未回执 = 失约，计入 remediation.missed）
         _expired = [k for k, (_q, _t) in self._pending_receipt_ledger.items()
                     if (now - _t) > self._pending_receipt_ledger_ttl]
+        if _expired:
+            # ★第241批 刀3（C案一刀三得）：过期未回执项数计入 missed（失约率直算）
+            from nucleus.LLMDependencyMetrics import record_remediation_missed
+            record_remediation_missed(len(_expired))
         for _k in _expired:
             self._pending_receipt_ledger.pop(_k, None)
 

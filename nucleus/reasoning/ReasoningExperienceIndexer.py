@@ -370,6 +370,68 @@ class ReasoningExperienceIndexer:
                 self._queue.submit(_nid, _value)
 
     # ------------------------------------------------------------------
+    # ★第241批 刀1（C案一刀三得）：补救答案已回执专用方法
+    # ------------------------------------------------------------------
+    def record_remediation_returned(self, question: str, answer: str,
+                                    rule_candidate: str | None = None,
+                                    confidence: float = 0.8) -> None:
+        """★第241批 刀1（C案一刀三得）：补救答案已回执/交付用户——(问题, 答案) 蒸馏为 L2
+        节点 + 候选规则，并埋点 remediation.returned；**不再 +1 _remediation_count**
+        （灭 237批回执钩与分发侧对同一条补救成功的双记：原回执钩调 record_remediation_success
+        非空答案→另 +1 _remediation_count 并产蒸馏）。
+
+        与 record_remediation_success 的区别：
+          - 不 bump _remediation_count（成功口径仍由分发侧唯一统计，灭双记）；
+          - 不 bump remediation.success（避免单轮补救被记两次）；
+          - 额外 bump remediation.returned（兑现率 = returned / attempt 直算）；
+          - 仍产蒸馏（store_l2 + L2 节点），与成功路径沉淀机制一致。
+        无 try/except：异常上抛给调用方既有异常边界（不新增静默 except 处理）。
+        """
+        _q = str(question or "").strip()
+        _a = str(answer or "").strip()
+        if not _q or not _a:
+            # 空答案防御性早返回：不产蒸馏、不计数（回执侧正常非空）
+            return
+        self._exp.record(_q, "remediation_returned", source="remediation",
+                         confidence=float(confidence))
+        # ★注意：刻意不 bump _remediation_count / remediation.success（灭双记）
+        self._remediation_log.append({
+            "question": _q, "answer": _a, "rule": rule_candidate,
+            "ts": time.time(), "kind": "returned"})
+        if len(self._remediation_log) > 500:
+            self._remediation_log = self._remediation_log[-300:]
+        if self._double_write_enabled:
+            from nucleus.LLMDependencyMetrics import record_remediation_returned as _rec_ret
+            from nucleus.LLMDependencyMetrics import record_remediation_distilled
+            _rec_ret(1)
+            # 仍产蒸馏（store_l2 + L2 节点 + distilled 计数），与成功路径沉淀一致；
+            # 但刻意不 bump _remediation_count / remediation.success（灭双记），
+            # 亦不触碰旁路哨兵（哨兵只统计分发侧成功→蒸馏关系）。
+            record_remediation_distilled(1)
+            from nucleus.llm.semantic_cache import store_l2
+            store_l2(prompt=_q, response=_a, origin="user_query")
+        if self._double_write_enabled and self._node_pool is not None:
+            _value = (f"补救回执｜问题：{_q}｜答案：{_a}"
+                      + (f"｜候选规则：{rule_candidate}" if rule_candidate else ""))
+            from nucleus.mnemosyne.PulseNode import PulseNode
+            _node = PulseNode(
+                value=_value,
+                keywords=_split_keywords(_q) if _q else [],
+                source_organ=SOURCE_ORGAN,
+                evol_level=PulseNode.EVOL_L2,
+                importance=PulseNode.IMPORTANCE_B,
+                space_path=PATH_REMEDIATION,
+            )
+            if self._knowledge_tree is not None:
+                self._knowledge_tree.register_path(PATH_REMEDIATION)
+            _nid = self._node_pool.add(_node)
+            with self._state_lock:
+                self._nodes_written += 1
+                self._persist_state()
+            if self._queue is not None:
+                self._queue.submit(_nid, _value)
+
+    # ------------------------------------------------------------------
     # ★第232批 刀2：旁路哨兵窗口核查（蒸馏增量滞后补救成功→连续两窗告警）
     # ------------------------------------------------------------------
     def _sentinel_check_window(self) -> None:

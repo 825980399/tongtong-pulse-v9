@@ -181,8 +181,10 @@ def test_snapshot_extends_three_link_and_scene():
               "remediation_distill_rate", "scene_llm_dependency_ratio"):
         assert k in d, f"快照 derived 缺失键: {k}"
     assert isinstance(d["scene_llm_dependency_ratio"], dict)
-    # ★第233批 刀1.1：新增 distilled_delegated 计数键，快照随计数器字典自动携带
-    assert snap["counters"]["remediation"] == {"attempt": 2, "success": 1, "distilled": 1, "distilled_delegated": 0}
+    # ★第233批 刀1.1 + 第241批 刀2（C案一刀三得）：快照随计数器字典自动携带新键
+    assert snap["counters"]["remediation"] == {
+        "attempt": 2, "success": 1, "distilled": 1,
+        "distilled_delegated": 0, "returned": 0, "missed": 0}
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +260,23 @@ def test_indexer_empty_answer_triggers_distilled_delegated():
         idx.record_remediation_success(question="q", correct_answer="a")
         _distilled2.assert_called_once_with(1)
         _deleg2.assert_not_called()
+
+
+def test_indexer_returned_triggers_distilled_not_count():
+    """★第241批 刀1（C案一刀三得）：returned 专用方法产蒸馏但不 +1 _remediation_count（灭双记）。"""
+    idx, _exp, _pool, _queue = _make_indexer(True)
+    _distilled = MagicMock()
+    with patch("nucleus.LLMDependencyMetrics.record_remediation_distilled",
+               _distilled), \
+         patch("nucleus.LLMDependencyMetrics.record_remediation_returned",
+               MagicMock()) as _ret:
+        idx.record_remediation_returned(question="q", answer="a")
+        # returned 专用方法埋点 remediation.returned（兑现率直算）
+        _ret.assert_called_once_with(1)
+        # 仍产蒸馏（store_l2 + L2 节点），与主成功路径沉淀一致
+        _distilled.assert_called_once_with(1)
+    # 双写仍正常（A1 无回归）：L2 节点写入
+    assert len(_pool.added) == 1
 
 
 # ---------------------------------------------------------------------------
