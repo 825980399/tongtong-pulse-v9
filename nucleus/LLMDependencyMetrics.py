@@ -62,7 +62,7 @@ def _blank_counters() -> dict[str, dict[str, int]]:
         "search_count": {k: 0 for k in SEARCH_KINDS},
         "digestion_count": {DIGEST_KNOWLEDGE: 0, DIGEST_FILE: 0},
         # ★第164批 刀A2：补救三态计数（attempt/success/distilled）
-        "remediation": {"attempt": 0, "success": 0, "distilled": 0},
+        "remediation": {"attempt": 0, "success": 0, "distilled": 0, "distilled_delegated": 0},
     }
 
 
@@ -165,6 +165,10 @@ class LLMDependencyMetrics:
     def record_remediation_distilled(self, n: int = 1) -> None:
         """★第164批 刀A2：记录一次补救后蒸馏沉淀（L2 节点成功写入知识树）。"""
         self._bump("remediation", "distilled", n)
+
+    def record_remediation_distilled_delegated(self, n: int = 1) -> None:
+        """★第233批 刀1.1：记录一次 delegated 补救（空答案旁路，无真产物）蒸馏计数。"""
+        self._bump("remediation", "distilled_delegated", n)
 
     def _bump(self, group: str, key: str, n: int = 1) -> None:
         with self._lock:
@@ -664,6 +668,11 @@ def record_remediation_success(n: int = 1) -> None:
 def record_remediation_distilled(n: int = 1) -> None:
     """★第164批 刀A2：补救蒸馏沉淀埋点便捷入口。"""
     get_llm_dependency_metrics().record_remediation_distilled(n)
+
+
+def record_remediation_distilled_delegated(n: int = 1) -> None:
+    """★第233批 刀1.1：delegated 补救蒸馏计数便捷入口。"""
+    get_llm_dependency_metrics().record_remediation_distilled_delegated(n)
 
 
 def get_dependency_snapshot() -> dict[str, Any]:

@@ -30,6 +30,7 @@ from nucleus.LLMDependencyMetrics import (
     LLMDependencyMetrics,
     record_remediation_attempt,
     record_remediation_distilled,
+    record_remediation_distilled_delegated,
     record_remediation_success,
 )
 from nucleus.reasoning.ReasoningExperienceIndexer import (
@@ -180,7 +181,8 @@ def test_snapshot_extends_three_link_and_scene():
               "remediation_distill_rate", "scene_llm_dependency_ratio"):
         assert k in d, f"快照 derived 缺失键: {k}"
     assert isinstance(d["scene_llm_dependency_ratio"], dict)
-    assert snap["counters"]["remediation"] == {"attempt": 2, "success": 1, "distilled": 1}
+    # ★第233批 刀1.1：新增 distilled_delegated 计数键，快照随计数器字典自动携带
+    assert snap["counters"]["remediation"] == {"attempt": 2, "success": 1, "distilled": 1, "distilled_delegated": 0}
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +233,31 @@ def test_indexer_double_write_off_no_distilled():
                _distilled):
         idx.record_remediation_success(question="q", correct_answer="a")
         _distilled.assert_not_called()
+
+
+def test_indexer_empty_answer_triggers_distilled_delegated():
+    """★第233批 刀3：空答案早返回走 delegated 计数，主 distilled 不被污染。"""
+    idx, _exp, _pool, _queue = _make_indexer(True)
+    _distilled = MagicMock()
+    _deleg = MagicMock()
+    with patch("nucleus.LLMDependencyMetrics.record_remediation_distilled",
+               _distilled), \
+         patch("nucleus.LLMDependencyMetrics.record_remediation_distilled_delegated",
+               _deleg):
+        # 空答案：correct_answer="" → 空答案早返回分支
+        idx.record_remediation_success(question="q", correct_answer="")
+        _deleg.assert_called_once_with(1)
+        _distilled.assert_not_called()
+    # 双写仍正常（A1 无回归）：真答案路径主 distilled +1、delegated 不增
+    _distilled2 = MagicMock()
+    _deleg2 = MagicMock()
+    with patch("nucleus.LLMDependencyMetrics.record_remediation_distilled",
+               _distilled2), \
+         patch("nucleus.LLMDependencyMetrics.record_remediation_distilled_delegated",
+               _deleg2):
+        idx.record_remediation_success(question="q", correct_answer="a")
+        _distilled2.assert_called_once_with(1)
+        _deleg2.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -92,6 +92,7 @@ class ReasoningExperienceIndexer:
         # ★第232批 刀2：旁路哨兵实例变量（蒸馏滞后检测）
         self._sentinel_success = 0
         self._sentinel_distilled = 0
+        self._sentinel_distilled_delegated = 0
         self._sentinel_consec = 0
         self._remediation_log: list[dict[str, Any]] = []
         self._failure_modes: list[dict[str, Any]] = []
@@ -314,6 +315,12 @@ class ReasoningExperienceIndexer:
         if self._double_write_enabled:
             self._sentinel_success += 1
         if not _q or not _a:
+            # ★第233批 刀1.2：空答案早返回属 delegated 补救（无真产物），计入
+            #   distilled_delegated 而非主 distilled，主 distilled 语义保持纯净。
+            if self._double_write_enabled:
+                from nucleus.LLMDependencyMetrics import record_remediation_distilled_delegated
+                record_remediation_distilled_delegated(1)
+                self._sentinel_distilled_delegated += 1
             self._sentinel_check_window()
             return
         self._exp.record(_q, "remediation_success", source="remediation", confidence=float(confidence))
@@ -374,7 +381,7 @@ class ReasoningExperienceIndexer:
         """
         if self._sentinel_success < _SENTINEL_WINDOW:
             return
-        _gap = self._sentinel_success - self._sentinel_distilled
+        _gap = self._sentinel_success - (self._sentinel_distilled + self._sentinel_distilled_delegated)
         if _gap > 0:
             self._sentinel_consec += 1
             if self._sentinel_consec >= 2:
@@ -386,6 +393,7 @@ class ReasoningExperienceIndexer:
             self._sentinel_consec = 0
         self._sentinel_success = 0
         self._sentinel_distilled = 0
+        self._sentinel_distilled_delegated = 0
 
     def record_failure_mode(self, pattern: str, question: str | None = None,
                             context: str | None = None, confidence: float = 0.3) -> None:
