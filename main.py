@@ -314,6 +314,22 @@ class PulseFramework:
         self.config = config
         self._logger.info("配置加载完成")
 
+        # ★第251批 刀4：启动版本指纹（工具性基建，明晨重启生效）
+        #   V2 版本归属不清——进程起电时刻 HEAD 与日志无指纹行，无法对账。
+        #   启动时打一行 git rev-parse --short HEAD，重启后运维据此定位代码版本。
+        try:
+            import subprocess
+            _git_proc = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True, text=True, timeout=5,
+            )
+            _git_hash = (_git_proc.stdout or "").strip() or "unknown"
+            self._logger.info(f"[版本指纹] 启动 HEAD={_git_hash}")
+        except Exception as _ge:
+            self._logger.warning(
+                f"[版本指纹] 获取失败（不影响启动）: {type(_ge).__name__}: {_ge}")
+
         # ===== 步骤2: 初始化六大支柱模块 =====
         # PulseCore: 脉冲核心引擎（创建、分发、幂等保护、超时熔断）
         self.pulse_core = PulseCore(max_completed_fingerprints=config.PULSE["fingerprint_cache_size"])
@@ -457,7 +473,13 @@ class PulseFramework:
                 _rei.set_dependencies(encode_queue=get_encode_queue())
             except Exception as _se:
                 silent_exc(_se, "main.py:412")
-            _rei.set_enabled(bool(_rei_cfg.get("enable_reasoning_double_write", False)))
+            # ★第250批 刀1：修复蒸馏断链根因——enable_reasoning_double_write 实际位于
+            #   config 顶层（config.py:1104），而 _rei_cfg 来自子节
+            #   REASONING_EXPERIENCE_INDEX_CONFIG，子节无该键导致 .get 恒返 False，
+            #   双写永不启用、蒸馏整段不执行（distilled 恒为 0）。此处 fallback 读顶层。
+            _rei.set_enabled(bool(_rei_cfg.get(
+                "enable_reasoning_double_write",
+                getattr(config, "enable_reasoning_double_write", False))))
             self._log(LogLevel.INFO if _rei.double_write_enabled else LogLevel.DEBUG,
                       f"[推理经验双写] {'已启用' if _rei.double_write_enabled else '未启用'}"
                       f"（enable_reasoning_double_write="

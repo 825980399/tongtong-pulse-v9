@@ -1406,6 +1406,29 @@ class SafeEvolutionExecutor:
         对每个问题：先判断本地规则能否修复，再调大模型获取修复建议做对比，
         把对比结果（含 api_better 标记与大模型建议）记录到验证学习枢纽，沉淀为可复用规则。
         """
+        # ★第251批 刀3 N4熔断：补丁积压≥40即熔断，避免空转算力
+        #   （进化健康度归零轮——5,225次LLM调用换0修复；积压高时再调LLM=纯空转）
+        try:
+            _pm = getattr(self, "_patch_manager", None)
+            _pending = _pm.list_pending_patches() if _pm is not None else []
+            if len(_pending) >= 40:
+                _module_logger.warning(
+                    f"[N4熔断] 补丁积压={len(_pending)}≥40，熔断本轮进化调用"
+                    f"（跳过 LLM 空转，待积压消化后再恢复）")
+                return {
+                    "repaired": 0,
+                    "pass_rate": 0.0,
+                    "processed": 0,
+                    "skipped_no_snippet": 0,
+                    "skipped": (len(issues) if issues else 0),
+                    "local_fixable": 0,
+                    "breaker": True,
+                    "reason": "patch_backlog_overflow",
+                }
+        except Exception as _be:
+            _module_logger.debug(
+                f"[N4熔断] 积压查询失败，放行本轮: {type(_be).__name__}: {_be}")
+
         # ★主线第59批 T2：问题文件路径过滤（排除标准库/项目外路径），
         #   避免 stdlib Traceback 占用修复名额。放在入口最前，确保被过滤问题
         #   不进入 alias 归一化/冷却/多步规划，不消耗 20 名额。不过度过滤：

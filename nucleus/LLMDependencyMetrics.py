@@ -492,6 +492,15 @@ class LLMDependencyMetrics:
                     if isinstance(v, dict):
                         self._counters.setdefault(g, {}).update(
                             {k: int(x) for k, x in v.items()})
+                # ★第250批 刀2：防御性合并——确保 _blank_counters 中新增键
+                #   （如 remediation.returned/missed，241批加入）在旧持久化态加载后
+                #   仍然存在，避免运行中进程因启动期缺键而长期缺计数
+                #   （S2：241批指标键未进运行时计数）。
+                for _g, _v in _blank_counters().items():
+                    if isinstance(_v, dict):
+                        self._counters.setdefault(_g, {})
+                        for _k, _default in _v.items():
+                            self._counters[_g].setdefault(_k, _default)
                 _h = _d.get("history")
                 if isinstance(_h, list):
                     self._history = _h[-_HISTORY_MAX:]
