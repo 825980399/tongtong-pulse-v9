@@ -25,7 +25,15 @@ DEFAULT_RETRIEVER: Callable[[str, int], list[Any]] | None = None
 def _extract_scores(hits: list[Any]) -> list[float]:
     _scores: list[float] = []
     for _h in hits or []:
-        _s = _h.get("score") if isinstance(_h, dict) else getattr(_h, "score", None)
+        # 形状对齐（239刀2 一验即闭）：helper 原只读 `score` 键；真实
+        # ``ExperienceRetriever.retrieve`` 返回命中含 ``_score`` 键（下划线）。
+        # 两键都认，兼容既有调用方契约与真实检索器两种命中形状。
+        if isinstance(_h, dict):
+            _s = _h.get("score")
+            if not isinstance(_s, (int, float)) or isinstance(_s, bool):
+                _s = _h.get("_score")
+        else:
+            _s = getattr(_h, "score", None)
         if isinstance(_s, (int, float)) and not isinstance(_s, bool):
             _scores.append(float(_s))
     return _scores

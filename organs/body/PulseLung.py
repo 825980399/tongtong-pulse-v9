@@ -91,7 +91,10 @@ class PulseLung(BasePulseOrgan):
         self._quality_correction_memory: dict[str, dict[str, Any]] = {}
         self._correction_memory_max = 200
         self._correction_memory_lock = threading.Lock()
-        self._shadow_v2_retriever = None  # ★199刀1：影子 v2 只读检索 retriever（默认未接线，实弹刀推 200 注入）
+        # ★239刀1：检索器影子档接线——门（retriever_enabled）开则注入真实 retriever
+        # （绑定 .retrieve 为可调用 (query, top_k)）；门关或工厂/编码器不可用回落 None，
+        # 保持 199 窗「未接线」零行为语义。形状对齐见 nucleus/shadow_v2_probe.py:_extract_scores。
+        self._shadow_v2_retriever = self._wire_shadow_v2_retriever()  # ★199刀1：影子 v2 只读检索 retriever
         # ★P0修复：短时间去重缓存，防止同一问题被重复处理导致重复输出
         self._recent_requests: list[tuple[float, str]] = []
         self._dedup_window = 3.0  # ★v26.0优化: 10s→3s，避免用户快速连续输入被误拦截
@@ -115,6 +118,25 @@ class PulseLung(BasePulseOrgan):
         self._current_task_is_background = False
         self._current_call_is_background = False
         self._m49_tls = threading.local()
+
+    # ========== ★239刀1：检索器影子档接线（半天级，零行为） ==========
+    def _wire_shadow_v2_retriever(self):
+        """构造影子 v2 只读检索 retriever（可调用 (query, top_k)->list）。
+
+        门（``retriever_enabled``）关闭时返回 ``None``，保持 199 窗「未接线」语义。
+        门开时返回 ``ExperienceRetriever.retrieve`` 绑定方法，供
+        ``build_shadow_v2_fragment`` 直接调用（其契约正是
+        ``Callable[[str, int], list]``）。
+
+        不吞异常（铁律150：新 handler 不得静默 except）——工厂构造失败按真实错误
+        上抛；``get_retriever()`` 仅构造轻量实例、不触编码器，常规路径安全。
+        """
+        from nucleus.mnemosyne.experience_retriever import (
+            retriever_enabled, get_retriever)
+        if not retriever_enabled():
+            return None
+        return get_retriever().retrieve
+
     # ========== 主线第49批 T1：调用来源标记（线程局部） ==========
 
     def _m49_source_fix_on(self) -> bool:
