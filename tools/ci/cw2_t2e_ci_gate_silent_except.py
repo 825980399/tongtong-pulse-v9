@@ -88,8 +88,11 @@ def _log(level, msg):
 
 
 def git_show(ref, relpath):
+    # ★第245批 ci-gate-change：utf-8-sig 自动剥离 BOM（HEAD 既有 config.py 首行带 U+FEFF，
+    #   原函数用 utf-8 读取导致 ast.parse 报"不可打印字符"从而误判 parse_err FAIL，
+    #   拦截一切 config.py 改动）。utf-8-sig 对无 BOM 文件与 utf-8 完全等价。
     r = subprocess.run(["git", "show", f"{ref}:{relpath}"], cwd=ROOT,
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+                       capture_output=True, text=True, encoding="utf-8-sig", errors="replace")
     return r.stdout if r.returncode == 0 else None
 
 
@@ -97,7 +100,8 @@ def git_read_worktree(relpath):
     p = os.path.join(ROOT, relpath)
     if not os.path.exists(p):
         return None
-    return open(p, encoding="utf-8", errors="replace").read()
+    # ★第245批 ci-gate-change：utf-8-sig 自动剥离 BOM（同 git_show 说明）
+    return open(p, encoding="utf-8-sig", errors="replace").read()
 
 
 def changed_files(base):
