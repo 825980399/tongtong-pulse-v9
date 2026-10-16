@@ -892,9 +892,10 @@ class SemanticCacheL2:
         try:
             for _k, _v in _t.items():
                 _L.info(
-                    "[semantic_cache_l2] telemetry scene=%s hits=%s misses=%s neg=%s hit_rate=%s pollution_rate=%s",
+                    "[semantic_cache_l2] telemetry scene=%s hits=%s misses=%s neg=%s hit_rate=%s pollution_rate=%s stores=%s",
                     _k, _v.get("hits", 0), _v.get("misses", 0),
                     _v.get("neg", 0), _v.get("hit_rate", 0.0), _v.get("pollution_rate", 0.0),
+                    self._stat.get("stores", 0),
                 )
         except Exception as e:
             silent_exc(e, where="nucleus.llm.semantic_cache::SemanticCacheL2.telemetry.log")

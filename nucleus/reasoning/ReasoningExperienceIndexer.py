@@ -23,6 +23,12 @@ from typing import Any
 from nucleus._silent_except import silent_exc
 from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
 
+import logging
+logger = logging.getLogger("nucleus.reasoning.ReasoningExperienceIndexer")
+
+# ★第232批 刀2：旁路哨兵窗口（成功增量计数达此值即核一次蒸馏滞后，连续两窗>0 即告警）
+_SENTINEL_WINDOW = 50
+
 _lock = threading.Lock()
 _indexer: ReasoningExperienceIndexer | None = None
 
@@ -83,6 +89,10 @@ class ReasoningExperienceIndexer:
         self._state_lock = threading.RLock()
         # ★第164批 刀A1：补救/失败模式计数与内存索引
         self._remediation_count = 0
+        # ★第232批 刀2：旁路哨兵实例变量（蒸馏滞后检测）
+        self._sentinel_success = 0
+        self._sentinel_distilled = 0
+        self._sentinel_consec = 0
         self._remediation_log: list[dict[str, Any]] = []
         self._failure_modes: list[dict[str, Any]] = []
         self._failure_mode_total = 0   # 失败模式累计（本会话增量）
@@ -299,7 +309,12 @@ class ReasoningExperienceIndexer:
         """
         _q = str(question or "").strip()
         _a = str(correct_answer or "").strip()
+        # ★第232批 刀2：旁路哨兵——双写开启时每次成功补救理应产蒸馏；空答案早返回
+        #   亦在此计数（确保"成功增量"含空答案旁路），蒸馏增量滞后则两窗后告警。
+        if self._double_write_enabled:
+            self._sentinel_success += 1
         if not _q or not _a:
+            self._sentinel_check_window()
             return
         self._exp.record(_q, "remediation_success", source="remediation", confidence=float(confidence))
         with self._state_lock:
@@ -318,6 +333,9 @@ class ReasoningExperienceIndexer:
         if self._double_write_enabled:
             from nucleus.LLMDependencyMetrics import record_remediation_distilled
             record_remediation_distilled(1)
+            # ★第232批 刀2：成功且已蒸馏 → 蒸馏增量+1 并核窗
+            self._sentinel_distilled += 1
+            self._sentinel_check_window()
             # 蒸馏产物进 SemanticCacheL2（内在模型 L2 实现载体）：
             #   问题→正确答案 的可复用校正，命中后过四闸直接返回，替代 LLM 调用。
             #   store_l2 永不抛出；L2 关闭时静默返回 False（蒸馏计数已落，不阻断主链路）。
@@ -343,6 +361,31 @@ class ReasoningExperienceIndexer:
                 self._persist_state()
             if self._queue is not None:
                 self._queue.submit(_nid, _value)
+
+    # ------------------------------------------------------------------
+    # ★第232批 刀2：旁路哨兵窗口核查（蒸馏增量滞后补救成功→连续两窗告警）
+    # ------------------------------------------------------------------
+    def _sentinel_check_window(self) -> None:
+        """双写开启下，成功增量与蒸馏增量之差>0 连续两窗即判仍有旁路（可证伪预言）。
+
+        调用方在「成功计数+1」与「蒸馏计数+1」两处各调一次；窗口满即比对缺口，
+        缺口连续两窗为正→证明仍有未蒸馏的补救成功（如空答案早返回），与"旁路已修"
+        预言相悖（修复彻底后该哨兵应静默）。双写关闭时不计数，蒸馏恒0属预期。
+        """
+        if self._sentinel_success < _SENTINEL_WINDOW:
+            return
+        _gap = self._sentinel_success - self._sentinel_distilled
+        if _gap > 0:
+            self._sentinel_consec += 1
+            if self._sentinel_consec >= 2:
+                logger.warning(
+                    "ReasoningExperienceIndexer 旁路哨兵：蒸馏增量滞后补救成功 %d "
+                    "(连续 %d 窗>0)，仍存未蒸馏的补救成功——疑似空答案早返回或其他旁路",
+                    _gap, self._sentinel_consec)
+        else:
+            self._sentinel_consec = 0
+        self._sentinel_success = 0
+        self._sentinel_distilled = 0
 
     def record_failure_mode(self, pattern: str, question: str | None = None,
                             context: str | None = None, confidence: float = 0.3) -> None:

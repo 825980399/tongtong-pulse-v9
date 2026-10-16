@@ -176,6 +176,8 @@ def _dump_pairs():
                 "amplitude": e.get("amplitude", None),
                 "from": e.get("from", ""),
                 "matched_organs": e.get("matched_organs", []),
+                "layer": e.get("layer", ""),
+                "ttl_ns": e.get("ttl_ns", None),
             })
     try:
         _path = _get_pair_path()
