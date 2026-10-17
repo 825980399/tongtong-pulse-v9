@@ -1143,6 +1143,9 @@ class PulseFramework:
                 #   复用本 try 的 except，不新增静默 handler（cw2 门禁友好）。
                 from tools.lfi_self_awareness_compare import register_with_daily_schedule
                 register_with_daily_schedule()
+                # ★第262批 刀1②：丙-2先行 —— 把 InfoField 死数据/幽灵监听审计挂入每日调度
+                from nucleus.field.InfoField import register_infofield_dead_events_schedule
+                register_infofield_dead_events_schedule()
                 self._log(LogLevel.INFO,
                           f"[SelfAwareness] 每日调度"
                           f"{'已启动' if _sched_ok else '未启动（开关关闭或已在运行）'}")

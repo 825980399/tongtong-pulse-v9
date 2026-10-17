@@ -11,6 +11,7 @@ InfoField.py —— 信息场
 定位: 核心场域层
 """
 
+import json
 import os
 import random
 import sys
@@ -2716,6 +2717,74 @@ def get_info_field() -> "InfoField | None":
     供非器官组件（如 TimeCore 内核单例）获取，无需修改 main.py。
     """
     return _THE_INFO_FIELD
+
+
+# ========== ★第262批 刀1：丙-2先行 —— 死数据/幽灵监听每日落盘 ==========
+# audit_ghost_listeners() 是零新埋点的现成品（三个计数器在生产路径每拍都在填），
+# 本段仅把它的出口挂上每日调度并原子落盘，正够 260 刀3 三族新面孔运行时实证之用。
+_INFOFIELD_DEAD_EVENTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "monitor", "infofield_dead_events.json",
+)
+
+
+def audit_and_dump_dead_events() -> dict[str, Any] | None:
+    """调用 InfoField.audit_ghost_listeners() 并把结果原子落盘到 data/monitor。
+
+    供 DailyScheduler 每日调度点调用（无参签名，契合 add_daily_hook(fn: Callable[[], Any])）。
+    返回 audit_ghost_listeners 的结果；单例不可用时返回 None（不抛、不扰主链路）。
+    """
+    try:
+        _field = get_info_field()
+        if _field is None:
+            _module_logger.debug("[死数据审计] InfoField 单例不可用，跳过本轮")
+            return None
+        _result = _field.audit_ghost_listeners()
+        _dir = os.path.dirname(_INFOFIELD_DEAD_EVENTS_PATH)
+        os.makedirs(_dir, exist_ok=True)
+        _tmp = _INFOFIELD_DEAD_EVENTS_PATH + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            json.dump(_result, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _INFOFIELD_DEAD_EVENTS_PATH)
+        _module_logger.info(
+            "[死数据审计] 已落盘 dead_events=%d ghost_listeners=%d total_conditions=%d",
+            len(_result.get("dead_events", [])),
+            len(_result.get("ghost_listeners", [])),
+            _result.get("total_conditions", 0),
+        )
+        return _result
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.InfoField.audit_and_dump_dead_events")
+        return None
+
+
+# ★第262批 刀1②：每日调度挂钩（沿用 lfi 件先例 register_with_daily_schedule → DailyScheduler）
+INFOFIELD_DEAD_EVENTS_HOOK = "infofield_dead_events"
+
+
+def register_infofield_dead_events_schedule(scheduler=None):
+    """把 audit_and_dump_dead_events 挂入 DailyScheduler 每日调度点。
+
+    不翻生产开关、不改 InfoField 本体逻辑、不在此启动线程；
+    由 main.py 接线处负责 start()。返回挂载后的调度器实例；不可用时返回 None。
+    """
+    try:
+        from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule")
+        return None
+    _sched = scheduler or get_daily_scheduler()
+    if _sched is None:
+        return None
+    try:
+        if hasattr(_sched, "add_daily_hook"):
+            _sched.add_daily_hook(INFOFIELD_DEAD_EVENTS_HOOK, audit_and_dump_dead_events)
+        else:
+            _sched._infofield_dead_attached = True
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule")
+        return _sched
+    return _sched
 
 
 if __name__ == "__main__":

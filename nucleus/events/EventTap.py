@@ -111,7 +111,7 @@ class EventTap:
         if self._started:
             return self._sub_id
         _bus = self._bus if self._bus is not None else get_event_bus()
-        self._sub_id = _bus.subscribe("**", self._on_event, priority=EventPriority.LOW)
+        self._sub_id = _bus.subscribe("**", self._on_event, priority=EventPriority.LOW, observer=True)
         self._started = True
         return self._sub_id
 

@@ -152,6 +152,7 @@ class Subscription:
     once: bool = False
     created_at: float = 0.0
     invoked: int = 0
+    observer: bool = False
 
 
 class EventBus:
@@ -192,6 +193,7 @@ class EventBus:
         handler: EventHandler,
         priority: EventPriority = EventPriority.NORMAL,
         once: bool = False,
+        observer: bool = False,
     ) -> str:
         """注册订阅。
 
@@ -219,6 +221,7 @@ class EventBus:
             priority=priority,
             once=bool(once),
             created_at=time.time(),
+            observer=bool(observer),
         )
         with self._lock:
             self._subs[sub.sub_id] = sub

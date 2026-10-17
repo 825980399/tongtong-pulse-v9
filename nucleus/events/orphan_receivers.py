@@ -38,7 +38,7 @@ def register_growth_need_detected_receiver(bus=None) -> str | None:
         # 幂等：已登记且订阅表仍含该事件 → 跳过
         if _registered and _bus.subscription_count(_EVENT_TYPE) > 0:
             return None
-        _sid = _bus.subscribe(_EVENT_TYPE, _noop_handler)
+        _sid = _bus.subscribe(_EVENT_TYPE, _noop_handler, observer=True)
         _registered = True
         return _sid
     except Exception as e:  # 总线不可用等 → 静默降级，绝不扰动运行路径
