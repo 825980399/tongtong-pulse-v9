@@ -438,6 +438,7 @@ class PulseCortex(BasePulseOrgan):
             if correlation_id:
                 _q = self._receipt_ledger_pop(correlation_id)
                 if _q is not None:
+                    self._log(LogLevel.DEBUG, f"[B3账本] 命中 cid={correlation_id}")
                     try:
                         from nucleus.reasoning.ReasoningExperienceIndexer import (
                             get_reasoning_experience_indexer,
@@ -515,6 +516,8 @@ class PulseCortex(BasePulseOrgan):
         _now = time.time()
         with self._pending_receipt_ledger_lock:
             self._pending_receipt_ledger[correlation_id] = (question, _now)
+            self._log(LogLevel.DEBUG,
+                      f"[B3账本] 记入 cid={correlation_id} 账本={len(self._pending_receipt_ledger)}")
             self._receipt_ledger_sweep_locked(_now)
 
     def _receipt_ledger_pop(self, correlation_id: str) -> str | None:
@@ -539,6 +542,7 @@ class PulseCortex(BasePulseOrgan):
         _expired = [k for k, (_q, _t) in self._pending_receipt_ledger.items()
                     if (now - _t) > self._pending_receipt_ledger_ttl]
         if _expired:
+            self._log(LogLevel.DEBUG, f"[B3账本] 过期未兑现 n={len(_expired)}")
             # ★第241批 刀3（C案一刀三得）：过期未回执项数计入 missed（失约率直算）
             from nucleus.LLMDependencyMetrics import record_remediation_missed
             record_remediation_missed(len(_expired))

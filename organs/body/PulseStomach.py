@@ -349,6 +349,22 @@ class PulseStomach(BasePulseOrgan):
         if not content:
             return {"status": "skipped", "reason": "空内容"}
 
+        # ★第256批 刀1（N13 digest 重试循环幂等）：
+        #   自我理解派发的「器官说明书占位条目」(功能: (待大模型分析)) 被消化循环反复派发，
+        #   导致 dry_run 探针高噪(1,323行/日)。加派发键去重：同一占位条目本次会话仅派发一次。
+        if "self_understanding" in str(trigger_reason) and "功能: (待大模型分析)" in content:
+            import hashlib
+            _n13_dedup = getattr(self, "_manual_digest_dispatched", None)
+            if _n13_dedup is None:
+                _n13_dedup = set()
+                self._manual_digest_dispatched = _n13_dedup
+            _n13_key = hashlib.md5(content.encode("utf-8")).hexdigest()[:16]
+            if _n13_key in _n13_dedup:
+                self._log(LogLevel.DEBUG,
+                          f"[N13 digest幂等] 跳过已派发占位说明书条目 key={_n13_key} 前40字={content[:40]!r}")
+                return {"status": "skipped", "reason": "说明书占位条目已派发"}
+            _n13_dedup.add(_n13_key)
+
         # 主线第71批 T2：记录一次知识消化查询执行（只写 InfluxDB）
         self._m71_record_query_executed("digest_knowledge", 0.0, 1)
 
