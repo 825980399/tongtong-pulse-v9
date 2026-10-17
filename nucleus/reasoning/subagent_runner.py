@@ -114,6 +114,46 @@ def _cleanup_on_timeout(exc):
             proc.wait(timeout=5)
 
 
+_CHANNEL_POOL_SENTINEL = "channel_pool"
+
+
+def _resolve_cheap_model(cfg, cheap):
+    """解析子代理廉价模型规格（270批刀3）。
+
+    ``SUBAGENT_CHEAP_MODEL == "channel_pool"`` 是哨兵值：复用主进程
+    ``REMOTE_API_CHANNELS`` 渠道池，按 priority 升序选首个可用渠道（与主进程
+    多渠道路由同源、不硬编码渠道名）。渠道池整体不可用时回退付费
+    ``advanced_model`` 兜底，保证恒非空（满足硬条款③）。
+
+    返回 dict：{"model": str, "channel": dict | None, "source": str}
+    """
+    if str(cheap or "").strip().lower() != _CHANNEL_POOL_SENTINEL:
+        return {"model": cheap, "channel": None, "source": "literal"}
+    _ch = None
+    try:
+        _active = cfg.get_active_channels()  # 已按 priority 升序（智谱优先）
+        if _active:
+            _ch = _active[0]
+    except Exception as exc:
+        _L.warning("[subagent_runner] channel_pool 解析失败，回退 advanced 兜底: %s: %s",
+                   type(exc).__name__, exc)
+        _ch = None
+    if _ch and _ch.get("model"):
+        return {"model": _ch["model"], "channel": _ch, "source": "channel_pool"}
+    _pool = getattr(cfg, "REMOTE_API_CHANNELS", {}) or {}
+    _adv_model = _pool.get("advanced_model", "") or "deepseek-flash"
+    _adv = {
+        "name": "advanced_fallback",
+        "model": _adv_model,
+        "api_url": _pool.get("advanced_api_url", ""),
+        "api_key": _pool.get("advanced_api_key", ""),
+        "adapter": "openai_compatible",
+    }
+    _L.warning("[subagent_runner] channel_pool 无可用渠道，回退付费 advanced 兜底 model=%s",
+               _adv_model)
+    return {"model": _adv_model, "channel": _adv, "source": "advanced"}
+
+
 def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
                  stderr_file=None, timeout=None, dry_run=None):
     """执行一次子代理任务（封装安全边界协议）。
@@ -188,7 +228,11 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
         output_file = tempfile.mktemp(suffix=".json", prefix="subagent_out_")
     if stderr_file is None:
         stderr_file = tempfile.mktemp(suffix=".log", prefix="subagent_err_")
-    _write_json(input_file, {**task, "model": cheap,
+    # —— 刀3（270）：解析廉价模型规格（channel_pool 复用主进程渠道池）——
+    _spec = _resolve_cheap_model(cfg, cheap)
+    _write_json(input_file, {**task, "model": _spec["model"],
+                             "channel": _spec["channel"],
+                             "model_source": _spec["source"],
                              "budget_tokens": int(task.get("budget_tokens", budget))})
 
     if timeout is None:

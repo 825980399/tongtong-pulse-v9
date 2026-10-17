@@ -1083,8 +1083,11 @@ OA3_SKILL_MANIFEST_DIRS = []             # 参与 SKILL.md 资源清单的能力
 # ========== 180批 刀3（O-B6）：子代理隔离面键声明 ==========
 # 来源：烛微180前置 §1 反假——evolution_worker.py:102 进程隔离已在位、:90/:92 深度上限已参数化；
 # 本刀只补两键声明（无消息工具开关 + 廉价模型指定键），默认关（真起子代理推后续批，不重复排已有能力）。
-ENABLE_SUBAGENT_NO_MESSAGE_TOOL = False  # 子代理无消息工具隔离面（默认关）
-SUBAGENT_CHEAP_MODEL = ""                # 子代理廉价模型指定（空=不指定，沿用主模型）
+ENABLE_SUBAGENT_NO_MESSAGE_TOOL = True   # ★270批刀2：隔离面翻开（子代理不得直发 Mouth/SPEAK）
+#   runner 仍 False ⇒ 零真起风险；先翻安全闸，使档四真起时隔离面已就位且已被验证。
+SUBAGENT_CHEAP_MODEL = "channel_pool"    # ★270批刀3：哨兵值＝复用主进程 REMOTE_API_CHANNELS 渠道池
+#   由 subagent_runner._resolve_cheap_model 按 priority 升序选首个可用渠道
+#   （智谱优先 → … → 付费 advanced/deepseek 兜底），不硬编码渠道名；硬条款③非空通过。
 
 # ========== 179批 刀2（O-B2）：Standing Orders 四字段 ==========
 # 来源：177批《O-B2 Standing Orders 设计稿》；179A 刀2 实装四字段结构 + 闸引用 O-B1 键。
@@ -5881,9 +5884,9 @@ O_A4_LOCAL_EVIDENCE_PROVIDERS = {
 # 读取点：nucleus/reasoning/subagent_runner.py::run_subagent
 # 硬条款：①强制exit code检查 ②NO_MESSAGE_TOOL闸先于真起 ③预算校验 ④timeout清理
 # 零行为变化：ENABLE_SUBAGENT_RUNNER=False（默认）→ 调用方 dry_run（不真起）；
-#             ENABLE_SUBAGENT_NO_MESSAGE_TOOL=False 未翻开 → 拒绝真起（硬条款②先行）
+#             ENABLE_SUBAGENT_NO_MESSAGE_TOOL=True（270批刀2已翻开）→ 硬条款②先行通过；
 ENABLE_SUBAGENT_RUNNER = False
-SUBAGENT_BUDGET_TOKENS = 0          # 0=不限制单次预算（硬条款③仅校验 CHEAP_MODEL 非空）
+SUBAGENT_BUDGET_TOKENS = 4000       # ★270批刀3：4000 tokens/次上限（预算线不空转，:169—177 生效）
 SUBAGENT_TIMEOUT_SECONDS = 300
 
 # ===== [M183-TEMP] 183批刀3：认知状态机观测（纯函数 + 统一温度单一来源）=====

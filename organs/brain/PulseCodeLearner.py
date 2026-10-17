@@ -1936,12 +1936,26 @@ class PulseCodeLearner(BasePulseOrgan):
             f'"潜在风险": "可能的边界情况或性能问题"}}'
         )
 
+        # ★270批刀1：显式声明本次 LLM 调用的场景＝「代码学习/自我理解」。
+        #   此前无 scene ⇒ 肺部统一出口埋点一律记 SCENE_LUNG（"肺回答"），
+        #   说明书分析这类"自我理解"消耗被混进对话分母（265 §2 已指出）。
+        #   零行为变化：仅声明归类，不改调用路径与返回值。
+        try:
+            from nucleus.LLMDependencyMetrics import (
+                SCENE_CODE_LEARN as _m270_scene_code_learn,
+            )
+        except Exception as _m270_e:
+            _m270_scene_code_learn = "代码学习"
+            self._log(LogLevel.DEBUG,
+                      f"[270刀1] SCENE_CODE_LEARN 导入失败，回退字面量: "
+                      f"{type(_m270_e).__name__}")
         self._emit(LungEvent.SELECT_MODEL, {
             "task_type": "code",
             "prompt": _prompt,
             "user_name": "系统",
             "is_background_learning": True,
             "trigger_reason": f"self_understanding.code_analysis:{organ_name}.{method_name}",
+            "scene": _m270_scene_code_learn,
         }, priority=2, layer="L3")
 
     def _weave_code_knowledge(self):
