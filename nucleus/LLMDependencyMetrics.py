@@ -339,6 +339,8 @@ class LLMDependencyMetrics:
         不进入回答通道，不应虚高 LLM 依赖度。故分子与分母同步排除进化调用，
         口径变为「回答通道内（肺/代码/其他）依赖度」。
         基线常量 LLM_DEPENDENCY_BASELINE（0.9694）不在此重锚。
+        ★第266批 刀4：本指标对外称「回答类依赖度」，分母只含回答类（肺/代码/其他），
+        不含自主进化类；整体大模型占比见 :meth:`overall_llm_share`。
         """
         _evo = int(self._counters.get("llm_call_count", {}).get(SCENE_EVOLUTION, 0))
         _llm = max(0, self.llm_total() - _evo)
@@ -628,6 +630,11 @@ class LLMDependencyMetrics:
                 f"对话={_tw['lung_ratio']:.4f} 总={_tw['total']} "
                 f"(进化={_tw['evolution']} 对话={_tw['lung']})"
             )
+        # ★第266批 刀4：对外口径标注——本指标为「回答类依赖度」，不含自主进化类
+        _logger.info(
+            "[依赖度量] 本指标为回答类依赖度(LLM依赖度)，不含自主进化类；"
+            "整体大模型占比见 overall_llm_share"
+        )
         # 依赖度过高（>0.9 且有样本）时提示，服务"增强自持能力"目标
         if _d["answer_requests"] >= 20 and _d["llm_dependency_ratio"] > 0.9:
             _logger.warning(

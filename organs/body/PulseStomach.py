@@ -44,7 +44,7 @@ from nucleus.knowledge_noise_filter import (
     is_noise_keyword,
     is_path_fragment_word,  # ★v25.0新增：路径碎片检测
 )
-from nucleus.LLMDependencyMetrics import DIGEST_KNOWLEDGE, record_digestion
+from nucleus.LLMDependencyMetrics import DIGEST_KNOWLEDGE, record_digestion, record_local_inference, KIND_RULE
 from nucleus.logger import exc_location
 from nucleus.mnemosyne.PulseNode import PulseNode
 
@@ -1320,6 +1320,8 @@ class PulseStomach(BasePulseOrgan):
         # ★P0修复：优先本地快速检查（解决脉冲通信不可靠导致的持续超时）
         _local = self._local_ethics_check(content[:500])
         if _local is not None:
+            # ★第266批 刀1：本地决策计数对称——优先本地快速检查路径补记账（只加计数不改分支）
+            record_local_inference(KIND_RULE)
             return _local
 
         if not self.info_field or not self.pulse_core:

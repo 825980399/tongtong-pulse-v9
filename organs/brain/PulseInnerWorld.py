@@ -18,7 +18,7 @@ import threading
 import time
 from typing import Any
 
-from nucleus.LLMDependencyMetrics import KIND_SIMPLE, record_local_inference
+from nucleus.LLMDependencyMetrics import KIND_SIMPLE, KIND_RULE, record_local_inference
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -4186,6 +4186,8 @@ class PulseInnerWorld(
         if any(s in ctx.question for s in _KNOWLEDGE_QUERY_SIGNALS) and \
                 not re.search(r'规则\s*\d+.*(?:→|->|=>)|冲突|矛盾|类比|归纳|演绎', ctx.question):
             self._log(LogLevel.DEBUG, "经验匹配路由: 纯知识查询，跳过经验路由，交本地检索")
+            # ★第266批 刀1：本地决策计数对称——纯知识查询本地检索路径补记账（只加计数不改分支）
+            record_local_inference(KIND_RULE)
             return None
 
         try:
