@@ -49,6 +49,11 @@ _FLUSH_INTERVAL = 2.0  # 写入频率限制：每2秒最多一次，避免竞态
 _events = []
 _lock = threading.Lock()
 
+# ★第268批 刀1（丙-1主路）：pulse_id → emit 事件 O(1) 索引。
+#   根治 264 降级项3 + 117 批欠账：log_receive 回填从 O(n) 反扫降 O(1) 直查；
+#   mark_route_matched 凭 pulse_id 就地打点路由结果（发射当场权威）。
+_EMIT_INDEX: dict[str, dict] = {}
+
 # 207批·刀1：target_organ 标注制填充率观测（仅 ENABLE_TARGET_ORGAN_FIELD 时计数，生死闸）
 _TO_FILL_RATE_EVERY = 500   # 每 N 次 emit 打一行填充率 INFO
 _TO_EMIT_TOTAL = 0
@@ -270,7 +275,7 @@ def _get_orphan_path():
 
 def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None):
     """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
-    global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
+    global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ, _EMIT_INDEX
     # ★第222批·刀1：int-3幽灵追踪——target_organ 必须为 str，非 str 视为幽灵来源并告警+归一
     if not isinstance(target_organ, str):
         logger.warning(
@@ -293,8 +298,16 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
         event["seq"] = _EVENT_SEQ
         _EVENT_SEQ += 1
         _events.append(event)
+        # ★268批 刀1：写 O(1) 索引（pulse_id 非空时）
+        if pulse_id:
+            _EMIT_INDEX[pulse_id] = event
         if len(_events) > _ring_size():
-            _events.pop(0)
+            _evicted = _events.pop(0)
+            # 环溢出逐出时同步摘除索引：仅在索引仍指向同一事件对象时（身份校验，
+            # 防重号 pulse_id 串扰误删仍在环内的新事件），避免孤儿索引泄漏。
+            _evicted_pid = _evicted.get("pulse_id", "")
+            if _evicted_pid and _EMIT_INDEX.get(_evicted_pid) is _evicted:
+                _EMIT_INDEX.pop(_evicted_pid, None)
         # 207批·刀1：仅当字段启用时统计填充率（否则恒空无意义，生死闸）
         if _target_organ_field_enabled():
             _TO_EMIT_TOTAL += 1
@@ -314,16 +327,17 @@ def log_receive(organ_name, event_type, source_organ, pulse_id=""):
     - 接收记录直记 pulse_id，供 STDP 成对流落盘精确配对。
     """
     with _lock:
-        global _EVENT_SEQ
-        # 207批·刀3：优先按 pulse_id 精确匹配 emit；失败回退事件类型启发式
+        global _EVENT_SEQ, _EMIT_INDEX
+        # 207批·刀3 + 268批 刀1：优先按 pulse_id 经 _EMIT_INDEX 做 O(1) 精确回填；
+        # 索引未命中（事件已出环 / 非脉冲路由发射）再退化为事件类型启发式反扫兜底。
         if pulse_id:
-            _hit = False
-            for evt in reversed(_events):
-                if evt.get("type") == "emit" and evt.get("pulse_id") == pulse_id:
-                    if organ_name not in evt["matched_organs"]:
-                        evt["matched_organs"].append(organ_name)
-                    _hit = True
-                    break
+            _emit_evt = _EMIT_INDEX.get(pulse_id)
+            if _emit_evt is not None and _emit_evt.get("type") == "emit":
+                if organ_name not in _emit_evt["matched_organs"]:
+                    _emit_evt["matched_organs"].append(organ_name)
+                _hit = True
+            else:
+                _hit = False
             if not _hit:
                 for evt in reversed(_events):
                     if evt.get("type") == "emit" and evt.get("event_type") == event_type:
@@ -348,8 +362,38 @@ def log_receive(organ_name, event_type, source_organ, pulse_id=""):
         _EVENT_SEQ += 1
         _events.append(_evt)
         if len(_events) > _ring_size():
-            _events.pop(0)
+            _evicted = _events.pop(0)
+            _evicted_pid = _evicted.get("pulse_id", "")
+            if _evicted_pid and _EMIT_INDEX.get(_evicted_pid) is _evicted:
+                _EMIT_INDEX.pop(_evicted_pid, None)
     _ensure_flusher()  # ★T-117a 方案B：运行期懒启动（import 期绝不起线程）
+
+
+# ★第268批 刀1（丙-1主路）：在 InfoField.publish 收尾记录路由匹配结果，
+#   使孤儿判定「发射当场权威」（不等 1.5s 靠 matched_organs 反扫），并让早退三类
+#   （expired/duplicate/storm_blocked）归因到 dispatch_loss。
+def mark_route_matched(pulse_id, real_matched, universal_matched, dispatched, status):
+    """记录某 emit 的路由匹配结果（由 InfoField.publish 收尾调用）。
+
+    Args:
+        pulse_id: 发射的 pulse_id（空串直接忽略，零副作用）
+        real_matched: 真实器官匹配数（剔除万能器官计数）
+        universal_matched: 仅万能器官（血管等）匹配数
+        dispatched: 是否成功派发（bool）
+        status: 路由态，取值 {"ok","unmatched","expired","duplicate","storm_blocked"}
+    """
+    if not pulse_id:
+        return
+    with _lock:
+        _evt = _EMIT_INDEX.get(pulse_id)
+        if _evt is None or _evt.get("type") != "emit":
+            return
+        _evt["route_matched"] = {
+            "real_matched": real_matched,
+            "universal_matched": universal_matched,
+            "dispatched": dispatched,
+            "status": status,
+        }
 
 def _detect_orphans(events, min_age=None, subscription_provider=None):
     """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件。
@@ -372,18 +416,28 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
             continue
         if (now - evt["timestamp"]) < min_age:
             continue
-        # ★第264批 刀2（丙-1判据红线 / 263§0）：一律以 real_matched_count 为准，绝不用 naive matched_count。
-        #   real_matched_count = 剔除万能观测器官（_UNIVERSAL_ONLY_ORGANS，如血管 "*" 条件）后的真实匹配数；
-        #   若直接以 matched_organs 非空判平反，会重建 257 抓出的永零失明（这次表没选错，更难发现）。
-        _matched = evt.get("matched_organs") or []
-        _real_matched_count = len([o for o in _matched if o not in _UNIVERSAL_ONLY_ORGANS])
-        if _real_matched_count > 0:
-            # 有真实消费者（剔除万能后） → 当场权威平反（迟到 receive 回填亦走此路径）
-            continue
-        # real_matched_count == 0：可能"只有万能器官在看"或"完全无接收"——两类都不平反，计入孤儿候选。
-        #   universal_only 标记"只有血管在看"的真孤儿候选（价值最高的一格）。
-        _universal_only = bool(_matched) and _real_matched_count == 0
-        # ★200刀1：订阅表兜底 —— 存在「非观测者」订阅方则平反（subscription_provider 已剔除 observer）
+        # ★第268批 刀1（丙-1主路）：判据升四态——发射当场（路由层）权威，不等 1.5s。
+        _rm = evt.get("route_matched")
+        _has_rm = _rm is not None
+        if _has_rm:
+            # 1) 主路已打点且真实匹配 > 0 → 当场平反（迟到 receive 回填亦走此路径）
+            # 2) 主路已打点且真实匹配 == 0 → 真孤儿候选（往下走 subscription/白名单）
+            _real_matched_count = _rm.get("real_matched", 0)
+            _matched = evt.get("matched_organs") or []
+            # universal_only 仍按「剔除万能器官后的真实匹配」判（覆盖 route_matched 未细分 universal 的情况）
+            _universal_only = (bool(_matched)
+                               and len([o for o in _matched if o not in _UNIVERSAL_ONLY_ORGANS]) == 0
+                               and _real_matched_count == 0)
+            if _real_matched_count > 0:
+                continue
+        else:
+            # 3) 无 route_matched（早退/未打点/已出环）→ 现 264 红线：剔除万能器官后的真实匹配数
+            _matched = evt.get("matched_organs") or []
+            _real_matched_count = len([o for o in _matched if o not in _UNIVERSAL_ONLY_ORGANS])
+            _universal_only = bool(_matched) and _real_matched_count == 0
+            if _real_matched_count > 0:
+                continue
+        # 4) ★200刀1：订阅表兜底 —— 存在「非观测者」订阅方则平反（subscription_provider 已剔除 observer）
         if subscription_provider is not None:
             try:
                 _has_sub = subscription_provider(evt["event_type"])
@@ -401,9 +455,11 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
             "event_type": evt["event_type"],
             "layer": evt.get("layer", ""),
             "pulse_id": evt.get("pulse_id", ""),
-            # ★第264批 刀2：判据红线字段——剔除万能器官后的真实匹配数；universal_only 标"只有血管在看"
+            # ★第264批 刀2：判据红线字段——剔除万能器官后的真实匹配数；
+            # ★第268批 刀1：route_status 附路由态（None=未打点）供 dispatch_loss 诊断
             "real_matched_count": _real_matched_count,
             "universal_only": _universal_only,
+            "route_status": _rm.get("status") if _has_rm else None,
             "error": "孤儿脉冲: 发射后无器官接收",
         })
     return orphans
@@ -574,14 +630,33 @@ def flush_to_file(force: bool = False):
             _hb_bus = get_event_bus()
             if _hb_bus is not None:
                 _hb_W = _hb_bus.subscription_count("**")
+            # ★第268批 刀1：主路自证覆盖率（健康线）+ 派发丢包（dispatch_loss，按 status 分桶）
+            _hb_R = sum(1 for e in _hb_emits if e.get("route_matched") is not None)
+            _hb_L = 0
+            _hb_L_by_status = {}
+            for e in _hb_emits:
+                _rm = e.get("route_matched")
+                if _rm is None:
+                    continue
+                _expected = _rm.get("real_matched", 0)
+                _matched = e.get("matched_organs") or []
+                _arrived = len([o for o in _matched if o not in _UNIVERSAL_ONLY_ORGANS])
+                _loss = _expected - _arrived
+                if _loss > 0:
+                    _hb_L += _loss
+                    _st = _rm.get("status", "unknown")
+                    _hb_L_by_status[_st] = _hb_L_by_status.get(_st, 0) + _loss
             _hb_K = len(new_orphans)                    # 本轮新增孤儿
             if _hb_K == 0 and _hb_W > 0:
                 logger.warning(
                     "pulse_tracer: [孤儿判定] 判定面可能被万能监听器短路（K=0 但 通配=%d>0）", _hb_W)
             else:
                 logger.info(
-                    "pulse_tracer: [孤儿判定] 基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d",
-                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K)
+                    "pulse_tracer: [孤儿判定] 基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d 主路自证=%d 派发丢包=%d",
+                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K, _hb_R, _hb_L)
+            if _hb_L > 0:
+                logger.info(
+                    "pulse_tracer: [dispatch_loss] 分桶=%s", _hb_L_by_status)
 
         # ★第117批 T-117a：此处的 _last_flush_time 更新已删除（头判尾更的根因），
         #   占位统一在 _claim_flush_gate 内「判完即占」完成。

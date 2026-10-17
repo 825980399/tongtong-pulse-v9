@@ -12,7 +12,7 @@ offline_survival_protocol.py —— 断网生存协议（164批 刀A3 · T-断�
     - 不触碰 config.py（开关一律模块级常量）。
     - 纯函数式，无框架依赖，可独立 import 与隔离测试。
 
-本地链顺序与 nucleus/reasoning/StrategySelector._LOCAL_FALLBACK_CHAIN 前端一致：
+本地链顺序与 nucleus/reasoning/StrategySelector._LOCAL_REASONING_CHAIN 前端一致（第268批刀4改名）：
     ("symbolic", "causal", "analogy")，最后才是 "llm"（外脑）。
 
 联网复核：
@@ -35,7 +35,7 @@ OFFLINE_SURVIVAL_ENABLED: bool = True
 # 离线推理结果统一标记（落点要求：结果标 `[本地推理·待验证]`）
 OFFLINE_TAG: str = "[本地推理·待验证]"
 
-# 本地推理链顺序（与 StrategySelector._LOCAL_FALLBACK_CHAIN 前端一致）
+# 本地推理链顺序（与 StrategySelector._LOCAL_REASONING_CHAIN 前端一致，第268批刀4改名）
 LOCAL_CHAIN: tuple[str, ...] = ("symbolic", "causal", "analogy")
 
 # 类比跨域迁移判定置信度下限（低于此不采纳迁移假设）

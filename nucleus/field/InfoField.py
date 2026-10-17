@@ -106,6 +106,19 @@ def resolve_l2_config(cpu_count=8, layer_config=None) -> dict:
     return {"queue_limit": _limit, "workers": _workers, "warn_ratio": _warn_ratio}
 
 
+# ★第268批 刀1（丙-1主路）：受 DEBUG_PULSE_TRACE 门控的路由打点（零阻塞、失败即忽略）。
+#   由 publish 各出口调用，把「路由层当场判定」写入 pulse_tracer，使孤儿判定发射当场权威。
+def _trace_route_matched(pulse_id, real_matched, universal_matched, dispatched, status):
+    """受 DEBUG_PULSE_TRACE 门控，转发到 pulse_tracer.mark_route_matched。"""
+    try:
+        if not getattr(_cfg, "DEBUG_PULSE_TRACE", False):
+            return
+        from utils.pulse_tracer import mark_route_matched
+        mark_route_matched(pulse_id, real_matched, universal_matched, dispatched, status)
+    except Exception as _e:
+        _module_logger.debug(f"[路由打点忽略] type={type(_e).__name__} {_e}")
+
+
 class InfoField(SilentLogMixin):
     """
     全局信息场（v9.5 分层异步调度 · 终极完整版）
@@ -558,6 +571,7 @@ class InfoField(SilentLogMixin):
             if not (PULSE_LAYER.get("disable_ttl_for_l0_l1", True) and layer in (_PULSE_LAYER_L0, _PULSE_LAYER_L1)):
                 with self._lock:
                     self._total_expired += 1
+                _trace_route_matched(pulse_id, 0, 0, False, "expired")
                 return {"status": "expired", "pulse_id": pulse_id,
                         "reason": f"脉冲已过期 (TTL={ttl_ns}ns, 已过{now_ns - timestamp_ns}ns)"}
         
@@ -573,6 +587,7 @@ class InfoField(SilentLogMixin):
         if self._is_duplicate(_dedup_key):
             with self._lock:
                 self._total_duplicated += 1
+            _trace_route_matched(pulse_id, 0, 0, False, "duplicate")
             return {"status": "duplicate", "pulse_id": pulse_id, "reason": "已处理过"}
         
         # === 步骤2: 脉冲风暴检测 ===
@@ -582,6 +597,7 @@ class InfoField(SilentLogMixin):
             if action == _STORM_REJECT:
                 with self._lock:
                     self._total_storm_blocked += 1
+                _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                 return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "脉冲风暴，已拒绝"}
             elif action == _STORM_AGGREGATE:
                 pulse["storm_aggregated"] = True
@@ -591,6 +607,7 @@ class InfoField(SilentLogMixin):
                 if layer not in (_PULSE_LAYER_L0, _PULSE_LAYER_L1) and random.random() < 0.3:
                     with self._lock:
                         self._total_storm_blocked += 1
+                    _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                     return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "风暴聚合降载"}
             elif action == _STORM_THROTTLE:
                 pulse["storm_throttled"] = True
@@ -598,6 +615,7 @@ class InfoField(SilentLogMixin):
                 if layer not in (_PULSE_LAYER_L0, _PULSE_LAYER_L1) and random.random() < 0.5:
                     with self._lock:
                         self._total_storm_blocked += 1
+                    _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                     return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "风暴限流降载"}
 
         # === 步骤3: 高负载自适应 ===
@@ -846,6 +864,15 @@ class InfoField(SilentLogMixin):
             )
         except Exception as _exc:
             _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
+        # ★第268批 刀1（丙-1主路）：publish 收尾打点路由结果（剔除万能器官，与 tracer 口径一致）
+        try:
+            from utils.pulse_tracer import _UNIVERSAL_ONLY_ORGANS as _UOA
+            _real = len([o for o in matched_organs if o not in _UOA])
+            _univ = len(matched_organs) - _real
+            _status = "ok" if matched_organs else "unmatched"
+            _trace_route_matched(pulse_id, _real, _univ, bool(matched_organs), _status)
+        except Exception as _e:
+            _module_logger.debug(f"[路由打点忽略] type={type(_e).__name__} {_e}")
         return {
             "status": "published",
             "pulse_id": pulse_id,

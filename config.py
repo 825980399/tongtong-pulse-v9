@@ -2336,7 +2336,8 @@ DIALOG_QUEUE_STRATEGY = "queue"
 #         仅完成「判定链设计 + 静态接线」，不触发本地兜底链；
 #   True （★生产放宽需双 P0 活体验证后翻，应急回滚改 False）：
 #         未知问题经本地推理链兜底，预期本地拦截率 <2%→≥40%。
-REASONING_ROUTE_LOCAL_FALLBACK = True
+#   ★第268批 刀3：接入前降回 False（开关就位、链未接通，先关闸，接入后按窗放开）。
+REASONING_ROUTE_LOCAL_FALLBACK = False
 
 ENABLE_EVENT_BUS = False
 EVENT_BUS_CONFIG = {

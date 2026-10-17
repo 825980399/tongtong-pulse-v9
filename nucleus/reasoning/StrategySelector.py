@@ -67,13 +67,14 @@ class StrategySelector:
     }
 
     # ★163批 刀1：检测器认不出时的本地推理兜底链（顺序即执行序）。
-    _LOCAL_FALLBACK_CHAIN: ClassVar[tuple[str, ...]] = (
+    # ★第268批 刀4：改名 local_reasoning_chain，与 PulseLung 远程回退的 local_fallback 区分（防读错数）。
+    _LOCAL_REASONING_CHAIN: ClassVar[tuple[str, ...]] = (
         "symbolic", "causal", "analogy", "llm",
     )
 
     def __init__(self, enabled: bool = True,
                  adapt_rate: float = 0.1,
-                 local_fallback_enabled: bool | None = None) -> None:
+                 local_reasoning_chain_enabled: bool | None = None) -> None:
         """
         Args:
             enabled: 开关
@@ -100,9 +101,10 @@ class StrategySelector:
         self._degraded: dict[str, bool] = {name: False for name in self._STRATEGIES}
 
         # ★163批 刀1：本地推理链兜底灰度开关（默认读 config，可被构造参数覆盖）。
-        self._local_fallback_enabled = (bool(local_fallback_enabled)
-                                        if local_fallback_enabled is not None
-                                        else self._read_cfg_fallback_flag())
+        # ★第268批 刀4：改名 _local_reasoning_chain_enabled（与 PulseLung 远程回退区分）。
+        self._local_reasoning_chain_enabled = (bool(local_reasoning_chain_enabled)
+                                               if local_reasoning_chain_enabled is not None
+                                               else self._read_cfg_fallback_flag())
 
     # ========== 核心：策略选择 ==========
 
@@ -184,20 +186,22 @@ class StrategySelector:
         import config as _cfg
         return bool(getattr(_cfg, "REASONING_ROUTE_LOCAL_FALLBACK", False))
 
-    def set_local_fallback_enabled(self, value: bool) -> None:
-        """灰度开关运行时切换。"""
-        self._local_fallback_enabled = bool(value)
+    def set_local_reasoning_chain_enabled(self, value: bool) -> None:
+        """★第268批 刀4：灰度开关运行时切换（原名 set_local_fallback_enabled，改名区分远程回退）。"""
+        self._local_reasoning_chain_enabled = bool(value)
 
     def _is_unrecognized(self, base: dict[str, Any],
                         question_type: str) -> bool:
         """检测器是否认不出：未分类（'未知'）即视为不可识别。"""
         return question_type == "\u672a\u77e5"
 
-    def route_with_local_fallback(self, question: str,
-                                  complexity: float = 0.5,
-                                  question_type: str = "未知",
-                                  context: dict[str, Any] | None = None) -> dict[str, Any]:
-        """推理路由入口（放宽版）：检测器认不出时走本地推理链兜底。
+    def route_with_local_reasoning_chain(self, question: str,
+                                          complexity: float = 0.5,
+                                          question_type: str = "未知",
+                                          context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """★第268批 刀4：推理路由入口（放宽版）——改名 local_reasoning_chain，与 PulseLung 远程回退区分。
+
+        检测器认不出时走本地推理链兜底。
 
         判定链（兜底序）：Symbolic → Causal → Analogy → LLM。
         - 开关关闭（默认·前段静态接线）：行为等价于 select_strategy，零变化。
@@ -208,10 +212,10 @@ class StrategySelector:
         实际引擎调用与活体拦截率验收留待双 P0 后接入。
         """
         _base = self.select_strategy(question, complexity, question_type, context)
-        if self._local_fallback_enabled and self._is_unrecognized(_base, question_type):
+        if self._local_reasoning_chain_enabled and self._is_unrecognized(_base, question_type):
             return {
-                "route": "local_fallback",
-                "chain": list(self._LOCAL_FALLBACK_CHAIN),
+                "route": "local_reasoning_chain",
+                "chain": list(self._LOCAL_REASONING_CHAIN),
                 "base_strategy": _base.get("strategy"),
                 "confidence": _base.get("confidence"),
                 "question_type": question_type,

@@ -1146,12 +1146,27 @@ class PulseCortex(BasePulseOrgan):
         if self._strategy_selector and correlation_id:
             try:
                 _question = ctx.get("content", "") if ctx else ""
+                # ★268批 刀2 甲：用「意图→类型映射（2364）」算出真实 question_type，
+                #   替代恒为"未知"（补分类真值，改策略输入，不改执行）。
+                _intent = (ctx.get("intent", "一般对话") if ctx else "一般对话") or "一般对话"
+                _question_type = self._cort_select_intent_strategy(_intent).get("category", "rule_reason")
                 _complexity = self._strategy_selector.estimate_complexity(_question)
                 _strategy = self._strategy_selector.select_strategy(
                     _question, complexity=_complexity,
-                    question_type="未知",
+                    question_type=_question_type,
                     context={"method": method},
                 )
+                # ★268批 刀2 乙（影子接入）：多调一次 route_with_local_reasoning_chain，
+                #   丢弃返回值、只记 DEBUG——零行为变更，现答与今日完全一致。
+                try:
+                    _shadow = self._strategy_selector.route_with_local_reasoning_chain(
+                        _question, complexity=_complexity, question_type=_question_type,
+                        context={"method": method},
+                    )
+                    self._log(LogLevel.DEBUG,
+                              f"[本地兜底·影子] 未知={_question_type} 链={_shadow.get('route')} 现答={method}")
+                except Exception as _se:
+                    self._log(LogLevel.DEBUG, f"[本地兜底·影子] 调用异常已忽略: {type(_se).__name__}")
                 # ★P1-25 防御：select_strategy 若返回非 dict（None/异常态），
                 #   不再让 _strategy['xxx'] 抛 NoneType 而中断整个推理结果处理链路
                 if not isinstance(_strategy, dict):
