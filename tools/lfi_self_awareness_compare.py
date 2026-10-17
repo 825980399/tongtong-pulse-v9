@@ -185,6 +185,31 @@ def _evaluate_checks(
     }
 
 
+def _load_prev_row(curve_path: str) -> dict | None:
+    """读曲线最后一行（_evaluate_checks 在 _append_curve 之前调用，故最后一行即上一轮）。
+
+    ★第260批 刀2：望远镜乙案——以「上一轮 actual_overall」作为预测基准，
+    使 delta_vs_prev = 本轮实测 − 上一轮冻结预测，真正变成跨日望远镜。
+    """
+    try:
+        if not os.path.exists(curve_path):
+            return None
+        with open(curve_path, "r", encoding="utf-8") as _f:
+            _lines = [ln for ln in _f.read().splitlines() if ln.strip()]
+        if not _lines:
+            return None
+        _row = json.loads(_lines[-1])
+        return {
+            "ts": _row.get("ts"),
+            "actual_overall": _row.get("actual_overall"),
+            "approx_running_state": (_row.get("checks", {}) or {}).get("approx_running_state"),
+            "sim_mode": _row.get("sim_mode"),
+        }
+    except Exception as e:
+        silent_exc(e, where="lfi_self_awareness_compare._load_prev_row")
+        return None
+
+
 def run_once(
     runtime_activity: dict | None = None,
     curve_path: str | None = None,
@@ -216,6 +241,8 @@ def run_once(
     payload_raw = compute_lfi(runtime_activity={k: float(v) for k, v in raw.items()})
     payload_norm = compute_lfi(runtime_activity={k: float(v) for k, v in norm.items()})
 
+    # ★第260批 刀2：ref 仅供 actual 口径（_overall_score 的 ref 参数），勿作预测基准；
+    #   乙案后预测基准 = 上一行 actual_overall（见下方 _load_prev_row）
     ref = _load_frozen_ref(ref_path)
     if ref is None:
         ref = cur_max  # 首次运行：冻结 ref = 当前最大值（此刻 实际套==模拟套，Δ=0）
@@ -227,15 +254,45 @@ def run_once(
     norm_max = max(norm.values()) if norm else 1.0
     sim_overall = _overall_score(payload_norm, activity_override=norm, ref=norm_max)
 
+    # ★第260批 刀2：望远镜乙案真望远镜——吃昨日快照
+    prev = _load_prev_row(curve_path)
+    prev_actual = prev.get("actual_overall") if prev else None
+    prev_gap_days = ((time.time() - prev["ts"]) / 86400.0) if (prev and prev.get("ts") is not None) else None
+    prev_source = "legacy_mirror" if (prev and prev.get("sim_mode") != "prev_snapshot") else "telescope"
+    if prev_actual is None:
+        # 硬约束1：冷启动绝不写 0.0（257 教训：恒 0 会被读成"仿得准"）
+        _dvp = None
+        _dvp_void = True
+        _dvp_reason = "冷启动无历史样本"
+    elif prev_gap_days is not None and prev_gap_days > 2:
+        # 硬约束3：过期即作废（跨多日空窗的"预测"无物理意义）
+        _dvp = None
+        _dvp_void = True
+        _dvp_reason = "上一行过期"
+    else:
+        _dvp = round(abs(actual_overall - prev_actual), 4)
+        _dvp_void = False
+        _dvp_reason = ""
+
     checks = _evaluate_checks(
         payload_raw, payload_norm, raw, norm, actual_overall, sim_overall, curve_path
     )
+    # ★第260批 刀2 硬约束2：旧 delta（≡0，同日内两套恒等）保留写盘但判死，不作预测力依据
+    checks["delta_legacy_void"] = True
     record = {
         "ts": time.time(),
         "actual_overall": round(actual_overall, 4),
         "sim_overall": round(sim_overall, 4),
         "delta": round(abs(actual_overall - sim_overall), 4),
         "ref": round(ref, 4),
+        # ★第260批 刀2：望远镜乙案新增键（只加不改名不改义）
+        "sim_mode": "prev_snapshot",
+        "prev_ts": prev.get("ts") if prev else None,
+        "prev_gap_days": round(prev_gap_days, 3) if prev_gap_days is not None else None,
+        "delta_vs_prev": _dvp,
+        "delta_vs_prev_void": _dvp_void,
+        "delta_vs_prev_void_reason": _dvp_reason,
+        "prev_source": prev_source,
         "checks": checks,
     }
     _append_curve(record, curve_path)

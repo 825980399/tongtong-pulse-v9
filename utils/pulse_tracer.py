@@ -227,12 +227,13 @@ def _default_bus_sub_provider(event_type):
                        level="debug")
         from nucleus.events.EventBus import _match, get_event_bus
         bus = get_event_bus()
-        if bus.subscription_count("**") > 0:
-            return True
+        # ★第260批 刀1①：删除「**通配计数>0即判有订阅方」短路——EventTap 以字面"**"订阅且不受
+        #   ENABLE_EVENT_BUS 约束，该短路令孤儿清单结构性永零（甲案通配平反修正）
         if bus.subscription_count(event_type) > 0:
             return True
         try:
-            return any(_match(s.pattern, event_type) for s in bus._subs.values())
+            # ★第260批 刀1②：通配兜底排除观测者（s.pattern == "**"），否则删了短路仍被 _match("**", x) 全命中
+            return any(_match(s.pattern, event_type) for s in bus._subs.values() if s.pattern != "**")
         except Exception as _we:
             silent_exc(_we, "utils/pulse_tracer.py:_default_bus_sub_provider:通配匹配失败", level="debug")
             return False
