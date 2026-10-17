@@ -129,6 +129,9 @@ class PulseBloodVessel(BasePulseOrgan):
         return [
             {
                 "organ_name": self.organ_name,
+                # ★第264批 刀4：先打 observer 标记让"万能观测者"显形（不改变 EventBus 与 _conditions 路由表不同源的事实）；
+                #   后续批再考虑改为显式窄订阅。本标记供审计/匹配逻辑识别为万能观测者（本批刀1去毒已用 event_types 含 "*" 先行覆盖）。
+                "observer": True,
                 "event_types": ["*"],  # ★v24.0修复：订阅所有事件以追踪各器官活跃
                 "min_priority": 1,
             },

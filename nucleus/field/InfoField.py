@@ -2469,7 +2469,33 @@ class InfoField(SilentLogMixin):
             _conds = dict(self._conditions)
             _triggers = dict(self._cond_trigger_count)
             _events = dict(self._event_publish_count)
-            _unmatched = dict(self._event_unmatched_count)
+
+        # ★第264批 刀1（262刀1去毒）：万能条件（event_types 含 "*" 或为空）不计入"该事件有消费者"。
+        #   血管 v24.0 的 event_types:["*"] 令 _match_condition 恒 True → publish 时 matched_organs 恒非空
+        #   → _event_unmatched_count 恒 0 → dead_events 恒空表（被误读成"没有死数据"）。本函数重算：
+        #   只有「非万能条件」命中才算真消费者；万能命中只标 universal_only，不消除死数据嫌疑。
+        def _cond_is_universal(_cd):
+            _ets = (_cd.get("condition", {}) or {}).get("event_types", [])
+            return (not _ets) or ("*" in _ets)
+
+        _real_conds = {_cid: _cd for _cid, _cd in _conds.items() if not _cond_is_universal(_cd)}
+        _universal_conds = {_cid: _cd for _cid, _cd in _conds.items() if _cond_is_universal(_cd)}
+
+        def _event_has_real_consumer(_et):
+            for _cd in _real_conds.values():
+                _c = _cd.get("condition", {}) or {}
+                for _pat in _c.get("event_types", []):
+                    if _pat != "*" and self._match_event(_et, _pat):
+                        return True
+            return False
+
+        def _event_has_universal(_et):
+            for _cd in _universal_conds.values():
+                _c = _cd.get("condition", {}) or {}
+                for _pat in _c.get("event_types", []):
+                    if _pat == "*" or self._match_event(_et, _pat):
+                        return True
+            return False
 
         _ghosts = []
         for _cid, _cd in _conds.items():
@@ -2479,14 +2505,24 @@ class InfoField(SilentLogMixin):
                     "cond_id": _cid,
                     "organ": _cond.get("organ_name", "unknown"),
                     "event_types": _cond.get("event_types", []),
+                    # ★第264批 刀1：标记该条件是否为万能（不计入真消费者）
+                    "universal_only": _cond_is_universal(_cd),
                 })
 
         _dead = []
         for _et, _cnt in _events.items():
-            _unc = _unmatched.get(_et, 0)
-            # 发布超过阈值且全部未匹配，认定为死数据
-            if _unc >= _cnt >= max(1, min_publish_threshold) and _unc > 0:
-                _dead.append({"event_type": _et, "published": _cnt, "unmatched": _unc})
+            _has_real = _event_has_real_consumer(_et)
+            _has_univ = _event_has_universal(_et)
+            # 去毒：只有真消费者才消除死数据嫌疑；万能命中不算数
+            _real_unc = 0 if _has_real else _cnt
+            if _real_unc >= _cnt >= max(1, min_publish_threshold) and _real_unc > 0:
+                _dead.append({
+                    "event_type": _et,
+                    "published": _cnt,
+                    "unmatched": _real_unc,
+                    # ★第264批 刀1：universal_only = 无真消费者但被万能条件命中的"只有血管在看"候选
+                    "universal_only": (not _has_real and _has_univ),
+                })
 
         # 按未匹配次数降序
         _dead.sort(key=lambda x: x["unmatched"], reverse=True)

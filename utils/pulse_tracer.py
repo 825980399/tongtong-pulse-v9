@@ -23,7 +23,19 @@ from nucleus.const import EnergyEvent  # 204批·刀4：报告即终点白名单
 # 204批·刀4：报告即终点白名单（快照类事件本就'报告即终点'，不参与孤儿检测）
 _REPORT_ENDPOINT_WHITELIST = {
     EnergyEvent.METABOLISM_SNAPSHOT,  # 代谢快照族（孤儿榜首）
+    # ★第264批 刀3（依据260刀3 / 263⑥）：进程内直调消费，非脉冲路由订阅——回填模型天然表达不了
+    #   - pattern_prewarm：出处260刀3，消费方 nucleus/field/InfoField.py:2637
+    #     get_pattern_prewarm_consumer().on_prewarm(_prewarm)（循环外一次性批消费）
+    #   - pattern_prediction：出处260刀3，消费方同上族，由 stream_miner 周期预测链路
+    "pattern_prewarm",
+    "pattern_prediction",
 }
+
+# ★第264批 刀2（丙-1判据红线 / 263§0）：万能观测器官集合——判据一律以「剔除这些器官后的
+#   real_matched_count」为准，绝不用 naive matched_count（含万能血管恒 >=1）。血管 v24.0 共振条件
+#   event_types:["*"]（PulseBloodVessel.py）对所有脉冲命中，使 matched_organs 恒非空；若直接以
+#   matched_organs 非空判平反会重建 257 抓出的永零失明（这次表没选错，更难发现）。
+_UNIVERSAL_ONLY_ORGANS = frozenset({"血管"})
 
 
 # ★第201批 刀1（环窗参数化）：以下三值是「config 键缺失/非法时的回退默认值」，
@@ -360,10 +372,18 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
             continue
         if (now - evt["timestamp"]) < min_age:
             continue
-        if evt.get("matched_organs"):
-            # 迟到 receive 已平反（log_receive 在匹配时回填 matched_organs）
+        # ★第264批 刀2（丙-1判据红线 / 263§0）：一律以 real_matched_count 为准，绝不用 naive matched_count。
+        #   real_matched_count = 剔除万能观测器官（_UNIVERSAL_ONLY_ORGANS，如血管 "*" 条件）后的真实匹配数；
+        #   若直接以 matched_organs 非空判平反，会重建 257 抓出的永零失明（这次表没选错，更难发现）。
+        _matched = evt.get("matched_organs") or []
+        _real_matched_count = len([o for o in _matched if o not in _UNIVERSAL_ONLY_ORGANS])
+        if _real_matched_count > 0:
+            # 有真实消费者（剔除万能后） → 当场权威平反（迟到 receive 回填亦走此路径）
             continue
-        # ★200刀1：订阅表兜底 —— 存在订阅方则平反
+        # real_matched_count == 0：可能"只有万能器官在看"或"完全无接收"——两类都不平反，计入孤儿候选。
+        #   universal_only 标记"只有血管在看"的真孤儿候选（价值最高的一格）。
+        _universal_only = bool(_matched) and _real_matched_count == 0
+        # ★200刀1：订阅表兜底 —— 存在「非观测者」订阅方则平反（subscription_provider 已剔除 observer）
         if subscription_provider is not None:
             try:
                 _has_sub = subscription_provider(evt["event_type"])
@@ -381,7 +401,10 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
             "event_type": evt["event_type"],
             "layer": evt.get("layer", ""),
             "pulse_id": evt.get("pulse_id", ""),
-            "error": "孤儿脉冲: 发射后无器官接收"
+            # ★第264批 刀2：判据红线字段——剔除万能器官后的真实匹配数；universal_only 标"只有血管在看"
+            "real_matched_count": _real_matched_count,
+            "universal_only": _universal_only,
+            "error": "孤儿脉冲: 发射后无器官接收",
         })
     return orphans
 
