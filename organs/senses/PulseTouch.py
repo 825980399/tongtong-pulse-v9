@@ -503,23 +503,38 @@ class PulseTouch(BasePulseOrgan):
 
     # ========== GPU 使用率后台探针（非阻塞） ==========
     def _start_gpu_probe(self):
-        """启动后台定时探针：周期性运行 nvidia-smi 并更新缓存，脉冲路径只读取缓存。"""
+        # 关键改动:
+        # 1) 新增 _gpu_probe_busy 重入守卫, 上一轮未结束时直接返回,
+        #    避免重复创建 Timer 与探测任务堆积;
+        # 2) 用 try/finally 保证异常路径下守卫一定会被释放;
+        # 3) 保留原有 _gpu_probe_timer 判空逻辑与先立即探测一次的语义。
         if self._gpu_probe_timer is not None:
             return
-        self._gpu_probe_once()  # 先立即探测一次（在后台线程，不阻塞调用方）
-        self._gpu_probe_timer = threading.Timer(self._gpu_probe_interval, self._gpu_probe_loop)
-        self._gpu_probe_timer.daemon = True
-        self._gpu_probe_timer.start()
-
-    def _gpu_probe_loop(self):
-        self._gpu_probe_once()
-        if not self._booted:
-            self._gpu_probe_timer = None
+        if getattr(self, "_gpu_probe_busy", False):
             return
-        self._gpu_probe_timer = threading.Timer(self._gpu_probe_interval, self._gpu_probe_loop)
-        self._gpu_probe_timer.daemon = True
-        self._gpu_probe_timer.start()
-
+        self._gpu_probe_busy = True
+        try:
+            self._gpu_probe_once()  # 先立即探测一次（在后台线程，不阻塞调用方）
+            self._gpu_probe_timer = threading.Timer(self._gpu_probe_interval, self._gpu_probe_loop)
+            self._gpu_probe_timer.daemon = True
+            self._gpu_probe_timer.start()
+        finally:
+            self._gpu_probe_busy = False
+    def _gpu_probe_loop(self):
+        # reentry guard: skip this round if previous round is still running
+        if getattr(self, "_gpu_probe_in_progress", False):
+            return
+        self._gpu_probe_in_progress = True
+        try:
+            self._gpu_probe_once()
+            if not self._booted:
+                self._gpu_probe_timer = None
+                return
+            self._gpu_probe_timer = threading.Timer(self._gpu_probe_interval, self._gpu_probe_loop)
+            self._gpu_probe_timer.daemon = True
+            self._gpu_probe_timer.start()
+        finally:
+            self._gpu_probe_in_progress = False
     def _gpu_probe_once(self):
         """在独立守护线程中运行 nvidia-smi（带超时），仅更新缓存，不阻塞任何脉冲线程。"""
         def _run():

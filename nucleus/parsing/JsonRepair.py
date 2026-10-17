@@ -45,6 +45,9 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+_logger = get_module_logger("JsonRepair")
 
 __all__ = [
     "JsonFailureTracker",
@@ -264,12 +267,17 @@ def _apply_structural_fixes(text: str, *,
     return _t
 
 
+# ★第254批 刀1（JSON定位刀）：失败路径定位辅助——记录最近一次解析异常（best-effort，
+#   仅诊断用，不阻塞主链路；多线程下取"最近一次"失败异常，足以定位来源指纹）。
+_LAST_PARSE_FAILURE: dict = {}
+
 def _try_loads(text: str) -> Any | None:
     """尝试解析；成功且为 dict/list 时返回对象，否则 None。"""
     try:
         _obj = json.loads(text)
     except Exception as e:
         silent_exc(e, "JsonRepair:261:JSON解析失败", level="warning")
+        _LAST_PARSE_FAILURE["exc"] = e
         return None
     return _obj if isinstance(_obj, (dict, list)) else None
 
@@ -370,6 +378,16 @@ def parse_with_repair(text: str) -> tuple[Any | None, str]:
         if _obj is not None:
             return _obj, "repair"
 
+    # ★第254批 刀1（JSON定位刀）：修复失败路径 DEBUG
+    #   输出"失败串前60字＋长度＋来源标记（错误类型 + 字符位）"，供重启后定位
+    #   60处 JSONDecodeError 的"先切片、后解析"来源行（char 232/233/239/240/299 窄带）。
+    _fe = _LAST_PARSE_FAILURE.get("exc")
+    _pos = getattr(_fe, "pos", None)
+    _src = classify_json_error(_fe) if _fe is not None else "全策略失败"
+    _logger.debug(
+        f"[JSON定位刀] 修复失败 | 前60字={text[:60]!r} 长度={len(text)} "
+        f"来源标记={_src} 字符位={_pos}"
+    )
     return None, "none"
 
 

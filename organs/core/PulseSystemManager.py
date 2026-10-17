@@ -42,10 +42,10 @@ _SILENCE_EXEMPT_KEYS = resolve_organ_keys(SILENCE_EXEMPT_ORGANS)
 class PulseSystemManager(BasePulseOrgan):
     """系统自主管理器（v9.5 分层脉冲版）"""
 
-    def __init__(self, organ_name: str = "系统管理器"):
+    def __init__(self, organ_name):
         super().__init__(organ_name)
 
-        # ===== 托管服务 =====
+        # ===== managed services =====
         self._managed_services = {
             "ollama": {
                 "name": "Ollama",
@@ -56,34 +56,28 @@ class PulseSystemManager(BasePulseOrgan):
             },
         }
 
-        # ===== 运行所需目录 =====
+        # ===== required dirs =====
         self._required_dirs = [
             "data",
             "logs",
             "data/organ_states",
         ]
 
-        # ===== 统计 =====
+        # ===== stats =====
         self._check_count = 0
         self._repair_count = 0
         self._running = False
+        self._health_check_in_progress = False  # periodic task reentry guard
         self._health_timer: threading.Timer | None = None
 
-        # ===== ★F4处置闭环：器官自愈调度状态 =====
-        self.framework = None   # ★权限边界：只读访问 organs 容器，仅调用生命周期方法，严禁修改容器
-        # 处置防抖：organ_name -> {"level": int, "last_action": ts, "fail_count": int}
+        # ===== F4 action state =====
+        self.framework = None
         self._escalation_action_state: dict[str, dict[str, Any]] = {}
-        self._escalation_action_cooldown = 300.0   # 同器官同级别处置防抖（5分钟观察期）
-        self._escalation_recover_threshold = 3     # 连续 3 次巡检正常 → 自动恢复降级
+        self._escalation_action_cooldown = 300.0
+        self._escalation_recover_threshold = 3
         self._escalation_action_enabled = getattr(
             config, "ORGAN_ESCALATION_ACTION_ENABLED", False)
-        # ★第106批 T-106a（P3）：not_found 分支一次性告警去重集合。
-        #   处置目标不在器官注册表时，此前静默返回 "not_found" 直接蒸发（任务书：自愈闭环
-        #   对非器官实体全窗 0 处置）。改为一次性 WARNING 让空转可见；同一名称只报一次。
         self._warned_not_found: set = set()
-
-    # ========== 统一命令执行（核心方法） ==========
-
     def _run_command(self, cmd: list, timeout: int = 5) -> dict[str, Any]:
         """
         安全执行系统命令。

@@ -10308,20 +10308,16 @@ class PulseInnerWorld(
         return _written
 
     def _identity_lookup(self, question: str) -> str:
-        """★第九批 3.4（星轨 P2-9）：按问题里的人名查身份知识库。
-
-        QICA 会建议 /人物/{人名} 这样的路径，但知识树里此前根本没有这些节点，
-        检索必然落空。这里先按人名查身份库，命中就返回一句现成的自然人话。
-        """
         try:
             import config as _cfg
             if not getattr(_cfg, "ENABLE_IDENTITY_KNOWLEDGE", False):
                 return ""
             from nucleus.mnemosyne.IdentityKnowledgeManager import get_identity_manager
             _mgr = get_identity_manager()
-            if not _mgr.get_stats().get("people"):
+            _stats = _mgr.get_stats()
+            if not _stats.get("people"):
                 return ""
-            for _name in _mgr.get_stats().get("names", []):
+            for _name in _stats.get("names", []):
                 if _name and _name in question:
                     _desc = _mgr.describe(_name)
                     if _desc:
@@ -10330,7 +10326,6 @@ class PulseInnerWorld(
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseInnerWorld::_identity_lookup L10225")
             return ""
-
     def _record_conversation(self, question: str, answer: str, user_name: str,
                               method: str, confidence: float):
         """

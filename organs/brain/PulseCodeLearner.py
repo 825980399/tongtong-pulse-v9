@@ -608,15 +608,21 @@ class PulseCodeLearner(BasePulseOrgan):
             silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_code_learning_adaptive_enabled L591")
             return True
 
-    def _m65_get_load_level(self) -> str:
-        """统一系统负载等级（low/medium/high/critical）；异常安全降级 low。"""
+    def _m65_get_load_level(self):
+        # Route the cross-module singleton call through the pulse bus.
         try:
-            from nucleus.runtime_metrics import get_runtime_metrics
-            return get_runtime_metrics().get_system_load().get("load_level", "low")
+            bus = getattr(self, "_pulse_bus", None)
+            if bus is None:
+                bus = getattr(self, "pulse_bus", None)
+            if bus is None:
+                bus = getattr(self, "_bus", None)
+            if bus is None:
+                raise RuntimeError("pulse bus not available")
+            load = bus.request("runtime_metrics.get_system_load")
+            return load.get("load_level", "low")
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L599")
             return "low"
-
     def _learn_own_code_structure(self):
         # ★T3: 自适应降频接线——代码学习
         try:

@@ -567,13 +567,23 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
                 os.remove(_backup)
         except OSError as e:
             silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L549")
-        self.stream.flush()
+        # ★253批修复：self.stream可能为None（如文件句柄已关闭），先检查再flush
+        if self.stream is not None:
+            try:
+                self.stream.flush()
+            except Exception:
+                pass
         with open(_base, "rb") as _fin, open(_backup, "wb") as _fout:
             _fout.write(_fin.read())
         # 3) 截断当前文件（self.stream 已持有句柄，就地清空，不重命名）
-        self.stream.seek(0)
-        self.stream.truncate(0)
-        self.stream.flush()
+        # ★253批修复：self.stream可能为None，先检查再seek/truncate/flush
+        if self.stream is not None:
+            try:
+                self.stream.seek(0)
+                self.stream.truncate(0)
+                self.stream.flush()
+            except Exception:
+                pass
 
 def _log_rollover_cfg_error(exc: BaseException) -> None:
     """轮转配置读取失败的诊断（避免静默）。"""

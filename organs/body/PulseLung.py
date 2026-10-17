@@ -1383,14 +1383,20 @@ class PulseLung(BasePulseOrgan):
             return True
 
     def _m65_get_load_level(self) -> str:
-        """统一系统负载等级（low/medium/high/critical）；异常安全降级 low。"""
+        # Route the cross-module lookup through the pulse bus instead of
+        # calling the runtime_metrics singleton directly. This removes the
+        # implicit coupling and keeps this organ isolated from the
+        # runtime_metrics module internals.
         try:
-            from nucleus.runtime_metrics import get_runtime_metrics
-            return get_runtime_metrics().get_system_load().get("load_level", "low")
+            from nucleus.pulse_bus import get_pulse_bus
+            payload = get_pulse_bus().request("runtime_metrics.get_system_load")
         except Exception as e:
             silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L1299")
             return "low"
 
+        if isinstance(payload, dict):
+            return payload.get("load_level", "low")
+        return "low"
     def _append_background_learning_requirement(self, prompt: str,
                                                 payload: dict) -> str:
         """主线第12批 T3.2/P2-83：后台学习提示词追加结构化输出要求。

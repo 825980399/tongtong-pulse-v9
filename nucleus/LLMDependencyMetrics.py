@@ -54,6 +54,9 @@ DIGEST_FILE = "文件消化"
 HOUR_SECONDS = 3600
 _HISTORY_MAX = 168  # 保留最近 168 个小时快照（7 天）
 
+# ★第254批 刀2（本地决策停摆诊断）：三计数（首触发 DEBUG 观测对象）
+_DIAG_THREE_COUNTERS = ("llm_call_count", "local_inference_count", "search_count")
+
 
 def _blank_counters() -> dict[str, dict[str, int]]:
     return {
@@ -130,6 +133,8 @@ class LLMDependencyMetrics:
         self._save_path = os.path.join(self._base_dir, self.DEFAULT_FILE)
 
         self._counters: dict[str, dict[str, int]] = _blank_counters()
+        # ★第254批 刀2（本地决策停摆诊断）：三计数首触发记录（每组仅打一次 DEBUG）
+        self._first_trigger: set[str] = set()
         self._started_at: str = time.strftime("%Y-%m-%dT%H:%M:%S")
         self._last_updated: str = self._started_at
         self._history: list[dict[str, Any]] = []
@@ -187,6 +192,18 @@ class LLMDependencyMetrics:
             bucket = self._counters.setdefault(group, {})
             bucket[key] = int(bucket.get(key, 0)) + int(n)
             self._last_updated = time.strftime("%Y-%m-%dT%H:%M:%S")
+            # ★第254批 刀2（本地决策停摆诊断）：三计数首触发 DEBUG
+            if group in _DIAG_THREE_COUNTERS and group not in self._first_trigger:
+                self._first_trigger.add(group)
+                _llm = sum(self._counters.get("llm_call_count", {}).values())
+                _local = sum(self._counters.get("local_inference_count", {}).values())
+                _search = sum(self._counters.get("search_count", {}).values())
+                _ratio = self.llm_dependency_ratio()
+                _logger.debug(
+                    f"[依赖度量·三计数首触发] {group} 首个非零触发 | "
+                    f"llm_call={_llm} local_inference={_local} search={_search} | "
+                    f"ratio={_ratio} (metric_json基线增量)"
+                )
             # 轻量：不每次落盘，避免高频 IO 拖慢主链路（由小时线程 + 显式 save 落盘）
 
     # ============ 派生指标 ============

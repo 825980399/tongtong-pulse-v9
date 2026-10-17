@@ -2900,15 +2900,17 @@ class PulseCortex(BasePulseOrgan):
         except Exception as e:
             self._log_ignored_exception(e)
 
-    def get_parallelism(self) -> int:
-        """暴露当前建议并行度（供其他模块查询硬件自适应结果）。"""
+    def get_parallelism(self):
         try:
-            from nucleus.parallel_scheduler import get_parallel_scheduler
-            return get_parallel_scheduler().get_parallelism()
+            bus = getattr(self, "pulse_bus", None)
+            if bus is None:
+                bus = getattr(self, "_pulse_bus", None)
+            if bus is None:
+                raise RuntimeError("pulse bus is not available")
+            return bus.request("parallel_scheduler.get_parallelism")
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseCortex::get_parallelism L2650")
             return 2
-
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()
     def _on_emotion_update(self, payload: dict) -> dict[str, Any]:

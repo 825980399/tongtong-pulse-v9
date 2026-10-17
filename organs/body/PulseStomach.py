@@ -2426,31 +2426,43 @@ class PulseStomach(BasePulseOrgan):
 
 
     def _m70_kal_get_node(self, node_id):
-        """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。"""
         if not self._m70_kal_callsites_on():
             return self._m70_direct_get_node(node_id)
         try:
-            from nucleus.knowledge_access_layer import get_kal
-            _r = get_kal().get_node(node_id)
-            if _r is not None:
-                return _r
+            _bus = getattr(self, "_pulse_bus", None)
+            if _bus is None:
+                _bus = getattr(self, "_bus", None)
+            if _bus is None:
+                _bus = getattr(self, "_pulse", None)
+            if _bus is not None and hasattr(_bus, "call"):
+                _r = _bus.call("nucleus.knowledge_access_layer.get_node", node_id)
+                if _r is not None:
+                    return _r
         except Exception as e:
             silent_exc(e, where="organs.body.PulseStomach::_m70_kal_get_node L2414")
         return self._m70_direct_get_node(node_id)
-
-    def _m70_kal_search_keywords(self, keywords, top_k=10):
-        """★T4.3 实际调用点：关键词搜索（KAL 优先 + 回退）。"""
+    def _m70_kal_search_keywords(self, keywords=None, top_k=10):
         if not self._m70_kal_callsites_on():
             return []
         try:
-            from nucleus.knowledge_access_layer import get_kal
-            _r = get_kal().search_by_keywords(keywords or [], top_k=top_k)
-            if _r:
-                return _r
+            _kws = keywords or []
+            _bus = getattr(self, "_pulse_bus", None)
+            if _bus is not None and hasattr(_bus, "request"):
+                _r = _bus.request(
+                    "kal.search_by_keywords",
+                    {"keywords": _kws, "top_k": top_k},
+                )
+                if _r:
+                    return _r
+                return []
+            _kal = getattr(self, "_kal", None)
+            if _kal is not None and hasattr(_kal, "search_by_keywords"):
+                _r = _kal.search_by_keywords(_kws, top_k=top_k)
+                if _r:
+                    return _r
         except Exception as e:
             silent_exc(e, where="organs.body.PulseStomach::_m70_kal_search_keywords L2427")
         return []
-
     def _m70_direct_get_node(self, node_id):
         """回退路径：直连 node_pool。"""
         try:
