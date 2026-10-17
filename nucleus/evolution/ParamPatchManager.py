@@ -27,6 +27,10 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 _CONFIG_OVERRIDE_PATH = os.path.join(_PROJECT_ROOT, "data", "config_override.json")
 _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
 
+# ★第258批 刀2：SOP v1.2 不变量（运行期可施工，零新开关）
+_HARD_CAP = 1                      # 批量追加令硬闸：本轮至多应用 1 条（免疫 max_apply 被放大击穿）
+_DEFAULT_OBSERVE_WINDOW_S = 60     # 效果观察窗（秒）：apply 时记 effect_verify_due_at = now + 此值
+
 # 参数安全范围（防止参数调整过度）
 # ★A-9死参数清理（2026-09-08，内部协作者拍板）：移除 search_quality_threshold /
 #   search_low_overlap_threshold / innerworld_search_quality_threshold /
@@ -363,12 +367,26 @@ class ParamPatchManager:
             patch["status"] = "applied"
             result["applied"] = True
 
+            # ★第258批 刀2.2/2.3：效果验证到期点 + 七字段固定（沿用既有滚动面补键，不新建第二账本）
+            _observe_s = _DEFAULT_OBSERVE_WINDOW_S
+            patch["observe_window_s"] = _observe_s
+            patch["effect_verify_due_at"] = time.time() + _observe_s
+            patch["verify"] = "pending"            # 效果验证状态占位（到期扫描后写回 effect_result）
+            patch["symptom"] = patch.get("reason", "")
+
             # 4. 记录历史
             with self._lock:
                 self._applied_patches.append(patch)
                 if patch in self._pending_patches:
                     self._pending_patches.remove(patch)
             self._save_history()
+            # ★第258批 刀2.4②：同参数补丁互斥——应用后作废旧生效补丁（防非栈式回滚写中间态）
+            with self._lock:
+                for _old in self._applied_patches:
+                    if (_old is not patch and _old.get("param") == patch["param"]
+                            and _old.get("status") == "applied"):
+                        _old["status"] = "superseded"
+                        _old["superseded_by"] = patch.get("id")
             # ★P1: 记录参数变更日志
             try:
                 import config as _cfg
@@ -482,24 +500,28 @@ class ParamPatchManager:
         }
 
         try:
-            # 读取当前override
-            override_data = {}
-            if os.path.exists(_CONFIG_OVERRIDE_PATH):
-                override_data = safe_read_json(_CONFIG_OVERRIDE_PATH, default={})
+            # ★第258批 刀2.4①：回滚全体持锁，消除与并发 apply 的竞态
+            with self._lock:
+                # 读取当前override
+                override_data = {}
+                if os.path.exists(_CONFIG_OVERRIDE_PATH):
+                    override_data = safe_read_json(_CONFIG_OVERRIDE_PATH, default={})
 
-            # 恢复旧值
-            if "RUNTIME_PARAMS" in override_data:
-                old_override = patch.get("old_override_value")
-                if old_override is not None:
-                    override_data["RUNTIME_PARAMS"][patch["param"]] = old_override
-                else:
-                    override_data["RUNTIME_PARAMS"].pop(patch["param"], None)
+                # 恢复旧值
+                if "RUNTIME_PARAMS" in override_data:
+                    old_override = patch.get("old_override_value")
+                    if old_override is not None:
+                        override_data["RUNTIME_PARAMS"][patch["param"]] = old_override
+                    else:
+                        # ★第258批 刀2.4③：缺键降级申报——回滚退化为弹回默认(config)
+                        override_data["RUNTIME_PARAMS"].pop(patch["param"], None)
+                        print(f"[WARNING] ParamPatchManager.rollback_patch: 补丁缺 old_override_value 键(param={patch.get('param')})，回滚退化为弹回默认(config)")
 
-            # 原子写入
-            temp_path = _CONFIG_OVERRIDE_PATH + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(override_data, f, ensure_ascii=False, indent=2)
-            os.replace(temp_path, _CONFIG_OVERRIDE_PATH)
+                # 原子写入
+                temp_path = _CONFIG_OVERRIDE_PATH + ".tmp"
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(override_data, f, ensure_ascii=False, indent=2)
+                os.replace(temp_path, _CONFIG_OVERRIDE_PATH)
 
             patch["status"] = "rolled_back"
             patch["rolled_back_at"] = time.time()
@@ -599,6 +621,11 @@ class ParamPatchManager:
             "details": [],
         }
 
+        # ★第258批 刀2.1/2.5：SOP 硬闸 —— 批量追加令至多应用 1 条（免疫 max_apply 被放大击穿）
+        if max_apply > _HARD_CAP:
+            print(f"[WARNING] ParamPatchManager.auto_apply_pending: 批量指令被SOP硬闸截断，本轮仅应用{_HARD_CAP}条（请求{max_apply}）")
+            max_apply = min(max_apply, _HARD_CAP)
+
         with self._lock:
             pending = list(self._pending_patches)
 
@@ -687,10 +714,13 @@ class ParamPatchManager:
         patches_to_verify = []
         with self._lock:
             for patch in self._applied_patches:
+                _due = patch.get("effect_verify_due_at")
+                # ★第258批 刀2.2②：到期触发新增 effect_verify_due_at 通道（与既有 applied_at+wait 并存）
                 if (patch.get("status") == "applied"
                         and not patch.get("effect_verified")
-                        and patch.get("applied_at")
-                        and (now - patch["applied_at"]) > wait_after_apply):
+                        and ((patch.get("applied_at")
+                              and (now - patch["applied_at"]) > wait_after_apply)
+                             or (_due is not None and now >= _due))):
                     patches_to_verify.append(patch)
 
         if not patches_to_verify:
@@ -766,6 +796,8 @@ class ParamPatchManager:
                         result["rollback_recommended"] += 1
 
                 result["verified"] += 1
+                # ★第258批 刀2.2②：recommended 写回补丁（验证结论回流，补足原 effect_verify_scheduled 无消费方）
+                patch["recommended"] = patch.get("effect_result", "observe")
                 result["details"].append({
                     "patch_id": patch["id"],
                     "param": patch["param"],

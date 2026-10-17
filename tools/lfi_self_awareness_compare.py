@@ -60,11 +60,27 @@ def fetch_runtime_activity() -> dict:
     """
     try:
         from nucleus.PulseBloodVessel import PulseBloodVessel
+        from tools.export_lfi import _get_organs
 
         inst = PulseBloodVessel.get_instance()
         stats = inst.get_stats()
         act = stats.get("organ_activity") or {}
-        return {str(k): float(v) for k, v in act.items()}
+        # ★第258批 刀3②：organ_activity 多以 source_organ/class_name 为键，而 LFI 节点以
+        #   organ_name 为键——建立「class_name/organ_name → organ_name」映射逐键对齐，
+        #   使运行态活跃度正确流入（approx 翻运行态 + overall 反映脉冲计数而非 method_count）。
+        _name_map = {}
+        for _o in _get_organs():
+            _cn = _o.get("class_name")
+            _on = _o.get("organ_name")
+            if _cn:
+                _name_map[_cn] = _on
+            if _on:
+                _name_map[_on] = _on
+        _remapped = {}
+        for _k, _v in act.items():
+            _nk = _name_map.get(_k, _k)
+            _remapped[str(_nk)] = float(_v)
+        return _remapped
     except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare.fetch_runtime_activity")
         return {}
@@ -151,13 +167,20 @@ def _evaluate_checks(
     tier_zero_flip = len(flips) == 0
     # ≥1自然日
     span_ge_1_day = _span_days(curve_path) >= 1.0
+    # ★第258批 刀3③：approx 未翻运行态 ⇒ delta 是代数恒等式，所有 delta 读数按作废处理
+    delta_void = not approx_running
     return {
         "approx_running_state": approx_running,
         "delta": round(delta, 4),
+        "delta_void": delta_void,
+        "delta_void_reason": ("approx未翻运行态(pulse计数)，delta≡0为代数恒等式，读数按作废处理" if delta_void else ""),
         "delta_within_2": delta_within_2,
         "tier_zero_flip": tier_zero_flip,
         "tier_flips": flips,
+        # ★第258批 刀4②：span 在 _append_curve 之前统计，故为「不含本轮」的历史跨度
         "span_days": round(_span_days(curve_path), 4),
+        "span_excludes_current_round": True,
+        "span_note": "跨度不含本轮（_evaluate_checks 在 _append_curve 之前调用，仅统计历史样本间隔）",
         "span_ge_1_day": span_ge_1_day,
     }
 
@@ -189,7 +212,8 @@ def run_once(
     norm = {k: (v / cur_max if cur_max > 0 else 0.0) for k, v in raw.items()}
 
     # 双算：原始值套（raw）/ 归一化套（norm）；两套均提供全器官键 → approx 翻运行态
-    payload_raw = compute_lfi(runtime_activity={k: int(v) for k, v in raw.items()})
+    # ★第258批 刀4.1：两套统一 float（原 int(v) 会把非峰值器官 activity 压成 0，潜伏刀）
+    payload_raw = compute_lfi(runtime_activity={k: float(v) for k, v in raw.items()})
     payload_norm = compute_lfi(runtime_activity={k: float(v) for k, v in norm.items()})
 
     ref = _load_frozen_ref(ref_path)
@@ -198,6 +222,7 @@ def run_once(
         if persist_ref:
             _save_frozen_ref(ref, ref_path)
 
+    # ★第258批 刀4.1：activity_override 是唯一的真值通道，勿删（删后 actual 立即塌陷为 method_count）
     actual_overall = _overall_score(payload_raw, activity_override=raw, ref=ref)
     norm_max = max(norm.values()) if norm else 1.0
     sim_overall = _overall_score(payload_norm, activity_override=norm, ref=norm_max)

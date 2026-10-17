@@ -127,6 +127,10 @@ def compute_lfi(runtime_activity: dict[str, int] | None = None) -> dict[str, Any
             if _o.get("category") == _cat and _o.get("class_name") != _cls
         )
         _h = _health.get(_name)
+        # ★第258批 刀3②：键名对齐——_act 可能以 organ_name 或 class_name 为键，两种命名逐节点比对
+        _av = _act.get(_name) if _act is not None else None
+        if _av is None and _act is not None:
+            _av = _act.get(_cls)
         _out_nodes.append({
             "class_name": _cls,
             "name": _name,
@@ -140,8 +144,8 @@ def compute_lfi(runtime_activity: dict[str, int] | None = None) -> dict[str, Any
                     "status": "未装配" if _h is None else "已装配",
                 },
                 "activity": {
-                    "value": (_act.get(_name, _mc) if _act is not None else _mc),
-                    "approx": ("运行态(pulse计数)" if (_act is not None and _name in _act) else "静态近似(method_count)"),
+                    "value": (_av if _av is not None else _mc),
+                    "approx": ("运行态(pulse计数)" if (_act is not None and (_name in _act or _cls in _act)) else "静态近似(method_count)"),
                 },
             },
         })

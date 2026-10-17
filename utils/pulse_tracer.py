@@ -48,6 +48,9 @@ _LAST_PAIR_SEQ = -1            # 已落盘的最后一笔事件序号（哨兵�
 _LAST_PAIR_FLUSH_TS = 0.0      # 上次成对流强制 flush 时间戳（10min 双保险）
 _PAIR_FILE_CAP = 200000        # pulse_pairs.jsonl 行数上限（230批改正-a：从2万扩到20万，防止下沉后emit采样被receive洪流挤饿）
 _PAIR_FLUSH_EVERY_SEC = 60.0    # 1 分钟强制 flush 双保险（210批·刀2：环容调大后配套收紧）
+# ★第258批 刀1：孤儿心跳线节流（2s 闸下每小时一行，一夜≤24行，避免造新噪音海）
+_ORPHAN_HEARTBEAT_EVERY_SEC = 3600
+_LAST_ORPHAN_HEARTBEAT_TS = 0.0
 _pair_path = None
 _output_path = None
 _orphan_path = None
@@ -496,7 +499,7 @@ def flush_to_file(force: bool = False):
         #     PULSE_TRACER_MIN_AGE_SEC（默认 1.5 → 零行为变化）
         new_orphans = _detect_orphans(
             events_snapshot, subscription_provider=_subscription_provider)
-        
+
         # 读取已有孤儿记录，合并去重（修复：default=[]而不是{}）
         existing_orphans = []
         if os.path.exists(orphan_path):
@@ -530,6 +533,36 @@ def flush_to_file(force: bool = False):
         
         # 原子写孤儿记录
         safe_write_json(orphan_path, existing_orphans, backup=False)
+
+        # ★第258批 刀1：孤儿心跳线（观测面零语义变更；V 窗取数定案前先点亮可观测入口）
+        #   落点：孤儿已写盘（上方 safe_write_json），new_orphans 与 events_snapshot 仍在手，五个数全齐。
+        #   节流：每 _ORPHAN_HEARTBEAT_EVERY_SEC 一行，2s 闸下一夜≤24行；异常由外层 try 兜底。
+        global _LAST_ORPHAN_HEARTBEAT_TS
+        _now_hb = time.time()
+        if _now_hb - _LAST_ORPHAN_HEARTBEAT_TS >= _ORPHAN_HEARTBEAT_EVERY_SEC:
+            _LAST_ORPHAN_HEARTBEAT_TS = _now_hb
+            _hb_emits = [e for e in events_snapshot if e.get("type") == "emit"]
+            _hb_N = len(_hb_emits)                       # 环内 emit 条数（判定基数）
+            _hb_M = sum(1 for e in _hb_emits if not e.get("matched_organs"))  # 未回填=原始嫌疑面
+            _hb_X = 0                                   # 被订阅表平反的条数（提供器内部已防御，直接调）
+            if _subscription_provider is not None:
+                for e in _hb_emits:
+                    if _subscription_provider(e.get("event_type")) is True:
+                        _hb_X += 1
+            _hb_W = 0                                   # 通配订阅计数（必须带，否则无法区分健康/失明）
+            from nucleus.events.EventBus import get_event_bus
+            _hb_bus = get_event_bus()
+            if _hb_bus is not None:
+                _hb_W = _hb_bus.subscription_count("**")
+            _hb_K = len(new_orphans)                    # 本轮新增孤儿
+            if _hb_K == 0 and _hb_W > 0:
+                logger.warning(
+                    "pulse_tracer: [孤儿判定] 判定面可能被万能监听器短路（K=0 但 通配=%d>0）", _hb_W)
+            else:
+                logger.info(
+                    "pulse_tracer: [孤儿判定] 基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d",
+                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K)
+
         # ★第117批 T-117a：此处的 _last_flush_time 更新已删除（头判尾更的根因），
         #   占位统一在 _claim_flush_gate 内「判完即占」完成。
     except Exception as e:
