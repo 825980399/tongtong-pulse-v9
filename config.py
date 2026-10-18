@@ -5615,7 +5615,7 @@ ENABLE_EVOLUTION_USE_CHANNEL_POOL = False
 #     —— 属「纵深防御 + 未来场景」，详见交付报告偏差清单 D94-1。
 #   读取点：nucleus/reasoning/PatchManager.py::_m94_pending_aging_on
 #           nucleus/reasoning/SafeEvolutionExecutor.py::_m94_pending_blocks_regeneration
-ENABLE_PENDING_QUEUE_AGING = True  # 2026-09-27星轨开启：补丁队列老化处理
+ENABLE_PENDING_QUEUE_AGING = False  # 2026-09-27星轨开启；★第280批刀3关闭：aging对source=llm队列空转(合格项恒0)，明写llm永不自动
 
 # ★第94批 T-94a：老化触发阈值——pending 条数（任务书建议 20 条）。
 #   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。

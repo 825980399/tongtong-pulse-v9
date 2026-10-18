@@ -1027,11 +1027,98 @@ class PatchManager:
                 _why)
         return _out
 
+    @staticmethod
+    def _m280_extract_def_name(code: str) -> str:
+        # ★280批刀1（P0）：从 modified_code 提取首个 def 名。
+        #   解析失败/无 def → 空串（保守：不误拦）。
+        if not code or not isinstance(code, str):
+            return ""
+        try:
+            import re
+            _m = re.search(
+                r"^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(",
+                code, re.MULTILINE)
+            return _m.group(1) if _m else ""
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m280_extract_def_name")
+            return ""
+
+    @staticmethod
+    def _m280_risk_by_issue_type(issue_type: str) -> str:
+        # ★280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
+        _m = {
+            "sql_injection": "高",
+            "lock_with_emit": "高",
+            "non_atomic_write": "高",
+            "thread_no_daemon": "中",
+            "resource_no_close": "中",
+            "cross_module_singleton_call": "中",
+            "periodic_task_no_reentry": "低",
+        }
+        return _m.get(str(issue_type or ""), "低")
+
+    @staticmethod
+    def _m280_trust_by_issue_type(issue_type: str) -> float:
+        # ★280批刀4：trust_score 改为按 issue_type 有信息量（替代恒70零信息量）。
+        #   高危族低信任、低危族高信任，使 PATCH_AUTO_APPROVE_TRUST_THRESHOLD 恢复效力。
+        _m = {
+            "sql_injection": 20.0,
+            "lock_with_emit": 25.0,
+            "non_atomic_write": 30.0,
+            "thread_no_daemon": 50.0,
+            "resource_no_close": 55.0,
+            "cross_module_singleton_call": 60.0,
+            "periodic_task_no_reentry": 75.0,
+        }
+        return _m.get(str(issue_type or ""), 40.0)
+
+    def _m280_converge_pending(self, data):
+        # ★280批刀4：pending 队列落盘前状态机收敛。
+        #   ① applied=True 即出队（不再留在 pending）；
+        #   ② 删顶层 runtime_verified（留嵌套 runtime_verify_result.verified 为唯一真值）。
+        if not isinstance(data, list):
+            return data
+        _out = []
+        for _it in data:
+            if not isinstance(_it, dict):
+                _out.append(_it)
+                continue
+            if _it.get("applied"):
+                _module_logger.info(
+                    "[280刀4] applied补丁出队: %s:%s",
+                    _it.get("file", ""), _it.get("method", ""))
+                continue
+            _it.pop("runtime_verified", None)
+            _out.append(_it)
+        return _out
+
     def save_pending_patch(self, patch: dict[str, Any]):
         """
         保存待应用的补丁到队列。
         ★v23.0增强：自动补齐元数据 + 去重检查。
         """
+        # ★第280批刀1（P0）：生成侧 def 对齐——出补丁即断言 def名==method，不一致拒绝入库。
+        #   烛微279批发现：23条def名与method错配＋6条modified_code无def＝29条(60.4%)。
+        #   源头拦比队列清便宜：解析 modified_code 首个 def 名，与 method 字段比对。
+        _def_name = PatchManager._m280_extract_def_name(
+            patch.get("modified_code", "") or "")
+        _method_name = str(patch.get("method", "") or "").strip()
+        if _method_name and _def_name and _def_name != _method_name:
+            _module_logger.error(
+                f"[补丁入队][280刀1] 补丁def名与method字段不一致，拒绝入库: "
+                f"def={_def_name!r} method={_method_name!r} "
+                f"file={patch.get('file','')}")
+            return
+        # ★第280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
+        #   烛微279批发现：48条risk_level全为"低"，其中 sql_injection/lock_with_emit/
+        #   non_atomic_write 共8条高危被误判低风险。高危族禁入免签视野、必须专项验证。
+        patch["risk_level"] = PatchManager._m280_risk_by_issue_type(
+            patch.get("issue_type"))
+        # ★第280批刀4：trust_score 恒70 零信息量 → 按 issue_type 重算有信息量分值。
+        #   原恒70使 PATCH_AUTO_APPROVE_TRUST_THRESHOLD=40 形同虚设。
+        if patch.get("trust_score") in (None, 70, 70.0):
+            patch["trust_score"] = PatchManager._m280_trust_by_issue_type(
+                patch.get("issue_type"))
         # ★v23.0新增：补全元数据
         if "saved_at" not in patch:
             patch["saved_at"] = time.time()
@@ -1138,7 +1225,10 @@ class PatchManager:
         _safe_list_a1 = list(_evo_cfg_a1.get("SAFE_TO_AUTO_FIX", []) or [])
         _issue_type_a1 = str(patch.get("issue_type", "") or "")
         _whitelist_ok_a1 = (not _safe_list_a1) or (_issue_type_a1 in _safe_list_a1)
-        if _risk_ok_a1 and _trust_ok_a1 and _whitelist_ok_a1:
+        # ★第280批刀3：llm 补丁永不自动审批（即使 risk/trust/whitelist 达标也转人工）。
+        _source_is_llm_a1 = str(patch.get("source", "")) == "llm"
+        if (_risk_ok_a1 and _trust_ok_a1 and _whitelist_ok_a1
+                and not _source_is_llm_a1):
             # ★主线第80批 T7 (P0-3)：免签改写闸门——verified 或核心文件或总开关关闭，
             #   禁止升 approved；核心/关闭场景下未 verified 的补丁强制置 verified 待人工。
             # ★M85-4：总开关关闭时，本地低风险补丁仍放行（_m85_allow 认定）；
@@ -3861,6 +3951,9 @@ class PatchManager:
                         _it["file"] = self._normalize_patch_file(_it["file"])
         except Exception:
             _module_logger.debug("补丁路径归一化失败（不影响保存）")
+        # ★第280批刀4：pending 队列落盘前做状态机收敛（applied即出队 + 删顶层runtime_verified）。
+        if path == self._pending_file:
+            data = self._m280_converge_pending(data)
         return self._save_json(path, data)
 
     def _load_json(self, path, default):
