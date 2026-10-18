@@ -35,6 +35,13 @@ from nucleus._silent_except import silent_exc
 
 _MODULE_TAG = "subagent_worker"
 
+# ★275批刀2：产物 schema 分档
+#   说明书类（方法级四字段）——器官职责说明书 / 种子记忆类共用
+ORGAN_SPEC_FIELDS = ("功能", "关键步骤", "依赖的外部数据", "潜在风险")
+#   梦境类（文本 + 关键词）——★明确不入节点池，防把虚构内容当认知沉淀
+DREAM_SCHEMA_FIELDS = ("文本", "关键词")
+DREAM_NO_NODE_POOL = True
+
 
 def _open_stderr_log(stderr_file: str | None):
     """打开 stderr 诊断日志（可选）；返回可写句柄或 None。"""
@@ -45,6 +52,43 @@ def _open_stderr_log(stderr_file: str | None):
     except OSError as exc:
         silent_exc(exc, where="_open_stderr_log")
         return None
+
+
+def _handle_llm_op(spec: dict, task: dict, result: dict, model_fallback) -> int:
+    # ★275批刀2：op=llm —— 经 channel_client 单次 HTTP 调模型。
+    #   返回 exit_code：0=成功；4=产物不可解析（schema 校验失败 / 调用失败 / 缺 prompt）。
+    #   密钥从进程环境变量 SUBAGENT_API_KEY 取回（input_file 里不写 api_key）。
+    _prompt = str(task.get("prompt", "") or "")
+    if not _prompt:
+        result["error"] = "op=llm 缺 prompt"
+        return 4
+    try:
+        from nucleus.reasoning.channel_client import call_channel
+    except Exception as _imp_e:
+        silent_exc(_imp_e, where="subagent_worker::_handle_llm_op(import)")
+        result["error"] = "channel_client 不可用: %s" % type(_imp_e).__name__
+        return 4
+    _rep = call_channel(spec.get("channel") or {}, _prompt,
+                        timeout=spec.get("timeout"),
+                        system=str(task.get("system", "") or ""))
+    result["channel"] = _rep.get("channel")
+    result["model"] = _rep.get("model") or model_fallback
+    result["usage"] = _rep.get("usage") or {}
+    if not _rep.get("ok"):
+        result["error"] = _rep.get("error") or "渠道调用失败"
+        return 4
+    _answer = _rep.get("text") or ""
+    result["answer"] = _answer
+    _schema = str(task.get("schema", "organ_spec") or "organ_spec")
+    result["schema"] = _schema
+    # 产物可解析性校验（刀4：exit_code=4）
+    _fields = DREAM_SCHEMA_FIELDS if _schema == "dream" else ORGAN_SPEC_FIELDS
+    _missing = [k for k in _fields if k not in _answer]
+    if _missing:
+        result["missing_fields"] = _missing
+        result["error"] = "产物缺字段: %s" % ",".join(_missing)
+        return 4
+    return 0
 
 
 def run_once(spec: Any) -> tuple[dict, int]:
@@ -74,6 +118,7 @@ def run_once(spec: Any) -> tuple[dict, int]:
 
     task = spec.get("task", spec)
     op = task.get("op") if isinstance(task, dict) else None
+    _exit = 0  # ★275批刀4：0成功 / 3未知op / 4产物不可解析
 
     if isinstance(task, dict):
         if op == "echo":
@@ -91,10 +136,16 @@ def run_once(spec: Any) -> tuple[dict, int]:
             ).hexdigest()
         elif op == "noop":
             result["handled"] = True
+        elif op == "llm":
+            # ★275批刀2：worker 接模型（甲′路线）—— 经 channel_client 单次 HTTP
+            _exit = _handle_llm_op(spec, task, result, model)
         else:
-            # 未知 op / 无 op：确定性 ack（不调 LLM，仅登记任务键集合）
+            # ★275批刀4：未知 op 原为 exit 0（假绿根：prompt 打错字也算成功）
+            #   ⇒ 改为 exit_code=3（未知任务）
             result["handled"] = True
             result["task_keys"] = sorted(task.keys())
+            result["error"] = "unknown op: %r" % (op,)
+            _exit = 3
     elif isinstance(task, str):
         result["echo"] = task
     else:
@@ -102,7 +153,7 @@ def run_once(spec: Any) -> tuple[dict, int]:
 
     result["budget_tokens"] = budget
     result["timeout"] = timeout
-    return result, 0
+    return result, _exit
 
 
 def _write_output(output_file: str, result: dict, exit_code: int) -> None:

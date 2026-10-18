@@ -113,15 +113,18 @@ def safe_write_json(path, data, backup=True, ensure_ascii=False,
             _tmp = f"{path}.{int(time.time() * 1000)}.tmp"
             with open(_tmp, "w", encoding=encoding) as f:
                 json.dump(data, f, ensure_ascii=ensure_ascii, indent=indent, default=default)
+                # ★275批刀1：fsync 确保数据真正落盘（非正常终止不留全零/半写文件）
+                f.flush()
+                os.fsync(f.fileno())
             _replace_with_retry(_tmp, path)
         return True
     except Exception as _exc:
-        _module_logger.debug(f"[写入失败] path={path} type={type(_exc).__name__} {_exc}")
-        if _tmp and os.path.exists(_tmp):
-            try:
-                os.remove(_tmp)
-            except Exception:
-                pass
+        # ★275批刀1：写入失败不再静默吞（原 debug ⇒ 改 ERROR），
+        #   且**保留 tmp 供取证**（原实现删除 tmp ⇒ 现场被抹掉，
+        #   无法定位"全零文件"从何而来）。
+        _module_logger.error(
+            f"[写入失败] path={path} type={type(_exc).__name__} {_exc}"
+            f" tmp={'保留:' + _tmp if _tmp and os.path.exists(_tmp) else '无'}")
         return False
 
 

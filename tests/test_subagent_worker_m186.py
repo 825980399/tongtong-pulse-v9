@@ -38,10 +38,14 @@ def test_run_once_hash():
 
 
 def test_run_once_unknown_op_is_ack():
+    # ★275批刀4：未知 op 原为 exit 0 —— 是"prompt 打错字也算成功"的假绿根。
+    #   现改为 exit_code=3（未知任务）；ack 语义保留（handled=True + task_keys），
+    #   只是退出码如实反映"并未真正处理"。
     res, code = m.run_once({"task": {"op": "frobnicate", "x": 1},
                             "model": "cheap", "budget_tokens": 10})
-    assert code == 0
+    assert code == 3
     assert res["handled"] is True
+    assert "unknown op" in str(res.get("error", ""))
 
 
 def test_run_once_string_task():

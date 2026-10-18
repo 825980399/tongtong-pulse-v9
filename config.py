@@ -5888,6 +5888,12 @@ O_A4_LOCAL_EVIDENCE_PROVIDERS = {
 ENABLE_SUBAGENT_RUNNER = False
 SUBAGENT_BUDGET_TOKENS = 4000       # ★270批刀3：4000 tokens/次上限（预算线不空转，:169—177 生效）
 SUBAGENT_TIMEOUT_SECONDS = 300
+# ★275批刀5：子代理成本三熔断（只停真起、不停 dry_run 观测 ⇒ 观测面零成本）
+SUBAGENT_BREAKER_PAID_CONSECUTIVE = 3        # A：连续 N 次付费兜底(advanced)→停真起
+SUBAGENT_BREAKER_DAY_MAX_CALLS = 200         # B：当日累计调用上限
+SUBAGENT_BREAKER_DAY_MAX_TOKENS = 1000000    # B：当日累计 tokens 上限（停至次日03:00）
+SUBAGENT_BREAKER_FAIL_WINDOW = 20            # C：失败率滑动窗口大小
+SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 ⇒ 停真起）
 
 # ===== [M183-TEMP] 183批刀3：认知状态机观测（纯函数 + 统一温度单一来源）=====
 # 读取点：nucleus/cognitive/cognitive_state_utils.py::suggested_temperature

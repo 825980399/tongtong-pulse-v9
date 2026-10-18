@@ -579,6 +579,21 @@ def flush_to_file(force: bool = False):
         # 读取已有孤儿记录，合并去重（修复：default=[]而不是{}）
         existing_orphans = []
         if os.path.exists(orphan_path):
+            # ★275批刀1：观测面劣化不再被静默吞 —— 全零文件即 WARN。
+            #   机理：safe_write_json 走 tmp+os.replace，非正常终止会留下全零文件；
+            #   而 safe_read_json(default=[]) 把劣化降级成 [] ⇒ "没有孤儿"的假绿。
+            try:
+                with open(orphan_path, "rb") as _of:
+                    _raw_orphan = _of.read()
+                if _raw_orphan and all(_b == 0 for _b in _raw_orphan):
+                    logger.warning(
+                        "pulse_tracer: [孤儿判定] pulse_orphans.json 读取失败"
+                        "（全零文件 size=%d）——降级为默认空列表，请检查 safe_write_json",
+                        len(_raw_orphan))
+            except Exception as _raw_e:
+                logger.debug(
+                    "pulse_tracer: [孤儿判定] pulse_orphans.json 预检异常: %s",
+                    type(_raw_e).__name__)
             try:
                 existing_orphans = safe_read_json(orphan_path, default=[])
                 if not isinstance(existing_orphans, list):
