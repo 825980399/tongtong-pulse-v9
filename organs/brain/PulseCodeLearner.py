@@ -2202,6 +2202,20 @@ class PulseCodeLearner(BasePulseOrgan):
             _flow_node.trust_score = max(65.0, _health["trust_score"])
             if self.frequency_codec:
                 self.frequency_codec.encode_node(_flow_node)
+            # ★第294批刀2：同类[数据流·]快照版本收敛——写入新数据流节点前，把同 organ 的
+            #   旧数据流节点标记为 dormant（superseded），只保留最新版本，避免多版本画像并存
+            #   （Top 全为 PulseInnerWorld 233/233/216/214… 的根因）。仅命中 value 含「数据流」
+            #   的节点，不误伤同路径下的「[自我理解·」方法理解节点。
+            try:
+                if self.node_pool:
+                    _old_flows = self.node_pool.query(
+                        space_path_prefix=f"/自我理解/代码/{organ}", limit=200)
+                    for _of in _old_flows:
+                        _oval = str(getattr(_of, "value", "") or "")
+                        if "数据流" in _oval and getattr(_of, "state", None) == "active":
+                            _of.state = "dormant"
+            except Exception as e:
+                silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 快照收敛")
             if self.node_pool:
                 _flow_node.value = clean_content_text(_flow_node.value) or _flow_node.value
                 self.node_pool.add(_flow_node)

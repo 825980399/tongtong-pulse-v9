@@ -170,20 +170,43 @@ def _disk_consumption_rate() -> float | None:
 
 
 def _patch_true_fix_rate() -> float | None:
-    """补丁真实修复率（★主动复现口径，见 patch_active_reprobe）。"""
+    """补丁真实修复率（★第294批刀4：统一验证真值源）。
+
+    原实现只读「主动复现」口径（``patch_active_reprobe.true_fix_rate``），
+    与 ``patch_quality_evaluator`` 的 N-9 口径（fixed/judgeable、unverifiable 单列）
+    各说各话，导致自评被单一宽松口径喂大（83.34 vs 22.6%）。
+
+    现改为**双口径并存取低值（保守）**：
+      ① N-9 口径 —— 与 ``patch_quality_evaluator.evaluate_history`` 同源
+         （``maturity_ledger.patch_rates``，fixed/judgeable，unverifiable 不计分子也不计分母）；
+      ② 主动复现口径 —— 保留作对照；
+    两者都有值时取 min，任一缺失则用另一；皆无则 None（不参与加权）。
+    """
+    _vals: list[float] = []
+    # ① N-9 口径（与 patch_quality_evaluator 同源，见 maturity_ledger.patch_rates）
+    try:
+        from nucleus.self_awareness.maturity_ledger import patch_rates as _n9_rates
+        _n9 = _n9_rates()
+        if isinstance(_n9, dict) and isinstance(_n9.get("fix_rate"), (int, float)):
+            _vals.append(float(_n9["fix_rate"]))
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate N9")
+    # ② 主动复现口径（保留作对照）
     try:
         from nucleus.evolution.patch_active_reprobe import true_fix_rate
         _p = os.path.join(ROOT, "data", "patches", "patch_history.json")
-        if not os.path.isfile(_p):
-            return None
-        _d = json.load(open(_p, encoding="utf-8"))
-        _ps = _d.get("patches") if isinstance(_d, dict) and "patches" in _d else _d
-        if not isinstance(_ps, list) or not _ps:
-            return None
-        return true_fix_rate(_ps)
+        if os.path.isfile(_p):
+            _d = json.load(open(_p, encoding="utf-8"))
+            _ps = _d.get("patches") if isinstance(_d, dict) and "patches" in _d else _d
+            if isinstance(_ps, list) and _ps:
+                _tf = true_fix_rate(_ps)
+                if isinstance(_tf, (int, float)):
+                    _vals.append(float(_tf))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate L181")
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate reprobe")
+    if not _vals:
         return None
+    return round(min(_vals), 4)
 
 
 def _report_resolution_rate() -> float | None:

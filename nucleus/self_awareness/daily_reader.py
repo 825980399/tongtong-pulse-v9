@@ -348,3 +348,58 @@ def append_phase18_section(report_path: str, logger: Any = None) -> dict[str, An
     except Exception as e:
         silent_exc(e, "daily_reader.append_phase18_section:写日报小节", level="warning")
     return _sig
+
+
+def append_mastery_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """第294批刀1：装掌握率分母，日报出「掌握率=understood/total」。
+
+    背景（烛微291批）：已理解 6677 个方法，但仓内缺稳定 total_methods 出口，
+    「掌握率 = 6677/?」无法计算。本函数补齐分母并落到日报：
+
+      * 分母 total = 全仓方法总数（``get_organ_code_structure()`` 各器官
+        ``method_count`` 求和，AST 静态扫描，稳定口径）；
+      * 分子 understood = 已理解方法数（从信息场 ``code_learner.stats`` 尽力取，
+        取不到则 0 并如实标注 source=unavailable）。
+
+    纯只读观测 + 追加日报一行 + 打 INFO，零语义变更。
+    """
+    _log = logger or _module_logger
+    total = 0
+    understood = 0
+    _src = "unavailable"
+    # 分母：全仓方法总数（稳定，AST 静态扫描每器官 method_count 求和）
+    try:
+        from nucleus.self_inspector import get_self_inspector
+        _cs = get_self_inspector().get_organ_code_structure() or {}
+        total = sum(int(_v.get("method_count", 0))
+                    for _v in _cs.values() if isinstance(_v, dict))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_mastery_section:total", level="warning")
+    # 分子：已理解方法数（信息场 code_learner.stats，防御性多 key 读取）
+    try:
+        from nucleus.field.InfoField import get_info_field
+        _if = get_info_field()
+        _st = _if.get_current("code_learner.stats") if _if is not None else None
+        if isinstance(_st, dict):
+            _u = _st.get("understood")
+            if isinstance(_u, (int, float)):
+                understood = int(_u)
+                _src = "info_field.code_learner.stats"
+            if total == 0:
+                _t = _st.get("total_methods")
+                if isinstance(_t, (int, float)):
+                    total = int(_t)
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_mastery_section:understood", level="warning")
+    _pct = round(min(100.0, understood / max(1, total) * 100), 1) if total > 0 else 0.0
+    try:
+        _lines = ["", "【掌握率】",
+                  f"  · 已理解 {understood}/{total} 个方法（掌握率 {_pct}%）", ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_mastery_section:写日报小节", level="warning")
+    _log.info("[掌握率] understood=%d total=%d mastery=%.1f%% source=%s",
+              understood, total, _pct, _src)
+    return {"understood": understood, "total_methods": total,
+            "mastery_pct": _pct, "source": _src}

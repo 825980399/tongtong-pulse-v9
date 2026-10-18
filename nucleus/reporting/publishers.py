@@ -365,11 +365,38 @@ def self_cognition_anomalies(summary: dict | None) -> list:
     return _out
 
 
+def _count_usable_dims(summary: dict | None) -> int:
+    """第294批刀3：统计 self_cognition 摘要里「可用评分维度」数。
+
+    可用 = 字段值非 None / 非空字符串 / 非空 dict。少于 2 视为空报告。
+    """
+    if not isinstance(summary, dict):
+        return 0
+    _keys = ("overall_score", "health_level", "best_dimension",
+             "worst_dimension", "headline_issue")
+    _n = 0
+    for _k in _keys:
+        _v = summary.get(_k)
+        if _v is not None and _v != "" and _v != {}:
+            _n += 1
+    return _n
+
+
 def publish_self_cognition(text: str, summary: dict | None = None,
                            generator: str = "SelfAwarenessEngine",
                            extra: dict | None = None) -> dict | None:
-    """发布自认知报告 —— **P0-1 的头号修复点**（此前「生成了没人读」）。"""
+    """发布自认知报告 —— **P0-1 的头号修复点**（此前「生成了没人读」）。
+
+    ★第294批刀3：空报告不再计为产出——可用评分维度 <2 时不发布
+    （烛微291批：116 份报告仅 7 份有评分，九成是空的，消费方读到也没东西）。
+    """
     if not bus_enabled():
+        return None
+    # ★第294批刀3：可用维度<2 → 空报告，不发布（避免污染消费方 + 虚增产出计数）。
+    _usable = _count_usable_dims(summary)
+    if _usable < 2:
+        _LOG.info("[空报告拦截] self_cognition 可用评分维度=%d<2，不发布（insufficient_data）",
+                  _usable)
         return None
     _content: dict[str, Any] = {
         "text_length": len(text or ""),

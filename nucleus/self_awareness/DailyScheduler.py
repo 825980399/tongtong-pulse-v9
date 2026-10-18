@@ -598,6 +598,16 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _p18e282:
                     silent_exc(_p18e282, "DailyScheduler.run_once:PHASE18信号")
 
+            # ★第294批 刀1：装掌握率分母——日报出「掌握率=understood/total」。
+            #   纯只读观测 + 追加日报一行，失败只 warning 不影响调度主流程。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _294_dr
+                    _res["mastery"] = _294_dr.append_mastery_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m294e:
+                    silent_exc(_m294e, "DailyScheduler.run_once:掌握率")
+
             # ★第286批 刀2：每日03:00 落盘 InsightBoard + PHASE18 snapshot（滚动保留7份）。
             if not self._is_test_env():
                 try:
