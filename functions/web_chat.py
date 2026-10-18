@@ -571,6 +571,25 @@ class WebChatHandler(BaseHTTPRequestHandler):
 
                 user_name = self._get_current_user_name()
 
+                # ★286批刀5：用户通过 Web 对话出现 → 发射 presence（无摄像头时也"眼前有人"）。
+                #   节流：同一 user 在 60s 内只发一次，避免每条消息都刷 presence。
+                _m286_now = time.time()
+                _m286_last_ts = getattr(self.server, "_m286_last_presence_ts", 0.0)
+                _m286_last_user = getattr(self.server, "_m286_last_presence_user", "")
+                if user_name != _m286_last_user or (_m286_now - _m286_last_ts) >= 60.0:
+                    self.server._m286_last_presence_ts = _m286_now
+                    self.server._m286_last_presence_user = user_name
+                    self.server.info_field.publish(self.server.pulse_core.emit(
+                        source_organ="Web对话",
+                        event_type=ChatEvent.USER_PRESENCE_DETECTED,
+                        payload={
+                            "user_name": user_name,
+                            "detection_type": "web_chat_message",
+                        },
+                        priority=7,
+                        layer="L1"
+                    ))
+
                 # 发射文本消息
                 if parsed["text"]:
                     chat_pulse = self.server.pulse_core.emit(

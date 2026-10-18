@@ -1882,6 +1882,7 @@ class SelfInspector(SilentLogMixin):
             from tools.export_event_graph import load_event_graph_cache
             _g = load_event_graph_cache()
             if not _g:
+                _module_logger.warning("[图谱缓存] 未生成，blast_radius暂缺")
                 return {}
             _affects: dict[str, set[str]] = {}
             _driven: dict[str, set[str]] = {}
@@ -1908,6 +1909,7 @@ class SelfInspector(SilentLogMixin):
             from tools.export_event_graph import load_event_graph_cache
             _g = load_event_graph_cache()
             if not _g:
+                _module_logger.warning("[图谱缓存] 未生成，blast_radius暂缺")
                 return {"organ": organ, "affects": [], "driven_by": [],
                         "blast_radius": 0, "error": "no_cache"}
             _affects: set[str] = set()

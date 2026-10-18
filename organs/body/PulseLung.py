@@ -2035,6 +2035,17 @@ class PulseLung(BasePulseOrgan):
                         self._log(LogLevel.DEBUG,
                                   f"[语义缓存L2] 写入失败（已忽略）: "
                                   f"{type(_m138se).__name__}")
+                # ★284批刀1：L2 读侧影子接线——L1 命中后并调 lookup_l2，只记不返回。
+                #   影子闸 ENABLE_SEMANTIC_CACHE_L2_SHADOW 包着（默认关→零副作用）；
+                #   观测「若真接上会命中多少」，不影响现有命中判定/返回。
+                if _reply and self._m41_cache_observe_enabled():
+                    try:
+                        from nucleus.llm.semantic_cache import lookup_l2_shadow as _m284_shadow
+                        _m284_shadow(prompt, origin=_m40_origin)
+                    except Exception as _m284se:
+                        self._log(LogLevel.DEBUG,
+                                  f"[语义缓存L2影子] 观测异常（已忽略）: "
+                                  f"{type(_m284se).__name__}")
 
                 if _reply:
                     self._update_channel_health(_name, True, _latency)

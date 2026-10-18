@@ -24,6 +24,22 @@ from nucleus._silent_except import silent_exc
 _MAX_EVENTS = 200
 
 
+def _l3_group_enabled() -> bool:
+    """★286批刀1：L3 背压热路是否在 PHASE18_SIGNAL_GROUPS 白名单内。
+
+    总开关 ENABLE_PHASE18_SIGNALS 翻 True 后，低频四组（evolution/reasoning/
+    strategy/knowledge）开始采集，但 L3 热路（backpressure）按白名单留后——
+    PHASE18_SIGNAL_GROUPS 不含 l3/backpressure 时，record_l3_backpressure 直接 no-op。
+    """
+    try:
+        import config
+        _groups = getattr(config, "PHASE18_SIGNAL_GROUPS", "")
+        _names = {g.strip().lower() for g in str(_groups).split(",") if g.strip()}
+        return bool({"l3", "backpressure", "l3_backpressure"} & _names)
+    except Exception:
+        return False
+
+
 class Phase18Signals:
     """进程内轻量信号采集器（线程安全）。"""
 
@@ -122,6 +138,8 @@ class Phase18Signals:
             consumer_rate_per_sec: L3 消费速率（脉冲/秒，近 60s 滑窗）。
         """
         if not self._enabled:
+            return
+        if not _l3_group_enabled():
             return
         with self._lock:
             self._l3_events.append({

@@ -82,10 +82,10 @@ def test_exit_code_enforced_failure(tmp_path):
 
 
 def test_exit_code_zero_success(tmp_path):
-    """退出码 0 → success，且读取结果文件。"""
+    """退出码 0 → success，且读取结果文件（★284批刀4：含 capabilities=[] 能力面回传）。"""
     cfg = _cfg(ENABLE_SUBAGENT_NO_MESSAGE_TOOL=True, SUBAGENT_CHEAP_MODEL="cheap-llm")
     out = tmp_path / "out.json"
-    out.write_text('{"stats": {"n": 3}}', encoding="utf-8")
+    out.write_text('{"stats": {"n": 3}, "capabilities": []}', encoding="utf-8")
     fake = MagicMock()
     fake.returncode = 0
     fake.pid = 8888

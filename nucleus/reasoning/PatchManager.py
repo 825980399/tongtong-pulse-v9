@@ -1076,9 +1076,12 @@ class PatchManager:
         # ★280批刀4：pending 队列落盘前状态机收敛。
         #   ① applied=True 即出队（不再留在 pending）；
         #   ② 删顶层 runtime_verified（留嵌套 runtime_verify_result.verified 为唯一真值）。
+        # ★284批刀5：③ 结构缺陷补丁批量作废（def名!=method 错配 或 modified_code 无 def），
+        #   回生成侧重新生成（存量 29 条不再污染队列类指标）。
         if not isinstance(data, list):
             return data
         _out = []
+        _voided = 0
         for _it in data:
             if not isinstance(_it, dict):
                 _out.append(_it)
@@ -1088,8 +1091,25 @@ class PatchManager:
                     "[280刀4] applied补丁出队: %s:%s",
                     _it.get("file", ""), _it.get("method", ""))
                 continue
+            # ★284批刀5：结构缺陷补丁作废（错配 def!=method / 无 def）
+            _def_name = PatchManager._m280_extract_def_name(
+                _it.get("modified_code", "") or "")
+            _method_name = str(_it.get("method", "") or "").strip()
+            _mismatch = bool(_method_name and _def_name and _def_name != _method_name)
+            _no_def = bool(_method_name and not _def_name)
+            if _mismatch or _no_def:
+                _module_logger.warning(
+                    "[284刀5] 结构缺陷补丁作废: %s:%s "
+                    "(def=%r method=%r 错配=%s 无def=%s)",
+                    _it.get("file", ""), _method_name, _def_name, _method_name,
+                    _mismatch, _no_def)
+                _voided += 1
+                continue
             _it.pop("runtime_verified", None)
             _out.append(_it)
+        if _voided:
+            _module_logger.info(
+                "[284刀5] 结构缺陷补丁批量作废: %d 条（回生成侧重新生成）", _voided)
         return _out
 
     def save_pending_patch(self, patch: dict[str, Any]):

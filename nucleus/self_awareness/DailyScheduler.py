@@ -37,6 +37,26 @@ from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 
 
+def _m286_retain_dated(dir_path: str, prefix: str, keep: int = 7) -> int:
+    """★286批刀2：滚动保留 dated 文件（如 insight_board_YYYYMMDD.json），只留最近 keep 份。
+
+    返回删除的份数。失败静默降级（每日低频任务，不影响主流程）。
+    """
+    _removed = 0
+    try:
+        _files = sorted(f for f in os.listdir(dir_path)
+                        if f.startswith(prefix) and f.endswith(".json"))
+        for _old in _files[:-keep]:
+            try:
+                os.remove(os.path.join(dir_path, _old))
+                _removed += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return _removed
+
+
 def _a3_sample_rss_threads():
     """165批A3：采样本进程 RSS（字节）与活跃线程数；psutil 不可用时优雅降级。"""
     try:
@@ -577,6 +597,36 @@ class SelfAwarenessDailyScheduler:
                         _282_dr.append_phase18_section(_rp, logger=_module_logger)
                 except Exception as _p18e282:
                     silent_exc(_p18e282, "DailyScheduler.run_once:PHASE18信号")
+
+            # ★第286批 刀2：每日03:00 落盘 InsightBoard + PHASE18 snapshot（滚动保留7份）。
+            if not self._is_test_env():
+                try:
+                    _m286_ts = _now.strftime("%Y%m%d")
+                    _m286_proj = self._project_root
+                    # ① InsightBoard 落盘（data/insights/）
+                    from nucleus.InsightBoard import get_insight_board as _m286_gib
+                    _m286_ins_dir = os.path.join(_m286_proj, "data", "insights")
+                    os.makedirs(_m286_ins_dir, exist_ok=True)
+                    _m286_ins_path = os.path.join(_m286_ins_dir, f"insight_board_{_m286_ts}.json")
+                    _m286_n = _m286_gib().dump_to_disk(_m286_ins_path)
+                    _m286_retain_dated(_m286_ins_dir, "insight_board_", keep=7)
+                    # ② PHASE18 snapshot 落盘（data/phase18/）
+                    import json as _m286_json
+                    from nucleus.telemetry.phase18_signals import get_phase18_signals as _m286_gps
+                    _m286_snap = _m286_gps().snapshot()
+                    _m286_p18_dir = os.path.join(_m286_proj, "data", "phase18")
+                    os.makedirs(_m286_p18_dir, exist_ok=True)
+                    _m286_p18_path = os.path.join(_m286_p18_dir, f"phase18_snapshot_{_m286_ts}.json")
+                    _m286_tmp = _m286_p18_path + ".tmp"
+                    with open(_m286_tmp, "w", encoding="utf-8") as _m286_f:
+                        _m286_json.dump(_m286_snap, _m286_f, ensure_ascii=False, indent=2)
+                    os.replace(_m286_tmp, _m286_p18_path)
+                    _m286_retain_dated(_m286_p18_dir, "phase18_snapshot_", keep=7)
+                    _res["insight_board_dump"] = {"entries": _m286_n, "path": _m286_ins_path}
+                    _res["phase18_snapshot_dump"] = {"path": _m286_p18_path}
+                    _module_logger.info("[思维洞察落盘] insights=%d", _m286_n)
+                except Exception as _m286_e:
+                    silent_exc(_m286_e, "DailyScheduler.run_once:思维洞察落盘")
 
             self._runs += 1
         except Exception as _e:

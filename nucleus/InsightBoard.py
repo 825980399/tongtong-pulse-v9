@@ -257,6 +257,27 @@ class InsightBoard:
                 "type_distribution": type_dist,
             }
 
+    def dump_to_disk(self, path: str) -> int:
+        """★286批刀2：把当前黑板内容落盘为 JSON（供每日03:00日拍，滚动保留7份）。
+
+        原子写（tmp + os.replace），内容为 entries 快照。返回条目数。
+        """
+        import json as _json
+        import os as _os
+        with self._lock:
+            _entries = [dict(e) for e in self._entries]
+        _payload = {
+            "dumped_at": time.time(),
+            "entry_count": len(_entries),
+            "entries": _entries,
+        }
+        _os.makedirs(_os.path.dirname(path), exist_ok=True)
+        _tmp = path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            _json.dump(_payload, _f, ensure_ascii=False, indent=2)
+        _os.replace(_tmp, path)
+        return len(_entries)
+
 
 # ========== 模块级单例 ==========
 _insight_board: InsightBoard | None = None

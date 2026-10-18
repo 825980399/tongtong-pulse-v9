@@ -619,6 +619,10 @@ class L2Entry:
 class SemanticCacheL2:
     """语义缓存 L2：**命中且过四闸 → 直接返回缓存响应**。纯内存、线程安全、**永不抛出**。
 
+    ★284批刀7 命中优先级语义：**L1 优先，L2 兜底**——L1 是精准命中（完全匹配/高相似，
+    只回命中统计、结构上不返回内容），L2 是语义相似（四闸通过后返回缓存响应）。
+    两层缓存不互相遮蔽：L1 精准命中优先；L2 仅在 L1 命中语义判定后作为语义相似兜底。
+
     四道闸门（全部通过才返回；任一失败 → 静默回落渠道调用）：
       ① 置信闸：余弦 sim ≥ 阈值（沿用 L1 校准值 0.85）；
       ② 时效闸：now - ts ≤ L2 TTL（1 小时）；
@@ -961,3 +965,49 @@ def store_l2(prompt: str, response: str, origin: str = "") -> bool:
     except Exception as e:
         silent_exc(e, "nucleus/llm/semantic_cache.py:store_l2", level="debug")
         return False
+
+
+# ★284批刀1：L2 读侧影子观测（L1 命中后并调 lookup_l2，只记不返回）。
+#   依据：烛微283批前置——lookup_l2 生产调用面=0，L1 活跃在写 ⇒ hits/misses 恒 0。
+#   影子期由 ENABLE_SEMANTIC_CACHE_L2_SHADOW 总闸包裹（默认 False → None，零副作用）。
+#   语义：L1 精准命中优先（完全匹配/高相似），L2 语义相似兜底（刀7 优先级口径）。
+#   只记不返回：不改变任何命中判定 / 存储 / 返回，仅 INFO 日志观测「若真接上会命中多少」。
+def lookup_l2_shadow(prompt: str, origin: str = "") -> dict | None:
+    """L2 读侧影子观测：L1 命中后并调一次 lookup_l2，只记不返回。
+
+    流程（与刀7「L1 优先 L2 兜底」口径一致）：
+      1. L1 lookup（只回命中统计，L1 红线：绝不返回内容）
+      2. 若 L1 命中 → 并调一次 lookup_l2（L2 语义相似）
+      3. 记录 l2_would_hit + 与 L1 结果一致率（仅 INFO 日志）
+
+    返回观测 dict（供隔离测试断言）；影子闸关闭 / L1 未命中 / 异常 → None。
+    """
+    if not bool(_l2_cfg("ENABLE_SEMANTIC_CACHE_L2_SHADOW", False)):
+        return None
+    try:
+        _l1 = get_semantic_cache()
+        _l1_hit = False
+        _l1_sim = None
+        if _l1 is not None:
+            _l1r = _l1.lookup(prompt)
+            if _l1r:
+                _l1_hit = bool(_l1r.get("hit"))
+                _l1_sim = _l1r.get("similarity")
+        if not _l1_hit:
+            return None  # 只在 L1 命中后并调 L2（任务书口径）
+        _l2r = lookup_l2(prompt, origin=origin)
+        _l2_would_hit = bool(_l2r and _l2r.get("response"))
+        _consistent = (_l1_hit is True) and (_l2_would_hit is True)
+        _L.info(
+            "[semantic_cache_l2_shadow] l1_hit=true l2_would_hit=%s "
+            "l1_sim=%s l2_sim=%s consistent=%s",
+            _l2_would_hit, _l1_sim,
+            (_l2r or {}).get("similarity"), _consistent,
+        )
+        return {"l1_hit": True, "l2_would_hit": _l2_would_hit,
+                "l1_similarity": _l1_sim,
+                "l2_similarity": (_l2r or {}).get("similarity"),
+                "consistent": _consistent}
+    except Exception as e:
+        silent_exc(e, "nucleus/llm/semantic_cache.py:lookup_l2_shadow", level="debug")
+        return None

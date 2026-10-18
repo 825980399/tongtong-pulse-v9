@@ -35,6 +35,27 @@ from nucleus._silent_except import silent_exc
 
 _MODULE_TAG = "subagent_worker"
 
+# ★284批刀4：能力面声明 + 断言（NO_MESSAGE_TOOL worker 侧拦截实现）。
+#   此前 NO_MESSAGE_TOOL 只在 runner 侧做准入拒绝（假护栏）；worker 侧无任何拦截。
+#   本刀让 worker 显式声明「无发消息能力」（capabilities 空），并在启动时断言
+#   未 import 器官链 / EventBus / Mouth，output 回传 capabilities=[] 供 runner 校验。
+_CAPABILITIES: tuple[str, ...] = ()  # 能力面：空 = 无发消息能力（NO_MESSAGE_TOOL）
+
+
+def _assert_no_message_capability() -> None:
+    """能力面断言：worker 进程内不得 import 器官链（organs.*，含 Mouth/EventBus）。
+
+    仅做「声明性拦截」——检查 sys.modules 里已加载的器官链模块名；
+    命中则抛 AssertionError（由 main 捕获归一为 exit_code=5 拒绝产物）。
+    不 import 任何器官链模块本身（零新增依赖）。
+    生产态 worker 为独立子进程（sys.modules 干净），此断言真实生效；
+    测试共享进程时由铁律151 逐文件隔离单跑规避顺序污染。
+    """
+    _loaded = [m for m in sys.modules if m == "organs" or m.startswith("organs.")]
+    if _loaded:
+        raise AssertionError(
+            f"worker 越权加载器官链模块: {sorted(_loaded)[:5]}")
+
 # ★275批刀2：产物 schema 分档
 #   说明书类（方法级四字段）——器官职责说明书 / 种子记忆类共用
 ORGAN_SPEC_FIELDS = ("功能", "关键步骤", "依赖的外部数据", "潜在风险")
@@ -158,7 +179,9 @@ def run_once(spec: Any) -> tuple[dict, int]:
 
 def _write_output(output_file: str, result: dict, exit_code: int) -> None:
     """安全写入 output json（先写临时文件再重命名，避免半写）。"""
-    payload = {"result": result, "exit_code": exit_code, "stats": result}  # 187批刀5：补 stats 键对齐 runner（runner 读 result.get("stats", {})，否则产出被丢弃）
+    # ★284批刀4：output 回传 capabilities=[] 供 runner 校验（能力面声明落地）
+    payload = {"result": result, "exit_code": exit_code, "stats": result,
+               "capabilities": list(_CAPABILITIES)}  # 187批刀5：补 stats 键对齐 runner
     tmp = output_file + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -199,6 +222,19 @@ def main(argv: list[str] | None = None) -> int:
         if _log is not None:
             _log.close()
         return 2
+
+    # ★284批刀4：能力面断言——worker 启动即校验未接发消息/器官链能力；越权则拒产
+    try:
+        _assert_no_message_capability()
+    except AssertionError as _cap_e:
+        _log_line(f"[{_MODULE_TAG}] capability assertion failed: {_cap_e}")
+        _write_output(output_file, {
+            "error": f"capability assertion failed: {_cap_e}",
+            "deterministic": True,
+        }, 5)
+        if _log is not None:
+            _log.close()
+        return 5
 
     result, exit_code = run_once(spec)
     _log_line(f"[{_MODULE_TAG}] deterministic run done: exit_code={exit_code}")

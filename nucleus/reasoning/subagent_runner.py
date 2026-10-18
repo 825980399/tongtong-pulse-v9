@@ -385,6 +385,18 @@ def run_subagent(task, *, cfg=None, input_file=None, output_file=None,
                                     error=f"subagent exited with code {proc.returncode}",
                                     duration_ms=_ms(started), pid=getattr(proc, "pid", None))
         result = _read_json(output_file)
+        # ★284批刀4：worker 能力面校验——output 必须回传 capabilities=[]（空能力面），
+        #   证明 worker 侧 NO_MESSAGE_TOOL 拦截已落地（不再只是 runner 准入假护栏）。
+        #   缺失或非空 → 判 failure（子代理可能具备发消息能力，弃结果）。
+        _caps = result.get("capabilities")
+        if _caps is None or _caps != []:
+            _L.error("[subagent_runner] worker 能力面校验失败（capabilities=%r），"
+                     "NO_MESSAGE_TOOL 未在 worker 侧落地，弃结果", _caps)
+            _breaker_record(cfg, source=_spec.get("source"), ok=False)
+            return SubagentRunResult(
+                "failure", returncode=proc.returncode,
+                error="worker capabilities assertion missing (NO_MESSAGE_TOOL)",
+                duration_ms=_ms(started), pid=getattr(proc, "pid", None))
         _stats = result.get("stats", {}) or {}
         _breaker_record(cfg, source=_spec.get("source"), ok=True,
                         tokens=(_stats.get("usage") or {}).get("total_tokens", 0))

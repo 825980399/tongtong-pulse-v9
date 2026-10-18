@@ -487,7 +487,7 @@ ENABLE_CONTRADICTION_WRITE_PRECHECK = True  # 2026-09-27星轨开启：知识写
 #   knowledge_quality（知识矛盾消解结果）
 # 默认关闭：采集器为 no-op，对现有业务路径零副作用；开启后由
 # nucleus.telemetry.phase18_signals 统一收集，PHASE18 经 snapshot() 消费。
-ENABLE_PHASE18_SIGNALS = False
+ENABLE_PHASE18_SIGNALS = True
 
 # ★282批刀3：PHASE18 信号组白名单（L3 背压属热路，留到最后开）。
 #   先开低频四类：evolution / reasoning / strategy / knowledge。
@@ -1069,7 +1069,10 @@ OB1_FACET_RULES = {
 #       NONE（无匹配且无授权→不动作，留痕待裁决）。
 ENABLE_O_A4_DUAL_PATH = False      # 总开关（关闭 → 回到单路，零回归）
 O_A4_MODE = "NONE"                 # 当前激活态：DETERMINISTIC / SUBAGENT / NONE（默认 NONE）
-O_A4_SUBAGENT_ENABLED = False      # SUBAGENT 受限子代理（默认关，真起子代理推后续批）
+# ★284批刀6 互注：本键属「活跃记忆双路」（nucleus/field/active_memory_dual.py:34），
+#   与子代理 runner（ENABLE_SUBAGENT_RUNNER / subagent_runner.py）**无关**——真起子代理只有
+#   ENABLE_SUBAGENT_RUNNER 一道闸，本键不是第二道闸，勿误判为"还得开两道"。
+O_A4_SUBAGENT_ENABLED = False      # SUBAGENT 受限子代理（活跃记忆双路 SUBAGENT 态；默认关，真起子代理推后续批）
 # 声明式确定性规则表（与 tools/export_public.py 白名单同面维护；命中即返回 matched_rule_id，不调 LLM）
 O_A4_DETERMINISTIC_RULES = [
     ("当前时间", "rule_current_time"),

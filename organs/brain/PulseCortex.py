@@ -528,6 +528,36 @@ class PulseCortex(BasePulseOrgan):
             _entry = self._pending_receipt_ledger.pop(correlation_id, None)
         return _entry[0] if _entry else None
 
+    def _b3_receipt_settle(self, correlation_id: str, answer: str) -> bool:
+        """★284批刀3：B3 回执钩独立执行——账本出账 + record_remediation_returned。
+
+        原回执钩内嵌 :meth:`_maybe_append_self_state`，受输出锁 ``not _locked`` 拦截
+        （补救触发后 correlation_id 加入 ``_remediation_pending``，直至 90s 超时才释放），
+        导致肺应答回传时 returned 恒 0、真答案从未送蒸馏口（B3 账本走不完圈）。
+        本方法在肺应答回传路径独立执行，不依赖输出锁 / 对话条件，使 returned 起跳。
+        幂等：先 pop 账本，命中才记 returned；账本空 → 直接 False，不双记。
+        """
+        if not correlation_id or not answer:
+            return False
+        _q = self._receipt_ledger_pop(correlation_id)
+        if _q is None:
+            return False
+        try:
+            from nucleus.reasoning.ReasoningExperienceIndexer import (
+                get_reasoning_experience_indexer,
+            )
+            _idx = get_reasoning_experience_indexer()
+            _idx.record_remediation_returned(
+                question=_q, answer=answer,
+                rule_candidate="lung_remediation:returned")
+            self._log(LogLevel.DEBUG, f"[B3账本] 出账并记回执 cid={correlation_id}")
+            return True
+        except Exception as _re:
+            self._log(LogLevel.DEBUG,
+                      f"[B3回执钩] 记补救回执异常(忽略): "
+                      f"{type(_re).__name__}: {_re}")
+            return False
+
     def _receipt_ledger_sweep_locked(self, now: float | None = None) -> None:
         """★刀3：容量/TTL 自清（调用方须持锁）。"""
         if now is None:
@@ -1312,6 +1342,8 @@ class PulseCortex(BasePulseOrgan):
                 # 有文件需要处理，同时发射答案和文件处理（仅对话链路；内在自主不 SPEAK）
                 # ★P0 输出锁检查：补救中不输出原始答案
                 _locked = correlation_id in self._remediation_pending
+                # ★284批刀3：B3 回执钩独立执行（不依赖输出锁），使 returned 起跳、真答案送蒸馏口
+                self._b3_receipt_settle(correlation_id, answer)
                 # ★主线第15批 T1/P1-98：输出前校验 cid
                 if (not _is_inner_autonomous and not _locked
                         and self._dialog_should_output(correlation_id)):
@@ -1481,10 +1513,9 @@ class PulseCortex(BasePulseOrgan):
                                             correct_answer=_corrected_answer,
                                             rule_candidate=f"self_correction:{_correction.get('strategy', '')}")
                                         # ★第164批 刀A2：同步 LLM 依赖度量埋点（失败/成功）
+                                        # ★284批刀2：success 埋点已搬进 indexer 入口（灭 165 条差额），此处只记 attempt
                                         from nucleus.LLMDependencyMetrics import record_remediation_attempt as _rec_att
-                                        from nucleus.LLMDependencyMetrics import record_remediation_success as _rec_succ
                                         _rec_att(1)
-                                        _rec_succ(1)
 
                                     except Exception as e:
                                         self._log_ignored_exception(e)
@@ -1601,10 +1632,9 @@ class PulseCortex(BasePulseOrgan):
                             context="cortex_output_blocked_to_lung")
                         # ★第164批 刀A2：失败模式即一次补救尝试（补救率分母）
                         from nucleus.LLMDependencyMetrics import record_remediation_attempt as _rec_att
-                        from nucleus.LLMDependencyMetrics import record_remediation_success as _rec_succ
                         _rec_att(1)
                         # ★第170批 C2 刀1（RC-1）：转肺补救成功回执（原链路只加分母、无分子）
-                        _rec_succ(1)
+                        # ★284批刀2：success 埋点已搬进 indexer 入口（灭 165 条差额），此处不再重复记
                         _idx.record_remediation_success(
                             question=ctx.get("content", ""),
                             correct_answer="",
@@ -1636,6 +1666,8 @@ class PulseCortex(BasePulseOrgan):
 
             # ★P0 输出锁检查：补救中不输出原始答案
             _locked = correlation_id in self._remediation_pending
+            # ★284批刀3：B3 回执钩独立执行（不依赖输出锁），使 returned 起跳、真答案送蒸馏口
+            self._b3_receipt_settle(correlation_id, answer)
             # ★主线第15批 T1/P1-98：输出前校验 cid —— 已作废/过期的回复一律丢弃
             if (not _is_inner_autonomous and not _locked
                     and self._dialog_should_output(correlation_id)):

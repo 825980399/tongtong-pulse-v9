@@ -41,6 +41,12 @@ IMPORTANT_REPORT_TYPES = ("health", "pollution")
 _ON_DISK_IMPORTANT_MULTIPLIER = 2
 DEFAULT_ROOT = os.path.join("data", "reports")
 
+# ★第286批 刀4：legacy 判定时间边界。第51/52批修复"publish 先落盘、后填 consumed_by"之后，
+#   consumed_by 为空的报告不再视为 legacy（消费状态已不可恢复）——那只是"真没人消费"。
+#   仅修复时刻之前落盘且 consumed_by 为空的，才计入 _legacy_without_consumed。
+_LEGACY_WITHOUT_CONSUMED_CUTOFF = time.mktime(time.strptime(
+    "2026-09-15 00:00:00", "%Y-%m-%d %H:%M:%S"))
+
 #: 异常码含 LOW -> 低即差（best-effort 方向推断，见 _is_breaching）
 _LOW_HINT_RE = re.compile(r"LOW", re.I)
 
@@ -837,8 +843,10 @@ class ReportBus:
                     continue
                 with self._lock:
                     self._envelopes[_e.report_id] = _e
-                if not _e.consumed_by:
-                    # ★第52批 T1：历史报告（落盘时消费标记尚未填写）
+                if not _e.consumed_by and _e.generated_at < _LEGACY_WITHOUT_CONSUMED_CUTOFF:
+                    # ★第286批 刀4：仅修复时刻之前落盘且 consumed_by 为空才算 legacy
+                    #   （消费状态已不可恢复）；修复后落盘但真没人消费的，是"真未消费"，
+                    #   不再计入 legacy，避免 211 被系统性高估、"真未消费"被吞。
                     self._legacy_without_consumed += 1
                 _n += 1
         self._trim()

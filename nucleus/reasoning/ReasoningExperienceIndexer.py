@@ -324,6 +324,12 @@ class ReasoningExperienceIndexer:
         """
         _q = str(question or "").strip()
         _a = str(correct_answer or "").strip()
+        # ★284批刀2：metric success 与 indexer 入口同源（灭 165 条差额）。
+        #   把 metric 计数点搬进 indexer 入口之后——只要进了入口就算 success，
+        #   与蒸馏（distilled / distilled_delegated）严格 1:1 同源。
+        #   原 PulseCortex 分发侧的 success 埋点已移除（见 284批刀2）。
+        from nucleus.LLMDependencyMetrics import record_remediation_success as _m284_rec_succ
+        _m284_rec_succ(1)
         # ★第232批 刀2：旁路哨兵——双写开启时每次成功补救理应产蒸馏；空答案早返回
         #   亦在此计数（确保"成功增量"含空答案旁路），蒸馏增量滞后则两窗后告警。
         if self._double_write_enabled:
