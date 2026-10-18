@@ -1138,6 +1138,13 @@ class PulseFramework:
             _engine.register_analyzer(
                 "evolution_health", lambda _e: _e.integrate_evolution_health(),
                 "evolution_health", replace=True)
+            # ★第295批刀4：补注册 event_tap → runtime_events 维度。
+            #   根因（294批刀3.2查明）：生产装配此前缺此注册，runtime_events 恒空，
+            #   报告误报「EventTap未启用或统计为空」（EventTap 本身已正确启动）。
+            #   注册零开销，执行仍由 run_all_analyses 决定（开关 ENABLE_EVENT_TAP_INTEGRATION）。
+            _engine.register_analyzer(
+                "event_tap", lambda _e: _e.integrate_event_tap(),
+                "runtime_events", replace=True)
             self._log(LogLevel.INFO, "[SelfAwareness] 自我认知引擎已初始化")
             # ★主线第37批 T1（P2-210）：启动每日低频调度（让引擎真正"跑起来"）
             #   函数内导入以规避 main.py 存量 E402；

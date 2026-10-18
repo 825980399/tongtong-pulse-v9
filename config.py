@@ -5568,9 +5568,9 @@ ENABLE_NONORGAN_FILE_RESOLVE = True
 #   True → `PatchManager._verify_in_copy` 写副本前拦截
 #          （stage=base_indent_guard_failed）；
 #   False（默认）→ 逐字回到第91批末行为。
-#   ★任务书要求默认**关闭**：防御性校验先观察一批再考虑开启。
+#   ★第295批刀1：翻闸为 True——"先观察一批"已远过期（3个月），正式结案。
 #   读取点：nucleus/reasoning/PatchManager.py::_m92_base_indent_guard_on
-ENABLE_M92_PATCH_BASE_INDENT_GUARD = False
+ENABLE_M92_PATCH_BASE_INDENT_GUARD = True
 
 # ★第92批 T-92d：验证侧「AST 结构不变量」关（类方法总数不得大幅缩水）。
 #   True → `_verify_in_copy` 写副本前比较补丁前后「类方法总数」，缩水 > 10%
@@ -5581,7 +5581,8 @@ ENABLE_M92_PATCH_BASE_INDENT_GUARD = False
 #     ——「语法合法 ≠ 结构未退化」。
 #   阈值常量：nucleus/reasoning/PatchManager.py::_M92_STRUCT_SHRINK_RATIO (0.10)
 #   读取点：nucleus/reasoning/PatchManager.py::_m92_ast_struct_guard_on
-ENABLE_M92_PATCH_AST_STRUCT_GUARD = False
+#   ★第295批刀1：翻闸为 True——"先观察一批"已远过期（3个月），正式结案。
+ENABLE_M92_PATCH_AST_STRUCT_GUARD = True
 # [M92-CFG]
 # ============================================================================
 # ★第96批登记（T-96a 进化通道渠道池）
