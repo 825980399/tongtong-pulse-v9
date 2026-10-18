@@ -619,7 +619,19 @@ def flush_to_file(force: bool = False):
             _LAST_ORPHAN_HEARTBEAT_TS = _now_hb
             _hb_emits = [e for e in events_snapshot if e.get("type") == "emit"]
             _hb_N = len(_hb_emits)                       # 环内 emit 条数（判定基数）
-            _hb_M = sum(1 for e in _hb_emits if not e.get("matched_organs"))  # 未回填=原始嫌疑面
+            # ★第273批 刀2：_hb_M 加 min_age 过龄过滤（与 _detect_orphans 同口径）。
+            #   原口径不查龄期，而 _detect_orphans 先按 1.5s 跳过未到龄者 ⇒
+            #   启动风暴期整环 emit 全"未到判定龄"却被记成"未回填=满额"（稳定虚报）。
+            #   _hb_Y = 未到龄数，使启动窗能读到"未到龄"而不是"未回填=满额"。
+            _hb_age = _min_age_sec()
+            _hb_Y = 0                                   # 未到判定龄（尚未进入判定面）
+            _hb_overdue = []                            # 已过龄（真正进入判定面）
+            for _e in _hb_emits:
+                if (_now_hb - _e.get("timestamp", 0)) < _hb_age:
+                    _hb_Y += 1
+                else:
+                    _hb_overdue.append(_e)
+            _hb_M = sum(1 for e in _hb_overdue if not e.get("matched_organs"))  # 过龄且未回填
             _hb_X = 0                                   # 被订阅表平反的条数（提供器内部已防御，直接调）
             if _subscription_provider is not None:
                 for e in _hb_emits:
@@ -647,13 +659,19 @@ def flush_to_file(force: bool = False):
                     _st = _rm.get("status", "unknown")
                     _hb_L_by_status[_st] = _hb_L_by_status.get(_st, 0) + _loss
             _hb_K = len(new_orphans)                    # 本轮新增孤儿
-            if _hb_K == 0 and _hb_W > 0:
+            # ★第273批 刀2：原触发条件「K==0 且 通配>0」前提已过期（260甲案已删通配短路、
+            #   262 已过滤 observer），且该 WARN 不带任何计数——恰在最可疑的时刻全省读数。
+            #   新条件：K==0 且过龄未回填>0（判定面有嫌疑却零产出＝最可疑）。
+            #   WARN 与 INFO 同带全量读数（含未到龄），不再空口告警。
+            if _hb_K == 0 and _hb_M > 0:
                 logger.warning(
-                    "pulse_tracer: [孤儿判定] 判定面可能被万能监听器短路（K=0 但 通配=%d>0）", _hb_W)
+                    "pulse_tracer: [孤儿判定] 判定面零产出但有过龄未回填"
+                    "（基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d 主路自证=%d 派发丢包=%d 未到龄=%d）",
+                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K, _hb_R, _hb_L, _hb_Y)
             else:
                 logger.info(
-                    "pulse_tracer: [孤儿判定] 基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d 主路自证=%d 派发丢包=%d",
-                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K, _hb_R, _hb_L)
+                    "pulse_tracer: [孤儿判定] 基数=%d 未回填=%d 平反=%d 通配=%d 孤儿=%d 主路自证=%d 派发丢包=%d 未到龄=%d",
+                    _hb_N, _hb_M, _hb_X, _hb_W, _hb_K, _hb_R, _hb_L, _hb_Y)
             if _hb_L > 0:
                 logger.info(
                     "pulse_tracer: [dispatch_loss] 分桶=%s", _hb_L_by_status)
