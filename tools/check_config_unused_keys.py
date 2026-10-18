@@ -4,6 +4,15 @@
 扫描 config.py 全部模块级常量定义，检测「定义了但全仓零引用」的死键（空转键）。
 ★第290批刀6：明确覆盖 *_L2_* / SUBAGENT_* / PHASE18_* 三族（不再只查 ENABLE_*）。
 
+★第300批刀8（去留定案）：与 tools/ci/check_write_only_gates.py 覆盖面比对后定案——
+  两者**都查 D1 死键，但维度不同，勿长期并存做门禁**：
+    * check_write_only_gates.py  = **CI 增量门禁**（base..target diff，只防新增、
+      存量不清，含 D1 显式豁免表，退出码 1 阻断 CI）⇒ **保留为唯一 CI 门禁**。
+    * 本件 check_config_unused_keys.py = **离线全量盘点工具**（扫 config.py 全部
+      顶层常量，报告存量死键，纯只读不落盘）⇒ **定位为定期审计工具，不进 CI、
+      不做阻断**，避免与 gates 并存造成「两份门禁、结论互相打架」。
+  结论：CI 门禁以 check_write_only_gates.py 为准；本件仅作离线盘点，勿二者并行。
+
 用法：
   python tools/check_config_unused_keys.py [--json] [--families L2,SUBAGENT,PHASE18,ENABLE]
 

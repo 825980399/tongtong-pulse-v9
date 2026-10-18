@@ -392,9 +392,17 @@ def append_mastery_section(report_path: str, logger: Any = None) -> dict[str, An
     except Exception as e:
         silent_exc(e, "daily_reader.append_mastery_section:understood", level="warning")
     _pct = round(min(100.0, understood / max(1, total) * 100), 1) if total > 0 else 0.0
+    # ★第300批刀2：掌握率三源标注（numerator_source / total_source / 进程内计数重启回跳）。
+    #   真相：PulseCodeLearner.get_stats 的 understood = max(快照恢复值, 知识库实时计数)，
+    #   get_stats **只返回 max 后的值**，日报侧无分项 ⇒ 无法二选一区分
+    #   restored_snapshot / kb_live_count，如实标注为 snapshot_vs_kb_max(进程内)。
+    _numerator_source = ("snapshot_vs_kb_max(进程内)" if _src != "unavailable" else _src)
+    _total_source = ("code_structure.method_count" if total > 0 else "unavailable")
     try:
         _lines = ["", "【掌握率】",
-                  f"  · 已理解 {understood}/{total} 个方法（掌握率 {_pct}%）", ""]
+                  f"  · 已理解 {understood}/{total} 个方法（掌握率 {_pct}%）",
+                  f"  · numerator_source={_numerator_source} total_source={_total_source}",
+                  "  · 本值为进程内计数，重启回跳（非累计总量）", ""]
         with open(report_path, "a", encoding="utf-8") as _f:
             _f.write("\n".join(_lines))
     except Exception as e:
@@ -402,14 +410,50 @@ def append_mastery_section(report_path: str, logger: Any = None) -> dict[str, An
     _log.info("[掌握率] understood=%d total=%d mastery=%.1f%% source=%s",
               understood, total, _pct, _src)
     return {"understood": understood, "total_methods": total,
-            "mastery_pct": _pct, "source": _src}
+            "mastery_pct": _pct, "source": _src,
+            "numerator_source": _numerator_source,
+            "total_source": _total_source,
+            "process_local_note": "本值为进程内计数，重启回跳"}
+
+
+def _read_last_queue_stats(output_dir: str) -> dict[str, Any] | None:
+    """第300批刀4：读上一份日报的【入队哨兵】四数作为跨重启累计基线（只读，不新落盘）。
+
+    解析最近一份 ``report_*.txt`` 里「累计(含历史基线)」行的三个数；找不到 → None。
+    """
+    import glob
+    import re as _re
+    try:
+        if not output_dir or not os.path.isdir(output_dir):
+            return None
+        _cands = sorted(glob.glob(os.path.join(output_dir, "report_*.txt")),
+                        key=os.path.getmtime, reverse=True)
+        for _p in _cands[:3]:
+            try:
+                _text = io.open(_p, encoding="utf-8", errors="ignore").read()
+            except OSError:
+                continue
+            for _ln in _text.splitlines():
+                if "累计(含历史基线)" not in _ln:
+                    continue
+                _mm = _re.search(r"新补丁=(\d+)", _ln)
+                _rm = _re.search(r"入队被拦=(\d+)", _ln)
+                _km = _re.search(r"M92拒绝=(\d+)", _ln)
+                if _mm and _rm and _km:
+                    return {"new_patches": int(_mm.group(1)),
+                            "shape_rejected": int(_rm.group(1)),
+                            "m92_rejected": int(_km.group(1))}
+    except Exception as e:
+        silent_exc(e, "daily_reader._read_last_queue_stats", level="warning")
+    return None
 
 
 def append_queue_stats_section(report_path: str, logger: Any = None) -> dict[str, Any]:
-    """第298批刀2：日报固定输出入队哨兵四数。
+    """第298批刀2 + 第300批刀4：日报固定输出入队哨兵四数（本周期 + 跨重启累计）。
 
     新补丁=NN｜入队被拦=MM｜M92拒绝=KK｜pending=PP（NN/MM/KK 读 PatchManager 类属性，
     PP 读 pending_patches.json 长度）。读法：MM/KK>0 且 PP=0 ⇒ 治好了；NN=0 ⇒ 停一停。
+    ★刀4：累计 = 上一份日报四数（历史基线，只读） + 本周期增量 ⇒ 跨重启不归零。
     """
     _log = logger or _module_logger
     _nn = _mm = _kk = 0
@@ -428,13 +472,53 @@ def append_queue_stats_section(report_path: str, logger: Any = None) -> dict[str
             _pp = len(json.load(io.open(_pend, encoding="utf-8")))
     except Exception as e:
         silent_exc(e, "daily_reader.append_queue_stats_section:pending", level="warning")
+    # ★刀4：历史基线（上一份日报）→ 跨重启累计
+    _base = _read_last_queue_stats(os.path.dirname(os.path.abspath(report_path)))
+    _cum = {
+        "new_patches": _nn + int((_base or {}).get("new_patches", 0) or 0),
+        "shape_rejected": _mm + int((_base or {}).get("shape_rejected", 0) or 0),
+        "m92_rejected": _kk + int((_base or {}).get("m92_rejected", 0) or 0),
+    }
     try:
         _lines = ["", "【入队哨兵】",
-                  f"  · 新补丁={_nn}｜入队被拦={_mm}｜M92拒绝={_kk}｜pending={_pp}", ""]
+                  f"  · 本周期：新补丁={_nn}｜入队被拦={_mm}｜M92拒绝={_kk}｜pending={_pp}",
+                  f"  · 累计(含历史基线)：新补丁={_cum['new_patches']}｜"
+                  f"入队被拦={_cum['shape_rejected']}｜M92拒绝={_cum['m92_rejected']}", ""]
         with open(report_path, "a", encoding="utf-8") as _f:
             _f.write("\n".join(_lines))
     except Exception as e:
         silent_exc(e, "daily_reader.append_queue_stats_section:写日报小节", level="warning")
-    _log.info("[入队哨兵] 新补丁=%d 入队被拦=%d M92拒绝=%d pending=%d",
-              _nn, _mm, _kk, _pp)
-    return {"new_patches": _nn, "shape_rejected": _mm, "m92_rejected": _kk, "pending": _pp}
+    _log.info("[入队哨兵] 本周期 新补丁=%d 被拦=%d M92=%d pending=%d | 累计 新补丁=%d 被拦=%d M92=%d",
+              _nn, _mm, _kk, _pp, _cum["new_patches"], _cum["shape_rejected"],
+              _cum["m92_rejected"])
+    return {"new_patches": _nn, "shape_rejected": _mm, "m92_rejected": _kk,
+            "pending": _pp, "cumulative": _cum, "baseline": _base}
+
+
+def append_remediation_stats_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """第300批刀3：日报输出补救链上游三数（与298四数同构）。
+
+    进入校验=N｜判定阻断=M｜attempt=K。读法：N=0⇒无输入(无对话)；
+    N>0且M=0⇒没有病可补(健康，值得记功)；M>0且K<M⇒中间有闸(被拦)★唯一需修；
+    K>0且success不涨⇒补救本身失败。
+    """
+    _log = logger or _module_logger
+    _n = _m = _k = 0
+    try:
+        from nucleus.LLMDependencyMetrics import get_dependency_snapshot
+        _snap = get_dependency_snapshot() or {}
+        _rem = (_snap.get("counters", {}) or {}).get("remediation", {}) or {}
+        _n = int(_rem.get("entered_verification", 0) or 0)
+        _m = int(_rem.get("blocked", 0) or 0)
+        _k = int(_rem.get("attempt", 0) or 0)
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_remediation_stats_section:counters", level="warning")
+    try:
+        _lines = ["", "【补救链·三数】",
+                  f"  · 进入校验={_n} | 判定阻断={_m} | attempt={_k}", ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_remediation_stats_section:写日报小节", level="warning")
+    _log.info("[补救链·三数] 进入校验=%d 判定阻断=%d attempt=%d", _n, _m, _k)
+    return {"entered_verification": _n, "blocked": _m, "attempt": _k}

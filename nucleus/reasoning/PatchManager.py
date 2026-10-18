@@ -1033,6 +1033,31 @@ class PatchManager:
         return _out
 
     @staticmethod
+    def rescan_high_risk_levels(self) -> dict:
+        """★第300批刀7：存量高危 issue_type 回扫定级（280刀2只管新补丁，欠一次回扫）。
+
+        只做**升级**（高危族 sql_injection/lock_with_emit/non_atomic_write → 高），
+        不做降级（避免把 code_optimization「中等→低」这类语义变更带进来）。
+        幂等：已是"高"则跳过，重复调用无副作用。
+        """
+        _HIGH = ("sql_injection", "lock_with_emit", "non_atomic_write")
+        _hist = self._load_patch_list(self._history_file)
+        if not isinstance(_hist, list):
+            return {"changed": 0, "total": 0}
+        _changed = 0
+        for _p in _hist:
+            if not isinstance(_p, dict):
+                continue
+            if str(_p.get("issue_type", "")) in _HIGH and _p.get("risk_level") != "高":
+                _p["risk_level"] = "高"
+                _p["_300_rescanned_high"] = True
+                _changed += 1
+        if _changed:
+            self._save_patch_list(self._history_file, _hist)
+            _module_logger.warning(
+                f"[存量回扫][300刀7] 高危族重定级 {_changed} 条 → 高")
+        return {"changed": _changed, "total": len(_hist)}
+
     def _m280_extract_def_name(code: str) -> str:
         # ★280批刀1（P0）：从 modified_code 提取首个 def 名。
         #   解析失败/无 def → 空串（保守：不误拦）。
@@ -1134,11 +1159,20 @@ class PatchManager:
                 f"def={_def_name!r} method={_method_name!r} "
                 f"file={patch.get('file','')}")
             return
-        # ★第298批刀1：入队口形态校验——「片段→完整」(original无def且modified有def) 拒绝入队。
-        #   与295刀5 is_fragment_to_full 同源；源头拦比派单侧过滤更彻底（坏补丁根本不入队）。
-        _orig_def298 = PatchManager._m280_extract_def_name(
-            patch.get("original_code", "") or "")
-        if not _orig_def298 and _def_name:
+        # ★第300批刀1：7 vs 5 口径对齐——入队口与派单侧**共用同一个** is_fragment_to_full，
+        #   消除「各算各的」造成的口径差（295报7条 vs 烛微复算5条，疑 original 为空边界处理不同）。
+        #   与295刀5/298刀1同源；源头拦比派单侧过滤更彻底（坏补丁根本不入队）。
+        try:
+            from nucleus.evolution.patch_execution_dispatch import (
+                is_fragment_to_full as _m300_iftf,
+            )
+            _frag2full = bool(_m300_iftf(patch))
+        except Exception as _m300_e:
+            silent_exc(_m300_e, where="nucleus.reasoning.PatchManager::save_pending_patch 形态判据回退")
+            _orig_def298 = PatchManager._m280_extract_def_name(
+                patch.get("original_code", "") or "")
+            _frag2full = (not _orig_def298) and bool(_def_name)
+        if _frag2full:
             PatchManager._shape_rejected_count += 1
             _module_logger.warning(
                 f"[补丁入队][298刀1] 片段→完整形态拒绝入队: "

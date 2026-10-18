@@ -15,6 +15,12 @@
 - 只读：不写任何文件、不改任何状态。
 - 频次按 (emitter, event, receiver) 三元组聚合；广播事件会出现 (emitter,event) 对应多个 receiver。
 
+★第300批刀11（动态边定案）：**动态边 = pulse_pairs 日聚合，不新增埋点**——
+本件即该口径的落地实现：读当日 ``data/monitor/pulse_pairs_YYYYMMDD.jsonl``
+（pulse_tracer 按日分文件，207批刀3 + 212批刀1），按 pulse_id 做 emit→receive
+join 聚合三元组频次 ⇒ 动态边由既有埋点派生，**零新增埋点、零行为变更**。
+勿再另起一套动态边采集，与本件并存会造成两份动态边口径打架。
+
 用法：
     python tools/count_match_frequency.py [--path data/monitor/pulse_pairs_20261015.jsonl] [--top 50] [--min 1]
 

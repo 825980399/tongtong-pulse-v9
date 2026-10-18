@@ -703,34 +703,42 @@ class PulseKidney(BasePulseOrgan):
 
 
     def _m70_kal_get_node(self, node_id):
-        """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。"""
-        def _m70_get_node(self, node_id):
-                if not self._m70_kal_callsites_on():
-                    return self._m70_direct_get_node(node_id)
-                try:
-                    _r = self._pulse_bus.request('kal.get_node', node_id)
-                    if _r is not None:
-                        return _r
-                except Exception as e:
-                    self._log(LogLevel.ERROR, f'异常: {e}')
-                return self._m70_direct_get_node(node_id)
+        """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。
+
+        ★第300批刀9（人工重写试做）：还原被「片段→完整」补丁污染的结构——
+        原 LLM 补丁把方法体包成**嵌套 def**（def 内再 def），使外层方法只剩
+        docstring + 内层定义、无任何 return ⇒ 调用恒返 None（功能性损坏）。
+        现把内层函数体提升为外层方法体（同缩进），恢复真实调用语义。
+        """
+        if not self._m70_kal_callsites_on():
+            return self._m70_direct_get_node(node_id)
+        try:
+            _r = self._pulse_bus.request('kal.get_node', node_id)
+            if _r is not None:
+                return _r
+        except Exception as e:
+            self._log(LogLevel.ERROR, f'异常: {e}')
+        return self._m70_direct_get_node(node_id)
 
     def _m70_kal_search_by_level(self, evol_level, top_k=10):
-        """★T4.3 实际调用点：按进化层级搜索（KAL 优先 + 回退）。"""
-        def _m70_kal_search_by_evol_level(self, evol_level, top_k):
-                if not self._m70_kal_callsites_on():
-                    return []
-                try:
-                    _r = self._pulse_bus.request(
-                        'nucleus.knowledge_access_layer.search_by_evol_level',
-                        evol_level=evol_level,
-                        top_k=top_k,
-                    )
-                    if _r:
-                        return _r
-                except Exception as e:
-                    self._log(LogLevel.ERROR, f'异常: {e}')
-                return []
+        """★T4.3 实际调用点：按进化层级搜索（KAL 优先 + 回退）。
+
+        ★第300批刀9（人工重写试做）：同 _m70_kal_get_node，还原被嵌套 def
+        污染的方法体（原外层恒返 None）。
+        """
+        if not self._m70_kal_callsites_on():
+            return []
+        try:
+            _r = self._pulse_bus.request(
+                'nucleus.knowledge_access_layer.search_by_evol_level',
+                evol_level=evol_level,
+                top_k=top_k,
+            )
+            if _r:
+                return _r
+        except Exception as e:
+            self._log(LogLevel.ERROR, f'异常: {e}')
+        return []
 
     def _m70_direct_get_node(self, node_id):
         """回退路径：直连 node_pool。"""

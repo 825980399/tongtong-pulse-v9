@@ -67,8 +67,11 @@ def _blank_counters() -> dict[str, dict[str, int]]:
         # ★第164批 刀A2：补救三态计数（attempt/success/distilled）
         # ★第241批 刀2（C案一刀三得）：扩展 returned/missed 两键
         #   returned = 补救答案已回执/交付用户；missed = sweep TTL 过期未回执
+        # ★第300批刀3：补上游两键 entered_verification(进入输出校验=N) / blocked(判定阻断=M)
+        #   读法：N=0⇒无输入(无对话)；N>0且M=0⇒没有病可补(健康)；M>0且attempt<M⇒中间有闸(被拦)
         "remediation": {"attempt": 0, "success": 0, "distilled": 0,
-                        "distilled_delegated": 0, "returned": 0, "missed": 0},
+                        "distilled_delegated": 0, "returned": 0, "missed": 0,
+                        "entered_verification": 0, "blocked": 0},
     }
 
 
@@ -186,6 +189,15 @@ class LLMDependencyMetrics:
     def record_remediation_missed(self, n: int = 1) -> None:
         """★第241批 刀3：记录一次补救分发后 TTL 过期未回执（失约率 = missed / attempt）。"""
         self._bump("remediation", "missed", n)
+
+    # ★第300批刀3：补救上游两态埋点（与298四数同构，回答「无对话／没病／被拦」）
+    def record_remediation_entered_verification(self, n: int = 1) -> None:
+        """★第300批刀3：记录一次进入输出校验（N）。N=0 ⇒ 无输入（无对话）。"""
+        self._bump("remediation", "entered_verification", n)
+
+    def record_remediation_blocked(self, n: int = 1) -> None:
+        """★第300批刀3：记录一次判定阻断（M，触发补救）。M>0 且 attempt<M ⇒ 中间有闸（被拦）。"""
+        self._bump("remediation", "blocked", n)
 
     def _bump(self, group: str, key: str, n: int = 1) -> None:
         with self._lock:
@@ -341,6 +353,14 @@ class LLMDependencyMetrics:
         基线常量 LLM_DEPENDENCY_BASELINE（0.9694）不在此重锚。
         ★第266批 刀4：本指标对外称「回答类依赖度」，分母只含回答类（肺/代码/其他），
         不含自主进化类；整体大模型占比见 :meth:`overall_llm_share`。
+
+        ★第300批刀5（分母口径定案）：本指标分母**已统一且不再漂移**——
+        分母 = (llm_total − SCENE_EVOLUTION) + local_total，即「回答类三类
+        （肺 / 代码学习 / 其他）」；SCENE_EVOLUTION（自主进化，实测占 llm 约
+        50.8%、真实修复率仅 7.3% 的进化空转面）分子分母同步排除。
+        0.8808 vs 0.9356 一类差异即「排除进化前后」的口径差，现以本口径为准。
+        全栈口径（含 search / digestion 四类）另立 :meth:`overall_llm_share`，
+        **二者不可混用**——混用即重现 97.73% vs 12.72% 的误读。
         """
         _evo = int(self._counters.get("llm_call_count", {}).get(SCENE_EVOLUTION, 0))
         _llm = max(0, self.llm_total() - _evo)
@@ -729,6 +749,16 @@ def record_remediation_returned(n: int = 1) -> None:
 def record_remediation_missed(n: int = 1) -> None:
     """★第241批 刀3：补救 TTL 过期未回执埋点便捷入口。"""
     get_llm_dependency_metrics().record_remediation_missed(n)
+
+
+def record_remediation_entered_verification(n: int = 1) -> None:
+    """★第300批刀3：进入输出校验埋点便捷入口（N）。"""
+    get_llm_dependency_metrics().record_remediation_entered_verification(n)
+
+
+def record_remediation_blocked(n: int = 1) -> None:
+    """★第300批刀3：判定阻断埋点便捷入口（M）。"""
+    get_llm_dependency_metrics().record_remediation_blocked(n)
 
 
 def get_dependency_snapshot() -> dict[str, Any]:

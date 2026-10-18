@@ -1430,10 +1430,26 @@ class PulseCortex(BasePulseOrgan):
             )
 
             # ★v25.0新增：输出前统一验证 + 阻断补救
+            # ★第300批刀3：上游两数埋点——进入输出校验(N) / 判定阻断(M)
+            #   读法：N=0⇒无输入(无对话)；N>0且M=0⇒没有病可补(健康)；M>0且attempt<M⇒中间有闸(被拦)
+            try:
+                from nucleus.LLMDependencyMetrics import (
+                    record_remediation_entered_verification as _rec_ev300,
+                )
+                _rec_ev300(1)
+            except Exception as _ev300e:
+                self._log_ignored_exception(_ev300e)
             _verify = self._verify_output_relevance(
                 ctx.get("content", ""), answer, method
             )
             if _verify["needs_verification"]:
+                try:
+                    from nucleus.LLMDependencyMetrics import (
+                        record_remediation_blocked as _rec_blk300,
+                    )
+                    _rec_blk300(1)
+                except Exception as _blk300e:
+                    self._log_ignored_exception(_blk300e)
                 self._log(LogLevel.INFO,
                          f"输出验证: 相关性低({_verify['relevance_score']})，"
                          f"原因={_verify['reason']}，触发补救")

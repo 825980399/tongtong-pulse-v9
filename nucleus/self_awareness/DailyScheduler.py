@@ -617,6 +617,24 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m298e:
                     silent_exc(_m298e, "DailyScheduler.run_once:入队哨兵")
 
+            # ★第300批 刀3：日报输出补救链上游三数（进入校验/判定阻断/attempt）。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _300_dr
+                    _res["remediation_stats"] = _300_dr.append_remediation_stats_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m300e:
+                    silent_exc(_m300e, "DailyScheduler.run_once:补救链三数")
+
+            # ★第300批 刀7：存量高危 issue_type 回扫定级（只升不降、幂等）。
+            if not self._is_test_env():
+                try:
+                    from nucleus.reasoning.PatchManager import PatchManager as _300_pm
+                    _res["risk_rescan"] = _300_pm(
+                        self._project_root).rescan_high_risk_levels()
+                except Exception as _m300r:
+                    silent_exc(_m300r, "DailyScheduler.run_once:存量高危回扫")
+
             # ★第286批 刀2：每日03:00 落盘 InsightBoard + PHASE18 snapshot（滚动保留7份）。
             if not self._is_test_env():
                 try:

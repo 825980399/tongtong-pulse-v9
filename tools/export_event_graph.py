@@ -335,8 +335,64 @@ def _wire_event_traffic(edges: list[dict], publish_count: dict[str, int] | None)
     return _out
 
 
+def derive_import_edges() -> "list[dict[str, Any]]":
+    """★第300批刀10：类间图粗粒度（事件图 ∪ import）——提取**文件级**跨模块 import 边。
+
+    ★放弃方法级跨类推断：方法级推断会产生「看起来精确其实错」的边（同名方法、
+    动态分发、继承重写、字符串反射均会误判），故类间图只取**文件级 import**
+    这一粗粒度证据，与事件路由边（organ 级 emitter/subscriber）并集构成类间图。
+
+    ★零行为变更：本函数只**新增** ``import_edges`` 字段，**不并入既有 edges**，
+    故 ``edge_count`` / ``struct_hash`` 语义不变（既有 92/145 基线不受影响）。
+
+    纯只读：AST 解析 organs/ 下源码，不落盘、不改状态。
+    """
+    import ast as _ast
+    try:
+        import io as _io
+    except Exception:  # pragma: no cover
+        _io = None
+    _edges: "list[dict[str, Any]]" = []
+    _seen: "set[tuple[str, str]]" = set()
+    _organs_dir = os.path.join(_proj_root(), "organs")
+    if not os.path.isdir(_organs_dir) or _io is None:
+        return _edges
+    _ROOTS = ("organs", "nucleus", "functions", "base", "utils")
+    for _dp, _dns, _fns in os.walk(_organs_dir):
+        if "__pycache__" in _dp or ".bak" in _dp:
+            continue
+        for _fn in _fns:
+            if not _fn.endswith(".py"):
+                continue
+            _fp = os.path.join(_dp, _fn)
+            try:
+                _tree = _ast.parse(_io.open(_fp, encoding="utf-8", errors="ignore").read())
+            except Exception as e:
+                silent_exc(e, where="tools.export_event_graph::derive_import_edges parse")
+                continue
+            _cls = _fn[:-3]
+            for _n in _ast.walk(_tree):
+                _mods: "list[str]" = []
+                if isinstance(_n, _ast.ImportFrom) and _n.module:
+                    _mods.append(_n.module)
+                elif isinstance(_n, _ast.Import):
+                    _mods.extend(_a.name for _a in _n.names if _a.name)
+                for _m in _mods:
+                    _root = _m.split(".")[0]
+                    if _root in _ROOTS:
+                        _key = (_cls, _root)
+                        if _key not in _seen:
+                            _seen.add(_key)
+                            _edges.append({"emitter": _cls, "imports": _m,
+                                           "edge_source": "import", "via": _fn})
+    return _edges
+
+
 def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_publish_count: dict[str, int] | None = None) -> Any:
     """导出事件路由图谱 v0.5（事件路由边表）。
+
+    ★第300批刀10：返回值新增 ``import_edges`` / ``import_edge_count`` 两个字段
+    （类间图粗粒度 = 事件图 ∪ import），**不并入既有 edges**，零行为变更。
 
     Args:
         organs: 可选运行时实例映射（v0.5 以 AST 清单为准，预留扩展）。
@@ -344,11 +400,18 @@ def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_
 
     Returns:
         dict：{version, description, organ_count, event_type_count, edge_count,
-              edges, emits, subscribes, wildcards, stats}
+              edges, import_edges, import_edge_count, emits, subscribes,
+              wildcards, stats}
     不落盘、不改状态。
     """
     _rows = scan_organ_classes() if organs is None else organs
     _res = derive_event_edges(_rows)
+    # ★第300批刀10：类间图粗粒度（事件图 ∪ import）——新字段，不并入 edges（零行为变更）
+    try:
+        _import_edges = derive_import_edges()
+    except Exception as _ie300:
+        silent_exc(_ie300, where="tools.export_event_graph::export_event_graph import_edges")
+        _import_edges = []
     _payload = {
         "version": "v0.5",
         "description": "事件路由边 Y→T→X：器官 Y 发射事件类型 T，器官 X 订阅类型 T（纯静态 AST 提取）",
@@ -357,6 +420,8 @@ def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_
                                 | {t for s in _res["subscribes"].values() for t in s}),
         "edge_count": len(_res["edges"]),
         "edges": _wire_event_traffic(_res["edges"], runtime_event_publish_count),
+        "import_edges": _import_edges,
+        "import_edge_count": len(_import_edges),
         "emits": _res["emits"],
         "subscribes": _res["subscribes"],
         "wildcards": _res["wildcards"],
