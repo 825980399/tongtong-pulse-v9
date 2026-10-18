@@ -1,6 +1,0 @@
-{
-    "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": [],
-    "cmake.sourceDirectory": "D:/xinrenlei/tongtong-pulse-v9/hardware/robot_body/servo_controller",
-    "python.django.project.supportEnabled": false
-}
