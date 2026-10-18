@@ -2126,22 +2126,24 @@ class PulseCodeLearner(BasePulseOrgan):
 
         call_graph = self._code_call_graph
 
-        # 按器官分组统计
+        # 按器官分组统计（★第297批刀2：total_methods 改 code_structure 全量分母；
+        #   call_graph_keys 单独记「有出边方法数」，两套口径分栏标注，防掌握率虚高）
         organ_stats = {}
         for _key, info in call_graph.items():
             organ = info.get("organ", "未知")
             if organ not in organ_stats:
                 organ_stats[organ] = {
-                    "total_methods": 0,
+                    "total_methods": 0,       # code_structure 全量方法数（★294刀1口径）
+                    "call_graph_keys": 0,     # call_graph 键数（有出边方法，偏小口径）
                     "total_calls": 0,
                     "called_by_others": 0,
                     "calls_to_others": 0,
                     "entry_methods": [],
                     "leaf_methods": [],
                 }
-            organ_stats[organ]["total_methods"] += 1
+            organ_stats[organ]["call_graph_keys"] += 1
 
-        # 统计调用关系
+        # 统计调用关系（_called_by 反向表：谁调用我）
         _called_by = {}
         for caller_key, caller_info in call_graph.items():
             caller_organ = caller_info.get("organ", "")
@@ -2154,20 +2156,56 @@ class PulseCodeLearner(BasePulseOrgan):
                 if caller_organ in organ_stats:
                     organ_stats[caller_organ]["calls_to_others"] += 1
 
-        # 识别入口方法和叶子方法
+        # ★第297批刀2：全量方法集（含无出边的叶子）——从 code_structure 完整 methods 拿
+        _insp297 = self._get_inspector()
+        _organ_all_methods = {}
+        _organ_method_count = {}
+        try:
+            for _o in list(organ_stats.keys()):
+                _full = _insp297.get_organ_code_structure(_o) if _insp297 else None
+                if isinstance(_full, dict):
+                    _organ_method_count[_o] = _full.get("method_count", 0)
+                    _organ_all_methods[_o] = [
+                        m.get("name") for m in (_full.get("methods") or [])
+                        if isinstance(m, dict) and m.get("name")
+                    ]
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 全量方法集")
+
+        # 识别入口方法和叶子方法（★第297批刀1/刀2 修复）
         for key, info in call_graph.items():
             organ = info.get("organ", "")
             if organ not in organ_stats:
                 continue
             method_name = key.split(".")[-1] if "." in key else key
 
-            # 叶子方法：不调用其他方法
-            if not info.get("called_methods"):
-                organ_stats[organ]["leaf_methods"].append(method_name)
-
-            # 入口方法：被外部调用或是以"on_"开头的脉冲处理方法
-            if method_name.startswith("on_") or method_name == "start" or method_name == "stop":
+            # ★刀1 入口判据：字面命中 ∪ _called_by 中被其它 organ 调用（真·外部入口）
+            _is_entry = (
+                method_name.startswith("on_")
+                or method_name == "start"
+                or method_name == "stop"
+            )
+            if not _is_entry:
+                for _ck in _called_by.get(key, []):
+                    _c_organ = _ck.split(".")[0] if "." in _ck else ""
+                    if _c_organ and _c_organ != organ:
+                        _is_entry = True
+                        break
+            if _is_entry:
                 organ_stats[organ]["entry_methods"].append(method_name)
+
+        # ★刀2 叶子判据：遍历全量方法集，不在 call_graph 键（无出边）即叶子
+        for _o, _stats in organ_stats.items():
+            _all = _organ_all_methods.get(_o) or []
+            _keys = {k.split(".")[-1] for k in call_graph if k.startswith(_o + ".")}
+            for _mn in _all:
+                if _mn not in _keys:
+                    _stats["leaf_methods"].append(_mn)
+
+        # 回填全量方法数（分母 = code_structure.method_count；缺失回退 call_graph 键数）
+        for _o, _stats in organ_stats.items():
+            _mc = _organ_method_count.get(_o, 0)
+            _stats["total_methods"] = _mc if isinstance(_mc, int) and _mc > 0 else _stats["call_graph_keys"]
 
         # 为每个已完成分析的器官生成数据流知识节点
         _generated = 0
@@ -2179,7 +2217,8 @@ class PulseCodeLearner(BasePulseOrgan):
             _leaf_str = "、".join(stats["leaf_methods"][:3]) if stats["leaf_methods"] else "无明确叶子"
 
             _flow_content = (
-                f"[internal][数据流·{organ}] 已理解{stats['total_methods']}个方法。"
+                f"[internal][数据流·{organ}] 已理解{stats['total_methods']}个方法"
+                f"（调用图{stats['call_graph_keys']}个有出边）。"
                 f"入口方法: {_entry_str}。"
                 f"叶子方法: {_leaf_str}。"
                 f"内部调用{stats['calls_to_others']}次。"
