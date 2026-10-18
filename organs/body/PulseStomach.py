@@ -345,6 +345,9 @@ class PulseStomach(BasePulseOrgan):
         #   消化链路零变化。
         source_timestamp = float(payload.get("source_timestamp", 0.0) or 0.0)
         source_time = float(payload.get("source_time", 0.0) or 0.0)
+        # 第290批 刀1：想象加冕——读取来源类型与验证状态（仅想象 emit 会带）
+        node_source = payload.get("source", "")
+        node_verification_status = payload.get("verification_status", "")
 
         if not content:
             return {"status": "skipped", "reason": "空内容"}
@@ -425,6 +428,8 @@ class PulseStomach(BasePulseOrgan):
                 view_mode_override=_effective_view_mode,
                 source_timestamp=source_timestamp,
                 source_time=source_time,
+                source=node_source,
+                verification_status=node_verification_status,
             )
             if success:
                 return {"status": "queued", "content_preview": str(content)[:40]}
@@ -439,13 +444,17 @@ class PulseStomach(BasePulseOrgan):
             view_mode_override=_effective_view_mode,
             source_timestamp=source_timestamp,
             source_time=source_time,
+            source=node_source,
+            verification_status=node_verification_status,
         )
 
     def _do_digest(self, content: str, source_organ: str, trigger_reason: str,
                    importance_hint: str, emotion_snapshot: dict,
                    view_mode_override: str = "OUTER_VIEW",
                    source_timestamp: float = 0.0,
-                   source_time: float = 0.0) -> dict[str, Any]:
+                   source_time: float = 0.0,
+                   source: str = "",
+                   verification_status: str = "") -> dict[str, Any]:
         """执行知识消化（核心逻辑，可在异步线程中运行）"""
         # ===== 243批 档一：子代理通电观测窗（零行为探针） =====
         # 把消化任务作为子代理潜在调用方登记：开关不翻（ENABLE_SUBAGENT_RUNNER 仍 False），
@@ -983,6 +992,13 @@ class PulseStomach(BasePulseOrgan):
             space_path=space_path,
         )
         node.trigger_reason = trigger_reason
+
+        # 第290批 刀1：想象加冕——source/verification_status 参数携带时写入节点。
+        #   默认不写（source_organ/trigger_reason 已能标识来源），仅想象节点显式打标。
+        if source:
+            node.source = source
+        if verification_status:
+            node.verification_status = verification_status
 
         # ★任务C-4（2026-09-08）：网页发布时间写入节点（时效性增强）。
         #   source_timestamp：网页自带发布时间（搜索器官提取，未提取到为 0.0）。

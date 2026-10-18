@@ -12,7 +12,6 @@ PulseCognitiveReflector —— 认知反思子模块
 """
 from __future__ import annotations
 
-import random
 import re
 import time
 from collections.abc import Callable
@@ -100,27 +99,55 @@ class PulseCognitiveReflector:
         # 检查两个节点是否仍在节点池中
         node_a = self.node_pool.get(tension.get("node_a_id", "")) if self.node_pool else None
         node_b = self.node_pool.get(tension.get("node_b_id", "")) if self.node_pool else None
+        node_a_id = tension.get("node_a_id", "")
+        node_b_id = tension.get("node_b_id", "")
+        # 两个节点都已被淘汰 => 无法引用证据消解（不再记「自然消解」这类空消解）
         if not node_a and not node_b:
-            tension["resolved"] = True
-            tension["resolution"] = "两个节点都已被淘汰，张力自然消解"
+            tension["last_reviewed"] = time.time()
+            tension["review_count"] += 1
+            self._log("INFO",
+                      f"认知张力回顾: 节点 {node_a_id[:12]}/{node_b_id[:12]} 均已淘汰，"
+                      f"无证据可消解（保留待证据，review_count={tension['review_count']}）")
             return None
-        # 尝试统一
-        resolutions = [
-            (f"关于「{val_a[:30]}...」和「{val_b[:30]}...」的矛盾，"
-             f"我意识到它们可能在不同情境下各自成立——没有绝对的对错，只有适用的范围"),
-            (f"我曾经认为「{val_a[:30]}...」和「{val_b[:30]}...」是对立的，"
-             f"但现在看来，后者可能是前者的一个特例——它们不是敌人，是层级关系"),
-            (f"「{val_a[:30]}...」和「{val_b[:30]}...」看似矛盾，"
-             f"但如果加上时间维度，它们可能只是同一事物在不同阶段的表现"),
-        ]
-        resolution = random.choice(resolutions)
+        # 第290批 刀4：消解引用真实证据（存活节点 id + trust/evol/激活次数），
+        #   取代 random.choice 模板话术——「反思」必须指向具体 node_id 并给出成立依据。
+        def _node_evidence(node, node_id):
+            if node is None:
+                return None
+            return {
+                "node_id": str(node_id)[:12],
+                "trust": round(float(getattr(node, "trust_score", 50.0) or 50.0), 1),
+                "evol": str(getattr(node, "evol_level", "?") or "?"),
+                "acts": int(getattr(node, "activation_count", 0) or 0),
+            }
+        _ev_a = _node_evidence(node_a, node_a_id)
+        _ev_b = _node_evidence(node_b, node_b_id)
+        if _ev_a and not _ev_b:
+            _reason = (f"「{val_a[:40]}」存活(trust={_ev_a['trust']}/L{_ev_a['evol']}/"
+                       f"激活{_ev_a['acts']}次)，「{val_b[:40]}」已淘汰——以存活节点为准")
+        elif _ev_b and not _ev_a:
+            _reason = (f"「{val_b[:40]}」存活(trust={_ev_b['trust']}/L{_ev_b['evol']}/"
+                       f"激活{_ev_b['acts']}次)，「{val_a[:40]}」已淘汰——以存活节点为准")
+        else:
+            _diff = abs(_ev_a["trust"] - _ev_b["trust"])
+            if _diff < 5.0:
+                _reason = (f"节点{_ev_a['node_id']}(trust={_ev_a['trust']}) 与 "
+                           f"{_ev_b['node_id']}(trust={_ev_b['trust']}) 置信度相当(Δ{_diff:.1f})，"
+                           f"二者在不同情境下各自成立——暂存为并存张力")
+            else:
+                _winner = _ev_a if _ev_a["trust"] >= _ev_b["trust"] else _ev_b
+                _loser = _ev_b if _winner is _ev_a else _ev_a
+                _reason = (f"节点{_winner['node_id']}(trust={_winner['trust']}) 置信度高于 "
+                           f"{_loser['node_id']}(trust={_loser['trust']})，"
+                           f"暂以高置信度者为默认解释，低置信度者留待验证")
+        resolution = (f"认知张力[{node_a_id[:12]} vs {node_b_id[:12]}]消解依据: {_reason}")
         tension["resolution_attempts"].append(resolution)
         tension["last_reviewed"] = time.time()
         tension["review_count"] += 1
         # 如果回顾次数达到上限，标记为已处理
         if tension["review_count"] >= 3:
             tension["resolved"] = True
-        self._log("INFO", f"认知张力回顾: {resolution[:80]}")
+        self._log("INFO", f"认知张力回顾: {resolution[:120]}")
         return resolution
 
     def get_tension_stats(self) -> dict[str, Any]:

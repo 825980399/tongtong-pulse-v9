@@ -257,26 +257,73 @@ class InsightBoard:
                 "type_distribution": type_dist,
             }
 
+    def _m290_score_entry(self, entry: dict[str, Any]) -> float:
+        """★第290批 刀2：洞察/想象评分 = confidence × relevance × novelty。
+
+        - confidence：entry["confidence"]（0-1，post 时已有）
+        - relevance：启发式代理——有 keywords 或 related_dimension 时偏高
+        - novelty：现成 VectorEncoder 相似度反推（此处用保守代理，见下方注释）
+
+        返回 [0,1] 分值，供 Top-N 落盘排序。纯函数、无副作用。
+        """
+        try:
+            _conf = float(entry.get("confidence", 0.5) or 0.5)
+        except (TypeError, ValueError):
+            _conf = 0.5
+        _conf = max(0.0, min(1.0, _conf))
+        _kw = entry.get("keywords") or []
+        _dim = entry.get("related_dimension") or ""
+        _rel = 0.6 + (0.2 if _kw else 0.0) + (0.2 if _dim else 0.0)
+        _rel = max(0.0, min(1.0, _rel))
+        # ★novelty：VectorEncoder/ExperienceRetriever 集成需编码全量知识语料，属下一批；
+        #   此处以内容长度作极简代理（更长通常承载更完整的新联想），钳制到 [0.5,1.0]
+        #   避免把「短但新颖」的洞察打残。真正的新颖度由后续批接 VectorEncoder 覆盖。
+        try:
+            _len = len(str(entry.get("content", "") or ""))
+        except Exception:
+            _len = 0
+        _novelty = 0.5 + 0.5 * min(_len / 500.0, 1.0)
+        _novelty = max(0.0, min(1.0, _novelty))
+        return round(_conf * _rel * _novelty, 4)
+
+    def _m290_top_n(self) -> int:
+        """★第290批 刀2：日拍落盘 Top-N（防噪声淹盘）。默认 5，可从 config.INSIGHT_TOP_N_DUMP 覆盖。"""
+        try:
+            import config as _cfg
+            return max(1, int(getattr(_cfg, "INSIGHT_TOP_N_DUMP", 5) or 5))
+        except Exception:
+            return 5
+
     def dump_to_disk(self, path: str) -> int:
         """★286批刀2：把当前黑板内容落盘为 JSON（供每日03:00日拍，滚动保留7份）。
 
-        原子写（tmp + os.replace），内容为 entries 快照。返回条目数。
+        原子写（tmp + os.replace）。★第290批 刀2：每条带 score 且按分排序，
+        仅保留 Top-N 防噪声淹盘。返回实际落盘条目数。
         """
         import json as _json
         import os as _os
         with self._lock:
             _entries = [dict(e) for e in self._entries]
+        _scored = []
+        for _e in _entries:
+            _e = dict(_e)
+            _e["score"] = self._m290_score_entry(_e)
+            _scored.append(_e)
+        _scored.sort(key=lambda e: e.get("score", 0.0), reverse=True)
+        _top_n = self._m290_top_n()
+        _kept = _scored[:_top_n]
         _payload = {
             "dumped_at": time.time(),
             "entry_count": len(_entries),
-            "entries": _entries,
+            "top_n": _top_n,
+            "entries": _kept,
         }
         _os.makedirs(_os.path.dirname(path), exist_ok=True)
         _tmp = path + ".tmp"
         with open(_tmp, "w", encoding="utf-8") as _f:
             _json.dump(_payload, _f, ensure_ascii=False, indent=2)
         _os.replace(_tmp, path)
-        return len(_entries)
+        return len(_kept)
 
 
 # ========== 模块级单例 ==========

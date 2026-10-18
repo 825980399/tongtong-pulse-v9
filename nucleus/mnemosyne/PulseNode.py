@@ -157,6 +157,9 @@ class PulseNode:
         self.source_organ = source_organ
         self.source_url = self._sanitize_source_url(source_url)  # ★R1：来源URL结构化标记（脏数据清洗）
         self.trigger_reason = ""              # 触发原因（首次创建时为空）
+        # 第290批 刀1：想象加冕——来源类型（imagination/observation/...）与验证状态（hypothesis/verified）
+        self.source = ""
+        self.verification_status = "verified"
         self.frequency_signature = 0.0        # 由 FrequencyCodec 编码后赋值
 
         # ===== 记忆维关联信息 =====
@@ -343,6 +346,8 @@ class PulseNode:
             "source_organ": self.source_organ,
             "source_url": getattr(self, "source_url", ""),   # ★R1：向前兼容
             "trigger_reason": self.trigger_reason,
+            "source": getattr(self, "source", ""),
+            "verification_status": getattr(self, "verification_status", "verified"),
             "frequency_signature": self.frequency_signature,
             # ★第102批 T-102c：linked_nodes 是 semantic_relations 的冗余投影，
             #   仅当「可由 sem 完整重建」时才不落盘（加载时 from_dict 动态重建）。
@@ -429,6 +434,8 @@ class PulseNode:
             _raw_state = "active"
         node.state = _raw_state
         node.trigger_reason = data.get("trigger_reason", "")
+        node.source = data.get("source", "")
+        node.verification_status = data.get("verification_status", "verified")
         node.frequency_signature = data.get("frequency_signature", 0.0)
         node.linked_nodes = data.get("linked_nodes", [])
         node.semantic_relations = data.get("semantic_relations", [])
