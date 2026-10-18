@@ -257,7 +257,41 @@ class InsightBoard:
                 "type_distribution": type_dist,
             }
 
-    def _m290_score_entry(self, entry: dict[str, Any]) -> float:
+    def _m301_batch_novelty(self, texts: list[str]) -> list[float] | None:
+        """★第301批 刀2：novelty 用现成 VectorEncoder 算「与同批其他条目的最大余弦相似度」的反。
+
+        返回与 texts 等长的 list[float]（钳 [0.05,1.0] 避免把「完全重复」打为 0 而整条消失）；
+        编码器不可用/异常 ⇒ 返回 None，调用方回退 290 批的内容长度代理（零回归）。
+        纯读、无副作用；只在日拍（03:00 低频）路径调用，不在热路径。
+        """
+        if not texts:
+            return None
+        try:
+            from nucleus.semantic.VectorEncoder import VectorEncoder
+            _vecs = VectorEncoder().encode(list(texts))
+            if _vecs is None or len(_vecs) != len(texts):
+                return None
+            import math as _math
+            _norms = []
+            for _v in _vecs:
+                _norms.append(_math.sqrt(sum(float(a) * float(a) for a in _v)))
+            _out = []
+            for _i, _v in enumerate(_vecs):
+                _max_sim = 0.0
+                for _j, _w in enumerate(_vecs):
+                    if _i == _j or _norms[_i] <= 0.0 or _norms[_j] <= 0.0:
+                        continue
+                    _dot = float(sum(float(a) * float(b) for a, b in zip(_v, _w)))
+                    _sim = _dot / (_norms[_i] * _norms[_j])
+                    if _sim > _max_sim:
+                        _max_sim = _sim
+                _out.append(round(max(0.05, min(1.0, 1.0 - _max_sim)), 4))
+            return _out
+        except Exception as e:
+            silent_exc(e, where="nucleus.InsightBoard::_m301_batch_novelty")
+            return None
+
+    def _m290_score_entry(self, entry: dict[str, Any], novelty: float | None = None) -> float:
         """★第290批 刀2：洞察/想象评分 = confidence × relevance × novelty。
 
         - confidence：entry["confidence"]（0-1，post 时已有）
@@ -282,8 +316,13 @@ class InsightBoard:
             _len = len(str(entry.get("content", "") or ""))
         except Exception:
             _len = 0
-        _novelty = 0.5 + 0.5 * min(_len / 500.0, 1.0)
-        _novelty = max(0.0, min(1.0, _novelty))
+        if novelty is not None:
+            # ★第301批 刀2：调用方传入的真实 novelty（VectorEncoder 余弦距离），优先采用
+            _novelty = max(0.0, min(1.0, float(novelty)))
+        else:
+            #   编码器不可用时的回退：内容长度代理（更长通常承载更完整的新联想），钳 [0.5,1.0]
+            _novelty = 0.5 + 0.5 * min(_len / 500.0, 1.0)
+            _novelty = max(0.0, min(1.0, _novelty))
         return round(_conf * _rel * _novelty, 4)
 
     def _m290_top_n(self) -> int:
@@ -293,6 +332,49 @@ class InsightBoard:
             return max(1, int(getattr(_cfg, "INSIGHT_TOP_N_DUMP", 5) or 5))
         except Exception:
             return 5
+
+    def _m301_dispatch_hypotheses(self, kept: list[dict[str, Any]]) -> int:
+        """★第301批 刀3：高分假设进 verification_learning_hub 待验证（复用 200→5 蒸馏通道）。
+
+        只派「想象/洞察/类比/梦境族」且 score >= INSIGHT_HYPOTHESIS_MIN_SCORE（默认 0.5）的条目，
+        以 origin="imagination" 标记来源 ⇒ hub 可区分「待验证的想象」与常规学习记录。
+        失败只留痕（silent_exc），不影响落盘主流程。返回派发条数。
+        """
+        _min = 0.5
+        try:
+            import config as _cfg
+            _min = float(getattr(_cfg, "INSIGHT_HYPOTHESIS_MIN_SCORE", 0.5) or 0.5)
+        except Exception:
+            _min = 0.5
+        _sent = 0
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
+            _hub = get_verification_learning_hub()
+            for _e in kept:
+                _t = str(_e.get("type", "") or "")
+                _src = str(_e.get("source", "") or "")
+                _is_hypo = (_src == "imagination"
+                            or any(_k in _t for _k in
+                                   ("imagination", "insight", "analogy", "dream")))
+                if not _is_hypo:
+                    continue
+                if float(_e.get("score", 0.0) or 0.0) < _min:
+                    continue
+                _hub.record(
+                    organ="想象",
+                    task_type="hypothesis_verification",
+                    input_summary=str(_e.get("content", ""))[:200],
+                    local_result=dict(score=_e.get("score"), insight_type=_t),
+                    confidence=float(_e.get("confidence", 0.5) or 0.5),
+                    relevance_score=float(_e.get("score", 0.5) or 0.5),
+                    needs_verification=True,
+                    lesson="origin=imagination id=" + str(_e.get("id", "")),
+                    origin="imagination",
+                )
+                _sent += 1
+        except Exception as e:
+            silent_exc(e, where="nucleus.InsightBoard::_m301_dispatch_hypotheses")
+        return _sent
 
     def dump_to_disk(self, path: str) -> int:
         """★286批刀2：把当前黑板内容落盘为 JSON（供每日03:00日拍，滚动保留7份）。
@@ -304,10 +386,14 @@ class InsightBoard:
         import os as _os
         with self._lock:
             _entries = [dict(e) for e in self._entries]
+        # ★第301批 刀2：novelty 优先用现成编码器批量算；返回 None 时回退长度代理
+        _novelties = self._m301_batch_novelty(
+            [str(_e.get("content", "") or "") for _e in _entries])
         _scored = []
-        for _e in _entries:
+        for _idx, _e in enumerate(_entries):
             _e = dict(_e)
-            _e["score"] = self._m290_score_entry(_e)
+            _nv = _novelties[_idx] if (_novelties and _idx < len(_novelties)) else None
+            _e["score"] = self._m290_score_entry(_e, novelty=_nv)
             _scored.append(_e)
         _scored.sort(key=lambda e: e.get("score", 0.0), reverse=True)
         _top_n = self._m290_top_n()
@@ -323,6 +409,13 @@ class InsightBoard:
         with open(_tmp, "w", encoding="utf-8") as _f:
             _json.dump(_payload, _f, ensure_ascii=False, indent=2)
         _os.replace(_tmp, path)
+        # ★第301批 刀3：Top-N 里的高分想象/洞察条目 → 送 hub 当待验证假设（复用 200→5 通道）
+        try:
+            _sent = self._m301_dispatch_hypotheses(_kept)
+            if _sent:
+                _payload["hypotheses_dispatched"] = _sent
+        except Exception as e:
+            silent_exc(e, where="nucleus.InsightBoard::dump_to_disk dispatch")
         return len(_kept)
 
 

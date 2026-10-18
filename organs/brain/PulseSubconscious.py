@@ -3843,6 +3843,59 @@ class PulseSubconscious(BasePulseOrgan):
             )
         else:
             _do_rehearse()
+    def _m301_triplet_recombine(self, seeds: list) -> str | None:
+        """★第301批 刀4：跨域三元组重组——从两个不同域节点各抽一条三元组，拼成一个新句式。
+
+        复用 analogy_engine 现成的 _TRIPLET_PAT 抽（主体, 关系宾语）三元组；
+        seeds 来自不同 space_path 一级域 ⇒ 保证「不相关域」。
+        抽不足两个三元组时返回 None（调用方沿用模板，零回归）。
+        """
+        try:
+            from nucleus.reasoning.analogy_engine import _TRIPLET_PAT
+        except Exception as e:
+            self._log(LogLevel.DEBUG, f"三元组重组不可用: {type(e).__name__}: {e}")
+            return None
+        _triplets = []
+        for _s in seeds:
+            _text = str(getattr(_s, "value", "") or "")
+            if len(_text) < 4:
+                continue
+            _m = _TRIPLET_PAT.search(_text)
+            if _m:
+                _triplets.append((_m.group(1), _m.group(3)))
+            if len(_triplets) >= 2:
+                break
+        if len(_triplets) < 2:
+            return None
+        _a1, _b1 = _triplets[0]
+        _a2, _b2 = _triplets[1]
+        _forms = (
+            "如果把「" + _a1 + "的" + _b1 + "」放进「" + _a2 + "」的语境，它的"
+            + _b2 + "会不会变成另一种东西？",
+            "「" + _a1 + "—" + _b1 + "」与「" + _a2 + "—" + _b2 + "」分属两个领域，"
+            "却在结构上互相映照：前者给出关系，后者给出尺度。",
+            "假设" + _a1 + "的" + _b1 + "也遵循" + _a2 + "的" + _b2 + "规律，会推出什么？",
+        )
+        try:
+            import random as _rnd301
+            return _rnd301.choice(_forms)
+        except Exception:
+            return _forms[0]
+
+    def _m301_score_candidate(self, text: str, concepts: list) -> float:
+        """★第301批 刀4：用 290 批的洞察评分器给候选句打分（confidence×relevance×novelty）。
+
+        评分器不可用时返回 0.0 ⇒ 调用方沿用模板（零回归）。纯读、无副作用。
+        """
+        try:
+            from nucleus.InsightBoard import get_insight_board
+            _board = get_insight_board()
+            _entry = dict(content=text, confidence=0.5, keywords=list(concepts or []))
+            return float(_board._m290_score_entry(_entry))
+        except Exception as e:
+            self._log(LogLevel.DEBUG, f"候选评分不可用: {type(e).__name__}: {e}")
+            return 0.0
+
     def _trigger_inspiration_surge(self):
         """
         灵感涌现：在静默状态下，潜意识对知识碎片进行创造性重组。
@@ -3923,6 +3976,20 @@ class PulseSubconscious(BasePulseOrgan):
                     f"一个关于{'、'.join(concepts[:3])}的跨领域灵感闪现了，值得进一步探索",
                 ]
                 inspiration = _random.choice(inspiration_templates)
+                # ★第301批 刀4：跨域三元组重组候选与模板候选同台竞争，由评分器淘汰（不加模板）
+                try:
+                    from config import RUNTIME_PARAMS as _RP301
+                    _tri_on = bool(_RP301.get("subconscious_triplet_recombine", True))
+                except Exception:
+                    _tri_on = True
+                if _tri_on:
+                    _cand = self._m301_triplet_recombine(seeds)
+                    if _cand:
+                        _s_cand = self._m301_score_candidate(_cand, concepts)
+                        _s_tpl = self._m301_score_candidate(inspiration, concepts)
+                        if _s_cand > _s_tpl:
+                            inspiration = _cand
+                            self._log(LogLevel.INFO, "[301刀4] 三元组重组候选胜出")
 
                 # 作为灵感种子发射给胃进行消化
                 # 存入分享素材池

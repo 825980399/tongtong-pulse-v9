@@ -3587,7 +3587,8 @@ RUNTIME_PARAMS = {
     "subconscious_curiosity_interval": 300,  # 好奇心探索间隔（秒）
     "subconscious_inspiration_chance": 0.05,  # 灵感涌现概率
     "subconscious_creative_chance": 0.3,      # 创造性联想概率
-    "subconscious_counterfactual_chance": 0.3, # 反事实想象概率
+    "subconscious_counterfactual_chance": 0.35, # 反事实想象概率（★301刀4：0.3→0.35 上调门控而非加模板）
+    "subconscious_triplet_recombine": True,  # ★301刀4：灵感涌现启用跨域三元组重组（评分器淘汰制）
     # 内在世界参数
     "innerworld_reflection_interval": 180,    # 反思间隔（秒）
     "innerworld_vision_interval": 1800,       # 愿景生成间隔（秒，每10轮反思）
