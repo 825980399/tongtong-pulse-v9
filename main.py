@@ -1161,6 +1161,14 @@ class PulseFramework:
                 # ★第262批 刀1②：丙-2先行 —— 把 InfoField 死数据/幽灵监听审计挂入每日调度
                 from nucleus.field.InfoField import register_infofield_dead_events_schedule
                 register_infofield_dead_events_schedule()
+                # ★第295批 刀2/刀3：行动面通电——派单路径 + 执行结果回写。
+                #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
+                from nucleus.evolution.patch_execution_dispatch import (
+                    register_with_daily_schedule as _295_reg_dispatch,
+                    set_dispatch_framework as _295_set_fw,
+                )
+                _295_set_fw(self)
+                _295_reg_dispatch()
                 self._log(LogLevel.INFO,
                           f"[SelfAwareness] 每日调度"
                           f"{'已启动' if _sched_ok else '未启动（开关关闭或已在运行）'}")
