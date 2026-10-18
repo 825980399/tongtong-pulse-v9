@@ -198,7 +198,8 @@ class StrategySelector:
     def route_with_local_reasoning_chain(self, question: str,
                                           complexity: float = 0.5,
                                           question_type: str = "未知",
-                                          context: dict[str, Any] | None = None) -> dict[str, Any]:
+                                          context: dict[str, Any] | None = None,
+                                          _shadow_probe: bool = False) -> dict[str, Any]:
         """★第268批 刀4：推理路由入口（放宽版）——改名 local_reasoning_chain，与 PulseLung 远程回退区分。
 
         检测器认不出时走本地推理链兜底。
@@ -208,11 +209,16 @@ class StrategySelector:
         - 开关开启（★双 P0 活体验证后）：未知问题返回本地兜底链路由，
           预期把本地拦截率从 <2% 拉到 ≥40%。
 
+        ★第288批 刀1（乙影子）：_shadow_probe=True 时无视开关、只报告
+        「若启用本地链会走本地」——用于影子期统计「若接上能拦下多少」，
+        不改变任何实际路由（零行为变更，默认 False 行为与旧版完全一致）。
+
         注：本方法只做**路由判定（静态接线）**，不执行引擎；
         实际引擎调用与活体拦截率验收留待双 P0 后接入。
         """
         _base = self.select_strategy(question, complexity, question_type, context)
-        if self._local_reasoning_chain_enabled and self._is_unrecognized(_base, question_type):
+        _would_local = self._is_unrecognized(_base, question_type)
+        if (_shadow_probe or self._local_reasoning_chain_enabled) and _would_local:
             return {
                 "route": "local_reasoning_chain",
                 "chain": list(self._LOCAL_REASONING_CHAIN),

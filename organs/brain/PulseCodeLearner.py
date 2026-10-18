@@ -1299,6 +1299,8 @@ class PulseCodeLearner(BasePulseOrgan):
                 _self_understand_node.trust_score = max(70.0, _health["trust_score"])
                 if _health["quality_score"] < 40.0:
                     _self_understand_node.ephemeral = True
+                    # ★288批 刀6：ephemeral 占位条目「不懂存量」计数（只加计数不改分支）
+                    self._m288_ephemeral_count = getattr(self, "_m288_ephemeral_count", 0) + 1
                     self._log(LogLevel.DEBUG,
                              f"代码学习质量偏低: {organ_name}.{method_name} "
                              f"健康分={_health['health_score']:.0f}({_health['level']})")
@@ -1370,6 +1372,13 @@ class PulseCodeLearner(BasePulseOrgan):
             self._log(LogLevel.INFO,
                      f"代码学习批次完成: 新增理解={_batch_new}个, 耗时={_batch_elapsed:.0f}ms"
                      + (f" [超时跳过{len(_batch)-_idx-1}个]" if time.time() > _batch_deadline else ""))  # type: ignore[possibly-unbound]
+
+            # ★288批 刀6：ephemeral 占位条目「不懂存量」每日一条 INFO（量化不懂的方法数，解286刀8源头）
+            _m288_today = time.strftime("%Y-%m-%d")
+            if getattr(self, "_m288_ephemeral_log_day", "") != _m288_today:
+                self._m288_ephemeral_log_day = _m288_today
+                self._log(LogLevel.INFO,
+                          f"占位条目=ephemeral {getattr(self, '_m288_ephemeral_count', 0)}")
 
             # ★v17.0 F1修复：每器官学够10个方法就生成说明书，而非等全部学完
             _milestone_organs = self._check_organ_milestone(progress)

@@ -2349,6 +2349,13 @@ DIALOG_QUEUE_STRATEGY = "queue"
 #   ★第268批 刀3：接入前降回 False（开关就位、链未接通，先关闸，接入后按窗放开）。
 REASONING_ROUTE_LOCAL_FALLBACK = False
 
+# ========== ★主线第288批 刀1（乙影子总闸）：本地推理兜底链影子期 ==========
+# 影子先行（零行为变更）：route_with_local_reasoning_chain 以 _shadow_probe=True 多调一次、
+# 丢弃返回值、只记 DEBUG——用于统计「若接上能拦下多少」，不改变任何实际推理行为。
+#   True （默认·影子期）：影子在对话链路（PulseCortex）运行，只观测；
+#   False：影子停，回到纯 select_strategy 基线（不影响 REASONING_ROUTE_LOCAL_FALLBACK 实弹判定）。
+ENABLE_LOCAL_FALLBACK_SHADOW = True
+
 ENABLE_EVENT_BUS = False
 EVENT_BUS_CONFIG = {
     # 事件溯源历史上限（环形，超出丢弃最旧）。任务书要求 ≤10000。

@@ -1188,13 +1188,17 @@ class PulseCortex(BasePulseOrgan):
                 )
                 # ★268批 刀2 乙（影子接入）：多调一次 route_with_local_reasoning_chain，
                 #   丢弃返回值、只记 DEBUG——零行为变更，现答与今日完全一致。
+                # ★288批 刀1（乙影子）：由 ENABLE_LOCAL_FALLBACK_SHADOW 总闸包着，
+                #   且以 _shadow_probe=True 探测「若启用本地链会走本地」，用于量拦下量。
                 try:
-                    _shadow = self._strategy_selector.route_with_local_reasoning_chain(
-                        _question, complexity=_complexity, question_type=_question_type,
-                        context={"method": method},
-                    )
-                    self._log(LogLevel.DEBUG,
-                              f"[本地兜底·影子] 未知={_question_type} 链={_shadow.get('route')} 现答={method}")
+                    import config as _m288_cfg
+                    if bool(getattr(_m288_cfg, "ENABLE_LOCAL_FALLBACK_SHADOW", True)):
+                        _shadow = self._strategy_selector.route_with_local_reasoning_chain(
+                            _question, complexity=_complexity, question_type=_question_type,
+                            context={"method": method}, _shadow_probe=True,
+                        )
+                        self._log(LogLevel.DEBUG,
+                                  f"[本地兜底·影子] 未知={_question_type} 链={_shadow.get('route')} 现答={method}")
                 except Exception as _se:
                     self._log(LogLevel.DEBUG, f"[本地兜底·影子] 调用异常已忽略: {type(_se).__name__}")
                 # ★P1-25 防御：select_strategy 若返回非 dict（None/异常态），
