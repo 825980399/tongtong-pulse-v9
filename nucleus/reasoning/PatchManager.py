@@ -3577,14 +3577,12 @@ class PatchManager:
             _module_logger.warning(
                 "[N-3①②] 存在验证不可判定的已应用补丁，抑制整机自重启（待人工/活体确认）"
             )
-        return results
-
-        # ★196刀2：运行时失败路→反思（半根刀补齐）。
-        #   启动期接线 main.py:3934（SelfVerifier 验证失败路径）已通电；
-        #   此处补齐运行期 PatchManager 失败路：对 apply_all_pending 收集到的
-        #   每条失败补丁触发 SelfReflectionEngine 维度级诊断（不写盘/不回滚/零副作用）。
-        #   零行为变化：默认开关 ENABLE_PATCH_FAILURE_REFLECTION 未设置(=False) 时直接返回。
+        # ★第302批 刀2（dead_code_after_return · 逻辑未闭环）：
+        #   原 `_reflect_on_failed_patches(...)` 调用写在 `return results` **之后** ⇒ 永不执行，
+        #   即 196刀2 补的这半根刀实际从未通电。按「逻辑未闭环 ⇒ 补完而非删除」原则前移到
+        #   return 之前；开关 ENABLE_PATCH_FAILURE_REFLECTION 默认未设置(=False) ⇒ 移动后仍零行为变化。
         _reflect_on_failed_patches(results.get("details", []), project_root=self._project_root)
+        return results
 
     # 结构性失效（重试一万次也不会成功）的失败原因特征串
     _OBSOLETE_MARKERS = (

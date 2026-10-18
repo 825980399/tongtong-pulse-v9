@@ -1178,9 +1178,8 @@ class PulseInnerWorldKnowledgeMixin:
                 return True
 
         # 代码学习产生的纯结构化描述
+        # ★第302批 刀2：原末行 `return False` 位于本 return 之后，属不可达真死代码 ⇒ 已删除
         return value.startswith(("功能:", "关键步骤:")) and "。" not in value[:100]
-
-        return False
     # 结构化节点标签字段（代码分析/知识节点内部字段，不该出现在对话回答里）
     _NODE_LABEL_FIELDS = ("功能", "依赖", "参数", "风险", "关键步骤", "调用关系",
                           "方法列表", "入口方法", "叶子方法", "返回值")

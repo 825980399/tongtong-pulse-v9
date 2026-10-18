@@ -3991,17 +3991,43 @@ class SelfInspector(SilentLogMixin):
             })
 
     def _check_unsafe_eval(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
-        """检测不安全 eval/exec 使用（★FIX: 扩展检测维度·安全风险）"""
-        pattern = re.compile(r'\b(eval|exec)\s*\(')
-        for match in pattern.finditer(body):
-            # 排除安全注释或字符串字面量
-            line_num = start_line + body[:match.start()].count('\n')
-            suggestion = self._generate_fix_suggestion("unsafe_eval", file_path, method, line_num)
+        """检测不安全 eval/exec 使用（★FIX: 扩展检测维度·安全风险）
+
+        ★第302批 刀1（假阳性治理）：本函数注释原声称「排除安全注释或字符串字面量」，
+        但**实现未做任何排除** ⇒ 两类常量被一律报为 high：
+          ① 「危险命令清单」里的字符串常量（如 dangerous_commands = ["eval(", "exec("]）；
+          ② 已用 ast.parse + 白名单 + {"__builtins__": {}} 的**受限安全求值**。
+        302 批实测高严重度 10 条**全部**为此类误报（PulseSkin/PulseWhiteCell 各 2 条属 ①，
+        PulseInnerWorld._safe_eval_arithmetic 属 ②）。现补齐三条排除判据：
+          ① 命中位于字符串字面量内部（同行前缀引号数为奇数）⇒ 跳过；
+          ② 同一方法体已用 AST 白名单 + 空内建命名空间受限求值 ⇒ 跳过；
+          ③ 命中行是注释（以 # 开头）⇒ 跳过。
+        判据 ① 为启发式（不处理转义/三引号），方向是「宁可少报也不制造假高危」，
+        真实 `eval(user_input)` 写法不受影响。
+        """
+        _pattern = re.compile(r'\b(eval|exec)\s*\(')
+        _is_sandboxed = (('ast.parse' in body or '_ast.parse' in body)
+                         and '__builtins__' in body)
+        for _match in _pattern.finditer(body):
+            _line_num = start_line + body[:_match.start()].count('\n')
+            _line_start = body.rfind('\n', 0, _match.start()) + 1
+            _line_end = body.find('\n', _match.end())
+            if _line_end == -1:
+                _line_end = len(body)
+            _line = body[_line_start:_line_end]
+            if _line.lstrip().startswith('#'):
+                continue
+            _prefix = _line[:_match.start() - _line_start]
+            if _prefix.count('"') % 2 == 1 or _prefix.count("'") % 2 == 1:
+                continue
+            if _is_sandboxed:
+                continue
+            suggestion = self._generate_fix_suggestion("unsafe_eval", file_path, method, _line_num)
             issues.append({
                 "file": file_path,
                 "organ": organ,
                 "method": method,
-                "line": line_num,
+                "line": _line_num,
                 "type": "unsafe_eval",
                 "description": "使用了 eval/exec，存在任意代码执行风险，建议改为 AST 白名单解析",
                 "suggestion": suggestion,
@@ -4063,7 +4089,21 @@ class SelfInspector(SilentLogMixin):
         """检测线程未设置 daemon（★FIX: 扩展检测维度·线程泄漏）"""
         pattern = re.compile(r'threading\.Thread\s*\(')
         for match in pattern.finditer(body):
-            _call_end = body.find(')', match.start())
+            # ★第302批 刀2（假阳性治理）：原用 `body.find(')')` 取调用文本，
+            #   遇到 `args=(kind,)` 这类**嵌套括号**会提前截断 ⇒ 写在 args 之后的
+            #   `daemon=True` 永远看不到 ⇒ 已设 daemon 的线程被误报为 thread_no_daemon
+            #   （302 批实测 PulseDeviceManager:313、PulseVisualCortex:321 两处均属此类）。
+            #   改为括号配对扫描，取完整调用文本后再判 'daemon'。
+            _depth = 0
+            _call_end = -1
+            for _pos in range(match.end() - 1, len(body)):
+                if body[_pos] == '(':
+                    _depth += 1
+                elif body[_pos] == ')':
+                    _depth -= 1
+                    if _depth == 0:
+                        _call_end = _pos
+                        break
             _call_text = body[match.start():_call_end + 1] if _call_end > 0 else ""
             if 'daemon' not in _call_text:
                 line_num = start_line + body[:match.start()].count('\n')
@@ -4079,16 +4119,31 @@ class SelfInspector(SilentLogMixin):
                 })
 
     def _check_sql_injection(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
-        """检测 SQL 字符串拼接（★FIX: 扩展检测维度·SQL注入风险）"""
-        pattern = re.compile(r'f?["\'].*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)\s+.*\{.*\}.*["\']', re.IGNORECASE | re.DOTALL)
-        for match in pattern.finditer(body):
-            line_num = start_line + body[:match.start()].count('\n')
-            suggestion = self._generate_fix_suggestion("sql_injection", file_path, method, line_num)
+        """检测 SQL 字符串拼接（★FIX: 扩展检测维度·SQL注入风险）
+
+        ★第302批 刀1（假阳性治理）：原正则带 re.DOTALL ⇒ `.` 可跨行，
+        会把「相隔很远的 SQL 关键字」与「后面任意一处 {}」拼成一次匹配，
+        于是「方法内根本不写 SQL」的目标也被判 high（302 批实测
+        PulseInterestModel._on_reflection_insight / _analyze_and_boost、
+        PulseSelfAwareness.__init__ 三处均为此类，其中一处源码内已写明
+        "no SQL at all ... false positive"）。现改为：
+          - 去掉 DOTALL，用 [^\\n] 限定**同一行内**必须同时含 SQL 关键字与 {} 占位；
+          - 命中行若是注释（以 # 开头）⇒ 跳过（注释里的「正确写法示例」不算风险）。
+        """
+        _pattern = re.compile(
+            r'f?["\'][^\n]*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)\s+[^\n]*\{[^\n]*\}["\']',
+            re.IGNORECASE)
+        for _match in _pattern.finditer(body):
+            _line_num = start_line + body[:_match.start()].count('\n')
+            _line_start = body.rfind('\n', 0, _match.start()) + 1
+            if body[_line_start:].lstrip().startswith('#'):
+                continue
+            suggestion = self._generate_fix_suggestion("sql_injection", file_path, method, _line_num)
             issues.append({
                 "file": file_path,
                 "organ": organ,
                 "method": method,
-                "line": line_num,
+                "line": _line_num,
                 "type": "sql_injection",
                 "description": "SQL 语句通过字符串拼接变量，存在 SQL 注入风险，建议使用参数化查询",
                 "suggestion": suggestion,
