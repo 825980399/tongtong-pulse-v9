@@ -403,3 +403,38 @@ def append_mastery_section(report_path: str, logger: Any = None) -> dict[str, An
               understood, total, _pct, _src)
     return {"understood": understood, "total_methods": total,
             "mastery_pct": _pct, "source": _src}
+
+
+def append_queue_stats_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """第298批刀2：日报固定输出入队哨兵四数。
+
+    新补丁=NN｜入队被拦=MM｜M92拒绝=KK｜pending=PP（NN/MM/KK 读 PatchManager 类属性，
+    PP 读 pending_patches.json 长度）。读法：MM/KK>0 且 PP=0 ⇒ 治好了；NN=0 ⇒ 停一停。
+    """
+    _log = logger or _module_logger
+    _nn = _mm = _kk = 0
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager
+        _nn = int(PatchManager._enqueue_count or 0)
+        _mm = int(PatchManager._shape_rejected_count or 0)
+        _kk = int(PatchManager._m92_rejected_count or 0)
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_queue_stats_section:counters", level="warning")
+    _pp = 0
+    try:
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _pend = os.path.join(_root, "data", "patches", "pending_patches.json")
+        if os.path.isfile(_pend):
+            _pp = len(json.load(io.open(_pend, encoding="utf-8")))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_queue_stats_section:pending", level="warning")
+    try:
+        _lines = ["", "【入队哨兵】",
+                  f"  · 新补丁={_nn}｜入队被拦={_mm}｜M92拒绝={_kk}｜pending={_pp}", ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_queue_stats_section:写日报小节", level="warning")
+    _log.info("[入队哨兵] 新补丁=%d 入队被拦=%d M92拒绝=%d pending=%d",
+              _nn, _mm, _kk, _pp)
+    return {"new_patches": _nn, "shape_rejected": _mm, "m92_rejected": _kk, "pending": _pp}

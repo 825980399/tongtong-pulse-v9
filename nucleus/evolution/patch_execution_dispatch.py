@@ -80,7 +80,8 @@ def select_patch_for_execution(patch_history: list, limit: int = 1) -> list:
     _cands = [p for p in patch_history if isinstance(p, dict)
               and p.get("status") == "runtime_verified"
               and p.get("risk_level") in ("低", "low")]
-    # 刀5：过滤「片段→完整」形态可疑补丁
+    # ★第298批刀3：is_fragment_to_full 为 select 永久排除项（非首批边界）——
+    #   即使后续放宽到 approved（71条），片段→完整结构损坏补丁（含2条problem_fixed=True）也绝不派单。
     _safe = [p for p in _cands if not is_fragment_to_full(p)]
     # 低风险优先；同风险按 trust_score 降序
     _safe.sort(key=lambda p: (

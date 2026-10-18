@@ -608,6 +608,15 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m294e:
                     silent_exc(_m294e, "DailyScheduler.run_once:掌握率")
 
+            # ★第298批 刀2：日报固定输出入队哨兵四数（新补丁/入队被拦/M92拒绝/pending）。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _298_dr
+                    _res["queue_stats"] = _298_dr.append_queue_stats_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m298e:
+                    silent_exc(_m298e, "DailyScheduler.run_once:入队哨兵")
+
             # ★第286批 刀2：每日03:00 落盘 InsightBoard + PHASE18 snapshot（滚动保留7份）。
             if not self._is_test_env():
                 try:

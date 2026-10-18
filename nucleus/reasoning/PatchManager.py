@@ -379,6 +379,11 @@ def _m92_ast_struct_guard(before_src: str, after_src: str):
 
 
 class PatchManager:
+    # ★第298批刀2：入队哨兵计数器（类属性，内存态跨实例共享，供日报四数读取）
+    _shape_rejected_count = 0   # 入队形态拒绝数（片段→完整）
+    _enqueue_count = 0          # 入队数
+    _m92_rejected_count = 0     # M92 守卫拒绝数（base_indent + ast_struct）
+
     def __init__(self, project_root: str):
         self._project_root = project_root
         self._patch_dir = os.path.join(project_root, "data", "patches")
@@ -1129,6 +1134,17 @@ class PatchManager:
                 f"def={_def_name!r} method={_method_name!r} "
                 f"file={patch.get('file','')}")
             return
+        # ★第298批刀1：入队口形态校验——「片段→完整」(original无def且modified有def) 拒绝入队。
+        #   与295刀5 is_fragment_to_full 同源；源头拦比派单侧过滤更彻底（坏补丁根本不入队）。
+        _orig_def298 = PatchManager._m280_extract_def_name(
+            patch.get("original_code", "") or "")
+        if not _orig_def298 and _def_name:
+            PatchManager._shape_rejected_count += 1
+            _module_logger.warning(
+                f"[补丁入队][298刀1] 片段→完整形态拒绝入队: "
+                f"file={patch.get('file','')} method={_method_name} "
+                f"(original无def modified有def={_def_name!r})")
+            return
         # ★第280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
         #   烛微279批发现：48条risk_level全为"低"，其中 sql_injection/lock_with_emit/
         #   non_atomic_write 共8条高危被误判低风险。高危族禁入免签视野、必须专项验证。
@@ -1423,6 +1439,7 @@ class PatchManager:
 
         pending.append(patch)
         self._save_patch_list(self._pending_file, pending)
+        PatchManager._enqueue_count += 1
         _module_logger.info(
             f"[补丁入队] {patch.get('id','')[:16]} {patch.get('file','')}:"
             f"{patch.get('method','')} trust={patch.get('trust_score','?')} "
@@ -1818,6 +1835,7 @@ class PatchManager:
                         f"（原位替换会把类体/函数体提前终止，且语法仍合法）")
                     result["stage"] = "base_indent_guard_failed"
                     result["failed_check"] = "indent"
+                    PatchManager._m92_rejected_count += 1
                     _module_logger.warning(
                         f"[补丁验证] 基础缩进结构化关拒绝: original={_bo92} "
                         f"modified={_bm92}（source={patch.get('source', '')!r}, "
@@ -1839,6 +1857,7 @@ class PatchManager:
                     result["errors"].append(_st92["reason"])
                     result["stage"] = "ast_structure_guard_failed"
                     result["failed_check"] = "ast_structure"
+                    PatchManager._m92_rejected_count += 1
                     _module_logger.warning(
                         f"[补丁验证] 结构不变量关拒绝: 类方法 {_st92['before']} → "
                         f"{_st92['after']}（-{_st92['ratio']:.1%}）（"
