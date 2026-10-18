@@ -535,6 +535,19 @@ class SelfAwarenessDailyScheduler:
             #   测试环境不跑（防污染生产 data/）；单个钩子失败只 warning，不影响调度主流程。
             if not self._is_test_env():
                 self._run_daily_hooks(_res)
+            # ★第277批 刀3/刀4/刀5：晨读 reader（读最新日报 + dead_events 注入当日上下文） + 每周一清理 .tmp。
+            #   零新依赖、零语义变更：纯只读观测 + 打日志 + 结果入 _res，不改任何现有分析/发布行为。
+            if not self._is_test_env():
+                try:
+                    from nucleus.self_awareness import daily_reader as _277_dr
+                    _res["daily_context"] = _277_dr.read_daily_context(
+                        output_dir=_out, project_root=self._project_root,
+                        now_fn=self._now_fn, logger=_module_logger)
+                    _res["tmp_cleanup"] = _277_dr.cleanup_stale_tmp(
+                        project_root=self._project_root, now_fn=self._now_fn,
+                        logger=_module_logger)
+                except Exception as _277r_e:
+                    silent_exc(_277r_e, "DailyScheduler.run_once:晨读")
 
             self._runs += 1
         except Exception as _e:

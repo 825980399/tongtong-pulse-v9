@@ -39,7 +39,6 @@ from .report_envelope import (
                          TYPE_EVOLUTION,
                          TYPE_GENERIC,
                          TYPE_HEALTH,
-                         TYPE_KNOWLEDGE,
                          TYPE_POLLUTION,
                          TYPE_RUNTIME,
                          TYPE_SELF_COGNITION,
@@ -56,7 +55,7 @@ __all__ = [
     "ACT_ALERT", "ACT_GENERATE_PATCH", "ACT_ENQUEUE_TASK",
     "ACT_CLEAN_DATA", "ACT_LOG_ONLY",
     "TYPE_HEALTH", "TYPE_POLLUTION", "TYPE_EVOLUTION", "TYPE_SELF_COGNITION",
-    "TYPE_KNOWLEDGE", "TYPE_RUNTIME", "TYPE_GENERIC",
+    "TYPE_RUNTIME", "TYPE_GENERIC",
     # ★第50批 T1：发布适配器
     "publishers", "publish_health", "publish_pollution",
     "publish_self_cognition", "publish_patch_quality",

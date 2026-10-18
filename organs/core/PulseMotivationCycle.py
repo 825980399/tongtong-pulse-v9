@@ -345,6 +345,10 @@ class PulseMotivationCycle(BasePulseOrgan):
         if not self.experience_pool:
             return
 
+        # ★278批刀1：第三路乘性修正 trend_factor（选A：更保守）。
+        _trend = self._compute_trend_factor()
+        _trend_factor = _trend["trend_factor"]
+
         positive = self.experience_pool.get_positive_experiences(limit=10)
         negative = self.experience_pool.get_negative_experiences(limit=5)
 
@@ -355,7 +359,7 @@ class PulseMotivationCycle(BasePulseOrgan):
                 motivation_desc = "探索新的可能"
             reward_intensity = exp.get("result_reward", {}).get("intensity", 0.5)
             resource_pressure = self._pressure_state.get("resource", 0.0)
-            intensity = reward_intensity * (1 - resource_pressure * 0.5)
+            intensity = reward_intensity * (1 - resource_pressure * 0.5) * _trend_factor
             if intensity < 0.1:
                 continue
             motivation = {
@@ -366,6 +370,9 @@ class PulseMotivationCycle(BasePulseOrgan):
                 "expires_at": time.time() + 3600,
                 "source": "experience_pool",
                 "type": "approach",
+                "trend_source_report_id": _trend.get("report_id"),
+                "trend_score_delta": _trend.get("score_delta"),
+                "trend_as_of": _trend.get("as_of"),
             }
             self._add_motivation(motivation)
             self._motivation_generated_count += 1
@@ -374,7 +381,7 @@ class PulseMotivationCycle(BasePulseOrgan):
         for exp in negative[:3]:
             pressure_type = exp.get("pressure_type", "frustration")
             avoidance_desc = f"避免高{pressure_type}的情境"
-            intensity = 0.5 * (1 - self._pressure_state.get("frustration", 0.0) * 0.3)
+            intensity = 0.5 * (1 - self._pressure_state.get("frustration", 0.0) * 0.3) * _trend_factor
             if intensity < 0.1:
                 continue
             motivation = {
@@ -385,9 +392,32 @@ class PulseMotivationCycle(BasePulseOrgan):
                 "expires_at": time.time() + 3600,
                 "source": "experience_pool",
                 "type": "avoidance",
+                "trend_source_report_id": _trend.get("report_id"),
+                "trend_score_delta": _trend.get("score_delta"),
+                "trend_as_of": _trend.get("as_of"),
             }
             self._add_motivation(motivation)
             self._motivation_generated_count += 1
+
+    def _compute_trend_factor(self) -> dict:
+        """★278批刀1：从最新跨夜日报 score 变化映射 trend_factor（选A：更保守）。
+
+        score 降⇒trend_factor<1（"我状态不好，少搞点"）；score 升⇒trend_factor>1；
+        stale（>24h）⇒trend_factor=1（不修正）；夹紧 [0.85, 1.15]。
+        """
+        _fallback = {"trend_factor": 1.0, "score_delta": None, "report_id": None, "as_of": None}
+        try:
+            from nucleus.self_awareness import daily_reader as _m278_dr
+            _sig = _m278_dr.get_trend_signal()
+            return {
+                "trend_factor": _sig.get("trend_factor", 1.0),
+                "score_delta": _sig.get("score_delta"),
+                "report_id": _sig.get("report_id"),
+                "as_of": _sig.get("as_of"),
+            }
+        except Exception as e:
+            self._log(LogLevel.ERROR, f"异常: {e}")
+            return _fallback
 
     def _calculate_priority(self, intensity: float, reward_type: str) -> int:
         """根据强度和奖赏类型计算优先级（1-10）"""

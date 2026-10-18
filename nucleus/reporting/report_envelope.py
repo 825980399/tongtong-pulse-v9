@@ -39,7 +39,6 @@ TYPE_HEALTH = "health"
 TYPE_POLLUTION = "pollution"
 TYPE_EVOLUTION = "evolution"
 TYPE_SELF_COGNITION = "self_cognition"
-TYPE_KNOWLEDGE = "knowledge"
 TYPE_RUNTIME = "runtime"
 TYPE_GENERIC = "generic"
 

@@ -370,6 +370,12 @@ class ReportBus:
                 _by_type[_e.report_type] = _by_type.get(_e.report_type, 0) + 1
                 _s = _e.max_severity
                 _by_sev[_s] = _by_sev.get(_s, 0) + 1
+            # ★第277批 刀1：分型消费统计（按 report_type 计数已消费），供 get_stats 暴露分型消费率。
+            _by_type_consumed: dict[str, int] = {}
+            for _e in _all:
+                if _e.consumed_by:
+                    _by_type_consumed[_e.report_type] = (
+                        _by_type_consumed.get(_e.report_type, 0) + 1)
             _anom = sum(len(e.anomalies) for e in _all)
             _acted = sum(len(e.actions_triggered) for e in _all)
             # ★第111批 T-111c：消费结果与路由决策的读取点（防死键）
@@ -393,6 +399,16 @@ class ReportBus:
                 "unconsumed": _n - len(_consumed),
                 "consumption_rate": round(len(_consumed) / _n, 4) if _n else 0.0,
                 "by_type": _by_type,
+                # ★第277批 刀1：分型消费率（各报告类型独立消费率，不报总数以免掩盖分型差异）
+                "by_type_consumption": {
+                    _t: {
+                        "total": _by_type.get(_t, 0),
+                        "consumed": _by_type_consumed.get(_t, 0),
+                        "rate": (round(_by_type_consumed.get(_t, 0) / _by_type[_t], 4)
+                                 if _by_type.get(_t) else 0.0),
+                    }
+                    for _t in sorted(_by_type)
+                },
                 "by_severity": _by_sev,
                 "anomaly_count": _anom,
                 "actions_triggered": _acted,

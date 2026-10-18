@@ -708,7 +708,15 @@ class PulseFramework:
             if getattr(_m50_cfg, "ENABLE_REPORT_BUS", True):
                 from nucleus.reporting import get_report_bus as _m50_gb
                 from nucleus.reporting.consumers import register_builtin_consumers as _m50_reg
-                _m50_types = _m50_reg(_m50_gb())
+                # ★第277批 刀2（刀1拆1a）：重启后从磁盘恢复 report_bus 统计，跨日消费趋势才不归零。
+                #   返回 _n 含 legacy（历史无消费标记），须一并输出 legacy_without_consumed
+                #   （坑①，否则消费率分母被历史污染）；恢复量受内存上限裁剪（坑②：load_from_disk 内部 _trim）。
+                _m50_bus = _m50_gb()
+                _m50_n = _m50_bus.load_from_disk()
+                _m50_l = _m50_bus.get_stats().get("legacy_without_consumed", 0)
+                self._log(LogLevel.INFO,
+                          f"[晨读·报告总线] 恢复={_m50_n} 其中历史无消费标记={_m50_l}")
+                _m50_types = _m50_reg(_m50_bus)
                 self._log(LogLevel.INFO,
                           f"自认知报告总线已启用，已注册消费者: {_m50_types}")
         except Exception as _m50_re:
