@@ -301,3 +301,50 @@ def get_trend_signal(output_dir=None, project_root=None, now_fn=None, logger=Non
     return {"trend_factor": round(_factor, 4), "score_delta": round(_delta, 2),
             "stale": False, "report_id": _latest.get("path"),
             "as_of": _latest.get("generated_at")}
+
+
+# ----------------------------------------------------------------- 282批刀3
+
+def read_phase18_signals(logger: Any = None) -> dict[str, Any]:
+    """刀3：读 get_phase18_signals().snapshot() 四类结果（reasoning/strategy/knowledge/evolution）。
+
+    不翻 ENABLE_PHASE18_SIGNALS 采集闸；即使采集器未开（snapshot 返回空结构）也安全返回。
+    """
+    _log = logger or _module_logger
+    try:
+        from nucleus.telemetry.phase18_signals import get_phase18_signals
+        _snap = get_phase18_signals().snapshot()
+    except Exception as e:
+        silent_exc(e, "daily_reader.read_phase18_signals", level="warning")
+        return {}
+    return {
+        "reasoning_mode": _snap.get("reasoning_mode") or {},
+        "strategy_selection": _snap.get("strategy_selection") or [],
+        "knowledge_quality": _snap.get("knowledge_quality") or [],
+        "evolution": _snap.get("evolution") or [],
+    }
+
+
+def append_phase18_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """刀3：把【PHASE18信号】节（reasoning/strategy/knowledge 三类）追加到日报 + 打 INFO 日志。
+
+    返回四类信号 dict；日报节只聚焦三类（与任务书 INFO 行口径一致）。
+    """
+    _log = logger or _module_logger
+    _sig = read_phase18_signals(_log)
+    _rm = _sig.get("reasoning_mode") or {}
+    _st = _sig.get("strategy_selection") or []
+    _kq = _sig.get("knowledge_quality") or []
+    _log.info("[PHASE18信号] reasoning_mode=%s strategy=%d knowledge=%d",
+              (",".join(sorted(_rm.keys())) or "-"), len(_st), len(_kq))
+    try:
+        _lines = ["", "【PHASE18信号】"]
+        _lines.append("  · reasoning_mode: %s" % (",".join(sorted(_rm.keys())) or "（无）"))
+        _lines.append("  · strategy_selection: %d 条" % len(_st))
+        _lines.append("  · knowledge_quality: %d 条" % len(_kq))
+        _lines.append("")
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_phase18_section:写日报小节", level="warning")
+    return _sig

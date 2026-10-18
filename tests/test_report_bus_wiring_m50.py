@@ -127,8 +127,12 @@ class TestAnomalyExtraction(unittest.TestCase):
         self.assertEqual(a[0].severity, SEV_P0)
 
     def test_18_self_cognition_critical(self):
-        a = _pub.self_cognition_anomalies({"health_level": "critical",
-                                           "overall_score": 20.0})
+        # ★282批刀7①：197刀2 口径统一后，self_cognition_anomalies 读 _v2_quality()
+        #   （不再读 summary 里的 v1 health_level/overall_score），故打桩 _v2_quality
+        #   验证「critical 等级 → SEV_P0」的新口径。
+        import unittest.mock as _mock
+        with _mock.patch.object(_pub, "_v2_quality", return_value=(20.0, "critical")):
+            a = _pub.self_cognition_anomalies({})
         self.assertEqual(a[0].severity, SEV_P0)
 
     def test_19_non_dict_safe(self):

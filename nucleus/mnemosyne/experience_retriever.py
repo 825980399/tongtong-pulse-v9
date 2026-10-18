@@ -67,6 +67,16 @@ def retriever_enabled() -> bool:
         return True
 
 
+def _graph_adjacency_enabled() -> bool:
+    """★282批刀2：图谱邻接影子闸（默认 False，照 retriever_enabled 同款写法）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_GRAPH_ADJACENCY", False))
+    except Exception as e:
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_graph_adjacency_enabled")
+        return False
+
+
 def _cfg(name: str, default: Any) -> Any:
     try:
         import config
@@ -229,8 +239,13 @@ class ExperienceRetriever:
         return _rows
 
     def retrieve(self, query: str, top_k: int | None = None,
-                 filter_polluted: bool | None = None, limit: int | None = None) -> list:
-        """语义检索 top-k。编码器不可用 / 无候选 → 空列表（绝不抛出）。"""
+                 filter_polluted: bool | None = None, limit: int | None = None,
+                 expand_adjacent: bool = False, adjacency_limit: int | None = None):
+        """语义检索 top-k。编码器不可用 / 无候选 → 空列表（绝不抛出）。
+
+        ★282批刀2：expand_adjacent=True 且 ENABLE_GRAPH_ADJACENCY 开启时，
+        返回 {"direct": [...], "adjacent": [...], "adjacent_meta": {...}} 两列；
+        否则返回原 list（向后兼容，零行为变更）。"""
         if not query or not isinstance(query, str):
             return []
         try:
@@ -258,10 +273,70 @@ class ExperienceRetriever:
                 _e["_similarity"] = round(_sim, 4)
                 _e["_score"] = round(_final, 4)
                 _out.append(_e)
+            if expand_adjacent and _graph_adjacency_enabled():
+                return self._with_adjacent(_out, adjacency_limit)
             return _out
         except Exception as _e:                      # 检索失败不得影响调用方
             print("[经验检索] 检索异常: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
             return []
+
+    # -------------------------------------------------- 邻接扩展（282批刀2）
+    def _with_adjacent(self, direct: list, adjacency_limit: int | None = None) -> dict:
+        """刀2：分 direct/adjacent 两列返回；只扩1跳、邻居候选≤top_k//2、绝不混合重排序。
+
+        通信边的邻居是「她会跟谁说话」，不是「哪个知识更相关」——混排必伤精度，
+        故 direct 保持原排序，adjacent 单独一列（含 _adjacent_source 溯源）。
+        经验若无器官字段（当前库未接），adjacent 恒空（影子期预期，零行为变更）。
+        """
+        _adj: list = []
+        try:
+            from tools.export_event_graph import load_event_graph_cache
+            _g = load_event_graph_cache()
+            if not _g:
+                return {"direct": direct, "adjacent": _adj,
+                        "adjacent_meta": {"expanded": False, "reason": "no_cache"}}
+            _edges = _g.get("edges") or []
+            _neighbors: dict[str, set] = {}
+            for _e in _edges:
+                _em = _e.get("emitter")
+                _sub = _e.get("subscriber")
+                if not _em or not _sub:
+                    continue
+                _neighbors.setdefault(_em, set()).add(_sub)
+                _neighbors.setdefault(_sub, set()).add(_em)
+            _orgs: set = set()
+            for _d in direct:
+                for _key in ("organ", "source_organ", "organ_name", "source"):
+                    _v = _d.get(_key)
+                    if isinstance(_v, str) and _v:
+                        _orgs.add(_v)
+                        break
+            if not _orgs:
+                return {"direct": direct, "adjacent": _adj,
+                        "adjacent_meta": {"expanded": False, "reason": "no_organ_field"}}
+            _adj_orgs: set = set()
+            for _o in _orgs:
+                for _n in _neighbors.get(_o, set()):
+                    if _n not in _orgs:
+                        _adj_orgs.add(_n)
+            _limit = int(adjacency_limit) if adjacency_limit else max(1, self.top_k() // 2)
+            for _e in self.candidates(include_polluted=False):
+                if len(_adj) >= _limit:
+                    break
+                _eorg = (_e.get("organ") or _e.get("source_organ")
+                         or _e.get("organ_name") or _e.get("source"))
+                if _eorg in _adj_orgs:
+                    _e2 = dict(_e)
+                    _e2["_adjacent_source"] = _eorg
+                    _adj.append(_e2)
+            return {"direct": direct, "adjacent": _adj,
+                    "adjacent_meta": {"expanded": True, "direct_count": len(direct),
+                                      "adjacent_count": len(_adj),
+                                      "adjacent_organs": sorted(_adj_orgs)}}
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::_with_adjacent")
+            return {"direct": direct, "adjacent": [],
+                    "adjacent_meta": {"expanded": False, "reason": "error"}}
 
     # -------------------------------------------------- 对比（L1 观测核心）
     def baseline_retrieve(self, query: str, limit: int | None = None) -> list:

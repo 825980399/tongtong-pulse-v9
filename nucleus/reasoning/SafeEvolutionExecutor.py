@@ -1411,10 +1411,13 @@ class SafeEvolutionExecutor:
         try:
             _pm = getattr(self, "_patch_manager", None)
             _pending = _pm.list_pending_patches() if _pm is not None else []
-            if len(_pending) >= 40:
+            _pending_count = len(_pending)
+            _approved_count = sum(1 for p in _pending if p.get("status") == "approved")
+            _needs_approval = _pending_count - _approved_count
+            if _needs_approval >= 40:
                 _module_logger.warning(
-                    f"[N4熔断] 补丁积压={len(_pending)}≥40，熔断本轮进化调用"
-                    f"（跳过 LLM 空转，待积压消化后再恢复）")
+                    f"[N4熔断] 队列长度={_pending_count} 待人工裁决={_needs_approval}≥40，"
+                    f"熔断本轮进化调用（跳过 LLM 空转，待积压消化后再恢复）")
                 return {
                     "repaired": 0,
                     "pass_rate": 0.0,

@@ -42,7 +42,7 @@ _SILENCE_EXEMPT_KEYS = resolve_organ_keys(SILENCE_EXEMPT_ORGANS)
 class PulseSystemManager(BasePulseOrgan):
     """系统自主管理器（v9.5 分层脉冲版）"""
 
-    def __init__(self, organ_name):
+    def __init__(self, organ_name: str = "系统管理器"):
         super().__init__(organ_name)
 
         # ===== managed services =====

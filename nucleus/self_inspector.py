@@ -1879,8 +1879,10 @@ class SelfInspector(SilentLogMixin):
         不落盘、不改状态。失败降级为 {}（blast_radius=0）。
         """
         try:
-            from tools.export_event_graph import export_event_graph
-            _g = export_event_graph()
+            from tools.export_event_graph import load_event_graph_cache
+            _g = load_event_graph_cache()
+            if not _g:
+                return {}
             _affects: dict[str, set[str]] = {}
             _driven: dict[str, set[str]] = {}
             for _e in _g.get("edges", []):
@@ -1903,8 +1905,11 @@ class SelfInspector(SilentLogMixin):
         Returns: {"organ", "affects", "driven_by", "blast_radius"}（纯只读，零行为变化）。
         """
         try:
-            from tools.export_event_graph import export_event_graph
-            _g = export_event_graph()
+            from tools.export_event_graph import load_event_graph_cache
+            _g = load_event_graph_cache()
+            if not _g:
+                return {"organ": organ, "affects": [], "driven_by": [],
+                        "blast_radius": 0, "error": "no_cache"}
             _affects: set[str] = set()
             _driven: set[str] = set()
             for _e in _g.get("edges", []):

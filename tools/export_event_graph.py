@@ -28,8 +28,10 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
+import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
@@ -363,6 +365,84 @@ def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_
     if as_json:
         return json.dumps(_payload, ensure_ascii=False, indent=2)
     return _payload
+
+
+# =============================================================================
+# ★282批刀1：落盘缓存 + 只读缓存（图谱四步第一步）
+# -----------------------------------------------------------------------------
+GRAPH_CACHE_DIR_NAME = "data/graphs"
+_GRAPH_CACHE_RETENTION = 7  # 滚动保留 7 份 dated 文件（遵 276 教训，防新档案堆积）
+
+
+def _graph_cache_dir(project_root: str | None = None) -> str:
+    return os.path.join(project_root or _proj_root(), GRAPH_CACHE_DIR_NAME)
+
+
+def _struct_hash(payload: dict[str, Any]) -> str:
+    """对 edges 做确定性哈希，作为结构指纹（edges 变化即视为结构变化）。"""
+    try:
+        _ser = json.dumps(payload.get("edges") or [], ensure_ascii=False, sort_keys=True)
+        return hashlib.sha256(_ser.encode("utf-8")).hexdigest()[:16]
+    except Exception as e:
+        silent_exc(e, where="tools.export_event_graph::_struct_hash")
+        return ""
+
+
+def save_event_graph_cache(payload: dict[str, Any] | None = None,
+                           cache_dir: str | None = None) -> str | None:
+    """刀1：把图谱写盘到 event_graph.json（最新）+ event_graph_YYYYMMDD.json（滚动保留7份）。
+
+    文件格式：{schema_version, struct_hash, generated_at, edge_count, nodes, edges, ...}。
+    返回最新文件路径；失败返回 None（silent_exc 记录，不阻断调度）。
+    """
+    try:
+        if payload is None:
+            payload = export_event_graph()
+        _dir = cache_dir or _graph_cache_dir()
+        os.makedirs(_dir, exist_ok=True)
+        _now = time.strftime("%Y%m%d")
+        _iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+        _out = dict(payload)
+        _out["schema_version"] = 1
+        _out["struct_hash"] = _struct_hash(_out)
+        _out["generated_at"] = _iso
+        _out["edge_count"] = len(_out.get("edges") or [])
+        _out["nodes"] = sorted(set(
+            [e.get("emitter") for e in _out.get("edges", []) if e.get("emitter")]
+            + [e.get("subscriber") for e in _out.get("edges", []) if e.get("subscriber")]))
+        _main = os.path.join(_dir, "event_graph.json")
+        _dated = os.path.join(_dir, "event_graph_%s.json" % _now)
+        _txt = json.dumps(_out, ensure_ascii=False, indent=2)
+        for _p in (_dated, _main):
+            with open(_p, "w", encoding="utf-8") as _f:
+                _f.write(_txt)
+        _dated_files = sorted(
+            [os.path.join(_dir, f) for f in os.listdir(_dir)
+             if f.startswith("event_graph_") and f.endswith(".json")
+             and f != "event_graph.json"])
+        for _old in _dated_files[:-_GRAPH_CACHE_RETENTION]:
+            try:
+                os.remove(_old)
+            except OSError as _re:
+                silent_exc(_re, where="tools.export_event_graph::save_event_graph_cache:滚动清理")
+        return _main
+    except Exception as e:
+        silent_exc(e, where="tools.export_event_graph::save_event_graph_cache")
+        return None
+
+
+def load_event_graph_cache(cache_dir: str | None = None) -> dict[str, Any] | None:
+    """刀1：只读 event_graph.json 缓存；不存在/损坏返回 None（绝不现扫全仓源码）。"""
+    try:
+        _dir = cache_dir or _graph_cache_dir()
+        _main = os.path.join(_dir, "event_graph.json")
+        if not os.path.isfile(_main):
+            return None
+        with open(_main, encoding="utf-8") as _f:
+            return json.load(_f)
+    except Exception as e:
+        silent_exc(e, where="tools.export_event_graph::load_event_graph_cache")
+        return None
 
 
 if __name__ == "__main__":

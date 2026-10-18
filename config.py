@@ -489,6 +489,10 @@ ENABLE_CONTRADICTION_WRITE_PRECHECK = True  # 2026-09-27星轨开启：知识写
 # nucleus.telemetry.phase18_signals 统一收集，PHASE18 经 snapshot() 消费。
 ENABLE_PHASE18_SIGNALS = False
 
+# ★282批刀3：PHASE18 信号组白名单（L3 背压属热路，留到最后开）。
+#   先开低频四类：evolution / reasoning / strategy / knowledge。
+PHASE18_SIGNAL_GROUPS = "evolution,reasoning,strategy,knowledge"
+
 # 意图原型向量库 / 分类反馈持久化路径（相对项目根）
 QICA_INTENT_PROTOTYPES_PATH = "data/qica/intent_prototypes.json"
 QICA_CLASSIFICATION_FEEDBACK_PATH = "data/qica/classification_feedback.json"
@@ -4740,6 +4744,10 @@ ENABLE_PATCH_QUALITY_EVALUATOR = True
 #   ★L1 仅观测：只记录「新检索器 vs 现有检索器」的重叠对比，**不替换现有检索逻辑**。
 ENABLE_EXPERIENCE_RETRIEVER_OBSERVE = True
 EXPERIENCE_RETRIEVER_TOP_K = 5                # 观测时返回的候选条数
+
+# ★282批刀2：图谱邻接影子闸（默认关）。retrieve(expand_adjacent=True) 仅在此开关开启时
+#   才真正扩1跳邻接；影子期保持 False，零行为变更。
+ENABLE_GRAPH_ADJACENCY = False
 EXPERIENCE_RETRIEVER_FILTER_POLLUTED = True   # 过滤 polluted=True 的经验
 EXPERIENCE_RETRIEVER_SCAN_LIMIT = 200         # 单次检索最多编码的候选条数（给耗时设上界）
 # ============================================================================

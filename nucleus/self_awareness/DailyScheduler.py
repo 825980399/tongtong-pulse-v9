@@ -549,6 +549,35 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _277r_e:
                     silent_exc(_277r_e, "DailyScheduler.run_once:晨读")
 
+            # ★第282批 刀1：每日03:00 拍一次事件图谱，落盘 data/graphs/event_graph.json（滚动保留7份）。
+            #   运行时消费者（self_inspector 的 blast_radius / retrieve 邻接扩展）只读缓存，绝不现扫。
+            if not self._is_test_env():
+                try:
+                    from tools.export_event_graph import export_event_graph, save_event_graph_cache
+                    _g282 = export_event_graph()
+                    _gp282 = save_event_graph_cache(_g282)
+                    _res["event_graph_cache"] = {
+                        "edge_count": _g282.get("edge_count"),
+                        "path": _gp282,
+                    }
+                    _module_logger.info(
+                        "[图谱缓存] 每日拍图落盘 edge_count=%d path=%s",
+                        _g282.get("edge_count"), _gp282)
+                except Exception as _ge282:
+                    silent_exc(_ge282, "DailyScheduler.run_once:图谱缓存")
+
+            # ★第282批 刀3：PHASE18 先注册消费方——读 snapshot() 四类结果并入日报【PHASE18信号】节。
+            #   不翻 ENABLE_PHASE18_SIGNALS（采集闸留待后续批次），此处只接消费方，零行为变更。
+            if not self._is_test_env():
+                try:
+                    from nucleus.self_awareness import daily_reader as _282_dr
+                    _res["phase18_signals"] = _282_dr.read_phase18_signals(
+                        logger=_module_logger)
+                    if _rp:
+                        _282_dr.append_phase18_section(_rp, logger=_module_logger)
+                except Exception as _p18e282:
+                    silent_exc(_p18e282, "DailyScheduler.run_once:PHASE18信号")
+
             self._runs += 1
         except Exception as _e:
             _res["status"] = "error"
