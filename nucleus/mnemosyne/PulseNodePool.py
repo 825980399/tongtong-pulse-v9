@@ -61,7 +61,7 @@ class PulseNodePool(SilentLogMixin):
         温池 (warm): L2 中频节点 + 活跃 L1 —— 内存缓存
         冷池 (cold): L1 低频历史节点 —— 按需加载/淘汰
     """
-    
+
     def __init__(self, max_hot: int = 10000, max_warm: int = 50000):
         """
         Args:
@@ -72,17 +72,17 @@ class PulseNodePool(SilentLogMixin):
         self._hot: dict[str, PulseNode] = {}    # node_id → PulseNode
         self._warm: dict[str, PulseNode] = {}   # node_id → PulseNode
         self._cold: dict[str, PulseNode] = {}   # node_id → PulseNode（L1 冷缓存，可被驱逐）
-        self._instinct: dict[str, PulseNode] = {}  # L4 本能节点池（独立存储，常驻内存）        
+        self._instinct: dict[str, PulseNode] = {}  # L4 本能节点池（独立存储，常驻内存）
         # 容量上限
         self._max_hot = max_hot
         self._max_warm = max_warm
-        
+
         # 线程安全
         self._lock = threading.Lock()
         # ★v25.1吞吐量优化: 内容去重统计（用于知识质量反馈调速）
         self._content_add_total = 0
         self._content_dedup_total = 0
-        
+
         # ★阶段B'新增：L1 冷存储分治配置（默认关闭，零侵入）
         #   _cold_storage_enabled: 是否启用冷池驱逐（由 use_cold_storage 开关控制）
         #   _max_cold_cache: 冷池内存缓存上限（超过则驱逐最久未激活节点）
@@ -110,7 +110,7 @@ class PulseNodePool(SilentLogMixin):
         self._cold_compact_fail_streak = 0
         # ★第162批刀3：侧车索引陈旧标记（S2 写失败/重建失败置位，成功重建复位；S3 新鲜度判定写入）
         self._cold_index_stale = False
-        
+
         # ★P3-1新增：分层索引——按 evol_level 快速定位节点
         # 格式：{"L1": {node_id, ...}, "L2": {node_id, ...}, "L3": {node_id, ...}}
         self._level_index: dict[str, set] = {"L1": set(), "L2": set(), "L3": set()}
@@ -121,19 +121,19 @@ class PulseNodePool(SilentLogMixin):
         # 懒构建 + 脏标记，支撑「谁关联了我」的反向横向遍历（此前横向联系仅存在于节点内部，无池级索引）。
         self._semantic_index: dict[str, set] = {}
         self._semantic_index_valid = False
-        
+
         # 关联组件
         self.resonance_engine = None  # ResonanceEngine 实例
         # ★阶段C'新增：外置索引持久化器（可选，开关 use_external_index 开启时注入）
         self._index_store = None
-        
+
         # 统计
         self._total_added = 0
         self._total_removed = 0
         self._total_activated = 0
         # ===== 未来演化预留（v10.0 振荡场） =====
         self._field_strength = 1.0  # 振荡场强度 0.0-1.0（v10.0注入）
-        
+
         # ★v23.0新增：赫布学习器引用
         self._hebbian_learner = None
 
@@ -162,9 +162,9 @@ class PulseNodePool(SilentLogMixin):
             self._promotion_threshold = 100
             self._demotion_threshold = 10
             self._memory_warning_threshold = 0.8
-        
+
     # ========== 框架注入 ==========
-    
+
     def refresh_runtime_params(self):
         """★P1: 刷新运行时参数（热加载后调用）。"""
         try:
@@ -183,7 +183,7 @@ class PulseNodePool(SilentLogMixin):
     def set_resonance_engine(self, engine):
         """注入共振引擎，用于自动维护索引"""
         self.resonance_engine = engine
-    
+
     def set_hebbian_learner(self, learner):
         """★v23.0新增：注入赫布学习器，节点激活时通知"""
         self._hebbian_learner = learner
@@ -349,7 +349,7 @@ class PulseNodePool(SilentLogMixin):
             return list(self._hot.values()) + list(self._warm.values())
 
     # ========== 未来演化预留（v10.0 振荡场） ==========
-    
+
     def set_field_strength(self, strength: float):
         """
         【预留 v10.0】设置振荡场强度，调制节点激活阈值。
@@ -434,13 +434,13 @@ class PulseNodePool(SilentLogMixin):
                 node.trust_score = max(0.0, min(100.0, float(node.trust_score)))
             except Exception:
                 node.trust_score = 50.0
-            
+
             # ===== 幂等检查 =====
             if node_id in self._hot or node_id in self._warm or node_id in self._cold:
                 # 已存在，仅更新索引（如果缺失）
                 if self.resonance_engine:
-                    existing = (self._hot.get(node_id) or 
-                                self._warm.get(node_id) or 
+                    existing = (self._hot.get(node_id) or
+                                self._warm.get(node_id) or
                                 self._cold.get(node_id))
                     if existing:
                         try:
@@ -462,10 +462,10 @@ class PulseNodePool(SilentLogMixin):
 
             # 确定目标池
             target_pool = self._determine_pool(node)
-            
+
             # 添加到目标池
             target_pool[node_id] = node
-            
+
             # 同步到共振引擎索引
             if self.resonance_engine:
                 try:
@@ -475,10 +475,10 @@ class PulseNodePool(SilentLogMixin):
             # ★P3-1新增：更新分层索引和路径索引
             self._update_index_on_add(node)
             self._m71_influx_write("node_modified", node_id, "create", "-", "created")
-            
+
             # ★知识体系·容量治理：热/温池超限时逐级降级，防止上百亿规模下内存无界增长
             self._enforce_capacity()
-            
+
             # ★阶段B'：冷池超限时驱逐最久未激活节点到磁盘
             if (self._cold_storage_enabled
                     and target_pool is self._cold
@@ -489,7 +489,7 @@ class PulseNodePool(SilentLogMixin):
             if self._hot_cold_enabled:
                 self._enforce_warm_lru()
                 self._shrink_cache()
-            
+
             self._dual_write_neo4j_node(node, "add")
             self._total_added += 1
             return node_id
@@ -729,14 +729,14 @@ class PulseNodePool(SilentLogMixin):
                 self._cache_stats["warm_hits"] += 1
             elif node is not None and node_id not in self._hot and node_id not in self._warm:
                 self._cache_stats["warm_misses"] += 1
-            
+
             # ★阶段B'：内存未命中但可能是被驱逐的冷节点 → 磁盘召回
             if node is None and self._cold_storage_enabled and node_id in self._cold_evicted:
                 node = self._recall_cold_node(node_id)
                 if node is not None:
                     # 召回后提升温池（复用现有激活→提升语义）
                     self._warm[node_id] = node
-            
+
             if node:
                 # ★第81批补 T1：懒加载回填（锁安全：锁内仅做内存 _m70_keep 快速回填，零 IO）
                 if getattr(node, "_m70_blanked", False):
@@ -766,7 +766,7 @@ class PulseNodePool(SilentLogMixin):
                                        str(getattr(node, "evol_level", "") or ""))
                 if self._m71_influx_sample():
                     self._m71_influx_write("node_accessed", node_id, "get")
-                
+
                 # ★v23.0新增 / ★A-16修复：通知赫布学习器，并把学到的连接权重
                 #   回写到节点，供共振引擎利用。
                 #   A-16 变更：改用 sync_hebbian_weight（EMA 可升可降），
@@ -777,7 +777,7 @@ class PulseNodePool(SilentLogMixin):
                         self.sync_hebbian_weight(node_id, node)
                     except Exception as e:
                         self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-                
+
                 # 冷池节点被访问时，提升到温池
                 if node_id in self._cold:
                     self._promote_to_warm(node)
@@ -802,7 +802,7 @@ class PulseNodePool(SilentLogMixin):
                           f"{getattr(_m70_pending_recall, 'node_id', '')}: "
                           f"{type(_e).__name__}: {_e}")
         return node
-    
+
     def remove(self, node_id: str) -> bool:
         """
         移除节点。
@@ -814,7 +814,7 @@ class PulseNodePool(SilentLogMixin):
             for pool in [self._hot, self._warm, self._cold]:
                 if node_id in pool:
                     node = pool.pop(node_id)
-                    
+
                     # 同步移除共振引擎索引
                     if self.resonance_engine:
                         self.resonance_engine.remove_node(
@@ -822,10 +822,10 @@ class PulseNodePool(SilentLogMixin):
                             freq=node.frequency_signature,
                             space_path=node.space_path
                         )
-                    
+
                     # ★P3-1新增：从分层索引和路径索引中移除
                     self._update_index_on_remove(node)
-                    
+
                     self._dual_write_neo4j_node(node, "remove")
 
                     # ★第102批 T-102b：删节点级联移除向量（防孤儿向量 D161）
@@ -850,7 +850,7 @@ class PulseNodePool(SilentLogMixin):
                 self._total_removed += 1
                 return True
         return False
-    
+
     # ========== 主线第71批 T1：Neo4j 双写（只写不读，灰度关闭） ==========
     def _m71_neo4j_store(self):
         """惰性获取 Neo4j 单例；不可用时返回 None（不影响主流程）。"""
@@ -1260,7 +1260,7 @@ class PulseNodePool(SilentLogMixin):
 
     # [M71-T2-NODEPOOL]
 
-    def query(self, 
+    def query(self,
               evol_level: str | None = None,
               importance: str | None = None,
               source_organ: str | None = None,
@@ -1280,7 +1280,7 @@ class PulseNodePool(SilentLogMixin):
             匹配的节点列表
         """
         results = []
-        
+
         # ★知识体系·检索优化：惰性迭代 + 提前终止，避免全量复制索引。
         # 上百亿规模下，此前 .copy() 会复制数十亿 ID（OOM/卡死），
         # 现在全程持锁惰性遍历，命中 limit 即停。
@@ -1291,21 +1291,21 @@ class PulseNodePool(SilentLogMixin):
                 if source_organ and _node.source_organ != source_organ:
                     return False
                 return not (space_path_prefix and not _node.space_path.startswith(space_path_prefix))
-            
+
             def _append(_node: PulseNode) -> bool:
                 results.append(_node)
                 return len(results) >= limit
-            
+
             def _scan(_ids):
                 for _nid in _ids:
-                    _node = (self._hot.get(_nid) or 
-                             self._warm.get(_nid) or 
+                    _node = (self._hot.get(_nid) or
+                             self._warm.get(_nid) or
                              self._cold.get(_nid))
                     if _node is not None and _matches(_node):
                         if _append(_node):
                             return True
                 return False
-            
+
             if evol_level and evol_level in self._level_index:
                 if space_path_prefix:
                     # P1-5修复(2026-09-03)：同时有层级和路径时取两个索引的交集，
@@ -1335,9 +1335,9 @@ class PulseNodePool(SilentLogMixin):
                             break
                     if len(results) >= limit:
                         break
-        
+
         return results
-    
+
     def get_all(self) -> list[PulseNode]:
         """获取所有内存节点（热 + 温 + 冷缓存），**不含被驱逐的冷节点**。
 
@@ -1432,9 +1432,9 @@ class PulseNodePool(SilentLogMixin):
             return len(self._hot) + len(self._warm) + len(self._cold) + (
                 len(self._cold_evicted) if self._cold_storage_enabled else 0
             )
-    
+
     # ========== 批量加载（快照恢复用） ==========
-    
+
     def load_batch(self, nodes: list[PulseNode]):
         """
         批量加载节点（启动时从快照恢复）。
@@ -1445,18 +1445,18 @@ class PulseNodePool(SilentLogMixin):
             for node in nodes:
                 if node.node_id in self._hot or node.node_id in self._warm or node.node_id in self._cold:
                     continue  # 幂等：已存在则跳过
-                
+
                 target_pool = self._determine_pool(node)
                 target_pool[node.node_id] = node
-                
+
                 if self.resonance_engine:
                     self.resonance_engine.index_node(node.to_dict())
-                
+
                 # ★v17.0修复：批量加载时同步更新分层索引和路径索引
                 # 之前只有 add() 会更新索引，load_batch() 不会
                 # 导致重启后从快照恢复的节点无法被 query() 检索到
                 self._update_index_on_add(node)
-                
+
                 self._total_added += 1
     def load_batch_lazy(self, nodes: list[PulseNode]) -> dict[str, int]:
         """★阶段D：启动按需加载（冷存储启用时的替代 load_batch）。
@@ -1513,12 +1513,12 @@ class PulseNodePool(SilentLogMixin):
         with self._lock:
             for node in nodes:
                 node.instinct = True
-                self._instinct[node.node_id] = node    
+                self._instinct[node.node_id] = node
     def get_instincts(self) -> list[PulseNode]:
         """获取所有本能节点（推理前置约束使用）"""
         with self._lock:
             return list(self._instinct.values())
-        
+
     def upgrade_to_instinct(self, node: PulseNode) -> bool:
         """将一个L3节点升级为本能节点"""
         with self._lock:
@@ -1527,13 +1527,13 @@ class PulseNodePool(SilentLogMixin):
                 oldest = min(self._instinct.values(),
                            key=lambda n: (n.instinct_active_times, n.instinct_at))
                 self._downgrade_instinct(oldest)
-            
+
             # 从原池中移除
             for pool in [self._hot, self._warm, self._cold]:
                 if node.node_id in pool:
                     del pool[node.node_id]
                     break
-            
+
             # 升级为本能
             node.instinct = True
             node.instinct_at = time.time()
@@ -1561,29 +1561,29 @@ class PulseNodePool(SilentLogMixin):
                     node = pool[node_id]
                     source_pool = pool
                     break
-            
+
             if node is None:
                 return False
-            
+
             old_level = node.evol_level
             if old_level == new_level:
                 return True
-            
+
             # 更新节点的演化层级
             node.evol_level = new_level
-            
+
             # ★P1-2核心修复：同步迁移分层索引
             if old_level in self._level_index:
                 self._level_index[old_level].discard(node_id)
             if new_level in self._level_index:
                 self._level_index[new_level].add(node_id)
-            
+
             # 如果升级到L3，移到热池
             if new_level == PulseNode.EVOL_L3 and source_pool is not self._hot:
                 del source_pool[node_id]
                 self._hot[node_id] = node
-            
-            return True    
+
+            return True
     def _downgrade_instinct(self, node: PulseNode):
         """降级本能节点回L3"""
         node.instinct = False
@@ -1591,7 +1591,7 @@ class PulseNodePool(SilentLogMixin):
         del self._instinct[node.node_id]
         self._hot[node.node_id] = node
     # ========== 淘汰机制 ==========
-    
+
     def purge_obsolete(self, max_age_days: float = 30.0) -> int:
         """
         清理过期的节点。
@@ -1608,17 +1608,17 @@ class PulseNodePool(SilentLogMixin):
             淘汰/降级的节点数
         """
         purged = 0
-        
+
         with self._lock:
             # ★P1-1修复：先处理L2降级，再处理L1删除
             # 遍历所有池，找出过时的L2节点并降级
             for pool in [self._cold, self._warm, self._hot]:
                 downgrade_ids = []
-                
+
                 for node_id, node in pool.items():
                     if node.evol_level == PulseNode.EVOL_L2 and node.is_obsolete(max_age_days):
                         downgrade_ids.append(node_id)
-                
+
                 for node_id in downgrade_ids:
                     node = pool[node_id]
                     # ★P1-1修复：L2节点不删除，降级为L1
@@ -1635,15 +1635,15 @@ class PulseNodePool(SilentLogMixin):
                         del pool[node_id]
                         self._cold[node_id] = node
                     purged += 1
-            
+
             # 再处理L1的物理删除
             for pool in [self._cold, self._warm, self._hot]:
                 obsolete_ids = []
-                
+
                 for node_id, node in pool.items():
                     if node.evol_level == PulseNode.EVOL_L1 and node.is_obsolete(max_age_days):
                         obsolete_ids.append(node_id)
-                
+
                 for node_id in obsolete_ids:
                     node = pool.pop(node_id)
                     if self.resonance_engine:
@@ -1656,27 +1656,27 @@ class PulseNodePool(SilentLogMixin):
                     self._update_index_on_remove(node)
                     purged += 1
                     self._total_removed += 1
-        
+
         return purged
-    def get_path_distribution(self) -> dict[str, int]: 
+    def get_path_distribution(self) -> dict[str, int]:
         """
         获取知识树各一级路径下的节点分布。
         用于自我认知评估自己的知识强项和盲区。
         """
         with self._lock:
             all_nodes = list(self._hot.values()) + list(self._warm.values()) + list(self._cold.values())
-        
+
         path_dist = {}
         for node in all_nodes:
             path = getattr(node, 'space_path', '/')
             parts = path.strip('/').split('/')
             root_path = '/' + parts[0] if parts and parts[0] else '/'
             path_dist[root_path] = path_dist.get(root_path, 0) + 1
-        
+
         return path_dist
 
     # ========== 统计信息 ==========
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取节点池统计信息（肾脏淘汰决策依据）"""
         with self._lock:
@@ -1684,12 +1684,12 @@ class PulseNodePool(SilentLogMixin):
             warm_count = len(self._warm)
             cold_count = len(self._cold)
             total = hot_count + warm_count + cold_count
-            
+
             # 演化分布
             evol_dist = {"L1": 0, "L2": 0, "L3": 0}
             for node in list(self._hot.values()) + list(self._warm.values()) + list(self._cold.values()):
                 evol_dist[node.evol_level] = evol_dist.get(node.evol_level, 0) + 1
-            
+
         return {
             "total_nodes": total,
             "hot_count": hot_count,
@@ -2022,7 +2022,7 @@ class PulseNodePool(SilentLogMixin):
             _stop["flag"] = False
 
     # ========== 内部方法 ==========
-    
+
     def _determine_pool(self, node: PulseNode) -> dict[str, PulseNode]:
         """
         根据节点属性确定目标池。
@@ -2036,12 +2036,12 @@ class PulseNodePool(SilentLogMixin):
         """
         if node.evol_level == PulseNode.EVOL_L3:
             return self._hot
-        
+
         if node.evol_level == PulseNode.EVOL_L2:
             if node.importance in (PulseNode.IMPORTANCE_S, PulseNode.IMPORTANCE_A):
                 return self._hot
             return self._warm
-        
+
         # L1
         if node.importance in (PulseNode.IMPORTANCE_S, PulseNode.IMPORTANCE_A):
             return self._warm
@@ -2164,7 +2164,7 @@ class PulseNodePool(SilentLogMixin):
                 f"(最低 {int(_pct * 100)}% 分位，批上限 {int(_batch)}，"
                 f"间隔 {int(_interval)}s)")
     # ========== ★P3-1新增：分层索引维护方法 ==========
-    
+
     @staticmethod
     def _iter_path_prefixes(space_path: str) -> list[str]:
         """
@@ -2182,7 +2182,7 @@ class PulseNodePool(SilentLogMixin):
             _cur += '/' + _p
             _prefixes.append(_cur)
         return _prefixes
-    
+
     def _update_index_on_add(self, node: PulseNode):
         """
         添加节点时更新分层索引和全路径前缀索引。
@@ -2190,7 +2190,7 @@ class PulseNodePool(SilentLogMixin):
         _level = node.evol_level
         if _level in self._level_index:
             self._level_index[_level].add(node.node_id)
-        
+
         _path = getattr(node, 'space_path', '/')
         for _prefix in self._iter_path_prefixes(_path):
             _ids = self._path_index.get(_prefix)
@@ -2209,7 +2209,7 @@ class PulseNodePool(SilentLogMixin):
                 self._index_store.record_change(
                     "add", "path_index", {"path_prefix": _prefix, "node_id": node.node_id}
                 )
-    
+
     def _update_index_on_remove(self, node: PulseNode):
         """
         移除节点时清理分层索引和全路径前缀索引。
@@ -2217,7 +2217,7 @@ class PulseNodePool(SilentLogMixin):
         _level = node.evol_level
         if _level in self._level_index:
             self._level_index[_level].discard(node.node_id)
-        
+
         _path = getattr(node, 'space_path', '/')
         for _prefix in self._iter_path_prefixes(_path):
             _ids = self._path_index.get(_prefix)
@@ -2236,7 +2236,7 @@ class PulseNodePool(SilentLogMixin):
                 self._index_store.record_change(
                     "remove", "path_index", {"path_prefix": _prefix, "node_id": node.node_id}
                 )
-    
+
     def _get_path_prefix_ids(self, space_path_prefix: str) -> set | None:
         """
         根据路径前缀从全路径索引中获取候选节点ID集合（支持父路径/子路径模糊匹配）。
@@ -3576,9 +3576,9 @@ class PulseNodePool(SilentLogMixin):
 
 if __name__ == "__main__":
     print("=== PulseNodePool v9.5 自测 ===\n")
-    
+
     pool = PulseNodePool(max_hot=100, max_warm=500)
-    
+
     # 1. 添加不同层级节点
     l1_node = PulseNode(
         value="Python 3.12发布",
@@ -3601,49 +3601,49 @@ if __name__ == "__main__":
         evol_level=PulseNode.EVOL_L3,
         importance=PulseNode.IMPORTANCE_S,
     )
-    
+
     pool.add(l1_node)
     pool.add(l2_node)
     pool.add(l3_node)
-    
+
     print(f"✅ 添加后总数: {pool.count()} (应为3)")
-    
+
     # 2. 验证分层
     stats = pool.get_stats()
     print(f"✅ 热池: {stats['hot_count']} (L3+L2_A), 温池: {stats['warm_count']} (L1_C), 冷池: {stats['cold_count']}")
     print(f"   演化分布: {stats['evol_distribution']}")
-    
+
     # 3. 获取并激活
     node = pool.get(l1_node.node_id)
     print(f"✅ 获取L1节点: {node.value}, 激活次数={node.activation_count}")
-    
+
     # 4. 查询
     l3_nodes = pool.query(evol_level=PulseNode.EVOL_L3)
     print(f"✅ 查询L3节点: {len(l3_nodes)}个 → {l3_nodes[0].value}")
-    
+
     # 5. 移除
     removed = pool.remove(l1_node.node_id)
     print(f"✅ 移除L1节点: {removed}, 剩余={pool.count()}")
-    
+
     # 6. 批量加载（幂等）
     pool.load_batch([l2_node, l3_node])  # 已存在，跳过
     print(f"✅ 批量加载后: {pool.count()} (幂等，不变)")
-    
+
     # 7. 淘汰
     purged = pool.purge_obsolete(max_age_days=0)  # 0天淘汰所有L1
     print(f"✅ 淘汰: {purged}个 (L3不淘汰)")
-    
+
     # 8. 统计
     final_stats = pool.get_stats()
     print(f"✅ 最终: 总数{final_stats['total_nodes']} 添加{final_stats['total_added']} "
           f"移除{final_stats['total_removed']} 激活{final_stats['total_activated']}")
-    
+
     # 9. 验证 L3 节点获取
     l3 = pool.get(l3_node.node_id)
     print(f"✅ L3节点: {l3.value}, 可淘汰={l3.is_obsolete()}")
-    
+
     print("\n=== 自测全部通过 ===")
-    
+
 # _m51_t4_c
 # _m69_t1_init
 # _m69_t1_get

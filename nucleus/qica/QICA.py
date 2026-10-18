@@ -271,12 +271,12 @@ class QICA(BasePulseOrgan):
         self._intent_rules: list[dict[str, Any]] = _copy.deepcopy(INTENT_RULES)
         self._dynamic_rule_ids: set[str] = set()  # 记录动态新增规则 id（用于快照持久化区分）
         self._intent_rules_lock = threading.Lock()  # 规则表读写锁（动态增删并发安全）
-        
+
         # ===== ★v22.0重构：知识树和节点池引用（用于动态路径映射） =====
         self._node_pool = None
         self._knowledge_tree = None
         # ===== 引用结束 =====
-        
+
         # ===== ★v23.0新增：领域知识库——概念→知识路径映射 =====
         self._domain_knowledge_lock = threading.Lock()  # ★v25.0新增：领域知识库线程锁
         self._max_domain_knowledge = 500  # ★v25.0新增：领域知识库上限
@@ -307,7 +307,7 @@ class QICA(BasePulseOrgan):
             "路径前缀索引": "/自我/架构/检索优化",
             "粗筛精算": "/自我/架构/检索优化",
             "检索优化": "/自我/架构/检索优化",
-            
+
             # ── 身份与使命 ──
             "曈曈": "/身份/自我",
             "<SELF_NAME>": "/身份/自我",
@@ -325,7 +325,7 @@ class QICA(BasePulseOrgan):
             "小林": "/身份/家庭",
             "<CREATOR_DAUGHTER>": "/身份/家庭",
             "数字生命": "/身份/自我",
-            
+
             # ── 推理与认知 ──
             "推理": "/自我/架构/推理引擎",
             "推理引擎": "/自我/架构/推理引擎",
@@ -343,7 +343,7 @@ class QICA(BasePulseOrgan):
             "本能层": "/自我/架构/三层架构",
             "理性层": "/自我/架构/三层架构",
             "智慧层": "/自我/架构/三层架构",
-            
+
             # ── 情感与关系 ──
             "情绪": "/自我/状态/情绪趋势",
             "情感": "/自我/状态/情绪趋势",
@@ -354,7 +354,7 @@ class QICA(BasePulseOrgan):
             "关系光谱": "/社会",
             "亲密度": "/社会",
             "信任度": "/社会",
-            
+
             # ── 自我进化与知识管理 ──
             "进化": "/自我/架构/自我进化",
             "自我进化": "/自我/架构/自我进化",
@@ -372,7 +372,7 @@ class QICA(BasePulseOrgan):
             "节点池": "/自我/架构/知识管理/节点池",
             "知识树": "/自我/架构/知识管理/知识树",
             "频率编码": "/自我/架构/检索优化",
-            
+
             # ── 设计原则与宪法 ──
             "设计原则": "/自我/架构/设计哲学",
             "叠加而非替换": "/自我/架构/设计哲学",
@@ -388,7 +388,7 @@ class QICA(BasePulseOrgan):
             "双轨演化": "/自我/架构/自我进化",
             "向内进化": "/自我/架构/自我进化",
             "向外适应": "/自我/架构/自我进化",
-            
+
             # ── 人格与身份保护 ──
             "人格内核": "/自我/架构/人格内核",
             "基线校验": "/自我/架构/人格内核",
@@ -402,7 +402,7 @@ class QICA(BasePulseOrgan):
             "叙事记忆": "/身份/叙事自我",
             "记忆重构": "/身份/叙事自我",
             "关系联结": "/社会",
-            
+
             # ── 免疫与防御 ──
             "白细胞": "/自我/架构/免疫系统",
             "免疫系统": "/自我/架构/免疫系统",
@@ -410,7 +410,7 @@ class QICA(BasePulseOrgan):
             "胸腺": "/自我/架构/免疫系统",
             "行为偏离": "/自我/架构/免疫系统/行为偏离",
             "安全防御": "/自我/架构/免疫系统",
-            
+
             # ── 学习与探索 ──
             "好奇心": "/自我/架构/潜意识",
             "潜意识": "/自我/架构/潜意识",
@@ -423,7 +423,7 @@ class QICA(BasePulseOrgan):
             "表达冲动": "/自我/架构/潜意识/表达冲动",
             "生命状态": "/自我/状态/生命状态",
             "沉默陪伴": "/自我/架构/潜意识/沉默陪伴",
-            
+
             # ── 代码自学习 ──
             "代码学习": "/自我理解/代码",
             "调用链": "/自我理解/代码",
@@ -432,7 +432,7 @@ class QICA(BasePulseOrgan):
             "方法分析": "/自我理解/代码",
         }
         # ===== 领域知识库结束 =====
-        
+
         # ===== ★v22.0重构：语义意图→推理方法映射 =====
         self._intent_to_method = {
             "身份确认": {"method": "rule_reason", "paths": ["/身份/自我", "/身份/使命"]},
@@ -487,7 +487,7 @@ class QICA(BasePulseOrgan):
     def set_node_pool(self, pool):
         """★v22.0重构：注入节点池，用于动态知识路径映射"""
         self._node_pool = pool
-    
+
     def set_knowledge_tree(self, tree):
         """★v22.0重构：注入知识树，用于动态知识路径映射"""
         self._knowledge_tree = tree
@@ -633,11 +633,11 @@ class QICA(BasePulseOrgan):
 
         # v9.5: 分类结果脉冲标记为L2认知思考层
         # ★v22.0重构·日志：输出QICA分类结果，验证链路
-        self._log(LogLevel.INFO, 
+        self._log(LogLevel.INFO,
                  f"QICA分类输出: 意图={anchor.get('task_type', '未分类')}, "
                  f"建议方法={anchor.get('suggested_method', 'unknown')}, "
                  f"知识路径={anchor.get('knowledge_paths', [])}")
-        
+
         self._emit(QICAEvent.CLASSIFY_RESULT, {
             "raw_input": raw_text,
             "channel": anchor["channel"],
@@ -1282,10 +1282,10 @@ class QICA(BasePulseOrgan):
         # 更新规则命中统计
         rule_id = best["id"]
         self._rule_hits[rule_id] = self._rule_hits.get(rule_id, 0) + 1
-        
+
         # ===== ★v22.0重构：追加语义意图→推理方法映射（动态路径版） =====
         _intent_type = best["intent_type"]
-        _method_info = self._intent_to_method.get(_intent_type, 
+        _method_info = self._intent_to_method.get(_intent_type,
             {"method": "knowledge_retrieve", "paths": ["/知识"]})
         anchor["suggested_method"] = _method_info["method"]
         # ★动态路径：从知识树中查询实际存在且节点最多的路径
@@ -1296,11 +1296,11 @@ class QICA(BasePulseOrgan):
         # ===== 映射追加结束 =====
 
         return anchor
-    def _resolve_knowledge_paths(self, intent_type: str, default_paths: list, 
+    def _resolve_knowledge_paths(self, intent_type: str, default_paths: list,
                                    raw_input: str = "") -> list:
         if not self._knowledge_tree or not self._node_pool:
             return default_paths
-        
+
         # ===== ★v23.0新增：领域知识库优先匹配 =====
         _domain_paths = []
         if raw_input:
@@ -1309,9 +1309,9 @@ class QICA(BasePulseOrgan):
                     _domain_paths.append(_path)
                     if len(_domain_paths) >= 2:
                         break
-        
+
         if _domain_paths:
-            self._log(LogLevel.INFO, 
+            self._log(LogLevel.INFO,
                      f"QICA领域知识库命中: 概念匹配→{_domain_paths}")
             # 领域知识库命中的路径优先，同时追加动态路径作为补充
             _dynamic_paths = self._get_dynamic_paths(default_paths)
@@ -1320,68 +1320,68 @@ class QICA(BasePulseOrgan):
                     _domain_paths.append(_dp)
             return _domain_paths[:3]
         # ===== 领域知识库匹配结束 =====
-        
+
         try:
             _path_dist = self._node_pool.get_path_distribution()
             if not _path_dist:
                 return default_paths
-            
+
             # 从用户输入中提取关键词
             _input_words = set()
             if raw_input:
                 import re as _re_kw
                 for _m in _re_kw.finditer(r'[\u4e00-\u9fff]{2,6}', raw_input):
                     _w = _m.group()
-                    if _w not in ["什么是", "是什么", "为什么", "如何", "怎么", 
+                    if _w not in ["什么是", "是什么", "为什么", "如何", "怎么",
                                    "这个", "那个", "一个", "一种", "帮我", "请"]:
                         _input_words.add(_w.lower())
-            
+
             # 对每个路径计算相关性评分
             _max_nodes = max(_path_dist.values()) if _path_dist else 1
             _scored_paths = []
-            
+
             for _path, _count in _path_dist.items():
                 if _path == "/" or _count == 0:
                     continue
-                
+
                 # 相关性分：路径名称与输入关键词的匹配度
                 _relevance = 0.0
                 _path_lower = _path.lower()
                 _path_parts = _path_lower.strip("/").split("/")
-                
+
                 for _kw in _input_words:
                     _kw_lower = _kw.lower()
                     for _part in _path_parts:
                         if _kw_lower in _part or _part in _kw_lower:
                             _relevance += 0.3  # 每个匹配关键词加0.3
-                
+
                 # 数量归一化分
                 _quantity = _count / _max_nodes if _max_nodes > 0 else 0.0
-                
+
                 # 综合评分
                 _score = _relevance * 0.7 + _quantity * 0.3
-                
+
                 if _score > 0:
                     _scored_paths.append((_path, _score, _count))
-            
+
             # 按综合评分降序排序
             _scored_paths.sort(key=lambda x: x[1], reverse=True)
-            
+
             _top_paths = [_p for _p, _s, _c in _scored_paths[:3]]
-            
+
             if _top_paths:
-                self._log(LogLevel.INFO, 
+                self._log(LogLevel.INFO,
                          f"QICA语义路径: 输入关键词={list(_input_words)[:5]}, "
                          f"排序结果={_top_paths}")
                 return _top_paths
-            
+
             # 无匹配时回退到数量排序
             _sorted_by_count = sorted(_path_dist.items(), key=lambda x: x[1], reverse=True)
             _fallback = [_p for _p, _c in _sorted_by_count[:2] if _c > 0]
             return _fallback or default_paths
-            
+
         except Exception as _exc:
-            
+
             _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
         return default_paths
     def feedback_lessons(self, lessons: list[dict[str, Any]]) -> int:
@@ -1400,18 +1400,18 @@ class QICA(BasePulseOrgan):
         """
         if not lessons:
             return 0
-        
+
         import re as _re_fb
-        
+
         _added = 0
         for _lesson in lessons:
             if not isinstance(_lesson, dict):
                 continue
-            
+
             _local = _lesson.get("local", {})
             _llm = _lesson.get("llm", {})
             _content = _lesson.get("content", "")
-            
+
             # 只处理本地与大模型意图不一致的记录（最有价值的纠正信号）
             _local_intent = _local.get("intent", "")
             _llm_intent = _llm.get("intent", "")
@@ -1429,7 +1429,7 @@ class QICA(BasePulseOrgan):
                           f"学习记录跳过(无目标路径): content='{_content[:30]}', llm_intent='{_llm_intent}'")
                 continue
             _target_path = _llm_paths[0]
-            
+
             # 从内容中提取中文关键词
             _keywords = []
             for _m in _re_fb.finditer(r'[\u4e00-\u9fff]{2,6}', _content):
@@ -1439,10 +1439,10 @@ class QICA(BasePulseOrgan):
                     "这个", "那个", "一个", "一种", "帮我", "请",
                 ]:
                     _keywords.append(_kw)
-            
+
             # 去重并保留前5个关键词
             _unique_kws = list(dict.fromkeys(_keywords))[:5]
-            
+
             with self._domain_knowledge_lock:
                 for _kw in _unique_kws:
                     # 只添加新映射，不覆盖已有映射
@@ -1455,12 +1455,12 @@ class QICA(BasePulseOrgan):
                             break
                         self._domain_knowledge[_kw] = _target_path
                         _added += 1
-        
+
         if _added > 0:
             self._log(LogLevel.INFO,
                      f"领域知识库反馈: 从{len(lessons)}条学习记录中提取{_added}个新概念映射")
-        
-        return _added 
+
+        return _added
     def _find_node_by_keyword(self, kw: str):
         """根据关键词在节点池中查找节点"""
         if not self._node_pool or not kw:
@@ -1483,7 +1483,7 @@ class QICA(BasePulseOrgan):
         _hits = self._node_pool.query(evol_level="L2", space_path_prefix=path, limit=10)
         if not _hits:
             _hits = self._node_pool.query(evol_level="L3", space_path_prefix=path, limit=5)
-        return _hits[0] if _hits else None          
+        return _hits[0] if _hits else None
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """
         ★v25.0修复：吸收成长对比日志蒸馏出的规则。
@@ -1494,7 +1494,7 @@ class QICA(BasePulseOrgan):
         """
         if not rules:
             return 0
-        
+
         _absorbed = 0
         for _rule in rules:
             if not isinstance(_rule, dict):
@@ -1503,7 +1503,7 @@ class QICA(BasePulseOrgan):
             _concept = _rule.get("concept", "")
             _path = _rule.get("path", "") or _rule.get("correct_path", "")
             _intent = _rule.get("intent", "") or _rule.get("correct_intent", "")
-            
+
             if _type == "domain_knowledge" and _concept and _path:
                 with self._domain_knowledge_lock:
                     # ★质量修复A2：2字内宽泛概念禁止注入身份/自我路径
@@ -1511,7 +1511,7 @@ class QICA(BasePulseOrgan):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
                             _absorbed += 1
-                
+
                 # 同步更新意图到方法映射
                 if _intent and _intent in self._intent_to_method:
                     # ★技术债治理：paths 可能被类型标注为 Sequence（不可变），
@@ -1520,7 +1520,7 @@ class QICA(BasePulseOrgan):
                     if _path not in _existing_paths:
                         _existing_paths.insert(0, _path)
                         self._intent_to_method[_intent]["paths"] = _existing_paths[:3]
-            
+
             elif _type == "concept_correction" and _concept:
                 # ★修复：支持纠正类规则，更新领域知识库 + 建立纠正关系边
                 with self._domain_knowledge_lock:
@@ -1529,7 +1529,7 @@ class QICA(BasePulseOrgan):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
                             _absorbed += 1
-                
+
                 # 同步意图映射
                 if _intent and _intent in self._intent_to_method:
                     # ★技术债治理：同 domain_knowledge 分支，显式转 list 再 insert。
@@ -1537,7 +1537,7 @@ class QICA(BasePulseOrgan):
                     if _path and _path not in _existing_paths:
                         _existing_paths.insert(0, _path)
                         self._intent_to_method[_intent]["paths"] = _existing_paths[:3]
-                
+
                 # ★新增：在知识节点间建立纠正关系边
                 _node = self._find_node_by_keyword(_concept)
                 _correct_node = self._find_node_by_path(_path) if _path else None
@@ -1546,11 +1546,11 @@ class QICA(BasePulseOrgan):
                         _correct_node.node_id, "correction",
                         round(_rule.get("confidence", 0.6), 3), "qica_growth")
                     _absorbed += 1
-        
+
         if _absorbed > 0:
             self._log(LogLevel.INFO,
                      f"成长规则吸收: 从蒸馏中吸收{_absorbed}条规则（含纠正映射）")
-        
+
         return _absorbed
     def _get_dynamic_paths(self, default_paths: list) -> list:
         """
@@ -1564,7 +1564,7 @@ class QICA(BasePulseOrgan):
                 return [_p for _p, _c in _sorted[:3] if _c > 0]
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        return default_paths    
+        return default_paths
     # ========== 共振条件 ==========
 
     def get_resonance_conditions(self) -> list:
@@ -1614,7 +1614,7 @@ if __name__ == "__main__":
         r = qica.on_pulse({
             "event_type": QICAEvent.CLASSIFY,
             "payload": {"content": text, "user_name": "小林"},
-            "priority": 7, 
+            "priority": 7,
         })
         ch_status = "✅" if r["channel"] == expected_channel else "❌"
         print(f"{ch_status} '{text}': channel={r['channel']} (expected={expected_channel}), intent={r['intent_type']}")

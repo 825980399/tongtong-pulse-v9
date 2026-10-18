@@ -32,7 +32,7 @@ class InsightBoard:
     7. 认知策略闭环（内在世界→自我认知→潜意识→双腿）
     8. 搜索反馈闭环（内在世界→潜意识）
     """
-    
+
     def __init__(self, max_entries: int = 100):
         """
         Args:
@@ -41,7 +41,7 @@ class InsightBoard:
         self._entries: list[dict[str, Any]] = []
         self._max_entries = max_entries
         self._lock = threading.Lock()
-        
+
         # 洞察有效期配置（秒）
         # ★v23.0补全：覆盖框架中实际使用的全部洞察类型
         self._ttl_config = {
@@ -77,7 +77,7 @@ class InsightBoard:
             "comprehensive_diagnosis": 21600,  # ★v23.0新增：综合诊断：6小时
             "modification_suggestion": 43200,  # ★v23.0新增：修改建议：12小时
         }
-    
+
     def post(self, insight_type: str, content: str, source_loop: str,
              related_dimension: str = "", confidence: float = 0.5,
              keywords: list[str] | None = None) -> str:
@@ -107,10 +107,10 @@ class InsightBoard:
             "ttl": self._ttl_config.get(insight_type, 3600),
             "query_count": 0,
         }
-        
+
         with self._lock:
             self._entries.append(entry)
-            
+
             # 容量保护：超出上限时移除最旧的条目
             if len(self._entries) > self._max_entries:
                 # 优先移除过期条目
@@ -119,9 +119,9 @@ class InsightBoard:
                 if len(self._entries) > self._max_entries:
                     self._entries.sort(key=lambda e: e["posted_at"], reverse=True)
                     self._entries = self._entries[:self._max_entries]
-        
+
         return entry["id"]
-    
+
     def query(self, insight_type: str | None = None, related_dimension: str | None = None,
               source_loop: str | None = None, min_confidence: float = 0.0,
               max_age_seconds: float | None = None, limit: int = 10) -> list[dict[str, Any]]:
@@ -141,7 +141,7 @@ class InsightBoard:
         """
         now = time.time()
         results = []
-        
+
         with self._lock:
             for entry in self._entries:
                 # 过滤过期条目
@@ -149,45 +149,45 @@ class InsightBoard:
                 effective_ttl = max_age_seconds or entry["ttl"]
                 if age > effective_ttl:
                     continue
-                
+
                 # 按类型过滤
                 if insight_type and entry["type"] != insight_type:
                     continue
-                
+
                 # 按来源闭环过滤
                 if source_loop and entry["source_loop"] != source_loop:
                     continue
-                
+
                 # 按相关维度过滤（部分匹配）
                 if related_dimension and related_dimension not in entry.get("related_dimension", ""):
                     continue
-                
+
                 # 按置信度过滤
                 if entry.get("confidence", 0) < min_confidence:
                     continue
-                
+
                 # 计算综合权重：时效性×0.4 + 置信度×0.6
                 freshness = max(0, 1.0 - age / effective_ttl)
                 weight = freshness * 0.4 + entry.get("confidence", 0.5) * 0.6
-                
+
                 results.append({
                     **entry,
                     "age_seconds": round(age, 1),
                     "weight": round(weight, 2),
                 })
-        
+
         # 按权重降序排序
         results.sort(key=lambda r: r["weight"], reverse=True)
-        
+
         # 更新查询计数
         for r in results[:limit]:
             for entry in self._entries:
                 if entry["id"] == r["id"]:
                     entry["query_count"] += 1
                     break
-        
+
         return results[:limit]
-    
+
     def get_latest(self, insight_type: str, source_loop: str | None = None) -> dict[str, Any] | None:
         """
         获取指定类型的最新洞察。
@@ -205,7 +205,7 @@ class InsightBoard:
             limit=1
         )
         return results[0] if results else None
-    
+
     def has_recent(self, insight_type: str, related_dimension: str | None = None,
                    max_age_seconds: float | None = None) -> bool:
         """
@@ -226,7 +226,7 @@ class InsightBoard:
             limit=1
         )
         return len(results) > 0
-    
+
     def _cleanup_expired(self):
         """清理所有过期条目"""
         now = time.time()
@@ -234,17 +234,17 @@ class InsightBoard:
             e for e in self._entries
             if now - e["posted_at"] < e["ttl"] * 2  # 保留两倍TTL内的条目
         ]
-    
+
     def cleanup(self):
         """手动触发清理"""
         with self._lock:
             self._cleanup_expired()
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取黑板统计信息"""
         with self._lock:
             now = time.time()
-            active = sum(1 for e in self._entries 
+            active = sum(1 for e in self._entries
                         if now - e["posted_at"] < e["ttl"])
             type_dist = {}
             for e in self._entries:

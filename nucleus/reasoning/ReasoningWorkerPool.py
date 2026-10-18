@@ -45,7 +45,7 @@ class ReasoningWorkerPool:
     使用 ProcessPoolExecutor 在独立进程中执行 CPU 密集的推理任务，
     绕过 Python GIL 限制，充分利用多核 CPU。
     """
-    
+
     def __init__(self):
         # ★P1 优化：进程数接入全局并行调度器信号（硬件自适应），与其余线程池统一调度信号源。
         # 全局并行度是「建议线程并行度」，进程池绕过 GIL 跑 CPU 密集任务，取该值的 0.75 倍
@@ -102,7 +102,7 @@ class ReasoningWorkerPool:
 
         # 初始化进程池
         self._init_pool()
-    
+
     def _init_pool(self):
         """初始化进程池"""
         try:
@@ -115,7 +115,7 @@ class ReasoningWorkerPool:
             _module_logger.warning(f"进程池初始化失败: {e}，回退到同步执行")
             self._pool = None
             self._enabled = False
-    
+
     @staticmethod
     def _deep_think_bypass_enabled() -> bool:
         """★主线第31批 T1（P2-185）：深度思考任务是否跳过进程池提交。
@@ -248,7 +248,7 @@ class ReasoningWorkerPool:
                 self._fail_count += 1
             return None
         return self._sync_future(func_name, *args, **kwargs)
-    
+
     @staticmethod
     def _execute_reasoning_task(func_name: str, *args, **kwargs):
         """
@@ -258,7 +258,7 @@ class ReasoningWorkerPool:
         深度思考任务改为主进程同步执行。
         """
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        
+
         # 批量频率编码
         if func_name == "FrequencyCodec.encode_batch":
             try:
@@ -278,7 +278,7 @@ class ReasoningWorkerPool:
                 import traceback
                 _module_logger.error(f"FrequencyCodec.encode_batch 失败: {e}\n{traceback.format_exc()[:300]}")
                 return []
-        
+
         # 批量共振计算
         if func_name == "ResonanceEngine.resonate_batch":
             try:
@@ -289,7 +289,7 @@ class ReasoningWorkerPool:
                 return _engine.resonate(_query_pulse, _candidates, top_k=20)
             except Exception:
                 return []
-        
+
         # ★P1-5修复：深度思考任务返回明确的降级标记
         # 子进程无法访问node_pool/knowledge_tree等核心依赖，
         # 深度思考应由主进程同步执行以保证推理质量。
@@ -299,10 +299,10 @@ class ReasoningWorkerPool:
                 "reason": "子进程无知识上下文，请改用主进程同步执行深度思考",
                 "result": None,
             }
-        
+
         return {"func_name": func_name, "args": args, "kwargs": kwargs,
                 "status": "delegated"}
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取进程池统计"""
         with self._lock:
@@ -319,7 +319,7 @@ class ReasoningWorkerPool:
         except Exception as e:
             silent_exc(e, "nucleus/reasoning/ReasoningWorkerPool.py:319:get_stats", level="warning")
         return _stats
-    
+
     # ==================================================================
     # ★主线第15批 T2/P1-92：进程池崩溃自动重建
     # ==================================================================

@@ -33,19 +33,19 @@ class ResonanceEngine:
         查询脉冲 → 提取五维特征 → 遍历候选节点 →
         计算五维共振得分 → 加权求和 → 按得分降序返回
     """
-    
+
     # 五维权重（规则1.3：永久固定，禁止修改）
     # ★第82批 T-c：单一来源收敛（Dxxx）——唯一数值定义在 config.RESONANCE_WEIGHTS，
     #   此处只做只读引用，禁止再写字面数值（原类内重复定义已删）。
     WEIGHTS = RESONANCE_WEIGHTS
-    
+
     def __init__(self):
         # 频率索引: frequency_signature → [node_id, ...]
         self._freq_index: dict[float, list[str]] = {}
-        
+
         # 空间索引: space_path → [node_id, ...]
         self._space_index: dict[str, list[str]] = {}
-        
+
         # 关联组件引用
         self.info_field = None
         self.node_pool = None
@@ -297,14 +297,14 @@ class ResonanceEngine:
         except ImportError:
             self._resonance_cy = None
             self._resonance_cy_available = False
-            _logger.warning("Cython共振模块未编译，使用Python原生实现")      
+            _logger.warning("Cython共振模块未编译，使用Python原生实现")
     # ========== 索引管理 ==========
-    
+
     def index_node(self, node: dict[str, Any]):
         node_id = node.get("node_id", "")
         if not node_id:
             return
-        
+
         # ★P0-3修复：加锁保护索引写入
         with self._index_lock:
             freq = node.get("frequency_signature", 0.0)
@@ -312,7 +312,7 @@ class ResonanceEngine:
                 self._freq_index[freq] = []
             if node_id not in self._freq_index[freq]:
                 self._freq_index[freq].append(node_id)
-                
+
             space_path = node.get("space_path", "/")
             if space_path not in self._space_index:
                 self._space_index[space_path] = []
@@ -329,7 +329,7 @@ class ResonanceEngine:
                 for freq_list in self._freq_index.values():
                     if node_id in freq_list:
                         freq_list.remove(node_id)
-                        
+
             if space_path is not None and space_path in self._space_index:
                 self._space_index[space_path] = [
                     nid for nid in self._space_index[space_path] if nid != node_id
@@ -482,7 +482,7 @@ class ResonanceEngine:
             _logger.debug(f"[共振引擎] 极性判别异常（不影响检索）: {_e}")
         return False
 
-    def resonate(self, query_pulse: dict[str, Any], 
+    def resonate(self, query_pulse: dict[str, Any],
                  candidate_nodes: list[dict[str, Any]],
                  top_k: int = 20,
                  _semantic_map: dict[str, float] | None = None,
@@ -506,7 +506,7 @@ class ResonanceEngine:
             _rule_map = self._build_rule_map(query_pulse, candidate_nodes)
 
         results = []
-        
+
         # ★A-15（2026-09-08）：污染节点降权（灰度 ENABLE_POLLUTION_TAGGING，默认关）。
         #   开关关闭 → _pollution_tagger 为 None，下方零开销、逐字节等价。
         _tagger = self._get_pollution_tagger()
@@ -515,7 +515,7 @@ class ResonanceEngine:
 
         for node in candidate_nodes:
             dims = self._calculate_dimensions(query_pulse, node, _semantic_map, _rule_map)
-            
+
             score = (
                 dims["memory"] * self.WEIGHTS["memory"] +
                 dims["space"]  * self.WEIGHTS["space"] +
@@ -536,7 +536,7 @@ class ResonanceEngine:
                         score *= _factor
                 except Exception as _e:
                     _logger.debug(f"[共振引擎] 污染降权失败（不影响检索）: {_e}")
-            
+
             if score > 0:
                 _r = {
                     "node": node,
@@ -547,9 +547,9 @@ class ResonanceEngine:
                 if self._knowledge_timeliness_enabled():
                     _r["is_potentially_stale"] = self._is_potentially_stale(node)
                 results.append(_r)
-        
+
         results.sort(key=lambda r: r["score"], reverse=True)
-        
+
         self._total_resonated += len(results)
 
         # ★PHASE17-阶段二子任务4.2：三通道一致性置信度
@@ -728,8 +728,8 @@ class ResonanceEngine:
                     continue
         return _added
     # ========== 五维得分计算 ==========
-    
-    def _calculate_dimensions(self, query: dict[str, Any], 
+
+    def _calculate_dimensions(self, query: dict[str, Any],
                                node: dict[str, Any],
                                semantic_map: dict[str, float] | None = None,
                                rule_map: dict[str, float] | None = None
@@ -754,7 +754,7 @@ class ResonanceEngine:
             "state":  self._calc_state_dim(query, node),
         }
         return dims
-    
+
     # ---- 记忆维（40%） ----
     def _calc_keyword_score(self, query: dict, node: dict) -> float:
         """纯关键词通道得分（频率签名 + 赫布权重 + 激活次数）。
@@ -1095,34 +1095,34 @@ class ResonanceEngine:
             return min(1.0, match_depth / len(query_parts))
 
         return self.SPACE_NEUTRAL_SCORE
-    
+
     # ---- 逻辑维（15%） ----
     def _calc_logic_dim(self, query: dict, node: dict) -> float:
         """
         逻辑维得分：意图匹配 + 事件类型匹配。
         """
         score = 0.0
-        
+
         # 事件类型匹配
         query_event = query.get("event_type", "")
         node_trigger = node.get("trigger_reason", "")
         node_source = node.get("source_organ", "")
-        
+
         if query_event and (query_event in node_trigger or query_event in node_source):
             score += 0.6
-        
+
         # 关键词匹配（载荷中的关键词与节点关键词重叠）
         query_keywords = set(query.get("payload", {}).get("keywords", []))
         node_keywords = set(node.get("keywords", []))
-        
+
         if query_keywords and node_keywords:
             overlap = len(query_keywords & node_keywords)
             if overlap > 0:
                 keyword_score = min(1.0, overlap / len(query_keywords))
                 score += keyword_score * 0.4
-        
+
         return min(score, 1.0)
-    
+
     # ---- 时间维（10%） ----
     def _calc_time_dim(self, query: dict, node: dict) -> float:
         """时间维得分（权重 0.10，宪法规则1.3 永久固定，本方法绝不修改）。
@@ -1228,11 +1228,11 @@ class ResonanceEngine:
         if not _acq or _acq <= 0:
             return False
         return (time.time() - _acq) / 86400.0 > _thr
-    
+
     # ---- 状态维（5%） ----
     def _calc_state_dim(self, query: dict, node: dict) -> float:
         importance = node.get("importance", "C")
-        
+
         # ★v23.0优化：优先使用Cython加速
         if self._resonance_cy_available:
             # 将importance字符串映射为int编码
@@ -1245,7 +1245,7 @@ class ResonanceEngine:
             else:
                 _code = 0
             return self._resonance_cy.calc_state_dim_cy(_code)
-        
+
         # Python原生兜底
         importance_scores = {
             "S": 1.0,
@@ -1254,10 +1254,10 @@ class ResonanceEngine:
             "C": 0.2,
         }
         return importance_scores.get(importance, 0.2)
-    
+
     # ========== 升级：替代 InfoField 的简单匹配 ==========
-    
-    def match_condition_advanced(self, pulse: dict[str, Any], 
+
+    def match_condition_advanced(self, pulse: dict[str, Any],
                                   condition: dict[str, Any]) -> bool:
         """
         升级版条件匹配（替代 InfoField._match_condition 的简单事件匹配）。
@@ -1268,7 +1268,7 @@ class ResonanceEngine:
         # 基础事件类型匹配
         event_type = pulse.get("event_type", "")
         event_types = condition.get("event_types", [])
-        
+
         if event_types:
             matched = False
             for pattern in event_types:
@@ -1277,13 +1277,13 @@ class ResonanceEngine:
                     break
             if not matched:
                 return False
-        
+
         # 优先级阈值
         if pulse.get("priority", 5) < condition.get("min_priority", 0):  # noqa: SIM103
             return False
-        
+
         return True
-    
+
     @staticmethod
     def _simple_match(event_type: str, pattern: str) -> bool:
         """简单通配符匹配"""
@@ -1296,7 +1296,7 @@ class ResonanceEngine:
         return all(pp == "*" or pp == ep for pp, ep in zip(pattern_parts, event_parts))
 
     # ========== 未来演化预留（v10.0 振荡场） ==========
-    
+
     def set_phase_lock(self, phase_lock):
         """
         【预留 v10.0】注入频率-相位锁定机制。
@@ -1305,7 +1305,7 @@ class ResonanceEngine:
         频率-相位锁定是振荡场自组织协同的核心机制。
         """
         self.phase_lock = phase_lock
-    
+
     def set_oscillon_enhancement(self, factor: float):
         """
         【预留 v10.0】设置振荡场增强因子。
@@ -1316,9 +1316,9 @@ class ResonanceEngine:
         Args:
             factor: 增强因子 1.0-2.0（1.0=无增强，2.0=最强增强）
         """
-        self._oscillon_enhancement = max(1.0, min(2.0, factor))  
+        self._oscillon_enhancement = max(1.0, min(2.0, factor))
     # ========== 统计信息 ==========
-    
+
     def get_freq_index_keys(self) -> list:
         """公开只读访问频率索引键（规则14）"""
         return list(self._freq_index.keys())
@@ -1333,7 +1333,7 @@ class ResonanceEngine:
         _phase_lock_stats = None
         if self.phase_lock:
             _phase_lock_stats = self.phase_lock.get_stats()
-        
+
         return {
             "total_queries": self._total_queries,
             "rule_calls": self._rule_calls,
@@ -1350,14 +1350,14 @@ class ResonanceEngine:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== ResonanceEngine 自测 ===")
-    
+
     engine = ResonanceEngine()
-    
+
     # 1. 权重永久固定验证
     print(f"✅ 五维权重: {engine.WEIGHTS}")
     assert sum(engine.WEIGHTS.values()) == 1.0, "权重总和应为1.0"
     print(f"✅ 权重总和: {sum(engine.WEIGHTS.values())}")
-    
+
     # 2. 构建测试节点
     nodes = [
         {
@@ -1400,13 +1400,13 @@ if __name__ == "__main__":
             "trigger_reason": "inference.identity",
         },
     ]
-    
+
     # 3. 索引节点
     for node in nodes:
         engine.index_node(node)
     print(f"✅ 频率索引大小: {len(engine._freq_index)}")
     print(f"✅ 空间索引大小: {len(engine._space_index)}")
-    
+
     # 4. 五维共振检索
     query = {
         "event_type": "chat.question",
@@ -1414,12 +1414,12 @@ if __name__ == "__main__":
         "memory_dim": {"frequency_signature": 42.0},
         "space_dim": {"path": "/技术/架构/脉冲场"},
     }
-    
+
     results = engine.resonate(query, nodes, top_k=5)
     print(f"✅ 共振结果数: {len(results)}")
     for i, r in enumerate(results):
         print(f"   #{i+1}: {r['node']['value'][:40]}... (score={r['score']})")
-    
+
     # 5. 验证 S 级节点提权
     # node_3（身份节点）即使 space 不匹配，记忆维 + 状态维也应得分
     query2 = {
@@ -1432,13 +1432,13 @@ if __name__ == "__main__":
     print("✅ 身份查询共振结果:")
     for i, r in enumerate(results2):
         print(f"   #{i+1}: {r['node']['value'][:40]}... (score={r['score']})")
-    
+
     # 6. 移除节点
     engine.remove_node("node_2", freq=15.2, space_path="/知识/编程/Python")
     print(f"✅ 移除后频率索引: {len(engine._freq_index)}")
-    
+
     # 7. 统计
     stats = engine.get_stats()
     print(f"✅ 统计: 查询{stats['total_queries']}次 共振{stats['total_resonated']}个节点")
-    
+
     print("=== 自测全部通过 ===")

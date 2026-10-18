@@ -38,7 +38,7 @@ class EvolutionTracker:
         - 接口完整定义，但功能开关默认关闭。
         - P3阶段可激活完整的在线演化追踪。
     """
-    
+
     def __init__(self, max_history: int = 500):
         """
         Args:
@@ -46,20 +46,20 @@ class EvolutionTracker:
         """
         # 变异历史
         self._mutation_history: list[dict[str, Any]] = []
-        
+
         # 节点演化路径: node_id → [{from_level, to_level, timestamp, reason}]
         self._node_evolution_paths: dict[str, list[dict[str, Any]]] = {}
-        
+
         # 成功/失败统计
         self._total_mutations = 0
         self._successful_mutations = 0
         self._rolled_back_mutations = 0
-        
+
         self._max_history = max_history
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 功能开关
         self._enabled = False
 
@@ -76,7 +76,7 @@ class EvolutionTracker:
 
     # ========== 变异记录 ==========
 
-    def record_mutation(self, 
+    def record_mutation(self,
                         organ_name: str,
                         param_name: str,
                         old_value: Any,
@@ -102,7 +102,7 @@ class EvolutionTracker:
 
         with self._lock:
             self._total_mutations += 1
-            
+
             if success:
                 self._successful_mutations += 1
             else:
@@ -140,10 +140,10 @@ class EvolutionTracker:
         """
         with self._lock:
             history = list(self._mutation_history)
-        
+
         if organ_name:
             history = [h for h in history if h["organ"] == organ_name]
-        
+
         return list(reversed(history))[-limit:]
 
     # ========== 节点演化路径追踪 ==========
@@ -298,10 +298,10 @@ class EvolutionTracker:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== EvolutionTracker 自测 ===\n")
-    
+
     tracker = EvolutionTracker(max_history=100)
     tracker.enable()
-    
+
     # 1. 记录成功的变异
     r1 = tracker.record_mutation(
         organ_name="进化",
@@ -312,7 +312,7 @@ if __name__ == "__main__":
         reason="加速心跳测试"
     )
     print(f"1. 成功变异: {r1['mutation_id']}, 参数={r1['param']}")
-    
+
     # 2. 记录失败的变异（回滚）
     r2 = tracker.record_mutation(
         organ_name="进化",
@@ -323,7 +323,7 @@ if __name__ == "__main__":
         reason="越界测试"
     )
     print(f"2. 失败变异: {r2['mutation_id']}, 状态={'回滚' if not r2['success'] else '成功'}")
-    
+
     # 3. 记录多次成功变异
     for i in range(5):
         tracker.record_mutation(
@@ -334,34 +334,34 @@ if __name__ == "__main__":
             success=True,
             reason="批量测试"
         )
-    
+
     # 4. 记录节点演化路径
     tracker.record_node_evolution("node_001", "L1", "L2", "压缩内化")
     tracker.record_node_evolution("node_001", "L2", "L3", "融合抽象")
     tracker.record_node_evolution("node_002", "L1", "L2", "复盘压缩")
-    
+
     path = tracker.get_node_evolution_path("node_001")
     print(f"\n3. node_001 演化路径: {len(path)} 步")
     for step in path:
         print(f"   {step['from_level']} → {step['to_level']} ({step['reason']})")
-    
+
     # 5. 演化方向评估
     evaluation = tracker.evaluate_evolution_direction()
     print(f"\n4. 演化评估: {evaluation['direction']} - {evaluation['assessment']}")
     print(f"   成功率: {evaluation['success_rate']:.1%}")
     print(f"   回滚率: {evaluation['rollback_rate']:.1%}")
-    
+
     # 6. 演化建议
     suggestions = tracker.get_evolution_suggestions()
     if suggestions:
         print("\n5. 演化建议:")
         for s in suggestions:
             print(f"   - {s}")
-    
+
     # 7. 统计
     stats = tracker.get_stats()
     print(f"\n6. 统计: 变异{stats['total_mutations']}次, "
           f"追踪节点{stats['tracked_nodes']}个")
-    
+
     tracker.disable()
     print("\n=== 自测全部通过 ===")

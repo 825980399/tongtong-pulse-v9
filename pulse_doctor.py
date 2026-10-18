@@ -90,22 +90,22 @@ ORGAN_COUNT_EXPECTED = 50
 # ========== 诊断结果收集 ==========
 class DoctorReport:
     """诊断报告收集器"""
-    
+
     def __init__(self):
         self.passed = []
         self.warnings = []
         self.failed = []
         self.start_time = time.time()
-    
+
     def ok(self, check_name: str, detail: str = ""):
         self.passed.append({"name": check_name, "detail": detail})
-    
+
     def warn(self, check_name: str, detail: str = ""):
         self.warnings.append({"name": check_name, "detail": detail})
-    
+
     def fail(self, check_name: str, detail: str = ""):
         self.failed.append({"name": check_name, "detail": detail})
-    
+
     def summary(self) -> dict:
         elapsed = time.time() - self.start_time
         total = len(self.passed) + len(self.warnings) + len(self.failed)
@@ -135,7 +135,7 @@ def check_config(report: DoctorReport):
         for attr in required_attrs:
             if not hasattr(config, attr):
                 missing.append(attr)
-        
+
         if missing:
             report.fail("配置文件", f"缺少字段: {', '.join(missing)}")
         else:
@@ -153,7 +153,7 @@ def check_directories(report: DoctorReport):
         full_path = os.path.join(PROJECT_ROOT, d)
         if not os.path.isdir(full_path):
             missing_dirs.append(d)
-    
+
     if missing_dirs:
         report.fail("目录结构", f"缺失 {len(missing_dirs)} 个目录: {', '.join(missing_dirs[:5])}...")
     else:
@@ -167,7 +167,7 @@ def check_files(report: DoctorReport):
         full_path = os.path.join(PROJECT_ROOT, f)
         if not os.path.isfile(full_path):
             missing_files.append(f)
-    
+
     if missing_files:
         report.fail("关键文件", f"缺失 {len(missing_files)} 个文件: {', '.join(missing_files)}")
     else:
@@ -184,7 +184,7 @@ def check_core_modules(report: DoctorReport, quick: bool = False):
                 failed_modules.append(f"{module_path}.{class_name} (类不存在)")
         except Exception as e:
             failed_modules.append(f"{module_path}: {e}")
-    
+
     if failed_modules:
         report.fail("核心模块", f"{len(failed_modules)} 个导入失败: {', '.join(failed_modules)}")
     else:
@@ -208,7 +208,7 @@ def check_snapshots(report: DoctorReport):
         if not os.path.exists(full_path):
             report.warn(f"快照文件: {snapshot_name}", f"文件不存在（首次启动后自动创建）: {snapshot_path}")
             continue
-        
+
         try:
             with open(full_path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -229,7 +229,7 @@ def check_logs(report: DoctorReport):
     if not os.path.isdir(log_dir):
         report.warn("日志目录", "logs/ 目录不存在，日志系统可能未初始化")
         return
-    
+
     log_file = os.path.join(log_dir, "pulse.log")
     if os.path.isfile(log_file):
         size = os.path.getsize(log_file)
@@ -247,13 +247,13 @@ def check_organs_count(report: DoctorReport):
         for f in files:
             if f.endswith('.py') and not f.startswith('_'):
                 py_files.append(os.path.join(root, f))
-    
+
     count = len(py_files)
     # 加上 QICA（在 nucleus/qica 下）
     qica_path = os.path.join(PROJECT_ROOT, "nucleus", "qica", "QICA.py")
     if os.path.exists(qica_path):
         count += 1
-    
+
     if count >= ORGAN_COUNT_EXPECTED:
         report.ok("器官文件", f"共 {count} 个器官文件（预期≥{ORGAN_COUNT_EXPECTED}）")
     else:
@@ -394,32 +394,32 @@ def check_monitor_data(report: DoctorReport):
 def print_report_console(report: DoctorReport):
     """控制台友好输出"""
     summary = report.summary()
-    
+
     print("\n" + "=" * 60)
     print("  🩺 PulseNet v9.5 诊断报告")
     print("=" * 60)
-    
+
     # 通过项
     if report.passed:
         print(f"\n  ✅ 通过 ({len(report.passed)} 项):")
         for item in report.passed:
             detail = f" — {item['detail']}" if item['detail'] else ""
             print(f"     {item['name']}{detail}")
-    
+
     # 警告项
     if report.warnings:
         print(f"\n  ⚠️  警告 ({len(report.warnings)} 项):")
         for item in report.warnings:
             detail = f" — {item['detail']}" if item['detail'] else ""
             print(f"     {item['name']}{detail}")
-    
+
     # 失败项
     if report.failed:
         print(f"\n  ❌ 失败 ({len(report.failed)} 项):")
         for item in report.failed:
             detail = f" — {item['detail']}" if item['detail'] else ""
             print(f"     {item['name']}{detail}")
-    
+
     # 摘要
     print(f"\n  {'─' * 56}")
     status_text = "🟢 系统健康" if summary['healthy'] else "🔴 需要修复"
@@ -444,9 +444,9 @@ def print_report_json(report: DoctorReport):
 def main():
     quick_mode = "--quick" in sys.argv
     json_mode = "--json" in sys.argv
-    
+
     report = DoctorReport()
-    
+
     # 执行所有基础检查
     check_config(report)
     check_directories(report)
@@ -459,31 +459,31 @@ def main():
     check_snapshots(report)
     check_logs(report)
     check_monitor_data(report)
-    
+
     if not quick_mode:
         check_organs_count(report)
-    
+
     # ===== 扩展诊断：新增模块健康检查 =====
     print("\n[扩展诊断] 新增模块健康检查...")
-    
+
     try:
         from nucleus.diagnostics import get_diagnostics
         from nucleus.InsightBoard import get_insight_board
         from nucleus.reasoning.AutonomousDeriver import get_autonomous_deriver
-        
+
         insight_board = get_insight_board()
         autonomous_deriver = get_autonomous_deriver()
         diag = get_diagnostics()
-        
+
         # 获取内在世界引用（诊断工具独立运行时框架未启动，内世界为None）
         inner_world = None
-        
+
         extended = diag.get_extended_diagnosis(
             inner_world=inner_world,
             insight_board=insight_board,
             autonomous_deriver=autonomous_deriver
         )
-        
+
         print(f"  整体状态: {extended['overall_health']}")
         for module_name, module_info in extended.get("modules", {}).items():
             status = module_info.get("status", "unknown")
@@ -496,26 +496,26 @@ def main():
             elif status == "active" and module_info.get("target"):
                 detail = f" (目标: {module_info['target']})"
             print(f"  {status_icon} {module_name}: {status}{detail}")
-        
+
         if extended.get("warnings"):
             print(f"  ⚠️ 警告 ({len(extended['warnings'])}条):")
             for w in extended["warnings"]:
                 print(f"     - {w}")
-        
+
         if extended.get("issues"):
             print(f"  ❌ 问题 ({len(extended['issues'])}条):")
             for i in extended["issues"]:
                 print(f"     - {i}")
-                
+
     except Exception as e:
         print(f"  ❌ 扩展诊断异常: {e}")
-    
+
     # 输出基础报告
     if json_mode:
         print_report_json(report)
     else:
         print_report_console(report)
-    
+
     sys.exit(0 if report.summary()['healthy'] else 1)
 if __name__ == "__main__":
     main()

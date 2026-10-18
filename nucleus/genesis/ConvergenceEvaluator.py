@@ -35,7 +35,7 @@ class ConvergenceEvaluator:
         - 接口完整定义，但功能开关默认关闭。
         - P3阶段可激活完整的在线收敛评估。
     """
-    
+
     def __init__(self, max_snapshots: int = 200):
         """
         Args:
@@ -44,24 +44,24 @@ class ConvergenceEvaluator:
         # 收敛快照历史
         self._snapshots: list[dict[str, Any]] = []
         self._max_snapshots = max_snapshots
-        
+
         # 收敛状态
         self._convergence_status = "unknown"
         self._last_evaluation_time = 0.0
-        
+
         # 关联组件引用
         self.node_pool = None
         self.knowledge_tree = None
         self.evolution_tracker = None
         self.resonance_detector = None
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_evaluations = 0
         self._total_warnings = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -191,7 +191,7 @@ class ConvergenceEvaluator:
             # 综合判断
             trends = [knowledge_trend, synergy_trend, stability_trend]
             converging_count = sum(1 for t in trends if t > 0)
-            
+
             if converging_count >= 3:
                 self._convergence_status = "converging"
                 message = "三个维度均在改善，演化方向健康"
@@ -245,21 +245,21 @@ class ConvergenceEvaluator:
 
         recent = self._snapshots[-min(10, len(self._snapshots)):]
         values = [s[metric_name] for s in recent]
-        
+
         # 简单线性回归斜率
         n = len(values)
         if n < 2:
             return 0.0
-        
+
         x_mean = (n - 1) / 2
         y_mean = sum(values) / n
-        
+
         numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
         denominator = sum((i - x_mean) ** 2 for i in range(n))
-        
+
         if denominator == 0:
             return 0.0
-        
+
         return numerator / denominator
 
     # ========== 收敛速度评估 ==========
@@ -283,18 +283,18 @@ class ConvergenceEvaluator:
             for metric in ["knowledge_density", "organ_synergy", "evolution_stability"]:
                 recent_avg = sum(s[metric] for s in recent) / len(recent)
                 older_avg = sum(s[metric] for s in older) / len(older) if older else recent_avg
-                
+
                 # 速度 = (近期均值 - 早期均值) / 时间跨度
                 if len(self._snapshots) >= 20:
                     time_span = recent[-1]["timestamp"] - older[-1]["timestamp"]
                 else:
                     time_span = recent[-1]["timestamp"] - recent[0]["timestamp"]
-                
+
                 if time_span > 0:
                     speed = (recent_avg - older_avg) / time_span
                 else:
                     speed = 0.0
-                
+
                 speeds[metric] = {
                     "speed": round(speed, 6),
                     "recent_average": round(recent_avg, 4),
@@ -355,15 +355,15 @@ class ConvergenceEvaluator:
         speed_data = self.get_convergence_speed()
         if speed_data.get("status") != "ok":
             return None
-        
+
         density_speed = speed_data["speeds"].get("knowledge_density", {}).get("speed", 0)
         if density_speed <= 0:
             return None
-        
+
         current_density = self._measure_knowledge_density()
         if current_density >= target_density:
             return 0.0
-        
+
         return (target_density - current_density) / density_speed
 
 
@@ -386,10 +386,10 @@ def get_convergence_evaluator() -> ConvergenceEvaluator:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== ConvergenceEvaluator 自测 ===\n")
-    
+
     evaluator = ConvergenceEvaluator(max_snapshots=50)
     evaluator.enable()
-    
+
     # 1. 采集多个快照（模拟知识密度逐步上升）
     print("1. 采集快照（模拟收敛过程）:")
     for i in range(8):
@@ -403,11 +403,11 @@ if __name__ == "__main__":
                     "total_nodes": l1 + l2 + l3,
                     "evol_distribution": {"L1": l1, "L2": l2, "L3": l3},
                 }
-        
+
         evaluator.node_pool = MockNodePool()
         snapshot = evaluator.take_snapshot()
         print(f"   快照#{i+1}: 知识密度={snapshot['knowledge_density']:.2%}")
-    
+
     # 2. 执行收敛评估
     print("\n2. 收敛评估:")
     result = evaluator.evaluate()
@@ -416,7 +416,7 @@ if __name__ == "__main__":
     print(f"   当前值: {result['current_values']}")
     print(f"   趋势: {result['trends']}")
     print(f"   收敛维度: {result['converging_dimensions']}/{result['total_dimensions']}")
-    
+
     # 3. 收敛速度
     print("\n3. 收敛速度:")
     speed = evaluator.get_convergence_speed()
@@ -424,11 +424,11 @@ if __name__ == "__main__":
         for metric, data in speed["speeds"].items():
             print(f"   {metric}: 速度={data['speed']:.6f}/s, "
                   f"近期均值={data['recent_average']:.4f}")
-    
+
     # 4. 统计
     stats = evaluator.get_stats()
     print(f"\n4. 统计: 评估{stats['total_evaluations']}次, "
           f"快照{stats['snapshot_count']}个, 状态={stats['convergence_status']}")
-    
+
     evaluator.disable()
     print("\n=== 自测全部通过 ===")

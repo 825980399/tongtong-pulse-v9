@@ -154,7 +154,7 @@ class PulseTouch(BasePulseOrgan):
                   f"硬件检测完成: CPU={self._hardware_info['cpu'].get('cores', '?')}核心 "
                   f"内存={self._hardware_info['memory'].get('total_gb', '?')}GB "
                   f"GPU={'有' if self._has_gpu else '无'}")
-        self._hardware_info["environment"] = self._get_environment_info()        
+        self._hardware_info["environment"] = self._get_environment_info()
 
     def _get_cpu_info(self) -> dict[str, Any]:
         info = {"model": "unknown", "cores": 1, "usage_percent": 0.0}
@@ -378,7 +378,7 @@ class PulseTouch(BasePulseOrgan):
         当前使用系统时间和桌面环境推断，未来可接入物理传感器。
         只规定下限逻辑——无传感器时返回默认值，永远不报错。
         """
-        
+
         info = {
             "light_level": self._detect_light_level(),
             "temperature": self._detect_temperature(),
@@ -387,14 +387,14 @@ class PulseTouch(BasePulseOrgan):
             "detection_method": "inference",  # 当前使用推断，未来可切换为"sensor"
         }
         return info
-    
+
     def _detect_light_level(self) -> float:
         """
         检测环境光照水平 (0.0-1.0)。
         当前基于时间和系统主题推断，未来可接入环境光传感器。
         """
         hour = time.localtime().tm_hour
-        
+
         # 基于时间的简单推断
         if 6 <= hour < 8:
             return 0.4  # 日出
@@ -406,9 +406,9 @@ class PulseTouch(BasePulseOrgan):
             return 0.2  # 傍晚
         else:
             return 0.05  # 夜间
-        
+
         return 0.5  # 默认中等光照
-    
+
     def _detect_temperature(self) -> float:
         """
         检测环境温度（摄氏度）。
@@ -452,7 +452,7 @@ class PulseTouch(BasePulseOrgan):
                 #   真异常信息不丢：保留 {type(e).__name__}: {e} 便于事后定位。
                 self._log(LogLevel.DEBUG,
                           f"温度采集失败，改由季节推断兜底: {type(e).__name__}: {e}")
-        
+
         # 兜底：基于季节推断
         month = time.localtime().tm_mon
         if month in (12, 1, 2):
@@ -463,7 +463,7 @@ class PulseTouch(BasePulseOrgan):
             return 30.0  # 夏季
         else:
             return 20.0  # 秋季
-    
+
     def _get_current_season(self) -> str:
         """获取当前季节"""
         month = time.localtime().tm_mon
@@ -475,7 +475,7 @@ class PulseTouch(BasePulseOrgan):
             return "autumn"
         else:
             return "winter"
-    
+
     def _get_time_period(self) -> str:
         """获取当前时段"""
         hour = time.localtime().tm_hour
@@ -493,7 +493,7 @@ class PulseTouch(BasePulseOrgan):
             return "night"
         else:
             return "late_night"
-        
+
     def _get_gpu_usage(self) -> dict[str, float]:
         """获取GPU实时使用率（非阻塞：直接返回后台探针缓存，绝不在此路径上启动 nvidia-smi 子进程）。"""
         # 惰性启动后台探针（首次调用时），避免脉冲线程被 nvidia-smi 阻塞
@@ -641,10 +641,10 @@ class PulseTouch(BasePulseOrgan):
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._device_check_counter += 1
         if self._device_check_counter % 5 == 0:
-            self._check_device_connections()        
+            self._check_device_connections()
         snapshot = {
             "cpu": self._hardware_info["cpu"],
-            "memory": self._hardware_info["memory"], 
+            "memory": self._hardware_info["memory"],
             "gpu": gpu_info,
             "disk": self._hardware_info["disk"],
             "timestamp": time.time(),
@@ -661,14 +661,14 @@ class PulseTouch(BasePulseOrgan):
         now = time.time()
         alert_cfg = self._load_alert_config()
         alarm_cooldown = alert_cfg.get("alarm_cooldown", 60)
-        
+
         if now - self._last_alarm_time >= alarm_cooldown:
             cpu_usage = snapshot["cpu"].get("usage_percent", 0)
             mem_usage = snapshot["memory"].get("usage_percent", 0)
             gpu_usage = snapshot["gpu"].get("usage_percent", 0)
             gpu_mem_usage = snapshot["gpu"].get("memory_usage_percent", 0)  # noqa: F841
             disk_usage = snapshot["disk"].get("usage_percent", 0)
-            
+
             # 从config读取告警阈值
             cpu_critical = alert_cfg.get("cpu_critical", 90)
             mem_critical = alert_cfg.get("memory_critical", 90)
@@ -678,9 +678,9 @@ class PulseTouch(BasePulseOrgan):
             mem_warning = alert_cfg.get("memory_warning", 80)
             gpu_warning = alert_cfg.get("gpu_warning", 85)
             disk_warning = alert_cfg.get("disk_warning", 90)
-            
+
             # 综合判断：任一维度超过临界阈值则触发严重告警
-            if (cpu_usage > cpu_critical or mem_usage > mem_critical or 
+            if (cpu_usage > cpu_critical or mem_usage > mem_critical or
                 gpu_usage > gpu_critical or disk_usage > disk_critical):
                 self._last_alarm_time = now
                 self._emit(SystemEvent.ALARM, {
@@ -693,9 +693,9 @@ class PulseTouch(BasePulseOrgan):
                     "action": "建议暂停所有非必要后台任务",
                 }, priority=10, layer="L0")
                 self._log(LogLevel.WARNING, f"硬件告警: CPU={cpu_usage:.0f}%, 内存={mem_usage:.0f}%, GPU={gpu_usage:.0f}%, 磁盘={disk_usage:.0f}%")
-            elif (cpu_usage > cpu_warning or mem_usage > mem_warning or 
+            elif (cpu_usage > cpu_warning or mem_usage > mem_warning or
                   gpu_usage > gpu_warning or disk_usage > disk_warning):
-                self._last_alarm_time = now 
+                self._last_alarm_time = now
                 self._emit(SystemEvent.ALARM, {
                     "type": "hardware_warning",
                     "cpu_usage": cpu_usage,
@@ -715,7 +715,7 @@ class PulseTouch(BasePulseOrgan):
                 "detail": env_change.get("detail", {}),
                 "adaptation_hint": env_change.get("hint", ""),
             }, priority=5, layer="L3")
-            self._log(LogLevel.INFO, f"环境突变: {env_change.get('type')} → {env_change.get('hint', '')}")    
+            self._log(LogLevel.INFO, f"环境突变: {env_change.get('type')} → {env_change.get('hint', '')}")
         # 发射硬件快照脉冲给信息场和设备管理器
         # ★PHASE14-闭环修复：硬件快照是「状态型」数据，TTL 必须覆盖采集间隔。
         #   原实现沿用 _emit 默认 TTL=5s，而本器官采集间隔为 30s（可配），
@@ -785,7 +785,7 @@ class PulseTouch(BasePulseOrgan):
         cpu_usage = self._hardware_info.get("cpu", {}).get("usage_percent", 0)
         gpu_available = self._hardware_info.get("gpu", {}).get("available", False)
         disk_usage = self._hardware_info.get("disk", {}).get("usage_percent", 0)
-        
+
         # 1. CPU持续偏高（超过70%持续3次快照约90秒）
         if not hasattr(self, '_cpu_high_count'):
             self._cpu_high_count = 0
@@ -793,7 +793,7 @@ class PulseTouch(BasePulseOrgan):
             self._cpu_high_count += 1
         else:
             self._cpu_high_count = 0
-        
+
         if self._cpu_high_count >= 3:
             self._cpu_high_count = 0
             return {
@@ -801,7 +801,7 @@ class PulseTouch(BasePulseOrgan):
                 "detail": {"cpu_usage": cpu_usage},
                 "hint": "CPU持续高负载，建议降低深度搜索频率，增加内在沉思比重",
             }
-        
+
         # 2. GPU状态变化
         if not hasattr(self, '_last_gpu_available'):
             self._last_gpu_available = gpu_available
@@ -819,7 +819,7 @@ class PulseTouch(BasePulseOrgan):
                     "detail": {"gpu_available": True},
                     "hint": "GPU已恢复，可恢复正常视觉探索",
                 }
-        
+
         # 3. 磁盘空间紧张（超过90%）
         if disk_usage > 90:
             return {
@@ -827,9 +827,9 @@ class PulseTouch(BasePulseOrgan):
                 "detail": {"disk_usage": disk_usage},
                 "hint": "磁盘空间紧张，建议暂停大规模深度搜索，优先内部知识整理",
             }
-        
+
         return None
-    
+
     def _load_alert_config(self) -> dict:
         """从config加载硬件告警阈值，失败时用兜底"""
         try:

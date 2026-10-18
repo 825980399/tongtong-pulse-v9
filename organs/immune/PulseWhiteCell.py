@@ -87,7 +87,7 @@ class PulseWhiteCell(BasePulseOrgan):
 
         self._security_event_count = 0
         self.sandbox_core = None
-        
+
         # ===== v20.0支点C：行为模式偏离检测 =====
         # ★v30.0负载均衡修复：随机错峰初始化，避免与其他器官取模任务同点共振
         self._behavior_check_counter = random.randint(1, 149)
@@ -140,7 +140,7 @@ class PulseWhiteCell(BasePulseOrgan):
             return self._on_heartbeat(payload)
         elif event_type == SystemEvent.STATUS_REQUEST:
             return self._on_status_request()
-        elif event_type in (SecurityEvent.BLOCKED, SecurityEvent.PASSED, 
+        elif event_type in (SecurityEvent.BLOCKED, SecurityEvent.PASSED,
                             SecurityEvent.THREAT_DETECTED, SecurityEvent.SANDBOX_VIOLATION):
             self._on_security_event(payload, event_type)
             return None
@@ -233,18 +233,18 @@ class PulseWhiteCell(BasePulseOrgan):
         """
         _anomalies = []
         _now = time.time()
-        
+
         # 1. 知识节点总数突变检测
         if self.node_pool:
             _stats = self.node_pool.get_stats()
             _total = _stats.get("total_nodes", 0)
-            
+
             if self._behavior_history:
                 _prev = self._behavior_history[-1]
                 _prev_total = _prev.get("total_nodes", _total)
                 _delta = _total - _prev_total
                 _delta_pct = _delta / max(1, _prev_total) * 100
-                
+
                 # 节点数骤降超过20%——可能肾脏过度淘汰
                 if _delta_pct < -20:
                     _anomalies.append({
@@ -259,7 +259,7 @@ class PulseWhiteCell(BasePulseOrgan):
                         "detail": f"知识节点骤增{_delta_pct:.0f}%（{_prev_total}→{_total}），"
                                  f"需检查是否有低质量知识涌入",
                     })
-        
+
         # 2. 错误报告频率异常检测
         _recent_errors = [
             t for t in self._recent_ethics_events
@@ -271,7 +271,7 @@ class PulseWhiteCell(BasePulseOrgan):
                 "detail": f"30分钟内收到{len(_recent_errors)}次伦理/安全事件，"
                          f"需检查是否有攻击或误判",
             })
-        
+
         # 3. 免疫记忆长期无新增——可能检测机制失效
         _memory_age = 0
         for _entry in self._immune_memory.values():
@@ -283,7 +283,7 @@ class PulseWhiteCell(BasePulseOrgan):
                 "detail": f"免疫记忆已超过7天无新增（共{len(self._immune_memory)}条），"
                          f"可能检测机制覆盖不足",
             })
-        
+
         # 保存行为快照
         self._behavior_history.append({
             "timestamp": _now,
@@ -293,19 +293,19 @@ class PulseWhiteCell(BasePulseOrgan):
         })
         if len(self._behavior_history) > self._max_behavior_history:
             self._behavior_history = self._behavior_history[-self._max_behavior_history:]
-        
+
         # 处理异常
         if _anomalies:
             for _anomaly in _anomalies:
                 self._log(LogLevel.WARNING, f"行为偏离检测: {_anomaly['detail']}")
-                
+
                 # 发射L0层告警
                 self._emit(SystemEvent.ALARM, {
                     "type": "behavioral_anomaly",
                     "anomaly_type": _anomaly["type"],
                     "message": _anomaly["detail"],
                 }, priority=8, layer="L0")
-                
+
                 # 写入InsightBoard，供深度自我审视和主动交互使用
                 try:
                     from nucleus.InsightBoard import get_insight_board
@@ -319,7 +319,7 @@ class PulseWhiteCell(BasePulseOrgan):
                         keywords=["行为异常", _anomaly["type"], "自我守护"]
                     )
                 except Exception as e:
-                    self._log(LogLevel.ERROR, f'异常: {e}')    
+                    self._log(LogLevel.ERROR, f'异常: {e}')
     def _on_error_report(self, payload: dict) -> dict[str, Any]:
         """接收错误报告并尝试修复"""
         error_type = payload.get("error_type", "unknown")
@@ -593,7 +593,7 @@ class PulseWhiteCell(BasePulseOrgan):
                         break
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        
+
         strategy = _elite_strategy or self._repair_strategies.get(error_type, "通用修复策略")
         # ===== v22.0 M5新增结束 =====
         success = self._simulate_repair(error_type, error_message)
@@ -627,7 +627,7 @@ class PulseWhiteCell(BasePulseOrgan):
         按last_seen时间删除最旧的条目。
         """
         _now = time.time()
-        
+
         # 第一轮：清理过期条目（30天未命中）
         _expired_keys = []
         for _key, _entry in self._immune_memory.items():
@@ -636,7 +636,7 @@ class PulseWhiteCell(BasePulseOrgan):
                 _expired_keys.append(_key)
         for _key in _expired_keys:
             del self._immune_memory[_key]
-        
+
         # 第二轮：如果仍超过上限，删除最旧的条目
         if len(self._immune_memory) > self._max_immune_memory:
             _sorted_items = sorted(
@@ -646,9 +646,9 @@ class PulseWhiteCell(BasePulseOrgan):
             _to_remove = len(self._immune_memory) - self._max_immune_memory
             for _key, _entry in _sorted_items[:_to_remove]:
                 del self._immune_memory[_key]
-        
+
         if _expired_keys or len(self._immune_memory) > self._max_immune_memory:
-            self._log(LogLevel.DEBUG, 
+            self._log(LogLevel.DEBUG,
                      f"免疫记忆清理: 移除{len(_expired_keys)}条过期, "
                      f"当前{len(self._immune_memory)}条")
     def _extract_error_signature(self, error_type: str, error_message: str) -> str:
@@ -678,7 +678,7 @@ class PulseWhiteCell(BasePulseOrgan):
             self._immune_memory[signature]["fail_count"] += 1
         else:
             self._immune_memory[signature]["success_count"] += 1
-        
+
         # ★v25.0治理：安全事件签名也可能积累，定期清理
         if len(self._immune_memory) > self._max_immune_memory * 1.5:
             self._cleanup_immune_memory()
@@ -743,7 +743,7 @@ class PulseWhiteCell(BasePulseOrgan):
             # 对于伦理违规，额外检查是否是高频交互导致的误报
             if pattern_type == "伦理违规" and self._is_high_frequency_normal_use():
                 return  # 高频交互导致的伦理事件，不触发免疫泛化日志
-            
+
             self._log(LogLevel.INFO,
                      f"免疫泛化: 识别攻击模式 '{pattern_type}' "
                      f"(出现{pattern['occurrence_count']}次, 拦截{pattern['blocked_count']}次)")
@@ -760,26 +760,26 @@ class PulseWhiteCell(BasePulseOrgan):
         for cmd in dangerous_commands:
             if cmd.lower() in content_lower:
                 return True
-        
+
         # 2. 检查payload中是否有明显的恶意上下文
         threat_keywords = ["攻击", "入侵", "破解", "盗取", "绕过", "漏洞利用", "植入", "木马"]
         reason_lower = reason.lower() if reason else ""
         for kw in threat_keywords:
             if kw in reason_lower:
                 return True
-        
+
         # 3. 如果内容看起来是正常的知识或对话（非威胁性内容），则不是攻击
         # 正常知识输入的特征：包含教育性关键词、长度适中、不含恶意指令
         educational_keywords = ["原理", "理论", "概念", "定义", "规则", "结构", "模型", "算法", "方法"]
         if any(kw in content_lower for kw in educational_keywords):
             return False  # 大概率是正常知识输入
-        
+
         # 4. 内容长度>50且不含恶意指令，更可能是正常交流
         if len(content) > 50 and not any(cmd.lower() in content_lower for cmd in dangerous_commands):
             return False
-        
+
         return False  # 默认为非攻击（安全优先）
-    
+
     def _is_high_frequency_normal_use(self) -> bool:
         """检查当前是否是高频正常交互模式"""
         now = time.time()
@@ -792,7 +792,7 @@ class PulseWhiteCell(BasePulseOrgan):
         self._recent_ethics_events.append(now)
         # 判断频率
         return len(self._recent_ethics_events) > self._ethics_spam_threshold
-    
+
     def _track_ethics_frequency(self):
         """记录伦理事件的频率（用于智能降级）"""
         now = time.time()
@@ -818,7 +818,7 @@ class PulseWhiteCell(BasePulseOrgan):
                         "matched_pattern": pattern["pattern_type"],
                         "pattern_confidence": min(0.9, pattern["blocked_count"] / max(1, pattern["occurrence_count"])),
                     }
-        return None     
+        return None
     def get_immune_memory(self) -> dict[str, dict[str, Any]]:
         """公开接口：获取免疫记忆（供胸腺和骨髓等训练器官使用）"""
         return dict(self._immune_memory)

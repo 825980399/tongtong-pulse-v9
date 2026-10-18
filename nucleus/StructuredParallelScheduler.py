@@ -172,7 +172,7 @@ class StructuredParallelScheduler:
                 error="调度器已关闭",
                 duration_ms=0.0,
             )
-        
+
         group_id = f"grp_{uuid.uuid4().hex[:8]}"
         start_time = time.time()
 

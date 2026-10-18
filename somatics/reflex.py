@@ -25,8 +25,8 @@ class ReflexRule:
         - 优先级：同时触发多条规则时的执行顺序
         - 冷却时间：防止同一条件反复触发
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  rule_id: str,
                  description: str,
                  sensor_type: str,
@@ -86,25 +86,25 @@ class Reflex:
         - 功能开关默认关闭。
         - 在桌面PC环境下，物理传感器和执行器有限。
     """
-    
+
     def __init__(self):
         # 反射规则库
         self._rules: dict[str, ReflexRule] = {}
-        
+
         # 关联组件引用
         self.sensor_module = None
         self.actuator_module = None
         self.info_field = None
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_triggers = 0
-        
+
         # 功能开关
         self._enabled = False
-        
+
         # 预置基本保护规则
         self._init_default_rules()
 
@@ -268,7 +268,7 @@ class Reflex:
                 if self._check_condition(rule, sensor_readings):
                     # 执行动作
                     result = self._execute_action(rule)
-                    
+
                     rule.last_triggered = now
                     rule.trigger_count += 1
                     self._total_triggers += 1
@@ -425,10 +425,10 @@ class Reflex:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== Reflex 自测 ===\n")
-    
+
     reflex = Reflex()
     reflex.enable()
-    
+
     # 模拟传感器模块
     class MockSensor:
         def __init__(self):
@@ -439,25 +439,25 @@ if __name__ == "__main__":
             return self._readings
         def set_reading(self, sensor_type, field, value):
             self._readings = {f"{sensor_type}_0": {field: value, "timestamp": time.time()}}
-    
+
     # 模拟执行器模块
     class MockActuator:
         def emergency_stop(self):
             return {"status": "stopped", "message": "紧急停止"}
         def send_command(self, target, action, params=None):
             return {"status": "executed", "target": target, "action": action, "params": params}
-    
+
     mock_sensor = MockSensor()
     mock_actuator = MockActuator()
     reflex.set_sensor_module(mock_sensor)
     reflex.set_actuator_module(mock_actuator)
-    
+
     # 1. 查看预置规则
     rules = reflex.get_rules()
     print(f"1. 预置规则: {len(rules)} 条")
     for r in rules:
         print(f"   [{r['priority']}] {r['rule_id']}: {r['description']} (启用={r['enabled']})")
-    
+
     # 2. 模拟碰撞触发
     print("\n2. 模拟碰撞检测:")
     mock_sensor.set_reading("imu", "acceleration.z", 15.0)
@@ -465,17 +465,17 @@ if __name__ == "__main__":
     if actions:
         for a in actions:
             print(f"   触发: {a['rule_id']} → {a['action']} → {a['result'].get('message', a['result'])}")
-    
+
     # 3. 冷却期内不重复触发
     print("\n3. 冷却测试（立即再次扫描）:")
     actions2 = reflex.scan_and_execute()
     print(f"   触发数: {len(actions2)} (应为0，冷却中)")
     assert len(actions2) == 0, "冷却期内不应重复触发"
     print("   ✅ 冷却机制正确")
-    
+
     # 4. 统计
     stats = reflex.get_stats()
     print(f"\n4. 统计: 规则{stats['total_rules']}条, 活跃{stats['active_rules']}, 触发{stats['total_triggers']}次")
-    
+
     reflex.disable()
     print("\n=== 自测全部通过 ===")

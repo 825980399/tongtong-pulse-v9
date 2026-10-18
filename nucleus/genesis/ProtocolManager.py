@@ -45,24 +45,24 @@ class ProtocolManager:
         - 注册了 v9.0 的核心协议版本。
         - 功能开关默认关闭，P3阶段激活。
     """
-    
+
     def __init__(self):
         # 已注册的协议: protocol_name → {version, status, registered_at, description}
         self._protocols: dict[str, dict[str, Any]] = {}
-        
+
         # 协议变更历史
         self._version_history: list[dict[str, Any]] = []
-        
+
         # 兼容性矩阵: (protocol_name, version_a, version_b) → is_compatible
         self._compatibility_cache: dict[tuple[str, str, str], bool] = {}
-        
+
         # 统计
         self._total_checks = 0
         self._total_conflicts = 0
-        
+
         # 功能开关
         self._enabled = False
-        
+
         # 初始化 v9.0 核心协议
         self._register_core_protocols()
 
@@ -100,7 +100,7 @@ class ProtocolManager:
                 "status": VersionStatus.ACTIVE,
             },
         }
-        
+
         for name, info in core_protocols.items():
             self._protocols[name] = {
                 **info,
@@ -120,8 +120,8 @@ class ProtocolManager:
 
     # ========== 协议注册与查询 ==========
 
-    def register_protocol(self, 
-                          name: str, 
+    def register_protocol(self,
+                          name: str,
                           version: str,
                           description: str = "",
                           status: VersionStatus = VersionStatus.ACTIVE) -> bool:
@@ -199,8 +199,8 @@ class ProtocolManager:
         except (ValueError, IndexError):
             return (0, 0, 0)
 
-    def check_compatibility(self, 
-                            protocol_name: str, 
+    def check_compatibility(self,
+                            protocol_name: str,
                             required_version: str) -> dict[str, Any]:
         """
         检查指定协议的版本是否与系统兼容。
@@ -264,7 +264,7 @@ class ProtocolManager:
             "required_version": required_version,
         }
 
-    def check_node_compatibility(self, 
+    def check_node_compatibility(self,
                                   remote_protocols: dict[str, str]) -> dict[str, Any]:
         """
         检查远程节点的协议版本是否与本节点兼容。
@@ -401,47 +401,47 @@ class ProtocolManager:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== ProtocolManager 自测 ===\n")
-    
+
     manager = ProtocolManager()
     manager.enable()
-    
+
     # 1. 查询核心协议
     print("1. 核心协议:")
     protocols = manager.get_all_protocols()
     for name, info in protocols.items():
         print(f"   {name}: v{info['version']} - {info['description']}")
-    
+
     # 2. 兼容性检查（同版本）
     result = manager.check_compatibility("pulse_event_system", "9.0.0")
     print(f"\n2. 同版本兼容性: {result['compatible']} - {result['reason']}")
     assert result["compatible"], "同版本应兼容"
     print("   ✅ 同版本兼容正确")
-    
+
     # 3. 兼容性检查（MAJOR不同）
     result = manager.check_compatibility("pulse_event_system", "10.0.0")
     print(f"3. MAJOR不同兼容性: {result['compatible']} - {result['reason']}")
     assert not result["compatible"], "MAJOR不同应不兼容"
     print("   ✅ MAJOR不兼容正确")
-    
+
     # 4. 版本解析
     major, minor, patch = manager.parse_version("9.0.1")
     print(f"\n4. 版本解析: 9.0.1 → major={major}, minor={minor}, patch={patch}")
     assert major == 9 and minor == 0 and patch == 1
     print("   ✅ 版本解析正确")
-    
+
     # 5. 协议升级
     result = manager.upgrade_protocol("pulse_event_system", "9.1.0", "新增PulseIntent枚举")
     print(f"\n5. 协议升级: {result['protocol']} {result['old_version']} → {result['new_version']}")
-    
+
     # 6. 多节点握手检查
     remote = {"pulse_event_system": "9.0.0", "organ_interface": "9.0.0"}
     handshake = manager.check_node_compatibility(remote)
     print(f"\n6. 节点握手: 兼容={handshake['compatible']}, 冲突={len(handshake['conflicts'])}")
-    
+
     # 7. 统计
     stats = manager.get_stats()
     print(f"\n7. 统计: 协议{stats['total_protocols']}个, "
           f"检查{stats['total_checks']}次, 冲突{stats['total_conflicts']}次")
-    
+
     manager.disable()
     print("\n=== 自测全部通过 ===")

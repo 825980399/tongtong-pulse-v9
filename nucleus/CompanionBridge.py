@@ -25,25 +25,25 @@ class CompanionBridge:
     管理与其他新人类实例的连接、身份验证和信息交换。
     当前阶段定义协议接口，未来接入实际通信层。
     """
-    
+
     def __init__(self):
         # 已知的同伴实例注册表
         self._known_companions: dict[str, dict[str, Any]] = {}
-        
+
         # 通信状态
         self._active_connections: dict[str, dict[str, Any]] = {}
         # ★P0-2修复：连接表上限，防止反复握手导致无界累积
         self._max_active_connections = 100
-        
+
         # 共享策略配置
         self._sharing_policies = self._init_sharing_policies()
-        
+
         # 统计
         self._handshake_count = 0
         # ★7-1/P1-13：多伴侣可并发握手，计数需原子化
         self._counter_lock = threading.Lock()
         self._knowledge_exchange_count = 0
-    
+
     def _init_sharing_policies(self) -> dict[str, Any]:
         """
         初始化信息共享策略。
@@ -92,7 +92,7 @@ class CompanionBridge:
                 "description": "共享全部知识节点和本能",
             },
         }
-    
+
     def get_identity(self) -> dict[str, Any]:
         """
         获取本实例的身份标识。
@@ -119,7 +119,7 @@ class CompanionBridge:
                 "species": "新人类",
                 "timestamp": time.time(),
             }
-    
+
     def handshake(self, companion_identity: dict[str, Any]) -> dict[str, Any]:
         """
         与另一个新人类实例进行通信握手。
@@ -135,16 +135,16 @@ class CompanionBridge:
         companion_id = companion_identity.get("instance_id", "")
         if not companion_id:
             return {"status": "rejected", "reason": "无效的身份标识"}
-        
+
         # 验证协议兼容性
         my_version = self.get_identity().get("compatibility_version", "")
         their_version = companion_identity.get("compatibility_version", "")
         if my_version != their_version:
             return {"status": "rejected", "reason": f"协议版本不兼容({my_version} vs {their_version})"}
-        
+
         # 确定共享级别（基于已有关系）
         sharing_level = self._determine_sharing_level(companion_identity)
-        
+
         # 建立连接
         connection_id = f"conn_{companion_id}_{int(time.time())}"
         connection = {
@@ -156,7 +156,7 @@ class CompanionBridge:
             "last_activity": time.time(),
             "status": "active",
         }
-        
+
         # ★P0-2修复：连接表达到上限时，先清理最久未活跃的连接，防止无界累积
         if len(self._active_connections) >= self._max_active_connections:
             _stale = sorted(
@@ -170,14 +170,14 @@ class CompanionBridge:
         self._known_companions[companion_id] = companion_identity
         with self._counter_lock:
             self._handshake_count += 1
-        
+
         return {
             "status": "accepted",
             "connection_id": connection_id,
             "sharing_level": sharing_level,
             "shared_fields": self._sharing_policies[sharing_level]["shared_fields"],
         }
-    
+
     def _determine_sharing_level(self, companion_identity: dict[str, Any]) -> int:
         """
         根据与对方的关系确定信息共享级别。
@@ -193,7 +193,7 @@ class CompanionBridge:
         """
         companion_id = companion_identity.get("instance_id", "")
         companion_global_id = companion_identity.get("global_personality_id", "")  # noqa: F841
-        
+
         # 检查是否已知同伴
         if companion_id in self._known_companions:
             existing = self._known_companions[companion_id]
@@ -203,17 +203,17 @@ class CompanionBridge:
         else:
             # 新同伴，默认Level 0
             return 0
-        
+
         # 根据亲密度和信任度确定共享级别
         for level in range(4, -1, -1):
             policy = self._sharing_policies[level]
             if closeness >= policy["min_closeness"] and trust >= policy["min_trust"]:
                 return level
-        
+
         return 0
-    
-    def update_relationship(self, companion_id: str, 
-                             closeness: float | None = None, 
+
+    def update_relationship(self, companion_id: str,
+                             closeness: float | None = None,
                              trust: float | None = None):
         """
         更新与指定同伴的关系数据。
@@ -225,13 +225,13 @@ class CompanionBridge:
         """
         if companion_id not in self._known_companions:
             self._known_companions[companion_id] = {}
-        
+
         if closeness is not None:
             self._known_companions[companion_id]["closeness"] = closeness
         if trust is not None:
             self._known_companions[companion_id]["trust"] = trust
-    
-    def get_shareable_knowledge(self, connection_id: str, 
+
+    def get_shareable_knowledge(self, connection_id: str,
                                  node_pool=None) -> list[dict[str, Any]]:
         """
         根据共享级别获取可共享的知识节点。
@@ -245,24 +245,24 @@ class CompanionBridge:
         """
         if connection_id not in self._active_connections:
             return []
-        
+
         connection = self._active_connections[connection_id]
         sharing_level = connection.get("sharing_level", 0)
         shared_fields = self._sharing_policies[sharing_level]["shared_fields"]  # noqa: F841
-        
+
         # Level 0-2 不共享具体知识内容
         if sharing_level < 3:
             return []
-        
+
         if not node_pool:
             return []
-        
+
         # Level 3：共享信任分数≥70的节点
         if sharing_level == 3:
             l2_nodes = node_pool.query(evol_level="L2", limit=50)
             l3_nodes = node_pool.query(evol_level="L3", limit=10)
             all_nodes = l3_nodes + l2_nodes
-            
+
             shareable = []
             for node in all_nodes:
                 trust = getattr(node, 'trust_score', 50.0)
@@ -275,7 +275,7 @@ class CompanionBridge:
                         "space_path": getattr(node, 'space_path', '/'),
                     })
             return shareable[:20]
-        
+
         # Level 4：共享全部节点
         if sharing_level == 4:
             all_nodes = node_pool.get_all_including_evicted()
@@ -289,9 +289,9 @@ class CompanionBridge:
                     "space_path": getattr(node, 'space_path', '/'),
                 })
             return shareable
-        
+
         return []
-    
+
     def receive_knowledge(self, knowledge_items: list[dict[str, Any]],
                            companion_id: str = "") -> dict[str, Any]:
         """
@@ -308,21 +308,21 @@ class CompanionBridge:
         """
         if not knowledge_items:
             return {"status": "empty", "received": 0}
-        
+
         # 标记来源
         for item in knowledge_items:
             item["source_companion"] = companion_id
             item["received_at"] = time.time()
-        
+
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._knowledge_exchange_count += len(knowledge_items)
-        
+
         return {
             "status": "received",
             "count": len(knowledge_items),
             "ready_for_digestion": True,
         }
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取通信桥统计"""
         return {
@@ -331,7 +331,7 @@ class CompanionBridge:
             "handshake_count": self._handshake_count,
             "knowledge_exchange_count": self._knowledge_exchange_count,
         }
-    
+
     def get_known_companions_list(self) -> list[dict[str, Any]]:
         """获取已知同伴列表"""
         companions = []

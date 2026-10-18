@@ -1361,11 +1361,11 @@ setInterval(loadData, 60000);
             "timeline": [],
             "patches": [],
         }
-        
+
         try:
             from nucleus.InsightBoard import get_insight_board
             board = get_insight_board()
-            
+
             # 获取最新深度审视评分
             reviews = board.query(insight_type="deep_self_review", limit=1)
             if reviews:
@@ -1374,7 +1374,7 @@ setInterval(loadData, 60000);
                 score_match = re.search(r'评分[：:](\d+)', content)
                 if score_match:
                     data["score"] = int(score_match.group(1))
-            
+
             # 进化事件时间线
             all_events = board.query(limit=20)
             for evt in sorted(all_events, key=lambda e: e.get("posted_at", 0), reverse=True)[:10]:
@@ -1384,7 +1384,7 @@ setInterval(loadData, 60000);
                     "time": time_str,
                     "event": evt.get("content", "")[:120],
                 })
-            
+
             # 待处理补丁
             patches = board.query(insight_type="code_patch", limit=10)
             for p in patches[:5]:
@@ -1430,25 +1430,25 @@ setInterval(loadData, 60000);
                 except Exception as e:
                     silent_exc(e, where="functions/health_ui.py:1277")
                     continue
-            
+
             # ★FIX: 模块评分由真实运行时指标 + 静态审查推导（替代硬编码假数据）
             _modules = self._compute_module_scores()
             data["modules"] = _modules
             # 若未从深度审视报告提取到评分，则用模块均值作为综合分
             if data["score"] == 85:
                 data["score"] = round(sum(m["score"] for m in _modules) / max(1, len(_modules)))
-            
+
         except Exception:
             data["timeline"].append({
                 "time": "现在",
                 "event": "进化仪表盘已就绪，等待首次深度审视报告生成。"
             })
-        
+
         result = json.dumps(data, ensure_ascii=False)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Cache-Control', 'no-cache')
-        
+
         self.end_headers()
         self.wfile.write(result.encode('utf-8'))
 
@@ -1584,16 +1584,16 @@ setInterval(loadKGData, 30000);
     def _serve_knowledge_graph_data(self):
         """提供知识图谱数据JSON（添加节点value信息）"""
         data = {"nodes": [], "links": []}
-        
+
         if not _node_pool:
             result = json.dumps(data, ensure_ascii=False)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            
+
             self.end_headers()
             self.wfile.write(result.encode('utf-8'))
             return
-        
+
         try:
             all_nodes = _node_pool.get_all()
             # 构建节点数据（添加value字段）
@@ -1604,7 +1604,7 @@ setInterval(loadKGData, 30000);
                 kws = node.keywords if hasattr(node, 'keywords') and node.keywords else []
                 label = kws[0] if kws else value[:15]
                 path = getattr(node, 'space_path', '/')
-                
+
                 data["nodes"].append({
                     "id": node.node_id,
                     "label": label,
@@ -1613,7 +1613,7 @@ setInterval(loadKGData, 30000);
                     "path": path,
                     "value": value,
                 })
-            
+
             # 构建连线数据（基于关键词重叠）
             node_index = {n["id"]: i for i, n in enumerate(data["nodes"])}
             for i in range(len(all_nodes)):
@@ -1630,17 +1630,17 @@ setInterval(loadKGData, 30000);
                                 "source": node_index[id_a],
                                 "target": node_index[id_b],
                             })
-            
+
             if len(data["links"]) > 200:
                 data["links"] = data["links"][:200]
-            
+
         except Exception as e:
             data["error"] = str(e)[:80]
-        
+
         result = json.dumps(data, ensure_ascii=False)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
-        
+
         self.end_headers()
         self.wfile.write(result.encode('utf-8'))
 
@@ -1745,7 +1745,7 @@ class HealthUIServer:
 
     def __init__(self, port: int = 5051):
         self.port = port
-        self._server: HTTPServer | None = None 
+        self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
         self._watchdog_running = False

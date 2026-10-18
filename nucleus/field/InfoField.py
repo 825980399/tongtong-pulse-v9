@@ -126,7 +126,7 @@ class InfoField(SilentLogMixin):
     所有器官共享此实例。
     发布脉冲 → 幂等检查 → TTL校验 → 匹配共振条件 → 风暴检测 → 按 layer 异步分发到独立线程池。
     """
-    
+
     def __init__(self, max_history: int = 1000):
         """
         Args:
@@ -141,10 +141,10 @@ class InfoField(SilentLogMixin):
         self._dup_trace_seen: dict[str, tuple] = {}
         self._dup_trace_lock = threading.Lock()
         self._dup_trace_count = 0
-        
+
         # 脉冲历史记录（环形缓冲）
         self._history: deque = deque(maxlen=max_history)
-        
+
         # 线程安全锁
         # ★A6【P2】锁序一致性诊断结论（2026-09-06，只诊断不重构）：
         #   经静态扫描全部 with self._lock: 块，未发现「锁内调用另一个也加 self._lock 的方法」的嵌套锁，
@@ -192,7 +192,7 @@ class InfoField(SilentLogMixin):
         self.resonance_engine = None
         self.oscillon_field = None
         self.stream_miner = None
-        
+
         # 统计
         self._total_published = 0
         self._total_handled = 0  # ★P1: 已完成（handler 执行完毕）的脉冲计数，供假死探测器判断框架是否真正在运转
@@ -206,10 +206,10 @@ class InfoField(SilentLogMixin):
         self._cond_trigger_count: dict[str, int] = {}      # cond_id → 触发次数（幽灵监听判定）
         self._event_publish_count: dict[str, int] = {}     # event_type → 发布次数（死数据判定）
         self._event_unmatched_count: dict[str, int] = {}   # event_type → 无条件匹配次数
-        
+
         # ===== v9.5: 分层异步调度线程池 =====
         self._layer_pools: dict[str, ThreadPoolExecutor] = {}
-        self._layer_disabled: dict[str, bool] = {}        
+        self._layer_disabled: dict[str, bool] = {}
         # ★主线第33批 T4（P3）：分层队列上限（0=无上限）默认值。
         #   ★必须在 _init_layer_pools() **之前**赋值 —— 该方法会按 config.PULSE_LAYER
         #   覆盖本字典（L3 由 config 提供 300）。历史缺陷：默认值写在它**之后**，
@@ -222,27 +222,27 @@ class InfoField(SilentLogMixin):
             _PULSE_LAYER_L3: 100,    # 硬上限（仅 config 未提供时兜底）
         }
         self._init_layer_pools()
-        
+
         # ===== v9.5: 高负载状态标记 =====
         self._high_load = False
         self._high_load_since = 0.0
         self._last_load_check = 0.0
         self._load_check_interval = 5.0  # 每5秒检查一次系统负载
-        
+
         # ===== v9.5: 场域模式 =====
         self._field_mode = PULSE_LAYER.get("field_mode", "PULSE")
-        
+
         # ===== v9.5: 幂等防重放缓存 =====
         self._processed_pulses: OrderedDict = OrderedDict()
         self._max_processed_cache = 5000
         self._processed_ttl_seconds = 5.0
-        
+
         # ===== v9.5: 脉冲风暴检测 =====
         self._pulse_rate_window: deque = deque()
         self._storm_threshold = PULSE_LAYER.get("pulse_storm_threshold", 500)
         self._storm_action = PULSE_LAYER.get("pulse_storm_action", _STORM_AGGREGATE)
         self._in_storm = False
-        
+
         # ===== v9.5: 器官并发计数 =====
         self._organ_concurrent_count: dict[str, int] = {}
         self._organ_concurrent_lock = threading.Lock()
@@ -253,11 +253,11 @@ class InfoField(SilentLogMixin):
         #   从而精准递减 _organ_concurrent_count，而非暴力 clear。
         #   结构：{layer_tag: {organ_name: count}}
         self._layer_organ_inflight: dict[str, dict[str, int]] = {}
-        
+
         # ===== v9.5: CPU亲和预埋 =====
         self._cpu_affinity_enabled = PULSE_LAYER.get("cpu_affinity_enabled", False)
         self._cpu_affinity_cores = PULSE_LAYER.get("cpu_affinity_cores", [])  # type: ignore[possibly-unbound]
-        
+
         # ===== 自适应并行调度：硬件负载感知缓存 =====
         self._hardware_snapshot = {
             "cpu_usage": 0.0,
@@ -269,7 +269,7 @@ class InfoField(SilentLogMixin):
             "updated_at": 0.0,
         }
         self._hardware_lock = threading.Lock()
-        self._shutting_down = False     # 关闭标志，阻止新任务提交        
+        self._shutting_down = False     # 关闭标志，阻止新任务提交
         # ===== 自适应任务线程池 =====
         self._adaptive_task_pool = None
         self._adaptive_pool_size = 0
@@ -365,7 +365,7 @@ class InfoField(SilentLogMixin):
         self._l3_depth_sample_ts = 0.0
         # ★P1修复：器官接收脉冲活跃追踪（供血管沉默检测合并）
         self._organ_last_active: dict[str, float] = {}
-        
+
         # ===== 统一负载等级 =====
         self._load_level = "light"
         # ★P0-7修复：外部强制等级的过期时间戳（紧急处理器 set_load_level 时设置，
@@ -378,11 +378,11 @@ class InfoField(SilentLogMixin):
         self._hardware_probe_ok = True
         self._load_probe_failed = False
         self._load_probe_fail_count = 0
-        
+
         # ===== 持续时间保护相关 =====
         self._high_load_since_level = None
         self._high_load_since_time = 0.0
-        
+
         # ===== 线程池调整记录 =====
         self._last_resized_level = "light"   # 上次调整四层池时的负载等级
 
@@ -399,7 +399,7 @@ class InfoField(SilentLogMixin):
     def _init_layer_pools(self):
         """v9.5: 初始化四层独立线程池 + 自适应任务线程池（硬件自适应）"""
         _cpu_count = os.cpu_count() or 8
-        
+
         # 根据 CPU 核心数动态分配线程池
         # L0 必须保持单线程
         _l0_workers = 1
@@ -413,7 +413,7 @@ class InfoField(SilentLogMixin):
         _l3_workers = max(2, _cpu_count // 4)
         # 自适应任务池分配 CPU 核心数的 50%
         _adaptive_workers = max(4, _cpu_count // 2)
-        
+
         layer_config = PULSE_LAYER
 
         # ★P0-4修复（第十二批）：让 config.PULSE_LAYER 的队列上限键真正生效。
@@ -444,52 +444,52 @@ class InfoField(SilentLogMixin):
                 max_workers=_l0_workers,
                 thread_name_prefix="L0-Life"
             )
-        
+
         if layer_config.get("l1_enabled", True):
             self._layer_pools[_PULSE_LAYER_L1] = ThreadPoolExecutor(
                 max_workers=_l1_workers,
                 thread_name_prefix="L1-RealTime"
             )
-        
+
         if layer_config.get("l2_enabled", True):
             self._layer_pools[_PULSE_LAYER_L2] = ThreadPoolExecutor(
                 max_workers=_l2_workers,
                 thread_name_prefix="L2-Cognitive"
             )
-        
+
         if layer_config.get("l3_enabled", True):
             self._layer_pools[_PULSE_LAYER_L3] = ThreadPoolExecutor(
                 max_workers=_l3_workers,
                 thread_name_prefix="L3-Autonomous"
             )
-        
+
         self._adaptive_pool_size = _adaptive_workers
         self._adaptive_task_pool = ThreadPoolExecutor(
             max_workers=self._adaptive_pool_size,
             thread_name_prefix="AdaptiveTask"
         )
         self._task_pool_ready = True
-        
+
         _module_logger.info(f"线程池已初始化 (CPU={_cpu_count}核): "
               f"L0={_l0_workers}, L1={_l1_workers}, L2={_l2_workers}, "
               f"L3={_l3_workers}, Adaptive={_adaptive_workers}")
-    
+
     # ========== 框架注入接口 ==========
-    
+
     def set_pulse_core(self, pulse_core):
         self.pulse_core = pulse_core
         pulse_core.set_info_field(self)
-        
+
     def set_resonance_engine(self, resonance_engine):
         self.resonance_engine = resonance_engine
-        
+
     def set_oscillon_field(self, oscillon_field):
         self.oscillon_field = oscillon_field
 
     def set_stream_miner(self, stream_miner):
         self.stream_miner = stream_miner
-    
-    def propagate_oscillon(self, frequency: float, amplitude: float, 
+
+    def propagate_oscillon(self, frequency: float, amplitude: float,
                             phase: float) -> dict[str, Any]:
         return {}
 
@@ -513,7 +513,7 @@ class InfoField(SilentLogMixin):
 
         # ★主线第25批 T1/P2-160：重复事件遥测（灰度；关闭时函数首行即返回）
         self._dup_trace_check(pulse, event_type)
-        
+
         # 缓存设备能力更新
         if event_type == "device.capability_update":
             caps = pulse.get("payload", {}).get("capabilities", {})
@@ -532,26 +532,26 @@ class InfoField(SilentLogMixin):
                 cpu_info = payload_data.get("cpu", {})
                 mem_info = payload_data.get("memory", {})
                 gpu_info = payload_data.get("gpu", {})
-                
+
                 self._hardware_snapshot["cpu_usage"] = cpu_info.get("usage_percent", 0)
                 self._hardware_snapshot["mem_usage"] = mem_info.get("usage_percent", 0)
                 self._hardware_snapshot["gpu_available"] = gpu_info.get("available", False)
                 self._hardware_snapshot["gpu_memory_mb"] = gpu_info.get("memory_mb", 0)
                 self._hardware_snapshot["updated_at"] = time.time()
                 self._hardware_snapshot["gpu_usage"] = gpu_info.get("usage_percent", 0.0)
-                
+
                 # 安全解析 GPU 显存使用率（可能为空字符串或无效值）
                 mem_usage_raw = gpu_info.get("memory_usage_percent", 0.0)
                 try:
                     self._hardware_snapshot["gpu_memory_usage"] = float(mem_usage_raw) if mem_usage_raw else 0.0
                 except (ValueError, TypeError):
                     self._hardware_snapshot["gpu_memory_usage"] = 0.0
-                
+
                 # 同步变量
                 self._cpu_usage = self._hardware_snapshot["cpu_usage"]
                 self._mem_usage = self._hardware_snapshot["mem_usage"]
                 self._gpu_usage = self._hardware_snapshot.get("gpu_usage", 0.0)
-                
+
                 # ★三期：注入硬件能力快照（tier/cores/memory），供运行时自适应调度消费。
                 # 仅在开关开启时生效；开关关闭时这些字段保持默认（high/0/0），不影响原行为。
                 if self._adaptive_tuning_enabled:
@@ -564,7 +564,7 @@ class InfoField(SilentLogMixin):
                         self._hardware_memory_gb = _mem_gb
                     # 用一/二期同款评分逻辑反推 tier（与 hardware_probe 语义一致）
                     self._hardware_tier = self._infer_tier(self._hardware_cores, self._hardware_memory_gb, _has_gpu)  # type: ignore[possibly-unbound]
-        
+
         # === 步骤0: TTL校验 ===
         now_ns = time.time_ns()
         if ttl_ns > 0 and (now_ns - timestamp_ns) > ttl_ns:
@@ -574,7 +574,7 @@ class InfoField(SilentLogMixin):
                 _trace_route_matched(pulse_id, 0, 0, False, "expired")
                 return {"status": "expired", "pulse_id": pulse_id,
                         "reason": f"脉冲已过期 (TTL={ttl_ns}ns, 已过{now_ns - timestamp_ns}ns)"}
-        
+
         # === 步骤1: 幂等检查（业务指纹去重） ===
         # ★FIX: 原实现直接用唯一 pulse_id 去重，永不命中；改用业务指纹，
         #   使 source+event+payload 相同的重复业务事件能被真正去重
@@ -589,7 +589,7 @@ class InfoField(SilentLogMixin):
                 self._total_duplicated += 1
             _trace_route_matched(pulse_id, 0, 0, False, "duplicate")
             return {"status": "duplicate", "pulse_id": pulse_id, "reason": "已处理过"}
-        
+
         # === 步骤2: 脉冲风暴检测 ===
         storm_result = self._check_pulse_storm()
         if storm_result["in_storm"]:
@@ -710,7 +710,7 @@ class InfoField(SilentLogMixin):
                         thread_name_prefix=f"{layer_tag}-Rebuilt"
                     )
                     self._layer_pools[layer_tag] = pool
-            
+
             if pool is not None and not self._layer_disabled.get(layer_tag, False):
                 # ★P0-4（第十二批）：分层队列有界背压准入。
                 #   放在 _increment_organ_concurrency 之前——被拒绝时不做任何自增，
@@ -885,7 +885,7 @@ class InfoField(SilentLogMixin):
             "high_load": self._high_load,
             "load_probe_ok": self._hardware_probe_ok,
         }
-    
+
     # ========== ★相关任务：boot 完整率审计 ==========
     def _audit_boot_completeness(self, items):
         """后台守护线程：等待 boot 脉冲各订阅者 future 终态，枚举 handled/cancelled。
@@ -918,7 +918,7 @@ class InfoField(SilentLogMixin):
             + " ".join(f"{_o}={_s}" for _o, _s in _results)
         )
 
-    def _dispatch_handler(self, pulse: dict[str, Any], handler: Callable, 
+    def _dispatch_handler(self, pulse: dict[str, Any], handler: Callable,
                           organ_name: str, route_mode: str, layer_tag: str | None = None):
         """
         分发脉冲到单个订阅者的处理函数。
@@ -977,7 +977,7 @@ class InfoField(SilentLogMixin):
                 self._inflight_dispatch_count = max(0, self._inflight_dispatch_count - 1)
             if layer_tag == _PULSE_LAYER_L3:
                 self._record_l3_completion()
-    
+
     def _call_handler_safe(self, pulse: dict[str, Any], handler: Callable):
         # ★P0-1修复：_handle_pulse_safe 分支原先无异常保护，异常会上抛导致
         # _total_handled 计数被跳过且异常被 pool.submit 的未来对象静默吞掉。
@@ -1064,7 +1064,7 @@ class InfoField(SilentLogMixin):
                 time.sleep(1.0)   # 异常时略微降频，避免疯狂刷日志
 
     # ========== v9.5: 幂等防重放 ==========
-    
+
     def _is_duplicate(self, pulse_id: str) -> bool:
         now = time.time()
         with self._lock:
@@ -1077,8 +1077,8 @@ class InfoField(SilentLogMixin):
                 self._processed_pulses.pop(pulse_id, None)
                 return False
             return True
-    
-    
+
+
     def _mark_processed(self, pulse_id: str):
         now = time.time()
         self._processed_pulses[pulse_id] = now
@@ -1086,9 +1086,9 @@ class InfoField(SilentLogMixin):
         #   过期项会在超过 _max_processed_cache 时由 popitem 自然淘汰，避免每脉冲无意义遍历
         while len(self._processed_pulses) > self._max_processed_cache:
             self._processed_pulses.popitem(last=False)
-    
+
     # ========== v9.5: 脉冲风暴检测 ==========
-    
+
     def _check_pulse_storm(self) -> dict[str, Any]:
         now = time.time()
         # ★P1-1修复：加锁保护脉冲速率窗口的并发读写
@@ -1107,9 +1107,9 @@ class InfoField(SilentLogMixin):
                     self._in_storm = False
                     _module_logger.info(f"脉冲风暴解除: {rate}脉冲/秒")
                 return {"in_storm": self._in_storm, "rate": rate}
-    
+
     # ========== v9.5: 高负载自适应 ==========
-    
+
     # ============ ★第169批 C8：内存压力（双口径 + 可配置阈值） ============
     def _m169_mem_thresholds(self) -> dict[str, float]:
         """内存告警阈值（可配置，不写死）。
@@ -1171,21 +1171,21 @@ class InfoField(SilentLogMixin):
         now = time.time()
         if now - self._last_load_check < self._load_check_interval:
             return
-        
+
         self._last_load_check = now
-        
+
         # ★P0-7修复：外部强制等级在 60 秒有效期内，内部检测不覆盖（尊重紧急降级）；
         # 过期后内部检测接管，可立即降回 light，避免 hardware_warning→heavy 无出口卡死。
         if self._external_level_expiry:
             if time.time() < self._external_level_expiry:
                 return
             self._external_level_expiry = 0.0
-        
+
         # 优先使用触觉缓存的硬件数据
         with self._hardware_lock:
             cpu_percent = self._hardware_snapshot["cpu_usage"]
             mem_percent = self._hardware_snapshot["mem_usage"]
-        
+
         # 如果缓存数据为空或过期，回退到直接检测
         if cpu_percent == 0 and mem_percent == 0:
             try:
@@ -1243,15 +1243,15 @@ class InfoField(SilentLogMixin):
             return
 
         load_level = self._get_load_level(cpu_percent, mem_percent, gpu_percent, gpu_mem_percent)
-        
+
         was_high_load = self._high_load
         self._high_load = load_level in ("heavy", "critical")
-        
+
         if self._high_load and not was_high_load:
             self._high_load_since = now
         elif not self._high_load and was_high_load:
             self._high_load_since = 0.0
-        
+
         # ===== 持续时间保护：等级升高需持续 30 秒才生效，降低立即生效 =====
         if load_level != self._load_level:
             if self._is_higher_level(load_level, self._load_level):
@@ -1285,9 +1285,9 @@ class InfoField(SilentLogMixin):
             self._release_override_if_critical()
         # ★主线第5批 P1-42：L3 队列深度驱动动态扩缩容（独立于负载等级，按队列压力自愈）
         self._auto_scale_l3_by_depth()
-    
+
     # ========== 统一负载管理 ==========
-    
+
     def update_hardware_snapshot(self, snapshot: dict[str, Any]):
         """
         接收触觉的硬件快照，更新本地负载缓存。
@@ -1296,17 +1296,17 @@ class InfoField(SilentLogMixin):
         cpu_info = snapshot.get("cpu", {})
         mem_info = snapshot.get("memory", {})
         gpu_info = snapshot.get("gpu", {})
-        
+
         self._cpu_usage = cpu_info.get("usage_percent", 0.0)
         self._mem_usage = mem_info.get("usage_percent", 0.0)
         self._gpu_usage = gpu_info.get("usage_percent", 0.0)
-        
+
         with self._hardware_lock:
             self._hardware_snapshot["cpu_usage"] = self._cpu_usage
             self._hardware_snapshot["mem_usage"] = self._mem_usage
             self._hardware_snapshot["gpu_usage"] = self._gpu_usage
             self._hardware_snapshot["updated_at"] = time.time()
-    
+
     def set_load_level(self, level: str):
         """
         公开方法：外部（如紧急处理）强制设置负载等级。
@@ -1327,11 +1327,11 @@ class InfoField(SilentLogMixin):
         self._adjust_adaptive_pool()
         self._resize_layer_pools_by_level()
         _module_logger.info(f"负载等级外部设置为: {level}")
-    
+
     def _is_higher_level(self, new_level: str, old_level: str) -> bool:
         order = {"light": 0, "moderate": 1, "heavy": 2, "critical": 3}
         return order.get(new_level, 0) > order.get(old_level, 0)
-    
+
     def _get_load_level(self, cpu: float, mem: float, gpu: float = 0.0, gpu_mem: float = 0.0) -> str:
         """综合评估硬件负载等级（含GPU）。
 
@@ -1364,14 +1364,14 @@ class InfoField(SilentLogMixin):
         elif cpu > (50 + _offset + _hyst) or mem > (_mem_mod + _offset + _hyst) or gpu > 70 or gpu_mem > 70:
             return "moderate"
         return "light"
-    
+
     def _resize_layer_pools_by_level(self):
         """根据当前 _load_level 调整四层线程池大小（仅在实际变化时调用）"""
         level = self._load_level
         if level == self._last_resized_level:
             return
         self._last_resized_level = level
-        
+
         if level == "critical":
             self._resize_layer_pool(_PULSE_LAYER_L1, 1)
             self._resize_layer_pool(_PULSE_LAYER_L2, 0)
@@ -1398,7 +1398,7 @@ class InfoField(SilentLogMixin):
             self._resize_layer_pool(_PULSE_LAYER_L1, max(4, _ps))
             self._resize_layer_pool(_PULSE_LAYER_L2, max(2, _ps // 2))
             self._resize_layer_pool(_PULSE_LAYER_L3, max(1, _ps // 4))
-    
+
     def _adjust_adaptive_pool(self):
         """根据负载等级动态调整自适应线程池大小。
 
@@ -1443,7 +1443,7 @@ class InfoField(SilentLogMixin):
             new_size = max(2, actual_max // 2)   # 至少2个，保持基本吞吐
         else:  # critical
             new_size = 0
-        
+
         if new_size != self._adaptive_pool_size:
             old_size = self._adaptive_pool_size
             self._adaptive_pool_size = new_size
@@ -1533,9 +1533,9 @@ class InfoField(SilentLogMixin):
             self._override_deadline = 0.0
             self._override_extra_parallelism = 0
             _module_logger.warning("R5 例外突破因 critical 负载被强制回收")
-    
+
     # ========== 统一异步任务提交入口 ==========
-    
+
     def submit_adaptive_task(self, task_func: Callable, task_name: str = "",
                              priority: str = "normal", *args, **kwargs) -> bool:
         if self._shutting_down:
@@ -1623,13 +1623,13 @@ class InfoField(SilentLogMixin):
                                      f"{task_name}: {_e}\n{traceback.format_exc()}")
                 return False
         return False
-    
+
     def get_load_level(self) -> str:
         return self._load_level
-    
+
     def is_high_load(self) -> bool:
         return self._load_level in ("heavy", "critical")
-    
+
     def get_adaptive_tuning_state(self) -> dict[str, Any]:
         """★三期观测接口：暴露运行时自适应智能化状态（供日志/健康面板消费）。"""
         return {
@@ -1642,7 +1642,7 @@ class InfoField(SilentLogMixin):
             "override_active": bool(self._override_deadline and time.time() < self._override_deadline),
             "override_extra_parallelism": self._override_extra_parallelism,
         }
-    
+
     # ========== ★P0-4：分层队列有界背压（稳态规则7「风暴队列上限」落地） ==========
 
     @staticmethod
@@ -2220,13 +2220,13 @@ class InfoField(SilentLogMixin):
         """动态调整指定层级的线程池大小（线程安全，永不摘除池）"""
         if layer not in self._layer_pools:
             return
-        
+
         pool = self._layer_pools[layer]
         current = pool._max_workers
-        
+
         if not force and current == target_workers:
             return
-        
+
         # 当目标 worker 数为 0 或负时，保持池存在但缩小到 1 worker。
         # ★P2-8修复：不再标记 _layer_disabled 强制走同步执行——同步兜底会阻塞
         # publish 线程、且不经过 _dispatch_handler（导致 _total_handled 停增、
@@ -2237,14 +2237,14 @@ class InfoField(SilentLogMixin):
         # 清理可能残留的禁用标记（历史版本遗留），确保异步路径始终可用
         if hasattr(self, '_layer_disabled') and layer in self._layer_disabled:
             self._layer_disabled[layer] = False
-        
+
         new_pool = ThreadPoolExecutor(
             max_workers=target_workers,
             thread_name_prefix=f"{layer}-Adaptive"
         )
         old_pool = self._layer_pools[layer]
         self._layer_pools[layer] = new_pool
-        
+
         # ★P2-9修复：原实现 spawn 一个 daemon 线程执行 old_pool.shutdown(wait=True)，
         # 若旧池 worker 卡死（如锁死锁），wait=True 永不返回，每次 resize 都泄漏
         # 一个线程 + 卡死 worker，累积成数百线程。改为 wait=False + cancel_futures，
@@ -2313,7 +2313,7 @@ class InfoField(SilentLogMixin):
             #   且此处必须「吞掉」——池重建失败不能打断调用方（L0 看门狗）。
             _module_logger.debug(f"[池重建] 旧池shutdown异常(已忽略): {_rsz_e}")
     # ========== v9.5: 器官并发控制 ==========
-    
+
     def _check_organ_concurrency(self, organ_name: str) -> bool:
         max_concurrent = self._organ_max_concurrent
         if max_concurrent <= 0:
@@ -2321,19 +2321,19 @@ class InfoField(SilentLogMixin):
         with self._organ_concurrent_lock:
             current = self._organ_concurrent_count.get(organ_name, 0)
             return current < max_concurrent
-    
+
     def _increment_organ_concurrency(self, organ_name: str):
         with self._organ_concurrent_lock:
             self._organ_concurrent_count[organ_name] = self._organ_concurrent_count.get(organ_name, 0) + 1
-    
+
     def _decrement_organ_concurrency(self, organ_name: str):
         with self._organ_concurrent_lock:
             current = self._organ_concurrent_count.get(organ_name, 0)
             if current > 0:
                 self._organ_concurrent_count[organ_name] = current - 1
-    
+
     # ========== 共振条件注册 ==========
-    
+
     def _dup_trace_check(self, pulse: dict[str, Any], event_type: str) -> None:
         """★主线第25批 T1/P2-160：重复事件遥测（诊断用，默认关闭）。
 
@@ -2382,7 +2382,7 @@ class InfoField(SilentLogMixin):
         except Exception as _exc:
             _module_logger.debug(f"[重复事件遥测] 异常已忽略: {type(_exc).__name__}: {_exc}")
 
-    def register_condition(self, organ_name: str, 
+    def register_condition(self, organ_name: str,
                            event_types: list[str] | None = None,
                            space_paths: list[str] | None = None,
                            intent_labels: list[str] | None = None,
@@ -2402,23 +2402,23 @@ class InfoField(SilentLogMixin):
                 "handler": handler,
             }
             return cond_id
-    
+
     def unregister_condition(self, cond_id: str) -> bool:
         with self._lock:
             if cond_id in self._conditions:
                 del self._conditions[cond_id]
                 return True
             return False
-    
+
     # ========== 脉冲历史查询 ==========
-    
+
     def get_history(self, limit: int = 20, event_type: str | None = None) -> list[dict]:
         with self._lock:
             history = list(self._history)
         if event_type:
             history = [h for h in history if h.get("event_type") == event_type]
         return list(reversed(history))[-limit:]
-    
+
     def get_current(self, key: str) -> Any | None:
         now_ns = time.time_ns()
         with self._lock:
@@ -2429,9 +2429,9 @@ class InfoField(SilentLogMixin):
                     if ttl_ns <= 0 or (now_ns - ts_ns) <= ttl_ns:
                         return pulse
         return None
-    
+
     # ========== 统计信息 ==========
-    
+
     def get_total_handled(self) -> int:
         """公开只读访问已处理脉冲计数，供假死探测器使用（规则14）"""
         # ★PHASE14-锁优化：读端必须与写端同一把锁，改用 _handled_lock。
@@ -2447,7 +2447,7 @@ class InfoField(SilentLogMixin):
                 "max_workers": pool._max_workers,
                 "active": True,
             }
-        
+
         with self._lock:
             return {
                 "total_published": self._total_published,
@@ -2581,7 +2581,7 @@ class InfoField(SilentLogMixin):
             "max_concurrent_ops": 2,
             "timestamp": time.time(),
         }
-        
+
         # 获取外部操作调度器状态
         try:
             from nucleus.external_executor import get_external_executor
@@ -2592,10 +2592,10 @@ class InfoField(SilentLogMixin):
         except Exception as _ee_e:
             # ★P0-1修复（第十二批）：原为 self._log（幽灵方法）→ 改用模块 logger
             _module_logger.debug(f"[状态采集] 外部执行器状态获取异常(已忽略): {_ee_e}")
-        
+
         return state
     # ========== 内部方法：条件匹配 ==========
-    
+
     def _match_condition(self, pulse: dict[str, Any], condition: dict[str, Any]) -> bool:
         event_type = pulse.get("event_type", "")
         priority = pulse.get("priority", 5)
@@ -2605,7 +2605,7 @@ class InfoField(SilentLogMixin):
         if not event_types:
             return True
         return any(self._match_event(event_type, pattern) for pattern in event_types)
-    
+
     def _apply_discovered_patterns(self, patterns: list):
         """★P1补强：应用发现的事件模式——高频模式发射预测信号。"""
         try:
@@ -2733,26 +2733,26 @@ class InfoField(SilentLogMixin):
         if len(pattern_parts) != len(event_parts):
             return False
         return all(not (pp != "*" and pp != ep) for pp, ep in zip(pattern_parts, event_parts))
-    
+
     # ========== v9.5: 分层调度管理 ==========
-    
+
     def get_layer_pool(self, layer: str) -> ThreadPoolExecutor | None:
         return self._layer_pools.get(layer)
-    
+
     def set_field_mode(self, mode: str):
         if mode in ("PULSE", "OSCILLATION", "MIXED"):
             self._field_mode = mode
-    
+
     def get_field_mode(self) -> str:
         return self._field_mode
-    
-    def set_storm_threshold(self, threshold: int): 
+
+    def set_storm_threshold(self, threshold: int):
         self._storm_threshold = threshold
-    
+
     def set_storm_action(self, action: str):
         if action in (_STORM_AGGREGATE, _STORM_THROTTLE, _STORM_REJECT):
             self._storm_action = action
-    
+
     def shutdown(self):
         self._shutting_down = True
         # ★v17.0修复：所有线程池统一使用wait=False快速关闭
@@ -2852,7 +2852,7 @@ def register_infofield_dead_events_schedule(scheduler=None):
 
 if __name__ == "__main__":
     print("=== InfoField v9.5 终极版自测 ===\n")
-    
+
     class MockOrgan:
         def __init__(self, name):
             self.name = name
@@ -2862,11 +2862,11 @@ if __name__ == "__main__":
             self.status = "running"
             self.organ_name = name
             self._lock = __import__('threading').Lock()
-        
+
         def on_pulse(self, pulse):
             self.received.append(pulse["event_type"])
             return {"status": "ok"}
-        
+
         def _handle_pulse_safe(self, pulse):
             if self.status == "fused":
                 return None
@@ -2878,14 +2878,14 @@ if __name__ == "__main__":
                     if self._error_count >= self._fuse_threshold:
                         self.status = "fused"
                 return None
-    
+
     field = InfoField(max_history=100)
     heart = MockOrgan("心脏")
     lung = MockOrgan("肺")
-    
+
     field.register_condition("心脏", event_types=["heart.*", "system.*", "test.*"], handler=heart.on_pulse)
     field.register_condition("肺", event_types=["lung.*", "system.*", "test.*"], handler=lung.on_pulse)
-    
+
     print("1. 基础异步分发:")
     result = field.publish({
         "pulse_id": "p1", "source_organ": "main",
@@ -2893,11 +2893,11 @@ if __name__ == "__main__":
         "priority": 5, "timestamp_ns": time.time_ns(), "payload": {}
     })
     print(f"   publish返回: {result['status']}, 异步={result.get('dispatched_async')}")
-    
+
     time.sleep(0.3)
     print(f"   心脏收到: {heart.received}")
     print(f"   肺收到: {lung.received}")
-    
+
     print("\n2. 幂等防重放:")
     result2 = field.publish({
         "pulse_id": "p1", "source_organ": "main",
@@ -2905,7 +2905,7 @@ if __name__ == "__main__":
         "priority": 5, "timestamp_ns": time.time_ns(), "payload": {}
     })
     print(f"   重复pulse_id: {result2['status']} (预期duplicate)")
-    
+
     print("\n3. N对一并发:")
     heart.received.clear()
     for i in range(5):
@@ -2916,19 +2916,19 @@ if __name__ == "__main__":
         })
     time.sleep(0.5)
     print(f"   心脏收到并发脉冲: {len([e for e in heart.received if e == 'test.concurrent'])} 条 (预期5)")
-    
+
     print("\n4. 分层线程池:")
     for layer in ["L0", "L1", "L2", "L3"]:
         pool = field.get_layer_pool(layer)
         print(f"   {layer}: {'✅' if pool else '❌'}")
-    
+
     stats = field.get_stats()
     print(f"\n5. 统计: 发布{stats['total_published']} 匹配{stats['total_matched']} "
           f"重复{stats['total_duplicated']} 风暴{stats['total_storm_blocked']} "
           f"缓存{stats['processed_cache_size']}")
     print(f"   负载等级: {stats['load_level']}, CPU: {stats['cpu_usage']}, MEM: {stats['mem_usage']}")
     print(f"   自适应线程池: {stats['adaptive_pool_size']} 线程, 活跃任务: {stats['active_tasks']}")
-    
+
     print("\n6. 自适应任务提交:")
     submitted = field.submit_adaptive_task(
         lambda msg: print(f"   [异步任务] {msg}"),
@@ -2938,17 +2938,16 @@ if __name__ == "__main__":
     )
     time.sleep(0.2)
     print(f"   任务提交: {'✅' if submitted else '❌'}")
-    
+
     print("\n7. 外部负载设置:")
     field.set_load_level("critical")
     print(f"   当前负载等级: {field.get_load_level()}")
     print(f"   自适应线程池: {field._adaptive_pool_size}")
-    
+
     field.set_load_level("light")
     print(f"   恢复后负载等级: {field.get_load_level()}")
     print(f"   自适应线程池: {field._adaptive_pool_size}")
-    
+
     field.shutdown()
     print("\n8. 线程池已关闭")
     print("\n=== 自测全部通过 ===")
-    

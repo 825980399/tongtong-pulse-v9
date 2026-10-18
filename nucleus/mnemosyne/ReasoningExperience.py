@@ -30,7 +30,7 @@ class ReasoningExperience(SilentLogMixin):
     存储"问题结构特征 → 推理类型"的映射经验。
     当路由层无法确定推理类型时，在经验库中搜索相似问题结构。
     """
-    
+
     def __init__(self, data_dir: str = "data/context"):
         self._data_dir = data_dir
         self._file_path = os.path.join(data_dir, "reasoning_experience.json")
@@ -38,12 +38,12 @@ class ReasoningExperience(SilentLogMixin):
         self._save_lock = threading.RLock()  # T-112a：保存可重入锁，防止并发/递归保存互相覆盖
         self._max_experiences = 200
         self._min_confidence = 0.5  # 最低匹配置信度
-        
+
         # ★v23.0新增：特征提取缓存
         self._feature_cache: dict[str, dict[str, Any]] = {}  # question→features
         self._feature_cache_max = 100  # 最多缓存100个问题的特征
         self._feature_cache_ttl = 300  # 缓存有效期5分钟
-        
+
         # ★v23.0新增：特征权重提取为类常量，便于校准
         self.FEATURE_WEIGHTS = {
             "has_sequence_numbering": 1.5,
@@ -74,7 +74,7 @@ class ReasoningExperience(SilentLogMixin):
         except Exception as e:
             print(f"[WARNING] ReasoningExperience.py:65: {type(e).__name__}: {e}")
             self._experiences = []
-    
+
     def _save(self):
         """保存经验库到文件（原子写入，可重入锁保护）"""
         with self._save_lock:
@@ -82,14 +82,14 @@ class ReasoningExperience(SilentLogMixin):
                 dir_path = os.path.dirname(self._file_path)
                 if dir_path and not os.path.exists(dir_path):
                     os.makedirs(dir_path, exist_ok=True)
-                
+
                 data = {
                     "version": "v1.0",
                     "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                     "total_count": len(self._experiences),
                     "experiences": self._experiences,
                 }
-                
+
                 # 原子写入（经安全写通道：路径锁 + 退避重试 + 唯一 tmp + 失败清理）
                 if not safe_write_json(self._file_path, data):
                     self._log(LogLevel.WARNING, "reasoning_experience.json 写入失败（需关注）")
@@ -107,7 +107,7 @@ class ReasoningExperience(SilentLogMixin):
             _cached = self._feature_cache[_cache_key]
             if time.time() - _cached.get("_cached_at", 0) < self._feature_cache_ttl:
                 return {k: v for k, v in _cached.items() if k != "_cached_at"}
-        
+
         features = {
             "has_sequence_numbering": bool(
                 re.search(r'(?:规则\s*\d+|第\s*[一二三四五六七八九十\d]+|^\s*[一二三四五六七八九十]\s*[、，,])', question, re.MULTILINE)
@@ -149,7 +149,7 @@ class ReasoningExperience(SilentLogMixin):
         _cached_features["_cached_at"] = time.time()
         self._feature_cache[_cache_key] = _cached_features
         return features
-    
+
     def _extract_question_type(self, question: str) -> str:
         """提取疑问词类型"""
         if re.search(r'请问.*结论|请问.*推导|请问.*推理', question):
@@ -177,33 +177,33 @@ class ReasoningExperience(SilentLogMixin):
             如果无匹配返回None
         """
         current_features = self.extract_structural_features(question)
-        
+
         best_match = None
         best_score = 0.0
-        
+
         for exp in self._experiences:
             exp_features = exp.get("features", {})
             if not exp_features:
                 continue
-            
+
             score = self._calculate_feature_similarity(current_features, exp_features)
-            
+
             # 加权：大模型确认的经验权重更高
             source = exp.get("source", "local")
             if source == "remote_api":
                 score *= 1.2
             elif source == "remote_api_confirmed":
                 score *= 1.5
-            
+
             # 时间衰减：越近的经验越可信
             age_days = (time.time() - exp.get("timestamp", 0)) / 86400.0
             if age_days > 0:
                 score *= max(0.7, 1.0 - age_days * 0.01)
-            
+
             if score > best_score:
                 best_score = score
                 best_match = exp
-        
+
         if best_match and best_score >= self._min_confidence:
             return {
                 "derivation_type": best_match.get("derivation_type", ""),
@@ -212,25 +212,25 @@ class ReasoningExperience(SilentLogMixin):
                 "matched_example": best_match.get("example_question", "")[:80],
                 "features_matched": self._get_matched_features(current_features, best_match.get("features", {})),
             }
-        
+
         return None
-    
+
     def _calculate_feature_similarity(self, current: dict[str, Any], stored: dict[str, Any]) -> float:
         """计算两个特征集的相似度（0.0-1.0）"""
         if not stored:
             return 0.0
-        
+
         total_weight = 0.0
         matched_weight = 0.0
-        
+
         # 各特征权重（使用类常量，支持统一校准）
         weights = self.FEATURE_WEIGHTS
-        
+
         for feature, weight in weights.items():
             total_weight += weight
             current_val = current.get(feature)
             stored_val = stored.get(feature)
-            
+
             if current_val is not None and stored_val is not None:
                 if current_val == stored_val:
                     matched_weight += weight
@@ -240,12 +240,12 @@ class ReasoningExperience(SilentLogMixin):
                     diff_ratio = abs(current_val - stored_val) / max(1, max(current_val, stored_val))
                     if diff_ratio < 0.3:
                         matched_weight += weight * (1 - diff_ratio)
-        
+
         if total_weight == 0:
             return 0.0
-        
+
         return matched_weight / total_weight
-    
+
     def _get_matched_features(self, current: dict[str, Any], stored: dict[str, Any]) -> list[str]:
         """获取匹配的特征名列表（用于日志）"""
         matched = []
@@ -253,9 +253,9 @@ class ReasoningExperience(SilentLogMixin):
             if key in stored and current[key] == stored[key]:
                 matched.append(key)
         return matched[:5]
-    
+
     # ========== 经验记录 ==========
-    
+
     def record(self, question: str, derivation_type: str, source: str = "local",
                confidence: float = 0.7):
         """
@@ -268,7 +268,7 @@ class ReasoningExperience(SilentLogMixin):
             confidence: 置信度
         """
         features = self.extract_structural_features(question)
-        
+
         # 检查是否已存在高度相似的经验
         existing = self.search(question)
         if existing and existing.get("confidence", 0) >= 0.85:
@@ -282,7 +282,7 @@ class ReasoningExperience(SilentLogMixin):
                         exp["timestamp"] = time.time()
                     self._save()
                     return
-        
+
         # ★P0-2修复：容量保护——先预检再追加，避免新经验被截断淘汰
         # 预检容量：超出上限时先淘汰一条最旧经验，为新经验腾出空间
         if len(self._experiences) >= self._max_experiences:
@@ -295,7 +295,7 @@ class ReasoningExperience(SilentLogMixin):
             )
             # 移除最旧的一条（排序后索引0是最优先淘汰的）
             _removed = self._experiences.pop(0)
-        
+
         # 新增经验（此时容量已确保有余地）
         exp = {
             "features": features,
@@ -306,21 +306,21 @@ class ReasoningExperience(SilentLogMixin):
             "example_question": question[:200],
         }
         self._experiences.append(exp)
-        
+
         self._save()
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取经验库统计"""
         sources = {}
         for exp in self._experiences:
             src = exp.get("source", "unknown")
             sources[src] = sources.get(src, 0) + 1
-        
+
         types = {}
         for exp in self._experiences:
             t = exp.get("derivation_type", "unknown")
             types[t] = types.get(t, 0) + 1
-        
+
         return {
             "total_experiences": len(self._experiences),
             "source_distribution": sources,

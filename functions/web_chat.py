@@ -384,7 +384,7 @@ setInterval(async () => {
 
 class WebChatHandler(BaseHTTPRequestHandler):
     """Web对话请求处理器"""
-    
+
     def log_message(self, format, *args):
         pass
     def _check_origin(self) -> bool:
@@ -408,7 +408,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
             # 175刀3：scheme 白名单 http/https 均支持
             if not any(origin.startswith(f'{_s}://{h}') for h in allowed_hosts for _s in ("http", "https")):
                 return False
-        return True    
+        return True
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             self._serve_html()
@@ -417,7 +417,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def do_POST(self):
         if not self._check_origin():
             self.send_response(403)
@@ -431,20 +431,20 @@ class WebChatHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def _serve_html(self):
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write(WEB_CHAT_HTML.encode('utf-8'))
-    
+
     def _serve_replies(self):
         replies = pop_replies()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.end_headers()
         self.wfile.write(json.dumps({"replies": replies}, ensure_ascii=False).encode('utf-8'))
-    
+
     def _get_current_user_name(self):
         """从信息场获取当前活跃身份"""
         try:
@@ -457,12 +457,12 @@ class WebChatHandler(BaseHTTPRequestHandler):
         except Exception as e:
             silent_exc(e, where="functions.web_chat::_get_current_user_name L451")
         return "访客"
-    
+
     def _handle_upload(self):
         """处理文件上传"""
         # 确保上传目录存在
         os.makedirs(_UPLOAD_DIR, exist_ok=True)
-        
+
         # 解析multipart/form-data
         content_type = self.headers.get('Content-Type', '')
         if 'multipart/form-data' not in content_type:
@@ -470,11 +470,11 @@ class WebChatHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": "需要multipart/form-data"}).encode('utf-8'))
             return
-        
+
         # 读取body
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
-        
+
         # 提取boundary
         boundary_match = re.search(r'boundary=([^\s]+)', content_type)
         if not boundary_match:
@@ -482,13 +482,13 @@ class WebChatHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": "缺少boundary"}).encode('utf-8'))
             return
-        
+
         boundary = boundary_match.group(1).encode('utf-8')
-        
+
         # 简单multipart解析
         parts = body.split(b'--' + boundary)
         saved_path = None
-        
+
         for part in parts:
             if b'filename=' in part:  # type: ignore[possibly-unbound]
                 # 提取文件名
@@ -496,7 +496,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                 if not header_match:
                     continue
                 filename = header_match.group(1).decode('utf-8', errors='replace')
-                
+
                 # 找到文件内容（两个\r\n\r\n之后）
                 header_end = part.find(b'\r\n\r\n')
                 if header_end == -1:
@@ -508,7 +508,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     file_content = file_content[:-2]
                 elif file_content.endswith(b'\n'):
                     file_content = file_content[:-1]
-                
+
                 # 保存文件（★v24.0安全修复：basename 防路径穿越）
                 import os.path as _osp
                 _clean_filename = _osp.basename(filename)  # type: ignore[possibly-unbound]
@@ -532,7 +532,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     f.write(file_content)
                 saved_path = file_path
                 break
-        
+
         if saved_path:
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -546,7 +546,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             self.wfile.write(json.dumps({"error": "未找到文件"}).encode('utf-8'))
-    
+
     def _handle_send(self):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
@@ -554,10 +554,10 @@ class WebChatHandler(BaseHTTPRequestHandler):
             data = json.loads(body)
             message = data.get('message', '')
             file_paths = data.get('file_paths', [])
-            
+
             if (message or file_paths) and hasattr(self.server, 'info_field') and hasattr(self.server, 'pulse_core'):
                 parsed = {"text": message, "code_blocks": [], "file_paths": list(file_paths)}
-                
+
                 # 识别代码块
                 code_pattern = r'```(\w*)\n(.*?)```'
                 matches = re.findall(code_pattern, message, re.DOTALL)
@@ -568,9 +568,9 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     })
                 if parsed["code_blocks"]:
                     parsed["text"] = re.sub(code_pattern, '【代码片段】', message, flags=re.DOTALL).strip()
-                
+
                 user_name = self._get_current_user_name()
-                
+
                 # 发射文本消息
                 if parsed["text"]:
                     chat_pulse = self.server.pulse_core.emit(
@@ -588,7 +588,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                         layer="L1"
                     )
                     self.server.info_field.publish(chat_pulse)
-                
+
                 # 处理上传的文件：直接发射视觉查询脉冲
                 for fp in file_paths:
                     if not os.path.exists(fp):
@@ -620,7 +620,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                             priority=7,
                             layer="L1"
                         ))
-            
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.end_headers()
@@ -632,13 +632,13 @@ class WebChatHandler(BaseHTTPRequestHandler):
 
 class WebChatServer:
     """Web对话窗口服务器"""
-    
+
     def __init__(self, port: int = 5052):
         self.port = port
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
-    
+
     def start(self, info_field=None, pulse_core=None):
         import os as _os
         import sys as _sys
@@ -651,7 +651,7 @@ class WebChatServer:
         self._running = True
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
-        
+
         # 注册人脸检测监听
         if info_field:
             from nucleus.const import ChatEvent as _ChatEvent
@@ -670,11 +670,11 @@ class WebChatServer:
                 event_types=[_PersonaEvent.SWITCHED, _ChatEvent.USER_PRESENCE_DETECTED, _ChatEvent.USER_LEFT],
                 handler=lambda p: on_persona_switched(p) if p.get("event_type") == _PersonaEvent.SWITCHED else (on_user_presence(p) if p.get("event_type") == _ChatEvent.USER_PRESENCE_DETECTED else on_user_left(p))
             )
-        
+
         # 确保上传目录存在
         os.makedirs(_UPLOAD_DIR, exist_ok=True)
         print(f"[Web对话] 对话窗口已启动 → http://localhost:{self.port}")
-    
+
     def stop(self):
         self._running = False
         if self._server:

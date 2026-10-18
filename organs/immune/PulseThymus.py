@@ -65,7 +65,7 @@ class PulseThymus(BasePulseOrgan):
 
         # 统计
         self._train_count = 0
-        
+
         # ===== v22.0 M5新增：心跳驱动定期训练 =====
         # ★v30.0负载均衡修复：随机错峰初始化，避免与其他器官取模任务同点共振
         self._heartbeat_count = random.randint(1, 299)

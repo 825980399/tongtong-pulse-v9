@@ -101,12 +101,12 @@ class SystemEvent:
     BOOT = "system.boot"
     STOP = "system.stop"
     STATUS_REQUEST = "system.status.request"
-    
+
     # 告警
     ALARM = "system.alarm"
     ERROR = "system.error"
     SAFE_MODE = "system.safe_mode"
-    
+
     # 硬件
     DEVICE_ATTACHED = "hardware.device.attached"
     DEVICE_DETACHED = "hardware.device.detached"
@@ -150,7 +150,7 @@ class ChatEvent:
 class MotorEvent:
     """运动系统事件"""
     EXECUTE = "motor.execute"
-    FILE_DIGEST = "motor.file_digest" 
+    FILE_DIGEST = "motor.file_digest"
 
 
 class ReflectionEvent:
@@ -230,7 +230,7 @@ class InferenceEvent:
 class InnerWorldEvent:
     # TODO: 预留接口，待未来功能使用（事件占位类，当前成员 CACHE_CLEAR 无引用）
     """内在世界相关事件"""
-    CACHE_CLEAR = "inner_world.cache_clear"    
+    CACHE_CLEAR = "inner_world.cache_clear"
 
 
 class SubconsciousEvent:
@@ -365,15 +365,15 @@ class ErrorCode:
     DEPENDENCY_MISSING = "dependency_missing"
     CONFIG_INVALID = "config_invalid"
     DIRECTORY_NOT_FOUND = "directory_not_found"
-    
+
     ORGAN_TIMEOUT = "organ_timeout"
     PULSE_TIMEOUT = "pulse_timeout"
     EXECUTION_FAILED = "execution_failed"
-    
+
     SECURITY_BLOCKED = "security_blocked"
     PERMISSION_DENIED = "permission_denied"
     INPUT_REJECTED = "input_rejected"
-    
+
     KNOWLEDGE_CORRUPTED = "knowledge_corrupted"
     SNAPSHOT_LOAD_FAILED = "snapshot_load_failed"
 
@@ -399,7 +399,7 @@ class EyeEvent:
     """眼睛/搜索相关事件"""
     SEARCH = "eyes.search"
     SEARCH_RESULT = "eyes.search_result"
-    VISUAL_QUERY = "eyes.visual_query" 
+    VISUAL_QUERY = "eyes.visual_query"
     STREAM_FRAME = "eyes.stream_frame"  # ← 新增：眼睛主动推送实时帧给视觉皮层
 class RiskEvent:
     """风险感知相关事件"""
@@ -430,7 +430,7 @@ class HormonesEvent:
     EMOTION_DETECTED = "hormones.emotion_detected"
     CARE_NEEDED = "hormones.care_needed"
 class EvolutionEvent:
-    """进化相关事件""" 
+    """进化相关事件"""
     MUTATE = "evolution.mutate"
     SAVE_BLUEPRINT = "evolution.save_blueprint"
     MUTATION_SUCCESS = "evolution.mutation_success"
@@ -447,7 +447,7 @@ class EthicsEvent:
     REVIEW_RESULT = "ethics.review_result"
 
 class GrowthEvent:
-    """成长评估相关事件""" 
+    """成长评估相关事件"""
     ASSESS = "growth.assess"
     MILESTONE_REACHED = "growth.milestone_reached"
     NEED_DETECTED = "growth.need_detected"
@@ -594,20 +594,20 @@ class ControllerEvent:
     LAUNCH_APP = "controller.launch_app"
     OPEN_URL = "controller.open_url"
     CLOSE_WINDOW = "controller.close_window"
-    SEARCH_STAGE_COMPLETED = "controller.search_stage_completed"  # 新增：搜索阶段完成反馈   
-    SEARCH_COMPLETED = "controller.search_completed"     
-    
+    SEARCH_STAGE_COMPLETED = "controller.search_stage_completed"  # 新增：搜索阶段完成反馈
+    SEARCH_COMPLETED = "controller.search_completed"
+
     # 文件操作
     READ_FILE = "controller.read_file"
     WRITE_FILE = "controller.write_file" # 预留：文件写入能力（阶段3）
     LIST_DIRECTORY = "controller.list_directory" # 预留：文件内容回传（阶段3）
     FILE_CONTENT = "controller.file_content"
-    
+
     # 桌面自动化
     MOUSE_CLICK = "controller.mouse_click"
     INPUT_TEXT = "controller.input_text"
     CAPTURE_SCREEN = "controller.capture_screen"
-    
+
     # 结果回传
     RESULT = "controller.result"
     ERROR = "controller.error"
@@ -638,7 +638,7 @@ class SearchEvent:
     STAGE_COMPLETED = ControllerEvent.SEARCH_STAGE_COMPLETED
 
 
-    
+
 
 
 # ========== 第58批 T5：统一事件常量（集中管理此前散落的硬编码事件名）==========

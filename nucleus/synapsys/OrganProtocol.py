@@ -59,26 +59,26 @@ class OrganProtocol:
         - 接口完整定义，基础注册/注销/升级已实现。
         - 通过功能开关控制激活状态，默认关闭。
     """
-    
+
     def __init__(self):
         # 已注册的器官清单: organ_name → manifest
         self._registered_organs: dict[str, dict[str, Any]] = {}
-        
+
         # 协议版本历史（用于回滚兼容）
         self._protocol_history: list[dict[str, Any]] = []
-        
+
         # 依赖关系图: organ_name → [dependent_organ_names]
         self._dependency_graph: dict[str, list[str]] = {}
-        
+
         # 并发安全锁
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_registered = 0
         self._total_unregistered = 0
         self._total_upgrades = 0
         self._total_rollbacks = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -207,36 +207,36 @@ class OrganProtocol:
         """
         if not self._enabled:
             return {"status": "disabled"}
-        
+
         with self._lock:
             if organ_name not in self._registered_organs:
                 return {"status": "not_found"}
-            
+
             return self._do_upgrade(organ_name, self._registered_organs[organ_name], new_manifest)
-    def _do_upgrade(self, organ_name: str, old_entry: dict[str, Any], 
+    def _do_upgrade(self, organ_name: str, old_entry: dict[str, Any],
                      new_manifest: dict[str, Any]) -> dict[str, Any]:
         """
         ★P0-2+P1-2修复：内部无锁升级逻辑。
         调用方必须已持有 self._lock。
         """
         old_manifest = old_entry["manifest"]
-        
+
         # 检查新版本兼容性
         compatibility = self._check_compatibility(new_manifest)
         if not compatibility["compatible"]:
             return {"status": "rejected", "reason": compatibility["reason"]}
-        
+
         # ★P1-2修复：升级前深拷贝旧状态，确保回滚时能完整恢复
         _backup_entry = {
             "manifest": dict(old_manifest),
             "registered_at": old_entry.get("registered_at", time.time()),
             "status": old_entry.get("status", OrganStatus_v2.ACTIVE),
         }
-        
+
         # 标记为升级中
         old_entry["status"] = OrganStatus_v2.UPGRADING
         old_entry["upgrade_started_at"] = time.time()
-        
+
         try:
             # 应用新声明
             old_entry["manifest"] = new_manifest
@@ -245,31 +245,31 @@ class OrganProtocol:
             # ★第106批 T-106c（预埋）：同步活跃度模型（声明可能新增/变更 activity_model）。
             old_entry["activity_model"] = new_manifest.get("activity_model")
             self._total_upgrades += 1
-            
+
             # 更新依赖关系图
             self._update_dependency_graph(organ_name, new_manifest.get("dependencies", []))
-            
+
             self._record_protocol_event(
                 "organ_upgraded",
                 organ_name=organ_name,
                 old_version=old_manifest["version"],
                 new_version=new_manifest["version"],
             )
-            
-            return {"status": "upgraded", "organ": organ_name, 
+
+            return {"status": "upgraded", "organ": organ_name,
                     "new_version": new_manifest["version"]}
-        
+
         except Exception as e:
             # ★P1-2修复：用深拷贝的备份完整恢复旧状态
             self._registered_organs[organ_name] = _backup_entry
             self._total_rollbacks += 1
-            
+
             self._record_protocol_event(
                 "organ_upgrade_failed",
                 organ_name=organ_name,
                 error=str(e),
             )
-            
+
             return {
                 "status": "rollback",
                 "organ": organ_name,
@@ -294,15 +294,15 @@ class OrganProtocol:
                 return {"status": "not_found"}
 
             # 从历史记录中查找上一个版本
-            history = [h for h in self._protocol_history 
+            history = [h for h in self._protocol_history
                       if h["event"] == "organ_upgraded" and h["details"].get("organ_name") == organ_name]
-            
+
             if not history:
                 return {"status": "no_history", "message": "未找到可回滚的历史版本"}
 
             last_upgrade = history[-1]
             old_version = last_upgrade["details"]["old_version"]
-            
+
             self._total_rollbacks += 1
             self._record_protocol_event("organ_rollback", organ_name=organ_name, restored_version=old_version)
 
@@ -435,10 +435,10 @@ class OrganProtocol:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== OrganProtocol 自测（P3补齐版） ===\n")
-    
+
     protocol = OrganProtocol()
     protocol.enable()
-    
+
     # 1. 注册器官
     manifest = {
         "version": "1.0.0",
@@ -448,16 +448,16 @@ if __name__ == "__main__":
     }
     result = protocol.register_manifest("胃", manifest)
     print(f"1. 注册: {result['status']} v{result.get('version', '?')}")
-    
+
     # 2. 幂等注册
     result_idem = protocol.register_manifest("胃", manifest)
     print(f"2. 幂等注册: {result_idem['status']} - {result_idem.get('note', '')}")
-    
+
     # 3. 升级器官
     manifest_v2 = {**manifest, "version": "2.0.0", "capabilities": ["知识消化", "五维归属", "词表增强"]}
     result2 = protocol.upgrade_organ("胃", manifest_v2)
     print(f"3. 升级: {result2['status']} v{result2.get('new_version', '?')}")
-    
+
     # 4. 依赖检查
     result_dep = protocol.register_manifest("肝", {
         "version": "1.0.0",
@@ -466,19 +466,19 @@ if __name__ == "__main__":
         "dependencies": ["胃", "node_pool"],  # 依赖已注册的胃
     })
     print(f"4. 依赖注册: {result_dep['status']}")
-    
+
     # 5. 注销阻塞
     result_block = protocol.unregister_organ("胃")
     print(f"5. 注销阻塞: {result_block['status']} - 依赖者: {result_block.get('dependents', [])}")
-    
+
     # 6. 强制注销
     result_force = protocol.unregister_organ("胃", force=True)
     print(f"6. 强制注销: {result_force['status']}")
-    
+
     # 7. 统计
     stats = protocol.get_stats()
     print(f"7. 统计: 注册{stats['total_registered']} 注销{stats['total_unregistered']} "
           f"升级{stats['total_upgrades']} 回滚{stats['total_rollbacks']} 活跃{stats['active_organs']}")
-    
+
     protocol.disable()
     print("\n=== 自测全部通过 ===")

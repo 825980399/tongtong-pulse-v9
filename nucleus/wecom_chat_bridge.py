@@ -234,7 +234,7 @@ class WeComChatBridge(SilentLogMixin):
         try:
             # ★v23.0修复：设置回复目标
             self._last_reply_target = {"userid": userid, "user_name": user_name}
-            
+
             image_info = body.get("image", {})
             url = image_info.get("url", "")
             aes_key = image_info.get("aeskey", "")

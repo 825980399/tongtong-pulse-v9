@@ -28,7 +28,7 @@ class Actuator:
         - 在桌面PC环境下，执行器列表可能为空或仅有基础设备。
         - 接入机器人平台后自动激活完整驱动。
     """
-    
+
     # 支持的执行器类型及其标准脉冲事件
     ACTUATOR_TYPES = {
         "display": "actuator.display.show_text",
@@ -37,19 +37,19 @@ class Actuator:
         "led": "actuator.led.set_color",
         "servo": "actuator.motor.move_to",
     }
-    
+
     def __init__(self):
         # 已连接的执行器: device_id → {type, driver, status, last_action}
         self._devices: dict[str, dict[str, Any]] = {}
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_actions = 0
         self._total_successes = 0
         self._total_failures = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -291,35 +291,35 @@ class Actuator:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== Actuator 自测 ===\n")
-    
+
     actuator = Actuator()
     actuator.enable()
-    
+
     # 1. 设备列表
     devices = actuator.get_device_list()
     print(f"1. 已连接执行器: {len(devices)} 个")
     for d in devices:
         print(f"   - {d['device_id']}: {d['type']} ({d['status']})")
-    
+
     # 2. 执行动作
     result = actuator.execute("display_0", "show_text", {"text": "你好，曈曈！"})
     print(f"\n2. 显示文本: {result['status']} ({result['elapsed_ms']}ms)")
-    
+
     result2 = actuator.execute("speaker_0", "say", {"text": "守护这个世界"})
     print(f"3. 语音输出: {result2['status']}")
-    
+
     # 4. 设备可用性
     has_display = actuator.is_device_available("display")
     has_motor = actuator.is_device_available("motor")
     print(f"\n4. 设备可用性: 显示={'✅' if has_display else '❌'}, 电机={'✅' if has_motor else '❌'}")
-    
+
     # 5. 紧急停止
     estop = actuator.emergency_stop("测试急停")
     print(f"5. 紧急停止: {estop['stopped_devices']}")
-    
+
     # 6. 统计
     stats = actuator.get_stats()
     print(f"\n6. 统计: 动作{stats['total_actions']}次, 成功{stats['total_successes']}次, 成功率{stats['success_rate']:.1%}")
-    
+
     actuator.disable()
     print("\n=== 自测全部通过 ===")

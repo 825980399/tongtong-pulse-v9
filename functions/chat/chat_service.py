@@ -45,7 +45,7 @@ FUNCTION_META = {
 }
 
 
-class ChatService: 
+class ChatService:
     """对话交互功能模块（v9.5 异步双向版）"""
 
     def __init__(self):
@@ -69,7 +69,7 @@ class ChatService:
         self._silence_level = 0  # 当前沉默次数（0表示还没触发过主动交互）
         self._silence_intervals = [120, 600, 1800, 3600, 7200]  # 5次递进间隔
         # 当前活跃用户（视觉皮层检测到人脸时会更新）
-        self._current_user_name = "访客"        
+        self._current_user_name = "访客"
 
     # ========== 框架注入 ==========
 
@@ -142,7 +142,7 @@ class ChatService:
             user_name = payload.get("current_user", "访客")  # ★T-115e R2：未知用户默认"访客"而非"小林"
             self._current_user_name = user_name
             return
-        
+
         # 处理人脸检测事件（保留欢迎/告别打印）
         if event_type == ChatEvent.USER_PRESENCE_DETECTED:
             user_name = payload.get("user_name", "访客")  # ★T-118a 未知/访客占位
@@ -254,7 +254,7 @@ class ChatService:
             )
             self.info_field.publish(goodbye_pulse)
             return
-        
+
         # 原有的回复处理逻辑
         content = payload.get("content", "")
         source = payload.get("source", "unknown")
@@ -385,7 +385,7 @@ class ChatService:
             self._reset_silence_timer()
             return True
         elif cmd.startswith(("approve", "批准")):
-            self._approve_patch(cmd) 
+            self._approve_patch(cmd)
             self._reset_silence_timer()
             return True
         elif cmd in ("params", "参数"):
@@ -557,17 +557,17 @@ class ChatService:
         if not self.framework:
             print("\n📊 系统状态: 框架未初始化\n")
             return
-        
+
         # ===== 基础数据 =====
         stats_pool = self.framework.node_pool.get_stats()
         stats_field = self.info_field.get_stats() if self.info_field else {}
         evol = stats_pool.get('evol_distribution', {})
         instinct_count = stats_pool.get('instinct_count', 0)
         load_level = stats_field.get('load_level', '?')
-        
+
         # ★v17.0修复：L3数量不应该减去本能数，L4是独立存储的
         l3_count = evol.get('L3', 0)
-        
+
         # ★v17.0修复：动态获取器官在线数
         _organs_online = 0
         _organs_total = 0
@@ -577,7 +577,7 @@ class ChatService:
                     _organs_total += 1
                     if getattr(_o, 'is_running', False):
                         _organs_online += 1
-        
+
         # ===== v17.0新增：代码学习进度 =====
         _code_progress_text = ""
         try:
@@ -592,7 +592,7 @@ class ChatService:
                         _code_progress_text = f"代码理解: {_understood}/{_total_methods} ({_pct}%)"
         except Exception as _se:
             silent_exc(_se, "chat_service.py:513")
-        
+
         # ===== v17.0新增：直觉命中率 =====
         _intuition_text = ""
         try:
@@ -607,7 +607,7 @@ class ChatService:
                         _intuition_text = f"直觉命中: {_hits}/{_queries} ({_rate}%)"
         except Exception as _se:
             silent_exc(_se, "chat_service.py:528")
-        
+
         # ===== v17.0新增：对话记忆数 =====
         _conv_mem_text = ""
         try:
@@ -618,7 +618,7 @@ class ChatService:
                     _conv_mem_text = f"对话记忆: {_conv_count}条"
         except Exception as _se:
             silent_exc(_se, "chat_service.py:539")
-        
+
         # ===== v17.0新增：生命周期阶段 =====
         _life_stage_text = ""
         try:
@@ -631,7 +631,7 @@ class ChatService:
                         _life_stage_text = f"生命阶段: {_stage_short}"
         except Exception as _se:
             silent_exc(_se, "chat_service.py:552")
-        
+
         # ===== v17.0新增：代码问题趋势 =====
         _code_trend_text = ""
         try:
@@ -648,7 +648,7 @@ class ChatService:
                 _code_trend_text = "代码问题: →稳定"
         except Exception as _se:
             silent_exc(_se, "chat_service.py:569")
-        
+
         # ===== 第64批 T5：器官扫描缓存统计 =====
         _cache_stats_text = ""
         try:
@@ -765,10 +765,10 @@ class ChatService:
                 _lines.append(f"   生命状态: {ls['state']} ({ls['description']})")
                 _lines.append(f"   探索间隔: {ls['explore_interval']:.0f}s  梦境间隔: {ls['dream_interval']:.0f}s")
         _lines.append("")
-        
+
         _status_output = "\n".join(_lines)
         print(_status_output)
-        
+
         # 同时发射脉冲供Web对话窗口获取（精简版）
         if self.pulse_core and self.info_field:
             _web_lines = [
@@ -883,7 +883,7 @@ class ChatService:
         if self._is_simple_question(text):
             self._send_chat_message(text, user_input, is_complex=False,
                                     code_blocks=parsed.get("code_blocks", []),
-                                    file_paths=parsed.get("file_paths", [])) 
+                                    file_paths=parsed.get("file_paths", []))
         else:
             self._send_chat_message(text, user_input, is_complex=True,
                                     code_blocks=parsed.get("code_blocks", []),
@@ -985,7 +985,7 @@ class ChatService:
         user = self._current_user_name or "访客"
         if user not in self._short_term_memory:
             self._short_term_memory[user] = deque(maxlen=self._max_memory_per_user)
-        
+
         self._short_term_memory[user].append({
             "speaker": speaker,
             "content": content[:200],
@@ -1048,7 +1048,7 @@ class ChatService:
                 "code": code_content,
             })
             result["text"] = user_input  # 保留原文给内在世界
-            return result        
+            return result
         # 1. 提取代码块（```语言\n代码\n```）
         code_pattern = r'```(\w*)\n(.*?)```'
         matches = re.findall(code_pattern, user_input, re.DOTALL)
@@ -1111,10 +1111,10 @@ class ChatService:
             return
         if not self.info_field or not self.pulse_core:
             return
-        
+
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._silence_level += 1
-        
+
         chat_pulse = self.pulse_core.emit(
             source_organ="对话模块",
             event_type=ChatEvent.SILENCE_TIMEOUT,
@@ -1128,7 +1128,7 @@ class ChatService:
             layer="L1"
         )
         self.info_field.publish(chat_pulse)
-        
+
         # 如果还没到5次，启动下一级计时器
         if self._silence_level < 5:
             next_interval = self._silence_intervals[self._silence_level]  # silence_level 已经+1了，所以这里用当前索引

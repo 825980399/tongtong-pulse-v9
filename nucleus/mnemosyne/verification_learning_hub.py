@@ -48,7 +48,7 @@ class VerificationLearningHub:
         self._entries: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self._organ_appliers: dict[str, Callable] = {}
-    
+
         self._load()
         # ★FIX: 不在构造期自动蒸馏（此时 applier 尚未注册，规则会产出即丢失），
         #   改为首个 applier 注册后延迟触发，见 register_applier

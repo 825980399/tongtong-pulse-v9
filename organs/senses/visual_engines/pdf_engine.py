@@ -28,12 +28,12 @@ def process(file_path: str, max_pages: int = 10) -> dict[str, Any]:
             "pages": 0,
             "error": f"文件不存在: {file_path}"
         }
-    
+
     result = {"text": "", "confidence": 0.0, "source": "pdf_engine", "pages": 0, "error": None}
-    
+
     try:
         import fitz  # PyMuPDF
-        
+
         _doc = fitz.open(file_path)
         try:
             _pages = min(len(_doc), max_pages)
@@ -46,17 +46,17 @@ def process(file_path: str, max_pages: int = 10) -> dict[str, Any]:
                     _text_parts.append(f"[第{_page_num + 1}页]\n{_page_text.strip()}")
         finally:
             _doc.close()
-        
+
         if _text_parts:
             result["text"] = "\n\n".join(_text_parts)
             result["confidence"] = 0.95
             result["pages"] = _pages
         else:
             result["error"] = "PDF中未提取到文字内容"
-        
+
     except ImportError:
         result["error"] = "PyMuPDF(fitz)未安装，请运行: pip install PyMuPDF"
     except Exception as e:
         result["error"] = f"PDF提取异常: {str(e)[:80]}"
-    
+
     return result

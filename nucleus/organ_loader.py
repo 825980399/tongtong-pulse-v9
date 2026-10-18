@@ -22,7 +22,7 @@ _module_logger = get_module_logger("OrganLoader")
 
 class OrganMeta:
     """器官元数据定义"""
-    def __init__(self, 
+    def __init__(self,
                  name: str,
                  module_path: str,
                  class_name: str,
@@ -75,7 +75,7 @@ class OrganMeta:
 
 class OrganLoader:
     """器官加载器"""
-    
+
     # 框架组件名到实际属性名的映射
     _framework_components = {
         'node_pool': 'node_pool',
@@ -88,7 +88,7 @@ class OrganLoader:
         'touch': 'touch',
         'system_manager': 'system_manager',
     }
-    
+
     def __init__(self, framework):
         """
         Args:
@@ -97,7 +97,7 @@ class OrganLoader:
         self.framework = framework
         self._loaded_organs: dict[str, Any] = {}
         self._scanned_metas: list[OrganMeta] | None = None
-    
+
     def scan_organs_directory(self) -> list[OrganMeta]:
         """
         扫描 organs/ 目录，通过导入模块获取 ORGAN_META。
@@ -105,20 +105,20 @@ class OrganLoader:
         """
         organs_dir = os.path.join(os.path.dirname(__file__), '..', 'organs')
         metas = []
-        
+
         # 遍历 organs/ 下的所有子目录
         for system_dir in os.listdir(organs_dir):
             system_path = os.path.join(organs_dir, system_dir)
             if not os.path.isdir(system_path) or system_dir.startswith('_'):
                 continue
-            
+
             for filename in os.listdir(system_path):
                 if not filename.endswith('.py') or filename.startswith('_'):
                     continue
-                
+
                 module_name = filename[:-3]  # 去掉 .py
                 full_module_path = f"organs.{system_dir}.{module_name}"
-                
+
                 try:
                     module = importlib.import_module(full_module_path)
                     if hasattr(module, 'ORGAN_META'):
@@ -137,9 +137,9 @@ class OrganLoader:
                         metas.append(meta)
                 except Exception as e:
                     _module_logger.error(f"加载模块 {full_module_path} 失败: {e}")
-        
+
         return metas
-    
+
     def load_organs(self, metas: list[OrganMeta] | None = None):
         """
         ★插件化阶段1：仅扫描 ORGAN_META 注册表，不创建器官。
@@ -183,7 +183,7 @@ class OrganLoader:
         )
         if not os.path.isdir(organs_dir):
             return result
-        
+
         # ★P3-3修复：已下线器官黑名单（功能被 PulseInnerWorld 推理链路替代，_simulate_inference 为假实现），
         # 跳过自动加载以消除「订阅了 inference.execute 却无人发射」的幽灵监听。
         _OFFLINE_ORGANS = {"PulseInferenceEngine"}
@@ -203,7 +203,7 @@ class OrganLoader:
                 result[organ_class_name] = organ
             except Exception as e:
                 _module_logger.error(f"动态加载器官失败({organ_class_name}): {e}")
-        
+
         return result
     def get_all_organs(self) -> list:
         """返回所有已加载的器官实例列表"""

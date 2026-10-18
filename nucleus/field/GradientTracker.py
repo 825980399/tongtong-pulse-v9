@@ -39,7 +39,7 @@ class GradientTracker(SilentLogMixin):
         - 接口完整定义，但仅做数据存储和基础统计。
         - 通过功能开关控制激活状态，默认关闭。
     """
-    
+
     def __init__(self, window_size: int = 60, sample_interval_seconds: float = 1.0):
         """
         Args:
@@ -50,28 +50,28 @@ class GradientTracker(SilentLogMixin):
         self._frequency_samples: deque = deque(maxlen=window_size)   # 频率采样序列
         self._amplitude_samples: deque = deque(maxlen=window_size)   # 振幅采样序列
         self._phase_samples: deque = deque(maxlen=window_size)       # 相位采样序列
-        
+
         self._window_size = window_size
         self._sample_interval = sample_interval_seconds
-        
+
         # 关联组件引用
         self.info_field = None
         self.event_stream = None
-        
+
         # 梯度阈值（超过阈值触发预警）
         self._alert_threshold_up = 2.0    # 上升梯度阈值
         self._alert_threshold_down = -2.0 # 下降梯度阈值
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_samples = 0
         self._total_alerts = 0
-        
+
         # 功能开关
         self._enabled = False
-        
+
         # ★v23.0新增：振荡场监视器引用
         self._oscillon_monitor = None
 
@@ -95,14 +95,14 @@ class GradientTracker(SilentLogMixin):
     def set_event_stream(self, event_stream):
         """注入事件流，用于获取原始事件数据"""
         self.event_stream = event_stream
-    
+
     def set_oscillon_monitor(self, monitor):
         """
         ★v23.0新增：注入振荡场监视器。
         每次采样后自动更新场状态快照，为未来振荡场模式积累数据。
         """
         self._oscillon_monitor = monitor
-    
+
     def _notify_monitor(self):
         """
         ★v23.0新增：通知振荡场监视器更新场状态。
@@ -184,7 +184,7 @@ class GradientTracker(SilentLogMixin):
             self._total_samples += 1
 
         return self._calculate_phase_gradient()
-    def sample_knowledge_growth(self, current_total: int, current_l2: int = 0, 
+    def sample_knowledge_growth(self, current_total: int, current_l2: int = 0,
                                   current_l3: int = 0) -> dict[str, Any]:
         """
         ★v23.0新增：采样知识节点增长速率。
@@ -201,7 +201,7 @@ class GradientTracker(SilentLogMixin):
         """
         if not self._enabled:
             return {"status": "disabled"}
-        
+
         # 知识质量分 = L2 + L3×3，比单纯总量更能反映真实成长
         _quality_score = float(current_l2 + current_l3 * 3)
         return self.sample_frequency(_quality_score)
@@ -220,7 +220,7 @@ class GradientTracker(SilentLogMixin):
         if not self._enabled:
             return {"status": "disabled"}
         return self.sample_frequency(rate)
-    
+
     def get_field_report(self) -> dict[str, Any]:
         """
         ★v23.0新增：获取场报告摘要。
@@ -230,7 +230,7 @@ class GradientTracker(SilentLogMixin):
         _freq_grad = self._calculate_frequency_gradient() if len(self._frequency_samples) >= 3 else None
         _amp_grad = self._calculate_amplitude_gradient() if len(self._amplitude_samples) >= 3 else None
         _phase_grad = self._calculate_phase_gradient() if len(self._phase_samples) >= 3 else None
-        
+
         return {
             "timestamp": time.time(),
             "knowledge_growth_trend": _freq_grad.get("trend", "insufficient") if _freq_grad else "insufficient",
@@ -248,26 +248,26 @@ class GradientTracker(SilentLogMixin):
         """
         _freq_grad = self._calculate_frequency_gradient() if len(self._frequency_samples) >= 3 else None
         _amp_grad = self._calculate_amplitude_gradient() if len(self._amplitude_samples) >= 3 else None
-        
+
         _summary = {
             "knowledge_growth_trend": "stable",
             "knowledge_growth_rate": 0.0,
             "knowledge_growth_accelerating": False,
         }
-        
+
         if _freq_grad and _freq_grad.get("status") == "ok":
             _first = _freq_grad.get("first_order", 0.0)
             _second = _freq_grad.get("second_order", 0.0)
             _trend = _freq_grad.get("trend", "stable")
-            
+
             if _first > 0.05:
                 _summary["knowledge_growth_trend"] = "rising"
             elif _first < -0.05:
                 _summary["knowledge_growth_trend"] = "falling"
-            
+
             _summary["knowledge_growth_rate"] = round(_first, 4)
             _summary["knowledge_growth_accelerating"] = abs(_second) > 0.5
-        
+
         return _summary
 
     # ========== 梯度计算 ==========
@@ -376,7 +376,7 @@ class GradientTracker(SilentLogMixin):
 
     # ========== 趋势预判（未来演化） ==========
 
-    def predict_next_value(self, gradient_type: str = "frequency", 
+    def predict_next_value(self, gradient_type: str = "frequency",
                           forecast_steps: int = 5) -> float | None:
         """
         【预留 v10.0】基于当前梯度预判未来值。

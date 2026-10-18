@@ -125,7 +125,7 @@ class PulseSkin(BasePulseOrgan):
 
         # 步骤2: 检查可疑操作
         warnings = []
-        for pattern in self._suspicious_patterns: 
+        for pattern in self._suspicious_patterns:
             if pattern in code:
                 warnings.append(pattern)
 

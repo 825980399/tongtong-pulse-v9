@@ -74,21 +74,21 @@ class ExternalOperation:
     # 任务标识
     task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     operation_type: str = "generic"  # 操作类型：search/http/file/hardware等
-    
+
     # 调度参数
     priority: OperationPriority = OperationPriority.NORMAL
     max_timeout: float = 60.0       # 最大执行时间（秒）
     submitted_at: float = field(default_factory=time.time)
-    
+
     # 视角标记
     view_mode: str = "OUTER_VIEW"   # INNER_VIEW/OUTER_VIEW
-    
+
     # 执行函数与回调
     executor_func: Callable | None = None
     on_completed: Callable | None = None  # 完成回调
     on_failed: Callable | None = None     # 失败回调
     on_progress: Callable | None = None   # 进度回调（用于硬件操作）
-    
+
     # 状态追踪
     status: OperationStatus = OperationStatus.PENDING
     started_at: float = 0.0
@@ -96,7 +96,7 @@ class ExternalOperation:
     progress: float = 0.0           # 进度 0.0-1.0
     result: Any = None
     error: str | None = None
-    
+
     # 额外参数（传递给执行函数）
     kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -108,37 +108,37 @@ class ExternalExecutor(SilentLogMixin):
     所有与外部世界交互的耗时操作，都通过此调度器统一管理。
     不限制操作类型，不关心谁在执行——只管理“如何安全高效地调度”。
     """
-    
+
     def __init__(self):
         self._lock = threading.Lock()
-        
+
         # 任务队列（按优先级分桶）
         self._urgent_queue: deque = deque()   # 紧急队列
         self._high_queue: deque = deque()     # 高优先级队列
         self._normal_queue: deque = deque()   # 普通队列
         self._low_queue: deque = deque()      # 低优先级队列
-        
+
         # 执行中任务
         self._active_operations: dict[str, ExternalOperation] = {}
-        
+
         # 历史记录（最近100条）
         self._history: deque = deque(maxlen=100)
-        
+
         # 操作类型去重缓存（可选，由操作类型决定是否需要去重）
         self._dedup_cache: dict[str, dict[str, float]] = {}
-        
+
         # 统计
         self._total_submitted = 0
         self._total_completed = 0
         self._total_failed = 0
         self._total_timeout = 0
-        
+
         # 关闭标志
         self._shutting_down = False
-        
+
         # 加载配置
         self._load_config()
-    
+
     def _load_config(self):
         """从config加载调度参数"""
         try:
@@ -170,9 +170,9 @@ class ExternalExecutor(SilentLogMixin):
             return max(1, min(self._max_concurrent, _ps // 2))
         except Exception:
             return self._max_concurrent
-    
+
     # ========== 任务提交 ==========
-    
+
     def submit(self, operation_type: str, executor_func: Callable,
                priority: OperationPriority = OperationPriority.NORMAL,
                view_mode: str = "OUTER_VIEW",
@@ -209,7 +209,7 @@ class ExternalExecutor(SilentLogMixin):
                 error="调度器已关闭"
             )
             return op
-        
+
         # 去重检查
         if self._enable_dedup and dedup_key:
             if self._is_duplicate(operation_type, dedup_key):
@@ -227,7 +227,7 @@ class ExternalExecutor(SilentLogMixin):
                 )
                 self._history.append(op)
                 return op
-        
+
         # 创建操作对象
         operation = ExternalOperation(
             operation_type=operation_type,
@@ -240,11 +240,11 @@ class ExternalExecutor(SilentLogMixin):
             on_progress=on_progress,
             kwargs=kwargs,
         )
-        
+
         # 标记去重
         if dedup_key:
             self._mark_submitted(operation_type, dedup_key)
-        
+
         # 按优先级加入对应队列（★P2-2修复：队列总长度上限，超限背压拒绝，防止无界积压）
         with self._lock:
             _queue_total = (len(self._urgent_queue) + len(self._high_queue) +
@@ -265,47 +265,47 @@ class ExternalExecutor(SilentLogMixin):
                 self._normal_queue.append(operation)
             else:
                 self._low_queue.append(operation)
-        
+
         # 尝试调度执行
         self._try_execute_next()
-        
+
         return operation
-    
+
     # ========== 队列调度 ==========
-    
+
     def _try_execute_next(self):
         """尝试从队列中取出下一个任务执行"""
         if self._shutting_down:
             return
-        
+
         with self._lock:
             active_count = len(self._active_operations)
             # ★P3-11修复：并发上限参考全局并行调度器的建议并行度
             if active_count >= self._get_effective_max_concurrent():
                 return
-            
+
             # 按优先级取任务
             operation = self._pop_next_task()
             if operation is None:
                 return
-            
+
             # 标记为执行中
             operation.status = OperationStatus.EXECUTING
             operation.started_at = time.time()
             self._active_operations[operation.task_id] = operation
-        
+
         # 在锁外调度执行（★A1【P0】：由每任务新建 Thread 改为有界外层调度池，
         # 消除线程爆炸；线程池线程本身即 daemon，语义保留）
         _SCHEDULER_EXECUTOR.submit(self._execute_operation, operation)
-    
+
     def _pop_next_task(self) -> ExternalOperation | None:
         """按优先级从各队列取任务"""
-        for queue in [self._urgent_queue, self._high_queue, 
+        for queue in [self._urgent_queue, self._high_queue,
                       self._normal_queue, self._low_queue]:
             if queue:
                 return queue.popleft()
         return None
-    
+
     def _execute_operation(self, operation: ExternalOperation):
         """在专用线程中执行操作，并强制应用 max_timeout（超时标记为 TIMEOUT 并释放槽位）"""
         try:
@@ -386,9 +386,9 @@ class ExternalExecutor(SilentLogMixin):
 
             # 尝试执行下一个任务
             self._try_execute_next()
-    
+
     # ========== 去重机制 ==========
-    
+
     # [批次4·深度体检][PERF-4] 去重缓存惰性清理，避免无界增长
     def _is_duplicate(self, operation_type: str, dedup_key: str) -> bool:
         """检查操作是否在冷却期内（同时惰性清理已过期条目，避免 _dedup_cache 无界增长）"""
@@ -403,7 +403,7 @@ class ExternalExecutor(SilentLogMixin):
             # ★PERF-4修复: 超过冷却期则删除该条目，防止缓存无界增长（内存泄漏）
             _bucket.pop(cache_key, None)
             return False
-    
+
     def _mark_submitted(self, operation_type: str, dedup_key: str):
         """标记操作已提交"""
         cache_key = f"{operation_type}:{dedup_key[:80]}"
@@ -411,9 +411,9 @@ class ExternalExecutor(SilentLogMixin):
             if operation_type not in self._dedup_cache:
                 self._dedup_cache[operation_type] = {}
             self._dedup_cache[operation_type][cache_key] = time.time()
-    
+
     # ========== 状态查询 ==========
-    
+
     def get_operation_status(self, task_id: str) -> dict[str, Any] | None:
         """查询指定任务的状态"""
         with self._lock:
@@ -425,7 +425,7 @@ class ExternalExecutor(SilentLogMixin):
                         break
                 else:
                     return None
-            
+
             return {
                 "task_id": op.task_id,
                 "operation_type": op.operation_type,
@@ -438,17 +438,17 @@ class ExternalExecutor(SilentLogMixin):
                 "completed_at": op.completed_at,
                 "error": op.error,
             }
-    
+
     def get_active_count(self) -> int:
         """获取当前活跃任务数"""
         return len(self._active_operations)
-    
+
     def get_queue_size(self) -> int:
         """获取当前排队任务数"""
         with self._lock:
-            return (len(self._urgent_queue) + len(self._high_queue) + 
+            return (len(self._urgent_queue) + len(self._high_queue) +
                     len(self._normal_queue) + len(self._low_queue))
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取调度器统计信息"""
         with self._lock:
@@ -458,20 +458,20 @@ class ExternalExecutor(SilentLogMixin):
                 "total_failed": self._total_failed,
                 "total_timeout": self._total_timeout,
                 "active_count": len(self._active_operations),
-                "queue_size": (len(self._urgent_queue) + len(self._high_queue) + 
+                "queue_size": (len(self._urgent_queue) + len(self._high_queue) +
                               len(self._normal_queue) + len(self._low_queue)),
                 "max_concurrent": self._max_concurrent,
                 "history_size": len(self._history),
             }
-    
+
     # ========== 生命周期 ==========
-    
+
     def shutdown(self):
         """优雅关闭调度器"""
         self._shutting_down = True
         with self._lock:
             # 取消所有排队任务
-            for queue in [self._urgent_queue, self._high_queue, 
+            for queue in [self._urgent_queue, self._high_queue,
                          self._normal_queue, self._low_queue]:
                 while queue:
                     op = queue.popleft()

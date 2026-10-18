@@ -555,7 +555,7 @@ def flush_to_file(force: bool = False):
             _LAST_PAIR_FLUSH_TS = _now
     if not force and not _claim_flush_gate():
         return
-    
+
     try:
         path = _get_output_path()
         orphan_path = _get_orphan_path()
@@ -563,13 +563,13 @@ def flush_to_file(force: bool = False):
         # 207批·刀3：成对流随 2s 闸落盘（增量、去重、超容回写）
         if _pulse_pair_dump_enabled():
             _dump_pairs()
-        
+
         with _lock:
             events_snapshot = list(_events)
-        
+
         # 写入实时事件（原子写）
         safe_write_json(path, events_snapshot[-150:], backup=False)
-        
+
         # 检测孤儿脉冲（★200刀1：传入订阅方提供器做判定撤销兜底）
         #   ★201刀1：判定窗不再硬编码 1.5，改由 _detect_orphans 取 config
         #     PULSE_TRACER_MIN_AGE_SEC（默认 1.5 → 零行为变化）
@@ -586,14 +586,14 @@ def flush_to_file(force: bool = False):
             except Exception as e:
                 print(f"[WARNING] pulse_tracer.py:128: {type(e).__name__}: {e}")
                 existing_orphans = []
-        
+
         # 去重：基于 timestamp + organ + event_type
         existing_keys = set()
         for o in existing_orphans:
             if isinstance(o, dict):
                 key = f"{o.get('timestamp',0):.3f}_{o.get('organ','')}_{o.get('event_type','')}"
                 existing_keys.add(key)
-        
+
         for o in new_orphans:
             if not isinstance(o, dict):
                 continue
@@ -601,12 +601,12 @@ def flush_to_file(force: bool = False):
             if key not in existing_keys:
                 existing_orphans.append(o)
                 existing_keys.add(key)
-        
+
         # 限制总数（★201刀1：上限改由 config PULSE_TRACER_MAX_ORPHANS 驱动）
         _orphan_cap = _max_orphans()
         if len(existing_orphans) > _orphan_cap:
             existing_orphans = existing_orphans[-_orphan_cap:]
-        
+
         # 原子写孤儿记录
         safe_write_json(orphan_path, existing_orphans, backup=False)
 

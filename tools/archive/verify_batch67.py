@@ -73,15 +73,15 @@ try:
     controller = AdaptiveFrequencyController()
     controller.register('test_operation', normal_interval=60, min_interval=300)
     controller.register('critical_operation', normal_interval=1, is_critical=True)
-    
+
     load = assess_load_level()
     print(f"  ✅ 当前负载等级: {load}")
-    
+
     interval_normal = controller.get_interval('test_operation')
     interval_critical = controller.get_interval('critical_operation')
     print(f"  ✅ 普通操作间隔: {interval_normal}秒")
     print(f"  ✅ 关键操作间隔: {interval_critical}秒 (应为0，不降频)")
-    
+
     if interval_critical == 0:
         print("  ✅ 关键操作白名单验证通过")
     else:

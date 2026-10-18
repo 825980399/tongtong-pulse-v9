@@ -137,14 +137,14 @@ def safe_read_json(path, default=None):
         default = {}
     if not os.path.exists(path):
         return default
-    
+
     # 空文件特殊处理：直接返回默认，不报警（可能是原子写的中间状态）
     try:
         if os.path.getsize(path) == 0:
             return default
     except Exception:
         pass
-    
+
     raw = None
     # ★第144批 T-144d：``utf-8-sig`` 置于首位——透明剥离 UTF-8 BOM，
     #   避免带 BOM 的 JSON 被 utf-8 成功解码后 json.loads 报 "Unexpected UTF-8 BOM"。

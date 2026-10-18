@@ -29,17 +29,17 @@ class SandboxCore:
         本模块作为安全服务提供方，不主动发射脉冲，因此无需 layer 标记。
         实际安全拦截脉冲（SecurityEvent.*）由各防御器官（皮肤/沙箱/伦理）按分层规则发射。
     """
-    
+
     def __init__(self, max_history: int = 100):
         self._lock = threading.Lock()
         self._event_history: list[dict[str, Any]] = []
         self._max_history = max_history
         self._blocked_count = 0
         self._passed_count = 0
-        
+
         # 安全态势评分 (0.0-1.0, 越高越危险)
         self._threat_level = 0.0
-    
+
     def adjudicate(self, content: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         统一安全裁决入口（v24.0实现实际审查）。
@@ -72,8 +72,8 @@ class SandboxCore:
                           "安全内容", threat_score=0.1)
         return {"verdict": "passed", "level": "L1",
                 "reason": "安全内容", "threat_score": 0.1}
-    
-    def record_event(self, event_type: str, source: str, verdict: str, 
+
+    def record_event(self, event_type: str, source: str, verdict: str,
                      reason: str = "", threat_score: float = 0.0, details: dict | None = None):
         """记录安全事件到历史"""
         with self._lock:
@@ -89,14 +89,14 @@ class SandboxCore:
             self._event_history.append(event)
             if len(self._event_history) > self._max_history:
                 self._event_history.pop(0)
-            
+
             if verdict == "blocked":
                 self._blocked_count += 1
                 self._threat_level = min(1.0, self._threat_level + 0.1)
             else:
                 self._passed_count += 1
                 self._threat_level = max(0.0, self._threat_level - 0.02)
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取安全统计"""
         with self._lock:

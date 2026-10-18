@@ -72,7 +72,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             from nucleus.ssrf_guard import safe_http_json
             _cfg = get_llm_call_config()
             _timeout = _cfg["timeout_by_purpose"]["general"]
-            
+
             # 超时重试机制：偶发网络问题自动重试1次
             _max_retries = 2
             _ok = False
@@ -88,12 +88,12 @@ class LLMEvolutionEngine(SilentLogMixin):
                         break
                 except Exception as _retry_err:
                     if _attempt < _max_retries - 1:
-                        self._log(LogLevel.DEBUG, 
+                        self._log(LogLevel.DEBUG,
                             f"LLM调用超时/异常，重试中（{_attempt+1}/{_max_retries}）: {type(_retry_err).__name__}")
                         time.sleep(1.0)
                         continue
                     raise
-            
+
             if not _ok or not isinstance(_data, dict):
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None

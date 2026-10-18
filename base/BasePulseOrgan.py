@@ -31,7 +31,7 @@ class BasePulseOrgan(ABC):
         7. 并发安全: _handle_pulse_safe 支持多线程并发调用，锁仅保护熔断状态（v9.5新增）
         8. 分层脉冲: _emit/_send 原生支持 layer 参数，脉冲自动标记层级（v9.5新增）
     """
-    
+
     def __init__(self, organ_name: str):
         """
         Args:
@@ -42,13 +42,13 @@ class BasePulseOrgan(ABC):
         self.pulse_core = None          # 由框架注入
         self.is_running = False
         self._pulse_id_counter = 0
-        
+
         # 接入统一日志系统
         self._logger = get_organ_logger(self.organ_name)
-        
+
         # 器官状态（OrganStatus 落地）
         self.status = OrganStatus.IDLE
-        
+
         # ===== 熔断机制（P1-1 · v9.5并发安全增强） =====
         self._error_count = 0
         self._fuse_threshold = 3
@@ -60,12 +60,12 @@ class BasePulseOrgan(ABC):
         self._trace_enabled = False          # 追踪开关（默认关闭）
         self._trace_buffer: list[dict[str, Any]] = []  # 追踪缓冲区
         self._trace_max_buffer = 100         # 缓冲区上限
-        self._trace_lock = threading.Lock()  # 追踪缓冲区锁        
+        self._trace_lock = threading.Lock()  # 追踪缓冲区锁
         # ★205刀2：LIF 影子观测器（默认 None，lazy 创建；观测不门控）
         self._lif_shadow = None
-    
+
     # ========== 框架注入接口（基类防御性空实现） ==========
-    
+
     def set_info_field(self, info_field):
         """
         ★v17.0防御性设计：注入全局信息场。
@@ -73,7 +73,7 @@ class BasePulseOrgan(ABC):
         心跳驱动器官必须覆盖此方法以确保心跳脉冲正常接收。
         """
         self.info_field = info_field
-        
+
     def set_pulse_core(self, pulse_core):
         """注入脉冲核心引擎。由框架在初始化时调用。"""
         self.pulse_core = pulse_core
@@ -202,7 +202,7 @@ class BasePulseOrgan(ABC):
         self._registered_cond_ids = []
 
     # ========== 时间中枢钩子（v9.x TimeCore） ==========
-    
+
     def on_time_tick(self, pulse) -> None:
         """
         ★v9.x TimeCore 时间中枢钩子：响应周期性 time.tick 广播。
@@ -216,7 +216,7 @@ class BasePulseOrgan(ABC):
         return None  # noqa: RET501
 
     # ========== 子类必须实现的抽象方法 ==========
-    
+
     @abstractmethod
     def on_pulse(self, pulse) -> dict[str, Any] | None:
         """
@@ -231,15 +231,15 @@ class BasePulseOrgan(ABC):
     @abstractmethod
     def get_resonance_conditions(self) -> list:
         """返回此器官订阅的共振条件列表。"""
-    
+
     # ========== 未来演化预留（v10.0 振荡场） ==========
-    
-    def on_field_oscillation(self, frequency: float, amplitude: float, 
+
+    def on_field_oscillation(self, frequency: float, amplitude: float,
                               phase: float, field_strength: float) -> dict[str, Any] | None:
         """【预留 v10.0】感知连续振荡场的变化。"""
         return None
     # ========== ★P1-4新增：统一状态快照接口 ==========
-    
+
     def get_state_snapshot(self) -> dict[str, Any]:
         """
         获取器官当前运行状态的快照，用于持久化恢复。
@@ -250,7 +250,7 @@ class BasePulseOrgan(ABC):
             {"status": str, "counters": {...}, "extra": ...}
         """
         return {}
-    
+
     def load_state_snapshot(self, state: dict[str, Any]):
         """
         从快照恢复器官运行状态。子类按需覆盖。
@@ -259,12 +259,12 @@ class BasePulseOrgan(ABC):
         Args:
             state: get_state_snapshot 方法返回的字典
         """
-    
-    # ========== 状态快照接口结束 ==========    
+
+    # ========== 状态快照接口结束 ==========
     # ========== 子类可用的工具方法 ==========
-    
+
     def _emit(self, event_type: str, payload: dict | None = None,
-              target_organ: str = "", 
+              target_organ: str = "",
               priority: int = 5, ttl_ns: int = 5_000_000_000,
               layer: str = "L1") -> str | None:
         """
@@ -299,7 +299,7 @@ class BasePulseOrgan(ABC):
             ttl_ns=ttl_ns,
             layer=layer,
         )
-        
+
     def _send(self, event_type: str, payload: dict | None = None,
               target_organ: str = "",
               priority: int = 5, ttl_ns: int = 5_000_000_000,
@@ -311,7 +311,7 @@ class BasePulseOrgan(ABC):
             self._log(LogLevel.WARNING,
                       f"脉冲发送失败: info_field 未注入，丢弃事件 {event_type}")
             return None
-        
+
         if self.pulse_core is not None:
             # v9.5: 直接将 layer 传入 PulseCore.emit，无需事后赋值
             pulse = self.pulse_core.emit(
@@ -323,16 +323,16 @@ class BasePulseOrgan(ABC):
                 target_organ=target_organ,
             )
 
-            
+
             # 发布脉冲并返回ID（正常路径，不依赖异常）
             self.info_field.publish(pulse)
             pulse_id = pulse.get("pulse_id", "") if isinstance(pulse, dict) else ""
             return pulse_id or None
-        
+
         # 兜底：手动构造脉冲（仅在pulse_core不可用时）
         self._pulse_id_counter += 1
         pulse_id = f"pulse:{self.organ_name}:{event_type}:{time.time_ns()}:{self._pulse_id_counter}"
-        
+
         pulse = {
             "pulse_id": pulse_id,
             "source_organ": self.organ_name,
@@ -345,7 +345,7 @@ class BasePulseOrgan(ABC):
             "amplitude": DEFAULT_AMPLITUDE,
             "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
-        
+
         # ★第226批（新方向）：兜底路径（pulse_core 不可用）亦经此打点，确保无 emit 漏记
         try:
             import config
@@ -359,7 +359,7 @@ class BasePulseOrgan(ABC):
             self._log(LogLevel.DEBUG, f"[226批] 兜底打点异常已记录: {exc_location()}")
         self.info_field.publish(pulse)
         return pulse_id
-        
+
     def _log(self, level: str, message: str, error_code: str | None = None):
         """使用统一日志系统输出日志。"""
         log_level = {
@@ -369,13 +369,13 @@ class BasePulseOrgan(ABC):
             LogLevel.ERROR: 40,
             LogLevel.CRITICAL: 50,
         }.get(level, 20)
-        
+
         if error_code:
             message = f"[{error_code}] {message}"
-        
+
         self._logger.log(log_level, message)
     # ========== ★v17.0 D8预埋：运行时追踪方法（v18.0启用） ==========
-    
+
     def _trace_entry(self, method_name: str, args: dict[str, Any] | None = None):
         """
         ★v17.0 D8预埋：记录方法入口追踪。
@@ -389,7 +389,7 @@ class BasePulseOrgan(ABC):
         """
         if not self._trace_enabled:
             return
-        
+
         import time as _time
         _entry = {
             "type": "entry",
@@ -402,7 +402,7 @@ class BasePulseOrgan(ABC):
             self._trace_buffer.append(_entry)
             if len(self._trace_buffer) > self._trace_max_buffer:
                 self._trace_buffer = self._trace_buffer[-self._trace_max_buffer:]
-    
+
     def _trace_exit(self, method_name: str, result: Any = None, duration: float = 0.0):
         """
         ★v17.0 D8预埋：记录方法出口追踪。
@@ -417,7 +417,7 @@ class BasePulseOrgan(ABC):
         """
         if not self._trace_enabled:
             return
-        
+
         import time as _time
         _exit = {
             "type": "exit",
@@ -429,7 +429,7 @@ class BasePulseOrgan(ABC):
         }
         with self._trace_lock:
             self._trace_buffer.append(_exit)
-    
+
     def _get_trace_summary(self) -> dict[str, Any]:
         """
         ★v17.0 D8预埋：获取追踪摘要。
@@ -438,14 +438,14 @@ class BasePulseOrgan(ABC):
         """
         with self._trace_lock:
             _entries = list(self._trace_buffer)
-        
+
         if not _entries:
             return {"total_traces": 0, "summary": "追踪缓冲区为空"}
-        
+
         _entry_count = sum(1 for _e in _entries if _e["type"] == "entry")
         _exit_count = sum(1 for _e in _entries if _e["type"] == "exit")
         _methods = list({_e["method"] for _e in _entries})
-        
+
         return {
             "total_traces": len(_entries),
             "entry_count": _entry_count,
@@ -454,21 +454,21 @@ class BasePulseOrgan(ABC):
             "buffer_usage": f"{len(_entries)}/{self._trace_max_buffer}",
             "enabled": self._trace_enabled,
         }
-    
+
     def enable_tracing(self):
         """★v17.0 D8预埋：启用运行时追踪"""
         self._trace_enabled = True
         self._log(LogLevel.INFO, f"运行时追踪已启用 (缓冲区={self._trace_max_buffer})")
-    
+
     def disable_tracing(self):
         """★v17.0 D8预埋：禁用运行时追踪"""
         self._trace_enabled = False
         self._log(LogLevel.INFO, f"运行时追踪已禁用 (共记录{len(self._trace_buffer)}条)")
         self._trace_buffer = []
-    
+
     # ========== 追踪方法结束 ==========
     # ========== 熔断机制（P1-1 · v9.5并发安全增强） ==========
-    
+
     # ========== 第205批 刀2：LIF 影子观测（观测不门控） ==========
 
     def _lif_observe(self, pulse: dict[str, Any]) -> None:
@@ -516,7 +516,7 @@ class BasePulseOrgan(ABC):
                 # 冷却结束，进入半开状态
                 self.status = OrganStatus.RECOVERING
                 self._log(LogLevel.INFO, "熔断冷却结束，进入恢复状态")
-        
+
         # 脉冲追踪模式：记录接收事件
         try:
             import config
@@ -536,7 +536,7 @@ class BasePulseOrgan(ABC):
                 result = self.on_time_tick(pulse)
             else:
                 result = self.on_pulse(pulse)
-            
+
             # 成功处理：重置错误计数（锁保护）
             with self._fuse_lock:
                 if self.status == OrganStatus.RECOVERING:
@@ -546,9 +546,9 @@ class BasePulseOrgan(ABC):
                     self._log(LogLevel.INFO, "已从熔断中恢复正常")
                 elif self._error_count > 0:
                     self._error_count = 0
-            
+
             return result
-            
+
         except Exception as e:
             # 异常处理（锁保护）
             import traceback
@@ -558,10 +558,10 @@ class BasePulseOrgan(ABC):
             with self._fuse_lock:
                 self._error_count += 1
                 # ★v23.0新增：打印完整堆栈跟踪，便于定位问题
-                self._log(LogLevel.ERROR, 
+                self._log(LogLevel.ERROR,
                           f"脉冲处理异常 (第{self._error_count}次): {e}\n{_tb[:2000]}",
                           error_code=ErrorCode.EXECUTION_FAILED)
-                
+
                 if self._error_count >= self._fuse_threshold:
                     self.status = OrganStatus.FUSED
                     cooldown = self._fuse_cooldown * self._fuse_multiplier
@@ -569,7 +569,7 @@ class BasePulseOrgan(ABC):
                     self._log(LogLevel.ERROR,
                               f"器官熔断! 冷却{cooldown}s (翻倍系数={self._fuse_multiplier})",
                               error_code=ErrorCode.ORGAN_TIMEOUT)
-                    
+
                     self._fuse_multiplier = min(self._fuse_multiplier * 2, 16)
                     _need_alarm = True
                     _alarm_payload = {
@@ -579,7 +579,7 @@ class BasePulseOrgan(ABC):
                         "cooldown": cooldown,
                         "message": f"器官 {self.organ_name} 已熔断",
                     }
-            
+
             # ★P2-1修复：锁外发射熔断告警（L0 生命线层），避免锁内发射脉冲导致潜在死锁
             if _need_alarm:
                 self._emit(SystemEvent.ALARM, _alarm_payload, priority=9, layer="L0")
@@ -597,19 +597,19 @@ class BasePulseOrgan(ABC):
                 self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
 
             return None
-    
+
     def is_available(self) -> bool:
         """判断器官当前是否可处理脉冲（v9.5: 线程安全）"""
         with self._fuse_lock:
             return self.is_running and self.status not in (OrganStatus.FUSED,)
-        
+
     # ========== 生命周期方法 ==========
-    
+
     def start(self):
         """启动器官。子类可覆盖，但必须调用 super().start()。"""
         self.is_running = True
         self.status = OrganStatus.RUNNING
-        
+
     def stop(self):
         """停止器官。子类可覆盖，但必须调用 super().stop()。"""
         self.is_running = False
@@ -655,14 +655,14 @@ class BasePulseOrgan(ABC):
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== BasePulseOrgan v9.5 并发安全自测 ===\n")
-    
+
     # 1. 抽象类保护
     try:
         organ = BasePulseOrgan("测试器官")
         print("❌ 应抛出 TypeError")
     except TypeError as e:
         print(f"✅ 抽象类保护正常: {e}")
-    
+
     # 2. 具体子类
     class TestOrgan(BasePulseOrgan):
         def on_pulse(self, pulse):
@@ -671,21 +671,21 @@ if __name__ == "__main__":
                 raise ValueError("模拟业务异常")
             self._log("DEBUG", f"收到脉冲: {event_type}")
             return {"status": "ok"}
-        
+
         def get_resonance_conditions(self):
             return []
-    
+
     class MockInfoField:
         def __init__(self):
             self.published = []
         def publish(self, pulse):
             self.published.append(pulse)
-            
+
     mock_field = MockInfoField()
     test_organ = TestOrgan("测试器官")
     test_organ.set_info_field(mock_field)
     test_organ.start()
-    
+
     # 3. _emit 的 layer 参数
     print("3. _emit 新增 layer 参数:")
     test_organ._emit("test.event", {"msg": "hello"}, layer="L0")
@@ -693,17 +693,17 @@ if __name__ == "__main__":
     print(f"   发射脉冲 layer={last_pulse.get('layer', '未设置')} (预期L0)")
     assert last_pulse.get("layer") == "L0"
     print("   ✅ layer参数正常")
-    
+
     # 4. 并发安全验证：10线程同时调用正常脉冲
     print("\n4. 并发安全验证（10线程同时调用）:")
     errors_in_threads = []
-    
+
     def concurrent_call(organ, event_type):
         try:
             organ._handle_pulse_safe({"event_type": event_type, "priority": 5})
         except Exception as e:
             errors_in_threads.append(str(e))
-    
+
     threads = []
     for i in range(10):
         t = threading.Thread(target=concurrent_call, args=(test_organ, "test.normal"))
@@ -714,12 +714,12 @@ if __name__ == "__main__":
     print(f"   线程异常数: {len(errors_in_threads)} (预期0)")
     assert len(errors_in_threads) == 0
     print("   ✅ 并发安全验证通过")
-    
+
     # 5. 并发熔断验证：混合正常和异常脉冲
     print("\n5. 并发熔断验证（混合正常+异常脉冲）:")
     test_organ._error_count = 0
     test_organ.status = "RUNNING"
-    
+
     mixed_threads = []
     for i in range(5):
         evt = "test.error" if i < 3 else "test.normal"
@@ -732,7 +732,7 @@ if __name__ == "__main__":
     print(f"   错误计数: {test_organ._error_count}")
     assert test_organ.status == "fused" or test_organ._error_count >= 3
     print("   ✅ 并发熔断验证通过")
-    
+
     # 6. _send 的 layer 透传（需要 mock PulseCore）
     class MockPulseCore:
         def emit(self, source_organ, event_type, payload, priority, layer="L1"):
@@ -753,7 +753,7 @@ if __name__ == "__main__":
     print(f"\n6. _send 透传 layer: pulse['layer']={sent_pulse.get('layer')} (预期L3)")
     assert sent_pulse.get("layer") == "L3"
     print("   ✅ _send layer透传正常")
-    
+
     test_organ.stop()
     print("\n=== 自测全部通过 ===")
-    
+

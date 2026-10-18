@@ -297,7 +297,7 @@ class SafeEvolutionExecutor:
     将推演方案转化为具体的修改建议，输出到洞察黑板和日志。
     绝不自动修改任何文件。
     """
-    
+
     def __init__(self):
         # ★主线第15批 T3/P1-93：子进程崩溃统计（按 mode 记次数与原因分布）
         self._crash_stats: dict[str, Any] = {}
@@ -3714,7 +3714,7 @@ class SafeEvolutionExecutor:
 
         return {"status": "reviewed", "reviewed": _reviewed, "distilled": _distilled, "report": _report}
 
-    def execute(self, plans: list[dict[str, Any]], 
+    def execute(self, plans: list[dict[str, Any]],
                 self_inspector=None) -> dict[str, Any]:
         """
         为推演方案生成可执行补丁。
@@ -3732,7 +3732,7 @@ class SafeEvolutionExecutor:
                 "summary": "无优化方案可执行。",
                 "patches": [],
             }
-        
+
         # ★多步规划(P1红项)：冲突感知——同一 organ+method 的多个计划，
         # 只执行优先级最高者（EvolutionSandbox 已按 benefit/risk 排序，先到者优先），
         # 其余标记 conflict 跳过，避免多个补丁同位置互相覆盖产生脏补丁。
@@ -3751,7 +3751,7 @@ class SafeEvolutionExecutor:
             else:
                 _plan_scope[_scope_key] = _p.get("id") or str(_p.get("type"))
         _plans = [p for p in _plans if not p.get("_skip")]
-        
+
         patches = []
         # ★自我反思闭环(P1红项): 验证失败不直接放弃——按失败阶段反思根因、换策略重试。
         #   全局预算 _retry_budget 限制整轮重试总数（防验证失败触发的重试风暴，峰值压力均衡）。
@@ -3860,9 +3860,9 @@ class SafeEvolutionExecutor:
                 else:
                     # 验证失败状态已由 while 循环内设置（verification_failed），无需重复处理
                     pass
-                
+
                 patches.append(patch)
-        
+
         # ★FIX(A5): 移除失效且危险的 _auto_apply_patch 直写路径，统一走 main.py 的 apply_all_pending（含安全门+核心审批）
         auto_applied = []
         auto_apply_enabled = False
@@ -3872,7 +3872,7 @@ class SafeEvolutionExecutor:
             auto_apply_enabled = evo_cfg.get("auto_apply_enabled", False)
         except Exception as e:
             _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        
+
         _approved_count = sum(1 for p in patches if p.get("status") == "approved")
         _core_approved = sum(1 for p in patches if p.get("status") == "approved" and p.get("is_core_file"))
         if _approved_count:
@@ -3881,7 +3881,7 @@ class SafeEvolutionExecutor:
         else:
             summary = f"安全执行完成：生成{len(patches)}个代码补丁，等待创造者审核。"
             warning = "以下补丁为只读建议，未自动修改任何代码文件。请创造者手动审核后执行。"
-        
+
         report = {
             "status": "completed",
             "summary": summary,
@@ -3891,13 +3891,13 @@ class SafeEvolutionExecutor:
             "warning": warning,
             "auto_apply_enabled": auto_apply_enabled,
         }
-        
+
         self._patch_log.append(report)
         if len(self._patch_log) > self._max_log:
             self._patch_log = self._patch_log[-self._max_log:]
-        
+
         return report
-    
+
     def _dynamic_llm_min_trust(self, issue_type: str, base_trust: int) -> int:
         """★策略自进化(元学习·下一层): LLM 补丁自动批准信任门槛按历史策略效果动态调整。
 
@@ -4381,7 +4381,7 @@ class SafeEvolutionExecutor:
         return _res
 
 
-    def _generate_patch(self, plan: dict[str, Any], 
+    def _generate_patch(self, plan: dict[str, Any],
                          self_inspector=None) -> dict[str, Any] | None:
         """
         【v16.0增强】生成包含完整修改前后代码对比的补丁。
@@ -4400,7 +4400,7 @@ class SafeEvolutionExecutor:
         plan_type = plan.get("type", "")
         organ_name = plan.get("target", "")
         method_name = plan.get("method", "")
-        
+
         # 读取原始代码
         original_code = ""
         file_path = ""
@@ -4414,7 +4414,7 @@ class SafeEvolutionExecutor:
                     file_path = organ_info.get("file_path", "")
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        
+
         if not file_path or not original_code:
             return None
 
@@ -4646,7 +4646,7 @@ class SafeEvolutionExecutor:
         # 说明检测器误报或代码形态不匹配，不应生成空补丁（避免「无实质性变更」的假补丁）。
         if modified_code == original_code:
             return None
-        
+
         # ★158-α-2：沙箱语法预检闸门——生成后立即隔离判据预检，语法错误直接拦截，
         #   避免后续质量评估 / LLM 重试算力浪费（与关2 验证口径同源 ast.parse）。
         _syn_ok, _syn_err = _sandbox_syntax_precheck(modified_code)
@@ -4654,10 +4654,10 @@ class SafeEvolutionExecutor:
             _module_logger.warning(
                 f"[沙箱语法预检] 拒绝语法错误补丁: {plan_type} {method_name}: {_syn_err}")
             return None
-        
+
         # 生成变更摘要
         diff_summary = self._generate_diff_summary(original_code, modified_code)
-        
+
         # ★P1-2(2026-09-04)：补丁质量评估——最小化改动约束 + 零冲突检查
         _quality = self._assess_patch_quality(original_code, modified_code, file_path)
         if not _quality.get("pass", True):
@@ -4669,7 +4669,7 @@ class SafeEvolutionExecutor:
             _module_logger.info(
                 f"[补丁质量] {plan_type} {method_name} 质量警告: "
                 f"得分={_quality['score']}, {_quality['issues'][0]}")
-        
+
         # ★FIX(A3): 从方案数值评分推导风险等级与信任分（此前 risk_level 恒为"低"，trust_score 硬编码）
         _risk_score = plan.get("risk_score", 2)
         _risk_map = {1: "极低", 2: "低", 3: "中等", 4: "高"}
@@ -4726,7 +4726,7 @@ class SafeEvolutionExecutor:
             "applied": False,
             "applied_at": 0,
         }
-    
+
     def _assess_patch_quality(self, original_code: str, modified_code: str,
                                 file_path: str = "") -> dict[str, Any]:
         """★P1-2(2026-09-04)：补丁质量评估——最小化改动约束 + 零冲突检查。
@@ -5403,31 +5403,31 @@ class SafeEvolutionExecutor:
             return "无法生成变更摘要"
         orig_lines = original.strip().split('\n')
         mod_lines = modified.strip().split('\n')
-        
+
         changes = []
         for i, (o, m) in enumerate(zip(orig_lines, mod_lines)):
             if o != m:
                 o_short = o.strip()[:40]
                 m_short = m.strip()[:40]
                 changes.append(f"第{i+1}行: '{o_short}' → '{m_short}'")
-        
+
         if len(mod_lines) > len(orig_lines):
             for i in range(len(orig_lines), len(mod_lines)):
                 changes.append(f"新增第{i+1}行: '{mod_lines[i].strip()[:60]}'")
         elif len(orig_lines) > len(mod_lines):
             for i in range(len(mod_lines), len(orig_lines)):
                 changes.append(f"删除第{i+1}行: '{orig_lines[i].strip()[:60]}'")
-        
+
         return "; ".join(changes[:5]) if changes else "无实质性变更"
-    
-    def _patch_silent_exception(self, plan: dict[str, Any], 
+
+    def _patch_silent_exception(self, plan: dict[str, Any],
                                  file_path: str, original_code: str) -> dict[str, Any]:
         """为静默异常生成补丁"""
         description = (
             f"在 {plan.get('target', '?')}.{plan.get('method', '?')} 方法中，"
             f"将静默异常捕获 except Exception: pass 改为记录日志。"
         )
-        
+
         return {
             "file": file_path or f"organs/{plan.get('target', '?')}.py",
             "method": plan.get("method", ""),
@@ -5441,8 +5441,8 @@ class SafeEvolutionExecutor:
                 "    self._log(LogLevel.ERROR, f'异常: {e}')"
             ),
         }
-    
-    def _patch_bare_except(self, plan: dict[str, Any], 
+
+    def _patch_bare_except(self, plan: dict[str, Any],
                             file_path: str, original_code: str) -> dict[str, Any]:
         """为裸except生成补丁"""
         return {
@@ -5458,8 +5458,8 @@ class SafeEvolutionExecutor:
                 "    self._log(LogLevel.ERROR, f'异常: {e}')"
             ),
         }
-    
-    def _patch_status_request(self, plan: dict[str, Any], 
+
+    def _patch_status_request(self, plan: dict[str, Any],
                                file_path: str) -> dict[str, Any]:
         """为_on_status_request重复代码生成补丁"""
         return {
@@ -5475,8 +5475,8 @@ class SafeEvolutionExecutor:
                 "    return self.get_stats()"
             ),
         }
-    
-    def _patch_generic(self, plan: dict[str, Any], 
+
+    def _patch_generic(self, plan: dict[str, Any],
                         file_path: str, original_code: str) -> dict[str, Any]:
         """为通用问题生成补丁"""
         return {
@@ -5508,43 +5508,43 @@ class SafeEvolutionExecutor:
         try:
             import config  # type: ignore[possibly-unbound]
             evo_cfg = getattr(config, 'EVOLUTION_CONFIG', {})  # type: ignore[possibly-unbound]
-            
+
             # 安全检查1：总开关
             if not evo_cfg.get("auto_apply_enabled", False):
                 return {"applied": False, "reason": "自动执行总开关未开启"}
-            
+
             # 安全检查2：信任分数
             min_trust = evo_cfg.get("auto_apply_min_trust", 100)
             patch_trust = patch.get("trust_score", 50)
             if patch_trust < min_trust:
                 return {"applied": False, "reason": f"信任分数不足({patch_trust}<{min_trust})"}
-            
+
             # 安全检查3：风险等级
             max_risk = evo_cfg.get("auto_apply_max_risk", 1)
             risk_map = {"极低": 1, "低": 2, "中等": 3, "高": 4}
             patch_risk = risk_map.get(patch.get("risk_level", "中等"), 3)
             if patch_risk > max_risk:
                 return {"applied": False, "reason": f"风险等级过高({patch.get('risk_level', '未知')})"}
-            
+
             # 安全检查4：冷却时间
             if not hasattr(self, '_last_auto_apply_time'):
                 self._last_auto_apply_time = 0.0
             cooldown = evo_cfg.get("auto_apply_cooldown", 86400)
             if time.time() - self._last_auto_apply_time < cooldown:
                 return {"applied": False, "reason": f"冷却中({cooldown}s)"}
-            
+
             # 安全检查5：创建快照备份
             backup_path = ""
             if evo_cfg.get("auto_apply_backup_required", True):
                 backup_path = self._create_backup_before_apply(patch)
-            
+
             # 安全检查6：执行修改
             file_path = patch.get("file", "")
             if not file_path or not os.path.exists(file_path):
                 return {"applied": False, "reason": f"文件不存在: {file_path}"}
-            
+
             apply_result = self._apply_patch_to_file(file_path, patch)
-            
+
             if apply_result.get("success"):
                 self._last_auto_apply_time = time.time()
                 return {
@@ -5557,11 +5557,11 @@ class SafeEvolutionExecutor:
                 }
             else:
                 return {"applied": False, "reason": apply_result.get("error", "未知错误")}
-                
+
         except Exception as e:
             print(f"[WARNING] SafeEvolutionExecutor.py:3544: {type(e).__name__}: {e}")
             return {"applied": False, "reason": f"自动应用异常: {str(e)[:80]}"}
-    
+
     def _create_backup_before_apply(self, patch: dict[str, Any]) -> str:
         """
         在自动修改前创建代码文件备份。
@@ -5575,10 +5575,10 @@ class SafeEvolutionExecutor:
         file_path = patch.get("file", "")
         if not file_path or not os.path.exists(file_path):
             return ""
-        
+
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         backup_path = f"{file_path}.{timestamp}.evo_bak"
-        
+
         try:
             import shutil
             shutil.copy2(file_path, backup_path)
@@ -5586,8 +5586,8 @@ class SafeEvolutionExecutor:
         except Exception as e:
             silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_create_backup_before_apply L5449")
             return ""
-    
-    def _apply_patch_to_file(self, file_path: str, 
+
+    def _apply_patch_to_file(self, file_path: str,
                               patch: dict[str, Any]) -> dict[str, Any]:
         """
         将补丁应用到文件中。
@@ -5605,26 +5605,26 @@ class SafeEvolutionExecutor:
         try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
-            
+
             original_pattern = patch.get("original_pattern", "")
             suggested_code = patch.get("suggested_code", "")
-            
+
             if not original_pattern or not suggested_code:
                 return {"success": False, "error": "补丁信息不完整"}
-            
+
             if original_pattern == "手动维护的重复代码" or original_pattern == "需手动审查":
                 return {"success": False, "error": "该补丁类型暂不支持自动执行，需手动修改"}
-            
+
             # 执行替换
             if original_pattern in content:
                 new_content = content.replace(original_pattern, suggested_code)
-                
+
                 # 验证替换后的内容语法完整性
                 try:
                     compile(new_content, file_path, 'exec')
                 except SyntaxError as e:
                     return {"success": False, "error": f"替换后代码语法错误: {e}"}
-                
+
                 # 原子写入（★FIX: 改用 mkstemp 随机名，避免预测名 TOCTOU/符号链接重定向）
                 import tempfile
                 _fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(file_path) or ".",
@@ -5642,9 +5642,9 @@ class SafeEvolutionExecutor:
                 return {"success": True}
             else:
                 return {"success": False, "error": "未找到匹配的原始模式"}
-                
+
         except Exception as e:
-            return {"success": False, "error": str(e)[:80]}    
+            return {"success": False, "error": str(e)[:80]}
 
     # ==================================================================
     # ★主线第15批 T3/P1-93：子进程崩溃可诊断 + 自动重试 + 降级

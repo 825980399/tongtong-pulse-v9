@@ -14,16 +14,16 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 
 class HaarEngine(SilentLogMixin):
     """OpenCV Haar级联分类器"""
-    
+
     def __init__(self):
         self._cascade = None
         cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         if os.path.exists(cascade_path):
             self._cascade = cv2.CascadeClassifier(cascade_path)
-    
+
     def is_available(self) -> bool:
         return self._cascade is not None
-    
+
     def detect(self, frame) -> tuple:
         """返回 (是否检测到人脸, 置信度 0.0-1.0)"""
         if self._cascade is None:

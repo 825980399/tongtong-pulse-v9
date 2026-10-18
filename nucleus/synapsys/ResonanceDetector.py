@@ -35,20 +35,20 @@ class ResonanceDetector:
         - 接口完整定义，但仅做数据记录与统计。
         - 通过功能开关控制激活状态，默认关闭。
     """
-    
+
     def __init__(self):
         # 器官共振记录: organ_name → {event_type: {"count": N, "last_seen": timestamp}}
         self._resonance_records: dict[str, dict[str, dict[str, Any]]] = {}
-        
+
         # 器官协同矩阵: (organ_a, organ_b) → 共同响应次数
         self._co_response_matrix: dict[tuple, int] = {}
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_detections = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -80,11 +80,11 @@ class ResonanceDetector:
         with self._lock:
             if organ_name not in self._resonance_records:
                 self._resonance_records[organ_name] = {}
-            
+
             organ_records = self._resonance_records[organ_name]
             if event_type not in organ_records:
                 organ_records[event_type] = {"count": 0, "last_seen": 0.0}
-            
+
             organ_records[event_type]["count"] += 1
             organ_records[event_type]["last_seen"] = time.time()
             self._total_detections += 1
@@ -259,29 +259,29 @@ def get_detector():
 
 if __name__ == "__main__":
     print("=== ResonanceDetector 自测 ===\n")
-    
+
     detector = ResonanceDetector()
     detector.enable()
-    
+
     # 1. 记录共振
     detector.record_resonance("心脏", "heart.beat")
     detector.record_resonance("血管", "heart.beat")
     detector.record_resonance("前额叶", "heart.beat")
     detector.record_resonance("胃", "digest.knowledge")
-    
+
     # 2. 记录协同响应
     detector.record_co_response(["心脏", "血管", "前额叶"], "heart.beat")
-    
+
     # 3. 查询统计
     heart_stats = detector.get_organ_resonance_stats("心脏")
     print(f"1. 心脏共振统计: 总响应{heart_stats['total_resonances']}次, 事件类型{heart_stats['event_types']}种")
-    
+
     # 4. 协同对
     top_pairs = detector.get_top_co_responses(5)
     print(f"2. 最佳协同对: {top_pairs}")
-    
+
     stats = detector.get_stats()
     print(f"3. 检测器统计: 总检测{stats['total_detections']}次, 追踪器官{stats['tracked_organs']}个")
-    
+
     detector.disable()
     print("\n=== 自测全部通过 ===")

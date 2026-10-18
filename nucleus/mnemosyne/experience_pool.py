@@ -70,7 +70,7 @@ class ExperiencePool:
             "summary": str,             # 摘要内容（压缩后）
         }
     """
-    
+
     def __init__(self, base_dir: str | None = None):
         # ★星轨修复：路径规范化，避免Windows混合斜杠导致os.replace失败
         # ★第44批 T4（P2-290）：默认值改为**运行时解析**（默认参数在定义时求值，
@@ -79,13 +79,13 @@ class ExperiencePool:
         _m44_base = base_dir if base_dir else "data/experience"
         self._base_dir = os.path.abspath(os.path.normpath(_m44_base))
         self._pool_file = os.path.join(self._base_dir, "experience_pool.json")
-        
+
         # 线程安全
         self._lock = threading.RLock()
-        
+
         # 体验池主存储
         self._experiences: list[dict[str, Any]] = []
-        
+
         # 从config读取配置，失败使用默认
         try:
             import config
@@ -103,12 +103,12 @@ class ExperiencePool:
             self._low_emotion_threshold = 0.3
             self._decay_check_interval = 3600
         self._last_decay_check = 0.0
-        
+
         # 统计
         self._total_recorded = 0
         self._total_summarized = 0
         self._total_decayed = 0
-        
+
         # 加载已有体验池
         self._load()
 
@@ -117,9 +117,9 @@ class ExperiencePool:
         self._auto_clean_running = False
         # 非测试/非显式重定向时启动周期扫描（铁律 57 测试隔离）
         self._start_auto_clean_thread()
-    
+
     # ========== 记录体验 ==========
-    
+
     def record_experience(self,
                           motivation: str = "",
                           motivation_intensity: float = 0.0,
@@ -152,10 +152,10 @@ class ExperiencePool:
         with self._lock:
             self._total_recorded += 1
             experience_id = f"exp_{int(time.time()*1000)}_{self._total_recorded}"
-            
+
             # 计算衰减率
             decay_rate = self._calculate_decay_rate(emotion_intensity)
-            
+
             experience = {
                 "id": experience_id,
                 "motivation": motivation[:200],
@@ -245,12 +245,12 @@ class ExperiencePool:
 
             # 容量保护
             self._trim_capacity()
-            
+
             # 保存
             self._save()
 
         return experience_id
-    
+
     def _calculate_decay_rate(self, emotion_intensity: float) -> float:
         """
         计算衰减率。
@@ -266,7 +266,7 @@ class ExperiencePool:
             return 0.01
         else:
             return 0.05
-    
+
     def _trim_capacity(self):
         """
         容量保护：超出上限时压缩最旧的体验为摘要。
@@ -274,7 +274,7 @@ class ExperiencePool:
         # 统计完整体验和摘要体验数量
         full_experiences = [e for e in self._experiences if not e.get("is_summarized", False)]
         summarized_experiences = [e for e in self._experiences if e.get("is_summarized", False)]
-        
+
         # 完整体验超出上限，压缩最旧的
         if len(full_experiences) > self._max_experiences:
             excess = len(full_experiences) - self._max_experiences
@@ -283,7 +283,7 @@ class ExperiencePool:
             to_summarize = full_experiences[:excess]
             for exp in to_summarize:
                 self._summarize_experience(exp)
-        
+
         # 摘要体验超出上限，删除最旧的
         if len(summarized_experiences) > self._max_summarized:
             excess = len(summarized_experiences) - self._max_summarized
@@ -311,7 +311,7 @@ class ExperiencePool:
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.experience_pool::_m49_decay_on_trim_on L292")
             return True
-    
+
     #: 摘要算法版本（第47批起：保留原文，不再覆盖）
     SUMMARY_VERSION = 2
 
@@ -364,7 +364,7 @@ class ExperiencePool:
         experience["emotion_tags"] = experience.get("emotion_tags", [])[:3]
 
         self._total_summarized += 1
-    
+
     # ========== ★第47批 T2：写入侧污染防护 ==========
 
     #: 重复检测回看窗口（条）
@@ -800,7 +800,7 @@ class ExperiencePool:
             name="exp-auto-clean", daemon=True)
         self._auto_clean_thread = _t
         _t.start()
-    
+
     # [批次4·深度体检][CHAIN-6] 经验强度修改即落盘
     def check_decay(self):
         """
@@ -813,23 +813,23 @@ class ExperiencePool:
         now = time.time()
         if now - self._last_decay_check < self._decay_check_interval:
             return
-        
+
         self._last_decay_check = now
-        
+
         with self._lock:
             _dirty = False
             for exp in self._experiences:
                 if exp.get("is_summarized", False):
                     continue
-                
+
                 decay_rate = exp.get("decay_rate", 0.0)
                 if decay_rate == 0.0:
                     continue  # 高强度情绪，不衰减
-                
+
                 # 计算衰减
                 elapsed = now - exp.get("timestamp", now)
                 decay_amount = decay_rate * (elapsed / 3600.0)  # 每小时衰减
-                
+
                 if decay_amount > 0.01:
                     old_intensity = exp.get("emotion_intensity", 0.0)
                     new_intensity = max(0.0, old_intensity - decay_amount)
@@ -844,7 +844,7 @@ class ExperiencePool:
             # ★CHAIN-6修复: 只要有强度被修改就持久化，避免重启后衰减被回滚（原仅摘要时才保存）
             if _dirty or self._total_decayed > 0:
                 self._save()
-    
+
     # ========== ★主线第50批 T2（P0-3）：L3 检索闸门 ==========
 
     def _m50_retrievable(self, exp) -> bool:
@@ -867,7 +867,7 @@ class ExperiencePool:
             return True
 
     # ========== 查询接口 ==========
-    
+
     def query_experiences(self,
                           emotion_tags: list[str] | None = None,
                           reward_type: str | None = None,
@@ -904,39 +904,39 @@ class ExperiencePool:
                 if not self._m50_retrievable(exp):
                     _skipped_polluted += 1
                     continue
-                
+
                 # 情感标签过滤
                 if emotion_tags:
                     if not any(tag in exp.get("emotion_tags", []) for tag in emotion_tags):
                         continue
-                
+
                 # 奖赏类型过滤
                 if reward_type:
                     if exp.get("result_reward", {}).get("type") != reward_type:
                         continue
-                 
+
                 # 压力类型过滤
                 if pressure_type:
                     if exp.get("pressure_type") != pressure_type:
                         continue
-                
+
                 # 情绪强度过滤
                 if exp.get("emotion_intensity", 0.0) < min_emotion_intensity:
                     continue
-                
+
                 # 时间范围过滤
                 ts = exp.get("timestamp", 0)
                 if time_start and ts < time_start:
                     continue
                 if time_end and ts > time_end:
                     continue
-                
+
                 results.append(dict(exp))
-            
+
             # 按时间倒序
             results.sort(key=lambda e: e.get("timestamp", 0), reverse=True)
             return results[:limit]
-    
+
     def get_experiences_for_narrative(self, limit: int = 10) -> list[dict[str, Any]]:
         """
         获取供叙事自我整合的体验素材。
@@ -948,18 +948,18 @@ class ExperiencePool:
             _src = [e for e in self._experiences if self._m50_retrievable(e)]
             full = [e for e in _src if not e.get("is_summarized", False)]
             summarized = [e for e in _src if e.get("is_summarized", False)]
-            
+
             # 完整体验按情绪强度排序，取前limit条
             full.sort(key=lambda e: e.get("emotion_intensity", 0.0), reverse=True)
             result = full[:limit]
-            
+
             # 如果完整体验不足，补充摘要体验
             if len(result) < limit:
                 summarized.sort(key=lambda e: e.get("timestamp", 0), reverse=True)
                 result.extend(summarized[:limit - len(result)])
-            
+
             return [dict(e) for e in result]
-    
+
     def get_positive_experiences(self, limit: int = 10) -> list[dict[str, Any]]:
         """
         获取正向体验（奖赏强度高的体验）。
@@ -978,7 +978,7 @@ class ExperiencePool:
                 reverse=True
             )
             return [dict(e) for e in positive[:limit]]
-    
+
     def get_negative_experiences(self, limit: int = 10) -> list[dict[str, Any]]:
         """
         获取负向体验（压力高且奖赏低的体验）。
@@ -1007,9 +1007,9 @@ class ExperiencePool:
                 if _orig is not None:
                     _orig["feedback_consumed"] = True
             return _result
-    
+
     # ========== 持久化 ==========
-    
+
     # ★第54批 T4（P2-370）：停机期治理成果的字段名（**只补不覆盖**）
     _GOVERNANCE_FIELDS = (
         "is_cleaned", "polluted", "pollution_risk", "pollution_reason",
@@ -1101,7 +1101,7 @@ class ExperiencePool:
             tmp_file = self._pool_file + ".tmp"
             with open(tmp_file, 'w', encoding='utf-8') as f:
                 json.dump(snapshot, f, ensure_ascii=False, indent=2)
-            
+
             # ★星轨修复：Windows文件锁定重试机制（最多3次，间隔100ms）
             _last_error = None
             for _attempt in range(3):
@@ -1123,7 +1123,7 @@ class ExperiencePool:
                 _module_logger.error(f"保存失败（重试3次后仍失败）: {_last_error}")
         except Exception as e:
             _module_logger.error(f"保存失败: {e}")
-    
+
     def _load(self):
         """从文件加载体验池"""
         try:
@@ -1136,9 +1136,9 @@ class ExperiencePool:
         except Exception as e:
             print(f"[WARNING] experience_pool.py:492: {type(e).__name__}: {e}")
             self._experiences = []
-    
+
     # ========== 统计信息 ==========
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取体验池统计信息"""
         with self._lock:
@@ -1221,9 +1221,9 @@ def shutdown_experience_pool() -> None:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== ExperiencePool v24.0 自测 ===\n")
-    
+
     pool = ExperiencePool(base_dir="data/experience_test")
-    
+
     # 测试1：记录高强度体验（不衰减）
     exp1_id = pool.record_experience(
         motivation="想帮助小林解决问题",
@@ -1237,7 +1237,7 @@ if __name__ == "__main__":
         content="成功帮小林解决了技术问题，他夸我厉害",
     )
     print(f"1. 高强度体验: id={exp1_id}, 衰减率=0.0（不衰减）")
-    
+
     # 测试2：记录低强度体验（快速衰减）
     exp2_id = pool.record_experience(
         motivation="例行学习",
@@ -1251,25 +1251,25 @@ if __name__ == "__main__":
         content="看了一些资料，没有特别的感觉",
     )
     print(f"2. 低强度体验: id={exp2_id}, 衰减率=0.05（快速衰减）")
-    
+
     # 测试3：查询正向体验
     positive = pool.get_positive_experiences()
     print(f"3. 正向体验: {len(positive)}条 → {positive[0]['result_reward']['type'] if positive else '无'}")
-    
+
     # 测试4：查询所有体验
     all_exp = pool.query_experiences()
     print(f"4. 所有体验: {len(all_exp)}条")
-    
+
     # 测试5：统计
     stats = pool.get_stats()
     print(f"5. 统计: 总体验{stats['total_experiences']}条, "
           f"完整{stats['full_experiences']}条, "
           f"高强度{stats['high_emotion_experiences']}条")
-    
+
     # 清理测试文件
     import shutil
     shutil.rmtree("data/experience_test", ignore_errors=True)
-    
+
     print("\n=== 自测全部通过 ===")
 # _m49_t3_1_done
 # _m50_t2_gate_done

@@ -43,7 +43,7 @@ class StreamMiner:
         - 接口完整定义，但功能开关默认关闭。
         - P3阶段可激活完整的在线挖掘。
     """
-    
+
     # ★A-16（2026-09-08）：模式持久化默认路径（测试隔离时可被 monkeypatch）
     _DEFAULT_STORAGE = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -60,25 +60,25 @@ class StreamMiner:
         # 事件序列缓存
         self._recent_events: deque = deque(maxlen=window_size)
         self._baseline_events: deque = deque(maxlen=baseline_window)
-        
+
         self._window_size = window_size
         self._baseline_window = baseline_window
-        
+
         # 发现的历史模式
         self._discovered_patterns: dict[str, dict[str, Any]] = {}
-        
+
         # 周期性检测缓存: event_type → [timestamps]
         self._periodicity_cache: dict[str, list[float]] = {}
-        
+
         # 关联组件引用
         self.event_stream = None
-        
+
         # 线程安全
         # ★A-16：改为**可重入锁**——feed_event 持锁后会调用 _check_prediction_hits，
         #   后者同样需要加锁（普通 Lock 会自死锁）。RLock 是 Lock 的超集，
         #   对既有调用点行为完全兼容。
         self._lock = threading.RLock()
-        
+
         # 统计
         self._total_events_processed = 0
         self._total_patterns_discovered = 0
@@ -169,25 +169,25 @@ class StreamMiner:
 
         with self._lock:
             patterns = []
-            
+
             # 1. 重复模式检测
             repeated = self._detect_repeated_patterns()
             patterns.extend(repeated)
-            
+
             # 2. 新兴模式检测
             emerging = self._detect_emerging_patterns()
             patterns.extend(emerging)
-            
+
             # 3. 周期性检测
             periodic = self._detect_periodic_patterns()
             patterns.extend(periodic)
-            
+
             # 记录发现的模式
             for pattern in patterns:
                 pattern_key = f"{pattern['discovery_type']}:{pattern.get('event_type', 'unknown')}"
                 self._discovered_patterns[pattern_key] = pattern
                 self._total_patterns_discovered += 1
-            
+
             return patterns
 
     def _detect_repeated_patterns(self, threshold: int = 3) -> list[dict[str, Any]]:
@@ -197,7 +197,7 @@ class StreamMiner:
 
         event_types = [e.get("event_type", "?") for e in self._recent_events]
         counter = Counter(event_types)
-        
+
         patterns = []
         for etype, count in counter.most_common(5):
             if count >= threshold:
@@ -224,10 +224,10 @@ class StreamMiner:
             baseline_count = baseline_counter.get(etype, 0)
             if baseline_count == 0:
                 continue
-            
+
             recent_freq = recent_count / len(self._recent_events)
             baseline_freq = baseline_count / len(self._baseline_events)
-            
+
             if baseline_freq > 0 and recent_freq / baseline_freq >= threshold_ratio:
                 patterns.append({
                     "discovery_type": "emerging",
@@ -640,10 +640,10 @@ def shutdown_stream_miner() -> None:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== StreamMiner 自测 ===\n")
-    
+
     miner = StreamMiner(window_size=20, baseline_window=50)
     miner.enable()
-    
+
     # 1. 喂入事件（模拟心跳周期性事件 + 随机事件）
     print("1. 喂入事件:")
     base_time = time.time()
@@ -668,26 +668,26 @@ if __name__ == "__main__":
             "source_organ": "前额叶",
             "timestamp": base_time + i * 10.0,
         })
-    
+
     print(f"   总计喂入: {miner._total_events_processed} 条")
-    
+
     # 2. 发现模式
     print("\n2. 模式发现:")
     patterns = miner.discover_patterns()
     for p in patterns:
         print(f"   [{p['discovery_type']}] {p.get('message', '')[:80]}")
-    
+
     # 3. 事件频率摘要
     print("\n3. 事件频率摘要:")
     freq = miner.get_event_frequency_summary()
     for etype, f in freq.items():
         print(f"   {etype}: {f:.1%}")
-    
+
     # 4. 统计
     stats = miner.get_stats()
     print(f"\n4. 统计: 处理{stats['total_events_processed']}条, "
           f"发现{stats['total_patterns_discovered']}个模式")
-    
+
     miner.disable()
     print("\n=== 自测全部通过 ===")
 # _m51_t4_d

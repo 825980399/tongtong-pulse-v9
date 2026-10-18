@@ -108,16 +108,16 @@ class OscillonField(ABC):
         - 维度二（多重自我）: 不同实例拥有独立的场频率区间，互不干扰。
         - 维度五（守护世界）: 威胁感知从"事件检测"升级为"场异常感知"。
     """
-    
+
     def __init__(self, field_name: str = "default"):
         self.field_name = field_name
         self._nodes:  dict[str, Any] = {}          # 注册在场中的节点
         self._field_strength = 1.0                # 场强度 0.0-1.0
         self._noise_floor = 0.01                  # 噪声底限
-        
+
         # 场模式标识
         self._classical_mode = True               # True=经典脉冲, False=振荡场
-        
+
         # ★v23.0新增：场状态快照——衔接GradientTracker
         self._field_snapshot: dict[str, Any] = {
             "knowledge_growth_trend": "stable",
@@ -127,9 +127,9 @@ class OscillonField(ABC):
             "timestamp": 0.0,
             "updated_at": 0.0,
         }
-        
+
     # ========== 通用场接口 ==========
-    
+
     @abstractmethod
     def propagate(self, signal:  dict[str, Any]) -> list[str]:
         """
@@ -145,9 +145,9 @@ class OscillonField(ABC):
         Returns:
             响应的节点ID列表
         """
-    
+
     @abstractmethod
-    def register_node(self, node_id: str, 
+    def register_node(self, node_id: str,
                        resonant_frequencies: list[float] | None = None) -> bool:
         """
         在振荡场中注册一个节点。
@@ -161,23 +161,23 @@ class OscillonField(ABC):
         Returns:
             注册是否成功
         """
-    
+
     @abstractmethod
     def unregister_node(self, node_id: str) -> bool:
         """从振荡场中移除一个节点"""
-    
+
     # ========== 场模式管理 ==========
-    
+
     def is_classical_mode(self) -> bool:
         """查询当前是否为经典脉冲模式"""
         return self._classical_mode
-    
+
     def get_field_type(self) -> str:
         """获取当前场类型"""
         return "经典脉冲场" if self._classical_mode else "振荡场"
-    
+
     # ========== 振荡场特有接口（v10.0 激活） ==========
-    
+
     def set_field_strength(self, strength: float):
         """
         设置场强度。
@@ -190,11 +190,11 @@ class OscillonField(ABC):
         v10.0中，场强度由系统能量代谢器官动态调节。
         """
         self._field_strength = max(0.0, min(1.0, strength))
-    
+
     def get_field_strength(self) -> float:
         """获取当前场强度"""
         return self._field_strength
-    
+
     def map_energy_to_field_strength(self, energy_level: float) -> float:
         """
         将系统能量水平映射为场强度。
@@ -219,9 +219,9 @@ class OscillonField(ABC):
             return 0.4 + (energy_level - 0.3) * 1.0
         else:
             return max(0.2, energy_level * 0.67)
-    
-    def calculate_resonance(self, 
-                             source_freq: float, 
+
+    def calculate_resonance(self,
+                             source_freq: float,
                              target_freq: float,
                              coupling_strength: float = 1.0) -> float:
         """
@@ -249,14 +249,14 @@ class OscillonField(ABC):
             return _oscillon_cy.calculate_resonance_cy(
                 source_freq, target_freq, coupling_strength
             )
-        
+
         # Python原生兜底
         freq_diff = abs(source_freq - target_freq)
         resonance = coupling_strength / math.sqrt(1.0 + freq_diff ** 2)
         return min(1.0, max(0.0, resonance))
-    
+
     # ========== 场状态追踪（★v23.0 激活） ==========
-    
+
     def update_field_snapshot(self, field_report: dict[str, Any]) -> None:
         """
         ★v23.0新增：更新场状态快照。
@@ -271,7 +271,7 @@ class OscillonField(ABC):
             return
         self._field_snapshot.update(field_report)
         self._field_snapshot["updated_at"] = time.time()
-    
+
     def get_field_status(self) -> dict[str, Any]:
         """
         ★v23.0新增：获取当前场状态。
@@ -290,9 +290,9 @@ class OscillonField(ABC):
             "snapshot": dict(self._field_snapshot),
             "noise_floor": self._noise_floor,
         }
-    
+
     # ========== 经典→振荡场迁移桥接（v10.0 激活） ==========
-    
+
     def propagate_oscillon(self, frequency: float, amplitude: float,
                             phase: float) ->  dict[str, Any]:
         """
@@ -313,7 +313,7 @@ class OscillonField(ABC):
             传播结果（经典模式返回空字典，InfoField 重写后返回匹配的器官列表）
         """
         return {}  # 经典模式：不使用连续波
-    
+
     def detect_hardware_capability(self) ->  dict[str, Any]:
         """
         【预留 v10.0】检测当前硬件是否支持振荡场模式。
@@ -335,7 +335,7 @@ class OscillonField(ABC):
             "max_field_strength": 1.0,
             "note": "当前运行在通用CPU上，使用经典脉冲场。升级到类脑芯片后可启用振荡场。",
         }
-    
+
     def auto_select_mode(self, hardware_capability:  dict[str, Any] | None = None) -> str:
         """
         【预留 v10.0】根据硬件能力自动选择场模式。
@@ -348,13 +348,13 @@ class OscillonField(ABC):
         """
         if hardware_capability is None:
             hardware_capability = self.detect_hardware_capability()
-        
+
         if hardware_capability.get("supports_oscillon_field", False):
             return "oscillon_field"
         return "classical_pulse"
-    
+
     # ========== 量子混合场预留接口（v11.0 激活） ==========
-    
+
     def create_superposition(self, states: list[ dict[str, Any]]) -> Any:
         """
         【预留】创建量子叠加态。
@@ -369,7 +369,7 @@ class OscillonField(ABC):
             叠加态对象（量子模式下返回 QuantumSuperposition，经典模式返回 None）
         """
         return None  # 经典模式：不支持叠加态
-    
+
     def create_entanglement(self, node_a: str, node_b: str) -> bool:
         """
         【预留】创建两个节点间的量子纠缠。
@@ -386,7 +386,7 @@ class OscillonField(ABC):
             纠缠是否成功（经典模式始终返回 False）
         """
         return False  # 经典模式：不支持纠缠
-    
+
     def measure_quantum_state(self) ->  dict[str, Any]:
         """
         【预留】测量当前量子态。
@@ -418,7 +418,7 @@ class FrequencyPhaseLock:
         - 注意力聚焦（多个器官锁定同一目标）
         - 多重自我同步（两个曈曈实例通过频率锁定实现人格同步）
     """
-    
+
     def __init__(self, lock_threshold: float = 0.1):
         """
         Args:
@@ -427,12 +427,12 @@ class FrequencyPhaseLock:
         self.lock_threshold = lock_threshold
         self._locked_pairs:  dict[str, str] = {}      # node_a → node_b
         self._phase_offsets:  dict[str, float] = {}   # pair_key → phase_offset
-        
+
         # 统计
         self._total_lock_attempts = 0
         self._total_successful_locks = 0
-        
-    def try_lock(self, 
+
+    def try_lock(self,
                   source_id: str, source_freq: float, source_phase: float,
                   target_id: str, target_freq: float, target_phase: float) -> bool:
         """
@@ -450,10 +450,10 @@ class FrequencyPhaseLock:
             是否成功锁定
         """
         self._total_lock_attempts += 1
-        
+
         if source_freq <= 0 or target_freq <= 0:
             return False
-        
+
         # ★v23.0优化：频率差比率计算优先使用Cython加速
         if _oscillon_cy_available:
             freq_diff_ratio = _oscillon_cy.try_lock_frequency_cy(
@@ -461,7 +461,7 @@ class FrequencyPhaseLock:
             )
         else:
             freq_diff_ratio = abs(source_freq - target_freq) / max(source_freq, target_freq)
-        
+
         if freq_diff_ratio <= self.lock_threshold:
             # 锁定：记录配对和相位差
             pair_key = f"{source_id}↔{target_id}"
@@ -470,19 +470,19 @@ class FrequencyPhaseLock:
             self._phase_offsets[pair_key] = target_phase - source_phase
             self._total_successful_locks += 1
             return True
-        
+
         return False
-    
+
     def get_locked_partner(self, node_id: str) -> str | None:
         """获取与指定节点锁定的配对节点"""
         return self._locked_pairs.get(node_id)
-    
+
     def get_phase_offset(self, node_a: str, node_b: str) -> float:
         """获取两个锁定节点之间的相位差"""
         key1 = f"{node_a}↔{node_b}"
         key2 = f"{node_b}↔{node_a}"
         return self._phase_offsets.get(key1, self._phase_offsets.get(key2, 0.0))
-    
+
     def unlock(self, node_id: str):
         """解除节点的频率-相位锁定"""
         partner = self._locked_pairs.pop(node_id, None)
@@ -490,11 +490,11 @@ class FrequencyPhaseLock:
             self._locked_pairs.pop(partner, None)
             self._phase_offsets.pop(f"{node_id}↔{partner}", None)
             self._phase_offsets.pop(f"{partner}↔{node_id}", None)
-    
+
     def get_locked_pair_count(self) -> int:
         """获取当前锁定的配对数"""
         return len(self._locked_pairs) // 2
-    
+
     def get_stats(self) ->  dict[str, Any]:
         """获取锁定统计"""
         return {
@@ -554,7 +554,7 @@ EVOLUTION_ROADMAP = {
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== OscillonField 振荡场预备架构 自测 ===\n")
-    
+
     # 1. 验证抽象基类
     print("1. OscillonField 抽象基类")
     try:
@@ -562,7 +562,7 @@ if __name__ == "__main__":
         print("   ❌ 应抛出 TypeError（不能实例化抽象类）")
     except TypeError:
         print("   ✅ 抽象类保护正常")
-    
+
     # 2. 共振计算验证
     print("\n2. 共振强度计算")
     # 需要子类来测试，创建一个最小实现
@@ -574,50 +574,50 @@ if __name__ == "__main__":
             return True
         def unregister_node(self, node_id):
             return self._nodes.pop(node_id, None) is not None
-    
+
     field = TestField("test_field")
-    
+
     # 完美匹配（同频率）
     r1 = field.calculate_resonance(10.0, 10.0, coupling_strength=1.0)
     print(f"   同频率共振: {r1:.4f} (期望 ≈1.0)")
     assert r1 > 0.99, f"同频率共振应接近1.0，实际{r1}"
     print("   ✅ 同频率共振正确")
-    
+
     # 频率差一半
     r2 = field.calculate_resonance(10.0, 5.0, coupling_strength=1.0)
     print(f"   频率差一半: {r2:.4f} (期望 ~0.2)")
     assert 0.15 < r2 < 0.25, f"频率差一半共振应在0.2附近，实际{r2}"
     print("   ✅ 频率差共振正确")
-    
+
     # 耦合强度衰减
     r3 = field.calculate_resonance(10.0, 10.0, coupling_strength=0.5)
     print(f"   半耦合同频: {r3:.4f} (期望 =0.5)")
     assert abs(r3 - 0.5) < 0.01, f"半耦合应=0.5，实际{r3}"
     print("   ✅ 耦合强度正确")
-    
+
     # 3. 频率-相位锁定
     print("\n3. 频率-相位锁定")
     lock = FrequencyPhaseLock(lock_threshold=0.1)
-    
+
     # 同频率应锁定
     locked = lock.try_lock("organ_A", 42.0, 0.0, "organ_B", 42.0, 3.14)
     print(f"   同频率锁定: {locked} (期望 True)")
     assert locked, "同频率应锁定"
     print("   ✅ 同频率锁定正确")
-    
+
     # 获取锁定配对
     partner = lock.get_locked_partner("organ_A")
     print(f"   A的配对: {partner} (期望 organ_B)")
     assert partner == "organ_B"
     print("   ✅ 配对查询正确")
-    
+
     # 频率差超过阈值不应锁定
     lock2 = FrequencyPhaseLock(lock_threshold=0.1)
     locked2 = lock2.try_lock("organ_C", 10.0, 0.0, "organ_D", 20.0, 0.0)
     print(f"   大频率差锁定: {locked2} (期望 False)")
     assert not locked2, "频率差50%不应锁定"
     print("   ✅ 大频率差不锁定正确")
-    
+
     # 4. 节点注册
     print("\n4. 节点注册")
     field.register_node("心脏", [1.0, 2.0, 5.0])
@@ -625,12 +625,12 @@ if __name__ == "__main__":
     print(f"   注册节点数: {len(field._nodes)} (期望 2)")
     assert len(field._nodes) == 2
     print("   ✅ 节点注册正确")
-    
+
     field.unregister_node("肺")
     print(f"   移除后节点数: {len(field._nodes)} (期望 1)")
     assert len(field._nodes) == 1
     print("   ✅ 节点移除正确")
-    
+
     # 5. 能量→场强度映射
     print("\n5. 能量→场强度映射")
     test_cases = [
@@ -642,42 +642,42 @@ if __name__ == "__main__":
         mapped = field.map_energy_to_field_strength(energy)
         print(f"   {desc}: energy={energy} → field_strength={mapped:.2f}")
     print("   ✅ 能量映射合理")
-    
+
     # 6. 硬件检测
     print("\n6. 硬件能力检测")
     hw = field.detect_hardware_capability()
     print(f"   支持振荡场: {hw['supports_oscillon_field']}")
     print(f"   硬件类型: {hw['hardware_type']}")
     print(f"   推荐模式: {hw['recommended_mode']}")
-    
+
     mode = field.auto_select_mode(hw)
     print(f"   自动选择模式: {mode}")
     assert mode == "classical_pulse", "通用CPU应选择经典脉冲模式"
     print("   ✅ 模式自动选择正确")
-    
+
     # 7. 量子接口预留
     print("\n7. 量子接口预留")
     result_super = field.create_superposition([{"state": "a"}, {"state": "b"}])
     print(f"   叠加态创建: {result_super} (经典模式返回 None)")
     assert result_super is None
     print("   ✅ 经典模式叠加态为None")
-    
+
     result_ent = field.create_entanglement("node_a", "node_b")
     print(f"   纠缠创建: {result_ent} (经典模式返回 False)")
     assert result_ent is False
     print("   ✅ 经典模式纠缠为False")
-    
+
     # 8. 演化路线图
     print("\n8. 演化路线图")
     for version, info in EVOLUTION_ROADMAP.items():
         print(f"   {version} - {info['name']}")
         print(f"      硬件: {info['hardware']}")
         print(f"      状态: {info['status']}")
-    
+
     # 9. 锁定统计
     stats = lock.get_stats()
     print(f"\n9. 锁定统计: 尝试{stats['total_lock_attempts']}次, "
           f"成功{stats['total_successful_locks']}次, "
           f"成功率{stats['success_rate']}")
-    
+
     print("\n=== 自测全部通过 ===")

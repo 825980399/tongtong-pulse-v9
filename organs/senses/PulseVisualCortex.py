@@ -73,7 +73,7 @@ def _tol_or_none(v):
 
 class PulseVisualCortex(BasePulseOrgan):
     """视觉皮层 —— 图像感知与分析器官（v9.5 分层脉冲版）"""
-    
+
     def refresh_runtime_params(self):
         """★P1: 刷新运行时参数（热加载后调用）。"""
         try:
@@ -95,33 +95,33 @@ class PulseVisualCortex(BasePulseOrgan):
 
     def __init__(self, organ_name: str = "视觉皮层"):
         super().__init__(organ_name)
-        
+
         self.node_pool = None
         self.frequency_codec = None
-        
+
         self._frame_count = 0
         self._face_detected_count = 0
         self._object_detected_count = 0
         self._text_detected_count = 0
-        
+
         self._has_opencv = False
         self._has_face_recognition = False
         self._has_ocr = False
-        
+
         self._lock = threading.Lock()
         self._global_lock = threading.Lock()
-        
+
         self.is_running = False
         self._current_user_name = "访客"  # 当前检测到的用户（T-118a：未知默认访客）
         # 摄像头监测线程
         self._camera_thread = None
         self._camera_running = False
-        
+
         # 人脸检测状态
         self._face_score = 0
         self._face_was_detected = False
         self._last_face_state_switch = 0
-        
+
         # v9.5 时序追踪：滑动窗口记录最近N帧的检测结果
         self._detection_window = []      # 存储最近N帧的bool值(True=有人脸)
         # ★P1: 从RUNTIME_PARAMS读取视觉皮层参数（支持热加载）
@@ -141,7 +141,7 @@ class PulseVisualCortex(BasePulseOrgan):
         self._log_queue = []           # 日志条目队列
         self._log_lock = threading.Lock()  # 队列锁
         self._log_thread = None        # 日志写入线程
-        self._log_running = False        
+        self._log_running = False
         self._last_processed_seq = 0  # 最后处理的帧序号，用于丢弃过期帧
         self._gpu_available = None  # GPU是否可用（None=未收到能力更新）
 
@@ -212,7 +212,7 @@ class PulseVisualCortex(BasePulseOrgan):
                       f"[R5] 人脸册加载失败，按空册启动（不影响其它功能）: {type(_e_r5).__name__}: {_e_r5}")
 
 
-        self._mp_face_detection = None        
+        self._mp_face_detection = None
         # ★7-5修复(2026-09-05)：以下默认值**必须先于**下方配置加载执行。
         #   原先这段被机械追加在配置加载之后，导致 config.py 里配好的值
         #   被这里的硬编码默认值逐个覆盖（全项目 10 个器官、24 个属性）。
@@ -226,9 +226,9 @@ class PulseVisualCortex(BasePulseOrgan):
         self._engines = []
         self._engine_warning_cooldown = {}  # 引擎异常日志冷却（30秒）
         self._init_engines()
-    
+
     # ========== 能力检测 ==========
-   
+
     def _detect_capabilities(self):
         # 1. OpenCV（必须）
         try:
@@ -236,7 +236,7 @@ class PulseVisualCortex(BasePulseOrgan):
             self._has_opencv = True
         except ImportError:
             self._has_opencv = False
-        
+
         # 2. MediaPipe 安全导入
         self._has_mediapipe = False
         self._mp_face_detection = None
@@ -257,7 +257,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
-        
+
         # 3. 其他可选库（★T-113c：补 import，缺失即 False，消除"假有"）
         try:
             import face_recognition  # noqa: F401
@@ -271,11 +271,11 @@ class PulseVisualCortex(BasePulseOrgan):
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
     # ========== 视觉引擎管理 ==========
-    
+
     def _init_engines(self):
         """初始化所有可用的视觉检测引擎，按优先级排序"""
         self._engines = []
-        
+
         # 引擎1：MediaPipe（高精度，优先级最高）
         try:
             from organs.senses.visual_engines.mediapipe_engine import MediaPipeEngine
@@ -285,7 +285,7 @@ class PulseVisualCortex(BasePulseOrgan):
                 self._log(LogLevel.INFO, "已加载视觉引擎: MediaPipe（高精度）")
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
-        
+
         # 引擎2：Haar（基础精度，永远可用）
         try:
             from organs.senses.visual_engines.haar_engine import HaarEngine
@@ -295,10 +295,10 @@ class PulseVisualCortex(BasePulseOrgan):
                 self._log(LogLevel.INFO, "已加载视觉引擎: Haar（基础精度）")
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
-        
+
         if not self._engines:
             self._log(LogLevel.WARNING, "无可用视觉引擎，人脸检测不可用")
-    
+
     def _detect_face(self, frame) -> tuple:
         """使用最佳可用引擎检测人脸，失败自动降级"""
         for name, engine in self._engines:
@@ -317,11 +317,11 @@ class PulseVisualCortex(BasePulseOrgan):
     def _start_log_writer(self):
         """启动异步日志写入线程"""
         self._log_running = True
-        log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+        log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                  'data', 'stream', 'vision_stream_log.json')
         self._log_thread = threading.Thread(target=self._log_writer_loop, args=(log_path,), daemon=True)
         self._log_thread.start()
-    
+
     def _log_writer_loop(self, log_path):
         """后台线程：定期批量写入视觉流日志"""
         while self._log_running:
@@ -331,10 +331,10 @@ class PulseVisualCortex(BasePulseOrgan):
                     continue
                 batch = list(self._log_queue)
                 self._log_queue.clear()
-             
+
             if not batch:
                 continue
-            
+
             try:
                 import json as _json
                 # 读取已有日志
@@ -359,48 +359,48 @@ class PulseVisualCortex(BasePulseOrgan):
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
     # ========== 依赖注入 ==========
-    
+
     def set_node_pool(self, node_pool):
         self.node_pool = node_pool
-    
+
     def set_frequency_codec(self, frequency_codec):
         self.frequency_codec = frequency_codec
-    
+
     def set_sensor(self, sensor):
         """注入躯体硬件层 Sensor 实例"""
         self._sensor = sensor
-    
-    
+
+
     # ========== 生命周期 ==========
     def start(self):
         super().start()
-        self._log(LogLevel.INFO, 
+        self._log(LogLevel.INFO,
                   f"已启动，OpenCV={'有' if self._has_opencv else '无'}, "
                   f"人脸识别={'有' if self._has_face_recognition else '无'}, "
-                  f"OCR={'有' if self._has_ocr else '无'}")   
-        self._start_log_writer() 
+                  f"OCR={'有' if self._has_ocr else '无'}")
+        self._start_log_writer()
     def stop(self):
         self._camera_running = False
-        self._log_running = False        
+        self._log_running = False
         super().stop()
-        self._log(LogLevel.INFO, 
+        self._log(LogLevel.INFO,
                   f"已停止，处理{self._frame_count}帧, "
                   f"人脸{self._face_detected_count}次")
-    
+
     # ========== 脉冲入口 ==========
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
         if not self.is_running:
             return None
-        
+
         event_type = pulse.get("event_type", "")
         payload = pulse.get("payload", {})
-        
+
         # ★v23.0修复：优先检查task_type，确保OCR/PDF请求不被分辨率分析拦截
         _task_type = payload.get("task_type", "")
         if _task_type in ("ocr", "pdf"):
             return self._on_visual_query(payload)
-        
+
         if event_type == VisualEvent.CAMERA_FRAME:
             return self._analyze_frame(payload)
         elif event_type == VisualEvent.SIMULATE:
@@ -413,9 +413,9 @@ class PulseVisualCortex(BasePulseOrgan):
             return self._on_capability_update(payload)
         elif event_type == ChatEvent.MESSAGE:
             return self._on_chat_message(payload)
-        
+
         return None
-    
+
     def is_face_detected(self) -> bool:
         """公开只读访问当前是否检测到人脸（规则14）"""
         return self._face_was_detected
@@ -440,7 +440,7 @@ class PulseVisualCortex(BasePulseOrgan):
         caps = payload.get("capabilities", {})
         self._gpu_available = caps.get("compute.gpu.available", False)
         self._log(LogLevel.INFO, f"硬件能力更新: GPU={'可用' if self._gpu_available else '不可用'}")
-        return {"status": "updated", "gpu_available": self._gpu_available}    
+        return {"status": "updated", "gpu_available": self._gpu_available}
     def _on_chat_message(self, payload: dict) -> dict[str, Any]:
         """
         收到对话消息时，将未识别的人脸编码与对话中的用户名绑定。
@@ -449,9 +449,9 @@ class PulseVisualCortex(BasePulseOrgan):
         user_name = payload.get("user_name", "")
         if not user_name or user_name in ("用户", "访客", "小林"):  # ★T-119a 绑定白名单守卫：脏键禁止入册
             return {"status": "skipped", "reason": "脏键(用户/访客/小林)禁止入册"}
-        
+
         # 如果有待绑定的人脸编码且距今30秒内，绑定到当前用户名
-        if (self._pending_face_encoding is not None 
+        if (self._pending_face_encoding is not None
             and time.time() - self._pending_face_time < 30):
             self._known_face_encodings[user_name] = self._pending_face_encoding
             self._current_user_name = user_name
@@ -459,14 +459,14 @@ class PulseVisualCortex(BasePulseOrgan):
                                             "hits": 0, "tolerance_override": None}  # ★R5-5 元数据与册同点写
             self._roster_hits[user_name] = 0                                        # ★R5-5b
 
-            self._log(LogLevel.INFO, 
+            self._log(LogLevel.INFO,
                      f"视觉身份绑定: 将当前人脸与'{user_name}'关联")
             self._pending_face_encoding = None
             self._pending_face_time = 0.0
             self._save_face_roster()   # ★R5-6 一次绑定=一次落盘（失败只 WARN，不改绑定结果）
 
             return {"status": "bound", "user_name": user_name}
-        
+
         return {"status": "acknowledged", "user_name": user_name}
     def _on_visual_query(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
@@ -476,10 +476,10 @@ class PulseVisualCortex(BasePulseOrgan):
         file_path = payload.get("file_path", "")
         task_type = payload.get("task_type", "ocr")
         user_name = payload.get("user_name", "用户")
-        
+
         if not file_path:
             return {"status": "skipped", "reason": "空文件路径"}
-        
+
         # 去重：同一文件+同一task_type在60秒内不重复处理
         if not hasattr(self, '_recent_visual_queries'):
             self._recent_visual_queries: dict[str, float] = {}
@@ -489,12 +489,12 @@ class PulseVisualCortex(BasePulseOrgan):
             if _now - self._recent_visual_queries[_dedup_key] < 60:
                 return {"status": "skipped", "reason": f"60秒内已处理过: {_dedup_key}"}
         self._recent_visual_queries[_dedup_key] = _now
-        
+
         if not os.path.exists(file_path):
             return {"status": "error", "reason": f"文件不存在: {file_path}"}
-        
+
         result = {"status": "processed", "task_type": task_type, "file_path": file_path, "text": "", "error": None}
-        
+
         # 获取远程API配置（用于OCR增强）
         _remote_config = None
         try:
@@ -502,7 +502,7 @@ class PulseVisualCortex(BasePulseOrgan):
             _remote_config = getattr(_cfg, 'REMOTE_API_CONFIG', {})
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        
+
         if task_type == "ocr":
             try:
                 from organs.senses.visual_engines.ocr_engine import (
@@ -515,14 +515,14 @@ class PulseVisualCortex(BasePulseOrgan):
                 result["error"] = _ocr_result.get("error") or _ocr_result.get("warning")
                 # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
                 self._text_detected_count += 1
-                self._log(LogLevel.INFO, 
+                self._log(LogLevel.INFO,
                          f"OCR识别完成: {len(result['text'])}字符, "
                          f"方法={result['method']}, 置信度={result['confidence']}")
             except ImportError:
                 result["error"] = "ocr_engine插件未安装"
             except Exception as e:
                 result["error"] = f"OCR处理异常: {str(e)[:80]}"
-        
+
         elif task_type == "pdf":
             try:
                 from organs.senses.visual_engines.pdf_engine import (
@@ -534,19 +534,19 @@ class PulseVisualCortex(BasePulseOrgan):
                 result["confidence"] = _pdf_result.get("confidence", 0)
                 result["error"] = _pdf_result.get("error")
                 self._text_detected_count += 1
-                self._log(LogLevel.INFO, 
+                self._log(LogLevel.INFO,
                          f"PDF提取完成: {len(result['text'])}字符, "
                          f"{result.get('pages', 0)}页, 置信度={result['confidence']}")
             except ImportError:
                 result["error"] = "pdf_engine插件未安装"
             except Exception as e:
                 result["error"] = f"PDF处理异常: {str(e)[:80]}"
-        
+
         else:
             result["status"] = "unknown_task"
             result["error"] = f"未知任务类型: {task_type}"
             return result
-        
+
         # 将识别结果发射为知识消化脉冲（后台知识积累）
         if result["text"] and len(result["text"].strip()) >= 5:
             _file_name = os.path.basename(file_path)
@@ -564,7 +564,7 @@ class PulseVisualCortex(BasePulseOrgan):
                 "view_mode": "OUTER_VIEW",
             }, priority=3, layer="L2")
             self._log(LogLevel.INFO, f"视觉知识消化: {task_type}结果已发射为知识节点")
-            
+
             # ★新增：将识别结果通过嘴巴输出给用户
             _reply_text = (
                 f"📄 识别完成！以下是「{_file_name}」中的文字内容：\n\n"
@@ -590,7 +590,7 @@ class PulseVisualCortex(BasePulseOrgan):
                 "user_name": user_name,
                 "reasoning_path": f"visual_{task_type}_empty",
             }, priority=8, layer="L1")
-        
+
         return result
     def _recognize_face(self, frame) -> tuple:
         """
@@ -603,41 +603,41 @@ class PulseVisualCortex(BasePulseOrgan):
         """
         if not self._has_face_recognition:
             return (None, 0.0)
-        
+
         try:
             import face_recognition
             import numpy as np  # noqa: F401
-            
+
             # 转换OpenCV BGR为RGB
             rgb_frame = frame[:, :, ::-1]
-            
+
             # 提取当前帧的面部编码
             face_encodings = face_recognition.face_encodings(rgb_frame)
             if not face_encodings:
                 return (None, 0.0)
-            
+
             current_encoding = face_encodings[0]
-            
+
             # 与已知面部编码比对
             best_match = None
             best_distance = 0.6  # 阈值：距离小于0.6认为是同一个人
-            
+
             for name, known_encoding in self._known_face_encodings.items():
                 distance = face_recognition.face_distance([known_encoding], current_encoding)[0]
                 if distance < best_distance:
                     best_distance = distance
                     best_match = name
-            
+
             # 如果没匹配到，保存待绑定编码
             if best_match is None:
                 self._pending_face_encoding = current_encoding
                 self._pending_face_time = time.time()
                 return (None, 0.0)
-            
+
             # ★T-115e Z1：匹配度语义（"是他"而非"有脸"）
             _conf = max(0.0, 1.0 - best_distance / 0.6)
             return (best_match, _conf)
-            
+
         except (Exception, SystemExit) as _e:  # ★T-119a 硬化：SystemExit 非 Exception 子类
             # ★T-113c：识别失败计数 + 日志，防止"8天0成功"无感知
             _fc = getattr(self, "_face_recognize_fail_count", 0) + 1
@@ -646,12 +646,12 @@ class PulseVisualCortex(BasePulseOrgan):
                 self._log(LogLevel.WARNING,
                           f"[人脸识别] 识别异常（累计失败 {_fc} 次）: {_e}")
             return (None, 0.0)
-    
+
     def _extract_face_encoding(self, frame) -> Any | None:
         """从帧中提取人脸编码（不进行比对）"""
         if not self._has_face_recognition:
             return None
-        
+
         try:
             import face_recognition
             rgb_frame = frame[:, :, ::-1]
@@ -660,19 +660,19 @@ class PulseVisualCortex(BasePulseOrgan):
                 return face_encodings[0]
         except (Exception, SystemExit) as e:  # ★T-119a 硬化：SystemExit 非 Exception 子类
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        return None    
+        return None
 
     # ========== 帧分析（纯元数据） ==========
-    
+
     def _analyze_frame(self, payload: dict[str, Any]) -> dict[str, Any]:
         """接收 CAMERA_FRAME 脉冲，提取帧元数据"""
         self._frame_count += 1
-        
+
         device_id = payload.get("device_id", "unknown")
         image_format = payload.get("image_format", "unknown")
         width = payload.get("width", 0)
         height = payload.get("height", 0)
-        
+
         analysis = {
             "frame_id": self._frame_count,
             "device_id": device_id,
@@ -681,7 +681,7 @@ class PulseVisualCortex(BasePulseOrgan):
             "megapixels": round(width * height / 1_000_000, 2) if width and height else 0,
             "timestamp": time.time(),
         }
-        
+
         if self.info_field and self.pulse_core:
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
@@ -691,31 +691,31 @@ class PulseVisualCortex(BasePulseOrgan):
                 priority=3,
                 layer="L3"
             ))
-        
+
         return analysis
     def _on_stream_frame(self, payload: dict[str, Any]) -> dict[str, Any]:
         """接收实时视频帧，灵敏人脸检测 + 快速启动确认 + 快速离开确认"""
-        
+
         raw_data = payload.get("raw_data")
         frame_seq = payload.get("frame_seq", 0)
-        
+
         if raw_data is None:
             return {"status": "skipped", "reason": "无帧数据"}
-        
+
         with self._global_lock:
             if frame_seq <= self._last_processed_seq:
                 return {"status": "skipped", "reason": "过期帧"}
             self._last_processed_seq = frame_seq
-        
+
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._frame_count += 1
-        face_detected, confidence = self._detect_face(raw_data) 
+        face_detected, confidence = self._detect_face(raw_data)
         # 初始化快速启动/离开计数器
         if not hasattr(self, '_startup_faces'):
             self._startup_faces = 0
         if not hasattr(self, '_absent_frames'):
             self._absent_frames = 0
-        
+
         # 快速启动确认：前30帧内，累计检测到2帧人脸，立刻打招呼
         if self._frame_count <= 30 and face_detected:
             # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
@@ -734,7 +734,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     if recognized:
                         old_name = self._current_user_name  # noqa: F841
                         self._current_user_name = recognized
-                        self._log(LogLevel.INFO, f"视觉识别: 人脸识别为'{recognized}'(匹配度={_match_conf:.2f})")                
+                        self._log(LogLevel.INFO, f"视觉识别: 人脸识别为'{recognized}'(匹配度={_match_conf:.2f})")
                 if self.info_field and self.pulse_core:
                     # ★P3-5补发射：人脸识别到身份 → persona.identified（此前有订阅无发射）
                     if self._has_face_recognition and self._current_user_name not in ("用户", "访客"):
@@ -762,7 +762,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         layer="L1"
                     ))
                 return {"status": "fast_confirmed", "frame_seq": frame_seq}
-        
+
         # 快速离开确认：连续6帧检测不到人脸，立刻触发离开
         if self._face_was_detected:
             if face_detected:
@@ -789,17 +789,17 @@ class PulseVisualCortex(BasePulseOrgan):
                     ))
                 self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
                 return {"status": "fast_left", "frame_seq": frame_seq}
-        
+
         # 常规时序追踪（兜底）：基于滑动窗口的稳定性判断
         STATE_COOLDOWN = 3.0   #状态切换冷却更久，杜绝反复横跳
         presence_ratio = 0.0  # 初始化，供后续日志使用
-        
+
         with self._global_lock:
             # 更新滑动窗口
             self._detection_window.append(face_detected)
             if len(self._detection_window) > self._window_size:
                 self._detection_window.pop(0)
-            
+
             # 计算窗口内的检测率
             if len(self._detection_window) >= 3:
                 nonlocal_presence = sum(self._detection_window) / len(self._detection_window)
@@ -807,11 +807,11 @@ class PulseVisualCortex(BasePulseOrgan):
             else:
                 # 窗口不足3帧时，暂不判断
                 presence_ratio = 1.0 if self._face_was_detected else 0.0
-            
+
             now = time.time()
             old_state = self._face_was_detected
             cooldown_passed = (now - self._last_face_state_switch) >= STATE_COOLDOWN
-            
+
             # 判定出现：窗口内检测率超过阈值且冷却已过
             if not old_state and presence_ratio >= self._stable_presence_ratio:
                 if cooldown_passed:
@@ -823,7 +823,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     if self._has_face_recognition:
                         recognized, _match_conf = self._recognize_face(raw_data)
                         if recognized:
-                            self._current_user_name = recognized                    
+                            self._current_user_name = recognized
                     if self.info_field and self.pulse_core:
                         # ★P3-5补发射：人脸识别到身份 → persona.identified（此前有订阅无发射）
                         if self._has_face_recognition and self._current_user_name not in ("用户", "访客"):
@@ -850,7 +850,7 @@ class PulseVisualCortex(BasePulseOrgan):
                             priority=7,
                             layer="L1"
                         ))
-            
+
             # 判定离开：窗口内检测率低于阈值
             elif old_state and presence_ratio <= self._stable_absence_ratio:
                 self._face_was_detected = False
@@ -869,7 +869,7 @@ class PulseVisualCortex(BasePulseOrgan):
                         layer="L1"
                     ))
                 self._current_user_name = "访客"  # ★第129批 T-129b：离场即清粘名，防影子误报
-        
+
         # 异步写入视觉流日志（放入队列，后台线程处理）
         try:
             with self._global_lock:
@@ -878,7 +878,7 @@ class PulseVisualCortex(BasePulseOrgan):
                 else:
                     current_ratio = 1.0 if self._face_was_detected else 0.0
                 current_state = "有人" if self._face_was_detected else "无人"
-            
+
             log_entry = {
                 "timestamp": time.time(),
                 "frame_seq": frame_seq,
@@ -894,19 +894,19 @@ class PulseVisualCortex(BasePulseOrgan):
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
         return {"status": "processed", "frame_seq": frame_seq}
     # ========== 图片文件分析 ==========
-    
+
     def _simulate_from_file(self, payload: dict[str, Any]) -> dict[str, Any]:
         # ★v23.0修复：OCR/PDF任务已由_on_visual_query处理，这里不再重复做分辨率分析
         if payload.get("task_type") in ("ocr", "pdf"):
             return {"status": "routed_to_visual_query", "reason": "OCR/PDF任务由视觉查询处理"}
-        
+
         file_path = payload.get("file_path", "")
-        
+
         if not file_path:
             return {"error": "未指定文件路径"}
         if not os.path.exists(file_path):
             return {"error": f"文件不存在: {file_path}"}
-        
+
         if self._has_opencv:
             import cv2
             try:
@@ -937,7 +937,7 @@ class PulseVisualCortex(BasePulseOrgan):
                     return result
             except Exception as e:
                 return {"error": f"OpenCV 读取失败: {e}"}
-        
+
         file_size = os.path.getsize(file_path)
         ext = os.path.splitext(file_path)[1].lower()
         result = {
@@ -950,7 +950,7 @@ class PulseVisualCortex(BasePulseOrgan):
             "correlation_id": payload.get("correlation_id", ""),
         }
         self._frame_count += 1
-        
+
         if self.info_field and self.pulse_core:
             self.info_field.publish(self.pulse_core.emit(
                 source_organ=self.organ_name,
@@ -960,17 +960,17 @@ class PulseVisualCortex(BasePulseOrgan):
                 priority=3,
                 layer="L3"
             ))
-        
-        return result  
+
+        return result
 
     # ========== 预留接口 ==========
-    
+
     def on_field_oscillation(self, frequency: float, amplitude: float, phase: float, field_strength: float):
         """【预留 v10.0】"""
     def _on_status_request(self) -> dict[str, Any]:
-        return self.get_stats()    
+        return self.get_stats()
     # ========== 统计信息 ==========
-    
+
     # ========== ★R5-7 册路径 / 落盘（原子写；失败只 WARN）==========
     def _face_roster_path(self) -> str:
         """册路径（测试可用 TONGTONG_FACE_ROSTER 覆盖）。

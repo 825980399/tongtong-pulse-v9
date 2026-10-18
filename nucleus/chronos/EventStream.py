@@ -32,7 +32,7 @@ class EventStream:
         - 经典脉冲模式，仅做脉冲历史存储。
         - 通过功能开关控制是否记录事件，默认关闭以减少内存开销。
     """
-    
+
     def __init__(self, max_events: int = 10000, window_size_seconds: float = 300.0):
         """
         Args:
@@ -42,17 +42,17 @@ class EventStream:
         self._events: list[dict[str, Any]] = []
         self._max_events = max_events
         self._default_window = window_size_seconds
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 全局时钟引用（v10.0注入）
         self.global_clock = None
-        
+
         # 统计
         self._total_pushed = 0
         self._total_queried = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -134,7 +134,7 @@ class EventStream:
 
     # ========== 时间窗口查询 ==========
 
-    def query_window(self, window_seconds: float | None = None, 
+    def query_window(self, window_seconds: float | None = None,
                      event_type: str | None = None,
                      source_organ: str | None = None,
                      limit: int = 100) -> list[dict[str, Any]]:
@@ -171,7 +171,7 @@ class EventStream:
 
         return results
 
-    def query_recent(self, count: int = 20, 
+    def query_recent(self, count: int = 20,
                      event_type: str | None = None) -> list[dict[str, Any]]:
         """
         查询最近的事件（便捷方法）。
@@ -317,10 +317,10 @@ class EventStream:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== EventStream 自测（P3预留接口） ===\n")
-    
+
     stream = EventStream(max_events=100, window_size_seconds=60)
     stream.enable()
-    
+
     # 1. 推入事件
     for i in range(5):
         stream.push({
@@ -330,7 +330,7 @@ if __name__ == "__main__":
             "timestamp": time.time(),
             "timestamp_ns": time.time_ns(),
         })
-    
+
     for i in range(3):
         stream.push({
             "event_type": "knowledge.written",
@@ -339,24 +339,24 @@ if __name__ == "__main__":
             "timestamp": time.time(),
             "timestamp_ns": time.time_ns(),
         })
-    
+
     print(f"1. 推入事件: {stream._total_pushed} 条")
-    
+
     # 2. 时间窗口查询
     recent = stream.query_recent(10)
     print(f"2. 最近10条: {len(recent)} 条")
-    
+
     heart_events = stream.query_by_organ("心脏")
     print(f"3. 心脏事件: {len(heart_events)} 条")
-    
+
     # 4. 事件分布
     dist = stream.get_event_type_distribution()
     print(f"4. 事件分布: {dist}")
-    
+
     # 5. 器官活跃度
     activity = stream.get_organ_activity_summary()
     print(f"5. 器官活跃度: {activity}")
-    
+
     # 6. 脉冲便捷推入
     test_pulse = {
         "event_type": "reflection.insight",
@@ -367,15 +367,15 @@ if __name__ == "__main__":
     }
     stream.push_pulse(test_pulse)
     print(f"6. 脉冲推入后总数: {len(stream._events)}")
-    
+
     # 7. 统计
     stats = stream.get_stats()
     print(f"7. 统计: 推送{stats['total_pushed']}次 查询{stats['total_queried']}次 "
           f"当前{stats['current_size']}条")
-    
+
     # 8. 清理
     stream.clear()
     print(f"8. 清空后: {len(stream._events)} 条")
-    
+
     stream.disable()
     print("\n=== 自测全部通过 ===")

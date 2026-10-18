@@ -63,7 +63,7 @@ def _layer_l1() -> dict[str, Any]:
         _thr = float(getattr(_cfg, "SEMANTIC_CACHE_THRESHOLD", None) or 0.85)
     except Exception as _e:
         silent_exc(_e, where="dashboard._layer_l1.threshold")
-        
+
     _dq = _cfg_flag("ENABLE_LLM_DATA_QUALITY_EVAL", True)
     return {
         "semantic_cache": {
@@ -183,7 +183,7 @@ def _read_last_external_dependency_snapshot_from_logs() -> dict[str, Any] | None
                             _kv[_k] = float(_v)
                         except ValueError as _e:
                             silent_exc(_e, where="dashboard.read_logs.parse")
-                            
+
                 if _kv:
                     _last = _kv
     except Exception as _e:

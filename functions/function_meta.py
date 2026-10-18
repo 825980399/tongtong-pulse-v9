@@ -8,8 +8,8 @@
 
 class FunctionMeta:
     """功能模块元数据定义（v9.5）"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  name: str,
                  module_path: str,
                  class_name: str,

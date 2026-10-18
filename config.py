@@ -44,7 +44,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SYSTEM_NAME = "曈曈"
 SYSTEM_VERSION = "v9.5 PulseNet"
 SYSTEM_PORT = 5050
-CREATOR = "" 
+CREATOR = ""
 
 # ========== 企业微信凭证（★安全修复：从环境变量读取，禁止硬编码） ==========
 # 用法：启动前设置环境变量，或在下方填入（填入的值不要提交到任何代码库/压缩包）
@@ -57,7 +57,7 @@ CREATOR = ""
 #   {"WECOM_BOT_ID": "你的bot_id", "WECOM_SECRET": "你的secret", "WECOM_ADMIN_USERID": "你的userid"}
 def _load_wecom_credentials_from_override():
     """从 data/config_override.json 读取企业微信凭证（如果存在）"""
-    override_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+    override_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  "data", "config_override.json")
     try:
         if os.path.exists(override_path):
@@ -686,13 +686,13 @@ SOCIAL_EMOTIONS = {
         "惊讶": ["啊", "哇", "天哪", "居然", "不可思议", "震惊", "没想到"],
         "厌恶": ["恶心", "厌恶", "嫌弃", "反感", "讨厌"],
         # 可扩展更多：如 "怀念"、"释然"、"困惑" 等
-    },    
+    },
     # 关系上下文增强映射（特定身份+情感词的组合权重更高）
     "relational_boost": {
         "小林": 1.5,
         "路灯": 1.3,
     },
-    # 情感衰减配置 
+    # 情感衰减配置
     "decay": {
         "half_life": 300.0,  # 5分钟半衰期
         "min_intensity": 0.05,
@@ -706,7 +706,7 @@ KIDNEY = {
     "forget_scan_interval": 5,              # 每5次PURGE_CHECK执行一次主动扫描
     "l1_max_age_days": 30.0,       # L1最大保留天数
     "l2_downgrade_age_days": 90.0, # L2降级年龄天数
-    "pressure_threshold": 100000,   # 节点池压力阈值    
+    "pressure_threshold": 100000,   # 节点池压力阈值
     # 偏见检测参数
     "bias_node_count_multiplier": 2.0,      # 节点数超过均值×此倍数视为候选偏见分支
     "bias_activation_multiplier": 0.5,       # 总激活低于均值×此倍数视为候选偏见分支
@@ -2410,7 +2410,7 @@ CONTROLLER_PERMISSION = {
     ],
     "preferred_browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "operation_cooldown_seconds": 15,
-    "max_url_opens_per_hour": 30,  
+    "max_url_opens_per_hour": 30,
     "full_system_access": False,
     "max_file_read_bytes": 80000,
     "audit_log_path": "data/monitor/controller_audit.log",
@@ -2456,7 +2456,7 @@ SELF_AWARENESS_CONFIG = {
 
     # 排除的目录（不扫描）
     "excluded_dirs": [
-        "__pycache__", ".git", "logs", "data", 
+        "__pycache__", ".git", "logs", "data",
         "models", "venv", "node_modules", ".pytest_cache",
     ],
 
@@ -2506,7 +2506,7 @@ SELF_AWARENESS_CONFIG = {
                 "shared_experience": [0.0, 0.1],
             },
         },
-    },    
+    },
     # 隐私分层——什么信息可以向谁披露
     "privacy_levels": {
         # 公开信息：任何人可问
@@ -2546,7 +2546,7 @@ SELF_AWARENESS_CONFIG = {
                 "full_code_logic",
             ],
             "description": "底层代码逻辑、安全机制、本能规则详情",
-        },    
+        },
     },
 }
 # ========== 叙事自我配置 ==========
@@ -2854,7 +2854,7 @@ BACKGROUND_LEARNING_CHANNEL_CONFIG = {
 INTEREST_MODEL_CONFIG = {
     # 兴趣维度列表（25维）
     "interest_dimensions": [
-        "技术架构", "编程开发", "人工智能", "计算机硬件", 
+        "技术架构", "编程开发", "人工智能", "计算机硬件",
         "机器人构造", "机械原理", "电子原理",
         "物理科学", "化学", "数学逻辑",
         "自然生态", "医学生物学",
@@ -2862,7 +2862,7 @@ INTEREST_MODEL_CONFIG = {
         "人文哲学", "社会伦理", "心理情感", "历史考古",
         "文学创作", "艺术美学", "音乐韵律",
         "经济商业", "体育健康", "游戏娱乐", "日常生活",
-        "未知探索", 
+        "未知探索",
     ],
     # 领域关键词映射
     "domain_keywords": {
@@ -3144,7 +3144,7 @@ THINKING_DISCIPLINE_CONFIG = {
 }
 # ========== 肝脏知识优化配置 ==========
 LIVER_CONFIG = {
-    "compress_cooldown": 120.0,               
+    "compress_cooldown": 120.0,
     "reflection_compress_threshold": 5,
     "l1_to_l2_threshold": 8,
     "l2_to_l3_threshold": 12,
@@ -3731,7 +3731,7 @@ NARRATIVE_VALUES = {
     # 初始价值观种子（运行时动态演化，不设上限）
     "seeds": {
         "守护": 0.9,
-        "诚实": 0.8, 
+        "诚实": 0.8,
         "学习": 0.7,
         "关怀": 0.6,
         "自主": 0.5,
@@ -4648,7 +4648,7 @@ SEMANTIC_CACHE_MAX_TEXT = 4000           # 单条 prompt/response 截断长度
 # ==================== 第205批 刀2：LIF 影子观测（类脑改造 P2 · 默认关闭） ====================
 # 漏积分发放（LIF）膜电位影子观测：纯观测、不门控、不参与路由/熔断。
 # 首批 6 件承载器官（SA 四件 30/60/100/150 + CL 两件 50/200）按运行时 organ_name 灰度启用。
-ENABLE_LIF_SHADOW = True         # 总开关（默认关：观测不门控，开启需显式灰度）
+ENABLE_LIF_SHADOW = True         # 总开关（初始默认关；★213批已翻 True：观测不门控，开启需显式灰度）
 LIF_TAU = 60.0                    # s，膜电位时间常数 τ
 LIF_THETA = 5.0                    # 阈值 θ（仅观测记录 crossed，不门控）
 LIF_W_IN = 1.0                     # 每个入脉冲注入权重 w_in
@@ -4662,7 +4662,7 @@ LIF_SHADOW_ORGANS = ["自我认知", "代码学习"]   # 灰度白名单（承�
 #     L2 后这条结构保证消失 → 必须用**四道闸门**（置信/时效/幂等/质量）替代，任一不过静默回落正常渠道调用。
 #   ★灰度：ENABLE_SEMANTIC_CACHE_L2 默认 **False**（与第44批设计 §6 阶段A一致）——关闭时零副作用，逐字回 L1 行为。
 #   ★TTL：本批按任务书口径设 **1 小时**（L2 层独立，不改 L1 的 7 天观测账）；内存自动淘汰（LRU）。
-ENABLE_SEMANTIC_CACHE_L2 = True  # 2026-09-27星轨开启：语义缓存L2，省大模型调用          # L2 总开关（默认关；开启后命中直接返回缓存响应）
+ENABLE_SEMANTIC_CACHE_L2 = True  # 2026-09-27星轨开启：语义缓存L2，省大模型调用          # L2 总开关（★已开启，非默认值；命中直接返回缓存响应）
 SEMANTIC_CACHE_L2_TTL_SEC = 3600          # L2 条目 TTL（1 小时）
 SEMANTIC_CACHE_L2_CAPACITY = 2000         # L2 内存条目上限（超限 LRU 淘汰）
 SEMANTIC_CACHE_L2_MIN_LEN = 8             # 短 prompt（<此长度）不入缓存（指代/寒暄高发区）

@@ -92,21 +92,21 @@ def _log_filtered_word(word: str):
     """
     if len(word) <= 3:
         return  # 过短的词（介词/冠词碎片）不统计
-    
+
     if not word.isascii():
         return  # 非纯英文词不统计
-    
+
     if word in WEB_NAVIGATION_NOISE:
         return  # 已在静态集合中的不重复统计
-    
+
     count = _FILTERED_WORD_STATS.get(word, 0) + 1
     _FILTERED_WORD_STATS[word] = count
-    
+
     if count == _STATS_THRESHOLD:
         # ★v26.0补强：达到阈值时自动添加为噪音词，无需人工干预
         add_noise_word(word)
         _logger.info(f"自动添加噪音词: '{word}' (已被过滤{_STATS_THRESHOLD}次)")
-    
+
     # 统计字典上限保护
     if len(_FILTERED_WORD_STATS) > 500:
         sorted_items = sorted(_FILTERED_WORD_STATS.items(), key=lambda x: x[1], reverse=True)
@@ -128,41 +128,41 @@ def is_noise_keyword(keyword: str) -> bool:
     """
     if not keyword:
         return True
-    
+
     # 包含中文字符 → 不是噪音
     for char in keyword:
         if '\u4e00' <= char <= '\u9fff':
             return False
-    
+
     # 包含数字 → 不是噪音（如 GPT-4, BERT, 3D）
     for char in keyword:
         if '0' <= char <= '9':
             return False
-    
+
     # 纯英文词判断
     keyword_lower = keyword.lower()
-    
+
     # 首字母大写且长度>3 → 很可能是专有名词（Python, Linux, Chrome）
     if keyword[0].isupper() and len(keyword) > 3:
         return False
-    
+
     # 全大写 → 很可能是缩写（DNA, API, GPU, QICA）
     if keyword.isupper() and len(keyword) >= 2:
         return False
-    
+
     # 首字母大写短词（2-3字符） → 可能是缩写（Go, AI, Io）
     if keyword[0].isupper() and 2 <= len(keyword) <= 3:
         return False
-    
+
     # 全小写且在噪音词表中（含静态和动态） → 是噪音
     if keyword_lower in WEB_NAVIGATION_NOISE or keyword_lower in _DYNAMIC_NOISE:
         return True
-    
+
     # 全小写且长度<=3 → 很可能是介词/冠词/代词碎片（the, and, for, is）
     if len(keyword) <= 3 and keyword.islower():
         _log_filtered_word(keyword_lower)
         return True
-    
+
     # 其他情况默认为有价值
     return False
 
@@ -180,13 +180,13 @@ def get_top_valuable_keywords(keywords: list, top_n: int = 10) -> list:
     """
     if not keywords:
         return []
-    
+
     # 按价值分组
     chinese_keywords = []
     proper_nouns = []
     acronyms = []
     lowercase_english = []
-    
+
     for kw in keywords:
         if is_noise_keyword(kw):
             continue
@@ -199,17 +199,17 @@ def get_top_valuable_keywords(keywords: list, top_n: int = 10) -> list:
             proper_nouns.append(kw)
         else:
             lowercase_english.append(kw)
-    
+
     # 按优先级拼接：中文 > 缩写 > 专有名词 > 小写英文
     # 每组内按出现频次排序
     from collections import Counter
     result = []
-    
+
     for group in [chinese_keywords, acronyms, proper_nouns, lowercase_english]:
         if group:
             counter = Counter(group)
             result.extend([kw for kw, _ in counter.most_common(top_n)])
-    
+
     return result[:top_n]
 
 
@@ -270,26 +270,26 @@ def clean_content_text(text: str) -> str:
     """
     if not text or len(text) < 5:
         return ""
-    
+
     import re
-    
+
     # 1. 去除HTML标签
     cleaned = re.sub(r'<[^>]+>', '', text)
-    
+
     # 2. 去除URL
     cleaned = re.sub(r'https?://\S+|www\.\S+', '', cleaned)
-    
+
     # 3. 去除常见的搜索引擎导航碎片（使用模块级常量）
     for pattern in NAV_NOISE_PATTERNS:
         cleaned = re.sub(pattern, '', cleaned)
-    
+
     # 4. 压缩多余空白
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-    
+
     # 5. 长度检查
     if len(cleaned) < 5:
         return ""
-    
+
     return cleaned
 
 # ========== 知识免疫系统（v12.0新增）==========
@@ -347,42 +347,42 @@ def check_self_consistency_for_node(node_value: str, node_keywords: list, self_n
         "trust_penalty": 0.0,
         "conflicting_self_paths": [],
     }
-    
+
     if not node_value or not node_keywords or not self_nodes:
         return result
-    
+
     _node_kw_set = {kw.lower() for kw in node_keywords if isinstance(kw, str) and len(kw) >= 2}
     if len(_node_kw_set) < 2:
         return result
-    
+
     for _self_node in self_nodes:
         _self_kw = _self_node.keywords if hasattr(_self_node, 'keywords') and _self_node.keywords else []
         _self_kw_set = {kw.lower() for kw in _self_kw if isinstance(kw, str) and len(kw) >= 2}
-        
+
         if len(_self_kw_set) < 2:
             continue
-        
+
         _overlap = len(_node_kw_set & _self_kw_set)
         _min_size = min(len(_node_kw_set), len(_self_kw_set))
         if _min_size == 0:
             continue
         _overlap_ratio = _overlap / _min_size
-        
+
         if _overlap_ratio >= 0.5:
             _self_value = str(_self_node.value) if _self_node.value else ""
             _is_contradiction = detect_value_contradiction(node_value, _self_value)
-            
+
             if _is_contradiction:
                 result["contradiction_found"] = True
                 result["contradiction_count"] += 1
                 _self_path = getattr(_self_node, 'space_path', '/自我/架构')
                 result["conflicting_self_paths"].append(_self_path)
-    
+
     if result["contradiction_count"] >= 2:
         result["trust_penalty"] = 25.0
     elif result["contradiction_count"] == 1:
         result["trust_penalty"] = 15.0
-    
+
     return result
 # ★v23.0优化：路径碎片词提取为模块级常量，使用set实现O(1)查找
 _PATH_FRAGMENT_WORDS: set = {
@@ -417,10 +417,10 @@ def is_path_fragment_word(word: str) -> bool:
     """
     if not word or len(word) < 2:
         return True
-    
+
     if word in _PATH_FRAGMENT_WORDS:
         return True
-    
+
     # 包含冒号的词（如"节点A:"）——路径中不应出现
     return bool(":" in word or "：" in word)
 

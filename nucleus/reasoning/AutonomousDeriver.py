@@ -37,7 +37,7 @@ class AutonomousDeriver:
         self._induction_cooldown: dict[str, float] = {}  # 归纳冷却
         self._analogy_cooldown: dict[str, float] = {}    # 类比冷却
         self._COOLDOWN_ALL = 1800  # 归纳/类比冷却30分钟
-    
+
     def derive(self, node_pool, knowledge_tree, derivation_type: str = "auto", context_question: str | None = None) -> list[dict[str, Any]]:
         """
         执行自主推导。
@@ -51,7 +51,7 @@ class AutonomousDeriver:
         """
         if not node_pool:
             return []
-        
+
         if derivation_type == "auto":
             # 自动选择：检查每种推导是否有足够素材
             results = []
@@ -65,9 +65,9 @@ class AutonomousDeriver:
             return self._inductive_derive(node_pool, knowledge_tree)
         elif derivation_type == "analogical":
             return self._analogical_derive(node_pool, knowledge_tree, context_question)
-        
+
         return []
-    
+
     def _deductive_derive(self, node_pool) -> list[dict[str, Any]]:
         """
         逻辑演绎：从L2/L3节点中寻找因果关系链，推导新事实。
@@ -78,20 +78,20 @@ class AutonomousDeriver:
         3. 推导A→C（标记为低置信度）
         """
         results = []
-        
+
         # 获取L2和L3节点
         l3_nodes = node_pool.query(evol_level="L3", limit=20)
         l2_nodes = node_pool.query(evol_level="L2", limit=80)
         all_nodes = l3_nodes + l2_nodes
-        
+
         if len(all_nodes) < 5:
             return results
-        
+
         # 因果关键词
-        causal_keywords = ["导致", "因此", "所以", "因为", "影响", "产生", 
+        causal_keywords = ["导致", "因此", "所以", "因为", "影响", "产生",
                           "引起", "造成", "促使", "触发", "驱动", "推动",
                           "使得", "结果是", "源于", "归因于"]
-        
+
         # 提取包含因果关系的节点
         causal_nodes = []
         for node in all_nodes:
@@ -100,24 +100,24 @@ class AutonomousDeriver:
                 if kw in value:
                     causal_nodes.append(node)
                     break
-        
+
         if len(causal_nodes) < 2:
             return results
-        
+
         # 优先使用高信任节点（信任分数≥50）
-        high_trust_causal = [n for n in causal_nodes 
+        high_trust_causal = [n for n in causal_nodes
                             if getattr(n, 'trust_score', 50.0) >= 50.0]
         if len(high_trust_causal) >= 2:
             causal_nodes = high_trust_causal
         elif len(causal_nodes) < 2:
             return results
-        
+
         # 提取因果关系中的概念对
         causal_pairs = []
         for node in causal_nodes[:10]:
             value = str(node.value) if node.value else ""
             kws = node.keywords if hasattr(node, 'keywords') and node.keywords else []
-            
+
             # 找因果关系中涉及的A和B
             for i, kw_a in enumerate(kws):
                 for kw_b in kws[i+1:]:
@@ -139,7 +139,7 @@ class AutonomousDeriver:
                         except re.error:
                             # 关键词含无法处理的正则特殊字符，跳过此组合
                             continue
-        
+
         if len(causal_pairs) < 2:
             return results
 
@@ -154,16 +154,16 @@ class AutonomousDeriver:
             if _verified_deductions:
                 results.extend(_verified_deductions)
             return results[:2]
-        
+
         # 寻找因果链：A→B 和 B→C → 推导 A→C
         deductions = []
         seen_chains = set()
-        
+
         for pair1 in causal_pairs:
             for pair2 in causal_pairs:
                 if pair1["source_node_id"] == pair2["source_node_id"]:
                     continue
-                
+
                 # B在pair1中是effect，在pair2中是cause
                 if pair1["effect"].lower() == pair2["cause"].lower():
                     chain_key = f"{pair1['cause']}→{pair1['effect']}→{pair2['effect']}"
@@ -172,7 +172,7 @@ class AutonomousDeriver:
                     seen_chains.add(chain_key)
                    # 综合置信度：源节点信任越高，推导结果越可信
                     _avg_source_trust = (pair1["trust"] + pair2["trust"]) / 2
-                    _derived_confidence = min(45.0, _avg_source_trust * 0.4 + 10.0)                    
+                    _derived_confidence = min(45.0, _avg_source_trust * 0.4 + 10.0)
                     # 推导A→C
                     deduction = {
                         "type": "deductive",
@@ -189,7 +189,7 @@ class AutonomousDeriver:
                         "derivation_chain": chain_key,
                     }
                     deductions.append(deduction)
-        
+
         return deductions[:2]
 
     # ========== ★B-2（2026-09-08 第八批）：因果链图谱校验 ==========
@@ -281,12 +281,12 @@ class AutonomousDeriver:
         3. 如果共同关键词≥2个，归纳出通用规律
         """
         results = []
-        
+
         l2_nodes = node_pool.query(evol_level="L2", limit=100)
-        
+
         if len(l2_nodes) < 6:
             return results
-        
+
         # 按路径分组
         path_groups = {}
         for node in l2_nodes:
@@ -297,43 +297,43 @@ class AutonomousDeriver:
             if group_key not in path_groups:
                 path_groups[group_key] = []
             path_groups[group_key].append(node)
-        
+
         # 对每组≥3个节点的组进行归纳（优先使用高信任节点）
         for path, nodes in path_groups.items():
             if len(nodes) < 3:
                 continue
-            
+
             # ★v23.0新增：冷却检查——同一路径30分钟内不重复归纳
             _now = time.time()
             _last_induct = self._induction_cooldown.get(path, 0)
             if _now - _last_induct < self._COOLDOWN_ALL:
                 continue
-            
+
             # 信任分数加权：高信任节点在归纳中权重更高
             _trust_weighted_nodes = sorted(
-                nodes, 
-                key=lambda n: getattr(n, 'trust_score', 50.0), 
+                nodes,
+                key=lambda n: getattr(n, 'trust_score', 50.0),
                 reverse=True
             )
             # 如果高信任节点≥3个，只使用它们
             _high_trust = [n for n in nodes if getattr(n, 'trust_score', 50.0) >= 50.0]
             if len(_high_trust) >= 3:
                 nodes = _high_trust
-            
+
             # 提取所有关键词及其出现频率
             from collections import Counter
             all_kw = []
             for node in nodes:
                 kws = node.keywords if hasattr(node, 'keywords') and node.keywords else []
                 all_kw.extend([kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2])
-            
+
             kw_counter = Counter(all_kw)
             # 找出在≥2个节点中出现的共同关键词
             common_kw = [kw for kw, count in kw_counter.items() if count >= 2]
-            
+
             if len(common_kw) < 2:
                 continue
-            
+
             # 提取节点中的共同价值/规律性描述
             common_patterns = []
             node_values = [str(n.value)[:150] if n.value else "" for n in nodes]
@@ -342,9 +342,9 @@ class AutonomousDeriver:
                     if pattern in val:
                         common_patterns.append(pattern)
                         break
-            
+
             path_name = path.split('/')[-1] if '/' in path else path
-            
+
             if common_patterns:
                 # 尝试从知识库中查找深层原理
                 _deep_insight = self._search_deep_principle(node_pool, common_kw)
@@ -387,7 +387,7 @@ class AutonomousDeriver:
                 results.append(induction)
                 # ★v23.0新增：记录冷却时间
                 self._induction_cooldown[path] = time.time()
-        
+
         return results[:2]
     def _search_deep_principle(self, node_pool, common_keywords: list) -> str | None:
         """
@@ -397,45 +397,45 @@ class AutonomousDeriver:
         """
         if not node_pool or not common_keywords:
             return None
-        
+
         # 查询L3节点
         l3_nodes = node_pool.query(evol_level="L3", limit=30)
         if not l3_nodes:
             return None
-        
+
         _best_node = None
         _best_overlap = 0
-        
+
         _input_kw = {kw.lower() for kw in common_keywords if isinstance(kw, str) and len(kw) >= 2}
-        
+
         for _node in l3_nodes:
             _trust = getattr(_node, 'trust_score', 50.0)
             if _trust < 70.0:
                 continue
-            
+
             _node_kw = {kw.lower() for kw in (_node.keywords or []) if isinstance(kw, str) and len(kw) >= 2}
             _overlap = len(_input_kw & _node_kw)
-            
+
             if _overlap > _best_overlap:
                 _best_overlap = _overlap
                 _best_node = _node
-        
+
         if _best_node and _best_overlap >= 2:
             _value = str(_best_node.value) if _best_node.value else ""
             # 取前150字作为核心解释
             _clean = _value[:150].rstrip("，,。.")
             if len(_clean) >= 30:
                 return _clean
-        
-        return None    
+
+        return None
     def _analogical_derive(self, node_pool, knowledge_tree, context_question: str | None = None) -> list[dict[str, Any]]:
         results = []
-        
+
         # ===== 【v12.0新增】优先基于自我架构知识构建类比 =====
         _self_l3 = node_pool.query(evol_level="L3", space_path_prefix="/自我/架构", limit=30)
         _self_l2 = node_pool.query(evol_level="L2", space_path_prefix="/自我/架构", limit=30)
         _self_nodes = _self_l3 + _self_l2
-        
+
         if len(_self_nodes) >= 4:
             _self_groups = {}
             for _node in _self_nodes:
@@ -445,26 +445,26 @@ class AutonomousDeriver:
                 if _group_key not in _self_groups:
                     _self_groups[_group_key] = []
                 _self_groups[_group_key].append(_node)
-            
+
             if len(_self_groups) >= 2:
                 _self_items = sorted(_self_groups.items(), key=lambda x: len(x[1]), reverse=True)
                 _path_a, _nodes_a = _self_items[0]
                 _path_b, _nodes_b = _self_items[1]
-                
+
                 _kw_a = set()
                 for _n in _nodes_a[:5]:
                     _kws = _n.keywords if hasattr(_n, 'keywords') and _n.keywords else []
                     _kw_a.update([kw.lower() for kw in _kws if isinstance(kw, str) and len(kw) >= 2])
-                
+
                 _kw_b = set()
                 for _n in _nodes_b[:5]:
                     _kws = _n.keywords if hasattr(_n, 'keywords') and _n.keywords else []
                     _kw_b.update([kw.lower() for kw in _kws if isinstance(kw, str) and len(kw) >= 2])
-                
+
                 _shared = _kw_a & _kw_b
                 _unique_a = _kw_a - _kw_b
                 _unique_b = _kw_b - _kw_a
-                
+
                 if len(_shared) >= 1:
                     return [{
                         "type": "analogical",
@@ -484,10 +484,10 @@ class AutonomousDeriver:
                     }]
         # ===== 自我知识优先类比结束 =====
         l2_nodes = node_pool.query(evol_level="L2", limit=100)
-        
+
         if len(l2_nodes) < 8:
             return results
-        
+
         # 按路径分组
         path_groups = {}
         for node in l2_nodes:
@@ -497,12 +497,12 @@ class AutonomousDeriver:
             if group_key not in path_groups:
                 path_groups[group_key] = []
             path_groups[group_key].append(node)
-        
+
         if len(path_groups) < 2:
             return results
 
         path_items = sorted(path_groups.items(), key=lambda x: len(x[1]), reverse=True)
-        
+
         # 如果有首选领域，将它们排到前面
         _preferred_domains = set()
         if context_question:
@@ -515,56 +515,56 @@ class AutonomousDeriver:
                     _path = getattr(_node, 'space_path', '/')
                     _root = _path.strip('/').split('/')[0] if _path else 'root'
                     _preferred_domains.add(_root)
-        
+
         if _preferred_domains:
             _preferred_items = [(k, v) for k, v in path_items if k in _preferred_domains]
             _other_items = [(k, v) for k, v in path_items if k not in _preferred_domains]
             path_items = _preferred_items + _other_items
-        
+
         analogies = []
         seen_pairs = set()
-        
+
         for i in range(len(path_items)):
             for j in range(i + 1, len(path_items)):
                 path_a, nodes_a = path_items[i]
                 path_b, nodes_b = path_items[j]
-                
+
                 if len(nodes_a) < 3 or len(nodes_b) < 3:
                     continue
-                
+
                 # ★v23.0新增：冷却检查——同一领域对30分钟内不重复类比
                 _now = time.time()
                 _pair_cool_key = f"{path_a}:{path_b}"
                 _last_analogy = self._analogy_cooldown.get(_pair_cool_key, 0)
                 if _now - _last_analogy < self._COOLDOWN_ALL:
                     continue
-                
+
                 _high_trust_a = [n for n in nodes_a if getattr(n, 'trust_score', 50.0) >= 45.0]
                 _high_trust_b = [n for n in nodes_b if getattr(n, 'trust_score', 50.0) >= 45.0]
                 if len(_high_trust_a) >= 3:
                     nodes_a = _high_trust_a
                 if len(_high_trust_b) >= 3:
                     nodes_b = _high_trust_b
-                
+
                 pair_key = tuple(sorted([path_a, path_b]))
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)
-                
+
                 kw_a = set()
                 for n in nodes_a[:5]:
                     kws = n.keywords if hasattr(n, 'keywords') and n.keywords else []
                     kw_a.update([kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2])
-                
+
                 kw_b = set()
                 for n in nodes_b[:5]:
                     kws = n.keywords if hasattr(n, 'keywords') and n.keywords else []
                     kw_b.update([kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2])
-                
+
                 shared_kw = kw_a & kw_b
                 unique_a = kw_a - kw_b
                 unique_b = kw_b - kw_a
-                
+
                 if len(shared_kw) >= 2 and len(unique_a) >= 2 and len(unique_b) >= 2:
                     analogy = {
                         "type": "analogical",
@@ -583,7 +583,7 @@ class AutonomousDeriver:
                     analogies.append(analogy)
                     # ★v23.0新增：记录冷却时间
                     self._analogy_cooldown[_pair_cool_key] = time.time()
-        
+
         return analogies[:2]
     def causal_chain_derive(self, node_pool, premise_a: str, premise_b: str) -> dict[str, Any] | None:
         """
@@ -604,44 +604,44 @@ class AutonomousDeriver:
         """
         if not node_pool:
             return None
-        
+
         # 获取L2和L3节点
         l3_nodes = node_pool.query(evol_level="L3", limit=30)
         l2_nodes = node_pool.query(evol_level="L2", limit=50)
         all_nodes = l3_nodes + l2_nodes
-        
+
         if len(all_nodes) < 3:
             return None
-        
+
         # 因果关键词
         causal_keywords = ["导致", "因此", "所以", "因为", "影响", "产生",
                           "引起", "造成", "促使", "触发", "驱动", "推动",
                           "使得", "结果是", "源于", "归因于", "取决于", "依赖于"]
-        
+
         # 提取与premise_a和premise_b相关的因果节点
         relevant_nodes_a = []
         relevant_nodes_b = []
-        
+
         import re  # noqa: F401
         for node in all_nodes:
             value = str(node.value) if node.value else ""
             kws = node.keywords if hasattr(node, 'keywords') and node.keywords else []
-            
+
             # 检查是否包含因果关键词
             has_causal = any(kw in value for kw in causal_keywords)
             if not has_causal:
                 continue
-            
+
             # 检查与premise_a或premise_b的相关性
             kw_str = " ".join(kws).lower()
             if any(w in kw_str for w in premise_a.lower().split()):
                 relevant_nodes_a.append(node)
             if any(w in kw_str for w in premise_b.lower().split()):
                 relevant_nodes_b.append(node)
-        
+
         if len(relevant_nodes_a) < 1 or len(relevant_nodes_b) < 1:
             return None
-        
+
         # 提取因果关系对
         def extract_causal_pairs(nodes, filter_word=""):
             pairs = []
@@ -673,13 +673,13 @@ class AutonomousDeriver:
                                 "node_id": node.node_id,
                             })
             return pairs
-        
+
         pairs_a = extract_causal_pairs(relevant_nodes_a, premise_a)
         pairs_b = extract_causal_pairs(relevant_nodes_b, premise_b)
-        
+
         if not pairs_a or not pairs_b:
             return None
-        
+
         # 寻找因果链：A→B 和 B→C
         chain_steps = []
         pa = None
@@ -695,14 +695,14 @@ class AutonomousDeriver:
                         "chain": f"{pa['cause']}→{pa['effect']}→{pb['effect']}",
                         "avg_trust": (pa["trust"] + pb["trust"]) / 2,
                     })
-        
+
         if not chain_steps:
             return None
-        
+
         # 选择信任最高的因果链
         best_chain = max(chain_steps, key=lambda c: c["avg_trust"])
         confidence = min(45.0, best_chain["avg_trust"] * 0.4 + 10.0)
-        
+
         _result = {
             "type": "causal_chain",
             "content": (
@@ -726,7 +726,7 @@ class AutonomousDeriver:
                 "[T4留痕] 因果链验证器异常已忽略: %s: %s",
                 type(_e).__name__, _e)
         return _result
-    
+
     def inductive_generalize(self, node_pool, samples: list[str], domain_hint: str = "") -> dict[str, Any] | None:
         """
         【v12.0新增】归纳抽象算子：从多个样本中提炼统一规律。
@@ -746,30 +746,30 @@ class AutonomousDeriver:
         """
         if not node_pool or len(samples) < 3:
             return None
-        
+
         # 为每个样本搜索相关节点
         all_relevant_nodes = []
         sample_keywords = {}
-        
+
         for i, sample in enumerate(samples):
             l3_nodes = node_pool.query(evol_level="L3", limit=10)
             l2_nodes = node_pool.query(evol_level="L2", limit=20)
-            
+
             relevant = []
             for node in l3_nodes + l2_nodes:
                 value = str(node.value).lower() if node.value else ""
                 if any(w in value for w in sample.lower().split()):
                     relevant.append(node)
-            
+
             all_relevant_nodes.extend(relevant)
             sample_keywords[i] = set()
             for node in relevant:
                 kws = node.keywords if hasattr(node, 'keywords') and node.keywords else []
                 sample_keywords[i].update(kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2)
-        
+
         if len(all_relevant_nodes) < 5:
             return None
-        
+
         # 找所有样本的共同关键词
         if not sample_keywords:
             return None
@@ -780,7 +780,7 @@ class AutonomousDeriver:
                     common_kw = sample_keywords[i].copy()
                 else:
                     common_kw &= sample_keywords[i]
-        
+
         if not common_kw or len(common_kw) < 2:
             # 放宽条件：找至少3个样本中出现的共同关键词
             from collections import Counter
@@ -790,14 +790,14 @@ class AutonomousDeriver:
                     all_kw.extend(list(sample_keywords[i]))
             kw_counter = Counter(all_kw)
             common_kw = {kw for kw, count in kw_counter.items() if count >= max(2, len(samples) // 2)}
-        
+
         if not common_kw or len(common_kw) < 2:
             return None
-        
+
         common_list = list(common_kw)
         domain_str = domain_hint or "通用"
         confidence = min(40.0, 25.0 + len(all_relevant_nodes) * 1.5)
-        
+
         return {
             "type": "inductive",
             "content": (
@@ -811,7 +811,7 @@ class AutonomousDeriver:
             "sample_count": len(samples),
             "source_nodes": [n.node_id for n in all_relevant_nodes[:5]],
         }
-    
+
     def analogical_map(self, node_pool, domain_a: str, domain_b: str) -> dict[str, Any] | None:
         """
         【v12.0新增】跨领域类比算子：在两组不同领域的节点间进行结构映射。
@@ -831,39 +831,39 @@ class AutonomousDeriver:
         """
         if not node_pool:
             return None
-        
+
         # 从两个领域获取节点
         nodes_a = node_pool.query(evol_level="L2", space_path_prefix=domain_a, limit=20)
         if len(nodes_a) < 5:
             nodes_a = node_pool.query(evol_level="L3", space_path_prefix=domain_a, limit=10)
             if len(nodes_a) < 3:
                 return None
-        
+
         nodes_b = node_pool.query(evol_level="L2", space_path_prefix=domain_b, limit=20)
         if len(nodes_b) < 5:
             nodes_b = node_pool.query(evol_level="L3", space_path_prefix=domain_b, limit=10)
             if len(nodes_b) < 3:
                 return None
-        
+
         # 提取两个领域的关键词集合
         kw_a = set()
         for n in nodes_a[:8]:
             kws = n.keywords if hasattr(n, 'keywords') and n.keywords else []
             kw_a.update(kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2)
-        
+
         kw_b = set()
         for n in nodes_b[:8]:
             kws = n.keywords if hasattr(n, 'keywords') and n.keywords else []
             kw_b.update(kw.lower() for kw in kws if isinstance(kw, str) and len(kw) >= 2)
-        
+
         if not kw_a or not kw_b:
             return None
-        
+
         # 计算共同概念和各自独有概念
         shared_kw = kw_a & kw_b
         unique_a = kw_a - kw_b
         unique_b = kw_b - kw_a
-        
+
         if len(shared_kw) < 2:
             # 尝试通过语义关联找共同概念
             # 简化：找包含关系
@@ -871,19 +871,19 @@ class AutonomousDeriver:
                 for kb in list(kw_b)[:10]:
                     if kw in kb or kb in kw:
                         shared_kw.add(kw)
-        
+
         if len(shared_kw) < 1:
             return None
-        
+
         # 提取各自的代表性概念用于映射
         rep_a = list(unique_a)[:3] if unique_a else list(kw_a)[:3]
         rep_b = list(unique_b)[:3] if unique_b else list(kw_b)[:3]
-        
+
         domain_a_name = domain_a.split("/")[-1] if "/" in domain_a else domain_a
         domain_b_name = domain_b.split("/")[-1] if "/" in domain_b else domain_b
-        
+
         confidence = min(35.0, 20.0 + len(shared_kw) * 5.0)
-        
+
         return {
             "type": "analogical",
             "content": (
@@ -900,7 +900,7 @@ class AutonomousDeriver:
             "unique_b": rep_b[:3],
             "source_nodes": [n.node_id for n in nodes_a[:3]] + [n.node_id for n in nodes_b[:3]],
         }
-        
+
     def log_derivation(self, result: dict[str, Any]):
         """记录推导日志"""
         self._derivation_log.append({
@@ -909,7 +909,7 @@ class AutonomousDeriver:
         })
         if len(self._derivation_log) > self._max_log:
             self._derivation_log = self._derivation_log[-self._max_log:]
-    
+
     def get_derivation_log(self) -> list[dict[str, Any]]:
         """公开只读访问推导日志副本（规则14）"""
         return list(self._derivation_log)

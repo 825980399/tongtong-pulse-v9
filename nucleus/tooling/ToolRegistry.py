@@ -324,7 +324,7 @@ def register_default_tools() -> None:
     try:
         from nucleus.tooling_runner import get_tooling_runner
         _runner = get_tooling_runner()
-        _registry.register_tool(overwrite=True, 
+        _registry.register_tool(overwrite=True,
             name="compile_check",
             description="Python代码编译检查，检测语法错误和编译问题",
             capabilities=["代码检查", "编译", "语法错误", "静态分析"],
@@ -333,7 +333,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(overwrite=True, 
+        _registry.register_tool(overwrite=True,
             name="ruff_check",
             description="Python代码风格和质量检查，检测PEP8违规、复杂度、安全隐患",
             capabilities=["代码检查", "静态分析", "风格", "安全扫描", "ruff"],
@@ -342,7 +342,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(overwrite=True, 
+        _registry.register_tool(overwrite=True,
             name="mypy_check",
             description="Python类型检查，检测类型注解错误和类型不匹配",
             capabilities=["代码检查", "类型检查", "静态分析", "mypy"],
@@ -351,7 +351,7 @@ def register_default_tools() -> None:
             returns="问题列表",
             category="code_check",
         )
-        _registry.register_tool(overwrite=True, 
+        _registry.register_tool(overwrite=True,
             name="bandit_check",
             description="Python安全扫描，检测常见安全漏洞和风险代码",
             capabilities=["代码检查", "安全扫描", "漏洞检测", "bandit"],
@@ -367,7 +367,7 @@ def register_default_tools() -> None:
     try:
         from nucleus.external_executor import ExternalExecutor
         _ext = ExternalExecutor()
-        _registry.register_tool(overwrite=True, 
+        _registry.register_tool(overwrite=True,
             name="external_command",
             description="执行外部系统命令，支持超时控制和安全沙箱",
             capabilities=["命令执行", "系统调用", "外部工具", "shell"],

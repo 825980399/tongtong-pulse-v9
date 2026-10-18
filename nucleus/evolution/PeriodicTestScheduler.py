@@ -303,7 +303,7 @@ class PeriodicTestScheduler:
             _script = os.path.join(self._tools_dir, _fname)
             try:
                 _proc = subprocess.run(  # 有意不检查子进程退出码
-                
+
                     ["python", _script],
                     capture_output=True, text=True, timeout=timeout,
                     encoding="utf-8", errors="replace",

@@ -23,7 +23,7 @@ def get_current_datetime() -> dict[str, Any]:
     import datetime
     now = datetime.datetime.now()
     weekday_map = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-    
+
     hour = now.hour
     if 5 <= hour < 8:
         period = "清晨"
@@ -39,7 +39,7 @@ def get_current_datetime() -> dict[str, Any]:
         period = "晚上"
     else:
         period = "深夜"
-    
+
     return {
         "year": now.year,
         "month": now.month,
@@ -74,21 +74,21 @@ def get_weather(city: str = "许昌") -> dict[str, Any]:
         包含城市、温度、天气描述、湿度的字典
     """
     global _weather_cache, _last_weather_check
-    
+
     now = time.time()
-    
+
     # 缓存命中：直接返回
     with _weather_cache_lock:
         if _weather_cache and (now - _last_weather_check) < _WEATHER_CHECK_INTERVAL:
             return dict(_weather_cache)
-    
+
     # 缓存未命中：发起网络请求
     try:
         import urllib.parse
 
         encoded_city = urllib.parse.quote(city)
         url = f"https://wttr.in/{encoded_city}?format=j1"
-        
+
         # ★FIX(SSRF): 统一经 ssrf_guard 出站校验，防止 scheme/私网地址逃逸
         from nucleus.ssrf_guard import safe_http_json
 
@@ -112,7 +112,7 @@ def get_weather(city: str = "许昌") -> dict[str, Any]:
             _last_weather_check = now
 
         return dict(new_cache)
-            
+
     except Exception as e:
         print(f"[WARNING] time_utils.py:128: {type(e).__name__}: {e}")
         fallback = {"city": city, "temperature": "--", "description": "未知", "error": "获取失败"}

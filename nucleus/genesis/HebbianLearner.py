@@ -43,8 +43,8 @@ class HebbianLearner:
         - P2阶段通过 ResonanceEngine 间接使用赫布权重。
         - P3阶段可激活完整的在线学习。
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  cooccurrence_window: float = 60.0,   # ★v23.0校准：对齐2个心跳周期
                  learning_rate: float = 0.15,          # ★v23.0校准：适度提升学习速率
                  decay_rate: float = 0.0005,           # ★v23.0校准：减缓衰减，保留长时记忆
@@ -61,29 +61,29 @@ class HebbianLearner:
         # 赫布连接: (node_a, node_b) → weight
         self._connections: dict[tuple[str, str], float] = {}
         self._max_connections = 5000  # ★v25.0治理：最大连接数，超过时修剪最弱连接
-        
+
         # 最近激活记录: node_id → last_activation_time
         self._recent_activations: dict[str, float] = {}
-        
+
         # 共现统计: (node_a, node_b) → cooccurrence_count
         self._cooccurrence_counts: dict[tuple[str, str], int] = {}
-        
+
         # 参数
         self._window = cooccurrence_window
         self._learning_rate = learning_rate
         self._decay_rate = decay_rate
         self._min_weight = min_weight
         self._max_weight = max_weight
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 统计
         self._total_activations = 0
         self._total_cooccurrences = 0
         self._total_decays = 0
         self._total_pruned = 0
-        
+
         # 功能开关
         self._enabled = False
 
@@ -130,7 +130,7 @@ class HebbianLearner:
             # 增强共现节点对的赫布权重
             for other_id in co_activated:
                 pair = tuple(sorted([node_id, other_id]))
-                
+
                 # 增加共现计数
                 self._cooccurrence_counts[pair] = self._cooccurrence_counts.get(pair, 0) + 1
                 self._total_cooccurrences += 1
@@ -238,11 +238,11 @@ class HebbianLearner:
 
         with self._lock:
             pruned_pairs = []
-            
+
             for pair in list(self._connections.keys()):
                 old_weight = self._connections[pair]
                 new_weight = old_weight * (1.0 - self._decay_rate)
-                
+
                 if new_weight < self._min_weight:
                     pruned_pairs.append(pair)
                 else:
@@ -335,10 +335,10 @@ class HebbianLearner:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== HebbianLearner 自测 ===\n")
-    
+
     learner = HebbianLearner(cooccurrence_window=5.0, learning_rate=0.1)
     learner.enable()
-    
+
     # 1. 模拟节点共现激活
     print("1. 模拟节点共现:")
     # 节点A、B、C经常一起激活
@@ -347,7 +347,7 @@ if __name__ == "__main__":
         learner.on_node_activated("node_B")
         learner.on_node_activated("node_C")
         time.sleep(0.1)
-    
+
     w_ab = learner.get_weight("node_A", "node_B")
     w_ac = learner.get_weight("node_A", "node_C")
     w_bc = learner.get_weight("node_B", "node_C")
@@ -356,19 +356,19 @@ if __name__ == "__main__":
     print(f"   B-C 权重: {w_bc:.4f} (应 > 0)")
     assert w_ab > 0 and w_ac > 0 and w_bc > 0, "共现节点应有正权重"
     print("   ✅ 共现权重增强正确")
-    
+
     # 2. 节点D独立激活（不应与其他节点产生强连接）
     print("\n2. 孤立节点:")
     for _ in range(3):
         learner.on_node_activated("node_D")
         time.sleep(6.0)  # 超过共现窗口
-    
+
     w_da = learner.get_weight("node_D", "node_A")
     w_db = learner.get_weight("node_D", "node_B")
     print(f"   D-A 权重: {w_da:.4f} (应 ≈ 0)")
     print(f"   D-B 权重: {w_db:.4f} (应 ≈ 0)")
     print("   ✅ 孤立节点无连接正确")
-    
+
     # 3. 衰减与修剪
     print("\n3. 衰减测试:")
     old_count = len(learner._connections)
@@ -377,16 +377,16 @@ if __name__ == "__main__":
     new_count = len(learner._connections)
     print(f"   衰减前连接数: {old_count}, 衰减后: {new_count}")
     print("   ✅ 衰减机制正常")
-    
+
     # 4. 节点连接查询
     connections = learner.get_node_connections("node_A")
     print(f"\n4. node_A的连接: {[(k, round(v, 4)) for k, v in connections.items()]}")
-    
+
     # 5. 统计
     stats = learner.get_stats()
     print(f"\n5. 统计: 激活{stats['total_activations']}次, "
           f"共现{stats['total_cooccurrences']}次, "
           f"连接{stats['connection_count']}个")
-    
+
     learner.disable()
     print("\n=== 自测全部通过 ===")

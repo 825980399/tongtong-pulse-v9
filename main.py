@@ -172,7 +172,7 @@ from organs.brain.PulseRiskPerception import (
     PulseRiskPerception,  # 风险感知: 五维风险预判
 )
 from organs.brain.PulseSemanticComprehension import (
-    PulseSemanticComprehension,  # 语义理解器: 本地+大模型比对  
+    PulseSemanticComprehension,  # 语义理解器: 本地+大模型比对
 )
 from organs.brain.PulseSpiritualCore import PulseSpiritualCore  # ★v16.0新增: 精神整合
 from organs.brain.PulseSubconscious import (
@@ -695,7 +695,7 @@ class PulseFramework:
         from nucleus.field.GradientTracker import GradientTracker
         self.gradient_tracker = GradientTracker(window_size=120, sample_interval_seconds=10.0)
         self.gradient_tracker.enable()  # 从预埋状态激活
-        
+
         # ★v24.0新增：体验记忆池——与知识库物理隔离
         from nucleus.mnemosyne.experience_pool import get_experience_pool
         self.experience_pool = get_experience_pool()
@@ -718,11 +718,11 @@ class PulseFramework:
             except Exception as _se:
                 silent_exc(_se, "main.py:634")
         self._log(LogLevel.INFO, "体验记忆池已初始化")
-        
+
         # ★v23.0新增：振荡场监视器——衔接OscillonField与GradientTracker
         #   （壳降格声明·166批刀3：OscillonField 现为壳=未接线预留；全仓振荡场增强因子仅 3 处：ResonanceEngine:58 初始化 / :1309 setter / :1319 赋值，无 getter 消费读取点）
         from nucleus.field.OscillonField import FrequencyPhaseLock, OscillonField
-        
+
         # 创建最小具体实现——振荡场监视器
         class _FieldStatusMonitor(OscillonField):
             # 壳降级（166批刃3）：OscillonField 未接线预留，本子类仅 _propagate_empty_count 观测计数在用
@@ -750,7 +750,7 @@ class PulseFramework:
 
         self.oscillon_monitor = _FieldStatusMonitor(field_name="pulse_net_monitor")
         self.gradient_tracker.set_oscillon_monitor(self.oscillon_monitor)
-        
+
         # ★v23.0新增：赫布学习器——激活"一起激活的节点连在一起"
         from nucleus.genesis.HebbianLearner import HebbianLearner
         self.hebbian_learner = HebbianLearner()
@@ -762,7 +762,7 @@ class PulseFramework:
         if hasattr(self.node_pool, 'set_hebbian_learner'):
             self.node_pool.set_hebbian_learner(self.hebbian_learner)
         self._log(LogLevel.INFO, "赫布学习器已激活 (共现窗口=60s, 学习率=0.15)")
-        
+
         # ★FIX: 事件流挖掘器——发现重复/新兴/周期性事件模式
         from nucleus.genesis.StreamMiner import get_stream_miner
         self.stream_miner = get_stream_miner()
@@ -770,12 +770,12 @@ class PulseFramework:
         if hasattr(self.info_field, 'set_stream_miner'):
             self.info_field.set_stream_miner(self.stream_miner)
         self._log(LogLevel.INFO, "事件流挖掘器已激活 (窗口=100, 基线=500)")
-        
+
         # 频率-相位锁定器——注入共振引擎，为未来自组织协同奠定基础
         self.phase_lock = FrequencyPhaseLock(lock_threshold=0.1)
         if hasattr(self.resonance_engine, 'set_phase_lock'):
             self.resonance_engine.set_phase_lock(self.phase_lock)
-        
+
         self._log(LogLevel.INFO, "振荡场监视器已激活 (场状态追踪+频率相位锁定)")
 
         # ===== 步骤3: 核心模块间依赖注入 =====
@@ -1461,7 +1461,7 @@ class PulseFramework:
         FEATURE = self.config.FEATURE
 
         # ===== 核心脏器（始终在线） =====
-        self.heart = self._create_organ(PulseHeart, "心脏") 
+        self.heart = self._create_organ(PulseHeart, "心脏")
         self.stomach = self._create_organ(PulseStomach, "胃",
                                           knowledge_tree=self.knowledge_tree,
                                           node_pool=self.node_pool,
@@ -1510,7 +1510,7 @@ class PulseFramework:
                                               frequency_codec=self.frequency_codec,
                                               knowledge_tree=self.knowledge_tree)
         # ★v25.0新增：注入体验池，用于推理失败体验记录
-        self.inner_world.set_experience_pool(self.experience_pool)        
+        self.inner_world.set_experience_pool(self.experience_pool)
         self.subconscious = self._create_organ(PulseSubconscious, "潜意识",
                                                knowledge_tree=self.knowledge_tree,
                                                node_pool=self.node_pool)
@@ -1527,11 +1527,11 @@ class PulseFramework:
                                                    frequency_codec=self.frequency_codec,
                                                    knowledge_tree=self.knowledge_tree)
         else:
-            self.code_learner = None          
+            self.code_learner = None
         self.risk_perception = self._create_organ(PulseRiskPerception, "风险感知")
         # ★v25.0新增：注入代码学习器到肝脏，用于代码调用关联
         if hasattr(self, 'liver') and self.liver:
-            self.liver.set_code_learner(self.code_learner)          
+            self.liver.set_code_learner(self.code_learner)
         # ===== v24.0新增：注入自我认知，使风险等级考虑用户关系 =====
         if hasattr(self, 'self_awareness') and self.self_awareness:
             self.risk_perception.set_self_awareness(self.self_awareness)
@@ -1589,7 +1589,7 @@ class PulseFramework:
         )
         # 让大脑皮层发射语义理解事件而不是直接发给QICA
         # 修改大脑皮层的发射逻辑（见下面）
-        # ===== v24.0新增结束 =====        
+        # ===== v24.0新增结束 =====
         # ===== 躯体硬件层（提前创建，供视觉皮层和设备管理器使用） =====
         # ★169批 C-7（P0）：守卫式复用 —— Sensor 有真实设备探测副作用
         #   （自动检测设备/建实例/热插拔），两分支都走到会重复建实例、泄漏句柄。
@@ -1603,7 +1603,7 @@ class PulseFramework:
                                        node_pool=self.node_pool,
                                        resonance_engine=self.resonance_engine,
                                        frequency_codec=self.frequency_codec)
-        self.eyes.set_sensor(self.sensor)        
+        self.eyes.set_sensor(self.sensor)
         self.ears = self._create_organ(PulseEars, "耳朵")
 
         if FEATURE.get("enable_vision", True):
@@ -1673,7 +1673,7 @@ class PulseFramework:
         self.inner_world.set_self_awareness(self.self_awareness)
         # 注入自我认知到风险感知
         if hasattr(self, 'risk_perception') and self.risk_perception:
-            self.risk_perception.set_self_awareness(self.self_awareness)        
+            self.risk_perception.set_self_awareness(self.self_awareness)
         # ★P3-2审计：set_companion_bridge 方法不存在（hasattr 恒 False），幻影死代码已移除
         # 注入闭环间洞察共享黑板
         _insight_board = _safe_get_insight_board()
@@ -1744,7 +1744,7 @@ class PulseFramework:
         if hasattr(self, 'subconscious') and hasattr(self, 'legs'):
             self.subconscious.set_legs(self.legs)
         if hasattr(self, 'self_awareness') and self.self_awareness:
-            self.subconscious.set_self_awareness(self.self_awareness)            
+            self.subconscious.set_self_awareness(self.self_awareness)
         if FEATURE.get("enable_immune", True):
             # ★v18.0修复：免疫系统改为OrganLoader动态加载
             _immune_result = self.organ_loader.load_organs_from_dir("immune")
@@ -1803,16 +1803,16 @@ class PulseFramework:
             self.spiritual_core = None
 
         if hasattr(self, 'risk_perception') and self.risk_perception:
-            self.inner_world.set_risk_perception(self.risk_perception) 
+            self.inner_world.set_risk_perception(self.risk_perception)
         if hasattr(self, 'inner_world') and hasattr(self, 'ethics') and self.ethics:
-            self.inner_world.set_ethics(self.ethics)            
+            self.inner_world.set_ethics(self.ethics)
         # ★v17.0 F2修复：注入代码学习器官引用，支持代码调用链查询
         if hasattr(self, 'inner_world') and hasattr(self, 'code_learner') and self.code_learner:
-            self.inner_world.set_code_learner(self.code_learner)            
+            self.inner_world.set_code_learner(self.code_learner)
         # 注入上下文快照管理器
         if hasattr(self.inner_world, 'set_context_snapshot'):
             self.inner_world.set_context_snapshot(get_context_snapshot())
-        
+
         # ===== 注入推理进程池 =====
         try:
             from nucleus.reasoning.ReasoningWorkerPool import get_reasoning_pool
@@ -1821,7 +1821,7 @@ class PulseFramework:
                 self.inner_world.set_reasoning_pool(_reasoning_pool)
         except Exception as _se:
             silent_exc(_se, "main.py:1600")
-        # ===== 推理进程池注入结束 =====                     
+        # ===== 推理进程池注入结束 =====
         if FEATURE.get("enable_evolution", True):
             # ★v18.0修复：遗传系统改为OrganLoader动态加载
             _genetic_result = self.organ_loader.load_organs_from_dir("genetic")
@@ -1885,7 +1885,7 @@ class PulseFramework:
         if self.global_learner.organ_name != "全局学习器":
             self.global_learner.organ_name = "全局学习器"
             self.global_learner.reset_logger("全局学习器")
-        # ===== v24.0新增结束 =====   
+        # ===== v24.0新增结束 =====
         self.energy_metabolism = _core_result.get("PulseEnergyMetabolism")
         self.health_monitor = _core_result.get("PulseHealthMonitor")
         self.emergency_handler = _core_result.get("PulseEmergencyHandler")
@@ -2004,7 +2004,7 @@ class PulseFramework:
         instinct_nodes = self.instinct_snapshot.load()
         if instinct_nodes:
             self.node_pool.load_instincts(instinct_nodes)
-        
+
         # 步骤5-6: 恢复快照、注入种子记忆
         restored_nodes = self.snapshot.load()
         # 加载L1独立快照
@@ -2014,7 +2014,7 @@ class PulseFramework:
             self.node_pool.load_batch(l1_nodes)
             for node in l1_nodes:
                 self.knowledge_tree.register_path(node.space_path)
-            self._log(LogLevel.INFO, f"L1快照恢复: {len(l1_nodes)} 个L1节点已加载(批量)")        
+            self._log(LogLevel.INFO, f"L1快照恢复: {len(l1_nodes)} 个L1节点已加载(批量)")
         # ===== 新增: 完整性/分层校验失败时自动回退 =====
         # ★第80批 T4：回退条件扩展为「空结果 / 分层塌缩（主全L1但备份有L2/L3） / 校验FAIL」。
         _need_backup = False
@@ -2048,7 +2048,7 @@ class PulseFramework:
         if _need_backup and os.path.exists(self.snapshot.snapshot_path):
             self._log(LogLevel.WARNING, "主快照恢复异常，尝试从备份恢复...")
             restored_nodes = self.snapshot.load_from_backup()
-        
+
         if restored_nodes:
             # ★阶段D：启动按需加载——冷存储启用时冷节点落磁盘按需召回，热/温节点进内存；
             # 冷存储未启用时 load_batch_lazy 内部回退 load_batch（零回归）。
@@ -2100,15 +2100,15 @@ class PulseFramework:
         if extra_state:
             life_state_info = extra_state.get("life_state")
             emotion_state_info = extra_state.get("emotion_state")
-            social_memory_info = extra_state.get("social_memory") 
+            social_memory_info = extra_state.get("social_memory")
             narrative_count = extra_state.get("narrative_count")
             saved_values = extra_state.get("values")
-            
+
             if life_state_info and hasattr(self, 'organs'):
                 subcon = self.organs.get("潜意识")
                 if subcon and hasattr(subcon, 'set_life_state'):
                     subcon.set_life_state(life_state_info)
-            
+
             if emotion_state_info and hasattr(self, 'organs'):
                 hormones = self.organs.get("激素")
                 if hormones and hasattr(hormones, 'set_emotion_state'):
@@ -2119,7 +2119,7 @@ class PulseFramework:
                     hormones.set_emotion_timeline(emotion_timeline_info)
                 if hormones and hasattr(hormones, 'set_social_memory') and social_memory_info:
                     hormones.set_social_memory(social_memory_info)
-            
+
             if narrative_count is not None and saved_values is not None:
                 narrative = self.organs.get("叙事自我") if hasattr(self, 'organs') else None
                 if narrative:
@@ -2129,7 +2129,7 @@ class PulseFramework:
                     _saved_reports = extra_state.get("weekly_reports", [])
                     if _saved_reports:
                         narrative.set_weekly_reports(_saved_reports)
-                    self._log(LogLevel.INFO, 
+                    self._log(LogLevel.INFO,
                              f"生命连续性恢复: 叙事事件{narrative_count}条, "
                              f"价值观{list(saved_values.keys())}, "
                              f"周期报告{len(_saved_reports)}份")
@@ -2152,19 +2152,19 @@ class PulseFramework:
                 if _memories_for_user:
                     self.inner_world.set_conversation_memory(_memories_for_user)
                     self._log(LogLevel.INFO, f"上下文恢复: {len(_memories_for_user)}条对话记忆已加载")
-            
+
             # 恢复推理链
             _traces = _ctx_data.get("inference_trace", [])
             if _traces:
                 self.inner_world.set_inference_trace(_traces)
                 self._log(LogLevel.INFO, f"上下文恢复: {len(_traces)}条推理链已加载")
-            
+
             # 恢复搜索经验
             _experiences = _ctx_data.get("search_experience", {})
             if _experiences:
                 self.inner_world.set_search_experience(_experiences)
                 self._log(LogLevel.INFO, f"上下文恢复: {len(_experiences)}条搜索经验已加载")
-            
+
             # 恢复学习目标
             _goals = _ctx_data.get("learning_goals", {})
             if _goals.get("active_goal"):
@@ -2172,7 +2172,7 @@ class PulseFramework:
                 self._log(LogLevel.INFO, "上下文恢复: 活跃学习目标已加载")
             if _goals.get("goal_queue"):
                 self.inner_world.set_learning_goal_queue(_goals["goal_queue"])
-            
+
             # 恢复代码理解进度
             _code_prog = _ctx_data.get("code_progress", {})
             if _code_prog.get("understood", 0) > 0:
@@ -2260,7 +2260,7 @@ class PulseFramework:
         # ★v25.0新增：一次性清理快照中的旧噪音碎片节点
         self._cleanup_legacy_noise_nodes()
         self._inject_seed_memories()
-        self._inject_seed_instincts() 
+        self._inject_seed_instincts()
         # 步骤7: 启动所有器官并注册共振条件（★两阶段：并行start + 串行注册）
         _active_organs = [(name, o) for name, o in self.organs.items() if o is not None]
         _skipped = [name for name, o in self.organs.items() if o is None]
@@ -2694,12 +2694,12 @@ class PulseFramework:
                 layer=PulseLayer.L0_LIFELINE,
             )
             self.info_field.publish(stop_pulse)
-        
+
         # 等待异步脉冲被分发处理
         time.sleep(0.3)
-        
+
         self._running = False
-        
+
         # ★终止优化：器官停止并行化（心脏最后停）
         # ★v25.1 P0修复: 添加每个器官停止耗时日志 + 避免with上下文管理器阻塞
         from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -2981,7 +2981,7 @@ class PulseFramework:
                 _pool.shutdown()
         except Exception as _se:
             silent_exc(_se, "main.py:2678")
-        
+
         # v9.5新增: 优雅关闭信息场所有分层线程池
         if hasattr(self, 'info_field') and self.info_field:
             self._log(LogLevel.INFO, "关闭信息场分层调度线程池...")
@@ -3058,7 +3058,7 @@ class PulseFramework:
 
         # 输出运行统计
         stats_pulse = self.pulse_core.get_stats()
-        stats_pool = self.node_pool.get_stats() 
+        stats_pool = self.node_pool.get_stats()
         self._log(LogLevel.INFO, "运行统计:")
         self._log(LogLevel.INFO,
                   f"脉冲: 发射{stats_pulse['total_emitted']} "
@@ -3170,7 +3170,7 @@ class PulseFramework:
                 _has_duplicate = len(_parts) != len(set(_parts))
                 # 检查值是否明显是搜索噪音（拼音/读音/笔顺）
                 _is_search_noise = any(kw in _value for kw in ["拼音", "读音", "笔顺", "部首", "百度百科"])
-                
+
                 if _has_fragment or _has_duplicate or _is_search_noise:
                     # 从节点池移除
                     if hasattr(self.node_pool, 'remove_by_id'):
@@ -3180,12 +3180,12 @@ class PulseFramework:
                         _node.state = "dormant"
                         _node.trust_score = max(5.0, getattr(_node, 'trust_score', 30.0) - 30.0)
                     _cleaned += 1
-            
+
             if _cleaned > 0:
                 self._log(LogLevel.INFO, f"旧噪音节点清理: 标记{_cleaned}个L1节点为临时/休眠")
         except Exception as _e:
             self._log(LogLevel.WARNING, f"旧噪音节点清理异常: {_e}")
-            
+
     def _inject_seed_memories(self):
         """注入5条核心种子记忆为 L3 智慧节点（永久锁定，不可淘汰）"""
         for seed in config.SEED_MEMORIES:
@@ -3246,10 +3246,10 @@ class PulseFramework:
         诊断结果写入日志和洞察黑板。
         """
         self._log(LogLevel.INFO, "执行启动健康诊断...")
-        
+
         _issues_found = 0
         _warnings = []
-        
+
         # 1. 代码问题检测
         try:
             from nucleus.self_inspector import (
@@ -3261,7 +3261,7 @@ class PulseFramework:
             # ★v17.0 F3修复：展示有效问题数（排除legacy历史遗留）
             _lifecycle = _inspector.get_issue_lifecycle_stats()
             _active_issues = _lifecycle.get("new", 0) + _lifecycle.get("persistent", 0) + _lifecycle.get("reopened", 0)
-            
+
             # ★v18.0新增：启动时修复验证闭环
             # 对比本次启动与上次退出时的代码问题数量
             _last_issue_count = _lifecycle.get("last_total", 0)
@@ -3310,14 +3310,14 @@ class PulseFramework:
             else:
                 # 首次启动，记录基线
                 self._log(LogLevel.INFO, f"  代码趋势: 📊 首次记录基线（{_code_count}个问题）")
-            
+
             if _code_count > 10:
                 _warnings.append(f"代码问题: {_code_count}个（建议优先修复P0级）")
                 _issues_found += 1
             self._log(LogLevel.INFO, f"  代码健康: {_active_issues}个有效问题 (共{_code_count}个，{_lifecycle.get('legacy', 0)}个历史遗留)")
         except Exception as e:
             self._log(LogLevel.WARNING, f"  代码检测异常: {e}")
-        
+
         # 2. 知识库状态
         try:
             _stats = self.node_pool.get_stats()
@@ -3329,10 +3329,10 @@ class PulseFramework:
             self._log(LogLevel.INFO, f"  知识库: {_total}节点, L3={_l3}个")
         except Exception as e:
             self._log(LogLevel.WARNING, f"  知识库检测异常: {e}")
-        
+
         # 3. 器官在线状态
         try:
-            _offline = [name for name, organ in self.organs.items() 
+            _offline = [name for name, organ in self.organs.items()
                        if organ is None or not getattr(organ, 'is_running', False)]
             if _offline:
                 _warnings.append(f"器官离线: {len(_offline)}个（{', '.join(_offline[:5])}）")
@@ -3340,7 +3340,7 @@ class PulseFramework:
             self._log(LogLevel.INFO, f"  器官状态: {len(self.organs) - len(_offline)}/{len(self.organs)}在线")
         except Exception as e:
             self._log(LogLevel.WARNING, f"  器官检测异常: {e}")
-        
+
         # 4. 上下文恢复状态
         try:
             _ctx = get_context_snapshot()
@@ -3349,7 +3349,7 @@ class PulseFramework:
                      f"推理链={_ctx_stats.get('trace_count', 0)}条")
         except Exception as _se:
             silent_exc(_se, "main.py:2997")
-        
+
         # 5. ★往期批次 相关任务③a：启动即锁死WARNING
         #    棘轮锁死状态此前仅在 apply_all_pending 运行时落日志，重启后若未触发
         #    apply 则该状态"失忆"。此处启动即重报，确保重启后立即可见。
@@ -3359,10 +3359,10 @@ class PulseFramework:
             _pm._m114b_emit_ratchet_lock_warning()
         except Exception as _re:
             silent_exc(_re, "main.py:启动锁死WARNING")
-        
+
         # 汇总
         if _issues_found > 0:
-            self._log(LogLevel.WARNING, 
+            self._log(LogLevel.WARNING,
                      f"健康诊断完成: 发现{_issues_found}个关注项 - {'; '.join(_warnings[:3])}")
             # 写入洞察黑板
             try:
@@ -3380,7 +3380,7 @@ class PulseFramework:
             except Exception as _se:
                 silent_exc(_se, "main.py:3016")
         else:
-            self._log(LogLevel.INFO, "健康诊断完成: ✅ 所有检查项通过")   
+            self._log(LogLevel.INFO, "健康诊断完成: ✅ 所有检查项通过")
             # ★P3 自主深度探查：启动首轮（异步，不阻塞启动）+ 低频周期巡检
         # 让探查器「自行决定查什么/查多深/何时停」，结果仅发布 InsightBoard + 后台日志，
         # 零副作用；周期间隔可配（默认 30 分钟低频，与既有周期任务错峰，压力均衡）。
@@ -3435,7 +3435,7 @@ class PulseFramework:
         except Exception as e:
             self._log(LogLevel.WARNING, f"自动保存失败: {e}")
             return {"status": "auto_failed"}
-        return {"status": "auto_saved"}            
+        return {"status": "auto_saved"}
 
     def _on_self_modify_constraint(self, pulse):
         """处理自我修改约束信号，设置一段时间的禁止窗口（问题3闭环）"""
@@ -4033,8 +4033,8 @@ def main():
                     _verifier.mark_rollback_failed(
                         "rollback_last() 返回 False（无可用备份/路径越界/历史无已应用补丁）")
                     _logger.info("[自验证] 回退失败，停止自动重启，请人工介入检查日志")
-    
-    
+
+
     # 启动人体UI监控面板（独立Web服务）
     health_ui = None
     try:
@@ -4044,7 +4044,7 @@ def main():
         health_ui.start()
     except Exception as e:
         logging.getLogger("pulse").warning(f"[框架] 人体UI启动失败 (端口5051): {e}")
-    
+
     # 启动Web对话窗口（独立Web服务）
     web_chat = None
     try:
@@ -4053,7 +4053,7 @@ def main():
         web_chat.start(info_field=framework.info_field, pulse_core=framework.pulse_core)
     except Exception as e:
         logging.getLogger("pulse").warning(f"[框架] Web对话窗口启动失败 (端口5052): {e}")
-    
+
     # 启动功能模块加载器
     framework.function_loader = FunctionLoader(framework)
     framework.function_loader.load_all()

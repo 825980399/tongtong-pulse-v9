@@ -163,7 +163,7 @@ class PulseEars(BasePulseOrgan):
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()
     # ========== 生命周期 ==========
-    
+
     def start(self):
         """启动耳朵，开启语音监听后台线程"""
         super().start()
@@ -172,7 +172,7 @@ class PulseEars(BasePulseOrgan):
             self._voice_thread = threading.Thread(target=self._voice_listen_loop, daemon=True)
             self._voice_thread.start()
             self._log(LogLevel.INFO, "语音监听已启动")
-    
+
     def stop(self):
         """停止耳朵"""
         self._voice_running = False
@@ -181,7 +181,7 @@ class PulseEars(BasePulseOrgan):
             self._voice_thread.join(timeout=TIMEOUT_CONFIG['thread_join'])
         super().stop()
         self._log(LogLevel.INFO, f"已停止，监听{self._listen_count}次")
-    
+
     # ========== 语音监听循环 ==========
     def _voice_listen_loop(self):
         """后台线程：用sounddevice录音→Vosk离线识别→发射消息（主动结束版）"""
@@ -244,7 +244,7 @@ class PulseEars(BasePulseOrgan):
                     has_speech = True
                     silence_count = 0
                     recognizer.AcceptWaveform(audio_int16)
-                    
+
                     # 获取实时partial结果
                     partial = json.loads(recognizer.PartialResult())
                     partial_text = partial.get("partial", "").strip()
@@ -256,7 +256,7 @@ class PulseEars(BasePulseOrgan):
                 else:
                     # 静音
                     silence_count += 1
-                    
+
                     if has_speech and silence_count >= max_silence and last_partial_text:
                         # 连续静音达到阈值且有有效文本，立即结束
                         if self._is_valid_speech(last_partial_text):
@@ -265,7 +265,7 @@ class PulseEars(BasePulseOrgan):
                             self._emit_voice_message(last_partial_text)
                         else:
                             self._write_ear_log(rms, False, f"无效语音(已过滤): {last_partial_text}")
-                        
+
                         # 重置状态
                         recognizer = vosk.KaldiRecognizer(model, 16000)
                         recognizer.SetWords(False)
@@ -314,17 +314,17 @@ class PulseEars(BasePulseOrgan):
         """
         if not text or len(text.strip()) < 2:
             return False
-        
+
         text_stripped = text.strip()
-        
+
         # 必须包含至少一个中文字符
         import re
         if not re.search(r'[\u4e00-\u9fff]', text_stripped):
             return False
-        
+
         # 过滤掉纯单字（Vosk 最常见的噪音误识别）
         common_noise = {"我", "你", "的", "了", "是", "在", "有", "他", "她", "它", "这", "那", "吗", "呢", "吧", "啊", "哦", "嗯", "哼", "哈"}
-        return text_stripped not in common_noise                
+        return text_stripped not in common_noise
     def _emit_voice_message(self, text: str):
         """发射语音识别结果到信息场"""
         if not text or not self.info_field or not self.pulse_core:
@@ -350,7 +350,7 @@ class PulseEars(BasePulseOrgan):
         """写入耳朵监听日志文件"""
         try:
             ear_log_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                 'data', 'stream', 'ear_stream_log.json'
             )
             entry = {
@@ -380,7 +380,7 @@ class PulseEars(BasePulseOrgan):
     def _update_ear_log(self, text: str | None = None, status: str = ""):
         """更新耳朵监听日志的最新条目"""
         try:
-            ear_log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+            ear_log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                          'data', 'stream', 'ear_stream_log.json')
             if os.path.exists(ear_log_path):
                 log_data = safe_read_json(ear_log_path, default=[])
@@ -428,7 +428,7 @@ class PulseEars(BasePulseOrgan):
                 })
         return code_blocks
 
-    def _handle_code_blocks(self, code_blocks: list[dict[str, str]], 
+    def _handle_code_blocks(self, code_blocks: list[dict[str, str]],
                              original_content: str, user_name: str) -> dict[str, Any]:
         # v9.5: 代码执行请求标记为L1实时交互层
         for i, block in enumerate(code_blocks):

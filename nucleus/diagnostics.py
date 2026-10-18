@@ -25,13 +25,13 @@ class FrameworkDiagnostics:
     提供统一的健康检查接口，让曈曈能审视自己的运行状态。
     不修改框架状态，只提供只读的诊断信息。
     """
-    
+
     def __init__(self):
         self._last_diagnosis_time = 0.0
         self._diagnosis_cache = {}
         self._cache_ttl = 30.0  # 缓存30秒
-    
-    def get_full_diagnosis(self, info_field=None, node_pool=None, 
+
+    def get_full_diagnosis(self, info_field=None, node_pool=None,
                            framework=None) -> dict[str, Any]:
         """
         获取完整的框架健康诊断报告。
@@ -47,7 +47,7 @@ class FrameworkDiagnostics:
         now = time.time()
         if now - self._last_diagnosis_time < self._cache_ttl and self._diagnosis_cache:
             return self._diagnosis_cache
-        
+
         diagnosis = {
             "timestamp": now,
             "overall_health": "healthy",
@@ -56,7 +56,7 @@ class FrameworkDiagnostics:
             "info": [],
             "metrics": {},
         }
-        
+
         # 1. 脉冲通信健康度
         if info_field:
             try:
@@ -72,19 +72,19 @@ class FrameworkDiagnostics:
                     "mem_usage": field_stats.get("mem_usage", 0.0),
                     "gpu_usage": field_stats.get("gpu_usage", 0.0),
                 }
-                
+
                 # 检查脉冲风暴
                 if field_stats.get("in_storm"):
                     diagnosis["issues"].append("脉冲风暴正在进行中")
                     diagnosis["overall_health"] = "warning"
-                
+
                 # 检查高负载
                 if field_stats.get("high_load"):
                     diagnosis["warnings"].append(f"系统负载偏高: CPU={field_stats.get('cpu_usage', 0):.1f}%, MEM={field_stats.get('mem_usage', 0):.1f}%")
-                    
+
             except Exception as e:
                 diagnosis["issues"].append(f"无法获取脉冲统计: {e}")
-        
+
         # 2. 知识演化健康度
         if node_pool:
             try:
@@ -97,21 +97,21 @@ class FrameworkDiagnostics:
                     "L3_count": evol_dist.get("L3", 0),
                     "instinct_count": pool_stats.get("instinct_count", 0),
                 }
-                
+
                 # 检查L1堆积
                 l1_count = evol_dist.get("L1", 0)
                 total = pool_stats.get("total_nodes", 1)
                 if total > 50 and l1_count / total > 0.8:
                     diagnosis["warnings"].append(f"L1节点占比过高({l1_count/total:.0%})，可能需要触发压缩")
-                
+
                 # 检查L3节点过少
                 l3_count = evol_dist.get("L3", 0)
                 if total > 100 and l3_count < 3:
                     diagnosis["warnings"].append("L3智慧节点较少，知识深度有待提升")
-                    
+
             except Exception as e:
                 diagnosis["warnings"].append(f"无法获取知识统计: {e}")
-        
+
         # 3. 器官健康度
         if framework and hasattr(framework, 'organs'):
             try:
@@ -120,20 +120,20 @@ class FrameworkDiagnostics:
                     if organ and hasattr(organ, 'status'):
                         if getattr(organ, 'status', '') == 'fused':
                             fused_organs.append(organ_name)
-                
+
                 diagnosis["metrics"]["organs"] = {
                     "total": len(framework.organs),
                     "fused": len(fused_organs),
                     "fused_list": fused_organs,
                 }
-                
+
                 if fused_organs:
                     diagnosis["issues"].append(f"器官熔断: {', '.join(fused_organs)}")
                     diagnosis["overall_health"] = "critical"
-                    
+
             except Exception as e:
                 diagnosis["warnings"].append(f"无法获取器官状态: {e}")
-        
+
         # 4. 外部操作健康度
         try:
             from nucleus.external_executor import get_external_executor
@@ -146,15 +146,15 @@ class FrameworkDiagnostics:
                 "active_count": exec_stats.get("active_count", 0),
                 "queue_size": exec_stats.get("queue_size", 0),
             }
-            
+
             # 检查大量失败
             failure_rate = exec_stats.get("total_failed", 0) / max(1, exec_stats.get("total_submitted", 1))
             if failure_rate > 0.5 and exec_stats.get("total_submitted", 0) > 5:
                 diagnosis["warnings"].append(f"外部操作失败率偏高({failure_rate:.0%})，可能网络存在问题")
-                
+
         except Exception as e:
             silent_exc(e, "nucleus/diagnostics.py:154:诊断操作异常", level="warning")
-        
+
         # 5. 整体健康判定
         if not diagnosis["issues"]:
             if diagnosis["warnings"]:
@@ -316,7 +316,7 @@ class FrameworkDiagnostics:
             "warnings": [],
             "modules": {},
         }
-        
+
         # 1. InsightBoard 状态
         if insight_board:
             try:
@@ -333,7 +333,7 @@ class FrameworkDiagnostics:
                 results["issues"].append(f"洞察黑板检查失败: {str(e)[:60]}")
         else:
             results["modules"]["insight_board"] = {"status": "not_injected"}
-        
+
         # 2. 对话记忆库状态
         if inner_world:
             try:
@@ -349,7 +349,7 @@ class FrameworkDiagnostics:
                 results["modules"]["conversation_memory"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["conversation_memory"] = {"status": "not_initialized"}
-        
+
         # 3. 自主推导引擎状态
         if autonomous_deriver:
             try:
@@ -363,7 +363,7 @@ class FrameworkDiagnostics:
                 results["modules"]["autonomous_deriver"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["autonomous_deriver"] = {"status": "not_injected"}
-        
+
         # 4. 代码理解进度
         if inner_world:
             try:
@@ -379,7 +379,7 @@ class FrameworkDiagnostics:
                 results["modules"]["code_understanding"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["code_understanding"] = {"status": "not_initialized"}
-        
+
         # 5. 知识验证统计
         if inner_world:
             try:
@@ -396,7 +396,7 @@ class FrameworkDiagnostics:
                 results["modules"]["knowledge_verification"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["knowledge_verification"] = {"status": "not_initialized"}
-        
+
         # 6. 长期目标状态
         if inner_world:
             try:
@@ -418,7 +418,7 @@ class FrameworkDiagnostics:
                 results["modules"]["active_learning_goal"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["active_learning_goal"] = {"status": "not_initialized"}
-        
+
         # 7. 搜索经验库状态
         if inner_world:
             try:
@@ -434,15 +434,15 @@ class FrameworkDiagnostics:
                 results["modules"]["search_experience"] = {"status": "error", "error": str(e)[:80]}
         else:
             results["modules"]["search_experience"] = {"status": "not_initialized"}
-        
+
         # 汇总判定
         if results["issues"]:
             results["overall_health"] = "critical"
         elif len(results["warnings"]) >= 3:
             results["overall_health"] = "warning"
-        
-        return results    
-    def get_health_summary(self, diagnosis: dict[str, Any] | None = None, 
+
+        return results
+    def get_health_summary(self, diagnosis: dict[str, Any] | None = None,
                            info_field=None, node_pool=None, framework=None) -> str:
         """
         生成人类可读的健康摘要。
@@ -476,7 +476,7 @@ class FrameworkDiagnostics:
         parts = []
         health = diagnosis.get("overall_health", "unknown")
         metrics = diagnosis.get("metrics", {})
-        
+
         # 总体状态
         if health == "healthy":
             parts.append("我目前运行状态良好。")
@@ -484,7 +484,7 @@ class FrameworkDiagnostics:
             parts.append("我有一些需要注意的地方——")
         elif health == "critical":
             parts.append("我遇到了一些严重问题，需要关注——")
-        
+
         # 知识状态
         knowledge = metrics.get("knowledge", {})
         if knowledge:
@@ -493,14 +493,14 @@ class FrameworkDiagnostics:
             l3 = knowledge.get("L3_count", 0)
             instinct = knowledge.get("instinct_count", 0)
             parts.append(f"知识体系共有{total}个节点，其中{l2}条认知、{l3}条智慧、{instinct}条本能。")
-        
+
         # 脉冲通信
         pulse = metrics.get("pulse", {})
         if pulse:
             active_organs = pulse.get("active_conditions", 0)
             load = pulse.get("load_level", "unknown")
             parts.append(f"当前有{active_organs}个活跃条件，系统负载为{load}级别。")
-        
+
         # 器官状态
         organs = metrics.get("organs", {})
         if organs:
@@ -510,14 +510,14 @@ class FrameworkDiagnostics:
                 parts.append(f"{total_organs}个器官中，{fused}个出现熔断。")
             else:
                 parts.append(f"所有{total_organs}个器官运行正常。")
-        
+
         # 外部操作
         external = metrics.get("external_ops", {})
         if external:
             completed = external.get("total_completed", 0)
             active = external.get("active_count", 0)
             parts.append(f"已完成{completed}次外部操作，当前有{active}个在执行。")
-        
+
         # 问题汇总
         issues = diagnosis.get("issues", [])
         warnings = diagnosis.get("warnings", [])
@@ -525,15 +525,15 @@ class FrameworkDiagnostics:
             parts.append("发现的问题：" + "；".join(issues[:3]))
         elif warnings:
             parts.append("需要注意：" + "；".join(warnings[:3]))
-        
+
         return "".join(parts)
-    
-    def get_specific_metric(self, metric_name: str, info_field=None, 
+
+    def get_specific_metric(self, metric_name: str, info_field=None,
                            node_pool=None, framework=None) -> Any | None:
         """获取特定指标的当前值"""
         diagnosis = self.get_full_diagnosis(info_field, node_pool, framework)
         metrics = diagnosis.get("metrics", {})
-        
+
         # 支持嵌套查询，如 "knowledge.total_nodes" 或 "pulse.load_level"
         parts = metric_name.split(".")
         value = metrics

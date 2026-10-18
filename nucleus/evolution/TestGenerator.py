@@ -269,7 +269,7 @@ if __name__ == "__main__":
         """在子进程隔离运行冒烟测试脚本。"""
         try:
             _proc = subprocess.run(  # 有意不检查子进程退出码
-                
+
                 ["python", script_path],
                 check=False, capture_output=True, text=True, timeout=TIMEOUT_CONFIG['llm_call'],
                 encoding="utf-8", errors="replace",

@@ -26,12 +26,12 @@ class EvolutionSandbox:
     在"沙箱"中推演优化方案，评估可行性、影响范围和预期收益。
     推演结果为文本报告，供创造者参考，不自动执行。
     """
-    
+
     def __init__(self):
         self._simulation_log: list[dict[str, Any]] = []
         self._max_log = 30
-    
-    def simulate(self, issues: list[dict[str, Any]], 
+
+    def simulate(self, issues: list[dict[str, Any]],
                  context: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         执行策略推演。
@@ -51,33 +51,33 @@ class EvolutionSandbox:
                 "recommendations": [],
                 "overall_risk": "low",
             }
-        
+
         plans = []
         recommendations = []
         total_benefit = 0
         total_risk = 0
-        
+
         for issue in issues[:5]:  # 最多处理5个问题
             plan = self._generate_plan(issue, context)
             if plan:
                 plans.append(plan)
                 total_benefit += plan.get("benefit_score", 0)
                 total_risk += plan.get("risk_score", 0)
-        
+
         # 按优先级排序
         plans.sort(key=lambda p: p.get("priority_score", 0), reverse=True)
-        
+
         # 生成总体建议
         if total_risk > total_benefit:
             recommendations.append("当前优化风险较高，建议优先积累更多知识后再进行优化。")
         elif len(plans) > 0:
             recommendations.append(f"共{len(plans)}个优化方案可执行，建议从优先级最高的开始逐步推进。")
-        
+
         if any(p.get("type") == "code_optimization" for p in plans):
             recommendations.append("代码优化方案需创造者手动执行，框架不自动修改代码。")
-        
+
         overall_risk = "high" if total_risk > total_benefit * 0.7 else "medium" if total_risk > total_benefit * 0.3 else "low"
-        
+
         report = {
             "status": "completed",
             "summary": f"推演完成：{len(plans)}个优化方案，整体风险等级={overall_risk}。",
@@ -87,14 +87,14 @@ class EvolutionSandbox:
             "overall_benefit": round(total_benefit, 1),
             "simulated_at": time.time(),
         }
-        
+
         self._simulation_log.append(report)
         if len(self._simulation_log) > self._max_log:
             self._simulation_log = self._simulation_log[-self._max_log:]
-        
+
         return report
-    
-    def _generate_plan(self, issue: dict[str, Any], 
+
+    def _generate_plan(self, issue: dict[str, Any],
                         context: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """
         为单个问题生成优化方案并进行推演。
@@ -108,7 +108,7 @@ class EvolutionSandbox:
         """
         issue_type = issue.get("type", "unknown")
         issue.get("description", "")
-        
+
         # 根据问题类型生成不同的优化方案
         if "silent_exception" in issue_type:
             plan = self._plan_silent_exception_fix(issue)
@@ -122,7 +122,7 @@ class EvolutionSandbox:
             plan = self._plan_bare_except_fix(issue)
         else:
             plan = self._plan_generic(issue)
-        
+
         if plan:
             # 推演影响
             plan["impact_assessment"] = self._assess_impact(plan, context)
@@ -154,9 +154,9 @@ class EvolutionSandbox:
                     )
             except Exception as e:
                 silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::_generate_plan L154")
-        
+
         return plan
-    
+
     def _plan_silent_exception_fix(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为静默异常捕获生成修复方案"""
         return {
@@ -170,7 +170,7 @@ class EvolutionSandbox:
             "risk_description": "低风险：仅增加日志，不改变业务逻辑",
             "expected_benefit": "提升问题排查效率，减少静默失败",
         }
-    
+
     def _plan_lock_emit_fix(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为锁内发射脉冲生成修复方案"""
         return {
@@ -184,7 +184,7 @@ class EvolutionSandbox:
             "risk_description": "中等风险：移动代码可能影响执行时序，需仔细验证",
             "expected_benefit": "消除潜在死锁风险，提升系统稳定性",
         }
-    
+
     def _plan_method_split(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为过长方法生成拆分方案"""
         return {
@@ -198,7 +198,7 @@ class EvolutionSandbox:
             "risk_description": "中等风险：方法拆分可能引入新的调用问题，建议逐个拆分",
             "expected_benefit": "提升代码可读性和可维护性",
         }
-    
+
     def _plan_dedup_status_request(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为代码重复生成修复方案"""
         return {
@@ -212,7 +212,7 @@ class EvolutionSandbox:
             "risk_description": "低风险：仅消除重复代码，不改变行为",
             "expected_benefit": "减少代码重复，降低维护成本",
         }
-    
+
     def _plan_bare_except_fix(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为裸except生成修复方案"""
         return {
@@ -226,7 +226,7 @@ class EvolutionSandbox:
             "risk_description": "低风险：仅规范异常捕获，不改变处理逻辑",
             "expected_benefit": "避免捕获系统级异常，提升异常处理的精确性",
         }
-    
+
     def _plan_generic(self, issue: dict[str, Any]) -> dict[str, Any]:
         """为未知类型问题生成通用方案"""
         return {
@@ -240,8 +240,8 @@ class EvolutionSandbox:
             "risk_description": "低风险：仅审查不修改",
             "expected_benefit": "发现潜在问题",
         }
-    
-    def _assess_impact(self, plan: dict[str, Any], 
+
+    def _assess_impact(self, plan: dict[str, Any],
                         context: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         推演方案执行后的影响。
@@ -253,7 +253,7 @@ class EvolutionSandbox:
         4. 可逆性——执行后是否容易回滚
         """
         plan_type = plan.get("type", "general_review")
-        
+
         if plan_type == "code_optimization":
             return {
                 "function_impact": "低——不改变业务逻辑",
@@ -275,7 +275,7 @@ class EvolutionSandbox:
                 "compatibility": "未知",
                 "reversibility": "中等",
             }
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取推演统计"""
         return {

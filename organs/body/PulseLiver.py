@@ -1094,7 +1094,7 @@ class PulseLiver(BasePulseOrgan):
                                 _cls = 'DOC:' + _m2.group(1).strip()
                         _group_key = '/自我理解/代码/' + (_cls or _parts[-1])
                     _code_groups.setdefault(_group_key, []).append(_node)
-                
+
                 _code_compressed = 0
                 for _prefix, _nodes in _code_groups.items():
                     if self._stop_requested:  # ★L10补全：停止请求检查点

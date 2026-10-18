@@ -27,7 +27,7 @@ class Sensor:
         - 在桌面PC环境下，传感器列表可能为空或仅有基础设备。
         - 接入机器人平台后自动激活完整驱动。
     """
-    
+
     # 支持的传感器类型及其标准脉冲事件
     SENSOR_TYPES = {
         "camera": "sensor.camera.frame",
@@ -39,20 +39,20 @@ class Sensor:
         "gps": "sensor.gps.position",
         "bio_heart_rate": "sensor.bio.heart_rate",
     }
-    
+
     def __init__(self):
         # 已连接的传感器: device_id → {type, driver, status, last_reading}
         self._devices: dict[str, dict[str, Any]] = {}
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 最近一次全量采集的快照
         self._latest_readings: dict[str, Any] = {}
-        
+
         # 统计
         self._total_reads = 0
-        
+
         # 功能开关
         self._enabled = False
 

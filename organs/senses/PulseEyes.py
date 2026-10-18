@@ -25,7 +25,7 @@ PulseEyes —— 脉冲驱动眼睛（知识检索器官 · v9.5 分层脉冲版
     4. 结果排序 → 按共振强度降序，返回 Top-K
     5. 兜底检索 → 共振引擎未注入时，回退关键词匹配
 """
- 
+
 import re
 import threading  # ← 加这一行
 import time
@@ -73,7 +73,7 @@ class PulseEyes(BasePulseOrgan):
             self.min_score = 0.1
 
         self._search_count = 0
-        
+
         # 摄像头设备（由眼睛管理，供视觉皮层通过专用通道获取帧）
         self._camera_cap = None          # OpenCV VideoCapture 对象
         self._camera_lock = threading.Lock()  # 帧读取锁
@@ -107,7 +107,7 @@ class PulseEyes(BasePulseOrgan):
         # 乐观初始化：先尝试打开摄像头，能力更新到达后再根据实际硬件调整
         # _init_camera 有防重入锁，收到能力更新后再次调用不会重复初始化
         self._init_camera()
-    
+
     def _init_camera(self):
         """初始化摄像头设备（防重入）
 
@@ -284,29 +284,29 @@ class PulseEyes(BasePulseOrgan):
         caps = payload.get("capabilities", {})
         self._camera_available = caps.get("sensor.camera.available", False)
         self._log(LogLevel.INFO, f"硬件能力更新: 摄像头={'可用' if self._camera_available else '不可用'}")
-        
+
         # 如果摄像头可用且尚未启动推流，尝试初始化
         if self._camera_available and not self._stream_running:
             self._init_camera()
-        
-        return {"status": "updated", "camera_available": self._camera_available}        
+
+        return {"status": "updated", "camera_available": self._camera_available}
 
     def capture_frame(self):
         """读取一帧摄像头画面（供视觉皮层专用通道调用），带读取重试"""
         if self._camera_cap is None:
             return None
-        
+
         with self._camera_lock:
             if not self._camera_cap.isOpened():
                 return None
-            
+
             # 多次尝试读取，摄像头刚启动时需要预热
             for _ in range(10):
                 ret, frame = self._camera_cap.read()
                 if ret and frame is not None:
                     return frame
                 time.sleep(0.1)  # 短暂等待后重试
-            
+
             return None
     def _stream_loop(self):
         """后台推流线程：持续采集摄像头帧，定向发射给视觉皮层"""
@@ -333,7 +333,7 @@ class PulseEyes(BasePulseOrgan):
                     if self.info_field and self.pulse_core:
                         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
                         self._frame_seq += 1
-                        
+
                         # 写入推流日志供人体UI监控
                         try:
                             log_entry = {
@@ -342,7 +342,7 @@ class PulseEyes(BasePulseOrgan):
                                 "shape": list(frame_data.shape),
                                 "dtype": str(frame_data.dtype),
                             }
-                            log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                            log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                                      'data', 'stream', 'eye_stream_log.json')
                             log_data = []
                             if os.path.exists(log_path):
@@ -362,7 +362,7 @@ class PulseEyes(BasePulseOrgan):
                             safe_write_json(log_path, log_data)
                         except Exception as e:
                             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-                        
+
                         try:
                             self.info_field.publish(self.pulse_core.emit(
                                 source_organ=self.organ_name,
@@ -393,7 +393,7 @@ class PulseEyes(BasePulseOrgan):
                         self._log(LogLevel.ERROR, "摄像头可能已断开，尝试重新初始化")
                         self._try_reopen_camera()
                         empty_count = 0
-                        
+
             except Exception as e:
                 self._log(LogLevel.WARNING, f"推流异常: {e}")
 
@@ -426,7 +426,7 @@ class PulseEyes(BasePulseOrgan):
                 _last_stats_time = time.time()
 
             time.sleep(0.5)  # 星轨调整：8.3fps→2fps，降低L3队列负载（人脸识别等功能完善后再调回）
-    
+
     def _try_reopen_camera(self):
         """尝试重新打开摄像头（带指数退避冷却和最大重试限制）"""
         # 冷却保护：每次重连失败后等待时间翻倍
@@ -436,13 +436,13 @@ class PulseEyes(BasePulseOrgan):
             self._reopen_backoff = 2.0  # 初始冷却2秒
         if not hasattr(self, '_reopen_fail_count'):
             self._reopen_fail_count = 0
-        
+
         now = time.time()
         if now < self._reopen_cooldown_until:
             return  # 冷却中，不重试
-        
+
         self._reopen_fail_count += 1
-        
+
         # 连续失败超过5次，通知设备管理器并彻底放弃
         if self._reopen_fail_count > 5:
             self._log(LogLevel.ERROR, f"摄像头连续{self._reopen_fail_count}次重连失败，通知设备管理器")
@@ -460,7 +460,7 @@ class PulseEyes(BasePulseOrgan):
                 ))
             self._stream_running = False
             return
-        
+
         with self._camera_init_lock:
             try:
                 import cv2
@@ -612,7 +612,7 @@ class PulseEyes(BasePulseOrgan):
         return [
             {
                 "organ_name": self.organ_name,
-                "event_types": [ 
+                "event_types": [
                     EyeEvent.SEARCH,
                     EyeEvent.VISUAL_QUERY,
                     DeviceEvent.CAPABILITY_UPDATE,

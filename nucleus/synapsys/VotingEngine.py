@@ -91,8 +91,8 @@ class VotingEngine:
 
     # ========== 核心接口：提案管理 ==========
 
-    def propose(self, 
-                source_organ: str, 
+    def propose(self,
+                source_organ: str,
                 issue: str,
                 options: list[str],
                 tier: VoteTier = VoteTier.REFLEX,

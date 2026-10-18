@@ -235,11 +235,11 @@ class PulseSnapshot:
         self.resonance_engine = None
         self.hebbian_learner = None
         self.inference_cache = {}
-        
+
         self._last_save_time = 0.0
         self._last_save_nodes = 0
         self._total_saves = 0
-        
+
         # ===== P1-3: 增量保存相关 =====
         self._last_saved_nodes: dict[str, str] = {}  # node_id → 上次保存时的 SHA256 摘要
         # ★第41批 T2（P1-264）：由硬编码 5 改为读 config.KNOWLEDGE_BACKUP_KEEP（默认 3）
@@ -253,12 +253,12 @@ class PulseSnapshot:
         #   任一次真实写盘成功后清零；调用方据其区分「已保存」与「待刷新」。
         self._pending_flush: bool = False
         # ===== 新增: 生命连续性状态 =====
-        self._extra_state: dict[str, Any] = {}  
+        self._extra_state: dict[str, Any] = {}
         # L1独立快照路径
         self.l1_snapshot_path = os.path.join(
             os.path.dirname(snapshot_path) if snapshot_path else "data/knowledge",
             "pulse_l1_snapshot.json"
-        )              
+        )
         # 接入统一日志系统
         self._logger = get_module_logger("PulseSnapshot")
 
@@ -302,7 +302,7 @@ class PulseSnapshot:
         self._logger.log(log_level, msg)
 
     # ========== 框架注入 ==========
-    
+
     def set_node_pool(self, node_pool):
         self.node_pool = node_pool
         # ★第81批补 T2：自动绑定冷召回源（消除 main 漏调→fn 永远 None 失效类）。
@@ -311,13 +311,13 @@ class PulseSnapshot:
             _fn = getattr(node_pool, "recall_cold_nodes_batch", None)
             if callable(_fn):
                 self._m70_cold_recall_fn = _fn
-        
+
     def set_resonance_engine(self, engine):
         self.resonance_engine = engine
-        
+
     def set_hebbian_learner(self, learner):
         self.hebbian_learner = learner
-        
+
     # ========== 保存（P1-3 改造：增量 + 轮转） ==========
     def _m44_write_allowed(self) -> bool:
         """★第44批 T4（P2-290）：写盘守卫 —— 测试环境不得写生产 data/。
@@ -379,11 +379,11 @@ class PulseSnapshot:
         # self._lock 是 RLock（可重入），save() 内部调用 save_l1()/save_parquet() 不会死锁。
         with self._lock:
             return self._save_locked(force_full=force_full)
-    
+
     def _save_locked(self, force_full: bool = False) -> bool:
         """★P1修复：save() 的实际逻辑（已持有 self._lock，避免重入死锁的扁平化实现）。"""
         start_time = time.time()
-        
+
         all_nodes = self.node_pool.get_all_including_evicted()
         # 跳过临时节点
         saved_nodes = [n for n in all_nodes if not getattr(n, 'ephemeral', False)]
@@ -393,10 +393,10 @@ class PulseSnapshot:
             self._log(LogLevel.WARNING,
                       f"保存快照时有效节点数为 0（总节点 {len(all_nodes)} 个，"
                       f"可能全部为 ephemeral 或节点池为空）—— 不阻断保存，请留意")
-        
+
         # 计算当前节点列表的校验和
         current_checksum = self._compute_node_list_checksum(saved_nodes)
-        
+
         # 无变更时跳过
         if self._last_saved_checksum and current_checksum == self._last_saved_checksum:
             elapsed = time.time() - start_time
@@ -410,7 +410,7 @@ class PulseSnapshot:
                           f"距上次保存{seconds_since_last_save:.0f}秒) "
                           f"耗时 {elapsed:.2f}s")
             return True
-        
+
         # ★v29/14.44：写盘节流——距上次实际写盘 < 最小间隔且非强制 → 延迟写盘。
         #   内存 node_pool 始终持有最新数据，延迟写盘不丢数据；下次触发时 checksum 已变会继续。
         #   仅对「变更节点数小」的常规增量生效；全量保存（10分钟周期）不节流，保证周期落盘。
@@ -449,12 +449,12 @@ class PulseSnapshot:
             except Exception as _e:
                 self._log(LogLevel.ERROR, f"保护快照写入失败: {_e}")
                 return False
-        # ===== 快照保护结束 =====        
+        # ===== 快照保护结束 =====
         # 计算变更节点数量（复用筛选结果避免双重遍历）
         _changed_nodes_preview, _ = self._get_changed_nodes(saved_nodes)
         _changed_count = len(_changed_nodes_preview)
         _seconds_since_full = _now - self._last_full_save_time if hasattr(self, '_last_full_save_time') else self._m67_full_save_interval() + 1
-        
+
         # ★P0-1修复(2026-09-03)：退出时强制全量保存。
         # 增量保存需读全文件+解析+构建索引+写回，8700节点下比全量慢10倍以上(170s vs 9s)，
         # 退出时距上次全量保存近会触发增量导致90s超时。force_full直接走全量。
@@ -466,7 +466,7 @@ class PulseSnapshot:
                 and _changed_count <= self._m67_incremental_max_nodes()
                 and os.path.exists(self.snapshot_path)
             )
-        
+
         if _use_incremental:
             # ===== 增量保存模式 =====
             # ★第67批 T2：优先走真正的增量日志（jsonl 追加，O(变更数)）；
@@ -501,7 +501,7 @@ class PulseSnapshot:
             self._pending_flush = False
 
         return _success
-        
+
     def _build_full_snapshot(self, saved_nodes: list, current_checksum: str) -> dict[str, Any]:
         l2_l3_nodes = [n for n in saved_nodes if n.evol_level in (PulseNode.EVOL_L2, PulseNode.EVOL_L3)]
         l1_nodes = [n for n in saved_nodes if n.evol_level == PulseNode.EVOL_L1]
@@ -545,7 +545,7 @@ class PulseSnapshot:
         """
         if not self._last_saved_nodes_map:
             return len(saved_nodes)  # 无历史记录，全部视为变更
-        
+
         _changed = 0
         for _node in saved_nodes:
             _node_id = _node.node_id
@@ -553,11 +553,11 @@ class PulseSnapshot:
             _saved_checksum = self._last_saved_nodes_map.get(_node_id, '')
             if _current_checksum != _saved_checksum:
                 _changed += 1
-        
+
         # 也统计被删除的节点
         _current_ids = {n.node_id for n in saved_nodes}
         _deleted = sum(1 for _nid in self._last_saved_nodes_map if _nid not in _current_ids)
-        
+
         return _changed + _deleted
 
     def _get_changed_nodes(self, saved_nodes: list) -> tuple[list, set]:
@@ -570,7 +570,7 @@ class PulseSnapshot:
         if not self._last_saved_nodes_map:
             # 无历史记录，全部视为变更
             return saved_nodes, {n.node_id for n in saved_nodes}
-        
+
         _changed = []
         for _node in saved_nodes:
             _node_id = _node.node_id
@@ -578,7 +578,7 @@ class PulseSnapshot:
             _saved_checksum = self._last_saved_nodes_map.get(_node_id, '')
             if _current_checksum != _saved_checksum:
                 _changed.append(_node)
-        
+
         _current_ids = {n.node_id for n in saved_nodes}
         return _changed, _current_ids
 
@@ -587,7 +587,7 @@ class PulseSnapshot:
         ★P0-4新增：增量保存——将变更节点合并到已有快照。
         """
         self._log(LogLevel.DEBUG, "开始增量保存...")
-        
+
         try:
             # 加载已有快照
             _existing = safe_read_json(self.snapshot_path, default={})
@@ -595,12 +595,12 @@ class PulseSnapshot:
             # 加载失败，降级为全量
             self._log(LogLevel.WARNING, "增量保存加载失败，降级为全量")
             return self._full_save(saved_nodes, current_checksum, start_time)
-        
+
         # ★v23.0优化：先筛选变更节点，减少不必要的序列化
         _changed_nodes, _current_ids = self._get_changed_nodes(saved_nodes)
         # 构建节点ID→索引映射
         _existing_nodes = _existing.get("nodes", [])
-        _existing_map = {n.get("node_id", ""): i for i, n in enumerate(_existing_nodes)}        
+        _existing_map = {n.get("node_id", ""): i for i, n in enumerate(_existing_nodes)}
         # ★F1 零更新前置校验：若无任何内容变更，且无节点增删（内存集合 == 磁盘集合），
         #   直接跳过写盘，避免无意义的读文件 + 构建映射 + 原子写 IO。
         #   注意：save() 顶部的 checksum 已拦截绝大多数无变更场景，此处为增量路径的
@@ -613,15 +613,15 @@ class PulseSnapshot:
             self._last_saved_checksum = current_checksum
             self._last_save_time = time.time()
             self._last_save_nodes = len(saved_nodes)
-            return True        
-        
+            return True
+
         # 合并变更节点（只序列化变更的节点）
         _merged_count = 0
         _new_count = 0
         for _node in _changed_nodes:
             _node_dict = _node.to_dict()
             _node_id = _node.node_id
-            
+
             if _node_id in _existing_map:
                 # 已存在：更新
                 _idx = _existing_map[_node_id]
@@ -631,14 +631,14 @@ class PulseSnapshot:
                 # 新增节点
                 _existing_nodes.append(_node_dict)
                 _new_count += 1
-        
+
         # 删除已淘汰的节点（使用已计算的当前ID集合）
         _existing_nodes = [n for n in _existing_nodes if n.get("node_id", "") in _current_ids]
-        
+
         # 更新快照元信息
         _l2_l3 = [n for n in saved_nodes if n.evol_level in (PulseNode.EVOL_L2, PulseNode.EVOL_L3)]
         _l1 = [n for n in saved_nodes if n.evol_level == PulseNode.EVOL_L1]
-        
+
         _existing["total_nodes_all"] = len(saved_nodes)
         _existing["l2_l3_count"] = len(_l2_l3)
         _existing["l1_saved_count"] = len(_l1)
@@ -647,52 +647,52 @@ class PulseSnapshot:
         _existing["node_list_checksum"] = current_checksum
         _existing["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         _existing["nodes"] = _existing_nodes
-        
+
         try:
             # ★v29：增量保存用紧凑模式 + 不轮转（省去 209MB 文件 rename+重写两次）
             self._atomic_write_with_rotation(_existing, compact=True, rotate=False)
         except Exception as e:
             self._log(LogLevel.ERROR, f"增量保存失败: {e}")
             return False
-        
+
         # 更新状态
         self._last_saved_checksum = current_checksum
         self._update_saved_nodes_map(saved_nodes)
         self._last_write_time = time.time()  # ★v29/14.44：记录实际写盘时间
-        
+
         elapsed = time.time() - start_time
         self._last_save_time = time.time()
         self._last_save_nodes = len(saved_nodes)
         self._total_saves += 1
-        
+
         self._log(LogLevel.INFO,
                   f"增量保存完成: {len(saved_nodes)}节点 (更新{_merged_count}个, 新增{_new_count}个) "
                   f"耗时 {elapsed:.2f}s")
         return True
-    
+
     def _full_save(self, saved_nodes: list, current_checksum: str, start_time: float) -> bool:
         """
         ★P0-4重构：全量保存逻辑从原save()方法提取。
         """
         self._log(LogLevel.INFO, "开始全量保存...")
-        
+
         l2_l3_nodes = [n for n in saved_nodes if n.evol_level in (PulseNode.EVOL_L2, PulseNode.EVOL_L3)]
         l1_nodes = [n for n in saved_nodes if n.evol_level == PulseNode.EVOL_L1]
-        
+
         freq_index = {}
         if self.resonance_engine:
             freq_index = {
                 "freq_keys": self.resonance_engine.get_freq_index_keys(),
                 "space_keys": self.resonance_engine.get_space_index_keys(),
             }
-        
+
         hebbian_weights = {}
         if self.hebbian_learner:
             hebbian_weights = {
                 "total_cooccurrences": getattr(self.hebbian_learner, '_total_cooccurrences', 0),
                 "connection_count": len(getattr(self.hebbian_learner, '_connections', {})),
             }
-        
+
         snapshot = {
             "version": "v9.5",
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -707,7 +707,7 @@ class PulseSnapshot:
             "inference_cache": self.inference_cache,
             "extra_state": self._extra_state,
         }
-        
+
         try:
             # ★v29：全量保存同样用紧凑模式（保留轮转备份，兼容旧版加载）
             # ★第67批 T1：分批流式写（默认开，SNAPSHOT_BATCH_SIZE > 0）——
@@ -727,17 +727,17 @@ class PulseSnapshot:
         except Exception as e:
             self._log(LogLevel.ERROR, f"全量保存失败: {type(e).__name__}: {e}")
             return False
-        
+
         # 更新状态
         self._last_saved_checksum = current_checksum
         self._update_saved_nodes_map(saved_nodes)
         self._last_write_time = time.time()  # ★v29/14.44：记录实际写盘时间
-        
+
         elapsed = time.time() - start_time
         self._last_save_time = time.time()
         self._last_save_nodes = len(saved_nodes)
         self._total_saves += 1
-        
+
         self._log(LogLevel.INFO,
                   f"全量保存完成: {len(saved_nodes)}个节点 "
                   f"(L1={len(l1_nodes)}, L2/L3={len(l2_l3_nodes)}) "
@@ -1563,7 +1563,7 @@ class PulseSnapshot:
         # ★P1修复：并发写竞态加锁（RLock 可重入，save() 内部调用时不会死锁）
         with self._lock:
             return self._save_l1_locked()
-    
+
     def _save_l1_locked(self) -> bool:
         """save_l1() 的实际逻辑（已持有 self._lock）。"""
         # ★第44批 T4（P2-290）：写盘守卫
@@ -1571,15 +1571,15 @@ class PulseSnapshot:
             return False
         if self.node_pool is None:
             return False
-        
+
         all_nodes = self.node_pool.get_all_including_evicted()
-        l1_nodes = [n for n in all_nodes 
-                    if n.evol_level == PulseNode.EVOL_L1 
+        l1_nodes = [n for n in all_nodes
+                    if n.evol_level == PulseNode.EVOL_L1
                     and not getattr(n, 'ephemeral', False)]
-        
+
         if not l1_nodes:
             return True
-        
+
         snapshot = {
             "version": "v9.5",
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -1602,28 +1602,28 @@ class PulseSnapshot:
                 self._log(LogLevel.WARNING,
                           f"[第102批 T-102a] L1悬空边过滤异常(已忽略): "
                           f"{type(_e).__name__}: {_e}")
-        
+
         try:
             l1_dir = os.path.dirname(self.l1_snapshot_path)
             if l1_dir and not os.path.exists(l1_dir):
                 os.makedirs(l1_dir, exist_ok=True)
-            
+
             tmp_fd, tmp_path = tempfile.mkstemp(
                 suffix=".json", prefix="l1_snapshot_", dir=l1_dir or "."
             )
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, ensure_ascii=False, indent=2)
-            
+
             if os.path.exists(self.l1_snapshot_path):
                 os.remove(self.l1_snapshot_path)
             os.replace(tmp_path, self.l1_snapshot_path)
-            
+
             self._log(LogLevel.DEBUG, f"L1快照保存完成: {len(l1_nodes)} 个L1节点")
             return True
         except Exception as e:
             self._log(LogLevel.ERROR, f"L1快照保存失败: {e}")
             return False
-    
+
     def load_l1(self) -> list[PulseNode]:
         """
         独立加载L1节点快照。
@@ -1631,10 +1631,10 @@ class PulseSnapshot:
         """
         if not os.path.exists(self.l1_snapshot_path):
             return []
-        
+
         try:
             data = safe_read_json(self.l1_snapshot_path, default={})
-            
+
             nodes_data = data.get("nodes", [])
             restored = []
             for node_dict in nodes_data:
@@ -1643,12 +1643,12 @@ class PulseSnapshot:
                     restored.append(node)
                 except Exception as e:
                     self._log(LogLevel.WARNING, f"L1节点恢复失败，已跳过: {e}")
-            
+
             self._log(LogLevel.INFO, f"L1快照加载完成: {len(restored)} 个L1节点")
             return restored
         except Exception as e:
             self._log(LogLevel.WARNING, f"L1快照加载失败: {e}")
-            return []    
+            return []
     def _atomic_write_with_rotation(self, snapshot: dict[str, Any],
                                      compact: bool = True,
                                      rotate: bool = True) -> None:
@@ -1670,7 +1670,7 @@ class PulseSnapshot:
         snapshot_dir = os.path.dirname(self.snapshot_path)
         if snapshot_dir and not os.path.exists(snapshot_dir):
             os.makedirs(snapshot_dir, exist_ok=True)
-        
+
         # ===== 轮转：将当前文件重命名为备份（仅 rotate=True） =====
         if rotate and os.path.exists(self.snapshot_path):
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -1680,7 +1680,7 @@ class PulseSnapshot:
             except Exception as e:
                 self._log(LogLevel.WARNING,
                           f"快照轮转备份失败(无回退副本): {e}")
-        
+
         # ===== 原子写入新快照 =====
         # ===== ★第102批 T-102a：落盘前引用完整性过滤（悬空边不落盘） =====
         if _m102_dangling_guard_on():
@@ -1703,7 +1703,7 @@ class PulseSnapshot:
             prefix="snapshot_",
             dir=snapshot_dir or "."
         )
-        
+
         try:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 if compact:
@@ -1726,16 +1726,16 @@ class PulseSnapshot:
             except Exception as e:
                 silent_exc(e, "nucleus/mnemosyne/PulseSnapshot.py:1591", level="warning")
             raise
-        
+
         # ===== 清理旧备份（仅 rotate=True） =====
         if rotate:
             self._cleanup_old_backups()
-    
+
     def _cleanup_old_backups(self):
         """P1-3: 清理超过保留上限的旧备份文件"""
         snapshot_dir = os.path.dirname(self.snapshot_path) or "."
         base_name = os.path.basename(self.snapshot_path)
-        
+
         backups = []
         try:
             for fname in os.listdir(snapshot_dir):
@@ -1745,18 +1745,18 @@ class PulseSnapshot:
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_cleanup_old_backups L1628")
             return
-        
+
         backups.sort(reverse=True)  # 按时间倒序
-        
+
         # 删除超过上限的备份
         for _, fpath in backups[self._max_backups:]:
             try:
                 os.remove(fpath)
             except Exception as e:
                 self._log(LogLevel.DEBUG, f"清理异常已忽略: {type(e).__name__}: {e}")
-    
+
     # ========== 加载（P1-3 改造：损坏时自动回退） ==========
-    
+
     def load(self, full_load: bool = True):
         """★第67批 T2：加载 = 原加载逻辑 + 增量日志重放。
         ★异常时退化为纯全量快照 —— 增量日志损坏绝不影响框架启动。"""
@@ -2051,7 +2051,7 @@ class PulseSnapshot:
             self._log(LogLevel.DEBUG,
                       f"[P2-88] 快照加载调用栈:\n{''.join(traceback.format_stack()[-8:])}")
         start_time = time.time()
-        
+
         # ★v29/14.47：Parquet 优先加载——列式存储比 JSON 快 3x（实测 0.89s vs 2.84s）。
         #   仅加载节点，元数据(inference_cache/extra_state/checksum)留空，
         #   首次全量保存会重建。失败或节点数过少时回退 JSON（零冲突）。
@@ -2076,7 +2076,7 @@ class PulseSnapshot:
                              f"Parquet 节点数过少({len(_pq_nodes) if _pq_nodes else 0})，回退 JSON")
             except Exception as _e:
                 self._log(LogLevel.WARNING, f"Parquet 优先加载失败，回退 JSON: {_e}")
-        
+
         # 尝试加载主快照（JSON 回退路径）
         data = None
         try:
@@ -2084,9 +2084,9 @@ class PulseSnapshot:
         except (json.JSONDecodeError, Exception) as e:
             self._log(LogLevel.ERROR, f"主快照加载失败: {e}，尝试回退到备份...")
             return self._load_from_backup()
-        
+
         restored = self._restore_from_data(data, start_time)
-        
+
         # ★v24.0新增：如果主快照恢复的节点数远小于保存时记录的数量，尝试从备份中加载更大的快照
         expected_count = data.get("node_count_at_save", 0)
         if expected_count > 0 and len(restored) < expected_count * 0.5:
@@ -2098,9 +2098,9 @@ class PulseSnapshot:
                 self._log(LogLevel.INFO,
                          f"从备份恢复更多节点: {len(backup_nodes)} vs 主快照 {len(restored)}")
                 return backup_nodes
-        
+
         return restored
-    
+
     def _load_lazy(self):
         """★主线第9批 T4 / P2-48：惰性加载入口。
 
@@ -2127,7 +2127,7 @@ class PulseSnapshot:
         """
         snapshot_dir = os.path.dirname(self.snapshot_path) or "."
         base_name = os.path.basename(self.snapshot_path)
-        
+
         backups = []
         try:
             for fname in os.listdir(snapshot_dir):
@@ -2139,17 +2139,17 @@ class PulseSnapshot:
             self._log(LogLevel.ERROR,
                       f"读取备份目录失败，放弃从备份恢复: {e}\n{traceback.format_exc()}")
             return []
-        
+
         if not backups:
             self._log(LogLevel.WARNING, "没有可用的备份文件")
             return []
-        
+
         # 按时间从新到旧尝试加载，选择节点数最多的
         backups.sort(reverse=True, key=lambda x: x[0])
         best_nodes = []
         best_backup_path = None
         best_score = -1.0  # ★第80批 T4：综合选优评分基准
-        
+
         for _mtime, backup_path in backups:
             try:
                 data = safe_read_json(backup_path, default={})
@@ -2175,39 +2175,39 @@ class PulseSnapshot:
             except Exception as e:
                 self._log(LogLevel.WARNING, f"备份加载失败 {backup_path}: {e}")
                 continue
-        
+
         if best_backup_path:
             self._log(LogLevel.INFO,
                      f"选择最大备份恢复: {os.path.basename(best_backup_path)} ({len(best_nodes)}节点)")
             return best_nodes
-        
+
         self._log(LogLevel.WARNING, "所有备份均无法恢复有效节点")
         return []
-    
+
     def _restore_from_data(self, data: dict[str, Any], start_time: float) -> list[PulseNode]:
         """从已解析的快照数据中恢复节点"""
         version = data.get("version", "unknown")
         self._log(LogLevel.INFO, f"快照版本: {version}")
-        
+
         self.inference_cache = data.get("inference_cache", {})
-        self._extra_state = data.get("extra_state", {})        
+        self._extra_state = data.get("extra_state", {})
         nodes_data = data.get("nodes", [])
         restored_nodes = []
-        
+
         for node_dict in nodes_data:
             try:
                 node = PulseNode.from_dict(node_dict)
                 restored_nodes.append(node)
             except Exception as e:
                 self._log(LogLevel.ERROR, f"节点恢复失败: {e}")
-        
+
         # ===== P1-3: 恢复上次保存时的节点状态快照和校验和 =====
         self._last_saved_checksum = data.get("node_list_checksum", "")
-        
+
         elapsed = time.time() - start_time
         total_all = data.get("total_nodes_all", len(restored_nodes))
         save_mode = data.get("save_mode", "full")
-        
+
         # ===== v24.0修改：完整性校验改为软校验 =====
         integrity_ok = self._verify_integrity(data, restored_nodes)
         if not integrity_ok:
@@ -2218,12 +2218,12 @@ class PulseSnapshot:
                       f"实际恢复{len(restored_nodes)}个节点。"
                       f"将使用已加载节点继续启动，并稍后自动重新保存快照以更新校验和。")
             # 不再返回空列表，使用已恢复的节点
-        
+
         self._log(LogLevel.INFO,
                   f"快照加载完成: {len(restored_nodes)} 个节点 "
                   f"(原始总数: {total_all}, 保存模式: {save_mode}) "
                   f"耗时 {elapsed:.2f}s")
-        
+
         # ★阶段B'：恢复被驱逐的冷节点 node_id 清单（冷节点全文在冷存 Parquet，不随快照）
         if (self.node_pool is not None
                 and getattr(self.node_pool, 'is_cold_storage_enabled', lambda: False)()):
@@ -2233,11 +2233,11 @@ class PulseSnapshot:
                 _cold_evicted.update(_evicted)
                 self._log(LogLevel.INFO,
                           f"冷存储：恢复 {len(_evicted)} 个被驱逐节点清单（冷节点全文按需从冷存召回）")
-        
+
         return restored_nodes
-    
+
     # ========== 推理缓存 ==========
-    
+
     def cache_inference(self, question: str, answer: str, reasoning: str = ""):
         cache_key = question.strip()[:100]
         self.inference_cache[cache_key] = {
@@ -2245,7 +2245,7 @@ class PulseSnapshot:
             "reasoning": reasoning,
             "cached_at": time.time(),
         }
-        
+
         if len(self.inference_cache) > 1000:
             sorted_keys = sorted(
                 self.inference_cache.keys(),
@@ -2253,7 +2253,7 @@ class PulseSnapshot:
             )
             for key in sorted_keys[:200]:
                 del self.inference_cache[key]
-    
+
     def get_cached_inference(self, question: str) -> dict[str, Any] | None:
         cache_key = question.strip()[:100]
         return self.inference_cache.get(cache_key)
@@ -2264,11 +2264,11 @@ class PulseSnapshot:
         """
         expected_count = data.get("node_count_at_save")
         expected_checksum = data.get("node_list_checksum")
-        
+
         if expected_count is None and expected_checksum is None:
             self._log(LogLevel.INFO, "快照未包含校验信息（旧版本格式），跳过完整性校验")
             return True
-        
+
         # 校验1：节点数量对比（允许小偏差，但不允许为空）
         if expected_count is not None:
             actual_count = len(restored_nodes)
@@ -2294,7 +2294,7 @@ class PulseSnapshot:
                 self._log(LogLevel.WARNING,
                           f"节点数量不匹配: 预期{expected_count}个, 实际恢复{actual_count}个。"
                           f"允许继续启动。")
-        
+
         # 校验2：节点列表校验和对比（仅警告/调试，不阻断启动）
         # ★P2-86：区分「占位符」（测试夹具遗留）与「真实不匹配」（方法升级）。
         #   占位符直接跳过并 DEBUG 说明；真实不匹配按 _checksum_debug_mode() 定级。
@@ -2314,13 +2314,13 @@ class PulseSnapshot:
                               f"算法版本 v{CHECKSUM_ALGO_VERSION}）。"
                               f"预期{expected_checksum}, 实际{actual_checksum}。"
                               f"允许继续启动。")
-        
+
         self._log(LogLevel.INFO,
                   f"快照完整性校验完成 ({len(restored_nodes)}个节点，软校验)")
-        return True   
+        return True
     def set_extra_state(self, extra_state: dict[str, Any]):
         """设置需要在快照中保存的额外生命状态"""
-        self._extra_state = extra_state     
+        self._extra_state = extra_state
     @staticmethod
     def _snapshot_diagnostic_enabled() -> bool:
         """快照诊断日志开关（读不到时默认开启）。"""
@@ -2382,7 +2382,7 @@ class PulseSnapshot:
     def get_extra_state(self) -> dict[str, Any]:
         """获取从快照中恢复的额外生命状态"""
         return dict(self._extra_state)
-    
+
     def merge_organ_extra_state(self, organ_name: str, state: dict[str, Any]):
         """
         合并器官提交的额外状态到快照的extra_state中。
@@ -2394,7 +2394,7 @@ class PulseSnapshot:
         """
         if "organ_states" not in self._extra_state:
             self._extra_state["organ_states"] = {}
-        self._extra_state["organ_states"][organ_name] = state   
+        self._extra_state["organ_states"][organ_name] = state
     def auto_cleanup(self) -> dict[str, Any]:
         """
         自动精简快照：清理过期L1节点、临时节点、冗余备份。
@@ -2408,7 +2408,7 @@ class PulseSnapshot:
         if not self._m44_write_allowed():
             return {}
         import json
-        
+
         result = {
             "l1_removed": 0,
             "ephemeral_removed": 0,
@@ -2416,123 +2416,123 @@ class PulseSnapshot:
             "file_size_before": 0,
             "file_size_after": 0,
         }
-        
+
         now = time.time()
-        
+
         # 记录清理前文件大小
         if os.path.exists(self.snapshot_path):
             result["file_size_before"] = os.path.getsize(self.snapshot_path)
-        
+
         # ===== 1. 清理过期的L1快照节点 =====
         if os.path.exists(self.l1_snapshot_path):
             try:
                 l1_data = safe_read_json(self.l1_snapshot_path, default={})
-                
+
                 l1_nodes = l1_data.get("nodes", [])
                 original_count = len(l1_nodes)
-                
+
                 # 删除创建超过24小时且信任分数<30的L1节点
                 cleaned_nodes = []
                 for node_dict in l1_nodes:
                     created_at = node_dict.get("created_at", 0)
                     trust_score = node_dict.get("trust_score", 50.0)
                     age_hours = (now - created_at) / 3600 if created_at > 0 else 0
-                    
+
                     # 保留条件：创建不到24小时 或 信任分数≥30
                     if age_hours < 24 or trust_score >= 30.0:
                         cleaned_nodes.append(node_dict)
-                
+
                 result["l1_removed"] = original_count - len(cleaned_nodes)
-                
+
                 if result["l1_removed"] > 0:
                     l1_data["nodes"] = cleaned_nodes
                     l1_data["l1_count"] = len(cleaned_nodes)
                     l1_data["cleaned_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    
+
                     l1_dir = os.path.dirname(self.l1_snapshot_path)
                     if l1_dir and not os.path.exists(l1_dir):
                         os.makedirs(l1_dir, exist_ok=True)
-                    
+
                     tmp_fd, tmp_path = tempfile.mkstemp(
                         suffix=".json", prefix="l1_snapshot_", dir=l1_dir or "."
                     )
                     with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                         json.dump(l1_data, f, ensure_ascii=False, indent=2)
-                    
+
                     if os.path.exists(self.l1_snapshot_path):
                         os.remove(self.l1_snapshot_path)
                     os.replace(tmp_path, self.l1_snapshot_path)
-                    
+
                     self._log(LogLevel.INFO,
                              f"L1快照精简: 移除{result['l1_removed']}个过期低信任节点 "
                              f"(剩余{len(cleaned_nodes)}个)")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"L1快照精简异常: {e}")
-        
+
         # ===== 2. 清理主快照中的临时节点 =====
         if os.path.exists(self.snapshot_path):
             try:
                 main_data = safe_read_json(self.snapshot_path, default={})
-                
+
                 main_nodes = main_data.get("nodes", [])
                 original_main_count = len(main_nodes)
-                
+
                 # 删除ephemeral=True的节点
                 permanent_nodes = [
-                    n for n in main_nodes 
+                    n for n in main_nodes
                     if not n.get("ephemeral", False)
                 ]
-                
+
                 result["ephemeral_removed"] = original_main_count - len(permanent_nodes)
-                
+
                 if result["ephemeral_removed"] > 0:
                     main_data["nodes"] = permanent_nodes
                     main_data["total_nodes_all"] = len(permanent_nodes)
                     main_data["cleaned_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    
+
                     snapshot_dir = os.path.dirname(self.snapshot_path)
                     if snapshot_dir and not os.path.exists(snapshot_dir):
                         os.makedirs(snapshot_dir, exist_ok=True)
-                    
+
                     tmp_fd, tmp_path = tempfile.mkstemp(
                         suffix=".json", prefix="snapshot_", dir=snapshot_dir or "."
                     )
                     with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                         json.dump(main_data, f, ensure_ascii=False, indent=2)
-                    
+
                     if os.path.exists(self.snapshot_path):
                         os.remove(self.snapshot_path)
                     os.replace(tmp_path, self.snapshot_path)
-                    
+
                     self._log(LogLevel.INFO,
                              f"主快照精简: 移除{result['ephemeral_removed']}个临时节点 "
                              f"(剩余{len(permanent_nodes)}个)")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"主快照精简异常: {e}")
-        
+
         # ===== 3. 清理冗余备份 =====
         result["backups_removed"] = self._cleanup_old_backups_count()
-        
+
         # ===== 4. 记录清理后文件大小 =====
         if os.path.exists(self.snapshot_path):
             result["file_size_after"] = os.path.getsize(self.snapshot_path)
-        
+
         if result["l1_removed"] > 0 or result["ephemeral_removed"] > 0 or result["backups_removed"] > 0:
             self._log(LogLevel.INFO,
                      f"快照自动精简完成: L1移除{result['l1_removed']}个, "
                      f"临时节点移除{result['ephemeral_removed']}个, "
                      f"备份移除{result['backups_removed']}份, "
                      f"文件大小{result['file_size_before']}→{result['file_size_after']}字节")
-        
+
         return result
-    
+
     def _cleanup_old_backups_count(self) -> int:
         """
         清理超过上限的旧备份文件，返回移除的备份数量。
         """
         snapshot_dir = os.path.dirname(self.snapshot_path) or "."
         base_name = os.path.basename(self.snapshot_path)
-        
+
         removed = 0
         backups = []
         try:
@@ -2542,28 +2542,28 @@ class PulseSnapshot:
                     backups.append((os.path.getmtime(fpath), fpath))
         except Exception:
             return removed
-        
+
         backups.sort(reverse=True)
-        
+
         for _, fpath in backups[self._max_backups:]:
             try:
                 os.remove(fpath)
                 removed += 1
             except Exception as e:
                 self._log(LogLevel.DEBUG, f"清理异常已忽略: {type(e).__name__}: {e}")
-        
+
         return removed
     def auto_save(self):
         """★v24.0新增：自动保存入口，供snapshot.auto_save事件调用"""
         self._log(LogLevel.INFO, "收到自动保存事件")
-        return self.save()    
+        return self.save()
     # ========== 统计 ==========
-    
+
     def get_stats(self) -> dict[str, Any]:
         file_size = 0
         if os.path.exists(self.snapshot_path):
             file_size = os.path.getsize(self.snapshot_path)
-        
+
         # 统计备份文件数
         snapshot_dir = os.path.dirname(self.snapshot_path) or "."
         base_name = os.path.basename(self.snapshot_path)
@@ -2574,7 +2574,7 @@ class PulseSnapshot:
                     backup_count += 1
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-            
+
         return {
             "snapshot_path": self.snapshot_path,
             "file_size_bytes": file_size,
@@ -2921,7 +2921,7 @@ class PulseSnapshot:
         # ★P1修复：并发写竞态加锁（RLock 可重入，save() 内部调用时不会死锁）
         with self._lock:
             return self._save_parquet_locked()
-    
+
     def _save_parquet_locked(self) -> bool:
         """save_parquet() 的实际逻辑（已持有 self._lock）。"""
         if self.node_pool is None:
@@ -3128,14 +3128,14 @@ class PulseSnapshot:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== PulseSnapshot P1-3 增量保存+轮转自测 ===\n")
-    
+
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
-    
+
     pool = PulseNodePool()
     snapshot = PulseSnapshot(snapshot_path="data/test_snapshot.json")
     snapshot.set_node_pool(pool)
-    
-    l1 = PulseNode("临时感知数据", keywords=["测试"], 
+
+    l1 = PulseNode("临时感知数据", keywords=["测试"],
                     source_organ="双腿", evol_level=PulseNode.EVOL_L1,
                     importance=PulseNode.IMPORTANCE_C)
     l2 = PulseNode("Python是编程语言", keywords=["Python"],
@@ -3144,23 +3144,23 @@ if __name__ == "__main__":
     l3 = PulseNode("我是曈曈", keywords=["身份"],
                     source_organ="内在世界", evol_level=PulseNode.EVOL_L3,
                     importance=PulseNode.IMPORTANCE_S)
-    
+
     pool.add(l1)
     pool.add(l2)
     pool.add(l3)
-    
+
     print(f"1. 添加节点: 总数={pool.count()} (应为3)")
-    
+
     # 第一次保存（全量）
     ok = snapshot.save()
     print(f"2. 首次保存: {'✅ 成功' if ok else '❌ 失败'}")
     print(f"   追踪节点数: {len(snapshot._last_saved_nodes)}")
-    
+
     # 第二次保存（无变更，应跳过）
     print("\n3. 无变更保存（应跳过）:")
     ok2 = snapshot.save()
     print(f"   {'✅ 跳过（无变更）' if ok2 else '❌ 失败'}")
-    
+
     # 添加新节点后保存（增量）
     l4 = PulseNode("新知识点", keywords=["新"],
                     source_organ="双腿", evol_level=PulseNode.EVOL_L1,
@@ -3170,20 +3170,20 @@ if __name__ == "__main__":
     ok3 = snapshot.save()
     print(f"   {'✅ 增量保存成功' if ok3 else '❌ 失败'}")
     print(f"   追踪节点数: {len(snapshot._last_saved_nodes)}")
-    
+
     # 加载验证
     pool2 = PulseNodePool()
     snapshot2 = PulseSnapshot(snapshot_path="data/test_snapshot.json")
     snapshot2.set_node_pool(pool2)
-    
+
     restored = snapshot2.load()
     pool2.load_batch(restored)
     print(f"\n5. 加载快照: {pool2.count()} 个节点恢复 (应为4)")
-    
+
     # 统计
     stats = snapshot.get_stats()
     print(f"\n6. 统计: 快照{stats['file_size_mb']}MB 备份{stats['backup_count']}份 追踪{stats['tracked_nodes']}节点")
-    
+
     # 清理测试文件
     if os.path.exists("data/test_snapshot.json"):
         os.remove("data/test_snapshot.json")
@@ -3194,7 +3194,7 @@ if __name__ == "__main__":
             os.remove(f)
         except Exception:
             pass
-    
+
     print("\n=== 自测全部通过 ===")
 # _m70_t4_snapshot_hotcold
 

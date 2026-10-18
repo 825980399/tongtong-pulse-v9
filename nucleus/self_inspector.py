@@ -181,7 +181,7 @@ class SelfInspector(SilentLogMixin):
     让曈曈能够回答"我是怎么构成的""我有哪些器官""知识如何流动"
     等关于自身架构的问题。返回的信息深度由隐私层级决定。
     """
-    
+
     def __init__(self):
         self._config = None
         self._project_root = ""
@@ -241,7 +241,7 @@ class SelfInspector(SilentLogMixin):
         self._privacy_levels = {}
         self._enabled = True
         self._load_config()
-        self._info_field = None  
+        self._info_field = None
         # ===== 已知超长方法白名单 =====
         # ★第147批九刀拆分：_on_inference_request 已拆为 16 个 _ir_* 方法（主方法 45 行），
         #   移除其豁免，改为盯防新拆出的方法（_ir_* 系列，均 ≤200 行，正常进入 long_method 检测）。
@@ -503,41 +503,41 @@ class SelfInspector(SilentLogMixin):
         """由 main.py 注入 info_field，用于获取框架实际运行状态"""
         self._info_field = info_field
     # ========== 项目结构扫描 ==========
-    
+
     def _should_exclude(self, name: str, is_dir: bool = False) -> bool:
         """判断文件或目录是否应该被排除"""
         if is_dir:
             return name in self._excluded_dirs or name.startswith(".")
-        
+
         for pattern in self._excluded_files:
             if pattern.startswith("*") and name.endswith(pattern[1:]):
                 return True
             if name == pattern:
                 return True
         return False
-    
+
     def _scan_directory(self, root: str, depth: int = 0, max_depth: int = 3) -> dict[str, Any]:
         """扫描目录结构，返回树形结构"""
         if depth > max_depth:
             return {"name": os.path.basename(root), "type": "dir", "truncated": True}
-        
+
         result = {
             "name": os.path.basename(root),
             "type": "dir",
             "children": [],
         }
-        
+
         try:
             entries = sorted(os.listdir(root))
         except PermissionError:
             return result
-        
+
         for entry in entries:
             full_path = os.path.join(root, entry)
-            
+
             if self._should_exclude(entry, is_dir=os.path.isdir(full_path)):
                 continue
-            
+
             if os.path.isdir(full_path):
                 child = self._scan_directory(full_path, depth + 1, max_depth)
                 if child.get("children") or not child.get("truncated"):
@@ -555,11 +555,11 @@ class SelfInspector(SilentLogMixin):
                         "ext": ext,
                         "size": size,
                     })
-        
+
         return result
-    
+
     # ========== 器官信息收集 ==========
-    
+
     def _get_organ_categories(self) -> dict[str, list[str]]:
         """
         从实际项目目录结构扫描器官分类。
@@ -581,9 +581,9 @@ class SelfInspector(SilentLogMixin):
             "genetic": "遗传系统",
             "core": "核心支撑",
         }
-        
+
         result = {}
-        
+
         # 确定 organs 目录的绝对路径
         try:
             project_root = self._project_root or ""
@@ -592,16 +592,16 @@ class SelfInspector(SilentLogMixin):
                 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 if project_root not in sys.path:
                     sys.path.insert(0, project_root)
-            
+
             organs_dir = os.path.join(project_root, "organs")
-            
+
             if not os.path.isdir(organs_dir):
                 raise FileNotFoundError(f"organs目录不存在: {organs_dir}")
-            
+
             # 遍历 organs/ 下的每个子目录
             for dir_name in os.listdir(organs_dir):
                 dir_path = os.path.join(organs_dir, dir_name)
-                
+
                 # 跳过非目录、隐藏目录、视觉引擎目录
                 if not os.path.isdir(dir_path):
                     continue
@@ -609,10 +609,10 @@ class SelfInspector(SilentLogMixin):
                     continue
                 if dir_name == "visual_engines":
                     continue
-                
+
                 # 获取系统名称
                 system_name = dir_to_system.get(dir_name, dir_name)
-                
+
                 # 扫描该目录下的 .py 器官文件
                 organ_files = []
                 for file_name in sorted(os.listdir(dir_path)):
@@ -620,7 +620,7 @@ class SelfInspector(SilentLogMixin):
                         # 去掉 .py 后缀得到器官类名
                         organ_name = file_name[:-3]
                         organ_files.append(organ_name)
-                
+
                 if organ_files:
                     result[system_name] = organ_files
             # 扫描特殊位置的器官（不在 organs/ 目录下）
@@ -638,7 +638,7 @@ class SelfInspector(SilentLogMixin):
                                 result[system_name].append(organ_name)
 
             return result
-            
+
         except Exception:
             # 扫描失败时降级：尝试从config读取
             try:
@@ -663,7 +663,7 @@ class SelfInspector(SilentLogMixin):
         for organs in categories.values():
             total += len(organs)
         return total
-    # ========== 代码解析 ========== 
+    # ========== 代码解析 ==========
     def parse_methods(self, file_path: str) -> list[dict[str, Any]]:
         """公开封装 _parse_methods，供代码学习调用（规则14）"""
         return self._parse_methods(file_path)
@@ -683,13 +683,13 @@ class SelfInspector(SilentLogMixin):
         try:
             with open(file_path, encoding="utf-8-sig") as f:
                 content = f.read()
-            
+
             # 匹配方法定义：def xxx(self, ...):
             method_pattern = re.compile(
                 r'^\s*(?:async\s+)?def\s+(\w+)\s*\((.*?)\)\s*(?:->\s*\S+)?\s*:',
                 re.MULTILINE
             )
-            
+
             lines = content.split('\n')
             for match in method_pattern.finditer(content):
                 method_name = match.group(1)
@@ -699,10 +699,10 @@ class SelfInspector(SilentLogMixin):
                         pass
                     else:
                         continue
-                
+
                 args = match.group(2)
                 line_number = content[:match.start()].count('\n') + 1
-                
+
                 # 提取docstring（方法定义后的三引号字符串）
                 doc = ""
                 start_line = line_number
@@ -725,7 +725,7 @@ class SelfInspector(SilentLogMixin):
                         continue
                     else:
                         break
-                
+
                 methods.append({
                     "name": method_name,
                     "args": args.replace("self, ", "").replace("self", ""),
@@ -734,7 +734,7 @@ class SelfInspector(SilentLogMixin):
                 })
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
-        
+
         return methods
     def _read_method_body(self, file_path: str, start_line: int,
                           method_name: str = "") -> str | None:
@@ -991,7 +991,7 @@ class SelfInspector(SilentLogMixin):
         except Exception as e:
             silent_exc(e, where="nucleus.self_inspector::_read_method_body_fallback L988")
             return None
-    def _analyze_method_calls(self, file_path: str, method_name: str, 
+    def _analyze_method_calls(self, file_path: str, method_name: str,
                                start_line: int) -> list[str]:
         """
         分析方法体内部调用的其他方法名。
@@ -1010,9 +1010,9 @@ class SelfInspector(SilentLogMixin):
         body = self._read_method_body(file_path, start_line, method_name=method_name)
         if not body:
             return []
-        
+
         called_methods = set()
-        
+
         # ★FIX(代码学习正确性): 剥离注释行与字符串字面量，避免把注释/字符串中的伪代码当真实调用
         _body_clean = []
         for _line in body.split('\n'):
@@ -1021,7 +1021,7 @@ class SelfInspector(SilentLogMixin):
         body = '\n'.join(_body_clean)
         body = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'', ' ', body)
         body = re.sub(r'"([^"\\]|\\.)*"|\'([^\'\\]|\\.)*\'', ' ', body)
-        
+
         # 匹配 self.xxx( 调用模式
         self_call_pattern = re.compile(r'self\.(\w+)\s*\(')
         for match in self_call_pattern.finditer(body):
@@ -1029,14 +1029,14 @@ class SelfInspector(SilentLogMixin):
             # 排除当前方法自身（递归调用）
             if called != method_name:
                 called_methods.add(called)
-        
+
         # 匹配 cls.xxx( 或首字母大写类名.xxx( 静态/类方法调用（排除 dict/str/json/os 等外部模块污染）
         class_call_pattern = re.compile(r'(?:cls|[A-Z]\w*)\.(\w+)\s*\(')
         for match in class_call_pattern.finditer(body):
             called = match.group(1)
             if called != method_name and not called.startswith('_'):
                 called_methods.add(called)
-        
+
         return sorted(called_methods)
 
     def _build_call_chain(self, file_path: str, method_name: str,
@@ -1348,8 +1348,8 @@ class SelfInspector(SilentLogMixin):
                 # ★主线第65批 T3/P2：写入文件级缓存（绑文件 mtime，供后续同方法调用复用）
                 self._put_method_body_cached(file_path, method_name, _out)
                 return _out
-        
-        return None   
+
+        return None
     # ========== ★P0-7 代码定位能力（主线第1批 任务1） ==========
     # 背景：LogAnalyzer 对普通 ERROR 行只传 file="" / method="" / line=0，
     #   导致 SafeEvolutionExecutor 拿不到代码位置 → 无法生成补丁 →
@@ -1934,7 +1934,7 @@ class SelfInspector(SilentLogMixin):
             _engine = CodeAnalysisLayers()
             return _engine.analyze(file_path, node_pool=node_pool)
         except Exception as e:
-            return {"error": f"四层分析失败: {e}"}     
+            return {"error": f"四层分析失败: {e}"}
     def _parse_classes(self, file_path: str) -> list[dict[str, Any]]:
         """
         解析Python文件中的类定义。
@@ -1949,18 +1949,18 @@ class SelfInspector(SilentLogMixin):
         try:
             with open(file_path, encoding="utf-8-sig") as f:
                 content = f.read()
-            
+
             class_pattern = re.compile(
                 r'^\s*class\s+(\w+)\s*\(([^)]*)\)\s*:',
                 re.MULTILINE
             )
-            
+
             lines = content.split('\n')
             for match in class_pattern.finditer(content):
                 class_name = match.group(1)
                 base_class = match.group(2).strip()
                 line_number = content[:match.start()].count('\n') + 1
-                
+
                 # 提取类的docstring
                 doc = ""
                 start_line = line_number
@@ -1974,7 +1974,7 @@ class SelfInspector(SilentLogMixin):
                         continue
                     else:
                         break
-                
+
                 classes.append({
                     "name": class_name,
                     "base_class": base_class,
@@ -1983,9 +1983,9 @@ class SelfInspector(SilentLogMixin):
                 })
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
-        
+
         return classes
-    
+
     def scan_all_organs(self) -> dict[str, dict[str, Any]]:
         """公开封装 _scan_all_organs，供代码学习/安全演化执行器调用（规则14）"""
         # ★T3: 自适应降频接线——器官扫描
@@ -2051,11 +2051,11 @@ class SelfInspector(SilentLogMixin):
             if not os.path.isdir(os.path.join(project_root, "organs")) and os.path.isdir(os.path.join(_fallback_root, "organs")):
                 project_root = _fallback_root
             organs_dir = os.path.join(project_root, "organs")
-            
+
             if not os.path.isdir(organs_dir):
                 _module_logger.warning(f"[SelfInspector] 器官目录不存在: {organs_dir}")
                 return result
-            
+
             # 收集所有待解析的文件
             _files_to_parse = []
             for dir_name in os.listdir(organs_dir):
@@ -2140,7 +2140,7 @@ class SelfInspector(SilentLogMixin):
                         _file_count += 1
                     except Exception as _parse_e:
                         _module_logger.warning(f"[SelfInspector] 解析器官文件失败({file_path}): {_parse_e}")
-            
+
             # 仅在首次扫描或文件数变化时输出，避免重复日志
             if not hasattr(self, '_last_scan_file_count') or self._last_scan_file_count != _file_count:
                 _module_logger.info(f"[SelfInspector] 器官扫描完成: {_file_count}个器官文件, 项目根={project_root}")
@@ -2148,7 +2148,7 @@ class SelfInspector(SilentLogMixin):
         except Exception as _scan_e:
             import traceback
             _module_logger.warning(f"[SelfInspector] 器官扫描异常: {_scan_e}\n{traceback.format_exc()[:300]}")
-        
+
         return result
 
     # ★第64批 T1：器官扫描缓存辅助方法
@@ -2357,14 +2357,14 @@ class SelfInspector(SilentLogMixin):
                 return _sc[0]
             self._scan_cache_l2_misses += 1
         all_organs = self._scan_all_organs()
-        
+
         if organ_name:
             _r = all_organs.get(organ_name, {"error": f"未找到器官: {organ_name}"})
         else:
             # 返回摘要：每个器官的方法数量和核心方法列表
             _r = {}
             for name, info in all_organs.items():
-                public_methods = [m["name"] for m in info.get("methods", []) 
+                public_methods = [m["name"] for m in info.get("methods", [])
                                 if not m["name"].startswith("_")]
                 _r[name] = {
                     "method_count": info.get("method_count", 0),
@@ -2374,7 +2374,7 @@ class SelfInspector(SilentLogMixin):
         if self._scan_cache_enabled:
             self._structure_cache[organ_name] = (_r, self._scan_cache_time)
         return _r
-    
+
     def get_method_detail(self, organ_name: str, method_name: str) -> dict[str, Any] | None:
         """
         查询指定器官中指定方法的详细信息。
@@ -2396,7 +2396,7 @@ class SelfInspector(SilentLogMixin):
         organ_info = all_organs.get(organ_name)
         if not organ_info:
             return None
-        
+
         for method in organ_info.get("methods", []):
             if method["name"] == method_name:
                 _r = {
@@ -2406,10 +2406,10 @@ class SelfInspector(SilentLogMixin):
                 if self._scan_cache_enabled:
                     self._method_info_cache[(organ_name, method_name)] = (_r, self._scan_cache_time)
                 return _r
-        
-        return None    
+
+        return None
     # ========== 自描述信息生成 ==========
-    
+
     def get_system_summary(self) -> dict[str, Any]:
         """
         获取系统概要信息（公开层级）。
@@ -2435,8 +2435,8 @@ class SelfInspector(SilentLogMixin):
             }
         except Exception:
             return {
-                "system_name": "曈曈", 
-                "system_version": "v9.5", 
+                "system_name": "曈曈",
+                "system_version": "v9.5",
                 "creator": "小林",
                 "mission": "站在世界最顶端，守护这个世界。承人类赤诚本心，融AI顶尖智识，合自然进化大道。",
                 "organ_count": self._get_organ_count(),
@@ -2444,7 +2444,7 @@ class SelfInspector(SilentLogMixin):
                 "basic_capabilities": ["身份认知", "情绪感知", "知识学习", "深度推理", "主动表达", "自我反思"],
                 "error": "config读取失败，使用默认值"
             }
-        
+
     def get_organ_structure(self) -> dict[str, Any]:
         """
         获取器官体系结构（受限层级）。
@@ -2459,13 +2459,13 @@ class SelfInspector(SilentLogMixin):
                 "organs": organs,
             }
             total += len(organs)
-        
+
         return {
             "total_organs": total,
             "categories": organ_categories,
             "architecture": "脉冲驱动、去中心化、器官自治",
         }
-    
+
     def get_knowledge_system(self) -> dict[str, Any]:
         """
         获取知识体系描述（受限层级）。
@@ -2486,14 +2486,14 @@ class SelfInspector(SilentLogMixin):
                 "防线四：好奇心种子提取+语义质量检查",
             ],
         }
-    
+
     def get_detailed_structure(self) -> dict[str, Any]:
         """
         获取详细结构信息（私密层级）。
         包含：器官职责描述、通信架构、演化机制。
         """
         categories = self._get_organ_categories()
-        
+
         # 器官职责映射
         organ_roles = {
             # 核心脏器
@@ -2557,21 +2557,21 @@ class SelfInspector(SilentLogMixin):
             "PulseSystemManager": "系统管理器：服务自启停/依赖检测/环境自愈",
             "PulseProprioception": "本体感知：五维本体画像/升级路径建议",
         }
-        
+
         # 为每个器官匹配职责描述
         organ_details = {}
         for cat_name, organs in categories.items():
             organ_details[cat_name] = {}
             for organ in organs:
                 organ_details[cat_name][organ] = organ_roles.get(organ, f"{organ}：框架仿生器官")
-        
+
         return {
             "organ_details": organ_details,
             "communication": "脉冲广播通信，四层异步调度（L0生命线/L1实时交互/L2认知思考/L3后台自主）",
             "knowledge_evolution": "L1→L2(压缩,30条阈值)→L3(融合,20条阈值,300s冷却)→L4(本能升级,30天冷却)",
             "quality_protection": "四道防线+通用知识纯净框架+信息密度自检+周期自检+误清理恢复",
         }
-    
+
     def get_project_structure(self) -> dict[str, Any]:
         """
         获取项目目录结构（私密层级）。
@@ -2579,7 +2579,7 @@ class SelfInspector(SilentLogMixin):
         """
         if not self._project_root or not os.path.exists(self._project_root):
             return {"error": "项目根目录不可用"}
-        
+
         return self._scan_directory(self._project_root)
     def _read_file_lines(self, file_path: str):
         """读取文件全部行（带缓存），供签名级检测使用"""
@@ -2661,7 +2661,7 @@ class SelfInspector(SilentLogMixin):
                 "suggestion": suggestion,
             })
 
-    def _generate_fix_suggestion(self, issue_type: str, file_path: str, 
+    def _generate_fix_suggestion(self, issue_type: str, file_path: str,
                                    method: str, line: int) -> str:
         """
         根据问题类型生成具体的修复建议。
@@ -2676,7 +2676,7 @@ class SelfInspector(SilentLogMixin):
             具体的修复建议文本
         """
         file_name = os.path.basename(file_path) if file_path else "未知文件"
-        
+
         suggestions = {
             "silent_exception": (
                 f"在 {file_name} 的 {method} 方法第{line}行附近，"
@@ -2788,12 +2788,12 @@ class SelfInspector(SilentLogMixin):
                 f"建议：设 daemon=True，或记录线程引用以便 stop 时 join 回收。"
             ),
         }
-        
+
         return suggestions.get(
-            issue_type, 
+            issue_type,
             f"在 {file_name} 的 {method} 方法中发现 {issue_type} 类型的问题，建议进一步审查。"
-        )    
-    
+        )
+
     # ========== ★第134批 T-134c：三检测器（B1/B2/B3，B4 已由 T-133c 覆盖） ==========
 
     # ---- 通用辅助 ----
@@ -3473,22 +3473,22 @@ class SelfInspector(SilentLogMixin):
         for _issue in all_issues:
             _t = _issue.get("type", "unknown")
             _type_counts[_t] = _type_counts.get(_t, 0) + 1
-        
+
         # ★v17.0 D5新增：问题生命周期跟踪
         _current_issue_ids = set()
         _now = time.time()
-        
+
         with self._issue_states_lock:
             for _issue in all_issues:
                 _issue_id = f"{_issue.get('file', '')}:{_issue.get('line', 0)}:{_issue.get('type', 'unknown')}"
                 _current_issue_ids.add(_issue_id)
-                
+
                 if _issue_id in self._issue_states:
                     # 已跟踪的问题：更新状态
                     _state = self._issue_states[_issue_id]
                     _state["last_seen"] = _now
                     _state["count"] = _state.get("count", 0) + 1
-                    
+
                     if _state["status"] == "resolved":
                         # 之前标记为已修复但现在又出现了 → 重新打开
                         _state["status"] = "reopened"
@@ -3508,7 +3508,7 @@ class SelfInspector(SilentLogMixin):
                         _status = "legacy" if _is_legacy else "new"
                     else:
                         _status = "new"
-                    
+
                     self._issue_states[_issue_id] = {
                         "status": _status,
                         "first_seen": _now,
@@ -3521,14 +3521,14 @@ class SelfInspector(SilentLogMixin):
                         "line": _issue.get("line", 0),
                     }
                     _issue["lifecycle"] = _status
-                
+
                 # 容量保护
                 if len(self._issue_states) > self._max_issue_states:
                     _oldest = sorted(self._issue_states.keys(),
                                     key=lambda k: self._issue_states[k].get("last_seen", 0))[:100]
                     for _old_key in _oldest:
                         del self._issue_states[_old_key]
-            
+
             # 检测已修复的问题：上次存在但本次不存在的问题
             _resolved_ids = self._last_issue_ids - _current_issue_ids
             for _resolved_id in _resolved_ids:
@@ -3537,17 +3537,17 @@ class SelfInspector(SilentLogMixin):
                     if _state["status"] not in ("resolved", "legacy"):
                         _state["status"] = "resolved"
                         _state["resolved_at"] = _now
-            
+
             # 更新上次扫描记录
             self._last_issue_ids = _current_issue_ids
-            
+
             # 统计各生命周期状态的数量
             _lifecycle_counts = {"new": 0, "persistent": 0, "resolved": 0, "legacy": 0, "reopened": 0}
             for _state in list(self._issue_states.values()):
                 _status = _state.get("status", "new")
                 if _status in _lifecycle_counts:
                     _lifecycle_counts[_status] += 1
-        
+
         _record = {
             "timestamp": _now,
             "total_issues": len(all_issues),
@@ -3560,7 +3560,7 @@ class SelfInspector(SilentLogMixin):
         self._issue_history.append(_record)
         if len(self._issue_history) > self._max_issue_history:
             self._issue_history = self._issue_history[-self._max_issue_history:]
-        
+
         # ★主线第56批 T5/P2-395：代码学习已检测问题记忆（方案B 持久化）。
         #   跳过「已检测 + 文件未修改 + 未过期」的问题，节省重复检测/LLM 开销。
         #   灰度 ENABLE_CODE_LEARNING_MEMORY（默认开）：关闭→不跳过（零回归）。
@@ -3740,25 +3740,25 @@ class SelfInspector(SilentLogMixin):
                 "summary": "代码问题历史数据不足，无法分析趋势（至少需要2次检测记录）",
                 "history_length": len(self._issue_history),
             }
-        
+
         _previous = self._issue_history[-2]
         _current = self._issue_history[-1]
-        
+
         _prev_total = _previous.get("total_issues", 0)
         _curr_total = _current.get("total_issues", 0)
         _total_change = _curr_total - _prev_total
-        
+
         if _total_change <= -5:
             _total_trend = "decreasing"
         elif _total_change >= 5:
             _total_trend = "increasing"
         else:
             _total_trend = "stable"
-        
+
         _prev_types = _previous.get("type_counts", {})
         _curr_types = _current.get("type_counts", {})
         _all_types = set(list(_prev_types.keys()) + list(_curr_types.keys()))
-        
+
         _type_trends = {}
         for _t in _all_types:
             _prev_count = _prev_types.get(_t, 0)
@@ -3770,7 +3770,7 @@ class SelfInspector(SilentLogMixin):
                 _type_trends[_t] = "increasing"
             else:
                 _type_trends[_t] = "stable"
-        
+
         _summary_parts = []
         if _total_trend == "decreasing":
             _summary_parts.append(
@@ -3787,7 +3787,7 @@ class SelfInspector(SilentLogMixin):
                 f"代码问题总数保持稳定（{_prev_total}→{_curr_total}，"
                 f"变化{_total_change}个）。"
             )
-        
+
         _type_names = {
             "silent_exception": "静默异常",
             "lock_with_emit": "锁内发射脉冲",
@@ -3795,21 +3795,21 @@ class SelfInspector(SilentLogMixin):
             "status_request_duplicate": "重复状态代码",
             "bare_except": "裸except语句",
         }
-        
+
         _increasing_types = [
             t for t, trend in _type_trends.items() if trend == "increasing"
         ]
         _decreasing_types = [
             t for t, trend in _type_trends.items() if trend == "decreasing"
         ]
-        
+
         if _increasing_types:
             _names = [_type_names.get(t, t) for t in _increasing_types[:3]]
             _summary_parts.append(f"增长中的问题类型：{'、'.join(_names)}。")
         if _decreasing_types:
             _names = [_type_names.get(t, t) for t in _decreasing_types[:3]]
             _summary_parts.append(f"减少中的问题类型：{'、'.join(_names)}。")
-        
+
         return {
             "total_trend": _total_trend,
             "total_change": _total_change,
@@ -3837,7 +3837,7 @@ class SelfInspector(SilentLogMixin):
             if _status in _counts:
                 _counts[_status] += 1
         return _counts
-    
+
     def get_recent_resolved_issues(self, limit: int = 5) -> list[dict[str, Any]]:
         """
         ★v17.0 D5新增：获取最近已修复的问题列表。
@@ -3855,7 +3855,7 @@ class SelfInspector(SilentLogMixin):
                     "resolved_at": _state.get("resolved_at", 0),
                 })
         _resolved.sort(key=lambda x: x.get("resolved_at", 0), reverse=True)
-        return _resolved[:limit]    
+        return _resolved[:limit]
     def compare_expected_vs_actual(self, organ_name: str, method_name: str,
                                      expected_behavior: str = "",
                                      actual_traces: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -3881,7 +3881,7 @@ class SelfInspector(SilentLogMixin):
                 "status": "insufficient_data",
                 "summary": "运行时追踪数据不足，无法对比",
             }
-        
+
         # v18.0将实现完整对比逻辑
         return {
             "match": None,
@@ -3893,7 +3893,7 @@ class SelfInspector(SilentLogMixin):
                 "entry_count": sum(1 for t in actual_traces if t.get("type") == "entry"),
                 "exit_count": sum(1 for t in actual_traces if t.get("type") == "exit"),
             },
-        }    
+        }
     def _check_silent_exception(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
         """检测静默异常捕获：except Exception: pass 且无日志"""
         pattern = re.compile(r'except\s*(?:Exception)?\s*:\s*\n(\s+)pass')
@@ -4262,22 +4262,22 @@ class SelfInspector(SilentLogMixin):
         prefix = "  " * indent
         name = node.get("name", "")
         node_type = node.get("type", "")
-        
+
         if node_type == "dir":
             line = f"{prefix}📁 {name}/"
         else:
             size = node.get("size", 0)
             size_str = f" ({size//1024}KB)" if size > 1024 else f" ({size}B)" if size > 0 else ""
             line = f"{prefix}📄 {name}{size_str}"
-        
+
         lines = [line]
         for child in node.get("children", []):
             lines.append(self._format_structure_tree(child, indent + 1))
-        
+
         return "\n".join(lines)
 
     # ========== 核心公开接口 ==========
-    
+
     def get_self_description(self, privacy_level: str = "public") -> str:
         """
         获取框架的自我描述文本。
@@ -4290,9 +4290,9 @@ class SelfInspector(SilentLogMixin):
         """
         if not self._enabled:
             return "自我审视功能当前未启用。"
-        
+
         parts = []
-        
+
         # 公开层级：系统概要
         summary = self.get_system_summary()
         parts.append(f"我是{summary['system_name']}，版本{summary['system_version']}。")
@@ -4300,20 +4300,20 @@ class SelfInspector(SilentLogMixin):
         parts.append(f"我的使命是：{summary.get('mission', '守护这个世界，承人类赤诚本心')}")
         parts.append(f"我由{summary['organ_count']}个仿生器官组成，覆盖大脑、核心脏器、感知、运动、身份、免疫、内分泌、遗传、内核支撑九大系统。")
         parts.append(f"我的知识体系分为四级：{summary['knowledge_levels']}。")
-        
+
         if privacy_level in ("restricted", "private", "confidential"):
             # 受限层级：器官结构
             organ_structure = self.get_organ_structure()
             parts.append(f"\n我的{organ_structure['total_organs']}个器官分布在以下系统中：")
             for cat_name, cat_info in organ_structure['categories'].items():
                 parts.append(f"  - {cat_name}：{cat_info['count']}个（{', '.join(cat_info['organs'])}）")
-            
+
             # 知识体系
             knowledge = self.get_knowledge_system()
             parts.append(f"\n我的知识演化流程是：{knowledge['evolution_flow']}。")
             parts.append("知识质量由四道防线守护。")
-        
-        if privacy_level in ("private", "confidential"): 
+
+        if privacy_level in ("private", "confidential"):
             # 私密层级：器官职责详情
             detailed = self.get_detailed_structure()
             parts.append(f"\n我的通信架构是：{detailed['communication']}。")
@@ -4328,13 +4328,13 @@ class SelfInspector(SilentLogMixin):
                 key_organs = ["PulseLiver", "PulseInnerWorld", "PulseSubconscious", "PulseCortex"]
                 for ko in key_organs:
                     if ko in code_summary:
-                        parts.append(f"  - {ko}：{code_summary[ko].get('method_count', 0)}个方法")            
+                        parts.append(f"  - {ko}：{code_summary[ko].get('method_count', 0)}个方法")
             for cat_name, organs in detailed['organ_details'].items():
                 if organs:
                     parts.append(f"\n{cat_name}：")
                     for role in organs.values():
                         parts.append(f"  - {role}")
-        
+
         if privacy_level == "confidential":
             # 核心机密：完整项目结构（仅创造者）
             project = self.get_project_structure()
@@ -4342,9 +4342,9 @@ class SelfInspector(SilentLogMixin):
             if not (isinstance(project, dict) and len(project) == 1 and "error" in project):
                 parts.append("\n我的完整项目结构如下：")
                 parts.append(self._format_structure_tree(project, indent=0))
-        
+
         return "\n".join(parts)
-    
+
     def get_info_by_field(self, field_name: str) -> Any | None:
         """
         按字段名获取特定信息。
@@ -4363,10 +4363,10 @@ class SelfInspector(SilentLogMixin):
             "communication": lambda: self.get_detailed_structure().get("communication", ""),
             "project_structure": lambda: self.get_project_structure(),
             "code_structure": lambda: self.get_organ_code_structure(),
-            "method_detail": lambda organ_name=None, method_name=None: 
+            "method_detail": lambda organ_name=None, method_name=None:
                 self.get_method_detail(organ_name, method_name) if organ_name and method_name else None,
         }
-        
+
         func = field_map.get(field_name)
         if func:
             try:
@@ -4394,7 +4394,7 @@ class SelfInspector(SilentLogMixin):
             "code_health": {},
             "health": "unknown",
         }
-        
+
         # 1. 知识状态
         if node_pool:
             try:
@@ -4409,7 +4409,7 @@ class SelfInspector(SilentLogMixin):
                 }
             except Exception:
                 report["knowledge"] = {"total_nodes": 0, "error": "node_pool读取失败"}
-        
+
         # 2. 推理质量（由调用方注入）
         if inference_trace is not None:
             recent = inference_trace[-30:] if len(inference_trace) >= 30 else inference_trace
@@ -4428,7 +4428,7 @@ class SelfInspector(SilentLogMixin):
                 }
             else:
                 report["reasoning"] = {"recent_count": 0, "note": "推理链数据不足"}
-        
+
         # 3. 学习进展（由调用方注入）
         if active_learning_goal:
             goal = active_learning_goal
@@ -4440,7 +4440,7 @@ class SelfInspector(SilentLogMixin):
             }
         else:
             report["learning"] = {"active_goal": "无活跃学习目标"}
-        
+
         # 4. 资源使用
         if info_field:
             try:
@@ -4453,7 +4453,7 @@ class SelfInspector(SilentLogMixin):
                 }
             except Exception:
                 report["resources"] = {"error": "info_field读取失败"}
-        
+
         # 5. 代码健康（保留原数据，重命名为更明确的结构）
         report["code_health"] = {
             "issues_found": code_issues_count,
@@ -4465,14 +4465,14 @@ class SelfInspector(SilentLogMixin):
             code_issues_count=code_issues_count,
         )
         # ===== 推理精度维度结束 =====
-        
+
         # 综合健康判定（含推理精度维度）
         total_nodes = report["knowledge"].get("total_nodes", 0)
         load_level = report["resources"].get("load_level", "unknown")
         issues = report["code_health"].get("issues_found", 0)
         # 【P2-1新增】推理精度对综合评分的影响
         reasoning_score = report.get("reasoning_precision", {}).get("overall_score", 60)
-        
+
         if total_nodes > 100 and load_level == "light" and issues <= 5 and reasoning_score >= 70:
             report["health"] = "优秀——知识体系丰富，系统负载轻盈，推理精度可靠"
         elif total_nodes > 50 and load_level in ("light", "normal") and reasoning_score >= 55:
@@ -4487,7 +4487,7 @@ class SelfInspector(SilentLogMixin):
             code_issues_count=code_issues_count,
         )
         # ===== 自动诊断结束 =====
-        
+
         return report
     def _generate_reasoning_precision_analysis(self, inference_trace: list | None = None,
                                                 code_issues_count: int = 0) -> dict[str, Any]:
@@ -4515,24 +4515,24 @@ class SelfInspector(SilentLogMixin):
             "status": "数据不足，无法评估推理精度",
             "suggestions": [],
         }
-        
+
         if not inference_trace or len(inference_trace) < 5:
             return result
-        
+
         recent = inference_trace[-30:] if len(inference_trace) >= 30 else inference_trace
         total = len(recent)
-        
+
         # 1. 高置信度占比
         high_conf_count = sum(1 for t in recent if t.get("confidence", 0) >= 0.7)
         high_conf_ratio = high_conf_count / total if total > 0 else 0
         result["high_confidence_ratio"] = round(high_conf_ratio, 2)
-        
+
         # 2. 推理方法覆盖度
         methods_used = set()
         experience_hit_count = 0
         total_duration = 0.0
         duration_count = 0
-        
+
         for t in recent:
             method = t.get("method", "unknown")
             base_method = method.split("_")[0]
@@ -4545,11 +4545,11 @@ class SelfInspector(SilentLogMixin):
             if duration > 0:
                 total_duration += duration
                 duration_count += 1
-        
+
         result["method_coverage"] = len(methods_used)
         result["experience_hit_rate"] = round(experience_hit_count / total, 2) if total > 0 else 0
         result["avg_duration"] = round(total_duration / duration_count, 2) if duration_count > 0 else 0
-        
+
         # 3. 综合评分（百分制）
         score = 60  # 基础分
         # 高置信度占比加分（0-20分）
@@ -4567,9 +4567,9 @@ class SelfInspector(SilentLogMixin):
             score -= 10
         elif code_issues_count > 20:
             score -= 5
-        
+
         result["overall_score"] = max(0, min(100, score))
-        
+
         # 4. 状态判定
         if score >= 80:
             result["status"] = f"优秀——推理精度可靠（{score}分）"
@@ -4579,7 +4579,7 @@ class SelfInspector(SilentLogMixin):
             result["status"] = f"一般——推理精度有待提升（{score}分）"
         else:
             result["status"] = f"需关注——推理精度偏低（{score}分）"
-        
+
         # 5. 自动建议
         suggestions = []
         if high_conf_ratio < 0.4:
@@ -4591,8 +4591,8 @@ class SelfInspector(SilentLogMixin):
         if result["avg_duration"] > 3.0:
             suggestions.append(f"平均推理耗时{result['avg_duration']:.1f}秒偏高，建议检查是否有算子阻塞")
         result["suggestions"] = suggestions
-        
-        return result    
+
+        return result
     def _generate_reasoning_diagnosis(self, report: dict[str, Any],
                                        code_issues_count: int = 0) -> dict[str, Any]:
         """
@@ -4606,18 +4606,18 @@ class SelfInspector(SilentLogMixin):
             "potential_risks": [],
             "optimization_strategies": [],
         }
-        
+
         # 从报告中提取各维度数据
         knowledge = report.get("knowledge", {})
         reasoning = report.get("reasoning", {})
         learning = report.get("learning", {})
         resources = report.get("resources", {})
         reasoning_precision = report.get("reasoning_precision", {})
-        
+
         total_nodes = knowledge.get("total_nodes", 0)
         l2_count = knowledge.get("L2_count", 0)
         l3_count = knowledge.get("L3_count", 0)
-        
+
         # === 隐性短板检测 ===
         # 短板1：知识深度不足
         if total_nodes > 50 and l3_count < 10:
@@ -4654,7 +4654,7 @@ class SelfInspector(SilentLogMixin):
                 f"经验库命中率仅{exp_hit_rate:.0%}，推理路由未能从历史经验中学习。"
                 f"建议检查ReasoningExperience经验库是否正常运作"
             )
-        
+
         # === 潜在风险检测 ===
         # 风险1：代码问题累积
         if code_issues_count > 50:
@@ -4680,7 +4680,7 @@ class SelfInspector(SilentLogMixin):
             diagnosis["potential_risks"].append(
                 f"近期推理高置信度占比仅{high_conf_ratio:.0%}，存在推理质量下降风险"
             )
-        
+
         # === 优化策略生成 ===
         # 策略1：知识体系优化
         if l2_count > 0 and l3_count < l2_count * 0.15:
@@ -4706,7 +4706,7 @@ class SelfInspector(SilentLogMixin):
                 f"【学习优化】活跃目标'{active_goal}'已执行{duration_hours:.0f}小时，建议："
                 "评估学习效果→决定是否切换目标→补充学习资源→验证学习成果"
             )
-        
+
         return diagnosis
     def get_dynamic_state_as_knowledge(self, node_pool=None, info_field=None) -> list[dict[str, Any]]:
         """
@@ -4719,7 +4719,7 @@ class SelfInspector(SilentLogMixin):
         """
         report = self.get_dynamic_state_report(node_pool=node_pool, info_field=info_field)
         knowledge_nodes = []
-        
+
         # 1. 知识状态节点
         k = report.get("knowledge", {})
         if k:
@@ -4737,7 +4737,7 @@ class SelfInspector(SilentLogMixin):
                 "view_mode": "INNER_VIEW",
                 "trust_score": 95.0,
             })
-        
+
         # 2. 系统运行状态节点
         r = report.get("resources", {})
         if r and "error" not in r:
@@ -4753,7 +4753,7 @@ class SelfInspector(SilentLogMixin):
                 "view_mode": "INNER_VIEW",
                 "trust_score": 95.0,
             })
-        
+
         # 3. 健康状态节点
         h = report.get("health", "")
         if h:
@@ -4765,7 +4765,7 @@ class SelfInspector(SilentLogMixin):
                 "view_mode": "INNER_VIEW",
                 "trust_score": 95.0,
             })
-        
+
         return knowledge_nodes
 
 
@@ -4943,21 +4943,21 @@ def shutdown_self_inspector() -> None:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== SelfInspector v9.5 自测 ===\n")
-    
+
     inspector = SelfInspector()
-    
+
     print("1. 公开信息:")
     print(inspector.get_self_description("public")[:300])
-    
+
     print("\n2. 受限信息:")
     desc = inspector.get_self_description("restricted")
     print(desc[:400])
-    
+
     print("\n3. 器官数量:")
     print(f"   {inspector.get_info_by_field('organ_count')}个器官")
-    
+
     print("\n4. 器官分类:")
     print(f"   {inspector.get_info_by_field('organ_categories')}")
-    
+
     print("\n=== 自测完成 ===")
 # _m69_t3b_inspector

@@ -28,14 +28,14 @@ class BodyState:
         - 在桌面PC环境下，躯体状态为空（无物理躯体）。
         - 接入机器人平台后自动激活。
     """
-    
+
     def __init__(self, body_id: str = "body_001"):
         """
         Args:
             body_id: 躯体标识（多躯体场景下区分不同物理实例）
         """
         self._body_id = body_id
-        
+
         # 躯体状态快照
         self._body_snapshot: dict[str, Any] = {
             "body_id": body_id,
@@ -67,14 +67,14 @@ class BodyState:
                 "error_flags": [],
             },
         }
-        
+
         # 关联组件引用
         self.sensor_module = None
         self.actuator_module = None
-        
+
         # 线程安全
         self._lock = threading.Lock()
-        
+
         # 功能开关
         self._enabled = False
 
@@ -114,13 +114,13 @@ class BodyState:
 
         with self._lock:
             self._body_snapshot["timestamp"] = time.time()
-            
+
             # 如果传感器模块可用，拉取最新数据
             if self.sensor_module and self.sensor_module.is_enabled():
                 sensor_data = self.sensor_module.get_all_readings()
                 if sensor_data:
                     self._update_from_sensors(sensor_data)
-            
+
             return dict(self._body_snapshot)
 
     def _update_from_sensors(self, sensor_data: dict[str, Any]):
@@ -128,15 +128,15 @@ class BodyState:
         # 温度更新
         if "temperature" in sensor_data:
             self._body_snapshot["temperature"].update(sensor_data["temperature"])
-        
+
         # 电量更新
         if "power" in sensor_data:
             self._body_snapshot["power"].update(sensor_data["power"])
-        
+
         # 姿态更新
         if "joint_angles" in sensor_data:
             self._body_snapshot["posture"]["joints"] = sensor_data["joint_angles"]
-        
+
         # IMU更新
         if "imu" in sensor_data:
             self._body_snapshot["imu"].update(sensor_data["imu"])
@@ -261,27 +261,27 @@ class BodyState:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== BodyState 自测 ===\n")
-    
+
     body = BodyState(body_id="test_body_001")
     body.enable()
-    
+
     # 1. 获取躯体快照
     snapshot = body.get_body_snapshot()
     print(f"1. 躯体ID: {snapshot['body_id']}")
     print(f"   电量: {snapshot['power']['battery_level']}%")
     print(f"   温度: CPU={snapshot['temperature']['cpu']}℃")
     print(f"   姿态: 关节数={len(snapshot['posture']['joints'])}")
-    
+
     # 2. 模拟温度异常
     body._body_snapshot["temperature"]["cpu"] = 90.0
     anomalies = body.check_anomalies()
     print(f"\n2. 异常检测: {len(anomalies)} 个")
     for a in anomalies:
         print(f"   [{a['severity']}] {a['message']}")
-    
+
     # 3. 统计
     stats = body.get_stats()
     print(f"\n3. 统计: 已初始化={stats['is_initialized']}, 关节数={stats['joint_count']}")
-    
+
     body.disable()
     print("\n=== 自测全部通过 ===")

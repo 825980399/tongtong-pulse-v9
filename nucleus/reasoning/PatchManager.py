@@ -1683,11 +1683,11 @@ class PatchManager:
             tmp_target = os.path.join(tmp_dir, target_file_rel)
             os.makedirs(os.path.dirname(tmp_target), exist_ok=True)
             shutil.copy2(patch["file"], tmp_target)
-            
+
             # 2. 应用补丁到副本
             with open(patch["file"], encoding='utf-8') as orig:
                 full_content = orig.read()
-            
+
             if patch["original_code"] not in full_content:
                 result["errors"].append("目标代码片段在源文件中未找到，无法应用补丁")
                 result["stage"] = "code_not_found"
@@ -1738,9 +1738,9 @@ class PatchManager:
 
             with open(tmp_target, 'w', encoding='utf-8') as f:
                 f.write(modified_full)
-            
+
             result["stage"] = "patch_applied_to_copy"
-            
+
             # 3. 语法校验
             try:
                 with open(tmp_target, encoding='utf-8') as f:
@@ -1758,7 +1758,7 @@ class PatchManager:
                 result["stage"] = "syntax_check_failed"
                 result["failed_check"] = "syntax"
                 return result
-            
+
             # 4. 编译验证（py_compile，不执行模块级代码，避免框架文件模块级副作用导致误判）
             # ★2026-09-03修复：原exec(open(file).read())会执行整个文件，
             #   框架文件有大量模块级导入/初始化代码，在临时目录中必然失败，
@@ -1923,7 +1923,7 @@ class PatchManager:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        
+
         return result
 
     def _verify_import_in_subprocess(self, patch: dict[str, Any],
@@ -2878,7 +2878,7 @@ class PatchManager:
             # ★FIX(问题12): 无待应用补丁时重置重启计数器，避免无意义累计导致永久锁死
             self.reset_restart_counter()
             return {"applied": 0, "failed": 0, "details": []}
-        
+
         # ★主线第94批 T-94a（P0）：待审批队列老化策略——在审批过滤**之前**执行，
         #   使老化放行的补丁（status→approved）能被下面的 only_approved 过滤捞到。
         #   开关默认关闭 ⇒ `_m94_apply_pending_aging` 立即返回、不触碰任何补丁。
@@ -2902,7 +2902,7 @@ class PatchManager:
                 self.reset_restart_counter()
                 return {"applied": 0, "failed": 0, "details": [], "skipped_unapproved": _skipped_count}
         # ===== 审批过滤结束 =====
-        
+
         # ★v16.0新增：防循环重启检测（仅在有可应用补丁时自增，A4修复）
         # ★T-113e①（2026-09-23）：棘轮改「冷却可重试 + 遥测」。
         #   原逻辑：计数 > 上限即永久锁死（须人工 reset_restart_counter 才解开）。
@@ -2943,7 +2943,7 @@ class PatchManager:
                     f"请手动检查补丁）")
                 self._m113e_emit_restart_telemetry(_cooldown_h, _remain)
                 return {"applied": 0, "failed": 0, "details": [], "loop_protection": True}
-        
+
         results = {"applied": 0, "failed": 0, "details": []}
         history = self._load_patch_list(self._history_file)
 
@@ -3043,7 +3043,7 @@ class PatchManager:
                     })
                     history.append(patch)
                     continue
-                # ★v24.0新增结束                
+                # ★v24.0新增结束
                 # 1. 备份原始文件（集中式备份）
                 _backup_dir = self._backup_manager.create_backup(
                     files=[patch["file"]],
@@ -3057,11 +3057,11 @@ class PatchManager:
                     backup_path = patch["file"] + f".patch_backup_{int(time.time())}"
                     shutil.copy2(patch["file"], backup_path)
                     patch["backup_path"] = backup_path
-                
+
                 # 2. 应用补丁
                 with open(patch["file"], encoding='utf-8') as f:
                     full_content = f.read()
-                
+
                 # ★修复: str.replace 默认替换所有出现位置——original_code 若出现多次
                 # 会被静默全部改写。改为校验唯一出现 + 单次替换。
                 _occurrences = full_content.count(patch["original_code"])
@@ -3167,7 +3167,7 @@ class PatchManager:
                                 os.remove(_tmp_path)  # type: ignore[possibly-unbound]
                             except OSError as e:
                                 silent_exc(e, "nucleus/reasoning/PatchManager.py:3003:apply_all_pending", level="warning")
-                    
+
                     patch["applied"] = True
                     patch["applied_at"] = time.time()
                     patch["rollback_available"] = True
@@ -3333,15 +3333,15 @@ class PatchManager:
                     patch["applied"] = False
                     patch["apply_error"] = "原始代码未找到，可能已被修改"
                     results["failed"] += 1
-                
+
                 history.append(patch)
-                
+
             except Exception as e:
                 print(f"[WARNING] PatchManager.py:1764: {type(e).__name__}: {e}")
                 patch["applied"] = False
                 patch["apply_error"] = str(e)
                 results["failed"] += 1
-        
+
         # ★Kimi 设计参考借鉴（§9.1/§12.3）：失败计数器——按「文件+类型」累计失败，3 次升级
         # 绝不原样重复同一失败动作：同一问题反复失败即标记需升级（换策略/人工介入）。
         # 零冲突：仅在应用循环结束后统一记账，不改变任何应用/验证/回滚逻辑。
@@ -3505,13 +3505,13 @@ class PatchManager:
             _project_root = self._project_root
             if _project_root not in _sys.path:
                 _sys.path.insert(0, _project_root)
-            
+
             from organs.identity.PulsePersonalityKernel import PulsePersonalityKernel
             _kernel = PulsePersonalityKernel("补丁校验")
-            
+
             _proposed_content = patch.get("modified_code", "")
             _proposed_file = patch.get("file", "")
-            
+
             return _kernel.check_modification_baseline(
                 proposed_content=_proposed_content,
                 proposed_file=_proposed_file,
@@ -3600,7 +3600,7 @@ class PatchManager:
         with open(_log_path, "a", encoding="utf-8") as f:
             f.write("\n".join(_lines))
 
-        _module_logger.info(f"修改日志已更新: {_log_path}")        
+        _module_logger.info(f"修改日志已更新: {_log_path}")
     @staticmethod
     def _m80_safe_target_path(target_file: str, project_root: str) -> bool:
         """★T7-4：回滚目标路径必须在项目根内，禁止越界(呼应 SSL 路径沙箱教训)。"""
@@ -4081,7 +4081,7 @@ class PatchManager:
             global _publish_fail_count
             _publish_fail_count += 1
             _module_logger.warning(f"[棘轮遥测] 事件总线发布失败（仅影响遥测，不影响锁死）: {_e}")
-        self._restart_counter = 0    
+        self._restart_counter = 0
     def _save_json(self, path, data):
         """保存 JSON 并**返回是否写入成功**（bool）。
 

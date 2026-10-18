@@ -207,36 +207,36 @@ class FrequencyCodec:
         - v9.5: 共振记忆容量管理，防止无限增长
         - v9.5: 按层级统计共振频次
     """
-    
+
     FREQ_MIN = 0.0
     FREQ_MAX = 100.0
-    
+
     # v9.5: 共振记忆最大容量
     MAX_RESONANCE_ENTRIES = 100000
-    
+
     def __init__(self):
         # 共振记忆: frequency → [{"node_id": ..., "resonance_count": ..., "layer": ...}, ...]
         self.resonance_memory: dict[float, list[dict[str, Any]]] = {}
-        
+
         self._total_encoded = 0
         # v18.0: Cython加速标记（首次加载时输出日志）
-        self._cython_loaded = False        
+        self._cython_loaded = False
         # v18.0: 节点频率缓存（避免重复编码相同节点）
-        self._node_cache: dict[str, tuple] = {}  # node_id → (frequency, checksum)    
+        self._node_cache: dict[str, tuple] = {}  # node_id → (frequency, checksum)
         # ★14.51：纯文本编码 LRU 缓存（解决 qica_knowledge 4.3s 慢推理中
         # frequency_codec.encode(question) 重复计算问题）。相同问题文本直接命中。
         self._text_cache: dict[str, float] = {}
         self._text_cache_max = 2000  # 上限2000条，超出删最旧（Python3.7+ dict有序）
         self._total_decoded = 0
-        
+
         # v9.5: 层级共振统计
         self._layer_resonance_stats: dict[str, int] = {
             "L0": 0, "L1": 0, "L2": 0, "L3": 0
         }
-        
+
         # v9.5: 线程安全锁
         self._lock = threading.Lock()
-        
+
         # v9.5: 共振记忆清理阈值（达到容量上限时触发）
         self._cleanup_threshold = self.MAX_RESONANCE_ENTRIES
         self._last_cleanup_time = time.time()
@@ -245,11 +245,11 @@ class FrequencyCodec:
     def _single_keyword_hash(self, word: str) -> int:
         """内部工具：对单个关键词生成稳定哈希值"""
         return int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16)
-        
+
     # ========== 编码 v3.0 修复版 ==========
-    def encode(self, value: Any, keywords: list[str] | None = None, 
+    def encode(self, value: Any, keywords: list[str] | None = None,
                layer: str | None = None) -> float:
-        
+
         """
         将知识内容编码为频率签名（v9.5: 新增可选的 layer 参数）。
         
@@ -284,18 +284,18 @@ class FrequencyCodec:
                 self._total_encoded += 1
                 return _encode_cy(str(value), keywords)
         self._total_encoded += 1
-        
+
         text = str(value)
         # ★14.51：纯文本编码缓存——相同文本+关键词直接返回缓存频率
         _cache_key = text[:200] + "|" + (",".join(keywords) if keywords else "")
         if _cache_key in self._text_cache:
             return self._text_cache[_cache_key]
-        
+
         # 步骤1: 获取并规范化关键词
         if not keywords:
             raw_words = text.replace("，", " ").replace("。", " ").replace("的", " ").split()
             keywords = [w for w in raw_words if len(w) >= 2][:3]
-        
+
         if not keywords:
             # 无有效关键词，使用文本长度作为兜底特征
             raw_anchor = len(text) * 1.7
@@ -306,7 +306,7 @@ class FrequencyCodec:
                 kw_clean = kw.lower()
                 kw_hash = self._single_keyword_hash(kw_clean)
                 kw_hash_list.append(kw_hash)
-            
+
             hash_avg = sum(kw_hash_list) / len(kw_hash_list)
             # 取模压缩到固定区间，保证数值平滑
             raw_mod = hash_avg % 10000.0
@@ -315,7 +315,7 @@ class FrequencyCodec:
         # 步骤3: 正弦平滑映射到 [FREQ_MIN, FREQ_MAX]，避免硬跳变
         rad = raw_anchor * math.pi * 0.9
         freq = math.sin(rad) * 50 + 50
-        
+
         _result = round(freq, 4)
         # ★14.51：写入文本缓存（LRU，超出删最旧）
         self._text_cache[_cache_key] = _result
@@ -325,7 +325,7 @@ class FrequencyCodec:
                 del self._text_cache[_k]
         return _result
 
-    
+
     def encode_node(self, node, layer: str | None = None) -> float:
         _node_id = getattr(node, 'node_id', '')
         if _node_id and _node_id in self._node_cache:
@@ -336,10 +336,10 @@ class FrequencyCodec:
                 node.frequency_signature = _cached_freq
                 return _cached_freq
             # checksum不匹配，缓存失效，走重新编码
-        
+
         freq = self.encode(node.value, node.keywords, layer=layer)
         node.frequency_signature = freq
-        
+
         if _node_id:
             _current_checksum = getattr(node, 'checksum', '')
             self._node_cache[_node_id] = (freq, _current_checksum)
@@ -351,7 +351,7 @@ class FrequencyCodec:
                 _del_keys = _all_keys[:len(_all_keys) - _keep_size]
                 for _k in _del_keys:
                     del self._node_cache[_k]
-        
+
         return freq
     def invalidate_node_cache(self, node_id: str):
         """
@@ -359,7 +359,7 @@ class FrequencyCodec:
         当节点内容发生变更（升级/压缩/修改）时调用此方法。
         """
         if node_id and node_id in self._node_cache:
-            del self._node_cache[node_id]  
+            del self._node_cache[node_id]
     def encode_batch(self, nodes: list[dict[str, Any]]) -> list[float]:
         """
         ★v23.0新增：批量编码节点。
@@ -389,7 +389,7 @@ class FrequencyCodec:
             if _encode_batch_cy is not None:
                 self._total_encoded += len(nodes)
                 return _encode_batch_cy(nodes)
-        
+
         # Python原生回退
         results = []
         for node in nodes:
@@ -397,13 +397,13 @@ class FrequencyCodec:
             _keywords = node.get("keywords", []) if isinstance(node, dict) else []
             _freq = self.encode(_value, _keywords)
             results.append(_freq)
-        return results            
+        return results
     # ========== 解码 ==========
-    
+
     def decode(self, freq: float, tolerance: float = 0.5,
                layer: str | None = None) -> list[dict[str, Any]]:
         self._total_decoded += 1
-        
+
         results = []
         # ★P0-1修复：加锁保护共振记忆的遍历读取
         with self._lock:
@@ -418,13 +418,13 @@ class FrequencyCodec:
                             "resonance_count": entry.get("resonance_count", 0),
                             "layer": entry.get("layer", "L1"),
                         })
-        
+
         results.sort(key=lambda r: r["resonance_count"], reverse=True)
         return results
-    
+
     # ========== 共振记忆（v9.5 增强） ==========
-    
-    def record_resonance(self, freq: float, node_id: str, 
+
+    def record_resonance(self, freq: float, node_id: str,
                          layer: str = "L2"):
         """
         记录一次共振事件到共振记忆（v9.5: 新增 layer 参数，默认 L2 认知层）。
@@ -432,7 +432,7 @@ class FrequencyCodec:
         with self._lock:
             if freq not in self.resonance_memory:
                 self.resonance_memory[freq] = []
-            
+
             for entry in self.resonance_memory[freq]:
                 if entry.get("node_id") == node_id:
                     entry["resonance_count"] = entry.get("resonance_count", 0) + 1
@@ -441,22 +441,22 @@ class FrequencyCodec:
                         entry["layer"] = layer
                     self._update_layer_stats(layer)
                     return
-            
+
             self.resonance_memory[freq].append({
                 "node_id": node_id,
                 "resonance_count": 1,
                 "layer": layer,
             })
             self._update_layer_stats(layer)
-            
+
             # v9.5: 容量检查与清理
             self._check_capacity()
-    
+
     def _update_layer_stats(self, layer: str):
         """v9.5: 更新层级共振统计"""
         if layer in self._layer_resonance_stats:
             self._layer_resonance_stats[layer] += 1
-    
+
     def _check_capacity(self):
         """v9.5: 如果共振记忆超过上限，清理低频条目"""
         total_entries = sum(len(entries) for entries in self.resonance_memory.values())
@@ -478,7 +478,7 @@ class FrequencyCodec:
             remaining = sum(len(e) for e in self.resonance_memory.values())
             if remaining > self._cleanup_threshold * 0.8:
                 min_resonance += 1
-    
+
     def get_top_frequencies(self, top_k: int = 10,
                             layer: str | None = None) -> list[dict[str, Any]]:
         freq_scores = []
@@ -498,12 +498,12 @@ class FrequencyCodec:
                         "total_resonance": total_resonance,
                         "node_count": node_count,
                     })
-        
+
         freq_scores.sort(key=lambda f: f["total_resonance"], reverse=True)
         return freq_scores[:top_k]
-    
+
     # ========== 频率相似度 ==========
-    
+
     def similarity(self, freq_a: float, freq_b: float) -> float:
         """
         计算两个频率之间的相似度。
@@ -514,9 +514,9 @@ class FrequencyCodec:
         if max_diff == 0:
             return 1.0
         return max(0.0, 1.0 - diff / max_diff)
-    
+
     # ========== 统计（v9.5 增强） ==========
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取编解码统计（v9.5: 包含层级共振统计）"""
         with self._lock:
@@ -535,11 +535,11 @@ class FrequencyCodec:
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== FrequencyCodec v9.5 分层共振版 自测 ===\n")
-    
+
     codec = FrequencyCodec()
-    
+
     # 1. 编码（带 layer 参数）
-    freq1 = codec.encode("脉冲场架构是v8.0的核心设计", 
+    freq1 = codec.encode("脉冲场架构是v8.0的核心设计",
                           keywords=["脉冲场", "架构", "设计"], layer="L2")
     freq2 = codec.encode("v9.0采用纯脉冲架构",
                           keywords=["脉冲", "架构", "v9.0"], layer="L2")
@@ -547,57 +547,57 @@ if __name__ == "__main__":
                           keywords=["Python", "编程", "语言"], layer="L2")
     freq4 = codec.encode("脉冲神经网络使用脉冲信号",
                           keywords=["脉冲", "神经", "网络"], layer="L2")
-    
+
     print("1. 频率编码:")
     print(f"   '脉冲场架构v8.0' → {freq1} Hz")
     print(f"   'v9.0脉冲架构'   → {freq2} Hz")
     print(f"   'Python编程语言'  → {freq3} Hz")
     print(f"   '脉冲神经网络'    → {freq4} Hz")
-    
+
     # 2. 语义相近验证
     sim_12 = codec.similarity(freq1, freq2)
     sim_14 = codec.similarity(freq1, freq4)
     sim_13 = codec.similarity(freq1, freq3)
     sim_24 = codec.similarity(freq2, freq4)
-    
+
     print("\n2. 语义相近验证:")
     print(f"   脉冲场v8.0 vs v9.0脉冲架构: {sim_12:.4f}")
     print(f"   脉冲场v8.0 vs 脉冲神经网络:   {sim_14:.4f}")
     print(f"   脉冲场v8.0 vs Python编程:     {sim_13:.4f}")
     print(f"   v9.0脉冲 vs 脉冲神经网络:     {sim_24:.4f}")
-    
+
     assert sim_12 > sim_13, "共享关键词的频率应更接近！"
     assert sim_14 > sim_13, "共享关键词的频率应更接近！"
     print("   ✅ 语义相近性验证通过")
-    
+
     # 3. 编码确定性
     freq1_again = codec.encode("脉冲场架构是v8.0的核心设计",
                                 keywords=["脉冲场", "架构", "设计"])
     assert freq1 == freq1_again, "同一输入应产生相同频率"
     print("\n3. 编码确定性: ✅")
-    
+
     # 4. 共振记忆（带 layer）
     codec.record_resonance(freq1, "node_001", layer="L2")
     codec.record_resonance(freq1, "node_001", layer="L2")
     codec.record_resonance(freq1, "node_002", layer="L1")
     codec.record_resonance(freq3, "node_003", layer="L2")
-    
+
     top = codec.get_top_frequencies(3)
     print(f"\n4. 共振记忆: {len(codec.resonance_memory)} 个频率")
     for t in top:
         print(f"   {t['frequency']} Hz → {t['total_resonance']}次共振")
-    
+
     # 按层过滤
     top_l2 = codec.get_top_frequencies(3, layer="L2")
     print(f"   L2层过滤: {len(top_l2)} 个频率")
-    
+
     # 5. 解码查询
     results = codec.decode(freq1, tolerance=0.5)
     print(f"\n5. 解码查询 (freq={freq1}, tol=0.5): {len(results)} 条")
-    
+
     # 6. 全局统计
     stats = codec.get_stats()
     print(f"\n6. 统计: 编码{stats['total_encoded']}次 解码{stats['total_decoded']}次 "
           f"记忆{stats['resonance_memory_size']}条 层级共振{stats['layer_resonance_stats']}")
-    
+
     print("\n=== 自测全部通过 ===")

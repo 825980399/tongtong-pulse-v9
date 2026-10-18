@@ -34,26 +34,26 @@ class SearchScheduler:
     所有深度搜索请求统一提交到此调度器，
     由调度器根据优先级、并发数、去重规则决定执行策略。
     """
-    
+
     def __init__(self):
         self._lock = threading.Lock()
-        
+
         # 搜索去重缓存：{search_topic: last_search_time}
         self._search_dedup_cache: OrderedDict = OrderedDict()
         self._max_dedup_cache = 100
-        
+
         # 正在执行的任务数
         self._active_count = 0
-        
+
         # 统计
         self._total_submitted = 0
         self._total_executed = 0
         self._total_dedup_skipped = 0
         self._total_downgraded = 0
-        
+
         # 加载配置
         self._load_config()
-    
+
     def _load_config(self):
         """从config加载调度参数"""
         try:
@@ -68,7 +68,7 @@ class SearchScheduler:
             self._dedup_interval = 1800
             self._queue_warning_threshold = 5
             self._queue_downgrade_threshold = 10
-    
+
     def try_schedule(self, search_topic: str, priority: str = "normal",
                      executor_func: Callable | None = None,
                      fallback_func: Callable | None = None,
@@ -90,7 +90,7 @@ class SearchScheduler:
         补工厂 + 装载点 + InnerWorld 检索入口接线（升①）。
         """
         self._total_submitted += 1
-        
+
         # 1. 去重检查
         if self._is_duplicate(search_topic):
             self._total_dedup_skipped += 1
@@ -98,10 +98,10 @@ class SearchScheduler:
                 "status": "dedup_skipped",
                 "reason": f"搜索主题 '{search_topic[:40]}' 在冷却期内，跳过"
             }
-        
+
         # 2. 记录去重时间
         self._mark_searched(search_topic)
-        
+
         # 3. 检查是否需要降级
         if self._should_downgrade(priority):
             self._total_downgraded += 1
@@ -122,7 +122,7 @@ class SearchScheduler:
                 "status": "downgraded",
                 "reason": "队列过长，且无降级函数可用"
             }
-        
+
         # 5. 执行
         if executor_func is None:
             return {
@@ -179,7 +179,7 @@ class SearchScheduler:
             #   否则「占用(锁内) / 归还(锁外)」配不起来，计数仍会漂移。
             with self._lock:
                 self._active_count = max(0, self._active_count - 1)
-    
+
     def _is_duplicate(self, search_topic: str) -> bool:
         """检查搜索主题是否在冷却期内"""
         topic_key = search_topic.strip().lower()[:80]
@@ -189,7 +189,7 @@ class SearchScheduler:
                 if time.time() - last_time < self._dedup_interval:
                     return True
             return False
-    
+
     def _mark_searched(self, search_topic: str):
         """标记搜索主题已执行"""
         topic_key = search_topic.strip().lower()[:80]
@@ -198,7 +198,7 @@ class SearchScheduler:
             # 缓存上限保护
             while len(self._search_dedup_cache) > self._max_dedup_cache:
                 self._search_dedup_cache.popitem(last=False)
-    
+
     def _should_downgrade(self, priority: str) -> bool:
         """判断是否需要降级"""
         # urgent 和 high 优先级永不降级
@@ -206,11 +206,11 @@ class SearchScheduler:
             return False
         # normal 和 low 在队列过长时降级
         return self._active_count >= self._queue_downgrade_threshold
-    
+
     def get_active_count(self) -> int:
         """获取当前活跃任务数"""
         return self._active_count
-    
+
     def get_stats(self) -> dict[str, Any]:
         """获取调度器统计信息"""
         return {
