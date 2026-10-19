@@ -361,9 +361,21 @@ class PulseNarrativeSelf(BasePulseOrgan):
         _reasoning_skill_text = ""
         try:
             if self.info_field:
-                # 从信息场获取代码学习器官的统计
-                _code_pulse = self.info_field.get_current("code_learner.stats")
-                if not _code_pulse:
+                # ★第314批 刀1（P0）：改走**唯一取数口**，与日报同口径同函数。
+                #   原实现 `self.info_field.get_current("code_learner.stats")`：
+                #   该 key 全库 **0 个发射方**，且 `get_current` 是 5s TTL 的
+                #   **脉冲历史查询**、返回脉冲记录而非 stats 本体
+                #   （语义见 `nucleus/field/InfoField.py::get_current` 的 docstring）
+                #   ⇒ 恒为空、永远落到下面的知识库兜底。
+                from nucleus.code_learning_stats import get_code_learning_stats as _m314_stats
+                _m314 = _m314_stats(self.info_field) or {}
+                _m314_u = _m314.get("understood")
+                if isinstance(_m314_u, int):
+                    _code_progress_text = "代码理解进度：已理解 %d/%d 个方法（掌握率 %s%%）" % (
+                        _m314_u, int(_m314.get("total_methods") or 0),
+                        _m314.get("mastery_pct")
+                        if isinstance(_m314.get("mastery_pct"), (int, float)) else "N/A")
+                if not _code_progress_text:
                     # 兜底：直接从知识库统计 /自我/状态/代码学习 节点
                     if self.node_pool:
                         _state_nodes = self.node_pool.query(

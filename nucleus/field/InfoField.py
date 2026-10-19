@@ -2420,6 +2420,32 @@ class InfoField(SilentLogMixin):
         return list(reversed(history))[-limit:]
 
     def get_current(self, key: str) -> Any | None:
+        """查**脉冲历史**里 `event_type == key` 的最近一条记录（★不是"读当前值"）。
+
+        语义（名字骗人，实现为准）
+        --------------------------
+        * 从 `_history` **倒序**找 `event_type == key` 的脉冲；
+        * 每条脉冲自带 `ttl_ns`（**缺省 5 秒** = `5_000_000_000`），据此判过期：
+          `ttl_ns <= 0` 视为永不过期；`now_ns - timestamp_ns > ttl_ns` 视为过期；
+        * 命中即返回**脉冲记录本身**（`{event_type, payload, timestamp_ns, ttl_ns, …}`），
+          **不是**事件对应的"当前值"——要拿业务数据得读 `pulse["payload"]`。
+
+        为什么必须写清楚（★第314批 刀2）
+        ---------------------------------
+        这名字天然诱导人当作"读当前值"，结果造成过一个**哑而不报错**的读数为 0：
+
+          * 掌握率两处读者（`daily_reader.append_mastery_section` /
+            `PulseNarrativeSelf._generate_weekly_report`）都写
+            `get_current("code_learner.stats")`，而该 key **全库 0 个发射方**；
+          * 即便有人 emit，**5 秒后照样读不到**（TTL 生效）；
+          * 万一读到了，返回的也是脉冲记录 ⇒ `pulse.get("understood")` 恒为 None。
+
+        于是 `source=unavailable` 与"读数真的是 0"无法区分（314 批刀1 已改走
+        `nucleus/code_learning_stats.py::get_code_learning_stats()` 直调真实生产者）。
+
+        需要"当前值"语义时请**另建缓存/快照口**（如 `set_global_awareness` /
+        `get_global_awareness` 的范式），不要指望本方法。
+        """
         now_ns = time.time_ns()
         with self._lock:
             for pulse in reversed(self._history):

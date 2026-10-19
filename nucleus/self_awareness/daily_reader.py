@@ -356,63 +356,79 @@ def append_mastery_section(report_path: str, logger: Any = None) -> dict[str, An
     背景（烛微291批）：已理解 6677 个方法，但仓内缺稳定 total_methods 出口，
     「掌握率 = 6677/?」无法计算。本函数补齐分母并落到日报：
 
-      * 分母 total = 全仓方法总数（``get_organ_code_structure()`` 各器官
-        ``method_count`` 求和，AST 静态扫描，稳定口径）；
-      * 分子 understood = 已理解方法数（从信息场 ``code_learner.stats`` 尽力取，
-        取不到则 0 并如实标注 source=unavailable）。
+      * 分母 total 优先取器官自报（``get_stats().total_methods``），取不到再退回
+        全仓 AST 静态扫描（``get_organ_code_structure()`` 各器官 ``method_count`` 求和）；
+      * 分子 understood 只有**真实来源**才写数，取不到即为 None。
 
-    纯只读观测 + 追加日报一行 + 打 INFO，零语义变更。
+    ★第314批 刀1（P0）修正（烛微314批前置分析）：真正的断点是
+    **``code_learner.stats`` 没有生产者** —— 全库 2 个读取方、0 个发射方，
+    且 ``InfoField.get_current()`` 实为 5s TTL 的脉冲历史查询、返回脉冲记录
+    而非 stats 本体 ⇒ 原实现 ``understood`` 恒取不到，``source=unavailable``
+    与"读数真的是 0"长得一模一样。现改走唯一取数口
+    ``nucleus/code_learning_stats.py::get_code_learning_stats()``：
+    ``get_current``（保留兼容）→ 直调 ``PulseCodeLearner.get_stats()`` →
+    两路都没有则**标结构缺口**（不打印 0% 冒充读数）。
+
+    纯只读观测 + 追加日报一节 + 打 INFO，零语义变更。
     """
     _log = logger or _module_logger
-    total = 0
-    understood = 0
-    _src = "unavailable"
-    # 分母：全仓方法总数（稳定，AST 静态扫描每器官 method_count 求和）
+    # 分母兜底：全仓方法总数（AST 静态扫描各器官 method_count 求和，口径稳定）
+    _structure_total = 0
     try:
         from nucleus.self_inspector import get_self_inspector
         _cs = get_self_inspector().get_organ_code_structure() or {}
-        total = sum(int(_v.get("method_count", 0))
-                    for _v in _cs.values() if isinstance(_v, dict))
+        _structure_total = sum(int(_v.get("method_count", 0))
+                               for _v in _cs.values() if isinstance(_v, dict))
     except Exception as e:
         silent_exc(e, "daily_reader.append_mastery_section:total", level="warning")
-    # 分子：已理解方法数（信息场 code_learner.stats，防御性多 key 读取）
+    # ★第314批 刀1：分子+分母改走**唯一取数口**
+    #   get_current（兼容）→ 直调 PulseCodeLearner.get_stats() → 结构缺口。
+    #   原实现只走 `InfoField.get_current("code_learner.stats")`，而该 key 全库
+    #   **0 个发射方**，且 get_current 返回的是脉冲记录（不是 stats 本体）
+    #   ⇒ `understood` 恒取不到、`source=unavailable`，与"读数真是 0"无法区分。
+    #   语义见 `nucleus/field/InfoField.py::get_current` 的 docstring。
+    _st: dict[str, Any] = {}
     try:
-        from nucleus.field.InfoField import get_info_field
-        _if = get_info_field()
-        _st = _if.get_current("code_learner.stats") if _if is not None else None
-        if isinstance(_st, dict):
-            _u = _st.get("understood")
-            if isinstance(_u, (int, float)):
-                understood = int(_u)
-                _src = "info_field.code_learner.stats"
-            if total == 0:
-                _t = _st.get("total_methods")
-                if isinstance(_t, (int, float)):
-                    total = int(_t)
+        from nucleus.code_learning_stats import get_code_learning_stats
+        _st = get_code_learning_stats(fallback_total=_structure_total) or {}
     except Exception as e:
-        silent_exc(e, "daily_reader.append_mastery_section:understood", level="warning")
-    _pct = round(min(100.0, understood / max(1, total) * 100), 1) if total > 0 else 0.0
-    # ★第300批刀2：掌握率三源标注（numerator_source / total_source / 进程内计数重启回跳）。
-    #   真相：PulseCodeLearner.get_stats 的 understood = max(快照恢复值, 知识库实时计数)，
-    #   get_stats **只返回 max 后的值**，日报侧无分项 ⇒ 无法二选一区分
-    #   restored_snapshot / kb_live_count，如实标注为 snapshot_vs_kb_max(进程内)。
-    _numerator_source = ("snapshot_vs_kb_max(进程内)" if _src != "unavailable" else _src)
-    _total_source = ("code_structure.method_count" if total > 0 else "unavailable")
+        silent_exc(e, "daily_reader.append_mastery_section:stats", level="warning")
+    _understood = _st.get("understood")
+    total = _st.get("total_methods") or _structure_total
+    _src = str(_st.get("source") or "unavailable")
+    _gap = _st.get("gap")
+    _pct = _st.get("mastery_pct")
+    # ★第300批刀2 的注解仍成立：PulseCodeLearner.get_stats 的 understood =
+    #   max(快照恢复值, 知识库实时计数)，**只返回 max 后的值** ⇒ 分项不可辨；
+    #   这里如实写 source（哪条路取到的），不硬拆、不编造。
+    _numerator_source = _src if _understood is not None else "unavailable"
+    _total_source = ("code_structure.method_count" if _structure_total > 0
+                     else ("code_learner.get_stats" if total else "unavailable"))
     try:
-        _lines = ["", "【掌握率】",
-                  f"  · 已理解 {understood}/{total} 个方法（掌握率 {_pct}%）",
-                  f"  · numerator_source={_numerator_source} total_source={_total_source}",
-                  "  · 本值为进程内计数，重启回跳（非累计总量）", ""]
+        _lines = ["", "【掌握率】"]
+        if _understood is None:
+            # ★314：生产侧缺失 ⇒ **标结构缺口，不标 0%**
+            #   （0% 会被读成"学了个寂寞"，实际是"根本没接通"）
+            _lines.append("  · 已理解取不到（结构性缺口：%s）" % (_gap or "unknown"))
+        else:
+            _pct_txt = ("%.1f%%" % _pct) if isinstance(_pct, (int, float)) else "N/A"
+            _lines.append("  · 已理解 %d/%d 个方法（掌握率 %s）"
+                          % (_understood, total, _pct_txt))
+        _lines.append("  · numerator_source=%s total_source=%s"
+                      % (_numerator_source, _total_source))
+        _lines.append("  · 本值为进程内计数，重启回跳（非累计总量）")
+        _lines.append("")
         with open(report_path, "a", encoding="utf-8") as _f:
             _f.write("\n".join(_lines))
     except Exception as e:
         silent_exc(e, "daily_reader.append_mastery_section:写日报小节", level="warning")
-    _log.info("[掌握率] understood=%d total=%d mastery=%.1f%% source=%s",
-              understood, total, _pct, _src)
-    return {"understood": understood, "total_methods": total,
+    _log.info("[掌握率] understood=%s total=%s mastery=%s source=%s gap=%s",
+              _understood, total,
+              ("%.1f%%" % _pct) if isinstance(_pct, (int, float)) else "N/A", _src, _gap)
+    return {"understood": _understood, "total_methods": total,
             "mastery_pct": _pct, "source": _src,
             "numerator_source": _numerator_source,
-            "total_source": _total_source,
+            "total_source": _total_source, "gap": _gap,
             "process_local_note": "本值为进程内计数，重启回跳"}
 
 
