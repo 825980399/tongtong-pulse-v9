@@ -1383,6 +1383,45 @@ class CallGraphAnalyzer:
             "cross_cluster_calls": _cross,
         }
 
+    def mastery_assertion_check(self, class_name="PulseInnerWorld",
+                                manual_method_count=None) -> dict:
+        """★316批刀1：掌握度结构断言（只跑断言、不跑检测器）。
+
+        **不进 issues、不进趋势门禁**（守 307—312 的 info/统计口径不污染问题清单）。
+        数据源＝`cluster_view` 的 method_count ＋ 说明书方法数（由调用方传入）。
+
+        - A1 入边断言：类簇内方法在图上有 ≥1 条入边；零入边方法计入 failed（应出现在待复核清单）。
+        - A4 覆盖断言：说明书方法集大小 == 图类簇节点数；不一致即报「半张地图」缺口。
+
+        返回四项计数 {total, passed, failed, unverifiable} ＋ a1/a4 明细。
+        """
+        _cv = self.cluster_view(class_name)
+        _methods = int(_cv.get("method_count", 0) or 0)
+        _zero_in = list(_cv.get("zero_in_degree_methods") or [])
+        _a1_failed = len(_zero_in)
+        _a1_passed = max(0, _methods - _a1_failed)
+        _a4 = {"manual": None, "graph": _methods, "gap": None,
+               "status": "unverifiable"}
+        if isinstance(manual_method_count, int) and not isinstance(manual_method_count, bool) \
+                and manual_method_count >= 0:
+            _gap = abs(int(manual_method_count) - _methods)
+            _a4 = {"manual": int(manual_method_count), "graph": _methods,
+                   "gap": _gap, "status": "passed" if _gap == 0 else "failed"}
+        _failed = _a1_failed + (1 if _a4["status"] == "failed" else 0)
+        _unverifiable = 1 if _a4["status"] == "unverifiable" else 0
+        _passed = max(0, _methods - _failed)
+        return {
+            "class": class_name,
+            "total": _methods,
+            "passed": _passed,
+            "failed": _failed,
+            "unverifiable": _unverifiable,
+            "a1_inbound": {"passed": _a1_passed, "failed": _a1_failed,
+                           "zero_in_degree_sample": _zero_in[:50]},
+            "a4_coverage": _a4,
+            "cross_cluster_calls": _cv.get("cross_cluster_calls", 0),
+        }
+
     def analyze_health(self, call_graph: dict | None = None) -> dict:
         """基于调用图计算"代码结构健康度"（5 维度 + 综合评分）。
 

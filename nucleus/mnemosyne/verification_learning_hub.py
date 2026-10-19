@@ -539,6 +539,14 @@ class VerificationLearningHub:
             applied = self.apply_rules(organ_name, organ_rules)
             applied_total += applied
 
+        # ★316批刀2：跨阈三段留痕（料数/蒸馏/消费方），固定一行、可 grep。
+        self._log(
+            LogLevel.INFO,
+            f"[316刀2][蒸馏跨阈] status=distilled entries={len(self._entries)} "
+            f"distilled={len(distillable)} rules={len(rules)} "
+            f"applied={applied_total} applied_organs={list(organ_rule_groups.keys())}"
+        )
+
         return {
             "status": "distilled",
             "distilled_entries": len(distillable),

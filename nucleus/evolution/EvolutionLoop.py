@@ -235,7 +235,15 @@ class EvolutionLoop(SilentLogMixin):
         #   这些条目的 severity 仍是 info、review_only=True，
         #   由下游按 intake 标记区分「判死产物」与「待复核产物」。
         _intake = self._m311_collect_review_intake()
-        _final = unique[:max_issues] + _intake
+        # ★316批刀3：需求源入队（growth 内省并轨）——缺陷优先、需求补空窗。
+        #   仅当缺陷源本拍未取到料时，才补一条需求源；继承同一硬上限（每拍≤1）。
+        _growth_intake = self._m316_collect_growth_intake(
+            _defect_taken=len(_intake), _existing=unique)
+        _final = unique[:max_issues] + _intake + _growth_intake
+        # ★316批刀3：给所有入池条目补可观测 trigger 字段（defect / growth_need），
+        #   不新开第三字段；需求驱动补丁占比 := count(growth_need)/count(all) 可算。
+        for _i in _final:
+            _i.setdefault("trigger", "defect")
         return {
             "issues": _final,
             "summary": {
@@ -244,6 +252,12 @@ class EvolutionLoop(SilentLogMixin):
                 "from_code_review": code_count,
                 "from_self_inspector": inspector_count,
                 "review_intake": len(_intake),
+                "growth_intake": len(_growth_intake),
+                "trigger_counts": {
+                    "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
+                    "growth_need": sum(1 for _i in _final
+                                       if _i.get("trigger") == "growth_need"),
+                },
             }
         }
 
@@ -270,6 +284,67 @@ class EvolutionLoop(SilentLogMixin):
             _module_logger.debug("[311刀1] 待复核入料失败（不影响发现池）: %s: %s",
                                  type(_e).__name__, _e)
             return []
+
+    def _m316_collect_growth_intake(self, _defect_taken=0, _existing=None) -> list:
+        """★316批刀3：需求源入队（growth 内省并轨 · 最小落地）。
+
+        路由：复用同一硬上限（REVIEW_INTAKE_MAX_PER_BATCH，每拍≤1）；**缺陷优先**——
+        缺陷源本拍已取到料（_defect_taken ≥ 上限）时不补，仅填空窗。
+        冲突：同一 (file, method) 若缺陷源已命中，需求源让位。
+        优先级：一律 requires_confirmation=True，不进 auto_apply。
+        五段留痕之「补丁」段：[316刀3][补丁] ... 可 grep。
+        """
+        try:
+            import config as _cfg316
+            _lim = int(getattr(_cfg316, "REVIEW_INTAKE_MAX_PER_BATCH", 1) or 0)
+        except Exception as _e:
+            _module_logger.debug("[316刀3] 读 REVIEW_INTAKE_MAX_PER_BATCH 失败，按 1: %s", _e)
+            _lim = 1
+        if _lim <= 0 or _defect_taken >= _lim:
+            return []
+        _topic = ""
+        _hyp = ""
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import (
+                get_verification_learning_hub,
+            )
+            _hub = get_verification_learning_hub()
+            for _entry in reversed(list(getattr(_hub, "_entries", []) or [])):
+                if (str(_entry.get("task_type", "")) == "growth_hypothesis"
+                        or str(_entry.get("origin", "")) == "growth"):
+                    _hyp = str(_entry.get("input_summary", ""))[:200]
+                    _lr = _entry.get("local_result") or {}
+                    _topic = str(_lr.get("topic", "") or "")[:80]
+                    break
+        except Exception as _e:
+            _module_logger.debug("[316刀3] 读 hub growth 料失败（不影响发现池）: %s", _e)
+        if not _topic and not _hyp:
+            return []
+        _file, _method = "", ""
+        _conflict = {(str(_i.get("file") or ""), str(_i.get("method") or ""))
+                     for _i in (_existing or [])}
+        if (_file, _method) in _conflict:
+            _module_logger.info(
+                "[316刀3][补丁] 需求源让位（与缺陷源同 file/method）: %s", _topic)
+            return []
+        _rec = {
+            "type": "growth_need",
+            "message": (_hyp or _topic)[:300],
+            "file": _file,
+            "line": 0,
+            "method": _method,
+            "organ": "潜意识",
+            "severity": "info",
+            "source": "subconscious",
+            "intake": "growth_intake",
+            "intake_reason": "growth_introspection",
+            "requires_confirmation": True,
+            "trigger": "growth_need",
+        }
+        _module_logger.info(
+            "[316刀3][补丁] growth_need 入队(requires_confirmation=True, 不自动应用): "
+            "topic=%s", _topic or (_hyp[:80]))
+        return [_rec]
 
     # ========== 阶段 3+4：修改代码 + diff 归档 ==========
 

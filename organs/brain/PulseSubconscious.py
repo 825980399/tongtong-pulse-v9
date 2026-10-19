@@ -1579,6 +1579,8 @@ class PulseSubconscious(BasePulseOrgan):
         _verify = "检索/复算该方向是否产出新的可引用结论"
         _expect = "该方向在下一个认知窗内出现 ≥1 条被下游引用的节点"
         _hypothesis = "假设：{}｜验证法：{}｜预期观测：{}".format(_subject, _verify, _expect)
+        # ★316批刀3：五段留痕之「假设」段（可 grep）。
+        self._log(LogLevel.INFO, f"[316刀3][假设] {_hypothesis[:120]}")
         try:
             from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
             _hub = get_verification_learning_hub()
@@ -1597,6 +1599,9 @@ class PulseSubconscious(BasePulseOrgan):
             self._m304_growth_hub_sent = getattr(self, "_m304_growth_hub_sent", 0) + 1
             self._log(LogLevel.INFO,
                       f"[304刀4] growth 假设入库({self._m304_growth_hub_sent}/{_max}): {_subject}")
+            # ★316批刀3：五段留痕之「hub」段（可 grep）。
+            self._log(LogLevel.INFO,
+                      f"[316刀3][hub] organ=潜意识 task_type=growth_hypothesis topic={_subject}")
             return 1
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseSubconscious::_m304_growth_to_hub")
@@ -1621,6 +1626,8 @@ class PulseSubconscious(BasePulseOrgan):
             if len(self._deep_exploration_queue) > 30:
                 self._deep_exploration_queue = self._deep_exploration_queue[:30]
             self._log(LogLevel.INFO, f"收到成长目标，优先探索: {growth_topic}")
+            # ★316批刀3：五段留痕之「growth.need_detected」段（可 grep）。
+            self._log(LogLevel.INFO, f"[316刀3][growth.need_detected] topic={growth_topic[:120]}")
             # 立即触发双腿优先学习
             # ★P3-1修复：跨器官 on_pulse 直调 → 发射脉冲（规则14）
             if self.legs:

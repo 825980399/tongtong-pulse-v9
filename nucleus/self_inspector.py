@@ -459,6 +459,10 @@ class SelfInspector(SilentLogMixin):
             _hub.register_applier("self_inspector", self.absorb_growth_rules)
             # ★315批刀2-B：声明别名——code_learner 蒸馏出的规则也回流 self_inspector
             _hub.register_applier_alias("self_inspector", "code_learner")
+            # ★316批刀4：hub organ 约定——growth 料写 organ="潜意识"，别名归位到已注册的
+            #   cortex（QICA 吸收方），避免「需求料进了 hub 但永远无人吸收」的空接线。
+            #   复用 315 刀2 别名机制，**禁止同名覆盖式注册**。
+            _hub.register_applier_alias("cortex", "潜意识")
             self._m303_hub = _hub
             self._log("INFO", "[303刀5] self_inspector 已注册 hub applier（审查结论→规则回灌接通）")
             return True
@@ -5520,6 +5524,7 @@ def build_review_intake(limit: int = 1, items: list | None = None) -> list[dict]
             "source": "self_inspector", "intake": "review_intake",
             "requires_confirmation": True,
             "intake_reason": "coverage_mid_band_review",
+            "trigger": "defect",
         })
         _module_logger.info(
             "[311刀1] 受控入料 1 条: %s::%s（拒收: 生命周期=%d 核心文件=%d 形态不符=%d）",

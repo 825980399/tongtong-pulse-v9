@@ -662,6 +662,15 @@ class SemanticCacheL2:
                        level="debug")
             return 3600.0
 
+    def size(self) -> int:
+        """★316批刀2：内存层条目数（只读；区分「store 空」与「真不一致」）。"""
+        try:
+            with self._lock:
+                return len(self._entries)
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/semantic_cache.py:SemanticCacheL2.size", level="debug")
+            return 0
+
     def capacity(self) -> int:
         try:
             return max(1, int(_l2_cfg("SEMANTIC_CACHE_L2_CAPACITY", 2000) or 1))
@@ -998,16 +1007,25 @@ def lookup_l2_shadow(prompt: str, origin: str = "") -> dict | None:
         _l2r = lookup_l2(prompt, origin=origin)
         _l2_would_hit = bool(_l2r and _l2r.get("response"))
         _consistent = (_l1_hit is True) and (_l2_would_hit is True)
+        # ★316批刀2：加记 l2_store_size（内存层条目数）——区分「store 空」与「真不一致」。
+        #   只读计数，不改路由/开关/不返回内容（守 L1 红线）。
+        _l2_store_size = 0
+        try:
+            _l2 = get_semantic_cache_l2()
+            _l2_store_size = _l2.size() if _l2 is not None else 0
+        except Exception as e:
+            silent_exc(e, "nucleus/llm/semantic_cache.py:lookup_l2_shadow.size", level="debug")
         _L.info(
             "[semantic_cache_l2_shadow] l1_hit=true l2_would_hit=%s "
-            "l1_sim=%s l2_sim=%s consistent=%s",
+            "l1_sim=%s l2_sim=%s consistent=%s l2_store_size=%s",
             _l2_would_hit, _l1_sim,
-            (_l2r or {}).get("similarity"), _consistent,
+            (_l2r or {}).get("similarity"), _consistent, _l2_store_size,
         )
         return {"l1_hit": True, "l2_would_hit": _l2_would_hit,
                 "l1_similarity": _l1_sim,
                 "l2_similarity": (_l2r or {}).get("similarity"),
-                "consistent": _consistent}
+                "consistent": _consistent,
+                "l2_store_size": _l2_store_size}
     except Exception as e:
         silent_exc(e, "nucleus/llm/semantic_cache.py:lookup_l2_shadow", level="debug")
         return None
