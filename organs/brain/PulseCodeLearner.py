@@ -2213,7 +2213,13 @@ class PulseCodeLearner(BasePulseOrgan):
             if stats["total_methods"] < 3:
                 continue
 
-            _entry_str = "、".join(stats["entry_methods"][:3]) if stats["entry_methods"] else "无明确入口"
+            if stats["entry_methods"]:
+                _entry_str = "、".join(stats["entry_methods"][:3])
+            else:
+                # ★315批刀3：图判定替代启发式——用「被调用情况（入度）」区分
+                #   「无外部入口（类内自洽）」与「孤立（全图无人调用）」，而非笼统「无明确入口」。
+                _any_called = any(_called_by.get(f"{organ}.{_m}") for _m in (_organ_all_methods.get(organ) or []))
+                _entry_str = "无外部入口（类内自洽）" if _any_called else "无明确入口（孤立）"
             _leaf_str = "、".join(stats["leaf_methods"][:3]) if stats["leaf_methods"] else "无明确叶子"
 
             _flow_content = (

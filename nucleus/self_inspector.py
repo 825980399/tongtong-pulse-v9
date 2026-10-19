@@ -457,6 +457,8 @@ class SelfInspector(SilentLogMixin):
             from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
             _hub = get_verification_learning_hub()
             _hub.register_applier("self_inspector", self.absorb_growth_rules)
+            # ★315批刀2-B：声明别名——code_learner 蒸馏出的规则也回流 self_inspector
+            _hub.register_applier_alias("self_inspector", "code_learner")
             self._m303_hub = _hub
             self._log("INFO", "[303刀5] self_inspector 已注册 hub applier（审查结论→规则回灌接通）")
             return True
@@ -3645,6 +3647,12 @@ class SelfInspector(SilentLogMixin):
         if _bak_dropped:
             _module_logger.debug(
                 f"[self_inspector] 防御过滤 {_bak_dropped} 个指向备份目录的问题")
+        # ★315批刀2-A：审查结论归位收尾——把本轮检测发现以 origin=code_review 回流 hub，
+        #   闭合 self_inspector.report_issues_to_hub 此前「只定义不调用」的六窗孤儿缺口。
+        try:
+            self.report_issues_to_hub(all_issues)
+        except Exception as _rpt_e:
+            silent_exc(_rpt_e, where="nucleus.self_inspector::detect_code_issues 回灌hub")
         return _safe_issues
 
     def _apply_code_learning_memory(self, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:

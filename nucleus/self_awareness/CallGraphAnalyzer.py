@@ -1341,6 +1341,48 @@ class CallGraphAnalyzer:
             _logger.warning("调用图落盘失败（返回空串）: %s: %s", type(e).__name__, e)
             return ""
 
+    def cluster_view(self, class_name: str) -> dict:
+        """★315批刀3：只读类簇视图——给定类名（cls），返回该类簇的图结构指标。
+        复用 `_qual_id` / `nodes` / `edges` 现成结构（与 dump_graph_snapshot 同源）。
+        输出：方法数、各方法入度/出度、零入边方法列表、跨簇边界调用数。
+        供 PulseCodeLearner 等消费者把「无明确入口」启发式改为图判定。
+        """
+        _cg = self._ensure()
+        _nodes = (_cg or {}).get("nodes", []) if isinstance(_cg, dict) else []
+        _edges = (_cg or {}).get("edges", []) if isinstance(_cg, dict) else []
+        _cls_nodes = [n for n in _nodes if isinstance(n, dict) and n.get("cls") == class_name]
+        _ids = [n.get("id") for n in _cls_nodes]
+        _id_set = set(_ids)
+        _in = {_i: 0 for _i in _ids}
+        _out = {_i: 0 for _i in _ids}
+
+        def _cls_of(qual_id: str) -> str:
+            if not qual_id or ":" not in qual_id:
+                return ""
+            return qual_id.split(":", 1)[-1].split(".")[0]
+
+        _cross = 0
+        for _e in _edges:
+            if not isinstance(_e, dict):
+                continue
+            _c = _e.get("caller")
+            _ce = _e.get("callee")
+            if _c in _out:
+                _out[_c] += 1
+            if _ce in _in:
+                _in[_ce] += 1
+            if (_c in _id_set) != (_ce in _id_set):
+                _cross += 1
+        _zero_in = [_i for _i, _v in _in.items() if _v == 0]
+        return {
+            "class": class_name,
+            "method_count": len(_cls_nodes),
+            "in_degrees": _in,
+            "out_degrees": _out,
+            "zero_in_degree_methods": _zero_in,
+            "cross_cluster_calls": _cross,
+        }
+
     def analyze_health(self, call_graph: dict | None = None) -> dict:
         """基于调用图计算"代码结构健康度"（5 维度 + 综合评分）。
 

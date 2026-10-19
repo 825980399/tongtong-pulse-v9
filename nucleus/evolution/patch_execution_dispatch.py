@@ -104,6 +104,7 @@ _LOCATE_FAIL_COUNTS: dict[str, int] = {
     LOCATE_FAIL_NO_NODE: 0,
     LOCATE_FAIL_FILE_MISMATCH: 0,
     LOCATE_FAIL_NO_FILE: 0,
+    "file_mismatch_rescued": 0,
 }
 
 
@@ -128,6 +129,21 @@ def _m307_locate_fail_reason(qualified: str, file: str | None,
         return LOCATE_FAIL_NO_NODE, []
     if not (file or "").strip():
         return LOCATE_FAIL_NO_FILE, _files[:3]
+    # file 已给出：判定是否 mismatch（file 不在候选集）
+    _file_norm = (file or "").replace("\\", "/").strip()
+    if _file_norm not in _files:
+        # ★315批刀4：二级兜底——同名只落唯一文件时按该唯一文件定位（唯一性约束，
+        #   防止 332 次重名那类 __init__ 合并进起点）；跨多文件仍返 file_mismatch 转人工。
+        if len(_files) == 1:
+            _u = _files[0]
+            _c = _LOCATE_FAIL_COUNTS.get("file_mismatch_rescued", 0) + 1
+            _LOCATE_FAIL_COUNTS["file_mismatch_rescued"] = _c
+            _module_logger.info(
+                "[315刀4] file_mismatch 唯一类兜底救援: name=%s file=%s rescued=%s",
+                _name, _file_norm, _u)
+            return "file_mismatch_rescued", [_u]
+        return LOCATE_FAIL_FILE_MISMATCH, _files[:3]
+    # file 命中候选集 => 视为可定位（保持原 file_mismatch 标记语义，转人工复核）
     return LOCATE_FAIL_FILE_MISMATCH, _files[:3]
 
 
@@ -359,7 +375,10 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
     for _p in patch_history:
         if not isinstance(_p, dict):
             continue
-        if _p.get("status") != "runtime_verified":
+        _status = _p.get("status")
+        # ★315批刀5：小林裁定——approved 低风险（risk∈{低,low} 且 trust≥阈值）纳入自动分诊池；
+        #   其余非 runtime_verified 的 approved（高风险）及所有其它状态仍转人工。
+        if _status not in ("runtime_verified", "approved"):
             _rej["status"] += 1
             continue
         if _p.get("risk_level") not in ("低", "low"):

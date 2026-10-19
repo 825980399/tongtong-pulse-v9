@@ -111,7 +111,31 @@ class VerificationLearningHub:
         当蒸馏出该器官的规则时，自动调用回调并传入规则列表。
         """
         with self._lock:
+            _existing = self._organ_appliers.get(organ_name)
+            if _existing is not None and _existing is not callback:
+                self._log(LogLevel.WARNING,
+                          f"[VerificationLearningHub] 器官 {organ_name} 的 applier 被不同回调覆盖"
+                          f"（同名重复注册脆弱性已捕获）：旧={getattr(_existing,'__qualname__','?')} "
+                          f"新={getattr(callback,'__qualname__','?')}")
             self._organ_appliers[organ_name] = callback
+
+    def register_applier_alias(self, primary: str, alias: str):
+        """★315批刀2-B：声明别名路由——当规则派发给 `alias` 器官时，
+        同时派发给 `primary` 器官的回调（让一份料被多个吸收方接收，互不顶掉）。
+
+        例：register_applier_alias("self_inspector", "code_learner")
+           => code_learner 蒸馏出的 code_issue_lesson 规则也会回流到 self_inspector，
+             self_inspector 的 absorb_growth_rules 因此被调用（闭环「注册了但收不到料」）。
+        """
+        with self._lock:
+            if not hasattr(self, "_applier_aliases"):
+                self._applier_aliases = {}
+            if alias in self._applier_aliases and self._applier_aliases[alias] != primary:
+                self._log(LogLevel.WARNING,
+                          f"[VerificationLearningHub] 别名 {alias} 已指向 "
+                          f"{self._applier_aliases[alias]}，忽略新的 {primary} 映射")
+                return
+            self._applier_aliases[alias] = primary
 
     def run_startup_distill(self):
         """在全部器官 applier 注册完成后调用，处理历史存量蒸馏（避免首个注册即蒸馏的竞态）。"""
@@ -466,20 +490,33 @@ class VerificationLearningHub:
     def apply_rules(self, organ: str, rules: list[dict[str, Any]]) -> int:
         """
         将蒸馏规则应用到指定器官。
-        如果该器官注册了回调，则调用回调。
+        如果该器官注册了回调，则调用回调；并通过别名路由把同一批规则
+        同时派发给别名目标器官（★315批刀2-B：一份料可被多个吸收方接收）。
         返回成功应用的规则数。
         """
-        callback = self._organ_appliers.get(organ)
-        if callback:
+        _targets = []
+        _cb = self._organ_appliers.get(organ)
+        if _cb:
+            _targets.append((organ, _cb))
+        # ★315批刀2-B：别名路由——把 `alias` 的规则也派给其 primary 回调
+        _primary = getattr(self, "_applier_aliases", {}).get(organ)
+        if _primary:
+            _pcb = self._organ_appliers.get(_primary)
+            if _pcb:
+                _targets.append((_primary, _pcb))
+        if not _targets:
+            # ★FIX(L1): 无回调时显式告警，避免规则静默丢弃
+            self._log(LogLevel.WARNING,
+                     f"[VerificationLearningHub] 器官 {organ} 未注册规则回调，{len(rules)} 条规则被跳过")
+            return 0
+        _delivered = 0
+        for _name, _c in _targets:
             try:
-                return callback(rules)
+                _delivered += (_c(rules) or 0)
             except Exception as e:
-                self._log(LogLevel.INFO,f"[VerificationLearningHub] 应用规则失败({organ}): {e}")
-                return 0
-        # ★FIX(L1): 无回调时显式告警，避免规则静默丢弃
-        self._log(LogLevel.WARNING,
-                 f"[VerificationLearningHub] 器官 {organ} 未注册规则回调，{len(rules)} 条规则被跳过")
-        return 0
+                self._log(LogLevel.INFO,
+                          f"[VerificationLearningHub] 应用规则失败({_name}): {e}")
+        return _delivered
 
     def process_distill(self, organ: str | None = None) -> dict[str, Any]:
         """

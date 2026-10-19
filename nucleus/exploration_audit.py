@@ -518,7 +518,8 @@ def record_audit_findings_to_hub(report: dict[str, Any], max_entries: int = 15) 
                     "line": _issue.get("line", 0),
                 },
                 api_better=True,
-                lesson=_message,
+                    lesson=_message,
+                    origin="code_review",
             )
             _recorded += 1
         except Exception as e:
