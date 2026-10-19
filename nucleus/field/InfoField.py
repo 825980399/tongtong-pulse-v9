@@ -2594,6 +2594,68 @@ class InfoField(SilentLogMixin):
             _module_logger.debug(f"[状态采集] 外部执行器状态获取异常(已忽略): {_ee_e}")
 
         return state
+
+    # ========== ★第307批 刀2：分层脉冲一级深化（只读聚合快照） ==========
+    #: 全局认知快照的新鲜度阈值（秒）：超过即 status=stale（只提示，不阻断）
+    _GLOBAL_AWARENESS_STALE_SEC = 3600.0
+
+    def set_global_awareness(self, payload: dict, source: str = "") -> bool:
+        """写入全局认知快照（**唯一写入口**，由 SelfAwarenessEngine 的刷新器调用）。
+
+        ★只存**普通数据**：只认 ``learning_goal`` / ``exploration_clues`` /
+        ``narrative_clues`` / ``gaps`` 四个键，其余一律丢弃——防止把器官实例、
+        锁、线程等活对象塞进缓存（那会让「快照」变成第二份运行态引用）。
+        """
+        if not isinstance(payload, dict):
+            return False
+        _lg = payload.get("learning_goal")
+        _out = {
+            "as_of": float(payload.get("as_of") or time.time()),
+            "source": str(source or payload.get("source") or "unknown"),
+            "learning_goal": dict(_lg) if isinstance(_lg, dict) else None,
+            "exploration_clues": [dict(x) for x in (payload.get("exploration_clues") or [])
+                                  if isinstance(x, dict)],
+            "narrative_clues": [str(x) for x in (payload.get("narrative_clues") or [])],
+            "gaps": [str(x) for x in (payload.get("gaps") or [])],
+        }
+        self._global_awareness_cache = _out
+        return True
+
+    def get_global_awareness(self) -> dict[str, Any]:
+        """★第307批 刀2：**只读**全局认知快照（一级深化对外唯一入口）。
+
+        ★红线：本方法**绝不跨器官现调**（不 import 器官、不触发任何 getter）——
+        只在内存里读 ``_global_awareness_cache`` 并做深拷贝。数据新鲜度由
+        ``SelfAwarenessEngine.integrate_global_awareness()`` 定期刷新负责。
+
+        返回：``{as_of, source, stale_sec, status, learning_goal,
+                exploration_clues, narrative_clues, gaps}``
+        - ``as_of``：快照生成时间（epoch 秒）；未刷新过为 0
+        - ``source``：快照来源（刷新器标识，防「第五套读数」）
+        - ``status``：``fresh`` / ``stale`` / ``not_refreshed``
+        """
+        _cache = getattr(self, "_global_awareness_cache", None)
+        if not isinstance(_cache, dict) or not _cache:
+            return {"status": "not_refreshed", "as_of": 0.0, "source": "",
+                    "stale_sec": None, "learning_goal": None,
+                    "exploration_clues": [], "narrative_clues": [],
+                    "gaps": ["not_refreshed"]}
+        _as_of = float(_cache.get("as_of") or 0.0)
+        _stale = round(time.time() - _as_of, 3) if _as_of else None
+        _lg = _cache.get("learning_goal")
+        return {
+            "as_of": _as_of,
+            "source": str(_cache.get("source") or ""),
+            "stale_sec": _stale,
+            "status": ("fresh" if (_stale is not None and _stale <= self._GLOBAL_AWARENESS_STALE_SEC)
+                       else "stale"),
+            "learning_goal": dict(_lg) if isinstance(_lg, dict) else None,
+            "exploration_clues": [dict(x) for x in (_cache.get("exploration_clues") or [])
+                                  if isinstance(x, dict)],
+            "narrative_clues": [str(x) for x in (_cache.get("narrative_clues") or [])],
+            "gaps": [str(x) for x in (_cache.get("gaps") or [])],
+        }
+
     # ========== 内部方法：条件匹配 ==========
 
     def _match_condition(self, pulse: dict[str, Any], condition: dict[str, Any]) -> bool:

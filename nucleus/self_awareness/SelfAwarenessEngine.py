@@ -41,6 +41,54 @@ _logger = get_module_logger("SelfAwarenessEngine")
 #: 分析器签名：接收引擎，返回该维度的分析结果 dict。
 AnalyzerFunc = Callable[["SelfAwarenessEngine"], dict]
 
+#: ★第307批 刀2：全局认知刷新的**器官来源注册表**（与
+#: `patch_execution_dispatch.set_dispatch_framework` 同范式——装配层注入一次）。
+_AWARENESS_ORGANS: Any = None
+
+
+def set_awareness_organs(organs: Any) -> None:
+    """注入活体器官表（main.py 装配后调用；未注入时刷新器返回 ``no_organs``）。"""
+    global _AWARENESS_ORGANS
+    _AWARENESS_ORGANS = organs
+
+
+def _pick_organ(organs: Any, *keys: str) -> Any:
+    """★307刀2：按多套命名从器官表里取活体器官（dict / 对象皆可）。
+
+    兼容三类键：中文器官名（`"潜意识"`）、属性名（`"subconscious"`）、
+    类名（`"PulseSubconscious"`）——装配层怎么放就怎么取，不为命名打架。
+    """
+    if organs is None:
+        return None
+    for _k in keys:
+        try:
+            if isinstance(organs, dict) and organs.get(_k) is not None:
+                return organs.get(_k)
+            _v = getattr(organs, _k, None)
+            if _v is not None:
+                return _v
+        except Exception as e:  # 取器官失败按「没有」处理，不污染刷新
+            silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_pick_organ")
+    return None
+
+
+def _call_getter(organ: Any, name: str, gaps: list, tag: str,
+                 kwargs: dict | None = None) -> Any:
+    """★307刀2：调一个**只读 getter**，缺失/异常都记进 gaps，绝不抛出去。"""
+    if organ is None:
+        gaps.append("%s:missing" % tag)
+        return None
+    _fn = getattr(organ, name, None)
+    if _fn is None or not callable(_fn):
+        gaps.append("%s:no_getter(%s)" % (tag, name))
+        return None
+    try:
+        return _fn(**(kwargs or {}))
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_call_getter")
+        gaps.append("%s:error(%s)" % (tag, type(e).__name__))
+        return None
+
 #: 画像中所有"字典型"字段名（汇总结果的合法落点）。
 _PROFILE_DICT_FIELDS = (
     "code_health",
@@ -1277,6 +1325,67 @@ class SelfAwarenessEngine:
             return _health
         except Exception as e:  # 整合失败不影响引擎
             _logger.warning("调用图分析整合失败（返回空 dict）: %s: %s",
+                            type(e).__name__, e)
+            return {}
+
+    def integrate_global_awareness(self, organs: Any = None,
+                                   info_field: Any = None) -> dict:
+        """★第307批 刀2：分层脉冲**一级深化**的刷新器（全局认知快照）。
+
+        本体不是「再算一套数」，而是把三个器官**已经有的**对外 getter 聚合成
+        一份带 ``as_of`` / ``source`` 的快照，写进 InfoField 的唯一缓存：
+          - 内在世界当前主题：``get_active_learning_goal()``
+          - 潜意识活跃线索：``get_active_exploration_clues(limit=3)``
+          - 叙事自我当下叙事弧：``get_narrative_clues(limit=2)``
+
+        ★层次纪律（烛微 307 批指出的倒挂风险）：**刷新器负责跨器官取数，
+        `InfoField.get_global_awareness()` 只读缓存**——调用方（任何器官、
+        报告、对话）永远不会经由这个入口触发别的器官干活。
+
+        Args:
+            organs: 器官表（中文名/属性名/类名任一键均可）；None 时用
+                模块级注册表（``set_awareness_organs``）。
+            info_field: 目标 InfoField；None 时取 ``get_info_field()`` 单例。
+
+        三种「取不到」都如实落 ``gaps``，不猜测、不填默认值：
+        未注入器官 ⇒ ``status="no_organs"``；某源缺失 ⇒ ``gaps=["subconscious:missing"]``。
+        """
+        try:
+            if organs is None:
+                organs = _AWARENESS_ORGANS
+            if not organs:
+                _logger.debug("全局认知刷新跳过：未注入器官表（set_awareness_organs）")
+                return {"status": "no_organs"}
+            if info_field is None:
+                from nucleus.field.InfoField import get_info_field
+                info_field = get_info_field()
+            if info_field is None or not hasattr(info_field, "set_global_awareness"):
+                return {"status": "no_info_field"}
+            _gaps: list = []
+            _inner = _pick_organ(organs, "内在世界", "inner_world", "PulseInnerWorld")
+            _sub = _pick_organ(organs, "潜意识", "subconscious", "PulseSubconscious")
+            _narr = _pick_organ(organs, "叙事自我", "narrative", "PulseNarrativeSelf")
+            _goal = _call_getter(_inner, "get_active_learning_goal", _gaps,
+                                 "inner_world")
+            _clues = _call_getter(_sub, "get_active_exploration_clues", _gaps,
+                                  "subconscious", kwargs={"limit": 3}) or []
+            _narrative = _call_getter(_narr, "get_narrative_clues", _gaps,
+                                      "narrative", kwargs={"limit": 2}) or []
+            _payload = {
+                "as_of": time.time(),
+                "source": "self_awareness.integrate_global_awareness",
+                "learning_goal": _goal if isinstance(_goal, dict) else None,
+                "exploration_clues": [x for x in _clues if isinstance(x, dict)],
+                "narrative_clues": [str(x) for x in _narrative],
+                "gaps": _gaps,
+            }
+            _ok = bool(info_field.set_global_awareness(
+                _payload, source=_payload["source"]))
+            _payload["written"] = _ok
+            _payload["status"] = "ok" if _ok else "write_failed"
+            return _payload
+        except Exception as e:  # 刷新失败绝不影响引擎
+            _logger.warning("全局认知刷新失败（返回空 dict）: %s: %s",
                             type(e).__name__, e)
             return {}
 

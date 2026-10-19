@@ -5054,15 +5054,36 @@ class SelfInspector(SilentLogMixin):
         #   实测本窗图入边覆盖率仅 56.7%（有入边 3818 / 节点 6738）：跨模块 resolve 率偏低
         #   ⇒ 「无入边」里大量是**没解析出来**，而不是**真没人调用**——这等价于「没测」，
         #   按判据纪律不许据此判死 ⇒ 覆盖率低于阈值时本判据整体让位（只记日志，不产出问题）。
-        _MIN_COVERAGE = 0.70
+        # ★第307批 刀1：**图质量守卫三档**（小林拍板「中间档」）。
+        #   305 是二值闸：覆盖率 <70% 整体让位 ⇒ dead_code 入料口长期为 0，
+        #   既不沉默也不误杀，代价是这条线整条废掉。改为：
+        #     ≥70%  ：正常判死（severity=low，进趋势门禁）
+        #     55~70%：只产出「待复核清单」（severity=info + review_only=True，
+        #             **禁入自动入队、不进趋势门禁**——没测够，不等于真死）
+        #     <55%  ：整体让位（只记 INFO，不产出问题）
+        _COVERAGE_JUDGE = 0.70
+        _COVERAGE_FLOOR = 0.55
         _node_count = int(_gidx.get("node_count", 0) or 0)
         _coverage = (len(_in_edge_ids) / _node_count) if _node_count else 0.0
-        if _gidx.get("ok") and _coverage < _MIN_COVERAGE:
+        _mode = "judge"
+        if _gidx.get("ok"):
+            if _coverage < _COVERAGE_FLOOR:
+                _mode = "silent"
+            elif _coverage < _COVERAGE_JUDGE:
+                _mode = "review"
+        if _mode == "silent":
             _module_logger.info(
-                "[305刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于可信阈值 %.0f%%"
-                " ⇒ 「无入边」不足以证明死代码，本轮不判死（待图解析率提升后自动生效）",
-                _coverage * 100.0, len(_in_edge_ids), _node_count, _MIN_COVERAGE * 100.0)
+                "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
+                " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）",
+                _coverage * 100.0, len(_in_edge_ids), _node_count, _COVERAGE_FLOOR * 100.0)
             return _issues
+        _review_only = (_mode == "review")
+        if _review_only:
+            _module_logger.info(
+                "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）处于中间档 [%.0f%%, %.0f%%)"
+                " ⇒ 只产出**待复核清单**（severity=info，禁入自动入队/趋势门禁），不判死",
+                _coverage * 100.0, len(_in_edge_ids), _node_count,
+                _COVERAGE_FLOOR * 100.0, _COVERAGE_JUDGE * 100.0)
         _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0,
                       "out_of_graph": 0, "no_node": 0}
 
@@ -5091,19 +5112,31 @@ class SelfInspector(SilentLogMixin):
                 _alive_src["entry"] += 1
             else:
                 for _f, _line in _defs[:1]:
+                    # ★307刀1：中间档 ⇒ 待复核清单（info + review_only，不判死）
                     _issues.append({
                         'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
-                        'type': 'dead_code', 'severity': 'low',
-                        'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',
-                        'suggestion': '确认是否需要保留，如不需要可删除以减少代码体积',
+                        'type': 'dead_code',
+                        'severity': ('info' if _review_only else 'low'),
+                        'review_only': bool(_review_only),
+                        'review_reason': (
+                            "graph_coverage=%.1f%%(<%.0f%%)"
+                            % (_coverage * 100.0, _COVERAGE_JUDGE * 100.0)
+                            if _review_only else ""),
+                        'description': (
+                            ('[待复核] ' if _review_only else '')
+                            + f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）'),
+                        'suggestion': ('图解析率不足，先人工复核再决定是否删除（不得据本轮结论自动入队）'
+                                       if _review_only
+                                       else '确认是否需要保留，如不需要可删除以减少代码体积'),
                     })
         # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
         _module_logger.info(
-            "[305刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
-            " 图域外(不判)=%d 无图节点(不判)=%d（判死=%d）",
+            "[307刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
+            " 图域外(不判)=%d 无图节点(不判)=%d（模式=%s 覆盖率=%.1f%% 产出=%d 其中待复核=%d）",
             _alive_src["static"], _alive_src["byname"], _alive_src["event"],
             _alive_src["entry"], _alive_src["out_of_graph"],
-            _alive_src["no_node"], len(_issues))
+            _alive_src["no_node"], _mode, _coverage * 100.0, len(_issues),
+            len(_issues) if _review_only else 0)
         return _issues
 
     def _detect_unused_imports(self) -> list[dict[str, Any]]:

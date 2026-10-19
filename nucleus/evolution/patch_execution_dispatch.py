@@ -89,6 +89,47 @@ PILOT_FIRST_BATCH = frozenset({
     ("organs/motor/PulseCodeSandbox.py", "refresh_runtime_params"),
 })
 
+#: ★第307批 刀3：**定位失败原因码** —— 305 刀3 起所有定位失败共用一句日志
+#:   （「起点无法定位 ⇒ 转人工」），无法区分是图缺节点、宿主文件错位（Mixin 拆文件），
+#:   还是压根没给 file 无法消歧。三种失败的处理方式完全不同：
+#:     - no_node         ：图里没有这个节点 ⇒ 要补图/补扫描范围
+#:     - file_mismatch   ：图里有同名方法但宿主文件不同 ⇒ 补丁 file 字段过时（Mixin/搬迁）
+#:     - no_file         ：裸方法名 + 无 file ⇒ 补丁记录缺字段，无法消歧
+LOCATE_FAIL_NO_NODE = "no_node"
+LOCATE_FAIL_FILE_MISMATCH = "file_mismatch"
+LOCATE_FAIL_NO_FILE = "no_file"
+
+#: 三类失败的**进程内计数**（可读性优先，供每日派单日志一行汇总）
+_LOCATE_FAIL_COUNTS: dict[str, int] = {
+    LOCATE_FAIL_NO_NODE: 0,
+    LOCATE_FAIL_FILE_MISMATCH: 0,
+    LOCATE_FAIL_NO_FILE: 0,
+}
+
+
+def get_locate_fail_counts() -> dict[str, int]:
+    """★307刀3：三类定位失败的累计计数（只读副本，供报表/单测）。"""
+    return dict(_LOCATE_FAIL_COUNTS)
+
+
+def _m307_locate_fail_reason(qualified: str, file: str | None,
+                             nodes: list) -> tuple[str, list]:
+    """★307刀3：给「起点无法定位」分类并给出候选宿主文件。
+
+    Returns: ``(reason_code, candidate_files[:3])``
+    """
+    _name = str(qualified or "").split(".")[-1]
+    _cands = []
+    for _n in nodes or []:
+        if isinstance(_n, dict) and str(_n.get("name") or "") == _name:
+            _cands.append(str(_n.get("file", "") or "").replace("\\", "/"))
+    _files = sorted({x for x in _cands if x})
+    if not _files:
+        return LOCATE_FAIL_NO_NODE, []
+    if not (file or "").strip():
+        return LOCATE_FAIL_NO_FILE, _files[:3]
+    return LOCATE_FAIL_FILE_MISMATCH, _files[:3]
+
 
 #: ★第305批 刀4：落盘调用图**读缓存**（对齐 DailyScheduler:573 既有口径
 #:   「运行时消费者只读缓存，绝不现扫」）。304 刀5 在 select 循环里每条候选
@@ -196,7 +237,16 @@ def blast_radius_of(qualified: str, file: str | None = None,
             if _nid.endswith(_q) or _qual == _q or _qual.endswith("." + _q):
                 _starts.append(_nid)
     if not _starts:
-        _module_logger.info("[305刀3] 起点无法定位（name=%s file=%s）⇒ 转人工", _q, _f or "-")
+        # ★第307批 刀3：三类失败分原因码 + 可区分计数（不再共用一句日志）
+        _reason, _cand_files = _m307_locate_fail_reason(_q, _f, _nodes)
+        _LOCATE_FAIL_COUNTS[_reason] = _LOCATE_FAIL_COUNTS.get(_reason, 0) + 1
+        _module_logger.info(
+            "[307刀3] 起点无法定位 ⇒ 转人工: reason=%s name=%s file=%s 候选宿主=%s"
+            "（累计 no_node=%d file_mismatch=%d no_file=%d）",
+            _reason, _q, _f or "-", _cand_files or "-",
+            _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_NODE],
+            _LOCATE_FAIL_COUNTS[LOCATE_FAIL_FILE_MISMATCH],
+            _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_FILE])
         return None
     _adj = _call_graph_cache.get("in_adj") if direction == "in" else _call_graph_cache.get("out_adj")
     if _adj is None:
@@ -356,6 +406,11 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     _module_logger.info("[行动面通电] 回扫=%d 可疑=%d 派单=%d 结果=%s",
                         len(_rv_cands), _suspect_n, len(_results),
                         [(r.get("patch_id"), r.get("success")) for r in _results])
+    # ★第307批 刀3：定位失败分布（三类分开计数，一眼看出是「图缺」还是「file 字段过时」）
+    _module_logger.info("[307刀3] 定位失败分布: no_node=%d file_mismatch=%d no_file=%d",
+                        _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_NODE],
+                        _LOCATE_FAIL_COUNTS[LOCATE_FAIL_FILE_MISMATCH],
+                        _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_FILE])
     return {"status": "ok", "reswept": len(_rv_cands), "suspect": _suspect_n,
             "dispatched": len(_results), "results": _results}
 

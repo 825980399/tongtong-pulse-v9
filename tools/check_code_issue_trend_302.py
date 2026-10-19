@@ -68,7 +68,15 @@ def main() -> int:
 
     _high = [i for i in _issues if str(i.get("severity", "")).lower() == "high"]
     _med = [i for i in _issues if str(i.get("severity", "")).lower() == "medium"]
-    _dead = [i for i in _issues if str(i.get("type", "")) == "dead_code"]
+    # ★第307批 刀1：dead_code 分两档 —— 判死（severity=low）才进门禁；
+    #   中间档产出的「待复核清单」（severity=info / review_only）**不计入 FAIL**，
+    #   只作为不阻断的观测值输出（图解析率不足时它本来就不可信）。
+    _dead = [i for i in _issues
+             if str(i.get("type", "")) == "dead_code"
+             and str(i.get("severity", "")).lower() != "info"]
+    _dead_review = [i for i in _issues
+                    if str(i.get("type", "")) == "dead_code"
+                    and str(i.get("severity", "")).lower() == "info"]
     _by_type: dict[str, int] = {}
     for _i in _issues:
         _t = str(_i.get("type", "?"))
@@ -81,6 +89,7 @@ def main() -> int:
         "high": len(_high),
         "medium": len(_med),
         "dead_code": len(_dead),
+        "dead_code_review": len(_dead_review),
         "max_high": _a.max_high,
         "max_medium": _a.max_medium,
         "max_dead_code": _a.max_dead_code,
@@ -95,7 +104,8 @@ def main() -> int:
         print(f"[代码问题趋势] criteria={CRITERIA_VERSION} "
               f"high={len(_high)}(阈值{_a.max_high}) "
               f"medium={len(_med)}(阈值{_a.max_medium}) "
-              f"dead_code={len(_dead)}(阈值{_a.max_dead_code}) => {_payload['verdict']}")
+              f"dead_code={len(_dead)}(阈值{_a.max_dead_code})"
+              f" 待复核={len(_dead_review)}(不判) => {_payload['verdict']}")
         for _t, _n in _payload["by_type"].items():
             print(f"  {_t}: {_n}")
         for _h in _payload["high_items"]:

@@ -4784,6 +4784,49 @@ class PulseSubconscious(BasePulseOrgan):
 
     # ========== 统计信息 ==========
 
+    def get_active_exploration_clues(self, limit: int = 3) -> list[dict[str, Any]]:
+        """★第307批 刀2：潜意识对外 getter —— 当前活跃探索线索（只读快照）。
+
+        消费方：``InfoField.get_global_awareness()`` 的分层脉冲一级深化（洞鉴建议的
+        「成本最低、收益最高」的一级深化入口）。
+
+        **只读**：不触发探索、不改队列、不发脉冲——线索由既有调度写入。
+        来源优先级：① 深度探索队列（待探索）② 最近探索日志（已探索，按时间倒序）。
+        返回 ``[{topic, state, count, last_ts}]``；任何内部异常 ⇒ 返回已收集部分。
+        """
+        try:
+            _n = max(0, int(limit))
+        except (TypeError, ValueError) as e:
+            silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues limit")
+            _n = 3
+        if _n == 0:
+            return []
+        _out: list[dict[str, Any]] = []
+        _queue = getattr(self, "_deep_exploration_queue", None) or []
+        _counts = getattr(self, "_deep_exploration_counts", None) or {}
+        _log_map = getattr(self, "_exploration_log", None) or {}
+        for _topic in list(_queue)[:_n]:
+            _out.append({"topic": str(_topic), "state": "queued",
+                         "count": int(_counts.get(_topic, 0) or 0),
+                         "last_ts": float(_log_map.get(_topic, 0.0) or 0.0)})
+        if len(_out) < _n:
+            _seen = {x["topic"] for x in _out}
+            try:
+                _recent = sorted(_log_map.items(),
+                                 key=lambda kv: float(kv[1] or 0.0), reverse=True)
+            except (TypeError, ValueError) as e:
+                silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues sort")
+                _recent = []
+            for _topic, _ts in _recent:
+                if len(_out) >= _n:
+                    break
+                if str(_topic) in _seen:
+                    continue
+                _out.append({"topic": str(_topic), "state": "explored",
+                             "count": int(_counts.get(_topic, 0) or 0),
+                             "last_ts": float(_ts or 0.0)})
+        return _out
+
     def get_stats(self) -> dict[str, Any]:
         return {
             "organ": self.organ_name,
