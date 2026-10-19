@@ -1569,8 +1569,34 @@ class PulseSubconscious(BasePulseOrgan):
             _max = int(_v) if _v is not None else 20
         except Exception:
             _max = 20
+        # ★317批刀1（G-5）：节流从「每进程 20 条封顶」改为「按时间窗重置」。
+        #   原实现进程内计数永不归零 ⇒ 长跑（>1天）growth 通道自动停流，
+        #   「需求驱动」这条腿在长跑里必断。现改为：窗口到期即计数归零。
+        _win = 3600.0
+        try:
+            import config as _cfg_win
+            _w = getattr(_cfg_win, "GROWTH_HUB_WINDOW_SEC", 3600)
+            _win = float(_w) if _w is not None else 3600.0
+        except Exception as _e_win:
+            silent_exc(_e_win, where="PulseSubconscious._m304_growth_to_hub.window")
+            _win = 3600.0
+        _now_win = time.time()
+        _start_win = getattr(self, "_m304_growth_window_start", None)
+        if _start_win is None:
+            self._m304_growth_window_start = _now_win
+            _start_win = _now_win
+        elif _now_win - float(_start_win) >= _win:
+            _prev_sent = getattr(self, "_m304_growth_hub_sent", 0)
+            self._m304_growth_window_start = _now_win
+            self._m304_growth_hub_sent = 0
+            # ★317刀1：窗口重置留痕（可 grep；证明长跑不断流）
+            self._log(LogLevel.INFO,
+                      f"[317刀1][growth窗口重置] 窗口={_win:.0f}s "
+                      f"上一窗入库={_prev_sent}条 ⇒ 计数归零")
         if getattr(self, "_m304_growth_hub_sent", 0) >= _max:
-            self._log(LogLevel.DEBUG, f"[304刀4] 本窗 growth 入库已达上限 {_max}，跳过")
+            self._log(LogLevel.DEBUG,
+                      f"[304刀4] 本窗 growth 入库已达上限 {_max}，"
+                      f"跳过（窗口={_win:.0f}s 后自动归零，不再永久停流）")
             return 0
         _topic = str(growth_topic or "").strip()
         if not _topic:

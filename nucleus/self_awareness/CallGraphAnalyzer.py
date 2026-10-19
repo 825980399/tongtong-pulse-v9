@@ -1383,6 +1383,33 @@ class CallGraphAnalyzer:
             "cross_cluster_calls": _cross,
         }
 
+    # ===== ★317批刀2（G-6）：A4 覆盖断言的类簇口径——显式文件清单，钉死 =====
+    # 口径差（339 / 455 / 462）的成因（本批实测）：
+    #   * 图类簇 339：调用图只收「被静态解析到调用点」的方法，且全部落在 PulseInnerWorld.py
+    #     （4 个 pulse_inner_world_*.py mixin 的方法未入图 ⇒ "半张地图"）
+    #   * 说明书 455：5 个源文件（PulseInnerWorld.py 346 + 4 mixin 109）的 def 总数
+    #   * 烛微 462 / 6 文件：455 + nucleus/reasoning/_inner_world_math.py 的 7 个**模块级**函数
+    # ⇒ 裁定：`_inner_world_math.py` **不计入**（它是数学核，模块级函数不属于该类的方法集，
+    #   图类簇永不包含它；计入会把"口径差"与"真缺口"混在一起）。
+    _A4_CRITERIA_VERSION = "317.a4.v1"
+    _A4_CLUSTER_SCOPE = {
+        "class": "PulseInnerWorld",
+        "files_included": [
+            "organs/brain/PulseInnerWorld.py",
+            "organs/brain/pulse_inner_world_creative.py",
+            "organs/brain/pulse_inner_world_emotion_aug.py",
+            "organs/brain/pulse_inner_world_knowledge.py",
+            "organs/brain/pulse_inner_world_support.py",
+        ],
+        "files_excluded": {
+            "nucleus/reasoning/_inner_world_math.py":
+                "模块级数学核（7 个模块级 def），非该类方法；图类簇永不包含 ⇒ 计入会污染 gap",
+        },
+        "manual_baseline": 455,
+        "graph_baseline": 339,
+        "gap_baseline": 116,
+    }
+
     def mastery_assertion_check(self, class_name="PulseInnerWorld",
                                 manual_method_count=None) -> dict:
         """★316批刀1：掌握度结构断言（只跑断言、不跑检测器）。
@@ -1401,7 +1428,9 @@ class CallGraphAnalyzer:
         _a1_failed = len(_zero_in)
         _a1_passed = max(0, _methods - _a1_failed)
         _a4 = {"manual": None, "graph": _methods, "gap": None,
-               "status": "unverifiable"}
+               "status": "unverifiable",
+               "criteria_version": self._A4_CRITERIA_VERSION,
+               "scope_files": list(self._A4_CLUSTER_SCOPE["files_included"])}
         if isinstance(manual_method_count, int) and not isinstance(manual_method_count, bool) \
                 and manual_method_count >= 0:
             _gap = abs(int(manual_method_count) - _methods)
@@ -1412,6 +1441,8 @@ class CallGraphAnalyzer:
         _passed = max(0, _methods - _failed)
         return {
             "class": class_name,
+            "criteria_version": self._A4_CRITERIA_VERSION,
+            "cluster_scope": self._A4_CLUSTER_SCOPE,
             "total": _methods,
             "passed": _passed,
             "failed": _failed,

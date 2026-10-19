@@ -324,6 +324,20 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _L.append("```")
         _L.append("")
 
+        # ★317批刀4：世界模型最小版（只观测不决策）——复用 04:00 编译点，不新建调度器。
+        try:
+            from nucleus.world_model.expectation_ledger import sweep as _ledger_sweep
+            _led = _ledger_sweep(project_root)
+            _L.append("## 五、预期台账（world_model · 只观测不决策）")
+            _L.append("")
+            _L.append("- 本次新增断言：**%s** 条 ｜ 台账累计：**%s** 条"
+                      % (_led.get("added", 0), _led.get("total", 0)))
+            _L.append("- verdict 分布：%s" % (_led.get("verdicts", {}),))
+            _L.append("- 红线：`violated` 不参与入队/动机（本模块只写台账）")
+            _L.append("")
+        except Exception as _le:
+            silent_exc(_le, where="night_orchestration.generate_night_digest.ledger")
+
         with open(_digest_path, "w", encoding="utf-8") as _f:
             _f.write("\n".join(_L) + "\n")
         return _digest_path

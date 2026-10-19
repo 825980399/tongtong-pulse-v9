@@ -1798,7 +1798,20 @@ class PulseCodeLearner(BasePulseOrgan):
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
-        _entry_str = "、".join(_entry_methods[:3]) if _entry_methods else "脉冲响应入口"
+        # ★317批刀2（G-7）：本处（旧启发式文案「脉冲响应入口」）统一为图判定，
+        #   与数据流说明书段（本文件 :2222 一带）同口径——消除"只改一处"的半截修复。
+        if _entry_methods:
+            _entry_str = "、".join(_entry_methods[:3])
+        else:
+            _called_keys = set()
+            for _ck, _ci in (self._code_call_graph or {}).items():
+                for _cm in (_ci.get("called_methods") or []):
+                    _called_keys.add(_cm)
+            _organ_keys = [k for k in (self._code_call_graph or {})
+                           if str(k).startswith(organ_name + ".")]
+            _any_called = any(k in _called_keys for k in _organ_keys)
+            _entry_str = ("无外部入口（类内自洽）" if _any_called
+                          else "无明确入口（孤立）")
         _leaf_str = "、".join(_leaf_methods[:3]) if _leaf_methods else "底层实现"
 
         _handbook = (

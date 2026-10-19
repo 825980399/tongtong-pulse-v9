@@ -27,6 +27,69 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("PatchExecutionDispatch")
 
+# ===== ★317批刀0：派单节拍可配（G-1）=====
+# 背景：决定/动手此前只在「每日 03:00 一拍」，任何并行/裁判都看不见效果。
+# 设计：保留日频为默认（86400s），配置调小即得更密档位；**安全闸不动**
+#       （ParamPatchManager._HARD_CAP=1、select_for_auto_triage 的 max_blast_radius=1）。
+_DISPATCH_INTERVAL_DEFAULT_SEC = 86400.0
+_last_dispatch_ts: float | None = None
+
+
+def _dispatch_interval_sec() -> float:
+    """读派单最小间隔（秒）；缺失/非法回退日频，下限 60s 防每轮询重入。"""
+    _iv = _DISPATCH_INTERVAL_DEFAULT_SEC
+    try:
+        import config as _cfg
+        _v = getattr(_cfg, "PATCH_DISPATCH_INTERVAL_SEC", _DISPATCH_INTERVAL_DEFAULT_SEC)
+        if _v is not None:
+            _iv = float(_v)
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch._dispatch_interval_sec")
+    return max(60.0, _iv)
+
+
+def get_last_dispatch_ts() -> float | None:
+    """返回上次派单时间戳（测试/观测用；纯读）。"""
+    return _last_dispatch_ts
+
+
+def reset_last_dispatch_ts(value: float | None = None) -> None:
+    """★测试/压测专用：重置派单计时基线（不改任何安全闸，仅时间戳）。"""
+    global _last_dispatch_ts
+    _last_dispatch_ts = value
+
+
+def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
+    """★317批刀0：按可配节拍派单（最小间隔 + 同拍一次）。
+
+    - 首次调用只「起算」不派单（避免挂载瞬间抢跑一拍）；
+    - `elapsed < interval` ⇒ **显式留痕「钩子未到时 ⇒ 未触发」**（回应烛微 G-1 降级项2）；
+    - 到期 ⇒ 派单 1 条（`_HARD_CAP=1` 与 `max_blast_radius=1` 维持不变）。
+    """
+    global _last_dispatch_ts
+    _now = float(time.time() if now is None else now)
+    _iv = _dispatch_interval_sec()
+    if _last_dispatch_ts is None:
+        _last_dispatch_ts = _now
+        _module_logger.info(
+            "[317刀0][分诊节拍] 挂载起算：interval=%.0fs，下次最早 %.0fs 后（同拍一次）",
+            _iv, _iv)
+        return {"status": "armed", "interval_sec": _iv}
+    _elapsed = _now - _last_dispatch_ts
+    if _elapsed < _iv:
+        _module_logger.info(
+            "[317刀0][分诊节拍] 钩子未到时 ⇒ 未触发 elapsed=%.0fs < interval=%.0fs",
+            _elapsed, _iv)
+        return {"status": "skipped_not_due", "elapsed_sec": round(_elapsed, 1),
+                "interval_sec": _iv}
+    _last_dispatch_ts = _now
+    _r = dispatch_runtime_verified_patches(limit=1)
+    _module_logger.info(
+        "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs dispatched=%s "
+        "hard_cap=1 blast_cap=1（安全闸未放宽）",
+        _iv, _r.get("dispatched") if isinstance(_r, dict) else "?")
+    return {"status": "dispatched", "interval_sec": _iv, "result": _r}
+
 #: 全局 framework 桥接（main.py 装配后 set_dispatch_framework 注入）
 _framework: Any = None
 
@@ -529,6 +592,14 @@ def register_with_daily_schedule(scheduler: Any = None) -> str:
     if scheduler is None:
         from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
         scheduler = get_daily_scheduler()
+    # ★317批刀0：优先挂「节拍钩子」（挂既有 60s 轮询，按 interval 自节流）；
+    #   不支持 tick 的调度器退回原日频钩子（行为不变）。
+    if hasattr(scheduler, "add_tick_hook"):
+        _module_logger.info(
+            "[317刀0][分诊节拍] 注册 tick 钩子（默认日频 86400s，"
+            "config.PATCH_DISPATCH_INTERVAL_SEC 可加密）")
+        return scheduler.add_tick_hook("patch_execution_dispatch_317_tick",
+                                       dispatch_on_tick)
     if not hasattr(scheduler, "add_daily_hook"):
         return ""
     return scheduler.add_daily_hook(

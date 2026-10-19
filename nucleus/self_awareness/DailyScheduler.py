@@ -739,6 +739,34 @@ class SelfAwarenessDailyScheduler:
         """查询某名钩子是否已挂载。"""
         return any(h[0] == name for h in self._daily_hooks)
 
+    # ---------------------------------------------------- ★317批刀0 节拍钩子
+    def add_tick_hook(self, name: str, fn: Callable[[], Any]) -> str:
+        """★317批刀0：注册一个「每轮询（默认 60s）」调用的节拍钩子。
+
+        与 `add_daily_hook`（每日 03:00 一次）的区别：tick 钩子跑在既有 60s 轮询上，
+        **由钩子自身按配置间隔自节流**（如派单的 `PATCH_DISPATCH_INTERVAL_SEC`），
+        因此默认日频行为不变，调小间隔即可获得更密档位供压测调用。
+        同名重复注册覆盖旧钩子；永不抛异常（单个钩子失败不影响其余钩子与主循环）。
+        """
+        with self._lock:
+            _hooks = list(getattr(self, "_tick_hooks", None) or [])
+            _hooks = [h for h in _hooks if h[0] != name]
+            _hooks.append((name, fn))
+            self._tick_hooks = _hooks
+        return name
+
+    def has_tick_hook(self, name: str) -> bool:
+        """查询某名节拍钩子是否已挂载。"""
+        return any(h[0] == name for h in (getattr(self, "_tick_hooks", None) or []))
+
+    def _run_tick_hooks(self) -> None:
+        """依次调用节拍钩子（每轮询一次）；单个失败仅记 warning，不中断循环。"""
+        for _name, _fn in list(getattr(self, "_tick_hooks", None) or []):
+            try:
+                _fn()
+            except Exception as _te:
+                silent_exc(_te, f"SelfAwarenessDailyScheduler._run_tick_hooks:{_name}")
+
     def _run_daily_hooks(self, res: dict[str, Any]) -> None:
         """依次调用所有已注册每日钩子，结果/异常记入 res["hooks"]。
 
@@ -800,6 +828,8 @@ class SelfAwarenessDailyScheduler:
                 _module_logger.warning(
                     "[自我认知调度] 调度循环异常（线程继续）: %s: %s",
                     type(_e).__name__, _e)
+            # ★317批刀0：节拍钩子挂在既有轮询上（自身按配置间隔自节流）
+            self._run_tick_hooks()
             self._stop.wait(_iv)
         _module_logger.info("[自我认知调度] 后台调度线程已退出")
 

@@ -5921,6 +5921,20 @@ SUBAGENT_BREAKER_DAY_MAX_TOKENS = 1000000    # B：当日累计 tokens 上限（
 SUBAGENT_BREAKER_FAIL_WINDOW = 20            # C：失败率滑动窗口大小
 SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 ⇒ 停真起）
 
+# ===== [M317] 317批：长期支点最小落地（节拍可配 + growth 时间窗）=====
+# 读取点①：nucleus/evolution/patch_execution_dispatch.py::dispatch_on_tick
+#   派单节拍：最小间隔（秒）。默认 86400 = 保留日频；压测档位可调小（如 300/3600）。
+#   安全闸不随节拍放开：ParamPatchManager._HARD_CAP=1、max_blast_radius=1 均不动。
+PATCH_DISPATCH_INTERVAL_SEC = 86400
+# 读取点②：organs/brain/PulseSubconscious.py::_m304_growth_to_hub
+#   growth 入库「按时间窗重置」的窗口长度（秒）。默认 3600 = 每小时窗口 20 条。
+#   语义仍是 GROWTH_HUB_MAX_PER_WINDOW（每窗条数），由「每进程封顶」改为「按窗滚动」。
+GROWTH_HUB_WINDOW_SEC = 3600
+# 每窗 growth 入库条数上限（304 刀4 起仅在代码里 getattr 兜底；烛微 305/306/313 三次挂账
+# 「键未登记」，317 刀1 要求"配置化上限"，此处正式登记）。设 0 = 关闭 growth 入库。
+GROWTH_HUB_MAX_PER_WINDOW = 20
+
+
 # ===== [M183-TEMP] 183批刀3：认知状态机观测（纯函数 + 统一温度单一来源）=====
 # 读取点：nucleus/cognitive/cognitive_state_utils.py::suggested_temperature
 #         organs/body/PulseLung.py 两处硬编码 0.7 统一为本常量（不动态）

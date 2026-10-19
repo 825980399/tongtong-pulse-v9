@@ -37,6 +37,29 @@ from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_co
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
+# ===== ★317批刀3（G-8）：子进程产出率计数 =====
+# 背景：并行子进程 118/149 次 `result=no_anomaly，审查=0，报告=0`——
+#       "跑完没异常"不能记为一圈，否则压测指标全是假成功。
+# 口径：`productive = (reviewed>0 or report>0)`；`rate = productive / runs`。
+# 边界：只统计、只留痕；不参与入队/分诊/动机决策。
+_OUTPUT_STATS = {"runs": 0, "productive": 0, "zero_output": 0}
+
+
+def get_output_rate_stats() -> dict:
+    """★317批刀3：返回子进程产出率统计（可读指标，供压测/日报消费；纯读）。"""
+    _r = dict(_OUTPUT_STATS)
+    _runs = int(_r.get("runs", 0) or 0)
+    _r["rate"] = round(_r.get("productive", 0) / float(_runs), 4) if _runs else 0.0
+    return _r
+
+
+def reset_output_rate_stats() -> None:
+    """★测试专用：清零产出率计数（不改任何业务状态）。"""
+    _OUTPUT_STATS["runs"] = 0
+    _OUTPUT_STATS["productive"] = 0
+    _OUTPUT_STATS["zero_output"] = 0
+
+
 # ★第117批 T-117d①（烛微 N4）：项目根（供问题身份键做路径归一）
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -5819,6 +5842,20 @@ class SafeEvolutionExecutor:
                     f"[自主迭代] 子进程完成: mode=review, result={_review_status}, "
                     f"审查={_reviewed}个异常, 报告={_report_len}条, 耗时={_elapsed:.1f}s, "
                     f"pid={proc.pid}")
+                # ★317批刀3（G-8）：零产出不再计为「成功一圈」。
+                _productive = 1 if (int(_reviewed or 0) > 0 or _report_len > 0) else 0
+                _OUTPUT_STATS["runs"] += 1
+                _OUTPUT_STATS["productive" if _productive else "zero_output"] += 1
+                _runs_n = _OUTPUT_STATS["runs"]
+                _module_logger.info(
+                    "[317刀3][产出率] mode=review productive=%d reviewed=%s report=%d "
+                    "runs=%d productive_total=%d zero_total=%d rate=%.4f counted_as_loop=%d",
+                    _productive, _reviewed, _report_len, _runs_n,
+                    _OUTPUT_STATS["productive"], _OUTPUT_STATS["zero_output"],
+                    (_OUTPUT_STATS["productive"] / float(_runs_n)) if _runs_n else 0.0,
+                    _productive)
+                _result["counted_as_loop"] = bool(_productive)
+                _result["output_rate"] = get_output_rate_stats()
             elif mode == "repair":
                 _local_fixable = _stats.get("local_fixable", "?")
                 _local_generated = _stats.get("local_generated", "?")
