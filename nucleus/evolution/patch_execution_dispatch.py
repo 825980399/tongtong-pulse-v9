@@ -138,24 +138,37 @@ _call_graph_cache: dict[str, Any] = {"path": None, "graph": None,
                                      "out_adj": None, "in_adj": None}
 
 
-def load_call_graph_cache(force: bool = False) -> dict[str, Any] | None:
-    """装载最新落盘调用图（**带缓存**）；无图 ⇒ None。
+def load_call_graph_cache(force: bool = False,
+                          graph_dir: str | None = None) -> dict[str, Any] | None:
+    """装载最新**合格**落盘调用图（**带缓存**）；无合格图 ⇒ None。
 
     同时构建出边/入边邻接表（`out_adj` / `in_adj`），供牵连半径 BFS 使用。
+
+    ★第312批 刀1：`graph_dir` 仅用于**隔离验证**（指向沙箱图目录，证守卫不改变读数）；
+    生产调用方一律不传，走默认的 `<仓库根>/data/call_graph`。
     """
     global _call_graph_cache
     try:
-        import glob as _g
         _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        _files = sorted(_g.glob(os.path.join(_root, "data", "call_graph", "graph_*.json")))
-        if not _files:
+        # ★第312批 刀1：图污染守卫（与 self_inspector 同一判据）—— 合成夹具（12 节点 / 4 文件）
+        #   一旦排在最后，牵连闸的起点就定位不到 ⇒ 整池 blast=None 转人工（fail-closed 掐死闭环）。
+        #   宁可用旧的真图，也不信新的假图。
+        from nucleus.data.call_graph_guard import (
+            format_rejected as _fmt_rej2,
+            select_latest_graph as _sel_graph2,
+        )
+        _pick2 = _sel_graph2(graph_dir or os.path.join(_root, "data", "call_graph"))
+        if _pick2.get("rejected"):
+            _module_logger.warning(
+                "[312刀1] 牵连闸图守卫：拒绝 %d 份不合格图（不当判据、也不删）: %s",
+                len(_pick2["rejected"]), _fmt_rej2(_pick2["rejected"]))
+        if not _pick2.get("ok"):
             return None
-        _latest = _files[-1]
+        _latest = _pick2["path"]
         if (not force and _call_graph_cache["path"] == _latest
                 and _call_graph_cache["graph"] is not None):
             return _call_graph_cache["graph"]
-        with open(_latest, encoding="utf-8") as _f:
-            _gd = json.load(_f)
+        _gd = _pick2["graph"]
         _out_adj: dict[str, list[str]] = {}
         _in_adj: dict[str, list[str]] = {}
         for _e in (_gd.get("edges") or []):

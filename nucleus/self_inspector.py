@@ -4917,14 +4917,24 @@ class SelfInspector(SilentLogMixin):
                   #   没有图身份就分不清「代码变了」与「图换了」。
                   "graph_file": "", "graph_mtime": 0.0}
         try:
-            import glob as _g
-            import json as _j
+            # ★第312批 刀1：**图污染守卫** —— 不再「取最新一份」就信，改为「取最新一份合格的图」。
+            #   生产目录被合成夹具污染过两次（12 节点 / 4 文件，node.file 全是 pkg/*.py）；
+            #   只要它排在最后，dead_code 就会拿一张 4 文件图当判据：覆盖率与豁免集全部失真，
+            #   而且**看不出来**（读数仍是个正常数字）。判据与选择器由 call_graph_guard 单点提供。
+            from nucleus.data.call_graph_guard import (
+                format_rejected as _fmt_rej,
+                select_latest_graph as _sel_graph,
+            )
             _dir = os.path.join(self._project_root, "data", "call_graph")
-            _files = sorted(_g.glob(os.path.join(_dir, "graph_*.json")))
-            if not _files:
+            _pick = _sel_graph(_dir)
+            if _pick.get("rejected"):
+                _module_logger.warning(
+                    "[312刀1] 调用图消费守卫：拒绝 %d 份不合格图（不当判据、也不删）: %s",
+                    len(_pick["rejected"]), _fmt_rej(_pick["rejected"]))
+            if not _pick.get("ok"):
                 return _empty
-            with open(_files[-1], encoding="utf-8") as _f:
-                _gd = _j.load(_f)
+            _gd = _pick["graph"]
+            _graph_path = _pick["path"]
             _in_edge_ids = {_e.get("callee") for _e in (_gd.get("edges") or [])
                             if isinstance(_e, dict) and _e.get("callee")}
             _id_by_fileline: dict = {}
@@ -4948,7 +4958,7 @@ class SelfInspector(SilentLogMixin):
                 if _nm:
                     _ids_by_filename.setdefault((_f, _nm), []).append(_nid)
             try:
-                _gmtime = float(os.path.getmtime(_files[-1]))
+                _gmtime = float(os.path.getmtime(_graph_path))
             except OSError as _gme:
                 # 取不到 mtime 只影响「图身份」可读性，不影响判据本身
                 _module_logger.debug("[309刀3] 图 mtime 读取失败: %s", _gme)
@@ -4956,7 +4966,9 @@ class SelfInspector(SilentLogMixin):
             return {"in_edge_ids": _in_edge_ids, "id_by_fileline": _id_by_fileline,
                     "ids_by_filename": _ids_by_filename, "covered_files": _covered,
                     "node_count": len(_gd.get("nodes") or []), "ok": True,
-                    "graph_file": os.path.basename(_files[-1]), "graph_mtime": _gmtime}
+                    "graph_file": os.path.basename(_graph_path), "graph_mtime": _gmtime,
+                    # ★第312批 刀1：本轮被判据采用的是**哪一份**图（拒绝清单另行 WARNING 留痕）
+                    "graph_rejected": list(_pick.get("rejected") or [])}
         except Exception as e:
             silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
             return _empty

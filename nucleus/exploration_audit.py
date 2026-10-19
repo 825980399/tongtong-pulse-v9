@@ -158,6 +158,61 @@ def _llm_channel(self_inspector=None) -> dict[str, Any]:
         return {"status": "error", "reviewed": 0, "distilled": 0, "report": []}
 
 
+def _m312_rel_file(file_path, root: str) -> str:
+    """★第312批 刀2：落盘前把 `file` 归一为**项目相对路径**（PII 外泄面收口）。
+
+    检测器内部两种口径并存：规则通道给相对路径，工具通道给 `os.path.abspath`。
+    312 前置分析实测：一份 70 条的真实 per-item 里 **59 条是完整盘符路径** ⇒
+    产物一旦对外，本机目录结构就跟着出去了。
+
+    规则：项目根内 ⇒ 相对路径；根外（临时目录 / 别的盘）⇒ 只留文件名；
+    统一 `/` 分隔。**只改落盘表示，不改检测器内部口径**（`dedup_key` 同步用归一值，
+    否则同一问题会因「路径写法不同」在去重表里变成两条）。
+    """
+    _p = str(file_path or "").replace("\\", "/").strip()
+    if not _p:
+        return ""
+    _is_abs = (len(_p) > 1 and _p[1] == ":") or _p.startswith("/")
+    if not _is_abs:
+        return _p
+    try:
+        from nucleus.data.path_utils import safe_relpath
+        _rel = str(safe_relpath(_p, root)).replace("\\", "/")
+    except Exception as e:
+        silent_exc(e, where="nucleus.exploration_audit::_m312_rel_file")
+        _rel = _p
+    # safe_relpath 跨盘时**降级为绝对路径** ⇒ 这里再兜一层，绝不让盘符落盘；
+    # 越过项目根的 ../ 链同样不收（它暴露的是根的绝对深度，一样是外泄面）。
+    if (_rel.startswith("/") or _rel.startswith("..")
+            or (len(_rel) > 1 and _rel[1] == ":")):
+        return _rel.rsplit("/", 1)[-1]
+    return _rel
+
+
+def _m312_build_items(issues: list, llm_issues: list, root: str) -> list:
+    """★第312批 刀2：把逐条明细**建成落盘结构**（纯函数，不写盘）。
+
+    抽出来的唯一目的：让「产物里有没有盘符路径」能在隔离环境里被断言，
+    不必往 `data/reports/` 真写一份。
+    """
+    _items = []
+    for _i in list(issues or []) + list(llm_issues or []):
+        if not isinstance(_i, dict):
+            continue
+        _rel_file = _m312_rel_file(_i.get("file", ""), root)
+        _items.append({
+            "type": _i.get("type", "unknown"),
+            "severity": _i.get("severity", "low"),
+            "file": _rel_file,
+            "line": _i.get("line", 0),
+            "method": _i.get("method", ""),
+            "desc": str(_i.get("description") or _i.get("message") or "")[:300],
+            "dedup_key": "{}:{}:{}".format(
+                _rel_file, _i.get("line", 0), _i.get("type", "unknown")),
+        })
+    return _items
+
+
 def _m303_dump_per_item(issues: list, llm_issues: list,
                         strategy: dict | None = None) -> str:
     """★第303批 刀6：per-item 清单落盘（审查的「出口记录仪」）。
@@ -178,20 +233,7 @@ def _m303_dump_per_item(issues: list, llm_issues: list,
         _dir = _os.path.join(_root, "data", "reports", "code_review")
         _os.makedirs(_dir, exist_ok=True)
         _ts = _time.strftime("%Y%m%d_%H%M%S")
-        _items = []
-        for _i in list(issues or []) + list(llm_issues or []):
-            if not isinstance(_i, dict):
-                continue
-            _items.append({
-                "type": _i.get("type", "unknown"),
-                "severity": _i.get("severity", "low"),
-                "file": _i.get("file", ""),
-                "line": _i.get("line", 0),
-                "method": _i.get("method", ""),
-                "desc": str(_i.get("description") or _i.get("message") or "")[:300],
-                "dedup_key": "{}:{}:{}".format(
-                    _i.get("file", ""), _i.get("line", 0), _i.get("type", "unknown")),
-            })
+        _items = _m312_build_items(issues, llm_issues, _root)
         _payload = {
             "run_id": _ts,
             "generated_at": _time.time(),

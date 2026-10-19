@@ -79,6 +79,21 @@ _module_logger = get_module_logger("SelfAwarenessDailyScheduler")
 DEFAULT_CHECK_INTERVAL_SEC = 60.0
 
 
+def _m312_as_dict(value: Any, where: str) -> dict:
+    """★第312批 刀3：把上游返回值兑成 dict（None / 其他类型 ⇒ 空 dict + WARNING 留痕）。
+
+    留痕行不能比它观测的代码更脆：`rescan_high_risk_levels()` 走异常路径时可能返回
+    None，原来直接 `.get()` 会在这里自抛 AttributeError，把「回扫失败」升级成
+    「整个每日拍失败」。守卫放在读之前，**不吞上游异常**（异常仍由外层 except
+    silent_exc 留痕），只把「读数缺失」变成「读数为空」。
+    """
+    if isinstance(value, dict):
+        return value
+    _module_logger.warning(
+        "[312刀3] %s 返回非 dict（%s），按空 dict 处理", where, type(value).__name__)
+    return {}
+
+
 def _cfg(name: str, default: Any) -> Any:
     """读取 config 配置项（导入失败或缺失时回退默认值）。"""
     try:
@@ -626,6 +641,10 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m300e:
                     silent_exc(_m300e, "DailyScheduler.run_once:补救链三数")
 
+            # ★第312批 刀3：留痕行读上游结果前先兑 dict（上游异常路径可能返回 None，
+            #   直接 `.get()` 会在留痕行自抛 AttributeError，把「回扫失败」升级成「每日拍失败」）。
+            #   守卫见模块级 `_m312_as_dict`。
+
             # ★第300批 刀7：存量高危 issue_type 回扫定级（只升不降、幂等）。
             if not self._is_test_env():
                 try:
@@ -635,10 +654,14 @@ class SelfAwarenessDailyScheduler:
                     # ★第309批 刀1：调用点补一行**成功留痕** —— 方法内部只在 changed>0
                     #   时打 WARNING，0 变更时静默，光看日志分不清「修好了没跑」与
                     #   「跑了但无变更」（正是本 bug 藏了 9 个批次的观察盲区）。
+                    # ★第312批 刀3：**留痕行不得比被观测的代码更脆** —— 上游异常路径可能
+                    #   返回 None（或任何非 dict），原来直接 `.get()` 会在这里自抛
+                    #   AttributeError，把「回扫失败」升级成「每日拍失败」。先兑空 dict。
+                    _rr = _m312_as_dict(_res["risk_rescan"], "存量高危回扫")
+                    _res["risk_rescan"] = _rr
                     _module_logger.info(
                         "[309刀1] 存量高危回扫完成: changed=%s total=%s",
-                        _res["risk_rescan"].get("changed"),
-                        _res["risk_rescan"].get("total"))
+                        _rr.get("changed"), _rr.get("total"))
                 except Exception as _m300r:
                     silent_exc(_m300r, "DailyScheduler.run_once:存量高危回扫")
 
