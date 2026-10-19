@@ -59,10 +59,17 @@ def fetch_runtime_activity() -> dict:
     离线/不可用时返回空 dict（调用方据此判定未进入运行态口径）。
     """
     try:
-        from nucleus.PulseBloodVessel import PulseBloodVessel
+        # ★第309批 刀2：模块路径修正 —— 血管真实位置是 organs/body/PulseBloodVessel.py
+        #   （原写法 `nucleus.PulseBloodVessel` 必然 ModuleNotFoundError）；且该类
+        #   **没有** `get_instance()`，仓内既有范式是模块级 `get_blood_vessel()`
+        #   （main.py:1548 用 set_blood_vessel_instance 注册活体实例；
+        #     SelfAwarenessEngine:457 同用法）——两处都得改，只改 import 仍会 AttributeError。
+        from organs.body.PulseBloodVessel import get_blood_vessel
         from tools.export_lfi import _get_organs
 
-        inst = PulseBloodVessel.get_instance()
+        inst = get_blood_vessel()
+        if inst is None:
+            return {}
         stats = inst.get_stats()
         act = stats.get("organ_activity") or {}
         # ★第258批 刀3②：organ_activity 多以 source_organ/class_name 为键，而 LFI 节点以
@@ -79,7 +86,25 @@ def fetch_runtime_activity() -> dict:
         _remapped = {}
         for _k, _v in act.items():
             _nk = _name_map.get(_k, _k)
-            _remapped[str(_nk)] = float(_v)
+            # ★第309批 刀2（「同因不同果」的另一半）：organ_activity 的值是
+            #   {"sent": n, "received": m} 的 **dict**（PulseBloodVessel:155 初始化），
+            #   原 `float(_v)` 必抛 TypeError → 被 silent_exc 吞成 {} → 掌握率
+            #   source=unavailable。此处归并为标量（sent+received），与
+            #   SelfAwarenessEngine:463—470 的既有口径一致。
+            if isinstance(_v, dict):
+                try:
+                    _val = float(int(_v.get("sent", 0) or 0)
+                                 + int(_v.get("received", 0) or 0))
+                except (TypeError, ValueError) as _ce1:
+                    silent_exc(_ce1, where="lfi_self_awareness_compare::fetch_runtime_activity:dict_pair")
+                    continue
+            else:
+                try:
+                    _val = float(_v)
+                except (TypeError, ValueError) as _ce2:
+                    silent_exc(_ce2, where="lfi_self_awareness_compare::fetch_runtime_activity:scalar")
+                    continue
+            _remapped[str(_nk)] = _val
         return _remapped
     except Exception as e:
         silent_exc(e, where="lfi_self_awareness_compare.fetch_runtime_activity")

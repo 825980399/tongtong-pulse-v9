@@ -1036,7 +1036,11 @@ class PatchManager:
                 _why)
         return _out
 
-    @staticmethod
+    # ★第309批 刀1：**去掉误加的 @staticmethod**。它把带 self 的普通方法绑成静态函数，
+    #   调用方 `PatchManager(root).rescan_high_risk_levels()` 一实参都不传 ⇒
+    #   TypeError: missing 1 required positional argument: 'self'。
+    #   后果：300 批的存量高危回扫**从未成功跑过一次**（306/308 两次升 CRITERIA_VERSION
+    #   之后的「按新判据重算」全部死在这一行，仅由 silent_exc 可见化留痕）。
     def rescan_high_risk_levels(self) -> dict:
         """★第300批刀7：存量高危 issue_type 回扫定级（280刀2只管新补丁，欠一次回扫）。
 

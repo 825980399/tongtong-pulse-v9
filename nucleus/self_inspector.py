@@ -4911,7 +4911,11 @@ class SelfInspector(SilentLogMixin):
             图缺失/损坏 ⇒ `ok=False`（判据退化为「不判」，零崩溃）。
         """
         _empty = {"in_edge_ids": set(), "id_by_fileline": {}, "ids_by_filename": {},
-                  "covered_files": set(), "node_count": 0, "ok": False}
+                  "covered_files": set(), "node_count": 0, "ok": False,
+                  # ★第309批 刀3：图身份（哪一份图 / 什么时候落的）——
+                  #   覆盖率与待复核数**随图漂移**（533→535 就是换了图），
+                  #   没有图身份就分不清「代码变了」与「图换了」。
+                  "graph_file": "", "graph_mtime": 0.0}
         try:
             import glob as _g
             import json as _j
@@ -4943,9 +4947,16 @@ class SelfInspector(SilentLogMixin):
                 _nm = str(_n.get("name", "") or "")
                 if _nm:
                     _ids_by_filename.setdefault((_f, _nm), []).append(_nid)
+            try:
+                _gmtime = float(os.path.getmtime(_files[-1]))
+            except OSError as _gme:
+                # 取不到 mtime 只影响「图身份」可读性，不影响判据本身
+                _module_logger.debug("[309刀3] 图 mtime 读取失败: %s", _gme)
+                _gmtime = 0.0
             return {"in_edge_ids": _in_edge_ids, "id_by_fileline": _id_by_fileline,
                     "ids_by_filename": _ids_by_filename, "covered_files": _covered,
-                    "node_count": len(_gd.get("nodes") or []), "ok": True}
+                    "node_count": len(_gd.get("nodes") or []), "ok": True,
+                    "graph_file": os.path.basename(_files[-1]), "graph_mtime": _gmtime}
         except Exception as e:
             silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
             return _empty
@@ -5075,6 +5086,8 @@ class SelfInspector(SilentLogMixin):
             _DEAD_CODE_REVIEW_STATS.update({
                 "count": 0, "mode": _mode, "coverage": round(_coverage * 100.0, 2),
                 "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
+                "graph_file": _gidx.get("graph_file", ""),
+                "graph_mtime": _gidx.get("graph_mtime", 0.0),
                 "samples": [], "as_of": time.time()})
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
@@ -5141,6 +5154,9 @@ class SelfInspector(SilentLogMixin):
             "count": int(_review_count), "mode": _mode,
             "coverage": round(_coverage * 100.0, 2),
             "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
+            # ★第309批 刀3：同版同图可比 —— 记下「这一轮读数出自哪份图」
+            "graph_file": _gidx.get("graph_file", ""),
+            "graph_mtime": _gidx.get("graph_mtime", 0.0),
             "samples": list(_review_samples), "as_of": time.time()})
         if _review_count:
             _module_logger.info(
@@ -5223,7 +5239,10 @@ _self_inspector_lock = threading.Lock()
 #   语义边界：待复核 ≠ 死代码；数字大只说明**图解析率不足**，不得据此删码。
 _DEAD_CODE_REVIEW_STATS: dict = {
     "count": 0, "mode": "unknown", "coverage": 0.0,
-    "node_count": 0, "in_edge_count": 0, "samples": [], "as_of": 0.0,
+    "node_count": 0, "in_edge_count": 0,
+    # ★第309批 刀3：图身份（哪份图 / 何时落），待复核数随图漂移时据此解释
+    "graph_file": "", "graph_mtime": 0.0,
+    "samples": [], "as_of": 0.0,
 }
 
 

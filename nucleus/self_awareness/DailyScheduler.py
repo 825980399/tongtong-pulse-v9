@@ -630,8 +630,15 @@ class SelfAwarenessDailyScheduler:
             if not self._is_test_env():
                 try:
                     from nucleus.reasoning.PatchManager import PatchManager as _300_pm
-                    _res["risk_rescan"] = _300_pm(
-                        self._project_root).rescan_high_risk_levels()
+                    _300_pmgr = _300_pm(self._project_root)
+                    _res["risk_rescan"] = _300_pmgr.rescan_high_risk_levels()
+                    # ★第309批 刀1：调用点补一行**成功留痕** —— 方法内部只在 changed>0
+                    #   时打 WARNING，0 变更时静默，光看日志分不清「修好了没跑」与
+                    #   「跑了但无变更」（正是本 bug 藏了 9 个批次的观察盲区）。
+                    _module_logger.info(
+                        "[309刀1] 存量高危回扫完成: changed=%s total=%s",
+                        _res["risk_rescan"].get("changed"),
+                        _res["risk_rescan"].get("total"))
                 except Exception as _m300r:
                     silent_exc(_m300r, "DailyScheduler.run_once:存量高危回扫")
 
