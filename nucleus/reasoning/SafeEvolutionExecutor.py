@@ -5854,6 +5854,13 @@ class SafeEvolutionExecutor:
                     _OUTPUT_STATS["productive"], _OUTPUT_STATS["zero_output"],
                     (_OUTPUT_STATS["productive"] / float(_runs_n)) if _runs_n else 0.0,
                     _productive)
+                if not _productive:
+                    # ★318批刀4：零产出 ⇒ 显式标「任务面空」，不得以"无异常"代替"无输入"
+                    _module_logger.info(
+                        "[318刀4][任务面空] 归因=判据看不见（子进程不可见父进程运行期指标）"
+                        " 证据=logs 1278/1278 均 mode=review+no_anomaly；"
+                        "alerts 12798 条含 ERROR475/CRITICAL8 ⇒ 压测该圈记任务面空，"
+                        "不得记作成功一圈")
                 _result["counted_as_loop"] = bool(_productive)
                 _result["output_rate"] = get_output_rate_stats()
             elif mode == "repair":

@@ -575,6 +575,11 @@ class CallGraphAnalyzer:
         self._raw_entries: list = []
         self._raw_tables: list = []
         self._parse_errors: list = []
+        # ★318批：名称索引（刀1 R1/R2 消歧用，懒惰构建）＋ 未解析样本（刀0 R3）
+        self._m318_name_index_cache: dict | None = None
+        self._m318_samples: list = []
+        self._m318_last_kind: str = ""
+
         self._graph_data: dict = {}      # analyze() 结果缓存
         self._unresolved = 0
         self._cross_file = 0
@@ -720,6 +725,47 @@ class CallGraphAnalyzer:
             [dict(x, file=rel, module=_module) for x in _c.name_tables])
         return _c
 
+    #: ★318批刀0：未解析样本单轮留存上限（防内存无限增长；落盘后即清）
+    #: 实测全库未解析+external ≈ 52k 条（2026-10-19），上限取 30 万防截断失真
+    _M318_MAX_SAMPLES = 300000
+
+    def _m318_name_index(self) -> dict:
+        """★318批刀1：名称 → [节点 id] 索引（懒惰构建）。
+
+        供 R1（self.X 作用域消歧）／R2（obj.X 全库唯一建边）／R3（样本分类）共用，
+        避免每条未解析调用都全表扫描 `_defs`（27k × 6.8k 次 = 不可承受）。
+        每个 (name, nid) 只入一次（与原 `_resolve_by_name` 的 `or` 判定等价）。
+        """
+        if self._m318_name_index_cache is None:
+            _idx: dict = {}
+            for _nid, _d in self._defs.items():
+                _qn = str(_d.get("qualname") or "")
+                _nm = str(_d.get("name") or "")
+                _key = _qn.split(".")[-1] if _qn else _nm
+                if not _key:
+                    continue
+                _idx.setdefault(_key, []).append(_nid)
+                if _nm and _nm != _key:
+                    _idx.setdefault(_nm, []).append(_nid)
+            self._m318_name_index_cache = _idx
+        return self._m318_name_index_cache
+
+    def _m318_classify_unresolved(self, rc: dict) -> str:
+        """★318批刀0（R3）：未解析调用分类，与烛微318§1-维度1 对表。
+
+        类别：`self唯一` / `self多义` / `obj唯一` / `obj多义` / `external` / `混合`。
+        判据只看"该名字在全库的候选数"——**不猜测**，只给攻坚靶子。
+        """
+        _parts = list(rc.get("parts") or [])
+        if not _parts:
+            return "混合"
+        _is_self = _parts[0] == "self"
+        _cands = self._m318_name_index().get(_parts[-1]) or []
+        _uniq = len(_cands) == 1
+        if _is_self:
+            return "self唯一" if _uniq else "self多义"
+        return "obj唯一" if _uniq else "obj多义"
+
     def _resolve_by_name(self, name: str, caller_module: str,
                          caller_class: str = "", caller_file: str = "") -> str:
         """把 `getattr(x, "name")` 的字面名解析为图节点 id（作用域优先消歧）。
@@ -732,11 +778,8 @@ class CallGraphAnalyzer:
         """
         if not name:
             return ""
-        _hits: list[str] = []
-        for _nid, _d in self._defs.items():
-            _qn = str(_d.get("qualname") or "")
-            if _qn.split(".")[-1] == name or str(_d.get("name") or "") == name:
-                _hits.append(_nid)
+        # ★318批刀1：改走名称索引（O(1) 取候选），语义不变
+        _hits: list[str] = list(self._m318_name_index().get(name) or [])
         if not _hits:
             return ""
         if len(_hits) == 1:
@@ -748,7 +791,17 @@ class CallGraphAnalyzer:
                          if str((self._defs.get(_h) or {}).get("qualname") or "") == _want]
             if len(_same_cls) == 1:
                 return _same_cls[0]
-        # ② 同模块
+        # ② 同文件（★318批刀1 增强：多义时先收窄到**调用方所在文件**——
+        #   同文件多类同名（mixin / 私有实现）是 self.X() 未解析的主要形态之一）
+        if caller_file:
+            _cf = caller_file.replace("\\", "/")
+            _same_file = [
+                _h for _h in _hits
+                if str((self._defs.get(_h) or {}).get("file") or ""
+                       ).replace("\\", "/") == _cf]
+            if len(_same_file) == 1:
+                return _same_file[0]
+        # ③ 同模块
         _same = [_h for _h in _hits
                  if str((self._defs.get(_h) or {}).get("module") or "") == caller_module]
         if len(_same) == 1:
@@ -790,13 +843,28 @@ class CallGraphAnalyzer:
                             self._in_deg[_hit] = self._in_deg.get(_hit, 0) + 1
                             self._edge_kinds[(_c_id, _hit)] = "byname"
                 continue
+            self._m318_last_kind = ""
             _callee = self._resolve(_rc, _module_names)
+            _m318_kind = self._m318_last_kind
             if not _callee:
                 # ★口径修正：区分「项目外调用」与「项目内疑似未解析」
+                _cat = ""
                 if self._is_external(_rc, _module_names):
                     self._external += 1
+                    _cat = "external"
                 else:
                     self._unresolved += 1
+                    _cat = self._m318_classify_unresolved(_rc)
+                # ★318批刀0（R3）：放弃处不再是「只有计数器、无样本」——留样本给 R1 对表
+                if len(self._m318_samples) < self._M318_MAX_SAMPLES:
+                    self._m318_samples.append({
+                        "cat": _cat,
+                        "parts": list(_rc.get("parts") or [])[:4],
+                        "module": _rc.get("module", ""),
+                        "file": _rc.get("file", ""),
+                        "in_class": _rc.get("in_class", ""),
+                        "caller": _rc.get("caller_qual", ""),
+                    })
                 continue
             _caller_mod = _rc.get("module", "")
             _caller_qual = _rc.get("caller_qual") or _MODULE_SCOPE
@@ -810,11 +878,22 @@ class CallGraphAnalyzer:
             _tgt[_callee] = _tgt.get(_callee, 0) + 1
             self._in_deg[_callee] = self._in_deg.get(_callee, 0) + 1
             # ★第305批刀2：静态边也记 kind（默认 static），与 byname/event 统一到边上
-            self._edge_kinds[(_caller_id, _callee)] = _rc.get("kind") or "static"
+            self._edge_kinds[(_caller_id, _callee)] = (_m318_kind
+                                                      or _rc.get("kind") or "static")
             if self._callee_module(_callee) != _caller_mod:
                 self._cross_file += 1
         # ★第306批刀1：静态解析完成后补两类反射边（event / entry）
         self._pass2_reflect(_module_names)
+        # ★318批刀0（R3）：未解析样本落盘（滚动 7 份，与 312 同规格）
+        if getattr(self, "_m318_samples", None):
+            try:
+                from nucleus.self_awareness.unresolved_samples import dump_samples
+                _sp = dump_samples(self._m318_samples, self.project_root)
+                _logger.info("[318刀0][R3] 未解析样本落盘: %s（%d 条）",
+                             _sp, len(self._m318_samples))
+            except Exception as _se:
+                _logger.warning("[318刀0][R3] 未解析样本落盘失败（不影响建图）: %s: %s",
+                                type(_se).__name__, _se)
 
     def _pass2_reflect(self, module_names: set) -> None:
         """把 emit / 订阅 / 注册三类反射证据解析成边。
@@ -939,6 +1018,15 @@ class CallGraphAnalyzer:
             _hit = self._by_module.get(_cur_mod, {}).get(_q)
             if _hit:
                 return _hit
+            # ★318批刀1（R1 主线第一刀）：同模块 qualname 表查不到（跨模块继承 / mixin）
+            #   ⇒ 改走 **作用域优先消歧**（同类 → 同模块 → 同目录 → 全库唯一），
+            #   带 caller_class / caller_file；仍多义 ⇒ 空串（不猜，口径纪律不变）。
+            _hit2 = self._resolve_by_name(_parts[1], _cur_mod,
+                                          caller_class=rc.get("in_class", ""),
+                                          caller_file=rc.get("file", ""))
+            if _hit2:
+                self._m318_last_kind = "self_attr"
+                return _hit2
             return ""
 
         # 2) 本模块内定义（含 Class.method / Class.A.B）
@@ -1001,6 +1089,15 @@ class CallGraphAnalyzer:
                       and v["type"] == "function"]
             if len(_cands) == 1:
                 return _cands[0]["id"]
+        # 6) ★318批刀1（R2）：`obj.X()` 属性调用——**多义仍不猜**，但全库同名唯一时建边
+        #    （kind="unique_name"，可审计）。硬护栏：external 一律不享受此兜底，
+        #    防把 os/json 之类第三方调用算成"已解析"制造虚假提升（与刀2 同口径）。
+        if self._is_external(rc, module_names):
+            return ""
+        _cands2 = list(self._m318_name_index().get(_parts[-1]) or [])
+        if len(_cands2) == 1:
+            self._m318_last_kind = "unique_name"
+            return _cands2[0]
         return ""
 
     def _lookup_in_module(self, module: str, qualname: str) -> str:

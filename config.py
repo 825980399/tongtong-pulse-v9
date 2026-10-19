@@ -5925,7 +5925,9 @@ SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 
 # 读取点①：nucleus/evolution/patch_execution_dispatch.py::dispatch_on_tick
 #   派单节拍：最小间隔（秒）。默认 86400 = 保留日频；压测档位可调小（如 300/3600）。
 #   安全闸不随节拍放开：ParamPatchManager._HARD_CAP=1、max_blast_radius=1 均不动。
-PATCH_DISPATCH_INTERVAL_SEC = 86400
+# ★318批刀3（星轨+小林裁定）：压测首跑取 **3600s 安全档**（N=4 圈/天）。
+#   86400（原日频）只够一天一圈，压测看不见效果；60s 下限仍在（防每轮询重入）。
+PATCH_DISPATCH_INTERVAL_SEC = 3600
 # 读取点②：organs/brain/PulseSubconscious.py::_m304_growth_to_hub
 #   growth 入库「按时间窗重置」的窗口长度（秒）。默认 3600 = 每小时窗口 20 条。
 #   语义仍是 GROWTH_HUB_MAX_PER_WINDOW（每窗条数），由「每进程封顶」改为「按窗滚动」。

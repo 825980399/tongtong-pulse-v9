@@ -4924,6 +4924,8 @@ class SelfInspector(SilentLogMixin):
         """
         _empty = {"in_edge_ids": set(), "id_by_fileline": {}, "ids_by_filename": {},
                   "covered_files": set(), "node_count": 0, "ok": False,
+                  # ★318批刀2：调用图 stats（解析率口径的原始读数——解禁尺子换它）
+                  "stats": {},
                   # ★第309批 刀3：图身份（哪一份图 / 什么时候落的）——
                   #   覆盖率与待复核数**随图漂移**（533→535 就是换了图），
                   #   没有图身份就分不清「代码变了」与「图换了」。
@@ -4979,13 +4981,15 @@ class SelfInspector(SilentLogMixin):
                     "ids_by_filename": _ids_by_filename, "covered_files": _covered,
                     "node_count": len(_gd.get("nodes") or []), "ok": True,
                     "graph_file": os.path.basename(_graph_path), "graph_mtime": _gmtime,
+                    "stats": _gd.get("stats") or {},
                     # ★第312批 刀1：本轮被判据采用的是**哪一份**图（拒绝清单另行 WARNING 留痕）
                     "graph_rejected": list(_pick.get("rejected") or [])}
         except Exception as e:
             silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
             return _empty
 
-    def _detect_dead_code(self) -> list[dict[str, Any]]:
+    def _detect_dead_code(self, _a1_failed_rate: float | None = None) \
+            -> list[dict[str, Any]]:
         """死代码检测：扫描全库公共方法，找出无外部调用的方法。
 
         ★9-问题3修复（2026-09-06）：原实现为 O(方法数 × 全库字符数) 的双重循环——
@@ -5100,23 +5104,39 @@ class SelfInspector(SilentLogMixin):
         _COVERAGE_FLOOR = 0.55
         _node_count = int(_gidx.get("node_count", 0) or 0)
         _coverage = (len(_in_edge_ids) / _node_count) if _node_count else 0.0
+        # ★318批刀2：**换尺子**——解禁条件改用「仓内可解析调用解析率」，
+        #   分母显式排除 external（硬护栏：防 R1 把 os/json 调用算成"已解析"制造虚假提升）。
+        #   旧覆盖率保留为**参考读数**（仍输出、仍可审计），但不再当闸门。
+        _resolve_rate, _internal_n, _unres_n = self._m318_resolve_rate(_gidx.get("stats") or {})
+        _high_conf = bool(_gidx.get("ok")) and _resolve_rate >= self._RESOLVE_GATE_HIGH
         _mode = "judge"
         if _gidx.get("ok"):
-            if _coverage < _COVERAGE_FLOOR:
+            if _resolve_rate < self._RESOLVE_GATE_REVIEW:
                 _mode = "silent"
-            elif _coverage < _COVERAGE_JUDGE:
+            elif _resolve_rate < self._RESOLVE_GATE_JUDGE:
                 _mode = "review"
+        # A1 类簇断言护栏（可选输入；不可得(None) 时不阻断——没测 ≠ 有病，也不许据此放行）
+        if _a1_failed_rate is not None:
+            try:
+                if float(_a1_failed_rate) > self._A1_FAILED_MAX:
+                    _mode = {"judge": "review", "review": "silent"}.get(_mode, _mode)
+            except (TypeError, ValueError) as _a1e:
+                _module_logger.debug("[318刀2] A1 failed 率不可解析，护栏跳过: %s", _a1e)
         if _mode == "silent":
             _DEAD_CODE_REVIEW_STATS.update({
                 "count": 0, "mode": _mode, "coverage": round(_coverage * 100.0, 2),
                 "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
                 "graph_file": _gidx.get("graph_file", ""),
                 "graph_mtime": _gidx.get("graph_mtime", 0.0),
+                "criteria_version": self._DEAD_CODE_CRITERIA_VERSION,
+                "resolve_rate": round(_resolve_rate * 100.0, 2),
                 "samples": [], "items": [], "as_of": time.time()})
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
-                " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）",
-                _coverage * 100.0, len(_in_edge_ids), _node_count, _COVERAGE_FLOOR * 100.0)
+                " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）"
+                " ｜ 解析率 %.1f%%（仓内可解析 %d / 仓内调用 %d，分母已排除 external）",
+                _coverage * 100.0, len(_in_edge_ids), _node_count, _COVERAGE_FLOOR * 100.0,
+                _resolve_rate * 100.0, _internal_n, _internal_n + _unres_n)
             return _issues
         _review_only = (_mode == "review")
         # ★第308批 刀2：中间档只计数、不再造 issue
@@ -5201,6 +5221,10 @@ class SelfInspector(SilentLogMixin):
             # ★第309批 刀3：同版同图可比 —— 记下「这一轮读数出自哪份图」
             "graph_file": _gidx.get("graph_file", ""),
             "graph_mtime": _gidx.get("graph_mtime", 0.0),
+            # ★318批刀2：新尺子（解析率）与口径版本一并留档，供跨批对表
+            "criteria_version": self._DEAD_CODE_CRITERIA_VERSION,
+            "resolve_rate": round(_resolve_rate * 100.0, 2),
+            "high_confidence": bool(_high_conf),
             "samples": list(_review_samples),
             "items": list(_review_items),
             "as_of": time.time()})
@@ -5209,6 +5233,10 @@ class SelfInspector(SilentLogMixin):
                 "[308刀2] 待复核清单 %d 条（统计口径，不进issues；覆盖率 %.1f%%，"
                 "非死代码结论，不得据此删码）样例: %s",
                 _review_count, _coverage * 100.0, ", ".join(_review_samples))
+        # ★318批刀2：per-item 按 criteria_version 留样（判死档打开后一次涌进数百条，
+        #   滚动 7 份会被冲掉 ⇒ 按口径版本各留一份，跨批可比、可审计）
+        if _review_items:
+            _m318_record_per_item(self._DEAD_CODE_CRITERIA_VERSION, _review_items)
         # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
         _module_logger.info(
             "[307刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
@@ -5223,6 +5251,29 @@ class SelfInspector(SilentLogMixin):
     _M311_MIN_INTERVAL_SEC = 60.0   # 合并窗口：同进程内两次指纹扫描的最小间隔
     _M311_MAX_LISTED = 50           # payload 每类最多列多少文件（472 文件全变也压得住）
     _M311_MAX_ITEMS = 20            # 待复核明细留存条数（受控入料口取用）
+
+    # ===== ★318批刀2：dead_code 解禁口径（换尺子：解析率，而非"被调用足迹"）=====
+    # 57.7% 是"有入边节点 / 总节点"——受"图残缺"与"真没人调用"双向污染，不能当解禁依据。
+    # 星轨+小林裁定：X=50%（R1 完成即可达）为「中间档 → 判死档」新门槛；70% 保留高置信判死档。
+    _RESOLVE_GATE_JUDGE = 0.50        # 解析率 ≥50% ⇒ 可判死（severity=low）
+    _RESOLVE_GATE_HIGH = 0.70         # 解析率 ≥70% ⇒ 高置信判死
+    _RESOLVE_GATE_REVIEW = 0.35       # 35%~50% ⇒ 只出待复核清单（不判死）
+    _A1_FAILED_MAX = 0.50             # A1 类簇断言 failed 率上限（超出 ⇒ 降一档，不据此放行）
+    _DEAD_CODE_CRITERIA_VERSION = "2026-10-19.318.resolve50"
+
+
+    @staticmethod
+    def _m318_resolve_rate(stats: dict) -> tuple[float, int, int]:
+        """★318批刀2：仓内可解析调用解析率（**分母显式排除 external**）。
+
+        Returns: (resolve_rate, internal_resolved, unresolved)
+        """
+        _total = int(stats.get("total_calls", 0) or 0)
+        _unres = int(stats.get("unresolved_calls", 0) or 0)
+        _ext = int(stats.get("external_calls", 0) or 0)
+        _internal = max(0, _total - _unres - _ext)
+        _den = _internal + _unres
+        return ((_internal / float(_den)) if _den else 0.0, _internal, _unres)
 
     def detect_structure_changes(self, scan_dirs: list | None = None,
                                  emit: bool = True) -> dict[str, Any]:
@@ -5391,6 +5442,27 @@ class SelfInspector(SilentLogMixin):
 
 _self_inspector: SelfInspector | None = None
 _self_inspector_lock = threading.Lock()
+
+# ===== ★318批刀2：per-item 按 criteria_version 留样（模块级出口）=====
+# 判死档打开后清单会一次涌进数百条，滚动 7 份会被后续产物冲掉 ⇒ 按版本各留一份。
+_DEAD_CODE_PER_ITEM_BY_VERSION: dict = {}
+
+
+def _m318_record_per_item(version: str, items: list) -> int:
+    """★318批刀2：按 `criteria_version` 留样（每版本上限 500 条）。返回该版本累计条数。"""
+    if not items:
+        return len(_DEAD_CODE_PER_ITEM_BY_VERSION.get(version) or [])
+    _lst = _DEAD_CODE_PER_ITEM_BY_VERSION.setdefault(version, [])
+    for _it in items[:500]:
+        _lst.append(_it)
+    del _lst[500:]
+    return len(_lst)
+
+
+def get_dead_code_per_item_by_version() -> dict:
+    """★318批刀2：读 per-item 按版本留样（拷贝，只读；供压测/报告跨批对表）。"""
+    return {_k: list(_v) for _k, _v in _DEAD_CODE_PER_ITEM_BY_VERSION.items()}
+
 
 # ★第308批 刀2：dead_code 中间档「待复核清单」的**统计口径**出口。
 #   307 批把它作为 severity=info 的 issue 堆进 issues（实测 533 条），但下游全都不消费：
