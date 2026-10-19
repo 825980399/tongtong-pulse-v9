@@ -813,6 +813,15 @@ class SelfAwarenessDailyScheduler:
             "[自我认知调度] 后台调度线程已启动（每日 %02d:%02d 触发，轮询 %.0fs，daemon）",
             _h, _m, _iv)
         while not self._stop.is_set():
+            # ★319批刀6：None 守卫尾巴（310§7-⑥ / 313§7-⑨）——关键句柄为 None 时
+            #   显式告警并跳过本轮，杜绝"静默 None 传播"。
+            if self._stop is None or self._now_fn is None:
+                _module_logger.warning(
+                    "[319刀6] DailyScheduler 关键句柄为 None（stop=%s now_fn=%s）"
+                    " ⇒ 本轮跳过（None 守卫，线程不退出）",
+                    self._stop is None, self._now_fn is None)
+                self._stop.wait(_iv) if self._stop is not None else time.sleep(_iv)
+                continue
             try:
                 _now = self._now_fn()
                 if self._due(_now):

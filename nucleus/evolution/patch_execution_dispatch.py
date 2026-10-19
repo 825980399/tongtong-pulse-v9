@@ -481,6 +481,54 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
     return _out[:_lim]
 
 
+
+# ===== ★319批刀5（SC-2 回归自检 · 挂点）=====
+_SC2_LAST: dict = {}
+_SC2_MIN_INTERVAL_SEC = 600.0
+_SC2_LAST_TS: dict = {}
+
+
+def _sc2_probe(class_name: str = "PulseInnerWorld", reason: str = "") -> dict:
+    """★319批刀5：跑一次 A1 并与进程内上次结果比对（**只许减不许增**）。
+
+    只读：从最新图快照注入（不触发全量重扫）；节流 600s 防热点。
+    红线：只产计数与结论，不改台账、不入队、不触发行动。
+    """
+    _now = time.time()
+    if _now - float(_SC2_LAST_TS.get(class_name, 0.0) or 0.0) < _SC2_MIN_INTERVAL_SEC:
+        return {"status": "throttled"}
+    _SC2_LAST_TS[class_name] = _now
+    try:
+        from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
+        import json as _json
+        _dir = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))), "data", "call_graph")
+        _fs = sorted(f for f in os.listdir(_dir)
+                     if f.startswith("graph_") and f.endswith(".json"))
+        if not _fs:
+            return {"status": "no_graph"}
+        with open(os.path.join(_dir, _fs[-1]), encoding="utf-8") as _f:
+            _g = _json.load(_f)
+        _a = CallGraphAnalyzer()
+        _a._graph_data = _g
+        _r = _a.mastery_assertion_check(class_name)
+        _failed = set((_r.get("a1_inbound") or {}).get("zero_in_degree_sample") or [])
+        _prev = _SC2_LAST.get(class_name)
+        _SC2_LAST[class_name] = _failed
+        if _prev is None:
+            _module_logger.info("[SC-2] 回归自检 基线建立 class=%s failed=%d reason=%s"
+                                "（首跑不发结论）", class_name, len(_failed), reason or "-")
+            return {"status": "baseline", "failed": len(_failed)}
+        _res = CallGraphAnalyzer.sc2_regression_selfcheck(
+            _prev, _failed, class_name=class_name,
+            criteria_version=str(_r.get("criteria_version") or ""))
+        _res["status"] = _res.get("verdict")
+        return _res
+    except Exception as _e:
+        _module_logger.warning("[SC-2] 回归自检探针不可用（不影响主流程）: %s: %s",
+                               type(_e).__name__, _e)
+        return {"status": "error", "error": type(_e).__name__}
+
 def dispatch_and_verify(sandbox: Any, patch: dict) -> dict:
     """把补丁 modified_code 路由 sandbox 执行，返回执行结论（不落盘，由调用方回写）。
 

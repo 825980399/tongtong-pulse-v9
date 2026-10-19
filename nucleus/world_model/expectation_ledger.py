@@ -398,6 +398,76 @@ def collect_assertions(project_root: str | None = None) -> list[dict]:
     return _out
 
 
+
+def sc3_consistency(project_root: str | None = None,
+                    class_names: list | None = None) -> dict:
+    """★319批刀1（SC-3 一致性自检）：断言（二阶）与 ledger（世界模型）**对表**。
+
+    同一条断言在 `mastery_assertion_check` 与 `expectation_ledger.verdict` 两处结论
+    是否一致——不一致即"尺子坏"，**优先于任何结论**（验收线：不一致率 ≤5%）。
+    比对项：A4 覆盖的 `gap`（断言侧） vs ledger 的 `measured.actual` ＋ `verdict`。
+
+    红线：只产计数与结论，不因不一致去改任一侧（不自动"修"数据）。
+    """
+    _root = project_root or os.getcwd()
+    try:
+        from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
+    except Exception as _e:
+        silent_exc(_e, where="world_model.expectation_ledger.sc3_consistency.import")
+        return {"error": type(_e).__name__, "total": 0, "mismatch": 0}
+    _graph_rel, _graph = _latest_graph(_root)
+    _a = CallGraphAnalyzer()
+    _a._graph_data = _graph
+    _idx: dict[str, dict] = {}
+    for _r in _read_jsonl(ledger_path(_root)):
+        _aid = str(_r.get("assertion_id") or "")
+        _idx[_aid] = _r
+        if _aid.startswith("loop."):
+            _idx[_aid.split(".", 2)[-1]] = _r
+    _names = class_names or [c for c, _ns in
+                             sorted(_clusters(_graph).items(), key=lambda kv: -len(kv[1]))[:10]]
+    _total = 0
+    _mismatch = 0
+    _details: list[dict] = []
+    for _c in _names:
+        # ★修正：断言侧必须拿到「说明书侧方法数」才有 gap——否则 a4_coverage 恒为
+        #   unverifiable，对表会**空转（total=0）**，看起来"一致"其实是没比。
+        _ns = _clusters(_graph).get(_c) or []
+        _files = {str(_n.get("file") or "") for _n in _ns if _n.get("file")}
+        _manual = 0
+        _missing = True
+        for _f in _files:
+            _cnt = _count_defs_in_file(os.path.join(_root, str(_f).replace("\\", "/")))
+            if _cnt is None:
+                continue
+            _missing = False
+            _manual += _cnt
+        _res = _a.mastery_assertion_check(
+            _c, manual_method_count=(None if _missing else _manual))
+        _gap = (_res.get("a4_coverage") or {}).get("gap")
+        if _gap is None:
+            continue
+        _total += 1
+        _lr = _idx.get("a4.coverage.%s" % _c)
+        if _lr is None:
+            _mismatch += 1
+            _details.append({"class": _c, "reason": "ledger 无对应断言"})
+            continue
+        _lactual = (_lr.get("measured") or {}).get("actual")
+        _lverdict = _lr.get("verdict")
+        _exp = "met" if _gap == 0 else "violated"
+        if _lverdict != _exp or _lactual != _gap:
+            _mismatch += 1
+            _details.append({"class": _c, "assert_gap": _gap,
+                             "ledger_actual": _lactual, "ledger_verdict": _lverdict,
+                             "expected_verdict": _exp})
+    _rate = (_mismatch / float(_total)) if _total else 0.0
+    _module_logger.info("[SC-3] consistency total=%d mismatch=%d rate=%.4f（>0.05 即判尺子坏）",
+                        _total, _mismatch, _rate)
+    return {"total": _total, "mismatch": _mismatch, "rate": round(_rate, 4),
+            "threshold": 0.05, "ruler_broken": _rate > 0.05,
+            "graph_file": _graph_rel, "details": _details[:20]}
+
 def sweep(project_root: str | None = None, loop: int | None = None) -> dict:
     """跑一次台账（幂等：同一 assertion_id 同日只记首次），返回统计。
 

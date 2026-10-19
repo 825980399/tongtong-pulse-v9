@@ -1438,7 +1438,7 @@ class CallGraphAnalyzer:
             _logger.warning("调用图落盘失败（返回空串）: %s: %s", type(e).__name__, e)
             return ""
 
-    def cluster_view(self, class_name: str) -> dict:
+    def cluster_view(self, class_name: str, mask_ids: list | None = None) -> dict:
         """★315批刀3：只读类簇视图——给定类名（cls），返回该类簇的图结构指标。
         复用 `_qual_id` / `nodes` / `edges` 现成结构（与 dump_graph_snapshot 同源）。
         输出：方法数、各方法入度/出度、零入边方法列表、跨簇边界调用数。
@@ -1470,6 +1470,12 @@ class CallGraphAnalyzer:
                 _in[_ce] += 1
             if (_c in _id_set) != (_ce in _id_set):
                 _cross += 1
+        # ★319批刀0（SC-1）：**只读遮蔽**——把指定方法的入边在**内存态**视作 0
+        #   （不落 data/、不改台账、不入队、不触发行动；仅用于自检"断言是否真能发现"）。
+        if mask_ids:
+            for _mi in mask_ids:
+                if _mi in _in:
+                    _in[_mi] = 0
         _zero_in = [_i for _i, _v in _in.items() if _v == 0]
         return {
             "class": class_name,
@@ -1507,8 +1513,57 @@ class CallGraphAnalyzer:
         "gap_baseline": 116,
     }
 
+    def sc1_mask_selfcheck(self, class_name="PulseInnerWorld", sample_n: int = 5) -> dict:
+        """★319批刀0（SC-1 遮蔽自检）：**拿自己考考自己**（负样本版）。
+
+        做法：从"当前有入边"的方法里取 `sample_n` 个作为**负样本**，在内存态把它们的
+        入边遮蔽（视作 0），再看断言是否真的把它们判为 failed（零入边）。
+        - 被遮蔽的方法**出现在**遮蔽后的零入边集合 ⇒ 命中（断言有效）
+        - 没出现 ⇒ **漏报**（"假掌握"：断言看不见自己该看见的东西）
+
+        红线（写死）：**只产计数与结论**，不改台账、不入队、不触发行动、不落 data/。
+        """
+        _cv0 = self.cluster_view(class_name)
+        _degs = _cv0.get("in_degrees") or {}
+        _cands = [_i for _i, _v in _degs.items() if int(_v or 0) > 0]
+        _picked = _cands[:max(0, int(sample_n or 0))]
+        if not _picked:
+            _logger.info("[SC-1] 遮蔽自检 class=%s 无可用负样本（全零入边）⇒ 本轮不判", class_name)
+            return {"class": class_name, "masked": 0, "hit": 0, "miss": 0,
+                    "status": "no_sample"}
+        _res = self.mastery_assertion_check(class_name,
+                                            mask={"hide_methods": _picked})
+        return {"class": class_name, "status": "ok",
+                **(_res.get("sc1_mask") or {})}
+
+    @staticmethod
+    def sc2_regression_selfcheck(before_failed: list | set, after_failed: list | set,
+                                 class_name: str = "PulseInnerWorld",
+                                 graph_file: str = "",
+                                 criteria_version: str = "") -> dict:
+        """★319批刀5（SC-2 回归自检）：补丁/规则应用前后比 A1 failed 集合——**只许减不许增**。
+
+        同 `graph_file` ＋ 同 `criteria_version` 才可比（否则记 `not_comparable`）。
+        红线：只产计数与结论，不改台账、不入队、不触发行动。
+        """
+        _b = set(before_failed or [])
+        _a = set(after_failed or [])
+        _added = sorted(_a - _b)
+        _removed = sorted(_b - _a)
+        _ok = not _added
+        _logger.info(
+            "[SC-2] 回归自检 class=%s graph_file=%s criteria_version=%s "
+            "added=%d removed=%d verdict=%s",
+            class_name, graph_file or "-", criteria_version or "-",
+            len(_added), len(_removed), "ok" if _ok else "regression")
+        return {"class": class_name, "added": _added, "removed": _removed,
+                "added_count": len(_added), "removed_count": len(_removed),
+                "ok": _ok, "verdict": "ok" if _ok else "regression",
+                "graph_file": graph_file, "criteria_version": criteria_version}
+
     def mastery_assertion_check(self, class_name="PulseInnerWorld",
-                                manual_method_count=None) -> dict:
+                                manual_method_count=None,
+                                mask: dict | None = None) -> dict:
         """★316批刀1：掌握度结构断言（只跑断言、不跑检测器）。
 
         **不进 issues、不进趋势门禁**（守 307—312 的 info/统计口径不污染问题清单）。
@@ -1519,8 +1574,19 @@ class CallGraphAnalyzer:
 
         返回四项计数 {total, passed, failed, unverifiable} ＋ a1/a4 明细。
         """
-        _cv = self.cluster_view(class_name)
+        # ★319批刀0（SC-1）：只读遮蔽（负样本）——不落 data/、不改台账
+        _hide = list((mask or {}).get("hide_methods") or [])
+        _cv = self.cluster_view(class_name, mask_ids=_hide or None)
         _methods = int(_cv.get("method_count", 0) or 0)
+        _sc1 = {"masked": len(_hide), "hit": 0, "miss": 0}
+        if _hide:
+            _zset = set(_cv.get("zero_in_degree_methods") or [])
+            _hit = sum(1 for _m in _hide if _m in _zset)
+            _sc1 = {"masked": len(_hide), "hit": _hit, "miss": len(_hide) - _hit}
+            _logger.info(
+                "[SC-1] 遮蔽自检 class=%s masked=%d hit=%d miss=%d"
+                "（只产计数与结论：不改台账/不入队/不触发行动/不落 data/）",
+                class_name, _sc1["masked"], _sc1["hit"], _sc1["miss"])
         _zero_in = list(_cv.get("zero_in_degree_methods") or [])
         _a1_failed = len(_zero_in)
         _a1_passed = max(0, _methods - _a1_failed)
@@ -1538,6 +1604,7 @@ class CallGraphAnalyzer:
         _passed = max(0, _methods - _failed)
         return {
             "class": class_name,
+            "sc1_mask": _sc1,
             "criteria_version": self._A4_CRITERIA_VERSION,
             "cluster_scope": self._A4_CLUSTER_SCOPE,
             "total": _methods,

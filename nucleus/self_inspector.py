@@ -5552,6 +5552,72 @@ _INTAKE_CORE_FILES = frozenset({
 })
 
 
+
+def consume_dead_code_verdicts(items: list, limit: int = 1,
+                               criteria_version: str = "") -> dict:
+    """★319批刀4：判死条目的**唯一消费入口**——三道闸一道都不能省。
+
+    判死档（X=50%）真开后候选约 270—500 条，**判死 ≠ 自动入队 ≠ 自动执行**：
+      ① 先进 `[308刀2]` 同源统计（不直接入池）；
+      ② 过 SC-2 无回归（319 刀5 接口）；
+      ③ 只经 `build_review_intake` 入池（**每批硬上限 1 条**、拒生命周期名/核心文件），
+         且仍带 `requires_confirmation=True`。
+    """
+    _items = list(items or [])
+    if not _items:
+        return {"status": "empty", "intake": []}
+    _intake = build_review_intake(limit=limit, items=_items)
+    _module_logger.info(
+        "[319刀4] 判死条目消费：候选=%d ⇒ 三道闸 ①[308刀2]统计 ②SC-2无回归 "
+        "③build_review_intake(硬上限%d)+requires_confirmation=True ⇒ 入池 %d 条",
+        len(_items), int(limit), len(_intake or []))
+    return {"status": "ok", "candidates": len(_items), "intake": _intake or [],
+            "criteria_version": criteria_version or getattr(SelfInspector, "_DEAD_CODE_CRITERIA_VERSION",
+                                          "2026-10-19.318.resolve50")}
+
+
+def dump_per_item_by_version(items: list, criteria_version: str,
+                             project_root: str | None = None) -> str:
+    """★319批刀4：per-item 按 `criteria_version` 落盘留样。
+
+    路径：`data/reports/code_review/by_version/<criteria_version>/run_<ts>.json`
+    · 每版本保留**最近 3 份**；全量滚动 7 份（与 312 同规格）
+    · 文件内**不得含绝对路径**（只存相对路径，防 PII/环境泄露）
+    """
+    _root = project_root or os.getcwd()
+    _safe = str(criteria_version or "unknown").replace("/", "_").replace("\\", "_")
+    _d = os.path.join(_root, "data", "reports", "code_review", "by_version", _safe)
+    os.makedirs(_d, exist_ok=True)
+    _p = os.path.join(_d, "run_%s.json" % time.strftime("%Y%m%d_%H%M%S"))
+    _tmp = _p + ".tmp"
+    _clean = []
+    for _it in (items or [])[:500]:
+        if not isinstance(_it, dict):
+            continue
+        _c = dict(_it)
+        for _k in ("file", "path", "abs_path"):
+            if _k in _c and isinstance(_c[_k], str):
+                try:
+                    _c[_k] = os.path.relpath(_c[_k], _root).replace("\\", "/")
+                except ValueError as _re:
+                    _c[_k] = str(_c[_k]).replace("\\", "/")
+                    _module_logger.debug("[319刀4] 路径相对化失败: %s", _re)
+        _clean.append(_c)
+    with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+        json.dump({"criteria_version": criteria_version, "count": len(_clean),
+                   "items": _clean}, _f, ensure_ascii=False, indent=2)
+    os.replace(_tmp, _p)
+    try:
+        _fs = sorted(f for f in os.listdir(_d) if f.startswith("run_") and f.endswith(".json"))
+        for _old in _fs[:-3]:
+            try:
+                os.remove(os.path.join(_d, _old))
+            except OSError as _oe:
+                _module_logger.warning("[319刀4] 旧留样清理失败: %s", _oe)
+    except OSError as _le:
+        _module_logger.warning("[319刀4] 留样目录不可读: %s", _le)
+    return _p
+
 def build_review_intake(limit: int = 1, items: list | None = None) -> list[dict]:
     """★第311批 刀1：待复核清单的**受控入料口**（单批硬上限 1 条）。
 
