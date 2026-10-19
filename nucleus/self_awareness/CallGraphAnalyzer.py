@@ -50,6 +50,10 @@ from nucleus.logger import (
 
 _logger = get_module_logger("CallGraphAnalyzer")
 
+#: ★第313批 刀2：本进程内已完成「存量合成图隔离清扫」的目录
+#: （每目录只扫一次 —— 清扫要逐份解析整图，不能挂在每次落盘的热路径上反复付费）
+_M313_PRUNED_DIRS: set = set()
+
 
 # ----------------------------------------------------------------------
 # 常量
@@ -1264,9 +1268,48 @@ class CallGraphAnalyzer:
             _root = _project_root()
             _dir = os.path.join(_root, "data", "call_graph")
             os.makedirs(_dir, exist_ok=True)
+            # ★第313批 刀2（写侧守卫，P1）：312 只补了**读侧**（选择器不取合成图），
+            #   写侧仍脏 —— 实测 `pkg/a.py` 类合成图三次进生产目录，且占着滚动 7 份的配额
+            #   （一份 4 文件的假图能把一份 6700 节点的真图挤出窗口）。两道闸：
+            #   ① 内容判据：判据不合格（合成/过小）⇒ **不落生产目录**，落 `_quarantine/` 留证；
+            #   ② 写盘守卫：测试/E2E/普通脚本进程一律拒写生产 data/，只有框架主进程可写。
+            from nucleus.data.call_graph_guard import judge_graph as _m313_judge
+            from nucleus.data.call_graph_guard import (
+                quarantine_invalid_graphs as _m313_quarantine,
+            )
+            from nucleus.data.write_guard import guard_write as _m313_write_guard
+            _m313_ok, _m313_why = _m313_judge(_cg)
+            if not _m313_ok:
+                _qdir = os.path.join(_dir, "_quarantine")
+                _qpath = os.path.join(_qdir, "graph_quarantined_{}.json".format(
+                    _time.strftime("%Y%m%d_%H%M%S")))
+                if _m313_write_guard(_qpath, component="CallGraphAnalyzer.quarantine"):
+                    try:
+                        os.makedirs(_qdir, exist_ok=True)
+                        self.export_json(_qpath, data=dict(_cg))
+                    except Exception as _qe:
+                        _logger.warning("合成图隔离落盘失败: %s: %s",
+                                        type(_qe).__name__, _qe)
+                _logger.warning(
+                    "[313刀2] 拒落生产目录（判据不合格 %s）: nodes=%d",
+                    _m313_why, len(_cg.get("nodes") or []))
+                return ""
+            # 存量清扫：本进程内每个目录只做一次（把历史合成图从滚动配额里摘出去）
+            if _dir not in _M313_PRUNED_DIRS:
+                _M313_PRUNED_DIRS.add(_dir)
+                _pq = _m313_quarantine(_dir)
+                if _pq.get("quarantined"):
+                    _logger.warning(
+                        "[313刀2] 存量合成图已隔离 %d 份 → %s（%s）",
+                        len(_pq["quarantined"]), _pq.get("quarantine_dir"),
+                        ", ".join("%s[%s]" % (str(_x.get("file")), str(_x.get("reason")))
+                                  for _x in _pq["quarantined"]))
             _ts = _time.strftime("%Y%m%d_%H%M%S")
             _path = os.path.join(_dir, "graph_{}.json".format(_ts))
             _tmp = _path + ".tmp"
+            # ★第313批 刀2：写盘守卫（拒写即返回空串，调用方按「未落盘」处理，绝不猜）
+            if not _m313_write_guard(_path, component="CallGraphAnalyzer.dump_graph_snapshot"):
+                return ""
             # ★第305批刀2：分色由**边自带的 kind** 聚合（不再全库重扫正则）
             _edge_types = {"static": 0, "byname": 0, "event": 0, "entry": 0}
             for _e in (_cg.get("edges") or []):

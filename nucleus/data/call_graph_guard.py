@@ -127,3 +127,67 @@ def format_rejected(rejected: list) -> str:
         return ""
     return ", ".join("%s[%s]" % (str(_r.get("file", "")), str(_r.get("reason", "")))
                      for _r in rejected if isinstance(_r, dict))
+
+# ---------------------------------------------------------------- 313批刀2 写侧
+
+#: 隔离目录名（位于图目录下）。`select_latest_graph` 的 `graph_*.json` 通配**不进子目录**，
+#: 因此被隔离的图不会被下游误当判据；同时也不再占「滚动 7 份」的配额。
+QUARANTINE_DIRNAME = "_quarantine"
+
+
+def quarantine_invalid_graphs(graph_dir: str, logger=None) -> dict:
+    """★第313批 刀2（写侧）：把目录里**不合格的图**移入 `_quarantine/`（移动，不删除）。
+
+    背景：312 批只补了读侧守卫（`select_latest_graph` 不取合成图），写侧仍脏 ——
+    实测 `pkg/a.py` 类合成图三次进生产目录，还盘踞在滚动 7 份里，
+    于是一份 4 文件的假图会把一份 6700 节点的真图挤出窗口。
+
+    语义边界：**只移动、不删除**（留证据，可人工复核）；判据仍由 :func:`judge_graph`
+    单点提供，本函数不另立标准。移动失败只留痕并置 `ok=False`，绝不抛。
+
+    Args:
+        graph_dir: 图目录（通常 `<project_root>/data/call_graph`）。
+        logger: 保留参数（本函数不自行打日志，由调用方聚合输出一行）。
+
+    Returns:
+        ``{"ok": bool, "checked": n, "quarantined": [{"file","reason"}], "quarantine_dir": str}``
+    """
+    _out: dict = {"ok": True, "checked": 0, "quarantined": [], "quarantine_dir": ""}
+    try:
+        if not graph_dir or not os.path.isdir(str(graph_dir)):
+            return _out
+        _dir = str(graph_dir)
+        _qdir = os.path.join(_dir, QUARANTINE_DIRNAME)
+        _out["quarantine_dir"] = _qdir
+        for _p in sorted(glob.glob(os.path.join(_dir, "graph_*.json"))):
+            _out["checked"] += 1
+            _gd = None
+            _why = ""
+            try:
+                with open(_p, encoding="utf-8") as _f:
+                    _gd = json.load(_f)
+            except (OSError, ValueError) as e:
+                silent_exc(
+                    e, where="nucleus.data.call_graph_guard::quarantine_invalid_graphs:load")
+                _why = "bad_json"
+            if not _why:
+                _ok, _why = judge_graph(_gd, _p)
+                if _ok:
+                    continue
+            try:
+                if not os.path.isdir(_qdir):
+                    os.makedirs(_qdir, exist_ok=True)
+                _dst = os.path.join(_qdir, os.path.basename(_p))
+                if os.path.exists(_dst):
+                    _dst = _dst[:-5] + "_" + str(int(os.path.getmtime(_p))) + ".json"
+                os.replace(_p, _dst)
+                _out["quarantined"].append({"file": os.path.basename(_p), "reason": _why})
+            except OSError as e:
+                silent_exc(
+                    e, where="nucleus.data.call_graph_guard::quarantine_invalid_graphs:move")
+                _out["ok"] = False
+    except Exception as e:
+        silent_exc(e, where="nucleus.data.call_graph_guard::quarantine_invalid_graphs")
+        _out["ok"] = False
+    return _out
+

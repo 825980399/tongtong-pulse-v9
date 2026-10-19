@@ -213,6 +213,58 @@ def _m312_build_items(issues: list, llm_issues: list, root: str) -> list:
     return _items
 
 
+def _m313_has_drive_path(value) -> bool:
+    """字符串里是否含 **Windows 盘符路径**（`D:/x` / `D:\\x`，出现在串中任意位置也算）。"""
+    _s = str(value or "")
+    _n = len(_s)
+    for _i in range(_n - 2):
+        if _s[_i + 1] == ":" and _s[_i].isalpha() and _s[_i + 2] in ("\\", "/"):
+            # 排除 `http://` 这类 scheme（`p:` 前面紧跟字母且再前面是字母时多半是协议名）
+            _prev = _s[_i - 1] if _i > 0 else ""
+            if _prev.isalpha():
+                continue
+            return True
+    return False
+
+
+def _m313_scan_drive_paths(obj, where: str = "items") -> list:
+    """★第313批 刀3：递归扫描落盘结构里的盘符路径（自检用，纯函数）。"""
+    _hits: list = []
+    if isinstance(obj, dict):
+        for _k, _v in obj.items():
+            _hits.extend(_m313_scan_drive_paths(_v, "%s.%s" % (where, _k)))
+    elif isinstance(obj, list):
+        for _i, _v in enumerate(obj):
+            _hits.extend(_m313_scan_drive_paths(_v, "%s[%d]" % (where, _i)))
+    elif isinstance(obj, str):
+        if _m313_has_drive_path(obj):
+            _hits.append({"where": where, "value": obj[:120]})
+    return _hits
+
+
+def _m313_selfcheck_items(items: list, root: str) -> tuple:
+    """★第313批 刀3：per-item **落盘前**一次性归一并自检（不写盘，纯函数）。
+
+    312 批只归一了 `file`，但 `dedup_key` 是从**原始** `file` 拼的（含盘符）
+    ⇒ 同一份产物里 `file` 相对、`dedup_key` 绝对，混存比统一更危险：
+    任何按前缀 / 相对性匹配的下游都会静默漏。这里把两件事**一次做完**：
+
+      ① `file` 再归一一遍（幂等，防上游字段绕过 `_m312_build_items` 的口径）；
+      ② `dedup_key` **一律从归一后的 `file` 重建** —— 两者不可能再分叉。
+
+    Returns:
+        `(items, leaks)`；`leaks` 是**修后仍残留**的盘符位置（交由调用方告警）。
+    """
+    for _it in items or []:
+        if not isinstance(_it, dict):
+            continue
+        _fixed = _m312_rel_file(_it.get("file", ""), root)
+        _it["file"] = _fixed
+        _it["dedup_key"] = "{}:{}:{}".format(
+            _fixed, _it.get("line", 0), _it.get("type", "unknown"))
+    return items, _m313_scan_drive_paths(items, "items")
+
+
 def _m303_dump_per_item(issues: list, llm_issues: list,
                         strategy: dict | None = None) -> str:
     """★第303批 刀6：per-item 清单落盘（审查的「出口记录仪」）。
@@ -234,14 +286,30 @@ def _m303_dump_per_item(issues: list, llm_issues: list,
         _os.makedirs(_dir, exist_ok=True)
         _ts = _time.strftime("%Y%m%d_%H%M%S")
         _items = _m312_build_items(issues, llm_issues, _root)
+        # ★第313批 刀3：落盘前**一次性**归一 + 自检（含盘符即告警）。
+        #   312 只归一 file；dedup_key 仍用原始 file 拼 ⇒ 「file 相对 + dedup_key 绝对」
+        #   在同一份产物里混存（实测 82 绝对 / 22 相对，最坏的一条同时占两种写法）。
+        #   这里把 file 与 dedup_key 一次对齐，并把「修后仍残留」的盘符位置记进 payload。
+        _items, _m313_leaks = _m313_selfcheck_items(_items, _root)
         _payload = {
             "run_id": _ts,
             "generated_at": _time.time(),
             "parallelism": 3,
             "timeout_flags": (strategy or {}).get("timeout_flags", {}),
             "item_count": len(_items),
+            "path_selfcheck": {
+                "drive_letter_leak": len(_m313_leaks),
+                "checked_items": len(_items),
+                "sample": [str(_x.get("where", "")) for _x in _m313_leaks[:3]],
+            },
             "items": _items,
         }
+        if _m313_leaks:
+            _logger.warning(
+                "[313刀3] per-item 落盘自检：仍有盘符路径 %d 处（示例: %s）",
+                len(_m313_leaks),
+                "; ".join("%s=%s" % (str(_x.get("where", "")), str(_x.get("value", "")))
+                          for _x in _m313_leaks[:3]))
         _path = _os.path.join(_dir, "run_{}.json".format(_ts))
         _tmp = _path + ".tmp"
         with open(_tmp, "w", encoding="utf-8") as _f:

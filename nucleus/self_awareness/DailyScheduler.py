@@ -641,6 +641,18 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m300e:
                     silent_exc(_m300e, "DailyScheduler.run_once:补救链三数")
 
+            # ★第313批 刀1（P0）：日报输出全局认知**实际值**（status/gaps/三源计数）。
+            #   308 批只让分析器在活体跑了；报告侧此前只有一行键名摘要
+            #   `global_awareness: {as_of, source, ...}` ⇒「status=fresh 且 gaps=[]」
+            #   这条验收在产物层面永远判不了（不是没跑，是没打印）。纯只读，零语义变更。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _313_dr
+                    _res["global_awareness"] = _313_dr.append_global_awareness_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m313e:
+                    silent_exc(_m313e, "DailyScheduler.run_once:全局认知")
+
             # ★第312批 刀3：留痕行读上游结果前先兑 dict（上游异常路径可能返回 None，
             #   直接 `.get()` 会在留痕行自抛 AttributeError，把「回扫失败」升级成「每日拍失败」）。
             #   守卫见模块级 `_m312_as_dict`。

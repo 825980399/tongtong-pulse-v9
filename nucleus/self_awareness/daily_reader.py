@@ -522,3 +522,102 @@ def append_remediation_stats_section(report_path: str, logger: Any = None) -> di
         silent_exc(e, "daily_reader.append_remediation_stats_section:写日报小节", level="warning")
     _log.info("[补救链·三数] 进入校验=%d 判定阻断=%d attempt=%d", _n, _m, _k)
     return {"entered_verification": _n, "blocked": _m, "attempt": _k}
+
+# ----------------------------------------------------------------- 313批刀1
+
+def read_global_awareness(logger: Any = None) -> dict[str, Any]:
+    """★第313批 刀1：读 InfoField 的**全局认知快照**（纯内存，绝不跨器官现调）。
+
+    307 批的层次纪律：跨器官取数只发生在 `integrate_global_awareness()`；
+    本函数只调 `get_global_awareness()`（读缓存 + 深拷贝），不触发任何器官干活。
+    读不到（InfoField 不可用 / 未刷新）如实返回空 dict，不猜默认值。
+    """
+    try:
+        from nucleus.field.InfoField import get_info_field
+        _if = get_info_field()
+        if _if is None or not hasattr(_if, "get_global_awareness"):
+            return {}
+        _snap = _if.get_global_awareness()
+    except Exception as e:
+        silent_exc(e, "daily_reader.read_global_awareness", level="warning")
+        return {}
+    return dict(_snap) if isinstance(_snap, dict) else {}
+
+
+def _m313_fmt_gaps(gaps: Any) -> tuple[str, int]:
+    """把 `gaps` 渲染成 `[]` / `['a', 'b']`，并返回条数（非 list 如实标 unavailable）。"""
+    if not isinstance(gaps, list):
+        return "unavailable", 0
+    return "[" + ", ".join(repr(str(_g)) for _g in gaps) + "]", len(gaps)
+
+
+def _m313_fmt_as_of(as_of: Any) -> str:
+    """epoch 秒 → 可读 ISO；0 / 非数值 ⇒ `未刷新`（不伪造时间）。"""
+    if isinstance(as_of, bool) or not isinstance(as_of, (int, float)) or as_of <= 0:
+        return "未刷新"
+    try:
+        return datetime.fromtimestamp(float(as_of)).isoformat(timespec="seconds")
+    except (OverflowError, OSError, ValueError) as e:
+        silent_exc(e, "daily_reader._m313_fmt_as_of")
+        return "非法时间戳(%s)" % as_of
+
+
+def append_global_awareness_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """★第313批 刀1（P0）：日报输出 global_awareness 的**实际值**。
+
+    背景（烛微 313 批前置分析）：308 批把分析器点亮进活体后，日报【其他】里只有一行
+    `global_awareness: {as_of, source, learning_goal, …}` —— **只有键名摘要**，
+    `status` 与 `gaps` 的实值一个都没打印 ⇒「status=fresh 且 gaps=[]」这条验收
+    在产物层面**永远是哑的**（不是没跑，是读不出来）。
+
+    本函数把三件事落到日报（纯只读，零语义变更）：
+      * `status=` fresh / stale / not_refreshed / unavailable；
+      * `gaps=` 的**实际清单**（`[]` 或具体缺口）＋条数；
+      * 三源计数：learning_goal / exploration_clues / narrative_clues 各几条。
+
+    任何异常都只 warning，绝不影响调度主流程。
+    """
+    _log = logger or _module_logger
+    _snap = read_global_awareness(_log)
+    _status = str(_snap.get("status") or "unavailable")
+    _source = str(_snap.get("source") or "（无）")
+    _as_of_txt = _m313_fmt_as_of(_snap.get("as_of"))
+    _stale = _snap.get("stale_sec")
+    _stale_txt = ("%.1fs" % float(_stale)) if isinstance(_stale, (int, float)) \
+        and not isinstance(_stale, bool) else "None"
+    _gaps_txt, _gaps_n = _m313_fmt_gaps(_snap.get("gaps"))
+    _goal = _snap.get("learning_goal")
+    _goal_n = 1 if isinstance(_goal, dict) and _goal else 0
+    _clues = _snap.get("exploration_clues")
+    _clues_n = len(_clues) if isinstance(_clues, list) else 0
+    _narr = _snap.get("narrative_clues")
+    _narr_n = len(_narr) if isinstance(_narr, list) else 0
+    _goal_txt = "（无）"
+    if _goal_n:
+        try:
+            _goal_txt = json.dumps(_goal, ensure_ascii=False)[:200]
+        except (TypeError, ValueError) as e:
+            silent_exc(e, "daily_reader.append_global_awareness_section:goal")
+            _goal_txt = str(_goal)[:200]
+    try:
+        _lines = ["", "【全局认知】",
+                  "  · status=%s  source=%s" % (_status, _source),
+                  "  · as_of=%s  stale_sec=%s" % (_as_of_txt, _stale_txt),
+                  "  · gaps=%s（%d 条）" % (_gaps_txt, _gaps_n),
+                  "  · 三源计数: learning_goal=%d 条 | exploration_clues=%d 条 | "
+                  "narrative_clues=%d 条" % (_goal_n, _clues_n, _narr_n),
+                  "  · learning_goal=%s" % _goal_txt,
+                  ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_global_awareness_section:写日报小节",
+                   level="warning")
+    _log.info("[全局认知] status=%s gaps=%s 三源(goal/clues/narrative)=%d/%d/%d source=%s",
+              _status, _gaps_txt, _goal_n, _clues_n, _narr_n, _source)
+    return {"status": _status, "gaps": _snap.get("gaps") if isinstance(
+        _snap.get("gaps"), list) else [], "gaps_count": _gaps_n,
+        "learning_goal_count": _goal_n, "exploration_clues_count": _clues_n,
+        "narrative_clues_count": _narr_n, "source": _source,
+        "as_of": _as_of_txt, "stale_sec": _stale}
+
