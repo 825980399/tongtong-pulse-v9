@@ -312,6 +312,12 @@ class VerificationLearningHub:
                 return distillable
             return []
 
+    # ★317批刀6（G-4 · 星轨+小林裁定A）：蒸馏来源白名单。
+    # 原判据只看 `organ=="code_learner"`（所谓"工牌"），导致 self_inspector 名义料
+    # （origin=code_review，organ=self_inspector）永远进不了蒸馏——315刀2 审查归位
+    # 因此只成一半。裁定：改按 **origin/规则类型** 分流，同时保留白名单防噪声混入。
+    _DISTILL_ORIGIN_WHITELIST = frozenset({"code_review"})
+
     def distill_rules(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         从一组验证-学习条目中蒸馏规则。
@@ -440,7 +446,11 @@ class VerificationLearningHub:
         for entry in entries:
             if not entry.get("api_better", False):
                 continue
-            if entry.get("organ") != "code_learner":
+            # ★317批刀6：origin 分流——organ 工牌命中 **或** origin 在可信白名单内即放行
+            #   （白名单外来源仍被拦，不放开；code_learner 老路径行为不变）
+            _src_organ = str(entry.get("organ") or "") or "code_learner"
+            _src_origin = str(entry.get("origin") or "")
+            if _src_organ != "code_learner" and _src_origin not in self._DISTILL_ORIGIN_WHITELIST:
                 continue
             verify = entry.get("verification_result", {})
             if not isinstance(verify, dict):
@@ -454,22 +464,24 @@ class VerificationLearningHub:
             if not _issue_type:
                 _issue_type = "unknown"
             _code_issue_count += 1
-            if _issue_type not in _code_issue_map:
-                _code_issue_map[_issue_type] = {
+            _grp_key = (_src_organ, _issue_type)
+            if _grp_key not in _code_issue_map:
+                _code_issue_map[_grp_key] = {
                     "suggestion": _suggestion[:500],
                     "confidence": entry.get("confidence", 0.7),
                     "count": 0,
+                    "origin": _src_origin,
                 }
-            _code_issue_map[_issue_type]["count"] += 1
+            _code_issue_map[_grp_key]["count"] += 1
             # 保留置信度最高的建议
-            if entry.get("confidence", 0.7) > _code_issue_map[_issue_type]["confidence"]:
-                _code_issue_map[_issue_type]["suggestion"] = _suggestion[:500]
-                _code_issue_map[_issue_type]["confidence"] = entry.get("confidence", 0.7)
+            if entry.get("confidence", 0.7) > _code_issue_map[_grp_key]["confidence"]:
+                _code_issue_map[_grp_key]["suggestion"] = _suggestion[:500]
+                _code_issue_map[_grp_key]["confidence"] = entry.get("confidence", 0.7)
 
-        for _itype, _data in _code_issue_map.items():
+        for (_r_organ, _itype), _data in _code_issue_map.items():
             rules.append({
                 "type": "code_issue_lesson",
-                "organ": "code_learner",
+                "organ": _r_organ,
                 "issue_type": _itype,
                 "fix_strategy": _data["suggestion"],
                 "confidence": round(_data["confidence"], 2),
@@ -483,7 +495,9 @@ class VerificationLearningHub:
         self._log(LogLevel.INFO,
                  f"[蒸馏诊断] 生成规则={len(rules)} "
                  f"(concept_correction={_concept_rules}, domain_knowledge={_domain_rules}, "
-                 f"code_issue_lesson={_code_rules}), code_learner候选={_code_issue_count}")
+                 f"code_issue_lesson={_code_rules}), 候选={_code_issue_count} "
+                 f"来源器官={sorted({r.get('organ') for r in rules if r.get('type') == 'code_issue_lesson'})} "
+                 f"白名单={sorted(self._DISTILL_ORIGIN_WHITELIST)}")
 
         return rules
 
