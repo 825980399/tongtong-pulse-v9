@@ -69,6 +69,27 @@ def is_fragment_to_full(patch: dict) -> bool:
     return (_extract_def_name(_orig) == "") and (_extract_def_name(_mod) != "")
 
 
+#: ★第306批 刀4：**生命周期名** —— 静态图对它们结构性失明。
+#:   实例化（`__init__`）、析构、上下文管理、启停框架钩子都由解释器/框架调用，
+#:   源码里没有调用点 ⇒ 入边 0 是**图的盲区**，不是「没人依赖它」。
+#:   这类方法的牵连半径**不可判定** ⇒ 一律转人工，绝不按 0 放行。
+_LIFECYCLE_NAMES = frozenset((
+    "__init__", "__new__", "__del__", "__post_init__", "__enter__", "__exit__",
+    "__aenter__", "__aexit__", "__call__", "__getattr__",
+    "start", "stop", "setup", "teardown", "init", "initialize", "close",
+    "shutdown", "reset", "run", "on_start", "on_stop", "on_init",
+))
+
+#: ★第306批 刀4：**受控试点首批白名单** —— 只有这 2 条 `refresh_runtime_params`
+#:   进自动分诊（305 刀3 修正牵连闸后，13 条候选里实际可派的就是这 2 条；
+#:   `__init__` 等生命周期名看似「入边 0」实为图盲区，属假安全）。
+#:   白名单外的候选**不自动派单**，转人工评估后再放行。
+PILOT_FIRST_BATCH = frozenset({
+    ("organs/motor/PulseController.py", "refresh_runtime_params"),
+    ("organs/motor/PulseCodeSandbox.py", "refresh_runtime_params"),
+})
+
+
 #: ★第305批 刀4：落盘调用图**读缓存**（对齐 DailyScheduler:573 既有口径
 #:   「运行时消费者只读缓存，绝不现扫」）。304 刀5 在 select 循环里每条候选
 #:   json.load 一次 3.1MB 图 ⇒ N×3MB 磁盘读，与该口径冲突。
@@ -148,6 +169,12 @@ def blast_radius_of(qualified: str, file: str | None = None,
         return None
     _nodes = _gd.get("nodes") or []
     _q = qualified.strip()
+    # ★第306批 刀4：生命周期名 ⇒ 牵连不可判定（图的盲区，不是 0）
+    if _q.split(".")[-1] in _LIFECYCLE_NAMES:
+        _module_logger.info(
+            "[306刀4] 生命周期名牵连不可判定 ⇒ 转人工: %s（file=%s）",
+            _q, file or "-")
+        return None
     _f = str(file or "").replace("\\", "/").strip()
     _name = _q.split(".")[-1]
     _starts: list[str] = []
@@ -178,13 +205,18 @@ def blast_radius_of(qualified: str, file: str | None = None,
 
 
 def select_patch_for_execution(patch_history: list, limit: int = 1,
-                               max_blast_radius: int = 1) -> list:
+                               max_blast_radius: int = 1,
+                               pilot_only: bool = True) -> list:
     """从 patch_history 选「status=runtime_verified 且 risk=低」的补丁（低风险优先）。
 
     纯函数（便于隔离单测）；只读，不改任何字段。
     ★第295批刀5：先跑形态判据回扫，「片段→完整」（嵌套 def）补丁过滤掉，不派单。
     ★第304批刀5：再查**牵连半径**（读落盘调用图）—— 牵连节点数 > `max_blast_radius`
       者**不入队、转人工**（自动分诊的前置依赖；图缺失时 blast=0 ⇒ 按「不拦」处理，零回归）。
+    ★第306批刀4：`pilot_only=True` 时再按**受控试点首批白名单**收敛（只放 2 条
+      `refresh_runtime_params`）。自动分诊的首批刻意不给「全池放行」——
+      305 修正牵连闸后 13 条候选里真正可派的就这 2 条，其余要么牵连不可判定，
+      要么候选本身就是生命周期名。`pilot_only=False` 仅供人工复核/单测显式越权使用。
     """
     if not isinstance(patch_history, list):
         return []
@@ -212,6 +244,19 @@ def select_patch_for_execution(patch_history: list, limit: int = 1,
                 str(_p.get("id", ""))[:16], _m, _br, max_blast_radius)
             continue
         _scoped.append(_p)
+    # ★第306批刀4：受控试点首批白名单（只放两个 refresh_runtime_params）
+    if pilot_only:
+        _pilot = []
+        for _p in _scoped:
+            _key = (str(_p.get("file") or "").replace("\\", "/"),
+                    str(_p.get("method") or ""))
+            if _key in PILOT_FIRST_BATCH:
+                _pilot.append(_p)
+            else:
+                _module_logger.info(
+                    "[306刀4] 非首批试点 ⇒ 转人工: patch=%s method=%s",
+                    str(_p.get("id", ""))[:16], _key[1])
+        _scoped = _pilot
     # 低风险优先；同风险按 trust_score 降序
     _scoped.sort(key=lambda p: (
         0 if p.get("risk_level") in ("低", "low") else 1,

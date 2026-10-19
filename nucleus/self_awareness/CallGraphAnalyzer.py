@@ -197,6 +197,69 @@ def _qual_id(module: str, qualname: str) -> str:
     """组装节点 id：`module:qualname`。"""
     return f"{module}:{qualname}"
 
+# ----------------------------------------------------------------------
+# ★第306批 刀1：事件枚举规范化 + 注册实参还原
+# ----------------------------------------------------------------------
+#: 事件枚举成员表（`MouthEvent.REPLY` → `"mouth.reply"`），模块级缓存。
+_EVENT_TAXONOMY: dict | None = None
+
+
+def _event_taxonomy() -> dict:
+    """静态解析 `nucleus/const.py` 的 `*Event` 类，产出「成员全名 → 事件字符串」。
+
+    ★为什么必须做：发/订两侧的事件名在源码里大多写成枚举成员
+    （`self.pulse_core.emit(event_type=MouthEvent.REPLY)` 与
+    `"event_types": [MouthEvent.REPLY]`）。不做规范化则两侧字符串不可比，
+    event 边永远为 0 —— 这正是 305 批「分色落地但 event/entry 无写入路径」的根因。
+    纯 AST 解析，不 import、不执行；解析失败按空表处理（退化为字面量口径）。
+    """
+    global _EVENT_TAXONOMY
+    if _EVENT_TAXONOMY is not None:
+        return _EVENT_TAXONOMY
+    _out: dict = {}
+    _const = os.path.join(_project_root(), "nucleus", "const.py")
+    try:
+        with open(_const, encoding="utf-8", errors="replace") as f:
+            _tree = ast.parse(f.read())
+        for _node in _tree.body:
+            if not isinstance(_node, ast.ClassDef):
+                continue
+            if not (_node.name.endswith("Event") or _node.name == "Event"):
+                continue
+            for _a in _node.body:
+                if (isinstance(_a, ast.Assign) and len(_a.targets) == 1
+                        and isinstance(_a.targets[0], ast.Name)
+                        and isinstance(_a.value, ast.Constant)
+                        and isinstance(_a.value.value, str)):
+                    _out["%s.%s" % (_node.name, _a.targets[0].id)] = _a.value.value
+    except Exception as e:
+        _logger.debug("事件枚举表解析失败（事件边退化到字面量口径）: %s: %s",
+                      type(e).__name__, e)
+    _EVENT_TAXONOMY = _out
+    return _out
+
+
+def _canon_event(node: Any) -> str:
+    """把事件类型 AST 节点还原为规范化字符串；无法解析 ⇒ 空串（不猜测）。"""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return _event_taxonomy().get("%s.%s" % (node.value.id, node.attr), "")
+    return ""
+
+
+def _callable_ref(node: Any) -> str:
+    """把注册调用的「可调用实参」还原为点号路径（供 entry 边解析）。
+
+    支持 `f` / `self.f` / `Cls.f` / `mod.f`，以及 `lambda ...: self.f(...)`
+    ——注册条件时几乎都用 lambda 适配签名（`handler=lambda p: self._on_x(p)`）。
+    """
+    if isinstance(node, (ast.Name, ast.Attribute)):
+        return _dotted(node)
+    if isinstance(node, ast.Lambda) and isinstance(node.body, ast.Call):
+        return _dotted(node.body.func)
+    return ""
+
 
 # ----------------------------------------------------------------------
 # Pass1 收集器
@@ -210,6 +273,11 @@ class _Collector(ast.NodeVisitor):
         self.defs: list = []            # [{id,name,qualname,cls,module,file,line,type}]
         self.bindings: dict = {}        # alias -> 目标（模块名 或 模块.符号）
         self.raw_calls: list = []       # [{caller, parts, line, in_class}]
+        # ★第306批刀1：反射证据三表（emit 事件 / 订阅声明 / 注册入口）
+        self.emits: list = []           # [{caller_qual, cls, event, line}]
+        self.subs: list = []            # [{parts, cls, qual, event, line}]
+        self.entries: list = []         # [{caller_qual, cls, parts, line}]
+        self.name_tables: list = []     # 字符串键→可调用体（按名派发表）
         self._scope: list = []          # [(kind, name)]  kind in {"class","func"}
 
     # ---------------- 定义 ----------------
@@ -233,13 +301,172 @@ class _Collector(ast.NodeVisitor):
         })
         self._scope.append(("func", node.name))
         self.generic_visit(node)
+        self._collect_roles(node, _qual, _cls)
         self._scope.pop()
+
+    def _collect_roles(self, node: Any, qual: str, cls: str) -> None:
+        """★第306批刀1：从函数体提取「订阅什么事件」，落 `self.subs`。
+
+        两个权威来源（与 `tools/export_event_graph.py` 同源判据）：
+          1. `get_resonance_conditions()` 返回 dict 的 `event_types` 列表
+             ⇒ 订阅方是**本类的 on_pulse**（该方法的处理器身份）；
+          2. `on_pulse()` 体内 `event_type == X` / `in (...)` 判定
+             ⇒ 订阅方就是 on_pulse 自身。
+        `event_types=["*"]` 记通配（该器官对全部事件可见）。
+        """
+        if not cls:
+            return
+        _handler = ["self", "on_pulse"]
+        if node.name == "get_resonance_conditions":
+            for _d in ast.walk(node):
+                if not isinstance(_d, ast.Dict):
+                    continue
+                for _k, _v in zip(_d.keys, _d.values):
+                    if not (isinstance(_k, ast.Constant) and _k.value == "event_types"):
+                        continue
+                    for _elt in getattr(_v, "elts", []):
+                        if isinstance(_elt, ast.Constant) and _elt.value == "*":
+                            self.subs.append({"parts": _handler, "cls": cls, "qual": qual,
+                                              "event": "*", "line": _d.lineno})
+                            continue
+                        _e = _canon_event(_elt)
+                        if _e:
+                            self.subs.append({"parts": _handler, "cls": cls, "qual": qual,
+                                              "event": _e, "line": _d.lineno})
+        elif node.name == "on_pulse":
+            _ev_var = "event_type"
+            for _a in ast.walk(node):
+                if (isinstance(_a, ast.Assign) and len(_a.targets) == 1
+                        and isinstance(_a.targets[0], ast.Name)):
+                    _val = _a.value
+                    _is_get = (isinstance(_val, ast.Call)
+                               and isinstance(_val.func, ast.Attribute)
+                               and _val.func.attr == "get" and _val.args
+                               and isinstance(_val.args[0], ast.Constant)
+                               and _val.args[0].value == "event_type")
+                    _is_sub = (isinstance(_val, ast.Subscript)
+                               and isinstance(getattr(_val, "slice", None), ast.Constant)
+                               and getattr(_val.slice, "value", None) == "event_type")
+                    if _is_get or _is_sub:
+                        _ev_var = _a.targets[0].id
+            for _cmp in ast.walk(node):
+                if not (isinstance(_cmp, ast.Compare) and isinstance(_cmp.left, ast.Name)
+                        and _cmp.left.id == _ev_var):
+                    continue
+                for _op, _c in zip(_cmp.ops, _cmp.comparators):
+                    if not isinstance(_op, (ast.Eq, ast.In, ast.Is)):
+                        continue
+                    _cands = (_c.elts if isinstance(_c, (ast.Tuple, ast.List, ast.Set))
+                              else [_c])
+                    for _cc in _cands:
+                        _e = _canon_event(_cc)
+                        if _e:
+                            self.subs.append({"parts": _handler, "cls": cls, "qual": qual,
+                                              "event": _e, "line": _cmp.lineno})
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_func(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._visit_func(node)
+
+    def _sniff_event_and_entry(self, node: ast.Call, text: str) -> None:
+        """★第306批刀1：识别两类反射证据 —— 事件发射 / 注册入口。
+
+        · 发射：`self.pulse_core.emit(event_type=...)` → `self.emits`
+        · 入口：`*register*(...)` / `add_daily_hook(...)` 等注册调用的可调用实参
+          → `self.entries`（同时把注册条件带的 `event_types` 记进 `self.subs`）
+        """
+        _fn = next((x[1] for x in reversed(self._scope) if x[0] == "func"), "")
+        _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
+        _caller = ("%s.%s" % (_cls, _fn)) if _cls else _MODULE_SCOPE
+        _parts = text.split(".") if text else []
+        _attr = _parts[-1] if _parts else ""
+        if not _attr:
+            return
+        # ---- ① 事件发射 ----
+        if (_attr == "emit" and len(_parts) >= 2 and _parts[-2] == "pulse_core"):
+            _et = None
+            for _kw in node.keywords:
+                if _kw.arg == "event_type":
+                    _et = _kw.value
+                    break
+            if _et is None and len(node.args) >= 2:
+                _et = node.args[1]
+            _ev = _canon_event(_et) if _et is not None else ""
+            if _ev:
+                self.emits.append({"caller_qual": _caller, "cls": _cls,
+                                   "event": _ev, "line": node.lineno})
+            return
+        # ---- ② 注册入口（含注册条件式事件订阅） ----
+        _reg_like = (("register" in _attr) or _attr in (
+            "add_daily_hook", "add_handler", "add_callback", "subscribe", "attach"))
+        if not _reg_like:
+            return
+        _evs: list = []
+        _ref = None
+        for _kw in node.keywords:
+            if _kw.arg == "event_types" and isinstance(
+                    _kw.value, (ast.List, ast.Tuple, ast.Set)):
+                for _elt in _kw.value.elts:
+                    if isinstance(_elt, ast.Constant) and _elt.value == "*":
+                        _evs.append("*")
+                        continue
+                    _e = _canon_event(_elt)
+                    if _e:
+                        _evs.append(_e)
+            elif _kw.arg in ("handler", "callback", "fn", "func", "target"):
+                _r = _callable_ref(_kw.value)
+                if _r:
+                    _ref = _r
+        if _ref is None:
+            # 位置实参：取**最后一个**可调用引用（前面多是名字/类型字符串）
+            for _a in reversed(node.args):
+                if isinstance(_a, (ast.Name, ast.Attribute, ast.Lambda)):
+                    _r = _callable_ref(_a)
+                    if _r:
+                        _ref = _r
+                        break
+        if not _ref:
+            return
+        _ref_parts = _ref.split(".")
+        self.entries.append({"caller_qual": _caller, "cls": _cls,
+                             "parts": _ref_parts, "line": node.lineno})
+        for _e in _evs:
+            self.subs.append({"parts": _ref_parts, "cls": _cls, "qual": _ref,
+                              "event": _e, "line": node.lineno})
+
+    def visit_Dict(self, node: ast.Dict) -> None:
+        """★第306批刀1：字符串键 → 可调用体 的「按名派发表」也算反射证据。
+
+        形态：`{"refresh": self._do_refresh, "reset": self._do_reset}`
+        （键是字符串名、值是 `self.x` / 裸函数名）。这是与
+        `getattr(x, "y")()` 同源的按名派发，但 305 的 byname 判据只认后者，
+        全库仅 17 处 ⇒ 按名边永远是个位数。
+        """
+        _fn = next((x[1] for x in reversed(self._scope) if x[0] == "func"), "")
+        _cls = ".".join(x[1] for x in self._scope if x[0] == "class")
+        if not _fn or not node.keys or len(node.keys) < 2:
+            self.generic_visit(node)
+            return
+        _ok_keys = 0
+        _targets: list = []
+        for _k, _v in zip(node.keys, node.values):
+            if isinstance(_k, ast.Constant) and isinstance(_k.value, str):
+                _ok_keys += 1
+            if isinstance(_v, ast.Attribute) and isinstance(_v.value, ast.Name) \
+                    and _v.value.id == "self":
+                _targets.append(_dotted(_v))
+            elif isinstance(_v, ast.Name):
+                _targets.append(_v.id)
+        if _ok_keys >= 2 and len(_targets) == len(node.keys) and _cls:
+            self.name_tables.append({
+                "caller_qual": "%s.%s" % (_cls, _fn),
+                "cls": _cls,
+                "parts_list": [x.split(".") for x in _targets],
+                "line": node.lineno,
+            })
+        self.generic_visit(node)
 
     # ---------------- import ----------------
     def visit_Import(self, node: ast.Import) -> None:
@@ -272,6 +499,7 @@ class _Collector(ast.NodeVisitor):
     # ---------------- 调用 ----------------
     def visit_Call(self, node: ast.Call) -> None:
         _text = _dotted(node.func)
+        self._sniff_event_and_entry(node, _text)
         # ★动态调用：func 不是 Name/Attribute 链 —— `getattr(x, "y")()`、
         #   `d["k"]()`、`f()()` 等，无法静态解析，统一计入 dynamic_calls，
         #   **不做猜测**（任务书 §2.2 口径）。
@@ -337,6 +565,11 @@ class CallGraphAnalyzer:
         self._in_deg: dict = {}          # callee_id -> 被调用次数
         self._caller_module: dict = {}   # id -> module
         self._raw_calls: list = []
+        # ★第306批刀1：反射证据（跨文件累积，Pass2 统一解析成 event / entry 边）
+        self._raw_emits: list = []
+        self._raw_subs: list = []
+        self._raw_entries: list = []
+        self._raw_tables: list = []
         self._parse_errors: list = []
         self._graph_data: dict = {}      # analyze() 结果缓存
         self._unresolved = 0
@@ -415,6 +648,10 @@ class CallGraphAnalyzer:
         # ★第305批刀2：边类型表（(caller, callee) -> kind: static/byname/event/entry）
         self._edge_kinds = {}
         self._raw_calls = []
+        self._raw_emits = []
+        self._raw_subs = []
+        self._raw_entries = []
+        self._raw_tables = []
         self._parse_errors = []
         self._unresolved = 0
         self._cross_file = 0
@@ -469,13 +706,25 @@ class CallGraphAnalyzer:
         self._by_module_top[_module] = _top
         self._raw_calls.extend(
             [dict(x, file=rel, module=_module) for x in _c.raw_calls])
+        self._raw_emits.extend(
+            [dict(x, file=rel, module=_module) for x in _c.emits])
+        self._raw_subs.extend(
+            [dict(x, file=rel, module=_module) for x in _c.subs])
+        self._raw_entries.extend(
+            [dict(x, file=rel, module=_module) for x in _c.entries])
+        self._raw_tables.extend(
+            [dict(x, file=rel, module=_module) for x in _c.name_tables])
         return _c
 
-    def _resolve_by_name(self, name: str, caller_module: str) -> str:
-        """★第305批刀2：把 `getattr(x, "name")` 的字面名解析为图节点 id。
+    def _resolve_by_name(self, name: str, caller_module: str,
+                         caller_class: str = "", caller_file: str = "") -> str:
+        """把 `getattr(x, "name")` 的字面名解析为图节点 id（作用域优先消歧）。
 
-        优先同模块内的方法（qualname 末段 == name），其次全库**唯一**同名命中；
-        多义或找不到 ⇒ 空串（该按名边记 unresolved，不猜测——口径纪律）。
+        ★第306批刀1：305 的「多义即放弃」让 byname 边只剩 3 条——绝大多数字面名
+        在库里都有多个同名方法（`refresh` / `_on_pulse` / `update` …），一律放弃等于
+        把反射可达整片抹掉。改为**逐级收窄的作用域优先**：
+            同类（`Cls.name`）→ 同模块 → 同目录 → 全库唯一；仍多义 ⇒ 空串
+            （记 unresolved，**不猜测**——口径纪律不变）。
         """
         if not name:
             return ""
@@ -486,12 +735,29 @@ class CallGraphAnalyzer:
                 _hits.append(_nid)
         if not _hits:
             return ""
+        if len(_hits) == 1:
+            return _hits[0]
+        # ① 同类
+        if caller_class:
+            _want = "%s.%s" % (caller_class, name)
+            _same_cls = [_h for _h in _hits
+                         if str((self._defs.get(_h) or {}).get("qualname") or "") == _want]
+            if len(_same_cls) == 1:
+                return _same_cls[0]
+        # ② 同模块
         _same = [_h for _h in _hits
                  if str((self._defs.get(_h) or {}).get("module") or "") == caller_module]
         if len(_same) == 1:
             return _same[0]
-        if len(_hits) == 1:
-            return _hits[0]
+        # ③ 同目录
+        if caller_file:
+            _dir = caller_file.replace("\\", "/").rsplit("/", 1)[0]
+            _same_dir = [
+                _h for _h in _hits
+                if str((self._defs.get(_h) or {}).get("file") or ""
+                       ).replace("\\", "/").rsplit("/", 1)[0] == _dir]
+            if len(_same_dir) == 1:
+                return _same_dir[0]
         return ""
 
     def _pass2_resolve(self, collectors: list) -> None:
@@ -504,7 +770,10 @@ class CallGraphAnalyzer:
                 # ★第305批刀2：按名派发**不再一律丢弃** —— getattr 字面名能解析到方法就建
                 #   kind="byname" 的边（此前的边只有静态调用，反射可达在图上完全不可见）。
                 if (_rc.get("kind") == "byname" and _rc.get("attr_name")):
-                    _hit = self._resolve_by_name(_rc.get("attr_name"), _rc.get("module", ""))
+                    _hit = self._resolve_by_name(
+                        _rc.get("attr_name"), _rc.get("module", ""),
+                        caller_class=_rc.get("in_class", ""),
+                        caller_file=_rc.get("file", ""))
                     if _hit:
                         _c_mod = _rc.get("module", "")
                         _c_qual = _rc.get("caller_qual") or _MODULE_SCOPE
@@ -540,6 +809,83 @@ class CallGraphAnalyzer:
             self._edge_kinds[(_caller_id, _callee)] = _rc.get("kind") or "static"
             if self._callee_module(_callee) != _caller_mod:
                 self._cross_file += 1
+        # ★第306批刀1：静态解析完成后补两类反射边（event / entry）
+        self._pass2_reflect(_module_names)
+
+    def _pass2_reflect(self, module_names: set) -> None:
+        """把 emit / 订阅 / 注册三类反射证据解析成边。
+
+        `event` 边 = 发射点 → 订阅处理器（按事件名连，跨器官 Y→T→X 的方法级投影）；
+        `entry` 边 = 注册点 → 被注册的处理器（总线/调度器/分析器注册入口）。
+        两类都不猜测：事件名解析不出、处理器定位不到 ⇒ 不建边。
+        """
+        # ---------- 订阅索引：event -> [handler_id]，另有通配订阅者 ----------
+        _sub_index: dict = {}
+        _wild: list = []
+        for _s in self._raw_subs:
+            _ev = _s.get("event") or ""
+            if not _ev:
+                continue
+            _rc = {"parts": _s.get("parts") or [], "module": _s.get("module", ""),
+                   "file": _s.get("file", ""), "in_class": _s.get("cls", "")}
+            _hid = self._resolve(_rc, module_names)
+            if not _hid:
+                continue
+            if _ev == "*":
+                _wild.append(_hid)
+                continue
+            _lst = _sub_index.setdefault(_ev, [])
+            if _hid not in _lst:
+                _lst.append(_hid)
+        # ---------- event 边 ----------
+        for _e in self._raw_emits:
+            _ev = _e.get("event") or ""
+            if not _ev:
+                continue
+            _caller_id = _qual_id(_e.get("module", ""),
+                                  _e.get("caller_qual") or _MODULE_SCOPE)
+            if _caller_id not in self._defs:
+                _caller_id = "%s:%s" % (_e.get("module", ""), _MODULE_SCOPE)
+            for _hid in list(_sub_index.get(_ev, [])) + _wild:
+                if _hid == _caller_id:
+                    continue
+                _t = self._graph.setdefault(_caller_id, {})
+                _t[_hid] = _t.get(_hid, 0) + 1
+                self._in_deg[_hid] = self._in_deg.get(_hid, 0) + 1
+                self._edge_kinds[(_caller_id, _hid)] = "event"
+        # ---------- 按名派发表（byname） ----------
+        for _tbl in self._raw_tables:
+            _caller_id = _qual_id(_tbl.get("module", ""),
+                                  _tbl.get("caller_qual") or _MODULE_SCOPE)
+            if _caller_id not in self._defs:
+                _caller_id = "%s:%s" % (_tbl.get("module", ""), _MODULE_SCOPE)
+            for _parts in (_tbl.get("parts_list") or []):
+                _hid = self._resolve({"parts": _parts, "module": _tbl.get("module", ""),
+                                      "file": _tbl.get("file", ""),
+                                      "in_class": _tbl.get("cls", "")}, module_names)
+                if not _hid or _hid == _caller_id:
+                    continue
+                _t = self._graph.setdefault(_caller_id, {})
+                _t[_hid] = _t.get(_hid, 0) + 1
+                self._in_deg[_hid] = self._in_deg.get(_hid, 0) + 1
+                self._edge_kinds[(_caller_id, _hid)] = "byname"
+        # ---------- entry 边 ----------
+        for _r in self._raw_entries:
+            _rc = {"parts": _r.get("parts") or [], "module": _r.get("module", ""),
+                   "file": _r.get("file", ""), "in_class": _r.get("cls", "")}
+            _hid = self._resolve(_rc, module_names)
+            if not _hid:
+                continue
+            _caller_id = _qual_id(_r.get("module", ""),
+                                  _r.get("caller_qual") or _MODULE_SCOPE)
+            if _caller_id not in self._defs:
+                _caller_id = "%s:%s" % (_r.get("module", ""), _MODULE_SCOPE)
+            if _hid == _caller_id:
+                continue
+            _t = self._graph.setdefault(_caller_id, {})
+            _t[_hid] = _t.get(_hid, 0) + 1
+            self._in_deg[_hid] = self._in_deg.get(_hid, 0) + 1
+            self._edge_kinds[(_caller_id, _hid)] = "entry"
 
     def _is_external(self, rc: dict, module_names: set) -> bool:
         """该调用是否指向**项目外**（内置 / 标准库 / 第三方）。

@@ -312,6 +312,11 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
     #   其余记录维持原文件级判据，避免把影响面扩大到本批未授权的范围。
     _reprobe = reprobe_effectiveness(p) if _n9_exempt(p) else None
     _reprobe_ok = _reprobe is not None and _reprobe > 0
+    # ★第306批 刀2：problem_fixed 走唯一派生源（与台账层 split_verification 同一函数）
+    from nucleus.evolution.patch_verification_split import (
+        derive_problem_fixed as _derive_pf,
+    )
+    _pf_value, _pf_reason = _derive_pf(p)
     _eff_for_score = _reprobe if _reprobe_ok else _real
 
     _s_eff, _r_eff = _score_effectiveness(_eff_for_score)
@@ -352,9 +357,12 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
         # ★第158批第9刀（N-9）：方法级复现探针效果 + 本次是否采纳它作为效果判据。
         "reprobe_effectiveness": _reprobe,
         "reprobe_used": _reprobe_ok,
-        # ★第305批刀5：`problem_fixed` 由 T4（方法级复现探针）**派生**，不再由各路径各写一次。
-        #   语义：复现探针生效 ⇒ 该问题已被修好；探针未生效 ⇒ 退化为「文件级真实效果 > 0」。
-        "problem_fixed": bool(_reprobe_ok or (_real is not None and _real > 0)),
+        # ★第306批 刀2：`problem_fixed` 不再在此处自己派生（305 刀5 的
+        #   `bool(_reprobe_ok or _real > 0)` 会把「不可判定」折叠成 False，
+        #   与台账层的 split 口径差 10 条）。改为调**唯一派生源**，并带上原因码。
+        "problem_fixed": _pf_value,
+        "problem_fixed_reason": _pf_reason,
+        "problem_fixed_partial": _pf_reason == "reprobe_partial_fix",
         "baseline_errors": _baseline,
         "post_apply_errors": _post,
         "repeats": repeats,

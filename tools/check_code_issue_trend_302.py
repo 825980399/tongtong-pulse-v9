@@ -13,9 +13,13 @@
   2 = 运行错误
 
 说明：
-- 默认 **跳过 dead_code / unused_imports / config_audit** 三个检测器——
-  它们量极大（本窗 638 条）且 severity 恒为 low，进不了进化链路，
-  只为避免每轮多花数十秒（与 self_inspector 的 skip_detectors 设计一致）。
+- ★第306批 刀3：SKIP **去掉 dead_code** —— 302 建此门禁时把它跳过，于是
+  「27 → 541」这种量级的变化不会触发任何 FAIL（尺子跟不上判据）。现在
+  dead_code 单列一条阈值（`--max-dead-code`，默认 40 ≈ 现值 27×1.5）。
+- 仍跳过 unused_imports / config_audit：二者与进化链路无关且量极大。
+- ★判据版本戳：`CRITERIA_VERSION` 变了（检测器增删、severity 口径、dead_code
+  存活判据升级）就**必须按新版重算阈值**，不得跨版本比基线——`rescan_high_risk_levels`
+  只升不降，存量会按新判据整体上移，旧基线在新版本下没有可比性。
 - 纯只读：不写 data/、不写 logs/、不改任何文件。
 """
 from __future__ import annotations
@@ -29,7 +33,13 @@ DEFAULT_MAX_HIGH = 0
 #   原 60 宽于现值 ⇒ 头几轮形同不拦（烛微 302 建议）；48 留出 4 条缓冲，
 #   既拦住回涨又不至于把正常波动判 FAIL。
 DEFAULT_MAX_MEDIUM = 48
-SKIP = ["dead_code", "unused_imports", "config_audit"]
+# ★第306批 刀3：dead_code 单列阈值（现值 27；留 48% 余量仍能拦住 27→541 这类回涨）
+DEFAULT_MAX_DEAD_CODE = 40
+SKIP = ["unused_imports", "config_audit"]
+
+#: ★第306批 刀3：**判据版本戳**。判据一变（检测器增删 / 严重度口径 /
+#: dead_code 存活判据升级）必须升版，阈值随之按新版重算；跨版本比基线无效。
+CRITERIA_VERSION = "2026-10-19.306"
 
 
 def main() -> int:
@@ -37,29 +47,43 @@ def main() -> int:
     _ap.add_argument("--json", action="store_true", help="输出 JSON")
     _ap.add_argument("--max-high", type=int, default=DEFAULT_MAX_HIGH)
     _ap.add_argument("--max-medium", type=int, default=DEFAULT_MAX_MEDIUM)
+    _ap.add_argument("--max-dead-code", type=int, default=DEFAULT_MAX_DEAD_CODE)
+    _ap.add_argument("--stamp", action="store_true",
+                     help="只打印判据版本戳（供 CI 记录基线所属版本）")
     _a = _ap.parse_args()
+    if _a.stamp:
+        print(CRITERIA_VERSION)
+        return 0
 
     try:
         from nucleus.self_inspector import get_self_inspector
+        # ★第306批 刀3：不再下推 min_severity —— dead_code 恒为 low，
+        #   若仍按 medium 过滤，即使不 SKIP 也永远数不到它（这正是
+        #   「SKIP 去掉 dead_code」单独不够的原因）。严重度分桶在下面做。
         _issues = get_self_inspector().detect_code_issues(
-            skip_detectors=SKIP, min_severity="medium")
+            skip_detectors=SKIP, min_severity=None)
     except Exception as e:
         print(f"[ERROR] 扫描失败: {type(e).__name__}: {e}")
         return 2
 
     _high = [i for i in _issues if str(i.get("severity", "")).lower() == "high"]
     _med = [i for i in _issues if str(i.get("severity", "")).lower() == "medium"]
+    _dead = [i for i in _issues if str(i.get("type", "")) == "dead_code"]
     _by_type: dict[str, int] = {}
     for _i in _issues:
         _t = str(_i.get("type", "?"))
         _by_type[_t] = _by_type.get(_t, 0) + 1
 
-    _fail = len(_high) > _a.max_high or len(_med) > _a.max_medium
+    _fail = (len(_high) > _a.max_high or len(_med) > _a.max_medium
+             or len(_dead) > _a.max_dead_code)
     _payload = {
+        "criteria_version": CRITERIA_VERSION,
         "high": len(_high),
         "medium": len(_med),
+        "dead_code": len(_dead),
         "max_high": _a.max_high,
         "max_medium": _a.max_medium,
+        "max_dead_code": _a.max_dead_code,
         "by_type": dict(sorted(_by_type.items(), key=lambda kv: -kv[1])),
         "high_items": [{"file": i.get("file"), "type": i.get("type"),
                         "method": i.get("method"), "line": i.get("line")} for i in _high],
@@ -68,8 +92,10 @@ def main() -> int:
     if _a.json:
         print(json.dumps(_payload, ensure_ascii=False, indent=2))
     else:
-        print(f"[代码问题趋势] high={len(_high)}(阈值{_a.max_high}) "
-              f"medium={len(_med)}(阈值{_a.max_medium}) => {_payload['verdict']}")
+        print(f"[代码问题趋势] criteria={CRITERIA_VERSION} "
+              f"high={len(_high)}(阈值{_a.max_high}) "
+              f"medium={len(_med)}(阈值{_a.max_medium}) "
+              f"dead_code={len(_dead)}(阈值{_a.max_dead_code}) => {_payload['verdict']}")
         for _t, _n in _payload["by_type"].items():
             print(f"  {_t}: {_n}")
         for _h in _payload["high_items"]:

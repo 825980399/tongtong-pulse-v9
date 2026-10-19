@@ -50,6 +50,19 @@ F_VERIFIED = "verified"              # deprecated，保留向后兼容
 F_SPLIT_VERSION = "verification_split_version"
 # ★第51批 T1（P0-2）：主动复现字段（见 nucleus/evolution/patch_active_reprobe.py）
 F_REPROBE_VERDICT = "reprobe_verdict"
+# ★第306批 刀2：problem_fixed 的**派生原因码**（唯一派生源的可审计落点）
+F_PF_REASON = "problem_fixed_reason"
+F_PF_PARTIAL = "problem_fixed_partial"
+
+#: 派生原因码 —— 每个 problem_fixed 取值都必须能追到其中之一
+PF_TRUE_PASS = "reprobe_true_pass"        # 探针确证目标问题完全消失
+PF_FALSE_PASS = "reprobe_false_pass"      # 探针无法复现目标问题（假通过）
+PF_INEFFECTIVE = "reprobe_ineffective"    # 探针复现了，但问题没减少
+PF_PARTIAL = "reprobe_partial_fix"        # 部分修复（减少未清零）⇒ 不可判定 + partial 标
+PF_VERIFY_FAILED = "verification_failed"  # 片段无法解析，探针未跑成
+PF_NO_PROBE = "no_probe"                  # 无探针结论（含 not_applicable）⇒ 不可判定
+PF_LEGACY = "legacy_unverifiable"         # 探针与文件级基线都不可用（历史遗留）
+PF_BASELINE = "baseline_compare"          # 无探针，但文件级基线可对比（legacy 兜底）
 
 #: 验证粒度取值
 GRAN_STATIC_ONLY = "static_only"      # 只有静态检查（语法/导入/回归）
@@ -71,6 +84,108 @@ def _as_int(value: Any) -> int | None:
     except (TypeError, ValueError) as e:
         silent_exc(e, where="nucleus.evolution.patch_verification_split::_as_int L69")
         return None
+
+
+_GRAN_OF_CODE = {
+    PF_TRUE_PASS: GRAN_ACTIVE_REPROBE,
+    PF_FALSE_PASS: GRAN_ACTIVE_REPROBE,
+    PF_INEFFECTIVE: GRAN_ACTIVE_REPROBE,
+    PF_PARTIAL: GRAN_REPRODUCTION,
+    PF_VERIFY_FAILED: GRAN_STATIC_ONLY,
+    PF_NO_PROBE: GRAN_STATIC_ONLY,
+    PF_LEGACY: GRAN_STATIC_ONLY,
+    PF_BASELINE: GRAN_EFFECTIVENESS,
+}
+
+
+def _baseline_pair(patch: dict[str, Any]) -> tuple[int | None, int | None]:
+    """取（修复前, 修复后）错误计数；顶层优先，回退 runtime_verify_result。"""
+    _baseline = _as_int(patch.get("baseline_errors"))
+    _after = _as_int(patch.get("post_apply_errors"))
+    _rvr = patch.get("runtime_verify_result")
+    if isinstance(_rvr, dict):
+        if _baseline is None:
+            _baseline = _as_int(_rvr.get("baseline"))
+        if _after is None:
+            _after = _as_int(_rvr.get("after_fix"))
+    return _baseline, _after
+
+
+def derive_problem_fixed(patch: dict[str, Any]) -> tuple[bool | None, str]:
+    """★第306批 刀2：``problem_fixed`` 的**唯一派生源**。
+
+    全仓唯一真值是 ``reprobe_verdict``（T4 方法级复现探针）；文件级
+    ``baseline/post`` 只在**完全没有探针结论**时兜底（历史遗留记录）。
+
+    规则（与烛微 306 前置分析逐条对齐）：
+
+    ==========================  ==================  =========================
+    reprobe_verdict             派生值              原因码
+    ==========================  ==================  =========================
+    true_pass（基线命中 > 0）    True                reprobe_true_pass
+    true_pass（基线未命中）      None                no_probe
+    false_pass                   False               reprobe_false_pass
+    ineffective                  False               reprobe_ineffective
+    partial_fix                  **None**（+partial） reprobe_partial_fix
+    verification_failed          None                verification_failed
+    not_applicable / 缺失        None                no_probe
+    无探针 + 基线可对比          bool(after<base)    baseline_compare
+    无探针 + 基线不可用          None                legacy_unverifiable
+    ==========================  ==================  =========================
+
+    ★不可判定**永远保留 None**，绝不为凑布尔值折叠成 False。
+    Returns: ``(value, reason_code)``
+    """
+    _rp = patch.get(F_REPROBE_VERDICT)
+    _hits = _as_int(patch.get("reprobe_baseline_hits"))
+    if _rp == "true_pass":
+        if _hits is not None and _hits > 0:
+            return True, PF_TRUE_PASS
+        # ★165批B1：标记 true_pass 但复现基线未命中 ⇒ 复现未真正发生，不判 True
+        return None, PF_NO_PROBE
+    if _rp == "false_pass":
+        return False, PF_FALSE_PASS
+    if _rp == "ineffective":
+        return False, PF_INEFFECTIVE
+    if _rp == "partial_fix":
+        return None, PF_PARTIAL
+    if _rp == "verification_failed":
+        return None, PF_VERIFY_FAILED
+    if _rp is not None:
+        # "not_applicable" 及未来新增取值：一律按「无探针证据」处理
+        return None, PF_NO_PROBE
+    # ---- 探针缺失：文件级基线兜底（legacy 记录） ----
+    _baseline, _after = _baseline_pair(patch)
+    if _baseline is None or not _baseline or _after is None:
+        return None, PF_LEGACY
+    return bool(_after < _baseline), PF_BASELINE
+
+
+def _pf_note(code: str, patch: dict[str, Any]) -> str:
+    """原因码 → 人读理由（供 verification_split_reason 与报表复用）。"""
+    if code == PF_TRUE_PASS:
+        return "主动复现：目标问题**完全消失**（复现基线命中）"
+    if code == PF_FALSE_PASS:
+        return "主动复现：**无法复现**目标问题（假通过）"
+    if code == PF_INEFFECTIVE:
+        return "主动复现：问题**未减少**（修复无效）"
+    if code == PF_PARTIAL:
+        return ("主动复现：问题**减少但未清零**（部分修复，按 strict 口径不判已修复，"
+                "计为不可判定）")
+    if code == PF_VERIFY_FAILED:
+        return "主动复现：代码片段无法解析，不可判定"
+    if code == PF_BASELINE:
+        _b, _a = _baseline_pair(patch)
+        return "文件级基线对比：%s → %s（无探针结论，退 legacy 口径）" % (_b, _a)
+    if code == PF_LEGACY:
+        # 三种「基线不可用」的区别保留原文表述，便于历史报告逐字对照
+        _b, _a = _baseline_pair(patch)
+        if _b is None:
+            return "无修复前基线，无法判定问题是否消失（legacy_unverifiable）"
+        if not _b:
+            return "修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）"
+        return "有基线但缺修复后计数，不可判定（legacy_unverifiable）"
+    return "无探针结论（not_applicable），不可判定"
 
 
 def split_verification(patch: dict[str, Any]) -> dict[str, Any]:
@@ -110,72 +225,15 @@ def split_verification(patch: dict[str, Any]) -> dict[str, Any]:
 
     # ---------- ② Problem-Fixed（"修好了"） ----------
     # 基线优先取顶层，回退 runtime_verify_result.baseline
-    _baseline = _as_int(patch.get("baseline_errors"))
-    _after = _as_int(patch.get("post_apply_errors"))
-    _rvr = patch.get("runtime_verify_result")
-    if isinstance(_rvr, dict):
-        if _baseline is None:
-            _baseline = _as_int(_rvr.get("baseline"))
-        if _after is None:
-            _after = _as_int(_rvr.get("after_fix"))
+    _baseline, _after = _baseline_pair(patch)
 
-    # ---------- ⓪ ★第51批 T1 + 165批B1：主动复现优先（代码级，不受日志轮转影响） ----------
-    # ★165批B1 真值口径互斥修复：采信 reprobe_verdict 必须同时具备复现基线命中
-    #   （reprobe_baseline_hits > 0）；无复现基线说明"复现"未真正发生，
-    #   不得据 reprobe_verdict 判 True（否则与日志基线两套口径互斥、同 verdict 落两值）。
-    _rp = patch.get(F_REPROBE_VERDICT)
-    _rp_hits = _as_int(patch.get("reprobe_baseline_hits"))
-    if _rp == "true_pass":
-        if _rp_hits is not None and _rp_hits > 0:
-            _problem_fixed = True
-            _gran = GRAN_ACTIVE_REPROBE
-            _pf_note = "主动复现：目标问题**完全消失**（复现基线命中）"
-        else:
-            # ★165批B1：标记为 true_pass 但复现基线未命中 → 不可判定，绝不落 True
-            _problem_fixed = None
-            _gran = GRAN_ACTIVE_REPROBE
-            _pf_note = ("主动复现：标记为 true_pass 但复现基线未命中"
-                        "（reprobe_baseline_hits<=0），不可判定")
-    elif _rp == "partial_fix":
-        # ★165批B1：partial_fix 不再等同"已修复" —— 问题只减少未清零，
-        #   严格口径下不归类为 problem_fixed=True，落 None 保留粒度供审计。
-        _problem_fixed = None
-        _gran = GRAN_REPRODUCTION
-        _pf_note = ("主动复现：问题**减少但未清零**（部分修复，"
-                    "按 strict 口径不判为已修复，计为不可判定）")
-    elif _rp in ("false_pass", "ineffective"):
-        _problem_fixed = False
-        _gran = GRAN_ACTIVE_REPROBE
-        _pf_note = ("主动复现：**无法复现**目标问题（假通过）"
-                    if _rp == "false_pass" else "主动复现：问题**未减少**（修复无效）")
-    elif _rp == "verification_failed":
-        _problem_fixed = None
-        _gran = GRAN_STATIC_ONLY
-        _pf_note = "主动复现：代码片段无法解析，不可判定"
-    elif _rp is not None:
-        _problem_fixed = None
-        _gran = GRAN_STATIC_ONLY
-        _pf_note = "主动复现：不适用（无检测器），不判通过"
-    elif _baseline is None:
-        _problem_fixed = None
-        _gran = GRAN_STATIC_ONLY
-        _pf_note = "无修复前基线，无法判定问题是否消失"
-    elif not _baseline:
-        # ★基线为 0 —— 这是本批的核心修复点：
-        #   旧逻辑会把它当成"修复前 0 个错 → 效果 100%"，
-        #   实际是"基线根本没采到"（第46批 R1：日志已轮转截断）。
-        _problem_fixed = None
-        _gran = GRAN_STATIC_ONLY
-        _pf_note = "修复前基线为 0（未采到真实基线），不可判定"
-    elif _after is None:
-        _problem_fixed = None
-        _gran = GRAN_REPRODUCTION
-        _pf_note = "有基线但缺修复后计数，不可判定"
-    else:
-        _problem_fixed = bool(_after < _baseline)
-        _gran = GRAN_EFFECTIVENESS
-        _pf_note = ("问题已消失" if _problem_fixed
-                    else f"问题仍在（修复后仍有 {_after} 处）")
+    # ★第306批 刀2：**唯一派生源** —— 本函数不再自带分支，值/原因码全从
+    #   `derive_problem_fixed()` 取（评估器与台账层调的是同一个函数）。
+    _problem_fixed, _pf_code = derive_problem_fixed(patch)
+    _gran = _GRAN_OF_CODE.get(_pf_code, GRAN_STATIC_ONLY)
+    _pf_text = _pf_note(_pf_code, patch)
+
+    _LEGACY_PF_BRANCH = False
 
     # ---------- ③ effectiveness ----------
     if _baseline and _after is not None:
@@ -188,11 +246,13 @@ def split_verification(patch: dict[str, Any]) -> dict[str, Any]:
     return {
         F_NO_REGRESSION: _no_regression,
         F_PROBLEM_FIXED: _problem_fixed,
+        F_PF_REASON: _pf_code,
+        F_PF_PARTIAL: _pf_code == PF_PARTIAL,
         F_GRANULARITY: _gran,
         F_EFFECTIVENESS: _eff,
         F_VERIFIED: _no_regression,      # deprecated：等于 no_regression
         F_SPLIT_VERSION: SPLIT_VERSION,
-        "reason": f"{_nr_note}；{_pf_note}",
+        "reason": f"{_nr_note}；{_pf_text}",
     }
 
 
@@ -202,8 +262,8 @@ def apply_split(patch: dict[str, Any]) -> dict[str, Any]:
     ★不删除任何既有字段 —— 向后兼容优先。
     """
     _r = split_verification(patch)
-    for _k in (F_NO_REGRESSION, F_PROBLEM_FIXED, F_GRANULARITY,
-               F_EFFECTIVENESS, F_VERIFIED, F_SPLIT_VERSION):
+    for _k in (F_NO_REGRESSION, F_PROBLEM_FIXED, F_PF_REASON, F_PF_PARTIAL,
+               F_GRANULARITY, F_EFFECTIVENESS, F_VERIFIED, F_SPLIT_VERSION):
         patch[_k] = _r[_k]
     patch["verification_split_reason"] = _r["reason"]
     return _r
@@ -248,8 +308,9 @@ def backfill(patches: list[dict[str, Any]],
             or bool(_p.get(F_VERIFIED))
         _r = split_verification(_p)
         if apply:
-            for _k in (F_NO_REGRESSION, F_PROBLEM_FIXED, F_GRANULARITY,
-                       F_EFFECTIVENESS, F_VERIFIED, F_SPLIT_VERSION):
+            for _k in (F_NO_REGRESSION, F_PROBLEM_FIXED, F_PF_REASON,
+                       F_PF_PARTIAL, F_GRANULARITY, F_EFFECTIVENESS,
+                       F_VERIFIED, F_SPLIT_VERSION):
                 _p[_k] = _r[_k]
             _p["verification_split_reason"] = _r["reason"]
         _nr[_r[F_NO_REGRESSION]] = _nr.get(_r[F_NO_REGRESSION], 0) + 1
@@ -307,9 +368,14 @@ def real_fix_rate(patches: list[dict[str, Any]]) -> float | None:
     for _p in patches:
         if not isinstance(_p, dict):
             continue
-        _pf = _p.get(F_PROBLEM_FIXED)
-        if _pf is None and F_SPLIT_VERSION not in _p:
-            _pf = split_verification(_p)[F_PROBLEM_FIXED]
+        # ★第306批 刀2：与评估器**同源**——一律重派生，不读存储值。
+        #   唯一例外是人工修正锁定（problem_fixed_corrected），那是显式裁决。
+        if _p.get("problem_fixed_corrected") or _p.get(F_PF_REASON):
+            # 已带原因码 ⇒ 本派生源已算过（评估器输出层就是这种形态）；
+            # 直接采信，避免对「已剥离探针字段的投影 dict」重算出另一套数。
+            _pf = _p.get(F_PROBLEM_FIXED)
+        else:
+            _pf = derive_problem_fixed(_p)[0]
         if _pf is True:
             _ok += 1
             _known += 1
