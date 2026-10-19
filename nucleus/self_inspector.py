@@ -4891,6 +4891,54 @@ class SelfInspector(SilentLogMixin):
 
     # ========== ★P1 新增：全库扫描检测器 ==========
 
+    def _m304_load_in_edge_names(self) -> set[str]:
+        """★第304批 刀2：从最新落盘调用图读「**有入边**的节点名」集合（死代码判据的权威来源）。
+
+        读 `data/call_graph/graph_<ts>.json`（304 刀1 产出，滚动 7 份，取最新一份）。
+        图不存在/损坏 ⇒ 返回空集（判据退化为按名/事件/入口三类，零崩溃）。
+        """
+        try:
+            import glob as _g
+            import json as _j
+            _dir = os.path.join(self._project_root, "data", "call_graph")
+            _files = sorted(_g.glob(os.path.join(_dir, "graph_*.json")))
+            if not _files:
+                return set()
+            with open(_files[-1], encoding="utf-8") as _f:
+                _gd = _j.load(_f)
+            _edges = _gd.get("edges") or []
+            _nodes = _gd.get("nodes") or []
+            _in_edges = {_e.get("callee") for _e in _edges if isinstance(_e, dict)}
+            return {_n.get("name") for _n in _nodes
+                    if isinstance(_n, dict) and _n.get("id") in _in_edges and _n.get("name")}
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_m304_load_in_edge_names")
+            return set()
+
+    def _m304_graph_covered_files(self) -> set[str]:
+        """★第304批 刀2：返回**图中出现过的文件集合**（= 入边判据的可用域）。
+
+        调用图只扫 `config.CALL_GRAPH_SCAN_DIRS`（本窗实测：nucleus / organs / functions /
+        base / utils / somatics / main.py）⇒ **tools/、hardware/、config.py 等不在图内**。
+        对图域外的文件，入边判据不可用（等价于「没测」）；按判据纪律
+        **不得据此判死代码**——分不清「没有病」与「没测」时不许下结论。
+        """
+        try:
+            import glob as _g
+            import json as _j
+            _dir = os.path.join(self._project_root, "data", "call_graph")
+            _files = sorted(_g.glob(os.path.join(_dir, "graph_*.json")))
+            if not _files:
+                return set()
+            with open(_files[-1], encoding="utf-8") as _f:
+                _gd = _j.load(_f)
+            return {str(_n.get("file", "")).replace("\\", "/")
+                    for _n in (_gd.get("nodes") or [])
+                    if isinstance(_n, dict) and _n.get("file")}
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_m304_graph_covered_files")
+            return set()
+
     def _detect_dead_code(self) -> list[dict[str, Any]]:
         """死代码检测：扫描全库公共方法，找出无外部调用的方法。
 
@@ -4962,46 +5010,62 @@ class SelfInspector(SilentLogMixin):
                 _name = _m.group(1)
                 _call_counts[_name] = _call_counts.get(_name, 0) + 1
 
-        # ★第303批 刀2（反射可见性）：静态调用计数对「按名派发／事件注册／回调」**天然失效**。
-        #   302 批实测 638 条 dead_code 里 617 条（96.7%）是反射可达/公共 API/预埋，全是误报，
-        #   根因就是判据只看 `name(` 形式的静态调用，看不到：
-        #     ① `getattr(self, "xxx")` 按名派发（全库数百处）；
-        #     ② 事件注册表／回调名单里以**字符串**写下的名字（subscribes/handlers/signal 等）。
-        #   现补齐可见性：出现在「字符串常量」或「getattr 字面名」中的名字一律视为**可达**，
-        #   不再判为死代码。方向是「宁可少报也不把在跑的能力判成死代码」。
-        _reflect_names: set[str] = set()
+        # ★第303批刀2 → ★第304批刀2 升级：**「在场即活」改为「有边即活」**。
+        #   303 的代价是 nucleus/、base/、tools/、config.py **整目录豁免** ⇒ 框架层与配置面
+        #   从此结构性不被 dead_code 检查（覆盖面丢失）。本批改由**图**说话，四类存活来源：
+        #     ① 静态边（static）：落盘调用图（304刀1 产出 data/call_graph/graph_<ts>.json）
+        #        中同名节点**有入边** ⇒ 活（权威判据，替代目录豁免）；
+        #     ② 按名边（byname）：`getattr(self, "x")` 字面名；
+        #     ③ 事件边（event）：字符串常量形式的事件名（`a.b` 形态，取末段）；
+        #     ④ 注册入口（entry）：on_/handle_/do_/signal_ 等由总线反射调用的处理器。
+        #   **目录豁免与 API 前缀豁免已移除** ⇒ nucleus/ 不再是盲区（可判）。
+        #   各来源豁免条数见下方 INFO 日志（豁免来源可审计）。
+        _in_edge_names = self._m304_load_in_edge_names()
+        _byname_names: set[str] = set()
+        _event_names: set[str] = set()
         _GETATTR_RE = _re.compile(r'getattr\s*\(\s*[^,()]{1,80},\s*["\'](\w+)["\']')
-        _STR_NAME_RE = _re.compile(r'["\']([A-Za-z_][A-Za-z0-9_]{2,})["\']')
+        _EVENT_RE = _re.compile(r'["\']([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)["\']')
         for _content in _contents.values():
             for _m in _GETATTR_RE.finditer(_content):
-                _reflect_names.add(_m.group(1))
-            for _m in _STR_NAME_RE.finditer(_content):
-                _reflect_names.add(_m.group(1))
-
-        # ③ 公共能力面：公共 API 前缀 / config.py / 框架层与工具层的方法 —— 属**对外契约**，
-        #    即便当前无静态调用点也不该判死代码（302 批分类中 A 类 96.7% 正是这一类：
-        #    config.py 的配置访问器、nucleus/base/tools 的能力面）。
-        _API_PREFIX = ("get_", "set_", "is_", "has_", "create_", "build_", "parse_",
-                       "format_", "to_", "from_", "register_", "unregister_", "shutdown_",
-                       "enable_", "disable_", "dump_", "load_", "save_", "export_", "import_")
-        _FRAMEWORK_DIRS = ("nucleus/", "base/", "tools/")
+                _byname_names.add(_m.group(1))
+            for _m in _EVENT_RE.finditer(_content):
+                _event_names.add(_m.group(1).split(".")[-1])
+        _ENTRY_PREFIX = ("on_", "handle_", "_on_", "do_", "signal_")
+        # ★图覆盖域：调用图只扫 config.CALL_GRAPH_SCAN_DIRS，域外文件**没有入边数据** ⇒
+        #   判据不可用（等价于「没测」）。按判据纪律：分不清「没有病」与「没测」时不许判死。
+        _covered_files = self._m304_graph_covered_files()
+        _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0, "out_of_graph": 0}
 
         for _name, _defs in _methods.items():
             _call_count = _call_counts.get(_name, 0)
             _def_count = len(_defs)
-            _f_norm = _defs[0][0].replace("\\", "/")
-            _is_public_api = (_name.startswith(_API_PREFIX)
-                              or _f_norm == "config.py"
-                              or any(_f_norm.startswith(_d) for _d in _FRAMEWORK_DIRS))
-            if (_call_count <= _def_count and _name not in _reflect_names
-                    and not _is_public_api):
+            if _call_count > _def_count:
+                continue
+            if _defs[0][0].replace("\\", "/") not in _covered_files:
+                _alive_src["out_of_graph"] += 1
+                continue
+            if _name in _in_edge_names:
+                _alive_src["static"] += 1
+            elif _name in _byname_names:
+                _alive_src["byname"] += 1
+            elif _name in _event_names:
+                _alive_src["event"] += 1
+            elif _name.startswith(_ENTRY_PREFIX):
+                _alive_src["entry"] += 1
+            else:
                 for _f, _line in _defs[:1]:
                     _issues.append({
                         'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
                         'type': 'dead_code', 'severity': 'low',
-                        'description': f'方法 {_name} 可能无外部调用（死代码）',
+                        'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',
                         'suggestion': '确认是否需要保留，如不需要可删除以减少代码体积',
                     })
+        # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
+        _module_logger.info(
+            "[304刀2] dead_code 豁免来源: 静态入边=%d 按名边=%d 事件边=%d 注册入口=%d"
+            " 图域外(判据不可用,不判)=%d（判死=%d）",
+            _alive_src["static"], _alive_src["byname"], _alive_src["event"],
+            _alive_src["entry"], _alive_src["out_of_graph"], len(_issues))
         return _issues
 
     def _detect_unused_imports(self) -> list[dict[str, Any]]:

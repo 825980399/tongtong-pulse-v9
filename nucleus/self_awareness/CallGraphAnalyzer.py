@@ -819,9 +819,15 @@ class CallGraphAnalyzer:
                 break
         return _chain
 
-    def export_json(self, path: str) -> int:
-        """导出调用图为 JSON，返回字节数。"""
-        _data = self._ensure()
+    def export_json(self, path: str, data: dict | None = None) -> int:
+        """导出调用图为 JSON，返回字节数。
+
+        ★第304批 刀1：新增可选 `data` —— 允许把**已算好的图**直接落盘（避免重复分析）；
+        不传时行为与改造前逐字一致（内部 `_ensure()`）。
+        生产调用方为本类的 `dump_graph_snapshot()`；此前全库唯一调用方是测试
+        ⇒ 图本体（nodes/edges）每次分析完即弃，从未落盘。
+        """
+        _data = data if isinstance(data, dict) else self._ensure()
         _dir = os.path.dirname(os.path.abspath(path))
         if _dir and not os.path.isdir(_dir):
             os.makedirs(_dir, exist_ok=True)
@@ -832,6 +838,72 @@ class CallGraphAnalyzer:
     # ------------------------------------------------------------------
     # T2：健康度分析
     # ------------------------------------------------------------------
+    def dump_graph_snapshot(self, graph: dict | None = None, keep: int = 7) -> str:
+        """★第304批 刀1：调用图**本体**落盘（图不再「分析完即弃」）。
+
+        产出 `data/call_graph/graph_<ts>.json`，规格与 303 批刀6 per-item 落盘一致
+        （原子写 tmp + `os.replace`，滚动保留最新 7 份）。
+
+        内容：
+          - `nodes[]` / `edges[]`（点号 ID：**模块.类.方法**）＋ `stats`；
+          - `edge_types`：边类型**分色**统计 ——
+              `static` = AST 静态调用边（图本体 edges 数）；
+              `byname` = `getattr(self, "x")` 按名派发边（全库扫描计数）；
+              `event`   = 字符串常量形式的事件名边（全库扫描计数）。
+            分色的用途：让「谁靠静态边活着、谁只靠按名/事件边活着」可被区分，
+            刀2 的 dead_code 判据据此从「在场即活」升级为「有边即活」。
+
+        Returns: 落盘绝对路径；失败返回空串（绝不阻断调用方）。
+        """
+        import time as _time
+        try:
+            _cg = graph if isinstance(graph, dict) else self._ensure()
+            if not isinstance(_cg, dict):
+                return ""
+            _root = _project_root()
+            _dir = os.path.join(_root, "data", "call_graph")
+            os.makedirs(_dir, exist_ok=True)
+            _ts = _time.strftime("%Y%m%d_%H%M%S")
+            _path = os.path.join(_dir, "graph_{}.json".format(_ts))
+            _tmp = _path + ".tmp"
+            _edge_types = {"static": len(_cg.get("edges") or []), "byname": 0, "event": 0}
+            try:
+                import re as _re
+                _GETATTR_RE = _re.compile(r'getattr\s*\(\s*[^,()]{1,80},\s*["\'](\w+)["\']')
+                _EVENT_RE = _re.compile(r'["\']([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)["\']')
+                for _rel in _iter_py_files(_root, _scan_dirs()):
+                    try:
+                        with open(os.path.join(_root, _rel.replace("/", os.sep)),
+                                  encoding="utf-8", errors="ignore") as _f:
+                            _c = _f.read()
+                    except Exception:
+                        continue
+                    _edge_types["byname"] += len(_GETATTR_RE.findall(_c))
+                    _edge_types["event"] += len(_EVENT_RE.findall(_c))
+            except Exception as _e:
+                _logger.debug("边类型分色统计失败（不影响落盘）: %s: %s", type(_e).__name__, _e)
+            _payload = dict(_cg)
+            _payload["edge_types"] = _edge_types
+            _payload["dumped_at"] = _time.time()
+            self.export_json(_tmp, data=_payload)
+            os.replace(_tmp, _path)
+            try:
+                _olds = sorted(_f for _f in os.listdir(_dir)
+                               if _f.startswith("graph_") and _f.endswith(".json"))
+                for _old in _olds[:-keep]:
+                    os.remove(os.path.join(_dir, _old))
+            except Exception as _e:
+                _logger.warning("调用图滚动清理失败（不影响本次落盘）: %s: %s",
+                                type(_e).__name__, _e)
+            _logger.info("[304刀1] 调用图落盘: %s（nodes=%d edges=%d 边类型=%s）",
+                         os.path.relpath(_path, _root),
+                         len(_payload.get("nodes") or []),
+                         len(_payload.get("edges") or []), _edge_types)
+            return _path
+        except Exception as e:
+            _logger.warning("调用图落盘失败（返回空串）: %s: %s", type(e).__name__, e)
+            return ""
+
     def analyze_health(self, call_graph: dict | None = None) -> dict:
         """基于调用图计算"代码结构健康度"（5 维度 + 综合评分）。
 

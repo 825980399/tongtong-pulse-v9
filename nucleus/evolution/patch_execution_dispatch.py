@@ -69,11 +69,59 @@ def is_fragment_to_full(patch: dict) -> bool:
     return (_extract_def_name(_orig) == "") and (_extract_def_name(_mod) != "")
 
 
-def select_patch_for_execution(patch_history: list, limit: int = 1) -> list:
+def blast_radius_of(method: str, max_depth: int = 3) -> int:
+    """★第304批刀5：派单/入队前查**牵连半径** —— 改动该方法会波及的下游节点数。
+
+    读 304刀1 落盘的调用图（`data/call_graph/graph_<ts>.json`，取最新一份），
+    从同名节点出发沿 `caller → callee` 做 BFS（限深 `max_depth`），返回可达节点数（不含自身）。
+    图缺失 / 异常 / 方法不在图中 ⇒ 返回 **0**（判据不可用，调用方按「不拦」处理，零回归）。
+
+    用途（自动分诊的前置依赖）：牵连节点数 > 1 者**不入队、转人工**。
+    """
+    if not method:
+        return 0
+    try:
+        import glob as _g
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _files = sorted(_g.glob(os.path.join(_root, "data", "call_graph", "graph_*.json")))
+        if not _files:
+            return 0
+        with open(_files[-1], encoding="utf-8") as _f:
+            _gd = json.load(_f)
+        _out: dict[str, list[str]] = {}
+        for _e in (_gd.get("edges") or []):
+            if isinstance(_e, dict) and _e.get("caller") and _e.get("callee"):
+                _out.setdefault(_e["caller"], []).append(_e["callee"])
+        _starts = [_n.get("id") for _n in (_gd.get("nodes") or [])
+                   if isinstance(_n, dict) and _n.get("name") == method and _n.get("id")]
+        if not _starts:
+            return 0
+        _seen = set(_starts)
+        _frontier = list(_starts)
+        for _ in range(max_depth):
+            _next: list[str] = []
+            for _nid in _frontier:
+                for _nxt in _out.get(_nid, []):
+                    if _nxt not in _seen:
+                        _seen.add(_nxt)
+                        _next.append(_nxt)
+            _frontier = _next
+            if not _frontier:
+                break
+        return len(_seen) - len(set(_starts))
+    except Exception as e:
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::blast_radius_of")
+        return 0
+
+
+def select_patch_for_execution(patch_history: list, limit: int = 1,
+                               max_blast_radius: int = 1) -> list:
     """从 patch_history 选「status=runtime_verified 且 risk=低」的补丁（低风险优先）。
 
     纯函数（便于隔离单测）；只读，不改任何字段。
     ★第295批刀5：先跑形态判据回扫，「片段→完整」（嵌套 def）补丁过滤掉，不派单。
+    ★第304批刀5：再查**牵连半径**（读落盘调用图）—— 牵连节点数 > `max_blast_radius`
+      者**不入队、转人工**（自动分诊的前置依赖；图缺失时 blast=0 ⇒ 按「不拦」处理，零回归）。
     """
     if not isinstance(patch_history, list):
         return []
@@ -83,11 +131,22 @@ def select_patch_for_execution(patch_history: list, limit: int = 1) -> list:
     # ★第298批刀3：is_fragment_to_full 为 select 永久排除项（非首批边界）——
     #   即使后续放宽到 approved（71条），片段→完整结构损坏补丁（含2条problem_fixed=True）也绝不派单。
     _safe = [p for p in _cands if not is_fragment_to_full(p)]
+    # ★第304批刀5：牵连半径闸门（> max_blast_radius ⇒ 转人工，不自动派单）
+    _scoped = []
+    for _p in _safe:
+        _m = str(_p.get("method") or "")
+        _br = blast_radius_of(_m)
+        if _br > max_blast_radius:
+            _module_logger.info(
+                "[304刀5] 牵连半径超限转人工: patch=%s method=%s blast=%d > %d",
+                str(_p.get("id", ""))[:16], _m, _br, max_blast_radius)
+            continue
+        _scoped.append(_p)
     # 低风险优先；同风险按 trust_score 降序
-    _safe.sort(key=lambda p: (
+    _scoped.sort(key=lambda p: (
         0 if p.get("risk_level") in ("低", "low") else 1,
         -(float(p.get("trust_score", 0) or 0))))
-    return _safe[:limit]
+    return _scoped[:limit]
 
 
 def dispatch_and_verify(sandbox: Any, patch: dict) -> dict:

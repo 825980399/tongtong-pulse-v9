@@ -1550,6 +1550,58 @@ class PulseSubconscious(BasePulseOrgan):
 
         return {"status": "marked_low_quality", "direction": direction_key}
 
+    def _m304_growth_to_hub(self, growth_topic: str) -> int:
+        """★第304批 刀4：给「想成长」一个**能动的出口**（验证回边）。
+
+        463 次 `growth.need_detected` 此前只有「做」（入队 + emit LEGS + 腿侧 handler），
+        没有「证明做了且有用」的回边。本方法把 growth_topic 结构化为
+        **三行内可判真伪**的假设（主体／谓词／验证方法／预期观测），送
+        `verification_learning_hub`（复用 301刀3 的 origin 字段，新增 `origin="growth"`）。
+
+        节流：每窗（进程内）入库上限 `GROWTH_HUB_MAX_PER_WINDOW`（默认 20），
+        与 `self_inspector.report_issues_to_hub(max_items=20)` 同规格，防刷屏淹掉 hub。
+        """
+        _max = 20
+        try:
+            import config as _cfg
+            # 注意：不能写 `int(x or 20)` —— 那样 0（关闭入库）会被当成假值回退成 20。
+            _v = getattr(_cfg, "GROWTH_HUB_MAX_PER_WINDOW", 20)
+            _max = int(_v) if _v is not None else 20
+        except Exception:
+            _max = 20
+        if getattr(self, "_m304_growth_hub_sent", 0) >= _max:
+            self._log(LogLevel.DEBUG, f"[304刀4] 本窗 growth 入库已达上限 {_max}，跳过")
+            return 0
+        _topic = str(growth_topic or "").strip()
+        if not _topic:
+            return 0
+        _subject = _topic[:40]
+        _verify = "检索/复算该方向是否产出新的可引用结论"
+        _expect = "该方向在下一个认知窗内出现 ≥1 条被下游引用的节点"
+        _hypothesis = "假设：{}｜验证法：{}｜预期观测：{}".format(_subject, _verify, _expect)
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
+            _hub = get_verification_learning_hub()
+            _hub.record(
+                organ="潜意识",
+                task_type="growth_hypothesis",
+                input_summary=_hypothesis[:200],
+                local_result=dict(topic=_subject, predicate="可形成可验证的成长假设",
+                                  verify=_verify, expect=_expect),
+                confidence=0.5,
+                relevance_score=0.5,
+                needs_verification=True,
+                lesson="origin=growth topic=" + _subject,
+                origin="growth",
+            )
+            self._m304_growth_hub_sent = getattr(self, "_m304_growth_hub_sent", 0) + 1
+            self._log(LogLevel.INFO,
+                      f"[304刀4] growth 假设入库({self._m304_growth_hub_sent}/{_max}): {_subject}")
+            return 1
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseSubconscious::_m304_growth_to_hub")
+            return 0
+
     def _on_growth_need(self, payload: dict) -> dict[str, Any]:
         """收到成长需求脉冲，加入深度探索队列"""
         growth_topic = payload.get("growth_topic", "")
@@ -1562,13 +1614,19 @@ class PulseSubconscious(BasePulseOrgan):
             self._deep_exploration_queue.insert(0, growth_topic)  # 插入队首，优先处理
             self._deep_exploration_counts[growth_topic] = self._deep_exploration_counts.get(growth_topic, 0) + 1
             # ★v25.0治理：限制深度探索队列最大30条
+            # ★第304批 刀3（满员丢新·一行修复）：本分支是 `insert(0)` —— **最新项在队首**，
+            #   原 `[-30:]` 取的是队尾 30 个 = **最旧的 30 个** ⇒ 满员时被丢的正是刚进队首的这条
+            #   最新成长目标（463 次「想成长」在满员时新来的直接蒸发）。改为 `[:30]` ⇒ 保留最新 30 个。
+            #   注意：其余 9 处截断均为 `append()`（最新在队尾），`[-30:]` 本就正确，**未改动**。
             if len(self._deep_exploration_queue) > 30:
-                self._deep_exploration_queue = self._deep_exploration_queue[-30:]
+                self._deep_exploration_queue = self._deep_exploration_queue[:30]
             self._log(LogLevel.INFO, f"收到成长目标，优先探索: {growth_topic}")
             # 立即触发双腿优先学习
             # ★P3-1修复：跨器官 on_pulse 直调 → 发射脉冲（规则14）
             if self.legs:
                 self._emit(Event.LEGS_LEARN_NOW, {"direction": growth_topic, "priority": "high"}, priority=3)
+            # ★第304批 刀4：验证回边——把这条「想成长」结构化为可验证假设送 hub（节流 ≤20/窗）
+            self._m304_growth_to_hub(growth_topic)
             return {"status": "queued", "topic": growth_topic, "priority": "high"}
         # ===== 新增: 从长期规划中提取方向并注入兴趣标签 =====
         current_level = payload.get("current_level", {})

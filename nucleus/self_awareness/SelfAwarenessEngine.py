@@ -1267,6 +1267,13 @@ class SelfAwarenessEngine:
             _graph = _cg.analyze()
             _health = _cg.analyze_health(_graph)
             _health["graph_stats"] = dict(_graph.get("stats") or {})
+            # ★第304批 刀1：图**本体**落盘。此前 integrate 只回传 health + stats 摘要，
+            #   nodes/edges 用完即弃 ⇒ 下游（dead_code 判据、派单牵连查询）无图可查。
+            #   落盘失败只留痕，绝不影响健康度维度产出。
+            try:
+                _health["graph_dump"] = _cg.dump_graph_snapshot(_graph)
+            except Exception as _de:
+                _logger.debug("调用图落盘异常已忽略: %s: %s", type(_de).__name__, _de)
             return _health
         except Exception as e:  # 整合失败不影响引擎
             _logger.warning("调用图分析整合失败（返回空 dict）: %s: %s",
