@@ -234,11 +234,23 @@ def reprobe_effectiveness(p: dict) -> float | None:
     return (_b - _a) / _b
 
 
+#: ★第305批 刀5：N-9 复现探针**黑名单**（默认启用制下的唯一排除通道）。
+#:   仅当某条记录被证实「复现探针结论不可用/会误判」时才加入（需注明理由）。
+N9_REPROBE_DENY: set[tuple[str, str]] = set()
+
+
 def _n9_exempt(p: Any) -> bool:
-    """该补丁是否在 N-9 复核清单（:data:`N9_REPROBE_EXEMPT`）内。"""
+    """★第305批 刀5：是否采纳方法级复现探针（T4）结论 —— **默认启用 + 黑名单排除**。
+
+    原实现为**白名单制**：仅 `N9_REPROBE_EXEMPT` 清单内的条目才采纳复现探针结论，
+    于是 62 条「不可验证」里约 50 条**虽有** `reprobe_verdict=true_pass` 证据却被挡在门外
+    ——不是缺证据，是证据被口径压住。经小林拍板授权，本批改为：
+      - **默认启用**：所有记录都可用方法级复现探针作为效果判据（T4 提为唯一真值）；
+      - **黑名单排除**：仅命中 `N9_REPROBE_DENY` 的条目回退到原文件级判据。
+    """
     if not isinstance(p, dict):
         return False
-    return (str(p.get("file") or ""), str(p.get("method") or "")) in N9_REPROBE_EXEMPT
+    return (str(p.get("file") or ""), str(p.get("method") or "")) not in N9_REPROBE_DENY
 
 
 def _score_effectiveness(real_eff: float | None) -> tuple[float, str]:
@@ -340,6 +352,9 @@ def evaluate_patch(p: dict, repeats: int = 1) -> dict[str, Any]:
         # ★第158批第9刀（N-9）：方法级复现探针效果 + 本次是否采纳它作为效果判据。
         "reprobe_effectiveness": _reprobe,
         "reprobe_used": _reprobe_ok,
+        # ★第305批刀5：`problem_fixed` 由 T4（方法级复现探针）**派生**，不再由各路径各写一次。
+        #   语义：复现探针生效 ⇒ 该问题已被修好；探针未生效 ⇒ 退化为「文件级真实效果 > 0」。
+        "problem_fixed": bool(_reprobe_ok or (_real is not None and _real > 0)),
         "baseline_errors": _baseline,
         "post_apply_errors": _post,
         "repeats": repeats,

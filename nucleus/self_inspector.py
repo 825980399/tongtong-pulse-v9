@@ -4891,53 +4891,64 @@ class SelfInspector(SilentLogMixin):
 
     # ========== ★P1 新增：全库扫描检测器 ==========
 
-    def _m304_load_in_edge_names(self) -> set[str]:
-        """★第304批 刀2：从最新落盘调用图读「**有入边**的节点名」集合（死代码判据的权威来源）。
+    def _m305_load_graph_index(self) -> dict:
+        """★第305批 刀1：装载落盘调用图的**判据索引**（**对齐图 id**，止住 304 的 541 回归）。
 
-        读 `data/call_graph/graph_<ts>.json`（304 刀1 产出，滚动 7 份，取最新一份）。
-        图不存在/损坏 ⇒ 返回空集（判据退化为按名/事件/入口三类，零崩溃）。
+        304 刀2 的缺陷：按**裸 method name** 比对（`{node["name"] | id ∈ callee}`），
+        而图节点 ID 是 `module:Class.method` ⇒ 同一个 name（如 `__init__`）背后是跨数百个
+        文件的几十个不同函数，**同名合并**导致大量误判（dead_code 27 → 541）。
+
+        本函数改为 **id 对齐**，并按两级定位把「源码里的方法定义」映射到图节点：
+          一级：`(文件, def 行号)` —— 精确（AST lineno 与 def 关键字行同源）；
+          二级：`(文件, 方法名)`   —— 行号漂移（装饰器/格式）时兜底。
+
+        Returns:
+            {"in_edge_ids": set[str],                 # 有入边的节点 id（权威「活着」集合）
+             "id_by_fileline": {(file, line): id},
+             "ids_by_filename": {(file, name): [ids]},
+             "covered_files": set[str],               # 图覆盖域（域外判据不可用 ⇒ 不判）
+             "ok": bool}                              # 图是否可用
+            图缺失/损坏 ⇒ `ok=False`（判据退化为「不判」，零崩溃）。
         """
+        _empty = {"in_edge_ids": set(), "id_by_fileline": {}, "ids_by_filename": {},
+                  "covered_files": set(), "node_count": 0, "ok": False}
         try:
             import glob as _g
             import json as _j
             _dir = os.path.join(self._project_root, "data", "call_graph")
             _files = sorted(_g.glob(os.path.join(_dir, "graph_*.json")))
             if not _files:
-                return set()
+                return _empty
             with open(_files[-1], encoding="utf-8") as _f:
                 _gd = _j.load(_f)
-            _edges = _gd.get("edges") or []
-            _nodes = _gd.get("nodes") or []
-            _in_edges = {_e.get("callee") for _e in _edges if isinstance(_e, dict)}
-            return {_n.get("name") for _n in _nodes
-                    if isinstance(_n, dict) and _n.get("id") in _in_edges and _n.get("name")}
+            _in_edge_ids = {_e.get("callee") for _e in (_gd.get("edges") or [])
+                            if isinstance(_e, dict) and _e.get("callee")}
+            _id_by_fileline: dict = {}
+            _ids_by_filename: dict = {}
+            _covered: set = set()
+            for _n in (_gd.get("nodes") or []):
+                if not isinstance(_n, dict):
+                    continue
+                _nid = _n.get("id")
+                _f = str(_n.get("file", "") or "").replace("\\", "/")
+                if not _nid or not _f:
+                    continue
+                _covered.add(_f)
+                try:
+                    _ln = int(_n.get("line", 0) or 0)
+                except (TypeError, ValueError):
+                    _ln = 0
+                if _ln:
+                    _id_by_fileline[(_f, _ln)] = _nid
+                _nm = str(_n.get("name", "") or "")
+                if _nm:
+                    _ids_by_filename.setdefault((_f, _nm), []).append(_nid)
+            return {"in_edge_ids": _in_edge_ids, "id_by_fileline": _id_by_fileline,
+                    "ids_by_filename": _ids_by_filename, "covered_files": _covered,
+                    "node_count": len(_gd.get("nodes") or []), "ok": True}
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m304_load_in_edge_names")
-            return set()
-
-    def _m304_graph_covered_files(self) -> set[str]:
-        """★第304批 刀2：返回**图中出现过的文件集合**（= 入边判据的可用域）。
-
-        调用图只扫 `config.CALL_GRAPH_SCAN_DIRS`（本窗实测：nucleus / organs / functions /
-        base / utils / somatics / main.py）⇒ **tools/、hardware/、config.py 等不在图内**。
-        对图域外的文件，入边判据不可用（等价于「没测」）；按判据纪律
-        **不得据此判死代码**——分不清「没有病」与「没测」时不许下结论。
-        """
-        try:
-            import glob as _g
-            import json as _j
-            _dir = os.path.join(self._project_root, "data", "call_graph")
-            _files = sorted(_g.glob(os.path.join(_dir, "graph_*.json")))
-            if not _files:
-                return set()
-            with open(_files[-1], encoding="utf-8") as _f:
-                _gd = _j.load(_f)
-            return {str(_n.get("file", "")).replace("\\", "/")
-                    for _n in (_gd.get("nodes") or [])
-                    if isinstance(_n, dict) and _n.get("file")}
-        except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m304_graph_covered_files")
-            return set()
+            silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
+            return _empty
 
     def _detect_dead_code(self) -> list[dict[str, Any]]:
         """死代码检测：扫描全库公共方法，找出无外部调用的方法。
@@ -5020,7 +5031,12 @@ class SelfInspector(SilentLogMixin):
         #     ④ 注册入口（entry）：on_/handle_/do_/signal_ 等由总线反射调用的处理器。
         #   **目录豁免与 API 前缀豁免已移除** ⇒ nucleus/ 不再是盲区（可判）。
         #   各来源豁免条数见下方 INFO 日志（豁免来源可审计）。
-        _in_edge_names = self._m304_load_in_edge_names()
+        # ★第305批刀1：**判据对齐图 id** —— 304 按裸 name 比对（同名合并）导致 27→541 回归。
+        #   现由 `_m305_load_graph_index` 提供 id 级索引（一级 file+line，二级 file+name）。
+        _gidx = self._m305_load_graph_index()
+        _in_edge_ids = _gidx["in_edge_ids"]
+        _id_by_fileline = _gidx["id_by_fileline"]
+        _ids_by_filename = _gidx["ids_by_filename"]
         _byname_names: set[str] = set()
         _event_names: set[str] = set()
         _GETATTR_RE = _re.compile(r'getattr\s*\(\s*[^,()]{1,80},\s*["\'](\w+)["\']')
@@ -5033,18 +5049,39 @@ class SelfInspector(SilentLogMixin):
         _ENTRY_PREFIX = ("on_", "handle_", "_on_", "do_", "signal_")
         # ★图覆盖域：调用图只扫 config.CALL_GRAPH_SCAN_DIRS，域外文件**没有入边数据** ⇒
         #   判据不可用（等价于「没测」）。按判据纪律：分不清「没有病」与「没测」时不许判死。
-        _covered_files = self._m304_graph_covered_files()
-        _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0, "out_of_graph": 0}
+        _covered_files = _gidx["covered_files"]
+        # ★第305批刀1（续）：**图质量守卫** —— 判据可信度不足时不得批量下结论。
+        #   实测本窗图入边覆盖率仅 56.7%（有入边 3818 / 节点 6738）：跨模块 resolve 率偏低
+        #   ⇒ 「无入边」里大量是**没解析出来**，而不是**真没人调用**——这等价于「没测」，
+        #   按判据纪律不许据此判死 ⇒ 覆盖率低于阈值时本判据整体让位（只记日志，不产出问题）。
+        _MIN_COVERAGE = 0.70
+        _node_count = int(_gidx.get("node_count", 0) or 0)
+        _coverage = (len(_in_edge_ids) / _node_count) if _node_count else 0.0
+        if _gidx.get("ok") and _coverage < _MIN_COVERAGE:
+            _module_logger.info(
+                "[305刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于可信阈值 %.0f%%"
+                " ⇒ 「无入边」不足以证明死代码，本轮不判死（待图解析率提升后自动生效）",
+                _coverage * 100.0, len(_in_edge_ids), _node_count, _MIN_COVERAGE * 100.0)
+            return _issues
+        _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0,
+                      "out_of_graph": 0, "no_node": 0}
 
         for _name, _defs in _methods.items():
             _call_count = _call_counts.get(_name, 0)
             _def_count = len(_defs)
             if _call_count > _def_count:
                 continue
-            if _defs[0][0].replace("\\", "/") not in _covered_files:
+            _f_norm = _defs[0][0].replace("\\", "/")
+            if _f_norm not in _covered_files:
                 _alive_src["out_of_graph"] += 1
                 continue
-            if _name in _in_edge_names:
+            # ★id 对齐：一级 (file, line)；二级 (file, name)。都落空 ⇒ 判据不可用，不判。
+            _nid = _id_by_fileline.get((_f_norm, _defs[0][1]))
+            _ids = [_nid] if _nid else _ids_by_filename.get((_f_norm, _name), [])
+            if not _ids:
+                _alive_src["no_node"] += 1
+                continue
+            if any(_i in _in_edge_ids for _i in _ids):
                 _alive_src["static"] += 1
             elif _name in _byname_names:
                 _alive_src["byname"] += 1
@@ -5062,10 +5099,11 @@ class SelfInspector(SilentLogMixin):
                     })
         # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
         _module_logger.info(
-            "[304刀2] dead_code 豁免来源: 静态入边=%d 按名边=%d 事件边=%d 注册入口=%d"
-            " 图域外(判据不可用,不判)=%d（判死=%d）",
+            "[305刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
+            " 图域外(不判)=%d 无图节点(不判)=%d（判死=%d）",
             _alive_src["static"], _alive_src["byname"], _alive_src["event"],
-            _alive_src["entry"], _alive_src["out_of_graph"], len(_issues))
+            _alive_src["entry"], _alive_src["out_of_graph"],
+            _alive_src["no_node"], len(_issues))
         return _issues
 
     def _detect_unused_imports(self) -> list[dict[str, Any]]:

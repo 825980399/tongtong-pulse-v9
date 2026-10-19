@@ -69,49 +69,112 @@ def is_fragment_to_full(patch: dict) -> bool:
     return (_extract_def_name(_orig) == "") and (_extract_def_name(_mod) != "")
 
 
-def blast_radius_of(method: str, max_depth: int = 3) -> int:
-    """★第304批刀5：派单/入队前查**牵连半径** —— 改动该方法会波及的下游节点数。
+#: ★第305批 刀4：落盘调用图**读缓存**（对齐 DailyScheduler:573 既有口径
+#:   「运行时消费者只读缓存，绝不现扫」）。304 刀5 在 select 循环里每条候选
+#:   json.load 一次 3.1MB 图 ⇒ N×3MB 磁盘读，与该口径冲突。
+_call_graph_cache: dict[str, Any] = {"path": None, "graph": None,
+                                     "out_adj": None, "in_adj": None}
 
-    读 304刀1 落盘的调用图（`data/call_graph/graph_<ts>.json`，取最新一份），
-    从同名节点出发沿 `caller → callee` 做 BFS（限深 `max_depth`），返回可达节点数（不含自身）。
-    图缺失 / 异常 / 方法不在图中 ⇒ 返回 **0**（判据不可用，调用方按「不拦」处理，零回归）。
 
-    用途（自动分诊的前置依赖）：牵连节点数 > 1 者**不入队、转人工**。
+def load_call_graph_cache(force: bool = False) -> dict[str, Any] | None:
+    """装载最新落盘调用图（**带缓存**）；无图 ⇒ None。
+
+    同时构建出边/入边邻接表（`out_adj` / `in_adj`），供牵连半径 BFS 使用。
     """
-    if not method:
-        return 0
+    global _call_graph_cache
     try:
         import glob as _g
         _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         _files = sorted(_g.glob(os.path.join(_root, "data", "call_graph", "graph_*.json")))
         if not _files:
-            return 0
-        with open(_files[-1], encoding="utf-8") as _f:
+            return None
+        _latest = _files[-1]
+        if (not force and _call_graph_cache["path"] == _latest
+                and _call_graph_cache["graph"] is not None):
+            return _call_graph_cache["graph"]
+        with open(_latest, encoding="utf-8") as _f:
             _gd = json.load(_f)
-        _out: dict[str, list[str]] = {}
+        _out_adj: dict[str, list[str]] = {}
+        _in_adj: dict[str, list[str]] = {}
         for _e in (_gd.get("edges") or []):
             if isinstance(_e, dict) and _e.get("caller") and _e.get("callee"):
-                _out.setdefault(_e["caller"], []).append(_e["callee"])
-        _starts = [_n.get("id") for _n in (_gd.get("nodes") or [])
-                   if isinstance(_n, dict) and _n.get("name") == method and _n.get("id")]
-        if not _starts:
-            return 0
-        _seen = set(_starts)
-        _frontier = list(_starts)
-        for _ in range(max_depth):
-            _next: list[str] = []
-            for _nid in _frontier:
-                for _nxt in _out.get(_nid, []):
-                    if _nxt not in _seen:
-                        _seen.add(_nxt)
-                        _next.append(_nxt)
-            _frontier = _next
-            if not _frontier:
-                break
-        return len(_seen) - len(set(_starts))
+                _out_adj.setdefault(_e["caller"], []).append(_e["callee"])
+                _in_adj.setdefault(_e["callee"], []).append(_e["caller"])
+        _call_graph_cache = {"path": _latest, "graph": _gd,
+                             "out_adj": _out_adj, "in_adj": _in_adj}
+        return _gd
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::blast_radius_of")
-        return 0
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::load_call_graph_cache")
+        return None
+
+
+def _bfs_count(adj: dict[str, list[str]], starts: list[str], max_depth: int) -> int:
+    """从起点集沿邻接表 BFS，返回可达节点数（不含起点自身）。"""
+    _seen = set(starts)
+    _frontier = list(starts)
+    for _ in range(max(1, int(max_depth))):
+        _next: list[str] = []
+        for _nid in _frontier:
+            for _nxt in adj.get(_nid, []):
+                if _nxt not in _seen:
+                    _seen.add(_nxt)
+                    _next.append(_nxt)
+        _frontier = _next
+        if not _frontier:
+            break
+    return len(_seen) - len(set(starts))
+
+
+def blast_radius_of(qualified: str, file: str | None = None,
+                    max_depth: int = 3, direction: str = "in") -> int | None:
+    """★第305批 刀3：牵连半径 —— 默认**入边方向（谁依赖我）**。
+
+    304 刀5 的三处缺陷与本批修正：
+      ① **方向错**：沿 caller→callee 出边 BFS ⇒ 度量的是「我依赖谁」，
+         而改动风险的实际来源是「**谁依赖我**」⇒ 默认改 `direction="in"`（入边）。
+      ② **缺名返回 0** ⇒ 调用方按「不拦」放行，把「查不到」当成「牵连小」（**假通过**）
+         ⇒ 改为**返回 None**，调用方 `is None` 必须**转人工**。
+      ③ **裸 name 起 BFS** ⇒ 同名方法跨文件合并，量到的是别人的半径
+         ⇒ **起点消歧**：优先用 `file` + 方法名精确定位（补丁的 file/method 字段），
+         其次要求 `Class.method` / `module.Class.method` 限定名；
+         仅给裸 name 且无 file ⇒ 返回 None（消歧失败，转人工）。
+
+    Returns: 可达节点数（不含起点）；**图缺失或起点无法确定 ⇒ None**（绝不返回 0 冒充「牵连小」）。
+    """
+    if not qualified or not isinstance(qualified, str):
+        return None
+    _gd = load_call_graph_cache()
+    if not _gd:
+        return None
+    _nodes = _gd.get("nodes") or []
+    _q = qualified.strip()
+    _f = str(file or "").replace("\\", "/").strip()
+    _name = _q.split(".")[-1]
+    _starts: list[str] = []
+    # 一级：文件 + 方法名（补丁的 file/method ⇒ 精确，不要求类限定，避免「饿死」）
+    if _f and _name:
+        for _n in _nodes:
+            if not isinstance(_n, dict):
+                continue
+            if (str(_n.get("file", "") or "").replace("\\", "/") == _f
+                    and str(_n.get("name") or "") == _name):
+                _starts.append(_n.get("id"))
+    # 二级：限定名（Class.method / module.Class.method）
+    if not _starts and "." in _q:
+        for _n in _nodes:
+            if not isinstance(_n, dict):
+                continue
+            _nid = str(_n.get("id") or "")
+            _qual = str(_n.get("qualname") or "")
+            if _nid.endswith(_q) or _qual == _q or _qual.endswith("." + _q):
+                _starts.append(_nid)
+    if not _starts:
+        _module_logger.info("[305刀3] 起点无法定位（name=%s file=%s）⇒ 转人工", _q, _f or "-")
+        return None
+    _adj = _call_graph_cache.get("in_adj") if direction == "in" else _call_graph_cache.get("out_adj")
+    if _adj is None:
+        return None
+    return _bfs_count(_adj, [str(_s) for _s in _starts if _s], max_depth)
 
 
 def select_patch_for_execution(patch_history: list, limit: int = 1,
@@ -135,7 +198,14 @@ def select_patch_for_execution(patch_history: list, limit: int = 1,
     _scoped = []
     for _p in _safe:
         _m = str(_p.get("method") or "")
-        _br = blast_radius_of(_m)
+        _f = str(_p.get("file") or "")
+        # ★第305批刀3：入边方向（谁依赖我）；**None = 不可判定 ⇒ 转人工**（禁止当 0 放行）
+        _br = blast_radius_of(_m, file=_f)
+        if _br is None:
+            _module_logger.info(
+                "[305刀3] 牵连不可判定（图缺/起点未定位）⇒ 转人工: patch=%s method=%s file=%s",
+                str(_p.get("id", ""))[:16], _m, _f or "-")
+            continue
         if _br > max_blast_radius:
             _module_logger.info(
                 "[304刀5] 牵连半径超限转人工: patch=%s method=%s blast=%d > %d",

@@ -280,6 +280,17 @@ class _Collector(ast.NodeVisitor):
                 _fn0 = next((x[1] for x in reversed(self._scope)
                              if x[0] == "func"), "")
                 _cls0 = ".".join(x[1] for x in self._scope if x[0] == "class")
+                # ★第305批刀2：按名派发识别 —— `getattr(x, "y")` 的**字面名** ⇒ kind="byname"
+                #   （304 刀1 的分色只在 dump 时用正则数了个数，边本身没有 kind ⇒ 判据拿不到
+                #    「反射可达」这张图，只能退回正则小集兜命。本批让 kind 落到边上。）
+                _kind = "dynamic"
+                _attr = ""
+                if (isinstance(node.func, ast.Call) and isinstance(node.func.func, ast.Name)
+                        and node.func.func.id == "getattr" and len(node.func.args) >= 2
+                        and isinstance(node.func.args[1], ast.Constant)
+                        and isinstance(node.func.args[1].value, str)):
+                    _kind = "byname"
+                    _attr = str(node.func.args[1].value)
                 self.raw_calls.append({
                     "caller_qual": ((f"{_cls0}.{_fn0}") if _cls0 else _fn0)
                     or _MODULE_SCOPE,
@@ -287,6 +298,8 @@ class _Collector(ast.NodeVisitor):
                     "line": node.lineno,
                     "in_class": _cls0,
                     "dynamic": True,
+                    "kind": _kind,
+                    "attr_name": _attr,
                 })
             self.generic_visit(node)
             return
@@ -363,7 +376,8 @@ class CallGraphAnalyzer:
         _edges = []
         for _caller, _targets in self._graph.items():
             for _callee, _cnt in _targets.items():
-                _edges.append({"caller": _caller, "callee": _callee, "count": int(_cnt)})
+                _edges.append({"caller": _caller, "callee": _callee, "count": int(_cnt),
+                               "kind": self._edge_kinds.get((_caller, _callee), "static")})
         _elapsed_ms = round((time.perf_counter() - _t0) * 1000.0, 2)
         self._graph_data = {
             "nodes": _nodes,
@@ -398,6 +412,8 @@ class CallGraphAnalyzer:
                    self._bindings, self._graph, self._in_deg,
                    self._caller_module):
             _d.clear()
+        # ★第305批刀2：边类型表（(caller, callee) -> kind: static/byname/event/entry）
+        self._edge_kinds = {}
         self._raw_calls = []
         self._parse_errors = []
         self._unresolved = 0
@@ -455,6 +471,29 @@ class CallGraphAnalyzer:
             [dict(x, file=rel, module=_module) for x in _c.raw_calls])
         return _c
 
+    def _resolve_by_name(self, name: str, caller_module: str) -> str:
+        """★第305批刀2：把 `getattr(x, "name")` 的字面名解析为图节点 id。
+
+        优先同模块内的方法（qualname 末段 == name），其次全库**唯一**同名命中；
+        多义或找不到 ⇒ 空串（该按名边记 unresolved，不猜测——口径纪律）。
+        """
+        if not name:
+            return ""
+        _hits: list[str] = []
+        for _nid, _d in self._defs.items():
+            _qn = str(_d.get("qualname") or "")
+            if _qn.split(".")[-1] == name or str(_d.get("name") or "") == name:
+                _hits.append(_nid)
+        if not _hits:
+            return ""
+        _same = [_h for _h in _hits
+                 if str((self._defs.get(_h) or {}).get("module") or "") == caller_module]
+        if len(_same) == 1:
+            return _same[0]
+        if len(_hits) == 1:
+            return _hits[0]
+        return ""
+
     def _pass2_resolve(self, collectors: list) -> None:
         """把原始调用名解析为边。"""
         _module_names = set(self._by_module.keys())
@@ -462,6 +501,21 @@ class CallGraphAnalyzer:
             self._total_calls += 1
             if _rc.get("dynamic"):
                 self._dynamic += 1
+                # ★第305批刀2：按名派发**不再一律丢弃** —— getattr 字面名能解析到方法就建
+                #   kind="byname" 的边（此前的边只有静态调用，反射可达在图上完全不可见）。
+                if (_rc.get("kind") == "byname" and _rc.get("attr_name")):
+                    _hit = self._resolve_by_name(_rc.get("attr_name"), _rc.get("module", ""))
+                    if _hit:
+                        _c_mod = _rc.get("module", "")
+                        _c_qual = _rc.get("caller_qual") or _MODULE_SCOPE
+                        _c_id = _qual_id(_c_mod, _c_qual)
+                        if _c_id not in self._defs:
+                            _c_id = f"{_c_mod}:{_MODULE_SCOPE}"
+                        if _hit != _c_id:
+                            _t = self._graph.setdefault(_c_id, {})
+                            _t[_hit] = _t.get(_hit, 0) + 1
+                            self._in_deg[_hit] = self._in_deg.get(_hit, 0) + 1
+                            self._edge_kinds[(_c_id, _hit)] = "byname"
                 continue
             _callee = self._resolve(_rc, _module_names)
             if not _callee:
@@ -482,6 +536,8 @@ class CallGraphAnalyzer:
             _tgt = self._graph.setdefault(_caller_id, {})
             _tgt[_callee] = _tgt.get(_callee, 0) + 1
             self._in_deg[_callee] = self._in_deg.get(_callee, 0) + 1
+            # ★第305批刀2：静态边也记 kind（默认 static），与 byname/event 统一到边上
+            self._edge_kinds[(_caller_id, _callee)] = _rc.get("kind") or "static"
             if self._callee_module(_callee) != _caller_mod:
                 self._cross_file += 1
 
@@ -846,12 +902,11 @@ class CallGraphAnalyzer:
 
         内容：
           - `nodes[]` / `edges[]`（点号 ID：**模块.类.方法**）＋ `stats`；
-          - `edge_types`：边类型**分色**统计 ——
-              `static` = AST 静态调用边（图本体 edges 数）；
-              `byname` = `getattr(self, "x")` 按名派发边（全库扫描计数）；
-              `event`   = 字符串常量形式的事件名边（全库扫描计数）。
-            分色的用途：让「谁靠静态边活着、谁只靠按名/事件边活着」可被区分，
-            刀2 的 dead_code 判据据此从「在场即活」升级为「有边即活」。
+          - `edge_types`：边类型**分色**统计 —— 由 `edges[].kind` 聚合而来：
+              `static` = AST 静态调用边；`byname` = `getattr(x, "y")` 按名派发边；
+              `event` / `entry` = 事件边 / 注册入口边（本窗若无可解析目标则计 0）。
+            ★第305批刀2：分色**落到边上**（每条边自带 kind），落盘时的统计只是聚合，
+            不再像 304 那样额外全库扫一遍正则（既慢又与图不一致）。
 
         Returns: 落盘绝对路径；失败返回空串（绝不阻断调用方）。
         """
@@ -866,22 +921,15 @@ class CallGraphAnalyzer:
             _ts = _time.strftime("%Y%m%d_%H%M%S")
             _path = os.path.join(_dir, "graph_{}.json".format(_ts))
             _tmp = _path + ".tmp"
-            _edge_types = {"static": len(_cg.get("edges") or []), "byname": 0, "event": 0}
-            try:
-                import re as _re
-                _GETATTR_RE = _re.compile(r'getattr\s*\(\s*[^,()]{1,80},\s*["\'](\w+)["\']')
-                _EVENT_RE = _re.compile(r'["\']([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)["\']')
-                for _rel in _iter_py_files(_root, _scan_dirs()):
-                    try:
-                        with open(os.path.join(_root, _rel.replace("/", os.sep)),
-                                  encoding="utf-8", errors="ignore") as _f:
-                            _c = _f.read()
-                    except Exception:
-                        continue
-                    _edge_types["byname"] += len(_GETATTR_RE.findall(_c))
-                    _edge_types["event"] += len(_EVENT_RE.findall(_c))
-            except Exception as _e:
-                _logger.debug("边类型分色统计失败（不影响落盘）: %s: %s", type(_e).__name__, _e)
+            # ★第305批刀2：分色由**边自带的 kind** 聚合（不再全库重扫正则）
+            _edge_types = {"static": 0, "byname": 0, "event": 0, "entry": 0}
+            for _e in (_cg.get("edges") or []):
+                if not isinstance(_e, dict):
+                    continue
+                _k = str(_e.get("kind") or "static")
+                if _k not in _edge_types:
+                    _k = "static"
+                _edge_types[_k] += 1
             _payload = dict(_cg)
             _payload["edge_types"] = _edge_types
             _payload["dumped_at"] = _time.time()
