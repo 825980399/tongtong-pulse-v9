@@ -314,6 +314,78 @@ def select_patch_for_execution(patch_history: list, limit: int = 1,
     return _scoped[:limit]
 
 
+#: ★第311批 刀1：自动分诊的「高置信」门槛（历史 trust_score 实测取值 30/40/45/50/80）
+AUTO_TRIAGE_MIN_TRUST = 40.0
+
+
+def select_for_auto_triage(patch_history: list, limit: int = 1,
+                           max_blast_radius: int = 1) -> list:
+    """★第311批 刀1：**高置信 · 低风险**自动分诊池（单批硬上限 1 条）。
+
+    与 `select_patch_for_execution` 的区别只有一处：**不再用 2 条白名单**，
+    改用可解释的高置信规则 —— 306 的首批白名单是「先证明能跑通」的临时边界，
+    本批把边界升级成规则，池子才不会长期停在 2 条。
+
+    硬约束（全部为「不可判定 ⇒ 转人工」）：
+      * `status=runtime_verified` 且 `risk_level` 低；
+      * 非 `is_fragment_to_full`（片段→完整 = 嵌套 def 风险）；
+      * `trust_score >= AUTO_TRIAGE_MIN_TRUST`；
+      * 方法名非生命周期名（`_LIFECYCLE_NAMES`：构造/析构/启停，图上结构性失明）；
+      * `blast_radius_of` 可判定且 `<= max_blast_radius`（`None` 一律转人工）；
+      * `limit` 硬上限 1（自动分诊只做「一次一条」，不做批量放行）。
+    """
+    try:
+        _lim = min(1, int(limit))
+    except (TypeError, ValueError) as _le:
+        _module_logger.debug("[311刀1] limit 非整数，按 1 处理: %s: %s", type(_le).__name__, _le)
+        _lim = 1
+    if _lim <= 0 or not isinstance(patch_history, list):
+        return []
+    _out: list = []
+    _rej = {"status": 0, "risk": 0, "morph": 0, "trust": 0, "lifecycle": 0, "blast": 0}
+    for _p in patch_history:
+        if not isinstance(_p, dict):
+            continue
+        if _p.get("status") != "runtime_verified":
+            _rej["status"] += 1
+            continue
+        if _p.get("risk_level") not in ("低", "low"):
+            _rej["risk"] += 1
+            continue
+        if is_fragment_to_full(_p):
+            _rej["morph"] += 1
+            continue
+        try:
+            _trust = float(_p.get("trust_score", 0) or 0)
+        except (TypeError, ValueError) as _te:
+            _module_logger.debug("[311刀1] trust_score 非数值，按 0 处理: %s: %s",
+                                 type(_te).__name__, _te)
+            _trust = 0.0
+        if _trust < AUTO_TRIAGE_MIN_TRUST:
+            _rej["trust"] += 1
+            continue
+        _m = str(_p.get("method") or "")
+        if _m in _LIFECYCLE_NAMES:
+            _rej["lifecycle"] += 1
+            _module_logger.info("[311刀1] 自动分诊排除生命周期名 ⇒ 转人工: %s", _m)
+            continue
+        _br = blast_radius_of(_m, file=str(_p.get("file") or ""))
+        if _br is None or _br > max_blast_radius:
+            _rej["blast"] += 1
+            _module_logger.info(
+                "[311刀1] 自动分诊牵连不可判定/超限 ⇒ 转人工: method=%s blast=%s",
+                _m, _br)
+            continue
+        _out.append(_p)
+    _out.sort(key=lambda p: (-float(p.get("trust_score", 0) or 0),))
+    _module_logger.info(
+        "[311刀1] 自动分诊池: 命中 %d 条（拒收 status=%d risk=%d 形态=%d 置信=%d "
+        "生命周期=%d 牵连=%d），单批派 %d 条",
+        len(_out), _rej["status"], _rej["risk"], _rej["morph"], _rej["trust"],
+        _rej["lifecycle"], _rej["blast"], min(len(_out), _lim))
+    return _out[:_lim]
+
+
 def dispatch_and_verify(sandbox: Any, patch: dict) -> dict:
     """把补丁 modified_code 路由 sandbox 执行，返回执行结论（不落盘，由调用方回写）。
 
@@ -389,6 +461,11 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
             _p["_295_suspect_reason"] = "片段→完整(嵌套def风险)"
             _suspect_n += 1
     _selected = select_patch_for_execution(_hist, limit=limit)
+    if not _selected:
+        # ★第311批 刀1：首批试点白名单为空 ⇒ 走自动分诊（高置信低风险，单批仍 ≤1 条）。
+        #   顺序不反：白名单是「先证明能跑通」的最窄边界，分诊是它的上位规则，
+        #   白名单有料时优先级更高（确定性优先于统计置信）。
+        _selected = select_for_auto_triage(_hist, limit=1)
     _results = []
     for _p in _selected:
         _v = dispatch_and_verify(_sandbox, _p)

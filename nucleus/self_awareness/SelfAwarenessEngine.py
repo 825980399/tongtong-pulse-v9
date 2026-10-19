@@ -149,6 +149,32 @@ def _integration_enabled(attr: str, default: bool = True) -> bool:
         return default
 
 
+def _structure_rescan_enabled() -> bool:
+    """★第311批 刀2：结构变化 → 图重扫 的消费者开关（默认 **False**，影子先开一窗）。
+
+    用 `getattr(config, KEY, DEFAULT)` 读（与 M92 守卫同范式）⇒ 不需在 config.py
+    预先声明，避免动配置登记册（register_columns）的列基线。
+    """
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_STRUCTURE_RESCAN", False))
+    except Exception as e:  # 开关读取失败按「关」处理，绝不因配置异常触发重扫
+        _logger.debug("读取 ENABLE_STRUCTURE_RESCAN 失败，按 False: %s: %s",
+                      type(e).__name__, e)
+        return False
+
+
+def _structure_rescan_interval() -> float:
+    """两次重扫之间的最小间隔（秒）；读不到按 300s。"""
+    try:
+        import config
+        return max(0.0, float(getattr(config, "RESCAN_MIN_INTERVAL_SEC", 300.0)))
+    except Exception as e:
+        _logger.debug("读取 RESCAN_MIN_INTERVAL_SEC 失败，按 300s: %s: %s",
+                      type(e).__name__, e)
+        return 300.0
+
+
 #: 审查/统计时应排除的目录名（备份 / 临时 / 缓存）
 _NON_SOURCE_SEGMENTS = ("tmp", "__pycache__", ".git", ".pytest_cache",
                         "node_modules", "venv", "logs", "data")
@@ -329,6 +355,20 @@ class SelfAwarenessEngine:
         self._run_count = 0
         self._skipped_off = 0
         self._timeout_sec = timeout_sec
+        # ★第311批 刀2：结构变化脉冲的消费者状态（订阅 + 重扫节流 + 计数）
+        self._m311_consumer_cond = ""
+        self._m311_last_rescan_ts = 0.0
+        self._m311_rescan_count = 0
+        self._m311_ensure_structure_consumer()
+        # ★第311批 刀2：传感端挂在**既有节拍**上（不新增定时器/不加 122s）——
+        #   每轮自认知拍跑一次指纹差分（进程内 60s 合并窗口；稳态实测 48ms）。
+        try:
+            self.register_analyzer("structure_change",
+                                   lambda _e: _e._m311_scan_structure(),
+                                   "structure_change", replace=True)
+        except Exception as _re:
+            _logger.debug("[311刀2] 注册结构指纹分析器失败: %s: %s",
+                          type(_re).__name__, _re)
 
     # ------------------------------------------------------------------
     # 分析器注册
@@ -406,6 +446,105 @@ class SelfAwarenessEngine:
             _e = _err["error"]
             return None, f"error: {type(_e).__name__}: {_e}"
         return _box.get("value"), None
+
+    # ------------------------------------------------------------------
+    # ★第311批 刀2：结构变化 → 图重扫（二级实体化 MVP · 消费端）
+    # ------------------------------------------------------------------
+    def _m311_scan_structure(self) -> dict:
+        """传感端入口（自认知节拍调用）：指纹差分 → 一条聚合脉冲。失败绝不影响引擎。"""
+        try:
+            from nucleus.self_inspector import get_self_inspector
+            _ins = get_self_inspector()
+            if _ins is None or not hasattr(_ins, "detect_structure_changes"):
+                return {"status": "no_inspector"}
+            return _ins.detect_structure_changes(emit=True)
+        except Exception as e:
+            _logger.warning("[311刀2] 结构指纹扫描失败（不影响引擎）: %s: %s",
+                            type(e).__name__, e)
+            return {"status": "error", "error": str(e)[:200]}
+
+    def _m311_ensure_structure_consumer(self) -> str:
+        """订阅 `code.structure.changed`（幂等）；返回订阅 id，失败/无信息场返回空串。
+
+        订阅本身零开销（开关在 handler 首行判），所以默认就订阅——
+        这样 `ENABLE_STRUCTURE_RESCAN` 翻成 True 时**无需重启装配**即可生效。
+        """
+        if self._m311_consumer_cond:
+            return self._m311_consumer_cond
+        try:
+            from nucleus.const import Event
+            from nucleus.field.InfoField import get_info_field
+            _fi = get_info_field()
+            if _fi is None:
+                return ""
+            _cid = _fi.register_condition(
+                organ_name="self_awareness_engine",
+                event_types=[Event.CODE_STRUCTURE_CHANGED],
+                min_priority=0,
+                handler=self._on_structure_changed)
+            self._m311_consumer_cond = _cid
+            _logger.debug("[311刀2] 已订阅 %s（重扫开关=%s）",
+                          Event.CODE_STRUCTURE_CHANGED, _structure_rescan_enabled())
+            return _cid
+        except Exception as e:
+            _logger.debug("[311刀2] 订阅结构变化失败（不影响引擎）: %s: %s",
+                          type(e).__name__, e)
+            return ""
+
+    def _on_structure_changed(self, pulse: Any = None) -> dict:
+        """消费一条结构变化脉冲 ⇒ 重扫调用图并回写图身份（受开关与最小间隔双重节流）。
+
+        口径纪律：重扫**不会**提高图入边覆盖率（覆盖率取决于 resolve 率），
+        它改善的是**新鲜度** —— 让 `graph_file/graph_mtime` 与代码同步，
+        避免「数字变了但说不出是哪份图带来的」。
+        """
+        if not _structure_rescan_enabled():
+            return {"status": "disabled"}
+        try:
+            import os as _os
+            _now = time.time()
+            _min_gap = _structure_rescan_interval()
+            if self._m311_last_rescan_ts and (_now - self._m311_last_rescan_ts) < _min_gap:
+                _logger.info("[311刀2] 图重扫被节流: 距上次 %.1fs < %.0fs",
+                             _now - self._m311_last_rescan_ts, _min_gap)
+                return {"status": "throttled",
+                        "gap_sec": round(_now - self._m311_last_rescan_ts, 1),
+                        "min_interval_sec": _min_gap}
+            self._m311_last_rescan_ts = _now
+            _pl = pulse if isinstance(pulse, dict) else {}
+            _payload = _pl.get("payload") or {}
+            _health = self.integrate_call_graph()
+            if not _health:
+                _logger.info("[311刀2] 图重扫返回空（开关关闭或异常）")
+                return {"status": "rescan_empty"}
+            _dump = str(_health.get("graph_dump") or "")
+            _mtime = 0.0
+            if _dump and _os.path.isfile(_dump):
+                try:
+                    _mtime = float(_os.path.getmtime(_dump))
+                except OSError as _e:
+                    _logger.debug("[311刀2] 图 mtime 读取失败: %s", _e)
+            _gfile = _os.path.basename(_dump) if _dump else ""
+            try:
+                from nucleus.self_inspector import update_review_graph_identity
+                update_review_graph_identity(graph_file=_gfile, graph_mtime=_mtime,
+                                             source="structure_rescan")
+            except Exception as _ue:
+                _logger.debug("[311刀2] 图身份回写失败: %s: %s", type(_ue).__name__, _ue)
+            self._m311_rescan_count += 1
+            _logger.info(
+                "[311刀2] 结构变化触发的图重扫完成: 第%d次 graph=%s mtime=%.3f "
+                "触发差集(改%d/增%d/删%d)",
+                self._m311_rescan_count, _gfile or "-", _mtime,
+                int(_payload.get("changed_count", 0) or 0),
+                int(_payload.get("added_count", 0) or 0),
+                int(_payload.get("removed_count", 0) or 0))
+            return {"status": "rescanned", "graph_file": _gfile, "graph_mtime": _mtime,
+                    "rescan_count": self._m311_rescan_count}
+        except Exception as e:
+            _logger.warning("[311刀2] 结构变化消费失败（不影响引擎）: %s: %s",
+                            type(e).__name__, e)
+            return {"status": "error", "error": str(e)[:200]}
 
     def run_all_analyses(self, scope: str = "all") -> SelfAwarenessProfile:
         """执行全部（或指定）分析器并汇总为新的画像。

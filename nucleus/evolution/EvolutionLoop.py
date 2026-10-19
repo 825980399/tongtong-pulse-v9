@@ -230,15 +230,46 @@ class EvolutionLoop(SilentLogMixin):
             if key not in seen:
                 seen.add(key)
                 unique.append(issue)
+        # ★第311批 刀1：**受控入料**（≤1 条）放在 max_issues 截断**之后**并入——
+        #   否则池子填满时这一条会被 [:max_issues] 直接切掉，「池 0→有料」永远是假的。
+        #   这些条目的 severity 仍是 info、review_only=True，
+        #   由下游按 intake 标记区分「判死产物」与「待复核产物」。
+        _intake = self._m311_collect_review_intake()
+        _final = unique[:max_issues] + _intake
         return {
-            "issues": unique[:max_issues],
+            "issues": _final,
             "summary": {
-                "total": len(unique),
+                "total": len(_final),
                 "from_log": len(log_result.get("issues", [])),
                 "from_code_review": code_count,
                 "from_self_inspector": inspector_count,
+                "review_intake": len(_intake),
             }
         }
+
+    def _m311_collect_review_intake(self) -> list:
+        """★第311批 刀1：待复核清单的受控入料（单批 ≤1 条；配置 0 即关）。
+
+        为什么不在这里现跑 dead_code 检测器：它的耗时是**分钟级**（历史实测 9 分钟），
+        塞进每轮进化发现等于把循环预算全吃掉。改为读 self_inspector 最近一次
+        全量扫描留下的统计明细（`get_dead_code_review_stats()["items"]`），
+        没有明细就如实返回 0 条并在 summary 里可见。
+        """
+        try:
+            import config as _cfg311
+            _lim = int(getattr(_cfg311, "REVIEW_INTAKE_MAX_PER_BATCH", 1) or 0)
+        except Exception as _ie:
+            _module_logger.debug("[311刀1] 读 REVIEW_INTAKE_MAX_PER_BATCH 失败，按 1: %s", _ie)
+            _lim = 1
+        if _lim <= 0:
+            return []
+        try:
+            from nucleus.self_inspector import build_review_intake
+            return build_review_intake(limit=min(1, _lim))
+        except Exception as _e:
+            _module_logger.debug("[311刀1] 待复核入料失败（不影响发现池）: %s: %s",
+                                 type(_e).__name__, _e)
+            return []
 
     # ========== 阶段 3+4：修改代码 + diff 归档 ==========
 

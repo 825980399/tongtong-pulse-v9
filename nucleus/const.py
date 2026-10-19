@@ -686,6 +686,10 @@ class Event:
     CURIOSITY_TICK = "curiosity.tick"
     DIGEST_KNOWLEDGE = "digest.knowledge"
     ENVIRONMENT_MUTATED = "environment.mutated"
+    # —— 第311批 刀2：结构变化脉冲（二级实体化 MVP）——
+    #   传感在 self_inspector（指纹差分），消费者在 SelfAwarenessEngine（图重扫）。
+    #   只落 L3（后台自主层，可丢弃、消费须幂等），严禁 L1/L0。
+    CODE_STRUCTURE_CHANGED = "code.structure.changed"
     GLOBAL_LEARNER_DRIFT_DETECTED = "global_learner.drift_detected"
     MOTIVATION_URGE = "motivation.urge"
     CONSTRAINT_SELF_MODIFY_FORBIDDEN = "constraint.self_modify_forbidden"

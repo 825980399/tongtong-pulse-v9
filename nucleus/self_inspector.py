@@ -5088,7 +5088,7 @@ class SelfInspector(SilentLogMixin):
                 "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
                 "graph_file": _gidx.get("graph_file", ""),
                 "graph_mtime": _gidx.get("graph_mtime", 0.0),
-                "samples": [], "as_of": time.time()})
+                "samples": [], "items": [], "as_of": time.time()})
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
                 " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）",
@@ -5098,6 +5098,9 @@ class SelfInspector(SilentLogMixin):
         # ★第308批 刀2：中间档只计数、不再造 issue
         _review_count = 0
         _review_samples: list[str] = []
+        # ★第311批 刀1：明细（≤_M311_MAX_ITEMS 条）留存，供受控入料口取用——
+        #   否则入料侧要重跑一次 9 分钟级的 dead_code 检测才能拿到候选。
+        _review_items: list[dict] = []
         if _review_only:
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）处于中间档 [%.0f%%, %.0f%%)"
@@ -5132,14 +5135,31 @@ class SelfInspector(SilentLogMixin):
                 _alive_src["entry"] += 1
             else:
                 if _review_only:
-                    # ★第308批 刀2：中间档清单**不再进 issues**（降级为统计口径）——
-                    #   533 条 info 堆在 issues 里长期无人消费（自动入队按 medium 拦死、
-                    #   趋势门禁不判死），只白占内存与报告篇幅。改为「只计数 + 落统计」，
-                    #   数量由 get_dead_code_review_stats() 供趋势门禁展示。
-                    #   注意：降级 ≠ 放宽 —— 判死阈值仍为 _COVERAGE_JUDGE，一条未改。
+                    # ★第311批 刀1：**恢复入料口**（308 降级为纯统计后，闭环自动端
+                    #   彻底断料——issues 里一条 review 条目都没有，进化候选池只剩
+                    #   环境里偶然出现的 medium，pending 队列长期 0 条）。
+                    #   恢复 ≠ 放宽判死：severity 仍是 info、判死阈值仍是
+                    #   _COVERAGE_JUDGE，且这些条目**只能**经 build_review_intake()
+                    #   受控入料（单批硬上限 1 条 + 生命周期名/核心文件一律转人工）。
+                    #   仍保留统计口径（_DEAD_CODE_REVIEW_STATS），趋势门禁照旧读统计。
                     _review_count += 1
                     if len(_review_samples) < 3:
                         _review_samples.append("%s::%s" % (_defs[0][0], _name))
+                    for _f, _line in _defs[:1]:
+                        _issue_rec = {
+                            'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
+                            'type': 'dead_code',
+                            'severity': 'info',
+                            'review_only': True,
+                            'review_reason': 'graph_coverage_mid_band',
+                            'description': (f'方法 {_name} 在图上无入边，但图入边覆盖率仅 '
+                                            f'{_coverage * 100.0:.1f}%（中间档）'
+                                            f'⇒ 分不清「真死」与「没解析出来」，待人工复核'),
+                            'suggestion': '先核调用方是否被反射/事件/跨模块调用；确认无调用再删',
+                        }
+                        _issues.append(_issue_rec)
+                        if len(_review_items) < self._M311_MAX_ITEMS:
+                            _review_items.append(dict(_issue_rec))
                     continue
                 for _f, _line in _defs[:1]:
                     _issues.append({
@@ -5157,7 +5177,9 @@ class SelfInspector(SilentLogMixin):
             # ★第309批 刀3：同版同图可比 —— 记下「这一轮读数出自哪份图」
             "graph_file": _gidx.get("graph_file", ""),
             "graph_mtime": _gidx.get("graph_mtime", 0.0),
-            "samples": list(_review_samples), "as_of": time.time()})
+            "samples": list(_review_samples),
+            "items": list(_review_items),
+            "as_of": time.time()})
         if _review_count:
             _module_logger.info(
                 "[308刀2] 待复核清单 %d 条（统计口径，不进issues；覆盖率 %.1f%%，"
@@ -5172,6 +5194,120 @@ class SelfInspector(SilentLogMixin):
             _alive_src["no_node"], _mode, _coverage * 100.0, len(_issues),
             _review_count)
         return _issues
+
+    # ========== 第311批 刀2：结构变化感知（二级实体化 MVP · 传感端） ==========
+    _M311_MIN_INTERVAL_SEC = 60.0   # 合并窗口：同进程内两次指纹扫描的最小间隔
+    _M311_MAX_LISTED = 50           # payload 每类最多列多少文件（472 文件全变也压得住）
+    _M311_MAX_ITEMS = 20            # 待复核明细留存条数（受控入料口取用）
+
+    def detect_structure_changes(self, scan_dirs: list | None = None,
+                                 emit: bool = True) -> dict[str, Any]:
+        """★第311批 刀2：扫描域文件 (path, mtime, size, 方法数) 指纹差分 → 一条聚合脉冲。
+
+        设计约束（都来自 310 前置分析的实测数字，不是拍脑袋）：
+          * **不做文件系统 watcher**（Windows 无 inotify），在既有节拍里做指纹比对；
+          * **不做逐文件触发**：活体单次全量重扫实测 27.91s，472 文件全变 ⇒ 约 3.7 小时
+            CPU，而每日自认知拍总共才 122s ⇒ 必须聚合成**一条**事件（L3，可丢）；
+          * **只在 (mtime,size) 变时才解析 AST 数方法数** ⇒ 稳态开销是 N 次 stat（毫秒级），
+            首跑一次性解析全量（实测 1~2s），满足「新增节拍 ≤5s 增量」预算；
+          * 首跑只建**基线**不发事件（否则每次重启都发一条「全库都变了」的假脉冲）；
+          * 进程内节流 `_M311_MIN_INTERVAL_SEC`；基线不落盘（本批写入面不含 data/）。
+
+        Returns:
+            dict：status ∈ baseline/unchanged/changed/throttled，附带差集与耗时。
+        """
+        import glob as _glob
+        _t0 = time.time()
+        _root = self._project_root or os.getcwd()
+        _dirs = scan_dirs
+        if not _dirs:
+            try:
+                import config as _cfg
+                _dirs = list(getattr(_cfg, "CALL_GRAPH_SCAN_DIRS", []) or [])
+            except Exception as e:
+                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:dirs")
+                _dirs = []
+        _rel_files: list[str] = []
+        for _d in _dirs:
+            _abs = os.path.join(_root, _d)
+            if not os.path.isdir(_abs):
+                continue
+            for _p in _glob.glob(os.path.join(_abs, "**", "*.py"), recursive=True):
+                if "__pycache__" in _p:
+                    continue
+                _rel_files.append(os.path.relpath(_p, _root).replace("\\", "/"))
+        _rel_files.sort()
+        _cache = getattr(self, "_m311_fp_cache", None)
+        if not isinstance(_cache, dict):
+            _cache = {}
+            self._m311_fp_cache = _cache
+        _last = float(getattr(self, "_m311_last_scan_ts", 0.0) or 0.0)
+        if _last and (_t0 - _last) < self._M311_MIN_INTERVAL_SEC:
+            return {"status": "throttled", "skipped_sec": round(_t0 - _last, 1),
+                    "min_interval_sec": self._M311_MIN_INTERVAL_SEC, "emitted": False}
+        self._m311_last_scan_ts = _t0
+        _baseline = not bool(_cache)
+        _changed: list[str] = []
+        _added: list[str] = []
+        _new_cache: dict[str, dict] = {}
+        for _rel in _rel_files:
+            _abs = os.path.join(_root, _rel)
+            try:
+                _st = os.stat(_abs)
+            except OSError as e:
+                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:stat")
+                continue
+            _prev = _cache.get(_rel)
+            if (_prev and _prev.get("mtime") == round(_st.st_mtime, 3)
+                    and _prev.get("size") == int(_st.st_size)):
+                _new_cache[_rel] = dict(_prev)
+                continue
+            _fp = {"mtime": round(_st.st_mtime, 3), "size": int(_st.st_size),
+                   "methods": _m311_count_methods(_abs)}
+            _new_cache[_rel] = _fp
+            if _baseline or _prev is None:
+                _added.append(_rel)
+            else:
+                # mtime/size 任一变化都算「结构可能变了」（重写同内容 = 假阳性，
+                # 但漏报的代价比多发一条 L3 事件高：漏报会让图长期陈旧）
+                _changed.append(_rel)
+        _removed = [] if _baseline else [p for p in _cache if p not in _new_cache]
+        self._m311_fp_cache = _new_cache
+        _elapsed = round((time.time() - _t0) * 1000.0, 1)
+        if _baseline:
+            _module_logger.info("[311刀2] 结构指纹基线建立: %d 文件（首跑不发事件）",
+                                len(_new_cache))
+            return {"status": "baseline", "files": len(_new_cache),
+                    "emitted": False, "elapsed_ms": _elapsed}
+        _total = len(_changed) + len(_added) + len(_removed)
+        if not _total:
+            return {"status": "unchanged", "files": len(_new_cache),
+                    "emitted": False, "elapsed_ms": _elapsed}
+        _payload = {
+            "changed_files": _changed[:self._M311_MAX_LISTED],
+            "added": _added[:self._M311_MAX_LISTED],
+            "removed": _removed[:self._M311_MAX_LISTED],
+            "changed_count": len(_changed), "added_count": len(_added),
+            "removed_count": len(_removed),
+            "scan_file_count": len(_new_cache),
+            "fingerprint_as_of": _t0,
+            # 上一张图的身份（309 刀3 起统计里就有）——消费方能算出「图比代码旧多少」
+            "prev_graph_file": _DEAD_CODE_REVIEW_STATS.get("graph_file", ""),
+            "prev_graph_mtime": _DEAD_CODE_REVIEW_STATS.get("graph_mtime", 0.0),
+            "criteria_version": "2026-10-19.311",
+        }
+        _emitted = _m311_emit_structure_event(_payload) if emit else False
+        _module_logger.info(
+            "[311刀2] 结构变化: 改=%d 增=%d 删=%d（扫描 %d 文件，%.0fms）⇒ %s",
+            len(_changed), len(_added), len(_removed), len(_new_cache), _elapsed,
+            "已发 code.structure.changed(L3)" if _emitted
+            else "未发射（无脉冲核 / emit=False）")
+        return {"status": "changed", "changed": _changed[:self._M311_MAX_LISTED],
+                "added": _added[:self._M311_MAX_LISTED],
+                "removed": _removed[:self._M311_MAX_LISTED],
+                "changed_count": len(_changed), "added_count": len(_added),
+                "removed_count": len(_removed), "emitted": _emitted,
+                "elapsed_ms": _elapsed}
 
     def _detect_unused_imports(self) -> list[dict[str, Any]]:
         """未使用导入/变量检测：调用 RUFF 检查 F401/F841。"""
@@ -5242,7 +5378,7 @@ _DEAD_CODE_REVIEW_STATS: dict = {
     "node_count": 0, "in_edge_count": 0,
     # ★第309批 刀3：图身份（哪份图 / 何时落），待复核数随图漂移时据此解释
     "graph_file": "", "graph_mtime": 0.0,
-    "samples": [], "as_of": 0.0,
+    "samples": [], "items": [], "as_of": 0.0,
 }
 
 
@@ -5250,7 +5386,129 @@ def get_dead_code_review_stats() -> dict:
     """★第308批 刀2：读最近一次 dead_code 扫描的待复核统计（拷贝返回，只读）。"""
     _s = dict(_DEAD_CODE_REVIEW_STATS)
     _s["samples"] = list(_DEAD_CODE_REVIEW_STATS.get("samples") or [])
+    _s["items"] = [dict(_i) for _i in (_DEAD_CODE_REVIEW_STATS.get("items") or [])]
     return _s
+
+
+def _m311_count_methods(path: str) -> int:
+    """数一个文件里 def / async def 的数量（结构指纹的语义位）；解析失败 -1。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as _f:
+            _tree = ast.parse(_f.read())
+        return sum(1 for _n in ast.walk(_tree)
+                   if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    except (OSError, SyntaxError) as e:
+        silent_exc(e, where="nucleus.self_inspector::_m311_count_methods")
+        return -1
+
+
+def _m311_emit_structure_event(payload: dict) -> bool:
+    """★第311批 刀2：把结构差集聚合成**一条** code.structure.changed 脉冲（L3）。
+
+    发射路径复用既有单例：InfoField → PulseCore.emit（工厂）→ InfoField.publish（路由）。
+    任一步缺失都只留痕返回 False，绝不抛给扫描主流程（结构感知不该拖垮自检）。
+    """
+    try:
+        from nucleus.const import Event
+        from nucleus.field.InfoField import get_info_field
+        _fi = get_info_field()
+        if _fi is None:
+            _module_logger.debug("[311刀2] 无 InfoField 单例 ⇒ 结构事件未发射")
+            return False
+        _pc = getattr(_fi, "pulse_core", None)
+        if _pc is None or not hasattr(_pc, "emit"):
+            _module_logger.debug("[311刀2] InfoField 未接 PulseCore ⇒ 结构事件未发射")
+            return False
+        _pulse = _pc.emit(source_organ="self_inspector",
+                          event_type=Event.CODE_STRUCTURE_CHANGED,
+                          payload=payload, priority=2, layer="L3",
+                          target_organ="自我认知")
+        _fi.publish(_pulse)
+        return True
+    except Exception as e:
+        silent_exc(e, where="nucleus.self_inspector::_m311_emit_structure_event")
+        return False
+
+
+def update_review_graph_identity(graph_file: str = "", graph_mtime: float = 0.0,
+                                 source: str = "structure_rescan") -> dict:
+    """★第311批 刀2：图重扫后回写「图身份」，让待复核统计跟着图走（消费端唯一写口）。"""
+    _DEAD_CODE_REVIEW_STATS.update({
+        "graph_file": str(graph_file or ""),
+        "graph_mtime": float(graph_mtime or 0.0),
+        "graph_source": str(source or ""),
+        "graph_as_of": time.time(),
+    })
+    return {"graph_file": str(graph_file or ""), "graph_mtime": float(graph_mtime or 0.0)}
+
+
+#: 受控入料口排斥的生命周期方法名（删了必炸，且牵连半径在图上是「不可判定」）
+_INTAKE_LIFECYCLE_NAMES = frozenset({
+    "__init__", "__del__", "__post_init__", "start", "stop", "close", "shutdown",
+    "run", "setup", "teardown", "on_pulse", "handle_pulse", "init", "main",
+})
+
+#: 受控入料口排斥的核心文件（与 M80/cw2 同向：核心文件不接受自动修复）
+_INTAKE_CORE_FILES = frozenset({
+    "main.py", "config.py", "nucleus/const.py", "nucleus/pulse/PulseCore.py",
+    "nucleus/field/InfoField.py", "nucleus/reasoning/PatchManager.py",
+    "nucleus/reasoning/SafeEvolutionExecutor.py",
+})
+
+
+def build_review_intake(limit: int = 1, items: list | None = None) -> list[dict]:
+    """★第311批 刀1：待复核清单的**受控入料口**（单批硬上限 1 条）。
+
+    308 把待复核清单降级成纯统计后，闭环自动端彻底断料（pending 队列长期 0 条）。
+    本函数把料接回来，但**不是放行**：
+      * 只取 `review_only=True` 的条目（判死档位的产物一律不走这条路）；
+      * 生命周期名（`__init__`/`close`/`start`…）一律转人工 —— 删了必炸，
+        而且在图上「牵连半径」是结构性失明的；
+      * 核心文件（main/config/const/PulseCore/InfoField/PatchManager/Executor）一律转人工；
+      * `limit` 硬上限 1；`limit <= 0` 即关闭（配置 `REVIEW_INTAKE_MAX_PER_BATCH=0`）。
+
+    Returns:
+        0~1 条待复核条目（拷贝，带 `intake`/`requires_confirmation` 标记）。
+    """
+    try:
+        _lim = int(limit)
+    except (TypeError, ValueError) as _le:
+        _module_logger.debug("[311刀1] limit 非整数，按 1 处理: %s: %s",
+                             type(_le).__name__, _le)
+        _lim = 1
+    _lim = min(1, _lim)
+    if _lim <= 0:
+        return []
+    _pool = items
+    if _pool is None:
+        _pool = _DEAD_CODE_REVIEW_STATS.get("items") or []
+    _rejected = {"lifecycle": 0, "core": 0, "shape": 0}
+    for _it in _pool:
+        if not isinstance(_it, dict) or not _it.get("review_only"):
+            _rejected["shape"] += 1
+            continue
+        _name = str(_it.get("method") or "")
+        _file = str(_it.get("file") or "").replace("\\", "/")
+        if _name in _INTAKE_LIFECYCLE_NAMES:
+            _rejected["lifecycle"] += 1
+            continue
+        if _file in _INTAKE_CORE_FILES:
+            _rejected["core"] += 1
+            continue
+        _rec = dict(_it)
+        _rec.update({
+            "source": "self_inspector", "intake": "review_intake",
+            "requires_confirmation": True,
+            "intake_reason": "coverage_mid_band_review",
+        })
+        _module_logger.info(
+            "[311刀1] 受控入料 1 条: %s::%s（拒收: 生命周期=%d 核心文件=%d 形态不符=%d）",
+            _file, _name, _rejected["lifecycle"], _rejected["core"], _rejected["shape"])
+        return [_rec]
+    _module_logger.info(
+        "[311刀1] 受控入料 0 条（候选 %d；拒收: 生命周期=%d 核心文件=%d 形态不符=%d）",
+        len(_pool), _rejected["lifecycle"], _rejected["core"], _rejected["shape"])
+    return []
 
 
 def get_self_inspector() -> SelfInspector:
