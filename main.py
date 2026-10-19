@@ -1089,7 +1089,9 @@ class PulseFramework:
         """★主线第18批 T4/P0：初始化自我认知引擎（PHASE18 阶段一核心）。
 
         最小入侵：创建单例并注册两个**静态**分析器（产出-消费配对 / 虚假闭环检测），
-        **不自动触发分析**（ast 全项目扫描约 4 秒，启动期不宜阻塞）。
+        **不自动触发全量分析**（ast 全项目扫描约 4 秒，启动期不宜阻塞）。
+        ★308 批起例外一处：全局认知刷新器做一次**首帧**刷新（三源均为内存 getter，
+        毫秒级），否则「启动后即 fresh」不成立。
         函数内导入以规避 main.py 存量 E402；初始化失败只记 WARNING。
         """
         try:
@@ -1145,6 +1147,26 @@ class PulseFramework:
             _engine.register_analyzer(
                 "event_tap", lambda _e: _e.integrate_event_tap(),
                 "runtime_events", replace=True)
+            # ★第308批 刀1：全局认知点亮（307 批刷新器已就绪但**无生产调用方**
+            #   ⇒ 生产 get_global_awareness() 恒 not_refreshed）。三步：
+            #   ① 注入活体器官表 —— 传 dict **引用**（不是拷贝）：本函数位于
+            #      self._init_organs() 内、装配已完成，此处填好的表后续仍可增补；
+            #   ② 注册分析器，让 run_all_analyses 每轮续刷新鲜度；
+            #   ③ **首帧立即刷一次** —— 否则要等首轮全量分析（AST 约 4s）才 fresh，
+            #      「启动后即 fresh」这条验收不可能成立。三源 getter 均为内存读，
+            #      毫秒级；失败只记 WARNING / 落 gaps，不影响启动。
+            from nucleus.self_awareness.SelfAwarenessEngine import (
+                set_awareness_organs,
+            )
+            set_awareness_organs(self.organs)
+            _engine.register_analyzer(
+                "global_awareness", lambda _e: _e.integrate_global_awareness(),
+                "global_awareness", replace=True)
+            _ga_first = _engine.integrate_global_awareness(organs=self.organs)
+            self._log(
+                LogLevel.INFO,
+                f"[SelfAwareness] 全局认知首帧点亮: status={_ga_first.get('status')}"
+                f" gaps={_ga_first.get('gaps', [])}")
             self._log(LogLevel.INFO, "[SelfAwareness] 自我认知引擎已初始化")
             # ★主线第37批 T1（P2-210）：启动每日低频调度（让引擎真正"跑起来"）
             #   函数内导入以规避 main.py 存量 E402；

@@ -5072,12 +5072,19 @@ class SelfInspector(SilentLogMixin):
             elif _coverage < _COVERAGE_JUDGE:
                 _mode = "review"
         if _mode == "silent":
+            _DEAD_CODE_REVIEW_STATS.update({
+                "count": 0, "mode": _mode, "coverage": round(_coverage * 100.0, 2),
+                "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
+                "samples": [], "as_of": time.time()})
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
                 " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）",
                 _coverage * 100.0, len(_in_edge_ids), _node_count, _COVERAGE_FLOOR * 100.0)
             return _issues
         _review_only = (_mode == "review")
+        # ★第308批 刀2：中间档只计数、不再造 issue
+        _review_count = 0
+        _review_samples: list[str] = []
         if _review_only:
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）处于中间档 [%.0f%%, %.0f%%)"
@@ -5111,24 +5118,35 @@ class SelfInspector(SilentLogMixin):
             elif _name.startswith(_ENTRY_PREFIX):
                 _alive_src["entry"] += 1
             else:
+                if _review_only:
+                    # ★第308批 刀2：中间档清单**不再进 issues**（降级为统计口径）——
+                    #   533 条 info 堆在 issues 里长期无人消费（自动入队按 medium 拦死、
+                    #   趋势门禁不判死），只白占内存与报告篇幅。改为「只计数 + 落统计」，
+                    #   数量由 get_dead_code_review_stats() 供趋势门禁展示。
+                    #   注意：降级 ≠ 放宽 —— 判死阈值仍为 _COVERAGE_JUDGE，一条未改。
+                    _review_count += 1
+                    if len(_review_samples) < 3:
+                        _review_samples.append("%s::%s" % (_defs[0][0], _name))
+                    continue
                 for _f, _line in _defs[:1]:
-                    # ★307刀1：中间档 ⇒ 待复核清单（info + review_only，不判死）
                     _issues.append({
                         'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
                         'type': 'dead_code',
-                        'severity': ('info' if _review_only else 'low'),
-                        'review_only': bool(_review_only),
-                        'review_reason': (
-                            "graph_coverage=%.1f%%(<%.0f%%)"
-                            % (_coverage * 100.0, _COVERAGE_JUDGE * 100.0)
-                            if _review_only else ""),
-                        'description': (
-                            ('[待复核] ' if _review_only else '')
-                            + f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）'),
-                        'suggestion': ('图解析率不足，先人工复核再决定是否删除（不得据本轮结论自动入队）'
-                                       if _review_only
-                                       else '确认是否需要保留，如不需要可删除以减少代码体积'),
+                        'severity': 'low',
+                        'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',
+                        'suggestion': '确认是否需要保留，如不需要可删除以减少代码体积',
                     })
+        # ★第308批 刀2：待复核清单落**统计口径**（不进 issues，供趋势门禁读）
+        _DEAD_CODE_REVIEW_STATS.update({
+            "count": int(_review_count), "mode": _mode,
+            "coverage": round(_coverage * 100.0, 2),
+            "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
+            "samples": list(_review_samples), "as_of": time.time()})
+        if _review_count:
+            _module_logger.info(
+                "[308刀2] 待复核清单 %d 条（统计口径，不进issues；覆盖率 %.1f%%，"
+                "非死代码结论，不得据此删码）样例: %s",
+                _review_count, _coverage * 100.0, ", ".join(_review_samples))
         # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
         _module_logger.info(
             "[307刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
@@ -5136,7 +5154,7 @@ class SelfInspector(SilentLogMixin):
             _alive_src["static"], _alive_src["byname"], _alive_src["event"],
             _alive_src["entry"], _alive_src["out_of_graph"],
             _alive_src["no_node"], _mode, _coverage * 100.0, len(_issues),
-            len(_issues) if _review_only else 0)
+            _review_count)
         return _issues
 
     def _detect_unused_imports(self) -> list[dict[str, Any]]:
@@ -5197,6 +5215,24 @@ class SelfInspector(SilentLogMixin):
 
 _self_inspector: SelfInspector | None = None
 _self_inspector_lock = threading.Lock()
+
+# ★第308批 刀2：dead_code 中间档「待复核清单」的**统计口径**出口。
+#   307 批把它作为 severity=info 的 issue 堆进 issues（实测 533 条），但下游全都不消费：
+#   自动入队按 min_severity="medium" 拦、趋势门禁不判死 —— 长期无人看的清单等于噪声。
+#   本批改为「不进 issues、只计数」，由趋势门禁读 get_dead_code_review_stats() 展示数量。
+#   语义边界：待复核 ≠ 死代码；数字大只说明**图解析率不足**，不得据此删码。
+_DEAD_CODE_REVIEW_STATS: dict = {
+    "count": 0, "mode": "unknown", "coverage": 0.0,
+    "node_count": 0, "in_edge_count": 0, "samples": [], "as_of": 0.0,
+}
+
+
+def get_dead_code_review_stats() -> dict:
+    """★第308批 刀2：读最近一次 dead_code 扫描的待复核统计（拷贝返回，只读）。"""
+    _s = dict(_DEAD_CODE_REVIEW_STATS)
+    _s["samples"] = list(_DEAD_CODE_REVIEW_STATS.get("samples") or [])
+    return _s
+
 
 def get_self_inspector() -> SelfInspector:
     """获取SelfInspector单例"""

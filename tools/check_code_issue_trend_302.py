@@ -20,6 +20,9 @@
 - ★判据版本戳：`CRITERIA_VERSION` 变了（检测器增删、severity 口径、dead_code
   存活判据升级）就**必须按新版重算阈值**，不得跨版本比基线——`rescan_high_risk_levels`
   只升不降，存量会按新判据整体上移，旧基线在新版本下没有可比性。
+- ★第308批 刀2：待复核清单（dead_code 中间档）已**降级为统计口径**——不再作为
+  issue 存在于扫描结果中，数量改由 `get_dead_code_review_stats()` 提供；门禁照旧
+  **不判死**（只展示），阈值语义不变。
 - 纯只读：不写 data/、不写 logs/、不改任何文件。
 """
 from __future__ import annotations
@@ -39,7 +42,7 @@ SKIP = ["unused_imports", "config_audit"]
 
 #: ★第306批 刀3：**判据版本戳**。判据一变（检测器增删 / 严重度口径 /
 #: dead_code 存活判据升级）必须升版，阈值随之按新版重算；跨版本比基线无效。
-CRITERIA_VERSION = "2026-10-19.306"
+CRITERIA_VERSION = "2026-10-19.308"
 
 
 def main() -> int:
@@ -74,9 +77,21 @@ def main() -> int:
     _dead = [i for i in _issues
              if str(i.get("type", "")) == "dead_code"
              and str(i.get("severity", "")).lower() != "info"]
-    _dead_review = [i for i in _issues
-                    if str(i.get("type", "")) == "dead_code"
-                    and str(i.get("severity", "")).lower() == "info"]
+    # ★第308批 刀2：待复核清单已降级为**统计口径**（不再进 issues）——
+    #   数量从检测器的模块级统计读；兼容口径切换期（若仍有 info 级 dead_code
+    #   落在 issues 里，以实测条数为准），取两者较大值避免漏数。
+    _dead_review_in_issues = [i for i in _issues
+                              if str(i.get("type", "")) == "dead_code"
+                              and str(i.get("severity", "")).lower() == "info"]
+    _review_stats: dict = {}
+    if not _dead_review_in_issues:
+        try:
+            from nucleus.self_inspector import get_dead_code_review_stats
+            _review_stats = get_dead_code_review_stats()
+        except Exception as e:
+            print(f"[WARN] 读取待复核统计失败（按 0 计）: {type(e).__name__}: {e}")
+    _review_count = max(len(_dead_review_in_issues),
+                        int(_review_stats.get("count", 0) or 0))
     _by_type: dict[str, int] = {}
     for _i in _issues:
         _t = str(_i.get("type", "?"))
@@ -89,7 +104,8 @@ def main() -> int:
         "high": len(_high),
         "medium": len(_med),
         "dead_code": len(_dead),
-        "dead_code_review": len(_dead_review),
+        "dead_code_review": _review_count,
+        "dead_code_review_stats": _review_stats,
         "max_high": _a.max_high,
         "max_medium": _a.max_medium,
         "max_dead_code": _a.max_dead_code,
@@ -105,7 +121,7 @@ def main() -> int:
               f"high={len(_high)}(阈值{_a.max_high}) "
               f"medium={len(_med)}(阈值{_a.max_medium}) "
               f"dead_code={len(_dead)}(阈值{_a.max_dead_code})"
-              f" 待复核={len(_dead_review)}(不判) => {_payload['verdict']}")
+              f" 待复核={_review_count}(统计口径,不进issues,不判) => {_payload['verdict']}")
         for _t, _n in _payload["by_type"].items():
             print(f"  {_t}: {_n}")
         for _h in _payload["high_items"]:
