@@ -5585,6 +5585,12 @@ ENABLE_M92_PATCH_BASE_INDENT_GUARD = True
 #   ★第295批刀1：翻闸为 True——"先观察一批"已远过期（3个月），正式结案。
 ENABLE_M92_PATCH_AST_STRUCT_GUARD = True
 # [M92-CFG]
+
+# ★第303批 刀4（影子开）：补丁失败路→反思。
+#   196刀2 补的半根刀（nucleus/reasoning/PatchManager.py::_reflect_on_failed_patches）
+#   此前因调用点在 return 之后从未通电；302 批已前移，本批影子开一窗验证。
+#   影子性质：只做维度级诊断（SelfReflectionEngine），不改任何判定/放行结果。
+ENABLE_PATCH_FAILURE_REFLECTION = True
 # ============================================================================
 # ★第96批登记（T-96a 进化通道渠道池）
 #   本批红线「不改 config.py 运行开关（只加新开关）」⇒ 本段**只新增**，

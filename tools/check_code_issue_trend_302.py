@@ -25,7 +25,10 @@ import json
 import sys
 
 DEFAULT_MAX_HIGH = 0
-DEFAULT_MAX_MEDIUM = 60
+# ★第303批 刀3：起步阈值由 60 收紧为 48（现值 44）。
+#   原 60 宽于现值 ⇒ 头几轮形同不拦（烛微 302 建议）；48 留出 4 条缓冲，
+#   既拦住回涨又不至于把正常波动判 FAIL。
+DEFAULT_MAX_MEDIUM = 48
 SKIP = ["dead_code", "unused_imports", "config_audit"]
 
 

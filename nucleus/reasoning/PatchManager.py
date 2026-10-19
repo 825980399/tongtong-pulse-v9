@@ -228,8 +228,12 @@ def _c96_import():
 
 # ★第92批 T-92c/T-92d：验证侧两道**防御性**结构化关（任务书要求默认**关闭**，先观察一批）。
 #   两者都只做「拒绝」判定，不改任何既有放行逻辑 ⇒ 关闭时逐字回到第91批末行为。
-_M92_BASE_INDENT_GUARD_DEFAULT = False
-_M92_AST_STRUCT_GUARD_DEFAULT = False
+# ★第303批 刀1（隐形总闸）：原两者皆为 False（92 批「先观察一批」的保守默认）。
+#   295 批已把 config.py 两个开关翻 True ⇒ 运行时读的是 config（getattr 优先），早已生效；
+#   本批把**兜底默认**也翻 True，使「未定义 config 键」时同样是开闸态（双保险）。
+#   关闸路径保持有效：把 config.py 对应键显式置 False 即可（getattr 优先于本默认值）。
+_M92_BASE_INDENT_GUARD_DEFAULT = True
+_M92_AST_STRUCT_GUARD_DEFAULT = True
 #   T-92d 判据：类方法总数缩水**超过**该比例即拒绝。
 _M92_STRUCT_SHRINK_RATIO = 0.10
 

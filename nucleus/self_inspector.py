@@ -344,6 +344,12 @@ class SelfInspector(SilentLogMixin):
         # ★P3-12修复：自增强闭环——蒸馏出的「问题类型→修复策略」知识库，
         # 供 detect_code_issues 在命中同类问题时用 LLM 沉淀的策略增强修复建议。
         self._lesson_fix_strategies: dict[str, str] = {}
+        # ★第303批 刀5：审查结论反哺规则引擎——构造期自注册 hub applier（此前无 applier ⇒ 永远无法回灌）
+        self._m303_hub = None
+        try:
+            self._m303_wire_verification_hub()
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::__init__ wire hub")
 
     # ========== 假阳性库持久化 ==========
     def _load_false_positives(self):
@@ -439,6 +445,58 @@ class SelfInspector(SilentLogMixin):
                 f"（规则库 {len(self._false_positive_rules)} 条，"
                 f"剩余 {len(_kept)} 条）")
         return _kept
+
+    def _m303_wire_verification_hub(self) -> bool:
+        """★第303批 刀5：注册 applier 到 verification_learning_hub（复用 200→5 蒸馏通道）。
+
+        此前 self_inspector **未注册 applier** ⇒ LLM 审查结论永远无法反哺规则引擎；
+        `absorb_growth_rules` 虽已存在但无调用方，审查-修复-回灌闭环缺最后一公里。
+        本方法把二者接上：蒸馏出 self_inspector 的规则时回调 absorb_growth_rules。
+        """
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
+            _hub = get_verification_learning_hub()
+            _hub.register_applier("self_inspector", self.absorb_growth_rules)
+            self._m303_hub = _hub
+            self._log("INFO", "[303刀5] self_inspector 已注册 hub applier（审查结论→规则回灌接通）")
+            return True
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::_m303_wire_verification_hub")
+            return False
+
+    def report_issues_to_hub(self, issues: list[dict[str, Any]], max_items: int = 20) -> int:
+        """★第303批 刀5：把审查发现以 origin="code_review" 记入 hub（让审查结论成为可蒸馏的料）。
+
+        origin 字段为 301 批刀3 新增（本批复用）⇒ hub 可区分「审查发现」与常规验证学习条目，
+        从而满足「hub 出现 origin=code_review 条目」的验收口径。
+        """
+        _hub = getattr(self, "_m303_hub", None)
+        if _hub is None and not self._m303_wire_verification_hub():
+            return 0
+        _hub = getattr(self, "_m303_hub", None)
+        if _hub is None:
+            return 0
+        _sent = 0
+        try:
+            for _i in (issues or [])[:max_items]:
+                if not isinstance(_i, dict):
+                    continue
+                _hub.record(
+                    organ="self_inspector",
+                    task_type="code_review",
+                    input_summary=str(_i.get("description") or _i.get("type", ""))[:200],
+                    local_result=dict(issue_type=_i.get("type"), file=_i.get("file"),
+                                      line=_i.get("line"), method=_i.get("method")),
+                    confidence=0.5,
+                    relevance_score=0.5,
+                    needs_verification=True,
+                    lesson="origin=code_review type=" + str(_i.get("type", "")),
+                    origin="code_review",
+                )
+                _sent += 1
+        except Exception as e:
+            silent_exc(e, where="nucleus.self_inspector::report_issues_to_hub")
+        return _sent
 
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """★P3-12修复：吸收验证学习枢纽蒸馏出的 code_issue_lesson 规则，
@@ -4904,10 +4962,39 @@ class SelfInspector(SilentLogMixin):
                 _name = _m.group(1)
                 _call_counts[_name] = _call_counts.get(_name, 0) + 1
 
+        # ★第303批 刀2（反射可见性）：静态调用计数对「按名派发／事件注册／回调」**天然失效**。
+        #   302 批实测 638 条 dead_code 里 617 条（96.7%）是反射可达/公共 API/预埋，全是误报，
+        #   根因就是判据只看 `name(` 形式的静态调用，看不到：
+        #     ① `getattr(self, "xxx")` 按名派发（全库数百处）；
+        #     ② 事件注册表／回调名单里以**字符串**写下的名字（subscribes/handlers/signal 等）。
+        #   现补齐可见性：出现在「字符串常量」或「getattr 字面名」中的名字一律视为**可达**，
+        #   不再判为死代码。方向是「宁可少报也不把在跑的能力判成死代码」。
+        _reflect_names: set[str] = set()
+        _GETATTR_RE = _re.compile(r'getattr\s*\(\s*[^,()]{1,80},\s*["\'](\w+)["\']')
+        _STR_NAME_RE = _re.compile(r'["\']([A-Za-z_][A-Za-z0-9_]{2,})["\']')
+        for _content in _contents.values():
+            for _m in _GETATTR_RE.finditer(_content):
+                _reflect_names.add(_m.group(1))
+            for _m in _STR_NAME_RE.finditer(_content):
+                _reflect_names.add(_m.group(1))
+
+        # ③ 公共能力面：公共 API 前缀 / config.py / 框架层与工具层的方法 —— 属**对外契约**，
+        #    即便当前无静态调用点也不该判死代码（302 批分类中 A 类 96.7% 正是这一类：
+        #    config.py 的配置访问器、nucleus/base/tools 的能力面）。
+        _API_PREFIX = ("get_", "set_", "is_", "has_", "create_", "build_", "parse_",
+                       "format_", "to_", "from_", "register_", "unregister_", "shutdown_",
+                       "enable_", "disable_", "dump_", "load_", "save_", "export_", "import_")
+        _FRAMEWORK_DIRS = ("nucleus/", "base/", "tools/")
+
         for _name, _defs in _methods.items():
             _call_count = _call_counts.get(_name, 0)
             _def_count = len(_defs)
-            if _call_count <= _def_count:
+            _f_norm = _defs[0][0].replace("\\", "/")
+            _is_public_api = (_name.startswith(_API_PREFIX)
+                              or _f_norm == "config.py"
+                              or any(_f_norm.startswith(_d) for _d in _FRAMEWORK_DIRS))
+            if (_call_count <= _def_count and _name not in _reflect_names
+                    and not _is_public_api):
                 for _f, _line in _defs[:1]:
                     _issues.append({
                         'file': _f, 'organ': 'global', 'method': _name, 'line': _line,

@@ -158,6 +158,66 @@ def _llm_channel(self_inspector=None) -> dict[str, Any]:
         return {"status": "error", "reviewed": 0, "distilled": 0, "report": []}
 
 
+def _m303_dump_per_item(issues: list, llm_issues: list,
+                        strategy: dict | None = None) -> str:
+    """★第303批 刀6：per-item 清单落盘（审查的「出口记录仪」）。
+
+    烛微 302 最重要的发现：801 条**不是一个待修清单，是一台没有出口记录仪的读数**——
+    per-item 清单从未落盘 ⇒ 任何一轮的「高 N」事后都无法逐条打开核对，
+    只能看到一个聚合数字。本函数把每轮审查的逐条明细写
+    `data/reports/code_review/run_<ts>.json`（原子写 + 滚动保留 7 份），
+    字段：run_id／生成时间／并行度／每通道超时标记／type·severity·file·line·method·desc·dedup_key。
+
+    Returns: 落盘绝对路径；失败返回空串（绝不阻断审查主流程）。
+    """
+    try:
+        import json as _json
+        import os as _os
+        import time as _time
+        _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        _dir = _os.path.join(_root, "data", "reports", "code_review")
+        _os.makedirs(_dir, exist_ok=True)
+        _ts = _time.strftime("%Y%m%d_%H%M%S")
+        _items = []
+        for _i in list(issues or []) + list(llm_issues or []):
+            if not isinstance(_i, dict):
+                continue
+            _items.append({
+                "type": _i.get("type", "unknown"),
+                "severity": _i.get("severity", "low"),
+                "file": _i.get("file", ""),
+                "line": _i.get("line", 0),
+                "method": _i.get("method", ""),
+                "desc": str(_i.get("description") or _i.get("message") or "")[:300],
+                "dedup_key": "{}:{}:{}".format(
+                    _i.get("file", ""), _i.get("line", 0), _i.get("type", "unknown")),
+            })
+        _payload = {
+            "run_id": _ts,
+            "generated_at": _time.time(),
+            "parallelism": 3,
+            "timeout_flags": (strategy or {}).get("timeout_flags", {}),
+            "item_count": len(_items),
+            "items": _items,
+        }
+        _path = _os.path.join(_dir, "run_{}.json".format(_ts))
+        _tmp = _path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            _json.dump(_payload, _f, ensure_ascii=False, indent=2)
+        _os.replace(_tmp, _path)
+        try:
+            _old_files = sorted(_f for _f in _os.listdir(_dir)
+                                if _f.startswith("run_") and _f.endswith(".json"))
+            for _old in _old_files[:-7]:
+                _os.remove(_os.path.join(_dir, _old))
+        except Exception as _e:
+            _logger.warning(f"[303刀6] 滚动清理失败（不影响本次落盘）: {type(_e).__name__}: {_e}")
+        return _path
+    except Exception as e:
+        _logger.warning(f"[303刀6] per-item 落盘失败: {type(e).__name__}: {e}")
+        return ""
+
+
 def aggregate_audit_results(tool_issues: list, rule_issues: list,
                             llm_report: dict, strategy: dict | None = None) -> dict[str, Any]:
     """聚合层：按文件+类型+行号去重，分类汇总，输出统一报告。
@@ -213,6 +273,8 @@ def aggregate_audit_results(tool_issues: list, rule_issues: list,
         ))
 
     _llm_issues = llm_report.get("report", []) if isinstance(llm_report, dict) else []
+    # ★第303批 刀6：per-item 落盘（「高 N」从此可逐条打开；失败只告警，不影响聚合结果）
+    _m303_dump_per_item(_issues, _llm_issues, strategy)
     return {
         "total_issues": len(_issues),
         "severity_counts": _severity_counts,

@@ -180,6 +180,22 @@ def main():
     else:
         print('    ✓ 无混批（或无 CI 件）')
 
+    # ---- 附 · 代码问题趋势门禁（★第303批 刀3 挂入；起步阈值 --max-medium 48）----
+    print()
+    print('[附] 代码问题趋势门禁（high 必须 0；medium 起步阈值 48）')
+    r = _run_timed(['tools/check_code_issue_trend_302.py'], timeout=900,
+                   label='issue-trend')
+    out = (r.stdout or '') + (r.stderr or '')
+    if r.returncode == 0:
+        print('    ✓ PASS')
+    else:
+        print('    ✗ FAIL ⇒ 代码问题数回涨：')
+        for ln in (out or '').split('\n'):
+            if ln.strip():
+                print(f'      {ln.strip()[:160]}')
+        print('      处方：① 真回涨 ⇒ 先修再提交；② 判据误报 ⇒ 修检测判据（勿抬阈值）')
+        must_fix.append('代码问题趋势门禁未过')
+
     # ---- 结论 ----
     print()
     print('=' * 70)
