@@ -177,3 +177,5 @@ _install_cython.bat
 # 第161批段A A6（E6）：.aionclaw-tmp/ 原先只被 .git/info/exclude 覆盖，
 # 该文件不入库 ⇒ 换机器/换人克隆会失去此规则（本地临时规则隐患）。
 .aionclaw-tmp/
+
+# IDE客户端产物(本地配置, 不入库).arts/
