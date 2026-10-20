@@ -1150,6 +1150,206 @@ class PatchManager:
                 "[284刀5] 结构缺陷补丁批量作废: %d 条（回生成侧重新生成）", _voided)
         return _out
 
+    # ===== ★323批 刀2（P-03）：生成侧真值 =====
+    # 烛微323：补丁的 def 名与 method 字段是**两把尺子**——method 取"发现时所在方法"，
+    # def 取"生成文本首行解析"，两源分叉 ⇒ PatchManager 入队口拒收 25 条。
+    # 根治：入队（唯一汇聚点）前以 **AST enclosing def** 为唯一真值回填 method，
+    # 并统一 re-indent（F-4 IndentationError 12 条同源：片段带原缩进）。
+    _m323_def_mismatch_rejected = 0     # AST 真值仍对不上 ⇒ 真异常，拒收并计数（回归指标）
+    _m323_normalized = 0                # 回填/修正过 method 的补丁数
+    _m323_reindented = 0                # 做过 re-indent 的补丁数
+
+    @staticmethod
+    def _m323_reindent(code: str) -> tuple:
+        """剥掉生成片段的前导公共缩进（不碰相对层级）；返回 (新文本, 是否改动)。
+
+        只做「整体左移」这一件事：片段被整块缩进时，写入文件会导致
+        IndentationError；左移公共前缀既修问题又不改语义。
+        """
+        if not code:
+            return code, False
+        _lines = code.replace("\r\n", "\n").split("\n")
+        _widths = []
+        for _ln in _lines:
+            _s = _ln.strip()
+            # ★323批刀2修正：纯注释行不参与公共缩进计算——生成片段常以
+            #   0 缩进注释打头（"# Make sure..."），否则 cut 恒为 0、re-indent 空转。
+            if not _s or _s.startswith("#"):
+                continue
+            _w = len(_ln) - len(_ln.lstrip(" \t"))
+            _widths.append(_w)
+        if not _widths:
+            return code, False
+        _cut = min(_widths)
+        if _cut <= 0:
+            return code, False
+        _out = []
+        for _ln in _lines:
+            _s = _ln.strip()
+            if not _s:
+                _out.append("")
+                continue
+            _w = len(_ln) - len(_ln.lstrip(" \t"))
+            if _s.startswith("#") and _w < _cut:
+                _out.append(_ln)          # 注释行缩进不足 ⇒ 原样保留（顶层注释合法）
+                continue
+            _out.append(_ln[_cut:] if len(_ln) >= _cut else _ln.lstrip(" \t"))
+        return "\n".join(_out), True
+
+    @staticmethod
+    def _m323_ast_def_name(code: str) -> str:
+        """取补丁文本里**第一个 def/async def** 的名字（AST，不靠文本正则）。
+
+        优先顶层 def；顶层没有则取深层第一个（片段是方法体时可能出现内部函数）。
+        """
+        if not (code or "").strip():
+            return ""
+        try:
+            _tree = ast.parse(code)
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, where="nucleus.reasoning.PatchManager::_m323_ast_def_name 首解析",
+                       level="warning")
+            _fixed, _chg = PatchManager._m323_reindent(code)
+            if not _chg:
+                return ""
+            try:
+                _tree = ast.parse(_fixed)
+            except (SyntaxError, ValueError) as _e2:
+                silent_exc(_e2, where="nucleus.reasoning.PatchManager::_m323_ast_def_name 重试解析",
+                           level="warning")
+                return ""
+        for _n in _tree.body:
+            if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return _n.name
+        for _n in ast.walk(_tree):
+            if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return _n.name
+        return ""
+
+    @staticmethod
+    def _m323_normalize_patch(patch: dict) -> dict:
+        """以 AST enclosing def 为唯一真值回填 method（★323批刀2）。
+
+        返回审计信息（写进 patch["m323_truth"]，可核可回滚）。
+        """
+        _info = {"method_before": str(patch.get("method") or "").strip(),
+                 "def_name": "", "method_after": "", "action": "unchanged",
+                 "reindented": False, "parse_ok": True}
+        _code = patch.get("modified_code", "") or ""
+        if not _code.strip():
+            return _info
+        _new, _chg = PatchManager._m323_reindent(_code)
+        if _chg:
+            patch["modified_code"] = _new
+            _code = _new
+            _info["reindented"] = True
+            PatchManager._m323_reindented += 1
+        try:
+            ast.parse(_code)
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, where="nucleus.reasoning.PatchManager::_m323_normalize_patch 语法校验",
+                       level="warning")
+            _info["parse_ok"] = False
+        _def = PatchManager._m323_ast_def_name(_code)
+        _info["def_name"] = _def
+        if _def:
+            if _info["method_before"] != _def:
+                _info["action"] = ("method_backfilled" if _info["method_before"]
+                                   else "method_filled")
+                PatchManager._m323_normalized += 1
+            patch["method"] = _def
+        _info["method_after"] = str(patch.get("method") or "")
+        patch["m323_truth"] = _info
+        return _info
+
+    @staticmethod
+    def get_m323_generation_metrics() -> dict:
+        """生成侧真值回归指标（拒收数应 → 0）。"""
+        return {"def_mismatch_rejected": int(PatchManager._m323_def_mismatch_rejected),
+                "normalized": int(PatchManager._m323_normalized),
+                "reindented": int(PatchManager._m323_reindented)}
+
+    # ===== ★323批刀3（P-14）：pending 滞留件出口 =====
+    _M323_RF_MAX_SWEEPS = 3       # 同一补丁在 runtime_failed 上被扫到的次数上限
+    _M323_RF_TTL_HOURS = 24.0     # 或超龄即归档（二者取先到）
+
+    def sweep_runtime_failed(self, max_sweeps: int = 0,
+                             ttl_hours: float = 0.0) -> dict:
+        """给 `runtime_failed` 补丁一个**出口**：重试上限 + 过期归档（★323批刀3）。
+
+        背景（烛微323 §0-2）：pending 首条 `runtime_failed` 长期滞留——既不再重试，
+        也不退出队列，于是"入池非零"被滞留件污染，开闸连锁误判。
+        本方法：每次触碰队列时累加扫描次数；超上限或超龄 ⇒ 移到
+        `pending_patches_archive.json`（可追溯，不删除）。
+        """
+        _max = int(max_sweeps or self._M323_RF_MAX_SWEEPS)
+        _ttl = float(ttl_hours or self._M323_RF_TTL_HOURS) * 3600.0
+        _res = {"scanned": 0, "runtime_failed": 0, "archived": 0,
+                "kept": 0, "archived_ids": [], "skipped_reason": ""}
+        try:
+            _raw = {}
+            if os.path.exists(self._pending_file):
+                with open(self._pending_file, "r", encoding="utf-8") as _f:
+                    _raw = json.load(_f)
+            if isinstance(_raw, dict):
+                _items = _raw.get("patches") or _raw.get("items") or []
+            elif isinstance(_raw, list):
+                _items = _raw
+            else:
+                _items = []
+            _keep, _arch = [], []
+            _now = time.time()
+            for _p in _items:
+                if not isinstance(_p, dict):
+                    continue
+                _res["scanned"] += 1
+                if str(_p.get("status") or "") != "runtime_failed":
+                    _keep.append(_p)
+                    continue
+                _res["runtime_failed"] += 1
+                _n = int(_p.get("m323_rf_sweeps") or 0) + 1
+                _p["m323_rf_sweeps"] = _n
+                _age = 0.0
+                for _k in ("failed_at", "updated_at", "saved_at", "generated_at", "timestamp"):
+                    _v = _p.get(_k)
+                    if isinstance(_v, (int, float)) and _v > 0:
+                        _age = max(_age, _now - float(_v))
+                if _n > _max or (_ttl > 0 and _age > _ttl):
+                    _p["m323_archived_at"] = _now
+                    _p["m323_archive_reason"] = ("retry_cap" if _n > _max else "ttl_expired")
+                    _arch.append(_p)
+                    _res["archived"] += 1
+                    _res["archived_ids"].append(str(_p.get("id") or _p.get("patch_id") or ""))
+                else:
+                    _keep.append(_p)
+            _res["kept"] = len(_keep)
+            if _arch:
+                _ap = os.path.join(self._patch_dir, "pending_patches_archive.json")
+                _old = []
+                if os.path.exists(_ap):
+                    try:
+                        with open(_ap, "r", encoding="utf-8") as _f:
+                            _ov = json.load(_f)
+                        _old = _ov if isinstance(_ov, list) else (_ov.get("patches") or [])
+                    except (OSError, ValueError) as _e:
+                        silent_exc(_e, where="nucleus.reasoning.PatchManager::sweep_runtime_failed 归档读",
+                                   level="warning")
+                        _old = []
+                _payload = (_old + _arch)[-500:]
+                with open(_ap, "w", encoding="utf-8") as _f:
+                    json.dump(_payload, _f, ensure_ascii=False, indent=2)
+            if isinstance(_raw, dict):
+                _raw["patches"] = _keep
+            else:
+                _raw = _keep
+            if _arch or _res["runtime_failed"]:
+                with open(self._pending_file, "w", encoding="utf-8") as _f:
+                    json.dump(_raw, _f, ensure_ascii=False, indent=2)
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.reasoning.PatchManager::sweep_runtime_failed 323", level="warning")
+            _res["skipped_reason"] = "%s: %s" % (type(_e).__name__, _e)
+        return _res
+
     def save_pending_patch(self, patch: dict[str, Any]):
         """
         保存待应用的补丁到队列。
@@ -1158,14 +1358,32 @@ class PatchManager:
         # ★第280批刀1（P0）：生成侧 def 对齐——出补丁即断言 def名==method，不一致拒绝入库。
         #   烛微279批发现：23条def名与method错配＋6条modified_code无def＝29条(60.4%)。
         #   源头拦比队列清便宜：解析 modified_code 首个 def 名，与 method 字段比对。
+        # ★323批刀3（P-14）：入队即给滞留件一次"出口机会"（重试上限 + 过期归档）。
+        #   放在入队口而不是定时器上：队列被触碰时才需要清理，不新增调度面。
+        try:
+            _sw = self.sweep_runtime_failed()
+            if _sw.get("archived"):
+                _module_logger.info(
+                    "[323刀3] pending 滞留件归档 %d 条（runtime_failed 出口）: %s",
+                    _sw["archived"], ",".join(_sw.get("archived_ids") or [])[:200])
+        except Exception as _sw_e:
+            silent_exc(_sw_e, where="nucleus.reasoning.PatchManager::save_pending_patch 323滞留清理", level="warning")
+        # ★323批刀2（P-03）：入队前先做「真值归一」——AST enclosing def 为唯一真值
+        #   回填 method、统一 re-indent。280 的拒收闸门保留兜底（只拦真异常）。
+        try:
+            PatchManager._m323_normalize_patch(patch)
+        except Exception as _m323_e:
+            silent_exc(_m323_e, where="nucleus.reasoning.PatchManager::save_pending_patch 323真值归一", level="warning")
         _def_name = PatchManager._m280_extract_def_name(
             patch.get("modified_code", "") or "")
         _method_name = str(patch.get("method", "") or "").strip()
         if _method_name and _def_name and _def_name != _method_name:
+            PatchManager._m323_def_mismatch_rejected += 1
             _module_logger.error(
-                f"[补丁入队][280刀1] 补丁def名与method字段不一致，拒绝入库: "
+                f"[补丁入队][280刀1/323刀2] 补丁def名与method字段不一致，拒绝入库: "
                 f"def={_def_name!r} method={_method_name!r} "
-                f"file={patch.get('file','')}")
+                f"file={patch.get('file','')} "
+                f"(323真值归一后仍错配 ⇒ 真异常，计入回归指标)")
             return
         # ★第300批刀1：7 vs 5 口径对齐——入队口与派单侧**共用同一个** is_fragment_to_full，
         #   消除「各算各的」造成的口径差（295报7条 vs 烛微复算5条，疑 original 为空边界处理不同）。

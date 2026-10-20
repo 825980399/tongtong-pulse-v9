@@ -54,6 +54,15 @@ _DEFAULTS = {
 }
 
 
+# ===== ★323批刀4（P-05，小林裁决：设上界 + 样本不足冻结上调）=====
+# 烛微323 §1：`search_cooldown_seconds` 实测走 7→5→7→10→13→17→23 单调递增；
+# 每轮 ×1.3 且无天花板 —— "质量差→加冷却→观测更少→继续加"是正反馈自锁。
+COOLDOWN_CAP_SEARCH = 30          # 搜索冷却上界（秒）；按趋势定值：23→30 留 1 档余量
+COOLDOWN_FLOOR_SEARCH = 5         # 下限沿用既有语义
+UP_MIN_OBS = 12                   # 窗口内观察样本 < 此值 ⇒ **冻结上调**（不冻下调）
+_TIMEOUT_SIGNAL_HINTS = ("timeout", "timed_out", "超时", "8,000ms", "8000ms")
+
+
 class ParamTuningClosedLoop:
     """通用参数调优闭环控制器。
 
@@ -120,6 +129,14 @@ class ParamTuningClosedLoop:
             now = time.time()
             _sig_name = str(signal.get("signal", "unknown"))
             _bad = bool(signal.get("bad"))
+            # ★323批刀4（P-05·3）：浏览器/网络超时属**外部源问题**，不作闭环归因——
+            #   否则一次上游 8,000ms 超时会把"搜索质量差"的账算到冷却参数上。
+            _low = _sig_name.lower()
+            if any(_h in _low or _h in _sig_name for _h in _TIMEOUT_SIGNAL_HINTS):
+                if signal.get("external_source") is not False:
+                    self._obs.append((now, False, _sig_name))
+                    self._trim()
+                    return False
             with self._lock:
                 self._obs.append((now, _bad, _sig_name))
                 self._trim()
@@ -240,8 +257,18 @@ class ParamTuningClosedLoop:
         if not _multi:
             _candidates = _candidates[:1]  # 单参数模式：保持原行为
 
+        # 窗口内**全部**观察数（含好信号）——冻结上调的样本依据
+        _window_n = len([o for o in self._obs if now - o[0] <= self._window_sec])
+
         _chosen = _new = _dominant = _cur = None
         for _st, _dom in _candidates:
+            # ★323批刀4（P-05·2）：样本不足 ⇒ 冻结**上调**（下调不受限）。
+            #   只加冷却会让样本更少，形成自锁；宁可不动，也不往死里调。
+            if _st.get("direction") == "up" and _window_n < UP_MIN_OBS:
+                self._log_safe(
+                    f"样本不足冻结上调: 窗口观察 {_window_n} < {UP_MIN_OBS}，"
+                    f"跳过策略「{_st['name']}」（参数={_st['param']} 保持当前值）")
+                continue
             _cur = self._current_param_value(_st["param"])
             if _cur is None:
                 self._log_safe(f"参数{_st['param']}不在RUNTIME_PARAMS中，跳过")
@@ -398,7 +425,8 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
     """
     def _cooldown_up(cur):
         try:
-            _n = min(300, int(math.ceil(cur * 1.3)))
+            # ★323批刀4（P-05·1）：上界 30s（旧上界 300 形同虚设，实测已爬到 23）
+            _n = min(COOLDOWN_CAP_SEARCH, int(math.ceil(cur * 1.3)))
         except Exception as e:
             silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_up L396")
             return None
@@ -406,7 +434,7 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
 
     def _cooldown_down(cur):
         try:
-            _n = max(5, int(math.floor(cur * 0.8)))
+            _n = max(COOLDOWN_FLOOR_SEARCH, int(math.floor(cur * 0.8)))
         except Exception as e:
             silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_down L403")
             return None
@@ -421,12 +449,14 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
                 "signals": {"stage1_terminate"},
                 "param": "search_cooldown_seconds",
                 "step_fn": _cooldown_up,
+                "direction": "up",      # ★323批刀4：样本不足时冻结的正是这个方向
             },
             {
                 "name": "提频·缩短搜索冷却",
                 "signals": {"search_empty"},
                 "param": "search_cooldown_seconds",
                 "step_fn": _cooldown_down,
+                "direction": "down",    # 下调不冻结（避免"只涨不降"）
             },
         ],
         log_fn=log_fn,

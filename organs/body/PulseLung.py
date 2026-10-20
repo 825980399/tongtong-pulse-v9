@@ -1383,20 +1383,17 @@ class PulseLung(BasePulseOrgan):
             return True
 
     def _m65_get_load_level(self) -> str:
-        # Route the cross-module lookup through the pulse bus instead of
-        # calling the runtime_metrics singleton directly. This removes the
-        # implicit coupling and keeps this organ isolated from the
-        # runtime_metrics module internals.
+        # ★323批刀1（P-01，小林裁决）：双负载源合并 —— 走 InfoField 自算 _load_level
+        #   的**唯一**口径（`get_system_load_level`）。此前经 `pulse_bus`
+        #   转发，而该模块在仓内不存在 ⇒ 每次 ImportError 被静默吞掉（实测上千次/夜），
+        #   负载档恒为 low，高负载缩容分支从未生效。
+        #   取不到时仍返回 low，与旧态等价（不制造新的缩容行为）。
         try:
-            from nucleus.pulse_bus import get_pulse_bus
-            payload = get_pulse_bus().request("runtime_metrics.get_system_load")
+            from nucleus.field.InfoField import get_system_load_level
+            return str(get_system_load_level() or "low")
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L1299")
+            silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L323")
             return "low"
-
-        if isinstance(payload, dict):
-            return payload.get("load_level", "low")
-        return "low"
     def _append_background_learning_requirement(self, prompt: str,
                                                 payload: dict) -> str:
         """主线第12批 T3.2/P2-83：后台学习提示词追加结构化输出要求。

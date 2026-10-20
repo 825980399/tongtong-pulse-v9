@@ -2861,6 +2861,46 @@ class InfoField(SilentLogMixin):
 _THE_INFO_FIELD = None
 
 
+#: ★323批刀1（P-01）：负载等级对外别名。
+#: InfoField 内部自算档位是 light/moderate/heavy/critical；两个器官（及
+#: runtime_metrics 旧口径）消费侧比较的是 low/medium/high/critical。
+#: 全仓只在这里做一次映射，避免"两把尺子各说各话"。
+_LOAD_LEVEL_ALIAS = {
+    "light": "low",
+    "moderate": "medium",
+    "heavy": "high",
+    "critical": "critical",
+}
+
+#: 单一口径的兜底值：与合并前两处器官的**实际**行为一致（此前 import 失败恒返回 low）
+_LOAD_LEVEL_DEFAULT = "low"
+
+
+def get_system_load_level(default: str = "") -> str:
+    """全仓唯一的「当前系统负载档」取数口（★323批刀1 · 合并双负载源）。
+
+    直接读 ``InfoField`` 自算的 ``_load_level``，映射为消费侧档位
+    low/medium/high/critical 后返回。取不到时返回 ``default``（默认 low）——
+    与合并前两处器官的实际行为等价：它们此前恒返回 low（pulse_bus 模块并不存在）。
+
+    为什么不再走 `pulse_bus`：该模块**在仓内不存在**，
+    每次调用都抛 ImportError 被静默吞掉（烛微实测 1,076＋336 次/夜），
+    等于负载感知长期失效 ⇒ 高负载缩容分支从未触发。
+    """
+    _dflt = str(default or _LOAD_LEVEL_DEFAULT)
+    try:
+        _f = get_info_field()
+        if _f is None:
+            return _dflt
+        _raw = str(_f.get_load_level() or "").strip()
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.InfoField::get_system_load_level L323")
+        return _dflt
+    if not _raw:
+        return _dflt
+    return _LOAD_LEVEL_ALIAS.get(_raw, _raw)
+
+
 def get_info_field() -> "InfoField | None":
     """★v9.x TimeCore：获取主信息场单例。
 

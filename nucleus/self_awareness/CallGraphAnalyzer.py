@@ -40,6 +40,7 @@ from typing import Any
 from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
+    sanitize_sys_path as _sanitize_sys_path,  # ★323批刀0：副本导入防线
 )
 from nucleus.logger import (
     get_module_logger,
@@ -49,6 +50,10 @@ from nucleus.logger import (
 )
 
 _logger = get_module_logger("CallGraphAnalyzer")
+
+#: ★323批刀0：导入期就地剔除 sys.path 里的备份/打包目录（越早越好——
+#: 晚一步，同进程后续的 `import nucleus.*` 仍可能命中副本）
+_M323_SYS_PATH_PRUNED = _sanitize_sys_path()
 
 #: ★第313批 刀2：本进程内已完成「存量合成图隔离清扫」的目录
 #: （每目录只扫一次 —— 清扫要逐份解析整图，不能挂在每次落盘的热路径上反复付费）
@@ -173,9 +178,36 @@ def _scan_dirs() -> list:
     return list(_DEFAULT_SCAN_DIRS)
 
 
-def _project_root() -> str:
-    """由本文件位置推导项目根（nucleus/self_awareness/ → 上溯 3 层）。"""
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#: ★323批刀0：项目根标记——两者齐备才算根（config.py + .git/nucleus）
+_ROOT_MARK_FILE = "config.py"
+_ROOT_MARK_DIRS = (".git", "nucleus")
+_ROOT_MAX_UP = 24
+
+
+def _project_root(start: str | None = None) -> str:
+    """定位项目根：**按标记文件向上找**，找不到即抛错（★323批刀0 · P-02）。
+
+    旧实现"上溯 3 层"隐含前提「本文件恒在 <root>/nucleus/self_awareness/」。
+    一旦模块从 `.bak_batchNNN/`、`code_package_*/` 的整树副本被 import，前提不成立，
+    算出的根落在副本或项目父目录 ⇒ `nucleus/const.py` 读不到 ⇒ 事件枚举表退化，
+    event 边随之失真。故改为**只认标记、绝不猜层数**。
+    """
+    _env = str(os.environ.get("TT_PROJECT_ROOT") or "").strip()
+    if _env and os.path.isfile(os.path.join(_env, _ROOT_MARK_FILE)):
+        return os.path.abspath(_env)
+    _cur = os.path.abspath(start or os.path.dirname(os.path.abspath(__file__)))
+    for _ in range(_ROOT_MAX_UP):
+        if (os.path.isfile(os.path.join(_cur, _ROOT_MARK_FILE))
+                and any(os.path.exists(os.path.join(_cur, _m)) for _m in _ROOT_MARK_DIRS)):
+            return _cur
+        _parent = os.path.dirname(_cur)
+        if _parent == _cur:
+            break
+        _cur = _parent
+    raise RuntimeError(
+        "无法定位项目根：向上 %d 层未见 %s + %s｜start=%r｜"
+        "请检查是否从备份副本(.bak_batch*/code_package_*)导入（323刀0 拒绝猜层数）"
+        % (_ROOT_MAX_UP, _ROOT_MARK_FILE, "/".join(_ROOT_MARK_DIRS), _cur))
 
 
 def _dotted(node: Any) -> str:
@@ -259,6 +291,9 @@ def _event_taxonomy() -> dict:
     except Exception as e:
         _logger.debug("事件枚举表解析失败（事件边退化到字面量口径）: %s: %s",
                       type(e).__name__, e)
+        # ★323批刀0：**失败不写缓存**——否则一次读错（如副本根）会把
+        #   event 边永久钉死在字面量口径，后续整轮读数都不可信。
+        return _out
     _EVENT_TAXONOMY = _out
     return _out
 

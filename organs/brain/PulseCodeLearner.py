@@ -609,19 +609,15 @@ class PulseCodeLearner(BasePulseOrgan):
             return True
 
     def _m65_get_load_level(self):
-        # Route the cross-module singleton call through the pulse bus.
+        # ★323批刀1（P-01，小林裁决）：与 PulseLung 同一口径 —— InfoField 自算
+        #   `_load_level` 经 `get_system_load_level()` 映射输出。旧实现先找
+        #   `self._pulse_bus/_bus`（器官上根本没有这些属性）再经不存在的
+        #   `pulse_bus` 转发 ⇒ 恒返回 low，高负载暂停分支形同虚设。
         try:
-            bus = getattr(self, "_pulse_bus", None)
-            if bus is None:
-                bus = getattr(self, "pulse_bus", None)
-            if bus is None:
-                bus = getattr(self, "_bus", None)
-            if bus is None:
-                raise RuntimeError("pulse bus not available")
-            load = bus.request("runtime_metrics.get_system_load")
-            return load.get("load_level", "low")
+            from nucleus.field.InfoField import get_system_load_level
+            return str(get_system_load_level() or "low")
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L599")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L323")
             return "low"
     def _learn_own_code_structure(self):
         # ★T3: 自适应降频接线——代码学习

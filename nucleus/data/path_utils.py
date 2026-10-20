@@ -38,11 +38,13 @@ from nucleus._silent_except import silent_exc
 
 __all__ = [
     "drive_of",
+    "is_backup_dir",
     "normalize_path",
     "normalize_relpath",
     "safe_commonpath",
     "safe_relpath",
     "same_drive",
+    "sanitize_sys_path",
 ]
 
 
@@ -135,3 +137,52 @@ def normalize_relpath(path: str, start: str | None = None) -> str:
     保证「同一逻辑路径不同分隔符 -> 同一 key」的不变式。
     """
     return normalize_path(safe_relpath(path, start))
+
+# ========== ★323批 刀0（P-02）：副本导入防线 ==========
+# 烛微323归因纠正：验证读数的"路径 bug"根因不是上溯层数不够，而是
+# `.bak_batchNNN/`、`code_package_*/` 里的**整树副本**进了 sys.path，
+# 于是 `import nucleus` 命中副本，派生出的项目根全是错的。
+_BACKUP_DIR_PREFIXES = (".bak_batch", "code_package_", "pulse_backups")
+
+
+def is_backup_dir(path: str) -> bool:
+    """判断目录名是否属于备份/打包目录（副本一律不得作为导入源）。"""
+    try:
+        _name = os.path.basename(os.path.normpath(str(path or "")))
+    except (TypeError, ValueError) as e:
+        silent_exc(e, where="nucleus.data.path_utils::is_backup_dir L323")
+        return False
+    if not _name:
+        return False
+    return any(_name.startswith(_p) for _p in _BACKUP_DIR_PREFIXES)
+
+
+def sanitize_sys_path(keep_root: str = "") -> list:
+    """剔除 ``sys.path`` 中的备份/打包目录，防副本模块抢先被 import。
+
+    幂等；``keep_root`` 命中的条目永不剔除。返回被剔除的条目（空列表=无副本）。
+    """
+    _removed: list = []
+    try:
+        import sys
+        _keep = os.path.abspath(keep_root) if keep_root else ""
+        _kept: list = []
+        for _p in list(sys.path):
+            try:
+                _ap = os.path.abspath(_p) if _p else ""
+            except (TypeError, ValueError) as _e:
+                silent_exc(_e, where="nucleus.data.path_utils::sanitize_sys_path 路径归一",
+                           level="warning")
+                _ap = ""
+            if _ap and _keep and _ap == _keep:
+                _kept.append(_p)
+                continue
+            if _ap and is_backup_dir(_ap):
+                _removed.append(_p)
+                continue
+            _kept.append(_p)
+        if _removed:
+            sys.path[:] = _kept
+    except Exception as e:                      # 防线自身绝不能搞挂导入链
+        silent_exc(e, where="nucleus.data.path_utils::sanitize_sys_path L323", level="warning")
+    return _removed

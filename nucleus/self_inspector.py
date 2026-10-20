@@ -54,6 +54,21 @@ def _get_logger():
         import logging
         return logging.getLogger("self_inspector")
 
+# ===== ★323批刀3（P-14）：ceiling 判据的热改豁免 =====
+#: 文件在窗口内被改过 ⇒ 视为"施工中"，不参与 loc/branch ceiling 判定
+_M323_HOT_EDIT_WINDOW_SEC = 1800.0
+_M323_HOT_SKIP = {"total": 0, "by_file": {}}
+
+
+def _is_hot_edit(path: str) -> bool:
+    """判断文件是否处于"施工热改"窗口内（默认 30 分钟）。"""
+    try:
+        return (time.time() - os.path.getmtime(path)) <= _M323_HOT_EDIT_WINDOW_SEC
+    except OSError as _e:
+        silent_exc(_e, "self_inspector.py:_is_hot_edit", level="debug")
+        return False
+
+
 _module_logger = _get_logger()
 
 
@@ -3097,6 +3112,13 @@ class SelfInspector(SilentLogMixin):
                 continue
             _loc_b = _b.get("loc", 0)
             _br_b = _b.get("branches", 0)
+            # ★323批刀3（P-14）：**施工中的热改文件不计 ceiling**——补丁刚落地、
+            #   行数自然上涨，立刻再招一条 loc/branch ceiling 补丁＝自我打转。
+            #   单独记数（不进自动分诊），供"被排除多少"可核。
+            if _is_hot_edit(_ap):
+                _M323_HOT_SKIP["total"] += 1
+                _M323_HOT_SKIP["by_file"][_rel] = _M323_HOT_SKIP["by_file"].get(_rel, 0) + 1
+                continue
             if _loc_b > 0:
                 _loc_rise = (_lines - _loc_b) / _loc_b * 100.0
                 if _loc_rise > SELF_INSPECTOR_B3_CEILING_PCT:
@@ -5196,6 +5218,9 @@ class SelfInspector(SilentLogMixin):
         _review_only = (_mode == "review")
         # ★第308批 刀2：中间档只计数、不再造 issue
         _review_count = 0
+        # ★323批刀3（P-13）：两个数以前混成一个 —— 报表里"待复核 562 / 14"两把尺子
+        #   打架，正是因为"清单条数"与"软赦免降级计数"共用了 count。
+        _soft_demoted = 0
         _review_samples: list[str] = []
         # ★第311批 刀1：明细（≤_M311_MAX_ITEMS 条）留存，供受控入料口取用——
         #   否则入料侧要重跑一次 9 分钟级的 dead_code 检测才能拿到候选。
@@ -5255,6 +5280,8 @@ class SelfInspector(SilentLogMixin):
                 #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
                 # ★322批刀0：软赦免条目**在这里**落地（判死档下也降级待复核）。
                 _review_count += 1
+                if _tier == "soft":
+                    _soft_demoted += 1
                 if len(_review_samples) < 3:
                     _review_samples.append("%s::%s" % (_defs[0][0], _name))
                 for _f, _line in _defs[:1]:
@@ -5289,6 +5316,12 @@ class SelfInspector(SilentLogMixin):
         # ★第308批 刀2：待复核清单落**统计口径**（不进 issues，供趋势门禁读）
         _DEAD_CODE_REVIEW_STATS.update({
             "count": int(_review_count), "mode": _mode,
+            # ★323批刀3（P-13）：**报表口径写死**——进报表/趋势门禁读
+            #   `review_list_count`（清单条数）；`soft_demoted_count` 只作口径解释，
+            #   不得与清单条数相加或互换（两者是"其中"关系，非并列关系）。
+            "review_list_count": int(_review_count),
+            "soft_demoted_count": int(_soft_demoted),
+            "count_semantics": "review_list_count=清单条数(进报表)｜soft_demoted_count=其中软赦免降级(仅解释)",
             "coverage": round(_coverage * 100.0, 2),
             # ★322批刀0：三层覆盖率同报（单行读数不可审计）
             "coverage_hard": round(_cov_hard * 100.0, 2),
