@@ -379,6 +379,147 @@ class LLMDependencyMetrics:
             return 0.0
         return round(self.local_total() / _t, 4)
 
+    # ============ ★324批刀4：中期10 双指标验收（小林裁决 2026-10-20） ============
+    #: 冷却量基线（config.RUNTIME_PARAMS["search_cooldown_seconds"] 初始值）
+    #  解释变量口径：冷却被 P-05 闭环**收紧**会让搜索量下降、比率"看起来"改善，
+    #  必须与 search_total 一并报，禁止把"搜得少"读成"自给率高"。
+    _M324_COOLDOWN_BASELINE = 15.0
+    def dependency_acceptance(self, target: float = 0.80,
+                              growth_multiple: float = 1.0,
+                              window_hours: float = 24.0) -> dict:
+        """★324批刀4：依赖度达标判定改**双指标**，禁止用比率单值宣布"阶段二达成"。
+
+        指标① `llm_dependency_ratio <= target`
+        指标② `llm_call_total` 小时增速 ≤ 达标前 `window_hours` 均值 × `growth_multiple`
+
+        为什么必须双指标（烛微324§1 实测 0.8103 是**分母性下降**）：
+        比率 = llm/(llm+local)，只要 local 涨得比 llm 快，比率就会掉——哪怕 LLM 的
+        **绝对调用量仍在加速**。那不是"自给率提升"，是分母替代。指标②把这条路堵住：
+        若 LLM 小时增速已超基线，即便比率达标也只记 `denominator_only`（不算功）。
+
+        解释变量一并输出（防 P-05 闭环收紧伪装成自给率提升）：
+        `search_total` 变化、`search_cooldown_seconds` 现值、`local_inference_total` 变化。
+        消费面归因（hub organ 分布 / absorb_growth_rules / L2 大小）**只归因不新做消费面**，
+        取不到一律记 `unavailable`，**不许填 0 冒充读数**。
+        """
+        _hist = []
+        with self._lock:
+            _hist = [dict(h) for h in (self._history or []) if isinstance(h, dict)]
+        _cur = self.llm_dependency_ratio()
+        _ratio_ok = bool(_cur <= float(target))
+        # ---- 指标②：小时增速 vs 达标前窗口均值 ----
+        _pts = [h for h in _hist
+                if isinstance(h.get("llm_call_total"), (int, float))
+                and isinstance(h.get("ts_epoch"), (int, float))]
+        _pts.sort(key=lambda h: float(h.get("ts_epoch") or 0))
+        _growth_now = None
+        _growth_base = None
+        _growth_ok = None
+        _growth_note = ""
+        if len(_pts) >= 2:
+            _last, _prev = _pts[-1], _pts[-2]
+            _dt = max(1e-6, float(_last["ts_epoch"]) - float(_prev["ts_epoch"]))
+            _dl = float(_last["llm_call_total"]) - float(_prev["llm_call_total"])
+            _growth_now = round(_dl / (_dt / 3600.0), 3)      # 次/小时
+            _win_start = float(_last["ts_epoch"]) - float(window_hours) * 3600.0
+            _win = [h for h in _pts[:-1] if float(h["ts_epoch"]) >= _win_start]
+            _rates = []
+            for _a, _b in zip(_win, _win[1:]):
+                _d2 = float(_b["ts_epoch"]) - float(_a["ts_epoch"])
+                if _d2 <= 0:
+                    continue
+                _rates.append((float(_b["llm_call_total"]) - float(_a["llm_call_total"]))
+                              / (_d2 / 3600.0))
+            if _rates:
+                _growth_base = round(sum(_rates) / len(_rates), 3)
+                _growth_ok = bool(_growth_now <= _growth_base * float(growth_multiple))
+            else:
+                _growth_note = "窗口内样本不足⇒指标②不可判定（记 unavailable，不按达标算）"
+        else:
+            _growth_note = "history 少于 2 点⇒指标②不可判定（记 unavailable，不按达标算）"
+        # ---- 解释变量 ----
+        _exp = {"search_total_delta": None, "local_total_delta": None,
+                "search_cooldown_seconds": None}
+        if len(_pts) >= 2:
+            try:
+                _exp["search_total_delta"] = (
+                    int(_pts[-1].get("search_total", 0) or 0)
+                    - int(_pts[-2].get("search_total", 0) or 0))
+                _exp["local_total_delta"] = (
+                    int(_pts[-1].get("local_inference_total", 0) or 0)
+                    - int(_pts[-2].get("local_inference_total", 0) or 0))
+            except (TypeError, ValueError) as e:
+                _logger.debug("[324刀4] 解释变量差值计算失败: %s: %s", type(e).__name__, e)
+        try:
+            import config as _cfg
+            # 冷却量实际住在 RUNTIME_PARAMS（可热加载字典），不在模块级属性上——
+            # 只 getattr 会恒 None（那会被误读成"没配冷却"，与"读不到"混为一谈）。
+            _sc = None
+            _rp = getattr(_cfg, "RUNTIME_PARAMS", None)
+            if isinstance(_rp, dict):
+                _sc = _rp.get("search_cooldown_seconds")
+            if _sc is None:
+                _sc = getattr(_cfg, "SEARCH_COOLDOWN_SECONDS", None)
+            _exp["search_cooldown_seconds"] = _sc
+            _exp["search_cooldown_baseline"] = self._M324_COOLDOWN_BASELINE
+            _exp["search_cooldown_changed"] = (
+                None if _sc is None else bool(float(_sc) != float(self._M324_COOLDOWN_BASELINE)))
+        except Exception as e:
+            silent_exc(e, "LLMDependencyMetrics.dependency_acceptance:cooldown", level="warning")
+        # ---- 消费面归因（只归因，不新做消费面）----
+        _attr = {"hub_organ_dist": "unavailable", "absorb_growth_rules_gt0": "unavailable",
+                 "l2_store_size": "unavailable"}
+        try:
+            from nucleus.mnemosyne.verification_learning_hub import (
+                get_verification_learning_hub,
+            )
+            _st = get_verification_learning_hub().get_stats()
+            _org = (_st or {}).get("organ_dist") or (_st or {}).get("by_organ")
+            if isinstance(_org, dict):
+                _attr["hub_organ_dist"] = dict(sorted(_org.items(),
+                                                      key=lambda kv: (-int(kv[1] or 0), str(kv[0])))[:5])
+        except Exception as e:
+            silent_exc(e, "LLMDependencyMetrics.dependency_acceptance:hub", level="warning")
+        try:
+            from nucleus.llm.semantic_cache import lookup_l2_shadow
+            _l2 = lookup_l2_shadow("__m324_acceptance_probe__", origin="m324_acceptance")
+            if isinstance(_l2, dict):
+                _attr["l2_store_size"] = _l2.get("l2_store_size", "unavailable")
+        except Exception as e:
+            silent_exc(e, "LLMDependencyMetrics.dependency_acceptance:l2", level="warning")
+        # ---- 结论 ----
+        if _ratio_ok and _growth_ok:
+            _verdict = "semantic_reached"
+            _why = "比率达标且 LLM 绝对增速未超基线 ⇒ 语义达标"
+        elif _ratio_ok and _growth_ok is False:
+            _verdict = "denominator_only"
+            _why = ("比率达标但 LLM 小时增速 %.3f > 基线 %.3f×%.2f ⇒ **分母性达标**，不算功"
+                    % (_growth_now, _growth_base, float(growth_multiple)))
+        elif _ratio_ok:
+            _verdict = "ratio_ok_growth_unavailable"
+            _why = _growth_note or "指标②不可判定"
+        else:
+            _verdict = "not_reached"
+            _why = "比率 %.4f 未达 %.2f" % (_cur, float(target))
+        return {
+            "verdict": _verdict,
+            "why": _why,
+            "target": float(target),
+            "metrics": {
+                "llm_dependency_ratio": _cur,
+                "ratio_ok": _ratio_ok,
+                "llm_call_growth_per_hour": _growth_now,
+                "llm_call_growth_baseline_per_hour": _growth_base,
+                "growth_multiple": float(growth_multiple),
+                "growth_ok": _growth_ok,
+                "growth_note": _growth_note,
+                "history_points": len(_pts),
+            },
+            "explainers": _exp,
+            "consumption_attribution": _attr,
+            "note": "双指标缺一不可；growth_ok=None 时按未达标处理，禁止只报比率宣布阶段二达成",
+        }
+
     # ============ ★第169批 C5：本地决策率 + 依赖度阶段目标线 ============
     def local_decision_rate(self) -> float:
         """本地决策率 = 1 - llm_dependency_ratio（与依赖度同源、恒等互补）。

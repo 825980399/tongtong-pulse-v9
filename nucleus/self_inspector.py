@@ -5374,17 +5374,56 @@ class SelfInspector(SilentLogMixin):
 
 
     @staticmethod
-    def _m318_resolve_rate(stats: dict) -> tuple[float, int, int]:
+    def _m318_resolve_rate(stats: dict | None = None,
+                          project_root: str | None = None) -> tuple[float, int, int]:
         """★318批刀2：仓内可解析调用解析率（**分母显式排除 external**）。
 
+        ★324批刀6：`stats` 改为**可选**——外部复算可直接无参调用（自动取最新图），
+        不再因签名不匹配抛 TypeError 被上层记成 None（323 遗留：外部调用拿到 None，
+        与"解析率为 0"无法区分）。仍然**永远返回三元组**，绝不返回 None。
+
         Returns: (resolve_rate, internal_resolved, unresolved)
+                 分母为 0 ⇒ (0.0, 0, 0)，由 `resolve_rate_report()` 显式标 UNAVAILABLE。
         """
+        if not isinstance(stats, dict):
+            stats, _gf = self_inspector_latest_graph_stats(project_root)
+            if not isinstance(stats, dict):
+                stats = {}
         _total = int(stats.get("total_calls", 0) or 0)
         _unres = int(stats.get("unresolved_calls", 0) or 0)
         _ext = int(stats.get("external_calls", 0) or 0)
         _internal = max(0, _total - _unres - _ext)
         _den = _internal + _unres
         return ((_internal / float(_den)) if _den else 0.0, _internal, _unres)
+
+    def resolve_rate_report(self, stats: dict | None = None,
+                            project_root: str | None = None) -> dict:
+        """★324批刀6：解析率的**对外唯一报告口**（数值或显式 UNAVAILABLE）。
+
+        口径与内部完全同源（复用 `_m318_resolve_rate`，不另算），差别只在返回值
+        形状：外部复算要的是"能不能用"，不是"一个可能被当成 0 的数"。
+        """
+        _stats = stats
+        _gfile = ""
+        if not isinstance(_stats, dict):
+            _stats, _gfile = self_inspector_latest_graph_stats(project_root)
+        if not isinstance(_stats, dict) or not _stats:
+            return {"status": "UNAVAILABLE", "resolve_rate": None,
+                    "why": "no_graph_stats（无落盘图或图不可读）",
+                    "graph_file": _gfile, "denominator": 0}
+        _rate, _internal, _unres = self._m318_resolve_rate(_stats)
+        _ext = int(_stats.get("external_calls", 0) or 0)
+        _den = _internal + _unres
+        if _den <= 0:
+            return {"status": "UNAVAILABLE", "resolve_rate": None,
+                    "why": "empty_denominator（internal+unresolved=0）",
+                    "graph_file": _gfile, "denominator": 0,
+                    "external_calls": _ext}
+        return {"status": "ok", "resolve_rate": round(float(_rate), 4),
+                "internal_resolved": int(_internal), "unresolved": int(_unres),
+                "denominator": int(_den), "external_calls": _ext,
+                "graph_file": _gfile,
+                "rule": "rate = internal/(internal+unresolved)，external 不计入分母"}
 
     def detect_structure_changes(self, scan_dirs: list | None = None,
                                  emit: bool = True) -> dict[str, Any]:
@@ -5685,6 +5724,32 @@ def consume_dead_code_verdicts(items: list, limit: int = 1,
     return {"status": "ok", "candidates": len(_items), "intake": _intake or [],
             "criteria_version": criteria_version or getattr(SelfInspector, "_DEAD_CODE_CRITERIA_VERSION",
                                           "2026-10-19.318.resolve50")}
+
+
+def self_inspector_latest_graph_stats(project_root: str | None = None) -> tuple[dict, str]:
+    """★324批刀6：取**最新落盘图**的 stats（不触发重建，纯读）。返回 (stats, 文件名)。
+
+    取不到一律返回 ({}, "")，由调用方决定 UNAVAILABLE —— 本函数**不返回 None**。
+    """
+    _root = project_root or os.getcwd()
+    _d = os.path.join(_root, "data", "call_graph")
+    try:
+        _fs = sorted(f for f in os.listdir(_d)
+                     if f.startswith("graph_") and f.endswith(".json"))
+    except OSError as _e:
+        _module_logger.debug("[324刀6] 图目录不可读: %s", _e)
+        return {}, ""
+    if not _fs:
+        return {}, ""
+    _p = os.path.join(_d, _fs[-1])
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            _g = json.load(_f)
+    except (OSError, ValueError) as _e:
+        _module_logger.warning("[324刀6] 最新图不可读（%s）: %s", _fs[-1], _e)
+        return {}, _fs[-1]
+    _st = (_g or {}).get("stats") if isinstance(_g, dict) else None
+    return (dict(_st) if isinstance(_st, dict) else {}), _fs[-1]
 
 
 def dump_per_item_by_version(items: list, criteria_version: str,

@@ -1191,6 +1191,14 @@ class PulseFramework:
                 )
                 _295_set_fw(self)
                 _295_reg_dispatch()
+                # ★324批刀1：图重建独立节拍——此前图只在**每日 03:00** 全量分析里落盘，
+                #   重启后要等次日 ⇒ 活体长期消费旧图（323 刀6 的 V1 FAIL 即此）。
+                from nucleus.self_awareness.SelfAwarenessEngine import (
+                    register_graph_rebuild_tick as _324_reg_graph,
+                )
+                _324_graph_hook = _324_reg_graph()
+                self._log(LogLevel.INFO,
+                          f"[SelfAwareness] 图重建节拍钩子={_324_graph_hook or '未注册'}")
                 self._log(LogLevel.INFO,
                           f"[SelfAwareness] 每日调度"
                           f"{'已启动' if _sched_ok else '未启动（开关关闭或已在运行）'}")

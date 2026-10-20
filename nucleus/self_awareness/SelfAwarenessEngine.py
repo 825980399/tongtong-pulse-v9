@@ -175,6 +175,101 @@ def _structure_rescan_interval() -> float:
         return 300.0
 
 
+# ===== ★324批刀1：调用图重建的**独立节拍**（根治"活体不产新图"）=====
+# 324 实测根因（不是"节拍失效"，是**压根没有小时级图节拍**）：
+#   · 生产唯一图落盘路径 = DailyScheduler **每日 03:00** 的 `run_all_analyses()`
+#     → `integrate_call_graph()` → `dump_graph_snapshot()`
+#     ⇒ 11:37 重启后下一次日调度是**次日 03:00**，"12:37 后无新图"是设计如此；
+#   · `interval=3600` 属**派单钩子**（patch_execution_dispatch），与图重建无关
+#     （323 刀6 曾把两者混为一谈，本批订正）；
+#   · 16:26 有 `unresolved_samples_*.jsonl` 无 graph_*.json，是因为 dispatch/ledger
+#     两处直接 `CallGraphAnalyzer().analyze()`——**analyze 会 dump_samples，不会 dump_graph**。
+# 本函数给图重建一个显式 tick 入口：挂既有 60s 轮询，按 `CALL_GRAPH_REBUILD_INTERVAL_SEC`
+# 自节流（默认 3600s；单次全量 AST 实测 ≈16.5s，占空比 ≈0.46%）。
+_M324_GRAPH_REBUILD_TS = 0.0
+
+
+def _graph_rebuild_interval() -> float:
+    """图重建最小间隔（秒）；读不到按 3600s，下限 60s（防误配成 0 打爆 CPU）。"""
+    try:
+        import config
+        return max(60.0, float(getattr(config, "CALL_GRAPH_REBUILD_INTERVAL_SEC", 3600.0)))
+    except Exception as e:
+        _logger.debug("读取 CALL_GRAPH_REBUILD_INTERVAL_SEC 失败，按 3600s: %s: %s",
+                      type(e).__name__, e)
+        return 3600.0
+
+
+def rebuild_graph_snapshot(now: float | None = None, force: bool = False) -> dict:
+    """★324批刀1：按节拍重建并落盘调用图（唯一入口，供 tick 钩子/运维调用）。
+
+    口径：只走既有 `integrate_call_graph()`（同一把尺子），不新造图；
+    落盘失败只留痕不影响节拍；返回值永远带 `status`，不返回 None。
+    """
+    global _M324_GRAPH_REBUILD_TS
+    _now = float(time.time() if now is None else now)
+    _iv = _graph_rebuild_interval()
+    if not force and _M324_GRAPH_REBUILD_TS and (_now - _M324_GRAPH_REBUILD_TS) < _iv:
+        return {"status": "skipped_not_due",
+                "elapsed_sec": round(_now - _M324_GRAPH_REBUILD_TS, 1),
+                "interval_sec": _iv}
+    _M324_GRAPH_REBUILD_TS = _now
+    try:
+        _eng = get_self_awareness_engine()
+        _health = _eng.integrate_call_graph()
+    except Exception as e:
+        _logger.warning("[324刀1] 图重建失败（不影响节拍）: %s: %s",
+                        type(e).__name__, e)
+        return {"status": "error", "error": "%s: %s" % (type(e).__name__, str(e)[:160])}
+    if not _health:
+        _logger.info("[324刀1] 图重建返回空（开关关闭或异常）")
+        return {"status": "empty"}
+    _dump = str(_health.get("graph_dump") or "")
+    _mtime = 0.0
+    if _dump and os.path.isfile(_dump):
+        try:
+            _mtime = float(os.path.getmtime(_dump))
+        except OSError as e:
+            _logger.debug("[324刀1] 图 mtime 读取失败: %s", e)
+    _gfile = os.path.basename(_dump) if _dump else ""
+    try:
+        from nucleus.self_inspector import update_review_graph_identity
+        update_review_graph_identity(graph_file=_gfile, graph_mtime=_mtime,
+                                     source="tick_rebuild")
+    except Exception as e:
+        _logger.debug("[324刀1] 图身份回写失败: %s: %s", type(e).__name__, e)
+    _stats = dict(_health.get("graph_stats") or {})
+    _logger.info("[324刀1] 图重建完成 graph=%s mtime=%.0f edges_total=%s unresolved=%s "
+                 "external=%s 间隔=%.0fs",
+                 _gfile or "-", _mtime, _stats.get("total_calls", "?"),
+                 _stats.get("unresolved_calls", "?"), _stats.get("external_calls", "?"), _iv)
+    return {"status": "rebuilt", "graph_file": _gfile, "graph_mtime": _mtime,
+            "interval_sec": _iv, "stats": _stats}
+
+
+def register_graph_rebuild_tick(scheduler: "object | None" = None) -> str:
+    """把图重建挂入 DailyScheduler 的 tick 钩子（60s 轮询上自节流）。返回钩子名或空串。"""
+    try:
+        _sched = scheduler
+        if _sched is None:
+            from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+            _sched = get_daily_scheduler()
+        if _sched is None:
+            return ""
+        if not hasattr(_sched, "add_tick_hook"):
+            _logger.info("[324刀1] 调度器不支持 tick 钩子 ⇒ 图重建退回每日全量分析")
+            return ""
+        _name = _sched.add_tick_hook("call_graph_rebuild_324_tick",
+                                     rebuild_graph_snapshot)
+        _logger.info("[324刀1] 图重建 tick 钩子已注册 name=%s 间隔=%.0fs",
+                     _name, _graph_rebuild_interval())
+        return str(_name or "")
+    except Exception as e:
+        _logger.warning("[324刀1] 图重建钩子注册失败（不影响启动）: %s: %s",
+                        type(e).__name__, e)
+        return ""
+
+
 #: 审查/统计时应排除的目录名（备份 / 临时 / 缓存）
 _NON_SOURCE_SEGMENTS = ("tmp", "__pycache__", ".git", ".pytest_cache",
                         "node_modules", "venv", "logs", "data")

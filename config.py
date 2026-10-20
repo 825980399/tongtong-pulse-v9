@@ -5930,6 +5930,40 @@ SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 
 # 零行为变化：默认 False 与原 getattr 默认值**完全一致**，登记只为可审计/可对账。
 ENABLE_STRUCTURE_RESCAN = False
 
+# ===== [M324] 324批刀1：CALL_GRAPH_REBUILD_INTERVAL_SEC 键登记（键未登记第五/六例收口）=====
+# 读取点：nucleus/self_awareness/SelfAwarenessEngine.py::_graph_rebuild_interval()
+#         `getattr(config, "CALL_GRAPH_REBUILD_INTERVAL_SEC", 3600.0)`（下限 60s）
+# 语义：调用图**重建节拍**（秒）。此前图只在 DailyScheduler 每日 03:00 全量分析时落盘
+#       ⇒ 重启后活体长期消费旧图、V1（R1 进活体）永远 FAIL；本键让重建挂上 60s tick 自节流。
+# 取值依据：单次全量 AST 实测 16.47s（351 文件/6,830 函数）⇒ 3600s 占空比 ≈0.46%。
+# 零行为变化说明：注册前该键不存在，`getattr` 默认 3600.0 与本次声明值一致；
+#                 钩子注册本身不改任何既有调度时序（图节拍此前根本不存在）。
+CALL_GRAPH_REBUILD_INTERVAL_SEC = 3600.0
+
+# ===== [M324] 324批刀6：键登记收口（残量扫描 32 个未登记键，本批登记其中 3 个本批在用的）=====
+# 扫描口径（可复算）：AST 取 config.py 顶层大写赋值集，对全仓
+#   `getattr(_cfg|config, "KEY", default)` 做差集 ⇒ 527 个被读取键 / 32 个未声明。
+#   **只登记本批读到的 3 个**，其余 28 个列清单移交 325（不擅自批量改配置面）。
+#
+# ① REVIEW_INTAKE_MAX_PER_BATCH —— 读取点：nucleus/evolution/EvolutionLoop.py:274/:299、
+#    nucleus/reasoning/SafeEvolutionExecutor.py::run_runtime_guided_review（324刀2）
+#    语义：review 任务面"每拍 ≤N 条"的硬上限；324起也是 K1 任务面自建规模的唯一口径。
+#    零行为变化：默认 1 与本批前后 getattr 默认值完全一致。
+REVIEW_INTAKE_MAX_PER_BATCH = 1
+#
+# ② RESCAN_MIN_INTERVAL_SEC —— 读取点：nucleus/self_awareness/SelfAwarenessEngine.py:171
+#    (_structure_rescan_interval)；语义：结构变化→图重扫的最小间隔（秒）。
+#    零行为变化：默认 300.0 与 getattr 默认一致；本键**不改变** ENABLE_STRUCTURE_RESCAN
+#    仍为 False 的事实（真重扫仍关，324刀1 走的是新增的独立 tick 节拍）。
+RESCAN_MIN_INTERVAL_SEC = 300.0
+#
+# ③ SEARCH_COOLDOWN_SECONDS —— 读取点：nucleus/LLMDependencyMetrics.py::
+#    dependency_acceptance（324刀4 解释变量兜底读法，主读 config.RUNTIME_PARAMS）。
+#    语义：搜索冷却秒数的**模块级别名**（真源仍是 RUNTIME_PARAMS["search_cooldown_seconds"]
+#    可热加载项，见 3574 行）。设别名只为让"未登记键"清零且不改变热加载路径。
+#    零行为变化：默认 15 与 RUNTIME_PARAMS 初值一致；消费方 P-05 闭环仍改 RUNTIME_PARAMS。
+SEARCH_COOLDOWN_SECONDS = 15
+
 # ===== [M317] 317批：长期支点最小落地（节拍可配 + growth 时间窗）=====
 # 读取点①：nucleus/evolution/patch_execution_dispatch.py::dispatch_on_tick
 #   派单节拍：最小间隔（秒）。默认 86400 = 保留日频；压测档位可调小（如 300/3600）。

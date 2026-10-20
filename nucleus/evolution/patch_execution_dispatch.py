@@ -84,10 +84,15 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
                 "interval_sec": _iv}
     _last_dispatch_ts = _now
     _r = dispatch_runtime_verified_patches(limit=1)
+    # ★324批刀0：日志三拆——"派单动作"不得再被读成"自转成果"
     _module_logger.info(
-        "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs dispatched=%s "
-        "hard_cap=1 blast_cap=1（安全闸未放宽）",
-        _iv, _r.get("dispatched") if isinstance(_r, dict) else "?")
+        "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs selected=%s executed=%s "
+        "applied=%s blocked=%s hard_cap=1 blast_cap=1（安全闸未放宽）",
+        _iv,
+        _r.get("dispatched_selected") if isinstance(_r, dict) else "?",
+        _r.get("dispatched") if isinstance(_r, dict) else "?",
+        _r.get("dispatched_applied") if isinstance(_r, dict) else "?",
+        (_r.get("blocked_reason") or "-") if isinstance(_r, dict) else "?")
     return {"status": "dispatched", "interval_sec": _iv, "result": _r}
 
 #: 全局 framework 桥接（main.py 装配后 set_dispatch_framework 注入）
@@ -472,6 +477,9 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
                 _m, _br)
             continue
         _out.append(_p)
+    # ★324批刀0：拒收分布对外可见（blocked_reason 指认拦截环节的唯一来源）
+    _LAST_TRIAGE_REJ.clear()
+    _LAST_TRIAGE_REJ.update(dict(_rej))
     _out.sort(key=lambda p: (-float(p.get("trust_score", 0) or 0),))
     _module_logger.info(
         "[311刀1] 自动分诊池: 命中 %d 条（拒收 status=%d risk=%d 形态=%d 置信=%d "
@@ -529,6 +537,64 @@ def _sc2_probe(class_name: str = "PulseInnerWorld", reason: str = "") -> dict:
                                type(_e).__name__, _e)
         return {"status": "error", "error": type(_e).__name__}
 
+# ===== ★324批刀0：P-15 派单语义三拆（selected / applied / blocked_reason）=====
+# 语义钉死（实测依据：logs/pulse.log 12:38—17:38 六圈同 id 全 False）：
+#   · 历史 `dispatched` = len(_results) = **已在沙箱执行并回写**的条数
+#     （既非"仅选中"，也非"应用到源码"——sandbox 的 motor.execute 只验证不落源码）
+#   · `_write_back` 失败时**不改 status** ⇒ 同一补丁被每圈重复选中，
+#     于是"dispatched=1 但账本零变化"恒成立：那不是自转成果，是**重复失败循环**
+#   · 故本批补三件：三拆计数 / 失败退出上限 / 拦截环节指认
+_DISPATCH_FAIL_CAP = 2      # 同一补丁累计验证失败达此次数 ⇒ 转人工，不再自动派单
+_M324_TRACE_KEEP = 500      # 派单留痕文件最多保留行数（超限滚动截断，防无界增长）
+
+#: 自动分诊最近一次的拒收分布（供 blocked_reason 指认拦截环节；`select_for_auto_triage` 写）
+_LAST_TRIAGE_REJ: dict = {}
+
+
+def _m324_trace_path() -> str:
+    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(_root, "data", "reports", "patch_dispatch_trace.jsonl")
+
+
+def _m324_append_trace(rec: dict) -> str:
+    """★324批刀0：派单留痕（追加一行 JSON；失败不影响派单主流程）。返回路径或空串。"""
+    _p = _m324_trace_path()
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        with io.open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m324_append_trace", level="warning")
+        return ""
+    return _p
+
+
+def _m324_fail_count(patch: dict) -> int:
+    try:
+        return max(0, int(patch.get("runtime_verify_fail_count", 0) or 0))
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m324_fail_count 非数值按0",
+                   level="debug")
+        return 0
+
+
+def _m324_blocked_reason(patch: dict) -> str:
+    """★324批刀0：该补丁不可自动派单的原因（空串 = 可派）。只读，不改任何字段。"""
+    _fc = _m324_fail_count(patch)
+    if _fc >= _DISPATCH_FAIL_CAP:
+        return "verify_fail_cap(%d>=%d)" % (_fc, _DISPATCH_FAIL_CAP)
+    return ""
+
+
+def _m324_rej_reason() -> str:
+    """★324批刀0：把自动分诊拒收分布压成一句"拦截环节"（按计数从大到小）。"""
+    _items = [(k, int(v)) for k, v in (_LAST_TRIAGE_REJ or {}).items() if int(v or 0) > 0]
+    if not _items:
+        return ""
+    _items.sort(key=lambda kv: (-kv[1], kv[0]))
+    return "triage:" + ",".join("%s=%d" % kv for kv in _items)
+
+
 def dispatch_and_verify(sandbox: Any, patch: dict) -> dict:
     """把补丁 modified_code 路由 sandbox 执行，返回执行结论（不落盘，由调用方回写）。
 
@@ -569,6 +635,12 @@ def _write_back(patch: dict, verdict: dict) -> None:
     }
     if not _ok:
         patch["runtime_verify_failure_reason"] = _err
+        # ★324批刀0：失败必须可退出——否则同一补丁每圈重复选中
+        #   （实测 12:38—17:38 六圈同一 id、结果全 False、账本零变化）
+        patch["runtime_verify_fail_count"] = _m324_fail_count(patch) + 1
+        patch["runtime_verify_last_attempt_at"] = time.time()
+    else:
+        patch["runtime_verify_fail_count"] = 0
 
 
 def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> dict:
@@ -604,13 +676,28 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
             _p["_295_suspect_reason"] = "片段→完整(嵌套def风险)"
             _suspect_n += 1
     _selected = select_patch_for_execution(_hist, limit=limit)
+    _sel_src = "pilot_whitelist"
     if not _selected:
         # ★第311批 刀1：首批试点白名单为空 ⇒ 走自动分诊（高置信低风险，单批仍 ≤1 条）。
         #   顺序不反：白名单是「先证明能跑通」的最窄边界，分诊是它的上位规则，
         #   白名单有料时优先级更高（确定性优先于统计置信）。
         _selected = select_for_auto_triage(_hist, limit=1)
-    _results = []
+        _sel_src = "auto_triage"
+    # ★324批刀0：选中 ≠ 执行 ≠ 有副作用——三拆，且失败超限者转人工
+    _n_selected = len(_selected)
+    _blocked: list = []
+    _dispatchable: list = []
     for _p in _selected:
+        _why = _m324_blocked_reason(_p)
+        if _why:
+            _blocked.append({"patch_id": str(_p.get("id", ""))[:32], "reason": _why})
+            _module_logger.info(
+                "[324刀0] 选中但转人工（不进沙箱）: patch=%s method=%s reason=%s",
+                str(_p.get("id", ""))[:16], str(_p.get("method") or ""), _why)
+            continue
+        _dispatchable.append(_p)
+    _results = []
+    for _p in _dispatchable:
         _v = dispatch_and_verify(_sandbox, _p)
         _write_back(_p, _v)
         _results.append(_v)
@@ -631,8 +718,33 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
                         _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_NODE],
                         _LOCATE_FAIL_COUNTS[LOCATE_FAIL_FILE_MISMATCH],
                         _LOCATE_FAIL_COUNTS[LOCATE_FAIL_NO_FILE])
+    # ★324批刀0：三拆计数（`dispatched` 保留旧口径=已进沙箱执行，兼容既有读法）
+    _applied = sum(1 for _r in _results if isinstance(_r, dict) and _r.get("success"))
+    _blocked_reason = ""
+    if _blocked:
+        _blocked_reason = ";" .join(sorted({str(_b.get("reason") or "").split("(")[0]
+                                            for _b in _blocked}))
+    elif not _n_selected:
+        _blocked_reason = _m324_rej_reason() or "no_candidate"
+    _m324_append_trace({
+        "ts": time.time(),
+        "selected_source": _sel_src,
+        "dispatched_selected": _n_selected,
+        "dispatched_applied": _applied,
+        "dispatched_executed": len(_results),
+        "dispatched_verify_failed": len(_results) - _applied,
+        "blocked_reason": _blocked_reason,
+        "blocked_detail": _blocked[:5],
+        "reswept": len(_rv_cands),
+        "patch_ids": [str((_r or {}).get("patch_id") or "")[:32] for _r in _results],
+    })
     return {"status": "ok", "reswept": len(_rv_cands), "suspect": _suspect_n,
-            "dispatched": len(_results), "results": _results}
+            "dispatched": len(_results), "results": _results,
+            "dispatched_selected": _n_selected,
+            "dispatched_applied": _applied,
+            "dispatched_verify_failed": len(_results) - _applied,
+            "blocked_reason": _blocked_reason,
+            "selected_source": _sel_src}
 
 
 def register_with_daily_schedule(scheduler: Any = None) -> str:

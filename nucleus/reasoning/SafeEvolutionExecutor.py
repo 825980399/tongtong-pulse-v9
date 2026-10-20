@@ -3689,6 +3689,7 @@ class SafeEvolutionExecutor:
         #   ② 报告行  report_id/anomaly_type/**severity**/description/...
         # 只认 severity 会漏掉 13257 条日志行（其中 ERROR 493 条）⇒ 两字段都要认。
         _want = {"ERROR", "CRITICAL", "FATAL", "P0"}
+        _skipped_u = 0
         _lines: list[str] = []
         try:
             with open(_p, encoding="utf-8", errors="ignore") as _f:
@@ -3707,7 +3708,7 @@ class SafeEvolutionExecutor:
             _sev = str(_d.get("severity") or _d.get("level") or "").upper()
             if _sev not in _want:
                 continue
-            _out.append({
+            _it = {
                 "pulse_type": _d.get("anomaly_type") or _d.get("pulse_type") or "?",
                 "severity": _sev,
                 "target": _d.get("target") or "",
@@ -3715,9 +3716,28 @@ class SafeEvolutionExecutor:
                 "file": _d.get("file") or _d.get("path") or "",
                 "method": _d.get("method") or _d.get("funcName") or "",
                 "ts": _d.get("ts_str") or _d.get("ts") or "",
-            })
+            }
+            # ★324批刀2：**可定位性**是任务面硬门槛。
+            #   实测（2026-10-20）：alerts.jsonl 最新段 ERROR/P0 靠前的全是
+            #   `{"severity":"P0","description":"测试P0异常"}` 这类**无 path/funcName**
+            #   的注入样本 ⇒ 喂进去 reviewed 恒 0。那正是"任务面与判据面脱节"的真因，
+            #   不是"子进程看不见世界"。不可定位者跳过并计数，不塞空壳占位。
+            if not (_it["file"] or _it["method"]):
+                _skipped_u += 1
+                continue
+            _out.append(_it)
             if len(_out) >= int(limit):
                 break
+        # ★324批刀2：不可定位样本数留痕（只读计数；不改既有返回语义）
+        try:
+            _st = getattr(SafeEvolutionExecutor, "_m324_taskface_stats", None)
+            if not isinstance(_st, dict):
+                _st = {}
+                SafeEvolutionExecutor._m324_taskface_stats = _st
+            _st["skipped_unlocatable"] = int(_skipped_u)
+            _st["returned"] = len(_out)
+        except Exception as _se:
+            silent_exc(_se, where="SafeEvolutionExecutor._k1_build_task_face 统计", level="warning")
         return _out
 
     @staticmethod
@@ -4205,12 +4225,21 @@ class SafeEvolutionExecutor:
                 "verdict": _verdict,
                 "note": "只读试点；ENABLE_SUBAGENT_RUNNER 仍 False；计数仅主进程聚合"}
 
-    def run_runtime_guided_review(self, self_inspector=None) -> dict[str, Any]:
+    def run_runtime_guided_review(self, self_inspector=None, task_face=None,
+                                  task_face_limit: int | None = None) -> dict[str, Any]:
         """
         ★P2: 运行时引导的定向深度审查。
         采集运行时指标（异常快照/队列积压/重入），若发现异常，
         把「异常现场 + 相关代码 + 相关日志」喂给 LLM 做定向深度审查，
         结果沉淀到验证学习枢纽。
+
+        ★324批刀2（长期12）：**任务面改默认入参**——productive=0 的真因不是"没活干"，
+        而是 `runtime_metrics` 是**进程内模块级单例**，子进程里恒空 ⇒ 恒走 no_anomaly。
+        现在：`task_face=None` 时由本函数按 `REVIEW_INTAKE_MAX_PER_BATCH`（默认1）
+        自建任务面（唯一口径 `_k1_build_task_face`，只读 alerts.jsonl）；
+        **缺陷源优先**——有运行期异常时仍走原路径，任务面只在空窗时补位。
+        红线不动：不写盘、不改台账、不碰 approved/requires_confirmation 迁移，
+        `ENABLE_SUBAGENT_RUNNER` 仍 False（K3 前置未满足）。
         """
         import re as _re
 
@@ -4226,9 +4255,35 @@ class SafeEvolutionExecutor:
         _reentry = _snap.get("reentry_count", 0)
         _hub = get_verification_learning_hub()
 
-        # 触发条件：有异常快照 或 队列积压明显 或 重入发生
-        if not _errors and _queue_depth < 50 and _reentry == 0:
-            return {"status": "no_anomaly", "reviewed": 0, "distilled": 0, "report": []}
+        # ★324批刀2：任务面（显式入参优先；未给则自建，每拍 ≤ REVIEW_INTAKE_MAX_PER_BATCH）
+        _tf_src = "explicit"
+        _task_face = task_face
+        if _task_face is None:
+            _tf_src = "auto:_k1_build_task_face"
+            _lim = task_face_limit
+            if _lim is None:
+                try:
+                    import config as _cfg324
+                    _lim = int(getattr(_cfg324, "REVIEW_INTAKE_MAX_PER_BATCH", 1) or 1)
+                except Exception as _le:
+                    silent_exc(_le, where="SafeEvolutionExecutor.review 读任务面上限", level="warning")
+                    _lim = 1
+            try:
+                _task_face = self._k1_build_task_face(limit=max(1, int(_lim or 1)))
+            except Exception as _tfe:
+                silent_exc(_tfe, where="SafeEvolutionExecutor.review 自建任务面", level="warning")
+                _task_face = []
+        elif not isinstance(_task_face, list):
+            _task_face = []
+            _tf_src = "explicit_invalid"
+        _fed = len(_task_face)
+        _tf_stats: dict = {"fed": _fed, "reviewed": 0, "report": []}
+
+        # 触发条件：有异常快照 或 队列积压明显 或 重入发生 或 **任务面非空**
+        if not _errors and _queue_depth < 50 and _reentry == 0 and not _task_face:
+            return {"status": "no_anomaly", "reviewed": 0, "distilled": 0, "report": [],
+                    "report_count": 0, "task_face_fed": 0, "task_face_source": _tf_src,
+                    "productive": False, "gate": "no_task_face_no_anomaly"}
 
         _reviewed = 0
         _distilled = 0
@@ -4273,7 +4328,20 @@ class SafeEvolutionExecutor:
                 except Exception as e:
                     _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
-        return {"status": "reviewed", "reviewed": _reviewed, "distilled": _distilled, "report": _report}
+        # ★324批刀2：任务面兜底（**缺陷源优先**——有 error 快照时不抢位）
+        if not _errors and _task_face:
+            _tf_stats = self._k1_review_with_task_face(_task_face, self_inspector)
+            _reviewed += int(_tf_stats.get("reviewed", 0) or 0)
+            _report.extend(_tf_stats.get("report") or [])
+        return {"status": "reviewed", "reviewed": _reviewed, "distilled": _distilled,
+                "report": _report,
+                # ★324批刀2：reviewed 与 report 必须**同时报**（防"reviewed>0 但 report=0"形式达标）
+                "report_count": len(_report),
+                "task_face_fed": _fed,
+                "task_face_reviewed": int(_tf_stats.get("reviewed", 0) or 0),
+                "task_face_source": _tf_src,
+                "productive": bool(_reviewed > 0),
+                "gate": ("runtime_metrics" if _errors else "task_face_explicit")}
 
     def execute(self, plans: list[dict[str, Any]],
                 self_inspector=None) -> dict[str, Any]:

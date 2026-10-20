@@ -217,6 +217,111 @@ def _infer_gap_reason(assertion_id: str, verdict: str, gap_reason: str) -> str:
     return ""
 
 
+# ===== ★324批刀3：gap_reason 显式标注（裁判口径 · 防 8/25 误判）=====
+# 烛微324§0-5 实测：120 条里仅 1 条 gap_reason 非空，其余全靠 `_infer_gap_reason()`
+# 按前缀猜；8/25 条 violated **没有 criteria_gap 前缀** ⇒ 被记成 real_violation。
+# 本批口径：**显式 gap_reason 为唯一首选**，缺则 WARNING 留痕一次（每个 assertion_id 一次）；
+# 推断只作兜底，且 `gap_reason_origin` 分列 explicit / inferred / none，判罚一律不改。
+_GAP_EXPLICIT_SEEN: set = set()
+_GAP_MISS_TOTAL = {"miss": 0}
+
+
+def _m324_warn_missing_gap(assertion_id: str, verdict: str, inferred: str) -> bool:
+    """缺显式 gap_reason ⇒ 每个 assertion_id 只告警一次（防刷屏）。返回是否首次。"""
+    _aid = str(assertion_id or "-")
+    if _aid in _GAP_EXPLICIT_SEEN:
+        return False
+    _GAP_EXPLICIT_SEEN.add(_aid)
+    try:
+        _logger.warning(
+            "[324刀3] 断言未显式给 gap_reason ⇒ 按兜底推断落账: id=%s verdict=%s "
+            "inferred=%s（只留痕，不改判罚）", _aid, verdict, inferred or "-")
+    except Exception as e:
+        silent_exc(e, where="expectation_ledger._m324_warn_missing_gap")
+    return True
+
+
+def gap_reason_origin_stats(rows: list | None = None) -> dict:
+    """★324批刀3：显式 / 兜底推断 分列统计（喂验收与报表，不改任何既有读数）。
+
+    历史行（324 前）没有 `gap_reason_origin` ⇒ 记 `legacy`，并按 gap_reason 是否为空
+    再分 `legacy_explicit` / `legacy_inferred`，避免把旧账混进新口径。
+    """
+    _c = {"explicit": 0, "inferred": 0, "none": 0, "legacy_explicit": 0,
+          "legacy_inferred": 0, "unknown": 0}
+    _reasons: dict = {}
+    for _r in (rows or []):
+        if not isinstance(_r, dict):
+            continue
+        _o = str(_r.get("gap_reason_origin") or "")
+        _g = str(_r.get("gap_reason") or "")
+        if not _o:
+            _o = "legacy_explicit" if _g else "legacy_inferred"
+        if _o not in _c:
+            _o = "unknown"
+        _c[_o] += 1
+        if _g:
+            _reasons[_g] = int(_reasons.get(_g, 0)) + 1
+    _new = _c["explicit"] + _c["inferred"] + _c["none"]
+    return {
+        "counts": _c,
+        "new_rows": _new,
+        "explicit_rate_on_new": (round(_c["explicit"] / float(_new), 4) if _new else None),
+        "gap_reason_dist": dict(sorted(_reasons.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "warn_missing_total": int(_GAP_MISS_TOTAL.get("miss", 0)),
+        "note": "显式=调用方传入；inferred=按前缀兜底推断；none=不可推断（unverifiable 以外）",
+    }
+
+
+def audit_violated_gap_ownership(rows: list | None = None,
+                                 sample: int = 30) -> dict:
+    """★324批刀3：8/25 风险面复核——**violated 且靠推断记 real_violation** 的条目点名。
+
+    只读：不写盘、不改台账。返回 `risky` 计数与抽样 id，供人工复核归属
+    （真违规 / 口径差 / 断言写错）。
+    """
+    _risky: list = []
+    _stat = {"violated_total": 0, "violated_explicit": 0, "violated_inferred": 0,
+             "violated_real_inferred": 0, "violated_criteria_gap_inferred": 0,
+             "violated_gap_empty": 0}
+    for _r in (rows or []):
+        if not isinstance(_r, dict) or str(_r.get("verdict") or "") != "violated":
+            continue
+        _stat["violated_total"] += 1
+        _o = str(_r.get("gap_reason_origin") or "")
+        _g = str(_r.get("gap_reason") or "")
+        if _o == "explicit":
+            _stat["violated_explicit"] += 1
+            continue
+        _stat["violated_inferred"] += 1
+        if not _g:
+            # ★324批刀3：**gap_reason 为空**的 violated 才是 8/25 风险面本体——
+            #   既无显式口径也无前缀可推 ⇒ "真违规"与"口径差"在数据上不可区分。
+            #   旧实现只看 real_violation 会把这一类漏掉（实测 25/25 全落这里）。
+            _stat["violated_gap_empty"] += 1
+            if len(_risky) < max(0, int(sample)):
+                _risky.append({"assertion_id": str(_r.get("assertion_id") or ""),
+                               "gap_reason": "", "origin": _o or "legacy",
+                               "why": "gap_reason_empty：真违规/口径差不可区分",
+                               "criteria_version": str(_r.get("criteria_version") or "")})
+        elif _g == "real_violation":
+            _stat["violated_real_inferred"] += 1
+            if len(_risky) < max(0, int(sample)):
+                _risky.append({"assertion_id": str(_r.get("assertion_id") or ""),
+                               "gap_reason": _g, "origin": _o or "legacy",
+                               "criteria_version": str(_r.get("criteria_version") or "")})
+        elif _g == "criteria_gap":
+            _stat["violated_criteria_gap_inferred"] += 1
+    _risky_n = _stat["violated_real_inferred"] + _stat["violated_gap_empty"]
+    return {
+        "stat": _stat,
+        "risky_sample": _risky,
+        "risky_count": _risky_n,
+        "verdict": ("需要人工复核归属" if _risky_n else "无风险面"),
+        "rule": "violated 且 origin!=explicit 且 gap_reason==real_violation ⇒ 记可疑，不直接判真违规",
+    }
+
+
 def _norm_source(source: str | None) -> str:
     """★320批刀0/刀3：来源标记归一（``live`` 活体 / ``verification`` 验证运行）。"""
     _s = str(source or "live").strip().lower()
@@ -231,6 +336,13 @@ def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect:
     """构造一条 ledger 记录（统一 schema）。"""
     # ★321批刀3：前缀校验留痕（缺前缀⇒ WARNING；**不改 verdict / gap_reason**）
     _m321_check_prefix(assertion_id, gap_reason)
+    # ★324批刀3：显式 gap_reason 优先；缺则兜底推断 + 单独计数（判罚一律不改）
+    _g_origin = "explicit" if str(gap_reason or "").strip() else "none"
+    _g_final = _infer_gap_reason(assertion_id, verdict, gap_reason)
+    if _g_origin == "none":
+        _GAP_MISS_TOTAL["miss"] = int(_GAP_MISS_TOTAL.get("miss", 0)) + 1
+        _g_origin = "inferred" if _g_final else "none"
+        _m324_warn_missing_gap(assertion_id, verdict, _g_final)
     return {
         "assertion_id": assertion_id,
         "statement": statement,
@@ -242,7 +354,9 @@ def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect:
         "verdict": verdict,
         # ★320批刀1：原实现 `gap_reason if verdict == "unverifiable" else ""` 把
         # violated 的 gap_reason **直接清空**（烛微320§0-3 的 24/25 空值即此因）。
-        "gap_reason": _infer_gap_reason(assertion_id, verdict, gap_reason),
+        "gap_reason": _g_final,
+        # ★324批刀3：口径来源分列（explicit / inferred / none）——报表与验收可直接读
+        "gap_reason_origin": _g_origin,
         "criteria_version": criteria_version,
         "graph_file": graph_file,
     }
