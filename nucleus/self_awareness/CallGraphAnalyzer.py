@@ -37,6 +37,7 @@ import os
 import time
 from typing import Any
 
+from nucleus._silent_except import silent_exc  # ★326批刀5：A5 异常口径与全项目一致
 from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
@@ -1901,7 +1902,8 @@ class CallGraphAnalyzer:
 
     def mastery_assertion_check(self, class_name="PulseInnerWorld",
                                 manual_method_count=None,
-                                mask: dict | None = None) -> dict:
+                                mask: dict | None = None,
+                                include_a5: bool = True) -> dict:
         """★316批刀1：掌握度结构断言（只跑断言、不跑检测器）。
 
         **不进 issues、不进趋势门禁**（守 307—312 的 info/统计口径不污染问题清单）。
@@ -1937,6 +1939,14 @@ class CallGraphAnalyzer:
             _gap = abs(int(manual_method_count) - _methods)
             _a4 = {"manual": int(manual_method_count), "graph": _methods,
                    "gap": _gap, "status": "passed" if _gap == 0 else "failed"}
+        _a5 = {"assertion": "A5", "verdict": "SKIPPED", "reason": "include_a5=False"}
+        if include_a5:
+            try:
+                _a5 = self.a5_growth_intake_assertion()
+            except Exception as _a5e:
+                silent_exc(_a5e, where="CallGraphAnalyzer::mastery_assertion_check A5")
+                _a5 = {"assertion": "A5", "verdict": "UNAVAILABLE",
+                       "reason": "异常: %s" % type(_a5e).__name__}
         _failed = _a1_failed + (1 if _a4["status"] == "failed" else 0)
         _unverifiable = 1 if _a4["status"] == "unverifiable" else 0
         _passed = max(0, _methods - _failed)
@@ -1953,7 +1963,139 @@ class CallGraphAnalyzer:
                            "zero_in_degree_sample": _zero_in[:50]},
             "a4_coverage": _a4,
             "cross_cluster_calls": _cv.get("cross_cluster_calls", 0),
+            # ★326批刀5：A5 需求承接（**单独一栏**，不进 total/passed/failed——
+            #   它是"需求→能力"链路的断言，不是类簇结构断言，混进去会污染 A1/A4 读数
+            #   与 SC-2 回归基线）
+            "a5_intake": _a5,
         }
+
+    # ===== ★326批刀5：A5 需求承接断言（自进"变成能力"闭环的缺口）=====
+    #: A5 的窗口拍数（325刀0 入队规格：每拍≤1 条；默认 5 拍内须有承接或作废）
+    A5_WINDOW_TICKS = 5
+    #: 视为"显式作废"的补丁状态（承接侧的状态机取值）
+    A5_VOID_STATUSES = frozenset({
+        "cancelled", "canceled", "expired", "obsolete", "rejected",
+        "archived", "withdrawn",
+    })
+
+    def a5_growth_intake_assertion(self, n_window: int | None = None,
+                                   root: str | None = None,
+                                   journal_path: str | None = None,
+                                   patch_history_path: str | None = None,
+                                   handbook_refs: list | None = None,
+                                   tick_now: int | None = None) -> dict:
+        """A5：**需求驱动条目须在 N 拍内被承接（被摘要引用）或显式作废**。
+
+        为什么加这条断言：需求源（growth_need）入队后，台账侧只有"入了几条"，
+        没有任何断言回答"这些条目后来怎么了"——A1/A4 只管类簇结构与覆盖率，
+        "需求→能力"这一段在断言族里是空的（烛微326 §3-维度2）。
+
+        数据源（都可落盘、可复算）：
+          * `data/reports/evolution/intake_journal.jsonl`（326刀5 新增：逐拍一行，
+            带本拍入队条目 key/file/method）—— **主源**；
+          * `data/patches/patch_history.json`——承接落地的证据（同 file+method 出现
+            即视为被承接；状态 ∈ `A5_VOID_STATUSES` 视为显式作废）；
+          * `handbook_refs`——**可选**入参：调用方在进程内采集到
+            `organ_handbook_updated` 事件后把条目键传进来（该事件不落盘，
+            不传就不参与判据，绝不把"没采到"当"没承接"）。
+
+        红线（与 316刀1 一致）：只产计数与结论，**不进 issues、不进趋势门禁**。
+
+        Returns: 计数 + 逐条 `rows`（key/tick/age/status/basis）+ `verdict`。
+          无台账 ⇒ `UNAVAILABLE`（不填 0）。
+        """
+        import json as _json
+        _win = int(self.A5_WINDOW_TICKS if n_window is None else n_window)
+        _root = root or os.getcwd()
+        _jp = journal_path or os.path.join(_root, "data", "reports", "evolution",
+                                           "intake_journal.jsonl")
+        _hp = patch_history_path or os.path.join(_root, "data", "patches",
+                                                 "patch_history.json")
+        _out = {"assertion": "A5", "n_window": _win, "journal": _jp,
+                "journal_exists": os.path.isfile(_jp), "items": 0,
+                "referenced": 0, "voided": 0, "overdue_failed": 0, "pending": 0,
+                "tick_now": None, "verdict": "UNAVAILABLE", "rows": []}
+        if not _out["journal_exists"]:
+            _out["reason"] = ("无逐拍台账（326刀5 起才落）⇒ 承接情况不可判定，"
+                             "不填 0、不当作通过")
+            return _out
+        _entries = []
+        try:
+            with open(_jp, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _entries.append(_json.loads(_line))
+                    except (ValueError, TypeError):
+                        continue
+        except OSError as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账")
+            _out["reason"] = "台账读取失败: %s" % type(_e).__name__
+            return _out
+        _max_tick = 0
+        for _e in _entries:
+            try:
+                _max_tick = max(_max_tick, int(_e.get("tick", 0) or 0))
+            except (TypeError, ValueError):
+                continue
+        _out["tick_now"] = int(tick_now if tick_now is not None else _max_tick)
+        # 承接证据：patch_history 的 (file, method) → status
+        _landed: dict = {}
+        try:
+            if os.path.isfile(_hp):
+                _h = _json.load(open(_hp, encoding="utf-8"))
+                if isinstance(_h, dict):
+                    _h = _h.get("patches") or []
+                for _p in (_h or []):
+                    if not isinstance(_p, dict):
+                        continue
+                    _k = "%s::%s" % (str(_p.get("file") or ""), str(_p.get("method") or ""))
+                    _landed[_k] = str(_p.get("status") or "")
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账")
+        _refs = set(handbook_refs or [])
+        for _e in _entries:
+            for _it in (_e.get("growth_items") or []):
+                if not isinstance(_it, dict):
+                    continue
+                _out["items"] += 1
+                _key = str(_it.get("key") or "")
+                _t = int(_e.get("tick", 0) or 0)
+                _age = max(0, int(_out["tick_now"]) - _t)
+                _status, _basis = "pending", ""
+                if _key in _refs or ("%s::%s" % (_it.get("file") or "",
+                                                 _it.get("method") or "")) in _refs:
+                    _status, _basis = "referenced", "handbook organ_handbook_updated 命中"
+                elif _key in _landed:
+                    if _landed[_key] in self.A5_VOID_STATUSES:
+                        _status, _basis = "voided", "patch_history 状态=%s" % _landed[_key]
+                    else:
+                        _status, _basis = "referenced", "patch_history 已承接(状态=%s)" % _landed[_key]
+                elif _age >= _win:
+                    _status, _basis = "overdue", "超 %d 拍仍无承接/作废" % _age
+                _out["rows"].append({"key": _key, "tick": _t, "age": _age,
+                                     "status": _status, "basis": _basis})
+                if _status == "referenced":
+                    _out["referenced"] += 1
+                elif _status == "voided":
+                    _out["voided"] += 1
+                elif _status == "overdue":
+                    _out["overdue_failed"] += 1
+                else:
+                    _out["pending"] += 1
+        if not _out["items"]:
+            _out["reason"] = "台账存在但零需求条目 ⇒ 无从判定（不填 0 冒充通过）"
+            return _out
+        _out["verdict"] = "FAIL" if _out["overdue_failed"] else "PASS"
+        _logger.info(
+            "[A5] 需求承接断言 items=%d referenced=%d voided=%d overdue=%d pending=%d "
+            "window=%d tick_now=%s verdict=%s",
+            _out["items"], _out["referenced"], _out["voided"],
+            _out["overdue_failed"], _out["pending"], _win, _out["tick_now"],
+            _out["verdict"])
+        return _out
 
     def analyze_health(self, call_graph: dict | None = None) -> dict:
         """基于调用图计算"代码结构健康度"（5 维度 + 综合评分）。

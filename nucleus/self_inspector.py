@@ -471,7 +471,8 @@ class SelfInspector(SilentLogMixin):
         try:
             from nucleus.mnemosyne.verification_learning_hub import get_verification_learning_hub
             _hub = get_verification_learning_hub()
-            _hub.register_applier("self_inspector", self.absorb_growth_rules)
+            _hub.register_applier("self_inspector", self.absorb_growth_rules,
+                                  tag="self_inspector_absorb")
             # ★315批刀2-B：声明别名——code_learner 蒸馏出的规则也回流 self_inspector
             _hub.register_applier_alias("self_inspector", "code_learner")
             # ★316批刀4：hub organ 约定——growth 料写 organ="潜意识"，别名归位到已注册的
@@ -5207,6 +5208,9 @@ class SelfInspector(SilentLogMixin):
                 "graph_mtime": _gidx.get("graph_mtime", 0.0),
                 "criteria_version": self._DEAD_CODE_CRITERIA_VERSION,
                 "resolve_rate": round(_resolve_rate * 100.0, 2),
+                # ★326批刀2：hard 池同口径归零（silent 档 = 本轮没判，不是"没有 hard"）
+                "hard_total": 0, "hard_items": [], "hard_pool_capped": False,
+                "o3_n_target": _O3_N_TARGET, "o3_n_source": _O3_N_SOURCE,
                 "samples": [], "items": [], "as_of": time.time()})
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
@@ -5225,6 +5229,11 @@ class SelfInspector(SilentLogMixin):
         # ★第311批 刀1：明细（≤_M311_MAX_ITEMS 条）留存，供受控入料口取用——
         #   否则入料侧要重跑一次 9 分钟级的 dead_code 检测才能拿到候选。
         _review_items: list[dict] = []
+        # ★326批刀2：hard 档候选池（抽验靶子）。**总数与池子分开记**——
+        #   池子有上限（_O3_HARD_POOL_MAX），总数没有；混成一个数就会把
+        #   "抽验只覆盖池内" 说成 "抽验覆盖全部"。
+        _hard_items: list[dict] = []
+        _hard_total = 0
         if _review_only:
             _module_logger.info(
                 "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）处于中间档 [%.0f%%, %.0f%%)"
@@ -5275,6 +5284,11 @@ class SelfInspector(SilentLogMixin):
                 _tier = "infer-only"
             else:
                 _tier = "hard"          # 三层全无入边 ⇒ 判死依据是「硬」的
+                # ★326批刀2：入 hard 候选池（供 O3 抽验 A；只收集不判罚）
+                _hard_total += 1
+                if len(_hard_items) < _O3_HARD_POOL_MAX:
+                    _hard_items.append({"file": _f_norm, "method": _name,
+                                        "line": _defs[0][1], "evidence_tier": "hard"})
             if _review_only or _tier == "soft":
                 # ★第311批 刀1：受控入料口（单批硬上限 1 条 + 生命周期名/核心文件转人工）。
                 #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
@@ -5337,6 +5351,11 @@ class SelfInspector(SilentLogMixin):
             "high_confidence": bool(_high_conf),
             "samples": list(_review_samples),
             "items": list(_review_items),
+            # ★326批刀2：O3 抽验靶子（hard 池 + 总数口径，二者不可互换）
+            "hard_total": int(_hard_total),
+            "hard_items": list(_hard_items),
+            "hard_pool_capped": bool(_hard_total > len(_hard_items)),
+            "o3_n_target": _O3_N_TARGET, "o3_n_source": _O3_N_SOURCE,
             "as_of": time.time()})
         if _review_count:
             _module_logger.info(
@@ -5633,6 +5652,16 @@ _DEAD_CODE_REVIEW_STATS: dict = {
 # 实测 hard=548 ≫ N(50~100) ⇒ 先要"看得见构成"，再谈降量；降法**不由本模块裁决**，
 # 本模块只给数据（谁占大头、每类可消多少）。
 #: 抽验通过线（20 条里误判不超过 2 条）
+# ★326批刀2（小林裁决①）：**O3 的 N 口径钉死**。
+#   N = **`evidence_tier == "hard"` 的候选条数**（三层 static/byname/infer 皆无入边
+#   且图外无任何证据的那一档）。**不是**判死总数、**不是**待复核清单条数、
+#   更不是"解析率 63% 那把宽尺子"推算出来的数。
+#   现状 182（325 实测）→ 目标 ≤100。任何"到没到 N"的结论只能用这个口径复算。
+_O3_N_TARGET = 100
+_O3_N_SOURCE = "evidence_tier=hard（三层皆无入边且图外无证据）"
+#: hard 档候选池留存上限（抽验靶子；>池上限时抽验只代表池内，须在结果里标注）
+_O3_HARD_POOL_MAX = 1000
+
 _O3_MISJUDGE_LINE = 0.10
 #: 候选数上限建议（小林：N=50—100）
 _O3_CANDIDATE_MAX = 100
@@ -5773,9 +5802,16 @@ def sample_verify_hard_candidates(k: int = 20, items=None, seed: int = 325,
     这正是"不可把没测当没病"的边界，只能转人工，不能维持判死。
     """
     import random as _random
-    _pool = [dict(_r) for _r in (items or []) if isinstance(_r, dict)
+    # ★326批刀2：`items=None` 时读**活体 hard 池**（判死主循环收集，326 起才有）。
+    #   此前默认读 `_DEAD_CODE_REVIEW_STATS["items"]`（只装待复核明细、且封顶 20 条
+    #   ⇒ hard 档结构性抽不到）⇒ 抽验恒 UNAVAILABLE，等于没有尺子。
+    _src = "injected"
+    _pool_raw = items
+    if _pool_raw is None:
+        _pool_raw = list(_DEAD_CODE_REVIEW_STATS.get("hard_items") or [])
+        _src = "live_hard_pool"
+    _pool = [dict(_r) for _r in (_pool_raw or []) if isinstance(_r, dict)
              and str(_r.get("evidence_tier") or "") == "hard"]
-    _src = "injected" if items is not None else "live_stats"
     if not _pool:
         return {"ok": False,
                 "reason": "unavailable：当前无 hard 档候选（活体 silent 档/未跑判死）",
@@ -5806,6 +5842,10 @@ def sample_verify_hard_candidates(k: int = 20, items=None, seed: int = 325,
             "misjudge_rate": (round(_rate, 4) if _rate is not None else None),
             "line": _O3_MISJUDGE_LINE, "verdict": ("PASS" if _ok else "FAIL"),
             "source": _src, "probe_index": bool(_M325_NAME_INDEX.get("ok")),
+            # ★326批刀2：抽验只代表**池内**；池有上限时必须在结论旁标出来
+            "hard_total": int(_DEAD_CODE_REVIEW_STATS.get("hard_total", 0) or 0),
+            "pool_capped": bool(_DEAD_CODE_REVIEW_STATS.get("hard_pool_capped")),
+            "n_source": _O3_N_SOURCE,
             "rows": _rows}
 
 
@@ -5814,6 +5854,12 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
 
     输出每类：`n`（条数）、`reduction_path`（可消做法）、`samples`，
     用于回答"548 → N 能不能到、靠哪几类到"。
+
+    ★326批刀2（小林裁决①）**口径钉死**：
+      * **N = `evidence_tier == "hard"` 的候选条数**，目标 `_O3_N_TARGET = 100`
+        （325 实测 hard=182 ⇒ 需消 82 条）。N **不含**软档/待复核清单/判死总数。
+      * `548` 是**判死总数**（含 soft 降级），不是 N —— 两个数不可互换。
+      * 本函数只给"每类能消多少"，**降法仍由星轨裁**（B/C/D 见 325 报告）。
     """
     _hard = [dict(_r) for _r in (items or []) if isinstance(_r, dict)
              and str(_r.get("evidence_tier") or "") == "hard"]
@@ -5846,9 +5892,158 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
     _removable = sum(v["n"] for k, v in _cats.items() if k != "no_graph_signal_at_all")
     return {"ok": True, "hard_total": _total, "removable_if_all_moved": _removable,
             "residual_hard": _total - _removable, "target_max": _O3_CANDIDATE_MAX,
+            # ★326批刀2：N 口径随结果一起返回（谁读谁复算得到同一个数）
+            "n_target": _O3_N_TARGET, "n_source": _O3_N_SOURCE,
+            "needs_reduction": max(0, _total - _O3_N_TARGET),
             "meets_target": (_total - _removable) <= _O3_CANDIDATE_MAX,
             "cats": _out,
             "note": "只给数据与路径；降哪几类、是否降，由星轨+小林裁决（本模块不代判）"}
+
+
+def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
+                         project_root: str | None = None,
+                         hard_total_baseline: int | None = None,
+                         drift_line: float = 0.2) -> dict:
+    """★326批刀2：O3 开闸报告（**N=100 口径 + A 抽验先跑 + B/C 降量**）。
+
+    口径（小林裁决①，写死不可换）：
+      * **N = evidence_tier hard 档候选数**，目标 `_O3_N_TARGET = 100`（当前 182 ⇒ 差 82）；
+      * `548` 是判死总数（含 soft 降级），**不是 N**；
+      * 不用宽尺子（解析率）代替硬档读数。
+
+    通过线：A 抽验**误判率 ≤ 10%** ⇒ 182 可直接开闸（无需降量）；
+    误判率 > 10% ⇒ 给 B/C 降量清单（按各类可消量 + 风险），**降法仍由星轨裁**。
+
+    `min_graph_mtime`：重启时刻（由《重启验证执行单》提供）。判据是
+    **图 mtime ≥ 重启时刻** 才算"重启后新图"；没给/没到 ⇒ `official_verdict`
+    如实记 `UNAVAILABLE`（**不填 0、不伪造读数**），开闸顺延。
+
+    `hard_total_baseline`：历史 N 基数（如 325 报的 182）。给了就做**漂移检测**：
+    实测 hard_total 与基线相差超过 `drift_line`（默认 20%）⇒ 记 blocker
+    `N基数漂移`。为什么要这个闸：N 都定不下来，"182→100"这种话就没有意义，
+    不许拿一个复算不出来的基数去谈降量。
+    """
+    import time as _t
+    _s = dict(_DEAD_CODE_REVIEW_STATS)
+    _items = list(_s.get("hard_items") or [])
+    _hard_total = int(_s.get("hard_total", 0) or 0)
+    _dist = evidence_tier_distribution()
+    _rep = {
+        "n_target": _O3_N_TARGET,
+        "n_source": _O3_N_SOURCE,
+        "hard_total": _hard_total,
+        "hard_pool": len(_items),
+        "hard_pool_capped": bool(_s.get("hard_pool_capped")),
+        "tier_dist": _dist,
+        "tier_lines": format_evidence_tier_dist(),
+        "graph": {"file": str(_s.get("graph_file") or ""),
+                  "mtime": float(_s.get("graph_mtime") or 0.0),
+                  "mtime_str": (_t.strftime("%Y-%m-%d %H:%M:%S",
+                                            _t.localtime(float(_s.get("graph_mtime") or 0.0)))
+                                if _s.get("graph_mtime") else "unavailable"),
+                  "mode": str(_s.get("mode") or ""),
+                  "resolve_rate": _s.get("resolve_rate")},
+        "min_graph_mtime": (float(min_graph_mtime) if min_graph_mtime else None),
+        "criteria_version": str(_s.get("criteria_version") or ""),
+        "hard_total_baseline": (int(hard_total_baseline)
+                                if hard_total_baseline is not None else None),
+        "as_of": _t.time(),
+    }
+    # ★326批刀2：N 基数漂移（复算不出来就别谈"182→100"）
+    if hard_total_baseline is not None:
+        _base = max(1, int(hard_total_baseline))
+        _drift = abs(_hard_total - _base) / float(_base)
+        _rep["hard_total_drift"] = round(_drift, 4)
+        _rep["hard_total_drift_line"] = float(drift_line)
+        _rep["hard_total_drift_exceeded"] = bool(_drift > float(drift_line))
+    else:
+        _rep["hard_total_drift"] = None
+        _rep["hard_total_drift_exceeded"] = False
+    # ---- 重启后新图判定（判据只认 mtime，不认"我以为重启了"）----
+    _gm = float(_s.get("graph_mtime") or 0.0)
+    if not min_graph_mtime:
+        _rep["post_restart_graph"] = None
+        _rep["post_restart_reason"] = ("未提供重启时刻 ⇒ 无法判定是否重启后新图"
+                                       "（由重启验证执行单传 min_graph_mtime）")
+    else:
+        _rep["post_restart_graph"] = bool(_gm >= float(min_graph_mtime))
+        _rep["post_restart_reason"] = ("图 mtime %s ≥ 重启时刻 %s"
+                                       % (_rep["graph"]["mtime_str"],
+                                          _t.strftime("%Y-%m-%d %H:%M:%S",
+                                                      _t.localtime(float(min_graph_mtime))))
+                                       ) if _rep["post_restart_graph"] else (
+            "图 mtime %s < 重启时刻 ⇒ 仍是旧图" % _rep["graph"]["mtime_str"])
+    # ---- A 抽验（先跑，看清质量再谈降量）----
+    if _hard_total <= 0:
+        _rep["sample"] = {"ok": False, "verdict": "UNAVAILABLE",
+                          "reason": "当前无 hard 档候选（活体未判死/未跑判死）",
+                          "n_source": _O3_N_SOURCE}
+    else:
+        _rep["sample"] = sample_verify_hard_candidates(k=k, project_root=project_root)
+    _rep["reduction"] = hard_candidate_reduction_analysis(
+        items=_items if _items else None, project_root=project_root)
+    # ---- B/C 降量选项（只算可消量与风险，不代选）----
+    _cats = {c.get("cat"): int(c.get("n") or 0) for c in (_rep["reduction"].get("cats") or [])}
+    _b_n = sum(_cats.get(x, 0) for x in _O3_PROBE_KINDS)
+    _c_n = sum(1 for _i in _items
+               if str(_i.get("method") or "").startswith("_")
+               and not str(_i.get("method") or "").startswith("__"))
+    _rep["options"] = {
+        "A": {"name": "直接开闸（误判 ≤10% 即用）",
+              "candidate_reduction": 0,
+              "risk": "抽验误判率超线则不许用",
+              "sample_verdict": (_rep["sample"] or {}).get("verdict")},
+        "B": {"name": "四类移 soft（string_ref/protocol_name/test_ref/attr_bound）",
+              "candidate_reduction": _b_n,
+              "residual_hard": max(0, _hard_total - _b_n),
+              "risk": "移出的若不真死 ⇒ 死码留活，属「漏判」不是「误判」",
+              "meets_n": max(0, _hard_total - _b_n) <= _O3_N_TARGET},
+        "C": {"name": "辅助函数类（下划线开头私有函数）单独归一类、不判死",
+              "candidate_reduction": _c_n,
+              # ★326实测：判死扫描在**采集期**就跳过 `_`/`__` 开头的方法名
+              #  （`_detect_dead_code` 的 `if _name.startswith(('_', '__')): continue`）
+              #  ⇒ C 在本扫描口径下结构性为 0，不是"没消掉"而是"本来就不在池里"。
+              "note": "C 结构性为 0：采集期已排除 `_`/`__` 开头方法（325 报告对 C 的估计作废）",
+              "residual_hard": max(0, _hard_total - _c_n),
+              "risk": "私有函数也可能真是死码；单独归类后仍需人工复核",
+              "meets_n": max(0, _hard_total - _c_n) <= _O3_N_TARGET},
+    }
+    # ---- 官方结论：只认"重启后新图 + 池不截断"----
+    _blockers = []
+    if _rep.get("post_restart_graph") is not True:
+        _blockers.append("非重启后新图")
+    if _rep["sample"].get("verdict") == "UNAVAILABLE":
+        _blockers.append("抽验不可用")
+    if _rep.get("hard_pool_capped"):
+        _blockers.append("hard 池被上限截断（抽验只代表池内）")
+    if _rep.get("hard_total_drift_exceeded"):
+        _blockers.append("N基数漂移（实测 %d vs 基线 %s，超 %.0f%%）"
+                         % (_hard_total, _rep.get("hard_total_baseline"),
+                            float(drift_line) * 100))
+    if _blockers:
+        _rep["official_verdict"] = "UNAVAILABLE"
+        _rep["official_reason"] = "、".join(_blockers) + " ⇒ 开闸顺延（不填 0）"
+    else:
+        _rep["official_verdict"] = str(_rep["sample"].get("verdict"))
+        _rep["official_reason"] = ("抽验误判率 %s（线 %.0f%%）" % (
+            _rep["sample"].get("misjudge_rate"), _O3_MISJUDGE_LINE * 100))
+    # ---- 与 325刀5 的三字段衔接（同一实现，不抄第二份）----
+    try:
+        from tools.stress.collect_stress_baseline import m325_open_gate_fields as _ogf
+        _rep["open_gate_fields"] = _ogf(project_root)
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::o3_open_gate_report open_gate_fields",
+                   level="warning")
+        _rep["open_gate_fields"] = {"evidence_tier_dist": None,
+                                    "evidence_tier_src": "unavailable"}
+    _module_logger.info(
+        "[326刀2][O3开闸] N口径=%s target=%d hard_total=%d pool=%d capped=%s "
+        "sample=%s misjudge=%s official=%s reason=%s",
+        _O3_N_SOURCE, _O3_N_TARGET, _hard_total, len(_items),
+        _rep["hard_pool_capped"], _rep["sample"].get("verdict"),
+        _rep["sample"].get("misjudge_rate"), _rep["official_verdict"],
+        _rep["official_reason"])
+    return _rep
 
 
 def get_dead_code_review_stats() -> dict:

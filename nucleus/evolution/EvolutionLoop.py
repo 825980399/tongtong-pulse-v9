@@ -49,6 +49,90 @@ _GROWTH_INTAKE_STATS: dict = {
 _M325_INTAKE_SUMMARY_REL = os.path.join(
     "data", "reports", "evolution", "intake_summary_latest.json")
 
+# ===== ★326批刀5：需求入队**逐拍台账**（A5 断言的唯一数据源）=====
+# 为什么必须新增：325刀0 只落"最新一拍的汇总计数"，**没有条目身份**⇒
+#   "某条需求驱动条目在 N 拍内是否被承接/作废"在数据上根本无法判定，
+#   A5 只能写成"永远 UNAVAILABLE"。故本批补一个 append-only 台账：
+#   每拍一行，行内带本拍入队条目明细（key/file/method/message）与 tick 序。
+_M326_INTAKE_JOURNAL_REL = os.path.join(
+    "data", "reports", "evolution", "intake_journal.jsonl")
+#: 拍序计数器（进程内；重启后由台账里最大 tick 续号，绝不复用旧号）
+_GROWTH_INTAKE_TICKS: dict = {"ticks": 0}
+
+
+def _m326_intake_journal_path(root: str | None = None) -> str:
+    return os.path.join(root or os.getcwd(), _M326_INTAKE_JOURNAL_REL)
+
+
+def _m326_item_key(item: dict) -> str:
+    """需求条目身份键：优先 file::method（可比对 patch_history），退化为 message 前缀。"""
+    _f = str((item or {}).get("file") or "").strip()
+    _m = str((item or {}).get("method") or "").strip()
+    if _f or _m:
+        return "%s::%s" % (_f, _m)
+    _msg = str((item or {}).get("message") or "").strip()
+    return "msg::" + _msg[:80]
+
+
+def _m326_next_tick(root: str | None = None) -> int:
+    """取下一拍号：进程内计数 + 台账最大值 取大者 +1（重启后接续，不回头）。"""
+    _last = 0
+    try:
+        _p = _m326_intake_journal_path(root)
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        import json as _json
+                        _last = max(_last, int((_json.loads(_line) or {}).get("tick", 0) or 0))
+                    except (ValueError, TypeError):
+                        continue
+    except OSError as _e:
+        silent_exc(_e, where="EvolutionLoop::_m326_next_tick", level="debug")
+    _cur = max(int(_GROWTH_INTAKE_TICKS.get("ticks", 0)), _last)
+    _GROWTH_INTAKE_TICKS["ticks"] = _cur + 1
+    return _cur + 1
+
+
+def _m326_append_intake_journal(rec: dict, root: str | None = None) -> str:
+    """追加一行入队台账（失败只留痕，绝不影响发现池）。返回路径或空串。"""
+    _p = _m326_intake_journal_path(root)
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        import json as _json
+        with open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionLoop::_m326_append_intake_journal", level="warning")
+        return ""
+    return _p
+
+
+def get_intake_journal_stats(root: str | None = None) -> dict:
+    """★326批刀5：台账读数（只读），供 A5 断言与日报取数。"""
+    _p = _m326_intake_journal_path(root)
+    _out = {"path": _p, "exists": os.path.isfile(_p), "ticks": 0, "lines": 0,
+            "growth_items": 0}
+    try:
+        if _out["exists"]:
+            import json as _json
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    _out["lines"] += 1
+                    _d = _json.loads(_line)
+                    _out["ticks"] = max(_out["ticks"], int(_d.get("tick", 0) or 0))
+                    _out["growth_items"] += len(_d.get("growth_items") or [])
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionLoop::get_intake_journal_stats", level="warning")
+        _out["error"] = type(_e).__name__
+    return _out
+
 
 def get_growth_intake_stats() -> dict:
     """★325批刀0：需求源计数（只读拷贝），供压测报告/日报取数。"""
@@ -289,6 +373,28 @@ class EvolutionLoop(SilentLogMixin):
         # ★325批刀0：sum 落盘（唯一可观测口）——旧实现 trigger_counts 只活在
         #   内存返回值里，压测报告/日报/外部复算全都读不到，需求源"有没有产出"
         #   根本无法验收（这正是 刀5 三处字段映射缺源的同一个坑）。
+        # ★326批刀5：本拍需求条目明细（A5 判"某条是否被承接/作废"的靶子）
+        _m326_growth_items = [{
+            "key": _m326_item_key(_i),
+            "file": str(_i.get("file") or ""),
+            "method": str(_i.get("method") or ""),
+            "message": str(_i.get("message") or "")[:120],
+            "organ": str(_i.get("organ") or ""),
+        } for _i in (_growth_intake or []) if isinstance(_i, dict)]
+        _m326_append_intake_journal({
+            "tick": _m326_next_tick(),
+            "ts": time.time(),
+            "ts_str": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total": len(_final),
+            "review_intake": len(_intake),
+            "growth_intake": len(_growth_intake),
+            "trigger_counts": {
+                "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
+                "growth_need": sum(1 for _i in _final
+                                   if _i.get("trigger") == "growth_need"),
+            },
+            "growth_items": _m326_growth_items,
+        })
         _m325_persist_intake_summary({
             "total": len(_final),
             "review_intake": len(_intake),
@@ -299,6 +405,9 @@ class EvolutionLoop(SilentLogMixin):
                                    if _i.get("trigger") == "growth_need"),
             },
             "growth_stats": dict(_GROWTH_INTAKE_STATS),
+            # ★326批刀5：明细也进最新快照（台账是主源，快照带一份便于人读）
+            "growth_items": _m326_growth_items,
+            "tick": int(_GROWTH_INTAKE_TICKS.get("ticks", 0)),
         })
         return {
             "issues": _final,

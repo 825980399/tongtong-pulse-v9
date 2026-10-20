@@ -1470,7 +1470,10 @@ class PulseFramework:
             )
             _vl_hub = get_verification_learning_hub()
             if hasattr(self.qica, 'absorb_growth_rules'):
-                _vl_hub.register_applier("stomach", self.qica.absorb_growth_rules)
+                # ★326批刀0：显式 tag —— 通道账名（声明式/legacy 两条装配路径共用，
+                #   同一吸收方 ⇒ 同一 tag，重复注册按幂等更新，不再互相顶掉）
+                _vl_hub.register_applier("stomach", self.qica.absorb_growth_rules,
+                                         tag="qica_growth")
             _inspector = get_self_inspector()  # type: ignore[possibly-unbound]
 
             def _code_learner_applier(rules):
@@ -1483,7 +1486,8 @@ class PulseFramework:
                     _applied += _inspector.absorb_growth_rules(_inspector_rules)
                 return _applied
 
-            _vl_hub.register_applier("code_learner", _code_learner_applier)
+            _vl_hub.register_applier("code_learner", _code_learner_applier,
+                                     tag="code_learner_intake")
         except Exception as _se:
             silent_exc(_se, "main.py:1257")
 
@@ -1611,7 +1615,10 @@ class PulseFramework:
             )
             _vl_hub = get_verification_learning_hub()
             if hasattr(self.qica, 'absorb_growth_rules'):
-                _vl_hub.register_applier("stomach", self.qica.absorb_growth_rules)
+                # ★326批刀0：显式 tag —— 通道账名（声明式/legacy 两条装配路径共用，
+                #   同一吸收方 ⇒ 同一 tag，重复注册按幂等更新，不再互相顶掉）
+                _vl_hub.register_applier("stomach", self.qica.absorb_growth_rules,
+                                         tag="qica_growth")
             _inspector = get_self_inspector()  # type: ignore[possibly-unbound]
 
             def _code_learner_applier(rules):
@@ -1624,7 +1631,8 @@ class PulseFramework:
                     _applied += _inspector.absorb_growth_rules(_inspector_rules)
                 return _applied
 
-            _vl_hub.register_applier("code_learner", _code_learner_applier)
+            _vl_hub.register_applier("code_learner", _code_learner_applier,
+                                     tag="code_learner_intake")
         except Exception as _se:
             silent_exc(_se, "main.py:1359")
         # ★v22.0重构：注入节点池和知识树到QICA，用于动态知识路径映射

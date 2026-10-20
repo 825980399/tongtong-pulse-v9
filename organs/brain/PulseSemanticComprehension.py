@@ -144,7 +144,8 @@ class PulseSemanticComprehension(BasePulseOrgan):
         try:
             if hasattr(qica, 'absorb_growth_rules'):
                 _hub = self._get_verification_learning_hub()
-                _hub.register_applier("semantic", qica.absorb_growth_rules)
+                _hub.register_applier("semantic", qica.absorb_growth_rules,
+                                      tag="semantic_qica")
                 self._log(LogLevel.DEBUG, "QICA已注册到终身学习引擎Hub")
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")

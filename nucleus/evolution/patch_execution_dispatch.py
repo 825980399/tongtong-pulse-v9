@@ -114,6 +114,188 @@ def _history_path() -> str:
     return os.path.join(_root, "data", "patches", "patch_history.json")
 
 
+# ===== ★326批刀1：fail_count 落生产台账 + **持久性语义**（小林裁决④）=====
+# 实测事实（本批复核，非推测）：
+#   · 生产 `patch_history.json` 84 条记录里 `runtime_verify_fail_count` **0 条命中**；
+#     但 `patch_1788891582_6ecc` 明明带着 `runtime_verify_result` /
+#     `runtime_verify_failure_reason`（2026-10-20 19:39 那次执行写的），
+#     且 `patch_dispatch_trace.jsonl` 显示它已连败 2 次并触达 cap；
+#   · 即「字段有写入代码，但没持久住」——多写者各持内存副本，后写者按自己的
+#     副本落盘，陌生字段被静默抹掉。只往记录里塞字段解决不了这个问题。
+# 故本批**双写 + 单调侧账**：
+#   ① 记录字段 `runtime_verify_fail_count`（patch_history.json）—— 人可读主口径，
+#      成功清零（与 324刀0 语义相同）；
+#   ② 侧账 `data/patches/patch_fail_counts.json` —— **单调不减**的权威累计
+#      （抗覆盖、抗重启），成功时置 0 但保留 `max_ever` 审计值；
+#   ③ 判定一律取 `max(字段, 侧账)` ⇒ **重启后按累计持久值判 cap**，不再依赖内存态。
+_M326_FAIL_LEDGER_REL = os.path.join("data", "patches", "patch_fail_counts.json")
+_M326_FAIL_LEDGER_VERSION = "326.1"
+
+
+def _m326_fail_ledger_path(path: str | None = None) -> str:
+    """侧账路径（`path` 仅供隔离验证注入，生产调用方不传）。"""
+    if path:
+        return path
+    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(_root, _M326_FAIL_LEDGER_REL)
+
+
+def _m326_load_fail_ledger(path: str | None = None) -> dict:
+    """读侧账；缺失/损坏一律返回空结构（**绝不因侧账坏了阻断派单**）。"""
+    _p = _m326_fail_ledger_path(path)
+    try:
+        if not os.path.isfile(_p):
+            return {"version": _M326_FAIL_LEDGER_VERSION, "patches": {}}
+        _d = json.load(io.open(_p, encoding="utf-8"))
+        if not isinstance(_d, dict):
+            return {"version": _M326_FAIL_LEDGER_VERSION, "patches": {}}
+        if not isinstance(_d.get("patches"), dict):
+            _d["patches"] = {}
+        _d.setdefault("version", _M326_FAIL_LEDGER_VERSION)
+        return _d
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m326_load_fail_ledger",
+                   level="warning")
+        return {"version": _M326_FAIL_LEDGER_VERSION, "patches": {}}
+
+
+def _m326_save_fail_ledger(data: dict, path: str | None = None) -> bool:
+    """原子写侧账；失败只留痕返回 False（不影响派单主流程）。"""
+    _p = _m326_fail_ledger_path(path)
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _body = dict(data or {})
+        _body["version"] = _M326_FAIL_LEDGER_VERSION
+        _body["updated_at"] = time.time()
+        _tmp = _p + ".tmp"
+        with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(_body, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _p)
+        return True
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m326_save_fail_ledger",
+                   level="warning")
+        return False
+
+
+def _m326_bump_fail_ledger(patch_id: str, fail_count: int | None = None,
+                           reason: str = "", path: str | None = None) -> int:
+    """把侧账累计值抬到 `max(现值, fail_count)`（单调不减）；缺 fail_count 则 +1。
+
+    Returns: 侧账当前值（0 = 没有记录）。
+    """
+    _pid = str(patch_id or "")
+    if not _pid:
+        return 0
+    _d = _m326_load_fail_ledger(path)
+    _rec = _d["patches"].get(_pid)
+    if not isinstance(_rec, dict):
+        _rec = {"fail_count": 0, "max_ever": 0, "first_at": time.time()}
+    _cur = max(0, int(_rec.get("fail_count", 0) or 0))
+    _new = (_cur + 1) if fail_count is None else max(_cur, int(fail_count or 0))
+    _rec["fail_count"] = _new
+    _rec["max_ever"] = max(int(_rec.get("max_ever", 0) or 0), _new)
+    _rec["last_reason"] = str(reason or "")[:200]
+    _rec["updated_at"] = time.time()
+    _rec.setdefault("first_at", time.time())
+    _d["patches"][_pid] = _rec
+    _m326_save_fail_ledger(_d, path)
+    return _new
+
+
+def _m326_reset_fail_ledger(patch_id: str, path: str | None = None) -> int:
+    """成功 ⇒ 侧账置 0（`max_ever` 保留作审计）。返回置零后的值（0）。"""
+    _pid = str(patch_id or "")
+    if not _pid:
+        return 0
+    _d = _m326_load_fail_ledger(path)
+    _rec = _d["patches"].get(_pid)
+    if not isinstance(_rec, dict):
+        return 0
+    _rec["max_ever"] = max(int(_rec.get("max_ever", 0) or 0),
+                           int(_rec.get("fail_count", 0) or 0))
+    _rec["fail_count"] = 0
+    _rec["last_success_at"] = time.time()
+    _rec["updated_at"] = time.time()
+    _d["patches"][_pid] = _rec
+    _m326_save_fail_ledger(_d, path)
+    return 0
+
+
+def _m326_persisted_fail_count(patch: dict, ledger: dict | None = None,
+                               path: str | None = None) -> int:
+    """**持久累计失败次数** = max(记录字段, 侧账)。cap 判定只看这个值。"""
+    if not isinstance(patch, dict):
+        return 0
+    _field = _m324_fail_count(patch)
+    _d = ledger if isinstance(ledger, dict) else _m326_load_fail_ledger(path)
+    _rec = (_d.get("patches") or {}).get(str(patch.get("id") or ""))
+    _led = 0
+    if isinstance(_rec, dict):
+        try:
+            _led = max(0, int(_rec.get("fail_count", 0) or 0))
+        except (TypeError, ValueError) as _e:
+            # 侧账里写了非数值 ⇒ 按 0 处理（记录字段仍参与 max，不会丢失败次数）
+            silent_exc(_e, where="patch_execution_dispatch::_m326_persisted_fail_count 非数值",
+                       level="debug")
+            _led = 0
+    return max(_field, _led)
+
+
+def _m326_seed_from_trace(trace_path: str | None = None, dry_run: bool = True,
+                          path: str | None = None) -> dict:
+    """用派单留痕（`patch_dispatch_trace.jsonl`）**一次性**回填侧账。
+
+    判据（可核、不猜）：一条 trace 记录里 `dispatched_verify_failed==1` 且
+    `patch_ids` 恰好 1 个 ⇒ 该补丁 +1 次失败。只增不减（`max`），幂等可重跑。
+    """
+    _tp = trace_path or _m324_trace_path()
+    _stat = {"trace_path": _tp, "lines": 0, "evidence_fails": 0,
+             "patches_touched": [], "dry_run": bool(dry_run), "written": False}
+    _ledger = _m326_load_fail_ledger(path)
+    _acc: dict[str, int] = {}
+    try:
+        if os.path.isfile(_tp):
+            for _line in io.open(_tp, encoding="utf-8"):
+                _line = _line.strip()
+                if not _line:
+                    continue
+                _stat["lines"] += 1
+                try:
+                    _r = json.loads(_line)
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(_r, dict):
+                    continue
+                _ids = [str(_i) for _i in (_r.get("patch_ids") or []) if _i]
+                _failed = int(_r.get("dispatched_verify_failed", 0) or 0)
+                if _failed >= 1 and len(_ids) == 1:
+                    _acc[_ids[0]] = _acc.get(_ids[0], 0) + _failed
+                    _stat["evidence_fails"] += _failed
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m326_seed_from_trace",
+                   level="warning")
+    for _pid, _n in sorted(_acc.items()):
+        _rec = _ledger["patches"].get(_pid)
+        if not isinstance(_rec, dict):
+            _rec = {"fail_count": 0, "max_ever": 0, "first_at": time.time()}
+        _rec["fail_count"] = max(int(_rec.get("fail_count", 0) or 0), int(_n))
+        _rec["max_ever"] = max(int(_rec.get("max_ever", 0) or 0), int(_rec["fail_count"]))
+        _rec["source"] = "trace_seed_326"
+        _rec["updated_at"] = time.time()
+        _ledger["patches"][_pid] = _rec
+        _stat["patches_touched"].append({"patch_id": _pid, "fail_count": _rec["fail_count"]})
+    if not dry_run and _acc:
+        _stat["written"] = _m326_save_fail_ledger(_ledger, path)
+    return _stat
+
+
+def get_m326_fail_ledger(path: str | None = None) -> dict:
+    """★326批刀1：侧账内容（只读拷贝），供报表/验收取数。"""
+    _d = _m326_load_fail_ledger(path)
+    return {"version": _d.get("version"), "patches": dict(_d.get("patches") or {})}
+
+
 def _extract_def_name(code: str) -> str:
     """提取代码首个 def 名（与 PatchManager._m280_extract_def_name 同源）；无 def → 空串。"""
     if not code or not isinstance(code, str):
@@ -354,10 +536,139 @@ def blast_radius_of(qualified: str, file: str | None = None,
 # ===== ★325批刀1：危险关键字预检（**唯一实现**，生成侧与派单侧共用）=====
 # 为什么放在这里而不是各写一份：沙箱黑名单是 `PulseCodeSandbox.DANGEROUS_KEYWORDS`，
 # 抄第二份必然漂移。本模块已因 `is_fragment_to_full` 承担"派单口径单一真源"的角色。
-#: 本仓合法惯用法（**不是**生成质量问题）：热加载读写、文件 IO、交互式输入
-_M325_IDIOM_KEYWORDS = frozenset({
-    "getattr(", "setattr(", "delattr(", "open(", "file(", "input(", "raw_input(",
-})
+#: ★326批刀4：**本仓可信代码惯用法登记册**（唯一真源，`_M325_IDIOM_KEYWORDS` 由它派生）。
+#: 登记口径（每一条都要写"为什么它在本仓是惯用法"）——不写理由的一律不许登记，
+#: 否则登记册会变成"把黑名单搬空"的后门。
+TRUSTED_CODE_IDIOMS: dict[str, str] = {
+    "getattr(": "热加载/配置读取惯用法：getattr(cfg,'X',default)，全仓数百处，非危险调用",
+    "setattr(": "运行期参数回填惯用法：refresh_runtime_params 系补丁的常见写法",
+    "delattr(": "属性清理惯用法：与 setattr 成对出现于状态复位路径",
+    "open(": "文件 IO 惯用法：读写 data/ 下 jsonl/json，仓内各器官常规操作",
+    "file(": "历史兼容写法（py2 遗留词法），仅作为字符串/老代码出现",
+    "input(": "交互式输入惯用法：控制台脚本与工具入口",
+    "raw_input(": "历史兼容写法（py2 遗留词法）",
+}
+
+#: 旧名保持可用（325 及既有调用方按 frozenset 用），值**由登记册派生**，不重复维护
+_M325_IDIOM_KEYWORDS = frozenset(TRUSTED_CODE_IDIOMS)
+
+
+# ===== ★326批刀4：两通道判别标准（**只出方案与判别，不动拦截行为**）=====
+# 背景（325刀1 实测）：沙箱 `_security_precheck` 是纯子串匹配，它面对的本来是
+#   "不可信外部片段"；而派单把**本仓方法体整段**喂进去 ⇒ 84 条历史补丁命中 61 条
+#   （72.62%），其中 getattr( 占 54 条、真逃逸 **2** 条。这是**口径错配**，不是生成质量问题。
+# 本批定义两条通道的判别口径（可复算、不看主观）：
+#   trusted_repo     ：补丁带 `file` 且该路径落在仓内、`modified_code` 可 AST 解析、
+#                      且 `original_code` 非空（= 本仓方法体的替换重放）
+#                      ⇒ 走**惯用法白名单**（`TRUSTED_CODE_IDIOMS`）解释命中
+#   external_fragment：无 file / file 在仓外 / 原码为空（= 外部片段或整段新代码）
+#                      ⇒ 走**黑名单**（沙箱 DANGEROUS_KEYWORDS，逐字同判据）
+#   unparsed         ：AST 解析失败 ⇒ **按不可信处理**（fail-closed），不许"解析不了所以放行"
+# 红线（本批明令）：`DANGEROUS_KEYWORDS` 不动、`_security_precheck` 不改、
+#   `would_block` 判据不变 ⇒ **沙箱行为零变化**。本段只做归类与留痕。
+CHANNEL_TRUSTED = "trusted_repo"
+CHANNEL_EXTERNAL = "external_fragment"
+CHANNEL_UNPARSED = "unparsed"
+
+
+def _m326_repo_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def classify_code_channel(patch: dict, project_root: str | None = None) -> dict:
+    """★326批刀4：判该补丁走**可信通道**还是**外部片段通道**（只读，不改任何字段）。
+
+    判别只用三个可观测事实：file 是否落仓内、原码是否非空、`modified_code` 能否解析。
+    每次判别都给 `reasons` 与 `untrusted_by`（可复算），不给"看起来像"这种话。
+
+    ★第一版实现用"在理由字符串里找关键字"来判否定项 ⇒ `无 file 字段` 这类理由
+      不含"仓外/不存在/为空"，被判成可信通道（实测 5 个样本里 3 个误判）。
+      故改为**显式布尔标记**：每个判据命中即往 `untrusted_by` 追加一个码，
+      有没有否定项一眼可数，不做字符串嗅探。
+    """
+    _root = os.path.abspath(project_root or _m326_repo_root())
+    _p = patch if isinstance(patch, dict) else {}
+    _file = str(_p.get("file") or "").replace("\\", "/").strip()
+    _code = str(_p.get("modified_code") or "")
+    _orig = str(_p.get("original_code") or "")
+    _reasons: list[str] = []
+    _untrusted: list[str] = []
+    if not _file:
+        _reasons.append("无 file 字段 ⇒ 无法证明是本仓方法体")
+        _untrusted.append("no_file")
+    else:
+        _abs = os.path.abspath(os.path.join(_root, _file))
+        try:
+            _in_repo = os.path.commonpath([_root, _abs]) == _root
+        except ValueError as _e:
+            # 跨盘/不同 drive 时 commonpath 抛 ValueError ⇒ 记不可信（fail-closed）
+            silent_exc(_e, where="patch_execution_dispatch::classify_code_channel 跨盘",
+                       level="debug")
+            _in_repo = False
+        if not _in_repo:
+            _reasons.append("file 落在仓外(%s) ⇒ 外部片段" % _file)
+            _untrusted.append("outside_repo")
+        elif not os.path.isfile(_abs):
+            _reasons.append("file 在仓内但文件不存在(%s) ⇒ 不可信" % _file)
+            _untrusted.append("file_missing")
+        else:
+            _reasons.append("file 落仓内且存在(%s)" % _file)
+    if not _orig.strip():
+        _reasons.append("original_code 为空 ⇒ 非「方法体替换」，按外部片段处理")
+        _untrusted.append("no_original")
+    else:
+        _reasons.append("original_code 非空 ⇒ 属方法体替换")
+    if _m325_ast_tokens(_code) is None:
+        _reasons.append("modified_code AST 解析失败 ⇒ fail-closed 按不可信")
+        return {"channel": CHANNEL_UNPARSED, "file": _file, "reasons": _reasons,
+                "untrusted_by": _untrusted + ["unparsed"],
+                "registry": "unparsed ⇒ 黑名单 + 不赦免",
+                "judge": "沙箱 DANGEROUS_KEYWORDS（逐字同判据）"}
+    if _untrusted:
+        return {"channel": CHANNEL_EXTERNAL, "file": _file, "reasons": _reasons,
+                "untrusted_by": _untrusted,
+                "registry": "黑名单（DANGEROUS_KEYWORDS）",
+                "judge": "沙箱 DANGEROUS_KEYWORDS（逐字同判据）"}
+    return {"channel": CHANNEL_TRUSTED, "file": _file, "reasons": _reasons,
+            "untrusted_by": [],
+            "registry": "惯用法白名单（TRUSTED_CODE_IDIOMS，%d 条）" % len(TRUSTED_CODE_IDIOMS),
+            "judge": "子串判据不变；命中且全属登记册 ⇒ 记 idiom，不算生成质量问题"}
+
+
+def sandbox_channel_policy() -> dict:
+    """★326批刀4：两通道判别标准（机器可读版；文档见
+    `docs/路灯与星轨对话/施工预案/沙箱两通道判别标准_v1.md`）。
+
+    **本函数只描述口径，不改变任何拦截行为**：`DANGEROUS_KEYWORDS` 原样、
+    `_security_precheck` 原样、`would_block` 原样。
+    """
+    return {
+        "version": "326.1",
+        "channels": {
+            CHANNEL_TRUSTED: {
+                "criteria": ["patch.file 落在仓内且文件存在",
+                             "patch.original_code 非空（方法体替换）",
+                             "patch.modified_code 可 AST 解析"],
+                "registry": "TRUSTED_CODE_IDIOMS（%d 条，带理由登记）"
+                            % len(TRUSTED_CODE_IDIOMS),
+                "action": "命中且全属登记册 ⇒ class=idiom（不算生成质量问题）；"
+                          "命中含非登记册真实调用 ⇒ class=real（真危险，转人工）",
+            },
+            CHANNEL_EXTERNAL: {
+                "criteria": ["无 file 字段", "或 file 在仓外", "或 original_code 为空"],
+                "registry": "沙箱 DANGEROUS_KEYWORDS（单一真源，不抄第二份）",
+                "action": "子串命中即拦（与沙箱逐字同判据），无豁免、无解释",
+            },
+            CHANNEL_UNPARSED: {
+                "criteria": ["modified_code AST 解析失败"],
+                "registry": "同外部片段",
+                "action": "fail-closed：按不可信处理，不许「解析不了所以放行」",
+            },
+        },
+        "blacklist_unchanged": True,
+        "interception_unchanged": True,
+        "red_line": "本批不动 DANGEROUS_KEYWORDS、不改 _security_precheck、不改 would_block",
+    }
 
 
 def sandbox_keywords() -> list:
@@ -729,11 +1040,15 @@ def _m324_fail_count(patch: dict) -> int:
         return 0
 
 
-def _m324_blocked_reason(patch: dict) -> str:
-    """★324批刀0：该补丁不可自动派单的原因（空串 = 可派）。只读，不改任何字段。"""
-    _fc = _m324_fail_count(patch)
+def _m324_blocked_reason(patch: dict, ledger: dict | None = None) -> str:
+    """★324批刀0 / ★326批刀1：该补丁不可自动派单的原因（空串 = 可派）。只读。
+
+    ★326：cap 判定用**持久累计值** `max(记录字段, 侧账)`——重启后不会归零，
+    因此"永久失败补丁无限重试"不再可能（6ecc 实测：字段缺失但 trace 有 2 次失败证据）。
+    """
+    _fc = _m326_persisted_fail_count(patch, ledger)
     if _fc >= _DISPATCH_FAIL_CAP:
-        return "verify_fail_cap(%d>=%d)" % (_fc, _DISPATCH_FAIL_CAP)
+        return "verify_fail_cap(%d>=%d,persisted)" % (_fc, _DISPATCH_FAIL_CAP)
     return ""
 
 
@@ -788,10 +1103,19 @@ def _write_back(patch: dict, verdict: dict) -> None:
         patch["runtime_verify_failure_reason"] = _err
         # ★324批刀0：失败必须可退出——否则同一补丁每圈重复选中
         #   （实测 12:38—17:38 六圈同一 id、结果全 False、账本零变化）
-        patch["runtime_verify_fail_count"] = _m324_fail_count(patch) + 1
+        # ★326批刀1：**双写**——既落记录字段，也落单调侧账（后者抗覆盖/抗重启）
+        _persisted = _m326_bump_fail_ledger(patch.get("id"), reason=_err)
+        patch["runtime_verify_fail_count"] = max(
+            _m324_fail_count(patch) + 1, int(_persisted or 0))
         patch["runtime_verify_last_attempt_at"] = time.time()
+        # ★326批刀1：留痕——本值来自"持久累计"而非内存计数
+        patch["fail_count_persisted"] = int(patch["runtime_verify_fail_count"])
+        patch["fail_count_source"] = "ledger+field(326.1)"
     else:
         patch["runtime_verify_fail_count"] = 0
+        _m326_reset_fail_ledger(patch.get("id"))
+        patch["fail_count_persisted"] = 0
+        patch["fail_count_source"] = "ledger+field(326.1)"
 
 
 def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> dict:
@@ -838,8 +1162,10 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     _n_selected = len(_selected)
     _blocked: list = []
     _dispatchable: list = []
+    # ★326批刀1：一次派单只读一次侧账（传下去，避免每条候选各读一次盘）
+    _m326_ledger = _m326_load_fail_ledger()
     for _p in _selected:
-        _why = _m324_blocked_reason(_p)
+        _why = _m324_blocked_reason(_p, _m326_ledger)
         if _why:
             _blocked.append({"patch_id": str(_p.get("id", ""))[:32], "reason": _why})
             _module_logger.info(
@@ -877,6 +1203,14 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
                                             for _b in _blocked}))
     elif not _n_selected:
         _blocked_reason = _m324_rej_reason() or "no_candidate"
+    # ★326批刀1：本拍涉及补丁的持久累计失败次数（选中/被拦都记，便于复盘）
+    _m326_fc_trace: dict = {}
+    for _p in list(_selected or []):
+        try:
+            _m326_fc_trace[str(_p.get("id") or "")[:32]] = int(
+                _m326_persisted_fail_count(_p, _m326_ledger))
+        except Exception as _e:
+            silent_exc(_e, where="patch_execution_dispatch::_m326_fc_trace", level="debug")
     _m324_append_trace({
         "ts": time.time(),
         "selected_source": _sel_src,
@@ -888,6 +1222,9 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
         "blocked_detail": _blocked[:5],
         "reswept": len(_rv_cands),
         "patch_ids": [str((_r or {}).get("patch_id") or "")[:32] for _r in _results],
+        # ★326批刀1：把**持久累计**失败次数写进留痕（重启后复算 cap 的唯一依据）
+        "fail_count_persisted": _m326_fc_trace,
+        "fail_count_ledger_version": _M326_FAIL_LEDGER_VERSION,
     })
     return {"status": "ok", "reswept": len(_rv_cands), "suspect": _suspect_n,
             "dispatched": len(_results), "results": _results,

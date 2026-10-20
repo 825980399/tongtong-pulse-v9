@@ -274,7 +274,8 @@ class PulseCortex(BasePulseOrgan):
                 from nucleus.mnemosyne.verification_learning_hub import (
                     get_verification_learning_hub,
                 )
-                get_verification_learning_hub().register_applier("cortex", qica.absorb_growth_rules)
+                get_verification_learning_hub().register_applier(
+                    "cortex", qica.absorb_growth_rules, tag="cortex_qica")
         except Exception as e:
             self._log_ignored_exception(e)
 

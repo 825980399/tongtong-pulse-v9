@@ -47,7 +47,16 @@ class VerificationLearningHub:
         self._vl_mismatch_logged = 0
         self._entries: list[dict[str, Any]] = []
         self._lock = threading.Lock()
-        self._organ_appliers: dict[str, Callable] = {}
+        # ★326批刀0：一 organ **多通道**回调。结构 {organ: [(tag, callback), ...]}
+        #   旧实现是单值 `dict[organ] = callback` ⇒ 后注册者静默胜出、前通道规则丢失
+        #   （烛微326 §0-4 实测 WARNING×2：stomach 被两处注册，后者顶掉前者）。
+        #   改列表后语义：**同 organ 同 tag = 更新（幂等）**、**不同 tag = 并存（追加）**。
+        #   tag 由注册方声明（如 qica_growth / self_inspector_absorb），是"谁吸收了规则"的账名。
+        self._organ_appliers: dict[str, list[tuple[str, Callable]]] = {}
+        #: 分发留痕序号（每次 apply_rules +1，供日志/报表复算）
+        self._applier_dispatch_seq = 0
+        #: 分发留痕最近一条（只读快照，供压测报告/日报取数）
+        self._applier_last_dispatch: dict = {}
 
         self._load()
         # ★FIX: 不在构造期自动蒸馏（此时 applier 尚未注册，规则会产出即丢失），
@@ -105,19 +114,64 @@ class VerificationLearningHub:
         except Exception as e:
             self._log(LogLevel.WARNING, f"[VerificationLearningHub] 保存失败: {e}")
 
-    def register_applier(self, organ_name: str, callback: Callable):
+    #: ★326批刀0：未声明 tag 时的默认通道名（保持旧调用点可用）
+    APPLIER_TAG_DEFAULT = "default"
+
+    def register_applier(self, organ_name: str, callback: Callable,
+                         tag: str | None = None) -> str:
+        """注册器官某**通道**的规则应用回调（★326批刀0：一 organ 多回调）。
+
+        语义（写死，勿回退为单值）：
+          * **同 organ 同 tag** ⇒ 更新该通道回调（幂等：同对象重复注册零动作）；
+            **不再**打「applier 被覆盖」WARNING —— 覆盖式语义已不存在。
+          * **同 organ 不同 tag** ⇒ 追加并存，分发时逐个调用（谁都不顶掉谁）。
+          * tag 是"谁吸收了规则"的账名，缺省用 `APPLIER_TAG_DEFAULT`。
+
+        Returns: 实际落入的 tag（供调用方留痕/断言）。
         """
-        注册器官的规则应用回调。
-        当蒸馏出该器官的规则时，自动调用回调并传入规则列表。
-        """
+        _tag = str(tag or self.APPLIER_TAG_DEFAULT)
+        _cb_name = (getattr(callback, "__qualname__", None)
+                    or repr(callback)[:40])
         with self._lock:
-            _existing = self._organ_appliers.get(organ_name)
-            if _existing is not None and _existing is not callback:
-                self._log(LogLevel.WARNING,
-                          f"[VerificationLearningHub] 器官 {organ_name} 的 applier 被不同回调覆盖"
-                          f"（同名重复注册脆弱性已捕获）：旧={getattr(_existing,'__qualname__','?')} "
-                          f"新={getattr(callback,'__qualname__','?')}")
-            self._organ_appliers[organ_name] = callback
+            _slot = self._organ_appliers.setdefault(organ_name, [])
+            for _i, (_t, _cb) in enumerate(_slot):
+                if _t != _tag:
+                    continue
+                if _cb is callback:
+                    return _tag          # 完全幂等：同 tag 同对象，零动作
+                _slot[_i] = (_tag, callback)
+                self._log(LogLevel.DEBUG,
+                          f"[326刀0][applier] 同 tag 更新 organ={organ_name} tag={_tag} "
+                          f"new={_cb_name}（同 tag 覆盖属幂等更新，非丢规则）")
+                return _tag
+            _slot.append((_tag, callback))
+            self._log(LogLevel.INFO,
+                      f"[326刀0][applier] 新通道注册 organ={organ_name} tag={_tag} "
+                      f"cb={_cb_name} 该器官通道数={len(_slot)}")
+        return _tag
+
+    def _appliers_for(self, organ_name: str) -> list[tuple[str, Callable]]:
+        """取某 organ 的全部 (tag, callback)；缺失返回 []（只读，不改注册表）。
+
+        兼容旧结构（万一拿到单值 Callable 的实例）：按默认 tag 包装，绝不 AttributeError。
+        """
+        _slot = self._organ_appliers.get(organ_name)
+        if not _slot:
+            return []
+        if callable(_slot):
+            return [(self.APPLIER_TAG_DEFAULT, _slot)]
+        _out = []
+        for _item in _slot:
+            if isinstance(_item, tuple) and len(_item) == 2:
+                _out.append((str(_item[0]), _item[1]))
+            elif callable(_item):
+                _out.append((self.APPLIER_TAG_DEFAULT, _item))
+        return _out
+
+    def applier_registry_snapshot(self) -> dict:
+        """★326批刀0：注册表快照（organ → [tag...]），供验收/报表核"几个通道"。只读。"""
+        return {_o: [t for t, _ in self._appliers_for(_o)]
+                for _o in list(self._organ_appliers.keys())}
 
     def register_applier_alias(self, primary: str, alias: str):
         """★315批刀2-B：声明别名路由——当规则派发给 `alias` 器官时，
@@ -508,28 +562,52 @@ class VerificationLearningHub:
         同时派发给别名目标器官（★315批刀2-B：一份料可被多个吸收方接收）。
         返回成功应用的规则数。
         """
-        _targets = []
-        _cb = self._organ_appliers.get(organ)
-        if _cb:
-            _targets.append((organ, _cb))
-        # ★315批刀2-B：别名路由——把 `alias` 的规则也派给其 primary 回调
+        # ★326批刀0：一 organ 多通道全部派发（不再"后注册者胜出"）
+        _targets = [(organ, _tag, _cb) for _tag, _cb in self._appliers_for(organ)]
+        # ★315批刀2-B：别名路由——把 `alias` 的规则也派给其 primary 的各通道
         _primary = getattr(self, "_applier_aliases", {}).get(organ)
         if _primary:
-            _pcb = self._organ_appliers.get(_primary)
-            if _pcb:
-                _targets.append((_primary, _pcb))
+            _targets.extend((_primary, _tag, _cb)
+                            for _tag, _cb in self._appliers_for(_primary))
         if not _targets:
             # ★FIX(L1): 无回调时显式告警，避免规则静默丢弃
             self._log(LogLevel.WARNING,
                      f"[VerificationLearningHub] 器官 {organ} 未注册规则回调，{len(rules)} 条规则被跳过")
             return 0
         _delivered = 0
-        for _name, _c in _targets:
+        _tags = []
+        _per = []
+        for _name, _tag, _c in _targets:
+            # ★326批刀5：absorb 计数留痕——**class/organ/tag/rules/applied/tier 六段固定**
+            #   回调若是绑定方法，`__self__` 就是吸收方实例 ⇒ 类名可直接取出（无需调用方传参）。
+            _owner = getattr(_c, "__self__", None)
+            _cls = (type(_owner).__name__ if _owner is not None
+                    else (getattr(_c, "__qualname__", "") or "callable"))
+            _applied = 0
             try:
-                _delivered += (_c(rules) or 0)
+                _applied = int(_c(rules) or 0)
+                _delivered += _applied
             except Exception as e:
                 self._log(LogLevel.INFO,
-                          f"[VerificationLearningHub] 应用规则失败({_name}): {e}")
+                          f"[VerificationLearningHub] 应用规则失败({_name}/{_tag}): {e}")
+            _tags.append(f"{_name}:{_tag}")
+            _per.append({"organ": _name, "tag": _tag, "class": _cls,
+                         "rules": len(rules), "applied": _applied,
+                         "tier": _m326_rule_tier(rules)})
+            self._log(LogLevel.INFO,
+                      f"[326刀5][absorb] class={_cls} organ={_name} tag={_tag} "
+                      f"rules={len(rules)} applied={_applied} tier={_m326_rule_tier(rules)}")
+        self._applier_dispatch_seq = int(getattr(self, "_applier_dispatch_seq", 0)) + 1
+        self._applier_last_dispatch = {
+            "seq": self._applier_dispatch_seq, "organ": organ,
+            "tags": list(_tags), "rules": len(rules), "delivered": int(_delivered),
+            "per_channel": _per, "at": time.time(),
+        }
+        # ★326批刀0：分发留痕（固定一行、可 grep、可复算"谁吸收了规则"）
+        self._log(LogLevel.INFO,
+                  f"[326刀0][applier_dispatch] organ={organ} tags=[{','.join(_tags)}] "
+                  f"rules={len(rules)} delivered={int(_delivered)} "
+                  f"channels={len(_targets)} seq={self._applier_dispatch_seq}")
         return _delivered
 
     def process_distill(self, organ: str | None = None) -> dict[str, Any]:
@@ -575,7 +653,41 @@ class VerificationLearningHub:
                 "file_exists": os.path.exists(self._file_path),
                 "distill_threshold": self._distill_threshold,
                 "registered_organs": list(self._organ_appliers.keys()),
+                # ★326批刀0：通道视图（organ → [tag...]），旧字段保持原样不动
+                "registered_appliers": self.applier_registry_snapshot(),
             }
+
+
+def _m326_rule_tier(rules: list) -> str:
+    """★326批刀5：给一批规则的"力度档"命名（只用于留痕，不参与任何判罚）。
+
+    口径写死：取批内**最高置信度**分档 —— high >=0.8 / mid >=0.6 / low 其余；
+    空批记 `empty`。为什么按 max 而不是均值：一批规则里只要有一条高置信，
+    吸收方的行为就已经被它拉动，均值会把这件事抹平。
+    """
+    _cs = []
+    for _r in (rules or []):
+        if isinstance(_r, dict):
+            try:
+                _cs.append(float(_r.get("confidence", 0) or 0))
+            except (TypeError, ValueError):
+                continue
+    if not _cs:
+        return "empty"
+    _mx = max(_cs)
+    if _mx >= 0.8:
+        return "high"
+    if _mx >= 0.6:
+        return "mid"
+    return "low"
+
+
+def get_applier_dispatch_summary() -> dict:
+    """★326批刀0：最近一次分发留痕（只读拷贝），供压测/日报取数。"""
+    _h = _hub
+    if _h is None:
+        return {}
+    return dict(getattr(_h, "_applier_last_dispatch", {}) or {})
 
 
 # 模块级单例

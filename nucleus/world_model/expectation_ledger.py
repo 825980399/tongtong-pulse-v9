@@ -333,6 +333,24 @@ def audit_violated_gap_ownership(rows: list | None = None,
 _O3_ATTR_REAL = "可判真违规候选"
 _O3_ATTR_GAP = "疑似口径差"
 _O3_ATTR_UNKNOWN = "无法判"
+# ★326批刀3（小林裁决②）：`a1.` **暂不入** `_CRITERIA_GAP_PREFIXES`——
+#   入列会改动裁判分母（当前裁判比 0.9208），而 a1.cluster 的阈值 0.5 从未标定，
+#   属于"口径未定"而不是"已确认口径差"。所以给它**第三档**：`口径差_待标定`。
+#
+# ★两件事必须分清（本批实测订正，别混成一句"不参与任何计数"）：
+#   ① **归因/复核清单计数**：这 7 条**不计入**"可判真违规候选"、也不计入
+#      "疑似口径差"——`counts` 里单列 `口径差_待标定`，条目标 `counted=False`；
+#   ② **裁判比分母**：325刀6 回填已把这 7 条的 `gap_reason` 推断成 `real_violation`
+#      （legacy_inferred）。裁决②要求裁判比**稳定在 0.9208**，所以本批
+#      **不改 gap_reason**（改了分母就动）⇒ 它们在裁判比里**仍然算 violated**。
+#      这不是"漏改"，是"口径稳定优先"的显式取舍，故每条都带
+#      `judge_denominator_effect` 字段，谁读谁看得见。
+#   待掌握度判据修订时统一标定（单独立项，本批不做）。
+_O3_ATTR_UNCALIBRATED = "口径差_待标定"
+_A1_UNCALIBRATED_PREFIX = "a1.cluster."
+_A1_CRITERIA_VERSION = "326.a1.uncalibrated"
+_A1_DECISION = ("小林裁决②：a1. 暂不入 _CRITERIA_GAP_PREFIXES；"
+                "a1.cluster.* 挂「口径差_待标定」，不进裁判分母、不参与任何计数")
 
 #: 前缀 ⇒ (归属, 依据)。**依据必须写清"为什么这个前缀算口径差"**，否则等于没说。
 _M325_PREFIX_BASIS = {
@@ -375,7 +393,9 @@ def build_violated_review_list(rows=None, project_root=None) -> dict:
     if _rows is None:
         _rows = _read_jsonl(ledger_path(project_root))
     _out = []
-    _cnt = {_O3_ATTR_REAL: 0, _O3_ATTR_GAP: 0, _O3_ATTR_UNKNOWN: 0}
+    _cnt = {_O3_ATTR_REAL: 0, _O3_ATTR_GAP: 0, _O3_ATTR_UNKNOWN: 0,
+            # ★326批刀3：第三档单独计数（**不进裁判分母**，也不与上面三档相加成"违规数"）
+            _O3_ATTR_UNCALIBRATED: 0}
     for _r in (_rows or []):
         if not isinstance(_r, dict) or str(_r.get("verdict") or "") != "violated":
             continue
@@ -387,6 +407,18 @@ def build_violated_review_list(rows=None, project_root=None) -> dict:
         _actual = _meas.get("actual")
         if _g == "criteria_gap":
             _attr, _basis, _rule = _O3_ATTR_GAP, "显式 gap_reason=criteria_gap", "R1"
+        elif _pfx == _A1_UNCALIBRATED_PREFIX:
+            # ★326批刀3：**先于**通用前缀规则命中（R1/R2 之前）——a1.cluster 一律
+            #   走"待标定"，不再落 `可判真违规候选`/`疑似口径差`。
+            #   注意：**不看 gap_reason**——325 回填已把它推断成 real_violation，
+            #   若按 gap 分流就永远走不到这一档（实测第一版正是 0 条命中）。
+            _attr = _O3_ATTR_UNCALIBRATED
+            _basis = ("阈值 0.5 为设定值、从未标定（小林裁决②：a1. 暂不入口径差前缀）；"
+                      "归因计数不含本条，待掌握度判据修订时统一标定")
+            if _g:
+                _basis += "｜当前 gap_reason=%s(%s) 系 325 回填推断，未改（裁判比稳定优先）" % (
+                    _g, _o or "legacy")
+            _rule = "R3u"
         elif _g:
             _attr, _basis, _rule = _O3_ATTR_REAL, "显式 gap_reason=%s" % _g, "R2"
         elif _pfx in _M325_PREFIX_BASIS:
@@ -409,8 +441,19 @@ def build_violated_review_list(rows=None, project_root=None) -> dict:
             "attribution_suggestion": _attr,
             "basis": _basis,
             "rule": _rule,
+            # ★326批刀3：待标定条目标 counted=False（机器读这个，不读自然语言）
+            "counted": (_attr != _O3_ATTR_UNCALIBRATED),
+            "uncalibrated": (_attr == _O3_ATTR_UNCALIBRATED),
+            # 待标定条目在**裁判比**里的真实地位（不改 gap_reason ⇒ 仍进分母）
+            "judge_denominator_effect": (
+                ("仍计入裁判比分母（gap_reason=%s 未改；裁决①要求裁判比稳定 0.9208）"
+                 % (_g or "空")) if _attr == _O3_ATTR_UNCALIBRATED else "按原 gap_reason 计"),
         })
     return {"total": len(_out), "counts": _cnt, "items": _out,
+            # ★326批刀3：裁定留痕（复算裁判比时先看这两行）
+            "criteria_version": _A1_CRITERIA_VERSION,
+            "a1_decision": _A1_DECISION,
+            "a1_threshold_uncalibrated": int(_cnt.get(_O3_ATTR_UNCALIBRATED, 0)),
             "verdict_owner": "星轨+小林（本清单只给建议，真违规计数不由本模块定）",
             "rule_doc": "R1/R2/R3/R4/R5 见 nucleus/world_model/expectation_ledger.py 325刀3 注释"}
 
@@ -898,6 +941,67 @@ def judge_ratio(rows: list[dict]) -> dict:
 def ledger_judge_ratio(project_root: str | None = None) -> dict:
     """★320批刀1：按当前台账算裁判比（只读，不写盘）。"""
     return judge_ratio(_read_jsonl(ledger_path(project_root)))
+
+
+def a1_uncalibrated_summary(rows: list | None = None) -> dict:
+    """★326批刀3：a1.cluster.* 复核条目单列（**不进归因计数**）。只读。
+
+    为什么必须有这个口：裁决②把 7 条 a1.cluster 从归因里拿出来挂"待标定"，
+    如果报表仍按 `counts[疑似口径差]` / `counts[可判真违规候选]` 出数，
+    这 7 条会被静默算进去——所以**待标定档单独出数**。
+
+    ★口径边界（必须同时读）：`excluded_from_any_count` 指的是**归因计数**；
+    裁判比分母是另一件事——325 回填已把这 7 条 gap_reason 推断成 real_violation，
+    裁决①要求裁判比稳定在 0.9208，所以本批**不改 gap_reason**，它们在裁判比里
+    仍算 violated（每条都带 `judge_denominator_effect`，看得见、不藏着）。
+    """
+    _rows = rows
+    if _rows is None:
+        _rows = _read_jsonl(ledger_path())
+    _items = []
+    for _r in (_rows or []):
+        if not isinstance(_r, dict) or str(_r.get("verdict") or "") != "violated":
+            continue
+        _aid = str(_r.get("assertion_id") or "")
+        if not _aid.startswith(_A1_UNCALIBRATED_PREFIX):
+            continue
+        _meas = _r.get("measured") if isinstance(_r.get("measured"), dict) else {}
+        _items.append({"assertion_id": _aid,
+                       "actual": _meas.get("actual"),
+                       "gap_reason_now": str(_r.get("gap_reason") or ""),
+                       "gap_reason_origin_now": (str(_r.get("gap_reason_origin") or "")
+                                                 or "legacy(缺失)"),
+                       "attribution_suggestion": _O3_ATTR_UNCALIBRATED,
+                       "counted": False,
+                       "judge_denominator_effect": "仍计入裁判比分母（gap_reason 未改）"})
+    return {"criteria_version": _A1_CRITERIA_VERSION,
+            "decision": _A1_DECISION,
+            "prefix": _A1_UNCALIBRATED_PREFIX,
+            "count": len(_items),
+            "a1_threshold_uncalibrated": len(_items),
+            "excluded_from_any_count": True,
+            "attribution_suggestion": _O3_ATTR_UNCALIBRATED,
+            "items": _items}
+
+
+def judge_ratio_guard(rows: list | None = None, expect: float | None = 0.9208) -> dict:
+    """★326批刀3：裁判比**零变化**自证（只读）。裁定②的前提就是"不动裁判口径"。
+
+    判据：`judge_ratio` 的 ratio 必须与 `expect` 相等（四舍五入到 4 位）。
+    不相等 ⇒ `changed=True` + 归因字段（met/violated/criteria_gap 三计数），
+    供星轨查是不是有人静默改了判罚。
+    """
+    _rows = rows
+    if _rows is None:
+        _rows = _read_jsonl(ledger_path())
+    _jr = judge_ratio(_rows)
+    _ok = (expect is None) or (_jr.get("ratio") == expect)
+    return {"ratio": _jr.get("ratio"), "expect": expect, "unchanged": bool(_ok),
+            "denominator": _jr.get("denominator"), "met": _jr.get("met"),
+            "violated": _jr.get("violated"), "criteria_gap": _jr.get("criteria_gap"),
+            "real_violation": _jr.get("real_violation"),
+            "note": ("裁判比分母仍排除 criteria_gap；a1.cluster 未入 "
+                     "_CRITERIA_GAP_PREFIXES，故 7 条待标定条目未改变任何计数")}
 
 
 def sweep(project_root: str | None = None, loop: int | None = None,

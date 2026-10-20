@@ -1230,10 +1230,47 @@ class PatchManager:
     _m325_generated_flagged = 0
 
     @staticmethod
-    def get_m325_danger_metrics() -> dict:
-        """★325批刀1：生成侧危险关键字计数（只读），供报告/门禁取数。"""
-        return {"generated_flagged_dangerous": int(
-            PatchManager._m325_generated_flagged)}
+    def get_m325_danger_metrics(history_path: str | None = None) -> dict:
+        """★325批刀1 / ★326批刀6：生成侧危险关键字计数（只读）。
+
+        ★326 为什么扩：原实现只有**进程内**计数器 `_m325_generated_flagged`，
+        子进程/重启一律读 0 —— 与 317 批 `runtime_metrics` 同一个坑（"读数为 0"与
+        "没接通"不可区分）。故补**持久读**：现扫生产台账 84 条，按 class 分档计数，
+        进程内计数保留为 `generated_flagged_dangerous`（含义不变，只加不改成）。
+        """
+        _out = {"generated_flagged_dangerous": int(PatchManager._m325_generated_flagged),
+                "process_scoped": True, "source": "unavailable"}
+        try:
+            import json as _json
+            from nucleus.evolution.patch_execution_dispatch import (
+                _history_path as _hp, is_sandbox_incompatible, scan_dangerous_keywords)
+            _p = history_path or _hp()
+            _out["source"] = _p
+            _hist = _json.load(open(_p, encoding="utf-8"))
+            if isinstance(_hist, dict):
+                _hist = _hist.get("patches") or []
+            _cls: dict = {}
+            _incompat = 0
+            for _it in (_hist or []):
+                if not isinstance(_it, dict):
+                    continue
+                _d = scan_dangerous_keywords(_it.get("modified_code")
+                                             or _it.get("original_code") or "")
+                _k = str(_d.get("class") or "none")
+                _cls[_k] = int(_cls.get(_k, 0)) + 1
+                if _it.get("sandbox_incompatible") is True or is_sandbox_incompatible(_it):
+                    _incompat += 1
+            _out.update({"records": len(_hist or []), "class_dist": _cls,
+                         "real_class_count": int(_cls.get("real", 0)),
+                         "idiom_class_count": int(_cls.get("idiom", 0)),
+                         "literal_class_count": int(_cls.get("literal", 0)),
+                         "unparsed_class_count": int(_cls.get("unparsed", 0)),
+                         "sandbox_incompatible_count": int(_incompat)})
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::get_m325_danger_metrics 持久读",
+                       level="warning")
+            _out["error"] = type(_e).__name__
+        return _out
 
     @staticmethod
     def _m323_normalize_patch(patch: dict) -> dict:
