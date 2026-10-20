@@ -18,6 +18,43 @@
 
 ---
 
+## 〇bis、版本指纹表与来源进程（★320批刀2 · 防 L 圈伪造）
+
+> **为什么必须有这一节**：活体与验证进程会混在同一份 `logs/` 和数据里。压测 L 圈
+> 最容易被"验证运行产出"伪造成"活体产出"（320 批实测：ledger 120 条里 114 条是
+> 00:0x 验证运行写的，活体 04:00 sweep 反而是 0）。**判读 L 圈前先填本表**，
+> 指纹对不上 ⇒ 该圈作废，不得计入通过线。
+
+### A. 指纹 → 版本归属（对不上就是混了版本）
+
+| 指纹标记 | 归属 | 出现即证明 |
+|---|---|---|
+| `[307刀1]` `[308刀2]` `[317刀0]` `[317刀3]` `[316刀2]` | **315—317 活体正常** | 活体已含 315—317 批 |
+| `[318刀0]` `[318刀4]` `[316刀3]` | **318 验证运行**（施工验证所写，非活体） | 数据来自验证运行 |
+| 源码/参数里出现 `cluster_view` / `mastery_assertion_check` 作 `source` | **318/319 验证运行** | 同上 |
+| `[320刀0][ledger_sweep]` `[320刀6][K1实验]` | **320 批之后** | 320 批已进活体 |
+| 图 `edge_types` 含 `unique_name` / `self_attr` | **R1 已进活体** | 318 R1 生效（活体图重跑过） |
+
+### B. 来源进程（活体 PID vs 验证运行）
+
+| 项 | 活体 | 验证运行 | 判据 |
+|---|---|---|---|
+| `ledger.source` | `live` | `verification` | 每条记录的 `source` 字段（320 批起） |
+| `ledger.source_process` | `live` | `verification` | 同上（冗余列，便于 grep） |
+| 产物落点 | `data/` | **隔离根 `tmp/p3xx_root/`** | 320 批刀3 硬规 |
+| 日志窗口 | 连续、跨小时 | 集中在提交前后 ±10min | `observed_at` / 日志时间戳 |
+
+### C. 本圈判定（填表）
+
+| 项 | 实测 | 结论 |
+|---|---|---|
+| 本圈 ledger 条数 / 其中 `source=live` | | |
+| 是否出现 318/319 验证运行指纹 | | |
+| 图 `edge_types` 是否含 `unique_name`/`self_attr` | | |
+| **本圈是否可信**（指纹一致 且 live 占多数） | | |
+
+---
+
 ## 一、八项基线快照（开跑前落一次）
 
 | # | 项 | 开跑前 | 本圈末 | 变化 |
@@ -87,6 +124,30 @@
 | verdict 分布（met/violated/unverifiable） | |
 | `gap_reason` 分布 | |
 | 备注 | `violated` **不参与入队/动机**（红线） |
+
+---
+
+## 五bis、验证产物隔离硬规（★320批刀3 · 第四例后的硬规）
+
+> 320 批实测第四例：ledger 114 条 + R3 样本 2 份 + 合成图 3 次都是**验证运行**写进
+> 生产 `data/` 的（时间戳与提交同窗）。**本批起为硬规，违规即交付报告须申报。**
+
+| 规则 | 内容 | 违规判定 |
+|---|---|---|
+| R1 | 验证运行一律落**隔离根** `tmp/p3xx_root/`（用 `TT_LEDGER_PATH` 指向） | 生产 `data/` 出现无 source 的新条目 |
+| R2 | 万不得已写生产目录，每条必须带 `source=verification` | 条目无 `source` 字段 |
+| R3 | 交付报告须申报隔离根路径与"是否写生产 data/" | 报告未申报 |
+| R4 | 现有验证产物可一键剔除/标记 | 见下命令 |
+
+```bash
+# 只看（默认 dry-run，绝不写）
+python tools/stress/purge_verification_data.py
+# 剔除带 source=verification 的条目（自动备份到 tmp/p320_root/）
+python tools/stress/purge_verification_data.py --apply
+# 旧数据无 source：按时间窗识别并标记（不删，更安全）
+python tools/stress/purge_verification_data.py --mark-legacy \
+    --window "2026-10-20 00:00,2026-10-20 00:40" --apply
+```
 
 ---
 

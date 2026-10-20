@@ -327,11 +327,16 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         # ★317批刀4：世界模型最小版（只观测不决策）——复用 04:00 编译点，不新建调度器。
         try:
             from nucleus.world_model.expectation_ledger import sweep as _ledger_sweep
-            _led = _ledger_sweep(project_root)
+            # ★320批刀0：04:00 属**活体**自然产出，显式标记 source=live
+            #   （验证运行一律 source=verification + 隔离根，见刀3 硬规）
+            _led = _ledger_sweep(project_root, source="live")
             _L.append("## 五、预期台账（world_model · 只观测不决策）")
             _L.append("")
-            _L.append("- 本次新增断言：**%s** 条 ｜ 台账累计：**%s** 条"
-                      % (_led.get("added", 0), _led.get("total", 0)))
+            _L.append("- 触发：triggered=%s ｜ 新增 **%s** 条 ｜ 幂等跳过 %s 条 ｜ reason=%s"
+                      % (_led.get("triggered"), _led.get("added", 0),
+                         _led.get("skipped", 0), _led.get("reason", "")))
+            _L.append("- 来源：source=%s（活体自然产出）" % (_led.get("source", "live"),))
+            _L.append("- 台账累计：**%s** 条" % (_led.get("total", 0),))
             _L.append("- verdict 分布：%s" % (_led.get("verdicts", {}),))
             _L.append("- 红线：`violated` 不参与入队/动机（本模块只写台账）")
             _L.append("")

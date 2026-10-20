@@ -282,10 +282,30 @@ class _Collector(ast.NodeVisitor):
         self.subs: list = []            # [{parts, cls, qual, event, line}]
         self.entries: list = []         # [{caller_qual, cls, parts, line}]
         self.name_tables: list = []     # 字符串键→可调用体（按名派发表）
+        # ★320批刀5：类继承关系（qualname -> [基类尾名]），供 _resolve_by_name 的
+        #   父类链档使用。仅采集名字（不做类型推断），不猜多义。
+        self.class_bases: dict = {}
         self._scope: list = []          # [(kind, name)]  kind in {"class","func"}
 
     # ---------------- 定义 ----------------
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        # ★320批刀5：采集基类**尾名**（`mixin.Foo` → `Foo`）——图里 qualname 是
+        #   仓内局部名，不做跨模块全限定（多义时靠"唯一"闸兜底，不猜）。
+        _qual = ".".join([x[1] for x in self._scope if x[0] == "class"] + [node.name])
+        _bases = []
+        for _b in (node.bases or []):
+            if isinstance(_b, ast.Name):
+                _bases.append(_b.id)
+            elif isinstance(_b, ast.Attribute):
+                _bases.append(_b.attr)
+            elif isinstance(_b, ast.Subscript):     # Generic[T] / Protocol[X]
+                _v = _b.value
+                if isinstance(_v, ast.Name):
+                    _bases.append(_v.id)
+                elif isinstance(_v, ast.Attribute):
+                    _bases.append(_v.attr)
+        if _bases:
+            self.class_bases[_qual] = _bases
         self._scope.append(("class", node.name))
         self.generic_visit(node)
         self._scope.pop()
@@ -562,6 +582,7 @@ class CallGraphAnalyzer:
         self.scan_dirs = list(scan_dirs) if scan_dirs else _scan_dirs()
         # ---- 状态 ----
         self._defs: dict = {}            # id -> def dict
+        self._class_bases: dict = {}     # ★320刀5：qualname -> [基类尾名]
         self._by_module: dict = {}       # module -> {qualname: id}
         self._by_module_top: dict = {}   # module -> {顶层名: id}
         self._bindings: dict = {}        # rel_file -> {alias: 目标}
@@ -703,6 +724,9 @@ class CallGraphAnalyzer:
             return None
         # 登记
         self._bindings[rel] = dict(_c.bindings)
+        # ★320批刀5：合并本文件采到的继承关系（跨文件同名类靠尾名唯一闸消歧）
+        for _k, _v in getattr(_c, "class_bases", {}).items():
+            self._class_bases.setdefault(_k, list(_v))
         _top: dict = {}
         for _d in _c.defs:
             if _d["id"] in self._defs:
@@ -766,6 +790,35 @@ class CallGraphAnalyzer:
             return "self唯一" if _uniq else "self多义"
         return "obj唯一" if _uniq else "obj多义"
 
+    def _m320_ancestors(self, cls_qual: str) -> list[str]:
+        """★320批刀5：按声明顺序返回祖先类 qualname（BFS，防环；**不做推断**）。
+
+        只走 `_class_bases` 里**真实写在 class 定义上的基类名**；基类若在仓内
+        找不到同名类定义则到此为止（父类在仓外 ⇒ 无法上溯，不猜）。
+        """
+        _bases = getattr(self, "_class_bases", None) or {}
+        if not _bases or not cls_qual:
+            return []
+        # 尾名 -> qualname（同尾名多个时按"本模块优先"再"唯一"取，仍多义则不用）
+        _by_tail: dict[str, list[str]] = {}
+        for _q in _bases:
+            _by_tail.setdefault(_q.rsplit(".", 1)[-1], []).append(_q)
+        _out: list[str] = []
+        _seen = {cls_qual}
+        _queue = list(_bases.get(cls_qual) or [])
+        while _queue:
+            _b = _queue.pop(0)
+            _cands = _by_tail.get(_b) or []
+            if len(_cands) != 1:
+                continue
+            _q = _cands[0]
+            if _q in _seen:
+                continue
+            _seen.add(_q)
+            _out.append(_q)
+            _queue.extend(_bases.get(_q) or [])
+        return _out
+
     def _resolve_by_name(self, name: str, caller_module: str,
                          caller_class: str = "", caller_file: str = "") -> str:
         """把 `getattr(x, "name")` 的字面名解析为图节点 id（作用域优先消歧）。
@@ -793,6 +846,15 @@ class CallGraphAnalyzer:
                 return _same_cls[0]
         # ② 同文件（★318批刀1 增强：多义时先收窄到**调用方所在文件**——
         #   同文件多类同名（mixin / 私有实现）是 self.X() 未解析的主要形态之一）
+        # ④ 父类链（★320批刀5：同类→同文件→同模块→**父类链**→同目录→全库唯一）
+        #   只沿**声明过的基类**上溯（BFS + visited 防环），仍多义 ⇒ 空串（不猜）。
+        if caller_class:
+            for _anc in self._m320_ancestors(caller_class):
+                _want = "%s.%s" % (_anc, name)
+                _pc = [_h for _h in _hits
+                       if str((self._defs.get(_h) or {}).get("qualname") or "") == _want]
+                if len(_pc) == 1:
+                    return _pc[0]
         if caller_file:
             _cf = caller_file.replace("\\", "/")
             _same_file = [

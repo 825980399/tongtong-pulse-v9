@@ -28,6 +28,8 @@ from typing import Any
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _ROOT)
 
+from nucleus._silent_except import silent_exc  # noqa: E402
+
 #: 七段留痕锚点（闭环顺序）
 SEGMENTS = [
     ("1发现", "[307刀1]"),
@@ -102,6 +104,86 @@ def _ledger() -> dict:
     except OSError as _e:
         print(f"[WARN] ledger mtime 不可读: {_e}")
     return {"rows": len(_rows), "verdicts": _v, "gap_reasons": _g, "mtime": _mt}
+
+
+def source_provenance() -> dict:
+    """★320批刀2：来源进程维度——区分「活体产出」与「验证运行产出」。
+
+    烛微320§3-维度3：两者混在同一份日志/数据里，L 圈最容易被验证运行伪造。
+    本函数只读，输出：ledger 按来源计数、版本指纹命中、图 edge_types、日志窗口。
+    """
+    _out: dict = {}
+    # 1) ledger 按来源计数
+    _p = os.path.join(_ROOT, "data", "world_model", "expectation_ledger.jsonl")
+    _by_src: dict[str, int] = {}
+    _no_src = 0
+    _hours: dict[str, int] = {}
+    try:
+        with open(_p, encoding="utf-8", errors="ignore") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _r = json.loads(_line)
+                except ValueError as _e:
+                    silent_exc(_e, where="tools.stress.collect_stress_baseline.provenance")
+                    continue
+                _s = str(_r.get("source_process") or "")
+                if not _s:
+                    _s2 = str(_r.get("source") or "")
+                    _s = _s2 if _s2 in ("live", "verification") else ""
+                if _s:
+                    _by_src[_s] = _by_src.get(_s, 0) + 1
+                else:
+                    _no_src += 1
+                _ts = float((_r.get("measured") or {}).get("observed_at") or 0)
+                if _ts:
+                    _h = time.strftime("%Y-%m-%d %H", time.localtime(_ts))
+                    _hours[_h] = _hours.get(_h, 0) + 1
+    except Exception as _e:
+        print(f"[WARN] ledger 来源统计失败: {_e}")
+    _out["ledger_by_source"] = _by_src
+    _out["ledger_no_source_legacy"] = _no_src
+    _out["ledger_by_hour"] = dict(sorted(_hours.items())[-12:])
+
+    # 2) 版本指纹命中（活体 vs 验证运行）
+    _fp_live = ["[307刀1]", "[308刀2]", "[317刀0]", "[317刀3]", "[316刀2]",
+                "[320刀0]", "[320刀6]"]
+    _fp_verify = ["[318刀0]", "[318刀4]", "[316刀3]", "cluster_view", "mastery_assertion_check"]
+    _hits: dict[str, int] = {}
+    _last_ts = ""
+    try:
+        import glob as _glob
+        for _f in _glob.glob(os.path.join(_ROOT, "logs", "pulse*.log*")):
+            try:
+                with open(_f, "rb") as _fh:
+                    _s = _fh.read().decode("utf-8", "ignore")
+            except Exception:
+                continue
+            for _m in _fp_live + _fp_verify:
+                _c = _s.count(_m)
+                if _c:
+                    _hits[_m] = _hits.get(_m, 0) + _c
+            for _ln in _s.splitlines()[-200:]:
+                if len(_ln) > 19 and _ln[4] == "-" and _ln[13] == ":":
+                    if _ln[:19] > _last_ts:
+                        _last_ts = _ln[:19]
+    except Exception as _e:
+        print(f"[WARN] 指纹扫描失败: {_e}")
+    _out["fingerprints"] = _hits
+    _out["fingerprint_live"] = {k: v for k, v in _hits.items() if k in _fp_live}
+    _out["fingerprint_verification"] = {k: v for k, v in _hits.items() if k in _fp_verify}
+    _out["log_last_ts"] = _last_ts
+
+    # 3) 图 edge_types（R1 是否进活体）
+    _g = _latest("data/call_graph/graph_*.json")
+    _gd = _read_json(_g, {}) or {}
+    _et = (_gd.get("stats") or {}).get("edge_types") or {}
+    _out["graph_file"] = os.path.basename(_g) if _g else ""
+    _out["graph_edge_types"] = _et
+    _out["r1_in_live"] = bool({"unique_name", "self_attr"} & set(_et.keys()))
+    return _out
 
 
 def baseline() -> dict:
@@ -236,6 +318,7 @@ def main() -> int:
     _a = _ap.parse_args()
 
     _res = {"loop": _a.loop, "baseline": baseline(),
+            "provenance": source_provenance(),
             "segments": segment_counts(), "human_push": human_push_counts(),
             "task_face": task_face(),
             "note": "开三环闭四环：执行环(第四环)不真执行；本脚本只读统计"}
@@ -250,6 +333,17 @@ def main() -> int:
     print("4) 图: %s nodes=%s edges=%s" % (_b["graph"]["file"], _b["graph"]["nodes"],
                                            _b["graph"]["edges"]))
     print("5) hub: %s" % _b["hub"])
+    _pv = _res.get("provenance") or {}
+    print("-" * 62)
+    print("★来源维度（320刀2 · 防L圈伪造）")
+    print("   ledger 按来源: %s ｜ 无source旧数据: %s"
+          % (_pv.get("ledger_by_source"), _pv.get("ledger_no_source_legacy")))
+    print("   ledger 按时段(末12): %s" % (_pv.get("ledger_by_hour"),))
+    print("   活体指纹: %s" % (_pv.get("fingerprint_live"),))
+    print("   验证运行指纹: %s" % (_pv.get("fingerprint_verification"),))
+    print("   图: %s edge_types=%s R1已进活体=%s"
+          % (_pv.get("graph_file"), _pv.get("graph_edge_types"), _pv.get("r1_in_live")))
+    print("   日志末条时间: %s" % (_pv.get("log_last_ts"),))
     print("6) ledger: %s" % _b["expectation_ledger"])
     print("7) 产出率: %s" % _b["output_rate"])
     print("8) M92: %s" % _b["m92"])

@@ -65,7 +65,15 @@ _SOURCE_BUDGET = {
 
 
 def ledger_path(project_root: str | None = None) -> str:
-    """台账文件绝对路径。"""
+    """台账文件绝对路径。
+
+    ★320批刀3（验证产物隔离硬规·代码侧支撑）：环境变量 ``TT_LEDGER_PATH``
+    优先——施工/压测的**验证运行**一律指向隔离根（``tmp/p3xx_root/...``），
+    不得写生产 ``data/``（烛微320§0-2 已数到第四例）。
+    """
+    _env = os.environ.get("TT_LEDGER_PATH")
+    if _env:
+        return _env
     return os.path.join(project_root or os.getcwd(), _LEDGER_REL)
 
 
@@ -115,6 +123,56 @@ def _latest_graph(project_root: str) -> tuple[str, dict]:
     return os.path.join("data", "call_graph", _cands[0]), (_read_json(_p, {}) or {})
 
 
+# ★320批刀1：gap_reason 枚举（**violated 也必须带**——烛微320§0-3 指出 25 条
+# violated 里 24 条 gap_reason 为空，导致无法区分"世界不符"与"口径差"）。
+#   field_not_exposed / no_measurement_source / predicate_not_computable /
+#   criteria_gap（口径差，**不计入裁判分母**）/ real_violation（真违反，计入分母）
+_GAP_REASONS = frozenset({
+    "field_not_exposed",
+    "no_measurement_source",
+    "predicate_not_computable",
+    "criteria_gap",
+    "real_violation",
+})
+
+#: 这些 assertion_id 前缀属「说明书口径 vs 图口径」的结构性差值，不是世界不符
+#: 注意含 `a4.`（`a4.coverage.<Cls>` 是实测 id 形态）与 `a4_`（旧写法）两种
+_CRITERIA_GAP_PREFIXES = ("mastery.", "handbook.", "a4.", "a4_", "manual.")
+
+
+def _row_source(row: dict) -> str:
+    """★320批刀0：取一条记录的**来源进程**（新字段优先，旧数据回退）。
+
+    旧台账（320 前）没有 `source_process`；其 `source` 是"断言来源模块"（不是进程），
+    不能拿来当进程标记 ⇒ 一律按 `live`（历史数据视为活体时期产生）处理。
+    """
+    _sp = row.get("source_process")
+    if _sp:
+        return _norm_source(_sp)
+    _s = str(row.get("source") or "")
+    return _norm_source(_s) if _s in ("live", "verification") else "live"
+
+
+def _infer_gap_reason(assertion_id: str, verdict: str, gap_reason: str) -> str:
+    """★320批刀1：gap_reason 归一——violated 必带；口径差单列 criteria_gap。"""
+    if gap_reason:
+        return gap_reason if gap_reason in _GAP_REASONS else "predicate_not_computable"
+    if verdict == "unverifiable":
+        return "no_measurement_source"
+    if verdict == "violated":
+        _aid = str(assertion_id or "")
+        if any(_aid.startswith(_p) for _p in _CRITERIA_GAP_PREFIXES):
+            return "criteria_gap"
+        return "real_violation"
+    return ""
+
+
+def _norm_source(source: str | None) -> str:
+    """★320批刀0/刀3：来源标记归一（``live`` 活体 / ``verification`` 验证运行）。"""
+    _s = str(source or "live").strip().lower()
+    return "verification" if _s.startswith("verif") else "live"
+
+
 def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect: str,
         meas_field: str, actual: Any, verdict: str, obs_source: str,
         gap_reason: str = "", graph_file: str = "",
@@ -130,7 +188,9 @@ def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect:
                      "observed_at": round(float(observed_at or time.time()), 3),
                      "obs_source": obs_source},
         "verdict": verdict,
-        "gap_reason": gap_reason if verdict == "unverifiable" else "",
+        # ★320批刀1：原实现 `gap_reason if verdict == "unverifiable" else ""` 把
+        # violated 的 gap_reason **直接清空**（烛微320§0-3 的 24/25 空值即此因）。
+        "gap_reason": _infer_gap_reason(assertion_id, verdict, gap_reason),
         "criteria_version": criteria_version,
         "graph_file": graph_file,
     }
@@ -160,7 +220,8 @@ def _clusters(graph: dict) -> dict[str, list[dict]]:
     return _out
 
 
-def collect_assertions(project_root: str | None = None) -> list[dict]:
+def collect_assertions(project_root: str | None = None,
+                       source: str = "live") -> list[dict]:
     """按 ≥7 类现成实测源产出断言（预算 112 条/周；三态 verdict 均可出现）。"""
     _root = project_root or os.getcwd()
     _now = time.time()
@@ -395,6 +456,15 @@ def collect_assertions(project_root: str | None = None) -> list[dict]:
                     "call_graph.stats", "graph_file", "not empty", "graph_file",
                     _graph_rel or None, "met" if _graph_rel else "violated",
                     "call_graph_graph_stats", "", _graph_rel, observed_at=_now))
+    # ★320批刀0/刀3：**每条**打来源标记（一次循环，不改 25 处 _mk 调用）。
+    #   live=活体自然产出 ｜ verification=施工/压测验证运行（可一键剔除，见
+    #   tools/stress/purge_verification_data.py）。
+    # ★注意：`source` 字段是 _mk 的第 3 个位置参数，语义是「**断言来源模块**」
+    #   （如 `CallGraphAnalyzer.mastery_assertion_check`）——**不得覆盖**。
+    #   来源进程标记独立用 `source_process`（施工自查发现的字段语义冲突，已修正）。
+    _src_tag = _norm_source(source)
+    for _r in _out:
+        _r["source_process"] = _src_tag
     return _out
 
 
@@ -468,7 +538,44 @@ def sc3_consistency(project_root: str | None = None,
             "threshold": 0.05, "ruler_broken": _rate > 0.05,
             "graph_file": _graph_rel, "details": _details[:20]}
 
-def sweep(project_root: str | None = None, loop: int | None = None) -> dict:
+def judge_ratio(rows: list[dict]) -> dict:
+    """★320批刀1：压测外部裁判比 —— `met / (met + violated - criteria_gap)`。
+
+    口径差（``criteria_gap``，如 a4_gap 116：说明书口径 vs 图类簇口径）**不进分母**，
+    否则每一圈都会被结构性口径差压成失败（烛微320§0-3：25/118≈21%）。
+    ``real_violation`` 仍进分母——真违反就是要扣分。
+    """
+    _met = _viol = _cg = _real = 0
+    for _r in rows or []:
+        _v = str(_r.get("verdict") or "")
+        _g = str(_r.get("gap_reason") or "")
+        if _v == "met":
+            _met += 1
+        elif _v == "violated":
+            if _g == "criteria_gap":
+                _cg += 1
+            else:
+                _viol += 1
+                if _g == "real_violation":
+                    _real += 1
+    _den = _met + _viol
+    _ratio = round(_met / _den, 4) if _den else None
+    return {
+        "met": _met, "violated": _viol, "criteria_gap": _cg,
+        "real_violation": _real, "denominator": _den,
+        "ratio": _ratio, "threshold": 0.8,
+        "pass": bool(_den and _ratio is not None and _ratio >= 0.8),
+        "denominator_excludes": "criteria_gap",
+    }
+
+
+def ledger_judge_ratio(project_root: str | None = None) -> dict:
+    """★320批刀1：按当前台账算裁判比（只读，不写盘）。"""
+    return judge_ratio(_read_jsonl(ledger_path(project_root)))
+
+
+def sweep(project_root: str | None = None, loop: int | None = None,
+          source: str = "live") -> dict:
     """跑一次台账（幂等：同一 assertion_id 同日只记首次），返回统计。
 
     Args:
@@ -476,21 +583,29 @@ def sweep(project_root: str | None = None, loop: int | None = None) -> dict:
     """
     _root = project_root or os.getcwd()
     _p = ledger_path(_root)
-    _rows = collect_assertions(_root)
+    _src = _norm_source(source)
+    _rows = collect_assertions(_root, source=_src)
     if loop is not None:
         for _r in _rows:
             _r["assertion_id"] = "loop.%d.%s" % (int(loop), _r["assertion_id"])
 
-    _existing: set[tuple[str, str]] = set()
+    # ★320批刀0：幂等键由 (assertion_id, 当天) 改为 **(assertion_id, 当天, 来源)**。
+    #   归因：烛微320§0-2-① 活体 04:00 sweep `added=0`，01—08 时 0 新增——真因是
+    #   00:0x 有**验证运行**先写了当日 114 条，把「当日幂等位」占满，04:00 活体
+    #   sweep 逐条命中 `(id, today)` ⇒ 全部 skip ⇒ 0 产出（不是版本行为）。
+    #   加来源维度后：验证运行只占 verification 位，活体 live 位仍空 ⇒ 能自然产出。
+    _existing: set[tuple[str, str, str]] = set()
     _total = 0
     for _r in _read_jsonl(_p):
         _total += 1
         _day = time.strftime("%Y-%m-%d", time.localtime(
             float((_r.get("measured") or {}).get("observed_at") or 0)))
-        _existing.add((str(_r.get("assertion_id")), _day))
+        _existing.add((str(_r.get("assertion_id")), _day,
+                       _row_source(_r)))
 
     _today = time.strftime("%Y-%m-%d", time.localtime())
     _added = 0
+    _skipped = 0
     _verdicts: dict[str, int] = {}
     _gaps: dict[str, int] = {}
     try:
@@ -500,8 +615,9 @@ def sweep(project_root: str | None = None, loop: int | None = None) -> dict:
                 _verdicts[_r["verdict"]] = _verdicts.get(_r["verdict"], 0) + 1
                 if _r.get("gap_reason"):
                     _gaps[_r["gap_reason"]] = _gaps.get(_r["gap_reason"], 0) + 1
-                _key = (str(_r.get("assertion_id")), _today)
+                _key = (str(_r.get("assertion_id")), _today, _src)
                 if _key in _existing:
+                    _skipped += 1
                     continue
                 _f.write(json.dumps(_r, ensure_ascii=False) + "\n")
                 _existing.add(_key)
@@ -509,11 +625,26 @@ def sweep(project_root: str | None = None, loop: int | None = None) -> dict:
                 _total += 1
     except Exception as _e:
         silent_exc(_e, where="world_model.expectation_ledger.sweep")
+        _module_logger.info(
+            "[320刀0][ledger_sweep] triggered=True generated=0 skipped=%d "
+            "reason=write_error:%s source=%s", _skipped, type(_e).__name__, _src)
         return {"added": 0, "total": _total, "verdicts": _verdicts,
-                "error": type(_e).__name__}
+                "error": type(_e).__name__, "source": _src,
+                "triggered": True, "skipped": _skipped,
+                "reason": "write_error"}
 
+    # ★320批刀0：显式四段留痕（triggered/generated/skipped/reason），
+    #   使「钩子未触发」与「触发了但被幂等挡住」在日志里可区分——
+    #   317 批只打一条 [318刀5][ledger] 看不出 skipped，才让 0 产出悬了一夜。
+    _reason = ("all_idempotent_skipped" if (_added == 0 and _skipped > 0)
+               else ("no_assertions" if not _rows else "ok"))
+    _module_logger.info(
+        "[320刀0][ledger_sweep] triggered=True generated=%d skipped=%d reason=%s "
+        "source=%s total=%d verdict=%s gap_reason=%s（只观测不决策）",
+        _added, _skipped, _reason, _src, _total, _verdicts, _gaps)
     _module_logger.info(
         "[318刀5][ledger] 新增 %d 条 / 累计 %d 条 verdict=%s gap_reason=%s（只观测不决策）",
         _added, _total, _verdicts, _gaps)
     return {"added": _added, "total": _total, "verdicts": _verdicts,
-            "gap_reasons": _gaps, "path": _p}
+            "gap_reasons": _gaps, "path": _p, "source": _src,
+            "triggered": True, "skipped": _skipped, "reason": _reason}

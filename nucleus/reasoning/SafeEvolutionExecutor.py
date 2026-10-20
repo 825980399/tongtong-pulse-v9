@@ -3670,6 +3670,141 @@ class SafeEvolutionExecutor:
             return None
         return None
 
+    # ================= ★320批刀6：K1 任务面显式入参实验（只读） =================
+    @staticmethod
+    def _k1_build_task_face(limit: int = 1, project_root: str | None = None) -> list[dict]:
+        """★320批刀6：从 alerts 取已知 ERROR/CRITICAL 条目，转成"任务面"摘要。
+
+        **只读**：只读 ``data/reports/alerts.jsonl``，不写任何文件、不改台账。
+        这是长期12 的第一步实验——把父进程看得见的世界，显式交给子进程。
+        """
+        import json as _json
+        _root = project_root or os.getcwd()
+        _p = os.path.join(_root, "data", "reports", "alerts.jsonl")
+        _out: list[dict] = []
+        if not os.path.exists(_p):
+            return _out
+        # alerts.jsonl 有**两种行格式**（实测 2026-10-20）：
+        #   ① 日志行  ts/ts_str/logger/**level**/message/**path**/lineno/source
+        #   ② 报告行  report_id/anomaly_type/**severity**/description/...
+        # 只认 severity 会漏掉 13257 条日志行（其中 ERROR 493 条）⇒ 两字段都要认。
+        _want = {"ERROR", "CRITICAL", "FATAL", "P0"}
+        _lines: list[str] = []
+        try:
+            with open(_p, encoding="utf-8", errors="ignore") as _f:
+                _lines = _f.read().splitlines()   # 全量（≈5MB，只读一次）
+        except Exception as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor._k1_build_task_face.read")
+            return _out
+        for _ln in reversed(_lines):
+            _ln = _ln.strip()
+            if not _ln:
+                continue
+            try:
+                _d = _json.loads(_ln)
+            except ValueError:
+                continue
+            _sev = str(_d.get("severity") or _d.get("level") or "").upper()
+            if _sev not in _want:
+                continue
+            _out.append({
+                "pulse_type": _d.get("anomaly_type") or _d.get("pulse_type") or "?",
+                "severity": _sev,
+                "target": _d.get("target") or "",
+                "description": str(_d.get("description") or _d.get("message") or "")[:300],
+                "file": _d.get("file") or _d.get("path") or "",
+                "method": _d.get("method") or _d.get("funcName") or "",
+                "ts": _d.get("ts_str") or _d.get("ts") or "",
+            })
+            if len(_out) >= int(limit):
+                break
+        return _out
+
+    @staticmethod
+    def _k1_review_with_task_face(task_face: list, self_inspector=None) -> dict:
+        """★320批刀6：**子进程内可独立调用**的评审函数（不依赖父进程运行期指标）。
+
+        归因验证的关键：`run_runtime_guided_review` 读的是 ``runtime_metrics`` 快照，
+        而它是**进程内模块级单例**——子进程里恒为空 ⇒ 恒走 ``no_anomaly``。
+        本函数改成"**任务面即输入**"：只要喂进来条目，就有得评。
+        """
+        _fed = len(task_face or [])
+        _reviewed = 0
+        _report: list[dict] = []
+        for _it in (task_face or []):
+            _file = str(_it.get("file") or "")
+            _method = str(_it.get("method") or "")
+            if not (_file or _method):
+                continue
+            _snippet = ""
+            if self_inspector is not None and _file and _method:
+                try:
+                    _organ = os.path.splitext(os.path.basename(_file))[0]
+                    _detail = self_inspector.get_method_body(_organ, _method)
+                    _snippet = (_detail or {}).get("body", "") or ""
+                except Exception as _e:
+                    silent_exc(_e, where="SafeEvolutionExecutor._k1_review_with_task_face.body")
+            _reviewed += 1
+            _report.append({
+                "pulse_type": _it.get("pulse_type"),
+                "file": _file, "method": _method,
+                "snippet_len": len(_snippet),
+                "severity": _it.get("severity"),
+            })
+        return {"fed": _fed, "reviewed": _reviewed,
+                "productive": bool(_reviewed > 0), "report": _report,
+                "gate": "task_face_explicit"}
+
+    def k1_task_face_probe(self, limit: int = 1, use_subprocess: bool = True) -> dict:
+        """★320批刀6：K1 只读实验——「任务面显式交给子进程」是否能让 `reviewed>0`。
+
+        **只读**：不开 ``ENABLE_SUBAGENT_RUNNER``、不改台账、不写 data/。
+        对照组（父进程内直接评）与实验组（真子进程评）各跑一次，用来坐实归因：
+        子进程看不见父进程 ``runtime_metrics`` ⇒ 无任务面即 0 产出；
+        任务面显式传入 ⇒ 有产出。
+        """
+        import json as _json
+        import subprocess as _sp
+        import sys as _sys
+        _face = self._k1_build_task_face(limit=limit)
+        _res_self = self._k1_review_with_task_face(_face, self_inspector=None)
+        _res_child: dict = {"fed": 0, "reviewed": 0, "skipped": "no_subprocess"}
+        if use_subprocess and _face:
+            _payload = _json.dumps(_face, ensure_ascii=False)
+            _code = (
+                "import json,sys,os;"
+                "sys.path.insert(0,os.getcwd());"
+                "from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor as E;"
+                "f=json.loads(sys.argv[1]);"
+                "r=E._k1_review_with_task_face(f,None);"
+                "print(json.dumps(r,ensure_ascii=False))"
+            )
+            try:
+                _cp = _sp.run([_sys.executable, "-c", _code, _payload],
+                              capture_output=True, text=True, timeout=90,
+                              cwd=os.getcwd())
+                if _cp.returncode == 0 and _cp.stdout.strip():
+                    _res_child = _json.loads(_cp.stdout.strip().splitlines()[-1])
+                else:
+                    _res_child = {"fed": len(_face), "reviewed": 0,
+                                   "skipped": "child_rc=%s" % _cp.returncode,
+                                   "stderr": (_cp.stderr or "")[-300:]}
+            except Exception as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor.k1_task_face_probe.subprocess")
+                _res_child = {"fed": len(_face), "reviewed": 0,
+                              "skipped": type(_e).__name__}
+        _verdict = ("task_face_enables_review"
+                    if int(_res_child.get("reviewed") or 0) > 0
+                    else ("no_task_face_available" if not _face else "not_confirmed"))
+        _module_logger.info(
+            "[320刀6][K1实验] fed=%d reviewed(parent)=%d reviewed(child)=%s "
+            "verdict=%s（只读·未开ENABLE_SUBAGENT_RUNNER·未改台账）",
+            len(_face), int(_res_self.get("reviewed") or 0),
+            _res_child.get("reviewed"), _verdict)
+        return {"fed": len(_face), "parent": _res_self, "child": _res_child,
+                "verdict": _verdict,
+                "note": "只读实验；ENABLE_SUBAGENT_RUNNER 仍 False，台账未改"}
+
     def run_runtime_guided_review(self, self_inspector=None) -> dict[str, Any]:
         """
         ★P2: 运行时引导的定向深度审查。
