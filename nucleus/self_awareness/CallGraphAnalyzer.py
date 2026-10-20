@@ -1771,6 +1771,13 @@ class CallGraphAnalyzer:
             # 独立字段（**不塞进 edge_types 字典**，否则各档之和就不等于边数了）
             _payload["edge_types_total"] = _et_total
             _payload["edge_types_source"] = "per_edge_kind"
+            # ★330批刀2（P1 判据用图门槛）：图必须能自证"我是哪个代码版本、哪套判据产的"。
+            #   `code_version`  = 建边语义版本（`CODE_VERSION`，改建边就要改它）
+            #   `criteria_version` = 判据版本（与 self_inspector 常量**同源**，不另写一份）
+            #   两者缺一，判据侧一律拒绝（UNAVAILABLE），不拿"看起来正常"的读数下结论。
+            _payload["code_version"] = str(self.CODE_VERSION)
+            _payload["criteria_version"] = str(self._m330_judge_criteria_version())
+            _payload["version_fields_src"] = "330.cg.v1/criteria同源self_inspector"
             _payload["dumped_at"] = _time.time()
             self.export_json(_tmp, data=_payload)
             os.replace(_tmp, _path)
@@ -1916,6 +1923,34 @@ class CallGraphAnalyzer:
 
     # ===== ★328批刀1：A6 聚合口径自检（软推断不得被折叠成硬自证）=====
     #: A6 口径版本（换口径必须换版本号，便于历史读数对表）
+    #: ★330批刀2（小林拍板③·P1）：**代码版本标识**。
+    #  改动了建边逻辑/kind 判定就必须改这里 —— 判据用图门槛靠它区分
+    #  "图是这套代码产的" 与 "图是上一版代码产的"。不是仓库 commit id：
+    #  绝大多数提交不影响图的语义，把它们也算成版本只会让门槛天天误报。
+    CODE_VERSION = "330.cg.v1"
+
+    @staticmethod
+    def _m330_judge_criteria_version() -> str:
+        """★330批刀2：落图时写入的**判据版本**——与 self_inspector 判据常量同源。
+
+        为什么必须同源、不能各写一份：P1 门槛判的是「这张图是**这套判据**认可的
+        代码产出的」。两个字符串一旦各维护一份，改判据时必然漂移，门槛就成了摆设
+        （图上写着对得上的版本，实际判据早换了）。
+
+        读不到（模块改名/延迟加载）⇒ 返回 ``"unknown"``，由判据侧按**不匹配**拒绝
+        —— 不猜、不放过。
+        """
+        try:
+            # ★实测纠正：它是 **SelfInspector 的类属性**，不是模块级常量。
+            #   第一版写成 `from ... import _DEAD_CODE_CRITERIA_VERSION` 会 ImportError，
+            #   然后静默退成 "unknown" —— 图上写着 unknown 看起来也像个值，
+            #   但判据侧必然拒绝，等于把门槛变成了一道永久关闭的门。
+            from nucleus.self_inspector import SelfInspector as _SI330
+            return str(getattr(_SI330, "_DEAD_CODE_CRITERIA_VERSION", "") or "unknown")
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::_m330_judge_criteria_version")
+            return "unknown"
+
     A6_CRITERIA_VERSION = "328.a6.v1"
     #: 图解析缓存（key=(路径, mtime)）——同一份图在一个进程里只解析一次
     _A6_CACHE: dict = {}
@@ -1978,11 +2013,37 @@ class CallGraphAnalyzer:
                     "reason": "图不可解析: %s" % type(_e).__name__,
                     "graph_file": os.path.basename(_gp),
                     "criteria_version": self.A6_CRITERIA_VERSION}
+        # ★330批刀2（P1）：A6 的第一项判据由「图可解析」扩展为「图可解析 **且** 版本匹配」。
+        #   缺字段/不匹配一律 UNAVAILABLE（**语义不变：没测 ≠ 没有边，不填 0**）。
+        #   为什么 A6 也要卡版本：A6 断言的是"聚合 == 逐边"，而 `edge_types` 的折叠缺陷
+        #   是**旧代码**产的图才有的；拿一张旧图跑 A6 得到 FAIL，会被误读成"现在的代码
+        #   还在折叠"。版本对不上，FAIL 与 PASS 都不该信。
+        _a6_gcv = str((_gd or {}).get("code_version") or "")
+        _a6_crv = str((_gd or {}).get("criteria_version") or "")
+        if not _a6_gcv or not _a6_crv:
+            return {"assertion": "A6", "verdict": "UNAVAILABLE",
+                    "reason": ("图缺版本字段（code_version=%r criteria_version=%r）"
+                               "⇒ 330 前的旧图，无法确认与当前代码同版本"
+                               % (_a6_gcv, _a6_crv)),
+                    "graph_file": os.path.basename(_gp),
+                    "graph_code_version": _a6_gcv,
+                    "graph_criteria_version": _a6_crv,
+                    "criteria_version": self.A6_CRITERIA_VERSION}
+        if _a6_gcv != str(self.CODE_VERSION):
+            return {"assertion": "A6", "verdict": "UNAVAILABLE",
+                    "reason": ("图 code_version=%s ≠ 当前代码 %s ⇒ 跨版本图不作判据"
+                               % (_a6_gcv, self.CODE_VERSION)),
+                    "graph_file": os.path.basename(_gp),
+                    "graph_code_version": _a6_gcv,
+                    "graph_criteria_version": _a6_crv,
+                    "criteria_version": self.A6_CRITERIA_VERSION}
         _edges = _gd.get("edges") if isinstance(_gd, dict) else None
         if not isinstance(_edges, list):
             return {"assertion": "A6", "verdict": "UNAVAILABLE",
                     "reason": "图内无 edges 列表",
                     "graph_file": os.path.basename(_gp),
+                    "graph_code_version": _a6_gcv,
+                    "graph_criteria_version": _a6_crv,
                     "criteria_version": self.A6_CRITERIA_VERSION}
         _per: dict = {}
         for _e in _edges:

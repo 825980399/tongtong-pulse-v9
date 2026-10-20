@@ -55,6 +55,10 @@ class VerificationLearningHub:
         self._organ_appliers: dict[str, list[tuple[str, Callable]]] = {}
         #: 分发留痕序号（每次 apply_rules +1，供日志/报表复算）
         self._applier_dispatch_seq = 0
+        # ★330批刀4：**上一次跨阈消费的时刻**（= 上一轮 check_and_get_distillable 真放料的时刻）。
+        #   需求源入队侧要拿它算"料龄"——料龄超过跨阈节奏（≈33 分钟）就说明这一拍读到的
+        #   本就是上一轮残留，标 stale 而不是当成"刚产出的料"。
+        self._last_consume_ts = 0.0
         #: 分发留痕最近一条（只读快照，供压测报告/日报取数）
         self._applier_last_dispatch: dict = {}
 
@@ -349,19 +353,58 @@ class VerificationLearningHub:
             return True
         return bool(confidence < 0.8 and relevance_score < 0.7)
 
+    #: ★330批刀4：消费后**至少保留**的 growth 料条数（供下一拍 intake 读取）
+    _M330_GROWTH_RETAIN_N = 2
+
+    @staticmethod
+    def _m330_is_growth(e) -> bool:
+        """与 `EvolutionLoop._m316_collect_growth_intake` 的取料条件**同源**。
+
+        两处若各写一份判据，早晚会漂移成"消费侧保留了、采集侧照样找不到"——
+        所以这里不改用新口径，直接照抄采集侧那两个字段。
+        """
+        if not isinstance(e, dict):
+            return False
+        return (str(e.get("task_type", "")) == "growth_hypothesis"
+                or str(e.get("origin", "")) == "growth")
+
     def check_and_get_distillable(self, organ: str | None = None) -> list[dict[str, Any]]:
         """
         检查是否达到蒸馏阈值。
         达到则返回待蒸馏的条目（并清空这些条目），否则返回空列表。
+
+        ★330批刀4（326 挂账⑧/327 挂账⑨）：**growth 料最小保留**。
+          旧实现 `distillable = target[:]` 把命中器官的条目**整批**摘走，注释写的
+          "保留最新10条作为缓冲"从未实现过 —— 于是 growth 料被一轮跨阈消费清空后，
+          下一拍 `_m316_collect_growth_intake` 只能读到 `no_material`，需求源结构性断料。
+          现在：每轮消费时把**最近 N 条** growth 料留在 `_entries` 里，只让它被保留**一轮**
+          （`_m330_retained_once` 标记，下一轮必放行），既不断料也不永久屏蔽蒸馏。
         """
+        import time as _t
         with self._lock:
+            # ---- 先释放上一轮的保留标记：保留只维持 1 轮，第 2 轮必进蒸馏 ----
+            for _e in self._entries:
+                if isinstance(_e, dict) and _e.pop("_m330_retained", None):
+                    _e["_m330_retained_once"] = True
             target = [e for e in self._entries if organ is None or e.get("organ") == organ]
             if len(target) >= self._distill_threshold:
                 distillable = target[:]
+                # ---- ★330批刀4：挑最近的 N 条 growth 料留下（已保留过一次的不再保留）----
+                _g = [e for e in distillable
+                      if self._m330_is_growth(e) and not e.get("_m330_retained_once")]
+                _keep_ids = {id(e) for e in _g[-self._M330_GROWTH_RETAIN_N:]} if _g else set()
+                for _e in distillable:
+                    if id(_e) in _keep_ids:
+                        _e["_m330_retained"] = True
+                if _keep_ids:
+                    distillable = [e for e in distillable if id(e) not in _keep_ids]
+                    # 留下的是"料"，不是"待蒸馏"——本轮的返回值里不能含它们
+                    self._last_consume_ts = _t.time()
                 # 从主列表中移除已蒸馏的条目
-                distill_ids = {e["id"] for e in distillable}
-                self._entries = [e for e in self._entries if e["id"] not in distill_ids]
-                # 保留最新10条作为缓冲
+                distill_ids = {e["id"] for e in distillable if isinstance(e, dict) and "id" in e}
+                # 移除时要容错：缺 id 的脏条目不能 KeyError 掉整轮（保留原有"不清它"的语义）
+                self._entries = [e for e in self._entries
+                                 if not (isinstance(e, dict) and e.get("id") in distill_ids)]
                 self._save()
                 return distillable
             return []

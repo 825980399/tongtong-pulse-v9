@@ -4955,7 +4955,12 @@ class SelfInspector(SilentLogMixin):
                   "graph_file": "", "graph_mtime": 0.0,
                   # ★322批刀0：分层集合（无图时为空，判据自然让位）
                   "in_edge_hard": set(), "in_edge_soft": set(),
-                  "in_edge_infer": set(), "kind_counts": {}}
+                  "in_edge_infer": set(), "kind_counts": {},
+                  # ★330批刀2（P1）：图版本门槛诊断。None = 没走到校验（图都没取到），
+                  #   False = 校验过且**拒绝**。两者不能混成 False（"没测"≠"不合格"）。
+                  "graph_version_ok": None, "graph_version_reason": "",
+                  "graph_code_version": "", "graph_criteria_version": "",
+                  "judge_criteria_version": "", "judge_code_version": ""}
         try:
             # ★第312批 刀1：**图污染守卫** —— 不再「取最新一份」就信，改为「取最新一份合格的图」。
             #   生产目录被合成夹具污染过两次（12 节点 / 4 文件，node.file 全是 pkg/*.py）；
@@ -4975,6 +4980,42 @@ class SelfInspector(SilentLogMixin):
                 return _empty
             _gd = _pick["graph"]
             _graph_path = _pick["path"]
+            # ★330批刀2（小林拍板③·P1）：**判据用图门槛** —— 版本不匹配即拒绝。
+            #   为什么必须拒绝而不是"警告后照用"：跨版本的图看起来完全正常（节点数、
+            #   覆盖度都是合理数字），判据却按另一套建边语义在解读它 —— 错误不自曝。
+            #   拒绝后返回空索引 ⇒ 主循环把所有方法记进「图域外」⇒ **本轮不判**，
+            #   且 `graph_version_ok=False` 让"没判"与"判了 0 条"可区分。
+            _gcv = str(_gd.get("code_version") or "")
+            _gcrv = str(_gd.get("criteria_version") or "")
+            _my_cv = str(self._DEAD_CODE_CRITERIA_VERSION or "")
+            try:
+                from nucleus.self_awareness.CallGraphAnalyzer import (
+                    CallGraphAnalyzer as _CGA330,
+                )
+                _my_gcv = str(getattr(_CGA330, "CODE_VERSION", "") or "")
+            except Exception as _iv:
+                silent_exc(_iv, where="self_inspector::m330 graph version import")
+                _my_gcv = ""
+            _v_why = ""
+            if not _gcv or not _gcrv:
+                _v_why = ("图缺版本字段（code_version=%r criteria_version=%r）"
+                          "⇒ 330 前的旧图，无法证明与当前判据同版本" % (_gcv, _gcrv))
+            elif _gcrv != _my_cv:
+                _v_why = ("图 criteria_version=%s ≠ 当前判据 %s" % (_gcrv, _my_cv))
+            elif _my_gcv and _gcv != _my_gcv:
+                _v_why = ("图 code_version=%s ≠ 当前代码 %s" % (_gcv, _my_gcv))
+            if _v_why:
+                _module_logger.warning(
+                    "[330刀2] 判据用图门槛：**拒绝** %s —— %s（本轮不判、不填 0）",
+                    os.path.basename(_graph_path), _v_why)
+                return dict(_empty,
+                            graph_file=os.path.basename(_graph_path),
+                            graph_version_ok=False,
+                            graph_version_reason=_v_why,
+                            graph_code_version=_gcv,
+                            graph_criteria_version=_gcrv,
+                            judge_criteria_version=_my_cv,
+                            judge_code_version=_my_gcv)
             # ★322批刀0：边按 **kind 分层**入不同集合（321 起推断边落图，若不分层，
             #   `unique_name/self_attr/typed_infer` 会被当成「有人调用」的证据 ⇒
             #   **误建边静默赦免死代码且无告警**。分层纪律：
@@ -5039,7 +5080,11 @@ class SelfInspector(SilentLogMixin):
                     "graph_file": os.path.basename(_graph_path), "graph_mtime": _gmtime,
                     "stats": _gd.get("stats") or {},
                     # ★第312批 刀1：本轮被判据采用的是**哪一份**图（拒绝清单另行 WARNING 留痕）
-                    "graph_rejected": list(_pick.get("rejected") or [])}
+                    "graph_rejected": list(_pick.get("rejected") or []),
+                    # ★330批刀2：版本门槛通过（True；拒绝走上面的早退分支）
+                    "graph_version_ok": True, "graph_version_reason": "",
+                    "graph_code_version": _gcv, "graph_criteria_version": _gcrv,
+                    "judge_criteria_version": _my_cv, "judge_code_version": _my_gcv}
         except Exception as e:
             silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
             return _empty
@@ -5207,6 +5252,12 @@ class SelfInspector(SilentLogMixin):
                 "graph_file": _gidx.get("graph_file", ""),
                 "graph_mtime": _gidx.get("graph_mtime", 0.0),
                 "criteria_version": self._DEAD_CODE_CRITERIA_VERSION,
+                # ★330批刀2（P1）：图版本门槛读数 —— 让"没判"与"判了 0 条"可区分
+                "graph_version_ok": _gidx.get("graph_version_ok"),
+                "graph_version_reason": str(_gidx.get("graph_version_reason") or ""),
+                "graph_code_version": str(_gidx.get("graph_code_version") or ""),
+                "graph_criteria_version": str(
+                    _gidx.get("graph_criteria_version") or ""),
                 "resolve_rate": round(_resolve_rate * 100.0, 2),
                 # ★326批刀2：hard 池同口径归零（silent 档 = 本轮没判，不是"没有 hard"）
                 "hard_total": 0, "hard_items": [], "hard_pool_capped": False,
@@ -5244,6 +5295,10 @@ class SelfInspector(SilentLogMixin):
         #   "抽验只覆盖池内" 说成 "抽验覆盖全部"。
         _hard_items: list[dict] = []
         _hard_total = 0
+        # ★330批刀1（M2）：hard 档分层计数。三者之和 == `_hard_total`，同图同版本可复算。
+        _hard_strict_total = 0
+        _hard_loose_total = 0
+        _hard_unverified_total = 0
         if _review_only:
             # ★328批刀2：同 silent 分支——中间档的**决定量是解析率**，不是覆盖率。
             #   旧文案只说"覆盖率处于中间档"，读的人会以为覆盖率是闸门（活体实测
@@ -5302,12 +5357,27 @@ class SelfInspector(SilentLogMixin):
                 _alive_src["infer_only"] += 1
                 _tier = "infer-only"
             else:
-                _tier = "hard"          # 三层全无入边 ⇒ 判死依据是「硬」的
+                # ★330批刀1（小林拍板②·M2 分层＋M1 双证据）：hard 不再是一个大筐。
+                #   hard_strict = 图内三层皆无入边 **且** 图外 probe 四类皆空（双证据）
+                #   hard_loose  = 图内三层无入边，但图外仍有痕迹 ⇒ **只降级待复核**
+                #   hard_unverified = probe 索引不可用 ⇒ 无法取证（**不填 0**、不计入 N）
+                #   probe 命中**只用于降级**，任何情况下不得据此判活。
+                _tier, _probe_hits = _m330_classify_hard_tier(
+                    {"file": _f_norm, "method": _name, "line": _defs[0][1]})
                 # ★326批刀2：入 hard 候选池（供 O3 抽验 A；只收集不判罚）
+                #   330 起池内按**分层后**档位留存，O3 只吃 hard_strict 那部分。
                 _hard_total += 1
+                if _tier == "hard_strict":
+                    _hard_strict_total += 1
+                elif _tier == "hard_loose":
+                    _hard_loose_total += 1
+                else:
+                    _hard_unverified_total += 1
                 if len(_hard_items) < _O3_HARD_POOL_MAX:
                     _hard_items.append({"file": _f_norm, "method": _name,
-                                        "line": _defs[0][1], "evidence_tier": "hard"})
+                                        "line": _defs[0][1],
+                                        "evidence_tier": _tier,
+                                        "probe_hits": _probe_hits})
             if _review_only or _tier == "soft":
                 # ★第311批 刀1：受控入料口（单批硬上限 1 条 + 生命周期名/核心文件转人工）。
                 #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
@@ -5366,6 +5436,11 @@ class SelfInspector(SilentLogMixin):
             "graph_mtime": _gidx.get("graph_mtime", 0.0),
             # ★318批刀2：新尺子（解析率）与口径版本一并留档，供跨批对表
             "criteria_version": self._DEAD_CODE_CRITERIA_VERSION,
+            # ★330批刀2（P1）：图版本门槛读数（拒绝时本判据本轮无产出，非"0 条死码"）
+            "graph_version_ok": _gidx.get("graph_version_ok"),
+            "graph_version_reason": str(_gidx.get("graph_version_reason") or ""),
+            "graph_code_version": str(_gidx.get("graph_code_version") or ""),
+            "graph_criteria_version": str(_gidx.get("graph_criteria_version") or ""),
             "resolve_rate": round(_resolve_rate * 100.0, 2),
             "high_confidence": bool(_high_conf),
             "samples": list(_review_samples),
@@ -5374,6 +5449,20 @@ class SelfInspector(SilentLogMixin):
             "hard_total": int(_hard_total),
             "hard_items": list(_hard_items),
             "hard_pool_capped": bool(_hard_total > len(_hard_items)),
+            # ★330批刀1（M2 分层）：**N 只认 hard_strict**；loose/unverified 单列供审计。
+            #   三者之和 == hard_total（同图同版本可复算）。probe 不可用时 strict/loose
+            #   记 None 而不是 0 ——「测不出来」绝不能长得像「达标」。
+            "hard_strict_total": (int(_hard_strict_total)
+                                  if _hard_unverified_total == 0 else None),
+            "hard_loose_total": (int(_hard_loose_total)
+                                 if _hard_unverified_total == 0 else None),
+            "hard_unverified_total": int(_hard_unverified_total),
+            "hard_probe_ok": bool(_hard_unverified_total == 0),
+            "hard_tier_sum_ok": bool(
+                _hard_strict_total + _hard_loose_total + _hard_unverified_total
+                == _hard_total),
+            "hard_tier_note": ("hard_strict=N口径(O3只消费本档)｜hard_loose=图外有痕迹"
+                               "(只降级待复核)｜hard_unverified=probe不可用(不填0)"),
             "o3_n_target": _O3_N_TARGET, "o3_n_source": _O3_N_SOURCE,
             "as_of": time.time()})
         if _review_count:
@@ -5663,6 +5752,10 @@ _DEAD_CODE_REVIEW_STATS: dict = {
     # ★第309批 刀3：图身份（哪份图 / 何时落），待复核数随图漂移时据此解释
     "graph_file": "", "graph_mtime": 0.0,
     "samples": [], "items": [], "as_of": 0.0,
+    # ★330批刀1（M2 分层）：hard 档拆三份的默认值。None = 「还没算过」，
+    #   与 0（「算过，就是 0 条」）严格区分 —— 开闸判定不许把两者混为一谈。
+    "hard_strict_total": None, "hard_loose_total": None,
+    "hard_unverified_total": 0, "hard_probe_ok": None, "hard_tier_sum_ok": None,
 }
 
 
@@ -5672,12 +5765,20 @@ _DEAD_CODE_REVIEW_STATS: dict = {
 # 本模块只给数据（谁占大头、每类可消多少）。
 #: 抽验通过线（20 条里误判不超过 2 条）
 # ★326批刀2（小林裁决①）：**O3 的 N 口径钉死**。
-#   N = **`evidence_tier == "hard"` 的候选条数**（三层 static/byname/infer 皆无入边
-#   且图外无任何证据的那一档）。**不是**判死总数、**不是**待复核清单条数、
-#   更不是"解析率 63% 那把宽尺子"推算出来的数。
-#   现状 182（325 实测）→ 目标 ≤100。任何"到没到 N"的结论只能用这个口径复算。
+#   ★330批刀1（小林拍板②·M2 分层）：N 的承担者由粗档 `hard` **收窄为 `hard_strict`**。
+#   hard 档已拆两层，旧写法 `evidence_tier == "hard"` 在 330 之后**不再是一个会出现的值**
+#   —— 照抄会把 N 算成 0（= 假装达标），故此处与实现一并写清：
+#   N = **`evidence_tier == "hard_strict"` 的候选条数**，
+#       即「图内三层（static/byname/typed_infer）皆无入边」**且**
+#          「图外 probe 四类（string_ref / protocol_name / test_ref / attr_bound）皆空」
+#          —— 这就是 M1 双证据，与 `_m330_classify_hard_tier` 的判定逐字对应。
+#   **不是** `hard_loose`（图外还有痕迹，只降级待复核）、**不是**判死总数、
+#   **不是**待复核清单条数、更不是"解析率那把宽尺子"推算出来的数。
+#   probe 不可用（`hard_unverified`）时 N 记 None 不记 0，结论判 UNAVAILABLE。
+#   任何"到没到 N"的结论只能用这个口径复算。
 _O3_N_TARGET = 100
-_O3_N_SOURCE = "evidence_tier=hard（三层皆无入边且图外无证据）"
+_O3_N_SOURCE = ("evidence_tier=hard_strict（图内三层皆无入边 且 图外 probe 四类"
+                "string_ref/protocol_name/test_ref/attr_bound 皆空）")
 #: hard 档候选池留存上限（抽验靶子；>池上限时抽验只代表池内，须在结果里标注）
 _O3_HARD_POOL_MAX = 1000
 
@@ -5778,6 +5879,37 @@ def _m325_probe_reachable(item: dict, project_root=None) -> list:
     return _hit
 
 
+# ===== ★330批刀1：hard 档分层（M2）＋双证据（M1）=====
+# 背景：329 前置坐实 A 抽验 4/20 误判**全部**是 string_ref 命中，而 hard 档判死时
+# 完全不看图外证据（注释却写着「三层皆无入边且图外无证据」）⇒ 注释与实现不一致、
+# 判据过宽。小林拍板②：M2 分层 + M1 双证据。
+_M330_HARD_TIERS = ("hard_strict", "hard_loose", "hard_unverified")
+
+
+def _m330_classify_hard_tier(item: dict, project_root=None) -> tuple:
+    """★330批刀1：把「图内三层无入边」的候选拆成 strict / loose / unverified。
+
+    返回 ``(tier, probe_hits)``：
+      * ``("hard_strict", [])``     —— 图内三层无入边 **且** 图外 probe 四类皆空（M1 双证据）
+      * ``("hard_loose", [...])``   —— 图内三层无入边，但图外仍有痕迹 ⇒ 只降级待复核
+      * ``("hard_unverified", [])`` —— probe 索引不可用 ⇒ **无法取证**
+
+    为什么 probe 不可用时单列 unverified，而不是并进 loose 或 strict：
+      并进 loose ⇒ strict 计数变小，N 反而「更容易达标」；
+      并进 strict ⇒ 无证据放行。
+      两者都是把「测不出来」伪装成「达标」。只能显式单列，由 O3 判 UNAVAILABLE（不填 0）。
+
+    ★铁律（303 批「字符串在场即赦免」回潮防线）：probe 命中**只用于降级**，
+      任何情况下不得据此判活；判定用档位显式值，不在证据字符串里找关键字（铁律153）。
+    """
+    _idx = _m325_build_name_index(project_root)
+    if not _idx.get("ok"):
+        return "hard_unverified", []
+    _hits = [e for e in _m325_probe_reachable(item, project_root)
+             if e in _O3_PROBE_KINDS]
+    return ("hard_loose", _hits) if _hits else ("hard_strict", [])
+
+
 def evidence_tier_distribution(items=None) -> dict:
     """evidence_tier 三档分布（hard / soft / infer-only，附 unset）。
 
@@ -5786,12 +5918,24 @@ def evidence_tier_distribution(items=None) -> dict:
     _rows = items
     if _rows is None:
         _rows = list((_DEAD_CODE_REVIEW_STATS or {}).get("items") or [])
-    _d = {"hard": 0, "soft": 0, "infer-only": 0, "unset": 0}
+    # ★330批刀1：三档 → 四档（hard 拆 strict/loose）。另有两个**非正常档**单列：
+    #   `hard_unverified` = probe 不可用（故障态，不代表"没有死码"）；
+    #   `hard_legacy`     = 330 之前的粗档 `hard`（旧留样/外部注入），
+    #                       **不得并入 strict**，否则新旧读数混报会假装开闸达标。
+    _d = {"hard_strict": 0, "hard_loose": 0, "hard_unverified": 0,
+          "hard_legacy": 0, "soft": 0, "infer-only": 0, "unset": 0}
+    _legacy = 0
     for _r in (_rows or []):
         if not isinstance(_r, dict):
             continue
         _k = str(_r.get("evidence_tier") or "unset")
+        if _k == "hard":
+            _k = "hard_legacy"
+            _legacy += 1
         _d[_k] = int(_d.get(_k, 0)) + 1
+    if _legacy:
+        _d["legacy_note"] = ("hard_legacy=%d 条来自 330 之前的粗档 hard（未分层），"
+                             "只作基线对照，不计入 N" % _legacy)
     _d["total"] = int(len(_rows or []))
     return _d
 
@@ -5801,9 +5945,15 @@ def format_evidence_tier_dist(items=None) -> list:
     _d = evidence_tier_distribution(items)
     _t = max(1, int(_d.get("total") or 0))
     _out = []
-    for _k in ("hard", "soft", "infer-only"):
+    # ★330批刀1：四档齐印（hard_strict 是 N 口径，单列在最前；loose 供审计）
+    for _k in ("hard_strict", "hard_loose", "hard_unverified", "soft", "infer-only"):
         _n = int(_d.get(_k, 0))
-        _out.append("[evidence_tier] %-10s %5d  (%5.1f%%)" % (_k, _n, _n * 100.0 / _t))
+        _tag = "  <- N 口径" if _k == "hard_strict" else ""
+        _out.append("[evidence_tier] %-14s %5d  (%5.1f%%)%s"
+                    % (_k, _n, _n * 100.0 / _t, _tag))
+    if _d.get("hard_legacy"):
+        _out.append("[evidence_tier] %-14s %5d  (330 前粗档 hard，只作基线对照，不计入 N)"
+                    % ("hard_legacy", int(_d["hard_legacy"])))
     if _d.get("unset"):
         _out.append("[evidence_tier] %-10s %5d  (档位缺失，需修生产者)"
                     % ("unset", _d["unset"]))
@@ -5829,11 +5979,25 @@ def sample_verify_hard_candidates(k: int = 20, items=None, seed: int = 325,
     if _pool_raw is None:
         _pool_raw = list(_DEAD_CODE_REVIEW_STATS.get("hard_items") or [])
         _src = "live_hard_pool"
-    _pool = [dict(_r) for _r in (_pool_raw or []) if isinstance(_r, dict)
-             and str(_r.get("evidence_tier") or "") == "hard"]
+    # ★330批刀1（M2）：抽验靶子从粗档 `hard` 收窄为 **`hard_strict`**。
+    #   330 之前的池子（328 代码基线）只有粗档 `hard`，作为**基线对照**接受，
+    #   但必须显式标 `tier_source=legacy_hard`，绝不与 strict 读数混报。
+    _pool = []
+    _legacy_hits = 0
+    for _r in (_pool_raw or []):
+        if not isinstance(_r, dict):
+            continue
+        _tv = str(_r.get("evidence_tier") or "")
+        if _tv == "hard_strict":
+            _pool.append(dict(_r))
+        elif _tv == "hard":
+            _legacy_hits += 1
+            _pool.append(dict(_r))
+    _tier_src = ("legacy_hard" if (_legacy_hits and _legacy_hits == len(_pool))
+                 else ("mixed" if _legacy_hits else "hard_strict"))
     if not _pool:
         return {"ok": False,
-                "reason": "unavailable：当前无 hard 档候选（活体 silent 档/未跑判死）",
+                "reason": "unavailable：当前无 hard_strict 档候选（活体 silent 档/未跑判死）",
                 "k": int(k), "pool": 0, "sampled": 0, "misjudged": 0,
                 "misjudge_rate": None, "line": _O3_MISJUDGE_LINE,
                 "verdict": "UNAVAILABLE", "source": _src, "rows": []}
@@ -5865,6 +6029,8 @@ def sample_verify_hard_candidates(k: int = 20, items=None, seed: int = 325,
             "hard_total": int(_DEAD_CODE_REVIEW_STATS.get("hard_total", 0) or 0),
             "pool_capped": bool(_DEAD_CODE_REVIEW_STATS.get("hard_pool_capped")),
             "n_source": _O3_N_SOURCE,
+            # ★330批刀1：抽到的是**哪个档**要写在结果里（legacy 池不能冒充 strict 读数）
+            "tier_source": _tier_src,
             "rows": _rows}
 
 
@@ -5880,10 +6046,23 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
       * `548` 是**判死总数**（含 soft 降级），不是 N —— 两个数不可互换。
       * 本函数只给"每类能消多少"，**降法仍由星轨裁**（B/C/D 见 325 报告）。
     """
-    _hard = [dict(_r) for _r in (items or []) if isinstance(_r, dict)
-             and str(_r.get("evidence_tier") or "") == "hard"]
+    # ★330批刀1（M2）：归因对象与 N 口径同源 —— 只算 `hard_strict`。
+    #   粗档 `hard`（330 前的旧池）仍收，但显式标 legacy，避免把未分层读数当 strict。
+    _hard = []
+    _legacy_n = 0
+    for _r in (items or []):
+        if not isinstance(_r, dict):
+            continue
+        _tv = str(_r.get("evidence_tier") or "")
+        if _tv == "hard_strict":
+            _hard.append(dict(_r))
+        elif _tv == "hard":
+            _legacy_n += 1
+            _hard.append(dict(_r))
+    _tier_src = ("legacy_hard" if (_legacy_n and _legacy_n == len(_hard))
+                 else ("mixed" if _legacy_n else "hard_strict"))
     if not _hard:
-        return {"ok": False, "reason": "unavailable：当前无 hard 档候选",
+        return {"ok": False, "reason": "unavailable：当前无 hard_strict 档候选",
                 "hard_total": 0, "cats": [], "target_max": _O3_CANDIDATE_MAX}
     _cats = {k: {"n": 0, "samples": []} for k in _O3_PROBE_KINDS}
     _cats["no_graph_signal_at_all"] = {"n": 0, "samples": []}
@@ -5913,6 +6092,7 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
             "residual_hard": _total - _removable, "target_max": _O3_CANDIDATE_MAX,
             # ★326批刀2：N 口径随结果一起返回（谁读谁复算得到同一个数）
             "n_target": _O3_N_TARGET, "n_source": _O3_N_SOURCE,
+            "tier_source": _tier_src,
             "needs_reduction": max(0, _total - _O3_N_TARGET),
             "meets_target": (_total - _removable) <= _O3_CANDIDATE_MAX,
             "cats": _out,
@@ -5946,11 +6126,24 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     _s = dict(_DEAD_CODE_REVIEW_STATS)
     _items = list(_s.get("hard_items") or [])
     _hard_total = int(_s.get("hard_total", 0) or 0)
+    # ★330批刀1（M2）：N 只认 hard_strict。None = 还没算过 / probe 不可用 ⇒ 不可复算，
+    #   绝不能退化成一个 0 去和 N(100) 比大小（那会把"测不出来"判成"达标"）。
+    _strict = _s.get("hard_strict_total")
+    _loose = _s.get("hard_loose_total")
+    _unver = int(_s.get("hard_unverified_total", 0) or 0)
     _dist = evidence_tier_distribution()
     _rep = {
         "n_target": _O3_N_TARGET,
         "n_source": _O3_N_SOURCE,
         "hard_total": _hard_total,
+        # ★330批刀1：四档读数并列（strict 是 N 口径，loose/unverified 供审计）
+        "hard_strict_total": _strict,
+        "hard_loose_total": _loose,
+        "hard_unverified_total": _unver,
+        "hard_probe_ok": _s.get("hard_probe_ok"),
+        "hard_tier_sum_ok": _s.get("hard_tier_sum_ok"),
+        "n_meets_target": (None if _strict is None
+                           else bool(int(_strict) <= _O3_N_TARGET)),
         "hard_pool": len(_items),
         "hard_pool_capped": bool(_s.get("hard_pool_capped")),
         "tier_dist": _dist,
@@ -6004,6 +6197,9 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     # ---- B/C 降量选项（只算可消量与风险，不代选）----
     _cats = {c.get("cat"): int(c.get("n") or 0) for c in (_rep["reduction"].get("cats") or [])}
     _b_n = sum(_cats.get(x, 0) for x in _O3_PROBE_KINDS)
+    # ★330批刀1：分层后 strict 天然收缩 —— B 的可消量按 strict 基数算，
+    #   `_hard_total` 仍是粗档总数（对表 329 的 558 用它，两者不可互换）。
+    _base_n = int(_strict) if _strict is not None else _hard_total
     _c_n = sum(1 for _i in _items
                if str(_i.get("method") or "").startswith("_")
                and not str(_i.get("method") or "").startswith("__"))
@@ -6014,7 +6210,7 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
               "sample_verdict": (_rep["sample"] or {}).get("verdict")},
         "B": {"name": "四类移 soft（string_ref/protocol_name/test_ref/attr_bound）",
               "candidate_reduction": _b_n,
-              "residual_hard": max(0, _hard_total - _b_n),
+              "residual_hard": max(0, _base_n - _b_n),
               "risk": "移出的若不真死 ⇒ 死码留活，属「漏判」不是「误判」",
               "meets_n": max(0, _hard_total - _b_n) <= _O3_N_TARGET},
         "C": {"name": "辅助函数类（下划线开头私有函数）单独归一类、不判死",
@@ -6023,12 +6219,26 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
               #  （`_detect_dead_code` 的 `if _name.startswith(('_', '__')): continue`）
               #  ⇒ C 在本扫描口径下结构性为 0，不是"没消掉"而是"本来就不在池里"。
               "note": "C 结构性为 0：采集期已排除 `_`/`__` 开头方法（325 报告对 C 的估计作废）",
-              "residual_hard": max(0, _hard_total - _c_n),
+              "residual_hard": max(0, _base_n - _c_n),
               "risk": "私有函数也可能真是死码；单独归类后仍需人工复核",
-              "meets_n": max(0, _hard_total - _c_n) <= _O3_N_TARGET},
+              "meets_n": max(0, _base_n - _c_n) <= _O3_N_TARGET},
     }
     # ---- 官方结论：只认"重启后新图 + 池不截断"----
     _blockers = []
+    # ★330批刀1（M2）：N 口径必须**可复算**才谈得上开闸。probe 不可用 ⇒ N 记 None，
+    #   此处显式阻断（不填 0、不拿 0 去比 N）。
+    if _strict is None:
+        _blockers.append("hard_strict 不可复算（图外 probe 不可用："
+                         "hard_unverified=%d）" % _unver)
+    elif _rep.get("hard_tier_sum_ok") is False:
+        _blockers.append("hard 分层计数不自洽（strict+loose+unverified ≠ hard_total）")
+    elif int(_strict) > _O3_N_TARGET:
+        _blockers.append("N 未达标（hard_strict=%d > N=%d）"
+                         % (int(_strict), _O3_N_TARGET))
+    # ★330批刀2（P1）：版本不对齐 ⇒ 这张图不能被本判据用来开闸（判定树第 6 步）
+    if _rep["graph"].get("version_ok") is not True:
+        _blockers.append("图版本未对齐（%s）"
+                         % (_rep["graph"].get("version_reason") or "图无版本字段/判据未跑"))
     if _rep.get("post_restart_graph") is not True:
         _blockers.append("非重启后新图")
     if _rep["sample"].get("verdict") == "UNAVAILABLE":
@@ -6204,6 +6414,8 @@ def dump_per_item_by_version(items: list, criteria_version: str,
     _p = os.path.join(_d, "run_%s.json" % time.strftime("%Y%m%d_%H%M%S"))
     _tmp = _p + ".tmp"
     _clean = []
+    # ★330批刀3：相对化留痕（同盘 vs 跨盘回落），让"回落"不是一件看不见的事
+    _rel_mode = {"same_drive": 0, "cross_drive_basename": 0}
     # ★322批刀3：单轮判死档实测可达 425 条（321 起分层后还会再涨），500 太贴边 ⇒
     #   提到 1000，并在文件头写 capacity_note 声明上限（超限即**显式可见**，不静默截断）。
     #   注意：**不改**「每版本留 3 份、全量滚动 7 份」的总量策略（312 起护栏）。
@@ -6214,11 +6426,21 @@ def dump_per_item_by_version(items: list, criteria_version: str,
         _c = dict(_it)
         for _k in ("file", "path", "abs_path"):
             if _k in _c and isinstance(_c[_k], str):
+                _raw_k = _c[_k]
                 try:
-                    _c[_k] = os.path.relpath(_c[_k], _root).replace("\\", "/")
-                except ValueError as _re:
-                    _c[_k] = str(_c[_k]).replace("\\", "/")
-                    _module_logger.debug("[319刀4] 路径相对化失败: %s", _re)
+                    _c[_k] = os.path.relpath(_raw_k, _root).replace("\\", "/")
+                    _rel_mode["same_drive"] += 1
+                except (ValueError, OSError, TypeError) as _re:
+                    # ★330批刀3：跨盘（D: vs C:）**回落为文件名**，绝不写回绝对路径。
+                    #   本函数的设计约束是「文件内**不得含绝对路径**」（防 PII/环境泄露，
+                    #   319刀4 原意）。旧实现回落成 `str(原路径)`，恰恰把盘符路径写了进去
+                    #   —— 名义上"相对化失败兜底"，实际是**泄露面兜底**。
+                    _base = os.path.basename(str(_raw_k).replace("\\", "/"))
+                    _c[_k] = _base or str(_raw_k)
+                    _rel_mode["cross_drive_basename"] += 1
+                    _module_logger.debug(
+                        "[330刀3] 跨盘相对化回落**文件名**: kind=%s raw=%r -> %r（%s）",
+                        _k, _raw_k, _c[_k], _re)
         _clean.append(_c)
     with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
         # ★322批刀3：文件头留容量声明 + 批次日期 + 证据档位分布（人工抽验要有靶子）
@@ -6235,6 +6457,11 @@ def dump_per_item_by_version(items: list, criteria_version: str,
                                        "why": "322刀3：单轮 425 条需不顶满；超限显式 truncated",
                                        "roll_policy": "每版本留3份/全量滚动7份（未改）"},
                    "evidence_tier_dist": _tiers,
+                   # ★330批刀3：相对化方式留痕（跨盘回落条数 >0 时**可见**，
+                   #   而不是靠 debug 日志碰运气）
+                   "path_rel_mode": dict(_rel_mode),
+                   "path_rel_note": ("same_drive=同盘相对化｜cross_drive_basename="
+                                     "跨盘回落为**文件名**（不含盘符，防 PII）"),
                    "items": _clean}, _f, ensure_ascii=False, indent=2)
     os.replace(_tmp, _p)
     try:

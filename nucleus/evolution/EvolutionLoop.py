@@ -43,7 +43,19 @@ _GROWTH_INTAKE_STATS: dict = {
     "admitted": 0,       # 真正入队
     "empty_key_hits": 0,  # 存在空键冲突候选（**不再让位**，仅留痕）
     "no_material": 0,    # hub 里没有 growth 料
+    # ★330批刀4（326 前置§0-3）：让位要看得出**是哪种**冲突 —— 只有一句日志不算留痕。
+    "last_conflict_key": None,   # 最近一次让位的 {"file","method","why"}，可复算
+    "yielded_nonempty": 0,       # 与 yielded 同值（语义名，报表直读不猜）
+    "empty_key_ignored": 0,      # 与 empty_key_hits 同值（语义名）
+    # ★330批刀4：料龄 —— 与 hub **上次跨阈消费**的时刻对表。
+    #   None = hub 从未消费过 ⇒ 不可算（**不填 0**：0 秒会被读成"刚刚产出的新料"）。
+    "hub_consume_age_sec": None,
+    "stale_material": 0,         # 料龄超过跨阈节奏的拍数
 }
+
+#: ★330批刀4：hub 跨阈消费节奏（≈33 分钟/轮）。料龄超过它，说明这一拍读到的
+#: 是上一轮**残留**而不是"刚产出的料"——标 stale，不冒充新鲜数据。
+_M330_HUB_CADENCE_SEC = 33 * 60.0
 
 #: 入料摘要落盘位置（唯一可观测口——trigger_counts 过去只活在内存返回值里）
 _M325_INTAKE_SUMMARY_REL = os.path.join(
@@ -469,11 +481,14 @@ class EvolutionLoop(SilentLogMixin):
             return []
         _topic = ""
         _hyp = ""
+        _hub_consume_ts = None
         try:
             from nucleus.mnemosyne.verification_learning_hub import (
                 get_verification_learning_hub,
             )
             _hub = get_verification_learning_hub()
+            # ★330批刀4：hub 上次跨阈消费时刻（用于算料龄，不参与让位判定）
+            _hub_consume_ts = getattr(_hub, "_last_consume_ts", None)
             for _entry in reversed(list(getattr(_hub, "_entries", []) or [])):
                 if (str(_entry.get("task_type", "")) == "growth_hypothesis"
                         or str(_entry.get("origin", "")) == "growth"):
@@ -505,12 +520,21 @@ class EvolutionLoop(SilentLogMixin):
             # 空键：**不判冲突**，只记录"候选里确实有空键"，与"没判"可区分
             _GROWTH_INTAKE_STATS["empty_key_hits"] = int(
                 _GROWTH_INTAKE_STATS.get("empty_key_hits", 0)) + 1
+            # ★330批刀4：与 yielded（真同文件冲突让位）**分开计数**，
+            #   否则"空键被忽略"与"真冲突让位"会混成一个数，看不出是哪一类。
+            _GROWTH_INTAKE_STATS["empty_key_ignored"] = int(
+                _GROWTH_INTAKE_STATS.get("empty_key_ignored", 0)) + 1
         if _conflict_key:
             _GROWTH_INTAKE_STATS["yielded"] = int(
                 _GROWTH_INTAKE_STATS.get("yielded", 0)) + 1
+            _GROWTH_INTAKE_STATS["yielded_nonempty"] = int(
+                _GROWTH_INTAKE_STATS.get("yielded_nonempty", 0)) + 1
+            # ★330批刀4：把**具体冲突键**落进统计（只有日志的话，复算要翻日志文件）
+            _GROWTH_INTAKE_STATS["last_conflict_key"] = dict(_conflict_key)
             _module_logger.info(
-                "[316刀3][补丁] 需求源让位（与缺陷源同 file/method）: topic=%s "
-                "conflict_key=%s", _topic, _conflict_key)
+                "[316刀3][补丁][330刀4] 需求源让位: topic=%s key_kind=%s "
+                "conflict_key=%s（另一类 empty_key 冲突只计数不让位）",
+                _topic, _conflict_key.get("why"), _conflict_key)
             return []
         _rec = {
             "type": "growth_need",
@@ -528,7 +552,20 @@ class EvolutionLoop(SilentLogMixin):
         }
         # ★325批刀0：留痕带上冲突判定结论，便于复核"为什么这拍进来了"
         _rec["conflict_key"] = None
+        _rec["conflict_key_why"] = "none"
         _rec["m325_empty_key_ignored"] = bool(_file == "" and _method == "")
+        # ★330批刀4：料龄与 hub 消费时刻对表 —— 差值超过跨阈节奏 ⇒ 这料是上一轮残留，
+        #   如实标 stale。绝不用 0 冒充"刚产出的新料"。
+        _age = None
+        if isinstance(_hub_consume_ts, (int, float)) and float(_hub_consume_ts) > 0:
+            _age = max(0.0, time.time() - float(_hub_consume_ts))
+            _GROWTH_INTAKE_STATS["hub_consume_age_sec"] = round(_age, 1)
+        _stale = bool(_age is not None and _age > _M330_HUB_CADENCE_SEC)
+        if _stale:
+            _GROWTH_INTAKE_STATS["stale_material"] = int(
+                _GROWTH_INTAKE_STATS.get("stale_material", 0)) + 1
+        _rec["material_age_sec"] = (round(_age, 1) if _age is not None else None)
+        _rec["material_stale"] = _stale
         _GROWTH_INTAKE_STATS["admitted"] = int(
             _GROWTH_INTAKE_STATS.get("admitted", 0)) + 1
         _module_logger.info(

@@ -258,7 +258,16 @@ def m325_open_gate_fields(root: str | None = None) -> dict:
     _pi = _m325_latest_per_item(_root)
     _isum = _m325_intake_summary(_root)
     _dist = _pi.get("evidence_tier_dist") or None
-    _hard = (_dist or {}).get("hard") if _dist else None
+    # ★330批刀1：三档 → 四档。`hard_strict` 才是 **N 口径**；`hard_loose` 是
+    #   图外还有痕迹（只降级待复核）；`hard_legacy` 是 330 前的粗档（只作基线对照）。
+    #   旧键 `hard_candidates` 保留，值改为 strict（330 之后的 N 就该是它）；
+    #   若留样还是旧格式（只有 hard），则退回 legacy 值并标 src，绝不静默混报。
+    _hs = (_dist or {}).get("hard_strict") if _dist else None
+    _hl = (_dist or {}).get("hard_loose") if _dist else None
+    _hg = (_dist or {}).get("hard_legacy") if _dist else None
+    _hard = _hs if _hs is not None else _hg
+    _tier_src = ("hard_strict" if _hs is not None
+                 else ("hard_legacy" if _hg is not None else "unavailable"))
     _soft = (_dist or {}).get("soft") if _dist else None
     _tc = (_isum.get("trigger_counts") if isinstance(_isum, dict) else None) or None
     return {
@@ -267,6 +276,15 @@ def m325_open_gate_fields(root: str | None = None) -> dict:
         "per_item_count": _pi.get("count"),
         "per_item_truncated": _pi.get("truncated"),
         "hard_candidates": _hard,
+        # ★330批刀1：四档单列（N 口径 = hard_strict；legacy 不计入 N）
+        "hard_strict_candidates": _hs,
+        "hard_loose_candidates": _hl,
+        "hard_legacy_candidates": _hg,
+        "hard_candidates_tier_src": _tier_src,
+        "hard_unverified_candidates": ((_dist or {}).get("hard_unverified")
+                                       if _dist else None),
+        "n_source": ("evidence_tier=hard_strict（图内三层无入边 且 图外 probe 四类皆空）"
+                     if _hs is not None else "unavailable（无 strict 读数）"),
         "soft_candidates": _soft,
         "trigger_counts": _tc,
         "trigger_counts_src": (_isum.get("_path") or "") or "unavailable",
@@ -327,10 +345,27 @@ def render_markdown(res: dict) -> str:
     _dist = _og.get("evidence_tier_dist")
     _L.append("| evidence_tier 分布 | `%s` | `%s` |" % (
         ("unavailable" if not _dist else
-         "hard=%s/soft=%s/infer-only=%s" % (_dist.get("hard"), _dist.get("soft"),
-                                            _dist.get("infer-only"))) ,
+         "hard_strict=%s/hard_loose=%s/hard_unverified=%s/soft=%s/infer-only=%s"
+         % (_dist.get("hard_strict"), _dist.get("hard_loose"),
+            _dist.get("hard_unverified"), _dist.get("soft"),
+            _dist.get("infer-only"))),
         str(_og.get("evidence_tier_src") or "unavailable").replace("|", "\\|")))
-    _L.append("| hard 候选数 | `%s` | 同上 |" % (
+    if _dist and _dist.get("hard_legacy"):
+        _L.append("| hard_legacy（330 前粗档） | `%s` | 同上（**只作基线对照，"
+                  "不计入 N**） |" % _dist.get("hard_legacy"))
+    # ★330批刀1（+331 要求）：**hard_strict 与解析率分开两行印**——
+    #   两者是不同尺子，并排会让人误以为"解析率高 ⇒ N 就低"。
+    _L.append("| **hard_strict 候选数（N 口径）** | `%s` | %s |" % (
+        "unavailable" if _og.get("hard_strict_candidates") is None
+        else _og.get("hard_strict_candidates"),
+        str(_og.get("hard_candidates_tier_src") or "unavailable")))
+    _L.append("| hard_loose 候选数（只降级待复核） | `%s` | 同上 |" % (
+        "unavailable" if _og.get("hard_loose_candidates") is None
+        else _og.get("hard_loose_candidates")))
+    _L.append("| 解析率（**另一把尺子，与 N 无关**） | `%s` | 调用图 stats（baseline.m92） |" % (
+        "unavailable" if (_b.get("m92") or {}).get("resolve_rate") is None
+        else (_b.get("m92") or {}).get("resolve_rate")))
+    _L.append("| hard 候选数（兼容键，值同 strict） | `%s` | 同上 |" % (
         "unavailable" if _og.get("hard_candidates") is None else _og.get("hard_candidates")))
     _L.append("| soft 候选数 | `%s` | 同上 |" % (
         "unavailable" if _og.get("soft_candidates") is None else _og.get("soft_candidates")))
