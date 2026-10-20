@@ -454,6 +454,7 @@ def main() -> int:
     _ap = argparse.ArgumentParser(description="压测首跑：基线快照 + 七段留痕 + 人推计数")
     _ap.add_argument("--loop", type=int, default=None, help="压测圈次（写进输出）")
     _ap.add_argument("--json", default="", help="另存 JSON 路径")
+    _ap.add_argument("--md", default="", help="另存 Markdown 渲染路径（321刀4 render_markdown 输出）")
     _a = _ap.parse_args()
 
     _pid = _framework_pid_info()
