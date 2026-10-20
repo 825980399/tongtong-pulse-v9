@@ -4929,7 +4929,10 @@ class SelfInspector(SilentLogMixin):
                   # ★第309批 刀3：图身份（哪一份图 / 什么时候落的）——
                   #   覆盖率与待复核数**随图漂移**（533→535 就是换了图），
                   #   没有图身份就分不清「代码变了」与「图换了」。
-                  "graph_file": "", "graph_mtime": 0.0}
+                  "graph_file": "", "graph_mtime": 0.0,
+                  # ★322批刀0：分层集合（无图时为空，判据自然让位）
+                  "in_edge_hard": set(), "in_edge_soft": set(),
+                  "in_edge_infer": set(), "kind_counts": {}}
         try:
             # ★第312批 刀1：**图污染守卫** —— 不再「取最新一份」就信，改为「取最新一份合格的图」。
             #   生产目录被合成夹具污染过两次（12 节点 / 4 文件，node.file 全是 pkg/*.py）；
@@ -4949,8 +4952,34 @@ class SelfInspector(SilentLogMixin):
                 return _empty
             _gd = _pick["graph"]
             _graph_path = _pick["path"]
-            _in_edge_ids = {_e.get("callee") for _e in (_gd.get("edges") or [])
-                            if isinstance(_e, dict) and _e.get("callee")}
+            # ★322批刀0：边按 **kind 分层**入不同集合（321 起推断边落图，若不分层，
+            #   `unique_name/self_attr/typed_infer` 会被当成「有人调用」的证据 ⇒
+            #   **误建边静默赦免死代码且无告警**。分层纪律：
+            #     硬赦免（自证）= static / event / entry
+            #     软赦免（按名匹配）= byname / self_attr / unique_name ⇒ 只能降级待复核
+            #     不入赦免集（纯推断）= typed_infer ⇒ 仅解释，不得判活
+            #   未知 kind 一律按**软**处理（保守：既不判活也不判死）。
+            _HARD_KINDS = ("static", "event", "entry")
+            _in_edge_ids: set = set()
+            _in_edge_hard: set = set()
+            _in_edge_soft: set = set()
+            _in_edge_infer: set = set()
+            _kind_counts: dict = {}
+            for _e in (_gd.get("edges") or []):
+                if not isinstance(_e, dict):
+                    continue
+                _cal = _e.get("callee")
+                if not _cal:
+                    continue
+                _in_edge_ids.add(_cal)
+                _kind = str(_e.get("kind") or "static")
+                _kind_counts[_kind] = int(_kind_counts.get(_kind, 0)) + 1
+                if _kind in _HARD_KINDS:
+                    _in_edge_hard.add(_cal)
+                elif _kind == "typed_infer":
+                    _in_edge_infer.add(_cal)
+                else:
+                    _in_edge_soft.add(_cal)
             _id_by_fileline: dict = {}
             _ids_by_filename: dict = {}
             _covered: set = set()
@@ -4977,7 +5006,11 @@ class SelfInspector(SilentLogMixin):
                 # 取不到 mtime 只影响「图身份」可读性，不影响判据本身
                 _module_logger.debug("[309刀3] 图 mtime 读取失败: %s", _gme)
                 _gmtime = 0.0
-            return {"in_edge_ids": _in_edge_ids, "id_by_fileline": _id_by_fileline,
+            return {"in_edge_ids": _in_edge_ids,
+                    # ★322批刀0：分层集合与 kind 分布（覆盖率/判据按层重算的原料）
+                    "in_edge_hard": _in_edge_hard, "in_edge_soft": _in_edge_soft,
+                    "in_edge_infer": _in_edge_infer, "kind_counts": _kind_counts,
+                    "id_by_fileline": _id_by_fileline,
                     "ids_by_filename": _ids_by_filename, "covered_files": _covered,
                     "node_count": len(_gd.get("nodes") or []), "ok": True,
                     "graph_file": os.path.basename(_graph_path), "graph_mtime": _gmtime,
@@ -5104,6 +5137,23 @@ class SelfInspector(SilentLogMixin):
         _COVERAGE_FLOOR = 0.55
         _node_count = int(_gidx.get("node_count", 0) or 0)
         _coverage = (len(_in_edge_ids) / _node_count) if _node_count else 0.0
+        # ★322批刀0：**同一份图按三层分别重算覆盖率**，且必须**三行分别输出**——
+        #   单行读数分不清「真没人调」与「只被推断边连着」，后者正是误赦免的来源。
+        _in_hard = _gidx.get("in_edge_hard") or set()
+        _in_soft = _gidx.get("in_edge_soft") or set()
+        _in_infer = _gidx.get("in_edge_infer") or set()
+        _kind_counts = dict(_gidx.get("kind_counts") or {})
+        _cov_hard = (len(_in_hard) / _node_count) if _node_count else 0.0
+        _cov_soft = (len(_in_hard | _in_soft) / _node_count) if _node_count else 0.0
+        _module_logger.info(
+            "[322刀0] 硬赦免覆盖率(static/event/entry) = %.2f%%（有硬入边 %d / 节点 %d）",
+            _cov_hard * 100.0, len(_in_hard), _node_count)
+        _module_logger.info(
+            "[322刀0] 软赦免覆盖率(+byname/self_attr/unique_name) = %.2f%%（新增软入边 %d）",
+            _cov_soft * 100.0, len(_in_hard | _in_soft) - len(_in_hard))
+        _module_logger.info(
+            "[322刀0] 全赦免覆盖率(+typed_infer) = %.2f%%（仅推断入边 %d）｜kind 分布=%s",
+            _coverage * 100.0, len(_in_infer - (_in_hard | _in_soft)), _kind_counts)
         # ★318批刀2：**换尺子**——解禁条件改用「仓内可解析调用解析率」，
         #   分母显式排除 external（硬护栏：防 R1 把 os/json 调用算成"已解析"制造虚假提升）。
         #   旧覆盖率保留为**参考读数**（仍输出、仍可审计），但不再当闸门。
@@ -5124,7 +5174,12 @@ class SelfInspector(SilentLogMixin):
                 _module_logger.debug("[318刀2] A1 failed 率不可解析，护栏跳过: %s", _a1e)
         if _mode == "silent":
             _DEAD_CODE_REVIEW_STATS.update({
-                "count": 0, "mode": _mode, "coverage": round(_coverage * 100.0, 2),
+                "count": 0, "mode": _mode,
+            "coverage": round(_coverage * 100.0, 2),
+            # ★322批刀0：三层覆盖率同报（单行读数不可审计）
+            "coverage_hard": round(_cov_hard * 100.0, 2),
+            "coverage_soft": round(_cov_soft * 100.0, 2),
+            "kind_counts": dict(_kind_counts),
                 "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
                 "graph_file": _gidx.get("graph_file", ""),
                 "graph_mtime": _gidx.get("graph_mtime", 0.0),
@@ -5152,7 +5207,9 @@ class SelfInspector(SilentLogMixin):
                 _coverage * 100.0, len(_in_edge_ids), _node_count,
                 _COVERAGE_FLOOR * 100.0, _COVERAGE_JUDGE * 100.0)
         _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0,
-                      "out_of_graph": 0, "no_node": 0}
+                      "out_of_graph": 0, "no_node": 0,
+                      # ★322批刀0：软赦免（降级待复核）/ 仅推断边（不赦免）分别计数
+                      "soft_review": 0, "infer_only": 0}
 
         for _name, _defs in _methods.items():
             _call_count = _call_counts.get(_name, 0)
@@ -5169,54 +5226,74 @@ class SelfInspector(SilentLogMixin):
             if not _ids:
                 _alive_src["no_node"] += 1
                 continue
-            if any(_i in _in_edge_ids for _i in _ids):
+            # ★322批刀0：**分层判定** —— 只有硬赦免判活；软赦免降级待复核；
+            #   typed_infer **不入赦免集**（照判死/待复核，但 issue 标 evidence_tier）。
+            _hit_hard = any(_i in _in_hard for _i in _ids)
+            _hit_soft = any(_i in _in_soft for _i in _ids)
+            _hit_infer = any(_i in _in_infer for _i in _ids)
+            if (_hit_hard or _name in _event_names
+                    or _name.startswith(_ENTRY_PREFIX)):
                 _alive_src["static"] += 1
-            elif _name in _byname_names:
-                _alive_src["byname"] += 1
-            elif _name in _event_names:
-                _alive_src["event"] += 1
-            elif _name.startswith(_ENTRY_PREFIX):
-                _alive_src["entry"] += 1
+                if _name in _event_names:
+                    _alive_src["event"] += 1
+                if _name.startswith(_ENTRY_PREFIX):
+                    _alive_src["entry"] += 1
+                continue
+            if _hit_soft or _name in _byname_names:
+                # 软赦免：按名匹配 ⇒ **不得判活**（历史上正是它静默赦免了死码）
+                _alive_src["soft_review"] += 1
+                if _name in _byname_names:
+                    _alive_src["byname"] += 1
+                _tier = "soft"
+            elif _hit_infer:
+                _alive_src["infer_only"] += 1
+                _tier = "infer-only"
             else:
-                if _review_only:
-                    # ★第311批 刀1：**恢复入料口**（308 降级为纯统计后，闭环自动端
-                    #   彻底断料——issues 里一条 review 条目都没有，进化候选池只剩
-                    #   环境里偶然出现的 medium，pending 队列长期 0 条）。
-                    #   恢复 ≠ 放宽判死：severity 仍是 info、判死阈值仍是
-                    #   _COVERAGE_JUDGE，且这些条目**只能**经 build_review_intake()
-                    #   受控入料（单批硬上限 1 条 + 生命周期名/核心文件一律转人工）。
-                    #   仍保留统计口径（_DEAD_CODE_REVIEW_STATS），趋势门禁照旧读统计。
-                    _review_count += 1
-                    if len(_review_samples) < 3:
-                        _review_samples.append("%s::%s" % (_defs[0][0], _name))
-                    for _f, _line in _defs[:1]:
-                        _issue_rec = {
-                            'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
-                            'type': 'dead_code',
-                            'severity': 'info',
-                            'review_only': True,
-                            'review_reason': 'graph_coverage_mid_band',
-                            'description': (f'方法 {_name} 在图上无入边，但图入边覆盖率仅 '
-                                            f'{_coverage * 100.0:.1f}%（中间档）'
-                                            f'⇒ 分不清「真死」与「没解析出来」，待人工复核'),
-                            'suggestion': '先核调用方是否被反射/事件/跨模块调用；确认无调用再删',
-                        }
-                        _issues.append(_issue_rec)
-                        if len(_review_items) < self._M311_MAX_ITEMS:
-                            _review_items.append(dict(_issue_rec))
-                    continue
+                _tier = "hard"          # 三层全无入边 ⇒ 判死依据是「硬」的
+            if _review_only or _tier == "soft":
+                # ★第311批 刀1：受控入料口（单批硬上限 1 条 + 生命周期名/核心文件转人工）。
+                #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
+                # ★322批刀0：软赦免条目**在这里**落地（判死档下也降级待复核）。
+                _review_count += 1
+                if len(_review_samples) < 3:
+                    _review_samples.append("%s::%s" % (_defs[0][0], _name))
                 for _f, _line in _defs[:1]:
-                    _issues.append({
+                    _issue_rec = {
                         'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
                         'type': 'dead_code',
-                        'severity': 'low',
-                        'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',
-                        'suggestion': '确认是否需要保留，如不需要可删除以减少代码体积',
-                    })
+                        'severity': 'info',
+                        'review_only': True,
+                        'review_reason': ('soft_edge_only' if _tier == "soft"
+                                          else 'graph_coverage_mid_band'),
+                        # ★322批刀0/刀3：证据档位（hard/soft/infer-only），人工抽验有靶子
+                        'evidence_tier': _tier,
+                        'description': (f'方法 {_name} 只有软/推断证据（tier={_tier}），'
+                                        f'图入边覆盖率 硬={_cov_hard * 100.0:.1f}%'
+                                        f'/全={_coverage * 100.0:.1f}% ⇒ 待人工复核'),
+                        'suggestion': '先核调用方是否被反射/事件/跨模块调用；确认无调用再删',
+                    }
+                    _issues.append(_issue_rec)
+                    if len(_review_items) < self._M311_MAX_ITEMS:
+                        _review_items.append(dict(_issue_rec))
+                continue
+            for _f, _line in _defs[:1]:
+                _issues.append({
+                    'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
+                    'type': 'dead_code',
+                    'severity': 'low',
+                    # ★322批刀0/刀3：证据档位（hard=三层皆无入边｜infer-only=只有推断边）
+                    'evidence_tier': _tier,
+                    'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',
+                    'suggestion': '确认是否需要保留，如不需要可删除以减少代码体积',
+                })
         # ★第308批 刀2：待复核清单落**统计口径**（不进 issues，供趋势门禁读）
         _DEAD_CODE_REVIEW_STATS.update({
             "count": int(_review_count), "mode": _mode,
             "coverage": round(_coverage * 100.0, 2),
+            # ★322批刀0：三层覆盖率同报（单行读数不可审计）
+            "coverage_hard": round(_cov_hard * 100.0, 2),
+            "coverage_soft": round(_cov_soft * 100.0, 2),
+            "kind_counts": dict(_kind_counts),
             "node_count": _node_count, "in_edge_count": len(_in_edge_ids),
             # ★第309批 刀3：同版同图可比 —— 记下「这一轮读数出自哪份图」
             "graph_file": _gidx.get("graph_file", ""),
@@ -5239,12 +5316,13 @@ class SelfInspector(SilentLogMixin):
             _m318_record_per_item(self._DEAD_CODE_CRITERIA_VERSION, _review_items)
         # ★第304批 刀2：豁免来源标注（可审计——谁靠什么活着一目了然）
         _module_logger.info(
-            "[307刀1] dead_code 豁免来源: 静态入边(id对齐)=%d 按名边=%d 事件边=%d 注册入口=%d"
-            " 图域外(不判)=%d 无图节点(不判)=%d（模式=%s 覆盖率=%.1f%% 产出=%d 其中待复核=%d）",
-            _alive_src["static"], _alive_src["byname"], _alive_src["event"],
-            _alive_src["entry"], _alive_src["out_of_graph"],
-            _alive_src["no_node"], _mode, _coverage * 100.0, len(_issues),
-            _review_count)
+            "[307刀1/322刀0] dead_code 豁免来源: 硬赦免=%d 软赦免降级待复核=%d"
+            " 仅推断边(不赦免)=%d 图域外(不判)=%d 无图节点(不判)=%d"
+            "（模式=%s 覆盖率 硬=%.2f%%/软=%.2f%%/全=%.2f%% 产出=%d 其中待复核=%d）",
+            _alive_src["static"], _alive_src["soft_review"], _alive_src["infer_only"],
+            _alive_src["out_of_graph"], _alive_src["no_node"], _mode,
+            _cov_hard * 100.0, _cov_soft * 100.0, _coverage * 100.0,
+            len(_issues), _review_count)
         return _issues
 
     # ========== 第311批 刀2：结构变化感知（二级实体化 MVP · 传感端） ==========
@@ -5591,7 +5669,11 @@ def dump_per_item_by_version(items: list, criteria_version: str,
     _p = os.path.join(_d, "run_%s.json" % time.strftime("%Y%m%d_%H%M%S"))
     _tmp = _p + ".tmp"
     _clean = []
-    for _it in (items or [])[:500]:
+    # ★322批刀3：单轮判死档实测可达 425 条（321 起分层后还会再涨），500 太贴边 ⇒
+    #   提到 1000，并在文件头写 capacity_note 声明上限（超限即**显式可见**，不静默截断）。
+    #   注意：**不改**「每版本留 3 份、全量滚动 7 份」的总量策略（312 起护栏）。
+    _CAP = 1000
+    for _it in (items or [])[:_CAP]:
         if not isinstance(_it, dict):
             continue
         _c = dict(_it)
@@ -5604,7 +5686,20 @@ def dump_per_item_by_version(items: list, criteria_version: str,
                     _module_logger.debug("[319刀4] 路径相对化失败: %s", _re)
         _clean.append(_c)
     with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
-        json.dump({"criteria_version": criteria_version, "count": len(_clean),
+        # ★322批刀3：文件头留容量声明 + 批次日期 + 证据档位分布（人工抽验要有靶子）
+        _tiers: dict = {}
+        for _c in _clean:
+            _tk = str(_c.get("evidence_tier") or "unset")
+            _tiers[_tk] = int(_tiers.get(_tk, 0)) + 1
+        json.dump({"criteria_version": criteria_version,
+                   "batch_date": time.strftime("%Y%m%d"),
+                   "count": len(_clean),
+                   "source_count": len(items or []),
+                   "truncated": bool(len(items or []) > _CAP),
+                   "capacity_note": {"per_file_cap": _CAP,
+                                       "why": "322刀3：单轮 425 条需不顶满；超限显式 truncated",
+                                       "roll_policy": "每版本留3份/全量滚动7份（未改）"},
+                   "evidence_tier_dist": _tiers,
                    "items": _clean}, _f, ensure_ascii=False, indent=2)
     os.replace(_tmp, _p)
     try:

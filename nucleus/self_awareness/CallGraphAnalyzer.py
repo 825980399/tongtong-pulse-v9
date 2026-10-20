@@ -371,6 +371,58 @@ class _Collector(ast.NodeVisitor):
                 "调用图分析：形参注解采集失败 %s: %s", type(_e).__name__, _e)
         if _ann:
             _pt[_qual] = _ann
+        # ★322批刀1（路线② T1）：采集**返回注解**与**`v = f(...)` 赋值源**，
+        #   供 `v.m()` 走「返回值→接收者类型」推断档（kind 仍 typed_infer，可审计）。
+        #   判据纪律与 321 刀0 同规：只认**简单名**、只认**点号为零**的函数名，
+        #   `Optional[C]` / `pkg.f()` / 链式调用一律不采（接了就是猜）。
+        try:
+            _ret = getattr(node, "returns", None)
+            _rn = ""
+            if isinstance(_ret, ast.Name):
+                _rn = _ret.id
+            elif isinstance(_ret, ast.Constant) and isinstance(_ret.value, str):
+                _rv = _ret.value.strip()
+                if _rv.isidentifier():
+                    _rn = _rv
+            if _rn and _rn not in ("None", "Any", "Optional"):
+                _ra = getattr(self, "ret_ann", None)
+                if _ra is None:
+                    _ra = {}
+                    self.ret_ann = _ra
+                _ra[_qual_id(self.module, _qual)] = _rn
+            _src: dict = {}
+
+            def _scan_assign(_nodes, _out, _depth=0):
+                """只扫本函数作用域：遇嵌套 def/class/lambda 即跳过（不越界猜）。"""
+                if _depth > 10:
+                    return
+                for _st in (_nodes or []):
+                    if isinstance(_st, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                       ast.ClassDef, ast.Lambda)):
+                        continue
+                    if (isinstance(_st, ast.Assign) and len(_st.targets) == 1
+                            and isinstance(_st.targets[0], ast.Name)
+                            and isinstance(_st.value, ast.Call)):
+                        _fq = _dotted(_st.value.func)
+                        if _fq and "." not in _fq:
+                            _out[_st.targets[0].id] = _fq
+                    for _fld in ("body", "orelse", "finalbody"):
+                        _scan_assign(getattr(_st, _fld, None), _out, _depth + 1)
+                    for _h in (getattr(_st, "handlers", None) or []):
+                        _scan_assign(getattr(_h, "body", None), _out, _depth + 1)
+                    for _c in (getattr(_st, "cases", None) or []):
+                        _scan_assign(getattr(_c, "body", None), _out, _depth + 1)
+
+            _scan_assign(node.body, _src)
+            if _src:
+                _as = getattr(self, "assign_src", None)
+                if _as is None:
+                    _as = {}
+                    self.assign_src = _as
+                _as[_qual_id(self.module, _qual)] = _src
+        except Exception as _e2:      # 采不到只是少一条线索，绝不影响建图
+            (_logger.debug if _noise_reduce() else _logger.warning)(
+                "调用图分析：返回注解/赋值源采集失败 %s: %s", type(_e2).__name__, _e2)
         self._scope.append(("func", node.name))
         self.generic_visit(node)
         self._collect_roles(node, _qual, _cls)
@@ -745,6 +797,11 @@ class CallGraphAnalyzer:
         self._external = 0
         # ★321批刀0：形参注解档的类尾名索引（每轮建图重建，防陈旧）
         self._m321_cls_index = None
+        # ★322批刀1：路线② 推断态（返回注解 / 赋值源 / 名字索引 / 计数）全部按轮重建
+        self.ret_ann = {}
+        self.assign_src = {}
+        self._m322_name_idx = None
+        self._m322_infer_stats = {"param_ann": 0, "ret_value": 0}
 
     def _collect_file(self, rel: str) -> Any:
         """解析单个文件，产出 `_Collector`；解析失败返回 None 并记 WARNING。"""
@@ -795,7 +852,14 @@ class CallGraphAnalyzer:
             self._caller_module[_d["id"]] = _d["module"]
         self._by_module_top[_module] = _top
         self._raw_calls.extend(
-            [dict(x, file=rel, module=_module) for x in _c.raw_calls])
+            [dict(x, file=rel, module=_module) for x in _c.raw_calls])        # ★322批刀1：把收集器采集到的「返回注解 / 赋值源」并进分析器
+        #   （收集器按文件用完即弃，不并回来 = 这档永远空转，实测 0 边就是这原因）
+        _cra = getattr(_c, "ret_ann", None) or {}
+        if _cra:
+            self.ret_ann.update(_cra)
+        _cas = getattr(_c, "assign_src", None) or {}
+        if _cas:
+            self.assign_src.update(_cas)
         self._raw_emits.extend(
             [dict(x, file=rel, module=_module) for x in _c.emits])
         self._raw_subs.extend(
@@ -915,6 +979,55 @@ class CallGraphAnalyzer:
             return ""                      # 仓内同名类多义 ⇒ 不猜
         _cls, _mod = next(iter(_cands))
         return str(self._by_module.get(_mod, {}).get("%s.%s" % (_cls, suffix)) or "")
+
+    # ===== ★322批刀1（路线②）：返回值 → 接收者类型推断（kind 仍 typed_infer） =====
+    @staticmethod
+    def _m322_typed_enabled() -> bool:
+        """typed_infer 档**总开关**（回退粒度按 kind：关掉只少 typed_infer，不动 static/unique_name）。"""
+        return str(os.environ.get("TT_TYPED_INFER", "1")).strip().lower() not in ("0", "false", "no")
+
+    @staticmethod
+    def _m322_ret_enabled() -> bool:
+        """路线②（返回值推断）**单独开关**：默认关，待 T2 误建率结论由星轨拍板再开。"""
+        return str(os.environ.get("TT_TYPED_INFER_RET", "0")).strip().lower() in ("1", "true", "yes")
+
+    def _m322_inc(self, via: str) -> None:
+        """分来源计数（param_ann=路线①｜ret_value=路线②），供交叉项与对表复算。"""
+        _s = getattr(self, "_m322_infer_stats", None)
+        if _s is None:
+            _s = {"param_ann": 0, "ret_value": 0}
+            self._m322_infer_stats = _s
+        _s[via] = int(_s.get(via, 0)) + 1
+
+    def _m322_name_index(self) -> dict:
+        """函数名 → [节点 id]（惰性；只用于判「全库唯一」，不唯一即不猜）。"""
+        _idx = getattr(self, "_m322_name_idx", None)
+        if _idx is not None:
+            return _idx
+        _idx2: dict = {}
+        for _nid, _d in self._defs.items():
+            _idx2.setdefault(str(_d.get("name") or ""), []).append(str(_nid))
+        self._m322_name_idx = _idx2
+        return _idx2
+
+    def _m322_var_target(self, caller_id: str, var: str, suffix: str) -> str:
+        """`v = f(...)` + `f` 全库唯一 + `f -> C`（仓内类唯一）⇒ `C.suffix` 的节点 id。
+
+        任一环不满足即返回空串（不猜）：这档只负责「解释得通的接法」，不负责多接边。
+        """
+        if not (caller_id and var and suffix):
+            return ""
+        _src = (getattr(self, "assign_src", None) or {}).get(caller_id) or {}
+        _fname = str(_src.get(var) or "")
+        if not _fname:
+            return ""
+        _ids = self._m322_name_index().get(_fname) or []
+        if len(_ids) != 1:                 # 全库同名多义 ⇒ 不猜（任务书 T1 口径）
+            return ""
+        _rn = (getattr(self, "ret_ann", None) or {}).get(_ids[0]) or ""
+        if not _rn:
+            return ""
+        return self._m321_typed_target(_rn, suffix)
 
     def _resolve_by_name(self, name: str, caller_module: str,
                          caller_class: str = "", caller_file: str = "") -> str:
@@ -1251,12 +1364,25 @@ class CallGraphAnalyzer:
         # 4b) ★321批刀0（C类路线①·形参注解档）：`def f(x: C)` 里 `x.m()`
         #   判据：注解类名 C 在仓内**唯一**，且 C 里确有 `m` 的定义 ⇒ 接上，
         #   边 kind="typed_infer"（可审计）。多义/找不到 ⇒ 不猜（继续走兜底）。
-        _rt = str(rc.get("recv_type") or "")
+        _rt = str(rc.get("recv_type") or "") if self._m322_typed_enabled() else ""
         if _rt:
             _hit_t = self._m321_typed_target(_rt, ".".join(_parts[1:]))
             if _hit_t:
                 self._m318_last_kind = "typed_infer"
+                self._m322_inc("param_ann")
                 return _hit_t
+        # 4c) ★322批刀1（路线②·返回值推断档）：`v = f(...)`，f **全库唯一**且带 `-> C`
+        #   （简单名、仓内类唯一）⇒ `v.m()` 接 `C.m`。**默认关**（TT_TYPED_INFER_RET=1 才开），
+        #   因为误建率尚未实测（T2）。kind 与 321 刀0 同为 typed_infer，按 kind 一行可退。
+        if (self._m322_typed_enabled() and self._m322_ret_enabled()
+                and len(_parts) >= 2 and _head not in ("self", "cls")):
+            _hit_r = self._m322_var_target(
+                _qual_id(str(rc.get("module") or ""), str(rc.get("caller_qual") or "")),
+                _head, ".".join(_parts[1:]))
+            if _hit_r:
+                self._m318_last_kind = "typed_infer"
+                self._m322_inc("ret_value")
+                return _hit_r
         # 5) 全局唯一同名函数（兜底，仅在唯一时采用，避免误连）
         if len(_parts) == 1:
             _cands = [v for v in self._defs.values() if v["name"] == _head

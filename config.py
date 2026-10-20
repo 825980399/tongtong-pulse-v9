@@ -5921,6 +5921,15 @@ SUBAGENT_BREAKER_DAY_MAX_TOKENS = 1000000    # B：当日累计 tokens 上限（
 SUBAGENT_BREAKER_FAIL_WINDOW = 20            # C：失败率滑动窗口大小
 SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 ⇒ 停真起）
 
+
+# ===== [M322] 322批刀4：ENABLE_STRUCTURE_RESCAN 键登记（307 起累计第四例「键未登记」）=====
+# 读取点：nucleus/self_awareness/SelfAwarenessEngine.py:160
+#         `getattr(config, "ENABLE_STRUCTURE_RESCAN", False)`（**无声明** ⇒ 对账表里看不见）
+# 语义：结构变化感知的「全量重扫」开关。默认关 = 只做节拍内 (mtime,size) 指纹增量比对，
+#       不做全量 rescan（全量单次实测 27.91s，472 文件全变约 3.7 小时 CPU）。
+# 零行为变化：默认 False 与原 getattr 默认值**完全一致**，登记只为可审计/可对账。
+ENABLE_STRUCTURE_RESCAN = False
+
 # ===== [M317] 317批：长期支点最小落地（节拍可配 + growth 时间窗）=====
 # 读取点①：nucleus/evolution/patch_execution_dispatch.py::dispatch_on_tick
 #   派单节拍：最小间隔（秒）。默认 86400 = 保留日频；压测档位可调小（如 300/3600）。
