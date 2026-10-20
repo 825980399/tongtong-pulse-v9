@@ -106,6 +106,145 @@ def _ledger() -> dict:
     return {"rows": len(_rows), "verdicts": _v, "gap_reasons": _g, "mtime": _mt}
 
 
+def _framework_pid_info() -> dict:
+    """★321批刀4：活体 PID + **进程创建时刻**（L 圈三证之二）。
+
+    烛微321§4-㊿：`source=live` 标签**可以被手工调用打出来**（09:05:35 实测
+    generated=114 source=live 而活体 PID 未变），所以标签不能单独采信。进程
+    创建时刻由内核记账、无法伪造，与标签+事件账本同判才计 L 圈。
+    只读：psutil 不可用时返回空并标注原因（不假装“无活体”）。
+    """
+    _out = {"pid": None, "create_time": None, "create_str": "", "match": [],
+            "available": False, "note": ""}
+    try:
+        import psutil
+    except Exception as _e:
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.import")
+        _out["note"] = "psutil 不可用: %s" % type(_e).__name__
+        return _out
+    _out["available"] = True
+    try:
+        for _p in psutil.process_iter(["pid", "cmdline", "create_time"]):
+            _cl = _p.info.get("cmdline") or []
+            if any(os.path.basename(str(_a)).lower() == "main.py" for _a in _cl):
+                _out["match"].append({"pid": _p.info.get("pid"),
+                                      "create_time": _p.info.get("create_time")})
+    except Exception as _e:
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.iter")
+        _out["note"] = "process_iter 失败: %s" % type(_e).__name__
+    if _out["match"]:
+        _best = sorted(_out["match"], key=lambda x: x.get("create_time") or 0)[-1]
+        _out["pid"] = _best.get("pid")
+        _out["create_time"] = _best.get("create_time")
+        _ts = float(_best.get("create_time") or 0)
+        if _ts:
+            _out["create_str"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_ts))
+    elif _out["available"]:
+        _out["note"] = "未发现 main.py 活体进程（停机态）"
+    return _out
+
+
+def _rel(path: str) -> str:
+    try:
+        return os.path.relpath(path, _ROOT).replace("\\", "/")
+    except Exception as _e:
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.rel")
+        return path
+
+
+def l_loop_triple_proof(_pid: dict) -> dict:
+    """★321批刀4：L 圈**三证同判**的可计算部分（只读：不做结论，只给三证原料）。
+
+    ① `source_process=live` 标签条数 ② 活体 PID 创建时刻 ③ `pulse_pairs_*.jsonl` 事件账本。
+    三者一致才计该圈为有效自转圈；任一不符 ⇒ 该圈作废（见模板 §五ter）。
+    `consistent` 故意留 `None`：三证里有两证需要人对 T0 时间轴判读，
+    脚本不替人下结论（避“算出来的假真”）。
+    """
+    _live = 0
+    _p = os.path.join(_ROOT, "data", "world_model", "expectation_ledger.jsonl")
+    try:
+        with open(_p, encoding="utf-8", errors="ignore") as _f:
+            for _ln in _f:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _r = json.loads(_ln)
+                except ValueError as _e:
+                    silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.row")
+                    continue
+                _s = str(_r.get("source_process") or "")
+                if _s == "live" or (not _s and str(_r.get("source") or "") == "live"):
+                    _live += 1
+    except Exception as _e:
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.read")
+    _pairs: list = []
+    try:
+        _pairs = sorted(glob.glob(os.path.join(_ROOT, "**", "pulse_pairs_*.jsonl"),
+                                  recursive=True))[-8:]
+    except Exception as _e:
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.pairs")
+    return {
+        "p1_tag_live_rows": _live,
+        "p2_pid": _pid.get("pid"),
+        "p2_pid_create_str": _pid.get("create_str"),
+        "p3_pair_files": [_rel(x) for x in _pairs],
+        "p3_pair_count": len(_pairs),
+        "consistent": None,
+        "rule": "三证一致才计 L 圈；任一不符 ⇒ 该圈作废",
+    }
+
+
+def render_markdown(res: dict) -> str:
+    """★321批刀5：把快照渲染成 Markdown（多圈趋势自动报告最小路径）。"""
+    _b = res.get("baseline") or {}
+    _pv = res.get("provenance") or {}
+    _tp = res.get("triple_proof") or {}
+    _L = []
+    _L.append("# 压测快照（自动生成）· 圈次=%s" % (res.get("loop") or "-"))
+    _L.append("")
+    _L.append("> 生成时间 %s；口径：开三环闭四环（执行环不真执行）。"
+              "本文只输出读数，不代替人做通过判定。" % _b.get("as_of_str"))
+    _L.append("")
+    _L.append("## 一、八项基线")
+    _L.append("")
+    _L.append("| 项 | 值 |")
+    _L.append("|---|---|")
+    for _k, _v in (("1 台账", _b.get("ledger_patches")), ("2 pending", _b.get("pending")),
+                   ("3 待复核/覆盖率", _b.get("dead_code_review")),
+                   ("4 图", _b.get("graph")), ("5 hub", _b.get("hub")),
+                   ("6 ledger", _b.get("expectation_ledger")),
+                   ("7 产出率", _b.get("output_rate")), ("8 M92", _b.get("m92"))):
+        _L.append("| %s | `%s` |" % (_k, str(_v).replace("|", "\\|")))
+    _L.append("")
+    _L.append("## 二、来源维度（320刀2 · 防 L 圈伪造）")
+    _L.append("")
+    _L.append("| 项 | 值 |")
+    _L.append("|---|---|")
+    for _k in ("ledger_by_source", "ledger_no_source_legacy", "fingerprint_live",
+               "fingerprint_verification", "graph_edge_types", "r1_in_live", "log_last_ts"):
+        _L.append("| %s | `%s` |" % (_k, str(_pv.get(_k)).replace("|", "\\|")))
+    _L.append("")
+    _L.append("## 三、L 圈三证（★321刀4）")
+    _L.append("")
+    _L.append("| 证 | 值 |")
+    _L.append("|---|---|")
+    for _k in ("p1_tag_live_rows", "p2_pid", "p2_pid_create_str", "p3_pair_count", "p3_pair_files"):
+        _L.append("| %s | `%s` |" % (_k, str(_tp.get(_k)).replace("|", "\\|")))
+    _L.append("| consistent | `%s`（需人对 T0 判读） |" % _tp.get("consistent"))
+    _L.append("")
+    _L.append("> 规则：%s" % _tp.get("rule"))
+    _L.append("")
+    _L.append("## 四、七段留痕 / 人推计数 / 任务面")
+    _L.append("")
+    for _k, _lbl in (("segments", "七段留痕"), ("human_push", "人推计数"),
+                     ("task_face", "任务面")):
+        _L.append("- **%s**: `%s`" % (_lbl, str(res.get(_k)).replace("|", "\\|")))
+    _L.append("")
+    _L.append("*本文由 tools/stress/collect_stress_baseline.py --md 自动生成。*")
+    return "\n".join(_L) + "\n"
+
+
 def source_provenance() -> dict:
     """★320批刀2：来源进程维度——区分「活体产出」与「验证运行产出」。
 
@@ -317,8 +456,10 @@ def main() -> int:
     _ap.add_argument("--json", default="", help="另存 JSON 路径")
     _a = _ap.parse_args()
 
+    _pid = _framework_pid_info()
     _res = {"loop": _a.loop, "baseline": baseline(),
             "provenance": source_provenance(),
+            "pid": _pid, "triple_proof": l_loop_triple_proof(_pid),
             "segments": segment_counts(), "human_push": human_push_counts(),
             "task_face": task_face(),
             "note": "开三环闭四环：执行环(第四环)不真执行；本脚本只读统计"}
@@ -344,6 +485,14 @@ def main() -> int:
     print("   图: %s edge_types=%s R1已进活体=%s"
           % (_pv.get("graph_file"), _pv.get("graph_edge_types"), _pv.get("r1_in_live")))
     print("   日志末条时间: %s" % (_pv.get("log_last_ts"),))
+    _tp = _res.get("triple_proof") or {}
+    print("★L圈三证（★321刀4 · 任一不符则该圈作废）")
+    print("   1) tag=live 条数: %s" % _tp.get("p1_tag_live_rows"))
+    print("   2) 活体 PID: %s （创建于 %s）" % (_tp.get("p2_pid"),
+                                                      _tp.get("p2_pid_create_str") or "-"))
+    print("   3) pulse_pairs 账本: %s 份 %s" % (_tp.get("p3_pair_count"),
+                                                    _tp.get("p3_pair_files")))
+    print("   一致判定: 需对 T0 时间轴人工判读（脚本不代替人下结论）")
     print("6) ledger: %s" % _b["expectation_ledger"])
     print("7) 产出率: %s" % _b["output_rate"])
     print("8) M92: %s" % _b["m92"])
@@ -354,6 +503,11 @@ def main() -> int:
     print("-" * 62)
     print("注: %s" % _res["note"])
 
+    if _a.md:
+        _md_text = render_markdown(_res)
+        with open(_a.md, "w", encoding="utf-8") as _f:
+            _f.write(_md_text)
+        print("已写出 Markdown: %s" % _a.md)
     if _a.json:
         with open(_a.json, "w", encoding="utf-8") as _f:
             json.dump(_res, _f, ensure_ascii=False, indent=2)

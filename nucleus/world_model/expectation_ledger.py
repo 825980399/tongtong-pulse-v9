@@ -36,8 +36,11 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import os
 import time
+
+_logger = logging.getLogger(__name__)
 from typing import Any
 
 from nucleus._silent_except import silent_exc
@@ -139,6 +142,53 @@ _GAP_REASONS = frozenset({
 #: 注意含 `a4.`（`a4.coverage.<Cls>` 是实测 id 形态）与 `a4_`（旧写法）两种
 _CRITERIA_GAP_PREFIXES = ("mastery.", "handbook.", "a4.", "a4_", "manual.")
 
+#: ★321批刀3：断言命名**可识别前缀**（与 320批刀1 的 `_infer_gap_reason` 同源）。
+#: 前缀不是风格问题——它是**判据的输入**：缺前缀的断言会被归成
+#: real_violation，直接压进裁判分母、把通过率压低。新写断言必须命中其一，
+#: 或在 `_mk(...)` 里**显式带 gap_reason**。
+_ASSERT_ID_PREFIXES = ("mastery.", "a4.", "a4_", "handbook.", "manual.", "loop.")
+#: 已告警过的断言 id（同一条只告一次，避刷屏）
+_PREFIX_MISS_SEEN: set = set()
+
+
+def _m321_check_prefix(assertion_id: str, gap_reason: str = "") -> bool:
+    """★321批刀3：断言命名前缀校验（**只告警，不改 verdict / gap_reason**）。
+
+    为什么要管这个：320批刀1 的 `_infer_gap_reason()` **按前缀推断**口径差——
+    `mastery./a4./handbook./manual.` 归 criteria_gap（不进裁判分母），其余归
+    real_violation（进分母、扣分）。所以命名前缀直接决定裁判口径。
+    本函数不推断、不抦圆：只对“对不上前缀且没现成 gap_reason”的断言告一次警。
+    """
+    _aid = str(assertion_id or "")
+    _ok = any(_aid.startswith(_p) for _p in _ASSERT_ID_PREFIXES) or bool(gap_reason)
+    if not _ok and _aid not in _PREFIX_MISS_SEEN:
+        _PREFIX_MISS_SEEN.add(_aid)
+        _logger.warning(
+            "[321刀3][assert_prefix] 断言缺可识别前缀: %r"
+            "（新断言须以 mastery./a4./handbook./manual./loop. 开头，"
+            "或显式带 gap_reason；否则会被判成 real_violation）", _aid)
+    return _ok
+
+
+def prefix_hit_rate(rows: list[dict]) -> dict:
+    """★321批刀3：当前断言集的前缀命中率（只读统计，供验收与回归）。"""
+    _total = _hit = 0
+    _miss: list = []
+    for _r in (rows or []):
+        if not isinstance(_r, dict):
+            continue
+        _aid = str(_r.get("assertion_id") or "")
+        if not _aid:
+            continue
+        _total += 1
+        if any(_aid.startswith(_p) for _p in _ASSERT_ID_PREFIXES) or _r.get("gap_reason"):
+            _hit += 1
+        elif len(_miss) < 20:
+            _miss.append(_aid)
+    return {"total": _total, "hit": _hit, "miss": len(_miss),
+            "rate": round(_hit / _total, 4) if _total else None,
+            "miss_samples": _miss}
+
 
 def _row_source(row: dict) -> str:
     """★320批刀0：取一条记录的**来源进程**（新字段优先，旧数据回退）。
@@ -179,6 +229,8 @@ def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect:
         criteria_version: str = _CRITERIA_VERSION,
         observed_at: float | None = None) -> dict:
     """构造一条 ledger 记录（统一 schema）。"""
+    # ★321批刀3：前缀校验留痕（缺前缀⇒ WARNING；**不改 verdict / gap_reason**）
+    _m321_check_prefix(assertion_id, gap_reason)
     return {
         "assertion_id": assertion_id,
         "statement": statement,

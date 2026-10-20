@@ -151,6 +151,38 @@ python tools/stress/purge_verification_data.py --mark-legacy \
 
 ---
 
+## 五ter、L 圈三证规则（★321批刀4 · 防伪造）
+
+> 烛微321§4-㊿ 实测：09:05:35 的 `generated=114 source=live` 是**手工调用**打出的，
+> 而活体 PID 当时**未变** ⇒ **`source=live` 标签不能单独采信**。
+> 本圈起 L 圈必须**三证同判**，任一不符 ⇒ 该圈作废（不计入多圈趋势）。
+
+| 证 | 采集口 | 判据 | 伪造难度 |
+|---|---|---|---|
+| ① 标签证 | `provenance.ledger_by_source["live"]` / `triple_proof.p1_tag_live_rows` | 本圈 > 0 | 低（手工调用即可打出） |
+| ② 进程证 | `triple_proof.p2_pid` / `p2_pid_create_str` | 创建时刻 **晚于上次重启前的 T0**，且整圈未变 | 高（内核记账） |
+| ③ 账本证 | `triple_proof.p3_pair_files` / `pulse_pairs_*.jsonl` | 本圈时间窗内有事件记录 | 中（需真跑脉冲对） |
+
+**一致性判定口径**（脚本不代替人下结论，`consistent` 恒为 `None`）：
+
+```text
+①>0  ∧  ② PID 创建时刻 ∈ [T0, T0+本圈)（且未变化）  ∧  ③ 本圈窗内有事件
+  ⇒ 计为有效自转圈
+否则 ⇒ 作废，并在日志里记一条 [321刀4] 作废原因（指明是哪一证不符）
+```
+
+**取证命令**（只读，不写生产）：
+
+```bash
+python tools/stress/collect_stress_baseline.py --loop <N> \
+    --json tmp/p321_root/loop_<N>.json --md tmp/p321_root/loop_<N>.md
+```
+
+> ★K2 并行试点的产出必须按本表归位——子代理产物带 `source=parallel_pilot`，
+> **不得计入活体自转圈**（避“把并行产量当自转”）。
+
+---
+
 ## 六、结论与遗留
 
 - 本圈是否计为"有效自动圈"：□是 □否（七段各≥1 且 人推=0）

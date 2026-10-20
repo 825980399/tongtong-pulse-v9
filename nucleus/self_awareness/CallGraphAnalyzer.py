@@ -130,6 +130,26 @@ _MAX_DEPTH_LIMIT = 200
 # ----------------------------------------------------------------------
 # 辅助函数
 # ----------------------------------------------------------------------
+#: ★321批刀1：external **同名通用词表**（显式排除，防"顺手放宽"凭空造边）。
+#: 数据出处（烛微321 §3-维度3 实测 2026-10-20）：external 27,400 条中有
+#: 1,243 条（4.5%）末段命中仓内方法名，全是 dict/str/builtin 通用名：
+#: set 475 / search 343 / format 143 / get 49 / load 49 …。`dict.set` 若被接到仓内
+#: `set()` 上就是凭空造边。纪律：命中本表且**接收者不是仓内模块** ⇒ 显式判
+#: external，不享受任何兜底（不进 unique_name / typed_infer）。
+_EXTERNAL_NAME_ALLOWLIST = frozenset({
+    "set", "search", "format", "get", "load", "add", "remove", "pop", "clear", "items",
+    "keys", "values", "copy", "write", "read", "readlines", "writelines", "close",
+    "append", "extend", "insert", "sort", "reverse", "split", "rsplit", "join",
+    "strip", "lstrip", "rstrip", "replace", "startswith", "endswith", "lower", "upper",
+    "find", "rfind", "count", "index", "encode", "decode", "match", "group", "groups",
+    "sub", "compile", "dumps", "loads", "exists", "isdir", "isfile", "mkdir",
+    "makedirs", "listdir", "walk", "process_iter", "wait", "poll", "terminate", "kill",
+    "fetchall", "fetchone", "fetchmany", "commit", "rollback", "execute", "executemany",
+    "acquire", "release", "notify", "notify_all", "submit", "shutdown", "result",
+    "publish", "subscribe", "emit", "connect", "recv", "send", "sendall",
+})
+
+
 def _scan_enabled() -> bool:
     """读取总开关（默认 True）。config 不可用时按开启处理。"""
     try:
@@ -323,6 +343,34 @@ class _Collector(ast.NodeVisitor):
             "line": node.lineno,
             "type": "method" if _cls else "function",
         })
+        # ★321批刀0（C类路线①）：采集**形参类型注解** `def f(x: C)` → {x: "C"}。
+        #   只认**简单名**（ast.Name）与字符串字面量注解；`Optional[C]` / `psutil.P`
+        #   这类一律不采（多义或跨库，接了就是猜）。供 `x.m()` 走 typed_infer 档。
+        _pt = getattr(self, "param_types", None)
+        if _pt is None:
+            _pt = {}
+            self.param_types = _pt
+        _ann: dict = {}
+        try:
+            _all_args = (list(getattr(node.args, "posonlyargs", []) or [])
+                         + list(node.args.args or [])
+                         + list(node.args.kwonlyargs or []))
+            for _a in _all_args:
+                _an = _a.annotation
+                _nm = ""
+                if isinstance(_an, ast.Name):
+                    _nm = _an.id
+                elif isinstance(_an, ast.Constant) and isinstance(_an.value, str):
+                    _v = _an.value.strip()
+                    if _v.isidentifier():
+                        _nm = _v
+                if _nm and _nm not in ("self", "cls"):
+                    _ann[_a.arg] = _nm
+        except Exception as _e:      # 注解采集失败只是少一条线索，不影响建图
+            (_logger.debug if _noise_reduce() else _logger.warning)(
+                "调用图分析：形参注解采集失败 %s: %s", type(_e).__name__, _e)
+        if _ann:
+            _pt[_qual] = _ann
         self._scope.append(("func", node.name))
         self.generic_visit(node)
         self._collect_roles(node, _qual, _cls)
@@ -561,11 +609,18 @@ class _Collector(ast.NodeVisitor):
             _caller_qual = (f"{_cls}.{_fn}") if _cls else _fn
         else:
             _caller_qual = _MODULE_SCOPE
+        # ★321批刀0：`def f(x: C)` 里 `x.m()` ⇒ 带上**接收者类型** C（typed_infer 档的输入）
+        _parts_t = _text.split(".")
+        _rcv_type = ""
+        if len(_parts_t) >= 2:
+            _pt2 = getattr(self, "param_types", None) or {}
+            _rcv_type = str((_pt2.get(_caller_qual) or {}).get(_parts_t[0]) or "")
         self.raw_calls.append({
             "caller_qual": _caller_qual,
-            "parts": _text.split("."),
+            "parts": _parts_t,
             "line": node.lineno,
             "in_class": _cls,
+            "recv_type": _rcv_type,
         })
         self.generic_visit(node)
 
@@ -688,6 +743,8 @@ class CallGraphAnalyzer:
         self._total_calls = 0
         self._dynamic = 0
         self._external = 0
+        # ★321批刀0：形参注解档的类尾名索引（每轮建图重建，防陈旧）
+        self._m321_cls_index = None
 
     def _collect_file(self, rel: str) -> Any:
         """解析单个文件，产出 `_Collector`；解析失败返回 None 并记 WARNING。"""
@@ -818,6 +875,46 @@ class CallGraphAnalyzer:
             _out.append(_q)
             _queue.extend(_bases.get(_q) or [])
         return _out
+
+    @staticmethod
+    def _m321_allowlisted(rc: dict) -> bool:
+        """★321批刀1：调用末段是不是「通用同名词」（⇒ 禁止靠兜底建边）。
+
+        只认 2 段以上且**接收者不是 self/cls** 的形态：`self._pool.get()` 这类仓内属性链
+        属"未知类型的属性" 而非 dict/str 通用调用，不应被本表一刀切。
+        """
+        _parts = rc.get("parts") or []
+        if len(_parts) < 2:
+            return False
+        if str(_parts[0]) in ("self", "cls"):
+            return False
+        return str(_parts[-1]) in _EXTERNAL_NAME_ALLOWLIST
+
+    def _m321_cls_tail_index(self) -> dict:
+        """★321批刀0：类尾名 → {(类 qualname, 模块)} 索引（惰性构建，只读 _defs）。"""
+        _idx = getattr(self, "_m321_cls_index", None)
+        if _idx is not None:
+            return _idx
+        _idx2: dict = {}
+        for _d in self._defs.values():
+            _q = str(_d.get("qualname") or "")
+            if "." not in _q:
+                continue
+            _cls = _q.rsplit(".", 1)[0]
+            _idx2.setdefault(_cls.rsplit(".", 1)[-1], set()).add(
+                (_cls, str(_d.get("module") or "")))
+        self._m321_cls_index = _idx2
+        return _idx2
+
+    def _m321_typed_target(self, recv_type: str, suffix: str) -> str:
+        """★321批刀0：形参注解 ⇒ 目标方法节点 id（**尾名唯一才接**，不猜）。"""
+        if not (recv_type and suffix):
+            return ""
+        _cands = self._m321_cls_tail_index().get(recv_type) or ()
+        if len(_cands) != 1:
+            return ""                      # 仓内同名类多义 ⇒ 不猜
+        _cls, _mod = next(iter(_cands))
+        return str(self._by_module.get(_mod, {}).get("%s.%s" % (_cls, suffix)) or "")
 
     def _resolve_by_name(self, name: str, caller_module: str,
                          caller_class: str = "", caller_file: str = "") -> str:
@@ -1045,6 +1142,12 @@ class CallGraphAnalyzer:
         if not _parts:
             return True                      # 动态调用已单独计数
         _head = _parts[0]
+        # ★321批刀1：末段命中「通用同名词表」且接收者不是仓内模块 ⇒ 显式判外部。
+        #   （接收者是仓内模块/包时不判外：`utils.get()` 这类是项目内调用，别误伤。）
+        # ★321批刀1：本函数**不**参与通用词表判定——它只对"该不该算项目外"负责；
+        #   通用词表做的是"不得靠 unique_name 兜底造边"（见 _resolve 关 6）。
+        #   若在这里判外，会把 14,607 条 `x.get()/d.items()` 算成 external，
+        #   等于变相稀释 unresolved（违背"不可把没测当没病"）。
         if _head in _BUILTIN_FUNCS or _head in _STDLIB_TOPS:
             return True
         _b = self._bindings.get(rc.get("file", "")) or {}
@@ -1145,6 +1248,15 @@ class CallGraphAnalyzer:
             if _hit:
                 return _hit
 
+        # 4b) ★321批刀0（C类路线①·形参注解档）：`def f(x: C)` 里 `x.m()`
+        #   判据：注解类名 C 在仓内**唯一**，且 C 里确有 `m` 的定义 ⇒ 接上，
+        #   边 kind="typed_infer"（可审计）。多义/找不到 ⇒ 不猜（继续走兜底）。
+        _rt = str(rc.get("recv_type") or "")
+        if _rt:
+            _hit_t = self._m321_typed_target(_rt, ".".join(_parts[1:]))
+            if _hit_t:
+                self._m318_last_kind = "typed_infer"
+                return _hit_t
         # 5) 全局唯一同名函数（兜底，仅在唯一时采用，避免误连）
         if len(_parts) == 1:
             _cands = [v for v in self._defs.values() if v["name"] == _head
@@ -1154,7 +1266,10 @@ class CallGraphAnalyzer:
         # 6) ★318批刀1（R2）：`obj.X()` 属性调用——**多义仍不猜**，但全库同名唯一时建边
         #    （kind="unique_name"，可审计）。硬护栏：external 一律不享受此兜底，
         #    防把 os/json 之类第三方调用算成"已解析"制造虚假提升（与刀2 同口径）。
-        if self._is_external(rc, module_names):
+        # ★321批刀1：末段命中「通用同名词表」⇒ **不进兜底**（不建 unique_name 边）。
+        #   不判为 external（不渲染分母），而是老实留在 unresolved 里—— 这才是
+        #   "护栏未开口子"与"不把没测当没病"两条纪律的交集。
+        if self._is_external(rc, module_names) or self._m321_allowlisted(rc):
             return ""
         _cands2 = list(self._m318_name_index().get(_parts[-1]) or [])
         if len(_cands2) == 1:

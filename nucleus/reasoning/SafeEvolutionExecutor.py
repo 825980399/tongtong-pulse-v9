@@ -3805,6 +3805,406 @@ class SafeEvolutionExecutor:
                 "verdict": _verdict,
                 "note": "只读实验；ENABLE_SUBAGENT_RUNNER 仍 False，台账未改"}
 
+    # ======== ■321批刀2：K1复跑加固 + K2只读并行试点（只读·隔离·计数单一源） ========
+    K2_MAX_WORKERS = 2          # 并发 2（任务书钉死）
+    K2_ROUNDS = 3               # 串行/并行各 3 轮取均值
+    K2_BLAST_LIMIT = 1          # blast_radius_of > 1 ⇒ 不并行，转人工
+    K2_DROP_TARGET = 0.30       # 墙钟下降通过线
+
+    @staticmethod
+    def _m321_data_snapshot(project_root: str | None = None, cap: int = 200000) -> dict:
+        """只读快照：data/ 下每个文件的 mtime（用于**逐文件归因**泄漏，而非只看最大 mtime）。"""
+        _root = os.path.join(project_root or os.getcwd(), "data")
+        _mp: dict = {}
+        if not os.path.isdir(_root):
+            return {"exists": False, "files": 0, "map": _mp}
+        _n = 0
+        for _dp, _dn, _fn in os.walk(_root):
+            for _f in _fn:
+                _n += 1
+                if _n > cap:
+                    return {"exists": True, "files": _n, "map": _mp, "capped": True}
+                _p = os.path.join(_dp, _f)
+                try:
+                    _mp[os.path.relpath(_p, _root).replace(os.sep, "/")] = round(
+                        os.stat(_p).st_mtime, 3)
+                except OSError as _e:
+                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_snapshot.stat")
+        return {"exists": True, "files": _n, "map": _mp}
+
+    @staticmethod
+    def _m321_live_path(rel: str) -> bool:
+        """活体常态写路径清单（319 实测节拍：stream/monitor/runtime_state/alerts 等）。
+
+        这些文件由**运行中活体**按节拍写，试点前后必变 ⇒ 不可作为泄漏证据；
+        清单**只用来解释变化**，不放宽任何自我保护。
+        """
+        _p = str(rel or "")
+        _pre = ("stream/", "monitor/", "knowledge/", "experience/", "logs/",
+                "reports/", "cache/", "sessions/", "metrics/")
+        if _p.startswith(_pre):
+            return True
+        _bare = _p.split("/")[-1]
+        _exact = ("runtime_state.json", "runtime_state.json.bak",
+                  "runtime_state.json.bak.1", "runtime_state.json.bak.2",
+                  "tool_strategy_memory.json", "verification_learning.json",
+                  "pulse_trace.json", "health_snapshot.json")
+        return _bare in _exact or _bare.endswith(".bak") or _bare.endswith(".bak.1") \
+            or _bare.endswith(".bak.2")
+
+    @staticmethod
+    def _m321_isolated_root(project_root: str | None = None) -> str:
+        """★321刀2：试点隔离根 —— 一切产物落 ``tmp/p321_root/``，绝不写生产 data/。"""
+        _root = os.path.join(project_root or os.getcwd(), "tmp", "p321_root")
+        try:
+            os.makedirs(_root, exist_ok=True)
+        except OSError as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor._m321_isolated_root")
+        return _root
+
+    @staticmethod
+    def _m321_child_env(isolated_root: str) -> dict:
+        """★321刀2：子进程一律把 ``TT_*_PATH`` 指向隔离根（320 刀3 硬规）。"""
+        _env = dict(os.environ)
+        _env["TT_LEDGER_PATH"] = os.path.join(isolated_root, "expectation_ledger.jsonl")
+        _env["TT_ALERTS_PATH"] = os.path.join(isolated_root, "alerts.jsonl")
+        _env["TT_PULSE_PAIR_DIR"] = os.path.join(isolated_root, "pulse_pairs")
+        _env["TT_STRESS_OUT"] = os.path.join(isolated_root, "stress")
+        _env["PYTHONDONTWRITEBYTECODE"] = "1"
+        return _env
+
+    @staticmethod
+    def _m321_data_fingerprint(project_root: str | None = None, cap: int = 200000) -> dict:
+        """只读指纹：data/ 的文件数 + 最大 mtime，用于证明试点零泄漏。"""
+        _root = os.path.join(project_root or os.getcwd(), "data")
+        _n = 0
+        _mx = 0.0
+        if not os.path.isdir(_root):
+            return {"exists": False, "files": 0, "max_mtime": 0.0}
+        for _dp, _dn, _fn in os.walk(_root):
+            for _f in _fn:
+                _n += 1
+                if _n > cap:
+                    return {"exists": True, "files": _n, "max_mtime": -1.0, "capped": True}
+                try:
+                    _m = os.stat(os.path.join(_dp, _f)).st_mtime
+                    if _m > _mx:
+                        _mx = _m
+                except OSError as _e:
+                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_fingerprint.stat")
+        return {"exists": True, "files": _n, "max_mtime": round(_mx, 3)}
+
+    def k1_task_face_probe_rerun(self, fed_min: int = 10, rounds: int = 3,
+                                 use_subprocess: bool = True) -> dict:
+        """★321刀2：K1 复跑加固 —— ``fed>=10``（烛微降级5：原样本仅 fed=1，方向明确但样本薄）。
+
+        **只读**：每轮重建任务面（alerts.jsonl 只读一遍），真子进程独立评审；
+        只记录 ``reviewed(child)``，不开 ENABLE_SUBAGENT_RUNNER、不改台账、不写 data/。
+        """
+        _want = max(int(fed_min or 10), 10)
+        _rows: list[dict] = []
+        for _i in range(max(int(rounds or 3), 1)):
+            _r = self.k1_task_face_probe(limit=_want, use_subprocess=use_subprocess)
+            _rows.append({
+                "round": _i + 1,
+                "fed": int(_r.get("fed") or 0),
+                "reviewed_child": int((_r.get("child") or {}).get("reviewed") or 0),
+                "reviewed_parent": int((_r.get("parent") or {}).get("reviewed") or 0),
+                "verdict": _r.get("verdict"),
+            })
+        _fed_ok = bool(_rows) and all(row["fed"] >= 10 for row in _rows)
+        _stable = bool(_rows) and all(row["reviewed_child"] > 0 for row in _rows)
+        if _stable and _fed_ok:
+            _verdict = "task_face_enables_review_stable"
+        elif not _fed_ok:
+            _verdict = "fed_insufficient"
+        else:
+            _verdict = "unstable"
+        _mi = min([row["reviewed_child"] for row in _rows] or [0])
+        _module_logger.info(
+            "[321刀2][K1复跑] fed_min=%d rounds=%d reviewed(child) min=%d fed_ok=%s "
+            "verdict=%s（只读·ENABLE_SUBAGENT_RUNNER 仍 False）",
+            _want, len(_rows), _mi, _fed_ok, _verdict)
+        return {"fed_min": _want, "rounds": len(_rows), "rows": _rows,
+                "fed_ok": _fed_ok, "stable": _stable, "min_reviewed_child": _mi,
+                "verdict": _verdict,
+                "note": "只读复跑；未开 ENABLE_SUBAGENT_RUNNER、未改台账、未写 data/"}
+
+    @staticmethod
+    def _k2_worker_src() -> str:
+        """K2 只读工作单元源码（子进程 ``-c`` 执行；纯读盘 + AST 统计，不落盘）。"""
+        return chr(10).join([
+            "import ast, json, sys",
+            "def _scan(p):",
+            "    try:",
+            "        with open(p, encoding='utf-8', errors='ignore') as f:",
+            "            src = f.read()",
+            "        t = ast.parse(src)",
+            "    except Exception:",
+            "        return None",
+            "    nf = nc = cc = an = 0",
+            "    for n in ast.walk(t):",
+            "        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):",
+            "            nf += 1",
+            "            if getattr(n, 'returns', None) is not None:",
+            "                an += 1",
+            "        elif isinstance(n, ast.ClassDef):",
+            "            nc += 1",
+            "        elif isinstance(n, (ast.If, ast.For, ast.While, ast.Try,",
+            "                           ast.BoolOp, ast.ExceptHandler)):",
+            "            cc += 1",
+            "    return {'functions': nf, 'classes': nc, 'complexity': cc, 'ann': an}",
+            "def _main():",
+            "    with open(sys.argv[1], encoding='utf-8') as f:",
+            "        shard = json.load(f)",
+            "    out = {'scanned': 0, 'reviewed': 0, 'findings': 0, 'detail': []}",
+            "    for it in shard.get('items') or []:",
+            "        out['scanned'] += 1",
+            "        st = _scan(it.get('abs') or '')",
+            "        if st is None:",
+            "            continue",
+            "        out['reviewed'] += 1",
+            "        if st['complexity'] > 80:",
+            "            out['findings'] += 1",
+            "        out['detail'].append([it.get('task_id'), st['functions'], st['complexity']])",
+            "    print(json.dumps(out, ensure_ascii=False))",
+            "_main()",
+        ])
+
+    @staticmethod
+    def _k2_blast(qualified: str, file: str) -> int | None:
+        """牵连半径；**None = 无法消歧 ⇒ 转人工**（绝不返回 0 冒充牵连小）。"""
+        try:
+            from nucleus.evolution.patch_execution_dispatch import blast_radius_of as _br
+            return _br(qualified, file)
+        except Exception as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_blast")
+            return None
+
+    @staticmethod
+    def _k2_classes_from_ast(files: list, max_classes: int = 6) -> list[dict]:
+        """struct_assert 类的来源：AST 类清单（只读、不重建全图）。
+
+        不调 ``cluster_view`` 的理由（321 批实测偏差，已申报）：
+        重建调用图约 15s 且会触发未解析样本落盘，试点自身不得引入写盘与量级噪声；
+        故 struct_assert 面取「类簇视角的 AST 等价面」——按类名分项、逐项做结构断言。
+        """
+        import ast as _ast
+        _out: list[dict] = []
+        for _abs in files or []:
+            try:
+                with open(_abs, encoding="utf-8", errors="ignore") as _f:
+                    _tree = _ast.parse(_f.read())
+            except (SyntaxError, OSError, ValueError) as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor._k2_classes_from_ast")
+                continue
+            for _n in _tree.body:
+                if not isinstance(_n, _ast.ClassDef):
+                    continue
+                _ms = [m.name for m in _n.body
+                       if isinstance(m, (_ast.FunctionDef, _ast.AsyncFunctionDef))]
+                _pub = [x for x in _ms if not x.startswith("_")]
+                _out.append({"cls": _n.name, "file": _abs, "methods": len(_ms),
+                             "public": len(_pub),
+                             "method": (_pub or _ms or ["_class_"])[0]})
+        _out.sort(key=lambda d: (-int(d.get("methods") or 0), str(d.get("cls") or "")))
+        return _out[:max(int(max_classes or 6), 1)]
+
+    def _k2_build_tasks(self, project_root: str | None = None, max_files: int = 40,
+                        max_classes: int = 6) -> dict:
+        """K2 两类只读任务面：
+
+        ① ``code_scan``    —— 按**文件集**切片（``detect_code_issues`` 分片的等价面）
+        ② ``struct_assert`` —— 类簇视角的类清单派生（每类一个结构断言项）
+        ``blast_radius_of`` 为 None 或 >1 的项一律进 ``deferred``（转人工，不并行）。
+        """
+        _root = project_root or os.getcwd()
+        _files: list[str] = []
+        for _sub in ("nucleus", os.path.join("tools", "stress")):
+            _base = os.path.join(_root, _sub)
+            if not os.path.isdir(_base):
+                continue
+            for _dp, _dn, _fn in os.walk(_base):
+                _dn[:] = [_d for _d in _dn if _d not in ("__pycache__", ".git", "tmp")]
+                for _f in _fn:
+                    if _f.endswith(".py"):
+                        _files.append(os.path.join(_dp, _f))
+        _files.sort()
+        _cap = max(int(max_files or 40), 2)
+        _items: list[dict] = []
+        _deferred: list[dict] = []
+        for _abs in _files[:_cap]:
+            _rel = os.path.relpath(_abs, _root).replace(os.sep, "/")
+            _items.append({"task_id": "code_scan:%s" % _rel, "kind": "code_scan",
+                           "file": _rel, "method": "_module_", "abs": _abs, "blast": 0})
+        for _c in self._k2_classes_from_ast(_files[:_cap], max_classes):
+            _rel = os.path.relpath(_c["file"], _root).replace(os.sep, "/")
+            _iq = "%s.%s" % (_c["cls"], _c["method"])
+            _br = self._k2_blast(_iq, _rel)
+            _row = {"task_id": "struct_assert:%s" % _iq, "kind": "struct_assert",
+                    "file": _rel, "method": str(_c["method"]), "abs": _c["file"],
+                    "blast": _br}
+            if _br is None or int(_br) > self.K2_BLAST_LIMIT:
+                _row["defer_reason"] = ("blast_unknown" if _br is None
+                                        else "blast>%d" % self.K2_BLAST_LIMIT)
+                _deferred.append(_row)
+            else:
+                _items.append(_row)
+        return {"items": _items, "deferred": _deferred,
+                "file_pool": len(_files), "class_source": "ast_class_inventory"}
+
+    def _k2_partition(self, items: list, k: int = 2) -> list:
+        """按**文件**分片：同文件全部项必进同一片 ⇒ 结构性保证 (file, method) 互斥。"""
+        _k = max(int(k or 2), 1)
+        _by_file: dict = {}
+        for _it in items or []:
+            _by_file.setdefault(str(_it.get("file") or ""), []).append(_it)
+        _buckets = [[] for _ in range(_k)]
+        _load = [0] * _k
+        for _f in sorted(_by_file, key=lambda x: (-len(_by_file[x]), x)):
+            _j = _load.index(min(_load))
+            _buckets[_j].extend(_by_file[_f])
+            _load[_j] += len(_by_file[_f])
+        return [b for b in _buckets if b]
+
+    def _k2_start(self, shard: list, tag: str, isolated_root: str):
+        """起一个只读工作单元子进程（stdout 回收，产物不落生产目录）。"""
+        import json as _json
+        import subprocess as _sp
+        import sys as _sys
+        _spd = os.path.join(isolated_root, "shard_%s.json" % tag)
+        with open(_spd, "w", encoding="utf-8") as _f:
+            _json.dump({"items": shard}, _f, ensure_ascii=False)
+        return _sp.Popen([_sys.executable, "-c", self._k2_worker_src(), _spd],
+                         stdout=_sp.PIPE, stderr=_sp.PIPE, text=True,
+                         env=self._m321_child_env(isolated_root), cwd=os.getcwd())
+
+    @staticmethod
+    def _k2_collect(proc, tag: str) -> dict:
+        """主进程聚合：只认子进程回传的计数（计数单一源）。"""
+        import json as _json
+        try:
+            _out, _err = proc.communicate(timeout=180)
+        except Exception as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.communicate")
+            try:
+                proc.kill()
+            except OSError as _e2:
+                silent_exc(_e2, where="SafeEvolutionExecutor._k2_collect.kill")
+            return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
+                    "error": "timeout"}
+        if proc.returncode != 0 or not (_out or "").strip():
+            return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
+                    "error": "rc=%s" % proc.returncode,
+                    "stderr": (_err or "")[-200:]}
+        try:
+            _d = _json.loads((_out or "").strip().splitlines()[-1])
+        except ValueError as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.parse")
+            return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
+                    "error": "unparsable"}
+        _d["tag"] = tag
+        return _d
+
+    def _k2_round_serial(self, buckets: list, isolated_root: str, prefix: str):
+        """串行基线：逐片顺序执行，墙钟 = 各片之和。"""
+        import time as _time
+        _t0 = _time.time()
+        _res = []
+        for _i, _b in enumerate(buckets):
+            _tg = "%s_s%d" % (prefix, _i)
+            _res.append(self._k2_collect(self._k2_start(_b, _tg, isolated_root), _tg))
+        return _time.time() - _t0, _res
+
+    def _k2_round_parallel(self, buckets: list, isolated_root: str, prefix: str):
+        """2 并发：同时起片，墙钟 = 最慢片。"""
+        import time as _time
+        _t0 = _time.time()
+        _ps = []
+        for _i, _b in enumerate(buckets):
+            _tg = "%s_p%d" % (prefix, _i)
+            _ps.append((self._k2_start(_b, _tg, isolated_root), _tg))
+        _res = [self._k2_collect(_p, _tg) for _p, _tg in _ps]
+        return _time.time() - _t0, _res
+
+    def k2_parallel_pilot(self, project_root: str | None = None, rounds: int | None = None,
+                          max_files: int = 40, max_classes: int = 6) -> dict:
+        """★321刀2：K2 只读并行试点 —— 串行 vs 2 并发各 3 轮，比墙钟 + 比产出率。
+
+        通过线：**墙钟下降 >= 30% 且 productive/reviewed 完全相等**。
+        只降墙钟不产出 = 并行空转，判不通过。计数只在主进程聚合。
+        """
+        _root = self._m321_isolated_root(project_root)
+        _fp0 = self._m321_data_snapshot(project_root)
+        _tk = self._k2_build_tasks(project_root=project_root, max_files=max_files,
+                                   max_classes=max_classes)
+        _buckets = self._k2_partition(_tk["items"], self.K2_MAX_WORKERS)
+        _n = max(int(rounds or self.K2_ROUNDS), 1)
+        _ser: list[float] = []
+        _par: list[float] = []
+        _acc_s = {"scanned": 0, "reviewed": 0, "findings": 0}
+        _acc_p = {"scanned": 0, "reviewed": 0, "findings": 0}
+        for _r in range(_n):
+            _w1, _r1 = self._k2_round_serial(_buckets, _root, "r%d" % (_r + 1))
+            _ser.append(round(_w1, 4))
+            for _x in _r1:
+                for _k in _acc_s:
+                    _acc_s[_k] += int(_x.get(_k) or 0)
+            _w2, _r2 = self._k2_round_parallel(_buckets, _root, "r%d" % (_r + 1))
+            _par.append(round(_w2, 4))
+            for _x in _r2:
+                for _k in _acc_p:
+                    _acc_p[_k] += int(_x.get(_k) or 0)
+        _ms = sum(_ser) / max(len(_ser), 1)
+        _mp = sum(_par) / max(len(_par), 1)
+        _drop = (1.0 - _mp / _ms) if _ms > 0 else 0.0
+        _prod_eq = (_acc_s["reviewed"] == _acc_p["reviewed"]
+                    and _acc_s["scanned"] == _acc_p["scanned"])
+        _fp1 = self._m321_data_snapshot(project_root)
+        _m0 = _fp0.get("map") or {}
+        _m1 = _fp1.get("map") or {}
+        _chg = sorted([_k for _k, _v in _m1.items() if _m0.get(_k) != _v])
+        _suspect = [_c for _c in _chg if not self._m321_live_path(_c)]
+        _leak = bool(_suspect)
+        if _leak:
+            _attrib = "pilot_suspect"
+        elif _chg:
+            _attrib = "live_heartbeat"
+        else:
+            _attrib = "none"
+        if _leak:
+            _verdict = "isolation_leak"
+        elif _drop >= self.K2_DROP_TARGET and _prod_eq:
+            _verdict = "parallel_pilot_pass"
+        elif not _prod_eq:
+            _verdict = "productivity_mismatch"
+        else:
+            _verdict = "wallclock_not_dropped"
+        _module_logger.info(
+            "[321刀2][K2并行] items=%d shards=%d rounds=%d 串行均值=%.3fs 并行均值=%.3fs "
+            "下降=%.1f%% 产出(串/并)=%d/%d verdict=%s 泄漏=%s",
+            len(_tk["items"]), len(_buckets), _n, _ms, _mp, _drop * 100.0,
+            _acc_s["reviewed"], _acc_p["reviewed"], _verdict, _leak)
+        return {"isolated_root": _root, "rounds": _n,
+                "items": len(_tk["items"]), "shards": [len(b) for b in _buckets],
+                "deferred": len(_tk["deferred"]),
+                "deferred_items": [d.get("task_id") for d in _tk["deferred"]],
+                "class_source": _tk.get("class_source"),
+                "serial_secs": _ser, "parallel_secs": _par,
+                "serial_mean": round(_ms, 4), "parallel_mean": round(_mp, 4),
+                "drop_ratio": round(_drop, 4), "drop_target": self.K2_DROP_TARGET,
+                "productivity_serial": _acc_s, "productivity_parallel": _acc_p,
+                "productivity_equal": _prod_eq,
+                "data_files_before": _fp0.get("files"),
+                "data_files_after": _fp1.get("files"),
+                "data_changed_count": len(_chg),
+                "data_changed_sample": _chg[:12],
+                "leak_attribution": _attrib,
+                "pilot_leak": bool(_leak),
+                "pilot_leak_suspects": _suspect[:10],
+                "verdict": _verdict,
+                "note": "只读试点；ENABLE_SUBAGENT_RUNNER 仍 False；计数仅主进程聚合"}
+
     def run_runtime_guided_review(self, self_inspector=None) -> dict[str, Any]:
         """
         ★P2: 运行时引导的定向深度审查。
