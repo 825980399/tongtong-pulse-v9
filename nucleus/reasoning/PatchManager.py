@@ -1226,6 +1226,15 @@ class PatchManager:
                 return _n.name
         return ""
 
+    #: ★325批刀1：生成侧被判"结构性无法通过沙箱"的补丁计数（只增）
+    _m325_generated_flagged = 0
+
+    @staticmethod
+    def get_m325_danger_metrics() -> dict:
+        """★325批刀1：生成侧危险关键字计数（只读），供报告/门禁取数。"""
+        return {"generated_flagged_dangerous": int(
+            PatchManager._m325_generated_flagged)}
+
     @staticmethod
     def _m323_normalize_patch(patch: dict) -> dict:
         """以 AST enclosing def 为唯一真值回填 method（★323批刀2）。
@@ -1374,6 +1383,31 @@ class PatchManager:
             PatchManager._m323_normalize_patch(patch)
         except Exception as _m323_e:
             silent_exc(_m323_e, where="nucleus.reasoning.PatchManager::save_pending_patch 323真值归一", level="warning")
+        # ★325批刀1：生成侧危险关键字预检——**入队前**就判定"沙箱是否必然拦截"。
+        #   为什么在生成侧做：派单侧拦是"事后"，同一补丁会被反复选中反复失败
+        #   （324刀0 实测六圈同一 id）；入队时打标 ⇒ 派单侧一次即跳过，且
+        #   `generated_flagged_dangerous` 让"又一条静默失败"变成可数事实。
+        #   ★不改沙箱 DANGEROUS_KEYWORDS（安全闸不因本批放宽）。
+        try:
+            from nucleus.evolution.patch_execution_dispatch import (
+                scan_dangerous_keywords as _m325_scan,
+            )
+            _d = _m325_scan(patch.get("modified_code", "") or "")
+            patch["danger_keyword_class"] = _d.get("class")
+            patch["danger_real_calls"] = _d.get("real_calls") or []
+            patch["sandbox_blocked_keywords"] = _d.get("sandbox_blocked") or []
+            patch["sandbox_incompatible"] = bool(_d.get("would_block"))
+            if _d.get("would_block"):
+                PatchManager._m325_generated_flagged += 1
+                _module_logger.info(
+                    "[325刀1][生成侧] 补丁结构性无法通过沙箱预检(转人工): "
+                    "file=%s method=%s class=%s kw=%s",
+                    patch.get("file", ""), patch.get("method", ""),
+                    _d.get("class"),
+                    ",".join((_d.get("sandbox_blocked") or [])[:5]))
+        except Exception as _m325_e:
+            silent_exc(_m325_e, where="nucleus.reasoning.PatchManager::save_pending_patch 325危险预检",
+                       level="warning")
         _def_name = PatchManager._m280_extract_def_name(
             patch.get("modified_code", "") or "")
         _method_name = str(patch.get("method", "") or "").strip()

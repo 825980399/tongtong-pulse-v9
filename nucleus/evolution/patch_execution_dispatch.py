@@ -351,6 +351,128 @@ def blast_radius_of(qualified: str, file: str | None = None,
     return _bfs_count(_adj, [str(_s) for _s in _starts if _s], max_depth)
 
 
+# ===== ★325批刀1：危险关键字预检（**唯一实现**，生成侧与派单侧共用）=====
+# 为什么放在这里而不是各写一份：沙箱黑名单是 `PulseCodeSandbox.DANGEROUS_KEYWORDS`，
+# 抄第二份必然漂移。本模块已因 `is_fragment_to_full` 承担"派单口径单一真源"的角色。
+#: 本仓合法惯用法（**不是**生成质量问题）：热加载读写、文件 IO、交互式输入
+_M325_IDIOM_KEYWORDS = frozenset({
+    "getattr(", "setattr(", "delattr(", "open(", "file(", "input(", "raw_input(",
+})
+
+
+def sandbox_keywords() -> list:
+    """取沙箱黑名单（单一真源）。沙箱不可用时返回空表并留痕，绝不本地抄一份。"""
+    try:
+        from organs.motor.PulseCodeSandbox import PulseCodeSandbox as _S
+        return list(getattr(_S, "DANGEROUS_KEYWORDS", []) or [])
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::sandbox_keywords")
+        return []
+
+
+def _m325_ast_tokens(code: str) -> set | None:
+    """提取代码里的「真实标识符/调用」集合（**排除字符串字面量**）。
+
+    返回 None = 解析失败（片段带缩进等），此时调用方一律按"不可判定"处理。
+    """
+    import ast as _ast
+    import textwrap as _tw
+    _src = code or ""
+    for _cand in (_src, _tw.dedent(_src)):
+        try:
+            _tr = _ast.parse(_cand)
+        except (SyntaxError, ValueError):
+            continue
+        _toks: set = set()
+        for _n in _ast.walk(_tr):
+            if isinstance(_n, _ast.Attribute):
+                _toks.add(_n.attr.lower())
+            elif isinstance(_n, _ast.Name):
+                _toks.add(_n.id.lower())
+            elif isinstance(_n, _ast.Call):
+                _f = _n.func
+                if isinstance(_f, _ast.Name):
+                    _toks.add(_f.id.lower() + "(")
+                elif isinstance(_f, _ast.Attribute):
+                    _toks.add(_f.attr.lower() + "(")
+        return _toks
+    return None
+
+
+def scan_dangerous_keywords(code: str) -> dict:
+    """扫补丁代码对沙箱黑名单的命中，并区分三类。
+
+    为什么必须区分：沙箱 `_security_precheck` 是**纯子串匹配**
+    （`keyword.lower() in code.lower()`），它面对的是"不可信外部片段"；而派单把
+    **本仓方法体整段**喂进去 ⇒ 本仓合法的 `getattr(cfg,'X',d)` 热加载惯用法、甚至
+    PulseSkin 那种"把危险关键字写成字符串清单"的代码都会命中。
+    实测 84 条历史补丁：命中 61 条（72.6%），`getattr(` 占 54 条、真逃逸模式 **0** 条
+    —— 这不是生成质量问题，是**口径错配**（报告已如实申报）。
+
+    返回：
+      sandbox_blocked  子串命中的关键字（= 沙箱一定会拦的，判据与沙箱逐字一致）
+      real_calls       去掉字符串字面量后仍在真实调用位的关键字
+      literal_only     命中全部来自字符串字面量/注释
+      idiom_only       命中全部属本仓合法惯用法
+      class            none | idiom | literal | real
+      would_block      沙箱是否必然拦截（子串命中即 True）
+    """
+    _kw = sandbox_keywords()
+    _low = str(code or "").lower()
+    _blocked = [_k for _k in _kw if str(_k).lower() in _low]
+    if not _blocked:
+        return {"sandbox_blocked": [], "real_calls": [], "literal_only": False,
+                "idiom_only": False, "class": "none", "would_block": False}
+    _toks = _m325_ast_tokens(code)
+    if _toks is None:
+        # 解析失败 ⇒ 不可判定：只报子串命中，不猜"真危险"
+        return {"sandbox_blocked": _blocked, "real_calls": [], "literal_only": False,
+                "idiom_only": False, "class": "unparsed", "would_block": True}
+    _real = []
+    for _k in _blocked:
+        _probe = str(_k).lower()
+        _bare = _probe.rstrip("(").rstrip(".")
+        if _probe.endswith("("):
+            if _probe in _toks:
+                _real.append(_k)
+        elif _bare in _toks:
+            _real.append(_k)
+    _idiom = [k for k in _blocked if k in _M325_IDIOM_KEYWORDS]
+    # ★分类顺序很重要：`getattr(` 既是**真实调用**又是**本仓合法惯用法**，
+    #   先判"real"会把它误报成生成质量问题（实测 84 条里 54 条这样）。
+    #   口径：非惯用法的真实调用才算 real；惯用法真实调用记 idiom；只在字符串里出现记 literal。
+    _non_idiom_real = [k for k in _real if k not in _M325_IDIOM_KEYWORDS]
+    if _non_idiom_real:
+        _class = "real"
+    elif _real:
+        _class = "idiom"
+    elif _idiom:
+        _class = "literal"
+    else:
+        _class = "literal"
+    return {"sandbox_blocked": _blocked, "real_calls": _real,
+            "literal_only": (not _real and not _idiom),
+            "idiom_only": _class == "idiom", "class": _class,
+            "would_block": True}
+
+
+def is_sandbox_incompatible(patch: dict) -> bool:
+    """该补丁是否**结构性**无法通过沙箱（子串黑名单必拦）。
+
+    只读；兼容老补丁（无 `sandbox_incompatible` 字段时现算一次，不写回）。
+    """
+    if not isinstance(patch, dict):
+        return False
+    if patch.get("sandbox_incompatible") is True:
+        return True
+    if patch.get("sandbox_incompatible") is False:
+        return False
+    _code = patch.get("modified_code") or patch.get("original_code") or ""
+    if not _code:
+        return False
+    return bool(scan_dangerous_keywords(_code).get("would_block"))
+
+
 def select_patch_for_execution(patch_history: list, limit: int = 1,
                                max_blast_radius: int = 1,
                                pilot_only: bool = True) -> list:
@@ -373,6 +495,26 @@ def select_patch_for_execution(patch_history: list, limit: int = 1,
     # ★第298批刀3：is_fragment_to_full 为 select 永久排除项（非首批边界）——
     #   即使后续放宽到 approved（71条），片段→完整结构损坏补丁（含2条problem_fixed=True）也绝不派单。
     _safe = [p for p in _cands if not is_fragment_to_full(p)]
+    # ★325批刀1：**结构性必败**的补丁不派单（沙箱子串黑名单必拦）。
+    #   凭据：324刀0 实测 12:38—17:38 六圈同一 patch_1788891582_6ecc 全失败，
+    #   而它的 modified_code 是合法的 `getattr(_cfg,'RUNTIME_PARAMS',{})` 热加载惯用法
+    #   —— 派六次就失败六次，纯浪费。这类**转人工**，不再自动重试（不改沙箱判据）。
+    _m325_skip = []
+    _safe2 = []
+    for _p in _safe:
+        if is_sandbox_incompatible(_p):
+            _m325_skip.append(_p)
+            _module_logger.info(
+                "[325刀1] 沙箱预检必拦 ⇒ 转人工(不派单): patch=%s method=%s kw=%s",
+                str(_p.get("id", ""))[:16], str(_p.get("method") or ""),
+                ",".join((scan_dangerous_keywords(
+                    _p.get("modified_code") or _p.get("original_code") or ""
+                ).get("sandbox_blocked") or [])[:4]))
+            continue
+        _safe2.append(_p)
+    if _m325_skip:
+        _M325_DISPATCH_REJ["sandbox_incompatible"] = len(_m325_skip)
+    _safe = _safe2
     # ★第304批刀5：牵连半径闸门（> max_blast_radius ⇒ 转人工，不自动派单）
     _scoped = []
     for _p in _safe:
@@ -409,6 +551,15 @@ def select_patch_for_execution(patch_history: list, limit: int = 1,
         0 if p.get("risk_level") in ("低", "low") else 1,
         -(float(p.get("trust_score", 0) or 0))))
     return _scoped[:limit]
+
+
+#: ★325批刀1：本批派单侧的拒收分布（只增不重置，便于一次运行内归因）
+_M325_DISPATCH_REJ: dict = {}
+
+
+def get_m325_dispatch_rej() -> dict:
+    """★325批刀1：读本进程内派单拒收分布（只读拷贝）。"""
+    return dict(_M325_DISPATCH_REJ)
 
 
 #: ★第311批 刀1：自动分诊的「高置信」门槛（历史 trust_score 实测取值 30/40/45/50/80）

@@ -195,6 +195,96 @@ def l_loop_triple_proof(_pid: dict) -> dict:
     }
 
 
+# ===== ★325批刀5：开档三字段取数（evidence_tier 分布 / trigger_counts / hard-soft 候选数）=====
+# 取数优先级：**活体落盘 > 进程内统计 > unavailable**。
+# 为什么不用进程内统计兜底活体数据：压测报告是外部进程跑的，进程内统计恒为空，
+# 拿空当"0 候选"就是把"没接通"报成"没有"，正是 314 批定的红线。
+_M325_BY_VERSION_REL = os.path.join("data", "reports", "code_review", "by_version")
+_M325_INTAKE_REL = os.path.join("data", "reports", "evolution",
+                                "intake_summary_latest.json")
+
+
+def _m325_latest_per_item(root: str) -> dict:
+    """取最新一份 per-item 留样（含 evidence_tier_dist）。找不到返回 {}。"""
+    _d = os.path.join(root, _M325_BY_VERSION_REL)
+    if not os.path.isdir(_d):
+        return {}
+    _best = None
+    _best_m = -1.0
+    for _dp, _dn, _fn in os.walk(_d):
+        for _f in _fn:
+            if not (_f.startswith("run_") and _f.endswith(".json")):
+                continue
+            _p = os.path.join(_dp, _f)
+            try:
+                _m = os.path.getmtime(_p)
+            except OSError:
+                continue
+            if _m > _best_m:
+                _best, _best_m = _p, _m
+    if not _best:
+        return {}
+    try:
+        _j = json.load(open(_best, encoding="utf-8"))
+    except Exception as _e:
+        silent_exc(_e, where="collect_stress_baseline::_m325_latest_per_item")
+        return {}
+    _dist = _j.get("evidence_tier_dist")
+    return {"path": _rel(_best), "count": _j.get("count"),
+            "source_count": _j.get("source_count"),
+            "truncated": _j.get("truncated"),
+            "evidence_tier_dist": (_dist if isinstance(_dist, dict) else None)}
+
+
+def _m325_intake_summary(root: str) -> dict:
+    """读 EvolutionLoop 落盘的本拍入料摘要（325刀0 新增的唯一可观测口）。"""
+    _p = os.path.join(root, _M325_INTAKE_REL)
+    if not os.path.isfile(_p):
+        return {}
+    try:
+        _j = json.load(open(_p, encoding="utf-8"))
+    except Exception as _e:
+        silent_exc(_e, where="collect_stress_baseline::_m325_intake_summary")
+        return {}
+    if not isinstance(_j, dict):
+        return {}
+    _j["_path"] = _rel(_p)
+    return _j
+
+
+def m325_open_gate_fields(root: str | None = None) -> dict:
+    """★325刀5：开档三字段汇总（渲染与外部复算共用同一实现）。"""
+    _root = root or _ROOT
+    _pi = _m325_latest_per_item(_root)
+    _isum = _m325_intake_summary(_root)
+    _dist = _pi.get("evidence_tier_dist") or None
+    _hard = (_dist or {}).get("hard") if _dist else None
+    _soft = (_dist or {}).get("soft") if _dist else None
+    _tc = (_isum.get("trigger_counts") if isinstance(_isum, dict) else None) or None
+    return {
+        "evidence_tier_dist": _dist,
+        "evidence_tier_src": (_pi.get("path") or "") or "unavailable",
+        "per_item_count": _pi.get("count"),
+        "per_item_truncated": _pi.get("truncated"),
+        "hard_candidates": _hard,
+        "soft_candidates": _soft,
+        "trigger_counts": _tc,
+        "trigger_counts_src": (_isum.get("_path") or "") or "unavailable",
+        "growth_stats": (_isum.get("growth_stats") if isinstance(_isum, dict) else None),
+    }
+
+
+def _m325_open_gate_safe(root: str) -> dict:
+    """刀5 的安全包装：取数失败也给出可渲染的 `unavailable`，绝不让报告生成失败。"""
+    try:
+        return m325_open_gate_fields(root)
+    except Exception as _e:
+        silent_exc(_e, where="collect_stress_baseline::_m325_open_gate_safe", level="warning")
+        return {"evidence_tier_dist": None, "evidence_tier_src": "unavailable",
+                "hard_candidates": None, "soft_candidates": None,
+                "trigger_counts": None, "trigger_counts_src": "unavailable"}
+
+
 def render_markdown(res: dict) -> str:
     """★321批刀5：把快照渲染成 Markdown（多圈趋势自动报告最小路径）。"""
     _b = res.get("baseline") or {}
@@ -224,6 +314,29 @@ def render_markdown(res: dict) -> str:
     for _k in ("ledger_by_source", "ledger_no_source_legacy", "fingerprint_live",
                "fingerprint_verification", "graph_edge_types", "r1_in_live", "log_last_ts"):
         _L.append("| %s | `%s` |" % (_k, str(_pv.get(_k)).replace("|", "\\|")))
+    _L.append("")
+    _og = res.get("open_gate") or {}
+    _L.append("## 二ter、开档三字段（★325刀5）")
+    _L.append("")
+    _L.append("> 空数据一律 `unavailable`，**不填 0**——0=真的没有，unavailable=没接通。")
+    _L.append("")
+    _L.append("| 字段 | 值 | 来源 |")
+    _L.append("|---|---|---|")
+    _dist = _og.get("evidence_tier_dist")
+    _L.append("| evidence_tier 分布 | `%s` | `%s` |" % (
+        ("unavailable" if not _dist else
+         "hard=%s/soft=%s/infer-only=%s" % (_dist.get("hard"), _dist.get("soft"),
+                                            _dist.get("infer-only"))) ,
+        str(_og.get("evidence_tier_src") or "unavailable").replace("|", "\\|")))
+    _L.append("| hard 候选数 | `%s` | 同上 |" % (
+        "unavailable" if _og.get("hard_candidates") is None else _og.get("hard_candidates")))
+    _L.append("| soft 候选数 | `%s` | 同上 |" % (
+        "unavailable" if _og.get("soft_candidates") is None else _og.get("soft_candidates")))
+    _tc = _og.get("trigger_counts")
+    _L.append("| trigger_counts | `%s` | `%s` |" % (
+        ("unavailable" if not _tc else
+         "defect=%s/growth_need=%s" % (_tc.get("defect"), _tc.get("growth_need"))),
+        str(_og.get("trigger_counts_src") or "unavailable").replace("|", "\\|")))
     _L.append("")
     _L.append("## 三、L 圈三证（★321刀4）")
     _L.append("")
@@ -463,6 +576,8 @@ def main() -> int:
             "pid": _pid, "triple_proof": l_loop_triple_proof(_pid),
             "segments": segment_counts(), "human_push": human_push_counts(),
             "task_face": task_face(),
+            # ★325批刀5：开档三字段（evidence_tier / trigger_counts / hard-soft 候选数）
+            "open_gate": _m325_open_gate_safe(_ROOT),
             "note": "开三环闭四环：执行环(第四环)不真执行；本脚本只读统计"}
 
     print("=" * 62)

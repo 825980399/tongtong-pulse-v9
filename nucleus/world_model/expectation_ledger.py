@@ -322,6 +322,166 @@ def audit_violated_gap_ownership(rows: list | None = None,
     }
 
 
+# ===== ★325批刀3：25 条 violated 复核清单（只出清单 + 建议，**不代判**）=====
+# 324刀3 已把"violated 且 gap_reason 为空"点成风险面（25/25）；本批要能逐条复核。
+# 分类规则逐条可核（不做黑箱打分）：
+#   R1 gap_reason 显式且 == criteria_gap            ⇒ 疑似口径差
+#   R2 gap_reason 显式且 ∈ {real_violation, ...}    ⇒ 可判真违规候选
+#   R3 前缀 a4./a1.cluster./mastery. 且 gap 空      ⇒ 疑似口径差（附具体理由）
+#   R4 前缀 alerts. 且 gap 空                       ⇒ 可判真违规候选（事实层）
+#   R5 其余                                         ⇒ 无法判
+_O3_ATTR_REAL = "可判真违规候选"
+_O3_ATTR_GAP = "疑似口径差"
+_O3_ATTR_UNKNOWN = "无法判"
+
+#: 前缀 ⇒ (归属, 依据)。**依据必须写清"为什么这个前缀算口径差"**，否则等于没说。
+_M325_PREFIX_BASIS = {
+    "a4.": (_O3_ATTR_GAP,
+            "A4 口径 317.a4.v1：图节点数 vs 说明书方法数本身存在已知映射差"
+            "（322 实测 +math 7 个模块级 def 需排除；本批 116 条差额同源）"),
+    "a1.cluster.": (_O3_ATTR_GAP,
+                    "类簇零入边率阈值 0.5 为设定值、从未标定；"
+                    "ratio<0.95 时属阈值口径问题（ratio≥0.95 另标真违规候选=整簇孤立/图残缺）"),
+    "mastery.": (_O3_ATTR_GAP,
+                 "mastery 生产者缺失（323/324 V3 实测 no_producer）："
+                 "断言值本身取不到，violated 反映的是管道未接通，不是行为违规"),
+    "alerts.": (_O3_ATTR_REAL,
+                "alerts 是事实层（有 ERROR 记录即事实），不依赖口径推断"),
+    "a1.": (_O3_ATTR_GAP, "A1 图覆盖率类断言，阈值未标定"),
+    "loop.": (_O3_ATTR_UNKNOWN, "压测圈次包装断言，需按内层断言回落判定"),
+}
+
+
+def _m325_prefix_of(assertion_id: str) -> str:
+    """取断言 id 的可识别前缀（两段优先，如 a1.cluster.），否则一段。"""
+    _a = str(assertion_id or "")
+    if not _a:
+        return ""
+    if _a.startswith("a1.cluster."):
+        return "a1.cluster."
+    for _p in _ASSERT_ID_PREFIXES + ("a1.", "alerts.", "loop."):
+        if _a.startswith(_p):
+            return _p
+    return _a.split(".")[0] + "." if "." in _a else ""
+
+
+def build_violated_review_list(rows=None, project_root=None) -> dict:
+    """★325批刀3：给出 violated 逐条复核清单（含归属**建议**与依据），只读不写盘。
+
+    "不代判"的落地方式：输出里主字段叫 `attribution_suggestion`，
+    并在 `verdict_owner` 里写明"真违规计数由星轨+小林核后定"。
+    """
+    _rows = rows
+    if _rows is None:
+        _rows = _read_jsonl(ledger_path(project_root))
+    _out = []
+    _cnt = {_O3_ATTR_REAL: 0, _O3_ATTR_GAP: 0, _O3_ATTR_UNKNOWN: 0}
+    for _r in (_rows or []):
+        if not isinstance(_r, dict) or str(_r.get("verdict") or "") != "violated":
+            continue
+        _aid = str(_r.get("assertion_id") or "")
+        _pfx = _m325_prefix_of(_aid)
+        _g = str(_r.get("gap_reason") or "")
+        _o = str(_r.get("gap_reason_origin") or "")
+        _meas = (_r.get("measured") or {}) if isinstance(_r.get("measured"), dict) else {}
+        _actual = _meas.get("actual")
+        if _g == "criteria_gap":
+            _attr, _basis, _rule = _O3_ATTR_GAP, "显式 gap_reason=criteria_gap", "R1"
+        elif _g:
+            _attr, _basis, _rule = _O3_ATTR_REAL, "显式 gap_reason=%s" % _g, "R2"
+        elif _pfx in _M325_PREFIX_BASIS:
+            _attr, _basis = _M325_PREFIX_BASIS[_pfx]
+            _rule = "R4" if _pfx == "alerts." else "R3"
+            if _pfx == "a1.cluster." and isinstance(_actual, (int, float)) and _actual >= 0.95:
+                _basis += "；本行 actual=%s ≥0.95 ⇒ 另可判真违规候选（整簇孤立）" % _actual
+        else:
+            _attr, _basis, _rule = _O3_ATTR_UNKNOWN, "前缀无规则、gap_reason 亦缺失", "R5"
+        _cnt[_attr] = _cnt.get(_attr, 0) + 1
+        _out.append({
+            "assertion_id": _aid,
+            "prefix": _pfx,
+            "gap_reason_now": _g,
+            "gap_reason_origin_now": _o or "legacy(缺失)",
+            "criteria_gap_prefix_inferable": _pfx in _CRITERIA_GAP_PREFIXES,
+            "statement": str(_r.get("statement") or "")[:160],
+            "expect": str((_r.get("predicted") or {}).get("expect") or ""),
+            "actual": _actual,
+            "attribution_suggestion": _attr,
+            "basis": _basis,
+            "rule": _rule,
+        })
+    return {"total": len(_out), "counts": _cnt, "items": _out,
+            "verdict_owner": "星轨+小林（本清单只给建议，真违规计数不由本模块定）",
+            "rule_doc": "R1/R2/R3/R4/R5 见 nucleus/world_model/expectation_ledger.py 325刀3 注释"}
+
+
+# ===== ★325批刀6：legacy 存量 gap_reason_origin 回填 =====
+# 存量 120 行全部缺 `gap_reason_origin`（324刀3 的显式标注只对新写入生效）。
+# 回填规则：**只补标记与可推的 gap_reason，绝不改 verdict / 不删行**。
+_GAP_BACKFILL_VERSION = "325.1"
+
+
+def backfill_legacy_origin(path=None, dry_run: bool = True,
+                           project_root=None) -> dict:
+    """给存量行补 `gap_reason_origin`（legacy_explicit / legacy_inferred / legacy_none）。
+
+    Args:
+        path: 台账路径；缺省取 ledger_path(project_root)。
+        dry_run: True 只统计不写盘（默认，安全）。
+
+    返回：`origin_added` / `gap_filled` / `verdict_changed`（**必须为 0**）/ `rows`。
+    非 dry_run 时先备份到 `<path>.bak_325` 再原子写。
+    """
+    _p = path or ledger_path(project_root)
+    _rows = _read_jsonl(_p)
+    _stat = {"rows": len(_rows), "origin_added": 0, "gap_filled": 0,
+             "legacy_explicit": 0, "legacy_inferred": 0, "legacy_none": 0,
+             "verdict_changed": 0, "dry_run": bool(dry_run), "path": _p,
+             "version": _GAP_BACKFILL_VERSION}
+    _now = round(time.time(), 3)
+    _out = []
+    for _r in _rows:
+        if not isinstance(_r, dict):
+            continue
+        _row = dict(_r)
+        _v_before = str(_row.get("verdict") or "")
+        if not str(_row.get("gap_reason_origin") or ""):
+            _g = str(_row.get("gap_reason") or "")
+            if _g:
+                _row["gap_reason_origin"] = "legacy_explicit"
+                _stat["legacy_explicit"] += 1
+            else:
+                _inferred = _infer_gap_reason(_row.get("assertion_id"),
+                                              _v_before, "")
+                if _inferred:
+                    _row["gap_reason"] = _inferred
+                    _row["gap_reason_origin"] = "legacy_inferred"
+                    _stat["legacy_inferred"] += 1
+                    _stat["gap_filled"] += 1
+                else:
+                    _row["gap_reason_origin"] = "legacy_none"
+                    _stat["legacy_none"] += 1
+            _row["legacy_backfill_version"] = _GAP_BACKFILL_VERSION
+            _row["legacy_backfill_at"] = _now
+            _stat["origin_added"] += 1
+        if str(_row.get("verdict") or "") != _v_before:
+            _stat["verdict_changed"] += 1     # 必须恒为 0
+        _out.append(_row)
+    if not dry_run and _stat["origin_added"]:
+        import shutil as _sh
+        _sh.copy2(_p, _p + ".bak_325")
+        _tmp = _p + ".tmp"
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            for _row in _out:
+                _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        os.replace(_tmp, _p)
+        _stat["written"] = True
+    else:
+        _stat["written"] = False
+    _stat["verdict_safe"] = (_stat["verdict_changed"] == 0)
+    return _stat
+
+
 def _norm_source(source: str | None) -> str:
     """★320批刀0/刀3：来源标记归一（``live`` 活体 / ``verification`` 验证运行）。"""
     _s = str(source or "live").strip().lower()

@@ -5964,6 +5964,44 @@ RESCAN_MIN_INTERVAL_SEC = 300.0
 #    零行为变化：默认 15 与 RUNTIME_PARAMS 初值一致；消费方 P-05 闭环仍改 RUNTIME_PARAMS。
 SEARCH_COOLDOWN_SECONDS = 15
 
+# ===== [M325] 325批刀4：28 个未登记 config 键批量收口（零行为变化）=====
+# 来源：324刀6 扫描（AST 取 config.py 顶层大写赋值集，对全仓
+#   `getattr(_cfg|config, "KEY", default)` 做差集）余 28 键 + 1 个门禁误报(LITERAL)。
+# 原则：**默认值与现行 getattr 现读值逐键一致**（下表 default 列即证据），
+#   因此登记本身不改变任何一行运行路径；有偏差的键一律跳过并申报，不擅自对齐。
+# 注意：这些键**不新建第二真源**——`getattr(...)` 读到的仍是本文件这一处。
+#
+# key                                  读取点 / 语义                                         default
+_ASSISTANT_NAME_DOC = "nucleus/field/active_memory_dual.py：默认助手名（空=未配置）"
+ASSISTANT_NAME = ""
+DIALOG_CRISIS_GUARD_ENABLED = True          # functions/chat/chat_service.py：对话危机拦截总闸
+ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE = True   # SafeEvolutionExecutor：已解析文件回灌 M88 素材
+ENABLE_OSCILLON_STARTUP_REPORT = True       # nucleus/field/OscillonField.py：启动报告开关
+ENABLE_REPORT_DWELL_AUDIT = True            # tools/report_dwell_audit.py：滞留审计开关
+ENABLE_REPORT_EXPECTED_CONSUMERS = True     # nucleus/reporting/report_bus.py：期望消费者校验
+HIGH_LOAD_PROCESS_RSS_MB = 6144.0           # nucleus/field/InfoField.py：进程 RSS 高载阈值(MB)
+INSIGHT_HYPOTHESIS_MIN_SCORE = 0.5          # nucleus/InsightBoard.py：洞见假设入板最小分
+INSIGHT_TOP_N_DUMP = 5                      # nucleus/InsightBoard.py：洞见落盘 TopN
+KNOWLEDGE_CURRENT_VERSION = None            # KnowledgeQualityAnalyzer：当前知识版本（None=自动）
+KNOWLEDGE_NOISE_FILTER = {}                 # knowledge_noise_filter：附加噪声词表（只读 .get）
+KNOWLEDGE_SNAPSHOT_PATH = None              # knowledge_access_layer：快照路径（None=用默认布局）
+LOG_ROLLOVER_AWARE_WINDOW_SEC = 120.0       # nucleus/logger.py：轮转感知窗口(秒)
+OB1_SANDBOX_CPU_CAP = None                  # nucleus/security/sandbox_limits.py：CPU 上限(None=不限)
+OB1_SANDBOX_MEM_MB = None                   # nucleus/security/sandbox_limits.py：内存上限(None=不限)
+OLLAMA_BASE_URL = ""                        # nucleus/ssrf_guard.py：本地模型基址（空=未配置）
+PATCH_RESTART_COOLDOWN_HOURS = None         # PatchManager：重启冷却小时（None=用内置默认）
+QICA_INTENT_HIERARCHY_PATH = "data/qica/intent_hierarchy.json"   # qica/IntentChannels：意图层级表
+QUOTA_DAILY_RESET_HOUR = 11                 # llm/ChannelQuotaMonitor：每日额度重置小时
+REPORT_CONSUMER_STALENESS_SECONDS = 3600    # reporting/report_bus：消费者陈旧阈值(秒)
+REPORT_DWELL_LIMIT_DAYS = 2.0               # tools/report_dwell_audit：滞留天数上限
+REPORT_RESOLUTION_WINDOW_SECONDS = 2592000  # reporting/report_bus：报解决窗口(30天)
+RUNTIME_MEM_LEVEL_MEDIUM = 85.0             # runtime_metrics：内存档位中(百分比)
+RUNTIME_MEM_LEVEL_HIGH = 90.0               # runtime_metrics：内存档位高
+RUNTIME_MEM_LEVEL_CRITICAL = 95.0           # runtime_metrics：内存档位危
+SNAPSHOT_INCREMENTAL_LOG_DELETE_ABS_MAX = 500    # mnemosyne/PulseSnapshot：增量日志删除绝对上限
+SNAPSHOT_SLOW_SAVE_THRESHOLD = 600.0        # mnemosyne/PulseSnapshot：慢存告警阈值(秒)
+TOOL_REGISTRY_PATH = "data/tool_registry.json"   # tooling/ToolRegistry：工具注册表路径
+
 # ===== [M317] 317批：长期支点最小落地（节拍可配 + growth 时间窗）=====
 # 读取点①：nucleus/evolution/patch_execution_dispatch.py::dispatch_on_tick
 #   派单节拍：最小间隔（秒）。默认 86400 = 保留日频；压测档位可调小（如 300/3600）。

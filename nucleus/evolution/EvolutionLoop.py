@@ -32,6 +32,48 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 
 _module_logger = logging.getLogger("EvolutionLoop")
 
+# ===== ★325批刀0：需求源（growth_intake）可观测计数 =====
+# 为什么要有：旧实现 `_file, _method = "", ""` 恒空，而缺陷源里大量日志类条目
+# (file="", method="") ⇒ ("","") 必在 _conflict ⇒ 需求源**结构性 100% 让位**。
+# 烛微325§0-5 实测佐证：台账 trigger 84 条全 None、growth_intake 恒 0。
+# 计数只为"看得见"，不参与任何判罚。
+_GROWTH_INTAKE_STATS: dict = {
+    "calls": 0,          # 进入采集的次数（有 hub 料才算）
+    "yielded": 0,        # 因**非空**冲突键让位
+    "admitted": 0,       # 真正入队
+    "empty_key_hits": 0,  # 存在空键冲突候选（**不再让位**，仅留痕）
+    "no_material": 0,    # hub 里没有 growth 料
+}
+
+#: 入料摘要落盘位置（唯一可观测口——trigger_counts 过去只活在内存返回值里）
+_M325_INTAKE_SUMMARY_REL = os.path.join(
+    "data", "reports", "evolution", "intake_summary_latest.json")
+
+
+def get_growth_intake_stats() -> dict:
+    """★325批刀0：需求源计数（只读拷贝），供压测报告/日报取数。"""
+    return dict(_GROWTH_INTAKE_STATS)
+
+
+def _m325_persist_intake_summary(summary: dict) -> str:
+    """把本拍入料摘要原子落盘；失败只留痕，绝不影响发现池。"""
+    _p = os.path.join(os.getcwd(), _M325_INTAKE_SUMMARY_REL)
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _tmp = _p + ".tmp"
+        _body = dict(summary or {})
+        _body["written_at"] = time.time()
+        _body["written_str"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        import json as _json
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            _json.dump(_body, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _p)
+        return _p
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionLoop::_m325_persist_intake_summary",
+                   level="warning")
+        return ""
+
 
 class EvolutionLoop(SilentLogMixin):
     """完整进化闭环编排器。"""
@@ -244,6 +286,20 @@ class EvolutionLoop(SilentLogMixin):
         #   不新开第三字段；需求驱动补丁占比 := count(growth_need)/count(all) 可算。
         for _i in _final:
             _i.setdefault("trigger", "defect")
+        # ★325批刀0：sum 落盘（唯一可观测口）——旧实现 trigger_counts 只活在
+        #   内存返回值里，压测报告/日报/外部复算全都读不到，需求源"有没有产出"
+        #   根本无法验收（这正是 刀5 三处字段映射缺源的同一个坑）。
+        _m325_persist_intake_summary({
+            "total": len(_final),
+            "review_intake": len(_intake),
+            "growth_intake": len(_growth_intake),
+            "trigger_counts": {
+                "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
+                "growth_need": sum(1 for _i in _final
+                                   if _i.get("trigger") == "growth_need"),
+            },
+            "growth_stats": dict(_GROWTH_INTAKE_STATS),
+        })
         return {
             "issues": _final,
             "summary": {
@@ -319,13 +375,33 @@ class EvolutionLoop(SilentLogMixin):
         except Exception as _e:
             _module_logger.debug("[316刀3] 读 hub growth 料失败（不影响发现池）: %s", _e)
         if not _topic and not _hyp:
+            _GROWTH_INTAKE_STATS["no_material"] = int(
+                _GROWTH_INTAKE_STATS.get("no_material", 0)) + 1
             return []
         _file, _method = "", ""
+        # ★325批刀0：**空键不得参与冲突判定**。
+        #   旧实现 _file/_method 恒 ""（需求源本就没有具体代码位置），而缺陷源里
+        #   大量 {file:"", method:""} 的日志类条目 ⇒ ("","") 必在 _conflict ⇒
+        #   需求源**结构性必然让位**（烛微325§0-5；台账 trigger 84 条全 None 与此一致）。
+        #   修法：只有**非空** (file, method) 才判冲突；空键仅计数留痕，不拦。
         _conflict = {(str(_i.get("file") or ""), str(_i.get("method") or ""))
                      for _i in (_existing or [])}
-        if (_file, _method) in _conflict:
+        _GROWTH_INTAKE_STATS["calls"] = int(_GROWTH_INTAKE_STATS.get("calls", 0)) + 1
+        _conflict_key = None
+        if _file or _method:
+            if (_file, _method) in _conflict:
+                _conflict_key = {"file": _file, "method": _method,
+                                 "why": "nonempty_key_conflict"}
+        elif ("", "") in _conflict:
+            # 空键：**不判冲突**，只记录"候选里确实有空键"，与"没判"可区分
+            _GROWTH_INTAKE_STATS["empty_key_hits"] = int(
+                _GROWTH_INTAKE_STATS.get("empty_key_hits", 0)) + 1
+        if _conflict_key:
+            _GROWTH_INTAKE_STATS["yielded"] = int(
+                _GROWTH_INTAKE_STATS.get("yielded", 0)) + 1
             _module_logger.info(
-                "[316刀3][补丁] 需求源让位（与缺陷源同 file/method）: %s", _topic)
+                "[316刀3][补丁] 需求源让位（与缺陷源同 file/method）: topic=%s "
+                "conflict_key=%s", _topic, _conflict_key)
             return []
         _rec = {
             "type": "growth_need",
@@ -341,6 +417,11 @@ class EvolutionLoop(SilentLogMixin):
             "requires_confirmation": True,
             "trigger": "growth_need",
         }
+        # ★325批刀0：留痕带上冲突判定结论，便于复核"为什么这拍进来了"
+        _rec["conflict_key"] = None
+        _rec["m325_empty_key_ignored"] = bool(_file == "" and _method == "")
+        _GROWTH_INTAKE_STATS["admitted"] = int(
+            _GROWTH_INTAKE_STATS.get("admitted", 0)) + 1
         _module_logger.info(
             "[316刀3][补丁] growth_need 入队(requires_confirmation=True, 不自动应用): "
             "topic=%s", _topic or (_hyp[:80]))

@@ -5628,6 +5628,229 @@ _DEAD_CODE_REVIEW_STATS: dict = {
 }
 
 
+# ===== ★325批刀2：O3 开闸准备（抽验 / 降量归因 / 三档打印）=====
+# 背景：小林裁决开闸口径 = **O3**（hard 档候选数 ≤N 且抽 20 条误判 ≤10%）。
+# 实测 hard=548 ≫ N(50~100) ⇒ 先要"看得见构成"，再谈降量；降法**不由本模块裁决**，
+# 本模块只给数据（谁占大头、每类可消多少）。
+#: 抽验通过线（20 条里误判不超过 2 条）
+_O3_MISJUDGE_LINE = 0.10
+#: 候选数上限建议（小林：N=50—100）
+_O3_CANDIDATE_MAX = 100
+#: 图外可达证据的类型（**不看调用图**，避免拿判据自证判据）
+_O3_PROBE_KINDS = ("string_ref", "protocol_name", "test_ref", "attr_bound")
+
+_M325_NAME_INDEX = {"built": False, "names": {}, "ok": False}
+
+
+def _m325_build_name_index(project_root=None) -> dict:
+    """一次性扫全仓，建「标识符 → 图外出现证据」索引（惰性、只读、失败不缓存）。
+
+    为什么失败不缓存：323刀0 的教训——一次读错把空表钉死，整轮判据永久退化。
+    为什么用 AST 不用正则：要区分"字符串里提到这个名字"与"代码里调用它"，
+    正则分不清注释/字符串/真实调用；AST 天然分得清。
+    """
+    if _M325_NAME_INDEX.get("built"):
+        return _M325_NAME_INDEX
+    _root = project_root or os.getcwd()
+    _skip = {".git", "__pycache__", "tmp", "node_modules", ".arts", "logs", "data",
+             "_archive", "_quarantine"}
+    _idx: dict = {}
+
+    def _slot(_nm):
+        _s = _idx.get(_nm)
+        if _s is None:
+            _s = {"files": set(), "tests": False, "setattr": False}
+            _idx[_nm] = _s
+        return _s
+
+    try:
+        for _dp, _dn, _fn in os.walk(_root):
+            _dn[:] = [d for d in _dn
+                      if d not in _skip and not d.startswith(".bak_batch")]
+            for _f in _fn:
+                if not _f.endswith(".py"):
+                    continue
+                _p = os.path.join(_dp, _f)
+                _rel = os.path.relpath(_p, _root).replace(os.sep, "/")
+                try:
+                    _src = open(_p, encoding="utf-8", errors="ignore").read()
+                    _tree = ast.parse(_src)
+                except (OSError, SyntaxError, ValueError):
+                    continue
+                _in_tests = _rel.startswith("tests/")
+                for _n in ast.walk(_tree):
+                    if isinstance(_n, ast.Constant) and isinstance(_n.value, str):
+                        _v = _n.value
+                        if _v.isidentifier():
+                            _s = _slot(_v)
+                            _s["files"].add(_rel)
+                            if _in_tests:
+                                _s["tests"] = True
+                    elif isinstance(_n, ast.Call):
+                        _fn2 = _n.func
+                        _fname = (_fn2.id if isinstance(_fn2, ast.Name)
+                                  else (_fn2.attr if isinstance(_fn2, ast.Attribute) else ""))
+                        if _fname == "setattr" and len(_n.args) >= 2:
+                            _a1 = _n.args[1]
+                            if isinstance(_a1, ast.Constant) and isinstance(_a1.value, str):
+                                _slot(_a1.value)["setattr"] = True
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::_m325_build_name_index", level="warning")
+        return {"built": False, "names": {}, "ok": False}
+    _M325_NAME_INDEX.update({"built": True, "names": _idx, "ok": True})
+    return _M325_NAME_INDEX
+
+
+def _m325_probe_reachable(item: dict, project_root=None) -> list:
+    """图外独立可达证据探查（**不读调用图**）。返回命中的证据类型列表。
+
+    判据为什么长这样：hard 档的定义是"三层（static/byname/infer）皆无入边"，
+    所以任何**图内**信号都会自证为"无证据"。要独立，只能看图外痕迹：
+      string_ref     名字被当字符串写进别的文件 ⇒ 反射/事件注册/动态派发可能
+      protocol_name  __xx__ 或 on_/handle_/do_ 前缀 ⇒ 框架/协议回调，图天然看不见
+      test_ref       tests/ 里出现 ⇒ 至少测试可达（不该算"死"）
+      attr_bound     名字被 setattr/回调表绑定 ⇒ 运行期动态挂载
+    """
+    _name = str((item or {}).get("method") or (item or {}).get("name") or "")
+    if not _name:
+        return ["no_name"]
+    _idx = _m325_build_name_index(project_root)
+    _hit = []
+    _slot = (_idx.get("names") or {}).get(_name)
+    if _slot:
+        if _slot.get("files"):
+            _hit.append("string_ref")
+        if _slot.get("tests"):
+            _hit.append("test_ref")
+        if _slot.get("setattr"):
+            _hit.append("attr_bound")
+    if (_name.startswith("__") and _name.endswith("__")) or _name.startswith(
+            ("on_", "handle_", "do_")):
+        _hit.append("protocol_name")
+    return _hit
+
+
+def evidence_tier_distribution(items=None) -> dict:
+    """evidence_tier 三档分布（hard / soft / infer-only，附 unset）。
+
+    ★口径：一律用**证据档位**，不用"解析率 63.53%"那把宽尺子（星轨325 §三）。
+    """
+    _rows = items
+    if _rows is None:
+        _rows = list((_DEAD_CODE_REVIEW_STATS or {}).get("items") or [])
+    _d = {"hard": 0, "soft": 0, "infer-only": 0, "unset": 0}
+    for _r in (_rows or []):
+        if not isinstance(_r, dict):
+            continue
+        _k = str(_r.get("evidence_tier") or "unset")
+        _d[_k] = int(_d.get(_k, 0)) + 1
+    _d["total"] = int(len(_rows or []))
+    return _d
+
+
+def format_evidence_tier_dist(items=None) -> list:
+    """三档各一行可读输出（开档当天要能一眼看构成，不再只有 JSON）。"""
+    _d = evidence_tier_distribution(items)
+    _t = max(1, int(_d.get("total") or 0))
+    _out = []
+    for _k in ("hard", "soft", "infer-only"):
+        _n = int(_d.get(_k, 0))
+        _out.append("[evidence_tier] %-10s %5d  (%5.1f%%)" % (_k, _n, _n * 100.0 / _t))
+    if _d.get("unset"):
+        _out.append("[evidence_tier] %-10s %5d  (档位缺失，需修生产者)"
+                    % ("unset", _d["unset"]))
+    _out.append("[evidence_tier] total      %5d" % int(_d.get("total") or 0))
+    return _out
+
+
+def sample_verify_hard_candidates(k: int = 20, items=None, seed: int = 325,
+                                 project_root=None) -> dict:
+    """★O3 抽验：从 hard 档随机抽 k 条，用**图外独立证据**核"是否可能误判"。
+
+    通过线（小林裁决）：误判率 ≤ 10%（默认 20 条 ⇒ ≤2 条）。
+    为什么"有图外证据"就算疑似误判：hard 的判死理由是"三层皆无入边"，
+    一旦有字符串引用/协议名/测试引用，就说明**图看不见**不等于**没人用**——
+    这正是"不可把没测当没病"的边界，只能转人工，不能维持判死。
+    """
+    import random as _random
+    _pool = [dict(_r) for _r in (items or []) if isinstance(_r, dict)
+             and str(_r.get("evidence_tier") or "") == "hard"]
+    _src = "injected" if items is not None else "live_stats"
+    if not _pool:
+        return {"ok": False,
+                "reason": "unavailable：当前无 hard 档候选（活体 silent 档/未跑判死）",
+                "k": int(k), "pool": 0, "sampled": 0, "misjudged": 0,
+                "misjudge_rate": None, "line": _O3_MISJUDGE_LINE,
+                "verdict": "UNAVAILABLE", "source": _src, "rows": []}
+    _rd = _random.Random(int(seed))
+    _take = min(max(1, int(k)), len(_pool))
+    _sample = _rd.sample(_pool, _take) if _take < len(_pool) else list(_pool)
+    _rows = []
+    _bad = 0
+    for _it in _sample:
+        _ev = _m325_probe_reachable(_it, project_root)
+        _susp = bool(_ev)
+        if _susp:
+            _bad += 1
+        _rows.append({"file": str(_it.get("file") or ""),
+                      "method": str(_it.get("method") or _it.get("name") or ""),
+                      "line": _it.get("line", 0),
+                      "evidence_tier": "hard",
+                      "probe_hits": _ev,
+                      "judgement": ("疑似误判（图外可达证据）" if _susp
+                                    else "维持判死（图外亦无证据）")})
+    _rate = (_bad / float(len(_rows))) if _rows else None
+    _ok = (_rate is not None and _rate <= _O3_MISJUDGE_LINE)
+    return {"ok": True, "k": int(k), "pool": len(_pool), "sampled": len(_rows),
+            "misjudged": _bad,
+            "misjudge_rate": (round(_rate, 4) if _rate is not None else None),
+            "line": _O3_MISJUDGE_LINE, "verdict": ("PASS" if _ok else "FAIL"),
+            "source": _src, "probe_index": bool(_M325_NAME_INDEX.get("ok")),
+            "rows": _rows}
+
+
+def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
+    """hard 档构成归因 + **可选**降量路径（只给数据与增量，降法由星轨裁）。
+
+    输出每类：`n`（条数）、`reduction_path`（可消做法）、`samples`，
+    用于回答"548 → N 能不能到、靠哪几类到"。
+    """
+    _hard = [dict(_r) for _r in (items or []) if isinstance(_r, dict)
+             and str(_r.get("evidence_tier") or "") == "hard"]
+    if not _hard:
+        return {"ok": False, "reason": "unavailable：当前无 hard 档候选",
+                "hard_total": 0, "cats": [], "target_max": _O3_CANDIDATE_MAX}
+    _cats = {k: {"n": 0, "samples": []} for k in _O3_PROBE_KINDS}
+    _cats["no_graph_signal_at_all"] = {"n": 0, "samples": []}
+    for _it in _hard:
+        _ev = [e for e in _m325_probe_reachable(_it, project_root)
+               if e in _O3_PROBE_KINDS]
+        _key = _ev[0] if _ev else "no_graph_signal_at_all"
+        _cats.setdefault(_key, {"n": 0, "samples": []})
+        _cats[_key]["n"] += 1
+        if len(_cats[_key]["samples"]) < 3:
+            _cats[_key]["samples"].append(
+                "%s::%s" % (_it.get("file"), _it.get("method")))
+    _paths = {
+        "string_ref": "移出 hard：名字以字符串出现 ⇒ 反射/事件注册可能，改记 soft 待复核",
+        "protocol_name": "移出 hard：dunder/on_/handle_ 前缀 ⇒ 框架回调，图天然看不见，改记 soft",
+        "test_ref": "移出 hard：tests/ 有引用 ⇒ 至少测试可达，不该判死",
+        "attr_bound": "移出 hard：被 setattr 动态挂载 ⇒ 图外绑定，改记 soft",
+        "no_graph_signal_at_all": "**真 hard（建议保留）**：图内三层无入边且图外无任何证据",
+    }
+    _out = []
+    for _k, _v in sorted(_cats.items(), key=lambda kv: -kv[1]["n"]):
+        _out.append({"cat": _k, "n": _v["n"], "samples": _v["samples"],
+                     "reduction_path": _paths.get(_k, "")})
+    _total = len(_hard)
+    _removable = sum(v["n"] for k, v in _cats.items() if k != "no_graph_signal_at_all")
+    return {"ok": True, "hard_total": _total, "removable_if_all_moved": _removable,
+            "residual_hard": _total - _removable, "target_max": _O3_CANDIDATE_MAX,
+            "meets_target": (_total - _removable) <= _O3_CANDIDATE_MAX,
+            "cats": _out,
+            "note": "只给数据与路径；降哪几类、是否降，由星轨+小林裁决（本模块不代判）"}
+
+
 def get_dead_code_review_stats() -> dict:
     """★第308批 刀2：读最近一次 dead_code 扫描的待复核统计（拷贝返回，只读）。"""
     _s = dict(_DEAD_CODE_REVIEW_STATS)
