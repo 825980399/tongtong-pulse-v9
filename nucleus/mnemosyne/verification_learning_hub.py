@@ -634,12 +634,25 @@ class VerificationLearningHub:
                 self._log(LogLevel.INFO,
                           f"[VerificationLearningHub] 应用规则失败({_name}/{_tag}): {e}")
             _tags.append(f"{_name}:{_tag}")
+            # ★331批刀1：把吸收方的四步计数并进留痕（读回调 owner 的实例统计，
+            #   **不 import self_inspector** —— 那边会 import 本模块，循环依赖）。
+            #   读不到记 None（**不填 0**：没统计 ≠ 统计为 0）。
+            _abs = getattr(_owner, "_m331_absorb_stats", None) if _owner is not None else None
+            _reason = dict(_abs["reason"]) if isinstance(_abs, dict) else None
             _per.append({"organ": _name, "tag": _tag, "class": _cls,
                          "rules": len(rules), "applied": _applied,
-                         "tier": _m326_rule_tier(rules)})
+                         "tier": _m326_rule_tier(rules),
+                         "absorb_reason": _reason,
+                         "absorb_steps": ({
+                             "delivered": _abs.get("delivered"),
+                             "categorized": _abs.get("categorized"),
+                             "tier_checked": _abs.get("tier_checked"),
+                             "applied": _abs.get("applied"),
+                         } if isinstance(_abs, dict) else None)})
             self._log(LogLevel.INFO,
                       f"[326刀5][absorb] class={_cls} organ={_name} tag={_tag} "
-                      f"rules={len(rules)} applied={_applied} tier={_m326_rule_tier(rules)}")
+                      f"rules={len(rules)} applied={_applied} tier={_m326_rule_tier(rules)} "
+                      f"reason={_reason}")
         self._applier_dispatch_seq = int(getattr(self, "_applier_dispatch_seq", 0)) + 1
         self._applier_last_dispatch = {
             "seq": self._applier_dispatch_seq, "organ": organ,

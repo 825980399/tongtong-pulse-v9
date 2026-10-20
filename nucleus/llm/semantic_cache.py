@@ -749,6 +749,63 @@ class SemanticCacheL2:
         for _e in _rows[: len(self._entries) - _cap]:
             self._entries.pop(_e.hash, None)
 
+    # ★331批刀9：去标识化影子计数（**被准入闸拒绝**的写入请求记一次）
+    #   落盘只含「origin 名 + 键哈希 + 计数」——**不存任何原话**（PII 面不扩大）。
+    _M331_SHADOW_PATH = os.path.join("data", "reports",
+                                     "semantic_cache_l2_shadow_331.json")
+    _M331_SHADOW_BUF: dict = {"by_origin": {}, "total": 0,
+                              "admitted_origins": list(_ALLOWED_ORIGINS)}
+
+    @classmethod
+    def _m331_shadow_note(cls, origin: str, prompt: str) -> None:
+        """★331批刀9：记一次"本可进 L2 但被准入闸拦下"的**去标识化**计数。
+
+        为什么记而不是放行：开准入（把自主流量加进 `_ALLOWED_ORIGINS`）是**策略裁定**，
+        会改变缓存内容构成与 PII 面，不在本批授权。记数只是把 330 刀5 的
+        "料从未来过"（当时是推断）变成**可数事实**，为裁定提供依据。
+        失败一律静默：影子计数坏了不能影响主链路。
+        """
+        try:
+            _o = str(origin or "") or "(empty)"
+            if _o in cls._ALLOWED_ORIGINS:
+                return
+            _h = hashlib.sha256(str(prompt or "").encode("utf-8",
+                                                          errors="replace")).hexdigest()
+            _b = cls._M331_SHADOW_BUF
+            _slot = _b["by_origin"].get(_o)
+            if not isinstance(_slot, dict):
+                _slot = {"count": 0, "distinct_keys": []}
+                _b["by_origin"][_o] = _slot
+            _slot["count"] = int(_slot.get("count", 0)) + 1
+            if _h[:16] not in _slot["distinct_keys"]:
+                if len(_slot["distinct_keys"]) < 100:
+                    _slot["distinct_keys"].append(_h[:16])
+            _b["total"] = int(_b.get("total", 0)) + 1
+        except Exception as _e:
+            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_note")
+
+    @classmethod
+    def _m331_shadow_flush(cls, root: str | None = None) -> bool:
+        """★331批刀9：把影子计数原子落盘（只含计数与哈希）。"""
+        try:
+            _base = root or os.getcwd()
+            _p = os.path.join(_base, cls._M331_SHADOW_PATH)
+            os.makedirs(os.path.dirname(_p), exist_ok=True)
+            _body = {"version": "331.1",
+                     "note": "去标识化影子计数：仅 origin/键哈希/计数，**无原话**",
+                     "admitted_origins": list(cls._ALLOWED_ORIGINS),
+                     "total": int(cls._M331_SHADOW_BUF.get("total", 0)),
+                     "by_origin": dict(cls._M331_SHADOW_BUF.get("by_origin") or {}),
+                     "updated_at": time.time()}
+            _tmp = _p + ".tmp"
+            with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+                json.dump(_body, _f, ensure_ascii=False, indent=2)
+            os.replace(_tmp, _p)
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_flush")
+            return False
+
     # ---------------- 写入 ----------------
     def store(self, prompt: str, response: str, origin: str = "",
               vec: list | None = None) -> bool:
@@ -756,6 +813,8 @@ class SemanticCacheL2:
         if not self.enabled() or not prompt or not response:
             return False
         if str(origin or "") not in self._ALLOWED_ORIGINS:
+            # ★331批刀9：被准入闸拦下 ⇒ 记一次去标识化影子计数（不改准入语义）
+            self._m331_shadow_note(origin, prompt)
             return False
         if len(prompt) < self.min_len():
             return False
@@ -789,6 +848,8 @@ class SemanticCacheL2:
             if not self.enabled() or not prompt:
                 return None
             if str(origin or "") not in self._ALLOWED_ORIGINS:
+                # ★331批刀9：查询侧同样记影子（"本可命中但被准入拦"的次数）
+                self._m331_shadow_note(origin, prompt)
                 return None
             if len(prompt) < self.min_len():
                 self._stat["rejected"] += 1

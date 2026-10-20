@@ -103,7 +103,15 @@ def _ledger() -> dict:
         _mt = float(os.path.getmtime(_p))
     except OSError as _e:
         print(f"[WARN] ledger mtime 不可读: {_e}")
-    return {"rows": len(_rows), "verdicts": _v, "gap_reasons": _g, "mtime": _mt}
+    # ★331批刀3：判定线同步为「violated 100% 带归属」（90% 全量线作废）
+    _own: dict = {"verdict": "UNAVAILABLE"}
+    try:
+        from nucleus.world_model.expectation_ledger import violated_gap_ownership_check
+        _own = violated_gap_ownership_check(_rows)
+    except Exception as _oe:
+        print(f"[WARN] violated 归属校验不可读: {_oe}")
+    return {"rows": len(_rows), "verdicts": _v, "gap_reasons": _g, "mtime": _mt,
+            "violated_ownership": _own}
 
 
 def _framework_pid_info() -> dict:
@@ -270,7 +278,26 @@ def m325_open_gate_fields(root: str | None = None) -> dict:
                  else ("hard_legacy" if _hg is not None else "unavailable"))
     _soft = (_dist or {}).get("soft") if _dist else None
     _tc = (_isum.get("trigger_counts") if isinstance(_isum, dict) else None) or None
+    # ★331批刀5：报告模板增**进程代次**字段（PID ＋ 进程创建时刻）。
+    #   两个面各记一份：活体面（观测对象）与计数面（本进程统计），
+    #   混在一份里会出现"用 A 进程的代次标注 B 进程的计数"。
+    _pg_live = _framework_pid_info()
+    _pg_stats: dict = {"available": False, "note": ""}
+    try:
+        from nucleus.reasoning.SafeEvolutionExecutor import get_output_rate_stats
+        _pg_stats = (get_output_rate_stats().get("proc_gen") or {})
+        _pg_stats = dict(_pg_stats, available=True)
+    except Exception as _pge:
+        # ★331批刀5·cw2整改：不可读必须**说出来**（否则读盘失败被静默吞掉，
+        #   报表上"代次不可用"与"压根没取"长得一样）
+        print(f"[WARN] 进程代次不可读: {_pge}")
+        _pg_stats = {"available": False, "note": "%s" % type(_pge).__name__}
     return {
+        "proc_gen_live": {"pid": _pg_live.get("pid"),
+                          "create_time": _pg_live.get("create_time"),
+                          "create_str": _pg_live.get("create_str"),
+                          "available": bool(_pg_live.get("available"))},
+        "proc_gen_stats": _pg_stats,
         "evidence_tier_dist": _dist,
         "evidence_tier_src": (_pi.get("path") or "") or "unavailable",
         "per_item_count": _pi.get("count"),

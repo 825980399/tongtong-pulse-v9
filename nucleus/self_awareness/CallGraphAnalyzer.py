@@ -1793,6 +1793,10 @@ class CallGraphAnalyzer:
                          os.path.relpath(_path, _root),
                          len(_payload.get("nodes") or []),
                          len(_payload.get("edges") or []), _edge_types)
+            # ★331批刀2：落盘即自检 —— 把"图刚落盘"变成 A6 的触发点。
+            #   挂在**统一落盘口**上：任何调用路径（含 SelfAwarenessEngine 的图重建）
+            #   都会经过这里，不会有挂点漏网。自检失败只留痕，**不阻断落盘**。
+            self._m331_auto_a6(_path)
             return _path
         except Exception as e:
             _logger.warning("调用图落盘失败（返回空串）: %s: %s", type(e).__name__, e)
@@ -1954,6 +1958,51 @@ class CallGraphAnalyzer:
     A6_CRITERIA_VERSION = "328.a6.v1"
     #: 图解析缓存（key=(路径, mtime)）——同一份图在一个进程里只解析一次
     _A6_CACHE: dict = {}
+
+    # ★331批刀2：A6 自检"每图只留痕一次"的路径账（防 silent 分支重复打噪声）
+    _M331_A6_LOGGED: set = set()
+
+    def _m331_auto_a6(self, graph_path: str) -> dict | None:
+        """★331批刀2：图落盘后自动跑一次 A6 聚合口径自检，并**无条件**留痕一行。
+
+        为什么立这个挂点（烛微331§0-2 坐实）：A6 的三项判据自 328刀1 起**只在隔离根
+        实测过**，断言从不在活体周期跑 —— 全日志检索 `[A6]` **零命中**。跨批必然回潮：
+        折叠缺陷属于"旧代码产的图才有"，没人定期跑就没有人发现它又回来了。
+
+        为什么 `folded=0` 也要打日志：只写"异常才打"，正常时日志里根本检索不到 `[A6]`，
+        就无法区分"跑过且正常"与"压根没跑" —— 这与"把没测当没病"是同一个坑。
+        故无条件留痕，`folded>0` 再加一条 WARNING。
+
+        每图只打一次（`_M331_A6_LOGGED`）：同一张图被反复读时不刷屏。
+        返回 A6 结果（异常/不可用则 None 或带 verdict 的字典），**不阻断落盘**。
+        """
+        if not graph_path:
+            return None
+        _key = os.path.basename(graph_path)
+        if _key in self._M331_A6_LOGGED:
+            return None
+        self._M331_A6_LOGGED.add(_key)
+        try:
+            _r = self.a6_edge_kind_consistency(graph_path=graph_path)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6")
+            _logger.warning("[A6] 落盘自检异常（**不阻断落盘**）: %s", type(_e).__name__)
+            return None
+        if not isinstance(_r, dict):
+            return None
+        _v = str(_r.get("verdict") or "")
+        _folded = int(_r.get("folded_into_static", 0) or 0)
+        if _v == "UNAVAILABLE":
+            # 版本对不上/图不可解析 ⇒ **不填 0**，如实记不可用与原因
+            _logger.warning("[A6] folded=%s verdict=UNAVAILABLE reason=%s file=%s",
+                            _folded, _r.get("reason"), _key)
+            return _r
+        _logger.info("[A6] folded=%d verdict=%s edges=%s agg_sum=%s file=%s",
+                     _folded, _v, _r.get("total_edges"), _r.get("agg_sum"), _key)
+        if _folded > 0:
+            _logger.warning("[A6] folded=%d > 0 ⇒ 存在 kind 被折叠进 static（file=%s）",
+                            _folded, _key)
+        return _r
 
     def a6_edge_kind_consistency(self, graph_path: str | None = None,
                                  root: str | None = None) -> dict:

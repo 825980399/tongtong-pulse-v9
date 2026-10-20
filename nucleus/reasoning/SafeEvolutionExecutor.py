@@ -44,12 +44,44 @@ _module_logger = get_module_logger("SafeEvolutionExecutor")
 # 边界：只统计、只留痕；不参与入队/分诊/动机决策。
 _OUTPUT_STATS = {"runs": 0, "productive": 0, "zero_output": 0}
 
+# ★331批刀5：进程代次（**跨进程计数不得拼接**）
+# 烛微331§0-3：K1 计数 `runs=1` 从重启后重计，若不看代次，会把上一进程的 11 拍与
+#   新进程的 20 拍混算成 31 拍 —— 数字看着在涨，其实没有一拍是同一个进程跑的。
+#   代次标签由内核记账的**进程创建时刻**构成（与 PID 同判），无法伪造。
+_M331_PROC_GEN: dict = {}
+
+
+def _m331_proc_gen() -> dict:
+    """★331批刀5：本进程的代次标识（PID ＋ 进程创建时刻）。
+
+    边界：psutil 不可用时 `create_time=None`、**gen 后缀记 unknown**——
+    **不填 0**：0 会被读成"1970 年起的进程"，比"不知道"错得更彻底。
+    """
+    if _M331_PROC_GEN:
+        return dict(_M331_PROC_GEN)
+    _pid = os.getpid()
+    _ct = None
+    try:
+        import psutil
+        _ct = float(psutil.Process(_pid).create_time())
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m331_proc_gen")
+        _ct = None
+    _cs = time.strftime("%Y%m%d-%H%M%S", time.localtime(_ct)) if _ct else ""
+    _gen = ("pid%d@%s" % (_pid, _cs)) if _cs else ("pid%d@unknown" % _pid)
+    _M331_PROC_GEN.update({"pid": _pid, "create_time": _ct,
+                           "create_str": _cs, "gen": _gen})
+    return dict(_M331_PROC_GEN)
+
 
 def get_output_rate_stats() -> dict:
     """★317批刀3：返回子进程产出率统计（可读指标，供压测/日报消费；纯读）。"""
     _r = dict(_OUTPUT_STATS)
     _runs = int(_r.get("runs", 0) or 0)
     _r["rate"] = round(_r.get("productive", 0) / float(_runs), 4) if _runs else 0.0
+    # ★331批刀5：任何 runs/productive_total 输出都必须**自带代次标签**，
+    #   否则跨进程一拼接就是假账（11 拍 + 20 拍 ≠ 31 拍）。
+    _r["proc_gen"] = _m331_proc_gen()
     return _r
 
 
@@ -6452,11 +6484,12 @@ class SafeEvolutionExecutor:
                 _runs_n = _OUTPUT_STATS["runs"]
                 _module_logger.info(
                     "[317刀3][产出率] mode=review productive=%d reviewed=%s report=%d "
-                    "runs=%d productive_total=%d zero_total=%d rate=%.4f counted_as_loop=%d",
+                    "runs=%d productive_total=%d zero_total=%d rate=%.4f counted_as_loop=%d "
+                    "proc_gen=%s",
                     _productive, _reviewed, _report_len, _runs_n,
                     _OUTPUT_STATS["productive"], _OUTPUT_STATS["zero_output"],
                     (_OUTPUT_STATS["productive"] / float(_runs_n)) if _runs_n else 0.0,
-                    _productive)
+                    _productive, _m331_proc_gen().get("gen"))
                 if not _productive:
                     # ★318批刀4：零产出 ⇒ 显式标「任务面空」，不得以"无异常"代替"无输入"
                     _module_logger.info(

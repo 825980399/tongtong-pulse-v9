@@ -179,9 +179,12 @@ def _m326_save_fail_ledger(data: dict, path: str | None = None) -> bool:
 
 
 def _m326_bump_fail_ledger(patch_id: str, fail_count: int | None = None,
-                           reason: str = "", path: str | None = None) -> int:
+                           reason: str = "", path: str | None = None,
+                           category: str = "") -> int:
     """把侧账累计值抬到 `max(现值, fail_count)`（单调不减）；缺 fail_count 则 +1。
 
+    ★331批刀4：新增可选 `category`——**一次写盘**顺带记类别分布，让"执行失败"与
+    "派单前被拦"在后验时**可区分**（不落类别的话，计数涨了仍不知道卡在哪一层）。
     Returns: 侧账当前值（0 = 没有记录）。
     """
     _pid = str(patch_id or "")
@@ -196,11 +199,124 @@ def _m326_bump_fail_ledger(patch_id: str, fail_count: int | None = None,
     _rec["fail_count"] = _new
     _rec["max_ever"] = max(int(_rec.get("max_ever", 0) or 0), _new)
     _rec["last_reason"] = str(reason or "")[:200]
+    if str(category or ""):
+        _cats = _rec.get("categories")
+        if not isinstance(_cats, dict):
+            _cats = {}
+        _cats[str(category)] = int(_cats.get(str(category), 0) or 0) + 1
+        _rec["categories"] = _cats
+        _rec["last_category"] = str(category)
     _rec["updated_at"] = time.time()
     _rec.setdefault("first_at", time.time())
     _d["patches"][_pid] = _rec
     _m326_save_fail_ledger(_d, path)
     return _new
+
+
+# ===== ★331批刀4：侧账本「全类型计次」＋ runtime_failed 的 TTL 归档出口 =====
+# 为什么（烛微331§0-5 坐实）：侧账本此前只有 **1 条**（6ecc，fail_count=2），
+#   而 pending 里两条 `runtime_failed` 的**发现类**补丁从未进过侧账 ⇒ cap 对它们
+#   **不生效** ⇒ 失败件只增不消化。根因不是"忘了写"，是**挂点不全**：
+#   旧 bump 只挂在「进过沙箱且执行失败」这一条路径上，发现类补丁在派单前就被拦下，
+#   压根走不到那儿，于是永远计不上数 —— 属于"代码写了但量不到"的典型断链。
+_M331_RF_TTL_SEC = 24 * 3600.0
+_M331_RF_ARCHIVE_REL = os.path.join("data", "patches", "runtime_failed_archive_331.jsonl")
+
+
+def _m331_note_blocked(patch_id: str, reason: str = "",
+                       category: str = "verify_failed",
+                       path: str | None = None) -> int:
+    """★331批刀4：任何「验证失败 / 派单前被拦」都计一次 —— **含发现类**。
+
+    与直接调 `_m326_bump_fail_ledger` 的差别：本函数把 `category` 变成**必填语义**
+    （verify_failed / dispatch_blocked / discovery_class ...），这样侧账涨了之后
+    还能回答"是执行失败还是压根没派出去"。单调不减语义不变。
+    """
+    return _m326_bump_fail_ledger(str(patch_id or ""), reason=str(reason or "")[:200],
+                                  path=path, category=str(category or "unclassified"))
+
+
+def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = None,
+                       dry_run: bool = True, archive_path: str | None = None,
+                       ledger_path: str | None = None) -> dict:
+    """★331批刀4：`runtime_failed` 的 TTL 归档出口（与 323刀3「滞留件出口」同型）。
+
+    超龄 ⇒ 追加一行归档 + 从 pending 移除 + 侧账记 `archived_at`，
+    **不再出现在重试面**（否则失败件只增不消化，cap 形同虚设）。
+
+    `dry_run` 默认 **True**：不擅自改生产数据，先出结论再执行。
+    仅支持 pending 为 **list** 的形态；dict 形态只报告不改（避免破坏结构）。
+
+    ★归档路径与侧账路径**都可注入**（`archive_path` / `ledger_path`）：
+      隔离验证时若不注入，归档行会落到**生产** `data/patches/`（本函数首版即此缺陷，
+      实测已把一条隔离测试数据 `aged_1` 写进生产归档）。隔离验证不得污染生产数据面。
+    """
+    _ttl = float(_M331_RF_TTL_SEC if ttl_sec is None else ttl_sec)
+    _root = _m326_repo_root()
+    _pp = pending_path or os.path.join(_root, "data", "patches", "pending_patches.json")
+    _arch = archive_path or os.path.join(_root, _M331_RF_ARCHIVE_REL)
+    _out = {"ttl_sec": _ttl, "dry_run": bool(dry_run), "scanned": 0, "aged_out": 0,
+            "kept": 0, "archived_ids": [], "keep_ids": [], "ages_sec": {},
+            "structure": "", "error": ""}
+    try:
+        _d = json.load(io.open(_pp, encoding="utf-8"))
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep read")
+        _out["error"] = "read_failed:%s" % type(e).__name__
+        return _out
+    if not isinstance(_d, list):
+        _out["structure"] = "dict_only_report（不改动）"
+        _items = list((_d.get("patches") or {}).values())
+    else:
+        _out["structure"] = "list"
+        _items = _d
+    _now = time.time()
+    _aged = []
+    for _p in _items:
+        if not isinstance(_p, dict):
+            continue
+        if str(_p.get("status") or "") != "runtime_failed":
+            continue
+        _out["scanned"] += 1
+        try:
+            _age = _now - float(_p.get("created_at") or 0)
+        except (TypeError, ValueError):
+            continue
+        _out["ages_sec"][str(_p.get("id") or "")] = round(_age, 1)
+        if _age >= _ttl:
+            _aged.append(_p)
+            _out["archived_ids"].append(str(_p.get("id") or ""))
+        else:
+            _out["keep_ids"].append(str(_p.get("id") or ""))
+    _out["aged_out"] = len(_aged)
+    _out["kept"] = len(_out["keep_ids"])
+    if dry_run or not _aged or not isinstance(_d, list):
+        return _out
+    # ---- 真正归档 ----
+    try:
+        os.makedirs(os.path.dirname(_arch), exist_ok=True)
+        with io.open(_arch, "a", encoding="utf-8", newline="\n") as _f:
+            for _p in _aged:
+                _row = dict(_p)
+                _row["archived_at"] = _now
+                _row["archived_by"] = "331刀4_TTL"
+                _row["archive_reason"] = "runtime_failed 超龄 %.1fh" % (
+                    (_now - float(_p.get("created_at") or 0)) / 3600.0)
+                _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+                _m331_note_blocked(_p.get("id"), reason="archived_by_ttl",
+                                   category="runtime_failed_archived",
+                                   path=ledger_path)
+        _left = [_p for _p in _d if _p not in _aged]
+        _tmp = _pp + ".m331.tmp"
+        with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(_left, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _pp)
+        _out["written"] = True
+        _out["archive_file"] = _arch
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep write")
+        _out["error"] = "write_failed:%s" % type(e).__name__
+    return _out
 
 
 def _m326_reset_fail_ledger(patch_id: str, path: str | None = None) -> int:
@@ -1165,7 +1281,9 @@ def _write_back(patch: dict, verdict: dict) -> None:
         # ★324批刀0：失败必须可退出——否则同一补丁每圈重复选中
         #   （实测 12:38—17:38 六圈同一 id、结果全 False、账本零变化）
         # ★326批刀1：**双写**——既落记录字段，也落单调侧账（后者抗覆盖/抗重启）
-        _persisted = _m326_bump_fail_ledger(patch.get("id"), reason=_err)
+        # ★331批刀4：改走统一计次入口（带类别，后验时可区分"执行失败"与"被拦"）
+        _persisted = _m331_note_blocked(patch.get("id"), reason=_err,
+                                        category="verify_failed")
         patch["runtime_verify_fail_count"] = max(
             _m324_fail_count(patch) + 1, int(_persisted or 0))
         patch["runtime_verify_last_attempt_at"] = time.time()
@@ -1229,6 +1347,10 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
         _why = _m324_blocked_reason(_p, _m326_ledger)
         if _why:
             _blocked.append({"patch_id": str(_p.get("id", ""))[:32], "reason": _why})
+            # ★331批刀4：**被拦也要计一次** —— 发现类补丁就死在这一层：
+            #   它们在派单前被拦下，永远走不到沙箱，旧的"只统计执行失败"量不到它们，
+            #   于是 cap 对它们不生效、失败件只增不消化。计次后累积到 cap 即自动转人工。
+            _m331_note_blocked(_p.get("id"), reason=_why, category="dispatch_blocked")
             _module_logger.info(
                 "[324刀0] 选中但转人工（不进沙箱）: patch=%s method=%s reason=%s",
                 str(_p.get("id", ""))[:16], str(_p.get("method") or ""), _why)

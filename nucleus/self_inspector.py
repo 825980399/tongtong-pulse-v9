@@ -189,6 +189,28 @@ def _issue_file_in_backup_dir(file_path: str) -> bool:
     return False
 
 
+# ★331批刀1：吸收层类别白名单 —— **唯一源**，吸收方与留痕同源。
+#   330 交付后实测 `[326刀5][absorb] ... rules=3 applied=0 tier=mid` 无法归因：
+#   "没东西可学" 与 "通道又断" 长得一模一样。本批把过滤点显式化。
+#   ★实证：`_m326_rule_tier()` 的 tier 档**不参与判罚**（其文档明示"只用于留痕"），
+#     所以 applied=0 的归因只可能是类别白名单或条目本身空策略，与 tier=mid 无关。
+_M331_ABSORB_CATEGORIES = ("code_issue_lesson",)
+
+
+def _m331_new_absorb_stats() -> dict:
+    """★331批刀1：吸收层四步计数（delivered → categorized → tier_checked → applied）。
+
+    为什么要四步而不是只看 applied：烛微㊾教训——某层修好 ≠ 链通，
+    逐层计数才能定位"断在哪一层"。reason 三态让 applied=0 **可归因**：
+      - `no_category_match`：类别不在白名单（本批唯一真过滤点）
+      - `empty`：类别命中但条目无可吸收策略（issue_type / fix_strategy 缺）
+      - `tier_filtered`：tier 档被过滤（**当前实现恒为 0**，见上方实证）
+    """
+    return {"delivered": 0, "categorized": 0, "tier_checked": 0, "applied": 0,
+            "reason": {"no_category_match": 0, "empty": 0, "tier_filtered": 0},
+            "tier_filters_active": False}
+
+
 class SelfInspector(SilentLogMixin):
     """
     框架自描述生成器。
@@ -359,6 +381,8 @@ class SelfInspector(SilentLogMixin):
         # ★P3-12修复：自增强闭环——蒸馏出的「问题类型→修复策略」知识库，
         # 供 detect_code_issues 在命中同类问题时用 LLM 沉淀的策略增强修复建议。
         self._lesson_fix_strategies: dict[str, str] = {}
+        # ★331批刀1：吸收层留痕统计（惰性兜底见 `absorb_growth_rules`）
+        self._m331_absorb_stats: dict = _m331_new_absorb_stats()
         # ★第303批 刀5：审查结论反哺规则引擎——构造期自注册 hub applier（此前无 applier ⇒ 永远无法回灌）
         self._m303_hub = None
         try:
@@ -527,24 +551,48 @@ class SelfInspector(SilentLogMixin):
         此前 code_issue_lesson 规则被 QICA 忽略（QICA 只消费 domain_knowledge/concept_correction），
         且 self_inspector 未注册 applier，导致 LLM 审查结论永远无法反哺规则引擎。
         """
+        # ★331批刀1：吸收层四步计数 —— 逐层留痕，applied=0 必须能说出"断在哪一层"。
+        _st = getattr(self, "_m331_absorb_stats", None)
+        if not isinstance(_st, dict):
+            _st = _m331_new_absorb_stats()
+            self._m331_absorb_stats = _st
         if not rules:
+            _module_logger.info(
+                "[331刀1][absorb] delivered=0 categorized=0 tier_checked=0 applied=0 "
+                "reason=%s", _st["reason"])
             return 0
+        _st["delivered"] += len(rules)
         _absorbed = 0
         for _rule in rules:
             if not isinstance(_rule, dict):
+                _st["reason"]["no_category_match"] += 1
                 continue
             # 只消费 code_issue_lesson 类型（issue_type → fix_strategy）
-            if _rule.get("type") != "code_issue_lesson":
+            if _rule.get("type") not in _M331_ABSORB_CATEGORIES:
+                _st["reason"]["no_category_match"] += 1
                 continue
+            _st["categorized"] += 1
             _issue_type = _rule.get("issue_type", "")
             _strategy = _rule.get("fix_strategy", "")
             if not _issue_type or not _strategy:
+                # 类别命中，但条目本身没有可吸收的策略内容
+                _st["reason"]["empty"] += 1
                 continue
+            # ★tier 档**不过滤**（`_m326_rule_tier` 只用于留痕，不参与判罚）；
+            #   若将来引入 tier 门槛，需在此处累加 `tier_filtered` 并把
+            #   `_st["tier_filters_active"]` 置 True —— 现在如实记 False。
+            _st["tier_checked"] += 1
             # 仅当策略更具体（长度更长）或首次出现时才更新，避免被低质策略覆盖
             _existing = self._lesson_fix_strategies.get(_issue_type, "")
             if not _existing or len(_strategy) > len(_existing):
                 self._lesson_fix_strategies[_issue_type] = _strategy
                 _absorbed += 1
+        _st["applied"] += _absorbed
+        _module_logger.info(
+            "[331刀1][absorb] delivered=%d categorized=%d tier_checked=%d applied=%d "
+            "reason=%s tier_filters_active=%s",
+            _st["delivered"], _st["categorized"], _st["tier_checked"], _st["applied"],
+            _st["reason"], _st["tier_filters_active"])
         return _absorbed
 
     # ========== 配置加载 ==========
@@ -5299,6 +5347,8 @@ class SelfInspector(SilentLogMixin):
         _hard_strict_total = 0
         _hard_loose_total = 0
         _hard_unverified_total = 0
+        # ★331批刀7：框架接口覆写计数（**不计入 hard_total**，单独列）
+        _framework_hook_total = 0
         if _review_only:
             # ★328批刀2：同 silent 分支——中间档的**决定量是解析率**，不是覆盖率。
             #   旧文案只说"覆盖率处于中间档"，读的人会以为覆盖率是闸门（活体实测
@@ -5364,21 +5414,27 @@ class SelfInspector(SilentLogMixin):
                 #   probe 命中**只用于降级**，任何情况下不得据此判活。
                 _tier, _probe_hits = _m330_classify_hard_tier(
                     {"file": _f_norm, "method": _name, "line": _defs[0][1]})
-                # ★326批刀2：入 hard 候选池（供 O3 抽验 A；只收集不判罚）
-                #   330 起池内按**分层后**档位留存，O3 只吃 hard_strict 那部分。
-                _hard_total += 1
-                if _tier == "hard_strict":
-                    _hard_strict_total += 1
-                elif _tier == "hard_loose":
-                    _hard_loose_total += 1
+                # ★331批刀7：框架接口覆写**不是 hard** —— 不进 hard_total、不进 strict，
+                #   也不进 O3 的 N 分母（它是图盲区产物，计进去只会把 N 抬高）。
+                if _tier == "framework_hook":
+                    _framework_hook_total += 1
                 else:
-                    _hard_unverified_total += 1
+                    # ★326批刀2：入 hard 候选池（供 O3 抽验 A；只收集不判罚）
+                    #   330 起池内按**分层后**档位留存，O3 只吃 hard_strict 那部分。
+                    _hard_total += 1
+                    if _tier == "hard_strict":
+                        _hard_strict_total += 1
+                    elif _tier == "hard_loose":
+                        _hard_loose_total += 1
+                    else:
+                        _hard_unverified_total += 1
                 if len(_hard_items) < _O3_HARD_POOL_MAX:
                     _hard_items.append({"file": _f_norm, "method": _name,
                                         "line": _defs[0][1],
                                         "evidence_tier": _tier,
                                         "probe_hits": _probe_hits})
-            if _review_only or _tier == "soft":
+            # ★331批刀7：framework_hook 与 soft 同路 —— **降级待复核，不判死**
+            if _review_only or _tier == "soft" or _tier == "framework_hook":
                 # ★第311批 刀1：受控入料口（单批硬上限 1 条 + 生命周期名/核心文件转人工）。
                 #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
                 # ★322批刀0：软赦免条目**在这里**落地（判死档下也降级待复核）。
@@ -5394,7 +5450,9 @@ class SelfInspector(SilentLogMixin):
                         'severity': 'info',
                         'review_only': True,
                         'review_reason': ('soft_edge_only' if _tier == "soft"
-                                          else 'graph_coverage_mid_band'),
+                                          else ('framework_hook_override'
+                                                if _tier == "framework_hook"
+                                                else 'graph_coverage_mid_band')),
                         # ★322批刀0/刀3：证据档位（hard/soft/infer-only），人工抽验有靶子
                         'evidence_tier': _tier,
                         'description': (f'方法 {_name} 只有软/推断证据（tier={_tier}），'
@@ -5886,10 +5944,64 @@ def _m325_probe_reachable(item: dict, project_root=None) -> list:
 _M330_HARD_TIERS = ("hard_strict", "hard_loose", "hard_unverified")
 
 
+# ★331批刀7：框架接口覆写切面 —— 唯一**强判据**的可移出面。
+#   判据：方法名在框架基类（`base/` 下的 def 名集合）**有定义** ⇒ 它由框架按名回调，
+#   不属"没人调用"。可复算：AST 提取，不靠"看着像"。
+#   ★为什么只实施这一个切面：本次另测了两个候选，判据都**不蕴含可达性**，故只出证据：
+#     · 仓内重名 ≥2（最多 37 条）——"定义了两次"不等于"被调用"，两次都没人调用照样是死的；
+#     · do_/on_ 前缀（实测 0 条命中）。
+_M331_FRAMEWORK_HOOK_CACHE: dict = {}
+
+
+def _m331_framework_hook_names(root: str | None = None) -> set:
+    """★331批刀7：框架基类的 def 名集合（AST 提取，可复算）。
+
+    「框架接口覆写」的可证依据：调用方在框架里写的是 `self.<name>(...)`，而 `self`
+    的静态类型是基类 —— 调用图上**挂在基类方法名下**，不会挂到子类覆写实现上，
+    于是子类实现在图里"零入边"。这不是没人调用，是**图的固有盲区**。
+    """
+    if _M331_FRAMEWORK_HOOK_CACHE.get("names") is not None:
+        return set(_M331_FRAMEWORK_HOOK_CACHE["names"])
+    import ast
+    _names: set = set()
+    # 与 `_m325_build_name_index` 同口径：未显式传根时按 cwd
+    _base = os.path.join(root or os.getcwd(), "base")
+    try:
+        if os.path.isdir(_base):
+            for _f in os.listdir(_base):
+                if not _f.endswith(".py"):
+                    continue
+                try:
+                    import io
+                    _src = io.open(os.path.join(_base, _f), encoding="utf-8",
+                                   errors="replace").read()
+                    _tree = ast.parse(_src)
+                except (SyntaxError, ValueError, OSError) as _pe:
+                    silent_exc(_pe, where="self_inspector::_m331_framework_hook_names"
+                                          " parse %s" % _f)
+                    continue
+                for _n in ast.walk(_tree):
+                    if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        _names.add(_n.name)
+    except OSError as _oe:
+        silent_exc(_oe, where="self_inspector::_m331_framework_hook_names listdir")
+    _M331_FRAMEWORK_HOOK_CACHE["names"] = _names
+    return set(_names)
+
+
+def _m331_is_framework_hook(method: str) -> bool:
+    """★331批刀7：是否框架接口覆写名（空名一律 False —— 不猜）。"""
+    _n = str(method or "").strip()
+    if not _n:
+        return False
+    return _n in _m331_framework_hook_names()
+
+
 def _m330_classify_hard_tier(item: dict, project_root=None) -> tuple:
     """★330批刀1：把「图内三层无入边」的候选拆成 strict / loose / unverified。
 
     返回 ``(tier, probe_hits)``：
+      * ``("framework_hook", [])``  —— ★331批刀7：名字是框架接口覆写 ⇒ **图盲区，不是死码**
       * ``("hard_strict", [])``     —— 图内三层无入边 **且** 图外 probe 四类皆空（M1 双证据）
       * ``("hard_loose", [...])``   —— 图内三层无入边，但图外仍有痕迹 ⇒ 只降级待复核
       * ``("hard_unverified", [])`` —— probe 索引不可用 ⇒ **无法取证**
@@ -5902,6 +6014,10 @@ def _m330_classify_hard_tier(item: dict, project_root=None) -> tuple:
     ★铁律（303 批「字符串在场即赦免」回潮防线）：probe 命中**只用于降级**，
       任何情况下不得据此判活；判定用档位显式值，不在证据字符串里找关键字（铁律153）。
     """
+    # ★331批刀7：框架接口覆写**先判**——它是图的盲区（调用挂在基类名下），
+    #   不是"没人调用"。放在 probe 之前：probe 扫不到这类调用，靠它只能误判。
+    if _m331_is_framework_hook((item or {}).get("method")):
+        return "framework_hook", []
     _idx = _m325_build_name_index(project_root)
     if not _idx.get("ok"):
         return "hard_unverified", []

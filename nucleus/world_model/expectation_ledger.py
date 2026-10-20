@@ -322,6 +322,67 @@ def audit_violated_gap_ownership(rows: list | None = None,
     }
 
 
+# ===== ★331批刀3（小林拍板①）：判定线改「violated 100% 带归属」=====
+# 为什么换线：烛微331§1 报「120 行 gap_reason 非空仅 27（22.5%），与 90% 验收线不符」。
+#   实测根因是**口径错配**，不是留痕缺失：120 行里 **93 行是 `met`（达成）**——
+#   达成本就没有 gap 要解释，把它算进分母，非空率怎么算都是 22.5%。
+#   正确口径只看 violated：实测 **25/25 = 100%** 已带归属
+#   （criteria_gap 17 / real_violation 8），unverifiable 2/2 同样 100%。
+# ⇒ 90% 线作废（它量的是错误分母），判定线改为「violated 100% 带归属」。
+_M331_VIOLATED_OWNERSHIP_RULE = (
+    "violated 100% 带归属（90% 全量线作废：其分母含 93 行 met，量的是错误口径）")
+_M331_VIOLATED_OWNERSHIP_TARGET = 1.0
+
+
+def violated_gap_ownership_check(rows: list | None = None,
+                                 sample: int = 30) -> dict:
+    """★331批刀3：判定线「violated 100% 带归属」——只读校验，不写盘、不改台账。
+
+    口径写死（可复算）：
+      - 分母 = `verdict == "violated"` 的行数（**不含 met**：达成没有 gap 要解释）
+      - 分子 = 其中 `gap_reason` 非空的行数
+      - 通过线 = 覆盖率 == 1.0（**不是 90%**）
+
+    另记 `explicit_ratio`（显式占比）作**质量参考，不进通过线**：
+    "推断来的归属"也是归属（能区分真违规与口径差），但它不如显式的可信，
+    故分列展示而不混进判定 —— 混进去会把"能归属"与"归属得好"两件事搅在一起。
+
+    边界：一条 violated 都没有 ⇒ `coverage=None`、`verdict=UNAVAILABLE`
+    （**不填 0**：0 会被读成"全部没带归属"）。
+    """
+    _rows = rows if rows is not None else _read_jsonl(ledger_path())
+    _total = 0
+    _owned = 0
+    _explicit = 0
+    _missing: list = []
+    for _r in (_rows or []):
+        if not isinstance(_r, dict) or str(_r.get("verdict") or "") != "violated":
+            continue
+        _total += 1
+        _g = str(_r.get("gap_reason") or "").strip()
+        if _g:
+            _owned += 1
+            if str(_r.get("gap_reason_origin") or "").endswith("explicit"):
+                _explicit += 1
+        elif len(_missing) < max(0, int(sample)):
+            _missing.append({"assertion_id": str(_r.get("assertion_id") or ""),
+                             "criteria_version": str(_r.get("criteria_version") or "")})
+    _cov = (_owned / _total) if _total else None
+    return {
+        "rule": _M331_VIOLATED_OWNERSHIP_RULE,
+        "target": _M331_VIOLATED_OWNERSHIP_TARGET,
+        "violated_total": _total,
+        "violated_owned": _owned,
+        "violated_missing": _total - _owned,
+        "coverage": None if _cov is None else round(_cov, 4),
+        "explicit_count": _explicit,
+        "explicit_ratio": None if not _total else round(_explicit / _total, 4),
+        "missing_sample": _missing,
+        "verdict": ("UNAVAILABLE" if _cov is None
+                    else ("PASS" if _cov >= _M331_VIOLATED_OWNERSHIP_TARGET else "FAIL")),
+    }
+
+
 # ===== ★325批刀3：25 条 violated 复核清单（只出清单 + 建议，**不代判**）=====
 # 324刀3 已把"violated 且 gap_reason 为空"点成风险面（25/25）；本批要能逐条复核。
 # 分类规则逐条可核（不做黑箱打分）：
@@ -536,7 +597,13 @@ def _mk(assertion_id: str, statement: str, source: str, pred_field: str, expect:
         gap_reason: str = "", graph_file: str = "",
         criteria_version: str = _CRITERIA_VERSION,
         observed_at: float | None = None) -> dict:
-    """构造一条 ledger 记录（统一 schema）。"""
+    """构造一条 ledger 记录（统一 schema）。
+
+    ★331批刀3（小林拍板①）：本函数**不做 gap_reason 强校验**——
+    判定线已改为「violated 100% 带归属」（见 `violated_gap_ownership_check`），
+    由 `_infer_gap_reason()` 兜底保证 violated 必带归属；在构造入口强校验会
+    逼着改存量写法，收益不抵风险。要验覆盖请用上面的只读校验函数。
+    """
     # ★321批刀3：前缀校验留痕（缺前缀⇒ WARNING；**不改 verdict / gap_reason**）
     _m321_check_prefix(assertion_id, gap_reason)
     # ★324批刀3：显式 gap_reason 优先；缺则兜底推断 + 单独计数（判罚一律不改）

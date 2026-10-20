@@ -482,6 +482,8 @@ class EvolutionLoop(SilentLogMixin):
         _topic = ""
         _hyp = ""
         _hub_consume_ts = None
+        # ★331批刀8：growth 条目本体（用于取需求落点 file/method）
+        _hyp_entry: dict = {}
         try:
             from nucleus.mnemosyne.verification_learning_hub import (
                 get_verification_learning_hub,
@@ -495,6 +497,10 @@ class EvolutionLoop(SilentLogMixin):
                     _hyp = str(_entry.get("input_summary", ""))[:200]
                     _lr = _entry.get("local_result") or {}
                     _topic = str(_lr.get("topic", "") or "")[:80]
+                    # ★331批刀8：留住条目本体 —— 旧实现只抽了两个字符串就把条目丢了，
+                    #   于是位置信息无从取，`_file/_method` 只能硬编码空 ⇒
+                    #   非空冲突分支**结构性不可达**（330 刀4 如实申报的那条）。
+                    _hyp_entry = _entry if isinstance(_entry, dict) else {}
                     break
         except Exception as _e:
             _module_logger.debug("[316刀3] 读 hub growth 料失败（不影响发现池）: %s", _e)
@@ -502,12 +508,21 @@ class EvolutionLoop(SilentLogMixin):
             _GROWTH_INTAKE_STATS["no_material"] = int(
                 _GROWTH_INTAKE_STATS.get("no_material", 0)) + 1
             return []
-        _file, _method = "", ""
+        # ★331批刀8：需求源**真实来源赋值** —— 不再是硬编码空串。
+        #   取值顺序：条目本体 → local_result（需求落点）→ 兜底空串。
+        #   ★料本身没带位置时空串仍在，但那是"这条料没有位置"，不是"代码写死为空"：
+        #     两者在留痕上能分开（一个是有来源但为空，一个是压根没来源）。
+        _src_lr = _hyp_entry.get("local_result") or {}
+        _file = str(_hyp_entry.get("file") or _hyp_entry.get("target_file")
+                    or _src_lr.get("file") or _src_lr.get("target_file") or "")
+        _method = str(_hyp_entry.get("method") or _hyp_entry.get("target_method")
+                      or _src_lr.get("method") or _src_lr.get("target_method") or "")
         # ★325批刀0：**空键不得参与冲突判定**。
         #   旧实现 _file/_method 恒 ""（需求源本就没有具体代码位置），而缺陷源里
         #   大量 {file:"", method:""} 的日志类条目 ⇒ ("","") 必在 _conflict ⇒
         #   需求源**结构性必然让位**（烛微325§0-5；台账 trigger 84 条全 None 与此一致）。
         #   修法：只有**非空** (file, method) 才判冲突；空键仅计数留痕，不拦。
+        #   ★331批刀8：现在 _file/_method 有真实来源 ⇒ 非空分支**可达**（料带位置时命中）。
         _conflict = {(str(_i.get("file") or ""), str(_i.get("method") or ""))
                      for _i in (_existing or [])}
         _GROWTH_INTAKE_STATS["calls"] = int(_GROWTH_INTAKE_STATS.get("calls", 0)) + 1
