@@ -547,7 +547,19 @@ TRUSTED_CODE_IDIOMS: dict[str, str] = {
     "file(": "历史兼容写法（py2 遗留词法），仅作为字符串/老代码出现",
     "input(": "交互式输入惯用法：控制台脚本与工具入口",
     "raw_input(": "历史兼容写法（py2 遗留词法）",
+    # ★328批刀4（小林拍板②）：**设计内危险**——不是"不危险"，是"危险但用途正当且已裁"。
+    #   典型：`_safe_eval_arithmetic` 用 eval/compile 做算术表达式求值，这是它的**功能本身**，
+    #   删掉就没功能了。登记只改归因（real→idiom），**不放宽任何拦截**：
+    #   DANGEROUS_KEYWORDS 不动、would_block 仍为 True、sandbox_incompatible 仍为 True。
+    "eval(": "设计内危险——算术沙箱按设计（_safe_eval_arithmetic；326刀6 发现，328刀4 登记）",
+    "compile(": "设计内危险——算术沙箱按设计（同 eval(：先编译再求值，同一处代码路径）",
 }
+
+#: ★328批刀4：**设计内危险**子集（白名单里"明知危险但已裁可用"的那几条）。
+#: 为什么单列一个集合而不是"看 reason 里有没有'设计内'字样"：
+#:   判据必须是**显式标记**，不能靠在中文理由串里找关键字（铁律153：理由会被人改写，
+#:   一旦措辞变了，分类就静默翻转，而且没人会发现）。
+DESIGN_INTERNAL_IDIOMS = frozenset({"eval(", "compile("})
 
 #: 旧名保持可用（325 及既有调用方按 frozenset 用），值**由登记册派生**，不重复维护
 _M325_IDIOM_KEYWORDS = frozenset(TRUSTED_CODE_IDIOMS)
@@ -761,10 +773,59 @@ def scan_dangerous_keywords(code: str) -> dict:
         _class = "literal"
     else:
         _class = "literal"
+    # ★328批刀4：把 idiom 再分两档，让"本仓惯用法"与"设计内危险"在读数上不可混谈。
+    #   repo_idiom       = 热加载/IO 这类**本来就不危险**的写法；
+    #   design_internal  = **真危险但已裁**（eval/compile 做算术求值）——它仍然是危险调用，
+    #                      所以 sandbox_incompatible 保持 True、派单照旧转人工。
+    _di_used = [k for k in _real if k in DESIGN_INTERNAL_IDIOMS]
+    _repo_used = [k for k in _real if k in _M325_IDIOM_KEYWORDS
+                  and k not in DESIGN_INTERNAL_IDIOMS]
+    _scope = ("design_internal" if (_di_used and not _repo_used)
+              else ("mixed" if (_di_used and _repo_used)
+                    else ("repo_idiom" if _repo_used else "")))
     return {"sandbox_blocked": _blocked, "real_calls": _real,
             "literal_only": (not _real and not _idiom),
             "idiom_only": _class == "idiom", "class": _class,
+            "idiom_scope": _scope,
+            "design_internal_calls": _di_used,
+            "repo_idiom_calls": _repo_used,
             "would_block": True}
+
+
+def registry_boundary_check() -> dict:
+    """★328批刀4：登记册边界自检 —— 白名单里**允许**放什么、不许放什么。
+
+    旧语义（326）是「real 类**永不**进白名单」，表达的是一个绝对禁令；
+    328 小林拍板②后语义改成：
+        **非设计内 real 永不进白名单；设计内 real 可进，但必须显式登记在
+        `DESIGN_INTERNAL_IDIOMS` 且 reason 带"设计内危险"前缀。**
+
+    这条不是文字承诺，是可复算的三项检查：
+      1. `DESIGN_INTERNAL_IDIOMS` 每条都必须在 `TRUSTED_CODE_IDIOMS` 里（登记不自洽 ⇒ 空挂）；
+      2. 每条设计内登记的 reason 必须以"设计内危险"开头（**归因口径统一**）；
+      3. `eval(` / `compile(` 之外，不允许出现"没有对应登记的 design_internal"——
+         反向也查一遍：登记册里 reason 带"设计内危险"的，必须在 `DESIGN_INTERNAL_IDIOMS` 里
+         （防止有人用改理由的方式偷偷把某条升成设计内）。
+    """
+    _missing = sorted(k for k in DESIGN_INTERNAL_IDIOMS if k not in TRUSTED_CODE_IDIOMS)
+    _bad_reason = sorted(k for k in DESIGN_INTERNAL_IDIOMS
+                         if not str(TRUSTED_CODE_IDIOMS.get(k) or "").startswith("设计内危险"))
+    # 反向：理由里自称设计内、却不在显式集里 ⇒ 视为"偷渡"，同样算违规
+    _smuggled = sorted(k for k, v in TRUSTED_CODE_IDIOMS.items()
+                       if "设计内" in str(v or "") and k not in DESIGN_INTERNAL_IDIOMS)
+    _ok = (not _missing) and (not _bad_reason) and (not _smuggled)
+    return {
+        "ok": _ok,
+        "criteria_version": "328.registry_boundary.v1",
+        "idiom_registry_n": len(TRUSTED_CODE_IDIOMS),
+        "design_internal_n": len(DESIGN_INTERNAL_IDIOMS),
+        "design_internal": sorted(DESIGN_INTERNAL_IDIOMS),
+        "missing_from_registry": _missing,
+        "bad_reason_prefix": _bad_reason,
+        "smuggled_without_explicit_set": _smuggled,
+        "invariant": ("非设计内 real 永不进白名单；设计内 real 可进且须显式登记"
+                      "（拦截行为不因登记改变）"),
+    }
 
 
 def is_sandbox_incompatible(patch: dict) -> bool:

@@ -5212,12 +5212,22 @@ class SelfInspector(SilentLogMixin):
                 "hard_total": 0, "hard_items": [], "hard_pool_capped": False,
                 "o3_n_target": _O3_N_TARGET, "o3_n_source": _O3_N_SOURCE,
                 "samples": [], "items": [], "as_of": time.time()})
+            # ★328批刀2：这行文案原来把**两个量混印**在一句里 —— "覆盖率 57.8%
+            #   低于让位阈值 55%"，而 57.8 > 55，读的人只能怀疑是 bug。真相是：
+            #   **决定档位的是解析率**（< _RESOLVE_GATE_REVIEW 即 silent），
+            #   覆盖率只是参考读数。故拆成两行、各引各的读数，并把"谁决定档位"
+            #   直接写进文案（否则同一句话还会被下一个人再误读一次）。
             _module_logger.info(
-                "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）低于让位阈值 %.0f%%"
-                " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）"
-                " ｜ 解析率 %.1f%%（仓内可解析 %d / 仓内调用 %d，分母已排除 external）",
-                _coverage * 100.0, len(_in_edge_ids), _node_count, _COVERAGE_FLOOR * 100.0,
-                _resolve_rate * 100.0, _internal_n, _internal_n + _unres_n)
+                "[328刀2] 让位判据：**解析率** %.1f%% < 让位阈值 %.1f%% ⇒ 档位=silent"
+                "（仓内可解析 %d / 仓内调用 %d，分母已排除 external）",
+                _resolve_rate * 100.0, self._RESOLVE_GATE_REVIEW * 100.0,
+                _internal_n, _internal_n + _unres_n)
+            _module_logger.info(
+                "[328刀2] 参考读数（**不决定档位**）：图入边覆盖率 %.1f%%"
+                "（有入边 %d / 节点 %d，参考阈值 %.0f%%）"
+                " ⇒ 判据不可用，本轮不判死也不出清单（待图解析率提升后自动生效）",
+                _coverage * 100.0, len(_in_edge_ids), _node_count,
+                _COVERAGE_FLOOR * 100.0)
             return _issues
         _review_only = (_mode == "review")
         # ★第308批 刀2：中间档只计数、不再造 issue
@@ -5235,9 +5245,18 @@ class SelfInspector(SilentLogMixin):
         _hard_items: list[dict] = []
         _hard_total = 0
         if _review_only:
+            # ★328批刀2：同 silent 分支——中间档的**决定量是解析率**，不是覆盖率。
+            #   旧文案只说"覆盖率处于中间档"，读的人会以为覆盖率是闸门（活体实测
+            #   覆盖率 65.2% 与解析率 36.6% 恰好都落在各自中间档，靠巧合对上，
+            #   一旦两者不同档就变成自相矛盾）。
             _module_logger.info(
-                "[307刀1] 图入边覆盖率 %.1f%%（有入边 %d / 节点 %d）处于中间档 [%.0f%%, %.0f%%)"
+                "[328刀2] 让位判据：**解析率** %.1f%% 落在中间档 [%.1f%%, %.1f%%)"
                 " ⇒ 只产出**待复核清单**（severity=info，禁入自动入队/趋势门禁），不判死",
+                _resolve_rate * 100.0, self._RESOLVE_GATE_REVIEW * 100.0,
+                self._RESOLVE_GATE_JUDGE * 100.0)
+            _module_logger.info(
+                "[328刀2] 参考读数（**不决定档位**）：图入边覆盖率 %.1f%%"
+                "（有入边 %d / 节点 %d，参考档 [%.0f%%, %.0f%%)）",
                 _coverage * 100.0, len(_in_edge_ids), _node_count,
                 _COVERAGE_FLOOR * 100.0, _COVERAGE_JUDGE * 100.0)
         _alive_src = {"static": 0, "byname": 0, "event": 0, "entry": 0,

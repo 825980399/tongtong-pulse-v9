@@ -3129,12 +3129,30 @@ class PulseController(BasePulseOrgan):
         webbrowser.open(url, new=2)
 
     def _cleanup_browser_windows(self):
-        """关闭搜索打开的浏览器窗口"""
+        """关闭搜索打开的浏览器窗口（★328刀5：不再新建清窗线程）。
+
+        为什么不能再用线程：本方法体会被演化引擎当成候选补丁**重新生成与再审**，
+        而沙箱黑名单里有一条"线程创建"类子串 —— 只要函数体里出现它，这段代码就
+        **结构性无法过检**，每次都得转人工。小林拍板③：不另立 idiom 条目
+        （登记等于承认"这里就该起线程"，会把真问题洗白），改从**代码侧**规避。
+        ★措辞纪律：连**注释与 docstring** 里也不许出现那个子串 —— 子串预检不区分
+        代码/注释（326刀6 已踩过一次；本刀首版也在 docstring 里写了它，实测照样命中）。
+
+        改写口径（功能等价，三档降级）：
+          * 有**运行中的事件循环** ⇒ 挂到循环上延迟 `close_delay` 秒清理
+            （`call_soon_threadsafe` + `call_later`：从任意线程调用都安全，
+             不阻塞调用方，延时语义与原 `sleep` 一致）；
+          * 循环存在但不在运行/已关闭 ⇒ 退同步立即清理（不空等）；
+          * 根本拿不到循环（脚本进程/停机阶段）⇒ 同步立即清理。
+        后两档为什么不补延时：关窗前的 3 秒是给**页面消化**留的，而这两种情况下
+        页面已经没人读了，空等只会拖住调用方（原实现在无循环时也会先睡 3 秒，
+        纯属白等 —— 这是改写顺带修掉的第二个问题）。
+        """
         close_delay = 3  # 搜索完成后3秒自动关闭，给页面消化留一点时间
+        if not self._browser_windows:
+            return
 
         def _do_cleanup():
-            # [pulse-sleep-exempt] 关窗前页面消化延时，非脉冲纪律
-            time.sleep(close_delay)
             for pid in list(self._browser_windows):
                 try:
                     if sys.platform == "win32":
@@ -3164,10 +3182,29 @@ class PulseController(BasePulseOrgan):
                 except Exception as e:
                     self._log(LogLevel.ERROR, f'异常: {e}')
 
-        if self._browser_windows:
-            cleanup_thread = threading.Thread(target=_do_cleanup, daemon=True)
-            cleanup_thread.start()
-            self._log(LogLevel.INFO, f"🧹 窗口清理已安排: {len(self._browser_windows)}个窗口将在{close_delay}秒后关闭")
+        _pending = len(self._browser_windows)
+        _scheduled = False
+        try:
+            import asyncio
+            _loop = asyncio.get_event_loop()
+            if _loop is not None and _loop.is_running() and not _loop.is_closed():
+                # call_soon_threadsafe：不假定调用方就在循环线程里（搜索可能在别处走到这）
+                _loop.call_soon_threadsafe(
+                    lambda: _loop.call_later(close_delay, _do_cleanup))
+                _scheduled = True
+        except RuntimeError as e:
+            silent_exc(e, "organs/motor/PulseController.py:328_cleanup_schedule",
+                       level="debug")
+        except Exception as e:
+            self._log(LogLevel.DEBUG,
+                      f"清窗延迟调度不可用，改为同步清理: {type(e).__name__}: {e}")
+        if _scheduled:
+            self._log(LogLevel.INFO,
+                      f"🧹 窗口清理已安排: {_pending}个窗口将在{close_delay}秒后关闭")
+            return
+        # 无可用事件循环：同步清理（不阻塞、不空等）
+        _do_cleanup()
+        self._log(LogLevel.INFO, f"🧹 窗口清理已执行: {_pending}个窗口（无事件循环，同步清理）")
 
     def _get_config(self, key: str, default: Any = None) -> Any:
         """从CONTROLLER_PERMISSION配置块安全获取配置项"""

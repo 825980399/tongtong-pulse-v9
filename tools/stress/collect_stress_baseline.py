@@ -312,7 +312,9 @@ def render_markdown(res: dict) -> str:
     _L.append("| 项 | 值 |")
     _L.append("|---|---|")
     for _k in ("ledger_by_source", "ledger_no_source_legacy", "fingerprint_live",
-               "fingerprint_verification", "graph_edge_types", "r1_in_live", "log_last_ts"):
+               "fingerprint_verification", "graph_edge_types", "graph_edge_types_src",
+               "graph_edge_types_agg", "graph_edge_types_folded",
+               "r1_edge_counts", "r1_in_live", "log_last_ts"):
         _L.append("| %s | `%s` |" % (_k, str(_pv.get(_k)).replace("|", "\\|")))
     _L.append("")
     _og = res.get("open_gate") or {}
@@ -429,12 +431,43 @@ def source_provenance() -> dict:
     _out["log_last_ts"] = _last_ts
 
     # 3) 图 edge_types（R1 是否进活体）
+    # ★328批刀1：这里原来有两层错，叠在一起让读数**永远错**却没人发现：
+    #   ① 读的是 `stats.edge_types`，而落盘写的是**顶层** `edge_types` ⇒ 恒为空字典；
+    #   ② 就算读对顶层，328 之前的聚合把 unique_name/self_attr/typed_infer 折进了
+    #      static ⇒ 按聚合判 R1 也照样判不出（"折叠"和"没进"读数一样）。
+    #   所以判据改到**逐边统计**上（权威），聚合只作汇总展示：
+    #   `graph_edge_types`        = 逐边口径（权威读数）
+    #   `graph_edge_types_agg`    = 落盘聚合（展示用，可能被折叠）
+    #   `graph_edge_types_folded` = 聚合 static 超出逐边 static 的条数（>0 即折叠）
     _g = _latest("data/call_graph/graph_*.json")
     _gd = _read_json(_g, {}) or {}
-    _et = (_gd.get("stats") or {}).get("edge_types") or {}
+    _agg_raw = _gd.get("edge_types")
+    _agg = {str(_k): int(_v) for _k, _v in _agg_raw.items()
+            if isinstance(_agg_raw, dict)} if isinstance(_agg_raw, dict) else {}
+    _cnt = {}
+    for _e in (_gd.get("edges") or []):
+        if not isinstance(_e, dict):
+            continue
+        _k = str(_e.get("kind") or "static")
+        _cnt[_k] = int(_cnt.get(_k, 0)) + 1
     _out["graph_file"] = os.path.basename(_g) if _g else ""
-    _out["graph_edge_types"] = _et
-    _out["r1_in_live"] = bool({"unique_name", "self_attr"} & set(_et.keys()))
+    if _cnt:
+        _out["graph_edge_types"] = _cnt
+        _out["graph_edge_types_src"] = "graph.edges[].kind(逐边统计)"
+    elif _agg:
+        _out["graph_edge_types"] = _agg
+        _out["graph_edge_types_src"] = "graph.edge_types(仅聚合，无逐边可算)"
+    else:
+        _out["graph_edge_types"] = {}
+        _out["graph_edge_types_src"] = "unavailable"
+    _out["graph_edge_types_agg"] = _agg
+    _out["graph_edge_types_folded"] = max(
+        0, int(_agg.get("static", 0)) - int(_cnt.get("static", 0))) if _cnt else None
+    _et = _out["graph_edge_types"]
+    _out["r1_edge_counts"] = {_k: int(_et.get(_k, 0))
+                              for _k in ("unique_name", "self_attr") if _k in _et}
+    # R1 是否已进活体：按**逐边口径**判（聚合折叠不再影响这个读数）
+    _out["r1_in_live"] = bool(_out["r1_edge_counts"])
     return _out
 
 

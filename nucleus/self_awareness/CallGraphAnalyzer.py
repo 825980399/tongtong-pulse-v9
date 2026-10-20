@@ -1688,11 +1688,18 @@ class CallGraphAnalyzer:
 
         内容：
           - `nodes[]` / `edges[]`（点号 ID：**模块.类.方法**）＋ `stats`；
-          - `edge_types`：边类型**分色**统计 —— 由 `edges[].kind` 聚合而来：
-              `static` = AST 静态调用边；`byname` = `getattr(x, "y")` 按名派发边；
-              `event` / `entry` = 事件边 / 注册入口边（本窗若无可解析目标则计 0）。
+          - `edge_types`：边类型**分色**统计 —— 由 `edges[].kind` 聚合而来，
+            七类分列：`static` = AST 静态调用边；`unique_name` = 按唯一名命中的边；
+            `self_attr` = 同对象自属性边；`byname` = `getattr(x, "y")` 按名派发边；
+            `event` / `entry` = 事件边 / 注册入口边（本窗若无可解析目标则计 0）；
+            `typed_infer` = 类型推断边（**软证据**，不是硬自证）。
             ★第305批刀2：分色**落到边上**（每条边自带 kind），落盘时的统计只是聚合，
             不再像 304 那样额外全库扫一遍正则（既慢又与图不一致）。
+            ★328批刀1（A6聚合收口）：**按 kind 原样分列，不再把未知 kind 折叠进 static**。
+            旧实现 `if _k not in _edge_types: _k = "static"` 把 unique_name/self_attr/
+            typed_infer 全部并入 static（实测 7626+1297+1118+7=10048），任何按聚合取数的
+            消费方都会把**软推断当硬自证**。现另落 `edge_types_total`（=逐边条数）与
+            `edge_types_source="per_edge_kind"`，供 A6 断言逐档对表。
 
         Returns: 落盘绝对路径；失败返回空串（绝不阻断调用方）。
         """
@@ -1747,16 +1754,23 @@ class CallGraphAnalyzer:
             if not _m313_write_guard(_path, component="CallGraphAnalyzer.dump_graph_snapshot"):
                 return ""
             # ★第305批刀2：分色由**边自带的 kind** 聚合（不再全库重扫正则）
-            _edge_types = {"static": 0, "byname": 0, "event": 0, "entry": 0}
+            # ★328批刀1（A6聚合收口）：**不再折叠未知 kind**。旧实现把不在预设键里的
+            #   kind 一律记成 static（unique_name 1297 + self_attr 1118 + typed_infer 7
+            #   全部并进去），聚合里 static 虚高到 10048，看图的人会把软推断当硬自证。
+            #   现在：预设七类**只用来固定输出顺序**，任何 kind 都记在它自己的档上。
+            _edge_types = {"static": 0, "unique_name": 0, "self_attr": 0,
+                           "event": 0, "byname": 0, "entry": 0, "typed_infer": 0}
             for _e in (_cg.get("edges") or []):
                 if not isinstance(_e, dict):
                     continue
                 _k = str(_e.get("kind") or "static")
-                if _k not in _edge_types:
-                    _k = "static"
-                _edge_types[_k] += 1
+                _edge_types[_k] = int(_edge_types.get(_k, 0)) + 1
+            _et_total = sum(int(_v) for _v in _edge_types.values())
             _payload = dict(_cg)
             _payload["edge_types"] = _edge_types
+            # 独立字段（**不塞进 edge_types 字典**，否则各档之和就不等于边数了）
+            _payload["edge_types_total"] = _et_total
+            _payload["edge_types_source"] = "per_edge_kind"
             _payload["dumped_at"] = _time.time()
             self.export_json(_tmp, data=_payload)
             os.replace(_tmp, _path)
@@ -1900,10 +1914,134 @@ class CallGraphAnalyzer:
                 "ok": _ok, "verdict": "ok" if _ok else "regression",
                 "graph_file": graph_file, "criteria_version": criteria_version}
 
+    # ===== ★328批刀1：A6 聚合口径自检（软推断不得被折叠成硬自证）=====
+    #: A6 口径版本（换口径必须换版本号，便于历史读数对表）
+    A6_CRITERIA_VERSION = "328.a6.v1"
+    #: 图解析缓存（key=(路径, mtime)）——同一份图在一个进程里只解析一次
+    _A6_CACHE: dict = {}
+
+    def a6_edge_kind_consistency(self, graph_path: str | None = None,
+                                 root: str | None = None) -> dict:
+        """A6：落盘图的**聚合 edge_types** 必须与**逐边 kind** 逐档相等，且同数。
+
+        为什么立这条断言（328刀1）：
+          `dump_graph_snapshot` 旧实现把不在预设键里的 kind 一律记成 `static`，
+          于是 `unique_name` / `self_attr` / `typed_infer`（**软推断**）被折叠进
+          `static`（实测 7626+1297+1118+7=10048）。判死主循环与 O3 三档分层靠的是
+          "硬/软/推断"之别，聚合一旦被打平，任何按聚合取数的消费方都会把软证据当
+          硬自证 —— 而这类错误**不会自己暴露**（数字看起来完全正常，只是偏大）。
+          故用一条可复算的守恒断言把它钉住。
+
+        判据（三项全过才 PASS，全部可复算）：
+          1. `per_edge_total == total_edges`（逐边计数自洽）；
+          2. `agg_sum == total_edges`（聚合各档之和 == 边数，即**没有丢边**）；
+          3. 每个 kind 档 `agg[k] == per_edge[k]`（**没有折叠**；聚合允许多带零值键）。
+
+        边界：图不存在/不可解析 ⇒ `UNAVAILABLE`，**不填 0** ——
+        0 是"图上真的没有这种边"，和"没读到图"必须能区分开。
+        本断言**不进 mastery 的 total/passed/failed**（同 A5：混进去会污染 A1/A4 基线）。
+        """
+        _root = root or _project_root()
+        _gp = graph_path
+        if not _gp:
+            _dir = os.path.join(_root, "data", "call_graph")
+            _cands = []
+            try:
+                for _f in os.listdir(_dir):
+                    if _f.startswith("graph_") and _f.endswith(".json"):
+                        _p = os.path.join(_dir, _f)
+                        try:
+                            _cands.append((os.path.getmtime(_p), _f, _p))
+                        except OSError as _me:
+                            silent_exc(_me, where="CallGraphAnalyzer::a6 candidate mtime")
+            except OSError as _le:
+                silent_exc(_le, where="CallGraphAnalyzer::a6 listdir")
+            if not _cands:
+                return {"assertion": "A6", "verdict": "UNAVAILABLE",
+                        "reason": "无 graph_*.json（没落盘 ⇒ 不等于没有边）",
+                        "criteria_version": self.A6_CRITERIA_VERSION}
+            _gp = sorted(_cands)[-1][2]
+        try:
+            _mt = os.path.getmtime(_gp)
+        except OSError as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::a6 graph mtime")
+            _mt = 0.0
+        _ck = (_gp, _mt)
+        if self._A6_CACHE.get("key") == _ck and isinstance(self._A6_CACHE.get("val"), dict):
+            return dict(self._A6_CACHE["val"])
+        try:
+            with open(_gp, encoding="utf-8", errors="replace") as _f:
+                _gd = json.load(_f)
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::a6 read graph")
+            return {"assertion": "A6", "verdict": "UNAVAILABLE",
+                    "reason": "图不可解析: %s" % type(_e).__name__,
+                    "graph_file": os.path.basename(_gp),
+                    "criteria_version": self.A6_CRITERIA_VERSION}
+        _edges = _gd.get("edges") if isinstance(_gd, dict) else None
+        if not isinstance(_edges, list):
+            return {"assertion": "A6", "verdict": "UNAVAILABLE",
+                    "reason": "图内无 edges 列表",
+                    "graph_file": os.path.basename(_gp),
+                    "criteria_version": self.A6_CRITERIA_VERSION}
+        _per: dict = {}
+        for _e in _edges:
+            if not isinstance(_e, dict):
+                continue
+            _k = str(_e.get("kind") or "static")
+            _per[_k] = int(_per.get(_k, 0)) + 1
+        _agg_raw = _gd.get("edge_types")
+        _agg: dict = {}
+        if isinstance(_agg_raw, dict):
+            for _k, _v in _agg_raw.items():
+                try:
+                    _agg[str(_k)] = int(_v)
+                except (TypeError, ValueError) as _ve:
+                    silent_exc(_ve, where="CallGraphAnalyzer::a6 agg value")
+        _per_total = sum(_per.values())
+        _agg_sum = sum(_agg.values())
+        _mismatch: dict = {}
+        for _k in sorted(set(_per) | set(_agg)):
+            _pe = int(_per.get(_k, 0))
+            _ag = int(_agg.get(_k, 0))
+            if _pe != _ag:
+                _mismatch[_k] = {"per_edge": _pe, "aggregated": _ag}
+        # 折叠检测：聚合 static 超出逐边 static 的部分就是被折叠进来的软证据
+        _fold = max(0, int(_agg.get("static", 0)) - int(_per.get("static", 0)))
+        _c1 = (_per_total == len(_edges))
+        _c2 = (_agg_sum == len(_edges))
+        _c3 = (not _mismatch)
+        _out = {
+            "assertion": "A6",
+            "verdict": "PASS" if (_c1 and _c2 and _c3) else "FAIL",
+            "criteria_version": self.A6_CRITERIA_VERSION,
+            "graph_file": os.path.basename(_gp),
+            "graph_mtime": _mt,
+            "total_edges": len(_edges),
+            "per_edge": dict(sorted(_per.items())),
+            "per_edge_total": _per_total,
+            "aggregated": dict(sorted(_agg.items())),
+            "agg_sum": _agg_sum,
+            "edge_types_total_field": _gd.get("edge_types_total"),
+            "mismatch": _mismatch,
+            "folded_into_static": _fold,
+            "checks": {"per_edge_self_consistent": _c1,
+                       "agg_sum_equals_edges": _c2,
+                       "per_kind_equal": _c3},
+        }
+        if _fold:
+            _logger.warning(
+                "[A6] 聚合 static 比逐边多 %d 条 ⇒ 疑似仍有 kind 被折叠（graph=%s）",
+                _fold, _out["graph_file"])
+        self._A6_CACHE["key"] = _ck
+        self._A6_CACHE["val"] = dict(_out)
+        return _out
+
     def mastery_assertion_check(self, class_name="PulseInnerWorld",
                                 manual_method_count=None,
                                 mask: dict | None = None,
-                                include_a5: bool = True) -> dict:
+                                include_a5: bool = True,
+                                include_a6: bool = True) -> dict:
         """★316批刀1：掌握度结构断言（只跑断言、不跑检测器）。
 
         **不进 issues、不进趋势门禁**（守 307—312 的 info/统计口径不污染问题清单）。
@@ -1947,6 +2085,15 @@ class CallGraphAnalyzer:
                 silent_exc(_a5e, where="CallGraphAnalyzer::mastery_assertion_check A5")
                 _a5 = {"assertion": "A5", "verdict": "UNAVAILABLE",
                        "reason": "异常: %s" % type(_a5e).__name__}
+        # ★328批刀1：A6 聚合口径自检 —— 与 A5 同样**单独一栏**，不进下面三项计数
+        _a6 = {"assertion": "A6", "verdict": "SKIPPED", "reason": "include_a6=False"}
+        if include_a6:
+            try:
+                _a6 = self.a6_edge_kind_consistency()
+            except Exception as _a6e:
+                silent_exc(_a6e, where="CallGraphAnalyzer::mastery_assertion_check A6")
+                _a6 = {"assertion": "A6", "verdict": "UNAVAILABLE",
+                       "reason": "异常: %s" % type(_a6e).__name__}
         _failed = _a1_failed + (1 if _a4["status"] == "failed" else 0)
         _unverifiable = 1 if _a4["status"] == "unverifiable" else 0
         _passed = max(0, _methods - _failed)
@@ -1967,6 +2114,8 @@ class CallGraphAnalyzer:
             #   它是"需求→能力"链路的断言，不是类簇结构断言，混进去会污染 A1/A4 读数
             #   与 SC-2 回归基线）
             "a5_intake": _a5,
+            # ★328批刀1：A6 聚合口径（同样单独一栏，不进 total/passed/failed）
+            "a6_edge_kinds": _a6,
         }
 
     # ===== ★326批刀5：A5 需求承接断言（自进"变成能力"闭环的缺口）=====
