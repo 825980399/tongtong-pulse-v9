@@ -210,8 +210,44 @@ def _m335_k1_from_log(log_path, tail_lines: int = 40000) -> dict | None:
             "samples": len(_groups[_pg_last])}
 
 
+def _m337_k1_mark(res: dict, expect_gen: "str | None") -> dict:
+    """★337批刀10：给 K1 读数打 `gen_consistent` 标记（跨代次残留识别）。
+
+    为什么（337前置挂账5 / 336移交⑤）：`get_k1_verdict()` 的 `log_parsed` 源会从
+    **活体日志**取最近一代次的产出率行——若调用方属于**新进程**（还没打出自己的
+    产出率行），它会安静地返回**上一代次**的读数，而返回值里没有任何字段能让人
+    看出"这是别人代的数"。335 刀2 提过"K1 跨代次不拼接"，但那只在**拼接**场景
+    成立；**单代次残留**这一面此前无人标。
+
+    三态（绝不二值化）：
+      * `expect_gen` 未给          ⇒ `gen_consistent=None`（未要求校验，不猜）
+      * 本读数 proc_gen == expect  ⇒ `True`
+      * 不一致 / 本读数无 proc_gen ⇒ `False`，并把 verdict 如实降为"不可判"
+        （跨代次残留**不可信**，不得沿用旧结论）
+    """
+    _pg = str(res.get("proc_gen") or "")
+    if not expect_gen:
+        res["gen_consistent"] = None
+        res["expect_gen"] = None
+        return res
+    res["expect_gen"] = str(expect_gen)
+    if _pg and _pg == str(expect_gen):
+        res["gen_consistent"] = True
+        return res
+    _ov = res.get("verdict")
+    res["gen_consistent"] = False
+    res["verdict"] = _K1_VERDICT_UNKNOWN
+    res["reason"] = ("跨代次残留不可信：本读数 proc_gen=%s ≠ 期望 %s"
+                     "（原判 %s：%s）" % (_pg or "unknown", str(expect_gen),
+                                       _ov, res.get("reason") or ""))
+    _K1_LAST.clear()
+    _K1_LAST.update(res)
+    return res
+
+
 def get_k1_verdict(project_root: str | None = None,
-                   log_path: str | None = None) -> dict:
+                   log_path: str | None = None,
+                   expect_gen: str | None = None) -> dict:
     """★335刀4：K1 判定（开闸判定树⑦ 与报表头的**唯一取数口**）。
 
     双源，**显式标 `source`**（铁律153：判定用显式标记，不让读方猜来源）：
@@ -228,7 +264,8 @@ def get_k1_verdict(project_root: str | None = None,
                             _pg.get("gen"), "in_process")
         _K1_LAST.clear()
         _K1_LAST.update(_r)
-        return _r
+        # ★337批刀10：带代次标记返回（expect_gen 未给 ⇒ None，不猜）
+        return _m337_k1_mark(dict(_r), expect_gen)
     _root = project_root or _PROJECT_ROOT
     _lp = log_path or os.path.join(_root, "logs", "pulse.log")
     _g = _m335_k1_from_log(_lp)
@@ -243,7 +280,7 @@ def get_k1_verdict(project_root: str | None = None,
             "criteria": _K1_VERDICT_CRITERIA}
         _K1_LAST.clear()
         _K1_LAST.update(_r)
-        return _r
+        return _m337_k1_mark(dict(_r), expect_gen)
     _r = _m335_k1_judge(_g["runs"], _g["productive"], _g["zero_output"],
                         _g["proc_gen"], "log_parsed",
                         reviewed=_g.get("reviewed"))
@@ -252,7 +289,7 @@ def get_k1_verdict(project_root: str | None = None,
     _r["samples"] = _g.get("samples")
     _K1_LAST.clear()
     _K1_LAST.update(_r)
-    return _r
+    return _m337_k1_mark(dict(_r), expect_gen)
 
 
 def get_k1_last() -> dict:

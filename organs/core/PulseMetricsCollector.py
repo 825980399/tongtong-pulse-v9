@@ -307,6 +307,36 @@ class PulseMetricsCollector(BasePulseOrgan):
             self._reflection_last_domain = payload.get("domain", "通用")
         return {"status": "cached", "reflection_count": self._reflection_count}
 
+    # ★337批刀4：库镜像采样 TTL（memory_maps 要枚举全部映射，每拍跑会变成绩瓶颈）
+    _M337_IMAGE_TTL_SEC = 300.0
+
+    def _m337_image_mb(self):
+        """★337批刀4：**库镜像常驻量**（MB）—— RSS 里"不可释放"的那部分。
+
+        为什么必须拆（337前置§0-1）：活体实测 RSS 6001.3MB ＝ 镜像 4322.2MB ＋
+        私有堆 1679.1MB；镜像里 GPU 栈 3304MB（torch_cuda/cudnn/cublas/cufft/
+        cusparse…）属"装载即驻"，**运行中释放一分钱也省不到**。若只看 RSS，
+        会把"少装一个库"的架构收益与"内存治理有效"混为一谈。
+
+        取不到 ⇒ `None`（**不填 0**：0 会让 `heap = RSS` 全量，把"测不到"读成
+        "全部可释放"，那是把治理靶面凭空放大 4 倍）。
+        """
+        _now = time.time()
+        _c = getattr(self, "_m337_image_cache", None)
+        if isinstance(_c, dict) and (_now - float(_c.get("ts") or 0)) < self._M337_IMAGE_TTL_SEC:
+            return _c.get("mb")
+        _mb = None
+        try:
+            import psutil
+            _tot = 0
+            for _mm in psutil.Process().memory_maps():
+                _tot += int(getattr(_mm, "rss", 0) or 0)
+            _mb = round(_tot / (1024.0 * 1024.0), 1)
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m337_image_mb")
+        self._m337_image_cache = {"ts": _now, "mb": _mb}
+        return _mb
+
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
         175刀1：在已活采集链上接入 RSS 上限自动回收（避免 167 死开关事故——
@@ -327,6 +357,11 @@ class PulseMetricsCollector(BasePulseOrgan):
             "instant_drop_mb": None,
             "restart_armed": False,
             "restart_count": 0,
+            # ★337批刀4：RSS 拆「镜像 + 堆」；镜像测不到 ⇒ 两字段都 None（不填 0）
+            "image_mb": None,
+            "heap_mb": None,
+            # ★337批刀4：增长率告警读数（死链挂接后的可见出口）
+            "growth_alarm": None,
         }
         if not self.info_field:
             _out["reason"] = "info_field 未就绪"
@@ -357,6 +392,31 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._mem_last_rss_mb = _rss
                 _out["rss_peak_mb"] = self._mem_peak_rss_mb
                 _out["rss_peak_ts"] = self._mem_peak_ts
+
+                # ★337批刀4：heap = RSS − 镜像（唯一可释放靶面）。
+                #   镜像测不到 ⇒ heap 留 None（**不填 0**，整轮不释放）。
+                _img = self._m337_image_mb()
+                _out["image_mb"] = _img
+                if _img is not None:
+                    _out["heap_mb"] = round(max(0.0, _rss - float(_img)), 1)
+
+                # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
+                #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，
+                #   生产日志 `[运行时指标] 内存` **0 行** ⇒ "写了没挂"（与 333刀2 同型）。
+                #   挂在与 memory_pressure 同一条心跳链上，不新增调度点。
+                try:
+                    from nucleus.runtime_metrics import get_runtime_metrics as _grm
+                    _al = _grm().check_memory_alarm_detailed() or {}
+                    _out["growth_alarm"] = {
+                        "triggered": bool(_al.get("triggered")),
+                        "growth_mb_per_min": _al.get("growth_mb_per_min"),
+                        "rss_mb": _al.get("rss_mb"),
+                    }
+                except Exception as _ae:
+                    silent_exc(_ae,
+                               where="PulseMetricsCollector::_collect_memory_pressure growth_alarm")
+                    # 取不到 ⇒ None（**不填 False**：False="没超线"，None="没测"）
+                    _out["growth_alarm"] = None
 
                 # 175刀1：RSS 上限自动回收（仅 ENABLE_MEMORY_AUTO_GC=True 且越阈时触发，默认关=零回归）
                 if _enable_gc and _rss > _gc_rss_mb:

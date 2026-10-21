@@ -5404,7 +5404,9 @@ class SelfInspector(SilentLogMixin):
                 if _name in _byname_names:
                     _alive_src["byname"] += 1
                 _tier = "soft"
-            elif _hit_infer:
+            # ★337批刀9：`_hit_infer` **或**登记项 —— 登记项保证 typed_infer 关掉后
+            #   这 4 个方法仍落 infer-only（软档），不进 hard_strict（防 strict +4）。
+            elif _hit_infer or _m337_typed_only(_f_norm, _name):
                 _alive_src["infer_only"] += 1
                 _tier = "infer-only"
             else:
@@ -5967,6 +5969,30 @@ def _m325_probe_reachable(item: dict, project_root=None) -> list:
 # 判据过宽。小林拍板②：M2 分层 + M1 双证据。
 _M330_HARD_TIERS = ("hard_strict", "hard_loose", "hard_unverified")
 
+# ===== ★337批刀9：typed_infer 关闭的**代价登记**（防 strict +4）=====
+# 这 4 个方法在 337 之前**只有 1 条 typed_infer 入边**撑着；洞开默认关之后它们
+# 会变成"图内三层皆无入边"，按 `_m330_classify_hard_tier` 落 hard_strict ⇒
+# strict +4。它们都是真实的公开 API（缓存序列化 / 报告信封的 P0 判定与消费回执），
+# 不是死码。**登记口径＝(相对文件路径, 方法名)**；匹配用 `endswith` 是因为
+# `_f_norm` 在扫描里是绝对路径。
+# 判级：登记项即使 `_hit_infer=False` 也走 `infer-only`（软档），**不进 hard 池**。
+# 撤销条件：这 4 个方法出现 static/unique_name 级入边证据后即可删除本表项。
+_M337_TYPED_ONLY_METHODS = (
+    ("nucleus/llm/semantic_cache.py", "to_dict"),                       # CacheEntry.to_dict
+    ("nucleus/reporting/report_envelope.py", "has_p0"),                 # ReportEnvelope.has_p0
+    ("nucleus/reporting/report_envelope.py", "to_dict"),                # ReportEnvelope.to_dict
+    ("nucleus/reporting/report_envelope.py", "record_consume_result"),  # ReportEnvelope.record_consum
+)
+
+
+def _m337_typed_only(file_norm: str, method: str) -> bool:
+    """该 (文件, 方法) 是否属"仅靠 typed_infer 活着"的登记项（只读，零副作用）。"""
+    _f = str(file_norm or "").replace("\\", "/")
+    for _rf, _rm in _M337_TYPED_ONLY_METHODS:
+        if _rm == method and _f.endswith(_rf):
+            return True
+    return False
+
 
 # ★331批刀7：框架接口覆写切面 —— 唯一**强判据**的可移出面。
 #   判据：方法名在框架基类（`base/` 下的 def 名集合）**有定义** ⇒ 它由框架按名回调，
@@ -6517,7 +6543,30 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                           "reason": "当前无 hard 档候选（活体未判死/未跑判死）",
                           "n_source": _O3_N_SOURCE}
     else:
+        # ★337批刀8（裁决① / 前置§3.2）：抽验 **之前**先取 W1 外部心跳。
+        #   与 A6 用同一个薄封装（`w1_verdict_brief`），阈值改动只改一处。
+        _w1b = {"verdict": "unavailable", "age_sec": None, "basis": "未接"}
+        try:
+            from nucleus.world_model.external_heartbeat import (
+                w1_verdict_brief as _w1v,
+            )
+            _w1b = _w1v()
+        except Exception as _e:
+            silent_exc(_e, where="self_inspector::o3_open_gate_report w1_before_sample",
+                       level="warning")
         _rep["sample"] = sample_verify_hard_candidates(k=k, project_root=project_root)
+        # `stale/unavailable` ⇒ 抽样结论降 `provisional`（**不进 official_verdict**）：
+        #   在旧信号上做判据手术，会把"外部说卡"读成"抽验通过"。
+        if isinstance(_rep.get("sample"), dict):
+            _rep["sample"]["w1"] = {"verdict": _w1b.get("verdict"),
+                                    "age_sec": _w1b.get("age_sec")}
+            if _w1b.get("verdict") != "alive" and \
+                    _rep["sample"].get("verdict") not in (None, "UNAVAILABLE"):
+                _rep["sample"]["verdict_raw"] = _rep["sample"].get("verdict")
+                _rep["sample"]["verdict"] = "provisional"
+                _rep["sample"]["verdict_reason"] = (
+                    "W1=%s ⇒ 抽样结论降 provisional（不作为开闸依据）"
+                    % _w1b.get("verdict"))
     _rep["reduction"] = hard_candidate_reduction_analysis(
         items=_items if _items else None, project_root=project_root)
     # ---- B/C 降量选项（只算可消量与风险，不代选）----
@@ -6551,6 +6600,12 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     }
     # ---- 官方结论：只认"重启后新图 + 池不截断"----
     _blockers = []
+    # ★337批刀10：**未跑 ≠ 未过** —— 分栏收集（显式取值，不在理由串里找关键字）。
+    #   `version_ok is None`      ⇒ 判据面未跑（`_m305_load_graph_index` 早退）
+    #   `version_ok is False`     ⇒ 跑过了、版本不符（**真的未过**）
+    #   `post_restart_graph is None`  ⇒ 重启时刻未提供（不可判）
+    #   `post_restart_graph is False` ⇒ 有旧图（**真的未过**）
+    _not_run: list = []
     # ★330批刀1（M2）：N 口径必须**可复算**才谈得上开闸。probe 不可用 ⇒ N 记 None，
     #   此处显式阻断（不填 0、不拿 0 去比 N）。
     if _strict is None:
@@ -6573,13 +6628,28 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     if _ir.get("rate_ok") is not True:
         _blockers.append("入池速率未达标或不可算（%s）"
                          % (_ir.get("reason") or "intake_rate 不可算"))
-    if _rep["graph"].get("version_ok") is not True:
+    # ★337批刀10：三态分栏（原来 `is not True` 把 None（未跑）和 False（未过）糊成一档）
+    _vok10 = _rep["graph"].get("version_ok")
+    if _vok10 is None:
+        _not_run.append("图版本判据未跑（%s）"
+                        % (_rep["graph"].get("version_reason") or "图索引未走/无版本字段"))
+    elif _vok10 is not True:
         _blockers.append("图版本未对齐（%s）"
-                         % (_rep["graph"].get("version_reason") or "图无版本字段/判据未跑"))
-    if _rep.get("post_restart_graph") is not True:
-        _blockers.append("非重启后新图")
+                         % (_rep["graph"].get("version_reason") or "版本不符"))
+    _prg10 = _rep.get("post_restart_graph")
+    if _prg10 is None:
+        _not_run.append("重启时刻未提供（min_graph_mtime）⇒ 是否重启后新图不可判")
+    elif _prg10 is not True:
+        _blockers.append("非重启后新图（图 mtime %s 早于重启时刻）"
+                         % (_rep["graph"].get("mtime_str") or "?"))
     if _rep["sample"].get("verdict") == "UNAVAILABLE":
         _blockers.append("抽验不可用")
+    # ★337批刀8：W1 非 alive ⇒ 抽验降 provisional ⇒ **不作为开闸依据**
+    #   （进 `_not_run` 而非 `_blockers`：这是"外部信号不可用"，不是"判据未过"）
+    if (_rep.get("sample") or {}).get("verdict") == "provisional":
+        _not_run.append("W1=%s ⇒ 抽验结论 provisional（不进 official_verdict）"
+                        % (((_rep.get("sample") or {}).get("w1") or {}).get("verdict")
+                           or "unavailable"))
     if _rep.get("hard_pool_capped"):
         _blockers.append("hard 池被上限截断（抽验只代表池内）")
     if _rep.get("hard_total_drift_exceeded"):
@@ -6646,9 +6716,21 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         _rep["failed_steps"].append("⑦ K1三证＋对表")
     if _v7 == "未达成":
         _blockers.append("⑦ K1三证＋对表 未达成（%s）" % _why7)
+    # ★337批刀10：未跑项**始终单列**（即使同时有未过项，读方也能分清两类）
+    _rep["not_run_steps"] = list(_not_run)
+    _rep["official_blockers"] = list(_blockers)
     if _blockers:
         _rep["official_verdict"] = "UNAVAILABLE"
         _rep["official_reason"] = "、".join(_blockers) + " ⇒ 开闸顺延（不填 0）"
+        if _not_run:
+            _rep["official_reason"] += ("；另含**未跑**项（未跑≠未过）：%s"
+                                        % "、".join(_not_run))
+    elif _not_run:
+        # ★337批刀10：判据面未跑 ⇒ **NOT_RUN**（不是 UNAVAILABLE——那是"跑过但没过"）
+        _rep["official_verdict"] = "NOT_RUN"
+        _rep["official_reason"] = (
+            "判据面未跑：%s ⇒ 未跑 ≠ 未过，本轮不出开闸结论（不填 0）"
+            % "、".join(_not_run))
     elif _v7 == "不可判":
         # ★判决口径：**不许写"全过"**。未判 ≠ 没失败，必须在 reason 里点出来。
         _rep["official_verdict"] = "OPEN"

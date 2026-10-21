@@ -1020,8 +1020,15 @@ class CallGraphAnalyzer:
     # ===== ★322批刀1（路线②）：返回值 → 接收者类型推断（kind 仍 typed_infer） =====
     @staticmethod
     def _m322_typed_enabled() -> bool:
-        """typed_infer 档**总开关**（回退粒度按 kind：关掉只少 typed_infer，不动 static/unique_name）。"""
-        return str(os.environ.get("TT_TYPED_INFER", "1")).strip().lower() not in ("0", "false", "no")
+        """typed_infer 档**总开关**（回退粒度按 kind：关掉只少 typed_infer，不动 static/unique_name）。
+
+        ★337批刀9（小林拍板③）：默认值 **"1" → "0"（正式默认关闭）**。
+        理由：typed_infer 在实图上只贡献 7 条边（占比 0.07%），却让图谱多一层
+        不可复核的推断口径；而它的代价（4 个公开方法失去唯一入边）已在
+        `nucleus.self_inspector._M337_TYPED_ONLY_METHODS` 同批登记兜住。
+        仍可用 `TT_TYPED_INFER=1` 显式打开（env 覆盖，无需 config 登记）。
+        """
+        return str(os.environ.get("TT_TYPED_INFER", "0")).strip().lower() not in ("0", "false", "no")
 
     @staticmethod
     def _m322_ret_enabled() -> bool:
@@ -1804,8 +1811,15 @@ class CallGraphAnalyzer:
             _logger.warning("调用图落盘失败（返回空串）: %s: %s", type(e).__name__, e)
             return ""
 
-    def cluster_view(self, class_name: str, mask_ids: list | None = None) -> dict:
+    def cluster_view(self, class_name: str, mask_ids: list | None = None,
+                     scope_files: list | None = None) -> dict:
         """★315批刀3：只读类簇视图——给定类名（cls），返回该类簇的图结构指标。
+
+        ★337批刀6：新增 `scope_files` —— 给定时**按文件**圈定类簇（Mixin 归族），
+        不给时维持原 `cls` 单名过滤（向后兼容，既有调用方一字不改）。
+        为什么要这一维：`_A4_CLUSTER_SCOPE` 声明的是"5 个文件"，实现却按单一
+        类名过滤，两者差 116 个节点（4 个 Mixin 109 + InferenceContext 1 +
+        MockInfoField 2 + 模块级 4）——这正是 A4 gap 的真正来源，**不是"未入图"**。
         复用 `_qual_id` / `nodes` / `edges` 现成结构（与 dump_graph_snapshot 同源）。
         输出：方法数、各方法入度/出度、零入边方法列表、跨簇边界调用数。
         供 PulseCodeLearner 等消费者把「无明确入口」启发式改为图判定。
@@ -1813,7 +1827,14 @@ class CallGraphAnalyzer:
         _cg = self._ensure()
         _nodes = (_cg or {}).get("nodes", []) if isinstance(_cg, dict) else []
         _edges = (_cg or {}).get("edges", []) if isinstance(_cg, dict) else []
-        _cls_nodes = [n for n in _nodes if isinstance(n, dict) and n.get("cls") == class_name]
+        if scope_files:
+            # ★337批刀6：文件口径（Mixin 归族）—— 与 `_A4_CLUSTER_SCOPE` 的声明一致
+            _m337_scope = {str(_f).replace("\\", "/") for _f in scope_files}
+            _cls_nodes = [n for n in _nodes if isinstance(n, dict)
+                          and str(n.get("file") or "").replace("\\", "/") in _m337_scope]
+        else:
+            _cls_nodes = [n for n in _nodes
+                          if isinstance(n, dict) and n.get("cls") == class_name]
         _ids = [n.get("id") for n in _cls_nodes]
         _id_set = set(_ids)
         _in = {_i: 0 for _i in _ids}
@@ -1853,14 +1874,21 @@ class CallGraphAnalyzer:
         }
 
     # ===== ★317批刀2（G-6）：A4 覆盖断言的类簇口径——显式文件清单，钉死 =====
-    # 口径差（339 / 455 / 462）的成因（本批实测）：
-    #   * 图类簇 339：调用图只收「被静态解析到调用点」的方法，且全部落在 PulseInnerWorld.py
-    #     （4 个 pulse_inner_world_*.py mixin 的方法未入图 ⇒ "半张地图"）
-    #   * 说明书 455：5 个源文件（PulseInnerWorld.py 346 + 4 mixin 109）的 def 总数
+    # 口径差（339 / 455 / 462）的成因 —— ★337批刀6 **订正**（317 旧注释错）：
+    #   ★旧注释写的"4 个 mixin 的方法**未入图**（半张地图）"已被实测**推翻**：
+    #     烛微 337 前置逐节点核对 graph_20261021_130221.json ⇒ 109/109 个 mixin
+    #     方法**全部在图内**（mixin_only_with_existing_node_of_same_name=109），
+    #     5 个源文件在图内合计 455 个节点 = 346 + 109，一个不缺。
+    #   * gap 116 的**真实成因是口径**：`cluster_view` 用 `n.get("cls") == class_name`
+    #     **单类名**过滤，把 4 个 Mixin 类（109）＋ PulseInnerWorld.InferenceContext（1）
+    #     ＋ MockInfoField（2）＋ 模块级函数（4）共 116 个节点排除在类簇之外。
+    #   * 说明书面 455：5 个源文件（PulseInnerWorld.py 346 + 4 mixin 109）的 def 总数
     #   * 烛微 462 / 6 文件：455 + nucleus/reasoning/_inner_world_math.py 的 7 个**模块级**函数
     # ⇒ 裁定：`_inner_world_math.py` **不计入**（它是数学核，模块级函数不属于该类的方法集，
     #   图类簇永不包含它；计入会把"口径差"与"真缺口"混在一起）。
-    _A4_CRITERIA_VERSION = "317.a4.v1"
+    # ★337批刀6：317.a4.v1（cls 单名过滤，339/116）→ **337.a4.v2**（文件口径，455/0）
+    #   跨版本**禁止比较**（与 A-4/A-14 同型）：旧报告里的 339/116 不得与新读数并列。
+    _A4_CRITERIA_VERSION = "337.a4.v2"
     _A4_CLUSTER_SCOPE = {
         "class": "PulseInnerWorld",
         "files_included": [
@@ -1874,9 +1902,20 @@ class CallGraphAnalyzer:
             "nucleus/reasoning/_inner_world_math.py":
                 "模块级数学核（7 个模块级 def），非该类方法；图类簇永不包含 ⇒ 计入会污染 gap",
         },
+        # ★337批刀6：口径＝文件过滤（上面的 `files_included`），实测 455 == 说明书 455
+        "scope_mode": "files_included",
         "manual_baseline": 455,
-        "graph_baseline": 339,
-        "gap_baseline": 116,
+        "graph_baseline": 455,
+        "gap_baseline": 0,
+        # 旧口径留档（**跨版本禁止比较**）：cls 单名过滤 ⇒ 图类簇 339、gap 116。
+        # MRO 归族口径备查：339+109=448，残余 7 = 4 模块级 + InferenceContext 1 +
+        # MockInfoField 2（本批**未采用**，避免出现第三把尺子）。
+        "legacy_a4_v1": {
+            "criteria_version": "317.a4.v1",
+            "scope_mode": "cls",
+            "graph_baseline": 339,
+            "gap_baseline": 116,
+        },
     }
 
     def sc1_mask_selfcheck(self, class_name="PulseInnerWorld", sample_n: int = 5) -> dict:
@@ -1889,7 +1928,8 @@ class CallGraphAnalyzer:
 
         红线（写死）：**只产计数与结论**，不改台账、不入队、不触发行动、不落 data/。
         """
-        _cv0 = self.cluster_view(class_name)
+        _cv0 = self.cluster_view(class_name,
+                                 scope_files=self._A4_CLUSTER_SCOPE["files_included"])
         _degs = _cv0.get("in_degrees") or {}
         _cands = [_i for _i, _v in _degs.items() if int(_v or 0) > 0]
         _picked = _cands[:max(0, int(sample_n or 0))]
@@ -2011,6 +2051,29 @@ class CallGraphAnalyzer:
                      " proc_gen=%s",
                      _folded, _v, _r.get("total_edges"), _r.get("agg_sum"), _key,
                      _m335_pg())
+        # ★337批刀8（裁决①）：A6 **双证行** —— 把图内自证与图外心跳放在同一行，
+        #   冲突时按 `_m337_a6_arbitrate` 仲裁（w1!=alive ⇒ provisional）。
+        #   为什么必须在同一行：分开两行时读方无法判断"A6 的 PASS 到底采信了没有"，
+        #   而 `verdict_final` 才是能进判据的那个值。
+        try:
+            from nucleus.world_model.external_heartbeat import (
+                w1_verdict_brief as _w1v, _m337_a6_arbitrate as _arb,
+            )
+            _w1 = _w1v()
+            _fin = _arb(_v, _w1)
+            _logger.info(
+                "[A6+W1] graph=%s dumped_at=%s snapshot_age_sec=%s w1=%s a6=%s "
+                "verdict_final=%s basis=%s proc_gen=%s",
+                _key, _r.get("dumped_at"), _w1.get("age_sec"), _w1.get("verdict"),
+                _v, _fin.get("verdict"), _fin.get("basis"), _m335_pg())
+            _r["w1"] = {"verdict": _w1.get("verdict"),
+                        "age_sec": _w1.get("age_sec")}
+            _r["verdict_final"] = _fin.get("verdict")
+            _r["arbitration_basis"] = _fin.get("basis")
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6 w1_arbitrate")
+            _logger.warning("[A6+W1] W1 仲裁不可用（不阻断 A6）: %s proc_gen=%s",
+                            type(_e).__name__, _m335_pg())
         if _folded > 0:
             _logger.warning("[A6] folded=%d > 0 ⇒ 存在 kind 被折叠进 static（file=%s）"
                             " proc_gen=%s", _folded, _key, _m335_pg())
@@ -2176,7 +2239,8 @@ class CallGraphAnalyzer:
         """
         # ★319批刀0（SC-1）：只读遮蔽（负样本）——不落 data/、不改台账
         _hide = list((mask or {}).get("hide_methods") or [])
-        _cv = self.cluster_view(class_name, mask_ids=_hide or None)
+        _cv = self.cluster_view(class_name, mask_ids=_hide or None,
+                                scope_files=self._A4_CLUSTER_SCOPE["files_included"])
         _methods = int(_cv.get("method_count", 0) or 0)
         _sc1 = {"masked": len(_hide), "hit": 0, "miss": 0}
         if _hide:

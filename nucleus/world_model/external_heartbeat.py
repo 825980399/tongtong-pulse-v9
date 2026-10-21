@@ -236,6 +236,56 @@ def external_heartbeat_verdict(root: str | None = None,
     }
 
 
+def w1_verdict_brief(prev_sample: dict | None = None,
+                     root: str | None = None) -> dict:
+    """★337批刀8：W1 判定的**薄封装取数口**（消费方专用，不重复实现判定）。
+
+    为什么要有这一层：337 之前 `external_heartbeat_verdict()` 的生产调用方
+    **grep = 0**（只有自身与 tests）——"证"写在报告里，不在判据里。A6 与 O3
+    两处接线若各自直调，阈值/参数一改就漂成两套；故统一从这里取。
+
+    返回归一结构：
+      ``{"verdict": alive|stale|unavailable, "age_sec": float|None,
+         "basis": str, "raw": dict}``
+    取数异常 ⇒ `verdict="unavailable"`（**绝不猜 alive**：猜 alive 会让"外部说卡"
+    被当成"外部说好"，仲裁方向正好反）。
+    """
+    try:
+        _r = external_heartbeat_verdict(root=root, prev_sample=prev_sample) or {}
+        _ev = _r.get("evidence")
+        _age = None
+        if isinstance(_ev, dict):
+            _age = _ev.get("age_sec")
+        return {"verdict": str(_r.get("verdict") or "unavailable"),
+                "age_sec": _age,
+                "basis": str(_r.get("basis") or ""),
+                "raw": _r}
+    except Exception as _e:
+        silent_exc(_e, where="external_heartbeat.w1_verdict_brief")
+        return {"verdict": "unavailable", "age_sec": None,
+                "basis": "W1 取数异常: %s" % type(_e).__name__, "raw": {}}
+
+
+def _m337_a6_arbitrate(a6_verdict: str, w1: dict) -> dict:
+    """★337批刀8（裁决① / 337前置§3.1）：A6 与 W1 **打架时的仲裁**。
+
+    规则写死（不许按场景"灵活"）：
+      * `w1 == alive`        ⇒ `verdict_final = a6`（图新鲜度已被外部证据确认）
+      * `w1 == unavailable`  ⇒ `UNAVAILABLE`（**只报数不给结论**，不填 0）
+      * 其余（stale 等）     ⇒ `provisional`（"图说好、外部说卡" ⇒ 先查图新鲜度；
+                               **不改判据、不改图**，只降结论强度）
+    """
+    _w = str((w1 or {}).get("verdict") or "unavailable")
+    if _w == "alive":
+        return {"verdict": str(a6_verdict or ""), "w1": _w,
+                "basis": "w1=alive ⇒ A6 结论采信"}
+    if _w == "unavailable":
+        return {"verdict": "UNAVAILABLE", "w1": _w,
+                "basis": "w1=unavailable ⇒ A6 只报数不给结论（不填 0）"}
+    return {"verdict": "provisional", "w1": _w,
+            "basis": "w1=%s ⇒ A6 降 provisional（先查图新鲜度，不改判据/不改图）" % _w}
+
+
 def w1_consumers() -> dict:
     """W1 的消费方接入点（结构化，供报告/日报直接引用，不靠文字描述）。"""
     return {
@@ -244,13 +294,22 @@ def w1_consumers() -> dict:
             {"name": "A6 外部证据面",
              "how": "A6 判聚合与逐边一致性；W1 提供的 alive/stale 作为**图外**证据，"
                     "当 A6 与 W1 冲突（图说好、外部说卡）时以 W1 为准先查图新鲜度",
-             "landed": False,
-             "reason": "需 A6 消费方接入，属 330 批（开闸批）范围"},
+             "landed": True,
+             "landed_at": "337批刀8",
+             "judge": "`CallGraphAnalyzer._m331_auto_a6` 图落盘后调 "
+                      "`w1_verdict_brief()`，产 `[A6+W1]` 双证行；"
+                      "`w1!=alive ⇒ verdict_final=provisional`；"
+                      "`w1=unavailable ⇒ UNAVAILABLE//只报数不给结论`",
+             "reason": ""},
             {"name": "O3 抽验 A",
              "how": "抽验前先过 W1：`stale/unavailable` ⇒ 抽样结论记 `provisional`，"
                     "不给开闸结论（避免在旧信号上做判据手术）",
-             "landed": False,
-             "reason": "O3 开闸批（330）接入"},
+             "landed": True,
+             "landed_at": "337批刀8",
+             "judge": "`o3_open_gate_report` 在 `sample_verify_hard_candidates` "
+                      "**之前**取 `w1_verdict_brief()`；非 alive ⇒ `sample.verdict` "
+                      "降 `provisional` 并进 `not_run_steps`（不进 official_verdict）",
+             "reason": ""},
             {"name": "开闸三证第四证",
              "how": "开闸需 ①图 ②判据 ③A 抽验 ④**外部心跳**；第四证 = W1 verdict == alive "
                     "且（重启后）beat_count 已推进",

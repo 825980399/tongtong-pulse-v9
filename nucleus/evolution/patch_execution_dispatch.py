@@ -155,7 +155,10 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
     # ── ① 闸门结论（**只读**，不改判据） ──
     if gate_report is None:
         try:
-            gate_report = _si.o3_open_gate_report(project_root=project_root)
+            # ★337批刀2：补传重启时刻——否则「重启后新图」判据恒不可判 ⇒ 开闸永不可能 OPEN
+            gate_report = _si.o3_open_gate_report(
+                project_root=project_root,
+                min_graph_mtime=_m337_boot_time())
         except Exception as _e:
             silent_exc(_e, where="PatchExecutionDispatch._m335_o3_consume gate",
                        level="warning")
@@ -1343,7 +1346,11 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
     if _lim <= 0 or not isinstance(patch_history, list):
         return []
     _out: list = []
-    _rej = {"status": 0, "risk": 0, "morph": 0, "trust": 0, "lifecycle": 0, "blast": 0}
+    # ★337批刀1：新增 applied / cap 两档拒收（方向A/B 各一档），拒收分布仍对外可见
+    _rej = {"status": 0, "risk": 0, "morph": 0, "trust": 0,
+            "lifecycle": 0, "blast": 0, "applied": 0, "cap": 0}
+    # ★337批刀1（方向B）：侧账只读一次（与派单主流程同源，避免每条候选各读一次盘）
+    _m337_ledger = _m326_load_fail_ledger()
     for _p in patch_history:
         if not isinstance(_p, dict):
             continue
@@ -1352,6 +1359,29 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
         #   其余非 runtime_verified 的 approved（高风险）及所有其它状态仍转人工。
         if _status not in ("runtime_verified", "approved"):
             _rej["status"] += 1
+            continue
+        # ★337批刀1（方向A）：**已应用**的补丁不再进自动派单池。
+        #   实测病灶：patch_llm_1791967240_fcef 的 `applied=true`，却每圈被选中，
+        #   侧账 fail_count 2→7 越锁越死，其余 12 条候选零机会——根因就是筛选
+        #   从不看 `applied`（只判 status，而它 status=approved 仍在池）。
+        if _p.get("applied") is True:
+            _rej["applied"] += 1
+            _module_logger.info(
+                "[337刀1] 筛选剔除已应用 ⇒ 转人工: patch=%s method=%s applied_at=%s",
+                str(_p.get("id", ""))[:16], str(_p.get("method") or ""),
+                _p.get("applied_at"))
+            continue
+        # ★337批刀1（方向B）：**cap 判定前移**到候选池构成阶段——已 cap 死的补丁
+        #   在这里就剔除，不再"选中之后再拦"（原路径走 `_m324_blocked_reason`，
+        #   选中→拦截→计次→仍占名额）。留痕保留，读方仍能看到拦在哪一层。
+        _m337_fc = _m326_persisted_fail_count(_p, _m337_ledger)
+        if _m337_fc >= _DISPATCH_FAIL_CAP:
+            _rej["cap"] += 1
+            _module_logger.info(
+                "[337刀1] 筛选剔除已cap ⇒ 转人工（不进候选池）: patch=%s method=%s "
+                "fail_count=%d cap=%d",
+                str(_p.get("id", ""))[:16], str(_p.get("method") or ""),
+                _m337_fc, _DISPATCH_FAIL_CAP)
             continue
         if _p.get("risk_level") not in ("低", "low"):
             _rej["risk"] += 1
@@ -1384,12 +1414,15 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
     # ★324批刀0：拒收分布对外可见（blocked_reason 指认拦截环节的唯一来源）
     _LAST_TRIAGE_REJ.clear()
     _LAST_TRIAGE_REJ.update(dict(_rej))
-    _out.sort(key=lambda p: (-float(p.get("trust_score", 0) or 0),))
+    # ★337批刀1：同 trust 下按「最近尝试时间最久」优先（防同一条被反复选中）
+    _out.sort(key=lambda p: (-float(p.get("trust_score", 0) or 0),
+                             _m337_last_attempt_ts(p)))
     _module_logger.info(
         "[311刀1] 自动分诊池: 命中 %d 条（拒收 status=%d risk=%d 形态=%d 置信=%d "
-        "生命周期=%d 牵连=%d），单批派 %d 条",
+        "生命周期=%d 牵连=%d 已应用=%d cap=%d），单批派 %d 条",
         len(_out), _rej["status"], _rej["risk"], _rej["morph"], _rej["trust"],
-        _rej["lifecycle"], _rej["blast"], min(len(_out), _lim))
+        _rej["lifecycle"], _rej["blast"], _rej["applied"], _rej["cap"],
+        min(len(_out), _lim))
     return _out[:_lim]
 
 
@@ -1449,6 +1482,55 @@ def _sc2_probe(class_name: str = "PulseInnerWorld", reason: str = "") -> dict:
 #     于是"dispatched=1 但账本零变化"恒成立：那不是自转成果，是**重复失败循环**
 #   · 故本批补三件：三拆计数 / 失败退出上限 / 拦截环节指认
 _DISPATCH_FAIL_CAP = 2      # 同一补丁累计验证失败达此次数 ⇒ 转人工，不再自动派单
+
+
+# ===== ★337批刀2：重启时刻（开闸判据「重启后新图」的唯一取数口）=====
+def _m337_boot_time() -> "float | None":
+    """★337批刀2：本进程**重启时刻** —— 与 `proc_gen` 同源（同一个 create_time）。
+
+    为什么必须补这个（336移交① · 337前置§3.2）：`o3_open_gate_report()` 的
+    `min_graph_mtime` 形参自 326 批起就存在，但**唯一调用点只传 project_root**
+    ⇒ `post_restart_graph=None` ⇒ blocker「非重启后新图」**恒成立** ⇒
+    开闸在结构上永不可能 OPEN（14:02 实测：抽验 PASS/图 335.cg.v1/⑥对齐，
+    结论仍 UNAVAILABLE）。
+
+    取不到 ⇒ `None`（**绝不填 0**：0 会让「图 mtime ≥ 0」恒真，把旧图误判成
+    重启后新图——比"不知道"错得更彻底，与 `nucleus/proc_gen.py` 同一条纪律）。
+    """
+    try:
+        from nucleus.proc_gen import get_proc_gen
+        _ct = get_proc_gen().get("create_time")
+        return float(_ct) if _ct else None
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m337_boot_time")
+        return None
+
+
+# ===== ★337批刀1：最近一次尝试时刻（同 trust 时"最久未试"优先）=====
+def _m337_last_attempt_ts(patch: dict) -> float:
+    """该补丁**最近一次尝试**的时间戳（取可用字段最大值；全无 ⇒ 0.0）。
+
+    为什么（337前置§0-1 / 336移交②）：`fcef` trust=80 全池最高，排序只按
+    trust 降序 ⇒ **每圈都选中同一条**，其余 12 条候选零机会。补这一维后，
+    同 trust 之间按「最久没试过」轮转，避免单条被反复钉住。
+    """
+    _cands = [patch.get("saved_at"), patch.get("applied_at"),
+              patch.get("approved_at")]
+    _rvr = patch.get("runtime_verify_result")
+    if isinstance(_rvr, dict):
+        _cands.append(_rvr.get("executed_at"))
+    _best = 0.0
+    for _c in _cands:
+        try:
+            _v = float(_c or 0)
+        except (TypeError, ValueError) as _te:
+            _module_logger.debug(
+                "[337刀1] 尝试时刻字段非数值，跳过: %s: %s",
+                type(_te).__name__, _te)
+            _v = 0.0
+        if _v > _best:
+            _best = _v
+    return _best
 _M324_TRACE_KEEP = 500      # 派单留痕文件最多保留行数（超限滚动截断，防无界增长）
 
 #: 自动分诊最近一次的拒收分布（供 blocked_reason 指认拦截环节；`select_for_auto_triage` 写）

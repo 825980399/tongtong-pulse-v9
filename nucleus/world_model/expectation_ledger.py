@@ -48,8 +48,10 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("ExpectationLedger")
 
-#: 与 CallGraphAnalyzer 的 A4 口径保持同一版本号（317 批钉死：不含 _inner_world_math.py）
-_CRITERIA_VERSION = "317.a4.v1"
+#: 与 CallGraphAnalyzer 的 A4 口径保持同一版本号（337 批起：文件口径，不含 _inner_world_math.py）
+#: ★337刀6/7 同批升版：317.a4.v1（cls 单名过滤）→ 337.a4.v2（按 files_included 过滤）
+#:   **跨版本禁止比较**（A-14）：存量 ledger 行的 measured.actual 是旧口径值。
+_CRITERIA_VERSION = "337.a4.v2"
 #: A4 说明书侧基线（5 文件 def 总数，317 批实测）
 _A4_MANUAL_BASELINE = 455
 
@@ -934,7 +936,14 @@ def sc3_consistency(project_root: str | None = None,
                              sorted(_clusters(_graph).items(), key=lambda kv: -len(kv[1]))[:10]]
     _total = 0
     _mismatch = 0
+    # ★337批刀7：跨版本跳过计数（**不静默**：跳过了几条必须报出来）
+    _legacy = 0
     _details: list[dict] = []
+    _cur_a4v = ""
+    try:
+        _cur_a4v = str(getattr(CallGraphAnalyzer, "_A4_CRITERIA_VERSION", "") or "")
+    except Exception as _ve:
+        silent_exc(_ve, where="expectation_ledger.sc3_consistency.a4_version")
     for _c in _names:
         # ★修正：断言侧必须拿到「说明书侧方法数」才有 gap——否则 a4_coverage 恒为
         #   unverifiable，对表会**空转（total=0）**，看起来"一致"其实是没比。
@@ -953,12 +962,26 @@ def sc3_consistency(project_root: str | None = None,
         _gap = (_res.get("a4_coverage") or {}).get("gap")
         if _gap is None:
             continue
-        _total += 1
         _lr = _idx.get("a4.coverage.%s" % _c)
         if _lr is None:
+            _total += 1
             _mismatch += 1
             _details.append({"class": _c, "reason": "ledger 无对应断言"})
             continue
+        # ★337批刀7（A-14）：ledger 行口径与当前 A4 版本不一致 ⇒ **禁止比较**。
+        #   不比而不是"比了算 mismatch"：口径改版本就是"尺子换了"，
+        #   拿旧尺子的读数去判新尺子坏，是判据常识错误。
+        _lvert = str(_lr.get("criteria_version") or "")
+        if _cur_a4v and _lvert and _lvert != _cur_a4v:
+            _legacy += 1
+            _details.append({"class": _c, "reason": "跨版本跳过（禁止比较）",
+                             "ledger_criteria": _lvert,
+                             "current_criteria": _cur_a4v})
+            continue
+        # ★337刀7：**分母只计真正比过的项**（铁律160：分母与被测对象同域）。
+        #   跨版本跳过的不进 total——否则 mismatch=0 时会算出 rate=0=PASS，
+        #   把"没比"读成"一致"。
+        _total += 1
         _lactual = (_lr.get("measured") or {}).get("actual")
         _lverdict = _lr.get("verdict")
         _exp = "met" if _gap == 0 else "violated"
@@ -967,11 +990,37 @@ def sc3_consistency(project_root: str | None = None,
             _details.append({"class": _c, "assert_gap": _gap,
                              "ledger_actual": _lactual, "ledger_verdict": _lverdict,
                              "expected_verdict": _exp})
-    _rate = (_mismatch / float(_total)) if _total else 0.0
-    _module_logger.info("[SC-3] consistency total=%d mismatch=%d rate=%.4f（>0.05 即判尺子坏）",
-                        _total, _mismatch, _rate)
+    # ★337批刀7：**空转 ≠ 通过** —— total==0 记 UNAVAILABLE，绝不记 rate=0.0
+    #   （原实现 `rate=_mismatch/_total if _total else 0.0`，空转时 rate=0
+    #    会被下游读成"不一致率 0% = 尺子没坏"，这正是 322 遗留至今的假绿。）
+    _pg7 = ""
+    try:
+        from nucleus.proc_gen import proc_gen_str as _pgs
+        _pg7 = _pgs()
+    except Exception as _pe:
+        silent_exc(_pe, where="expectation_ledger.sc3_consistency.proc_gen")
+    if _total <= 0:
+        _module_logger.warning(
+            "[337刀7][SC-3] total=0 ⇒ **UNAVAILABLE**（空转不得记 rate=0=通过）"
+            " legacy_skipped=%d graph=%s proc_gen=%s",
+            _legacy, _graph_rel, _pg7)
+        return {"total": 0, "mismatch": 0, "rate": None, "status": "UNAVAILABLE",
+                "threshold": 0.05, "ruler_broken": None,
+                "legacy_skipped": _legacy,
+                "reason": "无可对表项（跨版本跳过 %d 条／断言侧拿不到 gap）⇒ 未实测"
+                          % _legacy,
+                "criteria_version": _cur_a4v,
+                "graph_file": _graph_rel, "details": _details[:20]}
+    _rate = _mismatch / float(_total)
+    _status = "PASS" if _rate <= 0.05 else "RULER_BROKEN"
+    _module_logger.info(
+        "[337刀7][SC-3] total=%d mismatch=%d rate=%.4f legacy_skipped=%d"
+        " status=%s criteria=%s graph=%s proc_gen=%s"
+        "（>0.05 即判尺子坏；只产计数与结论，不入 issues/趋势门禁）",
+        _total, _mismatch, _rate, _legacy, _status, _cur_a4v, _graph_rel, _pg7)
     return {"total": _total, "mismatch": _mismatch, "rate": round(_rate, 4),
-            "threshold": 0.05, "ruler_broken": _rate > 0.05,
+            "threshold": 0.05, "ruler_broken": _rate > 0.05, "status": _status,
+            "legacy_skipped": _legacy, "criteria_version": _cur_a4v,
             "graph_file": _graph_rel, "details": _details[:20]}
 
 def judge_ratio(rows: list[dict]) -> dict:

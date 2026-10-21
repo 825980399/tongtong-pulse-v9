@@ -64,6 +64,15 @@ def _snapshot_slow_threshold() -> float:
 # 校验和算法版本：方法升级（如字段口径变化）时递增，配合 _verify_integrity 做版本兼容。
 CHECKSUM_ALGO_VERSION = 1
 
+# ===== ★337批刀3：懒加载视图 LRU 的**硬上限**（撤"抬全量"）=====
+# 为什么定 2000（337前置§1.2 建议值 + §1.3 护栏边界）：
+#   * 现成上界是 `COLD_POOL_SHRINK_PERCENTILE=0.20` / `BATCH_MAX=1000`，本值只是
+#     "在其之下再加一档更保守的读缓存容量"，**不提高任何既有上界**；
+#   * 实测 13044 个 L2/L3 节点、文本均值 47.9KB/节点 ⇒ 全量常驻当量 ≈0.63GB，
+#     2000 个约 96MB 文本当量，能真正产生"驱逐 + 按需 re-read"；
+#   * 节点总数 ≤ 本值时仍等效全量（小图不需要限制）——见下面的 `min()`。
+_M337_LAZY_CACHE_MAX = 2000
+
 # 已知占位符集合（测试夹具硬编码值，非真实校验和）。命中即跳过校验，不告警。
 _CHECKSUM_PLACEHOLDERS = frozenset({
     "deadbeef",        # tests/test_lazy_snapshot_m9.py 历史遗留占位符
@@ -1899,8 +1908,15 @@ class PulseSnapshot:
     def _m70_resolve_node_iterable(self, nodes):
         """★162批刀2：将输入节点统一解析为可迭代序列 + 是否视图标记。
 
-        - LazySnapshotView：提升 max_cache 以容纳全部节点（避免 LRU 逐出导致
-          分级结果丢失），返回其 iter_nodes() 生成器，is_view=True。
+        - LazySnapshotView：**限制** max_cache 到固定上限（★337批刀3 订正），
+          返回其 iter_nodes() 生成器，is_view=True。
+
+        ★337批刀3 为什么改（337前置§0-2）：162 批原实现是"提升 max_cache 以容纳
+        全部节点（避免 LRU 逐出导致分级结果丢失）"，实际后果是 **LRU 上限 = 全量**
+        ⇒ 懒加载形同虚设（活体 `13044 节点进内存, 0 冷节点落磁盘按需召回`）。
+        现改为 `min(_M337_LAZY_CACHE_MAX, 节点数)`：节点少时自然全量，节点多时
+        才真正驱逐。被驱逐的节点**可回载**（`get_node` 按需 seek 单节点反序列化，
+        另有 `set_cold_recall_source` 注册的冷存批量召回兜底），故不丢结果。
         - list / tuple：原样返回，is_view=False。
         - 其他可迭代（生成器 / 自定义视图）：包成 list 返回。
         - 不可迭代：返回 (None, False)，由调用方兜底原样返回并打标记。
@@ -1912,10 +1928,24 @@ class PulseSnapshot:
                       where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable import")
             return None, False
         if isinstance(nodes, LazySnapshotView):
+            # ★337批刀3：撤"抬全量"，改固定上限；**只降不升**（任何路径不得再抬全量）
             try:
-                nodes.max_cache = max(
-                    int(getattr(nodes, "max_cache", 1000)),
-                    len(getattr(nodes, "_spans", [])) + 1)
+                _total = len(getattr(nodes, "_spans", []))
+                _cap = _M337_LAZY_CACHE_MAX
+                if _total > 0:
+                    _cap = min(_cap, _total)   # 小图等效全量；大图才真正懒
+                _cur = int(getattr(nodes, "max_cache", 0) or 0)
+                if _cur <= 0 or _cur > _cap:
+                    nodes.max_cache = _cap
+                    _lg337 = getattr(self, "_logger", None) or get_module_logger(
+                        "PulseSnapshot")
+                    _lg337.info(
+                        "[337内存] 懒加载 max_cache 收敛: %s -> %d（全量=%d 节点）"
+                        " ⇒ 撤抬全量，超出部分按需回载",
+                        _cur if _cur > 0 else "unset", _cap, _total)
+                else:
+                    # 已在限内（或更小）：不动 —— 只降不升，避免与其他路径打架
+                    nodes.max_cache = _cur
             except Exception as _mc_err:
                 silent_exc(_mc_err,
                           where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable max_cache")

@@ -346,6 +346,29 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
             _digest,
             "unavailable" if _added is None else _added,
             _sw.get("total", "unavailable"), _sw.get("verdicts", {}), _m335_pg())
+        # ★337批刀7：SC-3 一致性自检 —— **接夜间链**（04:00 digest 之后跑一次）。
+        #   为什么挂这里：单跑要建图（实测 28.1s）⇒ 禁每拍；04:00 之后 ledger 当日
+        #   自转数据与 `a4.coverage.*` 都最新，且与 digest 同窗不增加调度点。
+        #   红线：**只产计数与结论**，不把 SC-3 送进 issues/趋势门禁
+        #   （一次尺子抖动会变成补丁洪峰）。
+        try:
+            from nucleus.world_model.expectation_ledger import (
+                sc3_consistency as _sc3,
+            )
+            _out["sc3"] = _sc3(project_root=_root)
+            _module_logger.info(
+                "[337刀7][SC-3] 夜间链实测 total=%s mismatch=%s rate=%s "
+                "status=%s legacy_skipped=%s proc_gen=%s",
+                (_out["sc3"] or {}).get("total"),
+                (_out["sc3"] or {}).get("mismatch"),
+                (_out["sc3"] or {}).get("rate"),
+                (_out["sc3"] or {}).get("status"),
+                (_out["sc3"] or {}).get("legacy_skipped"), _m335_pg())
+        except Exception as _se:
+            silent_exc(_se, where="night_orchestration::maybe_run_night_digest sc3",
+                       level="warning")
+            _out["sc3"] = {"status": "UNAVAILABLE",
+                           "reason": "SC-3 异常: %s" % type(_se).__name__}
     else:
         _out["reason"] = "failed"
         _module_logger.warning(
