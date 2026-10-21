@@ -1,0 +1,8 @@
+{
+  "max_typed_infer": 7,
+  "code_version": "335.cg.v1",
+  "note": "338刀5-①：typed_infer 护栏基线。7 = 337刀9 登记的 4 个 typed-only 方法产生的边数（实测 2026-10-21 20:07 图）。跨 code_version 不比；重锚须 --attr 且 expected_count==实测。",
+  "reanchored_at": "2026-10-21 20:30:00",
+  "reanchor_reason": "338批首锚：337刀9 默认关 + 4 方法登记后的实测值",
+  "proc_gen": "unknown"
+}
