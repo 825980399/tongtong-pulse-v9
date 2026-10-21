@@ -277,6 +277,17 @@ def m325_open_gate_fields(root: str | None = None) -> dict:
     _tier_src = ("hard_strict" if _hs is not None
                  else ("hard_legacy" if _hg is not None else "unavailable"))
     _soft = (_dist or {}).get("soft") if _dist else None
+    # ★333批刀1：入池速率（口径唯一源 = `self_inspector._m333_intake_rate`，不抄第二份）
+    try:
+        from nucleus.self_inspector import _m333_intake_rate as _m333_irf
+        _m333_ir = _m333_irf(_root)
+    except Exception as _ire:
+        # 取不到必须**说出来**（否则"不可算"与"算出来是 0"在报表上长得一样）
+        print(f"[WARN] 入池速率不可算: {_ire}")
+        _m333_ir = {"count": None, "rate_ok": None, "source_ok": False,
+                    "limit": 1, "window_sec": 86400,
+                    "reason": "不可算:%s" % type(_ire).__name__,
+                    "consumer_connected": None, "note": "不可算 ≠ 达标"}
     _tc = (_isum.get("trigger_counts") if isinstance(_isum, dict) else None) or None
     # ★331批刀5：报告模板增**进程代次**字段（PID ＋ 进程创建时刻）。
     #   两个面各记一份：活体面（观测对象）与计数面（本进程统计），
@@ -313,6 +324,11 @@ def m325_open_gate_fields(root: str | None = None) -> dict:
         "n_source": ("evidence_tier=hard_strict（图内三层无入边 且 图外 probe 四类皆空）"
                      if _hs is not None else "unavailable（无 strict 读数）"),
         "soft_candidates": _soft,
+        # ★333批刀1（小林拍板①）：strict 总量**降为记录项**，开闸门槛改「入池速率 ≤1/天」。
+        #   取数失败一律 `count=None / rate_ok=None`——**不填 0**（0 会被读成"节流达标"）。
+        "strict_total_role": "record_only",
+        "strict_total_record_target": 100,
+        "intake_rate": _m333_ir,
         "trigger_counts": _tc,
         "trigger_counts_src": (_isum.get("_path") or "") or "unavailable",
         "growth_stats": (_isum.get("growth_stats") if isinstance(_isum, dict) else None),
@@ -382,10 +398,27 @@ def render_markdown(res: dict) -> str:
                   "不计入 N**） |" % _dist.get("hard_legacy"))
     # ★330批刀1（+331 要求）：**hard_strict 与解析率分开两行印**——
     #   两者是不同尺子，并排会让人误以为"解析率高 ⇒ N 就低"。
-    _L.append("| **hard_strict 候选数（N 口径）** | `%s` | %s |" % (
+    # ★333批刀1（小林拍板①）：N 线重裁 —— 下面**两行必须分开印**：
+    #   ① strict 总量 = **记录项**（只跟踪趋势，不再作开闸门槛）
+    #   ② 入池速率  = **真门槛**（≤1 条/天）
+    #   合在一行会让人继续拿"总量 447 > 100"当阻塞项读。
+    _L.append("| hard_strict 候选数（N 口径 · **记录项，不作门槛**） | `%s` | %s |" % (
         "unavailable" if _og.get("hard_strict_candidates") is None
         else _og.get("hard_strict_candidates"),
         str(_og.get("hard_candidates_tier_src") or "unavailable")))
+    _ir = _og.get("intake_rate") or {}
+    if _ir.get("count") is None:
+        _ir_v = "unavailable（不可算，**不填 0**）"
+    else:
+        _ir_v = "%s 条/%.0fh（限额 %s）" % (
+            _ir.get("count"),
+            float(_ir.get("window_sec") or 86400) / 3600.0,
+            _ir.get("limit"))
+    _ir_src = str(_ir.get("reason") or "unavailable")
+    if _ir.get("consumer_connected") is False:
+        _ir_src += "；★消费面未接通（count=0 只代表还没东西入池，不代表节流生效）"
+    _L.append("| **O3 入池速率（★真门槛 ≤1 条/天）** | `%s` | %s |" % (
+        _ir_v, _ir_src.replace("|", "\\|")))
     _L.append("| hard_loose 候选数（只降级待复核） | `%s` | 同上 |" % (
         "unavailable" if _og.get("hard_loose_candidates") is None
         else _og.get("hard_loose_candidates")))

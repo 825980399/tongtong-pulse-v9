@@ -22,6 +22,23 @@ import os
 import time
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+_module_logger = get_module_logger("NightOrchestration")
+
+# ===== ★333批刀2：夜间编制定时点（04:00±容差）=====
+# 背景（331 运行验证坐实）：`generate_night_digest` 在全部代码中**没有任何调用方**——
+#   main.py 只用 NightShutdownChannel（退出通道），docstring 里"由 04:00 夜间编排
+#   经 tools/night_orch_shutdown.py --digest 调用"的约定**从未兑现**，
+#   ⇒ 压测通过线「ledger 04:00 活体自转（source="live" 新增）」机制缺失，
+#   ledger 永远 120 行 / 19:48 / live=0。
+# 修正：在 main.py **既有主循环**加一个轻量定时点（不新建调度器、不起线程）。
+NIGHT_DIGEST_HOUR = 4              # 调度时刻（时）
+NIGHT_DIGEST_MINUTE = 0            # 调度时刻（分）
+NIGHT_DIGEST_TOLERANCE_SEC = 600.0  # ±容差（04:00±10min 视为窗口内）
+NIGHT_DIGEST_STATE_REL = "data/reports/night_digest_state.json"
+#: `generate_night_digest` 最近一次 sweep 的读数（留痕用；不跨进程持久化）
+_LAST_SWEEP_RESULT: dict = {}
 
 _SHUTDOWN_FLAG_FILE = "shutdown_request.json"
 
@@ -197,6 +214,135 @@ def write_exit_blocked_report(count, project_root, reason="EXIT_BLOCKED_BY_PATCH
 
 
 
+def _m333_digest_state_path(project_root):
+    """状态文件路径（★铁律158：**可注入**，隔离验证不得写生产）。"""
+    return os.path.join(project_root, NIGHT_DIGEST_STATE_REL)
+
+
+def _m333_read_state(path):
+    try:
+        with open(path, "r", encoding="utf-8") as _f:
+            _d = json.load(_f)
+        return _d if isinstance(_d, dict) else {}
+    except Exception as _e:
+        silent_exc(_e, where="night_orchestration._m333_read_state")
+        return {}
+
+
+def _m333_write_state(path, data):
+    """原子写状态文件（先 .tmp 再 os.replace）；失败留痕不抛。"""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _tmp = path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(data, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, path)
+        return True
+    except Exception as _e:
+        _module_logger.warning("[夜间编排] digest 状态写失败 %s: %s: %s",
+                               path, type(_e).__name__, _e)
+        return False
+
+
+def maybe_run_night_digest(project_root, now=None, state_path=None,
+                           tolerance_sec=None, enabled=None):
+    """★333批刀2：夜间编排 digest 的**真实调度入口**（main.py 主循环调用）。
+
+    Args:
+        project_root: 项目根（**隔离验证传隔离根**，ledger 路径随 root 走）
+        now:          注入当前时间（datetime；测试用）
+        state_path:   状态文件路径（默认 `<root>/data/reports/night_digest_state.json`）
+        tolerance_sec: 04:00 的 ± 容差秒数（默认 600s）
+        enabled:      覆盖 `config.NIGHT_ORCH_DIGEST_ENABLED`
+
+    Returns:
+        `{ran, reason, digest, added, source, ymd}` —— 五态可区分，**不填 0**：
+          ran=True                    跑了一次
+          reason=already_ran_today    当日幂等命中（不重复写）
+          reason=out_of_window        不在 04:00±容差窗内（静默，不刷屏）
+          reason=missed_window        今日窗已过且未跑（**WARNING 一次**）
+          reason=disabled / failed    开关关 / 生成失败
+
+    边界：只写 digest 文件 ＋ ledger(source=live) ＋ 本状态文件；不碰其他数据面。
+    """
+    _root = project_root or os.getcwd()
+    _tol = float(tolerance_sec if tolerance_sec is not None
+                 else NIGHT_DIGEST_TOLERANCE_SEC)
+    _sp = state_path or _m333_digest_state_path(_root)
+    if now is None:
+        from datetime import datetime as _dt
+        now = _dt.now()
+    _ymd = now.strftime("%Y%m%d")
+    _st = _m333_read_state(_sp)
+    _out = {"ran": False, "reason": "", "digest": None, "added": None,
+            "source": "live", "ymd": _ymd, "state_path": _sp}
+
+    if enabled is None:
+        try:
+            import config as _cfg
+            enabled = bool(getattr(_cfg, "NIGHT_ORCH_DIGEST_ENABLED", True))
+        except Exception as _e:
+            silent_exc(_e, where="night_orchestration.maybe_run_night_digest.cfg")
+            enabled = True
+    if not enabled:
+        _out["reason"] = "disabled"
+        return _out
+    if str(_st.get("last_run_ymd") or "") == _ymd:
+        _out["reason"] = "already_ran_today"
+        return _out
+
+    from datetime import datetime as _dt2
+    from datetime import timedelta as _td
+    _target = _dt2(now.year, now.month, now.day,
+                   NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE)
+    _lo = _target - _td(seconds=_tol)
+    _hi = _target + _td(seconds=_tol)
+    if now < _lo:
+        _out["reason"] = "out_of_window"
+        return _out
+    if now > _hi:
+        # ★「没跑」必须说出来一次：静默错过与"跑了但 0 新增"长得一模一样
+        _out["reason"] = "missed_window"
+        if str(_st.get("missed_ymd") or "") != _ymd:
+            _st["missed_ymd"] = _ymd
+            _st["missed_at"] = time.time()
+            _st["missed_reason"] = ("今日 %02d:%02d±%.0fs 窗内进程未运行"
+                                    % (NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol))
+            _m333_write_state(_sp, _st)
+            _module_logger.warning(
+                "[夜间编排] digest **未生成**：%s（今日 %s；窗=%s ~ %s）"
+                " ⇒ ledger 活体自转今日不会发生（不填 0，记为未发生）",
+                _st["missed_reason"], _ymd,
+                _lo.strftime("%H:%M:%S"), _hi.strftime("%H:%M:%S"))
+        return _out
+
+    _digest = generate_night_digest(_root, as_of=now, enabled=enabled)
+    _sw = dict(_LAST_SWEEP_RESULT or {})
+    _added = _sw.get("added")
+    _out["digest"] = _digest
+    _out["added"] = _added
+    if _digest:
+        _out["ran"] = True
+        _out["reason"] = "ok"
+        _st["last_run_ymd"] = _ymd
+        _st["last_run_ts"] = time.time()
+        _st["last_digest"] = str(_digest)
+        _st["last_added"] = _added
+        _m333_write_state(_sp, _st)
+        _module_logger.info(
+            "[夜间编排] digest 生成：%s 新增 %s 条（source=live）"
+            " ｜ ledger 累计 %s 条 ｜ verdict=%s",
+            _digest,
+            "unavailable" if _added is None else _added,
+            _sw.get("total", "unavailable"), _sw.get("verdicts", {}))
+    else:
+        _out["reason"] = "failed"
+        _module_logger.warning(
+            "[夜间编排] digest 生成失败（返回 None）：root=%s ymd=%s"
+            " ⇒ 当日不重试，次日 04:00 窗再跑", _root, _ymd)
+    return _out
+
+
 # ==================== ★第162批刀16：自报 digest（每晚 04:00 挂靠夜间编排） ====================
 def generate_night_digest(project_root, as_of=None, enabled=None):
     """★第162批刀16（T-自报digest-1，P2，依赖刀7）每晚自认知报告后产出人读摘要。
@@ -330,6 +476,13 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             # ★320批刀0：04:00 属**活体**自然产出，显式标记 source=live
             #   （验证运行一律 source=verification + 隔离根，见刀3 硬规）
             _led = _ledger_sweep(project_root, source="live")
+            # ★333批刀2：把读数记到模块级，供 `maybe_run_night_digest` 打
+            #   「新增 X 条（source=live）」——否则"跑了但 0 新增"与"压根没跑"分不清。
+            try:
+                _LAST_SWEEP_RESULT.clear()
+                _LAST_SWEEP_RESULT.update(dict(_led or {}))
+            except Exception as _e:
+                silent_exc(_e, where="night_orchestration.generate_night_digest.trace")
             _L.append("## 五、预期台账（world_model · 只观测不决策）")
             _L.append("")
             _L.append("- 触发：triggered=%s ｜ 新增 **%s** 条 ｜ 幂等跳过 %s 条 ｜ reason=%s"

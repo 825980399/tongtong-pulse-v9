@@ -251,6 +251,9 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
         "by_subclass": {},
         "true_idle_rate": None,
         "unparsable": 0,
+        # ★333批刀6：把"哪些文件解析不了"记下来（最多 20 个），否则只有计数、
+        #   事后无从定位；损坏行**跳过不中断**，reconcile 继续。
+        "unparsable_files": [],
         "by_reason_sample": {},
         "scanned_at": time.time(),
         "source": "data/reports",
@@ -270,8 +273,16 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
                     _d = json.load(_f)
             except (OSError, ValueError) as _e:
                 _out["unparsable"] += 1
-                silent_exc(_e, where="nucleus.self_awareness.capability_ledger::reconcile",
-                           level="debug")
+                _uf = _out.setdefault("unparsable_files", [])
+                if len(_uf) < 20:
+                    _uf.append(_rel)
+                # ★333批刀6（运行异常收口）：**warning 级 ＋ 带路径**。
+                #   原来是 debug 级、只有异常类型没有文件名 —— 10-14/10-15/10-21 三次
+                #   `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
+                #   都无从知道是哪个文件（空文件同样触发 char 0）。
+                silent_exc(_e, where=("nucleus.self_awareness.capability_ledger::"
+                                      "reconcile[%s]" % _rel),
+                           level="warning")
             _dest, _why = classify_report(_rel, _d)
             _out["total"] += 1
             if _dest == "unparseable":

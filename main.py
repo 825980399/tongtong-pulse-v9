@@ -4252,6 +4252,8 @@ def main():
     # 主循环：等待退出信号 + 周期检测「立即应用补丁」请求 + 第162批刀7 shutdown_request 退出通道
     try:
         _apply_check_counter = 0
+        # ★333批刀2：夜间编排 digest 定时点的节流计数（每 60 拍查一次，约 1 分钟）
+        _nd_tick_counter = 0
         _shutdown_chan = None
         while not exit_requested:
             # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
@@ -4294,6 +4296,20 @@ def main():
                     break
             except Exception as _sd_e:
                 silent_exc(_sd_e, "main.py:3965[刀7-shutdown]")
+            # ★333批刀2：夜间编制定时点（04:00±容差）——`generate_night_digest` 的
+            #   **真实调度入口**。331 运行验证坐实：该函数全库无调用方，
+            #   "由 04:00 夜间编排复用调用"的注释从未兑现 ⇒ ledger 活体自转机制缺失。
+            #   幂等（当日只跑一次）/ 留痕（成功与失败都打）/ 隔离路径注入都在
+            #   `maybe_run_night_digest` 内部，这里只负责节流调用。
+            try:
+                _nd_tick_counter += 1
+                if _nd_tick_counter >= 60:
+                    _nd_tick_counter = 0
+                    from nucleus.evolution import night_orchestration as _nd_orch
+                    _nd_orch.maybe_run_night_digest(
+                        os.path.dirname(os.path.abspath(__file__)))
+            except Exception as _nd_e:
+                silent_exc(_nd_e, "main.py[333刀2-night-digest]")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。
             #   审视生成的补丁若已批准，会写入 apply_now.json 标记，
             #   此处检测到后走「应用+重启」流程，不再被动等待框架退出。

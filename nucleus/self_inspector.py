@@ -5834,7 +5834,26 @@ _DEAD_CODE_REVIEW_STATS: dict = {
 #   **不是**待复核清单条数、更不是"解析率那把宽尺子"推算出来的数。
 #   probe 不可用（`hard_unverified`）时 N 记 None 不记 0，结论判 UNAVAILABLE。
 #   任何"到没到 N"的结论只能用这个口径复算。
-_O3_N_TARGET = 100
+#   ★333批刀1：该口径现在**只用于记录与趋势跟踪**——总量不再是开闸门槛，
+#     开闸消费约束见 `_O3_INTAKE_MAX_PER_DAY`（每天入池候选 ≤1 条）。
+# ★333批刀1（小林拍板① · 2026-10-21）：**N 线重裁 —— 总量不再是开闸门槛**。
+#   历史：330/331 把 `_O3_N_TARGET=100` 当作「hard_strict 总量 ≤100」的开闸通过线。
+#   331刀7 实测 strict=449，其中 91.7% 是仓内**唯一命名**的公开方法、私有方法 0%
+#   ⇒ 这条线**量错了对象**：它想约束的是「每天入池/消费多少条」，
+#     却写成了「仓里一共有多少条」。池大 ≠ 每天入池多。
+#   现裁定：① strict 总量**只作记录项**（每圈打印、跟踪趋势，**不再 FAIL**）；
+#           ② 开闸消费约束改为 **每天入池候选 ≤1 条**（`_O3_INTAKE_MAX_PER_DAY`）；
+#           ③ ⑤抽验 ≤10%（`_O3_MISJUDGE_LINE`）**保持硬线**，判据严格性不放宽。
+#   附加裁定：`hard_unverified`（probe 不可用）**不计入任何门槛、不填 0**
+#           —— 「计入分母、不计分子」那套口径**已裁不采纳**（330刀1 沿用）。
+_O3_N_RECORD_TARGET = 100           # 记录项：strict 总量趋势跟踪，**不参与开闸判定**
+_O3_N_TARGET = _O3_N_RECORD_TARGET  # 历史名（消费方兼容）；语义已降级为「记录项」
+_O3_N_TARGET_KIND = "record_only"   # 显式标记（铁律153）：本常量不作任何 FAIL 条件
+_O3_INTAKE_MAX_PER_DAY = 1          # ★真正的开闸消费约束：每天入池候选 ≤1 条
+_O3_INTAKE_WINDOW_SEC = 86400       # 入池速率统计窗口（秒）
+#: O3 死码候选入池标记——**显式集合/布尔**（铁律153：禁"理由字符串里找关键字"）
+_O3_INTAKE_ISSUE_TYPES = frozenset({"dead_code_candidate", "dead_code"})
+_O3_INTAKE_BOOL_FIELD = "o3_dead_code"
 _O3_N_SOURCE = ("evidence_tier=hard_strict（图内三层皆无入边 且 图外 probe 四类"
                 "string_ref/protocol_name/test_ref/attr_bound 皆空）")
 #: hard 档候选池留存上限（抽验靶子；>池上限时抽验只代表池内，须在结果里标注）
@@ -6215,6 +6234,122 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
             "note": "只给数据与路径；降哪几类、是否降，由星轨+小林裁决（本模块不代判）"}
 
 
+def _m333_intake_rate(project_root: str | None = None,
+                      window_sec: float | None = None,
+                      now: float | None = None) -> dict:
+    """★333批刀1（小林拍板①）：O3 开闸**消费面**约束 —— 每天入池候选 ≤1 条。
+
+    为什么换口径：331刀7 实测 `hard_strict=449`、其中 91.7% 是仓内唯一命名的公开
+    方法 ⇒ 原「strict 总量 ≤100」量错了对象（那是"仓里有多少"，不是"每天入多少"）。
+    池大不等于每天入池多，用总量当门槛会让 ④ 与 ⑤ 互相拉扯。
+
+    数据源（**显式两轨，可复算**）：
+      ① ``data/patches/pending_patches.json`` —— 当前待修池（入池未出池）
+      ② ``data/patches/patch_history.json``   —— 已入池历史（按 generated_at 落窗）
+
+    标记口径（铁律153：**显式布尔/集合，禁"理由字符串里找关键字"**）：
+      条目 ``o3_dead_code`` 为 True，或 ``issue_type`` ∈ ``_O3_INTAKE_ISSUE_TYPES``。
+
+    三态（**"测不出来"不得长得像"达标"**）：
+      · 至少一轨可读   ⇒ ``count``（**0 是合法读数**）
+      · 两轨都读不到   ⇒ ``count=None`` / ``rate_ok=None``（不可算，不得显示成 0）
+
+    另给 ``consumer_connected``：全时间轴是否存在任何 O3 入池标记。为 False 时
+    ``count=0`` 只能读作「消费面未接通」，**不能**读作「节流生效」。
+
+    边界：只读；不写任何文件；不参与派单/动机决策。
+    """
+    _root = project_root or os.getcwd()
+    _win = float(window_sec if window_sec is not None
+                 else _O3_INTAKE_WINDOW_SEC)
+    _now = float(now if now is not None else __import__("time").time())
+    _lo = _now - _win
+    _srcs: list = []
+    _readable = 0
+    _all: list = []
+
+    def _load(_rel):
+        _p = os.path.join(_root, _rel.replace("/", os.sep))
+        if not os.path.isfile(_p):
+            _srcs.append({"path": _rel, "ok": False, "reason": "missing"})
+            return []
+        try:
+            import json as _json
+            with open(_p, encoding="utf-8") as _f:
+                _d = _json.load(_f)
+        except Exception as _e:
+            _srcs.append({"path": _rel, "ok": False,
+                          "reason": "unreadable:%s" % type(_e).__name__})
+            # ★cw2 铁律150：不可读必须留痕（结构化 `_srcs` 之外再打一条，
+            #   否则读盘失败被静默吞掉，"不可算"与"算出来是 0"在报表上长得一样）
+            _module_logger.warning(
+                "[333刀1][入池速率] 数据源不可读 %s：%s: %s（不填 0，记不可算）",
+                _rel, type(_e).__name__, _e)
+            return []
+        _items = _d if isinstance(_d, list) else (
+            _d.get("patches") or _d.get("pending") or _d.get("history") or [])
+        if isinstance(_items, dict):
+            _items = list(_items.values())
+        _items = [x for x in (_items or []) if isinstance(x, dict)]
+        _srcs.append({"path": _rel, "ok": True, "n": len(_items)})
+        return _items
+
+    def _is_o3(_e) -> bool:
+        if _e.get(_O3_INTAKE_BOOL_FIELD) is True:
+            return True
+        return str(_e.get("issue_type") or "") in _O3_INTAKE_ISSUE_TYPES
+
+    for _rel in ("data/patches/pending_patches.json",
+                 "data/patches/patch_history.json"):
+        _items = _load(_rel)
+        if _srcs[-1].get("ok"):
+            _readable += 1
+        _all.extend(_items)
+
+    _marker_ever = sum(1 for _e in _all if _is_o3(_e))
+    _cnt = 0
+    for _e in _all:
+        if not _is_o3(_e):
+            continue
+        _ts = _e.get("generated_at") or _e.get("created_at") or 0
+        try:
+            _ts = float(_ts or 0)
+        except (TypeError, ValueError) as _te:
+            # ★cw2 铁律150：时间戳不可解析要留痕（否则"没时间戳"被当"窗口外"，
+            #   两者在读数里都是"不计入"，但原因完全不同）
+            _module_logger.debug(
+                "[333刀1][入池速率] 时间戳不可解析 %r（%s）⇒ 按 0 处理（视作无时间戳，仍计入）",
+                _ts, type(_te).__name__)
+            _ts = 0.0
+        # pending 池里的条目**在池即算入池**（created_at 缺失也不排除——池子本身就是证据）
+        if _ts and _ts < _lo:
+            continue
+        _cnt += 1
+
+    if _readable == 0:
+        return {"count": None, "limit": _O3_INTAKE_MAX_PER_DAY,
+                "window_sec": _win, "rate_ok": None, "source_ok": False,
+                "sources": _srcs, "marker_hits": None,
+                "consumer_connected": None,
+                "reason": "入池数据源两轨皆不可读（不填 0）",
+                "note": "不可算 ≠ 达标：报告里不得把本项显示为 0"}
+    _ok = bool(_cnt <= _O3_INTAKE_MAX_PER_DAY)
+    if _marker_ever:
+        _note = "O3 入池标记命中 %d 条（全时间轴）" % _marker_ever
+    else:
+        _note = ("O3 入池标记全时间轴命中 0 条 ⇒ **消费面尚未接通**，"
+                 "count=0 不代表节流生效（只代表还没有东西入池）")
+    return {"count": int(_cnt), "limit": _O3_INTAKE_MAX_PER_DAY,
+            "window_sec": _win, "rate_ok": _ok, "source_ok": True,
+            "sources": _srcs, "marker_hits": int(_marker_ever),
+            "consumer_connected": bool(_marker_ever),
+            "reason": ("入池 %d 条/%.0fh ≤ 限额 %d"
+                       % (_cnt, _win / 3600.0, _O3_INTAKE_MAX_PER_DAY)) if _ok else
+                      ("入池 %d 条/%.0fh > 限额 %d"
+                       % (_cnt, _win / 3600.0, _O3_INTAKE_MAX_PER_DAY)),
+            "note": _note}
+
+
 def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                          project_root: str | None = None,
                          hard_total_baseline: int | None = None,
@@ -6260,6 +6395,13 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         "hard_tier_sum_ok": _s.get("hard_tier_sum_ok"),
         "n_meets_target": (None if _strict is None
                            else bool(int(_strict) <= _O3_N_TARGET)),
+        # ★333批刀1：N 线重裁——总量降为**记录项**。`n_meets_target` 保留仅供趋势对照，
+        #   不再参与 official 判定；真正的门槛是下面的入池速率。
+        "n_target_kind": _O3_N_TARGET_KIND,
+        "n_record": {"target": _O3_N_RECORD_TARGET, "actual": _strict,
+                     "role": "record_only",
+                     "note": "strict 总量只记录趋势，不作开闸门槛（333刀1 小林拍板①）"},
+        "intake_rate": _m333_intake_rate(project_root),
         "hard_pool": len(_items),
         "hard_pool_capped": bool(_s.get("hard_pool_capped")),
         "tier_dist": _dist,
@@ -6270,7 +6412,17 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                                             _t.localtime(float(_s.get("graph_mtime") or 0.0)))
                                 if _s.get("graph_mtime") else "unavailable"),
                   "mode": str(_s.get("mode") or ""),
-                  "resolve_rate": _s.get("resolve_rate")},
+                  "resolve_rate": _s.get("resolve_rate"),
+                  # ★333批刀1（自查修 330 遗留真缺陷）：此前 `_rep["graph"]` **从未**
+                  #   收到版本字段，而下方 blocker 读 `_rep["graph"].get("version_ok")`
+                  #   ⇒ 恒为 None ⇒ ⑥「图版本未对齐」**结构性永久 FAIL**
+                  #   （与铁律156 同类：图上看着有字段，门却永远关着）。
+                  #   版本字段的真源是 `_m305_load_graph_index` 写进 stats 的
+                  #   `graph_version_ok/_reason/_code_version/_criteria_version`。
+                  "version_ok": _s.get("graph_version_ok"),
+                  "version_reason": str(_s.get("graph_version_reason") or ""),
+                  "graph_code_version": _s.get("graph_code_version"),
+                  "graph_criteria_version": _s.get("graph_criteria_version")},
         "min_graph_mtime": (float(min_graph_mtime) if min_graph_mtime else None),
         "criteria_version": str(_s.get("criteria_version") or ""),
         "hard_total_baseline": (int(hard_total_baseline)
@@ -6348,10 +6500,21 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                          "hard_unverified=%d）" % _unver)
     elif _rep.get("hard_tier_sum_ok") is False:
         _blockers.append("hard 分层计数不自洽（strict+loose+unverified ≠ hard_total）")
-    elif int(_strict) > _O3_N_TARGET:
-        _blockers.append("N 未达标（hard_strict=%d > N=%d）"
-                         % (int(_strict), _O3_N_TARGET))
+    # ★333批刀1（小林拍板①）：`strict > _O3_N_TARGET` **不再是 blocker**——
+    #   总量降为记录项（见 `_rep["n_record"]`），开闸看的是下面这条入池速率。
+    #   原判断保留在此只作趋势对照的显式记录点，**不追加到 `_blockers`**。
+    if _strict is not None and int(_strict) > _O3_N_RECORD_TARGET:
+        _module_logger.info(
+            "[333刀1][O3记录项] hard_strict=%d > 记录目标 %d（**仅记录，不阻断**）"
+            " ⇒ 趋势跟踪；开闸门槛改用入池速率 ≤%d 条/天",
+            int(_strict), _O3_N_RECORD_TARGET, _O3_INTAKE_MAX_PER_DAY)
     # ★330批刀2（P1）：版本不对齐 ⇒ 这张图不能被本判据用来开闸（判定树第 6 步）
+    # ★333批刀1：④ 新判据 = **入池速率 ≤1 条/天**（开闸消费面约束）。
+    #   三态：rate_ok=False ⇒ 超线；rate_ok=None ⇒ 不可算（**不填 0 冒充达标**）。
+    _ir = _rep.get("intake_rate") or {}
+    if _ir.get("rate_ok") is not True:
+        _blockers.append("入池速率未达标或不可算（%s）"
+                         % (_ir.get("reason") or "intake_rate 不可算"))
     if _rep["graph"].get("version_ok") is not True:
         _blockers.append("图版本未对齐（%s）"
                          % (_rep["graph"].get("version_reason") or "图无版本字段/判据未跑"))
@@ -6475,6 +6638,13 @@ def consume_dead_code_verdicts(items: list, limit: int = 1,
       ② 过 SC-2 无回归（319 刀5 接口）；
       ③ 只经 `build_review_intake` 入池（**每批硬上限 1 条**、拒生命周期名/核心文件），
          且仍带 `requires_confirmation=True`。
+
+    ★333批刀4（对表判据三条件式 · 烛微332修正）：本入口"没有新行"**不能**单独读作
+    "任务面与判据面脱节"。判脱节须**三条同时成立**：
+      ① `mode == "judge"`（判死档真开——`mode=review` 本就不产判死条目）；
+      ② 同窗 `[317刀3] reviewed > 0`（任务面非空）；
+      ③ 本打印同窗连续 **≥3 窗**缺席。
+    缺任一条件只能记 `不可判（condition_k）`，**不得据此否 K2**。
     """
     _items = list(items or [])
     if not _items:
@@ -6482,7 +6652,9 @@ def consume_dead_code_verdicts(items: list, limit: int = 1,
     _intake = build_review_intake(limit=limit, items=_items)
     _module_logger.info(
         "[319刀4] 判死条目消费：候选=%d ⇒ 三道闸 ①[308刀2]统计 ②SC-2无回归 "
-        "③build_review_intake(硬上限%d)+requires_confirmation=True ⇒ 入池 %d 条",
+        "③build_review_intake(硬上限%d)+requires_confirmation=True ⇒ 入池 %d 条"
+        " ｜ 对表判据=三条件式（333刀4）：本行缺席**不单独**构成脱节，"
+        "须 mode=judge ＋ [317刀3]reviewed>0 ＋ 连续≥3窗 三条同成立",
         len(_items), int(limit), len(_intake or []))
     return {"status": "ok", "candidates": len(_items), "intake": _intake or [],
             "criteria_version": criteria_version or getattr(SelfInspector, "_DEAD_CODE_CRITERIA_VERSION",

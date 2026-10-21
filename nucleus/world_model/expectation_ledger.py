@@ -1103,6 +1103,8 @@ def sweep(project_root: str | None = None, loop: int | None = None,
     _today = time.strftime("%Y-%m-%d", time.localtime())
     _added = 0
     _skipped = 0
+    # ★333批刀5：新写入的 violated 缺 gap_reason 计数（**只告警，不阻断、不伪造**）
+    _vio_no_gap = 0
     _verdicts: dict[str, int] = {}
     _gaps: dict[str, int] = {}
     try:
@@ -1116,6 +1118,21 @@ def sweep(project_root: str | None = None, loop: int | None = None,
                 if _key in _existing:
                     _skipped += 1
                     continue
+                # ★333批刀5（烛微332建议·弱化版）：**新写入**的 violated 若没有归属就喊一声。
+                #   为什么只告警不拦截：331刀3 已裁定不做 `_mk` 强校验（会逼着改存量写法），
+                #   但"100% 带归属"若全靠历史回填兜着，就是巧合而不是机制。
+                #   本检查**不改 verdict、不伪造 gap_reason、不跳过写入**。
+                if (str(_r.get("verdict") or "") == "violated"
+                        and not str(_r.get("gap_reason") or "").strip()):
+                    _vio_no_gap += 1
+                    _module_logger.warning(
+                        "[333刀5][gap归属] 新写入 violated **缺 gap_reason**："
+                        "assertion_id=%s source=%s gap_origin=%s criteria_version=%s"
+                        " ⇒ 已照写（不伪造），但该条无法归因"
+                        "（本圈累计 %d 条）",
+                        _r.get("assertion_id"), _r.get("source"),
+                        _r.get("gap_reason_origin"),
+                        _r.get("criteria_version"), _vio_no_gap)
                 _f.write(json.dumps(_r, ensure_ascii=False) + "\n")
                 _existing.add(_key)
                 _added += 1
@@ -1139,9 +1156,17 @@ def sweep(project_root: str | None = None, loop: int | None = None,
         "[320刀0][ledger_sweep] triggered=True generated=%d skipped=%d reason=%s "
         "source=%s total=%d verdict=%s gap_reason=%s（只观测不决策）",
         _added, _skipped, _reason, _src, _total, _verdicts, _gaps)
+    if _vio_no_gap:
+        # ★333批刀5：单独一行汇总——警告逐条打之外，还要一个"本圈总计"可被 grep
+        _module_logger.warning(
+            "[333刀5][gap归属] 本圈新写入 violated 缺归属 **%d/%d** 条"
+            "（写入口告警，不阻断不伪造；存量 25 条不动）",
+            _vio_no_gap, _added)
     _module_logger.info(
         "[318刀5][ledger] 新增 %d 条 / 累计 %d 条 verdict=%s gap_reason=%s（只观测不决策）",
         _added, _total, _verdicts, _gaps)
     return {"added": _added, "total": _total, "verdicts": _verdicts,
             "gap_reasons": _gaps, "path": _p, "source": _src,
-            "triggered": True, "skipped": _skipped, "reason": _reason}
+            "triggered": True, "skipped": _skipped, "reason": _reason,
+            # ★333批刀5：本圈新写入的 violated 缺归属条数（0 是合法读数）
+            "violated_missing_gap": _vio_no_gap}

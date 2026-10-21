@@ -41,6 +41,9 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+_module_logger = get_module_logger("TaskLedger")
 
 __all__ = [
     "TASK_LEDGER_VERSION",
@@ -113,8 +116,26 @@ def load_ledger(path: str | None = None) -> dict[str, Any]:
         silent_exc(_e, where="nucleus.evolution.task_ledger::load_ledger", level="warning")
         return _empty_ledger()
     if not isinstance(_d, dict) or not isinstance(_d.get("tasks"), dict):
-        silent_exc(ValueError("账本结构非法（缺 tasks）"),
-                   where="nucleus.evolution.task_ledger::load_ledger", level="warning")
+        # ★333批刀6（运行异常收口）：缺 `tasks` 时**容错但说清楚**。
+        #   旧写法 `silent_exc(ValueError("账本结构非法（缺 tasks）"))` 在日志里
+        #   长得像"未捕获异常"（`ValueError: 账本结构非法`），而实际行为是
+        #   **容错返回空账** —— 一个看得见的假异常，比静默更容易误导排查
+        #   （331 运行验证就是照着这条 ERROR 去查了一个不存在的中断）。
+        #   现改为结构化 WARNING：说清路径/体积/键名/是否旧版结构。
+        _keys = sorted(_d.keys()) if isinstance(_d, dict) else [type(_d).__name__]
+        _legacy = [k for k in ("patches", "history", "entries", "records")
+                   if isinstance(_d, dict) and k in _d]
+        try:
+            _size = os.path.getsize(_p) if os.path.isfile(_p) else -1
+        except OSError as _se:
+            silent_exc(_se, where="nucleus.evolution.task_ledger::load_ledger[size]",
+                       level="debug")
+            _size = -1
+        _module_logger.warning(
+            "[333刀6][task_ledger] 账本结构非法（缺 tasks）⇒ **空账初始化，不抛**："
+            "path=%s size=%s keys=%s legacy_keys=%s"
+            "（旧版结构请归档后重建，勿直删）",
+            _p, _size, _keys[:8], _legacy)
         return _empty_ledger()
     _d.setdefault("version", TASK_LEDGER_VERSION)
     return _d
