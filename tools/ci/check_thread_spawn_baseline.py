@@ -34,11 +34,22 @@ import json
 import os
 import re
 import sys
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # <repo>/tools/ci/<script> -> 3 levels
 BASELINE_PATH = os.path.join(REPO_ROOT, "tools", "ci", "baselines", "thread_spawn_baseline.json")
 SELF_REL = os.path.relpath(os.path.abspath(__file__), REPO_ROOT).replace("\\", "/")
+def _log(level: str, msg: str) -> None:
+    """★340刀5：本脚本原本**没有**日志器（`_log` 这个名字在本文件里不存在）。
+
+    为什么要自建：cw2 门禁要求"静默 except 必须留痕"，而本脚本不能引框架 logger
+    （CI 件要保持零框架依赖）。补留痕时若直接写 `_log(...)` 就是 **F821/NameError**
+    —— 这个坑由 ruff `--select F` 抓出（不是靠肉眼）。
+    """
+    sys.stderr.write("[thread_spawn_baseline][%s] %s\n" % (level, msg))
+
+
 PATTERN = re.compile(r"threading\.Thread\(")
 SKIP_DIRS = {".git", "__pycache__", ".ruff_cache", ".pytest_cache",
              "tmp", "node_modules", ".venv", "venv", "data"}
@@ -69,7 +80,57 @@ def scan():
     return total, len(file_set), sorted(per_file)
 
 
-def emit(current_total, current_files, attribution=None):
+def _git_show_baseline():
+    """读 HEAD 里的基线（用于"重锚是否被署名"自检）；不可得 ⇒ None（不阻断）。"""
+    try:
+        import subprocess
+        _rel = os.path.relpath(BASELINE_PATH, REPO_ROOT).replace("\\", "/")
+        _r = subprocess.run(["git", "show", "HEAD:" + _rel],
+                            capture_output=True, text=True, timeout=30,
+                            cwd=REPO_ROOT, encoding="utf-8", errors="replace")
+        if _r.returncode == 0 and (_r.stdout or "").strip():
+            return json.loads(_r.stdout)
+    except Exception as _e:
+        # ★340刀5：不静默。读不到 HEAD 基线 ⇒ 按"首次锚定"处理，但必须说清楚，
+        #   否则"自检被跳过"与"自检通过"在输出上长得一样（铁律156）。
+        _log("warning", "HEAD 基线读取失败（按首次锚定处理，跳过署名自检）: "
+                        "%s: %s" % (type(_e).__name__, _e))
+    return None
+
+
+def selfcheck_reanchor_sign(cur):
+    """★340刀5：把"重锚必带当日署名 + 归因之和 == delta"从**纪律**升级为**机器可校验**。
+
+    为什么需要：基线文件里 `anchored_by=172刀0/anchored_at=2026-10-08` 是**首次锚定**
+    的署名，后续每次重锚都改数字却不改署名 ⇒ 读者无法从文件本身知道"这 64/45 是谁在
+    什么时候锚的"（烛微 340 前置挂账 16/28）。本自检让"数字变了但没署名"直接 FAIL。
+
+    Returns: ``(bool, 说明)``
+    """
+    _head = _git_show_baseline()
+    if _head is None:
+        return True, "HEAD 无此基线（首次锚定），跳过署名自检"
+    _dt = int(cur.get("total_occurrences") or 0) - int(_head.get("total_occurrences") or 0)
+    _df = int(cur.get("file_count") or 0) - int(_head.get("file_count") or 0)
+    if _dt == 0 and _df == 0:
+        return True, "与 HEAD 一致（%+d/%+d），无需重锚" % (_dt, _df)
+    _today = time.strftime("%Y-%m-%d")
+    _at = str(cur.get("reanchor_at") or "")
+    if _at != _today:
+        return False, ("数字已变（occurrences %+d / files %+d）但 reanchor_at=%r != 今日 %s"
+                       % (_dt, _df, _at, _today))
+    if not str(cur.get("reanchor_by") or ""):
+        return False, "数字已变且日期对，但缺 reanchor_by 署名"
+    _attr = cur.get("attribution") or []
+    _sd = sum(int(a.get("delta_occurrences", 0)) for a in _attr)
+    _sf = sum(int(a.get("delta_files", 0)) for a in _attr)
+    if _sd != _dt or _sf != _df:
+        return False, ("归因合计 %+d/%+d != delta %+d/%+d" % (_sd, _sf, _dt, _df))
+    return True, ("署名/日期/归因三项自洽：%+d/%+d，by=%s at=%s"
+                  % (_dt, _df, cur.get("reanchor_by"), _at))
+
+
+def emit(current_total, current_files, attribution=None, reanchor_by=None):
     payload = {
         "metric": "production_thread_spawn_points",
         "pattern": "threading.Thread(",
@@ -86,6 +147,51 @@ def emit(current_total, current_files, attribution=None):
         payload["attribution"] = attribution
         payload["reanchor_note"] = (
             "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）")
+        # ★340刀5：**只增不改写** —— `anchored_by/anchored_at` 是首次锚定的历史署名，
+        #   本次重锚的署名另开两个字段（否则历史被覆盖，无法追溯"谁在什么时候挪的红线"）。
+        payload["reanchor_by"] = str(reanchor_by or "unknown")
+        payload["reanchor_at"] = time.strftime("%Y-%m-%d")
+        _hist = []
+        try:
+            if os.path.exists(BASELINE_PATH):
+                with open(BASELINE_PATH, "r", encoding="utf-8") as _fh:
+                    _old = json.load(_fh)
+                _hist = list(_old.get("reanchor_history") or [])
+        except Exception as _e:
+            # ★340刀5：旧基线不可读 ⇒ 历史从本次起重新累积，但**必须留痕**
+            _log("warning", "旧基线 reanchor_history 不可读（历史自本次起累积）: "
+                            "%s: %s" % (type(_e).__name__, _e))
+            _hist = []
+        _prev_attr = None
+        try:
+            if os.path.exists(BASELINE_PATH):
+                with open(BASELINE_PATH, "r", encoding="utf-8") as _fh2:
+                    _prev_attr = (json.load(_fh2) or {}).get("attribution")
+        except Exception as _e:
+            _log("warning", "读取上一次 attribution 失败（记 None）: %s: %s"
+                 % (type(_e).__name__, _e))
+        _hist.append({
+            "reanchor_by": payload["reanchor_by"],
+            "reanchor_at": payload["reanchor_at"],
+            "from": {"total_occurrences": None, "file_count": None},
+            "to": {"total_occurrences": current_total, "file_count": current_files},
+            "attribution": attribution,
+            # ★340刀5：`attribution` 字段的语义是"**本次**重锚的归因"
+            #   （`sum == delta` 靠它成立），所以每次重锚会被覆盖；
+            #   历史归因改由这里留存 ⇒ 既不破坏算术自洽，也不丢追溯。
+            "prev_attribution": _prev_attr,
+        })
+        if _hist:
+            try:
+                with open(BASELINE_PATH, "r", encoding="utf-8") as _fh:
+                    _old = json.load(_fh)
+                _hist[-1]["from"] = {"total_occurrences": _old.get("total_occurrences"),
+                                     "file_count": _old.get("file_count")}
+            except Exception as _e:
+                # ★340刀5：`from` 侧抓不到就留 None 并留痕（不填 0，不静默）
+                _log("warning", "reanchor_history.from 取值失败（记 None，不填 0）: "
+                                "%s: %s" % (type(_e).__name__, _e))
+        payload["reanchor_history"] = _hist
     os.makedirs(os.path.dirname(BASELINE_PATH), exist_ok=True)
     with open(BASELINE_PATH, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
@@ -99,6 +205,8 @@ def main():
     ap.add_argument("--emit", action="store_true", help="write current count as baseline")
     # ★337批刀11：重锚归因（delta != 0 时必填）
     ap.add_argument("--attr", help="重锚归因 JSON 文件路径（delta != 0 时必填）")
+    # ★340刀5：重锚署名（写进 reanchor_by；不给 ⇒ unknown 并告警）
+    ap.add_argument("--by", help="重锚署名（如 '340刀2'）")
     args = ap.parse_args()
 
     cur_total, cur_files, per_file = scan()
@@ -127,7 +235,10 @@ def main():
                     return 1
                 print("[OK] 归因算术自洽：%+d 次 / %+d 文件（%d 条）"
                       % (_dt, _df, len(_attr)))
-        emit(cur_total, cur_files, _attr)
+        if not args.by:
+            print("[WARN] 未提供 --by ⇒ 重锚署名记为 unknown（340刀5：应写批次/刀号）")
+        # ★340刀5：`from` 侧数字要在**写盘前**抓（emit 里会覆盖文件）
+        emit(cur_total, cur_files, _attr, reanchor_by=args.by)
         return 0
 
     if not os.path.exists(BASELINE_PATH):
@@ -139,6 +250,13 @@ def main():
 
     base_total = base.get("total_occurrences")
     base_files = base.get("file_count")
+
+    # ★340刀5：署名自检（数字被改动过 ⇒ 必须有当日署名 + 归因自洽）
+    _ok, _why = selfcheck_reanchor_sign(base)
+    if not _ok:
+        print("[FAIL] 重锚署名自检不通过：%s" % _why)
+        return 1
+    print("[OK] 重锚署名自检：%s" % _why)
 
     if cur_total == base_total and cur_files == base_files:
         print(f"[PASS] thread spawn caliber stable: occurrences={cur_total} files={cur_files}")

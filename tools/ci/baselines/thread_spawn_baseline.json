@@ -2,39 +2,81 @@
   "metric": "production_thread_spawn_points",
   "pattern": "threading.Thread(",
   "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
-  "total_occurrences": 64,
+  "total_occurrences": 62,
   "file_count": 45,
   "anchored_by": "172刀0",
   "anchored_at": "2026-10-08",
   "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber",
   "attribution": [
     {
-      "delta_occurrences": 1,
-      "delta_files": 1,
-      "file": "nucleus/field/external_dependency_observe.py",
-      "state": "保活",
-      "evidence": "观测函数 observe_external_channel_call / observe_delegate_browser / observe_semantic_decision 分别被 organs/body/PulseLung.py:1880、nucleus/knowledge/KnowledgeAcquisitionRouter.py:215、organs/brain/PulseSemanticComprehension.py:289 调用；线程本身是 60s 周期快照，产出 [external_dependency_observe] snapshot 日志行（有输出消费方）",
-      "batch": "337刀11",
-      "measured_at": "2026-10-21"
-    },
-    {
-      "delta_occurrences": 1,
-      "delta_files": 1,
-      "file": "nucleus/field/request_dedup_observe.py",
-      "state": "保活",
-      "evidence": "set_current_user / observe_span / get_current_user 被 organs/body/PulseLung.py:305,2067 与 nucleus/social/shadow_profile_observer.py 调用；线程本身是 60s 周期快照，产出 [request_dedup_observe] snapshot 日志行",
-      "batch": "337刀11",
-      "measured_at": "2026-10-21"
-    },
-    {
-      "delta_occurrences": -1,
+      "delta_occurrences": -2,
       "delta_files": 0,
-      "file": "organs/core/PulseController.py",
+      "file": "organs/motor/PulseController.py",
       "state": "去线程",
-      "evidence": "328刀5 清窗去线程，4→3；烛微 337 前置用 git grep 同型对比锚点 e47b1432(10-08)→HEAD 逐文件定位，PulseController 相对减少 1 处",
-      "batch": "328刀5",
-      "measured_at": "2026-10-21"
+      "evidence": "340刀2 第1批：start() 里两处裸预热线程（原 L256 降级分支 + L260 非主线程模式分支）改为同步调用 self._ensure_headless_browser()；该文件 3→1（仅剩 L2111 _keepalive_loop 保活，按烛微340前置§0-5 判保活不改）。功能对拍（tmp/p340_root/d2_pair_{before,after}.json，同一脚本在 worktree e7b807a 与工作树各跑一次）：返回值同为 None；改前 elapsed=1.53ms/返回时未调用/threads_at_return=2（异步·新增1线程），改后 elapsed=300.34ms/返回前已完成/threads=1（同步·不新增线程）。桩函数 sleep 300ms 以获得时序判别力（否则旧版线程可能在返回前跑完，对拍无判别力）。",
+      "batch": "340刀2",
+      "measured_at": "2026-10-22"
     }
   ],
-  "reanchor_note": "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）"
+  "reanchor_note": "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）",
+  "reanchor_by": "340刀2",
+  "reanchor_at": "2026-10-22",
+  "reanchor_history": [
+    {
+      "reanchor_by": "340刀2",
+      "reanchor_at": "2026-10-22",
+      "from": {
+        "total_occurrences": 64,
+        "file_count": 45
+      },
+      "to": {
+        "total_occurrences": 62,
+        "file_count": 45
+      },
+      "attribution": [
+        {
+          "delta_occurrences": -2,
+          "delta_files": 0,
+          "file": "organs/motor/PulseController.py",
+          "state": "去线程",
+          "evidence": "340刀2 第1批：start() 里两处裸预热线程（原 L256 降级分支 + L260 非主线程模式分支）改为同步调用 self._ensure_headless_browser()；该文件 3→1（仅剩 L2111 _keepalive_loop 保活，按烛微340前置§0-5 判保活不改）。功能对拍（tmp/p340_root/d2_pair_{before,after}.json，同一脚本在 worktree e7b807a 与工作树各跑一次）：返回值同为 None；改前 elapsed=1.53ms/返回时未调用/threads_at_return=2（异步·新增1线程），改后 elapsed=300.34ms/返回前已完成/threads=1（同步·不新增线程）。桩函数 sleep 300ms 以获得时序判别力（否则旧版线程可能在返回前跑完，对拍无判别力）。",
+          "batch": "340刀2",
+          "measured_at": "2026-10-22"
+        }
+      ],
+      "prev_attribution": [
+        {
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "file": "nucleus/field/external_dependency_observe.py",
+          "state": "保活",
+          "evidence": "观测函数 observe_external_channel_call / observe_delegate_browser / observe_semantic_decision 分别被 organs/body/PulseLung.py:1880、nucleus/knowledge/KnowledgeAcquisitionRouter.py:215、organs/brain/PulseSemanticComprehension.py:289 调用；线程本身是 60s 周期快照，产出 [external_dependency_observe] snapshot 日志行（有输出消费方）",
+          "batch": "337刀11",
+          "measured_at": "2026-10-21"
+        },
+        {
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "file": "nucleus/field/request_dedup_observe.py",
+          "state": "保活",
+          "evidence": "set_current_user / observe_span / get_current_user 被 organs/body/PulseLung.py:305,2067 与 nucleus/social/shadow_profile_observer.py 调用；线程本身是 60s 周期快照，产出 [request_dedup_observe] snapshot 日志行",
+          "batch": "337刀11",
+          "measured_at": "2026-10-21"
+        },
+        {
+          "delta_occurrences": -1,
+          "delta_files": 0,
+          "file": "organs/core/PulseController.py",
+          "state": "去线程",
+          "evidence": "328刀5 清窗去线程，4→3；烛微 337 前置用 git grep 同型对比锚点 e47b1432(10-08)→HEAD 逐文件定位，PulseController 相对减少 1 处",
+          "batch": "328刀5",
+          "measured_at": "2026-10-21"
+        }
+      ],
+      "prev_total": {
+        "total_occurrences": 64,
+        "file_count": 45
+      }
+    }
+  ]
 }
