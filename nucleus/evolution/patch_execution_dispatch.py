@@ -24,6 +24,7 @@ from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 _module_logger = get_module_logger("PatchExecutionDispatch")
 
@@ -59,6 +60,237 @@ def reset_last_dispatch_ts(value: float | None = None) -> None:
     _last_dispatch_ts = value
 
 
+
+# ===== ★335批刀1（334挂账⑦ · 本批核心）：O3 开闸**执行面消费链** =====
+# 背景：三方（路灯 grep / 洞鉴 submitted=0 / 千问办公）一致确认 `official_verdict`
+#   全库**零消费者** —— OPEN 只改报表结论，不改任何执行行为。334 实测段2 入池=0、
+#   段4 派单 executed=0，压测圈"能跑不能过"。
+# 本段装第一条真实消费链（**只消费结论，不动判据**）：
+#
+#   分诊节拍 → o3_open_gate_report → OPEN? → 节流(≤1条/天) → 候选 → pending_patches
+#
+# 三条边界（写在此处，防止后人当"性能优化"改掉）：
+#   ① **不动判据**：判定树 7 步、N 线、抽验线一个数不改，本段只读 `official_verdict`；
+#   ② **入池 ≠ 放行**：条目固定 `risk_level="高"` ＋ `trust_score=0` ＋
+#      `requires_confirmation=True` ＋ `status="pending"` ⇒ 即使落进
+#      `save_pending_patch` 的自动审批语义里也拿不到 auto_approved（死代码删除
+#      必须人确认，这条不给配置开口子）；
+#   ③ **路径双可注入**（`project_root`/`pending_path`）：隔离验证不得写生产
+#      `pending_patches.json`（330/331 已两次踩坑，铁律158）。
+_M335_O3_PENDING_REL = os.path.join("data", "patches", "pending_patches.json")
+_M335_O3_LAST: dict = {}
+
+
+def _m335_pending_path(project_root: str | None = None,
+                       pending_path: str | None = None) -> str:
+    """pending_patches 路径（`pending_path` 仅供隔离验证注入）。"""
+    if pending_path:
+        return pending_path
+    if project_root:
+        return os.path.join(project_root, _M335_O3_PENDING_REL)
+    _root = os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(_root, _M335_O3_PENDING_REL)
+
+
+def _m335_atomic_write_json(path: str, obj: Any) -> None:
+    """原子写（同目录临时文件 + os.replace）：半个 JSON 比不写更糟。"""
+    _dir = os.path.dirname(os.path.abspath(path)) or "."
+    if not os.path.isdir(_dir):
+        os.makedirs(_dir, exist_ok=True)
+    _tmp = path + ".tmp335"
+    with open(_tmp, "w", encoding="utf-8") as _f:
+        json.dump(obj, _f, ensure_ascii=False, indent=2)
+    os.replace(_tmp, path)
+
+
+def _m335_read_pending(path: str) -> tuple[list, str]:
+    """读待修池；返回 (条目列表, 容器形态)。缺失/损坏 ⇒ ([], "missing"|"bad")。
+
+    形态必须记住：生产文件是 **list**，历史版本是 `{"patches": [...]}` ——
+    写回时按原形态，不擅自改结构（改了会让别的读方全部读空）。
+    """
+    if not os.path.isfile(path):
+        return [], "missing"
+    try:
+        with open(path, encoding="utf-8") as _f:
+            _d = json.load(_f)
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="PatchExecutionDispatch._m335_read_pending",
+                   level="warning")
+        _module_logger.warning("[335刀1][O3消费] 待修池不可读 %s：%s: %s"
+                               "（本轮不写，避免覆盖别人的账）",
+                               path, type(_e).__name__, _e)
+        return [], "bad"
+    if isinstance(_d, list):
+        return [x for x in _d if isinstance(x, dict)], "list"
+    if isinstance(_d, dict):
+        for _k in ("patches", "pending", "history"):
+            if isinstance(_d.get(_k), list):
+                return [x for x in _d[_k] if isinstance(x, dict)], "dict:" + _k
+        return [], "dict:empty"
+    return [], "bad"
+
+
+def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
+                     pending_path: str | None = None,
+                     gate_report: dict | None = None) -> dict:
+    """★335批刀1：把开闸结论接到「入池」这一步（**唯一消费入口**）。
+
+    五态返回（**每一态都留痕，不静默**）：
+      ``intake``       —— 入池 1 条（带 `o3_marker`）
+      ``deferred``     —— 闸门非 OPEN ⇒ 候选**不入池**
+      ``intake_full``  —— 当日已达 `_O3_INTAKE_MAX_PER_DAY` ⇒ 顺延
+      ``no_candidate`` —— 闸门开着但候选为空 ⇒ 空转（**不伪造入池**）
+      ``unavailable``  —— 判定树取不到 ⇒ 不可判（不填 0）
+    """
+    _now = float(time.time() if now is None else now)
+    try:
+        import nucleus.self_inspector as _si
+    except Exception as _e:
+        silent_exc(_e, where="PatchExecutionDispatch._m335_o3_consume import",
+                   level="warning")
+        return {"status": "unavailable", "reason": "self_inspector 不可导入"}
+
+    # ── ① 闸门结论（**只读**，不改判据） ──
+    if gate_report is None:
+        try:
+            gate_report = _si.o3_open_gate_report(project_root=project_root)
+        except Exception as _e:
+            silent_exc(_e, where="PatchExecutionDispatch._m335_o3_consume gate",
+                       level="warning")
+            _module_logger.warning(
+                "[335刀1][O3消费] 判定树不可用（%s: %s）⇒ 本轮不入池（不填 0）"
+                " proc_gen=%s", type(_e).__name__, _e, _m335_pg())
+            return {"status": "unavailable", "reason": "判定树异常"}
+    _verdict = str((gate_report or {}).get("official_verdict") or "UNAVAILABLE")
+    _reason = str((gate_report or {}).get("official_reason") or "")
+
+    # ── ② 闸门关着 ⇒ 候选不入池（**不静默**） ──
+    if _verdict != "OPEN":
+        _sel0 = _si._m335_o3_intake_candidates(limit=1)
+        _module_logger.info(
+            "[335刀1][O3消费] gate=%s 顺延：候选 %d 条**不入池**（%s） proc_gen=%s",
+            _verdict, len(_sel0.get("candidates") or []), _reason[:160], _m335_pg())
+        return {"status": "deferred", "gate": _verdict,
+                "candidates": len(_sel0.get("candidates") or []),
+                "reason": _reason}
+
+    # ── ③ 节流：当日入池已达上限 ⇒ intake_full ──
+    _rate = {}
+    try:
+        _rate = _si._m333_intake_rate(project_root or None, now=_now) or {}
+    except Exception as _e:
+        silent_exc(_e, where="PatchExecutionDispatch._m335_o3_consume rate",
+                   level="warning")
+        _module_logger.warning("[335刀1][O3消费] 入池速率不可算（%s: %s）"
+                               "⇒ 按保守顺延处理（不猜 0）",
+                               type(_e).__name__, _e)
+        return {"status": "intake_full", "gate": _verdict,
+                "reason": "入池速率不可算 ⇒ 保守顺延"}
+    _cnt = _rate.get("count")
+    _limit = int(_rate.get("limit") or 1)
+    if _cnt is None:
+        _module_logger.warning(
+            "[335刀1][O3消费] 入池速率不可算（%s）⇒ 保守顺延（不填 0）",
+            _rate.get("reason"))
+        return {"status": "intake_full", "gate": _verdict,
+                "reason": "入池速率不可算"}
+    if int(_cnt) >= _limit:
+        _module_logger.info(
+            "[335刀1][O3消费] intake_full 顺延：今日已入池 %d 条 ≥ 限额 %d"
+            "（限额未放宽） proc_gen=%s", int(_cnt), _limit, _m335_pg())
+        return {"status": "intake_full", "gate": _verdict,
+                "intake_count": int(_cnt), "limit": _limit}
+
+    # ── ④ 候选（闸门开着才筛） ──
+    _sel = _si._m335_o3_intake_candidates(limit=max(1, _limit - int(_cnt)))
+    _cands = list(_sel.get("candidates") or [])
+    if not _cands:
+        _module_logger.info(
+            "[335刀1][O3消费] 无候选 ⇒ 空转（%s）｜**不伪造入池** proc_gen=%s",
+            _sel.get("reason"), _m335_pg())
+        return {"status": "no_candidate", "gate": _verdict,
+                "pool": _sel.get("pool"), "pool_strict": _sel.get("pool_strict"),
+                "reason": _sel.get("reason")}
+
+    # ── ⑤ 入池（1 条） ──
+    _c = _cands[0]
+    _id = "o3_%d_%s" % (int(_now), str(abs(hash("%s::%s" % (
+        _c.get("file"), _c.get("method")))))[:8])
+    _entry = {
+        "id": _id,
+        "file": _c.get("file"), "method": _c.get("method"),
+        "line": _c.get("line"),
+        "issue_type": "dead_code_candidate",
+        "description": ("O3 开闸入池：方法 %s 图内三层无入边且图外无证据"
+                        "（hard_strict）⇒ 待人工确认是否删除"
+                        % (_c.get("method"),)),
+        # ★入池标记（334挂账⑦ 要把它从"从未出现"变成"可数事实"）
+        "o3_marker": _si._M335_O3_MARKER,
+        "o3_dead_code": True,
+        "o3_rule": _si._M335_O3_RULE,
+        "evidence_tier": _c.get("evidence_tier"),
+        "gate_verdict": _verdict,
+        "gate_reason": _reason[:300],
+        "intake_reason": "o3_open_gate_consumer",
+        "source": "o3_open_gate", "source_process": "live",
+        # ★安全位：死代码删除必须人确认 —— 高风险管理、信任 0 分，
+        #   任何自动审批通道（risk<=2 ＆ trust>=60）都不会碰它。
+        "risk_level": "高", "trust_score": 0, "status": "pending",
+        "requires_confirmation": True,
+        "created_at": _now, "generated_at": _now, "saved_at": _now,
+    }
+    _path = _m335_pending_path(project_root, pending_path)
+    _rows, _shape = _m335_read_pending(_path)
+    if _shape == "bad" or _shape == "dict:empty":
+        return {"status": "unavailable", "gate": _verdict,
+                "reason": "待修池结构不可判定 ⇒ 本轮不写（不覆盖他方账）"}
+    _dup = [x for x in _rows
+            if str(x.get("file") or "") == str(_entry["file"])
+            and str(x.get("method") or "") == str(_entry["method"])]
+    if _dup:
+        _module_logger.info(
+            "[335刀1][O3消费] 已存在同题候选（id=%s）⇒ 不重复入池",
+            (_dup[0] or {}).get("id"))
+        return {"status": "no_candidate", "gate": _verdict,
+                "reason": "同题已在池", "existing_id": (_dup[0] or {}).get("id")}
+    _rows.append(_entry)
+    if _shape == "list" or _shape == "missing" or _shape == "dict:empty":
+        _payload: Any = _rows
+    elif _shape.startswith("dict:"):
+        _key = _shape.split(":", 1)[1]
+        _payload = {_key: _rows}
+    else:
+        _payload = _rows
+    try:
+        _m335_atomic_write_json(_path, _payload)
+    except OSError as _e:
+        silent_exc(_e, where="PatchExecutionDispatch._m335_o3_consume write",
+                   level="warning")
+        _module_logger.warning("[335刀1][O3消费] 入池写盘失败 %s：%s: %s",
+                               _path, type(_e).__name__, _e)
+        return {"status": "unavailable", "reason": "写盘失败"}
+    _module_logger.info(
+        "[335刀1][O3消费] 入池 1 条 id=%s %s::%s ｜ o3_marker=%s "
+        "evidence_tier=%s gate=%s ⇒ 待修池 %d 条（requires_confirmation=True，"
+        "risk=高 ⇒ **不入自动审批**） proc_gen=%s",
+        _id, _c.get("file"), _c.get("method"), _entry["o3_marker"],
+        _entry["evidence_tier"], _verdict, len(_rows), _m335_pg())
+    _r = {"status": "intake", "gate": _verdict, "entry_id": _id,
+          "file": _c.get("file"), "method": _c.get("method"),
+          "o3_marker": _entry["o3_marker"], "pending_total": len(_rows),
+          "path": _path}
+    _M335_O3_LAST.clear()
+    _M335_O3_LAST.update(_r)
+    return _r
+
+
+def get_m335_o3_last() -> dict:
+    """★335批刀1：最近一次消费结果（纯读；未跑过返回空 dict，**不造假**）。"""
+    return dict(_M335_O3_LAST)
+
+
 def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
     """★317批刀0：按可配节拍派单（最小间隔 + 同拍一次）。
 
@@ -83,16 +315,49 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
         return {"status": "skipped_not_due", "elapsed_sec": round(_elapsed, 1),
                 "interval_sec": _iv}
     _last_dispatch_ts = _now
+    # ★335批刀1：**同节拍先消费开闸结论**（入池是"派单的前置料"，不是派单本身）。
+    #   放在派单之前：本拍新入池的条目下一拍才可能被选中，语义清晰、不互相顶。
+    try:
+        _o3 = _m335_o3_consume(now=_now)
+    except Exception as _o3_e:
+        silent_exc(_o3_e, where="patch_execution_dispatch.dispatch_on_tick 335刀1 O3消费",
+                   level="warning")
+        _module_logger.warning("[335刀1][O3消费] 节拍调用异常（不影响派单）：%s: %s",
+                               type(_o3_e).__name__, _o3_e)
+        _o3 = {"status": "unavailable", "reason": "节拍调用异常"}
+    # ★335批刀6（小林拍板③）：费用熔断 —— 超预算只降级"花钱的进化动作"。
+    #   放在派单**之前**、O3 消费**之后**：入池只是写文件不花钱，该允许；
+    #   真正花钱的是派单执行。只读巡检 / 心跳 / W1 **不走这里**，故不受影响。
+    _bs = {}
+    try:
+        from nucleus.evolution.evolution_budget import budget_state as _m335_bs
+        _bs = _m335_bs(now=_now)
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch.dispatch_on_tick 335刀6 熔断",
+                   level="warning")
+        _module_logger.warning("[335刀6][费用熔断] 状态读取失败（%s: %s）"
+                               " ⇒ 按**未熔断**处理（不猜额度）",
+                               type(_e).__name__, _e)
+        _bs = {}
+    if _bs.get("tripped"):
+        from nucleus.evolution.evolution_budget import note_tripped as _m335_nt
+        _m335_nt(_bs.get("reason"), where="dispatch_on_tick")
+        return {"status": "budget_tripped", "interval_sec": _iv,
+                "budget": _bs,
+                "result": {"dispatched": 0, "dispatched_selected": 0,
+                           "blocked_reason": "budget_tripped"}}
     _r = dispatch_runtime_verified_patches(limit=1)
     # ★324批刀0：日志三拆——"派单动作"不得再被读成"自转成果"
     _module_logger.info(
         "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs selected=%s executed=%s "
-        "applied=%s blocked=%s hard_cap=1 blast_cap=1（安全闸未放宽）",
+        "applied=%s blocked=%s hard_cap=1 blast_cap=1（安全闸未放宽）"
+        " ｜ [335刀1]O3消费=%s gate=%s",
         _iv,
         _r.get("dispatched_selected") if isinstance(_r, dict) else "?",
         _r.get("dispatched") if isinstance(_r, dict) else "?",
         _r.get("dispatched_applied") if isinstance(_r, dict) else "?",
-        (_r.get("blocked_reason") or "-") if isinstance(_r, dict) else "?")
+        (_r.get("blocked_reason") or "-") if isinstance(_r, dict) else "?",
+        (_o3 or {}).get("status"), (_o3 or {}).get("gate"))
     return {"status": "dispatched", "interval_sec": _iv, "result": _r}
 
 #: 全局 framework 桥接（main.py 装配后 set_dispatch_framework 注入）

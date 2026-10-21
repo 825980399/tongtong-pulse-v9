@@ -474,6 +474,17 @@ class LLMCallRecorder:
             _m94_tokens = int(_m94_usage.get("total_tokens", 0) or 0)
         # ★第170批 C9：费用估算（模型 × tokens → 费用）；未配置单价/模型未知 → None。
         _m94_cost = _compute_cost_estimate(model, _m94_tokens)
+        # ★335批刀6：把本次调用费用累进进化预算侧账。
+        #   为什么在这里：这是**唯一**能拿到 cost 的真实记账点（任务书写的
+        #   `track_llm_cost` 全库不存在，T0 实测订正）。cost 为 None 时
+        #   `record_cost` 自己会跳过（未配置单价 ⇒ 不猜价，也不记假账）。
+        #   best-effort：记账失败绝不影响调用记录本身。
+        try:
+            from nucleus.evolution.evolution_budget import record_cost as _m335_rc
+            _m335_rc(_m94_cost, _ts)
+        except Exception as _e:
+            silent_exc(_e, where="call_recorder::_write_line 335刀6 费用记账",
+                       level="debug")
         _rec = {
             "trace_id": _tid,
             "ts": _ts,

@@ -22,6 +22,7 @@ from typing import Any
 
 from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
+from nucleus.proc_gen import proc_gen_str as _m335_pg
 from nucleus.const import (
     GOD_FILE_EXEMPT,
     SCAN_EXCLUDE_DIR_BASENAMES,
@@ -5854,6 +5855,10 @@ _O3_INTAKE_WINDOW_SEC = 86400       # 入池速率统计窗口（秒）
 #: O3 死码候选入池标记——**显式集合/布尔**（铁律153：禁"理由字符串里找关键字"）
 _O3_INTAKE_ISSUE_TYPES = frozenset({"dead_code_candidate", "dead_code"})
 _O3_INTAKE_BOOL_FIELD = "o3_dead_code"
+# ★335批刀1：入池标记的规则名与版本戳（消费方写 pending 条目时同源引用，
+#   避免"报表说 335 版、条目说别的"）。
+_M335_O3_RULE = "O3_OPEN_GATE_335"
+_M335_O3_MARKER = "335.cg.v1"
 _O3_N_SOURCE = ("evidence_tier=hard_strict（图内三层皆无入边 且 图外 probe 四类"
                 "string_ref/protocol_name/test_ref/attr_bound 皆空）")
 #: hard 档候选池留存上限（抽验靶子；>池上限时抽验只代表池内，须在结果里标注）
@@ -6350,6 +6355,59 @@ def _m333_intake_rate(project_root: str | None = None,
             "note": _note}
 
 
+def _m335_gate_table(k1: dict | None = None) -> dict:
+    """★335批刀2：三道闸**对表**判定（333刀4 三条件式的代码落地 · 334挂账②）。
+
+    333 刀4 只把"三条件式"写进了文档和打印文案，代码里**仍然没有判定逻辑**
+    ⇒ 334 复测时"对表是否脱节"只能靠人读日志，于是出现了
+    "一边写对表不可判、一边报七步全过⇒OPEN"的自相矛盾。
+
+    三条件（**同时成立**才判 `脱节`）：
+      ① `mode == "judge"` —— 判死档真开。`mode=review` 本就不产判死条目，
+         此时"闸口 0 条"是**预期结果**，不是脱节；
+      ② 同窗 `[317刀3] reviewed > 0` —— 任务面非空；
+      ③ 本打印同窗连续 ≥3 窗缺席 —— 需窗历史。
+
+    返回 `verdict ∈ {"脱节", "无脱节", "不可判"}` ＋ 逐条件读数。
+    取不到的条件一律 `None` ⇒ `不可判`（**不填 0、不臆造缺席窗数**）。
+    """
+    _s = dict(_DEAD_CODE_REVIEW_STATS)
+    _mode = str(_s.get("mode") or "")
+    _reviewed = (k1 or {}).get("reviewed")
+    _reviewed_src = "k1_log_row" if _reviewed is not None else "unavailable"
+    if _reviewed is None:
+        _reviewed = _s.get("reviewed")
+        _reviewed_src = "review_stats" if _reviewed is not None else "unavailable"
+    _cond1 = (_mode == "judge")
+    _cond2 = (None if _reviewed is None else (int(_reviewed) > 0))
+    # 条件③：本实现不维护窗历史计数器 ⇒ 拿不到就记 None（不可判），不猜
+    _miss = _s.get("intake_absent_windows")
+    _cond3 = (None if _miss is None else (int(_miss) >= 3))
+    _base = {"cond_1_mode_judge": _cond1,
+             "cond_2_reviewed_positive": _cond2,
+             "cond_3_absent_3_windows": _cond3,
+             "mode": _mode, "reviewed": _reviewed,
+             "reviewed_src": _reviewed_src,
+             "absent_windows": _miss}
+    if not _cond1:
+        return dict(_base, verdict="不可判",
+                    reason="condition_1 不成立：判死档未开（mode=%s）"
+                           % (_mode or "unavailable"))
+    if _cond2 is not True:
+        return dict(_base, verdict="不可判",
+                    reason="condition_2 不成立：任务面读数不可得或为 0（reviewed=%s）"
+                           % (_reviewed,))
+    if _cond3 is None:
+        return dict(_base, verdict="不可判",
+                    reason="condition_3 不可得：无窗历史读数（不臆造缺席窗数）")
+    if _cond3:
+        return dict(_base, verdict="脱节",
+                    reason="三条件同成立：mode=judge ＋ reviewed=%s ＋ 连续 %s 窗缺席"
+                           % (_reviewed, _miss))
+    return dict(_base, verdict="无脱节",
+                reason="本窗有入池（连续缺席 %s 窗 < 3）" % (_miss,))
+
+
 def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                          project_root: str | None = None,
                          hard_total_baseline: int | None = None,
@@ -6506,8 +6564,8 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     if _strict is not None and int(_strict) > _O3_N_RECORD_TARGET:
         _module_logger.info(
             "[333刀1][O3记录项] hard_strict=%d > 记录目标 %d（**仅记录，不阻断**）"
-            " ⇒ 趋势跟踪；开闸门槛改用入池速率 ≤%d 条/天",
-            int(_strict), _O3_N_RECORD_TARGET, _O3_INTAKE_MAX_PER_DAY)
+            " ⇒ 趋势跟踪；开闸门槛改用入池速率 ≤%d 条/天 proc_gen=%s",
+            int(_strict), _O3_N_RECORD_TARGET, _O3_INTAKE_MAX_PER_DAY, _m335_pg())
     # ★330批刀2（P1）：版本不对齐 ⇒ 这张图不能被本判据用来开闸（判定树第 6 步）
     # ★333批刀1：④ 新判据 = **入池速率 ≤1 条/天**（开闸消费面约束）。
     #   三态：rate_ok=False ⇒ 超线；rate_ok=None ⇒ 不可算（**不填 0 冒充达标**）。
@@ -6528,13 +6586,80 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         _blockers.append("N基数漂移（实测 %d vs 基线 %s，超 %.0f%%）"
                          % (_hard_total, _rep.get("hard_total_baseline"),
                             float(drift_line) * 100))
+    # ★335批刀2（334挂账②）：⑦ =「K1 三证 ＋ 三道闸对表」——此前是**未测的空位**。
+    #   334 五条最硬④：d7 一边写"对表不可判"一边报"七步全过 ⇒ OPEN"，
+    #   把"不可判"当"没失败"计入了通过。现在 ⑦ 是**显式三态**，绝不二值化：
+    #     达成   = K1 达成 且 对表=无脱节
+    #     未达成 = K1 未达成 或 对表=脱节
+    #     不可判 = K1 pending/不可判/缺代次 或 对表缺条件
+    #   ★口径（唯一的不对称，写在此处以免被后人当 bug 改掉）：
+    #     ①-⑥ 的"不可判"一律阻断（测不出来 ≠ 没问题，330刀1 起的铁口径）；
+    #     ⑦ 的"不可判"**不阻断**，只落 `unjudged_steps`——因为 K1 pending 是
+    #     "本代次拍数还没累积够"的**纯时间问题**，不是数据面缺陷；若也阻断，
+    #     压测期间永远开不了闸（本批刀1 要接的消费链就永远空转）。
+    #     代价是 OPEN 会带着未判项，所以 official_reason **禁止**再写"七步全过"。
+    _k1: dict = {}
+    try:
+        from nucleus.reasoning.SafeEvolutionExecutor import (
+            get_k1_verdict as _k1_get,
+        )
+        _k1 = _k1_get(project_root) or {}
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::o3_open_gate_report step7_k1",
+                   level="warning")
+        _k1 = {"verdict": "不可判",
+               "reason": "K1 取数异常：%s" % type(_e).__name__}
+    _k1v = str(_k1.get("verdict") or "不可判")
+    _k1pg = str(_k1.get("proc_gen") or "")
+    # ★刀2 第2条：判据引用**必须带代次**。缺 `proc_gen` 的读数一律不采信——
+    #   否则"上一进程 11 拍 ＋ 新进程 20 拍 = 31 拍"这种跨代次假账会混进判据
+    #   （333刀3 已把同代次写进常量，这里补"引用侧也必须带代次"）。
+    if not _k1pg and _k1v in ("达成", "未达成"):
+        _k1v = "不可判"
+        _k1_why = "K1 读数缺 proc_gen ⇒ 拒采历史代次读数（原判 %s：%s）" % (
+            _k1.get("verdict"), _k1.get("reason") or "")
+    else:
+        _k1_why = "proc_gen=%s runs=%s productive=%s/%s zero=%s" % (
+            _k1pg or "unknown", _k1.get("runs"), _k1.get("productive"),
+            _k1.get("min_runs"), _k1.get("zero_output"))
+    _gt = _m335_gate_table(_k1)
+    _gtv = str(_gt.get("verdict") or "不可判")
+    if _k1v == "未达成" or _gtv == "脱节":
+        _v7 = "未达成"
+    elif _k1v == "达成" and _gtv == "无脱节":
+        _v7 = "达成"
+    else:
+        _v7 = "不可判"
+    _why7 = "K1=%s（%s）；对表=%s（%s）" % (
+        _k1v, _k1_why, _gtv, _gt.get("reason") or "")
+    _rep["k1"] = dict(_k1)
+    _rep["k1_proc_gen"] = (_k1pg or None)
+    _rep["gate_table"] = _gt
+    _rep["step7"] = {"id": "⑦", "name": "K1 三证＋三道闸对表",
+                     "verdict": _v7, "reason": _why7,
+                     "k1_verdict": _k1v, "gate_table_verdict": _gtv}
+    # ★335批刀2 第3条：未判步骤**显式列清单**（消费方/报表直接读，不必再解析文案）
+    _rep["steps_total"] = 7
+    _rep["unjudged_steps"] = ["⑦ K1三证＋对表"] if _v7 == "不可判" else []
+    _rep["failed_steps"] = list(_blockers)
+    if _v7 == "未达成":
+        _rep["failed_steps"].append("⑦ K1三证＋对表")
+    if _v7 == "未达成":
+        _blockers.append("⑦ K1三证＋对表 未达成（%s）" % _why7)
     if _blockers:
         _rep["official_verdict"] = "UNAVAILABLE"
         _rep["official_reason"] = "、".join(_blockers) + " ⇒ 开闸顺延（不填 0）"
+    elif _v7 == "不可判":
+        # ★判决口径：**不许写"全过"**。未判 ≠ 没失败，必须在 reason 里点出来。
+        _rep["official_verdict"] = "OPEN"
+        _rep["official_reason"] = (
+            "含未判步骤：⑦ K1三证＋对表（%s）⇒ 未判步骤不计通过（6/7 步达成）"
+            % _why7)
     else:
-        _rep["official_verdict"] = str(_rep["sample"].get("verdict"))
-        _rep["official_reason"] = ("抽验误判率 %s（线 %.0f%%）" % (
-            _rep["sample"].get("misjudge_rate"), _O3_MISJUDGE_LINE * 100))
+        _rep["official_verdict"] = "OPEN"
+        _rep["official_reason"] = (
+            "七步全过（含⑦达成）＋抽验误判率 %s（线 %.0f%%）" % (
+                _rep["sample"].get("misjudge_rate"), _O3_MISJUDGE_LINE * 100))
     # ---- 与 325刀5 的三字段衔接（同一实现，不抄第二份）----
     try:
         from tools.stress.collect_stress_baseline import m325_open_gate_fields as _ogf
@@ -6817,6 +6942,86 @@ def build_review_intake(limit: int = 1, items: list | None = None) -> list[dict]
         "[311刀1] 受控入料 0 条（候选 %d；拒收: 生命周期=%d 核心文件=%d 形态不符=%d）",
         len(_pool), _rejected["lifecycle"], _rejected["core"], _rejected["shape"])
     return []
+
+
+def _m335_o3_intake_candidates(items: list | None = None,
+                                limit: int = 1) -> dict:
+    """★335批刀1：O3 开闸消费面的**候选筛选**（与受控入料同规则集）。
+
+    为什么不直接复用 `build_review_intake`：那条路要求条目带 `review_only=True`，
+    而 O3 候选来自 **`hard_strict` 档**（判死档产物，不是待复核档），形态检定
+    必然全拒 —— 直接复用会得出"永远 0 条候选"的假结论。
+
+    筛选规则（与 `build_review_intake` 逐条同源，不新造门槛）：
+      ① `evidence_tier == "hard_strict"`（**显式标记**，铁律153：不看理由字符串）；
+      ② 生命周期名（`__init__`/`close`/`start`…）转人工 —— 删了必炸；
+      ③ 核心文件（main/config/const/PulseCore/InfoField/PatchManager/Executor）转人工；
+      ④ 同 `file::method` 只出一条。
+
+    本函数**只筛选、不写盘**：写盘是消费方的事，且必须经路径注入（铁律158）。
+
+    Returns:
+        ``{"candidates": [...], "rejected": {...}, "pool": n, "pool_strict": n}``
+    """
+    try:
+        _lim = int(limit)
+    except (TypeError, ValueError) as _le:
+        _module_logger.debug("[335刀1] limit 非整数，按 1 处理：%s: %s",
+                             type(_le).__name__, _le)
+        _lim = 1
+    _lim = max(0, min(int(_O3_INTAKE_MAX_PER_DAY), _lim))
+    _pool = list(items if items is not None
+                 else (_DEAD_CODE_REVIEW_STATS.get("hard_items") or []))
+    _rejected = {"tier": 0, "lifecycle": 0, "core": 0, "shape": 0, "dup": 0}
+    _strict_n = sum(1 for _i in _pool
+                    if isinstance(_i, dict)
+                    and str(_i.get("evidence_tier") or "") == "hard_strict")
+    if _lim <= 0:
+        return {"candidates": [], "rejected": _rejected,
+                "pool": len(_pool), "pool_strict": _strict_n,
+                "reason": "限额为 0 ⇒ 关闭（配置驱动，非本函数决定）"}
+    _seen: set = set()
+    _out: list = []
+    for _it in _pool:
+        if not isinstance(_it, dict):
+            _rejected["shape"] += 1
+            continue
+        if str(_it.get("evidence_tier") or "") != "hard_strict":
+            _rejected["tier"] += 1
+            continue
+        _name = str(_it.get("method") or "")
+        _file = str(_it.get("file") or "").replace("\\", "/")
+        if not _name or not _file:
+            _rejected["shape"] += 1
+            continue
+        if _name in _INTAKE_LIFECYCLE_NAMES:
+            _rejected["lifecycle"] += 1
+            continue
+        if _file in _INTAKE_CORE_FILES:
+            _rejected["core"] += 1
+            continue
+        _key = "%s::%s" % (_file, _name)
+        if _key in _seen:
+            _rejected["dup"] += 1
+            continue
+        _seen.add(_key)
+        _out.append({"file": _file, "method": _name,
+                     "line": _it.get("line"),
+                     "evidence_tier": "hard_strict",
+                     "rule": _M335_O3_RULE})
+    # ★335批刀1 自查修正：**遍历完整池再截断**。首版在这里 `break`，
+    #   而 `_lim` 恒为 1（`_O3_INTAKE_MAX_PER_DAY`），于是第一条命中即跳出，
+    #   后面的条目根本没被分类 ⇒ `rejected` 恒为 0，拒收原因不可审计
+    #   （且"__init__ 被拒"这类断言在只取 1 条时必然成立＝空转判据）。
+    _out = _out[:_lim]
+    return {"candidates": _out, "rejected": _rejected,
+            "pool": len(_pool), "pool_strict": _strict_n,
+            "reason": ("筛选出 %d 条（strict 池 %d）" % (len(_out), _strict_n))
+                      if _out else
+                      ("strict 池 %d 条全被生命周期/核心文件/形态规则拒收"
+                       "（拒收: 档位=%d 生命周期=%d 核心=%d 形态=%d 重复=%d）"
+                       % (_strict_n, _rejected["tier"], _rejected["lifecycle"],
+                          _rejected["core"], _rejected["shape"], _rejected["dup"]))}
 
 
 def get_self_inspector() -> SelfInspector:

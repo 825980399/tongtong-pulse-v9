@@ -12,12 +12,14 @@ SafeEvolutionExecutor.py —— 安全进化执行器
 """
 
 import os
+import re
 import time
 from typing import Any
 
 import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 from nucleus._silent_except import silent_exc
+from nucleus.proc_gen import get_proc_gen as _m335_proc_gen
 from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
 from nucleus.data.DataAccessLayer import safe_read_json
 
@@ -64,24 +66,13 @@ _M331_PROC_GEN: dict = {}
 def _m331_proc_gen() -> dict:
     """★331批刀5：本进程的代次标识（PID ＋ 进程创建时刻）。
 
-    边界：psutil 不可用时 `create_time=None`、**gen 后缀记 unknown**——
-    **不填 0**：0 会被读成"1970 年起的进程"，比"不知道"错得更彻底。
+    ★335批刀8：实现已搬到 `nucleus/proc_gen.py`（零依赖，供夜间编排/自检/派单
+    直接引用，不必 import 本重模块）。此函数**保留为委托**，既有调用点一字不改
+    —— 口径单一，不会出现"两个地方各算一次代次"的漂移。
     """
-    if _M331_PROC_GEN:
-        return dict(_M331_PROC_GEN)
-    _pid = os.getpid()
-    _ct = None
-    try:
-        import psutil
-        _ct = float(psutil.Process(_pid).create_time())
-    except Exception as _e:
-        silent_exc(_e, where="SafeEvolutionExecutor::_m331_proc_gen")
-        _ct = None
-    _cs = time.strftime("%Y%m%d-%H%M%S", time.localtime(_ct)) if _ct else ""
-    _gen = ("pid%d@%s" % (_pid, _cs)) if _cs else ("pid%d@unknown" % _pid)
-    _M331_PROC_GEN.update({"pid": _pid, "create_time": _ct,
-                           "create_str": _cs, "gen": _gen})
-    return dict(_M331_PROC_GEN)
+    _r = _m335_proc_gen()
+    _M331_PROC_GEN.update(_r)
+    return dict(_r)
 
 
 def get_output_rate_stats() -> dict:
@@ -100,6 +91,183 @@ def reset_output_rate_stats() -> None:
     _OUTPUT_STATS["runs"] = 0
     _OUTPUT_STATS["productive"] = 0
     _OUTPUT_STATS["zero_output"] = 0
+
+# ===== ★335批刀4（小林拍板①）：K1 判据**消费点** =====
+# 背景（千问办公）：333刀3 把 `_K1_MIN_RUNS=20` 写成了**常量**，但**全库零消费点**
+#   —— "≥20 拍"纯靠人工对表，判据存在与否对系统行为毫无影响（334 实测 `runs=65`
+#   也是人工从日志数的）。本刀把判定落成代码，并让开闸判定树⑦能直接消费。
+#
+# 三态（**不得把"没测"算成"没达成"，也不得算成"达成"**）：
+#   达成   = 本代次 runs >= 20 且 productive_total >= 15 且三列同报
+#   pending= 本代次 runs < 20（**未到可判窗口**，不记 0、不记未达成）
+#   未达成 = 到窗口但 productive_total < 15
+#   不可判 = 三列不自洽（runs ≠ productive + zero_output）⇒ 读数本身坏了
+_K1_VERDICT_OK = "达成"
+_K1_VERDICT_PENDING = "pending"
+_K1_VERDICT_FAIL = "未达成"
+_K1_VERDICT_UNKNOWN = "不可判"
+_K1_VERDICT_CRITERIA = ("333刀3判据：同一进程代次内累计 %d 拍 ≥%d/%d 且三列同报"
+                        % (_K1_MIN_RUNS, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+
+#: 最近一次自动判定（供开闸判定树⑦ / 报表头消费；**进程内，不跨代次**）
+_K1_LAST: dict = {}
+
+#: 活体日志里 `[317刀3][产出率]` 行的解析式（刀8 之后这行必带 proc_gen）
+_K1_LOG_RE = re.compile(
+    r"\[317刀3\]\[产出率\].*?runs=(\d+)\s+productive_total=(\d+)\s+"
+    r"zero_total=(\d+).*?proc_gen=(\S+)")
+
+#: ★335批刀2：同日志行里的 `reviewed=` 读数（三道闸对表条件②的**唯一真实来源**）。
+#   单独一个正则而不并进上面那个 —— 上面的组号 1..4 已被 333/335刀4 验证过，
+#   动组号等于重赌一次解析正确性；这里只做**旁路抽取**，抽不到就是 None（不填 0）。
+_K1_REVIEWED_RE = re.compile(
+    r"\[317刀3\]\[产出率\].*?reviewed=(\S+)\s+report=")
+
+
+def _m335_k1_judge(runs, productive, zero, proc_gen, source="in_process",
+                   reviewed=None) -> dict:
+    """★335刀4：K1 三态判定（**纯函数**，无副作用，可单测）。
+
+    ★335批刀2：`reviewed` 只**透传**给对表判据（三道闸条件②），不参与 K1 三态判定
+    ——K1 的通过线仍是「本代次 ≥20 拍且 ≥15 拍有产出且三列同报」，一个数都不能动。
+    """
+    _runs = int(runs or 0)
+    _prod = int(productive or 0)
+    _zero = int(zero or 0)
+    _cols_ok = (_runs == _prod + _zero)
+    if _runs < _K1_MIN_RUNS:
+        _v = _K1_VERDICT_PENDING
+        _why = ("本代次 %d 拍 < 可判窗口 %d 拍 ⇒ pending"
+                "（不记 0、不记未达成）" % (_runs, _K1_MIN_RUNS))
+    elif not _cols_ok:
+        _v = _K1_VERDICT_UNKNOWN
+        _why = ("三列不自洽（runs=%d ≠ productive=%d + zero=%d）⇒ 不可判"
+                % (_runs, _prod, _zero))
+    elif _prod >= _K1_MIN_PRODUCTIVE:
+        _v = _K1_VERDICT_OK
+        _why = ("本代次 %d/%d 拍产出 ≥ %d/%d 且三列同报"
+                % (_prod, _runs, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+    else:
+        _v = _K1_VERDICT_FAIL
+        _why = ("本代次 %d/%d 拍产出 < %d/%d 线"
+                % (_prod, _runs, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+    return {"verdict": _v, "reason": _why,
+            "runs": _runs, "productive": _prod, "zero_output": _zero,
+            "cols_consistent": bool(_cols_ok),
+            "min_runs": _K1_MIN_RUNS, "min_productive": _K1_MIN_PRODUCTIVE,
+            "proc_gen": proc_gen, "source": source,
+            # ★335批刀2：对表条件②用；None = 该代次日志行没带 reviewed（**不填 0**）
+            "reviewed": reviewed,
+            "criteria": _K1_VERDICT_CRITERIA}
+
+
+def _m335_k1_from_log(log_path, tail_lines: int = 40000) -> dict | None:
+    """★335刀4：从活体日志按**代次**解析 K1 读数（工具进程没有内存态时用）。
+
+    为什么不直接数全文件：K1 被重启清零过两次，"上一进程 11 拍 + 新进程 20 拍
+    = 31 拍"是最容易犯的假账（铁律：计数面必须自带代次标签）。
+    故先按 `proc_gen` 分组，只取**最后出现的那一组**（=最新代次），组内取最后一行。
+    """
+    try:
+        if not log_path or not os.path.isfile(log_path):
+            return None
+        with open(log_path, encoding="utf-8", errors="ignore") as _f:
+            _lines = _f.readlines()[-tail_lines:]
+    except OSError as _e:
+        _module_logger.warning("[335刀4][K1判定] 日志不可读 %s：%s: %s",
+                               log_path, type(_e).__name__, _e)
+        return None
+    _groups: dict = {}
+    _order: list = []
+    for _ln in _lines:
+        _m = _K1_LOG_RE.search(_ln)
+        if not _m:
+            continue
+        _pg = _m.group(4)
+        if _pg not in _groups:
+            _groups[_pg] = []
+            _order.append(_pg)
+        # ★335批刀2：多存原始行，出组后旁路抽 reviewed（不动上面验证过的组号）
+        _groups[_pg].append((int(_m.group(1)), int(_m.group(2)),
+                             int(_m.group(3)), _ln))
+    if not _order:
+        return None
+    _pg_last = _order[-1]
+    _runs, _prod, _zero, _last_ln = _groups[_pg_last][-1]
+    # ★335批刀2：reviewed 旁路抽取。抽不到 / 解析不了 ⇒ None（**绝不填 0**，
+    #   0 会与"跑了但审查到 0 个异常"混为一谈，对表条件②就假成立了）。
+    _reviewed = None
+    _rm = _K1_REVIEWED_RE.search(_last_ln)
+    if _rm:
+        try:
+            _reviewed = int(_rm.group(1))
+        except (TypeError, ValueError):
+            _module_logger.debug("[335刀2][对表] reviewed 读数不可解析：%r",
+                                 _rm.group(1))
+    return {"proc_gen": _pg_last, "runs": _runs, "productive": _prod,
+            "zero_output": _zero, "reviewed": _reviewed,
+            "gen_count": len(_order),
+            "samples": len(_groups[_pg_last])}
+
+
+def get_k1_verdict(project_root: str | None = None,
+                   log_path: str | None = None) -> dict:
+    """★335刀4：K1 判定（开闸判定树⑦ 与报表头的**唯一取数口**）。
+
+    双源，**显式标 `source`**（铁律153：判定用显式标记，不让读方猜来源）：
+      * `in_process` —— 本进程真跑过子进程（活体走这条，权威）
+      * `log_parsed` —— 本进程没跑过（工具/报表进程），从活体日志按代次取
+      * `unavailable` —— 两源都取不到 ⇒ **不可判**（不填 0、不猜）
+    """
+    _pg = _m331_proc_gen()
+    _local_runs = int(_OUTPUT_STATS.get("runs", 0) or 0)
+    if _local_runs > 0:
+        _r = _m335_k1_judge(_local_runs,
+                            _OUTPUT_STATS.get("productive", 0),
+                            _OUTPUT_STATS.get("zero_output", 0),
+                            _pg.get("gen"), "in_process")
+        _K1_LAST.clear()
+        _K1_LAST.update(_r)
+        return _r
+    _root = project_root or _PROJECT_ROOT
+    _lp = log_path or os.path.join(_root, "logs", "pulse.log")
+    _g = _m335_k1_from_log(_lp)
+    if _g is None:
+        _r = {"verdict": _K1_VERDICT_UNKNOWN, "reason": (
+            "本进程无 K1 读数且活体日志无 `[317刀3][产出率]` 行"
+            "（日志=%s）⇒ 不可判（不填 0）" % _lp),
+            "runs": None, "productive": None, "zero_output": None,
+            "cols_consistent": None,
+            "min_runs": _K1_MIN_RUNS, "min_productive": _K1_MIN_PRODUCTIVE,
+            "proc_gen": None, "source": "unavailable",
+            "criteria": _K1_VERDICT_CRITERIA}
+        _K1_LAST.clear()
+        _K1_LAST.update(_r)
+        return _r
+    _r = _m335_k1_judge(_g["runs"], _g["productive"], _g["zero_output"],
+                        _g["proc_gen"], "log_parsed",
+                        reviewed=_g.get("reviewed"))
+    _r["log_path"] = _lp
+    _r["gen_count"] = _g.get("gen_count")
+    _r["samples"] = _g.get("samples")
+    _K1_LAST.clear()
+    _K1_LAST.update(_r)
+    return _r
+
+
+def get_k1_last() -> dict:
+    """★335刀4：读最近一次判定（纯读；未判过返回空 dict，**不造假**）。"""
+    return dict(_K1_LAST)
+
+
+def _m335_k1_log_line(res: dict) -> str:
+    """★335刀8：`[335刀4][K1判定]` 单行文案（带 proc_gen，压测取证硬前提）。"""
+    return ("[335刀4][K1判定] proc_gen=%s runs=%s productive=%s zero=%s "
+            "verdict=%s source=%s reason=%s"
+            % (res.get("proc_gen") or "unknown", res.get("runs"),
+               res.get("productive"), res.get("zero_output"),
+               res.get("verdict"), res.get("source"), res.get("reason")))
+
 
 
 # ★第117批 T-117d①（烛微 N4）：项目根（供问题身份键做路径归一）
@@ -6500,6 +6668,14 @@ class SafeEvolutionExecutor:
                     _OUTPUT_STATS["productive"], _OUTPUT_STATS["zero_output"],
                     (_OUTPUT_STATS["productive"] / float(_runs_n)) if _runs_n else 0.0,
                     _productive, _m331_proc_gen().get("gen"))
+                # ★335批刀4：**判据消费点**——每拍跑完立即判定（不是等人工数）
+                try:
+                    _k1 = get_k1_verdict()
+                    _module_logger.info(_m335_k1_log_line(_k1))
+                except Exception as _k1_e:
+                    _module_logger.warning(
+                        "[335刀4][K1判定] 判定失败（不影响本拍）：%s: %s",
+                        type(_k1_e).__name__, _k1_e)
                 if not _productive:
                     # ★318批刀4：零产出 ⇒ 显式标「任务面空」，不得以"无异常"代替"无输入"
                     _module_logger.info(

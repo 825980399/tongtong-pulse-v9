@@ -38,6 +38,7 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc  # ★326批刀5：A5 异常口径与全项目一致
+from nucleus.proc_gen import proc_gen_str as _m335_pg
 from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
@@ -1777,7 +1778,8 @@ class CallGraphAnalyzer:
             #   两者缺一，判据侧一律拒绝（UNAVAILABLE），不拿"看起来正常"的读数下结论。
             _payload["code_version"] = str(self.CODE_VERSION)
             _payload["criteria_version"] = str(self._m330_judge_criteria_version())
-            _payload["version_fields_src"] = "330.cg.v1/criteria同源self_inspector"
+            _payload["version_fields_src"] = (
+                "%s/criteria同源self_inspector" % self.CODE_VERSION)
             _payload["dumped_at"] = _time.time()
             self.export_json(_tmp, data=_payload)
             os.replace(_tmp, _path)
@@ -1931,7 +1933,13 @@ class CallGraphAnalyzer:
     #  改动了建边逻辑/kind 判定就必须改这里 —— 判据用图门槛靠它区分
     #  "图是这套代码产的" 与 "图是上一版代码产的"。不是仓库 commit id：
     #  绝大多数提交不影响图的语义，把它们也算成版本只会让门槛天天误报。
-    CODE_VERSION = "330.cg.v1"
+    #   ★335批刀3（334挂账③ · 2026-10-21）：升版 —— 331/333 未升版导致
+    #     08:26 与 09:34:58 两张图同戳 `330.cg.v1`，版本门**分不出代次**，
+    #     ⑥ 退化为恒真门（334 五条最硬⑤）。升版后版本门才真正可判。
+    #   ⚠️ 结构性后果（如实标注，不掩盖）：旧图（330 戳）从此被拒 ⇒ 活体
+    #     **不重启就产不出新图**，⑥ 会从"恒真"翻成"恒假"。这是**更安全**的
+    #     方向（宁可判不可用，不可冒充通过），但 335/336 首跑前必须先重启产图。
+    CODE_VERSION = "335.cg.v1"
 
     @staticmethod
     def _m330_judge_criteria_version() -> str:
@@ -1986,7 +1994,8 @@ class CallGraphAnalyzer:
             _r = self.a6_edge_kind_consistency(graph_path=graph_path)
         except Exception as _e:
             silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6")
-            _logger.warning("[A6] 落盘自检异常（**不阻断落盘**）: %s", type(_e).__name__)
+            _logger.warning("[A6] 落盘自检异常（**不阻断落盘**）: %s proc_gen=%s",
+                            type(_e).__name__, _m335_pg())
             return None
         if not isinstance(_r, dict):
             return None
@@ -1994,14 +2003,17 @@ class CallGraphAnalyzer:
         _folded = int(_r.get("folded_into_static", 0) or 0)
         if _v == "UNAVAILABLE":
             # 版本对不上/图不可解析 ⇒ **不填 0**，如实记不可用与原因
-            _logger.warning("[A6] folded=%s verdict=UNAVAILABLE reason=%s file=%s",
-                            _folded, _r.get("reason"), _key)
+            _logger.warning("[A6] folded=%s verdict=UNAVAILABLE reason=%s file=%s"
+                            " proc_gen=%s",
+                            _folded, _r.get("reason"), _key, _m335_pg())
             return _r
-        _logger.info("[A6] folded=%d verdict=%s edges=%s agg_sum=%s file=%s",
-                     _folded, _v, _r.get("total_edges"), _r.get("agg_sum"), _key)
+        _logger.info("[A6] folded=%d verdict=%s edges=%s agg_sum=%s file=%s"
+                     " proc_gen=%s",
+                     _folded, _v, _r.get("total_edges"), _r.get("agg_sum"), _key,
+                     _m335_pg())
         if _folded > 0:
-            _logger.warning("[A6] folded=%d > 0 ⇒ 存在 kind 被折叠进 static（file=%s）",
-                            _folded, _key)
+            _logger.warning("[A6] folded=%d > 0 ⇒ 存在 kind 被折叠进 static（file=%s）"
+                            " proc_gen=%s", _folded, _key, _m335_pg())
         return _r
 
     def a6_edge_kind_consistency(self, graph_path: str | None = None,
@@ -2141,8 +2153,8 @@ class CallGraphAnalyzer:
         }
         if _fold:
             _logger.warning(
-                "[A6] 聚合 static 比逐边多 %d 条 ⇒ 疑似仍有 kind 被折叠（graph=%s）",
-                _fold, _out["graph_file"])
+                "[A6] 聚合 static 比逐边多 %d 条 ⇒ 疑似仍有 kind 被折叠（graph=%s）"
+                " proc_gen=%s", _fold, _out["graph_file"], _m335_pg())
         self._A6_CACHE["key"] = _ck
         self._A6_CACHE["val"] = dict(_out)
         return _out

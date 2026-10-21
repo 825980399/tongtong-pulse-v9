@@ -22,6 +22,7 @@ from typing import Any
 from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 # ★第87批 T-87c：验证决策校验日志的采样间隔（每 N 条不一致打 1 条 DEBUG）。
 #   原实现「每次不一致都打一条」，实测单次进化轮次可产出上百条
@@ -32,6 +33,30 @@ _VL_MISMATCH_LOG_EVERY = 100
 
 
 
+# ===== ★335批刀5（小林拍板②）：absorb 结果**持久化** =====
+# 问题：吸收效果只活在内存 dict 里，重启即失（实测 applied 0→2 重启归零）。
+#   "复利"如果跨不过一次重启，它就不是复利，只是一次性副作用。
+# 设计：**只搬结果、不动判定** ——
+#   * 落盘 `data/evolution/lesson_strategies.json`（原子写 tmp + os.replace）；
+#   * 键 = `organ|tag|rule`（rule = `type::issue_type`）：同一规则在不同吸收方
+#     名下**分开记账**（谁吸收的、吸收了几次，必须分得清）；
+#   * `applied_total` **累加不重置** —— 跨重启续算，这是本刀的核心判据；
+#   * 边界：类别白名单不扩（已裁）、absorb 四步逻辑不动、不新增调度面。
+# ⚠ 口径如实说明：回调只返回**整批** applied，无法拆分到单条规则，
+#   故同批的每条规则都记同一批次数 —— `applied_total` 是"批次口径累计"，
+#   读它时请配合 `hit_count`（被派发次数）一起看，别当"单条规则被应用了几次"。
+_M335_STRATEGY_REL = os.path.join("data", "evolution", "lesson_strategies.json")
+_M335_STRATEGY_VERSION = "335.1"
+
+
+def _m335_strategy_key(rule: dict) -> str:
+    """规则的稳定键：`type::issue_type`（无 issue_type 时退 `type::name`）。"""
+    _t = str(rule.get("type") or "unknown")
+    _k = str(rule.get("issue_type") or rule.get("rule")
+             or rule.get("name") or "")
+    return ("%s::%s" % (_t, _k)) if _k else _t
+
+
 class VerificationLearningHub:
     """全框架终身学习引擎统一骨架"""
 
@@ -39,8 +64,13 @@ class VerificationLearningHub:
                  # ★P1: 原阈值 2000 在正常运营中几乎不可达，导致蒸馏永不触发、规则永不回灌。
                  #   降为 200 使累计对比记录能周期性蒸馏并经 applier 真正作用于 QICA（闭合回灌链）。
                  #   distill_rules 仍保留「单器官≥3条 + 同概念≥2次」护栏，不会因阈值降低产生噪声规则。
-                 distill_threshold: int = 200):
+                 distill_threshold: int = 200,
+                 strategies_path: str | None = None):
         self._file_path = file_path
+        # ★335批刀5：absorb 策略盘账路径（`strategies_path` 仅供隔离验证注入，
+        #   生产调用方不传 ⇒ 走项目根下的默认相对路径。铁律158）
+        self._m335_strategy_path: str | None = strategies_path
+        self._m335_strategies: dict = {}
         self._distill_threshold = max(5, distill_threshold)  # 保留下限校验，删掉冗余的第二行
         # ★第87批 T-87c：验证决策校验日志采样计数（纯计数，不参与任何判定）。
         self._vl_mismatch_total = 0
@@ -63,6 +93,10 @@ class VerificationLearningHub:
         self._applier_last_dispatch: dict = {}
 
         self._load()
+        # ★335批刀5：启动即加载策略盘账（跨重启续算的前提）。
+        #   加载失败不阻断构造：宁可"这轮从空账起步"，也不让一次读盘失败
+        #   把整个学习中枢拖死（失败已在 `_m335_load_strategies` 里留痕）。
+        self._m335_strategies = self._m335_load_strategies()
         # ★FIX: 不在构造期自动蒸馏（此时 applier 尚未注册，规则会产出即丢失），
         #   改为首个 applier 注册后延迟触发，见 register_applier
 
@@ -598,6 +632,118 @@ class VerificationLearningHub:
 
         return rules
 
+    # ===== ★335批刀5：absorb 盘账三件套（路径 → 读 → 原子写）=====
+    def _m335_strategy_file(self) -> str:
+        """策略盘账路径：注入优先，否则落项目根 `data/evolution/lesson_strategies.json`。"""
+        if getattr(self, "_m335_strategy_path", None):
+            return self._m335_strategy_path
+        _root = os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(_root, _M335_STRATEGY_REL)
+
+    def _m335_load_strategies(self, path: str | None = None) -> dict:
+        """读盘账；缺失/损坏 ⇒ 返回空账结构（**不抛**，但必须留痕）。"""
+        _p = path or self._m335_strategy_file()
+        _empty = {"version": _M335_STRATEGY_VERSION, "updated_at": 0.0,
+                  "strategies": {}}
+        try:
+            if not os.path.isfile(_p):
+                return _empty
+            with open(_p, encoding="utf-8") as _f:
+                _d = json.load(_f)
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, where="VerificationLearningHub::_m335_load_strategies",
+                       level="warning")
+            self._log(LogLevel.WARNING,
+                      f"[335刀5][absorb盘账] 读取失败 {_p}：{type(_e).__name__}: {_e}"
+                      f" ⇒ 本轮从空账起步（不覆盖原文件）")
+            return _empty
+        if not isinstance(_d, dict) or not isinstance(_d.get("strategies"), dict):
+            self._log(LogLevel.WARNING,
+                      f"[335刀5][absorb盘账] 结构不符（{type(_d).__name__}）"
+                      f" ⇒ 本轮从空账起步（不覆盖原文件）")
+            return _empty
+        _d.setdefault("version", _M335_STRATEGY_VERSION)
+        _d.setdefault("updated_at", 0.0)
+        return _d
+
+    def _m335_save_strategies(self, data: dict, path: str | None = None) -> str:
+        """原子写：同目录 tmp 文件 + `os.replace`（半个 JSON 比不写更糟）。"""
+        _p = path or self._m335_strategy_file()
+        _dir = os.path.dirname(os.path.abspath(_p))
+        if not os.path.isdir(_dir):
+            os.makedirs(_dir, exist_ok=True)
+        _tmp = _p + ".tmp335"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            json.dump(data, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _p)
+        return _p
+
+    def _m335_persist_batch(self, organ: str, tag: str, rules: list,
+                            applied: int) -> dict:
+        """把**本批规则**的吸收结果 upsert 进盘账（`applied_total` 累加不重置）。
+
+        Returns:
+            ``{"ok": bool, "total": n, "cumulative": m, "path": ...}``；
+            `ok=False` 时带 `reason`（`no_rule` / `write_failed`），**不吞**。
+        """
+        if not isinstance(getattr(self, "_m335_strategies", None), dict) \
+                or not self._m335_strategies:
+            self._m335_strategies = self._m335_load_strategies()
+        _d = self._m335_strategies
+        _bk = _d.setdefault("strategies", {})
+        _now = time.time()
+        _n = 0
+        for _r in (rules or []):
+            if not isinstance(_r, dict):
+                continue
+            _key = _m335_strategy_key(_r)
+            _full = "%s|%s|%s" % (organ, tag, _key)
+            _e = _bk.get(_full) if isinstance(_bk.get(_full), dict) else {}
+            _e.update({
+                "rule": _key,
+                "type": _r.get("type"),
+                "issue_type": _r.get("issue_type"),
+                "organ": organ,
+                "tag": tag,
+                "strategy": str(_r.get("fix_strategy")
+                                or _r.get("suggestion") or "")[:1000],
+                # ★核心：累加不重置（跨重启续算）
+                "applied_total": int(_e.get("applied_total") or 0) + int(applied or 0),
+                "applied_last": int(applied or 0),
+                "hit_count": int(_e.get("hit_count") or 0) + 1,
+                "first_seen": float(_e.get("first_seen") or _now),
+                "last_seen": _now,
+            })
+            _bk[_full] = _e
+            _n += 1
+        if not _n:
+            return {"ok": False, "total": 0, "reason": "no_rule"}
+        _d["version"] = _M335_STRATEGY_VERSION
+        _d["updated_at"] = _now
+        try:
+            _p = self._m335_save_strategies(_d)
+        except OSError as _e:
+            silent_exc(_e, where="VerificationLearningHub::_m335_persist_batch",
+                       level="warning")
+            self._log(LogLevel.WARNING,
+                      f"[335刀5][absorb盘账] 写盘失败 {type(_e).__name__}: {_e}"
+                      f" ⇒ 本轮吸收结果只在内存（下次成功写盘时补齐）")
+            return {"ok": False, "total": _n, "reason": "write_failed"}
+        _cum = sum(int(v.get("applied_total") or 0)
+                   for v in _bk.values() if isinstance(v, dict))
+        return {"ok": True, "total": _n, "cumulative": _cum, "path": _p}
+
+    def get_m335_strategies(self) -> dict:
+        """★335批刀5：盘账快照（纯读，供报表/压测取数）。"""
+        _d = getattr(self, "_m335_strategies", None)
+        if not isinstance(_d, dict) or not _d:
+            _d = self._m335_load_strategies()
+        return {"version": _d.get("version"),
+                "updated_at": _d.get("updated_at"),
+                "count": len(_d.get("strategies") or {}),
+                "strategies": dict(_d.get("strategies") or {})}
+
     def apply_rules(self, organ: str, rules: list[dict[str, Any]]) -> int:
         """
         将蒸馏规则应用到指定器官。
@@ -637,11 +783,17 @@ class VerificationLearningHub:
             # ★331批刀1：把吸收方的四步计数并进留痕（读回调 owner 的实例统计，
             #   **不 import self_inspector** —— 那边会 import 本模块，循环依赖）。
             #   读不到记 None（**不填 0**：没统计 ≠ 统计为 0）。
+            # ★335批刀5：本通道吸收结果**即时落盘**（applied 累加不重置）。
+            #   必须放在 `_per` 组装之前 —— 留痕里要带 `persisted=`，
+            #   否则"到底落没落盘"又要靠人猜（这正是本刀要消灭的东西）。
+            _persisted = self._m335_persist_batch(_name, _tag, rules, _applied)
             _abs = getattr(_owner, "_m331_absorb_stats", None) if _owner is not None else None
             _reason = dict(_abs["reason"]) if isinstance(_abs, dict) else None
             _per.append({"organ": _name, "tag": _tag, "class": _cls,
                          "rules": len(rules), "applied": _applied,
                          "tier": _m326_rule_tier(rules),
+                         "persisted": _persisted.get("ok"),
+                         "persisted_total": _persisted.get("total"),
                          "absorb_reason": _reason,
                          "absorb_steps": ({
                              "delivered": _abs.get("delivered"),
@@ -652,7 +804,10 @@ class VerificationLearningHub:
             self._log(LogLevel.INFO,
                       f"[326刀5][absorb] class={_cls} organ={_name} tag={_tag} "
                       f"rules={len(rules)} applied={_applied} tier={_m326_rule_tier(rules)} "
-                      f"reason={_reason}")
+                      f"reason={_reason} "
+                      f"persisted={_persisted.get('ok')}:{_persisted.get('total')}"
+                      f":cum={_persisted.get('cumulative')} "
+                      f"proc_gen={_m335_pg()}")
         self._applier_dispatch_seq = int(getattr(self, "_applier_dispatch_seq", 0)) + 1
         self._applier_last_dispatch = {
             "seq": self._applier_dispatch_seq, "organ": organ,

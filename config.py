@@ -4812,6 +4812,16 @@ EVOLUTION_PROMPT_VERSION = "evolution.v1"     # 进化引擎提示词版本号
 #         "deepseek-reasoner": 0.004,  # ¥/1K tokens 示意
 #     }
 ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 → cost_estimate 恒 null）
+# ===== ★335批刀6（小林拍板③）：进化费用预算熔断额度 =====
+# ★★ 阈值**待裁**：本批只落机制，额度由小林/星轨定，**代码里不写任何默认金额**。
+#   语义严格为三态，别把 None 改成 0：
+#     None  = 未配置 ⇒ **不熔断**（当前状态；机制在位但未启用）
+#     > 0   = 生效额度（元/人民币），used >= limit 即 tripped
+#     0/负数= 视为非法 ⇒ 按未配置处理并留痕（**不会**变成"预算零元全拦死"）
+#   熔断只拦"花钱的进化动作"（派单/执行）；只读巡检、心跳、W1 **不受影响**。
+#   侧账：data/evolution/evolution_budget.json（日/周三档，原子写）。
+EVOLUTION_BUDGET_DAILY_CNY = None            # 待裁：日预算上限（元），None=未配置
+EVOLUTION_BUDGET_WEEKLY_CNY = None           # 待裁：周预算上限（元），None=未配置
 EVOLUTION_LLM_PRICE_TABLE = {
     # 单位：Â¥ / 1K tokens（费用 = 单价 Ã tokens / 1000）。单价取自各模型官方价目（输入档 / 非高峰参考）。
     # 来源核验日期 2026-10-08；USDâCNY 按 ~7.1 折算官方 USD 价。仅填可溯源真实单价；
@@ -6043,5 +6053,19 @@ ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
 # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
 #             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
 ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
+
+# ===== ★335批刀10（Q-15 · 小林已裁⑥）：拟亲记忆的同意开关 =====
+# 语义：`organs/identity/PulsePersonalityKernel.py` 的 `<CREATOR_DAUGHTER>` 关系锚点，
+#   只有在**监护人显式同意**后才允许驱动"拟亲记忆"相关功能（写入长期记忆、参与对外表达）。
+# ★默认 False 且**本批不擅自开启** —— 同意是人的动作，不是代码的默认值。
+# ★开启前提（缺一不可）：
+#   ① 监护人（<CREATOR>）明确同意，且同意范围/期限有书面记录；
+#   ② 拟亲记忆**不存真实姓名/生日/住址**等可识别信息（只用占位符）；
+#   ③ 可随时撤回：置回 False 即停止驱动，已写入的记忆按撤回流程处理。
+# 边界：本开关**不影响**人格内核的结构性描述（锚点文字仍在），只影响"是否驱动功能"。
+# ★★ 落地状态（如实申报，别当已生效）：本批**只声明键**，全库**尚无任何消费点** ——
+#   置 True 目前**不会**改变任何行为。要让它生效，须先另批落"读取该键并驱动拟亲记忆"
+#   的代码（且须先满足上面三条开启前提）。铁律156 同类：有键无色=看着能开、其实永久关。
+ENABLE_CREATOR_AGREEMENT = False  # Q-15 同意程序：默认关，须监护人显式同意后才可开启
 
 

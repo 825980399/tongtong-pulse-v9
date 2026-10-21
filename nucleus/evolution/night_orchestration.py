@@ -23,6 +23,7 @@ import time
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 _module_logger = get_module_logger("NightOrchestration")
 
@@ -233,14 +234,18 @@ def _m333_write_state(path, data):
     """原子写状态文件（先 .tmp 再 os.replace）；失败留痕不抛。"""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        # ★335批刀10：落盘即带本代次 —— 状态文件也要能归属进程
+        #   （A-11 同理：不带代次的状态，重启后读起来跟"同一进程一直没跑"没区别）
+        if isinstance(data, dict):
+            data["proc_gen"] = _m335_pg()
         _tmp = path + ".tmp"
         with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
             json.dump(data, _f, ensure_ascii=False, indent=2)
         os.replace(_tmp, path)
         return True
     except Exception as _e:
-        _module_logger.warning("[夜间编排] digest 状态写失败 %s: %s: %s",
-                               path, type(_e).__name__, _e)
+        _module_logger.warning("[夜间编排] digest 状态写失败 %s: %s: %s proc_gen=%s",
+                               path, type(_e).__name__, _e, _m335_pg())
         return False
 
 
@@ -306,14 +311,20 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
         if str(_st.get("missed_ymd") or "") != _ymd:
             _st["missed_ymd"] = _ymd
             _st["missed_at"] = time.time()
-            _st["missed_reason"] = ("今日 %02d:%02d±%.0fs 窗内进程未运行"
-                                    % (NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol))
+            # ★335批刀10（334挂账④）：文案改**代次口径**。
+            #   原写"窗内进程未运行"会误导 —— 今日 04:00 进程**一直**在跑
+            #   （例如本进程 09:33 才起来），真正的原因是「**本代次没覆盖到那个窗**」
+            #   而不是"进程没跑"。两种说法对应的处置完全不同：
+            #   前者要查调度点是否挂上，后者只能等下一个 04:00。
+            _st["missed_reason"] = (
+                "本代次（proc_gen=%s）未覆盖今日 %02d:%02d±%.0fs 窗"
+                % (_m335_pg(), NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol))
             _m333_write_state(_sp, _st)
             _module_logger.warning(
                 "[夜间编排] digest **未生成**：%s（今日 %s；窗=%s ~ %s）"
-                " ⇒ ledger 活体自转今日不会发生（不填 0，记为未发生）",
+                " ⇒ ledger 活体自转今日不会发生（不填 0，记为未发生） proc_gen=%s",
                 _st["missed_reason"], _ymd,
-                _lo.strftime("%H:%M:%S"), _hi.strftime("%H:%M:%S"))
+                _lo.strftime("%H:%M:%S"), _hi.strftime("%H:%M:%S"), _m335_pg())
         return _out
 
     _digest = generate_night_digest(_root, as_of=now, enabled=enabled)
@@ -331,15 +342,15 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
         _m333_write_state(_sp, _st)
         _module_logger.info(
             "[夜间编排] digest 生成：%s 新增 %s 条（source=live）"
-            " ｜ ledger 累计 %s 条 ｜ verdict=%s",
+            " ｜ ledger 累计 %s 条 ｜ verdict=%s proc_gen=%s",
             _digest,
             "unavailable" if _added is None else _added,
-            _sw.get("total", "unavailable"), _sw.get("verdicts", {}))
+            _sw.get("total", "unavailable"), _sw.get("verdicts", {}), _m335_pg())
     else:
         _out["reason"] = "failed"
         _module_logger.warning(
             "[夜间编排] digest 生成失败（返回 None）：root=%s ymd=%s"
-            " ⇒ 当日不重试，次日 04:00 窗再跑", _root, _ymd)
+            " ⇒ 当日不重试，次日 04:00 窗再跑 proc_gen=%s", _root, _ymd, _m335_pg())
     return _out
 
 
