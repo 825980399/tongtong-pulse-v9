@@ -67,6 +67,15 @@ class ToolingRunner(SilentLogMixin):
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         return issues
 
+    # ★340刀5 [340排查] 已定位的静默归零点（**本批只定位，未改行为**）：
+    #   `_run_cmd` 返回 **stdout + "\n" + stderr**（拼接），而下面两个函数对
+    #   **整个拼接串** `json.loads(...)` ⇒ ruff/bandit 只要往 stderr 写一个字节
+    #   （实测：.ruff_cache 的 package-root 警告、全库扫描时的 Ruff panic）
+    #   就抛 JSONDecodeError ⇒ `except` ⇒ `return []` ⇒ **整条 tool 通道静默归零**
+    #   （无日志、不进 `timeout_flags`）。这正是 per-item `item_count`
+    #   在 947 / 661 两档间跳变（波动 24%）的成因 —— 规则通道恒 661，零波动。
+    #   证据与归因表：`tmp/p340_root/d5_itemcount.json`。
+    #   修复（只取 stdout / 失败留痕 / 固定扫描域）属**改行为** ⇒ 挂账待裁。
     def run_ruff_check(self, files: list[str] | None = None) -> list[dict[str, Any]]:
         """规范检查（ruff）。files 为空时全量，否则只查变更文件（增量）。"""
         issues = []

@@ -45,6 +45,8 @@ class LLMEvolutionEngine(SilentLogMixin):
         2. 用框架日志系统代替print，确保写入日志文件
         """
         record_llm_call(SCENE_EVOLUTION)
+        # ★340批刀4：每次调用先清空，避免沿用上一次的模型名（错账比漏账更难查）。
+        self._m44_last_model = ""
         try:
             import config
             _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
@@ -54,6 +56,11 @@ class LLMEvolutionEngine(SilentLogMixin):
                 self._m44_last_error = "missing_api_config: api_url/api_key 未配置"
                 return None
             _model = model or _api_cfg.get("advanced_model", "deepseek-flash")
+            # ★340批刀4：把**实际请求的模型名**写回取数口 `_m44_last_model`。
+            #   该属性此前全库**无生产者** ⇒ `trace_evolution_call` 装饰器恒取到空串
+            #   ⇒ `_compute_cost_estimate` 查不到单价 ⇒ `cost_estimate` 恒 null
+            #   ⇒ 预算熔断器永不跳闸（烛微340前置§四：cost 非空 = 0 条）。
+            self._m44_last_model = str(_model or "")
             _payload = {
                 "model": _model,
                 "messages": [
@@ -99,6 +106,10 @@ class LLMEvolutionEngine(SilentLogMixin):
                 return None
             # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存
             self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
+            # ★340批刀4：服务端回执的 model 才是**权威**值（网关可能路由到别处）
+            _m340_srv = str(_data.get("model") or "")
+            if _m340_srv:
+                self._m44_last_model = _m340_srv
             _choices = _data.get("choices", [])
             if _choices:
                 return _choices[0].get("message", {}).get("content", "")

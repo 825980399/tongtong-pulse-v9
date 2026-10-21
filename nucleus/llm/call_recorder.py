@@ -40,12 +40,18 @@ import uuid
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger  # ★340刀4：取数行留痕
+
 
 try:  # ★190刀1：接入 188刀4 内在模型产出判据（防御性兜底，避免导入环）
     from nucleus.llm.model_self_updater import is_internal_model_output as _is_internal_model_output
 except Exception as _imp_e:  # pragma: no cover
     silent_exc(_imp_e, where="nucleus.llm.call_recorder::import is_internal_model_output")
     _is_internal_model_output = None  # 兜底：判据不可用时退化为仅 origin 排除
+
+# ★340批刀4：模块日志器（`[340预算]` 取数行落 logs/pulse.log；文件 handler 级别
+#   默认 DEBUG ⇒ 该行可 grep，不新增控制台噪声）。
+_module_logger = get_module_logger("CallRecorder")
 
 # ---------------------------------------------------------------------------
 # 常量：origin（四类调用来源，由调用方显式传入，本模块不做猜测）
@@ -199,6 +205,27 @@ def _m94_normalize_usage(usage: Any) -> dict[str, int] | None:  # _m94_extract_u
             "total_tokens": _ti}
 
 
+def _m340_price_of(model: str) -> float | None:
+    """★340批刀4：单价取数**唯一出口**（¥ / 1K tokens）。
+
+    为什么单独抽一层：`_compute_cost_estimate` 原先**自己**读一次
+    `EVOLUTION_LLM_PRICE_TABLE`；日后若别处也要报价（日报、预算快照、
+    回算），就会出现"同一 model 两处取到不同单价" ⇒ 账不可复算。
+    现在**全库报价只走这一个函数**，`_compute_cost_estimate` 改为委派。
+
+    · 未配置单价表 / model 空 / 非数值单价 ⇒ `None`（**绝不猜价**，第93批设计）。
+    """
+    if not model:
+        return None
+    _tbl = _cfg("EVOLUTION_LLM_PRICE_TABLE", None) or {}
+    if not isinstance(_tbl, dict):
+        return None
+    _p = _tbl.get(str(model))
+    if isinstance(_p, bool) or not isinstance(_p, (int, float)):
+        return None
+    return float(_p)
+
+
 def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_cost
     """★第170批 C9（进化费用追踪下半）：按「模型 × tokens → 费用」估算单次调用费用。
 
@@ -218,11 +245,9 @@ def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_co
     """
     if not _cfg("ENABLE_EVOLUTION_COST_ESTIMATE", True):
         return None
-    _tbl = _cfg("EVOLUTION_LLM_PRICE_TABLE", None) or {}
-    if not isinstance(_tbl, dict) or not model:
-        return None
-    _price = _tbl.get(str(model))
-    if isinstance(_price, bool) or not isinstance(_price, (int, float)):
+    # ★340批刀4：单价改由**单源** `_m340_price_of` 取（不各算各的）。
+    _price = _m340_price_of(model)
+    if _price is None:
         return None
     _tok = tokens if (isinstance(tokens, (int, float))
                       and not isinstance(tokens, bool)) else 0
@@ -474,6 +499,12 @@ class LLMCallRecorder:
             _m94_tokens = int(_m94_usage.get("total_tokens", 0) or 0)
         # ★第170批 C9：费用估算（模型 × tokens → 费用）；未配置单价/模型未知 → None。
         _m94_cost = _compute_cost_estimate(model, _m94_tokens)
+        # ★340批刀4：取数行（model/tokens/cost 同打）。
+        #   为什么必须有这行：预算熔断"永不跳闸"的根因是 model 未透传 ⇒ 单价查不到
+        #   ⇒ cost 恒 null；没有这行，事后无法分辨"没花钱"与"没记上"。
+        _module_logger.debug(
+            "[340预算] 取数 model=%s tokens=%d cost=%s（单价源=EVOLUTION_LLM_PRICE_TABLE 单源）",
+            str(model or ""), _m94_tokens, _m94_cost)
         # ★335批刀6：把本次调用费用累进进化预算侧账。
         #   为什么在这里：这是**唯一**能拿到 cost 的真实记账点（任务书写的
         #   `track_llm_cost` 全库不存在，T0 实测订正）。cost 为 None 时

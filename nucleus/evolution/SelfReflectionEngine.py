@@ -35,6 +35,8 @@ class SelfReflectionEngine:
                   max_tokens: int = 2048) -> str | None:
         """统一 LLM 调用（复用 SSRF 防护网络层）。"""
         record_llm_call(SCENE_EVOLUTION)
+        # ★340批刀4：同上，先清空再写本次实际模型（防沿用上一次的错账）。
+        self._m44_last_model = ""
         try:
             import config
             _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
@@ -44,6 +46,8 @@ class SelfReflectionEngine:
                 self._m44_last_error = "missing_api_config: api_url/api_key 未配置"
                 return None
             _model = _api_cfg.get("advanced_model", "deepseek-flash")
+            # ★340批刀4：实际请求模型回写取数口（此前恒空 ⇒ 费用恒 null）。
+            self._m44_last_model = str(_model or "")
             _payload = {
                 "model": _model,
                 "messages": [
@@ -71,6 +75,10 @@ class SelfReflectionEngine:
                 return None
             # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
             self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
+            # ★340批刀4：服务端回执优先（网关可能路由到别处）
+            _m340_srv = str(_data.get("model") or "")
+            if _m340_srv:
+                self._m44_last_model = _m340_srv
             _choices = _data.get("choices", [])
             if _choices:
                 return _choices[0].get("message", {}).get("content", "")

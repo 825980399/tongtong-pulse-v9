@@ -1335,6 +1335,11 @@ class SafeEvolutionExecutor:
                             "不要提升或降低代码所在的层级。")
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+            # ★340批刀4：实际请求模型回写取数口（渠道池模型 / 默认模型二者取一）。
+            #   `_call_llm_with_followup` 被 `trace_evolution_call` 装饰，
+            #   装饰器在 finally 读 `_m44_last_model`；此前该属性恒空 ⇒ 费用恒 null。
+            self._m44_last_model = str(
+                model or get_llm_call_config().get("default_model", "deepseek-v4-flash"))
             _payload = {
                 # ★第96批 T-96a：渠道池命中时以**渠道自带的 model**（推理接入点 ID）
                 #   为准；为空（回落 REMOTE_API_CONFIG 路径）才用全局默认模型。
@@ -1359,6 +1364,10 @@ class SafeEvolutionExecutor:
                 #    多次追问时取**最后一次**调用的用量，属可接受的近似。）
                 #   ★第95批 T-95e：属性统一命名（原 `_m44_last_usage`）。
                 self._last_llm_usage = _data.get("usage")  # _m94_extract_usage_marker
+                # ★340批刀4：服务端回执优先；多轮追问取**最后一次**的回执
+                _m340_srv = str(_data.get("model") or "")
+                if _m340_srv:
+                    self._m44_last_model = _m340_srv
                 _choices = _data.get("choices", [])
                 if _choices:
                     _msg = _choices[0].get("message") or {}

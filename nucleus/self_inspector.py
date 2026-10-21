@@ -5867,6 +5867,21 @@ _O3_N_SOURCE = ("evidence_tier=hard_strict（图内三层皆无入边 且 图外
 _O3_HARD_POOL_MAX = 1000
 
 _O3_MISJUDGE_LINE = 0.10
+# ★340批刀3（小林拍板 A+C）：判死行动面的**独立 severity 档**与触发链。
+#   A 定语义：`mode == "review"`（解析率中间档 ⇒ 只出待复核清单，不判死）；
+#   C 定触发：`sample=PASS ∧ misjudge ≤ _O3_MISJUDGE_LINE` **连续 ≥3 tick**。
+#   ★N=3 写死：与"≥3 行同代次"纪律同源（单拍读数不足判）。
+#     改这个数 = 改判据口径，须单独立批，不得随手调。
+_M340_JUDGE_ACTION_MIN_TICKS = 3
+# ★只解判死类，不解全局：`_detect_dead_code` 的**硬档产物 severity 恒 'low'**
+#   （judge 档设计内取值），而 `EvolutionLoop:315` 对其余类型仍维持
+#   `min_severity="medium"` —— 本批不改那条线。
+_M340_DEAD_CODE_SEVERITY_KIND = "independent_dead_code"
+#: hard_strict 档判死条目的设计内 severity（池内条目未落该字段时的取值依据）
+_M340_DEAD_CODE_HARD_SEVERITY = "low"
+_M340_SEVERITY_ORDER = {"high": 3, "medium": 2, "low": 1, "info": 0}
+#: 连续 tick 计数（**进程内**；跨进程不拼接，与 proc_gen 纪律同源）
+_M340_JUDGE_ACTION_STATE = {"streak": 0, "last_tick": None, "last_open": False}
 #: 候选数上限建议（小林：N=50—100）
 _O3_CANDIDATE_MAX = 100
 #: 图外可达证据的类型（**不看调用图**，避免拿判据自证判据）
@@ -6926,6 +6941,20 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                    level="warning")
         _rep["open_gate_fields"] = {"evidence_tier_dist": None,
                                     "evidence_tier_src": "unavailable"}
+    # ★340刀3：判死行动面（A+C 触发）状态进开闸报告 —— 日报/压测都读这一个出口。
+    #   三要素全部取自**本函数已算好的读数**（不重算第二遍）：
+    #   mode 取统计档位，sample/misjudge 取本次抽验结果；`tick_id` 用扫描轮次戳
+    #   `_DEAD_CODE_REVIEW_STATS["as_of"]` ⇒ 同一轮重复调用**不虚增**连续计数。
+    try:
+        _rep["judge_action_open"] = _m340_judge_action_open(
+            mode=str(_DEAD_CODE_REVIEW_STATS.get("mode") or ""),
+            sample=(_rep.get("sample") or {}).get("verdict"),
+            misjudge=(_rep.get("sample") or {}).get("misjudge_rate"),
+            tick_id=(_DEAD_CODE_REVIEW_STATS.get("as_of") or None))
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::o3_open_gate_report 340刀3",
+                   level="warning")
+        _rep["judge_action_open"] = None
     _module_logger.info(
         "[326刀2][O3开闸] N口径=%s target=%d hard_total=%d pool=%d capped=%s "
         "sample=%s misjudge=%s official=%s reason=%s",
@@ -7294,6 +7323,113 @@ def _m339_intake_whitelisted(file_path) -> bool:
     return False
 
 
+def _m340_is_dead_code_entry(entry: object) -> bool:
+    """★340刀3：判死类条目的**显式判定**（铁律153：不在理由字符串里找关键字）。"""
+    if not isinstance(entry, dict):
+        return False
+    if entry.get(_O3_INTAKE_BOOL_FIELD) is True:
+        return True
+    _t = str(entry.get("issue_type") or entry.get("type") or "")
+    return _t in _O3_INTAKE_ISSUE_TYPES
+
+
+def _m340_severity_pass(entry: object, min_severity: str = "medium",
+                        action_open: bool | None = None,
+                        dead_code: bool | None = None,
+                        default_severity: str | None = None) -> tuple:
+    """★340刀3：判死行动面的**入队闸**（severity 档）—— 开 action 面的钥匙。
+
+    规则（**只解判死类，不解全局**）：
+      * 判死类（`issue_type ∈ _O3_INTAKE_ISSUE_TYPES` / `o3_dead_code=True`）
+        **且** 行动面已开（`action_open is True`）⇒ 按**独立档**放行，
+        severity=low 也可入 O3 候选；
+      * 其余类型 ⇒ 维持 `min_severity`（默认 "medium"），行为逐字不变；
+      * 条目未标 severity ⇒ 取 `default_severity`；仍取不到 ⇒ **不拦**
+        （"没标 severity" 不等于 "低危"，也不许据此放行判死类）。
+
+    Returns: ``(bool, reason)``，reason ∈ ``independent_dead_code /
+    pass_min_severity / below_min_severity / action_closed / unknown_severity /
+    no_threshold / not_dict``。
+    """
+    if not isinstance(entry, dict):
+        return False, "not_dict"
+    _is_dc = _m340_is_dead_code_entry(entry) if dead_code is None else bool(dead_code)
+    if _is_dc and action_open is True:
+        # ★独立档：这一条就是"钥匙"—— 判死类不再被 medium 整条过滤
+        return True, _M340_DEAD_CODE_SEVERITY_KIND
+    _sev = str(entry.get("severity") or default_severity or "")
+    _want = _M340_SEVERITY_ORDER.get(str(min_severity or ""), None)
+    _have = _M340_SEVERITY_ORDER.get(_sev, None)
+    if _want is None:
+        return True, "no_threshold"          # 未设门槛 ⇒ 不过滤（保持既有行为）
+    if _have is None:
+        return True, "unknown_severity"      # 不猜、不拦（见 docstring）
+    if _have >= _want:
+        return True, "pass_min_severity"
+    return False, ("action_closed" if _is_dc else "below_min_severity")
+
+
+def _m340_judge_action_open(mode: str | None = None, sample: object = None,
+                            misjudge: float | None = None,
+                            tick_id: object = None) -> dict:
+    """★340刀3：判死行动面触发（A 定语义 + C 定触发，三取一连环）。
+
+    触发条件**三取一**，缺一即不开（这是"开放新能力"的门 ⇒ fail-closed）：
+      ① `mode == "review"`（A：解析率中间档，只出待复核清单的那一档）；
+      ② `sample` 为 `PASS`（抽验通过，`sample_verify_hard_candidates` 的 verdict）；
+      ③ `misjudge` 是数值且 ≤ `_O3_MISJUDGE_LINE`（0.10）；None ⇒ 不可判。
+    且三条须**连续 ≥ `_M340_JUDGE_ACTION_MIN_TICKS`(3) 个 tick**。
+
+    `_RESOLVE_GATE_*` 阈值**一字不动**：本函数只读 `mode`，不改任何分档。
+
+    `tick_id`：同一 tick 重复调用**不重复计数**（幂等，防同拍虚增）；
+    不给 ⇒ 每次调用按一次新 tick 计（调用方应传拍号/`as_of` 戳）。
+
+    Returns: ``{"judge_action_open": bool, "verdict": OPEN/CLOSED/UNAVAILABLE,
+    "reason": {...}, "state": {...}}``
+    """
+    _mode_ok = (str(mode) == "review")
+    _sample_ok = (str(sample).upper() == "PASS")
+    _mis_val = None
+    _mis_ok = False
+    if isinstance(misjudge, (int, float)) and not isinstance(misjudge, bool):
+        _mis_val = float(misjudge)
+        _mis_ok = _mis_val <= float(_O3_MISJUDGE_LINE)
+    _unjudged = []
+    if mode is None:
+        _unjudged.append("mode")
+    if sample is None:
+        _unjudged.append("sample")
+    if misjudge is None:
+        _unjudged.append("misjudge")
+    _all_ok = bool(_mode_ok and _sample_ok and _mis_ok)
+    _st = _M340_JUDGE_ACTION_STATE
+    _same_tick = bool(tick_id is not None and _st.get("last_tick") == tick_id)
+    if _all_ok:
+        if not _same_tick:
+            _st["streak"] = int(_st.get("streak") or 0) + 1
+            _st["last_tick"] = tick_id
+    else:
+        _st["streak"] = 0
+        _st["last_tick"] = tick_id
+    _open = int(_st["streak"]) >= int(_M340_JUDGE_ACTION_MIN_TICKS)
+    _st["last_open"] = bool(_open)
+    _verdict = "OPEN" if _open else ("UNAVAILABLE" if _unjudged else "CLOSED")
+    _reason = {"mode": (str(mode) if mode is not None else None),
+               "sample": (str(sample) if sample is not None else None),
+               "misjudge": _mis_val, "misjudge_line": float(_O3_MISJUDGE_LINE),
+               "streak": int(_st["streak"]),
+               "need": int(_M340_JUDGE_ACTION_MIN_TICKS),
+               "unjudged_steps": list(_unjudged)}
+    _module_logger.info(
+        "[340判死] judge_action_open=%s(%s) mode=%s sample=%s misjudge=%s 连续=%d/%d%s",
+        bool(_open), _verdict, mode, sample, _mis_val,
+        int(_st["streak"]), int(_M340_JUDGE_ACTION_MIN_TICKS),
+        (" 未判项=" + ",".join(_unjudged)) if _unjudged else "")
+    return {"judge_action_open": bool(_open), "verdict": _verdict,
+            "reason": _reason, "state": dict(_st)}
+
+
 def _m335_o3_intake_candidates(items: list | None = None,
                                 limit: int = 1) -> dict:
     """★335批刀1：O3 开闸消费面的**候选筛选**（与受控入料同规则集）。
@@ -7324,7 +7460,16 @@ def _m335_o3_intake_candidates(items: list | None = None,
                  else (_DEAD_CODE_REVIEW_STATS.get("hard_items") or []))
     # ★339刀3：新增 `domain`（判据域外）与 `whitelist`（来源路径非业务目录）两档
     _rejected = {"tier": 0, "lifecycle": 0, "core": 0, "shape": 0, "dup": 0,
-                 "domain": 0, "whitelist": 0}
+                 "domain": 0, "whitelist": 0,
+                 # ★340刀3：severity 入队闸拒收档（判死类行动面未开 ⇒ 记这里）
+                 "severity": 0}
+    # ★340刀3：行动面开合**只读取**上一次判定结果（由 `o3_open_gate_report`
+    #   每 tick 计算一次），本函数不推进连续计数 —— 否则"筛选被调用几次"
+    #   会决定"行动面开不开"，那是把拍频当判据（与 335 三态同型错误）。
+    _m340_action_open = bool(_M340_JUDGE_ACTION_STATE.get("last_open"))
+    # 未注入 items ⇒ 池源就是判死 hard 池（`_DEAD_CODE_REVIEW_STATS["hard_items"]`）
+    # ⇒ 条目**按构造**都是判死类（池内条目未落 issue_type 字段，这里显式补判据）。
+    _pool_is_dc = (items is None)
     _strict_n = sum(1 for _i in _pool
                     if isinstance(_i, dict)
                     and str(_i.get("evidence_tier") or "") == "hard_strict")
@@ -7343,6 +7488,18 @@ def _m335_o3_intake_candidates(items: list | None = None,
             continue
         _name = str(_it.get("method") or "")
         _file = str(_it.get("file") or "").replace("\\", "/")
+        # ★340刀3：severity 入队闸。判死类在**行动面开启**后走独立档
+        #   （severity=low 也可入池）；未开 ⇒ 记 `action_closed`（可审计，不静默丢）。
+        _m340_ok, _m340_why = _m340_severity_pass(
+            _it, min_severity="medium", action_open=_m340_action_open,
+            dead_code=_pool_is_dc or None,
+            default_severity=(_M340_DEAD_CODE_HARD_SEVERITY if _pool_is_dc else None))
+        if not _m340_ok:
+            _rejected["severity"] += 1
+            _module_logger.info(
+                "[340判死] severity 档拒收: file=%s method=%s 原因=%s（行动面开=%s）",
+                _file, _name, _m340_why, _m340_action_open)
+            continue
         # ★339刀3：判据域显式排除 `tests/` / `test_`（图域外不判已有，
         #   但候选仍会产生 ⇒ 在这里补一道过滤）。
         if not _m339_in_domain(_file):
@@ -7384,10 +7541,11 @@ def _m335_o3_intake_candidates(items: list | None = None,
                       if _out else
                       ("strict 池 %d 条全被生命周期/核心文件/形态/域规则拒收"
                        "（拒收: 档位=%d 生命周期=%d 核心=%d 形态=%d 重复=%d"
-                       " 域外=%d 白名单外=%d）"
+                       " 域外=%d 白名单外=%d severity=%d）"
                        % (_strict_n, _rejected["tier"], _rejected["lifecycle"],
                           _rejected["core"], _rejected["shape"], _rejected["dup"],
-                          _rejected["domain"], _rejected["whitelist"]))}
+                          _rejected["domain"], _rejected["whitelist"],
+                          _rejected["severity"]))}
 
 
 def get_self_inspector() -> SelfInspector:

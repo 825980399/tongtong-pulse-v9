@@ -252,13 +252,26 @@ class PulseController(BasePulseOrgan):
                 self._get_playwright_executor().submit(self._ensure_headless_browser)
             except Exception as _pw_e:
                 self._log(LogLevel.DEBUG,
-                          f"预热提交池失败，降级裸线程: {type(_pw_e).__name__}: {_pw_e}")
-                _prewarm_thread = threading.Thread(
-                    target=self._ensure_headless_browser, daemon=True)
-                _prewarm_thread.start()
+                          f"预热提交池失败，降级同步预热: {type(_pw_e).__name__}: {_pw_e}")
+                # ★340刀2（D3 第1批）：一次性预热由**裸线程**改**同步调用**。
+                #   为什么可以同步：这是启动期一次性动作，不是保活循环；
+                #   同步后浏览器对象诞生在调用线程，反而消除了原注释里
+                #   "绑到已退出线程 ⇒ cannot switch to a different thread" 的隐患。
+                #   失败不阻断启动（与原"线程内失败即静默"相比，这里显式留痕）。
+                try:
+                    self._ensure_headless_browser()
+                except Exception as _pw_sync_e:
+                    self._log(LogLevel.WARNING,
+                              f"[340去线程] 同步预热失败（不阻断启动）: "
+                              f"{type(_pw_sync_e).__name__}: {_pw_sync_e}")
         else:
-            _prewarm_thread = threading.Thread(target=self._ensure_headless_browser, daemon=True)
-            _prewarm_thread.start()
+            # ★340刀2（D3 第1批）：同上，一次性预热改同步调用。
+            try:
+                self._ensure_headless_browser()
+            except Exception as _pw_sync_e:
+                self._log(LogLevel.WARNING,
+                          f"[340去线程] 同步预热失败（不阻断启动）: "
+                          f"{type(_pw_sync_e).__name__}: {_pw_sync_e}")
         # 启动浏览器保活定时器
         self._start_keepalive_timer()
         self._log(LogLevel.INFO, "控制器已启动（常驻浏览器预热中...）")
