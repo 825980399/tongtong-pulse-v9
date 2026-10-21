@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.mnemosyne import snapshot_index
 from nucleus.mnemosyne.PulseNode import PulseNode
 
 
@@ -182,6 +183,10 @@ class LazySnapshotView:
         self._cache: OrderedDict[str, PulseNode] = OrderedDict()
         self._file = None
         self._mm: mmap.mmap | None = None
+        # ★338刀1：本次打开走的是持久索引还是真扫（index_hit / rescanned /
+        #   index_hit_after_scan / scan_failed）。调用方据此判断切片表可信度。
+        self.index_status: str = "unknown"
+        self.index_written: bool = False
         self._build()
 
     def _build(self):
@@ -189,14 +194,38 @@ class LazySnapshotView:
         #   由 `_close_mm()` 统一释放；改为 with 会在 `_build()` 返回时关闭文件使 mmap 失效。
         self._file = open(self.path, "rb")  # noqa: SIM115 - 见上，句柄需长于本函数
         self._mm = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
+        # ★338刀1：先试持久索引——命中即跳过整份重扫（648MB / 19087 条 / 约 1.1s）。
+        #   命中条件是**物理身份**（file_size 全等 + mtime 在容差内）且 schema 一致；
+        #   任一项不符一律重扫，绝不用旧切片硬读新文件（读错偏移比慢一秒危险得多）。
+        _payload = snapshot_index.load(self.path)
+        if _payload is not None:
+            _spans, _index = snapshot_index.spans_of(_payload)
+            _md = _payload.get("metadata")
+            self._metadata = dict(_md) if isinstance(_md, dict) else {}
+            self._spans = _spans
+            self._index = _index
+            self.index_status = "index_hit"
+            return
         try:
             md, spans, index = _iter_snapshot(self._mm, b"nodes")
-        except Exception:
+        except Exception as _e338:
             self._close_mm()
+            self.index_status = "scan_failed"
+            snapshot_index.mark_scan_failed(
+                self.path, f"{type(_e338).__name__}: {_e338}")
+            silent_exc(_e338, where="lazy_snapshot::_build 重扫失败", level="error")
             raise
         self._metadata = md
         self._spans = spans
         self._index = index
+        self.index_status = "rescanned"
+        # 回写索引：best-effort。写不成只影响**下次启动**的速度，不影响本次正确性，
+        # 故失败不抛（但 health 里会留下 index_missing/stale 的痕迹）。
+        snapshot_index.mark_rescanned(self.path, len(spans), "索引未命中，重扫完成")
+        if snapshot_index.save(
+                self.path, snapshot_index.build_payload(self.path, md, spans)):
+            self.index_written = True
+            self.index_status = "rescanned+index_written"
 
     def _close_mm(self):
         try:

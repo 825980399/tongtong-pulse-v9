@@ -2071,6 +2071,17 @@ class PulseNodePool(SilentLogMixin):
                     and _victim.evol_level == PulseNode.EVOL_L1
                     and self._write_cold_node_to_disk(_victim)):
                 self._cold_evicted.add(_victim.node_id)
+                # ★338刀3：**这条才是生产真走的驱逐路径**（warm 溢出→L1 直接写盘，
+                #   不进 _cold 也就不走 _evict_cold_node）。不在这里留痕，就会出现
+                #   “真的驱逐了但日志里一条都没有”——正是 4 天 0 驱逐的真正成因之一。
+                self._m169_cold_trace(
+                    "evict", _victim.node_id, True,
+                    "warm溢出直写 evol_level={}".format(
+                        getattr(_victim, "evol_level", "?")))
+                _module_logger.info(
+                    "[338冷化] 驱逐 类=%s 条=1 回载=可用 路径=warm溢出直写 存留=%d",
+                    str(getattr(_victim, "evol_level", "?") or "?"),
+                    len(self._cold_evicted))
                 if self._index_store is not None:
                     self._index_store.record_change(
                         "add", "level_index",
@@ -2555,6 +2566,13 @@ class PulseNodePool(SilentLogMixin):
         self._cold_evicted.add(_node_id)
         self._m169_cold_trace("evict", _node_id, True,
                               "evol_level={}".format(getattr(node, "evol_level", "?")))
+        # ★338刀3：驱逐**真实动作**必须一行可 grep 的留痕（此前只有 trace 计数，
+        #   报表侧看不出「谁被赶走、赶走多少、还能不能取回来」）。
+        #   回载=可用 的判据 = 冷存启用且已写入磁盘（写盘失败在上面就 return 了）。
+        _module_logger.info(
+            "[338冷化] 驱逐 类=%s 条=1 回载=可用 存留=%d",
+            str(getattr(node, "evol_level", "?") or "?"),
+            len(self._cold_evicted))
         # 外置索引标记 evicted（★第81批 T4：用真实 evol_level，不再恒 L1）
         if self._index_store is not None:
             self._index_store.record_change(
@@ -2972,6 +2990,14 @@ class PulseNodePool(SilentLogMixin):
             if consume:
                 self._cold_evicted.discard(_nid)
                 self._cold_stats["recall_hits"] += 1
+        # ★338刀3：召回留痕。命中率的分母是**本次请求的条数**（不是全库），
+        #   这样才能回答「我要的这 100 条，取回了几条」。
+        _req = len(_targets)
+        _hit = len(_result)
+        if _req:
+            _module_logger.info(
+                "[338冷化] 召回 类=batch 请求=%d 命中=%d 命中率=%.4f 回载=可用",
+                _req, _hit, (_hit / _req))
         return _result
 
     def _recall_cold_node(self, node_id: str, consume: bool = True) -> PulseNode | None:
@@ -3113,11 +3139,87 @@ class PulseNodePool(SilentLogMixin):
                 "evicted_count": len(self._cold_evicted),
                 "recall_hits": _hits,
                 "recall_misses": _misses,
-                "recall_hit_rate": round(_hits / _total, 4) if _total else 0.0,
+                # ★338刀3：**没有样本时不填 0**。「一次都没召回过」和「召回了但全
+                #   没命中」是两个完全不同的事实，填 0 会把前者读成后者（活体 4 天
+                #   0 驱逐 0 召回，正是这样被读成「命中率 0%」的）。
+                "recall_hit_rate": round(_hits / _total, 4) if _total else None,
+                "recall_samples": _total,
+                "recall_status": "ok" if _total else "UNAVAILABLE",
                 # ★169批 C11：运行留痕计数（补可查证据，不改既有键）
                 "evict_count": self._cold_stats.get("evict_count", 0),
                 "recall_count": self._cold_stats.get("recall_count", 0),
             }
+
+    def cold_chain_report(self) -> dict[str, Any]:
+        """★338刀3：冷化链**完整取值链 + 为什么没动作**的只读报告。
+
+        活体现象：`cold.index.json` 5530 条、4 天 0 驱逐 0 召回。
+        本批查清的根因**不是 bug，是阈值与规模不匹配**：
+
+            降级链：hot(>max_hot=10000) → warm(>max_warm=50000) → cold/磁盘
+            实际规模：约 19087 节点 < max_warm(50000)
+
+        即 warm 池永远不溢出 ⇒ 永远不会往 cold 降 ⇒ cold 恒空 ⇒
+        `_enforce_cold_cache` 的前置 `len(_cold) > _max_cold_cache` 永假。
+        **机制是好的，只是从来没被触发过**。所以本报告在未触发时返回
+        `verdict="UNAVAILABLE"`（机制未生效），而不是「驱逐 0 条」——
+        后者会被读成「驱逐了但一条没成功」。
+
+        Returns:
+            dict: 含 enabled / 取值链三要素 / 分层规模 / 计数 / verdict / why
+        """
+        _stats = self.get_cold_stats()
+        _hot = len(getattr(self, "_hot", {}) or {})
+        _warm = len(getattr(self, "_warm", {}) or {})
+        _cold = len(getattr(self, "_cold", {}) or {})
+        _max_hot = int(getattr(self, "_max_hot", 0) or 0)
+        _max_warm = int(getattr(self, "_max_warm", 0) or 0)
+        _max_cold = int(getattr(self, "_max_cold_cache", 0) or 0)
+        # 冷池内存占用（只读估算，粗粒度：对象 __dict__ 的体积量级）
+        _bytes = 0
+        try:
+            import sys as _sys
+            for _n in list(getattr(self, "_cold", {}).values()):
+                _bytes += _sys.getsizeof(_n)
+        except Exception as _e:
+            silent_exc(_e, where="PulseNodePool::cold_chain_report 冷池体积估算")
+        _evict = int(_stats.get("evict_count", 0) or 0)
+        _recall = int(_stats.get("recall_count", 0) or 0)
+        # 未触发归因（铁律159：判据必须蕴含可达性——先答「该不该动作」）
+        _why = ""
+        _verdict = "OK"
+        if not self._cold_storage_enabled:
+            _verdict, _why = "UNAVAILABLE", "冷存未启用（config.FEATURE.use_cold_storage=False）"
+        elif _warm <= _max_warm:
+            _verdict = "UNAVAILABLE"
+            _why = ("未触发：warm %d ≤ max_warm %d ⇒ 从不降级到 cold"
+                    "（不是 bug，是阈值与规模不匹配）" % (_warm, _max_warm))
+        elif _cold == 0:
+            _verdict, _why = "UNAVAILABLE", "warm 溢出但 cold 仍空（L1 直接写盘分支已接管）"
+        elif _evict == 0 and _recall == 0:
+            _verdict, _why = "UNAVAILABLE", "cold 非空但从未驱逐/召回（待查）"
+        return {
+            "verdict": _verdict,
+            "why": _why,
+            "enabled": bool(self._cold_storage_enabled),
+            # 取值链三要素：配置键 → 生效分支 → 活体行（活体行由调用方从日志取）
+            "chain": {
+                "config_key": "FEATURE.use_cold_storage",
+                "wire_site": "main.py set_cold_storage(enabled=True, cold_dir=...) when enabled",
+                "live_log_marker": "L1 冷存储分治已启用",
+            },
+            "layers": {"hot": _hot, "warm": _warm, "cold": _cold,
+                       "max_hot": _max_hot, "max_warm": _max_warm,
+                       "max_cold": _max_cold},
+            "counts": {"evicted": int(_stats.get("evicted_count", 0) or 0),
+                       "evict_count": _evict, "recall_count": _recall,
+                       "recall_hits": int(_stats.get("recall_hits", 0) or 0),
+                       "recall_misses": int(_stats.get("recall_misses", 0) or 0),
+                       "recall_hit_rate": _stats.get("recall_hit_rate"),
+                       "recall_status": _stats.get("recall_status")},
+            "cold_cache_approx_mb": round(_bytes / (1024.0 * 1024.0), 3),
+            "cold_pool_mem_observe": True,
+        }
 
     def count_cold_parquet_files(self) -> int:
         """★阶段B'硬约束2：统计冷存 Parquet 小文件数（用于 compaction 触发判断）。

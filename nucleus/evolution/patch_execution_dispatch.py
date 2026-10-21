@@ -1319,6 +1319,96 @@ def get_m325_dispatch_rej() -> dict:
 
 
 #: ★第311批 刀1：自动分诊的「高置信」门槛（历史 trust_score 实测取值 30/40/45/50/80）
+# ★338刀4：生成侧证据门版本。生成侧填充与派单侧校验**同源同版**——
+#   否则生成侧填了、派单侧不认，又会回到“各算各的”。
+_M338_EVIDENCE_VERSION = "338.d4.v1"
+_M338_RISK_OK = ("低", "low", "中", "medium", "高", "high")
+
+
+def _m338_evidence_gate_on() -> bool:
+    """证据门开关（配置不可读 ⇒ 关，不猜）。
+
+    ★铁律156：门禁类禁静默降级。这里读不到开关时**默认关**是有意的：
+    证据门是“增加报警”型改动，靠不住时宁可不生效，也不能把派单全部阻死。
+    """
+    try:
+        import config as _cfg_ev
+
+        return bool(getattr(_cfg_ev, "ENABLE_PATCH_EVIDENCE_GATE", False))
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m338_evidence_gate_on")
+        return False
+
+
+def _m338_derive_evidence(patch: dict) -> dict:
+    """从补丁自身**可复算**的字段派生三要素证据。
+
+    为何要“基据”而不只是“值”：337刀1 查清只剩 8 条未应用候选全不合格，
+    而 `fcef` 之所以成为“池里唯一合格者”，根因是**没有人能回答“这个值凭什么”**。
+    所以每一项都必须带 `basis` + `source`，并且下面三种情形算“没证据”：
+      * risk 只有 LLM 自评（无 issue_type 可复算）；
+      * trust 是恒 70 默认值（零信息量）；
+      * blast 不可判定（方法名未入图 / 无 file 消歧）。
+    """
+    _it = str(patch.get("issue_type") or "").strip()
+    _risk = str(patch.get("risk_level") or "").strip()
+    _m = str(patch.get("method") or "")
+    _f = str(patch.get("file") or "")
+    _ev: dict = {"evidence_version": _M338_EVIDENCE_VERSION,
+                 "risk": None, "trust": None, "blast": None}
+    if _risk in _M338_RISK_OK and _it:
+        _ev["risk"] = {"value": _risk, "basis": "issue_type=%s" % _it,
+                       "source": "_m280_risk_by_issue_type"}
+    elif _risk in _M338_RISK_OK:
+        _ev["risk"] = {"value": _risk,
+                       "basis": "无 issue_type（只有 LLM 自评分，不可复算）",
+                       "source": "llm_self_report"}
+    try:
+        _t = float(patch.get("trust_score"))
+    except (TypeError, ValueError) as _te338:
+        _module_logger.debug(
+            "[338刀4] trust_score 非数值，证据记 None: %s: %s",
+            type(_te338).__name__, _te338)
+        _t = None
+    if _t is not None and float(_t) != 70.0:
+        _ev["trust"] = {"value": _t,
+                       "basis": "issue_type=%s 分值（非恒 70 默认）" % (_it or "-"),
+                       "source": "_m280_trust_by_issue_type"}
+    elif _t is not None:
+        _ev["trust"] = {"value": _t, "basis": "恒 70 默认值（零信息量）",
+                       "source": "default"}
+    _br = blast_radius_of(_m, file=_f) if _m else None
+    if _br is not None:
+        _ev["blast"] = {"value": int(_br),
+                        "basis": "method=%s file=%s 入边BFS(depth=3)" % (_m, _f),
+                        "source": "blast_radius_of"}
+    return _ev
+
+
+def _m338_evidence_ok(patch: dict) -> tuple:
+    """证据三要素是否**各自可复算**。
+
+    Returns:
+        (ok: bool, reason: str, evidence: dict)
+        reason 取值：ok / derived_legacy / 缺哪一项 / 证据不可复算
+    """
+    _ev = patch.get("patch_evidence")
+    if not isinstance(_ev, dict):
+        # 存量补丁无证据字段：同源派生一次（**只读，不回写存储**）
+        _ev = _m338_derive_evidence(patch)
+        _legacy = True
+    else:
+        _legacy = False
+    _miss = [k for k in ("risk", "trust", "blast") if not isinstance(_ev.get(k), dict)]
+    if _miss:
+        return False, "证据缺 %s" % ",".join(_miss), _ev
+    if str((_ev.get("risk") or {}).get("source")) == "llm_self_report":
+        return False, "risk 仅 LLM 自评（无 issue_type 可复算）", _ev
+    if str((_ev.get("trust") or {}).get("source")) == "default":
+        return False, "trust 为恒 70 默认（零信息量）", _ev
+    return True, ("derived_legacy" if _legacy else "ok"), _ev
+
+
 AUTO_TRIAGE_MIN_TRUST = 40.0
 
 
@@ -1348,7 +1438,8 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
     _out: list = []
     # ★337批刀1：新增 applied / cap 两档拒收（方向A/B 各一档），拒收分布仍对外可见
     _rej = {"status": 0, "risk": 0, "morph": 0, "trust": 0,
-            "lifecycle": 0, "blast": 0, "applied": 0, "cap": 0}
+            "lifecycle": 0, "blast": 0, "applied": 0, "cap": 0,
+            "evidence": 0}   # ★338刀4：证据不齐⇒转人工
     # ★337批刀1（方向B）：侧账只读一次（与派单主流程同源，避免每条候选各读一次盘）
     _m337_ledger = _m326_load_fail_ledger()
     for _p in patch_history:
@@ -1383,6 +1474,17 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
                 str(_p.get("id", ""))[:16], str(_p.get("method") or ""),
                 _m337_fc, _DISPATCH_FAIL_CAP)
             continue
+        # ★338刀4：**证据不齐不入自动派单池**。不是“降门槛”，
+        #   是要求每一项判据都能回答“凭什么”——fcef 型“池里唯一合格者”
+        #   就是从这个缺口漏进来的。开关关时不生效（铁律156：不默默展开新阻断）。
+        if _m338_evidence_gate_on():
+            _ev_ok, _ev_why, _ev_body = _m338_evidence_ok(_p)
+            if not _ev_ok:
+                _rej["evidence"] += 1
+                _module_logger.info(
+                    "[338刀4] 证据不齐 ⇒ 拒入自动派单池: patch=%s method=%s 原因=%s",
+                    str(_p.get("id", ""))[:24], str(_p.get("method") or ""), _ev_why)
+                continue
         if _p.get("risk_level") not in ("低", "low"):
             _rej["risk"] += 1
             continue
@@ -1419,12 +1521,143 @@ def select_for_auto_triage(patch_history: list, limit: int = 1,
                              _m337_last_attempt_ts(p)))
     _module_logger.info(
         "[311刀1] 自动分诊池: 命中 %d 条（拒收 status=%d risk=%d 形态=%d 置信=%d "
-        "生命周期=%d 牵连=%d 已应用=%d cap=%d），单批派 %d 条",
+        "生命周期=%d 牵连=%d 已应用=%d cap=%d 证据=%d），单批派 %d 条",
         len(_out), _rej["status"], _rej["risk"], _rej["morph"], _rej["trust"],
         _rej["lifecycle"], _rej["blast"], _rej["applied"], _rej["cap"],
+        _rej["evidence"],
         min(len(_out), _lim))
     return _out[:_lim]
 
+
+
+# ===== ★338批刀4：生成侧合格候选补料（回收通道）=====
+def build_reusable_candidates(patch_history: list, limit: int = 20,
+                              out_path: str | None = None) -> dict:
+    """★338刀4：把被拒的补丁整理成**可复用候选清单**（只出清单与修整动作）。
+
+    为何要这条通道：337刀1 修好死锁后池是空的——剩下 8 条未应用候选
+    **全部**被既有规则判不合格（risk2/trust2/fragment2/blast2）。它们不是“坏补丁”，
+    而是“**证据不全的补丁**”——只要把缺的那一项补上（重定级/补验证证据/确认调用面），
+    它们就能回到池里。**本函数不改任何判定语义、不改补丁本体、不调派单**，
+    只回答“哪些能救、怎么救、救完会过哪一档”。
+
+    ★铁律158：写盘路径**必须注入**（`out_path`），不接受默认拼产生路径；传 None 则只返回不落盘。
+
+    Args:
+        patch_history: 补丁历史列表（dict 列表）
+        limit: 最多返回条数
+        out_path: 可选落盘路径（原子写）
+
+    Returns:
+        dict: {version, total, reusable, items, by_reason}
+    """
+    _items: list = []
+    _by_reason: dict = {}
+    if not isinstance(patch_history, list):
+        return {"version": _M338_EVIDENCE_VERSION, "total": 0, "reusable": 0,
+                "items": [], "by_reason": {}}
+    _ledger = _m326_load_fail_ledger()
+    for _p in patch_history:
+        if not isinstance(_p, dict):
+            continue
+        # 已应用的不进清单（不是“可复用”，是“已用过”）
+        if _p.get("applied") is True:
+            continue
+        _status = _p.get("status")
+        _m = str(_p.get("method") or "")
+        _f = str(_p.get("file") or "")
+        _risk = str(_p.get("risk_level") or "")
+        _fc = _m326_persisted_fail_count(_p, _ledger)
+        _ev = _m338_derive_evidence(_p)
+        _ev_miss = [k for k in ("risk", "trust", "blast") if not isinstance(_ev.get(k), dict)]
+        _acts: list = []
+        _reason = ""
+
+        if _fc >= _DISPATCH_FAIL_CAP:
+            _reason = "cap"
+            _acts.append("连续验证失败 %d 次（cap=%d）⇒ 需先看失败原因，"
+                         "改动修正方案后才能重置计数" % (_fc, _DISPATCH_FAIL_CAP))
+        if _status not in ("runtime_verified", "approved"):
+            _reason = _reason or "status"
+            _acts.append("状态为 %r（需 runtime_verified 或 approved）⇒ 补运行时验证" % (_status,))
+        if _risk not in ("低", "low"):
+            _reason = _reason or "risk"
+            _acts.append("risk_level=%r（需 低）⇒ 按 issue_type 重定级（_m280_risk_by_issue_type）" % (_risk,))
+        try:
+            _trust = float(_p.get("trust_score") or 0)
+        except (TypeError, ValueError) as _te338b:
+            _module_logger.debug(
+                "[338刀4] 回收清单 trust_score 非数值，按 0 处理: %s: %s",
+                type(_te338b).__name__, _te338b)
+            _trust = 0.0
+        if _trust < AUTO_TRIAGE_MIN_TRUST:
+            _reason = _reason or "trust"
+            _acts.append("trust_score=%.1f < %.1f ⇒ 补验证证据（复现日志 + 回归用例）后按 issue_type 重算" % (_trust, AUTO_TRIAGE_MIN_TRUST))
+        if is_fragment_to_full(_p):
+            _reason = _reason or "morph"
+            _acts.append("形态=片段→完整（original 无 def、modified 有 def）⇒ original_code 需补完整函数体")
+        if _m in _LIFECYCLE_NAMES:
+            _reason = _reason or "lifecycle"
+            _acts.append("方法名 %r 属生命周期（图上结构性失明）⇒ 不得自动派单，只能人工审" % _m)
+        _br = blast_radius_of(_m, file=_f) if _m else None
+        if _br is None:
+            _reason = _reason or "blast"
+            _acts.append("牵连不可判定（方法名未入图 / 无 file 消歧）⇒ 需人工确认调用面后定值")
+        elif _br > 1:
+            _reason = _reason or "blast"
+            _acts.append("牵连半径=%d > 1 ⇒ 需拆分小改动或转专项验证" % _br)
+        if _ev_miss:
+            _reason = _reason or "evidence"
+            _acts.append("证据缺 %s ⇒ 生成侧补 patch_evidence（risk/trust/blast 各带 basis）" % ",".join(_ev_miss))
+        if str((_ev.get("risk") or {}).get("source")) == "llm_self_report":
+            _reason = _reason or "evidence"
+            _acts.append("risk 仅 LLM 自评⇒ 需补 issue_type 使其可复算")
+        if str((_ev.get("trust") or {}).get("source")) == "default":
+            _reason = _reason or "evidence"
+            _acts.append("trust 为恒 70 默认⇒ 需按 issue_type 重算出有信息量的分值")
+        if not _acts:
+            continue        # 完全合格的不在“可复用”清单里（它已能进池）
+        _by_reason[_reason] = _by_reason.get(_reason, 0) + 1
+        _items.append({
+            "id": str(_p.get("id") or "")[:48],
+            "method": _m,
+            "file": _f,
+            "issue_type": _p.get("issue_type"),
+            "status": _status,
+            "risk_level": _risk,
+            "trust_score": _trust,
+            "blast_radius": _br,
+            "fail_count": _fc,
+            "primary_reason": _reason,
+            "repair_actions": _acts,
+            "reusable": bool(_acts) and _m not in _LIFECYCLE_NAMES,
+        })
+    # 可复用的排前（修完能进池的优先），再按 fail_count 升序（越少越好救）
+    _items.sort(key=lambda x: (not x["reusable"], x["fail_count"], x["id"]))
+    _items = _items[:max(0, int(limit))]
+    _out = {
+        "version": _M338_EVIDENCE_VERSION,
+        "generated_at": time.time(),
+        "total": len(_items),
+        "reusable": sum(1 for x in _items if x["reusable"]),
+        "by_reason": _by_reason,
+        "items": _items,
+    }
+    if out_path:
+        try:
+            _tmp = out_path + ".tmp"
+            _d = os.path.dirname(out_path)
+            if _d:
+                os.makedirs(_d, exist_ok=True)
+            with io.open(_tmp, "w", encoding="utf-8", newline="") as _f:
+                json.dump(_out, _f, ensure_ascii=False, indent=2)
+            os.replace(_tmp, out_path)
+        except Exception as _e:
+            silent_exc(_e, where="patch_execution_dispatch::build_reusable_candidates 落盘")
+    _module_logger.info(
+        "[338刀4] 可复用候选清单: 条数=%d 可复用=%d 主因分布=%s",
+        _out["total"], _out["reusable"], _by_reason)
+    return _out
 
 
 # ===== ★319批刀5（SC-2 回归自检 · 挂点）=====

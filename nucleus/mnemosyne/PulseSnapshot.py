@@ -25,6 +25,7 @@ from typing import Any
 from nucleus.const import LogLevel
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.logger import get_module_logger
+from nucleus.mnemosyne import snapshot_index
 from nucleus.mnemosyne.pa_compat import table_from_rows
 from nucleus.mnemosyne.PulseNode import PulseNode
 
@@ -115,16 +116,23 @@ def _m41_backup_keep() -> int:
     """★第41批 T2（P1-264）：知识快照备份保留份数。
 
     原实现为 ``__init__`` 内**硬编码 5** → 无上限可配，实测堆积 5 份 ×438MB。
-    现读 ``config.KNOWLEDGE_BACKUP_KEEP``（默认 3）；开关
+    现读 ``config.KNOWLEDGE_BACKUP_KEEP``（默认 **2**）；开关
     ``ENABLE_KNOWLEDGE_BACKUP_ROTATION`` 关闭时**回到旧值 5**（零回归）。
+
+    ★338批刀1：**口径三处统一为 2**——config 值 / 本函数默认值 / 注释此前分别是
+    2 / 3 / 3（config 早已改 2，代码默认与注释没跟上）。默认值不跟 config 走，
+    一旦 config 读不到就会静默退回 3，等于备份份数靠运气；故同步改 2。
     """
     try:
         import config
         if not bool(getattr(config, "ENABLE_KNOWLEDGE_BACKUP_ROTATION", True)):
             return 5
-        _n = int(getattr(config, "KNOWLEDGE_BACKUP_KEEP", 3) or 3)
-    except Exception:
-        _n = 3
+        _n = int(getattr(config, "KNOWLEDGE_BACKUP_KEEP", 2) or 2)
+    except Exception as _e:
+        # ★338刀1：这里不能真静默——读不到配置就退 2，但“为什么退”必须可查
+        #   （否则备份份数靠运气，且与 config 改动看不出因果）。
+        silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m41_backup_keep")
+        _n = 2
     return max(1, _n)      # 至少保留 1 份，防止配置为 0 时删光全部备份
 
 
@@ -251,7 +259,7 @@ class PulseSnapshot:
 
         # ===== P1-3: 增量保存相关 =====
         self._last_saved_nodes: dict[str, str] = {}  # node_id → 上次保存时的 SHA256 摘要
-        # ★第41批 T2（P1-264）：由硬编码 5 改为读 config.KNOWLEDGE_BACKUP_KEEP（默认 3）
+        # ★第41批 T2（P1-264）：由硬编码 5 改为读 config.KNOWLEDGE_BACKUP_KEEP（默认 **2**）
         self._max_backups = _m41_backup_keep()       # 保留最近N份历史快照
         self._last_saved_checksum: str = ""
         # ===== ★P0-4新增: 增量保存状态 =====
@@ -921,6 +929,11 @@ class PulseSnapshot:
                 f.write("]}")
                 f.flush()
                 os.fsync(f.fileno())
+            # ★338刀1：**替换前先废索引**。新主档的字节布局与旧索引偏移毫无关系，
+            #   留着它就会拿旧偏移读新文件（静默读到错节点）。宁可下次多扫一次。
+            #   顺序必须是先 invalidate 再 replace：反过来会出现「已换档、索引还在」
+            #   的窗口期，而这段时间恰是别的线程可能来 open 的时刻。
+            snapshot_index.invalidate(self.snapshot_path, "流式全量重写前失效")
             # ★第80批 T4：纯 os.replace 原子覆盖（Windows 可直接覆盖已存在目标，
             #   前置 os.remove 冗余且目标被锁时会抛错；原子替换保证崩溃窗口最小）。
             os.replace(tmp_path, self.snapshot_path)
@@ -1721,6 +1734,8 @@ class PulseSnapshot:
                     json.dump(snapshot, f, ensure_ascii=False, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
+            # ★338刀1：全量保存同样要先废索引（同 4a 理由，此为 _full_save 路径）。
+            snapshot_index.invalidate(self.snapshot_path, "_full_save 全量重写前失效")
             # ★第80批 T4：纯 os.replace 原子覆盖（Windows 可直接覆盖已存在目标，
             #   前置 os.remove 冗余且目标被锁时会抛错；原子替换保证崩溃窗口最小）。
             os.replace(tmp_path, self.snapshot_path)
@@ -2140,6 +2155,14 @@ class PulseSnapshot:
         """
         from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
         view = LazySnapshotView(self.snapshot_path, max_cache=1000)
+        # ★338刀1：把「走索引还是重扫」记到实例上，供报表/判据区分
+        #   「读到了 0 条」与「压根没读到」。
+        self._m338_index_health = snapshot_index.health(self.snapshot_path)
+        self._log(LogLevel.INFO,
+                  "[338刀1] 快照索引 status=%s nodes=%s index=%s"
+                  % (self._m338_index_health.get("status"),
+                     self._m338_index_health.get("nodes"),
+                     "written" if getattr(view, "index_written", False) else "-"))
         md = view.metadata
         self.inference_cache = md.get("inference_cache", {})
         self._extra_state = md.get("extra_state", {})
@@ -2530,6 +2553,8 @@ class PulseSnapshot:
                     with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                         json.dump(main_data, f, ensure_ascii=False, indent=2)
 
+                    # ★338刀1：compaction/精简后布局全变，索引必须先废再换档。
+                    snapshot_index.invalidate(self.snapshot_path, "精简compaction前失效")
                     if os.path.exists(self.snapshot_path):
                         os.remove(self.snapshot_path)
                     os.replace(tmp_path, self.snapshot_path)

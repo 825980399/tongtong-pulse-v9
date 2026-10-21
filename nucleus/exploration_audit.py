@@ -213,6 +213,34 @@ def _m312_build_items(issues: list, llm_issues: list, root: str) -> list:
     return _items
 
 
+def _m338_version_stamps():
+    """★338批刀5-F：留样版本戳（criteria_version / code_version）。
+
+    为何要在**头部**留这两个：`run_*.json` 是 per-item 回算的唯一底稿，
+    没版本戳就不知道“这批 item 是哪把尺子量的”——与 A-6（跨 code_version
+    禁比）同理。取不到就记 `None`，**不填占位符串也不编造值**。
+    """
+    _out = {"criteria_version": None, "code_version": None, "source": None}
+    try:
+        from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
+
+        _out["code_version"] = getattr(CallGraphAnalyzer, "CODE_VERSION", None)
+    except Exception as _e:
+        silent_exc(_e, where="exploration_audit::_m338_version_stamps code_version")
+    try:
+        # ★铁律156：_DEAD_CODE_CRITERIA_VERSION 是**类属性**，必须按类取；
+        #   按模块名 import 会 ImportError ⇒ 退成 unknown ⇒ 门槛永远关。
+        from nucleus.self_inspector import SelfInspector
+
+        _out["criteria_version"] = getattr(
+            SelfInspector, "_DEAD_CODE_CRITERIA_VERSION", None)
+    except Exception as _e:
+        silent_exc(_e, where="exploration_audit::_m338_version_stamps criteria_version")
+    if _out["code_version"] or _out["criteria_version"]:
+        _out["source"] = "class_attr"
+    return _out
+
+
 def _m313_has_drive_path(value) -> bool:
     """字符串里是否含 **Windows 盘符路径**（`D:/x` / `D:\\x`，出现在串中任意位置也算）。"""
     _s = str(value or "")
@@ -291,8 +319,21 @@ def _m303_dump_per_item(issues: list, llm_issues: list,
         #   在同一份产物里混存（实测 82 绝对 / 22 相对，最坏的一条同时占两种写法）。
         #   这里把 file 与 dedup_key 一次对齐，并把「修后仍残留」的盘符位置记进 payload。
         _items, _m313_leaks = _m313_selfcheck_items(_items, _root)
+        # ★338批刀5-F：每条 item 显式带 `verdict`。
+        #   现存产物里根本没有这个字段（不是 None，是**缺失**），
+        #   回算时无法区分“判了且无异常”与“没判”。这里统一写成
+        #   `verdict=None` + `verdict_status="UNSET"`，把“没判”变成**显式事实**。
+        for _it in _items:
+            if isinstance(_it, dict) and "verdict" not in _it:
+                _it["verdict"] = None
+                _it["verdict_status"] = "UNSET"
+        _stamps = _m338_version_stamps()
         _payload = {
             "run_id": _ts,
+            # ★338批刀5-F：回算有锚的地基（取不到则 None，不编）
+            "criteria_version": _stamps.get("criteria_version"),
+            "code_version": _stamps.get("code_version"),
+            "version_stamps_source": _stamps.get("source"),
             "generated_at": _time.time(),
             "parallelism": 3,
             "timeout_flags": (strategy or {}).get("timeout_flags", {}),

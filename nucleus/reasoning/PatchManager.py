@@ -1110,6 +1110,33 @@ class PatchManager:
         }
         return _m.get(str(issue_type or ""), 40.0)
 
+    @staticmethod
+    def _m338_build_evidence(patch: dict) -> dict:
+        """★338批刀4：入队时生成**证据三要素**（risk/trust/blast 各带 basis+source）。
+
+        为何不在这里重写一套规则：生成侧与派单侧若各算各的，必然再现
+        “生成侧填了、派单侧不认”（与 300刀1 / 298刀1 同型教训）。所以直接委派
+        `patch_execution_dispatch._m338_derive_evidence`（**唯一取数口**）。
+
+        ★入队时机很关键：此时 `risk_level` / `trust_score` 已经过 _m280 重定级，
+        证据里记下的就是**真正入队的那个值**，而不是 LLM 刚吐出的原始自评。
+        """
+        try:
+            from nucleus.evolution.patch_execution_dispatch import (
+                _m338_derive_evidence as _m338_dev,
+            )
+
+            return _m338_dev(patch)
+        except Exception as _e:
+            silent_exc(
+                _e,
+                where="nucleus.reasoning.PatchManager::_m338_build_evidence 取数口回退")
+            # 取数口不可用时**不伪造**：显式标 derive_error，
+            # 派单侧证据门会按“证据缺”拒入（宁可转人工也不猜）。
+            return {"evidence_version": "338.d4.v1",
+                    "risk": None, "trust": None, "blast": None,
+                    "derive_error": "%s: %s" % (type(_e).__name__, _e)}
+
     def _m280_converge_pending(self, data):
         # ★280批刀4：pending 队列落盘前状态机收敛。
         #   ① applied=True 即出队（不再留在 pending）；
@@ -1486,6 +1513,23 @@ class PatchManager:
         if patch.get("trust_score") in (None, 70, 70.0):
             patch["trust_score"] = PatchManager._m280_trust_by_issue_type(
                 patch.get("issue_type"))
+        # ★338批刀4：**生成侧显式填充证据三要素**。
+        #   337刀1 查出池里只剩 fcef 一条“唯一合格者”，而其余 8 条
+        #   全是“值在、凭据不在”——没人能回答这个 risk/trust 凭什么定的。
+        #   在入队唯一口一次补齐，之后派单侧证据门（build_reusable_candidates /
+        #   select_for_auto_triage）可直接采信，不再反复推导。
+        if not isinstance(patch.get("patch_evidence"), dict):
+            patch["patch_evidence"] = PatchManager._m338_build_evidence(patch)
+            _ev338 = patch["patch_evidence"]
+            _miss338 = [k for k in ("risk", "trust", "blast")
+                        if not isinstance(_ev338.get(k), dict)]
+            if _miss338:
+                # 不阻断入队（入队与派单是两件事），但必须可见：
+                # 这类补丁进不了自动派单池，会进可复用清单。
+                _module_logger.info(
+                    "[338刀4] 补丁入队但证据不全（进不了自动派单池）: "
+                    "file=%s method=%s 缺=%s",
+                    patch.get("file", ""), patch.get("method", ""), ",".join(_miss338))
         # ★v23.0新增：补全元数据
         if "saved_at" not in patch:
             patch["saved_at"] = time.time()

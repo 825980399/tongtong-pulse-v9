@@ -4637,7 +4637,7 @@ EVOLUTION_BASELINE_WINDOW_DAYS = 7        # 基线统计窗口（天；0 = 全�
 # 背景：data/ 下 1274 个 .corrupted（同一文件的历史快照）+ 知识备份无上限轮转
 #   （实测 5 份 × 438MB = 2.19GB，且每 ~10 分钟仍在新增）。
 #   ★生成侧根因：`PulseSnapshot._max_backups` **硬编码 5**（第204行）。
-KNOWLEDGE_BACKUP_KEEP = 2                # ★备份保留份数（原硬编码 5 → 现 3）
+KNOWLEDGE_BACKUP_KEEP = 2                # ★备份保留份数（原硬编码 5 → 第41批改 3 → 338批刀1 定为 2 并与代码默认/注释三处统一）
 ENABLE_KNOWLEDGE_BACKUP_ROTATION = True  # 轮转总开关（关闭 → 回到旧值 5，零回归）
 CORRUPTED_QUARANTINE_DAYS = 30           # 无对应版本的 .corrupted 隔离保留天数
 
@@ -5351,6 +5351,42 @@ SNAPSHOT_INCREMENTAL_LOG_MAX_LINES = 50000
 #   单轮 delete 占存活基数比例超过此值 → 拒写 delete + ERROR（含期望/实际计数）+ 本轮降级全量保存，
 #   防止任何未来的解构/集合 bug 演变成批量误删。
 SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX = 0.5
+# ===== ★338批：内存治理（刀2 释放决策树 G0-G4 / 刀3 冷化链观测 / 刀4 证据闸门）=====
+#
+# 决策树总开关。默认 **False（影子）**：只出决策、只留痕、不动手。
+#   为什么默认关：释放是不可逆动作，第一次上线必须先"看它想干什么"，
+#   而不是"让它去干"。翻开需显式置 True（重启生效）。
+ENABLE_MEMORY_RELEASE_TREE = False
+
+# G2/G3/G4 分级阈值，口径一律 **heap_mb**（私有堆），不用 RSS。
+#   RSS = 库镜像 + 私有堆；镜像（GPU/数值栈，实测约 4.3GB）运行中释放不掉，
+#   拿 RSS 回落当验收线会把"释放成功但没归还"判成失败。
+MEMORY_RELEASE_G2_HEAP_MB = 1200.0        # ≥此值 ⇒ 软释放（语义缓存TTL/shadow deque/观测缓冲）
+MEMORY_RELEASE_G3_HEAP_MB = 1700.0        # ≥此值 ⇒ 冷化 warm→cold
+MEMORY_RELEASE_G4_HEAP_MB = 2000.0        # ≥此值 ⇒ 只告警不重启（★小林 D3 验收硬线 ≤2.0GB）
+MEMORY_RELEASE_COOLDOWN_BEATS = 30        # G0 冷却闸门：距上次释放≥30 拍
+MEMORY_RELEASE_IDLE_SEC = 1800.0          # 防误杀①：last_access 过期阈值（秒）
+MEMORY_RELEASE_COLD_BATCH_MAX = 1000      # G3 每批冷化上限（防风暴）
+
+# 降级线**双轨**（小林 A-G 裁决）：RSS≥10GB **或** heap≥2.5GB 先触其一即降级。
+#   336 实测期末 RSS 11.594GB 已触 10GB 线，但其中约 4.31GB 是不可释放镜像
+#   ⇒ 单看 RSS 等于只给堆 5.7GB 预算，会把"库装得多"误判成"堆泄漏"。
+MEMORY_DEGRADE_RSS_MB = 10240.0           # 降级线 RSS 轨（10GB）
+MEMORY_DEGRADE_HEAP_MB = 2560.0           # 降级线 heap 轨（2.5GB）
+
+# 判定线**双写**（小林 A-G 裁决）：期末 RSS <12GB **∧** heap 单日峰值 <2.0GB。
+#   只写 RSS 会把"少装库"的架构收益误记成"治理有效"。
+MEMORY_PASS_RSS_MB = 12288.0              # 判定线 RSS 项（12GB）
+
+# 刀3：冷化链观测开关（只读留痕，不改驱逐策略）。
+ENABLE_COLD_CHAIN_OBSERVE = True
+# 刀3：冷池内存占用观测（只读计数，不参与决策）。
+ENABLE_COLD_POOL_MEM_OBSERVE = True
+
+# 刀4：生成侧证据字段闸门。True ⇒ 未填 risk_evidence/trust_evidence/blast_evidence
+#   的补丁**不得入自动派单池**（防再造"fcef 型"唯一合格件）。
+#   ★不动安全闸：hard_cap=1 / blast_cap=1 / requires_confirmation=True 语义全部保留。
+ENABLE_PATCH_EVIDENCE_GATE = True
 
 # ★T3/P1：统一知识访问层（KAL）。本批仅接口 + 基础实现，不做全量迁移（不破坏现有代码）。
 ENABLE_KAL = True
