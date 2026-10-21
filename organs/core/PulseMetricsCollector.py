@@ -11,6 +11,8 @@ PulseMetricsCollector —— 多层级指标采集器 · 运行态可观测性�
 定位: 全系统的「仪表盘」，是运行态可观测性的唯一汇聚点。
 """
 
+import io
+import json
 import os
 import sys
 
@@ -337,6 +339,214 @@ class PulseMetricsCollector(BasePulseOrgan):
         self._m337_image_cache = {"ts": _now, "mb": _mb}
         return _mb
 
+    # ========== ★339批刀4：tracemalloc 自观测钩子（烛微338挂账10 / A-13根治配套） ==========
+    #   背景（烛微338前置§3.2）：外部探针读不到活体堆（24MB 读盘缓冲污染；
+    #   Windows `memory_maps` 只暴露模块镜像）⇒ **堆归因只能自观测**。
+    #   挂点：复用 337刀4 已落的心跳采样链（与 `_m337_image_mb` 同处），
+    #         **不新开调度器**（333刀2 纪律）。
+    #   频率：每日 1-2 次槽位（05:00 / 13:00，避开 03:50-04:10 首转窗）；
+    #         **禁止每拍采样**——自身分配开销会把治理变增负。
+    _M339_PROBE_HOURS = (5, 13)
+    _M339_PROBE_TOP_N = 20
+    _M339_PROBE_MAX_SEC = 3.0
+    _M339_GC_HEAP_MB = 1200.0
+
+    @staticmethod
+    def _m339_cfg_get(name: str, default):
+        """读配置（走已加载的 config 模块，避热路径重复 import）。
+
+        读不到 ⇒ 回退默认（本钩子是**观测**，不是门禁；
+        回退不会造成任何放行/拦截语义变化）。
+        """
+        _cfg = sys.modules.get("config")
+        if _cfg is None:
+            return default
+        return getattr(_cfg, name, default)
+
+    def _m339_version_stamp(self) -> dict[str, str]:
+        """三个版本戳（任一取不到 ⇒ `unknown`，**不填假值**）。
+
+        ★为何要三个：一份堆快照如果不知道是哪一代进程、哪一版图、
+        哪版判据产的，就只能"看着像"——跨代比较堆就是假归因。
+        """
+        _v = {"proc_gen": "unknown", "code_version": "unknown",
+              "criteria_version": "unknown"}
+        try:
+            from nucleus.proc_gen import proc_gen_str as _pgs
+            _v["proc_gen"] = str(_pgs())
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp proc_gen")
+        try:
+            from nucleus.self_awareness import CallGraphAnalyzer as _cga
+            _v["code_version"] = str(getattr(_cga, "CODE_VERSION", "unknown"))
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp code_version")
+        try:
+            import nucleus.self_inspector as _si
+            _v["criteria_version"] = str(
+                getattr(_si, "_DEAD_CODE_CRITERIA_VERSION", "unknown"))
+        except Exception as _e:
+            silent_exc(_e,
+                       where="PulseMetricsCollector::_m339_version_stamp criteria_version")
+        return _v
+
+    def _m339_memory_probe(self, heap_mb=None,
+                           out_dir: str | None = None) -> dict[str, Any]:
+        """★339刀4：堆自观测快照（**每日 ≤2 次**，产物只落一处）。
+
+        两档：
+          · 第一档（槽位 05 / 13）：`tracemalloc` top-N（默认 20）。
+          · 第二档（**仅当 heap > H1**，同日最多再 1 次）：`gc.get_objects()` 类型计数。
+        超时（> `M339_MEMORY_PROBE_MAX_SEC`）⇒ **不写盘** + WARNING（不把治理变增负）。
+
+        产物：`<out_dir>/top_types_<ymd_hms>.json`；头字段六项
+        （proc_gen / code_version / criteria_version / heap_mb / image_mb / top20）。
+
+        路径注入（铁律158）：`out_dir` 为 None 才默认项目根 `data/reports/memory`；
+        隔离验证必须传入沙箱目录。
+        """
+        _out: dict[str, Any] = {"ran": False, "mode": None, "path": None,
+                                "elapsed_sec": None, "reason": "", "top_n": 0}
+        _hours = tuple(int(_h) for _h in self._m339_cfg_get(
+            "M339_MEMORY_PROBE_HOURS", self._M339_PROBE_HOURS))
+        _topn = int(self._m339_cfg_get("M339_MEMORY_PROBE_TOP_N",
+                                       self._M339_PROBE_TOP_N))
+        _maxsec = float(self._m339_cfg_get("M339_MEMORY_PROBE_MAX_SEC",
+                                           self._M339_PROBE_MAX_SEC))
+        _h1 = float(self._m339_cfg_get("M339_MEMORY_GC_TYPES_HEAP_MB",
+                                       self._M339_GC_HEAP_MB))
+        _tmmode = str(self._m339_cfg_get("M339_TRACEMALLOC_MODE", "window"))
+        _now = time.time()
+        _lt = time.localtime(_now)
+        _slot = "%04d%02d%02d-%02d" % (_lt.tm_year, _lt.tm_mon, _lt.tm_mday,
+                                       _lt.tm_hour)
+        _in_slot = int(_lt.tm_hour) in _hours
+        _heap_hi = bool(heap_mb is not None and float(heap_mb) > _h1)
+        _last = getattr(self, "_m339_probe_last_slot", None)
+        _last_gc = getattr(self, "_m339_probe_last_gc_slot", None)
+        _mode = ""
+        if _in_slot and _last != _slot:
+            _mode = "tracemalloc+gc_objects" if _heap_hi else "tracemalloc"
+        elif _heap_hi and _last_gc != _slot:
+            _mode = "gc_objects"
+        if not _mode:
+            _out["reason"] = ("slot_done(hour=%d slot=%s)" % (_lt.tm_hour, _slot)
+                              if _in_slot else
+                              "not_in_slot(hour=%d slots=%s)" % (_lt.tm_hour, _hours))
+            return _out
+        _t0 = time.perf_counter()
+        _tm_rows: list = []
+        _gc_types: list = []
+        _basis = ""
+        try:
+            if "tracemalloc" in _mode:
+                import tracemalloc as _tm
+                _started = not _tm.is_tracing()
+                if _started:
+                    _tm.start(1)
+                try:
+                    _snap = _tm.take_snapshot()
+                    _basis = ("since_start（本次开启后的分配，**不代表全堆**）"
+                              if _started else "cumulative（进程内早已开启）")
+                    for _st in _snap.statistics("lineno")[:_topn]:
+                        try:
+                            _frame = _st.traceback[0] if _st.traceback else None
+                            _fn = str(getattr(_frame, "filename", "?") or "?")
+                            _fn = _fn.replace("\\", "/").split("/")[-1]
+                            _ln = int(getattr(_frame, "lineno", 0) or 0)
+                        except (IndexError, AttributeError) as _fde:
+                            _fn, _ln = "?", 0
+                            # ★cw2 铁律150：纯赋值兜底 = 静默 handler，必须留痕
+                            self._log(LogLevel.DEBUG,
+                                      "[339内存观测] tracemalloc 帧不可读"
+                                      "（记为 ?:0）: %s" % (type(_fde).__name__,))
+                        _tm_rows.append({"file": _fn, "line": _ln,
+                                         "size_kb": round(_st.size / 1024.0, 1),
+                                         "count": int(_st.count)})
+                finally:
+                    if _started and _tmmode != "resident":
+                        _tm.stop()
+            if _heap_hi or _mode == "gc_objects":
+                import gc as _gcm
+                _cnt: dict = {}
+                for _o in _gcm.get_objects():
+                    _n = type(_o).__name__
+                    _cnt[_n] = _cnt.get(_n, 0) + 1
+                _gc_types = [{"type": _k, "count": _v}
+                             for _k, _v in sorted(_cnt.items(),
+                                                  key=lambda _x: -_x[1])[:_topn]]
+        except Exception as _se:
+            silent_exc(_se, where="PulseMetricsCollector::_m339_memory_probe body")
+            # 铁律150：不静默——探针自身报错必须可见（否则"没产物"与"报错"长得一样）
+            self._log(LogLevel.WARNING,
+                      "[339内存观测] 采样异常（mode=%s）: %s: %s"
+                      % (_mode, type(_se).__name__, _se))
+            _out["reason"] = "probe_error:%s" % type(_se).__name__
+            return _out
+        _elapsed = time.perf_counter() - _t0
+        _out["elapsed_sec"] = round(_elapsed, 3)
+        if _elapsed > _maxsec:
+            self._log(LogLevel.WARNING,
+                      "[339内存观测] 单次快照 %.2fs > %.2fs ⇒ **不写盘**"
+                      "（自身分配开销会把治理变增负） mode=%s"
+                      % (_elapsed, _maxsec, _mode))
+            _out["reason"] = "timeout"
+            return _out
+        _v = self._m339_version_stamp()
+        _img_cache = getattr(self, "_m337_image_cache", None)
+        _img = (_img_cache.get("mb") if isinstance(_img_cache, dict) else None)
+        _payload = {
+            # ── 头字段六项（任一取不到写 None/unknown，不填 0）──
+            "proc_gen": _v["proc_gen"],
+            "code_version": _v["code_version"],
+            "criteria_version": _v["criteria_version"],
+            "heap_mb": (round(float(heap_mb), 1) if heap_mb is not None else None),
+            "image_mb": _img,
+            "top20": (_gc_types or _tm_rows),
+            # ── 附带读数（不替代上面六项）──
+            "top_n": _topn,
+            "mode": _mode,
+            "tracemalloc_rows": _tm_rows,
+            "gc_type_rows": _gc_types,
+            "tracemalloc_basis": _basis,
+            "tracemalloc_is_tracing": bool(
+                __import__("tracemalloc").is_tracing()),
+            "elapsed_sec": round(_elapsed, 3),
+            "ts": _now,
+            "note": ("只产计数与读数，**不改任何业务状态**；"
+                     "window 模式下 tracemalloc 快照只覆盖本次开启后的分配"),
+        }
+        _dir = out_dir or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), "data", "reports", "memory")
+        try:
+            os.makedirs(_dir, exist_ok=True)
+            _p = os.path.join(_dir, "top_types_%s.json" %
+                              time.strftime("%Y%m%d_%H%M%S", _lt))
+            _tmp = _p + ".tmp"
+            with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+                json.dump(_payload, _f, ensure_ascii=False, indent=2)
+            os.replace(_tmp, _p)
+        except OSError as _we:
+            silent_exc(_we, where="PulseMetricsCollector::_m339_memory_probe write")
+            self._log(LogLevel.WARNING,
+                      "[339内存观测] 产物写盘失败 %s：%s: %s"
+                      % (_dir, type(_we).__name__, _we))
+            _out["reason"] = "write_failed"
+            return _out
+        if "tracemalloc" in _mode:
+            self._m339_probe_last_slot = _slot
+        if _heap_hi:
+            self._m339_probe_last_gc_slot = _slot
+        _out.update({"ran": True, "mode": _mode, "path": _p,
+                     "top_n": len(_payload["top20"])})
+        self._log(LogLevel.INFO,
+                  "[339内存观测] 快照完成 mode=%s top=%d 耗时=%.2fs heap_mb=%s "
+                  "image_mb=%s proc_gen=%s code_version=%s criteria=%s 产物=%s"
+                  % (_mode, _out["top_n"], _elapsed, _payload["heap_mb"], _img,
+                     _v["proc_gen"], _v["code_version"], _v["criteria_version"], _p))
+        return _out
+
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
         175刀1：在已活采集链上接入 RSS 上限自动回收（避免 167 死开关事故——
@@ -399,6 +609,20 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _out["image_mb"] = _img
                 if _img is not None:
                     _out["heap_mb"] = round(max(0.0, _rss - float(_img)), 1)
+
+                # ★339刀4：tracemalloc 自观测钩子（**挂在已活采样链上**，
+                #   不新开调度器；钩子内部按日槽位自限流，
+                #   平时每拍只做一次时间判定就返回）。
+                try:
+                    _out["self_probe"] = self._m339_memory_probe(
+                        heap_mb=_out.get("heap_mb"))
+                except Exception as _mpe:
+                    silent_exc(_mpe,
+                               where="PulseMetricsCollector::_collect_memory_pressure 339刀4")
+                    self._log(LogLevel.WARNING,
+                              "[339内存观测] 钩子外层异常（不静默）: %s: %s"
+                              % (type(_mpe).__name__, _mpe))
+                    _out["self_probe"] = None
 
                 # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
                 #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，

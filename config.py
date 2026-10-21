@@ -5698,7 +5698,53 @@ PENDING_AGING_MAX_COUNT = 20
 #   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。
 #   读取点：nucleus/reasoning/PatchManager.py::_m94_aging_max_hours
 PENDING_AGING_MAX_AGE_HOURS = 24
-# [M94-CFG]
+
+# ============================================================================
+# ★第339批刀1（E裁决）：**O3 类**待裁决队列老化——单独开关
+#   为何不复用 ENABLE_PENDING_QUEUE_AGING：两者**动作不同**。
+#     · M94（llm/local_rule）：到期 ⇒ status='approved'（**自动审批放行**）
+#       —— 280刀3 关闭理由就是"明写 llm 永不自动"，本批**不动**这个语义。
+#     · M339（O3 判死类）：到期 ⇒ status='expired_pending'（**降级不删除**，
+#       原状态记在 acked_origin_status + expired_revertible=True，可回滚）
+#   共用一个开关 = 顺手给 llm 开了自动审批 ⇒ 必须分开。
+#   True（**默认**，任务书刀1 要求"ENABLE_PENDING_QUEUE_AGING 对 O3 类单独开启"）
+#   False ⇒ O3 条目不做降级，一直停在 pending（归档不动）。
+#   时限沿用 PENDING_AGING_MAX_AGE_HOURS（24h，不新增数）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m339_o3_aging_on / _m339_o3_aging
+# ============================================================================
+ENABLE_PENDING_QUEUE_AGING_O3 = True
+# [M339-CFG]
+
+# ============================================================================
+# ★第339批刀3：入池口**来源路径白名单**（防测试夹具进生产池）
+#   背景：活体 11:53-11:54 出现三条 "入池 1 条 … ExampleOrgan.py::compute_unused_thing"
+#   —— 测试夹具路径被当成生产死代码候选。白名单只放业务目录；
+#   不在白名单 ⇒ 不入池（留痕 [339域]）。铁律153：白名单是**显式前缀集**，
+#   不是"理由串里找关键字"。
+#   读取点：nucleus/evolution/patch_execution_dispatch.py::_m339_intake_path_ok
+#           nucleus/self_inspector.py::_m339_in_domain
+# ============================================================================
+M339_INTAKE_PATH_WHITELIST = ("nucleus/", "tools/", "organs/", "config.py",
+                              "main.py", "scripts/")
+M339_DOMAIN_EXCLUDE_PREFIXES = ("tests/", "test_")
+# [M339-CFG]
+
+# ============================================================================
+# ★第339批刀4：tracemalloc 自观测钩子（堆归因只能自观测）
+#   背景（烛微338前置§3.2）：外部探针读不到活体堆（24MB 读盘缓冲污染；
+#   Windows memory_maps 只暴露模块镜像）⇒ 堆归因**只能在进程内自观测**。
+#   频率：每日 1-2 次（槽位 05:00 / 13:00，避开 03:50-04:10 首转窗）；
+#   **禁止每拍采样**（自身分配开销会把治理变增负）。
+#   产物：data/reports/memory/top_types_<ymd_hms>.json（**只落这一处**）
+#   读取点：organs/core/PulseMetricsCollector.py::_m339_memory_probe
+# ============================================================================
+M339_MEMORY_PROBE_HOURS = (5, 13)          # 每日采样槽位（本地时间小时）
+M339_MEMORY_PROBE_TOP_N = 20               # top-N 类型数
+M339_MEMORY_PROBE_MAX_SEC = 3.0            # 单次快照耗时上限（超时不写盘，记 WARNING）
+M339_MEMORY_GC_TYPES_HEAP_MB = 1200.0      # 第二档触发线 H1（heap>H1 才做 gc 类型计数）
+M339_TRACEMALLOC_MODE = "window"           # "window"=仅钩子内开启后关（零常驻开销），"resident"=常驻
+# [M339-CFG]
+
 
 # ============================================================================
 # 主线第102批（数据治理专项：D160 悬空引用 / D161 孤儿向量 / D165 语义关系冗余）

@@ -219,6 +219,25 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
 
     # ── ⑤ 入池（1 条） ──
     _c = _cands[0]
+    # ★339刀3：**入池口白名单复核**——候选侧已过一道，但入池是"生产池"的
+    #   最后一道门；双保险不是冗余，是"测试夹具进生产池"这类事已经发生过。
+    #   拦截也**留痕**（不是静默丢弃）。
+    try:
+        _ok_wl = _si._m339_intake_whitelisted(_c.get("file"))
+    except Exception as _wle:
+        silent_exc(_wle, where="PatchExecutionDispatch._m335_o3_consume whitelist",
+                   level="warning")
+        _module_logger.warning(
+            "[339域] 白名单判定不可用（%s: %s）⇒ 本轮不入池（fail-closed）",
+            type(_wle).__name__, _wle)
+        _ok_wl = False
+    if not _ok_wl:
+        _module_logger.info(
+            "[339域] 入池口拦截：%s::%s 不在业务白名单 ⇒ 本轮不入池",
+            _c.get("file"), _c.get("method"))
+        return {"status": "no_candidate", "gate": _verdict,
+                "reason": "入池口白名单拦截",
+                "blocked_file": _c.get("file"), "blocked_at": "whitelist"}
     _id = "o3_%d_%s" % (int(_now), str(abs(hash("%s::%s" % (
         _c.get("file"), _c.get("method")))))[:8])
     _entry = {
@@ -350,6 +369,20 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
                 "result": {"dispatched": 0, "dispatched_selected": 0,
                            "blocked_reason": "budget_tripped"}}
     _r = dispatch_runtime_verified_patches(limit=1)
+    # ★339批刀1（E裁决）：O3「确认后自动派单」显式通道。
+    #   放在主管道之后：主管道管「无人裁决」的自动分诊（risk低/trust≥40），
+    #   本通道只管「人已裁决」的 O3 条目；两者词条不交叉，
+    #   llm 类永远进不了本通道（280刀3 语义一字不改）。
+    try:
+        _o3d = dispatch_o3_approved(limit=1)
+    except Exception as _o3d_e:
+        silent_exc(_o3d_e,
+                   where="patch_execution_dispatch.dispatch_on_tick 339刀1 O3派单",
+                   level="warning")
+        _module_logger.warning(
+            "[339审批][O3派单] 节拍调用异常（不影响主派单）：%s: %s",
+            type(_o3d_e).__name__, _o3d_e)
+        _o3d = {"status": "exception", "dispatched": 0}
     # ★324批刀0：日志三拆——"派单动作"不得再被读成"自转成果"
     _module_logger.info(
         "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs selected=%s executed=%s "
@@ -1776,7 +1809,20 @@ def _m324_trace_path() -> str:
 
 
 def _m324_append_trace(rec: dict) -> str:
-    """★324批刀0：派单留痕（追加一行 JSON；失败不影响派单主流程）。返回路径或空串。"""
+    """★324批刀0：派单留痕（追加一行 JSON；失败不影响派单主流程）。返回路径或空串。
+
+    ★339刀2：**每行必带 `proc_gen`** —— `consumer_connected` 第 2 条要求
+    "该条目在**同一 proc_gen** 内产生 dispatched 记录"；没有 proc_gen
+    就只能拿"历史上派过"冲当"这一代派过"，那是两件事。
+    只追加字段，不改任何既有读法（老行读不到字段 ⇒ 仍按"不可判"）。
+    """
+    if isinstance(rec, dict) and "proc_gen" not in rec:
+        try:
+            rec["proc_gen"] = _m335_pg()
+        except Exception as _pge:
+            silent_exc(_pge, where="patch_execution_dispatch::_m324_append_trace proc_gen",
+                       level="debug")
+            rec["proc_gen"] = "unknown"
     _p = _m324_trace_path()
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
@@ -1996,6 +2042,176 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
             "dispatched_verify_failed": len(_results) - _applied,
             "blocked_reason": _blocked_reason,
             "selected_source": _sel_src}
+
+
+# ===== ★339批刀1（E裁决）：O3「确认后自动派单」显式通道 =====
+_M339_O3_SOURCES = ("o3_open_gate", "o3")
+_M339_O3_ISSUE_TYPES = ("dead_code", "dead_code_candidate")
+
+
+def _m339_o3_dispatch_ready(patch: dict) -> tuple:
+    """O3 条目是否具备「确认后自动派单」条件（纯函数，逐条可复算）。
+
+    为什么**不看 status**：人工确认后 status=approved 只是"批过"，
+    真正允许自动派单的是 `o3_auto_dispatch_ready is True` +
+    `requires_confirmation is False`（由 `PatchManager.approve_o3_patch` 落的
+    **显式标记**）——铁律153：禁"从理由串里找关键字"判断意图。
+
+    **llm 类一律 False**（280刀3：永不自动，一字不改）。
+    """
+    if not isinstance(patch, dict):
+        return False, "not_dict"
+    _is_o3 = (patch.get("o3_dead_code") is True
+              or str(patch.get("source") or "") in _M339_O3_SOURCES
+              or str(patch.get("issue_type") or "") in _M339_O3_ISSUE_TYPES)
+    if not _is_o3:
+        return False, "not_o3"
+    if patch.get("o3_auto_dispatch_ready") is not True:
+        return False, "not_confirmed"
+    if patch.get("requires_confirmation") is not False:
+        return False, "still_requires_confirmation"
+    if patch.get("applied") is True:
+        return False, "applied"
+    if str(patch.get("status") or "") == "expired_pending":
+        return False, "expired"
+    return True, "ok"
+
+
+def dispatch_o3_approved(limit: int = 1, framework: Any = None,
+                         project_root: str | None = None,
+                         pending_path: str | None = None,
+                         sandbox: Any = None) -> dict:
+    """★339批刀1：O3 条目「确认后自动派单」**唯一执行入口**。
+
+    与 `dispatch_runtime_verified_patches` 的区别（三条，都是"不拆安全闸"）：
+      · 数据源不同：本函数读 `pending_patches.json`（O3 入池在待修池），
+        主流程读 `patch_history.json`；
+      · 词条不同：本函数只认 `o3_auto_dispatch_ready=True`（人已裁决），
+        不走 `select_for_auto_triage` 的 `risk=低 & trust≥40 & blast≤1`（那是**无人裁决**时
+        的代替判据；O3 的 risk 本来就是「高」，拿它拦 O3 等于永不派）；
+      · 仍保留硬约束：`_DISPATCH_FAIL_CAP`（连续验证失败到 cap ⇒ 转人工）、
+        沙箱 `motor.execute` 隔离执行（绝不 apply 到源码）、单批硬上限 1。
+
+    Args:
+        limit: 单批派单数（硬上限 1，与主流程同档）
+        framework / sandbox: 沙箱注入（隔离验证用 fake）
+        project_root / pending_path: **路径注入**（铁律158：隔离验证不得写生产）
+
+    Returns:
+        dict: {status, dispatched, results, pool, rejected, ...}
+    """
+    _path = _m335_pending_path(project_root, pending_path)
+    _rows, _shape = _m335_read_pending(_path)
+    if _shape in ("bad", "dict:empty"):
+        _module_logger.warning(
+            "[339审批][O3派单] 待修池结构不可判定（%s）⇒ 本轮不写"
+            "（不覆盖他方账）", _shape)
+        return {"status": "unavailable", "dispatched": 0,
+                "reason": "待修池结构不可判定"}
+    _rej = {"not_o3": 0, "not_confirmed": 0,
+            "still_requires_confirmation": 0, "applied": 0,
+            "expired": 0, "cap": 0}
+    _ledger = _m326_load_fail_ledger()
+    _cands: list = []
+    for _p in _rows:
+        _ok, _why = _m339_o3_dispatch_ready(_p)
+        if not _ok:
+            if _why in _rej:
+                _rej[_why] += 1
+            continue
+        _fc = _m326_persisted_fail_count(_p, _ledger)
+        if _fc >= _DISPATCH_FAIL_CAP:
+            _rej["cap"] += 1
+            _module_logger.info(
+                "[339审批][O3派单] 剔除已cap ⇒ 转人工: patch=%s fail_count=%d cap=%d",
+                str(_p.get("id") or "")[:24], _fc, _DISPATCH_FAIL_CAP)
+            continue
+        _cands.append(_p)
+    if not _cands:
+        _module_logger.info(
+            "[339审批][O3派单] 无待派条目（待修池 %d 条；拒收 %s） proc_gen=%s",
+            len(_rows), _rej, _m335_pg())
+        return {"status": "no_candidate", "dispatched": 0,
+                "pool": len(_rows), "rejected": dict(_rej)}
+    _sb = sandbox
+    if _sb is None:
+        _fw = framework or get_dispatch_framework()
+        _sb = (getattr(_fw, "organs", {}).get("代码沙箱")
+               if _fw is not None else None)
+    if _sb is None or not hasattr(_sb, "on_pulse"):
+        return {"status": "no_sandbox", "dispatched": 0, "pool": len(_rows)}
+    if not getattr(_sb, "is_running", False):
+        return {"status": "sandbox_stopped", "dispatched": 0, "pool": len(_rows)}
+    try:
+        _lim = max(0, min(1, int(limit)))
+    except (TypeError, ValueError) as _le339:
+        _module_logger.debug("[339刀1] limit 非整数，按 1 处理: %s: %s",
+                             type(_le339).__name__, _le339)
+        _lim = 1
+    _results: list = []
+    for _p in _cands[:_lim]:
+        _v = dispatch_and_verify(_sb, _p)
+        _write_back(_p, _v)
+        _p["o3_dispatched_at"] = time.time()
+        _p["o3_dispatch_attempts"] = int(_p.get("o3_dispatch_attempts") or 0) + 1
+        if _v.get("success"):
+            _p["applied"] = True
+            _p["applied_at"] = time.time()
+            _p["o3_dispatch_verdict"] = "applied"
+        else:
+            _p["o3_dispatch_verdict"] = "verify_failed"
+        _results.append(_v)
+        _module_logger.info(
+            "[339审批][O3派单] 执行%s patch=%s %s::%s success=%s"
+            "（**确认后自动派单，无二次审批**） proc_gen=%s",
+            "成功" if _v.get("success") else "失败",
+            str(_p.get("id") or "")[:24], _p.get("file"), _p.get("method"),
+            bool(_v.get("success")), _m335_pg())
+    if _results:
+        try:
+            if _shape == "list" or _shape == "missing":
+                _payload: Any = _rows
+            elif _shape.startswith("dict:"):
+                _payload = {_shape.split(":", 1)[1]: _rows}
+            else:
+                _payload = _rows
+            _m335_atomic_write_json(_path, _payload)
+        except OSError as _e:
+            silent_exc(_e, where="PatchExecutionDispatch.dispatch_o3_approved write",
+                       level="warning")
+            _module_logger.warning(
+                "[339审批][O3派单] 回写待修池失败 %s：%s: %s",
+                _path, type(_e).__name__, _e)
+            return {"status": "write_failed", "dispatched": len(_results),
+                    "results": _results}
+    # ★339刀2：O3 派单**也要留痕**——否则 `consumer_connected` 第 2 条
+    #   （"同一 proc_gen 内产生 dispatched 记录"）永远 false，不是没派，
+    #   而是"派了没记账"——与 333刀2 同型坑。`selected_source=o3_approved`
+    #   让读方能分辨两条派单渠道。
+    try:
+        _m324_append_trace({
+            "ts": time.time(),
+            "selected_source": "o3_approved",
+            "dispatched_selected": len(_results),
+            "dispatched_applied": sum(1 for _r in _results
+                                      if isinstance(_r, dict) and _r.get("success")),
+            "dispatched_executed": len(_results),
+            "dispatched_verify_failed": sum(1 for _r in _results
+                                            if isinstance(_r, dict)
+                                            and not _r.get("success")),
+            "blocked_reason": "",
+            "blocked_detail": [],
+            "reswept": len(_rows),
+            "patch_ids": [str((_r or {}).get("patch_id") or "")[:32]
+                          for _r in _results],
+            "channel": "o3_confirmed_auto",
+        })
+    except Exception as _tre:
+        silent_exc(_tre, where="patch_execution_dispatch.dispatch_o3_approved trace",
+                   level="warning")
+    return {"status": "ok", "dispatched": len(_results), "results": _results,
+            "pool": len(_rows), "rejected": dict(_rej),
+            "candidates": len(_cands)}
 
 
 def register_with_daily_schedule(scheduler: Any = None) -> str:

@@ -704,7 +704,9 @@ class PatchManager:
         return False
 
     @staticmethod
-    def _approve_via(patch: dict, source: str, signer) -> bool:
+    def _approve_via(patch: dict, source: str, signer,
+                     judged_by: str | None = None,
+                     basis: dict | None = None) -> bool:
         """★第129批 唯一 approved 写入口（五口收敛器核心）。
 
         fail-closed：任一校验不过 → 不置 approved、返回 False。
@@ -722,6 +724,16 @@ class PatchManager:
         patch["approved_source"] = source
         patch["approved_signer"] = signer
         patch["approved_at"] = time.time()
+        # ★339刀1（E裁决）：SLA 四字段从「signer+at」
+        #   补齐到「signer / at / judged_by(人|机) / basis」——没有 judged_by 就
+        #   分不清「谁批的」和「谁判的」；没有 basis 就回答不了
+        #   「凭什么批的」（与 338刀4 证据门同源：值必须带底座）。
+        if judged_by is None:
+            judged_by = "human" if str(source) == "human" else "machine"
+        patch["approved_judged_by"] = str(judged_by)
+        if basis is not None:
+            patch["approved_basis"] = (dict(basis) if isinstance(basis, dict)
+                                      else {"raw": str(basis)})
         return True
 
     def _m105_try_release_low_risk(self, patch: dict) -> bool:
@@ -1034,6 +1046,210 @@ class PatchManager:
                 "[补丁老化][M94] 触发(%s)但无合格补丁可放行"
                 "（判据 source=local_rule / 非核心 / runtime_verified=True / risk_level=低）",
                 _why)
+        return _out
+
+    # ========== ★主线第339批 刀1（E裁决）：审批分道 —— O3「确认后自动派单」 ==========
+    #   背景（烛微338前置§2.2）：O3 入池条目一律 `requires_confirmation=True`、
+    #   `risk=高` ⇒ 进不了自动审批；人工入口存在但「无裁决人 + 时限关着」
+    #   （`ENABLE_PENDING_QUEUE_AGING=False`，280刀3 关闭理由 = "aging 对 source=llm
+    #   队列空转，明写 llm 永不自动"）。94批自陈空转主因「已有待审批」48 次（28.6%）。
+    #   真实断点 = **没裁决人 + 时限关着**，不是"审批逻辑写错了"。
+    #
+    #   ★本批**绝不动** llm 类语义：`source=llm` 一律「永不自动」（280刀3 裁定，
+    #     一字不改）；分道只给 `source=o3` 开一条**显式**通道，而且前提是**人已裁决**
+    #     （`approved_signer` 落签名 + 四项审核齐 + `basis` 可复算）。
+
+    _M339_O3_SOURCES = ("o3_open_gate", "o3")
+    _M339_O3_ISSUE_TYPES = ("dead_code", "dead_code_candidate")
+    _M339_REVIEW_ITEMS = ("evidence_tier", "probe_out_of_graph",
+                          "misjudge_sample", "god_file")
+    _M339_O3_AGING_TARGET = "expired_pending"
+    _M339_O3_AGING_REVERT = "pending"
+
+    @staticmethod
+    def _m339_is_o3(patch: dict) -> bool:
+        """O3（判死类）来源判定——**显式字段**，从理由串里找关键字（铁律153）。"""
+        if not isinstance(patch, dict):
+            return False
+        if patch.get("o3_dead_code") is True:
+            return True
+        if str(patch.get("source") or "") in PatchManager._M339_O3_SOURCES:
+            return True
+        return str(patch.get("issue_type") or "") in PatchManager._M339_O3_ISSUE_TYPES
+
+    @staticmethod
+    def _m339_review_items_ok(basis) -> tuple:
+        """审核面固定四项是否齐。
+
+        四项：`evidence_tier`（证据档）/ `probe_out_of_graph`（图外 probe 四类）/
+        `misjudge_sample`（抽验 misjudge 样本行）/ `god_file`（是否上帝文件）。
+
+        返回 `(ok, reason, missing)`。缺项 ⇒ False（fail-closed：四项不是"建议"，
+        是 O3 自动派单的**前置条件**——没它，"确认后自动派单"就退化成"点一下就放"）。
+        """
+        if not isinstance(basis, dict):
+            return False, "basis 缺失（需 dict）", list(PatchManager._M339_REVIEW_ITEMS)
+        _items = basis.get("items") if isinstance(basis.get("items"), dict) else basis
+        _miss = [k for k in PatchManager._M339_REVIEW_ITEMS if _items.get(k) is None]
+        if _miss:
+            return False, "审核四项缺 %s" % ",".join(_miss), _miss
+        # 上帝文件只加严不放松：显式 True ⇒ 不许走自动派单
+        if _items.get("god_file") is True:
+            return False, "目标为上帝文件（PulseInnerWorld.py）⇒ 只加严不放松", ["god_file"]
+        return True, "ok", []
+
+    @staticmethod
+    def _m339_o3_aging_on() -> bool:
+        """O3 类老化开关（`ENABLE_PENDING_QUEUE_AGING_O3`，**默认 True**）。
+
+        ★为何默认开：任务书刀1 明写"`ENABLE_PENDING_QUEUE_AGING` 对 O3 类单独
+        开启（对 llm 类保持关闭）"。O3 的老化动作是**降级不删除**
+        （`pending → expired_pending`，可回滚），不是放行 —— 与 llm 类 aging
+        的"自动 approved"是**两种不同动作**，不能共用一个开关（共用一个就等于
+        顺手给 llm 开了自动审批）。
+
+        读不到配置 ⇒ True（保持任务书要求的开启态），但 **留痕**。
+        """
+        try:
+            import config as _c339
+            return bool(getattr(_c339, "ENABLE_PENDING_QUEUE_AGING_O3", True))
+        except Exception as e:
+            silent_exc(e, where="PatchManager::_m339_o3_aging_on")
+            return True
+
+    def _m339_o3_aging(self, pending: list, now: float | None = None) -> dict:
+        """★339刀1：O3 条目超时未裁决 ⇒ **降级不删除**（可回滚）。
+
+        与 `_m94_apply_pending_aging` 的**动作不同**：
+          · M94（llm/local_rule）：到期 ⇒ 置 approved（自动审批，280刀3 已关）
+          · M339（O3）：到期 ⇒ 置 expired_pending（**只是退出待裁决队列**，
+            原状态记在 `acked_origin_status`，`expired_revertible=True` 可回滚）
+        两条**互不引用**，避免"改 O3 顺手改了 llm"。时限沿用 24h（不新增数）。
+        """
+        _out = {"enabled": False, "checked": 0, "expired": 0, "ids": [],
+                "max_hours": None, "persisted": False, "reason": ""}
+        if not self._m339_o3_aging_on():
+            _out["reason"] = "disabled"
+            return _out
+        _out["enabled"] = True
+        if not isinstance(pending, list) or not pending:
+            _out["reason"] = "empty"
+            return _out
+        _out["checked"] = len(pending)
+        _now = float(time.time() if now is None else now)
+        _maxh = self._m94_aging_max_hours()
+        _out["max_hours"] = _maxh
+        _ids = []
+        for _p in pending:
+            if not isinstance(_p, dict) or not self._m339_is_o3(_p):
+                continue
+            if str(_p.get("status") or "") != "pending":
+                continue
+            _age = self._m94_patch_age_hours(_p, _now)
+            if _age is None or _age < _maxh:
+                continue
+            _p["acked_origin_status"] = str(_p.get("status") or PatchManager._M339_O3_AGING_REVERT)
+            _p["status"] = PatchManager._M339_O3_AGING_TARGET
+            _p["expired_at"] = _now
+            _p["expired_reason"] = "o3_unjudged_age=%.1fh>=%.0fh" % (_age, _maxh)
+            _p["expired_revertible"] = True
+            _ids.append(str(_p.get("id") or "")[:32])
+        _out["expired"] = len(_ids)
+        _out["ids"] = _ids
+        if _ids:
+            try:
+                _payload = [dict(_x) if isinstance(_x, dict) else _x for _x in pending]
+                _out["persisted"] = bool(self._save_patch_list(self._pending_file, _payload))
+            except Exception as _e:
+                _module_logger.warning(
+                    "[339审批][O3老化] 落盘失败（内存已改、盘未改，下轮重试）: %s: %s",
+                    type(_e).__name__, _e)
+            _module_logger.info(
+                "[339审批][O3老化] 超时未裁决 ⇒ 降级 %d 条 pending→expired_pending"
+                "（不删除，可经 acked_origin_status 回滚）: %s max_hours=%.0f",
+                len(_ids), ",".join(_ids), _maxh)
+        else:
+            _module_logger.info(
+                "[339审批][O3老化] 无超期未裁决 O3 条目（checked=%d max_hours=%.0f）",
+                _out["checked"], _maxh)
+        return _out
+
+    def approve_o3_patch(self, index: int, signer: str, basis: dict,
+                         judged_by: str = "human") -> dict:
+        """★339刀1：O3 条目的**唯一人工裁决口**（四项审核齐才放行）。
+
+        语义："人工确认后**不再要求二次审批**自动派单"——所以本方法成功后
+        直接置 `o3_auto_dispatch_ready=True` + `requires_confirmation=False`，
+        派单侧（`patch_execution_dispatch.dispatch_o3_approved`）看到这两个显式
+        标记即自动派单，**不再回头看 status 重审**（避免"再审批一次"的二次门）。
+
+        反例：`source=llm` 的条目**不许**走本口（`_m339_is_o3` 不为真 ⇒ 直接拒），
+        保证 llm 的"永不自动"一字不动。
+        """
+        _pending = self._load_patch_list(self._pending_file)
+        if not (0 <= index < len(_pending)):
+            return {"ok": False, "reason": "索引越界，共%d个待审批补丁" % len(_pending)}
+        _p = _pending[index]
+        if not self._m339_is_o3(_p):
+            _module_logger.warning(
+                "[339审批] 拒绝：非 O3 来源走本口（source=%s issue_type=%s）"
+                " ⇒ llm/生成类走人工常口，永不自动语义不变",
+                _p.get("source"), _p.get("issue_type"))
+            return {"ok": False, "reason": "非 O3 来源，不得走确认后自动派单通道"}
+        _ok, _why, _miss = self._m339_review_items_ok(basis)
+        if not _ok:
+            _module_logger.warning(
+                "[339审批] 拒绝：审核四项不齐（%s）patch=%s",
+                _why, str(_p.get("id") or "")[:24])
+            return {"ok": False, "reason": _why, "missing": _miss}
+        if not PatchManager._approve_via(_p, "human", signer,
+                                         judged_by=judged_by, basis=basis):
+            return {"ok": False, "reason": "审批被治理门禁拦截（需 human:<名> 签名且字段契约完整）"}
+        _p["o3_auto_dispatch_ready"] = True
+        _p["requires_confirmation"] = False
+        _p["o3_confirmed_at"] = time.time()
+        if not self._save_patch_list(self._pending_file, _pending):
+            return {"ok": False, "reason": "写入失败（可能被 WriteGuard 拦截）"}
+        _module_logger.info(
+            "[339审批] O3 确认后自动派单已置位：patch=%s %s::%s signer=%s "
+            "judged_by=%s ⇒ 派单侧下一拍自动执行（无二次审批）",
+            str(_p.get("id") or "")[:24], _p.get("file"), _p.get("method"),
+            signer, judged_by)
+        return {"ok": True, "patch_id": _p.get("id"), "auto_dispatch_ready": True}
+
+    def o3_pending_sla_summary(self, now: float | None = None) -> dict:
+        """★339刀1：O3 待裁决队列的周报口径（**未裁决条数 / 最老时长**）。
+
+        与 `publishers.publish_patch_quality` 的 `verifiable_rate` **同型**：
+        只产字段，不判红绿、不触发动作。
+        """
+        _now = float(time.time() if now is None else now)
+        _out = {"ok": False, "unjudged": None, "oldest_hours": None,
+                "expired": None, "max_hours": None}
+        try:
+            _pending = self._load_patch_list(self._pending_file)
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::o3_pending_sla_summary load")
+            return _out
+        if not isinstance(_pending, list):
+            return _out
+        _un = []
+        _exp = 0
+        for _p in _pending:
+            if not isinstance(_p, dict) or not self._m339_is_o3(_p):
+                continue
+            _st = str(_p.get("status") or "")
+            if _st == PatchManager._M339_O3_AGING_TARGET:
+                _exp += 1
+                continue
+            if _st in ("approved", "applied"):
+                continue
+            _un.append(_p)
+        _ages = [a for a in (self._m94_patch_age_hours(_p, _now) for _p in _un)
+                 if isinstance(a, float)]
+        _out.update({"ok": True, "unjudged": len(_un),
+                     "oldest_hours": round(max(_ages), 1) if _ages else None,
+                     "expired": _exp, "max_hours": self._m94_aging_max_hours()})
         return _out
 
     # ★第309批 刀1：**去掉误加的 @staticmethod**。它把带 self 的普通方法绑成静态函数，
@@ -1971,15 +2187,31 @@ class PatchManager:
                 return (_now - _t) / 86400.0 > _m54_stale_days()
         return False
 
-    def approve_patch(self, index: int, signer: str = "human:unknown") -> dict[str, Any]:
-        """将指定待审批补丁的 status 从 verified/pending 提升为 approved（★FIX: 人工审批闭环）"""
+    def approve_patch(self, index: int, signer: str = "human:unknown",
+                      basis: dict | None = None,
+                      judged_by: str | None = None) -> dict[str, Any]:
+        """将指定待审批补丁的 status 从 verified/pending 提升为 approved（★FIX: 人工审批闭环）
+
+        ★339刀1（E裁决）：O3 条目必须带**四项审核 basis**（缺 ⇒ fail-closed
+        拒绝，不静默降级成"普通审批"——那等于把自动派单的前置条件偷偷去掉）。
+        非 O3 条目（llm / local_rule）行为**与改前一致**（280刀3：llm 永不自动）。
+        """
         pending = self._load_patch_list(self._pending_file)
         if not (0 <= index < len(pending)):
             return {"ok": False, "reason": f"索引越界，共{len(pending)}个待审批补丁"}
         _patch = pending[index]
         if _patch.get("status") == "approved":
             return {"ok": False, "reason": "该补丁已批准"}
-        if not PatchManager._approve_via(_patch, "human", signer):
+        # ★339刀1：O3 走四项审核道（缺 basis ⇒ 直接拒，不降级）
+        if PatchManager._m339_is_o3(_patch):
+            _r_ok, _r_why, _r_miss = PatchManager._m339_review_items_ok(basis)
+            if not _r_ok:
+                return {"ok": False, "reason": _r_why, "missing": _r_miss,
+                        "hint": "O3 条目请用 approve_o3_patch(basis={...}) 四审核项"}
+            _patch["o3_auto_dispatch_ready"] = True
+            _patch["requires_confirmation"] = False
+        if not PatchManager._approve_via(_patch, "human", signer,
+                                         judged_by=judged_by, basis=basis):
             return {"ok": False, "reason": "审批被治理门禁拦截（需 human:<名> 签名且字段契约完整）"}
         # ★第54批 T3.2（P1）：过期检测 —— 超过阈值天数的补丁打 stale 标记。
         if _m54_stale_mark_on() and self._is_stale(_patch):
@@ -2030,6 +2262,13 @@ class PatchManager:
             if _count >= 10:
                 break  # ★第129批 T-129a：单次≤10硬上限，堵「一次点名全放行」
             if _p.get("status") != "approved":
+                # ★339刀1：批量审批**跳过 O3**——四项审核必须逐条给底座，
+                #   "一次点名全放行"在 O3上不成立（与 129批 单次≤10 同向）。
+                if PatchManager._m339_is_o3(_p):
+                    _module_logger.info(
+                        "[339审批] 批量审批跳过 O3 条目（四项审核须逐条裁决）: %s",
+                        str(_p.get("id") or "")[:24])
+                    continue
                 if not PatchManager._approve_via(_p, "human", signer):
                     continue
                 # ★v9.5审美判据：批量审批同样记录质量分（不阻断闭环）
@@ -3387,6 +3626,16 @@ class PatchManager:
         #   使老化放行的补丁（status→approved）能被下面的 only_approved 过滤捞到。
         #   开关默认关闭 ⇒ `_m94_apply_pending_aging` 立即返回、不触碰任何补丁。
         self._m94_apply_pending_aging(pending)
+        # ★339刀1：O3 类老化（降级不删除）——**独立一条**，不靠 M94 总开关
+        #   （M94 总开关关着时连函数都不进，把 O3 降级挂在里面就会永远不生效）。
+        try:
+            _o3_ag = self._m339_o3_aging(pending)
+            if isinstance(_o3_ag, dict) and _o3_ag.get("expired"):
+                _module_logger.info("[339审批][O3老化] 本轮降级 %s 条",
+                                    _o3_ag.get("expired"))
+        except Exception as _o3e:
+            _module_logger.warning("[339审批][O3老化] 异常（不阻断主流程）: %s: %s",
+                                   type(_o3e).__name__, _o3e)
         # ★v24.0新增：审批过滤
         if only_approved:
             _approved_pending = []

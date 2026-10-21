@@ -369,6 +369,30 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
                        level="warning")
             _out["sc3"] = {"status": "UNAVAILABLE",
                            "reason": "SC-3 异常: %s" % type(_se).__name__}
+        # ★339批刀5：**存量回算**——同链（04:00 digest 之后一次），
+        #   **禁每拍**（全量回算要读全部留样 + patch_history）。
+        #   红线：**只产计数与结论**，不改任何一侧数据（SC-3 同源）。
+        try:
+            from nucleus.review_recompute import run_recompute as _m339_rr
+            _out["recompute"] = _m339_rr(scope="incremental", project_root=_root)
+            _module_logger.info(
+                "[339回算] 夜间链实测 scope=%s verdict=%s 可判性=%s "
+                "死代码硬档=%s legacy标注=%s proc_gen=%s",
+                (_out["recompute"] or {}).get("scope"),
+                (_out["recompute"] or {}).get("verdict"),
+                ((_out["recompute"] or {}).get("blocks") or {}).get(
+                    "A_judgeability", {}).get("new"),
+                ((_out["recompute"] or {}).get("blocks") or {}).get(
+                    "B_dead_code_hard", {}).get("new"),
+                ((_out["recompute"] or {}).get("blocks") or {}).get(
+                    "C_legacy_applied", {}).get("legacy_tagged"),
+                _m335_pg())
+        except Exception as _rce:
+            silent_exc(_rce,
+                       where="night_orchestration::maybe_run_night_digest recompute",
+                       level="warning")
+            _out["recompute"] = {"status": "UNAVAILABLE",
+                                 "reason": "回算异常: %s" % type(_rce).__name__}
     else:
         _out["reason"] = "failed"
         _module_logger.warning(

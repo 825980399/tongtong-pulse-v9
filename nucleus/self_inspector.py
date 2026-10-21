@@ -6265,6 +6265,168 @@ def hard_candidate_reduction_analysis(items=None, project_root=None) -> dict:
             "note": "只给数据与路径；降哪几类、是否降，由星轨+小林裁决（本模块不代判）"}
 
 
+# ===== ★339批刀2：`consumer_connected` 四条件（烛微338挂账5） =====
+_M339_CC_STAGES = {1: "入池", 2: "派单", 3: "验证", 4: "沉淀或过期"}
+_M339_CC_TRACE_REL = "data/reports/patch_dispatch_trace.jsonl"
+
+
+def _m339_code_version() -> str:
+    """图代码版本（`CallGraphAnalyzer.CODE_VERSION`）。
+
+    ★为何需要它：338刀5 已把 `criteria_version/code_version` 写进留样，
+    但落盘目录仍只按 `criteria_version` 分层 ⇒ **同一目录里混着不同图版本**
+    （归因读数就只能拿"当时那张图"冲当"现在这张图"）。
+
+    ★取不到 ⇒ `unknown`（**不填假版本**：假版本会让跨版本比较看上去合法）。
+    """
+    try:
+        from nucleus.self_awareness import CallGraphAnalyzer as _cga
+        _v = str(getattr(_cga, "CODE_VERSION", "") or "")
+        return _v or "unknown"
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::_m339_code_version")
+        return "unknown"
+
+
+def _m339_read_trace(project_root: str | None = None,
+                     trace_path: str | None = None,
+                     keep_last: int = 500) -> tuple:
+    """读派单留痕（只取最后 N 行）。返回 `(rows, state)`，state ∈ ok/missing/bad。
+
+    ★"读不到" 与"读到但是空" 必须分开：前者 ⇒ 条件不可判（None），
+    后者 ⇒ 条件不成立（False）。两者在报表上都是"没连上"，但原因完全不同。
+    """
+    import json as _json
+    _p = trace_path or os.path.join((project_root or os.getcwd()).replace("/", os.sep),
+                                    _M339_CC_TRACE_REL.replace("/", os.sep))
+    if not os.path.isfile(_p):
+        return [], "missing"
+    _rows: list = []
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            for _ln in _f:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _o = _json.loads(_ln)
+                except ValueError as _ve:
+                    _module_logger.debug(
+                        "[339连通] trace 行不可解析（跳过）: %s", type(_ve).__name__)
+                    continue
+                if isinstance(_o, dict):
+                    _rows.append(_o)
+    except OSError as _e:
+        _module_logger.warning("[339连通] trace 不可读 %s：%s: %s",
+                               _p, type(_e).__name__, _e)
+        return [], "bad"
+    return _rows[-max(1, int(keep_last)):], "ok"
+
+
+def _m339_consumer_connected(o3_items: list, project_root: str | None = None,
+                             proc_gen: str | None = None,
+                             trace_path: str | None = None) -> dict:
+    """★339批刀2：`consumer_connected` **四条件同立**才算 True。
+
+    背景（烛微338前置§2.3）：OPEN 后"开了闸没下游"不可观测——旧实现只判
+    "全时间轴是否存在任何 O3 入池标记"，一个 bool 把四个环节压成一位。
+
+    四条件（**逐条显式字段，禁"理由串里找关键字"**，铁律153）：
+      1. `pending_patches.json` 内 ≥1 条 O3 标记（`o3_dead_code is True` 或
+         `issue_type ∈ {dead_code, dead_code_candidate}`）
+      2. 该条目在**同一 `proc_gen`** 内产生 `dispatched` 记录（trace）
+      3. 出现其 `verify` 结果（`runtime_verify_result.verified` 为 True/False，
+         **不能是"未测"——`None` 不算）
+      4. 沉淀或过期其一有留痕（`applied is True` / `o3_dispatch_verdict=applied`
+         / `status == expired_pending`）
+
+    为什么逐条目算而不是全局算：四个条件分属**不同条目**时，
+    "流水线通了"这句话是假的——那只是"每个环节各自有一个人走过"。
+    取**满足条数最多**的那一条做"最佳样本"，`partial_at` 指向它缺的第一环
+    （能定位断在哪里，而不是一刀切 false）。
+
+    返回：`{connected, partial_at, conditions, best_id, proc_gen, trace_state, note}`
+      · `connected=None` ⇒ 数据源不可读（**不得填 False**）
+      · `connected=False` ⇒ 确实断在 `partial_at`
+    """
+    _out = {"connected": None, "partial_at": None, "conditions": {},
+            "best_id": None, "proc_gen": proc_gen, "trace_state": None,
+            "note": ""}
+    if not isinstance(o3_items, list):
+        _out["note"] = "入参非列表 ⇒ 不可判"
+        return _out
+    if proc_gen is None:
+        try:
+            from nucleus.proc_gen import proc_gen_str as _pgs
+            proc_gen = _pgs()
+            _out["proc_gen"] = proc_gen
+        except Exception as _e:
+            silent_exc(_e, where="self_inspector::_m339_consumer_connected proc_gen")
+            proc_gen = "unknown"
+            _out["proc_gen"] = "unknown"
+    _trace, _state = _m339_read_trace(project_root, trace_path)
+    _out["trace_state"] = _state
+    # 同 proc_gen 的已派 id 集合（只认本代次；老 trace 无 proc_gen ⇒ 不计入）
+    _disp_ids = set()
+    for _r in _trace:
+        if str(_r.get("proc_gen") or "") != str(proc_gen):
+            continue
+        for _pid in (_r.get("patch_ids") or []):
+            _disp_ids.add(str(_pid or "")[:32])
+    # ★契约自守：入参名叫 `o3_items`，但**不依赖调用方先过滤**——
+    #   错传一条 llm 条目进来，"入池"这一环就会假成立
+    #   （上下文看不出来，因为条目确实存在）。这里再判一次显式标记。
+    _o3_only = []
+    for _e in (o3_items or []):
+        if not isinstance(_e, dict):
+            continue
+        if (_e.get(_O3_INTAKE_BOOL_FIELD) is True
+                or str(_e.get("source") or "") in ("o3_open_gate", "o3")
+                or str(_e.get("issue_type") or "") in _O3_INTAKE_ISSUE_TYPES):
+            _o3_only.append(_e)
+    _per = []
+    for _e in _o3_only[:50]:
+        _id = str(_e.get("id") or "")
+        if not _id:
+            continue
+        _c1 = True
+        _c2 = (None if _state != "ok" else (_id[:32] in _disp_ids))
+        _rvr = _e.get("runtime_verify_result")
+        _c3 = (isinstance(_rvr, dict)
+               and isinstance(_rvr.get("verified"), bool))
+        _c4 = bool(_e.get("applied") is True
+                   or str(_e.get("o3_dispatch_verdict") or "") == "applied"
+                   or str(_e.get("status") or "") == "expired_pending")
+        _per.append({"id": _id[:32], "c1": _c1, "c2": _c2, "c3": _c3, "c4": _c4,
+                     "score": sum(1 for _x in (_c1, _c2, _c3, _c4) if _x is True)})
+    if not _per:
+        _out["note"] = "池内无 O3 条目 ⇒ 条件 1 不成立"
+        _out["conditions"] = {"c1_intake": False, "c2_dispatched_same_gen": None,
+                              "c3_verify": False, "c4_sediment_or_expired": False}
+        _out["connected"] = False
+        _out["partial_at"] = "段1"
+        return _out
+    _best = sorted(_per, key=lambda x: (-x["score"], x["id"]))[0]
+    _c = {"c1_intake": _best["c1"], "c2_dispatched_same_gen": _best["c2"],
+          "c3_verify": _best["c3"], "c4_sediment_or_expired": _best["c4"]}
+    _out["conditions"] = _c
+    _out["best_id"] = _best["id"]
+    _seq = [_best["c1"], _best["c2"], _best["c3"], _best["c4"]]
+    if all(_x is True for _x in _seq):
+        _out["connected"] = True
+        _out["note"] = "四条件同立（最佳样本 id=%s）" % _best["id"]
+    else:
+        _out["connected"] = False
+        _i = next(_k for _k, _x in enumerate(_seq, start=1) if _x is not True)
+        _out["partial_at"] = "段%d" % _i
+        _out["note"] = ("断在%s（段%d）：条件 %d 不成立"
+                        " —— %s" % (_M339_CC_STAGES.get(_i, "?"), _i, _i,
+                                          "trace 不可读 ⇒ 不可判"
+                                          if _seq[_i - 1] is None else
+                                          "该环无记录"))
+    return _out
+
+
 def _m333_intake_rate(project_root: str | None = None,
                       window_sec: float | None = None,
                       now: float | None = None) -> dict:
@@ -6357,11 +6519,18 @@ def _m333_intake_rate(project_root: str | None = None,
             continue
         _cnt += 1
 
+    # ★339刀2：四条件可观测化（任一环缺 ⇒ partial_at=段N，不一刀切 false）
+    _cc = _m339_consumer_connected([_e for _e in _all if _is_o3(_e)],
+                                   project_root=_root)
     if _readable == 0:
         return {"count": None, "limit": _O3_INTAKE_MAX_PER_DAY,
                 "window_sec": _win, "rate_ok": None, "source_ok": False,
                 "sources": _srcs, "marker_hits": None,
                 "consumer_connected": None,
+                "consumer_partial_at": (_cc or {}).get("partial_at"),
+                "consumer_conditions": (_cc or {}).get("conditions"),
+                "consumer_note": (_cc or {}).get("note"),
+                "consumer_proc_gen": (_cc or {}).get("proc_gen"),
                 "reason": "入池数据源两轨皆不可读（不填 0）",
                 "note": "不可算 ≠ 达标：报告里不得把本项显示为 0"}
     _ok = bool(_cnt <= _O3_INTAKE_MAX_PER_DAY)
@@ -6373,7 +6542,13 @@ def _m333_intake_rate(project_root: str | None = None,
     return {"count": int(_cnt), "limit": _O3_INTAKE_MAX_PER_DAY,
             "window_sec": _win, "rate_ok": _ok, "source_ok": True,
             "sources": _srcs, "marker_hits": int(_marker_ever),
-            "consumer_connected": bool(_marker_ever),
+            # ★339刀2：**四条件同立才 True**（旧口径只看入池标记）
+            "consumer_connected": bool((_cc or {}).get("connected") is True),
+            "consumer_partial_at": (_cc or {}).get("partial_at"),
+            "consumer_conditions": (_cc or {}).get("conditions"),
+            "consumer_note": (_cc or {}).get("note"),
+            "consumer_proc_gen": (_cc or {}).get("proc_gen"),
+            "consumer_trace_state": (_cc or {}).get("trace_state"),
             "reason": ("入池 %d 条/%.0fh ≤ 限额 %d"
                        % (_cnt, _win / 3600.0, _O3_INTAKE_MAX_PER_DAY)) if _ok else
                       ("入池 %d 条/%.0fh > 限额 %d"
@@ -6895,16 +7070,27 @@ def self_inspector_latest_graph_stats(project_root: str | None = None) -> tuple[
 
 
 def dump_per_item_by_version(items: list, criteria_version: str,
-                             project_root: str | None = None) -> str:
-    """★319批刀4：per-item 按 `criteria_version` 落盘留样。
+                             project_root: str | None = None,
+                             code_version: str | None = None) -> str:
+    """★319批刀4：per-item 按版本落盘留样。
 
-    路径：`data/reports/code_review/by_version/<criteria_version>/run_<ts>.json`
+    路径：`data/reports/code_review/by_version/<code_version>_<criteria_version>/run_<ts>.json`
+
+    ★339批刀5（烛微338挂账13）：分域键从**只按判据版本** → **判据版本 × 图版本**。
+    实测病灶：`data/reports/code_review/by_version/` 下只有 `v-test-319` 测试夹具，
+    生产侧**从未产出真版本目录**；即使产出，同一判据版本下
+    换了图（升 CODE_VERSION）也会跟旧图的留样混在一个目录里。
+    兼容：`code_version` 为 None → 自取 `_m339_code_version()`；取不到
+    （≠ unknown）→ 回退旧路径（不制造 `unknown_xxx` 残目录）。
     · 每版本保留**最近 3 份**；全量滚动 7 份（与 312 同规格）
     · 文件内**不得含绝对路径**（只存相对路径，防 PII/环境泄露）
     """
     _root = project_root or os.getcwd()
     _safe = str(criteria_version or "unknown").replace("/", "_").replace("\\", "_")
-    _d = os.path.join(_root, "data", "reports", "code_review", "by_version", _safe)
+    # ★339刀5：分域目录 = `<code_version>_<criteria_version>`（两个版本戳同时入路径）
+    _cv = str(code_version or _m339_code_version() or "").replace("/", "_").replace("\\", "_")
+    _sub = ("%s_%s" % (_cv, _safe)) if _cv and _cv != "unknown" else _safe
+    _d = os.path.join(_root, "data", "reports", "code_review", "by_version", _sub)
     os.makedirs(_d, exist_ok=True)
     _p = os.path.join(_d, "run_%s.json" % time.strftime("%Y%m%d_%H%M%S"))
     _tmp = _p + ".tmp"
@@ -6944,6 +7130,9 @@ def dump_per_item_by_version(items: list, criteria_version: str,
             _tk = str(_c.get("evidence_tier") or "unset")
             _tiers[_tk] = int(_tiers.get(_tk, 0)) + 1
         json.dump({"criteria_version": criteria_version,
+                   # ★339刀5：头字段补 code_version（分域键必须与目录同源）
+                   "code_version": (_cv if _cv else "unknown"),
+                   "domain_dir": _sub,
                    "batch_date": time.strftime("%Y%m%d"),
                    "count": len(_clean),
                    "source_count": len(items or []),
@@ -7026,6 +7215,85 @@ def build_review_intake(limit: int = 1, items: list | None = None) -> list[dict]
     return []
 
 
+# ===== ★339批刀3：判据域排除 tests/ ＋入池口来源路径白名单（烛微338挂账6/7） =====
+#   背景：活体已出现 `[307刀3] 起点无法定位 ⇒ 转人工: reason=no_node
+#   file=tests/test_lazy_snapshot_m9.py`；11:53-11:54 三条"入池 1 条 …
+#   ExampleOrgan.py::compute_unused_thing"（测试夹具）。图域外不判已有，但
+#   **候选仍在产生** ⇒ 本批补两道过滤（候选产生侧 ＋ 入池口）。
+_M339_WL_DEFAULT = ("nucleus/", "tools/", "organs/", "config.py",
+                    "main.py", "scripts/")
+_M339_DOMAIN_EXCL_DEFAULT = ("tests/", "test_")
+
+
+def _m339_cfg_prefixes(name: str, default: tuple) -> tuple:
+    """读配置前缀集（读不到 ⇒ 回退默认，并留痕）。
+
+    ★为何回退而不是关闭：这两个集合是"宁可少入池"方向的
+    过滤器（进池严一点不会造成现网下游断裂）；与门禁类"读不到就关死"
+    （铁律156）不同——那里关死是拒放行，这里回退是拒进池，方向一致。
+    """
+    try:
+        import config as _c
+        _v = getattr(_c, name, None)
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::_m339_cfg_prefixes %s" % name)
+        return tuple(default)
+    if isinstance(_v, (list, tuple)) and _v:
+        return tuple(str(_x).replace("\\", "/") for _x in _v)
+    return tuple(default)
+
+
+def _m339_norm_path(file_path) -> str:
+    _f = str(file_path or "").replace("\\", "/").strip()
+    while _f.startswith("./"):
+        _f = _f[2:]
+    return _f
+
+
+def _m339_in_domain(file_path) -> bool:
+    """判据域内？（排除 `tests/` 与 `test_` 前缀）。
+
+    三重判定（任一命中均判域外）：
+      ① 整路径以 `tests/` 或 `test_` 开头；
+      ② **任意中间目录段** 名为 `tests` 或 `test_*`（如 `a/tests/b.py`）；
+      ③ 基名以 `test_` 开头（如 `nucleus/test_helper.py`）。
+    空路径 ⇒ False（无法定位就不进域，不猜）。
+    """
+    _f = _m339_norm_path(file_path)
+    if not _f:
+        return False
+    for _p in _m339_cfg_prefixes("M339_DOMAIN_EXCLUDE_PREFIXES",
+                                _M339_DOMAIN_EXCL_DEFAULT):
+        if _f.startswith(_p):
+            return False
+    _segs = _f.split("/")
+    if any(_s == "tests" or _s.startswith("test_") for _s in _segs[:-1]):
+        return False
+    if _segs and _segs[-1].startswith("test_"):
+        return False
+    return True
+
+
+def _m339_intake_whitelisted(file_path) -> bool:
+    """入池口**来源路径白名单**（只放业务目录）。
+
+    铁律153：白名单是**显式前缀集**，不是"在理由串里找关键字"。
+    测试夹具（如 `ExampleOrgan.py`）不在登记业务目录下 ⇒ 拦截。
+    空路径 / 白名单为空 ⇒ False（fail-closed：白名单本身就是“宁可不入池”）。
+    """
+    _f = _m339_norm_path(file_path)
+    _wl = _m339_cfg_prefixes("M339_INTAKE_PATH_WHITELIST", _M339_WL_DEFAULT)
+    if not _f or not _wl:
+        return False
+    for _p in _wl:
+        if _p.endswith("/"):
+            if _f.startswith(_p):
+                return True
+        elif _f == _p or _f.startswith(_p + "/"):
+            return True
+    return False
+
+
 def _m335_o3_intake_candidates(items: list | None = None,
                                 limit: int = 1) -> dict:
     """★335批刀1：O3 开闸消费面的**候选筛选**（与受控入料同规则集）。
@@ -7054,7 +7322,9 @@ def _m335_o3_intake_candidates(items: list | None = None,
     _lim = max(0, min(int(_O3_INTAKE_MAX_PER_DAY), _lim))
     _pool = list(items if items is not None
                  else (_DEAD_CODE_REVIEW_STATS.get("hard_items") or []))
-    _rejected = {"tier": 0, "lifecycle": 0, "core": 0, "shape": 0, "dup": 0}
+    # ★339刀3：新增 `domain`（判据域外）与 `whitelist`（来源路径非业务目录）两档
+    _rejected = {"tier": 0, "lifecycle": 0, "core": 0, "shape": 0, "dup": 0,
+                 "domain": 0, "whitelist": 0}
     _strict_n = sum(1 for _i in _pool
                     if isinstance(_i, dict)
                     and str(_i.get("evidence_tier") or "") == "hard_strict")
@@ -7073,8 +7343,20 @@ def _m335_o3_intake_candidates(items: list | None = None,
             continue
         _name = str(_it.get("method") or "")
         _file = str(_it.get("file") or "").replace("\\", "/")
-        if not _name or not _file:
-            _rejected["shape"] += 1
+        # ★339刀3：判据域显式排除 `tests/` / `test_`（图域外不判已有，
+        #   但候选仍会产生 ⇒ 在这里补一道过滤）。
+        if not _m339_in_domain(_file):
+            _rejected["domain"] += 1
+            _module_logger.info(
+                "[339域] 判据域外 ⇒ 不入池: file=%s method=%s"
+                "（tests/ 或 test_ 前缀）", _file, _name)
+            continue
+        if not _m339_intake_whitelisted(_file):
+            _rejected["whitelist"] += 1
+            _module_logger.info(
+                "[339域] 白名单外 ⇒ 不入池: file=%s method=%s"
+                "（仅放 nucleus/ tools/ organs/ config.py main.py scripts/）",
+                _file, _name)
             continue
         if _name in _INTAKE_LIFECYCLE_NAMES:
             _rejected["lifecycle"] += 1
@@ -7100,10 +7382,12 @@ def _m335_o3_intake_candidates(items: list | None = None,
             "pool": len(_pool), "pool_strict": _strict_n,
             "reason": ("筛选出 %d 条（strict 池 %d）" % (len(_out), _strict_n))
                       if _out else
-                      ("strict 池 %d 条全被生命周期/核心文件/形态规则拒收"
-                       "（拒收: 档位=%d 生命周期=%d 核心=%d 形态=%d 重复=%d）"
+                      ("strict 池 %d 条全被生命周期/核心文件/形态/域规则拒收"
+                       "（拒收: 档位=%d 生命周期=%d 核心=%d 形态=%d 重复=%d"
+                       " 域外=%d 白名单外=%d）"
                        % (_strict_n, _rejected["tier"], _rejected["lifecycle"],
-                          _rejected["core"], _rejected["shape"], _rejected["dup"]))}
+                          _rejected["core"], _rejected["shape"], _rejected["dup"],
+                          _rejected["domain"], _rejected["whitelist"]))}
 
 
 def get_self_inspector() -> SelfInspector:
