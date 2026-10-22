@@ -519,6 +519,18 @@ class PulseMetricsCollector(BasePulseOrgan):
         _dir = out_dir or os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__)))), "data", "reports", "memory")
+        # ★344补 3（A-17 三类出口③）：隔离/验证进程**改道**，不写生产目录。
+        #   实测：`top_types_20261022_194451.json` 的 proc_gen=pid15780（验证进程）
+        #   却落在生产 data/reports/memory/（当时活体是 pid22576）。
+        #   判据只认**显式隔离声明**（env）——活体代次目前没有
+        #   落盘 oracle，拿不到真值就不能拿它当判据（铁律156/166）。
+        try:
+            from nucleus.domain_guard import guard_artifact_dir as _m344_gad
+            _dir, _m344_arq = _m344_gad(
+                _dir, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
+        except Exception as _m344_gae:
+            silent_exc(_m344_gae,
+                       where="PulseMetricsCollector._m339_memory_probe 344补 3 域过滤")
         try:
             os.makedirs(_dir, exist_ok=True)
             _p = os.path.join(_dir, "top_types_%s.json" %

@@ -425,13 +425,14 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
     # ★324批刀0：日志三拆——"派单动作"不得再被读成"自转成果"
     _module_logger.info(
         "[317刀0][分诊节拍] 触发自动分诊 interval=%.0fs selected=%s executed=%s "
-        "applied=%s blocked=%s hard_cap=1 blast_cap=1（安全闸未放宽）"
+        "applied=%s blocked=%s hard_cap=%d blast_cap=%d（安全闸未放宽）"
         " ｜ [335刀1]O3消费=%s gate=%s",
         _iv,
         _r.get("dispatched_selected") if isinstance(_r, dict) else "?",
         _r.get("dispatched") if isinstance(_r, dict) else "?",
         _r.get("dispatched_applied") if isinstance(_r, dict) else "?",
         (_r.get("blocked_reason") or "-") if isinstance(_r, dict) else "?",
+        _DISPATCH_HARD_CAP, _DISPATCH_BLAST_CAP,
         (_o3 or {}).get("status"), (_o3 or {}).get("gate"))
     return {"status": "dispatched", "interval_sec": _iv, "result": _r}
 
@@ -1788,6 +1789,15 @@ def _sc2_probe(class_name: str = "PulseInnerWorld", reason: str = "") -> dict:
 #   · 故本批补三件：三拆计数 / 失败退出上限 / 拦截环节指认
 _DISPATCH_FAIL_CAP = 2      # 同一补丁累计验证失败达此次数 ⇒ 转人工，不再自动派单
 
+# ★345刀6（A-18）：安全闸实际值——**单一来源**。
+#   病根（烛微345）：分诊节拍日志里的 `hard_cap=1 blast_cap=1（安全闸未放宽）`
+#   是**格式串里写死的文本**，本模块从来没有 `_DISPATCH_HARD_CAP/_DISPATCH_BLAST_CAP`
+#   这两个变量（`grep` 全仓 0 命中）。把写死的字面量当"安全闸证据"，
+#   等于用一句宣传语证明闸门存在 —— 改闸它也不会变，读日志的人永远看到 1。
+#   现在：常量在这里定义，日志按实际值渲染；将来动闸日志自动跟着变，才可作证据。
+_DISPATCH_HARD_CAP = 1      # 单批派单硬上限（与 dispatch_o3_approved 的 limit 上限一致）
+_DISPATCH_BLAST_CAP = 1     # 单次派单允许影响的文件数上限（安全闸，禁放宽）
+
 
 # ===== ★337批刀2：重启时刻（开闸判据「重启后新图」的唯一取数口）=====
 def _m337_boot_time() -> "float | None":
@@ -2039,6 +2049,77 @@ def _m344_classify_refs(src: str, method: str) -> dict | None:
             "text_only": max(0, _total - _attr)}
 
 
+# ===== ★344补 1：删除动作第四条件——「删后新孤儿」 =====
+# 病根（烛微345 §一-③ · 挂账55）：删 `CompanionBridge.handshake` 后，它体内唯一引用的
+# `get_identity` 立刻变零调用者，下一轮就成新判死候选——「删一个、造一个新的」。
+# 旧三条件（目标 def 存在 ∧ 删后语法完整 ∧ 被删者调用点集合=0）看不见这一层。
+# 口径：不静默放行、不静默改判据——孤儿非空 ⇒ **拒入**（`ast_delete:post_delete_orphans`），
+# 要放行得拆成两条补丁（先处理下游、再删上游），而不是把这条判据关掉。
+_M344_MAX_OWNED = 40
+
+
+def _m344_owned_member_names(node: Any) -> list[str]:
+    """被删 def 体内引用到的成员名（`self.x` / `Cls.x` 的属性名）。
+
+    只取 Attribute 的 `attr`：删一个方法时最容易被「造成新孤儿」的，就是它**独占引用的下游成员**；
+    局部变量与模块级名字不算（口径收窄，避免把普通局部调用误判成孤儿）。
+    """
+    _out: list[str] = []
+    _seen: set[str] = set()
+    for _n in ast.walk(node):
+        if isinstance(_n, ast.Attribute):
+            _a = str(getattr(_n, "attr", "") or "")
+            if _a and _a not in _seen:
+                _seen.add(_a)
+                _out.append(_a)
+                if len(_out) >= _M344_MAX_OWNED:
+                    return _out
+    return _out
+
+
+def _m344_post_delete_orphans(new_src: str, removed: Any, root: str,
+                              exclude_abs: str) -> list:
+    """**删后新孤儿集合**：被删者独占引用、删后零引用的本文件成员。
+
+    三条同时满足才算（宁可少判，不允许把不确定当成放行）：
+      1. 该名字在**本文件内**确有定义（`def`/`class`）—— 只对本文件成员负责；
+      2. 删除后**本文件内**对它的引用点数 == 0（`new_src` 里已无被删 def）；
+      3. **跨文件**调用/属性引用也 == 0（用 `_m344_count_orphan_refs` 并排除本文件）。
+    """
+    try:
+        _tree = ast.parse(new_src)
+    except SyntaxError as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m344_post_delete_orphans parse",
+                   level="debug")
+        return []
+    _defined = {str(n.name) for n in ast.walk(_tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+    _refs: dict[str, int] = {}
+    for _n in ast.walk(_tree):
+        if isinstance(_n, ast.Attribute):
+            _k = str(getattr(_n, "attr", "") or "")
+        elif isinstance(_n, ast.Name):
+            _k = str(_n.id)
+        else:
+            continue
+        if _k:
+            _refs[_k] = _refs.get(_k, 0) + 1
+    _out: list = []
+    for _m in _m344_owned_member_names(removed):
+        if _m not in _defined or _refs.get(_m, 0) > 0:
+            continue
+        _x = _m344_count_orphan_refs(_m, root, exclude_abs)
+        _cq = int(_x.get("call_attr", 0)) + int(_x.get("attr_read", 0))
+        if _cq > 0 or bool(_x.get("truncated")):
+            # 跨文件还有人用 ⇒ 不是孤儿；
+            # 扫描被截断 ⇒ **不能说“零引用”**（不猜）。
+            continue
+        _out.append({"member": _m, "in_file_refs": 0,
+                     "cross_call": int(_x.get("call_attr", 0)),
+                     "cross_attr": int(_x.get("attr_read", 0))})
+    return _out
+
+
 def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
     """O3 判死删除动作的静态执行校验（不运行任何代码，不写任何文件）。
 
@@ -2112,6 +2193,26 @@ def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
                      % (_method, _e.lineno, _e.msg),
                      target_file=_file, def_lines=_all_lines,
                      removed_lines=_removed)
+
+    # ★344补 1④ 删后新孤儿（**黑白判据**：非空即拒入）
+    #   ②-③ 看的是“这个删除动作本身合不合法”；本条看的是“删完会不会**又造出一个新判死候选**”。
+    #   实测依据：`nucleus/CompanionBridge.py` 的 `get_identity`（:96）全仓仅
+    #   `handshake`（:140）一处 `self.get_identity()` 引用，跨文件 0
+    #   ⇒ 删 handshake 即把 get_identity 变成下一轮候选。
+    _new_orphans = _m344_post_delete_orphans(_new_src, _node, _root, _abs)
+    if _new_orphans:
+        _nm = "、".join(str(o["member"]) for o in _new_orphans[:8])
+        _module_logger.info(
+            "[344补1] 删后新孤儿 patch=%s %s::%s 个数=%d [%s]"
+            " ⇒ 拒入（拆条复核：先处理下游、再删上游）proc_gen=%s",
+            _pid[:24], _file, _method, len(_new_orphans), _nm, _m335_pg())
+        return _fail(
+            "ast_delete:post_delete_orphans",
+            "删掉 %s 会使 %d 个本文件成员变成零引用孤儿（%s）"
+            "（删一个、造一个新的），需拆条复核"
+            % (_method, len(_new_orphans), _nm),
+            target_file=_file, def_lines=_all_lines, removed_lines=_removed,
+            new_orphans=_new_orphans)
 
     # ③ 孤儿引用（仅告警，不参与成败判定）
     _orphan = _m344_count_orphan_refs(_method, _root, _abs)
@@ -2370,6 +2471,168 @@ def _m339_o3_dispatch_ready(patch: dict) -> tuple:
     return True, "ok"
 
 
+# ===== ★345刀6：O3 判死候选 cap 豁免 + 验证并发 + attempt 台账 =====
+
+#: O3 判死候选最多可豁免几次（裁决⑥B 的保底：第 2 次失败后仍转人工）
+_O3_CAP_EXEMPT_MAX = 2
+
+#: 沙箱验证并发上限（裁决⑦：试点 2-3；**派单仍串行**，只并发验证环节）
+_M345_VERIFY_WORKERS = 2
+
+#: 环境缺陷类失败的特征（失败原因在**环境**、不在补丁逻辑）
+#:
+#: 依据（344/345 两批踩过的实例）：
+#:  · `NameError: name 'Any' is not defined` —— 沙箱包装器没预注入 typing 注解符号，
+#:    合法代码被判失败（344刀1 已修）；
+#:  · `ast_delete:*` —— 344 新增的**静态删除校验**错误码（缺目标/删后语法坏），
+#:    它验证的是"这个删除动作本身合不合法"，不是"补丁代码写错了"；
+#:  · `module_not_found` / `import_error` —— 子进程环境缺依赖。
+#: ★补丁自身逻辑错（SyntaxError / 断言失败 / 输出不符）**不在此列**，照计 cap。
+_ENV_FAILURE_MARKERS = (
+    "nameerror: name 'any' is not defined",
+    "nameerror: name 'dict' is not defined",
+    "nameerror: name 'list' is not defined",
+    "nameerror: name 'optional' is not defined",
+    "nameerror: name 'union' is not defined",
+    "module_not_found",
+    "modulenotfounderror",
+    "importerror",
+    "no module named",
+)
+
+#: O3 静态删除校验错误码前缀（344 刀1② 引入；属"校验器判定"而非"代码错"）
+_ENV_AST_PREFIX = "ast_delete:"
+
+
+def _m345_env_failure_reason(patch: dict) -> str:
+    """判断该 O3 条目上次失败是否属**环境缺陷类**。是则返回原因标签，否则空串。
+
+    只看**证据字段**（`runtime_verify_result.detail` / `o3_dispatch_verdict` /
+    `runtime_verify_error`），不按"补丁看起来像什么"猜（铁律153）。
+    """
+    _parts: list[str] = []
+    _rvr = patch.get("runtime_verify_result")
+    if isinstance(_rvr, dict):
+        _parts.append(str(_rvr.get("detail", "") or ""))
+        _parts.append(str(_rvr.get("error", "") or ""))
+    for _k in ("runtime_verify_error", "apply_error", "o3_dispatch_verdict", "error"):
+        _v = patch.get(_k)
+        if _v:
+            _parts.append(str(_v))
+    _blob = " ".join(_parts).lower()
+    if not _blob.strip():
+        return ""
+    if _ENV_AST_PREFIX in _blob:
+        return "ast_delete_verifier"
+    for _mk in _ENV_FAILURE_MARKERS:
+        if _mk in _blob:
+            return "env_typing_or_import"
+    return ""
+
+
+def _m345_may_exempt_cap(patch: dict, fail_count: int, fail_cap: int) -> tuple[bool, str, int]:
+    """判定该 O3 条目能否**不计 cap 重派**。返回 `(可豁免, 原因, 已用次数)`。
+
+    三条同时满足才豁免：
+    1. `o3_dead_code is True`（只对判死候选，别的补丁不享受）；
+    2. 失败原因判为环境缺陷类（`_m345_env_failure_reason` 非空）；
+    3. 已豁免次数 < `_O3_CAP_EXEMPT_MAX`（保底：防无限豁免）。
+    """
+    if patch.get("o3_dead_code") is not True:
+        return False, "", 0
+    _used = int(patch.get("o3_cap_exempt_used") or 0)
+    _reason = _m345_env_failure_reason(patch)
+    if not _reason:
+        return False, "", _used
+    if _used >= _O3_CAP_EXEMPT_MAX:
+        return False, _reason, _used
+    return True, _reason, _used
+
+
+#: 验证 attempt 台账（append-only jsonl；按 patch_id + attempt 记录，防 cap 计数互相污染）
+_M345_ATTEMPT_LEDGER_REL = os.path.join("data", "patches", "patch_verify_attempts.jsonl")
+
+
+def _m345_attempt_ledger_path(project_root: str | None = None) -> str:
+    _root = str(project_root) if project_root else os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(_root, _M345_ATTEMPT_LEDGER_REL)
+
+
+def _m345_note_attempt(patch: dict, verdict: dict, project_root: str | None = None,
+                       attempt: int | None = None) -> bool:
+    """把一次验证尝试落进 attempt 台账（`patch_id + attempt` 双键）。
+
+    ★为什么需要它（烛微关键约束）：并发验证时多个补丁同时在跑，
+      若失败只按 patch_id 累计，两个补丁的失败会串账、cap 判定互相污染。
+      台账按 `patch_id + attempt` 记，事后可逐次回溯"第几次失败、失败在什么环节"。
+    """
+    try:
+        _pid = str(patch.get("id") or "")
+        if not _pid:
+            return False
+        _n = int(attempt if attempt is not None else (int(patch.get("o3_dispatch_attempts") or 0) + 1))
+        _rec = {
+            "patch_id": _pid,
+            "attempt": _n,
+            "ok": bool(verdict.get("success")),
+            "error": str(verdict.get("error", "") or "")[:300],
+            "execution_source": str(verdict.get("execution_source", "") or ""),
+            "at": time.time(),
+            "proc_gen": _m335_pg(),
+        }
+        _path = _m345_attempt_ledger_path(project_root)
+        os.makedirs(os.path.dirname(_path), exist_ok=True)
+        with open(_path, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        return True
+    except (OSError, ValueError, TypeError) as _e:
+        _module_logger.warning("[345cap] attempt 台账写入失败（不影响派单）: %s: %s",
+                               type(_e).__name__, _e)
+        return False
+
+
+def verify_patches_concurrent(sandbox: Any, patches: list,
+                              max_workers: int = 2,
+                              project_root: str | None = None) -> list:
+    """★345刀6（裁决⑦）：多补丁**并行**进沙箱验证（ThreadPool，上限可配 2-3）。
+
+    边界（不改安全闸）：
+      · **只并发验证**，派单仍串行（`hard_cap` 不变，谁先派谁后派由调用方按序决定）；
+      · 每个补丁的 attempt 序号在**派发前**确定，避免并发下各自读到同一个旧值；
+      · 结果按传入顺序返回（下游 write_back 依赖顺序，不能按完成先后）。
+    """
+    if not patches:
+        return []
+    _mw = max(1, min(3, int(max_workers or 1)))
+    _seq = [(i, _p, int(_p.get("o3_dispatch_attempts") or 0) + 1)
+            for i, _p in enumerate(patches)]
+    if _mw == 1 or len(_seq) == 1:
+        _out = []
+        for _i, _p, _att in _seq:
+            _v = dispatch_and_verify(sandbox, _p, project_root=project_root)
+            _m345_note_attempt(_p, _v, project_root=project_root, attempt=_att)
+            _out.append((_i, _v))
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        _out = []
+        with ThreadPoolExecutor(max_workers=_mw,
+                                thread_name_prefix="m345verify") as _pool:
+            _futs = [(_i, _att, _pool.submit(dispatch_and_verify, sandbox, _p,
+                                             project_root)) for _i, _p, _att in _seq]
+            for _i, _att, _f in _futs:
+                try:
+                    _v = _f.result()
+                except Exception as _e:  # noqa: BLE001 —— 单个补丁失败不得拖垮整批
+                    silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent")
+                    _v = {"patch_id": patches[_i].get("id", ""), "success": False,
+                          "error": f"verify_exc:{type(_e).__name__}"}
+                _m345_note_attempt(patches[_i], _v, project_root=project_root, attempt=_att)
+                _out.append((_i, _v))
+    _out.sort(key=lambda x: x[0])
+    return [_v for _, _v in _out]
+
+
 def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                          project_root: str | None = None,
                          pending_path: str | None = None,
@@ -2414,11 +2677,31 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
             continue
         _fc = _m326_persisted_fail_count(_p, _ledger)
         if _fc >= _DISPATCH_FAIL_CAP:
-            _rej["cap"] += 1
-            _module_logger.info(
-                "[339审批][O3派单] 剔除已cap ⇒ 转人工: patch=%s fail_count=%d cap=%d",
-                str(_p.get("id") or "")[:24], _fc, _DISPATCH_FAIL_CAP)
-            continue
+            # ★345刀6（裁决⑥B）：环境缺陷类失败后的重派**不计 cap**。
+            #   病根：20:59:23 `剔除已cap ⇒ 转人工: fail_count=2 cap=2` ——
+            #   两次失败都是 `NameError: name 'Any' is not defined`（沙箱没预注入
+            #   typing 注解符号，合法代码被判失败）。344刀1 把注入修好了，
+            #   可这条已被 cap 锁死，**修好执行层也不会重派**（336 fcef 死锁同型复发）。
+            #   处置：失败原因是环境缺陷 ⇒ 该次不计 cap；补丁自身逻辑错照计。
+            #   保底：最多豁免 _O3_CAP_EXEMPT_MAX 次，之后仍转人工（防无限豁免）。
+            _exempt, _ex_reason, _ex_used = _m345_may_exempt_cap(_p, _fc, _DISPATCH_FAIL_CAP)
+            if _exempt:
+                _p["o3_cap_exempt_used"] = _ex_used + 1
+                _p["o3_cap_exempt_last_at"] = time.time()
+                _module_logger.info(
+                    "[345cap] o3_judge_candidate 豁免: %s reason=%s "
+                    "fail_count=%d cap=%d used=%d/%d proc_gen=%s",
+                    str(_p.get("id") or "")[:24], _ex_reason, _fc,
+                    _DISPATCH_FAIL_CAP, _ex_used + 1, _O3_CAP_EXEMPT_MAX, _m335_pg())
+            else:
+                _rej["cap"] += 1
+                _module_logger.info(
+                    "[339审批][O3派单] 剔除已cap ⇒ 转人工: patch=%s fail_count=%d cap=%d"
+                    "（豁免不可用: %s）",
+                    str(_p.get("id") or "")[:24], _fc, _DISPATCH_FAIL_CAP,
+                    _ex_reason or ("非环境缺陷" if _p.get("o3_dead_code") is True
+                                   else "非O3判死候选"))
+                continue
         _cands.append(_p)
     if not _cands:
         _module_logger.info(
@@ -2442,8 +2725,12 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                              type(_le339).__name__, _le339)
         _lim = 1
     _results: list = []
-    for _p in _cands[:_lim]:
-        _v = dispatch_and_verify(_sb, _p)
+    # ★345刀6：验证环节可并行（派单仍串行——谁进沙箱由本列表顺序决定，
+    #   安全闸 `_DISPATCH_HARD_CAP` 不变）。生产 `limit=1` 时与串行完全等价。
+    _batch = _cands[:_lim]
+    _verdicts = verify_patches_concurrent(_sb, _batch, max_workers=_M345_VERIFY_WORKERS,
+                                         project_root=project_root)
+    for _p, _v in zip(_batch, _verdicts):
         _write_back(_p, _v)
         _p["o3_dispatched_at"] = time.time()
         _p["o3_dispatch_attempts"] = int(_p.get("o3_dispatch_attempts") or 0) + 1

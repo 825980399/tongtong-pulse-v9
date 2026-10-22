@@ -325,8 +325,87 @@ class PulseCortex(BasePulseOrgan):
                 f"[time.tick] wall={_p.get('wall_clock')} up={_p.get('uptime_display')} "
                 f"phase={_p.get('semantic_time')} tick={_p.get('tick_count')}",
             )
+            # ★345刀4：每拍刷新知识图 `/时间/当前时间` 节点。
+            #   病根：QICA 能识别时间意图、也建议 `/时间/当前时间` 这条路径，
+            #   但知识图里根本没有这个节点 ⇒ 检索必断 ⇒ 只能走 LLM 兜底。
+            #   这里按拍写入（node_pool.add 对同 node_id 覆盖），使路径可命中。
+            self._m345_refresh_time_node(_p)
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
+
+    # ========== ★345刀4：知识图时间节点 ==========
+
+    #: 时间节点的空间路径（QICA 时间意图指向的路径）
+    M345_TIME_SPACE_PATH = "/时间"
+    M345_TIME_NODE_KEY = "当前时间"
+
+    def _m345_refresh_time_node(self, payload: dict) -> None:
+        """把当前时间写成知识图节点 `/时间/当前时间`（每拍刷新）。
+
+        ★「刷新」不是「每拍 add 一个新节点」。本批实测：`pool.add()` 对 value 不同的
+        同路径节点会走**关键词重叠合并** —— node_id 各自不同，但池里只有 1 个节点，
+        且**不更新 value**（实测连续 3 次写入后 value 仍是第 1 次的值）。
+        因此这里走「先找、再原地改」：找到同路径节点就改 value/version/updated_at
+        并重算 checksum；找不到才新建（进程首拍）。
+
+        - 无 node_pool（未装配）时**不报错也不猜**：DEBUG 留痕后返回。
+        - L1 + 低重要性：时间节点是"活的当下"，不该沉淀成长期知识。
+        - 失败只留痕，绝不影响 time.tick 主流程。
+        """
+        try:
+            _pool = getattr(self, "node_pool", None)
+            if _pool is None:
+                self._log(LogLevel.DEBUG, "[345时] node_pool 未注入，跳过时间节点刷新")
+                return
+            from nucleus.chronos.time_context import context_time as _m345_ct
+            _t = _m345_ct()
+            _value = "%s（%s）" % (_t["text"], _t["wall_clock"])
+            _hit = None
+            try:
+                for _n in _pool.query(space_path_prefix=self.M345_TIME_SPACE_PATH, limit=8) or []:
+                    if str(getattr(_n, "space_path", "") or "") == self.M345_TIME_SPACE_PATH:
+                        _hit = _n
+                        break
+            except Exception as _qe:
+                silent_exc(_qe, where="PulseCortex._m345_refresh_time_node query", level="debug")
+            if _hit is not None:
+                if str(getattr(_hit, "value", "")) == _value:
+                    # 同一秒内重复刷新：内容一致就不刷版本号（避免空转增版本）
+                    self._log(LogLevel.DEBUG, f"[345时] 时间节点无变化: {_t['text']}")
+                    return
+                _hit.value = _value
+                try:
+                    _hit.version = int(getattr(_hit, "version", 1) or 1) + 1
+                    _hit.updated_at = _t["ts"]
+                    _hit._update_checksum()
+                except Exception as _ue:
+                    silent_exc(_ue, where="PulseCortex._m345_refresh_time_node 就地刷新", level="debug")
+                try:
+                    _hit.activate()
+                except Exception as _ae:
+                    silent_exc(_ae, where="PulseCortex._m345_refresh_time_node activate", level="debug")
+                self._log(LogLevel.INFO, f"[345时] 时间节点刷新(就地): {_t['text']}")
+                return
+            from nucleus.mnemosyne.PulseNode import PulseNode
+            _node = PulseNode(
+                value=_value,
+                keywords=["当前时间", "时间", "此刻", _t["weekday"]],
+                source_organ="PulseCortex",
+                evol_level=PulseNode.EVOL_L1,
+                importance=PulseNode.IMPORTANCE_C,
+                space_path=self.M345_TIME_SPACE_PATH,
+            )
+            # 节点时间戳与它代表的时间同口径（构造器默认取墙钟，会让"节点时刻"
+            # 与"节点内容"两套时间打架——本批实测踩过：updated_at 比 value 晚一年）
+            try:
+                _node.updated_at = _t["ts"]
+                _node.created_at = _t["ts"]
+            except Exception as _te:
+                silent_exc(_te, where="PulseCortex._m345_refresh_time_node 时间戳对齐", level="debug")
+            _pool.add(_node)
+            self._log(LogLevel.INFO, f"[345时] 时间节点建立: {_t['text']}")
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex._m345_refresh_time_node", level="warning")
 
     def _log_ignored_exception(self, e: Exception, ctx: str = "") -> None:
         """★P1-25 可观测性预埋：统一记录被忽略的异常，附带精确位置。

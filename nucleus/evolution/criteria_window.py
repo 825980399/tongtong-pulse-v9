@@ -95,6 +95,26 @@ def converge_voided_ledger_path(path: str | None = None) -> str:
     return os.path.join(_cw_repo_root(), CONVERGE_VOIDED_LEDGER_REL)
 
 
+#: ★344补 4：圈号纪元基准日（写死一个日期，圈号才跨进程可比）。
+CIRCLE_INDEX_EPOCH_DAY = "2026-10-01"
+
+
+def circle_index(ts: float | None = None,
+                 circle_sec: float | None = None) -> int:
+    """★344补 4：作废台账的**圈号**（从纪元起算的第几圈）。
+
+    为什么要圈号：台账只有 ts 时「十二圈重放」每次都得重算窗口，
+    算法一改结论就变。圈号是**写入时确定、不可事后重算**的锚。
+    基准日取 `CIRCLE_INDEX_EPOCH_DAY`（与压测圈标称值同源）。
+    """
+    _ts = float(ts if ts is not None else time.time())
+    _sec = float(circle_sec or CRITERIA_WINDOW_DEFAULT_SEC)
+    _day0 = time.mktime(time.strptime(CIRCLE_INDEX_EPOCH_DAY, "%Y-%m-%d"))
+    if _ts < _day0:
+        return 0
+    return int((_ts - _day0) // _sec) + 1
+
+
 def note_converge_voided(patch_id, file: str = "", method: str = "",
                          reason: str = "", path: str | None = None,
                          now: float | None = None, **fields) -> str:
@@ -105,7 +125,10 @@ def note_converge_voided(patch_id, file: str = "", method: str = "",
     写失败**不影响作废主流程**（作废本身照常发生），只留 warning。
     """
     _p = converge_voided_ledger_path(path)
-    _rec = {"ts": float(now if now is not None else time.time()),
+    _ts_now = float(now if now is not None else time.time())
+    _rec = {"ts": _ts_now,
+            # ★344补 4：写入时就把圈号固定下来（事后不重算）
+            "round_no": int(circle_index(_ts_now)),
             "patch_id": str(patch_id or "")[:64],
             "file": str(file or ""),
             "method": str(method or ""),
@@ -388,7 +411,24 @@ def count_converge_voided(win_lo, win_hi, ledger_path: str | None = None,
         _src = "log"
     else:
         _src = "ledger" if _covered_lo is not None else "log"
+    # ★344补 4：**两档口径标注**（不能混成一谈）：
+    #   · `ledger_anchored`  —— 台账锚定（有锚，行上带 proc_gen + round_no）
+    #   · `log_text_unanchored` —— 日志文本回溯（无锚，只能说“文本里数到几条”）
+    #   · `mixed`            —— 两边都出过行（口径拼接，看 notes）
+    _anchored_rows = [r for r in _led if str(r.get("proc_gen") or "") not in ("", "unknown")]
+    _all_anchored = bool(_led) and len(_anchored_rows) == len(_led)
+    if _led and _log_hits:
+        _tier = "mixed"
+    elif _led and _all_anchored:
+        _tier = "ledger_anchored"
+    elif _led:
+        _tier = "ledger_unanchored"
+    else:
+        _tier = "log_text_unanchored"
     return {"state": "ok", "count": int(_total), "source": _src,
+            "tier": _tier,
+            "anchored_rows": len(_anchored_rows),
+            "ledger_rows": len(_led),
             "reason": "台账 %d 条 + 日志回退 %d 条（逐条行，不含批量汇总行）"
                       % (len(_led), _log_hits),
             "coverage": {"window": [round(_lo), round(_hi)]},

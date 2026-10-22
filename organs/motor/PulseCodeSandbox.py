@@ -389,6 +389,22 @@ class PulseCodeSandbox(BasePulseOrgan):
         if _res.limit_hit == "memory":
             raise SandboxMemoryError("代码执行超过内存上限（512MB）")
 
+        # ★344补 2：注入留痕——事后可区分「补丁自身写错」与「环境缺符号」。
+        #   只记「实际命中」的符号（子进程按 getattr 结果回报），不把
+        #   白名单整表当成“已注入”（那样留痕就没判别力了）。
+        try:
+            from nucleus.security.sandbox_limits import (
+                parse_injected_symbols as _m344_pis,
+            )
+            _inj = _m344_pis(_res.stderr)
+            if _inj:
+                self._log(LogLevel.INFO,
+                          f"[344沙箱] injected={','.join(_inj)}"
+                          f" count={len(_inj)} code_len={len(code)}")
+        except Exception as _m344_ie:
+            self._log(LogLevel.DEBUG,
+                      f"344补 2 注入留痕失败: {type(_m344_ie).__name__}: {_m344_ie}")
+
         if _res.returncode != 0:
             _err = (_res.stderr or "").strip()
             _last = _err.splitlines()[-1] if _err else f"退出码 {_res.returncode}"

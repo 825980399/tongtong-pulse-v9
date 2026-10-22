@@ -2179,6 +2179,31 @@ class PulseInnerWorld(
             "reasoning_duration": round(reasoning_duration, 2),
         }
 
+    # ========== ★345刀3：输出端处理类型标识（单点收口） ==========
+
+    def _emit(self, event_type: str, payload: dict | None = None,
+              target_organ: str = "",
+              priority: int = 5, ttl_ns: int = 5_000_000_000,
+              layer: str = "L1") -> str | None:
+        """覆盖基类 `_emit`：推理结果统一补 `processing_type`（与「来源」正交的维度）。
+
+        **为什么在 _emit 收口而不是逐点改**：本文件有 40+ 个
+        `_emit(InferenceEvent.RESULT, {...})` 发射点，逐点加必漏（且新增点还会漏）。
+        在唯一出口过一遍，新增发射点自动带上。
+
+        **只动 `inference.result`**：其余事件零改动（纯新增字段，不改任何行为）。
+        `payload` 里已有合法 `processing_type` 时不覆盖——生成路径优先，
+        后续要把某条路径精确化只改那条路径，不必改判定表。
+        """
+        if event_type == InferenceEvent.RESULT and isinstance(payload, dict):
+            try:
+                from nucleus.processing_type import annotate_payload
+                annotate_payload(payload)
+            except Exception as _m345_e:
+                silent_exc(_m345_e, where="PulseInnerWorld._emit 345刀3 标注")
+        return super()._emit(event_type, payload, target_organ=target_organ,
+                             priority=priority, ttl_ns=ttl_ns, layer=layer)
+
     # ========== 推理检测器方法群（原 _on_inference_request C 段；第147批九刀拆分后由 _ir_run_detectors 调度） ==========
 
     def _detect_simple_query_local(self, ctx: "PulseInnerWorld.InferenceContext"):
@@ -9993,6 +10018,29 @@ class PulseInnerWorld(
             "knowledge_snippets": [],
             "search_experience": None,
         }
+        # ★345刀4：上下文挂「当前时间」——这是所有推理路径共用的上下文单点
+        #   （本函数有 8 处调用），挂在源头即可让每条路径都拿到时间事实。
+        try:
+            from nucleus.chronos.time_context import context_time as _m345_ct
+            _m345_t = _m345_ct()
+            context["ctx_time"] = _m345_t["text"]
+            context["ctx_time_ts"] = _m345_t["ts"]
+            context["ctx_time_source"] = _m345_t["source"]
+        except Exception as _m345_ce:
+            silent_exc(_m345_ce, where="PulseInnerWorld._build_memory_context 345刀4 时间注入")
+        # ★345刀7：上下文挂「重启恢复事实」——与刀4 同一收口（本函数有 10 处调用），
+        #   挂在源头即可让每条生成路径的 memory_context 都带上"我此前存在过"。
+        #   口径：只读落盘事实 + 渲染，不改任何话术模板（烛微345裁定）。
+        try:
+            from nucleus.cognitive.restart_continuity import (
+                collect_restart_context as _m345_rcc,
+            )
+            _m345_rc = _m345_rcc()
+            context["ctx_restart"] = _m345_rc
+            context["ctx_restart_total"] = int(_m345_rc.get("total") or 0)
+            context["ctx_restart_state"] = _m345_rc.get("state")
+        except Exception as _m345_re:
+            silent_exc(_m345_re, where="PulseInnerWorld._build_memory_context 345刀7 上下文恢复")
 
         # 第一层：关系与情绪
         if guidance:
@@ -14885,6 +14933,33 @@ class PulseInnerWorld(
                 f"- 直接给出分析内容，不要加任何前缀说明\n"
             )
 
+        # ★345刀4：把**框架当前时间**前置进 prompt。
+        #   病根：time.tick 每拍广播时间、PulseCortex 也缓存了 `_latest_time`，
+        #   但全仓零消费者 ⇒ 检索断后走 LLM 兜底时，模型手上没有"现在是几点"
+        #   ⇒ 答"不确定"、甚至给出「首启」口吻（洞鉴 #2 断点；该措辞的模板源头见刀7证据订正）。
+        #   注入口径：TimeCore 广播时间优先，取不到用墙钟并标明 source（不假装）。
+        _m345_ti: dict = {}
+        try:
+            from nucleus.chronos.time_context import annotate_llm_prompt as _m345_atp
+            _prompt, _m345_ti = _m345_atp(
+                _prompt, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
+        except Exception as _m345_te:
+            silent_exc(_m345_te, where="PulseInnerWorld._generate_branch_with_model 345刀4 时间注入")
+        # ★345刀7：把「此前存在的事实」前置进 prompt。
+        #   病根：重启后上下文里没有任何"我此前存在过"的事实 ⇒ 模型按无历史推断。
+        #   故此处**只补上下文**，话术模板一字不改（烛微345裁定；
+        #   模板侧是否收口见 nucleus/cognitive/restart_continuity 的证据订正）。
+        try:
+            from nucleus.cognitive.restart_continuity import (
+                annotate_prompt as _m345_rap,
+            )
+            _prompt, _m345_ri = _m345_rap(
+                _prompt, now_text=str((_m345_ti or {}).get("text") or ""),
+                trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
+        except Exception as _m345_rpe:
+            silent_exc(_m345_rpe,
+                       where="PulseInnerWorld._generate_branch_with_model 345刀7 上下文恢复")
+
         # 4. 同步调用大模型
         try:
             import json as _json
@@ -17204,11 +17279,41 @@ class PulseInnerWorld(
             except Exception as e:
                 self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
 
+        # ★345刀5：把常量方向与**成长记忆维度**合流，并消费治理侧的换源信号。
+        #   病根：`direction_keywords` 是常量映射，「守护」永远得到
+        #   「深入理解安全架构和风险管理」⇒ plan 恒同 ⇒ 双腿去重恒跳过（闭环死锁）。
+        #   这里让 direction 携带一个随成长记忆变化的维度；记忆为空时**不制造假变化**，
+        #   保持原 plan 并留痕（两种情形可 grep 区分）。
+        _m345_gm_dim = ""
+        _m345_reroute = {"was_set": False, "old_topic": ""}
+        try:
+            from nucleus.cognitive import growth_memory as _m345_gm
+            _m345_reroute = _m345_gm.consume_reroute()
+            _m345_gm_dim = _m345_gm.pick_growth_dimension(
+                seed=str(target_direction) + str(len(vision)), exclude="")
+            if _m345_gm_dim:
+                _m345_gm_dim = str(_m345_gm_dim)[:80]
+        except Exception as _m345_ge:
+            silent_exc(_m345_ge, where="PulseInnerWorld._convert_vision_to_learning 345刀5 成长记忆")
+
         if weak_areas_labels:  # type: ignore[possibly-unbound]
             plan = (f"为了{'、'.join(weak_areas_labels)}，"  # type: ignore[possibly-unbound]
                    f"我计划{target_direction}")
         else:
             plan = f"我计划{target_direction}——这是实现我心中愿景的重要一步"
+
+        if _m345_gm_dim:
+            _new_plan = f"{plan}；具体想从「{_m345_gm_dim}」这一处下手"
+            if _m345_reroute.get("was_set"):
+                self._log(LogLevel.INFO,
+                          f"[345愿] 换源: {str(_m345_reroute.get('old_topic', ''))[:40]}"
+                          f"→{_m345_gm_dim[:40]}（连续同主题被去重触发）")
+            plan = _new_plan
+            self._log(LogLevel.INFO, f"[345愿] 方向已并入成长记忆维度: {_m345_gm_dim[:40]}")
+        else:
+            self._log(LogLevel.INFO,
+                      f"[345愿] 成长记忆为空，方向保持价值观单源（不制造假变化）: "
+                      f"{target_direction[:40]}")
 
         self._log(LogLevel.INFO, f"愿景驱动学习: {plan[:80]}")
         return plan

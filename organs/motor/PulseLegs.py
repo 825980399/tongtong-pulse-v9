@@ -564,6 +564,20 @@ class PulseLegs(BasePulseOrgan):
             self._log(LogLevel.DEBUG,
                       f"[双腿学习治理] 跳过重复主题: {str(direction)[:40]} "
                       f"≈ 已学习 {str(_dup)[:40]}")
+            # ★345刀5：去重照旧跳过（治理侧不放宽），但**上报换源信号**。
+            #   连续同主题达阈值 ⇒ growth_memory 置位 reroute，由愿景/学习方向生成侧
+            #   消费后换一个成长维度——解「12 次跳过 0 次新学习」的死锁，
+            #   且不靠"放宽去重"来假造流动。
+            try:
+                from nucleus.cognitive import growth_memory as _m345_gm
+                _m345_sk = _m345_gm.note_dedup_skip(str(direction), threshold=3)
+                if _m345_sk.get("reroute"):
+                    self._log(LogLevel.INFO,
+                              f"[345愿] 连续同主题被去重 {_m345_sk.get('streak')} 次，"
+                              f"置位置换源: {str(direction)[:40]}")
+            except Exception as _m345_ge:
+                self._log(LogLevel.DEBUG,
+                          f"[345愿] 换源信号上报异常（已忽略）: {type(_m345_ge).__name__}")
             return
         with self._learn_queue_lock:
             # 去重：如果同方向已在学习或已在队列，跳过

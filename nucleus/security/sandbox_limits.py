@@ -38,6 +38,10 @@ DEFAULT_POLL_INTERVAL = 0.5
 # 选 91/92 的原因：避开 0/1/2（正常/未捕获异常/用法错误）与 120/125/126/127
 # （shell 保留码），也避开常见信号码 128+n 区间，便于父进程无歧义识别。
 LIMIT_MARKER = "__SANDBOX_LIMIT__"
+# ★344补 2：注入留痕标记（与 LIMIT_MARKER 同范式：子进程写 stderr，父进程扫描）。
+#   为什么要留：事后必须能区分「补丁自身写错」与「环境缺符号」——
+#   18:58 那次 `NameError: Any` 就是分不清才被当成补丁错。
+ANN_MARKER = "__SANDBOX_ANN__"
 EXIT_CODE_MEMORY_LIMIT = 91
 EXIT_CODE_CPU_LIMIT = 92
 
@@ -67,7 +71,17 @@ SANDBOX_ANNOTATION_SYMBOLS: tuple[str, ...] = (
     "Generic", "Iterable", "Iterator", "List", "Literal", "Mapping",
     "NamedTuple", "NoReturn", "Optional", "Protocol", "Sequence", "Set",
     "Tuple", "Type", "TypedDict", "Union",
+    # ★344补 2：再收一档常见注解符号（仍为注解层，yping 与 collections.abc 均有）
+    "AbstractSet", "AsyncIterator", "Awaitable", "ByteString", "Coroutine",
+    "Generator", "Hashable", "MutableMapping", "MutableSequence", "MutableSet",
+    "Reversible", "Sized",
 )
+
+#: ★344补 2：**注入面边界**——只允许「注解层」的两个模块。
+#: 绝不扩到任意 stdlib：一旦把 `sys`/`os`/`json` 之类也预注，
+#: 「补丁自身忘了 import」这个真错会被「环境兜底」掩盖成假阳——
+#: 那比不注入更坏：错的代码会被判成对。
+SANDBOX_ANNOTATION_MODULES: tuple[str, ...] = ("typing", "collections.abc")
 
 
 # ==================== 异常类型 ====================
@@ -311,10 +325,20 @@ def build_child_wrapper(
     annotation_setup = (
         f"_ann_names = {SANDBOX_ANNOTATION_SYMBOLS!r}\n"
         "import typing as _typing_mod\n"
+        "import collections.abc as _abc_mod\n"
+        "_ann_hit = []\n"
         "for _n in _ann_names:\n"
         "    _sym = getattr(_typing_mod, _n, None)\n"
+        "    if _sym is None:\n"
+        "        _sym = getattr(_abc_mod, _n, None)\n"
         "    if _sym is not None:\n"
         "        _g[_n] = _sym\n"
+        "        _ann_hit.append(_n)\n"
+        "try:\n"
+        f"    sys.stderr.write({ANN_MARKER!r} + ':' + ','.join(_ann_hit) + '\\n')\n"
+        "    sys.stderr.flush()\n"
+        "except Exception:\n"
+        "    pass\n"
     )
 
     src = (
@@ -493,6 +517,20 @@ class MemoryWatchdog:
 
 
 # ==================== 对外主入口 ====================
+def parse_injected_symbols(stderr_text: str) -> list[str]:
+    """★344补 2：从子进程 stderr 里读回「实际注入成功的符号」。
+
+    只认 `ANN_MARKER + ':'` 开头的那一行（与 `_classify_exit` 同一契约）；
+    找不到 ⇒ 返回空列表（**不猜**“没注入”与“没这个标记”也不混为一谈）。
+    """
+    for _line in reversed((stderr_text or "").splitlines()):
+        _t = _line.strip()
+        if _t.startswith(ANN_MARKER + ":"):
+            _body = _t.split(":", 1)[1].strip()
+            return [x for x in (s.strip() for s in _body.split(",")) if x]
+    return []
+
+
 def _classify_exit(returncode: int | None, stderr_text: str) -> str | None:
     """判断子进程是否死于资源超限，返回 "cpu"/"memory"/None。
 

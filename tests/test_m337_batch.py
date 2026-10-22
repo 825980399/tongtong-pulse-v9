@@ -8,7 +8,7 @@
 import json
 import os
 import sys
-import time
+import datetime
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
@@ -238,8 +238,14 @@ def test_m337_thread_gate_passes_now():
     #   的 spawn 归零会退出 file_count，文件数**必须**跟着降 1 —— 留着旧断言就是自相矛盾。）
     # ★340刀5：重锚必须留当日署名（历史 anchored_* 保留）
     assert b.get("anchored_by") == "172刀0" and b.get("anchored_at") == "2026-10-08"
-    assert b.get("reanchor_by") == "342刀5" and b.get("reanchor_at") == time.strftime("%Y-%m-%d")
+    # ★345批修：原断言 `reanchor_at == time.strftime("%Y-%m-%d")` 只在重锚当天成立，
+    #   过 00:00 必红（时钟依赖，铁律179 同型）。改为「署名在位 + 台账自洽」，时间无关且更严。
+    assert b.get("reanchor_by") == "342刀5"
+    _ra = str(b.get("reanchor_at") or "")
+    datetime.datetime.strptime(_ra, "%Y-%m-%d")   # 非法日期/空值直接抛
     _h = b.get("reanchor_history") or []
+    assert (b.get("reanchor_by"), b.get("reanchor_at")) == (
+        _h[-1].get("reanchor_by"), _h[-1].get("reanchor_at"))
     # 历史**累积**：头一条 from 仍是 172刀0 的 64，最近一条 from 是本次重锚前的 62
     assert len(_h) >= 2
     assert _h[0]["from"]["total_occurrences"] == 64

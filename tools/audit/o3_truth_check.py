@@ -147,7 +147,160 @@ def scan_references(path: str, symbol: str) -> dict:
             "parse_error": False}
 
 
-def check(root: str, target_file: str, symbol: str, roots=None) -> dict:
+# ===== ★344补 1（脚本侧）：删后新孤儿（第四条件）=====
+def owned_member_names(node) -> list:
+    """被删 def 体内引用到的成员名（`self.x` / `Cls.x` 的属性名）。"""
+    _out, _seen = [], set()
+    for _n in ast.walk(node):
+        if isinstance(_n, ast.Attribute):
+            _a = str(getattr(_n, "attr", "") or "")
+            if _a and _a not in _seen:
+                _seen.add(_a)
+                _out.append(_a)
+    return _out
+
+
+def post_delete_orphans(path: str, symbol: str, root: str, roots=None) -> dict:
+    """**删后新孤儿**：被删者独占引用、删后零引用的本文件成员。
+
+    与第四条件同口径（三条同时满足）：
+      1. 名字在本文件内有 `def`/`class` 定义；
+      2. 删除后本文件内引用数 == 0；
+      3. 跨文件（排除本文件）调用+属性引用 == 0，且扫描未被截断。
+    """
+    _roots = tuple(roots or _DEFAULT_ROOTS)
+    _abs = os.path.join(root, path.replace("/", os.sep))
+    _src_txt, _tree = _parse(_abs)   # ★本脚本的 _parse 返回 (源码, AST) 两元组
+    if _tree is None:
+        return {"state": "unavailable", "reason": "parse_failed", "orphans": []}
+    _hit = None
+    for _n in ast.walk(_tree):
+        if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)) and _n.name == symbol:
+            _hit = _n
+            break
+    if _hit is None:
+        return {"state": "unavailable", "reason": "symbol_not_found", "orphans": []}
+    _lines = io.open(_abs, encoding="utf-8", errors="ignore").read().splitlines(keepends=True)
+    _start = min([int(_hit.lineno)] + [int(d.lineno) for d in _hit.decorator_list]) - 1
+    _end = int(getattr(_hit, "end_lineno", 0) or 0)
+    _new_src = "".join(_lines[:_start] + _lines[_end:])
+    try:
+        _new_tree = ast.parse(_new_src)
+    except SyntaxError as _se:
+        # 删后语法坏了 ⇒ 孤儿判定无意义，交给调用方另判（不猜）
+        _logger.debug("删后语法错 %s: %s: %s", path, symbol, _se)
+        return {"state": "unavailable", "reason": "post_delete_syntax_error", "orphans": []}
+    _defined = {str(n.name) for n in ast.walk(_new_tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+    _refs = {}
+    for _n in ast.walk(_new_tree):
+        _k = (str(getattr(_n, "attr", "") or "") if isinstance(_n, ast.Attribute)
+              else (str(_n.id) if isinstance(_n, ast.Name) else ""))
+        if _k:
+            _refs[_k] = _refs.get(_k, 0) + 1
+    _out = []
+    for _m in owned_member_names(_hit):
+        if _m not in _defined or _refs.get(_m, 0) > 0:
+            continue
+        _cross = {"call_attr": 0, "call_name": 0, "attr_read": 0, "text_only": 0}
+        _trunc = False
+        for _p in _iter_py(root, _roots):
+            if os.path.abspath(_p) == os.path.abspath(_abs):
+                continue
+            _r = scan_references(_p, _m)
+            for _k in _cross:
+                _cross[_k] += int(_r[_k])
+        if _cross["call_attr"] + _cross["call_name"] + _cross["attr_read"] > 0:
+            continue
+        _out.append({"member": _m, "in_file_refs": 0, "cross": _cross,
+                     "truncated": _trunc})
+    return {"state": "ok", "orphans": _out,
+            "verdict": "新孤儿 %d 个" % len(_out)}
+
+
+# ===== ★344补 6：删除类补丁「整文件快照＋还原演练」=====
+#: 快照根：**隔离根**，不写生产 `data/`（任务书补 6 明确要求）
+DEFAULT_SNAPSHOT_ROOT = os.path.join("tmp", "o3_snapshots")
+
+
+def _sha256(path: str) -> str:
+    import hashlib
+    _h = hashlib.sha256()
+    with open(path, "rb") as _f:
+        for _b in iter(lambda: _f.read(1 << 16), b""):
+            _h.update(_b)
+    return _h.hexdigest()
+
+
+def snapshot_file(root: str, target_file: str,
+                  snapshot_root: str = "") -> dict:
+    """删除动作前的**整文件快照**。
+
+    为什么不能只靠“反向 patch”：删掉的 def 无法靠文本还原（
+    原文可能已被后续补丁改过），只有整文件快照能保证“还原回当时那一份”。
+    """
+    _abs = os.path.join(root, target_file.replace("/", os.sep))
+    if not os.path.isfile(_abs):
+        return {"state": "unavailable", "reason": "target_missing",
+                "target_file": target_file}
+    _sroot = snapshot_root or os.path.join(root, DEFAULT_SNAPSHOT_ROOT)
+    os.makedirs(_sroot, exist_ok=True)
+    import time as _t
+    _stamp = _t.strftime("%Y%m%d_%H%M%S", _t.localtime())
+    _name = ("%s__%s.bak" % (target_file.replace("/", "__"), _stamp))
+    _dst = os.path.join(_sroot, _name)
+    try:
+        with open(_abs, "rb") as _f, open(_dst, "wb") as _g:
+            _g.write(_f.read())
+    except OSError as _e:
+        _logger.debug("快照写失败 %s: %s: %s", target_file, type(_e).__name__, _e)
+        return {"state": "unavailable", "reason": "%s: %s" % (type(_e).__name__, _e),
+                "target_file": target_file}
+    return {"state": "ok", "target_file": target_file.replace("\\", "/"),
+            "source": _abs.replace("\\", "/"), "snapshot_path": _dst.replace("\\", "/"),
+            "bytes": os.path.getsize(_dst), "sha256": _sha256(_dst),
+            "in_production_data": os.path.abspath(_dst).startswith(
+                os.path.abspath(os.path.join(root, "data")) + os.sep)}
+
+
+def restore_drill(snapshot_path: str, work_dir: str = "") -> dict:
+    """**还原演练**：把快照还到一个临时目录并比 sha256。
+
+    演练不动源码：只证明“快照能完整写回此字节一致的一份”，不去碰真实目标文件。
+    """
+    if not os.path.isfile(snapshot_path):
+        return {"state": "unavailable", "reason": "snapshot_missing"}
+    _wd = work_dir or os.path.join(os.path.dirname(os.path.abspath(snapshot_path)),
+                                   "_drill")
+    os.makedirs(_wd, exist_ok=True)
+    _dst = os.path.join(_wd, os.path.basename(snapshot_path) + ".restored")
+    try:
+        with open(snapshot_path, "rb") as _f, open(_dst, "wb") as _g:
+            _g.write(_f.read())
+    except OSError as _e:
+        _logger.debug("还原演练写失败 %s: %s: %s", snapshot_path, type(_e).__name__, _e)
+        return {"state": "unavailable", "reason": "%s: %s" % (type(_e).__name__, _e)}
+    _a, _b = _sha256(snapshot_path), _sha256(_dst)
+    return {"state": "ok" if _a == _b else "mismatch", "restored_path": _dst,
+            "sha_snapshot": _a, "sha_restored": _b,
+            "sha_match": _a == _b, "bytes": os.path.getsize(_dst)}
+
+
+def deletion_snapshot_drill(root: str, target_file: str,
+                            snapshot_root: str = "", work_dir: str = "") -> dict:
+    """删除动作必备项一次做完：快照 → 还原演练（输出路径＋结果）。"""
+    _snap = snapshot_file(root, target_file, snapshot_root)
+    _out = {"snapshot": _snap, "restore_drill": None,
+            "deletion_ready": False}
+    if _snap.get("state") == "ok":
+        _out["restore_drill"] = restore_drill(_snap["snapshot_path"], work_dir)
+        _out["deletion_ready"] = bool(_out["restore_drill"].get("sha_match"))
+    return _out
+
+
+def check(root: str, target_file: str, symbol: str, roots=None,
+          snapshot_root: str = "", work_dir: str = "",
+          drill: bool = True) -> dict:
     _roots = tuple(roots or _DEFAULT_ROOTS)
     _tgt_abs = os.path.join(root, target_file.replace("/", os.sep))
 
@@ -195,6 +348,14 @@ def check(root: str, target_file: str, symbol: str, roots=None) -> dict:
             "truth": "定义 %d 处 / 调用 %d 处" % (len(_defs), _call_sites),
         },
         "boundary": _boundary,
+        # ★344补 1：删后新孤儿（与第四条件同口径）
+        "post_delete_orphans": (post_delete_orphans(
+            target_file, symbol, root, _roots)
+            if _defs else {"state": "skipped", "reason": "no_definition"}),
+        # ★344补 6：删除类必备的整文件快照＋还原演练
+        "deletion_drill": (deletion_snapshot_drill(
+            root, target_file, snapshot_root, work_dir)
+            if (drill and _defs) else {"skipped": True}),
     }
 
 
@@ -207,11 +368,18 @@ def main(argv=None) -> int:
     _ap.add_argument("--roots", default=",".join(_DEFAULT_ROOTS),
                      help="调用点扫描域（逗号分隔，默认 %s）" % ",".join(_DEFAULT_ROOTS))
     _ap.add_argument("--json-out", default="", help="结果 JSON 落盘路径（空=只打印）")
+    _ap.add_argument("--snapshot-root", default="",
+                       help="删除快照根（默认 tmp/o3_snapshots，禁写生产 data/）")
+    _ap.add_argument("--work-dir", default="", help="还原演练目录")
+    _ap.add_argument("--no-drill", action="store_true",
+                       help="跳过快照与演练（只做 AST 复核）")
     _args = _ap.parse_args(argv)
 
     _root = _args.repo_root or project_root()
     _roots = tuple(x.strip() for x in _args.roots.split(",") if x.strip())
-    _res = check(_root, _args.file, _args.symbol, _roots)
+    _res = check(_root, _args.file, _args.symbol, _roots,
+                 snapshot_root=_args.snapshot_root, work_dir=_args.work_dir,
+                 drill=not _args.no_drill)
     _txt = json.dumps(_res, ensure_ascii=False, indent=2, sort_keys=True)
 
     if _args.json_out:

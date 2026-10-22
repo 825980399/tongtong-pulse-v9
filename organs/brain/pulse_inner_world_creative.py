@@ -473,6 +473,29 @@ class PulseInnerWorldCreativeMixin:
         import random
         vision = random.choice(visions)
 
+        # ★345刀5：生成侧接**第二输入源=成长记忆**（裁决③）。
+        #   病根：愿景基调只由 `vision_map[top_value]` 三句候选随机决定，
+        #   而下游 `_convert_vision_to_learning` 的方向是**常量表** ⇒
+        #   vision 变不变，学习方向都是同一句 ⇒ 被双腿去重判重复跳过 ⇒ 闭环死锁。
+        #   这里把成长记忆（最近目标/成就/困惑）并入愿景主题，让主题真正随经历变化。
+        try:
+            from nucleus.cognitive import growth_memory as _m345_gm
+            _m345_gm_read = _m345_gm.read_growth_memory(limit=4)
+            _m345_dim = _m345_gm.pick_growth_dimension(seed=str(top_value) + vision)
+            if _m345_dim:
+                vision += f"。最近我一直在想'{_m345_dim}'这件事，希望它能成为下一步的方向"
+                self._log(LogLevel.INFO,
+                          f"[345愿] 输入源=values+growth_mem values={top_value} "
+                          f"growth_dim={_m345_dim[:40]} state={_m345_gm_read.get('state')}")
+            else:
+                # 成长记忆为空 ⇒ 不制造假变化，如实退回单源（可 grep 区分两种情形）
+                self._log(LogLevel.INFO,
+                          f"[345愿] 输入源=values growth_mem=empty（退回价值观单源） "
+                          f"values={top_value} state={_m345_gm_read.get('state')}")
+        except Exception as _m345_ge:
+            from nucleus._silent_except import silent_exc as _m345_se
+            _m345_se(_m345_ge, "creative._generate_self_vision 345刀5 成长记忆")
+
         # 如果有知识强项，追加具体的成长方向
         if strong_labels:
             vision += f"。特别是在{'和'.join(strong_labels)}方面，我已经有了一些基础，希望能持续深化"

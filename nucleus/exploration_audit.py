@@ -12,6 +12,7 @@ exploration_audit.py —— 探索审计器
 """
 
 from concurrent.futures import ThreadPoolExecutor
+import os
 from typing import Any
 
 from config import TIMEOUT_CONFIG
@@ -439,7 +440,70 @@ def aggregate_audit_results(tool_issues: list, rule_issues: list,
     }
 
 
-def run_parallel_audit(self_inspector=None, strategy: dict | None = None) -> dict[str, Any]:
+def _m345_persist_after_audit(report: dict[str, Any], persist: bool | None = None) -> dict[str, Any]:
+    """★345刀1/刀2：审查收口后把问题池落盘 + 按 issue_type 三类分流。
+
+    **不改审查结果**：report 原样返回；落盘/分流失败只告警，绝不阻断审查主流程。
+
+    落盘目标 `data/reports/audit/audit_<YYYYMMDD>.json`（池累积态），与既有的
+    `data/reports/code_review/run_<ts>.json`（每拍明细）正交，不是两套真值。
+
+    `persist=False` 可显式关闭（隔离测试用）；`None` 时读
+    `config.ENABLE_AUDIT_POOL_PERSIST`（默认 True，一键回滚）。
+    """
+    if not isinstance(report, dict):
+        return report
+    _on = persist
+    if _on is None:
+        try:
+            import config as _cfg
+            _on = bool(getattr(_cfg, "ENABLE_AUDIT_POOL_PERSIST", True))
+        except Exception as _ce:
+            silent_exc(_ce, "exploration_audit._m345_persist_after_audit 读开关", level="debug")
+            _on = True
+    if not _on:
+        return report
+    try:
+        from nucleus import audit_problem_pool as _pool
+        _issues = report.get("issues")
+        if not isinstance(_issues, list):
+            return report
+        # 刀2：先给每条打 route（三类出口），再落盘（route 随条目一并持久化）
+        _bucket = _pool.split_routes([_i for _i in _issues if isinstance(_i, dict)])
+        _stats = _pool.persist_pool(report)
+        # 刀2：三类出口落成可 grep 的实体（下游实现待烛微345待核2裁定，不预设）
+        try:
+            _pool_doc = _pool.load_pool()
+            if _pool_doc.get("state") == "ok":
+                report["problem_pool_routes"] = _pool.export_routes(_pool_doc["entries"])
+        except Exception as _re:
+            silent_exc(_re, "exploration_audit._m345_persist_after_audit 出口导出", level="warning")
+        _logger.info(
+            "[345池] 三分流: 补丁池=%d 优化清单=%d 清洗队列=%d | 落盘 state=%s total=%s",
+            len(_bucket.get(_pool.ROUTE_PATCH_POOL, [])),
+            len(_bucket.get(_pool.ROUTE_OPTIMIZE_LIST, [])),
+            len(_bucket.get(_pool.ROUTE_CLEANUP_QUEUE, [])),
+            _stats.get("state", "?"), _stats.get("total", "-"))
+        report["problem_pool"] = {
+            "state": _stats.get("state"),
+            "path": os.path.basename(str(_stats.get("path", "") or "")),
+            "total": _stats.get("total"),
+            "added": _stats.get("added"),
+            "updated": _stats.get("updated"),
+            "pruned": _stats.get("pruned"),
+            "routes": {
+                _pool.ROUTE_PATCH_POOL: len(_bucket.get(_pool.ROUTE_PATCH_POOL, [])),
+                _pool.ROUTE_OPTIMIZE_LIST: len(_bucket.get(_pool.ROUTE_OPTIMIZE_LIST, [])),
+                _pool.ROUTE_CLEANUP_QUEUE: len(_bucket.get(_pool.ROUTE_CLEANUP_QUEUE, [])),
+            },
+        }
+    except Exception as _e:
+        silent_exc(_e, "exploration_audit._m345_persist_after_audit 落盘/分流", level="warning")
+    return report
+
+
+def run_parallel_audit(self_inspector=None, strategy: dict | None = None,
+                       persist: bool | None = None) -> dict[str, Any]:
     """探查编排（★P1: 并行调度 + 回灌链；★P2: 注册表驱动动态探查器）。
 
     优先从探查器注册表取启用的探查器执行；若注册表不可用或未注册任何探查器，
@@ -456,7 +520,8 @@ def run_parallel_audit(self_inspector=None, strategy: dict | None = None) -> dic
         if _probes:
             # 有注册的探查器：并行执行（复用全局并行调度器，失败降级本地线程池）
             _results = _reg.run_all(self_inspector)
-            return _aggregate_registry_results(_results, strategy)
+            return _m345_persist_after_audit(
+                _aggregate_registry_results(_results, strategy), persist)
     except Exception as e:
         _logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
@@ -479,7 +544,8 @@ def run_parallel_audit(self_inspector=None, strategy: dict | None = None) -> dic
             _rule_issues = _f_rule.result()
             _llm_report = _f_llm.result()
 
-    return aggregate_audit_results(_tool_issues, _rule_issues, _llm_report, strategy)
+    return _m345_persist_after_audit(
+        aggregate_audit_results(_tool_issues, _rule_issues, _llm_report, strategy), persist)
 
 
 def _aggregate_registry_results(results: list[tuple[str, str, Any]],

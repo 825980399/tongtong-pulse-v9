@@ -1832,6 +1832,21 @@ class PatchManager:
         #   （`_m339_is_o3` 用它判 O3 来源），覆盖会改变审批分道语义。
         if isinstance(patch, dict):
             patch.setdefault("entry_source", "llm_auto_fix")
+        # ★344补 3（A-17 三类出口②）：补丁池**拒收隔离产物**。
+        #   实测：pending_patches 里曾有 `file=tmp/p342_root/d1_iso.py`
+        #   的条目——隔离脚本产物进了生产池，事后读的人分不清
+        #   "哪些是真生产补丁"。
+        #   判定用**路径结构**（前缀/后缀），不看文件名关键字（铁律153）。
+        try:
+            from nucleus import domain_guard as _m344_dg
+            _m344_ok, _m344_why = _m344_dg.guard_patch_entry(
+                patch, trace=lambda _f, *a: _module_logger.info(_f, *a))
+            if not _m344_ok:
+                return
+        except Exception as _m344_dge:
+            silent_exc(_m344_dge,
+                       where="PatchManager.save_pending_patch 344补 3 域过滤",
+                       level="warning")
         # ★第280批刀1（P0）：生成侧 def 对齐——出补丁即断言 def名==method，不一致拒绝入库。
         #   烛微279批发现：23条def名与method错配＋6条modified_code无def＝29条(60.4%)。
         #   源头拦比队列清便宜：解析 modified_code 首个 def 名，与 method 字段比对。
