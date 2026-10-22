@@ -179,3 +179,4 @@ _install_cython.bat
 .aionclaw-tmp/
 
 # IDE客户端产物(本地配置, 不入库).arts/
+.arts/
