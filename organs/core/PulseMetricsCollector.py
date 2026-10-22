@@ -548,6 +548,25 @@ class PulseMetricsCollector(BasePulseOrgan):
         return _out
 
     # ===== ★343批刀4：释放决策树心跳（G0-G4 生产侧触发） =====
+    def _m344_heap_probe(self):
+        """★344批刀5：AST 释放**之后**复测 heap（MB）= RSS − 镜像。
+
+        与 `_collect_memory_pressure` 同一口径（`heap = rss - image`），
+        取不到任一项 ⇒ None（**不填 0**，铁律156）。异常不抛，只留痕。
+        """
+        try:
+            if not self.info_field:
+                return None
+            _m = self.info_field._m169_memory_pressure()
+            _rss = _m.get("process_rss_mb")
+            _img = self._m337_image_mb()
+            if _rss is None or _img is None:
+                return None
+            return round(max(0.0, float(_rss) - float(_img)), 1)
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="PulseMetricsCollector::_m344_heap_probe", level="debug")
+            return None
+
     def _m343_release_heartbeat(self, heap_mb=None) -> dict:
         """跑一次 G0-G4 决策并留痕（**只决策不释放**：candidates 恒空）。
 
@@ -606,12 +625,38 @@ class PulseMetricsCollector(BasePulseOrgan):
             last_release_beat=getattr(self, "_m343_last_release_beat", None))
         _rp343.log_decision(_dec, where="[343心跳] beat=%d every=%d w1=%s"
                             % (_bc, _every, _w1 or "unavailable"))
+        # ★344批刀5：343刀4 只挂决策（`candidates_offered` 硬编码 0 = 只决策不释放），
+        #   本刀补**执行面**：G2/G3 档位时真实触发 AST 释放（清池 + gc.collect(2)
+        #   + 前后实测活体计数），并留痕 `[344释放] ast_cleanup nodes=... heap=...→...`。
+        #   口径纪律：池空就是 0（**不造假填数**），但必须给 `candidates_source` 与
+        #   `ast_release.measured_nodes` 佐证"释放动作确实跑过"（铁律166：
+        #   「没生效」与「生效但产出 0」不是一回事）。
+        _ast_rel = None
+        _offer = 0
+        _offer_src = "ast_face"
+        try:
+            from nucleus.mnemosyne import ast_release as _ar344
+            _offer = int(_ar344.pending_stats().get("faces") or 0)
+            if _dec.get("tier") in ("G2_SOFT_RELEASE", "G3_COLD_DEMOTE"):
+                _ast_rel = _ar344.release_ast_faces(
+                    tier=str(_dec.get("tier") or ""),
+                    heap_before=heap_mb,
+                    heap_probe=self._m344_heap_probe,
+                    where="[343心跳] beat=%d every=%d" % (_bc, _every))
+        except Exception as _are:
+            silent_exc(_are, where="PulseMetricsCollector::_m343_release_heartbeat 344刀5")
+            _offer_src = "unavailable"
+            self._log(LogLevel.WARNING,
+                      "[344释放] AST 释放面异常（不静默）: %s: %s"
+                      % (type(_are).__name__, _are))
         return {"status": "ok", "tier": _dec.get("tier"),
                 "tier_why": _dec.get("tier_why"),
                 "g0_blocked_by": list(_dec.get("g0", {}).get("blocked_by") or []),
                 "heap_mb": heap_mb, "beat": _bc,
                 "release_enabled": _dec.get("release_enabled"),
-                "candidates_offered": 0}
+                "candidates_offered": _offer,
+                "candidates_source": _offer_src,
+                "ast_release": _ast_rel}
 
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。

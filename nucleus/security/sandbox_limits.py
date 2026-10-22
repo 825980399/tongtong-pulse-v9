@@ -52,6 +52,23 @@ DEFAULT_ALLOWED_BUILTINS: tuple[str, ...] = (
     "divmod", "all", "any", "reversed", "slice",
 )
 
+# ★344批刀1：注解求值依赖的标准库符号白名单。
+#
+# 病根（2026-10-22 18:58:18 一手日志）：O3 派单执行 `CompanionBridge.handshake`
+# 报 `NameError: name 'Any' is not defined. Did you mean: 'any'?`。
+# 子进程包装器只往 `_g` 里放了 `__builtins__`（26 个白名单内置）与 `__name__`，
+# 而 Python 在 `def f(x: dict[str, Any])` **定义时**就要求值注解 ⇒ 环境缺 `Any`
+# 就把「代码本身完全合法」判成执行失败。这是**环境缺陷误判**，不是代码缺陷。
+#
+# 只注入类型注解用的名字，不注入模块对象本身（`_g` 里不出现 `typing`），
+# 也不放开 `__import__`——用户代码仍然不能 import，逃逸面不变。
+SANDBOX_ANNOTATION_SYMBOLS: tuple[str, ...] = (
+    "Any", "AnyStr", "Callable", "ClassVar", "Dict", "Final", "FrozenSet",
+    "Generic", "Iterable", "Iterator", "List", "Literal", "Mapping",
+    "NamedTuple", "NoReturn", "Optional", "Protocol", "Sequence", "Set",
+    "Tuple", "Type", "TypedDict", "Union",
+)
+
 
 # ==================== 异常类型 ====================
 class SandboxResourceError(RuntimeError):
@@ -286,11 +303,26 @@ def build_child_wrapper(
             + "      '__name__': '__main__'}\n"
         )
 
+    # ★344刀1：注入注解求值依赖（`Any`/`Dict`/... ）。放在 globals_setup 之后、
+    #   exec 用户代码之前——用户代码里 `def f(x: dict[str, Any])` 的注解在**定义时**
+    #   求值，符号必须此时已在 `_g` 里，否则就是 18:58 那次的 NameError。
+    #   只挑 typing 上真实存在的名字（getattr 兜底 None 的跳过），typing 自身
+    #   不进 `_g`（不进用户可见命名空间），`__import__` 也不放开。
+    annotation_setup = (
+        f"_ann_names = {SANDBOX_ANNOTATION_SYMBOLS!r}\n"
+        "import typing as _typing_mod\n"
+        "for _n in _ann_names:\n"
+        "    _sym = getattr(_typing_mod, _n, None)\n"
+        "    if _sym is not None:\n"
+        "        _g[_n] = _sym\n"
+    )
+
     src = (
         "import sys, os, builtins as _b\n"
         + _resource_limits_source(limits)
         + _cpu_signal_handler_source()
         + globals_setup
+        + annotation_setup
         + "with open(sys.argv[1], encoding='utf-8') as _f:\n"
         + "    _src = _f.read()\n"
         + "try:\n"

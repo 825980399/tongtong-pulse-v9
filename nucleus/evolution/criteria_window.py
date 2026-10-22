@@ -23,6 +23,8 @@
 """
 from __future__ import annotations
 
+import io
+import os
 import time
 from datetime import datetime
 
@@ -33,15 +35,379 @@ from nucleus._silent_except import silent_exc
 CRITERIA_WINDOW_DEFAULT_SEC = 3625.0
 
 #: 已知判据版本。未登记的版本 ⇒ 窗口不可判（不猜）。
+# ★344批刀4：表里的窗口长度**一律引用** `CRITERIA_WINDOW_DEFAULT_SEC`，
+#   不再各自抄一遍同一个数值。原来 3 个版本各写一份字面量 ⇒ 改默认值时表里
+#   两份会留在旧值，这就是"同一口径两份实现"的温床（本模块内部先自证）。
 CRITERIA_VERSIONS = {
-    "336.r12": {"window_sec": 3625.0, "note": "336 压测 12 圈（R01—R12）"},
-    "335.cg.v1": {"window_sec": 3625.0, "note": "图版本 335.cg.v1 起的代次窗口"},
+    "336.r12": {"window_sec": CRITERIA_WINDOW_DEFAULT_SEC,
+                "note": "336 压测 12 圈（R01—R12）"},
+    "335.cg.v1": {"window_sec": CRITERIA_WINDOW_DEFAULT_SEC,
+                  "note": "图版本 335.cg.v1 起的代次窗口"},
     "343.j3": {"window_sec": CRITERIA_WINDOW_DEFAULT_SEC,
                "note": "343 三段式判据（A∧B∧C）"},
 }
 
 #: 不可判升级为红色告警的阈值（洞鉴：不可判≥3 自动触发审计）
 UNJUDGED_ALARM_THRESHOLD = 3
+
+# ==================== 段B（收敛层作废条数）数据源 · 344批刀2 ====================
+#
+# 343刀7 留下的是**判据**，不是**数据**：12 圈 B 段全 `None` ⇒ RED_ALARM。
+# 本段补的是数据源，口径三条：
+#
+#   ① **结构化台账优先**：`data/reports/converge_voided.jsonl`（344 起由
+#      收敛层作废点写入，append-only、带 ts/proc_gen）。
+#      为什么必须有台账：作废行今天只进 `pulse.log`，而 pulse.log 是
+#      10MB×5 的滚动文件 —— 336 期（10-21 13:00→10-22 01:08）的日志
+#      **已经轮转消失**，事后重放无从谈起。只靠日志＝数据永远补不上。
+#   ② **日志只作回退**：台账覆盖不到的时间段，才回退扫 `logs/pulse*.log*`，
+#      且必须先证明**日志覆盖该窗口**（首末时间戳跨过 win_lo/win_hi），
+#      覆盖不到就是 `unavailable`，**不猜 0**（铁律156）。
+#   ③ **只数逐条行**：`[284刀5] 结构缺陷补丁作废: <file>:<method> ...`。
+#      批量汇总行 `批量作废: N 条` 不数 —— 数了就是同一次作废记两笔
+#      （铁律155：归因计数 ≠ 分母）。
+
+#: 台账相对路径（生产唯一写入口见 `note_converge_voided`）。
+CONVERGE_VOIDED_LEDGER_REL = os.path.join("data", "reports", "converge_voided.jsonl")
+
+#: 逐条件废行标记（**不含**批量汇总行）。
+CONVERGE_VOIDED_MARKER = "[284刀5] 结构缺陷补丁作废"
+
+#: 日志回退扫描上限（防长驻进程每拍把几 MB 日志全扫一遍）。
+_VOIDED_LOG_SCAN_MAX_FILES = 12
+_VOIDED_LOG_SCAN_MAX_LINES = 400000
+
+#: 日志行时间戳格式（`nucleus.logger` 落盘格式，本地时区无偏移）。
+_LOG_TS_FMT = "%Y-%m-%d %H:%M:%S"
+
+#: 覆盖判定的容差（秒）：轮转接缝处常有毫秒级空隙，不算"没覆盖"。
+_COVERAGE_TOL_SEC = 2.0
+
+
+def _cw_repo_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def converge_voided_ledger_path(path: str | None = None) -> str:
+    """台账路径（`path` 仅供隔离验证注入，铁律158）。"""
+    if path:
+        return path
+    return os.path.join(_cw_repo_root(), CONVERGE_VOIDED_LEDGER_REL)
+
+
+def note_converge_voided(patch_id, file: str = "", method: str = "",
+                         reason: str = "", path: str | None = None,
+                         now: float | None = None, **fields) -> str:
+    """**写**一条作废台账（append-only JSONL）。返回写入路径；失败返回空串。
+
+    由收敛层作废点（`PatchManager._m280_converge_pending`）调用 —— 这是把
+    "作废只进日志、日志一滚就没了"补成"作废有结构化台账"的那一刀。
+    写失败**不影响作废主流程**（作废本身照常发生），只留 warning。
+    """
+    _p = converge_voided_ledger_path(path)
+    _rec = {"ts": float(now if now is not None else time.time()),
+            "patch_id": str(patch_id or "")[:64],
+            "file": str(file or ""),
+            "method": str(method or ""),
+            "reason": str(reason or "")[:200],
+            "proc_gen": "unknown"}
+    try:
+        from nucleus.proc_gen import proc_gen_str as _pgs
+        _rec["proc_gen"] = str(_pgs() or "unknown")
+    except Exception as _e:                                    # noqa: BLE001
+        silent_exc(_e, where="criteria_window::note_converge_voided proc_gen",
+                   level="debug")
+    _rec.update(fields)
+    try:
+        _dir = os.path.dirname(os.path.abspath(_p))
+        if _dir and not os.path.isdir(_dir):
+            os.makedirs(_dir, exist_ok=True)
+        with io.open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(_json_dumps(_rec) + "\n")
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::note_converge_voided", level="warning")
+        return ""
+    return _p
+
+
+def _json_dumps(obj) -> str:
+    import json as _json
+    return _json.dumps(obj, ensure_ascii=False)
+
+
+def read_converge_voided_ledger(path: str | None = None) -> list:
+    """读台账（坏行跳过并计数，**绝不因台账坏了判 0**）。"""
+    import json as _json
+    _p = converge_voided_ledger_path(path)
+    _rows = []
+    _bad = 0
+    try:
+        if not os.path.isfile(_p):
+            return []
+        with io.open(_p, encoding="utf-8", errors="ignore") as _f:
+            for _ln in _f:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _d = _json.loads(_ln)
+                except ValueError as _e:
+                    silent_exc(_e, where="criteria_window::read_ledger bad_line",
+                               level="debug")
+                    _bad += 1
+                    continue
+                if isinstance(_d, dict) and _d.get("ts") is not None:
+                    _rows.append(_d)
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::read_ledger", level="warning")
+        return []
+    if _bad:
+        # 坏行只影响计数精度，不影响"有没有台账"这个事实，故不并入条数。
+        silent_exc(ValueError("bad_rows=%d" % _bad),
+                   where="criteria_window::read_ledger 坏行统计", level="debug")
+    return _rows
+
+
+def _log_candidates(root: str | None = None) -> list:
+    """候选日志文件（只收 pulse 系：生产事件流；pytest.log 是测试流，不算生产）。"""
+    _root = root or _cw_repo_root()
+    _out = []
+    for _sub in ("logs", os.path.join("logs", "archive")):
+        _d = os.path.join(_root, _sub)
+        if not os.path.isdir(_d):
+            continue
+        try:
+            _names = sorted(os.listdir(_d))
+        except OSError as _e:
+            silent_exc(_e, where="criteria_window::_log_candidates listdir",
+                       level="debug")
+            continue
+        for _n in _names:
+            if not _n.startswith("pulse"):
+                continue
+            if not (".log" in _n):
+                continue
+            _p = os.path.join(_d, _n)
+            if os.path.isfile(_p):
+                _out.append(_p)
+    return _out
+
+
+def _parse_log_ts(line: str):
+    """行首 `YYYY-MM-DD HH:MM:SS` → epoch（本地时区）；**不是时间戳行**返回 None。
+
+    先用**形状校验**挡掉绝大多数"本来就不是时间戳"的行（日志正文绝大多数如此），
+    只把真正形状对但值非法的极少数交给 strptime；异常仍留 debug 痕迹
+    （铁律150：纯 return 的 handler 一律判静默 ⇒ 必须有上报）。
+    """
+    _s = line[:19]
+    if (len(_s) != 19 or _s[4] != "-" or _s[7] != "-" or _s[10] != " "
+            or _s[13] != ":" or _s[16] != ":"):
+        return None
+    try:
+        return datetime.strptime(_s, _LOG_TS_FMT).timestamp()
+    except ValueError as _e:
+        silent_exc(_e, where="criteria_window::_parse_log_ts", level="debug")
+        return None
+
+
+def _scan_log_range(path: str) -> dict:
+    """返回该日志的时间戳跨度与行数（只读首尾块，不整读）。"""
+    _out = {"path": path, "first": None, "last": None, "lines": 0}
+    try:
+        _size = os.path.getsize(path)
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::_scan_log_range stat", level="debug")
+        return _out
+    _head_n = 200
+    _tail_bytes = 65536
+    try:
+        with io.open(path, encoding="utf-8", errors="ignore") as _f:
+            for _i, _ln in enumerate(_f):
+                _ts = _parse_log_ts(_ln)
+                if _ts is not None:
+                    _out["first"] = _ts
+                    break
+                if _i > _head_n:
+                    break
+        with io.open(path, "rb") as _fb:
+            _fb.seek(max(0, _size - _tail_bytes))
+            _tail = _fb.read().decode("utf-8", "ignore").splitlines()
+        for _ln in reversed(_tail):
+            _ts = _parse_log_ts(_ln)
+            if _ts is not None:
+                _out["last"] = _ts
+                break
+        with io.open(path, "rb") as _fb:
+            _out["lines"] = sum(1 for _ in _fb)
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::_scan_log_range read", level="debug")
+    return _out
+
+
+def _count_marker_in(path: str, lo: float, hi: float) -> dict:
+    """在某日志里数窗口内的**逐条件废行**。"""
+    _n = 0
+    _scanned = 0
+    try:
+        with io.open(path, encoding="utf-8", errors="ignore") as _f:
+            for _ln in _f:
+                _scanned += 1
+                if _scanned > _VOIDED_LOG_SCAN_MAX_LINES:
+                    break
+                if CONVERGE_VOIDED_MARKER not in _ln:
+                    continue
+                if "批量作废" in _ln:      # 汇总行，不数（否则同一次作废记两笔）
+                    continue
+                _ts = _parse_log_ts(_ln)
+                if _ts is None:
+                    continue
+                if lo <= _ts <= hi:
+                    _n += 1
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::_count_marker_in", level="debug")
+    return {"count": _n, "lines_scanned": _scanned}
+
+
+def _merge_intervals(iv: list) -> list:
+    _iv = sorted([x for x in iv if x and x[0] is not None and x[1] is not None])
+    if not _iv:
+        return []
+    _out = [list(_iv[0])]
+    for _lo, _hi in _iv[1:]:
+        if _lo <= _out[-1][1] + _COVERAGE_TOL_SEC:
+            _out[-1][1] = max(_out[-1][1], _hi)
+        else:
+            _out.append([_lo, _hi])
+    return [(_a, _b) for _a, _b in _out]
+
+
+def _coverage_of(intervals: list, lo: float, hi: float) -> bool:
+    for _a, _b in intervals:
+        if _a <= lo + _COVERAGE_TOL_SEC and _b >= hi - _COVERAGE_TOL_SEC:
+            return True
+    return False
+
+
+def count_converge_voided(win_lo, win_hi, ledger_path: str | None = None,
+                          log_paths=None, root: str | None = None) -> dict:
+    """**全仓唯一**的"窗口内收敛层作废条数"取数口。
+
+    Returns:
+        dict: `state` / `count` / `source` / `reason` / `coverage` / `files`
+            - `state="ok"`：`count` 是**有依据的**整数（可以是 0 —— 前提是
+              证据覆盖了整个窗口）
+            - `state="unavailable"`：`count=None`，`reason` 说明为什么判不了
+              （窗口不合法 / 无台账且日志已轮转出留存窗 / 日志未覆盖窗口）
+
+    ★"数到 0" 与 "没数据" 是两件事（铁律156/166）：只有**证据覆盖窗口**
+    时才允许返回 0；覆盖不到必须 `unavailable`。
+    """
+    if win_lo is None or win_hi is None:
+        return {"state": "unavailable", "count": None, "source": "none",
+                "reason": "窗口未给出（win_lo/win_hi 均为 None）⇒ 无法界定统计域",
+                "coverage": None, "files": []}
+    _lo = float(win_lo)
+    _hi = float(win_hi)
+    if _hi <= _lo:
+        return {"state": "unavailable", "count": None, "source": "none",
+                "reason": "窗口非正（win_hi<=win_lo）⇒ 统计域无效",
+                "coverage": None, "files": []}
+
+    _notes = []
+    _files = []
+    _total = 0
+    _covered_lo = None
+
+    # ① 台账（结构化，优先）
+    _rows = read_converge_voided_ledger(ledger_path)
+    _led = [r for r in _rows if _lo <= float(r.get("ts") or 0.0) <= _hi]
+    _lpath = converge_voided_ledger_path(ledger_path)
+    if os.path.isfile(_lpath):
+        _all_ts = [float(r.get("ts") or 0.0) for r in _rows] or None
+        if _all_ts:
+            _covered_lo = min(_all_ts)
+            _notes.append("台账首条 ts=%.0f（覆盖起点）" % _covered_lo)
+        else:
+            _notes.append("台账存在但无有效行 ⇒ 视同未覆盖")
+        _total += len(_led)
+        _files.append({"kind": "ledger", "path": _lpath,
+                       "rows_in_window": len(_led), "rows_total": len(_rows)})
+
+    # ② 日志回退（只补台账覆盖不到的 [win_lo, min(win_hi, 台账起点)) ）
+    _need_log = (_covered_lo is None) or (_covered_lo > _lo + _COVERAGE_TOL_SEC)
+    _log_end = _hi if _covered_lo is None else min(_hi, _covered_lo)
+    _log_cov = []
+    _log_hits = 0
+    if _need_log and _log_end > _lo:
+        _paths = log_paths if log_paths is not None else _log_candidates(root)
+        _paths = list(_paths)[:_VOIDED_LOG_SCAN_MAX_FILES]
+        for _p in _paths:
+            _rng = _scan_log_range(_p)
+            _log_cov.append((_rng["first"], _rng["last"]))
+            _files.append({"kind": "log", "path": _p,
+                           "first": _rng["first"], "last": _rng["last"],
+                           "lines": _rng["lines"]})
+        _iv = _merge_intervals(_log_cov)
+        if _coverage_of(_iv, _lo, _log_end):
+            for _p in _paths:
+                _c = _count_marker_in(_p, _lo, _log_end)
+                if _c["count"]:
+                    _log_hits += _c["count"]
+                    _notes.append("%s 命中 %d 条"
+                                  % (os.path.basename(_p), _c["count"]))
+            _total += _log_hits
+        else:
+            _notes.append("日志未覆盖 [%.0f, %.0f]（合并覆盖=%s）"
+                          % (_lo, _log_end,
+                             [(round(a), round(b)) for a, b in _iv] or "无带时间戳日志"))
+            if _log_hits == 0 and not _led:
+                return {"state": "unavailable", "count": None, "source": "none",
+                        "reason": ("无台账，且日志留存已轮转出该窗口 ⇒ "
+                                   "既无数到 0 的证据，也不能猜 0"),
+                        "coverage": {"intervals": [(round(a), round(b))
+                                                   for a, b in _iv],
+                                     "window": [round(_lo), round(_hi)]},
+                        "files": _files, "notes": _notes}
+            if not _led:
+                return {"state": "unavailable", "count": None, "source": "none",
+                        "reason": "台账未覆盖窗口起点且日志缺口未补齐 ⇒ 不许猜 0",
+                        "coverage": {"intervals": [(round(a), round(b))
+                                                   for a, b in _iv],
+                                     "window": [round(_lo), round(_hi)]},
+                        "files": _files, "notes": _notes}
+
+    # `source` 反映**谁提供了覆盖证据**，而不是"谁产出了行"：
+    # 窗内 0 条时两侧都没行，但覆盖起点来自台账 ⇒ 判据来源仍是台账。
+    # （344 刀2 附：原写法在"台账覆盖起点成立 + 窗内 0 条"时错报成 log。）
+    if _led and _log_hits:
+        _src = "ledger+log"
+    elif _led:
+        _src = "ledger"
+    elif _log_hits:
+        _src = "log"
+    else:
+        _src = "ledger" if _covered_lo is not None else "log"
+    return {"state": "ok", "count": int(_total), "source": _src,
+            "reason": "台账 %d 条 + 日志回退 %d 条（逐条行，不含批量汇总行）"
+                      % (len(_led), _log_hits),
+            "coverage": {"window": [round(_lo), round(_hi)]},
+            "files": _files, "notes": _notes}
+
+
+def judge_round_auto(win_lo, win_hi, seg2_intake, executed,
+                     criteria_version: str = "343.j3", proc_gen: str = "",
+                     ledger_path: str | None = None, root: str | None = None) -> dict:
+    """三段式判圈的**自动取数**版本：B 段由 `count_converge_voided` 取。
+
+    与 `judge_round` 的唯一差别：不给 `converge_voided`，改为自己从唯一数据源取；
+    取不到（`unavailable`）⇒ B 段 `None` ⇒ 该圈 `不可判`（**不是"合格"**）。
+    """
+    _b = count_converge_voided(win_lo, win_hi, ledger_path=ledger_path, root=root)
+    _bv = _b.get("count") if _b.get("state") == "ok" else None
+    _out = judge_round(seg2_intake, _bv, executed, criteria_version, proc_gen)
+    _out["B_source"] = _b
+    return _out
 
 #: 不可判缓冲的保持时长（秒）。活体是长驻进程，**必须剪枝**：
 #: 否则列表无限增长（内存）且累计到 3 条后告警永远为红（失去信息量）。
@@ -66,7 +432,9 @@ def _parse_proc_gen(proc_gen: str):
 
 def get_criteria_window(criteria_version: str, proc_gen: str,
                         window_sec: float | None = None,
-                        now: float | None = None) -> dict:
+                        now: float | None = None,
+                        include_converge_voided: bool = False,
+                        ledger_path: str | None = None) -> dict:
     """**全仓唯一**的判据窗口取数口。
 
     Args:
@@ -74,6 +442,10 @@ def get_criteria_window(criteria_version: str, proc_gen: str,
         proc_gen: 代次串（`pid<N>@YYYYMMDD-HHMMSS`），窗口锚点。
         window_sec: 显式窗口长度（不给 ⇒ 按版本查表，再不行用默认值）。
         now: 注入"当前时刻"（测试用；不给取 `time.time()`）。
+        include_converge_voided: True 时**顺带**取该窗口的段B读数（344批刀2）。
+            **默认 False**：窗口函数会被报表高频调用，日志回退扫描不该搭在
+            每次取窗口上；需要 B 段的调用方显式要（`judge_round_auto` 就要）。
+        ledger_path: 段B台账路径注入（隔离验证用）。
 
     Returns:
         dict: `win_lo` / `win_hi` / `window_sec` / `state` / `basis` / `notes`
@@ -110,9 +482,15 @@ def get_criteria_window(criteria_version: str, proc_gen: str,
         _notes.append("窗口尚未走满（now < win_hi）：本圈为**进行中**，不是完整圈")
     if _now > _hi + _win:
         _notes.append("窗口已过期 >1 圈：读数不是本代次当前圈，注意跨圈拼接")
-    return {"criteria_version": _ver, "proc_gen": _pg,
+    _out = {"criteria_version": _ver, "proc_gen": _pg,
             "win_lo": _lo, "win_hi": _hi, "window_sec": _win,
             "state": "ok", "basis": "proc_gen", "notes": _notes}
+    if include_converge_voided:
+        # ★344批刀2：段B（收敛层作废条数）**从窗口函数里取**，保证"窗口"与
+        #   "该窗口的作废数"永远同一口径（铁律160：分母须与被测对象同域）。
+        _out["converge_voided"] = count_converge_voided(
+            _lo, _hi, ledger_path=ledger_path)
+    return _out
 
 
 def judge_round(seg2_intake, converge_voided, executed,

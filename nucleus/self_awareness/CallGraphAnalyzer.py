@@ -243,6 +243,19 @@ def _iter_py_files(project_root: str, scan_dirs: list) -> list:
     return sorted(set(_out))
 
 
+def _m344_note_tree_dropped() -> None:
+    """★344批刀5：AST 面用完即删的**记账**（不持有任何树，零额外遍历开销）。
+
+    与 `nucleus/mnemosyne/ast_release.py` 解耦：import 失败也绝不影响图分析
+    （图分析是生产每 61 分钟一次的批量任务，不能被内存记账拖死）。
+    """
+    try:
+        from nucleus.mnemosyne import ast_release as _ar344
+        _ar344.note_ast_face_done(source="CallGraphAnalyzer._collect_file")
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, where="CallGraphAnalyzer::_m344_note_tree_dropped", level="debug")
+
+
 def _module_id(rel_path: str) -> str:
     """`a/b/c.py` → `a.b.c`；`a/b/__init__.py` → `a.b`。"""
     _p = rel_path.replace("\\", "/")
@@ -867,12 +880,22 @@ class CallGraphAnalyzer:
             # ★第22批 T5/P2-123：单个文件 AST 过深 → 跳过，属可预期路径 → DEBUG。
             (_logger.debug if _noise_reduce() else _logger.warning)(
                 "调用图分析：%s AST 递归过深，跳过", rel)
+            _m344_note_tree_dropped()
+            del _tree
             return None
         except Exception as e:
             # ★第22批 T5/P2-123：同上，遍历失败跳过 → DEBUG。
             (_logger.debug if _noise_reduce() else _logger.warning)(
                 "调用图分析：%s 遍历失败: %s: %s", rel, type(e).__name__, e)
+            _m344_note_tree_dropped()
+            del _tree
             return None
+        # ★344批刀5：AST 面**用完即删**。
+        #   改前 `_tree` 在 visit() 之后仍是局部变量，往下还有几十行（登记/合并/统计）
+        #   一直吊着整棵树；异常路径上 `traceback → frame → _tree` 更是长期持有
+        #   （只要异常对象被日志/账本留住，整棵树就活着）。此处显式断引用并记账。
+        _m344_note_tree_dropped()
+        del _tree
         # 登记
         self._bindings[rel] = dict(_c.bindings)
         # ★320批刀5：合并本文件采到的继承关系（跨文件同名类靠尾名唯一闸消歧）

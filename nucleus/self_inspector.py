@@ -72,6 +72,66 @@ def _is_hot_edit(path: str) -> bool:
 
 _module_logger = _get_logger()
 
+# ==================== ★344批刀2：段B（收敛层作废）读数快照 ====================
+# 343刀7 把三段式判据落成了**函数**，但 12 圈 B 段全是 None —— 判据背后
+# 没有数据源。本批补上采集口（`criteria_window.count_converge_voided`），
+# 并在这里做**生产侧接线**：报表要带 `criteria_b_segment`，否则采集器又
+# 变成"只有测试在调"的死代码（铁律159：判据必须可达）。
+#
+# 节流：窗口函数与日志回退都涉及磁盘读，报表按代次窗口取一次就够；
+# 300s 内复用上次结果（同一窗口内作废数变化极小，且台账是增量追加的）。
+_M344_B_CACHE: dict = {"ts": 0.0, "val": None}
+_M344_B_MIN_INTERVAL = 300.0
+
+
+def _m344_b_segment_snapshot(now: float | None = None,
+                             force: bool = False) -> dict:
+    """当前代次窗口的段B读数（不可判时**如实 unavailable**，绝不填 0）。"""
+    import time as _t
+    _now = float(now if now is not None else _t.time())
+    if not force and _M344_B_CACHE["val"] is not None \
+            and (_now - float(_M344_B_CACHE["ts"] or 0.0)) < _M344_B_MIN_INTERVAL:
+        _cached = dict(_M344_B_CACHE["val"])
+        _cached["cached"] = True
+        return _cached
+    _out = {"state": "unavailable", "win_lo": None, "win_hi": None,
+            "converge_voided": None, "cached": False}
+    try:
+        from nucleus.evolution import criteria_window as _cw344
+        _pg = str(_m335_pg() or "unknown")
+        _w = _cw344.get_criteria_window("343.j3", _pg, now=_now,
+                                       include_converge_voided=True)
+        _b = _w.get("converge_voided") or {}
+        _out.update({"proc_gen": _pg, "win_state": _w.get("state"),
+                     "win_lo": _w.get("win_lo"), "win_hi": _w.get("win_hi"),
+                     "converge_voided": _b.get("count"),
+                     "b_state": _b.get("state"), "b_source": _b.get("source"),
+                     "b_reason": _b.get("reason"),
+                     "state": ("ok" if (_w.get("state") == "ok"
+                                        and _b.get("state") == "ok")
+                               else "unavailable")})
+        if _out["state"] != "ok":
+            # 读数不可判 ⇒ 登记进不可判缓冲（洞鉴：不可判要被计数与升级）
+            _cw344.note_unjudged("段B 收敛层作废", str(_out.get("b_reason")
+                                                    or _w.get("notes")), now=_now)
+            _module_logger.info(
+                "[344判据] 段B 不可判: proc_gen=%s win_state=%s b_state=%s why=%s",
+                _pg, _w.get("state"), _b.get("state"),
+                str(_out.get("b_reason") or _w.get("notes"))[:160])
+        else:
+            _module_logger.info(
+                "[344判据] 段B 可判: proc_gen=%s 窗=[%.0f,%.0f] 作废=%d 来源=%s",
+                _pg, float(_out["win_lo"] or 0), float(_out["win_hi"] or 0),
+                int(_b.get("count") or 0), _b.get("source"))
+    except Exception as _e:                                       # noqa: BLE001
+        silent_exc(_e, where="self_inspector::_m344_b_segment_snapshot",
+                   level="warning")
+        _out["b_reason"] = "取数异常: %s" % type(_e).__name__
+    _M344_B_CACHE["ts"] = _now
+    _M344_B_CACHE["val"] = dict(_out)
+    return _out
+
+
 
 # ★第90批 T-90b：日志/类名定位 v2 开关（bug#2 类索引接入 + bug#3 包含匹配）。
 #   开启（默认）→ 与修复同批的行为；关闭 → 逐字回到第90批前（仅中文名前缀匹配）。
@@ -7130,6 +7190,8 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         silent_exc(_cw_e, where="self_inspector::o3_open_gate_report 343不可判告警")
         _rep["unjudged_alarm"] = {"verdict": "UNAVAILABLE",
                                   "reason": type(_cw_e).__name__}
+    # ★344批刀2：把段B读数**接进报表**（343 只落了判据，没落数据源）
+    _rep["criteria_b_segment"] = _m344_b_segment_snapshot()
     _rep["failed_steps"] = list(_blockers)
     if _v7 == "未达成":
         _rep["failed_steps"].append("⑦ K1三证＋对表")

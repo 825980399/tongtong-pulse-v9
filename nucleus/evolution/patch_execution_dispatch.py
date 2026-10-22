@@ -16,6 +16,7 @@ framework 经 set_dispatch_framework 注入（main.py 装配后调用）。
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import io
 import json
@@ -25,6 +26,7 @@ from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from nucleus.const import MotorEvent
 from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 _module_logger = get_module_logger("PatchExecutionDispatch")
@@ -1901,12 +1903,254 @@ def _m324_rej_reason() -> str:
     return "triage:" + ",".join("%s=%d" % kv for kv in _items)
 
 
-def dispatch_and_verify(sandbox: Any, patch: dict) -> dict:
+# ==================== ★344批刀1②：O3 判死删除动作的 AST 级执行校验 ====================
+#
+# 病根（18:58:18 一手日志）：O3 判死候选派单后 `success=False`，控制台
+# `NameError: name 'Any' is not defined`。但更本质的问题是**语义错位**：
+# O3 判死候选 = **删除动作**，删除之后没有代码可运行 —— 把「待删的 def」
+# 当普通修改塞进沙箱跑一遍，既证明不了「删对了」，又会因环境缺陷误判失败
+# （环境缺符号那类问题已由 344刀1① 在沙箱侧消除，但语义层面仍不该跑代码）。
+#
+# 删除动作的「执行验证」应当是静态三问：
+#   ① 目标 def（file+method[+line]）在源码中**确实存在**
+#   ② 把该 def 连同装饰器整段删掉后，文件**语法仍完整**（ast.parse 通过）
+#   ③ 删掉后**不留孤儿调用点**（仅告警，不作为失败判据 —— 静态引用含同名局部量
+#      误报，铁律168：宁可标注"参考值"也不拿它当放行/拦截的唯一依据）
+
+_M344_ORPHAN_SCAN_ROOTS: tuple[str, ...] = ("nucleus", "organs", "base")
+_M344_ORPHAN_SCAN_MAX_FILES = 4000
+_M344_SKIP_DIR_PREFIXES: tuple[str, ...] = (".bak_batch", ".git", "__pycache__",
+                                            "tmp", ".venv", "node_modules")
+
+
+def _m344_is_o3_delete(patch: Any) -> bool:
+    """该补丁是否为 O3 判死删除动作。
+
+    只认**显式布尔标记** `o3_dead_code is True`（铁律153：不从理由字符串
+    里找关键字）。其他形态（缺键、字符串 "true"）一律不算 —— 宁可走沙箱
+    也不误判成本条是删除动作。
+    """
+    if not isinstance(patch, dict):
+        return False
+    return patch.get("o3_dead_code") is True
+
+
+def _m344_repo_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _m344_find_def(tree: Any, method: str, line_hint: Any) -> tuple:
+    """在 AST 里找 `method` 的 def 节点。返回 (节点 or None, 全部同名行号, 是否命中声明行)。
+
+    ★line 只当 **tiebreak 提示**，不当硬条件：O3 条目是入池时写的行号，
+    此后源码上下挪动很常见（本次 `CompanionBridge.handshake` 入池记 122，
+    实测已在 123）。把行号当硬条件会造出「目标明明在，却报不存在」。
+    """
+    _hits = [n for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+             and getattr(n, "name", "") == method]
+    if not _hits:
+        return None, [], False
+    _lines = sorted(int(getattr(n, "lineno", 0) or 0) for n in _hits)
+    _hit_declared = False
+    try:
+        _hint = int(line_hint) if line_hint is not None else 0
+    except (TypeError, ValueError) as _e:
+        # 上游给了非数字行号（历史条目 / 脏数据）⇒ 行号降级为"无提示"，
+        # 但必须可见：否则"为什么走了 tiebreak 之外的路径"不可追溯。
+        silent_exc(_e, where="patch_execution_dispatch::_m344_find_def line_hint",
+                   level="debug")
+        _hint = 0
+    if _hint > 0:
+        _pick = min(_hits, key=lambda n: (abs(int(n.lineno) - _hint), int(n.lineno)))
+        _hit_declared = (int(_pick.lineno) == _hint)
+    else:
+        _pick = min(_hits, key=lambda n: int(n.lineno))
+    return _pick, _lines, _hit_declared
+
+
+def _m344_count_orphan_refs(method: str, root: str, exclude_abs: str) -> dict:
+    """统计 `.method` 属性引用点（文本预筛 → 仅命中文件做 AST 分类）。
+
+    两级是有原因的：全仓 AST 解析太慢（生产每拍要跑），纯文本计数又会把
+    `# 注释里的 .handshake` 与同名局部量算进来。所以文本先筛候选文件，
+    再只对这些文件做 AST 分类（`call_attr`=真的调用了 / `attr_read`=取属性
+    未调用 / `text_only`=只在注释或字符串里）。**全部只作告警参考。**
+    """
+    _out = {"call_attr": 0, "attr_read": 0, "text_only": 0, "files_scanned": 0,
+            "matched_files": 0, "truncated": False}
+    _needle = "." + method
+    _excl = os.path.normcase(os.path.abspath(exclude_abs))
+    _n = 0
+    for _base in _M344_ORPHAN_SCAN_ROOTS:
+        _dir = os.path.join(root, _base)
+        if not os.path.isdir(_dir):
+            continue
+        for _dp, _dns, _fns in os.walk(_dir):
+            _dns[:] = [d for d in _dns
+                       if not any(d.startswith(_sk) for _sk in _M344_SKIP_DIR_PREFIXES)]
+            for _fn in _fns:
+                if not _fn.endswith(".py"):
+                    continue
+                _abs = os.path.join(_dp, _fn)
+                if os.path.normcase(os.path.abspath(_abs)) == _excl:
+                    continue
+                _n += 1
+                if _n > _M344_ORPHAN_SCAN_MAX_FILES:
+                    _out["truncated"] = True
+                    return _out
+                try:
+                    _txt = io.open(_abs, encoding="utf-8", errors="ignore").read()
+                except OSError:
+                    continue
+                _out["files_scanned"] += 1
+                if _needle not in _txt:
+                    continue
+                _out["matched_files"] += 1
+                _cand = _m344_classify_refs(_txt, method)
+                if _cand is None:
+                    _out["text_only"] += _txt.count(_needle)
+                else:
+                    for _k in ("call_attr", "attr_read", "text_only"):
+                        _out[_k] += _cand[_k]
+    return _out
+
+
+def _m344_classify_refs(src: str, method: str) -> dict | None:
+    """把一段源码里的 `.method` 引用分类；源码解析不了返回 None（降级纯文本）。"""
+    try:
+        _tree = ast.parse(src)
+    except SyntaxError as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m344_classify_refs parse",
+                   level="debug")
+        return None
+    _call = 0
+    _attr = 0
+    for _n in ast.walk(_tree):
+        if isinstance(_n, ast.Attribute) and getattr(_n, "attr", "") == method:
+            _attr += 1
+        if isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)                 and getattr(_n.func, "attr", "") == method:
+            _call += 1
+    # 计数口径（铁律155：归因计数 != 分母，这里三者加总才是文本总数）：
+    #   total(文本出现) = attr(AST 属性引用) + text_only(注释/字符串/同名局部量)
+    #   attr 再拆成 call_attr(真调用) + attr_read(取属性未调用)
+    _total = src.count("." + method)
+    return {"call_attr": _call, "attr_read": max(0, _attr - _call),
+            "text_only": max(0, _total - _attr)}
+
+
+def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
+    """O3 判死删除动作的静态执行校验（不运行任何代码，不写任何文件）。
+
+    返回结构与 `dispatch_and_verify` 同构：`success` / `error` / `patch_id`，
+    另加 `execution_source="ast_delete"` 与带 `ast_delete` 字样的 `detail`，
+    供 `_write_back` 原样落进 `runtime_verify_result`（口径与常规一致）。
+    """
+    _pid = str(patch.get("id") or "unknown")
+    _file = str(patch.get("file") or "").replace("\\", "/").strip()
+    _method = str(patch.get("method") or "").strip()
+    _root = project_root or _m344_repo_root()
+
+    def _fail(_code: str, _why: str, **_extra: Any) -> dict:
+        _d = {"patch_id": _pid, "success": False, "error": _code,
+              "execution_source": "ast_delete",
+              "detail": "ast_delete 失败: " + _why}
+        _d.update(_extra)
+        _module_logger.info("[344刀1][ast_delete] 校验失败 patch=%s %s::%s code=%s why=%s",
+                            _pid[:24], _file, _method, _code, _why)
+        return _d
+
+    if not _file or not _method:
+        return _fail("ast_delete:missing_target", "条目缺 file/method，无法定位删除目标")
+
+    _abs = os.path.join(_root, _file)
+    if not os.path.isfile(_abs):
+        return _fail("ast_delete:file_not_found", "源文件不存在: %s" % _file,
+                     target_file=_file)
+    try:
+        _src = io.open(_abs, encoding="utf-8", newline="").read()
+    except (OSError, UnicodeDecodeError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete read",
+                   level="warning")
+        return _fail("ast_delete:read_failed",
+                     "%s: %s" % (type(_e).__name__, _e), target_file=_file)
+    try:
+        _tree = ast.parse(_src)
+    except SyntaxError as _e:
+        silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete parse",
+                   level="warning")
+        return _fail("ast_delete:source_syntax_error",
+                     "当前源码本身语法错误，无法判定（行 %s）" % _e.lineno,
+                     target_file=_file)
+
+    # ① 目标 def 存在
+    _node, _all_lines, _hit_declared = _m344_find_def(_tree, _method, patch.get("line"))
+    if _node is None:
+        return _fail("ast_delete:target_def_not_found",
+                     "文件内无 def %s（同名 0 处）" % _method,
+                     target_file=_file, def_lines=[])
+
+    # ② 删除后语法完整
+    _lines = _src.splitlines(keepends=True)
+    _start = min([int(_node.lineno)] + [int(d.lineno) for d in _node.decorator_list]) - 1
+    _end = int(getattr(_node, "end_lineno", 0) or 0)
+    if _start < 0 or _end <= _start or _end > len(_lines):
+        return _fail("ast_delete:span_unusable",
+                     "def 行区间不可用 start=%s end=%s lines=%s"
+                     % (_start, _end, len(_lines)), target_file=_file)
+    _removed = _end - _start
+    _new_src = "".join(_lines[:_start] + _lines[_end:])
+    try:
+        ast.parse(_new_src)
+    except SyntaxError as _e:
+        # 删除后语法不完整是**预期判定之一**（不是我们自己的异常），
+        # 落 debug 避免把正常校验结论刷成生产告警。
+        silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete post",
+                   level="debug")
+        return _fail("ast_delete:post_delete_syntax_error",
+                     "删掉 %s 后文件语法不完整（行 %s: %s）"
+                     % (_method, _e.lineno, _e.msg),
+                     target_file=_file, def_lines=_all_lines,
+                     removed_lines=_removed)
+
+    # ③ 孤儿引用（仅告警，不参与成败判定）
+    _orphan = _m344_count_orphan_refs(_method, _root, _abs)
+
+    _detail = ("ast_delete 目标存在(file=%s method=%s 实际行=%s 声明行=%s 同名=%d 处)"
+               " 删除后语法完整(移除 %d 行)"
+               " 孤儿引用 call_attr=%d attr_read=%d text_only=%d(参考值,不阻断)"
+               % (_file, _method, int(_node.lineno), patch.get("line"),
+                  len(_all_lines), _removed,
+                  _orphan["call_attr"], _orphan["attr_read"], _orphan["text_only"]))
+    if not _hit_declared:
+        _detail += " 行号漂移=是"
+    _module_logger.info(
+        "[344刀1][ast_delete] 校验通过 patch=%s %s::%s 实际行=%s 声明行=%s "
+        "移除行数=%d 孤儿引用=%d/%d/%d proc_gen=%s",
+        _pid[:24], _file, _method, int(_node.lineno), patch.get("line"),
+        _removed, _orphan["call_attr"], _orphan["attr_read"], _orphan["text_only"],
+        _m335_pg())
+    return {"patch_id": _pid, "success": True, "error": "",
+            "execution_source": "ast_delete", "detail": _detail,
+            "target_file": _file, "def_line_actual": int(_node.lineno),
+            "def_lines_all": _all_lines, "removed_lines": _removed,
+            "orphan_refs": _orphan}
+
+
+def dispatch_and_verify(sandbox: Any, patch: dict,
+                        project_root: str | None = None) -> dict:
     """把补丁 modified_code 路由 sandbox 执行，返回执行结论（不落盘，由调用方回写）。
 
     执行走 PulseCodeSandbox.on_pulse(MotorEvent.EXECUTE)，命中其 DANGEROUS_KEYWORDS
     黑名单与子进程隔离沙箱；绝不 apply 到源码。
+
+    ★344批刀1②：**O3 判死删除动作不走代码执行**。删除之后没有代码可运行，
+    所以改走 `verify_ast_delete`（存在性＋删除后语法完整＋孤儿引用告警）。
+    这是语义修正，不是给失败找台阶 —— 判据仍然是"验证通过/不通过"，
+    落盘字段与常规完全同构（`runtime_verified` / `runtime_verify_result`）。
     """
+    if _m344_is_o3_delete(patch):
+        return verify_ast_delete(patch, project_root=project_root)
     _pid = patch.get("id", "unknown")
     _code = patch.get("modified_code") or patch.get("original_code") or ""
     _lang = patch.get("language", "python")
@@ -1931,14 +2175,26 @@ def _write_back(patch: dict, verdict: dict) -> None:
     """刀3：把执行结果回写补丁字段（内存态；落盘由调用方统一原子写）。"""
     _ok = bool(verdict.get("success"))
     _err = verdict.get("error", "")
+    # ★344批刀1②：删除动作的校验来源是 ast_delete，不是 motor.execute。
+    #   口径一致（同两个字段、同 verified 语义），只有 detail/来源如实标注，
+    #   否则下游读"执行成功"会把"静态删除校验通过"误读成"代码跑通了"。
+    # 默认来源用 const 枚举（事件串门禁：点分事件名须单一事实来源）
+    _esrc = str(verdict.get("execution_source") or MotorEvent.EXECUTE.value)
+    _vdetail = str(verdict.get("detail") or "")
+    if not _vdetail:
+        _vdetail = ("[执行验证] %s " % _esrc) + ("成功" if _ok else "失败") \
+            + (f": {_err}" if _err else "")
     patch["runtime_verified"] = _ok
     patch["runtime_verify_result"] = {
         "verified": _ok,
-        "detail": ("[执行验证] motor.execute " + ("成功" if _ok else "失败")
-                   + (f": {_err}" if _err else "")),
-        "execution_source": "motor.execute",
+        "detail": _vdetail,
+        "execution_source": _esrc,
         "executed_at": time.time(),
     }
+    if _esrc == "ast_delete":
+        patch["runtime_verify_mode"] = "ast_delete"
+        if verdict.get("def_line_actual"):
+            patch["o3_def_line_actual"] = int(verdict["def_line_actual"])
     if not _ok:
         patch["runtime_verify_failure_reason"] = _err
         # ★324批刀0：失败必须可退出——否则同一补丁每圈重复选中

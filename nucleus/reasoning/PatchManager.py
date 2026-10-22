@@ -37,6 +37,36 @@ _module_logger = get_module_logger("PatchManager")
 _publish_fail_count = 0
 
 
+def _m344_split_failed_details(failed_details) -> dict:
+    """★344批刀6：把失败记录按**形态**与**状态**分流（纯函数、无副作用）。
+
+    为什么需要它：17:48:30 生产实测 `AttributeError: 'str' object has no attribute 'get'`
+    —— 上游把一条 `str` 混进失败记录，原写法当"全是 dict"处理，一条坏数据就让
+    **整批反思**被外层 except 吞掉（反思实际一条都没跑完）。分流后：
+    坏数据逐条留痕、好数据照常反思。
+
+    状态判定用**显式前缀/等值**，不从理由字符串里找关键字（铁律153）。
+
+    Returns:
+        `{"skipped_non_dict": int, "non_dict_values": list,   # 坏数据原值（留痕用）
+          "dicts": list,                                      # 全部 dict 记录（保序）
+          "actionables": list}`                               # 其中需反思的
+    """
+    _non: list = []
+    _dicts: list = []
+    _act: list = []
+    for _d in (failed_details or []):
+        if not isinstance(_d, dict):
+            _non.append(_d)
+            continue
+        _dicts.append(_d)
+        _status = str(_d.get("status", "") or "")
+        if _status.startswith("rejected") or _status == "failed":
+            _act.append(_d)
+    return {"skipped_non_dict": len(_non), "non_dict_values": _non,
+            "dicts": _dicts, "actionables": _act}
+
+
 def _reflect_on_failed_patches(failed_details: list, project_root: str | None = None) -> None:
     """196刀2 运行时失败路→反思（半根刀补齐）。
 
@@ -55,10 +85,20 @@ def _reflect_on_failed_patches(failed_details: list, project_root: str | None = 
             return
         from nucleus.evolution.SelfReflectionEngine import get_self_reflection_engine
         _engine = get_self_reflection_engine(project_root=project_root or "")
-        for _d in failed_details:
-            _status = _d.get("status", "")
-            if not (_status.startswith("rejected") or _status == "failed"):
-                continue
+        # ★344批刀6：失败记录**可能是 str**（17:48:30 生产实测
+        #   `AttributeError: 'str' object has no attribute 'get'`）。
+        #   原写法把 `failed_details` 当成"全是 dict"处理，一条坏数据就让
+        #   **整批反思**被外层 except 吞掉（静默异常可见化里看得到痕迹，
+        #   但反思实际一条都没跑完）。
+        #   这里逐条按类型分流：非 dict ⇒ 不猜它的语义（拿不到 file/id，
+        #   硬塞给引擎只会污染反思语料），但**必须留痕**，让"上游传了 str"
+        #   这件事可见，而不是继续静默。
+        _split = _m344_split_failed_details(failed_details)
+        for _bad in _split["non_dict_values"]:
+            _module_logger.info(
+                "[344刀6] 失败记录非字典形态，跳过反思: type=%s value=%r",
+                type(_bad).__name__, str(_bad)[:120])
+        for _d in _split["actionables"]:
             try:
                 _engine.reflect_and_improve(
                     {"id": _d.get("id"), "file": _d.get("file"), "reason": _d.get("reason")},
@@ -66,6 +106,10 @@ def _reflect_on_failed_patches(failed_details: list, project_root: str | None = 
                 )
             except Exception as _e:
                 silent_exc(_e, where="nucleus.reasoning.PatchManager::_reflect_on_failed_patches")
+        if _split["skipped_non_dict"]:
+            _module_logger.info(
+                "[344刀6] 本批失败记录中非字典形态 %d/%d 条（已跳过并逐条留痕）",
+                _split["skipped_non_dict"], len(failed_details))
     except Exception as _e:
         silent_exc(_e, where="nucleus.reasoning.PatchManager::_reflect_on_failed_patches")
 
@@ -1334,6 +1378,53 @@ class PatchManager:
         }
         return _m.get(str(issue_type or ""), "低")
 
+    #: 风险档位权重（★344刀3）。中英双写是因为历史数据里两种都有
+    #: （`select_for_auto_triage` 至今仍写 `in ("低", "low")`）。
+    _M344_RISK_RANK = {"低": 1, "low": 1, "中": 2, "medium": 2, "中危": 2,
+                       "高": 3, "high": 3}
+    _M344_RANK_NAME = {1: "低", 2: "中", 3: "高"}
+
+    @staticmethod
+    def _m344_merge_risk(explicit, issue_type: str) -> tuple:
+        """★344批刀3：入队口风险的**唯一裁决口** —— 显式声明优先，但只许升不许降。
+
+        病根（343 交付 §9.2 + 纯 HEAD 连跑 3 次稳定 FAIL）：
+        `_m280_risk_by_issue_type` 在入队口**无条件覆盖** `risk_level`，
+        于是测试/人工显式声明的"高"被重定成"低"，直传 T-101a 放行判据。
+
+        但**不能简单改成"显式就是一切"**：280刀2 立这条覆盖，正是为了拦住
+        "LLM 自评把 sql_injection 报成低风险"（烛微279：48 条全低，其中 8 条
+        高危被误判）。所以裁决规则是取**档位较高者**：
+
+            final = max(rank(显式), rank(按 issue_type 推断))
+
+          · 显式 高 + issue_type 默认低 ⇒ **高**（本刀要修的场景，安全面**更严**）
+          · 显式 低 + issue_type=sql_injection ⇒ **高**（280刀2 原意，保持不变）
+          · 无显式 ⇒ 按 issue_type 推断（原行为）
+
+        Returns:
+            `(final_level, basis)`，`basis ∈ {"explicit","issue_type",
+            "escalated_by_issue_type"}`
+        """
+        _derived = PatchManager._m280_risk_by_issue_type(issue_type)
+        _d_rank = PatchManager._M344_RISK_RANK.get(str(_derived), 1)
+        _ex = str(explicit or "").strip()
+        if not _ex:
+            return _derived, "issue_type"
+        _e_rank = PatchManager._M344_RISK_RANK.get(_ex)
+        if _e_rank is None:
+            # 显式值不在已知档位（拼错/新词）⇒ 不猜：按 issue_type 处理并留痕，
+            # 否则"写了个错词"会变成"静默放行"。
+            return _derived, "issue_type"
+        if _e_rank >= _d_rank:
+            # ★344批刀3附：**归一化**。原实现返回 `_ex` 原文，于是 "high"/"low"
+            #   这类英文（或别名）档位会原样写进 patch —— 而下游有三处只认中文
+            #   （`PatchManager.py:590/624/912` 用 `!= "低"`）。英文 "low" 在那里
+            #   会被判成"非低" ⇒ 低风险补丁永不放行（更严但不合语义、不可预测）。
+            #   归一到中文后 `risk_level` 只有一种形态；原值另存 `risk_level_raw`。
+            return PatchManager._M344_RANK_NAME[_e_rank], "explicit"
+        return PatchManager._M344_RANK_NAME[_d_rank], "escalated_by_issue_type"
+
     @staticmethod
     def _m280_trust_by_issue_type(issue_type: str) -> float:
         # ★280批刀4：trust_score 改为按 issue_type 有信息量（替代恒70零信息量）。
@@ -1455,6 +1546,22 @@ class PatchManager:
                     "(def=%r method=%r 错配=%s 无def=%s)",
                     _it.get("file", ""), _method_name, _def_name, _method_name,
                     _mismatch, _no_def)
+                # ★344批刀2：作废**必须落结构化台账**。原因（实测）：
+                #   作废此前只进 pulse.log，而 pulse.log 是 10MB×5 滚动文件，
+                #   336 期（10-21 13:00→10-22 01:08）的日志已轮转消失 ⇒
+                #   即便补上"从日志数作废"的采集器，历史 12 圈的 B 段也永远
+                #   补不回来。台账是 append-only 的，滚不掉。
+                #   写失败不影响作废主流程（作废照常发生，只留 warning）。
+                try:
+                    from nucleus.evolution import criteria_window as _cw
+                    _cw.note_converge_voided(
+                        _it.get("id"), file=str(_it.get("file") or ""),
+                        method=_method_name, reason="284刀5 结构缺陷补丁作废",
+                        def_name=str(_def_name or ""),
+                        mismatch=bool(_mismatch), no_def=bool(_no_def))
+                except Exception as _cw_e:                       # noqa: BLE001
+                    silent_exc(_cw_e, where="PatchManager::_m280 344作废台账",
+                               level="warning")
                 _voided += 1
                 continue
             _it.pop("runtime_verified", None)
@@ -1816,8 +1923,22 @@ class PatchManager:
         # ★第280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
         #   烛微279批发现：48条risk_level全为"低"，其中 sql_injection/lock_with_emit/
         #   non_atomic_write 共8条高危被误判低风险。高危族禁入免签视野、必须专项验证。
-        patch["risk_level"] = PatchManager._m280_risk_by_issue_type(
-            patch.get("issue_type"))
+        # ★344批刀3：入队口**不再无条件覆盖** —— 显式 risk_level 优先，
+        #   但与 issue_type 高危族取"较高档"（只许升不许降，安全面零放宽）。
+        _orig_risk = str(patch.get("risk_level") or "")
+        _m344_risk, _m344_risk_basis = PatchManager._m344_merge_risk(
+            _orig_risk, patch.get("issue_type"))
+        patch["risk_level"] = _m344_risk
+        patch["risk_level_basis"] = _m344_risk_basis
+        # 归一化后 `risk_level` 恒为中文档位；原文另存，便于追溯"上游写了什么"
+        if _orig_risk and _orig_risk != _m344_risk:
+            patch["risk_level_raw"] = _orig_risk
+        if _m344_risk_basis == "escalated_by_issue_type":
+            _module_logger.info(
+                "[344刀3] 风险按 issue_type 上调: %s:%s 显式=%r → %r"
+                "（issue_type=%s；280刀2 高危族禁降级保持有效）",
+                patch.get("file", ""), patch.get("method", ""), _orig_risk,
+                _m344_risk, patch.get("issue_type"))
         # ★第280批刀4：trust_score 恒70 零信息量 → 按 issue_type 重算有信息量分值。
         #   原恒70使 PATCH_AUTO_APPROVE_TRUST_THRESHOLD=40 形同虚设。
         if patch.get("trust_score") in (None, 70, 70.0):
