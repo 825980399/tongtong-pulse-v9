@@ -16,6 +16,7 @@ framework 经 set_dispatch_framework 注入（main.py 装配后调用）。
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -27,6 +28,27 @@ from nucleus.logger import get_module_logger
 from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 _module_logger = get_module_logger("PatchExecutionDispatch")
+
+
+def _m343_o3_stable_id(file_norm, method: str,
+                       issue_type: str = "dead_code_candidate",
+                       marker: str = "") -> str:
+    """★343刀1③：O3 条目 id = **纯稳定指纹**（无时间戳、无内置 hash）。
+
+    为什么必须换：
+      · 旧 id 前缀是 `int(now)` ⇒ 每次入池换一个 id，approve 落的
+        `status/o3_auto_dispatch_ready` 挂在旧 id 上，重入池后"审批态丢失"
+        （烛微342 挂账43：approve 过 `o3_1792638584_57885429`、
+        池内 `o3_1792645834_57885429` = 同题不同 id）。
+      · 旧后缀用 `hash("file::method")` —— **CPython str hash 随机化**
+        （PYTHONHASHSEED）⇒ 跨进程/重启后同一文件同一方法也可能换 id。
+        用 sha1 才是确定性的（可复算、可跨进程对账）。
+    口径：`file` 归一为 `/` 分隔、去前导 `./`（避免同一文件两种写法两个 id）。
+    """
+    _f = str(file_norm or "").replace("\\", "/").lstrip("./")
+    _k = "%s::%s::%s::%s" % (_f, str(method or ""), str(issue_type or ""),
+                            str(marker or ""))
+    return "o3_" + hashlib.sha1(_k.encode("utf-8")).hexdigest()[:16]
 
 # ===== ★317批刀0：派单节拍可配（G-1）=====
 # 背景：决定/动手此前只在「每日 03:00 一拍」，任何并行/裁判都看不见效果。
@@ -238,8 +260,9 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         return {"status": "no_candidate", "gate": _verdict,
                 "reason": "入池口白名单拦截",
                 "blocked_file": _c.get("file"), "blocked_at": "whitelist"}
-    _id = "o3_%d_%s" % (int(_now), str(abs(hash("%s::%s" % (
-        _c.get("file"), _c.get("method")))))[:8])
+    # ★343刀1③：稳定指纹 id（改前 = `o3_<now>_<hash8>`，时间戳+随机化 hash 双不稳）
+    _id = _m343_o3_stable_id(_c.get("file"), _c.get("method"),
+                             "dead_code_candidate", _si._M335_O3_MARKER)
     _entry = {
         "id": _id,
         "file": _c.get("file"), "method": _c.get("method"),
@@ -262,6 +285,8 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         "risk_level": "高", "trust_score": 0, "status": "pending",
         "requires_confirmation": True,
         "created_at": _now, "generated_at": _now, "saved_at": _now,
+        # ★343刀1③：入池时刻单独留字段（不再混进 id），供"何时入池"可追溯
+        "o3_intake_ts": int(_now), "id_scheme": "343.stable.sha1",
     }
     _path = _m335_pending_path(project_root, pending_path)
     _rows, _shape = _m335_read_pending(_path)

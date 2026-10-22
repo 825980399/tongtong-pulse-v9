@@ -4825,26 +4825,48 @@ ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 �
 #   （否则 cost 恒 null ⇒ 永不跳闸的熔断器）。
 EVOLUTION_BUDGET_DAILY_CNY = 50.0            # 日预算上限（元/人民币）
 EVOLUTION_BUDGET_WEEKLY_CNY = 200.0          # 周预算上限（元/人民币）
+# ★343刀3（星轨任务书更新版·烛微342 §0-5）：**跳闸双写**的"全量口径"额度。
+#   为什么需要第二个口径：金额口径只能约束"有单价的调用"——
+#   实测 15850 条调用里 `glm-4-flash`（0 单价·官方免费档）占 7452 次，
+#   它们**永不进 used** ⇒ 金额闸门对"免费渠道上无限空转"完全失效。
+#   量口径按**调用次数**设闸，免费/未定价调用也计数（`coverage.calls`）。
+#   ★None = 未配置 ⇒ 该口径不熔断（额度由小林/星轨裁，模块不代定；
+#     与金额额度同一套三态语义，绝不写 0）。
+EVOLUTION_BUDGET_DAILY_CALLS = None           # 日调用次数上限（None=不熔断）
+EVOLUTION_BUDGET_WEEKLY_CALLS = None          # 周调用次数上限（None=不熔断）
 EVOLUTION_LLM_PRICE_TABLE = {
-    # 单位：Â¥ / 1K tokens（费用 = 单价 Ã tokens / 1000）。单价取自各模型官方价目（输入档 / 非高峰参考）。
-    # 来源核验日期 2026-10-08；USDâCNY 按 ~7.1 折算官方 USD 价。仅填可溯源真实单价；
-    # 无法核验官方价的模型（GLM-5.x / 部分 Doubao-Seed 变体）留作注释「待补」，不臆造。
-    # â生产生效前提：record_evolution_call 的 model 须透传引擎实际模型名；当前 _m44_last_model
-    #   在生产路径未赋值 â model 恒空串 â cost_estimate 仍恒 null。此接线缺口独立于本刀（170 C9 L-1
-    #   仅要求补单价表），需独立票修复后方可生效。
-    "deepseek-v4-flash": 0.0011,    # DeepSeek V4.1-Flash 输入档(非高峰 cache-miss) $0.15/M â â¥Â¥0.0011/1K；输出 $0.60/Mâ¥Â¥0.0043/1K；来源 api-docs.deepseek.com 计价页(核验 2026-09-18)
-    "deepseek-flash": 0.0011,       # 同 V4.1-Flash（advanced_model 路由名，旧名仍路由到 V4.1 Flash）
-    "deepseek-v4-pro": 0.0047,      # DeepSeek V4-Pro 输入档 $0.66/M â â¥Â¥0.0047/1K；输出 $1.98/Mâ¥Â¥0.0141/1K；同源
-    "glm-4-flash": 0.0,             # æºè°± GLM-4-Flash å®æ¹åè´¹é¢åº¦(100ä¸T/å¤©)è®¡è´¹â 0ÿ1bæ¥æº docs.bigmodel.cn
-    "Doubao-Seed-2.1-pro": 0.0008,  # ç«å±±æ¹è Doubao-Seed è¾å¥æ¡£ Â¥0.8/M â Â¥0.0008/1K；è¾åº Â¥8/MâÂ¥0.008/1K；æ¥æº volcengine.com è®¡ä»·ææ¡£
-    "qwen2:7b-instruct-q4_K_M": 0.0,  # æ¬å°èªæç®¡ qwen2 æ¨çï¼é¶ API ææ¬
-    # å¾è¡¥ï¼å®æ¹ä»·æ ¸éªå¾æè½¨ç¡®è®¤ï¼ä¸æ¬é ）ï¼
-    # "GLM-5.2": <å¾è¡¥>,
-    # "GLM-5.3-Flash": <å¾è¡¥>,
-    # "Doubao-Seed-Evolving": <å¾è¡¥>,
-    # "Doubao-Seed-2.1-turbo": <å¾è¡¥>,
-    # "Doubao-Seed-Character": <å¾è¡¥>,
-    # "Doubao-Seed-2.0-pro": <å¾è¡¥>,
+    # 单位：¥ / 1K tokens（费用 = 单价 × tokens / 1000）。
+    # ★343刀3 口径订正（一手数据 15850 条调用实测）：
+    #   「表里有 0.0」与「表里没有这个 model」是**两种不同的事实**：
+    #     · 值 0.0  ⇒ **已定价且价格为零**（官方免费额度 / 本地自托管）
+    #                  ⇒ cost_estimate 落 **0.0**（有值），不是 None
+    #     · 键缺失 / 值 None ⇒ **未定价** ⇒ cost=None（不猜价），
+    #                  但必须计入 `cost_coverage.unpriced` 且在预算行可见
+    #   改前用 `if _price <= 0: return None`，把 glm-4-flash（7452 次调用、
+    #   官方免费档）整批读成"未定价"⇒ 主力渠道上熔断器永远读不到花费。
+    "deepseek-v4-flash": 0.0011,    # V4.1-Flash 输入档(非高峰 cache-miss) $0.15/M ≈ ¥0.0011/1K；输出 $0.60/M ≈ ¥0.0043/1K；来源 api-docs.deepseek.com(核验 2026-09-18)
+    "deepseek-flash": 0.0011,       # 同 V4.1-Flash（advanced_model 路由名）
+    "deepseek-v4-pro": 0.0047,      # V4-Pro 输入档 $0.66/M ≈ ¥0.0047/1K；输出 $1.98/M ≈ ¥0.0141/1K；同源
+    # ---- 免费档（0.0 = 已定价为零，不是缺价）----
+    "glm-4-flash": 0.0,             # 智谱 GLM-4-Flash 官方免费额度（100 万 T/天）计费为 0；来源 docs.bigmodel.cn
+    "glm-4-flash-250414": 0.0,      # GLM-4-Flash 带日期别名（同一免费档）
+    "qwen2:7b-instruct-q4_K_M": 0.0,  # 本地自托管 qwen2 推理，零 API 成本
+    # ---- 豆包 / 火山方舟（Seed 系）----
+    "Doubao-Seed-2.1-pro": 0.0008,  # 输入档 ¥0.8/M ⇒ ¥0.0008/1K；输出 ¥8/M ⇒ ¥0.008/1K；来源 volcengine.com 计价文档
+    "doubao-seed-2.1-pro": 0.0008,  # 小写别名（渠道返回大小写不一，按同价兜底）
+    "Doubao-Seed-2.1-turbo": 0.0003,  # Turbo 档 ¥0.3/M ⇒ ¥0.0003/1K（粗档，精确价待核官方页）
+    "doubao-seed-1.6": 0.0008,      # 兼容旧名（与 2.1-pro 同档兜底）
+    # ---- ★未定价（官方价未核验，**不臆造**）----
+    #   值 None ⇒ 语义 = "知道有这个渠道，但没有可溯源单价"，
+    #   走 unpriced 分支（cost=None + 计入 coverage.unpriced），
+    #   **绝不写成 0.0**（写成 0 会让熔断器看不见真实花费）。
+    #   `ep-*` 是火山 Ark endpoint id，同一端点可路由到不同模型 ⇒ 无法静态定价，
+    #   只能等调用侧透传真实 model 名后自动落表。
+    "GLM-5.2": None,
+    "GLM-5.3-Flash": None,
+    "Doubao-Seed-Evolving": None,
+    "Doubao-Seed-Character": None,
+    "Doubao-Seed-2.0-pro": None,
 }
 
 # ★第170批 C10（冷池分位动态化 / L-7）：冷池驱逐策略切换
@@ -5544,6 +5566,28 @@ TOOL_SCAN_ROOTS = [
     "main.py", "config.py", "pulse_doctor.py",
     "nucleus", "organs", "functions", "base", "pulses", "somatics", "utils", "tools",
 ]
+# ===== ★343批刀2（E-10 · A-17 根因）：日志分析的**域白名单** =====
+#   A-17（342 实证）：`LogAnalyzer._scan_log_file` 逐行扫日志里的
+#   `File "...", line N`，**没有任何域过滤** ⇒ 隔离验证脚本
+#   （tmp/p342_root/d1_iso.py）崩溃后的 traceback 被当成"生产缺陷"进了
+#   pending 补丁池。铁律158 的**输出侧**：验证脚本自己的崩溃不许活体看见。
+#   ★口径：与 `TOOL_SCAN_ROOTS` **同一套域**（不建第二套，避免两处口径分叉）；
+#     `LOG_SCAN_DOMAIN_ROOTS` 留空 ⇒ 直接回退 `TOOL_SCAN_ROOTS`。
+LOG_SCAN_DOMAIN_FILTER = True
+# ===== ★343批刀4：释放决策树（338刀2 G0-G4）的**生产侧心跳** =====
+#   V6 实测根因不是"决策树写错了"，而是**活体里没有任何调用点**：
+#   `release_policy.decide/log_decision` 全库唯一调用方是 tests 与 tools 探针
+#   ⇒ `[338释放]` 生产日志 0 行（"只测不动"）。
+#   本开关把决策树挂到**已活的内存采样链**（PulseMetricsCollector 的
+#   memory_pressure 采集）上，每 N 拍出**一行真实档位**。
+#   ★只出决策行、**不做释放动作**（candidates=[] ⇒ approved 恒空）：
+#     释放动作要等档位行在真活体上连续可观测、且 G1/G2 边界核过之后再开，
+#     否则等于拿生产做"第一次运行"。
+ENABLE_RELEASE_HEARTBEAT = True
+RELEASE_HEARTBEAT_EVERY_BEATS = 10   # 每 N 拍出一次档位行（避免刷日志）
+LOG_SCAN_DOMAIN_ROOTS = []          # 空 ⇒ 回退 TOOL_SCAN_ROOTS（同口径）
+LOG_SCAN_DOMAIN_DENY = ["tmp", "tests", "logs", "data", "site-packages",
+                        "dist-packages", "Lib", "node_modules"]
 ENABLE_FAISS_FAST_OPS = True    # fast_ops.fast_vector_search 优先走 FAISS
 ENABLE_KAL_CALL_SITES = True    # 胃/肝/肾实际调用点替换为 KAL
 

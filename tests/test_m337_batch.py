@@ -147,13 +147,27 @@ def test_m337_typed_infer_default_off(monkeypatch):
 
 
 def test_m337_typed_only_registry_hit():
+    """★343刀5（E-8 已裁）：登记表 4→2 —— 撤 `has_p0` / `record_consume_result`。
+
+    不是静默改断言：342刀4 证据（`unique_name` 入边 =1）证明这两项本就会判活，
+    继续挂在 infer-only 兜底表里属过期项；保留的两项**仍无证据**，不许顺手撤。
+    """
     import nucleus.self_inspector as si
     assert si._m337_typed_only("nucleus/llm/semantic_cache.py", "to_dict") is True
     assert si._m337_typed_only(
-        "D:/x/nucleus/reporting/report_envelope.py", "has_p0") is True
+        "D:/x/nucleus/reporting/report_envelope.py", "to_dict") is True
+    # 343刀5 撤表的两项 ⇒ 不再豁免
+    assert si._m337_typed_only(
+        "D:/x/nucleus/reporting/report_envelope.py", "has_p0") is False
+    assert si._m337_typed_only(
+        "D:/x/nucleus/reporting/report_envelope.py", "record_consume_result") is False
     # 未登记的方法名不豁免（防"按名全赦"）
     assert si._m337_typed_only("nucleus/logger.py", "to_dict") is False
-    assert len(si._M337_TYPED_ONLY_METHODS) == 4
+    assert len(si._M337_TYPED_ONLY_METHODS) == 2
+    # 撤表台账与登记表必须**无交集**（防"既登记又撤表"的自相矛盾状态）
+    _reg = {(f, c, m) for f, c, m in si._M337_TYPED_ONLY_METHODS}
+    _dereg = {(f, c, m) for f, c, m, _b in si._M343_TYPED_ONLY_DEREGISTERED}
+    assert len(_dereg) == 2 and not (_reg & _dereg)
 
 
 # ══════════ 刀10：K1 gen_consistent ══════════

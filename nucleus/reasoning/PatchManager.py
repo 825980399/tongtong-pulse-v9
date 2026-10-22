@@ -1210,6 +1210,29 @@ class PatchManager:
         _p["o3_confirmed_at"] = time.time()
         if not self._save_patch_list(self._pending_file, _pending):
             return {"ok": False, "reason": "写入失败（可能被 WriteGuard 拦截）"}
+        # ★343刀1：落盘后**复核条目仍在池内** —— 这是本次死链的教训：
+        #   改前 approve 返回 ok=True，而条目已在 `_m280_converge_pending` 里被
+        #   作废过滤掉（假成功）。凡"写回成功"都必须再读一次盘确认，
+        #   否则报喜不报丧（铁律166：机制生效但产出是 0 要能区分）。
+        _after = self._load_patch_list(self._pending_file)
+        _still = None
+        for _x in (_after if isinstance(_after, list) else []):
+            if isinstance(_x, dict) and str(_x.get("id") or "") == str(_p.get("id") or ""):
+                _still = _x
+                break
+        if (_still is None
+                or str(_still.get("status") or "") != "approved"
+                or _still.get("o3_auto_dispatch_ready") is not True):
+            _module_logger.warning(
+                "[343O3] 审批落盘复核失败：patch=%s 池内=%s status=%s ready=%s"
+                " ⇒ 条目未留在待修池（派单侧将看不到）",
+                str(_p.get("id") or "")[:32],
+                "在" if _still is not None else "缺失",
+                (_still or {}).get("status"), (_still or {}).get("o3_auto_dispatch_ready"))
+            return {"ok": False,
+                    "reason": "落盘复核未通过：条目未留在待修池（占位=被收敛吞掉）",
+                    "patch_id": _p.get("id"), "auto_dispatch_ready": False,
+                    "persisted_present": _still is not None}
         _module_logger.info(
             "[339审批] O3 确认后自动派单已置位：patch=%s %s::%s signer=%s "
             "judged_by=%s ⇒ 派单侧下一拍自动执行（无二次审批）",
@@ -1353,6 +1376,42 @@ class PatchManager:
                     "risk": None, "trust": None, "blast": None,
                     "derive_error": "%s: %s" % (type(_e).__name__, _e)}
 
+    # ★343批刀1（E-12 · P0）：O3 判死候选豁免 284 刀5 的 def 校验。
+    #   病根（星轨 12:51 现场 + 12:45 断点定位）：`approve_o3_patch` 人工 approve
+    #   返回 ok=True（内存里 status/o3_auto_dispatch_ready 都置好了），但**落盘**
+    #   要经 `_save_patch_list` → `_m280_converge_pending`；284 刀5 的判据是
+    #   「modified_code 里没有 def ⇒ 结构缺陷 ⇒ 作废」。而 O3 判死候选的动作是
+    #   **删除**——天然没有 modified_code、也没有要替换的 def。
+    #   ⇒ 用同一把尺子量两种动作，O3 必然 100% 被判"结构缺陷"过滤出 pending，
+    #     派单侧（dispatch_o3_approved 读 pending）永远看不到它 ⇒ 审批链走完，
+    #     派单/执行/applied 全 0（7 天 0 派单的直接原因之一）。
+    #   豁免边界（**只放松这一种情形，别的照旧**）：
+    #     · 只豁免「方法名有、def 提取不到」这一个分支（=无 modified_code 的常态）；
+    #     · 「def 名与 method 错配」**不豁免** —— 那是真结构缺陷，与判死动作无关；
+    #     · 判据只看显式字段（`o3_dead_code` / `source` / `issue_type`），
+    #       不从理由串里找关键字（铁律153）。
+    @staticmethod
+    def _m343_o3_def_exempt(patch) -> bool:
+        """该条目是否为「O3 判死候选」⇒ 豁免 284 刀5 的 def 校验（纯函数）。"""
+        return PatchManager._m339_is_o3(patch)
+
+    # ★343批刀1②（洞鉴第二季 · P0）：自主修复通道豁免 298刀1。
+    #   为什么需要**显式来源标记**：`SafeEvolutionExecutor` 提交时**不写 source 字段**
+    #   （实测全库 `llm_auto_fix` 零出现）⇒ 无法从现有字段区分"自主演化自动生成"
+    #   与"外部/人工提交"。故在入队唯一口补 `entry_source`（见 save_pending_patch），
+    #   判据只认这个显式标记 + 白名单 source，不从理由串里找关键字（铁律153）。
+    _M343_AUTO_FIX_SOURCES = ("llm_auto_fix",)
+    _m343_shape_exempt_count = 0     # 豁免计数（回归指标：应只见于自主修复通道）
+
+    @staticmethod
+    def _m343_auto_fix_exempt(patch) -> bool:
+        """该条目是否来自自主修复通道（豁免 298刀1 形态拒绝）。"""
+        if not isinstance(patch, dict):
+            return False
+        if str(patch.get("entry_source") or "") == "llm_auto_fix":
+            return True
+        return str(patch.get("source") or "") in PatchManager._M343_AUTO_FIX_SOURCES
+
     def _m280_converge_pending(self, data):
         # ★280批刀4：pending 队列落盘前状态机收敛。
         #   ① applied=True 即出队（不再留在 pending）；
@@ -1363,6 +1422,7 @@ class PatchManager:
             return data
         _out = []
         _voided = 0
+        _exempt = 0          # ★343刀1：判死候选豁免计数（可 grep/[343O3]）
         for _it in data:
             if not isinstance(_it, dict):
                 _out.append(_it)
@@ -1379,6 +1439,17 @@ class PatchManager:
             _mismatch = bool(_method_name and _def_name and _def_name != _method_name)
             _no_def = bool(_method_name and not _def_name)
             if _mismatch or _no_def:
+                # ★343刀1：判死候选（删除动作）无 def 是**常态**，不是结构缺陷。
+                if _no_def and not _mismatch and PatchManager._m343_o3_def_exempt(_it):
+                    _it["_m343_def_exempt"] = True
+                    _exempt += 1
+                    _module_logger.info(
+                        "[343O3] 判死候选豁免284刀5: %s file=%s method=%s"
+                        "（删除动作无 modified_code 属常态，不作废）",
+                        str(_it.get("id") or "")[:32], _it.get("file", ""),
+                        _method_name)
+                    _out.append(_it)
+                    continue
                 _module_logger.warning(
                     "[284刀5] 结构缺陷补丁作废: %s:%s "
                     "(def=%r method=%r 错配=%s 无def=%s)",
@@ -1391,6 +1462,10 @@ class PatchManager:
         if _voided:
             _module_logger.info(
                 "[284刀5] 结构缺陷补丁批量作废: %d 条（回生成侧重新生成）", _voided)
+        if _exempt:
+            _module_logger.info(
+                "[343O3] 判死候选豁免284刀5 汇总: %d 条（保留在 pending，"
+                "供 dispatch_o3_approved 派单）", _exempt)
         return _out
 
     # ===== ★323批 刀2（P-03）：生成侧真值 =====
@@ -1644,6 +1719,12 @@ class PatchManager:
         保存待应用的补丁到队列。
         ★v23.0增强：自动补齐元数据 + 去重检查。
         """
+        # ★343刀1②：自主修复通道**显式标记**（生产唯一调用方 =
+        #   `SafeEvolutionExecutor` 的 5 处 `save_pending_patch`，均不写 source）。
+        #   标在 `entry_source` 而不是覆盖 `source`：`source` 有既有消费者
+        #   （`_m339_is_o3` 用它判 O3 来源），覆盖会改变审批分道语义。
+        if isinstance(patch, dict):
+            patch.setdefault("entry_source", "llm_auto_fix")
         # ★第280批刀1（P0）：生成侧 def 对齐——出补丁即断言 def名==method，不一致拒绝入库。
         #   烛微279批发现：23条def名与method错配＋6条modified_code无def＝29条(60.4%)。
         #   源头拦比队列清便宜：解析 modified_code 首个 def 名，与 method 字段比对。
@@ -1713,12 +1794,25 @@ class PatchManager:
                 patch.get("original_code", "") or "")
             _frag2full = (not _orig_def298) and bool(_def_name)
         if _frag2full:
-            PatchManager._shape_rejected_count += 1
-            _module_logger.warning(
-                f"[补丁入队][298刀1] 片段→完整形态拒绝入队: "
-                f"file={patch.get('file','')} method={_method_name} "
-                f"(original无def modified有def={_def_name!r})")
-            return
+            # ★343刀1②：自主修复通道豁免 —— "片段→完整"是 LLM **正常产出形态**
+            #   （给方法体片段、由入队口补成完整方法），284刀5 拿它当"结构缺陷"
+            #   属口径错配。豁免后仍走后续的 280危险预检 / 风险定级 / 人工审批 /
+            #   运行时验证，**不放宽安全面**（只是不再"提交前就丢件"）。
+            if PatchManager._m343_auto_fix_exempt(patch):
+                PatchManager._m343_shape_exempt_count += 1
+                patch["_m343_shape_exempt"] = True
+                _module_logger.info(
+                    "[343O3] llm_auto_fix豁免298刀1: %s file=%s method=%s "
+                    "（片段→完整属 LLM 合理产出形态；仍走审批/验证）",
+                    str(patch.get("id") or "")[:32], patch.get("file", ""),
+                    _method_name)
+            else:
+                PatchManager._shape_rejected_count += 1
+                _module_logger.warning(
+                    f"[补丁入队][298刀1] 片段→完整形态拒绝入队: "
+                    f"file={patch.get('file','')} method={_method_name} "
+                    f"(original无def modified有def={_def_name!r})")
+                return
         # ★第280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
         #   烛微279批发现：48条risk_level全为"低"，其中 sql_injection/lock_with_emit/
         #   non_atomic_write 共8条高危被误判低风险。高危族禁入免签视野、必须专项验证。

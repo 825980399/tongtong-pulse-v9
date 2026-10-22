@@ -50,6 +50,17 @@ except Exception:
 COLD_COMPACT_MIN_FILES = 2
 
 
+def _m343_pg() -> str:
+    """代次串（唯一取数口 `nucleus.proc_gen.proc_gen_str`；取不到记 unknown，不填 0）。"""
+    try:
+        from nucleus.proc_gen import proc_gen_str as _pgs
+        return str(_pgs())
+    except Exception as _e:                                      # noqa: BLE001
+        # 取不到代次只降级为 unknown（**不填 0**，铁律：0 会被读成合法代次），但必须留痕
+        silent_exc(_e, where="PulseNodePool::_m343_pg")
+        return "unknown"
+
+
 class PulseNodePool(SilentLogMixin):
     """
     脉冲节点池（v9.5 适配版）
@@ -2082,6 +2093,8 @@ class PulseNodePool(SilentLogMixin):
                     "[338冷化] 驱逐 类=%s 条=1 回载=可用 路径=warm溢出直写 存留=%d",
                     str(getattr(_victim, "evol_level", "?") or "?"),
                     len(self._cold_evicted))
+                # ★343刀6：**生产真路径**也要记账（只补前者=日志永远空白，338 教训）
+                self._m343_record_eviction(_victim, "warm_overflow")
                 if self._index_store is not None:
                     self._index_store.record_change(
                         "add", "level_index",
@@ -2547,6 +2560,141 @@ class PulseNodePool(SilentLogMixin):
         except Exception as _e:
             silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m169_cold_trace")
 
+    # ===== ★343刀6（洞鉴第二季）：冷化链**持久化闭环** =====
+    #   病根（341/洞鉴实证）：`[338冷化]` 驱逐 140 次，但 `cold.index.json`
+    #   mtime 停在 09-28 —— **驱逐即丢**：`_evict_cold_node` 只写 parquet +
+    #   `_cold_evicted` 集合，从不碰侧车索引；索引只在 `_rebuild_cold_index`
+    #   （全量读 parquet）时才重写，而那条路在活体上几乎不跑。
+    #   ⇒ 懒加载视图"看不到刚驱逐的行"，pyarrow 直读方案也失去前提。
+    #   本刀只做"记账 + 持久化"，**不改驱逐策略/不改容量阈值**。
+    def _m343_cold_index_path(self) -> str:
+        """侧车索引路径（与 `_rebuild_cold_index` 同一口径，避免两处拼法分叉）。"""
+        return self._cold_dir.rstrip(os.sep) + ".index.json"
+
+    def _m343_evict_log_path(self) -> str:
+        """驱逐台账（append-only JSONL）：即使进程在两次持久化之间死掉也不丢账。"""
+        return self._cold_dir.rstrip(os.sep) + ".evict.jsonl"
+
+    def _m343_record_eviction(self, node: PulseNode, path: str) -> None:
+        """驱逐记账：写台账 → 更新内存索引 → 节流持久化 `cold.index.json`。
+
+        `path` 取值 `cold_pool`（`_evict_cold_node`）/ `warm_overflow`（`_enforce_capacity`）。
+        条目状态：
+          · `pending_flush` —— 已进写缓冲但尚未落成 parquet 行，此时
+            (file, rg, offset) **不可知**（这就是旧实现停更的结构性原因）；
+          · `flushed`       —— `_flush_cold_buffer_nodes` 成功后由
+            `_m343_mark_flushed` 批量置位。
+        ★异常一律留痕不抛（观测/记账代码不得影响驱逐主链路）。
+        """
+        _nid = str(getattr(node, "node_id", "") or "")
+        if not _nid:
+            return
+        _now = time.time()
+        _rec = {"ts": _now, "node_id": _nid,
+                "file": str(getattr(node, "file_path", "") or ""),
+                "level": str(getattr(node, "evol_level", "L1") or "L1"),
+                "path": path, "state": "pending_flush",
+                "reload": "available_after_flush",
+                "proc_gen": _m343_pg()}
+        # ① 台账（append-only，O(1)，mtime 必动）
+        _led_ok = False
+        if self._m81_cold_cfg("COLD_EVICT_LOG_ENABLED", True):
+            try:
+                _lp = self._m343_evict_log_path()
+                os.makedirs(os.path.dirname(_lp), exist_ok=True)
+                with open(_lp, "a", encoding="utf-8") as _lf:
+                    _lf.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+                _led_ok = True
+            except Exception as _e:                              # noqa: BLE001
+                silent_exc(_e, where="PulseNodePool::_m343_record_eviction ledger")
+        # ② 内存索引（键=node_id，与 _rebuild_cold_index 同结构 + 343 三字段）
+        try:
+            self._ensure_cold_index()
+            with self._cold_buf_lock():
+                if self._cold_index is None:
+                    self._cold_index = {}
+                self._cold_index[_nid] = {
+                    "file": _rec["file"] if _rec["file"] else
+                            (self._cold_dir.rstrip(os.sep) + ".parquet"),
+                    "rg": None, "offset": None, "level": _rec["level"],
+                    "evicted": True, "state": "pending_flush",
+                    "reload": "available_after_flush",
+                    "evict_ts": _now, "evict_path": path,
+                }
+                _n_idx = len(self._cold_index)
+        except Exception as _e:                                  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m343_record_eviction index")
+            _n_idx = -1
+        # ③ 持久化（节流：首条立即写，同窗口内合并，避免 140 次全量重写）
+        _wrote, _mtime = self._m343_persist_cold_index()
+        _module_logger.info(
+            "[343冷化] 持久化 驱逐 node_id=%s 路径=%s 状态=pending_flush "
+            "回载=%s 台账=%s 索引条目=%d 写盘=%s 索引mtime=%.3f proc_gen=%s",
+            _nid[:32], path, _rec["reload"], "已写" if _led_ok else "失败",
+            _n_idx, "是" if _wrote else "节流合并",
+            _mtime if _mtime is not None else -1.0, _rec["proc_gen"])
+
+    def _m343_mark_flushed(self, n: int) -> int:
+        """把 `pending_flush` 条目批量置 `flushed`（flush 成功后调用，避免全量重建）。"""
+        _done = 0
+        try:
+            self._ensure_cold_index()
+            with self._cold_buf_lock():
+                for _v in (self._cold_index or {}).values():
+                    if isinstance(_v, dict) and _v.get("state") == "pending_flush":
+                        _v["state"] = "flushed"
+                        _v["reload"] = "available"
+                        _done += 1
+        except Exception as _e:                                  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m343_mark_flushed")
+            return 0
+        if _done:
+            self._m343_persist_cold_index(force=True)
+            _module_logger.info(
+                "[343冷化] 持久化 flush完成 置flushed=%d 索引条目=%d proc_gen=%s",
+                _done, len(self._cold_index or {}), _m343_pg())
+        return _done
+
+    def _m343_persist_cold_index(self, force: bool = False):
+        """原子写 `cold.index.json`（tmp + os.replace），返回 (是否写, mtime)。
+
+        节流：`COLD_INDEX_PERSIST_MIN_INTERVAL`（默认 2s）内重复驱逐合并成一次写。
+        `force=True` 绕过节流（flush 完成/重启前落盘）。
+        ★写失败置 `_cold_index_stale=True` 并留痕（**不静默**）。
+        """
+        if not self._m81_cold_cfg("COLD_SIDECAR_INDEX_ENABLED", True):
+            return False, None
+        _now = time.time()
+        _last = float(getattr(self, "_m343_idx_persist_ts", 0.0) or 0.0)
+        _gap = float(self._m81_cold_cfg("COLD_INDEX_PERSIST_MIN_INTERVAL", 2.0))
+        if not force and _last and (_now - _last) < _gap:
+            return False, None
+        _ip = self._m343_cold_index_path()
+        try:
+            with self._cold_buf_lock():
+                _snap = dict(self._cold_index or {})
+            os.makedirs(os.path.dirname(_ip), exist_ok=True)
+            _tmp = _ip + ".tmp343"
+            with open(_tmp, "w", encoding="utf-8") as _f:
+                json.dump(_snap, _f)
+            os.replace(_tmp, _ip)
+            self._m343_idx_persist_ts = _now
+            self._cold_index_stale = False
+            try:
+                _mt = os.path.getmtime(_ip)
+            except OSError as _e2:
+                # 写成功但取 mtime 失败：退回"现在"，不能因为读不到时间就说没写（判据要能区分两件事）
+                silent_exc(_e2, where="PulseNodePool::_m343_persist_cold_index mtime")
+                _mt = _now
+            return True, _mt
+        except Exception as _e:                                  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m343_persist_cold_index")
+            self._cold_index_stale = True
+            _module_logger.warning(
+                "[343冷化] 索引持久化失败（陈旧标记已置）: %s: %s",
+                type(_e).__name__, _e)
+            return False, None
+
     def _evict_cold_node(self, node: PulseNode) -> bool:
         """把单个冷节点驱逐到磁盘冷存（增量追加 Parquet），返回是否成功。
 
@@ -2573,6 +2721,8 @@ class PulseNodePool(SilentLogMixin):
             "[338冷化] 驱逐 类=%s 条=1 回载=可用 存留=%d",
             str(getattr(node, "evol_level", "?") or "?"),
             len(self._cold_evicted))
+        # ★343刀6：驱逐必须记账（旧实现到此为止 ⇒ 索引停更 = 驱逐即丢）
+        self._m343_record_eviction(node, "cold_pool")
         # 外置索引标记 evicted（★第81批 T4：用真实 evol_level，不再恒 L1）
         if self._index_store is not None:
             self._index_store.record_change(
@@ -2740,6 +2890,12 @@ class PulseNodePool(SilentLogMixin):
             self._cold_last_flush_time = time.time()
             # 重建侧车索引（单点召回命中 row_group）
             self._rebuild_cold_index()
+            # ★343刀6：flush 落盘后，驱逐条目由 pending_flush → flushed（回载=可用）
+            try:
+                self._m343_mark_flushed(len(_rows))
+            except Exception as _m343f_e:                        # noqa: BLE001
+                silent_exc(_m343f_e,
+                           where="PulseNodePool::_flush_cold_buffer_nodes 343置flushed")
             return len(_rows)
         except Exception as _e:
             _module_logger.warning(f"[第81批 T4] 冷存批量 flush 失败: {_e}")
@@ -2810,12 +2966,21 @@ class PulseNodePool(SilentLogMixin):
             return
         try:
             _rows = self._read_cold_all_rows()
+            # ★343刀6：重建**不得抹掉驱逐标记**。旧实现整表覆盖 ⇒ 驱逐记账刚写进去
+            #   就被 flush 尾部的 rebuild 冲掉（"有索引但看不出是驱逐来的"）。
+            _prev = dict(getattr(self, "_cold_index", {}) or {})
             _idx = {}
             for _row, _fpath, _rg, _i in _rows:
                 _nid = str(_row.get("node_id", ""))
                 if _nid and _nid not in _idx:
                     _idx[_nid] = {"file": _fpath, "rg": _rg, "offset": _i,
                                   "level": _row.get("evol_level", "L1")}
+                    _p = _prev.get(_nid)
+                    if isinstance(_p, dict) and _p.get("evicted"):
+                        for _k in ("evicted", "state", "reload",
+                                   "evict_ts", "evict_path"):
+                            if _k in _p:
+                                _idx[_nid][_k] = _p[_k]
             with self._cold_buf_lock():
                 self._cold_index = _idx
                 self._cold_index_loaded = True

@@ -5515,6 +5515,10 @@ class SelfInspector(SilentLogMixin):
             "items": list(_review_items),
             # ★326批刀2：O3 抽验靶子（hard 池 + 总数口径，二者不可互换）
             "hard_total": int(_hard_total),
+            # ★343刀5：撤表后的分母口径——登记表条数 + 走 infer-only 的条数，
+            #   两者与 hard_total 一起才能复算"撤表是否挪了分母"。
+            "typed_only_registry": len(_M337_TYPED_ONLY_METHODS),
+            "infer_only_total": int(_alive_src.get("infer_only", 0) or 0),
             "hard_items": list(_hard_items),
             "hard_pool_capped": bool(_hard_total > len(_hard_items)),
             # ★330批刀1（M2 分层）：**N 只认 hard_strict**；loose/unverified 单列供审计。
@@ -5533,6 +5537,13 @@ class SelfInspector(SilentLogMixin):
                                "(只降级待复核)｜hard_unverified=probe不可用(不填0)"),
             "o3_n_target": _O3_N_TARGET, "o3_n_source": _O3_N_SOURCE,
             "as_of": time.time()})
+        # ★343刀5：判死分母留痕（每轮一行，供撤表前后对表）
+        _module_logger.info(
+            "[343判死] 分母 hard_total=%d strict=%s loose=%s unverified=%s "
+            "infer_only=%d typed_only_registry=%d（343刀5 撤表 4→2 · E-8 已裁）",
+            int(_hard_total), _hard_strict_total, _hard_loose_total,
+            _hard_unverified_total, int(_alive_src.get("infer_only", 0) or 0),
+            len(_M337_TYPED_ONLY_METHODS))
         if _review_count:
             _module_logger.info(
                 "[308刀2] 待复核清单 %d 条（统计口径，不进issues；覆盖率 %.1f%%，"
@@ -6006,10 +6017,43 @@ _M330_HARD_TIERS = ("hard_strict", "hard_loose", "hard_unverified")
 #   `ReportEnvelope.to_dict` —— 那比没证据更坏：它给出看起来很合理的错数。
 _M337_TYPED_ONLY_METHODS = (
     ("nucleus/llm/semantic_cache.py", "CacheEntry", "to_dict"),
-    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "has_p0"),
     ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "to_dict"),
-    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "record_consume_result"),
+    # ★343刀5（E-8 已裁）：以下 2 项**已撤表**，不再走 infer-only 软档：
+    #   `ReportEnvelope.has_p0` / `ReportEnvelope.record_consume_result`
+    #   依据：342刀4 `_m342_typed_only_evidence` 实测两项 `unique_name=1`
+    #   （图里存在 unique_name 级入边 = 撤销条件"出现 static/unique_name 级入边"
+    #   已满足）。**保留的两项仍无证据**，不许顺手一起撤。
+    #   撤表不是删除方法：它们照常参与判死，只是**不再享受 infer-only 豁免**，
+    #   若真无入边则会按 hard_tier 正常入池（分母可能上升 —— 这正是本刀的观察点）。
 )
+
+#: ★343刀5：撤表台账（file, cls, method, 依据）——留痕与报告共用同一份数据源，
+#:   避免"报告写撤 2 条、代码里其实撤了 3 条"这类口径分叉。
+_M343_TYPED_ONLY_DEREGISTERED = (
+    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "has_p0",
+     "unique_name_in_edges=1"),
+    ("nucleus/reporting/report_envelope.py", "ReportEnvelope",
+     "record_consume_result", "unique_name_in_edges=1"),
+)
+_M343_DEREG_LOGGED = False
+
+
+def _m343_note_typed_deregister() -> None:
+    """撤表留痕（幂等，一次；可 grep `[343判死] typed_only_deregister`）。
+
+    为什么留痕：撤表会**改变判死分母**（原先被 infer-only 软档兜住的方法，
+    撤表后要按真实入边重新定档）。没有这一行，日后看到 hard_total 变化
+    无法区分"新增死码"与"撤表导致的口径位移"（铁律166 同源）。
+    """
+    global _M343_DEREG_LOGGED
+    if _M343_DEREG_LOGGED:
+        return
+    _M343_DEREG_LOGGED = True
+    for _f, _c, _m, _b in _M343_TYPED_ONLY_DEREGISTERED:
+        _module_logger.info(
+            "[343判死] typed_only_deregister file=%s cls=%s method=%s "
+            "basis=%s registry_now=%d ref=342刀4证据",
+            _f, _c, _m, _b, len(_M337_TYPED_ONLY_METHODS))
 
 
 def _m337_typed_only(file_norm: str, method: str, cls: str = "") -> bool:
@@ -6019,6 +6063,7 @@ def _m337_typed_only(file_norm: str, method: str, cls: str = "") -> bool:
     （既有的两参调用点、`tests/test_m337_batch.py` 的两参断言都不受影响）；
     传了才按类名收紧 —— 供证据函数精确定位节点用。
     """
+    _m343_note_typed_deregister()
     _f = str(file_norm or "").replace("\\", "/")
     for _rf, _rc, _rm in _M337_TYPED_ONLY_METHODS:
         if _rm != method or not _f.endswith(_rf):
@@ -7065,6 +7110,26 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
     # ★335批刀2 第3条：未判步骤**显式列清单**（消费方/报表直接读，不必再解析文案）
     _rep["steps_total"] = 7
     _rep["unjudged_steps"] = ["⑦ K1三证＋对表"] if _v7 == "不可判" else []
+    # ★343刀7③（洞鉴第四类口径漂移）：**"不可判"必须升级成红色告警**，
+    #   不许在报表里留个空单元格让人读成"没问题"。阈值 3（同窗 1h，见
+    #   `criteria_window.UNJUDGED_KEEP_SEC`）；计数与告警都在
+    #   `criteria_window` 里，本处只做**生产侧接线**。
+    try:
+        from nucleus.evolution import criteria_window as _cw343
+        if _v7 == "不可判":
+            _cw343.note_unjudged("⑦ K1三证＋对表", _why7)
+        _al = _cw343.check_unjudged_alarm()
+        _rep["unjudged_alarm"] = _al
+        if _al.get("alarm"):
+            _module_logger.error(
+                "[343判据][红色告警] 不可判 %d 条 ≥ 阈值 %d ⇒ 自动触发审计"
+                "（items=%s；不可判 ≠ 没问题）",
+                _al["count"], _al["threshold"],
+                ",".join(str(x.get("item")) for x in _al["items"])[:200])
+    except Exception as _cw_e:
+        silent_exc(_cw_e, where="self_inspector::o3_open_gate_report 343不可判告警")
+        _rep["unjudged_alarm"] = {"verdict": "UNAVAILABLE",
+                                  "reason": type(_cw_e).__name__}
     _rep["failed_steps"] = list(_blockers)
     if _v7 == "未达成":
         _rep["failed_steps"].append("⑦ K1三证＋对表")

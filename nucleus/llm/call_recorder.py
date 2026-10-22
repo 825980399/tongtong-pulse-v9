@@ -205,6 +205,42 @@ def _m94_normalize_usage(usage: Any) -> dict[str, int] | None:  # _m94_extract_u
             "total_tokens": _ti}
 
 
+def _m343_price_state(model: str) -> dict:
+    """★343刀3：单价查询的**四态**结果（把「免费」与「未定价」分开）。
+
+    改前只有「有价 / 没价」两态，`price<=0` 一律当没价 ⇒ glm-4-flash 的
+    官方免费档（0.0）被读成未定价，7452 次调用零记账（实测）。
+
+    Returns:
+        `{"state": <state>, "price": float|None, "in_table": bool}`
+        state ∈ `no_model` / `table_missing` / `free` / `priced` / `unpriced`
+          · no_model      —— model 空串（调用侧没透传）⇒ 另一类缺口
+          · table_missing —— 单价表本身不可用
+          · free          —— 命中且 price == 0.0 ⇒ **合法零价**（但 cost 仍记 None：
+                              0 元计费等价于没记账，只做**计数**不制造虚假覆盖）
+          · priced        —— 命中且 price > 0
+          · unpriced      —— 命中但值为 None，或压根未命中
+    """
+    if not model:
+        return {"state": "no_model", "price": None, "in_table": False}
+    _tbl = _cfg("EVOLUTION_LLM_PRICE_TABLE", None)
+    if not isinstance(_tbl, dict):
+        return {"state": "table_missing", "price": None, "in_table": False}
+    _hit = str(model) in _tbl
+    # ★343 实测教训（m340 用例抓到的真缺陷）：本函数第一版**自己又读了一遍表**，
+    #   与 `_m340_price_of` 构成第二个取价点 ⇒ 违反"单价单一出口"（340刀4）。
+    #   四态只是**分类**，取价必须走唯一出口。
+    _p = _m340_price_of(model)
+    if _p is None:
+        return {"state": "unpriced", "price": None, "in_table": _hit}
+    _f = float(_p)
+    if _f < 0:
+        return {"state": "unpriced", "price": None, "in_table": _hit}
+    if _f == 0.0:
+        return {"state": "free", "price": 0.0, "in_table": True}
+    return {"state": "priced", "price": _f, "in_table": True}
+
+
 def _m340_price_of(model: str) -> float | None:
     """★340批刀4：单价取数**唯一出口**（¥ / 1K tokens）。
 
@@ -226,6 +262,30 @@ def _m340_price_of(model: str) -> float | None:
     return float(_p)
 
 
+def _m343_basis_of(model: str, tokens: int) -> str:
+    """本次调用的**计价归因档**（只分类，不改金额语义）。
+
+    取值与含义（用于 coverage / `calls_unpriced` / 留痕归因）：
+      · `priced`      —— 有正单价且有用量 ⇒ 有金额可记
+      · `no_tokens`   —— 有正单价但没拿到 tokens ⇒ 无法算钱（另一类缺口）
+      · `free_zero`   —— 表内单价 = 0.0（官方免费 / 本地自托管）⇒ **0 元不计费**
+      · `unpriced`    —— 键缺失或值 None ⇒ 未定价（不猜价）
+      · `no_model`    —— model 空串（调用侧没透传）
+      · `table_missing` —— 单价表不可用
+    ★`free_zero` 与 `unpriced` **都进 `calls_unpriced`**（任务书口径：
+      "0 单价/未定价调用的计数不计费"），但保留分项以便审计区分。
+    """
+    _st = _m343_price_state(model)
+    _s = _st["state"]
+    if _s == "free":
+        return "free_zero"
+    if _s == "priced":
+        _tok = tokens if (isinstance(tokens, (int, float))
+                          and not isinstance(tokens, bool)) else 0
+        return "priced" if _tok > 0 else "no_tokens"
+    return _s
+
+
 def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_cost
     """★第170批 C9（进化费用追踪下半）：按「模型 × tokens → 费用」估算单次调用费用。
 
@@ -245,13 +305,19 @@ def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_co
     """
     if not _cfg("ENABLE_EVOLUTION_COST_ESTIMATE", True):
         return None
-    # ★340批刀4：单价改由**单源** `_m340_price_of` 取（不各算各的）。
+    # ★343刀3（任务书更新版·烛微342 §0-5 根因修正）：
+    #   计费语义**一字不改** —— `_price <= 0` 仍然返回 None。
+    #   为什么不改成 0.0：0 元钱的"计费"在预算账上等价于没记账（used 不涨），
+    #   却会让人误以为"免费渠道已被约束"，等于制造虚假成本/虚假覆盖。
+    #   正确做法是把"0 单价/未定价"变成**计数**（`calls_unpriced`），
+    #   让空转量可观测 —— 见 `_m343_basis_of` 与 evolution_budget.coverage。
+    #   四态取价只用于**分类归因**，不参与金额计算。
+    # ★单价必须走**唯一出口** `_m340_price_of`（340刀4 的设计，m340 用例守门）：
+    #   四态分类（free/unpriced）不参与金额计算，只在 `_m343_basis_of` 里做归因。
     _price = _m340_price_of(model)
-    if _price is None:
-        return None
     _tok = tokens if (isinstance(tokens, (int, float))
                       and not isinstance(tokens, bool)) else 0
-    if _price <= 0 or _tok <= 0:
+    if _price is None or _price <= 0 or _tok <= 0:
         return None
     return round(_price * _tok / 1000.0, 6)
 
@@ -499,6 +565,10 @@ class LLMCallRecorder:
             _m94_tokens = int(_m94_usage.get("total_tokens", 0) or 0)
         # ★第170批 C9：费用估算（模型 × tokens → 费用）；未配置单价/模型未知 → None。
         _m94_cost = _compute_cost_estimate(model, _m94_tokens)
+        # ★343刀3：本条的**计价状态**与 cost 一起传给侧账 —— 没有它，
+        #   侧账只能看到「cost 是 None」，分不清「未定价」「没透传 model」
+        #   「没拿到 tokens」三件完全不同的事。
+        _m343_basis = _m343_basis_of(model, _m94_tokens)
         # ★340批刀4：取数行（model/tokens/cost 同打）。
         #   为什么必须有这行：预算熔断"永不跳闸"的根因是 model 未透传 ⇒ 单价查不到
         #   ⇒ cost 恒 null；没有这行，事后无法分辨"没花钱"与"没记上"。
@@ -512,7 +582,8 @@ class LLMCallRecorder:
         #   best-effort：记账失败绝不影响调用记录本身。
         try:
             from nucleus.evolution.evolution_budget import record_cost as _m335_rc
-            _m335_rc(_m94_cost, _ts)
+            _m335_rc(_m94_cost, _ts, model=str(model or ""),
+                     basis=_m343_basis, origin=str(origin or ""))
         except Exception as _e:
             silent_exc(_e, where="call_recorder::_write_line 335刀6 费用记账",
                        level="debug")

@@ -547,6 +547,72 @@ class PulseMetricsCollector(BasePulseOrgan):
                      _v["proc_gen"], _v["code_version"], _v["criteria_version"], _p))
         return _out
 
+    # ===== ★343批刀4：释放决策树心跳（G0-G4 生产侧触发） =====
+    def _m343_release_heartbeat(self, heap_mb=None) -> dict:
+        """跑一次 G0-G4 决策并留痕（**只决策不释放**：candidates 恒空）。
+
+        接线位置为什么在这里：这是活体**唯一**每拍都能拿到 `heap_mb` 的地方
+        （337刀4 已把 heap = RSS − image 算出来）。另起调度器会得到
+        "两份 heap 读数"，而 `[338释放]` 的判据正是拿 heap 分档 —— 两个来源
+        打架时无法复算。与 339刀4 tracemalloc 自观测同一挂点（同一范式）。
+
+        Returns:
+            dict：`{"status": "ok"|"throttled"|"disabled"|"unavailable", ...}`
+            —— 取不到 release_policy 时 `status=unavailable` + why，
+            **不填假档位**（"没跑" ≠ "跑出 G1"）。
+        """
+        _cfg = sys.modules.get("config")
+        if _cfg is not None and not bool(
+                getattr(_cfg, "ENABLE_RELEASE_HEARTBEAT", True)):
+            return {"status": "disabled"}
+        _now = time.time()
+        _bc = int(getattr(self, "_beat_count", 0) or 0)
+        _every = 10
+        if _cfg is not None:
+            try:
+                _every = max(1, int(getattr(_cfg,
+                                            "RELEASE_HEARTBEAT_EVERY_BEATS", 10) or 10))
+            except (TypeError, ValueError) as _e343:
+                # 配置值非法 ⇒ 退回默认节拍，但必须留痕（否则"为什么每 10 拍"不可追溯）
+                silent_exc(_e343, where="PulseMetricsCollector::_m343_release_heartbeat every")
+                _every = 10
+        _last = getattr(self, "_m343_rel_beat", None)
+        if _last is not None and (_bc - int(_last)) < _every:
+            return {"status": "throttled", "beats_since": _bc - int(_last),
+                    "every": _every}
+        self._m343_rel_beat = _bc
+        try:
+            from nucleus.mnemosyne import release_policy as _rp343
+        except Exception as _impe:
+            silent_exc(_impe, where="PulseMetricsCollector::_m343_release_heartbeat import")
+            self._log(LogLevel.WARNING,
+                      "[343释放] release_policy 不可用 ⇒ 本轮无档位行: %s: %s"
+                      % (type(_impe).__name__, _impe))
+            return {"status": "unavailable", "why": "import_failed"}
+        # W1 取真实值；取不到就 None（G0 会如实拦，**不猜 alive**）
+        _w1 = None
+        try:
+            from nucleus.world_model.external_heartbeat import (
+                w1_verdict_brief as _w1b,
+            )
+            _w1 = str((_w1b() or {}).get("verdict") or "") or None
+        except Exception as _w1e:
+            silent_exc(_w1e, where="PulseMetricsCollector::_m343_release_heartbeat w1",
+                       level="debug")
+            _w1 = None
+        _dec = _rp343.decide(
+            heap_mb=heap_mb, w1_verdict=_w1, now_ts=_now, candidates=(),
+            beat_count=_bc,
+            last_release_beat=getattr(self, "_m343_last_release_beat", None))
+        _rp343.log_decision(_dec, where="[343心跳] beat=%d every=%d w1=%s"
+                            % (_bc, _every, _w1 or "unavailable"))
+        return {"status": "ok", "tier": _dec.get("tier"),
+                "tier_why": _dec.get("tier_why"),
+                "g0_blocked_by": list(_dec.get("g0", {}).get("blocked_by") or []),
+                "heap_mb": heap_mb, "beat": _bc,
+                "release_enabled": _dec.get("release_enabled"),
+                "candidates_offered": 0}
+
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
         175刀1：在已活采集链上接入 RSS 上限自动回收（避免 167 死开关事故——
@@ -623,6 +689,20 @@ class PulseMetricsCollector(BasePulseOrgan):
                               "[339内存观测] 钩子外层异常（不静默）: %s: %s"
                               % (type(_mpe).__name__, _mpe))
                     _out["self_probe"] = None
+
+                # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
+                #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。
+                try:
+                    _out["release_heartbeat"] = self._m343_release_heartbeat(
+                        heap_mb=_out.get("heap_mb"))
+                except Exception as _rhe:
+                    silent_exc(_rhe,
+                               where="PulseMetricsCollector::_collect_memory_pressure 343刀4")
+                    self._log(LogLevel.WARNING,
+                              "[343释放] 心跳外层异常（不静默）: %s: %s"
+                              % (type(_rhe).__name__, _rhe))
+                    _out["release_heartbeat"] = {"status": "error",
+                                                 "why": type(_rhe).__name__}
 
                 # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
                 #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，

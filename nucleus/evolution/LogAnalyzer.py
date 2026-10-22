@@ -22,6 +22,9 @@ from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
+# ★343刀2⑤：两套文件域声明只打一次（进程级），避免每拍刷屏
+_M343_DOMAIN_DECLARED = False
+
 # 匹配 Traceback 的 File 行:  File "/path/to/file.py", line 123, in func_name
 _TRACEBACK_FILE_RE = re.compile(
     r'File "(?P<file>[^"]+\.py)", line (?P<line>\d+), in (?P<func>\w+)'
@@ -106,6 +109,14 @@ class LogAnalyzer(SilentLogMixin):
 
     def __init__(self, project_root: str):
         self._project_root = project_root
+        # ★343刀2：域外 Traceback 计数桶（键 = "文件:行"，值 = {n, why}）
+        self._m343_skipped: dict[str, dict[str, Any]] = {}
+        # ★343刀2⑤：两套文件域显式声明（进程内一次；失败不阻断分析）
+        try:
+            self._m343_domain_rel = self._m343_declare_two_domains()
+        except Exception as _m343d_e:                            # noqa: BLE001
+            self._m343_domain_rel = {"error": type(_m343d_e).__name__}
+            silent_exc(_m343d_e, where="LogAnalyzer::__init__ 343两域声明")
 
     def _default_log_file(self) -> str:
         return os.path.join(self._project_root, "logs", "pulse.log")
@@ -147,6 +158,180 @@ class LogAnalyzer(SilentLogMixin):
 
     # ========== 日志扫描 ==========
 
+    # ===== ★343批刀2（E-10）：Traceback 命中的**域过滤** =====
+    #   为什么必须在这里做：`_scan_log_file` 是"日志 → 补丁候选"的**唯一入口**，
+    #   过滤放在下游（生成侧/入池侧）都晚一步 —— 垃圾条目一旦入池，就会占掉
+    #   入池速率额度（O3 真门槛 1 条/天）并污染待修池读数。
+    @staticmethod
+    def _m343_domain_roots() -> list:
+        """域白名单：config 显式配置优先，留空回退 `TOOL_SCAN_ROOTS`（同口径）。"""
+        try:
+            import config as _c343
+            _r = list(getattr(_c343, "LOG_SCAN_DOMAIN_ROOTS", []) or [])
+            if _r:
+                return [str(x) for x in _r]
+            return [str(x) for x in (getattr(_c343, "TOOL_SCAN_ROOTS", []) or [])]
+        except Exception as _e:
+            silent_exc(_e, where="LogAnalyzer::_m343_domain_roots")
+            return []
+
+    @staticmethod
+    def _m343_filter_on() -> bool:
+        """域过滤开关（`LOG_SCAN_DOMAIN_FILTER`，默认 True）。
+
+        读不到配置 ⇒ True：A-17 的代价是"垃圾进池污染账"，
+        关掉过滤的收益只有"多收几条日志噪声"——两头不对称，fail-closed。
+        """
+        try:
+            import config as _c343
+            return bool(getattr(_c343, "LOG_SCAN_DOMAIN_FILTER", True))
+        except Exception as _e:
+            silent_exc(_e, where="LogAnalyzer::_m343_filter_on")
+            return True
+
+    # ===== ★343刀2⑤（342挂账45）：**两套文件域并存**必须显式声明 =====
+    #   342 实证：本仓有两套"代码面"集合，各自服务不同目的，且**不相等**：
+    #     · `config.TOOL_SCAN_ROOTS`（11 项）= **扫描域**：Ruff/Bandit/日志分析
+    #       愿意去看哪些路径（"看得见"）；
+    #     · `M339_INTAKE_PATH_WHITELIST` / `_M339_WL_DEFAULT`（6 项）= **入池域**：
+    #       判据允许哪些路径变成补丁候选（"能落地"）。
+    #   差集 = 只扫不入池 6 项 + 只入池不被扫 1 项（`scripts/`）。
+    #   风险不是"泄漏"，而是**"扫到了却没下文"的静默**：一条 functions/ 下的
+    #   Traceback 会被日志分析命中，却在入池口被丢掉，两边都不报错。
+    @staticmethod
+    def _m343_two_domains() -> dict:
+        """计算两套域的显式关系。返回 both / only_tool / only_wl 三个集合。
+
+        归一化：去尾 `/`、反斜杠转 `/`、去 `./` 前缀后按**根名**比对。
+        读不到入池域 ⇒ `only_wl` 记空 + `wl_source="unavailable"`（不猜、不填 0）。
+        """
+        def _norm(_xs):
+            _out = []
+            for _x in (_xs or []):
+                _t = str(_x).replace("\\", "/").strip().lstrip("./")
+                if not _t:
+                    continue
+                _t = _t.rstrip("/")
+                if _t:
+                    _out.append(_t)
+            return _out
+
+        _tool, _wl, _wl_src = [], [], "unavailable"
+        try:
+            import config as _c343d
+            _tool = _norm(getattr(_c343d, "TOOL_SCAN_ROOTS", []) or [])
+            _wlv = getattr(_c343d, "M339_INTAKE_PATH_WHITELIST", None)
+            if _wlv:
+                _wl, _wl_src = _norm(_wlv), "config"
+        except Exception as _e:                                  # noqa: BLE001
+            silent_exc(_e, where="LogAnalyzer::_m343_two_domains config")
+        if _wl_src == "unavailable":
+            try:
+                from nucleus.self_inspector import _M339_WL_DEFAULT as _wld
+                _wl, _wl_src = _norm(_wld), "self_inspector"
+            except Exception as _e:                              # noqa: BLE001
+                silent_exc(_e, where="LogAnalyzer::_m343_two_domains wl")
+        _st, _sw = set(_tool), set(_wl)
+        return {
+            "tool_roots": _tool, "intake_wl": _wl, "wl_source": _wl_src,
+            "both": sorted(_st & _sw),
+            "only_tool": sorted(_st - _sw),
+            "only_wl": sorted(_sw - _st),
+            "n_tool": len(_tool), "n_wl": len(_wl),
+        }
+
+    def _m343_declare_two_domains(self) -> dict:
+        """逐根打一行 `domain=` 留痕（进程内只打一次）。返回关系表。"""
+        global _M343_DOMAIN_DECLARED
+        _rel = self._m343_two_domains()
+        if _M343_DOMAIN_DECLARED:
+            return _rel
+        _M343_DOMAIN_DECLARED = True
+        _rows = ([(x, "both") for x in _rel["both"]]
+                 + [(x, "tool_roots") for x in _rel["only_tool"]]
+                 + [(x, "intake_wl") for x in _rel["only_wl"]])
+        for _root, _dom in sorted(_rows, key=lambda t: (t[1], t[0])):
+            if _dom == "both":
+                _note = "两域同在：既被扫描也可能入池"
+            elif _dom == "tool_roots":
+                _note = "只在扫描域 ⇒ 日志能命中但**入池口会丢**（不是泄漏，是静默）"
+            else:
+                _note = "只在入池域 ⇒ 入池口允许但**扫描面看不到**（无源可入）"
+            self._log(LogLevel.INFO,
+                      "[343域过滤] domain=%s root=%s note=%s"
+                      % (_dom, _root, _note))
+        self._log(LogLevel.INFO,
+                  "[343域过滤] 两域声明 tool_roots=%d intake_wl=%d both=%d "
+                  "only_tool=%d only_wl=%d wl_source=%s"
+                  "（TOOL_SCAN_ROOTS=扫描域 · M339入池白名单=入池域，**不是同一套**）"
+                  % (_rel["n_tool"], _rel["n_wl"], len(_rel["both"]),
+                     len(_rel["only_tool"]), len(_rel["only_wl"]),
+                     _rel["wl_source"]))
+        return _rel
+
+    def _m343_in_domain(self, file_path: str) -> tuple:
+        """该 Traceback 文件是否在**判据域**内。返回 `(bool, reason)`。
+
+        归一化：盘符/绝对前缀/反斜杠全部拉平成本仓库内的相对路径再判。
+        `reason` 取值：`ok` / `disabled` / `empty_roots` / `backup_copy` /
+        `deny_dir:<段>` / `not_in_roots` / `outside_root`。
+        """
+        if not self._m343_filter_on():
+            return True, "disabled"
+        _roots = self._m343_domain_roots()
+        if not _roots:
+            # 白名单空 = 判据不可用。**不默认全放行**（否则过滤形同虚设），
+            # 也不默认全拦（那会把真实缺陷挡在门外）⇒ 放行但显式报原因。
+            return True, "empty_roots"
+        _f = str(file_path or "").replace("\\", "/").strip()
+        if not _f:
+            return False, "not_in_roots"
+        if ".bak" in _f.lower():
+            return False, "backup_copy"
+        _rel = _f
+        try:
+            _root = os.path.abspath(self._project_root).replace("\\", "/")
+            _abs = os.path.abspath(_f).replace("\\", "/")
+            if _abs.lower().startswith(_root.lower() + "/"):
+                _rel = _abs[len(_root) + 1:]
+            elif os.path.isabs(_f):
+                return False, "outside_root"
+        except (OSError, ValueError) as _e:
+            # 路径归一失败不致命：退回原串继续判域，但要留痕（否则域过滤判定不可追溯）
+            silent_exc(_e, where="LogAnalyzer::_m343_in_domain abspath")
+            _rel = _f
+        _segs = [s for s in _rel.split("/") if s and s not in (".",)]
+        if not _segs:
+            return False, "not_in_roots"
+        try:
+            import config as _c343d
+            _deny = [str(x) for x in (getattr(_c343d, "LOG_SCAN_DOMAIN_DENY", []) or [])]
+        except Exception as _e:
+            silent_exc(_e, where="LogAnalyzer::_m343_in_domain deny")
+            _deny = ["tmp", "tests"]
+        _low = [s.lower() for s in _segs]
+        for _d in _deny:
+            if _d.lower() in _low:
+                return False, "deny_dir:%s" % _d
+        _head = _segs[0]
+        if _head in _roots:
+            return True, "ok"
+        if len(_segs) == 1 and _head in _roots:
+            return True, "ok"
+        return False, "not_in_roots"
+
+    def _m343_note_out_domain(self, file_path: str, line_no: int, why: str) -> None:
+        """域外 Traceback 留痕（按 (文件,行) 去重，避免刷屏；汇总行在扫描末尾打）。"""
+        _key = "%s:%s" % (file_path, line_no)
+        if _key in self._m343_skipped:
+            self._m343_skipped[_key]["n"] += 1
+            return
+        self._m343_skipped[_key] = {"n": 1, "why": why}
+        self._log(LogLevel.INFO,
+                  "[343域过滤] 跳过域外Traceback: %s %s why=%s"
+                  "（不建补丁：tmp/测试/备份/第三方崩溃不属于生产缺陷）"
+                  % (file_path, line_no, why))
+
     def _scan_log_file(self, log_file: str, issues: dict[str, dict[str, Any]]) -> None:
         """扫描日志文件，提取 Traceback/ERROR/CRITICAL 的精确位置。"""
         _context_buf: list[str] = []  # 最近几行，用于 Traceback 上下文
@@ -164,6 +349,15 @@ class LogAnalyzer(SilentLogMixin):
                         _file = _m.group("file")
                         _line_no = int(_m.group("line"))
                         _func = _m.group("func")
+                        # ★343刀2：先判域 —— 域外直接跳过（不建补丁、留痕）。
+                        _in_dom, _dom_why = self._m343_in_domain(_file)
+                        if not _in_dom:
+                            self._m343_note_out_domain(_file, _line_no, _dom_why)
+                            _pending_traceback = True
+                            _context_buf.append(_line)
+                            if len(_context_buf) > 20:
+                                _context_buf.pop(0)
+                            continue
                         _key = f"{_file}:{_line_no}:{_func}"
                         _issue = self._get_or_create(issues, _key, _file, _line_no, _func, "Traceback")
                         _issue["count"] += 1
@@ -232,6 +426,24 @@ class LogAnalyzer(SilentLogMixin):
                         _context_buf.pop(0)
         except Exception as e:
             silent_exc(e, where="nucleus.evolution.LogAnalyzer::_scan_log_file L232")
+        # ★343刀2：域过滤汇总行（可 grep；`跳过=0` 也是一条**事实**，
+        #   能区分「没有域外崩溃」与「过滤没生效」——铁律166）。
+        try:
+            _sk = self._m343_skipped
+            if _sk:
+                _n = sum(v["n"] for v in _sk.values())
+                _why = {}
+                for _v in _sk.values():
+                    _why[_v["why"]] = _why.get(_v["why"], 0) + _v["n"]
+                self._log(LogLevel.INFO,
+                          "[343域过滤] 汇总 跳过=%d 唯一位置=%d 域内问题=%d 归因=%s"
+                          % (_n, len(_sk), len(issues), _why))
+            else:
+                self._log(LogLevel.DEBUG,
+                          "[343域过滤] 汇总 跳过=0 域内问题=%d（本次扫描未见域外 Traceback）"
+                          % len(issues))
+        except Exception as _se:
+            silent_exc(_se, where="LogAnalyzer::_scan_log_file 343域过滤汇总")
 
     def _scan_runtime_metrics(self, issues: dict[str, dict[str, Any]]) -> None:
         """从 runtime_metrics 的 error_snapshots 提取异常现场，关联代码位置。"""

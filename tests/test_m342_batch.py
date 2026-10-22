@@ -127,14 +127,20 @@ def test_342_d4_evidence_function_and_row_format():
 
 
 def test_342_d4_registry_untouched():
-    """只补取证，不动 `_M337_TYPED_ONLY_METHODS` 登记表（撤表由星轨裁）。"""
+    """342 只补取证、不动登记表；**343 刀5 按 E-8 裁决撤表 4→2**（本条随之同步）。
+
+    保留本用例的价值：它守的是「登记表是**模块级**变量」这件事
+    （337 `_DEAD_CODE_CRITERIA_VERSION` 踩过类属性的坑：从类上取恒 None
+    ⇒ 断言恒过/恒挂，铁律161），条数只是顺带对齐口径。
+    """
     import nucleus.self_inspector as _si
-    # ★模块级变量，不是类属性（337 `_DEAD_CODE_CRITERIA_VERSION` 踩过同一个坑：
-    #   从类上取恒 None ⇒ 断言恒过/恒挂，属铁律161 的"分支不可达"）
     _m = getattr(_si, "_M337_TYPED_ONLY_METHODS", None)
     assert isinstance(_m, (tuple, list)), "登记表取不到（符号被改名或挪进类里了？）"
-    assert len(_m) == 4, "登记表条数变了 ⇒ 本批越界（只该补留痕）"
+    assert len(_m) == 2, "343刀5 撤表后应为 2 条；再变需另立批次+归因（铁律171）"
     assert all(len(x) == 3 for x in _m)
+    _d = getattr(_si, "_M343_TYPED_ONLY_DEREGISTERED", None)
+    assert isinstance(_d, (tuple, list)) and len(_d) == 2
+    assert all(len(x) == 4 for x in _d)
 
 
 # ============ 刀5：D3 第 2 批（去线程） ============
