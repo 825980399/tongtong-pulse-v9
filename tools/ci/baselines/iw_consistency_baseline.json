@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "fc308b34e8f52e053ee3c743020c846c84878e59",
- "observed_at": "2026-10-11T02:08:19",
+ "anchor_sha": "b7df477d4777798de1a161325dbb4d53030e4884",
+ "observed_at": "2026-10-23T00:34:12",
  "watch": [
   "organs/brain/PulseInnerWorld.py",
   "organs/brain/pulse_inner_world_*"
@@ -10,19 +10,19 @@
  "files": {
   "organs/brain/PulseInnerWorld.py": {
    "metrics": {
-    "try": 207,
-    "except": 208,
+    "try": 213,
+    "except": 214,
     "except_pass": 0,
-    "if": 1803,
+    "if": 1808,
     "for": 289,
     "while": 1,
-    "return": 788,
+    "return": 789,
     "raise": 0,
     "await": 0,
-    "emit_calls": 103,
-    "methods": 346,
-    "lines": 17517,
-    "ast_sha256_12": "41cb63b95ccb"
+    "emit_calls": 104,
+    "methods": 347,
+    "lines": 17626,
+    "ast_sha256_12": "c64ababbac98"
    },
    "priority_hist": {
     "2": 4,
@@ -37,10 +37,10 @@
   },
   "organs/brain/pulse_inner_world_creative.py": {
    "metrics": {
-    "try": 6,
-    "except": 6,
+    "try": 7,
+    "except": 7,
     "except_pass": 0,
-    "if": 129,
+    "if": 130,
     "for": 24,
     "while": 0,
     "return": 60,
@@ -48,8 +48,8 @@
     "await": 0,
     "emit_calls": 5,
     "methods": 14,
-    "lines": 1137,
-    "ast_sha256_12": "b29be460f6be"
+    "lines": 1160,
+    "ast_sha256_12": "c26cfe994a78"
    },
    "priority_hist": {
     "2": 1,
@@ -85,13 +85,13 @@
     "if": 318,
     "for": 57,
     "while": 0,
-    "return": 125,
+    "return": 124,
     "raise": 0,
     "await": 0,
     "emit_calls": 2,
     "methods": 25,
-    "lines": 2455,
-    "ast_sha256_12": "968a0fd309ba"
+    "lines": 2454,
+    "ast_sha256_12": "8087c191f9c8"
    },
    "priority_hist": {
     "4": 1,
@@ -113,7 +113,7 @@
     "emit_calls": 1,
     "methods": 42,
     "lines": 2105,
-    "ast_sha256_12": "29d4834ab171"
+    "ast_sha256_12": "1aab42acf437"
    },
    "priority_hist": {
     "2": 1
@@ -121,8 +121,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "185批刀1·卫生刀①：182刀1第④判据命中盲区升级时新增一行 INFO 日志，需在盲区分支内增一层 if _blind_hits 判空守卫，故 if 计数 +1；判定逻辑与 ENABLE_INNER_WORLD_QUALITY_ESCALATION 开关默认关均不变，属受控卫生增补。",
- "expected_delta": {
-  "if": 1
- }
+ "delta_reason": "345批重锚（CI基线件单笔 [ci-gate-change]）：本批在 IW 侧新增 6 个 try/except 对（刀3 `_emit` 覆写 1、刀4 时间注入 2〔`_build_memory_context`＋`_generate_branch_with_model`〕、刀5 成长记忆 2〔`_convert_vision_to_learning`＋creative `_generate_self_vision`〕、刀7 重启上下文 2〔同上两函数〕），故 PulseInnerWorld try 207→213 / except 208→214、creative try/except 6→7，均一对一带 except，算术自洽；if 1803→1808 为上述新增判空分支（+5）；methods 346→347、return 788→789、emit_calls 103→104 全部来自新增 `_emit` 单点收口方法本身（一个方法、一次 `return super()._emit(...)`），非新增发射点；priority_hist / event_hist 零漂移，语义面未变。另：pulse_inner_world_knowledge.py return 125→124 是 335 批存量挂账（HEAD 上 `--target HEAD` 即复现该项 FAIL），本次随重锚按处方①一并吸收，已在本批交付报告中显式申报，不计入本批改动。同时清空上一轮遗留的 expected_delta={\"if\": 1} 陈旧活口（收紧门禁，非放宽）。",
+ "expected_delta": {}
 }
