@@ -356,7 +356,21 @@ def test_m339_k2_script_slices_and_concludes(tmp_path):
     assert _c["verdict"] in ("PASS_throughput", "FAIL_throughput")
 
 
-def test_m339_k2_live_mode_refused(capsys):
+def test_m339_k2_live_mode_stub_removed():
+    """**契约已更新**（340 刀8）：原用例 `..._refused` 断言 live 恒返回 2，
+    那是「live 还是桩」时代的契约；340 刀8 把 live 落地后该断言必然失败，
+    故改锁新契约（桩文案已移除 + live 构件在位 + 无留样才 fail-fast 返回 2）。
+
+    真跑由 tests/test_m340_batch.py::test_62 覆盖（读盘+AST+probe 全真）。
+    """
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import k2_bench_339 as K
-    assert K.main(["--mode", "live"]) == 2
+    assert hasattr(K, "build_live_items") and hasattr(K, "run_serial_live")
+    assert hasattr(K, "run_parallel_live") and hasattr(K, "warmup_live")
+    _src = io.open(os.path.join(ROOT, "tools", "k2_bench_339.py"),
+                   encoding="utf-8", errors="replace").read()
+    assert "需在 10-22 04:00 重启窗之后执行" not in _src, "live 桩文案应已移除"
+    # 无留样 ⇒ 构件返回 ok=False（fail-fast，不静默空跑）
+    _r = K.build_live_items(3, os.path.join(ROOT, "__no_such_root__"))
+    assert _r["ok"] is False and _r["items"] == []
+    assert "无 per-item 留样" in (_r.get("reason") or "")

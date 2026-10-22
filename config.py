@@ -4820,8 +4820,11 @@ ENABLE_EVOLUTION_COST_ESTIMATE = True        # 费用估算总开关（关闭 �
 #     0/负数= 视为非法 ⇒ 按未配置处理并留痕（**不会**变成"预算零元全拦死"）
 #   熔断只拦"花钱的进化动作"（派单/执行）；只读巡检、心跳、W1 **不受影响**。
 #   侧账：data/evolution/evolution_budget.json（日/周三档，原子写）。
-EVOLUTION_BUDGET_DAILY_CNY = None            # 待裁：日预算上限（元），None=未配置
-EVOLUTION_BUDGET_WEEKLY_CNY = None           # 待裁：周预算上限（元），None=未配置
+# ★340刀7：额度已裁（小林 A-G 七项 · 星轨 340 任务书 §刀7）——
+#   50 元/日、200 元/周。填额度的前提是 340 刀4 已把 model 透传修通
+#   （否则 cost 恒 null ⇒ 永不跳闸的熔断器）。
+EVOLUTION_BUDGET_DAILY_CNY = 50.0            # 日预算上限（元/人民币）
+EVOLUTION_BUDGET_WEEKLY_CNY = 200.0          # 周预算上限（元/人民币）
 EVOLUTION_LLM_PRICE_TABLE = {
     # 单位：Â¥ / 1K tokens（费用 = 单价 Ã tokens / 1000）。单价取自各模型官方价目（输入档 / 非高峰参考）。
     # 来源核验日期 2026-10-08；USDâCNY 按 ~7.1 折算官方 USD 价。仅填可溯源真实单价；

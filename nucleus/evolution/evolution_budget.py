@@ -134,10 +134,25 @@ def record_cost(cost, ts: float | None = None, path: str | None = None,
     _d = load_budget(path, project_root)
     _dk = _m335_day_key(_t)
     _wk = _m335_week_key(_t)
-    if str(_d["day"].get("key") or "") != _dk:
+    # ★340刀7：日切/周切必须留痕。原实现是**静默重置** —— 钱花完了账自己归零，
+    #   日志里一个字没有，读方无法区分「本期没花钱」与「本期花完了被切走」。
+    _lim340 = _m335_limits()
+    _old_day_key = str(_d["day"].get("key") or "")
+    _old_day_used = float(_d["day"].get("used") or 0.0)
+    _old_week_key = str(_d["week"].get("key") or "")
+    _old_week_used = float(_d["week"].get("used") or 0.0)
+    if _old_day_key != _dk:
         _d["day"] = {"key": _dk, "used": 0.0, "calls": 0}
-    if str(_d["week"].get("key") or "") != _wk:
+        _module_logger.info(
+            "[335刀6] 预算日切 used=%.4f limit=%s 上期=%s 上期used=%.4f proc_gen=%s",
+            0.0, ("%.2f" % _lim340["day"]) if _lim340["day"] is not None else "None",
+            _old_day_key or "-", _old_day_used, _m335_pg())
+    if _old_week_key != _wk:
         _d["week"] = {"key": _wk, "used": 0.0, "calls": 0}
+        _module_logger.info(
+            "[335刀6] 预算周切 used=%.4f limit=%s 上期=%s 上期used=%.4f proc_gen=%s",
+            0.0, ("%.2f" % _lim340["week"]) if _lim340["week"] is not None else "None",
+            _old_week_key or "-", _old_week_used, _m335_pg())
     _d["day"]["used"] = round(float(_d["day"].get("used") or 0.0) + _c, 6)
     _d["day"]["calls"] = int(_d["day"].get("calls") or 0) + 1
     _d["week"]["used"] = round(float(_d["week"].get("used") or 0.0) + _c, 6)

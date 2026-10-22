@@ -40,6 +40,7 @@ import ast
 import hashlib
 import io
 import json
+import logging
 import os
 import random
 import re
@@ -47,6 +48,9 @@ import statistics
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+
+# ★340K2：模块日志器（best-effort 兜底**不静默**，走 stdlib lastResort 进 stderr）
+_LOG = logging.getLogger("K2Bench")
 
 _SEED = 325                      # 与 sample_verify_hard_candidates 同 seed
 _N_SLICES = 4                    # 任务集分 4 片
@@ -197,6 +201,131 @@ def _conclude(serial: list, parallel: list) -> dict:
     }
 
 
+
+# ---------------------------------------------------------------------------
+# ★340刀8：live 模式 —— 真实 per-item 任务集 + 真实取证负载
+# ---------------------------------------------------------------------------
+def build_live_items(n: int = 657, project_root=None) -> dict:
+    """从最新一份 per-item 留样读真实任务集（确定性取前 n 条）。
+
+    为什么不随机抽：K2 要比的是"同一批活"串行/并发的墙钟差，
+    换一批就等于换考题。故按 (file, method, line) 排序后取前 n —— 同盘同批同结果。
+    """
+    import glob
+    _root = project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _fs = sorted(glob.glob(os.path.join(_root, "data", "reports", "code_review",
+                                        "run_*.json")))
+    if not _fs:
+        return {"ok": False, "items": [], "source": "",
+                "reason": "无 per-item 留样（data/reports/code_review/run_*.json）"}
+    _src = _fs[-1]
+    with io.open(_src, encoding="utf-8") as _f:
+        _d = json.load(_f)
+    _rows = []
+    for _x in (_d.get("items") or []):
+        if not isinstance(_x, dict):
+            continue
+        _f_ = str(_x.get("file") or "")
+        _m_ = str(_x.get("method") or "")
+        if not _f_ or not _m_:
+            continue
+        _rows.append({"id": str(_x.get("dedup_key") or ("%s::%s" % (_f_, _m_))),
+                      "file": _f_, "method": _m_,
+                      "line": int(_x.get("line") or 0),
+                      "type": str(_x.get("type") or ""),
+                      "severity": str(_x.get("severity") or "")})
+    _rows.sort(key=lambda r: (r["file"], r["method"], r["line"], r["id"]))
+    _take = _rows[:max(1, int(n))]
+    return {"ok": bool(_take), "items": _take, "source": _src,
+            "source_mtime": os.path.getmtime(_src),
+            "pool_total": len(_rows), "taken": len(_take),
+            "item_count_field": _d.get("item_count"),
+            "criteria_version": _d.get("criteria_version"),
+            "code_version": _d.get("code_version")}
+
+
+def _live_read_src(rel: str, project_root=None):
+    """读生产源码（**每次真读盘**，不缓存 —— 生产 per-item 也不缓存）。"""
+    _root = project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _p = os.path.join(_root, str(rel).replace("/", os.sep))
+    try:
+        with io.open(_p, encoding="utf-8", errors="replace") as _f:
+            return _f.read()
+    except OSError as _e:
+        _LOG.warning("[340K2] 读源码失败 file=%s err=%s: %s", rel, type(_e).__name__, _e)
+        return ""
+
+
+def warmup_live(project_root=None) -> dict:
+    """预热图外 probe 索引（一次性全仓 AST 扫），**计时单列**不计入任何一轮。"""
+    _t0 = time.perf_counter()
+    try:
+        _root = project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from nucleus import self_inspector as _si
+        _idx = _si._m325_build_name_index(_root)
+        return {"ok": bool(_idx.get("built")),
+                "sec": round(time.perf_counter() - _t0, 4)}
+    except Exception as _e:  # noqa: BLE001 - 预热失败要在产物里显式可见
+        _LOG.warning("[340K2] probe 索引预热失败 err=%s: %s", type(_e).__name__, _e)
+        return {"ok": False, "sec": round(time.perf_counter() - _t0, 4),
+                "error": "%s: %s" % (type(_e).__name__, _e)}
+
+
+def _live_work(item: dict, project_root=None) -> dict:
+    """单条**真实** per-item 复核：读盘 + AST + 图外 probe 四类（生产同源）。"""
+    _src = _live_read_src(item.get("file"), project_root)
+    _names = []
+    _parse_ok = True
+    try:
+        _tree = ast.parse(_src)
+        _names = sorted({n.id for n in ast.walk(_tree) if isinstance(n, ast.Name)})
+    except SyntaxError as _e:
+        _LOG.warning("[340K2] AST 解析失败 file=%s: %s", item.get("file"), _e)
+        _parse_ok = False
+    try:
+        from nucleus import self_inspector as _si
+        _hits = list(_si._m325_probe_reachable(
+            {"file": item.get("file"), "method": item.get("method")},
+            project_root) or [])
+    except Exception as _e:  # noqa: BLE001 - 取证失败显式记，不静默当"无证据"
+        _LOG.warning("[340K2] probe 取证失败 file=%s method=%s err=%s: %s",
+                     item.get("file"), item.get("method"),
+                     type(_e).__name__, _e)
+        _hits = ["probe_error:%s" % type(_e).__name__]
+    _digest = hashlib.sha256(
+        ("%s|%s|%s|%s" % (item.get("id"), _parse_ok, ",".join(_hits),
+                          len(_names))).encode("utf-8")).hexdigest()[:12]
+    return {"id": item.get("id"), "reviewed": 1, "report": True, "applied": 0,
+            "digest": _digest, "candidate": (not _hits)}
+
+
+def _live_agg(rows: list, t0: float) -> dict:
+    return {"wall_sec": round(time.perf_counter() - t0, 4),
+            "reviewed": sum(int(r["reviewed"]) for r in rows),
+            "report": sum(1 for r in rows if r["report"]),
+            "applied": sum(int(r["applied"]) for r in rows),
+            "ids_fp": _ids_fp([r["id"] for r in rows]),
+            "verdict_fp": _ids_fp([r["id"] + "=" + r["digest"] for r in rows]),
+            "candidates": sum(1 for r in rows if r["candidate"]),
+            "n": len(rows)}
+
+
+def run_serial_live(items: list, project_root=None) -> dict:
+    _t0 = time.perf_counter()
+    return _live_agg([_live_work(_it, project_root) for _it in items], _t0)
+
+
+def run_parallel_live(items: list, workers: int = 3, project_root=None) -> dict:
+    _t0 = time.perf_counter()
+    _slices = _slice(items)
+    with ThreadPoolExecutor(max_workers=max(1, int(workers))) as _ex:
+        _done = list(_ex.map(
+            lambda _s: [_live_work(_x, project_root) for _x in _s], _slices))
+    return _live_agg([r for _chunk in _done for r in _chunk], _t0)
+
+
 def main(argv=None) -> int:
     _ap = argparse.ArgumentParser(description="339 刀6 · K2 生产对表")
     _ap.add_argument("--rounds", type=int, default=3)
@@ -208,36 +337,69 @@ def main(argv=None) -> int:
     _ap.add_argument("--out", default="tmp/p339_root/k2_bench.json")
     _a = _ap.parse_args(argv)
 
+    # ★340刀8：live 模式已落地（原桩 `return 2` 移除）。
+    _live_meta: dict = {}
+    _warm: dict = {}
+    _pr = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _a.mode == "live":
-        # 真实生产 per-item 需要调用图 + 源码；本批不跑（重启窗后执行）
-        print("[k2] --mode live 需在 10-22 04:00 重启窗之后执行；"
-              "本批只交付脚本与合成对表。", file=sys.stderr)
-        return 2
+        _src = build_live_items(_a.items, _pr)
+        if not _src.get("ok"):
+            print("[340K2] live 任务集构建失败：%s" % _src.get("reason"),
+                  file=sys.stderr)
+            return 2
+        _items = _src["items"]
+        _live_meta = {k: _src.get(k) for k in
+                      ("source", "source_mtime", "pool_total", "taken",
+                       "item_count_field", "criteria_version", "code_version")}
+        # 索引预热**计时单列**：一次性全仓 AST 扫若算进第 1 轮，
+        # 会被读成"串行更慢"，属口径污染。
+        _warm = warmup_live(_pr)
+        print("[340K2] live 任务集=%d 条（池 %s）源=%s 预热=%.2fs"
+              % (len(_items), _live_meta.get("pool_total"),
+                 os.path.basename(str(_live_meta.get("source") or "")),
+                 float(_warm.get("sec") or 0.0)))
+        _blocks = assert_blocks(_items)
+        _blocks["A4-3_live_source_ok"] = bool(_live_meta.get("taken"))
+        _blocks["A4-4_probe_index_warm"] = bool(_warm.get("ok"))
+    else:
+        _items = build_items(_a.items)
+        _blocks = assert_blocks(_items)
 
-    _items = build_items(_a.items)
-    _blocks = assert_blocks(_items)
     _rounds: list = []
     for _i in range(1, max(1, _a.rounds) + 1):
-        _r = run_serial(_items)
+        _r = (run_serial_live(_items, _pr) if _a.mode == "live"
+              else run_serial(_items))
         _r.update({"phase": "serial", "round": _i})
         _rounds.append(_r)
     for _i in range(1, max(1, _a.rounds) + 1):
-        _r = run_parallel(_items, _a.workers)
+        _r = (run_parallel_live(_items, _a.workers, _pr) if _a.mode == "live"
+              else run_parallel(_items, _a.workers))
         _r.update({"phase": "parallel", "round": _i})
         _rounds.append(_r)
     _serial = [r for r in _rounds if r["phase"] == "serial"]
     _parallel = [r for r in _rounds if r["phase"] == "parallel"]
     _summary = _conclude(_serial, _parallel)
+    # ★340刀8：live 侧额外一条**非空转**断言 —— 逐条裁决指纹也必须一致。
+    #   只看三列计数是不够的："reviewed 相等"不代表"判的是同一批结论"。
+    if _a.mode == "live":
+        _vfp = {r.get("verdict_fp") for r in _rounds}
+        _verdict_equal = (len(_vfp) == 1 and None not in _vfp)
+        _summary["verdict_fp_equal"] = bool(_verdict_equal)
+        _summary["verdict_fp"] = (list(_vfp)[0][:16] if _verdict_equal else None)
+        _summary["applied_equal"] = bool(
+            (_summary.get("output_equal_detail") or {}).get("applied"))
     _payload = {
         "meta": {"batch": 339, "knife": 6, "k2_version": "339.k2.v1",
                  "ts": time.time(), "mode": _a.mode, "tag": _a.tag,
                  "seed": _SEED, "items": _a.items, "slices": _N_SLICES,
                  "rounds_per_phase": _a.rounds, "workers": _a.workers,
-                 "workload": ("synthetic_ast_scan（合成负载，绝对值不代表生产；"
-                              "真实对表见 --mode live）"
-                              if _a.mode == "synthetic" else "live"),
+                 "workload": ("synthetic_ast_scan（合成负载，绝对值不代表生产）"
+                              if _a.mode == "synthetic"
+                              else "live_per_item（真实留样 + 图外 probe 四类）"),
                  "safety": dict(_SAFETY),
-                 "writes_prod_data": False},
+                 "writes_prod_data": False,
+                 "live": _live_meta,
+                 "warmup": _warm},
         "assert_blocks": _blocks,
         "rounds": _rounds,
         "summary": _summary,
@@ -249,6 +411,26 @@ def main(argv=None) -> int:
         os.makedirs(_d, exist_ok=True)
     with io.open(_out, "w", encoding="utf-8", newline="\n") as _f:
         json.dump(_payload, _f, ensure_ascii=False, indent=2)
+    if _a.mode == "live":
+        # ★340K2 留痕：一行可 grep，含降幅与产出率判定（任务书验收④）
+        _line = (
+            "[340K2] live 对表: serial=%.2fs parallel=%.2fs drop=%.2f%% "
+            "output_equal=%s applied_equal=%s verdict_fp_equal=%s verdict=%s "
+            "items=%d slices=%d workers=%d"
+            % (float(_summary.get("serial_wall_median") or 0.0),
+               float(_summary.get("parallel_wall_median") or 0.0),
+               float(_summary.get("drop_pct") or 0.0),
+               _summary.get("output_equal"),
+               _summary.get("applied_equal"),
+               _summary.get("verdict_fp_equal"), _summary.get("verdict"),
+               len(_items), _N_SLICES, _a.workers))
+        print(_line)
+        try:
+            from nucleus.logger import get_module_logger as _gml
+            _gml("K2Bench").info(_line)
+        except Exception as _e:  # noqa: BLE001 - 日志器不可用不影响产物落盘
+            _LOG.warning("[340K2] nucleus 日志器不可用 err=%s: %s",
+                         type(_e).__name__, _e)
     print(json.dumps({"ok": _summary["verdict"] != "FAIL_throughput",
                       "verdict": _summary["verdict"],
                       "drop_pct": _summary["drop_pct"],

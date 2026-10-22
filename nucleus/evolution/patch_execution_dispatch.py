@@ -354,6 +354,18 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
     try:
         from nucleus.evolution.evolution_budget import budget_state as _m335_bs
         _bs = _m335_bs(now=_now)
+        # ★340刀7：填额度后必须"每拍可见"。一行一条、频率=分诊节拍（≈1/h），
+        #   不刷屏；`state` 走 budget_state 的三态（ok/tripped），不在这里另立口径。
+        _module_logger.info(
+            "[340预算] state=%s day=%.4f/%.2f week=%.4f/%.2f calls=%d/%d"
+            " reason=%s proc_gen=%s",
+            _bs.get("state"), float(_bs.get("day_used") or 0.0),
+            float(_bs.get("day_limit") or 0.0),
+            float(_bs.get("week_used") or 0.0),
+            float(_bs.get("week_limit") or 0.0),
+            int(_bs.get("day_calls") or 0),
+            int(_bs.get("week_calls") or 0),
+            (_bs.get("reason") or "-"), _m335_pg())
     except Exception as _e:
         silent_exc(_e, where="patch_execution_dispatch.dispatch_on_tick 335刀6 熔断",
                    level="warning")
