@@ -149,15 +149,40 @@ def test_30_reanchor_fields_present_and_history_kept():
     assert _d.get("anchored_by") == "172刀0" and _d.get("anchored_at") == "2026-10-08"
     assert _d.get("reanchor_by") and _d.get("reanchor_at")
     _h = _d.get("reanchor_history") or []
-    assert _h and _h[-1]["from"]["total_occurrences"] == 64
+    # ★342刀5：历史是**累积**的，不是被最后一次覆盖 —— 头一条的 `from` 必须还是
+    #   172刀0 时代的 64（证明 340 刀2 那次重锚没被 342 刀5 抹掉）。
+    assert len(_h) >= 2
+    assert _h[0]["from"]["total_occurrences"] == 64
+    # 最近一条的 `from` == 本次重锚前的值（62/45），`to` == 文件里的现值
+    assert _h[-1]["from"]["total_occurrences"] == 62
+    assert _h[-1]["from"]["file_count"] == 45
     assert _h[-1]["to"]["total_occurrences"] == _d["total_occurrences"]
+    assert sum(a["delta_occurrences"] for a in _h[-1]["attribution"]) == \
+        _h[-1]["to"]["total_occurrences"] - _h[-1]["from"]["total_occurrences"]
 
 
 def test_31_baseline_numbers_match_current_scan():
-    """基线数字与当前扫描一致（刀2 重锚后 62/45）。"""
+    """基线数字与**当前扫描**一致（真扫，不是硬编码一个数字对另一个数字）。
+
+    ★342刀5 改口径：原名就写着 "match current scan"，但旧实现只是把 62/45 写死
+    跟基线文件里的 62/45 比 —— 那是**同义反复**（铁律163：必然成立的断言等于空转）。
+    现在真调门禁脚本的 `scan()`，任何一次重锚后本用例都无需再改，且能真正抓到
+    "代码里多了 spawn 点但基线没重锚" 这种漂移。
+    """
+    import importlib.util as _ilu
+    _gp = os.path.join(ROOT, "tools", "ci", "check_thread_spawn_baseline.py")
+    _spec = _ilu.spec_from_file_location("_thread_spawn_gate_342", _gp)
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    _tot, _files, _per_file = _mod.scan()
     _p = os.path.join(ROOT, "tools", "ci", "baselines", "thread_spawn_baseline.json")
     _d = json.load(io.open(_p, encoding="utf-8"))
-    assert _d["total_occurrences"] == 62 and _d["file_count"] == 45
+    assert _d["total_occurrences"] == _tot, (
+        "基线 %s != 实扫 %s（改了 spawn 点就必须 --emit --attr 重锚）"
+        % (_d["total_occurrences"], _tot))
+    assert _d["file_count"] == _files, (
+        "基线文件数 %s != 实扫 %s" % (_d["file_count"], _files))
+    assert _files == len(_per_file)
 
 
 # ============ 刀2：去线程（源码级断言 + 保活不受伤） ============

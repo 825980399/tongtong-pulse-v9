@@ -2067,7 +2067,12 @@ class PulseFramework:
             self.node_pool.load_instincts(instinct_nodes)
 
         # 步骤5-6: 恢复快照、注入种子记忆
-        restored_nodes = self.snapshot.load()
+        # ★342刀1：full_load **透传**（此前无参调用 ⇒ 恒为 True，懒加载链生产不可达）。
+        #   参数由 `config.SNAPSHOT_LAZY_LOAD` 决定，默认 False（理由与实测数据见
+        #   config.py 该键上方注释）；修通与否与开关是两件事，开关关着也能被隔离根
+        #   以 `load(full_load=False)` 直接驱动验证。
+        restored_nodes = self.snapshot.load(
+            full_load=False if bool(getattr(config, "SNAPSHOT_LAZY_LOAD", False)) else True)
         # 加载L1独立快照
         l1_nodes = self.snapshot.load_l1()
         if l1_nodes:

@@ -1789,7 +1789,16 @@ class PulseSnapshot:
         #   未命中/失败 → 回退原 JSON 加载路径，零回归。
         self._m68_last_load_source = "json"
         _src = self._m160_load_source()
-        if _src == "json":
+        # ★342刀1：`full_load=False` 时**先走懒加载**，不再被下面 parquet 分支吃掉参数。
+        #   340B 实证的根因就在这里：`elif _src == "parquet":` 直接 `_nodes = _pq`
+        #   （全量 list），`full_load` 参数整个失效 ⇒ `_load_lazy()` →
+        #   `LazySnapshotView` → `snapshot_index.save()` 整条链**生产永不执行**
+        #   （索引文件全仓不存在 / health=unknown / 零行 max_cache 收敛）。
+        #   失败或空视图 ⇒ 返回 None，落回原分支（全量），零回归。
+        _m342_lz = self._m342_try_lazy_load(full_load, _src)
+        if _m342_lz is not None:
+            _nodes = _m342_lz
+        elif _src == "json":
             _nodes = self._load_internal(full_load)
         elif _src == "parquet":
             _pq = self._m81_load_parquet_unified()
@@ -1820,7 +1829,16 @@ class PulseSnapshot:
             _nodes = self._m160_merge_dual(_pq, _js)
         try:
             if self._m67_incremental_log_enabled():
-                _nodes = self._m67_apply_incremental_log(_nodes)
+                if self._m342_is_lazy_view(_nodes):
+                    # ★342刀1：视图只读，重放需要可变的 node_id 集合 ⇒ 现有实现会把
+                    #   整份视图**物化成 list**（实测 658MB/13543 节点一遍 131s），
+                    #   懒加载收益归零。故此处显式跳过并留痕 —— 语义代价是
+                    #   「本次加载未重放增量日志」，不许静默。
+                    self._log(LogLevel.WARNING,
+                              "[342刀1] 懒加载视图跳过增量日志重放（视图只读，重放会物化"
+                              "整份快照）；本次加载不含增量变更，下次全量加载/落盘后对齐")
+                else:
+                    _nodes = self._m67_apply_incremental_log(_nodes)
         except Exception as _e:
             self._log(LogLevel.WARNING,
                       f"[第67批] 增量日志应用失败，退回全量快照: {type(_e).__name__}: {_e}")
@@ -1832,6 +1850,71 @@ class PulseSnapshot:
             self._log(LogLevel.WARNING,
                       f"[第70批] 冷热加载失败，退回全量加载: {type(_e70).__name__}: {_e70}")
         return _nodes
+
+    def _m342_try_lazy_load(self, full_load: bool, src: str):
+        """★342刀1：`full_load=False` 的懒加载入口 —— 返回 view，或 None（调用方回退全量）。
+
+        为什么单独成方法：`load()` 里的三选一分支（json/parquet/dual）都直接产出
+        **全量 list**，懒加载只能在这三条分支**之前**插队，否则一定被吃掉。
+        把插队逻辑收在一处，`load()` 的 diff 才只有三行、回归面才看得清。
+
+        ★ 四种回退到全量的情形（都留痕，不静默）：
+          1. `full_load=True`               —— 调用方没要求懒加载。
+          2. `_load_lazy()` 抛异常          —— 索引/文档损坏，退回全量（原有语义）。
+          3. 视图长度为 0                   —— 空视图当「不可用」而不是「真的没节点」。
+          4. 视图缺 iter_nodes/index_status  —— 协议不符，不敢往下游放。
+
+        Args:
+            full_load: `load()` 收到的同名参数。
+            src: `_m160_load_source()` 的结果，仅用于留痕（parquet/json/dual）。
+
+        Returns:
+            `LazySnapshotView` 或 `None`。
+        """
+        if full_load:
+            return None
+        try:
+            _view = self._load_lazy()
+        except Exception as _e342:  # noqa: BLE001 - 懒加载任何失败都必须回退全量而非炸启动
+            self._log(LogLevel.WARNING,
+                      "[342刀1] 懒加载失败，回退全量（src=%s）: %s: %s"
+                      % (src, type(_e342).__name__, _e342))
+            return None
+        if not self._m342_is_lazy_view(_view):
+            self._log(LogLevel.WARNING,
+                      "[342刀1] 懒加载返回类型不符协议（src=%s type=%s），回退全量"
+                      % (src, type(_view).__name__))
+            return None
+        _n342 = len(_view)
+        if _n342 <= 0:
+            self._log(LogLevel.WARNING,
+                      "[342刀1] 懒加载视图为空（src=%s），判为不可用并回退全量" % src)
+            try:
+                _view.close()
+            except Exception as _ce342:  # noqa: BLE001 - 关句柄失败不影响回退决策
+                silent_exc(_ce342,
+                           where="nucleus.mnemosyne.PulseSnapshot::_m342_try_lazy_load close")
+            return None
+        self._log(LogLevel.INFO,
+                  "[342刀1] 懒加载生效 src=%s nodes=%d index_status=%s max_cache=%s"
+                  % (src, _n342, getattr(_view, "index_status", "unknown"),
+                     getattr(_view, "max_cache", "?")))
+        return _view
+
+    @staticmethod
+    def _m342_is_lazy_view(nodes) -> bool:
+        """★342刀1：是否为懒加载视图（显式类型判定，不靠属性名猜）。
+
+        判定用 `isinstance` 而非 `hasattr`：视图协议以外的对象（比如把 list 包了
+        一层 iter_nodes 的适配器）不该被当成视图跳过增量日志 —— 那会静默丢变更。
+        """
+        try:
+            from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
+        except Exception as _ie342:  # noqa: BLE001 - 导入失败按「不是视图」处理最安全
+            silent_exc(_ie342,
+                       where="nucleus.mnemosyne.PulseSnapshot::_m342_is_lazy_view import")
+            return False
+        return isinstance(nodes, LazySnapshotView)
 
     def _m70_hot_cold_enabled(self) -> bool:
         """★第70批 T4.1：冷热加载开关（默认开）。"""
@@ -1950,17 +2033,29 @@ class PulseSnapshot:
                 if _total > 0:
                     _cap = min(_cap, _total)   # 小图等效全量；大图才真正懒
                 _cur = int(getattr(nodes, "max_cache", 0) or 0)
-                if _cur <= 0 or _cur > _cap:
+                # ★342刀1：把 logger 的取用提到分支外，并用**同一个前缀**打两条分支。
+                #   原实现只在「确实收敛了」时打 `[337内存] 懒加载 max_cache 收敛`，
+                #   而 `_load_lazy()` 恒以 max_cache=1000 构造视图（上限 2000）
+                #   ⇒ `_cur > _cap` **恒为假** ⇒ 该行**结构性永不出现**，
+                #   「max_cache ≤2000 生效」这条判据也就永远无从取证
+                #   （340B V3「未生效」有一半是留痕口径问题，不是配置问题）。
+                #   现在两条分支都打，用 changed= 显式标记区分「真收敛」与「本就在限内」，
+                #   读方不必在理由字符串里找关键字。
+                _lg337 = getattr(self, "_logger", None) or get_module_logger("PulseSnapshot")
+                _changed337 = bool(_cur <= 0 or _cur > _cap)
+                if _changed337:
                     nodes.max_cache = _cap
-                    _lg337 = getattr(self, "_logger", None) or get_module_logger(
-                        "PulseSnapshot")
                     _lg337.info(
                         "[337内存] 懒加载 max_cache 收敛: %s -> %d（全量=%d 节点）"
-                        " ⇒ 撤抬全量，超出部分按需回载",
+                        " changed=True ⇒ 撤抬全量，超出部分按需回载",
                         _cur if _cur > 0 else "unset", _cap, _total)
                 else:
                     # 已在限内（或更小）：不动 —— 只降不升，避免与其他路径打架
                     nodes.max_cache = _cur
+                    _lg337.info(
+                        "[337内存] 懒加载 max_cache 收敛: %d -> %d（全量=%d 节点）"
+                        " changed=False ⇒ 本就在限内（上限=%d），按需逐出/回载",
+                        _cur, _cur, _total, _M337_LAZY_CACHE_MAX)
             except Exception as _mc_err:
                 silent_exc(_mc_err,
                           where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable max_cache")

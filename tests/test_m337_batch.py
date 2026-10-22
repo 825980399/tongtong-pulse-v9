@@ -197,12 +197,15 @@ def test_m337_image_mb_not_fake_zero():
 
 # ══════════ 刀11：重锚护栏 ══════════
 def test_m337_thread_gate_passes_now():
-    """门禁由红转绿且归因在基线里（★340刀2 重锚后：64/45 → **62/45**）。
+    """门禁由红转绿且归因在基线里（★342刀5 重锚后：62/45 → **59/44**）。
 
     ★本用例与基线**强耦合**：`thread_spawn_baseline.json` 每被重锚一次，
     本断言就必须同步一次 —— 这是**设计如此**（基线门禁的全部价值就是
-    "红线只能被有记录地挪动"）。340刀2 去掉了 `PulseController` 的两处裸预热线程
-    ⇒ occurrences −2 / files +0，归因 1 条、合计恰为 −2/+0。
+    "红线只能被有记录地挪动"）。
+    342刀5 去掉了 `PulseSubconscious` 两处 Timer 包线程（480/484）
+    ＋ `function_loader` 一处聚合装配线程（106）
+    ⇒ occurrences −3 / files −1（function_loader 归零退出 file_count），
+    归因 2 条、合计恰为 −3/−1；L475 的硬件探针线程经济证据否决后**保留**。
     """
     import subprocess
     _p = subprocess.run(
@@ -213,14 +216,18 @@ def test_m337_thread_gate_passes_now():
     _bp = os.path.join(_ROOT, "tools", "ci", "baselines", "thread_spawn_baseline.json")
     with open(_bp, encoding="utf-8") as fh:
         b = json.load(fh)
-    assert b["total_occurrences"] == 62 and b["file_count"] == 45
+    assert b["total_occurrences"] == 59 and b["file_count"] == 44
     attrs = b.get("attribution") or []
-    assert len(attrs) == 1
-    assert sum(a["delta_occurrences"] for a in attrs) == -2
-    assert sum(a["delta_files"] for a in attrs) == 0
+    assert len(attrs) == 2
+    assert sum(a["delta_occurrences"] for a in attrs) == -3
+    # （340 时代那条 `delta_files == 0` 已由上面 `== -1` 取代：342刀5 起 function_loader
+    #   的 spawn 归零会退出 file_count，文件数**必须**跟着降 1 —— 留着旧断言就是自相矛盾。）
     # ★340刀5：重锚必须留当日署名（历史 anchored_* 保留）
     assert b.get("anchored_by") == "172刀0" and b.get("anchored_at") == "2026-10-08"
-    assert b.get("reanchor_by") == "340刀2" and b.get("reanchor_at") == time.strftime("%Y-%m-%d")
+    assert b.get("reanchor_by") == "342刀5" and b.get("reanchor_at") == time.strftime("%Y-%m-%d")
     _h = b.get("reanchor_history") or []
-    assert _h and _h[-1]["from"]["total_occurrences"] == 64
+    # 历史**累积**：头一条 from 仍是 172刀0 的 64，最近一条 from 是本次重锚前的 62
+    assert len(_h) >= 2
+    assert _h[0]["from"]["total_occurrences"] == 64
+    assert _h[-1]["from"]["total_occurrences"] == 62
     assert (_h[-1].get("prev_attribution") or [])  # 337 的历史归因须留存（不丢追溯）

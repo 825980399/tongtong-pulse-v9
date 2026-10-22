@@ -470,18 +470,36 @@ class PulseSubconscious(BasePulseOrgan):
         # ★v17.0修复：梦境推演始终初始化，不再依赖摄像头检测结果。
         # ★T-113f（2026-09-23）：摄像头可用性检测属硬件 I/O，移后台守护线程，
         #   boot 立即返回避免阻塞 L0 生命线层（2s 看门狗）；结果写回实例属性 _user_present。
+        # ★342刀5 **保留该线程（议否，见 `[342去线程]` 行）**：`_detect_user_presence_async`
+        #   内部走 `utils.safe_hw_probe.safe_camera_devices()` —— 那是**隔离子进程**探硬件，
+        #   同步化会把子进程启动 + 设备枚举塞进 boot，正是 T-113f 当初要躲的 2s 看门狗窗口。
+        #   D-3 第2批原计划含本站点，342 依铁律169（任务书点名的站点也可被证据否决）否决。
         with self._state_lock:
             self._user_present = False
         threading.Thread(target=self._detect_user_presence_async, daemon=True).start()
+        self._log(LogLevel.INFO,
+                  "[342去线程] action=reserved line=475 target=_detect_user_presence_async "
+                  "reason=hardware_probe_subprocess(T-113f)")
 
         # 无论摄像头是否可用，都初始化梦境定时器
-        # ★T-114d：_schedule_dream_timer 整体移后台守护线程，避免运行时 import 卡模块锁阻塞 L0 生命线层
+        # ★T-114d：原为「整体移后台守护线程，避免运行时 import 卡模块锁」——**import 已提到
+        #   文件顶部**（T-114d 同批完成），现在的 body 只剩「算间隔 + 建 Timer + start()」，
+        #   不阻塞、不 import、不持锁 ⇒ 那层线程是纯多余的瞬时线程。
+        # ★342刀5 改同步，并顺带修一个真时序缺陷：包线程时 boot **返回那一刻**
+        #   `_dream_timer` 还是 None（线程没排到），调用方若在 boot 后立刻 cancel/重置
+        #   定时器会静默失效 —— 对拍实测 `timers_ready_at_return = 0/5`；同步化后 5/5。
         self._dream_next_time = time.time() + self._dream_interval
-        threading.Thread(target=self._schedule_dream_timer, daemon=True).start()
+        self._schedule_dream_timer()
+        self._log(LogLevel.INFO,
+                  "[342去线程] action=removed line=480 target=_schedule_dream_timer "
+                  "mode=sync reason=non_blocking_timer_start")
         self._log(LogLevel.INFO, f"梦境推演已初始化（后台调度，间隔={self._dream_interval}s）")
 
-        # ★T-114d：探索定时器同样移后台，boot 立即返回不阻塞 L0 worker
-        threading.Thread(target=self._schedule_next_exploration, daemon=True).start()
+        # ★342刀5：同上。`_schedule_next_exploration` 只建 Timer 并 start()，不阻塞。
+        self._schedule_next_exploration()
+        self._log(LogLevel.INFO,
+                  "[342去线程] action=removed line=484 target=_schedule_next_exploration "
+                  "mode=sync reason=non_blocking_timer_start")
         return {"status": "booted", "explore_interval": self._current_interval}
 
     def _detect_user_presence_async(self) -> None:

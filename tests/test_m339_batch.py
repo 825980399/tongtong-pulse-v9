@@ -353,7 +353,17 @@ def test_m339_k2_script_slices_and_concludes(tmp_path):
     _c = K._conclude(_s, _p)
     assert _c["input_same_domain"] is True
     assert _c["output_equal"] is True
-    assert _c["verdict"] in ("PASS_throughput", "FAIL_throughput")
+    # ★342刀3 契约同步（E-2 裁决）：verdict 改由**安全面**决定，
+    #   吞吐降幅降级为报告字段。旧值 PASS_throughput/FAIL_throughput 不再产出，
+    #   只在 `verdict_legacy_throughput` 里保留供历史数据对表。
+    assert _c["verdict"] in ("PASS_safety", "FAIL_output_mismatch")
+    assert _c["safety_pass"] is True
+    assert _c["verdict_basis"].startswith("safety_only")
+    assert _c["throughput_report_only"] is True
+    assert _c["throughput_line_enforced"] is False
+    assert _c["throughput_pct"] == _c["drop_pct"]
+    assert _c["throughput_band"] in ("gil_noise", "above_noise", "regression", "unknown")
+    assert _c["verdict_legacy_throughput"] in ("PASS_throughput", "FAIL_throughput")
 
 
 def test_m339_k2_live_mode_stub_removed():

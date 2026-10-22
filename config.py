@@ -5512,6 +5512,38 @@ DISTRIBUTED_CONSISTENCY = "eventual"  # eventual / strong
 #   重启用前置条件：T5 双保险收口（_m70_blanked 标记 + save 跳过被清字段写回）+ 回填消费方实现。
 #   重启用批次：第81批之后（回填消费方实现前严禁重开，否则永久抹除 L2/L3 正文）。
 SNAPSHOT_HOT_COLD_LOAD = True    # ★第103批 T-103b：冷热分离落地（第81批 T2 回填回路已闭环、隔离三遍保真验证通过；生产启用待本批后受控重启验收启动时间/内存收益）
+
+# ★342刀1：快照懒加载开关（默认 **False** —— 不是保守，是实测数据要求的）。
+#   340B 实证：`main.py` 的 `snapshot.load()` 无参 ⇒ full_load=True，且
+#   `PulseSnapshot.load()` 的 `elif _src == "parquet"` 分支直接返回全量 list，
+#   把 full_load 参数整个吃掉 ⇒ `_load_lazy()→LazySnapshotView→snapshot_index.save()`
+#   整链**生产从不执行**（索引文件全仓不存在）。342 刀1 已把该短路修通，
+#   本开关决定「修通之后要不要真的打开」。
+#
+#   ★为什么默认关：342 刀1 在本机生产快照上实测（`tmp/p342_root/d1_cost.json`）：
+#       纯扫 span 建切片表（`_iter_snapshot`）  13543 条 = 122.6s
+#       视图一遍全量反序列化（iter_nodes）       13543 条 = 131.4s
+#       全量 json.load 对照                         13547 条 =   6.0s
+#   即：本项目 658MB 规模下，懒加载比全量**慢约 20 倍**。根因是实现层
+#   `lazy_snapshot._find_value_span` 用 `mm[j:j+1]` **逐字节**切片扫描（658MB
+#   ≈ 6.6 亿次 bytes 切片），而 `json.load` 是 C 实现。且 `SNAPSHOT_USE_INCREMENTAL_LOG`
+#   开启时增量重放需要可变节点集合，对 view 必须整份物化（又一遍 131s）。
+#   ⇒ 打开它不是「修复」，是制造启动回归。修性能需另立批（扫描器 C 化 / pyarrow 按
+#   row group 直读 parquet），落地并把启动耗时对表跑绿之后再改默认值。
+#
+#   回滚：本键写 False 即恢复 340B 行为（load 全量），无其他副作用。
+SNAPSHOT_LAZY_LOAD = False
+
+# ★342刀2：tool 通道（ruff/bandit）固定扫描域 —— **不再默认扫全库**。
+#   全库扫描会把 data/（GB 级快照/parquet 产物）、tmp/、logs/ 一起吃进去，实测还会让
+#   Ruff 在仓库根直接 panic（343 实证：根目录 NUL 文件），而 panic 写 stderr ⇒ 旧实现
+#   的整串 json.loads 报废 ⇒ 通道静默归零。此列表即「代码面」白名单，按需增删即可；
+#   写空列表/删键 ⇒ tooling_runner 退回内建默认域（`_TOOL_SCAN_ROOTS_DEFAULT`），
+#   两条路的差别只在留痕里的 domain=config / domain=default，都在记账里写明。
+TOOL_SCAN_ROOTS = [
+    "main.py", "config.py", "pulse_doctor.py",
+    "nucleus", "organs", "functions", "base", "pulses", "somatics", "utils", "tools",
+]
 ENABLE_FAISS_FAST_OPS = True    # fast_ops.fast_vector_search 优先走 FAISS
 ENABLE_KAL_CALL_SITES = True    # 胃/肝/肾实际调用点替换为 KAL
 

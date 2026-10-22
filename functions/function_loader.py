@@ -20,6 +20,9 @@ class FunctionLoader:
     def __init__(self, framework):
         self.framework = framework
         self._loaded_modules: dict[str, Any] = {}
+        # ★342刀5：`_threads` **保留字段但不再填充**（全库仅本文件读写，且只写不读）。
+        #   留着是为了不让任何按属性探测的代码/测试 KeyError；语义从「启动线程表」
+        #   变成「历史遗留空表」，见 `load_all` 处的 `[342去线程]` 留痕。
         self._threads: dict[str, threading.Thread] = {}
 
     def _log(self, level: str, msg: str):
@@ -102,15 +105,18 @@ class FunctionLoader:
 
                 self._loaded_modules[meta.name] = instance
 
-                # v9.5: 所有功能模块均在独立线程中启动，避免阻塞框架主线程
-                thread = threading.Thread(
-                    target=self._run_module,
-                    args=(instance, meta.name),
-                    daemon=True
-                )
-                self._threads[meta.name] = thread
-                thread.start()
-                self._log(LogLevel.INFO, f"功能模块 {meta.name} 已启动（{'阻塞' if meta.thread_mode == 'blocking' else '守护'}线程）")
+                # ★342刀5（D3第2批）：原实现给每个功能模块包一条线程跑 `_run_module`。
+                #   查证（342 前置）：`_run_module` 的 body 只有「`instance.start()` 一次 +
+                #   异常上报」，**不驻留**；而各功能模块的 `start()` 自己再起线程
+                #   （`health_ui` / `web_chat` 各起 `serve_forever`，`runtime_state_writer`
+                #   起写入线程）。⇒ 这层线程只换来「装配顺序不确定」：
+                #   改前 4 个模块的 `start()` 先后由线程调度决定，改后 == 声明顺序。
+                #   异常仍在 `_run_module` 内同一处捕获并上报（信息不变，只是不再跨线程）。
+                self._run_module(instance, meta.name)
+                self._log(LogLevel.INFO,
+                          "[342去线程] action=removed line=106 target=_run_module "
+                          "mode=sync module=%s reason=one_shot_start_no_resident" % meta.name)
+                self._log(LogLevel.INFO, f"功能模块 {meta.name} 已启动（同步装配，{'阻塞' if meta.thread_mode == 'blocking' else '守护'}语义不变）")
 
             except Exception as e:
                 self._log(LogLevel.ERROR, f"启动功能模块 {meta.name} 失败: {e}")

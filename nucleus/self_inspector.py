@@ -5409,6 +5409,13 @@ class SelfInspector(SilentLogMixin):
             elif _hit_infer or _m337_typed_only(_f_norm, _name):
                 _alive_src["infer_only"] += 1
                 _tier = "infer-only"
+                # ★342批刀4（E-4）：登记项命中即触发**一次**取证（幂等，全表 4 行
+                #   只打一遍）。留痕进「判死候选证据面」——338/340 连挂两批的根因
+                #   不是没有证据，是证据**从来没被打出来过**。
+                if _m337_typed_only(_f_norm, _name):
+                    # 不传 project_root：`_detect_dead_code` 本身也没有这个参数
+                    # （它用 `glob('**/*.py')` 隐含 cwd），证据函数自己按 __file__ 定位仓库根。
+                    _m342_typed_only_evidence()
             else:
                 # ★330批刀1（小林拍板②·M2 分层＋M1 双证据）：hard 不再是一个大筐。
                 #   hard_strict = 图内三层皆无入边 **且** 图外 probe 四类皆空（双证据）
@@ -5992,21 +5999,178 @@ _M330_HARD_TIERS = ("hard_strict", "hard_loose", "hard_unverified")
 # `_f_norm` 在扫描里是绝对路径。
 # 判级：登记项即使 `_hit_infer=False` 也走 `infer-only`（软档），**不进 hard 池**。
 # 撤销条件：这 4 个方法出现 static/unique_name 级入边证据后即可删除本表项。
+# ★342批刀4：登记表补**类名**（三元组）。原因是取证时必须能唯一定位节点：
+#   `nucleus/reporting/report_envelope.py` 里有 **3 个 `to_dict`**
+#   （Anomaly / ReportEnvelope / ConsumeResult），只按 (文件, 方法) 找会按 dict
+#   遍历顺序**随机**命中一个，进而拿 `Anomaly.to_dict` 的入边冒充
+#   `ReportEnvelope.to_dict` —— 那比没证据更坏：它给出看起来很合理的错数。
 _M337_TYPED_ONLY_METHODS = (
-    ("nucleus/llm/semantic_cache.py", "to_dict"),                       # CacheEntry.to_dict
-    ("nucleus/reporting/report_envelope.py", "has_p0"),                 # ReportEnvelope.has_p0
-    ("nucleus/reporting/report_envelope.py", "to_dict"),                # ReportEnvelope.to_dict
-    ("nucleus/reporting/report_envelope.py", "record_consume_result"),  # ReportEnvelope.record_consum
+    ("nucleus/llm/semantic_cache.py", "CacheEntry", "to_dict"),
+    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "has_p0"),
+    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "to_dict"),
+    ("nucleus/reporting/report_envelope.py", "ReportEnvelope", "record_consume_result"),
 )
 
 
-def _m337_typed_only(file_norm: str, method: str) -> bool:
-    """该 (文件, 方法) 是否属"仅靠 typed_infer 活着"的登记项（只读，零副作用）。"""
+def _m337_typed_only(file_norm: str, method: str, cls: str = "") -> bool:
+    """该 (文件, 方法) 是否属"仅靠 typed_infer 活着"的登记项（只读，零副作用）。
+
+    ★342批刀4：新增可选 `cls`。**不传时判定行为与 337 原实现一字不变**
+    （既有的两参调用点、`tests/test_m337_batch.py` 的两参断言都不受影响）；
+    传了才按类名收紧 —— 供证据函数精确定位节点用。
+    """
     _f = str(file_norm or "").replace("\\", "/")
-    for _rf, _rm in _M337_TYPED_ONLY_METHODS:
-        if _rm == method and _f.endswith(_rf):
-            return True
+    for _rf, _rc, _rm in _M337_TYPED_ONLY_METHODS:
+        if _rm != method or not _f.endswith(_rf):
+            continue
+        if cls and _rc and _rc != cls:
+            continue
+        return True
     return False
+
+
+# ===== ★342批刀4：登记项的**证据留痕**（E-4）=====
+# 登记表的撤销条件写的是「这 4 个方法出现 static/unique_name 级入边证据后即可
+# 删除本表项」。可 338/340 连挂两批，判据侧只看到「0 条」而**看不到**这 4 个
+# 方法的入边到底长什么样 —— 「看不见」被读成了「没证据」。
+# 本函数把这件事实打成一行可 grep 的证据：每类入边几条、图外有没有痕、撤销条件
+# 满没满。★只取证不改判级：`revocable=True` 只是「可以撤了」的建议，撤表由人裁。
+_M342_EVIDENCE_DONE = False
+_M342_EVIDENCE_CACHE: dict = {}
+
+
+def _m342_load_latest_graph(project_root=None):
+    """读最新一份调用图（`data/call_graph/graph_*.json`）。取不到返回 (None, 原因)。"""
+    import glob as _g342
+    _root = project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _pat = os.path.join(_root, "data", "call_graph", "graph_*.json")
+    _files = sorted(_g342.glob(_pat), key=os.path.getmtime)
+    if not _files:
+        return None, "no_graph_file"
+    _f = _files[-1]
+    try:
+        with open(_f, "r", encoding="utf-8", errors="replace") as _fh:
+            _d = json.load(_fh)
+    except (OSError, ValueError) as _e342g:
+        silent_exc(_e342g, where="nucleus.self_inspector::_m342_load_latest_graph")
+        return None, "graph_parse_failed:%s" % type(_e342g).__name__
+    if not isinstance(_d, dict):
+        return None, "graph_not_object"
+    _d["_m342_path"] = _f
+    _d["_m342_mtime"] = os.path.getmtime(_f)
+    return _d, ""
+
+
+def _m342_typed_only_evidence(project_root=None, force: bool = False) -> dict:
+    """★342刀4：为 4 个登记项逐方法产出 static/unique_name 证据（只读、幂等）。
+
+    Returns:
+        `{"graph": {...}, "rows": [{file, cls, method, node_id, in_static,
+        in_unique_name, in_self_attr, in_typed_infer, in_total, out_of_graph,
+        revocable, action}], "unavailable": str}`
+        —— `unavailable` 非空表示**拿不到图**，此时 `rows=[]`，判据必须走
+        「不可判」而不是「零入边」（铁律166：没读到 ≠ 是 0）。
+
+    为什么幂等缓存：本函数由判死主循环**逐方法**触发，4 个方法会调 4 次；
+    每次都读 3MB 图纯属浪费。`force=True` 供隔离验证/复算用。
+    """
+    global _M342_EVIDENCE_DONE, _M342_EVIDENCE_CACHE
+    if _M342_EVIDENCE_DONE and not force:
+        return _M342_EVIDENCE_CACHE
+
+    _out = {"graph": {}, "rows": [], "unavailable": ""}
+    _gd, _why = _m342_load_latest_graph(project_root)
+    if _gd is None:
+        _out["unavailable"] = _why
+        _M342_EVIDENCE_CACHE = _out
+        _M342_EVIDENCE_DONE = True
+        _module_logger.warning(
+            "[342判死] typed_only 证据不可得（%s）⇒ 4 个登记项的入边**不做判定**，"
+            "沿用登记表；不填 0、不据此撤表", _why)
+        return _out
+
+    _nodes = {str(_n.get("id") or ""): _n for _n in (_gd.get("nodes") or [])
+              if isinstance(_n, dict)}
+    _by_fc = {}
+    for _nid, _n in _nodes.items():
+        _k = (str(_n.get("file") or "").replace("\\", "/"), str(_n.get("cls") or ""))
+        _by_fc.setdefault(_k, {})[str(_n.get("name") or "")] = _nid
+    _inb = {}
+    for _e in (_gd.get("edges") or []):
+        if not isinstance(_e, dict):
+            continue
+        _ce = str(_e.get("callee") or "")
+        if not _ce:
+            continue
+        _k = str(_e.get("kind") or "static")
+        _slot = _inb.setdefault(_ce, {})
+        _slot[_k] = int(_slot.get(_k, 0)) + 1
+
+    _K_STATIC = ("static", "framework_hook", "event", "entry")
+    _rows = []
+    for _rf, _rc, _rm in _M337_TYPED_ONLY_METHODS:
+        # ★342刀4：**按 (文件, 类名, 方法名) 三元组精确定位** —— 只按 (文件, 方法)
+        #   找会在同名多类时随机命中（report_envelope.py 有 3 个 to_dict）。
+        _cls = _rc
+        _hit_nid = ""
+        _names = (_by_fc.get((_rf, _rc)) or {})
+        if _rm in _names:
+            _hit_nid = _names[_rm]
+        if not _hit_nid:
+            # 精确未命中才退回「同文件任意类同名」并**显式标记**（不许静默换对象）
+            for (_f342, _c342), _nm2 in _by_fc.items():
+                if _f342.endswith(_rf) and _rm in _nm2:
+                    _cls = _c342
+                    _hit_nid = _nm2[_rm]
+                    break
+        _cnt = dict(_inb.get(_hit_nid) or {}) if _hit_nid else {}
+        _static = sum(int(_cnt.get(k, 0)) for k in _K_STATIC)
+        _uniq = int(_cnt.get("unique_name", 0))
+        _sattr = int(_cnt.get("self_attr", 0))
+        _infer = int(_cnt.get("typed_infer", 0))
+        _total = sum(int(v) for v in _cnt.values())
+        # 撤销条件（登记表注释原文）：出现 static / unique_name 级入边证据
+        _revocable = bool(_static > 0 or _uniq > 0)
+        _rows.append({
+            "file": _rf, "cls": _cls or "?", "method": _rm,
+            "node_id": _hit_nid or None,
+            "in_static": _static, "in_unique_name": _uniq,
+            "in_self_attr": _sattr, "in_typed_infer": _infer,
+            "in_total": _total, "in_other": max(0, _total - _static - _uniq - _sattr - _infer),
+            "revocable": _revocable,
+            "action": ("revocable_drop_registry" if _revocable else "keep_registry"),
+        })
+
+    _out["graph"] = {
+        "path": os.path.basename(str(_gd.get("_m342_path") or "")),
+        "mtime": float(_gd.get("_m342_mtime") or 0.0),
+        "code_version": _gd.get("code_version"),
+        "criteria_version": _gd.get("criteria_version"),
+        "nodes": len(_nodes), "edges": len(_gd.get("edges") or []),
+    }
+    _out["rows"] = _rows
+    _M342_EVIDENCE_CACHE = _out
+    _M342_EVIDENCE_DONE = True
+
+    _n_rev = sum(1 for _r in _rows if _r["revocable"])
+    _module_logger.info(
+        "[342判死] typed_only 证据汇总 登记=%d 可撤=%d graph=%s mtime=%.0f "
+        "code_version=%s nodes=%d edges=%d",
+        len(_rows), _n_rev, _out["graph"]["path"], _out["graph"]["mtime"],
+        _out["graph"]["code_version"], _out["graph"]["nodes"], _out["graph"]["edges"])
+    for _r in _rows:
+        _module_logger.info(
+            "[342判死] typed_only file=%s cls=%s method=%s static=%d unique_name=%d "
+            "self_attr=%d typed_infer=%d total=%d revocable=%s action=%s",
+            _r["file"], _r["cls"], _r["method"], _r["in_static"], _r["in_unique_name"],
+            _r["in_self_attr"], _r["in_typed_infer"], _r["in_total"],
+            _r["revocable"], _r["action"])
+    return _out
+
+
+def _m342_typed_only_evidence_rows(project_root=None) -> list:
+    """供外部（报表/判据）取证据行的薄封装；不可得时返回 `[]`（调用方须查 unavailable）。"""
+    return list((_m342_typed_only_evidence(project_root) or {}).get("rows") or [])
 
 
 # ★331批刀7：框架接口覆写切面 —— 唯一**强判据**的可移出面。

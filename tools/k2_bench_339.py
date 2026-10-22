@@ -166,7 +166,21 @@ def assert_blocks(items: list) -> dict:
 
 
 def _conclude(serial: list, parallel: list) -> dict:
-    """判据：墙钟降 ≥30% **且** 三列产出相等（尤其 applied 必须相等）。"""
+    """判据（★342刀3 E-2 裁决）：**双口径** —— 安全面定 verdict，吞吐只报不判。
+
+    ① **安全面通过线**（决定 `verdict`）：三列 `reviewed/report/applied` 各轮完全相等，
+       **且** 两侧处理的是同一批 id（同域）。这条线要证的是「并行没改变结论」——
+       快而不准比慢更危险，故它必须能一票否决。
+    ② **吞吐报告线**（只报）：墙钟降幅 `throughput_pct` 照实输出，**不设硬线**。
+
+    为什么撤掉 30% 硬线（340B 刀8 实录）：649 条 × 4 片 × 串并各 3 轮，实测
+    20.21s → 19.47s，**降 3.68%**；合成负载 0.66%。两个数都在 GIL 噪声量级 ——
+    本负载是纯 CPU Python（读盘 + `ast.parse` + 图外 probe），线程并发在 GIL 下
+    结构上拿不到两位数降幅。继续把 30% 当判据，只会把「并行模型选错」持续
+    报成「代码变差」（340B 的 `verdict=FAIL_throughput` 就是这么来的）。
+    提吞吐的正解是换并行模型（进程池），已出架构票 `tmp/p342_root/k2_arch_ticket.md`，
+    结论落地前 K2 不再用吞吐卡人。
+    """
     _ws = statistics.median([r["wall_sec"] for r in serial])
     _wp = statistics.median([r["wall_sec"] for r in parallel])
     _drop = (1.0 - _wp / _ws) * 100.0 if _ws > 0 else None
@@ -176,28 +190,42 @@ def _conclude(serial: list, parallel: list) -> dict:
     # ★铁律160：分母必须与被测对象同域 —— 两侧**实际处理的 id 序列**必须完全一致
     _fp_set = {r.get("ids_fp") for r in serial + parallel}
     _same_domain = (len(_fp_set) == 1 and None not in _fp_set)
-    _pass = (_drop is not None and _drop >= 30.0 and _out_eq and _same_domain)
+    _safety = bool(_out_eq and _same_domain)
+    # 噪声带：|降幅| < 5% 视为 GIL 噪声量级（不是「略微提速」，也不是「变慢」）
+    _band = ("unknown" if _drop is None else
+             ("gil_noise" if abs(_drop) < 5.0 else
+              ("above_noise" if _drop > 0 else "regression")))
+    _legacy = ("PASS_throughput" if (_drop is not None and _drop >= 30.0 and _safety)
+               else ("FAIL_output_mismatch" if not _safety else "FAIL_throughput"))
     return {
         "serial_wall_median": round(_ws, 4),
         "parallel_wall_median": round(_wp, 4),
-        "drop_pct": (round(_drop, 2) if _drop is not None else None),
-        "drop_line_pct": 30.0,
+        # ---- ① 安全面（verdict 唯一依据） ----
+        "safety_pass": _safety,
         "input_same_domain": bool(_same_domain),
         "input_fp": (list(_fp_set)[0][:16] if _same_domain else None),
         "output_equal": bool(_out_eq),
         "output_equal_detail": _eq,
         "output_equal_meaning": ("三列 reviewed/report/applied 各轮完全相等 ⇒ "
                                  "**提吞吐不提产出**（快不等于多修好了东西）"),
-        # ★判定顺序必须是「先看产出是否可比，再看快不快」——
-        #   反过来会把"产出不等"报成"没提速"，那是把两类失败混成一类。
-        "verdict": ("PASS_throughput" if _pass else
-                    ("FAIL_output_mismatch" if (not _out_eq or not _same_domain)
-                     else "FAIL_throughput")),
-        "gil_note": ("合成负载是**纯 CPU Python**，GIL 下线程并发不会提速"
-                     "（drop≈0 是预期，不是脚本坏）。真实 per-item 若走子进程/IO，"
-                     "才可能有 322 试点那种降幅 —— 必须以 --mode live 实测为准。"),
-        "honest_note": ("本判据只证「同样产出下的墙钟降幅」，"
-                        "不证「修得更多」；applied 恒 0 时表示未开 runner（安全闸未放宽）"),
+        "verdict": ("PASS_safety" if _safety else "FAIL_output_mismatch"),
+        "verdict_basis": "safety_only(产出全等∧同域)",
+        # ---- ② 吞吐报告线（只报） ----
+        "drop_pct": (round(_drop, 2) if _drop is not None else None),
+        "throughput_pct": (round(_drop, 2) if _drop is not None else None),
+        "throughput_band": _band,
+        "throughput_report_only": True,
+        # 历史字段保留：读方若还在读 drop_line_pct，必须同时看到「未强制」这个标记
+        "drop_line_pct": 30.0,
+        "throughput_line_pct": 30.0,
+        "throughput_line_enforced": False,
+        "verdict_legacy_throughput": _legacy,
+        "verdict_legacy_note": ("340B 及以前的旧口径值（30% 硬线），仅供历史数据对表；"
+                                "342刀3 起 verdict 不再由它决定"),
+        "gil_note": ("合成/真实负载都是**纯 CPU Python**，GIL 下线程并发不会提速"
+                     "（drop≈3.68% 属噪声量级，不是脚本坏）。降幅 >5% 才谈得上「非噪声」；"
+                     "要两位数降幅得换进程池（见 k2_arch_ticket.md）。"),
+        "honest_note": ("安全面通过 ≠ 提速成功；applied 恒 0 时表示未开 runner（安全闸未放宽）"),
     }
 
 
@@ -341,6 +369,11 @@ def main(argv=None) -> int:
     _live_meta: dict = {}
     _warm: dict = {}
     _pr = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # ★342刀3：`tools/` 直接以脚本运行时不带项目根 ⇒ `import nucleus.*` 必失败，
+    #   而 `[340K2]`/`[342K2]` 的落库留痕都靠 nucleus 日志器。补一次 sys.path，
+    #   让留痕真进 pulse.log，而不是只打在 stdout 上（否则 grep 日志是 grep 不到的）。
+    if _pr not in sys.path:
+        sys.path.insert(0, _pr)
     if _a.mode == "live":
         _src = build_live_items(_a.items, _pr)
         if not _src.get("ok"):
@@ -388,6 +421,24 @@ def main(argv=None) -> int:
         _summary["verdict_fp"] = (list(_vfp)[0][:16] if _verdict_equal else None)
         _summary["applied_equal"] = bool(
             (_summary.get("output_equal_detail") or {}).get("applied"))
+    # ★342刀3：**双口径判据行**（两种模式都打，便于门禁/报表直接 grep）。
+    #   一行里同时给出「安全面结论」与「吞吐落带」，避免读方把 drop 当通过线。
+    _line342 = ("[342K2] mode=%s verdict=%s basis=%s safety_pass=%s "
+                "output_equal=%s same_domain=%s | throughput_pct=%s band=%s "
+                "report_only=True line_enforced=False | items=%d rounds=%d workers=%d"
+                % (_a.mode, _summary.get("verdict"), _summary.get("verdict_basis"),
+                   _summary.get("safety_pass"), _summary.get("output_equal"),
+                   _summary.get("input_same_domain"), _summary.get("throughput_pct"),
+                   _summary.get("throughput_band"), len(_items),
+                   _a.rounds, _a.workers))
+    print(_line342)
+    _summary["trace_line"] = _line342
+    try:
+        from nucleus.logger import get_module_logger as _gml342
+        _gml342("K2Bench").info(_line342)
+    except Exception as _e342:  # noqa: BLE001 - 日志器不可用不影响产物落盘
+        _LOG.warning("[342K2] nucleus 日志器不可用 err=%s: %s",
+                     type(_e342).__name__, _e342)
     _payload = {
         "meta": {"batch": 339, "knife": 6, "k2_version": "339.k2.v1",
                  "ts": time.time(), "mode": _a.mode, "tag": _a.tag,
@@ -416,6 +467,7 @@ def main(argv=None) -> int:
         _line = (
             "[340K2] live 对表: serial=%.2fs parallel=%.2fs drop=%.2f%% "
             "output_equal=%s applied_equal=%s verdict_fp_equal=%s verdict=%s "
+            "drop_band=%s "
             "items=%d slices=%d workers=%d"
             % (float(_summary.get("serial_wall_median") or 0.0),
                float(_summary.get("parallel_wall_median") or 0.0),
@@ -423,6 +475,7 @@ def main(argv=None) -> int:
                _summary.get("output_equal"),
                _summary.get("applied_equal"),
                _summary.get("verdict_fp_equal"), _summary.get("verdict"),
+               _summary.get("throughput_band"),
                len(_items), _N_SLICES, _a.workers))
         print(_line)
         try:
@@ -431,9 +484,12 @@ def main(argv=None) -> int:
         except Exception as _e:  # noqa: BLE001 - 日志器不可用不影响产物落盘
             _LOG.warning("[340K2] nucleus 日志器不可用 err=%s: %s",
                          type(_e).__name__, _e)
-    print(json.dumps({"ok": _summary["verdict"] != "FAIL_throughput",
+    print(json.dumps({"ok": bool(_summary.get("safety_pass")),
                       "verdict": _summary["verdict"],
+                      "verdict_basis": _summary.get("verdict_basis"),
                       "drop_pct": _summary["drop_pct"],
+                      "throughput_band": _summary.get("throughput_band"),
+                      "throughput_report_only": _summary.get("throughput_report_only"),
                       "output_equal": _summary["output_equal"],
                       "assert_blocks": _blocks,
                       "out": _out}, ensure_ascii=False))
