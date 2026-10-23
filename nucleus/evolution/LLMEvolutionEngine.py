@@ -49,13 +49,17 @@ class LLMEvolutionEngine(SilentLogMixin):
         self._m44_last_model = ""
         try:
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
+            # ★352刀9⑧：改走**渠道池**（REMOTE_API_CHANNELS 按优先级免费优先），
+            #   不再直连 api.deepseek.com。三元组成对取自同一渠道（见
+            #   `config.get_llm_call_target` 的注释：advanced_model 与渠道 URL 不成对）。
+            _tgts = config.get_llm_call_targets(model)
+            _tgt = _tgts[0] if _tgts else {}
+            _api_url = _tgt.get("api_url", "")
+            _api_key = _tgt.get("api_key", "")
             if not _api_url or not _api_key:
                 self._m44_last_error = "missing_api_config: api_url/api_key 未配置"
                 return None
-            _model = model or _api_cfg.get("advanced_model", "deepseek-flash")
+            _model = _tgt.get("model") or "deepseek-flash"
             # ★340批刀4：把**实际请求的模型名**写回取数口 `_m44_last_model`。
             #   该属性此前全库**无生产者** ⇒ `trace_evolution_call` 装饰器恒取到空串
             #   ⇒ `_compute_cost_estimate` 查不到单价 ⇒ `cost_estimate` 恒 null
@@ -80,28 +84,78 @@ class LLMEvolutionEngine(SilentLogMixin):
             _cfg = get_llm_call_config()
             _timeout = _cfg["timeout_by_purpose"]["general"]
 
-            # 超时重试机制：偶发网络问题自动重试1次
+            # ★352刀9⑧：超时重试 + **渠道失效转移**。两类失败分开处置（不同事实不同对待）：
+            #   · 超时/连接异常 = 网络偶发 ⇒ 原地重试 1 次；
+            #   · 429 / 5xx = **这个渠道现在不行** ⇒ 原地重试没用（免费渠道 conc=1，
+            #     d9c 实测连续 3 次里前两次全 429），必须换下一个渠道（任务书"收费兜底"）。
             _max_retries = 2
             _ok = False
             _data = None
-            for _attempt in range(_max_retries):
+            _last_exc = None
+            for _tgt in _tgts:
+                _api_url = _tgt.get("api_url", "")
+                _api_key = _tgt.get("api_key", "")
+                if not _api_url or not _api_key:
+                    continue
+                _model = _tgt.get("model") or "deepseek-flash"
+                self._m44_last_model = str(_model or "")
+                # ★352刀9⑧：路由留痕（验收要求"实际路由渠道可 grep"）。
+                #   「不再直连 api.deepseek.com」必须能从日志里看见，否则只是口头声明。
                 try:
-                    with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
-                        _ok, _data = safe_http_json(
-                            _api_url, method='POST', data=_payload_bytes, headers=_headers,
-                            timeout=_timeout,
-                        )
-                    if _ok and isinstance(_data, dict):
+                    _host = _api_url.split("//", 1)[-1].split("/", 1)[0]
+                    import logging as _lg
+                    _lg.getLogger("pulse").info(
+                        "[352接线] engine=evolution source=%s channel=%s model=%s host=%s",
+                        _tgt.get("source"), _tgt.get("channel"), _model, _host)
+                except Exception as _le:
+                    silent_exc(_le, where="LLMEvolutionEngine::_call_llm route_log")
+                _payload_bytes = json.dumps({
+                    "model": _model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }, ensure_ascii=False).encode('utf-8')
+                _headers = {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Authorization': 'Bearer ' + _api_key,
+                }
+                for _attempt in range(_max_retries):
+                    try:
+                        with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
+                            _ok, _data = safe_http_json(
+                                _api_url, method='POST', data=_payload_bytes, headers=_headers,
+                                timeout=_timeout,
+                            )
+                        if _ok and isinstance(_data, dict):
+                            break
+                        # 渠道侧限流/故障 ⇒ 换渠道，不必原地重试
+                        if isinstance(_data, str) and ("429" in _data or "HTTP Error 5" in _data):
+                            break
+                    except Exception as _retry_err:
+                        _last_exc = _retry_err
+                        if _attempt < _max_retries - 1:
+                            self._log(LogLevel.DEBUG,
+                                f"LLM调用超时/异常，重试中（{_attempt+1}/{_max_retries}）: {type(_retry_err).__name__}")
+                            time.sleep(1.0)
+                            continue
                         break
-                except Exception as _retry_err:
-                    if _attempt < _max_retries - 1:
-                        self._log(LogLevel.DEBUG,
-                            f"LLM调用超时/异常，重试中（{_attempt+1}/{_max_retries}）: {type(_retry_err).__name__}")
-                        time.sleep(1.0)
-                        continue
-                    raise
+                if _ok and isinstance(_data, dict):
+                    break
+                if len(_tgts) > 1:
+                    self._log(LogLevel.DEBUG,
+                        f"渠道 {_tgt.get('channel')} 未成功，转向下一渠道")
 
             if not _ok or not isinstance(_data, dict):
+                # ★352刀9⑧：异常语义保持不变（外层 except 记 "Type: msg"）；
+                #   服务端有原文时把它带出来（"HTTP Error 429" 比"请求失败"有用得多）。
+                if _last_exc is not None and _data is None:
+                    raise _last_exc
+                if isinstance(_data, str) and _data:
+                    self._m44_last_error = "http_failed: " + _data[:200]
+                    return None
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
             # ★第94批 相关任务：暂存 usage 供 `trace_evolution_call` 装饰器留存

@@ -87,19 +87,29 @@ STATUS_CLAIMED = "claimed"
 STATUS_FIXED = "fixed"
 STATUS_VERIFIED = "verified"
 STATUS_WONTFIX = "wontfix"
+#: ★352刀1：目标漂移（file/method 在当前工作副本上已不存在/改名）。
+#   与 wontfix 的区别：wontfix=“不修了”（人的决定）；target_drifted=“还要修，
+#   但要先重新定位”（机器的事实）。混用会把 27 条待重定位的真问题
+#   当成“已结案”丢掉。
+STATUS_TARGET_DRIFTED = "target_drifted"
 
-ALL_STATUSES = (STATUS_OPEN, STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED, STATUS_WONTFIX)
+ALL_STATUSES = (STATUS_OPEN, STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED,
+                STATUS_WONTFIX, STATUS_TARGET_DRIFTED)
 
 #: 终态：进入后视为"结案"，可被超期 prune（烛微口径：status≠verified/wontfix 即未结案）
 TERMINAL_STATUSES = (STATUS_VERIFIED, STATUS_WONTFIX)
 
 #: 合法流转（非法流转只告警不写，不静默纠正）
 _LEGAL_TRANSITIONS = {
-    STATUS_OPEN: (STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED, STATUS_WONTFIX),
-    STATUS_CLAIMED: (STATUS_FIXED, STATUS_OPEN, STATUS_WONTFIX),
-    STATUS_FIXED: (STATUS_VERIFIED, STATUS_CLAIMED, STATUS_WONTFIX),
+    STATUS_OPEN: (STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED, STATUS_WONTFIX,
+                  STATUS_TARGET_DRIFTED),
+    STATUS_CLAIMED: (STATUS_FIXED, STATUS_OPEN, STATUS_WONTFIX, STATUS_TARGET_DRIFTED),
+    STATUS_FIXED: (STATUS_VERIFIED, STATUS_CLAIMED, STATUS_WONTFIX, STATUS_TARGET_DRIFTED),
     STATUS_VERIFIED: (STATUS_OPEN, STATUS_WONTFIX),
     STATUS_WONTFIX: (STATUS_OPEN,),
+    # ★352刀1：漂移**不是结案**。必须能回 open（重新定位后继续），
+    #   也允许直接判 wontfix（确认该问题已随代码消失）。
+    STATUS_TARGET_DRIFTED: (STATUS_OPEN, STATUS_WONTFIX),
 }
 
 #: severity 值域（烛微345挂账59）
@@ -122,6 +132,87 @@ SCHEMA = "audit_problem_pool/345.v2"
 LEDGER_FILENAME = "_pool_ledger.json"
 LEDGER_SCHEMA = "audit_pool_ledger/348.v1"
 LEDGER_HISTORY_MAX = 120
+
+
+#: ★352刀1：批量预检计划 schema
+DRIFT_SCHEMA = "audit_pool_target_drift/352.v1"
+
+
+def plan_target_drift(entries: list, project_root: str | None = None) -> dict:
+    """对池条目批量跑目标存在性预检，**只读不写**，返回流转计划。
+
+    为什么不直接改状态：`set_status` 是**唯一**流转口（它负责合法校验、
+    追 history、落盘、留痕）。这里开一条“直接改字段”的旁路等于把那些
+    保障全绕过去（铁律205：跨态推进必须过状态机）。故本函数只产计划，
+    真正落盘由调用方逐条 `set_status(key, STATUS_TARGET_DRIFTED)`。
+
+    返回：`{schema, total, in_place, drifted, already, other,
+             drifted_keys, rows, boundary}`。
+    """
+    try:
+        from nucleus.evolution.patch_generator import (
+            TARGET_DRIFTED_VERDICTS as _DR,
+            TARGET_IN_PLACE as _IN,
+            precheck_batch as _pb,
+        )
+    except Exception as _e:                                    # noqa: BLE001
+        from nucleus._silent_except import silent_exc as _se
+
+        _se(_e, where="audit_problem_pool.plan_target_drift import")
+        return {"schema": DRIFT_SCHEMA, "state": "import_failed",
+                "error": "%s: %s" % (type(_e).__name__, str(_e)[:200]),
+                "total": 0, "in_place": 0, "drifted": 0, "already": 0,
+                "other": 0, "drifted_keys": [], "rows": []}
+    _rows_in = [e for e in (entries or []) if isinstance(e, dict)]
+    _batch = _pb(project_root, _rows_in)
+    _by_id = {str(r.get("id") or ""): r for r in _batch["rows"]}
+    _drifted_keys: list = []
+    _already: list = []
+    _in_place: list = []
+    _other: list = []
+    _detail: list = []
+    for _e in _rows_in:
+        _k = str(_e.get("dedup_key") or _e.get("id") or "")
+        _st = str(_e.get("status") or STATUS_OPEN)
+        _r = _by_id.get(_k) or {}
+        _v = str(_r.get("verdict") or "")
+        _rec = {"dedup_key": _k, "status": _st, "verdict": _v,
+                "file": _r.get("file"), "method": _r.get("method"),
+                "why": _r.get("why")}
+        if _st == STATUS_TARGET_DRIFTED:
+            # 幂等：已经标过的不重复计入 drifted（铁律199：标记选“改动后才出现”的状态）
+            _already.append(_k)
+            _rec["action"] = "already_drifted"
+        elif _v in _DR:
+            if _st != STATUS_OPEN:
+                # 非 open 态要先回 open 才能进 target_drifted（状态机不许跳档）
+                _rec["action"] = "need_reopen_first"
+                _other.append(_k)
+            else:
+                _rec["action"] = "mark_drifted"
+                _drifted_keys.append(_k)
+        elif _v == _IN:
+            _in_place.append(_k)
+            _rec["action"] = "keep"
+        else:
+            _other.append(_k)
+            _rec["action"] = "unjudged:%s" % _v
+        _detail.append(_rec)
+    return {
+        "schema": DRIFT_SCHEMA,
+        "state": "ok",
+        "total": len(_rows_in),
+        "in_place": len(_in_place),
+        "drifted": len(_drifted_keys),
+        "already": len(_already),
+        "other": len(_other),
+        "drifted_keys": _drifted_keys,
+        "batch_tally": _batch["tally"],
+        "rows": _detail,
+        "boundary": "判词只认 file_absent/method_absent 为漂移；"
+                    "parse_failed/unreadable 归 other（不能借漂移名义剔掉）；"
+                    "同名多类仍计 in_place 但标 ambiguous",
+    }
 
 
 def _project_root() -> str:

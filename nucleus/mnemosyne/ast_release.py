@@ -45,9 +45,11 @@ registry 若无限长持，**它自己就成了新的泄漏源**。
 """
 
 import ast as _ast
+import contextlib as _ctxlib
 import gc
 import sys
 import time
+import warnings as _warnings
 from typing import Any
 
 from nucleus._silent_except import silent_exc
@@ -88,6 +90,39 @@ def _m344_pg() -> str:
     return "unknown"
 
 
+# ---------------------------------------------------------------- 噪声抑制（352 刀8）
+#: ★352刀8：`gc.get_objects()` 会把**整个进程**的对象都摸一遍，其中包括 torch 的内部
+#:   对象；某些 torch 版本在属性访问/析构时会对 `torch.distributed.reduce_op` 发
+#:   FutureWarning（弃用提示）。本项目 `ENABLE_DISTRIBUTED=False` 且全仓无 `reduce_op`
+#:   调用 —— 这条告警**不是本项目的缺陷**，但它每次计数都会刷一遍，把真正的告警淹掉。
+#:
+#: 抑制范围**刻意收得很窄**（三条同时限定，少一条就可能顺手把别的告警吃掉）：
+#:   ① 类别：FutureWarning（不是所有 warning）
+#:   ② 消息：必须含 `reduce_op`
+#:   ③ 作用域：只在 `catch_warnings()` 块内、只在 `ast_live_count` 调用期
+#: 不用 `warnings.filterwarnings(...)` 全局登记 —— 那是**永久**改动进程的告警行为，
+#: 一旦有别的模块也发 reduce_op 相关 FutureWarning，我们会连它也一起吞掉。
+_TORCH_DEPRECATION_PAT = r".*reduce_op.*"
+
+
+def suppress_torch_deprecation():
+    """返回一个只抑制「torch reduce_op 弃用类 FutureWarning」的上下文管理器。
+
+    ★不改变任何其他告警的可见性（含 FutureWarning 的其它消息）。
+    """
+    @_ctxlib.contextmanager
+    def _cm():
+        with _warnings.catch_warnings():
+            _warnings.filterwarnings(
+                "ignore",
+                message=_TORCH_DEPRECATION_PAT,
+                category=FutureWarning,
+            )
+            yield
+
+    return _cm()
+
+
 # ---------------------------------------------------------------- 实测读数
 def ast_live_count() -> int | None:
     """当前进程 AST 活体对象数（**内联生成器，不建容器**）。
@@ -96,7 +131,9 @@ def ast_live_count() -> int | None:
         int，或 None（`gc.get_objects()` 不可用）。None ≠ 0。
     """
     try:
-        return sum(1 for _o in gc.get_objects() if isinstance(_o, _ast.AST))
+        # ★352刀8：只在这一次遍历外围包一层窄抑制（见 `suppress_torch_deprecation`）
+        with suppress_torch_deprecation():
+            return sum(1 for _o in gc.get_objects() if isinstance(_o, _ast.AST))
     except Exception as _e:  # noqa: BLE001
         silent_exc(_e, where="ast_release::ast_live_count", level="debug")
         return None

@@ -471,6 +471,61 @@ class PatchManager:
             str(patch.get("repair_source", "") or ""),
         )
 
+    @staticmethod
+    def _m352_ensure_dedup_key(patch: dict[str, Any]) -> dict:
+        """★352刀2：入池口强制 `dedup_key`（与 `audit_problem_pool` 同口径）。
+
+        为什么要在入池口做：烛微352 实测 pending 40/40 全缺 `dedup_key`，
+        而池（`audit_problem_pool`）侧早就有——两侧无法对账，于是“这条补丁对应哪个
+        问题”永远只能靠 file+method 字面匹配。
+
+        四种情形（**不同事实不同措辞**，铁律166）：
+          · `ok`        已有且与可复算值一致
+          · `filled`    缺失 ⇒ 现算补齐（本批前的全部历史条目就是这类）
+          · `recomputed` 有但与可复算值不同 ⇒ 以可复算值为准，原值留 `dedup_key_raw`
+                        并告警。为什么不拒收：不自洽的键比没键更糟，但因它
+                        拒收会把真补丁打死（上游可能只是算法旧版本）。
+          · `rejected`  file 或 method 缺失 ⇒ **无法定位，拒收**（没定位的补丁
+                        进了池也只会每拍生成失败一次）。
+
+        参数 `patch` 会被**就地修改**（这是入池口的使用方式，与 `_m323_normalize_patch` 一致）。
+        """
+        _f = str(patch.get("file") or "").strip()
+        _m = str(patch.get("method") or "").strip()
+        _i = str(patch.get("issue_type") or "").strip()
+        _out = {"ok": False, "action": "rejected", "key": "", "expect": "",
+                "raw": str(patch.get("dedup_key") or ""), "why": "",
+                "degraded": False, "schema": "pending_dedup_key/352.v1"}
+        if not _f or not _m:
+            _out["why"] = "missing_%s" % ("file" if not _f else "method")
+            return _out
+        try:
+            from nucleus.evolution.patch_generator import make_dedup_key as _mk
+        except Exception as _e:                                # noqa: BLE001
+            silent_exc(_e, where="PatchManager::_m352_ensure_dedup_key import")
+            _out["why"] = "key_module_unavailable:%s" % type(_e).__name__
+            return _out
+        _expect = _mk(_f, _m, _i)
+        _out["expect"] = _expect
+        _out["key"] = _expect
+        _out["degraded"] = not bool(_i)
+        _cur = str(patch.get("dedup_key") or "").strip()
+        if not _cur:
+            _out["ok"] = True
+            _out["action"] = "filled"
+            _out["why"] = "absent_%s" % ("degraded_no_issue_type" if _out["degraded"] else "ok")
+        elif _cur == _expect:
+            _out["ok"] = True
+            _out["action"] = "ok"
+            _out["why"] = "consistent"
+        else:
+            _out["ok"] = True
+            _out["action"] = "recomputed"
+            _out["why"] = "inconsistent:%s!=%s" % (_cur[:16], _expect[:16])
+            patch["dedup_key_raw"] = _cur
+        patch["dedup_key"] = _expect
+        return _out
+
     # ========== ★主线第80批 T7 (P0-3)：核心文件免签改写统一闸门 ==========
     #   单一路由，供 save_pending_patch（入队覆写）/ 反思直批(main.py) /
     #   落地(apply_all_pending) 共用。核心性单一真源为 SafeEvolutionExecutor._is_core_file。
@@ -2226,6 +2281,34 @@ class PatchManager:
         # ★第105批 T-105a：复用统一放行助手（与 verify_submitted_patches 补回边同源），
         #   判据已改读嵌套 runtime_verify_result.verified + baseline_errors>0。
         self._m105_try_release_low_risk(patch)
+
+        # ★352刀2②：入池口强制 `dedup_key`。放在所有其他判定**之后**、
+        #   载入队列**之前**：前面路径可能还会回写 `method`（_m323 真值归一），
+        #   键必须用**归一后**的 file/method 算；而在落盘前才能保证写进去的每一条
+        #   都带键（否则又是一批“入了池却对不上账”）。
+        try:
+            _m352_dk = PatchManager._m352_ensure_dedup_key(patch)
+            patch["dedup_key_status"] = _m352_dk["action"]
+            _m352_pid = str(patch.get("id") or "")[:32]
+            if not _m352_dk["ok"]:
+                _module_logger.warning(
+                    "[352去重] 拒收：无法定位时不入池 id=%s file=%r method=%r why=%s",
+                    _m352_pid, patch.get("file"), patch.get("method"), _m352_dk["why"])
+                return
+            if _m352_dk["action"] == "filled":
+                _module_logger.info(
+                    "[352去重] 补齐 dedup_key id=%s file=%s method=%s key=%s%s",
+                    _m352_pid, patch.get("file"), patch.get("method"),
+                    _m352_dk["key"], "(退化：无 issue_type)" if _m352_dk["degraded"] else "")
+            elif _m352_dk["action"] == "recomputed":
+                _module_logger.warning(
+                    "[352去重] dedup_key 不自洽，已按可复算值重算 id=%s "
+                    "原值=%s 新值=%s（原值留 dedup_key_raw）",
+                    _m352_pid, _m352_dk["raw"][:16], _m352_dk["key"])
+        except Exception as _m352_e:
+            # 异常不阻断入队（不能因新闸门丢真补丁），但**必须可见**
+            silent_exc(_m352_e, where="PatchManager::save_pending_patch 352去重键",
+                       level="warning")
 
         pending = self._load_patch_list(self._pending_file)
         history = self._load_patch_list(self._history_file)

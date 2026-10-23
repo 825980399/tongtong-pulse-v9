@@ -811,7 +811,9 @@ def read_calibration(path: str) -> dict:
 def collect_death_samples(project_root: str | None = None,
                           pool_entries: list | None = None,
                           universe: int = 76, limit: int = 20,
-                          scoped: bool = True) -> list:
+                          scoped: bool = True,
+                          exclude_drifted: bool = True,
+                          drift_filter: dict | None = None) -> list:
     """按「76 抽 20 重放」的办法组样本（349 刀4 同一评估法，本刀扩样本用）。
 
     `universe` 是候选面（默认 76 —— 与烛微审计同基数），`limit` 是实际重放条数。
@@ -819,6 +821,12 @@ def collect_death_samples(project_root: str | None = None,
 
     ★351刀1：`scoped=True`（默认）走「类.方法」限定口径；`scoped=False` 保留
     350 的裸名口径 —— 两口径**同一批样本**各跑一遍，才能看出同名碰撞消掉了多少。
+
+    ★352刀1②：`exclude_drifted=True`（默认）——**目标已漂移的候选不进判死池**。
+    道理：对一个 HEAD 上已经不存在的方法论“它是不是死代码”，结论必然是
+    “没人引用”（因为它根本不存在）—— 那不是判死，是**题目错了**。把它计入
+    判死分母只会把误报率要么虚高要么虚低，两头都不可信。
+    `drift_filter` 传一个 dict 就把过滤明细回填（不改返回类型，不破已有调用）。
     """
     _rows = list(pool_entries or [])
     if not _rows:
@@ -846,6 +854,39 @@ def collect_death_samples(project_root: str | None = None,
                        "file": str(_e.get("file") or ""),
                        "method": str(_e.get("method") or ""),
                        "judged": DEATH_JUDGED_DEAD, "tier": _tier})
+    # ★352刀1②：漂移候选不进判死池。**必须在抽样之前过滤**——
+    #   先抽 20 再剔漂移会让分母随机变小（铁律163：“只取N条”筛选器必须
+    #   先遍历全池再截断）。
+    _df = {"schema": "death_drift_filter/352.v1", "applied": bool(exclude_drifted),
+           "total_before": len(_cands), "excluded": 0, "kept": len(_cands),
+           "by_verdict": {}, "excluded_ids": [], "boundary": ""}
+    if exclude_drifted and _cands:
+        try:
+            from nucleus.evolution.patch_generator import (
+                TARGET_DRIFTED_VERDICTS as _DV,
+                precheck_batch as _pcb,
+            )
+
+            _bf = _pcb(project_root or _zbj_root(), _cands)
+            _bad = {}
+            for _r in _bf["rows"]:
+                if _r["verdict"] in _DV and str(_r["id"] or ""):
+                    _bad[str(_r["id"])] = _r
+            if _bad:
+                _cands = [c for c in _cands if str(c.get("id") or "") not in _bad]
+                _df["excluded"] = len(_bad)
+                _df["excluded_ids"] = sorted(_bad)
+                for _r in _bad.values():
+                    _df["by_verdict"][_r["verdict"]] = (
+                        _df["by_verdict"].get(_r["verdict"], 0) + 1)
+        except Exception as _e:                                # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.collect_death_samples drift")
+            # 预检不可用：**如实标未过滤**，不假装“没有漂移”（铁律156）
+            _df["applied"] = False
+            _df["boundary"] = "预检不可用 ⇒ 未过滤（非“无漂移”）"
+    _df["kept"] = len(_cands)
+    if isinstance(drift_filter, dict):
+        drift_filter.update(_df)
     _uni = _cands[:int(universe)]
     _n = min(int(limit), len(_uni))
     if _n <= 0:

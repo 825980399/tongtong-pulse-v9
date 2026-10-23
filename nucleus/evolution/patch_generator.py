@@ -38,6 +38,8 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
+import textwrap
 import json
 import os
 import time
@@ -48,15 +50,38 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("PatchGenerator")
 
+#: ★352刀3：模板档识别 `except <exc> as <var>:`。只匹配“有 as”的形态（裸 except
+#   没有异常对象可传，猜一个就不确定了）。
+_RE_EXCEPT_AS_PASS = re.compile(
+    r"^(?P<ind>[ \t]*)except\s+(?P<exc>[A-Za-z_][\w.\t ,()]*)\s+as\s+(?P<var>[A-Za-z_]\w*)\s*:\s*$")
+
 #: 生成器版本（写进每份草稿，便于按版本统计合格率；改 prompt/解析规则必须升版）
-GENERATOR_VERSION = "349.d1.v1"
+#: ★352刀6：349.d1.v1 → 352.d6.v1。升版理由：提示模板从“锚点三元组”改为
+#:   “整方法四步”（与 `METHOD_LEVEL_CONTRACT=True` 对齐），合格率不可跨版本直接比。
+GENERATOR_VERSION = "352.d6.v1"
+
+#: ★352刀6：提示模板版本（独立于生成器版本——同一版生成器可能试多套模板）
+PROMPT_TEMPLATE_VERSION = "352.d6.v1"
 
 # ---- ★三态（生成侧唯一口径）----
 STATE_DRAFT_READY = "draft_ready"
 STATE_GATE_REJECTED = "gate_rejected"
 STATE_GENERATION_FAILED = "generation_failed"
+#: ★352刀1：第四态——**目标漂移**。
+#   为什么不能并进 generation_failed：两者是**不同事实**（铁律166）。
+#     generation_failed = 模型/传输/解析没给出可用产物（重试或换模型有意义）；
+#     target_drifted   = 要改的东西在 HEAD 上已不存在/改名（重试一百次也没用，
+#                        必须重新定位或剔除）。
+#   混为一谈的代价：69.2% 的无效生成被记成“模型不行”——烛微352 诊断的正是这一条。
+STATE_TARGET_DRIFTED = "target_drifted"
+#: ★352刀3：第五态——**转人工**。
+#   与 generation_failed 不同（铁律166）：failed 是“这次没成功，可以重试”；
+#   manual_required 是“**不应该让模型生成**，必须人写”——重试、换模型、加强 prompt
+#   都是错的方向。把两者混一谈，这批条目会永远在重试队列里转。
+STATE_MANUAL_REQUIRED = "manual_required"
 
-STATES = (STATE_DRAFT_READY, STATE_GATE_REJECTED, STATE_GENERATION_FAILED)
+STATES = (STATE_DRAFT_READY, STATE_GATE_REJECTED, STATE_GENERATION_FAILED,
+          STATE_TARGET_DRIFTED, STATE_MANUAL_REQUIRED)
 
 #: ★349刀1②：证据门**六字段**（348 已铺前四个，本批补 reason / dedup_key）
 REQUIRED_PATCH_FIELDS = ("file", "method", "original_code", "modified_code",
@@ -134,6 +159,434 @@ def dedup_key_matches_pool(file: str, method: str, issue_type: str) -> bool:
         return False
 
 
+# ========== ★352刀1：生成前目标存在性预检 ==========
+#   烛微352 实测：40 条 pending 里目标漂移 27 条（69.2%），主根因是“生成器缺生成前预检”。
+#   另一半原因：原有 `extract_source_snippet` 虽然也会 file_not_found，
+#   但它归 `generation_failed`（词不达意），**且不回写池状态**，
+#   于是同一条漂移条目每一拍都重新失败一次。预检把这两件
+#   事都收了：给**独立判词**，且能被池側用来置 target_drifted。
+
+PRECHECK_SCHEMA = "target_precheck/352.v1"
+
+TARGET_IN_PLACE = "in_place"
+TARGET_FILE_ABSENT = "file_absent"
+TARGET_METHOD_ABSENT = "method_absent"
+TARGET_PARSE_FAILED = "parse_failed"
+TARGET_UNREADABLE = "unreadable"
+
+TARGET_VERDICTS = (TARGET_IN_PLACE, TARGET_FILE_ABSENT, TARGET_METHOD_ABSENT,
+                   TARGET_PARSE_FAILED, TARGET_UNREADABLE)
+
+#: 视为「漂移」（不该进生成/判死池）的判词。
+#   ★只收 file_absent 与 method_absent。parse_failed / unreadable 是**暂时不可判**，
+#   不能借“漂移”把它们一起剔掉（那会把真问题连同一个不可读文件一起打掉）
+TARGET_DRIFTED_VERDICTS = (TARGET_FILE_ABSENT, TARGET_METHOD_ABSENT)
+
+#: 预检缓存：key=(abs_path, mtime_ns, size) ⇒ 索引。
+#   为什么缓存：40 条存量里 `PulseLegs.py` 占 6 条、`PulseHormones.py` 占 4 条，
+#   同一文件反复 AST 解析在心跳里是白费的开销（铁律208：批量一次遍历）。
+_PRECHECK_CACHE: dict = {}
+_PRECHECK_CACHE_MAX = 512
+
+
+def _precheck_index(file_abs: str) -> tuple:
+    """返回 `(index, state)`；index = {module:set, by_class:dict, n_class:int}。"""
+    try:
+        _st = os.stat(file_abs)
+    except OSError as _e:
+        silent_exc(_e, where="patch_generator::_precheck_index stat %s" % file_abs)
+        return None, "%s: %s" % (type(_e).__name__, _e)
+    _key = (os.path.abspath(file_abs), int(_st.st_mtime_ns), int(_st.st_size))
+    _hit = _PRECHECK_CACHE.get(_key)
+    if _hit is not None:
+        return _hit
+    try:
+        with open(file_abs, encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        _tree = ast.parse(_src)
+    except SyntaxError as _se:
+        silent_exc(_se, where="patch_generator::_precheck_index parse %s" % file_abs)
+        _res = (None, "SyntaxError: %s" % _se)
+    except OSError as _oe:
+        silent_exc(_oe, where="patch_generator::_precheck_index read %s" % file_abs)
+        _res = (None, "%s: %s" % (type(_oe).__name__, _oe))
+    else:
+        _mod = set()
+        _by_class: dict = {}
+        _n_cls = 0
+        for _node in _tree.body:
+            if isinstance(_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                _mod.add(_node.name)
+            elif isinstance(_node, ast.ClassDef):
+                _n_cls += 1
+                for _sub in _node.body:
+                    if isinstance(_sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        _by_class.setdefault(_sub.name, []).append(_node.name)
+        _res = ({"module": _mod, "by_class": _by_class, "n_class": _n_cls}, "ok")
+    if len(_PRECHECK_CACHE) >= _PRECHECK_CACHE_MAX:
+        _PRECHECK_CACHE.clear()
+    _PRECHECK_CACHE[_key] = _res
+    return _res
+
+
+def precheck_target(project_root: str | None, file: str, method: str) -> dict:
+    """对**当前工作副本**校验「file 存在 ∧ method 有 def」。只读。
+
+    为什么用 AST 不用子串搜索：实测发现文本搜 `def __init__(` 在 1500 行的
+    器官文件里**必命中**（任何类都有 `__init__`），会把真漂移报成在位。
+    按语义单元（模块级 def / 类内 def）判才对得上账（铁律162）。
+
+    返回：`{schema, verdict, file, method, why, cls, module_level, ambiguous, n_class}`。
+    `cls` 列出命中的类；多个类同名 ⇒ `ambiguous=True`（**仍计在位**，
+    但如实标出，不假装确定性）。
+    """
+    _rel = _m349_norm_rel(file)
+    _root = project_root or os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    _out = {
+        "schema": PRECHECK_SCHEMA,
+        "file": _rel,
+        "method": str(method or "").strip(),
+        "verdict": TARGET_METHOD_ABSENT,
+        "why": "",
+        "cls": [],
+        "module_level": False,
+        "ambiguous": False,
+        "n_class": 0,
+    }
+    if not _rel:
+        _out["verdict"] = TARGET_FILE_ABSENT
+        _out["why"] = "empty_file_field"
+        return _out
+    if not _out["method"]:
+        # 没方法名 ⇒ 无法判“方法在不在”；这属于**条目声明不完整**，不当漂移
+        _out["verdict"] = TARGET_METHOD_ABSENT
+        _out["why"] = "empty_method_field"
+        return _out
+    _p = os.path.join(str(_root), _rel)
+    if not os.path.isfile(_p):
+        _out["verdict"] = TARGET_FILE_ABSENT
+        _out["why"] = "file_not_found"
+        return _out
+    _idx, _state = _precheck_index(_p)
+    if _idx is None:
+        _out["verdict"] = (TARGET_UNREADABLE if _state.startswith(("OSError", "FileNotFound"))
+                           else TARGET_PARSE_FAILED)
+        _out["why"] = _state[:200]
+        return _out
+    _out["n_class"] = _idx["n_class"]
+    if _out["method"] in _idx["module"]:
+        _out["verdict"] = TARGET_IN_PLACE
+        _out["module_level"] = True
+        _out["why"] = "module_level_def"
+        return _out
+    _cls = list(_idx["by_class"].get(_out["method"], []))
+    if _cls:
+        _out["verdict"] = TARGET_IN_PLACE
+        _out["cls"] = _cls
+        _out["ambiguous"] = len(_cls) > 1
+        _out["why"] = "class_def:%s%s" % (
+            ",".join(_cls), "(同名 %d 类)" % len(_cls) if len(_cls) > 1 else "")
+        return _out
+    _out["verdict"] = TARGET_METHOD_ABSENT
+    _out["why"] = "no_def_in_%d_classes_or_module" % _idx["n_class"]
+    return _out
+
+
+def precheck_batch(project_root: str | None, entries: list) -> dict:
+    """批量预检（一次遍历，铁律208）。返回 `{schema, total, tally, in_place,
+    drifted, other, rows}`。用于 40 条存量对账与池侧批量标记。
+    """
+    _rows = []
+    _tally: dict = {}
+    for _e in (entries or []):
+        if not isinstance(_e, dict):
+            continue
+        _pc = precheck_target(project_root, _e.get("file"), _e.get("method"))
+        _tally[_pc["verdict"]] = _tally.get(_pc["verdict"], 0) + 1
+        _rows.append({
+            "id": str(_e.get("dedup_key") or _e.get("id") or ""),
+            "file": _pc["file"],
+            "method": _pc["method"],
+            "verdict": _pc["verdict"],
+            "why": _pc["why"],
+            "cls": _pc["cls"],
+            "ambiguous": _pc["ambiguous"],
+        })
+    _in = _tally.get(TARGET_IN_PLACE, 0)
+    _dr = sum(_tally.get(_v, 0) for _v in TARGET_DRIFTED_VERDICTS)
+    return {
+        "schema": PRECHECK_SCHEMA + "/batch",
+        "total": len(_rows),
+        "tally": _tally,
+        "in_place": _in,
+        "drifted": _dr,
+        "other": len(_rows) - _in - _dr,
+        "rate_drifted": (round(_dr / len(_rows), 4) if _rows else None),
+        "rows": _rows,
+    }
+
+
+# ========== ★352刀3：分层生成路由 ==========
+#   烛微352：简单=规则模板（零模型零误报）｜中等=qwen2:7b 整方法改写｜复杂=人工。
+#   为什么要分：现状是**不管难易全扛给 7B 小模型**，而 7B 在跨方法/跨文件上
+#   几乎必错（铁律203：60s 只能出 ≈350 tokens，契约只能锚三元组）。
+
+LANE_TEMPLATE = "template"
+LANE_LOCAL_MODEL = "local_model"
+LANE_MANUAL = "manual"
+LANE_SCHEMA = "gen_lane/352.v1"
+LANES = (LANE_TEMPLATE, LANE_LOCAL_MODEL, LANE_MANUAL)
+
+#: 模板档只接**能确定性枚举**的 issue_type。
+#   ★收得越窄越好：每多一类就多一分“模板以为自己会写”的风险。
+TEMPLATE_ISSUE_TYPES = ("silent_exception",)
+
+#: 复杂档：跨文件/跨模块/语义重——机器不该猜
+MANUAL_ISSUE_TYPES = ("cross_module_singleton_call", "cross_file_refactor",
+                      "multi_file_change", "architecture")
+
+#: 上帝文件行数阈值（超过则改动影响面难以由小模型把握）
+GOD_FILE_LINES = 3000
+
+
+def route_generation_lane(entry: dict, project_root: str | None = None) -> dict:
+    """判定一条池条目应走哪个生成档。只读、确定性。
+
+    返回：`{schema, lane, score, reasons, signals}`。
+      · `score` 是“复杂度”分（越高越复杂），`reasons` 逐条列出为何加分——
+        留这个是为了事后能回答“它当初为什么没走模板”，而不是只报一个档位。
+      · `signals` 是原始阈值读数（行数/是否核心/是否判死）。
+    """
+    _e = entry if isinstance(entry, dict) else {}
+    _it = str(_e.get("issue_type") or "")
+    _f = _m349_norm_rel(_e.get("file"))
+    _o: dict = {"schema": LANE_SCHEMA, "lane": LANE_LOCAL_MODEL, "score": 0,
+                "reasons": [], "signals": {}}
+    _root = project_root or os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    _p = os.path.join(str(_root), _f) if _f else ""
+    _nlines = 0
+    if _p and os.path.isfile(_p):
+        try:
+            with open(_p, encoding="utf-8", errors="replace") as _fh:
+                _nlines = sum(1 for _ in _fh)
+        except OSError as _oe:
+            silent_exc(_oe, where="patch_generator::route_generation_lane lines")
+    _core = _m349_is_core_file(_f) if _f else True
+    _o["signals"] = {"issue_type": _it, "file": _f, "file_lines": _nlines,
+                     "is_core": bool(_core),
+                     "o3_dead_code": bool(_e.get("o3_dead_code"))}
+    # —— 复杂信号（只升档不降档）——
+    if _e.get("o3_dead_code"):
+        _o["score"] += 4
+        _o["reasons"].append("判死候选(o3_dead_code)⇒走AST删除路径，不应走生成器")
+    if _it in MANUAL_ISSUE_TYPES:
+        _o["score"] += 4
+        _o["reasons"].append("issue_type=%s 属跨文件/语义重族" % _it)
+    if _core:
+        _o["score"] += 3
+        _o["reasons"].append("核心文件（改错代价高）")
+    if _nlines >= GOD_FILE_LINES:
+        _o["score"] += 2
+        _o["reasons"].append("上帝文件 %d 行 ≥ %d" % (_nlines, GOD_FILE_LINES))
+    # —— 简单信号（仅当无复杂信号时才能进模板档）——
+    _simple = (_it in TEMPLATE_ISSUE_TYPES and not _e.get("o3_dead_code")
+               and _nlines and _nlines < GOD_FILE_LINES)
+    if _o["score"] >= 3:
+        _o["lane"] = LANE_MANUAL
+    elif _simple:
+        _o["lane"] = LANE_TEMPLATE
+        _o["reasons"].append("issue_type=%s 在模板可枚举集合内" % _it)
+    else:
+        _o["lane"] = LANE_LOCAL_MODEL
+        if _it not in TEMPLATE_ISSUE_TYPES:
+            _o["reasons"].append("issue_type=%s 不在模板可枚举集合内" % _it)
+        if not _nlines:
+            _o["reasons"].append("取不到行数（文件缺失）")
+    return _o
+
+
+# ── 模板档实现：只做**能确定性枚举**的改写 ──
+
+def _tpl_file_imports(file_path: str, symbol: str) -> bool:
+    """目标文件是否已导入某符号（模板产物要用它，没导入就不能改）。"""
+    try:
+        with open(file_path, encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+    except OSError as _e:
+        silent_exc(_e, where="patch_generator::_tpl_file_imports %s" % file_path)
+        return False
+    for _line in _src.split("\n"):
+        _s = _line.strip()
+        if _s.startswith(("import ", "from ")) and symbol in _s:
+            return True
+    return False
+
+
+def _tpl_silent_exception(project_root: str, entry: dict) -> dict:
+    """模板：`except X as e: pass` ⇒ `silent_exc(e, where="file::method")`。
+
+    三道确定性前提（少一条就**不生成**，降级给模型）：
+      ① 目标文件已导入 `silent_exc`（否则模板产物会 NameError）；
+      ② 方法体内存在 `except ... as <var>:` 紧跟 `pass` 的块；
+      ③ 该块是**单独一个 pass**（多语句时不拆，拆了就是改行为）。
+    裸 `except:`（无 as）不接——没有异常对象可传，猜一个就是不确定。
+    """
+    _rel = _m349_norm_rel(entry.get("file"))
+    _meth = str(entry.get("method") or "").strip()
+    _p = os.path.join(str(project_root), _rel)
+    _base = {"ok": False, "data": None, "why": ""}
+    if not _tpl_file_imports(_p, "silent_exc"):
+        _base["why"] = "no_silent_exc_import"
+        return _base
+    _span = _m349_method_span(project_root, _rel, _meth)
+    if not _span.get("ok"):
+        _base["why"] = "span:%s" % _span.get("why")
+        return _base
+    try:
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _lines = _f.read().replace("\r\n", "\n").split("\n")
+    except OSError as _e:
+        silent_exc(_e, where="patch_generator::_tpl_silent_exception read")
+        _base["why"] = "read_error"
+        return _base
+    _orig = "\n".join(_lines[_span["start"]:_span["end"]])
+    _new = []
+    _hits = 0
+    _var_name = "e"
+    _i = _span["start"]
+    _rx = _RE_EXCEPT_AS_PASS
+    while _i < _span["end"]:
+        _cur = _lines[_i]
+        _m = _rx.match(_cur)
+        if _m and _i + 1 < _span["end"]:
+            _nxt = _lines[_i + 1]
+            if _nxt.strip() == "pass" and (
+                    len(_nxt) - len(_nxt.lstrip())) > (len(_cur) - len(_cur.lstrip())):
+                _ind = _m.group("ind")
+                _var = _m.group("var")
+                _new.append("%sexcept %s as %s:" % (_ind, _m.group("exc"), _var)
+                            if _m.group("exc") else "%sexcept:" % _ind)
+                _new.append('%s    silent_exc(%s, where="%s::%s")  '
+                            '# 352模板档：静默异常留痕'
+                            % (_ind, _var, _rel, _meth))
+                _var_name = _var
+                _hits += 1
+                _i += 2
+                continue
+        _new.append(_cur)
+        _i += 1
+    if _hits != 1:
+        _base["why"] = "except_pass_hits=%d（需恰好 1）" % _hits
+        return _base
+    _mod = "\n".join(_new)
+    if _mod == _orig:
+        _base["why"] = "no_change"
+        return _base
+    # ★352刀3：reason 必须过「三段式」证据链门（触发行/现象/依据）——
+    #   模板档不能因为“是自动生成的”就不交代凭什么改（否则证据门对
+    #   模板档形同虚设）。三段内容都是**从源码实测得来**，不是套话。
+    _reason = ("触发行：%s 的 except 块（第 %d 行起）只有 pass。"
+               "现象：异常被静默吞掉，运行时无任何留痕。"
+               "依据：本文件已导入 silent_exc，按项目约定改为 "
+               "silent_exc(%s, where=\042%s::%s\042)，不改异常类与控制流。"
+               "（模板档，零模型）") % (
+                   _meth, _span["start"] + 1, _var_name, _rel, _meth)
+    _d = {"original_code": _orig, "modified_code": _mod,
+          "reason": _reason,
+          "splice_line": _span["start"] + 1}
+    return {"ok": True, "data": _d, "why": "template_ok", "hits": _hits}
+
+
+_TEMPLATE_RULES = {"silent_exception": _tpl_silent_exception}
+
+
+def generate_from_template(project_root: str, entry: dict) -> dict:
+    """模板档生成（**零模型**）。返回 `{ok, data, why}`，与 `parse_llm_reply` 同形。"""
+    _it = str((entry or {}).get("issue_type") or "")
+    _fn = _TEMPLATE_RULES.get(_it)
+    if _fn is None:
+        return {"ok": False, "data": None, "why": "no_template_for:%s" % _it}
+    return _fn(project_root, entry or {})
+
+
+# ========== ★352刀4：审批链分层 ==========
+#   烛微352：低危草稿自动过、高危人工。接㔉裁决②审批分道。
+#   ★不变量：`auto_apply_eligible` 恒 False。本刀只把“要不要人签字”分档，
+#   **不**把“要不要自动改源码”一并放开——免签与免审是两件事，
+#   混在一起就是把审批链当成自动落地链（铁律165：一开关控两语义须拆）。
+
+APPROVAL_TIER_SCHEMA = "approval_tier/352.v1"
+TIER_LOW = "low"
+TIER_HIGH = "high"
+
+#: 低危档的改动行上限（超过则不再“看上去小”）
+APPROVAL_LOW_MAX_CHANGED_LINES = 6
+#: 评分到达该值即高危（只升不降）
+APPROVAL_HIGH_SCORE = 3
+
+
+def score_approval_tier(draft: dict, project_root: str | None = None,
+                        *, lane: str | None = None) -> dict:
+    """给一份草稿算审批分档。只读、确定性。
+
+    返回：`{schema, tier, requires_confirmation, auto_apply_eligible,
+             score, reasons, changed_lines, signals}`。
+
+    高危信号（只升不降，与 `_m344_merge_risk` 同一哲学）：
+      判死候选 +5｜核心文件 +4｜跨文件族 +4｜影响面标记 +3
+    低危信号（只降不升，且**永远抵不过**高危信号）：
+      来自模板档 -2｜改动≤ 6 行 -1
+    """
+    _d = draft if isinstance(draft, dict) else {}
+    _o: dict = {"schema": APPROVAL_TIER_SCHEMA, "tier": TIER_HIGH,
+                "requires_confirmation": True, "auto_apply_eligible": False,
+                "score": 0, "reasons": [], "changed_lines": None, "signals": {}}
+    _f = _m349_norm_rel(_d.get("file"))
+    _it = str(_d.get("issue_type") or "")
+    _core = _m349_is_core_file(_f) if _f else True
+    _o3 = bool(_d.get("o3_dead_code"))
+    _multi = ("," in _f) or bool(_d.get("multi_file"))
+    _dm = _m349_diff_is_minimal(_d.get("original_code") or "",
+                                _d.get("modified_code") or "",
+                                max_changed_lines=10 ** 6)
+    _chg = _dm.get("changed")
+    _o["changed_lines"] = _chg
+    _o["signals"] = {"file": _f, "issue_type": _it, "is_core": bool(_core),
+                     "o3_dead_code": _o3, "multi_file": _multi,
+                     "lane": lane, "changed_lines": _chg,
+                     "risk_level": _d.get("risk_level")}
+    if _o3:
+        _o["score"] += 5
+        _o["reasons"].append("判死候选(o3_dead_code)")
+    if _core:
+        _o["score"] += 4
+        _o["reasons"].append("核心文件")
+    if _it in MANUAL_ISSUE_TYPES:
+        _o["score"] += 4
+        _o["reasons"].append("issue_type=%s 属跨文件/语义重族" % _it)
+    if _multi:
+        _o["score"] += 3
+        _o["reasons"].append("多文件改动")
+    if str(_d.get("risk_level") or "") in ("高", "中等", "high", "medium"):
+        _o["score"] += 2
+        _o["reasons"].append("risk_level=%s" % _d.get("risk_level"))
+    # —— 低危信号（高危信号已累计时不再减，避免“降到低危”）——
+    if _o["score"] == 0:
+        if lane == LANE_TEMPLATE:
+            _o["score"] -= 2
+            _o["reasons"].append("来自模板档（确定性改写）")
+        if isinstance(_chg, int) and _chg <= APPROVAL_LOW_MAX_CHANGED_LINES:
+            _o["score"] -= 1
+            _o["reasons"].append("改动 %d 行 ≤ %d" % (_chg, APPROVAL_LOW_MAX_CHANGED_LINES))
+    _o["tier"] = TIER_HIGH if _o["score"] >= APPROVAL_HIGH_SCORE else TIER_LOW
+    _o["requires_confirmation"] = (_o["tier"] == TIER_HIGH)
+    # ★不变量：永远 False。免审 ≠ 免征。
+    _o["auto_apply_eligible"] = False
+    return _o
+
+
 # ========== 源码片段 ==========
 
 
@@ -206,30 +659,133 @@ def extract_source_snippet(project_root: str, file: str, method: str,
 # ========== 提示词与解析 ==========
 
 
-def build_prompt(entry: dict, source: dict) -> str:
+# ========== ★352刀5：质量回灌（verdict → prompt） ==========
+#   350刀1 已把「验证结果 → 问题池状态」闭环；本刀把同一份 verdict 再往
+#   **生成侧**引：让模型看到“上几次同类改动实际效果如何”，而不是每次从零开始猜。
+
+FEEDBACK_SCHEMA = "gen_feedback_context/352.v1"
+#: 注入几条样本（越多越吃 token；7B 小模型吃不下太多）
+FEEDBACK_TOP_N = 3
+#: 样本 reason 截断（prompt 里不能被一条长理由撞没）
+FEEDBACK_REASON_MAX = 90
+
+#: 测试注入件的文件名形态（实测 effect_verify.json 里 50 条 verdict 有相当一部分
+#: 是 `a.py`/`b.py` 这种自证造的假文件）。把它们当 few-shot 会把
+#: 模型往“编一个不存在的文件”上带（铁律179：测试真值不得作为生产样本）。
+FEEDBACK_FAKE_FILE_EXACT = ("a.py", "b.py", "c.py", "x.py", "test.py", "foo.py")
+FEEDBACK_FAKE_PREFIX = ("tmp/", "tests/", "./a.py")
+
+
+def _feedback_is_real(row: dict) -> bool:
+    """判一条 verdict 是否值得当样本。只认**能定位到真实源码**的。"""
+    _f = _m349_norm_rel(row.get("file"))
+    if not _f:
+        return False
+    if _f in FEEDBACK_FAKE_FILE_EXACT:
+        return False
+    for _p in FEEDBACK_FAKE_PREFIX:
+        if _f.startswith(_p):
+            return False
+    # 真实条目应带目录层次（organs/ 或 nucleus/），光杆文件名不算
+    return "/" in _f
+
+
+def load_feedback_examples(base_dir: str | None = None,
+                          n: int = FEEDBACK_TOP_N) -> dict:
+    """从 `effect_verify.json` 取最近 n 条**真实**验证结果作 few-shot。
+
+    返回：`{schema, state, total, real, used, examples, path}`。
+    `state` 如实回报 `absent/unreadable/no_verdicts/ok`——
+    **读不到不等于“没有可回灌的东西”**（铁律156）。
+    """
+    _o = {"schema": FEEDBACK_SCHEMA, "state": "absent", "total": 0, "real": 0,
+          "used": 0, "examples": [], "path": ""}
+    try:
+        from nucleus.evolution.verify_feedback import read_verdicts as _rv
+    except Exception as _e:                                    # noqa: BLE001
+        silent_exc(_e, where="patch_generator::load_feedback_examples import")
+        _o["state"] = "import_failed"
+        return _o
+    _v = _rv(base_dir)
+    _o["state"] = _v.get("state")
+    _o["path"] = _v.get("path") or ""
+    _rows = list((_v.get("verdicts") or {}).values())
+    _o["total"] = len(_rows)
+    _real = [r for r in _rows if isinstance(r, dict) and _feedback_is_real(r)]
+    _o["real"] = len(_real)
+    # 确定性排序：verified_at 倒序，同时间戳用 patch_id 做 tiebreak
+    _real.sort(key=lambda r: (-(r.get("verified_at") or 0),
+                              str(r.get("patch_id") or "")))
+    _ex = []
+    for r in _real[:max(0, int(n))]:
+        _ex.append({
+            "patch_id": str(r.get("patch_id") or "")[:24],
+            "file": _m349_norm_rel(r.get("file")),
+            "issue_type": str(r.get("issue_type") or "")[:40],
+            "passed": r.get("passed"),
+            "reason": str(r.get("reason") or "")[:FEEDBACK_REASON_MAX],
+        })
+    _o["examples"] = _ex
+    _o["used"] = len(_ex)
+    return _o
+
+
+def render_feedback_block(examples: list) -> str:
+    """把样本渲成 prompt 里的一段（无样本返回空串，不留一个空标题）。"""
+    if not examples:
+        return ""
+    _lines = ["参考（同仓库最近已应用补丁的**实测**验证结果："
+              "标「通过」的做法可信，标「未通过」的路子不要重走）："]
+    for _e in examples:
+        _tag = ("通过" if _e.get("passed") is True
+                else ("未通过" if _e.get("passed") is False else "未判定"))
+        _lines.append("- [%s] %s :: %s —— %s" % (
+            _tag, _e.get("file"), _e.get("issue_type") or "?", _e.get("reason") or ""))
+    return "\n".join(_lines) + "\n"
+
+
+def build_prompt(entry: dict, source: dict, examples: list | None = None) -> str:
     """构造生成提示词（**确定性**，同一条目同一次输入 ⇒ 同一 prompt）。
 
     确定性很重要：合格率要能按版本比较，prompt 里不能塞时间戳/随机数。
+    ★352刀5：`examples`（回灌样本）也要满足确定性——取样规则固定（见
+    `load_feedback_examples`），同一份 `effect_verify.json` 必得同一个 prompt。
     """
     _desc = str(entry.get("desc") or "")[:_DESC_MAX_CHARS]
     return (
-        "你是 Python 代码修复助手。给定一条静态审计问题与相关源码，输出**最小修复补丁**。\n"
+        # ★352刀6：版本号写*字面量*而不插变量——这是隐式字符串拼接，
+        #   中间插一个名字会把拼接打断（实测直接 SyntaxError）。
+        #   两处一致由 `tests/test_m352_batch.py::test_刀6_版本与模板一致` 断言保证。
+        "你是一个严谨的 Python 代码修复助手。请按下面五步作业（本提示模板版本 352.d6.v1）。\n"
+        "\n"
+        "① 预检：先核对下面给出的 method 在源码片段里确实存在（能看到 "
+        "def <method>）。看不到就说明“目标已漂移”，**不要凭空写代码**。\n"
+        "② 定位：只改该 method 内部，不要动旁边的方法；不要改导包、"
+        "不要新增依赖。\n"
+        "③ 理由必须写成**三段**，段名就用这三个词：\n"
+        "    「触发行：……」（定位到具体哪一行/哪个语句）\n"
+        "    「现象：……」（运行时会发生什么，如异常被吞掉）\n"
+        "    「依据：……」（凭什么判定这样改对）\n"
+        "④ 交付形式：给**完整方法**（从 def 行到方法结束），不要只给片段、"
+        "不要给 diff 补丁。`modified_code` 里必须**只有一个 def**，且名字等于 method。\n"
+        "⑤ 自检：交之前心里过一遍——把 `modified_code` 当作一个完整模块能不能 parse？"
+        "缩进是否与原文一致？能不能被本文件已有的导包满足？\n"
+        "\n"
         "只输出一个 JSON 对象，不要任何解释、不要 Markdown 代码围栏。\n"
-        'JSON 字段：{"anchor": "...", "replacement": "...", "reason": "..."}\n'
-        "约束：\n"
-        "1. anchor = 源码片段里**原样的一行**（逐字复制，含原有缩进，不要改任何字符）。\n"
-        "2. replacement = 用来替换 anchor 的那 1-3 行（含缩进，缩进量必须与 anchor 相同）。\n"
-        "3. reason 说明改了什么、为什么，中文，不超过 120 字。\n"
-        "4. 若这个问题无法通过改代码解决（协议接口/环境缺陷/需人工决策），"
-        "把 anchor 与 replacement 都输出为空字符串，reason 里写明原因。\n"
+        'JSON 字段：{"original_code": "...", "modified_code": "...", "reason": "..."}\n'
+        "  · original_code = 源码片段里 **该方法的原文**（逐字复制，含原有缩进）。\n"
+        "  · modified_code = 修复后的**整个方法**（含 def 行，缩进与原文一致，不超 120 行改动）。\n"
+        "  · reason = 上面③的三段式。\n"
+        "  · 若这个问题无法通过改代码解决（协议接口/环境缺陷/需人工决策），"
+        "把 original_code 与 modified_code 都输出为空字符串，reason 里写明原因。\n"
         "问题：issue_type=%s severity=%s klass=%s\n"
-        "位置：file=%s method=%s line=%s\n"
-        "描述：%s\n"
+        "位置（②定位用）：file=%s method=%s line=%s\n"
+        "描述：%s\n%s"
         "源码片段（%s，行 %s-%s）：\n%s\n"
     ) % (
         entry.get("issue_type"), entry.get("severity"), entry.get("klass"),
         entry.get("file"), entry.get("method"), entry.get("line"),
-        _desc,
+        _desc, render_feedback_block(examples or []),
         source.get("why"), source.get("start_line"), source.get("end_line"),
         source.get("code") or "",
     )
@@ -701,13 +1257,30 @@ def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
                 "changed_lines": None}
     _code = str(draft.get("modified_code") or "")
     _m = str(draft.get("method") or "").strip()
+    import ast as _ast
+
+    # ★352刀3：**缩进形态不是语法错误**。
+    #   类内方法的 `modified_code` 天然带类体缩进（4 空格），直接 `ast.parse`
+    #   必报 `unexpected indent`——那是**形态**问题，不是代码坏了（铁律162：
+    #   判据按语义单元）。先原样 parse，失败再 dedent 重试——
+    #   与 `_m349_ast_ok` 已有做法同源（那里已经这么做了，本门当初漏了）。
+    _tree = None
+    _dedented = False
     try:
-        import ast as _ast
         _tree = _ast.parse(_code)
     except SyntaxError as _se:
-        _module_logger.info("[350生成] 整方法契约 AST 不通过: %s", _se)
-        return {"ok": False, "mode": "method", "why": "syntax_error:%s" % _se,
-                "defs": [], "changed_lines": None}
+        _ded = textwrap.dedent(_code)
+        if _ded != _code:
+            try:
+                _tree = _ast.parse(_ded)
+                _dedented = True
+            except SyntaxError as _dse:
+                silent_exc(_dse, where="patch_generator.check_method_contract dedent")
+                _tree = None
+        if _tree is None:
+            _module_logger.info("[350生成] 整方法契约 AST 不通过: %s", _se)
+            return {"ok": False, "mode": "method", "why": "syntax_error:%s" % _se,
+                    "defs": [], "changed_lines": None, "dedented": False}
     _defs = [n.name for n in _tree.body
              if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))]
     if len(_defs) != 1:
@@ -735,7 +1308,7 @@ def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
                 "why": "方法级改动 %d 行 > 上限 %d" % (_n_changed, METHOD_CONTRACT_MAX_LINES),
                 "defs": _defs[:6], "changed_lines": _n_changed}
     return {"ok": True, "mode": "method", "why": "", "defs": _defs[:6],
-            "changed_lines": _n_changed}
+            "changed_lines": _n_changed, "dedented": _dedented}
 
 
 # ========== 传输层（可注入）==========
@@ -846,6 +1419,33 @@ def generate_patch_draft(entry: dict,
         _module_logger.warning("[349生成] 条目缺 file/method，无法生成: key=%s",
                                _out["entry_key"])
         return _out
+    # ★352刀1①：生成前目标存在性预检。
+    #   为何放在取源码**之前**：目标已不存在时读文件本就是白费，
+    #   而且旧路径会把它记成 generation_failed（词不达意）。
+    _pc = precheck_target(_root, entry.get("file"), entry.get("method"))
+    _out["precheck"] = _pc
+    if _pc["verdict"] in TARGET_DRIFTED_VERDICTS:
+        _out["state"] = STATE_TARGET_DRIFTED
+        _out["error"] = "target_drifted:%s" % _pc["verdict"]
+        # 留证：告诉读人“改前它会被归到哪一档”，否则无法相信这是修复
+        _out["would_be_state_before_352"] = STATE_GENERATION_FAILED
+        _module_logger.warning(
+            "[352预检] target_drifted key=%s file=%s method=%s verdict=%s why=%s "
+            "→ 不进生成（改前会被误记为 %s，重试无效）",
+            _out["entry_key"], entry.get("file"), entry.get("method"),
+            _pc["verdict"], _pc["why"], STATE_GENERATION_FAILED)
+        return _out
+    # ★352刀3：分层路由。路由在**取源码之前**做：manual 档根本不需要源码，取了也是白取。
+    _lane = route_generation_lane(entry, _root)
+    _out["lane"] = _lane
+    if _lane["lane"] == LANE_MANUAL:
+        _out["state"] = STATE_MANUAL_REQUIRED
+        _out["error"] = "lane_manual:%s" % ";".join(_lane["reasons"])[:200]
+        _module_logger.warning(
+            "[352路由] manual_required key=%s file=%s method=%s 复杂度=%d 原因=%s",
+            _out["entry_key"], entry.get("file"), entry.get("method"),
+            _lane["score"], ";".join(_lane["reasons"])[:200])
+        return _out
     _src = extract_source_snippet(_root, entry.get("file"), entry.get("method"),
                                   entry.get("line"))
     _out["source_ok"] = bool(_src.get("ok"))
@@ -855,21 +1455,59 @@ def generate_patch_draft(entry: dict,
         _module_logger.warning("[349生成] 取不到源码片段，不猜测: key=%s file=%s why=%s",
                                _out["entry_key"], entry.get("file"), _src.get("why"))
         return _out
-    _prompt = build_prompt(entry, _src)
-    _out["prompt_chars"] = len(_prompt)
-    _tr = _tp(_prompt, model=_model, base_url=_base, timeout=_to)
-    _out["elapsed_sec"] = round(time.perf_counter() - _t0, 3)
-    if not isinstance(_tr, dict) or not _tr.get("ok"):
-        _out["error"] = "transport:%s" % ((_tr or {}).get("err") or "unknown")
-        _module_logger.warning("[349生成] generation_failed（模型层）key=%s err=%s",
-                               _out["entry_key"], _out["error"][:200])
-        return _out
-    _pr = parse_llm_reply(_tr.get("text") or "")
-    if not _pr.get("ok"):
-        _out["error"] = "parse:%s" % _pr.get("why")
-        _module_logger.warning("[349生成] generation_failed（回复不可解析）key=%s why=%s",
-                               _out["entry_key"], _pr.get("why"))
-        return _out
+    _pr = None
+    if _lane["lane"] == LANE_TEMPLATE:
+        # ★模板档零模型。生成失败**不是错误**，是“模板覆盖不到”⇒ 降级给模型。
+        _tpl = generate_from_template(_root, entry)
+        _out["template"] = {_k: _tpl.get(_k) for _k in ("ok", "why", "hits")}
+        if _tpl.get("ok"):
+            _pr = _tpl
+            _out["lane_effective"] = LANE_TEMPLATE
+            _out["prompt_chars"] = 0
+            _out["elapsed_sec"] = round(time.perf_counter() - _t0, 3)
+            _module_logger.info(
+                "[352路由] template key=%s file=%s method=%s hits=%s 零模型",
+                _out["entry_key"], entry.get("file"), entry.get("method"),
+                _tpl.get("hits"))
+        else:
+            # ★降级必须留痕。静默降级会把“模板覆盖不到”这件事藏掉（铁律156）
+            _out["lane_effective"] = LANE_LOCAL_MODEL
+            _out["lane_downgraded_from"] = LANE_TEMPLATE
+            _out["lane_downgrade_why"] = _tpl.get("why")
+            _module_logger.info(
+                "[352路由] 模板不适用，降级 local_model key=%s why=%s",
+                _out["entry_key"], _tpl.get("why"))
+    if _pr is None:
+        # ★352刀5：模型档才回灌（模板档零模型，读 verdict 是白读）
+        _fb = load_feedback_examples(os.path.join(str(_root), "data", "evolution"))
+        _out["feedback"] = {_k: _fb.get(_k) for _k in ("schema", "state", "total",
+                                                       "real", "used")}
+        _out["feedback_examples"] = _fb.get("examples") or []
+        if _fb.get("used"):
+            _module_logger.info(
+                "[352回灌] 注入 %d 条验证样本 key=%s（真实=%d/%d）",
+                _fb["used"], _out["entry_key"], _fb["real"], _fb["total"])
+        elif _fb.get("state") == "ok" and _fb.get("total"):
+            # 有 verdict 但全是测试件 ⇒ 如实标“无可用样本”，不假装没事
+            _module_logger.info(
+                "[352回灌] 无可用样本 key=%s（verdict %d 条，真实 0 条）",
+                _out["entry_key"], _fb["total"])
+        _prompt = build_prompt(entry, _src, _fb.get("examples"))
+        _out["prompt_chars"] = len(_prompt)
+        _tr = _tp(_prompt, model=_model, base_url=_base, timeout=_to)
+        _out["elapsed_sec"] = round(time.perf_counter() - _t0, 3)
+        _out["lane_effective"] = LANE_LOCAL_MODEL
+        if not isinstance(_tr, dict) or not _tr.get("ok"):
+            _out["error"] = "transport:%s" % ((_tr or {}).get("err") or "unknown")
+            _module_logger.warning("[349生成] generation_failed（模型层）key=%s err=%s",
+                                   _out["entry_key"], _out["error"][:200])
+            return _out
+        _pr = parse_llm_reply(_tr.get("text") or "")
+        if not _pr.get("ok"):
+            _out["error"] = "parse:%s" % _pr.get("why")
+            _module_logger.warning("[349生成] generation_failed（回复不可解析）key=%s why=%s",
+                                   _out["entry_key"], _pr.get("why"))
+            return _out
     _d = _pr["data"]
     # ★349刀1③：两种输出格式都接（锚点优先，老格式兼容）
     _orig = str(_d.get("original_code") or "")
@@ -947,7 +1585,7 @@ def generate_patch_draft(entry: dict,
     _module_logger.info(
         "[349生成] draft_ready key=%s model=%s 耗时=%.2fs prompt=%d字 "
         "changed_lines=%s proc_gen=%s",
-        _out["entry_key"], _model, _out["elapsed_sec"] or 0.0, len(_prompt),
+        _out["entry_key"], _model, _out["elapsed_sec"] or 0.0, _out["prompt_chars"],
         (_jd["checks"].get("diff_minimal") or {}).get("changed"), _out["proc_gen"])
     return _out
 
@@ -973,6 +1611,24 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
     if not _six["ok"]:
         _out["why"] = "six_fields:%s" % _six["why"]
         return _out
+    # ★352刀1②（审批链联动）：漂移候选**不得**进审批分道。
+    #   生成器侧已拦一道，这里是第二道——因为 `route_draft_to_approval` 也接**人写/
+    #   旧版生成器**产出的 draft，那些不经过 generate_patch_draft。
+    #   铁律172：隔离/守卫须守两端（输入侧 + 输出侧）。
+    _root_pc = project_root or os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    _pc = precheck_target(_root_pc, draft.get("file"), draft.get("method"))
+    _out["precheck"] = _pc
+    if _pc["verdict"] in TARGET_DRIFTED_VERDICTS:
+        _out["ok"] = False
+        _out["why"] = "draft_target_drifted:%s" % _pc["verdict"]
+        _module_logger.warning(
+            "[352预检] 草稿目标已漂移，拒收不入审批分道: file=%s method=%s why=%s",
+            draft.get("file"), draft.get("method"), _pc["why"])
+        return _out
+    # ★352刀4：审批分档（低危自动过审 / 高危人工）
+    _tier = score_approval_tier(draft, _root_pc, lane=draft.get("lane"))
+    _out["approval_tier"] = _tier
     _pid = "gen_%s" % str(draft.get("dedup_key") or "")[:16]
     _out["patch_id"] = _pid
     _rec = {
@@ -991,10 +1647,15 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
         "entry_source": "patch_generator",
         "generator_version": draft.get("generator_version"),
         "route": "approval_lane",
-        "requires_confirmation": True,
+        # ★352刀4：分档结果覆盖硬编码的 True
+        "requires_confirmation": bool(_tier["requires_confirmation"]),
         "auto_apply_eligible": False,
         "o3_dead_code": False,
-        "risk_level": "中",
+        # ★352刀4：风险档由分层结果决定（不再恒“中”）
+        "risk_level": ("低" if _tier["tier"] == TIER_LOW else "中"),
+        "approval_tier": _tier["tier"],
+        "approval_tier_score": _tier["score"],
+        "approval_tier_reasons": list(_tier["reasons"]),
         "status": "pending",
     }
     _out["patch"] = _rec
@@ -1002,8 +1663,7 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
         _out["ok"] = True
         _out["why"] = "dry_run"
         return _out
-    _root = project_root or os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))))
+    _root = _root_pc  # 同一次上溯，不重复算、不两份口径
     _path = os.path.join(str(_root), DRAFTS_REL)
     if also_queue:
         # 可选：同时试一次方法级入队口（它的 def 对齐会拒片段，**拒了不算错**，
@@ -1079,8 +1739,13 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
         if _out["written"]:
             _module_logger.warning(
                 "[349生成] 草稿入审批分道 id=%s file=%s method=%s "
-                "requires_confirmation=True（不自动应用，不进 O3 判死池）",
-                _pid, _rec["file"], _rec["method"])
+                "requires_confirmation=%s（不自动应用，不进 O3 判死池）",
+                _pid, _rec["file"], _rec["method"], _rec["requires_confirmation"])
+            # ★352刀4：分档一行可 grep（不则“为什么这条免了人工”永远要翻代码）
+            _module_logger.info(
+                "[352审批] tier=%s score=%d changed=%s 原因=%s id=%s",
+                _tier["tier"], _tier["score"], _tier["changed_lines"],
+                ";".join(_tier["reasons"])[:200] or "无", _pid)
     except Exception as _e:
         silent_exc(_e, where="patch_generator::route_draft_to_approval")
         _out["ok"] = False

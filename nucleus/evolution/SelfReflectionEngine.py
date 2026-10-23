@@ -18,6 +18,7 @@ import os
 import time
 from typing import Any
 
+from nucleus._silent_except import silent_exc
 from nucleus.llm.call_recorder import trace_evolution_call
 from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 
@@ -39,38 +40,67 @@ class SelfReflectionEngine:
         self._m44_last_model = ""
         try:
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
-            if not _api_url or not _api_key:
+            # ★352刀9⑨：同进化引擎，改走渠道池（免费优先 → 收费兜底）。
+            _tgts = config.get_llm_call_targets(None)
+            if not _tgts:
                 self._m44_last_error = "missing_api_config: api_url/api_key 未配置"
                 return None
-            _model = _api_cfg.get("advanced_model", "deepseek-flash")
-            # ★340批刀4：实际请求模型回写取数口（此前恒空 ⇒ 费用恒 null）。
-            self._m44_last_model = str(_model or "")
-            _payload = {
-                "model": _model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.2,
-                "max_tokens": max_tokens,
-            }
-            _payload_bytes = json.dumps(_payload, ensure_ascii=False).encode('utf-8')
-            _headers = {
-                'Content-Type': 'application/json; charset=utf-8',
-                'Authorization': 'Bearer ' + _api_key,
-            }
             from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
             from nucleus.ssrf_guard import safe_http_json
             _cfg = get_llm_call_config()
-            with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
-                _ok, _data = safe_http_json(
-                    _api_url, method='POST', data=_payload_bytes, headers=_headers,
-                    timeout=_cfg["timeout_by_purpose"]["general"],
-                )
+            _ok = False
+            _data = None
+            _last_exc = None
+            for _tgt in _tgts:
+                _api_url = _tgt.get("api_url", "")
+                _api_key = _tgt.get("api_key", "")
+                if not _api_url or not _api_key:
+                    continue
+                _model = _tgt.get("model") or "deepseek-flash"
+                # ★340批刀4：实际请求模型回写取数口（此前恒空 ⇒ 费用恒 null）。
+                self._m44_last_model = str(_model or "")
+                # ★352刀9⑨：路由留痕（同进化引擎，便于 grep 出实际走的渠道）
+                try:
+                    _host = _api_url.split("//", 1)[-1].split("/", 1)[0]
+                    import logging as _lg
+                    _lg.getLogger("pulse").info(
+                        "[352接线] engine=reflection source=%s channel=%s model=%s host=%s",
+                        _tgt.get("source"), _tgt.get("channel"), _model, _host)
+                except Exception as _le:
+                    silent_exc(_le, where="SelfReflectionEngine::_call_llm route_log")
+                _payload_bytes = json.dumps({
+                    "model": _model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": max_tokens,
+                }, ensure_ascii=False).encode('utf-8')
+                _headers = {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Authorization': 'Bearer ' + _api_key,
+                }
+                try:
+                    with api_rate_limited(enabled=_cfg.get('enable_rate_limit', True)):
+                        _ok, _data = safe_http_json(
+                            _api_url, method='POST', data=_payload_bytes, headers=_headers,
+                            timeout=_cfg["timeout_by_purpose"]["general"],
+                        )
+                except Exception as _fo_err:
+                    _last_exc = _fo_err
+                    self._m44_last_error = f"{type(_fo_err).__name__}: {_fo_err}"
+                    continue
+                if _ok and isinstance(_data, dict):
+                    break
+                if len(_tgts) > 1:
+                    self._m44_last_error = "channel_failed: %s 未成功，已转向下一渠道" % _tgt.get("channel")
             if not _ok or not isinstance(_data, dict):
+                if _last_exc is not None and _data is None:
+                    raise _last_exc
+                if isinstance(_data, str) and _data:
+                    self._m44_last_error = "http_failed: " + _data[:200]
+                    return None
                 self._m44_last_error = "http_failed: 请求失败或响应非 JSON 对象"
                 return None
             # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存
