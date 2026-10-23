@@ -228,6 +228,74 @@ class PulseNodePool(SilentLogMixin):
             silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::refresh_runtime_params L176")
 
 
+    # ========== ★353刀3：冷化链可达性（T-冷化链可达性-1） ==========
+
+    def set_max_warm(self, value: int, reason: str = "runtime") -> int:
+        """温池上限**运行时钩子** —— 调阈值但**不硬改 config 默认值**。
+
+        为什么需要这个钩子：`_max_warm` 默认 50000，而生产池实测约 1.9 万节点，
+        `_enforce_capacity` 里 `while len(self._warm) > self._max_warm` 在重启窗内
+        **永远不成立** ⇒ warm→cold 这一段冷化链虽然代码存在，实际不可达。
+        星轨裁决「不硬改阈值」（先等重启窗压测圈数据再定档），所以这里只提供
+        **运行时旋钮**：压测/验证时把它调到当前温池附近，即可让链路真正跑起来，
+        且不留任何持久化副作用（`refresh_runtime_params()` 一调即回配置值）。
+
+        Args:
+            value: 新的温池上限（必须 ≥1；非法值原样保留并告警，不静默吞掉）。
+            reason: 留痕用（`stress` / `verify` / `runtime` …）。
+        """
+        try:
+            _v = int(value)
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::set_max_warm L235")
+            _module_logger.warning("[353冷化] 阈值钩子被拒：value 非整数 %r", value)
+            return self._max_warm
+        if _v < 1:
+            _module_logger.warning("[353冷化] 阈值钩子被拒：value=%d 非法（须 ≥1）", _v)
+            return self._max_warm
+        _old = int(self._max_warm or 0)
+        self._max_warm = _v
+        _module_logger.info(
+            "[353冷化] 阈值钩子 max_warm=%d→%d reason=%s 当前温池=%d",
+            _old, _v, reason or "runtime", len(self._warm))
+        return self._max_warm
+
+    def cold_chain_reachability(self) -> dict:
+        """冷化链可达性自检（**只读**，不改任何状态）。
+
+        判据只有一条：温池溢出条件 `len(_warm) > _max_warm` 此刻能不能成立。
+
+        Returns:
+            {"verdict": "ok" | "blocked:<原因>", "reachable": bool,
+             "max_warm": int, "warm": int, "hot": int, "cold": int,
+             "growth_to_trigger": int, "cold_storage_enabled": bool}
+            `growth_to_trigger` = 还要再进多少条温池节点才会触发冷化（0 = 已触发条件）。
+        """
+        try:
+            _warm = len(self._warm)
+            _hot = len(self._hot)
+            _cold = len(self._cold)
+            _max_warm = int(self._max_warm or 0)
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::cold_chain_reachability L262")
+            return {"verdict": "blocked:inspect_failed", "reachable": False}
+        if _max_warm <= 0:
+            _verdict = "blocked:max_warm_invalid"
+        elif _warm > _max_warm:
+            _verdict = "ok"
+        else:
+            _verdict = "blocked:max_warm_unreachable"
+        return {
+            "verdict": _verdict,
+            "reachable": _verdict == "ok",
+            "max_warm": _max_warm,
+            "warm": _warm,
+            "hot": _hot,
+            "cold": _cold,
+            "growth_to_trigger": max(0, _max_warm - _warm + 1),
+            "cold_storage_enabled": bool(getattr(self, "_cold_storage_enabled", False)),
+        }
+
     def set_resonance_engine(self, engine):
         """注入共振引擎，用于自动维护索引"""
         self.resonance_engine = engine

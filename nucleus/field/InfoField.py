@@ -55,6 +55,33 @@ _ROUTE_SERIAL = "serial"
 # 模块级统一日志器（★FIX: 落盘 pulse.log，替代散落 print）
 _module_logger = get_module_logger("InfoField")
 
+
+def _m353_classify_stuck(stack_lines) -> str:
+    """★353刀4：把 L0 看门狗抓到的卡死栈帧**归类**，让下一次复发第一行就读出方向。
+
+    背景：system.boot / system.stop 的 L0 看门狗超时已复发 3 次
+    （19:21:48 / 21:41:24 / 23:03:00），每次 [P0-2诊断] 栈帧都落在
+    logging/__init__.py 的 handle -> acquire() / emit() 上 —— 即**日志 handler
+    的锁或写盘**，与「硬件探测同步阻塞」的初判方向完全不同（铁律109/196）。
+
+    Returns:
+        logging_io   栈帧里有 logging/__init__.py，卡在日志 handler；
+        handler_body 有栈但不在 logging，真在业务/处理体里；
+        no_frame     取不到栈帧；
+        unknown      归类过程本身异常。
+    """
+    try:
+        if not stack_lines:
+            return "no_frame"
+        _joined = "".join(str(x) for x in stack_lines).replace(chr(92), "/")
+        if "logging/__init__.py" in _joined:
+            return "logging_io"
+        return "handler_body"
+    except Exception as e:
+        silent_exc(e, where="nucleus.field.InfoField::_m353_classify_stuck")
+        return "unknown"
+
+
 # ===== ★PHASE13（2026-09-07）：按锁名的等待时长累计器 =====
 # 背景：runtime_metrics 的「锁等待过高」告警只报一个总均值（实测 63.9~78.8ms，
 #   持续 11.5 小时），运维看到数字却不知道是哪把锁 —— 内部协作者据此误判为
@@ -1030,9 +1057,15 @@ class InfoField(SilentLogMixin):
                             _frame = _frames[_tid]
                             _stack_lines = traceback.format_stack(_frame)
                         _stack_snippet = "\n".join(_stack_lines[-12:]) if _stack_lines else "（无可用堆栈）"
+                        # ★353刀4：卡死位置**归类**。三次复发（19:21/21:41/23:03）的栈帧
+                        #   全部落在 `logging/__init__.py` 的 `handle → acquire()` /
+                        #   `emit()` 上 —— 是日志 handler 锁/写盘，不是业务逻辑慢。
+                        #   此判词让下一次复发**第一行就能读出方向**，不必再翻 14MB 日志。
+                        _m353_where = _m353_classify_stuck(_stack_lines)
                         _module_logger.error(
                             f"L0看门狗处理器超时({self._l0_timeout}s): "
                             f"器官={_org} pulse={_pid} —— 重建L0池以隔离卡死线程\n"
+                            f"[353看门狗] 定位={_m353_where}（logging_io=卡在日志handler锁/写盘）\n"
                             f"[P0-2诊断] 卡死线程(tid={_tid})调用栈:\n{_stack_snippet}")
                     # ★C1【P0】重建L0池前输出全局线程快照，辅助定位「是否有其他线程
                     #   连带卡死/资源争抢」。仅在看门狗超时（罕见）时打印，无常态性能开销。

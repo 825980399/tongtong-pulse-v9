@@ -22,6 +22,20 @@ from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log
 
 _module_logger = get_module_logger("GPUCore")
 
+
+def _m353_probe_enabled() -> bool:
+    """★353刀2：GPU 探测开关（`config.GPU_PROBE_ENABLED`，默认 False）。
+
+    取不到配置时返回 True（即**保持改造前行为**）——宁可多加载一次 GPU 栈，
+    也不能因为配置模块异常而静默改变硬件能力判定（铁律156：禁静默降级）。
+    """
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "GPU_PROBE_ENABLED", True))
+    except Exception as e:
+        silent_exc(e, where="nucleus.GPUCore::_m353_probe_enabled")
+        return True
+
 class GPUCore(SilentLogMixin):
     """GPU 计算加速核心。"""
 
@@ -40,6 +54,8 @@ class GPUCore(SilentLogMixin):
         # 记录 torch 是否真正可用（避免每次重复 import 探测）
         self._torch_available: bool | None = None
         self._device = None
+        # ★353刀2：跳过留痕只打一次（`get_vram_pressure` 每拍都会调 probe_gpu）
+        self._m353_skip_logged = False
 
     # ========== 探测 ==========
 
@@ -54,6 +70,20 @@ class GPUCore(SilentLogMixin):
         """
         _now = time.time()
         if not force and self._gpu_info is not None and (_now - self._probe_time) < self.PROBE_CACHE_TTL:
+            return self._gpu_info
+        # ★353刀2：开关关闭 ⇒ 到 `import torch` 之前就返回，GPU 栈（约 3.68GB）不加载。
+        #   `force=True` 是**显式强制探测**通道，不受开关限制（任务书刀2 要求保留）。
+        #   放在缓存判定**之后**：首次跳过写进 `_gpu_info`，后续 60s 走缓存复用同一对象，
+        #   否则每拍 `get_vram_pressure()` 都会新造一个 dict。
+        if not force and not _m353_probe_enabled():
+            if not self._m353_skip_logged:
+                self._m353_skip_logged = True
+                self._log(LogLevel.INFO,
+                          "[353GPU] 探测=skipped reason=GPU_PROBE_ENABLED=False 未探测"
+                          "（torch/cuda 不加载；如需探测请置 True 或调用 probe_gpu(force=True)）")
+            self._gpu_info = {"available": False, "probed": False,
+                              "reason": "GPU_PROBE_ENABLED=False", "timestamp": _now}
+            self._probe_time = _now
             return self._gpu_info
         try:
             import torch  # type: ignore

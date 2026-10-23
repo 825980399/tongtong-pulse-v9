@@ -998,8 +998,16 @@ class PulseFramework:
         # torch 真探测（显存/算力/共享内存口径），供并行调度器与未来向量计算使用。
         try:
             from nucleus.GPUCore import get_gpu_core
-            _gpu_info = get_gpu_core().probe_gpu(force=True)
-            if _gpu_info.get("available"):
+            # ★353刀2：原为 `probe_gpu(force=True)` —— 首跑 `_gpu_info is None`，
+            #   缓存分支本就不命中，force 在此处是**冗余**的，却让
+            #   `GPU_PROBE_ENABLED` 对启动路径完全失效（开关形同虚设）。
+            #   改回默认参数后：开关关闭 ⇒ 不探测、不加载 GPU 栈；开启 ⇒ 行为同前。
+            _gpu_info = get_gpu_core().probe_gpu()
+            if _gpu_info.get("probed") is False:
+                self._log(LogLevel.INFO,
+                          "[353GPU] 探测=skipped reason=GPU_PROBE_ENABLED=False 未探测，"
+                          "启动不加载 GPU 栈（预期回收约 3.68GB）")
+            elif _gpu_info.get("available"):
                 self._log(LogLevel.INFO,
                           f"GPU计算加速: {_gpu_info.get('model')} "
                           f"算力{_gpu_info.get('compute_cap')} "
@@ -2081,6 +2089,23 @@ class PulseFramework:
             for node in l1_nodes:
                 self.knowledge_tree.register_path(node.space_path)
             self._log(LogLevel.INFO, f"L1快照恢复: {len(l1_nodes)} 个L1节点已加载(批量)")
+
+        # ★353刀3：冷化链可达性自检（加载完成后打一次，只读不改状态）。
+        #   任务书要求留痕 `[353冷化] 冷化链可达性=ok|blocked:<原因>`；这里如实报告，
+        #   `blocked:max_warm_unreachable` 说明"温池距溢出还差 N 条"——即链路代码在、
+        #   但重启窗内不会自然触发（阈值档位由 `PulseNodePool.set_max_warm()` 压测时定）。
+        try:
+            _m353_cold = self.node_pool.cold_chain_reachability()
+            self._log(LogLevel.INFO if _m353_cold.get("reachable") else LogLevel.WARNING,
+                      "[353冷化] 冷化链可达性={} 温池={}/{} 热池={} 冷池={} 距触发={}条 "
+                      "冷存储={}".format(
+                          _m353_cold.get("verdict"),
+                          _m353_cold.get("warm"), _m353_cold.get("max_warm"),
+                          _m353_cold.get("hot"), _m353_cold.get("cold"),
+                          _m353_cold.get("growth_to_trigger"),
+                          "on" if _m353_cold.get("cold_storage_enabled") else "off"))
+        except Exception as _m353ce:
+            self._log(LogLevel.DEBUG, f"[353冷化] 可达性自检跳过: {type(_m353ce).__name__}")
         # ===== 新增: 完整性/分层校验失败时自动回退 =====
         # ★第80批 T4：回退条件扩展为「空结果 / 分层塌缩（主全L1但备份有L2/L3） / 校验FAIL」。
         _need_backup = False

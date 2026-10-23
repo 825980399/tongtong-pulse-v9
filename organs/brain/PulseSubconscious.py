@@ -462,10 +462,25 @@ class PulseSubconscious(BasePulseOrgan):
     # ========== 事件处理 ==========
 
     def _on_system_boot(self, payload: dict) -> dict[str, Any]:
+        # ★353刀4：分段计时。三次 L0 看门狗超时（19:21:48 / 21:41:24 / 23:03:00）的
+        #   `[P0-2诊断]` 栈帧**全部**落在本方法内的 `self._log(...)` 上：
+        #     PulseSubconscious.py:493 → BasePulseOrgan.py:376 → logging.handle
+        #     → self.acquire() → self.lock.acquire()
+        #   即卡的是**日志 handler 的锁 / 写盘 I/O**，不是硬件探测 —— 摄像头探测
+        #   早在 T-113f 就移出 L0 了（479 行后台线程，342 刀5 依铁律169 保留）。
+        #   ⇒ 把处理器移出 L0 解决不了（不是业务逻辑慢）；本刀做的是
+        #   ① 降噪（少 3 次 INFO 热路径写盘）② 耗时归因留痕 ③ 看门狗判词可定位。
+        _m353_t0 = time.perf_counter()
+        _m353_marks: list = []
+
+        def _m353_mark(_label: str) -> None:
+            _m353_marks.append((_label, time.perf_counter()))
+
         if self._running:
             return {"status": "already_booted"}
         self._running = True
         self._log(LogLevel.INFO, "潜意识已激活，好奇心引擎启动（共享记忆版）")
+        _m353_mark("activate_log")
 
         # ★v17.0修复：梦境推演始终初始化，不再依赖摄像头检测结果。
         # ★T-113f（2026-09-23）：摄像头可用性检测属硬件 I/O，移后台守护线程，
@@ -477,9 +492,11 @@ class PulseSubconscious(BasePulseOrgan):
         with self._state_lock:
             self._user_present = False
         threading.Thread(target=self._detect_user_presence_async, daemon=True).start()
-        self._log(LogLevel.INFO,
+        # ★353刀4：施工留痕降级 INFO→DEBUG（说明性文字，每拍 boot 都过一遍 handler 加锁+写盘）。
+        self._log(LogLevel.DEBUG,
                   "[342去线程] action=reserved line=475 target=_detect_user_presence_async "
                   "reason=hardware_probe_subprocess(T-113f)")
+        _m353_mark("presence_thread")
 
         # 无论摄像头是否可用，都初始化梦境定时器
         # ★T-114d：原为「整体移后台守护线程，避免运行时 import 卡模块锁」——**import 已提到
@@ -490,16 +507,33 @@ class PulseSubconscious(BasePulseOrgan):
         #   定时器会静默失效 —— 对拍实测 `timers_ready_at_return = 0/5`；同步化后 5/5。
         self._dream_next_time = time.time() + self._dream_interval
         self._schedule_dream_timer()
-        self._log(LogLevel.INFO,
+        self._log(LogLevel.DEBUG,
                   "[342去线程] action=removed line=480 target=_schedule_dream_timer "
                   "mode=sync reason=non_blocking_timer_start")
         self._log(LogLevel.INFO, f"梦境推演已初始化（后台调度，间隔={self._dream_interval}s）")
+        _m353_mark("dream_timer")
 
         # ★342刀5：同上。`_schedule_next_exploration` 只建 Timer 并 start()，不阻塞。
         self._schedule_next_exploration()
-        self._log(LogLevel.INFO,
+        self._log(LogLevel.DEBUG,
                   "[342去线程] action=removed line=484 target=_schedule_next_exploration "
                   "mode=sync reason=non_blocking_timer_start")
+        _m353_mark("explore_timer")
+
+        # ★353刀4：耗时归因留痕（任务书格式：`[353看门狗] 潜意识boot处理耗时=Nms reason=<定位>`）。
+        #   `reason` 取**最慢分段**的标签；四段分别是 activate_log / presence_thread /
+        #   dream_timer / explore_timer。若 reason 落在 *_log 上，说明瓶颈是日志 I/O。
+        _m353_total = (time.perf_counter() - _m353_t0) * 1000.0
+        _m353_slow, _m353_slow_ms = "none", 0.0
+        _m353_prev = _m353_t0
+        for _m353_label, _m353_ts in _m353_marks:
+            _m353_d = (_m353_ts - _m353_prev) * 1000.0
+            if _m353_d > _m353_slow_ms:
+                _m353_slow, _m353_slow_ms = _m353_label, _m353_d
+            _m353_prev = _m353_ts
+        self._log(LogLevel.INFO,
+                  "[353看门狗] 潜意识boot处理耗时=%dms reason=%s slowest=%s(%dms)"
+                  % (int(_m353_total), _m353_slow, _m353_slow, int(_m353_slow_ms)))
         return {"status": "booted", "explore_interval": self._current_interval}
 
     def _detect_user_presence_async(self) -> None:
@@ -515,10 +549,21 @@ class PulseSubconscious(BasePulseOrgan):
             self._log(LogLevel.WARNING, f"摄像头检测异常，默认不在场: {_e}")
 
     def _on_system_stop(self, payload: dict) -> dict[str, Any]:
+        # ★353刀4：stop 段同样计时。21:41:24 那次超时的栈帧落在本方法的
+        #   `self._log(...)` → `logging/__init__.py:1028 handle → self.emit(record)`
+        #   （此时已持 handler 锁，卡在写盘），与 boot 段同型。
+        _m353_t0 = time.perf_counter()
         self._running = False
         if self._next_timer:
             self._next_timer.cancel()
+        _m353_cancel_ms = (time.perf_counter() - _m353_t0) * 1000.0
         self._log(LogLevel.INFO, f"已停止，探索次数: {self._exploration_count}")
+        _m353_total = (time.perf_counter() - _m353_t0) * 1000.0
+        self._log(LogLevel.INFO,
+                  "[353看门狗] 潜意识stop处理耗时=%dms reason=%s"
+                  % (int(_m353_total),
+                     "timer_cancel" if _m353_cancel_ms > (_m353_total - _m353_cancel_ms)
+                     else "stop_log"))
         return {"status": "stopped", "exploration_count": self._exploration_count}
 
     def _on_curiosity_tick(self, payload: dict) -> dict[str, Any]:

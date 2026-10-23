@@ -111,6 +111,9 @@ class LogAnalyzer(SilentLogMixin):
         self._project_root = project_root
         # ★343刀2：域外 Traceback 计数桶（键 = "文件:行"，值 = {n, why}）
         self._m343_skipped: dict[str, dict[str, Any]] = {}
+        # ★353刀6：ERROR 行分支丢弃计数（与 _m343_skipped 分开记 —— 两者是不同事实：
+        #   前者是「Traceback File 行被拒」，后者是「ERROR 行定位到域外后被撤回」，铁律166）
+        self._m353_domain_dropped: int = 0
         # ★343刀2⑤：两套文件域显式声明（进程内一次；失败不阻断分析）
         try:
             self._m343_domain_rel = self._m343_declare_two_domains()
@@ -530,6 +533,31 @@ class LogAnalyzer(SilentLogMixin):
                         #   分支已被上面提前填过；关闭时即改前行为）。
                         if not _issue["message"]:
                             _issue["message"] = _line.strip()[:200]
+                        # ★353刀6（T-LogAnalyzer域过滤-1 · A-17 根因的**另一半**）：
+                        #   343 刀2 只给「Traceback 的 File 行」加了域判定；本分支
+                        #   （ERROR/CRITICAL 行）此前**完全没有域过滤** —— 隔离脚本崩溃在
+                        #   日志里往往先以一条 ERROR 行出现（带器官标签），定位补全把
+                        #   file 落到 tmp/ 之后照样进 pending 池，活体把验证脚本自己的
+                        #   崩溃当生产缺陷（铁律158 的输出侧）。
+                        #   口径：复用 `_m343_in_domain`（与 TOOL_SCAN_ROOTS 同套白名单，
+                        #   不建第二套，避免两处口径分叉）。
+                        #   ★判据不可用（file 为空 / 定位失败）⇒ **放行**：判不了不等于
+                        #   域外，不能因为定位失败就把真实缺陷丢掉（与 empty_roots 同语义）。
+                        _m353_f = str(_issue.get("file_path") or "").strip()
+                        if _m353_f:
+                            _m353_in, _m353_why = self._m343_in_domain(_m353_f)
+                            if not _m353_in:
+                                issues.pop(_key, None)
+                                self._m353_domain_dropped += 1
+                                self._log(LogLevel.INFO,
+                                          "[353域] 丢弃域外ERROR行 file=%s organ=%s why=%s"
+                                          "（累计=%d；tmp/测试/备份域不入缺陷池）"
+                                          % (_m353_f, _organ, _m353_why,
+                                             self._m353_domain_dropped))
+                                _context_buf.append(_line)
+                                if len(_context_buf) > 20:
+                                    _context_buf.pop(0)
+                                continue
 
                     _context_buf.append(_line)
                     if len(_context_buf) > 20:
@@ -548,10 +576,16 @@ class LogAnalyzer(SilentLogMixin):
                 self._log(LogLevel.INFO,
                           "[343域过滤] 汇总 跳过=%d 唯一位置=%d 域内问题=%d 归因=%s"
                           % (_n, len(_sk), len(issues), _why))
+                self._log(LogLevel.INFO,
+                          "[353域] 汇总 ERROR行域外丢弃=%d 域内问题=%d"
+                          % (self._m353_domain_dropped, len(issues)))
             else:
                 self._log(LogLevel.DEBUG,
                           "[343域过滤] 汇总 跳过=0 域内问题=%d（本次扫描未见域外 Traceback）"
                           % len(issues))
+                self._log(LogLevel.DEBUG,
+                          "[353域] 汇总 ERROR行域外丢弃=%d（本次未见域外 ERROR 行）"
+                          % self._m353_domain_dropped)
         except Exception as _se:
             silent_exc(_se, where="LogAnalyzer::_scan_log_file 343域过滤汇总")
 

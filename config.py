@@ -3321,6 +3321,19 @@ SELF_INSPECTOR_LOG = {
     "aggregate_body_loc_log": True,
 }
 
+# ========== ★353刀2：GPU 探测开关（T-GPU探测开关化-1） ==========
+# 背景：启动路径 `main.py` 会 `probe_gpu()` 一次，`import torch` 把 cuda 运行时
+#   （GTX 1050 Ti 上约 3.68GB 常驻）整体拖进进程；而框架业务侧**不用 GPU**
+#   （星轨 1.1 决策：4GB 显存与既有 GPU 任务有 OOM 风险，向量检索走 numpy 更快）。
+#   PHASE14 的 GPU 向量检索本身有 `GPU_VECTOR_SEARCH` 独立开关，且真实候选规模
+#   远低于其下限 ⇒ 这条 torch 常驻开销纯属白付。
+# 语义：
+#   False（默认）= 探测入口直接返回 {available: False, probed: False}，
+#                 **不 import torch**，一行 GPU 栈都不加载；
+#   True         = 与改造前完全一致（torch 精确探测）。
+# 保留手动通道：`probe_gpu(force=True)` **不受本开关限制**（显式强制探测）。
+GPU_PROBE_ENABLED = False
+
 # ========== ★PHASE14：GPU 向量检索加速 ==========
 # 背景（小林实测反馈）：启动日志明明宣告了「GPU计算加速: GTX 1050 Ti
 #   算力6.1 … torch=2.6.0+cu124」，但任务管理器里 GPU 利用率纹丝不动，
@@ -4323,15 +4336,35 @@ def get_llm_call_targets(preferred_model: str | None = None) -> list:
     return _rows
 
 
-def get_llm_call_target(preferred_model: str | None = None) -> dict:
-    """★352刀9⑧⑨：取优先级最高的调用目标（即 `get_llm_call_targets` 的首项）。
+def get_llm_call_target(preferred_model: str | None = None,
+                         caller: str = "") -> dict:
+    """★352刀9⑧⑨：取调用目标（`get_llm_call_targets` 的**起点**项）。
 
     单一来源：本函数只是列表版的取首项，避免"单目标/多目标"两套口径各自漂移。
     返回：`{api_url, api_key, model, channel, source}`。
     `source` ∈ `channel_pool` / `single_endpoint` / `none`（池与单端点都取不到）。
+
+    ★353刀1（用户点名·渠道负载均衡轮询·方案A）：起点不再恒为 priority 1。
+    `_call_via_channels` 的多目标循环本就有「并发满即切换下一个」，但**单目标口**
+    （灵核/知识/控制器/OCR 共 6 处绕行点）拿不到那个循环 —— 它们全都撞在
+    `zhipu-47-flash`（`max_concurrent=1`）上。此处把"切换"从"失败后"提前到
+    "忙时即切"：按**并发余量**挑起点，留痕 `[353均衡] caller= picked= reason=`。
+    两条边界（见 `nucleus/llm/channel_balance.py` 模块头）：
+    ① 只 peek 不 acquire，不占许可；② 扫描窗口在第一条付费渠道前截止，
+    均衡不会把免费调用变成付费调用。
     """
     _rows = get_llm_call_targets(preferred_model)
     if _rows:
+        try:
+            from nucleus.llm.channel_balance import log_pick as _m353_log
+            from nucleus.llm.channel_balance import pick_balanced_index as _m353_pick
+            _idx, _why = _m353_pick(_rows, caller=caller)
+            if _idx < 0 or _idx >= len(_rows):
+                _idx, _why = 0, "default"
+            _m353_log(caller, _rows, _idx, _why)
+            return _rows[_idx]
+        except Exception as e:
+            silent_exc(e, where="config::get_llm_call_target L4390 (353刀1 起点均衡)")
         return _rows[0]
     return {"api_url": "", "api_key": "", "model": "deepseek-flash",
             "channel": "", "source": "none"}
