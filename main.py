@@ -4259,6 +4259,8 @@ def main():
         _apply_check_counter = 0
         # ★333批刀2：夜间编排 digest 定时点的节流计数（每 60 拍查一次，约 1 分钟）
         _nd_tick_counter = 0
+        # ★346批刀 1：问题池消费口的节拍计数（每 300 拍一次，约 5 分钟）
+        _pool_consume_counter = 0
         _shutdown_chan = None
         while not exit_requested:
             # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
@@ -4315,6 +4317,17 @@ def main():
                         os.path.dirname(os.path.abspath(__file__)))
             except Exception as _nd_e:
                 silent_exc(_nd_e, "main.py[333刀2-night-digest]")
+            # ★346批刀 1（P0）：问题池消费口——「发现→行动」的那一段。
+            #   与审查主链**解耦**：审查照原节拍跑，消费在这里按自己的节拍认领。
+            #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。
+            try:
+                _pool_consume_counter += 1
+                if _pool_consume_counter >= 300:
+                    _pool_consume_counter = 0
+                    from nucleus.audit_problem_pool_consumer import consume_heartbeat
+                    consume_heartbeat(os.path.dirname(os.path.abspath(__file__)))
+            except Exception as _pc_e:
+                silent_exc(_pc_e, "main.py[346刀1-pool-consume]")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。
             #   审视生成的补丁若已批准，会写入 apply_now.json 标记，
             #   此处检测到后走「应用+重启」流程，不再被动等待框架退出。

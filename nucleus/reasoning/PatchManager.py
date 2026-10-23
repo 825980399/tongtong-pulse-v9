@@ -556,7 +556,7 @@ class PatchManager:
         confidence 为**字符串枚举** ``high``、risk_level 为**中文** ``低``）：
             source      == "local_rule"
             confidence  == "high"
-            risk_level  == "低"
+            risk_level  rank == 1（中英通用：低 ↔ low；判据单点 `PatchManager._m346_is_low_risk`，函数 `_m85_local_low_risk_auto_apply`；346刀 5 前该比较在第 590 行）
         且必须同时满足：
             * **非核心文件** —— 沿用既有红线（``_m80_is_core_file``），本批不绕过；
             * **非学习尝试补丁** —— ``learning_attempt=True`` /
@@ -587,7 +587,8 @@ class PatchManager:
                 return False
             if str(patch.get("confidence", "")) != "high":
                 return False
-            if str(patch.get("risk_level", "")) != "低":
+            # ★346刀 5：读 rank（中英通用），不再比中文字面。判据单点：`PatchManager._m346_is_low_risk`
+            if not PatchManager._m346_is_low_risk(patch.get("risk_level")):
                 return False
             if PatchManager._m80_is_core_file(str(patch.get("file", ""))):
                 return False
@@ -609,7 +610,8 @@ class PatchManager:
         """★第101批 T-101a（P0）：低风险可放行路径判据（纯函数，保守默认 False）。
 
         放行条件（全部满足）：
-            * risk_level == "低"（中文，与 _m85/_m94 实测口径一致）
+            * risk_level rank == 1（低/low，见 `PatchManager._m346_is_low_risk`；
+              旧只认中文「低」使英文 low 走人工，346刀 5 修；函数 `_m101_low_risk_release_path`，346刀 5 前该比较在第 624 行）
             * runtime_verify_result.verified is True —— ★第105批修正：读**嵌套**字段
               （唯一真验证字段）。顶层 runtime_verified 由 verify_submitted_patches
               对所有处理过的补丁无条件置 True（含失败补丁），属污染字段，不可作放行依据；
@@ -621,7 +623,8 @@ class PatchManager:
         if not isinstance(patch, dict):
             return False
         try:
-            if str(patch.get("risk_level", "")) != "低":
+            # ★346刀 5：读 rank（中英通用），不再比中文字面。判据单点：`PatchManager._m346_is_low_risk`
+            if not PatchManager._m346_is_low_risk(patch.get("risk_level")):
                 return False
             # ★第105批 T-105a：读嵌套 runtime_verify_result.verified（唯一真验证字段）。
             #   顶层 runtime_verified 由 verify_submitted_patches 对所有处理过的补丁
@@ -884,7 +887,7 @@ class PatchManager:
             非核心文件       —— 复用 `_m80_is_core_file` 单一真源
                               **再叠加** `_m94_is_god_file`（任务书点名上帝文件）
             runtime_verify_result.verified is True（★第105批修正：读嵌套字段；顶层 runtime_verified 为污染字段）
-            risk_level       == "低"
+            risk_level       rank == 1（低/low，见 `PatchManager._m346_is_low_risk`；函数 `_m94_aging_eligible`，346刀 5 前该比较在第 912 行）
 
         ★字段口径按**生产实测**（与第85批 T-85d 同型）：实测 risk_level 为**中文**
         ``"低"``、source 为 ``"local_rule"``；任务书未给字段字面量，此处以实测为准。
@@ -909,7 +912,8 @@ class PatchManager:
                 _baseline = _rvr.get("baseline")
                 if not isinstance(_baseline, (int, float)) or _baseline <= 0:
                     return False
-            if str(patch.get("risk_level", "")) != "低":
+            # ★346刀 5：读 rank（中英通用），不再比中文字面。判据单点：`PatchManager._m346_is_low_risk`
+            if not PatchManager._m346_is_low_risk(patch.get("risk_level")):
                 return False
             _fp = str(patch.get("file", "") or "")
             if not _fp:
@@ -1367,10 +1371,17 @@ class PatchManager:
     @staticmethod
     def _m280_risk_by_issue_type(issue_type: str) -> str:
         # ★280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
+        # ★346刀 4：高危族扩表（安全面收紧，零放宽）。
+        #   烛微346 实测：command_injection / path_traversal / eval_usage / pickle_load
+        #   四族全判**低**——于是它们能走 auto_apply 面。定级只认**族名**（不猜形态）。
         _m = {
             "sql_injection": "高",
             "lock_with_emit": "高",
             "non_atomic_write": "高",
+            "command_injection": "高",
+            "path_traversal": "高",
+            "eval_usage": "高",
+            "pickle_load": "高",
             "thread_no_daemon": "中",
             "resource_no_close": "中",
             "cross_module_singleton_call": "中",
@@ -1383,6 +1394,38 @@ class PatchManager:
     _M344_RISK_RANK = {"低": 1, "low": 1, "中": 2, "medium": 2, "中危": 2,
                        "高": 3, "high": 3}
     _M344_RANK_NAME = {1: "低", 2: "中", 3: "高"}
+
+    @staticmethod
+    def _m346_risk_rank(risk_level) -> int | None:
+        """风险档位 → 权重（1低/2中/3高）；
+        **不认识返回 None**（不猜）。
+
+        ★346刀 5：下游**一律走这里**，
+        禁止再写 `!= "低"` 这类中文字面比较。
+
+        为什么：344 刀入已建 `_M344_RISK_RANK`（中英双写），
+        但当时下游三处（`_m85_local_low_risk_auto_apply` /
+        `_m101_low_risk_release_path` / `_m94_aging_eligible`）**仍在比中文字面**，
+        于是英文 `low` 被当成"非低"——**保守，但计数被低估**
+        （低风险自动应用面实测 = 0，而台账里
+        `risk_level="low"` 的条目并不少）。
+
+        保守边界：取不到或不认识 ⇒ 返 None
+        ⇒ 调用方必须当"非低风险"处理（与改前行为一致）。
+        """
+        _raw = str(risk_level if risk_level is not None else "").strip()
+        if not _raw:
+            return None
+        _rank = PatchManager._M344_RISK_RANK.get(_raw.lower())
+        if _rank is None:
+            _rank = PatchManager._M344_RISK_RANK.get(_raw)
+        return int(_rank) if _rank is not None else None
+
+    @staticmethod
+    def _m346_is_low_risk(risk_level) -> bool:
+        """是否"低风险"档（rank == 1）。
+        只有明确判定为低才返 True。"""
+        return PatchManager._m346_risk_rank(risk_level) == 1
 
     @staticmethod
     def _m344_merge_risk(explicit, issue_type: str) -> tuple:
@@ -4595,6 +4638,37 @@ class PatchManager:
             silent_exc(e, where="nucleus.reasoning.PatchManager::_m80_safe_target_path L3379")
             return False
 
+    def _m346_record_rollback(self, patch: dict, reason: str) -> dict:
+        """★346刀2：回退动作**记账**（patch_history status + effect_verify 联动）。
+
+        只写台账字段，不碰文件恢复——调用点都在"文件已经回滚完"之后。
+        记账失败只告警，**绝不影响回退本身**：回退是安全动作，不能被记账拖住。
+        """
+        _out = {"history": None, "effect": None}
+        try:
+            from nucleus.evolution.patch_lifecycle import (
+                mark_effect_verify_rolled_back, mark_history_rolled_back)
+            _out["history"] = mark_history_rolled_back(
+                patch, reason=reason, source="PatchManager.rollback")
+            if _out["history"].get("ok"):
+                _module_logger.info(
+                    "[346回退] 台账记账: id=%s status→rolled_back reason=%s",
+                    str(patch.get("id") or "")[:24], reason)
+            else:
+                _module_logger.warning(
+                    "[346回退] 台账记账被拒: id=%s %s",
+                    str(patch.get("id") or "")[:24], _out["history"].get("reason", ""))
+            # ★346刀 2：必须把**本实例的**台账目录传进去。
+            #   不传就走 `EvolutionEffectVerifier` 的默认目录（生产）——
+            #   隔离盘上的回滚会去改**生产**的效果验证台账
+            #   （本批隔离验收实测捕到这一点：d2 首轮 FAIL）。
+            _out["effect"] = mark_effect_verify_rolled_back(
+                str(patch.get("id") or ""), reason=reason,
+                base_dir=os.path.join(str(self._project_root), "data", "evolution"))
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager._m346_record_rollback", level="warning")
+        return _out
+
     def rollback_last(self) -> bool:
         """回滚最近一次应用的补丁"""
         history = self._load_patch_list(self._history_file)
@@ -4613,6 +4687,7 @@ class PatchManager:
                         patch["applied"] = False
                         patch["rollback_available"] = False
                         patch["rolled_back_at"] = time.time()
+                        self._m346_record_rollback(patch, "rollback_last")
                         self._save_patch_list(self._history_file, history)
                         self._write_rollback_log(patch)
                         # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）
@@ -4629,6 +4704,7 @@ class PatchManager:
                     patch["applied"] = False
                     patch["rollback_available"] = False
                     patch["rolled_back_at"] = time.time()
+                    self._m346_record_rollback(patch, "rollback_last")
                     self._save_patch_list(self._history_file, history)
                     self._write_rollback_log(patch)
                     # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）
@@ -4681,6 +4757,7 @@ class PatchManager:
             patch["rollback_available"] = False
             patch["rolled_back_at"] = time.time()
             patch["rolled_back_reason"] = "runtime_verify_failed"
+            self._m346_record_rollback(patch, "runtime_verify_failed")
             self._save_patch_list(self._history_file, history)
             self._write_rollback_log(patch)
             # ★第159批上A 刀3（O-B7）：登记回滚（失败不置位由上方保证）

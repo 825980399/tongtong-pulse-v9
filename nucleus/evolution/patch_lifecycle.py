@@ -36,6 +36,11 @@ __all__ = [
     "STAGE_ROLLED_BACK",
     "STAGE_VALIDATED",
     "VALID_PATCH_STAGES",
+    "PATCH_HISTORY_STATUSES",
+    "LEGAL_HISTORY_TRANSITIONS",
+    "HISTORY_STATUS_ROLLED_BACK",
+    "legal_history_transition",
+    "mark_history_rolled_back",
     "lifecycle_path",
     "load_lifecycle",
     "publish_handoff",
@@ -348,3 +353,162 @@ def PatchManager_is_core_file(file: str) -> bool:
         silent_exc(_e, where="nucleus.evolution.patch_lifecycle::PatchManager_is_core_file",
                    level="debug")
         return False
+
+
+# ============================================================
+# ★346批刀2：``patch_history`` 状态枚举 + 回退记账（挂账69/58）
+# ============================================================
+#
+# **真缺口（烛微346自纠）**：``rolled_back`` 全仓 119 处命中，但代码补丁台账
+# ``data/patches/patch_history.json`` 的 status 实测只有
+# ``approved``(73) / ``runtime_verified``(13) 两种 —— 回退动作只把
+# ``applied=False`` + ``rollback_available=False`` + ``rolled_back_at`` 改掉，
+# **status 停在 approved**。于是：
+#   · 统计口径里「已回退」永远是 0（``evolution_stats`` 靠 status 判 rolled_back）；
+#   · 事后看台账，「这条到底被回退过没有」要靠翻 change_log.md 猜。
+# ⇒ 回退不记账 = 状态机缺一个必需的旁路终态。
+#
+# 本段只做三件事：**补枚举 / 补迁移表 / 补写入口**，不改任何决策逻辑。
+
+#: patch_history status 枚举（实测值 + 回退新态）
+HISTORY_STATUS_PENDING = "pending"
+HISTORY_STATUS_APPROVED = "approved"
+HISTORY_STATUS_APPLIED = "applied"
+HISTORY_STATUS_RUNTIME_VERIFIED = "runtime_verified"
+HISTORY_STATUS_ROLLED_BACK = "rolled_back"
+
+#: ``rejected_*`` 是一族（实测有 rejected_core_guard / rejected_by_baseline /
+#: rejected_safety / rejected_verify / rejected_ambiguous / rejected_syntax …），
+#: 按前缀归族，**不逐个列**——列不全就等于把新 reject 形态判成非法迁移。
+HISTORY_STATUS_REJECTED_PREFIX = "rejected_"
+
+PATCH_HISTORY_STATUSES = frozenset({
+    HISTORY_STATUS_PENDING, HISTORY_STATUS_APPROVED, HISTORY_STATUS_APPLIED,
+    HISTORY_STATUS_RUNTIME_VERIFIED, HISTORY_STATUS_ROLLED_BACK,
+})
+
+#: 合法迁移表 ``旧态 → 允许到达的新态``。
+#:
+#: 口径：
+#:  · 空/未知旧态（存量条目没有 status）⇒ 允许任何目标（存量数据不能因为
+#:    缺字段就永远动不了，但也仅限"没有任何旧态"这一种）；
+#:  · ``rolled_back`` 是**旁路终态**：只允许人工"重开"回 pending/approved
+#:    （回退后要重修，必须显式重开，不能凭空变成 applied）；
+#:  · ``applied`` 与 ``runtime_verified`` 互转（运行时验证就是应用后再验）。
+LEGAL_HISTORY_TRANSITIONS = {
+    "": PATCH_HISTORY_STATUSES | {"rejected_*"},
+    HISTORY_STATUS_PENDING: (HISTORY_STATUS_APPROVED, "rejected_*",
+                             HISTORY_STATUS_ROLLED_BACK),
+    HISTORY_STATUS_APPROVED: (HISTORY_STATUS_APPLIED, HISTORY_STATUS_RUNTIME_VERIFIED,
+                              "rejected_*", HISTORY_STATUS_ROLLED_BACK),
+    HISTORY_STATUS_APPLIED: (HISTORY_STATUS_RUNTIME_VERIFIED,
+                             HISTORY_STATUS_ROLLED_BACK),
+    HISTORY_STATUS_RUNTIME_VERIFIED: (HISTORY_STATUS_APPLIED,
+                                      HISTORY_STATUS_ROLLED_BACK),
+    HISTORY_STATUS_ROLLED_BACK: (HISTORY_STATUS_PENDING, HISTORY_STATUS_APPROVED),
+}
+
+#: 迁移表里 ``rejected_*`` 族通配的落地名（供调用方读取）
+_REJECTED_FAMILY = "rejected_*"
+
+
+def _norm_history_status(status: Any) -> str:
+    """status 归一：小写去空白；``rejected_*`` 族原样保留（族内形态有意义）。"""
+    return str(status or "").strip().lower()
+
+
+def legal_history_transition(old: Any, new: Any, raw_status: Any = None) -> bool:
+    """``patch_history`` 状态迁移是否合法。
+
+    ``raw_status``：原值（当 ``new`` 是归一后的 ``rolled_back`` 而原值可能是
+    大小写混写时传入；不传则用 ``old``）。
+    未知旧态（不属于任何枚举值、也不是 ``rejected_*``）⇒ **拒绝**
+    （不是"随便放行"——未知态意味着有人手改过台账，该由人看）。
+    """
+    _old = _norm_history_status(old if raw_status is None else raw_status)
+    _new = _norm_history_status(new)
+    if not _new:
+        return False
+    _allowed = LEGAL_HISTORY_TRANSITIONS.get(_old)
+    if _allowed is None:
+        # 旧态是 rejected_* 族：等价于终态，只允许重开
+        if _old.startswith(HISTORY_STATUS_REJECTED_PREFIX):
+            return _new in (HISTORY_STATUS_PENDING, HISTORY_STATUS_APPROVED)
+        return False
+    if _new in _allowed:
+        return True
+    # 目标态是否属 rejected_* 族，看的是**目标**而不是旧态
+    if _new.startswith(HISTORY_STATUS_REJECTED_PREFIX):
+        return _REJECTED_FAMILY in _allowed
+    return False
+
+
+def mark_history_rolled_back(patch: Any, reason: str = "",
+                             now: float | None = None,
+                             source: str = "") -> dict:
+    """把**回退动作**记进台账（原地改 patch，落盘由调用方负责）。
+
+    写入：``status="rolled_back"`` + ``rolled_back_reason`` + ``rolled_back_at``
+    + ``status_history`` 追加一条（谁、何时、为什么）。
+
+    非法迁移**不写**并返回 ``ok=False``（不静默纠正 —— 与
+    ``audit_problem_pool.set_status`` 同一纪律）。
+
+    Returns: ``{ok, changed, from_status, to_status, reason}``
+    """
+    if not isinstance(patch, dict):
+        return {"ok": False, "changed": False, "from_status": None,
+                "to_status": None, "reason": "patch_not_dict"}
+    _ts = float(now if now is not None else time.time())
+    _old_raw = patch.get("status")
+    _old = _norm_history_status(_old_raw)
+    if not legal_history_transition(_old, HISTORY_STATUS_ROLLED_BACK):
+        return {"ok": False, "changed": False, "from_status": _old_raw,
+                "to_status": HISTORY_STATUS_ROLLED_BACK,
+                "reason": "illegal_transition_from:%s" % (_old or "<empty>")}
+    patch["status"] = HISTORY_STATUS_ROLLED_BACK
+    patch["rolled_back_at"] = _ts
+    patch["rolled_back_reason"] = str(reason or "")[:200]
+    _hist = patch.get("status_history")
+    if not isinstance(_hist, list):
+        _hist = []
+    _hist.append({"status": HISTORY_STATUS_ROLLED_BACK, "at": _ts,
+                  "from": _old_raw or "", "reason": str(reason or "")[:200],
+                  "source": str(source or "")[:80]})
+    patch["status_history"] = _hist
+    return {"ok": True, "changed": True, "from_status": _old_raw,
+            "to_status": HISTORY_STATUS_ROLLED_BACK, "reason": str(reason or "")}
+
+
+def mark_effect_verify_rolled_back(patch_id: str, reason: str = "",
+                                   base_dir: str | None = None) -> dict:
+    """刀2②：回退时**同步标记** ``effect_verify.json`` 里的效果验证结论。
+
+    为什么必须联动：效果验证台账回答"这条补丁改动有效吗"。补丁被回退后，
+    台账里若仍留着 ``passed=True``，就会出现"已验证有效"与"已回退"并存的自相矛盾读数
+    （铁律166：读数必须能回答它声称回答的问题）。
+
+    ``base_dir`` 注入给隔离验证用；生产不传 ⇒ 走 ``EvolutionEffectVerifier`` 默认目录。
+    """
+    _pid = str(patch_id or "").strip()
+    if not _pid:
+        return {"ok": False, "reason": "empty_patch_id"}
+    try:
+        from nucleus.evolution.EvolutionEffectVerifier import EvolutionEffectVerifier
+        _v = EvolutionEffectVerifier(base_dir)
+        _verdicts = getattr(_v, "_verdicts", None)
+        if not isinstance(_verdicts, dict):
+            return {"ok": False, "reason": "verdicts_not_dict"}
+        _cur = _verdicts.get(_pid)
+        if not isinstance(_cur, dict):
+            # 没有效果验证记录：不凭空造一条（"没验过"与"验过但回退"不同）
+            return {"ok": False, "reason": "no_verdict_record"}
+        _cur["rolled_back"] = True
+        _cur["rolled_back_at"] = time.time()
+        _cur["rolled_back_reason"] = str(reason or "")[:200]
+        _v.save()
+        return {"ok": True, "reason": "", "patch_id": _pid}
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.evolution.patch_lifecycle::mark_effect_verify_rolled_back",
+                   level="warning")
+        return {"ok": False, "reason": "%s: %s" % (type(_e).__name__, _e)}

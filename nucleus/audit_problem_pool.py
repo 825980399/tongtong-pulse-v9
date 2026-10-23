@@ -61,8 +61,18 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger(__name__)
 
-#: 池积存目录（相对项目根）
-AUDIT_DIR_REL = os.path.join("data", "reports", "audit")
+#: 池积存目录（相对项目根）。
+#:
+#: ★346刀6：先给一个**正斜杠字面量**常量，再由它派生 OS 路径。
+#: 原因：`os.path.join("data","reports","audit")` 在源码里被拆成三段，
+#: `grep -rn '"data/reports'` 命中 0 处 ⇒ 烛微346 判"落盘路径未见源码字符串常量"。
+#: 结论不是"没有常量"（`AUDIT_DIR_REL` 一直都在），而是**常量不可 grep**——
+#: 对审计者来说不可 grep 就等于不存在（铁律168：零命中不等于没有，但会误导）。
+#: 现在两种写法都能命中：字面量在这行，派生值仍是同一个路径（下方有断言自测）。
+AUDIT_DIR_LITERAL = "data/reports/audit"
+
+#: 池积存目录（相对项目根，OS 分隔符形态；由上面字面量派生，不另写一份）
+AUDIT_DIR_REL = os.path.join(*AUDIT_DIR_LITERAL.split("/"))
 
 #: 滚动保留天数（裁决①：最近 7 天 + 未结案全留）
 POOL_RETAIN_DAYS = 7
@@ -107,7 +117,32 @@ SCHEMA = "audit_problem_pool/345.v2"
 
 
 def _project_root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    """项目根（★346刀6 修一个 345 遗留的**静默错位**）。
+
+    原实现固定上溯三级。本模块在 `nucleus/` 下（只两级就是项目根），
+    上溯三级得到的是**仓库的父目录** ⇒ 默认池路径变成
+    `D:\\xinrenlei\\data\\reports\\audit`，**写到仓库外面去了**。
+
+    为什么一直没暴露：345 改码要等下一次重启窗才在活体上生效，此前这段
+    在隔离脚本里都走 `root=` / `PULSE_AUDIT_POOL_DIR` 注入，从没走过默认分支。
+    346 刀6 的域对齐验收第一次实跑默认路径就把它打出来了
+    （日志里目标路径是 `D:\\xinrenlei\\data\\...` 而不是 `...\\tongtong-pulse-v9\\data\\...`）。
+
+    修法：**不再硬编码层级**，按 `main.py` + `config.py` 这两个根标记向上找（有界）。
+    找不到就退回两级并告警——宁可给出一个可疑值并留痕，也不要静默错位。
+    """
+    _cur = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _first = _cur
+    for _ in range(4):
+        if (os.path.isfile(os.path.join(_cur, "main.py"))
+                and os.path.isfile(os.path.join(_cur, "config.py"))):
+            return _cur
+        _parent = os.path.dirname(_cur)
+        if _parent == _cur:
+            break
+        _cur = _parent
+    _module_logger.warning("[346池] 项目根定位失败（无 main.py/config.py），退回 %s", _first)
+    return _first
 
 
 def audit_dir(root: str | None = None, audit_dir_path: str | None = None) -> str:
@@ -425,6 +460,26 @@ def _merge(old_entries: list, new_entries: list, now: float) -> tuple[list, int,
 def _atomic_write_json(path: str, payload: dict) -> bool:
     """原子写（tmp + os.replace）。写盘经 guard_write 守卫（项目约定）。"""
     try:
+        # ★346刀6（A-17 第三类出口对齐）：隔离进程**不得写生产池**。
+        #   判据是结构性的（不猜）：存在显式隔离声明 且 目标就是生产池目录 ⇒ 拒写。
+        #   **不改道**：`PULSE_AUDIT_POOL_DIR` 已经在 `audit_dir()` 那层把目录换掉了，
+        #   这里再改道会二次搬移（声明的池目录叫 audit ⇒ 被当成生产目录再挪一层），
+        #   隔离证据会跑到意料之外的路径上。拒写比改道更容易解释，也更安全。
+        #
+        #   ★顺序很重要：守卫必须在 `os.makedirs` **之前**。否则"拒写"虽然成立，
+        #   目录已经被建出来了 —— 隔离进程仍然在生产目录树上留了痕（本批 d6 首轮
+        #   就是这么发现问题的：文件没写，空目录出现了）。
+        try:
+            from nucleus import domain_guard as _m346_dg
+            _decl = _m346_dg.isolation_declared()
+            if _decl:
+                _prod = os.path.abspath(os.path.join(_project_root(), AUDIT_DIR_REL))
+                if os.path.abspath(os.path.dirname(path)) == _prod:
+                    _module_logger.warning(
+                        "[346池] 隔离声明在位（%s），拒绝写生产池: %s", _decl, path)
+                    return False
+        except Exception as _dge:
+            silent_exc(_dge, "audit_problem_pool._atomic_write_json 346刀6 域过滤", level="debug")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
             from nucleus.data.write_guard import guard_write
