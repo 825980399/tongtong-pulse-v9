@@ -1439,8 +1439,10 @@ REMOTE_API_CHANNELS = {
             "max_concurrent": 1,   # 免费渠道实测并发约 1
         },
         {
-            "name": "bailian-qwen-turbo",
-            "model": "qwen-turbo",
+            # ★352刀9②(2026-10-23 21:01 星轨实测改口径)：qwen-turbo 实测 429 限流弃用，
+            #   改用 qwen-plus（同端点同 Key，实测调通）。渠道名随之改名，避免"名不符实"。
+            "name": "bailian-qwen-plus",
+            "model": "qwen-plus",
             "quota_type": "monthly_free",  # 阿里云百炼：每月 100 万 Token **持续**免费（每月滚动）
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -1449,6 +1451,20 @@ REMOTE_API_CHANNELS = {
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 4,
+        },
+        {
+            # ★352刀9②备选档：qwen-max（quality 档，同 Key 同端点）。
+            #   任务书 ② 写 priority 4、④ 写 priority 5 —— 4 已被 zhipu 占用，取 5（详见报告偏差节）。
+            "name": "bailian-qwen-max",
+            "model": "qwen-max",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 5,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
         },
         {
             "name": "siliconflow-qwen2-7b",

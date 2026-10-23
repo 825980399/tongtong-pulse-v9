@@ -367,9 +367,12 @@ def test_刀9_三新增渠道齐备():
     os.environ.setdefault("PULSE_FRAMEWORK", "1")
     import config
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
+    # ★2026-10-23 21:01 星轨实测改口径：qwen-turbo 429 限流弃用 ⇒ 改 qwen-plus，
+    #   并加 qwen-max 备选档（同 Key 同端点）。
     for n, pri, model in (("zhipu-47-flash", 1, "glm-4.7-flash"),
-                          ("bailian-qwen-turbo", 2, "qwen-turbo"),
-                          ("siliconflow-qwen2-7b", 3, "Qwen/Qwen2-7B-Instruct")):
+                          ("bailian-qwen-plus", 2, "qwen-plus"),
+                          ("siliconflow-qwen2-7b", 3, "Qwen/Qwen2-7B-Instruct"),
+                          ("bailian-qwen-max", 5, "qwen-max")):
         assert n in ch, "缺渠道 %s" % n
         assert ch[n]["priority"] == pri
         assert ch[n]["model"] == model
@@ -385,7 +388,8 @@ def test_刀9_优先级与ark已移除():
     #   实测现场是 10 条（任务书写 8，方案表漏列 ark-seed-21-turbo），10 条全删。
     ark = [c for c in ch.values() if str(c["name"]).startswith("ark-")]
     assert ark == [], "ark-* 应已从渠道池移除，实际残留 %d 条" % len(ark)
-    assert len(ch) == 5, "移除后池内应为 5 条，实际 %d 条" % len(ch)
+    # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条
+    assert len(ch) == 6, "池内应为 6 条，实际 %d 条" % len(ch)
 
 
 def test_刀9_ssrf白名单与高级渠道():
@@ -433,7 +437,8 @@ def test_刀9_转移链只含有key渠道():
     assert chain[0]["channel"] == "zhipu-47-flash"
     assert all(c["api_key"] for c in chain), "转移链混入了无密钥渠道"
     names = [c["channel"] for c in chain]
-    assert "bailian-qwen-turbo" not in names, "无 key 的百炼不应进链"
+    assert "bailian-qwen-plus" not in names, "无 key 的百炼不应进链"
+    assert "bailian-qwen-max" not in names, "无 key 的百炼备选不应进链"
     assert "single_endpoint" not in names, "有可用渠道时不该退单端点"
 
 
