@@ -390,6 +390,73 @@ class PulseMetricsCollector(BasePulseOrgan):
                        where="PulseMetricsCollector::_m339_version_stamp criteria_version")
         return _v
 
+    # ---- ★349刀5：堆归因四类（AST / PulseNode / image / other）----
+    #   为什么必须按**类别**归因，而不只是 top20 行号：
+    #   top20 回答"哪一行"，四类回答"哪一块"，而治理决策是按块做的
+    #   （AST 释放面 / 池容量 / 图片缓存 / 其余泄漏）。两者缺一不可。
+    _M349_HEAP_BUCKETS = ("ast", "pulsenode", "image", "other")
+
+    @staticmethod
+    def _m349_heap_bucket(file_name: str) -> str:
+        """按**文件名**归到四类之一（路径结构判定，不看关键字猜·铁律153）。
+
+        归类规则写在这里、写在明面上；改规则必须同时改
+        `tests/test_m349_batch.py` 里对应的正反例。
+        """
+        _f = str(file_name or "").replace("\\", "/").lower()
+        if not _f:
+            return "other"
+        # AST / 代码分析面
+        for _k in ("ast.py", "callgraphanalyzer", "self_inspector", "self_awareness/",
+                   "audit_problem_pool", "code_structure", "ast_release"):
+            if _k in _f:
+                return "ast"
+        # 脉冲节点 / 池面
+        for _k in ("pulsenodepool", "pulsenode.py", "mnemosyne/", "cold.index",
+                   "poolnode", "knowledgepool"):
+            if _k in _f:
+                return "pulsenode"
+        # 图片 / 视觉面
+        for _k in ("pil/", "pillow", "image.py", "imagedraw", "imagefile",
+                   "llava", "vision", "cv2", "numpy/lib"):
+            if _k in _f:
+                return "image"
+        return "other"
+
+    def _m349_heap_attribution(self, rows: list) -> dict:
+        """把 tracemalloc 行聚成四类占比。
+
+        返回 `{buckets: {ast|pulsenode|image|other: {size_kb,count,pct}},
+               total_size_kb, total_count, basis}`。
+        `pct` 按 **size** 算（内存治理看字节，不看条数）；`count` 单列，
+        因为"很多小对象"与"一个巨块"是两种病。
+        """
+        _b = {k: {"size_kb": 0.0, "count": 0, "pct": None}
+              for k in self._M349_HEAP_BUCKETS}
+        for _r in rows or []:
+            if not isinstance(_r, dict):
+                continue
+            _k = self._m349_heap_bucket(_r.get("file"))
+            try:
+                _sz = float(_r.get("size_kb") or 0.0)
+            except (TypeError, ValueError) as _e:
+                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution size")
+                _sz = 0.0
+            try:
+                _cnt = int(_r.get("count") or 0)
+            except (TypeError, ValueError) as _e:
+                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution count")
+                _cnt = 0
+            _b[_k]["size_kb"] = round(_b[_k]["size_kb"] + _sz, 1)
+            _b[_k]["count"] += _cnt
+        _tot = round(sum(v["size_kb"] for v in _b.values()), 1)
+        for _k, _v in _b.items():
+            _v["pct"] = (round(_v["size_kb"] / _tot, 4) if _tot > 0 else None)
+        return {"buckets": _b, "total_size_kb": _tot,
+                "total_count": sum(v["count"] for v in _b.values()),
+                "basis": ("按 tracemalloc 行的文件名归四类；pct 按 size_kb 计，"
+                          "**只覆盖本次快照可见的行**（window 模式下不是全堆）")}
+
     def _m339_memory_probe(self, heap_mb=None,
                            out_dir: str | None = None) -> dict[str, Any]:
         """★339刀4：堆自观测快照（**每日 ≤2 次**，产物只落一处）。
@@ -509,6 +576,9 @@ class PulseMetricsCollector(BasePulseOrgan):
             "tracemalloc_rows": _tm_rows,
             "gc_type_rows": _gc_types,
             "tracemalloc_basis": _basis,
+            # ★349刀5：四类占比（AST / PulseNode / image / other）
+            "heap_attribution": self._m349_heap_attribution(
+                _tm_rows if _tm_rows else _gc_types),
             "tracemalloc_is_tracing": bool(
                 __import__("tracemalloc").is_tracing()),
             "elapsed_sec": round(_elapsed, 3),

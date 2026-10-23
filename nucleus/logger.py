@@ -500,10 +500,68 @@ _log_init_lock = threading.Lock()
 #     · 捕获 `PermissionError`，**有限重试**（文件可能瞬间被释放）
 #     · 仍失败 → 记一条**单行 WARNING**，继续写当前文件（不中断运行）
 #     · 其他异常上报 logging 内部处理管道（`handleError`），不自行打印栈
+
+# ---- ★349刀10①：轮转**属主**判据（348 生产事故根治）----
+#   事故：一个验证脚本 `import nucleus.logger` 就触发了**生产日志轮转**
+#   （`pulse.log.1` 消失、`.5` 被当天内容覆盖）。根因不是"轮转写坏了"，
+#   是**轮转被路过者执行了**：任何 import 本模块的进程都会建一个
+#   RotatingFileHandler，它打开时看到文件已超 maxBytes，emit 第一条就轮转。
+#   而真正的写者（main.py 那个进程）根本没打算轮转 —— 两个 handler 抢同一份
+#   备份序列（`.4->.5`、`.1->.2`），互相踩踏，于是出现
+#   `FileNotFoundError: logs/pulse.log.4 -> logs/pulse.log.5`。
+#
+#   判据：**只有项目入口进程（`__main__` 是 main.py）才允许轮转**。
+#     · 生产主进程 —— 允许（行为与改前一致）；
+#     · 脚本 / 工具 / 测试 —— 不允许（它们只是"看一眼日志"）；
+#     · 环境变量 `PULSE_LOG_ROTATE=1|0` 可显式覆盖（运维应急口）。
+#   ★为什么不按"文件大小/自己写了多少"判：那种判据在**重启后首次打开**
+#     与"文件早已超限"两种情形下会给出互相矛盾的答案，且都要额外状态。
+#     "我是谁"是唯一稳定的事实。
+_M349_ROTATE_DECISION: dict = {}
+
+
+def _m349_rotate_allowed() -> tuple:
+    """本进程是否允许执行日志轮转。返回 `(allowed, why)`（结果进程内缓存）。"""
+    if _M349_ROTATE_DECISION.get("_decided"):
+        return (_M349_ROTATE_DECISION["allowed"], _M349_ROTATE_DECISION["why"])
+    _env = str(os.environ.get("PULSE_LOG_ROTATE", "") or "").strip().lower()
+    if _env in ("1", "true", "yes", "on"):
+        _a, _w = True, "env_force_on"
+    elif _env in ("0", "false", "no", "off"):
+        _a, _w = False, "env_force_off"
+    else:
+        _mf = ""
+        try:
+            _mn = sys.modules.get("__main__")
+            _mf = str(getattr(_mn, "__file__", "") or "").replace("\\", "/")
+        except Exception as _e:  # noqa: BLE001
+            _mf = ""
+            print("[Logger] 轮转属主判定读 __main__ 失败: %s: %s"
+                  % (type(_e).__name__, _e))
+        if _mf.endswith("/main.py") or _mf.endswith("/main.pyc"):
+            _a, _w = True, "main_entry"
+        else:
+            _a, _w = False, "non_entry_process:%s" % (_mf.rsplit("/", 1)[-1] or "?")
+    _M349_ROTATE_DECISION["_decided"] = True
+    _M349_ROTATE_DECISION["allowed"] = _a
+    _M349_ROTATE_DECISION["why"] = _w
+    return _a, _w
+
+
 class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """★第49批 T3-3：轮转失败不打印调用栈、不中断写入。"""
 
     def doRollover(self) -> None:
+        # ★349刀10①：**先问"是不是我该轮"**。非入口进程一律不动备份序列
+        #   （348 事故现场：脚本把 `.1` 挪没了、把 `.5` 覆盖了，主进程毫无察觉）。
+        _m349_allow, _m349_why = _m349_rotate_allowed()
+        if not _m349_allow:
+            _k = "_blocked_%s" % _m349_why
+            if not _M349_ROTATE_DECISION.get(_k):
+                _M349_ROTATE_DECISION[_k] = True
+                print("[Logger] 轮转被拦截：本进程不是日志写者（%s），"
+                      "保留现有备份序列不动 %s" % (_m349_why, self.baseFilename))
+            return
         _base = self.baseFilename
         _dir = os.path.dirname(_base) or "."
         _prev_size = None
@@ -522,7 +580,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
             _retry = 3
             _wait = 0.2
             try:
-                _log_rollover_cfg_error(_rc)
+                _log_rollover_cfg_error(_rc, "cfg")
             except Exception:
                 pass
         if _retry < 1:
@@ -588,7 +646,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
                             os.remove(_dst)
                         os.rename(_src, _dst)
             except Exception as _se:
-                _log_rollover_cfg_error(_se)
+                _log_rollover_cfg_error(_se, "shift")
         # 2) 复制当前内容 → .1（append 模式流不可读，另开读句柄读取已 flush 的磁盘内容）
         _backup = f"{_base}.1"
         try:
@@ -614,9 +672,16 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
             except Exception:
                 pass
 
-def _log_rollover_cfg_error(exc: BaseException) -> None:
-    """轮转配置读取失败的诊断（避免静默）。"""
-    print(f"[Logger] 轮转重试配置读取失败: {type(exc).__name__}: {exc}")
+def _log_rollover_cfg_error(exc: BaseException, stage: str = "") -> None:
+    """轮转**失败**的诊断（避免静默）。
+
+    ★349刀10①：加 `stage` 分档 —— 348 现场打的是「轮转重试配置读取失败:
+    FileNotFoundError: logs/pulse.log.4 -> .5」，读的人会去查配置，而真因是
+    **备份推移时文件被别人挪走了**。同一个函数被三种事实调用，措辞必须能分开
+    （铁律166：不同事实不同措辞）。
+    """
+    _stage = str(stage or "unknown")
+    print(f"[Logger] 轮转失败[{_stage}] {type(exc).__name__}: {exc}")
 
 
 # 轮转降级告警冷却（避免刷屏）：默认 5 分钟内最多报一次

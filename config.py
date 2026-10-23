@@ -6229,4 +6229,28 @@ ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
 #   的代码（且须先满足上面三条开启前提）。铁律156 同类：有键无色=看着能开、其实永久关。
 ENABLE_CREATOR_AGREEMENT = False  # Q-15 同意程序：默认关，须监护人显式同意后才可开启
 
+# ===== ★349批刀1（P0 · 裁决②落地）：本地补丁生成器开关 =====
+# 语义：`nucleus/evolution/patch_generator.py` 是否允许**真拉起**本地 Ollama
+#   （qwen2:7b-instruct-q4_K_M，单价表 0.0 免费档）把问题池条目变成待审草稿。
+# ★默认 False 是**有意的**，不是"没做完"：
+#   生成器单次耗时几秒到几十秒（7B 在 CPU/小显存上的真实量级），
+#   默认开等于给主循环加一条未知耗时的旁路。349 只交付**能力**，
+#   开闸留给重启窗（与 shadow→live 同纪律：先在隔离根跑出合格率，再谈接入）。
+# ★置 True 之后**也只产草稿**：草稿一律 `requires_confirmation=True` +
+#   `source="patch_generator"` ⇒ 不进 O3 判死池、不进自动派单池。
+ENABLE_PATCH_GENERATOR = False
 
+# 生成器模型名（必须能在 EVOLUTION_LLM_PRICE_TABLE 里查到，否则成本账会记 unpriced）
+PATCH_GENERATOR_MODEL = "qwen2:7b-instruct-q4_K_M"
+
+# 生成器基址（空串 ⇒ 回退 config.OLLAMA_BASE_URL ⇒ 再回退 http://localhost:11434）
+PATCH_GENERATOR_BASE_URL = ""
+
+# 单次生成超时（秒）。★60s 是任务书验收线：低于这个值 7B 常常刚出到一半就断，
+#   被误记成 generation_failed，合格率会被系统性低估。
+PATCH_GENERATOR_TIMEOUT_SEC = 60.0
+
+# ★349刀10②：问题池 `file` 字段归一开关（默认 True = 归一到「相对项目根的 posix 路径」）。
+#   现场实测：今日池 664 条里 52 条是盘符绝对路径、612 条是相对路径 ⇒ 同一个文件
+#   可能派生两个 dedup_key。开=归一（原值留 `file_raw` 可回溯），关=逐字回到改前行为。
+ENABLE_FILE_FIELD_NORMALIZE = True

@@ -410,6 +410,28 @@ def publish_self_cognition(text: str, summary: dict | None = None,
 
 
 # ---------------------------------------------------------------- 其他报告
+def publish_official_verdict(project_root: str | None = None,
+                            generator: str = "official_verdict_read") -> dict[str, Any] | None:
+    """★349刀2 读点①（日报）：把官方结论**一行**发到总线（只读，零副作用）。
+
+    为什么走总线而不各自打印：日报有多条渲染路径，各自读文件会出现
+    "同一时刻两份日报写不同的 official"（口径分叉）。总线一份，各端订阅。
+    """
+    try:
+        from nucleus.evolution.official_verdict_read import (
+            open_gate_line as _line, official_row as _row)
+        _r = _row(project_root)
+        _txt = _line(row=_r)
+        return _emit(make_envelope(
+            TYPE_EVOLUTION, generator,
+            content={"line": _txt, "row": _r},
+            level="info"))
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, where="publishers::publish_official_verdict",
+                   level="warning")
+        return None
+
+
 def publish_patch_quality(result: dict | None, generator: str = "patch_quality_evaluator",
                           extra: dict | None = None) -> dict | None:
     """发布补丁质量报告（真实修复率 0% 等结论由此进入闭环）。"""

@@ -2604,6 +2604,28 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
     """
     if not patches:
         return []
+    # ★349刀11（P3 实验性）：**opt-in** 子进程池。
+    #   为什么默认不开：沙箱对象跨进程不可 pickle ⇒ 子进程只能做 AST 层验证
+    #   （`verify_kind="ast_only"`）。真正的沙箱语义仍在主进程线程池里。
+    #   只有调用方显式 `PULSE_VERIFY_POOL=subproc` **且** `sandbox is None`
+    #   （本就不要沙箱）时才切；任何异常**回落线程池**并留痕，不静默换路径。
+    _pool_want = str(os.environ.get("PULSE_VERIFY_POOL", "") or "").strip().lower()
+    if _pool_want == "subproc" and sandbox is None:
+        try:
+            from nucleus.evolution.subproc_verify_pool import verify_patches_subproc as _vps
+            _sub = _vps(patches, project_root=project_root, max_workers=max_workers)
+            _module_logger.info(
+                "[349刀11] verify pool=subproc n=%d ok=%d verify_kind=ast_only",
+                len(_sub), sum(1 for _x in _sub if _x.get("success")))
+            return _sub
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent subproc")
+            _module_logger.warning(
+                "[349刀11] 子进程池不可用，回落线程池（不静默）: %s: %s",
+                type(_e).__name__, _e)
+    elif _pool_want == "subproc" and sandbox is not None:
+        _module_logger.info(
+            "[349刀11] 请求了 subproc 池但 sandbox 非 None（不可跨进程）⇒ 保持线程池")
     _mw = max(1, min(3, int(max_workers or 1)))
     _seq = [(i, _p, int(_p.get("o3_dispatch_attempts") or 0) + 1)
             for i, _p in enumerate(patches)]

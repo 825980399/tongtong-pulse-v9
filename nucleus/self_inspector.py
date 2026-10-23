@@ -7382,6 +7382,23 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         _rep["hard_pool_capped"], _rep["sample"].get("verdict"),
         _rep["sample"].get("misjudge_rate"), _rep["official_verdict"],
         _rep["official_reason"])
+    # ★349刀2（裁决①）：**先写后读** —— 判定结果落盘，读侧（日报/health_ui/问题池）
+    #   才能全只读零副作用。改前 official_verdict 只活在返回值里，
+    #   独立进程（health_ui）与另一条链（日报）**根本读不到**，"官方结论"事实上
+    #   只有调用者看得见。写盘失败**不影响判定**（观测不得反噬判据），但必须留痕。
+    try:
+        from nucleus.evolution.official_verdict_read import (
+            persist_verdict as _m349_persist)
+        _rep["official_verdict_persist"] = _m349_persist(_rep, project_root)
+        if not _rep["official_verdict_persist"].get("persisted"):
+            _module_logger.warning(
+                "[349刀2] official_verdict 未落盘（判定不受影响）why=%s",
+                _rep["official_verdict_persist"].get("why"))
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::o3_open_gate_report 349落盘",
+                   level="warning")
+        _rep["official_verdict_persist"] = {"persisted": False,
+                                            "why": "exception"}
     return _rep
 
 

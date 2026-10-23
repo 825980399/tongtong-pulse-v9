@@ -115,16 +115,34 @@ def read_alert_tail(root: str | None = None, max_lines: int = _ALERT_TAIL_LINES)
     # ★328批刀3 首版踩坑：写成"读满 max_lines 就 break" ⇒ 读的是**文件开头**
     #   （最老的 4000 行），算出的"末条年龄"是 9.7 天 —— 比真实值差三个数量级，
     #   而且看上去完全正常。改用 `deque(maxlen=...)` 滚一遍，只留**最后** N 行。
+    #
+    # ★349刀8①：上面那版**语义只留尾部、代价仍是全载**（`for _line in _f` 遍历全文件）。
+    #   任务书要求"只读尾部禁全载" ⇒ 改成**从文件末尾 seek 向前读**，凑够 N 行即停。
+    #   收益：告警流是只增日志，几年后可能上百 MB；每拍心跳全扫是白烧 I/O。
     _tail: deque[str] = deque(maxlen=int(max_lines))
     _n = 0
+    _partial = False
+    _bytes_read = 0
     try:
-        with open(_p, encoding="utf-8", errors="replace") as _f:
-            for _line in _f:
+        _size = os.path.getsize(_p)
+        _block = 8192
+        _pos = _size
+        _chunks: list[bytes] = []
+        with open(_p, "rb") as _fb:
+            while _pos > 0 and _n < int(max_lines):
+                _step = min(_block, _pos)
+                _pos -= _step
+                _fb.seek(_pos)
+                _chunk = _fb.read(_step)
+                _bytes_read += len(_chunk)
+                _chunks.append(_chunk)
+                _n = len(b"".join(reversed(_chunks)).splitlines())
+            _raw = b"".join(reversed(_chunks))
+            _partial = _pos > 0          # 还没到文件头就凑够了 ⇒ 这是局部（正常路径）
+            for _line in _raw.decode("utf-8", "replace").splitlines():
                 _s = _line.strip()
-                if not _s:
-                    continue
-                _n += 1
-                _tail.append(_s)
+                if _s:
+                    _tail.append(_s)
     except OSError as e:
         silent_exc(e, where="nucleus.world_model.external_heartbeat::alerts")
         return {"available": False, "path": _p, "reason": "读失败: %s" % type(e).__name__}
@@ -138,7 +156,11 @@ def read_alert_tail(root: str | None = None, max_lines: int = _ALERT_TAIL_LINES)
     return {
         "available": True,
         "path": _p,
+        # ★349刀8①：`scanned_lines` 语义改为"**参与尾部拼装的原始行数**"（不是全文行数）；
+        #   另给 `bytes_read` / `partial_read` 两个字段，让"读了多少"可审计。
         "scanned_lines": _n,
+        "bytes_read": _bytes_read,
+        "partial_read": bool(_partial),
         "tail_lines_kept": len(_tail),
         "last_ts": _ts,
         "last_age_sec": round(time.time() - _ts, 1) if _ts else None,
@@ -254,10 +276,26 @@ def w1_verdict_brief(prev_sample: dict | None = None,
         _r = external_heartbeat_verdict(root=root, prev_sample=prev_sample) or {}
         _ev = _r.get("evidence")
         _age = None
+        _alerts_brief: dict = {}
         if isinstance(_ev, dict):
             _age = _ev.get("age_sec")
+            _al = _ev.get("alerts")
+            if isinstance(_al, dict):
+                # ★349刀8①：把告警尾部**摘要**带出去（不含内容，只含"有没有/多旧/读了多少"）。
+                #   为什么在 brief 这一层：A6 与 O3 都只取 brief、不取 raw —— 留在 evidence
+                #   里等于没人看得到（337 之后 alerts 就是这么被静默的）。
+                _alerts_brief = {
+                    "available": bool(_al.get("available")),
+                    "tail_lines_kept": _al.get("tail_lines_kept"),
+                    "last_age_sec": _al.get("last_age_sec"),
+                    "bytes_read": _al.get("bytes_read"),
+                    "partial_read": _al.get("partial_read"),
+                    "reason": _al.get("reason") or "",
+                }
         return {"verdict": str(_r.get("verdict") or "unavailable"),
                 "age_sec": _age,
+                # ★口径警告随行：安静 ≠ 死了；alerts 只作辅助证据，**不参与 verdict**
+                "alerts": _alerts_brief,
                 "basis": str(_r.get("basis") or ""),
                 "raw": _r}
     except Exception as _e:
@@ -313,7 +351,14 @@ def w1_consumers() -> dict:
             {"name": "开闸三证第四证",
              "how": "开闸需 ①图 ②判据 ③A 抽验 ④**外部心跳**；第四证 = W1 verdict == alive "
                     "且（重启后）beat_count 已推进",
-             "landed": False,
-             "reason": "随开闸批编排；本批只提供读口与判定"},
+             "landed": True,
+             "landed_at": "349批刀8",
+             "judge": ("349刀8①：`w1_verdict_brief()` 增 `alerts` 摘要字段"
+                       "（available/tail_lines_kept/last_age_sec/bytes_read/partial_read），"
+                       "A6 的 `[A6+W1]` 行与 O3 采样结论都经 brief 取数 ⇒ 告警尾部证据"
+                       "首次有**结构化消费方**，不再只躺在 `evidence` 里。"
+                       "`read_alert_tail` 同步改**真 seek 尾部**（禁全载），"
+                       "`partial_read` 可审计「读到文件头还是只读尾部」。"),
+             "reason": ""},
         ],
     }

@@ -1360,7 +1360,18 @@ setInterval(loadData, 60000);
             "modules": [],
             "timeline": [],
             "patches": [],
+            # ★349刀2 读点②：官方结论（只读落盘结论，**不触发判定**）
+            #   `is_not_run=True` 时前端应显示"判据面未跑"，不得显示"未通过"。
+            "official_verdict": {},
         }
+        try:
+            from nucleus.evolution.official_verdict_read import official_row as _ov_row
+            data["official_verdict"] = _ov_row()
+        except Exception as _ov_e:  # noqa: BLE001
+            silent_exc(_ov_e, "health_ui._serve_evolution_data official",
+                       level="debug")
+            data["official_verdict"] = {"official": "UNAVAILABLE",
+                                        "narrative": "读口不可用"}
 
         try:
             from nucleus.InsightBoard import get_insight_board

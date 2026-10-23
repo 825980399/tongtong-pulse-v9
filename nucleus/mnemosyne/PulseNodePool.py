@@ -2642,6 +2642,140 @@ class PulseNodePool(SilentLogMixin):
             _nid[:32], path, _rec["reload"], "已写" if _led_ok else "失败",
             _n_idx, "是" if _wrote else "节流合并",
             _mtime if _mtime is not None else -1.0, _rec["proc_gen"])
+        # ★349刀3：驱逐**配对计数**起点（回载命中率的分母来自这里）
+        self._m349_note_reload("evict", _nid, True,
+                               "cold_written" if _led_ok else "cold_ledger_failed",
+                               path=path)
+
+    # ===== ★349刀3：回载命中率数据源（shadow→live 开闸条件③）=====
+    #   ★口径（唯一）：命中率分母 = **对已驱逐节点的回载请求数**。
+    #     `not_evicted`（本来没进冷存）单列，**不进分母** —— 否则命中率被
+    #     系统性拉低，开闸条件③永远读不到真值（铁律160）。
+    _M349_RELOAD_PERSIST_GAP = 30.0
+    _M349_RELOAD_LOG_EVERY = 20
+
+    def _m349_reload_state(self) -> dict:
+        """进程内计数容器（懒初始化；结构固定，字段只增不改名）。"""
+        _st = getattr(self, "_m349_reload", None)
+        if not isinstance(_st, dict):
+            _st = {
+                "schema": "mnemosyne_reload/349.v1",
+                "proc_gen": _m343_pg(),
+                "started_at": time.time(),
+                "evictions": 0, "requests": 0, "hits": 0, "misses": 0,
+                "skipped_not_evicted": 0,
+                "by_reason": {}, "by_kind": {},
+            }
+            self._m349_reload = _st
+        return _st
+
+    def _m349_reload_stats_path(self) -> str:
+        """落盘路径：与冷索引**同目录**（`cold.index.json` 旁边）。
+
+        为什么不放 `data/reports/`：这份数据是**池自身的**运行计数，
+        与冷存文件同生共死；分开放会让"池重建"与"计数重建"不同步。
+        """
+        try:
+            return os.path.join(os.path.dirname(self._cold_dir.rstrip(os.sep))
+                                or self._cold_dir, "reload_stats.json")
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m349_reload_stats_path")
+            return "reload_stats.json"
+
+    def _m349_note_reload(self, kind: str, node_id: str, ok: bool,
+                          reason: str = "", path: str | None = None) -> None:
+        """配对计数一次（驱逐 / 回载命中 / 回载未命中 / 跳过）。
+
+        `kind` ∈ {evict, recall, skip}。异常一律留痕不抛 —— 观测不得影响主链路。
+        """
+        try:
+            _st = self._m349_reload_state()
+            _r = str(reason or ("ok" if ok else "unknown"))
+            _k = str(kind)
+            _st["by_reason"][_r] = int(_st["by_reason"].get(_r, 0)) + 1
+            _st["by_kind"][_k] = int(_st["by_kind"].get(_k, 0)) + 1
+            if _k == "evict":
+                _st["evictions"] = int(_st["evictions"]) + 1
+            elif _k == "recall":
+                _st["requests"] = int(_st["requests"]) + 1
+                if ok:
+                    _st["hits"] = int(_st["hits"]) + 1
+                else:
+                    _st["misses"] = int(_st["misses"]) + 1
+                    # 未命中**必须**按 reason 可归因（"没取到"不是一个理由）
+                    _module_logger.warning(
+                        "[349回载] 未命中 node_id=%s reason=%s proc_gen=%s",
+                        str(node_id)[:32], _r, _st["proc_gen"])
+            elif _k == "skip":
+                _st["skipped_not_evicted"] = int(_st["skipped_not_evicted"]) + 1
+            _n = int(_st["requests"])
+            if _n and _n % int(self._M349_RELOAD_LOG_EVERY) == 0:
+                _den = int(_st["hits"]) + int(_st["misses"])
+                _module_logger.info(
+                    "[349回载] 计数 请求=%d 命中=%d 未命中=%d 命中率=%.4f "
+                    "驱逐=%d 未驱逐跳过=%d proc_gen=%s",
+                    _n, int(_st["hits"]), int(_st["misses"]),
+                    (int(_st["hits"]) / _den) if _den else 0.0,
+                    int(_st["evictions"]), int(_st["skipped_not_evicted"]),
+                    _st["proc_gen"])
+            self._m349_persist_reload_stats()
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m349_note_reload")
+
+    def _m349_persist_reload_stats(self, force: bool = False) -> bool:
+        """原子写 `reload_stats.json`（节流 `_M349_RELOAD_PERSIST_GAP`）。"""
+        try:
+            _now = time.time()
+            _last = float(getattr(self, "_m349_reload_persist_ts", 0.0) or 0.0)
+            if not force and _last and (_now - _last) < float(self._M349_RELOAD_PERSIST_GAP):
+                return False
+            _st = self._m349_reload_state()
+            _den = int(_st["hits"]) + int(_st["misses"])
+            _body = dict(_st)
+            _body["updated_at"] = _now
+            _body["hit_rate"] = (int(_st["hits"]) / _den) if _den else None
+            _body["denominator"] = _den
+            _body["criteria"] = ("命中率分母 = 对**已驱逐节点**的回载请求数；"
+                                 "not_evicted 单列不计入分母")
+            _p = self._m349_reload_stats_path()
+            _dir = os.path.dirname(_p)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            _tmp = _p + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as _f:
+                json.dump(_body, _f, ensure_ascii=False, indent=1)
+            os.replace(_tmp, _p)
+            self._m349_reload_persist_ts = _now
+            return True
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="PulseNodePool::_m349_persist_reload_stats")
+            return False
+
+    def reload_hit_rate(self) -> dict:
+        """★349刀3：开闸条件③的**唯一读数口**（shadow→live 用这个，不许各算各的）。
+
+        返回 `hit_rate=None` 表示**还没有样本**（不是 0）——"没测过"与"测了是 0"
+        必须分得开（铁律166）。
+        """
+        _st = self._m349_reload_state()
+        _den = int(_st["hits"]) + int(_st["misses"])
+        _hr = (int(_st["hits"]) / _den) if _den else None
+        return {
+            "schema": _st["schema"],
+            "proc_gen": _st["proc_gen"],
+            "hit_rate": _hr,
+            "denominator": _den,
+            "hits": int(_st["hits"]),
+            "misses": int(_st["misses"]),
+            "requests": int(_st["requests"]),
+            "evictions": int(_st["evictions"]),
+            "skipped_not_evicted": int(_st["skipped_not_evicted"]),
+            "by_reason": dict(_st["by_reason"]),
+            "by_kind": dict(_st["by_kind"]),
+            "gate_threshold": 0.95,
+            "gate_ok": bool(_hr is not None and _hr >= 0.95),
+            "stats_path": self._m349_reload_stats_path(),
+        }
 
     def _m343_mark_flushed(self, n: int) -> int:
         """把 `pending_flush` 条目批量置 `flushed`（flush 成功后调用，避免全量重建）。"""
@@ -3151,6 +3285,8 @@ class PulseNodePool(SilentLogMixin):
                 _by_id[_nid] = _row
         _result = []
         _targets = node_ids if node_ids is not None else list(_by_id.keys())
+        # ★349刀3：`node_ids=None`（全库读）不是"回载请求"，不进配对计数
+        _req_n = (len(node_ids) if node_ids is not None else None)
         for _nid in _targets:
             _row = _by_id.get(_nid)
             if _row is None:
@@ -3164,6 +3300,10 @@ class PulseNodePool(SilentLogMixin):
             if consume:
                 self._cold_evicted.discard(_nid)
                 self._cold_stats["recall_hits"] += 1
+                # ★349刀3：批量路径也进配对计数（只记 consume 且请求量 ≤200，
+                #   `node_ids=None` 的全库读不算"回载请求"，否则命中率恒 100%）
+                if _req_n is not None and _req_n <= 200:
+                    self._m349_note_reload("recall", _nid, True, "batch_hit")
         # ★338刀3：召回留痕。命中率的分母是**本次请求的条数**（不是全库），
         #   这样才能回答「我要的这 100 条，取回了几条」。
         _req = len(_targets)
@@ -3184,6 +3324,9 @@ class PulseNodePool(SilentLogMixin):
         if not self._cold_storage_enabled:
             return None
         if node_id not in self._cold_evicted:
+            # ★349刀3：**这条不进命中率分母** —— 它压根没进过冷存。
+            #   旧口径把它算 miss，等于用"没请假的人"拉低出勤率。
+            self._m349_note_reload("skip", node_id, False, "not_evicted")
             return None
         try:
             import pyarrow.parquet as pq
@@ -3208,6 +3351,8 @@ class PulseNodePool(SilentLogMixin):
                             self._cold_stats["recall_hits"] += 1
                             self._m169_cold_trace("recall", node_id, True,
                                                   "侧车索引命中")
+                            self._m349_note_reload("recall", node_id, True,
+                                                   "index_hit")
                             if self._index_store is not None:
                                 self._index_store.record_change(
                                     "remove", "level_index",
@@ -3226,6 +3371,7 @@ class PulseNodePool(SilentLogMixin):
         if consume:
             self._cold_stats["recall_misses"] += 1
             self._m169_cold_trace("recall", node_id, False, "批量回退未命中")
+            self._m349_note_reload("recall", node_id, False, "not_in_cold")
         return None
 
     def _m70_materialize_lazy_node(self, node) -> bool:

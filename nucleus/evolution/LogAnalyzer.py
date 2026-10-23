@@ -189,6 +189,70 @@ class LogAnalyzer(SilentLogMixin):
             silent_exc(_e, where="LogAnalyzer::_m343_filter_on")
             return True
 
+
+    # ===== ★349刀6②：差集清单**落盘**（343 只算不存，"6+1" 随日志滚动就没了） =====
+    @staticmethod
+    def dump_two_domains(out_path: str | None = None,
+                         project_root: str | None = None) -> dict:
+        """把两套文件域差集写成清单文件，返回 `{persisted, path, diff, why}`。
+
+        ★为什么单独落盘而不是"日报里打印一下"：
+          差集是**配置快照**，不是运行读数 —— 配置不变它就不变。落盘后可以
+          做"上次与本次差集是否相同"的对拍，配置漂移一眼可见。
+        ★写盘走 guard_write 判定 + `.tmp` → `os.replace` → 读回（铁律182），
+          并把 `persisted` 如实上报（铁律198：内存改了文件没写不算成功）。
+        """
+        import json as _j349d
+        import os as _o349d
+
+        _root = str(project_root or _o349d.getcwd())
+        _path = str(out_path) if out_path else _o349d.path.join(
+            _root, "data", "reports", "audit", "two_domain_diff.json")
+        _diff = LogAnalyzer._m343_two_domains()
+        _payload = {
+            "schema": "two_domain_diff/349.v1",
+            "generated_at": time.time(),
+            "tool_roots": _diff.get("tool_roots"),
+            "intake_wl": _diff.get("intake_wl"),
+            "wl_source": _diff.get("wl_source"),
+            "both": _diff.get("both"),
+            "only_tool": _diff.get("only_tool"),
+            "only_wl": _diff.get("only_wl"),
+            "n_tool": _diff.get("n_tool"),
+            "n_wl": _diff.get("n_wl"),
+            # 显式声明口径：6+1 是**当前实测值**，不是硬编码常量
+            "declared": {
+                "only_tool_count": len(_diff.get("only_tool") or []),
+                "only_wl_count": len(_diff.get("only_wl") or []),
+                "shape": "only_tool(%d) + only_wl(%d)" % (
+                    len(_diff.get("only_tool") or []), len(_diff.get("only_wl") or [])),
+                "meaning": "只扫不入池 / 只入池不被扫；风险是「扫到了却没下文」的静默",
+            },
+        }
+        _res = {"persisted": False, "path": _path, "diff": _diff, "why": ""}
+        try:
+            from nucleus.data.write_guard import guard_write as _gw349d
+            if not _gw349d(_path, component="LogAnalyzer::dump_two_domains"):
+                _res["why"] = "guard_write_denied"
+                return _res
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="LogAnalyzer::dump_two_domains guard")
+        try:
+            _o349d.makedirs(_o349d.path.dirname(_path), exist_ok=True)
+            _tmp = _path + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as _f:
+                _j349d.dump(_payload, _f, ensure_ascii=False, indent=2)
+            _o349d.replace(_tmp, _path)
+            with open(_path, "r", encoding="utf-8") as _f:
+                _back = _j349d.load(_f)
+            _res["persisted"] = bool(_back.get("schema") == "two_domain_diff/349.v1")
+            if not _res["persisted"]:
+                _res["why"] = "readback_schema_mismatch"
+        except Exception as _e:  # noqa: BLE001
+            silent_exc(_e, where="LogAnalyzer::dump_two_domains write")
+            _res["why"] = "write_error:%s" % type(_e).__name__
+        return _res
+
     # ===== ★343刀2⑤（342挂账45）：**两套文件域并存**必须显式声明 =====
     #   342 实证：本仓有两套"代码面"集合，各自服务不同目的，且**不相等**：
     #     · `config.TOOL_SCAN_ROOTS`（11 项）= **扫描域**：Ruff/Bandit/日志分析

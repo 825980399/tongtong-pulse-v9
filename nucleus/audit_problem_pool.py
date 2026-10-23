@@ -293,6 +293,67 @@ def _proc_gen() -> str:
         return "unknown"
 
 
+
+def _m349_gate_field() -> str:
+    """★349刀2：池条目的 `gate` 字段值（只读落盘结论）。
+
+    单独抽函数是为了**可测**：测试可以直接断言"读不到 ⇒ ABSENT，不是 OPEN"。
+    """
+    try:
+        from nucleus.evolution.official_verdict_read import gate_field as _gf
+
+        return str(_gf())
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, "audit_problem_pool._m349_gate_field", level="debug")
+        return "UNAVAILABLE"
+
+
+
+#: ★349刀10②：项目根目录名（用于把绝对路径切成相对路径）。
+#   ★为什么不按"上溯 N 级"定位：那在 worktree/子目录下必错（铁律187）。
+#     这里只做**文本切片**（去掉盘符 + 到本目录名之前的部分），不解析文件系统。
+_PROJ_DIRNAME = "tongtong-pulse-v9"
+
+
+def norm_file_field(file: Any) -> str:
+    """把 `file` 归一到「相对项目根的 posix 路径」。
+
+    三种输入统一成一种输出：
+      `D:\\xinrenlei\\tongtong-pulse-v9\\organs\\body\\PulseLiver.py` → `organs/body/PulseLiver.py`
+      `./organs/body/PulseLiver.py`                                  → `organs/body/PulseLiver.py`
+      `organs/body/PulseLiver.py`                                    → 原样
+    不属于本项目的绝对路径（别的盘/别的目录）**原样保留**（不硬切，切开就没意义了）。
+    """
+    if not isinstance(file, str) or not file:
+        return str(file or "")
+    _f = file.replace("\\", "/").strip()
+    # ★349刀10②：项目名做**大小写不敏感**匹配（Windows 路径大小写不敏感，
+    #   `D:\\XinRenLei\\TongTong-Pulse-V9\\...` 与 `D:\\xinrenlei\\tongtong-pulse-v9\\...`
+    #   是同一个文件；逐字比较会让同一文件派生两个 dedup_key —— 正是本刀要消灭的缺陷）。
+    #   切完**保留尾部原始大小写**，不改被审计文件名的写法。
+    _low = _f.lower()
+    _mark = "/%s/" % _PROJ_DIRNAME.lower()
+    _i = _low.find(_mark)
+    if _i >= 0:
+        _f = _f[_i + len(_mark):]
+    elif _low.startswith(_PROJ_DIRNAME.lower() + "/"):
+        _f = _f[len(_PROJ_DIRNAME) + 1:]
+    while _f.startswith("./"):
+        _f = _f[2:]
+    return _f.lstrip("/")
+
+
+def _m349_norm_enabled() -> bool:
+    """归一闪开关（默认 True；关 ⇒ 逐字回到改前行为）。"""
+    try:
+        import config as _c
+
+        return bool(getattr(_c, "ENABLE_FILE_FIELD_NORMALIZE", True))
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, "audit_problem_pool._m349_norm_enabled", level="debug")
+        return True
+
+
 # ========== 条目构造 ==========
 
 
@@ -303,7 +364,9 @@ def entry_from_issue(issue: dict, now: float | None = None,
         return None
     _ts = float(now if now is not None else time.time())
     _st = stamps if isinstance(stamps, dict) else _version_stamps()
-    _file = str(issue.get("file", "") or "")
+    _file_raw_in = str(issue.get("file", "") or "")
+    # ★349刀10②：file 归一到相对 posix 路径（幂等：已归一的原样返回）
+    _file = norm_file_field(_file_raw_in) if _m349_norm_enabled() else _file_raw_in
     _method = str(issue.get("method", "") or "")
     _itype = str(issue.get("type", "") or issue.get("issue_type", "") or "unknown")
     _key = make_dedup_key(_file, _method, _itype)
@@ -333,7 +396,14 @@ def entry_from_issue(issue: dict, now: float | None = None,
         "status": STATUS_OPEN,
         "closed_reason": "",
         "status_history": [{"status": STATUS_OPEN, "at": _ts}],
+        # ★349刀2 读点③：官方结论的 `gate` 字段（供自知柱面周报按 gate 分组）。
+        #   **零新采集**：只读已落盘的判定结果，绝不在这里再跑一次判定
+        #   （`o3_open_gate_report` 是重活，池构造是每日热路径）。
+        #   读不到就是 `ABSENT`/`UNAVAILABLE`，**不猜**、更不写成 OPEN。
+        "gate": _m349_gate_field(),
     }
+    if _file != _file_raw_in:
+        _entry["file_raw"] = _file_raw_in
     if not _sev_ok:
         # 不吞不弃：原值留证，条目照入池但强制走清洗队列
         _entry["severity_raw"] = _sev_raw
