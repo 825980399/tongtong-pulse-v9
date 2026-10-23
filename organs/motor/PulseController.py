@@ -44,6 +44,9 @@ try:
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 from concurrent.futures import ThreadPoolExecutor
+
+#: ★347批刀2：保活节拍间隔（保活线程去线程后由心跳驱动，节流保持原 60s 节奏）
+_M347_KEEPALIVE_SEC = 60.0
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
@@ -2079,50 +2082,62 @@ class PulseController(BasePulseOrgan):
         self._search_cache.clear()
         self._log(LogLevel.INFO, "无头浏览器已关闭")
     def _start_keepalive_timer(self):
-        """启动浏览器保活定时器，每60秒通过专用线程池轻触一次防止断开"""
-        def _keepalive_loop():
-            _last_restart = time.time()
-            while self.is_running:
-                # ★163批 刀8（P0★）：保活节拍改由心跳脉冲网关驱动
-                #   （灰度 OFF 默认退化为 time.sleep(60)，零行为变化）
-                if self._should_use_pulse_gateway():
-                    self.wait_heartbeat_pulse(60)
-                else:
-                    time.sleep(60)
-                if not self.is_running:
-                    break
-                # ★主线第12批 T1/P2-81（裁决方案A）：保活线程只置信号，不碰浏览器。
-                #   实际 touch 由 Playwright 专用线程（浏览器属主）执行，
-                #   规避 "cannot switch to a different thread" 跨线程错误。
-                if self._headless_browser and self._headless_page:
-                    try:
-                        if self._keepalive_signal_mode():
-                            self._signal_keepalive()
-                        else:
-                            # 灰度回退：第10批旧行为（直接由保活线程提交，已知跨线程）
-                            _executor = self._get_playwright_executor()
-                            _executor.submit(self._keepalive_touch)
-                    except Exception as _le:
-                        self._log(LogLevel.DEBUG,
-                                  f"保活调度异常（不影响运行）: {type(_le).__name__}: {_le}")
-                    # ★主线第10批 P2-77：接入原本定义了却从未被调用的回收逻辑（防僵尸/闲置泄漏）
-                    try:
-                        self._kill_zombie_headless()
-                    except Exception as _ze:
-                        self._log(LogLevel.DEBUG,
-                                  f"僵尸进程回收异常（不影响运行）: {type(_ze).__name__}: {_ze}")
-                # 配置化定期重启：应对内存泄漏（默认 0=禁用，不改变原有行为）
-                _restart_interval = self._get_headless_config(
-                    "headless_restart_interval_seconds", 0)
-                if (_restart_interval and self._headless_browser
-                        and (time.time() - _last_restart) >= _restart_interval):
-                    self._log(LogLevel.INFO,
-                              f"浏览器定期重启（间隔{_restart_interval}s，防内存泄漏）")
-                    self._close_headless_browser()
-                    _last_restart = time.time()
+        """★347批刀2（D3 去线程收尾 · 站点1/5）：保活不再起专用线程，改心跳脉冲驱动。
 
-        _keepalive_thread = threading.Thread(target=_keepalive_loop, daemon=True)
-        _keepalive_thread.start()
+        原实现起一条 daemon 线程 `_keepalive_loop`：`while self.is_running` +
+        `wait_heartbeat_pulse(60)`。这条线程与心跳网关**重复**——网关本身就是节拍源，
+        线程只是"等一个心跳、再睡 60s"。故本批移除线程，节拍交给
+        `_on_heartbeat_pulse → _keepalive_tick()`，用 `_M347_KEEPALIVE_SEC` 节流
+        保持原来的 60s 节奏（心跳快于 60s 时不多做；慢于 60s 时退化为心跳周期）。
+
+        行为等价：touch 仍**只置信号**（主线12批 P2-81 裁决方案A 不变，浏览器属主线程执行）、
+        僵尸回收不变、定期重启不变。唯一差别是那条线程不存在了。
+        """
+        self._keepalive_last_ts = 0.0
+        self._keepalive_last_restart_ts = time.time()
+        self._keepalive_tick_driver = "heartbeat"
+        self._log(LogLevel.INFO,
+                  "[347去线程] 保活改心跳驱动（原 60s 专用线程已移除，站点1/5）")
+
+    def _keepalive_tick(self) -> None:
+        """★347批刀2：保活节拍体（原 `_keepalive_loop` 循环体的单次执行，60s 节流）。"""
+        if not self.is_running:
+            return
+        _m347_now = time.time()
+        if (_m347_now - float(getattr(self, "_keepalive_last_ts", 0.0) or 0.0)) \
+                < _M347_KEEPALIVE_SEC:
+            return
+        self._keepalive_last_ts = _m347_now
+        # ★主线第12批 T1/P2-81（裁决方案A）：保活线程只置信号，不碰浏览器。
+        #   实际 touch 由 Playwright 专用线程（浏览器属主）执行，
+        #   规避 "cannot switch to a different thread" 跨线程错误。
+        if self._headless_browser and self._headless_page:
+            try:
+                if self._keepalive_signal_mode():
+                    self._signal_keepalive()
+                else:
+                    # 灰度回退：第10批旧行为（直接由保活线程提交，已知跨线程）
+                    _executor = self._get_playwright_executor()
+                    _executor.submit(self._keepalive_touch)
+            except Exception as _le:
+                self._log(LogLevel.DEBUG,
+                          f"保活调度异常（不影响运行）: {type(_le).__name__}: {_le}")
+            # ★主线第10批 P2-77：接入原本定义了却从未被调用的回收逻辑（防僵尸/闲置泄漏）
+            try:
+                self._kill_zombie_headless()
+            except Exception as _ze:
+                self._log(LogLevel.DEBUG,
+                          f"僵尸进程回收异常（不影响运行）: {type(_ze).__name__}: {_ze}")
+        # 配置化定期重启：应对内存泄漏（默认 0=禁用，不改变原有行为）
+        _restart_interval = self._get_headless_config(
+            "headless_restart_interval_seconds", 0)
+        if (_restart_interval and self._headless_browser
+                and (time.time() - self._keepalive_last_restart_ts) >= _restart_interval):
+            self._log(LogLevel.INFO,
+                      f"浏览器定期重启（间隔{_restart_interval}s，防内存泄漏）")
+            self._close_headless_browser()
+            self._keepalive_last_restart_ts = time.time()
+
 
     def _owner_thread_mode(self) -> bool:
         """★主线第12批 T1/P2-81：是否启用「属主线程」模式（默认开）。
@@ -2438,8 +2453,17 @@ class PulseController(BasePulseOrgan):
         return _woke
 
     def _on_heartbeat_pulse(self, payload: dict) -> dict[str, Any]:
-        """★163批 刀8（P0★）：心跳脉冲到达 → 置位网关事件，唤醒阻塞的循环。"""
+        """★163批 刀8（P0★）：心跳脉冲到达 → 置位网关事件，唤醒阻塞的循环。
+
+        ★347批刀2：同一心跳同时驱动保活节拍（`_keepalive_tick` 自带 60s 节流），
+        因此原保活专用线程已被移除，节拍源不增不减，仍是"每拍一次心跳"。
+        """
         self._heartbeat_pulse.set()
+        try:
+            self._keepalive_tick()
+        except Exception as _m347_ke:
+            self._log(LogLevel.DEBUG,
+                      f"保活节拍异常（不影响心跳与运行）: {type(_m347_ke).__name__}: {_m347_ke}")
         return {"status": "acknowledged"}
 
     # ========== 事件处理 ==========

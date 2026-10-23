@@ -71,6 +71,31 @@ _M326_INTAKE_JOURNAL_REL = os.path.join(
 #: 拍序计数器（进程内；重启后由台账里最大 tick 续号，绝不复用旧号）
 _GROWTH_INTAKE_TICKS: dict = {"ticks": 0}
 
+# ===== ★347批刀1：[347需求] 需求驱动占比的**唯一定义** =====
+# 为什么要有：占比此前只活在注释里（"count(growth_need)/count(all) 可算"），
+#   代码里没有任何一处真正算它、也没有任何一处留痕 ⇒ "需求源到底有没有产出"
+#   只能靠外部各自复算，口径必然漂移。这里把口径钉死一处，由 _m347_emit 统一留痕。
+
+
+def _m347_growth_ratio(trigger_counts: dict | None) -> dict:
+    """需求驱动占比（唯一口径）。分母 0 ⇒ ratio=None（**不填 0.0**，铁律166）。"""
+    _tc = trigger_counts or {}
+    _g = int(_tc.get("growth_need", 0) or 0)
+    _d = int(_tc.get("defect", 0) or 0)
+    _a = _g + _d
+    return {"growth": _g, "defect": _d, "all": _a,
+            "ratio": (float(_g) / float(_a)) if _a > 0 else None}
+
+
+def _m347_emit_intake_ratio(trigger_counts: dict | None, source: str = "") -> dict:
+    """留痕 `[347需求] 源=… 占比=…`（可 grep；"本拍无料"与"占比 0"措辞可分）。"""
+    _r = _m347_growth_ratio(trigger_counts)
+    _txt = "unavailable" if _r["ratio"] is None else "%.4f" % _r["ratio"]
+    _module_logger.info(
+        "[347需求] 源=%s growth=%d defect=%d all=%d 占比=%s",
+        source or "unknown", _r["growth"], _r["defect"], _r["all"], _txt)
+    return _r
+
 
 def _m326_intake_journal_path(root: str | None = None) -> str:
     return os.path.join(root or os.getcwd(), _M326_INTAKE_JOURNAL_REL)
@@ -393,6 +418,16 @@ class EvolutionLoop(SilentLogMixin):
             "message": str(_i.get("message") or "")[:120],
             "organ": str(_i.get("organ") or ""),
         } for _i in (_growth_intake or []) if isinstance(_i, dict)]
+        # ★347批刀1：trigger_counts 口径**只算一次**。旧实现把同一 dict 字面量
+        #   在「逐拍台账 / 入料快照 / 返回值」三个出口各算一遍，任一处改动就会
+        #   让三处读数不一致（同一事实三份独立真相）。
+        _m347_tc = {
+            "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
+            "growth_need": sum(1 for _i in _final
+                               if _i.get("trigger") == "growth_need"),
+        }
+        # ★347批刀1：需求驱动占比留痕（分母 0 ⇒ 占比 unavailable，不填 0.0）
+        _m347_emit_intake_ratio(_m347_tc, source="discover_all_issues")
         _m326_append_intake_journal({
             "tick": _m326_next_tick(),
             "ts": time.time(),
@@ -400,22 +435,14 @@ class EvolutionLoop(SilentLogMixin):
             "total": len(_final),
             "review_intake": len(_intake),
             "growth_intake": len(_growth_intake),
-            "trigger_counts": {
-                "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
-                "growth_need": sum(1 for _i in _final
-                                   if _i.get("trigger") == "growth_need"),
-            },
+            "trigger_counts": _m347_tc,
             "growth_items": _m326_growth_items,
         })
         _m325_persist_intake_summary({
             "total": len(_final),
             "review_intake": len(_intake),
             "growth_intake": len(_growth_intake),
-            "trigger_counts": {
-                "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
-                "growth_need": sum(1 for _i in _final
-                                   if _i.get("trigger") == "growth_need"),
-            },
+            "trigger_counts": _m347_tc,
             "growth_stats": dict(_GROWTH_INTAKE_STATS),
             # ★326批刀5：明细也进最新快照（台账是主源，快照带一份便于人读）
             "growth_items": _m326_growth_items,
@@ -430,11 +457,7 @@ class EvolutionLoop(SilentLogMixin):
                 "from_self_inspector": inspector_count,
                 "review_intake": len(_intake),
                 "growth_intake": len(_growth_intake),
-                "trigger_counts": {
-                    "defect": sum(1 for _i in _final if _i.get("trigger") == "defect"),
-                    "growth_need": sum(1 for _i in _final
-                                       if _i.get("trigger") == "growth_need"),
-                },
+                "trigger_counts": _m347_tc,
             }
         }
 
