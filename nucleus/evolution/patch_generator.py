@@ -602,8 +602,26 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
     _checks["ast_after_splice"] = _sp
     if not _sp["ok"]:
         _reasons.append("ast_splice:%s" % _sp["why"])
+    # ★350刀6①：desc 禁嵌动态读数（防349刀6假漂移复发）
+    _dd = check_desc_dynamic(draft)
+    _checks["desc_dynamic"] = _dd
+    if not _dd["ok"]:
+        _reasons.append("desc_dynamic:%s" % _dd["why"])
+    # ★350刀6③：reason 证据链（触发行/现象/依据）
+    _rc = check_reason_chain(draft)
+    _checks["reason_chain"] = _rc
+    if not _rc["ok"]:
+        _reasons.append("reason_chain:%s" % _rc["why"])
+    # ★350刀6③②：整方法改写契约（限上用方法级，而非锚点级 40 行）
+    _mc = check_method_contract(draft, draft.get("_project_root"))
+    _checks["method_contract"] = _mc
+    if not _mc["ok"]:
+        _reasons.append("method_contract:%s" % _mc["why"])
+    _dm_limit = (METHOD_CONTRACT_MAX_LINES
+                 if _mc.get("mode") == "method" else 40)
     _dm = _m349_diff_is_minimal(draft.get("original_code") or "",
-                                draft.get("modified_code") or "")
+                                draft.get("modified_code") or "",
+                                max_changed_lines=_dm_limit)
     _checks["diff_minimal"] = _dm
     if not _dm["ok"]:
         _reasons.append("diff:%s" % _dm["why"])
@@ -614,6 +632,110 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
         _reasons.append("touches_core_file")
     _state = STATE_DRAFT_READY if not _reasons else STATE_GATE_REJECTED
     return {"state": _state, "checks": _checks, "gate_reasons": _reasons}
+
+
+# ===== ★350刀6：证据门强化（desc 动态读数 + reason 证据链 + 整方法改写契约）=====
+
+#: 契约切换：**整方法改写**（350 刀6③②·小林 2026-10-23 裁定）。
+#: 为什么从"锚点三元组"改成"整方法"：锚点级只能表达 3 行内的替换，模型给出的
+#: 往往是"这个方法该怎么写"，硬压成锚点会丢掉上下文 ⇒ 合格率 14%（349 刀1）。
+#: 翻回锚点级只需把此常量置 False（保留回退路径，不靠改代码结构）。
+METHOD_LEVEL_CONTRACT = True
+
+#: 整方法改写的改动行上限（比锚点级的 40 行宽——整方法本来就长）
+METHOD_CONTRACT_MAX_LINES = 120
+
+#: reason 证据链三段（触发行 / 现象 / 判定依据）——缺一段即"薄理由"
+REASON_CHAIN_KEYS = ("触发行", "现象", "依据")
+
+#: 理由薄的最低长度（过短的 reason 基本等于没写）
+REASON_MIN_CHARS = 24
+
+
+def check_desc_dynamic(draft: dict) -> dict:
+    """★350刀6①：desc 含**动态读数**即拒收。
+
+    病根（349 刀6 真凶）：`desc` 里嵌了 `硬=59.3%/全=66.2%` 这类覆盖率读数，
+    而覆盖率每份图算一次 ⇒ 同一不变量的文本**每份都不同** ⇒ 按原文对差
+    假漂移 1217 条。判别力来自"这个 token 会不会随时间自己变"，不是"它像不像数字"。
+    """
+    from nucleus.evolution.desc_norm import desc_dynamic_hits
+    _hits = desc_dynamic_hits(draft.get("desc"))
+    return {"ok": not _hits, "hits": _hits[:8],
+            "why": "" if not _hits
+                   else "desc 含动态读数 %s（会随每份快照漂移，禁止进身份/对差）"
+                        % ",".join(h[:24] for h in _hits[:4])}
+
+
+def check_reason_chain(draft: dict) -> dict:
+    """★350刀6③：reason 必须有证据链（触发行/现象/依据三段落其一不可缺）。
+
+    口径：三段的**顺序**不强制（模型常写成"依据…现象…"），但**存在性**必须齐。
+    另外给一条长度下限，防"补 bug"这种等于没写的一句话理由。
+    """
+    _r = str(draft.get("reason") or "")
+    _miss = [k for k in REASON_CHAIN_KEYS if k not in _r]
+    _short = len(_r.strip()) < REASON_MIN_CHARS
+    _ok = (not _miss) and (not _short)
+    if _ok:
+        return {"ok": True, "missing": [], "why": ""}
+    _why = []
+    if _miss:
+        _why.append("缺段落 %s" % ",".join(_miss))
+    if _short:
+        _why.append("理由过短(%d<%d)" % (len(_r.strip()), REASON_MIN_CHARS))
+    return {"ok": False, "missing": _miss, "why": "；".join(_why)}
+
+
+def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
+    """★350刀6③②：整方法改写契约（方法级 diff / AST 方法体）。
+
+    三问：
+      ① `modified_code` 能不能 parse；
+      ② 有没有且只有**一个**顶层 def，名字等于 `method`；
+      ③ 改动行数在**方法级**上限之内（`METHOD_CONTRACT_MAX_LINES`）。
+    契约关闭时返回 `{"ok": True, "mode": "anchor", ...}`（不做方法级约束）。
+    """
+    if not METHOD_LEVEL_CONTRACT:
+        return {"ok": True, "mode": "anchor", "why": "", "defs": [],
+                "changed_lines": None}
+    _code = str(draft.get("modified_code") or "")
+    _m = str(draft.get("method") or "").strip()
+    try:
+        import ast as _ast
+        _tree = _ast.parse(_code)
+    except SyntaxError as _se:
+        _module_logger.info("[350生成] 整方法契约 AST 不通过: %s", _se)
+        return {"ok": False, "mode": "method", "why": "syntax_error:%s" % _se,
+                "defs": [], "changed_lines": None}
+    _defs = [n.name for n in _tree.body
+             if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))]
+    if len(_defs) != 1:
+        return {"ok": False, "mode": "method",
+                "why": "顶层 def 数=%d（须=1：整方法改写）" % len(_defs),
+                "defs": _defs[:6], "changed_lines": None}
+    if _m and _defs[0] != _m:
+        return {"ok": False, "mode": "method",
+                "why": "def 名 %s ≠ method %s" % (_defs[0], _m),
+                "defs": _defs[:6], "changed_lines": None}
+    _o = str(draft.get("original_code") or "")
+    _n_changed = None
+    if _o:
+        try:
+            import difflib as _dl
+            _diff = list(_dl.unified_diff(_o.splitlines(), _code.splitlines(), n=0))
+            _n_changed = sum(1 for ln in _diff
+                             if (ln.startswith("+") or ln.startswith("-"))
+                             and not ln.startswith("+++") and not ln.startswith("---"))
+        except Exception as _e:                                # noqa: BLE001
+            silent_exc(_e, where="patch_generator.check_method_contract diff")
+            _n_changed = None
+    if _n_changed is not None and _n_changed > METHOD_CONTRACT_MAX_LINES:
+        return {"ok": False, "mode": "method",
+                "why": "方法级改动 %d 行 > 上限 %d" % (_n_changed, METHOD_CONTRACT_MAX_LINES),
+                "defs": _defs[:6], "changed_lines": _n_changed}
+    return {"ok": True, "mode": "method", "why": "", "defs": _defs[:6],
+            "changed_lines": _n_changed}
 
 
 # ========== 传输层（可注入）==========

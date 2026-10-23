@@ -304,10 +304,56 @@ class LogAnalyzer(SilentLogMixin):
             "n_tool": len(_tool), "n_wl": len(_wl),
         }
 
+    #: ★350刀7③：两套文件域 **6+1 清单**（写死，偏离即报）。
+    #: 为什么要写死而不是每次算差集：差集是**现状**，清单是**应然**。
+    #: 两者分开才能回答「今天的域走样了没有」。
+    M350_DOMAIN_CHECKLIST = {
+        "both": ("config", "main", "nucleus", "organs", "tools"),
+        "only_tool": ("base", "functions", "pulse_doctor", "pulses",
+                      "somatics", "utils"),
+        "only_wl": ("scripts",),
+    }
+
+    def _m350_domain_checklist(self, rel: dict) -> dict:
+        """★350刀7③：对照 6+1 清单。偏离逐条报，**不静默容忍**。"""
+        _out = {"ok": True, "missing": {}, "unexpected": {}, "note": ""}
+
+        def _root(_x):
+            # ★350：清单按**根名**约定，而扫描域里 `config.py` / `main.py` /\n            #   `pulse_doctor.py` 是**单文件根**。不去掉 `.py` 就会把它们
+            #   判成「额外项」——那是命名形态差异，不是域偏离。
+            _s = str(_x or "").replace("\\", "/").rstrip("/")
+            if _s.endswith(".py"):
+                _s = _s[:-3]
+            return _s.rsplit("/", 1)[-1] if "/" in _s else _s
+
+        for _k, _expect in self.M350_DOMAIN_CHECKLIST.items():
+            _got = tuple(_root(x) for x in (rel.get(_k) or ()))
+            _miss = [x for x in _expect if x not in _got]
+            _extra = [x for x in _got if x not in _expect]
+            if _miss:
+                _out["missing"][_k] = _miss
+            if _extra:
+                _out["unexpected"][_k] = _extra
+        if rel.get("wl_source") == "unavailable":
+            _out["note"] = "入池域读不到 ⇒ only_wl 偏离不可判（不当作通过）"
+        _out["ok"] = not _out["missing"] and not _out["unexpected"]
+        if _out["ok"]:
+            self._log(LogLevel.INFO,
+                      "[判据350] 两域清单对照 both=%d only_tool=%d only_wl=%d 结论=PASS"
+                      % (len(self.M350_DOMAIN_CHECKLIST["both"]),
+                         len(self.M350_DOMAIN_CHECKLIST["only_tool"]),
+                         len(self.M350_DOMAIN_CHECKLIST["only_wl"])))
+        else:
+            self._log(LogLevel.WARNING,
+                      "[判据350] 两域清单偏离 missing=%s unexpected=%s note=%s"
+                      % (_out["missing"], _out["unexpected"], _out["note"] or "-"))
+        return _out
+
     def _m343_declare_two_domains(self) -> dict:
         """逐根打一行 `domain=` 留痕（进程内只打一次）。返回关系表。"""
         global _M343_DOMAIN_DECLARED
         _rel = self._m343_two_domains()
+        _rel["m350_checklist"] = self._m350_domain_checklist(_rel)
         if _M343_DOMAIN_DECLARED:
             return _rel
         _M343_DOMAIN_DECLARED = True

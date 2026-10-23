@@ -2443,6 +2443,35 @@ _M339_O3_SOURCES = ("o3_open_gate", "o3")
 _M339_O3_ISSUE_TYPES = ("dead_code", "dead_code_candidate")
 
 
+def _m350_read_history_rows(project_root: str | None = None) -> list:
+    """★350刀4：读 `patch_history.json` 的行列表（读不到返空且留痕）。"""
+    _p = (_history_path() if project_root is None
+          else os.path.join(project_root, "data", "patches", "patch_history.json"))
+    try:
+        with open(_p, "r", encoding="utf-8") as _f:
+            _d = json.load(_f)
+        if isinstance(_d, dict):
+            _d = _d.get("patches") or _d.get("history") or []
+        return _d if isinstance(_d, list) else []
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, where="patch_execution_dispatch::_m350_read_history_rows")
+        return []
+
+
+def _m350_clear_cancelled_pending(rows: list, hist_rows: list,
+                                  *, pending_path: str = "") -> dict:
+    """★350刀4：委派 `patch_lifecycle.clear_cancelled_pending`（**单一口径**）。
+
+    `persist` 取环境开关 `PULSE_PENDING_CLEAR_PERSIST=1`：默认只在内存里标记，
+不写生产台账（隔离约束；铁律198：写盘返回值必须上报）。
+    """
+    from nucleus.evolution.patch_lifecycle import clear_cancelled_pending as _ccp
+    _persist = str(os.environ.get("PULSE_PENDING_CLEAR_PERSIST", "")).strip() in ("1", "true", "yes")
+    _r = _ccp(rows, hist_rows, persist=_persist)
+    _r["pending_path"] = pending_path
+    return _r
+
+
 def _m339_o3_dispatch_ready(patch: dict) -> tuple:
     """O3 条目是否具备「确认后自动派单」条件（纯函数，逐条可复算）。
 
@@ -2460,6 +2489,11 @@ def _m339_o3_dispatch_ready(patch: dict) -> tuple:
               or str(patch.get("issue_type") or "") in _M339_O3_ISSUE_TYPES)
     if not _is_o3:
         return False, "not_o3"
+    # ★350刀4：撤单残留最先判（它是**更强**的否定：已被人裁定不做）。
+    #   放在 `o3_auto_dispatch_ready` 之前，否则清理后只会报 not_confirmed，
+    #   看不出「它是被**撤单**摘掉的」这个不同事实（铁律166）。
+    if patch.get("pending_cleared") is True:
+        return False, "pending_cleared"
     if patch.get("o3_auto_dispatch_ready") is not True:
         return False, "not_confirmed"
     if patch.get("requires_confirmation") is not False:
@@ -2688,7 +2722,20 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                 "reason": "待修池结构不可判定"}
     _rej = {"not_o3": 0, "not_confirmed": 0,
             "still_requires_confirmation": 0, "applied": 0,
-            "expired": 0, "cap": 0}
+            "expired": 0, "cap": 0, "pending_cleared": 0}
+    # ★350刀4：每批先对账一次（pending × patch_history），撤单的当场摘出。
+    #   默认 persist=False：本次只在内存里标记、不写生产数据（隔离约束）；
+    #   待重启窗由运维开关打开落盘。
+    try:
+        _hist_rows = _m350_read_history_rows(project_root)
+        _cl = _m350_clear_cancelled_pending(_rows, _hist_rows, pending_path=_path)
+        if _cl.get("cleared"):
+            _rows = [r for r in _rows if not (isinstance(r, dict)
+                                             and r.get("pending_cleared") is True)]
+            _rej["pending_cleared"] = int(_cl["cleared"])
+    except Exception as _cle:
+        silent_exc(_cle, where="patch_execution_dispatch::350撤单清理",
+                   level="warning")
     _ledger = _m326_load_fail_ledger()
     _cands: list = []
     for _p in _rows:

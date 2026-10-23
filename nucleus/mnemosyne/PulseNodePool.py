@@ -50,6 +50,43 @@ except Exception:
 COLD_COMPACT_MIN_FILES = 2
 
 
+def m350_reload_stats_path(cold_dir: str | None = None) -> str:
+    """★350：回载统计文件路径（与 `_m349_reload_stats_path` 同一口径）。
+
+    珬微/350 开闸判定器要在心跳里读命中率，而心跳拿不到池实例。把路径规则
+    放在池模块里（而不是在心跳里拼字符串），保证一个源。
+    """
+    _d = str(cold_dir or "data/knowledge/cold")
+    return os.path.join(os.path.dirname(_d.rstrip(os.sep)) or _d, "reload_stats.json")
+
+
+def m350_cold_index_evidence(cold_dir: str | None = None) -> dict:
+    """★350：冷索引写入**实证**（开闸条件④）。
+
+    能力边界（铁律196，必须说在前面）：本函数证的是「索引**里有由
+    驱逐写入的条目**」，证不了「此刻能写」。故 `writable` 取值严格限于
+    「条目数>0 且 mtime 可读」，余一律不立。
+    """
+    _d = str(cold_dir or "data/knowledge/cold")
+    _p = _d.rstrip(os.sep) + ".index.json"
+    try:
+        with open(_p, "r", encoding="utf-8") as _f:
+            _idx = json.load(_f)
+        _n = len(_idx) if isinstance(_idx, (dict, list)) else 0
+        _mt = os.path.getmtime(_p)
+        return {"state": "ok", "writable": bool(_n > 0), "index_entries": _n,
+                "index_mtime": _mt, "path": _p,
+                "why": "" if _n > 0 else "冷索引为空（无写入实证）"}
+    except FileNotFoundError:
+        _module_logger.info("[350开闸] 冷索引不存在 path=%s（条件④不立）", _p)
+        return {"state": "absent", "writable": False, "index_entries": 0,
+                "index_mtime": None, "path": _p, "why": "冷索引不存在"}
+    except Exception as _e:  # noqa: BLE001
+        silent_exc(_e, where="PulseNodePool::m350_cold_index_evidence")
+        return {"state": "unreadable", "writable": None, "index_entries": None,
+                "index_mtime": None, "path": _p, "why": "读不到不猜"}
+
+
 def _m343_pg() -> str:
     """代次串（唯一取数口 `nucleus.proc_gen.proc_gen_str`；取不到记 unknown，不填 0）。"""
     try:
@@ -2665,6 +2702,9 @@ class PulseNodePool(SilentLogMixin):
                 "evictions": 0, "requests": 0, "hits": 0, "misses": 0,
                 "skipped_not_evicted": 0,
                 "by_reason": {}, "by_kind": {},
+                # ★350刀2④：回载**失败**计数器（与命中率同结构扩展）
+                "recall_fail": 0, "by_fail_reason": {},
+                "fields_350": ["recall_fail", "by_fail_reason"],
             }
             self._m349_reload = _st
         return _st
@@ -2702,6 +2742,13 @@ class PulseNodePool(SilentLogMixin):
                     _st["hits"] = int(_st["hits"]) + 1
                 else:
                     _st["misses"] = int(_st["misses"]) + 1
+                    # ★350刀2④：失败另记一本账（命中率分母不动，避免两个语义共用一个计数）
+                    _st["recall_fail"] = int(_st.get("recall_fail", 0) or 0) + 1
+                    _bfr = _st.get("by_fail_reason")
+                    if not isinstance(_bfr, dict):
+                        _bfr = {}
+                        _st["by_fail_reason"] = _bfr
+                    _bfr[_r] = int(_bfr.get(_r, 0)) + 1
                     # 未命中**必须**按 reason 可归因（"没取到"不是一个理由）
                     _module_logger.warning(
                         "[349回载] 未命中 node_id=%s reason=%s proc_gen=%s",
@@ -2767,6 +2814,10 @@ class PulseNodePool(SilentLogMixin):
             "denominator": _den,
             "hits": int(_st["hits"]),
             "misses": int(_st["misses"]),
+            # ★350刀2④：失败计数单列（与 misses 同值但**语义不同**：
+            #   misses 是命中率分母的一半，recall_fail 是回滚线②的触发来源）
+            "recall_fail": int(_st.get("recall_fail", 0) or 0),
+            "by_fail_reason": dict(_st.get("by_fail_reason") or {}),
             "requests": int(_st["requests"]),
             "evictions": int(_st["evictions"]),
             "skipped_not_evicted": int(_st["skipped_not_evicted"]),

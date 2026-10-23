@@ -649,6 +649,59 @@ class PulseMetricsCollector(BasePulseOrgan):
             silent_exc(_e, where="PulseMetricsCollector::_m344_heap_probe", level="debug")
             return None
 
+    def _m350_live_gate_tick(self, heap_mb, w1_verdict, beat: int) -> dict:
+        """★350刀2①：每拍跑一次开闸判定（四条件同立）并留痕。
+
+        不动手的保证：本函数**不调** `apply_decision` / `apply_rollback`，
+        只算 `live_gate_ok()` 并打一行 `[350开闸]`。live 要真跑还需 `LIVE_ENABLED`
+        置 True（代码变更）——本批不翻。
+        """
+        from nucleus.mnemosyne import live_gate as _lg
+        _pg = ""
+        try:
+            from nucleus.proc_gen import proc_gen_str as _pgs
+            _pg = str(_pgs() or "")
+        except Exception as _pge:                              # noqa: BLE001
+            silent_exc(_pge, where="PulseMetricsCollector::_m350_live_gate_tick pg",
+                       level="debug")
+        _hist = getattr(self, "_m350_heap_hist", None)
+        if not isinstance(_hist, list):
+            _hist = []
+            self._m350_heap_hist = _hist
+        _hist.append({"proc_gen": _pg, "heap_mb": heap_mb, "beat": int(beat)})
+        del _hist[:-8]
+        _rs = None
+        _ci = None
+        try:
+            from nucleus.mnemosyne.PulseNodePool import (
+                m350_cold_index_evidence as _cie,
+                m350_reload_stats_path as _rsp,
+            )
+            _ci = _cie()
+            _p = _rsp()
+            try:
+                with open(_p, "r", encoding="utf-8") as _f:
+                    _rs = json.load(_f)
+            except FileNotFoundError:
+                # ★350：文件不存在是**确定事实**（还没跑过回载），写清楚而不静默
+                self._log(LogLevel.DEBUG, "[350开闸] 回载统计尚不存在 path=%s ⇒ 命中率样本=0"
+                          % _p)
+                _rs = None        # 还没跑过回载 ⇒ 无样本（不是 0）
+            except Exception as _rse:                          # noqa: BLE001
+                silent_exc(_rse, where="PulseMetricsCollector::_m350_live_gate_tick reload",
+                           level="debug")
+                _rs = None
+        except Exception as _pe:                               # noqa: BLE001
+            silent_exc(_pe, where="PulseMetricsCollector::_m350_live_gate_tick pool",
+                       level="debug")
+        _g = _lg.live_gate_ok(heap_mb=heap_mb, heap_history=_hist,
+                              w1_verdict=w1_verdict, reload_stats=_rs,
+                              cold_index_writable=_ci, proc_gen=_pg,
+                              paused=_lg.paused_categories())
+        _lg.log_gate(_g, where="[343心跳] beat=%d" % int(beat))
+        self._m350_live_gate = _g
+        return _g
+
     def _m343_release_heartbeat(self, heap_mb=None) -> dict:
         """跑一次 G0-G4 决策并留痕（**只决策不释放**：candidates 恒空）。
 
@@ -731,6 +784,18 @@ class PulseMetricsCollector(BasePulseOrgan):
             self._log(LogLevel.WARNING,
                       "[344释放] AST 释放面异常（不静默）: %s: %s"
                       % (type(_are).__name__, _are))
+        # ★350刀2①：live 开闸判定器**同拍**判一次（只判不动：LIVE_ENABLED 默认 off）。
+        #   挂在这里的理由与 343/344 一致：这是活体唯一每拍拿到 heap 的地方，
+        #   另起一条路会得到第二份 heap 读数，判据打架时无法复算。
+        _lg350 = None
+        try:
+            _lg350 = self._m350_live_gate_tick(heap_mb, _w1, _bc)
+        except Exception as _lge:                              # noqa: BLE001
+            silent_exc(_lge, where="PulseMetricsCollector::_m343_release_heartbeat 350开闸",
+                       level="warning")
+            self._log(LogLevel.WARNING,
+                      "[350开闸] 判定器异常（不静默）: %s: %s"
+                      % (type(_lge).__name__, _lge))
         return {"status": "ok", "tier": _dec.get("tier"),
                 "tier_why": _dec.get("tier_why"),
                 "g0_blocked_by": list(_dec.get("g0", {}).get("blocked_by") or []),

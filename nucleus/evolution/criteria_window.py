@@ -24,11 +24,16 @@
 from __future__ import annotations
 
 import io
+import json as _json350
 import os
 import time
 from datetime import datetime
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+#: ★350刀7：台账写入需要日志器（铁律170：补留痕前先确认日志器存在）
+_module_logger = get_module_logger("criteria_window")
 
 #: 压测圈窗默认长度（秒）。来源：336 实测 12 圈窗长 3594.6–3728.2s，
 #: 中位 3626.7s；取 3625 作为"一圈"的标称值。**不要在脚本里再抄这个数**。
@@ -49,6 +54,99 @@ CRITERIA_VERSIONS = {
 
 #: 不可判升级为红色告警的阈值（洞鉴：不可判≥3 自动触发审计）
 UNJUDGED_ALARM_THRESHOLD = 3
+
+
+# ===== ★350刀7：判据台账结论固化（刀6交裁落地）=====
+
+#: 台账结论落盘路径
+CRITERIA_LEDGER_REL = os.path.join("data", "reports", "criteria_ledger.jsonl")
+
+#: 已裁定的结论（**写死在代码里**，不靠口头传达）。
+#: 每条都必须带 `conclusion / basis / boundary` 三件 —— 只写结论不写边界，
+#: 下一个人会把它当成「普适真理」拿去用。
+M350_LEDGER_CONCLUSIONS = {
+    "m349_d6_24pct_volatility": {
+        "status": "closed",
+        "closed_at": "2026-10-23",
+        "decider": "human:小林（分判回执·350任务书）",
+        "conclusion": ("24% 波动**不可复现**，已结案；真实波动 "
+                       "9 条（1.34%）"),
+        "basis": ("生产 per-item 留样零真实数据；实测 item_count 波动 0.74%；"
+                  "口径差 -89.69% 不可能等于 24%；"
+                  "假漂移实锤 = desc 嵌浮动覆盖率读数（1217 条）"),
+        "boundary": ("结论只对「按原文 desc 对差」这个口径成立；"
+                     "归一后的 1.34% 仍含 `type=unknown` 兜底桶，"
+                     "对差基数本身不完整"),
+    },
+    "per_item_diff_key": {
+        "status": "adopted",
+        "closed_at": "2026-10-23",
+        "decider": "星轨·350任务书刀7②",
+        "conclusion": ("per-item 对差**键 = 语义归一身份**，"
+                       "禁用原文 desc 作键"),
+        "basis": "desc 嵌浮动读数 ⇒ 同一不变量每份文本不同；按原文对差产生假漂移",
+        "boundary": ("语义身份由 `desc_norm.normalize_desc` 产生；"
+                     "它只抹平**已知浮动模式**，新型浮动仍需补规则"),
+    },
+    "two_domain_checklist": {
+        "status": "adopted",
+        "closed_at": "2026-10-23",
+        "decider": "星轨·350任务书刀7③",
+        "conclusion": ("两套文件域 6+1：both=config/main/nucleus/organs/tools（合计 5 项根），"
+                       "only_tool=base/functions/pulse_doctor/pulses/somatics/utils，"
+                       "only_wl=scripts"),
+        "basis": "第343刀域过滤落盘的 `two_domain_diff.json`",
+        "boundary": ("清单只约束**根名层级**；根下子目录增减不会报警"),
+    },
+}
+
+
+def write_ledger_conclusions(path: str | None = None,
+                            now: float | None = None) -> dict:
+    """把已裁定结论追加写入台账（jsonl，**幂等**：同一 key 不重复写）。"""
+    _now = float(now if now is not None else time.time())
+    _p = path or CRITERIA_LEDGER_REL
+    _seen = set()
+    try:
+        if os.path.isfile(_p):
+            with open(_p, "r", encoding="utf-8") as _f:
+                for _ln in _f:
+                    _ln = _ln.strip()
+                    if not _ln:
+                        continue
+                    try:
+                        _o = _json350.loads(_ln)
+                    except Exception:                            # noqa: BLE001
+                        continue
+                    if isinstance(_o, dict) and _o.get("key"):
+                        _seen.add(str(_o["key"]))
+    except Exception as _e:                                      # noqa: BLE001
+        silent_exc(_e, where="criteria_window::write_ledger_conclusions read")
+    _added = []
+    _dir = os.path.dirname(_p)
+    try:
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        with open(_p, "a", encoding="utf-8") as _f:
+            for _k, _v in M350_LEDGER_CONCLUSIONS.items():
+                if _k in _seen:
+                    continue
+                _row = dict(_v)
+                _row["key"] = _k
+                _row["written_at"] = _now
+                _row["schema"] = "criteria_ledger/350.v1"
+                _f.write(_json350.dumps(_row, ensure_ascii=False) + "\n")
+                _added.append(_k)
+    except Exception as _e:                                      # noqa: BLE001
+        silent_exc(_e, where="criteria_window::write_ledger_conclusions write",
+                   level="warning")
+        return {"ok": False, "added": _added, "path": _p,
+                "why": "%s: %s" % (type(_e).__name__, _e)}
+    _module_logger.info("[判据台账] 结论写入 新增=%d 已在=%d 路径=%s",
+                        len(_added), len(_seen), _p)
+    return {"ok": True, "added": _added, "already": sorted(_seen), "path": _p}
+
+
 
 # ==================== 段B（收敛层作废条数）数据源 · 344批刀2 ====================
 #

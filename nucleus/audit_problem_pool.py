@@ -357,6 +357,61 @@ def _m349_norm_enabled() -> bool:
 # ========== 条目构造 ==========
 
 
+# ===== ★350刀6②：解析兜底桶修复（兜底行补齐归因）=====
+
+#: 兜底原因标识（逐条可计数，不是一个粘贴字符串）
+ATTR_MISSING_MESSAGE = "missing_message"
+ATTR_UNKNOWN_TYPE = "unknown_issue_type"
+ATTR_LINE_ZERO = "line_zero_or_missing"
+ATTR_MISSING_FILE = "missing_file"
+
+
+def _m350_desc_of(issue: dict) -> str:
+    """★350刀6①：入池 desc 过一道动态读数归一（与生成器同判）。"""
+    _raw = str(issue.get("message", "") or issue.get("description", "") or "")
+    try:
+        from nucleus.evolution.desc_norm import normalize_desc
+        return str(normalize_desc(_raw)["desc"])[:400]
+    except Exception as _e:                                      # noqa: BLE001
+        silent_exc(_e, where="audit_problem_pool::_m350_desc_of")
+        return _raw[:400]
+
+
+def _m350_attribution(issue: dict) -> dict:
+    """★350刀6②：兜底行补齐归因（源行 + 原因）。
+
+    病因（349 刀6 副产物）：`nucleus/field/InfoField.py:0`、
+    `nucleus/aibot_logger.py:0` 这类条目以 `type=unknown / severity=ERROR /
+    line=0 / desc=""` 进池 —— 它们没有身份，既无法对差也无法处置，
+    只能堆在 `unknown` 兜底桶里。现在至少能回答三件事：缺什么、
+    源行是什么、能不能定位。
+    """
+    _why: list = []
+    _msg = str(issue.get("message", "") or issue.get("description", "") or "")
+    if not _msg.strip():
+        _why.append(ATTR_MISSING_MESSAGE)
+    _it = issue.get("issue_type") or issue.get("type")
+    if not _it or str(_it).strip().lower() in ("", "unknown", "none"):
+        _why.append(ATTR_UNKNOWN_TYPE)
+    _ln = issue.get("line")
+    if _ln is None or str(_ln).strip() in ("", "0"):
+        _why.append(ATTR_LINE_ZERO)
+    if not str(issue.get("file") or "").strip():
+        _why.append(ATTR_MISSING_FILE)
+    _src = ""
+    for _k in ("raw", "source_line", "line_text", "evidence", "raw_line"):
+        _v = issue.get(_k)
+        if isinstance(_v, str) and _v.strip():
+            _src = _v.strip()[:300]
+            break
+    return {"schema": "audit_pool_attribution/350.v1",
+            "fallback": bool(_why), "reasons": _why,
+            "source_line": _src, "source_line_state": ("ok" if _src else "absent"),
+            "locatable": bool(str(issue.get("file") or "").strip()
+                              and _ln is not None and str(_ln) != "0")}
+
+
+
 def entry_from_issue(issue: dict, now: float | None = None,
                      stamps: dict | None = None, proc_gen: str | None = None) -> dict | None:
     """把一条 issue 转成池条目（16 字段口径）。非 dict 返回 None（不猜）。"""
@@ -385,7 +440,8 @@ def entry_from_issue(issue: dict, now: float | None = None,
         "file": _file,
         "line": _line,
         "method": _method,
-        "desc": str(issue.get("message", "") or issue.get("description", "") or "")[:400],
+        "desc": _m350_desc_of(issue),
+        "attribution": _m350_attribution(issue),
         "dedup_key": _key,
         "klass": classify_klass(_itype),
         "criteria_version": _st.get("criteria_version"),
@@ -758,6 +814,126 @@ def set_status(dedup_key: str, new_status: str, root: str | None = None,
     if not _atomic_write_json(_path, _payload):
         return {"state": "write_failed", "changed": False}
     return {"state": "ok", "changed": True, "from": _old, "to": new_status}
+
+# ===== ★350刀1：验证回灌面（effect_verify → 池条目）=====
+
+#: 回灌台账 schema（字段只增不改名）
+VERIFY_FEEDBACK_SCHEMA = "audit_pool_verify_feedback/350.v1"
+
+
+def _status_path(old: str, new: str, max_hops: int = 3):
+    """求 `old→new` 的最短合法转移路径（BFS，直接用 `_LEGAL_TRANSITIONS`）。
+
+    为什么要求路径而不是直接赋值：`claimed→verified` 在状态机上**不合法**
+    （必须经 `fixed`）。直接改字段就绕过了状态机，等于把一个有校验的入口
+    降级成不校验的写入口。BFS 也保证了"路径在就能走、路径不在就报
+    unreachable"，不靠硬编码两条路。
+    """
+    if old == new:
+        return []
+    _seen = {old}
+    _q = [(old, [])]
+    while _q:
+        _cur, _p = _q.pop(0)
+        if len(_p) >= max_hops:
+            continue
+        for _nxt in _LEGAL_TRANSITIONS.get(_cur, ()):
+            if _nxt == new:
+                return _p + [_nxt]
+            if _nxt not in _seen:
+                _seen.add(_nxt)
+                _q.append((_nxt, _p + [_nxt]))
+    return None
+
+
+def note_verify_feedback(dedup_key: str, *, patch_id: str = "", passed=None,
+                         verified_at=None, dims=None, reason: str = "",
+                         advance: bool = True, root: str | None = None,
+                         audit_dir_path: str | None = None,
+                         now: float | None = None) -> dict:
+    """★350刀1：把一条验证 verdict **写回池条目**（单次原子写）。
+
+    写三件事：
+      ① `verify_feedback` 字段（应用态/验证态/时间戳/dims）；
+      ② 状态翻转（`passed=True → verified`；`False → open`；`None → **不动**）；
+      ③ `status_history` 逐跳追加（跳过中间态也要留痕，否则看不出"它是怎么到这里的"）。
+
+    `passed is None` 不改状态是有意的：三项都没测时「不可判定」，
+    把它当 verified 写下去就是白送一个修复率。
+    """
+    _now = float(now if now is not None else time.time())
+    _pool = load_pool(root, audit_dir_path, _now)
+    if _pool["state"] != "ok":
+        _module_logger.warning("[350回灌] 池不可用 state=%s key=%s",
+                               _pool["state"], dedup_key)
+        return {"state": _pool["state"], "changed": False}
+    _entries = _pool["entries"]
+    _hit = None
+    for _e in _entries:
+        if str(_e.get("dedup_key")) == str(dedup_key):
+            _hit = _e
+            break
+    if _hit is None:
+        return {"state": "not_found", "changed": False}
+    _old = str(_hit.get("status", STATUS_OPEN))
+    _want = (STATUS_VERIFIED if passed is True
+             else (STATUS_OPEN if passed is False else None))
+    _hops: list = []
+    if advance and _want and _want != _old:
+        _path = _status_path(_old, _want)
+        if _path is None:
+            _module_logger.warning("[350回灌] 状态不可达 key=%s %s→%s",
+                                   dedup_key, _old, _want)
+            return {"state": "unreachable", "changed": False, "from": _old}
+        _hops = list(_path)
+    _hist = _hit.get("status_history")
+    if not isinstance(_hist, list):
+        _hist = []
+    for _st in _hops:
+        _hist.append({"status": _st, "at": _now,
+                      "note": "[350回灌] patch=%s passed=%r ⚡%s"
+                              % (str(patch_id)[:40], passed, str(reason)[:120])})
+    if _hops:
+        _hit["status"] = _hops[-1]
+        if _hops[-1] in TERMINAL_STATUSES:
+            _hit["closed_reason"] = ("[350回灌] 效果验证通过 patch=%s"
+                                     % str(patch_id)[:60])
+    _hit["status_history"] = _hist
+    _hit["verify_feedback"] = {
+        "schema": VERIFY_FEEDBACK_SCHEMA,
+        "patch_id": str(patch_id or ""),
+        "passed": passed,
+        "verified_at": verified_at,
+        "applied_at": _now,
+        "dims": dims if isinstance(dims, dict) else {},
+        "reason": str(reason or "")[:300],
+        "status_from": _old,
+        "status_to": _hit.get("status"),
+    }
+    _changed = bool(_hops) or True          # verify_feedback 本身也是内容变更
+    _path_out = snapshot_path(_now, root, audit_dir_path)
+    _payload = {
+        "schema": SCHEMA,
+        "snapshot_day": day_stamp(_now),
+        "generated_at": _now,
+        "retain_days": POOL_RETAIN_DAYS,
+        "proc_gen": _proc_gen(),
+        "total_entries": len(_entries),
+        "status_counts": _status_counts(_entries),
+        "prev_source": _pool.get("source", ""),
+        "prev_state": "ok",
+        "entries": _entries,
+    }
+    if not _atomic_write_json(_path_out, _payload):
+        _module_logger.warning("[350回灌] 落盘失败 key=%s（内存已改、文件未写）",
+                               dedup_key)
+        return {"state": "write_failed", "changed": False, "from": _old}
+    _module_logger.info("[350回灌] 条目 %s %s→%s patch=%s passed=%r",
+                        dedup_key, _old, _hit.get("status"), str(patch_id)[:40], passed)
+    return {"state": "noop" if not _hops else "ok", "changed": _changed,
+            "from": _old, "to": _hit.get("status"), "hops": _hops,
+            "persisted": True}
+
 
 
 def pool_summary(root: str | None = None, audit_dir_path: str | None = None,

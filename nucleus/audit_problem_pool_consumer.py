@@ -415,9 +415,28 @@ def consume_pool(limit: int | None = None, root: str | None = None,
 
 def consume_heartbeat(project_root: str | None = None, now: float | None = None,
                       enable: bool | None = None) -> dict:
-    """主循环节拍入口：异常一律吞掉并留痕（消费失败绝不能拖垮主循环）。"""
+    """主循环节拍入口：异常一律吞掉并留痕（消费失败绝不能拖垮主循环）。
+
+    ★350刀1：同一个节拍里跑完「消费」后紧接着「回灌」。
+    为什么挂在这里而不另起一个调度器：消费与回灌看的是**同一个池的同一代次**，
+    两条路各自算会得到两份口径（铁律160：分母须与被测对象同域）。
+    回灌失败**不影响消费结果**；失败原因如实写在 `verify_feedback` 字段里。
+    """
     try:
-        return consume_pool(root=project_root, now=now, enable=enable)
+        _r = consume_pool(root=project_root, now=now, enable=enable)
     except Exception as _e:
         silent_exc(_e, "audit_problem_pool_consumer.consume_heartbeat", level="warning")
         return {"state": "exception", "reason": "%s: %s" % (type(_e).__name__, _e)}
+    try:
+        from nucleus.evolution import verify_feedback as _vf350
+        _fb = _vf350.feedback_once(root=project_root, now=now)
+        _r["verify_feedback"] = {"state": _fb.get("state"),
+                                 "stats": _fb.get("stats"),
+                                 "persisted": _fb.get("persisted"),
+                                 "verdict_mtime": _fb.get("verdict_mtime")}
+    except Exception as _fe:
+        silent_exc(_fe, "audit_problem_pool_consumer.consume_heartbeat feedback",
+                   level="warning")
+        _r["verify_feedback"] = {"state": "exception",
+                                 "reason": "%s: %s" % (type(_fe).__name__, _fe)}
+    return _r

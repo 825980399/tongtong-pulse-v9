@@ -241,6 +241,303 @@ def recall_audit_sample(samples: list,
     }
 
 
+# ===== ★350刀5：判死性误报率评估（97号）=====
+#   ★口径纪律：判死性误报率 ≠ 存在性误报率（烛微 350 审计 4 钉死）。
+#     · 存在性误报（349刀9）：判定说"这个符号不存在了"，其实还在；
+#     · 判死性误报（本刀）：判定说"这段代码是死的"，其实还活着（有引用/被调用）。
+#   两者**分列**，绝不相加、绝不互相折算 —— 它们是两个不同问题的错误率。
+
+DEATH_JUDGED_DEAD = "dead"
+DEATH_JUDGED_ALIVE = "alive"
+DEATH_JUDGED_UNKNOWN = "unknown"
+
+#: 真值来源（本刀只用这一种，写在结论前面，铁律196）
+TRUTH_SOURCE = "textual_reference_count"
+
+#: 判死档前缀（这些 tier 的判定**在判死**，不是豁免）
+DEATH_TIERS = ("hard_strict", "hard_loose", "hard_unverified", "framework_hook")
+
+#: 判死**字面量族**（池里的 issue_type 就是这么写的）
+DEATH_ISSUE_TYPES = ("dead_code", "dead_code_candidate", "dead_code_suspect")
+
+
+def _iter_py_files(project_root: str, max_files: int = 6000):
+    _skip = {".git", "tmp", "__pycache__", ".bak_batch", "node_modules",
+             "logs", "data", ".venv", "venv", "site-packages"}
+    _n = 0
+    for _dp, _dns, _fns in os.walk(project_root):
+        _dns[:] = [d for d in _dns
+                   if d not in _skip and not d.startswith(".bak_batch")]
+        for _fn in _fns:
+            if not _fn.endswith(".py"):
+                continue
+            _n += 1
+            if _n > max_files:
+                return
+            yield os.path.join(_dp, _fn)
+
+
+def _zbj_root(project_root: str | None = None) -> str:
+    """项目根（按标记文件**有界上溯**，铁律187；不写死上溯级数）。"""
+    if project_root:
+        return str(project_root)
+    _d = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(6):
+        if os.path.isfile(os.path.join(_d, "main.py")) and os.path.isfile(
+                os.path.join(_d, "config.py")):
+            return _d
+        _nd = os.path.dirname(_d)
+        if _nd == _d:
+            break
+        _d = _nd
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def reference_truth_batch(project_root: str, items: list, *,
+                           max_files: int = 6000) -> list:
+    """一次遍历给**多条**样本定真值（避免 20 条样本各走一遍全仓）。
+
+    为什么要批量：单条 `reference_truth` 每次都要读全仓 .py，
+    20 条样本 = 20 次全仓扫 ⇒ 实测会把一次评估拖到分钟级。
+    改成一次遍历 + 一个名字交替正则，结果与单条口径一致。
+    """
+    _items = list(items or [])
+    _names = {}
+    for _it in _items:
+        _m = str(_it.get("method") or "").strip()
+        if _m:
+            _names.setdefault(_m, set()).add(
+                os.path.abspath(os.path.join(project_root, str(_it.get("file") or ""))))
+    _out = [{"dead": None, "refs": None, "why": "method 为空（不可判）",
+             "truth_source": TRUTH_SOURCE} for _ in _items]
+    if not _names:
+        return _out
+    import re as _re
+    _pat = _re.compile(r"\b(?:" + "|".join(
+        _re.escape(_n) for _n in sorted(_names, key=len, reverse=True)) + r")\b")
+    _total = {_n: 0 for _n in _names}
+    _in_def_file = {_n: 0 for _n in _names}
+    _scanned = 0
+    for _p in _iter_py_files(project_root, max_files=max_files):
+        _scanned += 1
+        try:
+            _txt = open(_p, "r", encoding="utf-8", errors="replace").read()
+        except Exception as _e:                                # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.reference_truth_batch read",
+                       level="debug")
+            continue
+        _hits: dict = {}
+        for _mm in _pat.finditer(_txt):
+            _k = _mm.group(0)
+            _hits[_k] = _hits.get(_k, 0) + 1
+        if not _hits:
+            continue
+        _ap = os.path.abspath(_p)
+        for _k, _c in _hits.items():
+            _total[_k] += _c
+            if _ap in _names.get(_k, ()):
+                _in_def_file[_k] += _c
+    for _i, _it in enumerate(_items):
+        _m = str(_it.get("method") or "").strip()
+        if not _m:
+            continue
+        # 定义文件里只扣掉 1 处（`def <name>` 那一行）。
+        #   多扣会把"docstring 里提到自己" 也当成定义，从而把**真死**误判成活。
+        _refs = max(0, _total[_m] - (1 if _in_def_file.get(_m, 0) > 0 else 0))
+        _dead = (_refs == 0)
+        _out[_i] = {"dead": _dead, "refs": _refs, "scanned_files": _scanned,
+                    "truth_source": TRUTH_SOURCE,
+                    "boundary": ("按方法名文本引用数判活/死；有引用⇒必非死代码，"
+                                 "无引用⇒**不等于**确认死代码"),
+                    "why": "" if _dead else "被 %d 处引用" % _refs}
+    return _out
+
+
+def reference_truth(project_root: str, file: str, method: str, *,
+                    max_files: int = 6000) -> dict:
+    """判死**真值**：按「方法名的文本引用数」判活/死。
+
+    ★能力边界（铁律196，必须说在结论前面）：
+      本函数数的是**文本出现次数**，不是真可达性。它能证伪"被别处调用了"
+      （有引用 ⇒ 一定不是死代码），但**证不了**"没引用 ⇒ 一定是死代码"
+      （反射/字符串拼接/动态分派都数不到）。因此：
+        · `dead=True`  只表示"扫到的文件里除定义外没有一处提到这个名字"；
+        · 结论里必须同句声明这一口径，不许把它写成"确认是死代码"。
+
+    排除项：定义文件自身的那一处（`def method` / `async def method`）。
+    """
+    _m = str(method or "").strip()
+    if not _m:
+        return {"dead": None, "refs": None, "why": "method 为空（不可判）",
+                "truth_source": TRUTH_SOURCE}
+    _re = None
+    try:
+        import re as _re_mod
+        _re = _re_mod.compile(r"\b" + _re_mod.escape(_m) + r"\b")
+    except Exception as _e:                                     # noqa: BLE001
+        silent_exc(_e, where="zero_break_judge.reference_truth regex")
+        return {"dead": None, "refs": None, "why": "正则构造失败",
+                "truth_source": TRUTH_SOURCE}
+    _self_abs = os.path.abspath(os.path.join(project_root, str(file or "")))
+    _refs = 0
+    _files_hit = 0
+    _scanned = 0
+    for _p in _iter_py_files(project_root, max_files=max_files):
+        _scanned += 1
+        try:
+            _txt = open(_p, "r", encoding="utf-8", errors="replace").read()
+        except Exception as _e:                                 # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.reference_truth read", level="debug")
+            continue
+        _hits = len(_re.findall(_txt))
+        if not _hits:
+            continue
+        if os.path.abspath(_p) == _self_abs:
+            # 去掉定义那一处（可能还有 docstring 里的提及，保守地只减 1）
+            _hits = max(0, _hits - 1)
+        if _hits:
+            _refs += _hits
+            _files_hit += 1
+    _dead = (_refs == 0)
+    return {"dead": _dead, "refs": _refs, "files_hit": _files_hit,
+            "scanned_files": _scanned, "truth_source": TRUTH_SOURCE,
+            "boundary": ("按方法名文本引用数判活/死；有引用⇒必非死代码，"
+                         "无引用⇒**不等于**确认死代码（反射/动态分派数不到）"),
+            "why": "" if _dead else "被 %d 处引用（%d 个文件）" % (_refs, _files_hit)}
+
+
+def death_false_positive_rate(samples: list, *,
+                              existence_rate=None) -> dict:
+    """判死性误报率（双报），并与存在性误报率**分列**。
+
+    `samples` 每项：`{id, judged, dead_code_true, tier?}`
+      · `judged`          —— 判定结论（dead/alive/unknown）
+      · `dead_code_true`  —— 真值（`reference_truth` 的 `dead`），None=不可判
+
+    两个率各按自己的分母算，**不共用一个 total**（铁律160：分母须与被测对象同域）：
+      · 判死性误报率 = 判死 ∧ 真值非死 / 判死判定总数
+      · 判死性漏判率 = 判活 ∧ 真值为死 / 判活判定总数
+    """
+    _dead_n = _dead_fp = 0
+    _alive_n = _alive_miss = 0
+    _unknown = 0
+    _nolen = 0
+    _fp_ids: list = []
+    _miss_ids: list = []
+    _by_tier: dict = {}
+    for _s in (samples or []):
+        if not isinstance(_s, dict):
+            continue
+        _j = str(_s.get("judged") or DEATH_JUDGED_UNKNOWN)
+        _t = _s.get("dead_code_true")
+        _tier = str(_s.get("tier") or "")
+        if _tier:
+            _b = _by_tier.setdefault(_tier, {"n": 0, "fp": 0})
+        if _t is None:
+            _nolen += 1
+            continue
+        if _j == DEATH_JUDGED_DEAD:
+            _dead_n += 1
+            if _tier:
+                _by_tier[_tier]["n"] += 1
+            if _t is False:
+                _dead_fp += 1
+                _fp_ids.append(str(_s.get("id") or ""))
+                if _tier:
+                    _by_tier[_tier]["fp"] += 1
+        elif _j == DEATH_JUDGED_ALIVE:
+            _alive_n += 1
+            if _tier:
+                _by_tier[_tier]["n"] += 1
+            if _t is True:
+                _alive_miss += 1
+                _miss_ids.append(str(_s.get("id") or ""))
+        else:
+            _unknown += 1
+    _fp_rate = round(_dead_fp / _dead_n, 4) if _dead_n else None
+    _miss_rate = round(_alive_miss / _alive_n, 4) if _alive_n else None
+    return {
+        "schema": "death_false_positive/350.v1",
+        "truth_source": TRUTH_SOURCE,
+        "sample_size": len(samples or []),
+        # ← 判死性口径（本刀）
+        "death_judged_n": _dead_n,
+        "death_false_positive": _dead_fp,
+        "death_false_positive_rate": _fp_rate,
+        "death_alive_n": _alive_n,
+        "death_missed": _alive_miss,
+        "death_false_negative_rate": _miss_rate,
+        "undetermined_truth": _nolen,
+        "judged_unknown": _unknown,
+        "fp_ids": _fp_ids[:20],
+        "miss_ids": _miss_ids[:20],
+        "by_tier": _by_tier,
+        # ← 存在性口径（349刀9，**另一条线**）
+        "existence_false_positive_rate": existence_rate,
+        "columns": {
+            "death": "death_false_positive_rate",
+            "existence": "existence_false_positive_rate",
+        },
+        "separation_note": ("两条线分列：判死性=说它死其实活；"
+                            "存在性=说它不在其实在。不相加、不互折"),
+        "boundary": ("真值=方法名文本引用数（`reference_truth`）。"
+                     "无引用只表示扫不到引用，**不等于**确认死代码"),
+        "rate_none_means": "无样本（不是 0）",
+    }
+
+
+def collect_death_samples(project_root: str | None = None,
+                          pool_entries: list | None = None,
+                          universe: int = 76, limit: int = 20) -> list:
+    """按「76 抽 20 重放」的办法组样本（349 刀4 同一评估法，本刀扩样本用）。
+
+    `universe` 是候选面（默认 76 —— 与烛微审计同基数），`limit` 是实际重放条数。
+    抽样用**等距**而不是随机：结果可复算，换个人跑同一份池得到同一组样本。
+    """
+    _rows = list(pool_entries or [])
+    if not _rows:
+        try:
+            from nucleus import audit_problem_pool as _ap
+            _p = _ap.load_pool()
+            if _p.get("state") == "ok":
+                _rows = _p["entries"]
+        except Exception as _e:                                 # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.collect_death_samples pool")
+            _rows = []
+    _cands = []
+    for _e in _rows:
+        _tier = str(_e.get("evidence_tier") or _e.get("gate_verdict") or "")
+        # ★350：判死候选面 = issue_type 族 ∨ gate_verdict=OPEN ∨ 判死档
+        #   实测：生产池 677 条里 622 条是 `issue_type=dead_code`，
+        #   而 `gate` 字段当前普遍为空（`_m349_gate_field` 读不到就不填）
+        #   —— 只看 `gate_verdict` 会得到 0 条样本，那是口径错不是"没死代码"。
+        _is_death = (str(_e.get("issue_type") or "") in DEATH_ISSUE_TYPES
+                     or str(_e.get("gate_verdict") or "") == "OPEN"
+                     or any(_tier.startswith(_d) for _d in DEATH_TIERS))
+        if not _is_death:
+            continue
+        _cands.append({"id": str(_e.get("dedup_key") or _e.get("id") or ""),
+                       "file": str(_e.get("file") or ""),
+                       "method": str(_e.get("method") or ""),
+                       "judged": DEATH_JUDGED_DEAD, "tier": _tier})
+    _uni = _cands[:int(universe)]
+    _n = min(int(limit), len(_uni))
+    if _n <= 0:
+        return []
+    _step = max(1, len(_uni) // _n)
+    _picked = [_uni[i * _step] for i in range(_n)]
+    _truth = reference_truth_batch(project_root or _zbj_root(), _picked)
+    _out = []
+    for _s, _t in zip(_picked, _truth):
+        _row = dict(_s)
+        _row["dead_code_true"] = _t.get("dead")
+        _row["truth_refs"] = _t.get("refs")
+        _row["truth_why"] = _t.get("why")
+        _row["truth_scanned_files"] = _t.get("scanned_files")
+        _out.append(_row)
+    return _out
+
+
 def production_patch_history(project_root: str | None = None) -> list:
     """读生产台账（只读；读不到返回空 list，**不当成"没有补丁"**以外的结论）。"""
     _root = project_root or os.path.dirname(os.path.dirname(

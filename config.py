@@ -5383,6 +5383,12 @@ SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX = 0.5
 #   而不是"让它去干"。翻开需显式置 True（重启生效）。
 ENABLE_MEMORY_RELEASE_TREE = False
 
+# ★350刀2②：shadow→live 开闸的**第二道锁**（默认 False）。
+#   两道锁同时开才可能 live：模块常量 `live_gate.LIVE_ENABLED`（代码变更）
+#   ∧ 本开关（配置变更）。为什么要两道：开闸不可逆，单一开关
+#   被误置就会直接动真实内存；双锁把「改配置」与「改代码」都需要。
+ENABLE_MEMORY_RELEASE_LIVE = False
+
 # G2/G3/G4 分级阈值，口径一律 **heap_mb**（私有堆），不用 RSS。
 #   RSS = 库镜像 + 私有堆；镜像（GPU/数值栈，实测约 4.3GB）运行中释放不掉，
 #   拿 RSS 回落当验收线会把"释放成功但没归还"判成失败。

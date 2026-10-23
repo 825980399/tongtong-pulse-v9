@@ -24,6 +24,9 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+_module_logger = get_module_logger("patch_lifecycle")
 from nucleus.evolution.task_ledger import _atomic_save
 
 __all__ = [
@@ -520,6 +523,67 @@ def mark_effect_verify_rolled_back(patch_id: str, reason: str = "",
         silent_exc(_e, where="nucleus.evolution.patch_lifecycle::mark_effect_verify_rolled_back",
                    level="warning")
         return {"ok": False, "reason": "%s: %s" % (type(_e).__name__, _e)}
+
+
+# ===== ★350刀4：撤单残留清理（pending 与 history 对账）=====
+def clear_cancelled_pending(pending_rows: list, history_rows: list, *,
+                            now: float | None = None,
+                            persist: bool = False) -> dict:
+    """★350刀4：把「已撤单」的条目标记清理，从派单扫描里摘出。
+
+    病因（348 刀10 的残留）：`mark_history_wont_fix` 只把撤单写进
+    **patch_history**，`pending_patches.json` 里那条的 `o3_auto_dispatch_ready`
+    仍是 True，于是每一拍都会被当成「人已裁决、可自动派单」重新拿起来——
+    就是每拍刷屏那行的根源。
+
+    为什么只标记不物理删除：审计记录不能凭空消失，否则下一个人看不出
+    「它为什么不在了」。`pending_cleared=True` + `_at` + `_reason` 就是那份交代。
+    幂等：重复清理只重复计数，不重复改字段。
+    """
+    _now = float(now if now is not None else time.time())
+    _wont: dict = {}
+    for _h in (history_rows or []):
+        if not isinstance(_h, dict):
+            continue
+        if str(_h.get("status") or "") != HISTORY_STATUS_WONT_FIX:
+            continue
+        _id = str(_h.get("id") or "")
+        if _id:
+            _wont[_id] = str(_h.get("wont_fix_reason") or "")[:160]
+    _cleared: list = []
+    _already = 0
+    for _p in (pending_rows or []):
+        if not isinstance(_p, dict):
+            continue
+        _pid = str(_p.get("id") or "")
+        _why = ""
+        if _p.get("pending_cleared") is True:
+            _already += 1
+            continue
+        if _pid in _wont:
+            _why = "wont_fix_in_history: %s" % (_wont[_pid] or "")
+        elif _p.get("status") == HISTORY_STATUS_WONT_FIX:
+            _why = "pending_status_wont_fix"
+        elif _p.get("o3_auto_dispatch_ready") is False and _p.get("o3_dead_code") is True:
+            _why = "o3_auto_dispatch_ready_false"
+        if not _why:
+            continue
+        _p["pending_cleared"] = True
+        _p["pending_cleared_at"] = _now
+        _p["pending_cleared_reason"] = _why[:200]
+        # 双保险：即使他处误把 ready 改回 True，`_m339_o3_dispatch_ready`
+        # 也会因 `pending_cleared` 直接拒。
+        _p["o3_auto_dispatch_ready"] = False
+        _cleared.append({"id": _pid, "why": _why[:160]})
+    _module_logger.info(
+        "[350撤单] 清理 新标记=%d 已标记=%d 历史撤单=%d persist=%s",
+        len(_cleared), _already, len(_wont), "yes" if persist else "no(in-memory)")
+    for _c in _cleared[:10]:
+        _module_logger.warning("[350撤单] 摘出 id=%s 因=%s", _c["id"][:32], _c["why"])
+    return {"ok": True, "cleared": len(_cleared), "rows": _cleared,
+            "already_cleared": _already, "history_wont_fix": len(_wont),
+            "persist": bool(persist)}
+
 
 
 def mark_history_wont_fix(patch: Any, reason: str = "", now: float | None = None,
