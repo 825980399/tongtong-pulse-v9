@@ -1043,3 +1043,178 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
         return _wrapper
     return _deco
 
+
+
+
+# =====================================================================
+# ★354刀4：daily_tokens 判读框架（烛微首日判读落地）
+# =====================================================================
+# 背景（烛微 a3 证据，2026-10-23 首日）：65 calls / 41245 tokens / paid 0 /
+# free 100% —— 表面健康，但 zhipu 单渠道占 84.6% calls、HHI=0.728 超标；
+# 且 `DAILY_PAID_TOKEN_ALERT=1_000_000` 这个**全局日阈值口径是错的**：
+# 月额免费额度是 **per-channel**（百炼月额 1M），拿全局日用量比全局月额，
+# 数字凑巧都叫 1M，语义完全不是一回事 ⇒ 永远不可能告警（假安全）。
+#
+# 本段把"人读 json"升级为**机器可读的四维判读**，废弃全局日阈值：
+#   ① paid_tokens > 0               ⇒ 收费兜底被触发，当日必须复盘
+#   ② HHI > 0.6                     ⇒ 单渠道依赖提示（HHI=Σ份额²，1=全押一家）
+#   ③ per-channel 月额燃烧率 > 5%   ⇒ 月额/20 预警（月 30 天，日烧超 1/20 即危险）
+#   ④ 429/健康度                    ⇒ 由渠道健康面给出（此处只读不判，避免跨面）
+# =====================================================================
+
+#: HHI 阈值（>0.6 提示单渠道依赖；1.0 = 全部调用都走同一渠道）
+CHANNEL_HHI_ALERT = 0.6
+#: per-channel 月额燃烧率预警线（日烧 > 月额/20 ⇒ 按 30 天折算会烧穿）
+CHANNEL_BURN_RATE_ALERT = 0.05
+#: per-channel 月额（免费额度）口径表；-1 = 无月额口径（永久免费/积分抵扣/收费）
+CHANNEL_MONTHLY_QUOTA: dict = {
+    "bailian-qwen-plus": 1_000_000,
+    "bailian-qwen-max": 1_000_000,
+    "zhipu": -1,
+    "zhipu-47-flash": -1,
+    "siliconflow-qwen2-7b": -1,
+    "modelscope": -1,
+    "deepseek": -1,
+}
+
+CHANNEL_READING_SCHEMA = "channel_reading/354.v1"
+
+
+def channel_hhi(by_channel: dict) -> float:
+    """渠道集中度 HHI = Σ(份额²)，按 **calls** 份额算（令牌数会被长文本放大）。"""
+    _tot = 0
+    for _v in (by_channel or {}).values():
+        try:
+            _tot += int((_v or {}).get("calls") or 0)
+        except (TypeError, ValueError):
+            continue
+    if _tot <= 0:
+        return 0.0
+    _h = 0.0
+    for _v in (by_channel or {}).values():
+        try:
+            _s = int((_v or {}).get("calls") or 0) / float(_tot)
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        _h += _s * _s
+    return round(_h, 4)
+
+
+def read_daily_tokens_report(base_dir: str | None = None) -> dict:
+    """按四维口径判读当日用量（只读，不写任何文件）。
+
+    Returns:
+        {schema, date, calls, total_tokens, paid_tokens, hhi,
+         alerts: [{code, level, channel, value, why}], by_channel_burn: {...},
+         threshold_deprecated: 说明全局日阈值为何废弃}
+    """
+    _d = get_daily_tokens(base_dir=base_dir)
+    _bc = (_d or {}).get("by_channel") or {}
+    _calls = int((_d or {}).get("calls") or 0)
+    _paid = int((_d or {}).get("paid_tokens") or 0)
+    _hhi = channel_hhi(_bc)
+    _alerts = []
+
+    if _paid > 0:
+        _alerts.append({"code": "paid_triggered", "level": "critical",
+                        "channel": "-", "value": _paid,
+                        "why": "收费兜底被触发（paid_tokens>0）⇒ 当日必须复盘"})
+    if _hhi > CHANNEL_HHI_ALERT:
+        _top = max(_bc.items(), key=lambda kv: int((kv[1] or {}).get("calls") or 0))[0]             if _bc else "-"
+        _alerts.append({"code": "hhi_concentration", "level": "warn",
+                        "channel": _top, "value": _hhi,
+                        "why": "单渠道依赖（HHI>%.2f，%.1f%% calls 走 %s）"
+                               % (CHANNEL_HHI_ALERT,
+                                  100.0 * _hhi if _hhi <= 1 else 100.0, _top)})
+    _burn = {}
+    for _name, _v in _bc.items():
+        _q = CHANNEL_MONTHLY_QUOTA.get(_name, -1)
+        if _q is None or _q <= 0:
+            _burn[_name] = {"quota": _q, "tokens": (_v or {}).get("tokens"),
+                            "burn_rate": None, "why": "无月额口径（永久免费/积分/收费）"}
+            continue
+        _tk = int((_v or {}).get("tokens") or 0)
+        _rate = _tk / float(_q)
+        _burn[_name] = {"quota": _q, "tokens": _tk,
+                        "burn_rate": round(_rate, 4),
+                        "projected_month": int(_tk * 30)}
+        if _rate > CHANNEL_BURN_RATE_ALERT:
+            _alerts.append({"code": "burn_rate", "level": "warn",
+                            "channel": _name, "value": round(_rate, 4),
+                            "why": "月额燃烧率 %.2f%% > %.0f%%（日烧 %d / 月额 %d，"
+                                   "按 30 天折算 %d）" % (100.0 * _rate,
+                                                    100.0 * CHANNEL_BURN_RATE_ALERT,
+                                                    _tk, _q, _tk * 30)})
+    _out = {
+        "schema": CHANNEL_READING_SCHEMA,
+        "date": (_d or {}).get("date") or "-",
+        "calls": _calls,
+        "total_tokens": int((_d or {}).get("total_tokens") or 0),
+        "paid_tokens": _paid,
+        "hhi": _hhi,
+        "alerts": _alerts,
+        "by_channel_burn": _burn,
+        "threshold_deprecated": ("全局日阈值 DAILY_PAID_TOKEN_ALERT=1_000_000 口径错误："
+                                 "月额免费额度是 per-channel，全局日用量比全局月额永远不告警"
+                                 "（假安全）⇒ 已由 per-channel 燃烧率 + paid>0 + HHI 三告警取代"),
+    }
+    # 留痕：三告警统一一条，可 grep `[354渠道]`
+    try:
+        _module_logger.info(
+            "[354渠道] 判读 date=%s calls=%d tokens=%d paid=%d HHI=%.3f 告警=%d 明细=%s",
+            _out["date"], _calls, _out["total_tokens"], _paid, _hhi, len(_alerts),
+            ";".join("%s:%s=%s" % (a["code"], a["channel"], a["value"]) for a in _alerts) or "无")
+    except Exception as _le:
+        silent_exc(_le, where="call_recorder::read_daily_tokens_report trace")
+    return _out
+
+
+#: 入池量化判据（烛微 a3）：未达判据 ⇒ 留痕"暂缓 + 判据值"，key 已设不浪费
+POOL_EXPANSION_CRITERIA = {
+    "TokenHub": "入池 ⇔ zhipu 连续2日 calls 占比>70% ∧ (zhipu健康度<0.6 ∨ 429≥2次/日)",
+    "qianfan-ernie-speed": "入池 ⇔ siliconflow 或 modelscope 任一 429≥2次/日",
+}
+
+
+def evaluate_pool_expansion(daily_rows: list) -> dict:
+    """按量化判据评估 TokenHub / 千帆是否入池（只读）。
+
+    `daily_rows` = 最近若干天的 `get_daily_tokens()` 结果（按日期升序）。
+    数据不足（<2 日）⇒ 判**不可判**（不伪装成"不达标"，铁律153/166）。
+    """
+    _rows = [r for r in (daily_rows or []) if isinstance(r, dict)]
+    _out = {"schema": "pool_expansion/354.v1", "days": len(_rows),
+            "verdicts": {}, "trace": []}
+    if len(_rows) < 2:
+        _out["verdicts"] = {"TokenHub": "undecidable", "qianfan-ernie-speed": "undecidable"}
+        _out["trace"].append("数据不足 2 日 ⇒ 判据不可算（不得当成『不达标』）")
+        try:
+            _module_logger.info("[354渠道] 入池判据 数据不足(%d日) ⇒ 不可判（非不达标）"
+                                % len(_rows))
+        except Exception as _le2:
+            silent_exc(_le2, where="call_recorder::evaluate_pool_expansion insufficient")
+        return _out
+    _last2 = _rows[-2:]
+    _shares = []
+    for _r in _last2:
+        _bc = _r.get("by_channel") or {}
+        _tot = sum(int((v or {}).get("calls") or 0) for v in _bc.values())
+        _z = int((_bc.get("zhipu") or {}).get("calls") or 0)
+        _shares.append((_z / _tot) if _tot else 0.0)
+    _both_over = all(s > 0.70 for s in _shares)
+    _rl = sum(int(((_r.get("by_channel") or {}).get(_c) or {}).get("rate_limit")
+                  or 0) for _r in _last2 for _c in ("siliconflow-qwen2-7b", "modelscope"))
+    _v1 = "join" if _both_over else "defer"
+    _out["verdicts"]["TokenHub"] = _v1
+    _out["trace"].append("TokenHub: zhipu占比最近2日=%s 阈值>0.70 ⇒ %s"
+                         % ([round(s, 3) for s in _shares], _v1))
+    _v2 = "join" if _rl >= 2 else "defer"
+    _out["verdicts"]["qianfan-ernie-speed"] = _v2
+    _out["trace"].append("千帆: siliconflow/modelscope 429 合计=%d 阈值≥2 ⇒ %s" % (_rl, _v2))
+    try:
+        _module_logger.info(
+            "[354渠道] 入池判据 TokenHub=%s 千帆=%s 判据值=%s（key 已设不浪费，未达即暂缓）",
+            _v1, _v2, ";".join(_out["trace"]))
+    except Exception as _le3:
+        silent_exc(_le3, where="call_recorder::evaluate_pool_expansion trace")
+    return _out

@@ -6829,6 +6829,14 @@ def _m348_quota_exempt(entry: dict) -> tuple[bool, str]:
         return False, "error"
 
 
+# ★354刀5：限额回退口径的**显式布尔字段**与**撤销状态集合**（铁律153：
+#   禁在"理由字符串里找关键字"，一律显式布尔/集合）
+_O3_RESTORE_NO_QUOTA_FIELD = "o3_restore_no_quota"
+_O3_REVOKED_STATUSES = frozenset({
+    "已撤销", "wont_fix", "cancelled", "revoked", "target_drifted_closed",
+})
+
+
 def _m333_intake_rate(project_root: str | None = None,
                       window_sec: float | None = None,
                       now: float | None = None) -> dict:
@@ -6907,14 +6915,26 @@ def _m333_intake_rate(project_root: str | None = None,
     #   「豁免 3 条」与「一条都没有」必须分得开（铁律166）。
     _exempt = 0
     _exempt_by: dict = {}
+    # ★354刀5：两条「限额回退」口径的显式计数（343裁决『实测钉死』补课，烛微 a5 证据）
+    _revoked = 0      # 已撤销但**仍计入**当日额度的条数（撤销不回退）
+    _restore = 0      # 显式标记 restore、不占额度的条数
     for _e in _all:
         if not _is_o3(_e):
+            continue
+        # ★354刀5②：restore 显式计数 —— 与 348 豁免同族：**不是不算，是不进额度**
+        #   （铁律166：『豁免/restore 3 条』与『一条都没有』必须分得开）
+        if _e.get(_O3_RESTORE_NO_QUOTA_FIELD) is True:
+            _restore += 1
             continue
         _qf, _qr = _m348_quota_exempt(_e)
         if _qf:
             _exempt += 1
             _exempt_by[_qr] = _exempt_by.get(_qr, 0) + 1
             continue
+        # ★354刀5①：撤销不回退 —— 撤销只改 status，不动入池标记 ⇒ 当日计数不减。
+        #   这里只做**观测计数并留痕**，不改入池判定（改判定会开绕口子，违反 333 裁定）。
+        if str(_e.get("status") or "") in _O3_REVOKED_STATUSES:
+            _revoked += 1
         _ts = _e.get("generated_at") or _e.get("created_at") or 0
         try:
             _ts = float(_ts or 0)
@@ -6951,9 +6971,17 @@ def _m333_intake_rate(project_root: str | None = None,
     else:
         _note = ("O3 入池标记全时间轴命中 0 条 ⇒ **消费面尚未接通**，"
                  "count=0 不代表节流生效（只代表还没有东西入池）")
+    # ★354刀5：两条口径各自留痕（可 grep）。「计数为 0」也是事实 —— 不因没触发就不打
+    #   （铁律166：『没有撤销』与『撤销口径没生效』在报表上必须分得开）
+    _module_logger.info(
+        "[354限额] 撤销不回退 n=%d（撤销只改 status，不动入池标记）"
+        " restore不占额度 n=%d 当日入池=%d/%d",
+        _revoked, _restore, _cnt, _O3_INTAKE_MAX_PER_DAY)
     return {"count": int(_cnt), "limit": _O3_INTAKE_MAX_PER_DAY,
             "window_sec": _win, "rate_ok": _ok, "source_ok": True,
             "quota_exempt": _exempt, "quota_exempt_by": dict(_exempt_by),
+            "revoked_no_rollback": int(_revoked),
+            "restore_no_quota": int(_restore),
             "sources": _srcs, "marker_hits": int(_marker_ever),
             # ★339刀2：**四条件同立才 True**（旧口径只看入池标记）
             "consumer_connected": bool((_cc or {}).get("connected") is True),

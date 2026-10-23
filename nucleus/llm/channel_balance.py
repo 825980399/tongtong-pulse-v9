@@ -87,7 +87,8 @@ def channel_has_room(manager: Any, name: str) -> bool:
         return True
 
 
-def pick_balanced_index(rows: list, caller: str = "") -> tuple:
+def pick_balanced_index(rows: list, caller: str = "",
+                        paid_channels=None) -> tuple:
     """按并发余量挑起点下标。
 
     Args:
@@ -107,7 +108,11 @@ def pick_balanced_index(rows: list, caller: str = "") -> tuple:
     if _mgr is None or not bool(getattr(_mgr, "enabled", True)):
         return 0, "default"
 
-    _paid = _paid_channels()
+    # 付费集合可由调用方**显式给定**（测试/非标渠道名场景）。不传才回落
+    #   config.PAID_CHANNELS —— 否则调用方传入的渠道名一旦不在那个常量里，
+    #   均衡不越界付费这条保护会静默失效（354 自测踩到）。
+    _paid = _paid_channels() if paid_channels is None else frozenset(
+        str(x) for x in (paid_channels or ()))
     _end = _n
     for _i in range(_n):
         if str((rows[_i] or {}).get("channel") or "") in _paid:
@@ -135,3 +140,49 @@ def log_pick(caller: str, rows: list, index: int, reason: str) -> None:
                   BALANCE_TAG, caller or "-", _picked or "-", reason)
     except Exception as e:
         silent_exc(e, where="nucleus.llm.channel_balance::log_pick.emit")
+
+
+
+
+def pick_and_acquire(rows: list, caller: str = "", paid_channels=None):
+    """★354刀4：353刀1 遗留 TOCTOU 风险的**原子**补法。
+
+    353刀1 的 `pick_balanced_index()` 是 **peek**（只看 `available()`，不占许可），
+    这是刻意的：单目标口的 6 处调用方（灵核/知识/控制器/OCR）**从不 acquire**，
+    若改成 acquire-then-return 却没有配套 release ⇒ 许可永久泄漏（铁律181）。
+    代价是存在 TOCTOU 窗口：两个调用可能都选中同一渠道，其中一个 acquire 失败
+    ⇒ 回落旧行为（切下一个/429），**不会更差**，但确实"选了又没占到"。
+
+    本函数给**需要严格原子化**的调用方一个正确用法：先占后返，并返回 release 回调。
+
+    Returns:
+        `(target_dict, release_callable)`；拿不到许可时 `(None, None)`。
+        release 只能调用一次（重复调用由信号量侧容忍，但调用方不应重复）。
+    """
+    try:
+        _idx, _why = pick_balanced_index(rows, caller=caller,
+                                        paid_channels=paid_channels)
+    except Exception as e:
+        silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire")
+        return None, None
+    if not rows or _idx >= len(rows):
+        return None, None
+    _mgr = _manager()
+    if _mgr is None:
+        log_pick(caller, rows, _idx, _why)
+        return rows[_idx], (lambda: None)
+    _name = str((rows[_idx] or {}).get("channel") or "")
+    _got = _mgr.acquire(_name, blocking=False)
+    if not _got:
+        # 占不到 ⇒ **不返回**该目标（否则调用方以为拿到了许可）
+        log_pick(caller, rows, _idx, "acquire_failed")
+        return None, None
+    log_pick(caller, rows, _idx, _why)
+
+    def _release():
+        try:
+            _mgr.release(_name)
+        except Exception as e:
+            silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire.release")
+
+    return rows[_idx], _release

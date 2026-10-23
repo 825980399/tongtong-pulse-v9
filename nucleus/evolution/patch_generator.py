@@ -40,6 +40,7 @@ import ast
 import hashlib
 import re
 import textwrap
+import io
 import json
 import os
 import time
@@ -293,17 +294,169 @@ def precheck_target(project_root: str | None, file: str, method: str) -> dict:
     return _out
 
 
+def precheck_target_v2(project_root: str | None, file: str, method: str,
+                       method_before: str = "", original_code: str = "") -> dict:
+    """★354刀6修正（星轨 v1.1）：三锚或判的目标存在性预检。
+
+    为什么不能只用 field 名：pending 40 条里 **35 条**的 `method` 字段是
+    **生成器猜的名**，与代码里的真实方法名对不上；`m323_truth.method_before`
+    才是补丁真正改的那个方法。拿 field 名去 AST 查 ⇒ 查不到 ⇒ 被判"目标漂移"
+    ⇒ 35 条真实存在的补丁被误杀。这就是 352 审计"27/39 漂移"的真相：
+    **是名字漂移，不是位置漂移**（星轨 pending 深析，39/39 用真实名全部命中）。
+
+    三锚（任一命中即"存在"）：
+      A. field 名 AST 命中           —— 名对得上的老条目
+      B. `method_before` AST 命中    —— 真实方法名（主锚）
+      C. `original_code` 归一化全文匹配 —— 前两锚都查不到时的兜底（改名/跨类）
+
+    Returns:
+        同 `precheck_target` 的结构，另加 `anchor`（field/method_before/
+        original_code/none）与 `anchors_tried`（逐个锚的结果，便于追溯）。
+    """
+    import re as _re
+
+    def _norm(_s: str) -> str:
+        return _re.sub(r"\s+", "", str(_s or ""))
+
+    _tried: list = []
+    _a = precheck_target(project_root, file, method)
+    _tried.append({"anchor": "field", "method": method, "verdict": _a["verdict"]})
+    if _a["verdict"] == TARGET_IN_PLACE:
+        _a["anchor"] = "field"
+        _a["anchors_tried"] = _tried
+        return _a
+
+    _mb = str(method_before or "").strip()
+    if _mb and _mb != str(method or "").strip():
+        _b = precheck_target(project_root, file, _mb)
+        _tried.append({"anchor": "method_before", "method": _mb, "verdict": _b["verdict"]})
+        if _b["verdict"] == TARGET_IN_PLACE:
+            _b["anchor"] = "method_before"
+            _b["field_method"] = method
+            _b["anchors_tried"] = _tried
+            return _b
+
+    _oc = str(original_code or "").strip()
+    if _oc:
+        _root = project_root or os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        _rel = _m349_norm_rel(file)
+        _src = ""
+        try:
+            with io.open(os.path.join(str(_root), _rel), encoding="utf-8",
+                         errors="ignore") as _f:
+                _src = _f.read()
+        except Exception as _oe:
+            silent_exc(_oe, where="patch_generator::precheck_target_v2 read_source")
+            _src = ""
+        _hit = bool(_src) and _norm(_oc) and (_norm(_oc) in _norm(_src))
+        _tried.append({"anchor": "original_code", "method": "-",
+                       "verdict": TARGET_IN_PLACE if _hit else TARGET_METHOD_ABSENT})
+        if _hit:
+            return {"schema": PRECHECK_SCHEMA + "/v2", "file": _rel,
+                    "method": _mb or str(method or "").strip(),
+                    "verdict": TARGET_IN_PLACE, "why": "original_code_norm_match",
+                    "cls": [], "module_level": False, "ambiguous": False,
+                    "n_class": 0, "anchor": "original_code",
+                    "field_method": method, "anchors_tried": _tried}
+
+    _a["anchor"] = "none"
+    _a["anchors_tried"] = _tried
+    _a["why"] = "three_anchors_all_missed:%s" % ";".join(
+        "%s=%s" % (t["anchor"], t["verdict"]) for t in _tried)
+    return _a
+
+
+#: ★354刀6增量：方法体完整性判定线（星轨 2026-10-24 建议）
+BODY_INTEGRITY_MIN_RATIO = 0.85
+
+
+def check_body_integrity(project_root: str | None, file: str, method: str,
+                         modified_code: str,
+                         min_ratio: float = BODY_INTEGRITY_MIN_RATIO) -> dict:
+    """方法体完整性：改后行数是否撑得住原方法体（识别模型输出截断）。
+
+    Args:
+        modified_code: 模型给出的**完整替换方法**（含 def 行）。
+        min_ratio: 判定线，默认 0.85（星轨建议值）。
+
+    Returns:
+        {verdict: "ok"|"truncated"|"undecidable"|"empty_output",
+         orig_lines, new_lines, ratio, min_ratio, why}
+        ★`undecidable` 与 `ok` 必须分得开（铁律166）：取不到原方法体时
+         **不得**算作合格，也不得算作截断 —— 那是"判据不可用"。
+    """
+    import ast as _ast
+
+    def _orig_lines() -> int | None:
+        _root = project_root or os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        _rel = _m349_norm_rel(file)
+        if not _rel:
+            return None
+        try:
+            with io.open(os.path.join(str(_root), _rel), encoding="utf-8",
+                         errors="ignore") as _f:
+                _src = _f.read()
+            _tree = _ast.parse(_src)
+        except Exception as _pe:
+            silent_exc(_pe, where="patch_generator::check_body_integrity parse")
+            return None
+        for _n in _ast.walk(_tree):
+            if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
+                    and _n.name == str(method or "").strip():
+                return int(getattr(_n, "end_lineno", _n.lineno) or _n.lineno) \
+                    - int(_n.lineno) + 1
+        return None
+
+    _new = len([_l for _l in str(modified_code or "").splitlines() if _l.strip()])
+    if _new == 0:
+        return {"verdict": "empty_output", "orig_lines": None, "new_lines": 0,
+                "ratio": 0.0, "min_ratio": min_ratio,
+                "why": "modified_code 为空 ⇒ 无产物可判完整性"}
+    _ol = _orig_lines()
+    if not _ol:
+        return {"verdict": "undecidable", "orig_lines": None, "new_lines": _new,
+                "ratio": None, "min_ratio": min_ratio,
+                "why": "取不到原方法体行数（文件/方法不可读）⇒ 判据不可用，不判不合格"}
+    _ratio = _new / float(_ol)
+    _ok = _ratio >= min_ratio
+    return {"verdict": "ok" if _ok else "truncated",
+            "orig_lines": _ol, "new_lines": _new,
+            "ratio": round(_ratio, 3), "min_ratio": min_ratio,
+            "why": ("改后 %d 行 / 原方法体 %d 行 = %.2f %s %.2f"
+                    % (_new, _ol, _ratio, ">=" if _ok else "<", min_ratio))}
+
+
 def precheck_batch(project_root: str | None, entries: list) -> dict:
     """批量预检（一次遍历，铁律208）。返回 `{schema, total, tally, in_place,
     drifted, other, rows}`。用于 40 条存量对账与池侧批量标记。
     """
     _rows = []
     _tally: dict = {}
+    _anchor_tally: dict = {}
     for _e in (entries or []):
         if not isinstance(_e, dict):
             continue
-        _pc = precheck_target(project_root, _e.get("file"), _e.get("method"))
+        # ★354刀6修正：O3 破零观察位（无 m323_truth 且无 original_code，如
+        #   o3_b31b31fee790d6e9）属**形态预期**，星轨明写不参与预检/去重，单独标记
+        #   ⇒ 跳过并计入 excluded_o3，不进 rejected 分母（否则会假报 1 条拒收）。
+        if not (_e.get("m323_truth") or {}).get("method_before")                 and not str(_e.get("original_code") or "").strip():
+            _anchor_tally["excluded_o3"] = _anchor_tally.get("excluded_o3", 0) + 1
+            _rows.append({"id": str(_e.get("id") or ""), "file": _e.get("file"),
+                          "method": _e.get("method"), "verdict": "excluded_o3",
+                          "why": "o3_observation_slot", "cls": [],
+                          "ambiguous": False, "anchor": "excluded_o3",
+                          "field_method": _e.get("method")})
+            continue
+        # ★354刀6修正：改用三锚或判（field ∨ method_before ∨ original_code）
+        _mb = str((_e.get("m323_truth") or {}).get("method_before") or "").strip()
+        _pc = precheck_target_v2(project_root, _e.get("file"), _e.get("method"),
+                                 method_before=_mb,
+                                 original_code=_e.get("original_code") or "")
         _tally[_pc["verdict"]] = _tally.get(_pc["verdict"], 0) + 1
+        _anchor = str(_pc.get("anchor") or "none")
+        _anchor_tally[_anchor] = _anchor_tally.get(_anchor, 0) + 1
         _rows.append({
             "id": str(_e.get("dedup_key") or _e.get("id") or ""),
             "file": _pc["file"],
@@ -312,11 +465,20 @@ def precheck_batch(project_root: str | None, entries: list) -> dict:
             "why": _pc["why"],
             "cls": _pc["cls"],
             "ambiguous": _pc["ambiguous"],
+            "anchor": _anchor,
+            "field_method": _e.get("method"),
         })
     _in = _tally.get(TARGET_IN_PLACE, 0)
     _dr = sum(_tally.get(_v, 0) for _v in TARGET_DRIFTED_VERDICTS)
+    # ★354刀6：批量汇总留痕。单条预检的 [352预检] 在 generate_patch_draft 里已有，
+    #   但**批量对账口径**（40 条存量 drifting 多少）此前无任何留痕 ⇒ 每批都要重算一遍
+    #   才能回答"拦截了多少"。这里一次遍历顺带打，不重复实现预检逻辑。
+    _module_logger.info(
+        "[354预检] rejected=%d/total=%d in_place=%d 锚点=%s 归因=%s",
+        _dr, len(_rows), _in, dict(_anchor_tally), dict(_tally))
     return {
-        "schema": PRECHECK_SCHEMA + "/batch",
+        "schema": PRECHECK_SCHEMA + "/batch/v2",
+        "anchor_tally": dict(_anchor_tally),
         "total": len(_rows),
         "tally": _tally,
         "in_place": _in,
@@ -1186,6 +1348,22 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
     if _core:
         # ★不是"不合格"，是"必须人审"——但按任务书的通过标准，它不进 auto 通道
         _reasons.append("touches_core_file")
+    # ★354刀6增量：方法体完整性（星轨建议：改后行数 ≥ 原方法体 ×0.85）。
+    #   `ast.parse` 只验语法不验长度 ⇒ 被 max_tokens 截断的草稿可能"语法合法但内容残缺"，
+    #   单靠语法校验会把它当合格品放行。
+    _bi = check_body_integrity(draft.get("_project_root"), draft.get("file"),
+                               draft.get("method"),
+                               draft.get("modified_code") or "")
+    _checks["body_integrity"] = _bi
+    if _bi["verdict"] == "truncated":
+        _reasons.append("body_truncated:%.2f" % _bi["ratio"])
+        _module_logger.warning(
+            "[354预检] body_integrity=truncated 改后%d行/原%d行=%.2f<%s file=%s method=%s",
+            _bi["new_lines"], _bi["orig_lines"], _bi["ratio"],
+            _bi["min_ratio"], draft.get("file"), draft.get("method"))
+    elif _bi["verdict"] == "empty_output":
+        _reasons.append("body_empty_output")
+    # undecidable ⇒ 不追加理由（判据不可用不等于不合格，铁律166）
     _state = STATE_DRAFT_READY if not _reasons else STATE_GATE_REJECTED
     return {"state": _state, "checks": _checks, "gate_reasons": _reasons}
 
@@ -1422,7 +1600,12 @@ def generate_patch_draft(entry: dict,
     # ★352刀1①：生成前目标存在性预检。
     #   为何放在取源码**之前**：目标已不存在时读文件本就是白费，
     #   而且旧路径会把它记成 generation_failed（词不达意）。
-    _pc = precheck_target(_root, entry.get("file"), entry.get("method"))
+    # ★354刀6修正：生成前预检改用三锚或判（星轨 v1.1）。
+    #   仅按 field 名判会误杀 35 条真实补丁（它们的真实名在 m323_truth.method_before）。
+    _pc = precheck_target_v2(
+        _root, entry.get("file"), entry.get("method"),
+        method_before=str((entry.get("m323_truth") or {}).get("method_before") or "").strip(),
+        original_code=entry.get("original_code") or "")
     _out["precheck"] = _pc
     if _pc["verdict"] in TARGET_DRIFTED_VERDICTS:
         _out["state"] = STATE_TARGET_DRIFTED

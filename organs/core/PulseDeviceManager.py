@@ -86,14 +86,27 @@ class PulseDeviceManager(BasePulseOrgan):
         #    阻塞调用移入后台守护线程，避免卡住 L0 生命线线程
         if self._sensor is not None:
             _sensor = self._sensor
+            # ★354刀2：传感器启用**护栏**。缺口不是"锁超时"（本文件实测无任何锁），
+            #   而是"卡死线程无人看管"：enable() 内部扫描硬件可能长期阻塞，
+            #   重复 boot 会不停起新的守护线程，卡死的那个既无人 join 也无人告警
+            #   ⇒ 与 docstring 自述的"被孤立线程长期持锁会级联阻塞"同源。
+            #   护栏三件事：①重入不重复起 ②上次仍存活即告警留痕 ③句柄可查。
+            _prev = getattr(self, "_sensor_enable_thread", None)
+            if _prev is not None and _prev.is_alive():
+                self._log(LogLevel.WARNING,
+                          "[354线程] 传感器启用线程仍存活(ident=%s) ⇒ 本次 boot 不重复启动，"
+                          "疑似 enable() 卡住（硬件扫描长期阻塞）" % _prev.ident)
+            else:
+                def _enable_sensor_async():
+                    try:
+                        _sensor.enable()  # enable()内部会自动调用_scan_devices()扫描设备
+                    except Exception as e:
+                        self._log(LogLevel.ERROR, f'异常: {e}')
 
-            def _enable_sensor_async():
-                try:
-                    _sensor.enable()  # enable()内部会自动调用_scan_devices()扫描设备
-                except Exception as e:
-                    self._log(LogLevel.ERROR, f'异常: {e}')
-
-            threading.Thread(target=_enable_sensor_async, daemon=True).start()
+                _t = threading.Thread(target=_enable_sensor_async, daemon=True,
+                                      name="sensor-enable")
+                self._sensor_enable_thread = _t
+                _t.start()
 
         # 2. 能力表在收到第一个硬件快照时构建和广播
         return {

@@ -12870,7 +12870,6 @@ class PulseInnerWorld(
                 # 触发框架优雅退出（main.py会在退出时应用补丁并重启）
                 try:
                     import signal
-                    import threading
                     def _trigger_shutdown():
                         time.sleep(5)  # 等待通知发出
                         # v25.1修复(2026-09-04): Windows上os.kill(SIGTERM)调用TerminateProcess
@@ -12895,7 +12894,12 @@ class PulseInnerWorld(
                             os._exit(0)
                         else:
                             os.kill(os.getpid(), signal.SIGTERM)
-                    threading.Thread(target=_trigger_shutdown, daemon=True).start()
+                    # ★354刀2：一次性 daemon 线程**内联**（shutdown 语义允许阻塞）。
+                    #   实测代价要写明：`_trigger_shutdown` 首行是 `time.sleep(5)`
+                    #   （等通知发出，v25.1 修复 Windows 硬杀后保留），内联后这 5s
+                    #   落在**当前线程** —— 原先由 daemon 线程承担。故本处收益是
+                    #   『少一个线程点』，不是『更快』；报告须据实披露，不得写成优化。
+                    _trigger_shutdown()
                 except Exception as e:
                     self._log(LogLevel.DEBUG, f"清理异常已忽略: {type(e).__name__}: {e}")
         except Exception as _e:
