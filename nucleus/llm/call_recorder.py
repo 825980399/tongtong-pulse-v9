@@ -322,6 +322,119 @@ def _compute_cost_estimate(model: str, tokens: int) -> float | None:  # _m170_co
     return round(_price * _tok / 1000.0, 6)
 
 
+# ---------------------------------------------------------------------------
+# ★352追补项5：每日 Tokens 汇总（分渠道/分模型/免费 vs 付费）
+# ---------------------------------------------------------------------------
+DAILY_TOKENS_SCHEMA = "daily_tokens/352b.v1"
+_DAILY_FILE_NAME = "daily_tokens.json"
+_M352B_DEFAULT_PAID = frozenset({"deepseek"})
+_M352B_DEFAULT_ALERT = 1000000
+
+
+def _m352b_paid_channels() -> frozenset:
+    """付费渠道集合。**单一来源 = `config.PAID_CHANNELS`**；取不到才用内置默认。
+
+    为什么不硬编码：将来加付费渠道（如某免费额度用完转收费）只改 config 一处，
+    统计口径自动跟上。取不到 config 时不抛，退回默认集并留痕。
+    """
+    try:
+        import config as _cfg_mod
+        _v = getattr(_cfg_mod, "PAID_CHANNELS", None)
+        if _v:
+            return frozenset(str(_x) for _x in _v)
+    except Exception as e:
+        silent_exc(e, where="call_recorder::_m352b_paid_channels")
+    return _M352B_DEFAULT_PAID
+
+
+def _m352b_alert_threshold() -> int:
+    """每日付费 tokens 告警阈值（单一来源 `config.DAILY_PAID_TOKEN_ALERT`）。"""
+    try:
+        import config as _cfg_mod
+        return int(getattr(_cfg_mod, "DAILY_PAID_TOKEN_ALERT", _M352B_DEFAULT_ALERT)
+                   or _M352B_DEFAULT_ALERT)
+    except Exception as e:
+        silent_exc(e, where="call_recorder::_m352b_alert_threshold")
+        return _M352B_DEFAULT_ALERT
+
+
+def _m352b_empty_day(day: str) -> dict:
+    """当日汇总的空骨架（键序固定，便于人读与对差）。"""
+    return {
+        "schema": DAILY_TOKENS_SCHEMA,
+        "date": day,
+        "calls": 0,
+        "total_tokens": 0,
+        "by_channel": {},
+        "by_model": {},
+        "paid_tokens": 0,
+        "free_tokens": 0,
+        "alerted": False,
+        "updated_at": "",
+    }
+
+
+def _m352b_accumulate(prev: dict, rec: dict, day: str,
+                      paid_channels=None) -> dict:
+    """把**一条**调用记录累进当日汇总。**纯函数**（不改入参，返回新 dict）。
+
+    Args:
+        prev: 上次落盘的汇总（可为空 dict 或昨日数据）。
+        rec: 一条调用记录（用 ``channel`` / ``model`` / ``tokens`` / ``ts``）。
+        day: 本条的日期串 ``YYYY-MM-DD``。
+        paid_channels: 付费渠道集合；``None`` ⇒ 取 config 单一来源。
+
+    Returns:
+        新汇总 dict。**日期与 prev 不同就整体重置**（当日滚动语义）。
+    """
+    _paid = (frozenset(paid_channels) if paid_channels is not None
+             else _m352b_paid_channels())
+    # 深拷贝：汇总只有几层标量/小 dict，用 json 往返最省事且不会漏嵌套
+    try:
+        out = json.loads(json.dumps(prev or {}, ensure_ascii=False))
+    except Exception as e:
+        silent_exc(e, where="call_recorder::_m352b_accumulate 深拷贝")
+        out = {}
+    if not isinstance(out, dict) or out.get("date") != day:
+        out = _m352b_empty_day(day)
+
+    _ch = str(rec.get("channel") or "") or "unknown"
+    _md = str(rec.get("model") or "") or "unknown"
+    try:
+        _tk = int(rec.get("tokens") or 0)
+    except (TypeError, ValueError) as e:
+        silent_exc(e, where="call_recorder::_m352b_accumulate tokens 非数值")
+        _tk = 0
+
+    out["calls"] = int(out.get("calls") or 0) + 1
+    out["total_tokens"] = int(out.get("total_tokens") or 0) + _tk
+    for _key, _name in (("by_channel", _ch), ("by_model", _md)):
+        _bucket = out.get(_key)
+        if not isinstance(_bucket, dict):
+            _bucket = {}
+            out[_key] = _bucket
+        _cell = _bucket.get(_name)
+        if not isinstance(_cell, dict):
+            _cell = {"calls": 0, "tokens": 0}
+        _cell["calls"] = int(_cell.get("calls") or 0) + 1
+        _cell["tokens"] = int(_cell.get("tokens") or 0) + _tk
+        _bucket[_name] = _cell
+
+    if _ch in _paid:
+        out["paid_tokens"] = int(out.get("paid_tokens") or 0) + _tk
+    else:
+        out["free_tokens"] = int(out.get("free_tokens") or 0) + _tk
+
+    _ts = rec.get("ts")
+    try:
+        _dts = float(_ts) if _ts is not None else time.time()
+        out["updated_at"] = _dt.datetime.fromtimestamp(_dts).isoformat(timespec="seconds")
+    except (TypeError, ValueError, OSError) as e:
+        silent_exc(e, where="call_recorder::_m352b_accumulate 时间戳")
+        out["updated_at"] = ""
+    return out
+
+
 def build_training_pair(rec: dict) -> dict | None:
     """★188刀4：把一条已留存的调用对（prompt/response）转为可训数据（input/output）。
     仅成功且含输入/输出的调用可转；失败/空响应不转。不建向量、不接微调管道。"""
@@ -620,6 +733,9 @@ class LLMCallRecorder:
             self._rotate(_ts)
             # ★188刀4：训练对物化（影子通道）。best-effort，绝不改变 record 返回值。
             self._materialize_training_pair(_rec, _ts)
+            # ★352追补项5：每日 Tokens 汇总（当日滚动）。同样 best-effort ——
+            #   统计失败绝不能让"调用记录"这件事失败。
+            self._m352b_update_daily(_rec, _ts)
             return _tid
         except Exception:
             self._failed += 1
@@ -674,6 +790,57 @@ class LLMCallRecorder:
             silent_exc(e, where="nucleus.llm.call_recorder::_materialize_training_pair")
             self._materialized_failed += 1
 
+    def _m352b_update_daily(self, rec: dict, ts: float) -> None:
+        """★352追补项5：把本次调用累进当日汇总（best-effort，永不抛出）。
+
+        为什么放在 `record()` 里而不是另开钩子：`record()` 是**唯一**能同时拿到
+        channel / model / tokens 的地方（`_m340_price_of` 那边只有 model）。
+        少一处采集点 = 少一处口径漂移。
+
+        写盘顺序（铁律182）：算 data → 写 `.tmp` → `os.replace` → 读回校验。
+        直接 open(w) 会在进程被杀时留下半个 JSON，下次读就炸。
+        """
+        try:
+            # 与 calls jsonl 同款守卫：测试环境且未注入目录 → 不写生产
+            if self._base_dir_override is None and _in_test_env() \
+                    and _is_production_trace_dir(self.base_dir()):
+                return
+            _day = _dt.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d")
+            _path = os.path.join(self.base_dir(), _DAILY_FILE_NAME)
+            _thr = _m352b_alert_threshold()
+            _fire: dict | None = None
+            with self._lock:
+                _prev: dict = {}
+                if os.path.isfile(_path):
+                    try:
+                        with open(_path, encoding="utf-8") as _f:
+                            _prev = json.load(_f) or {}
+                    except Exception as e:
+                        # 旧文件坏了不能让本次调用丢失：按空骨架重建并留痕
+                        silent_exc(e, where="call_recorder::_m352b_update_daily 读旧汇总")
+                        _prev = {}
+                _data = _m352b_accumulate(_prev, rec, _day)
+                if int(_data.get("paid_tokens") or 0) >= _thr and not _data.get("alerted"):
+                    _data["alerted"] = True
+                    _fire = dict(_data)
+                _tmp = _path + ".tmp"
+                with open(_tmp, "w", encoding="utf-8") as _f:
+                    json.dump(_data, _f, ensure_ascii=False, indent=2)
+                os.replace(_tmp, _path)
+                with open(_path, encoding="utf-8") as _f:
+                    _back = json.load(_f) or {}
+                if _back.get("date") != _data.get("date") \
+                        or int(_back.get("calls") or 0) != int(_data.get("calls") or 0):
+                    raise ValueError("daily_tokens 读回不一致")
+            if _fire is not None:
+                _module_logger.warning(
+                    "[每日Tokens] 付费tokens=%s 超阈值(%s)，建议评估免费渠道额度/新增免费平台"
+                    "（分渠道=%s）",
+                    _fire.get("paid_tokens"), _thr,
+                    json.dumps(_fire.get("by_channel") or {}, ensure_ascii=False))
+        except Exception as e:
+            silent_exc(e, where="call_recorder::_m352b_update_daily")
+
     def stats(self) -> dict[str, Any]:
         """运行期统计（不触发任何 IO 扫描）。"""
         return {
@@ -711,6 +878,51 @@ def get_call_recorder() -> LLMCallRecorder | None:
     except Exception as e:
         silent_exc(e, where="nucleus.llm.call_recorder::get_call_recorder L463")
         return None
+
+
+def get_daily_tokens(base_dir: str | None = None) -> dict:
+    """★352追补项5：读取当日 Tokens 汇总（**永不抛出**）。
+
+    Args:
+        base_dir: 注入目录（测试/工具用）。``None`` ⇒ 走单例的生产目录。
+
+    Returns:
+        汇总 dict（``schema``/``date``/``calls``/``total_tokens``/``by_channel``/
+        ``by_model``/``paid_tokens``/``free_tokens``/``alerted``/``updated_at``），
+        外加 ``source`` 说明数据来历：
+          * ``current``        —— 就是今天的
+          * ``stale_yesterday``—— 文件停在往日（**如实返回旧数据 + 标注**，不伪装成今天 0；
+                                   铁律166：'没数据' 与 '今天的 0' 是两件事）
+          * ``absent``         —— 还没写过
+          * ``unreadable``     —— 文件坏了
+    """
+    _today = _dt.date.today().strftime("%Y-%m-%d")
+    try:
+        if base_dir is not None:
+            _bd = str(base_dir)
+        else:
+            _r = get_call_recorder()
+            _bd = _r.base_dir() if _r is not None else ""
+        if not _bd:
+            _empty = _m352b_empty_day(_today)
+            _empty["source"] = "absent"
+            return _empty
+        _path = os.path.join(_bd, _DAILY_FILE_NAME)
+        if not os.path.isfile(_path):
+            _empty = _m352b_empty_day(_today)
+            _empty["source"] = "absent"
+            return _empty
+        with open(_path, encoding="utf-8") as _f:
+            _d = json.load(_f) or {}
+        if not isinstance(_d, dict) or not _d.get("date"):
+            raise ValueError("汇总结构不可识别")
+        _d["source"] = "current" if _d.get("date") == _today else "stale_yesterday"
+        return _d
+    except Exception as e:
+        silent_exc(e, where="call_recorder::get_daily_tokens")
+        _bad = _m352b_empty_day(_today)
+        _bad["source"] = "unreadable"
+        return _bad
 
 
 def reset_call_recorder() -> None:

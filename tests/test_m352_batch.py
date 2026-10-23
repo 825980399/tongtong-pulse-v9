@@ -371,7 +371,8 @@ def test_刀9_三新增渠道齐备():
     #   并加 qwen-max 备选档（同 Key 同端点）。
     for n, pri, model in (("zhipu-47-flash", 1, "glm-4.7-flash"),
                           ("bailian-qwen-plus", 2, "qwen-plus"),
-                          ("siliconflow-qwen2-7b", 3, "Qwen/Qwen2-7B-Instruct"),
+                          # ★352追补项1：Qwen2-7B 已下架（403）⇒ 改 zai-org/GLM-5.3-Flash
+                          ("siliconflow-qwen2-7b", 3, "zai-org/GLM-5.3-Flash"),
                           ("bailian-qwen-max", 5, "qwen-max")):
         assert n in ch, "缺渠道 %s" % n
         assert ch[n]["priority"] == pri
@@ -388,8 +389,11 @@ def test_刀9_优先级与ark已移除():
     #   实测现场是 10 条（任务书写 8，方案表漏列 ark-seed-21-turbo），10 条全删。
     ark = [c for c in ch.values() if str(c["name"]).startswith("ark-")]
     assert ark == [], "ark-* 应已从渠道池移除，实际残留 %d 条" % len(ark)
-    # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条
-    assert len(ch) == 6, "池内应为 6 条，实际 %d 条" % len(ch)
+    # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条；
+    # ★352追补项4 再加 modelscope(p7) ⇒ 7 条
+    assert len(ch) == 7, "池内应为 7 条，实际 %d 条" % len(ch)
+    assert ch["modelscope"]["priority"] == 7
+    assert ch["modelscope"]["model"] == "Qwen/Qwen2.5-7B-Instruct"
 
 
 def test_刀9_ssrf白名单与高级渠道():

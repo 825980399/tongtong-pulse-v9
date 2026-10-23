@@ -891,8 +891,12 @@ class PulseInnerWorldKnowledgeMixin:
         _has_remote_api = False
         try:
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
+            # ★352追补项3：可用性判定必须与**实际取数同源**（取数已改走渠道池）。
+            #   原实现判 REMOTE_API_CONFIG["enabled"] and ["api_key"]，而实取走渠道池，
+            #   两者在"渠道池有 key、单端点没 key"时给出相反结论 ⇒ 预检说不可用、
+            #   于是根本不进取数分支，渠道池白配。PulseController 同一结构同一修法。
+            _t_pre = config.get_llm_call_target(None)
+            if _t_pre.get("api_url") and _t_pre.get("api_key"):
                 _has_remote_api = True
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
@@ -1010,21 +1014,31 @@ class PulseInnerWorldKnowledgeMixin:
             import json as _json
 
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
+            # ★352追补项3：改走渠道池（逐条跳空 key，取首条可用），不再直读单端点。
+            #   单端点 REMOTE_API_CONFIG 只作 get_llm_call_target() 的**内部兜底**，
+            #   本处不再自己判断"有没有配 key"——两处判断必然漂移。
+            _tgt = config.get_llm_call_target(None)
+            _api_url = _tgt.get("api_url", "")
+            _api_key = _tgt.get("api_key", "")
+            _model = _tgt.get("model") or "deepseek-v4-flash"
 
             if not _api_url or not _api_key:
                 return None
 
+            self._log(LogLevel.DEBUG,
+                      f"[352追补2] caller=inner_world_refine "
+                      f"channel={_tgt.get('channel')} model={_model}")
+
             _payload = {
-                "model": _api_cfg.get("default_model", "deepseek-v4-flash"),
+                "model": _model,
                 "messages": [
                     {"role": "system", "content": _persona},
                     {"role": "user", "content": _prompt}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 256,
+                # ★352追补项3 max_tokens 门：256→512。任务书写"知识提炼 512"，实测改前是 256；
+                #   渠道池首位 glm-4.7-flash 是推理模型，256 会被 reasoning_tokens 吃光。
+                "max_tokens": 512,
                 # ★v23.0新增：多方向延展需要深度分析，启用思考模式
                 "thinking": {"type": "enabled"},
                 "reasoning_effort": "high",

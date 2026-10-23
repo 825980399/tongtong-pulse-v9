@@ -26,8 +26,14 @@ import unittest
 _PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _KEY_ENVS = (
+    # ★352追补项2：TTP_REMOTE_API_KEY 已退役（统一 DEEPSEEK_API_KEY），
+    #   但**仍要清空**——宿主若残留该变量，退役后它不再影响任何配置，
+    #   留着不清会让人误以为"退役没生效"。清空是更强的断言环境。
     "TTP_REMOTE_API_KEY", "DEEPSEEK_API_KEY", "ARK_API_KEY",
     "DOUBAO_API_KEY", "ZHIPU_API_KEY", "NEWAPI_TOKEN",
+    # ★352追补项1/4：新增渠道的环境变量也必须清空，
+    #   否则宿主设了这些 key，test_01「无密钥时全空」会假失败。
+    "SILICONFLOW_API_KEY", "DASHSCOPE_API_KEY", "MODELSCOPE_API_KEY",
 )
 
 _PROBE = r'''
@@ -84,7 +90,10 @@ class TestEnvPriority(unittest.TestCase):
         cls.doubao = _run({"DOUBAO_API_KEY": "bbb-test-key"})
         cls.both = _run({"ARK_API_KEY": "aaa-test-key",
                          "DOUBAO_API_KEY": "bbb-test-key"})
-        cls.remote = _run({"TTP_REMOTE_API_KEY": "ttt-test-key"})
+        # ★352追补项2：原用 TTP_REMOTE_API_KEY 注入 —— 退役后该变量不再被读取，
+        #   旧断言会变成"永远等于空"的假通过（其实连判别力都没有：注入什么都是空）。
+        #   改用 DEEPSEEK_API_KEY，测试对象与生产口径一致。
+        cls.remote = _run({"DEEPSEEK_API_KEY": "ttt-test-key"})
 
     @staticmethod
     def _changed(before, after):
@@ -119,24 +128,40 @@ class TestEnvPriority(unittest.TestCase):
         self.assertEqual(self.deepseek["__advanced__"], "ddd-test-key",
                          "advanced_api_key 应取 DEEPSEEK_API_KEY")
 
-    def test_04_ark_env_takes_effect(self):
+    def test_04_ark_env_no_longer_effective(self):
+        """★352刀9 起 ark-* 渠道已从 default_channels **移除** ⇒ 应无任何变化。
+
+        原断言是「注入 ARK_API_KEY 后必须有渠道变化」，在 ark 移除后必然失败。
+        判据反转而不删测试：将来若有人把 ark 加回池子，本用例会 FAIL 提醒同步。
+        """
         _d = self._changed(self.base, self.ark)
-        self.assertTrue(_d, "注入 ARK_API_KEY 后应有渠道 api_key 变化")
-        self.assertEqual(set(_d.values()), {"aaa-test-key"})
+        self.assertEqual(_d, {},
+                         "ARK_API_KEY 不应再影响任何渠道（ark-* 已移除）: %s"
+                         % list(_d))
 
-    def test_05_doubao_alias_fallback(self):
-        """ARK 未设置时，DOUBAO_API_KEY 作为兼容别名必须生效。"""
+    def test_05_doubao_alias_no_longer_effective(self):
+        """★352刀9 起 ark-* 移除 ⇒ DOUBAO_API_KEY（ARK 的兼容别名）同样不再生效。"""
         _d = self._changed(self.base, self.doubao)
-        self.assertTrue(_d, "仅有 DOUBAO_API_KEY 时别名回退应生效")
-        self.assertEqual(set(_d.values()), {"bbb-test-key"})
+        self.assertEqual(_d, {},
+                         "DOUBAO_API_KEY 不应再影响任何渠道（ark-* 已移除）: %s"
+                         % list(_d))
 
-    def test_06_ark_wins_over_doubao(self):
-        """ARK 与 DOUBAO 同时存在 → ARK 优先（`or` 短路顺序）。"""
-        self.assertEqual(self.both["__channels__"], self.ark["__channels__"],
-                         "同时设置时应与「仅 ARK」结果一致（ARK 优先）")
+    def test_06_ark_and_doubao_both_ineffective(self):
+        """ARK 与 DOUBAO 同时存在也无变化（两者都指向已移除的 ark 渠道）。"""
+        self.assertEqual(self.both["__channels__"], self.base["__channels__"],
+                         "同时设置 ARK+DOUBAO 不应改变渠道池（ark-* 已移除）")
 
     def test_07_remote_config_key_from_env(self):
+        """★352追补项2：REMOTE_API_CONFIG.api_key 统一取 DEEPSEEK_API_KEY。
+
+        TTP_REMOTE_API_KEY 已退役；本用例改为断言"注入 DEEPSEEK 后该字段跟着变"，
+        并**反向断言 TTP 注入不再产生作用**（退役必须是真退役，不能只改注释）。
+        """
         self.assertEqual(self.remote["__remote__"], "ttt-test-key")
+        _ttp_only = _run({"TTP_REMOTE_API_KEY": "ttt-should-be-ignored"})
+        self.assertFalse(_ttp_only["__remote__"],
+                         "TTP_REMOTE_API_KEY 已退役，注入它不应再影响 "
+                         "REMOTE_API_CONFIG.api_key")
 
     def test_08_missing_report_reflects_env(self):
         """无密钥时应报缺失；注入全部渠道 key 后缺失集合应变小。"""
@@ -166,24 +191,42 @@ class TestSourceNoPlaintextKey(unittest.TestCase):
         self.assertEqual(_hits, [], f"config.py 存在明文 ark- 密钥: {_hits}")
 
     def test_12_all_channel_keys_read_from_env(self):
-        """每个渠道的 api_key 都必须来自 os.environ（而非字面量）。"""
-        _i = self.src.index("REMOTE_API_CHANNELS")
-        _seg = self.src[_i:_i + 6000]
+        """每个渠道的 api_key 都必须来自 os.environ（而非字面量）。
+
+        ★锚点修正：原用 `self.src.index("REMOTE_API_CHANNELS")` 会命中**注释**
+        （config.py:1095 的 SUBAGENT_CHEAP_MODEL 说明），6000 字符窗口内一个
+        `"api_key":` 都取不到 ⇒ 该用例在 HEAD 上就已 FAIL（本次改动前定量复核过）。
+        改用带 ` = {` 的**定义**锚点，窗口放宽到 15000 覆盖 7 条渠道。
+        """
+        _i = self.src.index("REMOTE_API_CHANNELS = {")
+        _seg = self.src[_i:_i + 15000]
         _assigns = re.findall(r'"api_key"\s*:\s*(.+)', _seg)
-        self.assertTrue(_assigns, "未找到渠道 api_key 赋值")
+        self.assertGreaterEqual(len(_assigns), 7,
+                                "渠道 api_key 赋值只找到 %d 条（应 >=7，"
+                                "窗口可能不够）" % len(_assigns))
         for _a in _assigns:
             self.assertIn("os.environ.get", _a,
                           f"api_key 未从环境变量读取: {_a.strip()[:80]}")
 
     def test_13_env_defaults_are_empty(self):
-        """读取环境变量的默认值必须是空串（不得是真实密钥兜底）。"""
-        _i = self.src.index("REMOTE_API_CHANNELS")
-        _seg = self.src[_i:_i + 6000]
-        for _m in re.finditer(r'os\.environ\.get\(\s*"([A-Z_]+)"\s*,\s*([^)]*)\)',
-                              _seg):
-            _default = _m.group(2).strip()
-            self.assertIn(_default, ('""', "''"),
-                          f"{_m.group(1)} 的默认值非空: {_default}")
+        """渠道 **api_key** 读环境变量的默认值必须是空串（不得是真实密钥兜底）。
+
+        ★判据域修正：原实现扫窗口内**所有** `os.environ.get(...)`，等价于假设
+        "这个窗口里除了密钥没有别的配置"。本批把窗口 6000→15000 以覆盖第 7 条渠道后，
+        `PULSE_DUP_TRACE="0"` 等正常默认值就被判成违规 —— 判据与被测对象不同域。
+        改为只针对 `"api_key": os.environ.get("X", <default>)` 这一语义单元。
+        """
+        _i = self.src.index("REMOTE_API_CHANNELS = {")
+        _seg = self.src[_i:_i + 15000]
+        _pairs = re.findall(
+            r'"api_key"\s*:\s*os\.environ\.get\(\s*"([A-Z_]+)"\s*,\s*([^)]*)\)',
+            _seg)
+        self.assertGreaterEqual(len(_pairs), 7,
+                                "渠道 api_key 的环境变量读取只找到 %d 条（应 >=7）"
+                                % len(_pairs))
+        for _name, _default in _pairs:
+            self.assertIn(_default.strip(), ('""', "''"),
+                          f"{_name} 的默认值非空: {_default}")
 
 
 if __name__ == "__main__":

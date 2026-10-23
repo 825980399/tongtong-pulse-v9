@@ -495,13 +495,10 @@ class PulseVisualCortex(BasePulseOrgan):
 
         result = {"status": "processed", "task_type": task_type, "file_path": file_path, "text": "", "error": None}
 
-        # 获取远程API配置（用于OCR增强）
+        # ★352追补项3：不再直读 REMOTE_API_CONFIG。
+        #   OCR 引擎内部已改为走渠道池取数；这里传 None（传 dict 仍兼容，作回退）。
+        #   原 4 行 try/except 一并删掉 —— 少一个静默异常点，判据也更单一。
         _remote_config = None
-        try:
-            import config as _cfg
-            _remote_config = getattr(_cfg, 'REMOTE_API_CONFIG', {})
-        except Exception as e:
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
         if task_type == "ocr":
             try:

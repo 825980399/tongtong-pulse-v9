@@ -1360,7 +1360,12 @@ REMOTE_API_CONFIG = {
     "api_url": "https://api.deepseek.com/v1/chat/completions",
 
     # ★v17.0安全加固：API密钥从环境变量读取，不硬编码在代码中
-    "api_key": os.environ.get("TTP_REMOTE_API_KEY", ""),
+    # ★352追补项2（2026-10-23 小林裁决）：统一 DEEPSEEK_API_KEY，TTP_REMOTE_API_KEY **退役**。
+    #   退役原因：同一个 DeepSeek 端点被两个变量名分别配置，运维换 key 必须改两处；
+    #   漏改一处就出现「渠道池用新 key、REMOTE_API_CONFIG 用旧 key」的静默错配
+    #   —— 实测这两个变量当前**值就不同**（DEEPSEEK=sk-b2e6… / TTP=sk-1c92…），
+    #   即改前已在错配状态。自此 TTP_REMOTE_API_KEY 不再被任何活跃代码读取。
+    "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
 
     # 默认远程模型（轻量快速，用于普通对话）
     # ⚠️ 配置真实性标注（主线第6批 P2-55）："deepseek-v4-flash" 是「网关对外路由名」，
@@ -1406,6 +1411,19 @@ REMOTE_API_CONFIG = {
 # 安全：API Key 一律**优先从环境变量读取**；为兼容既有部署保留明文兜底值
 #   （星轨第12批裁决选2：环境变量 + 现有值作兜底）。清空兜底值即强制走环境变量。
 # 灰度：enabled=False 或 default_channels 为空时，PulseLung 回退单端点旧逻辑，零副作用。
+
+# ══ ★352追补项5（2026-10-23 小林裁决）：付费渠道集合 + 每日付费 tokens 阈值 ══
+#   ★为什么不复用 DYNAMIC_CONCURRENCY_CONFIG["paid_channel_names"]：
+#     那份名单是**并发调度**用的，含 "advanced" 这个虚拟档位（不是渠道名）；
+#     这里要的是**计费统计**用的「哪些渠道要花钱」。语义不同不能合并。
+#     但"付费渠道名"以本处为**唯一来源**，将来新增付费渠道只改这一行。
+PAID_CHANNELS = frozenset({"deepseek"})
+
+# 每日付费 tokens 告警阈值（tokens/日）。超阈值只 WARNING **不拦截** ——
+#   本批目的是"先看得见"（判断免费额度够不够用），熔断仍由 evolution_budget 按金额管，
+#   两种保护各司其职，避免"告警即断服"。
+DAILY_PAID_TOKEN_ALERT = 1000000
+
 REMOTE_API_CHANNELS = {
     # 总开关：False 时肺部走 REMOTE_API_CONFIG 单端点旧路径（与改造前一致）
     "enabled": True,
@@ -1467,9 +1485,14 @@ REMOTE_API_CHANNELS = {
             "max_concurrent": 2,
         },
         {
+            # ★352追补项1（2026-10-23 小林裁决）：Qwen2-7B 已下架禁用（403），
+            #   改用 zai-org/GLM-5.3-Flash —— 星轨实测调通，0.23 元/M tokens 低价档
+            #   （新用户积分抵扣，积分用完前 ≈ 免费）。
+            #   ★渠道名 `siliconflow-qwen2-7b` 沿用不改：渠道名是**标识**、model 才是实际模型；
+            #     改名会牵动测试断言与运维台账（铁律141：改名先 grep）。
             "name": "siliconflow-qwen2-7b",
-            "model": "Qwen/Qwen2-7B-Instruct",
-            "quota_limit": -1,  # 硅基流动：开源模型永久免费（平台限速内）
+            "model": "zai-org/GLM-5.3-Flash",
+            "quota_limit": -1,  # 硅基流动：积分抵扣期视为免费（平台限速内）
             "api_url": "https://api.siliconflow.cn/v1/chat/completions",
             "api_key": os.environ.get("SILICONFLOW_API_KEY", ""),
             "priority": 3,
@@ -1489,6 +1512,23 @@ REMOTE_API_CHANNELS = {
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 1,   # 智谱免费渠道，实测并发能力约 1
+        },
+        {
+            # ★352追补项4（2026-10-23 小林裁决）：新增魔搭（ModelScope）免费源。
+            #   排序裁决：魔搭排在硅基之后、DeepSeek 付费之前（priority 7）。
+            #   ★Token 形如 ms-xxxx（魔搭访问令牌，**不是 sk-**，别按 sk- 校验）。
+            #   ★魔搭 API-Inference 非商业非营利，配额/并发动态调整 ⇒ 标 quota_type=dynamic，
+            #     不承诺日/月额度（承诺了必然被打脸）。
+            "name": "modelscope",
+            "model": "Qwen/Qwen2.5-7B-Instruct",
+            "quota_type": "dynamic",  # 免费限流，配额动态调整（非固定日/月额度）
+            "quota_limit": -1,
+            "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
+            "api_key": os.environ.get("MODELSCOPE_API_KEY", ""),
+            "priority": 7,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
         },
         {
             "name": "deepseek",
@@ -1548,6 +1588,11 @@ SSRF_TRUSTED_EXTRA_HOSTS = (
     #   这里再显式登记一次（运维可不动代码去查）。
     "dashscope.aliyuncs.com",
     "api.siliconflow.cn",
+    # ★352追补项4：魔搭 API-Inference 域名。
+    #   注意 `www.modelscope.cn`（config 里已有，模型下载站）与
+    #   `api-inference.modelscope.cn`（推理端点）是**不同主机**，不能互相代替
+    #   —— 只登记下载域名的话 api-inference 仍会在解析判定时被拦。
+    "api-inference.modelscope.cn",
 )
 
 # ★主线第11批 T2/P2-59（星轨裁决选 3）：外挂 LLM 聚合网关开关。

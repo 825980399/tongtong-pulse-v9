@@ -410,8 +410,11 @@ class PulseSpiritualCore(BasePulseOrgan):
         _has_remote_api = False
         try:
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
+            # ★352追补项3：可用性判定必须与**实际取数同源**（取数已改走渠道池）。
+            #   原实现判 REMOTE_API_CONFIG.enabled and api_key；渠道池有 key、单端点没 key 时
+            #   会得出"不可用"并直接降级本地模板，渠道池白配（knowledge/Controller 同款修法）。
+            _t_pre = config.get_llm_call_target(None)
+            if _t_pre.get("api_url") and _t_pre.get("api_key"):
                 _has_remote_api = True
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
@@ -519,21 +522,31 @@ class PulseSpiritualCore(BasePulseOrgan):
         try:
             import json as _json
 
-            _api_cfg = getattr(__import__('config'), 'REMOTE_API_CONFIG', {})
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
+            _cfgmod = __import__('config')
+            # ★352追补项3：改走渠道池（逐条跳空 key，取首条可用），不再直读单端点。
+            _tgt = _cfgmod.get_llm_call_target(None)
+            _api_url = _tgt.get("api_url", "")
+            _api_key = _tgt.get("api_key", "")
+            _model = _tgt.get("model") or "deepseek-v4-flash"
 
             if not _api_url or not _api_key:
                 return None
 
+            self._log(LogLevel.DEBUG,
+                      f"[352追补2] caller=spiritual_reflect "
+                      f"channel={_tgt.get('channel')} model={_model}")
+
             _payload = {
-                "model": _api_cfg.get("default_model", "deepseek-v4-flash"),
+                "model": _model,
                 "messages": [
                     {"role": "system", "content": _persona},
                     {"role": "user", "content": _prompt}
                 ],
                 "temperature": 0.8,
-                "max_tokens": 256,
+                # ★352追补项3 max_tokens 门：256→1024（任务书指定）。
+                #   首位 glm-4.7-flash 是推理模型，实测 8 tokens 时 content 为空、
+                #   finish_reason=length；灵核感悟要长叙事，256 必空。
+                "max_tokens": 1024,
             }
 
             _payload_bytes = _json.dumps(_payload, ensure_ascii=False).encode('utf-8')

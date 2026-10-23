@@ -133,11 +133,23 @@ def _call_remote_ocr(file_path: str, api_config: dict) -> str:
     import json as _json
     import urllib.request  # noqa: F401
 
-    _api_url = api_config.get("api_url", "")
-    _api_key = api_config.get("api_key", "")
+    # ★352追补项3：改走渠道池（逐条跳空 key，取首条可用），不再只认调用方传入的单端点。
+    #   传入的 api_config 保留为**回退**（渠道池全空时用它），这样既收编了旁路，
+    #   又不会让"渠道未配 key"直接把 OCR 增强打死。
+    import config as _cfg_ocr
+    _tgt = _cfg_ocr.get_llm_call_target(None) or {}
+    _api_url = _tgt.get("api_url", "") or (api_config or {}).get("api_url", "")
+    _api_key = _tgt.get("api_key", "") or (api_config or {}).get("api_key", "")
+    _model = (_tgt.get("model")
+              or (api_config or {}).get("default_model", "deepseek-v4-flash"))
 
     if not _api_url or not _api_key:
         return ""
+
+    # ★352追补项3：路由留痕（低频路径 —— 只在本地 OCR 失败时才走到这里，
+    #   一行 print 不会刷屏；且本模块没有日志器，不为一行日志额外引 logger）。
+    print(f"[352追补2] caller=ocr channel={_tgt.get('channel') or 'caller_fallback'} "
+          f"model={_model}")
 
     # 读取图片并编码
     with open(file_path, "rb") as f:
@@ -145,7 +157,7 @@ def _call_remote_ocr(file_path: str, api_config: dict) -> str:
 
     # 构建请求
     _payload = {
-        "model": api_config.get("default_model", "deepseek-v4-flash"),
+        "model": _model,   # ★352追补项3：模型名随渠道（不再固定读 default_model）
         "messages": [
             {
                 "role": "system",

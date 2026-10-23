@@ -1632,8 +1632,11 @@ class PulseController(BasePulseOrgan):
         _has_remote_api = False
         try:
             import config
-            _api_cfg = getattr(config, 'REMOTE_API_CONFIG', {})
-            if _api_cfg.get("enabled", False) and _api_cfg.get("api_key", ""):
+            # ★352追补项3：可用性判定同样走渠道池 —— 判据必须与真正取数**同源**，
+            #   否则会出现「预检说有、取数取不到」的错位（原实现判 REMOTE_API_CONFIG，
+            #   取数也判 REMOTE_API_CONFIG，但两者都不等于"渠道池真能调"）。
+            _t_pre = config.get_llm_call_target(None)
+            if _t_pre.get("api_url") and _t_pre.get("api_key"):
                 _has_remote_api = True
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
@@ -1654,20 +1657,28 @@ class PulseController(BasePulseOrgan):
 
             import config as _cfg
 
-            _api_cfg = getattr(_cfg, 'REMOTE_API_CONFIG', {})
-            _api_url = _api_cfg.get("api_url", "")
-            _api_key = _api_cfg.get("api_key", "")
+            # ★352追补项3：改走渠道池（逐条跳空 key，取首条可用），不再直读单端点。
+            _tgt = _cfg.get_llm_call_target(None)
+            _api_url = _tgt.get("api_url", "")
+            _api_key = _tgt.get("api_key", "")
+            _model = _tgt.get("model") or "deepseek-v4-flash"
 
             if not _api_url or not _api_key:
                 return None
 
+            self._log(LogLevel.DEBUG,
+                      f"[352追补2] caller=controller_refine_search "
+                      f"channel={_tgt.get('channel')} model={_model}")
+
             _payload = {
-                "model": _api_cfg.get("default_model", "deepseek-v4-flash"),
+                "model": _model,
                 "messages": [
                     {"role": "user", "content": _prompt}
                 ],
                 "temperature": 0.3,
-                "max_tokens": 32,
+                # ★352追补项3 max_tokens 门：32→512。任务书要求「<512 提到 512」——
+                #   推理模型下 32 tokens 连 reasoning 都不够，必空回复。
+                "max_tokens": 512,
             }
 
             _payload_bytes = _json.dumps(_payload, ensure_ascii=False).encode('utf-8')
