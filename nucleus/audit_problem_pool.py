@@ -115,6 +115,14 @@ MAX_POOL_ENTRIES = 5000
 #: 池 schema 版本
 SCHEMA = "audit_problem_pool/345.v2"
 
+#: ★348刀8：池指纹台账（防再丢自证链）。
+#   345 的教训是"写进去的东西会悄悄不见"（滚动仅 84min；产物被复制走而池一无所知）。
+#   快照**无法自证"我还在"**——能证明它的只有池外的第三方台账。故指纹不落快照内，
+#   落同目录独立文件 `_pool_ledger.json`。
+LEDGER_FILENAME = "_pool_ledger.json"
+LEDGER_SCHEMA = "audit_pool_ledger/348.v1"
+LEDGER_HISTORY_MAX = 120
+
 
 def _project_root() -> str:
     """项目根（★346刀6 修一个 345 遗留的**静默错位**）。
@@ -584,11 +592,19 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
         "[345池] persist: total=%d new=%d updated=%d pruned=%d sev_invalid=%d file=%s proc_gen=%s",
         len(_kept), _added, _updated, _pruned, len(_rejected),
         os.path.basename(_path), _pg)
+    # ★348刀8：**先记账再查删**（顺序不可倒：反了会把本拍刚写的快照报成"指纹缺失"）。
+    _m348_fp = note_pool_fingerprint(_path, _payload, _now, root, audit_dir_path)
+    _m348_loss = detect_pool_loss(root, audit_dir_path, _now, current_path=_path)
     return {"state": "ok", "path": _path, "total": len(_kept), "added": _added,
             "updated": _updated, "pruned": _pruned, "truncated": _truncated,
             "severity_rejected": len(_rejected),
             "snapshot_day": day_stamp(_now), "prev_state": _prev["state"],
-            "proc_gen": _pg}
+            "proc_gen": _pg,
+            "fingerprint_ok": bool(_m348_fp.get("ok")),
+            "pool_loss": {"state": _m348_loss.get("state"),
+                          "alarms": _m348_loss.get("alarms"),
+                          "unregistered": _m348_loss.get("unregistered"),
+                          "missing": _m348_loss.get("missing")}}
 
 
 def restore_pool(root: str | None = None, audit_dir_path: str | None = None,
@@ -922,3 +938,160 @@ def export_routes(entries: list, root: str | None = None,
                         _out.get(ROUTE_OPTIMIZE_LIST, {}).get("count", 0),
                         _out.get(ROUTE_CLEANUP_QUEUE, {}).get("count", 0))
     return _out
+
+
+# ===== ★348刀8：池指纹留痕（防再丢自证链） =====
+def ledger_path(root: str | None = None, audit_dir_path: str | None = None) -> str:
+    """台账路径（与快照同目录、不同文件——台账必须能"站在池外"看池）。"""
+    return os.path.join(audit_dir(root, audit_dir_path), LEDGER_FILENAME)
+
+
+def _fingerprint_of(path: str, payload: dict, now: float) -> dict:
+    """算一条快照指纹。**纯函数**（不读盘）：读回校验由调用方负责，避免双读口径分叉。"""
+    _entries = payload.get("entries") or []
+    try:
+        _raw = json.dumps(_entries, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError) as _je:
+        # cw2：纯赋值也是静默（铁律176）——序列化不了说明条目里有不可 JSON 化的对象，
+        #   指纹会退化成"只按条数算"，必须留痕（否则两条不同内容同条数 = 同指纹）
+        silent_exc(_je, "audit_problem_pool._fingerprint_of json", level="debug")
+        _raw = repr(len(_entries))
+    return {
+        "snapshot": os.path.basename(path),
+        "entries_sha1_16": hashlib.sha1(_raw.encode("utf-8")).hexdigest()[:16],
+        "total_entries": int(payload.get("total_entries") or 0),
+        "snapshot_day": str(payload.get("snapshot_day") or ""),
+        "written_at": float(now),
+        "written_at_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(now))),
+        "proc_gen": str(payload.get("proc_gen") or "unknown"),
+        "code_version": str(payload.get("code_version") or "unknown"),
+        "schema": str(payload.get("schema") or ""),
+    }
+
+
+def read_ledger(root: str | None = None, audit_dir_path: str | None = None) -> dict:
+    """读台账。
+
+    `state` 三态**必须分开**（铁律166）：
+      - `absent`：台账从来不存在 ⇒ 首次运行，只做基线登记，**不告警**。
+      - `unreadable`：台账存在但读不出来 ⇒ 这是**故障**，要告警（不可当 absent 处理，
+        否则"台账被写坏"会被读成"第一次跑"，删除检测随之失效）。
+      - `ok`：正常。
+    """
+    _p = ledger_path(root, audit_dir_path)
+    if not os.path.isfile(_p):
+        return {"state": "absent", "path": _p, "last_known_snapshot": None, "seen": {}}
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            _d = json.load(_f)
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, "audit_problem_pool.read_ledger 台账不可读", level="warning")
+        return {"state": "unreadable", "path": _p, "last_known_snapshot": None, "seen": {}}
+    if not isinstance(_d, dict):
+        return {"state": "unreadable", "path": _p, "last_known_snapshot": None, "seen": {}}
+    if not isinstance(_d.get("seen"), dict):
+        _d["seen"] = {}
+    _d["state"] = "ok"
+    _d["path"] = _p
+    return _d
+
+
+def note_pool_fingerprint(path: str, payload: dict, now: float | None = None,
+                          root: str | None = None,
+                          audit_dir_path: str | None = None) -> dict:
+    """★348刀8①：persist 成功后把指纹写进独立台账。
+
+    `last_known_snapshot` = 本拍指纹（最近一次"我知道池长什么样"）；
+    `seen` = 按快照文件名的登记簿（首见/末见/写次/proc_gen），删除检测的分母；
+    `history` = 近 `LEDGER_HISTORY_MAX` 条指纹流水。
+
+    **首建基线**：台账 absent 时，先把磁盘上既有快照全部以 `baseline=True` 登记，
+    否则第一次跑会把历史快照全报成"指纹缺失"（假告警，铁律179 同型）。
+    """
+    _now = float(now if now is not None else time.time())
+    _fp = _fingerprint_of(path, payload, _now)
+    _led = read_ledger(root, audit_dir_path)
+    _first = _led["state"] == "absent"
+    _seen = dict(_led.get("seen") or {})
+    if _first:
+        for _p in list_snapshots(root, audit_dir_path):
+            _b = os.path.basename(_p)
+            if _b != _fp["snapshot"] and _b not in _seen:
+                try:
+                    _sz = os.path.getsize(_p)
+                except OSError as _se:
+                    # cw2：纯赋值也是静默（铁律176）——基线快照量不到要留痕
+                    silent_exc(_se, "audit_problem_pool.note_pool_fingerprint baseline size",
+                               level="debug")
+                    _sz = 0
+                _seen[_b] = {"baseline": True, "bytes": int(_sz), "writes": 0,
+                             "first_at": _now, "last_at": _now}
+    _old = _seen.get(_fp["snapshot"]) or {}
+    _seen[_fp["snapshot"]] = {
+        "total_entries": _fp["total_entries"],
+        "entries_sha1_16": _fp["entries_sha1_16"],
+        "first_at": float(_old.get("first_at") or _fp["written_at"]),
+        "last_at": _fp["written_at"],
+        "last_proc_gen": _fp["proc_gen"],
+        "writes": int(_old.get("writes") or 0) + 1,
+    }
+    _hist = list(_led.get("history") or [])
+    _hist.append(_fp)
+    if len(_hist) > LEDGER_HISTORY_MAX:
+        _hist = _hist[-LEDGER_HISTORY_MAX:]
+    _out = {
+        "schema": LEDGER_SCHEMA,
+        "updated_at": _now,
+        "updated_at_str": _fp["written_at_str"],
+        "last_known_snapshot": _fp,
+        "seen": _seen,
+        "history": _hist,
+    }
+    _ok = _atomic_write_json(ledger_path(root, audit_dir_path), _out)
+    if not _ok:
+        _module_logger.warning("[348池] 指纹台账写失败（本次不留痕，池仍已落盘）: %s",
+                               _fp["snapshot"])
+    return {"ok": _ok, "fingerprint": _fp, "seen_count": len(_seen),
+            "baseline_initialized": bool(_first)}
+
+
+def detect_pool_loss(root: str | None = None, audit_dir_path: str | None = None,
+                     now: float | None = None,
+                     current_path: str | None = None) -> dict:
+    """★348刀8②：删除检测。两个方向**分开报**，不合并成一个"异常"。
+
+    - `unregistered`：磁盘上有快照，台账里没有指纹 ⇒ 任务书原话「快照存在但指纹缺失」
+      （= 台账被清 / 快照被外部写入 / 池曾以别的口径落盘）。
+    - `missing`：台账里有指纹，磁盘上快照消失 ⇒ 真·被删除（这才是"再丢"）。
+
+    两个方向的处置不同：前者说明**记账链断了**，后者说明**数据没了**。
+    合并成一个数字，等于把两类事故读成同一类。
+
+    调用纪律：必须在 `note_pool_fingerprint()` **之后**调（否则本拍快照会被自己报成
+    未登记）。台账 `unreadable` 时**不猜正常**：直接以 `state="ledger_unreadable"` 报出，
+    并给出 missing/unregistered 的"不可判"字样，不做 0/0 的假清白。
+    """
+    _now = float(now if now is not None else time.time())
+    _led = read_ledger(root, audit_dir_path)
+    _disk = set(os.path.basename(_p) for _p in list_snapshots(root, audit_dir_path))
+    if current_path:
+        _disk.add(os.path.basename(current_path))
+    if _led["state"] == "unreadable":
+        _module_logger.warning("[348池] 台账不可读，删除检测**不可判**（不当 0 处理）: %s",
+                               _led.get("path", ""))
+        return {"state": "ledger_unreadable", "alarms": 1, "unregistered": None,
+                "missing": None, "checked_at": _now}
+    _reg = set((_led.get("seen") or {}).keys())
+    _unregistered = sorted(_disk - _reg)
+    _missing = sorted(_reg - _disk)
+    if _unregistered:
+        _module_logger.warning(
+            "[348池] 快照存在但指纹缺失 %d 个（记账链断裂/外部写入）: %s",
+            len(_unregistered), ",".join(_unregistered[:5]))
+    if _missing:
+        _module_logger.warning(
+            "[348池] 台账有指纹但快照已消失 %d 个（被删除/被清理）: %s",
+            len(_missing), ",".join(_missing[:5]))
+    return {"state": "ok", "alarms": len(_unregistered) + len(_missing),
+            "unregistered": _unregistered, "missing": _missing,
+            "registered": len(_reg), "on_disk": len(_disk), "checked_at": _now}

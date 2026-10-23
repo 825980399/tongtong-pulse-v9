@@ -249,9 +249,12 @@ def _m333_write_state(path, data):
         return False
 
 
-def maybe_run_night_digest(project_root, now=None, state_path=None,
-                           tolerance_sec=None, enabled=None):
+def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
+                                      tolerance_sec=None, enabled=None):
     """★333批刀2：夜间编排 digest 的**真实调度入口**（main.py 主循环调用）。
+
+    ★348刀7：本函数改名为 `_m348_impl_*`，公开入口变成同文件末尾的**可观测包装**
+      （只加 DEBUG 留痕，判定语义零变化）。
 
     Args:
         project_root: 项目根（**隔离验证传隔离根**，ledger 路径随 root 走）
@@ -560,3 +563,37 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
     except Exception as _e:
         silent_exc(_e, where="night_orchestration.generate_night_digest")
         return None
+
+
+# ==================== ★348刀7：夜间编排调用可观测 ====================
+def maybe_run_night_digest(project_root, now=None, state_path=None,
+                           tolerance_sec=None, enabled=None):
+    """★348刀7：`_m348_impl_maybe_run_night_digest` 的**可观测包装**（公开入口）。
+
+    为什么必须包这一层（实测依据，348刀7 三候选验证）：
+      原实现里 `out_of_window`（一天里 99.9% 的调用）**完全无留痕**，
+      于是「根本没被调用」与「调用了、但每次都落在窗外」在日志上**一模一样**。
+      10-23 04:00 第二拍未自转无法定因，根子就在这里（不是 fail-closed：
+      隔离实测证明开关全 True 且窗外调用会写 missed_window + WARNING）。
+
+    本包装对**每一次**调用打一条 DEBUG（reason/ymd/ran/added/窗/proc_gen），
+    下一次 04:00 窗到点，看有没有这几行即可一刀定生死：
+      有 `reason=out_of_window` 的大量行 ⇒ 调度点活着，问题在窗口覆盖；
+      一行都没有 ⇒ 主循环没走到调度点（下一刀查主循环）。
+
+    红线：只加日志，**不改任何判定/写盘/幂等语义**（全部沿用 impl 的返回值）。
+    """
+    _out = _m348_impl_maybe_run_night_digest(
+        project_root, now=now, state_path=state_path,
+        tolerance_sec=tolerance_sec, enabled=enabled)
+    try:
+        _tol = float(tolerance_sec if tolerance_sec is not None
+                     else NIGHT_DIGEST_TOLERANCE_SEC)
+        _module_logger.debug(
+            "[夜间编排] 调用 reason=%s ymd=%s ran=%s added=%s 窗=%02d:%02d±%.0fs proc_gen=%s",
+            (_out or {}).get("reason"), (_out or {}).get("ymd"),
+            (_out or {}).get("ran"), (_out or {}).get("added"),
+            NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol, _m335_pg())
+    except Exception as _le:
+        silent_exc(_le, where="night_orchestration.maybe_run_night_digest.log")
+    return _out

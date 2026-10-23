@@ -1469,6 +1469,13 @@ class PulseNodePool(SilentLogMixin):
                 self._update_index_on_add(node)
 
                 self._total_added += 1
+            # ★348刀5：**批量装载后必须补一次容量闸门**。
+            #   add() 每个节点都会调 _enforce_capacity()，而启动从快照恢复走的是
+            #   本循环，一个 add() 都不经过 ⇒ 热池可越过 _max_hot 直到下一次
+            #   add() 才自愈（实测 hot=9673<10000 属正常，但闸门**缺失**是结构事实，
+            #   不是「闸门没生效」）。放循环外只跑一次，避免每节点全扫热池。
+            self._enforce_capacity()  # _m348_d5_load_batch_gate
+
     def load_batch_lazy(self, nodes: list[PulseNode]) -> dict[str, int]:
         """★阶段D：启动按需加载（冷存储启用时的替代 load_batch）。
 
@@ -1518,6 +1525,8 @@ class PulseNodePool(SilentLogMixin):
                     self._update_index_on_add(node)
                     _in_memory += 1
                 self._total_added += 1
+            # ★348刀5：按需装载同样在循环外补一次闸门（理由见 load_batch 同段）
+            self._enforce_capacity()  # _m348_d5_lazy_gate
         return {"in_memory": _in_memory, "in_cold_disk": _in_cold}
     def load_instincts(self, nodes: list[PulseNode]):
         """加载本能节点到独立的本能池（启动时调用）"""

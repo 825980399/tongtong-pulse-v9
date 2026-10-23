@@ -5406,6 +5406,7 @@ class SelfInspector(SilentLogMixin):
         _hard_total = 0
         # ★330批刀1（M2）：hard 档分层计数。三者之和 == `_hard_total`，同图同版本可复算。
         _hard_strict_total = 0
+        _protocol_iface_total = 0  # ★348刀10
         _hard_loose_total = 0
         _hard_unverified_total = 0
         # ★331批刀7：框架接口覆写计数（**不计入 hard_total**，单独列）
@@ -5488,6 +5489,9 @@ class SelfInspector(SilentLogMixin):
                 #   也不进 O3 的 N 分母（它是图盲区产物，计进去只会把 N 抬高）。
                 if _tier == "framework_hook":
                     _framework_hook_total += 1
+                elif _tier == "protocol_iface":
+                    # ★348刀10：协议/接口/桥接/通信声明 ⇒ 不判死、不计入 N 分母
+                    _protocol_iface_total += 1
                 else:
                     # ★326批刀2：入 hard 候选池（供 O3 抽验 A；只收集不判罚）
                     #   330 起池内按**分层后**档位留存，O3 只吃 hard_strict 那部分。
@@ -5504,7 +5508,8 @@ class SelfInspector(SilentLogMixin):
                                         "evidence_tier": _tier,
                                         "probe_hits": _probe_hits})
             # ★331批刀7：framework_hook 与 soft 同路 —— **降级待复核，不判死**
-            if _review_only or _tier == "soft" or _tier == "framework_hook":
+            if (_review_only or _tier == "soft" or _tier == "framework_hook"
+                    or _tier == "protocol_iface"):
                 # ★第311批 刀1：受控入料口（单批硬上限 1 条 + 生命周期名/核心文件转人工）。
                 #   恢复 ≠ 放宽判死：severity 仍是 info，趋势门禁照旧读统计。
                 # ★322批刀0：软赦免条目**在这里**落地（判死档下也降级待复核）。
@@ -5522,7 +5527,9 @@ class SelfInspector(SilentLogMixin):
                         'review_reason': ('soft_edge_only' if _tier == "soft"
                                           else ('framework_hook_override'
                                                 if _tier == "framework_hook"
-                                                else 'graph_coverage_mid_band')),
+                                                else ('protocol_iface_declared'
+                                                      if _tier == "protocol_iface"
+                                                      else 'graph_coverage_mid_band'))),
                         # ★322批刀0/刀3：证据档位（hard/soft/infer-only），人工抽验有靶子
                         'evidence_tier': _tier,
                         'description': (f'方法 {_name} 只有软/推断证据（tier={_tier}），'
@@ -6323,6 +6330,72 @@ def _m331_framework_hook_names(root: str | None = None) -> set:
     return set(_names)
 
 
+#: ★348刀10（74号裁定）：协议/接口声明关键词 —— 命中的方法**不判死**。
+#:   为什么用「声明」而不是「调用」判活：O3 的失败教训正是「无运行时调用方 != 死代码」，
+#:   协议接口在定义阶段天然没有调用方。判据只认**该方法/该文件自己写下来的声明**，
+#:   不去猜语义（铁律153：不从理由字符串找关键字）。
+_M348_PROTOCOL_MARKERS = ("协议", "接口定义", "桥接", "通信桥", "通信接口",
+                          "protocol", "interface definition", "bridge")
+
+
+def _m348_protocol_iface_declared(item: dict) -> bool:
+    """★348刀10：该候选所在方法/文件是否**自我声明**为协议·接口·桥接·通信面。
+
+    取证顺序（全部为**静态**判据，零网络零执行）：
+      ① 方法体源码里出现声明词（docstring / 注释都算 —— 协议接口的声明就是文档）；
+      ② 同文件头 40 行内出现声明词（模块级声明，如「新人类族群通信桥」）；
+      ③ 该方法名在 `tests/` 中被引用（`<name>(` 形态）—— 有测试即非死码。
+
+    返回 True = **豁免**（交给人工，不判死）。任何异常返回 False（保守：不因取证失败而赦免）。
+    """
+    try:
+        _f = str((item or {}).get("file") or "")
+        _n = str((item or {}).get("method") or "").strip()
+        if not _f or not _n:
+            return False
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _full = _f if os.path.isabs(_f) else os.path.join(_root, _f)
+        if not os.path.isfile(_full):
+            return False
+        _src = open(_full, encoding="utf-8", errors="replace").read()
+        # ① 方法体（按 def 名定位到下一个同级 def 之前，最多 200 行）
+        _lines = _src.splitlines()
+        _start = None
+        for _i, _l in enumerate(_lines):
+            if _l.lstrip().startswith("def ") and ("def %s(" % _n) in _l:
+                _start = _i
+                break
+        if _start is not None:
+            _body = "\n".join(_lines[_start:_start + 200]).lower()
+            if any(_m.lower() in _body for _m in _M348_PROTOCOL_MARKERS):
+                return True
+        # ② 文件头 40 行
+        _head = "\n".join(_lines[:40]).lower()
+        if any(_m.lower() in _head for _m in _M348_PROTOCOL_MARKERS):
+            return True
+        # ③ 测试引用（有测试即非死码）
+        _troot = os.path.join(_root, "tests")
+        if os.path.isdir(_troot):
+            for _dp, _dn, _fn in os.walk(_troot):
+                _dn[:] = [_d for _d in _dn if not _d.startswith(".")]
+                for _tf in _fn:
+                    if not _tf.endswith(".py"):
+                        continue
+                    try:
+                        _tsrc = open(os.path.join(_dp, _tf), encoding="utf-8",
+                                        errors="replace").read()
+                    except OSError as _te:
+                        # cw2：纯 continue 也是静默（铁律176）——读不到测试文件要留痕
+                        silent_exc(_te, where="self_inspector._m348_protocol_iface_declared tests")
+                        continue
+                    if ("%s(" % _n) in _tsrc and _n in _tsrc:
+                        return True
+        return False
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector._m348_protocol_iface_declared")
+        return False
+
+
 def _m331_is_framework_hook(method: str) -> bool:
     """★331批刀7：是否框架接口覆写名（空名一律 False —— 不猜）。"""
     _n = str(method or "").strip()
@@ -6352,6 +6425,11 @@ def _m330_classify_hard_tier(item: dict, project_root=None) -> tuple:
     #   不是"没人调用"。放在 probe 之前：probe 扫不到这类调用，靠它只能误判。
     if _m331_is_framework_hook((item or {}).get("method")):
         return "framework_hook", []
+    # ★348刀10（74号裁定）：**协议/接口/桥接/通信声明 先于一切判据**。
+    #   CompanionBridge.handshake 被判死的根因不是证据不足，是判据本身错位：
+    #   协议接口在定义阶段天然无运行时调用方。命中即交人工，**不判死**。
+    if _m348_protocol_iface_declared(item):
+        return "protocol_iface", []
     _idx = _m325_build_name_index(project_root)
     if not _idx.get("ok"):
         return "hard_unverified", []
@@ -6711,6 +6789,46 @@ def _m339_consumer_connected(o3_items: list, project_root: str | None = None,
     return _out
 
 
+#: ★348刀2②（75号裁定）：**不计入当日入池额度**的终态/回退态。
+#   「重置/作废/撤销/回滚/恢复」不是"今天又新进了一条问题"，而是"这条被退回去了"。
+#   把它们算进当日入池数，会让**同一条**在"入池—撤销—再入池"之间来回刷额，
+#   限额就失去意义（75号：重置/恢复不计入当日入池额度）。
+#   ★显式枚举，禁理由字符串找关键字（铁律153）。
+_O3_QUOTA_EXEMPT_STATUSES = (
+    "wont_fix", "wontfix", "rolled_back", "revoked", "reset",
+    "restored", "cancelled", "canceled", "rejected",
+)
+
+
+def _m348_quota_exempt(entry: dict) -> tuple[bool, str]:
+    """该条目是否**豁免**当日入池额度。返回 `(豁免?, 依据)`。
+
+    依据串只作报表分档用（`status:xxx` / `flag:revoked` / `history:xxx`），
+    **不参与判定**——判定只看显式字段与枚举集合。
+    异常一律 `(False, "error")`：取证失败不豁免（宁可多算，不可少算）。
+    """
+    try:
+        _st = str(entry.get("status") or "").strip().lower()
+        if _st in _O3_QUOTA_EXEMPT_STATUSES:
+            return True, "status:%s" % _st
+        if _st.startswith("rejected_"):
+            return True, "status:rejected_*"
+        for _f in ("revoked", "quota_exempt", "is_reset", "restored"):
+            if entry.get(_f) is True:
+                return True, "flag:%s" % _f
+        _hist = entry.get("status_history") or []
+        if isinstance(_hist, list) and _hist:
+            _last = _hist[-1]
+            _ls = str((_last or {}).get("status") or "").strip().lower() \
+                if isinstance(_last, dict) else ""
+            if _ls in _O3_QUOTA_EXEMPT_STATUSES:
+                return True, "history:%s" % _ls
+        return False, ""
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector._m348_quota_exempt")
+        return False, "error"
+
+
 def _m333_intake_rate(project_root: str | None = None,
                       window_sec: float | None = None,
                       now: float | None = None) -> dict:
@@ -6785,8 +6903,17 @@ def _m333_intake_rate(project_root: str | None = None,
 
     _marker_ever = sum(1 for _e in _all if _is_o3(_e))
     _cnt = 0
+    # ★348刀2②（75号）：豁免项单独计数——**不是不算，是不进额度**。
+    #   「豁免 3 条」与「一条都没有」必须分得开（铁律166）。
+    _exempt = 0
+    _exempt_by: dict = {}
     for _e in _all:
         if not _is_o3(_e):
+            continue
+        _qf, _qr = _m348_quota_exempt(_e)
+        if _qf:
+            _exempt += 1
+            _exempt_by[_qr] = _exempt_by.get(_qr, 0) + 1
             continue
         _ts = _e.get("generated_at") or _e.get("created_at") or 0
         try:
@@ -6809,6 +6936,7 @@ def _m333_intake_rate(project_root: str | None = None,
     if _readable == 0:
         return {"count": None, "limit": _O3_INTAKE_MAX_PER_DAY,
                 "window_sec": _win, "rate_ok": None, "source_ok": False,
+                "quota_exempt": _exempt, "quota_exempt_by": dict(_exempt_by),
                 "sources": _srcs, "marker_hits": None,
                 "consumer_connected": None,
                 "consumer_partial_at": (_cc or {}).get("partial_at"),
@@ -6825,6 +6953,7 @@ def _m333_intake_rate(project_root: str | None = None,
                  "count=0 不代表节流生效（只代表还没有东西入池）")
     return {"count": int(_cnt), "limit": _O3_INTAKE_MAX_PER_DAY,
             "window_sec": _win, "rate_ok": _ok, "source_ok": True,
+            "quota_exempt": _exempt, "quota_exempt_by": dict(_exempt_by),
             "sources": _srcs, "marker_hits": int(_marker_ever),
             # ★339刀2：**四条件同立才 True**（旧口径只看入池标记）
             "consumer_connected": bool((_cc or {}).get("connected") is True),

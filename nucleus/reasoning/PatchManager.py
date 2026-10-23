@@ -1353,6 +1353,58 @@ class PatchManager:
                 f"[存量回扫][300刀7] 高危族重定级 {_changed} 条 → 高")
         return {"changed": _changed, "total": len(_hist)}
 
+    def _m348_o3_wontfix(self, patch_id: str, reason: str = "", source: str = "",
+                         by: str = "") -> dict:
+        """★348刀10（74号裁定）：把一条 O3 候选**撤单**并落台账。
+
+        为什么必须有这个方法（而不是手工改 json）：撤单不是一个字段，
+        是「status + 不派单位 + 留痕」三件一起，缺任何一件都会静默失效 ——
+        只改 reason 不改 status ⇒ 下拍仍被 apply_all_pending 当 approved 处理；
+        只改 status 不置 `o3_auto_dispatch_ready=False` ⇒ 派单链仍会认领。
+
+        Returns: ``{ok, changed, id, from_status, to_status, reason}``；
+        找不到 / 非法迁移一律 ``ok=False`` 且**不写盘**（不猜、不静默纠正）。
+        """
+        _pid = str(patch_id or "").strip()
+        if not _pid:
+            return {"ok": False, "changed": False, "id": "", "reason": "empty_patch_id"}
+        from nucleus.evolution import patch_lifecycle as _pl
+        _hist = self._load_patch_list(self._history_file)
+        if not isinstance(_hist, list):
+            return {"ok": False, "changed": False, "id": _pid,
+                    "reason": "history_unavailable"}
+        for _p in _hist:
+            if not isinstance(_p, dict) or str(_p.get("id") or "") != _pid:
+                continue
+            _r = _pl.mark_history_wont_fix(_p, reason=reason, source=source, by=by)
+            _out = {"ok": bool(_r.get("ok")), "changed": bool(_r.get("changed")),
+                    "id": _pid, "from_status": _r.get("from_status"),
+                    "to_status": _r.get("to_status"), "reason": _r.get("reason")}
+            if not _out["ok"]:
+                _module_logger.warning(
+                    "[348刀10] 撤单被拒（非法迁移，未写盘）id=%s status=%s reason=%s",
+                    _pid, _r.get("from_status"), _r.get("reason"))
+                return _out
+            # ★348刀10 订正（实测暴露）：`_save_patch_list` 会走 `guard_write`，
+            #   守卫拒绝时**返回值就是 False**；原先不接返回值 ⇒ 内存已改、文件没写，
+            #   方法却回 ok=True。d10 首轮 P2 就是这么被现场抓到的：ret.ok=True 而
+            #   patch_history.json 的 mtime 一字未动、status 仍是 approved。
+            #   「有键无色」同罪（铁律156）：**落盘与否必须上报**。
+            _save_ok = bool(self._save_patch_list(self._history_file, _hist))
+            _out["persisted"] = _save_ok
+            if not _save_ok:
+                _out["ok"] = False
+                _out["reason"] = "persist_refused_or_failed"
+                _module_logger.warning(
+                    "[348刀10] 撤单**未落盘**（内存已改，文件未写）id=%s 原状=%s",
+                    _pid, _r.get("from_status"))
+                return _out
+            _module_logger.warning(
+                "[348刀10] O3 撤单 wont_fix id=%s 原状=%s 理由=%s by=%s",
+                _pid, _r.get("from_status"), reason, by)
+            return _out
+        return {"ok": False, "changed": False, "id": _pid, "reason": "patch_not_found"}
+
     def _m280_extract_def_name(code: str) -> str:
         # ★280批刀1（P0）：从 modified_code 提取首个 def 名。
         #   解析失败/无 def → 空串（保守：不误拦）。

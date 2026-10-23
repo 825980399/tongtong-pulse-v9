@@ -4257,8 +4257,11 @@ def main():
     # 主循环：等待退出信号 + 周期检测「立即应用补丁」请求 + 第162批刀7 shutdown_request 退出通道
     try:
         _apply_check_counter = 0
-        # ★333批刀2：夜间编排 digest 定时点的节流计数（每 60 拍查一次，约 1 分钟）
-        _nd_tick_counter = 0
+        # ★333批刀2：夜间编排 digest 定时点的节流（★348刀7 改**墙钟 60s**）
+        #   原来是「每 60 拍」，节拍长度取决于主循环迭代率（心跳驱动下可能 != 1s）
+        #   ⇒ 实际检查间隔不可控；与 04:00±600s 的窗宽同量级时会**整窗跳过**。
+        #   墙钟节流与迭代率解耦：无论循环多慢，最多 60s 查一次。
+        _nd_last_ts = 0.0  # _m348_d7_wallclock
         # ★346批刀 1：问题池消费口的节拍计数（每 300 拍一次，约 5 分钟）
         _pool_consume_counter = 0
         _shutdown_chan = None
@@ -4309,14 +4312,14 @@ def main():
             #   幂等（当日只跑一次）/ 留痕（成功与失败都打）/ 隔离路径注入都在
             #   `maybe_run_night_digest` 内部，这里只负责节流调用。
             try:
-                _nd_tick_counter += 1
-                if _nd_tick_counter >= 60:
-                    _nd_tick_counter = 0
+                _nd_now = time.monotonic()
+                if _nd_now - _nd_last_ts >= 60.0:
+                    _nd_last_ts = _nd_now
                     from nucleus.evolution import night_orchestration as _nd_orch
                     _nd_orch.maybe_run_night_digest(
                         os.path.dirname(os.path.abspath(__file__)))
             except Exception as _nd_e:
-                silent_exc(_nd_e, "main.py[333刀2-night-digest]")
+                silent_exc(_nd_e, "main.py[333批刀2-night-digest]")
             # ★346批刀 1（P0）：问题池消费口——「发现→行动」的那一段。
             #   与审查主链**解耦**：审查照原节拍跑，消费在这里按自己的节拍认领。
             #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。

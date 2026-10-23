@@ -143,7 +143,36 @@ class PulseFormatter(logging.Formatter):
             record.organ_tag = name.split(".")[-1]
         else:
             record.organ_tag = name
-        return super().format(record)
+        # ★348刀1③（A-11 根治）：**每一行末尾**自带 `pid=<n> gen=<pid@创建时刻>`。
+        #   为什么放行尾、不放标签后面：`LogAnalyzer._LOG_ORGAN_RE` 的正则是
+        #   `\[([^\]]+)\]\s*(?:\[)?(ERROR|CRITICAL|WARNING|Traceback|Exception)`
+        #   —— organ 标签与级别必须**相邻**。把 pid@gen 插在中间，该正则整条失配，
+        #   organ 抽取会**静默全丢**（比不加更糟）。行尾追加对既有解析零影响，
+        #   同时满足 A-11 的目的：任何一行都能自证出自哪个进程代次
+        #   （340 前置 §0 判据：机制行须 `ts≥启动时刻 ∧ 行内 proc_gen==活体`）。
+        _m348_line = super().format(record)
+        try:
+            _m348_stamp = self._m348_proc_stamp()
+        except Exception as _m348_e:
+            silent_exc(_m348_e, where="nucleus.logger::PulseFormatter.format pid")
+            _m348_stamp = ""
+        return (_m348_line + "  " + _m348_stamp) if _m348_stamp else _m348_line
+
+    #: ★348刀1③：进程级缓存（pid/proc_gen 一个进程内不会变，避免每行都问内核）
+    _m348_pid: int | None = None
+    _m348_gen: str = ""
+
+    @classmethod
+    def _m348_proc_stamp(cls) -> str:
+        """`pid=<n> gen=<proc_gen>`；`PULSE_LOG_NO_PROC_STAMP=1` 可关（应急降噪）。"""
+        if os.environ.get("PULSE_LOG_NO_PROC_STAMP"):
+            return ""
+        if cls._m348_pid is None:
+            cls._m348_pid = os.getpid()
+        if not cls._m348_gen:
+            from nucleus.proc_gen import proc_gen_str as _m348_pgs
+            cls._m348_gen = _m348_pgs() or "unknown"
+        return "pid=%d gen=%s" % (cls._m348_pid, cls._m348_gen)
     def formatException(self, ei) -> str:
         _s = super().formatException(ei)
         return sanitize(_s) if _s else _s

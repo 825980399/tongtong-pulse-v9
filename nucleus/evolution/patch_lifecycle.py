@@ -39,6 +39,8 @@ __all__ = [
     "PATCH_HISTORY_STATUSES",
     "LEGAL_HISTORY_TRANSITIONS",
     "HISTORY_STATUS_ROLLED_BACK",
+    "HISTORY_STATUS_WONT_FIX",
+    "mark_history_wont_fix",
     "legal_history_transition",
     "mark_history_rolled_back",
     "lifecycle_path",
@@ -376,6 +378,10 @@ HISTORY_STATUS_APPROVED = "approved"
 HISTORY_STATUS_APPLIED = "applied"
 HISTORY_STATUS_RUNTIME_VERIFIED = "runtime_verified"
 HISTORY_STATUS_ROLLED_BACK = "rolled_back"
+# ★348刀10（74号裁定）：撤单终态。**不是**「验证失败」，是「人工裁定不该做」。
+#   与 rejected_* 的区别：rejected_* 是机器/审批拒绝一次提交；wont_fix 是**议题级**
+#   结论（例：CompanionBridge.handshake 是新人类族群通信桥的协议接口，不可删）。
+HISTORY_STATUS_WONT_FIX = "wont_fix"
 
 #: ``rejected_*`` 是一族（实测有 rejected_core_guard / rejected_by_baseline /
 #: rejected_safety / rejected_verify / rejected_ambiguous / rejected_syntax …），
@@ -385,6 +391,7 @@ HISTORY_STATUS_REJECTED_PREFIX = "rejected_"
 PATCH_HISTORY_STATUSES = frozenset({
     HISTORY_STATUS_PENDING, HISTORY_STATUS_APPROVED, HISTORY_STATUS_APPLIED,
     HISTORY_STATUS_RUNTIME_VERIFIED, HISTORY_STATUS_ROLLED_BACK,
+    HISTORY_STATUS_WONT_FIX,
 })
 
 #: 合法迁移表 ``旧态 → 允许到达的新态``。
@@ -398,9 +405,10 @@ PATCH_HISTORY_STATUSES = frozenset({
 LEGAL_HISTORY_TRANSITIONS = {
     "": PATCH_HISTORY_STATUSES | {"rejected_*"},
     HISTORY_STATUS_PENDING: (HISTORY_STATUS_APPROVED, "rejected_*",
-                             HISTORY_STATUS_ROLLED_BACK),
+                             HISTORY_STATUS_ROLLED_BACK, HISTORY_STATUS_WONT_FIX),
     HISTORY_STATUS_APPROVED: (HISTORY_STATUS_APPLIED, HISTORY_STATUS_RUNTIME_VERIFIED,
-                              "rejected_*", HISTORY_STATUS_ROLLED_BACK),
+                              "rejected_*", HISTORY_STATUS_ROLLED_BACK,
+                              HISTORY_STATUS_WONT_FIX),
     HISTORY_STATUS_APPLIED: (HISTORY_STATUS_RUNTIME_VERIFIED,
                              HISTORY_STATUS_ROLLED_BACK),
     HISTORY_STATUS_RUNTIME_VERIFIED: (HISTORY_STATUS_APPLIED,
@@ -512,3 +520,40 @@ def mark_effect_verify_rolled_back(patch_id: str, reason: str = "",
         silent_exc(_e, where="nucleus.evolution.patch_lifecycle::mark_effect_verify_rolled_back",
                    level="warning")
         return {"ok": False, "reason": "%s: %s" % (type(_e).__name__, _e)}
+
+
+def mark_history_wont_fix(patch: Any, reason: str = "", now: float | None = None,
+                          source: str = "", by: str = "") -> dict:
+    """★348刀10（74号裁定）：把**撤单**记进台账（原地改 patch，落盘由调用方负责）。
+
+    写入：``status="wont_fix"`` + ``wont_fix_reason`` + ``wont_fix_at``
+    + ``status_history`` 追加一条（谁、何时、为什么）。
+    另置 ``o3_auto_dispatch_ready=False`` —— 撤单的候选**不得**再进 O3 派单链
+    （不置这一位，撤单只改标签不改行为，下一拍照样派出去）。
+
+    非法迁移**不写**并返回 ``ok=False``（不静默纠正，与 mark_history_rolled_back 同纪律）。
+    """
+    if not isinstance(patch, dict):
+        return {"ok": False, "changed": False, "from_status": None,
+                "to_status": None, "reason": "patch_not_dict"}
+    _ts = float(now if now is not None else time.time())
+    _old_raw = patch.get("status")
+    _old = _norm_history_status(_old_raw)
+    if not legal_history_transition(_old, HISTORY_STATUS_WONT_FIX):
+        return {"ok": False, "changed": False, "from_status": _old_raw,
+                "to_status": HISTORY_STATUS_WONT_FIX,
+                "reason": "illegal_transition_from:%s" % (_old or "<empty>")}
+    patch["status"] = HISTORY_STATUS_WONT_FIX
+    patch["wont_fix_at"] = _ts
+    patch["wont_fix_reason"] = str(reason or "")[:300]
+    patch["wont_fix_by"] = str(by or "")[:80]
+    patch["o3_auto_dispatch_ready"] = False
+    _hist = patch.get("status_history")
+    if not isinstance(_hist, list):
+        _hist = []
+    _hist.append({"status": HISTORY_STATUS_WONT_FIX, "at": _ts,
+                  "from": _old_raw or "", "reason": str(reason or "")[:300],
+                  "source": str(source or "")[:80], "by": str(by or "")[:80]})
+    patch["status_history"] = _hist
+    return {"ok": True, "changed": True, "from_status": _old_raw,
+            "to_status": HISTORY_STATUS_WONT_FIX, "reason": str(reason or "")}

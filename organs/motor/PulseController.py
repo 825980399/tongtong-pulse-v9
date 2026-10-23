@@ -3378,23 +3378,61 @@ class PulseController(BasePulseOrgan):
         self._log(LogLevel.INFO, f"搜索引擎选择: {'国内' if is_domestic else '国际'} → {selected_url[:60]}...")
         return selected_url
 
+    #: ★348刀4④（观察2降频）：探测结果缓存 TTL 与「慢探测」降级阈值。
+    #   为什么必须缓存：本方法每次搜索都会被调，而每次是一次 TCP 建连（最坏 3s）。
+    #   网络一抖动，**搜索链路会被探测本身拖死**——降频是可用性修复，不是省资源。
+    _M348_NET_TTL_SEC = 1800.0     # 30min（任务书下限）
+    _M348_NET_SLOW_SEC = 3.0       # 单次探测耗时 ≥3s 视为"慢"⇒ 直接判国内
+
     def _check_domestic_network(self) -> bool:
-        """检测当前网络环境是否为国内"""
+        """检测当前网络环境是否为国内（★348刀4④：带 30min 缓存 + 慢探测降级）。
+
+        三档留痕（`[347网]`）——**三档必须分得开**（铁律166）：
+          - `缓存命中`：30min 内已判过，直接复用（不再建连）；
+          - `探测`：真建连了，报 host/耗时/结论；
+          - `慢降级`：探测失败且耗时 ≥3s ⇒ 判国内（长超时几乎只发生在国际出口
+            被卡住时；此时用国内引擎成功率更高）。
+        """
+        _now = time.monotonic()
+        _cached = getattr(self, "_m348_net_cache", None)
+        if _cached and (_now - float(_cached[0])) < self._M348_NET_TTL_SEC:
+            self._log(LogLevel.DEBUG,
+                      "[347网] 缓存命中 判国内=%s 剩余=%.0fs" % (
+                          bool(_cached[1]),
+                          self._M348_NET_TTL_SEC - (_now - float(_cached[0]))))
+            return bool(_cached[1])
+
         check_hosts = self._permission_config.get("network_check_hosts", [
             ("www.baidu.com", 3),
         ])
 
+        _t0 = time.monotonic()
         for host, timeout in check_hosts[:1]:
             try:
                 import socket
                 socket.setdefaulttimeout(timeout)
                 socket.create_connection((host, 80), timeout=timeout)
-                self._log(LogLevel.DEBUG, f"网络检测: {host} 可达，判定为国内网络")
+                _el = time.monotonic() - _t0
+                self._m348_net_cache = (_now, True)
+                self._log(LogLevel.DEBUG,
+                          "[347网] 探测 host=%s 可达 耗时=%.2fs 判国内=True" % (host, _el))
                 return True
             except Exception as e:
                 silent_exc(e, where="organs/motor/PulseController.py:3242")
                 continue
 
+        _elapsed = time.monotonic() - _t0
+        if _elapsed >= self._M348_NET_SLOW_SEC:
+            # 慢探测 ⇒ 降级用国内引擎（并缓存，避免下几次继续各卡 3s）
+            self._m348_net_cache = (_now, True)
+            self._log(LogLevel.WARNING,
+                      "[347网] 慢降级 探测失败但耗时=%.2fs≥%.0fs ⇒ 判国内（用国内引擎）"
+                      % (_elapsed, self._M348_NET_SLOW_SEC))
+            return True
+
+        self._m348_net_cache = (_now, False)
+        self._log(LogLevel.DEBUG,
+                  "[347网] 探测 不可达 耗时=%.2fs 判国内=False（用国际引擎）" % _elapsed)
         self._log(LogLevel.DEBUG, "国内网络不可达，使用国际搜索引擎")
         return False
 

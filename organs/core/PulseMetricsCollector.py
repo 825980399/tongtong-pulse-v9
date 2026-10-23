@@ -812,6 +812,19 @@ class PulseMetricsCollector(BasePulseOrgan):
             "timestamp": time.time(),
             "beat_count": self._beat_count,
         }
+        # ★348刀1：顶层补 proc_gen/code_version/pid —— 这是 domain_guard「产物属哪个
+        #   代次」缺的 oracle（345 起只能靠显式隔离声明判域）。此前快照顶层无 proc_gen，
+        #   读写两侧都无法把 data/ 产物归属到代次，去掉「隔离串味」只能靠人肉核对。
+        try:
+            _m348_vs = self._m339_version_stamp()
+            snapshot["proc_gen"] = str((_m348_vs or {}).get("proc_gen") or "unknown")
+            snapshot["code_version"] = str((_m348_vs or {}).get("code_version") or "unknown")
+        except Exception as _m348_pg_e:
+            silent_exc(_m348_pg_e,
+                       where="PulseMetricsCollector::_build_observability_snapshot proc_gen")
+            snapshot["proc_gen"] = "unknown"
+        snapshot["pid"] = os.getpid()  # _m348_d1_top_procgen
+
 
         # 系统级：脉冲统计
         if self.info_field and hasattr(self.info_field, 'pulse_core') and self.info_field.pulse_core:
