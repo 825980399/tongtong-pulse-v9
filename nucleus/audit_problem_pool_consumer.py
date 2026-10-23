@@ -213,11 +213,106 @@ def _append_jsonl_dedup(path: str, records: list) -> dict:
 # ========== 三族分流 ==========
 
 
-def _route_patch_candidate(entry: dict, root: str | None, now: float) -> dict:
+# ===== ★351刀1③：判死校准闸门（点估计 → 动作）=====
+#   背景：350 刀5 首报判死性误报率 70%（裸名口径·上界）；351 刀1 修口径后
+#   点估计 31.58%（24/76）仍 > 20% ⇒ 校准档位 candidate_only。
+#   闸门位置选在**入审批流之前**：只在「有代码可落」时才谈得上"进不进池"，
+#   但校准是更强的否定，必须先报（铁律206）。
+CALIB_LEDGER_REL = "data/evolution/death_calibration.jsonl"
+CALIB_LEDGER_ENV = "PULSE_DEATH_CALIB_LEDGER"
+
+#: ★351刀1③：**已测出结论**的内置默认档位（台账缺失时用它，不用 unknown 空转）。
+#   依据：351 刀1 scoped 口径实测 **24/76 = 31.58%** > 20% 红线
+#         （证据 `tmp/p351_root/d1_falsepos.json` → extended.rate_scoped）。
+#   为什么内置：本批受「生产 data/ 零写」约束，校准台账由 352 首批活体自写；
+#   在台账落盘之前用**测出来的结论**，而不是让闸门停在 unknown（铁律156：
+#   不许用"没读到"静默降级成"不拦"）。台账一旦存在即以台账为准。
+CALIB_DEFAULT_ACTION = "candidate_only"
+CALIB_DEFAULT_RATE = 0.3158
+CALIB_DEFAULT_BASIS = "351d1: 24/76=31.58%(scoped) > 20%"
+
+#: ★351刀2：注入路径必须落在这个相对目录下（结构判定，不看文件名·铁律153）
+ISOLATION_REL = "tmp"
+
+
+def calib_ledger_path(root: str | None = None) -> str:
+    """校准台账路径（环境变量 > root 派生）。"""
+    _env = os.environ.get(CALIB_LEDGER_ENV, "").strip()
+    if _env:
+        return _env
+    return os.path.join(str(root) if root else _project_root(), CALIB_LEDGER_REL)
+
+
+def _m351_calibration_gate(entry: dict, root: str | None) -> tuple:
+    """判死族条目是否放行进池。返回 `(allowed, decision, why)`。
+
+    三档动作（阈值唯一出处 = `zero_break_judge.CALIBRATION_THRESHOLDS`）：
+      · `candidate_only`  —— **只产候选不进池**（本轮档位）
+      · `split_by_klass`  —— 按 klass 分池分流（放行但打桶标）
+      · `keep` / `unknown`—— 维持现状（unknown 也**不改行为**，但如实留痕·铁律156）
+    """
+    _it = str(entry.get("issue_type") or "")
+    try:
+        from nucleus.evolution import zero_break_judge as _z
+    except Exception as _e:                                     # noqa: BLE001
+        silent_exc(_e, "audit_problem_pool_consumer._m351_calibration_gate import",
+                   level="warning")
+        return True, {}, "judge_unavailable"
+    if _it not in _z.DEATH_ISSUE_TYPES:
+        return True, {}, "not_death_family"
+    _rd = _z.read_calibration(calib_ledger_path(root))
+    _dec = _rd.get("decision") or {}
+    _act = str(_dec.get("action") or "")
+    _src = "ledger"
+    if not _act:
+        # 台账缺失/空/不可读 ⇒ 用已测出的结论（不是 unknown·铁律156）
+        _act = CALIB_DEFAULT_ACTION
+        _src = "builtin_default:%s" % CALIB_DEFAULT_BASIS
+        _dec = {"action": _act, "rate": CALIB_DEFAULT_RATE, "band": "over_20",
+                "source": _src, "ledger_state": _rd.get("state")}
+    _dec = dict(_dec)
+    _dec["source"] = _dec.get("source") or _src
+    if _act == "candidate_only":
+        return False, _dec, "candidate_only"
+    if _act == "split_by_klass":
+        return True, _dec, "split_by_klass:%s" % (str(entry.get("klass") or "none"))
+    if _act == "keep":
+        return True, _dec, "keep"
+    return True, _dec, ("calibration_unmapped(action=%s)" % _act)
+
+
+def guard_pending_path(path: str | None, root: str | None) -> tuple:
+    """★351刀2 守卫：注入路径必须在隔离根（`<root>/tmp/`）内，且不得等于生产路径。
+
+    判定只看**路径结构**（前缀），不看文件名关键字（铁律153）——
+    文件名关键字判据会被 `tmp_not_really/pending_patches.json` 这类路径骗过。
+    """
+    if not path:
+        return False, "empty"
+    _p = os.path.abspath(str(path))
+    _r = os.path.abspath(str(root) if root else _project_root())
+    _prod = os.path.join(_r, "data", "patches", "pending_patches.json")
+    if os.path.normcase(_p) == os.path.normcase(os.path.abspath(_prod)):
+        return False, "is_production_path"
+    _iso = os.path.abspath(os.path.join(_r, ISOLATION_REL))
+    _pn = os.path.normcase(_p)
+    _in = os.path.normcase(_iso)
+    if not (_pn == _in or _pn.startswith(_in + os.sep)):
+        return False, "outside_isolation_root"
+    return True, "ok"
+
+
+def _route_patch_candidate(entry: dict, root: str | None, now: float,
+                           pending_path: str | None = None) -> dict:
     """`code_defect` → 补丁候选工单；带完整代码时进 `save_pending_patch` 审批流。
 
     ★「候选」与「补丁」必须可区分（铁律166）：池条目没有代码，产物只能是工单。
     真落审批流的唯一条件是条目**自带** `original_code` + `modified_code` + `method`。
+
+    ★351刀2：`pending_path` 注入让**消费段可测**。
+      · 生产态（默认 `None`）—— 一字不改，仍落 `data/patches/pending_patches.json`；
+      · 测试/审计态 —— 注入隔离根路径，`PatchManager` 的守卫链照跑，只有落盘位置换。
+      守卫见 `guard_pending_path`：越界/等于生产路径一律拒绝（不做"就近写入"）。
     """
     _id = _dedup_key_of(entry)
     _rec = {
@@ -236,6 +331,25 @@ def _route_patch_candidate(entry: dict, root: str | None, now: float) -> dict:
         "original_code": entry.get("original_code") or "",
         "modified_code": entry.get("modified_code") or "",
     }
+    # ★351刀1③：校准闸门 —— 判死族在 `candidate_only` 档位下**只产候选不进池**。
+    _cal_ok, _cal_row, _cal_why = _m351_calibration_gate(entry, root)
+    if _cal_row:
+        _rec["calibration"] = {"action": _cal_row.get("action"),
+                               "band": _cal_row.get("band"),
+                               "rate": _cal_row.get("rate"),
+                               "source": _cal_row.get("source"),
+                               "why": _cal_why}
+    if _cal_why.startswith("split_by_klass"):
+        _rec["klass_bucket"] = str(entry.get("klass") or "none")
+    if not _cal_ok:
+        _rec["requires"] = ["calibration_passed"]
+        _rec["approval_written"] = False
+        _rec["calibration_blocked"] = True
+        _module_logger.info("%s 校准拦下 %s type=%s action=%s rate=%s",
+                            TRACE_TAG, _id, _rec["issue_type"],
+                            _cal_row.get("action"), _cal_row.get("rate"))
+        return _rec
+
     _has_code = bool(str(_rec["original_code"]).strip()
                      and str(_rec["modified_code"]).strip()
                      and str(_rec["method"] or "").strip())
@@ -244,9 +358,25 @@ def _route_patch_candidate(entry: dict, root: str | None, now: float) -> dict:
         _rec["requires"] = ["original_code", "modified_code"]
         _rec["approval_written"] = False
         return _rec
+    # ★351刀2：注入路径先过守卫，越界即拒（不"就近写入"、不静默降级）
+    if pending_path:
+        _g_ok, _g_why = guard_pending_path(pending_path, root)
+        if not _g_ok:
+            _rec["approval_written"] = False
+            _rec["pending_path_rejected"] = _g_why
+            _rec["requires"] = ["valid_pending_path"]
+            _module_logger.warning("%s 注入路径被拒 %s reason=%s path=%s",
+                                   TRACE_TAG, _id, _g_why, pending_path)
+            return _rec
     try:
         from nucleus.reasoning.PatchManager import PatchManager
         _pm = PatchManager(str(root) if root else _project_root())
+        if pending_path:
+            # PatchManager 的守卫链（domain_guard/280def/323归一/325危险词）照跑，
+            # 只有落盘位置换成注入路径 —— 替换点选实例属性，不动生产代码（零侵入）。
+            _pm._pending_file = os.path.abspath(str(pending_path))
+            _rec["pending_path_injected"] = True
+            _rec["pending_path"] = _pm._pending_file
         _pm.save_pending_patch({
             "id": "pool_%s" % _id,
             "file": _rec["file"],
@@ -310,7 +440,8 @@ def _route_cleanup(entry: dict, now: float) -> dict:
 
 def consume_pool(limit: int | None = None, root: str | None = None,
                  audit_dir_path: str | None = None, now: float | None = None,
-                 enable: bool | None = None, dry_run: bool = False) -> dict:
+                 enable: bool | None = None, dry_run: bool = False,
+                 pending_path: str | None = None) -> dict:
     """**唯一消费入口**：读池 → 取 open 条目 → 三族分流 → 落行动队列 → 状态推进。
 
     Returns: `{state, ...}`，`state` 取值
@@ -354,7 +485,8 @@ def consume_pool(limit: int | None = None, root: str | None = None,
             _route = _pool.classify_route(_e.get("issue_type"), bool(_e.get("severity_invalid")))
         _id = _dedup_key_of(_e)
         if _route == _pool.ROUTE_PATCH_POOL:
-            _cand.append(_route_patch_candidate(_e, root, _now))
+            _cand.append(_route_patch_candidate(_e, root, _now,
+                                             pending_path=pending_path))
         elif _route == _pool.ROUTE_CLEANUP_QUEUE:
             _cln.append(_route_cleanup(_e, _now))
         else:
@@ -414,7 +546,8 @@ def consume_pool(limit: int | None = None, root: str | None = None,
 
 
 def consume_heartbeat(project_root: str | None = None, now: float | None = None,
-                      enable: bool | None = None) -> dict:
+                      enable: bool | None = None,
+                      pending_path: str | None = None) -> dict:
     """主循环节拍入口：异常一律吞掉并留痕（消费失败绝不能拖垮主循环）。
 
     ★350刀1：同一个节拍里跑完「消费」后紧接着「回灌」。
@@ -423,7 +556,8 @@ def consume_heartbeat(project_root: str | None = None, now: float | None = None,
     回灌失败**不影响消费结果**；失败原因如实写在 `verify_feedback` 字段里。
     """
     try:
-        _r = consume_pool(root=project_root, now=now, enable=enable)
+        _r = consume_pool(root=project_root, now=now, enable=enable,
+                         pending_path=pending_path)
     except Exception as _e:
         silent_exc(_e, "audit_problem_pool_consumer.consume_heartbeat", level="warning")
         return {"state": "exception", "reason": "%s: %s" % (type(_e).__name__, _e)}

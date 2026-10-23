@@ -353,6 +353,198 @@ def reference_truth_batch(project_root: str, items: list, *,
     return _out
 
 
+# ===== ★351刀1：判死真值口径修复 —— 「类.方法」限定作用域 =====
+#   350 刀5 首报 70%（**上界**）：真值按**裸方法名**全仓计数，不同类的同名方法
+#   被算成引用 ⇒ "活"的判据过宽 ⇒ 误报率被抬高。本刀把每个命中拆成四类归属，
+#   只有**确定指向本方法**的才算引用（铁律 162：判据按语义单元，不按字符串）。
+
+REF_SCOPE_VERSION = "351.refscope.v1"
+
+SCOPE_STRONG = "strong"            # 确定指向本方法（类限定 / 同类 self. / 模块级裸调用）
+SCOPE_OTHER_CLASS = "other_class"  # 别的接收者上的同名方法 —— 同名碰撞，不算引用
+SCOPE_BARE = "bare"                # 裸名但本方法在类内 —— 无法证明指向本类，不算引用
+SCOPE_DEF = "def_line"             # 定义行本身（`def name` / `async def name`）
+
+_RECV_RE = None
+
+
+def _recv_re():
+    """匹配行内「接收者.」结尾（延迟编译）。"""
+    global _RECV_RE
+    if _RECV_RE is None:
+        import re as _re
+        # 351刀1：接收者可能是 Cls. 也可能是 Cls(...).（实例化后调用）
+        _RECV_RE = _re.compile(r"([A-Za-z_][A-Za-z_0-9]*)\s*(?:\([^()]*\))?\s*\.\s*$")
+    return _RECV_RE
+
+
+def _def_owner(file_abs: str, method: str) -> dict:
+    """解析定义文件，回答「这个方法属于哪个类」。
+
+    返回 `{cls, span, module_level, state}`：
+      · `cls=None, module_level=True`  —— 模块级函数（裸调用即引用）
+      · `cls=<类名>, span=(起, 止)`     —— 类内方法（只有限定引用才算）
+      · `cls="?", state=...`          —— 解析不出（**不猜**，如实报不可判）
+    """
+    _res = {"cls": "?", "span": None, "module_level": False, "state": "unresolved"}
+    if not file_abs or not os.path.isfile(file_abs):
+        _res["state"] = "no_file"
+        return _res
+    try:
+        import ast as _ast
+        with open(file_abs, "r", encoding="utf-8", errors="replace") as _f:
+            _tree = _ast.parse(_f.read())
+    except Exception as _e:                                     # noqa: BLE001
+        silent_exc(_e, where="zero_break_judge._def_owner parse", level="debug")
+        _res["state"] = "parse_failed"
+        return _res
+    import ast as _ast2
+    _defs = (_ast2.FunctionDef, _ast2.AsyncFunctionDef)
+    for _node in _tree.body:
+        if isinstance(_node, _defs) and getattr(_node, "name", "") == method:
+            _res = {"cls": None, "span": None, "module_level": True, "state": "module_level"}
+            return _res
+    for _node in _tree.body:
+        if not isinstance(_node, _ast2.ClassDef):
+            continue
+        for _sub in _node.body:
+            if isinstance(_sub, _defs) and getattr(_sub, "name", "") == method:
+                return {"cls": _node.name,
+                        "span": (int(getattr(_node, "lineno", 0)),
+                                 int(getattr(_node, "end_lineno", 0) or 0)),
+                        "module_level": False, "state": "class_method"}
+    return _res
+
+
+def _is_test_path(p: str) -> bool:
+    """路径是否属于测试面（测试引用**不构成生产可达性**，必须分列·铁律160）。"""
+    _s = str(p or "").replace("\\", "/").lower()
+    if "/tests/" in _s or "/test/" in _s:
+        return True
+    return os.path.basename(_s).startswith("test_")
+
+
+def reference_truth_scoped(project_root: str, items: list, *,
+                           max_files: int = 6000) -> list:
+    """★351刀1①：按「类.方法」限定作用域计引用（消解同名碰撞）。
+
+    与 `reference_truth_batch`（裸名口径）的差别**只有一处**：命中先判归属，
+    只有 `SCOPE_STRONG` 计入 `refs`；`other_class` / `bare` 分列另报，**不折算**。
+    结果里同时给 `refs_prod` / `refs_test`：测试引用不算生产可达（`dead_prod`）。
+    """
+    import re as _re
+
+    _items = list(items or [])
+    _meta: list = []
+    for _it in _items:
+        _m = str(_it.get("method") or "").strip()
+        _f = str(_it.get("file") or "").strip()
+        _abs = os.path.abspath(os.path.join(project_root, _f)) if _f else ""
+        _own = (_def_owner(_abs, _m) if (_m and _abs)
+                else {"cls": "?", "span": None, "module_level": False,
+                      "state": "no_file"})
+        _meta.append({"method": _m, "file_abs": _abs, "owner": _own})
+
+    _out = [{"dead": None, "refs": None, "why": "method 为空（不可判）",
+             "truth_source": TRUTH_SOURCE, "ref_scope": REF_SCOPE_VERSION}
+            for _ in _items]
+    _by_name: dict = {}
+    for _i, _md in enumerate(_meta):
+        if _md["method"]:
+            _by_name.setdefault(_md["method"], []).append(_i)
+    if not _by_name:
+        return _out
+
+    _stat = [{"strong": 0, "prod": 0, "test": 0, "other_class": 0,
+              "bare": 0, "def_line": 0} for _ in _items]
+    _pat = _re.compile(r"\b(?:" + "|".join(
+        _re.escape(_n) for _n in sorted(_by_name, key=len, reverse=True)) + r")\b")
+    _recv = _recv_re()
+    _scanned = 0
+    for _p in _iter_py_files(project_root, max_files=max_files):
+        _scanned += 1
+        try:
+            with open(_p, "r", encoding="utf-8", errors="replace") as _f:
+                _txt = _f.read()
+        except Exception as _e:                                 # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.reference_truth_scoped read",
+                       level="debug")
+            continue
+        if not _txt:
+            continue
+        _ap = os.path.abspath(_p)
+        _is_test = _is_test_path(_ap)
+        _lines = _txt.splitlines()
+        for _mm in _pat.finditer(_txt):
+            _k = _mm.group(0)
+            if _k not in _by_name:
+                continue
+            _nl = _txt.count("\n", 0, _mm.start())
+            _col = _mm.start() - (_txt.rfind("\n", 0, _mm.start()) + 1)
+            _line = _lines[_nl] if 0 <= _nl < len(_lines) else ""
+            _pre = _line[:max(0, _col)]
+            _stripped = _pre.strip()
+            _is_def_line = (_stripped.startswith("def ")
+                            or _stripped.startswith("async def "))
+            _m2 = _recv.search(_pre)
+            for _idx in _by_name[_k]:
+                _own = _meta[_idx]["owner"]
+                _cls = _own.get("cls")
+                _span = _own.get("span")
+                _same = (_ap == _meta[_idx]["file_abs"])
+                _st = _stat[_idx]
+                if _is_def_line:
+                    _st["def_line"] += 1
+                    continue
+                if _m2:
+                    _r = _m2.group(1)
+                    if _cls and _cls != "?" and _r == _cls:
+                        _st["strong"] += 1
+                        _st["test" if _is_test else "prod"] += 1
+                    elif (_r in ("self", "cls") and _cls and _cls != "?"
+                          and _same and _span and _span[0] <= _nl + 1 <= _span[1]):
+                        _st["strong"] += 1
+                        _st["test" if _is_test else "prod"] += 1
+                    else:
+                        _st["other_class"] += 1
+                elif _own.get("module_level"):
+                    _st["strong"] += 1
+                    _st["test" if _is_test else "prod"] += 1
+                else:
+                    _st["bare"] += 1
+
+    for _i, _it in enumerate(_items):
+        _m = _meta[_i]["method"]
+        if not _m:
+            continue
+        _st = _stat[_i]
+        _own = _meta[_i]["owner"]
+        _out[_i] = {
+            "dead": (_st["strong"] == 0),
+            "refs": _st["strong"],
+            "refs_prod": _st["prod"],
+            "refs_test": _st["test"],
+            "refs_other_class_excluded": _st["other_class"],
+            "refs_bare_excluded": _st["bare"],
+            "def_lines": _st["def_line"],
+            "dead_prod": (_st["prod"] == 0),
+            "cls": _own.get("cls"),
+            "owner_state": _own.get("state"),
+            "scanned_files": _scanned,
+            "truth_source": TRUTH_SOURCE,
+            "ref_scope": REF_SCOPE_VERSION,
+            "boundary": ("只把**确定指向本方法**的引用算作活（类限定 / 同类 self. / "
+                         "模块级裸调用）；别的类同名方法(\"other_class\")与类内裸名"
+                         "(\"bare\")分列不计；测试引用单列 refs_prod/refs_test。"
+                         "无引用仍**不等于**确认死代码"),
+            "why": ("" if _st["strong"] == 0
+                    else "被 %d 处限定引用（prod %d / test %d；排除 other_class %d / bare %d）"
+                         % (_st["strong"], _st["prod"], _st["test"],
+                            _st["other_class"], _st["bare"])),
+        }
+    return _out
+
+
 def reference_truth(project_root: str, file: str, method: str, *,
                     max_files: int = 6000) -> dict:
     """判死**真值**：按「方法名的文本引用数」判活/死。
@@ -407,7 +599,8 @@ def reference_truth(project_root: str, file: str, method: str, *,
 
 
 def death_false_positive_rate(samples: list, *,
-                              existence_rate=None) -> dict:
+                              existence_rate=None,
+                              calibration: dict | None = None) -> dict:
     """判死性误报率（双报），并与存在性误报率**分列**。
 
     `samples` 每项：`{id, judged, dead_code_true, tier?}`
@@ -480,19 +673,152 @@ def death_false_positive_rate(samples: list, *,
         },
         "separation_note": ("两条线分列：判死性=说它死其实活；"
                             "存在性=说它不在其实在。不相加、不互折"),
-        "boundary": ("真值=方法名文本引用数（`reference_truth`）。"
+        "boundary": ("真值=方法名文本引用数（scoped 口径见 `reference_truth_scoped`）。"
                      "无引用只表示扫不到引用，**不等于**确认死代码"),
         "rate_none_means": "无样本（不是 0）",
+        # ★351刀1③：校准档位随结论一起返回（不给调用方"自己去比阈值"的机会）
+        "calibration": calibration,
     }
+
+
+# ===== ★351刀1③：判死器校准档位（点估计 → 动作）=====
+#   阈值是本批**代码面**的唯一出处：要改校准线只改这里。
+CALIBRATION_SCHEMA = "death_calibration/351.v1"
+CALIBRATION_THRESHOLDS = {
+    "candidate_only": 0.20,   # > 20%  ⇒ 判死器只产候选，不进池
+    "split_by_klass": 0.10,   # 10-20% ⇒ 按 klass 分池分流
+    # < 10% ⇒ 维持（照旧入池）
+}
+CALIBRATION_ACTIONS = ("candidate_only", "split_by_klass", "keep", "unknown")
+
+
+def calibration_decision(rate, *, sample_size: int = 0,
+                         source: str = "") -> dict:
+    """点估计 → 校准档位。`rate=None`（无样本）⇒ `unknown` 且**不改行为**。
+
+    ★铁律156：无样本不许静默降级成 "keep"。`unknown` 明确表示"没测出来"，
+    调用方拿到 `unknown` 时行为维持现状，但**必须**把这一事实写进留痕。
+    """
+    if rate is None:
+        return {
+            "schema": CALIBRATION_SCHEMA, "rate": None, "band": "no_sample",
+            "action": "unknown", "sample_size": int(sample_size or 0),
+            "reason": "点估计无样本（rate=None）⇒ 不校准，行为维持现状",
+            "source": source, "thresholds": dict(CALIBRATION_THRESHOLDS),
+            "boundary": ("口径：rate 是**判死性误报率**（不是存在性误报率）；"
+                         "上界值不得直接当点估计用"),
+        }
+    _r = float(rate)
+    if _r > CALIBRATION_THRESHOLDS["candidate_only"]:
+        _band, _act = "over_20", "candidate_only"
+        _why = ("判死性误报率 %.2f%% > 20%% ⇒ 判死器**只产候选不进池**" % (_r * 100.0))
+    elif _r > CALIBRATION_THRESHOLDS["split_by_klass"]:
+        _band, _act = "10_20", "split_by_klass"
+        _why = ("判死性误报率 %.2f%% 落在 10-20%% ⇒ 按 klass 分池分流" % (_r * 100.0))
+    else:
+        _band, _act = "under_10", "keep"
+        _why = ("判死性误报率 %.2f%% < 10%% ⇒ 维持现行（照旧入池）" % (_r * 100.0))
+    return {
+        "schema": CALIBRATION_SCHEMA, "rate": round(_r, 4), "band": _band,
+        "action": _act, "reason": _why, "sample_size": int(sample_size or 0),
+        "source": source, "thresholds": dict(CALIBRATION_THRESHOLDS),
+        "boundary": ("口径：rate 是**判死性误报率**（不是存在性误报率）；"
+                     "上界值不得直接当点估计用"),
+    }
+
+
+def write_calibration_ledger(path: str, decision: dict, *,
+                             now: float | None = None) -> dict:
+    """校准动作**留痕**（jsonl，按 `rate+band` 幂等，不按墙钟）。"""
+    import json as _json
+    import time as _time
+
+    _out = {"ok": False, "appended": 0, "skipped_dup": 0, "path": path,
+            "persisted": False}
+    if not path:
+        _out["reason"] = "no_path"
+        return _out
+    _key = "%s|%s|%s" % (decision.get("band"), decision.get("action"),
+                         decision.get("rate"))
+    _row = dict(decision)
+    _row["key"] = _key
+    _row["written_at"] = float(now if now is not None else _time.time())
+    _seen = set()
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as _f:
+                for _ln in _f:
+                    _ln = _ln.strip()
+                    if not _ln:
+                        continue
+                    try:
+                        _seen.add(str(_json.loads(_ln).get("key") or ""))
+                    except Exception:                           # noqa: BLE001
+                        continue
+        except OSError as _e:
+            silent_exc(_e, "zero_break_judge.write_calibration_ledger read",
+                       level="debug")
+    if _key in _seen:
+        _out["skipped_dup"] = 1
+        _out["ok"] = True
+        return _out
+    try:
+        _d = os.path.dirname(path)
+        if _d:
+            os.makedirs(_d, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(_row, ensure_ascii=False) + "\n")
+        _out["appended"] = 1
+        _out["ok"] = True
+        _out["persisted"] = True
+    except OSError as _e:
+        silent_exc(_e, "zero_break_judge.write_calibration_ledger write",
+                   level="warning")
+        _out["reason"] = "%s: %s" % (type(_e).__name__, _e)
+    return _out
+
+
+def read_calibration(path: str) -> dict:
+    """读最近一条校准结论（读不到 ⇒ `unknown`，**不当成 keep**）。"""
+    import json as _json
+
+    _res = {"state": "absent", "decision": None, "path": path}
+    if not path or not os.path.isfile(path):
+        return _res
+    _last = None
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as _f:
+            for _ln in _f:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _last = _json.loads(_ln)
+                except Exception:                               # noqa: BLE001
+                    continue
+    except OSError as _e:
+        silent_exc(_e, "zero_break_judge.read_calibration", level="debug")
+        _res["state"] = "unreadable"
+        return _res
+    if _last is None:
+        _res["state"] = "empty"
+        return _res
+    _res["state"] = "ok"
+    _res["decision"] = _last
+    return _res
 
 
 def collect_death_samples(project_root: str | None = None,
                           pool_entries: list | None = None,
-                          universe: int = 76, limit: int = 20) -> list:
+                          universe: int = 76, limit: int = 20,
+                          scoped: bool = True) -> list:
     """按「76 抽 20 重放」的办法组样本（349 刀4 同一评估法，本刀扩样本用）。
 
     `universe` 是候选面（默认 76 —— 与烛微审计同基数），`limit` 是实际重放条数。
     抽样用**等距**而不是随机：结果可复算，换个人跑同一份池得到同一组样本。
+
+    ★351刀1：`scoped=True`（默认）走「类.方法」限定口径；`scoped=False` 保留
+    350 的裸名口径 —— 两口径**同一批样本**各跑一遍，才能看出同名碰撞消掉了多少。
     """
     _rows = list(pool_entries or [])
     if not _rows:
@@ -526,7 +852,9 @@ def collect_death_samples(project_root: str | None = None,
         return []
     _step = max(1, len(_uni) // _n)
     _picked = [_uni[i * _step] for i in range(_n)]
-    _truth = reference_truth_batch(project_root or _zbj_root(), _picked)
+    _root = project_root or _zbj_root()
+    _truth = (reference_truth_scoped(_root, _picked) if scoped
+              else reference_truth_batch(_root, _picked))
     _out = []
     for _s, _t in zip(_picked, _truth):
         _row = dict(_s)
@@ -534,8 +862,117 @@ def collect_death_samples(project_root: str | None = None,
         _row["truth_refs"] = _t.get("refs")
         _row["truth_why"] = _t.get("why")
         _row["truth_scanned_files"] = _t.get("scanned_files")
+        _row["truth_ref_scope"] = _t.get("ref_scope") or "350.bare.v1"
+        _row["truth_refs_prod"] = _t.get("refs_prod")
+        _row["truth_refs_test"] = _t.get("refs_test")
+        _row["truth_cls"] = _t.get("cls")
+        _row["truth_owner_state"] = _t.get("owner_state")
+        _row["truth_other_class_excluded"] = _t.get("refs_other_class_excluded")
+        _row["truth_bare_excluded"] = _t.get("refs_bare_excluded")
         _out.append(_row)
     return _out
+
+
+# ===== ★351刀3：破零观察位**具名**监控 =====
+#   350 刀4 撤掉 handshake 后，下一个候选是 `o3_b31b31fee790d6e9`
+#   （`dead_code_candidate` / file=nucleus/audit_problem_pool.py / method=restore_pool）。
+#   本刀把"它有没有被选中、四条件同不同立"写成**一行可 grep 的具名日志**——
+#   不然破零那件事要么靠人翻 pending，要么等到报告才发现（349/350 各栽过一次）。
+WATCH_SCHEMA = "zero_break_watch/351.v1"
+
+#: ★351 破零观察位（具名，不扫全池；换观察对象只改这里）
+WATCH_IDS = ("o3_b31b31fee790d6e9",)
+
+
+def _watch_find(rows: list, patch_id: str) -> dict | None:
+    for _r in (rows or []):
+        if not isinstance(_r, dict):
+            continue
+        _pid = str(_r.get("patch_id") or _r.get("id") or "")
+        if _pid == patch_id:
+            return _r
+    return None
+
+
+def watch_candidate(patch_id: str, *,
+                    pending_rows: list | None = None,
+                    history_rows: list | None = None,
+                    results: list | None = None,
+                    project_root: str | None = None) -> dict:
+    """单条候选的破零观察：`selected>0` + 四条件同立。
+
+    ★边界（铁律196）：`selected` 只说明"本拍被选中进沙箱"，
+    四条件同立只说明"链路通"，**都不说明补丁对不对**。
+    """
+    _pend = _watch_find(pending_rows, patch_id)
+    _hist = _watch_find(history_rows, patch_id)
+    _res = _watch_find(results, patch_id)
+    _selected = 1 if _res is not None else 0
+    _rec: dict = {}
+    if isinstance(_pend, dict):
+        _rec.update(_pend)
+    if isinstance(_hist, dict):
+        for _k in ("status", "verified", "applied", "executed"):
+            if _k in _hist and _k not in _rec:
+                _rec[_k] = _hist[_k]
+        # ★351刀3 自证抓到的坑：pending 里的 `file` 是**目标文件**，
+        #   history 里的 `file` 才是**实际落地文件**。四条件第④条问的是后者。
+        #   不加这一句，隔离根产物会被目标的绝对路径掩盖成"生产改动"⇒ 假破零。
+        if _hist.get("file"):
+            _rec["target_file"] = _rec.get("file")
+            _rec["file"] = _hist["file"]
+    if isinstance(_res, dict):
+        _rec["executed"] = 1
+        _rec["applied"] = _res.get("success") is True
+        if _res.get("verified") is not None and "verified" not in _rec:
+            _rec["verified"] = _res.get("verified")
+    _judge = judge_zero_break(_rec, project_root=project_root) if _rec else {
+        "zero_broken": False, "verdict": "not_in_pool", "checks": {},
+        "half_through": [], "boundary": "候选既不在 pending 也不在 history",
+    }
+    return {
+        "schema": WATCH_SCHEMA,
+        "patch_id": patch_id,
+        "in_pending": isinstance(_pend, dict),
+        "in_history": isinstance(_hist, dict),
+        "selected": _selected,
+        "selected_gt_0": _selected > 0,
+        "dispatch_attempts": (_rec.get("o3_dispatch_attempts") if _rec else None),
+        "zero_broken": bool(_judge.get("zero_broken")),
+        "verdict": _judge.get("verdict"),
+        "missing": list(_judge.get("half_through") or []),
+        "checks": _judge.get("checks") or {},
+        "file": _rec.get("file"),
+        "boundary": ("selected 只表示「本拍被选中进沙箱」；四条件同立只表示「链路通」"
+                     "——**不表示补丁正确**（判据能力边界）"),
+    }
+
+
+def watch_batch(patch_ids, **kw) -> list:
+    """批量（默认只观察 `WATCH_IDS`），异常不抛给调用方。"""
+    _out = []
+    for _pid in (patch_ids or WATCH_IDS):
+        try:
+            _out.append(watch_candidate(str(_pid), **kw))
+        except Exception as _e:                                 # noqa: BLE001
+            silent_exc(_e, where="zero_break_judge.watch_batch", level="warning")
+            _out.append({"schema": WATCH_SCHEMA, "patch_id": str(_pid),
+                         "error": "%s: %s" % (type(_e).__name__, _e)})
+    return _out
+
+
+def watch_line(w: dict) -> str:
+    """一行可 grep 的具名日志体（`[351破零]` 前缀由调用方加）。"""
+    if w.get("error"):
+        return "watch=%s error=%s" % (w.get("patch_id"), w["error"])
+    _miss = ",".join(w.get("missing") or []) or "-"
+    return ("watch=%s in_pending=%s selected=%d four_ok=%s "
+            "verdict=%s missing=%s file=%s"
+            % (w.get("patch_id"),
+               "Y" if w.get("in_pending") else "N",
+               int(w.get("selected") or 0),
+               "Y" if w.get("zero_broken") else "N",
+               w.get("verdict"), _miss, w.get("file")))
 
 
 def production_patch_history(project_root: str | None = None) -> list:

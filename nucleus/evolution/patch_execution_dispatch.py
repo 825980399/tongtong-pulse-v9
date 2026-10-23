@@ -2689,6 +2689,31 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
     return [_v for _, _v in _out]
 
 
+def _m351_watch_zero_break(pending_rows: list, results: list | None,
+                            project_root: str | None = None) -> list:
+    """★351刀3：破零观察位**具名**监控——只观测，不改派单行为。
+
+    为什么挂在派单出口而不是单起一个定时器：破零这件事只在「有一拍真的派了」
+    或「有一拍没得派」这两种时刻才有意义；离开派单拍去轮询读到的是别的代次。
+    `selected=0` 本身就是要观测的事实（选了没派 / 根本没选），所以
+    **无候选的早退路径也要打这一行**，不能只在成功时打。
+    """
+    try:
+        from nucleus.evolution import zero_break_judge as _zb351
+        _hrows = _m350_read_history_rows(project_root)
+        _ws = _zb351.watch_batch(_zb351.WATCH_IDS,
+                                 pending_rows=pending_rows,
+                                 history_rows=_hrows, results=results,
+                                 project_root=project_root)
+        for _w in _ws:
+            _module_logger.info("[351破零] %s proc_gen=%s",
+                                _zb351.watch_line(_w), _m335_pg())
+        return _ws
+    except Exception as _e:                                 # noqa: BLE001
+        silent_exc(_e, where="patch_execution_dispatch::351破零观察",
+                   level="warning")
+        return []
+
 def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                          project_root: str | None = None,
                          pending_path: str | None = None,
@@ -2776,6 +2801,8 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
         _module_logger.info(
             "[339审批][O3派单] 无待派条目（待修池 %d 条；拒收 %s） proc_gen=%s",
             len(_rows), _rej, _m335_pg())
+        # ★351刀3：没得派也是观测事实（selected=0），照打具名行
+        _m351_watch_zero_break(_rows, None, project_root)
         return {"status": "no_candidate", "dispatched": 0,
                 "pool": len(_rows), "rejected": dict(_rej)}
     _sb = sandbox
@@ -2858,6 +2885,8 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
     except Exception as _tre:
         silent_exc(_tre, where="patch_execution_dispatch.dispatch_o3_approved trace",
                    level="warning")
+    # ★351刀3：本拍真派了 ⇒ 四条件结果当场具名落日志（可 grep [351破零]）
+    _m351_watch_zero_break(_rows, _results, project_root)
     return {"status": "ok", "dispatched": len(_results), "results": _results,
             "pool": len(_rows), "rejected": dict(_rej),
             "candidates": len(_cands)}

@@ -6186,6 +6186,14 @@ TOOL_REGISTRY_PATH = "data/tool_registry.json"   # tooling/ToolRegistry：工具
 # ★318批刀3（星轨+小林裁定）：压测首跑取 **3600s 安全档**（N=4 圈/天）。
 #   86400（原日频）只够一天一圈，压测看不见效果；60s 下限仍在（防每轮询重入）。
 PATCH_DISPATCH_INTERVAL_SEC = 3600
+# ★351刀5：问题池「消费+回灌」节拍（单位=主循环**拍**，不是秒）。
+#   默认 300 拍 = 现行行为，**本批不改默认**（改默认需裁决）。
+#   为什么是拍不是秒：`consume_heartbeat` 挂在主循环 while 里，
+#   墙钟节流会让「池认领」和「回灌」两件事的间隔跟着主循环速率浮动
+#   （348 刀7 在夜间 digest 上踩过同型坑，但那里目标是**定时点**，
+#   这里是**频次**，拍计数反而更稳定）。
+#   运维临时覆盖：环境变量 PULSE_POOL_CONSUME_EVERY（优先生效）。
+POOL_CONSUME_EVERY_TICKS = 300
 # 读取点②：organs/brain/PulseSubconscious.py::_m304_growth_to_hub
 #   growth 入库「按时间窗重置」的窗口长度（秒）。默认 3600 = 每小时窗口 20 条。
 #   语义仍是 GROWTH_HUB_MAX_PER_WINDOW（每窗条数），由「每进程封顶」改为「按窗滚动」。

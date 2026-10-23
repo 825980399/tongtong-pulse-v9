@@ -412,6 +412,62 @@ def _m350_attribution(issue: dict) -> dict:
 
 
 
+# ===== ★351刀4：历史兜底条目追溯（attribution 补齐）=====
+#   350 刀6 的归因只挂在 `entry_from_issue` 上 ⇒ **只对新入池条目生效**；
+#   存量条目（实测快照 1356 条里 677 条无 attribution 字段）一直是空白的。
+#   追溯点选在 `persist_pool`（唯一"全量 entries 都在手里"的地方），
+#   判据与归因器**与 350 完全同一套**（`_m350_attribution`），不留第二口径。
+BACKFILL_SCHEMA = "audit_pool_attribution_backfill/351.v1"
+
+
+def backfill_attribution(entries: list, *, now: float | None = None) -> dict:
+    """给缺 `attribution` 的历史条目补齐归因（幂等）。
+
+    ★为什么不新写一套判据：归因口径一旦分叉，两份 attribution 会互相打脸
+    （350 刀6 已有的 `fallback=false` 与新写的不一致，读的人不知道信谁）。
+    这里只复用 `_m350_attribution`，额外加三个"这是追溯来的"标记字段。
+    """
+    _t = float(now if now is not None else time.time())
+    _n_missing = _n_filled = _n_fallback = _n_locatable = 0
+    _already = 0
+    for _e in (entries or []):
+        if not isinstance(_e, dict):
+            continue
+        _old = _e.get("attribution")
+        if isinstance(_old, dict) and _old.get("schema"):
+            _already += 1
+            continue
+        _n_missing += 1
+        # 池条目的 desc 就是 350 归因器要的 message（字段名不同，语义同一个）
+        _probe = {
+            "message": _e.get("desc") or "",
+            "issue_type": _e.get("issue_type"),
+            "line": _e.get("line"),
+            "file": _e.get("file"),
+        }
+        _att = _m350_attribution(_probe)
+        _att["backfilled"] = True
+        _att["backfilled_at"] = _t
+        _att["backfill_schema"] = BACKFILL_SCHEMA
+        _e["attribution"] = _att
+        _n_filled += 1
+        if _att.get("fallback"):
+            _n_fallback += 1
+        if _att.get("locatable"):
+            _n_locatable += 1
+    return {
+        "schema": BACKFILL_SCHEMA,
+        "already": _already,
+        "missing": _n_missing,
+        "filled": _n_filled,
+        "fallback": _n_fallback,
+        "locatable": _n_locatable,
+        "idempotent_second_call_filled": 0 if _n_missing == 0 else None,
+        "boundary": ("只补「缺 attribution 字段」的条目；已有的**不覆盖**"
+                     "（覆盖会把 350 的原值改成追溯值，等于篡改历史）"),
+    }
+
+
 def entry_from_issue(issue: dict, now: float | None = None,
                      stamps: dict | None = None, proc_gen: str | None = None) -> dict | None:
     """把一条 issue 转成池条目（16 字段口径）。非 dict 返回 None（不猜）。"""
@@ -678,6 +734,13 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
         _new.append(_e)
 
     _merged, _added, _updated = _merge(_old, _new, _now)
+    # ★351刀4：历史兜底条目追溯（每拍都可安全调用：已有 attribution 的跳过）。
+    _bf = backfill_attribution(_merged, now=_now)
+    if _bf["filled"]:
+        _module_logger.info(
+            "[351归因] 历史条目追溯: filled=%d already=%d fallback=%d locatable=%d "
+            "proc_gen=%s", _bf["filled"], _bf["already"], _bf["fallback"],
+            _bf["locatable"], _pg)
     _kept, _pruned = prune(_merged, _now, retain_days)
     _truncated = 0
     if len(_kept) > MAX_POOL_ENTRIES:

@@ -4264,6 +4264,18 @@ def main():
         _nd_last_ts = 0.0  # _m348_d7_wallclock
         # ★346批刀 1：问题池消费口的节拍计数（每 300 拍一次，约 5 分钟）
         _pool_consume_counter = 0
+        # ★351刀5：节拍**可配置**（默认 300 拍不变）。放在循环外算一次：
+        #   节拍参数不需要热更新，每 tick 重读是白付开销；
+        #   环境变量优先（运维临时加密），其次 config 常量。
+        try:
+            _pc_env = os.environ.get("PULSE_POOL_CONSUME_EVERY", "").strip()
+            _pool_consume_every = max(1, int(
+                _pc_env if _pc_env
+                else getattr(config, "POOL_CONSUME_EVERY_TICKS", 300)))
+        except (TypeError, ValueError) as _pc_e351:
+            _pool_consume_every = 300
+            logging.getLogger("pulse").warning(
+                "[351节拍] 节拍参数非法，回落 300 拍: %s", _pc_e351)
         _shutdown_chan = None
         while not exit_requested:
             # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
@@ -4325,7 +4337,7 @@ def main():
             #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。
             try:
                 _pool_consume_counter += 1
-                if _pool_consume_counter >= 300:
+                if _pool_consume_counter >= _pool_consume_every:
                     _pool_consume_counter = 0
                     from nucleus.audit_problem_pool_consumer import consume_heartbeat
                     consume_heartbeat(os.path.dirname(os.path.abspath(__file__)))
