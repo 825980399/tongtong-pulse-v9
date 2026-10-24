@@ -354,8 +354,28 @@ class PulseVisualCortex(BasePulseOrgan):
                 log_data.extend(batch)
                 if len(log_data) > 100:
                     log_data = log_data[-100:]
-                with open(log_path, 'w', encoding='utf-8') as f:
-                    _json.dump(log_data, f, ensure_ascii=False)
+                # ★356刀5：原子写（临时文件 → fsync → os.replace）。
+                #   本方法只有 `_log_writer_loop` 一个写线程调用，故不加锁；
+                #   原 `open(...,'w')` 截断写在中途异常时会把整份视觉流日志写坏。
+                import tempfile as _tempfile
+                _tmp = None
+                try:
+                    _fd, _tmp = _tempfile.mkstemp(
+                        dir=os.path.dirname(log_path),
+                        prefix='.vision_stream_log.', suffix='.tmp')
+                    with os.fdopen(_fd, 'w', encoding='utf-8') as f:
+                        _json.dump(log_data, f, ensure_ascii=False)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(_tmp, log_path)
+                    _tmp = None
+                finally:
+                    if _tmp is not None and os.path.exists(_tmp):
+                        try:
+                            os.unlink(_tmp)
+                        except OSError as _ue:
+                            self._log(LogLevel.DEBUG,
+                                      f"[356刀5] 临时文件清理失败: {type(_ue).__name__}: {_ue}")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
     # ========== 依赖注入 ==========

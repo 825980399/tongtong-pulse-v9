@@ -525,10 +525,15 @@ class SelfAwarenessDailyScheduler:
                             "[模型自更新] 状态=%s 版本=%s",
                             _up.get("status"), _up.get("version"))
                     if _chk.get("full_retrain_due"):
-                        _rp = _mu.full_retrain()
+                        # ★356刀6：改名避让——原先复用 `_rp` 承接重训计划，
+                        #   一旦今日恰好 full_retrain_due，`_rp` 就从"日报路径 str"
+                        #   变成 dict，后面 4 个 append_*_section(_rp) 全部
+                        #   TypeError（expected str, bytes or os.PathLike object, not dict）。
+                        #   实拍：2026-10-24 10:17:27-37 连续 4 次，当日日报未写。
+                        _m356_retrain = _mu.full_retrain()
                         _module_logger.info(
                             "[模型自更新] 全量重训计划已产出（不执行训练）: 版本=%s",
-                            _rp.get("version"))
+                            _m356_retrain.get("version"))
                 except Exception as _mue:                   # 自更新失败不得影响调度
                     _module_logger.warning(
                         "[自我认知调度] 模型自更新检查失败（忽略）: %s: %s",

@@ -135,6 +135,31 @@ def generator_enabled() -> bool:
 # ========== 身份键（与池同源，不重造）==========
 
 
+#: ★356刀2：项目目录名（键归一要用；由本文件位置反推，不写死盘符）
+_M356_PROJ_DIRNAME = os.path.basename(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def _m356_norm_key_file(file: Any) -> str:
+    """★356刀2：键口径归一——**与池正本 `norm_file_field` 逐字同构**。
+
+    池侧改成用 `norm_file_field` 算键后，若这里仍只做 `\\`→`/`，
+    两侧会在**绝对路径入参**上再次分叉（池剥项目根、生成器不剥）⇒ 键又双错位。
+    同构性由 `dedup_key_matches_pool()` 对拍保证（不靠"同一份代码"的口头承诺）。
+    """
+    _f = str(file or "").replace("\\", "/").strip()
+    _low = _f.lower()
+    _mark = "/%s/" % _M356_PROJ_DIRNAME.lower()
+    _i = _low.find(_mark)
+    if _i >= 0:
+        _f = _f[_i + len(_mark):]
+    elif _low.startswith(_M356_PROJ_DIRNAME.lower() + "/"):
+        _f = _f[len(_M356_PROJ_DIRNAME) + 1:]
+    while _f.startswith("./"):
+        _f = _f[2:]
+    return _f.lstrip("/")
+
+
 def make_dedup_key(file: str, method: str, issue_type: str) -> str:
     """★349刀1②：`dedup_key = sha1(file|method|issue_type)[:16]`（**弃行号**）。
 
@@ -142,8 +167,11 @@ def make_dedup_key(file: str, method: str, issue_type: str) -> str:
     池模块，import 它会把整条池依赖（含 pyarrow 邻域）拉进生成器。
     这里用**逐字同构**的实现，并在下面 `dedup_key_matches_pool()` 里
     与池正本对拍——口径一致性由**测试**保证，不靠"同一份代码"这种口头承诺。
+
+    ★356刀2：文件路径走 `_m356_norm_key_file`（相对根的 posix 路径），
+    与池侧 `norm_file_field` 同构 ⇒ 两侧同问题同键。
     """
-    _norm = str(file or "").replace("\\", "/").strip()
+    _norm = _m356_norm_key_file(file)
     _raw = "%s|%s|%s" % (_norm, str(method or "").strip(),
                          str(issue_type or "").strip())
     return hashlib.sha1(_raw.encode("utf-8")).hexdigest()[:16]

@@ -2317,6 +2317,36 @@ def _write_back(patch: dict, verdict: dict) -> None:
         patch["fail_count_source"] = "ledger+field(326.1)"
 
 
+def _m356_close_loop_fixed(patch: dict) -> dict | None:
+    """★356刀1：补丁应用成功 ⇒ 审计池 `set_status(FIXED)`（**复用既有状态机**）。
+
+    为什么必须有这一处：`set_status` 在生产只有 1 个调用点（consumer 的 `claimed`），
+    `fixed`/`verified` **零调用** ⇒ 六段闭环在"应用成功"这一步就断了：
+    补丁自身 `applied=True`，池条目却永远停在 claimed/open。
+    这里只调用既有 `_LEGAL_TRANSITIONS`，不重建状态机。
+
+    失败只 warning：闭环写不进去不能反过来把派单判失败（铁律：观测不得阻断主流程）。
+    """
+    try:
+        _key = str(patch.get("dedup_key") or "").strip()
+        if not _key:
+            return None
+        from nucleus import audit_problem_pool as _app
+        _r = _app.set_status(
+            _key, _app.STATUS_FIXED,
+            note="[356闭环] patch=%s 应用成功（motor.execute success）"
+                 % str(patch.get("id") or "")[:40])
+        _module_logger.info(
+            "[356闭环] set_status(FIXED) patch=%s key=%s state=%s changed=%s",
+            str(patch.get("id") or "")[:24], _key,
+            _r.get("state"), _r.get("changed"))
+        return _r
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m356_close_loop_fixed",
+                   level="warning")
+        return None
+
+
 def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> dict:
     """主入口：每日派单 ≤1 条 runtime_verified 低风险补丁到 motor.execute，回写 runtime_verified。"""
     _fw = framework or get_dispatch_framework()
@@ -2380,6 +2410,9 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     for _p in _dispatchable:
         _v = dispatch_and_verify(_sandbox, _p)
         _write_back(_p, _v)
+        # ★356刀1：应用成功 ⇒ 审计池 FIXED（六段闭环第 3 段接线）。
+        if _v.get("success"):
+            _m356_close_loop_fixed(_p)
         _results.append(_v)
     # 落盘（原子写；失败只 warning 不影响调度主流程）——有标记或有执行结果即落盘
     if _results or _suspect_n:

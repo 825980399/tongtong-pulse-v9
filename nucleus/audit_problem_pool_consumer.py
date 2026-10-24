@@ -573,4 +573,15 @@ def consume_heartbeat(project_root: str | None = None, now: float | None = None,
                    level="warning")
         _r["verify_feedback"] = {"state": "exception",
                                  "reason": "%s: %s" % (type(_fe).__name__, _fe)}
+    # ★356刀7：免费链用量可见化（只读日报汇总，不写盘、不动付费跳闸口径）
+    try:
+        from nucleus.llm import call_recorder as _cr356
+        _fc356 = _cr356.free_chain_usage()
+        _r["free_chain"] = {k: _fc356.get(k) for k in
+                            ("date", "free_tokens", "paid_tokens",
+                             "free_share", "models")}
+    except Exception as _fce356:
+        silent_exc(_fce356,
+                   "audit_problem_pool_consumer.consume_heartbeat free_chain",
+                   level="warning")
     return _r

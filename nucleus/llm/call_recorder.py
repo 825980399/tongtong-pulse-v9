@@ -369,6 +369,7 @@ def _m352b_empty_day(day: str) -> dict:
         "by_model": {},
         "paid_tokens": 0,
         "free_tokens": 0,
+        "free_by_model": {},
         "alerted": False,
         "updated_at": "",
     }
@@ -424,6 +425,19 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
         out["paid_tokens"] = int(out.get("paid_tokens") or 0) + _tk
     else:
         out["free_tokens"] = int(out.get("free_tokens") or 0) + _tk
+        # ★356刀7：免费链**按模型**单独计数。
+        #   为什么不能复用 `by_model`：它把免费与付费渠道的同名模型混在一个桶里，
+        #   而"免费额度还剩多少"必须只看免费侧——混桶会让余量判断失去分母。
+        _fb = out.get("free_by_model")
+        if not isinstance(_fb, dict):
+            _fb = {}
+            out["free_by_model"] = _fb
+        _fc = _fb.get(_md)
+        if not isinstance(_fc, dict):
+            _fc = {"calls": 0, "tokens": 0}
+        _fc["calls"] = int(_fc.get("calls") or 0) + 1
+        _fc["tokens"] = int(_fc.get("tokens") or 0) + _tk
+        _fb[_md] = _fc
 
     _ts = rec.get("ts")
     try:
@@ -1098,6 +1112,54 @@ def channel_hhi(by_channel: dict) -> float:
             continue
         _h += _s * _s
     return round(_h, 4)
+
+
+def free_chain_usage(base_dir: str | None = None) -> dict:
+    """★356刀7：免费链用量可见化（**与付费跳闸口径严格分开**）。
+
+    背景（星轨 355 刀10 重启首拍）：免费链模型（qwen-plus / glm-4.7-flash 等）
+    在 `[343单价]` 表里**未定价** ⇒ 它们消耗的 token 既不计钱、也不进付费跳闸阈值，
+    在"用量"视角完全不可见——免费额度被吃穿也不会有任何读数。
+
+    本函数只做**计数与占比**，不碰付费口径（`PAID_CHANNELS` /
+    `DAILY_PAID_TOKEN_ALERT` 一律不动），也不伪造月额余量。
+
+    Returns:
+        {schema, date, free_tokens, paid_tokens, total_tokens, free_share,
+         free_by_model, models, quota_hint}
+        `free_share` 无样本时为 **None**（不是 0，铁律155）。
+    """
+    _d = get_daily_tokens(base_dir=base_dir) or {}
+    _tot = int(_d.get("total_tokens") or 0)
+    _free = int(_d.get("free_tokens") or 0)
+    _paid = int(_d.get("paid_tokens") or 0)
+    _fbm = _d.get("free_by_model")
+    if not isinstance(_fbm, dict):
+        _fbm = {}
+    _top = sorted(_fbm.items(),
+                  key=lambda kv: -int((kv[1] or {}).get("tokens") or 0))[:5]
+    _rep = {
+        "schema": "m356_free_chain/356.v1",
+        "date": str(_d.get("date") or ""),
+        "free_tokens": _free,
+        "paid_tokens": _paid,
+        "total_tokens": _tot,
+        "free_share": (round(_free / float(_tot), 4) if _tot else None),
+        "free_by_model": {str(k): dict(v or {}) for k, v in _top},
+        "models": len(_fbm),
+        # ★口径声明：日汇总只有**日**粒度，月额余量必须跨日累计才成立；
+        #   这里明确标 unavailable，绝不拿"日用量"去冒充"月额剩余"。
+        "quota_hint": {"state": "unavailable",
+                       "why": "日汇总无月粒度，月额余量需跨日累计（不伪造）"},
+    }
+    _module_logger.info(
+        "[356免费链] date=%s 免费token=%d 付费token=%d 占比=%s 模型数=%d top=%s",
+        _rep["date"], _free, _paid,
+        ("%.2f%%" % (100.0 * _rep["free_share"])) if _rep["free_share"] is not None else "N/A",
+        _rep["models"],
+        ",".join("%s=%d" % (k, int((v or {}).get("tokens") or 0))
+                 for k, v in _top[:3]) or "-")
+    return _rep
 
 
 def read_daily_tokens_report(base_dir: str | None = None) -> dict:

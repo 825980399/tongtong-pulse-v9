@@ -50,9 +50,11 @@
 `PULSE_AUDIT_POOL_DIR`（给隔离脚本用）。生产不设环境变量 ⇒ 落 `data/reports/audit/`。
 """
 
+import functools
 import hashlib
 import json
 import os
+import threading
 import time
 from typing import Any
 
@@ -131,6 +133,25 @@ SCHEMA = "audit_problem_pool/345.v2"
 #   落同目录独立文件 `_pool_ledger.json`。
 LEDGER_FILENAME = "_pool_ledger.json"
 LEDGER_SCHEMA = "audit_pool_ledger/348.v1"
+
+#: ★356刀3：池写**串行化**锁。
+#:   现状：`persist_pool` / `set_status` / `note_verify_feedback` 都是
+#:   「load_pool → 改内存 → _atomic_write_json」，三者互不知情 ⇒ 两个写手
+#:   并发时后写者用**旧快照**覆盖前者（lost update）。星轨 356 前置把它列成
+#:   "竞态两候选（persist 断链重建 vs 双写）"，本刀先给出**确定的串行化**，
+#:   把"到底是断链重建还是双写"的判定留到重启后一拍实测（有锁之后若仍丢，
+#:   就排除并发写、直指断链重建）。
+#:   RLock：`set_status` 内部可能经 `note_pool_fingerprint` 再次进池，需可重入。
+_M356_POOL_LOCK = threading.RLock()
+
+
+def _m356_serialized(fn):
+    """★356刀3：给池写入口加串行化（装饰器形态，零侵入函数体）。"""
+    @functools.wraps(fn)
+    def _wrap(*args, **kwargs):
+        with _M356_POOL_LOCK:
+            return fn(*args, **kwargs)
+    return _wrap
 LEDGER_HISTORY_MAX = 120
 
 
@@ -294,8 +315,15 @@ def make_dedup_key(file: str, method: str, issue_type: str) -> str:
 
     用 sha1 而非内置 `hash()`：后者受 `PYTHONHASHSEED` 影响，跨进程算出的键不同
     ⇒ 重启后同一问题被判新条目（343 批已在 O3 id 上踩过）。
+
+    ★356刀2：**先归一文件路径**再算 sha1。此前 audit 侧原样用 `file` 串（可能带
+    反斜杠/绝对路径），而 generator 侧先 `\\`→`/` 再算 ⇒ 同一条问题两侧算出
+    **不同键**（烛微356「键双错位」）：回写落空、merge 断配、池里同问题两条。
+    归一函数复用 349 刀10② 的 `norm_file_field`（相对项目根的 posix 路径），
+    不另造一份口径。
     """
-    _raw = "%s|%s|%s" % (str(file or "").strip(), str(method or "").strip(),
+    _norm = norm_file_field(file)
+    _raw = "%s|%s|%s" % (_norm, str(method or "").strip(),
                          str(issue_type or "").strip())
     return hashlib.sha1(_raw.encode("utf-8")).hexdigest()[:16]
 
@@ -790,6 +818,7 @@ def _status_counts(entries: list) -> dict:
     return _out
 
 
+@_m356_serialized
 def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | None = None,
                  now: float | None = None, retain_days: int = POOL_RETAIN_DAYS) -> dict:
     """主入口：审查报告 → 合并进池 → prune → 原子落盘 → 留痕。
@@ -910,6 +939,7 @@ def restore_pool(root: str | None = None, audit_dir_path: str | None = None,
             "status_counts": {}, "reason": _r.get("reason", "")}
 
 
+@_m356_serialized
 def set_status(dedup_key: str, new_status: str, root: str | None = None,
                audit_dir_path: str | None = None, now: float | None = None,
                note: str = "") -> dict:
@@ -1000,6 +1030,7 @@ def _status_path(old: str, new: str, max_hops: int = 3):
     return None
 
 
+@_m356_serialized
 def note_verify_feedback(dedup_key: str, *, patch_id: str = "", passed=None,
                          verified_at=None, dims=None, reason: str = "",
                          advance: bool = True, root: str | None = None,
@@ -1053,6 +1084,16 @@ def note_verify_feedback(dedup_key: str, *, patch_id: str = "", passed=None,
             _hit["closed_reason"] = ("[350回灌] 效果验证通过 patch=%s"
                                      % str(patch_id)[:60])
     _hit["status_history"] = _hist
+    # ★356刀1：验证通过 ⇒ `problem_fixed=verified` 与状态 VERIFIED **同事件双写**。
+    #   此前只翻状态、不写 problem_fixed ⇒ 破零指标恒为 None（六段闭环第 5 段断点）。
+    #   反过来 passed=False ⇒ problem_fixed=failed（失败回滚留证据，不静默）。
+    if _want == STATUS_VERIFIED and str(_hit.get("status")) == STATUS_VERIFIED:
+        _hit["problem_fixed"] = "verified"
+        _hit["problem_fixed_reason"] = "356_effect_verify_passed"
+        _hit["problem_fixed_partial"] = False
+    elif _want == STATUS_OPEN and passed is False:
+        _hit["problem_fixed"] = "failed"
+        _hit["problem_fixed_reason"] = "356_effect_verify_failed"
     _hit["verify_feedback"] = {
         "schema": VERIFY_FEEDBACK_SCHEMA,
         "patch_id": str(patch_id or ""),
@@ -1366,6 +1407,9 @@ def _fingerprint_of(path: str, payload: dict, now: float) -> dict:
         "proc_gen": str(payload.get("proc_gen") or "unknown"),
         "code_version": str(payload.get("code_version") or "unknown"),
         "schema": str(payload.get("schema") or ""),
+        # ★356刀3：台账补 `status_counts`——此前**根本没这个键**，读方 `.get()` 恒 None，
+        #   "池里各状态各有多少"在台账层面完全不可见（星轨 356 前置列的原始现象）。
+        "status_counts": _status_counts(_entries),
     }
 
 
@@ -1444,6 +1488,8 @@ def note_pool_fingerprint(path: str, payload: dict, now: float | None = None,
         "updated_at": _now,
         "updated_at_str": _fp["written_at_str"],
         "last_known_snapshot": _fp,
+        # ★356刀3：顶层镜像，方便"一眼看当前池分布"而不必钻指纹历史
+        "status_counts": (_fp.get("status_counts") or {}),
         "seen": _seen,
         "history": _hist,
     }

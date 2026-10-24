@@ -72,6 +72,18 @@ def _is_hot_edit(path: str) -> bool:
 
 _module_logger = _get_logger()
 
+#: ★356刀4①：契约三件套的**单例入口名**——命中这些不算「跨模块耦合」。
+#:   依据《脉冲发布契约_355》：① 器官内 self._emit ② EventBus.publish/publish_async
+#:   ③ InsightBoard.get_insight_board().post。直连③是**规定用法**，不是缺陷。
+_M356_CONTRACT_SINGLETONS = frozenset({
+    "get_insight_board",   # 契约③：洞察板（给人看的结论落点）
+    "get_event_bus",       # 契约②：跨器官事件广播
+    "get_pulse_bus",       # 历史误名：本就该报，但让它走「不存在模块」那条判据
+})
+
+#: ★356刀4②：这些方法名不适用「周期任务重入守卫」——构造器/析构器不是周期任务。
+_M356_NO_REENTRY_SKIP = frozenset({"__init__", "__new__", "__del__", "__post_init__"})
+
 # ==================== ★344批刀2：段B（收敛层作废）读数快照 ====================
 # 343刀7 把三段式判据落成了**函数**，但 12 圈 B 段全是 None —— 判据背后
 # 没有数据源。本批补上采集口（`criteria_window.count_converge_voided`），
@@ -4352,7 +4364,14 @@ class SelfInspector(SilentLogMixin):
             })
 
     def _check_periodic_task_no_reentry(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
-        """检测周期任务方法缺少重入守卫（★FIX: 架构基线固化·周期任务必须有重入锁）"""
+        """检测周期任务方法缺少重入守卫（★FIX: 架构基线固化·周期任务必须有重入锁）。
+
+        ★356刀4：`__init__` 等构造器**直接不报**。构造器不是周期任务，
+        给它加"上一轮未完成就跳过"的守卫没有语义（355 的 29a2/e1d2 就是这么
+        被误报成缺陷的），报出来只会让生成器去重写整段初始化。
+        """
+        if str(method or "").strip() in _M356_NO_REENTRY_SKIP:
+            return
         _has_periodic = ('threading.Timer' in body or 'Timer(' in body
                          or '_schedule_' in body or '_schedule_next' in body)
         if not _has_periodic:
@@ -4399,15 +4418,29 @@ class SelfInspector(SilentLogMixin):
             return  # 每个方法只报一次，避免同一资源多模式重复
 
     def _check_cross_module_singleton_call(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
-        """检测直接调用其他模块单例的方法（★FIX: 架构基线固化·器官不得跨模块直调）。"""
+        """检测直接调用其他模块单例的方法（★FIX: 架构基线固化·器官不得跨模块直调）。
+
+        ★356刀4：两条排除（355 交付实测 15/15 假阳性的直接原因）：
+          ① **`self.xxx()` 不是跨模块调用** —— 原正则连 `self.stress_axis.get_stats()`
+             这种同器官调用也命中，把"自己调自己"报成"跨模块耦合"；
+          ② **契约三件套不报** —— `get_insight_board().post(...)` 就是
+             《脉冲发布契约_355》的入口③，直连是**正确用法**，报出来只会让生成器
+             再去自造 `nucleus.PulseBus`（355 实测 15 条补丁因此全部变成
+             指向不存在模块的 ImportError / 恒 None 静默 no-op）。
+        """
         # get_xxx().method() 或 get_xxx().method 模式，是绕过脉冲总线的跨模块直调信号
-        _pat = re.compile(r'\bget_\w+\(\)\.\w+\s*\(')
+        # ★356刀4：`(?<![\w.])` 排除被 `.` 前缀的调用（self.get_x() / obj.get_x()）
+        _pat = re.compile(r'(?<![\w.])get_\w+\(\)\.\w+\s*\(')
         _seen = set()
         for _m in _pat.finditer(body):
             _sig = _m.group()
             if _sig in _seen:
                 continue
             _seen.add(_sig)
+            # ★356刀4②：契约三件套入口 ⇒ 不报（见《脉冲发布契约_355》）
+            _callee = _sig.split("(", 1)[0].strip()
+            if _callee in _M356_CONTRACT_SINGLETONS:
+                continue
             line_num = start_line + body[:_m.start()].count('\n')
             suggestion = self._generate_fix_suggestion("cross_module_singleton_call", file_path, method, line_num)
             issues.append({

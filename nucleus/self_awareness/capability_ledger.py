@@ -237,6 +237,10 @@ def subclass_of(dest, data, rel_path):
     return "archived_other"
 
 
+#: ★356刀10①：坏 JSON 的"已留痕"集合（进程内单次；计数不受影响）
+_M356_BAD_JSON_WARNED: set[str] = set()
+
+
 def reconcile_reports(root: str | None = None) -> dict[str, Any]:
     """全量对账 ``data/reports``，输出 v2 四归位统计（**空转读数单一**）。
 
@@ -280,9 +284,14 @@ def reconcile_reports(root: str | None = None) -> dict[str, Any]:
                 #   原来是 debug 级、只有异常类型没有文件名 —— 10-14/10-15/10-21 三次
                 #   `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
                 #   都无从知道是哪个文件（空文件同样触发 char 0）。
-                silent_exc(_e, where=("nucleus.self_awareness.capability_ledger::"
-                                      "reconcile[%s]" % _rel),
-                           level="warning")
+                # ★356刀10①：同一文件**进程内只留痕一次**——计数照常每拍累加
+                #   （分母不能丢），但日志不再每拍重刷同一批：`_archive_test_20260914`
+                #   那三个坏 JSON 此前是每轮必报 3 条 warning，把真异常淹掉。
+                if _rel not in _M356_BAD_JSON_WARNED:
+                    _M356_BAD_JSON_WARNED.add(_rel)
+                    silent_exc(_e, where=("nucleus.self_awareness.capability_ledger::"
+                                          "reconcile[%s]" % _rel),
+                               level="warning")
             _dest, _why = classify_report(_rel, _d)
             _out["total"] += 1
             if _dest == "unparseable":

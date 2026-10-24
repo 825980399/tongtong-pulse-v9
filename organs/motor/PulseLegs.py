@@ -21,6 +21,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import random
 import re
 import threading
+
+#: ★356刀5：双腿学习日志的**写锁**——多路学习 worker 并发调 `_write_learn_log`，
+#:   原实现裸 `open(...,'w')` 既可能互相覆盖、崩溃时还会留下半截 JSON。
+_M356_LEARN_LOG_LOCK = threading.Lock()
 import time
 
 import requests
@@ -1461,11 +1465,34 @@ class PulseLegs(BasePulseOrgan):
                         self._log(LogLevel.WARNING,
                                   f"[第74批T1] 双腿学习日志格式异常(非list/dict)，重置为空: {type(log_data).__name__}")
                         log_data = []
-            log_data.append(entry)
-            if len(log_data) > 50:
-                log_data = log_data[-50:]
-            with open(log_path, 'w', encoding='utf-8') as f:
-                _json.dump(log_data, f, ensure_ascii=False)
+            # ★356刀5：写段进锁 + 原子写（临时文件 → fsync → os.replace）。
+            #   原实现 `open(...,'w')` 直接截断目标文件：多路学习 worker 并发写会
+            #   互相覆盖，进程中途退出则留下半截 JSON（读方 safe_read_json 直接归零）。
+            #   ★据实披露：**读段仍在锁外**（`safe_read_json` 那 20 行带 self._log，
+            #   进锁会把日志器锁套进来，353刀4 已证过 logging 持锁是最危险的形态），
+            #   故极端并发下仍是"最后一写者胜"；本刀只消除截断与半写。
+            with _M356_LEARN_LOG_LOCK:
+                log_data.append(entry)
+                if len(log_data) > 50:
+                    log_data = log_data[-50:]
+                import tempfile as _tempfile
+                _tmp = None
+                try:
+                    _fd, _tmp = _tempfile.mkstemp(
+                        dir=os.path.dirname(log_path),
+                        prefix='.legs_learn_log.', suffix='.tmp')
+                    with os.fdopen(_fd, 'w', encoding='utf-8') as f:
+                        _json.dump(log_data, f, ensure_ascii=False)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(_tmp, log_path)
+                    _tmp = None
+                finally:
+                    if _tmp is not None and os.path.exists(_tmp):
+                        try:
+                            os.unlink(_tmp)
+                        except OSError as _ue:
+                            silent_exc(_ue, where="organs.motor.PulseLegs::_write_learn_log 清理")
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
 
