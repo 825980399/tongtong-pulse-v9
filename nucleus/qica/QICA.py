@@ -13,6 +13,7 @@ QICA.py —— QICA意图分类器
 
 import logging
 import os
+import time as time_mod
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -1484,6 +1485,23 @@ class QICA(BasePulseOrgan):
         if not _hits:
             _hits = self._node_pool.query(evol_level="L3", space_path_prefix=path, limit=5)
         return _hits[0] if _hits else None
+    def _m360_absorb_bump(self, reason: str, n: int = 1) -> None:
+        """★360刀15：成长规则吸收归因累计（进程内累计，供 `m360_absorb_stats` 读）。"""
+        try:
+            if not hasattr(self, "_m360_absorb_reasons"):
+                self._m360_absorb_reasons = {}
+            self._m360_absorb_reasons[reason] = self._m360_absorb_reasons.get(reason, 0) + int(n)
+        except Exception as _m360e:
+            self._log(LogLevel.DEBUG,
+                      f"[360刀15] 吸收归因计数失败: {type(_m360e).__name__}: {_m360e}")
+
+    def m360_absorb_stats(self) -> dict[str, Any]:
+        """★360刀15：吸收归因出口 —— 把「吸收 0 条」拆成可处置的原因分布。"""
+        return {
+            "reasons": dict(getattr(self, "_m360_absorb_reasons", {}) or {}),
+            "last": dict(getattr(self, "_m360_absorb_last", {}) or {}),
+        }
+
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """
         ★v25.0修复：吸收成长对比日志蒸馏出的规则。
@@ -1493,11 +1511,20 @@ class QICA(BasePulseOrgan):
         - concept_correction：纠正概念→正确路径/意图（更新领域知识+建立纠正关系边）
         """
         if not rules:
+            # ★360刀15：「没蒸馏出规则」与「有规则但一条没吸收」必须分开计数
+            self._m360_absorb_bump("empty_rules")
+            self._log(LogLevel.DEBUG, "[360刀15] 成长规则吸收: 输入规则为空")
             return 0
 
         _absorbed = 0
+        _m360_why: dict[str, int] = {}
+
+        def _bump(reason: str) -> None:
+            _m360_why[reason] = _m360_why.get(reason, 0) + 1
+
         for _rule in rules:
             if not isinstance(_rule, dict):
+                _bump("not_dict")
                 continue
             _type = _rule.get("type", "")
             _concept = _rule.get("concept", "")
@@ -1511,6 +1538,10 @@ class QICA(BasePulseOrgan):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
                             _absorbed += 1
+                        else:
+                            _bump("low_confidence")
+                    else:
+                        _bump("blocked_quality_gate")
 
                 # 同步更新意图到方法映射
                 if _intent and _intent in self._intent_to_method:
@@ -1529,6 +1560,12 @@ class QICA(BasePulseOrgan):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
                             _absorbed += 1
+                        else:
+                            _bump("low_confidence")
+                    elif _path:
+                        _bump("blocked_quality_gate")
+                    else:
+                        _bump("missing_path")
 
                 # 同步意图映射
                 if _intent and _intent in self._intent_to_method:
@@ -1546,10 +1583,27 @@ class QICA(BasePulseOrgan):
                         _correct_node.node_id, "correction",
                         round(_rule.get("confidence", 0.6), 3), "qica_growth")
                     _absorbed += 1
+            elif _type in ("domain_knowledge", "concept_correction"):
+                # ★360刀15：类型认识但字段不全（缺 concept/path）⇒ 不是「类型不支持」
+                _bump("missing_fields")
+            else:
+                _bump("unknown_type")
 
+        # ★360刀15：0 条必须有归因。「吸收 0 条」可能是蒸馏没出规则、
+        #   可能是质量门全拦、也可能只是置信度不够——三件事处置动作完全不同。
+        for _k, _v in _m360_why.items():
+            self._m360_absorb_bump(_k, _v)
+        self._m360_absorb_last = {
+            "ts": time_mod.time(), "input": len(rules) if isinstance(rules, list) else -1,
+            "absorbed": _absorbed, "why": dict(_m360_why),
+        }
         if _absorbed > 0:
             self._log(LogLevel.INFO,
                      f"成长规则吸收: 从蒸馏中吸收{_absorbed}条规则（含纠正映射）")
+        else:
+            self._log(LogLevel.WARNING,
+                      f"[360刀15] 成长规则吸收 0 条，归因={_m360_why or '{}'}"
+                      f"（输入 {len(rules) if isinstance(rules, list) else -1} 条）")
 
         return _absorbed
     def _get_dynamic_paths(self, default_paths: list) -> list:

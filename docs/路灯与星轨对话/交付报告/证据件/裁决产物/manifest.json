@@ -1,0 +1,99 @@
+{
+  "exported_at": "2026-10-24 17:04:01",
+  "git_head": "6479c6b4",
+  "policy": "full<512KB 整份入库；大件只导摘要（原始档凭 sha256 对账）",
+  "items": [
+    {
+      "source": "data/patches/pending_patches.json",
+      "kind": "full",
+      "present": true,
+      "size_bytes": 65568,
+      "sha256": "03b0b8def1b3f300bc6d13ddb1669082ab8de8445918916c7a2bf4f3fbae85c7",
+      "mtime": "2026-10-24 15:07:28",
+      "mode": "full",
+      "exported_as": "pending_patches.json"
+    },
+    {
+      "source": "data/patches/applied_355.json",
+      "kind": "full",
+      "present": true,
+      "size_bytes": 43968,
+      "sha256": "4b4fb4c4303e505ae4be20becd9a723c2fbe241b28e7d4c9150eebd3b8c3f7b6",
+      "mtime": "2026-10-24 09:49:02",
+      "mode": "full",
+      "exported_as": "applied_355.json"
+    },
+    {
+      "source": "data/patches/rejected_355.json",
+      "kind": "full",
+      "present": true,
+      "size_bytes": 210016,
+      "sha256": "38e38250dd4990302e95159cc1ff862cc2d0062083bef7ce727ee693643a34c5",
+      "mtime": "2026-10-24 09:49:02",
+      "mode": "full",
+      "exported_as": "rejected_355.json"
+    },
+    {
+      "source": "data/reports/audit/_m356_key_map.json",
+      "kind": "full",
+      "present": true,
+      "size_bytes": 234343,
+      "sha256": "eb884933388a561a31a5407ecbe0fc46a65e6e95f2bf090bdcd0f49d670a0159",
+      "mtime": "2026-10-24 11:34:22",
+      "mode": "full",
+      "exported_as": "_m356_key_map.json"
+    },
+    {
+      "source": "data/reports/audit/_pool_ledger.json",
+      "kind": "full",
+      "present": true,
+      "size_bytes": 20712,
+      "sha256": "91d971f04466c96d9d2992b06b4fbb993cad351bb903bea62c9080764abf4715",
+      "mtime": "2026-10-24 15:47:38",
+      "mode": "full",
+      "exported_as": "_pool_ledger.json"
+    },
+    {
+      "source": "data/reports/audit/audit_20261023.json",
+      "kind": "summary",
+      "present": true,
+      "size_bytes": 1671951,
+      "sha256": "84a02a53b3dfcadad1c12a20fdab504278402c4a295ffc192e94f4069c514f2d",
+      "mtime": "2026-10-23 23:48:45",
+      "entries": 13,
+      "status_counts": {
+        "status=open": 1365
+      },
+      "mode": "summary",
+      "exported_as": "audit_20261023.json.summary.json"
+    },
+    {
+      "source": "data/reports/audit/audit_20261024.json",
+      "kind": "summary",
+      "present": true,
+      "size_bytes": 927768,
+      "sha256": "f46ed6eb0ae095d0f86ac44400f301b4b160eb8dc3f5dbfcb3466a90603ca4a6",
+      "mtime": "2026-10-24 15:47:38",
+      "entries": 13,
+      "status_counts": {
+        "status=open": 686,
+        "status=wontfix": 21,
+        "status=fixed": 7
+      },
+      "mode": "summary",
+      "exported_as": "audit_20261024.json.summary.json"
+    },
+    {
+      "source": "data/reports/audit/_m356_merged_rows.json",
+      "kind": "summary",
+      "present": true,
+      "size_bytes": 796172,
+      "sha256": "156c31f01ce51c9f63782f6c7f1629b2f3d7d0789138f22ffca20dbd08f314b7",
+      "mtime": "2026-10-24 11:34:22",
+      "entries": 4,
+      "status_counts": {},
+      "mode": "summary",
+      "exported_as": "_m356_merged_rows.json.summary.json"
+    }
+  ]
+}

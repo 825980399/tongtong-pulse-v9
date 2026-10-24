@@ -148,6 +148,32 @@ def safe_read_json(path, default=None):
     except Exception:
         pass
 
+    # ★360遗留：冷档 gzip 透明读（如 pulse_knowledge_snapshot.json.<ts>.bak.gz）。
+    #   必须读侧先兼容再谈压缩——否则压缩后的备份在 _load_from_backup 里
+    #   全部读不出来，「有备份但恢复不出节点」比占磁盘更严重。
+    if str(path).lower().endswith(".gz"):
+        try:
+            import gzip as _m360_gzip
+            with _m360_gzip.open(path, "rb") as _gf:
+                _rawb = _gf.read()
+        except Exception as _gzexc:
+            _module_logger.error(
+                f"[读取失败·gz] path={path} type={type(_gzexc).__name__} {_gzexc}")
+            return default
+        _gzraw = None
+        for enc in ("utf-8-sig", "utf-8", "gbk", "latin-1"):
+            try:
+                _gzraw = _rawb.decode(enc)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        if _gzraw is None:
+            _module_logger.error(f"[读取失败·gz编码] path={path} 四种编码均无法解码")
+            return default
+        if not _gzraw.strip():
+            return default
+        return _parse_json_raw(_gzraw, path, default)
+
     raw = None
     # ★第144批 T-144d：``utf-8-sig`` 置于首位——透明剥离 UTF-8 BOM，
     #   避免带 BOM 的 JSON 被 utf-8 成功解码后 json.loads 报 "Unexpected UTF-8 BOM"。
@@ -167,6 +193,16 @@ def safe_read_json(path, default=None):
     if not raw.strip():
         # 内容为空（只有空白字符），直接返回默认
         return default
+    return _parse_json_raw(raw, path, default)
+
+
+def _parse_json_raw(raw, path, default):
+    """★360遗留：从「已解码文本」解析 JSON，解析失败走限流告警 + 归档（语义与原实现逐字一致）。
+
+    抽出来的唯一目的：让 ``.gz`` 冷档与明文档共用**同一套**失败处理，
+    避免压缩档走一条「静默 return default」的捷径 —— 那正是 340 刀5 那类
+    「通道静默归零」的复现路径（读不出来看起来像「没数据」）。
+    """
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, ValueError) as _exc:

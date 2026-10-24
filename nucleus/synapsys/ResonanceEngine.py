@@ -1327,6 +1327,51 @@ class ResonanceEngine:
         """公开只读访问空间索引键（规则14）"""
         return list(self._space_index.keys())
 
+    def m360_channel_diag(self) -> dict[str, Any]:
+        """★360刀15：五维通道「真生效 / 回落 / 命中率」诊断出口。
+
+        给烛微那类「live real=7/2000=0.35%」结论一个**可自证**的读数：
+        分子分母同源（都锚 `total_queries`），无样本时命中率为 ``None``。
+        另给出判定提示，避免把「通道根本没开」误读成「通道效果差」。
+        """
+        _q = int(self._total_queries or 0)
+        _sem_c = int(self._semantic_calls or 0)
+        _sem_f = int(self._semantic_fallbacks or 0)
+        _rul_c = int(self._rule_calls or 0)
+        _rul_f = int(self._rule_fallbacks or 0)
+        _cfg = {}
+        try:
+            _cfg = self._get_semantic_cfg() or {}
+        except Exception as _m360ce:
+            _cfg = {}
+            # ★不得纯 assign：读不到配置会让诊断把通道误判成「没开」，必须留痕
+            _logger.debug(f"[360刀15] 读语义配置失败，按「未启用」诊断: "
+                          f"{type(_m360ce).__name__}: {_m360ce}")
+
+        def _rate(n: int) -> float | None:
+            return round(n / float(_q), 6) if _q > 0 else None
+
+        _sem_on = bool(_cfg.get("enable_semantic_kernel", False))
+        _rule_on = bool(_cfg.get("enable_rule_channel", False))
+        _hint = []
+        if not _sem_on:
+            _hint.append("语义通道总开关 enable_semantic_kernel=False ⇒ 命中率低属「未启用」非「效果差」")
+        if not _rule_on:
+            _hint.append("规则通道 enable_rule_channel=False ⇒ 同上")
+        if _sem_on and _q > 0 and _sem_c == 0 and _sem_f == 0:
+            _hint.append("语义通道零调用且零回落 ⇒ 疑似从未走到打分（查 provider 注入/候选集）")
+        return {
+            "total_queries": _q,
+            "semantic": {"enabled": _sem_on, "calls": _sem_c, "fallbacks": _sem_f,
+                         "hit_rate": _rate(_sem_c),
+                         "provider_bound": self._vector_provider is not None},
+            "rule": {"enabled": _rule_on, "calls": _rul_c, "fallbacks": _rul_f,
+                     "hit_rate": _rate(_rul_c),
+                     "provider_bound": self._rule_provider is not None},
+            "node_pool_bound": self.node_pool is not None,
+            "hints": _hint,
+        }
+
     def get_stats(self) -> dict[str, Any]:
         """获取共振引擎统计"""
         # ★v23.0新增：相位锁定统计
@@ -1334,10 +1379,22 @@ class ResonanceEngine:
         if self.phase_lock:
             _phase_lock_stats = self.phase_lock.get_stats()
 
+        # ★360刀15：语义通道的「生效/回落」一直在计数却从未导出 —— 补上。
+        #   命中率**无样本时是 None 不是 0**（铁律：没样本 ≠ 命中率为 0）。
+        _sem_hit = None
+        if self._total_queries > 0:
+            _sem_hit = round(self._semantic_calls / float(self._total_queries), 6)
+        _rule_hit = None
+        if self._total_queries > 0:
+            _rule_hit = round(self._rule_calls / float(self._total_queries), 6)
         return {
             "total_queries": self._total_queries,
             "rule_calls": self._rule_calls,
             "rule_fallbacks": self._rule_fallbacks,
+            "rule_hit_rate": _rule_hit,
+            "semantic_calls": self._semantic_calls,
+            "semantic_fallbacks": self._semantic_fallbacks,
+            "semantic_hit_rate": _sem_hit,
             "total_resonated": self._total_resonated,
             "freq_index_size": len(self._freq_index),
             "space_index_size": len(self._space_index),

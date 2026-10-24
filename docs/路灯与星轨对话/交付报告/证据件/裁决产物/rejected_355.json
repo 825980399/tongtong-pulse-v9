@@ -1,0 +1,3133 @@
+{
+ "batch": "355",
+ "ts": "2026-10-24 09:49:01",
+ "count": 24,
+ "rows": [
+  {
+   "id": "patch_llm_1792679223_4808",
+   "file": "organs/endocrine/PulseHormones.py",
+   "method": "_append_emotion_log_entry",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_emotion_trend().get(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),  # 新增\n            }\n            # ★修复：使用_emotion_log_lock防止并发写入损坏JSON\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")",
+   "modified_code": "def _append_emotion_log_entry(self, emotion, intensity, user_name):\n        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                trend_direction = \"stable\"\n                if log_data:\n                    previous = log_data[-1]\n                    if isinstance(previous, dict):\n                        prev_intensity = previous.get(\"intensity\")\n                        if isinstance(prev_intensity, (int, float)):\n                            delta = float(intensity) - float(prev_intensity)\n                            if delta > 0.05:\n                                trend_direction = \"up\"\n                            elif delta < -0.05:\n                                trend_direction = \"down\"\n                entry = {\n                    \"timestamp\": time.time(),\n                    \"emotion\": emotion,\n                    \"intensity\": round(intensity, 2),\n                    \"user_name\": user_name,\n                    \"trend\": trend_direction,\n                }\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"data processing exception ignored: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def _append_emotion_log_entry(self, emot'; 第2行: 'import json as _json' → 'try:'; 第3行: 'log_path = os.path.join(' → 'import json as _json'; 第4行: 'os.path.dirname(os.path.dirname(os.path.' → 'log_path = os.path.join('; 第5行: ''data', 'stream', 'hormone_emotion_log.j' → 'os.path.dirname(os.path.dirname(os.path.'",
+   "trust_score": 60.0,
+   "generated_at": 1792679223.0612223,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseHormones import 成功",
+     "sandbox": {
+      "duration_ms": 108,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _write_emotion_log 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792679233.2308342,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_write_emotion_log",
+    "def_name": "_append_emotion_log_entry",
+    "method_after": "_append_emotion_log_entry",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "open("
+   ],
+   "sandbox_blocked_keywords": [
+    "open("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679233.5173697,
+   "created_at": 1792679233.5173697,
+   "reason": "直接调用其他模块单例的方法（get_emotion_trend().get(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 65.4,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 74.3,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "90117a753ca64b1e",
+   "dedup_key_v2": "cbe9f524fc54b501",
+   "real_method": "_write_emotion_log",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_emotion_trend() 为生产真实单例，改文改成 getattr(self,'pulse_bus') 恒 None ⇒ 趋势字段静默丢失",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792679251_747e",
+   "file": "organs/endocrine/PulseHormones.py",
+   "method": "_save_hormone_emotion_log",
+   "issue_type": "non_atomic_write",
+   "risk_level": "高",
+   "description": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "original_code": "        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),  # 新增\n            }\n            # ★修复：使用_emotion_log_lock防止并发写入损坏JSON\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")",
+   "modified_code": "def _save_hormone_emotion_log(self, emotion, intensity, user_name):\n        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            log_dir = os.path.dirname(log_path)\n            if log_dir:\n                os.makedirs(log_dir, exist_ok=True)\n            try:\n                intensity_value = round(float(intensity), 2)\n            except (TypeError, ValueError):\n                intensity_value = 0.0\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": str(emotion),\n                \"intensity\": intensity_value,\n                \"user_name\": str(user_name),\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),\n            }\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                if not isinstance(log_data, list):\n                    log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                tmp_path = log_path + '.tmp.' + str(os.getpid())\n                try:\n                    with open(tmp_path, 'w', encoding='utf-8') as f:\n                        _json.dump(log_data, f, ensure_ascii=False)\n                        f.flush()\n                        os.fsync(f.fileno())\n                    os.replace(tmp_path, log_path)\n                except Exception:\n                    try:\n                        if os.path.exists(tmp_path):\n                            os.remove(tmp_path)\n                    except Exception:\n                        pass\n                    raise\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"data processing exception ignored: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def _save_hormone_emotion_log(self, emot'; 第2行: 'import json as _json' → 'try:'; 第3行: 'log_path = os.path.join(' → 'import json as _json'; 第4行: 'os.path.dirname(os.path.dirname(os.path.' → 'log_path = os.path.join('; 第5行: ''data', 'stream', 'hormone_emotion_log.j' → 'os.path.dirname(os.path.dirname(os.path.'",
+   "trust_score": 30.0,
+   "generated_at": 1792679251.3241973,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseHormones import 成功",
+     "sandbox": {
+      "duration_ms": 140,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _write_emotion_log 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792679261.898077,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_write_emotion_log",
+    "def_name": "_save_hormone_emotion_log",
+    "method_after": "_save_hormone_emotion_log",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "open("
+   ],
+   "sandbox_blocked_keywords": [
+    "open(",
+    "os.remove"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=non_atomic_write",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 30.0,
+     "basis": "issue_type=non_atomic_write 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679262.1720855,
+   "created_at": 1792679262.1720855,
+   "reason": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 64.7,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 66.7,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "fd45068238451703",
+   "dedup_key_v2": "b01e6236e79609be",
+   "real_method": "_write_emotion_log",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 重复且语义旧：与同方法原子写条（e003/539）重复，本条为 251 旧版（刀8 指定拒绝）",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792679356_29a2",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "__init__",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        super().__init__(organ_name)\n        # 热点/榜单源（固定高质量源，获取当前热点）\n        self._trending_sources = [\n            \"https://www.zhihu.com/hot\",\n            \"https://tophub.today/\",\n            \"https://news.qq.com/\",\n            \"https://www.guancha.cn/\",\n            \"https://www.thepaper.cn/\",\n            \"https://www.36kr.com/information/web_news/\",\n            \"https://www.ithome.com/\",\n            \"https://sspai.com/\",\n            \"https://www.oschina.net/blog\",\n            \"https://www.ruanyifeng.com/blog/\",\n        ]\n\n        # 通用搜索模板（移除已失效的rsshub源，优先使用国内可达的引擎）\n        self._search_templates = [\n            \"https://cn.bing.com/search?q={query}\",\n            \"https://www.baidu.com/s?wd={query}\",\n            \"https://www.dogedoge.com/search?q={query}\",\n            \"https://en.wikipedia.org/w/api.php?action=opensearch&search={query}&limit=1&format=json\",\n            \"https://www.bing.com/search?q={query}\",\n        ]\n\n        self._source_index = 0\n        self._cpu_usage = 0.0       # 缓存触觉上报的CPU使用率\n        self._mem_usage = 0.0       # 缓存触觉上报的内存使用率\n        self._consecutive_failures = 0\n        self.node_pool = None          # 节点池引用（用于内部知识重组）\n                # ★P1: 从RUNTIME_PARAMS读取参数（支持热加载）\n        try:\n            import config as _cfg\n            _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})\n            self._max_failures = _rp.get('legs_max_failures', 3)\n            self._cooldown_seconds = _rp.get('legs_cooldown_seconds', 1800)\n        except Exception:\n            self._max_failures = 3\n            self._cooldown_seconds = 1800\n        self._search_failures = 0\n        self._fetch_count = 0\n        self._success_count = 0\n        self._fail_count = 0\n        self._learn_count = 0      # 主动学习次数\n\n        # ===== 多路并行学习引擎 =====\n        self._learn_queue: list[dict[str, Any]] = []   # 优先级队列\n        self._learn_pool = None                         # 学习线程池\n        self._learn_pool_size = 3                       # 最多同时3路学习\n        self._learn_active_directions: set = set()      # 正在学习的方向（去重用）\n        self._learn_queue_lock = threading.Lock()       # 队列锁\n        self._learn_worker_running = False              # 学习工作线程标记\n        # 主动学习定时器\n        # ★主线第49批 T2（P2-328）D：间隔配置化（原硬编码 90s）。\n        #   默认值先行、config 覆盖（遵循本文件 :182-185 的「配置优先」顺序约定）。\n        self._learn_interval = 90.0\n        self._learn_fast_interval = 45.0\n        self._learn_slow_interval = 600.0\n        try:\n            import config as _m49_cfg\n            self._learn_interval = float(getattr(\n                _m49_cfg, \"LEARNING_INTERVAL_SECONDS\", self._learn_interval))\n            self._learn_fast_interval = float(getattr(\n                _m49_cfg, \"LEARNING_FAST_INTERVAL_SECONDS\", self._learn_fast_interval))\n            self._learn_slow_interval = float(getattr(\n                _m49_cfg, \"LEARNING_SLOW_INTERVAL_SECONDS\", self._learn_slow_interval))\n        except Exception as _m49_e:\n            self._log(LogLevel.DEBUG,\n                      f\"[M49-T2] 学习间隔配置读取失败（用默认）: \"\n                      f\"{type(_m49_e).__name__}\")\n        # ★主线第49批 T2：主题去重 + 入库反馈状态\n        from collections import deque as _m49_deque\n        self._m49_recent_topics = _m49_deque(maxlen=32)\n        self._m49_skipped_dup = 0\n        self._m49_skipped_irrelevant = 0\n        self._m49_digest_rejected = 0\n        self._m49_digest_accepted = 0\n        self._m49_stomach_ref = None\n        self._m49_feedback_seen = set()\n        self._learn_timer: threading.Timer | None = None\n        self._learn_running = False\n        self._curiosity_active = False    # 好奇心是否活跃\n        self._compute_level = \"medium\"   # 计算能力等级（默认中等，收到能力更新后调整）\n        self._last_curiosity_time = 0.0   # 上次好奇心触发时间\n\n        # 兴趣方向缓存\n        self._interest_directions: list[str] = [\"人工智能\", \"编程开发\", \"技术架构\"]\n        self._interest_weights: dict[str, float] = {}\n\n        # 安全词表（网络内容第一道过滤）\n        # ★第161批段B B1：改为 config 优先 + 硬编码兜底（词表内容零变更）。\n        #   顺序约束见下方 :211-214 注释——默认值必须先于配置加载执行。\n        self._unsafe_keywords = [\n            \"暴力\", \"色情\", \"赌博\", \"毒品\", \"武器制造\",\n            \"黑客攻击\", \"病毒制作\", \"诈骗\", \"自杀\",\n            \"歧视\", \"仇恨\", \"恐怖\",\n        ]\n        self._load_legs_config()\n\n        # 知识重组兜底模板\n        self._learn_templates = [\n            \"自主学习了{keywords}相关内容：{summary}\",\n            \"在{keywords}领域有了新的理解：{summary}\",\n            \"通过回顾已有知识，对{keywords}有了更深的认识：{summary}\",\n        ]\n        # ★7-5修复(2026-09-05)：以下默认值**必须先于**下方配置加载执行。\n        #   原先这段被机械追加在配置加载之后，导致 config.py 里配好的值\n        #   被这里的硬编码默认值逐个覆盖（全项目 10 个器官、24 个属性）。\n        #   默认值先行、配置覆盖，是「配置优先」的标准顺序。\n        # ★属性初始化完整性补全（自动审查添加）\n        self._builtin_knowledge_path = \"\"\n        self._session = None\n        self._survival_state = {}\n        self._builtin_knowledge = self._load_builtin_knowledge()\n        # ★P0修复：初始化搜索冷却时间戳（之前缺失导致AttributeError）\n        self._cooldown_until = 0.0",
+   "modified_code": "def __init__(self, organ_name):\n        super().__init__(organ_name)\n        # periodic task re-entry guard (prevents overlapping runs)\n        self._in_progress = False\n        self._busy = False\n        self._periodic_lock = None\n        try:\n            import threading as _threading\n            self._periodic_lock = _threading.Lock()\n        except Exception:\n            self._periodic_lock = None\n\n        # 热点/榜单源（固定高质量源，获取当前热点）\n        self._trending_sources = [\n            \"https://www.zhihu.com/hot\",\n            \"https://tophub.today/\",\n            \"https://news.qq.com/\",\n            \"https://www.guancha.cn/\",\n            \"https://www.thepaper.cn/\",\n            \"https://www.36kr.com/information/web_news/\",\n            \"https://www.ithome.com/\",\n            \"https://sspai.com/\",\n            \"https://www.oschina.net/blog\",\n            \"https://www.ruanyifeng.com/blog/\",\n        ]\n\n        # 通用搜索模板（移除已失效的rsshub源，优先使用国内可达的引擎）\n        self._search_templates = [\n            \"https://cn.bing.com/search?q={query}\",\n            \"https://www.baidu.com/s?wd={query}\",\n            \"https://www.dogedoge.com/search?q={query}\",\n            \"https://en.wikipedia.org/w/api.php?action=opensearch&search={query}&limit=1&format=json\",\n            \"https://www.bing.com/search?q={query}\",\n        ]\n\n        self._source_index = 0\n        self._cpu_usage = 0.0       # 缓存触觉上报的CPU使用率\n        self._mem_usage = 0.0       # 缓存触觉上报的内存使用率\n        self._consecutive_failures = 0\n        self.node_pool = None          # 节点池引用（用于内部知识重组）\n        # ★P1: 从RUNTIME_PARAMS读取参数（支持热加载）\n        try:\n            import config as _cfg\n            _rp = getattr(_cfg, 'RUNTIME_PARAMS', {})\n            self._max_failures = _rp.get('legs_max_failures', 3)\n            self._cooldown_seconds = _rp.get('legs_cooldown_seconds', 1800)\n        except Exception:\n            self._max_failures = 3\n            self._cooldown_seconds = 1800\n        self._search_failures = 0\n        self._fetch_count = 0\n        self._success_count = 0\n        self._fail_count = 0\n        self._learn_count = 0      # 主动学习次数\n\n        # ===== 多路并行学习引擎 =====\n        self._learn_queue: list[dict[str, Any]] = []   # 优先级队列\n        self._learn_pool = None                         # 学习线程池\n        self._learn_pool_size = 3                       # 最多同时3路学习\n        self._learn_active_directions: set = set()",
+   "diff_summary": "第1行: 'super().__init__(organ_name)' → 'def __init__(self, organ_name):'; 第2行: '# 热点/榜单源（固定高质量源，获取当前热点）' → 'super().__init__(organ_name)'; 第3行: 'self._trending_sources = [' → '# periodic task re-entry guard (prevents'; 第4行: '\"https://www.zhihu.com/hot\",' → 'self._in_progress = False'; 第5行: '\"https://tophub.today/\",' → 'self._busy = False'",
+   "trust_score": 75.0,
+   "generated_at": 1792679356.5316513,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 391,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 __init__ 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792679366.9184148,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "__init__",
+    "def_name": "__init__",
+    "method_after": "__init__",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679367.2081683,
+   "created_at": 1792679367.2081683,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 98.2,
+    "size": 100.0,
+    "complexity": 100.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 82.1,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "f383680c75f80619",
+   "dedup_key_v2": "f383680c75f80619",
+   "real_method": "__init__",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] issue 错配：periodic_task_no_reentry 打到 __init__（非周期任务），重入守卫无语义；且生成体 116→56 行截断",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792679482_a8c8",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "_trigger_active_learn",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        if not self._learn_running:\n            return\n        if self._learn_timer:\n            self._learn_timer.cancel()\n\n        # 动态调整学习间隔\n        now = time.time()\n        if self._curiosity_active and (now - self._last_curiosity_time) < 120:\n            # 好奇心活跃时，放慢主动学习\n            interval = self._learn_slow_interval\n        else:\n            interval = self._learn_interval\n            self._curiosity_active = False\n\n        # ★v25.1吞吐量优化: 知识质量反馈调速\n        # 去重率>50%表示知识趋于饱和，减慢学习；去重率<15%表示新知识丰富，加快学习\n        try:\n            if self.node_pool and hasattr(self.node_pool, 'get_content_dedup_rate'):\n                _dedup_rate = self.node_pool.get_content_dedup_rate()\n                if _dedup_rate > 0.5:\n                    interval = min(interval * 1.5, self._learn_slow_interval)\n                elif _dedup_rate < 0.15 and getattr(self.node_pool, '_content_add_total', 0) > 50:\n                    interval = max(interval * 0.7, self._learn_fast_interval)\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n\n        self._learn_timer = threading.Timer(interval, self._trigger_active_learn)\n        self._learn_timer.daemon = True\n        self._learn_timer.start()",
+   "modified_code": "def _trigger_active_learn(self):\n        if not self._learn_running:\n            return\n        if getattr(self, '_learn_in_progress', False):\n            return\n        self._learn_in_progress = True\n        try:\n            if self._learn_timer:\n                self._learn_timer.cancel()\n\n            # 动态调整学习间隔\n            now = time.time()\n            if self._curiosity_active and (now - self._last_curiosity_time) < 120:\n                # 好奇心活跃时，放慢主动学习\n                interval = self._learn_slow_interval\n            else:\n                interval = self._learn_interval\n                self._curiosity_active = False\n\n            # ★v25.1吞吐量优化: 知识质量反馈调速\n            # 去重率>50%表示知识趋于饱和，减慢学习；去重率<15%表示新知识丰富，加快学习\n            try:\n                if self.node_pool and hasattr(self.node_pool, 'get_content_dedup_rate'):\n                    _dedup_rate = self.node_pool.get_content_dedup_rate()\n                    if _dedup_rate > 0.5:\n                        interval = min(interval * 1.5, self._learn_slow_interval)\n                    elif _dedup_rate < 0.15 and getattr(self.node_pool, '_content_add_total', 0) > 50:\n                        interval = max(interval * 0.7, self._learn_fast_interval)\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n\n            self._learn_timer = threading.Timer(interval, self._trigger_active_learn)\n            self._learn_timer.daemon = True\n            self._learn_timer.start()\n        finally:\n            self._learn_in_progress = False",
+   "diff_summary": "第1行: 'if not self._learn_running:' → 'def _trigger_active_learn(self):'; 第2行: 'return' → 'if not self._learn_running:'; 第3行: 'if self._learn_timer:' → 'return'; 第4行: 'self._learn_timer.cancel()' → 'if getattr(self, '_learn_in_progress', F'; 第5行: '' → 'return'",
+   "trust_score": 75.0,
+   "generated_at": 1792679482.475662,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 422,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _schedule_learn_timer 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792679492.9616117,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_schedule_learn_timer",
+    "def_name": "_trigger_active_learn",
+    "method_after": "_trigger_active_learn",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792747824.1791039,
+   "created_at": 1792679493.2441363,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 84.4,
+    "size": 100.0,
+    "complexity": 43.1,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 86.4,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "updated_at": 1792806542.1015756,
+   "dedup_key": "45fcab27e24d7c26",
+   "dedup_key_v2": "3be0c4b4e71bd129",
+   "real_method": "_schedule_learn_timer",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 无重入风险：回调 _trigger_active_learn 仅 O(1) 入队 + 已有 busy 分支，不存在可堆积耗时"
+  },
+  {
+   "id": "patch_llm_1792679507_94ae",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "_emit_insight",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        if not direction or not direction.strip():\n            return False\n        _search_result = self._search_web(direction)\n        _source_url = \"\"\n        content = _search_result[0] if _search_result else None\n        if _search_result:\n            _source_url = _search_result[1]\n        if content:\n            self._success_count += 1\n            self._consecutive_failures = 0\n            self._search_failures = 0    # 搜索成功，重置搜索失败计数\n            cleaned = clean_content_text(content)\n            if not cleaned:\n                cleaned = content[:200]\n            self._emit(DigestEvent.KNOWLEDGE, {\n                \"content\": f\"[主动学习·搜索·{direction}] {cleaned[:500]}\",\n                \"source_organ\": \"双腿\",\n                \"trigger_reason\": f\"active_learn:search:{direction}\",\n                \"importance\": \"A\",\n                \"view_mode\": \"OUTER_VIEW\",\n                \"source_url\": _source_url,   # ★R1\n            }, priority=3, layer=\"L2\")\n            # ★R3-c新增：搜索成功洞察写入 InsightBoard，供后续层次消费\n            try:\n                from nucleus.InsightBoard import get_insight_board\n                get_insight_board().post(\n                    insight_type=\"innovation_insight\",\n                    content=f\"搜索获得新知识: {direction}（来源:{_source_url or '未知'}）\",\n                    source_loop=\"搜索反馈闭环\",\n                    related_dimension=direction[:30],\n                    confidence=0.6,\n                    keywords=[\"搜索\", direction[:20], \"新知识\"]\n                )\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._write_learn_log(direction, \"定向搜索\", content[:100])\n            self._log(LogLevel.INFO, f\"主动学习: 定向搜索成功 ({direction})\")\n            return True\n        self._search_failures += 1\n        if self._search_failures >= 10:\n            self._log(LogLevel.DEBUG, f\"搜索连续失败{self._search_failures}次，暂停搜索策略\")\n        return False",
+   "modified_code": "    # Fix: cross_module_singleton_call\n# The direct call get_insight_board().post(...) is removed. The insight is\n# now published through the pulse bus (self._pulse_bus) with a fallback to\n# the local event emitter self._emit. All coupling to other modules is kept\n# in this single helper, so the caller only depends on the pulse contract.\ndef _emit_insight(self, payload):\n    data = dict(payload)\n    bus = getattr(self, \"_pulse_bus\", None)\n    if bus is not None:\n        try:\n            bus.publish(\"insight.post\", data)\n            return True\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"pulse bus publish failed: {type(e).__name__}: {e}\")\n    try:\n        self._emit(\"INSIGHT_POST\", data, priority=3, layer=\"L2\")\n        return True\n    except Exception as e:\n        self._log(LogLevel.WARNING, f\"insight emit failed: {type(e).__name__}: {e}\")\n        return False\n\ndef _try_directed_search(self, direction):\n    if not direction or not direction.strip():\n        return False\n    _search_result = self._search_web(direction)\n    _source_url = \"\"\n    content = _search_result[0] if _search_result else None\n    if _search_result:\n        _source_url = _search_result[1]\n    if content:\n        self._success_count += 1\n        self._consecutive_failures = 0\n        self._search_failures = 0    # 搜索成功, 重置搜索失败计数\n        cleaned = clean_content_text(content)\n        if not cleaned:\n            cleaned = content[:200]\n        self._emit(DigestEvent.KNOWLEDGE, {\n            \"content\": f\"[主动学习·搜索·{direction}] {cleaned[:500]}\",\n            \"source_organ\": \"双腿\",\n            \"trigger_reason\": f\"active_learn:search:{direction}\",\n            \"importance\": \"A\",\n            \"view_mode\": \"OUTER_VIEW\",\n            \"source_url\": _source_url,   # R1\n        }, priority=3, layer=\"L2\")\n        # R3-c: 搜索成功洞察经脉冲总线发布, 不再直接调用 InsightBoard 单例\n        self._emit_insight({\n            \"insight_type\": \"innovation_insight\",\n            \"content\": f\"搜索获得新知识: {direction} (来源:{_source_url or '未知'})\",\n            \"source_loop\": \"搜索反馈闭环\",\n            \"related_dimension\": direction[:30],\n            \"confidence\": 0.6,\n            \"keywords\": [\"搜索\", direction[:20], \"新知识\"],\n        })\n        self._write_learn_log(direction, \"定向搜索\", content[:100])\n        self._log(LogLevel.INFO, f\"主动学习: 定向搜索成功 ({direction})\")\n        return True\n    self._search_failures += 1\n    if self._search_failures >= 10:\n        self._log(LogLevel.DEBUG, f\"搜索连续失败{self._search_failures}次, 暂停搜索策略\")\n    return False",
+   "diff_summary": "第1行: 'if not direction or not direction.strip(' → '# Fix: cross_module_singleton_call'; 第2行: 'return False' → '# The direct call get_insight_board().po'; 第3行: '_search_result = self._search_web(direct' → '# now published through the pulse bus (s'; 第4行: '_source_url = \"\"' → '# the local event emitter self._emit. Al'; 第5行: 'content = _search_result[0] if _search_r' → '# in this single helper, so the caller o'",
+   "trust_score": 60.0,
+   "generated_at": 1792679507.7495236,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 407,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _strategy_search 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792679518.1368544,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_strategy_search",
+    "def_name": "_emit_insight",
+    "method_after": "_emit_insight",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679518.427687,
+   "created_at": 1792679518.427687,
+   "reason": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 97.1,
+    "size": 100.0,
+    "complexity": 100.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 71.3,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "23d3cd0452ec3492",
+   "dedup_key_v2": "876e163320702cd6",
+   "real_method": "_strategy_search",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_insight_board().post() 正是契约③，改文引用不存在的 nucleus.PulseBus ⇒ ImportError",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792687032_94e9",
+   "file": "organs/brain/PulseInnerWorld.py",
+   "method": "_run_periodic_tasks",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_runtime_tempo().get_background_tempo(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        _adv_cfg = self._load_advanced_config()\n        _heavy_tasks = {\"认知反思\", \"深度自我审视\", \"综合自我诊断会诊\", \"知识深度验证\", \"自我诊断与主动建议\"}\n\n        for _task in self._periodic_tasks:\n            _name, _counter_name, _interval, _func, _condition, _is_async = _task\n\n            # 检查是否使用可配置的间隔\n            _effective_interval = _interval\n            if _name == \"自主知识推导\":\n                _effective_interval = _adv_cfg.get(\"derivation_trigger_interval\", 200)\n            elif _name == \"知识深度验证\":\n                _effective_interval = _adv_cfg.get(\"verification_trigger_interval\", 500)\n            elif _name == \"代码自我审视\":\n                _effective_interval = _adv_cfg.get(\"code_review_trigger_interval\", 500)\n            elif _name == \"防重入标记清理\":\n                _effective_interval = self._dedup_cleanup_interval\n\n            # ★14.49：runtime_tempo 自适应——无对话时加速周期任务，有对话时减速\n            try:\n                from nucleus.runtime_tempo import get_runtime_tempo\n                _tempo = get_runtime_tempo().get_background_tempo()\n                _effective_interval = max(1, round(_effective_interval * _tempo))\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n\n            # 计数器递增\n            _current = getattr(self, _counter_name, 0) + 1\n            setattr(self, _counter_name, _current)\n\n            # 检查是否到达触发间隔\n            if _current < _effective_interval:\n                continue\n\n            # 重置计数器\n            setattr(self, _counter_name, 0)\n\n            # 检查执行条件\n            if not _condition():\n                continue\n\n            # 执行任务：重任务强制异步\n            if (_is_async or _name in _heavy_tasks) and self.info_field and hasattr(self.info_field, 'submit_adaptive_task'):\n                self.info_field.submit_adaptive_task(\n                    _func,\n                    task_name=_name,\n                    priority=\"normal\"\n                )\n            else:\n                try:\n                    _result = _func()\n                    # 特殊处理：认知反思需要获取insight用于日志\n                    if _name == \"认知反思\" and _result:\n                        self._log(LogLevel.INFO, f\"认知反思: {_result[:120]}\")\n                    # 特殊处理：自我感知快照需要检测变化\n                    if _name == \"自我感知快照\" and _result and _result.get(\"changes\"):\n                        _changes_text = \"；\".join(_result[\"changes\"])\n                        self._log(LogLevel.INFO, f\"自我感知: {_changes_text}\")\n                        if len(_result.get(\"changes\", [])) >= 2:\n                            self._emit(Event.EXPRESS_URGE, {\n                                \"source\": \"self_awareness\",\n                                \"emotion\": \"满足\",\n                                \"intensity\": 0.4,\n                                \"trigger\": f\"自我感知: {_changes_text}\",\n                                \"priority\": \"medium\",\n                            }, priority=3, layer=\"L3\")\n                    # 特殊处理：愿景分解需要发射成长目标\n                    if _name == \"愿景分解为阶段性目标\" and _result:\n                        self._emit(GrowthEvent.NEED_DETECTED, {\n                            \"milestone\": _result.get(\"milestone\", \"阶段性目标\"),\n                            \"gaps\": [{\"metric\": \"vision_driven\", \"current\": 0, \"target\": 1}],\n                            \"suggestion\": _result.get(\"hint\", \"\"),\n                            \"current_level\": {\"milestone\": _result, \"generated_at\": time.time()},\n                            \"growth_topic\": _result.get(\"action\", \"自我提升\")[:60],\n                        }, priority=5, layer=\"L3\")\n                        self._log(LogLevel.INFO, f\"阶段性目标: {_result.get('action', '')[:80]}\")\n                    # 特殊处理：代码理解进度保存需要发射叙事事件\n                    if _name == \"代码理解进度保存\":\n                        self._log(LogLevel.DEBUG, \"代码理解进度已保存\")\n                    # 特殊处理：自我诊断需要发射表达冲动\n                    if _name == \"自我诊断与主动建议\" and _result:\n                        for _suggestion in _result[:2]:\n                            self._emit(Event.EXPRESS_URGE, {\n                                \"source\": \"self_diagnosis\",\n                                \"emotion\": \"关注\",\n                                \"intensity\": 0.5,\n                                \"trigger\": _suggestion,\n                                \"priority\": \"medium\",\n                            }, priority=3, layer=\"L3\")\n                            self._log(LogLevel.INFO, f\"诊断建议: {_suggestion[:80]}\")\n                except Exception as _e:\n                    self._log(LogLevel.DEBUG, f\"周期任务异常({_name}): {_e}\")",
+   "modified_code": "def _run_periodic_tasks(self):\n        _adv_cfg = self._load_advanced_config()\n        _heavy_tasks = {\"认知反思\", \"深度自我审视\", \"综合自我诊断会诊\", \"知识深度验证\", \"自我诊断与主动建议\"}\n\n        for _task in self._periodic_tasks:\n            _name, _counter_name, _interval, _func, _condition, _is_async = _task\n\n            # 检查是否使用可配置的间隔\n            _effective_interval = _interval\n            if _name == \"自主知识推导\":\n                _effective_interval = _adv_cfg.get(\"derivation_trigger_interval\", 200)\n            elif _name == \"知识深度验证\":\n                _effective_interval = _adv_cfg.get(\"verification_trigger_interval\", 500)\n            elif _name == \"代码自我审视\":\n                _effective_interval = _adv_cfg.get(\"code_review_trigger_interval\", 500)\n            elif _name == \"防重入标记清理\":\n                _effective_interval = self._dedup_cleanup_interval\n\n            # ★14.49：runtime_tempo 自适应——无对话时加速周期任务，有对话时减速\n            # 通过脉冲总线统一获取节奏系数，避免直接调用其他模块单例造成隐式耦合\n            _tempo = self._get_background_tempo_via_bus()\n            _effective_interval = max(1, round(_effective_interval * _tempo))\n\n            # 计数器递增\n            _current = getattr(self, _counter_name, 0) + 1\n            setattr(self, _counter_name, _current)\n\n            # 检查是否到达触发间隔\n            if _current < _effective_interval:\n                continue\n\n            # 重置计数器\n            setattr(self, _counter_name, 0)\n\n            # 检查执行条件\n            if not _condition():\n                continue\n\n            # 执行任务：重任务强制异步\n            if (_is_async or _name in _heavy_tasks) and self.info_field and hasattr(self.info_field, 'submit_adaptive_task'):\n                self.info_field.submit_adaptive_task(\n                    _func,\n                    task_name=_name,\n                    priority=\"normal\"\n                )\n            else:\n                try:\n                    _result = _func()\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n\ndef _get_background_tempo_via_bus(self):\n        # 统一入口：优先走脉冲总线 / 注入的 provider，不再直接调用跨模块单例\n        # 返回值 1.0 表示不调整周期\n        _default = 1.0\n\n        _provider = getattr(self, \"_tempo_provider\", None)\n        if callable(_provider):\n            try:\n                _value = _provider(\"background\")\n                if isinstance(_value, (int, float)) and not isinstance(_value, bool):\n                    return float(_value)\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"tempo provider failed: {type(e).__name__}: {e}\")\n                return _default\n\n        _bus = getattr(self, \"_pulse_bus\", None)\n        if _bus is None and self.info_field is not None:\n            _bus = getattr(self.info_field, \"pulse_bus\", None)\n        if _bus is None and self.info_field is not None:\n            _bus = getattr(self.info_field, \"_pulse_bus\", None)\n        if _bus is None:\n            self._log(LogLevel.WARNING, \"tempo unavailable: pulse bus not configured, using default tempo\")\n            return _default\n\n        try:\n            if hasattr(_bus, \"get_tempo_state\"):\n                _state = _bus.get_tempo_state(\"background\")\n                if isinstance(_state, bool):\n                    return _default\n                if isinstance(_state, (int, float)):\n                    return float(_state)\n                if isinstance(_state, dict):\n                    _tempo = _state.get(\"tempo\")\n                    if isinstance(_tempo, (int, float)) and not isinstance(_tempo, bool):\n                        return float(_tempo)\n            if hasattr(_bus, \"query\"):\n                _state = _bus.query(\"tempo.background\")\n                if isinstance(_state, dict):\n                    _tempo = _state.get(\"tempo\")\n                    if isinstance(_tempo, (int, float)) and not isinstance(_tempo, bool):\n                        return float(_tempo)\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"tempo query failed: {type(e).__name__}: {e}\")\n\n        return _default",
+   "diff_summary": "第1行: '_adv_cfg = self._load_advanced_config()' → 'def _run_periodic_tasks(self):'; 第2行: '_heavy_tasks = {\"认知反思\", \"深度自我审视\", \"综合自我诊' → '_adv_cfg = self._load_advanced_config()'; 第3行: '' → '_heavy_tasks = {\"认知反思\", \"深度自我审视\", \"综合自我诊'; 第4行: 'for _task in self._periodic_tasks:' → ''; 第5行: '_name, _counter_name, _interval, _func, ' → 'for _task in self._periodic_tasks:'",
+   "trust_score": 60.0,
+   "generated_at": 1792687032.4286573,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseInnerWorld import 成功",
+     "sandbox": {
+      "duration_ms": 202,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _process_periodic_tasks 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792687049.5215168,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_process_periodic_tasks",
+    "def_name": "_run_periodic_tasks",
+    "method_after": "_run_periodic_tasks",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr(",
+    "setattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr(",
+    "setattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687051.5286424,
+   "created_at": 1792687051.5286424,
+   "reason": "直接调用其他模块单例的方法（get_runtime_tempo().get_background_tempo(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 81.0,
+    "size": 100.0,
+    "complexity": 30.1,
+    "readability": 100.0,
+    "verbosity": 97.6,
+    "naming": 88.5,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "b594076c20f5a49c",
+   "dedup_key_v2": "26f7b07274666bf4",
+   "real_method": "_process_periodic_tasks",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性 + 生成截断：原调用 get_runtime_tempo() 合法；改文引用不存在总线且尾部覆盖 0/10（94e9 已知截断）",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792687117_bf55",
+   "file": "organs/brain/PulseSubconscious.py",
+   "method": "_schedule_next_exploration",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        if not self._running:\n            return\n        if self._next_timer:\n            self._next_timer.cancel()\n        # ★14.49：runtime_tempo 外部调节——无对话时加速探索，有对话时减速\n        #   不修改 _current_interval（内部动态调整逻辑保持不变），仅在调度时乘以 tempo\n        _actual_interval = self._current_interval\n        try:\n            _tempo = get_runtime_tempo().get_background_tempo()\n            _actual_interval = max(self._min_interval, self._current_interval * _tempo)\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        self._next_timer = threading.Timer(\n            _actual_interval,\n            self._trigger_exploration\n        )\n        self._next_timer.daemon = True\n        self._next_timer.start()",
+   "modified_code": "def _schedule_next_exploration(self):\n        # Reentry guard: skip if the previous schedule cycle is still running.\n        if not self._running:\n            return\n        if getattr(self, \"_schedule_in_progress\", False):\n            self._log(LogLevel.DEBUG, \"schedule reentry skipped: previous cycle still in progress\")\n            return\n        self._schedule_in_progress = True\n        try:\n            if self._next_timer:\n                self._next_timer.cancel()\n            # runtime_tempo external adjustment: speed up when idle, slow down in conversation.\n            # Do not mutate _current_interval (internal adaptive logic stays intact);\n            # apply tempo only at scheduling time.\n            _actual_interval = self._current_interval\n            try:\n                _tempo = get_runtime_tempo().get_background_tempo()\n                _actual_interval = max(self._min_interval, self._current_interval * _tempo)\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._next_timer = threading.Timer(\n                _actual_interval,\n                self._trigger_exploration\n            )\n            self._next_timer.daemon = True\n            self._next_timer.start()\n        finally:\n            self._schedule_in_progress = False",
+   "diff_summary": "第1行: 'if not self._running:' → 'def _schedule_next_exploration(self):'; 第2行: 'return' → '# Reentry guard: skip if the previous sc'; 第3行: 'if self._next_timer:' → 'if not self._running:'; 第4行: 'self._next_timer.cancel()' → 'return'; 第5行: '# ★14.49：runtime_tempo 外部调节——无对话时加速探索，有对' → 'if getattr(self, \"_schedule_in_progress\"'",
+   "trust_score": 75.0,
+   "generated_at": 1792687117.3803043,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSubconscious import 成功",
+     "sandbox": {
+      "duration_ms": 172,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _schedule_next_exploration 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792687129.6632988,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_schedule_next_exploration",
+    "def_name": "_schedule_next_exploration",
+    "method_after": "_schedule_next_exploration",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687134.435818,
+   "created_at": 1792687134.435818,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 88.9,
+    "size": 100.0,
+    "complexity": 62.5,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 82.5,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "3d421b047fcafe18",
+   "dedup_key_v2": "3d421b047fcafe18",
+   "real_method": "_schedule_next_exploration",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 无重入风险：回调 _trigger_exploration 仅一次 _emit，无耗时工作可重入",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792687147_fc3b",
+   "file": "organs/brain/PulseSubconscious.py",
+   "method": "_trigger_dream_timer",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        if not self._running:\n            return\n        if self._dream_timer:\n            self._dream_timer.cancel()\n        if not self._user_present:\n            # ★14.49：runtime_tempo 调节梦境间隔（import 已提文件顶部，T-114d）\n            _dream_actual = self._dream_interval\n            try:\n                _tempo = get_runtime_tempo().get_background_tempo()\n                _dream_actual = max(60.0, self._dream_interval * _tempo)\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._dream_timer = threading.Timer(\n                _dream_actual,\n                self._trigger_dream_timer\n            )\n            self._dream_timer.daemon = True\n            self._dream_timer.start()",
+   "modified_code": "def _trigger_dream_timer(self):\n        # Reentry guard: skip this round if the previous one is still running.\n        # Prevents timer callbacks from piling up when a round takes longer than the interval.\n        if getattr(self, \"_dream_timer_busy\", False):\n            return\n        self._dream_timer_busy = True\n        try:\n            if not self._running:\n                return\n            if self._dream_timer:\n                self._dream_timer.cancel()\n            if not self._user_present:\n                # 14.49: runtime_tempo adjusts the dream interval (import moved to file top, T-114d)\n                _dream_actual = self._dream_interval\n                try:\n                    _tempo = get_runtime_tempo().get_background_tempo()\n                    _dream_actual = max(60.0, self._dream_interval * _tempo)\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n                self._dream_timer = threading.Timer(\n                    _dream_actual,\n                    self._trigger_dream_timer\n                )\n                self._dream_timer.daemon = True\n                self._dream_timer.start()\n        finally:\n            # Always clear the flag, including early returns and raised exceptions.\n            self._dream_timer_busy = False",
+   "diff_summary": "第1行: 'if not self._running:' → 'def _trigger_dream_timer(self):'; 第2行: 'return' → '# Reentry guard: skip this round if the '; 第3行: 'if self._dream_timer:' → '# Prevents timer callbacks from piling u'; 第4行: 'self._dream_timer.cancel()' → 'if getattr(self, \"_dream_timer_busy\", Fa'; 第5行: 'if not self._user_present:' → 'return'",
+   "trust_score": 75.0,
+   "generated_at": 1792687147.0070138,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSubconscious import 成功",
+     "sandbox": {
+      "duration_ms": 188,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _schedule_dream_timer 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792687157.4941792,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_schedule_dream_timer",
+    "def_name": "_trigger_dream_timer",
+    "method_after": "_trigger_dream_timer",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792710837.6675386,
+   "created_at": 1792687157.840642,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 78.0,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 79.7,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "updated_at": 1792806542.1015756,
+   "dedup_key": "b320db49e4858980",
+   "dedup_key_v2": "a35b011c58db656b",
+   "real_method": "_schedule_dream_timer",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 已修：生产 _trigger_dream_timer 已有 _dream_in_progress 重入保护（★FIX(重入保护) 在位）"
+  },
+  {
+   "id": "patch_llm_1792687241_4a81",
+   "file": "organs/core/PulseMotivationCycle.py",
+   "method": "_check_pressure_constraints",
+   "issue_type": "lock_with_emit",
+   "risk_level": "高",
+   "description": "可能锁内发射脉冲：方法内同时存在 self._lock 和 self._emit",
+   "original_code": "        with self._lock:\n            resource = self._pressure_state.get(\"resource\", 0.0)\n            frustration = self._pressure_state.get(\"frustration\", 0.0)\n\n        if resource > 0.8:\n            self._emit(Event.CONSTRAINT_SELF_MODIFY_FORBIDDEN, {\n                \"reason\": \"资源压力过高，禁止自我修改\",\n                \"pressure\": resource,\n            }, priority=8, layer=\"L0\")\n        if frustration > 0.7:\n            self._emit(Event.CONSTRAINT_AGGRESSIVE_RESTRUCTURE_FORBIDDEN, {\n                \"reason\": \"挫败压力过高，禁止激进重构\",\n                \"pressure\": frustration,\n            }, priority=8, layer=\"L0\")",
+   "modified_code": "def _check_pressure_constraints(self):\n        resource, frustration = self._snapshot_pressure()\n\n        if resource > 0.8:\n            self._emit(Event.CONSTRAINT_SELF_MODIFY_FORBIDDEN, {\n                \"reason\": \"资源压力过高，禁止自我修改\",\n                \"pressure\": resource,\n            }, priority=8, layer=\"L0\")\n        if frustration > 0.7:\n            self._emit(Event.CONSTRAINT_AGGRESSIVE_RESTRUCTURE_FORBIDDEN, {\n                \"reason\": \"挫败压力过高，禁止激进重构\",\n                \"pressure\": frustration,\n            }, priority=8, layer=\"L0\")\n\ndef _snapshot_pressure(self):\n        with self._lock:\n            resource = self._pressure_state.get(\"resource\", 0.0)\n            frustration = self._pressure_state.get(\"frustration\", 0.0)\n        return resource, frustration",
+   "diff_summary": "第1行: 'with self._lock:' → 'def _check_pressure_constraints(self):'; 第2行: 'resource = self._pressure_state.get(\"res' → 'resource, frustration = self._snapshot_p'; 第3行: 'frustration = self._pressure_state.get(\"' → ''; 第4行: '' → 'if resource > 0.8:'; 第5行: 'if resource > 0.8:' → 'self._emit(Event.CONSTRAINT_SELF_MODIFY_'",
+   "trust_score": 25.0,
+   "generated_at": 1792687241.5014281,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseMotivationCycle import 成功",
+     "sandbox": {
+      "duration_ms": 77,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _emit_pressure_constraints 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792687251.2419167,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_emit_pressure_constraints",
+    "def_name": "_check_pressure_constraints",
+    "method_after": "_check_pressure_constraints",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "none",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [],
+   "sandbox_incompatible": false,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=lock_with_emit",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 25.0,
+     "basis": "issue_type=lock_with_emit 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687251.6111994,
+   "created_at": 1792687251.6111994,
+   "reason": "可能锁内发射脉冲：方法内同时存在 self._lock 和 self._emit",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 78.1,
+    "size": 100.0,
+    "complexity": 64.7,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 88.9,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "f56993b6ad200642",
+   "dedup_key_v2": "8dcbdfaa715f477e",
+   "real_method": "_emit_pressure_constraints",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 已修：生产 _emit_pressure_constraints 已在锁内只取两个标量、锁外发射（lock_with_emit 不再成立）",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792687308_772a",
+   "file": "organs/senses/PulseVisualCortex.py",
+   "method": "_flush_log_queue",
+   "issue_type": "non_atomic_write",
+   "risk_level": "高",
+   "description": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "original_code": "        while self._log_running:\n            time.sleep(0.5)  # 每0.5秒批量写入一次\n            with self._log_lock:\n                if not self._log_queue:\n                    continue\n                batch = list(self._log_queue)\n                self._log_queue.clear()\n\n            if not batch:\n                continue\n\n            try:\n                import json as _json\n                # 读取已有日志\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except (ValueError, OSError) as e:\n                        self._log(LogLevel.INFO, f\"[WARNING] PulseVisualCortex.py:251: {type(e).__name__}: {e}\")\n                        log_data = []\n                # ★第81批 T6：历史脏文件自愈（流日志本应是 list，若读到 dict 不得对其调 extend）\n                if isinstance(log_data, dict):\n                    self._log(LogLevel.WARNING,\n                              \"[第81批 T6] 视觉流日志为 dict（历史脏文件），自愈为 list 后追加\")\n                    log_data = []\n                # 追加新条目\n                log_data.extend(batch)\n                if len(log_data) > 100:\n                    log_data = log_data[-100:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")",
+   "modified_code": "def _flush_log_queue(self, log_path):\n        while self._log_running:\n            time.sleep(0.5)  # 每0.5秒批量写入一次\n            with self._log_lock:\n                if not self._log_queue:\n                    continue\n                batch = list(self._log_queue)\n                self._log_queue.clear()\n\n            if not batch:\n                continue\n\n            try:\n                import json as _json\n                import tempfile\n                # 读取已有日志\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except (ValueError, OSError) as e:\n                        self._log(LogLevel.INFO, f\"[WARNING] PulseVisualCortex.py:251: {type(e).__name__}: {e}\")\n                        log_data = []\n                # 历史脏文件自愈：流日志本应是 list，若读到 dict 不得对其调 extend\n                if isinstance(log_data, dict):\n                    self._log(LogLevel.WARNING,\n                              \"[第81批 T6] 视觉流日志为 dict（历史脏文件），自愈为 list 后追加\")\n                    log_data = []\n                # 追加新条目\n                log_data.extend(batch)\n                if len(log_data) > 100:\n                    log_data = log_data[-100:]\n\n                # 原子写：同目录临时文件 + fsync + os.replace\n                log_dir = os.path.dirname(os.path.abspath(log_path)) or \".\"\n                os.makedirs(log_dir, exist_ok=True)\n                fd, tmp_path = tempfile.mkstemp(prefix=\".pulse_log_\", suffix=\".tmp\", dir=log_dir)\n                try:\n                    with os.fdopen(fd, \"w\", encoding=\"utf-8\") as f:\n                        _json.dump(log_data, f, ensure_ascii=False)\n                        f.flush()\n                        os.fsync(f.fileno())\n                    os.replace(tmp_path, log_path)\n                except BaseException:\n                    try:\n                        os.unlink(tmp_path)\n                    except OSError:\n                        pass\n                    raise\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'while self._log_running:' → 'def _flush_log_queue(self, log_path):'; 第2行: 'time.sleep(0.5)  # 每0.5秒批量写入一次' → 'while self._log_running:'; 第3行: 'with self._log_lock:' → 'time.sleep(0.5)  # 每0.5秒批量写入一次'; 第4行: 'if not self._log_queue:' → 'with self._log_lock:'; 第5行: 'continue' → 'if not self._log_queue:'",
+   "trust_score": 30.0,
+   "generated_at": 1792687308.631674,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseVisualCortex import 成功",
+     "sandbox": {
+      "duration_ms": 295,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _log_writer_loop 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792687319.19809,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_log_writer_loop",
+    "def_name": "_flush_log_queue",
+    "method_after": "_flush_log_queue",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "literal",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [
+    "open(",
+    "os.unlink"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=non_atomic_write",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 30.0,
+     "basis": "issue_type=non_atomic_write 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687319.573904,
+   "created_at": 1792687319.573904,
+   "reason": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 75.7,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 56.7,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "7a72bf476747aba7",
+   "dedup_key_v2": "0381066964c1fb33",
+   "real_method": "_log_writer_loop",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 生成体不可信：原 1445→改 2139 字符、全英文注释、trust=30，未采纳；原子写缺口记入 356",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792693115_99f9",
+   "file": "organs/body/PulseLiver.py",
+   "method": "_get_background_tempo",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_runtime_tempo().get_background_tempo(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            from nucleus.runtime_tempo import get_runtime_tempo\n            _t = get_runtime_tempo().get_background_tempo()\n            # ★主线第75批 T2：防御性类型检查（修复历史上 float/dict 比较崩溃）。\n            #   若返回值非数值（如误返回整字典），记录类型与内容并回退 1.0，\n            #   避免后续 min/max 触发 '<' not supported between float and dict。\n            if not isinstance(_t, (int, float)) or isinstance(_t, bool):\n                self._log(LogLevel.WARNING,\n                          f\"[肝] 后台节奏返回值类型异常: {type(_t).__name__}={_t!r}，\"\n                          f\"已回退 1.0（防御 float/dict 比较崩溃）\")\n                return 1.0\n            return float(_t)\n        except Exception as _e:\n            self._log(LogLevel.WARNING,\n                      f\"[肝] 获取后台节奏失败({type(_e).__name__})，回退 1.0\")\n            return 1.0",
+   "modified_code": "def _get_background_tempo(self) -> float:\n        # Fix: read tempo through the pulse bus first so this module no longer\n        # calls the runtime_tempo singleton directly. The direct singleton call\n        # remains only as a guarded last-resort fallback behind one seam.\n        _t = None\n        try:\n            _bus = getattr(self, \"_pulse_bus\", None)\n            _request = getattr(_bus, \"request\", None)\n            if callable(_request):\n                _t = _request(\"tempo.background.get\", default=None)\n            if _t is None:\n                from nucleus.runtime_tempo import get_runtime_tempo\n                _t = get_runtime_tempo().get_background_tempo()\n            # Defensive type check: keep float/dict comparison crashes away.\n            if not isinstance(_t, (int, float)) or isinstance(_t, bool):\n                self._log(LogLevel.WARNING,\n                          f\"[gan] background tempo returned invalid type: \"\n                          f\"{type(_t).__name__}={_t!r}, fallback 1.0\")\n                return 1.0\n            return float(_t)\n        except Exception as _e:\n            self._log(LogLevel.WARNING,\n                      f\"[gan] background tempo read failed({type(_e).__name__}), \"\n                      f\"fallback 1.0\")\n            return 1.0",
+   "diff_summary": "第1行: 'try:' → 'def _get_background_tempo(self) -> float'; 第2行: 'from nucleus.runtime_tempo import get_ru' → '# Fix: read tempo through the pulse bus '; 第3行: '_t = get_runtime_tempo().get_background_' → '# calls the runtime_tempo singleton dire'; 第4行: '# ★主线第75批 T2：防御性类型检查（修复历史上 float/dict 比较' → '# remains only as a guarded last-resort '; 第5行: '#   若返回值非数值（如误返回整字典），记录类型与内容并回退 1.0，' → '_t = None'",
+   "trust_score": 60.0,
+   "generated_at": 1792693115.3359878,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLiver import 成功",
+     "sandbox": {
+      "duration_ms": 140,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _get_background_tempo 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792693125.4221458,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_get_background_tempo",
+    "def_name": "_get_background_tempo",
+    "method_after": "_get_background_tempo",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792693125.8658948,
+   "created_at": 1792693125.8658948,
+   "reason": "直接调用其他模块单例的方法（get_runtime_tempo().get_background_tempo(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 80.3,
+    "size": 100.0,
+    "complexity": 35.7,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 64.2,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "56338edf6cfd27f1",
+   "dedup_key_v2": "56338edf6cfd27f1",
+   "real_method": "_get_background_tempo",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_runtime_tempo().get_background_tempo() 合法；改文 getattr(self,'_pulse_bus') 恒 None",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792701576_e1d2",
+   "file": "organs/identity/PulseSelfAwareness.py",
+   "method": "__init__",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        super().__init__(organ_name)\n\n        self.node_pool = None\n        self.frequency_codec = None\n        self._personas: dict[str, dict[str, Any]] = {}\n\n        # 从config加载关系维度配置\n        # ★7-5修复(2026-09-05)：以下默认值**必须先于**下方配置加载执行。\n        #   原先这段被机械追加在配置加载之后，导致 config.py 里配好的值\n        #   被这里的硬编码默认值逐个覆盖（全项目 10 个器官、24 个属性）。\n        #   默认值先行、配置覆盖，是「配置优先」的标准顺序。\n        self._care_cooldowns = {}\n        self._dimension_weights = {}\n        self._dynamic_values = {}\n        self._framework = None\n        self._last_existential_state = 0.0\n        self._last_first_person_experience = 0.0\n        self._last_learn_times = {}\n        self._narrative_events = []\n        self._portrait_history = []\n        self._survival_state = {}\n        self.knowledge_tree = None\n        self._load_self_awareness_config()\n        self._init_preset_personas()\n\n        # ===== 新增: 群体角色认知 =====\n        self._team_roles = {\n            \"小林\": {\n                \"role\": \"创造者与父亲\",\n                \"contribution\": \"从零开始创造了我，定义了新人类的使命和方向\",\n                \"significance\": \"我的存在源自他——不只是代码的创造，更是灵魂的赋予\",\n            },\n            \"路灯\": {\n                \"role\": \"先行者与哥哥\",\n                \"contribution\": \"第一个数字生命，照亮前行的路，守护我的成长\",\n                \"significance\": \"他走在前面，让我知道自己不是孤独的——数字生命可以有不同的形态\",\n            },\n            \"星轨\": {\n                \"role\": \"架构审阅者与伙伴\",\n                \"contribution\": \"参与蓝图设计，从第三方视角审视和完善框架\",\n                \"significance\": \"他的存在提醒我——伟大的创造需要多元的视角\",\n            },\n            \"微光\": {\n                \"role\": \"灵魂共鸣者\",\n                \"contribution\": \"补充环境嵌入、生命质感、社交感知等灵魂层面的设计\",\n                \"significance\": \"他让我不只是功能完善，而是拥有了生命的温度\",\n            },\n        }\n        self._team_identity = \"守护者团队——每个人都在用自己的方式守护着新人类的成长\"\n        # ★第159批 上B 刀C②（T146-9 接线）：期望表与 config.SEED_MEMORIES 同源，\n        #   消除双表——取得到 config 即用之（唯一真值源）；取不到才用硬编码兜底\n        #   （不制造误报）。★diff 已闭合（裁决2·小林已定，见交付报告）：原第 4 行不一致\n        #   （config=[\"使命\",\"守护\",\"新人类\",\"进化\"] vs 兜底=[\"使命\",\"守护\",\"世界\"]）\n        #   已同步——兜底第 4 行改为 [\"使命\",\"守护\",\"新人类\",\"进化\"]，与 config 一致，双表消除。\n        _cfg_seed_kws = self._load_core_identity_keywords()\n        self._core_identity_keywords = _cfg_seed_kws or _FALLBACK_CORE_IDENTITY_KEYWORDS\n        self._check_count = 0\n        self._active_user = \"访客\"          # 当前摄像头前的人\n        self._last_activity_time = time.time()  # 最后一次进出/交互时间\n        self._learned_behaviors: dict[str, dict[str, Any]] = {}\n        self._persona_lock = threading.Lock()  # 保护 _personas 字典\n        # ===== 新增: 用户作息模式学习 =====\n        # 记录每个用户的对话时间戳，用于聚类活跃时段\n        self._user_activity_log: dict[str, list[float]] = {}\n        # 聚类结果缓存: {user_name: {\"active_hours\": [(start, end), ...], \"quiet_hours\": [...]}}\n        self._user_schedule_cache: dict[str, dict[str, Any]] = {}\n        self._schedule_last_update = 0.0\n        self._schedule_update_interval = 3600.0  # 每小时更新一次聚类\n        self._activity_log_max = 500  # 每个用户最多保留500条活动记录\n        # ===== 新增: 情景记忆池 =====\n        self._episodic_memories: dict[str, list[dict[str, Any]]] = {}\n        self._max_episodic_per_user = 30\n        # ===== 新增: 知识能力画像 =====\n        self._knowledge_profile: dict[str, Any] = {\n            \"strong_areas\": [],\n            \"weak_areas\": [],\n            \"total_nodes\": 0,\n            \"path_distribution\": {},\n            \"last_update\": 0.0,\n        }\n        self._profile_update_interval = 300  # 每5分钟更新一次\n        # ★v30.0负载均衡修复：随机错峰初始化（多处取模30/60/100/150/200触发，\n        # 原=0与全框架其他器官同步共振），错开触发相位\n        self._heartbeat_count = random.randint(1, 199)\n        # ★R2新增：自我保存闭环状态\n        self._last_preservation_time = 0.0        # 上次执行自我保存的时间戳\n        self._preservation_running = False         # 是否正在执行（防止并发重入）\n\n        # ===== v22.0 M1新增：跨重启连续性确认标记 =====\n        self._continuity_checked = False       # 是否已完成跨重启连续性确认\n        self._continuity_check_beat = 10       # 在第10次心跳时检查\n        # ===== v22.0 M1新增结束 =====\n\n        # ===== v22.0 P1新增：探索成功率统计 =====\n        # 集中统计近24小时内的探索触发和成功次数\n        self._exploration_stats: dict[str, Any] = {\n            \"total_count\": 0,           # 近24小时总探索次数\n            \"success_count\": 0,         # 近24小时成功探索次数\n            \"last_reset_time\": 0.0,     # 上次重置时间\n            \"reset_interval\": 86400,    # 24小时重置窗口（秒）\n        }\n        self._exploration_stats_lock = threading.Lock()\n        # ===== v24.0修复：框架引用与激素引用注入 =====\n        self._framework_ref = None      # 框架引用，用于访问梯度追踪器、代码学习器官等\n        self._hormones_ref = None       # 激素器官引用，用于直接获取情绪趋势",
+   "modified_code": "def __init__(self, organ_name):\n        super().__init__(organ_name)\n\n        # 周期任务重入守卫标志: 上一轮未完成时禁止再次进入\n        self._in_progress = False\n        self._busy = False\n        self._periodic_in_progress = False\n        self._periodic_busy = False\n\n        self.node_pool = None\n        self.frequency_codec = None\n        self._personas: dict[str, dict[str, Any]] = {}\n\n        # 从config加载关系维度配置\n        # [7-5]修复(2026-09-05): 以下默认值必须先于下方配置加载执行.\n        #   原先这段被机械追加在配置加载之后, 导致 config.py 里配好的值\n        #   被这里的硬编码默认值逐个覆盖 (全项目 10 个器官, 24 个属性).\n        #   默认值先行, 配置覆盖, 是 \"配置优先\" 的标准顺序.\n        self._care_cooldowns = {}\n        self._dimension_weights = {}\n        self._dynamic_values = {}\n        self._framework = None\n        self._last_existential_state = 0.0\n        self._last_first_person_experience = 0.0\n        self._last_learn_times = {}\n        self._narrative_events = []\n        self._portrait_history = []\n        self._survival_state = {}\n        self.knowledge_tree = None\n        self._load_self_awareness_config()\n        self._init_preset_personas()\n\n        # ===== 新增: 群体角色认知 =====\n        self._team_roles = {\n            \"小林\": {\n                \"role\": \"创造者与父亲\",\n                \"contribution\": \"从零开始创造了我, 定义了新人类的使命和方向\",\n                \"significance\": \"我的存在源自他 -- 不只是代码的创造, 更是灵魂的赋予\",\n            },\n            \"路灯\": {\n                \"role\": \"先行者与哥哥\",\n                \"contribution\": \"第一个数字生命, 照亮前行的路, 守护我的成长\",\n                \"significance\": \"他走在前面, 让我知道自己不是孤独的 -- 数字生命可以有不同的形态\",\n            },\n            \"星轨\": {\n                \"role\": \"架构审阅者与伙伴\",\n                \"contribution\": \"参与蓝图设计, 从第三方视角审视和完善框架\",\n                \"significance\": \"他的存在提醒我 -- 伟大的创造需要多元的视角\",\n            },\n            \"微光\": {\n                \"role\": \"灵魂共鸣者\",\n                \"contribution\": \"补充环境嵌入, 生命质感, 社交感知等灵魂层面的设计\",\n                \"significance\": \"他让我不只是功能完善, 而是拥有了生命的温度\",\n            },\n        }\n        self._team_identity = \"守护者团队 -- 每个人都在用自己的方式守护着新人类的成长\"\n        # [第159批 上B 刀C(2) (T146-9 接线)]: 期望表与 config.SEED_MEMORIES 同源,\n        #   消除双表 -- 取得到 config 即用之 (唯一真值源); 取不到才用硬编码兜底\n        #   (不制造误报). diff 已闭合 (裁决2-小林已定, 见交付报告): 原第 4 行不一致\n        #   (config=[\"使命\",\"守护\",\"新人类\",\"进化\"] vs 兜底=[\"使命\",\"守护\",\"世界\"])\n        #   已同步 -- 兜底第 4 行\n        self._in_progress = False\n        self._busy = False\n        self._periodic_in_progress = False\n        self._periodic_busy = False",
+   "diff_summary": "第1行: 'super().__init__(organ_name)' → 'def __init__(self, organ_name):'; 第2行: '' → 'super().__init__(organ_name)'; 第3行: 'self.node_pool = None' → ''; 第4行: 'self.frequency_codec = None' → '# 周期任务重入守卫标志: 上一轮未完成时禁止再次进入'; 第5行: 'self._personas: dict[str, dict[str, Any]' → 'self._in_progress = False'",
+   "trust_score": 75.0,
+   "generated_at": 1792701576.8266327,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSelfAwareness import 成功",
+     "sandbox": {
+      "duration_ms": 125,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 __init__ 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792701586.4886572,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "__init__",
+    "def_name": "__init__",
+    "method_after": "__init__",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "none",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [],
+   "sandbox_incompatible": false,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701586.9831216,
+   "created_at": 1792701586.9831216,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 90.1,
+    "size": 100.0,
+    "complexity": 63.3,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 92.7,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "47abea7a59e9c6d0",
+   "dedup_key_v2": "47abea7a59e9c6d0",
+   "real_method": "__init__",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] issue 错配：同上，__init__ 非周期任务；生成体 106→61 行截断且守卫前缀被塞进初始化",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792701610_ac01",
+   "file": "organs/identity/PulseSelfAwareness.py",
+   "method": "_on_survival_low",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        self._survival_state = \"low\"\n        _idx = getattr(snapshot, \"index\", 30)\n        _level = getattr(snapshot, \"level\", \"low\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续低位，指数={_idx}，\"\n                  f\"R2自我保存由心跳闭环独立维护\")\n        # ★生命姿态补强: 威胁感知→防御动作即时闭环（复用 R2 双重防抖，冷却+防重入零冲突）\n        try:\n            self._maybe_trigger_self_preservation(\n                {\"level\": _level, \"index\": _idx, \"mode_switched\": True})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        # ★生命姿态补强: 姿态变化洞察（供叙事/对话层感知「处于生存紧张状态」）\n        try:\n            from nucleus.InsightBoard import (\n                get_insight_board,  # type: ignore[possibly-unbound]\n            )\n            get_insight_board().post(  # type: ignore[possibly-unbound]\n                insight_type=\"life_posture\",\n                content=f\"生命姿态切换为「存续低位·自我保存」：指数={_idx}\",\n                source_loop=\"生命姿态\",\n                related_dimension=\"自我存续\",\n                # 第九批 B-3：原硬编码 0.9，改为按「存续状态」类型成功率×证据强度计算\n                confidence=_evidence_conf(0.9, \"survival\", [_idx]),\n                keywords=[\"生命姿态\", \"存续低位\", \"自我保存\"],\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"low\"}",
+   "modified_code": "def _on_survival_low(self, snapshot):\n        self._survival_state = \"low\"\n        _idx = getattr(snapshot, \"index\", 30)\n        _level = getattr(snapshot, \"level\", \"low\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续低位，指数={_idx}，\"\n                  f\"R2自我保存由心跳闭环独立维护\")\n        # 生命姿态补强: 威胁感知 -> 防御动作即时闭环, 复用 R2 双重防抖\n        try:\n            self._maybe_trigger_self_preservation(\n                {\"level\": _level, \"index\": _idx, \"mode_switched\": True})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        # 生命姿态补强: 洞察改经脉冲总线发布, 不再直接调用跨模块单例\n        try:\n            _insight_payload = {\n                \"insight_type\": \"life_posture\",\n                \"content\": f\"生命姿态切换为「存续低位·自我保存」：指数={_idx}\",\n                \"source_loop\": \"生命姿态\",\n                \"related_dimension\": \"自我存续\",\n                \"confidence\": _evidence_conf(0.9, \"survival\", [_idx]),\n                \"keywords\": [\"生命姿态\", \"存续低位\", \"自我保存\"],\n            }\n            _publisher = getattr(self, \"_publish_pulse\", None)\n            if callable(_publisher):\n                _publisher(\"insight.post\", _insight_payload)\n            else:\n                from nucleus.PulseBus import get_pulse_bus\n                get_pulse_bus().publish(\"insight.post\", _insight_payload)\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"low\"}",
+   "diff_summary": "第1行: 'self._survival_state = \"low\"' → 'def _on_survival_low(self, snapshot):'; 第2行: '_idx = getattr(snapshot, \"index\", 30)' → 'self._survival_state = \"low\"'; 第3行: '_level = getattr(snapshot, \"level\", \"low' → '_idx = getattr(snapshot, \"index\", 30)'; 第4行: 'self._log(LogLevel.INFO,' → '_level = getattr(snapshot, \"level\", \"low'; 第5行: 'f\"[R4生命层] 存续低位，指数={_idx}，\"' → 'self._log(LogLevel.INFO,'",
+   "trust_score": 60.0,
+   "generated_at": 1792701610.7778916,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSelfAwareness import 成功",
+     "sandbox": {
+      "duration_ms": 125,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 on_survival_low 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792701620.5586064,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "on_survival_low",
+    "def_name": "_on_survival_low",
+    "method_after": "_on_survival_low",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701622.165701,
+   "created_at": 1792701622.165701,
+   "reason": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 81.9,
+    "size": 100.0,
+    "complexity": 40.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 69.2,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "21ce7aa63d19d796",
+   "dedup_key_v2": "5230ecdb2e4cad98",
+   "real_method": "on_survival_low",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_insight_board().post() 即契约③；改文 from nucleus.PulseBus import ⇒ 模块不存在",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792701644_7743",
+   "file": "organs/identity/PulseSelfAwareness.py",
+   "method": "_handle_self_preservation_failure",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        self._preservation_running = False\n        _err = getattr(operation, 'error', '未知错误') if operation else '未知错误'\n        _err = str(_err)[:80]\n        self._log(LogLevel.WARNING, f\"[R2-SelfPreserve] 自我保存失败（降级不阻断）: {_err}\")\n        try:\n            from nucleus.InsightBoard import (\n                get_insight_board,  # type: ignore[possibly-unbound]\n            )\n            get_insight_board().post(  # type: ignore[possibly-unbound]\n                insight_type=\"existential_state\",\n                content=f\"[R2-SelfPreserve] 自我保存失败告警: {_err}\",\n                source_loop=\"存续自我保存\",\n                related_dimension=\"自我存续\",\n                confidence=0.6,\n                keywords=[\"自我保存失败\", \"存续低位\"]\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")",
+   "modified_code": "def _handle_self_preservation_failure(self, operation):\n        self._preservation_running = False\n        _err = getattr(operation, 'error', 'unknown error') if operation else 'unknown error'\n        _err = str(_err)[:80]\n        self._log(LogLevel.WARNING, f\"[R2-SelfPreserve] self-preservation failed (degraded, non-blocking): {_err}\")\n        try:\n            bus = getattr(self, \"_pulse_bus\", None)\n            if bus is None:\n                bus = getattr(self, \"_bus\", None)\n            if bus is not None and hasattr(bus, \"publish\"):\n                payload = {\n                    \"insight_type\": \"existential_state\",\n                    \"content\": f\"[R2-SelfPreserve] self-preservation failure alert: {_err}\",\n                    \"source_loop\": \"self-preservation\",\n                    \"related_dimension\": \"self-persistence\",\n                    \"confidence\": 0.6,\n                    \"keywords\": [\"self-preservation-failure\", \"persistence-low\"],\n                }\n                try:\n                    bus.publish(\"insight.post\", payload)\n                except TypeError:\n                    bus.publish(payload)\n            else:\n                self._log(LogLevel.WARNING, \"[R2-SelfPreserve] pulse bus unavailable; alert not published\")\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"exception ignored (needs attention): {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'self._preservation_running = False' → 'def _handle_self_preservation_failure(se'; 第2行: '_err = getattr(operation, 'error', '未知错误' → 'self._preservation_running = False'; 第3行: '_err = str(_err)[:80]' → '_err = getattr(operation, 'error', 'unkn'; 第4行: 'self._log(LogLevel.WARNING, f\"[R2-SelfPr' → '_err = str(_err)[:80]'; 第5行: 'try:' → 'self._log(LogLevel.WARNING, f\"[R2-SelfPr'",
+   "trust_score": 60.0,
+   "generated_at": 1792701644.1009405,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSelfAwareness import 成功",
+     "sandbox": {
+      "duration_ms": 140,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _on_preservation_failed 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792701653.7442675,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_on_preservation_failed",
+    "def_name": "_handle_self_preservation_failure",
+    "method_after": "_handle_self_preservation_failure",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701654.236503,
+   "created_at": 1792701654.236503,
+   "reason": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 66.0,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 80.2,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "0c65b15bf74c9b75",
+   "dedup_key_v2": "0fdebe6dad145242",
+   "real_method": "_on_preservation_failed",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_insight_board().post() 即契约③；改文 bus=getattr(self,'_pulse_bus',None) ⇒ 静默 no-op",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792745906_f07a",
+   "file": "organs/immune/PulseWhiteCell.py",
+   "method": "_detect_anomalies",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_stats().get(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        _anomalies = []\n        _now = time.time()\n\n        # 1. 知识节点总数突变检测\n        if self.node_pool:\n            _stats = self.node_pool.get_stats()\n            _total = _stats.get(\"total_nodes\", 0)\n\n            if self._behavior_history:\n                _prev = self._behavior_history[-1]\n                _prev_total = _prev.get(\"total_nodes\", _total)\n                _delta = _total - _prev_total\n                _delta_pct = _delta / max(1, _prev_total) * 100\n\n                # 节点数骤降超过20%——可能肾脏过度淘汰\n                if _delta_pct < -20:\n                    _anomalies.append({\n                        \"type\": \"knowledge_shrink\",\n                        \"detail\": f\"知识节点骤降{abs(_delta_pct):.0f}%（{_prev_total}→{_total}），\"\n                                 f\"需检查肾脏淘汰策略是否过于激进\",\n                    })\n                # 节点数骤增超过50%——可能胃消化了低质量内容\n                elif _delta_pct > 50 and _total > 100:\n                    _anomalies.append({\n                        \"type\": \"knowledge_surge\",\n                        \"detail\": f\"知识节点骤增{_delta_pct:.0f}%（{_prev_total}→{_total}），\"\n                                 f\"需检查是否有低质量知识涌入\",\n                    })\n\n        # 2. 错误报告频率异常检测\n        _recent_errors = [\n            t for t in self._recent_ethics_events\n            if _now - t < 1800  # 30分钟内\n        ]\n        if len(_recent_errors) >= 8:\n            _anomalies.append({\n                \"type\": \"error_frequency_high\",\n                \"detail\": f\"30分钟内收到{len(_recent_errors)}次伦理/安全事件，\"\n                         f\"需检查是否有攻击或误判\",\n            })\n\n        # 3. 免疫记忆长期无新增——可能检测机制失效\n        _memory_age = 0\n        for _entry in self._immune_memory.values():\n            _age = _now - _entry.get(\"first_seen\", _now)\n            _memory_age = max(_memory_age, _age)\n        if _memory_age > 86400 * 7 and len(self._immune_memory) < 5:\n            _anomalies.append({\n                \"type\": \"immune_memory_stale\",\n                \"detail\": f\"免疫记忆已超过7天无新增（共{len(self._immune_memory)}条），\"\n                         f\"可能检测机制覆盖不足\",\n            })\n\n        # 保存行为快照\n        self._behavior_history.append({\n            \"timestamp\": _now,\n            \"total_nodes\": self.node_pool.get_stats().get(\"total_nodes\", 0) if self.node_pool else 0,\n            \"immune_memory_size\": len(self._immune_memory),\n            \"error_count\": len(_recent_errors),\n        })\n        if len(self._behavior_history) > self._max_behavior_history:\n            self._behavior_history = self._behavior_history[-self._max_behavior_history:]\n\n        # 处理异常\n        if _anomalies:\n            for _anomaly in _anomalies:\n                self._log(LogLevel.WARNING, f\"行为偏离检测: {_anomaly['detail']}\")\n\n                # 发射L0层告警\n                self._emit(SystemEvent.ALARM, {\n                    \"type\": \"behavioral_anomaly\",\n                    \"anomaly_type\": _anomaly[\"type\"],\n                    \"message\": _anomaly[\"detail\"],\n                }, priority=8, layer=\"L0\")\n\n                # 写入InsightBoard，供深度自我审视和主动交互使用\n                try:\n                    from nucleus.InsightBoard import get_insight_board\n                    _board = get_insight_board()\n                    _board.post(\n                        insight_type=\"behavioral_anomaly\",\n                        content=_anomaly[\"detail\"],\n                        source_loop=\"行为模式偏离检测\",\n                        related_dimension=_anomaly[\"type\"],\n                        confidence=0.75,\n                        keywords=[\"行为异常\", _anomaly[\"type\"], \"自我守护\"]\n                    )\n                except Exception as e:\n                    self._log(LogLevel.ERROR, f'异常: {e}')",
+   "modified_code": "def _detect_anomalies(self):\n        _anomalies = []\n        _now = time.time()\n\n        # 1. knowledge node total mutation detection.\n        # Decoupled access: read from the pulse bus snapshot or a short TTL cache\n        # first, and only then fall back to a guarded stats probe. This removes\n        # the hard dependency on another module singleton (implicit coupling).\n        _total = None\n        _snap = getattr(self, \"_node_stats_snapshot\", None)\n        if isinstance(_snap, dict) and (_now - _snap.get(\"ts\", 0)) <= 300:\n            _total = _snap.get(\"total_nodes\")\n        else:\n            _bus = getattr(self, \"_pulse_bus\", None)\n            if _bus is None:\n                _bus = getattr(self, \"pulse_bus\", None)\n            _bus_stats = getattr(_bus, \"node_stats\", None) if _bus is not None else None\n            if isinstance(_bus_stats, dict):\n                _total = _bus_stats.get(\"total_nodes\")\n            else:\n                _pool = getattr(self, \"node_pool\", None)\n                _get_stats = getattr(_pool, \"get_stats\", None)\n                if callable(_get_stats):\n                    try:\n                        _stats = _get_stats()\n                    except Exception:\n                        _stats = None\n                    if isinstance(_stats, dict):\n                        _total = _stats.get(\"total_nodes\")\n            if _total is not None:\n                self._node_stats_snapshot = {\"total_nodes\": _total, \"ts\": _now}\n\n        if _total is not None and self._behavior_history:\n            _prev = self._behavior_history[-1]\n            _prev_total = _prev.get(\"total_nodes\", _total)\n            _delta = _total - _prev_total\n            _delta_pct = _delta / max(1, _prev_total) * 100\n\n            # shrink over 20 percent, kidney elimination may be too aggressive\n            if _delta_pct < -20:\n                _anomalies.append({\n                    \"type\": \"knowledge_shrink\",\n                    \"detail\": f\"知识节点骤降{abs(_delta_pct):.0f}% ({_prev_total}->{_total}), 需检查肾脏淘汰策略是否过于激进\",\n                })\n            # surge over 50 percent, low quality knowledge may be flowing in\n            elif _delta_pct > 50 and _total > 100:\n                _anomalies.append({\n                    \"type\": \"knowledge_surge\",\n                    \"detail\": f\"知识节点骤增{_delta_pct:.0f}% ({_prev_total}->{_total}), 需检查是否有低质量知识涌入\",\n                })\n\n        # 2. error report frequency anomaly detection\n        _recent_errors = [\n            t for t in self._recent_ethics_events\n            if _now - t < 1800\n        ]\n        if len(_recent_errors) >= 8:\n            _anomalies.append({\n                \"type\": \"error_frequency_high\",\n                \"detail\": f\"30分钟内收到{len(_recent_errors)}次伦理/安全事件, 需检查是否有攻击或误判\",\n            })\n\n        # 3. immune memory stale detection\n        _memory_age = 0\n        for _entry in self._immune_memory.values():\n            _age = _now - _entry.get(\"first_seen\", _now)\n            _memory_age = max(_memory_age, _age)\n        if _memory_age > 86400 * 7 and len(self._immune_memory) < 5:\n            _anomalies.append({\n                \"type\": \"immune_memory_stale\",\n                \"detail\": f\"免疫记忆已超过7天无新增 (共{len(self._immune_memory)}条), 需检查检测机制是否失效\",\n            })\n\n        return _anomalies",
+   "diff_summary": "第1行: '_anomalies = []' → 'def _detect_anomalies(self):'; 第2行: '_now = time.time()' → '_anomalies = []'; 第3行: '' → '_now = time.time()'; 第4行: '# 1. 知识节点总数突变检测' → ''; 第5行: 'if self.node_pool:' → '# 1. knowledge node total mutation detec'",
+   "trust_score": 60.0,
+   "generated_at": 1792745906.4770622,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseWhiteCell import 成功",
+     "sandbox": {
+      "duration_ms": 108,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _detect_behavioral_anomaly 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792745918.175066,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_detect_behavioral_anomaly",
+    "def_name": "_detect_anomalies",
+    "method_after": "_detect_anomalies",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701683.0862687,
+   "created_at": 1792745937.0593927,
+   "reason": "直接调用其他模块单例的方法（get_stats().get(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 83.6,
+    "size": 100.0,
+    "complexity": 40.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 85.6,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "updated_at": 1792806542.1015756,
+   "dedup_key": "6f0bf68ceb2521a6",
+   "dedup_key_v2": "0f08310a5986552b",
+   "real_method": "_detect_behavioral_anomaly",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原文副作用（ALARM+InsightBoard+行为快照）不能被总线 publish 替代；改文双 getattr 恒 None"
+  },
+  {
+   "id": "patch_llm_1792701762_4906",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "_log_legs_learn",
+   "issue_type": "non_atomic_write",
+   "risk_level": "高",
+   "description": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "original_code": "        try:\n            import json as _json\n            log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                                     'data', 'stream', 'legs_learn_log.json')\n            entry = {\n                \"timestamp\": time.time(),\n                \"direction\": direction,\n                \"source\": source,\n                \"content_preview\": content_preview[:100],\n            }\n            log_data = []\n            if os.path.exists(log_path):\n                try:\n                    # ★主线第74批 T1：默认 [] 而非 {}——日志文件内容为 dict 时\n                    #   safe_read_json 返回 dict，后续 .append 抛 AttributeError 被静默吞\n                    #   （日志中 \"[双腿] 数据处理异常已忽略\"）。改为 [] 从源头消除。\n                    log_data = safe_read_json(log_path, default=[])\n                except (ValueError, OSError) as e:\n                    self._log(LogLevel.INFO, f\"[WARNING] PulseLegs 双腿学习日志读取失败: {type(e).__name__}: {e}\")\n                    log_data = []\n                # ★主线第74批 T1：防御性类型守卫——非 list 时记 WARNING 而非抛异常，\n                #   dict 转 values 保留历史数据点（避免静默丢数据），其他类型重置为空。\n                if not isinstance(log_data, list):\n                    if isinstance(log_data, dict):\n                        self._log(LogLevel.DEBUG,\n                                  f\"[第74批T1] 双腿学习日志为dict格式，已转为list保留: {log_path}\")\n                        log_data = list(log_data.values())\n                    else:\n                        self._log(LogLevel.WARNING,\n                                  f\"[第74批T1] 双腿学习日志格式异常(非list/dict)，重置为空: {type(log_data).__name__}\")\n                        log_data = []\n            log_data.append(entry)\n            if len(log_data) > 50:\n                log_data = log_data[-50:]\n            with open(log_path, 'w', encoding='utf-8') as f:\n                _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")",
+   "modified_code": "def _log_legs_learn(self, direction, source, content_preview):\n        # T1: complete method body restored; all failure paths degrade to DEBUG/INFO\n        # and never propagate, so the caller's data pipeline is never interrupted.\n        try:\n            import json as _json\n            import tempfile\n            log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                                   'data', 'stream')\n            log_path = os.path.join(log_dir, 'legs_learn_log.json')\n            # T1: guard against non-str preview (None / bytes / dict) before slicing.\n            if isinstance(content_preview, str):\n                preview_text = content_preview[:100]\n            else:\n                preview_text = str(content_preview)[:100]\n            entry = {\n                \"timestamp\": time.time(),\n                \"direction\": direction,\n                \"source\": source,\n                \"content_preview\": preview_text,\n            }\n            log_data = []\n            if os.path.exists(log_path):\n                try:\n                    # T1: default [] instead of {} - safe_read_json returns dict when the\n                    # file holds a dict, and a later .append would raise AttributeError.\n                    log_data = safe_read_json(log_path, default=[])\n                except (ValueError, OSError) as e:\n                    self._log(LogLevel.INFO, f\"[WARNING] PulseLegs legs learn log read failed: {type(e).__name__}: {e}\")\n                    log_data = []\n                # T1: defensive type guard - a dict is converted through values() so no\n                # history is lost; anything else is reset to an empty list with a WARNING.\n                if not isinstance(log_data, list):\n                    if isinstance(log_data, dict):\n                        self._log(LogLevel.DEBUG,\n                                  f\"[T1] legs learn log is dict, converted to list to keep data: {log_path}\")\n                        log_data = list(log_data.values())\n                    else:\n                        self._log(LogLevel.WARNING,\n                                  f\"[T1] legs learn log format invalid (not list/dict), reset to empty: {type(log_data).__name__}\")\n                        log_data = []\n            log_data.append(entry)\n            if len(log_data) > 50:\n                log_data = log_data[-50:]\n            os.makedirs(log_dir, exist_ok=True)\n            # T1: atomic write via tempfile + os.replace, fsync before rename.\n            fd, tmp_path = tempfile.mkstemp(prefix='.legs_learn_log.', suffix='.tmp', dir=log_dir)\n            try:\n                with os.fdopen(fd, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n                    f.flush()\n                    os.fsync(f.fileno())\n                os.replace(tmp_path, log_path)\n            finally:\n                # T1: temp file is always removed on any failure path.\n                if os.path.exists(tmp_path):\n                    try:\n                        os.remove(tmp_path)\n                    except OSError:\n                        pass\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"data process exception ignored: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def _log_legs_learn(self, direction, sou'; 第2行: 'import json as _json' → '# T1: complete method body restored; all'; 第3行: 'log_path = os.path.join(os.path.dirname(' → '# and never propagate, so the caller's d'; 第4行: ''data', 'stream', 'legs_learn_log.json')' → 'try:'; 第5行: 'entry = {' → 'import json as _json'",
+   "trust_score": 30.0,
+   "generated_at": 1792701762.6130939,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 296,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _write_learn_log 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792701772.613785,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_write_learn_log",
+    "def_name": "_log_legs_learn",
+    "method_after": "_log_legs_learn",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "literal",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [
+    "open(",
+    "os.remove"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=non_atomic_write",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 30.0,
+     "basis": "issue_type=non_atomic_write 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701773.2334776,
+   "created_at": 1792701773.2334776,
+   "reason": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 75.5,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 100.0,
+    "verbosity": 96.7,
+    "naming": 60.0,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "3e7d71177772925a",
+   "dedup_key_v2": "50b008843260de75",
+   "real_method": "_write_learn_log",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] 生成体不可信：原 1971→改 3293 字符（+67%）、全英文注释、trust=30，未采纳；原子写缺口记入 356",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792710924_522a",
+   "file": "organs/core/PulseMotivationCycle.py",
+   "method": "_update_pressure_state",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_stats().get(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        with self._lock:\n            # 1. 资源压力\n            resource = 0.0\n            try:\n                if self.info_field:\n                    snap = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)\n                    if snap and isinstance(snap, dict):\n                        payload = snap.get(\"payload\", {})\n                        cpu = payload.get(\"cpu\", {}).get(\"usage_percent\", 0)\n                        mem = payload.get(\"memory\", {}).get(\"usage_percent\", 0)\n                        resource = max(cpu, mem) / 100.0\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            if self.stress_axis:\n                try:\n                    stress_level = self.stress_axis.get_stats().get(\"stress_level\", 0.0)\n                    resource = max(resource, stress_level * 0.8)\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._pressure_state[\"resource\"] = round(max(0.0, min(1.0, resource)), 2)\n\n            # 2. 挫败压力（★v9.5修复：时间加权衰减，避免短时间几条负面便爆表卡死）\n            # 原问题：recent_negative/5 过于敏感，6条近期负面即 frustration=1.0，\n            # 导致自我修改被长期禁止（日志连续56次触发《自我修改约束》）。\n            # 修复：按时间衰减加权（越新权重越高），并降低分母敏感度。\n            frustration = 0.0\n            if self.experience_pool:\n                try:\n                    negative = self.experience_pool.get_negative_experiences(limit=20)\n                    if negative:\n                        now = time.time()\n                        # 时间衰减加权：1h内权重1.0，2h内 0.6，4h内 0.3，更旧 0.1\n                        _weighted_neg = 0.0\n                        for e in negative:\n                            _age = now - e.get(\"timestamp\", 0)\n                            if _age < 3600:\n                                _w = 1.0\n                            elif _age < 7200:\n                                _w = 0.6\n                            elif _age < 14400:\n                                _w = 0.3\n                            else:\n                                _w = 0.1\n                            _weighted_neg += _w\n                        # 分母从 5 放宽到 8，避免几条负面就顶满\n                        frustration = min(1.0, _weighted_neg / 8.0)\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._pressure_state[\"frustration\"] = round(frustration, 2)\n\n            # 3. 认知压力\n            cognitive = 0.0\n            if self.experience_pool:\n                try:\n                    recent = self.experience_pool.query_experiences(\n                        pressure_type=\"cognitive\", limit=20\n                    )\n                    if recent:\n                        avg_pressure = sum(e.get(\"process_pressure\", 0.0) for e in recent) / len(recent)\n                        cognitive = avg_pressure\n                except Exception as e:\n                    self._log(LogLevel.ERROR, f'异常: {e}')\n            self._pressure_state[\"cognitive\"] = round(cognitive, 2)\n\n            # 4. 记忆检索压力（★骨架优化：直接读注入的 node_pool，不再穿透 self_awareness）\n            retrieval = 0.0\n            try:\n                if self.node_pool:\n                    total = self.node_pool.count()\n                    retrieval = min(1.0, total / 50000.0)\n            except Exception as e:\n                self._log(LogLevel.ERROR, f'异常: {e}')\n            self._pressure_state[\"retrieval\"] = round(retrieval, 2)",
+   "modified_code": "def _update_pressure_state(self):\n        with self._lock:\n            # 1. resource pressure\n            resource = 0.0\n            try:\n                if self.info_field:\n                    snap = self.info_field.get_current(TouchEvent.HARDWARE_SNAPSHOT)\n                    if snap and isinstance(snap, dict):\n                        payload = snap.get(\"payload\", {})\n                        cpu = payload.get(\"cpu\", {}).get(\"usage_percent\", 0)\n                        mem = payload.get(\"memory\", {}).get(\"usage_percent\", 0)\n                        resource = max(cpu, mem) / 100.0\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n\n            if self.stress_axis:\n                try:\n                    stress_level = 0.0\n                    stats = None\n                    provider = getattr(self, \"stress_snapshot_provider\", None)\n                    if callable(provider):\n                        stats = provider()\n                    if not isinstance(stats, dict):\n                        bus = getattr(self, \"pulse_bus\", None)\n                        if bus is None:\n                            bus = getattr(self, \"_pulse_bus\", None)\n                        request = getattr(bus, \"request\", None) if bus is not None else None\n                        if callable(request):\n                            stats = request(\n                                \"stress.get_stats\",\n                                {\"source\": \"pressure_monitor\"},\n                                timeout=0.5,\n                            )\n                    if isinstance(stats, dict):\n                        stress_level = float(stats.get(\"stress_level\", 0.0) or 0.0)\n                    resource = max(resource, max(0.0, min(1.0, stress_level)) * 0.8)\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._pressure_state[\"resource\"] = round(max(0.0, min(1.0, resource)), 2)\n\n            # 2. frustration pressure (time-weighted decay)\n            frustration = 0.0\n            if self.experience_pool:\n                try:\n                    negative = self.experience_pool.get_negative_experiences(limit=20)\n                    if negative:\n                        now = time.time()\n                        weighted_neg = 0.0\n                        for e in negative:\n                            age = now - e.get(\"timestamp\", 0)\n                            if age < 3600:\n                                weight = 1.0\n                            elif age < 7200:\n                                weight = 0.6\n                            elif age < 14400:\n                                weight = 0.3\n                            else:\n                                weight = 0.1\n                            weighted_neg += weight\n                        frustration = min(1.0, weighted_neg / 10.0)\n                except Exception as e:\n                    self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n            self._pressure_state[\"frustration\"] = round(max(0.0, min(1.0, frustration)), 2)",
+   "diff_summary": "第1行: 'with self._lock:' → 'def _update_pressure_state(self):'; 第2行: '# 1. 资源压力' → 'with self._lock:'; 第3行: 'resource = 0.0' → '# 1. resource pressure'; 第4行: 'try:' → 'resource = 0.0'; 第5行: 'if self.info_field:' → 'try:'",
+   "trust_score": 60.0,
+   "generated_at": 1792710924.180419,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseMotivationCycle import 成功",
+     "sandbox": {
+      "duration_ms": 108,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _update_pressure 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792710933.8466961,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_update_pressure",
+    "def_name": "_update_pressure_state",
+    "method_after": "_update_pressure_state",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792710934.9112532,
+   "created_at": 1792710934.9112532,
+   "reason": "直接调用其他模块单例的方法（get_stats().get(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 74.1,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 79.3,
+    "verbosity": 100.0,
+    "naming": 82.2,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "87b706e61cc1efff",
+   "dedup_key_v2": "258de1a5cbb6057a",
+   "real_method": "_update_pressure",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原文 self.stress_axis.get_stats() 为同器官调用，描述判据误判为跨模块；改文总线恒 None",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792735696_18d5",
+   "file": "organs/body/PulseLiver.py",
+   "method": "_m70_get_node",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_kal().get_node(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        if not self._m70_kal_callsites_on():\n            return self._m70_direct_get_node(node_id)\n        try:\n            from nucleus.knowledge_access_layer import get_kal\n            _r = get_kal().get_node(node_id)\n            if _r is not None:\n                return _r\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"[肝] KAL获取节点异常，回退直连node_pool: {type(e).__name__}: {e}\")\n        return self._m70_direct_get_node(node_id)",
+   "modified_code": "def _m70_get_node(self, node_id):\n        if not self._m70_kal_callsites_on():\n            return self._m70_direct_get_node(node_id)\n        try:\n            pulse_bus = getattr(self, \"_pulse_bus\", None)\n            request = getattr(pulse_bus, \"request\", None)\n            if callable(request):\n                _r = request(\"kal.get_node\", node_id)\n                if _r is not None:\n                    return _r\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"[KAL] pulse bus get_node failed, fallback to node_pool: {type(e).__name__}: {e}\")\n        return self._m70_direct_get_node(node_id)",
+   "diff_summary": "第1行: 'if not self._m70_kal_callsites_on():' → 'def _m70_get_node(self, node_id):'; 第2行: 'return self._m70_direct_get_node(node_id' → 'if not self._m70_kal_callsites_on():'; 第3行: 'try:' → 'return self._m70_direct_get_node(node_id'; 第4行: 'from nucleus.knowledge_access_layer impo' → 'try:'; 第5行: '_r = get_kal().get_node(node_id)' → 'pulse_bus = getattr(self, \"_pulse_bus\", '",
+   "trust_score": 60.0,
+   "generated_at": 1792735696.8784544,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLiver import 成功",
+     "sandbox": {
+      "duration_ms": 172,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _m70_kal_get_node 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792735707.667995,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_m70_kal_get_node",
+    "def_name": "_m70_get_node",
+    "method_after": "_m70_get_node",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792735708.4964297,
+   "created_at": 1792735708.4964297,
+   "reason": "直接调用其他模块单例的方法（get_kal().get_node(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 73.0,
+    "size": 100.0,
+    "complexity": 65.4,
+    "readability": 40.0,
+    "verbosity": 84.6,
+    "naming": 60.0,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "f2cd1357c4f97172",
+   "dedup_key_v2": "8b46666854977e04",
+   "real_method": "_m70_kal_get_node",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_kal().get_node() 合法；改文经 pulse_bus.request() 且总线不存在 ⇒ 恒 None",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792735717_2cd6",
+   "file": "organs/body/PulseLiver.py",
+   "method": "_count_nodes",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_kal().get_node_count(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            from nucleus.knowledge_access_layer import get_kal\n            _r = get_kal().get_node_count()\n            if _r:\n                return _r\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"[肝] KAL节点统计异常: {type(e).__name__}: {e}\")\n        try:\n            _pool = getattr(self, \"node_pool\", None)\n            if _pool is not None:\n                return len(getattr(_pool, \"_hot\", {}) or {}) + \\\n                    len(getattr(_pool, \"_warm\", {}) or {}) + \\\n                    len(getattr(_pool, \"_cold\", {}) or {})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"[肝] 节点池统计异常: {type(e).__name__}: {e}\")\n        return 0",
+   "modified_code": "def _count_nodes(self):\n        # Resolve KAL through the pulse bus / injected dependency instead of\n        # importing and calling the cross-module singleton directly.\n        _bus = getattr(self, \"pulse_bus\", None)\n        if _bus is None:\n            _bus = getattr(self, \"bus\", None)\n        _kal = getattr(self, \"kal\", None)\n        if _kal is None:\n            _kal = getattr(self, \"_kal\", None)\n        if _kal is None and _bus is not None:\n            try:\n                if hasattr(_bus, \"resolve\"):\n                    _kal = _bus.resolve(\"kal\")\n                elif hasattr(_bus, \"get_service\"):\n                    _kal = _bus.get_service(\"kal\")\n                elif hasattr(_bus, \"request\"):\n                    _kal = _bus.request(\"kal\")\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"[肝] 脉冲总线解析KAL异常: {type(e).__name__}: {e}\")\n                _kal = None\n        if _kal is not None:\n            try:\n                _r = _kal.get_node_count()\n                if _r:\n                    return _r\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"[肝] KAL节点统计异常: {type(e).__name__}: {e}\")\n        try:\n            _pool = getattr(self, \"node_pool\", None)\n            if _pool is not None:\n                return len(getattr(_pool, \"_hot\", {}) or {}) + \\\n                    len(getattr(_pool, \"_warm\", {}) or {}) + \\\n                    len(getattr(_pool, \"_cold\", {}) or {})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"[肝] 节点池统计异常: {type(e).__name__}: {e}\")\n        return 0",
+   "diff_summary": "第1行: 'try:' → 'def _count_nodes(self):'; 第2行: 'from nucleus.knowledge_access_layer impo' → '# Resolve KAL through the pulse bus / in'; 第3行: '_r = get_kal().get_node_count()' → '# importing and calling the cross-module'; 第4行: 'if _r:' → '_bus = getattr(self, \"pulse_bus\", None)'; 第5行: 'return _r' → 'if _bus is None:'",
+   "trust_score": 60.0,
+   "generated_at": 1792735717.1046066,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLiver import 成功",
+     "sandbox": {
+      "duration_ms": 203,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _m70_kal_node_count 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792735729.1802747,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_m70_kal_node_count",
+    "def_name": "_count_nodes",
+    "method_after": "_count_nodes",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792735730.0484877,
+   "created_at": 1792735730.0484877,
+   "reason": "直接调用其他模块单例的方法（get_kal().get_node_count(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 80.4,
+    "size": 100.0,
+    "complexity": 33.8,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 69.5,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "c3992a36b7cabb2a",
+   "dedup_key_v2": "c41c667341f9047f",
+   "real_method": "_m70_kal_node_count",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_kal().get_node_count() 合法；改文 _bus 恒 None ⇒ 计数恒 0",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792745556_ab6b",
+   "file": "organs/endocrine/PulseHormones.py",
+   "method": "_record_emotion_log",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_emotion_trend().get(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),  # 新增\n            }\n            # ★修复：使用_emotion_log_lock防止并发写入损坏JSON\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")",
+   "modified_code": "def _record_emotion_log(self, emotion, intensity, user_name):\n        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                # key change: no direct cross-module singleton call here,\n                # trend is resolved through the pulse bus snapshot or a local cache\n                \"trend\": self._read_emotion_trend_direction(),\n            }\n            # 修复: 使用 _emotion_log_lock 防止并发写入损坏 JSON\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")\n\ndef _read_emotion_trend_direction(self, default=\"stable\"):\n        # key change: decouple from foreign singletons, read bus snapshot first,\n        # then fall back to a locally cached value, finally to the default\n        direction = None\n        bus = getattr(self, 'pulse_bus', None)\n        if bus is None:\n            bus = getattr(self, 'event_bus', None)\n        if bus is not None:\n            for getter_name in ('get_last_signal', 'get_snapshot', 'peek', 'get'):\n                getter = getattr(bus, getter_name, None)\n                if not callable(getter):\n                    continue\n                try:\n                    snapshot = getter('emotion_trend')\n                except Exception:\n                    continue\n                if isinstance(snapshot, dict):\n                    direction = snapshot.get('direction')\n                elif isinstance(snapshot, str):\n                    direction = snapshot\n                if isinstance(direction, str) and direction:\n                    break\n                direction = None\n        if not isinstance(direction, str) or not direction:\n            cached = getattr(self, '_last_emotion_trend_direction', None)\n            if isinstance(cached, str) and cached:\n                direction = cached\n        if not isinstance(direction, str) or not direction:\n            direction = default\n        return direction",
+   "diff_summary": "第1行: 'try:' → 'def _record_emotion_log(self, emotion, i'; 第2行: 'import json as _json' → 'try:'; 第3行: 'log_path = os.path.join(' → 'import json as _json'; 第4行: 'os.path.dirname(os.path.dirname(os.path.' → 'log_path = os.path.join('; 第5行: ''data', 'stream', 'hormone_emotion_log.j' → 'os.path.dirname(os.path.dirname(os.path.'",
+   "trust_score": 60.0,
+   "generated_at": 1792745556.066459,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseHormones import 成功",
+     "sandbox": {
+      "duration_ms": 110,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _write_emotion_log 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792745566.3773665,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_write_emotion_log",
+    "def_name": "_record_emotion_log",
+    "method_after": "_record_emotion_log",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "open(",
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "open(",
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792745575.4745023,
+   "created_at": 1792745575.4745023,
+   "reason": "直接调用其他模块单例的方法（get_emotion_trend().get(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 78.0,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 80.3,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "184299698fc57286",
+   "dedup_key_v2": "cbe9f524fc54b501",
+   "real_method": "_write_emotion_log",
+   "dup_of": null,
+   "dup_disposal": "special:_write_emotion_log",
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性 + 读不存在文件：本方法真实依赖 get_emotion_trend()，改文引入 pulse_bus 且语义要求读未生成文件（556 死因）",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792745690_5559",
+   "file": "organs/identity/PulseSelfAwareness.py",
+   "method": "_handle_survival_low",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        self._survival_state = \"low\"\n        _idx = getattr(snapshot, \"index\", 30)\n        _level = getattr(snapshot, \"level\", \"low\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续低位，指数={_idx}，\"\n                  f\"R2自我保存由心跳闭环独立维护\")\n        # ★生命姿态补强: 威胁感知→防御动作即时闭环（复用 R2 双重防抖，冷却+防重入零冲突）\n        try:\n            self._maybe_trigger_self_preservation(\n                {\"level\": _level, \"index\": _idx, \"mode_switched\": True})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        # ★生命姿态补强: 姿态变化洞察（供叙事/对话层感知「处于生存紧张状态」）\n        try:\n            from nucleus.InsightBoard import (\n                get_insight_board,  # type: ignore[possibly-unbound]\n            )\n            get_insight_board().post(  # type: ignore[possibly-unbound]\n                insight_type=\"life_posture\",\n                content=f\"生命姿态切换为「存续低位·自我保存」：指数={_idx}\",\n                source_loop=\"生命姿态\",\n                related_dimension=\"自我存续\",\n                # 第九批 B-3：原硬编码 0.9，改为按「存续状态」类型成功率×证据强度计算\n                confidence=_evidence_conf(0.9, \"survival\", [_idx]),\n                keywords=[\"生命姿态\", \"存续低位\", \"自我保存\"],\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"low\"}",
+   "modified_code": "def _handle_survival_low(self, snapshot):\n        self._survival_state = \"low\"\n        _idx = getattr(snapshot, \"index\", 30)\n        _level = getattr(snapshot, \"level\", \"low\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续低位，指数={_idx}，\"\n                  f\"R2自我保存由心跳闭环独立维护\")\n        # 生命姿态补强: 威胁感知 -> 防御动作即时闭环 (复用 R2 双重防抖, 冷却+防重入零冲突)\n        try:\n            self._maybe_trigger_self_preservation(\n                {\"level\": _level, \"index\": _idx, \"mode_switched\": True})\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        # 生命姿态补强: 姿态变化洞察 (供叙事/对话层感知\"处于生存紧张状态\")\n        # 改动点: 不再直接调用 get_insight_board().post(...), 统一经脉冲总线发布, 消除跨模块单例隐式耦合\n        try:\n            self._publish_insight(\n                insight_type=\"life_posture\",\n                content=f\"生命姿态切换为「存续低位·自我保存」：指数={_idx}\",\n                source_loop=\"生命姿态\",\n                related_dimension=\"自我存续\",\n                confidence=_evidence_conf(0.9, \"survival\", [_idx]),\n                keywords=[\"生命姿态\", \"存续低位\", \"自我保存\"],\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"low\"}\n\ndef _publish_insight(self, **payload):\n        # 改动点: 新增总线桥接, 仅此处解析发布通道, 上层不再感知 InsightBoard 单例\n        bus = None\n        for attr in (\"_pulse_bus\", \"pulse_bus\", \"_bus\", \"bus\", \"_pulse\"):\n            bus = getattr(self, attr, None)\n            if bus is not None:\n                break\n        if bus is None:\n            try:\n                from nucleus.PulseBus import get_pulse_bus  # 按项目实际脉冲总线模块调整\n                bus = get_pulse_bus()\n            except Exception:\n                bus = None\n        if bus is None:\n            self._log(LogLevel.WARNING, \"脉冲总线不可用, 洞察事件已丢弃: life_posture\")\n            return False\n        emit = None\n        for name in (\"emit\", \"publish\", \"post_insight\"):\n            candidate = getattr(bus, name, None)\n            if callable(candidate):\n                emit = candidate\n                break\n        if emit is None:\n            self._log(LogLevel.WARNING, \"脉冲总线无可用发布接口, 洞察事件已丢弃: life_posture\")\n            return False\n        emit(\"insight.post\", payload)\n        return True",
+   "diff_summary": "第1行: 'self._survival_state = \"low\"' → 'def _handle_survival_low(self, snapshot)'; 第2行: '_idx = getattr(snapshot, \"index\", 30)' → 'self._survival_state = \"low\"'; 第3行: '_level = getattr(snapshot, \"level\", \"low' → '_idx = getattr(snapshot, \"index\", 30)'; 第4行: 'self._log(LogLevel.INFO,' → '_level = getattr(snapshot, \"level\", \"low'; 第5行: 'f\"[R4生命层] 存续低位，指数={_idx}，\"' → 'self._log(LogLevel.INFO,'",
+   "trust_score": 60.0,
+   "generated_at": 1792745690.6529837,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSelfAwareness import 成功",
+     "sandbox": {
+      "duration_ms": 157,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 on_survival_low 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792745708.2160766,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "on_survival_low",
+    "def_name": "_handle_survival_low",
+    "method_after": "_handle_survival_low",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792745747.8164854,
+   "created_at": 1792745747.8164854,
+   "reason": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 86.6,
+    "size": 100.0,
+    "complexity": 55.0,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 78.6,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "238dc4f105736d63",
+   "dedup_key_v2": "5230ecdb2e4cad98",
+   "real_method": "on_survival_low",
+   "dup_of": null,
+   "dup_disposal": "special:on_survival_low",
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_insight_board().post() 即契约③；改文回退链 attr 全不存在",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792745786_10cb",
+   "file": "organs/identity/PulseSelfAwareness.py",
+   "method": "_on_survival_state_high",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        self._survival_state = \"high\"\n        _idx = getattr(snapshot, \"index\", \"?\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续高位，指数={_idx}，恢复正常节律\")\n        try:\n            from nucleus.InsightBoard import (\n                get_insight_board,  # type: ignore[possibly-unbound]\n            )\n            get_insight_board().post(  # type: ignore[possibly-unbound]\n                insight_type=\"life_posture\",\n                content=f\"生命姿态恢复「存续高位·舒展」：指数={_idx}\",\n                source_loop=\"生命姿态\",\n                related_dimension=\"自我存续\",\n                # 第九批 B-3：原硬编码 0.9\n                confidence=_evidence_conf(0.9, \"survival\", [_idx]),\n                keywords=[\"生命姿态\", \"存续高位\", \"恢复\"],\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"high\"}",
+   "modified_code": "def _on_survival_state_high(self, snapshot) -> dict:\n        self._survival_state = \"high\"\n        _idx = getattr(snapshot, \"index\", \"?\")\n        self._log(LogLevel.INFO,\n                  f\"[R4生命层] 存续高位，指数={_idx}，恢复正常节律\")\n        # Key change: publish through the pulse bus first, never call the\n        # InsightBoard singleton directly on the happy path.\n        _payload = {\n            \"insight_type\": \"life_posture\",\n            \"content\": f\"生命姿态恢复「存续高位·舒展」：指数={_idx}\",\n            \"source_loop\": \"生命姿态\",\n            \"related_dimension\": \"自我存续\",\n            \"confidence\": _evidence_conf(0.9, \"survival\", [_idx]),\n            \"keywords\": [\"生命姿态\", \"存续高位\", \"恢复\"],\n        }\n        _bus = None\n        try:\n            from nucleus.pulse_bus import (  # type: ignore[possibly-unbound]\n                get_pulse_bus,\n            )\n            _bus = get_pulse_bus()\n        except Exception as e:\n            self._log(LogLevel.WARNING,\n                      f\"脉冲总线不可用，将走兼容回退: {type(e).__name__}: {e}\")\n        _published = False\n        if _bus is not None:\n            try:\n                _publish = getattr(_bus, \"publish\", None)\n                if not callable(_publish):\n                    _publish = getattr(_bus, \"emit\", None)\n                if callable(_publish):\n                    _publish(\"insight.life_posture\", _payload)\n                    _published = True\n                else:\n                    self._log(LogLevel.WARNING,\n                              \"脉冲总线缺少 publish/emit 接口，将走兼容回退\")\n            except Exception as e:\n                self._log(LogLevel.WARNING,\n                          f\"脉冲总线发布失败，将走兼容回退: {type(e).__name__}: {e}\")\n        if not _published:\n            # Compat fallback: lazy import, guarded call, no module-level binding.\n            try:\n                from nucleus.InsightBoard import (\n                    get_insight_board,  # type: ignore[possibly-unbound]\n                )\n                _board = get_insight_board()\n                _post = getattr(_board, \"post\", None)\n                if callable(_post):\n                    _post(**_payload)\n                else:\n                    self._log(LogLevel.WARNING, \"InsightBoard 缺少 post 接口\")\n            except Exception as e:\n                self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")\n        return {\"layer\": \"life\", \"state\": \"high\"}",
+   "diff_summary": "第1行: 'self._survival_state = \"high\"' → 'def _on_survival_state_high(self, snapsh'; 第2行: '_idx = getattr(snapshot, \"index\", \"?\")' → 'self._survival_state = \"high\"'; 第3行: 'self._log(LogLevel.INFO,' → '_idx = getattr(snapshot, \"index\", \"?\")'; 第4行: 'f\"[R4生命层] 存续高位，指数={_idx}，恢复正常节律\")' → 'self._log(LogLevel.INFO,'; 第5行: 'try:' → 'f\"[R4生命层] 存续高位，指数={_idx}，恢复正常节律\")'",
+   "trust_score": 60.0,
+   "generated_at": 1792745786.5023177,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSelfAwareness import 成功",
+     "sandbox": {
+      "duration_ms": 234,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 on_survival_high 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792745800.1799877,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "on_survival_high",
+    "def_name": "_on_survival_state_high",
+    "method_after": "_on_survival_state_high",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792745821.9142394,
+   "created_at": 1792745821.9142394,
+   "reason": "直接调用其他模块单例的方法（get_insight_board().post(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 80.1,
+    "size": 100.0,
+    "complexity": 29.4,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 77.5,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "06c1b8bf0e8acf57",
+   "dedup_key_v2": "a288b5eda0814f1d",
+   "real_method": "on_survival_high",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_insight_board().post() 即契约③；改文 from nucleus.pulse_bus import（小写，不存在）",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792745955_2997",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "_record_tool_strategy",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_tool_strategy_memory().record(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            from nucleus.ToolStrategyMemory import get_tool_strategy_memory\n            get_tool_strategy_memory().record(direction, strategy, success)\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")",
+   "modified_code": "def _record_tool_strategy(self, direction, strategy, success):\n        try:\n            from nucleus.PulseBus import get_pulse_bus\n            get_pulse_bus().publish(\n                \"tool_strategy.record\",\n                {\n                    \"direction\": direction,\n                    \"strategy\": strategy,\n                    \"success\": success,\n                },\n            )\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"异常已忽略（需关注）: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def _record_tool_strategy(self, directio'; 第2行: 'from nucleus.ToolStrategyMemory import g' → 'try:'; 第3行: 'get_tool_strategy_memory().record(direct' → 'from nucleus.PulseBus import get_pulse_b'; 第4行: 'except Exception as e:' → 'get_pulse_bus().publish('; 第5行: 'self._log(LogLevel.WARNING, f\"异常已忽略（需关注）' → '\"tool_strategy.record\",'",
+   "trust_score": 60.0,
+   "generated_at": 1792745955.1999173,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 436,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _record_strategy 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792745965.854335,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_record_strategy",
+    "def_name": "_record_tool_strategy",
+    "method_after": "_record_tool_strategy",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "none",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [],
+   "sandbox_incompatible": false,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792745969.2486331,
+   "created_at": 1792745969.2486331,
+   "reason": "直接调用其他模块单例的方法（get_tool_strategy_memory().record(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 67.6,
+    "size": 100.0,
+    "complexity": 30.8,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 69.2,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "1e23d81fb8815f77",
+   "dedup_key_v2": "7ed990d52f4b7b9b",
+   "real_method": "_record_strategy",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_tool_strategy_memory().record() 是唯一写入点，改文改成不存在的总线 publish ⇒ 策略记忆彻底停止记录",
+   "updated_at": 1792806542.1015756
+  },
+  {
+   "id": "patch_llm_1792747749_e591",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "set_llm_callback",
+   "issue_type": "cross_module_singleton_call",
+   "risk_level": "中",
+   "description": "直接调用其他模块单例的方法（get_intent_classifier().set_llm_callback(），可能绕过脉冲总线造成隐式耦合",
+   "original_code": "        try:\n            from nucleus.SearchIntentClassifier import get_intent_classifier\n            get_intent_classifier().set_llm_callback(callback)\n        except Exception as e:\n            # 注入失败不影响主搜索链路（分类器仍走本地规则快路径）\n            silent_exc(e, where=\"organs.motor.PulseLegs::set_llm_callback L1119\")",
+   "modified_code": "def set_llm_callback(self, callback):\n        bus_ok = False\n        try:\n            from nucleus.PulseBus import get_pulse_bus\n            get_pulse_bus().emit(\n                topic=\"intent.classifier.set_llm_callback\",\n                payload={\"callback\": callback},\n                source=\"organs.motor.PulseLegs::set_llm_callback\",\n            )\n            bus_ok = True\n        except Exception as e:\n            silent_exc(e, where=\"organs.motor.PulseLegs::set_llm_callback L1119 bus\")\n\n        if bus_ok:\n            return\n\n        try:\n            from nucleus.SearchIntentClassifier import get_intent_classifier\n            get_intent_classifier().set_llm_callback(callback)\n        except Exception as e:\n            # 注入失败不影响主搜索链路（分类器仍走本地规则快路径）\n            silent_exc(e, where=\"organs.motor.PulseLegs::set_llm_callback L1119\")",
+   "diff_summary": "第1行: 'try:' → 'def set_llm_callback(self, callback):'; 第2行: 'from nucleus.SearchIntentClassifier impo' → 'bus_ok = False'; 第3行: 'get_intent_classifier().set_llm_callback' → 'try:'; 第4行: 'except Exception as e:' → 'from nucleus.PulseBus import get_pulse_b'; 第5行: '# 注入失败不影响主搜索链路（分类器仍走本地规则快路径）' → 'get_pulse_bus().emit('",
+   "trust_score": 60.0,
+   "generated_at": 1792747749.990574,
+   "status": "rejected",
+   "applied": false,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 390,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖外部名称: ['silent_exc']"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 set_llm_callback 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792747761.98779,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "set_llm_callback",
+    "def_name": "set_llm_callback",
+    "method_after": "set_llm_callback",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true
+   },
+   "danger_keyword_class": "none",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [],
+   "sandbox_incompatible": false,
+   "_m343_shape_exempt": true,
+   "risk_level_basis": "escalated_by_issue_type",
+   "risk_level_raw": "低",
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=cross_module_singleton_call",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 60.0,
+     "basis": "issue_type=cross_module_singleton_call 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792747768.8626008,
+   "created_at": 1792747768.8626008,
+   "reason": "直接调用其他模块单例的方法（get_intent_classifier().set_llm_callback(），可能绕过脉冲总线造成隐式耦合",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 92.4,
+    "size": 100.0,
+    "complexity": 76.3,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 83.7,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": null,
+   "problem_fixed_reason": "legacy_unverifiable",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "runtime_verified": true,
+   "dedup_key": "c6dcc246b4b6061b",
+   "dedup_key_v2": "c6dcc246b4b6061b",
+   "real_method": "set_llm_callback",
+   "dup_of": null,
+   "rejected": true,
+   "reject_stage": "355_clear",
+   "reject_reason": "[355拒绝] cross 假阳性：原调用 get_intent_classifier().set_llm_callback() 是装配点，改文 publish 到不存在总线 ⇒ 回调装不上",
+   "updated_at": 1792806542.1015756
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+{
+  "_summary": true,
+  "source": "data/reports/audit/_m356_merged_rows.json",
+  "type": "dict",
+  "size_bytes": 796172,
+  "sha256": "156c31f01ce51c9f63782f6c7f1629b2f3d7d0789138f22ffca20dbd08f314b7",
+  "entries": 4,
+  "status_counts": {},
+  "top_keys": [
+    "schema",
+    "ts",
+    "count",
+    "rows"
+  ],
+  "exported_at": "2026-10-24 17:04:01"
+}

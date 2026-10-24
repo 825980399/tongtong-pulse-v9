@@ -1,0 +1,910 @@
+{
+ "batch": "355",
+ "ts": "2026-10-24 09:49:01",
+ "count": 7,
+ "rows": [
+  {
+   "id": "patch_llm_1792701488_bccc",
+   "file": "organs/core/PulseSystemManager.py",
+   "method": "_auto_health_check",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        if not self._running:\n            return\n        self._health_timer = threading.Timer(300, self._auto_health_check)\n        self._health_timer.daemon = True\n        self._health_timer.start()",
+   "modified_code": "def _auto_health_check(self):\n        # Reentry guard: skip this round if the previous one is still running.\n        if getattr(self, '_health_check_in_progress', False):\n            return\n        self._health_check_in_progress = True\n        try:\n            if not self._running:\n                return\n            self._health_timer = threading.Timer(300, self._auto_health_check)\n            self._health_timer.daemon = True\n            self._health_timer.start()\n        finally:\n            self._health_check_in_progress = False",
+   "diff_summary": "第1行: 'if not self._running:' → 'def _auto_health_check(self):'; 第2行: 'return' → '# Reentry guard: skip this round if the '; 第3行: 'self._health_timer = threading.Timer(300' → 'if getattr(self, '_health_check_in_progr'; 第4行: 'self._health_timer.daemon = True' → 'return'; 第5行: 'self._health_timer.start()' → 'self._health_check_in_progress = True'",
+   "trust_score": 75.0,
+   "generated_at": 1792701488.164232,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseSystemManager import 成功",
+     "sandbox": {
+      "duration_ms": 93,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _schedule_health_check 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_auto_health_check",
+    "def_name": "_auto_health_check",
+    "method_after": "_auto_health_check",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792745512.281198,
+   "created_at": 1792701498.045126,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 96.9,
+    "size": 100.0,
+    "complexity": 87.5,
+    "readability": 100.0,
+    "verbosity": 100.0,
+    "naming": 100.0,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "updated_at": 1792806542.1015756,
+   "dedup_key": "c503ba18e04cfe86",
+   "dedup_key_v2": "54a278fd9289c52e",
+   "real_method": "_auto_health_check",
+   "dup_of": null,
+   "apply_note": "[355清零] organs/core/PulseSystemManager.py::_auto_health_check 已落地（备份 .bak_batch355/organs__core__PulseSystemManager.py）"
+  },
+  {
+   "id": "patch_llm_1792679415_bd94",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "start",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        super().start()\n        self._learn_running = True\n        self._learn_worker_running = True\n        self._learn_pool = ThreadPoolExecutor(max_workers=self._learn_pool_size, thread_name_prefix=\"legs_learn\")\n        # 启动学习工作线程（从队列取任务分发给线程池）\n        threading.Thread(target=self._learn_worker_loop, daemon=True).start()\n        self._schedule_learn_timer()\n        self._log(LogLevel.INFO, f\"多路并行学习引擎已启动 (间隔{self._learn_interval}s, {self._learn_pool_size}路并行)\")",
+   "modified_code": "def start(self):\n        if getattr(self, \"_learn_started\", False):\n            self._log(LogLevel.INFO, \"learn engine already started, skip re-entry\")\n            return\n        self._learn_started = True\n        self._learn_in_progress = False\n        self._learn_lock = threading.Lock()\n        try:\n            super().start()\n            self._learn_running = True\n            self._learn_worker_running = True\n            self._learn_pool = ThreadPoolExecutor(max_workers=self._learn_pool_size, thread_name_prefix=\"legs_learn\")\n            threading.Thread(target=self._learn_worker_loop, daemon=True).start()\n            self._schedule_learn_timer()\n            self._log(LogLevel.INFO, f\"多路并行学习引擎已启动 (间隔{self._learn_interval}s, {self._learn_pool_size}路并行)\")\n        except Exception:\n            self._learn_started = False\n            raise",
+   "diff_summary": "第1行: 'super().start()' → 'def start(self):'; 第2行: 'self._learn_running = True' → 'if getattr(self, \"_learn_started\", False'; 第3行: 'self._learn_worker_running = True' → 'self._log(LogLevel.INFO, \"learn engine a'; 第4行: 'self._learn_pool = ThreadPoolExecutor(ma' → 'return'; 第5行: '# 启动学习工作线程（从队列取任务分发给线程池）' → 'self._learn_started = True'",
+   "trust_score": 75.0,
+   "generated_at": 1792679415.92281,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 391,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 start 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "start",
+    "def_name": "start",
+    "method_after": "start",
+    "action": "unchanged",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr(",
+    "threading.Thread"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679426.4966218,
+   "created_at": 1792679426.4966218,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 86.6,
+    "size": 100.0,
+    "complexity": 100.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 86.4,
+    "grade": "S",
+    "reason": "优秀：改动克制、结构清晰、命名规范",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "S",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "a64a2193b57e28f2",
+   "dedup_key_v2": "a64a2193b57e28f2",
+   "real_method": "start",
+   "dup_of": null,
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/motor/PulseLegs.py::start 已落地（备份 .bak_batch355/organs__motor__PulseLegs.py）"
+  },
+  {
+   "id": "patch_llm_1792679442_ee06",
+   "file": "organs/motor/PulseLegs.py",
+   "method": "_create_session",
+   "issue_type": "resource_no_close",
+   "risk_level": "中",
+   "description": "创建了连接/会话资源但未在同一方法内关闭，长期运行可能资源泄漏",
+   "original_code": "        # [批次4·深度体检][PERF-6] 复用会话（替代每次新建）\n        session = requests.Session()\n\n        retry_strategy = Retry(\n            total=3,\n            backoff_factor=1,\n            status_forcelist=[429, 500, 502, 503, 504],\n            allowed_methods=[\"GET\", \"HEAD\"]\n        )\n        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=5, pool_maxsize=10)\n        session.mount(\"https://\", adapter)\n        session.mount(\"http://\", adapter)\n        session.headers.update({\n            \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\n            \"Accept\": \"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\",\n            \"Accept-Language\": \"zh-CN,zh;q=0.9,en;q=0.8\",\n            \"Accept-Encoding\": \"gzip, deflate\",\n            \"Connection\": \"keep-alive\",\n        })\n\n        return session",
+   "modified_code": "def _create_http_session(self):\n        session = requests.Session()\n        try:\n            retry_strategy = Retry(\n                total=3,\n                backoff_factor=1,\n                status_forcelist=[429, 500, 502, 503, 504],\n                allowed_methods=[\"GET\", \"HEAD\"]\n            )\n            adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=5, pool_maxsize=10)\n            session.mount(\"https://\", adapter)\n            session.mount(\"http://\", adapter)\n            session.headers.update({\n                \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\n                \"Accept\": \"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\",\n                \"Accept-Language\": \"zh-CN,zh;q=0.9,en;q=0.8\",\n                \"Accept-Encoding\": \"gzip, deflate\",\n                \"Connection\": \"keep-alive\",\n            })\n        except BaseException:\n            session.close()\n            raise\n        return session",
+   "diff_summary": "第1行: '# [批次4·深度体检][PERF-6] 复用会话（替代每次新建）' → 'def _create_http_session(self):'; 第2行: 'session = requests.Session()' → 'session = requests.Session()'; 第3行: '' → 'try:'; 第4行: 'retry_strategy = Retry(' → 'retry_strategy = Retry('; 第5行: 'total=3,' → 'total=3,'",
+   "trust_score": 55.0,
+   "generated_at": 1792679442.0337605,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseLegs import 成功",
+     "sandbox": {
+      "duration_ms": 391,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖外部名称: ['HTTPAdapter', 'Retry', 'requests']"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _create_session 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_create_session",
+    "def_name": "_create_http_session",
+    "method_after": "_create_http_session",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "real",
+   "danger_real_calls": [
+    "requests."
+   ],
+   "sandbox_blocked_keywords": [
+    "requests."
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "中",
+     "basis": "issue_type=resource_no_close",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 55.0,
+     "basis": "issue_type=resource_no_close 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792679452.892107,
+   "created_at": 1792679452.892107,
+   "reason": "创建了连接/会话资源但未在同一方法内关闭，长期运行可能资源泄漏",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 69.6,
+    "size": 100.0,
+    "complexity": 41.3,
+    "readability": 40.0,
+    "verbosity": 91.3,
+    "naming": 75.3,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "07b95198a9f4872a",
+   "dedup_key_v2": "598dc3457bc15d2e",
+   "real_method": "_create_session",
+   "dup_of": null,
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/motor/PulseLegs.py::_create_session 已落地（备份 .bak_batch355/organs__motor__PulseLegs.py）"
+  },
+  {
+   "id": "patch_llm_1792687225_06b8",
+   "file": "organs/core/PulseMotivationCycle.py",
+   "method": "_emit_motivation_signals",
+   "issue_type": "lock_with_emit",
+   "risk_level": "高",
+   "description": "可能锁内发射脉冲：方法内同时存在 self._lock 和 self._emit",
+   "original_code": "        with self._lock:\n            if not self._active_motivations:\n                return\n            top = max(self._active_motivations, key=lambda x: x[\"intensity\"])\n            if top[\"intensity\"] < 0.2:\n                return\n            # ★v25.1修复：同动机发射冷却——同一 description 在冷却窗口内不重复发射，\n            # 消除「回答你是谁」等固定冲动每分钟空转；冷却窗口过后可再次发射，\n            # 其他更高强度动机仍可随时打断（保持动机系统的多样性与响应性）。\n            _now = time.time()\n            if (top[\"description\"] == self._last_urge_desc\n                    and (_now - self._last_urge_time) < self._urge_cooldown):\n                return\n            self._last_urge_desc = top[\"description\"]\n            self._last_urge_time = _now\n            # ★v25.2：发射后强度衰减——冲动被表达即消退（满足后衰减），\n            #   避免「你是谁」等一次性动机以恒强重复发射；真实强化会再次顶回。\n            _decay = getattr(self, \"_urge_decay_after_emit\", 0.5)\n            top[\"intensity\"] = round(top[\"intensity\"] * _decay, 4)\n            self._emit(Event.MOTIVATION_URGE, {\n                \"motivation_id\": top[\"id\"],\n                \"description\": top[\"description\"],\n                \"intensity\": top[\"intensity\"],\n                \"priority\": top[\"priority\"],\n                \"type\": top[\"type\"],\n            }, priority=4, layer=\"L3\")",
+   "modified_code": "def _maybe_emit_urge(self):\n        payload = None\n        with self._lock:\n            if not self._active_motivations:\n                return\n            top = max(self._active_motivations, key=lambda x: x[\"intensity\"])\n            if top[\"intensity\"] < 0.2:\n                return\n            _now = time.time()\n            if (top[\"description\"] == self._last_urge_desc\n                    and (_now - self._last_urge_time) < self._urge_cooldown):\n                return\n            self._last_urge_desc = top[\"description\"]\n            self._last_urge_time = _now\n            _decay = getattr(self, \"_urge_decay_after_emit\", 0.5)\n            top[\"intensity\"] = round(top[\"intensity\"] * _decay, 4)\n            payload = {\n                \"motivation_id\": top[\"id\"],\n                \"description\": top[\"description\"],\n                \"intensity\": top[\"intensity\"],\n                \"priority\": top[\"priority\"],\n                \"type\": top[\"type\"],\n            }\n        if payload is not None:\n            self._emit(Event.MOTIVATION_URGE, payload, priority=4, layer=\"L3\")",
+   "diff_summary": "第1行: 'with self._lock:' → 'def _maybe_emit_urge(self):'; 第2行: 'if not self._active_motivations:' → 'payload = None'; 第3行: 'return' → 'with self._lock:'; 第4行: 'top = max(self._active_motivations, key=' → 'if not self._active_motivations:'; 第5行: 'if top[\"intensity\"] < 0.2:' → 'return'",
+   "trust_score": 25.0,
+   "generated_at": 1792687225.119918,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseMotivationCycle import 成功",
+     "sandbox": {
+      "duration_ms": 92,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _emit_motivation_signals 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_emit_motivation_signals",
+    "def_name": "_maybe_emit_urge",
+    "method_after": "_maybe_emit_urge",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=lock_with_emit",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 25.0,
+     "basis": "issue_type=lock_with_emit 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687235.3763921,
+   "created_at": 1792687235.3763921,
+   "reason": "可能锁内发射脉冲：方法内同时存在 self._lock 和 self._emit",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 73.2,
+    "size": 100.0,
+    "complexity": 46.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 86.7,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "081c90c86ceb0c38",
+   "dedup_key_v2": "0569de11504f8487",
+   "real_method": "_emit_motivation_signals",
+   "dup_of": null,
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/core/PulseMotivationCycle.py::_emit_motivation_signals 已落地（备份 .bak_batch355/organs__core__PulseMotivationCycle.py）"
+  },
+  {
+   "id": "patch_llm_1792687270_ec1a",
+   "file": "organs/core/PulseProprioception.py",
+   "method": "_save_report_file",
+   "issue_type": "non_atomic_write",
+   "risk_level": "高",
+   "description": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "original_code": "        try:\n            filepath = \"data/proprioception_report.json\"\n            os.makedirs(\"data\", exist_ok=True)\n            with open(filepath, \"w\", encoding=\"utf-8\") as f:\n                json.dump(report, f, ensure_ascii=False, indent=2)\n            self._log(LogLevel.INFO, f\"报告已保存至 {filepath}\")\n        except Exception as e:\n            self._log(LogLevel.WARNING, f\"保存报告失败: {e}\")",
+   "modified_code": "def _save_proprioception_report(self, report):\n        temp_path = None\n        try:\n            filepath = \"data/proprioception_report.json\"\n            os.makedirs(\"data\", exist_ok=True)\n            import tempfile\n            with tempfile.NamedTemporaryFile(\n                mode=\"w\",\n                encoding=\"utf-8\",\n                dir=\"data\",\n                prefix=\".proprioception_report.\",\n                suffix=\".tmp\",\n                delete=False,\n            ) as f:\n                temp_path = f.name\n                json.dump(report, f, ensure_ascii=False, indent=2)\n                f.flush()\n                os.fsync(f.fileno())\n            os.replace(temp_path, filepath)\n            temp_path = None\n            self._log(LogLevel.INFO, f\"Report saved to {filepath}\")\n        except Exception as e:\n            if temp_path is not None:\n                try:\n                    os.unlink(temp_path)\n                except OSError:\n                    pass\n            self._log(LogLevel.WARNING, f\"Failed to save report: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def _save_proprioception_report(self, re'; 第2行: 'filepath = \"data/proprioception_report.j' → 'temp_path = None'; 第3行: 'os.makedirs(\"data\", exist_ok=True)' → 'try:'; 第4行: 'with open(filepath, \"w\", encoding=\"utf-8' → 'filepath = \"data/proprioception_report.j'; 第5行: 'json.dump(report, f, ensure_ascii=False,' → 'os.makedirs(\"data\", exist_ok=True)'",
+   "trust_score": 30.0,
+   "generated_at": 1792687270.3302717,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseProprioception import 成功",
+     "sandbox": {
+      "duration_ms": 94,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _save_report_file 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_save_report_file",
+    "def_name": "_save_proprioception_report",
+    "method_after": "_save_proprioception_report",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "literal",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [
+    "file(",
+    "os.unlink"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=non_atomic_write",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 30.0,
+     "basis": "issue_type=non_atomic_write 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687280.3246393,
+   "created_at": 1792687280.3246393,
+   "reason": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 64.7,
+    "size": 100.0,
+    "complexity": 25.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 54.3,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "1bb6746ffbb0068f",
+   "dedup_key_v2": "3f6380ed20cdb4c1",
+   "real_method": "_save_report_file",
+   "dup_of": null,
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/core/PulseProprioception.py::_save_report_file 已落地（备份 .bak_batch355/organs__core__PulseProprioception.py）"
+  },
+  {
+   "id": "patch_llm_1792687287_87c9",
+   "file": "organs/senses/PulseTouch.py",
+   "method": "_trigger_snapshot",
+   "issue_type": "periodic_task_no_reentry",
+   "risk_level": "低",
+   "description": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "original_code": "        self._next_timer = threading.Timer(\n            self._snapshot_interval,\n            self._trigger_snapshot\n        )\n        self._next_timer.daemon = True\n        self._next_timer.start()",
+   "modified_code": "def _trigger_snapshot(self):\n        if getattr(self, \"_snapshot_in_progress\", False):\n            return\n        self._snapshot_in_progress = True\n        try:\n            pass\n        finally:\n            self._snapshot_in_progress = False\n            self._next_timer = threading.Timer(\n                self._snapshot_interval,\n                self._trigger_snapshot\n            )\n            self._next_timer.daemon = True\n            self._next_timer.start()",
+   "diff_summary": "第1行: 'self._next_timer = threading.Timer(' → 'def _trigger_snapshot(self):'; 第2行: 'self._snapshot_interval,' → 'if getattr(self, \"_snapshot_in_progress\"'; 第3行: 'self._trigger_snapshot' → 'return'; 第4行: ')' → 'self._snapshot_in_progress = True'; 第5行: 'self._next_timer.daemon = True' → 'try:'",
+   "trust_score": 75.0,
+   "generated_at": 1792687287.7944758,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseTouch import 成功",
+     "sandbox": {
+      "duration_ms": 77,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _schedule_next_snapshot 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_trigger_snapshot",
+    "def_name": "_trigger_snapshot",
+    "method_after": "_trigger_snapshot",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "idiom",
+   "danger_real_calls": [
+    "getattr("
+   ],
+   "sandbox_blocked_keywords": [
+    "getattr("
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "低",
+     "basis": "issue_type=periodic_task_no_reentry",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 75.0,
+     "basis": "issue_type=periodic_task_no_reentry 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792687297.9968786,
+   "created_at": 1792687297.9968786,
+   "reason": "周期任务方法缺少重入守卫（无 _in_progress/_busy 标志），上一轮未完成时可能重入堆积",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 82.6,
+    "size": 100.0,
+    "complexity": 78.6,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 100.0,
+    "grade": "A",
+    "reason": "良好：整体优雅，个别维度可优化",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "A",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "986bc44dfd2c093a",
+   "dedup_key_v2": "3a69c036f7bc1bb1",
+   "real_method": "_trigger_snapshot",
+   "dup_of": null,
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/senses/PulseTouch.py::_trigger_snapshot 已落地（备份 .bak_batch355/organs__senses__PulseTouch.py）"
+  },
+  {
+   "id": "patch_llm_1792701539_e003",
+   "file": "organs/endocrine/PulseHormones.py",
+   "method": "_write_emotion_log",
+   "issue_type": "non_atomic_write",
+   "risk_level": "高",
+   "description": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "original_code": "        try:\n            import json as _json\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),  # 新增\n            }\n            # ★修复：使用_emotion_log_lock防止并发写入损坏JSON\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                with open(log_path, 'w', encoding='utf-8') as f:\n                    _json.dump(log_data, f, ensure_ascii=False)\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"数据处理异常已忽略: {type(e).__name__}: {e}\")",
+   "modified_code": "def log_emotion(self, emotion, intensity, user_name):\n        try:\n            import json as _json\n            import tempfile as _tempfile\n            log_path = os.path.join(\n                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n                'data', 'stream', 'hormone_emotion_log.json'\n            )\n            entry = {\n                \"timestamp\": time.time(),\n                \"emotion\": emotion,\n                \"intensity\": round(intensity, 2),\n                \"user_name\": user_name,\n                \"trend\": self.get_emotion_trend().get(\"direction\", \"stable\"),\n            }\n            with self._emotion_log_lock:\n                log_data = []\n                if os.path.exists(log_path):\n                    try:\n                        log_data = safe_read_json(log_path, default=[])\n                    except Exception:\n                        log_data = []\n                log_data.append(entry)\n                if len(log_data) > 50:\n                    log_data = log_data[-50:]\n                fd = None\n                tmp_path = None\n                try:\n                    fd, tmp_path = _tempfile.mkstemp(\n                        dir=os.path.dirname(log_path),\n                        prefix='.hormone_emotion_log.',\n                        suffix='.tmp'\n                    )\n                    with os.fdopen(fd, 'w', encoding='utf-8') as f:\n                        _json.dump(log_data, f, ensure_ascii=False)\n                        f.flush()\n                        os.fsync(f.fileno())\n                    os.replace(tmp_path, log_path)\n                    tmp_path = None\n                except Exception:\n                    if fd is not None:\n                        try:\n                            os.close(fd)\n                        except OSError:\n                            pass\n                    raise\n                finally:\n                    if tmp_path is not None:\n                        try:\n                            os.unlink(tmp_path)\n                        except OSError:\n                            pass\n        except Exception as e:\n            self._log(LogLevel.DEBUG, f\"data processing exception ignored: {type(e).__name__}: {e}\")",
+   "diff_summary": "第1行: 'try:' → 'def log_emotion(self, emotion, intensity'; 第2行: 'import json as _json' → 'try:'; 第3行: 'log_path = os.path.join(' → 'import json as _json'; 第4行: 'os.path.dirname(os.path.dirname(os.path.' → 'import tempfile as _tempfile'; 第5行: ''data', 'stream', 'hormone_emotion_log.j' → 'log_path = os.path.join('",
+   "trust_score": 30.0,
+   "generated_at": 1792701539.4445987,
+   "status": "applied",
+   "applied": true,
+   "source": "llm",
+   "verification": {
+    "passed": true,
+    "stage": "regression_test_passed",
+    "errors": [],
+    "logs": "",
+    "verify_depth": "standard",
+    "import": {
+     "ok": true,
+     "reason": "副本 patch_copy_PulseHormones import 成功",
+     "sandbox": {
+      "duration_ms": 94,
+      "peak_memory_bytes": 0
+     }
+    },
+    "regression": "1通过/0失败",
+    "behavior": {
+     "checked": false,
+     "equivalent": true,
+     "reason": "依赖 self 状态，非纯函数"
+    },
+    "signature": {
+     "checked": false,
+     "consistent": true,
+     "reason": "方法 _write_emotion_log 在修改前/后无法定位，跳过签名校验"
+    },
+    "verify_entries": [
+     "syntax",
+     "import",
+     "regression",
+     "behavior",
+     "signature"
+    ],
+    "cross_version_note": "当前环境仅 Python 3.12 单解释器，多环境/跨版本 CI 受环境限制未落地；以 compile 编译验证 + 方法签名结构护栏作为本地跨入口替代。"
+   },
+   "fixed_at": 1792806542.1015756,
+   "baseline_errors": 0,
+   "needs_runtime_verify": true,
+   "entry_source": "llm_auto_fix",
+   "m323_truth": {
+    "method_before": "_write_emotion_log",
+    "def_name": "log_emotion",
+    "method_after": "log_emotion",
+    "action": "method_backfilled",
+    "reindented": true,
+    "parse_ok": true,
+    "anchor_corrected_by": "355刀4/刀9"
+   },
+   "danger_keyword_class": "literal",
+   "danger_real_calls": [],
+   "sandbox_blocked_keywords": [
+    "open(",
+    "os.unlink"
+   ],
+   "sandbox_incompatible": true,
+   "_m343_shape_exempt": true,
+   "patch_evidence": {
+    "evidence_version": "338.d4.v1",
+    "risk": {
+     "value": "高",
+     "basis": "issue_type=non_atomic_write",
+     "source": "_m280_risk_by_issue_type"
+    },
+    "trust": {
+     "value": 30.0,
+     "basis": "issue_type=non_atomic_write 分值（非恒 70 默认）",
+     "source": "_m280_trust_by_issue_type"
+    },
+    "blast": null
+   },
+   "saved_at": 1792701549.5588725,
+   "created_at": 1792701549.5588725,
+   "reason": "直接以写模式打开文件，未采用「临时文件 + os.replace」原子写，断电/异常可能损坏数据",
+   "source_diagnosis": "llm",
+   "aesthetic_score": {
+    "total": 63.8,
+    "size": 100.0,
+    "complexity": 20.0,
+    "readability": 40.0,
+    "verbosity": 100.0,
+    "naming": 58.4,
+    "grade": "B",
+    "reason": "合格：能用但不够优，建议打磨结构",
+    "syntax_valid": true
+   },
+   "aesthetic_grade": "B",
+   "runtime_verify_result": {
+    "verified": true,
+    "baseline": 0,
+    "after_fix": 0,
+    "post_apply_errors": 0,
+    "effectiveness": null,
+    "new_issues": 0,
+    "detail": "[延迟复验] 重采基线: 修复后错误=0, 通过",
+    "undecidable": false
+   },
+   "post_apply_errors": 0,
+   "no_regression": true,
+   "problem_fixed": "static_verified",
+   "problem_fixed_reason": "355_apply_static_verified",
+   "problem_fixed_partial": false,
+   "verification_granularity": "static_only",
+   "effectiveness": null,
+   "verified": true,
+   "verification_split_version": 1,
+   "verification_split_reason": "静态与回归验证通过；修复前基线为 0（未采到真实基线），不可判定（legacy_unverifiable）",
+   "reverify_count": 2,
+   "dedup_key": "c25ae7cbec8e1d40",
+   "dedup_key_v2": "b01e6236e79609be",
+   "real_method": "_write_emotion_log",
+   "dup_of": null,
+   "dup_disposal": "special:_write_emotion_log",
+   "updated_at": 1792806542.1015756,
+   "apply_note": "[355清零] organs/endocrine/PulseHormones.py::_write_emotion_log 已落地（备份 .bak_batch355/organs__endocrine__PulseHormones.py）"
+  }
+ ]
+}

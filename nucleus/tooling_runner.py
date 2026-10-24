@@ -43,7 +43,36 @@ class ToolingRunner(SilentLogMixin):
         #   「本通道没跑到」分开（340刀5 的归零点就是这两件事被读成同一件事）。
         self._tool_flags: dict[str, dict[str, Any]] = {}
 
-    def _run_cmd_split(self, cmd: list[str], timeout: int = 180) -> dict[str, Any]:
+    def _m360_note_tool_flag(self, tool: str, rec: dict[str, Any]) -> None:
+        """★360刀14：把一次**执行失败/超时**写进 `_tool_flags[tool]`（不覆盖解析侧字段）。
+
+        只写「执行层」字段（degraded/exec_err/timeout/rc/stdout,stderr 字节数）；
+        `_tool_json` 重建 flag 时会带上 `timeout`，两条路径的信息不互相抹掉。
+        """
+        try:
+            _flag = self._tool_flags.get(tool) or {}
+            _flag["degraded"] = True
+            _flag["reason"] = "timeout" if rec.get("timeout") else "exec_failed"
+            _flag["exec_err"] = rec.get("err", "")
+            _flag["timeout"] = bool(rec.get("timeout"))
+            _flag["rc"] = rec.get("rc")
+            _flag["stdout_bytes"] = len(rec.get("stdout") or "")
+            _flag["stderr_bytes"] = len(rec.get("stderr") or "")
+            _flag["cmd"] = list(rec.get("cmd") or [])
+            self._tool_flags[tool] = _flag
+            self._log(LogLevel.ERROR,
+                      f"[360tool] {tool} 通道不可用（{_flag['reason']}）"
+                      f"⇒ 本通道 0 条，已记账: {str(rec.get('err'))[:200]}")
+        except Exception as _m360e:
+            self._log(LogLevel.WARNING,
+                      f"[360tool] 通道记账失败 tool={tool}: {type(_m360e).__name__}: {_m360e}")
+
+    def m360_tool_flags(self) -> dict[str, dict[str, Any]]:
+        """★360刀14：通道记账只读出口（供看板/自检区分「0 条」与「没跑到」）。"""
+        return dict(self._tool_flags)
+
+    def _run_cmd_split(self, cmd: list[str], timeout: int = 180,
+                       tool: str = "") -> dict[str, Any]:
         """★342刀2：**分开**返回 stdout / stderr / 返回码（失败不抛异常，但要记账）。
 
         为什么必须有这个「分开」：`_run_cmd` 把两股流拼成一个串，任何拿它去
@@ -52,11 +81,16 @@ class ToolingRunner(SilentLogMixin):
         就是这条：`.ruff_cache` 的 package-root 警告 / 全库扫描的 Ruff panic
         都写 stderr ⇒ `JSONDecodeError` ⇒ `return []` ⇒ 看起来像「本仓零问题」。
 
+        ★360刀14：`tool` 非空时，失败/超时**直接写 `_tool_flags[tool]`** ——
+        compileall / mypy 这类「走正则、不过 `_tool_json`」的通道此前没有任何记账，
+        执行失败 ⇒ 返回 `[工具执行失败]…` 串 ⇒ 正则零匹配 ⇒ `return []`
+        ⇒ 与「本仓零问题」不可区分（340刀5 同型静默归零，342刀2 漏修的两条）。
+
         Returns:
-            `{cmd, stdout, stderr, rc, ok, err}`；执行失败时 `ok=False` 且 `err` 非空。
+            `{cmd, stdout, stderr, rc, ok, timeout, err}`；执行失败时 `ok=False` 且 `err` 非空。
         """
         _rec: dict[str, Any] = {"cmd": list(cmd), "stdout": "", "stderr": "",
-                                "rc": None, "ok": False, "err": ""}
+                                "rc": None, "ok": False, "timeout": False, "err": ""}
         try:
             _r = subprocess.run(
                 cmd, check=False, cwd=self._project_root, capture_output=True, text=True, timeout=timeout,
@@ -66,20 +100,29 @@ class ToolingRunner(SilentLogMixin):
             _rec["stderr"] = _r.stderr or ""
             _rec["rc"] = _r.returncode
             _rec["ok"] = True
+        except subprocess.TimeoutExpired as _te:
+            # ★360刀14：超时单列。混在 exec_error 里会让「该调大 timeout」与
+            # 「工具没装/崩了」被当成同一件事处理（两类处置动作完全不同）。
+            _rec["err"] = f"TimeoutExpired({timeout}s): {_te}"
+            _rec["timeout"] = True
+            self._log(LogLevel.WARNING,
+                      f"[360tool] 命令超时 cmd={' '.join(cmd)} timeout={timeout}s")
         except Exception as _e:  # noqa: BLE001 - 执行失败必须显式记账（不静默归一为「0 条」）
             _rec["err"] = f"{type(_e).__name__}: {_e}"
             self._log(LogLevel.WARNING,
                       f"[342tool] 命令执行失败 cmd={' '.join(cmd)} err={_rec['err']}")
+        if tool and (_rec["err"] or _rec["timeout"]):
+            self._m360_note_tool_flag(tool, _rec)
         return _rec
 
-    def _run_cmd(self, cmd: list[str], timeout: int = 180) -> str:
+    def _run_cmd(self, cmd: list[str], timeout: int = 180, tool: str = "") -> str:
         """运行命令并返回 stdout+stderr 拼接串（失败不抛异常）。
 
         ★342刀2：保留本方法只为**非 JSON 解析**的调用方（compileall / mypy 走正则）。
         需要 `json.loads` 的一律改用 `_run_cmd_split` —— 拼接串里 stderr 的位置
         没有保证，拿它解析等于赌工具不写 stderr。
         """
-        _r = self._run_cmd_split(cmd, timeout)
+        _r = self._run_cmd_split(cmd, timeout, tool=tool)
         if _r.get("err"):
             return f"[工具执行失败] {' '.join(cmd)}: {_r['err']}"
         return (_r.get("stdout") or "") + "\n" + (_r.get("stderr") or "")
@@ -125,6 +168,7 @@ class ToolingRunner(SilentLogMixin):
         _err = rec.get("stderr") or ""
         _flag: dict[str, Any] = {
             "degraded": False, "reason": "", "rc": rec.get("rc"),
+            "timeout": bool(rec.get("timeout")),
             "stdout_bytes": len(_out), "stderr_bytes": len(_err),
             "targets": list(targets), "domain": domain,
         }
@@ -136,7 +180,7 @@ class ToolingRunner(SilentLogMixin):
                       f"{_err.strip()[:300]}")
         if rec.get("err"):
             _flag["degraded"] = True
-            _flag["reason"] = "exec_failed"
+            _flag["reason"] = "timeout" if rec.get("timeout") else "exec_failed"
             _flag["exec_err"] = rec.get("err", "")
             self._tool_flags[tool] = _flag
             self._log(LogLevel.ERROR,
@@ -182,7 +226,11 @@ class ToolingRunner(SilentLogMixin):
                 "python", "-m", "compileall", "-q", "-f",
                 "-x", r"\.venv|__pycache__|\.git",
                 self._project_root,
-            ])
+            ], tool="compileall")
+            if _out.startswith("[工具执行失败]"):
+                # ★360刀14：编译通道跑不起来必须看得见，不能与「零语法错误」同形
+                self._log(LogLevel.ERROR,
+                          "[360tool] compileall 通道不可用 ⇒ 本通道 0 条（非「零语法错误」）")
             # 解析 SyntaxError：形如  File "xxx.py", line N  ...  SyntaxError: ...
             for _m in re.finditer(r'File "([^"]+\.py)", line (\d+)[^\n]*\n\s*(.*?SyntaxError:.*)', _out):
                 _file = _m.group(1)
@@ -251,7 +299,10 @@ class ToolingRunner(SilentLogMixin):
                 "python", "-m", "mypy", "--ignore-missing-imports", "--no-error-summary",
                 "--exclude", "\\.venv",
                 self._project_root,
-            ])
+            ], tool="mypy")
+            if _out.startswith("[工具执行失败]"):
+                self._log(LogLevel.ERROR,
+                          "[360tool] mypy 通道不可用 ⇒ 本通道 0 条（非「零类型错误」）")
             for _m in re.finditer(r'^(.+?\.py):(\d+):\s*(error|warning):\s*(.+)$', _out, re.MULTILINE):
                 issues.append({
                     "file": _m.group(1),

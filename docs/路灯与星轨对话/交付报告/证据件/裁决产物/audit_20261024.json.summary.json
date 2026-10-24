@@ -1,0 +1,29 @@
+{
+  "_summary": true,
+  "source": "data/reports/audit/audit_20261024.json",
+  "type": "dict",
+  "size_bytes": 927768,
+  "sha256": "f46ed6eb0ae095d0f86ac44400f301b4b160eb8dc3f5dbfcb3466a90603ca4a6",
+  "entries": 13,
+  "status_counts": {
+    "status=open": 686,
+    "status=wontfix": 21,
+    "status=fixed": 7
+  },
+  "top_keys": [
+    "code_version",
+    "criteria_version",
+    "entries",
+    "generated_at",
+    "prev_source",
+    "prev_state",
+    "proc_gen",
+    "retain_days",
+    "schema",
+    "severity_invalid_count",
+    "snapshot_day",
+    "status_counts",
+    "total_entries"
+  ],
+  "exported_at": "2026-10-24 17:04:01"
+}

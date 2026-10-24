@@ -1367,6 +1367,9 @@ class PulseMetricsCollector(BasePulseOrgan):
             count = 0
             for _ in glob.glob("data/knowledge/pulse_knowledge_snapshot.json.*.bak"):
                 count += 1
+            # ★360遗留：冷档压成 .bak.gz 后仍是备份，不补这一条看板会「备份数凭空减少」
+            for _ in glob.glob("data/knowledge/pulse_knowledge_snapshot.json.*.bak.gz"):
+                count += 1
             return count
         except Exception as e:
             silent_exc(e, where="organs.core.PulseMetricsCollector::_count_snapshot_backups L660")

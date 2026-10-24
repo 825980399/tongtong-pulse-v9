@@ -1,0 +1,663 @@
+{
+  "history": [
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "9cfd38934c1feffc",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1356,
+      "written_at": 1792755716.8959475,
+      "written_at_str": "2026-10-23 19:41:56"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "772428ea0ea13930",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1356,
+      "written_at": 1792756718.3649917,
+      "written_at_str": "2026-10-23 19:58:38"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "aba919b4965b6f81",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1356,
+      "written_at": 1792757520.4210653,
+      "written_at_str": "2026-10-23 20:12:00"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "06950d80463ea648",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1356,
+      "written_at": 1792758475.2070024,
+      "written_at_str": "2026-10-23 20:27:55"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "580dba2f02b71079",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1360,
+      "written_at": 1792759112.7890787,
+      "written_at_str": "2026-10-23 20:38:32"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "048ccf9dac124e76",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1360,
+      "written_at": 1792759925.3979251,
+      "written_at_str": "2026-10-23 20:52:05"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "efd5683f9aa1fb32",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1360,
+      "written_at": 1792760697.896748,
+      "written_at_str": "2026-10-23 21:04:57"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "fbf9d87bd2328d4a",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1360,
+      "written_at": 1792761468.787771,
+      "written_at_str": "2026-10-23 21:17:48"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "0b9112c3a6ff9ddf",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1361,
+      "written_at": 1792762228.3591244,
+      "written_at_str": "2026-10-23 21:30:28"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "7d98001d365d6c9c",
+      "proc_gen": "pid22868@20261023-191837",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1361,
+      "written_at": 1792762885.4336727,
+      "written_at_str": "2026-10-23 21:41:25"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "5938c12bce588491",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1362,
+      "written_at": 1792768743.8828454,
+      "written_at_str": "2026-10-23 23:19:03"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "d2e9da38972ec65b",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1362,
+      "written_at": 1792769724.9118552,
+      "written_at_str": "2026-10-23 23:35:24"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "6cfab894f41f018b",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261023.json",
+      "snapshot_day": "20261023",
+      "total_entries": 1365,
+      "written_at": 1792770524.777112,
+      "written_at_str": "2026-10-23 23:48:44"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "96abb2a5731ccb9c",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1365,
+      "written_at": 1792771356.1611032,
+      "written_at_str": "2026-10-24 00:02:36"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "acee3e5dc6413a37",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1367,
+      "written_at": 1792772141.880071,
+      "written_at_str": "2026-10-24 00:15:41"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "2aaa21066d36e71f",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1367,
+      "written_at": 1792772850.4242167,
+      "written_at_str": "2026-10-24 00:27:30"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "0f676ad6ef0efdbd",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1368,
+      "written_at": 1792773684.058738,
+      "written_at_str": "2026-10-24 00:41:24"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "869200e9ba347481",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1368,
+      "written_at": 1792774670.0378048,
+      "written_at_str": "2026-10-24 00:57:50"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "7abf91250726bedc",
+      "proc_gen": "pid17948@20261023-225937",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1371,
+      "written_at": 1792775514.2472432,
+      "written_at_str": "2026-10-24 01:11:54"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "368902f5ed2664ff",
+      "proc_gen": "pid5020@20261024-101347",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1372,
+      "written_at": 1792809797.0134537,
+      "written_at_str": "2026-10-24 10:43:17"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "b2b5f204c0238a46",
+      "proc_gen": "pid5020@20261024-101347",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "total_entries": 1372,
+      "written_at": 1792810711.7483008,
+      "written_at_str": "2026-10-24 10:58:31"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "4f7a08aee79d778a",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 677,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 705,
+      "written_at": 1792815680.7909584,
+      "written_at_str": "2026-10-24 12:21:20"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "9d948205671a3eee",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 677,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 705,
+      "written_at": 1792816323.0223796,
+      "written_at_str": "2026-10-24 12:32:03"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "9ab0b80d68c61a99",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 677,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 705,
+      "written_at": 1792817015.3661258,
+      "written_at_str": "2026-10-24 12:43:35"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "d62b4610971ddad0",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 677,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 705,
+      "written_at": 1792817675.8546207,
+      "written_at_str": "2026-10-24 12:54:35"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "09ba6878eb99640d",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 677,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 705,
+      "written_at": 1792818456.7293243,
+      "written_at_str": "2026-10-24 13:07:36"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "6ae912d578e9ab5c",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 678,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 706,
+      "written_at": 1792819013.7662985,
+      "written_at_str": "2026-10-24 13:16:53"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "4bc69490bd85013b",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792819645.4122849,
+      "written_at_str": "2026-10-24 13:27:25"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "2921c796ba0c6de2",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792820478.0394883,
+      "written_at_str": "2026-10-24 13:41:18"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "eb0560c0921b3844",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792820955.7983813,
+      "written_at_str": "2026-10-24 13:49:15"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "4f035a286f713789",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792821649.6094854,
+      "written_at_str": "2026-10-24 14:00:49"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "389bb787f7ca7b1b",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792822272.477547,
+      "written_at_str": "2026-10-24 14:11:12"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "aaaa89db078c185b",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792822906.0207918,
+      "written_at_str": "2026-10-24 14:21:46"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "ff309dea66ae8df7",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792823564.5116487,
+      "written_at_str": "2026-10-24 14:32:44"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "a3d6d7b7d6796ee8",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792824244.899018,
+      "written_at_str": "2026-10-24 14:44:04"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "e53f5bf086595c61",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792824870.635222,
+      "written_at_str": "2026-10-24 14:54:30"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "7cd7370e09e7d957",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 679,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 707,
+      "written_at": 1792825535.467073,
+      "written_at_str": "2026-10-24 15:05:35"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "2acc7ffdba905246",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 686,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 714,
+      "written_at": 1792826191.166872,
+      "written_at_str": "2026-10-24 15:16:31"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "c793dc673b7b3426",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 686,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 714,
+      "written_at": 1792826917.5384626,
+      "written_at_str": "2026-10-24 15:28:37"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "7cee0e2a24ed1633",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 686,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 714,
+      "written_at": 1792827410.7760727,
+      "written_at_str": "2026-10-24 15:36:50"
+    },
+    {
+      "code_version": "335.cg.v1",
+      "entries_sha1_16": "faa0e14a487d02c4",
+      "proc_gen": "pid38320@20261024-120917",
+      "schema": "audit_problem_pool/345.v2",
+      "snapshot": "audit_20261024.json",
+      "snapshot_day": "20261024",
+      "status_counts": {
+        "claimed": 0,
+        "fixed": 7,
+        "open": 686,
+        "target_drifted": 0,
+        "verified": 0,
+        "wontfix": 21
+      },
+      "total_entries": 714,
+      "written_at": 1792828058.581759,
+      "written_at_str": "2026-10-24 15:47:38"
+    }
+  ],
+  "last_known_snapshot": {
+    "code_version": "335.cg.v1",
+    "entries_sha1_16": "faa0e14a487d02c4",
+    "proc_gen": "pid38320@20261024-120917",
+    "schema": "audit_problem_pool/345.v2",
+    "snapshot": "audit_20261024.json",
+    "snapshot_day": "20261024",
+    "status_counts": {
+      "claimed": 0,
+      "fixed": 7,
+      "open": 686,
+      "target_drifted": 0,
+      "verified": 0,
+      "wontfix": 21
+    },
+    "total_entries": 714,
+    "written_at": 1792828058.581759,
+    "written_at_str": "2026-10-24 15:47:38"
+  },
+  "schema": "audit_pool_ledger/348.v1",
+  "seen": {
+    "audit_20261023.json": {
+      "entries_sha1_16": "6cfab894f41f018b",
+      "first_at": 1792755716.8959475,
+      "last_at": 1792770524.777112,
+      "last_proc_gen": "pid17948@20261023-225937",
+      "total_entries": 1365,
+      "writes": 13
+    },
+    "audit_20261024.json": {
+      "entries_sha1_16": "faa0e14a487d02c4",
+      "first_at": 1792771356.1611032,
+      "last_at": 1792828058.581759,
+      "last_proc_gen": "pid38320@20261024-120917",
+      "total_entries": 714,
+      "writes": 28
+    }
+  },
+  "status_counts": {
+    "claimed": 0,
+    "fixed": 7,
+    "open": 686,
+    "target_drifted": 0,
+    "verified": 0,
+    "wontfix": 21
+  },
+  "updated_at": 1792828058.581759,
+  "updated_at_str": "2026-10-24 15:47:38"
+}
