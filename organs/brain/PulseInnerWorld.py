@@ -11754,6 +11754,18 @@ class PulseInnerWorld(
                 continue
             overlap_ratio = overlap / min_size
 
+            # ★364刀A3-①：低重叠不报矛盾 —— 原注释写着「重叠率 ≥ 60%」但**代码没有这道门**，
+            #   于是 25%/50% 的低重叠也被判成「知识矛盾」（任务书所述现状）。
+            #   低重叠只说明两边在讲不同侧面 ⇒ 记「视角差异」，不降信任、不进跟踪。
+            if overlap_ratio < 0.60:
+                self._m364_note_perspective_diff(node_a, node_b, overlap_ratio,
+                                                 reason="low_overlap")
+                continue
+            # ★364刀A3-②：跨空间不配对（虚构梦境 vs CallGraph 标准知识空间）
+            if not self._m364_same_space(node_a, node_b):
+                self._m364_note_perspective_diff(node_a, node_b, overlap_ratio,
+                                                 reason="cross_space")
+                continue
             # 重叠率 ≥ 60%：可能描述同一事实，检查内容一致性
             val_a = str(node_a.value) if node_a.value else ""
             val_b = str(node_b.value) if node_b.value else ""
@@ -11807,6 +11819,57 @@ class PulseInnerWorld(
                                  f"与节点{node_a.node_id[:12]}互相印证 (重叠率={overlap_ratio:.0%})")
         return confirmed_count
 
+    #: ★364刀A3：视角差异判定用 —— 视为「不同知识空间」的顶层段关键字
+    _M364_DREAM_SPACE_HINTS = ("梦境", "dream", "虚构", "幻想")
+    #: ★364刀A3：低重叠门限（原注释口径 60%，此处落到代码）
+    _M364_MIN_OVERLAP = 0.60
+
+    @staticmethod
+    def _m364_space_root(node) -> str:
+        """取节点的**顶层空间名**（space_path 第一段）；取不到返回空串。"""
+        _sp = str(getattr(node, "space_path", "") or "").strip("/")
+        return _sp.split("/")[0] if _sp else ""
+
+    @classmethod
+    def _m364_same_space(cls, node_a, node_b) -> bool:
+        """★364刀A3-②：两节点是否同一知识空间（跨空间不判矛盾）。
+
+        判据两条（任一命中即判跨空间）：
+          · 顶层空间名都存在且不同；
+          · 任一方顶层空间名含梦境/虚构类关键字（虚构梦境 vs 标准知识空间）。
+        都取不到空间（历史上大量节点无 space_path）⇒ **不拦**（按同一空间处理，
+        保持既有行为，避免因缺字段把全部矛盾判定废掉）。
+        """
+        _ra, _rb = cls._m364_space_root(node_a), cls._m364_space_root(node_b)
+        if any(h in _ra for h in cls._M364_DREAM_SPACE_HINTS) \
+                or any(h in _rb for h in cls._M364_DREAM_SPACE_HINTS):
+            return False
+        if _ra and _rb and _ra != _rb:
+            return False
+        return True
+
+    def _m364_note_perspective_diff(self, node_a, node_b, overlap_ratio,
+                                    reason: str = "") -> None:
+        """★364刀A3：记一次「视角差异」（不报矛盾、不降信任、不进跟踪列表）。
+
+        为什么必须留痕而不是直接 continue：低重叠/跨空间被**静默跳过**时，
+        下一轮若数量暴涨（例如空间字段口径变了）就没人能发现 —— 计数可查即可。
+        """
+        _c = getattr(self, "_m364_persp_counts", None)
+        if _c is None:
+            _c = {}
+            self._m364_persp_counts = _c
+        _k = str(reason or "unknown")
+        _c[_k] = _c.get(_k, 0) + 1
+        self._log(LogLevel.DEBUG,
+                  f"[364A3] 视角差异不报矛盾({_k}): 重叠率={float(overlap_ratio or 0):.0%} "
+                  f"space_a={self._m364_space_root(node_a) or '-'} "
+                  f"space_b={self._m364_space_root(node_b) or '-'}")
+
+    def m364_perspective_stats(self) -> dict:
+        """★364刀A3：读「视角差异」计数（跨空间/低重叠），供观测与下游过滤判据。"""
+        return dict(getattr(self, "_m364_persp_counts", None) or {})
+
     def _vk_record_contradiction(self, node_a, node_b, val_a, val_b, kw_a, kw_b, now, overlap_ratio, contradiction_count):
         # 相互矛盾：降低信任并标记
         trust_a = getattr(node_a, 'trust_score', 50.0)
@@ -11824,9 +11887,15 @@ class PulseInnerWorld(
                  f"(重叠率={overlap_ratio:.0%})")
 
         # 加入矛盾跟踪列表，供下次验证优先复查
+        # ★364刀A3-③：补来源与空间标记 —— 下游（肝吸收种子记忆素材）据此过滤，
+        #   避免「知识矛盾: 知识矛盾:」这类前缀嵌套被当素材反复吸收。
         _track_entry = {
             "node_a_id": node_a.node_id,
             "node_b_id": node_b.node_id,
+            "origin": "m364_cross_source_contradiction",
+            "space_a": str(getattr(node_a, "space_path", "") or ""),
+            "space_b": str(getattr(node_b, "space_path", "") or ""),
+            "in_seed_material": False,
             "val_a_preview": val_a[:60],
             "val_b_preview": val_b[:60],
             "detected_at": now,
