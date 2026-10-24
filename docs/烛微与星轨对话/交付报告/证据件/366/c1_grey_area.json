@@ -1,0 +1,188 @@
+{
+ "audit": "c1 C 类待复核（半成品/依赖临界/口径不清）",
+ "ts": "2026-10-24 20:55:32",
+ "items": [
+  {
+   "name": "ENABLE_MEMORY_RELEASE_TREE",
+   "line": 5493,
+   "class": "C",
+   "P": "P1",
+   "reason": "释放链总开关关闭；338/343 释放链在 shadow（362 实测开关=off(shadow)）；开启=释放知识树节点，高危",
+   "suggestion": "先 shadow 收数→按 live_gate 拦条目评估再开",
+   "wiring": "接线在位（release_policy.py:89）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_MEMORY_RELEASE_LIVE",
+   "line": 5499,
+   "class": "C",
+   "P": "P1",
+   "reason": "live 释放需 LIVE_ENABLED∩本开关；拦条目已就位（heap_g2_3beats_same_gen/w1_alive/recall_hit_rate_ge_95）",
+   "suggestion": "先开 shadow → 数据达阈值再评估 live",
+   "wiring": "接线在位（live_gate.py:97）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_GRAPH_ADJACENCY",
+   "line": 4870,
+   "class": "C",
+   "P": "P2",
+   "reason": "图谱邻接影子闸：仅 retrieve(expand_adjacent=True) 时生效，生产无调用方传 True ⇒ 半成品",
+   "suggestion": "先补调用方（expand_adjacent=True 的场景）再开",
+   "wiring": "半成品（experience_retriever.py:276 分支在，调用方缺）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_MULTISTEP_PARTIAL_WRITE",
+   "line": 5442,
+   "class": "C",
+   "P": "P2",
+   "reason": "getter 已定义但生产无消费（仅 PulseInnerWorld:15962 return）",
+   "suggestion": "先补消费方或归档",
+   "wiring": "半成品（getter 无调用）",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_ORGAN_INVENTORY_EXPORT",
+   "line": 6180,
+   "class": "C",
+   "P": "P2",
+   "reason": "getter 已定义但无消费（organ_inventory.py:142）",
+   "suggestion": "先补消费方或转 shadow",
+   "wiring": "半成品",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_O_A4_DUAL_PATH",
+   "line": 1070,
+   "class": "C",
+   "P": "P2",
+   "reason": "active_memory_dual 模块仅 tests 引用（生产无 import）⇒ O-A4 双路未接生产",
+   "suggestion": "先接生产调用再谈开关",
+   "wiring": "未接生产（仅 tests）",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "O_A4_SUBAGENT_ENABLED",
+   "line": 1075,
+   "class": "C",
+   "P": "P2",
+   "reason": "同上（真起子代理推后续批）",
+   "suggestion": "随 O-A4 接线一并评估",
+   "wiring": "未接生产",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_O_A4_LOCAL_EVIDENCE",
+   "line": 6191,
+   "class": "C",
+   "P": "P2",
+   "reason": "同上（getter 无消费）",
+   "suggestion": "随 O-A4 接线",
+   "wiring": "未接生产",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_STANDING_ORDERS",
+   "line": 1103,
+   "class": "C",
+   "P": "P2",
+   "reason": "standing_orders 模块仅 tests 引用（生产无 import）",
+   "suggestion": "先接生产（常设指令加载点）再谈",
+   "wiring": "未接生产",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_PATCH_GENERATOR",
+   "line": 6367,
+   "class": "C",
+   "P": "P1",
+   "reason": "generator_enabled() 定义但无调用方（生成能力由调用侧交付，开关未接线）",
+   "suggestion": "先接线到 generate_patch_draft 入口，再按重启窗开闸（349 纪律）",
+   "wiring": "半成品（getter 无调用）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_PENDING_QUEUE_AGING",
+   "line": 5887,
+   "class": "C",
+   "P": "P2",
+   "reason": "280 因 source=llm 队列空转关闭；355 清零后 pending=1、队列结构变化 ⇒ 需复核是否仍空转（O3 类另有独立键默认 True）",
+   "suggestion": "复核现状（llm 队列合格项是否仍恒 0）再决定",
+   "wiring": "接线在位（PatchManager.py:894）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION",
+   "line": 1869,
+   "class": "C",
+   "P": "P2",
+   "reason": "口径不一致：config=False 但消费侧 getattr(..., True)（PulseInnerWorld:15503）⇒ 缺键时行为反转",
+   "suggestion": "先统一默认值口径",
+   "wiring": "口径不一致",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_SELF_AWARENESS_INFLUENCE_DECISION",
+   "line": 4714,
+   "class": "C",
+   "P": "P2",
+   "reason": "阶段二门：363 在工（自我认知影响决策），开启条件未到",
+   "suggestion": "随 363 阶段二接线评估",
+   "wiring": "接线在位（PulseCortex.py:483）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "SELF_AWARENESS_MENTION_ENABLED",
+   "line": 4732,
+   "class": "C",
+   "P": "P2",
+   "reason": "自我认知提及开关（阶段二）",
+   "suggestion": "随 363 阶段二",
+   "wiring": "接线在位（PulseCortex.py:538）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "OUTPUT_WINDOWS_PATH_MASK",
+   "line": 3858,
+   "class": "C",
+   "P": "P3",
+   "reason": "可选 Windows 绝对路径脱敏；隐私 vs 排障权衡（默认 OFF）",
+   "suggestion": "转长期项：定脱敏策略后开启",
+   "wiring": "接线在位（sanitizer.py:36）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "SPIKE_BACKEND_ENABLED",
+   "line": 3811,
+   "class": "C",
+   "P": "P3",
+   "reason": "新执行后端试用开关（PulseCore:231 默认关零行为）",
+   "suggestion": "需试点批（对照旧后端）后再开",
+   "wiring": "接线在位",
+   "restart_required": "是",
+   "stop_required": "否"
+  }
+ ],
+ "paths": [
+  "半成品→先补消费方/调用方",
+  "高危释放→先 shadow 收数",
+  "阶段门→随 363 阶段二",
+  "口径不一致→统一默认值"
+ ]
+}

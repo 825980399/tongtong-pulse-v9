@@ -1,0 +1,51 @@
+{
+ "audit": "h1 在册条目去重核对",
+ "ts": "2026-10-24 20:57:08",
+ "rows": [
+  {
+   "source": "363 在工（PATCH_EVIDENCE_GATE/EVENT_BUS/ENABLE_EVENT_BUS_TAP/ENABLE_PAID_API_TRACE/质量门九信号）",
+   "state": "已在工",
+   "note": "不在本批 52 条默认 False 名单内，不重复提候选"
+  },
+  {
+   "source": "363 回执轮已裁决（SNAPSHOT_LAZY_LOAD/EVOLUTION_BUDGET None/冷化链/主快照轮转/K2/进程池/去线程/死广播）",
+   "state": "已裁决",
+   "note": "本批仅核对一致（SNAPSHOT_LAZY_LOAD 归 B）"
+  },
+  {
+   "source": "GPU_PROBE_ENABLED（L285 已结案）",
+   "state": "已结案",
+   "note": "勿重复复核，本批归 B"
+  },
+  {
+   "source": "T-付费key隔离-1（L364 已撤销）",
+   "state": "已撤销",
+   "note": "不复核"
+  },
+  {
+   "source": "361 渠道面（USER_DIALOG_PREFER_PAID/ENABLE_EVOLUTION_USE_CHANNEL_POOL/PAID_CHANNEL_NAMES）",
+   "state": "已裁决",
+   "note": "USER_DIALOG_PREFER_PAID 归 B（有意关闭）"
+  },
+  {
+   "source": "362 软伤族（日志瘦身 L385/403 L383/SSRF L382/JsonRepair L384/回载 L386）",
+   "state": "对照",
+   "note": "不重复立项；EYES_STREAM_STATS_INFO 属语义反向（False=降噪）"
+  },
+  {
+   "source": "共振 m204（RESONANCE_WEIGHT_MAP_ENABLED=True，L375 活体口径）",
+   "state": "已挂账/在工",
+   "note": "不在 52 条内，不重复"
+  }
+ ],
+ "new_candidates": [
+  "T-内存自动GC开启-1",
+  "T-释放链shadow收数-1",
+  "T-观测三开关开启-1",
+  "T-半成品开关接线-1",
+  "T-共窗翻回留痕-1",
+  "T-开关口径统一-1",
+  "T-死开关归档-1",
+  "T-开关台账语义标注-1"
+ ]
+}

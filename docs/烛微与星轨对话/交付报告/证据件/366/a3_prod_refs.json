@@ -1,0 +1,315 @@
+{
+ "PATCH_BASELINE_FAIL_OPEN": [
+  "config.py:99: PATCH_BASELINE_FAIL_OPEN = False",
+  "nucleus/reasoning/PatchManager.py:4681: # 如需临时放行，可在 config 中显式设置 PATCH_BASELINE_FAIL_OPEN=True。",
+  "nucleus/reasoning/PatchManager.py:4684: if getattr(_cfg, \"PATCH_BASELINE_FAIL_OPEN\", False):"
+ ],
+ "QICA_USE_TUNED_WEIGHTS": [
+  "config.py:355: #   在运行时产出真实贡献度分布后，确认不降准确率再翻 QICA_USE_TUNED_WEIGHTS=True。",
+  "config.py:356: QICA_USE_TUNED_WEIGHTS = False"
+ ],
+ "OB1_ELEVATED_ENABLED": [
+  "config.py:1022: OB1_ELEVATED_ENABLED = False            # 提权动作（写盘/重启/外部API）审批闸：默认关闭（实装推 179）",
+  "config.py:1042: \"level_key\": \"OB1_ELEVATED_ENABLED\",",
+  "config.py:1043: \"keys\": [\"OB1_ELEVATED_ENABLED\", \"OB1_ELEVATED_REQUIRE_HUMAN\",",
+  "config.py:1324: # 提权总闸（OB1_ELEVATED_ENABLED，:955，默认 False）",
+  "config.py:1325: \"OB1_ELEVATED_ENABLED\": True,",
+  "config.py:1329: \"semantics\": \"OB1_ELEVATED_ENABLED=True ∧ OB1_ELEVATED_REQUIRE_HUMAN=True ⇒ 任何源码改动须纯人工，L1/L2 自动路径被互斥抑制\","
+ ],
+ "ENABLE_O_A4_DUAL_PATH": [
+  "config.py:1070: ENABLE_O_A4_DUAL_PATH = False      # 总开关（关闭 → 回到单路，零回归）",
+  "config.py:6190: #             且总开关 ENABLE_O_A4_DUAL_PATH=False、O_A4_MODE=\"NONE\" → 根本不进入该分支。",
+  "nucleus/field/active_memory_dual.py:10: - 总开关 ENABLE_O_A4_DUAL_PATH 默认 False → 完全回到原单路，零行为变化。",
+  "nucleus/field/active_memory_dual.py:26: return bool(getattr(_cfg, \"ENABLE_O_A4_DUAL_PATH\", False))"
+ ],
+ "O_A4_SUBAGENT_ENABLED": [
+  "config.py:1075: O_A4_SUBAGENT_ENABLED = False      # SUBAGENT 受限子代理（活跃记忆双路 SUBAGENT 态；默认关，真起子代理推后续批）",
+  "nucleus/field/active_memory_dual.py:34: return bool(getattr(_cfg, \"O_A4_SUBAGENT_ENABLED\", False))"
+ ],
+ "ENABLE_OA3_SKILL_MANIFEST": [
+  "config.py:1087: ENABLE_OA3_SKILL_MANIFEST = False        # 总开关（关闭 -> 不实装，零行为变化）"
+ ],
+ "ENABLE_STANDING_ORDERS": [
+  "config.py:1103: ENABLE_STANDING_ORDERS = False     # 总开关（关闭 → 不加载，零回归）",
+  "nucleus/field/standing_orders.py:9: - 总开关 ENABLE_STANDING_ORDERS 默认 False → 不加载/不生效，零行为变化。",
+  "nucleus/field/standing_orders.py:29: return bool(getattr(_cfg, \"ENABLE_STANDING_ORDERS\", False))"
+ ],
+ "USE_EXTERNAL_LLM_GATEWAY": [
+  "config.py:1409: #   方案》并存不废——网关作为「可选渠道源」记录，由 USE_EXTERNAL_LLM_GATEWAY 开关控制",
+  "config.py:1621: USE_EXTERNAL_LLM_GATEWAY = False",
+  "config.py:4406: USE_EXTERNAL_LLM_GATEWAY=False 时返回 enabled=False，肺部不启用网关通道。",
+  "config.py:4409: \"enabled\": bool(USE_EXTERNAL_LLM_GATEWAY),",
+  "nucleus/llm/adapter_registry.py:27: 当前为 none-pass 空实现：未配置网关（USE_EXTERNAL_LLM_GATEWAY=False）时，",
+  "organs/body/PulseLung.py:1534: if getattr(_cfg, \"USE_EXTERNAL_LLM_GATEWAY\", False):"
+ ],
+ "USER_DIALOG_PREFER_PAID": [
+  "config.py:1646: USER_DIALOG_PREFER_PAID = False",
+  "organs/body/PulseLung.py:1786: - 仅当 `caller == \"user_dialog\"` 且 `USER_DIALOG_PREFER_PAID=True` 时生效；",
+  "organs/body/PulseLung.py:1794: if not getattr(_cfg, \"USER_DIALOG_PREFER_PAID\", True):",
+  "organs/body/PulseLung.py:2079: #   注：USER_DIALOG_PREFER_PAID=False（360 刀0-1）时该函数原样返回；"
+ ],
+ "FACE_WELCOME_SHADOW": [
+  "config.py:1794: FACE_WELCOME_SHADOW = False",
+  "config.py:4718: #   遵循 FACE_WELCOME_SHADOW 范式（config.py:1565）：默认均为影子/未启用态，",
+  "config.py:4795: #   （照 FACE_WELCOME_SHADOW 范式 config.py:1565；设计文档《语义缓存升L2方案_v1.0.md》§B 阶段）。",
+  "functions/chat/chat_service.py:26: from config import ENABLE_FACE_WELCOME_DIRECT, FACE_WELCOME_SHADOW",
+  "functions/chat/chat_service.py:29: FACE_WELCOME_SHADOW = False  # ★第115批 T-115e：config 键缺失时回落默认影子关（172刀7 退出影子，与 config 同值）",
+  "functions/chat/chat_service.py:182: #   影子模式(FACE_WELCOME_SHADOW=True, 默认)：本应跳过者只记日志不真跳，观察 1 天。",
+  "functions/chat/chat_service.py:185: if _should_skip and not FACE_WELCOME_SHADOW:",
+  "functions/chat/chat_service.py:189: if _should_skip and FACE_WELCOME_SHADOW:"
+ ],
+ "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION": [
+  "config.py:1869: ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION = False",
+  "organs/brain/PulseInnerWorld.py:15503: \"ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION\", True))"
+ ],
+ "KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD": [
+  "config.py:2298: KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD = False",
+  "organs/brain/pulse_inner_world_support.py:1704: #   应急宽兜底恢复：置 config.KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD=True。",
+  "organs/brain/pulse_inner_world_support.py:1706: _broad_fallback = bool(getattr(_cfg_prefix_k160, \"KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD\", False))"
+ ],
+ "REASONING_ROUTE_LOCAL_FALLBACK": [
+  "config.py:2339: REASONING_ROUTE_LOCAL_FALLBACK = False",
+  "config.py:2345: #   False：影子停，回到纯 select_strategy 基线（不影响 REASONING_ROUTE_LOCAL_FALLBACK 实弹判定）。",
+  "nucleus/reasoning/StrategySelector.py:185: \"\"\"读取 config.REASONING_ROUTE_LOCAL_FALLBACK（无 try/except，cw2 友好）。\"\"\"",
+  "nucleus/reasoning/StrategySelector.py:187: return bool(getattr(_cfg, \"REASONING_ROUTE_LOCAL_FALLBACK\", False))"
+ ],
+ "GPU_PROBE_ENABLED": [
+  "config.py:3366: GPU_PROBE_ENABLED = False",
+  "main.py:1026: #   `GPU_PROBE_ENABLED` 对启动路径完全失效（开关形同虚设）。",
+  "main.py:1031: \"[353GPU] 探测=skipped reason=GPU_PROBE_ENABLED=False 未探测，\"",
+  "nucleus/GPUCore.py:27: \"\"\"★353刀2：GPU 探测开关（`config.GPU_PROBE_ENABLED`，默认 False）。",
+  "nucleus/GPUCore.py:34: return bool(getattr(_cfg, \"GPU_PROBE_ENABLED\", True))",
+  "nucleus/GPUCore.py:82: \"[353GPU] 探测=skipped reason=GPU_PROBE_ENABLED=False 未探测\"",
+  "nucleus/GPUCore.py:85: \"reason\": \"GPU_PROBE_ENABLED=False\", \"timestamp\": _now}"
+ ],
+ "SPIKE_BACKEND_ENABLED": [
+  "config.py:3811: SPIKE_BACKEND_ENABLED = False",
+  "nucleus/pulse/PulseCore.py:217: # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；",
+  "nucleus/pulse/PulseCore.py:231: if not getattr(config, \"SPIKE_BACKEND_ENABLED\", False):"
+ ],
+ "ENABLE_SPIKE_BACKEND_STATS": [
+  "config.py:3816: ENABLE_SPIKE_BACKEND_STATS = False"
+ ],
+ "LOG_SANITIZER_DEBUG_MODE": [
+  "config.py:3857: LOG_SANITIZER_DEBUG_MODE = False         # 调试模式：控制台 handler 不脱敏（保留现场）",
+  "config.py:3959: \"LOG_SANITIZER_DEBUG_MODE\": None,",
+  "nucleus/logger.py:33: 默认（ENABLE_LOG_SANITIZER=True / LOG_SANITIZER_DEBUG_MODE=False）返回 True，",
+  "nucleus/logger.py:39: return not bool(getattr(config, \"LOG_SANITIZER_DEBUG_MODE\", False))"
+ ],
+ "OUTPUT_WINDOWS_PATH_MASK": [
+  "config.py:3858: OUTPUT_WINDOWS_PATH_MASK = False         # 可选：额外屏蔽 Windows 绝对路径（默认 OFF）",
+  "config.py:3960: \"OUTPUT_WINDOWS_PATH_MASK\": None,",
+  "nucleus/logging/sanitizer.py:15: 可选：OUTPUT_WINDOWS_PATH_MASK=True 时再屏蔽 Windows 绝对路径（默认 OFF）。",
+  "nucleus/logging/sanitizer.py:36: # 可选：Windows 绝对路径屏蔽（受 config.OUTPUT_WINDOWS_PATH_MASK 控制，默认 OFF）",
+  "nucleus/logging/sanitizer.py:76: mask_win_path 受 config.OUTPUT_WINDOWS_PATH_MASK 动态控制（默认 OFF）。",
+  "nucleus/logging/sanitizer.py:91: _mask = bool(getattr(_cfg, \"OUTPUT_WINDOWS_PATH_MASK\", False))"
+ ],
+ "ENABLE_SELF_AWARENESS_INFLUENCE_DECISION": [
+  "config.py:4714: ENABLE_SELF_AWARENESS_INFLUENCE_DECISION = False   # 总开关（阶段二逐步开启；默认关）",
+  "organs/brain/PulseCortex.py:446: ``ENABLE_SELF_AWARENESS_INFLUENCE_DECISION``（默认 False）为阶段二",
+  "organs/brain/PulseCortex.py:483: _c, \"ENABLE_SELF_AWARENESS_INFLUENCE_DECISION\", False))"
+ ],
+ "SELF_AWARENESS_MENTION_ENABLED": [
+  "config.py:4724: #   第四键 SELF_AWARENESS_MENTION_ENABLED 已有消费方（PulseCortex 读取），**保留**。",
+  "config.py:4731: #   SELF_AWARENESS_MENTION_ENABLED / SELF_AWARENESS_MENTION_COOLDOWN_SEC（避免产生无人读取的孤儿键）。",
+  "config.py:4732: SELF_AWARENESS_MENTION_ENABLED = False",
+  "organs/brain/PulseCortex.py:507: ① 开关：config.SELF_AWARENESS_MENTION_ENABLED 开 且 引擎可用；",
+  "organs/brain/PulseCortex.py:538: if not getattr(_c, \"SELF_AWARENESS_MENTION_ENABLED\", False):"
+ ],
+ "ENABLE_GRAPH_ADJACENCY": [
+  "config.py:4870: ENABLE_GRAPH_ADJACENCY = False",
+  "nucleus/mnemosyne/experience_retriever.py:74: return bool(getattr(config, \"ENABLE_GRAPH_ADJACENCY\", False))",
+  "nucleus/mnemosyne/experience_retriever.py:246: ★282批刀2：expand_adjacent=True 且 ENABLE_GRAPH_ADJACENCY 开启时，"
+ ],
+ "ENABLE_EYES_STREAM_STATS_INFO": [
+  "config.py:5121: ENABLE_EYES_STREAM_STATS_INFO = False",
+  "organs/senses/PulseEyes.py:406: #   开关：ENABLE_EYES_STREAM_STATS_INFO=True → 完全回到旧行为（零回归）。",
+  "organs/senses/PulseEyes.py:412: _m49_ecfg, \"ENABLE_EYES_STREAM_STATS_INFO\", False))"
+ ],
+ "ENABLE_ORGAN_SCAN_ADAPTIVE_TTL": [
+  "config.py:5372: ENABLE_ORGAN_SCAN_ADAPTIVE_TTL = False",
+  "nucleus/self_inspector.py:2399: 灰度 ENABLE_ORGAN_SCAN_ADAPTIVE_TTL=False（默认）→ 直接返回基础 TTL，零副作用。",
+  "nucleus/self_inspector.py:2407: _adaptive_on = bool(getattr(_m64_cfg, \"ENABLE_ORGAN_SCAN_ADAPTIVE_TTL\", False))"
+ ],
+ "ENABLE_MEMORY_AUTO_GC": [
+  "config.py:5420: #   ENABLE_MEMORY_AUTO_GC：使用率/增长率超阈值时自动 gc.collect()（默认关，避免副作用/零回归）；",
+  "config.py:5424: #     ENABLE_MEMORY_AUTO_GC=True 时回收（175刀1 接入已活采集链，防 167 死开关）。",
+  "config.py:5425: ENABLE_MEMORY_AUTO_GC = False",
+  "nucleus/runtime_metrics.py:516: ★auto_gc 受 ENABLE_MEMORY_AUTO_GC 闸门控制（默认关 → 零回归，不自动回收）；",
+  "nucleus/runtime_metrics.py:525: _enable_gc = bool(getattr(_c, \"ENABLE_MEMORY_AUTO_GC\", False))",
+  "organs/core/PulseMetricsCollector.py:911: _enable_gc = bool(getattr(_cfg, \"ENABLE_MEMORY_AUTO_GC\", False)) if _cfg is not None else False",
+  "organs/core/PulseMetricsCollector.py:1006: # 175刀1：RSS 上限自动回收（仅 ENABLE_MEMORY_AUTO_GC=True 且越阈时触发，默认关=零回归）"
+ ],
+ "ENABLE_MEMORY_AUTO_RESTART": [
+  "config.py:5430: #   ENABLE_MEMORY_AUTO_RESTART：连续 2 次 GC 仍越阈（RSS 仍 > MEMORY_AUTO_RESTART_RSS_MB）",
+  "config.py:5435: ENABLE_MEMORY_AUTO_RESTART = False",
+  "main.py:3781: \"\"\"176批段2：内存自动重启触发（默认 ENABLE_MEMORY_AUTO_RESTART=False 不进入）。",
+  "main.py:3789: if not bool(getattr(_cfg, \"ENABLE_MEMORY_AUTO_RESTART\", False)):",
+  "nucleus/mnemosyne/release_policy.py:19: G4 只告警不重启（`ENABLE_MEMORY_AUTO_RESTART` 恒 False）",
+  "organs/core/PulseMetricsCollector.py:1014: # 176批段2 内存自动重启判定（ENABLE_MEMORY_AUTO_RESTART 默认 False=零回归）：",
+  "organs/core/PulseMetricsCollector.py:1017: _enable_restart = (bool(getattr(_cfg, \"ENABLE_MEMORY_AUTO_RESTART\", False))"
+ ],
+ "ENABLE_MULTISTEP_PARTIAL_WRITE": [
+  "config.py:5442: ENABLE_MULTISTEP_PARTIAL_WRITE = False",
+  "organs/brain/PulseInnerWorld.py:15962: return bool(getattr(_cfg, \"ENABLE_MULTISTEP_PARTIAL_WRITE\", False))"
+ ],
+ "ENABLE_MEMORY_RELEASE_TREE": [
+  "config.py:5493: ENABLE_MEMORY_RELEASE_TREE = False",
+  "nucleus/mnemosyne/release_policy.py:87: \"让它去干\"。翻开需显式 `config.ENABLE_MEMORY_RELEASE_TREE=True`。",
+  "nucleus/mnemosyne/release_policy.py:89: return bool(_cfg(\"ENABLE_MEMORY_RELEASE_TREE\", False))",
+  "nucleus/mnemosyne/release_policy.py:472: - `shadow`：`ENABLE_MEMORY_RELEASE_TREE=False` ⇒ 不调用 executor，只留痕\"若真跑会做什么\"；"
+ ],
+ "ENABLE_MEMORY_RELEASE_LIVE": [
+  "config.py:5499: ENABLE_MEMORY_RELEASE_LIVE = False",
+  "nucleus/mnemosyne/live_gate.py:97: return bool(LIVE_ENABLED) and bool(_cfg(\"ENABLE_MEMORY_RELEASE_LIVE\", False))"
+ ],
+ "FAISS_USE_GPU": [
+  "config.py:5597: FAISS_USE_GPU = False  # faiss-cpu不支持GPU，必须为False"
+ ],
+ "STOMACH_USE_JSON5": [
+  "config.py:5607: STOMACH_USE_JSON5 = False"
+ ],
+ "ENABLE_NEO4J_GRAPH_STORE": [
+  "config.py:5619: ENABLE_NEO4J_GRAPH_STORE = False",
+  "config.py:5712: ENABLE_NEO4J_DUAL_WRITE = False  # Neo4j 双写（与 ENABLE_NEO4J_GRAPH_STORE 同开才生效）",
+  "config.py:5722: ENABLE_NEO4J_READ = False  # Neo4j 读取路径（需 ENABLE_NEO4J_GRAPH_STORE + ENABLE_NEO4J_DUAL_WRITE 同开才生效）",
+  "nucleus/knowledge_access_layer.py:414: return bool(getattr(config, \"ENABLE_NEO4J_GRAPH_STORE\", False)",
+  "nucleus/knowledge_access_layer.py:450: return bool(getattr(config, \"ENABLE_NEO4J_GRAPH_STORE\", False)",
+  "nucleus/graph_store/neo4j_store.py:8: - ``ENABLE_NEO4J_GRAPH_STORE`` 默认 False",
+  "nucleus/graph_store/neo4j_store.py:49: return bool(getattr(config, \"ENABLE_NEO4J_GRAPH_STORE\", False))",
+  "nucleus/mnemosyne/PulseNodePool.py:983: return bool(getattr(config, \"ENABLE_NEO4J_GRAPH_STORE\", False)",
+  "nucleus/mnemosyne/PulseNodePool.py:1148: return bool(getattr(config, \"ENABLE_NEO4J_GRAPH_STORE\", False)"
+ ],
+ "ENABLE_DISTRIBUTED": [
+  "config.py:5638: ENABLE_DISTRIBUTED = False",
+  "nucleus/distributed/heartbeat.py:8: 第71批默认关闭（ENABLE_DISTRIBUTED=False），心跳线程仅在显式 start 后运行。",
+  "nucleus/distributed/heartbeat.py:33: return bool(getattr(config, \"ENABLE_DISTRIBUTED\", False))",
+  "nucleus/distributed/node_registry.py:8: 第71批是分布式组件引入第一阶段，默认关闭（ENABLE_DISTRIBUTED=False），",
+  "nucleus/distributed/node_registry.py:43: return bool(getattr(config, \"ENABLE_DISTRIBUTED\", False))",
+  "nucleus/distributed/routing.py:12: ★开关 ``ENABLE_DISTRIBUTED`` 默认 False；本模块纯计算，无 IO、无副作用。",
+  "nucleus/distributed/routing.py:39: return bool(getattr(config, \"ENABLE_DISTRIBUTED\", False))",
+  "nucleus/distributed/sharding.py:12: ★开关 ``ENABLE_DISTRIBUTED`` 默认 False；本模块纯计算，无 IO、无副作用，",
+  "nucleus/distributed/sharding.py:39: return bool(getattr(config, \"ENABLE_DISTRIBUTED\", False))",
+  "nucleus/mnemosyne/ast_release.py:96: #:   FutureWarning（弃用提示）。本项目 `ENABLE_DISTRIBUTED=False` 且全仓无 `reduce_op`"
+ ],
+ "SNAPSHOT_LAZY_LOAD": [
+  "config.py:5672: SNAPSHOT_LAZY_LOAD = False",
+  "main.py:2102: #   参数由 `config.SNAPSHOT_LAZY_LOAD` 决定，默认 False（理由与实测数据见",
+  "main.py:2106: full_load=False if bool(getattr(config, \"SNAPSHOT_LAZY_LOAD\", False)) else True)"
+ ],
+ "ENABLE_NEO4J_DUAL_WRITE": [
+  "config.py:5712: ENABLE_NEO4J_DUAL_WRITE = False  # Neo4j 双写（与 ENABLE_NEO4J_GRAPH_STORE 同开才生效）",
+  "config.py:5722: ENABLE_NEO4J_READ = False  # Neo4j 读取路径（需 ENABLE_NEO4J_GRAPH_STORE + ENABLE_NEO4J_DUAL_WRITE 同开才生效）",
+  "nucleus/knowledge_access_layer.py:415: and getattr(config, \"ENABLE_NEO4J_DUAL_WRITE\", False))",
+  "nucleus/knowledge_access_layer.py:451: and getattr(config, \"ENABLE_NEO4J_DUAL_WRITE\", False)",
+  "nucleus/mnemosyne/PulseNodePool.py:984: and getattr(config, \"ENABLE_NEO4J_DUAL_WRITE\", False))",
+  "nucleus/mnemosyne/PulseNodePool.py:1149: and getattr(config, \"ENABLE_NEO4J_DUAL_WRITE\", False)"
+ ],
+ "ENABLE_INFLUXDB_AUTO_CONNECT": [
+  "config.py:5714: ENABLE_INFLUXDB_AUTO_CONNECT = False  # ★第174批刀1 T-InfluxDB连接接线-1：get_influxdb_store() 首次获取单例时主动 connect() 的灰度开关。默认 Fals",
+  "nucleus/timeseries_store/influxdb_store.py:412: # ★第174批刀1 T-InfluxDB连接接线-1：启用时连接（灰度开关 ENABLE_INFLUXDB_AUTO_CONNECT）。",
+  "nucleus/timeseries_store/influxdb_store.py:416: if bool(_cfg(\"ENABLE_INFLUXDB_AUTO_CONNECT\", False)):"
+ ],
+ "ENABLE_NEO4J_READ": [
+  "config.py:5722: ENABLE_NEO4J_READ = False  # Neo4j 读取路径（需 ENABLE_NEO4J_GRAPH_STORE + ENABLE_NEO4J_DUAL_WRITE 同开才生效）",
+  "nucleus/knowledge_access_layer.py:452: and getattr(config, \"ENABLE_NEO4J_READ\", False))",
+  "nucleus/mnemosyne/PulseNodePool.py:1150: and getattr(config, \"ENABLE_NEO4J_READ\", False))"
+ ],
+ "COLD_DISABLE_STARTUP_COMPACT": [
+  "config.py:5745: COLD_DISABLE_STARTUP_COMPACT = False",
+  "nucleus/mnemosyne/PulseNodePool.py:381: # ★第81批 T4：灰度开关 COLD_DISABLE_STARTUP_COMPACT（默认 False）。",
+  "nucleus/mnemosyne/PulseNodePool.py:384: if self._m81_cold_cfg(\"COLD_DISABLE_STARTUP_COMPACT\", False):",
+  "nucleus/mnemosyne/PulseNodePool.py:386: \"冷存启动compaction检查被 COLD_DISABLE_STARTUP_COMPACT 关闭（测试/降级用）\")"
+ ],
+ "ENABLE_PENDING_QUEUE_AGING": [
+  "config.py:5887: ENABLE_PENDING_QUEUE_AGING = False  # 2026-09-27星轨开启；★第280批刀3关闭：aging对source=llm队列空转(合格项恒0)，明写llm永不自动",
+  "config.py:5890: #   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。",
+  "config.py:5895: #   仅 ENABLE_PENDING_QUEUE_AGING=True 时生效。",
+  "config.py:5901: #   为何不复用 ENABLE_PENDING_QUEUE_AGING：两者**动作不同**。",
+  "config.py:5907: #   True（**默认**，任务书刀1 要求\"ENABLE_PENDING_QUEUE_AGING 对 O3 类单独开启\"）",
+  "nucleus/reasoning/PatchManager.py:888: \"\"\"★T-94a：老化策略总开关（``ENABLE_PENDING_QUEUE_AGING``，默认 False）。",
+  "nucleus/reasoning/PatchManager.py:894: return bool(getattr(_c, \"ENABLE_PENDING_QUEUE_AGING\", False))",
+  "nucleus/reasoning/PatchManager.py:1157: #   （`ENABLE_PENDING_QUEUE_AGING=False`，280刀3 关闭理由 = \"aging 对 source=llm",
+  "nucleus/reasoning/PatchManager.py:1208: ★为何默认开：任务书刀1 明写\"`ENABLE_PENDING_QUEUE_AGING` 对 O3 类单独",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:825: * 老化开关 ``ENABLE_PENDING_QUEUE_AGING`` **关闭（默认）** → 逐字等价于既有"
+ ],
+ "ENABLE_ROUTING_LAYERED": [
+  "config.py:6135: ENABLE_ROUTING_LAYERED = False          # 总开关（共窗验证完毕，翻回False）",
+  "nucleus/qica/QICA.py:550: ★零回归：开关 ENABLE_ROUTING_LAYERED 默认 False -> 直接返回 anchor。",
+  "nucleus/qica/QICA.py:554: if not bool(getattr(_cfg182, \"ENABLE_ROUTING_LAYERED\", False)):"
+ ],
+ "ENABLE_INNER_WORLD_QUALITY_ESCALATION": [
+  "config.py:6167: ENABLE_INNER_WORLD_QUALITY_ESCALATION = False  # 共窗验证完毕，翻回False",
+  "organs/brain/PulseInnerWorld.py:17542: return bool(getattr(_cfg, \"ENABLE_INNER_WORLD_QUALITY_ESCALATION\", False))",
+  "organs/brain/PulseInnerWorld.py:17585: # 开关沿用 181刀2 的 ENABLE_INNER_WORLD_QUALITY_ESCALATION（默认 False）："
+ ],
+ "ENABLE_ORGAN_HEALTH_LEADERBOARD": [
+  "config.py:6179: ENABLE_ORGAN_HEALTH_LEADERBOARD = False",
+  "nucleus/cognitive/organ_health_leaderboard.py:19: 零行为变化：ENABLE_ORGAN_HEALTH_LEADERBOARD 默认 False -> on_heartbeat() 直接返回。",
+  "nucleus/cognitive/organ_health_leaderboard.py:42: return bool(getattr(_cfg, \"ENABLE_ORGAN_HEALTH_LEADERBOARD\", False))"
+ ],
+ "ENABLE_ORGAN_INVENTORY_EXPORT": [
+  "config.py:6180: ENABLE_ORGAN_INVENTORY_EXPORT = False",
+  "nucleus/cognitive/organ_inventory.py:142: return bool(getattr(_cfg, \"ENABLE_ORGAN_INVENTORY_EXPORT\", False))"
+ ],
+ "ENABLE_O_A4_LOCAL_EVIDENCE": [
+  "config.py:6189: # 零行为变化：ENABLE_O_A4_LOCAL_EVIDENCE=False（默认）→ 命中仅落 matched_rule_id，与 179A 完全一致；",
+  "config.py:6191: ENABLE_O_A4_LOCAL_EVIDENCE = False",
+  "nucleus/field/active_memory_dual.py:120: return bool(getattr(_cfg, \"ENABLE_O_A4_LOCAL_EVIDENCE\", False))"
+ ],
+ "ENABLE_SUBAGENT_RUNNER": [
+  "config.py:1073: #   与子代理 runner（ENABLE_SUBAGENT_RUNNER / subagent_runner.py）**无关**——真起子代理只有",
+  "config.py:1074: #   ENABLE_SUBAGENT_RUNNER 一道闸，本键不是第二道闸，勿误判为\"还得开两道\"。",
+  "config.py:6201: # 零行为变化：ENABLE_SUBAGENT_RUNNER=False（默认）→ 调用方 dry_run（不真起）；",
+  "config.py:6203: ENABLE_SUBAGENT_RUNNER = False",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4087: **只读**：不开 ``ENABLE_SUBAGENT_RUNNER``、不改台账、不写 data/。",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4132: \"note\": \"只读实验；ENABLE_SUBAGENT_RUNNER 仍 False，台账未改\"}",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4228: 只记录 ``reviewed(child)``，不开 ENABLE_SUBAGENT_RUNNER、不改台账、不写 data/。",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4252: \"verdict=%s（只读·ENABLE_SUBAGENT_RUNNER 仍 False）\",",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4257: \"note\": \"只读复跑；未开 ENABLE_SUBAGENT_RUNNER、未改台账、未写 data/\"}",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4532: \"note\": \"只读试点；ENABLE_SUBAGENT_RUNNER 仍 False；计数仅主进程聚合\"}",
+  "nucleus/reasoning/SafeEvolutionExecutor.py:4548: `ENABLE_SUBAGENT_RUNNER` 仍 False（K3 前置未满足）。",
+  "nucleus/reasoning/subagent_runner.py:16: 调用方在 ENABLE_SUBAGENT_RUNNER 翻为 True 且共窗验证后，方可 dry_run=False 真起。",
+  "nucleus/reasoning/subagent_runner.py:259: dry_run: None 时由 ENABLE_SUBAGENT_RUNNER 决定（默认关 → True 不真起）；",
+  "nucleus/reasoning/subagent_runner.py:266: dry_run = not getattr(cfg, \"ENABLE_SUBAGENT_RUNNER\", False)",
+  "nucleus/reasoning/subagent_worker.py:13: - 不翻开关：默认关——仅当 runner 在 ENABLE_SUBAGENT_RUNNER=True 且共窗验证后 dry_run=False",
+  "organs/body/PulseStomach.py:460: # 把消化任务作为子代理潜在调用方登记：开关不翻（ENABLE_SUBAGENT_RUNNER 仍 False），"
+ ],
+ "ENABLE_STRUCTURE_RESCAN": [
+  "config.py:6214: # ===== [M322] 322批刀4：ENABLE_STRUCTURE_RESCAN 键登记（307 起累计第四例「键未登记」）=====",
+  "config.py:6216: #         `getattr(config, \"ENABLE_STRUCTURE_RESCAN\", False)`（**无声明** ⇒ 对账表里看不见）",
+  "config.py:6220: ENABLE_STRUCTURE_RESCAN = False",
+  "config.py:6245: #    零行为变化：默认 300.0 与 getattr 默认一致；本键**不改变** ENABLE_STRUCTURE_RESCAN",
+  "nucleus/self_awareness/SelfAwarenessEngine.py:160: return bool(getattr(config, \"ENABLE_STRUCTURE_RESCAN\", False))",
+  "nucleus/self_awareness/SelfAwarenessEngine.py:162: _logger.debug(\"读取 ENABLE_STRUCTURE_RESCAN 失败，按 False: %s: %s\",",
+  "nucleus/self_awareness/SelfAwarenessEngine.py:565: 这样 `ENABLE_STRUCTURE_RESCAN` 翻成 True 时**无需重启装配**即可生效。"
+ ],
+ "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE": [
+  "config.py:6321: # 零行为变化：ENABLE_COGNITIVE_TEMPERATURE_OBSERVE=False → 仅心跳日志，不进任何请求",
+  "config.py:6323: ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False  # 190共窗收证完成，翻回",
+  "organs/brain/PulseSubconscious.py:4986: if getattr(_cfg, \"ENABLE_COGNITIVE_TEMPERATURE_OBSERVE\", False):"
+ ],
+ "ENABLE_MEMORY_STRENGTH_SHADOW": [
+  "config.py:6328: # 零行为变化：ENABLE_MEMORY_STRENGTH_SHADOW=False → 仅日志，不改返回结果/权重/Parquet",
+  "config.py:6330: ENABLE_MEMORY_STRENGTH_SHADOW = False  # 190共窗收证完成，翻回",
+  "organs/brain/PulseSubconscious.py:4992: if getattr(_cfg, \"ENABLE_MEMORY_STRENGTH_SHADOW\", False):"
+ ],
+ "ENABLE_HEBBIAN_COLLISION_SCAN": [
+  "config.py:6334: # 零行为变化：ENABLE_HEBBIAN_COLLISION_SCAN=False → 仅日志（节点对/激活量/质量分），不入库不推理不外搜",
+  "config.py:6335: ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回",
+  "organs/brain/PulseSubconscious.py:4998: if getattr(_cfg, \"ENABLE_HEBBIAN_COLLISION_SCAN\", False):"
+ ],
+ "ENABLE_HEBBIAN_APPLY_DECAY": [
+  "config.py:6340: # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，",
+  "config.py:6342: ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回",
+  "organs/brain/PulseSubconscious.py:5004: if getattr(_cfg, \"ENABLE_HEBBIAN_APPLY_DECAY\", False):"
+ ],
+ "ENABLE_CREATOR_AGREEMENT": [
+  "config.py:6356: ENABLE_CREATOR_AGREEMENT = False  # Q-15 同意程序：默认关，须监护人显式同意后才可开启",
+  "organs/identity/PulsePersonalityKernel.py:68: #   ③ **同意程序入口**：拟亲记忆相关功能的启用须经 `ENABLE_CREATOR_AGREEMENT`"
+ ],
+ "ENABLE_PATCH_GENERATOR": [
+  "config.py:6367: ENABLE_PATCH_GENERATOR = False",
+  "nucleus/evolution/patch_generator.py:132: return bool(_m349_cfg(\"ENABLE_PATCH_GENERATOR\", False))"
+ ]
+}

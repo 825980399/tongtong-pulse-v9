@@ -1,0 +1,76 @@
+{
+ "audit": "d1 死开关/重复定义/口径修正",
+ "ts": "2026-10-24 20:55:32",
+ "t0_corrections": [
+  {
+   "t0": "USE_EXTERNAL_LLM_GATEWAY L1621 与 L4406 重复定义",
+   "actual": "误报：L4406 在 docstring 内（'USE_EXTERNAL_LLM_GATEWAY=False 时返回…'），非赋值；实际单一定义 L1621",
+   "evidence": "tmp/zw366_root/_config_head.py:4406"
+  },
+  {
+   "t0": "顶层 os.environ 覆盖形态未扫出",
+   "actual": "共 6 条 env 赋值：3 凭证（WECOM_*）+3 布尔（DEBUG_DUP_EVENT_TRACE/DEBUG_CHANNEL_HTTP_DUMP/ENABLE_REQUEST_DEDUP，均 == \"1\" 形态）",
+   "evidence": "a2_env_wrapped_switches.json"
+  }
+ ],
+ "dead_switches": [
+  "ENABLE_OA3_SKILL_MANIFEST",
+  "ENABLE_SPIKE_BACKEND_STATS",
+  "QICA_USE_TUNED_WEIGHTS",
+  "STOMACH_USE_JSON5",
+  "ENABLE_PATCH_GENERATOR(getter无调用)",
+  "ENABLE_MULTISTEP_PARTIAL_WRITE(getter无消费)",
+  "ENABLE_ORGAN_INVENTORY_EXPORT(getter无消费)",
+  "OB1_ELEVATED_ENABLED(仅gate表)"
+ ],
+ "unwired_modules": [
+  "nucleus/field/active_memory_dual.py（仅tests）",
+  "nucleus/field/standing_orders.py（仅tests）"
+ ],
+ "dead_rows": [
+  {
+   "name": "QICA_USE_TUNED_WEIGHTS",
+   "line": 356,
+   "class": "D",
+   "P": "P3",
+   "reason": "仅注释+定义（无生产/工具消费）⇒ 待实装（注释：等运行时贡献度分布确认不降准确率再翻）",
+   "suggestion": "归档为待实装线索；勿一键开",
+   "wiring": "死开关（无消费）",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "STOMACH_USE_JSON5",
+   "line": 5607,
+   "class": "D",
+   "P": "P3",
+   "reason": "仅 tools/archive 与 ci 豁免文本引用，生产无消费",
+   "suggestion": "归档/删除",
+   "wiring": "死开关",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_OA3_SKILL_MANIFEST",
+   "line": 1087,
+   "class": "D",
+   "P": "P3",
+   "reason": "生产 0 引用（仅 config 定义）",
+   "suggestion": "待 OA3 实装或归档",
+   "wiring": "死开关",
+   "restart_required": "—",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_SPIKE_BACKEND_STATS",
+   "line": 3816,
+   "class": "D",
+   "P": "P3",
+   "reason": "生产 0 引用",
+   "suggestion": "随 SPIKE 后端试点接线",
+   "wiring": "死开关",
+   "restart_required": "—",
+   "stop_required": "否"
+  }
+ ]
+}

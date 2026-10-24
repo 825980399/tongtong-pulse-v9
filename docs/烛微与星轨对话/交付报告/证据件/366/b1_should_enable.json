@@ -1,0 +1,50 @@
+{
+ "audit": "b1 A 类应开未开（接线在位+功能需要+风险可控）",
+ "ts": "2026-10-24 20:55:32",
+ "items": [
+  {
+   "name": "ENABLE_MEMORY_AUTO_GC",
+   "line": 5425,
+   "class": "A",
+   "P": "P1",
+   "reason": "内存治理手段关闭：362 实测 heap 3070→6066MB、RSS+2.93GB；runtime_metrics:525 已接线（阈值门在），默认关=不自动回收",
+   "suggestion": "开启（阈值触发+观察 GC 暂停）；先 6.5GB 档试运行",
+   "wiring": "接线在位（runtime_metrics.py:525 / PulseMetricsCollector）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_ORGAN_HEALTH_LEADERBOARD",
+   "line": 6179,
+   "class": "A",
+   "P": "P2",
+   "reason": "器官健康排行观测关闭（on_heartbeat 直接返回）；接线在位",
+   "suggestion": "开启（纯观测，风险低）",
+   "wiring": "接线在位（organ_health_leaderboard.py:42）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_STRUCTURE_RESCAN",
+   "line": 6220,
+   "class": "A",
+   "P": "P2",
+   "reason": "结构变化→图重扫关闭（SelfAwarenessEngine:582 条件订阅 CODE_STRUCTURE_CHANGED）；关闭=结构改动后图不刷新",
+   "suggestion": "开启并观察重扫耗时（与 362 self_inspector CPU 面同看）",
+   "wiring": "接线在位（SelfAwarenessEngine.py:160/582）",
+   "restart_required": "是",
+   "stop_required": "否"
+  },
+  {
+   "name": "ENABLE_ORGAN_SCAN_ADAPTIVE_TTL",
+   "line": 5372,
+   "class": "A",
+   "P": "P2",
+   "reason": "自检扫描自适应 TTL 关闭（直接返回基础 TTL）；362 自检 687 问题/轮≈10.6min CPU 密集，自适应可降负载",
+   "suggestion": "开启（灰度），观察扫描耗时与漏检",
+   "wiring": "接线在位（self_inspector.py:2407）",
+   "restart_required": "是",
+   "stop_required": "否"
+  }
+ ]
+}

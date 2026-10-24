@@ -1,0 +1,32 @@
+{
+ "audit": "a2 环境变量包裹布尔开关（修正版：含 == \"1\" 形态）",
+ "ts": "2026-10-24 20:55:32",
+ "rows": [
+  {
+   "name": "DEBUG_DUP_EVENT_TRACE",
+   "line": 1666,
+   "env": "PULSE_DUP_TRACE",
+   "default": "0",
+   "semantic": "== \"1\" → True（默认关）"
+  },
+  {
+   "name": "DEBUG_CHANNEL_HTTP_DUMP",
+   "line": 1743,
+   "env": "PULSE_HTTP_DUMP",
+   "default": "0",
+   "semantic": "== \"1\" → True（默认关）"
+  },
+  {
+   "name": "ENABLE_REQUEST_DEDUP",
+   "line": 1762,
+   "env": "PULSE_REQUEST_DEDUP",
+   "default": "1",
+   "semantic": "== \"1\" → True（默认开）"
+  }
+ ],
+ "credential_env": [
+  "WECOM_BOT_ID",
+  "WECOM_SECRET",
+  "WECOM_ADMIN_USERID"
+ ]
+}

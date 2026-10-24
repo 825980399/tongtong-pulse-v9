@@ -1,0 +1,524 @@
+{
+ "audit": "a1 config.py 开关全量台账（HEAD）",
+ "ts": "2026-10-24 20:51:54",
+ "head_config_lines": 6382,
+ "top_bool_total": 312,
+ "top_bool_true": 260,
+ "top_bool_false": 52,
+ "false_names": [
+  "PATCH_BASELINE_FAIL_OPEN",
+  "QICA_USE_TUNED_WEIGHTS",
+  "OB1_ELEVATED_ENABLED",
+  "ENABLE_O_A4_DUAL_PATH",
+  "O_A4_SUBAGENT_ENABLED",
+  "ENABLE_OA3_SKILL_MANIFEST",
+  "ENABLE_STANDING_ORDERS",
+  "USE_EXTERNAL_LLM_GATEWAY",
+  "USER_DIALOG_PREFER_PAID",
+  "FACE_WELCOME_SHADOW",
+  "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION",
+  "KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD",
+  "REASONING_ROUTE_LOCAL_FALLBACK",
+  "GPU_PROBE_ENABLED",
+  "SPIKE_BACKEND_ENABLED",
+  "ENABLE_SPIKE_BACKEND_STATS",
+  "LOG_SANITIZER_DEBUG_MODE",
+  "OUTPUT_WINDOWS_PATH_MASK",
+  "_config_watcher_running",
+  "ENABLE_SELF_AWARENESS_INFLUENCE_DECISION",
+  "SELF_AWARENESS_MENTION_ENABLED",
+  "ENABLE_GRAPH_ADJACENCY",
+  "ENABLE_EYES_STREAM_STATS_INFO",
+  "ENABLE_ORGAN_SCAN_ADAPTIVE_TTL",
+  "ENABLE_MEMORY_AUTO_GC",
+  "ENABLE_MEMORY_AUTO_RESTART",
+  "ENABLE_MULTISTEP_PARTIAL_WRITE",
+  "ENABLE_MEMORY_RELEASE_TREE",
+  "ENABLE_MEMORY_RELEASE_LIVE",
+  "FAISS_USE_GPU",
+  "STOMACH_USE_JSON5",
+  "ENABLE_NEO4J_GRAPH_STORE",
+  "ENABLE_DISTRIBUTED",
+  "SNAPSHOT_LAZY_LOAD",
+  "ENABLE_NEO4J_DUAL_WRITE",
+  "ENABLE_INFLUXDB_AUTO_CONNECT",
+  "ENABLE_NEO4J_READ",
+  "COLD_DISABLE_STARTUP_COMPACT",
+  "ENABLE_PENDING_QUEUE_AGING",
+  "ENABLE_ROUTING_LAYERED",
+  "ENABLE_INNER_WORLD_QUALITY_ESCALATION",
+  "ENABLE_ORGAN_HEALTH_LEADERBOARD",
+  "ENABLE_ORGAN_INVENTORY_EXPORT",
+  "ENABLE_O_A4_LOCAL_EVIDENCE",
+  "ENABLE_SUBAGENT_RUNNER",
+  "ENABLE_STRUCTURE_RESCAN",
+  "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE",
+  "ENABLE_MEMORY_STRENGTH_SHADOW",
+  "ENABLE_HEBBIAN_COLLISION_SCAN",
+  "ENABLE_HEBBIAN_APPLY_DECAY",
+  "ENABLE_CREATOR_AGREEMENT",
+  "ENABLE_PATCH_GENERATOR"
+ ],
+ "t0_candidates_summary": [
+  {
+   "name": "PATCH_BASELINE_FAIL_OPEN",
+   "head_line": 99,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 4,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "QICA_USE_TUNED_WEIGHTS",
+   "head_line": 356,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 12,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "OB1_ELEVATED_ENABLED",
+   "head_line": 1022,
+   "head_value": false,
+   "refs_total": 6,
+   "refs_prod": 0,
+   "docs_hits": 5,
+   "git_last": "be471440|10-11 15:37|184批 主线5刀收口交付（零停窗）"
+  },
+  {
+   "name": "ENABLE_O_A4_DUAL_PATH",
+   "head_line": 1070,
+   "head_value": false,
+   "refs_total": 4,
+   "refs_prod": 2,
+   "docs_hits": 9,
+   "git_last": "5eb60f53|10-11 02:02|182批 刀1/刀2/刀4/刀5 + 补刀3：认知反思消费闭环主案、黑板类型注册、路由分层接线、阶段二三键处置、O-A4本地确定性凭证"
+  },
+  {
+   "name": "O_A4_SUBAGENT_ENABLED",
+   "head_line": 1075,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 15,
+   "git_last": "c753e182|10-10 17:23|179A 刀1：O-A4 Active Memory 双路三态实装（三态键 + DETERMINISTIC 免 LLM 路径）+ 门控单测"
+  },
+  {
+   "name": "ENABLE_OA3_SKILL_MANIFEST",
+   "head_line": 1087,
+   "head_value": false,
+   "refs_total": 1,
+   "refs_prod": 0,
+   "docs_hits": 5,
+   "git_last": "dc954d75|10-10 22:41|180批刀2+刀3（O-A3/O-B6）：config.py 加声明段（默认关）"
+  },
+  {
+   "name": "ENABLE_STANDING_ORDERS",
+   "head_line": 1103,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 4,
+   "git_last": "3e42504a|10-10 17:25|179A 刀2：O-B2 Standing Orders 四字段结构 + 闸引用 O-B1 键校验 + 门控单测"
+  },
+  {
+   "name": "USE_EXTERNAL_LLM_GATEWAY",
+   "head_line": 1621,
+   "head_value": false,
+   "refs_total": 6,
+   "refs_prod": 2,
+   "docs_hits": 9,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "USER_DIALOG_PREFER_PAID",
+   "head_line": 1646,
+   "head_value": false,
+   "refs_total": 4,
+   "refs_prod": 3,
+   "docs_hits": 25,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "FACE_WELCOME_SHADOW",
+   "head_line": 1794,
+   "head_value": false,
+   "refs_total": 8,
+   "refs_prod": 5,
+   "docs_hits": 28,
+   "git_last": "20e62bf0|10-08 18:05|★170 C6（T-语义缓存L2校准落地-1）：新增 L2 影子双跑观测键"
+  },
+  {
+   "name": "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION",
+   "head_line": 1869,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 24,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "KNOWLEDGE_INFER_PREFIX_FALLBACK_BROAD",
+   "head_line": 2298,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 5,
+   "git_last": "a8f9767e|10-04 21:18|第160批上A 刀2（票1①②）：新增灰度开关（独立 commit）"
+  },
+  {
+   "name": "REASONING_ROUTE_LOCAL_FALLBACK",
+   "head_line": 2339,
+   "head_value": false,
+   "refs_total": 4,
+   "refs_prod": 2,
+   "docs_hits": 29,
+   "git_last": "14434e1a|10-18 20:57|路灯288批交付(九刀中3刀完成2刀前提陈旧3刀降级根因分析)+烛微289批前置分析交付(想象力是3个句式创造力是35%随机门加2小时自毁)"
+  },
+  {
+   "name": "GPU_PROBE_ENABLED",
+   "head_line": 3366,
+   "head_value": false,
+   "refs_total": 7,
+   "refs_prod": 6,
+   "docs_hits": 11,
+   "git_last": "76f569bc|10-24 00:03|feat(353): 渠道起点均衡 + GPU探测开关化 + 冷化链可达性 + L0看门狗潜意识降噪 + ERROR行域过滤"
+  },
+  {
+   "name": "SPIKE_BACKEND_ENABLED",
+   "head_line": 3811,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 18,
+   "git_last": "ab816252|10-13 13:01|第203批·3刀全零停窗（执行后端接入脉冲流 + 双引擎收敛 + B类Top3事件化）"
+  },
+  {
+   "name": "ENABLE_SPIKE_BACKEND_STATS",
+   "head_line": 3816,
+   "head_value": false,
+   "refs_total": 1,
+   "refs_prod": 0,
+   "docs_hits": 5,
+   "git_last": "90942373|10-14 12:59|212批·开闸日历化第一窗（四件套）· 业务4文件"
+  },
+  {
+   "name": "LOG_SANITIZER_DEBUG_MODE",
+   "head_line": 3857,
+   "head_value": false,
+   "refs_total": 4,
+   "refs_prod": 2,
+   "docs_hits": 17,
+   "git_last": "321478ca|09-26 21:49|第133批 交付（日志脱敏+IW静默+备份白名单+账本晋升）"
+  },
+  {
+   "name": "OUTPUT_WINDOWS_PATH_MASK",
+   "head_line": 3858,
+   "head_value": false,
+   "refs_total": 6,
+   "refs_prod": 4,
+   "docs_hits": 14,
+   "git_last": "321478ca|09-26 21:49|第133批 交付（日志脱敏+IW静默+备份白名单+账本晋升）"
+  },
+  {
+   "name": "ENABLE_SELF_AWARENESS_INFLUENCE_DECISION",
+   "head_line": 4714,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 28,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "SELF_AWARENESS_MENTION_ENABLED",
+   "head_line": 4732,
+   "head_value": false,
+   "refs_total": 5,
+   "refs_prod": 2,
+   "docs_hits": 13,
+   "git_last": "5eb60f53|10-11 02:02|182批 刀1/刀2/刀4/刀5 + 补刀3：认知反思消费闭环主案、黑板类型注册、路由分层接线、阶段二三键处置、O-A4本地确定性凭证"
+  },
+  {
+   "name": "ENABLE_GRAPH_ADJACENCY",
+   "head_line": 4870,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 6,
+   "git_last": "a67ece36|10-18 13:41|路灯282批交付(七刀全落地CI全链PASS)"
+  },
+  {
+   "name": "ENABLE_EYES_STREAM_STATS_INFO",
+   "head_line": 5121,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 3,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_ORGAN_SCAN_ADAPTIVE_TTL",
+   "head_line": 5372,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 14,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_MEMORY_AUTO_GC",
+   "head_line": 5425,
+   "head_value": false,
+   "refs_total": 7,
+   "refs_prod": 4,
+   "docs_hits": 63,
+   "git_last": "b86429e1|10-09 19:55|175刀1 灰度开关：ENABLE_MEMORY_AUTO_GC / MEMORY_AUTO_GC_RSS_MB（默认关·零回归）"
+  },
+  {
+   "name": "ENABLE_MEMORY_AUTO_RESTART",
+   "head_line": 5435,
+   "head_value": false,
+   "refs_total": 7,
+   "refs_prod": 5,
+   "docs_hits": 15,
+   "git_last": "94e1f53c|10-09 22:23|176批 段2 内存自动重启开关（键 commit·★共窗）：config 新键，默认全关零回归"
+  },
+  {
+   "name": "ENABLE_MULTISTEP_PARTIAL_WRITE",
+   "head_line": 5442,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 12,
+   "git_last": "d87c7ea2|10-09 23:29|176批 段4 A1 灰度键 ENABLE_MULTISTEP_PARTIAL_WRITE（键 commit）：默认 False 零回归"
+  },
+  {
+   "name": "ENABLE_MEMORY_RELEASE_TREE",
+   "head_line": 5493,
+   "head_value": false,
+   "refs_total": 4,
+   "refs_prod": 3,
+   "docs_hits": 3,
+   "git_last": "06e7e26d|10-21 22:20|338批 刀1-刀4: 索引持久化+释放决策树+冷化链跑响+生成侧证据补料"
+  },
+  {
+   "name": "ENABLE_MEMORY_RELEASE_LIVE",
+   "head_line": 5499,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 3,
+   "git_last": "34a98ca9|10-23 19:01|feat(350): 验证回灌环闭合 + 开闸判定器/回滚三线 + pending撤单摘出 + 判死性误报率 + 证据门强化"
+  },
+  {
+   "name": "FAISS_USE_GPU",
+   "head_line": 5597,
+   "head_value": false,
+   "refs_total": 6,
+   "refs_prod": 5,
+   "docs_hits": 13,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "STOMACH_USE_JSON5",
+   "head_line": 5607,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 2,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_NEO4J_GRAPH_STORE",
+   "head_line": 5619,
+   "head_value": false,
+   "refs_total": 20,
+   "refs_prod": 17,
+   "docs_hits": 43,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_DISTRIBUTED",
+   "head_line": 5638,
+   "head_value": false,
+   "refs_total": 11,
+   "refs_prod": 10,
+   "docs_hits": 25,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "SNAPSHOT_LAZY_LOAD",
+   "head_line": 5672,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 10,
+   "git_last": "32e24c1b|10-22 10:52|342 批业务落地：刀1 冷化链可达性 + 刀2 tool通道显性化 + 刀3 K2双口径 + 刀4 typed_infer留痕 + 刀5 D3第2批"
+  },
+  {
+   "name": "ENABLE_NEO4J_DUAL_WRITE",
+   "head_line": 5712,
+   "head_value": false,
+   "refs_total": 15,
+   "refs_prod": 13,
+   "docs_hits": 24,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_INFLUXDB_AUTO_CONNECT",
+   "head_line": 5714,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 6,
+   "git_last": "a78ce9eb|10-09 17:50|[174刀1 T-InfluxDB连接接线-1] config 灰度键 ENABLE_INFLUXDB_AUTO_CONNECT=False"
+  },
+  {
+   "name": "ENABLE_NEO4J_READ",
+   "head_line": 5722,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 20,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "COLD_DISABLE_STARTUP_COMPACT",
+   "head_line": 5745,
+   "head_value": false,
+   "refs_total": 5,
+   "refs_prod": 4,
+   "docs_hits": 2,
+   "git_last": "8d9b95f3|09-23 23:59|chore: 第102~116批技术债务清偿与框架完善"
+  },
+  {
+   "name": "ENABLE_PENDING_QUEUE_AGING",
+   "head_line": 5887,
+   "head_value": false,
+   "refs_total": 10,
+   "refs_prod": 5,
+   "docs_hits": 27,
+   "git_last": "e9fd14b3|10-21 23:34|第339批 刀1-刀5：审批分道 / 连通性四条件 / 判据域排除 / 内存自观测 / by_version 分域回算"
+  },
+  {
+   "name": "ENABLE_ROUTING_LAYERED",
+   "head_line": 6135,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 8,
+   "git_last": "6de51692|10-11 00:37|181批刀1+刀2：分层路由白名单配置面 + 内在世界沉思质量分升级（共窗接线刀，默认关）"
+  },
+  {
+   "name": "ENABLE_INNER_WORLD_QUALITY_ESCALATION",
+   "head_line": 6167,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 13,
+   "git_last": "6de51692|10-11 00:37|181批刀1+刀2：分层路由白名单配置面 + 内在世界沉思质量分升级（共窗接线刀，默认关）"
+  },
+  {
+   "name": "ENABLE_ORGAN_HEALTH_LEADERBOARD",
+   "head_line": 6179,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 2,
+   "docs_hits": 4,
+   "git_last": "6de51692|10-11 00:37|181批刀1+刀2：分层路由白名单配置面 + 内在世界沉思质量分升级（共窗接线刀，默认关）"
+  },
+  {
+   "name": "ENABLE_ORGAN_INVENTORY_EXPORT",
+   "head_line": 6180,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 5,
+   "git_last": "6de51692|10-11 00:37|181批刀1+刀2：分层路由白名单配置面 + 内在世界沉思质量分升级（共窗接线刀，默认关）"
+  },
+  {
+   "name": "ENABLE_O_A4_LOCAL_EVIDENCE",
+   "head_line": 6191,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 6,
+   "git_last": "5eb60f53|10-11 02:02|182批 刀1/刀2/刀4/刀5 + 补刀3：认知反思消费闭环主案、黑板类型注册、路由分层接线、阶段二三键处置、O-A4本地确定性凭证"
+  },
+  {
+   "name": "ENABLE_SUBAGENT_RUNNER",
+   "head_line": 6203,
+   "head_value": false,
+   "refs_total": 16,
+   "refs_prod": 12,
+   "docs_hits": 140,
+   "git_last": "87f81014|10-18 20:32|路灯286批交付(九刀中6刀完成3刀根因分析)+烛微287批前置分析交付(依赖度账面在降账外没变发散很旺收敛为零)"
+  },
+  {
+   "name": "ENABLE_STRUCTURE_RESCAN",
+   "head_line": 6220,
+   "head_value": false,
+   "refs_total": 7,
+   "refs_prod": 3,
+   "docs_hits": 34,
+   "git_last": "3223c9e6|10-20 19:15|324批: P-15派单语义三拆(selected/executed/applied+失败退出cap2+拦截环节指认+留痕) + 图重建独立节拍(根因=只有每日03:00落盘,interval3600属派单钩子) + K1接默认review路径(任务面可定位性硬门槛,productive 20/20) + gap_reason显式(origin分列+violated空值进风险面25/25) + 中期10双指标(0.8052未达/增速17vs19.474/冷却15->7) + evidence_tier验收确认(545不顶满) + 尺子接口统一(无参可调,0.2545非None)+键登记3/32"
+  },
+  {
+   "name": "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE",
+   "head_line": 6323,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 7,
+   "git_last": "c2cfc5e0|10-11 13:53|183批 config：追加M183各开关/常量键（默认关）"
+  },
+  {
+   "name": "ENABLE_MEMORY_STRENGTH_SHADOW",
+   "head_line": 6330,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 7,
+   "git_last": "c2cfc5e0|10-11 13:53|183批 config：追加M183各开关/常量键（默认关）"
+  },
+  {
+   "name": "ENABLE_HEBBIAN_COLLISION_SCAN",
+   "head_line": 6335,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 7,
+   "git_last": "c2cfc5e0|10-11 13:53|183批 config：追加M183各开关/常量键（默认关）"
+  },
+  {
+   "name": "ENABLE_HEBBIAN_APPLY_DECAY",
+   "head_line": 6342,
+   "head_value": false,
+   "refs_total": 3,
+   "refs_prod": 1,
+   "docs_hits": 8,
+   "git_last": "c2cfc5e0|10-11 13:53|183批 config：追加M183各开关/常量键（默认关）"
+  },
+  {
+   "name": "ENABLE_CREATOR_AGREEMENT",
+   "head_line": 6356,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 15,
+   "git_last": "6109dfbe|10-21 12:46|335批大长批11刀: 开闸执行面接线(official_verdict首接分诊节拍/五态留痕/入池需确认) + 判定树⑦三态化(不可判不计通过/unjudged_steps) + CODE_VERSION升335.cg.v1(旧戳图被⑥拒) + K1判据消费点落地(_K1_MIN_RUNS不再孤儿/双源显式标注/跨代次不拼接) + absorb持久化(跨重启不归零/原子写/路径可注入) + 进化费用熔断(config额度待裁/None不熔断/0非法不当零元) + 压测判定线8项(期末RSS<12GB/336圈操作单12.1h/10GB降级与12GB失败双线) + 六类日志行统一带proc_gen(A-11根治/nucleus/proc_gen.py唯一取数口/psutil不可用记unknown不填0) + 禁用清单v2(删hard_strict<=100旧线/改进池速率<=1条每天+A-9~A-12) + missed文案代次化与Q-15同意程序(config键占位如实标注无消费点) + M92整样本回归(★T0订正:实测7/84非任务书29/40,危险3条全拦零误拦)"
+  },
+  {
+   "name": "ENABLE_PATCH_GENERATOR",
+   "head_line": 6367,
+   "head_value": false,
+   "refs_total": 2,
+   "refs_prod": 1,
+   "docs_hits": 3,
+   "git_last": "f24c00f2|10-23 17:36|349批: 裁决①②落地+shadow第一环+348未完工与挂账(11刀 7落地自证/2复核已完工/1未达线/1最小闭环) 刀1生成器(锚点格式省token/六字段证据门/reason+dedup_key强制/草稿独立池不进O3判死池/requires_confirmation真/三态generation_failed-gate_rejected-draft_ready可区分/base_url逐级判空回退修SSRF假失败) 合格率1/7=14%未达70%线按任务书只产草稿不产派单 刀2 official_verdict(写侧落盘+日报/health_ui/池entries三处读点+NOT_RUN与UNAVAILABLE硬分离+7条写侧禁令+值域外不猜成最接近档) 刀3回载命中率(5处接线+skip不进分母+reload_stats落盘hit_rate=None表无样本 冷索引写通实证index6/evict6/回载value_match=true) 刀4破零四条件(applied必须is True字符false不算/召回率分母只含真豁免 生产扫描any_broken=false 撤单链wont_fix已摘) 刀5堆归因四类(ast18.05/pulsenode0/image0/other81.95 真跑_m339_memory_probe带proc_gen) 刀6判据台账(★24%不可复现交裁:per-item留样生产零数据只有v-test-319测试件 item_count实测波动0.74% 逐条对差32条96.88%落在本批在改文件 ★真凶:desc里嵌浮动覆盖率读数硬=59.3/59.4两值并存 按原文对差假漂移1217条归一到语义身份后9条1.34% 另两套文件域6+1清单落盘two_domain_diff.json) 刀7线程口径(门禁59/44宽口径89/26 13两套口径都复现不出作废 署名自检四反证全红正控绿 typed_infer现网0守卫0-7) 刀8消费面(read_alert_tail改真seek尾部16384B/505000B=3.24%末条ts与全载一致 brief带alerts摘要三条landed全真 SC-3 total=0⇒UNAVAILABLE非0.0复核 consumer_connected四段同立partial_at段2段3可定位) 刀9 ep端点(三证非本地自托管⇒不猜价标待星轨映射 覆盖率双报38.17/98.11/1.89) 刀10日志轮转(_m349_rotate_allowed入口身份闸门 事故不复现+入口正控 措辞分档cfg/shift file字段归一52绝对/612相对⇒单写法664绝对0 大小写不敏感匹配 原值留file_raw 开关可回退) 刀11子进程池(耗时基线65.33ms/8任务 2进程真跑8/8 脉冲verify_done可grep 超时subproc_timeout与崩溃subproc_crashed分离且cap_consumed=false 子进程只读守卫write_denied=1生产文件未创建 互斥评估无重叠 opt-in接线PULSE_VERIFY_POOL=subproc且sandbox为None才切默认线程池)"
+  }
+ ],
+ "note": "全量 all_top_bools 见 tmp/zw366_root/a1_switch_inventory.json（77KB，未随版化副本入库）"
+}
