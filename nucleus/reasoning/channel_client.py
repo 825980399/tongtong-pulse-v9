@@ -158,15 +158,36 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
                  "Authorization": "Bearer %s" % _key},
     )
     try:
+        # ★第360批 刀0-2：付费出口埋点（append-only，失败静默，绝不阻断主流程）
+        _m360_rid = ""
+        try:
+            from nucleus.llm.paid_api_trace import begin as _m360_begin
+            _m360_rid = _m360_begin(_url, _model,
+                                    caller="channel_client:" + _name,
+                                    payload=_payload)
+        except Exception as _m360be:
+            silent_exc(_m360be, where="channel_client::call_channel 埋点 begin")
         with urllib.request.urlopen(_req, timeout=timeout or 60) as _resp:
             _raw = _resp.read().decode("utf-8", errors="replace")
         _data = json.loads(_raw)
     except urllib.error.HTTPError as exc:
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, False, error="HTTP %s" % exc.code)
+            except Exception as _m360fe:
+                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
         silent_exc(exc, where="channel_client::call_channel")
         _out["error"] = "HTTP %s" % exc.code
         _report_health(_name, False, 0.0)
         return _out
     except Exception as exc:
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, False, error="%s" % type(exc).__name__)
+            except Exception as _m360fe:
+                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
         silent_exc(exc, where="channel_client::call_channel")
         _out["error"] = "%s: %s" % (type(exc).__name__, exc)
         _report_health(_name, False, 0.0)
@@ -186,6 +207,12 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
         _usage = {}
 
     _report_health(_name, bool(_text), 0.0)
+    if _m360_rid:
+        try:
+            from nucleus.llm.paid_api_trace import finish as _m360_finish
+            _m360_finish(_m360_rid, bool(_text), _usage)
+        except Exception as _m360fe:
+            silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
     if not _text:
         _out["error"] = "响应无有效内容"
         return _out

@@ -805,6 +805,45 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "candidates_source": _offer_src,
                 "ast_release": _ast_rel}
 
+    def _m360_paid_usage_tick(self) -> dict:
+        """★第360批 刀0-3：心跳侧「付费 / 免费 / 付费占比」行（节流，默认每 10 拍）。
+
+        为什么挂在这：与 343/344/350 同挂点 —— 本方法是活体**已活**的心跳采样链，
+        另起调度器会得到"第二份读数"，占比打架时无法复算。
+        只**读** `call_recorder.get_daily_tokens()`（一次小 JSON 读），节流后开销可忽略。
+
+        节流：``PAID_USAGE_HEARTBEAT_EVERY_BEATS``（默认 10 拍，约 2 分钟一行）。
+        """
+        _cfg = sys.modules.get("config")
+        if _cfg is not None and not bool(
+                getattr(_cfg, "ENABLE_PAID_USAGE_HEARTBEAT", True)):
+            return {"status": "disabled"}
+        _bc = int(getattr(self, "_beat_count", 0) or 0)
+        _every = 10
+        if _cfg is not None:
+            try:
+                _every = max(1, int(getattr(
+                    _cfg, "PAID_USAGE_HEARTBEAT_EVERY_BEATS", 10) or 10))
+            except (TypeError, ValueError) as _e360:
+                silent_exc(_e360, where="PulseMetricsCollector::_m360_paid_usage_tick every")
+                _every = 10
+        _last = getattr(self, "_m360_paid_beat", None)
+        if _last is not None and (_bc - int(_last)) < _every:
+            return {"status": "throttled", "beats_since": _bc - int(_last),
+                    "every": _every}
+        self._m360_paid_beat = _bc
+        try:
+            from nucleus.llm.call_recorder import paid_usage_line as _m360_line
+            _u = _m360_line() or {}
+            _u["status"] = "ok"
+            return _u
+        except Exception as _e360u:
+            silent_exc(_e360u, where="PulseMetricsCollector::_m360_paid_usage_tick")
+            self._log(LogLevel.WARNING,
+                      "[360付费占比] 心跳取数失败（不静默）: %s: %s"
+                      % (type(_e360u).__name__, _e360u))
+            return {"status": "error", "why": type(_e360u).__name__}
+
     def _collect_memory_pressure(self) -> dict[str, Any]:
         """172刀3：长跑内存采样增强——复用 InfoField 双口径读数。
         175刀1：在已活采集链上接入 RSS 上限自动回收（避免 167 死开关事故——
@@ -895,6 +934,15 @@ class PulseMetricsCollector(BasePulseOrgan):
                               % (type(_rhe).__name__, _rhe))
                     _out["release_heartbeat"] = {"status": "error",
                                                  "why": type(_rhe).__name__}
+
+                # ★360批刀0-3：付费/免费/占比心跳行（同挂点，节流 10 拍一行）
+                try:
+                    _out["paid_usage"] = self._m360_paid_usage_tick()
+                except Exception as _m360pe:
+                    silent_exc(_m360pe,
+                               where="PulseMetricsCollector::_collect_memory_pressure 360刀0-3")
+                    _out["paid_usage"] = {"status": "error",
+                                          "why": type(_m360pe).__name__}
 
                 # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
                 #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，

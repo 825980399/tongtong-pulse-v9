@@ -658,6 +658,16 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m313e:
                     silent_exc(_m313e, "DailyScheduler.run_once:全局认知")
 
+            # ★第360批 刀0-3（小林 DeepSeek 付费止血）：日报固定输出
+            #   「付费 tokens / 免费 tokens / 付费占比」一节。纯只读，零语义变更。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _360_dr
+                    _res["paid_usage"] = _360_dr.append_paid_usage_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m360e:
+                    silent_exc(_m360e, "DailyScheduler.run_once:付费占比")
+
             # ★第312批 刀3：留痕行读上游结果前先兑 dict（上游异常路径可能返回 None，
             #   直接 `.get()` 会在留痕行自抛 AttributeError，把「回扫失败」升级成「每日拍失败」）。
             #   守卫见模块级 `_m312_as_dict`。

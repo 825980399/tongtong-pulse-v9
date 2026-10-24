@@ -1530,6 +1530,30 @@ class SafeEvolutionExecutor:
             return _ch
         return None
 
+    @staticmethod
+    def _m360_channel_of_url(url: str) -> str:
+        """★第360批 刀0-3：按 URL 反查渠道名（单端点兜底路径用）。
+
+        渠道池没命中时 `_call_llm_for_repair` 走 `REMOTE_API_CONFIG` 单端点
+        （实测就是 api.deepseek.com，**付费**）。若此处不归位渠道名，
+        daily_tokens 会把这条记成 "unknown" ⇒ 付费用量被计进免费侧。
+        反查顺序：池内 api_url 精确匹配 → 付费端点判据 → `single_endpoint`。
+        """
+        try:
+            import config as _c360
+            for _ch in (_c360.get_active_channels(include_disabled=True) or []):
+                if isinstance(_ch, dict) and _ch.get("api_url") == url:
+                    return str(_ch.get("name") or "single_endpoint")
+        except Exception as _e360a:
+            silent_exc(_e360a, where="SafeEvolutionExecutor::_m360_channel_of_url 池反查")
+        try:
+            from nucleus.llm.paid_api_trace import is_paid_endpoint as _m360_paid
+            if _m360_paid(url):
+                return "deepseek"
+        except Exception as _e360b:
+            silent_exc(_e360b, where="SafeEvolutionExecutor::_m360_channel_of_url 付费判定")
+        return "single_endpoint"
+
     def _m96_record_channel_result(self, channel_name: str, success: bool,
                                    latency: float = 0.0) -> None:
         """把进化链的调用结果计入渠道健康度（与对话链路**同账本**）。"""
@@ -1619,6 +1643,12 @@ class SafeEvolutionExecutor:
             if self._m114a_should_skip_ask(issue):
                 # ★T-115d：拦截 INFO 日志已下沉到 _m114a_should_skip_ask（指纹级·可审计）
                 return None
+            # ★★第360批 刀0-3：把**实际命中的渠道名**交给留存装饰器。
+            #   此前 `trace_evolution_call` 拿不到 channel ⇒ daily_tokens 的
+            #   `by_channel` 里这些调用全落到 "unknown"，且**付费渠道的用量被
+            #   计成 free**（paid/free 按 channel 判定）⇒ 进化链的 DeepSeek
+            #   开销在"付费占比"里永远是 0。走单端点兜底时记为 single_endpoint。
+            self._m44_last_channel = _m96_name or self._m360_channel_of_url(_api_url)
             # ★多轮追问（根据策略动态决定追问次数）
             _answer = self._call_llm_with_followup(
                 _api_url, _api_key, _prompt, _strategy["max_followups"], scene,

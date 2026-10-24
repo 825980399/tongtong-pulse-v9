@@ -1088,10 +1088,26 @@ class PulseLung(BasePulseOrgan):
                           f"headers={self._mask_headers(_headers)} "
                           f"body={_json.dumps(_payload, ensure_ascii=False)[:800]}")
             try:
+                # ★第360批 刀0-2：付费出口埋点（append-only，失败静默，绝不阻断主流程）
+                _m360_rid = ""
+                try:
+                    from nucleus.llm.paid_api_trace import begin as _m360_begin
+                    _m360_rid = _m360_begin(
+                        _api_url, _model,
+                        caller="lung._call_channel:" + str(_name),
+                        payload=_payload)
+                except Exception as _m360be:
+                    silent_exc(_m360be, where="organs.body.PulseLung::_call_channel 埋点 begin")
                 with urllib.request.urlopen(_req, timeout=_timeout) as _resp:
                     _raw = _resp.read().decode("utf-8", "ignore")
                 _data = _json.loads(_raw)
             except urllib.error.HTTPError as _he:
+                if _m360_rid:
+                    try:
+                        from nucleus.llm.paid_api_trace import finish as _m360_finish
+                        _m360_finish(_m360_rid, False, error="HTTP " + str(_he.code))
+                    except Exception as _m360fe:
+                        silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish")
                 # ★主线第25批 T2/P2-162：此前 400 的真实原因被整段吞掉（只留
                 #   「HTTP Error 400: Bad Request」），运维无法定位。现把上游返回的
                 #   错误体（含 code/message）以 WARNING 可见，便于直接对症。
@@ -1130,11 +1146,40 @@ class PulseLung(BasePulseOrgan):
             if _m94_usage is None:
                 _m94_usage = _data.get("usage") if isinstance(_data, dict) else None
             self._last_llm_usage = _m94_usage   # ★第95批 T-95e：统一命名
+            # ★第360批 刀0-1：截断标记（finish_reason=length）—— 高级任务质量门的
+            #   回退判据之一（被 max_tokens/字段策略截断 ⇒ 不算"免费档成功"）。
+            self._m360_reply_truncated = self._m360_extract_truncated(_data)
+            if _m360_rid:
+                try:
+                    from nucleus.llm.paid_api_trace import finish as _m360_finish
+                    _m360_finish(_m360_rid, True, _m94_usage)
+                except Exception as _m360fe:
+                    silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish")
             return _adapter.parse_response(_data)
         except Exception as _exc:
             self._log(LogLevel.DEBUG,
                       f"[渠道] {_name} 调用失败: {type(_exc).__name__}: {str(_exc)[:100]}")
             return None
+
+    @staticmethod
+    def _m360_extract_truncated(data) -> bool:
+        """★第360批 刀0-1：从响应体判定「被截断」（finish_reason == length）。
+
+        只做判定、不改响应；取不到一律 False（宁可不回退，也不误判为坏结果）。
+        """
+        try:
+            if not isinstance(data, dict):
+                return False
+            _choices = data.get("choices")
+            if not isinstance(_choices, list) or not _choices:
+                return False
+            _c0 = _choices[0]
+            if not isinstance(_c0, dict):
+                return False
+            return str(_c0.get("finish_reason") or "").lower() == "length"
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_extract_truncated")
+            return False
 
     @staticmethod
     def _mask_headers(headers: dict | None) -> dict:
@@ -1636,6 +1681,96 @@ class PulseLung(BasePulseOrgan):
         return True
 
     # --------------------------------------------------------------
+    # ★第360批 刀0-1：三场景统一「免费优先、付费兜底」
+    #   用户对话 / 高级任务 / 后台学习三类调用走**同一个**排序器：
+    #   免费档按 priority 升序在前，付费档（deepseek / advanced）垫底。
+    # --------------------------------------------------------------
+    @staticmethod
+    def _m360_paid_names() -> set:
+        """付费渠道名集合（唯一来源 `config.PAID_CHANNEL_NAMES`）。"""
+        try:
+            import config as _cfg360
+            _n = getattr(_cfg360, "PAID_CHANNEL_NAMES", None)
+            if _n:
+                return set(str(x) for x in _n)
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_paid_names")
+        return {"deepseek", "advanced"}
+
+    def _m360_is_paid_channel(self, channel) -> bool:
+        """判定渠道是否付费成员（name 命中 PAID_CHANNEL_NAMES）。"""
+        try:
+            if not isinstance(channel, dict):
+                return False
+            return str(channel.get("name", "")) in self._m360_paid_names()
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_is_paid_channel")
+            return False
+
+    def _m360_order_candidates(self, candidates: list) -> list:
+        """统一排序：**免费优先、付费垫底**（组内各自按 priority 升序）。
+
+        - 网关（external_gateway）不在付费名单内 ⇒ 仍在免费组、按 priority=0 居首，
+          与 360 前行为一致（零回归）。
+        - 高级任务渠道（advanced）在付费名单内 ⇒ 不再 priority=-1 插队，改为垫底。
+        - 付费组内仍按 priority 升序（advanced -1 先于 deepseek 8）。
+        """
+        try:
+            _free, _paid = [], []
+            for _c in candidates or []:
+                (_paid if self._m360_is_paid_channel(_c) else _free).append(_c)
+            _key = lambda c: c.get("priority", 999) if isinstance(c, dict) else 999
+            _free.sort(key=_key)
+            _paid.sort(key=_key)
+            return _free + _paid
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_order_candidates")
+            return candidates
+
+    @staticmethod
+    def _m360_adv_free_first_on() -> bool:
+        """高级任务质量门总开关（`ADVANCED_TASK_FREE_FIRST`，默认 True）。"""
+        try:
+            import config as _cfg360
+            return bool(getattr(_cfg360, "ADVANCED_TASK_FREE_FIRST", True))
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_first_on")
+            return True
+
+    @staticmethod
+    def _m360_adv_free_min() -> int:
+        """允许回退付费前**至少**要试过的免费档数量（默认 2）。"""
+        try:
+            import config as _cfg360
+            _n = int(getattr(_cfg360, "ADVANCED_TASK_FREE_MIN_ATTEMPTS", 2) or 2)
+            return _n if _n > 0 else 1
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_min")
+            return 2
+
+    def _m360_adv_paid_blocked(self, channel, free_done: int) -> bool:
+        """高级任务下该付费渠道是否**暂不放行**（质量门）。
+
+        放行条件（任一命中即放行）：
+        1. 已实际尝试且失败的免费档 ≥ `ADVANCED_TASK_FREE_MIN_ATTEMPTS`；
+        2. 上一次免费档结果被截断（`finish_reason=length`，见
+           `_m360_extract_truncated`）；
+        3. 补丁产物预检不通过（生成器侧置一次性标记
+           `self._m360_patch_precheck_failed = True`）。
+        """
+        if not self._m360_is_paid_channel(channel):
+            return False
+        if not self._m360_adv_free_first_on():
+            return False
+        if free_done >= self._m360_adv_free_min():
+            return False
+        if getattr(self, "_m360_reply_truncated", False):
+            return False
+        if getattr(self, "_m360_patch_precheck_failed", False):
+            return False
+        return True
+
+    # --------------------------------------------------------------
     # T4：用户对话优先付费渠道（与 _prefer_cheap_channels 对称）
     # --------------------------------------------------------------
     def _prefer_paid_channels(self, candidates: list, caller: str = "unknown") -> list:
@@ -1932,7 +2067,11 @@ class PulseLung(BasePulseOrgan):
 
         # ★主线第12批 T3.3/P2-83：后台学习优先免费渠道（按 name 白名单前置，灰度可关）
         _candidates = self._prefer_cheap_channels(_candidates, is_background=_is_bg_call)
+        # ★第360批 刀0-1：统一排序 —— 免费优先、付费垫底（advanced 不再插队）
+        _candidates = self._m360_order_candidates(_candidates)
         # ★主线第24批 T4：用户对话优先付费渠道（免费渠道后置作为兜底）
+        #   注：USER_DIALOG_PREFER_PAID=False（360 刀0-1）时该函数原样返回；
+        #   显式切回 True 时付费置顶**覆盖**上面的统一排序（开关语义优先）。
         _candidates = self._prefer_paid_channels(_candidates, caller=caller)
 
         _health = self._get_channel_health()
@@ -1943,6 +2082,11 @@ class PulseLung(BasePulseOrgan):
                 _wait_s = float(_mgr._cfg.get("all_channels_full_wait", 1.0) or 1.0)
             except Exception:
                 _wait_s = 1.0
+
+        # ★第360批 刀0-1：高级任务质量门状态（免费档失败计数 / 截断标记）
+        _m360_adv = self._is_advanced_task(model)
+        _m360_free_done = 0
+        self._m360_reply_truncated = False
 
         for _round in range(2):
             if _round == 1:
@@ -1962,6 +2106,15 @@ class PulseLung(BasePulseOrgan):
                     self._log(LogLevel.DEBUG, f"[渠道] {_name} 熔断中，跳过")
                     continue
 
+                # ★第360批 刀0-1：高级任务付费闸门 —— 免费档没试够/没失败，
+                #   付费渠道一律暂不放行（禁止"免费一失败就直接付费"）。
+                if _m360_adv and self._m360_adv_paid_blocked(_ch, _m360_free_done):
+                    self._log(LogLevel.INFO,
+                              f"[渠道] {_name} 付费兜底暂不放行（高级任务质量门："
+                              f"已试免费档 {_m360_free_done}/"
+                              f"{self._m360_adv_free_min()}）")
+                    continue
+
                 # ★第24批 T2：非阻塞获取渠道许可；并发满 → 零延迟切换下一个
                 _slot = False
                 if _mgr is not None:
@@ -1973,6 +2126,8 @@ class PulseLung(BasePulseOrgan):
 
                 _t0 = time.time()
                 _reply = None
+                # ★360刀0-1：每次尝试前复位截断标记（避免上一档的标记串味到本档）
+                self._m360_reply_truncated = False
                 # ★主线第44批 T1（P1-286）：捕获本渠道的失败明细 —— 此前失败只写日志，
                 #   留存记录里 error 恒空 → 111 条 failed 全部不可诊断、重复试错。
                 _m44_err = ""
@@ -2044,7 +2199,11 @@ class PulseLung(BasePulseOrgan):
                                   f"[语义缓存L2影子] 观测异常（已忽略）: "
                                   f"{type(_m284se).__name__}")
 
-                if _reply:
+                # ★第360批 刀0-1：高级任务下「被截断的免费档结果」不算成功 ——
+                #   计一次免费失败并继续（从而放行付费 flash 取完整结果）。
+                _m360_trunc = bool(_m360_adv
+                                   and getattr(self, "_m360_reply_truncated", False))
+                if _reply and not _m360_trunc:
                     self._update_channel_health(_name, True, _latency)
                     self._record_model_result(_ch.get("model", _name), True)
                     self._adjust_channel_concurrency(_name, True, latency=_latency)
@@ -2052,6 +2211,12 @@ class PulseLung(BasePulseOrgan):
                               f"[渠道] {_name} 调用成功（{_latency:.2f}s, {len(_reply)}字）")
                     return _reply
 
+                if _m360_trunc:
+                    self._log(LogLevel.WARNING,
+                              f"[渠道] {_name} 结果被截断（finish_reason=length），"
+                              f"高级任务回退下一档")
+                if not self._m360_is_paid_channel(_ch):
+                    _m360_free_done += 1
                 self._update_channel_health(_name, False, _latency)
                 self._record_model_result(_ch.get("model", _name), False)
                 self._adjust_channel_concurrency(_name, False, latency=_latency)
@@ -2174,6 +2339,17 @@ class PulseLung(BasePulseOrgan):
             while _attempt < _max_attempts:
                 _attempt += 1
                 try:
+                    # ★第360批 刀0-2：单端点兜底路径的付费出口埋点（append-only）
+                    _m360_rid_se = ""
+                    try:
+                        from nucleus.llm.paid_api_trace import begin as _m360_begin_se
+                        _m360_rid_se = _m360_begin_se(
+                            api_url, model,
+                            caller="lung._call_remote_api:single_endpoint",
+                            payload=payload_bytes)
+                    except Exception as _m360bse:
+                        silent_exc(_m360bse,
+                                   where="organs.body.PulseLung::_call_remote_api 埋点 begin")
                     req = urllib.request.Request(api_url, data=payload_bytes, headers=headers, method='POST')
                     with urllib.request.urlopen(req, timeout=EXTERNAL_CALL_TIMEOUTS["http_read"]) as response:
                         response_bytes = response.read()
@@ -2193,6 +2369,14 @@ class PulseLung(BasePulseOrgan):
                             message = {}
                         _result = message.get("content", "").strip()
                         self._record_model_result(model, bool(_result))
+                        if _m360_rid_se:
+                            try:
+                                from nucleus.llm.paid_api_trace import finish as _m360_fin_se
+                                _m360_fin_se(_m360_rid_se, bool(_result),
+                                             data.get("usage") if isinstance(data, dict) else None)
+                            except Exception as _m360fse:
+                                silent_exc(_m360fse,
+                                           where="organs.body.PulseLung::_call_remote_api 埋点 finish")
                         return _result
 
                 except urllib.error.HTTPError as http_err:

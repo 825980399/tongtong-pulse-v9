@@ -637,3 +637,51 @@ def append_global_awareness_section(report_path: str, logger: Any = None) -> dic
         "narrative_clues_count": _narr_n, "source": _source,
         "as_of": _as_of_txt, "stale_sec": _stale}
 
+
+def append_paid_usage_section(report_path: str, logger: Any = None) -> dict[str, Any]:
+    """★第360批 刀0-3：日报输出当日「付费 tokens / 免费 tokens / 付费占比」一行。
+
+    背景（小林 2026-10-24 DeepSeek 平台亲查）：v4-pro 单日 1.09 亿 tokens，
+    而框架侧此前**没有任何一行日报读数**能回答"今天花了多少付费 token"。
+    356 刀7 的 `free_chain_usage()` 造了函数但**零调用点**（写了没挂）。
+
+    本函数只做**只读取数 + 追加日报一节**，不动任何计费口径
+    （`PAID_CHANNELS` / `DAILY_PAID_TOKEN_ALERT` 一律不动）。
+    任何异常只 warning，绝不影响调度主流程。
+    """
+    _log = logger or _module_logger
+    _rep: dict[str, Any] = {}
+    try:
+        from nucleus.llm.call_recorder import paid_usage_line as _m360_line
+        _rep = _m360_line(log=False) or {}
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_paid_usage_section:取数", level="warning")
+        return {}
+    _pct = lambda _x: ("%.2f%%" % (100.0 * _x)) if isinstance(_x, (int, float)) \
+        and not isinstance(_x, bool) else "N/A"
+    _top = _rep.get("top_paid_models") if isinstance(
+        _rep.get("top_paid_models"), dict) else {}
+    _top_txt = ",".join("%s=%d" % (k, int((v or {}).get("tokens") or 0))
+                        for k, v in _top.items()) or "-"
+    try:
+        _lines = ["", "【付费/免费用量】",
+                  "  · date=%s（source=%s）" % (_rep.get("date") or "-",
+                                            _rep.get("source") or "-"),
+                  "  · 付费token=%d  免费token=%d  合计=%d"
+                  % (int(_rep.get("paid_tokens") or 0),
+                     int(_rep.get("free_tokens") or 0),
+                     int(_rep.get("total_tokens") or 0)),
+                  "  · 付费占比=%s  免费占比=%s"
+                  % (_pct(_rep.get("paid_share")), _pct(_rep.get("free_share"))),
+                  "  · 付费模型 top=%s" % _top_txt,
+                  ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_paid_usage_section:写日报小节",
+                   level="warning")
+    _log.info("[360付费占比] 日报节 date=%s 付费=%d 免费=%d 付费占比=%s",
+              _rep.get("date") or "-", int(_rep.get("paid_tokens") or 0),
+              int(_rep.get("free_tokens") or 0), _pct(_rep.get("paid_share")))
+    return _rep
+

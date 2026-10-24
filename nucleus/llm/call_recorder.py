@@ -370,6 +370,9 @@ def _m352b_empty_day(day: str) -> dict:
         "paid_tokens": 0,
         "free_tokens": 0,
         "free_by_model": {},
+        # ★360刀0-3：付费侧**按模型**分布 —— 告警行要能回答"是哪个模型在烧钱"
+        #   （v4-pro 1.09 亿 tokens 事故的核心诉求：先看见，再定位）。
+        "paid_by_model": {},
         "alerted": False,
         "updated_at": "",
     }
@@ -423,6 +426,17 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
 
     if _ch in _paid:
         out["paid_tokens"] = int(out.get("paid_tokens") or 0) + _tk
+        # ★360刀0-3：付费侧按模型分桶（与 free_by_model 对称）
+        _pb = out.get("paid_by_model")
+        if not isinstance(_pb, dict):
+            _pb = {}
+            out["paid_by_model"] = _pb
+        _pc = _pb.get(_md)
+        if not isinstance(_pc, dict):
+            _pc = {"calls": 0, "tokens": 0}
+        _pc["calls"] = int(_pc.get("calls") or 0) + 1
+        _pc["tokens"] = int(_pc.get("tokens") or 0) + _tk
+        _pb[_md] = _pc
     else:
         out["free_tokens"] = int(out.get("free_tokens") or 0) + _tk
         # ★356刀7：免费链**按模型**单独计数。
@@ -849,9 +863,10 @@ class LLMCallRecorder:
             if _fire is not None:
                 _module_logger.warning(
                     "[每日Tokens] 付费tokens=%s 超阈值(%s)，建议评估免费渠道额度/新增免费平台"
-                    "（分渠道=%s）",
+                    "（分渠道=%s；付费模型分布=%s）",
                     _fire.get("paid_tokens"), _thr,
-                    json.dumps(_fire.get("by_channel") or {}, ensure_ascii=False))
+                    json.dumps(_fire.get("by_channel") or {}, ensure_ascii=False),
+                    json.dumps(_fire.get("paid_by_model") or {}, ensure_ascii=False))
         except Exception as e:
             silent_exc(e, where="call_recorder::_m352b_update_daily")
 
@@ -1045,6 +1060,10 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                         response=_resp if _resp else "",
                         status=_status, error=_err,
                         prompt_version=version,
+                        # ★第360批 刀0-3：带上**实际命中的渠道名**。
+                        #   此前恒为空 ⇒ 进化链调用在 daily_tokens 里全归 "unknown"，
+                        #   付费渠道用量被计成 free（paid/free 按 channel 判定）。
+                        channel=str(getattr(_self, "_m44_last_channel", "") or ""),
                         model=str(getattr(_self, "_m44_last_model", "") or ""),
                         duration=time.time() - _t0,
                         usage=_m94_usage if isinstance(_m94_usage, dict) else None)
@@ -1052,6 +1071,9 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                         _self._last_llm_usage = None
                         if hasattr(_self, "_m44_last_usage"):
                             _self._m44_last_usage = None
+                        # 一次性消费：渠道名不跨调用串味（与 model 同款纪律）
+                        if hasattr(_self, "_m44_last_channel"):
+                            _self._m44_last_channel = ""
                 except Exception as e:
                     silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587")
         return _wrapper
@@ -1160,6 +1182,54 @@ def free_chain_usage(base_dir: str | None = None) -> dict:
         ",".join("%s=%d" % (k, int((v or {}).get("tokens") or 0))
                  for k, v in _top[:3]) or "-")
     return _rep
+
+
+def paid_usage_line(base_dir: str | None = None, log: bool = True) -> dict:
+    """★第360批 刀0-3：当日「付费 / 免费 / 付费占比」一行（只读，**永不抛出**）。
+
+    背景：小林 2026-10-24 在 DeepSeek 平台查到 v4-pro 单日 1.09 亿 tokens，
+    而框架侧此前**没有任何一行**心跳/日报读数能回答"今天花了多少付费 token"。
+    356 刀7 的 `free_chain_usage()` 建了函数但**零调用点**（写了没挂），
+    本函数把付费侧与占比补上，并挂进心跳与日报（见下方接线点）。
+
+    Returns:
+        {schema, date, source, paid_tokens, free_tokens, total_tokens,
+         paid_share, free_share, top_paid_models}
+        `paid_share` / `free_share` 无样本时为 **None**（不是 0，铁律155）。
+    """
+    _out = {"schema": "m360_paid_usage/360.v1", "date": "", "source": "absent",
+            "paid_tokens": 0, "free_tokens": 0, "total_tokens": 0,
+            "paid_share": None, "free_share": None, "top_paid_models": {}}
+    try:
+        _d = get_daily_tokens(base_dir=base_dir) or {}
+        _tot = int(_d.get("total_tokens") or 0)
+        _free = int(_d.get("free_tokens") or 0)
+        _paid = int(_d.get("paid_tokens") or 0)
+        _pbm = _d.get("paid_by_model") if isinstance(_d.get("paid_by_model"), dict) else {}
+        _top = sorted(_pbm.items(),
+                      key=lambda kv: -int((kv[1] or {}).get("tokens") or 0))[:3]
+        _out.update({
+            "date": str(_d.get("date") or ""),
+            "source": str(_d.get("source") or "current"),
+            "paid_tokens": _paid,
+            "free_tokens": _free,
+            "total_tokens": _tot,
+            "paid_share": (round(_paid / float(_tot), 4) if _tot else None),
+            "free_share": (round(_free / float(_tot), 4) if _tot else None),
+            "top_paid_models": {str(k): dict(v or {}) for k, v in _top},
+        })
+        if log:
+            _pct = lambda _x: ("%.2f%%" % (100.0 * _x)) if _x is not None else "N/A"
+            _module_logger.info(
+                "[360付费占比] date=%s(%s) 付费token=%d 免费token=%d 付费占比=%s "
+                "免费占比=%s top付费模型=%s",
+                _out["date"] or "-", _out["source"], _paid, _free,
+                _pct(_out["paid_share"]), _pct(_out["free_share"]),
+                ",".join("%s=%d" % (k, int((v or {}).get("tokens") or 0))
+                         for k, v in _top) or "-")
+    except Exception as e:
+        silent_exc(e, where="call_recorder::paid_usage_line")
+    return _out
 
 
 def read_daily_tokens_report(base_dir: str | None = None) -> dict:

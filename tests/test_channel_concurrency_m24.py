@@ -282,14 +282,35 @@ class TestT3Dynamic(_M24Base):
 # T4 用户对话优先付费渠道（3 例）
 # ======================================================================
 class TestT4PreferPaid(_M24Base):
-    def test_10_user_dialog_prefers_paid(self):
-        """用户对话 → 付费渠道前置（免费后置兜底）。"""
+    def test_10_user_dialog_prefer_paid_switch(self):
+        """★第360批 刀0-1：`USER_DIALOG_PREFER_PAID` 是**真开关**，不是装饰。
+
+        - 默认（360 后 = False）：用户对话**不再**重排 ⇒ 付费垫底（止血语义）；
+        - 显式切回 True：付费仍前置（原语义保留，开关可回退）。
+
+        旧断言只覆盖「恒前置」一段，开关翻转后必红 ⇒ 本例改为**两段都验**，
+        避免"改了配置但语义没跟着变"的假绿。
+        """
         _l = _mk_lung(_ok_reply)
         _cand = [{"name": "zhipu", "priority": 1}, {"name": "doubao", "priority": 2},
                  {"name": "deepseek", "priority": 3}]
+
+        # (1) 生产默认值（必须来自 config，不硬编码）—— 360 后为 False ⇒ 原样返回
+        self.assertFalse(getattr(config, "USER_DIALOG_PREFER_PAID", True),
+                         "360 刀0-1 后 USER_DIALOG_PREFER_PAID 应为 False（免费优先）")
         _out = _l._prefer_paid_channels(_cand, caller="user_dialog")
-        self.assertEqual(_out[0]["name"], "deepseek")
-        self.assertEqual(_out[-1]["name"], "doubao", "免费渠道应后置作兜底")
+        self.assertEqual([c["name"] for c in _out], ["zhipu", "doubao", "deepseek"],
+                         "开关关闭时不得重排（付费垫底由 _m360_order_candidates 负责）")
+
+        # (2) 显式开回 True ⇒ 付费前置（旧语义仍要成立，否则开关形同虚设）
+        _old = config.USER_DIALOG_PREFER_PAID
+        try:
+            config.USER_DIALOG_PREFER_PAID = True
+            _out2 = _l._prefer_paid_channels(_cand, caller="user_dialog")
+            self.assertEqual(_out2[0]["name"], "deepseek", "开关打开时付费仍应前置")
+            self.assertEqual(_out2[-1]["name"], "doubao", "免费渠道应后置作兜底")
+        finally:
+            config.USER_DIALOG_PREFER_PAID = _old
 
     def test_11_background_prefers_free(self):
         """后台学习 → 不重排（仍按原优先级的免费优先逻辑）。"""
@@ -309,15 +330,22 @@ class TestT4PreferPaid(_M24Base):
 
         _calls = []
 
+        # ★第360批 刀0-1：语义反转 —— 360 前是"付费先、免费兜底"，
+        #   360 后是"免费先、付费兜底"。故 spy 必须让**免费失败、付费成功**，
+        #   才能在同一条序列里同时证到两端（免费在先 + 付费兜底成功）。
         def _spy(ch, prompt, **kw):
             _calls.append(ch.get("name"))
-            return "免费兜底成功" if ch.get("name") == _free_name else None
+            return "付费兜底成功" if ch.get("name") == _paid_name else None
 
         _l = _mk_lung(_spy)
         _r = _l._call_via_channels("hi", "m", caller="user_dialog")
-        self.assertEqual(_r, "免费兜底成功")
-        self.assertEqual(_calls[0], _paid_name, "用户对话应最先尝试付费渠道")
-        self.assertIn(_free_name, _calls, "付费渠道失败后应尝试免费渠道")
+        self.assertEqual(_r, "付费兜底成功", "免费渠道全失败后必须兜底到付费：%s" % _calls)
+        self.assertEqual(_calls[0], _free_name,
+                         "360 后用户对话应最先尝试免费渠道（付费仅兜底）")
+        self.assertEqual(_calls[-1], _paid_name,
+                         "付费渠道必须垫底（最后一个才轮到）：%s" % _calls)
+        self.assertLess(_calls.index(_free_name), _calls.index(_paid_name),
+                        "免费渠道必须排在付费渠道之前")
 
 
 # ======================================================================

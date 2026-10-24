@@ -1424,6 +1424,24 @@ PAID_CHANNELS = frozenset({"deepseek"})
 #   两种保护各司其职，避免"告警即断服"。
 DAILY_PAID_TOKEN_ALERT = 1000000
 
+# ============================================================================
+# ★第360批 刀0-2 / 刀0-1：付费治理三开关
+# ============================================================================
+# 付费出口全链路埋点总开关。True → 所有经框架 HTTP 出口发往付费端点的请求，
+# 追加一行到 data/logs/paid_api_trace.jsonl（ts/pid/url/model/caller/
+# 调用栈前 5 帧/prompt 字节数/usage）。写盘失败只降级为日志，**绝不阻断主流程**。
+# 用途：抓 deepseek-v4-pro 1.09 亿 tokens/日的真实调用源（静态溯源已穷尽）。
+ENABLE_PAID_API_TRACE = True
+
+# 高级任务（deep_think/code/complex_reasoning）质量门：
+# True  → 先打免费档（qwen-max / glm-4.7-flash 等较强免费渠道），
+#         只有在「至少尝试 ADVANCED_TASK_FREE_MIN_ATTEMPTS 个免费档仍失败」
+#         /「返回被截断」/「补丁产物预检不通过」时，才回退付费 flash。
+# False → 退回 360 前的「高级任务无条件插队付费」行为（止血失败时的回退闸）。
+ADVANCED_TASK_FREE_FIRST = True
+# 允许回退付费前**至少**要试过的免费档数量（禁止免费渠道一失败就直接付费）。
+ADVANCED_TASK_FREE_MIN_ATTEMPTS = 2
+
 REMOTE_API_CHANNELS = {
     # 总开关：False 时肺部走 REMOTE_API_CONFIG 单端点旧路径（与改造前一致）
     "enabled": True,
@@ -1622,7 +1640,10 @@ DYNAMIC_CONCURRENCY_CONFIG = {
 }
 
 # T4：用户对话优先付费渠道（保证响应速度）；后台学习仍优先免费渠道（省成本）
-USER_DIALOG_PREFER_PAID = True
+# ★第360批 刀0-1（小林 2026-10-24 DeepSeek 付费止血）：
+#   True → False。用户对话改为**免费优先、付费兜底**（付费渠道垫底，仅在免费
+#   全失败时兜底）。开关保留，需要高质量对话时可切回 True（此时付费置顶优先）。
+USER_DIALOG_PREFER_PAID = False
 PAID_CHANNEL_NAMES = ["deepseek", "advanced"]
 
 # T5：多轮对话历史（修复第三方报告 P0-9「无真实多轮对话」）
@@ -5828,7 +5849,10 @@ ENABLE_PATCH_FAILURE_REFLECTION = True
 #     https://api.deepseek.com/v1/chat/completions（官方收费）；
 #     渠道池 `get_active_channels()` 实测 **12 条**可用（含 zhipu 免费）。
 #   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m96_channel_pool_on
-ENABLE_EVOLUTION_USE_CHANNEL_POOL = False
+#   ★第360批 刀0-1：False → True（小林 DeepSeek 付费止血，最大嫌疑出血点）。
+#     True → 进化/补丁链不再直连 api.deepseek.com，改走渠道池（免费优先、
+#     含 ChannelHealthTracker 熔断与额度策略）；池不可用仍回落单端点（渠道池→额度熔断→单端点，三层设计）。
+ENABLE_EVOLUTION_USE_CHANNEL_POOL = True
 
 # ★T-96d 第3项（「固定额度用完即止 / 协作奖励每日 11 点补充」）经星轨裁决
 #   **单独立项**：需改造 ChannelQuotaMonitor 的持久化与daily调度，且当前

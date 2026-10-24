@@ -20,6 +20,12 @@ import urllib.request
 from typing import Any
 from urllib.parse import urlparse
 
+try:  # ★360刀0-2：埋点失败要留痕，但守卫本身不能被埋点依赖拖垮
+    from nucleus._silent_except import silent_exc
+except Exception:  # pragma: no cover —— 守卫模块必须自洽
+    def silent_exc(_e, where="", level="warning"):
+        logging.getLogger(__name__).warning("silent_exc 不可用(%s): %s", where, _e)
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -151,15 +157,51 @@ def safe_http_json(
     _allowed, _reason = is_safe_http_url(url)
     if not _allowed:
         return False, f"SSRF 防护拦截: {_reason}"
+    # ★第360批 刀0-2：统一 JSON 出口的付费埋点（append-only，失败静默不阻断）
+    _m360_rid = ""
+    try:
+        from nucleus.llm.paid_api_trace import begin as _m360_begin
+        _m360_model = ""
+        try:
+            if data:
+                _m360_model = str((json.loads(data.decode("utf-8", "ignore")) or {})
+                                  .get("model", "") or "")
+        except Exception as _m360me:
+            silent_exc(_m360me, where="nucleus.ssrf_guard::safe_http_json 埋点取 model")
+            _m360_model = ""
+        _m360_rid = _m360_begin(url, _m360_model,
+                                caller="ssrf_guard.safe_http_json", payload=data)
+    except Exception as _m360e:
+        silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 begin")
     try:
         _req = urllib.request.Request(
             url, data=data, headers=headers or {}, method=method
         )
         with urllib.request.urlopen(_req, timeout=timeout) as _resp:
-            return True, json.loads(_resp.read().decode("utf-8"))
+            _parsed = json.loads(_resp.read().decode("utf-8"))
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, True,
+                             _parsed.get("usage") if isinstance(_parsed, dict) else None)
+            except Exception as _m360e:
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
+        return True, _parsed
     except urllib.error.URLError as _e:
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, False, error="URLError")
+            except Exception as _m360e:
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
         return False, f"请求失败: {_e}"
     except (ValueError, json.JSONDecodeError) as _e:
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, False, error="响应解析失败")
+            except Exception as _m360e:
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
         return False, f"响应解析失败: {_e}"
 
 
