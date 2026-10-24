@@ -454,6 +454,14 @@ class PulseSystemManager(BasePulseOrgan):
     def _auto_health_check(self):
         if not self._running:
             return
+        # ★355刀4：重入守卫——标志在**回调入口**置位、回调真正结束时复位。
+        #   旧模板把复位写在调度函数 _schedule_health_check 的 finally 里，
+        #   timer 回调开始执行时标志早已清零，守卫形同虚设（烛微 e1 判"0 作用"）。
+        if getattr(self, "_health_check_in_progress", False):
+            # 上一轮自愈检查未结束：本轮跳过，但必须续期否则链停摆
+            self._schedule_health_check()
+            return
+        self._health_check_in_progress = True
         try:
             self._on_health_check({})
         except Exception as _e:  # ★FIX(AP53): 异常不得中断自愈链重排
@@ -462,6 +470,7 @@ class PulseSystemManager(BasePulseOrgan):
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         finally:
+            self._health_check_in_progress = False
             # 无论检查是否抛异常，都必须重排下一次定时器，避免 300s 自愈链永久停摆
             self._schedule_health_check()
 

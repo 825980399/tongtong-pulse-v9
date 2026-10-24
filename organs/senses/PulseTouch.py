@@ -859,8 +859,18 @@ class PulseTouch(BasePulseOrgan):
     def _trigger_snapshot(self):
         if not self.is_running:
             return
-        self._emit_snapshot()
-        self._schedule_next_snapshot()
+        # ★355刀4：重入守卫——_emit_snapshot() 要读硬件快照，慢于快照间隔时
+        #   旧实现会把下一轮 timer 叠上来；标志在回调入口置位、回调结束复位，
+        #   续期放 finally，任何分支都不会让快照链停摆。
+        if getattr(self, "_snapshot_in_progress", False):
+            self._schedule_next_snapshot()
+            return
+        self._snapshot_in_progress = True
+        try:
+            self._emit_snapshot()
+        finally:
+            self._snapshot_in_progress = False
+            self._schedule_next_snapshot()
     def get_hardware_info(self) -> dict[str, Any]:
         """公开接口：获取硬件信息快照"""
         return dict(self._hardware_info)

@@ -951,7 +951,7 @@ class PulseHormones(BasePulseOrgan):
         return suggestions.get(emotion, "我感受到你的情绪了。需要我做些什么吗？")
 
     def _write_emotion_log(self, emotion: str, intensity: float, user_name: str):
-        """（保留原有完整逻辑，字段增强）"""
+        """记录情绪日志（355：持锁 + 原子写，保留原有字段与中文注释）"""
         try:
             import json as _json
             log_path = os.path.join(
@@ -976,11 +976,26 @@ class PulseHormones(BasePulseOrgan):
                 log_data.append(entry)
                 if len(log_data) > 50:
                     log_data = log_data[-50:]
-                with open(log_path, 'w', encoding='utf-8') as f:
-                    _json.dump(log_data, f, ensure_ascii=False)
+                # ★355刀7：原子写——临时文件 + os.replace，避免截断后留下坏 JSON
+                import tempfile as _tempfile
+                _tmp = None
+                try:
+                    _fd, _tmp = _tempfile.mkstemp(
+                        dir=os.path.dirname(log_path), prefix='.hormone_emotion_log.', suffix='.tmp')
+                    with os.fdopen(_fd, 'w', encoding='utf-8') as f:
+                        _json.dump(log_data, f, ensure_ascii=False)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(_tmp, log_path)
+                    _tmp = None
+                finally:
+                    if _tmp is not None and os.path.exists(_tmp):
+                        try:
+                            os.unlink(_tmp)
+                        except OSError as _ue:
+                            silent_exc(_ue, where="organs.endocrine.PulseHormones::_write_emotion_log 清理")
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
-
     # ========== 共振条件 ==========
 
     def get_resonance_conditions(self) -> list:

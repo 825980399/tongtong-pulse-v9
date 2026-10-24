@@ -308,6 +308,12 @@ class PulseLegs(BasePulseOrgan):
 
     def start(self):
         """启动双腿，开启主动学习定时器 + 多路并行学习引擎"""
+
+        # ★355刀4：start 幂等守卫——重复调用会再起一个学习工作线程并覆盖
+        #   _learn_pool，旧池泄漏且任务被两个池争抢（停机清零批补）。
+        if getattr(self, "_learn_worker_running", False):
+            self._log(LogLevel.DEBUG, "[355守卫] start 重入已忽略：学习引擎已在运行")
+            return
         super().start()
         self._learn_running = True
         self._learn_worker_running = True
@@ -959,23 +965,27 @@ class PulseLegs(BasePulseOrgan):
         """创建带智能重试的HTTP会话"""
         # [批次4·深度体检][PERF-6] 复用会话（替代每次新建）
         session = requests.Session()
-
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "HEAD"]
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=5, pool_maxsize=10)
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate",
-            "Connection": "keep-alive",
-        })
+        # ★355刀9：构造中途抛异常时关闭 session，避免连接池/handler 泄漏
+        try:
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET", "HEAD"]
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=5, pool_maxsize=10)
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            })
+        except BaseException:
+            session.close()
+            raise
 
         return session
     @budget_guard("search")

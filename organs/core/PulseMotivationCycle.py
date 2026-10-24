@@ -483,6 +483,7 @@ class PulseMotivationCycle(BasePulseOrgan):
 
     def _emit_motivation_signals(self):
         """发射动机信号，供其他器官使用"""
+        _payload = None
         with self._lock:
             if not self._active_motivations:
                 return
@@ -502,14 +503,18 @@ class PulseMotivationCycle(BasePulseOrgan):
             #   避免「你是谁」等一次性动机以恒强重复发射；真实强化会再次顶回。
             _decay = getattr(self, "_urge_decay_after_emit", 0.5)
             top["intensity"] = round(top["intensity"] * _decay, 4)
-            self._emit(Event.MOTIVATION_URGE, {
+            _payload = {
                 "motivation_id": top["id"],
                 "description": top["description"],
                 "intensity": top["intensity"],
                 "priority": top["priority"],
                 "type": top["type"],
-            }, priority=4, layer="L3")
+            }
 
+        # ★355刀7：发射移出锁外——订阅方若在事件回调里回读动机状态，
+        #   持锁发射会自锁（lock_with_emit 的真实死锁面）。
+        if _payload is not None:
+            self._emit(Event.MOTIVATION_URGE, _payload, priority=4, layer="L3")
     def _emit_pressure_constraints(self):
         """根据压力分类发射约束信号"""
         with self._lock:

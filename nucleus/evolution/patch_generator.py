@@ -428,6 +428,104 @@ def check_body_integrity(project_root: str | None, file: str, method: str,
                     % (_new, _ol, _ratio, ">=" if _ok else "<", min_ratio))}
 
 
+#: ★355刀2：尾部覆盖判定线（任务书刀2 明定：保留 ≥80%）
+TAIL_COVERAGE_MIN = 0.80
+#: 取原方法体尾部多少条**非空语句**做覆盖比对
+TAIL_SAMPLE_LINES = 10
+
+
+def check_tail_coverage(project_root: str | None, file: str, method: str,
+                        modified_code: str,
+                        min_ratio: float = TAIL_COVERAGE_MIN,
+                        sample_lines: int = TAIL_SAMPLE_LINES) -> dict:
+    """尾部覆盖判据：原方法体**尾部 N 条非空语句**是否还留在改后方法体里。
+
+    为什么必须补这条：行数比只能抓"整体变短"，抓不到"**长度够但尾段被改写/丢失**"。
+    实证 94e9（PulseInnerWorld._run_periodic_tasks）：原 91 行 → 改后 96 行，
+    行数比 **1.05 过关**，但尾止于 tempo 分支 ⇒ **诊断建议发射在尾部丢失**
+    —— 行数比完全看不见这种截断。
+
+    Returns:
+        {verdict: "ok"|"truncated"|"undecidable",
+         tail_total, tail_hit, ratio, min_ratio, missing}
+        `missing` 列出**没被引进来的尾行**（可追溯到"丢了哪句"）。
+        `undecidable` = 取不到原方法体（不判不合格，铁律166）。
+    """
+    import ast as _ast
+
+    def _orig_body() -> str | None:
+        _root = project_root or os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        _rel = _m349_norm_rel(file)
+        if not _rel:
+            return None
+        try:
+            with io.open(os.path.join(str(_root), _rel), encoding="utf-8",
+                         errors="ignore") as _f:
+                _lines = _f.read().split("\n")
+            _src = "\n".join(_lines)
+            _tree = _ast.parse(_src)
+        except Exception as _pe:
+            silent_exc(_pe, where="patch_generator::check_tail_coverage parse")
+            return None
+        for _n in _ast.walk(_tree):
+            if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
+                    and _n.name == str(method or "").strip():
+                _a = int(_n.lineno)
+                _b = int(getattr(_n, "end_lineno", _n.lineno) or _n.lineno)
+                # 去掉装饰器行：从 def 所在行开始
+                return "\n".join(_lines[max(0, _a - 1):_b])
+        return None
+
+    def _norm(_s: str) -> str:
+        import re as _re
+        return _re.sub(r"\s+", "", str(_s or ""))
+
+    _ob = _orig_body()
+    if not _ob:
+        return {"verdict": "undecidable", "tail_total": 0, "tail_hit": 0,
+                "ratio": None, "min_ratio": min_ratio, "missing": [],
+                "why": "取不到原方法体 ⇒ 判据不可用，不判不合格"}
+    _tail = [_l for _l in _ob.split("\n") if _l.strip()][-int(sample_lines):]
+    _new_n = _norm(modified_code)
+    _hit, _missing = 0, []
+    for _l in _tail:
+        if _norm(_l) and _norm(_l) in _new_n:
+            _hit += 1
+        else:
+            _missing.append(_l.strip()[:80])
+    _ratio = _hit / float(len(_tail)) if _tail else 0.0
+    return {"verdict": "ok" if _ratio >= min_ratio else "truncated",
+            "tail_total": len(_tail), "tail_hit": _hit,
+            "ratio": round(_ratio, 3), "min_ratio": min_ratio,
+            "missing": _missing,
+            "why": "尾部%d条命中%d条=%.2f %s %.2f"
+                   % (len(_tail), _hit, _ratio,
+                      ">=" if _ratio >= min_ratio else "<", min_ratio)}
+
+
+def _m355_normalize_method(entry: dict) -> dict:
+    """★355刀2①：把条目的 `method` 归一为**真实方法名**（`m323_truth.method_before`）。
+
+    m323_truth 39/39 `action=method_backfilled`：def_name（=field 名）≠ method_before，
+    生成器拿 field 名去猜 ⇒ 31/39 把 def 名改成了猜的名字，应用即"改错方法"。
+    归一后：生成/契约/应用**全部锚真实名**，rompt 里也不会再出现猜的名。
+
+    Returns:
+        归一后的条目（原地修改并返回），另写 `method_field_original` 保留原名，
+        便于追溯"这条原本叫什么"。
+    """
+    if not isinstance(entry, dict):
+        return entry
+    _truth = entry.get("m323_truth") or {}
+    _real = str(_truth.get("method_before") or "").strip()
+    _cur = str(entry.get("method") or "").strip()
+    if _real and _real != _cur:
+        entry["method_field_original"] = _cur
+        entry["method"] = _real
+    return entry
+
+
 def precheck_batch(project_root: str | None, entries: list) -> dict:
     """批量预检（一次遍历，铁律208）。返回 `{schema, total, tally, in_place,
     drifted, other, rows}`。用于 40 条存量对账与池侧批量标记。
@@ -1355,12 +1453,25 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
                                draft.get("method"),
                                draft.get("modified_code") or "")
     _checks["body_integrity"] = _bi
+    # ★355刀2：双判据。判据A（行数比）抓"整体变短"，判据B（尾部覆盖）抓
+    #   "长度够但尾段丢失" —— 94e9 行数比 1.05 过关、尾部却断在 tempo 分支，
+    #   只有 B 能抓住。任一不过即不进 auto 通道。
+    _tc = check_tail_coverage(draft.get("_project_root"), draft.get("file"),
+                              draft.get("method"),
+                              draft.get("modified_code") or "")
+    _checks["tail_coverage"] = _tc
     if _bi["verdict"] == "truncated":
         _reasons.append("body_truncated:%.2f" % _bi["ratio"])
         _module_logger.warning(
-            "[354预检] body_integrity=truncated 改后%d行/原%d行=%.2f<%s file=%s method=%s",
+            "[355生成器] 判据A行数比=truncated 改后%d行/原%d行=%.2f<%s file=%s method=%s",
             _bi["new_lines"], _bi["orig_lines"], _bi["ratio"],
             _bi["min_ratio"], draft.get("file"), draft.get("method"))
+    if _tc["verdict"] == "truncated":
+        _reasons.append("tail_coverage:%.2f" % _tc["ratio"])
+        _module_logger.warning(
+            "[355生成器] 判据B尾部覆盖=truncated 命中%d/%d=%.2f<%s file=%s method=%s 丢失尾行=%s",
+            _tc["tail_hit"], _tc["tail_total"], _tc["ratio"], _tc["min_ratio"],
+            draft.get("file"), draft.get("method"), _tc["missing"][:3])
     elif _bi["verdict"] == "empty_output":
         _reasons.append("body_empty_output")
     # undecidable ⇒ 不追加理由（判据不可用不等于不合格，铁律166）
@@ -1597,6 +1708,9 @@ def generate_patch_draft(entry: dict,
         _module_logger.warning("[349生成] 条目缺 file/method，无法生成: key=%s",
                                _out["entry_key"])
         return _out
+    # ★355刀2①：先把方法名归一为真实名（`m323_truth.method_before`），
+    #   再走预检与生成 —— 否则 prompt 里带着猜的名，生成的 def 名也是猜的。
+    entry = _m355_normalize_method(entry)
     # ★352刀1①：生成前目标存在性预检。
     #   为何放在取源码**之前**：目标已不存在时读文件本就是白费，
     #   而且旧路径会把它记成 generation_failed（词不达意）。

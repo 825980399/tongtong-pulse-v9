@@ -573,11 +573,30 @@ class PulseProprioception(BasePulseOrgan):
         return "未知"
 
     def _save_report_file(self, report: dict[str, Any]):
+        # ★355刀7：原子写——先落同目录临时文件再 os.replace，避免中途崩溃留下
+        #   半截 JSON（原实现 open(...,"w") 直接截断目标文件，读方会读到不完整内容）。
         try:
             filepath = "data/proprioception_report.json"
             os.makedirs("data", exist_ok=True)
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(report, f, ensure_ascii=False, indent=2)
+            import tempfile
+            _tmp = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir="data",
+                    prefix=".proprioception_report.", suffix=".tmp", delete=False,
+                ) as _f:
+                    _tmp = _f.name
+                    json.dump(report, _f, ensure_ascii=False, indent=2)
+                    _f.flush()
+                    os.fsync(_f.fileno())
+                os.replace(_tmp, filepath)
+                _tmp = None
+            finally:
+                if _tmp is not None and os.path.exists(_tmp):
+                    try:
+                        os.unlink(_tmp)
+                    except OSError as _ue:
+                        silent_exc(_ue, where="organs.core.PulseProprioception::_save_report_file 清理")
             self._log(LogLevel.INFO, f"报告已保存至 {filepath}")
         except Exception as e:
             self._log(LogLevel.WARNING, f"保存报告失败: {e}")
