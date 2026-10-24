@@ -954,6 +954,26 @@ def extract_source_snippet(project_root: str, file: str, method: str,
 FEEDBACK_SCHEMA = "gen_feedback_context/352.v1"
 #: 注入几条样本（越多越吃 token；7B 小模型吃不下太多）
 FEEDBACK_TOP_N = 3
+
+# ★第360批 刀5：负样本（死因）回灌上限与 schema。
+#   为什么单独一条流：正样本回答"怎么改才对"，负样本回答"哪些路已被判死"；
+#   混在一条里会互相稀释（且正样本来自 effect_verify.json，负样本来自审计池
+#   /rejected 台账，本就不同源）。
+NEGATIVE_SCHEMA = "gen_negative_context/360.v1"
+NEGATIVE_TOP_N = 4
+
+
+def _project_root_guess() -> str:
+    """仓根猜测（patch_generator 位于 nucleus/evolution/ 下）。"""
+    try:
+        return os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::_project_root_guess")
+        return os.getcwd()
+# 负样本来源（只读）：审计池终态 + 补丁台账拒收件
+NEGATIVE_POOL_STATUSES = ("wontfix",)
+_NEG_REASON_MAX = 160
 #: 样本 reason 截断（prompt 里不能被一条长理由撞没）
 FEEDBACK_REASON_MAX = 90
 
@@ -1032,12 +1052,136 @@ def render_feedback_block(examples: list) -> str:
     return "\n".join(_lines) + "\n"
 
 
-def build_prompt(entry: dict, source: dict, examples: list | None = None) -> str:
+def load_negative_examples(root: str | None = None,
+                           n: int = NEGATIVE_TOP_N) -> dict:
+    """★第360批 刀5：取**死因**作负样本（只读，不写任何文件）。
+
+    两路来源（缺一路不报错，如实标 state）：
+      A. 审计池终态条目 —— `status ∈ NEGATIVE_POOL_STATUSES` 且带 `closed_reason`；
+      B. `data/patches/rejected_*.json` —— 带 `dup_of` 或 `closed_reason` 的拒收件。
+
+    返回 `{schema, state, total, used, examples, sources}`。
+    `state` 如实回报 `absent/unreadable/ok`——**读不到 ≠ 没有死因**（铁律156）。
+    排序固定（file/method/issue_type/reason），保证确定性（352刀5 同纪律）。
+    """
+    _o = {"schema": NEGATIVE_SCHEMA, "state": "absent", "total": 0,
+          "used": 0, "examples": [], "sources": []}
+    _rows: list = []
+
+    # ---- A. 审计池 ----
+    try:
+        from nucleus.audit_problem_pool import load_pool as _lp
+        _pool = _lp(root)
+        _st = _pool.get("state")
+        _o["sources"].append("pool:%s" % _st)
+        for _e in (_pool.get("entries") or []):
+            if not isinstance(_e, dict):
+                continue
+            if str(_e.get("status") or "") not in NEGATIVE_POOL_STATUSES:
+                continue
+            _why = str(_e.get("closed_reason") or "").strip()
+            if not _why:
+                continue
+            _rows.append({
+                "origin": "pool",
+                "file": str(_e.get("file") or ""),
+                "method": str(_e.get("method") or ""),
+                "issue_type": str(_e.get("issue_type") or ""),
+                "reason": _why[:_NEG_REASON_MAX],
+            })
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::load_negative_examples pool")
+
+    # ---- B. 补丁台账拒收件 ----
+    try:
+        import glob as _glob
+        _base = str(root) if root else _project_root_guess()
+        _pat = os.path.join(_base, "data", "patches", "rejected_*.json")
+        _found = False
+        for _p in sorted(_glob.glob(_pat)):
+            _found = True
+            try:
+                with open(_p, "r", encoding="utf-8") as _f:
+                    _d = json.load(_f)
+            except Exception as _e:
+                silent_exc(_e, where="patch_generator::load_negative_examples 读 %s" % _p)
+                continue
+            _items = _d.get("items") if isinstance(_d, dict) else _d
+            if not isinstance(_items, list):
+                continue
+            for _r in _items:
+                if not isinstance(_r, dict):
+                    continue
+                _dup = _r.get("dup_of")
+                _why = str(_r.get("closed_reason") or _r.get("reason") or "").strip()
+                if not _dup and not _why:
+                    continue
+                _rows.append({
+                    "origin": "rejected",
+                    "file": str(_r.get("file") or ""),
+                    "method": str(_r.get("method") or ""),
+                    "issue_type": str(_r.get("issue_type") or ""),
+                    "reason": (("[重复] " + _why) if _dup else _why)[:_NEG_REASON_MAX],
+                })
+        _o["sources"].append("rejected:%s" % ("found" if _found else "absent"))
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::load_negative_examples rejected")
+
+    _o["total"] = len(_rows)
+    if not _rows:
+        _o["state"] = "absent"
+        return _o
+    # 确定性排序 + 同键去重（同一死因不重复占额度）
+    _seen: set = set()
+    _uniq = []
+    for _r in sorted(_rows, key=lambda r: (r["file"], r["method"],
+                                           r["issue_type"], r["reason"])):
+        _k = (_r["file"], _r["method"], _r["issue_type"], _r["reason"])
+        if _k in _seen:
+            continue
+        _seen.add(_k)
+        _uniq.append(_r)
+    _o["state"] = "ok"
+    _o["examples"] = _uniq[:max(0, int(n))]
+    _o["used"] = len(_o["examples"])
+    return _o
+
+
+def negative_sample_stream(root: str | None = None,
+                           n: int = NEGATIVE_TOP_N) -> dict:
+    """★360刀5：**共享**负样本流出口（生成器与自更新器同源，避免两处各学各的）。
+
+    当前 HEAD 已无 `ModelSelfUpdater.py`（T0 实测），故先落**出口**；
+    后续任一学习者接 `negative_sample_stream()` 即与本生成器同流。
+    """
+    return load_negative_examples(root=root, n=n)
+
+
+def render_negative_block(examples: list) -> str:
+    """把死因渲成 prompt 的一段（无样本返回空串，不留空标题）。"""
+    if not examples:
+        return ""
+    _lines = ["【负样本·已被判死的做法，不要重走】"
+              "（以下来自本仓库已结案/拒收台账的真实死因）："]
+    for _e in examples:
+        _where = "%s::%s" % (_e.get("file") or "?", _e.get("method") or "?")
+        _lines.append("- %s [%s] %s —— %s" % (
+            _where, _e.get("origin") or "?", _e.get("issue_type") or "?",
+            _e.get("reason") or ""))
+    _lines.append("若本次问题与上面任一条同类，**先说明为何这次不会重蹈覆辙**，"
+                  "否则直接判为不可修（返回空 original_code/modified_code）。")
+    return "\n".join(_lines) + "\n"
+
+
+def build_prompt(entry: dict, source: dict, examples: list | None = None,
+                 negatives: list | None = None) -> str:
     """构造生成提示词（**确定性**，同一条目同一次输入 ⇒ 同一 prompt）。
 
     确定性很重要：合格率要能按版本比较，prompt 里不能塞时间戳/随机数。
     ★352刀5：`examples`（回灌样本）也要满足确定性——取样规则固定（见
     `load_feedback_examples`），同一份 `effect_verify.json` 必得同一个 prompt。
+    ★360刀5：新增 `negatives`（死因负样本，见 `load_negative_examples`），
+    同样确定性取样；默认 None ⇒ 与 360 前完全一致（零回归）。
     """
     _desc = str(entry.get("desc") or "")[:_DESC_MAX_CHARS]
     return (
@@ -1068,12 +1212,13 @@ def build_prompt(entry: dict, source: dict, examples: list | None = None) -> str
         "把 original_code 与 modified_code 都输出为空字符串，reason 里写明原因。\n"
         "问题：issue_type=%s severity=%s klass=%s\n"
         "位置（②定位用）：file=%s method=%s line=%s\n"
-        "描述：%s\n%s"
+        "描述：%s\n%s%s"
         "源码片段（%s，行 %s-%s）：\n%s\n"
     ) % (
         entry.get("issue_type"), entry.get("severity"), entry.get("klass"),
         entry.get("file"), entry.get("method"), entry.get("line"),
         _desc, render_feedback_block(examples or []),
+        render_negative_block(negatives or []),
         source.get("why"), source.get("start_line"), source.get("end_line"),
         source.get("code") or "",
     )
@@ -1461,6 +1606,11 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
     _checks["method_contract"] = _mc
     if not _mc["ok"]:
         _reasons.append("method_contract:%s" % _mc["why"])
+    # ★360刀6：虚构模块筛查（PulseBus 一族）——应用即 ImportError，等同无声删功能
+    _fr = screen_forbidden_refs(draft)
+    _checks["forbidden_refs"] = _fr
+    if not _fr["ok"]:
+        _reasons.append("forbidden_refs:%s" % _fr["why"])
     _dm_limit = (METHOD_CONTRACT_MAX_LINES
                  if _mc.get("mode") == "method" else 40)
     _dm = _m349_diff_is_minimal(draft.get("original_code") or "",
@@ -1518,6 +1668,24 @@ METHOD_LEVEL_CONTRACT = True
 #: 整方法改写的改动行上限（比锚点级的 40 行宽——整方法本来就长）
 METHOD_CONTRACT_MAX_LINES = 120
 
+# ★第360批 刀6：契约三件套白名单 与 禁用模块黑名单
+# ---------------------------------------------------------------------------
+# 契约三件套（**合法**单例，补丁里出现不算问题）：
+#   ① `self._emit`（器官内脉冲发射） ② `EventBus.publish`（事件总线）
+#   ③ `get_insight_board().post`（洞见板）
+# 355 实测：14/15 条补丁把这三者"改写成" `PulseBus` —— 生产**不存在**该模块，
+# 应用即 ImportError ⇒ 等于无声删功能。故：三件套放行，PulseBus 一族一律拒。
+CONTRACT_TRIPLE_WHITELIST = frozenset({
+    "_emit", "publish", "post", "EventBus", "get_insight_board",
+})
+#: 生产不存在的模块名（补丁引用即拒；新增请在此登记并注明来源）
+FORBIDDEN_MODULE_REFS = frozenset({
+    "PulseBus",        # 355 实测 14/15 条补丁虚构；生产无此模块
+    "PulseBusRouter",  # 同源衍生名，一并拦
+})
+#: 只在**这些位置**出现才算"引用"（避免把字符串/注释里的同名当引用）
+_FORBIDDEN_CHECK_MODE = "ast"
+
 #: reason 证据链三段（触发行 / 现象 / 判定依据）——缺一段即"薄理由"
 REASON_CHAIN_KEYS = ("触发行", "现象", "依据")
 
@@ -1558,6 +1726,66 @@ def check_reason_chain(draft: dict) -> dict:
     if _short:
         _why.append("理由过短(%d<%d)" % (len(_r.strip()), REASON_MIN_CHARS))
     return {"ok": False, "missing": _miss, "why": "；".join(_why)}
+
+
+def screen_forbidden_refs(draft: dict) -> dict:
+    """★第360批 刀6：拒绝引用**生产不存在模块**的补丁（契约三件套白名单）。
+
+    判定（AST，不看注释/字符串，避免把说明文字当引用）：
+      1. 收集 `modified_code` 里所有被引用的**顶层名**（`Name.id` /
+         `Attribute` 的最左名 / `import` 的目标）；
+      2. 命中 `FORBIDDEN_MODULE_REFS` ⇒ `ok=False`；
+      3. 命中 `CONTRACT_TRIPLE_WHITELIST` ⇒ 放行（合法单例，不算虚构）。
+
+    返回 `{ok, why, refs, forbidden, allowed}`。
+    解析不了（语法坏）⇒ **不拒**（交给契约门的 syntax_error 判），避免一稿两判
+    互相掩盖（铁律167：先分"用错"还是"数错"）。
+    """
+    _o = {"ok": True, "why": "", "refs": [], "forbidden": [], "allowed": []}
+    _code = str(draft.get("modified_code") or "")
+    if not _code.strip():
+        return _o
+    _tree = None
+    import ast as _ast
+    for _src in (_code, textwrap.dedent(_code)):
+        try:
+            _tree = _ast.parse(_src)
+            break
+        except SyntaxError:
+            continue
+    if _tree is None:
+        _o["why"] = "unparsable"
+        return _o            # 语法坏 ⇒ 不在此判，交 method_contract
+    _names: set = set()
+
+    def _leftmost(node):
+        while isinstance(node, _ast.Attribute):
+            node = node.value
+        return node.id if isinstance(node, _ast.Name) else None
+
+    for _n in _ast.walk(_tree):
+        if isinstance(_n, _ast.Name):
+            _names.add(_n.id)
+        elif isinstance(_n, _ast.Attribute):
+            _nm = _leftmost(_n)
+            if _nm:
+                _names.add(_nm)
+        elif isinstance(_n, _ast.Import):
+            for _a in _n.names:
+                _names.add(str(_a.name or "").split(".")[0])
+        elif isinstance(_n, _ast.ImportFrom):
+            if _n.module:
+                _names.add(str(_n.module).split(".")[0])
+    _o["refs"] = sorted(_names)[:40]
+    _forb = sorted(_n for _n in _names if _n in FORBIDDEN_MODULE_REFS)
+    _o["forbidden"] = _forb
+    _o["allowed"] = sorted(_n for _n in _names
+                           if _n in CONTRACT_TRIPLE_WHITELIST)[:20]
+    if _forb:
+        _o["ok"] = False
+        _o["why"] = "引用生产不存在的模块: %s（契约三件套应为 self._emit / " \
+                    "EventBus.publish / get_insight_board().post）" % ",".join(_forb)
+    return _o
 
 
 def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
@@ -1817,7 +2045,20 @@ def generate_patch_draft(entry: dict,
             _module_logger.info(
                 "[352回灌] 无可用样本 key=%s（verdict %d 条，真实 0 条）",
                 _out["entry_key"], _fb["total"])
-        _prompt = build_prompt(entry, _src, _fb.get("examples"))
+        # ★360刀5：负样本（死因）与正样本同档注入；读不到如实留痕，不假装没事
+        _neg = load_negative_examples(_root)
+        _out["negative"] = {_k: _neg.get(_k) for _k in ("schema", "state",
+                                                        "total", "used")}
+        _out["negative_examples"] = _neg.get("examples") or []
+        if _neg.get("used"):
+            _module_logger.info(
+                "[360回灌] 注入 %d 条死因负样本 key=%s（来源=%s）",
+                _neg["used"], _out["entry_key"], ",".join(_neg.get("sources") or []))
+        elif _neg.get("state") == "absent":
+            _module_logger.info("[360回灌] 无死因负样本 key=%s（台账为空，非故障）",
+                                _out["entry_key"])
+        _prompt = build_prompt(entry, _src, _fb.get("examples"),
+                               _neg.get("examples"))
         _out["prompt_chars"] = len(_prompt)
         _tr = _tp(_prompt, model=_model, base_url=_base, timeout=_to)
         _out["elapsed_sec"] = round(time.perf_counter() - _t0, 3)
