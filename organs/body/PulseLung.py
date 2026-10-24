@@ -1106,7 +1106,13 @@ class PulseLung(BasePulseOrgan):
                     silent_exc(_m360be, where="organs.body.PulseLung::_call_channel 埋点 begin")
                 with urllib.request.urlopen(_req, timeout=_timeout) as _resp:
                     _raw = _resp.read().decode("utf-8", "ignore")
-                _data = _json.loads(_raw)
+                try:
+                    _data = _json.loads(_raw)
+                except Exception as _je363:
+                    # ★363刀D1：解析失败也是「免费档没给出可用结果」⇒ 记信号；
+                    #   **原样 raise**，控制流与异常类型一字不改。
+                    self._m363_note_quality_signal("parse_failed", str(_je363)[:80])
+                    raise
             except urllib.error.HTTPError as _he:
                 if _m360_rid:
                     try:
@@ -1754,6 +1760,57 @@ class PulseLung(BasePulseOrgan):
             silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_min")
             return 2
 
+    #: ★363刀D1：高级任务「免费档产出不达标」的九类信号（质量门触发链口径）
+    M363_QUALITY_SIGNALS = (
+        "empty_reply",             # ① 空返回
+        "truncated",               # ② 被截断（finish_reason=length）
+        "integrity_low",           # ③ 方法体完整性 < 0.85
+        "def_name_mismatch",       # ④ 生成产物 def 名 ≠ method_before
+        "guard_template_missing",  # ⑤ periodic 守卫模板缺失
+        "parse_failed",            # ⑥ 响应解析失败
+        "retry_exceeded",          # ⑦ 重试次数 > 2
+        "low_confidence",          # ⑧ 低置信
+        "precheck_failed",         # ⑨ 产物预检不通过
+    )
+
+    def _m363_note_quality_signal(self, kind: str, detail: str = "") -> None:
+        """★363刀D1：登记一次质量门信号（计数 + 末次明细 + 日志）。
+
+        为什么单独一口：九类信号散在不同层（渠道调用在 PulseLung、产物校验在生成器），
+        各写各的标记 ⇒ 「为什么放行付费」复盘时要人肉拼。统一登记后一次读全。
+        未知 kind 也会计数（记 `unknown`），防止新信号被静默丢弃。
+        """
+        try:
+            _k = str(kind or "")
+            if _k not in self.M363_QUALITY_SIGNALS:
+                _k = "unknown:%s" % _k[:24]
+            _c = getattr(self, "_m363_quality_counts", None) or {}
+            self._m363_quality_counts = _c
+            _c[_k] = _c.get(_k, 0) + 1
+            _l = getattr(self, "_m363_quality_last", None) or {}
+            self._m363_quality_last = _l
+            _l[_k] = {"detail": str(detail)[:200], "ts": time.time()}
+            self._log(LogLevel.INFO,
+                      f"[363D1] 质量门信号 {_k}"
+                      f"（累计 {_c[_k]}）{('：' + str(detail)[:80]) if detail else ''}")
+        except Exception as _e363d:
+            self._log(LogLevel.DEBUG,
+                      f"[363D1] 信号登记失败: {type(_e363d).__name__}: {_e363d}")
+
+    def m363_quality_signals(self) -> dict:
+        """★363刀D1：读本实例的质量门信号计数与末次明细（只读拷贝）。"""
+        return {"counts": dict(getattr(self, "_m363_quality_counts", None) or {}),
+                "last": dict(getattr(self, "_m363_quality_last", None) or {})}
+
+    def _m363_quality_hit(self) -> bool:
+        """★363刀D1：任一质量门信号命中 ⇒ 免费档产出不达标 ⇒ **放行付费**。
+
+        与既有三条放行条件（免费失败≥N / 截断 / 预检失败）同向：它们本质上都是
+        「免费档这次没给出可用结果」，本方法把剩下的信号补齐到同一条链上。
+        """
+        _c = getattr(self, "_m363_quality_counts", None) or {}
+        return any(int(v or 0) > 0 for v in _c.values())
+
     def _m360_adv_paid_blocked(self, channel, free_done: int) -> bool:
         """高级任务下该付费渠道是否**暂不放行**（质量门）。
 
@@ -1773,6 +1830,10 @@ class PulseLung(BasePulseOrgan):
         if getattr(self, "_m360_reply_truncated", False):
             return False
         if getattr(self, "_m360_patch_precheck_failed", False):
+            return False
+        # ★363刀D1：其余质量门信号（空返回 / 解析失败 / 重试超限 / 完整性低 /
+        #   def 名漂移 / 守卫缺失 / 低置信）任一命中 ⇒ 同样放行付费兜底。
+        if self._m363_quality_hit():
             return False
         return True
 
@@ -2093,6 +2154,9 @@ class PulseLung(BasePulseOrgan):
         _m360_adv = self._is_advanced_task(model)
         _m360_free_done = 0
         self._m360_reply_truncated = False
+        # ★363刀D1：质量门信号计数（本轮调用内；与 _m360_reply_truncated 同生命周期）
+        self._m363_quality_counts = {}
+        self._m363_quality_last = {}
 
         for _round in range(2):
             if _round == 1:
@@ -2209,6 +2273,13 @@ class PulseLung(BasePulseOrgan):
                 #   计一次免费失败并继续（从而放行付费 flash 取完整结果）。
                 _m360_trunc = bool(_m360_adv
                                    and getattr(self, "_m360_reply_truncated", False))
+                if _m360_adv:
+                    if _m360_trunc:
+                        self._m363_note_quality_signal("truncated", _name)
+                    elif not _reply:
+                        self._m363_note_quality_signal("empty_reply", _name)
+                    elif getattr(self, "_m360_patch_precheck_failed", False):
+                        self._m363_note_quality_signal("precheck_failed", _name)
                 if _reply and not _m360_trunc:
                     self._update_channel_health(_name, True, _latency)
                     self._record_model_result(_ch.get("model", _name), True)
@@ -2223,6 +2294,10 @@ class PulseLung(BasePulseOrgan):
                               f"高级任务回退下一档")
                 if not self._m360_is_paid_channel(_ch):
                     _m360_free_done += 1
+                    # ★363刀D1：免费档已试 >2 次仍未成 ⇒ 记「重试超限」，放行付费
+                    if _m360_adv and _m360_free_done > 2:
+                        self._m363_note_quality_signal(
+                            "retry_exceeded", "free_done=%d" % _m360_free_done)
                 self._update_channel_health(_name, False, _latency)
                 self._record_model_result(_ch.get("model", _name), False)
                 self._adjust_channel_concurrency(_name, False, latency=_latency)
