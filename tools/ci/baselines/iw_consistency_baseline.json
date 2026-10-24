@@ -10,8 +10,8 @@
  "files": {
   "organs/brain/PulseInnerWorld.py": {
    "metrics": {
-    "try": 213,
-    "except": 214,
+    "try": 215,
+    "except": 216,
     "except_pass": 0,
     "if": 1808,
     "for": 289,
@@ -79,8 +79,8 @@
   },
   "organs/brain/pulse_inner_world_knowledge.py": {
    "metrics": {
-    "try": 24,
-    "except": 24,
+    "try": 26,
+    "except": 26,
     "except_pass": 0,
     "if": 318,
     "for": 57,
@@ -121,6 +121,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "345批重锚（CI基线件单笔 [ci-gate-change]）：本批在 IW 侧新增 6 个 try/except 对（刀3 `_emit` 覆写 1、刀4 时间注入 2〔`_build_memory_context`＋`_generate_branch_with_model`〕、刀5 成长记忆 2〔`_convert_vision_to_learning`＋creative `_generate_self_vision`〕、刀7 重启上下文 2〔同上两函数〕），故 PulseInnerWorld try 207→213 / except 208→214、creative try/except 6→7，均一对一带 except，算术自洽；if 1803→1808 为上述新增判空分支（+5）；methods 346→347、return 788→789、emit_calls 103→104 全部来自新增 `_emit` 单点收口方法本身（一个方法、一次 `return super()._emit(...)`），非新增发射点；priority_hist / event_hist 零漂移，语义面未变。另：pulse_inner_world_knowledge.py return 125→124 是 335 批存量挂账（HEAD 上 `--target HEAD` 即复现该项 FAIL），本次随重锚按处方①一并吸收，已在本批交付报告中显式申报，不计入本批改动。同时清空上一轮遗留的 expected_delta={\"if\": 1} 陈旧活口（收紧门禁，非放宽）。",
+ "delta_reason": "345批重锚（CI基线件单笔 [ci-gate-change]）：本批在 IW 侧新增 6 个 try/except 对（刀3 `_emit` 覆写 1、刀4 时间注入 2〔`_build_memory_context`＋`_generate_branch_with_model`〕、刀5 成长记忆 2〔`_convert_vision_to_learning`＋creative `_generate_self_vision`〕、刀7 重启上下文 2〔同上两函数〕），故 PulseInnerWorld try 207→213 / except 208→214、creative try/except 6→7，均一对一带 except，算术自洽；if 1803→1808 为上述新增判空分支（+5）；methods 346→347、return 788→789、emit_calls 103→104 全部来自新增 `_emit` 单点收口方法本身（一个方法、一次 `return super()._emit(...)`），非新增发射点；priority_hist / event_hist 零漂移，语义面未变。另：pulse_inner_world_knowledge.py return 125→124 是 335 批存量挂账（HEAD 上 `--target HEAD` 即复现该项 FAIL），本次随重锚按处方①一并吸收，已在本批交付报告中显式申报，不计入本批改动。同时清空上一轮遗留的 expected_delta={\"if\": 1} 陈旧活口（收紧门禁，非放宽）。 ｜363刀B2 记账增量（路灯 [ci-gate-change] 单笔）：为「直连出口 safe_http_json 的 token 记账」在 IW 侧新增 4 个 try/except 对（PulseInnerWorld 分支生成 1 对、pulse_inner_world_knowledge 知识精炼 1 对），故 PulseInnerWorld try 213→215/except 214→216、knowledge try 24→26/except 24→26。不新增付费出口、不改控制流。",
  "expected_delta": {}
 }
