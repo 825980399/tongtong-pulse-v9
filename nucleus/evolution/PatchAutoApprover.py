@@ -319,9 +319,17 @@ class PatchAutoApprover:
                     json.dump(_arch, f, ensure_ascii=False, indent=2)
             except Exception as e:
                 _logger.warning(f"归档已解决补丁失败: {type(e).__name__}: {e}")
+            # ★356刀11（洞鉴DJ4-03）：原先是**裸 open('w') 截断写**——既非原子，
+            #   又不与其他两个写者共享锁（半写/丢写都能发生）。改走唯一写口。
             try:
-                with open(self._pending_path, "w", encoding="utf-8") as f:
-                    json.dump(_kept, f, ensure_ascii=False, indent=2)
+                from nucleus.evolution.pending_write import write_pending
+                _w = write_pending(_kept, path=self._pending_path,
+                                   writer="PatchAutoApprover")
+                if not _w.get("ok"):
+                    _logger.warning(
+                        "[356单写者] 重写 pending 未通过校验: %s", _w.get("why"))
+                    return {"pruned": 0, "remaining": len(_patches),
+                            "error": str(_w.get("why") or "write_pending_failed")}
             except Exception as e:
                 _logger.warning(f"重写 pending 失败: {type(e).__name__}: {e}")
                 return {"pruned": 0, "remaining": len(_patches), "error": str(e)}

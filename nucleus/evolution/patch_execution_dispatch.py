@@ -2884,7 +2884,16 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                 _payload = {_shape.split(":", 1)[1]: _rows}
             else:
                 _payload = _rows
-            _m335_atomic_write_json(_path, _payload)
+            # ★356刀11（洞鉴DJ4-03）：TTL 回写也走唯一写口（与 PatchManager /
+            #   AutoApprover 共享同一进程内锁），否则三者读-改-写仍可交错。
+            try:
+                from nucleus.evolution.pending_write import write_pending
+                _pw356 = write_pending(_payload, path=_path, writer="dispatch_ttl")
+                if not _pw356.get("ok"):
+                    raise OSError("write_pending: %s" % (_pw356.get("why") or "failed"))
+            except ImportError:
+                # 极端环境下取不到写口模块 ⇒ 保留原原子写（宁可无锁，不可不写）
+                _m335_atomic_write_json(_path, _payload)
         except OSError as _e:
             silent_exc(_e, where="PatchExecutionDispatch.dispatch_o3_approved write",
                        level="warning")

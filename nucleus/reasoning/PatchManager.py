@@ -5057,6 +5057,17 @@ class PatchManager:
         # ★第280批刀4：pending 队列落盘前做状态机收敛（applied即出队 + 删顶层runtime_verified）。
         if path == self._pending_file:
             data = self._m280_converge_pending(data)
+            # ★356刀11（洞鉴DJ4-03）：pending **必须走唯一写口**。
+            #   本方法背后是 9 个写点（入队/审批/收敛/归档…），加上 AutoApprover
+            #   直写与 dispatch TTL 回写，共 3 写者 11 写点，原先没有共享锁：
+            #   A 读[1,2] → B 读[1,2] → A 写[1,2,3] → B 写[1,2,4] ⇒ 条目3 无声丢失。
+            try:
+                from nucleus.evolution.pending_write import write_pending
+                _w = write_pending(data, path=path, writer="PatchManager")
+                return bool(_w.get("ok"))
+            except Exception as _pwe:
+                silent_exc(_pwe, "PatchManager._save_patch_list 单写口", level="warning")
+                return self._save_json(path, data)
         return self._save_json(path, data)
 
     def _load_json(self, path, default):

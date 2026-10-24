@@ -2324,7 +2324,17 @@ REASONING_ROUTE_LOCAL_FALLBACK = False
 #   False：影子停，回到纯 select_strategy 基线（不影响 REASONING_ROUTE_LOCAL_FALLBACK 实弹判定）。
 ENABLE_LOCAL_FALLBACK_SHADOW = True
 
-ENABLE_EVENT_BUS = False
+# ★356刀16（洞鉴DJ4-05延伸）：**小林 2026-10-24 拍板"先接线"** ⇒ 总开关打开。
+#   原状：EventBus 生产态 1 发布（patch_lifecycle.py:343）+ 1 旁路订阅（EventTap）
+#   + orphan_receivers 探针，而开关 False ⇒ 两端皆冷旁路、发布即丢弃。
+#   接线后：发布真正入队，`main.py` 停机序列**原本就有** drain/stop
+#   （`停止序列清点[EventBus]` 那条分支），不需要新增停机面。
+#   ★回滚方式：置回 False 即回到冷旁路（零代码改动），重启生效。
+#   ★口径说明（据实）：洞鉴写的"6 订阅"里有 4 个是 **ReportBus** 的消费者
+#   （nucleus/reporting/consumers.py:298-308 订阅在 register_builtin_consumers
+#   传进来的 bus 上），不属于 EventBus；EventBus 侧真实订阅者是 EventTap 与
+#   orphan_receivers。刀17 首拍据此核对实际流量，不按"6"这个数硬凑。
+ENABLE_EVENT_BUS = True
 EVENT_BUS_CONFIG = {
     # 事件溯源历史上限（环形，超出丢弃最旧）。任务书要求 ≤10000。
     "max_history": 10000,

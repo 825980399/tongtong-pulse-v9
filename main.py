@@ -719,6 +719,29 @@ class PulseFramework:
                 _m50_types = _m50_reg(_m50_bus)
                 self._log(LogLevel.INFO,
                           f"自认知报告总线已启用，已注册消费者: {_m50_types}")
+                # ★356刀16：EventBus 接线对账（只读观测，不改总线状态）。
+                #   为什么要打这一行：开关从 False 翻到 True 之后，"到底有没有
+                #   真实订阅者、队列有没有积压"必须首拍可见——否则接线成功与否
+                #   只能靠猜（洞鉴待核#9）。异常只 warning，绝不影响启动。
+                try:
+                    import config as _m356_eb_cfg
+                    if bool(getattr(_m356_eb_cfg, "ENABLE_EVENT_BUS", False)):
+                        from nucleus.events.EventBus import get_event_bus as _m356_gb
+                        _m356_eb = _m356_gb()
+                        _m356_st = _m356_eb.get_stats()
+                        self._log(LogLevel.INFO,
+                                  "[356刀16] EventBus 已接线: subscriptions=%s "
+                                  "queue=%s published=%s delivered=%s dropped=%s async=%s"
+                                  % (_m356_st.get("subscriptions"),
+                                     _m356_st.get("queue_size"),
+                                     _m356_st.get("published"),
+                                     _m356_st.get("delivered"),
+                                     _m356_st.get("dropped"),
+                                     _m356_st.get("async_enabled")))
+                except Exception as _m356_ebe:
+                    self._log(LogLevel.WARNING,
+                              "[356刀16] EventBus 对账失败（已忽略）: %s"
+                              % type(_m356_ebe).__name__)
         except Exception as _m50_re:
             try:
                 self._log(LogLevel.WARNING,

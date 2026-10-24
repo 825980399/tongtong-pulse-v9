@@ -629,6 +629,9 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         # 先把当前内容复制为 .1 备份，再就地截断当前文件为空。
         # 调用点已持 self.lock（emit 内），无需额外加锁防并发写入。
         _base = self.baseFilename
+        # ★356刀12②：先问滑窗预算——超限直接放弃本轮（不再复制），避免轮转风暴
+        if not _m356_rollover_budget_ok():
+            return
         _max = 1
         try:
             _max = int(getattr(config, "LOG_BACKUP_COUNT", 5))
@@ -662,15 +665,36 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
                 pass
         with open(_base, "rb") as _fin, open(_backup, "wb") as _fout:
             _fout.write(_fin.read())
-        # 3) 截断当前文件（self.stream 已持有句柄，就地清空，不重命名）
-        # ★253批修复：self.stream可能为None，先检查再seek/truncate/flush
+        # 3) 截断当前文件（就地清空，不重命名）
+        # ★356刀12①：**stream=None 时必须另开句柄截断**。
+        #   253 批加的 `if self.stream is not None` 保护，在停机/close 后把轮转
+        #   变成"只复制不截断"：`.1` 是完整副本、主文件却一点没变小，下一次 size
+        #   判定立刻再触发 ⇒ 风暴。这里 stream 不可用就退回独立读写句柄。
+        _m356_truncated = False
         if self.stream is not None:
             try:
                 self.stream.seek(0)
                 self.stream.truncate(0)
                 self.stream.flush()
-            except Exception:
-                pass
+                _m356_truncated = True
+            except Exception as _te356a:
+                # ★356刀12③：截断失败**必须告警**（原来这里是 pass，静默）
+                _log_rollover_cfg_error(_te356a, "truncate_stream")
+        if not _m356_truncated:
+            try:
+                with open(_base, "r+b") as _tr356:
+                    _tr356.seek(0)
+                    _tr356.truncate(0)
+                    _tr356.flush()
+                    os.fsync(_tr356.fileno())
+                _m356_truncated = True
+            except OSError as _te356b:
+                _log_rollover_cfg_error(_te356b, "truncate_fallback")
+        if not _m356_truncated:
+            # 复制成功但截断失败 = "轮转成功但主文件没换新"，必须显式喊出来，
+            # 否则调用方照写 rollover marker，读的人以为轮转干净了。
+            print("[Logger] 轮转截断失败：主文件未被清空（已复制 %s.1，但 %s 仍为原大小）"
+                  % (_base, os.path.basename(_base)))
 
 def _log_rollover_cfg_error(exc: BaseException, stage: str = "") -> None:
     """轮转**失败**的诊断（避免静默）。
@@ -682,6 +706,42 @@ def _log_rollover_cfg_error(exc: BaseException, stage: str = "") -> None:
     """
     _stage = str(stage or "unknown")
     print(f"[Logger] 轮转失败[{_stage}] {type(exc).__name__}: {exc}")
+
+
+# ★356刀12②：轮转风暴防护（星轨实拍：停机收尾窗 17 秒内 20+ 条 rollover 事件）
+_M356_ROLLOVER_WINDOW_SEC = 60.0
+_M356_ROLLOVER_MAX_PER_WINDOW = 3
+_M356_ROLLOVER_STAMPS: list = []
+_M356_ROLLOVER_STORM_WARNED = False
+_m356_rollover_lock = threading.Lock()
+
+
+def _m356_rollover_budget_ok() -> bool:
+    """★356刀12②：同进程滑窗限额——超限即冷却降级（只告警一次，不再复制）。
+
+    为什么要有它：截断失败时"复制成功 + 主文件没变小"会让下一次 size 判定
+    **立刻**再次触发轮转，而每次轮转都写一条 rollover marker ⇒ 17 秒 20+ 条，
+    既刷爆 `log_integrity_events.log`，又把磁盘反复写满副本。
+    """
+    global _M356_ROLLOVER_STORM_WARNED
+    _now = time.time()
+    with _m356_rollover_lock:
+        _stamps = [t for t in _M356_ROLLOVER_STAMPS
+                   if _now - t < _M356_ROLLOVER_WINDOW_SEC]
+        if not _stamps:
+            _M356_ROLLOVER_STORM_WARNED = False      # 窗口清空 ⇒ 告警资格复位
+        if len(_stamps) >= _M356_ROLLOVER_MAX_PER_WINDOW:
+            _M356_ROLLOVER_STAMPS[:] = _stamps
+            if not _M356_ROLLOVER_STORM_WARNED:
+                _M356_ROLLOVER_STORM_WARNED = True
+                print("[Logger] 轮转风暴冷却：%d 秒内已轮转 %d 次（上限 %d），"
+                      "本窗口内不再复制——大概率是截断失败导致主文件没变小"
+                      % (_M356_ROLLOVER_WINDOW_SEC, len(_stamps),
+                         _M356_ROLLOVER_MAX_PER_WINDOW))
+            return False
+        _stamps.append(_now)
+        _M356_ROLLOVER_STAMPS[:] = _stamps
+        return True
 
 
 # 轮转降级告警冷却（避免刷屏）：默认 5 分钟内最多报一次
@@ -751,12 +811,35 @@ def install_tree_outside_logger_bridges() -> None:
         if not bool(getattr(config, "ENABLE_LOGGER_ROOT_CAUSE", True)):
             return
         _log_file = os.path.join(_log_dir, getattr(config, "LOG_FILE", "pulse.log"))
-        _fh = logging.FileHandler(_log_file, encoding="utf-8")
-        _fh.setLevel(_LEVEL_MAP.get(getattr(config, "LOG_LEVEL_FILE", LogLevel.DEBUG), logging.DEBUG))
-        _fh.setFormatter(PulseFormatter(
-            fmt="%(asctime)s [%(organ_tag)s] %(levelname)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"))
-        _fh.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
+        # ★356刀12③：**优先复用主 SafeRotatingFileHandler 实例**。
+        #   原先这里 new 一个**普通 FileHandler** 直写同一个 pulse.log，与 SafeRotating
+        #   各持一个文件偏移：SafeRotating 截断后另一方的偏移还在旧位置，下一次 flush
+        #   会在旧偏移处写出一大段 NUL 空洞、把文件重新撑大 ⇒ 主文件永远轮不干净。
+        _fh = None
+        try:
+            _m356_abs = os.path.abspath(_log_file)
+            for _h in logging.getLogger("pulse").handlers:
+                if (isinstance(_h, SafeRotatingFileHandler)
+                        and os.path.abspath(getattr(_h, "baseFilename", "")) == _m356_abs):
+                    _fh = _h
+                    break
+        except Exception as _he356:
+            silent_exc(_he356, "logger.install_tree_outside_logger_bridges 复用主handler")
+        _m356_created = False
+        if _fh is None:
+            _fh = SafeRotatingFileHandler(
+                _log_file,
+                maxBytes=int(getattr(config, "LOG_MAX_BYTES", 10 * 1024 * 1024)),
+                backupCount=int(getattr(config, "LOG_BACKUP_COUNT", 5)),
+                encoding="utf-8")
+            _m356_created = True
+        if _m356_created:
+            # 只在自建时设级别/格式；复用主 handler 时**不得**改它的格式（那是主链的）
+            _fh.setLevel(_LEVEL_MAP.get(getattr(config, "LOG_LEVEL_FILE", LogLevel.DEBUG), logging.DEBUG))
+            _fh.setFormatter(PulseFormatter(
+                fmt="%(asctime)s [%(organ_tag)s] %(levelname)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"))
+            _fh.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
         _attached = 0
         for _name in _TREE_OUTSIDE_LOGGER_NAMES:
             _lg = logging.getLogger(_name)
