@@ -369,6 +369,23 @@ class PulseVisualCortex(BasePulseOrgan):
                         os.fsync(f.fileno())
                     os.replace(_tmp, log_path)
                     _tmp = None
+                except OSError as _re363:
+                    # ★363刀E5：rename 被拒（WinError 5＝目标被占用）⇒ 计数 + 回退写。
+                    #   不回退的话，本批条目会随 finally 清理一起消失，且日志只留一句
+                    #   「异常已忽略」，既没量级也没指向。
+                    self._m363_note_rename_fail(log_path, _re363)
+                    try:
+                        with open(log_path, 'w', encoding='utf-8') as _fb:
+                            _json.dump(log_data, _fb, ensure_ascii=False)
+                            _fb.flush()
+                            os.fsync(_fb.fileno())
+                        self._log(LogLevel.WARNING,
+                                  "[363E5] 视觉流 rename 被拒，已回退为整体重写"
+                                  f"（{type(_re363).__name__}）")
+                    except Exception as _fb363:
+                        self._log(LogLevel.ERROR,
+                                  "[363E5] 视觉流回退写也失败（本批条目丢失）: "
+                                  f"{type(_fb363).__name__}: {_fb363}")
                 finally:
                     if _tmp is not None and os.path.exists(_tmp):
                         try:
@@ -378,6 +395,44 @@ class PulseVisualCortex(BasePulseOrgan):
                                       f"[356刀5] 临时文件清理失败: {type(_ue).__name__}: {_ue}")
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+    def _m363_note_rename_fail(self, log_path: str, err: Exception) -> None:
+        """★363刀E5：记一次 rename 失败（计数 + 末次快照 + **占用探测**）。
+
+        占用探测只做「能否以 r+ 打开目标」这一步——**不去查是哪个进程占着**
+        （进程级排查属框架外/宿主侧，本刀不越界），只把「目标此刻被占」这个
+        事实留下来，供小林/星轨后续判断是不是外部程序（编辑器/备份/杀软）在抓文件。
+        """
+        try:
+            self._m363_rename_fail = int(getattr(self, "_m363_rename_fail", 0)) + 1
+            _occupied = None
+            try:
+                with open(log_path, "r+", encoding="utf-8"):
+                    _occupied = False
+            except Exception as _oe363:
+                _occupied = True
+                # ★不得纯 assign：探测本身失败（路径不存在/权限）要说出来，
+                #   否则「被占用」与「路根本没有」会被读成同一件事。
+                self._log(LogLevel.DEBUG,
+                          "[363E5] 占用探测无法打开目标: "
+                          f"{type(_oe363).__name__}: {_oe363}")
+            self._m363_rename_last = {
+                "ts": time.time(), "type": type(err).__name__,
+                "msg": str(err)[:200], "path": str(log_path),
+                "target_locked": _occupied,
+            }
+            self._log(LogLevel.WARNING,
+                      f"[363E5] 视觉流 rename 失败（第 {self._m363_rename_fail} 次）"
+                      f"{type(err).__name__}: {err}"
+                      f"｜目标占用={'是（框架外占用方待查）' if _occupied else '否'}")
+        except Exception as _ne363:
+            self._log(LogLevel.DEBUG,
+                      f"[363E5] rename 记账失败: {type(_ne363).__name__}: {_ne363}")
+
+    def m363_visual_write_stats(self) -> dict:
+        """★363刀E5：读视觉流写路径的失败计数与末次快照（只读拷贝）。"""
+        return {"rename_fail": int(getattr(self, "_m363_rename_fail", 0)),
+                "last": dict(getattr(self, "_m363_rename_last", None) or {})}
+
     # ========== 依赖注入 ==========
 
     def set_node_pool(self, node_pool):
