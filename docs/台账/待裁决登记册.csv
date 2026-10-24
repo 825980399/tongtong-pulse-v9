@@ -354,3 +354,6 @@ DJ4-02,洞鉴,357(第四季),"L0+L1脉冲仅占2.3%(L0=5/L1=231),L3占87.6%,核�
 DJ4-03,洞鉴,357(第四季),"pending_patches.json 3写者/11写点无仲裁(PatchManager 9点+PatchAutoApprover直写+dispatch TTL回写),回写接线先仲裁否则加剧D4",P0,已裁决待排期,356,356,小林20261024拍板全采纳:已排356阶段A尾刀11(统一写口+锁+隔离压测)
 DJ4-04,洞鉴,357(第四季),"孤儿/死信判据冲突:pulse_tracer自报孤儿=0 vs 运行态716条死广播,需统一判据供后续脉冲审计",P1,已裁决待排期,358,356,小林20261024拍板全采纳:判据统一映射358批(洞鉴刀4)
 DJ4-05,洞鉴,357(第四季),"_build_call_chain纯AST同文件递归适配度30/100,脉冲/跨文件双盲,226处在役发布链不可见,需增脉冲语义通道+跨文件符号表",P1,已裁决待排期,358,356,小林20261024拍板全采纳:双通道改造映射358批(洞鉴刀3)
+T-EventBus监控三件-1,烛微,第358批前置,EventBus 接线后监控缺三件：①零匹配率（publish 匹配订阅数未累计，零匹配=发布面没喂到订阅面的哨兵）②订阅命中 per-sub（各订阅方收事件数现无）③队列水位告警阈值（queue_size 无上限哨兵）；另健康检查无 EventBus 条目（queue_size 超阈值→warning）；现有 get_stats（:504）只含 async_enabled/history_size/queue_size,P2,待裁决,358,,
+T-EventBus遥测扩面-1,烛微,第358批前置,1 发布（patch_handoff）喂不饱订阅面：接线后 EventBus 流量=低频 patch_handoff，EventTap『**』只收到它、orphan 哨兵恒空；判定=扩发布面不是停发，只扩遥测类（业务事件走 InfoField，177 定位红线）：①set_status 流转事件（356刀1 接线后）②consumer 认领事件（346 已有留痕）③蒸馏/吸收事件（357 C 链遥测化）④闭环回写事件（356刀4）——与 356/357 同源一批,P2,待裁决,358,,
+T-订阅口径订正-1,烛微,第358批前置,洞鉴/任务书『EventBus 6 订阅』口径混桶：EventBus 真实订阅=2（EventTap『**』＋orphan_receivers 哨兵）；consumers×4（health/pollution/self_cognition/evolution）注册在 ReportBus（main.py:710 register_builtin_consumers(_m50_bus)），是独立报告总线不是 EventBus；两条总线不能合并计数；订正为 EventBus 2＋ReportBus 4,P3,待裁决,358,,
