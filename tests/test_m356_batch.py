@@ -308,3 +308,138 @@ def test_356_batch_accounts():
     _ap = json.load(io.open(os.path.join(_ROOT, "data", "patches",
                                          "applied_355.json"), encoding="utf-8"))
     assert _ap["count"] == 7
+
+
+# ==========================================================================
+# 刀11 · pending 单写者仲裁（洞鉴 DJ4-03）
+# ==========================================================================
+def test_356_d11_three_writers_share_one_gate():
+    """三个写者都必须经唯一写口（PatchManager / AutoApprover / dispatch）。"""
+    for _rel in ("nucleus/reasoning/PatchManager.py",
+                 "nucleus/evolution/PatchAutoApprover.py",
+                 "nucleus/evolution/patch_execution_dispatch.py"):
+        assert "pending_write import write_pending" in _src(_rel), _rel
+    assert "PENDING_WRITE_LOCK" in _src("nucleus/evolution/pending_write.py")
+
+
+def test_356_d11_autapprover_no_bare_truncating_write():
+    """AutoApprover 原先是裸 open(...,'w') 截断写 —— 现在不得再有。"""
+    _t = _src("nucleus/evolution/PatchAutoApprover.py")
+    assert 'open(self._pending_path, "w"' not in _t
+
+
+def test_356_d11_atomic_rmw_loses_nothing(tmp_path):
+    """RMW 全在锁内 ⇒ 并发追加零丢失（小规模复现压测结论）。"""
+    import threading
+    from nucleus.evolution.pending_write import update_pending
+    _p = str(tmp_path / "pending_patches.json")
+    io.open(_p, "w", encoding="utf-8").write("[]")
+
+    def _w(tid):
+        for i in range(10):
+            update_pending(lambda cur, t=tid, i=i: cur + [{"id": "t%d-%d" % (t, i)}],
+                           path=_p, writer="ut356")
+
+    _ts = [threading.Thread(target=_w, args=(i,)) for i in range(4)]
+    for t in _ts:
+        t.start()
+    for t in _ts:
+        t.join()
+    import json
+    _d = json.load(io.open(_p, encoding="utf-8"))
+    assert len(_d) == 40, "并发 RMW 丢写：%d/40" % len(_d)
+
+
+# ==========================================================================
+# 刀12 · 日志轮转截断（stream=None 必须仍截断）
+# ==========================================================================
+def test_356_d12_stream_none_truncates(tmp_path):
+    os.environ["PULSE_LOG_ROTATE"] = "1"
+    import nucleus.logger as LG
+    _base = str(tmp_path / "pulse.log")
+    io.open(_base, "w", encoding="utf-8").write("x" * 4000 + "\n")
+    _h = LG.SafeRotatingFileHandler(_base, maxBytes=1024, backupCount=2, encoding="utf-8")
+    # 这里刻意**不 try/except**：close 失败就让测试红（静默吞会把"流没关掉"
+    # 伪装成"stream=None 场景"，测的就不是要测的东西了）。
+    _h.stream.flush()
+    _h.stream.close()
+    _h.stream = None
+    _h.doRollover()
+    assert os.path.getsize(_base) == 0, "stream=None 时主文件没被截断（253 批缺陷回潮）"
+
+
+def test_356_d12_storm_budget():
+    import nucleus.logger as LG
+    LG._M356_ROLLOVER_STAMPS.clear()
+    LG._M356_ROLLOVER_STORM_WARNED = False
+    _r = [LG._m356_rollover_budget_ok() for _ in range(5)]
+    assert _r[:3] == [True, True, True] and _r[3:] == [False, False]
+    assert LG._M356_ROLLOVER_STORM_WARNED is True
+
+
+def test_356_d12_bridge_reuses_main_handler():
+    """树外 bridge 不得再 new 普通 FileHandler 直写同一文件。"""
+    _t = _src("nucleus/logger.py")
+    assert "isinstance(_h, SafeRotatingFileHandler)" in _t
+    assert "logging.FileHandler(_log_file" not in _t
+
+
+# ==========================================================================
+# 刀14 · 存量键迁移（停机窗已执行）
+# ==========================================================================
+def test_356_d14_pool_keys_unique_and_dialect_clean():
+    import json
+    import nucleus.audit_problem_pool as APP
+    _p = os.path.join(_ROOT, "data", "reports", "audit", "audit_20261024.json")
+    _d = json.load(io.open(_p, encoding="utf-8"))
+    _e = _d.get("entries") or []
+    _ks = [str(x.get("dedup_key")) for x in _e]
+    assert len(_ks) == len(set(_ks)), "池里仍有重复键"
+    _bad = [x.get("dedup_key") for x in _e
+            if x.get("file") and x.get("method") and x.get("issue_type")
+            and APP.make_dedup_key(x["file"], x["method"], x["issue_type"])
+            != str(x.get("dedup_key"))]
+    assert not _bad, "仍有 %d 条键口径不一致" % len(_bad)
+
+
+def test_356_d14_map_and_merged_archive_exist():
+    _m = os.path.join(_ROOT, "data", "reports", "audit", "_m356_key_map.json")
+    _a = os.path.join(_ROOT, "data", "reports", "audit", "_m356_merged_rows.json")
+    assert os.path.isfile(_m) and os.path.isfile(_a)
+    import json
+    assert json.load(io.open(_m, encoding="utf-8"))["count"] > 0
+    assert json.load(io.open(_a, encoding="utf-8"))["count"] > 0
+
+
+# ==========================================================================
+# 刀15 · 批量对账回写
+# ==========================================================================
+def test_356_d15_status_distribution():
+    import nucleus.audit_problem_pool as APP
+    _p = APP.load_pool()
+    _c = {}
+    for e in _p.get("entries") or []:
+        _c[str(e.get("status"))] = _c.get(str(e.get("status")), 0) + 1
+    assert _c.get("fixed", 0) >= 7, "355 应用 7 条未回写 FIXED: %s" % _c
+    assert _c.get("wontfix", 0) >= 21, "355 拒绝未回写 WONTFIX: %s" % _c
+
+
+def test_356_d15_wontfix_carries_death_reason():
+    import nucleus.audit_problem_pool as APP
+    _p = APP.load_pool()
+    _wf = [e for e in _p.get("entries") or [] if str(e.get("status")) == "wontfix"]
+    _miss = [e.get("dedup_key") for e in _wf
+             if "[356对账]" not in str(e.get("closed_reason") or "")]
+    assert not _miss, "wontfix 缺死因: %s" % _miss[:3]
+
+
+# ==========================================================================
+# 刀16 · EventBus 接线
+# ==========================================================================
+def test_356_d16_bus_enabled_and_stop_path_present():
+    _c = _src("config.py")
+    assert "ENABLE_EVENT_BUS = True" in _c
+    _m = _src("main.py")
+    assert "停止序列清点[EventBus]" in _m, "停机 drain/stop 分支不见了"
+    assert "_eb.drain(" in _m and "_eb.stop(" in _m
+    assert "[356刀16]" in _m, "接线对账留痕缺失"
