@@ -30,6 +30,7 @@ EventBus.py —— 轻量级事件总线
 """
 
 from __future__ import annotations
+from nucleus._silent_except import silent_exc
 
 import itertools
 import queue
@@ -60,6 +61,16 @@ class EventPriority(IntEnum):
     HIGH = 10
     NORMAL = 20
     LOW = 30
+
+
+def _m360_queue_alarm_depth() -> int:
+    """★360刀17③：队列水位告警阈值（可由 config 覆写，默认 1000）。"""
+    try:
+        import config as _cfg
+        return max(1, int(getattr(_cfg, "EVENTBUS_QUEUE_ALARM_DEPTH", 1000) or 1000))
+    except Exception as _e:
+        silent_exc(_e, where="EventBus::_m360_queue_alarm_depth 读阈值")
+        return 1000
 
 
 def _match(pattern: str, name: str) -> bool:
@@ -183,6 +194,10 @@ class EventBus:
         self._sync_ms_max = 0.0
         self._last_error = ""
         self._zero_match_events = 0
+        # ★360刀9：零匹配/发布数**按事件名**分桶（死广播定位用）
+        self._m360_zero_by_name = {}
+        self._m360_pub_by_name = {}
+        self._m360_q_alarmed = False
 
     # ------------------------------------------------------------------
     # 订阅
@@ -280,6 +295,11 @@ class EventBus:
             self._published += 1
             self._delivered += n
             self._sync_ms_max = max(self._sync_ms_max, elapsed_ms)
+            # ★360刀9：发布数按名分桶（零匹配率的**分母**，缺它算不出比率）
+            self._m360_pub_by_name[ev.name] = int(
+                self._m360_pub_by_name.get(ev.name) or 0) + 1
+            # 注：零匹配计数只在 `_deliver` 里加一次（**唯一真源**）——
+            #   这里再加会把同一条事件记两遍，比率算出 >1 的荒唐值。
         if elapsed_ms > _SYNC_LATENCY_WARN_MS:
             _logger.debug(
                 "同步事件耗时偏高: %s %.2fms (%d 处理器)", ev.name, elapsed_ms, n
@@ -318,6 +338,83 @@ class EventBus:
             return False
         return True
 
+    # ------------------------------------------------------------------
+    # ★第360批 刀9/刀17：EventBus 监控三件（零匹配率 / 订阅命中 / 队列水位）
+    # ------------------------------------------------------------------
+    def m360_event_metrics(self) -> dict:
+        """监控读数（只读快照；不抛、不改状态）。
+
+        返回：
+            published / delivered / zero_match / zero_match_rate
+            top_dead_events（零匹配次数 top5，含各自发布数与比率）
+            sub_hits（per-sub 命中，top10）
+            queue_depth / queue_alarm / queue_alarm_threshold
+        `zero_match_rate` 无样本（published=0）时为 **None 不是 0**（铁律155）。
+        """
+        _out = {"schema": "eventbus_metrics/360.v1",
+                "published": 0, "delivered": 0, "zero_match": 0,
+                "zero_match_rate": None, "top_dead_events": [],
+                "sub_hits": [], "queue_depth": None,
+                "queue_alarm": False, "queue_alarm_threshold": 0}
+        try:
+            with self._lock:
+                _pub = int(self._published or 0)
+                _zero = int(self._zero_match_events or 0)
+                _out["published"] = _pub
+                _out["delivered"] = int(self._delivered or 0)
+                _out["zero_match"] = _zero
+                _out["zero_match_rate"] = (round(_zero / float(_pub), 4)
+                                           if _pub else None)
+                _zb = self._m360_zero_by_name or {}
+                _pb = self._m360_pub_by_name or {}
+                _top = sorted(_zb.items(), key=lambda kv: -int(kv[1] or 0))[:5]
+                for _n, _c in _top:
+                    _p = int(_pb.get(_n) or 0)
+                    _out["top_dead_events"].append({
+                        "event": _n, "zero": int(_c or 0), "pub": _p,
+                        "rate": (round(int(_c or 0) / float(_p), 4) if _p else None)})
+                _hits = sorted(((str(s.pattern), int(s.invoked or 0))
+                                for s in (self._subs or {}).values()),
+                               key=lambda kv: -kv[1])[:10]
+                _out["sub_hits"] = [{"pattern": _p, "hits": _h} for _p, _h in _hits]
+                try:
+                    _out["queue_depth"] = int(self._queue.qsize())
+                except Exception as _e:
+                    # ★铁律176：纯赋值也是静默 —— 取不到水位要说一声
+                    silent_exc(_e, where="EventBus::m360_event_metrics 队列水位")
+                    _out["queue_depth"] = None
+                _out["queue_alarm_threshold"] = int(_m360_queue_alarm_depth())
+                _out["queue_alarm"] = bool(
+                    _out["queue_depth"] is not None
+                    and _out["queue_depth"] >= _out["queue_alarm_threshold"])
+        except Exception as _e:
+            silent_exc(_e, where="EventBus::m360_event_metrics")
+        return _out
+
+    def m360_check_queue_alarm(self) -> dict:
+        """队列水位告警（超阈 ⇒ WARNING + 返回告警态；冷却期内不刷屏）。"""
+        _m = self.m360_event_metrics()
+        _on = bool(_m.get("queue_alarm"))
+        if not _on:
+            self._m360_q_alarmed = False
+            return {"alarm": False, "depth": _m.get("queue_depth"),
+                    "threshold": _m.get("queue_alarm_threshold")}
+        if getattr(self, "_m360_q_alarmed", False):
+            return {"alarm": True, "suppressed": True,
+                    "depth": _m.get("queue_depth")}
+        self._m360_q_alarmed = True
+        try:
+            _logger.warning(
+                "[360事件总线] 队列水位告警：depth=%s ≥ 阈值 %s"
+                "（top死广播=%s）", _m.get("queue_depth"),
+                _m.get("queue_alarm_threshold"),
+                ",".join("%s(%s)" % (d.get("event"), d.get("zero"))
+                         for d in (_m.get("top_dead_events") or [])[:3]) or "-")
+        except Exception as _e:
+            silent_exc(_e, where="EventBus::m360_check_queue_alarm warning")
+        return {"alarm": True, "depth": _m.get("queue_depth"),
+                "threshold": _m.get("queue_alarm_threshold")}
+
     def _deliver(self, event: Event) -> int:
         """把事件投递给全部匹配订阅（按优先级 → 注册时间 → sub_id 稳定排序）。"""
         with self._lock:
@@ -325,6 +422,11 @@ class EventBus:
             matched.sort(key=lambda s: (int(s.priority), s.created_at, s.sub_id))
             if not matched:
                 self._zero_match_events += 1
+                # ★360刀9：按**事件名**分桶 —— 全局计数回答不了
+                #   "哪一类事件是 100% 死广播"（DJ4：pattern_prewarm 149 /
+                #   pattern_prediction 52 全零匹配）。
+                self._m360_zero_by_name[event.name] = int(
+                    self._m360_zero_by_name.get(event.name) or 0) + 1
         delivered = 0
         for sub in matched:
             if sub.once:
