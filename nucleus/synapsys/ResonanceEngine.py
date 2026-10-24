@@ -85,6 +85,14 @@ class ResonanceEngine:
         self._polarity_guard = None       # duck-typing 对象，见 set_polarity_guard
         self._polarity_blocks = 0         # 拦截次数（验收用）
 
+
+        # ★363刀B3：登记到诊断桥（弱引用）。诊断方法此前**只有测试在调**，
+        #   生产主循环无调用点 ⇒ static_verified 而 live 不可见（评审扫进 dead_code）。
+        try:
+            from nucleus.m363_diag_bridge import register as _m363_register
+            _m363_register("resonance_engine", self)
+        except Exception as _m363re:
+            silent_exc(_m363re, where="resonance_engine::__init__ 诊断桥登记", level="warning")
     # ========== 框架注入接口 ==========
 
     def set_info_field(self, info_field):

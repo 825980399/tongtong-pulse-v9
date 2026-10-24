@@ -805,6 +805,38 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "candidates_source": _offer_src,
                 "ast_release": _ast_rel}
 
+    def _m363_diag_tick(self) -> dict:
+        """★363刀B3：六处诊断读数的**生产接线点**（心跳侧，按拍节流）。
+
+        与 `_m360_paid_usage_tick` 同款节流（默认每 10 拍一行，可配
+        `DIAG_HEARTBEAT_EVERY_BEATS`）。只采集与打印，不改任何控制流。
+        """
+        _bc = int(getattr(self, "_beat_count", 0) or 0)
+        _every = 10
+        try:
+            import config as _cfg363
+            _every = max(1, int(getattr(_cfg363, "DIAG_HEARTBEAT_EVERY_BEATS", 10) or 10))
+        except Exception as _e363c:
+            silent_exc(_e363c, where="PulseMetricsCollector::_m363_diag_tick every",
+                       level="debug")
+            _every = 10
+        _last = getattr(self, "_m363_diag_beat", None)
+        if _last is not None and (_bc - int(_last)) < _every:
+            return {"status": "throttled", "beats_since": _bc - int(_last),
+                    "every": _every}
+        self._m363_diag_beat = _bc
+        try:
+            from nucleus.m363_diag_bridge import collect as _m363_collect
+            from nucleus.m363_diag_bridge import diag_line as _m363_line
+            _d = _m363_collect() or {}
+            _d["status"] = "ok"
+            self._log(LogLevel.INFO, _m363_line(_d))
+            return _d
+        except Exception as _e363d:
+            silent_exc(_e363d, where="PulseMetricsCollector::_m363_diag_tick",
+                       level="warning")
+            return {"status": "error", "err": f"{type(_e363d).__name__}"}
+
     def _m360_paid_usage_tick(self) -> dict:
         """★第360批 刀0-3：心跳侧「付费 / 免费 / 付费占比」行（节流，默认每 10 拍）。
 
@@ -943,6 +975,15 @@ class PulseMetricsCollector(BasePulseOrgan):
                                where="PulseMetricsCollector::_collect_memory_pressure 360刀0-3")
                     _out["paid_usage"] = {"status": "error",
                                           "why": type(_m360pe).__name__}
+
+                # ★363刀B3：六处诊断读数的生产接线点（同挂点，节流 10 拍一行）
+                try:
+                    _out["m363_diag"] = self._m363_diag_tick()
+                except Exception as _m363de:
+                    silent_exc(_m363de,
+                               where="PulseMetricsCollector::_collect_memory_pressure 363刀B3")
+                    _out["m363_diag"] = {"status": "error",
+                                         "why": type(_m363de).__name__}
 
                 # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
                 #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，

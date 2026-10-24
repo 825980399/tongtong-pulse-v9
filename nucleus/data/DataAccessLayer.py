@@ -20,6 +20,16 @@ import time
 
 _module_logger = logging.getLogger("nucleus.data.DataAccessLayer")
 
+try:  # ★363刀B1：底层模块用 try 兜底导入，绝不让「记账依赖」把数据层拖崩
+    from nucleus._silent_except import silent_exc
+except Exception:  # pragma: no cover
+    def silent_exc(_e: Exception, where: str = "", level: str = "debug") -> None:
+        _module_logger.log(
+            {"debug": 10, "info": 20, "warning": 30, "error": 40,
+             "critical": 50}.get(level, 10),
+            f"[静默异常可见化] {where} {type(_e).__name__}: {_e}")
+
+
 _WRITE_LOCK = threading.Lock()  # 兼容保留（已不再作为全局唯一写锁，见 D186-A 按路径分锁）
 _MAX_BACKUPS = 3
 
@@ -145,8 +155,9 @@ def safe_read_json(path, default=None):
     try:
         if os.path.getsize(path) == 0:
             return default
-    except Exception:
-        pass
+    except Exception as _m363e1:
+        # ★363刀B1：原裸 pass。取不到 size（权限/路径消失/被占用）本身就是要看的信号
+        _m363_exc_note("dal_getsize", _m363e1, level="warning", where=path)
 
     # ★360遗留：冷档 gzip 透明读（如 pulse_knowledge_snapshot.json.<ts>.bak.gz）。
     #   必须读侧先兼容再谈压缩——否则压缩后的备份在 _load_from_backup 里
@@ -243,9 +254,37 @@ def safe_write_text(path, text, backup=True, encoding="utf-8"):
         if _tmp and os.path.exists(_tmp):
             try:
                 os.remove(_tmp)
-            except Exception:
-                pass
+            except Exception as _m363e2:
+                # ★363刀B1：临时文件删不掉会**污染下一轮**（撞已存在的 .tmp），必须可见
+                _m363_exc_note("dal_rm_tmp", _m363e2, level="warning", where=str(_tmp))
         return False
+
+
+# ============================================================
+# ★363刀B1：裸 pass 收口后的「计数 + 末次快照」出口
+# 为什么还要计数：只打日志的话，「同一处异常每分钟 300 次」和「一小时 1 次」
+# 在日志里看起来都是「有这条日志」——没有量级就无法判断要不要修。
+# ============================================================
+_M363_EXC_COUNTS: dict = {}
+_M363_EXC_LAST: dict = {}
+
+
+def _m363_exc_note(tag: str, e: Exception, level: str = "warning",
+                   where: str = "") -> None:
+    """★363刀B1：记一次「原本被 pass 吞掉」的异常（计数 + 末次快照 + 日志）。"""
+    try:
+        _M363_EXC_COUNTS[tag] = _M363_EXC_COUNTS.get(tag, 0) + 1
+        _M363_EXC_LAST[tag] = {"type": type(e).__name__, "msg": str(e)[:300],
+                               "where": where, "ts": time.time()}
+        silent_exc(e, where="%s %s" % (tag, where), level=level)
+    except Exception as _ne:
+        _module_logger.debug("[363B1] 异常记账失败: %s: %s",
+                             type(_ne).__name__, _ne)
+
+
+def m363_exc_stats() -> dict:
+    """★363刀B1：读本进程内「原裸 pass」异常计数与末次快照（只读拷贝）。"""
+    return {"counts": dict(_M363_EXC_COUNTS), "last": dict(_M363_EXC_LAST)}
 
 
 def safe_read_text(path, default=""):

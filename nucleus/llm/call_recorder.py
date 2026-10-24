@@ -903,6 +903,56 @@ _recorder: LLMCallRecorder | None = None
 _singleton_lock = threading.Lock()
 
 
+def note_direct_llm_call(url: str = "", model: str = "", usage: dict | None = None,
+                         caller: str = "", ok: bool = True, error: str = "",
+                         duration: float = 0.0) -> dict:
+    """★363刀B2：**直连出口**（`safe_http_json`）的调用记账统一口。
+
+    为什么单开一口：这四路（语义复核 / 异常审查 / 分支生成 / 知识精炼）以前
+    **一行账都没有** —— 它们不走 `trace_evolution_call`，也不过 `_call_via_channels`，
+    于是 daily_tokens by_channel 里永远看不到它们的量，付费/免费占比天然偏乐观。
+
+    渠道判定：拿 url 去 `config.REMOTE_API_CHANNELS` 里反查 **api_url**；
+    反查不到就记 `direct` —— **不猜、不归到某个免费渠道头上**（那会让占比失真）。
+    """
+    out: dict = {"ok": False, "channel": "", "tokens": 0, "why": ""}
+    try:
+        _rec = get_call_recorder()
+        if _rec is None:
+            out["why"] = "no_recorder"
+            return out
+        _ch = ""
+        try:
+            import config as _cfg363
+            for _name, _c in (getattr(_cfg363, "REMOTE_API_CHANNELS", {}) or {}).items():
+                if isinstance(_c, dict) and _c.get("api_url") \
+                        and str(_c.get("api_url")) in str(url or ""):
+                    _ch = str(_name)
+                    break
+        except Exception as _ce:
+            silent_exc(_ce, where="call_recorder::note_direct_llm_call 渠道反查",
+                       level="debug")
+        if not _ch:
+            _ch = "direct"
+        _u = usage if isinstance(usage, dict) else {}
+        _tk = int(_u.get("total_tokens") or 0)
+        if not _tk:
+            _tk = int(_u.get("prompt_tokens") or 0) + int(_u.get("completion_tokens") or 0)
+        _tid = _rec.record(origin="direct_safe_http_json", prompt="", response="",
+                           prompt_version=str(caller or ""), channel=_ch,
+                           model=str(model or ""), duration=float(duration or 0.0),
+                           tokens=_tk,
+                           status=STATUS_SUCCESS if ok else STATUS_FAILED,
+                           error=str(error or "")[:200], usage=_u or None)
+        out.update({"ok": _tid is not None, "channel": _ch, "tokens": _tk,
+                    "trace_id": _tid, "caller": caller})
+        return out
+    except Exception as _e:
+        silent_exc(_e, where="call_recorder::note_direct_llm_call", level="warning")
+        out["why"] = type(_e).__name__
+        return out
+
+
 def get_call_recorder() -> LLMCallRecorder | None:
     """进程内单例（首次调用时创建）。**永不抛出。**"""
     global _recorder

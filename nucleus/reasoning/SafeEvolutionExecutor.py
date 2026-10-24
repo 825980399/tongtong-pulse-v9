@@ -3853,6 +3853,16 @@ class SafeEvolutionExecutor:
             if not _ok or not isinstance(_data, dict):
                 return None
             _choices = _data.get("choices", [])
+            # ★363刀B2：本路此前**零记账**（不走 trace_evolution_call / 渠道池）⇒
+            #   tokens 从不进 daily_tokens by_channel，付费占比天然偏乐观。只补记账，不动返回路径。
+            try:
+                from nucleus.llm.call_recorder import note_direct_llm_call as _m363_note
+                _m363_note(url=_api_url,
+                           model=str((_data or {{}}).get("model") or "") if isinstance(_data, dict) else "",
+                           usage=(_data or {{}}).get("usage") if isinstance(_data, dict) else None,
+                           caller="SafeEvolutionExecutor::语义复核", ok=bool(_ok))
+            except Exception as _m363be:
+                silent_exc(_m363be, where="SafeEvolutionExecutor::语义复核 记账", level="warning")
             if _choices:
                 return _choices[0].get("message", {}).get("content", "")
         except Exception as e:
@@ -3949,6 +3959,16 @@ class SafeEvolutionExecutor:
             if not _ok or not isinstance(_data, dict):
                 return None
             _choices = _data.get("choices", [])
+            # ★363刀B2：本路此前**零记账**（不走 trace_evolution_call / 渠道池）⇒
+            #   tokens 从不进 daily_tokens by_channel，付费占比天然偏乐观。只补记账，不动返回路径。
+            try:
+                from nucleus.llm.call_recorder import note_direct_llm_call as _m363_note
+                _m363_note(url=_api_url,
+                           model=str((_data or {{}}).get("model") or "") if isinstance(_data, dict) else "",
+                           usage=(_data or {{}}).get("usage") if isinstance(_data, dict) else None,
+                           caller="SafeEvolutionExecutor::异常审查", ok=bool(_ok))
+            except Exception as _m363be:
+                silent_exc(_m363be, where="SafeEvolutionExecutor::异常审查 记账", level="warning")
             if _choices:
                 return _choices[0].get("message", {}).get("content", "")
         except Exception as e:

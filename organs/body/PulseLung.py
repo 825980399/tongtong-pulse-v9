@@ -457,7 +457,13 @@ class PulseLung(BasePulseOrgan):
             _module_logger.debug(f"[异常已忽略] type={type(_exc).__name__} {_exc}")
         # 核心修改：只要远程API可用，就优先使用它
         if _remote_available:
-            self._log(LogLevel.INFO, f"优先使用远程大模型: {_remote_model_name}")
+            # ★363刀B4：原文案无条件宣称「优先使用远程大模型」，但 360 刀0-1 之后
+            #   免费渠道优先、付费垫底 ⇒ 这条 INFO 与真实出口不符（首拍窗：文案 14 条、
+            #   deepseek 真实调用 0 条）。改为**如实描述意图**，真实出口交给
+            #   `[渠道] xxx 调用成功` 那条日志，不再由本句背书。
+            self._log(LogLevel.INFO,
+                      f"远程通道可用(model={_remote_model_name})；实际选型以渠道排序为准，"
+                      f"真实出口见 [渠道] 调用成功日志")
             _is_dialogue = payload.get("is_dialogue", False)
             _memory_context = payload.get("memory_context", None)
             # 对话触发时使用增强prompt，后台学习时使用原始prompt

@@ -473,6 +473,14 @@ class QICA(BasePulseOrgan):
                     _paths = self._intent_to_method[_it].get("paths", ["/身份/自我"])
                     self._intent_to_method[_it] = {"method": "rule_reason", "paths": _paths}
 
+
+        # ★363刀B3：登记到诊断桥（弱引用）。诊断方法此前**只有测试在调**，
+        #   生产主循环无调用点 ⇒ static_verified 而 live 不可见（评审扫进 dead_code）。
+        try:
+            from nucleus.m363_diag_bridge import register as _m363_register
+            _m363_register("qica", self)
+        except Exception as _m363re:
+            silent_exc(_m363re, where="qica::__init__ 诊断桥登记", level="warning")
     # ========== 脉冲入口 ==========
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:

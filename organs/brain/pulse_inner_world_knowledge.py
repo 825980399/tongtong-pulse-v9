@@ -1058,6 +1058,26 @@ class PulseInnerWorldKnowledgeMixin:
                     _api_url, method='POST', data=_payload_bytes, headers=_headers,
                     timeout=_cfg["timeout_by_purpose"]["inner_world_refine"],
                 )
+                # ★363刀B2：本路此前**零记账**（不走 trace_evolution_call / 渠道池）⇒
+                #   tokens 从不进 daily_tokens by_channel，付费占比天然偏乐观。只补记账，不动返回路径。
+                try:
+                    from nucleus.llm.call_recorder import note_direct_llm_call as _m363_note
+                    _m363_note(url=_api_url,
+                               model=str((_data or {{}}).get("model") or "") if isinstance(_data, dict) else "",
+                               usage=(_data or {{}}).get("usage") if isinstance(_data, dict) else None,
+                               caller="pulse_inner_world_knowledge::知识精炼", ok=bool(_ok))
+                except Exception as _m363be:
+                    silent_exc(_m363be, where="pulse_inner_world_knowledge::知识精炼 记账", level="warning")
+                # ★363刀B2：本路此前**零记账**（不走 trace_evolution_call / 渠道池）⇒
+                #   tokens 从不进 daily_tokens by_channel，付费占比天然偏乐观。只补记账，不动返回路径。
+                try:
+                    from nucleus.llm.call_recorder import note_direct_llm_call as _m363_note
+                    _m363_note(url=_api_url,
+                               model=str((_data or {{}}).get("model") or "") if isinstance(_data, dict) else "",
+                               usage=(_data or {{}}).get("usage") if isinstance(_data, dict) else None,
+                               caller="pulse_inner_world_knowledge::知识精炼", ok=bool(_ok))
+                except Exception as _m363be:
+                    silent_exc(_m363be, where="pulse_inner_world_knowledge::知识精炼 记账", level="warning")
             if _ok and isinstance(_data, dict) and "choices" in _data and len(_data["choices"]) > 0:
                     _reply = _data["choices"][0].get("message", {}).get("content", "").strip()
                     if _reply and len(_reply) >= 10:

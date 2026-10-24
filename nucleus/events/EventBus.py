@@ -199,6 +199,14 @@ class EventBus:
         self._m360_pub_by_name = {}
         self._m360_q_alarmed = False
 
+
+        # ★363刀B3：登记到诊断桥（弱引用）。诊断方法此前**只有测试在调**，
+        #   生产主循环无调用点 ⇒ static_verified 而 live 不可见（评审扫进 dead_code）。
+        try:
+            from nucleus.m363_diag_bridge import register as _m363_register
+            _m363_register("event_bus", self)
+        except Exception as _m363re:
+            silent_exc(_m363re, where="event_bus::__init__ 诊断桥登记", level="warning")
     # ------------------------------------------------------------------
     # 订阅
     # ------------------------------------------------------------------

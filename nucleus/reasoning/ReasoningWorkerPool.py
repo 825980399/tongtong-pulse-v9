@@ -24,6 +24,33 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("ReasoningWorkerPool")
 
+# ============================================================
+# ★363刀B1：裸 pass 收口后的「计数 + 末次快照」出口
+# 为什么还要计数：只打日志的话，「同一处异常每分钟 300 次」和「一小时 1 次」
+# 在日志里看起来都是「有这条日志」——没有量级就无法判断要不要修。
+# ============================================================
+_M363_EXC_COUNTS: dict = {}
+_M363_EXC_LAST: dict = {}
+
+
+def _m363_exc_note(tag: str, e: Exception, level: str = "warning",
+                   where: str = "") -> None:
+    """★363刀B1：记一次「原本被 pass 吞掉」的异常（计数 + 末次快照 + 日志）。"""
+    try:
+        _M363_EXC_COUNTS[tag] = _M363_EXC_COUNTS.get(tag, 0) + 1
+        _M363_EXC_LAST[tag] = {"type": type(e).__name__, "msg": str(e)[:300],
+                               "where": where, "ts": time.time()}
+        silent_exc(e, where="%s %s" % (tag, where), level=level)
+    except Exception as _ne:
+        _module_logger.debug("[363B1] 异常记账失败: %s: %s",
+                             type(_ne).__name__, _ne)
+
+
+def m363_exc_stats() -> dict:
+    """★363刀B1：读本进程内「原裸 pass」异常计数与末次快照（只读拷贝）。"""
+    return {"counts": dict(_M363_EXC_COUNTS), "last": dict(_M363_EXC_LAST)}
+
+
 
 def _is_alive(proc) -> bool:
     """★P2-24：安全判断子进程是否存活。
@@ -705,8 +732,10 @@ class ReasoningWorkerPool:
             for _f in _inflight:
                 try:
                     _f.cancel()
-                except Exception:
-                    pass
+                except Exception as _m363e3:
+                    # ★363刀B1：cancel 失败意味着该 future 仍在跑 ⇒ 关池不等于真停
+                    _m363_exc_note("rwp_future_cancel", _m363e3, level="warning",
+                                   where="ReasoningWorkerPool.shutdown")
             with self._lock:
                 self._inflight_futures.difference_update(_inflight)
         except Exception as e:
@@ -745,8 +774,10 @@ class ReasoningWorkerPool:
                 _killed += 1
                 try:
                     _p.join(1.0)   # 回收，避免留下僵尸
-                except Exception:
-                    pass
+                except Exception as _m363e4:
+                    # ★363刀B1：join 超时/失败 ⇒ 僵尸进程风险，不能靠 pass 抹掉
+                    _m363_exc_note("rwp_join", _m363e4, level="warning",
+                                   where="ReasoningWorkerPool.terminate")
             except Exception as e:
                 _module_logger.debug(
                     f"推理进程池终止子进程失败: {type(e).__name__}: {e}")

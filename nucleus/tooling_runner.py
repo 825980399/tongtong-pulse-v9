@@ -43,6 +43,14 @@ class ToolingRunner(SilentLogMixin):
         #   「本通道没跑到」分开（340刀5 的归零点就是这两件事被读成同一件事）。
         self._tool_flags: dict[str, dict[str, Any]] = {}
 
+        # ★363刀B3：登记到诊断桥（弱引用）。诊断方法此前**只有测试在调**，
+        #   生产主循环无调用点 ⇒ static_verified 而 live 不可见（评审扫进 dead_code）。
+        try:
+            from nucleus.m363_diag_bridge import register as _m363_register
+            _m363_register("tooling_runner", self)
+        except Exception as _m363re:
+            silent_exc(_m363re, where="tooling_runner::__init__ 诊断桥登记", level="warning")
+
     def _m360_note_tool_flag(self, tool: str, rec: dict[str, Any]) -> None:
         """★360刀14：把一次**执行失败/超时**写进 `_tool_flags[tool]`（不覆盖解析侧字段）。
 
