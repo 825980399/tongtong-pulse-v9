@@ -13,6 +13,7 @@ exploration_audit.py —— 探索审计器
 
 from concurrent.futures import ThreadPoolExecutor
 import os
+import time
 from typing import Any
 
 from config import TIMEOUT_CONFIG
@@ -126,9 +127,127 @@ def _tool_channel(self_inspector=None) -> list[dict[str, Any]]:
         return []
 
 
-def _rule_channel(self_inspector=None) -> list[dict[str, Any]]:
-    """通道2：工程质量规则检查（self_inspector 12 种检测器）。"""
+#: ★363刀D2：最近一次子进程扫描的状态（供观测；不写盘）
+_M363_RULE_SCAN_LAST: dict = {}
+
+
+def m363_rule_scan_last() -> dict:
+    """★363刀D2：读最近一次规则通道子进程扫描状态（只读拷贝）。"""
+    return dict(_M363_RULE_SCAN_LAST)
+
+
+def _m363_rule_subprocess_on() -> bool:
+    """规则通道子进程化开关（`ENABLE_RULE_CHANNEL_SUBPROCESS`，**默认 False**）。
+
+    ★为什么默认关：这是**隔离试点**。规则通道一轮约 10.6min、产出 687 问题，
+    在没拿到「子进程 vs 主进程产出一致」的对照结论前，不能让生产主链路改道。
+    读不到配置 ⇒ 关（保持既有行为）。
+    """
     try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_RULE_CHANNEL_SUBPROCESS", False))
+    except Exception as e:
+        silent_exc(e, where="exploration_audit::_m363_rule_subprocess_on", level="debug")
+        return False
+
+
+def _m363_rule_channel_subprocess(self_inspector=None, organs: list | None = None,
+                                  skip_detectors: list | None = None,
+                                  min_severity: str | None = None,
+                                  timeout: float | None = None) -> list | None:
+    """★363刀D2：规则通道的子进程执行（**返回 None 表示不可用，调用方须回退**）。
+
+    只在开关打开时使用；任何一步失败（超时 / 非零退出 / JSON 不可读 / 结构不符）
+    都返回 None ⇒ 主侧回退到进程内 `detect_code_issues()`，保证零回归。
+    """
+    if not _m363_rule_subprocess_on():
+        return None
+    import json as _json
+    import subprocess as _sp
+    import sys as _sys
+    import tempfile as _tf
+    _t0 = time.time()
+    _fd_out = None
+    _out_path = ""
+    try:
+        _worker = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "tools", "probe_scan_worker.py")
+        if not os.path.isfile(_worker):
+            _M363_RULE_SCAN_LAST.update({"state": "no_worker", "ts": _t0})
+            return None
+        _fd_out, _out_path = _tf.mkstemp(prefix="m363_rule_", suffix=".json")
+        os.close(_fd_out)
+        _fd_out = None
+        _cmd = [_sys.executable, _worker,
+                "--root", os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "--out", _out_path,
+                "--rules-version", "363.d2.v1"]
+        if organs:
+            _cmd += ["--organs", _json.dumps(list(organs), ensure_ascii=False)]
+        if skip_detectors:
+            _cmd += ["--skip-detectors", _json.dumps(list(skip_detectors), ensure_ascii=False)]
+        if min_severity:
+            _cmd += ["--min-severity", str(min_severity)]
+        _sec = float(timeout if timeout is not None else
+                     TIMEOUT_CONFIG.get("code_review", 600))
+        _r = _sp.run(_cmd, timeout=_sec, capture_output=True, text=True,
+                     encoding="utf-8", errors="replace")
+        if _r.returncode != 0:
+            _M363_RULE_SCAN_LAST.update(
+                {"state": "rc_nonzero", "rc": _r.returncode,
+                 "stderr": (_r.stderr or "")[:200], "ts": _t0,
+                 "duration": round(time.time() - _t0, 3)})
+            _logger.warning("[363D2] 规则通道子进程失败(rc=%s) ⇒ 回退进程内", _r.returncode)
+            return None
+        with open(_out_path, encoding="utf-8") as _f:
+            _doc = _json.load(_f)
+        if not isinstance(_doc, dict) or _doc.get("status") != "ok":
+            _M363_RULE_SCAN_LAST.update({"state": "bad_payload", "ts": _t0})
+            return None
+        _issues = _doc.get("issues")
+        if not isinstance(_issues, list):
+            _M363_RULE_SCAN_LAST.update({"state": "bad_issues", "ts": _t0})
+            return None
+        _M363_RULE_SCAN_LAST.update({
+            "state": "ok", "count": len(_issues), "duration": _doc.get("duration"),
+            "pid": _doc.get("pid"), "rules_version": _doc.get("rules_version"),
+            "ts": _t0})
+        _logger.info("[363D2] 规则通道子进程完成：%d 条 / %.2fs（pid=%s）",
+                     len(_issues), float(_doc.get("duration") or 0.0), _doc.get("pid"))
+        return _issues
+    except Exception as e:
+        silent_exc(e, where="exploration_audit::_m363_rule_channel_subprocess",
+                   level="warning")
+        _M363_RULE_SCAN_LAST.update({"state": "exception",
+                                     "err": type(e).__name__, "ts": _t0})
+        return None
+    finally:
+        if _fd_out is not None:
+            try:
+                os.close(_fd_out)
+            except OSError as _ce:
+                # ★不得纯 pass：fd 关不掉是句柄泄漏信号，必须留痕
+                silent_exc(_ce, where="exploration_audit::D2 close(tmp_fd)",
+                           level="warning")
+        if _out_path and os.path.exists(_out_path):
+            try:
+                os.remove(_out_path)
+            except OSError as _re:
+                # ★不得纯 pass：临时文件残留会污染下一轮扫描的输入目录
+                silent_exc(_re, where="exploration_audit::D2 rm(tmp_out)",
+                           level="warning")
+
+
+def _rule_channel(self_inspector=None) -> list[dict[str, Any]]:
+    """通道2：工程质量规则检查（self_inspector 12 种检测器）。
+
+    ★363刀D2：开关打开时先走子进程（隔离 GIL）；子进程不可用 ⇒ **回退进程内**，
+    返回结构与原实现完全一致（零回归）。
+    """
+    try:
+        _sub = _m363_rule_channel_subprocess(self_inspector)
+        if _sub is not None:
+            return _sub
         if self_inspector is not None and hasattr(self_inspector, 'detect_code_issues'):
             return self_inspector.detect_code_issues()
         return []
