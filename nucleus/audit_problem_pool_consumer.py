@@ -457,15 +457,23 @@ def consume_pool(limit: int | None = None, root: str | None = None,
       · `write_failed`             —— 行动队列写失败（状态不推进，避免"认领了却没工单"）
     """
     if not _enabled(enable):
+        # ★363刀A3：静默 return 会让人分不清「没跑到」与「跑到但开关关着」
+        _module_logger.debug("%s 本拍未消费：灰度开关关闭（enable=%s）",
+                             TRACE_TAG, enable)
         return {"state": "disabled", "consumed": 0, "reason": "switch_off"}
     _now = float(now if now is not None else time.time())
     _limit = CONSUME_BATCH_MAX if limit is None else max(0, int(limit))
 
     _doc = _pool.load_pool(root, audit_dir_path, _now)
     if _doc["state"] == "empty":
+        _module_logger.debug("%s 本拍未消费：池快照为空（无 open 条目可认领）",
+                             TRACE_TAG)
         return {"state": "noop_pool_empty", "consumed": 0, "pool_total": 0,
                 "open_before": 0, "reason": "no_snapshot"}
     if _doc["state"] != "ok":
+        _module_logger.warning(
+            "%s 本拍未消费：池读不出来（state=%s reason=%s）——**不猜 0**",
+            TRACE_TAG, _doc.get("state"), _doc.get("reason", ""))
         return {"state": "unavailable", "consumed": 0, "pool_total": None,
                 "open_before": None, "reason": _doc.get("reason", "")}
 
@@ -474,6 +482,9 @@ def consume_pool(limit: int | None = None, root: str | None = None,
     _open_before = sum(1 for _e in _entries if isinstance(_e, dict)
                        and str(_e.get("status") or _pool.STATUS_OPEN) == _pool.STATUS_OPEN)
     if not _picked:
+        _module_logger.debug(
+            "%s 本拍未消费：池内 %d 条、open=%d，但**无可消费条目**（非失败）",
+            TRACE_TAG, len(_entries), _open_before)
         return {"state": "noop_pool_empty", "consumed": 0, "pool_total": len(_entries),
                 "open_before": _open_before, "reason": "no_open_entry"}
 
@@ -589,4 +600,20 @@ def consume_heartbeat(project_root: str | None = None, now: float | None = None,
         silent_exc(_fce356,
                    "audit_problem_pool_consumer.consume_heartbeat free_chain",
                    level="warning")
+    # ★363刀A3：一行三字段（洞鉴建议2）。复盘时不用再人肉反推断点：
+    #   consume_state＝五态；candidate_count＝可消费候选数（读不出来时是 **None 不是 0**）；
+    #   dispatch_selected＝本拍实际认领数。只加字段与日志，不改任何返回语义。
+    _m363_open = _r.get("open_before")
+    _m363_view = {
+        "consume_state": _r.get("state"),
+        "candidate_count": (int(_m363_open)
+                            if isinstance(_m363_open, int) else None),
+        "dispatch_selected": int(_r.get("claimed") or 0),
+        "verify_feedback_state": (_r.get("verify_feedback") or {}).get("state"),
+    }
+    _r["m363_consume_view"] = _m363_view
+    _module_logger.info(
+        "[363A3] consume_state=%s candidate_count=%s dispatch_selected=%s fb=%s",
+        _m363_view["consume_state"], _m363_view["candidate_count"],
+        _m363_view["dispatch_selected"], _m363_view["verify_feedback_state"])
     return _r

@@ -384,6 +384,13 @@ class ChatService:
             self._show_pending_patches()
             self._reset_silence_timer()
             return True
+        # ★363刀A1：O3 专用口必须**排在**普通 approve 之前，否则 "approve_o3 0"
+        #   会被 `startswith("approve")` 先吃掉，走普通口 ⇒ 被 fail-closed 拒，
+        #   人看起来像「批不动」，实则是命令面没分道。
+        elif cmd.startswith(("approve_o3", "approve o3", "批准o3", "批准 o3")):
+            self._approve_o3_patch(cmd)
+            self._reset_silence_timer()
+            return True
         elif cmd.startswith(("approve", "批准")):
             self._approve_patch(cmd)
             self._reset_silence_timer()
@@ -444,9 +451,97 @@ class ChatService:
                 _reason = (_p.get("reason", "") or "")[:60]
                 print(f"  [{_i}] {_icon}{_label} | {_file} | {_reason}")
             print("\n输入 `approve <索引>` 批准单个，或 `approve all` 批准全部。")
+            # ★363刀A1：O3（判死类）条目走专用口，普通口对 O3 一律 fail-closed 拒
+            print("判死类（O3）条目请用 `approve_o3 <索引>`：需四项审核齐"
+                  "（evidence_tier / probe_out_of_graph / misjudge_sample / god_file）。")
             print("建议优先批准 ✅已验证 的补丁（已通过副本验证）。\n")
         except Exception as _e:
             print(f"\n读取补丁列表失败: {_e}\n")
+
+    @staticmethod
+    def _m363_o3_basis_of(patch: dict) -> dict:
+        """★363刀A1：从条目**既有字段**取四项审核 —— 取不到就是不齐，不编造。
+
+        顺序：`basis` → `approved_basis` → 顶层同名四项。
+        ★不填默认值：给 `god_file` 填 False 就等于替人工做了「不是上帝文件」的判断，
+        那正是 O3 通道最不能自动的部分。
+        """
+        if not isinstance(patch, dict):
+            return {"items": {}}
+        _raw = None
+        for _k in ("basis", "approved_basis"):
+            if isinstance(patch.get(_k), dict):
+                _raw = patch[_k]
+                break
+        if isinstance(_raw, dict) and isinstance(_raw.get("items"), dict):
+            _raw = _raw["items"]
+        _items = {}
+        for _key in ("evidence_tier", "probe_out_of_graph",
+                     "misjudge_sample", "god_file"):
+            _v = _raw.get(_key) if isinstance(_raw, dict) else None
+            if _v is None:
+                _v = patch.get(_key)
+            _items[_key] = _v
+        return {"items": _items}
+
+    def _approve_o3_patch(self, cmd: str):
+        """★363刀A1：O3（判死类）条目专用人工裁决命令面。
+
+        用法：`approve_o3 <索引> [signer]`（signer 默认 `human:console`，须以 human: 开头）。
+
+        流程（fail-closed）：
+          1. 解析索引与签名；
+          2. 从条目取四项审核 → 本地预检，缺哪项**打印缺哪项并拒**（不落盘）；
+          3. 齐了才调 `PatchManager.approve_o3_patch(index, signer, basis, judged_by="human")`；
+          4. 打印结果（成功 / 失败原因 / 缺失项）。
+
+        本口**不替人工做四项判断**，也不改普通口对 O3 的 fail-closed 语义。
+        """
+        import os
+        try:
+            from nucleus.reasoning.PatchManager import PatchManager
+            _project_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            _arg = cmd.strip()
+            for _prefix in ("approve_o3", "approve o3", "批准o3", "批准 o3"):
+                if _arg.startswith(_prefix):
+                    _arg = _arg[len(_prefix):].strip()
+                    break
+            _parts = _arg.split()
+            if not _parts:
+                print("\n❌ 用法：`approve_o3 <索引> [signer]`，索引见 `patches`\n")
+                return
+            _idx = int(_parts[0])
+            _signer = _parts[1] if len(_parts) > 1 else "human:console"
+            if not str(_signer).startswith("human:"):
+                print(f"\n❌ signer 必须以 human: 开头（当前={_signer}）\n")
+                return
+            _mgr = PatchManager(_project_root)
+            _pending = _mgr._load_patch_list(_mgr._pending_file)
+            if not isinstance(_pending, list) or not (0 <= _idx < len(_pending)):
+                print(f"\n❌ 索引越界，共 "
+                      f"{len(_pending) if isinstance(_pending, list) else 0} 个待审批补丁\n")
+                return
+            _p = _pending[_idx] if isinstance(_pending[_idx], dict) else {}
+            _basis = self._m363_o3_basis_of(_p)
+            _ok, _why, _miss = PatchManager._m339_review_items_ok(_basis)
+            if not _ok:
+                print(f"\n❌ O3 审核四项不齐 ⇒ 不放行：{_why}")
+                print(f"   缺失项：{_miss}")
+                print("   四项 = evidence_tier / probe_out_of_graph / "
+                      "misjudge_sample / god_file；补齐后重试。\n")
+                return
+            _res = _mgr.approve_o3_patch(_idx, _signer, _basis, judged_by="human")
+            if _res.get("ok"):
+                print(f"\n✅ 已批准 O3 条目 [{_idx}]"
+                      f"（o3_auto_dispatch_ready=True，将在下次派单窗口自动派单）\n")
+            else:
+                print(f"\n❌ 批准失败：{_res.get('reason', '未知')}"
+                      f"（missing={_res.get('missing') or []}）\n")
+        except ValueError:
+            print("\n❌ 索引格式错误，请输入 `approve_o3 <数字>`\n")
+        except Exception as _e:
+            print(f"\n批准 O3 补丁失败: {type(_e).__name__}: {_e}\n")
 
     def _approve_patch(self, cmd: str):
         """批准补丁（★FIX: 人工审批入口，verified→approved）"""

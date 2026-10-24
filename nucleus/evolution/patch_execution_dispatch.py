@@ -1307,6 +1307,169 @@ def is_sandbox_incompatible(patch: dict) -> bool:
     return bool(scan_dangerous_keywords(_code).get("would_block"))
 
 
+#: ★363刀A2：pending 分级进候选门槛（裁决一已批准，不回谈）
+PENDING_GRADED_TRUST_MIN = 40      # trust_score ≥ 40
+PENDING_GRADED_BLAST_MAX = 1       # 牵连半径 ≤ 1（与 select_patch_for_execution 同档）
+#: 「已复核通过」的实证口径：**没有 reviewed 字段**，以副本验证通过的
+#: `status == "runtime_verified"` 为准（未验证的 pending 条目一律不进）。
+PENDING_GRADED_OK_STATUS = ("runtime_verified",)
+#: 本进程内拒收分布（只增不重置，便于归因）
+_M363_PENDING_REJ: dict = {}
+
+
+def get_m363_pending_rej() -> dict:
+    """★363刀A2：读 pending 分级候选的拒收分布（只读拷贝）。"""
+    return dict(_M363_PENDING_REJ)
+
+
+def _m363_pending_graded_on() -> bool:
+    """pending 分级候选总开关（`ENABLE_PENDING_GRADED_CANDIDATE`，默认 True）。
+
+    读不到配置 ⇒ True（与既有 O3 老化开关同一族口径：任务书要求开启态）。
+    """
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_PENDING_GRADED_CANDIDATE", True))
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m363_pending_graded_on",
+                   level="warning")
+        return True
+
+
+def _m363_pending_pilot_only() -> bool:
+    """是否仍守 306刀4 受控试点白名单（`PENDING_GRADED_PILOT_ONLY`，默认 True）。
+
+    ★不默认绕过：白名单是 306 批刻意留的最窄边界，本刀只接通「达标⇒进候选」，
+    不在同一次改动里顺手放宽安全闸。
+    """
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "PENDING_GRADED_PILOT_ONLY", True))
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m363_pending_pilot_only",
+                   level="warning")
+        return True
+
+
+def _m363_is_o3_row(patch: dict) -> bool:
+    """O3（判死类）判定 —— 与 `PatchManager._m339_is_o3` **同源口径**，优先直接复用。
+
+    取不到 PatchManager 时用本地同构判据兜底，并在日志留痕（绝不静默换判据）。
+    """
+    if not isinstance(patch, dict):
+        return False
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager as _PM
+        return bool(_PM._m339_is_o3(patch))
+    except Exception as _e363:
+        # ★不得纯 pass：判据换了来源必须留痕，否则「口径不一致」永远发现不了
+        silent_exc(_e363, where="patch_execution_dispatch::_m363_is_o3_row(本地兜底)",
+                   level="warning")
+    if patch.get("o3_dead_code") is True:
+        return True
+    if str(patch.get("source") or "") in ("o3_open_gate", "o3"):
+        return True
+    return str(patch.get("issue_type") or "") in ("dead_code", "dead_code_candidate")
+
+
+def select_pending_candidates(pending_rows: list, limit: int = 1,
+                              max_blast_radius: int = PENDING_GRADED_BLAST_MAX,
+                              pilot_only: bool = True) -> list:
+    """★363刀A2：从 pending 池挑「达标」条目补进自动候选（纯函数，只读不改字段）。
+
+    门槛（fail-closed，任一不满足即退回人工队列）：
+      1. 非 O3（`_m363_is_o3_row`）⇒ O3 强制人工，与 A1 专用口分离；
+      2. `status == runtime_verified`（已复核通过的实证口径）；
+      3. `risk_level == 低`；
+      4. `trust_score >= 40`；
+      5. 非「片段→完整」形态（`is_fragment_to_full`）；
+      6. 非沙箱结构性必败（`is_sandbox_incompatible`）；
+      7. 牵连半径**可判定**且 ≤ 1（`blast_radius_of` 返回 None ⇒ 转人工）；
+      8. `pilot_only=True` 时仍守 306刀4 首批试点白名单。
+
+    ★不改 history 既有选择逻辑：本函数只作为**候选补充**来源被调用。
+    """
+    if not isinstance(pending_rows, list):
+        return []
+    _rej: dict = {"o3": 0, "status": 0, "risk": 0, "trust": 0,
+                  "fragment": 0, "sandbox": 0, "blast_unknown": 0,
+                  "blast_over": 0, "not_pilot": 0, "passed": 0}
+    _scoped: list = []
+    for _p in pending_rows:
+        if not isinstance(_p, dict):
+            continue
+        if _m363_is_o3_row(_p):
+            _rej["o3"] += 1
+            continue
+        if str(_p.get("status") or "") not in PENDING_GRADED_OK_STATUS:
+            _rej["status"] += 1
+            continue
+        if _p.get("risk_level") not in ("低", "low"):
+            _rej["risk"] += 1
+            continue
+        try:
+            _trust = float(_p.get("trust_score", 0) or 0)
+        except (TypeError, ValueError) as _te363:
+            _trust = 0.0
+            # ★不得纯 assign：解析不出来与「就是 0 分」处置动作不同（前者要修数据）
+            _module_logger.info(
+                "[363A2] trust_score 不可解析 ⇒ 按 0 处理并转人工: patch=%s 值=%r err=%s",
+                str(_p.get("id", ""))[:16], _p.get("trust_score"), _te363)
+        if _trust < PENDING_GRADED_TRUST_MIN:
+            _rej["trust"] += 1
+            continue
+        if is_fragment_to_full(_p):
+            _rej["fragment"] += 1
+            continue
+        if is_sandbox_incompatible(_p):
+            _rej["sandbox"] += 1
+            continue
+        _br = blast_radius_of(str(_p.get("method") or ""), file=str(_p.get("file") or ""))
+        if _br is None:
+            _rej["blast_unknown"] += 1
+            _module_logger.info(
+                "[363A2] 牵连不可判定 ⇒ 转人工: patch=%s method=%s",
+                str(_p.get("id", ""))[:16], str(_p.get("method") or ""))
+            continue
+        if _br > max_blast_radius:
+            _rej["blast_over"] += 1
+            continue
+        if pilot_only:
+            _key = (str(_p.get("file") or "").replace("\\", "/"),
+                    str(_p.get("method") or ""))
+            if _key not in PILOT_FIRST_BATCH:
+                _rej["not_pilot"] += 1
+                _module_logger.info(
+                    "[363A2] 达标但非首批试点 ⇒ 转人工: patch=%s method=%s",
+                    str(_p.get("id", ""))[:16], _key[1])
+                continue
+        _scoped.append(_p)
+    _rej["passed"] = len(_scoped)
+    for _k, _v in _rej.items():
+        _M363_PENDING_REJ[_k] = _M363_PENDING_REJ.get(_k, 0) + _v
+    _scoped.sort(key=lambda p: -(float(p.get("trust_score", 0) or 0)))
+    return _scoped[:limit]
+
+
+def _m363_read_pending_rows(project_root: str | None = None) -> list:
+    """★363刀A2：读 pending 池（复用 `_m335_pending_path`；读失败返回空列表并留痕）。"""
+    try:
+        _path = _m335_pending_path(project_root, None)
+        if not os.path.isfile(_path):
+            return []
+        import io as _io
+        import json as _json
+        with _io.open(_path, encoding="utf-8") as _f:
+            _rows = _json.load(_f)
+        if isinstance(_rows, dict):
+            _rows = _rows.get("patches") or []
+        return _rows if isinstance(_rows, list) else []
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m363_read_pending_rows",
+                   level="warning")
+        return []
+
+
 def select_patch_for_execution(patch_history: list, limit: int = 1,
                                max_blast_radius: int = 1,
                                pilot_only: bool = True) -> list:
@@ -2392,6 +2555,20 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
         #   白名单有料时优先级更高（确定性优先于统计置信）。
         _selected = select_for_auto_triage(_hist, limit=1)
         _sel_src = "auto_triage"
+    if not _selected and _m363_pending_graded_on():
+        # ★363刀A2：前两级（白名单 / 自动分诊）都读 history；本级**只补** pending 池的
+        #   达标条目（裁决一门槛）。history 选择逻辑**一字未改**，pending 只做候选补充。
+        _pend_rows = _m363_read_pending_rows()
+        _selected = select_pending_candidates(
+            _pend_rows, limit=1,
+            pilot_only=_m363_pending_pilot_only())
+        _sel_src = "pending_graded"
+        _module_logger.info(
+            "[363A2] 候选补充: pending池=%d 达标=%d 白名单内=%d 拒收=%s",
+            len(_pend_rows), _M363_PENDING_REJ.get("passed", 0),
+            max(0, _M363_PENDING_REJ.get("passed", 0)
+                - _M363_PENDING_REJ.get("not_pilot", 0)),
+            {k: v for k, v in get_m363_pending_rej().items() if v})
     # ★324批刀0：选中 ≠ 执行 ≠ 有副作用——三拆，且失败超限者转人工
     _n_selected = len(_selected)
     _blocked: list = []

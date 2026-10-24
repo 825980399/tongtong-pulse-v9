@@ -4388,7 +4388,19 @@ def main():
                 if _pool_consume_counter >= _pool_consume_every:
                     _pool_consume_counter = 0
                     from nucleus.audit_problem_pool_consumer import consume_heartbeat
-                    consume_heartbeat(os.path.dirname(os.path.abspath(__file__)))
+                    # ★363刀A3：原实现**丢弃返回值** ⇒ 消费口在日志里完全不可见，
+                    #   首拍「[356免费链] 0 条」无法区分「节拍未到」与「走到静默分支」。
+                    _m363_cv = consume_heartbeat(
+                        os.path.dirname(os.path.abspath(__file__)))
+                    if isinstance(_m363_cv, dict):
+                        _m363_v = _m363_cv.get("m363_consume_view") or {}
+                        _logger.info(
+                            "[363A3] 消费口 consume_state=%s "
+                            "candidate_count=%s dispatch_selected=%s fb=%s",
+                            _m363_v.get("consume_state"),
+                            _m363_v.get("candidate_count"),
+                            _m363_v.get("dispatch_selected"),
+                            _m363_v.get("verify_feedback_state"))
             except Exception as _pc_e:
                 silent_exc(_pc_e, "main.py[346刀1-pool-consume]")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。
