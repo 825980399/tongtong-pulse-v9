@@ -5369,7 +5369,10 @@ COLD_COMPACT_DELETE_RETRY_INTERVAL = 2.0    # 每次重试间隔（秒）
 # ★主线第64批 T3/P1（2026-09-16）：器官扫描自适应缓存 TTL 灰度开关。
 #   True = 根据 CPU 负载 + 队列深度动态延长缓存 TTL（降 CPU）；
 #   False（默认）= 固定基础 TTL（ORGAN_SCAN_CACHE_TTL），零副作用。
-ENABLE_ORGAN_SCAN_ADAPTIVE_TTL = False
+# ★364刀B3（甲3 已批准）：自检扫描自适应 TTL **灰度开启**（阈值沿用代码定稿：
+#   CPU 80/60、队列 CRITICAL/HIGH/LOW 三档，本批不改）。TTL 决策已留痕
+#   （m364_ttl_events()）。问题数基线取 audit 产物日计数对比。重启生效。
+ENABLE_ORGAN_SCAN_ADAPTIVE_TTL = True
 # ★主线第64批 T4/P1（2026-09-16）：队列深度自适应阈值（瞬时 _last_queue_depth，单位：条）。
 #   与 RuntimeMetrics 既有队列告警阈值（queue_max_depth=1000）口径不同：此处针对「缓存 TTL 延长」决策。
 QUEUE_DEPTH_HIGH_THRESHOLD = 5000        # 队列深度超过则延长缓存 TTL
@@ -5422,7 +5425,10 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   ★生产生效需停机/重启窗口；在线运行期仅采集与告警，不自动回收。
 #   MEMORY_AUTO_GC_RSS_MB：自动 GC 触发的进程 RSS 上限（MB）；高于此值且
 #     ENABLE_MEMORY_AUTO_GC=True 时回收（175刀1 接入已活采集链，防 167 死开关）。
-ENABLE_MEMORY_AUTO_GC = False
+# ★364刀B1（甲1 已批准）：三刀接线完成后**保守开启**（8GB 保守线，不降 6.5GB）。
+#   双闸：调用点 auto_gc=True ＋ 本开关；判据＝使用率≥80% 或 RSS≥8GB 或 增长率≥阈值。
+#   重启生效；阈值下调须等 A1 归属结论＋一周实测回落幅度另议。
+ENABLE_MEMORY_AUTO_GC = True
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
 MEMORY_AUTO_GC_RSS_MB = 8192.0
 
@@ -6217,7 +6223,9 @@ SUBAGENT_BREAKER_FAIL_MAX = 5                # C：窗口内失败上限（≥5 
 # 语义：结构变化感知的「全量重扫」开关。默认关 = 只做节拍内 (mtime,size) 指纹增量比对，
 #       不做全量 rescan（全量单次实测 27.91s，472 文件全变约 3.7 小时 CPU）。
 # 零行为变化：默认 False 与原 getattr 默认值**完全一致**，登记只为可审计/可对账。
-ENABLE_STRUCTURE_RESCAN = False
+# ★364刀B2（甲2 已批准）：结构变化触发图重扫**开启**。订阅在位、300s 节流保留；
+#   单次重扫耗时已留痕（[311刀2] 行含 耗时=xxms）。重启生效；不新增订阅面。
+ENABLE_STRUCTURE_RESCAN = True
 
 # ===== [M324] 324批刀1：CALL_GRAPH_REBUILD_INTERVAL_SEC 键登记（键未登记第五/六例收口）=====
 # 读取点：nucleus/self_awareness/SelfAwarenessEngine.py::_graph_rebuild_interval()

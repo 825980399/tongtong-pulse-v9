@@ -284,6 +284,15 @@ def _m331_new_absorb_stats() -> dict:
             "tier_filters_active": False}
 
 
+#: ★364刀B3：自适应 TTL 的最近决策记录（进程内，最近 50 条）
+_m364_ttl_events: list = []
+
+
+def m364_ttl_events() -> list:
+    """★364刀B3：读最近 50 条自适应 TTL 决策（只读拷贝）。"""
+    return [dict(x) for x in _m364_ttl_events]
+
+
 class SelfInspector(SilentLogMixin):
     """
     框架自描述生成器。
@@ -2443,6 +2452,17 @@ class SelfInspector(SilentLogMixin):
                 _ttl = min(_ttl, 300.0)
         except Exception as _m64_qe:
             _module_logger.debug(f"[SelfInspector] 自适应TTL队列维度获取失败: {type(_m64_qe).__name__}: {_m64_qe}")
+        # ★364刀B3：TTL 决策留痕（最近 50 条）——开闸后要能回答「这一轮 TTL 为什么是 600s」
+        try:
+            _m364_ttl_events.append({
+                "ts": time.time(), "ttl": float(_ttl), "base_ttl": float(_base),
+                "cpu": round(float(_cpu), 1), "queue_depth": _depth,
+                "cpu_band": ("high" if _cpu > 80.0 else ("mid" if _cpu > 60.0 else "normal")),
+            })
+            if len(_m364_ttl_events) > 50:
+                del _m364_ttl_events[:-50]
+        except Exception as _m364te:
+            _module_logger.debug(f"[364B3] TTL 决策留痕失败: {type(_m364te).__name__}: {_m364te}")
         return _ttl
 
     # _m64_t3_adaptive_ttl_done

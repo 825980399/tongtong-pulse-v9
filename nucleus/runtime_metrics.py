@@ -524,34 +524,78 @@ class RuntimeMetrics:
             import config as _c
             _enable_gc = bool(getattr(_c, "ENABLE_MEMORY_AUTO_GC", False))
             _growth_thr = float(getattr(_c, "MEMORY_GROWTH_ALARM_MB_PER_MIN", 10.0))
-        except Exception:
-            _enable_gc, _growth_thr = False, 10.0
+            # ★364刀B1②：RSS 阈值接入（8GB 保守线，任务书明确不擅自降到 6.5GB）
+            _rss_thr = float(getattr(_c, "MEMORY_AUTO_GC_RSS_MB", 8192.0))
+        except Exception as _ce364:
+            _enable_gc, _growth_thr, _rss_thr = False, 10.0, 8192.0
+            # ★不得纯 assign：配置读不出来时三闸会全部退到保守默认，
+            #   若这里不吭声，「GC 不开」就永远查不出是配置问题还是闸没接。
+            _logger.warning("[364B1] 内存GC配置读取失败，按保守默认值"
+                            "(关/10.0MB/min/8192MB): %s: %s",
+                            type(_ce364).__name__, _ce364)
         _u = self.get_memory_usage()
         _pct = _u.get("percent", 0.0)
         _rss = _u.get("rss_mb", 0.0)
         _growth = self.get_memory_growth_rate()
-        _triggered = _pct >= float(threshold_percent) or _growth >= _growth_thr
+        # ★364刀B1②：三闸并列 —— 使用率≥阈值 或 RSS≥8GB 或 增长率≥阈值。
+        #   原判据缺 RSS 阈值 ⇒ `MEMORY_AUTO_GC_RSS_MB=8192.0` 是个**读了没人用**的配置
+        #   （366 星轨现场复核：8192 阈值未接入判据）。
+        _triggers: list = []
+        if _pct >= float(threshold_percent):
+            _triggers.append("percent")
+        if _rss >= _rss_thr:
+            _triggers.append("rss")
+        if _growth >= _growth_thr:
+            _triggers.append("growth")
+        _triggered = bool(_triggers)
         _gc_done = False
         if _triggered:
             try:
-                if _pct >= float(threshold_percent):
+                # ★364刀B1②：告警按**真实闸因**分别说清楚，不再用 else 兜着
+                if "percent" in _triggers:
                     _logger.warning(
                         "[运行时指标] 内存使用率 %.1f%% ≥ 阈值 %.1f%%，RSS=%.1fMB，"
-                        "增长率 %.2fMB/分钟", _pct, threshold_percent, _rss, _growth)
-                else:
+                        "增长率 %.2fMB/分钟（闸因=%s）",
+                        _pct, threshold_percent, _rss, _growth, ",".join(_triggers))
+                if "rss" in _triggers:
+                    _logger.warning(
+                        "[运行时指标] RSS %.1fMB ≥ 自动GC阈值 %.1fMB（使用率 %.1f%%，"
+                        "增长率 %.2fMB/分钟，闸因=%s）",
+                        _rss, _rss_thr, _pct, _growth, ",".join(_triggers))
+                if "growth" in _triggers and "percent" not in _triggers:
                     _logger.warning(
                         "[运行时指标] 内存增长率 %.2fMB/分钟 ≥ 阈值 %.1fMB/分钟（疑似内存泄漏），"
-                        "RSS=%.1fMB 使用率=%.1f%%", _growth, _growth_thr, _rss, _pct)
+                        "RSS=%.1fMB 使用率=%.1f%%（闸因=%s）",
+                        _growth, _growth_thr, _rss, _pct, ",".join(_triggers))
             except Exception as _se:
                 silent_exc(_se, "runtime_metrics.py:435")
             if auto_gc and _enable_gc:
+                # ★364刀B1③：`gc.collect()` 是 **STW** 暂停，必须留痕
+                #   （回收对象数 + 暂停时长 + 触发闸因），否则「回收有没有用、
+                #   有没有把主循环卡住」只能靠猜。
+                _gc_t0 = time.perf_counter()
                 try:
-                    gc.collect()
+                    _collected = int(gc.collect())
                     _gc_done = True
+                    _gc_pause_ms = round((time.perf_counter() - _gc_t0) * 1000.0, 3)
+                    _gc_stats = {"collected": _collected, "pause_ms": _gc_pause_ms,
+                                 "triggers": list(_triggers),
+                                 "rss_mb": round(float(_rss), 1),
+                                 "percent": round(float(_pct), 1)}
+                    _last_auto_gc.append(_gc_stats)
+                    if len(_last_auto_gc) > 20:
+                        del _last_auto_gc[:-20]
+                    _logger.warning(
+                        "[运行时指标] 自动GC完成：回收 %d 个对象，暂停 %.2fms，闸因=%s，"
+                        "RSS=%.1fMB 使用率=%.1f%%",
+                        _collected, _gc_pause_ms, ",".join(_triggers), _rss, _pct)
                 except Exception as _se:
                     silent_exc(_se, "runtime_metrics.py:441")
         return {"triggered": _triggered, "percent": _pct, "rss_mb": _rss,
-                "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done}
+                "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done,
+                # ★364刀B1②③：闸因与回收读数一起返回（观测面可直接读）
+                "triggers": list(_triggers), "rss_threshold_mb": _rss_thr,
+                "auto_gc_last": (dict(_last_auto_gc[-1]) if _last_auto_gc else None)}
 
     # _m65_t2_get_system_load_done
 
@@ -585,6 +629,10 @@ class RuntimeMetrics:
 # 模块级单例（双检锁）
 _metrics: RuntimeMetrics | None = None
 _metrics_lock = threading.Lock()
+
+
+#: ★364刀B1③：最近 20 次自动 GC 的读数（进程内，供观测面读取）
+_last_auto_gc: list = []
 
 
 def get_runtime_metrics() -> RuntimeMetrics:

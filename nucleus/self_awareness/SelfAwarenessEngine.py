@@ -164,6 +164,15 @@ def _structure_rescan_enabled() -> bool:
         return False
 
 
+#: ★364刀B2：最近一次结构重扫的耗时读数（模块级，供观测面/自检读取）
+_m364_last_rescan: dict = {}
+
+
+def m364_last_rescan() -> dict:
+    """★364刀B2：读最近一次结构重扫的耗时与差集（只读拷贝）。"""
+    return dict(_m364_last_rescan or {})
+
+
 def _structure_rescan_interval() -> float:
     """两次重扫之间的最小间隔（秒）；读不到按 300s。"""
     try:
@@ -598,6 +607,8 @@ class SelfAwarenessEngine:
         try:
             import os as _os
             _now = time.time()
+            # ★364刀B2：单次重扫耗时留痕（重扫是重活，长卡顿要能一眼看出）
+            _m364_t0 = time.perf_counter()
             _min_gap = _structure_rescan_interval()
             if self._m311_last_rescan_ts and (_now - self._m311_last_rescan_ts) < _min_gap:
                 _logger.info("[311刀2] 图重扫被节流: 距上次 %.1fs < %.0fs",
@@ -627,15 +638,24 @@ class SelfAwarenessEngine:
             except Exception as _ue:
                 _logger.debug("[311刀2] 图身份回写失败: %s: %s", type(_ue).__name__, _ue)
             self._m311_rescan_count += 1
+            # ★364刀B2：耗时留痕（起止 → elapsed_ms），并进返回结构供观测面读
+            _m364_elapsed_ms = round((time.perf_counter() - _m364_t0) * 1000.0, 2)
+            _m364_last = {"ts": _now, "elapsed_ms": _m364_elapsed_ms,
+                          "graph_file": _gfile,
+                          "changed": int(_payload.get("changed_count", 0) or 0),
+                          "added": int(_payload.get("added_count", 0) or 0),
+                          "removed": int(_payload.get("removed_count", 0) or 0)}
+            self._m364_last_rescan = _m364_last
             _logger.info(
                 "[311刀2] 结构变化触发的图重扫完成: 第%d次 graph=%s mtime=%.3f "
-                "触发差集(改%d/增%d/删%d)",
-                self._m311_rescan_count, _gfile or "-", _mtime,
+                "耗时=%.1fms 触发差集(改%d/增%d/删%d)",
+                self._m311_rescan_count, _gfile or "-", _mtime, _m364_elapsed_ms,
                 int(_payload.get("changed_count", 0) or 0),
                 int(_payload.get("added_count", 0) or 0),
                 int(_payload.get("removed_count", 0) or 0))
             return {"status": "rescanned", "graph_file": _gfile, "graph_mtime": _mtime,
-                    "rescan_count": self._m311_rescan_count}
+                    "rescan_count": self._m311_rescan_count,
+                    "elapsed_ms": _m364_elapsed_ms}
         except Exception as e:
             _logger.warning("[311刀2] 结构变化消费失败（不影响引擎）: %s: %s",
                             type(e).__name__, e)

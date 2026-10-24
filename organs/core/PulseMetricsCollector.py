@@ -805,6 +805,55 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "candidates_source": _offer_src,
                 "ast_release": _ast_rel}
 
+    def _m364_leaderboard_tick(self) -> dict:
+        """★364刀B4：器官健康排行的心跳接线点（**低频**，不新增定时器/线程）。
+
+        节流默认 3600 拍（≈1 小时），可配 `LEADERBOARD_HEARTBEAT_EVERY_BEATS`。
+        ★为什么这么稀：`collect()` 实测 ~2.0s/次（57 器官静态 AST 兜底扫描、无缓存），
+        高频会直接拖长心跳周期 —— 本刀只把链路接通并留痕耗时，
+        开关 `ENABLE_ORGAN_HEALTH_LEADERBOARD` 维持 False（开灯前置不满足）。
+        """
+        try:
+            _bc = int(getattr(self, "_beat_count", 0) or 0)
+            _every = 3600
+            try:
+                import config as _cfg364
+                _every = max(1, int(getattr(
+                    _cfg364, "LEADERBOARD_HEARTBEAT_EVERY_BEATS", 3600) or 3600))
+            except Exception as _e364a:
+                silent_exc(_e364a, where="PulseMetricsCollector::_m364_leaderboard_tick every",
+                           level="debug")
+            _last = getattr(self, "_m364_lb_beat", None)
+            if _last is not None and (_bc - int(_last)) < _every:
+                return {"status": "throttled", "every": _every}
+            self._m364_lb_beat = _bc
+            from nucleus.cognitive.organ_health_leaderboard import (
+                get_organ_health_leaderboard as _m364_get,
+            )
+            _lb = getattr(self, "_m364_lb", None)
+            if _lb is None:
+                _lb = _m364_get()
+                self._m364_lb = _lb
+            _t0 = time.perf_counter()
+            _lb.on_heartbeat()
+            _ms = round((time.perf_counter() - _t0) * 1000.0, 1)
+            _rows = len(getattr(_lb, "_last_report", []) or [])
+            self._m364_lb_last = {"ts": time.time(), "cost_ms": _ms, "rows": _rows,
+                                  "beat": _bc}
+            # ★2s 级耗时必须每次都看得见（这正是「能不能开灯」的判据）
+            self._log(LogLevel.INFO,
+                      f"[364B4] 健康排行心跳完成: rows={_rows} 耗时={_ms}ms "
+                      f"(开关=ENABLE_ORGAN_HEALTH_LEADERBOARD，节流={_every}拍)")
+            return {"status": "ok", "rows": _rows, "cost_ms": _ms}
+        except Exception as _e364:
+            silent_exc(_e364, where="PulseMetricsCollector::_m364_leaderboard_tick",
+                       level="warning")
+            return {"status": "error", "why": type(_e364).__name__}
+
+    def m364_leaderboard_stats(self) -> dict:
+        """★364刀B4：读健康排行心跳接线的最近一次读数（只读拷贝）。"""
+        return dict(getattr(self, "_m364_lb_last", None) or {})
+
     def _m363_diag_tick(self) -> dict:
         """★363刀B3：六处诊断读数的**生产接线点**（心跳侧，按拍节流）。
 
@@ -985,17 +1034,32 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["m363_diag"] = {"status": "error",
                                          "why": type(_m363de).__name__}
 
+                # ★364刀B4：器官健康排行心跳接线（低频；开关关闭时 on_heartbeat 直接返回）
+                try:
+                    _out["m364_leaderboard"] = self._m364_leaderboard_tick()
+                except Exception as _m364le:
+                    silent_exc(_m364le,
+                               where="PulseMetricsCollector::_collect_memory_pressure 364刀B4")
+                    _out["m364_leaderboard"] = {"status": "error",
+                                                "why": type(_m364le).__name__}
+
                 # ★337批刀4：`check_memory_alarm_detailed` **死链挂接**（增长率为核心）
                 #   337前置§0-5：全库唯一调用方是 tests/test_memory_growth_analyzer_m66.py，
                 #   生产日志 `[运行时指标] 内存` **0 行** ⇒ "写了没挂"（与 333刀2 同型）。
                 #   挂在与 memory_pressure 同一条心跳链上，不新增调度点。
                 try:
                     from nucleus.runtime_metrics import get_runtime_metrics as _grm
-                    _al = _grm().check_memory_alarm_detailed() or {}
+                    # ★364刀B1①：传 auto_gc=True —— 366 现场复核「调用点未传 auto_gc=True」
+                    #   导致 GC 三闸接好了却永远不会回收（半接线）。
+                    _al = _grm().check_memory_alarm_detailed(auto_gc=True) or {}
                     _out["growth_alarm"] = {
                         "triggered": bool(_al.get("triggered")),
                         "growth_mb_per_min": _al.get("growth_mb_per_min"),
                         "rss_mb": _al.get("rss_mb"),
+                        # ★364刀B1：闸因/回收读数进观测面（回收量、暂停时长可追溯）
+                        "triggers": _al.get("triggers"),
+                        "gc_triggered": _al.get("gc_triggered"),
+                        "auto_gc_last": _al.get("auto_gc_last"),
                     }
                 except Exception as _ae:
                     silent_exc(_ae,

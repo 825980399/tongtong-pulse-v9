@@ -15499,11 +15499,15 @@ class PulseInnerWorld(
         """
         try:
             import config as _cfg
+            # ★364刀B5：默认值改 **False**（fail-closed）——键缺失按「关」处理，
+            #   与 config.py:1869 `ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION=False` 对齐。
+            #   原 `getattr(..., True)` 会让缺键静默滑回「开」，属于 fail-open。
             return bool(getattr(_cfg,
-                                "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION", True))
+                                "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION", False))
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_operational_admission_on L15881")
-            return True
+            # ★364刀B5：读异常同样按「关」处理（fail-closed），不猜「旧行为」
+            return False
 
     @staticmethod
     def _m34_fail_return_none_on() -> bool:
