@@ -31,6 +31,7 @@ _PT_ROOT = _pt_os.path.dirname(
 if _PT_ROOT not in _pt_sys.path:
     _pt_sys.path.insert(0, _PT_ROOT)
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
 
 # ★第160批 下上 刀0（0.4）：占位符判据统一走 PlaceholderSanitizer 唯一口径
 #   （禁在本文件再造字面量）；该模块不反向依赖本文件 ⇒ 无循环导入。
@@ -227,7 +228,9 @@ class PollutionTagger:
         for _n in _nodes:
             try:
                 _flag, _reason = self.classify(_n)
-            except Exception:
+            except Exception as _m360e:
+                # ★360刀3：污染漏标**静默跳过** ⇒ 打标率虚高且不报
+                note_drop("PollutionTagger.scan_pool", "node_error", "%s" % _m360e)
                 continue
             self._scanned += 1
             self._counts[_flag] = self._counts.get(_flag, 0) + 1
@@ -285,7 +288,9 @@ class PollutionTagger:
         for _n in nodes:
             try:
                 _flag, _reason = self.classify(_n)
-            except Exception:
+            except Exception as _m360e:
+                # ★360刀3：污染漏标**静默跳过** ⇒ 打标率虚高且不报
+                note_drop("PollutionTagger.scan_nodes", "node_error", "%s" % _m360e)
                 continue
             self._scanned += 1
             self._counts[_flag] = self._counts.get(_flag, 0) + 1
@@ -406,7 +411,9 @@ class PollutionTagger:
             if callable(_f):
                 try:
                     return list(_f())
-                except Exception:
+                except Exception as _m360e:
+                    # ★360刀3：污染漏标**静默跳过** ⇒ 打标率虚高且不报
+                    note_drop("PollutionTagger._iter_nodes", "node_error", "%s" % _m360e)
                     continue
         # 兜底：直接读内部池（只读，不修改）
         _out = []

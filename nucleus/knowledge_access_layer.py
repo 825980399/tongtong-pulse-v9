@@ -30,6 +30,8 @@ from collections.abc import Iterator
 from typing import Any, Optional
 
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
+
 
 try:  # 项目内模块日志器；取不到时回退标准 logging（零依赖）
     from nucleus.logger import get_module_logger as _get_module_logger
@@ -241,7 +243,10 @@ class KnowledgeAccessLayer:
                 if _na <= 0 or _nb <= 0:
                     continue
                 _out.append((_n, _dot / (_na * _nb)))
-            except Exception:
+            except Exception as _m360e:
+                # ★360刀3：检索候选被静默丢 ⇒ 召回数比实际少且不报
+                note_drop("knowledge_access_layer.search_similar",
+                          "candidate_dropped", "%s" % _m360e)
                 continue
         _out.sort(key=lambda x: x[1], reverse=True)
         return _out[:int(top_k or 1000)]

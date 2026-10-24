@@ -40,6 +40,8 @@ import uuid
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
+
 from nucleus.logger import get_module_logger  # ★340刀4：取数行留痕
 
 
@@ -507,10 +509,15 @@ def convert_calls_to_training_pairs(src_path: str, out_path: str) -> int:
                     continue
                 try:
                     _rec = json.loads(_line)
-                except Exception:
+                except Exception as _m360e:
+                    # ★360刀3：训练样本静默丢失 ⇒ 转化率分母虚高
+                    note_drop("call_recorder.convert_calls_to_training_pairs",
+                              "bad_line", "%s" % _m360e)
                     continue
                 _pair = build_training_pair(_rec)
                 if _pair is None:
+                    note_drop("call_recorder.convert_calls_to_training_pairs",
+                              "pair_none")
                     continue
                 _of.write(json.dumps(_pair, ensure_ascii=False, default=str) + "\n")
                 _n += 1

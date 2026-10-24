@@ -251,7 +251,9 @@ def cleanup_old_logs(log_dir: str | None = None, days: int | None = None,
     _removed = []
     try:
         _names = os.listdir(_dir)
-    except OSError:
+    except OSError as _m360e:
+        # ★360刀1：列目录失败 ⇒ 清理整体跳过，此前零痕迹（读的人以为"没有旧日志"）
+        silent_exc(_m360e, "logger.py:254 旧日志清理列目录失败", level="warning")
         return []
     for _name in _names:
         _p = os.path.join(_dir, _name)
@@ -262,7 +264,9 @@ def cleanup_old_logs(log_dir: str | None = None, days: int | None = None,
                 continue
             os.remove(_p)
             _removed.append(_p)
-        except OSError:
+        except OSError as _m360e:
+            # ★360刀1：删除失败静默 continue ⇒ 磁盘回收"看着没执行"
+            silent_exc(_m360e, "logger.py:265 旧日志删除失败(跳过)", level="warning")
             continue
     return _removed
 
@@ -581,8 +585,10 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
             _wait = 0.2
             try:
                 _log_rollover_cfg_error(_rc, "cfg")
-            except Exception:
-                pass
+            except Exception as _m360e:
+                # ★360刀1：告警器自身失败不能静默（否则"告警没出现"会被读成"没故障"）
+                silent_exc(_m360e, "logger.py:584 轮转配置告警器自身失败",
+                           level="warning")
         if _retry < 1:
             _retry = 1
         if _wait < 0.0:
@@ -592,33 +598,49 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
                 super().doRollover()
                 try:
                     _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
-                except Exception:
-                    pass
+                except Exception as _m360e:
+                    # ★360刀1：marker 写失败 ⇒ 后续 size 下降会被误判"外部截断"
+                    silent_exc(_m360e, "logger.py:595 轮转标记写入失败(doRollover)",
+                               level="warning")
                 return
             except PermissionError as _pe:
                 if _attempt < _retry - 1:
                     try:
                         time.sleep(min(_wait * (2 ** _attempt), 2.0))
-                    except Exception:
-                        pass
+                    except Exception as _m360e:
+                        silent_exc(_m360e, "logger.py:602 轮转重试 sleep 失败",
+                                   level="warning")
                     continue
+                # ★360刀4：重试耗尽 ⇒ 轮转被放弃，此前**零痕迹**
+                _m360_rollover_note(_dir, "permission_retry_exhausted", _pe,
+                                    attempt=_attempt + 1, retry=_retry)
                 break
             except OSError as _oe:
+                # ★360刀4：OSError 直接 break ⇒ 静默放弃轮转
+                _m360_rollover_note(_dir, "oserror", _oe,
+                                    attempt=_attempt + 1, retry=_retry)
                 break
             except Exception as _ue:
+                # ★360刀4：兜底分支静默 break（连异常类型都看不见）
+                _m360_rollover_note(_dir, "unknown", _ue,
+                                    attempt=_attempt + 1, retry=_retry)
                 break
         try:
             self._copy_truncate_rollover()
             try:
                 _write_rollover_marker(_dir, _base + ".1", _prev_size, _base)
-            except Exception:
-                pass
+            except Exception as _m360e:
+                silent_exc(_m360e, "logger.py:614 轮转标记写入失败(复制截断兜底)",
+                           level="warning")
             return
         except Exception as _ce:
+            # ★360刀1/刀4：兜底路径也失败 ⇒ 轮转彻底放弃，必须留痕
+            _m360_rollover_note(_dir, "copy_truncate_failed", _ce)
             try:
                 _warn_rollover_blocked_cooled(_ce)
-            except Exception:
-                pass
+            except Exception as _m360e:
+                silent_exc(_m360e, "logger.py:620 轮转兜底告警器自身失败",
+                           level="warning")
             return
 
     def _copy_truncate_rollover(self) -> None:
@@ -661,8 +683,10 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         if self.stream is not None:
             try:
                 self.stream.flush()
-            except Exception:
-                pass
+            except Exception as _m360e:
+                # ★360刀1：flush 失败 ⇒ 复制的是未落盘内容，备份会短一截
+                silent_exc(_m360e, "logger.py:664 轮转前 flush 失败",
+                           level="warning")
         with open(_base, "rb") as _fin, open(_backup, "wb") as _fout:
             _fout.write(_fin.read())
         # 3) 截断当前文件（就地清空，不重命名）
@@ -775,6 +799,70 @@ def _warn_rollover_blocked_cooled(exc: BaseException) -> None:
     except Exception as _le:
         print(f"[Logger] 日志轮转失败且告警失败: {type(_le).__name__}")
 
+
+# ==========================================================================
+# ★第360批 刀1/刀4：轮转失败路径**统一留痕**（烛微 359 A 类）
+# --------------------------------------------------------------------------
+# 背景：轮转族此前 9 处 `except ...: pass/break`，失败**零痕迹**。
+#   349 刀10① 加了 `_log_rollover_cfg_error`（只覆盖配置读取），356 刀12 加了
+#   681 截断告警与风暴防护；本批补齐剩下的面：
+#   - 596 处 pass（marker 写失败 / 告警器自身失败 / flush 失败）
+#   - 606/608 处 break（重试耗尽、OSError、未知异常 ⇒ 轮转**静默放弃**）
+# 落点：① 模块 warning（带 stage 分档，铁律166：不同事实不同措辞）；
+#       ② 追加一行 JSON 到 `log_integrity_events.log`（与轮转成功标记同文件，
+#          运维查一处即可看到成功/失败全貌）；③ 进程内计数（可观测/可断言）。
+# ==========================================================================
+_M360_ROLLOVER_NOTES: dict = {}
+_M360_ROLLOVER_NOTES_LOCK = threading.Lock()
+
+
+def _m360_rollover_note(log_dir: str, stage: str, exc: BaseException,
+                        attempt: int = 0, retry: int = 0,
+                        force: bool = False) -> dict:
+    """轮转失败留痕：**只留痕，不改变任何控制流**（调用方自己 break/return）。"""
+    _stage = str(stage or "unknown")
+    try:
+        with _M360_ROLLOVER_NOTES_LOCK:
+            _M360_ROLLOVER_NOTES[_stage] = int(
+                _M360_ROLLOVER_NOTES.get(_stage) or 0) + 1
+            _n = _M360_ROLLOVER_NOTES[_stage]
+    except Exception as _e:
+        silent_exc(_e, "logger.py:_m360_rollover_note 计数", level="warning")
+        _n = -1
+    _msg = ("日志轮转失败[stage=%s] attempt=%s/%s 累计%d次: %s: %s"
+            % (_stage, attempt or "-", retry or "-", _n, type(exc).__name__, exc))
+    try:
+        logging.getLogger(__name__).warning(_msg)
+    except Exception as _e:
+        silent_exc(_e, "logger.py:_m360_rollover_note warning", level="warning")
+    try:
+        if force or not _log_in_test_env():
+            _p = os.path.join(log_dir or "", _LOG_INTEGRITY_FILE)
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps({
+                    "ts": time.time(),
+                    "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "rollover_failed",
+                    "stage": _stage,
+                    "attempt": attempt, "retry": retry, "count": _n,
+                    "error": "%s: %s" % (type(exc).__name__, exc),
+                    "note": "轮转失败（360刀1/刀4 留痕；此前为静默 pass/break）",
+                }, ensure_ascii=False) + "\n")
+    except Exception as _e:
+        silent_exc(_e, "logger.py:_m360_rollover_note 写完整性事件",
+                   level="warning")
+    return {"stage": _stage, "count": _n}
+
+
+def m360_rollover_notes() -> dict:
+    """轮转失败分档计数读数出口（测试/心跳可观察；无失败时为空 dict）。"""
+    try:
+        with _M360_ROLLOVER_NOTES_LOCK:
+            return dict(_M360_ROLLOVER_NOTES)
+    except Exception as _m360e:
+        silent_exc(_m360e, "logger.py:m360_rollover_notes 读数失败",
+                   level="warning")
+        return {}
 
 # ========== ★206批 刀1：树外 logger 根治（案C 显式名单注册） ==========
 # 显式名单注册 16 个生产模块（来自205刀1普查黑盒名录；semantic_cache_l2 已在205改名入树故不在名单）。

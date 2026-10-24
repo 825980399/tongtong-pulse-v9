@@ -54,12 +54,20 @@ _GOLDEN_MODEL = "BAAI/bge-small-zh-v1.5"
 _GOLDEN_DIM = 512
 
 
+_M360_COMPONENT = "VectorStore"
+from nucleus.semantic.sem_failure_note import note_semantic_failure
+
+
 def _load_config() -> dict[str, Any]:
     try:
         import config as _cfg
         _raw = getattr(_cfg, "SEMANTIC_KERNEL_CONFIG", {})
         return _raw if isinstance(_raw, dict) else {}
-    except Exception:
+    except Exception as _m360e:
+        # ★360刀2：配置加载失败 ≠ "语义功能本就关闭"。此前静默 return {} ⇒
+        #   上层把"没读到配置"读成"配置里就是关的"，故障永远不可见。
+        #   留痕后仍返回空配置（零行为变化），但故障可计数、可区分。
+        note_semantic_failure(_M360_COMPONENT, "load_config", _m360e)
         return {}
 
 
@@ -690,6 +698,8 @@ class VectorStore:
             mat = self._matrix
             ids = list(self._ids)
         if mat.shape[0] == 0:
+            # 空矩阵属"真无召回"（不是失败）⇒ 复位标记，避免上一轮的失败态串味
+            self._m360_last_search_failed = False
             return []
         try:
             from nucleus.semantic.VectorEncoder import VectorEncoder
@@ -705,6 +715,7 @@ class VectorStore:
                     if 0 <= i < len(ids) and np.isfinite(s)]
             # ★主线第3批 任务3（P1-23）：quality_flag 检索消费（假闭环第5例）
             if self._quality_flag_provider is None:
+                self._m360_last_search_failed = False
                 return _raw
             _prov = self._quality_flag_provider
             # 放宽：先取更多候选，过滤污染节点后再裁到 top_k
@@ -721,9 +732,17 @@ class VectorStore:
                     continue  # polluted(0.0) -> 直接过滤
                 _out.append((ids[i], float(s) * _w))
             _out.sort(key=lambda x: x[1], reverse=True)
+            self._m360_last_search_failed = False
             return _out[:top_k]
         except Exception as _e:
-            _logger.debug(f"[向量库] 检索失败: {_e}")
+            # ★360刀2：检索失败 ≠ 无召回。此前只有 debug 级一行 ⇒ 上层
+            #   （含审计/回扫）把"调用炸了"读成"确实没召回"，属故障伪装空结果。
+            #   改：warning 留痕 + 置失败标记，返回值仍为 []（零行为变化）。
+            note_semantic_failure(_M360_COMPONENT, "search_by_vector", _e)
+            try:
+                self._m360_last_search_failed = True
+            except Exception as _m360e:
+                silent_exc(_m360e, where="VectorStore::search_by_vector 失败标记")
             return []
 
     # ---------------- quality_flag 检索消费（主线第3批 任务3）----------------

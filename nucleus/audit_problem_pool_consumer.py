@@ -47,6 +47,8 @@ import time
 
 from nucleus import audit_problem_pool as _pool
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
+
 from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger(__name__)
@@ -160,7 +162,10 @@ def _read_jsonl_ids(path: str) -> set:
                     continue
                 try:
                     _d = json.loads(_line)
-                except ValueError:
+                except ValueError as _m360e:
+                    # ★360刀3：坏行工单**静默丢失** ⇒ 回写对账永远差这一笔
+                    note_drop("audit_problem_pool_consumer._read_jsonl_ids",
+                              "bad_line", "%s" % _m360e)
                     continue
                 if isinstance(_d, dict) and _d.get("id"):
                     _ids.add(str(_d["id"]))

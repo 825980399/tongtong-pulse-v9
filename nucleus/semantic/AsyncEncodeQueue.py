@@ -26,12 +26,20 @@ from nucleus.semantic.VectorStore import get_vector_store
 _logger = get_module_logger("AsyncEncodeQueue")
 
 
+_M360_COMPONENT = "AsyncEncodeQueue"
+from nucleus.semantic.sem_failure_note import note_semantic_failure
+
+
 def _load_config() -> dict[str, Any]:
     try:
         import config as _cfg
         _raw = getattr(_cfg, "SEMANTIC_KERNEL_CONFIG", {})
         return _raw if isinstance(_raw, dict) else {}
-    except Exception:
+    except Exception as _m360e:
+        # ★360刀2：配置加载失败 ≠ "语义功能本就关闭"。此前静默 return {} ⇒
+        #   上层把"没读到配置"读成"配置里就是关的"，故障永远不可见。
+        #   留痕后仍返回空配置（零行为变化），但故障可计数、可区分。
+        note_semantic_failure(_M360_COMPONENT, "load_config", _m360e)
         return {}
 
 

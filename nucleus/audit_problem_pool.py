@@ -59,6 +59,8 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
+
 from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger(__name__)
@@ -709,7 +711,9 @@ def _first_ts(entry: dict) -> float:
         if _v is not None:
             try:
                 return float(_v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as _m360e:
+                # ★360刀3：first_seen 转 float 失败 ⇒ 该条目被跳过，池统计失真
+                note_drop("audit_problem_pool._first_ts", "cast_failed", "%s" % _m360e)
                 continue
     return 0.0
 
@@ -1265,7 +1269,9 @@ def hub_discovery_stats(since_ts: float, hub: Any = None,
     for _v in _all.values():
         try:
             _fs = float(_v.get("first_seen") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as _m360e:
+            # ★360刀3：同上，另一处口径（新条目统计）
+            note_drop("audit_problem_pool.new_since", "cast_failed", "%s" % _m360e)
             continue
         _seen += 1
         if _fs >= float(since_ts):

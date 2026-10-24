@@ -25,6 +25,8 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.drop_tracker import note_drop
+
 from nucleus.logger import get_module_logger
 from nucleus.const import MotorEvent
 from nucleus.proc_gen import proc_gen_str as _m335_pg
@@ -720,7 +722,10 @@ def _m326_seed_from_trace(trace_path: str | None = None, dry_run: bool = True,
                 _stat["lines"] += 1
                 try:
                     _r = json.loads(_line)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as _m360e:
+                    # ★360刀3：补丁条目丢失 ⇒ 派单台账对不上
+                    note_drop("patch_execution_dispatch._read_dispatch_state",
+                              "bad_line", "%s" % _m360e)
                     continue
                 if not isinstance(_r, dict):
                     continue
