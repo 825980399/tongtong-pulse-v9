@@ -33,7 +33,7 @@ from nucleus.const import (
     LungEvent,
     SystemEvent,
 )
-from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.knowledge_noise_filter import clean_content_text
 from nucleus.mnemosyne.PulseNode import PulseNode
 from nucleus.self_inspector import get_self_inspector
@@ -3298,7 +3298,6 @@ class PulseCodeLearner(BasePulseOrgan):
 
                 # 写入配置优化建议文件（供下次启动时参考）
                 try:
-                    import json as _json
                     import os as _os
                     _suggestion_file = _os.path.join(
                         _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
@@ -3307,13 +3306,23 @@ class PulseCodeLearner(BasePulseOrgan):
                     _existing = []
                     if _os.path.exists(_suggestion_file):
                         _existing = safe_read_json(_suggestion_file, default={})
+                    # ★367 后续（non_atomic_write 收口）：`safe_read_json` 读失败时返回 default，
+                    #   而下面要 `.append()` —— dict/None 会让 append 抛 AttributeError，
+                    #   被外层 except 吞掉 ⇒ 整段写入**静默失败**（建议永远写不进去）。
+                    #   此处强制归一：非 list 一律当空表（不猜内容）。
+                    if not isinstance(_existing, list):
+                        _existing = []
                     for _ps in _param_suggestions:
                         _ps["suggested_at"] = time.time()
                         _existing.append(_ps)
                     # 只保留最近50条
                     _existing = _existing[-50:]
-                    with open(_suggestion_file, 'w', encoding='utf-8') as _f:
-                        _json.dump(_existing, _f, ensure_ascii=False, indent=2)
+                    # ★367 后续：改走原子写（tmp + os.replace）。原来裸 open('w') 在写一半
+                    #   崩溃/被杀时会留下**半截 JSON**，下次启动 `safe_read_json` 读失败
+                    #   ⇒ 建议全部丢失，且没有任何痕迹。
+                    if not safe_write_json(_suggestion_file, _existing, indent=2):
+                        self._log(LogLevel.WARNING,
+                                  "参数优化建议写入失败（原子写返回 False，需关注）")
                 except Exception as e:
                     self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 

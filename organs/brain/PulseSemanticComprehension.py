@@ -26,6 +26,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus._silent_except import silent_exc
+from nucleus.data.DataAccessLayer import safe_write_json
 from nucleus.const import Event, LogLevel, QICAEvent, SystemEvent
 
 
@@ -793,11 +794,14 @@ class PulseSemanticComprehension(BasePulseOrgan):
             self._lessons = {}
 
     def _save_lessons(self):
-        """保存学习库到文件"""
+        """保存学习库到文件（★367 后续：原子写）"""
         try:
             os.makedirs(os.path.dirname(self._lessons_file), exist_ok=True)
-            with open(self._lessons_file, 'w', encoding='utf-8') as f:
-                json.dump(self._lessons, f, ensure_ascii=False, indent=2)
+            # ★367 后续（non_atomic_write 收口）：原来裸 open('w')，写一半被打断会留下
+            #   半截 JSON ⇒ 下次 `_load_lessons` 解析失败并把 `self._lessons` 置空
+            #   ⇒ **学习库整体丢失**（这是"非原子写"里代价最大的一种：不是丢一次写，是丢全部）。
+            if not safe_write_json(self._lessons_file, self._lessons, indent=2):
+                self._log(LogLevel.WARNING, "学习库保存失败（原子写返回 False，需关注）")
         except Exception as e:
             self._log(LogLevel.WARNING, f"学习库保存失败: {e}")
 
