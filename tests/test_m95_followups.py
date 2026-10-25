@@ -250,6 +250,16 @@ class TestM95RateUnification(unittest.TestCase):
     def _p(pf, source="local_rule", **extra):
         _d = {"source": source, "problem_fixed": pf,
               F_SPLIT_VERSION: 1, "file": "organs/x.py", "method": "m"}
+        # ★364刀A6续4（夹具同步派生源）：306批刀2 起 problem_fixed 的**唯一派生源**
+        #   是 reprobe_verdict（T4 方法级复现探针），real_fix_rate 一律重派生、
+        #   不读存储值 ⇒ 夹具只给 problem_fixed 会被派生为 None（real_fix_rate 恒 0），
+        #   与读存储值的 evolution_local_rule_rate 不再等价（3 例红的共同根因）。
+        #   pf=None（不可判定）刻意不补探针字段，保持派生为 None 的语义。
+        if pf is True:
+            _d["reprobe_verdict"] = "true_pass"
+            _d["reprobe_baseline_hits"] = 1
+        elif pf is False:
+            _d["reprobe_verdict"] = "ineffective"
         _d.update(extra)
         return _d
 

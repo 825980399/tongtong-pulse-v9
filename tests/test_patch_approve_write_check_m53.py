@@ -7,6 +7,7 @@
   ③ 返回值契约兼容 UI（reason 字段）与既有调用方
   ④ 灰度开关 ENABLE_PATCH_APPROVE_WRITE_CHECK 关闭 → 零回归
 """
+import contextlib
 import os
 import sys
 
@@ -20,6 +21,7 @@ from unittest import mock
 
 import config
 import nucleus.data.write_guard as _wg
+from nucleus.evolution import pending_write as _pw
 from nucleus.reasoning.PatchManager import PatchManager
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,7 +42,9 @@ def _write_pending(tmp, n=2, status="pending"):
     #   approve_all 无条目可批 ⇒ 返回 ok=True，与「写盘失败应 ok=False」的断言打架）。
     items = [{"id": "p%d" % i, "file": "config.py", "method": "m%d" % i,
               "status": status, "risk_level": "低", "trust_score": 40,
-              "original_code": "def m%d(self):\n    return 'x'\n" % i,
+              # ★364刀A6续2：夹具双约束——①284刀5「modified_code 首个 def 名 == method」
+              #   ②过期判据「original_code 必须在 config.py 中真实存在」（只满足①会判 obsolete）
+              "original_code": "PATCH_AUTO_APPROVE_TRUST_THRESHOLD = 40",
               "modified_code": "def m%d(self):\n    return 'y'\n" % i}
              for i in range(n)]
     with open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
@@ -52,6 +56,17 @@ def _read_pending(tmp):
     with open(os.path.join(tmp, "pending_patches.json"), encoding="utf-8") as f:
         return json.load(f)
 
+
+# ★364刀A6续3：写盘失败注入（356 单一写口后必须同时堵两个落点）。
+#   ① nucleus.data.write_guard.guard_write —— _save_json 直路仍走它；
+#   ② nucleus.evolution.pending_write.write_pending —— pending 队列唯一写口
+#      （356刀11 起 approve_* 走它，不再经过 guard_write，只堵①等于没堵）。
+@contextlib.contextmanager
+def _write_fail():
+    with mock.patch.object(_wg, "guard_write", lambda *a, **k: False), \
+         mock.patch.object(_pw, "write_pending",
+                           lambda *a, **k: {"ok": False, "why": "mock_write_denied"}):
+        yield
 
 class _Base(unittest.TestCase):
     def setUp(self):
@@ -71,7 +86,7 @@ class TestSaveJsonReturnValue(_Base):
         self.assertTrue(os.path.isfile(os.path.join(self.tmp, "ok.json")))
 
     def test_02_guard_reject_returns_false(self):
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr._save_json(os.path.join(self.tmp, "d.json"), {"a": 1})
         self.assertIs(_r, False)
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "d.json")))
@@ -84,7 +99,7 @@ class TestSaveJsonReturnValue(_Base):
     def test_04_never_returns_none(self):
         """★回归护栏：三路径均不得隐式返回 None（本轮修复前成功路径返回 None）。"""
         _r1 = self.mgr._save_json(os.path.join(self.tmp, "a.json"), {})
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r2 = self.mgr._save_json(os.path.join(self.tmp, "b.json"), {})
         with mock.patch.object(tempfile, "mkstemp", side_effect=OSError("x")):
             _r3 = self.mgr._save_json(os.path.join(self.tmp, "c.json"), {})
@@ -93,7 +108,7 @@ class TestSaveJsonReturnValue(_Base):
 
     def test_05_save_patch_list_propagates(self):
         self.assertIs(self.mgr._save_patch_list(os.path.join(self.tmp, "l.json"), []), True)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             self.assertIs(
                 self.mgr._save_patch_list(os.path.join(self.tmp, "l2.json"), []), False)
 
@@ -114,14 +129,14 @@ class TestApproveAllPatchesWriteCheck(_Base):
 
     def test_11_guard_reject_ok_false(self):
         _write_pending(self.tmp, 2)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr.approve_all_patches()
         self.assertIs(_r["ok"], False)
         self.assertEqual(_r["approved"], 0)
 
     def test_12_error_reported(self):
         _write_pending(self.tmp, 2)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr.approve_all_patches()
         self.assertIn("WriteGuard", _r["reason"])
         self.assertTrue(_r["error"])
@@ -129,7 +144,7 @@ class TestApproveAllPatchesWriteCheck(_Base):
     def test_13_disk_not_modified_on_failure(self):
         """★核心：写盘失败时不得把内存态当成功 —— 磁盘仍保持 pending。"""
         _write_pending(self.tmp, 2)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             self.mgr.approve_all_patches()
         self.assertTrue(all(x["status"] == "pending" for x in _read_pending(self.tmp)))
 
@@ -156,14 +171,14 @@ class TestApprovePatchWriteCheck(_Base):
 
     def test_21_guard_reject_ok_false(self):
         _write_pending(self.tmp, 2)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr.approve_patch(1)
         self.assertIs(_r["ok"], False)
         self.assertEqual(_r["approved"], 0)
 
     def test_22_disk_not_modified_on_failure(self):
         _write_pending(self.tmp, 2)
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             self.mgr.approve_patch(1)
         self.assertTrue(all(x["status"] == "pending" for x in _read_pending(self.tmp)))
 
@@ -182,7 +197,7 @@ class TestSwitchZeroRegression(_Base):
         _orig = config.ENABLE_PATCH_APPROVE_WRITE_CHECK
         try:
             config.ENABLE_PATCH_APPROVE_WRITE_CHECK = False
-            with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+            with _write_fail():
                 _r1 = self.mgr.approve_all_patches()
                 _r2 = self.mgr.approve_patch(0)
             self.assertIs(_r1["ok"], True)

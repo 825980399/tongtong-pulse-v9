@@ -61,7 +61,10 @@ def _base_patch(issue_type):
         "risk_level": "极低",
         "trust_score": 80,
         "issue_type": issue_type,
-        "source": "llm",
+        # ★364刀A6续5（夹具同步生产策略）：280批刀3 起「llm 补丁永不自动审批」
+        #   （即使 risk/trust/白名单达标也转人工）⇒ 原夹具 source="llm" 与
+        #   「应免签自动审批」的断言自相矛盾。改 local_rule 保持用例原语义。
+        "source": "local_rule",
         "status": "pending",
         "modified_code": "def foo():\n    return 1\n",
         "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},

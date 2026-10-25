@@ -15,6 +15,7 @@
 不依赖真实 config 热路径 import。
 """
 
+import logging
 import sys
 import types
 from unittest.mock import patch
@@ -28,6 +29,9 @@ def _make_collector(info_field):
     _c = PulseMetricsCollector.__new__(PulseMetricsCollector)
     _c.info_field = info_field
     _c._mem_restart_streak = 0
+    # ★364刀A6续5（夹具漂移）：339 批起采集段用 self._logger，缺失会抛
+    #   AttributeError 并被 silent_exc 吞成「采集异常」⇒ 用例读到空结果。
+    _c._logger = logging.getLogger("test.m176.restart")
     return _c
 
 

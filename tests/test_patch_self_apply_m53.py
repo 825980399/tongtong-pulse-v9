@@ -9,6 +9,7 @@
 
 全部落盘指向沙箱目录，绝不触碰生产 data/。
 """
+import contextlib
 import os
 import sys
 
@@ -23,6 +24,7 @@ from unittest import mock
 
 import config
 import nucleus.data.write_guard as _wg
+from nucleus.evolution import pending_write as _pw
 from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.events.EventBus import get_event_bus, reset_event_bus
 from nucleus.evolution import patch_lifecycle as _pl
@@ -73,14 +75,31 @@ def _patch(**kw):
         "confidence": kw.get("confidence", "high"),
         "trust_score": kw.get("trust_score", 40),
         "status": kw.get("status", "pending"),
+        # ★364刀A6续（夹具漂移）：284刀5 结构缺陷判据要求 modified_code 能 parse 出
+        #   与 method 同名的 def；原夹具为模块级赋值（无 def）⇒ 整条作废 ⇒
+        #   approve_* 无条目可批 ⇒ ok=True，与「写盘失败应 ok=False」断言打架（11 例同源）。
+        # ★364刀A6续2（二次夹具漂移订正）：夹具须同时满足①284刀5「modified_code
+        #   首个 def 名 == method」与②过期判据「original_code 必须在 config.py 中
+        #   真实存在」——只满足①会让整条被判 mark_obsolete（test_05 系列红）。
         "original_code": kw.get("original_code", "PATCH_AUTO_APPROVE_TRUST_THRESHOLD = 40"),
-        "modified_code": kw.get("modified_code", "PATCH_AUTO_APPROVE_TRUST_THRESHOLD = 40  # x"),
+        "modified_code": kw.get("modified_code", "def m1():\n    return 41\n"),
     }
     base.update({k: v for k, v in kw.items() if k not in base})
     return base
 
 
 # ============================ 场景① 自动审批逻辑 ============================
+# ★364刀A6续3：写盘失败注入（356 单一写口后必须同时堵两个落点）。
+#   ① nucleus.data.write_guard.guard_write —— _save_json 直路仍走它；
+#   ② nucleus.evolution.pending_write.write_pending —— pending 队列唯一写口
+#      （356刀11 起 approve_* 走它，不再经过 guard_write，只堵①等于没堵）。
+@contextlib.contextmanager
+def _write_fail():
+    with mock.patch.object(_wg, "guard_write", lambda *a, **k: False), \
+         mock.patch.object(_pw, "write_pending",
+                           lambda *a, **k: {"ok": False, "why": "mock_write_denied"}):
+        yield
+
 class TestAutoApproval(unittest.TestCase):
     """入队自动审批判据（与 PatchManager:135-166 同源）。"""
 
@@ -151,7 +170,7 @@ class TestApproveWriteCheck(unittest.TestCase):
 
     def test_11_approve_all_write_failure(self):
         _write_pending(self.tmp, [_patch(id="a")])
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr.approve_all_patches()
         self.assertIs(_r["ok"], False)
         self.assertEqual(_r["approved"], 0)
@@ -164,7 +183,7 @@ class TestApproveWriteCheck(unittest.TestCase):
 
     def test_13_approve_one_write_failure(self):
         _write_pending(self.tmp, [_patch(id="a")])
-        with mock.patch.object(_wg, "guard_write", lambda *a, **k: False):
+        with _write_fail():
             _r = self.mgr.approve_patch(0)
         self.assertIs(_r["ok"], False)
 
