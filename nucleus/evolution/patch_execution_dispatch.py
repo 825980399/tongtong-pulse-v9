@@ -342,6 +342,18 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
     # ★343刀1③：稳定指纹 id（改前 = `o3_<now>_<hash8>`，时间戳+随机化 hash 双不稳）
     _id = _m343_o3_stable_id(_c.get("file"), _c.get("method"),
                              "dead_code_candidate", _si._M335_O3_MARKER)
+    # ★365刀A3：入池即算池侧判重键（口径唯一来源 `audit_problem_pool.make_dedup_key`）；
+    #   取不到 ⇒ None 并留痕，不本地抄一份 sha1 公式（抄第二份就是下一个"键双错位"）。
+    _dk365 = None
+    try:
+        from nucleus import audit_problem_pool as _app365
+        _dk365 = _app365.make_dedup_key(_c.get("file"), _c.get("method"), "dead_code")
+    except Exception as _e365k:
+        silent_exc(_e365k, where="patch_execution_dispatch::_m335_o3_consume dedup_key",
+                   level="warning")
+        _module_logger.warning(
+            "[365刀A3][O3消费] dedup_key 不可算（%s）⇒ 条目带键为空，闭环回写将 unmap",
+            type(_e365k).__name__)
     _entry = {
         "id": _id,
         "file": _c.get("file"), "method": _c.get("method"),
@@ -370,6 +382,11 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         "created_at": _now, "generated_at": _now, "saved_at": _now,
         # ★343刀1③：入池时刻单独留字段（不再混进 id），供"何时入池"可追溯
         "o3_intake_ts": int(_now), "id_scheme": "343.stable.sha1",
+        # ★365刀A3：闭环键互填——池条目过去两键皆空，应用成功回写池时找不到条目
+        #   （`_m356_close_loop_fixed` 键空即静默返回）。`dedup_key` 用**池侧标准类型**
+        #   `dead_code`（不是 O3 侧 `dead_code_candidate`）计算，否则与池键错位
+        #   （356 刀2「键双错位」同型陷阱）。
+        "dedup_key": _dk365, "patch_id": _id,
     }
     _path = _m335_pending_path(project_root, pending_path)
     _rows, _shape = _m335_read_pending(_path)
@@ -1369,6 +1386,67 @@ def registry_boundary_check() -> dict:
     }
 
 
+#: ★365刀A2：派单侧预筛分档计数（按**调用次数**计，不去重；只增不重置）
+_M365_PREJ: dict = {}
+
+
+def get_m365_sandbox_prefilter_stats() -> dict:
+    """★365刀A2：读派单侧沙箱预筛的分档分布（只读拷贝）。
+
+    口径：按**判定调用次数**累计，同一补丁被多处闸门各判一次就计多次
+    —— 这是"决策分布"，不是"补丁分布"，两者不可混用（铁律155）。
+    """
+    return dict(_M365_PREJ)
+
+
+def _m365_two_channel_on() -> bool:
+    """派单侧预筛两通道口径开关（`ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL`，默认 True）。
+
+    读不到配置 ⇒ True（与 `_m363_pending_graded_on` 同族口径：任务书要求的开启态），
+    但**留痕**——不把"配置读不到"静默当成"默认开"。
+    """
+    try:
+        import config as _cfg365
+        return bool(getattr(_cfg365, "ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL", True))
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m365_two_channel_on",
+                   level="warning")
+        return True
+
+
+def _m365_prefilter_tier(scan: dict) -> tuple:
+    """★365刀A2：把 `scan_dangerous_keywords` 的分类翻成「是否预拦 + 档位」。
+
+    口径（365 任务书 A2 施工要点①；沙箱 `_security_precheck`/`DANGEROUS_KEYWORDS`/
+    `would_block` 判据**零改动**）：
+      clean           —— 无命中                        ⇒ 不预拦
+      idiom / literal —— 本仓惯用法 / 仅字面量          ⇒ **不预拦，交沙箱终判**
+      repo_idiom      —— 同上（`idiom_scope` 细档）     ⇒ 不预拦
+      design_internal —— eval/compile 设计内危险        ⇒ **维持预拦**
+      mixed           —— 设计内 + 本仓惯用法混用         ⇒ 维持预拦（只加严）
+      real            —— 非惯用法真实调用               ⇒ 预拦转人工
+      unparsed        —— AST 解析失败                   ⇒ 预拦（fail-closed）
+
+    Returns: ``(pre_block: bool, tier: str)``
+    """
+    if not isinstance(scan, dict):
+        return True, "unparsed"
+    _cls = str(scan.get("class") or "none")
+    _scope = str(scan.get("idiom_scope") or "")
+    if _cls == "none":
+        return False, "clean"
+    if _cls == "unparsed":
+        return True, "unparsed"
+    if _cls == "real":
+        return True, "real"
+    if _scope in ("design_internal", "mixed"):
+        return True, _scope
+    if _cls in ("idiom", "literal"):
+        return False, (_scope or _cls)
+    # 未知 class ⇒ fail-closed（不猜"放行"）
+    return True, "unknown:%s" % _cls
+
+
 def is_sandbox_incompatible(patch: dict) -> bool:
     """该补丁是否**结构性**无法通过沙箱（子串黑名单必拦）。
 
@@ -1383,7 +1461,24 @@ def is_sandbox_incompatible(patch: dict) -> bool:
     _code = patch.get("modified_code") or patch.get("original_code") or ""
     if not _code:
         return False
-    return bool(scan_dangerous_keywords(_code).get("would_block"))
+    _scan = scan_dangerous_keywords(_code)
+    # ★365刀A2：两通道分类。开关关闭 ⇒ 复现旧口径（子串命中即 would_block 全预拦）
+    if _m365_two_channel_on():
+        _pre_block, _tier = _m365_prefilter_tier(_scan)
+    else:
+        _pre_block, _tier = bool(_scan.get("would_block")), "legacy:would_block"
+    _M365_PREJ[_tier] = int(_M365_PREJ.get(_tier, 0)) + 1
+    if _pre_block:
+        _module_logger.debug(
+            "[365刀A2] 沙箱预筛拦截 tier=%s class=%s blocked=%s",
+            _tier, _scan.get("class"),
+            ",".join(_scan.get("sandbox_blocked") or []))
+    else:
+        _module_logger.info(
+            "[365刀A2] 沙箱预筛放行（交沙箱终判） tier=%s class=%s blocked=%s",
+            _tier, _scan.get("class"),
+            ",".join(_scan.get("sandbox_blocked") or []))
+    return bool(_pre_block)
 
 
 #: ★363刀A2：pending 分级进候选门槛（裁决一已批准，不回谈）
@@ -2564,6 +2659,20 @@ def _write_back(patch: dict, verdict: dict) -> None:
         patch["fail_count_source"] = "ledger+field(326.1)"
 
 
+#: ★365刀A3：闭环回写缺口计数（只增不重置；按**尝试次数**计，不去重）
+_M365_CLOSE_LOOP_MISS: dict = {}
+
+
+def get_m365_close_loop_stats() -> dict:
+    """★365刀A3：读闭环第六段的键缺口分布（只读拷贝）。
+
+    口径：`no_dedup_key` = 应用成功但补丁无 `dedup_key` 的次数（按调用次数计）；
+    `set_status_failed` = 调 `set_status` 抛异常的次数。两个数都是**缺口**，
+    不是"失败补丁数"（同一补丁多轮重试会重复计）。
+    """
+    return dict(_M365_CLOSE_LOOP_MISS)
+
+
 def _m356_close_loop_fixed(patch: dict) -> dict | None:
     """★356刀1：补丁应用成功 ⇒ 审计池 `set_status(FIXED)`（**复用既有状态机**）。
 
@@ -2577,6 +2686,16 @@ def _m356_close_loop_fixed(patch: dict) -> dict | None:
     try:
         _key = str(patch.get("dedup_key") or "").strip()
         if not _key:
+            # ★365刀A3：键缺失过去是**静默返回 None**（只 warning 不计数）⇒「破零为什么
+            #   一直是 0」查不出"有多少条是键断了"。现留痕计数，但**不把派单判失败**
+            #   （观测不得阻断主流程）。
+            _M365_CLOSE_LOOP_MISS["no_dedup_key"] = int(
+                _M365_CLOSE_LOOP_MISS.get("no_dedup_key", 0)) + 1
+            _module_logger.warning(
+                "[365刀A3][356闭环] 键缺失 ⇒ 无法回写池（不计派单失败） patch=%s "
+                "file=%s method=%s 累计=%d",
+                str(patch.get("id") or "")[:24], patch.get("file"),
+                patch.get("method"), _M365_CLOSE_LOOP_MISS["no_dedup_key"])
             return None
         from nucleus import audit_problem_pool as _app
         _r = _app.set_status(

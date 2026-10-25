@@ -126,6 +126,41 @@ def _norm_rel(path: Any) -> str:
     return _s.lstrip("./")
 
 
+#: ★365刀A3：闭环映射前的 `issue_type` 归一表（**只收有实证的同族对**）。
+#:
+#: 为什么需要：池侧判死类型写 `dead_code`，O3 生成侧写 `dead_code_candidate`
+#: （同一检测器的两种叫法）⇒ `(file, issue_type)` 第三条映射路径恒不命中。
+#: 为什么只有这一条：别的取值（`Traceback`/`code_optimization`/`silent_exception`…）
+#: 拿不出「同一检测器两种叫法」的实证，硬凑只会把无关条目判成已修（350 纪律：
+#: 抓错比不抓更糟）。新增映射须附实测依据，不得凭名字像就加。
+_M365_ISSUE_TYPE_ALIASES: dict = {
+    "dead_code_candidate": "dead_code",
+}
+
+
+def _m365_norm_issue_type(raw: Any) -> str:
+    """映射前归一 `issue_type`：先走既有 `SafeEvolutionExecutor._normalize_issue_type`
+    （单一真源，含 print_debug→print_instead_of_log 等），再叠加本模块的实证别名表。
+
+    取不到既有实现 ⇒ 只用本地表并留痕（不静默换判据）。
+    """
+    _v = str(raw or "").strip()
+    if not _v:
+        return ""
+    try:
+        from nucleus.reasoning.SafeEvolutionExecutor import _normalize_issue_type as _norm
+        _v = str(_norm(_v) or _v)
+    except Exception as _e365n:
+        silent_exc(_e365n, where="verify_feedback::_m365_norm_issue_type 既有归一不可用",
+                   level="warning")
+    _low = _v.lower()
+    if _v in _M365_ISSUE_TYPE_ALIASES:
+        return _M365_ISSUE_TYPE_ALIASES[_v]
+    if _low in _M365_ISSUE_TYPE_ALIASES:
+        return _M365_ISSUE_TYPE_ALIASES[_low]
+    return _v
+
+
 def map_verdict_to_entry(verdict: dict, entries: list) -> dict:
     """verdict → 池条目。
 
@@ -146,9 +181,11 @@ def map_verdict_to_entry(verdict: dict, entries: list) -> dict:
         if _pid and str(_e.get("patch_id") or "") == _pid:
             return {"state": "ok", "by": "entry_patch_id", "entry": _e}
     _f = _norm_rel((verdict or {}).get("file"))
-    _t = str((verdict or {}).get("issue_type") or "")
+    # ★365刀A3：两侧都先归一再比；归一后仍不同 ⇒ 不算命中（宁可 unmap，不猜）
+    _t = _m365_norm_issue_type((verdict or {}).get("issue_type"))
     _hits = [_e for _e in entries
-             if _norm_rel(_e.get("file")) == _f and str(_e.get("issue_type") or "") == _t]
+             if _norm_rel(_e.get("file")) == _f
+             and _m365_norm_issue_type(_e.get("issue_type")) == _t]
     if len(_hits) == 1:
         return {"state": "ok", "by": "file_type", "entry": _hits[0]}
     if len(_hits) > 1:
