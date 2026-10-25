@@ -390,6 +390,62 @@ def m366_diff_and_restore(before: dict, backups: dict) -> dict:
     _now = m366_snapshot_sentinels()
     return {"changed": _changed, "restored": _restored, "failed": _failed,
             "clean_after": all(_now.get(_r) == _h for _r, _h in (before or {}).items())}
+# ---------------------------------------------------------------- N4 续：写面重定向
+#: ★★ 这张表是**实测**得来的，不是静态 grep 猜的（`logs/full_regression/n4_writemap/`）：
+#: 54 件"有 data/ 字面量且有写操作"的候选里，**真写生产 data/ 的只有 4 条**，
+#: 其余都是 `should_skip_dir("data/x")` 这类纯字符串断言，或 `tmp_path/"data"/...` 自造结构。
+#:
+#: 手法：把模块级 REL 常量 patch 成**绝对路径** —— `os.path.join(root, abs)` 会丢弃 root
+#: （os.path.join 语义），于是路径单点转向沙箱，**不改生产代码、不改被测测试**。
+_M366_WRITE_REDIRECTS = (
+    ("nucleus.evolution.criteria_window", "CONVERGE_VOIDED_LEDGER_REL",
+     "data/reports/converge_voided.jsonl",
+     "作废台账；常量仅用于 converge_voided_ledger_path 拼接，不参与读取决策"),
+    ("nucleus.evolution.evolution_budget", "_M335_BUDGET_REL",
+     "data/evolution/evolution_budget.json",
+     "进化预算侧账；常量仅用于 _m335_budget_path 拼接"),
+)
+
+#: 设计内沙箱面：生产侧白名单要求名册路径**必须**在 data/ 下（T-134b），
+#: 测试因此用独立子目录 `data/.t_face_roster/`（git-ignored）。
+#: 这不是污染 ⇒ 全树探测里**不记为脏**，但仍在报告里可见（记 designed 计数）。
+_M366_DESIGNED_SUBDIRS = ("data/.t_face_roster/",)
+
+
+def m366_redirect_plan(tmp_root: str) -> list:
+    """按重定向表算目标路径（纯函数，便于测试）：[(模块, 属性, 目标绝对路径)]。"""
+    _out = []
+    for _mod, _attr, _rel, _why in _M366_WRITE_REDIRECTS:
+        _tail = _rel.split("/")[1:]
+        _out.append((_mod, _attr, os.path.join(str(tmp_root), "data", *_tail), _why))
+    return _out
+
+
+@pytest.fixture(autouse=True)
+def m366_redirect_data_writes(tmp_path, monkeypatch):
+    """把已知台账写入点重定向到 pytest 沙箱（框架运行时不启用、可环境变量关）。
+
+    `PULSE_DATA_REDIRECT=0` 关闭 —— 用于"就是要写生产 data/"的对照实验。
+    """
+    if is_framework_running() or os.environ.get("PULSE_DATA_REDIRECT", "1") == "0":
+        yield {}
+        return
+    import importlib
+    _done: dict = {}
+    for _mod, _attr, _tgt, _why in m366_redirect_plan(str(tmp_path)):
+        try:
+            _m = importlib.import_module(_mod)
+        except ImportError as _e:
+            print("[N4v3] 重定向跳过（模块不可导入）%s: %s" % (_mod, type(_e).__name__))
+            continue
+        if not hasattr(_m, _attr):
+            print("[N4v3] 重定向跳过（属性已改名，需重核表）%s.%s" % (_mod, _attr))
+            continue
+        os.makedirs(os.path.dirname(_tgt), exist_ok=True)
+        monkeypatch.setattr(_m, _attr, _tgt, raising=False)
+        _done["%s.%s" % (_mod, _attr)] = _tgt
+    yield _done
+
 
 # ---------------------------------------------------------------- v2：全树写入探测
 #: `data/` 顶层含大量流水账（evolution 4514 / probe 1579 / reports 641…），整体备份不可行
@@ -421,20 +477,33 @@ def m366_snapshot_tree() -> dict:
     return _out
 
 
-def m366_diff_tree(before: dict, after: dict, cap: int = 200) -> dict:
-    """三态差异：新增/删除/修改（各截断到 `cap` 条，另记总数）。"""
+def m366_diff_tree(before: dict, after: dict, cap: int = 200,
+                   ignore: tuple = ()) -> dict:
+    """三态差异：新增/删除/修改（各截断到 `cap` 条，另记总数）。
+
+    `ignore`：设计内沙箱面前缀（如 `data/.t_face_roster/`）—— 单独记 `n_designed`，
+    **不计入 `dirty`**，但仍出现在明细里（不隐藏，只分类）。
+    """
     _b = before or {}
     _a = after or {}
+    _ig = tuple(ignore or ())
+
+    def _is_designed(_k: str) -> bool:
+        return any(_k.startswith(p) for p in _ig)
     _added = sorted(set(_a) - set(_b))
     _removed = sorted(set(_b) - set(_a))
     _modified = sorted(k for k in (set(_a) & set(_b)) if _a[k] != _b[k])
+    _designed = [k for k in (_added + _removed + _modified) if _is_designed(k)]
+    _real_add = [k for k in _added if not _is_designed(k)]
+    _real_rm = [k for k in _removed if not _is_designed(k)]
+    _real_mod = [k for k in _modified if not _is_designed(k)]
     return {
         "n_before": len(_b), "n_after": len(_a),
-        "n_added": len(_added), "n_removed": len(_removed),
-        "n_modified": len(_modified),
-        "added": _added[:cap], "removed": _removed[:cap],
-        "modified": _modified[:cap],
-        "dirty": bool(_added or _removed or _modified),
+        "n_added": len(_real_add), "n_removed": len(_real_rm),
+        "n_modified": len(_real_mod), "n_designed": len(_designed),
+        "added": _real_add[:cap], "removed": _real_rm[:cap],
+        "modified": _real_mod[:cap], "designed": _designed[:cap],
+        "dirty": bool(_real_add or _real_rm or _real_mod),
     }
 
 
@@ -481,7 +550,8 @@ def m366_data_sentinel_guard():
     _res = m366_diff_and_restore(_before, _backups)
     _rep.update({"state": "checked", "result": _res})
     if _tree_on:
-        _td = m366_diff_tree(_tree0, m366_snapshot_tree())
+        _td = m366_diff_tree(_tree0, m366_snapshot_tree(),
+                             ignore=_M366_DESIGNED_SUBDIRS)
         # 三件哨兵已在上面还原，故从树差异里剔除（否则同一件事报两遍）
         for _k in ("added", "modified", "removed"):
             _td[_k] = [x for x in _td[_k] if x not in _M366_SENTINELS]
@@ -535,7 +605,8 @@ def m366_per_test_data_attribution(request):
         return
     _b = m366_snapshot_tree()
     yield
-    _d = m366_diff_tree(_b, m366_snapshot_tree())
+    _d = m366_diff_tree(_b, m366_snapshot_tree(),
+                         ignore=_M366_DESIGNED_SUBDIRS)
     if not _d["dirty"]:
         return
     _item = getattr(request, "nodeid", "?")
