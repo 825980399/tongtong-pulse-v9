@@ -3292,6 +3292,20 @@ class SelfInspector(SilentLogMixin):
             _d = os.path.dirname(path)
             if _d:
                 os.makedirs(_d, exist_ok=True)
+            # ★365刀F1：刷新留痕（**在写盘前**读旧值，才能记到 before/after 两个数）。
+            #   只观测：不改写盘行为、不改判据、不阻断；策略是否调整另立裁决。
+            try:
+                _prev = self._si_read_god_baseline(path)
+                _M365_BASELINE_TRACE.append({
+                    "ts": time.time(),
+                    "detector": os.path.basename(path),
+                    "before": (len(_prev) if isinstance(_prev, dict) else None),
+                    "after": (len(baseline) if isinstance(baseline, dict) else None),
+                })
+                if len(_M365_BASELINE_TRACE) > _M365_BASELINE_TRACE_MAX:
+                    del _M365_BASELINE_TRACE[:-_M365_BASELINE_TRACE_MAX]
+            except Exception as _te:
+                silent_exc(_te, "self_inspector.py:_si_write_god_baseline trace", level="debug")
             with open(path, "w", encoding="utf-8") as _f:
                 json.dump(baseline, _f, ensure_ascii=False)
         except OSError as _e:
@@ -6024,6 +6038,43 @@ _M340_JUDGE_ACTION_STATE = {"streak": 0, "last_tick": None, "last_open": False}
 _O3_CANDIDATE_MAX = 100
 #: 图外可达证据的类型（**不看调用图**，避免拿判据自证判据）
 _O3_PROBE_KINDS = ("string_ref", "protocol_name", "test_ref", "attr_bound")
+
+#: ★365刀F1：增量检测器的**基线刷新留痕**（只观测，不改刷新策略、不阻断门禁）。
+#: 为什么需要：`cc_ge50_new` / `long_method` / `branch|loc ceiling` 这几个检测器都是
+#: **增量型**——每次扫描结束就把当前结果写回基线。于是同一份代码"首轮 60 条、之后恒 51 条"，
+#: 重启后若基线未同步会重现 60 条，读数忽高忽低容易被误判成回归（364 D2 对照附带发现）。
+#: 本表只记「刷新时刻 / 检测器（基线文件名）/ 刷新前后条目数」，供判读时把首轮与稳态分开看。
+_M365_BASELINE_TRACE: list = []
+_M365_BASELINE_TRACE_MAX = 50
+
+
+def m365_baseline_refresh_report(limit: int = 20) -> dict:
+    """★365刀F1：基线刷新读数（首轮 vs 稳态双列 ＋ 最近若干次明细）。
+
+    口径：
+      * ``first_round``：每个检测器**本进程内第一次**刷新后的条目数（＝未扣基线的原始读数）；
+      * ``steady``：每个检测器**最近一次**刷新后的条目数（＝已按基线扣过的稳态读数）；
+      * 两者不等即说明"首轮/稳态双列"确实存在，读数须分别标注，不可混报。
+    """
+    _rows = list(_M365_BASELINE_TRACE)
+    _first: dict = {}
+    _last: dict = {}
+    for _r in _rows:
+        _d = str(_r.get("detector") or "")
+        if not _d:
+            continue
+        _first.setdefault(_d, _r)
+        _last[_d] = _r
+    return {
+        "schema": "m365.baseline_refresh_trace/v1",
+        "total_refresh": len(_rows),
+        "detectors": sorted(_last),
+        "first_round": {k: v.get("after") for k, v in _first.items()},
+        "steady": {k: v.get("after") for k, v in _last.items()},
+        "skew": {k: (v.get("after") != _first[k].get("after"))
+                 for k, v in _last.items() if k in _first},
+        "recent": _rows[-max(1, int(limit)):],
+    }
 
 _M325_NAME_INDEX = {"built": False, "names": {}, "ok": False}
 
