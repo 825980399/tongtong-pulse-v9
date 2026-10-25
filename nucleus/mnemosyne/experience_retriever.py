@@ -339,6 +339,27 @@ class ExperienceRetriever:
                     "adjacent_meta": {"expanded": False, "reason": "error"}}
 
     # -------------------------------------------------- 对比（L1 观测核心）
+    def retrieve_with_adjacency(self, query: str, top_k: int | None = None) -> dict:
+        """★366刀B4：邻接展开的**形态稳定**入口（`ENABLE_GRAPH_ADJACENCY` 的消费侧）。
+
+        为什么必须单开一个方法：`retrieve(expand_adjacent=True)` 在开关开时返回 **dict**
+        （`{"direct":…, "adjacent":…}`），开关关时返回 **list** —— 直接把 dict 喂给现有
+        只吃 list 的调用方会当场炸。这里把两种形态**归一**成一列 direct + 一列 adjacent，
+        开关 False 时 adjacent 恒空（`reason=switch_off`），对既有调用方零影响
+        （本方法为新增，不改 `retrieve`/`compare` 任何既有路径）。
+        """
+        _k = int(top_k) if top_k else self.top_k()
+        _on = bool(_graph_adjacency_enabled())
+        _r = self.retrieve(query, top_k=_k, expand_adjacent=_on)
+        if isinstance(_r, dict):
+            return {"direct": list(_r.get("direct") or []),
+                    "adjacent": list(_r.get("adjacent") or []),
+                    "adjacent_meta": dict(_r.get("adjacent_meta") or {}),
+                    "enabled": True}
+        return {"direct": list(_r or []), "adjacent": [],
+                "adjacent_meta": {"expanded": False, "reason": "switch_off"},
+                "enabled": False}
+
     def baseline_retrieve(self, query: str, limit: int | None = None) -> list:
         """**现有**检索器口径的结果（元数据过滤 + 时间倒序，含污染）。
 

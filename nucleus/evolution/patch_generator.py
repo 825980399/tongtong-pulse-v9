@@ -1733,6 +1733,54 @@ def check_reason_chain(draft: dict) -> dict:
     return {"ok": False, "missing": _miss, "why": "；".join(_why)}
 
 
+def generate_from_candidates(limit: int = 5, project_root: str | None = None,
+                             pending_path: str | None = None) -> dict:
+    """★366刀B4：从**问题池候选工单**取料并生成补丁草稿（破零唯一通路的入口）。
+
+    边界（星轨 2026-10-25 放行 `dc79a746` 的 8 条约束）：
+      * 开关 `ENABLE_PATCH_GENERATOR` **默认 False** ⇒ 直接返回 `disabled`，零行为变化；
+      * 入料只取白名单六类字段（`patch_candidates_consumer.CONTEXT_FIELDS`），
+        审计留痕/状态机/版本时间字段一律不进上下文；
+      * 候选文件**只读**；不写水位、不改行、不删行；
+      * 键继承：`entry.dedup_key` 来自候选 `id`（＝池 `dedup_key`），缺失才用
+        `audit_problem_pool.make_dedup_key` 兜底（公式单点，不抄第二份 sha1）；
+      * **三闸不豁免**：`generate_patch_draft` 内部的 judge 链（质量门/证据门/风险闸）
+        照常判，任一门拒即拒，本函数不做任何降级。
+
+    为什么单独开一个入口而不是改 `generate_patch_draft`：那个函数是"给定 entry 生成"的
+    纯生成单元，喂什么由调用方决定；把"从哪取料 + 去重"塞进去会让它同时承担 IO 职责。
+    """
+    if not generator_enabled():
+        return {"status": "disabled", "why": "ENABLE_PATCH_GENERATOR=False",
+                "generated": 0, "entries": 0}
+    try:
+        from nucleus.evolution.patch_candidates_consumer import consume_patch_candidates
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::generate_from_candidates import")
+        return {"status": "import_failed", "why": "%s: %s" % (type(_e).__name__, _e),
+                "generated": 0, "entries": 0}
+    _c = consume_patch_candidates(limit=limit, project_root=project_root,
+                                  pending_path=pending_path)
+    _out = {"status": "ok", "consume_state": _c.get("state"),
+            "entries": len(_c.get("entries") or []), "generated": 0,
+            "skipped_dup": _c.get("skipped_dup"), "skipped_bad": _c.get("skipped_bad"),
+            "drafts": [], "errors": []}
+    for _entry in (_c.get("entries") or []):
+        try:
+            _d = generate_patch_draft(_entry, project_root=project_root)
+            _out["drafts"].append(_d)
+            _out["generated"] += 1
+        except Exception as _e:
+            silent_exc(_e, where="patch_generator::generate_from_candidates draft",
+                       level="warning")
+            _out["errors"].append({"file": _entry.get("file"),
+                                   "method": _entry.get("method"),
+                                   "why": "%s: %s" % (type(_e).__name__, _e)})
+    if _out["errors"]:
+        _out["status"] = "partial" if _out["generated"] else "all_failed"
+    return _out
+
+
 def check_original_def_header(draft: dict, mode: str | None = None) -> dict:
     """★365刀B5：片段形态门禁 —— **方法级**补丁的 `original_code` 必须带 def 头。
 

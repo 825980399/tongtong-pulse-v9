@@ -805,6 +805,30 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "candidates_source": _offer_src,
                 "ast_release": _ast_rel}
 
+    def _m366_inventory_tick(self) -> dict:
+        """★366刀B4：器官清单导出的**消费方**（挂既有指标采集 tick，不新增定时器）。
+
+        `ENABLE_ORGAN_INVENTORY_EXPORT` 默认 False ⇒ 直接返回 `disabled`（零行为变化）。
+        挂载点＝`_collect_memory_pressure`（既有指标采集 tick，与 `m363_diag`/
+        `m364_leaderboard` 同一节拍），**不新起线程/定时器/独立节拍**（放行约束 5）。
+        导出内容范围不新增器官面：只调既有 `export_organ_inventory()`。
+        """
+        try:
+            from nucleus.cognitive import organ_inventory as _oi
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m366_inventory_tick import")
+            return {"status": "import_failed", "why": type(_e).__name__}
+        if not _oi._inventory_on():
+            return {"status": "disabled", "switch": "ENABLE_ORGAN_INVENTORY_EXPORT"}
+        try:
+            _inv = _oi.export_organ_inventory()
+            _n = len(_inv) if hasattr(_inv, "__len__") else None
+            return {"status": "ok", "rows": _n}
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m366_inventory_tick export",
+                       level="warning")
+            return {"status": "error", "why": "%s: %s" % (type(_e).__name__, _e)}
+
     def _m364_leaderboard_tick(self) -> dict:
         """★364刀B4：器官健康排行的心跳接线点（**低频**，不新增定时器/线程）。
 
@@ -1037,6 +1061,15 @@ class PulseMetricsCollector(BasePulseOrgan):
                                where="PulseMetricsCollector::_collect_memory_pressure 363刀B3")
                     _out["m363_diag"] = {"status": "error",
                                          "why": type(_m363de).__name__}
+
+                # ★366刀B4：器官清单导出消费方（挂同一既有 tick；开关关闭即返回）
+                try:
+                    _out["m366_inventory"] = self._m366_inventory_tick()
+                except Exception as _m366ie:
+                    silent_exc(_m366ie,
+                               where="PulseMetricsCollector::_collect_memory_pressure 366B4")
+                    _out["m366_inventory"] = {"status": "error",
+                                              "why": type(_m366ie).__name__}
 
                 # ★364刀B4：器官健康排行心跳接线（低频；开关关闭时 on_heartbeat 直接返回）
                 try:
