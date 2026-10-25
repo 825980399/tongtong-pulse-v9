@@ -2237,22 +2237,110 @@ class PulseController(BasePulseOrgan):
                 self._headless_page = None
                 self._headless_active = False
 
-    def _classify_browser_error(self, err: Exception) -> str:
+    #: ★364刀A2：同类连续超时的默认熔断阈值（连续 N 次超时 ⇒ 跳过本轮）
+    _M364_TIMEOUT_STREAK_MAX = 3
+    #: ★364刀A2：熔断冷却秒数（过后自动恢复，不永久禁用浏览器）
+    _M364_TIMEOUT_COOLDOWN_SEC = 300.0
+
+    def _m364_cfg_int(self, key: str, default: int) -> int:
+        """读整数配置（读不到用默认并在 DEBUG 留痕，不静默猜）。"""
+        try:
+            import config as _c364
+            return int(getattr(_c364, key, default) or default)
+        except Exception as _e364c:
+            self._log(LogLevel.DEBUG,
+                      f"[364A2] 配置 {key} 读取失败，用默认 {default}: "
+                      f"{type(_e364c).__name__}")
+            return default
+
+    def _m364_note_browser_err(self, reason: str, err: Exception = None) -> None:
+        """★364刀A2：按错误类分项计数 + 维护「连续超时」streak。
+
+        streak 只在**超时**时累加，其它分类一律清零 —— 熔断只针对「同类连续超时」，
+        崩溃/网络错误有各自的重建路径（混在一起会误熔断）。
+        """
+        _c = getattr(self, "_m364_err_counts", None)
+        if _c is None:
+            _c = {}
+            self._m364_err_counts = _c
+        _c[reason] = _c.get(reason, 0) + 1
+        if reason == "超时":
+            self._m364_timeout_streak = int(
+                getattr(self, "_m364_timeout_streak", 0)) + 1
+        else:
+            self._m364_timeout_streak = 0
+        self._log(LogLevel.DEBUG,
+                  f"[364A2] 浏览器错误计数 {reason}={_c[reason]} "
+                  f"连续超时={getattr(self, '_m364_timeout_streak', 0)} "
+                  f"err={type(err).__name__ if err is not None else '-'}")
+
+    def _m364_circuit_open(self) -> bool:
+        """★364刀A2：同类连续超时是否已达熔断（达阈值 ⇒ 本轮跳过，冷却后自动恢复）。"""
+        _streak = int(getattr(self, "_m364_timeout_streak", 0))
+        _max = self._m364_cfg_int("BROWSER_TIMEOUT_CIRCUIT_STREAK",
+                                  self._M364_TIMEOUT_STREAK_MAX)
+        if _streak < _max:
+            return False
+        _now = time.time()
+        _until = float(getattr(self, "_m364_circuit_until", 0.0) or 0.0)
+        if _until and _now < _until:
+            self._log(LogLevel.WARNING,
+                      f"[364A2] 浏览器超时熔断中（连续 {_streak} 次超时），"
+                      f"跳过本轮，冷却至 "
+                      f"{time.strftime('%H:%M:%S', time.localtime(_until))}")
+            return True
+        if _until and _now >= _until:
+            # ★冷却**到期**才放行一次试探并重置（`_until == 0` 表示「尚未登记冷却」，
+            #   此时不能清 streak —— 否则紧接着的 `_m364_mark_circuit()` 读到 0 而不登记，
+            #   熔断永远开不了）。
+            self._m364_timeout_streak = 0
+            self._m364_circuit_until = 0.0
+            self._log(LogLevel.INFO,
+                      "[364A2] 浏览器超时熔断冷却到期，放行一次试探重建")
+        return False
+
+    def _m364_mark_circuit(self) -> None:
+        """★364刀A2：达到阈值时登记冷却窗口（只登记，不改变本次调用结果）。"""
+        _streak = int(getattr(self, "_m364_timeout_streak", 0))
+        _max = self._m364_cfg_int("BROWSER_TIMEOUT_CIRCUIT_STREAK",
+                                  self._M364_TIMEOUT_STREAK_MAX)
+        if _streak >= _max and not getattr(self, "_m364_circuit_until", 0.0):
+            _cool = float(self._m364_cfg_int("BROWSER_TIMEOUT_COOLDOWN_SEC",
+                                             int(self._M364_TIMEOUT_COOLDOWN_SEC)))
+            self._m364_circuit_until = time.time() + _cool
+            self._log(LogLevel.WARNING,
+                      f"[364A2] 连续超时 {_streak} 次达阈值 {_max} ⇒ 熔断 {_cool:.0f}s")
+
+    def m364_timeout_stats(self) -> dict:
+        """★364刀A2：读浏览器错误分类计数 / 连续超时 / 熔断状态（只读拷贝）。"""
+        return {"counts": dict(getattr(self, "_m364_err_counts", None) or {}),
+                "timeout_streak": int(getattr(self, "_m364_timeout_streak", 0)),
+                "circuit_until": float(getattr(self, "_m364_circuit_until", 0.0) or 0.0),
+                "streak_max": self._m364_cfg_int(
+                    "BROWSER_TIMEOUT_CIRCUIT_STREAK", self._M364_TIMEOUT_STREAK_MAX)}
+
+    def _classify_browser_error(self, err: Exception, count: bool = True) -> str:
         """将浏览器异常分类为 超时/崩溃/网络错误，用于断开原因日志。
 
-        纯字符串特征匹配，不依赖具体驱动实现，不抛出、无副作用。
+        纯字符串特征匹配，不依赖具体驱动实现，不抛出。
+        ★364刀A2：分类后**顺带计数**（`count=False` 可跳过，供纯判定场景使用）——
+        原实现只返回分类、不记账，首拍窗 6 条 WARN 全靠人肉数。
         """
         _s = str(err)
         if any(_k in _s for _k in ("Timeout", "timeout", "timed out", "TimeoutError")):
-            return "超时"
-        if any(_k in _s for _k in ("Target", "closed", "detached", "Connection",
-                                   "greenlet", "Cannot switch", "crashed", "crash",
-                                   "destroyed", "destroy")):
-            return "崩溃/连接断开"
-        if any(_k in _s for _k in ("net::", "ERR_", "NameResolution", "getaddrinfo",
-                                   "ConnectionError", "socket", "Network")):
-            return "网络错误"
-        return "未知"
+            _reason = "超时"
+        elif any(_k in _s for _k in ("Target", "closed", "detached", "Connection",
+                                     "greenlet", "Cannot switch", "crashed", "crash",
+                                     "destroyed", "destroy")):
+            _reason = "崩溃/连接断开"
+        elif any(_k in _s for _k in ("net::", "ERR_", "NameResolution", "getaddrinfo",
+                                     "ConnectionError", "socket", "Network")):
+            _reason = "网络错误"
+        else:
+            _reason = "未知"
+        if count:
+            self._m364_note_browser_err(_reason, err)
+        return _reason
 
     def _ensure_headless_browser(self) -> bool:
         """
@@ -2269,6 +2357,9 @@ class PulseController(BasePulseOrgan):
                       f"浏览器重建冷却中(连续失败{self._browser_rebuild_failures}次)，跳过重建(退避至"
                       f"{time.strftime('%H:%M:%S', time.localtime(self._browser_rebuild_cooldown_until))})")
             return False
+        # ★364刀A2：同类连续超时熔断 ⇒ 本轮跳过（冷却后自动恢复；不改变重建冷却语义）
+        if self._m364_circuit_open():
+            return False
         # 检查现有浏览器是否存活
         if self._headless_browser and self._headless_page:
             _last_err: Exception | None = None
@@ -2277,6 +2368,13 @@ class PulseController(BasePulseOrgan):
                 try:
                     self._headless_page.title()
                     self._headless_last_used = time.time()
+                    # ★364刀A2：探活成功即清零连续超时（熔断只该由连续失败触发）
+                    if getattr(self, "_m364_timeout_streak", 0):
+                        self._log(LogLevel.INFO,
+                                  f"[364A2] 浏览器探活恢复，连续超时计数 "
+                                  f"{self._m364_timeout_streak} 归零")
+                    self._m364_timeout_streak = 0
+                    self._m364_circuit_until = 0.0
                     return True
                 except Exception as _e:
                     _err_str = str(_e)
@@ -2284,11 +2382,17 @@ class PulseController(BasePulseOrgan):
                     if "greenlet" in _err_str or "Cannot switch" in _err_str:
                         pass
                     if _retry < 2:
+                        # ★364刀A2：重试留痕（有限次 + 退避，次数不进代码常量以外的配置）
+                        self._log(LogLevel.DEBUG,
+                                  f"[364A2] 浏览器探活重试 {_retry + 1}/3 失败，"
+                                  f"退避 0.5s 后重试")
                         # [pulse-sleep-exempt] 浏览器重试退避，非脉冲纪律
                         time.sleep(0.5)
                         continue
             # 三次重试均失败，确认浏览器已断开，清理后重建（记录断开原因）
             _reason = self._classify_browser_error(_last_err) if _last_err else "未知"
+            # ★364刀A2：三次确认失败后登记熔断窗口（连续超时才熔断，崩溃/网络走原重建）
+            self._m364_mark_circuit()
             self._log(LogLevel.WARNING,
                       f"常驻浏览器已断开（3次确认，原因={_reason}），尝试重建...")
             self._headless_browser = None
