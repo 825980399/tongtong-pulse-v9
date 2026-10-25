@@ -407,7 +407,60 @@ class ChatService:
             self._generate_param_report()
             self._reset_silence_timer()
             return True
+        # ★365刀B2：同进程内存归属采样（gc.get_objects() 跨进程拿不到 ⇒ 必须活体内跑）
+        elif cmd.startswith(("memprobe", "内存归属")):
+            self._m365_mem_probe(cmd)
+            self._reset_silence_timer()
+            return True
         return False
+
+    def _m365_mem_probe(self, cmd: str):
+        """★365刀B2：同进程内存归属采样命令面（只读观测，不改任何阈值/开关）。
+
+        用法：
+          `memprobe start`   —— 拉起采样（10 分钟 / 30 秒一采 / 前 120 秒算 warmup）
+          `memprobe status`  —— 看是否在跑、采了几拍、最近一拍读数
+          `memprobe stop`    —— 置停止（下一拍退出，不强杀）
+
+        为什么必须同进程：`gc.get_objects()` 只看得见本进程对象；跨进程采不到归属。
+        结论只给 leak_suspect / stable，**不下泄漏终论**（归属需配合停学对照段）。
+        """
+        try:
+            from nucleus import m365_mem_attribution as _ma
+        except Exception as _e:
+            silent_exc(_e, where="chat_service::_m365_mem_probe import", level="warning")
+            print(f"\n❌ 内存归属采样模块不可用：{type(_e).__name__}: {_e}\n")
+            return
+        _arg = cmd.split(None, 1)[1].strip().lower() if " " in cmd.strip() else "status"
+        try:
+            if _arg.startswith("start") or _arg.startswith("开始"):
+                _r = _ma.start()
+                if _r.get("ok"):
+                    print(f"\n✅ 同进程内存归属采样已启动 pid={_r.get('pid')}"
+                          f" duration={_r.get('duration')}s interval={_r.get('interval')}s"
+                          f" warmup={_r.get('warmup')}s\n   产物：{_r.get('out')}\n")
+                else:
+                    print(f"\n⚠️ 未启动：{_r.get('why')}"
+                          f"（已有采样在跑，samples={_r.get('samples')}）\n")
+            elif _arg.startswith("stop") or _arg.startswith("停止"):
+                _r = _ma.stop()
+                print(f"\n{'✅ 已置停止（下一拍退出）' if _r.get('ok') else '⚠️ 当前没有在跑的采样'}"
+                      f" samples={_r.get('samples')}\n")
+            else:
+                _st = _ma.status()
+                print(f"\n📈 内存归属采样：running={_st.get('running')} "
+                      f"samples={_st.get('samples')} pid={_st.get('pid')}")
+                if _st.get("last"):
+                    _l = _st["last"]
+                    print(f"   最近一拍：rss={_l.get('rss_mb')}MB "
+                          f"objects={_l.get('obj_total')} "
+                          f"in_warmup={_l.get('in_warmup')} elapsed={_l.get('elapsed')}s")
+                if _st.get("error"):
+                    print(f"   ⚠️ 线程异常：{_st['error']}")
+                print(f"   产物：{_st.get('out') or '-'}（note={_st.get('note') or '-'}）\n")
+        except Exception as _e:
+            silent_exc(_e, where="chat_service::_m365_mem_probe run", level="warning")
+            print(f"\n❌ 采样命令执行失败：{type(_e).__name__}: {_e}\n")
 
     def _show_pending_patches(self):
         """显示待审批补丁列表（★FIX: 人工审批入口）
