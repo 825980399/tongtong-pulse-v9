@@ -52,6 +52,24 @@ _DIR_TO_TYPE = {
 
 _SKIP_DIR_NAMES = frozenset({"__pycache__"})
 
+# ★364刀B4第二刀（开灯前置）：器官 AST 扫描缓存。
+#   scan_organ_classes() 原为每次全量 os.walk + ast.parse（实测 ~2.0s/次），
+#   被健康排行榜心跳调用会直接拖长心跳周期 ⇒ 排行榜「不敢开灯」。
+#   缓存键 = (mtime, size)：器官文件一改即失效；invalidate_organ_scan_cache() 可强刷。
+_ORGAN_SCAN_CACHE: dict[str, tuple[float, int, list[dict[str, Any]]]] = {}
+
+
+def invalidate_organ_scan_cache() -> int:
+    """清空器官 AST 扫描缓存，返回被清条目数（供测试/强制刷新使用）。"""
+    _n = len(_ORGAN_SCAN_CACHE)
+    _ORGAN_SCAN_CACHE.clear()
+    return _n
+
+
+def organ_scan_cache_size() -> int:
+    """当前器官扫描缓存条目数（观测用）。"""
+    return len(_ORGAN_SCAN_CACHE)
+
 
 def _organs_root() -> str:
     """organs/ 目录绝对路径。
@@ -85,10 +103,55 @@ def _organ_name_default(cls_node: ast.ClassDef) -> str | None:
     return None
 
 
+def _scan_one_file(_p: str, _root: str) -> list[dict[str, Any]]:
+    """扫描单个源文件的 BasePulseOrgan 子类声明（★364B4：带 (mtime, size) 缓存）。"""
+    try:
+        _st = os.stat(_p)
+        _sig = (float(_st.st_mtime), int(_st.st_size))
+    except OSError as _oe:
+        # ★不得纯 return/continue：stat 失败是真实 I/O 异常，必须留痕
+        _module_logger.debug("[181刀5] stat 失败 %s: %s", _p, type(_oe).__name__)
+        _sig = None
+    if _sig is not None:
+        _hit = _ORGAN_SCAN_CACHE.get(_p)
+        if _hit is not None and _hit[0] == _sig[0] and _hit[1] == _sig[1]:
+            return list(_hit[2])
+    try:
+        _src = open(_p, encoding="utf-8", errors="replace").read()
+        _tree = ast.parse(_src)
+    except SyntaxError as _e:
+        _module_logger.debug("[181刀5] 解析失败 %s: %s", _p, _e)
+        return []
+    _recs: list[dict[str, Any]] = []
+    for _node in _tree.body:
+        if not isinstance(_node, ast.ClassDef):
+            continue
+        _bases = []
+        for _b in _node.bases:
+            if isinstance(_b, ast.Name):
+                _bases.append(_b.id)
+            elif isinstance(_b, ast.Attribute):
+                _bases.append(_b.attr)
+        if "BasePulseOrgan" not in _bases:
+            continue
+        _rel = os.path.relpath(_p, os.path.dirname(_root)).replace("\\", "/")
+        _recs.append({
+            "class_name": _node.name,
+            "organ_name": _organ_name_default(_node),
+            "file_path": _rel,
+            "method_count": _method_count_of(_node),
+        })
+    if _sig is not None:
+        _ORGAN_SCAN_CACHE[_p] = (_sig[0], _sig[1], list(_recs))
+    return _recs
+
+
 def scan_organ_classes() -> list[dict[str, Any]]:
     """确定性 AST 扫描：全部 BasePulseOrgan 子类（类名 + organ_name + 路径 + 方法数）。
 
     ★本函数是刀3「全覆盖」与刀5「清单」的共同数据源（避免两处各扫一套）。
+    ★364刀B4第二刀：单文件结果按 (mtime, size) 缓存，未改动的文件不再重复
+      ast.parse —— 冷启动仍 ~2s，之后降到 ms 级（排行榜开灯的前置条件）。
     """
     _root = _organs_root()
     _out: list[dict[str, Any]] = []
@@ -101,30 +164,7 @@ def scan_organ_classes() -> list[dict[str, Any]]:
             if not _fn.endswith(".py") or _fn.startswith("__"):
                 continue
             _p = os.path.join(_dp, _fn)
-            try:
-                _src = open(_p, encoding="utf-8", errors="replace").read()
-                _tree = ast.parse(_src)
-            except SyntaxError as _e:
-                _module_logger.debug("[181刀5] 解析失败 %s: %s", _p, _e)
-                continue
-            for _node in _tree.body:
-                if not isinstance(_node, ast.ClassDef):
-                    continue
-                _bases = []
-                for _b in _node.bases:
-                    if isinstance(_b, ast.Name):
-                        _bases.append(_b.id)
-                    elif isinstance(_b, ast.Attribute):
-                        _bases.append(_b.attr)
-                if "BasePulseOrgan" not in _bases:
-                    continue
-                _rel = os.path.relpath(_p, os.path.dirname(_root)).replace("\\", "/")
-                _out.append({
-                    "class_name": _node.name,
-                    "organ_name": _organ_name_default(_node),
-                    "file_path": _rel,
-                    "method_count": _method_count_of(_node),
-                })
+            _out.extend(_scan_one_file(_p, _root))
     _out.sort(key=lambda r: (r["file_path"], r["class_name"]))
     return _out
 
