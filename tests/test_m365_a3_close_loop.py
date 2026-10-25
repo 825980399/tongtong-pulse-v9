@@ -108,5 +108,18 @@ class TestA3CloseLoop(unittest.TestCase):
         self.assertTrue(str(e.get("patch_id") or "").startswith("o3_"))
 
 
+    # ⑦ unmap 原因细分（裁决落地·事项1）：同文件不同类型 vs 池里无此文件
+    def test_07_unmap_reason_kind(self):
+        entries = [{"dedup_key": "k9", "file": "a/b.py", "issue_type": "dead_code"}]
+        r1 = vf.map_verdict_to_entry({"patch_id": "zzz", "file": "a/b.py",
+                                      "issue_type": "silent_exception"}, entries)
+        self.assertEqual(r1["state"], "unmap")
+        self.assertEqual(r1.get("reason_kind"), "type_mismatch")
+        self.assertEqual(r1.get("same_file_types"), ["dead_code"])
+        r2 = vf.map_verdict_to_entry({"patch_id": "zzz", "file": "x/y.py",
+                                      "issue_type": "silent_exception"}, entries)
+        self.assertEqual(r2["state"], "unmap")
+        self.assertEqual(r2.get("reason_kind"), "file_absent")
+
 if __name__ == "__main__":
     unittest.main()

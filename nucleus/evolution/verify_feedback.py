@@ -191,8 +191,21 @@ def map_verdict_to_entry(verdict: dict, entries: list) -> dict:
     if len(_hits) > 1:
         return {"state": "ambiguous", "by": "file_type",
                 "why": "%s::%s 命中 %d 条（不猜）" % (_f, _t, len(_hits))}
-    return {"state": "unmap", "by": "file_type",
-            "why": "池中无 %s::%s" % (_f, _t)}
+    # ★365裁决落地（事项1）：unmap 分两种，别再混成一句话——
+    #   ① `file_absent`：池里连这个文件的条目都没有（补丁针对的问题**从未入池**）；
+    #   ② `type_mismatch`：池里同文件有条目，但类型不同（两侧描述的**不是同一个问题**）。
+    #   为什么必须分开：这决定了"补 dedup_key 有没有用"——①无从补，②补了也匹配不上。
+    #   实测（365 证据件 365_A1A3存量核查）：76 条 applied 里 55 条是②、20 条是①，
+    #   只有 1 条能真正按键命中 ⇒ "存量补键"这条路在数据上不成立。
+    _same_file = sorted({str(_e.get("issue_type") or "") for _e in entries
+                         if _norm_rel(_e.get("file")) == _f})
+    if _same_file:
+        return {"state": "unmap", "by": "file_type", "reason_kind": "type_mismatch",
+                "same_file_types": _same_file,
+                "why": "池中同文件有 %d 条（类型=%s），但没有 %s ⇒ 两侧描述的不是同一问题"
+                       % (len(_same_file), ",".join(_same_file[:6]), _t)}
+    return {"state": "unmap", "by": "file_type", "reason_kind": "file_absent",
+            "why": "池中无 %s 的任何条目（该问题从未入池）" % _f}
 
 
 def _target_status(passed: Any) -> str | None:
