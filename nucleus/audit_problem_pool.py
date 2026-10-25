@@ -126,6 +126,20 @@ _SEVERITY_ALIASES = {"warning": "medium", "info": "low", "critical": "high"}
 #: 单快照条目上限（防御：池无上限会把落盘本身变成新的内存/磁盘泄漏源）
 MAX_POOL_ENTRIES = 5000
 
+#: ★367 后续（T-死代码放大器修复-1 第三件事）：**低危条目**入池上限。
+#:
+#: 为什么需要单独限额（实测数据，非估算）：
+#:   · `SelfInspector._detect_dead_code()` 单次产 **646 条**，severity 归一后**恒为 low**；
+#:   · 占 `MAX_POOL_ENTRIES`（5000）的 **12.9%**，且每拍随 issues 重新生成、只增不减；
+#:   · 它们 `review_only=True`，源码语义边界明写「待复核 ≠ 死代码，不得据此删码」
+#:     ⇒ 与真正可修的 high/medium 条目抢容量与排序位，却不构成任何可执行修复任务。
+#:
+#: 语义边界：
+#:   · 只作用于 low；high/medium **全量保留**（限额绝不挤掉可修项）；
+#:   · **不是丢弃**：超限条数进 `low_severity_capped` 计数并打 warning（不吞不弃）；
+#:   · 截下的只是「本拍快照视图」，下一拍 issues 仍会重新送来（生成侧幂等）。
+MAX_LOW_ENTRIES = 600
+
 #: 池 schema 版本
 SCHEMA = "audit_problem_pool/345.v2"
 
@@ -356,6 +370,10 @@ KLASS_CODE_DEFECT = "code_defect"
 KLASS_POLLUTION = "pollution"
 KLASS_EXPERIENCE = "experience"
 KLASS_UNKNOWN = "unknown"
+#: ★367 后续（T-死代码放大器修复-1 第二件事）：**观测/趋势类**。
+#: 与 code_defect 的区别：趋势条目**不可修**（它们是「指标在涨」这件事本身），
+#: 只该进看板被人看，不该进 patch_pool 抢可修项的容量与排序位。
+KLASS_TREND = "trend"
 
 #: issue_type → klass 族表。
 #:
@@ -378,13 +396,18 @@ _KLASS_TABLE = {
     "pollution": ("pollution", "meta_description", "low_quality", "duplicate_node",
                   "shallow_node", "noise"),
     "experience": ("experience", "reflection", "insight", "growth"),
+    # ★367 后续：趋势类**显式**收录。
+    #   此前这三个靠「族表未收录 ⇒ unknown ⇒ 兜底 optimize_list」才进到看板侧，
+    #   是巧合不是设计（见本文件 split_routes 上方「掉进兜底桶」的注释）。
+    #   显式归类后：谁把它们挪进 code_defect，就会立刻被本表的意图挡住。
+    "trend": ("cc_ge50_new", "code_loc_weekly_growth", "silent_except_weekly_rise"),
 }
 
 
 def classify_klass(issue_type: Any) -> str:
     """把一个 issue_type 归到问题大类。先查字面量，再查族表，都不中 ⇒ unknown。"""
     _t = str(issue_type or "").strip().lower()
-    if _t in (KLASS_CODE_DEFECT, KLASS_POLLUTION, KLASS_EXPERIENCE):
+    if _t in (KLASS_CODE_DEFECT, KLASS_POLLUTION, KLASS_EXPERIENCE, KLASS_TREND):
         return _t
     for _klass, _members in _KLASS_TABLE.items():
         if _t in _members:
@@ -704,6 +727,42 @@ def _is_open(entry: dict) -> bool:
     return str(entry.get("status", STATUS_OPEN)) not in TERMINAL_STATUSES
 
 
+def cap_low_severity(entries: list, cap: int | None = None) -> tuple:
+    """★367 后续：低危（severity=low）条目入池限额。纯函数，可单测。
+
+    规则（顺序即优先级）：
+      · `medium` / `high` **全量保留** —— 限额只砍 low，绝不挤掉可修项；
+      · `low` 按「open 优先 → 首次时间新优先」保留前 `cap` 条
+        （与全局截断 `MAX_POOL_ENTRIES` 的排序键一致，避免两处口径分叉）；
+      · 未超限时**原样返回**（连顺序都不动），保证无超限时零影响。
+
+    ★为什么返回 dropped 而不是就地删：调用方必须留痕（铁律 156 不静默降级）。
+      被截下的条目**不是被判定为无价值**，只是本拍快照不收录。
+
+    Returns:
+        (kept, dropped)：kept 保持入参相对顺序；dropped 为被截下的 low 条目（升序按同键）
+    """
+    _cap = MAX_LOW_ENTRIES if cap is None else int(cap)
+    if _cap < 0:
+        _cap = 0
+
+    def _is_low(_e: dict) -> bool:
+        return str(_e.get("severity") or "").strip().lower() == "low"
+
+    _low = [_e for _e in entries if _is_low(_e)]
+    if len(_low) <= _cap:
+        return list(entries), []
+
+    _low_sorted = sorted(_low, key=lambda _e: (0 if _is_open(_e) else 1,
+                                               -(_first_ts(_e) or 0)))
+    _keep_low_ids = {id(_e) for _e in _low_sorted[:_cap]}
+    _dropped = _low_sorted[_cap:]
+    # 保序重建：原来的 entries 顺序里筛，避免重排影响下游按序消费
+    _kept = [_e for _e in entries
+             if (not _is_low(_e)) or id(_e) in _keep_low_ids]
+    return _kept, _dropped
+
+
 def _first_ts(entry: dict) -> float:
     """兼容 `first_seen_ts`（新口径）与 `first_seen_at`（旧快照）。"""
     for _k in ("first_seen_ts", "first_seen_at"):
@@ -866,6 +925,13 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
             "proc_gen=%s", _bf["filled"], _bf["already"], _bf["fallback"],
             _bf["locatable"], _pg)
     _kept, _pruned = prune(_merged, _now, retain_days)
+    # ★367 后续：低危限额（必须在全局截断**之前**：否则全局截断先砍，限额就形同虚设）
+    _kept, _low_dropped = cap_low_severity(_kept)
+    if _low_dropped:
+        _module_logger.warning(
+            "[367低危限额] 低危条目超限：保留 %d 条，本快照未收录 %d 条"
+            "（review_only 类，非丢弃：生成侧幂等，下拍仍会送来）",
+            MAX_LOW_ENTRIES, len(_low_dropped))
     _truncated = 0
     if len(_kept) > MAX_POOL_ENTRIES:
         _kept.sort(key=lambda e: (0 if _is_open(e) else 1, -(_first_ts(e) or 0)))
@@ -884,6 +950,7 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
         "total_entries": len(_kept),
         "status_counts": _status_counts(_kept),
         "severity_invalid_count": len(_rejected),
+        "low_severity_capped": len(_low_dropped),
         "prev_source": _prev.get("source", ""),
         "prev_state": _prev["state"],
         "entries": _kept,
@@ -1166,6 +1233,8 @@ _ROUTE_BY_KLASS = {
     KLASS_CODE_DEFECT: ROUTE_PATCH_POOL,
     KLASS_EXPERIENCE: ROUTE_OPTIMIZE_LIST,
     KLASS_POLLUTION: ROUTE_CLEANUP_QUEUE,
+    # ★367 后续：趋势类**显式**进看板侧（原来靠 unknown 兜底，见 KLASS_TREND 注释）
+    KLASS_TREND: ROUTE_OPTIMIZE_LIST,
     # klass 不明 ⇒ 人工看（不丢，也不假装知道该去哪）
     KLASS_UNKNOWN: ROUTE_OPTIMIZE_LIST,
 }
@@ -1347,6 +1416,76 @@ def export_hub_routes(hub: Any = None, root: str | None = None,
                         _r["counts"].get(ROUTE_OPTIMIZE_LIST, 0),
                         _r["counts"].get(ROUTE_CLEANUP_QUEUE, 0))
     return {"state": _r["state"], "routes": _out, "counts": _r["counts"]}
+
+
+#: 三种趋势的 issue_type（看板固定观察面；与 _KLASS_TABLE["trend"] 同源，
+#: 在此另列一份是为了**只读出口不依赖族表可变结构**——族表将来加成员不该
+#: 悄悄改变看板的口径）
+TREND_ISSUE_TYPES = ("cc_ge50_new", "code_loc_weekly_growth", "silent_except_weekly_rise")
+
+
+def trend_board_snapshot(root: str | None = None,
+                         audit_dir_path: str | None = None) -> dict:
+    """趋势三种的看板只读视图（T-死代码放大器修复-1 第二件事的读口）。
+
+    数据源：`<audit_dir>/routes/optimize_list.jsonl`（趋势类显式路由到此）。
+
+    ★三态不伪装（铁律 166：不同事实不同措辞）：
+      · 文件不存在 ⇒ `state="absent"`、`total=None`；
+      · 文件读不了 ⇒ `state="unreadable"`、`total=None`；
+      · 读到了但一条都没有 ⇒ `state="empty"`、`total=0`。
+      「没有这个文件」与「文件里 0 条」是两件不同的事，绝不合并成 0。
+
+    Returns:
+        {state, path, total, trends: {issue_type: {count, latest_ts, open}},
+         others, truncated_lines}
+    """
+    _p = os.path.join(audit_dir(root, audit_dir_path), "routes",
+                      _ROUTE_FILENAMES[ROUTE_OPTIMIZE_LIST])
+    _zero = {_t: {"count": None, "latest_ts": None, "open": None}
+             for _t in TREND_ISSUE_TYPES}
+    if not os.path.isfile(_p):
+        return {"state": "absent", "path": _p, "total": None,
+                "trends": _zero, "others": None, "truncated_lines": None}
+    _rows = []
+    _bad = 0
+    try:
+        with open(_p, encoding="utf-8") as _fh:
+            for _ln in _fh:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _rows.append(json.loads(_ln))
+                except (ValueError, TypeError) as _je:
+                    _bad += 1
+                    if _bad == 1:
+                        # ★只报首个坏行：看板出口每拍都读同一份文件，逐行报会刷屏；
+                        #   坏行总数照常进返回值的 truncated_lines（不吞不弃）。
+                        silent_exc(_je, where="audit_problem_pool.trend_board_snapshot 坏行",
+                                   level="warning")
+    except OSError as _e:
+        silent_exc(_e, where="audit_problem_pool.trend_board_snapshot 读", level="warning")
+        return {"state": "unreadable", "path": _p, "total": None,
+                "trends": _zero, "others": None, "truncated_lines": None}
+
+    _trends = {_t: {"count": 0, "latest_ts": None, "open": 0} for _t in TREND_ISSUE_TYPES}
+    _others = 0
+    for _r in _rows:
+        _t = str(_r.get("issue_type") or _r.get("type") or "").strip()
+        if _t not in _trends:
+            _others += 1
+            continue
+        _cell = _trends[_t]
+        _cell["count"] += 1
+        if _is_open(_r):
+            _cell["open"] += 1
+        _ts = _first_ts(_r)
+        if _ts is not None and (_cell["latest_ts"] is None or _ts > _cell["latest_ts"]):
+            _cell["latest_ts"] = _ts
+    return {"state": "ok" if _rows else "empty", "path": _p,
+            "total": len(_rows), "trends": _trends, "others": _others,
+            "truncated_lines": _bad}
 
 
 def export_routes(entries: list, root: str | None = None,
