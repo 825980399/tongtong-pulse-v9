@@ -1,0 +1,103 @@
+{
+ "audit": "t1 366 交付独立只读复核（六刀＋四尾笔）",
+ "ts": "2026-10-25 16:51:38",
+ "head_baseline": "da41d9a4/current HEAD",
+ "commits_verified": {
+  "7c0d7028": "B4 四键接线",
+  "4f95171c": "docs 交付报告",
+  "bcc52fc3": "E1 三要素",
+  "06dad4f9": "N4 哨兵 v2",
+  "0eba3b4a": "PulseEars print",
+  "da41d9a4": "N5 基线重生成",
+  "95682a71": "N1 主体",
+  "2f612a6e": "N2",
+  "da1f0ad1": "N3",
+  "0ee5c2d3": "N3 补",
+  "7380672d": "N4",
+  "f17f6917": "N5",
+  "aacaaa19": "N5 补"
+ },
+ "blades": [
+  {
+   "blade": "N1 A2 开关默认回正",
+   "要点对照": "已落地",
+   "源码锚点": "config.py:1037 ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL = True（任务书 :1035，漂移+2，内容一致）；tests/test_m365_a2_sandbox_prefilter.py:33 test_00_default_on；:80 test_06 内 mock.patch(_ON, False)",
+   "测试覆盖": "test_m365_a2 8 例（AST 计数）；default_on 与显式 patch False 均在位",
+   "存疑/缺口": "行号漂移 +2（已在报告注明）；其余无"
+  },
+  {
+   "blade": "B4 半成品接线＋问题池→生成器回流",
+   "要点对照": "已落地（四键影子接线全在，开关仍 False）",
+   "源码锚点": "patch_generator.py:1753 `if not generator_enabled()`（原无调用方→已接）；:2140 `_m366_entry_evidence(entry)`；:2012 三要素函数；patch_candidates_consumer.py:71/146/169 消费面在位；PulseMetricsCollector.py:1067/828 `m366_inventory` 导出消费；PulseInnerWorld.py:14503 `_m176_a1_multistep_partial_on()` 消费；experience_retriever.py:353 `retrieve(..., expand_adjacent=_on)` 调用侧接线",
+   "测试覆盖": "tests/test_m366_b4_candidates.py（用例数见 t1 附件）；四键 False 零行为断言",
+   "存疑/缺口": "四键仍全 False（本批不开闸，符合任务书）；adjacency `_on` 取值需与 `_graph_adjacency_enabled()` 对齐（静态读为同一函数，未见冲突）"
+  },
+  {
+   "blade": "N5 分片基线固化",
+   "要点对照": "已落地",
+   "源码锚点": "tools/ci/baselines/m366_full_regression_baseline.json（schema m366.full_regression.baseline/v1，shards=26，16:00 生成）；runner:112 `_failed_cases` 带 `.py` 结尾过滤（:118-124）；:132/151/170/183 build/save/load/diff 全在",
+   "测试覆盖": "tests/test_m366_n5_baseline.py 在位",
+   "存疑/缺口": "基线 JSON 根层为 shards_rows（26 行）；135 条/55 文件口径需按行内 cases 展开核对（本批未展开逐例，见降级）"
+  },
+  {
+   "blade": "N2 C1 暂停→解除双向留痕",
+   "要点对照": "已落地",
+   "源码锚点": "runtime_metrics.py:777 注释/785 set_level/807 `_emit_pause_event(\"resume\")`/857 `resume_exec`/868 统一 schema/899 get_pause_resume_events/904 stats；300s 节流保留、解除不受压制（:854 注释）",
+   "测试覆盖": "tests/test_m366_n2_pause_resume.py 在位",
+   "存疑/缺口": "任务书要求 T0 书面定位『渠道门控』指代——本批静态未见该书面结论文件（需星轨核验轮确认交付报告 T0 段）"
+  },
+  {
+   "blade": "N3 A5 主体前置收口",
+   "要点对照": "部分落地（工具与基线在，A 档元数据字段未在台账根层可读）",
+   "源码锚点": "tools/ci/m365_silent_ledger.py＋baselines/m365_silent_except_ledger.json（schema/total/by_kind/by_grade/parse_err）；6 条 A 档函数均在（criteria_window:104、zero_break_judge:730、call_recorder._rotate、data_quality_evaluator.load_records、PulseSnapshot.cleanup_temp_snapshot_residue、daily_reader._read_last_queue_stats）",
+   "测试覆盖": "tests/test_m366_n3_ledger_meta.py 在位",
+   "存疑/缺口": "台账 JSON 根层无 entries/A 档明细（本批读取 n=0）⇒ 人工确认元数据是否已落需星轨核验轮查台账结构；本批不定论"
+  },
+  {
+   "blade": "N4 测试 data 沙箱根隔离",
+   "要点对照": "已落地",
+   "源码锚点": "tests/conftest.py:166 production_data 注册/295-301 运行时跳过/311 guard fixture/349/354 m366 sentinels/394+ v2 全树写入探测",
+   "测试覆盖": "tests/test_m366_n4_data_sandbox.py＋test_m366tail_n4_tree_guard.py 在位",
+   "存疑/缺口": "v2 全树探测对停机态行为需活体/停机窗实测（本批静态不见运行结果）"
+  },
+  {
+   "tail": "E1 证据三要素",
+   "要点对照": "已落地",
+   "源码锚点": "patch_generator.py:2012 `_m366_entry_evidence`；:2049 `_PM._m344_merge_risk`（只升不降）；:2057 `_PM._m280_trust_by_issue_type`；:2077 `_m338_derive_evidence`；:2032 初始 `patch_evidence=None`（import 失败不伪造）；:2084 赋值",
+   "测试覆盖": "tests/test_m366tail_e1_evidence.py 在位",
+   "存疑/缺口": "trust 恒 70 边界：:2061 有 `70.0, unavailable` 回退（如实标注 unavailable，符合『非 70 才计信息量』的派生侧判定）"
+  },
+  {
+   "tail": "N4 哨兵 v2",
+   "要点对照": "已落地",
+   "源码锚点": "tests/conftest.py:394-405 v2 全树 stat 探测（只 stat 不读内容）",
+   "测试覆盖": "test_m366tail_n4_tree_guard.py",
+   "存疑/缺口": "无"
+  },
+  {
+   "tail": "PulseEars print 修复",
+   "要点对照": "已落地（业务代码零 print）",
+   "源码锚点": "organs/senses/PulseEars.py:677-706 全部 print 位于 `if __name__ == \"__main__\":` 自测块内（守卫内，框架运行不执行）",
+   "测试覆盖": "test_m366tail_ears_print.py",
+   "存疑/缺口": "E402 计数回归需跑 m37 判据（本批未跑，见降级）"
+  },
+  {
+   "tail": "N5 基线重生成",
+   "要点对照": "已落地",
+   "源码锚点": "baselines/m366_full_regression_baseline.json（18.5KB，26 片，16:00）；runner 基线比对 diff_against_baseline:183",
+   "测试覆盖": "test_m366_n5_baseline.py",
+   "存疑/缺口": "135/55 口径逐例核对未展开"
+  }
+ ],
+ "outputs_gap": "366 交付报告与 commit 表述差异：B4 章节旧口径『E1 留 367』已被尾笔 bcc52fc3 收口（现 HEAD 已有 _m366_entry_evidence）——交星轨核验轮以 HEAD 为准",
+ "test_files": [
+  "tests/test_m366_b4_candidates.py",
+  "tests/test_m366_n2_pause_resume.py",
+  "tests/test_m366_n3_ledger_meta.py",
+  "tests/test_m366_n4_data_sandbox.py",
+  "tests/test_m366_n5_baseline.py",
+  "tests/test_m366tail_e1_evidence.py",
+  "tests/test_m366tail_ears_print.py",
+  "tests/test_m366tail_n4_tree_guard.py"
+ ]
+}

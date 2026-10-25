@@ -1,0 +1,122 @@
+{
+ "audit": "t4 366 config 开关遗留复核（C 类 16＋半成品 7＋共窗 6）",
+ "ts": "2026-10-25 16:51:38",
+ "source": "tmp/zw366_root/c1_grey_area.json；星轨 366 裁决轮 ef8b5cad/6e24208e（甲4批准待拍板/乙5维持备料/丙4口径留痕）",
+ "c16": [
+  {
+   "name": "ENABLE_MEMORY_RELEASE_TREE",
+   "status": "维持备料（乙；并入 L325 shadow）",
+   "new_wiring": "无代码改动（仅 docs 裁决）"
+  },
+  {
+   "name": "ENABLE_MEMORY_RELEASE_LIVE",
+   "status": "维持备料（乙；L325 shadow）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_GRAPH_ADJACENCY",
+   "status": "**已接线**（366/B4：experience_retriever:353 调用侧 expand_adjacent=_on）",
+   "new_wiring": "7c0d7028"
+  },
+  {
+   "name": "ENABLE_MULTISTEP_PARTIAL_WRITE",
+   "status": "**已接线**（366/B4：PulseInnerWorld:14503 消费）",
+   "new_wiring": "7c0d7028"
+  },
+  {
+   "name": "ENABLE_ORGAN_INVENTORY_EXPORT",
+   "status": "**已接线**（PulseMetricsCollector:1067 m366_inventory）",
+   "new_wiring": "7c0d7028"
+  },
+  {
+   "name": "ENABLE_PATCH_GENERATOR",
+   "status": "**已接线**（patch_generator:1753 调用 generator_enabled()）",
+   "new_wiring": "7c0d7028"
+  },
+  {
+   "name": "ENABLE_O_A4_DUAL_PATH",
+   "status": "仍未接生产（active_memory_dual 仅 tests 引用）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "O_A4_SUBAGENT_ENABLED",
+   "status": "仍未接生产",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_O_A4_LOCAL_EVIDENCE",
+   "status": "仍未接生产",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_STANDING_ORDERS",
+   "status": "仍未接生产（standing_orders 仅 tests）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_PENDING_QUEUE_AGING",
+   "status": "维持备料（乙：复核空转）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION",
+   "status": "维持备料（乙：口径）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "ENABLE_SELF_AWARENESS_INFLUENCE_DECISION",
+   "status": "随二阶段（乙）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "SELF_AWARENESS_MENTION_ENABLED",
+   "status": "随二阶段（乙）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "OUTPUT_WINDOWS_PATH_MASK",
+   "status": "维持（乙：隐私试用）",
+   "new_wiring": "无"
+  },
+  {
+   "name": "SPIKE_BACKEND_ENABLED",
+   "status": "维持（乙：试点）",
+   "new_wiring": "无"
+  }
+ ],
+ "half_wired_7": {
+  "已接线 4": [
+   "PATCH_GENERATOR",
+   "GRAPH_ADJACENCY",
+   "MULTISTEP_PARTIAL_WRITE",
+   "ORGAN_INVENTORY_EXPORT"
+  ],
+  "仍未接线 3": [
+   "ENABLE_O_A4_DUAL_PATH",
+   "O_A4_SUBAGENT_ENABLED",
+   "ENABLE_O_A4_LOCAL_EVIDENCE",
+   "ENABLE_STANDING_ORDERS"
+  ],
+  "说明": "『7 个半成品』中 4 个由 366/B4 接线；剩余 4 个（O_A4×3＋standing_orders）模块从未接生产，需先接模块级调用再谈开关"
+ },
+ "common_window_6": {
+  "names": [
+   "ENABLE_ROUTING_LAYERED",
+   "ENABLE_INNER_WORLD_QUALITY_ESCALATION",
+   "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE",
+   "ENABLE_MEMORY_STRENGTH_SHADOW",
+   "ENABLE_HEBBIAN_COLLISION_SCAN",
+   "ENABLE_HEBBIAN_APPLY_DECAY"
+  ],
+  "status": "未见正式裁决记录新增（git log 无对应单条）；仍缺 —— 建议随丙4 口径留痕清理批补"
+ },
+ "a4_pending": {
+  "names": [
+   "ENABLE_MEMORY_AUTO_GC",
+   "ENABLE_ORGAN_HEALTH_LEADERBOARD",
+   "ENABLE_STRUCTURE_RESCAN",
+   "ENABLE_ORGAN_SCAN_ADAPTIVE_TTL"
+  ],
+  "status": "星轨建议甲4批准（待小林拍板）；GC 需先补接线：调用点未传 auto_gc=True＋8192 阈值未接入判据（星轨现场校正）"
+ }
+}

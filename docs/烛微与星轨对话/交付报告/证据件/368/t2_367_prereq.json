@@ -1,0 +1,80 @@
+{
+ "audit": "t2 367 刀1(H1)/刀2(H4) 前提证据加固（证实/证伪）",
+ "ts": "2026-10-25 16:51:38",
+ "h1": {
+  "节拍链": {
+   "main.py 计数器": "main.py:4313 `_pool_consume_counter=0`；4315-4321 env PULSE_POOL_CONSUME_EVERY → config.POOL_CONSUME_EVERY_TICKS（config.py:6337=300）→ 异常回退 300+WARNING（顺序一致）",
+   "consumer 开关链": "consumer.py:101-110 显式参数 > env PULSE_POOL_CONSUME > config ENABLE_AUDIT_POOL_CONSUME > 默认 True（与草案一致）",
+   "冲突": "未发现顺序/默认值冲突"
+  },
+  "主循环路径": {
+   "分支": "main.py `MAIN_LOOP_PULSE_ENABLED` → `_ctrl.wait_heartbeat_pulse(1)`（PulseController.py:2559）；`_on_heartbeat_pulse` :2570 置位 Event；超时返回 False ⇒ 主循环按 1s 推进（草案假设成立）",
+   "结论": "成立"
+  },
+  "跳过分支": {
+   "结论": "四处 silent_exc（patch-gate 异常/shutdown 异常/night digest 异常/消费异常）均在，主循环继续推进（static 读）"
+  },
+  "消费口视图": {
+   "正常路径": "consumer.py:603-618 `_m363_consume_view` **已存在**（363刀A3 落地）：consume_state/candidate_count/dispatch_selected/verify_feedback_state；main.py:4396 读取",
+   "异常路径": "consumer.py:577-579 `except` 提前 return `{\"state\":\"exception\"}`，**不组装 m363_consume_view** ⇒ 异常拍主循环看不到三字段视图",
+   "草案定性": "修正：『无 m363_consume_view』不成立；真实缺口=**异常路径缺视图**（+ 五态中 exception 未纳入视图 schema）",
+   "五态": "ok/noop_pool_empty/unavailable/disabled/write_failed 五态产出点齐全（:463/471/556…）；exception 为第六态（非五态内）"
+  },
+  "遗漏补查": [
+   "计数器竞态：_pool_consume_counter 为局部变量（非全局），重启/多线程下无共享问题（低风险）",
+   "节流重置点：仅初始化清零一次；异常路径不清零（符合设计）",
+   "线程切换留痕盲区：heartbeat 等待由 Event 驱动，无跨线程计数（无新发现）"
+  ]
+ },
+ "h4": {
+  "回写现状": "dispatch.py:2619 `_write_back` 只写 `runtime_verified`＋`runtime_verify_result{verified,detail,execution_source,executed_at}`；**不写顶层 `executed`/`applied`**（:2632-2642 逐行核实）",
+  "破零判据三侧": {
+   "zero_break_judge 四条件": "executed≥1（:67-73）/ applied is True 严格（:75）/ status∈VERIFIED_STATUSES(:30)/ 非隔离根(:36) —— 与草案一致",
+   "scan/watch": "scan_zero_break 门槛与 watch_candidate 三源合并未见对 `executed` 的写入端依赖（只读）",
+   "冲突": "dispatch 执行成功（runtime_verified=True）在 zero_break_judge 下仍 executed=0 ⇒ 半通；与草案『沙箱执行成功≠源码落地』一致"
+  },
+  "落地通道全量": {
+   "applied=True 写入点": [
+    "PatchManager.py:4332（apply_all_pending 真落地）",
+    "dispatch.py:3249（O3 通道）",
+    "ParamPatchManager.py:365（参数补丁，独立域）",
+    "ParamPatchManager.py:368（result 计数）"
+   ],
+   "executed 顶层写入": "全仓仅 zero_break_judge.py:966 `_rec[\"executed\"]=1`（判据侧构造 record），**落地通道无 executed 写入/清零点** ⇒ H4 缺口的另一半：不仅 applied 不回写，executed 也无人写",
+   "结论": "草案成立且更强：dispatch 通道两个字段（executed/applied）都不回写；只有 PatchManager.apply_all_pending 写 applied"
+  },
+  "语义边界": "沙箱执行成功≠源码落地成立；若沙箱误写 applied=True 会污染：324 选择器（:1875 `_p.get(\"applied\") is True` 直接剔除）、静态扫描、watcher 三源合并、生命周期表（applied_at/rollback_available）",
+  "遗漏补查": [
+   "runtime_verified 顶层与嵌套 runtime_verify_result.verified 双写一致（_write_back 同时写两处）",
+   "history 原子落盘在 _write_back 之后（调用方统一写），未见顺序冲突",
+   "补：ParamsPatchManager 属参数域，不应计入 pending 判据（同名 applied 字段易混，建议判据侧显式排除）"
+  ]
+ },
+ "anchor_drift": [
+  {
+   "item": "config.py:1035 (366任务书)",
+   "head": "config.py:1037",
+   "delta": "+2"
+  },
+  {
+   "item": "consumer.py:579 无视图",
+   "head": "consumer.py:577-579",
+   "delta": "0（确认）"
+  },
+  {
+   "item": "dispatch.py:2619-2661 _write_back",
+   "head": "2619-2661",
+   "delta": "0"
+  },
+  {
+   "item": "zero_break_judge.py:67-77",
+   "head": "67-77",
+   "delta": "0"
+  },
+  {
+   "item": "PatchManager.py:4332",
+   "head": "4332",
+   "delta": "0"
+  }
+ ]
+}

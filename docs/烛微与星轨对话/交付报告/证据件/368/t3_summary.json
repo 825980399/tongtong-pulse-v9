@@ -1,0 +1,334 @@
+{
+ "audit": "t3 G2–G11 未排 44 条前置分级",
+ "ts": "2026-10-25 16:51:38",
+ "n": 44,
+ "family_summary": {
+  "G2 守卫/线程": "7 条：1 可施工（守卫模板）/1 需活体（L0）/2 归并 354/1 残余复核/1 重锚归并/1 观察",
+  "G3 自测块/死代码": "2 条：均静态可施工，死代码需先抽样",
+  "G4 冷化/快照": "4 条：1 停机专项（快照压缩）/1 施工（可达性）/1 随同批/1 维持关闭",
+  "G5 K2/K1": "4 条：2 诊断先行/2 施工（试点）",
+  "G6 渠道/费用": "5 条：均静态可施工（额度/限额/入池/判读）",
+  "G7 EventBus": "4 条：1 施工/2 文档订正/1 观察",
+  "G8 软伤": "7 条：3 施工/3 诊断先行/1 已给判据",
+  "G9 缓存/推理/调度": "3 条：2 诊断/1 对表施工",
+  "G10 H组/D3": "7 条：1 施工（撤表）/3 诊断/2 留痕/1 环境",
+  "G11 存量重算": "1 条：设计先行"
+ },
+ "blockers": [
+  "T-快照压缩-1：需停机/写操作专项",
+  "T-线程验收补测-1/per-item/NUL：需活体或宿主环境",
+  "T-JsonRepair/占位符/学习漂移/L2/推理复用/H组：需先诊断定位",
+  "T-K1/K2：需隔离验证与微基准"
+ ],
+ "items": [
+  {
+   "id": "T-守卫模板重写-1",
+   "P_in_book": "P1",
+   "wiring": "接线在位可施工（355 已证 8 条守卫空壳：Timer 在 try 内 start＋finally 立即复位；87c9 try:pass）",
+   "blade": "独立批（G2 首刀）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-线程整改L0-1",
+   "P_in_book": "P1",
+   "wiring": "PulseSystemManager:155 `_run_boot_checks` 后台线程（api 注释 T-112c）；是否改同步需实测串行耗时 vs L0 8s 预算",
+   "blade": "诊断先行→施工",
+   "tri_state": "需活体实测"
+  },
+  {
+   "id": "T-去线程整改-1",
+   "P_in_book": "P2",
+   "wiring": "45 文件三态普查已做（338 表 v1）；15 候选已逐条精读（354）",
+   "blade": "归并：直接引用 354 表 v2",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-去线程收口-1",
+   "P_in_book": "P2",
+   "wiring": "同上：10 保留/2 可去/1 加固/1 消失/1 已改造",
+   "blade": "归并 354（已交付）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-并发自检移出-1",
+   "P_in_book": "P2",
+   "wiring": "BasePulseOrgan:709 自测块 354刀2 已移出（c15 命中 7/15）",
+   "blade": "复核后结案/残余",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-线程表重锚-1",
+   "P_in_book": "P2",
+   "wiring": "354 已出 v2（生产 58→55 线程点）",
+   "blade": "归并 354",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-线程验收补测-1",
+   "P_in_book": "P3",
+   "wiring": "同代次≥3 拍线程下降需重启窗",
+   "blade": "观察窗",
+   "tri_state": "需活体实测"
+  },
+  {
+   "id": "T-__main__自测块收口-1",
+   "P_in_book": "P2",
+   "wiring": "生产面 `__main__` 块可 AST 枚举（111 块/5327 行口径需复扫确认）",
+   "blade": "独立批",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-死代码放大器修复-1",
+   "P_in_book": "P2",
+   "wiring": "self_inspector.py:5043 同名合并 27→541 注释在；dead_code 1261 条待抽样",
+   "blade": "诊断先行→施工",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-冷化链可达性-1",
+   "P_in_book": "P1",
+   "wiring": "main.py:2070 `load()` 无参（full_load=True）＋`_src==parquet` 短路（340 已定位）",
+   "blade": "施工（停机窗口内验证）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-快照压缩-1",
+   "P_in_book": "P1",
+   "wiring": "snapshot.json 718.6MB＋双 .bak（362/366 复测口径仍在）；gzip 路径未接",
+   "blade": "停机专项（非本批）",
+   "tri_state": "需要停机/写操作"
+  },
+  {
+   "id": "T-冷化阈值-1",
+   "P_in_book": "P2",
+   "wiring": "max_warm=50000 vs 实际节点（340/354 已核）；随可达性同批改",
+   "blade": "随 T-冷化链可达性同批",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-懒加载开关-1",
+   "P_in_book": "P2",
+   "wiring": "SNAPSHOT_LAZY_LOAD 默认 False（363 回执维持；懒加载慢 20 倍）",
+   "blade": "结案/留痕",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-K1主闭环卸载-1",
+   "P_in_book": "P1",
+   "wiring": "K1 productive 到主闭环卸载=0（隔离验证态）；并行柱代码在位",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-K2判据改口径-1",
+   "P_in_book": "P1",
+   "wiring": "340B 实测串行 20.21s→并发 19.47s（降 3.68%，GIL 噪声带）；判据改双口径需星轨裁决",
+   "blade": "随 367/后续裁决",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-K2试点-1",
+   "P_in_book": "P2",
+   "wiring": "`submit_cpu_intensive` 生产 0 调用（366 复核仍 0）；subproc_verify_pool/parallel_scheduler 在位",
+   "blade": "施工（试点）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-K2进程池票-1",
+   "P_in_book": "P2",
+   "wiring": "ProcessPoolExecutor 基建在（Hybrid/ReasoningWorkerPool）",
+   "blade": "立项/并入试点",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-进化费用额度-1",
+   "P_in_book": "P2",
+   "wiring": "EVOLUTION_BUDGET_DAILY/WEEKLY_CNY=None ⇒ 不熔断（366 复核）；config 键在",
+   "blade": "施工（设额度）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-限额回退口径-1",
+   "P_in_book": "P2",
+   "wiring": "44 撤销/作废回退口径：343 裁决未落地（356 复核）",
+   "blade": "施工（实测）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-限额回退实测-1",
+   "P_in_book": "P2",
+   "wiring": "同上：restore 显式计数不占额度留痕未落",
+   "blade": "施工（实测）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-渠道入池判据-1",
+   "P_in_book": "P2",
+   "wiring": "TokenHub/千帆未入池（config 无条目）；zhipu 占比/HHI 判据在 361 报告",
+   "blade": "施工（按判据接线）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-token判读-1",
+   "P_in_book": "P2",
+   "wiring": "daily_tokens 四维（361/366 已给）；全局阈值 1M 口径错误（per-channel 才对）",
+   "blade": "施工（看板口径）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-EventBus遥测扩面-1",
+   "P_in_book": "P2",
+   "wiring": "EventBus 1 发布/2 订阅（358 复核）；扩面=遥测类事件",
+   "blade": "施工（接线后）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-判死真值复跑-1",
+   "P_in_book": "P3",
+   "wiring": "判死候选复核脚本未固化（351 手扫）",
+   "blade": "施工（脚本化）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-订阅口径订正-1",
+   "P_in_book": "P3",
+   "wiring": "EventBus 2＋ReportBus 4 口径（358 已给）",
+   "blade": "文档订正",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-EventBus降级判定-1",
+   "P_in_book": "P3",
+   "wiring": "订阅方无真实消费（358/363 观察窗）",
+   "blade": "观察窗",
+   "tri_state": "需活体实测"
+  },
+  {
+   "id": "T-占位符产出源-1",
+   "P_in_book": "P1",
+   "wiring": "PulseLiver.py:2921-2955 融合拦截在位；产出源定位未做（362 F08）",
+   "blade": "诊断先行→施工",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-SSRF分类留痕-1",
+   "P_in_book": "P2",
+   "wiring": "ssrf_guard.py:121 三类混同（362 已证）",
+   "blade": "施工（分类）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-403冷却-1",
+   "P_in_book": "P2",
+   "wiring": "WikiQuerier.py:142 无冷却（362 已证）",
+   "blade": "施工（冷却）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-JsonRepair来源-1",
+   "P_in_book": "P2",
+   "wiring": "JsonRepair:261 解析失败 6 次（362）",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-日志瘦身-1",
+   "P_in_book": "P2",
+   "wiring": "10 族 ≈1000 行/h（362 已量化）",
+   "blade": "施工（降级/聚合）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-350开闸回载缺口-1",
+   "P_in_book": "P2",
+   "wiring": "reload_stats.json/live_gate_state.json 重复 DEBUG（362）",
+   "blade": "施工（去重+核查）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-学习目标漂移-1",
+   "P_in_book": "P2",
+   "wiring": "「代码」两次强制切换（362）；与占位符是否同源待查",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-L2空转诊断-1",
+   "P_in_book": "P2",
+   "wiring": "L2 三场景 hits=0/misses=0（357/361/362）",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-运行中推理复用-1",
+   "P_in_book": "P2",
+   "wiring": "deep_think 仅对话管线（357）；运行中 4 路",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-调度面去重-1",
+   "P_in_book": "P2",
+   "wiring": "TimeCore 32 任务 vs 器官 Timer（362/361 已见日志）",
+   "blade": "诊断→施工",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-H组评审medium23条收口-1",
+   "P_in_book": "P2",
+   "wiring": "medium 23 条（audit 池）；真伪未核",
+   "blade": "诊断先行",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-D3后续批-1",
+   "P_in_book": "P2",
+   "wiring": "D3 12 文件 22 站点清单（347/354 口径）",
+   "blade": "施工（分批）",
+   "tri_state": "证据不足"
+  },
+  {
+   "id": "T-typed_infer撤表-1",
+   "P_in_book": "P2",
+   "wiring": "4→2 撤表已落（343刀5）；余 2 方法可撤（CacheEntry.to_dict/ReportEnvelope.to_dict 无证据）",
+   "blade": "施工（撤表）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-per-item波动-1",
+   "P_in_book": "P3",
+   "wiring": "24% 波动（861→866→660→660）未解释",
+   "blade": "诊断/观察",
+   "tri_state": "需活体实测"
+  },
+  {
+   "id": "T-NUL实证-1",
+   "P_in_book": "P3",
+   "wiring": "Ruff panic 与根 NUL 文件（环境线索）",
+   "blade": "长期项",
+   "tri_state": "需外部环境具备"
+  },
+  {
+   "id": "T-typed_infer留痕-1",
+   "P_in_book": "P3",
+   "wiring": "4 方法零入边无留痕（343 已见）",
+   "blade": "施工（留痕）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-cw3A重锚-1",
+   "P_in_book": "P3",
+   "wiring": "cw3-A 锚 125 vs 现 124",
+   "blade": "施工（重锚）",
+   "tri_state": "静态接线已核实"
+  },
+  {
+   "id": "T-存量重算机制-1",
+   "P_in_book": "P1",
+   "wiring": "verifiable_rate=0.2143 冻结存量 84 条；重算机制未设计",
+   "blade": "设计先行",
+   "tri_state": "证据不足"
+  }
+ ],
+ "note": "完整 44 行（含风险/前置条件/备注）见 tmp/zw368_root/t3_backlog_readiness.json"
+}

@@ -1,0 +1,49 @@
+{
+ "audit": "368 批审计产物版化副本（规范 A3）",
+ "ts": "2026-10-25 16:53:08",
+ "source_root": "tmp/zw368_root",
+ "files": [
+  {
+   "file": "h1_dedup_checklist.json",
+   "size": 1111,
+   "sha256": "c00dcb45836b648cf79f155b8a9c23acf627ba7c01e18bfbc25b2e279701606c"
+  },
+  {
+   "file": "t1_366_review.json",
+   "size": 6346,
+   "sha256": "890db56013145732e305fc9b261d34b83dd849c10c36597c0391fe5afa089d07"
+  },
+  {
+   "file": "t2_367_prereq.json",
+   "size": 4598,
+   "sha256": "1a070a20c15849690c41cf1bd781b1ab88f5d3d051e66bab5ec2d779f2be090a"
+  },
+  {
+   "file": "t3_summary.json",
+   "size": 10970,
+   "sha256": "6f30f6dc620bc32f7177c0c94043d71cc304e3368451f68cfb4c916eb5ea603b"
+  },
+  {
+   "file": "t4_switch_followup.json",
+   "size": 3601,
+   "sha256": "7d1009a7787c49cd60236f47a38029d0413a7f26c069be785159a548ff903417"
+  },
+  {
+   "file": "烛微_368批前置分析报告_20261025.md",
+   "size": 12625,
+   "sha256": "a3b18be5fbde917f8a85d407710cdf4a154160ce066a7521999a78eb8d63a64c"
+  }
+ ],
+ "full_ledgers": [
+  {
+   "path": "tmp/zw368_root/t3_backlog_readiness.json",
+   "size": 14830,
+   "sha256": "ae2e90464314b7e6b64b9c8923edae45dfa670cb6511385b719bd4ea63a46c59"
+  },
+  {
+   "path": "tmp/zw368_root/probe_raw.json",
+   "size": 47974,
+   "sha256": "012af39af965814620ac1f04de23500da71b248c94b42076e281f664c9a24af8"
+  }
+ ]
+}
