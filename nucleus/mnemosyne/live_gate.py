@@ -32,6 +32,7 @@ import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus import absence_notice as _absence_notice
 from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("live_gate")
@@ -119,7 +120,10 @@ def _load_state(state_path: str | None = None) -> dict:
         _d["_read"] = "ok"
         return _d
     except FileNotFoundError:
-        _module_logger.debug("[350开闸] 台账不存在 path=%s（首次运行）", _p)
+        # ★E10（T-350开闸回载缺口-1）：缺席是确定性事实，**不得每拍重复**留痕；
+        #   只在首次 / 曾存在又被清掉（事故信号）时打一条。
+        if _absence_notice.note_absent(_p):
+            _module_logger.debug("[350开闸] 台账不存在 path=%s（首次运行或刚被清理）", _p)
         return _blank_state(_p, "absent")
     except Exception as _e:                                   # noqa: BLE001
         silent_exc(_e, where="live_gate::_load_state")

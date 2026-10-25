@@ -39,6 +39,7 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus._silent_except import silent_exc
+from nucleus import absence_notice as _absence_notice
 from nucleus._warn_throttle import should_warn
 from nucleus.const import (
     HeartEvent,
@@ -683,9 +684,14 @@ class PulseMetricsCollector(BasePulseOrgan):
                 with open(_p, "r", encoding="utf-8") as _f:
                     _rs = json.load(_f)
             except FileNotFoundError:
-                # ★350：文件不存在是**确定事实**（还没跑过回载），写清楚而不静默
-                self._log(LogLevel.DEBUG, "[350开闸] 回载统计尚不存在 path=%s ⇒ 命中率样本=0"
-                          % _p)
+                # ★350：文件不存在是**确定事实**（还没跑过回载），写清楚而不静默。
+                # ★E10（T-350开闸回载缺口-1）：但**不得每拍重复**——同一事实每拍一条
+                #   DEBUG 实测约 2 条/拍、10 族合计约 1000 行/h 里占两条纯噪声。
+                #   ⇒ 只在「首次发现」或「曾存在又被清掉」时留痕（后者是事故信号）。
+                if _absence_notice.note_absent(_p):
+                    self._log(LogLevel.DEBUG,
+                              "[350开闸] 回载统计尚不存在 path=%s ⇒ 命中率样本=0"
+                              "（首次或刚被清理）" % _p)
                 _rs = None        # 还没跑过回载 ⇒ 无样本（不是 0）
             except Exception as _rse:                          # noqa: BLE001
                 silent_exc(_rse, where="PulseMetricsCollector::_m350_live_gate_tick reload",
