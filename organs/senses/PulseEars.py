@@ -4,6 +4,7 @@
 设计: 路灯、小林、星轨
 日期: 2026年9月9日
 """
+import logging as _m365_logging
 import os
 import sys
 
@@ -37,6 +38,9 @@ from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
 from nucleus._silent_except import silent_exc
+
+#: ★366 后续：留痕器自身失败时的**非 print** 兜底出口（m37 业务代码禁 print）
+_m365_fb_log = _m365_logging.getLogger("pulse.organ.ears")
 from nucleus.const import (
     ChatEvent,
     DigestEvent,
@@ -112,9 +116,10 @@ def m365_note_voice_failure(logger_self, exc: BaseException, where: str) -> str:
             from nucleus.const import LogLevel as _LL
             logger_self._log(getattr(_LL, _lvl), _msg)
         except Exception as _le:
-            # 留痕器自己失败也必须可见（不得纯 pass）
+            # 留痕器自己失败也必须可见（不得纯 pass），但**不得 print**：
+            #   m37::test_30 明确「业务代码不得有 print」⇒ 走模块 logger 兜底。
             silent_exc(_le, where="PulseEars::m365_note_voice_failure log", level="debug")
-            print(_msg)
+            _m365_fb_log.warning("%s", _msg)
     if _cls == "memory":
         # 资源紧张 ⇒ 本轮窗口内跳过语音入口（不反复重试），窗口过后自然恢复
         _M365_VOICE_SKIP_UNTIL["ts"] = _now + _M365_VOICE_QUIET_SEC
