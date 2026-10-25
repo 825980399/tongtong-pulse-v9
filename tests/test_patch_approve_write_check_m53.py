@@ -35,9 +35,13 @@ def _mk_mgr(tmp):
 
 
 def _write_pending(tmp, n=2, status="pending"):
+    # ★364刀A6（夹具漂移）：284刀5 起结构缺陷判据要求 `modified_code` 能 parse 出
+    #   与 method 同名的 def，否则整条**作废**（原夹具写 "y" ⇒ 两条都被作废 ⇒
+    #   approve_all 无条目可批 ⇒ 返回 ok=True，与「写盘失败应 ok=False」的断言打架）。
     items = [{"id": "p%d" % i, "file": "config.py", "method": "m%d" % i,
               "status": status, "risk_level": "低", "trust_score": 40,
-              "original_code": "x", "modified_code": "y"}
+              "original_code": "def m%d(self):\n    return 'x'\n" % i,
+              "modified_code": "def m%d(self):\n    return 'y'\n" % i}
              for i in range(n)]
     with open(os.path.join(tmp, "pending_patches.json"), "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False)

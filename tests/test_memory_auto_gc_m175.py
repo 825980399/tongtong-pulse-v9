@@ -15,8 +15,13 @@
 
 def _make_collector(info_field):
     from organs.core.PulseMetricsCollector import PulseMetricsCollector
+    import logging
     _c = PulseMetricsCollector.__new__(PulseMetricsCollector)
     _c.info_field = info_field
+    # ★364刀A6（夹具漂移）：339批起 `_collect_memory_pressure` 用 `self._logger` 留痕，
+    #   本夹具走 `__new__` 只塞 info_field ⇒ AttributeError 把整段采集打成「采集异常」，
+    #   gc 断言自然全红。补 `_logger` 即恢复（不改生产代码）。
+    _c._logger = logging.getLogger("test.m175.collector")
     return _c
 
 
