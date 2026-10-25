@@ -1022,12 +1022,17 @@ OB1_TOOL_POLICY_LEVEL = "conservative"  # 工具调用白/黑名单与频率闸�
 OB1_ELEVATED_ENABLED = False            # 提权动作（写盘/重启/外部API）审批闸：默认关闭（实装推 179）｜D2[S] 仅 gate 表/配置面引用，未实装 ⇒ 勿据其判断「提权已受控」
 
 # ★365刀A2：沙箱「派单侧预筛」口径（两通道分类）——只改**预筛**，沙箱拦截判据零改动。
-#   默认 True = 新口径：`class=real` / `design_internal` / `mixed` / `unparsed` 仍预拦转人工；
-#   `idiom`/`literal`（含 `repo_idiom`）不预拦，**交沙箱终判**（沙箱子串判据未变，
-#   真会拦的照样拦）。False = 复现旧行为（子串命中即 `would_block` 全预拦）。
+#   **默认 False（先关，观察后再翻）**：本批不停机、无 live 读数支撑新口径的实际收益，
+#   而新口径会让 `idiom`/`literal` 类补丁**不再在派单前被拦**、改为进沙箱再被拦 →
+#   多一次执行尝试并污染补丁失败计数（324「失败可退出」）。收益只是"拒收理由更准"，
+#   不是"更多补丁能过"（沙箱 `would_block` 判据未变）。故按"先关"处理。
+#   True = 新口径：`class=real` / `design_internal` / `mixed` / `unparsed` 仍预拦转人工；
+#          `idiom`/`literal`（含 `repo_idiom`）不预拦，**交沙箱终判**。
+#   False = 旧口径（子串命中即 `would_block` 全预拦，零行为变化）。
+#   翻闸前置：live 观察窗读 `get_m365_sandbox_prefilter_stats()` 分档分布 + 沙箱实际拦截率。
 #   读取点：nucleus/evolution/patch_execution_dispatch.py::_m365_two_channel_on
 #   依赖：无（独立开关，不与 OB1_SANDBOX_LEVEL 联动；不改 TRUSTED_CODE_IDIOMS 登记册）
-ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL = True
+ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL = False
 
 # 三层键段划分：键段 → 归属层 + 语义 + 子键清单
 OB1_CONFIG_FACETS = {

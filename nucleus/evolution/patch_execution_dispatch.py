@@ -1466,7 +1466,9 @@ def is_sandbox_incompatible(patch: dict) -> bool:
     if _m365_two_channel_on():
         _pre_block, _tier = _m365_prefilter_tier(_scan)
     else:
-        _pre_block, _tier = bool(_scan.get("would_block")), "legacy:would_block"
+        _pre_block = bool(_scan.get("would_block"))
+        # 旧口径下"没命中"仍是 clean（否则统计里会出现 legacy:would_block=不拦 的怪读数）
+        _tier = "legacy:would_block" if _pre_block else "clean"
     _M365_PREJ[_tier] = int(_M365_PREJ.get(_tier, 0)) + 1
     if _pre_block:
         _module_logger.debug(
