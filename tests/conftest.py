@@ -312,3 +312,123 @@ def guard_production_data():
     """内联守卫：框架运行时跳过当前测试（供未使用标记的生产数据读取测试调用）。"""
     _framework_running_skip_if_needed()
     yield
+
+
+# ============================================================ ★366刀N4：测试 data/ 沙箱根＋哨兵守卫
+#: 停机态全量回归会改写生产 data/（365 T1 实测：`data/evolution/effect_verify.json` 哈希变化）。
+#: 本段在**测试侧**兜住：跑测前备份哨兵 → 跑测后比对 → 变化则还原并报告。
+#: 不在生产代码加分支（任务书红线）；`PULSE_DATA_GUARD_STRICT=1` 时变化直接 fail。
+_M366_SENTINELS = (
+    os.path.join("data", "patches", "pending_patches.json"),
+    os.path.join("data", "patches", "patch_history.json"),
+    os.path.join("data", "evolution", "effect_verify.json"),
+)
+_M366_SANDBOX_REL = os.path.join("tmp", "pytest_data_sandbox")
+
+
+def m366_sandbox_dir() -> str:
+    """测试沙箱根（`tmp/pytest_data_sandbox`）——**不落 `data/`、不进审计池**。"""
+    _d = os.path.join(ROOT, _M366_SANDBOX_REL)
+    os.makedirs(_d, exist_ok=True)
+    return _d
+
+
+def m366_file_sha(path: str) -> str:
+    """文件 sha256 前 16 位；不存在记 `absent`（不伪造空哈希）。"""
+    import hashlib as _h
+    _p = path if os.path.isabs(path) else os.path.join(ROOT, path)
+    if not os.path.isfile(_p):
+        return "absent"
+    _x = _h.sha256()
+    with open(_p, "rb") as f:
+        for _b in iter(lambda: f.read(1 << 20), b""):
+            _x.update(_b)
+    return _x.hexdigest()[:16]
+
+
+def m366_snapshot_sentinels() -> dict:
+    """三个哨兵文件的哈希快照（键＝相对路径）。"""
+    return {p: m366_file_sha(p) for p in _M366_SENTINELS}
+
+
+def m366_backup_sentinels(backup_dir: str | None = None) -> dict:
+    """把哨兵文件备份到沙箱根（返回 {相对路径: 备份绝对路径 或 None}）。"""
+    import shutil as _sh
+    _bak = backup_dir or m366_sandbox_dir()
+    os.makedirs(_bak, exist_ok=True)
+    _out = {}
+    for _rel in _M366_SENTINELS:
+        _src = os.path.join(ROOT, _rel)
+        if not os.path.isfile(_src):
+            _out[_rel] = None
+            continue
+        _dst = os.path.join(_bak, _rel.replace(os.sep, "__") + ".bak")
+        _sh.copy2(_src, _dst)
+        _out[_rel] = _dst
+    return _out
+
+
+def m366_diff_and_restore(before: dict, backups: dict) -> dict:
+    """比对哨兵哈希；有变化则从备份还原并报告（无可还原源 ⇒ 如实记 not_restorable）。"""
+    import shutil as _sh
+    _after = m366_snapshot_sentinels()
+    _changed, _restored, _failed = {}, [], []
+    for _rel, _h0 in (before or {}).items():
+        _h1 = _after.get(_rel)
+        if _h1 == _h0:
+            continue
+        _changed[_rel] = {"before": _h0, "after": _h1}
+        _bak = (backups or {}).get(_rel)
+        if not _bak or not os.path.isfile(_bak):
+            _failed.append(_rel)
+            continue
+        try:
+            _sh.copy2(_bak, os.path.join(ROOT, _rel))
+            _restored.append(_rel)
+        except OSError as _e:
+            _failed.append("%s:%s" % (_rel, type(_e).__name__))
+    _now = m366_snapshot_sentinels()
+    return {"changed": _changed, "restored": _restored, "failed": _failed,
+            "clean_after": all(_now.get(_r) == _h for _r, _h in (before or {}).items())}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def m366_data_sentinel_guard():
+    """★366刀N4：会话级哨兵守卫（框架运行中不启用——那时由 production_data 标记跳过）。
+
+    停机态：备份 → 跑测 → 比对 → 变化则还原（`PULSE_DATA_GUARD_STRICT=1` 时 fail）。
+    报告落 `tmp/pytest_data_sandbox/last_guard.json`，供全量回归取证。
+    """
+    import json as _json
+    if is_framework_running():
+        yield {"state": "skipped_framework_running"}
+        return
+    _before = m366_snapshot_sentinels()
+    _backups = m366_backup_sentinels()
+    _rep = {"state": "armed", "before": _before}
+    yield _rep
+    _res = m366_diff_and_restore(_before, _backups)
+    _rep.update({"state": "checked", "result": _res})
+    try:
+        _p = os.path.join(m366_sandbox_dir(), "last_guard.json")
+        with open(_p, "w", encoding="utf-8") as f:
+            _json.dump(_rep, f, ensure_ascii=False, indent=1)
+    except OSError as _e:
+        print("[N4] 守卫报告写盘失败：%s: %s" % (type(_e).__name__, _e))
+    if _res["changed"]:
+        print("[N4][WARN] 生产 data/ 哨兵在跑测期间被改写：%s（已还原=%s，失败=%s）"
+              % (sorted(_res["changed"]), _res["restored"], _res["failed"]))
+    if os.environ.get("PULSE_DATA_GUARD_STRICT") == "1" and not _res["clean_after"]:
+        pytest.fail("[N4] 生产 data/ 哨兵未恢复到跑测前状态：%s" % (_res,), pytrace=False)
+
+
+@pytest.fixture
+def sandbox_data_root(tmp_path):
+    """★366刀N4：写类测试的沙箱 data 根（opt-in）。
+
+    用法：`def test_x(sandbox_data_root): p = sandbox_data_root / "patches" / "x.json"`。
+    产物落在 pytest 的 tmp_path 下，**不进 `data/`、不进审计池**。
+    """
+    _root = tmp_path / "data"
+    _root.mkdir(parents=True, exist_ok=True)
+    return _root
