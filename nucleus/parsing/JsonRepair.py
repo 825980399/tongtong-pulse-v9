@@ -219,6 +219,15 @@ def _escape_inner_quotes(text: str) -> str:
             if nxt in (",", "}", "]", ":", ""):
                 out.append(c)
                 in_str = False
+            elif nxt == '"':
+                # ★367 后续：内部引号**后面紧跟另一个引号** ⇒ 更可能是
+                #   「两个字符串紧邻但缺逗号」（如 ["a" "b"]），而不是「一个字符串含内部引号」。
+                #   此时转义会把两个元素**合并成一个**（"a" "b" → a" "b），
+                #   属于**静默语义篡改** —— 比解析失败更糟：上游 method="repair" 会当成功用。
+                #   纯文本层无法唯一区分这两种情形，故**不猜**：保持字符串结束语义，
+                #   让该候选解析失败，交上层 fallback（宁可不修，不可篡改）。
+                out.append(c)
+                in_str = False
             else:
                 out.append('\\"')
             i += 1
@@ -276,7 +285,15 @@ def _try_loads(text: str) -> Any | None:
     try:
         _obj = json.loads(text)
     except Exception as e:
-        silent_exc(e, "JsonRepair:261:JSON解析失败", level="warning")
+        # ★367 后续 E9（日志瘦身·JsonRepair 族）：**降为 debug**。
+        #   本函数是「逐候选验证」的内部件（4 处调用，其中 1 处在循环里），
+        #   候选不合法是**控制流的正常分支**，不是异常事件。实测：
+        #   `JsonRepair:261` 日志 1053 条 vs 真正「全策略失败」46 个独立事件
+        #   = **22.9 倍重复**（每轮候选都喊一次 warning）。
+        #   失败仍留痕：最终失败由 parse_with_repair 末尾的 `[JSON定位刀]`（debug，
+        #   带 source/前60字/长度/字符位）＋ PulseStomach 侧 warning 上报。
+        #   ⇒ 不是静默降级（铁律 156）：留痕点从「每个候选」上移到「整次解析结果」。
+        silent_exc(e, "JsonRepair:261:JSON解析失败", level="debug")
         _LAST_PARSE_FAILURE["exc"] = e
         return None
     return _obj if isinstance(_obj, (dict, list)) else None
@@ -343,11 +360,14 @@ def repair_json_text(text: str) -> str | None:
     return None
 
 
-def parse_with_repair(text: str) -> tuple[Any | None, str]:
+def parse_with_repair(text: str, source: str = "") -> tuple[Any | None, str]:
     """三策略串联解析：direct -> extract -> repair。
 
     Args:
         text: 原始文本。
+        source: **可选**的调用方来源标识（如 `"stomach.code_analysis"`）。
+            ★367 后续 E8：只用于失败时的定位留痕，**不参与任何解析判定**。
+            默认空串 ⇒ 结构与本刀之前完全一致（唯一调用方 PulseStomach 已显式传入）。
 
     Returns:
         ``(obj, method)``；``method`` ∈ ``{"direct", "extract", "repair", "none"}``。
@@ -384,9 +404,14 @@ def parse_with_repair(text: str) -> tuple[Any | None, str]:
     _fe = _LAST_PARSE_FAILURE.get("exc")
     _pos = getattr(_fe, "pos", None)
     _src = classify_json_error(_fe) if _fe is not None else "全策略失败"
+    # ★367 后续 E8：失败上下文补齐（供定位「谁写出的坏 JSON」）。
+    #   原来只有 exc/字符位，靠「前60字」猜来源；现在带调用方 source 与长度。
+    _LAST_PARSE_FAILURE["source"] = source
+    _LAST_PARSE_FAILURE["length"] = len(text)
+    _LAST_PARSE_FAILURE["head"] = text[:120]
     _logger.debug(
-        f"[JSON定位刀] 修复失败 | 前60字={text[:60]!r} 长度={len(text)} "
-        f"来源标记={_src} 字符位={_pos}"
+        f"[JSON定位刀] 修复失败 | source={source or '-'} 前60字={text[:60]!r} "
+        f"长度={len(text)} 来源标记={_src} 字符位={_pos}"
     )
     return None, "none"
 

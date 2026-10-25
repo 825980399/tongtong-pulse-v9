@@ -791,7 +791,10 @@ class PulseStomach(BasePulseOrgan):
                     try:
                         # ★修复：优先用策略2提取的JSON块，无匹配则用原始内容
                         _repair_input = _json_match.group() if _json_match else cleaned_content
-                        _fixed_obj, _fix_method = _parse_with_repair(_repair_input)
+                        # ★367 后续 E8：显式传来源标识 —— 失败时日志能直接指到
+                        #   「这一条坏 JSON 是代码分析调用产出的」，不必再靠前 60 字猜。
+                        _fixed_obj, _fix_method = _parse_with_repair(
+                            _repair_input, source="stomach.code_analysis")
                     except Exception as e:
                         _fixed_obj, _fix_method = None, "none"
                         _last_err = e
