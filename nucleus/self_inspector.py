@@ -16,6 +16,7 @@ import json
 import os
 import re
 import threading
+import textwrap
 import time
 from datetime import datetime
 from typing import Any
@@ -4168,24 +4169,70 @@ class SelfInspector(SilentLogMixin):
                 })
 
     def _check_lock_with_emit(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
-        """检测锁内发射脉冲：with self._lock: 内部调用 self._emit"""
-        if 'self._lock' not in body and 'self._lock.acquire' not in body:
+        """检测锁内发射脉冲：`self._emit` 调用是否**真在** `with self._lock` 块内。
+
+        ★367 后续（假阳性修正）：原实现是**纯字符串位置比较** ——
+          `lock_pos = body.find('self._lock'); emit_pos = body.find('self._emit')`
+          `if lock_pos < emit_pos: 报`。
+        它不看缩进、不看块归属 ⇒ 只要方法里既出现锁又出现 emit 就必然报，
+        **锁块结束之后的发射也照报**。实测后果：`PulseMotivationCycle` 的
+        `_emit_motivation_signals`（`★355刀7` 已把发射移到锁外）与
+        `_emit_pressure_constraints`（with 只包赋值、emit 在块外）被报成 medium，
+        两条都是假阳性 —— 而 agents 照着"修"只会把正确的代码改坏。
+
+        现改为 AST 判：找 `With` 且 items 含 `self._lock`/`self._lock.acquire()`，
+        再判 `self._emit(...)` 是否落在该 with 的**行区间**内；同一方法只报第一处。
+        解析失败 ⇒ 不报（不猜），但**留痕**（纯 return 会被 cw2 判静默）。
+        """
+        if 'self._emit' not in body:
             return
-        if 'self._lock' in body and 'self._emit' in body:
-            lock_pos = body.find('self._lock')
-            emit_pos = body.find('self._emit')
-            if lock_pos < emit_pos:
-                line_num = start_line + body[:emit_pos].count('\n')
-                suggestion = self._generate_fix_suggestion("lock_with_emit", file_path, method, line_num)
-                issues.append({
-                    "file": file_path,
-                    "organ": organ,
-                    "method": method,
-                    "line": line_num,
-                    "type": "lock_with_emit",
-                    "description": "可能锁内发射脉冲：方法内同时存在 self._lock 和 self._emit",
-                    "suggestion": suggestion,
-                })
+        try:
+            _tree = ast.parse(textwrap.dedent(body))
+        except (SyntaxError, ValueError) as _pe:
+            silent_exc(_pe, where="self_inspector::_check_lock_with_emit parse")
+            return
+        _ranges: list[tuple[int, int]] = []
+        for _n in ast.walk(_tree):
+            if not isinstance(_n, ast.With):
+                continue
+            _has_lock = False
+            for _it in _n.items:
+                _ex = _it.context_expr
+                if isinstance(_ex, ast.Attribute) and _ex.attr == '_lock' \
+                        and isinstance(_ex.value, ast.Name) and _ex.value.id == 'self':
+                    _has_lock = True
+                elif isinstance(_ex, ast.Call) and isinstance(_ex.func, ast.Attribute) \
+                        and _ex.func.attr == 'acquire' \
+                        and isinstance(_ex.func.value, ast.Attribute) \
+                        and _ex.func.value.attr == '_lock':
+                    _has_lock = True
+            if _has_lock:
+                _ranges.append((_n.lineno, getattr(_n, 'end_lineno', _n.lineno) or _n.lineno))
+        if not _ranges:
+            return
+        _hit = None
+        for _n in ast.walk(_tree):
+            if not (isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)
+                    and _n.func.attr == '_emit'
+                    and isinstance(_n.func.value, ast.Name)
+                    and _n.func.value.id == 'self'):
+                continue
+            if any(_lo <= _n.lineno <= _hi for _lo, _hi in _ranges):
+                _hit = _n
+                break
+        if _hit is None:
+            return
+        line_num = start_line + _hit.lineno - 1
+        suggestion = self._generate_fix_suggestion("lock_with_emit", file_path, method, line_num)
+        issues.append({
+            "file": file_path,
+            "organ": organ,
+            "method": method,
+            "line": line_num,
+            "type": "lock_with_emit",
+            "description": "锁内发射脉冲：self._emit 调用位于 with self._lock 块内",
+            "suggestion": suggestion,
+        })
 
     def _check_method_length(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
         """检测过长方法：方法体行数 > 200（白名单中的已知超长方法除外）"""
