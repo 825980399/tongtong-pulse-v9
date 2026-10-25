@@ -206,6 +206,8 @@ class PulseHeart(BasePulseOrgan):
         self._log("INFO", f"心脏起搏，基础间隔 {self.base_interval}s")
         # 立即发射第一次心跳
         self._schedule_next_beat()
+        # ★365刀C1：起搏即挂看门狗（幂等；链路断了才有第二个线程能发现）
+        self._m365_start_watchdog()
 
         # 发射存活信号（L0生命线层）
         self._emit(HeartEvent.ALIVE, {
@@ -378,7 +380,15 @@ class PulseHeart(BasePulseOrgan):
         if self.info_field is None:
             # 信息场不可用，无法发射脉冲，但仍然安排下一次心跳尝试恢复
             self._heartbeat_in_progress = False
-            self._schedule_next_beat()
+            # ★365刀C1：这条早退路径同样会续链失败（且它比 finally 更早出现），一并兜底
+            try:
+                self._schedule_next_beat()
+            except Exception as _ce365b:
+                self._m365_chain_fail = int(getattr(self, "_m365_chain_fail", 0)) + 1
+                self._log(LogLevel.ERROR,
+                          f"[365链] 心跳续链失败（info_field 缺失路径，第"
+                          f"{self._m365_chain_fail}次）：{type(_ce365b).__name__}: {_ce365b}",
+                          error_code="heartbeat_chain_break")
             return
 
         try:
@@ -479,7 +489,99 @@ class PulseHeart(BasePulseOrgan):
             # ★PHASE17-阶段二子任务5.7：先释放重入守卫标志，再调度下一次，
             #   确保标志不会因 finally 未执行而卡死（finally 必然执行）。
             self._heartbeat_in_progress = False
+            # ★365刀C1：续链失败兜底 —— `_schedule_next_beat()` 自己抛异常（Timer 构造失败/
+            #   线程资源耗尽）时，过去异常直接从 finally 抛出 ⇒ **定时链静默断掉**：没有下一拍、
+            #   没有日志、没有计数，外部只能看到"心跳突然不动了"。现在留痕＋计数，交看门狗复核。
+            try:
+                self._schedule_next_beat()
+            except Exception as _ce365:
+                self._m365_chain_fail = int(getattr(self, "_m365_chain_fail", 0)) + 1
+                self._log(LogLevel.ERROR,
+                          f"[365链] 心跳续链失败（第{self._m365_chain_fail}次，"
+                          f"beat={getattr(self, '_beat_count', 0)}，"
+                          f"interval={getattr(self, 'current_interval', 0)}s，"
+                          f"last_beat={getattr(self, '_last_beat_time', 0)}）："
+                          f"{type(_ce365).__name__}: {_ce365}",
+                          error_code="heartbeat_chain_break")
+
+    # ========== ★365刀C1：心跳链看门狗 ==========
+
+    def _m365_start_watchdog(self):
+        """启动心跳链独立看门狗（幂等；**不自动重启进程**，只告警＋尝试续链）。"""
+        if getattr(self, "_m365_wd_running", False):
+            return {"ok": True, "why": "already_running"}
+        self._m365_wd_running = True
+        self._m365_wd_fail = 0
+        _t = threading.Thread(target=self._m365_watchdog_loop,
+                              name="m365_heart_wd", daemon=True)
+        self._m365_wd_thread = _t
+        _t.start()
+        self._log(LogLevel.INFO,
+                  "[365链] 心跳看门狗已启动（阈值 = 2×interval，只告警＋续链，不重启进程）")
+        return {"ok": True, "why": "started"}
+
+    def _m365_watchdog_loop(self):
+        """看门狗主循环：按当前间隔的一半节拍自检（最短 5s）。"""
+        while getattr(self, "_m365_wd_running", False):
+            _iv = float(getattr(self, "current_interval", 30.0) or 30.0)
+            time.sleep(max(5.0, _iv / 2.0))
+            try:
+                self.m365_beat_watchdog()
+            except Exception as _e:
+                self._m365_wd_fail = int(getattr(self, "_m365_wd_fail", 0)) + 1
+                self._log(LogLevel.WARNING,
+                          f"[365链] 看门狗自身异常（第{self._m365_wd_fail}次）："
+                          f"{type(_e).__name__}: {_e}")
+
+    def m365_beat_watchdog(self) -> dict:
+        """★365刀C1：gap > 2×interval ⇒ WARNING 告警并尝试续链。
+
+        为什么需要独立看门狗：定时链一旦断，`_trigger_heartbeat` 不再被调用
+        ⇒ 任何写在心跳体内的自检都**永远不会执行**（自证死锁）。所以必须有一个
+        与心跳链无关的线程来发现"链不动了"。
+        不自动重启进程（任务书红线）；续链复用 `_heartbeat_in_progress` 重入守卫，
+        正在执行中的那一拍不会被看门狗插队。
+        """
+        _iv = float(getattr(self, "current_interval", 0) or 0)
+        _last = float(getattr(self, "_last_beat_time", 0) or 0)
+        _now = time.time()
+        if not getattr(self, "is_running", False) or _iv <= 0 or _last <= 0:
+            # 未启动/尚无基线 ⇒ 不判（避免启动期误报）
+            return {"ok": True, "action": "no_baseline"}
+        _gap = _now - _last
+        if _gap <= 2.0 * _iv:
+            return {"ok": True, "action": "none", "gap_s": round(_gap, 2)}
+        if self._heartbeat_in_progress:
+            # 正在跑的那一拍自己会续链；看门狗不插队（否则双定时器）
+            return {"ok": True, "action": "skip_in_progress", "gap_s": round(_gap, 2)}
+        self._m365_wd_gap_warn = int(getattr(self, "_m365_wd_gap_warn", 0)) + 1
+        _action = "reschedule_failed"
+        try:
             self._schedule_next_beat()
+            _action = "rescheduled"
+            self._log(LogLevel.WARNING,
+                      f"[365链] 心跳间隔异常 gap={_gap:.1f}s > 2×{_iv}s（第"
+                      f"{self._m365_wd_gap_warn}次）⇒ 已尝试续链（beat={self._beat_count}）")
+        except Exception as _e:
+            self._m365_chain_fail = int(getattr(self, "_m365_chain_fail", 0)) + 1
+            self._log(LogLevel.ERROR,
+                      f"[365链] 心跳间隔异常且续链失败 gap={_gap:.1f}s > 2×{_iv}s："
+                      f"{type(_e).__name__}: {_e}",
+                      error_code="heartbeat_chain_break")
+        return {"ok": _action == "rescheduled", "action": _action,
+                "gap_s": round(_gap, 2)}
+
+    def m365_chain_stats(self) -> dict:
+        """★365刀C1：心跳链健康读数（只读；供心跳/健康检查与 live 窗复核）。"""
+        _last = float(getattr(self, "_last_beat_time", 0) or 0)
+        _iv = float(getattr(self, "current_interval", 0) or 0)
+        return {"chain_fail": int(getattr(self, "_m365_chain_fail", 0)),
+                "wd_running": bool(getattr(self, "_m365_wd_running", False)),
+                "wd_fail": int(getattr(self, "_m365_wd_fail", 0)),
+                "gap_warn": int(getattr(self, "_m365_wd_gap_warn", 0)),
+                "beat_count": int(getattr(self, "_beat_count", 0)),
+                "interval": _iv,
+                "gap_s": (round(time.time() - _last, 2) if _last > 0 else None)}
 
     def _cancel_timer(self):
         """取消心跳定时器"""
@@ -695,6 +797,8 @@ class PulseHeart(BasePulseOrgan):
     def start(self):
         """启动心脏"""
         super().start()
+        # ★365刀C1：起搏路径（未走 boot 事件时）同样挂看门狗
+        self._m365_start_watchdog()
         with self._scheduled_tasks_lock:
             # ★v30.0负载均衡修复：所有调度任务 last_run 由固定 0 改为随机错峰偏移。
             # 原实现所有任务 last_run=0，且 interval 均为 300 的整数倍（300/600/1800/

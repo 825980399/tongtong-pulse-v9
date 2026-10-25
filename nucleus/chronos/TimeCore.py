@@ -99,7 +99,25 @@ class TimeCore:
             self._timer.daemon = True
             self._timer.start()
         except Exception as e:
-            self._log(f"调度失败: {e}")
+            # ★365刀C1：续链失败必须**可数、可见** —— 原先只有一行 INFO（等价于静默），
+            #   链断了在日志里翻不出来。现计数＋WARNING（与 PulseHeart 同口径）。
+            self._m365_chain_fail = int(getattr(self, "_m365_chain_fail", 0)) + 1
+            _msg = (f"[365链] TimeCore 调度失败（第{self._m365_chain_fail}次，"
+                    f"interval={self._interval}s）：{type(e).__name__}: {e}")
+            if self._logger is not None:
+                try:
+                    self._logger.warning(_msg)
+                except Exception as _le:
+                    silent_exc(_le, where="nucleus.chronos.TimeCore::_schedule_next warn")
+                    print(_msg)
+            else:
+                print(_msg)
+
+    def m365_chain_stats(self) -> dict:
+        """★365刀C1：TimeCore 续链失败计数（只读；与 PulseHeart.m365_chain_stats 同名同口径）。"""
+        return {"chain_fail": int(getattr(self, "_m365_chain_fail", 0)),
+                "running": bool(getattr(self, "_running", False)),
+                "interval": float(getattr(self, "_interval", 0) or 0)}
 
     def _tick(self) -> None:
         try:
