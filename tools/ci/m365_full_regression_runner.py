@@ -118,7 +118,10 @@ def _failed_cases(log_path: str) -> list:
                 _s = _ln.strip()
                 if _s.startswith("FAILED ") or _s.startswith("ERROR "):
                     _part = _s.split(None, 1)[1].split(" - ")[0].strip()
-                    if _part:
+                    # ★366 后续：只认 `path/to/x.py::case`。业务日志行（器官日志常以
+                    #   "FAILED "-like 形态被接在后面）第一段不以 .py 结尾 ⇒ 丢弃，
+                    #   否则基线里会混进 4 条"假用例"，归族时被当成文件去跑。
+                    if _part and _part.split("::")[0].endswith(".py"):
                         _out.append(_part)
     except OSError as _e:
         _LOG.warning("[N5] 分片日志不可读 %s: %s: %s", log_path, type(_e).__name__, _e)

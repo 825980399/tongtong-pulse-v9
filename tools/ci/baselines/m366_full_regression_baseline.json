@@ -41,9 +41,6 @@
    "hard_hang": false,
    "timeout_cases": [],
    "failed_cases": [
-    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 1 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_cp79rvw3\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet']",
-    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 1 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_df8dbtjk', 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_df8dbtjk\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet']",
-    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 2 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_3rzoblix', 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_3rzoblix\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet', 'bad2.parquet']",
     "tests/test_call_graph_m21.py::TestBoundary::test_bak_dir_excluded",
     "tests/test_call_graph_m21.py::TestBoundary::test_performance_100_files",
     "tests/test_call_graph_m21.py::TestBoundary::test_tests_dir_excluded_by_default",
@@ -169,7 +166,6 @@
    "hard_hang": false,
    "timeout_cases": [],
    "failed_cases": [
-    "subagent_runner:subagent_runner.py:393 [subagent_runner] worker 能力面校验失败（capabilities=None），NO_MESSAGE_TOOL 未在 worker 侧落地，弃结果",
     "tests/test_m187_blade2_graph_adjacency.py::test_build_adjacency_counts",
     "tests/test_m187_blade2_graph_adjacency.py::test_query_adjacency_affects_and_driven_by",
     "tests/test_m187_blade2_graph_adjacency.py::test_query_adjacency_leaf_organ",
