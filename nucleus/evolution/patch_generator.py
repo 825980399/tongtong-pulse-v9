@@ -2009,6 +2009,83 @@ def ollama_transport(prompt: str, *, model: str, base_url: str,
 # ========== 主入口 ==========
 
 
+def _m366_entry_evidence(entry: dict) -> dict:
+    """★366 后续 E1：给「问题池条目」补三要素证据的**可复算输入**，再复用派单侧派生。
+
+    为什么在生成侧做而不是让派单侧现算：派单侧 `_m338_evidence_ok` 对**无**
+    `patch_evidence` 的补丁走 `derived_legacy` 同源派生，但那意味着每条候选在
+    派单时才第一次被检查 —— 生成侧看不到"这条凭什么叫得动"，也就无法在草稿阶段
+    就淘汰证据不全的候选。此处提前算出，让三态出口都带同一份证据。
+
+    边界（模块 docstring 已定，不许越）：
+      * 裁决权归派单侧 `_m338_evidence_ok` —— 本函数只**提供原料**；
+      * 派生逻辑**复用** `_m338_derive_evidence`（单点），本模块不另建 rank/trust 表；
+      * `risk_level` 走唯一裁决口 `_m344_merge_risk`（只升不降）；
+      * `trust_score` 条目自带优先，否则按 issue_type 派生（**不用恒 70 默认**，
+        否则派单侧会以 "trust 为恒 70 默认（零信息量）" 拒收）。
+
+    Returns:
+        {"patch_evidence": dict|None, "evidence_meta": {risk_source, trust_source,
+         ok, reason}}；import 失败或 entry 为空时 `patch_evidence=None` 且
+        `evidence_meta.ok=False`（**如实报不可复算，不伪造证据**）。
+    """
+    _res: dict = {"patch_evidence": None, "evidence_meta": {"ok": False,
+                                                            "reason": "no_entry"}}
+    if not isinstance(entry, dict) or not entry:
+        return _res
+    _it = str(entry.get("issue_type") or "unknown").strip()
+    try:
+        from nucleus.evolution.patch_execution_dispatch import (
+            _m338_derive_evidence, _m338_evidence_ok)
+        from nucleus.reasoning.PatchManager import PatchManager as _PM
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence import")
+        _res["evidence_meta"] = {"ok": False, "reason": "import_failed"}
+        return _res
+
+    # risk：条目显式优先但只许升不许降（唯一裁决口）
+    _exp = entry.get("risk_level") or ""
+    try:
+        _risk, _rbasis = _PM._m344_merge_risk(_exp, _it)
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence risk")
+        _risk, _rbasis = "", "unavailable"
+    # trust：条目自带优先（非 70 才算有信息量，由派生侧判），否则按 issue_type 派生
+    _raw_t = entry.get("trust_score")
+    if _raw_t is None or _raw_t == "":
+        try:
+            _trust = float(_PM._m280_trust_by_issue_type(_it))
+            _tbasis = "_m280_trust_by_issue_type"
+        except Exception as _e:
+            silent_exc(_e, where="patch_generator::_m366_entry_evidence trust")
+            _trust, _tbasis = 70.0, "unavailable"
+    else:
+        try:
+            _trust = float(_raw_t)
+            _tbasis = "entry"
+        except (TypeError, ValueError) as _e:
+            # 非数值不猜：交派生侧按"无 trust"处理（它会记 None 并计入缺项）
+            silent_exc(_e, where="patch_generator::_m366_entry_evidence trust_type",
+                       level="debug")
+            _trust, _tbasis = 70.0, "invalid_fallback_default"
+
+    _probe = {"issue_type": _it, "risk_level": _risk,
+              "method": str(entry.get("method") or ""),
+              "file": str(entry.get("file") or ""),
+              "trust_score": _trust}
+    try:
+        _ev = _m338_derive_evidence(_probe)
+        _ok, _why, _ = _m338_evidence_ok({"patch_evidence": _ev})
+    except Exception as _e:
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence derive")
+        _res["evidence_meta"] = {"ok": False, "reason": "derive_failed",
+                                 "risk_source": _rbasis, "trust_source": _tbasis}
+        return _res
+    _res["patch_evidence"] = _ev
+    _res["evidence_meta"] = {"ok": bool(_ok), "reason": str(_why),
+                             "risk_source": _rbasis, "trust_source": _tbasis}
+    return _res
+
 def generate_patch_draft(entry: dict,
                          project_root: str | None = None,
                          *,
@@ -2057,6 +2134,12 @@ def generate_patch_draft(entry: dict,
         "draft": None, "error": "", "gate_reasons": [],
         "prompt_chars": 0, "elapsed_sec": None, "proc_gen": "unknown",
     }
+    # ★366 后续 E1：证据三要素只依赖**条目本身**（与模型回了什么无关）⇒ 在此单点
+    #   算好，`draft_ready/gate_rejected/generation_failed` 三条出口自动同带一份，
+    #   避免"只有成功草稿才有证据"造成三态证据不对称。
+    _ev_pack = _m366_entry_evidence(entry)
+    _out["patch_evidence"] = _ev_pack["patch_evidence"]
+    _out["evidence_meta"] = _ev_pack["evidence_meta"]
     try:
         from nucleus.proc_gen import proc_gen_str as _pgs
 
