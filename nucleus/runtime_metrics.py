@@ -774,6 +774,9 @@ class AdaptiveFrequencyController:
         self._skipped = {}
         self._executed = {}
         self._skip_log_at = {}   # ★B156-5 票③：各操作跳过日志节流时间戳
+        # ★366刀N2：暂停→解除双向留痕（同一 schema，供 live 复核成对读）
+        self._pause_events: list = []
+        self._paused_ops: dict = {}   # 操作名 → 被 CRITICAL 暂停的时刻
 
     def register(self, name: str, base_interval: float) -> None:
         """注册/覆盖一个非关键操作的正常间隔（秒）。"""
@@ -782,15 +785,28 @@ class AdaptiveFrequencyController:
     def set_level(self, level: str) -> None:
         if level in _VALID_LEVELS:
             if level != self._level:
+                _old = self._level
+                _ts = time.time()
                 # ★B156-5 票③：等级变化可观测（闭环是否随负载升降一目了然）
                 try:
                     import logging
                     _logger = logging.getLogger("pulse.module.runtime_metrics")
-                    _logger.info(f"[自适应降频] 负载等级变化: {self._level} → {level}")
+                    _logger.info(f"[自适应降频] 负载等级变化: {_old} → {level}")
                 except Exception as _e:
                     silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController.set_level")
                 self._level = level
-                self._level_since = time.time()
+                self._level_since = _ts
+                # ★366刀N2：双向留痕 —— 只有"进/出暂停"才是关键事件，普通升降仍走 INFO
+                _was_paused = ADAPTIVE_FREQ_FACTOR.get(_old, 1.0) is None
+                _now_paused = ADAPTIVE_FREQ_FACTOR.get(level, 1.0) is None
+                if _now_paused and not _was_paused:
+                    self._emit_pause_event("pause", scope="level", name="全局",
+                                           from_level=_old, to_level=level,
+                                           reason="负载达 CRITICAL ⇒ 非关键操作暂停")
+                elif _was_paused and not _now_paused:
+                    self._emit_pause_event("resume", scope="level", name="全局",
+                                           from_level=_old, to_level=level,
+                                           reason="负载回落 ⇒ 非关键操作恢复可执行")
 
     def get_level(self) -> str:
         return self._level
@@ -821,6 +837,8 @@ class AdaptiveFrequencyController:
         _iv = self.get_interval(name)
         if _iv == float("inf"):
             self._skipped[str(name)] = self._skipped.get(str(name), 0) + 1
+            # ★366刀N2：登记"该操作已被暂停"，供恢复时成对留痕（重复暂停只更新首次时刻）
+            self._paused_ops.setdefault(str(name), time.time())
             # ★B156-5 票③：CRITICAL 暂停属重要事件，按操作节流记 WARNING
             self._log_skip(name, True)
             return False
@@ -833,7 +851,68 @@ class AdaptiveFrequencyController:
             return False
         self._last_run[str(name)] = _now
         self._executed[str(name)] = self._executed.get(str(name), 0) + 1
+        # ★366刀N2：从"暂停"恢复执行 ⇒ 记 resume_exec（不受 300s 节流压制，低频关键事件）
+        _paused_at = self._paused_ops.pop(str(name), None)
+        if _paused_at is not None:
+            self._emit_pause_event("resume_exec", scope="op", name=str(name),
+                                   to_level=self._level,
+                                   duration_s=round(max(0.0, _now - float(_paused_at)), 2),
+                                   reason="操作恢复执行")
         return True
+
+    def _emit_pause_event(self, event: str, *, scope: str, name: str,
+                          from_level: str | None = None,
+                          to_level: str | None = None,
+                          duration_s: float | None = None,
+                          reason: str = "") -> dict:
+        """★366刀N2：暂停/解除事件的**统一 schema**（暂停、解除、操作恢复共用一套字段）。
+
+        为什么要统一：过去"暂停"有 WARNING（`_log_skip`）、"解除"只有一条等级变化 INFO，
+        两边字段各不相同，日志里配不成对 ⇒ 高压窗过去后无法回答"停了多久、有没有恢复"。
+        `duration_s` 只在解除类事件有值（暂停类为 None）。
+        """
+        _rec = {"ts": time.time(), "event": str(event), "scope": str(scope),
+                "name": str(name), "from_level": from_level,
+                "to_level": to_level, "duration_s": duration_s,
+                "reason": str(reason or "")[:120]}
+        self._pause_events.append(_rec)
+        if len(self._pause_events) > 50:
+            del self._pause_events[:-50]
+        try:
+            import logging
+            _logger = logging.getLogger("pulse.module.runtime_metrics")
+            _fmt = ("[自适应降频] %s scope=%s name=%s %s→%s"
+                    " duration=%ss 因=%s")
+            _msg = _fmt % (_rec["event"], _rec["scope"], _rec["name"],
+                           _rec["from_level"] or "-", _rec["to_level"] or "-",
+                           _rec["duration_s"] if _rec["duration_s"] is not None else "-",
+                           _rec["reason"] or "-")
+            # 解除类事件用 INFO（要能在常规日志里看到），暂停类用 WARNING
+            if _rec["event"] == "pause":
+                _logger.warning(_msg)
+            else:
+                _logger.info(_msg)
+        except Exception as _e:
+            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._emit_pause_event")
+        return _rec
+
+    def get_pause_resume_events(self, limit: int = 20) -> list:
+        """★366刀N2：读最近若干条暂停/解除事件（只读拷贝，供心跳/健康检查出口）。"""
+        _n = max(1, int(limit))
+        return [dict(x) for x in self._pause_events[-_n:]]
+
+    def pause_resume_stats(self) -> dict:
+        """★366刀N2：暂停/解除计数与当前挂起状态（只读）。
+
+        `paused_ops` 是**当前仍被暂停**的操作（恢复时会被移出）；为空＝没有挂起暂停。
+        计数按**事件次数**计，不去重（同一操作反复进出会多次计数）。
+        """
+        _cnt: dict = {}
+        for _r in self._pause_events:
+            _cnt[_r.get("event")] = int(_cnt.get(_r.get("event"), 0)) + 1
+        return {"level": self._level, "since": self._level_since,
+                "events": _cnt, "paused_ops": sorted(self._paused_ops),
+                "paused_ops_n": len(self._paused_ops)}
 
     def _log_skip(self, name: str, paused: bool) -> None:
         """★B156-5 票③：should_execute 跳过可观测——节流后按级别记录。

@@ -171,6 +171,10 @@ def pause_category(category: str, why: str = "", *,
         return {"ok": _saved, "changed": False, "repeat": _old["repeat"],
                 "persisted": _saved}
     _st["paused"][_cat] = {"since": _ts, "why": str(why or "")[:200], "repeat": 0}
+    # ★366刀N2：暂停也进 history（原来只有 paused 快照，历史里查不到"何时停的"）
+    _st.setdefault("history", []).append(
+        {"ts": _ts, "action": "pause", "category": _cat,
+         "why": str(why or "")[:200], "duration_s": None})
     _saved = _save_state(_st, state_path)
     _module_logger.warning(
         "[350开闸] 类别暂停 category=%s 因=%s 落盘=%s",
@@ -178,17 +182,36 @@ def pause_category(category: str, why: str = "", *,
     return {"ok": _saved, "changed": True, "persisted": _saved}
 
 
-def resume_category(category: str, *, state_path: str | None = None) -> dict:
-    """解除暂停（人工动作；不在自动回滚链上）。"""
+def resume_category(category: str, *, state_path: str | None = None,
+                    now: float | None = None) -> dict:
+    """解除暂停（人工动作；不在自动回滚链上）。
+
+    ★366刀N2：解除侧补**时长与成对历史** —— 过去只有一行 "类别恢复" INFO，
+    查不出"停了多久、原因为何"，与暂停侧的 WARNING 配不成事件对。
+    """
     _cat = str(category or "").strip()
     _st = _load_state(state_path)
     if _cat not in _st["paused"]:
         return {"ok": True, "changed": False, "reason": "not_paused"}
-    _st["paused"].pop(_cat, None)
+    _ts = float(now if now is not None else time.time())
+    _old = _st["paused"].pop(_cat, None) or {}
+    _since = float(_old.get("since") or _ts)
+    _dur = round(max(0.0, _ts - _since), 2)
+    _st.setdefault("history", []).append(
+        {"ts": _ts, "action": "resume", "category": _cat,
+         "why": str(_old.get("why") or "")[:200], "duration_s": _dur})
     _saved = _save_state(_st, state_path)
-    _module_logger.info("[350开闸] 类别恢复 category=%s 落盘=%s",
-                        _cat, "是" if _saved else "**失败**")
-    return {"ok": _saved, "changed": True, "persisted": _saved}
+    _module_logger.info("[350开闸] 类别恢复 category=%s 暂停时长=%ss 原原因=%s 落盘=%s",
+                        _cat, _dur, str(_old.get("why") or "-")[:80],
+                        "是" if _saved else "**失败**")
+    return {"ok": _saved, "changed": True, "persisted": _saved, "duration_s": _dur}
+
+
+def pause_history(limit: int = 20, *, state_path: str | None = None) -> list:
+    """★366刀N2：读最近的暂停/解除事件对（只读拷贝；同 schema：ts/action/category/duration_s）。"""
+    _st = _load_state(state_path)
+    _n = max(1, int(limit))
+    return [dict(x) for x in list(_st.get("history") or [])[-_n:]]
 
 
 def paused_categories(state_path: str | None = None) -> list:
