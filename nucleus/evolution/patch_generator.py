@@ -1607,6 +1607,11 @@ def judge_draft(draft: dict, project_root: str | None = None) -> dict:
     if not _mc["ok"]:
         _reasons.append("method_contract:%s" % _mc["why"])
     # ★360刀6：虚构模块筛查（PulseBus 一族）——应用即 ImportError，等同无声删功能
+    # ★365刀B5：片段形态门禁（只判方法级；锚点级草稿天然无 def 头，跳过）
+    _odh = check_original_def_header(draft, mode=_mc.get("mode"))
+    _checks["original_def_header"] = _odh
+    if not _odh.get("ok"):
+        _reasons.append("original_def_header:%s" % _odh.get("why"))
     _fr = screen_forbidden_refs(draft)
     _checks["forbidden_refs"] = _fr
     if not _fr["ok"]:
@@ -1726,6 +1731,58 @@ def check_reason_chain(draft: dict) -> dict:
     if _short:
         _why.append("理由过短(%d<%d)" % (len(_r.strip()), REASON_MIN_CHARS))
     return {"ok": False, "missing": _miss, "why": "；".join(_why)}
+
+
+def check_original_def_header(draft: dict, mode: str | None = None) -> dict:
+    """★365刀B5：片段形态门禁 —— **方法级**补丁的 `original_code` 必须带 def 头。
+
+    为什么只判方法级：锚点级草稿本来就是 1-3 行片段（本文件 :92 已写明"草稿天然不含 def"），
+    对它们要求 def 头会**把所有草稿一刀切拒掉**。所以：
+      * `mode == "method"`（整方法改写契约）⇒ 必须能 AST 解析出 `def <method>`；
+      * 其他/未知 mode ⇒ 不判（`ok=True, skipped=True`），交各自形态的门去管。
+
+    为什么必须有这道门（365 前置 B3 实测）：11 条未应用条目里 6 条 `original_code` 缺 def 头
+    而 `modified_code` 带 def 头 —— 整段替换会**再嵌一层 def**，应用即语法错或改错方法。
+    判据用 AST（不按字符串找 "def "，否则注释/字符串里的 def 会误放行）。
+
+    Returns: ``{ok, why, mode, has_def, method}``
+    """
+    _m = str(mode or "").strip().lower()
+    _out = {"ok": True, "why": "", "mode": _m, "has_def": None,
+            "method": str((draft or {}).get("method") or "")}
+    if _m != "method":
+        _out["why"] = "非方法级（mode=%s）⇒ 不做 def 头判据" % (_m or "unknown")
+        _out["skipped"] = True
+        return _out
+    _code = str((draft or {}).get("original_code") or "")
+    if not _code.strip():
+        _out.update({"ok": False, "why": "方法级补丁 original_code 为空 ⇒ 无法定位原方法"})
+        return _out
+    _method = str((draft or {}).get("method") or "").strip()
+    _tree = None
+    for _src in (_code, textwrap.dedent(_code)):
+        try:
+            _tree = ast.parse(_src)
+            break
+        except SyntaxError:
+            continue
+    if _tree is None:
+        _out.update({"ok": False, "has_def": False,
+                     "why": "original_code 无法解析 ⇒ 视为片段（缺 def 头），拒收重生成"})
+        return _out
+    _names = [_n.name for _n in ast.walk(_tree)
+              if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    _out["has_def"] = bool(_names)
+    if _method and _method not in _names:
+        _out.update({"ok": False,
+                     "why": "original_code 里的 def 名 %s 与 method=%s 不一致 ⇒ 拒收重生成"
+                            % (_names or "（无）", _method)})
+        return _out
+    if not _names:
+        _out.update({"ok": False,
+                     "why": "original_code 无 def 头（片段形态）⇒ 方法级补丁拒收重生成"})
+        return _out
+    return _out
 
 
 def screen_forbidden_refs(draft: dict) -> dict:
