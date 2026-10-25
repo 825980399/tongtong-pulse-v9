@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """365 刀A2 验收：派单侧沙箱预筛接两通道分类（沙箱判据零改动）。
 
-★裁决落地（2026-10-25）：开关 **默认 False（先关）**，故：
-  * 每个"新口径"用例都显式把开关 patch 成 True 再验；
-  * 另有一例断言「默认就是关的」——防有人日后悄悄翻默认值。
+★口径（366 收口轮）：开关 **默认 True（小林裁决甲）**，故：
+  * "新口径"用例显式 patch True（不依赖默认态，防止默认值再变动时整族失效）；
+  * 有一例断言「默认就是开的」——防日后被悄悄翻回 False；
+  * 旧口径用例显式 patch False 验灰度回退口。
 """
 from __future__ import annotations
 
@@ -28,10 +29,10 @@ class TestA2SandboxPrefilter(unittest.TestCase):
     def setUp(self):
         d._M365_PREJ.clear()
 
-    # ⓿ 默认必须关（先关，观察后再翻；翻闸前置见 config 注释）
-    def test_00_default_off(self):
-        self.assertIs(config.ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL, False)
-        self.assertIs(d._m365_two_channel_on(), False)
+    # ⓿ 默认必须开（小林 366 裁决甲；防日后被悄悄翻回 False）
+    def test_00_default_on(self):
+        self.assertIs(config.ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL, True)
+        self.assertIs(d._m365_two_channel_on(), True)
 
     # ① 本仓惯用法（getattr 热加载）⇒ 新口径下不预拦，交沙箱终判
     def test_01_idiom_not_preblocked(self):
@@ -75,10 +76,11 @@ class TestA2SandboxPrefilter(unittest.TestCase):
             self.assertIs(d.is_sandbox_incompatible(_patch(code)), True)
         self.assertEqual(d.get_m365_sandbox_prefilter_stats().get("design_internal"), 1)
 
-    # ⑥ 开关关闭（默认态）⇒ 复现旧口径：子串命中即预拦
+    # ⑥ 灰度回退口：显式关掉 ⇒ 复现旧口径（子串命中即预拦），不再靠默认态验
     def test_06_switch_off_restores_legacy(self):
         code = "def f(cfg):\n    return getattr(cfg, 'X', None)\n"
-        self.assertIs(d.is_sandbox_incompatible(_patch(code)), True)
+        with mock.patch(_ON, False):
+            self.assertIs(d.is_sandbox_incompatible(_patch(code)), True)
         self.assertEqual(d.get_m365_sandbox_prefilter_stats().get("legacy:would_block"), 1)
 
     # ⑦ 无命中 ⇒ 不预拦（两态一致）
