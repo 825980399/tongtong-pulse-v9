@@ -377,6 +377,8 @@ class PulseHeart(BasePulseOrgan):
         if self._heartbeat_in_progress:
             return
         self._heartbeat_in_progress = True
+        # ★367 后续：记录进入时刻，供看门狗判「这一拍是否已经卡死」。
+        self._heartbeat_started_at = time.time()
         if self.info_field is None:
             # 信息场不可用，无法发射脉冲，但仍然安排下一次心跳尝试恢复
             self._heartbeat_in_progress = False
@@ -489,6 +491,7 @@ class PulseHeart(BasePulseOrgan):
             # ★PHASE17-阶段二子任务5.7：先释放重入守卫标志，再调度下一次，
             #   确保标志不会因 finally 未执行而卡死（finally 必然执行）。
             self._heartbeat_in_progress = False
+            self._heartbeat_started_at = 0.0
             # ★365刀C1：续链失败兜底 —— `_schedule_next_beat()` 自己抛异常（Timer 构造失败/
             #   线程资源耗尽）时，过去异常直接从 finally 抛出 ⇒ **定时链静默断掉**：没有下一拍、
             #   没有日志、没有计数，外部只能看到"心跳突然不动了"。现在留痕＋计数，交看门狗复核。
@@ -552,8 +555,43 @@ class PulseHeart(BasePulseOrgan):
         if _gap <= 2.0 * _iv:
             return {"ok": True, "action": "none", "gap_s": round(_gap, 2)}
         if self._heartbeat_in_progress:
-            # 正在跑的那一拍自己会续链；看门狗不插队（否则双定时器）
-            return {"ok": True, "action": "skip_in_progress", "gap_s": round(_gap, 2)}
+            # ★367 后续（破零前置）：原实现**无条件**跳过，理由是「正在跑的那一拍
+            #   自己会续链」。该理由在「那一拍卡死」时不成立 —— 而卡死正是断链的成因：
+            #   实测 10-25 04:57:55 之后 health_snapshot 停更 17 小时、beat_count 冻结
+            #   在 1800，同时 TimeCore 的 time.tick 仍在跑 ⇒ 心跳链单方面死掉。
+            #   现在按**守卫持续时长**区分「正在跑」与「卡死了」：
+            #     ≤ 3×interval ⇒ 正常慢拍，仍然跳过（不插队、不双定时器）；
+            #     > 3×interval ⇒ 判定卡死 ⇒ 强制复位并续链（否则看门狗与心跳同归于尽）。
+            _started = float(getattr(self, "_heartbeat_started_at", 0) or 0)
+            _held = (_now - _started) if _started > 0 else None
+            _stuck_after = 3.0 * _iv
+            if _held is None or _held <= _stuck_after:
+                # ★367 后续：跳过分支过去**完全静默** ⇒ 外部只能看到"心跳不动了"，
+                #   看不到"看门狗在跑但一直跳过"。这是本次 17 小时断链无人察觉的直接原因之一。
+                #   现在按 60s 节流留痕：只在"已经开始慢"（held > 1×interval）时打，
+                #   正常快拍（< 1×interval）仍然不刷屏。
+                if _held is not None and _held > _iv:
+                    _last_warn = float(getattr(self, "_m367_skip_warn_at", 0) or 0)
+                    if _now - _last_warn >= 60.0:
+                        self._m367_skip_warn_at = _now
+                        self._m367_skip_warn = int(getattr(self, "_m367_skip_warn", 0)) + 1
+                        self._log(LogLevel.WARNING,
+                                  f"[367链] 看门狗持续跳过：心跳守卫已持有 {_held:.1f}s"
+                                  f"（阈值 {_stuck_after:.1f}s=3×{_iv:.1f}s，第"
+                                  f"{self._m367_skip_warn}次告警）gap={_gap:.1f}s",
+                                  error_code="heartbeat_guard_held")
+                return {"ok": True, "action": "skip_in_progress",
+                        "gap_s": round(_gap, 2),
+                        "held_s": (round(_held, 2) if _held is not None else None)}
+            self._m367_stuck_forced = int(getattr(self, "_m367_stuck_forced", 0)) + 1
+            self._log(LogLevel.ERROR,
+                      f"[367链] 心跳重入守卫疑似卡死：已持续 {_held:.1f}s > "
+                      f"{_stuck_after:.1f}s(3×{_iv:.1f}s)，第"
+                      f"{self._m367_stuck_forced}次强制复位并续链 "
+                      f"(beat={self._beat_count})",
+                      error_code="heartbeat_guard_stuck")
+            self._heartbeat_in_progress = False
+            self._heartbeat_started_at = 0.0
         self._m365_wd_gap_warn = int(getattr(self, "_m365_wd_gap_warn", 0)) + 1
         _action = "reschedule_failed"
         try:
