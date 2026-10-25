@@ -2624,7 +2624,11 @@ def _write_back(patch: dict, verdict: dict) -> None:
     #   口径一致（同两个字段、同 verified 语义），只有 detail/来源如实标注，
     #   否则下游读"执行成功"会把"静态删除校验通过"误读成"代码跑通了"。
     # 默认来源用 const 枚举（事件串门禁：点分事件名须单一事实来源）
-    _esrc = str(verdict.get("execution_source") or MotorEvent.EXECUTE.value)
+    # ★367刀2 附带修复：`MotorEvent.EXECUTE` 本身就是**字符串常量**（不是 Enum，
+    #   没有 `.value` 属性），原写法 `.value` 在**缺省分支必抛 AttributeError**
+    #   （生产调用总传 execution_source，所以从未暴露；刀2 单测走缺省路径时撞出）。
+    #   去掉 .value 后缺省值一字不变，纯降风险。
+    _esrc = str(verdict.get("execution_source") or MotorEvent.EXECUTE)
     _vdetail = str(verdict.get("detail") or "")
     if not _vdetail:
         _vdetail = ("[执行验证] %s " % _esrc) + ("成功" if _ok else "失败") \
@@ -2636,6 +2640,28 @@ def _write_back(patch: dict, verdict: dict) -> None:
         "execution_source": _esrc,
         "executed_at": time.time(),
     }
+    # ★367刀2①：顶层 `executed` —— **执行过即计**（成功/失败都算执行过）。
+    #   为什么必须补：`zero_break_judge.scan_zero_break` 的候选门槛是
+    #   `if applied is not True and not int(executed or 0): continue`
+    #   ⇒ 主通道（`dispatch_and_verify` 走沙箱 `motor` 执行，注释明示
+    #   "绝不 apply 到源码"）只写 `runtime_verified`，**顶层 executed/applied 都没写**
+    #   ⇒ 静态扫描直接把它跳过，连 half_through 都进不去（读数是"没有候选"，
+    #   与"真的没有"同形）。
+    #
+    #   ★语义边界（不可越界）：**沙箱执行成功 ≠ 源码落地**。所以这里
+    #   ①只写 `executed`，**绝不写顶层 `applied=True`** —— 那会把"沙箱跑通"
+    #     误标成"源码落地"，并污染 324 选择器（`applied is True` 直接剔除）、
+    #     watcher 与生命周期表；
+    #   ②失败分支也**不写 `applied=False` 占位**：保持字段缺省语义，
+    #      与 324 对缺省/False 的既有拒收口径一致。
+    #   ③`applied` 的落地语义仍归三处真实写入通道：
+    #      `PatchManager.py:4332`（代码补丁真落地）、
+    #      `patch_execution_dispatch.py:3249`（O3 双标确认通道）、
+    #      `ParamPatchManager.py:365/368`（参数域配置覆盖，与代码补丁域同名易混）。
+    #   ④`executed_at` 与 `runtime_verify_result.executed_at` **同源**，
+    #      不造第二时间源（两者必须相等，否则读数可被误当两次不同执行）。
+    patch["executed"] = 1
+    patch["executed_at"] = patch["runtime_verify_result"]["executed_at"]
     if _esrc == "ast_delete":
         patch["runtime_verify_mode"] = "ast_delete"
         if verdict.get("def_line_actual"):
