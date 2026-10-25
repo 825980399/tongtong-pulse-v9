@@ -158,6 +158,65 @@ def _m335_read_pending(path: str) -> tuple[list, str]:
     return [], "bad"
 
 
+def _m365_o3_review_items(cand: dict, gate_report: dict | None) -> dict:
+    """★365刀A1：O3 入池四件套的另三件（`evidence_tier` 由候选直接带）。
+
+    背景：专用口 `PatchManager._M339_REVIEW_ITEMS` 只认**条目字段**，而入池构造过去
+    只落 `evidence_tier` ⇒ 人工即使想批也批不动（缺三项 fail-closed）。本函数只补
+    **字段透传**，不改任何门槛。
+
+    口径（不新造判据）：
+      * ``probe_out_of_graph``：`_m330_classify_hard_tier` 产出的 `probe_hits` 归一为
+        四类计数（`string_ref`/`protocol_name`/`test_ref`/`attr_bound`）；probe 命中
+        只用于**降级**，这里仅记录，不据此判活/判死。
+      * ``misjudge_sample``：开闸抽验样本行（`gate_report["sample"]["rows"]`）**命中本条
+        目**才给 `["file:line"]`；没抽到 ⇒ ``None``（不编造、不填默认值）。
+      * ``god_file``：`PatchManager._m94_is_god_file(file)` 静态复算；**取不到 ⇒ None**
+        （不替人工判「不是上帝文件」；None 由调用方 fail-closed 处理）。
+
+    Returns:
+        ``{"probe_out_of_graph": dict, "misjudge_sample": list|None, "god_file": bool|None}``
+    """
+    _f = str((cand or {}).get("file") or "").replace("\\", "/")
+    _m = str((cand or {}).get("method") or "")
+    # ① probe_hits → 四类计数（与 _m330 同源：同一个 kinds 常量、同一个字段）
+    _kinds = ("string_ref", "protocol_name", "test_ref", "attr_bound")
+    try:
+        import nucleus.self_inspector as _si365
+        _kinds = tuple(getattr(_si365, "_O3_PROBE_KINDS", _kinds) or _kinds)
+    except Exception as _e365:
+        silent_exc(_e365, where="patch_execution_dispatch::_m365_o3_review_items kinds",
+                   level="warning")
+    _hits = (cand or {}).get("probe_hits")
+    _hits = _hits if isinstance(_hits, list) else []
+    _pog = {k: 0 for k in _kinds}
+    for _h in _hits:
+        _k = str(_h or "")
+        if _k in _pog:
+            _pog[_k] = int(_pog[_k]) + 1
+    # ② 抽验样本行：只有真被抽到才落（gate_report.sample.rows）
+    _sample = None
+    _rows = (((gate_report or {}).get("sample") or {}).get("rows") or [])
+    for _r in _rows:
+        if not isinstance(_r, dict):
+            continue
+        if (str(_r.get("file") or "").replace("\\", "/") == _f
+                and str(_r.get("method") or "") == _m):
+            _sample = ["%s:%s" % (_f, _r.get("line"))]
+            break
+    # ③ 上帝文件静态复算（只加严；取不到不填 False）
+    _god = None
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager as _PM365
+        _god = bool(_PM365._m94_is_god_file(_f))
+    except Exception as _e365b:
+        silent_exc(_e365b, where="patch_execution_dispatch::_m365_o3_review_items god_file",
+                   level="warning")
+        _god = None
+    return {"probe_out_of_graph": _pog, "misjudge_sample": _sample,
+            "god_file": _god}
+
+
 def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
                      pending_path: str | None = None,
                      gate_report: dict | None = None) -> dict:
@@ -264,6 +323,22 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         return {"status": "no_candidate", "gate": _verdict,
                 "reason": "入池口白名单拦截",
                 "blocked_file": _c.get("file"), "blocked_at": "whitelist"}
+    # ★365刀A1：`god_file` 入池即静态复算 —— True 不入池（只加严）；取不到（None）
+    #   同样不入池（fail-closed：不替人工判"不是上帝文件"）。
+    _rv365 = _m365_o3_review_items(_c, gate_report)
+    if _rv365.get("god_file") is None:
+        _module_logger.warning(
+            "[365刀A1][O3消费] god_file 不可判定（%s::%s）⇒ 本轮不入池（fail-closed）"
+            " proc_gen=%s", _c.get("file"), _c.get("method"), _m335_pg())
+        return {"status": "unavailable", "gate": _verdict,
+                "reason": "god_file 不可判定", "blocked_at": "god_file_unknown"}
+    if _rv365.get("god_file") is True:
+        _module_logger.info(
+            "[365刀A1][O3消费] 目标为上帝文件（%s::%s）⇒ 不入池（只加严不放松）"
+            " proc_gen=%s", _c.get("file"), _c.get("method"), _m335_pg())
+        return {"status": "no_candidate", "gate": _verdict,
+                "reason": "上帝文件 ⇒ 不入池", "blocked_at": "god_file",
+                "blocked_file": _c.get("file")}
     # ★343刀1③：稳定指纹 id（改前 = `o3_<now>_<hash8>`，时间戳+随机化 hash 双不稳）
     _id = _m343_o3_stable_id(_c.get("file"), _c.get("method"),
                              "dead_code_candidate", _si._M335_O3_MARKER)
@@ -280,6 +355,10 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         "o3_dead_code": True,
         "o3_rule": _si._M335_O3_RULE,
         "evidence_tier": _c.get("evidence_tier"),
+        # ★365刀A1：专用口四件套透传（缺一项人工批不动）——只落字段，门槛一字不改
+        "probe_out_of_graph": _rv365["probe_out_of_graph"],
+        "misjudge_sample": _rv365["misjudge_sample"],
+        "god_file": _rv365["god_file"],
         "gate_verdict": _verdict,
         "gate_reason": _reason[:300],
         "intake_reason": "o3_open_gate_consumer",
