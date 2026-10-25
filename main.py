@@ -3925,6 +3925,44 @@ def _confirm_apply_pending_on_quit(framework) -> bool:
         return False
 
 
+def _m367_pool_consume_sources():
+    """★367刀1①：解析问题池消费口的**节拍与开关**（值 + 来源），纯函数便于单测。
+
+    为什么单独成函数：改前三来源被合并成一个数，活体看到 `every=300` 时
+    分不清「env 指定 300」「config 是 300」「两者都没有走默认」——
+    三者运维含义完全不同（前者是人为指定，后者是兜底）。
+
+    Returns:
+        `(every:int, every_src:str, consume_on:bool, consume_src:str)`
+        `every_src` / `consume_src` ∈ `{"env","config","default"}`。
+        非法值回落 300/True 并记 WARNING（保留 351 刀5 原行为）。
+    """
+    _env = os.environ.get("PULSE_POOL_CONSUME_EVERY", "").strip()
+    _cfg_raw = getattr(config, "POOL_CONSUME_EVERY_TICKS", None)
+    try:
+        if _env:
+            _every, _esrc = max(1, int(_env)), "env"
+        elif _cfg_raw is not None:
+            _every, _esrc = max(1, int(_cfg_raw)), "config"
+        else:
+            _every, _esrc = 300, "default"
+    except (TypeError, ValueError) as _e:
+        _every, _esrc = 300, "default"
+        logging.getLogger("pulse").warning(
+            "[351节拍] 节拍参数非法，回落 300 拍: %s", _e)
+
+    _sw_env = os.environ.get("PULSE_POOL_CONSUME", "").strip()
+    if _sw_env in ("0", "false", "False", "off"):
+        _on, _osrc = False, "env"
+    else:
+        _sw_cfg = getattr(config, "ENABLE_AUDIT_POOL_CONSUME", None)
+        if _sw_cfg is None:
+            _on, _osrc = True, "default"
+        else:
+            _on, _osrc = bool(_sw_cfg), "config"
+    return _every, _esrc, _on, _osrc
+
+
 def main():
     """
     主入口函数（v9.5）。
@@ -4315,15 +4353,18 @@ def main():
         # ★351刀5：节拍**可配置**（默认 300 拍不变）。放在循环外算一次：
         #   节拍参数不需要热更新，每 tick 重读是白付开销；
         #   环境变量优先（运维临时加密），其次 config 常量。
-        try:
-            _pc_env = os.environ.get("PULSE_POOL_CONSUME_EVERY", "").strip()
-            _pool_consume_every = max(1, int(
-                _pc_env if _pc_env
-                else getattr(config, "POOL_CONSUME_EVERY_TICKS", 300)))
-        except (TypeError, ValueError) as _pc_e351:
-            _pool_consume_every = 300
-            logging.getLogger("pulse").warning(
-                "[351节拍] 节拍参数非法，回落 300 拍: %s", _pc_e351)
+        # ★367刀1①：节拍与消费开关的**值+来源**由纯函数解析（三路径可单测）
+        (_pool_consume_every, _pc_src,
+         _pc_consume_on, _pc_sw_src) = _m367_pool_consume_sources()
+        # ★367刀1①：节拍与消费开关**来源**留痕（循环外**一行**）。
+        #   为什么必须留：改前只把三来源合并成一个数，活体看到 every=300 时
+        #   分不清"env 写了 300" "config 是 300" "两者都没有、走了默认"，
+        #   而这三者的运维含义完全不同（前者是人为指定，后者是兜底）。
+        #: 最近一次唤醒方式（②在循环内更新，供计数器留痕引用）
+        _pc_wake_last = "unset"
+        logging.getLogger("pulse").info(
+            "[351节拍] every=%d source=%s consume_on=%s consume_source=%s",
+            _pool_consume_every, _pc_src, _pc_consume_on, _pc_sw_src)
         _shutdown_chan = None
         while not exit_requested:
             # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
@@ -4331,11 +4372,16 @@ def main():
             if getattr(config, "MAIN_LOOP_PULSE_ENABLED", False):
                 _ctrl = framework.controller if framework is not None else None
                 if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
-                    _ctrl.wait_heartbeat_pulse(1)
+                    # ★367刀1②：接住返回值**只用于留痕**（True=心跳唤醒／False=超时退化），
+                    #   等待语义不变（仍是"最多等 1s"，超时照常继续）。
+                    _pc_wake_last = ("heartbeat"
+                                     if _ctrl.wait_heartbeat_pulse(1) else "timeout")
                 else:
                     time.sleep(1)
+                    _pc_wake_last = "sleep_no_ctrl"
             else:
                 time.sleep(1)
+                _pc_wake_last = "sleep_pulse_disabled"
             # ★第162批刀7：shutdown_request.json 优雅退出通道
             #   Windows 无可靠外部 SIGTERM，改用数据文件指令；每拍检测，存在即进入优雅退出。
             try:
@@ -4358,6 +4404,14 @@ def main():
                                 print(f"[夜间编排] 退出被 {_approved_n} 条 approved 补丁拦截，"
                                       f"留痕 EXIT_BLOCKED_BY_PATCH，本轮不退出")
                                 _no_mod.write_exit_blocked_report(_approved_n, _no_root)
+                                # ★367刀1③：`continue` 跳过本拍后续段（含 night digest
+                                #   与消费口）**必须可辨** —— 否则"消费口没动静"分不清
+                                #   「节拍没到」与「被补丁闸拦了」。计数器在被跳过拍不累加
+                                #   是现状，留痕注明 counter_frozen_by_skip 以标明口径。
+                                _logger.info(
+                                    "[351节拍] skip=patch_gate_blocked "
+                                    "approved_n=%s counter_frozen_by_skip=%d",
+                                    _approved_n, _pool_consume_counter)
                                 continue
                         except Exception as _pg_e:
                             silent_exc(_pg_e, "main.py:3965[刀8-patch-gate]")
@@ -4366,6 +4420,9 @@ def main():
                     break
             except Exception as _sd_e:
                 silent_exc(_sd_e, "main.py:3965[刀7-shutdown]")
+                # ★367刀1③：异常分支分类标签（不新增行为、异常仍吞）
+                _logger.debug("[351节拍] branch=shutdown_exc err=%s",
+                              type(_sd_e).__name__)
             # ★333批刀2：夜间编制定时点（04:00±容差）——`generate_night_digest` 的
             #   **真实调度入口**。331 运行验证坐实：该函数全库无调用方，
             #   "由 04:00 夜间编排复用调用"的注释从未兑现 ⇒ ledger 活体自转机制缺失。
@@ -4380,11 +4437,21 @@ def main():
                         os.path.dirname(os.path.abspath(__file__)))
             except Exception as _nd_e:
                 silent_exc(_nd_e, "main.py[333批刀2-night-digest]")
+                # ★367刀1③：同一分类标签口径
+                _logger.debug("[351节拍] branch=night_digest_exc err=%s",
+                              type(_nd_e).__name__)
             # ★346批刀 1（P0）：问题池消费口——「发现→行动」的那一段。
             #   与审查主链**解耦**：审查照原节拍跑，消费在这里按自己的节拍认领。
             #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。
             try:
                 _pool_consume_counter += 1
+                # ★367刀1②：每 max(10, N//10) 拍留一行，让"计数在推进"可见
+                #   （改前计数器完全不可见：首拍 0 条无法区分"节拍没到"与"没在跑"）。
+                _pc_log_gap = max(10, int(_pool_consume_every) // 10)
+                if (_pool_consume_counter % _pc_log_gap) == 0:
+                    _logger.info("[351节拍] counter=%d/every=%d wake=%s",
+                                 _pool_consume_counter, _pool_consume_every,
+                                 _pc_wake_last)
                 if _pool_consume_counter >= _pool_consume_every:
                     _pool_consume_counter = 0
                     from nucleus.audit_problem_pool_consumer import consume_heartbeat
@@ -4401,6 +4468,17 @@ def main():
                             _m363_v.get("candidate_count"),
                             _m363_v.get("dispatch_selected"),
                             _m363_v.get("verify_feedback_state"))
+                        # ★367刀1④：异常拍单列一行 —— info 行里 `consume_state=exception`
+                        #   与「正常但池空」视觉上太像，异常必须连 reason 一起可诊断。
+                        if _m363_v.get("consume_state") == "exception":
+                            _logger.warning(
+                                "[363A3] heartbeat_exception state=exception reason=%s",
+                                _m363_cv.get("reason"))
+                    else:
+                        # ★367刀1⑤：非 dict 分支原来**没有 else** ⇒ 完全静默，
+                        #   与"消费口没跑"同形。这里只留型别，不改任何判定。
+                        _logger.warning("[363A3] heartbeat_non_dict type=%s",
+                                        type(_m363_cv).__name__)
             except Exception as _pc_e:
                 silent_exc(_pc_e, "main.py[346刀1-pool-consume]")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。

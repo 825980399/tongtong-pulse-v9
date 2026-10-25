@@ -576,7 +576,21 @@ def consume_heartbeat(project_root: str | None = None, now: float | None = None,
                          pending_path=pending_path)
     except Exception as _e:
         silent_exc(_e, "audit_problem_pool_consumer.consume_heartbeat", level="warning")
-        return {"state": "exception", "reason": "%s: %s" % (type(_e).__name__, _e)}
+        # ★367刀1④：异常拍也要带**与正常路径同结构**的视图。
+        #   原实现直接 return {"state":"exception",...}，`m363_consume_view` 缺席
+        #   ⇒ 主循环在异常拍看不到 consume_state/candidate_count/dispatch_selected
+        #   ——「看不见」比「看见失败」更糟：读数是 None，与"还没跑过"同形。
+        #   `exception` 是五态（ok/noop_pool_empty/unavailable/disabled/write_failed）
+        #   之外的**第六态**：只作为视图取值，**不并入五态集合**。
+        _m367_reason = "%s: %s" % (type(_e).__name__, _e)
+        return {"state": "exception", "reason": _m367_reason,
+                "m363_consume_view": {
+                    # 四字段与正常路径（下方 _m363_view）**同字段集合**，便于同一行日志读
+                    "consume_state": "exception",
+                    "candidate_count": None,
+                    "dispatch_selected": 0,
+                    "verify_feedback_state": None,
+                }}
     try:
         from nucleus.evolution import verify_feedback as _vf350
         _fb = _vf350.feedback_once(root=project_root, now=now)
