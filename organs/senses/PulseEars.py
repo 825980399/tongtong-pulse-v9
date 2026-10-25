@@ -49,6 +49,88 @@ from nucleus.const import (
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 
 
+#: ★365刀C2：语音启动失败分档（只分类留痕；不改识别链路）
+M365_VOICE_FAILS = ("dependency", "model", "no_mic", "device_busy",
+                    "memory", "unknown")
+#: 分类计数（只增不重置；按**失败次数**计，不去重）
+_M365_VOICE_FAIL: dict = {}
+#: 同类失败抑制窗口（秒）：避免资源紧张时每 0.5s 刷一条 WARNING
+_M365_VOICE_QUIET_SEC = 300.0
+_M365_VOICE_LAST: dict = {}
+#: 内存类失败后跳过入口的截止时刻（"资源紧张跳过语音入口"）
+_M365_VOICE_SKIP_UNTIL = {"ts": 0.0}
+
+
+def m365_classify_voice_failure(exc: BaseException) -> str:
+    """把语音启动失败归到五档（＋unknown）：dependency／model／no_mic／device_busy／memory。
+
+    判据按**异常类型优先、消息关键词兜底**（不看 traceback 文本）：
+      * ImportError/ModuleNotFoundError ⇒ dependency（sounddevice/vosk 没装）
+      * MemoryError ⇒ memory（资源紧张 ⇒ 调用方跳过入口）
+      * FileNotFoundError / 消息含 model|模型 ⇒ model（模型文件缺失）
+      * 消息含 no default input|no microphone|invalid device|无麦克风 ⇒ no_mic
+      * 消息含 busy|占用|already in use|unavailable ⇒ device_busy
+      * 其他 ⇒ unknown（**不猜**，照实记）
+    """
+    _n = type(exc).__name__
+    _m = str(exc).lower()
+    if isinstance(exc, (ImportError, ModuleNotFoundError)):
+        return "dependency"
+    if isinstance(exc, MemoryError):
+        return "memory"
+    if isinstance(exc, FileNotFoundError):
+        return "model"
+    if ("no default input" in _m or "no microphone" in _m
+            or "invalid device" in _m or "无麦克风" in _m):
+        return "no_mic"
+    if ("busy" in _m or "占用" in _m or "already in use" in _m
+            or "unavailable" in _m):
+        return "device_busy"
+    if "model" in _m or "模型" in _m or "vosk-model" in _m:
+        return "model"
+    return "unknown"
+
+
+def m365_note_voice_failure(logger_self, exc: BaseException, where: str) -> str:
+    """记一次启动失败：分类计数 ＋ 抑制窗口内降 DEBUG（不刷 WARNING）。
+
+    Returns: 分类名（供调用方决定是否跳过入口）
+    """
+    import time as _t
+    _cls = m365_classify_voice_failure(exc)
+    _M365_VOICE_FAIL[_cls] = int(_M365_VOICE_FAIL.get(_cls, 0)) + 1
+    _now = _t.time()
+    _last = float(_M365_VOICE_LAST.get(_cls, 0.0) or 0.0)
+    _quiet = (_now - _last) < _M365_VOICE_QUIET_SEC
+    _M365_VOICE_LAST[_cls] = _now
+    _msg = ("[365耳] 语音启动失败 cls=%s（第%d次）%s：%s: %s"
+            % (_cls, _M365_VOICE_FAIL[_cls], where,
+               type(exc).__name__, exc))
+    _lvl = "DEBUG" if _quiet else "WARNING"
+    if logger_self is not None and hasattr(logger_self, "_log"):
+        try:
+            from nucleus.const import LogLevel as _LL
+            logger_self._log(getattr(_LL, _lvl), _msg)
+        except Exception as _le:
+            # 留痕器自己失败也必须可见（不得纯 pass）
+            silent_exc(_le, where="PulseEars::m365_note_voice_failure log", level="debug")
+            print(_msg)
+    if _cls == "memory":
+        # 资源紧张 ⇒ 本轮窗口内跳过语音入口（不反复重试），窗口过后自然恢复
+        _M365_VOICE_SKIP_UNTIL["ts"] = _now + _M365_VOICE_QUIET_SEC
+    return _cls
+
+
+def m365_voice_failure_report() -> dict:
+    """★365刀C2：语音启动失败分布读数（只读拷贝）。"""
+    import time as _t
+    return {"schema": "m365.voice_fail/v1",
+            "counts": dict(_M365_VOICE_FAIL),
+            "total": sum(int(v) for v in _M365_VOICE_FAIL.values()),
+            "skip_until": float(_M365_VOICE_SKIP_UNTIL.get("ts") or 0.0),
+            "skip_active": _t.time() < float(_M365_VOICE_SKIP_UNTIL.get("ts") or 0.0)}
+
+
 class PulseEars(BasePulseOrgan):
     """脉冲驱动耳朵（v9.5 分层脉冲版）"""
 
@@ -185,10 +267,21 @@ class PulseEars(BasePulseOrgan):
     # ========== 语音监听循环 ==========
     def _voice_listen_loop(self):
         """后台线程：用sounddevice录音→Vosk离线识别→发射消息（主动结束版）"""
+        # ★365刀C2：内存类失败后的抑制窗口内**跳过语音入口**（不反复重试拖累系统）；
+        #   窗口 300s 过后自动恢复。其他分类不拦，照常尝试。
+        import time as _t365
+        if _t365.time() < float(_M365_VOICE_SKIP_UNTIL.get("ts") or 0.0):
+            self._log(LogLevel.DEBUG,
+                      "[365耳] 语音入口跳过（内存类失败抑制窗口内，"
+                      "剩余 %.0fs）" % (
+                          float(_M365_VOICE_SKIP_UNTIL["ts"]) - _t365.time()))
+            return
         try:
             import numpy as np
             import sounddevice as sd
-        except ImportError:
+        except ImportError as _e365a:
+            # ★365刀C2：依赖缺失单列一档（原来只有一句 WARNING，事后分不清是缺依赖还是设备问题）
+            m365_note_voice_failure(self, _e365a, "sounddevice")
             self._log(LogLevel.WARNING, "sounddevice未安装，语音监听不可用")
             return
 
@@ -196,7 +289,8 @@ class PulseEars(BasePulseOrgan):
             import json
 
             import vosk
-        except ImportError:
+        except ImportError as _e365b:
+            m365_note_voice_failure(self, _e365b, "vosk")
             self._log(LogLevel.WARNING, "vosk未安装，语音监听不可用")
             return
 
@@ -215,6 +309,8 @@ class PulseEars(BasePulseOrgan):
             recognizer.SetWords(False)  # 不需要逐词时间戳，加快速度
             self._log(LogLevel.INFO, "Vosk离线语音引擎已加载")
         except Exception as e:
+            # ★365刀C2：模型加载失败分类（模型缺失／内存不足／其他）
+            m365_note_voice_failure(self, e, "vosk.Model")
             self._log(LogLevel.ERROR, f"Vosk模型加载失败: {e}")
             return
 
@@ -293,6 +389,8 @@ class PulseEars(BasePulseOrgan):
                         self._write_ear_log(rms, False, "静默")
 
             except Exception as e:
+                # ★365刀C2：循环内异常同样分档（占用/无麦/内存），抑制窗口内降 DEBUG
+                m365_note_voice_failure(self, e, "voice_loop")
                 self._log(LogLevel.DEBUG, f"语音监听异常: {e}")
                 try:
                     recognizer = vosk.KaldiRecognizer(model, 16000)
