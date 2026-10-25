@@ -205,3 +205,92 @@ def safe_http_json(
         return False, f"响应解析失败: {_e}"
 
 
+# ========== ★E6（T-SSRF分类留痕-1）：拒收分六类计数 ==========
+# 为什么要有（烛微 362 候选 E6）：原实现把三类拒收混在一起统计
+# （DNS_FAIL 27 / PRIVATE_ADDR 2 / 其他 4），于是「拒收到底集中在哪里」答不出来 ——
+# 而三类的处置方向完全相反：
+#   * dns_fail     ⇒ 多半是 DNS 环境/污染（换解析或换源），不是有人在内网探测；
+#   * private_addr ⇒ **真的解析到了内网**，是 SSRF 判据在起作用（安全事件面）；
+#   * 其他         ⇒ 输入/配置问题（协议拼错、主机名空、云元数据硬拦）。
+# 混着统计会把「DNS 抖动」读成「安全事件」，也会把真实内网探测埋进噪声里。
+#
+# 为什么在**末尾重新绑定**而不是在函数体内加计数：
+#   函数体内有 6 处 `return False` 与 2 处 `except`，改任何一处都会变更静默 except 指纹；
+#   **改函数名同样会变**（cw2 指纹含 qualname）。末尾包一层则 def 名与函数体一字不动，
+#   指纹不变，而分类计数仍单点。
+
+_M367_REJECT_GROUP = {
+    "dns_fail": "dns_fail",
+    "private_addr": "private_addr",
+    "hard_block": "other",
+    "scheme": "other",
+    "no_host": "other",
+    "url_parse": "other",
+    "other": "other",
+}
+
+#: 判定顺序即优先级：先认更具体的 reason 前缀
+_M367_REJECT_RULES = (
+    ("dns_fail", "无法解析主机"),
+    ("private_addr", "拒绝非公网地址"),
+    ("hard_block", "拒绝云元数据"),
+    ("scheme", "不支持的协议"),
+    ("no_host", "缺少主机名"),
+    ("url_parse", "URL 解析失败"),
+)
+
+_M367_REJECT_COUNTS: dict = {}
+
+
+def m367_classify_reject(reason: str) -> str:
+    """把拒收 reason 文本归到细类（纯函数，便于测试与复算）。"""
+    _r = str(reason or "")
+    for _kind, _prefix in _M367_REJECT_RULES:
+        if _prefix in _r:
+            return _kind
+    return "other"
+
+
+def _m367_bump(kind: str) -> None:
+    # int 自增在 GIL 下不保证原子，但这是**计数**不是判据：丢掉一两次计数
+    # 只影响读数精度，不影响任何安全判定。不为此引入锁（热路径：每次 HTTP 前调用）。
+    _M367_REJECT_COUNTS[kind] = int(_M367_REJECT_COUNTS.get(kind, 0)) + 1
+
+
+#: 捕获原函数（同名重新绑定后仍可回指）
+_m367_raw_is_safe_http_url = is_safe_http_url
+
+
+def _m367_counted_is_safe_http_url(url: str) -> tuple:
+    """包装器：判据完全由原函数决定，此处**只**做分类计数。"""
+    _ok, _why = _m367_raw_is_safe_http_url(url)
+    if not _ok:
+        _m367_bump(m367_classify_reject(_why))
+    return _ok, _why
+
+
+#: 对外仍是同名可调用对象（模块内后续函数运行时查全局 ⇒ 自动拿到包装版）
+is_safe_http_url = _m367_counted_is_safe_http_url
+
+
+def m367_ssrf_reject_stats() -> dict:
+    """★E6：SSRF 拒收分类读数（只读拷贝）。
+
+    Returns:
+        `{"schema", "total", "by_kind", "by_group"}`
+        —— `total=0` 表示**本进程尚无拒收**，**不是**「网络很安全」，别无样本当健康。
+    """
+    _by_kind = dict(_M367_REJECT_COUNTS)
+    _by_group: dict = {}
+    for _k, _n in _by_kind.items():
+        _g = _M367_REJECT_GROUP.get(_k, "other")
+        _by_group[_g] = int(_by_group.get(_g, 0)) + int(_n)
+    return {"schema": "m367.ssrf_reject/v1",
+            "total": sum(int(v) for v in _by_kind.values()),
+            "by_kind": _by_kind, "by_group": _by_group}
+
+
+def _m367_reset_reject_stats() -> None:
+    """清空计数（**仅供测试**；生产不要调）。"""
+    _M367_REJECT_COUNTS.clear()
+
