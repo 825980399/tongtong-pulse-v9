@@ -28,7 +28,10 @@ import argparse
 import importlib.util
 import json
 import os
+import logging
 import sys
+
+_LOG = logging.getLogger("tools.ci.m365_silent_ledger")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))  # tools/ci ⇒ 仓库根（两级）
@@ -52,9 +55,39 @@ def grade_of(tier: str) -> str:
     return "WARNING" if str(tier or "").upper() == "A" else "INFO"
 
 
-def build_ledger() -> dict:
-    """重算「新判据多抓到的条目」并组装台账。"""
+#: ★366刀N3：人工复核写入台账后，**重算不得抹掉**的字段（按身份键保真）
+PRESERVE_FIELDS = ("manual_review", "exemption")
+
+
+def _load_existing_meta(path: str | None = None) -> dict:
+    """读既有台账的身份 → 元数据映射（用于 `--emit` 时保真，避免覆盖人工结论）。"""
+    _p = path or _LEDGER
+    if not os.path.isfile(_p):
+        return {}
+    try:
+        with open(_p, encoding="utf-8") as f:
+            _old = json.load(f)
+    except (OSError, ValueError) as _e:
+        _LOG.warning("[N3] 既有台账不可读（人工元数据本次不保真） %s: %s: %s",
+                     _p, type(_e).__name__, _e)
+        return {}
+    _out = {}
+    for _r in (_old.get("rows") or []):
+        _k = identity_of(_r)
+        _meta = {k: _r[k] for k in PRESERVE_FIELDS if k in _r}
+        if _meta:
+            _out[_k] = _meta
+    return _out
+
+
+def build_ledger(preserve: bool = True) -> dict:
+    """重算「新判据多抓到的条目」并组装台账。
+
+    ★366刀N3：`preserve=True` 时把既有台账里的人工元数据（manual_review/exemption）
+    按身份键搬过来 —— 否则每次 `--emit` 都会把人工作出的结论冲掉（那就没人敢往里写）。
+    """
     _m = _load_scanner()
+    _meta = _load_existing_meta() if preserve else {}
     _files, _old, _new, _parse_err = _m.scan("prod")
     _old_cmp = set(_m.handler_identity(x) for x in _old)
     _added = [x for x in _new if _m._cmp_key(x) not in _old_cmp]
@@ -73,6 +106,12 @@ def build_ledger() -> dict:
             "grade": grade_of(_x.get("tier")),
             "evidence_anchor": "%s:%s" % (_x["path"], _x["lineno"]),
         })
+    # ★366刀N3：按身份把人工元数据搬回来（只在对应身份仍存在时）
+    if _meta:
+        for _r in _rows:
+            _m2 = _meta.get(identity_of(_r))
+            if _m2:
+                _r.update(_m2)
     _by_kind: dict = {}
     _by_grade: dict = {}
     for _r in _rows:

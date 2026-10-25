@@ -1,5 +1,5 @@
 {
- "schema": "m365.silent_except_ledger.v1",
+ "schema": "m365.silent_except_ledger.v2",
  "judge_version": "v2 (five-tuple + cont/break)",
  "basis": "tools/scan_silent_except_dual.py（旧判据直接调 ci_common 权威实现）",
  "note": "本台账只留痕；判据切换（主体）后置 366+，切前须人工带元数据分档",
@@ -77,7 +77,13 @@
    "body": "continue",
    "tier_suggestion": "C",
    "grade": "INFO",
-   "evidence_anchor": "nucleus/events/EventBus.py:481"
+   "evidence_anchor": "nucleus/events/EventBus.py:481",
+   "exemption": {
+    "kind": "control_flow",
+    "reason": "控制流型：`except queue.Empty/Timeout: continue|break` 是**轮询等待**的标准写法，语义上不是吞异常 ⇒ 建议纳入豁免集（切判据时随元数据一起进白名单）",
+    "dep": "queue.Empty",
+    "reviewed_at": "2026-10-25"
+   }
   },
   {
    "path": "nucleus/evolution/EvolutionLoop.py",
@@ -168,7 +174,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/evolution/criteria_window.py:119"
+   "evidence_anchor": "nucleus/evolution/criteria_window.py:119",
+   "manual_review": {
+    "verdict": "C",
+    "basis": "读台账时跳过坏行（JSON 解析失败/非 dict）⇒ 合理静默：跳行不中断全量读取，坏行本身另有写入侧校验；不属吞异常",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 119
+   }
   },
   {
    "path": "nucleus/evolution/criteria_window.py",
@@ -246,7 +259,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/evolution/zero_break_judge.py:756"
+   "evidence_anchor": "nucleus/evolution/zero_break_judge.py:756",
+   "manual_review": {
+    "verdict": "C",
+    "basis": "同上（校准台账读侧跳坏行）⇒ 合理静默，理由：单行损坏不应废掉整份台账",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 756
+   }
   },
   {
    "path": "nucleus/evolution/zero_break_judge.py",
@@ -337,7 +357,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/llm/call_recorder.py:681"
+   "evidence_anchor": "nucleus/llm/call_recorder.py:681",
+   "manual_review": {
+    "verdict": "A",
+    "basis": "**闭环数据轮转路径**：删除过期账本失败被静默跳过 ⇒ 磁盘会无声堆积、而轮转是记录链的必经步骤；切判据前必须补留痕（计数+原因）",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 681
+   }
   },
   {
    "path": "nucleus/llm/call_recorder.py",
@@ -376,7 +403,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/llm/data_quality_evaluator.py:222"
+   "evidence_anchor": "nucleus/llm/data_quality_evaluator.py:222",
+   "manual_review": {
+    "verdict": "C",
+    "basis": "读 jsonl 跳过 ValueError 坏行 ⇒ 合理静默（数据质量问题不阻断评测读取）",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 222
+   }
   },
   {
    "path": "nucleus/llm/semantic_cache.py",
@@ -402,7 +436,13 @@
    "body": "break",
    "tier_suggestion": "C",
    "grade": "INFO",
-   "evidence_anchor": "nucleus/llm/semantic_cache.py:418"
+   "evidence_anchor": "nucleus/llm/semantic_cache.py:418",
+   "exemption": {
+    "kind": "control_flow",
+    "reason": "控制流型：`except queue.Empty/Timeout: continue|break` 是**轮询等待**的标准写法，语义上不是吞异常 ⇒ 建议纳入豁免集（切判据时随元数据一起进白名单）",
+    "dep": "queue.Empty",
+    "reviewed_at": "2026-10-25"
+   }
   },
   {
    "path": "nucleus/llm/semantic_cache.py",
@@ -415,7 +455,13 @@
    "body": "continue",
    "tier_suggestion": "C",
    "grade": "INFO",
-   "evidence_anchor": "nucleus/llm/semantic_cache.py:454"
+   "evidence_anchor": "nucleus/llm/semantic_cache.py:454",
+   "exemption": {
+    "kind": "control_flow",
+    "reason": "控制流型：`except queue.Empty/Timeout: continue|break` 是**轮询等待**的标准写法，语义上不是吞异常 ⇒ 建议纳入豁免集（切判据时随元数据一起进白名单）",
+    "dep": "queue.Empty",
+    "reviewed_at": "2026-10-25"
+   }
   },
   {
    "path": "nucleus/mnemosyne/PulseSnapshot.py",
@@ -428,7 +474,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/mnemosyne/PulseSnapshot.py:216"
+   "evidence_anchor": "nucleus/mnemosyne/PulseSnapshot.py:216",
+   "manual_review": {
+    "verdict": "B",
+    "basis": "清理临时快照残留：单文件删除失败继续属可豁免（外层已返回 _removed 计数），但建议后续补失败计数以便发现权限类问题",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 216
+   }
   },
   {
    "path": "nucleus/mnemosyne/PulseSnapshot.py",
@@ -584,7 +637,14 @@
    "body": "continue",
    "tier_suggestion": "A",
    "grade": "WARNING",
-   "evidence_anchor": "nucleus/self_awareness/daily_reader.py:450"
+   "evidence_anchor": "nucleus/self_awareness/daily_reader.py:450",
+   "manual_review": {
+    "verdict": "C",
+    "basis": "读日报文件 OSError 跳过候选文件 ⇒ 合理静默（多候选取最新可用）",
+    "reviewed_by": "路灯",
+    "reviewed_at": "2026-10-25",
+    "head_lineno": 450
+   }
   },
   {
    "path": "nucleus/self_awareness/quality_score_v2.py",
@@ -753,7 +813,13 @@
    "body": "break",
    "tier_suggestion": "C",
    "grade": "INFO",
-   "evidence_anchor": "nucleus/semantic/AsyncEncodeQueue.py:188"
+   "evidence_anchor": "nucleus/semantic/AsyncEncodeQueue.py:188",
+   "exemption": {
+    "kind": "control_flow",
+    "reason": "控制流型：`except queue.Empty/Timeout: continue|break` 是**轮询等待**的标准写法，语义上不是吞异常 ⇒ 建议纳入豁免集（切判据时随元数据一起进白名单）",
+    "dep": "queue.Empty",
+    "reviewed_at": "2026-10-25"
+   }
   },
   {
    "path": "nucleus/semantic/AsyncEncodeQueue.py",
@@ -766,7 +832,13 @@
    "body": "continue",
    "tier_suggestion": "C",
    "grade": "INFO",
-   "evidence_anchor": "nucleus/semantic/AsyncEncodeQueue.py:190"
+   "evidence_anchor": "nucleus/semantic/AsyncEncodeQueue.py:190",
+   "exemption": {
+    "kind": "control_flow",
+    "reason": "控制流型：`except queue.Empty/Timeout: continue|break` 是**轮询等待**的标准写法，语义上不是吞异常 ⇒ 建议纳入豁免集（切判据时随元数据一起进白名单）",
+    "dep": "queue.Empty",
+    "reviewed_at": "2026-10-25"
+   }
   },
   {
    "path": "nucleus/semantic/AsyncEncodeQueue.py",
@@ -898,5 +970,7 @@
    "grade": "INFO",
    "evidence_anchor": "organs/senses/PulseVisualCortex.py:190"
   }
- ]
+ ],
+ "manual_review_n": 6,
+ "control_flow_exempt_n": 5
 }
