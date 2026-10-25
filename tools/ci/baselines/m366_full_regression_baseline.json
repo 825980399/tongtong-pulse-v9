@@ -1,0 +1,375 @@
+{
+ "schema": "m366.full_regression.baseline/v1",
+ "as_of": "20261025_134531",
+ "shards": 26,
+ "per_test_timeout": 60.0,
+ "hard_timeout": 900.0,
+ "shard_size": 20,
+ "shards_rows": {
+  "1": {
+   "files": 20,
+   "rc": 1,
+   "summary": "5 failed, 177 passed in 37.23s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_a2_reasoning_metrics_m164.py::test_snapshot_extends_three_link_and_scene",
+    "tests/test_a5_pii_final_scan_m161.py::TestA5SharedAllowDomains::test_09_meta_line_hits_catches_real_pii",
+    "tests/test_adaptive_coverage_extension_m65.py::TestCodeLearningAdaptive::test_21_get_load_level",
+    "tests/test_adaptive_coverage_extension_m65.py::TestDigestAdaptive::test_41_get_load_level",
+    "tests/test_assertion_robustness_m33.py::TestNoFragileSourceCount::test_01_no_bare_name_count_in_tests"
+   ]
+  },
+  "2": {
+   "files": 20,
+   "rc": 1,
+   "summary": "5 failed, 195 passed, 2 skipped, 1 warning in 53.82s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_10_holds_slot_during_call",
+    "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_12_skips_when_channel_full",
+    "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_13_switch_off_bypasses_guard",
+    "tests/test_branch_concurrency_m32.py::TestConcurrentThreads::test_20_never_exceeds_channel_max",
+    "tests/test_branch_concurrency_m32.py::TestSourceWiring::test_03_release_in_finally"
+   ]
+  },
+  "3": {
+   "files": 20,
+   "rc": 1,
+   "summary": "17 failed, 251 passed in 158.99s (0:02:38)",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 1 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_cp79rvw3\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet']",
+    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 1 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_df8dbtjk', 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_df8dbtjk\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet']",
+    "pulse.module.PulseNodePool:PulseNodePool.py:4063 冷存compaction: 跳过 2 个无法读取的parquet文件（目录=['D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_3rzoblix', 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\tmp\\\\m63_cold_3rzoblix\\\\evol_level=L1']），这些文件未参与合并，样本: ['bad1.parquet', 'bad2.parquet']",
+    "tests/test_call_graph_m21.py::TestBoundary::test_bak_dir_excluded",
+    "tests/test_call_graph_m21.py::TestBoundary::test_performance_100_files",
+    "tests/test_call_graph_m21.py::TestBoundary::test_tests_dir_excluded_by_default",
+    "tests/test_call_graph_m21.py::TestHealth::test_analyze_health_shape_and_score",
+    "tests/test_call_graph_m21.py::TestHealth::test_cyclic_calls_detected",
+    "tests/test_call_graph_m21.py::TestHealth::test_deepest_call_chain",
+    "tests/test_call_graph_m21.py::TestHealth::test_direct_cycle_kind",
+    "tests/test_call_graph_m21.py::TestHealth::test_health_no_data",
+    "tests/test_call_graph_m21.py::TestHealth::test_hot_functions_sorted_desc",
+    "tests/test_call_graph_m21.py::TestHealth::test_isolated_functions_detected",
+    "tests/test_call_graph_m21.py::TestProfileIntegration::test_integrate_call_graph_on_sample",
+    "tests/test_call_graph_m21.py::TestScriptSwitches::test_call_graph_only",
+    "tests/test_cold_compaction_file_missing_m63.py::TestColdCompactionFileMissingM63::test_01_skip_corrupt_parquet_report_count",
+    "tests/test_cold_compaction_file_missing_m63.py::TestColdCompactionFileMissingM63::test_02_all_corrupt_returns_none",
+    "tests/test_cold_compaction_file_missing_m63.py::TestColdCompactionFileMissingM63::test_03_compact_skips_and_reports_skipped_files",
+    "tests/test_cold_compaction_file_missing_m63.py::TestColdCompactionFileMissingM63::test_05_force_delete_fallback_on_rmtree_failure",
+    "tests/test_cold_compaction_file_missing_m63.py::TestColdCompactionFileMissingM63::test_06_gray_off_single_rmtree"
+   ]
+  },
+  "4": {
+   "files": 20,
+   "rc": 1,
+   "summary": "..............................x...xx..................F....              [100%][safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {\"count\":52,\"threshold\":50,\"scope\":\"turn\",\"targets\":[\"\\\\\\\\?\\\\C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\pytest-of-Administrator\\\\garbage-88b4a17c-5f17-4fce-95d5-36bcb5c5bef1\"],\"targetCount\":1}",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "5": {
+   "files": 20,
+   "rc": 1,
+   "summary": "13 failed, 396 passed, 1 xfailed, 1 warning in 104.13s (0:01:44)",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_dialog_noise_m83.py::TestTa2AstParseFilename::test_no_bare_ast_parse_without_filename[nucleus/reasoning/PatchManager.py]",
+    "tests/test_dialog_noise_m83.py::TestTa2AstParseFilename::test_no_bare_ast_parse_without_filename[nucleus/reasoning/SafeEvolutionExecutor.py]",
+    "tests/test_dialog_noise_m83.py::TestTa2AstParseFilename::test_no_bare_ast_parse_without_filename[nucleus/self_inspector.py]",
+    "tests/test_dialogue_routing_m49.py::TestSourceWiring::test_54_taskbook_line_311_is_only_thinking",
+    "tests/test_distributed_dualwrite_import_m71.py::TestM71Config::test_02_influx_write_only_off",
+    "tests/test_distributed_dualwrite_import_m71.py::TestM71Config::test_08_three_feature_switches_off",
+    "tests/test_distributed_dualwrite_import_m71.py::TestT1Neo4jDualWritePool::test_21_influx_disabled",
+    "tests/test_distributed_neo4j_influx_m70.py::TestInfluxDBStore::test_11_disabled_by_default",
+    "tests/test_distributed_neo4j_influx_m70.py::TestIntegrationM70::test_55_defaults_all_off",
+    "tests/test_e402_guard_m14.py::TestE402Ceiling::test_fixed_files_have_zero_e402",
+    "tests/test_e402_guard_m14.py::TestE402Ceiling::test_nucleus_e402_within_ceiling",
+    "tests/test_entry_probe_m35.py::TestNoqaPolicyGuard::test_60_load_bearing_noqa_intact",
+    "tests/test_event_bus_m14.py::TestSingletonAndSwitch::test_switch_defaults_off_and_async_disabled"
+   ]
+  },
+  "6": {
+   "files": 20,
+   "rc": 1,
+   "summary": "1 failed, 237 passed in 41.59s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_evolution_learning_m85.py::TestM85RealFixRateDenominator::test_31_function_rate_uses_verifiable_denominator"
+   ]
+  },
+  "7": {
+   "files": 20,
+   "rc": 1,
+   "summary": "+++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "8": {
+   "files": 20,
+   "rc": 0,
+   "summary": "142 passed in 20.00s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "9": {
+   "files": 20,
+   "rc": 1,
+   "summary": "5 failed, 143 passed, 2 warnings in 68.06s (0:01:08)",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_knife13_speed_gate_m162.py::test_mixed_runs_full_gates",
+    "tests/test_knife13_speed_gate_m162.py::test_py_commit_runs_full_gates",
+    "tests/test_knife3_cold_index_m162.py::test_knife3_enforce_cold_cache_not_blocked_by_throttle",
+    "tests/test_knife3_cold_index_m162.py::test_knife3_eviction_rebuild_closure",
+    "tests/test_knife4_requirements_gate_m162.py::test_repo_tree_clean"
+   ]
+  },
+  "10": {
+   "files": 20,
+   "rc": 1,
+   "summary": "1 failed, 236 passed, 5 skipped in 41.41s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_llm_patch_material_m88.py::TestT88aSwitchContract::test_40_switch_read_via_getattr_default_true"
+   ]
+  },
+  "11": {
+   "files": 20,
+   "rc": 1,
+   "summary": "10 failed, 260 passed, 5 skipped in 68.30s (0:01:08)",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_31_permission_error_silenced",
+    "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_32_warning_recorded_once",
+    "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_35_normal_rollover_still_works",
+    "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_38_copy_truncate_fallback_rotates",
+    "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_39_warn_cooldown_suppresses_repeat",
+    "tests/test_log_governance_m37.py::TestNoE402Regression::test_40_e402_counts",
+    "tests/test_log_line_dynamic_m32.py::TestNoHardcodedLineLeft::test_11_all_use_exc_location",
+    "tests/test_log_locate_fix_m90.py::TestT90bBug3PrefixToContains::test_30_legacy_prefix_miss_on_real_tags",
+    "tests/test_log_locate_m91.py::TestT91aCoverage::test_33_先红_v3_off_reproduces_the_16_misses",
+    "tests/test_m116_c6_semantics.py::T116fCreatedAt::test_02_backfill_inside_save_pending_patch"
+   ]
+  },
+  "12": {
+   "files": 20,
+   "rc": 1,
+   "summary": "4 failed, 121 passed in 29.39s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "subagent_runner:subagent_runner.py:393 [subagent_runner] worker 能力面校验失败（capabilities=None），NO_MESSAGE_TOOL 未在 worker 侧落地，弃结果",
+    "tests/test_m187_blade2_graph_adjacency.py::test_build_adjacency_counts",
+    "tests/test_m187_blade2_graph_adjacency.py::test_query_adjacency_affects_and_driven_by",
+    "tests/test_m187_blade2_graph_adjacency.py::test_query_adjacency_leaf_organ",
+    "tests/test_m191_blade1_subagent_sandbox_wrap.py::test_wrapper_wired_into_command"
+   ]
+  },
+  "13": {
+   "files": 20,
+   "rc": 1,
+   "summary": "5 failed, 291 passed in 54.86s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_m337_batch.py::test_m337_thread_gate_passes_now",
+    "tests/test_m340_batch.py::test_30_reanchor_fields_present_and_history_kept",
+    "tests/test_m340_batch.py::test_31_baseline_numbers_match_current_scan",
+    "tests/test_m340_batch.py::test_40_prewarm_no_longer_spawns_thread",
+    "tests/test_m342_batch.py::test_342_d5_thread_baseline_reanchored_with_attribution"
+   ]
+  },
+  "14": {
+   "files": 20,
+   "rc": 1,
+   "summary": "12 failed, 358 passed in 30.37s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_m352_batch.py::test_刀1_判死池排除漂移候选",
+    "tests/test_m352_batch.py::test_刀9_转移链只含有key渠道",
+    "tests/test_m354_batch.py::test_354_d4_hhi_alert_on_real_data",
+    "tests/test_m354_batch.py::test_354_d6_body_integrity_four_states",
+    "tests/test_m354_batch.py::test_354_d6_body_integrity_wired_into_evidence_gate",
+    "tests/test_m354_batch.py::test_354_d6_stock_replay_zero_rejected",
+    "tests/test_m354_batch.py::test_354_d7_key_v2_dedup_by_real_method",
+    "tests/test_m354_batch.py::test_354_d7_pending_all_have_dedup_key",
+    "tests/test_m355_batch.py::test_355_counts_add_up",
+    "tests/test_m355_batch.py::test_355_d0_snapshot_manifest_consistent",
+    "tests/test_m355_batch.py::test_355_d89_pending_zeroed_except_observation",
+    "tests/test_m356_batch.py::test_356_d5_no_bare_truncating_open"
+   ]
+  },
+  "15": {
+   "files": 20,
+   "rc": 1,
+   "summary": "+++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "16": {
+   "files": 20,
+   "rc": 1,
+   "summary": "24 failed, 298 passed, 18 skipped, 14 xfailed in 68.23s (0:01:08)",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_m92_gate2_label.py::TestT92dEndToEnd::test_D1_current_version_labels_step3_error",
+    "tests/test_m92_patch_guards.py::TestT92aSwitchContract::test_A1_defaults_are_false",
+    "tests/test_m92_patch_guards.py::TestT92aSwitchContract::test_A2_runtime_toggle_takes_effect_immediately",
+    "tests/test_m92_patch_guards.py::TestT92aSwitchContract::test_A3_getattr_fallback_when_config_attr_absent",
+    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G1_red_all_switches_off_incident_sails_through",
+    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G3_green_t92d_blocks",
+    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G4_green_both_incidents_blocked_by_both_switches",
+    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G5_corpus_zero_false_block_by_judgement",
+    "tests/test_m92_switch_registry.py::TestT92aRegistrationFact::test_A1_each_switch_registered_exactly_once_as_literal",
+    "tests/test_m92_switch_registry.py::TestT92bRuntimeConsistency::test_B1_config_attributes_match",
+    "tests/test_m92_switch_registry.py::TestT92bRuntimeConsistency::test_B2_getters_return_registered_values",
+    "tests/test_m92_switch_registry.py::TestT92dCompilable::test_D2_importable_and_switch_readable",
+    "tests/test_m93_apply_guard.py::TestT93cWritePointGuard::test_C5_guard_is_off_by_default",
+    "tests/test_m94_dependency_layers.py::TestM94LocalRuleRate::test_D7_equivalent_to_real_fix_rate",
+    "tests/test_m96_followups.py::TestM96ApprovalGovernance::test_B1_local_switch_registered_false",
+    "tests/test_m96_followups.py::TestM96ApprovalGovernance::test_B2_allow_core_registered_false",
+    "tests/test_m96_followups.py::TestM96ChannelPool::test_A1_switch_registered_default_off",
+    "tests/test_m96_followups.py::TestM96ChannelPriority::test_D1_priority_ladder_matches_taskbook",
+    "tests/test_m96_followups.py::TestM96ChannelPriority::test_D2_new_models_already_in_pool",
+    "tests/test_m96_followups.py::TestM96ChannelPriority::test_D4_free_channel_is_first",
+    "tests/test_m96_followups.py::TestM96ChannelPriority::test_D5_paid_channel_is_last_of_top7",
+    "tests/test_m96_followups.py::TestM96ChannelPriority::test_D6_quota_values_corrected",
+    "tests/test_main_loop_pulse_knife1_m172.py::TestMainLoopPulseKnife1::test_call_sites_converted",
+    "tests/test_main_loop_pulse_knife8_m163.py::TestMainLoopPulseKnife8::test_default_off_zero_regression"
+   ]
+  },
+  "17": {
+   "files": 20,
+   "rc": 1,
+   "summary": "...................................                                      [100%][safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {\"count\":188,\"threshold\":50,\"scope\":\"turn\",\"targets\":[\"\\\\\\\\?\\\\C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\pytest-of-Administrator\\\\garbage-bdb7fa5e-7c48-4fe3-9990-19e268fe48c0\"],\"targetCount\":1}",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "18": {
+   "files": 20,
+   "rc": 1,
+   "summary": "1 failed, 268 passed, 7 skipped in 28.58s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_patch_dedup_m43.py::TestArtifacts::test_41_production_history_deduped"
+   ]
+  },
+  "19": {
+   "files": 20,
+   "rc": 1,
+   "summary": "........................................................                 [100%][safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {\"count\":77,\"threshold\":50,\"scope\":\"turn\",\"targets\":[\"\\\\\\\\?\\\\C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\pytest-of-Administrator\\\\garbage-baab3e2f-7d29-4ffb-bdc7-fcef47de52ff\"],\"targetCount\":1}",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "20": {
+   "files": 20,
+   "rc": 1,
+   "summary": "+++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "21": {
+   "files": 20,
+   "rc": 1,
+   "summary": "6 failed, 247 passed in 40.57s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_quota_type_m97.py::TestQuotaType::test_daily_reset_clears_usage",
+    "tests/test_quota_type_m97.py::TestQuotaType::test_fixed_channel_exhausts",
+    "tests/test_quota_type_m97.py::TestQuotaType::test_quota_type_from_config",
+    "tests/test_real_bullet_preembed_design_m198.py::test_taskbook_records_three_release_conditions",
+    "tests/test_report_bus_wiring_m50.py::TestPublishAndConsume::test_24_self_cognition_retrievable_from_bus",
+    "tests/test_reprobe_diff_scope_m55.py::TestDetectorCoverage::test_09_production_only_code_optimization_uncovered"
+   ]
+  },
+  "22": {
+   "files": 20,
+   "rc": 1,
+   "summary": "16 failed, 205 passed, 18 xfailed, 1 error in 51.59s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_self_awareness_m18.py::TestEngineCore::test_register_and_list_analyzers",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_abstract_interface_excluded",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_analyzer_entry_respects_switch",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_detects_save_load_pair_classes",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_healthy_class_not_reported",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_load_noop_detected",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_path_mismatch_detected",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_report_and_persist",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_save_noop_detected",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_score_levels",
+    "tests/test_self_awareness_m18.py::TestFakeLoopDetector::test_silent_except_detected",
+    "tests/test_self_awareness_m18.py::TestIntegration::test_engine_with_two_analyzers_summarizes",
+    "tests/test_self_awareness_m18.py::TestIntegration::test_main_init_path_no_error",
+    "tests/test_self_awareness_m18.py::TestProductionConsumptionMatcher::test_no_producer_marked",
+    "tests/test_self_awareness_m18.py::TestProductionConsumptionMatcher::test_normal_when_both_sides_exist",
+    "tests/test_self_awareness_m18.py::TestProductionConsumptionMatcher::test_report_and_persist"
+   ]
+  },
+  "23": {
+   "files": 20,
+   "rc": 1,
+   "summary": "+++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": []
+  },
+  "24": {
+   "files": 20,
+   "rc": 1,
+   "summary": "4 failed, 143 passed, 1 skipped in 59.31s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_subagent_worker_m186.py::test_main_writes_output_and_returns_zero",
+    "tests/test_t100a_pending_no_false_success.py::test_pending_queue_has_no_false_success",
+    "tests/test_t100a_pending_no_false_success.py::test_pending_queue_item_has_applied_marker",
+    "tests/test_t100c_log_rollover_awareness.py::test_doRollover_writes_unique_marker"
+   ]
+  },
+  "25": {
+   "files": 20,
+   "rc": 1,
+   "summary": "5 failed, 124 passed, 1 skipped in 19.78s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_t101c_ssrf_fail_closed.py::test_ssrf_guard_allows_proceeds_to_network",
+    "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_concerning_requires_keyword",
+    "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_cooldown_skips",
+    "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_low_health_mentions_knowledge_and_suggestion",
+    "tests/test_t134c_detectors.py::test_b3_alert_on_ceiling"
+   ]
+  },
+  "26": {
+   "files": 16,
+   "rc": 1,
+   "summary": "1 failed, 204 passed, 14 skipped, 2 xfailed in 52.37s",
+   "hard_hang": false,
+   "timeout_cases": [],
+   "failed_cases": [
+    "tests/test_weight_map_m202.py::test_update_weight_on_registered"
+   ]
+  }
+ }
+}

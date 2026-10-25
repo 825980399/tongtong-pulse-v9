@@ -104,6 +104,98 @@ def run_shard(idx: int, files: list, per_test_timeout: float, hard_timeout: floa
             "timeout_cases": _hung, "log": os.path.relpath(_log, _ROOT)}
 
 
+
+#: ★366刀N5：基线 schema（同片同例比对口径：片号 → 失败用例集 + 计数）
+BASELINE_SCHEMA = "m366.full_regression.baseline/v1"
+
+
+def _failed_cases(log_path: str) -> list:
+    """从 pytest 输出里抠出失败/报错用例（`FAILED x::y` / `ERROR x::y`）。"""
+    _out = []
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
+            for _ln in f:
+                _s = _ln.strip()
+                if _s.startswith("FAILED ") or _s.startswith("ERROR "):
+                    _part = _s.split(None, 1)[1].split(" - ")[0].strip()
+                    if _part:
+                        _out.append(_part)
+    except OSError as _e:
+        _LOG.warning("[N5] 分片日志不可读 %s: %s: %s", log_path, type(_e).__name__, _e)
+        return []
+    return sorted(set(_out))
+
+
+def build_baseline(summary: dict) -> dict:
+    """把一次分片跑的结果压成基线（片号 → 失败用例 + 计数 + 超时例）。"""
+    _rows = {}
+    for _r in summary.get("rows") or []:
+        _rows[str(_r.get("shard"))] = {
+            "files": _r.get("files"),
+            "rc": _r.get("rc"),
+            "summary": _r.get("summary"),
+            "hard_hang": bool(_r.get("hard_hang")),
+            "timeout_cases": list(_r.get("timeout_cases") or []),
+            "failed_cases": _failed_cases(os.path.join(_ROOT, _r.get("log") or "")),
+        }
+    return {"schema": BASELINE_SCHEMA, "as_of": summary.get("as_of"),
+            "shards": summary.get("shards"),
+            "per_test_timeout": summary.get("per_test_timeout"),
+            "hard_timeout": summary.get("hard_timeout"),
+            "shard_size": summary.get("shard_size"), "shards_rows": _rows}
+
+
+def save_baseline(path: str, summary: dict) -> bool:
+    """原子写基线（`.tmp` → `os.replace` → 读回校验）。"""
+    _b = build_baseline(summary)
+    try:
+        _d = os.path.dirname(path)
+        if _d:
+            os.makedirs(_d, exist_ok=True)
+        _tmp = path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as f:
+            json.dump(_b, f, ensure_ascii=False, indent=1)
+        os.replace(_tmp, path)
+        with open(path, encoding="utf-8") as f:
+            _back = json.load(f)
+        return bool(_back.get("schema") == BASELINE_SCHEMA)
+    except (OSError, ValueError) as _e:
+        _LOG.warning("[N5] 基线写盘失败 %s: %s: %s", path, type(_e).__name__, _e)
+        return False
+
+
+def load_baseline(path: str) -> dict | None:
+    """读基线；缺失/损坏返回 None（调用方必须显式说明，不静默放行）。"""
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            _b = json.load(f)
+    except (OSError, ValueError) as _e:
+        _LOG.warning("[N5] 基线不可读 %s: %s: %s", path, type(_e).__name__, _e)
+        return None
+    return _b if isinstance(_b, dict) and _b.get("schema") == BASELINE_SCHEMA else None
+
+
+def diff_against_baseline(base: dict, summary: dict) -> dict:
+    """同片同例比对：新增红 / 已转绿 / 未变（**只报告**，不阻断、不改断言）。"""
+    _new = build_baseline(summary)
+    _old_rows = base.get("shards_rows") or {}
+    _new_red, _fixed, _same = [], [], 0
+    for _shard, _row in (_new.get("shards_rows") or {}).items():
+        _o = _old_rows.get(_shard) or {}
+        _o_set = set(_o.get("failed_cases") or [])
+        _n_set = set(_row.get("failed_cases") or [])
+        for _c in sorted(_n_set - _o_set):
+            _new_red.append({"shard": _shard, "case": _c, "kind": "new_red"})
+        for _c in sorted(_o_set - _n_set):
+            _fixed.append({"shard": _shard, "case": _c, "kind": "fixed"})
+        _same += len(_o_set & _n_set)
+    return {"schema": "m366.full_regression.diff/v1",
+            "new_red": _new_red, "fixed": _fixed, "same_n": _same,
+            "baseline_as_of": base.get("as_of"), "now_as_of": _new.get("as_of")}
+
+
 def main():
     _ap = argparse.ArgumentParser()
     _ap.add_argument("--per-test-timeout", type=float, default=60.0)
@@ -111,6 +203,11 @@ def main():
     _ap.add_argument("--shard-size", type=int, default=20)
     _ap.add_argument("--only", nargs="*", default=None)
     _ap.add_argument("--outdir", default="")
+    # ★366刀N5：基线与比对（只报告增量，不阻断 CI、不自动改断言）
+    _ap.add_argument("--baseline", default="",
+                     help="基线 JSON 路径（--update-baseline 时写入，--compare 时读取）")
+    _ap.add_argument("--update-baseline", action="store_true")
+    _ap.add_argument("--compare", action="store_true")
     _a = _ap.parse_args()
 
     _shards = [list(_a.only)] if _a.only else discover(_a.shard_size)
@@ -118,6 +215,7 @@ def main():
     _outdir = _a.outdir or os.path.join(_ROOT, "logs", "full_regression", _ts)
     os.makedirs(_outdir, exist_ok=True)
     _before = {p: _sha(p) for p in SENTINELS}
+    _base = load_baseline(_a.baseline) if _a.compare else None
 
     print("[T1] 分片数=%d 每片≤%d 文件 单例超时=%.0fs 片级硬超时=%.0fs"
           % (len(_shards), _a.shard_size, _a.per_test_timeout, _a.hard_timeout))
@@ -162,6 +260,24 @@ def main():
             f.write("\n## 生产数据副作用（仅记录）\n\n")
             for _p, (_b, _a2) in _side.items():
                 f.write("- `%s` %s → %s\n" % (_p, _b, _a2))
+    # ★366刀N5：基线比对（同片同例；只报告增量）
+    if _a.compare:
+        if _base is None:
+            print("[N5] 基线缺失或不可读：%s ⇒ 不比对（不静默放行）"
+                  % (_a.baseline or "<未给 --baseline>"))
+        else:
+            _diff = diff_against_baseline(_base, _summary)
+            _summary["baseline_diff"] = _diff
+            with open(os.path.join(_outdir, "baseline_diff.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump(_diff, f, ensure_ascii=False, indent=1)
+            print("[N5] 基线比对：新增红=%d 已转绿=%d 未变=%d（只报告，不阻断）"
+                  % (len(_diff["new_red"]), len(_diff["fixed"]), _diff["same_n"]))
+    if _a.update_baseline:
+        _p = _a.baseline or os.path.join(_HERE, "baselines",
+                                         "m366_full_regression_baseline.json")
+        _ok = save_baseline(_p, _summary)
+        print("[N5] 基线已写入 %s ok=%s" % (_p, _ok))
     print("[T1] 汇总：%s" % os.path.join(_outdir, "summary.md"))
     print("[T1] 通过 %d/%d 片；卡死片=%s；side_effects=%d"
           % (_summary["ok_shards"], len(_shards),
