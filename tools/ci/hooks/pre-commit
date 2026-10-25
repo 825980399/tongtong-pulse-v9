@@ -5,6 +5,7 @@
 #   2) cw3-B ctx 陈旧读 = 0（每次提交，覆盖 _ir_→_ir_ 两级调用）
 #   3) cw3-A 语义守恒（仅当 organs/brain/PulseInnerWorld.py 变更时）
 #   4) T150-5 门禁隔离守卫：CI 门禁文件不得与业务代码同批暂存
+#   5) 367 后续 保留名门禁：Windows 保留设备名（NUL/CON/PRN/AUX/COM1-9/LPT1-9）不得被跟踪
 #
 # 第162批提速（刀13/14/15）：
 #   刀13 GATE_PATH_SPLIT — 仅文档路径提交跳过全部代码/collect 门禁（登记册+隔离守卫仍执行）
@@ -93,6 +94,20 @@ if [ "$SKIP_CODE_GATES" -ne 1 ]; then
     st=$?
     if [ "$st" -ne 0 ]; then
       fail "红基线 collect 门禁未通过（收集错误或节点数漂移>±5；详见 python tools/ci/check_red_baseline_gate.py collect）"
+    fi
+  fi
+
+  # --- 1.9b) 367 后续 T-NUL实证：Windows 保留设备名门禁 ---
+  #    只扫 `git ls-files`（已跟踪）：已跟踪的保留名 ⇒ FAIL；未跟踪/被忽略 ⇒ 仅 stderr 警告。
+  #    ★挂它的理由**不是**修 ruff panic（340 那条「疑与 NUL 有关」已证伪：同版本 ruff 0.16.5
+  #      在 NUL 在/不在 × cache 热/冷 四种条件下输出逐字相同）。挂它是为了防**保留名进版本库**
+  #      —— 一旦 commit 进去，checkout 与 CI 在 Windows 上会崩，且无法用 .gitattributes 补救。
+  GATE_NUL="$ROOT/tools/ci/check_nul_files_gate.py"
+  if [ -f "$GATE_NUL" ]; then
+    "$PY" "$GATE_NUL"
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      fail "保留名文件门禁未通过（有 Windows 保留设备名文件被 git 跟踪；详见 python tools/ci/check_nul_files_gate.py）"
     fi
   fi
 
