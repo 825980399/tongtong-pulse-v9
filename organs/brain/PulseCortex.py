@@ -384,7 +384,10 @@ class PulseCortex(BasePulseOrgan):
                     _hit.activate()
                 except Exception as _ae:
                     silent_exc(_ae, where="PulseCortex._m345_refresh_time_node activate", level="debug")
-                self._log(LogLevel.INFO, f"[345时] 时间节点刷新(就地): {_t['text']}")
+                # ★369刀1（E9 F8 族）：每分钟就地刷新一次是维持性动作，不是事件。
+                #   同族「无变化」分支（上几行）本就是 DEBUG，此处对齐降 DEBUG；
+                #   「时间节点建立」为进程首拍一次性真事件，仍保留 INFO。
+                self._log(LogLevel.DEBUG, f"[345时] 时间节点刷新(就地): {_t['text']}")
                 return
             from nucleus.mnemosyne.PulseNode import PulseNode
             _node = PulseNode(

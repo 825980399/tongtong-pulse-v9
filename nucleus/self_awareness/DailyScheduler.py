@@ -842,9 +842,14 @@ class SelfAwarenessDailyScheduler:
                 if self._due(_now):
                     if self._today_done(_now):
                         self._skipped += 1
-                        _module_logger.debug(
-                            "[自我认知调度] 当日（%s）已生成报告，跳过本次",
-                            _now.strftime("%Y-%m-%d"))
+                        # ★369刀1（E9 F7 族）：跨日/首次进入跳过态才打，同日重复轮询只计数。
+                        #   实证：60s 轮询 × 当日已生成 ⇒ 约 60 条/h 同文本重复；
+                        #   跳过次数本身已由 self._skipped / get_stats() 承载，不靠刷屏重复。
+                        from nucleus.log_state import changed as _m369_changed
+                        if _m369_changed("self_awareness.daily_skip", _now.strftime("%Y-%m-%d")):
+                            _module_logger.debug(
+                                "[自我认知调度] 当日（%s）已生成报告，跳过本次",
+                                _now.strftime("%Y-%m-%d"))
                     else:
                         self.run_once()
             except Exception as _e:

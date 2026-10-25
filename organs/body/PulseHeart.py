@@ -151,8 +151,12 @@ class PulseHeart(BasePulseOrgan):
             if not getattr(config, "ENABLE_TIME_CORE", False):
                 return
             _p = (pulse or {}).get("payload", {})
+            # ★369刀1（E9 F1 族）：time.tick 是每拍必然发生的控制流广播，
+            #   心/肺/皮层三器官各刷一条同内容 ⇒ 16.5h 实测 2652 条（约 160 条/h）。
+            #   心跳存活证据不由本行承担：beat_count / health_snapshot.json 才是权威读数，
+            #   故三处统一降 DEBUG（保留留痕，异常仍 ERROR）。
             self._log(
-                LogLevel.INFO,
+                LogLevel.DEBUG,
                 f"[time.tick] wall={_p.get('wall_clock')} up={_p.get('uptime_display')} "
                 f"phase={_p.get('semantic_time')} tick={_p.get('tick_count')}",
             )

@@ -323,7 +323,11 @@ class VerificationLearningHub:
             if len(self._entries) > 2000:
                 self._entries = self._entries[-2000:]
             # 进度日志
-            if len(self._entries) % 10 == 0:
+            # ★369刀1（E9 F6 族）：补「累计条数变化才打」。原判据只有 `len % 10 == 0`，
+            #   条目达上限后 len 在阈值附近摆动 ⇒ 同一读数重复打印（实测同值 27–28 次）。
+            _m369_prev_total = getattr(self, '_m369_last_entry_total', -1)
+            if len(self._entries) != _m369_prev_total and len(self._entries) % 10 == 0:
+                self._m369_last_entry_total = len(self._entries)
                 self._log(LogLevel.INFO,
                     f"[终身学习引擎] 当前累计 {len(self._entries)} 条对比记录，"
                     f"距离下次蒸馏还需 {max(0, self._distill_threshold - len(self._entries))} 条"

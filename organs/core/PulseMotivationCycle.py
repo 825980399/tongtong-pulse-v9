@@ -252,9 +252,17 @@ class PulseMotivationCycle(BasePulseOrgan):
             self._emit_pressure_constraints()
             self._send_to_field()
             self._cleanup_expired_motivations()
-            self._log(LogLevel.INFO,
-                 f"动机循环#{self._cycle_count}: 压力={self._pressure_state}, "
-                 f"活跃动机={len(self._active_motivations)}")
+            # ★369刀1（E9 F4 族）：压力向量与活跃动机数变化才升 INFO，无变化只 DEBUG。
+            #   实证 82.2 条/h，压力值多数拍不变 ⇒ 属控制流重复输出，非状态变更事件。
+            from nucleus.log_state import changed as _m369_changed, sig as _m369_sig
+            if _m369_changed("motivation.cycle",
+                             _m369_sig((self._pressure_state, len(self._active_motivations)))):
+                self._log(LogLevel.INFO,
+                     f"动机循环#{self._cycle_count}: 压力={self._pressure_state}, "
+                     f"活跃动机={len(self._active_motivations)}")
+            else:
+                self._log(LogLevel.DEBUG,
+                     f"动机循环#{self._cycle_count}: 压力无变化 活跃动机={len(self._active_motivations)}")
         except Exception as _e:
             self._log(LogLevel.ERROR, f"动机循环异常: {_e}")
         return {

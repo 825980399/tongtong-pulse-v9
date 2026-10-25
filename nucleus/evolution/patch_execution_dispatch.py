@@ -456,7 +456,10 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
         return {"status": "armed", "interval_sec": _iv}
     _elapsed = _now - _last_dispatch_ts
     if _elapsed < _iv:
-        _module_logger.info(
+        # ★369刀1（E9 F9 族）：「没发生」不是事件。16.5h 实测 863 条同型重复。
+        #   保留留痕降 DEBUG（要查节拍是否还在跑仍可开 DEBUG）；
+        #   「挂载起算」「实际派单」两条真事件维持 INFO 不动。
+        _module_logger.debug(
             "[317刀0][分诊节拍] 钩子未到时 ⇒ 未触发 elapsed=%.0fs < interval=%.0fs",
             _elapsed, _iv)
         return {"status": "skipped_not_due", "elapsed_sec": round(_elapsed, 1),

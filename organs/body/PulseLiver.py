@@ -1068,8 +1068,14 @@ class PulseLiver(BasePulseOrgan):
             _code_learning_l1 = [n for n in l1_nodes
                                 if getattr(n, 'space_path', '').startswith('/自我理解/代码')]
             if _code_learning_l1:
-                self._log(LogLevel.DEBUG,
-                         f"总量压缩跳过: {len(_code_learning_l1)}条代码自学习L1节点保留独立路径")
+                # ★369刀1（E9 F6 族）：补「条数变化才打」判据，与紧邻的 1078/1206 两处同款
+                #   （那两处本就有值变化判据，本行是全族唯一漏网的）。
+                #   实证：同一条数（如 494 条）在 16.5h 内重复打印 115 次。
+                _prev_code_skip = getattr(self, '_last_code_learning_l1_skip', -1)
+                if len(_code_learning_l1) != _prev_code_skip:
+                    self._last_code_learning_l1_skip = len(_code_learning_l1)
+                    self._log(LogLevel.DEBUG,
+                             f"总量压缩跳过: {len(_code_learning_l1)}条代码自学习L1节点保留独立路径")
             # 【v16.0修复】合并重复跳过日志为摘要，防止刷屏
             _skipped_count = len(l1_nodes) - len(_clean_l1) - len(_code_learning_l1)
             if _skipped_count > 0:
@@ -3919,4 +3925,3 @@ if __name__ == "__main__":
         return None
 # _m69_t4_kal_liver
 # _m70_t4_kal_liver
-

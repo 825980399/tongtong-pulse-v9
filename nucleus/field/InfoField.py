@@ -681,7 +681,14 @@ class InfoField(SilentLogMixin):
                 if self._total_published % 200 == 0:
                     _patterns = self.stream_miner.discover_patterns()
                     if _patterns:
-                        _module_logger.info(f"事件模式发现: {len(_patterns)} 个模式")
+                        # ★369刀1（E9 F5 族）：发现模式是真事件，但「模式数没变」的重复发现
+                        #   只保留 DEBUG；模式数一变（真有新结构产出）仍升 INFO。
+                        from nucleus.log_state import changed as _m369_changed
+                        if _m369_changed("infofield.pattern_count", len(_patterns)):
+                            _module_logger.info(f"事件模式发现: {len(_patterns)} 个模式")
+                        else:
+                            _module_logger.debug(
+                                f"事件模式发现（模式数无变化）: {len(_patterns)} 个模式")
                         # ★P1补强：模式应用——高频模式发射预测信号
                         self._apply_discovered_patterns(_patterns)
             except Exception as _exc:

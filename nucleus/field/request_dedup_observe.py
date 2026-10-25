@@ -26,12 +26,27 @@ _periodic_lock = threading.Lock()
 
 
 def log_snapshot() -> None:
-    """将当前观测快照以 INFO 级落日志（解决 179B「snapshot 无日志落点」X1 缺口）。"""
+    """将当前观测快照以 INFO 级落日志（解决 179B「snapshot 无日志落点」X1 缺口）。
+
+    ★369刀1（E9 F3 族）：快照读数无变化时不重复落日志，只在读数变化时落一行，
+    并附「无变化×N 次」汇总后缀。实证：300s 周期 × 读数恒定 ⇒ 同文本重复约 12 条/h。
+    """
+    from nucleus.log_state import (
+        changed as _m369_changed,
+        sig as _m369_sig,
+        suppressed as _m369_suppressed,
+    )
     _snap = snapshot()
+    _top = _snap.get("fingerprint_top") or []
+    _fp = (_m369_sig({_k: _v for _k, _v in _snap.items() if _k != "fingerprint_top"}),
+           len(_top))
+    _sup = _m369_suppressed("request_dedup_observe.snapshot")
+    if not _m369_changed("request_dedup_observe.snapshot", _fp):
+        return
     _log.info("[request_dedup_observe] snapshot inflight=%s inflight_peak=%s observed=%s "
-              "distinct_fingerprints=%s fingerprint_top=%s",
+              "distinct_fingerprints=%s 无变化×%d次 fingerprint_top=%s",
               _snap.get("inflight"), _snap.get("inflight_peak"), _snap.get("observed"),
-              _snap.get("distinct_fingerprints"), _snap.get("fingerprint_top"))
+              _snap.get("distinct_fingerprints"), _sup, _top)
 
 
 def _periodic_loop(interval: int) -> None:

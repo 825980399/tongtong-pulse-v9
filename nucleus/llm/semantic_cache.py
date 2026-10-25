@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.log_state import changed as _m369_changed, sig as _m369_sig
 
 # ★191刀2：L2 遥测 INFO 日志输出（命中率/污染率·按场景分布）
 # ★205刀1：logger名改挂 pulse 子树，使 telemetry() 输出落盘 pulse.log
@@ -964,13 +965,29 @@ class SemanticCacheL2:
         # ★191刀2：INFO 日志输出（命中率/污染率·按场景分布），方便观测共窗收证。
         #   仅新增日志，不改任何命中判定 / 存储 / 返回。
         try:
-            for _k, _v in _t.items():
-                _L.info(
-                    "[semantic_cache_l2] telemetry scene=%s hits=%s misses=%s neg=%s hit_rate=%s pollution_rate=%s stores=%s",
-                    _k, _v.get("hits", 0), _v.get("misses", 0),
-                    _v.get("neg", 0), _v.get("hit_rate", 0.0), _v.get("pollution_rate", 0.0),
-                    self._stat.get("stores", 0),
-                )
+            # ★369刀1（E9 F2 族）：读数变化才打，整次快照聚合为一行。
+            #   实证：40.9h / 6034 条（约 148 条/h），读数恒 0 仍每拍按场景刷一整套。
+            #   降噪不等于消失：读数不变只记抑制计数，一变立刻恢复一行含全部场景明细的汇总。
+            if not _m369_changed("semantic_cache_l2.telemetry", _m369_sig(_t)):
+                return _t
+            _tot_h = sum(int(_v.get("hits", 0) or 0) for _v in _t.values())
+            _tot_m = sum(int(_v.get("misses", 0) or 0) for _v in _t.values())
+            _tot_n = sum(int(_v.get("neg", 0) or 0) for _v in _t.values())
+            _tot_hr = round(_tot_h / (_tot_h + _tot_m), 4) if (_tot_h + _tot_m) else 0.0
+            _tot_pr = round(_tot_n / _tot_h, 4) if _tot_h else 0.0
+            _L.info(
+                "[semantic_cache_l2] telemetry 汇总 scenes=%d hits=%d misses=%d neg=%d stores=%d"
+                " hit_rate=%s pollution_rate=%s 明细=%s",
+                len(_t), _tot_h, _tot_m, _tot_n, int(self._stat.get("stores", 0) or 0),
+                _tot_hr, _tot_pr,
+                " ".join(
+                    "%s(h=%s/m=%s/hr=%s/pr=%s)" % (
+                        _k, _v.get("hits", 0), _v.get("misses", 0),
+                        _v.get("hit_rate", 0.0), _v.get("pollution_rate", 0.0),
+                    )
+                    for _k, _v in sorted(_t.items())
+                ),
+            )
         except Exception as e:
             silent_exc(e, where="nucleus.llm.semantic_cache::SemanticCacheL2.telemetry.log")
         return _t
