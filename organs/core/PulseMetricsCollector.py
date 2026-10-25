@@ -938,7 +938,10 @@ class PulseMetricsCollector(BasePulseOrgan):
         _out: dict[str, Any] = {
             "ok": False, "process_rss_mb": None,
             "system_percent": None, "reason": "",
-            "gc_triggered": getattr(self, "_mem_gc_triggered", 0),
+            # ★365刀B1：单轨口径 —— 本字段只作"本次是否触发自动GC"（None=测不到），
+            #   旧的 `_mem_gc_triggered` 累计计数已退役（与 growth_alarm.gc_triggered
+            #   两套计数并存 = 同一事实两个数，读的人必然对不上）。
+            "gc_triggered": False,
             "gc_last_rss_mb": None,
             "rss_peak_mb": getattr(self, "_mem_peak_rss_mb", None),
             "rss_peak_ts": getattr(self, "_mem_peak_ts", None),
@@ -957,8 +960,9 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             # 175刀1：配置读取走已加载的 config 模块（sys.modules，避免热路径重复 import / 阈值悬空）
             _cfg = sys.modules.get("config")
-            _enable_gc = bool(getattr(_cfg, "ENABLE_MEMORY_AUTO_GC", False)) if _cfg is not None else False
-            _gc_rss_mb = float(getattr(_cfg, "MEMORY_AUTO_GC_RSS_MB", 8192.0)) if _cfg is not None else 8192.0
+            # ★365刀B1：`_enable_gc` / `_gc_rss_mb` 两个局部量随旧 175 刀 RSS 单闸块一并退役
+            #   —— 阈值与开关统一由 `nucleus.runtime_metrics.check_memory_alarm_detailed`
+            #   在内部读取（单一真源），此处不再抄第二份。
 
             _m = self.info_field._m169_memory_pressure()
             _out["ok"] = bool(_m.get("ok"))
@@ -1061,18 +1065,23 @@ class PulseMetricsCollector(BasePulseOrgan):
                         "gc_triggered": _al.get("gc_triggered"),
                         "auto_gc_last": _al.get("auto_gc_last"),
                     }
+                    # ★365刀B1：单轨出口 —— 判据只取告警链返回值，不再有第二套计数
+                    _out["gc_triggered"] = bool(_al.get("gc_triggered"))
                 except Exception as _ae:
                     silent_exc(_ae,
                                where="PulseMetricsCollector::_collect_memory_pressure growth_alarm")
                     # 取不到 ⇒ None（**不填 False**：False="没超线"，None="没测"）
                     _out["growth_alarm"] = None
+                    # ★365刀B1：告警链都取不到 ⇒ GC 到底有没有发生**不可判定**，同为 None
+                    _out["gc_triggered"] = None
 
-                # 175刀1：RSS 上限自动回收（仅 ENABLE_MEMORY_AUTO_GC=True 且越阈时触发，默认关=零回归）
-                if _enable_gc and _rss > _gc_rss_mb:
-                    import gc as _gc_mod
-                    _gc_mod.collect()
-                    self._mem_gc_triggered = getattr(self, "_mem_gc_triggered", 0) + 1
-                    _out["gc_triggered"] = self._mem_gc_triggered
+                # ★365刀B1：旧 175 刀「RSS 单闸 + 独立 gc.collect()」块**已退役**。
+                #   退役理由：它与上方新块三闸（percent/rss/growth）**各回收一次**
+                #   （364 核验轮实测 m175 两例红即此双轨重复回收），且留下第二套计数
+                #   `_mem_gc_triggered` 与 `growth_alarm.gc_triggered` 并存。
+                #   现在：回收动作只在新块发生，本处只把"采集侧 RSS（info_field 口径）"
+                #   记到 `gc_last_rss_mb`，判据仍是新块的 `gc_triggered`（单轨）。
+                if _out.get("gc_triggered") is True:
                     _out["gc_last_rss_mb"] = round(_rss, 1)
 
                 # 176批段2 内存自动重启判定（ENABLE_MEMORY_AUTO_RESTART 默认 False=零回归）：
