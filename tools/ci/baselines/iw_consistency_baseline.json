@@ -121,6 +121,10 @@
    "event_hist": {}
   }
  },
- "delta_reason": "345批重锚（CI基线件单笔 [ci-gate-change]）：本批在 IW 侧新增 6 个 try/except 对（刀3 `_emit` 覆写 1、刀4 时间注入 2〔`_build_memory_context`＋`_generate_branch_with_model`〕、刀5 成长记忆 2〔`_convert_vision_to_learning`＋creative `_generate_self_vision`〕、刀7 重启上下文 2〔同上两函数〕），故 PulseInnerWorld try 207→213 / except 208→214、creative try/except 6→7，均一对一带 except，算术自洽；if 1803→1808 为上述新增判空分支（+5）；methods 346→347、return 788→789、emit_calls 103→104 全部来自新增 `_emit` 单点收口方法本身（一个方法、一次 `return super()._emit(...)`），非新增发射点；priority_hist / event_hist 零漂移，语义面未变。另：pulse_inner_world_knowledge.py return 125→124 是 335 批存量挂账（HEAD 上 `--target HEAD` 即复现该项 FAIL），本次随重锚按处方①一并吸收，已在本批交付报告中显式申报，不计入本批改动。同时清空上一轮遗留的 expected_delta={\"if\": 1} 陈旧活口（收紧门禁，非放宽）。 ｜363刀B2 记账增量（路灯 [ci-gate-change] 单笔）：为「直连出口 safe_http_json 的 token 记账」在 IW 侧新增 4 个 try/except 对（PulseInnerWorld 分支生成 1 对、pulse_inner_world_knowledge 知识精炼 1 对），故 PulseInnerWorld try 213→215/except 214→216、knowledge try 24→26/except 24→26。不新增付费出口、不改控制流。 ｜364刀A3 门控增量（路灯 [ci-gate-change] 单笔）：新增 4 个方法（_m364_space_root/_m364_same_space/_m364_note_perspective_diff/m364_perspective_stats）＋调用点两道门，故 if 1808→1813 / return 789→794 / methods 347→351；不新增 try/except，不改既有降信任与复查链路。",
- "expected_delta": {}
+ "delta_reason": "367后续 E11（学习目标漂移修复，CI 基线单笔 [ci-gate-change]）：PulseInnerWorld 新增**模块级**函数 goal_area_path_prefixes（methods +1）及其 3 个分支/3 个 return；评估判据里 nodes_after 改走别名前缀（if +2）、失败分支前加「无样本」挡板（if +1、return +1）、failed_domains 的单字遍历改整体匹配（if ±0）。合计 if 1813→1818(+5)、return 794→799(+5)、methods 351→352(+1)。★try/except 未变（215/216 不变）—— 本笔不新增异常处理器。★这两项增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。",
+ "expected_delta": {
+  "if": 5,
+  "return": 5,
+  "methods": 1
+ }
 }
