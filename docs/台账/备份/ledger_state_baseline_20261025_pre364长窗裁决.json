@@ -1,0 +1,12 @@
+{
+  "generated_by": "tools/ci/ledger_consistency_check.py --update-baseline",
+  "source": "docs/台账/待裁决登记册.csv",
+  "total_rows": 257,
+  "field_count": 9,
+  "states": {
+    "已结案": 198,
+    "已撤销": 14,
+    "已排期": 33,
+    "已裁决待排期": 12
+  }
+}
