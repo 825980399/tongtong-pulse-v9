@@ -1764,7 +1764,11 @@ def check_original_def_header(draft: dict, mode: str | None = None) -> dict:
         try:
             _tree = ast.parse(_src)
             break
-        except SyntaxError:
+        except SyntaxError as _se365:
+            # ★366刀N3：原样缩进解析失败属**预期**（片段常带缩进），但不得静默——
+            #   记 debug 后换 dedent 再试；两次都失败才判"片段形态"。
+            silent_exc(_se365, where="patch_generator::check_original_def_header retry",
+                       level="debug")
             continue
     if _tree is None:
         _out.update({"ok": False, "has_def": False,
