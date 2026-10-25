@@ -353,7 +353,7 @@ ENABLE_QICA_CHANNEL_TELEMETRY = True
 #   V2 在「保留语义通道为核心」前提下，将权重从两个弱信号通道(complexity/feedback)向
 #   结构可靠通道(semantic/keyword/context)做温和再平衡；待星轨用 analyze_qica_channels.py
 #   在运行时产出真实贡献度分布后，确认不降准确率再翻 QICA_USE_TUNED_WEIGHTS=True。
-QICA_USE_TUNED_WEIGHTS = False
+QICA_USE_TUNED_WEIGHTS = False          # D2归档[L398] 生产 0 引用（仅 tools/ci 门禁表引用）⇒ **死开关**，勿误开；真要用须先实装读取点
 QICA_CHANNEL_WEIGHTS_V2 = {
     "semantic": 0.27,      # ②语义向量：核心通道，权重温和上调
     "keyword": 0.22,       # ①关键词：可靠规则匹配，温和上调
@@ -1019,7 +1019,7 @@ POLARITY_GUARD_CONFIG = {
 # 三层主开关（单一驱动，便于灰度与审计）
 OB1_SANDBOX_LEVEL = "strict"            # 代码执行沙箱等级：strict(禁网+资源上限) / loose / off
 OB1_TOOL_POLICY_LEVEL = "conservative"  # 工具调用白/黑名单与频率闸：conservative / permissive
-OB1_ELEVATED_ENABLED = False            # 提权动作（写盘/重启/外部API）审批闸：默认关闭（实装推 179）
+OB1_ELEVATED_ENABLED = False            # 提权动作（写盘/重启/外部API）审批闸：默认关闭（实装推 179）｜D2[S] 仅 gate 表/配置面引用，未实装 ⇒ 勿据其判断「提权已受控」
 
 # ★365刀A2：沙箱「派单侧预筛」口径（两通道分类）——只改**预筛**，沙箱拦截判据零改动。
 #   默认 True = 新口径：`class=real` / `design_internal` / `mixed` / `unparsed` 仍预拦转人工；
@@ -1092,7 +1092,7 @@ O_A4_DETERMINISTIC_RULES = [
 # 声明式：SKILL.md 字段集（name/scope/entry/resources/risk）与
 #        tools/export_public.py 白名单同面维护；不实装自动加载执行逻辑（设计稿 §七），
 #        不与 OB1_FACET_RULES / OB1_CONFIG_FACETS 新开第四套配置面（178刀3 同面共存，取值互斥复核）。
-ENABLE_OA3_SKILL_MANIFEST = False        # 总开关（关闭 -> 不实装，零行为变化）
+ENABLE_OA3_SKILL_MANIFEST = False        # 总开关（关闭 -> 不实装，零行为变化）｜D2归档[L398] 生产 0 引用 ⇒ **待实装**，勿误开
 OA3_SKILL_MANIFEST_DIRS = []             # 参与 SKILL.md 资源清单的能力目录（默认空，零作用）
 
 # ========== 180批 刀3（O-B6）：子代理隔离面键声明 ==========
@@ -3821,7 +3821,7 @@ SPIKE_BACKEND_ENABLED = False
 # 212批·刀4：SPIKE 后端读数出口开关（默认关闭，开闸前默认关）。
 # 后端 PythonSNNBackend 新增 get_backend_stats() 计数出口（emit/on_spike/update_weight）；
 # 此键仅作「开闸前默认关」占位，避免后端未启用时产出读数噪声；开 SPIKE 闸后再置 True。
-ENABLE_SPIKE_BACKEND_STATS = False
+ENABLE_SPIKE_BACKEND_STATS = False      # D2归档[L398] 生产 0 引用（0 读取点）⇒ **待实装**，勿误开
 
 # 204批·刀3·D#2解封：共振权重映射接入实际脉冲流开关（**观测不门控**）。
 # ★364刀A6 口径订正：204 批引入时值=False；`13b1545e`「RESONANCE闸开闸(False→True)：
@@ -5130,7 +5130,7 @@ ENABLE_LEARNING_DIGEST_FEEDBACK = True
 # T3-1：容量保护时同步执行情绪衰减检查（原 check_decay 从无调用方）
 ENABLE_EXPERIENCE_DECAY_ON_TRIM = True
 # T3-2：眼睛推流统计日志级别（True=保持 INFO；默认 False=降为 DEBUG）
-ENABLE_EYES_STREAM_STATS_INFO = False
+ENABLE_EYES_STREAM_STATS_INFO = False   # D3反向[L399] **语义反向**：False=降噪（默认）；True=回到旧行为（打印流统计，PulseEyes:412）
 EYES_STREAM_STATS_INFO_INTERVAL = 1800   # 保留低频 INFO 摘要的间隔（秒）
 # T3-3：日志轮转失败（Windows 文件占用）重试次数与间隔
 LOG_ROLLOVER_RETRY = 3
@@ -5622,7 +5622,7 @@ ENABLE_KAL_MIGRATION = True
 
 # ★T8/P2：胃模块 JSON 容错解析（json5 / demjson3 均未安装 → 自研正则修复 + 降级提取）
 STOMACH_JSON_FAULT_TOLERANT = True
-STOMACH_USE_JSON5 = False
+STOMACH_USE_JSON5 = False               # D2归档[L398] 仅 tools/archive 与 ci 豁免文本引用⇒ **死开关**，勿误开；真要用须先实装读取点
 STOMACH_JSON_FALLBACK_EXTRACT = True
 STOMACH_JSON_FAILURE_WARNING_THRESHOLD = 0.1
 STOMACH_JSON_RECORD_FAILURES = True
@@ -5760,7 +5760,7 @@ ENABLE_LOCAL_FIX_BARE_RETURN_NONE = True
 # True=关闭 set_cold_storage 的后台启动 compaction daemon（供测试确定性构造历史碎文件场景 /
 #      生产降级止血用）；False=保持原行为（daemon 后台检查并合并历史遗留小文件）。
 # 默认 False：生产行为零变化，仅测试显式置 True。
-COLD_DISABLE_STARTUP_COMPACT = False
+COLD_DISABLE_STARTUP_COMPACT = False    # D3反向[L399] **语义反向**：False=新行为（启动 compaction 照常执行）；True=关闭该检查（降级/测试用，PulseNodePool:384）
 # ============================================================
 # ★主线第91批 T-91c：日志定位 / 补丁契约 / 缩进契约 灰度开关**正式登记**
 # ------------------------------------------------------------
@@ -6151,6 +6151,7 @@ MAIN_LOOP_PULSE_ENABLED = True
 #           且"技术推理"被误列入灰度（权威源属升级LLM）→ 本刀以代码权威源落地。
 # 零行为变化：总开关默认 False，读取点未接线前不产生任何行为。
 ENABLE_ROUTING_LAYERED = False          # 总开关（共窗验证完毕，翻回False）
+#   D1留痕[L397]：共窗收证完毕 · 小林裁决翻回 False · 依据=共窗验证（见上行原文） · 证据=登记册 L397
 
 # 维持本地 12 项（不升级 LLM）：自我知识/本地数据高覆盖，LLM 无增益
 ROUTING_LOCAL_INTENTS = (
@@ -6183,6 +6184,7 @@ ROUTING_INFERENCE_STRUCTURE_PATTERNS = (  # ③推理结构词（★与 PulseCor
 # 依赖：与刀1 ROUTING_* 同面；本开关仅控制「质量分触发」，不影响既有「沉思失败降级」
 # 零行为变化：False -> 判据恒 False -> 调用点走原分支
 ENABLE_INNER_WORLD_QUALITY_ESCALATION = False  # 共窗验证完毕，翻回False
+#   D1留痕[L397]：共窗收证完毕 · 小林裁决翻回 False · 依据=共窗验证（见上行原文） · 证据=登记册 L397
 
 # ===== [M181-COGNITIVE] 181批刀3/刀5：自我认知器官维度（观测级·零停窗）=====
 # 刀3 读取点：nucleus/cognitive/organ_health_leaderboard.py::_leaderboard_on
@@ -6341,6 +6343,7 @@ GROWTH_HUB_MAX_PER_WINDOW = 20
 # 零行为变化：ENABLE_COGNITIVE_TEMPERATURE_OBSERVE=False → 仅心跳日志，不进任何请求
 LLM_TEMPERATURE_BASE = 0.7
 ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False  # 190共窗收证完成，翻回
+#   D1留痕[L397]：190 批共窗收证完成 · 小林裁决翻回 False · 证据=登记册 L397
 
 # ===== [M183-STRENGTH] 183批刀4：记忆强度衰减观测（纯函数 + 影子排序）=====
 # 读取点：nucleus/memory_strength.py::memory_strength
@@ -6348,11 +6351,13 @@ ENABLE_COGNITIVE_TEMPERATURE_OBSERVE = False  # 190共窗收证完成，翻回
 # 零行为变化：ENABLE_MEMORY_STRENGTH_SHADOW=False → 仅日志，不改返回结果/权重/Parquet
 MEMORY_STRENGTH_TAU = 30.0
 ENABLE_MEMORY_STRENGTH_SHADOW = False  # 190共窗收证完成，翻回
+#   D1留痕[L397]：190 批共窗收证完成 · 小林裁决翻回 False · 证据=登记册 L397
 
 # ===== [M183-COLLISION] 183批刀5：顿悟触发器观测（碰撞扫描器）=====
 # 读取点：organs/brain/PulseSubconscious.py::_m183_scan_hebbian_collision
 # 零行为变化：ENABLE_HEBBIAN_COLLISION_SCAN=False → 仅日志（节点对/激活量/质量分），不入库不推理不外搜
 ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
+#   D1留痕[L397]：190 批共窗收证完成 · 小林裁决翻回 False · 证据=登记册 L397
 
 # ===== [M183-DECAY] 183批刀6：apply_decay 死代码接线（心跳周期调用）=====
 # 读取点：nucleus/genesis/HebbianLearner.py::apply_decay(force=True)
@@ -6360,6 +6365,7 @@ ENABLE_HEBBIAN_COLLISION_SCAN = False  # 190共窗收证完成，翻回
 # 零行为变化：ENABLE_HEBBIAN_APPLY_DECAY=False → 不调度；HebbianLearner._enabled 默认关，
 #             即使调度也仅 force 本次生效（不改 5000 上限、不调衰减速率）
 ENABLE_HEBBIAN_APPLY_DECAY = False  # 190共窗收证完成，翻回
+#   D1留痕[L397]：190 批共窗收证完成 · 小林裁决翻回 False · 证据=登记册 L397
 
 # ===== ★335批刀10（Q-15 · 小林已裁⑥）：拟亲记忆的同意开关 =====
 # 语义：`organs/identity/PulsePersonalityKernel.py` 的 `<CREATOR_DAUGHTER>` 关系锚点，
