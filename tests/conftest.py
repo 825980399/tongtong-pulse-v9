@@ -391,6 +391,74 @@ def m366_diff_and_restore(before: dict, backups: dict) -> dict:
     return {"changed": _changed, "restored": _restored, "failed": _failed,
             "clean_after": all(_now.get(_r) == _h for _r, _h in (before or {}).items())}
 
+# ---------------------------------------------------------------- v2：全树写入探测
+#: `data/` 顶层含大量流水账（evolution 4514 / probe 1579 / reports 641…），整体备份不可行
+#: （4.9G），但**清单扫描只要 0.87s** ⇒ 用清单 diff 探测写入面，只报告不还原。
+#: 例外是三件哨兵：它们有备份，跑完整真还原（v1 能力保留）。
+_M366_TREE_REPORT = "last_tree.json"
+
+#: 逐测试归因累加器：{nodeid: {...}}，只记脏例（跨用例累积，报告每例刷新一次）
+_M366_DIRTY_CASES: dict = {}
+
+
+def m366_snapshot_tree() -> dict:
+    """`data/` 全树清单：{相对posix路径: [size, mtime_ns]}（只 stat，不读内容）。"""
+    _root = os.path.join(ROOT, "data")
+    _out: dict = {}
+    if not os.path.isdir(_root):
+        return _out
+    for _dirpath, _dirnames, _filenames in os.walk(_root):
+        for _fn in _filenames:
+            _p = os.path.join(_dirpath, _fn)
+            try:
+                _st = os.stat(_p)
+            except OSError as _e:
+                print("[N4v2] stat 失败（跑测期间被删/占用）%s: %s"
+                      % (_p, type(_e).__name__))
+                continue
+            _out[os.path.relpath(_p, ROOT).replace("\\", "/")] = [
+                int(_st.st_size), int(_st.st_mtime_ns)]
+    return _out
+
+
+def m366_diff_tree(before: dict, after: dict, cap: int = 200) -> dict:
+    """三态差异：新增/删除/修改（各截断到 `cap` 条，另记总数）。"""
+    _b = before or {}
+    _a = after or {}
+    _added = sorted(set(_a) - set(_b))
+    _removed = sorted(set(_b) - set(_a))
+    _modified = sorted(k for k in (set(_a) & set(_b)) if _a[k] != _b[k])
+    return {
+        "n_before": len(_b), "n_after": len(_a),
+        "n_added": len(_added), "n_removed": len(_removed),
+        "n_modified": len(_modified),
+        "added": _added[:cap], "removed": _removed[:cap],
+        "modified": _modified[:cap],
+        "dirty": bool(_added or _removed or _modified),
+    }
+
+
+def _m366_write_report(name: str, payload: dict) -> None:
+    """报告落沙箱根（不进 data/）。写失败只 print，不掩盖被测结果。"""
+    import json as _json
+    try:
+        _p = os.path.join(m366_sandbox_dir(), name)
+        with open(_p, "w", encoding="utf-8") as _f:
+            _json.dump(payload, _f, ensure_ascii=False, indent=1)
+    except OSError as _e:
+        print("[N4v2] 报告写盘失败 %s: %s: %s" % (name, type(_e).__name__, _e))
+
+
+def m366_tree_guard_enabled() -> bool:
+    """全树探测默认**开**（单次 0.87s，可忽略）；`PULSE_DATA_TREE_GUARD=0` 可关。"""
+    return os.environ.get("PULSE_DATA_TREE_GUARD", "1") != "0"
+
+
+def m366_per_test_attribution() -> bool:
+    """逐测试归因默认**关**（每例 +1.7s）；`PULSE_DATA_TREE_GUARD=1` 时开。"""
+    return os.environ.get("PULSE_DATA_TREE_GUARD") == "1"
+
+
 
 @pytest.fixture(scope="session", autouse=True)
 def m366_data_sentinel_guard():
@@ -405,10 +473,31 @@ def m366_data_sentinel_guard():
         return
     _before = m366_snapshot_sentinels()
     _backups = m366_backup_sentinels()
-    _rep = {"state": "armed", "before": _before}
+    _tree_on = m366_tree_guard_enabled()
+    _tree0 = m366_snapshot_tree() if _tree_on else {}
+    _rep = {"state": "armed", "before": _before,
+            "tree_on": _tree_on, "tree_files": len(_tree0)}
     yield _rep
     _res = m366_diff_and_restore(_before, _backups)
     _rep.update({"state": "checked", "result": _res})
+    if _tree_on:
+        _td = m366_diff_tree(_tree0, m366_snapshot_tree())
+        # 三件哨兵已在上面还原，故从树差异里剔除（否则同一件事报两遍）
+        for _k in ("added", "modified", "removed"):
+            _td[_k] = [x for x in _td[_k] if x not in _M366_SENTINELS]
+        _td["n_added"] = len(_td["added"])
+        _td["n_modified"] = len(_td["modified"])
+        _td["n_removed"] = len(_td["removed"])
+        _td["dirty"] = bool(_td["added"] or _td["modified"] or _td["removed"])
+        _rep["tree"] = _td
+        if _td["dirty"]:
+            print("[N4v2][WARN] 跑测期间 data/ 全树变动：新增=%d 修改=%d 删除=%d"
+                  % (_td["n_added"], _td["n_modified"], _td["n_removed"]))
+            for _k in ("modified", "added", "removed"):
+                for _x in _td[_k][:12]:
+                    print("        %-9s %s" % (_k, _x))
+        _m366_write_report(_M366_TREE_REPORT, {
+            "state": "checked", "scope": "session", "tree": _td})
     try:
         _p = os.path.join(m366_sandbox_dir(), "last_guard.json")
         with open(_p, "w", encoding="utf-8") as f:
@@ -432,3 +521,30 @@ def sandbox_data_root(tmp_path):
     _root = tmp_path / "data"
     _root.mkdir(parents=True, exist_ok=True)
     return _root
+
+
+@pytest.fixture(autouse=True)
+def m366_per_test_data_attribution(request):
+    """逐测试归因（`PULSE_DATA_TREE_GUARD=1` 才启用）：定位**哪个用例**写了 data/。
+
+    每例前后各扫一次全树；只记脏例，报告累积落 `last_tree_per_test.json`。
+    默认关（每例 +1.7s）；单文件探测时开，全量回归时关。
+    """
+    if is_framework_running() or not m366_per_test_attribution():
+        yield
+        return
+    _b = m366_snapshot_tree()
+    yield
+    _d = m366_diff_tree(_b, m366_snapshot_tree())
+    if not _d["dirty"]:
+        return
+    _item = getattr(request, "nodeid", "?")
+    _acc = _M366_DIRTY_CASES
+    _acc[_item] = {k: _d[k] for k in ("n_added", "n_modified", "n_removed")}
+    _acc[_item].update({"added": _d["added"][:20], "modified": _d["modified"][:20],
+                        "removed": _d["removed"][:20]})
+    print("[N4v2] 用例写了 data/：%s 新增=%d 修改=%d 删除=%d"
+          % (_item, _d["n_added"], _d["n_modified"], _d["n_removed"]))
+    _m366_write_report("last_tree_per_test.json",
+                       {"state": "collecting", "scope": "per_test",
+                        "dirty_cases": _acc})
