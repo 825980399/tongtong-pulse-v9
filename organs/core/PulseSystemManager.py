@@ -398,12 +398,27 @@ class PulseSystemManager(BasePulseOrgan):
             if service.get("auto_start"):
                 self._log(LogLevel.DEBUG, f"{service['name']} 未运行，自动启动...")
                 try:
-                    subprocess.Popen(
+                    # ★365刀C3：`timeout=` **不是** `subprocess.Popen` 的形参（POSIX/Windows 皆无）
+                    #   —— 旧写法每跑必抛 TypeError，被下面 `except Exception` 吞成
+                    #   「自动启动失败，降级为 stopped」⇒ 看着有自动启动、实际从不启动。
+                    #   统一按本文件第一处（L231 段）的既有口径：Popen 只负责拉起，
+                    #   等待超时挂在 `proc.wait(timeout=)` 上，超时视为「常驻服务可能已在后台」。
+                    _proc365 = subprocess.Popen(
                         service["start_cmd"],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                    timeout=EXTERNAL_CALL_TIMEOUTS["subprocess_medium"], )
+                    )
+                    try:
+                        _proc365.wait(timeout=EXTERNAL_CALL_TIMEOUTS.get(
+                            "subprocess_medium", 30))
+                    except subprocess.TimeoutExpired as _te365:
+                        # 常驻服务（如 `ollama serve`）不会退出 ⇒ wait 超时是预期，不是失败；
+                        # 留痕后继续走 check_cmd 复核，不在这里判死、不强杀进程。
+                        self._log(LogLevel.WARNING,
+                                  f"{service['name']} 启动 wait 超时"
+                                  f"（{type(_te365).__name__}，进程 pid={_proc365.pid} "
+                                  f"仍在后台运行，转 check_cmd 复核）")
                     time.sleep(2)
                     check2 = self._run_command(service["check_cmd"])
                     if check2["success"]:
@@ -417,8 +432,10 @@ class PulseSystemManager(BasePulseOrgan):
                     self._log(LogLevel.DEBUG,
                               f"{service['name']} 命令不存在，降级为 stopped（环境未安装该服务）")
                 except Exception as _e:
-                    self._log(LogLevel.DEBUG,
-                              f"{service['name']} 自动启动失败，降级为 stopped: {_e}")
+                    # ★365刀C3：启动失败分类留痕（异常类型＋命令），不再只给消息串
+                    self._log(LogLevel.WARNING,
+                              f"{service['name']} 自动启动失败，降级为 stopped: "
+                              f"{type(_e).__name__}: {_e} cmd={service.get('start_cmd')}")
 
             service["status"] = "stopped"
             result[svc_name] = "stopped"
