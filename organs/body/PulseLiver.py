@@ -53,6 +53,32 @@ _RESOURCE_RSS_GROWTH_BYTES = 2 * 1024 ** 3  # 单采样周期内 RSS 增长超 2
 _RESOURCE_HANDLES_WARN = 5000              # 句柄数超 5000 告警（Windows num_handles）
 _RESOURCE_OPEN_FILES_WARN = 2000           # 打开文件数超 2000 告警（*nix open_files）
 
+# ★364刀A4：融合失败退避封顶时长（6 小时，与既有实现一致，外提为常量便于单测）
+_M364_FUSE_BACKOFF_CAP_SEC = 6 * 3600.0
+
+
+def m364_fuse_backoff_plan(fail_count, fingerprint, prev_fingerprint, base_block,
+                           cap=_M364_FUSE_BACKOFF_CAP_SEC):
+    """364 刀A4：融合失败退避决策（纯函数，便于单测，无副作用）。
+
+    reason 四档：
+      - "first"                 首次失败：base_block 起步
+      - "fingerprint_changed"   数据指纹已变化 ⇒ 失败计数重置为 1，退避回到起步档
+                                （旧实现只增不减：数据演化后仍按累计次数长时间退避）
+      - "data_unchanged_capped" 指纹未变且已失败 ≥2 次 ⇒ 直接封顶，语义是「等数据演化」
+                                （旧实现指纹只影响日志措辞，不影响是否重试 ⇒ 逐级 5→10→…→160min 不收敛）
+      - "exponential"           其余：base * 2^(n-1)，封顶 cap
+    返回 (block_duration, next_fail_count, reason)
+    """
+    if prev_fingerprint is not None and fingerprint != prev_fingerprint:
+        return float(min(base_block, cap)), 1, "fingerprint_changed"
+    if fail_count <= 1:
+        return float(min(base_block, cap)), 1, "first"
+    if fingerprint == prev_fingerprint:
+        return float(cap), int(fail_count), "data_unchanged_capped"
+    _mult = min(2 ** max(0, int(fail_count) - 1), 72)
+    return float(min(base_block * _mult, cap)), int(fail_count), "exponential"
+
 
 class PulseLiver(BasePulseOrgan):
     """
@@ -2710,20 +2736,43 @@ class PulseLiver(BasePulseOrgan):
                     # 修复 2：指数退避——失败次数越多，冷却越久，封顶 6 小时。
                     #        第 1 次 5 分钟，之后每次翻倍，避免无效重试刷屏。
                     _base_block = _ADAPTIVE_FUSE_COOLDOWN * 0.5
-                    _backoff_multiplier = min(2 ** max(0, _fail_count - 1), 72)
-                    _block_duration = min(_base_block * _backoff_multiplier, 6 * 3600)
+                    # ★364刀A4：退避决策外提为纯函数 m364_fuse_backoff_plan——
+                    #   ① 数据指纹已变化 ⇒ 失败计数重置（旧实现只增不减，数据演化后
+                    #      仍按累计次数长时间退避 ⇒ 表现为「退避不收敛」）；
+                    #   ② 指纹未变且已失败 ≥2 次 ⇒ 直接封顶，语义是「等数据演化」
+                    #      而非逐级重试（旧实现指纹只影响日志措辞，不影响是否重试）。
+                    _block_duration, _fail_count, _m364_reason = m364_fuse_backoff_plan(
+                        _fail_count, _fingerprint, _prev_fingerprint, _base_block,
+                    )
+                    self._fuse_fail_count[prefix] = _fail_count
 
                     self._adaptive_fuse_blocked_paths[prefix] = now + _block_duration
                     self._adaptive_fuse_blocked_until = now + _block_duration
                     # ★P1修复：持久化冷却状态到磁盘，重启后恢复
                     self._save_fuse_cooldown()
 
-                    if _data_unchanged and _fail_count > 1:
-                        # 数据未变化且已多次失败：明确提示「等待数据演化」，而非简单重试
+                    if _m364_reason == "data_unchanged_capped":
+                        # ★364刀A4：指纹未变 ⇒ 不再逐级重试，直接封顶并留痕定位
+                        if not hasattr(self, "_m364_fuse_stall"):
+                            self._m364_fuse_stall = {}
+                        _src = Counter(str(getattr(n, "source_organ", "") or "?") for n in nodes)
+                        self._m364_fuse_stall[prefix] = {
+                            "nodes": len(nodes),
+                            "quality": _quality_count,
+                            "fail_count": _fail_count,
+                            "top_source": _src.most_common(3),
+                            "blocked_until": now + _block_duration,
+                            "ts": now,
+                        }
                         self._log(LogLevel.WARNING,
-                                 f"自适应融合失败: {prefix}路径(第{_fail_count}次)，"
-                                 f"数据指纹未变化({len(nodes)}节点/{_quality_count}达标)，"
-                                 f"指数退避至{_block_duration/60:.0f}分钟后重试")
+                                 f"自适应融合停滞(364A4): {prefix}路径数据指纹未变化"
+                                 f"({len(nodes)}节点/{_quality_count}达标)，已连续失败{_fail_count}次，"
+                                 f"退避封顶{_block_duration/60:.0f}分钟等待数据演化；"
+                                 f"来源器官Top={_src.most_common(3)}")
+                    elif _m364_reason == "fingerprint_changed":
+                        self._log(LogLevel.WARNING,
+                                 f"自适应融合失败: {prefix}路径(数据指纹已变化，失败计数重置为1)，"
+                                 f"将在{_block_duration/60:.0f}分钟后重试")
                     else:
                         self._log(LogLevel.WARNING,
                                  f"自适应融合失败: {prefix}路径(第{_fail_count}次)，"
@@ -2833,6 +2882,23 @@ class PulseLiver(BasePulseOrgan):
                     _os_cd.remove(_tmp)
             except Exception as e:
                 self._log(LogLevel.ERROR, f'异常: {e}')
+
+    def m364_fuse_stall_report(self) -> dict:
+        """364 刀A4 读出口：融合停滞（数据指纹未变导致退避封顶）路径清单。
+
+        只报告、不改行为；供运维定位「哪条路径在干等数据演化」，不再靠日志翻找。
+        """
+        stalls = getattr(self, "_m364_fuse_stall", {})
+        counts = getattr(self, "_fuse_fail_count", {})
+        fps = getattr(self, "_fuse_fail_fingerprint", {})
+        blocked = getattr(self, "_adaptive_fuse_blocked_paths", {})
+        return {
+            "stall_paths": len(stalls),
+            "stalls": dict(sorted(stalls.items(), key=lambda kv: -kv[1].get("ts", 0))[:20]),
+            "fail_counts": dict(sorted(counts.items(), key=lambda kv: -kv[1])[:20]),
+            "fingerprints": dict(list(fps.items())[:20]),
+            "blocked_until": dict(list(blocked.items())[:20]),
+        }
 
     def _fuse_group(self, prefix: str, nodes: list[PulseNode],
                     _min_quality_nodes: int | None = None) -> bool:
