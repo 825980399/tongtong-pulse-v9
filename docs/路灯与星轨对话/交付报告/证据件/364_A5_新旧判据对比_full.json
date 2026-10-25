@@ -1,0 +1,2533 @@
+{
+  "generated_at": "2026-10-25 10:22:41",
+  "scope": "full",
+  "files_scanned": 1044,
+  "parse_err": [],
+  "legacy_hits": 716,
+  "new_hits": 859,
+  "new_by_kind": {
+    "assign": 376,
+    "ret": 231,
+    "cont": 139,
+    "pass": 109,
+    "break": 4
+  },
+  "new_by_tier": {
+    "C": 738,
+    "B": 63,
+    "A": 58
+  },
+  "added": [
+    {
+      "path": "main.py",
+      "qualname": "_probe_loop",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "break",
+      "sha16": "14ebe56a5008e7c2",
+      "lineno": 3521,
+      "tier": "C",
+      "body": "break"
+    },
+    {
+      "path": "nucleus/data/DataAccessLayer.py",
+      "qualname": "safe_read_json",
+      "nth": 1,
+      "tname": "(UnicodeDecodeError, UnicodeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 179,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/data/DataAccessLayer.py",
+      "qualname": "safe_read_json",
+      "nth": 2,
+      "tname": "(UnicodeDecodeError, UnicodeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 197,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/data/DataAccessLayer.py",
+      "qualname": "safe_read_text",
+      "nth": 0,
+      "tname": "(UnicodeDecodeError, UnicodeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 298,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/events/EventBus.py",
+      "qualname": "_worker_loop",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 481,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/EvolutionLoop.py",
+      "qualname": "_m326_next_tick",
+      "nth": 0,
+      "tname": "(ValueError, TypeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 128,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/ParamABTestEngine.py",
+      "qualname": "_analyze_log_segment",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 172,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/ParamABTestEngine.py",
+      "qualname": "run_ab_test_in_process",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 219,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/ParamAnalysisReport.py",
+      "qualname": "analyze_correlations",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 130,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/PerformanceProfiler.py",
+      "qualname": "_parse_pstats",
+      "nth": 0,
+      "tname": "(ValueError, IndexError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 105,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/SelfReflectionEngine.py",
+      "qualname": "_call_llm",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "243a900d146d4b08",
+      "lineno": 90,
+      "tier": "C",
+      "body": "_last_exc = _fo_err;self._m44_last_error = f'{type(_fo_err).__name__}: {_fo_err}';continue"
+    },
+    {
+      "path": "nucleus/evolution/criteria_window.py",
+      "qualname": "write_ledger_conclusions",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 119,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/criteria_window.py",
+      "qualname": "_parse_proc_gen",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 566,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/patch_execution_dispatch.py",
+      "qualname": "_m331_rf_ttl_sweep",
+      "nth": 0,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 626,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/patch_execution_dispatch.py",
+      "qualname": "_m325_ast_tokens",
+      "nth": 0,
+      "tname": "(SyntaxError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1169,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/patch_execution_dispatch.py",
+      "qualname": "_m344_count_orphan_refs",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 2182,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/patch_generator.py",
+      "qualname": "screen_forbidden_refs",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1754,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/zero_break_judge.py",
+      "qualname": "write_calibration_ledger",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 756,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/evolution/zero_break_judge.py",
+      "qualname": "read_calibration",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 797,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/knowledge/DataQualityGuard.py",
+      "qualname": "scan_nodes",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 114,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/knowledge/DuplicateNodeDetector.py",
+      "qualname": "mark",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 229,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/knowledge/WebTimeExtractor.py",
+      "qualname": "_parse_iso",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 242,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/knowledge_access_layer.py",
+      "qualname": "_cache_put",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "break",
+      "sha16": "14ebe56a5008e7c2",
+      "lineno": 126,
+      "tier": "C",
+      "body": "break"
+    },
+    {
+      "path": "nucleus/knowledge_access_layer.py",
+      "qualname": "search_by_time_range",
+      "nth": 0,
+      "tname": "TypeError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 215,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/call_recorder.py",
+      "qualname": "_rotate",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 681,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/call_recorder.py",
+      "qualname": "channel_hhi",
+      "nth": 0,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1182,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/call_recorder.py",
+      "qualname": "channel_hhi",
+      "nth": 1,
+      "tname": "(TypeError, ValueError, ZeroDivisionError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1190,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/data_quality_evaluator.py",
+      "qualname": "load_records",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 222,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/semantic_cache.py",
+      "qualname": "_load",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 234,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/llm/semantic_cache.py",
+      "qualname": "process_pending",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "break",
+      "sha16": "14ebe56a5008e7c2",
+      "lineno": 418,
+      "tier": "C",
+      "body": "break"
+    },
+    {
+      "path": "nucleus/llm/semantic_cache.py",
+      "qualname": "_worker_loop",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 454,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/mnemosyne/PulseSnapshot.py",
+      "qualname": "cleanup_temp_snapshot_residue",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 216,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/mnemosyne/PulseSnapshot.py",
+      "qualname": "_m67_apply_incremental_log",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e266c3b549f0b816",
+      "lineno": 1185,
+      "tier": "C",
+      "body": "_bad += 1;continue"
+    },
+    {
+      "path": "nucleus/mnemosyne/PulseSnapshot.py",
+      "qualname": "_m81_load_parquet_unified",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1462,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/mnemosyne/verification_learning_hub.py",
+      "qualname": "_m326_rule_tier",
+      "nth": 0,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 884,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/reasoning/AutonomousDeriver.py",
+      "qualname": "_deductive_derive",
+      "nth": 0,
+      "tname": "re.error",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 139,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/reasoning/ContradictionResolver.py",
+      "qualname": "_timestamp_of",
+      "nth": 0,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 64,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "qualname": "_k1_build_task_face",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 4012,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/runtime/RuntimeTrajectory.py",
+      "qualname": "_maybe_compact",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 303,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/CallGraphAnalyzer.py",
+      "qualname": "a5_growth_intake_assertion",
+      "nth": 0,
+      "tname": "(ValueError, TypeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 2389,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/CallGraphAnalyzer.py",
+      "qualname": "a5_growth_intake_assertion",
+      "nth": 1,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 2399,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/SelfAwarenessEngine.py",
+      "qualname": "_m40_latest_profile_file",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 840,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/SelfAwarenessEngine.py",
+      "qualname": "compare_profiles",
+      "nth": 0,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1184,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/daily_reader.py",
+      "qualname": "_read_last_queue_stats",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 450,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_awareness/quality_score_v2.py",
+      "qualname": "_disk_consumption_rate",
+      "nth": 0,
+      "tname": "(OSError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 160,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_build_project_class_index",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1421,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_build_organ_name_index",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1628,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "guess_method_from_message",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1665,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_build_logger_tag_index",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1743,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_build_organ_alias_index",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 1789,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "build_organ_metadata",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 2008,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "build_organ_metadata",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 2034,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_si_read_jsonl",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 3130,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_detect_god_file",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 3245,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_detect_dead_code",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 5294,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/self_inspector.py",
+      "qualname": "_m325_build_name_index",
+      "nth": 0,
+      "tname": "(OSError, SyntaxError, ValueError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 6064,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/semantic/AsyncEncodeQueue.py",
+      "qualname": "_worker",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "break",
+      "sha16": "14ebe56a5008e7c2",
+      "lineno": 188,
+      "tier": "C",
+      "body": "break"
+    },
+    {
+      "path": "nucleus/semantic/AsyncEncodeQueue.py",
+      "qualname": "_worker",
+      "nth": 1,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 190,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/semantic/AsyncEncodeQueue.py",
+      "qualname": "reconcile",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 272,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/ssrf_guard.py",
+      "qualname": "is_safe_http_url",
+      "nth": 2,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 127,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_build_semantic_map",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 215,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_build_rule_map",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 253,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_expand_by_association",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 695,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_expand_by_association",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 714,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_expand_by_association",
+      "nth": 2,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 723,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "nucleus/synapsys/ResonanceEngine.py",
+      "qualname": "_expand_by_association",
+      "nth": 3,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 735,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "organs/brain/pulse_inner_world_knowledge.py",
+      "qualname": "_orchestrate_reason",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "c7c2eb583d76e5a4",
+      "lineno": 2403,
+      "tier": "C",
+      "body": "_cand_fail += 1;continue"
+    },
+    {
+      "path": "organs/senses/PulseVisualCortex.py",
+      "qualname": "__init__",
+      "nth": 2,
+      "tname": "(TypeError, ValueError)",
+      "kind": "cont",
+      "sha16": "ef84dd3f1c4cfc26",
+      "lineno": 190,
+      "tier": "C",
+      "body": "_dropped += 1;continue"
+    },
+    {
+      "path": "tests/conftest.py",
+      "qualname": "_cmdline_is_framework_main",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 216,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/conftest.py",
+      "qualname": "_iter_main_py_cmdlines",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 240,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_channel_concurrency_m24.py",
+      "qualname": "_m32_pick_adjustable",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 93,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_entry_probe_m35.py",
+      "qualname": "setUpClass",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 280,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_event_const_m58.py",
+      "qualname": "_scan_raw_literals",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 141,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_event_const_m58.py",
+      "qualname": "_scan_raw_literals",
+      "nth": 1,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 145,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_fake_guard_regression_m51.py",
+      "qualname": "_scan_key_dirs",
+      "nth": 1,
+      "tname": "(SyntaxError, OSError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 115,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_llm_indent_contract_m91.py",
+      "qualname": "_load_patch_store",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 172,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_llm_patch_similarity_m89.py",
+      "qualname": "_load_llm_patches",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 144,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_log_governance_m37.py",
+      "qualname": "_prints",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 228,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_log_governance_m37.py",
+      "qualname": "test_33_zero_log_organs_now_have_business_logs",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 271,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_log_locate_m91.py",
+      "qualname": "_production_literals",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 180,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m182_followups.py",
+      "qualname": "test_32_no_reference_in_sources",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 335,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m340_batch.py",
+      "qualname": "test_55_budget_consumers_are_only_dispatch_and_recorder",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 350,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m360_batch.py",
+      "qualname": "test_30_no_third_direct_call_site",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 466,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m360_batch.py",
+      "qualname": "test_31_no_v4_pro_active_call_in_production",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 496,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m77_debt_audit.py",
+      "qualname": "test_38_silent_except_scan_reproducible",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 289,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m92_gate2_label.py",
+      "qualname": "_patch_library",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 102,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m92_patch_guards.py",
+      "qualname": "_patch_library",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 123,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m94_tokens_usage.py",
+      "qualname": "_records",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 458,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m95_followups.py",
+      "qualname": "test_E1_no_legacy_write_targets_anywhere",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 511,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m96_followups.py",
+      "qualname": "test_B9_auto_approved_single_writer",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 408,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_m96_followups.py",
+      "qualname": "test_C2_disk_miss_forces_effect_false",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 445,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_model_name_m11.py",
+      "qualname": "test_no_active_hardcoded_v4_pro",
+      "nth": 0,
+      "tname": "(SyntaxError, OSError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 70,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_no_bare_noqa_p207.py",
+      "qualname": "test_no_bare_noqa_in_source",
+      "nth": 0,
+      "tname": "(UnicodeDecodeError, OSError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 54,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_pa_compat_m140.py",
+      "qualname": "test_01_no_table_from_pylist_in_source",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 96,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_patch_field_contract_m90.py",
+      "qualname": "_load_patch_library",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 100,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_patch_field_contract_m90.py",
+      "qualname": "_iter_production_patch_dicts",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 134,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_pcl_risk_threshold_m54.py",
+      "qualname": "test_06_no_other_hardcoded_risk_gate",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 120,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_robustness_m7.py",
+      "qualname": "test_requests_calls_have_timeout_or_none",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 161,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_self_awareness_phase18_m36.py",
+      "qualname": "test_73_production_trigger_exists",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 605,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_spike_backend_m202.py",
+      "qualname": "test_not_wired_into_organs",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 108,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tests/test_unified_exclude_dirs_m47.py",
+      "qualname": "test_40_scan_project_root_for_unknown_copy_dirs",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 200,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/archive/cleanup_alias_placeholder_nodes.py",
+      "qualname": "_framework_looks_running",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 98,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/audit/criteria_hardcode_scan.py",
+      "qualname": "scan",
+      "nth": 0,
+      "tname": "(OSError, SyntaxError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 177,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/backfill_llm_trace_fields.py",
+      "qualname": "plan_file",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "75e558155c513c44",
+      "lineno": 137,
+      "tier": "C",
+      "body": "_bad_lines += 1;continue"
+    },
+    {
+      "path": "tools/benchmark_hot_cold_faiss_kal.py",
+      "qualname": "stage_node_pool_real",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 427,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/benchmark_hot_cold_faiss_kal.py",
+      "qualname": "stage_node_pool_real",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 436,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/check_config_unused_keys.py",
+      "qualname": "_iter_py_sources",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 70,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/check_patch_consistency.py",
+      "qualname": "_check_c4_backflow",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 204,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/check_pii_final_scan.py",
+      "qualname": "_changed_files_in_push",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 119,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/check_pii_final_scan.py",
+      "qualname": "tier_s2",
+      "nth": 2,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 161,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/check_requirements_declared_imports.py",
+      "qualname": "main",
+      "nth": 0,
+      "tname": "(OSError, SyntaxError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 225,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/check_requirements_declared_imports.py",
+      "qualname": "main",
+      "nth": 1,
+      "tname": "(OSError, SyntaxError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 239,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/check_write_only_gates.py",
+      "qualname": "d3_dead_consumer",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 563,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+      "qualname": "full_repo_scan",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 171,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+      "qualname": "full_repo_scan",
+      "nth": 1,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 181,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+      "qualname": "emit_baseline",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 196,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+      "qualname": "main",
+      "nth": 0,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "fbcc52ac53b5e142",
+      "lineno": 244,
+      "tier": "C",
+      "body": "parse_errs += 1;continue"
+    },
+    {
+      "path": "tools/ci/cw2_t2e_ci_gate_silent_except.py",
+      "qualname": "main",
+      "nth": 1,
+      "tname": "SyntaxError",
+      "kind": "cont",
+      "sha16": "fbcc52ac53b5e142",
+      "lineno": 249,
+      "tier": "C",
+      "body": "parse_errs += 1;continue"
+    },
+    {
+      "path": "tools/count_match_frequency.py",
+      "qualname": "compute_frequency",
+      "nth": 0,
+      "tname": "json.JSONDecodeError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 59,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/data_governance_m41.py",
+      "qualname": "scan_corrupted",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 92,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/data_governance_m41.py",
+      "qualname": "govern_corrupted",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 109,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/data_governance_m41.py",
+      "qualname": "govern_corrupted",
+      "nth": 2,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 124,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/data_governance_m41.py",
+      "qualname": "scan_knowledge_backups",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 210,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "collect_config_refs",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 174,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "collect_definitions",
+      "nth": 0,
+      "tname": "(SyntaxError, ValueError, UnicodeDecodeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 211,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "collect_refs",
+      "nth": 0,
+      "tname": "(SyntaxError, ValueError, OSError, UnicodeDecodeError)",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 275,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "_collect_imported_modules",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 517,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "_collect_methods",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 536,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/dead_code_scan.py",
+      "qualname": "_call_refs",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 583,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/export_event_graph.py",
+      "qualname": "derive_event_edges",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 276,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/export_public.py",
+      "qualname": "iter_public_files",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 468,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/mark_duplicate_nodes.py",
+      "qualname": "iter_snapshot_nodes",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 145,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tools/mark_duplicate_nodes.py",
+      "qualname": "mark_and_rewrite",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 172,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tools/measure_baseline.py",
+      "qualname": "dir_size_bytes",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 128,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/report_dwell_audit.py",
+      "qualname": "scan_dwell",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 108,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/scan_config_access.py",
+      "qualname": "scan",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 84,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/scan_except_pass.py",
+      "qualname": "scan",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 85,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/scan_main_blocks.py",
+      "qualname": "scan",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 86,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/scan_style_phantoms.py",
+      "qualname": "scan",
+      "nth": 0,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 49,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/serp_pollution_analyzer.py",
+      "qualname": "parse_since",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 274,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/stress/collect_stress_baseline.py",
+      "qualname": "_ledger",
+      "nth": 0,
+      "tname": "ValueError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 91,
+      "tier": "A",
+      "body": "continue"
+    },
+    {
+      "path": "tools/stress/collect_stress_baseline.py",
+      "qualname": "_m325_latest_per_item",
+      "nth": 0,
+      "tname": "OSError",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 229,
+      "tier": "C",
+      "body": "continue"
+    },
+    {
+      "path": "tools/stress/collect_stress_baseline.py",
+      "qualname": "source_provenance",
+      "nth": 1,
+      "tname": "Exception",
+      "kind": "cont",
+      "sha16": "e256ee8e7aff6957",
+      "lineno": 511,
+      "tier": "C",
+      "body": "continue"
+    }
+  ],
+  "added_by_kind": {
+    "cont": 139,
+    "break": 4
+  },
+  "added_by_tier": {
+    "C": 130,
+    "A": 13
+  },
+  "added_control_flow": [
+    {
+      "path": "nucleus/events/EventBus.py",
+      "qualname": "_worker_loop",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "lineno": 481
+    },
+    {
+      "path": "nucleus/llm/semantic_cache.py",
+      "qualname": "process_pending",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "break",
+      "lineno": 418
+    },
+    {
+      "path": "nucleus/llm/semantic_cache.py",
+      "qualname": "_worker_loop",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "lineno": 454
+    },
+    {
+      "path": "nucleus/semantic/AsyncEncodeQueue.py",
+      "qualname": "_worker",
+      "nth": 0,
+      "tname": "queue.Empty",
+      "kind": "break",
+      "lineno": 188
+    },
+    {
+      "path": "nucleus/semantic/AsyncEncodeQueue.py",
+      "qualname": "_worker",
+      "nth": 1,
+      "tname": "queue.Empty",
+      "kind": "cont",
+      "lineno": 190
+    }
+  ],
+  "added_control_flow_count": 5,
+  "removed_count": 0,
+  "removed_sample": [],
+  "baseline_total": 40,
+  "baseline_matched": 40,
+  "baseline_unmatched": 0,
+  "baseline_migration": [
+    {
+      "old": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_restart_counter",
+        0,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_restart_counter",
+        0,
+        "ImportError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "A",
+      "kind": "pass",
+      "lineno_baseline": 3645,
+      "lineno_head": 5109,
+      "lineno_drift": 1464,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_restart_blocked_at",
+        0,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_restart_blocked_at",
+        0,
+        "ImportError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "A",
+      "kind": "pass",
+      "lineno_baseline": 3729,
+      "lineno_head": 5263,
+      "lineno_drift": 1534,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_json",
+        0,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "nucleus/reasoning/PatchManager.py",
+        "_save_json",
+        0,
+        "ImportError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "A",
+      "kind": "pass",
+      "lineno_baseline": 3786,
+      "lineno_head": 5322,
+      "lineno_drift": 1536,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/PulseInnerWorld.py",
+        "_load_inner_world_config",
+        0,
+        "cb9d6bbf1ee95c38"
+      ],
+      "new": [
+        "organs/brain/PulseInnerWorld.py",
+        "_load_inner_world_config",
+        0,
+        "Exception",
+        "assign",
+        "cb9d6bbf1ee95c38"
+      ],
+      "tier": "B",
+      "kind": "assign",
+      "lineno_baseline": 358,
+      "lineno_head": 362,
+      "lineno_drift": 4,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/PulseInnerWorld.py",
+        "_ir_build_context",
+        0,
+        "6ce1f6546c222372"
+      ],
+      "new": [
+        "organs/brain/PulseInnerWorld.py",
+        "_ir_build_context",
+        0,
+        "Exception",
+        "assign",
+        "6ce1f6546c222372"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 565,
+      "lineno_head": 569,
+      "lineno_drift": 4,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_knowledge_retrieve",
+        0,
+        "ef8cbf5a4558d64f"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_knowledge_retrieve",
+        0,
+        "Exception",
+        "assign",
+        "ef8cbf5a4558d64f"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 216,
+      "lineno_head": 240,
+      "lineno_drift": 24,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_evaluate_fusion_quality",
+        0,
+        "6e073459398482b8"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_evaluate_fusion_quality",
+        0,
+        "Exception",
+        "assign",
+        "6e073459398482b8"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 792,
+      "lineno_head": 834,
+      "lineno_drift": 42,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_fuse_multiple_nodes",
+        0,
+        "f21e8cf8fe7dbff4"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_fuse_multiple_nodes",
+        0,
+        "Exception",
+        "assign",
+        "f21e8cf8fe7dbff4"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 863,
+      "lineno_head": 909,
+      "lineno_drift": 46,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_orchestrate_reason",
+        0,
+        "4ab0bbccac85bc8a"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_knowledge.py",
+        "_orchestrate_reason",
+        0,
+        "Exception",
+        "assign",
+        "4ab0bbccac85bc8a"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 2300,
+      "lineno_head": 2392,
+      "lineno_drift": 92,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_execute_qica_method",
+        0,
+        "14d4d20f1b6d2720"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_execute_qica_method",
+        0,
+        "Exception",
+        "assign",
+        "14d4d20f1b6d2720"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 84,
+      "lineno_head": 85,
+      "lineno_drift": 1,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_get_stress_reasoning_modulation",
+        0,
+        "a787d5f3ae56b80b"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_get_stress_reasoning_modulation",
+        0,
+        "Exception",
+        "assign",
+        "a787d5f3ae56b80b"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 540,
+      "lineno_head": 541,
+      "lineno_drift": 1,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_get_emotion_modulation",
+        0,
+        "a7689316669a324e"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_get_emotion_modulation",
+        0,
+        "Exception",
+        "ret",
+        "a7689316669a324e"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 702,
+      "lineno_head": 703,
+      "lineno_drift": 1,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_generate_life_stage_summary",
+        0,
+        "fd8f6ab21d16fd39"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_generate_life_stage_summary",
+        0,
+        "Exception",
+        "assign",
+        "fd8f6ab21d16fd39"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 2006,
+      "lineno_head": 2033,
+      "lineno_drift": 27,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_generate_life_stage_summary",
+        1,
+        "ad7267a0cf9a2a09"
+      ],
+      "new": [
+        "organs/brain/pulse_inner_world_support.py",
+        "_generate_life_stage_summary",
+        1,
+        "Exception",
+        "ret",
+        "ad7267a0cf9a2a09"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 2013,
+      "lineno_head": 2040,
+      "lineno_drift": 27,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/archive/cleanup_alias_placeholder_nodes.py",
+        "_framework_looks_running",
+        0,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "tools/archive/cleanup_alias_placeholder_nodes.py",
+        "_framework_looks_running",
+        0,
+        "OSError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "C",
+      "kind": "pass",
+      "lineno_baseline": 87,
+      "lineno_head": 87,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/archive/cleanup_alias_placeholder_nodes.py",
+        "_framework_looks_running",
+        2,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "tools/archive/cleanup_alias_placeholder_nodes.py",
+        "_framework_looks_running",
+        2,
+        "Exception",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "C",
+      "kind": "pass",
+      "lineno_baseline": 100,
+      "lineno_head": 100,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/archive/patch_template_helper.py",
+        "<module>",
+        0,
+        "92e58406c6382b02"
+      ],
+      "new": [
+        "tools/archive/patch_template_helper.py",
+        "<module>",
+        0,
+        "Exception",
+        "assign",
+        "92e58406c6382b02"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 246,
+      "lineno_head": 249,
+      "lineno_drift": 3,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/brain/PulseInnerWorld.py",
+        "_cr_vision_insight",
+        0,
+        "86b989c50e54a4e8"
+      ],
+      "new": [
+        "organs/brain/PulseInnerWorld.py",
+        "_cr_vision_insight",
+        0,
+        "Exception",
+        "assign",
+        "86b989c50e54a4e8"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 5064,
+      "lineno_head": 5182,
+      "lineno_drift": 118,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/ci/cw3_consistency_gate.py",
+        "main",
+        0,
+        "1c830325fc48fe4c"
+      ],
+      "new": [
+        "tools/ci/cw3_consistency_gate.py",
+        "main",
+        0,
+        "Exception",
+        "assign",
+        "1c830325fc48fe4c"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 110,
+      "lineno_head": 158,
+      "lineno_drift": 48,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/ci/verify_fingerprint_gate.py",
+        "main",
+        0,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "tools/ci/verify_fingerprint_gate.py",
+        "main",
+        0,
+        "OSError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "C",
+      "kind": "pass",
+      "lineno_baseline": 534,
+      "lineno_head": 573,
+      "lineno_drift": 39,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/ci/verify_fingerprint_gate.py",
+        "main",
+        1,
+        "d74ff0ee8da3b980"
+      ],
+      "new": [
+        "tools/ci/verify_fingerprint_gate.py",
+        "main",
+        1,
+        "OSError",
+        "pass",
+        "d74ff0ee8da3b980"
+      ],
+      "tier": "C",
+      "kind": "pass",
+      "lineno_baseline": 548,
+      "lineno_head": 587,
+      "lineno_drift": 39,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/LLMDependencyMetrics.py",
+        "remediation_rate",
+        0,
+        "8725d058f45489d4"
+      ],
+      "new": [
+        "nucleus/LLMDependencyMetrics.py",
+        "remediation_rate",
+        0,
+        "Exception",
+        "ret",
+        "8725d058f45489d4"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 335,
+      "lineno_head": 579,
+      "lineno_drift": 244,
+      "matched": true
+    },
+    {
+      "old": [
+        "functions/chat/chat_service.py",
+        "<module>",
+        0,
+        "7394554ac1518141"
+      ],
+      "new": [
+        "functions/chat/chat_service.py",
+        "<module>",
+        0,
+        "Exception",
+        "assign",
+        "7394554ac1518141"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 28,
+      "lineno_head": 27,
+      "lineno_drift": -1,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/diagnostics.py",
+        "get_quality_score_v2",
+        0,
+        "c3bb9ca340627366"
+      ],
+      "new": [
+        "nucleus/diagnostics.py",
+        "get_quality_score_v2",
+        0,
+        "Exception",
+        "ret",
+        "c3bb9ca340627366"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 264,
+      "lineno_head": 264,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/llm/model_self_updater.py",
+        "check_for_updates",
+        0,
+        "aa7b4e0ae30d943d"
+      ],
+      "new": [
+        "nucleus/llm/model_self_updater.py",
+        "check_for_updates",
+        0,
+        "Exception",
+        "assign",
+        "aa7b4e0ae30d943d"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 256,
+      "lineno_head": 256,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/mnemosyne/PulseNodePool.py",
+        "check_consistency",
+        0,
+        "a074efd3b65acb64"
+      ],
+      "new": [
+        "nucleus/mnemosyne/PulseNodePool.py",
+        "check_consistency",
+        0,
+        "Exception",
+        "assign",
+        "a074efd3b65acb64"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 1001,
+      "lineno_head": 1117,
+      "lineno_drift": 116,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/mnemosyne/experience_retriever.py",
+        "analyze_pollution",
+        0,
+        "b63308d41ab4524e"
+      ],
+      "new": [
+        "nucleus/mnemosyne/experience_retriever.py",
+        "analyze_pollution",
+        0,
+        "Exception",
+        "ret",
+        "b63308d41ab4524e"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 398,
+      "lineno_head": 473,
+      "lineno_drift": 75,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/qica/IntentChannels.py",
+        "load",
+        2,
+        "0f08837eca30d742"
+      ],
+      "new": [
+        "nucleus/qica/IntentChannels.py",
+        "load",
+        2,
+        "Exception",
+        "ret",
+        "0f08837eca30d742"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 0,
+      "lineno_head": 464,
+      "lineno_drift": 464,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/qica/IntentChannels.py",
+        "load",
+        0,
+        "97a7dc1b9b57e8a7"
+      ],
+      "new": [
+        "nucleus/qica/IntentChannels.py",
+        "load",
+        0,
+        "Exception",
+        "ret",
+        "97a7dc1b9b57e8a7"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 236,
+      "lineno_head": 245,
+      "lineno_drift": 9,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reasoning/PatchManager.py",
+        "pending_aging_preview",
+        0,
+        "a4bf3a1ca8c7c039"
+      ],
+      "new": [
+        "nucleus/reasoning/PatchManager.py",
+        "pending_aging_preview",
+        0,
+        "Exception",
+        "ret",
+        "a4bf3a1ca8c7c039"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 885,
+      "lineno_head": 1042,
+      "lineno_drift": 157,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reporting/report_bus.py",
+        "_write",
+        0,
+        "ae396e9c95a0e936"
+      ],
+      "new": [
+        "nucleus/reporting/report_bus.py",
+        "_write",
+        0,
+        "Exception",
+        "assign",
+        "ae396e9c95a0e936"
+      ],
+      "tier": "A",
+      "kind": "assign",
+      "lineno_baseline": 198,
+      "lineno_head": 204,
+      "lineno_drift": 6,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reporting/report_bus.py",
+        "_write",
+        1,
+        "afddc3f97891a8c9"
+      ],
+      "new": [
+        "nucleus/reporting/report_bus.py",
+        "_write",
+        1,
+        "(OSError, IOError, TypeError, ValueError)",
+        "ret",
+        "afddc3f97891a8c9"
+      ],
+      "tier": "A",
+      "kind": "ret",
+      "lineno_baseline": 270,
+      "lineno_head": 211,
+      "lineno_drift": -59,
+      "matched": true
+    },
+    {
+      "old": [
+        "nucleus/reporting/report_bus.py",
+        "get_disk_stats",
+        0,
+        "239096be529a7923"
+      ],
+      "new": [
+        "nucleus/reporting/report_bus.py",
+        "get_disk_stats",
+        0,
+        "Exception",
+        "assign",
+        "239096be529a7923"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 772,
+      "lineno_head": 794,
+      "lineno_drift": 22,
+      "matched": true
+    },
+    {
+      "old": [
+        "organs/body/PulseLung.py",
+        "_call_via_channels",
+        1,
+        "1ebaed51a319a1a5"
+      ],
+      "new": [
+        "organs/body/PulseLung.py",
+        "_call_via_channels",
+        1,
+        "Exception",
+        "assign",
+        "1ebaed51a319a1a5"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 1818,
+      "lineno_head": 2221,
+      "lineno_drift": 403,
+      "matched": true
+    },
+    {
+      "old": [
+        "tests/test_llm_indent_contract_m91.py",
+        "_gate2",
+        0,
+        "70ef172d333420de"
+      ],
+      "new": [
+        "tests/test_llm_indent_contract_m91.py",
+        "_gate2",
+        0,
+        "SyntaxError",
+        "ret",
+        "70ef172d333420de"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 125,
+      "lineno_head": 125,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "_load_real_nodes",
+        1,
+        "8e582417c7ced977"
+      ],
+      "new": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "_load_real_nodes",
+        1,
+        "Exception",
+        "ret",
+        "8e582417c7ced977"
+      ],
+      "tier": "C",
+      "kind": "ret",
+      "lineno_baseline": 372,
+      "lineno_head": 372,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "_config_snapshot",
+        0,
+        "8e582417c7ced977"
+      ],
+      "new": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "_config_snapshot",
+        0,
+        "Exception",
+        "ret",
+        "8e582417c7ced977"
+      ],
+      "tier": "A",
+      "kind": "ret",
+      "lineno_baseline": 69,
+      "lineno_head": 69,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        1,
+        "015c5fb6e80e541f"
+      ],
+      "new": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        1,
+        "Exception",
+        "assign",
+        "015c5fb6e80e541f"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 530,
+      "lineno_head": 530,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        2,
+        "22e04af26d33317f"
+      ],
+      "new": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        2,
+        "Exception",
+        "assign",
+        "22e04af26d33317f"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 544,
+      "lineno_head": 544,
+      "lineno_drift": 0,
+      "matched": true
+    },
+    {
+      "old": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        0,
+        "4b3ea015325652d1"
+      ],
+      "new": [
+        "tools/benchmark_hot_cold_faiss_kal.py",
+        "main",
+        0,
+        "Exception",
+        "assign",
+        "4b3ea015325652d1"
+      ],
+      "tier": "C",
+      "kind": "assign",
+      "lineno_baseline": 521,
+      "lineno_head": 521,
+      "lineno_drift": 0,
+      "matched": true
+    }
+  ]
+}
