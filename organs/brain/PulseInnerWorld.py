@@ -9214,10 +9214,11 @@ class PulseInnerWorld(
             # 简单推断问题所属领域
             for area in weak_areas:  # type: ignore[possibly-unbound]
                 label = area.get("label", "")
-                for word in label:
-                    if word in question:
-                        failed_domains[label] = failed_domains.get(label, 0) + 1
-                        break
+                # ★367 后续 E11：原写法 `for word in label:` 遍历的是**字符串的每个字**，
+                #   于是「技术架构与编程」里只要问题含「与」「的」这类单字就命中该领域，
+                #   失败领域统计被严重放大。改为**整体包含**匹配（label 本身就是一个词）。
+                if label and label in question:
+                    failed_domains[label] = failed_domains.get(label, 0) + 1
 
         # 3. 选择最需要加强的盲区
         target_area = None  # type: ignore[possibly-unbound]
@@ -9322,9 +9323,17 @@ class PulseInnerWorld(
         nodes_after = 0
         try:
             path_dist = self.node_pool.get_path_distribution()  # type: ignore[possibly-unbound]
+            # ★367 后续 E11：先按「领域名→知识路径」别名命中（两套词表本无交集，
+            #   原来对「代码」恒命中 0 条 ⇒ nodes_after 恒 0 ⇒ 必判失败）；
+            #   别名映射不到时**退回**原「label 子串」判据，保留既有行为。
+            _prefixes = goal_area_path_prefixes(target_area)  # type: ignore[possibly-unbound]
             for path_key, count in path_dist.items():
-                label = self._get_path_label_for_plan(path_key)  # type: ignore[possibly-unbound]
-                if label and target_area in label:  # type: ignore[possibly-unbound]
+                if _prefixes:
+                    _hit = any(str(path_key).startswith(_p) for _p in _prefixes)
+                else:
+                    label = self._get_path_label_for_plan(path_key)  # type: ignore[possibly-unbound]
+                    _hit = bool(label and target_area in label)  # type: ignore[possibly-unbound]
+                if _hit:
                     nodes_after += count
         except Exception:
             nodes_after = 0
@@ -9336,7 +9345,11 @@ class PulseInnerWorld(
         area_traces = [t for t in self._inference_trace[-20:]
                       if t.get("timestamp", 0) > started_at
                       and target_area[:2] in t.get("question", "")]  # type: ignore[possibly-unbound]
-        if area_traces:
+        # ★367 后续 E11：**无样本 ≠ 零成功率**（同 353 批 `hit_rate=None` 口径）。
+        #   原来 `area_traces` 空时直接 `success_rate = 0.0`，与「样本全是低分」同形，
+        #   于是「这个窗口没跑过含该领域的推理」被当成「学得差」而累加失败。
+        _has_sample = bool(area_traces)
+        if _has_sample:
             success_count = sum(1 for t in area_traces if t.get("confidence", 0) >= 0.5)
             success_rate = success_count / len(area_traces)
         else:
@@ -9379,6 +9392,16 @@ class PulseInnerWorld(
                    f"但还需要更多实践来加深理解")
 
         elif nodes_growth <= 0 and success_rate < 0.5:
+            if not _has_sample:
+                # ★367 后续 E11：本窗口该领域**没有推理样本** ⇒ 无法判「理解不深」。
+                #   不计失败、不清零、不切换，只留痕（铁律 166：不同事实不同措辞——
+                #   「没样本」与「样本全是低分」是两件事，不能都写成「效果不佳」）。
+                self._log(LogLevel.INFO,
+                          f"学习效果评估: 「{target_area}」本窗口无推理样本，"
+                          f"不判优劣、不计失败（现有计次="
+                          f"{self._consecutive_fail_counts.get(_fail_key, 0)}）")  # type: ignore[possibly-unbound]
+                return (f"我在「{target_area}」方面还没有足够的实践样本可供评估，"
+                        f"继续积累一段时间再看效果。")
             # 效果不佳：累加失败计数
             _fail_count = self._consecutive_fail_counts.get(_fail_key, 0) + 1
             self._consecutive_fail_counts[_fail_key] = _fail_count
@@ -17584,6 +17607,51 @@ META_SKILL_GOAL_AREAS = frozenset({
     "自我反思", "自我认知", "底层本能", "社会关系",
 })
 META_SKILL_GOAL_KEYWORDS = frozenset({"反思", "身份", "本能", "社会"})
+
+
+#: ★367 后续 E11：**能力画像领域名 → 知识路径前缀**。
+#:
+#: 为什么必须有这一层（实测铁证，不是设计偏好）：
+#:   · `weak_areas` 的 label 由 `SelfAwarenessEngine` 产出（`code_health → "代码"`）；
+#:   · 本类 `_get_path_label_for_plan` 的知识标签表是 `/技术 → "技术架构与编程"` 等 7 条；
+#:   · 两套词表**无交集** ⇒ 学习效果评估里 `target_area in label`（即 `"代码" in label`）
+#:     命中 **0/7** 条 ⇒ `nodes_after` 恒 0 ⇒ `nodes_growth <= 0` ⇒ 每轮必判「效果不佳」
+#:     ⇒ 3 次后强制切换再切回，形成目标漂移（日志实证 10-24 21:48 / 23:47 两次切换）。
+#:
+#: 口径：只做**同义归并**，不新造领域。命中不了就返回空元组，退回原「label 子串」判据，
+#:   绝不因为查表失败就直接判失败（那正是原 bug 的形态）。
+_GOAL_AREA_PATH_PREFIXES: dict[str, tuple[str, ...]] = {
+    "代码": ("/技术",),
+    "编程": ("/技术",),
+    "技术": ("/技术",),
+    "架构": ("/技术",),
+    "反思": ("/反思",),
+    "身份": ("/身份",),
+    "本能": ("/本能",),
+    "知识": ("/知识",),
+    "社会": ("/社会",),
+    "未分类": ("/未分类",),
+    "广泛涉猎": ("/未分类",),
+}
+
+
+def goal_area_path_prefixes(target_area: str) -> tuple[str, ...]:
+    """把能力画像的领域名映射到知识路径前缀；映射不到返回空元组（调用方回退原判据）。
+
+    ★为什么单独成函数而不是内联：它要能被单测直接钉住——
+    「代码 → /技术」这条对应关系一旦被谁改掉，学习目标就会重新开始漂移，
+    而漂移是**延时故障**（要 3 个评估周期、约 1 小时才显形），内联没法提前报警。
+    """
+    _a = str(target_area or "").strip()
+    if not _a:
+        return ()
+    if _a in _GOAL_AREA_PATH_PREFIXES:
+        return _GOAL_AREA_PATH_PREFIXES[_a]
+    # 含关系兜底（如「代码质量」）：取最长匹配键，避免「技术」抢在「技术架构」前
+    for _k in sorted(_GOAL_AREA_PATH_PREFIXES, key=len, reverse=True):
+        if _k in _a:
+            return _GOAL_AREA_PATH_PREFIXES[_k]
+    return ()
 
 
 def is_meta_skill_goal(target_area: str) -> bool:
