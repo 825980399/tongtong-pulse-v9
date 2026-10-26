@@ -514,14 +514,18 @@ class TestM96ChannelPriority(unittest.TestCase):
         self.ch = _channels_struct()
 
     def test_D1_priority_ladder_matches_taskbook(self):
+        # ★372刀8：原断言写的是 2026-09 的七级阶梯（zhipu p1 + 5 条 ark + deepseek p7）。
+        #   352刀9（2026-10-23 小林触发，方案见 docs/分析报告/模型渠道免费化配置方案_20261023.md）
+        #   后：火山方舟免费额度耗尽 ⇒ ark-* 全部挂起，渠道池换成免费渠道为主。
+        #   依据 = config.REMOTE_API_CHANNELS["default_channels"] 现值（直接读，不靠记忆）。
         want = [
-            (1, "zhipu", "glm-4-flash"),
-            (2, "ark-ds-v4.1-flash", "ep-20260915143823-n6585"),
-            (3, "ark-glm-5.3-flash", "ep-20260912135817-7dbrk"),
-            (4, "ark-seed-21-pro", "ep-20260912135302-wg5wn"),
-            (5, "ark-ds-v4-flash", "ep-20260912135632-k7c2w"),
-            (6, "ark-ds-v4-pro", "ep-20260912135550-b7mxr"),
-            (7, "deepseek", "deepseek-v4-flash"),
+            (1, "zhipu-47-flash", "glm-4.7-flash"),
+            (2, "bailian-qwen-plus", "qwen-plus"),
+            (3, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
+            (4, "zhipu", "glm-4-flash"),
+            (5, "bailian-qwen-max", "qwen-max"),
+            (7, "modelscope", "Qwen/Qwen2.5-7B-Instruct"),
+            (8, "deepseek", "deepseek-v4-flash"),
         ]
         by_name = {c[0]: c for c in self.ch}
         for prio, name, model in want:
@@ -531,10 +535,19 @@ class TestM96ChannelPriority(unittest.TestCase):
             self.assertEqual(got[1], model, f"{name} model 不符")
 
     def test_D2_new_models_already_in_pool(self):
-        """★任务书 T-96d 第1项前提核实：两个新模型**本就已在池中**。"""
+        """★任务书 T-96d 第1项前提核实：两个新模型**本就已在池中**。
+
+        ★372刀8：原断言查 ark-ds-v4.1-flash / ark-glm-5.3-flash；352刀9 后这两条
+        随 ark-* 一并挂起（Key/额度耗尽），池里的"新渠道"换成
+        zhipu-47-flash(glm-4.7-flash) 与 bailian-qwen-plus(qwen-plus)。
+        **本用例仍守原意图**：新渠道必须已在池中，不靠本批新增；
+        同时补一条反向断言：挂起的 ark-* 不得复活。
+        """
         names = {c[0] for c in self.ch}
-        self.assertIn("ark-ds-v4.1-flash", names)
-        self.assertIn("ark-glm-5.3-flash", names)
+        self.assertIn("zhipu-47-flash", names)
+        self.assertIn("bailian-qwen-plus", names)
+        self.assertNotIn("ark-ds-v4.1-flash", names)
+        self.assertNotIn("ark-glm-5.3-flash", names)
 
     def test_D3_no_duplicate_priority_in_top7(self):
         top = [c for c in self.ch if isinstance(c[2], int) and c[2] <= 7]
@@ -546,20 +559,42 @@ class TestM96ChannelPriority(unittest.TestCase):
                                   f"与 deepseek 同为 6）: {dup}")
 
     def test_D4_free_channel_is_first(self):
-        self.assertEqual(self.ch and min(self.ch, key=lambda c: c[2])[0], "zhipu",
-                         "免费不限量的智谱必须在第 1 优先级")
+        # ★372刀8：免费不限量渠道仍是第 1，但名字由 zhipu 换成 zhipu-47-flash（352刀9）。
+        #   守的是"第 1 优先级必须是免费渠道"这条意图，不是某个名字。
+        self.assertEqual(self.ch and min(self.ch, key=lambda c: c[2])[0],
+                         "zhipu-47-flash",
+                         "免费不限量的渠道必须排在第 1 优先级")
 
     def test_D5_paid_channel_is_last_of_top7(self):
-        top = sorted([c for c in self.ch if isinstance(c[2], int) and c[2] <= 7],
-                     key=lambda c: c[2])
-        self.assertEqual(top[-1][0], "deepseek", "收费官方 API 必须是第 7（兜底）")
+        # ★372刀8：原断言"收费 API 必须是第 7（兜底）"依赖旧的 7 级阶梯；
+        #   现态 priority 排到第 8（modelscope p7、deepseek p8）⇒ "第 7 是付费"已不成立。
+        #   改为守原意图的两条：① 全池末位必须是唯一付费渠道 deepseek；
+        #   ② 前 7 优先级内不得出现付费渠道（否则等于优先烧钱）。
+        by_prio = sorted([c for c in self.ch if isinstance(c[2], int)],
+                         key=lambda c: c[2])
+        self.assertEqual(by_prio[-1][0], "deepseek",
+                         "收费官方 API 必须是全池末位（兜底）")
+        _paid = {"deepseek"}
+        _top7 = [c[0] for c in by_prio if c[2] <= 7]
+        self.assertEqual([n for n in _top7 if n in _paid], [],
+                         "前 7 优先级内不得出现付费渠道")
 
     def test_D6_quota_values_corrected(self):
+        """★372刀8：原断言核对 ark-seed-21-pro / ark-ds-v4-flash 的额度值，
+        这两条随 ark-* 一并挂起（352刀9）⇒ 断言对象已不存在（KeyError）。
+        改为守现态不变量：**在池渠道的 quota_limit 必须是正整数**，
+        且池内不得残留 ark-*（挂起的渠道不得复活）。
+        """
         by_name = {c[0]: c for c in self.ch}
-        self.assertEqual(by_name["ark-seed-21-pro"][3], 2300000,
-                         "Doubao-Seed-2.1-pro 应为固定额度 230 万")
-        self.assertEqual(by_name["ark-ds-v4-flash"][3], 3243216,
-                         "ark-ds-v4-flash 应按注释实测值统一为 3,243,216（原注释与值矛盾）")
+        self.assertNotIn("ark-seed-21-pro", by_name)
+        self.assertNotIn("ark-ds-v4-flash", by_name)
+        for _n, _row in by_name.items():
+            _q = _row[3]
+            self.assertIsInstance(_q, int, f"{_n} 的 quota_limit 必须是整数")
+            # ★第32批 T6 定死的语义：-1 = 不限量（永久免费，不参与额度管控）；
+            #   其余必须是正整数。两者之外的取值都算错配。
+            self.assertTrue(_q > 0 or _q == -1,
+                            f"{_n} 的 quota_limit 必须是正整数或 -1（不限量），实际 {_q}")
 
     def test_D7_no_empty_quota_switch(self):
         """★星轨裁决：T-96d 第3项单独立项 ⇒ 本批不得留「未实施的空开关」。"""
