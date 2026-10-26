@@ -4434,7 +4434,29 @@ class PatchManager:
 
                     patch["applied"] = True
                     patch["applied_at"] = time.time()
+                    # ★372刀3（裁决 A3）：**真落地**标记。全仓只有"文件已写盘"的
+                    #   成功点才置这一个字段：本处（os.replace 已落目标文件）
+                    #   与 O3 双标确认通道；沙箱 success **不置**（沙箱绝不 apply 源码）。
+                    #   派单侧的 set_status(FIXED) 已改为只认本字段。
+                    patch["landed"] = True
+                    patch["landed_at"] = patch["applied_at"]
                     patch["rollback_available"] = True
+                    # ★372刀3（裁决 A3）：FIXED 改由**落地成功**触发 —— 就是这个时刻。
+                    #   改前挂在派单循环的沙箱 success 上（沙箱不碰源码），
+                    #   审计"已修"提前于落地。这里 os.replace 已落盘，才是真落地。
+                    #   复用既有唯一闭环封装（内部只有一个 set_status 调用点），
+                    #   不新开调用点、不放宽 _LEGAL_TRANSITIONS、不改 applied 三通道语义。
+                    #   闭环写不进去不得反过来把应用判失败（观测不阻断主流程）。
+                    try:
+                        from nucleus.evolution.patch_execution_dispatch import (
+                            _m356_close_loop_fixed as _m372_close_loop,
+                        )
+                        _m372_close_loop(patch)
+                    except Exception as _m372_e:
+                        silent_exc(
+                            _m372_e,
+                            where="nucleus.reasoning.PatchManager::apply_all_pending 372刀3 闭环回写",
+                            level="warning")
                     self._last_apply_time = time.time()
                     results["applied"] += 1
                     # ★第159批上A 刀3（O-B7）：补丁生命周期表登记激活态

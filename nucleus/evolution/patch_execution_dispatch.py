@@ -2707,6 +2707,25 @@ def get_m365_close_loop_stats() -> dict:
     return dict(_M365_CLOSE_LOOP_MISS)
 
 
+#: ★372刀3（裁决 A3）：沙箱执行成功但**未落地**的计数（观测面，不参与判定）。
+#:   改前这里的 `success` 直接触发 `set_status(FIXED)`，而沙箱注释明写
+#:   "绝不 apply 到源码" ⇒ 审计「已修」提前于落地。现把两件事拆开各记各的。
+_M372_SANDBOX_ONLY = {"n": 0}
+
+
+def _m372_landed_ok(patch) -> bool:
+    """★372刀3：该补丁是否**真落地**（源码已写盘）。纯函数。
+
+    只认显式布尔 `landed is True` —— 不从 `applied` / `status` / 理由串反推
+    （铁律153：显式布尔禁理由串；370 刀1 的教训：注释与实现矛盾比没注释更坏）。
+
+    为什么不能继续用沙箱 `success`：`dispatch_and_verify` 走的是沙箱 motor，
+    其语义边界注释原文是「**沙箱执行成功 ≠ 源码落地**」，且明确"绝不 apply 到源码"
+    ⇒ 拿它当"已修"证据，等于把"试跑通过"记成"已修复"。
+    """
+    return isinstance(patch, dict) and patch.get("landed") is True
+
+
 def _m356_close_loop_fixed(patch: dict) -> dict | None:
     """★356刀1：补丁应用成功 ⇒ 审计池 `set_status(FIXED)`（**复用既有状态机**）。
 
@@ -2826,7 +2845,19 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
         _write_back(_p, _v)
         # ★356刀1：应用成功 ⇒ 审计池 FIXED（六段闭环第 3 段接线）。
         if _v.get("success"):
-            _m356_close_loop_fixed(_p)
+            # ★372刀3（裁决 A3）：沙箱成功 ≠ 源码落地 ⇒ FIXED 只挂 landed 事件。
+            #   沙箱成功/失败**独立留痕**（sandbox_ok / sandbox_ok_at），不与 landed 合并语义。
+            _p["sandbox_ok"] = True
+            _p["sandbox_ok_at"] = _v.get("executed_at") or time.time()
+            if _m372_landed_ok(_p):
+                _m356_close_loop_fixed(_p)
+            else:
+                _M372_SANDBOX_ONLY["n"] = int(_M372_SANDBOX_ONLY.get("n", 0)) + 1
+                _module_logger.debug(
+                    "[372刀3] 沙箱成功但未落地 ⇒ 不置 FIXED: patch=%s file=%s"
+                    "（累计 sandbox_only=%d；落地由 apply_all_pending 触发热路径）",
+                    str(_p.get("id") or "")[:24], _p.get("file"),
+                    _M372_SANDBOX_ONLY["n"])
         _results.append(_v)
     # 落盘（原子写；失败只 warning 不影响调度主流程）——有标记或有执行结果即落盘
     if _results or _suspect_n:
