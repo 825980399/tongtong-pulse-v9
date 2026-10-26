@@ -1,0 +1,143 @@
+{
+ "mode": "self_v2",
+ "pid": 31740,
+ "ts": 1793025663.1953225,
+ "elapsed_ms": 13.7,
+ "no_gc": false,
+ "note": "★仅反映**本进程**；跨进程拿不到 gc 对象图。活体归属须在目标进程内调用本函数。",
+ "base_source": "probe_memory_attribution_371",
+ "dims": {
+  "gc_generations": [
+   {
+    "gen": 0,
+    "count": 362,
+    "collections": 16,
+    "collected": 141,
+    "uncollectable": 0
+   },
+   {
+    "gen": 1,
+    "count": 1,
+    "collections": 1,
+    "collected": 0,
+    "uncollectable": 0
+   },
+   {
+    "gen": 2,
+    "count": 0,
+    "collections": 1,
+    "collected": 24,
+    "uncollectable": 0
+   }
+  ],
+  "threads": {
+   "n": 1,
+   "daemon_n": 0,
+   "by_prefix": {
+    "MainThread": 1
+   },
+   "rows": [
+    {
+     "name": "MainThread",
+     "daemon": false,
+     "alive": true
+    }
+   ],
+   "err": null
+  },
+  "containers": {
+   "objects_total": 9936,
+   "by_type_n": {
+    "tuple": 1029,
+    "dict": 979,
+    "list": 258,
+    "set": 77,
+    "frozenset": 73
+   },
+   "by_type_mb": {
+    "dict": 0.4,
+    "set": 0.134,
+    "tuple": 0.061,
+    "list": 0.053,
+    "frozenset": 0.032
+   },
+   "err": null
+  },
+  "type_top": [
+   {
+    "type": "function",
+    "n": 1968
+   },
+   {
+    "type": "wrapper_descriptor",
+    "n": 1145
+   },
+   {
+    "type": "tuple",
+    "n": 1029
+   },
+   {
+    "type": "dict",
+    "n": 980
+   },
+   {
+    "type": "method_descriptor",
+    "n": 787
+   },
+   {
+    "type": "ReferenceType",
+    "n": 756
+   },
+   {
+    "type": "builtin_function_or_method",
+    "n": 722
+   },
+   {
+    "type": "getset_descriptor",
+    "n": 432
+   },
+   {
+    "type": "type",
+    "n": 397
+   },
+   {
+    "type": "member_descriptor",
+    "n": 342
+   },
+   {
+    "type": "list",
+    "n": 258
+   },
+   {
+    "type": "cell",
+    "n": 101
+   },
+   {
+    "type": "module",
+    "n": 96
+   },
+   {
+    "type": "ModuleSpec",
+    "n": 94
+   },
+   {
+    "type": "classmethod",
+    "n": 79
+   }
+  ],
+  "organs": {
+   "approximate": true,
+   "note": "按 gc 中类名含 Pulse 的实例近似统计；精确器官清单见 cognitive/organ_inventory.py",
+   "top": {},
+   "err": null
+  }
+ },
+ "candidates": [
+  "image_mb",
+  "thread_stacks",
+  "node_pool_resident",
+  "patch_ast_cache",
+  "handle_growth"
+ ],
+ "err": null
+}
