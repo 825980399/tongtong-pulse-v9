@@ -6,7 +6,9 @@
 切换会改写全部已知豁免（40 条）的 identity ⇒ 任务书要求「先跑新旧判据全量对比
 验证窗口，差异表落证据件后再切判据」。本工具即该验证窗口的静态实现：
 
-  - 旧判据：tools/ci/ci_common.py::extract_handlers（权威，直接调用）
+  - 旧判据：本文件 extract_handlers_legacy（**371A5 起的冻结副本**）。
+    ★原因：ci_common.extract_handlers 已于 371A5 第 2 笔升级为五元组并纳入 cont/break，
+      若仍直接 import，本工具的「新旧对比」会退化成「新 vs 新」而失去意义。
   - 新判据：本文件 extract_handlers_v2（追加 cont/break 形态 + kind 字段 + tname 入 identity）
 
 对比口径：
@@ -42,7 +44,6 @@ from ci_common import (  # noqa: E402  —— 旧判据（权威）
     _enclosing_func,
     _has_report,
     _quiet_body,
-    extract_handlers,
     handler_identity,
     normalize_body,
 )
@@ -108,6 +109,50 @@ def _tier_of(fp):
     if kind in ("pass", "assign", "ret") and any(k in q for k in CFG_HINT_KEYS):
         return "B"
     return "C"
+
+
+def extract_handlers_legacy(src, path="<unknown>"):
+    """★371A5 冻结副本：切换前的旧判据（四元组、只认 pass/ret/assign）。
+
+    与 `ci_common.extract_handlers`（现已升级为五元组 + cont/break）解耦，
+    使本工具的新旧对比长期可复跑、口径不随主门禁漂移。
+    ★生产代码与门禁**不再调用**本函数，仅供对比与历史复核。
+    """
+    out = []
+    tree = ast.parse(src)
+    funcs = [(n.lineno, n.end_lineno or n.lineno, n.name)
+             for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    handlers = [n for n in ast.walk(tree) if isinstance(n, ast.ExceptHandler)]
+    handlers.sort(key=lambda n: n.lineno)
+    scope_count = {}
+    for h in handlers:
+        if _has_report(h):
+            continue
+        qualname = _enclosing_func(funcs, h.lineno)
+        nth = scope_count.get(qualname, 0)
+        scope_count[qualname] = nth + 1
+        body = h.body
+        allquiet = all(_quiet_body(x) for x in body)
+        if not allquiet:
+            rets = [x for x in body if isinstance(x, ast.Return)]
+            asg = [x for x in body if isinstance(x, (ast.Assign, ast.AugAssign))]
+            if not (len(rets) == len(body) or len(rets) + len(asg) == len(body)):
+                continue
+        tname = ast.unparse(h.type) if h.type else "bare"
+        body_src = ";".join(ast.unparse(x) for x in body)
+        out.append({
+            "path": path.replace("\\", "/"),
+            "qualname": qualname,
+            "nth": nth,
+            "sha16": hashlib.sha256(normalize_body(body_src).encode("utf-8")).hexdigest()[:16],
+            "tname": tname,
+            "has_log": False,
+            "has_reraise": False,
+            # 旧判据没有 kind 概念；统一记 pass，仅为了让指纹形状与新版一致
+            "kind": "pass",
+            "lineno": h.lineno,
+        })
+    return out
 
 
 def extract_handlers_v2(src, path="<unknown>"):
@@ -185,7 +230,7 @@ def scan(scope="prod"):
         if not src:
             continue
         try:
-            old.extend(extract_handlers(src, rel))
+            old.extend(extract_handlers_legacy(src, rel))
         except SyntaxError as _e:
             parse_err.append((rel, "legacy", str(_e)))
             _LOG.warning("旧判据解析失败 %s: %s", rel, _e)
@@ -214,10 +259,14 @@ def main():
 
     files, old, new, parse_err = scan(args.scope)
     new_keys = set(_cmp_key(x) for x in new)
-    old_cmp = set(handler_identity(x) for x in old)  # (path, qualname, nth, sha16)
+    # ★371A5：added/removed 一律用「可比键」_cmp_key（四元组 path,qualname,nth,sha16）。
+    #   曾误用 handler_identity —— 它现已升为五元组（含 tname+kind、去 nth），
+    #   4 元 tuple 与 5 元 tuple 永不相等 ⇒ added 会被算成「全部 new」。口径必须分开：
+    #   「跨判据可比」用 _cmp_key，「同一判据内身份」才用 handler_identity。
+    old_cmp = set(_cmp_key(x) for x in old)
 
     added = [x for x in new if _cmp_key(x) not in old_cmp]
-    removed = [x for x in old if handler_identity(x) not in new_keys]
+    removed = [x for x in old if _cmp_key(x) not in new_keys]
 
     # —— 40 条已知豁免的迁移映射：按 (path, qualname, nth, sha16) 重定位 ——
     #    ★行号不做匹配键（基线 lineno 为历史快照，现仓已漂移；sha16=body 归一化 hash 稳定）

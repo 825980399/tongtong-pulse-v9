@@ -34,9 +34,18 @@ def _v2(src, path="x.py"):
 
 
 def _old(src, path="x.py"):
-    from ci_common import extract_handlers, handler_identity
+    """★371A5：旧判据改指 dual 工具的**冻结副本**（extract_handlers_legacy）。
+
+    背景：ci_common.extract_handlers 已于 371A5 第 2 笔升级为五元组并纳入 cont/break。
+    若继续从这里取「旧判据」，本文件「旧判据抓不到 cont/break」的断言会因主门禁
+    升级而失效（两边都是新判据 ⇒ 测不到差异）。冻结副本保留切换前的四元组形态，
+    使「新是旧的严格超集」这一历史不变量长期可验证。
+
+    返回四元组可比键 (path, qualname, nth, sha16)，与新判据 identity 的变更无关。
+    """
     sys.path.insert(0, os.path.join(ROOT, "tools", "ci"))
-    return set(handler_identity(x) for x in extract_handlers(src, path))
+    return {(x["path"], x["qualname"], x["nth"], x["sha16"])
+            for x in M.extract_handlers_legacy(src, path)}
 
 
 def test_v2_is_superset_of_legacy():

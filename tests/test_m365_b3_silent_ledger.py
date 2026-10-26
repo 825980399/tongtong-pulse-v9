@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import os
@@ -34,7 +35,9 @@ class TestB3SilentLedger(unittest.TestCase):
         cls.tool = _load_tool()
 
     def test_01_schema_and_fields(self):
-        self.assertEqual(self.led.get("schema"), "m365.silent_except_ledger.v1")
+        # ★371A5 订正：366 N3（`da1f0ad1`）已把台账升为 v2（6 条 A 档人工确认＋
+        #   控制流型豁免元数据＋emit 元数据保真），本断言当时未同步 ⇒ 长期假红。
+        self.assertEqual(self.led.get("schema"), "m365.silent_except_ledger.v2")
         self.assertGreater(len(self.led.get("rows") or []), 0)
         self.assertEqual(int(self.led["total"]), len(self.led["rows"]))
         for _r in self.led["rows"]:
@@ -57,21 +60,59 @@ class TestB3SilentLedger(unittest.TestCase):
         self.assertEqual(set(self.led["by_kind"]), {"cont", "break"})
 
     def test_04_identity_recomputable(self):
-        """抽样 3 个文件：台账里的身份必须能由现仓重算出来（指纹稳定，非空中楼阁）。"""
+        """抽样 3 个文件：台账条目必须能在现仓找到对应 handler（结构未脱节）。
+
+        ★371A5 订正（既有缺陷，非本笔引入）：原实现用 identity（含 body sha16）复算，
+        但 369 刀4 给台账每条都补了 `silent_exc(...)` 留痕 ⇒
+          ① body 变 ⇒ sha16 必变；
+          ② 含 silent_exc ⇒ `_has_report` 判为已上报 ⇒ 不在 extract_handlers_v2 结果里。
+        两者叠加使**已留痕条目必然复算不到**；369 当时抽样恰好没命中这类文件，长期假绿。
+        改为与 test_02 同口径：按 (qualname, tname) 在完整 AST 枚举里定位，
+        并要求该 handler 确实带 silent_exc 留痕（等于是"台账所说的留痕仍在"）。
+        """
         _scan = self.tool._load_scanner()
-        _paths = sorted({r["path"] for r in self.led["rows"] if r["path"].endswith(".py")})[:3]
+        _checked = 0
+        _paths = sorted({r["path"] for r in self.led["rows"]
+                         if r["path"].endswith(".py") and not r.get("retired_by")})[:3]
         self.assertTrue(_paths)
         for _rel in _paths:
             _src = _scan.read_src(_rel)
-            _live = {self.tool.identity_of({
-                "path": x["path"], "qualname": x["qualname"], "nth": x["nth"],
-                "tname": x["tname"], "kind": x["kind"], "sha16": x["sha16"]})
-                for x in _scan.extract_handlers_v2(_src, _rel)}
-            _rows = [r for r in self.led["rows"] if r["path"] == _rel]
-            self.assertTrue(_rows, _rel)
-            _miss = [self.tool.identity_of(r) for r in _rows
-                     if self.tool.identity_of(r) not in _live]
-            self.assertEqual(_miss, [], "%s 有身份在现仓复算不到" % _rel)
+            _tree = ast.parse(_src)
+            _funcs = [(n.lineno, n.end_lineno or n.lineno, n.name)
+                      for n in ast.walk(_tree)
+                      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            _all = [n for n in ast.walk(_tree) if isinstance(n, ast.ExceptHandler)]
+            # 排除退役与豁免类：exemption/manual_review 条目本就不要求 silent_exc 留痕
+            _rows = [r for r in self.led["rows"]
+                     if r["path"] == _rel
+                     and not r.get("retired_by")
+                     and not (r.get("manual_review") or r.get("exemption"))]
+            if not _rows:
+                # 该文件条目全部为退役/豁免类 ⇒ 无可校验项，跳过不算缺失
+                continue
+            _checked += len(_rows)
+            _miss = []
+            for r in _rows:
+                _hit = False
+                for h in _all:
+                    if _scan._enclosing_func(_funcs, h.lineno) != r["qualname"]:
+                        continue
+                    if (ast.unparse(h.type) if h.type else "bare") != r["tname"]:
+                        continue
+                    _names = set()
+                    for c in ast.walk(h):
+                        if isinstance(c, ast.Call):
+                            _f = c.func
+                            _names.add(_f.attr if isinstance(_f, ast.Attribute)
+                                       else (_f.id if isinstance(_f, ast.Name) else ""))
+                    if "silent_exc" not in _names:
+                        continue
+                    _hit = True
+                    break
+                if not _hit:
+                    _miss.append((r["qualname"], r["tname"]))
+            self.assertEqual(_miss, [], "%s 有台账条目在现仓找不到带留痕的 handler" % _rel)
+        self.assertGreater(_checked, 0, "抽样未覆盖任何可校验条目（防空跑假通过）")
 
     def test_05_diff_ignores_lineno(self):
         _a = [{"path": "a.py", "qualname": "f", "nth": 0, "tname": "OSError",

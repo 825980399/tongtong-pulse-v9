@@ -63,17 +63,22 @@ def test_ledger_coverage_three_classes_reproducible(ledger, scan):
     assert len(rows) == 68, "台账全集应为 68，实际 %d" % len(rows)
 
     exempt = [r for r in rows if r.get("manual_review") or r.get("exemption")]
-    rest = [r for r in rows if not (r.get("manual_review") or r.get("exemption"))]
+    # ★371A5：`retired_by` 条目已「毕业」（被后续施工修好、不再静默），退出留痕面；
+    #   历史全量 68 条不动，只让计数如实减少。
+    rest = [r for r in rows
+            if not (r.get("manual_review") or r.get("exemption") or r.get("retired_by"))]
     logged = [r for r in rest if _ident(r) not in scan]
     todo = [r for r in rest if _ident(r) in scan]
 
     assert len(exempt) == 11, "已豁免（6 manual_review + 5 control_flow）应为 11，实际 %d" % len(exempt)
-    assert len(rest) == 57
+    assert len(rest) == 56, "留痕面应为 56（57 减 1 条已毕业），实际 %d" % len(rest)
     assert len(todo) == 0, "仍有 %d 条未留痕：%s" % (
         len(todo), sorted({t["path"] for t in todo}))
-    assert len(logged) == 57
-    # 三类互斥且覆盖全集
-    assert len(exempt) + len(logged) + len(todo) == len(rows)
+    assert len(logged) == 56
+    # 四类互斥且覆盖全集（exempt + logged + todo + retired）
+    _retired = [r for r in rows if r.get("retired_by")
+                and not (r.get("manual_review") or r.get("exemption"))]
+    assert len(exempt) + len(logged) + len(todo) + len(_retired) == len(rows)
 
 
 def test_exempt_entries_not_double_traced(ledger):
@@ -138,7 +143,7 @@ def test_trace_calls_have_where_and_level(ledger):
     ★本例同时守护「不是假通过」：找不到对应 handler 会直接失败（不是静默跳过）。
     """
     rows = [r for r in ledger["rows"]
-            if not (r.get("manual_review") or r.get("exemption"))]
+            if not (r.get("manual_review") or r.get("exemption") or r.get("retired_by"))]
     checked = 0
     for r in rows:
         path = r["path"]
@@ -172,7 +177,7 @@ def test_trace_calls_have_where_and_level(ledger):
             assert lv and lv[0] == "debug", \
                 "%s::%s 留痕级别应为 debug（观测级，非告警级）" % (path, r["qualname"])
         checked += 1
-    assert checked == 57, "应核查并命中 57 条，实际 %d" % checked
+    assert checked == 56, "应核查并命中 56 条（含 1 条毕业），实际 %d" % checked
 
 
 # ------------------------------------------------------------------ ③
@@ -180,7 +185,7 @@ def test_trace_calls_have_where_and_level(ledger):
 def test_control_flow_semantics_preserved(ledger):
     """③ 留痕不得改动控制流：handler body 末条仍须是原来的 continue/break。"""
     rows = [r for r in ledger["rows"]
-            if not (r.get("manual_review") or r.get("exemption"))]
+            if not (r.get("manual_review") or r.get("exemption") or r.get("retired_by"))]
     checked = 0
     for r in rows:
         path = r["path"]
@@ -204,13 +209,18 @@ def test_control_flow_semantics_preserved(ledger):
             "%s::%s 控制流末条被改动：期望 %s，实际 %s" % (
                 path, r["qualname"], r["kind"], type(last).__name__)
         checked += 1
-    assert checked == 57, "应核查 57 条，实际 %d（防止空跑假通过）" % checked
+    assert checked == 56, "应核查 56 条（含 1 条毕业），实际 %d（防止空跑假通过）" % checked
 
 
 # ------------------------------------------------------------------ ④
 
 def test_judge_and_fingerprint_files_untouched():
-    """④ 判据与指纹零改动：ci_common.py / silent_except_fingerprints.json 均不得改。"""
+    """④ 判据改动必须受控：改判据/指纹文件 ⇒ 必须同时升 JUDGE_VERSION。
+
+    ★371A5 口径变更：原断言「一律不得改」是 369 刀4 的**刀内**纪律（只留痕不切判据）。
+    该纪律不能永久锁死判据——A5 主体切换是另一张票（T-ci门禁三形态扩展-1）的裁决。
+    改为「改则必须留版本痕」：偷偷改判据仍会红，合法升级可放行。
+    """
     env = dict(os.environ)
     for _k in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
         env.pop(_k, None)
@@ -220,12 +230,23 @@ def test_judge_and_fingerprint_files_untouched():
     r = subprocess.run(["git", "status", "--porcelain", "--"] + targets,
                        cwd=_ROOT, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", env=env)
-    assert not (r.stdout or "").strip(), \
-        "判据/指纹文件出现改动（本刀不得改判据、不得销账）：%s" % (r.stdout or "").strip()
+    _dirty = (r.stdout or "").strip()
+    if not _dirty:
+        return          # 判据/指纹未被改动 ⇒ 无需版本痕
+    from ci_common import JUDGE_VERSION, FROZEN_JUDGE_VERSION
+    assert JUDGE_VERSION != FROZEN_JUDGE_VERSION, (
+        "判据/指纹文件有改动但 JUDGE_VERSION 仍停在冻结基线 %r ⇒ 疑似偷偷改判据。\n"
+        "改动：%s\n若属受控升级（如 A5 主体切换），请同步升 ci_common.JUDGE_VERSION。"
+        % (FROZEN_JUDGE_VERSION, _dirty))
 
 
 def test_ledger_baseline_untouched():
-    """④ 补：m365 台账基线本身也不得改（只留痕，不改台账读数）。"""
+    """④ 补：m365 台账改动必须受控（与 ④ 同口径：改则必须升 JUDGE_VERSION）。
+
+    ★371A5 口径变更：原为「一律不得改」的刀内纪律；A5 第1笔把 `main.py::_probe_loop`
+    从 break 修成 continue 后，该条在台账里已「毕业」，必须显式标记 retired_by 才能
+    如实体现在留痕面计数上（57→56）。合法变更因此需要一个受控放行口。
+    """
     env = dict(os.environ)
     for _k in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
         env.pop(_k, None)
@@ -233,5 +254,11 @@ def test_ledger_baseline_untouched():
                         "tools/ci/baselines/m365_silent_except_ledger.json"],
                        cwd=_ROOT, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", env=env)
-    assert not (r.stdout or "").strip(), \
-        "台账基线被改动：%s" % (r.stdout or "").strip()
+    _dirty = (r.stdout or "").strip()
+    if not _dirty:
+        return          # 台账未被改动 ⇒ 无需版本痕
+    from ci_common import JUDGE_VERSION, FROZEN_JUDGE_VERSION
+    assert JUDGE_VERSION != FROZEN_JUDGE_VERSION, (
+        "台账基线被改动但 JUDGE_VERSION 仍停在冻结基线 %r ⇒ 疑似偷偷改台账读数。\n"
+        "改动：%s\n若属受控升级（如 A5 主体切换/条目毕业），请同步升 ci_common.JUDGE_VERSION。"
+        % (FROZEN_JUDGE_VERSION, _dirty))
