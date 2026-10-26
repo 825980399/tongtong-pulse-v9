@@ -289,7 +289,11 @@ class TestSourceWiring(unittest.TestCase):
 
     def test_54_taskbook_line_311_is_only_thinking(self):
         """★记录：:311 的局部变量只喂 `_enable_thinking`，非 `来源=` 的根因。"""
-        i = _SRC.find('_is_background_learning = payload.get("is_background_learning", False) or not payload.get("is_dialogue", False)')
+        # ★372刀8：原锚点写死了完整赋值表达式；现态（PulseLung.py:502）已改为
+        #   `... and payload.get("is_dialogue", False) == False` ——
+        #   **语义等价**（or not X ⇔ and X == False）但字面不同 ⇒ find 返 -1 ⇒ 假红。
+        #   故把锚点缩短到稳定前缀（对这类等价改写免疫），后面的意图断言原样保留。
+        i = _SRC.find('_is_background_learning = payload.get(')
         self.assertGreater(i, 0, "该行应仍存在（本批未改动它）")
         window = _SRC[i:i + 700]
         self.assertIn("_enable_thinking", window,

@@ -330,7 +330,12 @@ class TestT90bBug3PrefixToContains(unittest.TestCase):
         故本断言非空转。
         """
         _idx = _inspector()._build_organ_name_index()
-        for _tag in ("胃", "心脏", "肺", "框架"):
+        # ★372刀8：原样本里的 "框架" 已**失效** —— 现态头部名中出现了以"框架"
+        #   开头的名字（"框架时间注入"），于是它既有宿主、又被改前算法前缀命中，
+        #   不再满足"先红"性质。改用现态仍成立的 "管"（被"血管器官"等 10 个头部名
+        #   包含，且不以"管"开头 ⇒ 改前算法仍不命中）。
+        #   ★不改为放宽断言：本用例的价值就是"先红样本必须真的红"。
+        for _tag in ("胃", "心脏", "肺", "管"):
             # 前提：确有某个头部中文名**包含**该标签
             _hosts = [_cn for _cn in _idx if _tag in _cn]
             self.assertTrue(_hosts, f"{_tag!r} 不在任何头部名里 ⇒ 样本失效")
