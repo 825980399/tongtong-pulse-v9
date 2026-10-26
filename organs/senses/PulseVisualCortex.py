@@ -376,18 +376,55 @@ class PulseVisualCortex(BasePulseOrgan):
                     #   不回退的话，本批条目会随 finally 清理一起消失，且日志只留一句
                     #   「异常已忽略」，既没量级也没指向。
                     self._m363_note_rename_fail(log_path, _re363)
+                    # ★370刀1：回退分支改为**同主路径同构的原子写**。
+                    #   363刀E5 的裸 `open(log_path,'w')` 会在写中途异常时把既有
+                    #   日志**截断写坏**，等于把 356刀5 的原子写收口又开了个口子。
+                    #   本分支与主路径唯一差别：目标是「已发生过一次 rename 被拒」的
+                    #   热文件，故优先复用主路径已写好的临时文件重试一次 replace，
+                    #   仍失败才降级。占用探测/失败计数口径完全不动。
+                    _fb_tmp = None
                     try:
-                        with open(log_path, 'w', encoding='utf-8') as _fb:
-                            _json.dump(log_data, _fb, ensure_ascii=False)
-                            _fb.flush()
-                            os.fsync(_fb.fileno())
+                        if _tmp is not None and os.path.exists(_tmp):
+                            # 主路径的临时文件已写完并 fsync 过，直接复用重试
+                            _fb_tmp, _tmp = _tmp, None
+                        else:
+                            _fd2, _fb_tmp = _tempfile.mkstemp(
+                                dir=os.path.dirname(log_path),
+                                prefix='.vision_stream_log.', suffix='.tmp')
+                            with os.fdopen(_fd2, 'w', encoding='utf-8') as f:
+                                _json.dump(log_data, f, ensure_ascii=False)
+                                f.flush()
+                                os.fsync(f.fileno())
+                        os.replace(_fb_tmp, log_path)
+                        _fb_tmp = None
                         self._log(LogLevel.WARNING,
-                                  "[363E5] 视觉流 rename 被拒，已回退为整体重写"
+                                  "[370刀1] 视觉流 rename 被拒，回退分支已按原子写补写"
                                   f"（{type(_re363).__name__}）")
-                    except Exception as _fb363:
-                        self._log(LogLevel.ERROR,
-                                  "[363E5] 视觉流回退写也失败（本批条目丢失）: "
-                                  f"{type(_fb363).__name__}: {_fb363}")
+                    except OSError as _fb363:
+                        # ★三级兜底：原子写仍被拒 ⇒ 才退化为截断写（363刀E5 原口径）。
+                        #   截断写有「中途异常截断既有日志」的风险，故仅限此兜底层。
+                        try:
+                            with open(log_path, 'w', encoding='utf-8') as _fb:
+                                _json.dump(log_data, _fb, ensure_ascii=False)
+                                _fb.flush()
+                                os.fsync(_fb.fileno())
+                            self._log(LogLevel.WARNING,
+                                      "[363E5] 视觉流 rename 被拒，已回退为整体重写"
+                                      f"（{type(_fb363).__name__}）")
+                        except Exception as _fb363b:
+                            # 口径保留：本批条目丢失必须说出来，不静默吞掉
+                            self._log(LogLevel.ERROR,
+                                      "[363E5] 视觉流回退写也失败（本批条目丢失）: "
+                                      f"{type(_fb363b).__name__}: {_fb363b}")
+                    finally:
+                        # 临时文件清理口径与主路径一致
+                        if _fb_tmp is not None and os.path.exists(_fb_tmp):
+                            try:
+                                os.unlink(_fb_tmp)
+                            except OSError as _ue:
+                                self._log(LogLevel.DEBUG,
+                                          f"[370刀1] 回退临时文件清理失败: "
+                                          f"{type(_ue).__name__}: {_ue}")
                 finally:
                     if _tmp is not None and os.path.exists(_tmp):
                         try:
