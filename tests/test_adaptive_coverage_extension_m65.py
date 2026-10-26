@@ -16,6 +16,7 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 import config
+from nucleus.field import InfoField as _if_mod
 from nucleus.mnemosyne import PulseNodePool as _pnp_mod
 from nucleus.runtime_metrics import get_runtime_metrics
 from organs.body import PulseLung as _pl_mod
@@ -25,12 +26,26 @@ _LEVELS = ("low", "medium", "high", "critical")
 
 
 def _patch_load(level):
+    """注入负载档位。
+
+    ★372刀8：原实现只打桩 `get_runtime_metrics().get_system_load`，但
+    323批刀1 起器官的 `_m65_get_load_level()` 改走全仓唯一口
+    `nucleus.field.InfoField.get_system_load_level()` —— **与这里不是同一个源**
+    ⇒ 注入根本到不了产品，产品读到的是本机真实负载（medium）。
+    （323刀1 之前产品恒返回 low，恰好与 low 档断言"对上"，属**假通过**。）
+
+    故这里**两处都打桩**：runtime_metrics 供 test_10 验统一负载接口，
+    InfoField 供 test_21/test_41 验器官取数确实跟到了注入档位。
+    返回 (原 runtime_metrics 方法, 原 InfoField 函数) 便于还原。
+    """
     _rt = get_runtime_metrics()
     _orig = _rt.get_system_load
     _rt.get_system_load = lambda: {
         "cpu_percent": 0.0, "queue_depth": 0, "memory_percent": 0.0, "load_level": level,
     }
-    return _orig
+    _orig_if = _if_mod.get_system_load_level
+    _if_mod.get_system_load_level = lambda default="": str(level)
+    return _orig, _orig_if
 
 
 class _CfgSwitch:
@@ -96,9 +111,11 @@ class TestSystemLoad(unittest.TestCase):
 class TestCodeLearningAdaptive(unittest.TestCase):
     def setUp(self):
         self._orig = get_runtime_metrics().get_system_load
+        self._orig_if = _if_mod.get_system_load_level
 
     def tearDown(self):
         get_runtime_metrics().get_system_load = self._orig
+        _if_mod.get_system_load_level = self._orig_if
 
     def test_20_switch_reflects_config(self):
         _cl = _pcl.PulseCodeLearner.__new__(_pcl.PulseCodeLearner)
@@ -108,10 +125,14 @@ class TestCodeLearningAdaptive(unittest.TestCase):
             self.assertFalse(_cl._m65_code_learning_adaptive_enabled())
 
     def test_21_get_load_level(self):
+        """★372刀8：注入必须真能到达产品取数口（323刀1 后取数源已换）。"""
         _cl = _pcl.PulseCodeLearner.__new__(_pcl.PulseCodeLearner)
         for _lv in _LEVELS:
-            _patch_load(_lv)
-            self.assertEqual(_cl._m65_get_load_level(), _lv)
+            _orig, _orig_if = _patch_load(_lv)
+            try:
+                self.assertEqual(_cl._m65_get_load_level(), _lv)
+            finally:
+                _if_mod.get_system_load_level = _orig_if
 
 
 # ============================================================ 冷存 compaction 自适应
@@ -138,9 +159,11 @@ class TestColdCompactionAdaptive(unittest.TestCase):
 class TestDigestAdaptive(unittest.TestCase):
     def setUp(self):
         self._orig = get_runtime_metrics().get_system_load
+        self._orig_if = _if_mod.get_system_load_level
 
     def tearDown(self):
         get_runtime_metrics().get_system_load = self._orig
+        _if_mod.get_system_load_level = self._orig_if
 
     def test_40_switch_reflects_config(self):
         _lung = _pl_mod.PulseLung.__new__(_pl_mod.PulseLung)
@@ -150,10 +173,14 @@ class TestDigestAdaptive(unittest.TestCase):
             self.assertFalse(_lung._m65_digest_adaptive_enabled())
 
     def test_41_get_load_level(self):
+        """★372刀8：同 test_21 —— 消化侧同样改走 InfoField 唯一口。"""
         _lung = _pl_mod.PulseLung.__new__(_pl_mod.PulseLung)
         for _lv in _LEVELS:
-            _patch_load(_lv)
-            self.assertEqual(_lung._m65_get_load_level(), _lv)
+            _orig, _orig_if = _patch_load(_lv)
+            try:
+                self.assertEqual(_lung._m65_get_load_level(), _lv)
+            finally:
+                _if_mod.get_system_load_level = _orig_if
 
     def test_42_source_wired(self):
         """★零回归：消化路径确实植入了高负载跳过逻辑。"""
