@@ -197,10 +197,12 @@ def test_d2_note_then_read_roundtrip(tmp_path):
 @pytest.mark.parametrize("explicit,issue_type,want,basis", [
     ("高", "sql_injection", "高", "explicit"),        # 显式高不被降
     ("低", "sql_injection", "高", "escalated_by_issue_type"),  # 显式低 + 高危族 ⇒ 升
-    ("低", "doc_typo", "低", "explicit"),             # 低族 + 显式低 ⇒ 保持
+    # ★372刀1（裁决 C-2 甲）：doc_typo 是**未登记族**，372 起 fail-closed 至"中"，
+    #   显式"低"不再保留 —— 未登记族不得落低风险档（改前口径见证据件对照表）。
+    ("低", "doc_typo", "中", "escalated_by_issue_type"),  # 未登记族 + 显式低 ⇒ 升中
     ("", "sql_injection", "高", "issue_type"),        # 无显式 ⇒ 按族推断
     ("high", "", "高", "explicit"),                   # 英文档位**归一化**为中文
-    ("low", "doc_typo", "低", "explicit"),            # 英文低风险同样归一
+    ("low", "doc_typo", "中", "escalated_by_issue_type"),  # 英文低风险同样升中
 ])
 def test_d3_merge_risk(explicit, issue_type, want, basis):
     from nucleus.reasoning.PatchManager import PatchManager
@@ -211,7 +213,11 @@ def test_d3_merge_risk(explicit, issue_type, want, basis):
 
 
 def test_d3_merge_risk_unknown_explicit_falls_back():
-    """无法识别的显式档位 ⇒ 回退按 issue_type 推断（不猜）"""
+    """无法识别的显式档位 ⇒ 回退按 issue_type 推断（不猜）
+
+    ★372刀1：本用例的 issue_type=sql_injection 是已登记高危族，不受
+    未登记族 fail-closed 影响；未登记族口径见 test_m372_b1_family_failclosed.py。
+    """
     from nucleus.reasoning.PatchManager import PatchManager
 
     _lvl, _basis = PatchManager._m344_merge_risk("紫", "sql_injection")

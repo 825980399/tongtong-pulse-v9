@@ -1475,26 +1475,70 @@ class PatchManager:
             silent_exc(e, where="nucleus.reasoning.PatchManager::_m280_extract_def_name")
             return ""
 
+    #: ★372刀1（裁决 C-2 甲）：族 → 风险档。**表即唯一真源**。
+    #:   原先是函数内局部 dict：取值一样，但「族覆盖是否完备」既不能被测试枚举，
+    #:   也无法回答「这个族到底登记过没有」。移到类属性后 `_m372_family_registered`
+    #:   与族覆盖对照件共用同一份数据，不会两处各抄一份再漂移。
+    #:   ★取值一字未动（280刀2 立的 11 族：7 高 / 3 中 / 1 低）。
+    _M280_RISK_BY_FAMILY = {
+        "sql_injection": "高",
+        "lock_with_emit": "高",
+        "non_atomic_write": "高",
+        "command_injection": "高",
+        "path_traversal": "高",
+        "eval_usage": "高",
+        "pickle_load": "高",
+        "thread_no_daemon": "中",
+        "resource_no_close": "中",
+        "cross_module_singleton_call": "中",
+        "periodic_task_no_reentry": "低",
+    }
+
+    #: ★372刀1：族 → 信任分。同上，表即唯一真源（280刀4 立的 7 族，取值一字未动）。
+    _M280_TRUST_BY_FAMILY = {
+        "sql_injection": 20.0,
+        "lock_with_emit": 25.0,
+        "non_atomic_write": 30.0,
+        "thread_no_daemon": 50.0,
+        "resource_no_close": 55.0,
+        "cross_module_singleton_call": 60.0,
+        "periodic_task_no_reentry": 75.0,
+    }
+
+    #: ★372刀1（裁决 C-2 甲 · fail-closed）：**未登记族**的风险兜底档。
+    #:   改前是 "低"。实测依据（T0，2026-10-26 HEAD `5dff8abe`）：
+    #:     · `data/patches/patch_history.json` 87 条里 **81 条（93.1%）**属未登记族
+    #:       （silent_exception 57 / Traceback 9 / print_instead_of_log 8 /
+    #:        bare_return_none_in_except 3 / code_optimization 2 / dead_code_candidate 2）；
+    #:       pending 11 条里 4 条未登记。
+    #:     · 两条自动面**只以 `_m346_is_low_risk`（rank==1）为枢轴**（三条闸都不读 trust）：
+    #:       `_m85_local_low_risk_auto_apply` / `_m101_low_risk_release_path` /
+    #:       `_m94_aging_eligible`；另 `patch_execution_dispatch.select_for_auto_triage`
+    #:       要求 risk 低 + trust 达标。
+    #:   ⇒ 未登记族一律"低"＝自动档对主力族全开（fail-open）。
+    #:   改"中"后：上述自动面全部关闭，`PatchAutoApprover.classify` 落 need_human
+    #:   （**转人工**，不是直接拒）——与裁决口径「转人工或拒自动档」取前者，
+    #:   保留人工审的可能，也避免把主力族打成"高风险拒绝"。
+    #:   ★零放宽：只把**未登记族**从"低"提到"中"；已登记 11 族取值一字未动。
+    _M372_DEFAULT_FAMILY_RISK = "中"
+
+    #: ★372刀1：未登记族的信任分兜底，**保持 40.0 不变**（与
+    #:   `config.PATCH_AUTO_APPROVE_TRUST_THRESHOLD`=40 相等，恰踩线）。
+    #:   为什么不一起压低：risk 已是唯一枢轴，trust 只影响 need_human / reject 的分界；
+    #:   压低会把「人能看、能批」的条目直接打成「拒绝」，反而丢掉人工审。
+    #:   ★残留如实记：单看 trust=40 仍与门槛线相等 ⇒ **不得**再新增「只看 trust」的放行口。
+    _M372_DEFAULT_FAMILY_TRUST = 40.0
+
     @staticmethod
     def _m280_risk_by_issue_type(issue_type: str) -> str:
         # ★280批刀2：高危族按 issue_type 强制重定级（覆盖 LLM 自评分）。
         # ★346刀 4：高危族扩表（安全面收紧，零放宽）。
         #   烛微346 实测：command_injection / path_traversal / eval_usage / pickle_load
         #   四族全判**低**——于是它们能走 auto_apply 面。定级只认**族名**（不猜形态）。
-        _m = {
-            "sql_injection": "高",
-            "lock_with_emit": "高",
-            "non_atomic_write": "高",
-            "command_injection": "高",
-            "path_traversal": "高",
-            "eval_usage": "高",
-            "pickle_load": "高",
-            "thread_no_daemon": "中",
-            "resource_no_close": "中",
-            "cross_module_singleton_call": "中",
-            "periodic_task_no_reentry": "低",
-        }
-        return _m.get(str(issue_type or ""), "低")
+        # ★372刀1：表移到 `_M280_RISK_BY_FAMILY`；未命中族的兜底由 "低" 改 "中"
+        #   （fail-closed，见 `_M372_DEFAULT_FAMILY_RISK`）。
+        return PatchManager._M280_RISK_BY_FAMILY.get(
+            str(issue_type or ""), PatchManager._M372_DEFAULT_FAMILY_RISK)
 
     #: 风险档位权重（★344刀3）。中英双写是因为历史数据里两种都有
     #: （`select_for_auto_triage` 至今仍写 `in ("低", "low")`）。
@@ -1579,16 +1623,28 @@ class PatchManager:
     def _m280_trust_by_issue_type(issue_type: str) -> float:
         # ★280批刀4：trust_score 改为按 issue_type 有信息量（替代恒70零信息量）。
         #   高危族低信任、低危族高信任，使 PATCH_AUTO_APPROVE_TRUST_THRESHOLD 恢复效力。
-        _m = {
-            "sql_injection": 20.0,
-            "lock_with_emit": 25.0,
-            "non_atomic_write": 30.0,
-            "thread_no_daemon": 50.0,
-            "resource_no_close": 55.0,
-            "cross_module_singleton_call": 60.0,
-            "periodic_task_no_reentry": 75.0,
-        }
-        return _m.get(str(issue_type or ""), 40.0)
+        # ★372刀1：表移到 `_M280_TRUST_BY_FAMILY`；兜底值 **40.0 保持不变**
+        #   （理由与残留风险见 `_M372_DEFAULT_FAMILY_TRUST`）。
+        return PatchManager._M280_TRUST_BY_FAMILY.get(
+            str(issue_type or ""), PatchManager._M372_DEFAULT_FAMILY_TRUST)
+
+    @staticmethod
+    def _m372_family_registered(issue_type: str) -> bool:
+        """★372刀1：该族是否**已登记**（risk 表或 trust 表有其一）。纯函数。
+
+        为什么用"或"不用"与"：两表覆盖面本就不同（risk 11 族 / trust 7 族），
+        任一表认识它即"族名已知、有据可依"；两表都无条目才是"族未登记"，
+        此时 fail-closed 至 `_M372_DEFAULT_FAMILY_RISK`。
+
+        边界：空串 / None / 纯空白 一律判未登记（**不猜**，与 344 刀3
+        "显式值不认识就按族推断"同一取向：不认识的输入不许变成放行）。
+        纯函数，不读盘、不打日志、无 except。
+        """
+        _fam = str(issue_type or "").strip()
+        if not _fam:
+            return False
+        return (_fam in PatchManager._M280_RISK_BY_FAMILY
+                or _fam in PatchManager._M280_TRUST_BY_FAMILY)
 
     @staticmethod
     def _m338_build_evidence(patch: dict) -> dict:
@@ -2109,6 +2165,21 @@ class PatchManager:
         if patch.get("trust_score") in (None, 70, 70.0):
             patch["trust_score"] = PatchManager._m280_trust_by_issue_type(
                 patch.get("issue_type"))
+        # ★372刀1（裁决 C-2 甲）：族登记状态**显式留痕**，不再靠"默认值猜"。
+        #   未登记族已 fail-closed 至中风险（见 `_M372_DEFAULT_FAMILY_RISK`）；
+        #   这里把判定依据落到条目上，事后可对账"这条为什么没进自动档"。
+        #   布尔与说明分开两个字段（铁律153：显式布尔禁理由串）。
+        _fam_registered = PatchManager._m372_family_registered(
+            patch.get("issue_type"))
+        patch["risk_family_registered"] = _fam_registered
+        if not _fam_registered:
+            patch["risk_family_note"] = (
+                "族未登记 ⇒ fail-closed 中风险，不进自动档（372刀1）")
+            _module_logger.warning(
+                "[372刀1] 未登记族 fail-closed: issue_type=%r "
+                "file=%s method=%s ⇒ risk_level=%r（自动档关闭，转人工）",
+                patch.get("issue_type"), patch.get("file", ""),
+                patch.get("method", ""), patch.get("risk_level"))
         # ★338批刀4：**生成侧显式填充证据三要素**。
         #   337刀1 查出池里只剩 fcef 一条“唯一合格者”，而其余 8 条
         #   全是“值在、凭据不在”——没人能回答这个 risk/trust 凭什么定的。

@@ -1,0 +1,340 @@
+{
+ "batch": 372,
+ "blade": 1,
+ "ticket": "T-371-族表默认档-1",
+ "verdict": "C-2甲 fail-closed",
+ "baseline_head": "5dff8abe",
+ "measured_at": "2026-10-26",
+ "live_state": "曈曈停机态（无 main.py 进程；pulse.log 停 19:55:34）",
+ "tables": {
+  "risk_families_n": 11,
+  "trust_families_n": 7,
+  "risk_table": {
+   "sql_injection": "高",
+   "lock_with_emit": "高",
+   "non_atomic_write": "高",
+   "command_injection": "高",
+   "path_traversal": "高",
+   "eval_usage": "高",
+   "pickle_load": "高",
+   "thread_no_daemon": "中",
+   "resource_no_close": "中",
+   "cross_module_singleton_call": "中",
+   "periodic_task_no_reentry": "低"
+  },
+  "trust_table": {
+   "sql_injection": 20.0,
+   "lock_with_emit": 25.0,
+   "non_atomic_write": 30.0,
+   "thread_no_daemon": 50.0,
+   "resource_no_close": 55.0,
+   "cross_module_singleton_call": 60.0,
+   "periodic_task_no_reentry": 75.0
+  },
+  "default_risk_before": "低",
+  "default_risk_after": "中",
+  "default_trust_before": 40.0,
+  "default_trust_after": 40.0,
+  "auto_approve_trust_threshold": 40.0,
+  "threshold_straddled_by_default_trust": true
+ },
+ "coverage": {
+  "patch_history": {
+   "path": "data/patches/patch_history.json",
+   "total": 87,
+   "unregistered_n": 81,
+   "unregistered_pct": 93.1,
+   "detail": {
+    "silent_exception": {
+     "count": 57,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "Traceback": {
+     "count": 9,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "print_instead_of_log": {
+     "count": 8,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "cross_module_singleton_call": {
+     "count": 5,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "中",
+     "trust_after_372": 60.0,
+     "registered": true
+    },
+    "bare_return_none_in_except": {
+     "count": 3,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "code_optimization": {
+     "count": 2,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "dead_code_candidate": {
+     "count": 2,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "sql_injection": {
+     "count": 1,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "高",
+     "trust_after_372": 20.0,
+     "registered": true
+    }
+   }
+  },
+  "pending_patches": {
+   "path": "data/patches/pending_patches.json",
+   "total": 11,
+   "unregistered_n": 4,
+   "detail": {
+    "cross_module_singleton_call": {
+     "count": 4,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "中",
+     "trust_after_372": 60.0,
+     "registered": true
+    },
+    "dead_code_candidate": {
+     "count": 3,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "Traceback": {
+     "count": 1,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "non_atomic_write": {
+     "count": 1,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "高",
+     "trust_after_372": 30.0,
+     "registered": true
+    },
+    "lock_with_emit": {
+     "count": 1,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "高",
+     "trust_after_372": 25.0,
+     "registered": true
+    },
+    "periodic_task_no_reentry": {
+     "count": 1,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "低",
+     "trust_after_372": 75.0,
+     "registered": true
+    }
+   }
+  },
+  "audit_pool_20261026": {
+   "path": "data/reports/audit/audit_20261026.json",
+   "total": 654,
+   "unregistered_n": 613,
+   "unregistered_pct": 93.7,
+   "detail": {
+    "dead_code": {
+     "count": 596,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "cross_module_singleton_call": {
+     "count": 21,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "中",
+     "trust_after_372": 60.0,
+     "registered": true
+    },
+    "cc_ge50_new": {
+     "count": 11,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "periodic_task_no_reentry": {
+     "count": 11,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "低",
+     "trust_after_372": 75.0,
+     "registered": true
+    },
+    "non_atomic_write": {
+     "count": 6,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "高",
+     "trust_after_372": 30.0,
+     "registered": true
+    },
+    "long_method": {
+     "count": 3,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "lock_with_emit": {
+     "count": 2,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "高",
+     "trust_after_372": 25.0,
+     "registered": true
+    },
+    "code_loc_weekly_growth": {
+     "count": 1,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "silent_except_weekly_rise": {
+     "count": 1,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    },
+    "resource_no_close": {
+     "count": 1,
+     "in_risk_table": true,
+     "in_trust_table": true,
+     "risk_after_372": "中",
+     "trust_after_372": 55.0,
+     "registered": true
+    },
+    "print_debug": {
+     "count": 1,
+     "in_risk_table": false,
+     "in_trust_table": false,
+     "risk_after_372": "中",
+     "trust_after_372": 40.0,
+     "registered": false
+    }
+   },
+   "note": "池侧族名与补丁侧族名不是同一套词表，不可与 patch_history 相加"
+  }
+ },
+ "pivot_single_point": {
+  "low_risk_gates": [
+   "PatchManager._m85_local_low_risk_auto_apply:646",
+   "PatchManager._m101_low_risk_release_path:682",
+   "PatchManager._m94_aging_eligible:971"
+  ],
+  "dispatch_gate": "patch_execution_dispatch.select_for_auto_triage:1846",
+  "approver": "PatchAutoApprover.classify:255/262/269",
+  "conclusion": "三处闸都只读 _m346_is_low_risk，不读 trust ⇒ 改 risk 兜底即闭合全部自动面"
+ },
+ "change": {
+  "file": "nucleus/reasoning/PatchManager.py",
+  "diff_stat": "+95/-24",
+  "items": [
+   "risk/trust 两表提为类属性（取值一字未动）",
+   "_M372_DEFAULT_FAMILY_RISK 低→中",
+   "_M372_DEFAULT_FAMILY_TRUST 保持 40.0",
+   "新增纯函数 _m372_family_registered",
+   "save_pending_patch 入队口落 risk_family_registered / risk_family_note + WARNING"
+  ],
+  "crlf": "5341 → 5412，全 CRLF，0 条 LF-only"
+ },
+ "residual": {
+  "existing_entries_not_retroactive": true,
+  "pending_unregistered_low_risk": [
+   {
+    "id": "patch_llm_1792809961_f9f3",
+    "issue_type": "Traceback",
+    "risk_level": "低",
+    "trust_score": 40.0,
+    "source": "llm",
+    "status": "runtime_verified",
+    "file": "organs/brain/PulseSubconscious.py",
+    "method": "_on_system_boot",
+    "core_file": true,
+    "b_channel_release": false,
+    "a_channel_release": false
+   }
+  ],
+  "trust_default_still_at_threshold": 40.0,
+  "trust_residual_note": "单看 trust=40 仍过线 ⇒ 后续不得新增只看 trust 的放行口",
+  "closed_by_blade2": "source=llm 一律排除（刀2 给 _m101 加，同批闭合）"
+ },
+ "tests": {
+  "new_file": "tests/test_m372_b1_family_failclosed.py",
+  "new_cases": 5,
+  "result": "5 passed",
+  "reverse_check": {
+   "method": "把 _M372_DEFAULT_FAMILY_RISK 临时改回 \"低\"",
+   "result": "3 failed / 2 passed",
+   "restored": "diff 逐字节一致，恢复后 5 passed"
+  },
+  "existing_baseline": {
+   "files": [
+    "test_m344_batch",
+    "test_m346_batch",
+    "test_m366tail_e1_evidence",
+    "test_m343_batch"
+   ],
+   "before_change": "113 passed",
+   "after_change": "见交付报告"
+  },
+  "updated_assertions": [
+   "test_m344_batch::test_d3_merge_risk[低-doc_typo-...] 低→中",
+   "test_m344_batch::test_d3_merge_risk[low-doc_typo-...] 低→中"
+  ]
+ },
+ "gates": {
+  "ruff_F_E9": "pass",
+  "py_compile": "pass",
+  "cw2": "见交付报告"
+ },
+ "three_state": "static_verified"
+}
