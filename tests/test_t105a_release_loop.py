@@ -31,6 +31,15 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from nucleus.reasoning.PatchManager import PatchManager
+def _master_on(monkeypatch):
+    """★372刀2（裁决 C-1 甲）：B 通道已并入总开关，总开关关闭即拒。
+
+    本文件验的是「B 通道**自身**判据」，故显式打开总开关，
+    让被测条件（嵌套 verified / baseline / 风险档）成为唯一变量 ——
+    否则所有用例都会因总开关关闭而恒 False，测试失去判别力。
+    """
+    import config
+    monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
 
 
 class _DummyBackup:
@@ -63,17 +72,22 @@ def _low_risk_patch(target, **kw):
         "original_code": "def probe_func():\n    return 1\n",
         "modified_code": "def probe_func():\n    return 2\n",
         "risk_level": "低",
-        "source": "llm",
+        "source": "local_rule", "issue_type": "periodic_task_no_reentry",   # ★372刀2：llm 排除；★372刀1 起未登记族升中，故取已登记低危族
         "status": "pending",
-        "trust_score": 90,
+        # ★372刀2：trust 压到门槛下 —— 隔离出 B 通道（避免 A2 自动审批抢跑）
+        "trust_score": 30,
         "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},
     }
     _p.update(kw)
     return _p
 
 
-def test_A_enqueue_without_nested_verify_not_released():
-    """★A：入队时仅有污染字段 runtime_verified=True（无嵌套 verified）⇒ 绝不放行。"""
+def test_A_enqueue_without_nested_verify_not_released(monkeypatch):
+    """★A：入队时仅有污染字段 runtime_verified=True（无嵌套 verified）⇒ 绝不放行。
+
+    ★372刀2：显式打开总开关 —— 让「缺嵌套 verified」成为唯一否决原因。
+    """
+    _master_on(monkeypatch)
     tmp = tempfile.mkdtemp(prefix="t105a_A_")
     target = _make_target(tmp)
     with open(target, "w", encoding="utf-8") as f:
@@ -87,8 +101,12 @@ def test_A_enqueue_without_nested_verify_not_released():
     assert not _p.get("auto_released"), "★未通过嵌套验证者不得 auto_released"
 
 
-def test_B_enqueue_nested_verified_and_baseline_released():
-    """★B：入队时嵌套 verified=True + baseline>0 ⇒ 立刻放行（闭环入口打通）。"""
+def test_B_enqueue_nested_verified_and_baseline_released(monkeypatch):
+    """★B：入队时嵌套 verified=True + baseline>0 ⇒ 立刻放行（闭环入口打通）。
+
+    ★372刀2：B 通道并入总开关 ⇒ 本用例必须显式开总开关，否则恒不放行。
+    """
+    _master_on(monkeypatch)
     tmp = tempfile.mkdtemp(prefix="t105a_B_")
     target = _make_target(tmp)
     with open(target, "w", encoding="utf-8") as f:
@@ -117,7 +135,7 @@ def test_C_post_verify_recheck_releases():
     # 模拟「验证写回后」状态：status=pending/runtime_verified + 嵌套 verified + baseline>0
     _p = {
         "id": "t105a_recheck", "file": target, "method": "probe_func",
-        "risk_level": "低", "source": "llm", "status": "runtime_verified",
+        "risk_level": "低", "source": "local_rule", "issue_type": "periodic_task_no_reentry",   # ★372刀2：llm 排除；★372刀1 起未登记族升中，故取已登记低危族 "status": "runtime_verified",
         "runtime_verify_result": {"verified": True, "baseline": 2},
         "baseline_errors": 2,
         # ★B156-3 T-A09 接线点：_m105_try_release_low_risk 经 _approve_via 走
@@ -126,13 +144,13 @@ def test_C_post_verify_recheck_releases():
         "original_code": "def probe_func():\n    return 1\n",
         "modified_code": "def probe_func():\n    return 2\n",
     }
-    _ok = pm._m105_try_release_low_risk(_p)
+    _ok = pm._m105_try_release_low_risk(_p, {"auto_apply_enabled": True})
     assert _ok is True, "★验证后复查须放行 T-101a 合格补丁"
     assert _p.get("status") == "approved"
     assert _p.get("auto_released") is True
 
     # 幂等：已 approved 者再次复查不得重复放行
-    _again = pm._m105_try_release_low_risk(_p)
+    _again = pm._m105_try_release_low_risk(_p, {"auto_apply_enabled": True})
     assert _again is False, "★已 approved 须幂等，不得重复放行"
 
 
@@ -143,11 +161,11 @@ def test_D_polluted_top_level_ignored_when_nested_false():
     pm = _make_pm(tmp)
     _p = {
         "id": "t105a_polluted", "file": target, "method": "probe_func",
-        "risk_level": "低", "source": "llm", "status": "pending",
+        "risk_level": "低", "source": "local_rule", "issue_type": "periodic_task_no_reentry",   # ★372刀2：llm 排除；★372刀1 起未登记族升中，故取已登记低危族 "status": "pending",
         "runtime_verified": True,  # 污染字段，模拟旧数据
         "runtime_verify_result": {"verified": False},  # 真验证：未通过
     }
-    _ok = pm._m105_try_release_low_risk(_p)
+    _ok = pm._m105_try_release_low_risk(_p, {"auto_apply_enabled": True})
     assert _ok is False, "★嵌套 verified=False 须否决（顶层污染字段不可翻案）"
     assert _p.get("status") != "approved"
 
@@ -159,11 +177,11 @@ def test_E_baseline_zero_routes_to_human():
     pm = _make_pm(tmp)
     _p = {
         "id": "t105a_nobase", "file": target, "method": "probe_func",
-        "risk_level": "低", "source": "llm", "status": "pending",
+        "risk_level": "低", "source": "local_rule", "issue_type": "periodic_task_no_reentry",   # ★372刀2：llm 排除；★372刀1 起未登记族升中，故取已登记低危族 "status": "pending",
         "runtime_verify_result": {"verified": True, "baseline": 0},
         "baseline_errors": 0,
     }
-    _ok = pm._m105_try_release_low_risk(_p)
+    _ok = pm._m105_try_release_low_risk(_p, {"auto_apply_enabled": True})
     assert _ok is False, "★baseline<=0 效果不可判定，须转人工队列而非自动放行"
     assert _p.get("status") != "approved"
 

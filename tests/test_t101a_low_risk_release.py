@@ -15,6 +15,15 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from nucleus.reasoning.PatchManager import PatchManager
+def _master_on(monkeypatch):
+    """★372刀2（裁决 C-1 甲）：B 通道已并入总开关，总开关关闭即拒。
+
+    本文件验的是「B 通道**自身**判据」，故显式打开总开关，
+    让被测条件（嵌套 verified / baseline / 风险档）成为唯一变量 ——
+    否则所有用例都会因总开关关闭而恒 False，测试失去判别力。
+    """
+    import config
+    monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
 
 
 class _DummyBackup:
@@ -43,7 +52,8 @@ def _make_target(tmp):
     return os.path.join(PROJECT_ROOT, "tmp", f"t101a_target_{uuid.uuid4().hex}.py")
 
 
-def test_low_risk_release_promotes_and_lands_on_disk():
+def test_low_risk_release_promotes_and_lands_on_disk(monkeypatch):
+    _master_on(monkeypatch)   # ★372刀2：B 通道已并入总开关
     tmp = tempfile.mkdtemp(prefix="t101a_")
     target = _make_target(tmp)
     original = "def probe_func():\n    return 'ORIGINAL_MARKER'\n"
@@ -62,8 +72,10 @@ def test_low_risk_release_promotes_and_lands_on_disk():
         # （顶层 runtime_verified 为污染字段，不可作依据）+ baseline_errors>0。
         "runtime_verify_result": {"verified": True, "baseline": 3},
         "baseline_errors": 3,
-        "source": "llm",
-        "status": "pending",
+        "source": "local_rule", "issue_type": "periodic_task_no_reentry",   # ★372刀2：llm 排除；★372刀1 起未登记族升中，故取已登记低危族
+        "status": "verified",   # ★372刀2：置 verified 以避开 A2 低风险自动审批抢跑（B 通道正为这类补丁而设）
+        # ★372刀2：用 status=verified 隔离 A2（见下）；trust 保持 90 ——
+        #   落地门 auto_apply_min_trust=60，压到门槛下会卡在"信任分数不足"。
         "trust_score": 90,
         "confidence": "high",
         "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},
@@ -88,8 +100,14 @@ def test_low_risk_release_promotes_and_lands_on_disk():
     assert "ORIGINAL_MARKER" not in content, "disk probe: original_code still present"
 
 
-def test_high_risk_or_unverified_not_auto_released():
-    """回归：高风险 / 未通过复现的补丁不应被低风险路径放行。"""
+def test_high_risk_or_unverified_not_auto_released(monkeypatch):
+    """回归：高风险 / 未通过复现的补丁不应被低风险路径放行。
+
+    ★372刀2：总开关显式打开、source 改为非 llm —— 让"未验证/高风险"
+    成为本条用例**唯一**的否决原因（否则会被新加的两道闸一并挡住，
+    这条负控就退化成恒真）。
+    """
+    _master_on(monkeypatch)
     tmp = tempfile.mkdtemp(prefix="t101a_neg_")
     target = _make_target(tmp)
     with open(target, "w", encoding="utf-8") as f:
@@ -101,7 +119,7 @@ def test_high_risk_or_unverified_not_auto_released():
         "id": "neg1", "file": target, "method": "f",
         "original_code": "def f():\n    return 1\n",
         "modified_code": "def f():\n    return 2\n",
-        "risk_level": "\u4f4e", "source": "llm", "status": "pending",
+        "risk_level": "\u4f4e", "source": "local_rule", "issue_type": "periodic_task_no_reentry", "status": "verified",
         "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},
     }
     pm.save_pending_patch(p1)
@@ -113,7 +131,7 @@ def test_high_risk_or_unverified_not_auto_released():
         "original_code": "def f():\n    return 1\n",
         "modified_code": "def f():\n    return 2\n",
         "risk_level": "\u9ad8", "runtime_verify_result": {"verified": True, "baseline": 3},
-        "baseline_errors": 3, "source": "llm", "status": "pending",
+        "baseline_errors": 3, "source": "local_rule", "issue_type": "periodic_task_no_reentry", "status": "verified",
         "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},
     }
     pm.save_pending_patch(p2)

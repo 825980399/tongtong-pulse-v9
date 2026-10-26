@@ -665,8 +665,15 @@ class PatchManager:
         """★第101批 T-101a（P0）：低风险可放行路径判据（纯函数，保守默认 False）。
 
         放行条件（全部满足）：
+            * **总开关 `auto_apply_enabled` 为 True** —— ★372刀2（裁决 C-1 甲）新增。
+              改前本通道**故意**绕开总开关（旧注释：「比 auto_apply_enabled 更严格，
+              故即使总开关关闭也放行」）⇒ 总开关关着也能自动升 approved，是安全面裂缝。
+              现与 A 通道口径对齐：总开关关闭 ⇒ B 同样拒（不放行，退回人工）。
+            * **source 不得为 `llm`** —— ★372刀2（裁决 C-1 甲）新增。
+              改前本通道**允许** LLM 来源，而 A 通道（`_m85`）llm 一律拒；账本实测
+              12/12 全 source=llm ⇒ 两条通道对同一来源给出相反结论。现与 A 通道对齐。
             * risk_level rank == 1（低/low，见 `PatchManager._m346_is_low_risk`；
-              旧只认中文「低」使英文 low 走人工，346刀 5 修；函数 `_m101_low_risk_release_path`，346刀 5 前该比较在第 624 行）
+              旧只认中文「低」使英文 low 走人工，346刀 5 修）
             * runtime_verify_result.verified is True —— ★第105批修正：读**嵌套**字段
               （唯一真验证字段）。顶层 runtime_verified 由 verify_submitted_patches
               对所有处理过的补丁无条件置 True（含失败补丁），属污染字段，不可作放行依据；
@@ -674,10 +681,24 @@ class PatchManager:
             * 非核心文件（_m80_is_core_file 单一真源；落地核心门再兑底一次）
             * 目标方法不在安全护栏禁改清单 _M96_NO_AUTO_PATCH_METHODS
         不满足 / 异常 → False（保守：不放行，退回人工）。
+
+        ★两调用点同受控：`PatchManager.save_pending_patch`（入队）与
+        `SafeEvolutionExecutor.verify_submitted_patches`（验证后复查·补回边）
+        都经 `_m105_try_release_low_risk` 落到本函数 ⇒ 此处收口即两点同时生效，
+        **不需要**另开 B 独立开关（否 C-1 乙）。
         """
         if not isinstance(patch, dict):
             return False
         try:
+            # ★372刀2（裁决 C-1 甲）闸一：并入总开关收口。
+            #   改前本通道故意绕开总开关；现总开关关闭 ⇒ B 同样拒（与 A 通道对齐）。
+            if not PatchManager._m80_auto_apply_enabled(evo_cfg):
+                return False
+            # ★372刀2（裁决 C-1 甲）闸二：source=llm 一律排除。
+            #   A 通道（`_m85`）早已 llm 一律拒；本通道改前允许 ⇒ 同一来源两条通道
+            #   结论相反。归一后风险档位判断不变，只掐掉"llm 走 B 通道"这条旁路。
+            if str(patch.get("source", "") or "").strip().lower() == "llm":
+                return False
             # ★346刀 5：读 rank（中英通用），不再比中文字面。判据单点：`PatchManager._m346_is_low_risk`
             if not PatchManager._m346_is_low_risk(patch.get("risk_level")):
                 return False
@@ -838,14 +859,21 @@ class PatchManager:
                                       else {"raw": str(basis)})
         return True
 
-    def _m105_try_release_low_risk(self, patch: dict) -> bool:
+    def _m105_try_release_low_risk(self, patch: dict,
+                                   evo_cfg: dict | None = None) -> bool:
         """★第105批 T-105a（P0）：对单条补丁尝试 T-101a 低风险放行（置 approved + 留痕）。
 
-        判据见 ``_m101_low_risk_release_path``（已改读嵌套 runtime_verify_result.verified
-        + baseline_errors>0）。命中则就地置 ``status='approved'`` + ``auto_released=True``
+        判据见 ``_m101_low_risk_release_path``（嵌套 runtime_verify_result.verified
+        + baseline_errors>0；★372刀2 起另需总开关为 True 且 source≠llm）。
+        命中则就地置 ``status='approved'`` + ``auto_released=True``
         + 日志「低风险可放行(已升approved)」，返回 True；否则不动、返回 False。
         供 ``save_pending_patch``（入队）与 ``verify_submitted_patches``（验证后复查·补回边）
         两处复用，避免放行逻辑分叉。
+
+        ``evo_cfg``：★372刀2 新增透传口。传 None（默认）⇒ 判据自己读 ``config``；
+        传入则用调用方**已读到的同一份**配置。目的有二：
+          ① 避免同一次判定里两次读 config 得到不一致口径；
+          ② 让测试可显式注入配置，不必 monkeypatch 全局 `config`。
         """
         if not isinstance(patch, dict):
             return False
@@ -853,7 +881,7 @@ class PatchManager:
             return False
         if patch.get("auto_released"):
             return False
-        if not PatchManager._m101_low_risk_release_path(patch):
+        if not PatchManager._m101_low_risk_release_path(patch, evo_cfg):
             return False
         if not PatchManager._approve_via(patch, "auto", None):
             return False
@@ -2341,17 +2369,21 @@ class PatchManager:
                 f"白名单={'通过' if _whitelist_ok_a1 else '不在SAFE_TO_AUTO_FIX'}")
 
         # ★第101批 T-101a（P0）：低风险可放行路径——打通进化闭环最后一环。
-        #   现状：18 条补丁（多为 LLM 来源）提交后因 T7 闸门 + auto_apply_enabled=False
-        #   全部 pending/verified，0 批准 0 落盘（烛微第3期 N2）。
-        #   放行判据（比 auto_apply_enabled 更严格，故即使总开关关闭也放行，仍受
-        #   核心文件落地门 + 护栏函数清单双重兑底）：
-        #     risk_level == "低" 且 runtime_verify_result.verified is True（★第105批修正：嵌套字段）且 baseline_errors>0 且非核心且非护栏函数。
-        #   该路径允许 LLM 来源（与 _m85_local_low_risk_auto_apply 不同），因已通过
-        #   运行期复现验证；标记 auto_released=True（非 auto_approved），使 apply_all_pending
-        #   入口收口不将其退回，且落地核心门仍拦截核心文件。
-        # ★第105批 T-105a：复用统一放行助手（与 verify_submitted_patches 补回边同源），
-        #   判据已改读嵌套 runtime_verify_result.verified + baseline_errors>0。
-        self._m105_try_release_low_risk(patch)
+        #   沿革：18 条补丁（多为 LLM 来源）曾因 T7 闸门 + auto_apply_enabled=False
+        #   全部 pending/verified，0 批准 0 落盘（烛微第3期 N2），本通道即为此而开。
+        #   ★372刀2（裁决 C-1 甲）**改了本通道的两条口径**，旧注释已作废，如实记：
+        #     ① 旧：「比 auto_apply_enabled 更严格，故即使总开关关闭也放行」
+        #        ⇒ 现：**总开关关闭即拒**（绕总开关被认定为安全面裂缝，已收口）；
+        #     ② 旧：「该路径允许 LLM 来源（与 _m85 不同）」
+        #        ⇒ 现：**source=llm 一律排除**（与 A 通道对齐；账本实测 12/12 全 llm）。
+        #   现放行判据（全部满足）：总开关 True ∧ source≠llm ∧ risk 低
+        #   ∧ 嵌套 runtime_verify_result.verified=True ∧ baseline_errors>0
+        #   ∧ 非核心文件 ∧ 方法不在护栏禁改清单。
+        #   标记 auto_released=True（非 auto_approved），使 apply_all_pending
+        #   入口收口不将其退回；落地核心门仍拦截核心文件。
+        # ★第105批 T-105a：复用统一放行助手（与 verify_submitted_patches 补回边同源）。
+        # ★372刀2：本处把已读到的 `_evo_cfg_a1` 透传下去，避免同一次判定两次读 config。
+        self._m105_try_release_low_risk(patch, _evo_cfg_a1)
 
         # ★352刀2②：入池口强制 `dedup_key`。放在所有其他判定**之后**、
         #   载入队列**之前**：前面路径可能还会回写 `method`（_m323 真值归一），
