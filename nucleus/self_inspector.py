@@ -7999,13 +7999,18 @@ def _m340_severity_pass(entry: object, min_severity: str = "medium",
 def _m340_judge_action_open(mode: str | None = None, sample: object = None,
                             misjudge: float | None = None,
                             tick_id: object = None) -> dict:
-    """★340刀3：判死行动面触发（A 定语义 + C 定触发，三取一连环）。
+    """★340刀3：判死行动面触发（A 定语义 + C 定触发，**三取与**连环）。
 
-    触发条件**三取一**，缺一即不开（这是"开放新能力"的门 ⇒ fail-closed）：
+    触发条件 **三项全满足（三取与），缺一即不开**（这是"开放新能力"的门 ⇒ fail-closed）：
       ① `mode == "review"`（A：解析率中间档，只出待复核清单的那一档）；
       ② `sample` 为 `PASS`（抽验通过，`sample_verify_hard_candidates` 的 verdict）；
       ③ `misjudge` 是数值且 ≤ `_O3_MISJUDGE_LINE`（0.10）；None ⇒ 不可判。
     且三条须**连续 ≥ `_M340_JUDGE_ACTION_MIN_TICKS`(3) 个 tick**。
+
+    ★372刀12 D面订正：原文写"三取一"，**措辞与实现相反** —— 实现是
+    `_all_ok = _mode_ok and _sample_ok and _mis_ok`（三项**与**），不是任取其一。
+    照字面读"三取一"会以为满足任一条就能开闸，与实际的"全满足才开"刚好相反；
+    这正是 371 刀3 记下的"措辞误导"来源。**本处只改文案，判据逻辑一字未动。**
 
     `_RESOLVE_GATE_*` 阈值**一字不动**：本函数只读 `mode`，不改任何分档。
 
