@@ -1,0 +1,49 @@
+{
+  "schema": "zw371.h1_dedup_checklist/v1",
+  "batch": 371,
+  "auditor": "烛微",
+  "generated_at": "2026-10-26 09:26:50",
+  "head": "a0d277b0",
+  "registry_snapshot": {"rows": 425, "closed": 358, "withdrawn": 16, "pending_schedule": 51, "checked_by": "python csv.reader 全量读，头 426 行含表头，9 列"},
+
+  "items": [
+    {"source": "369 在工", "item": "刀1 E9 日志瘦身 / 刀2 singleton 21 条 / 刀3 134 失败归档", "relation": "不重复", "note": "本批不碰日志族与 singleton；任务一的族表问题与日志无关"},
+    {"source": "369 在工", "item": "刀4 指纹 68 条 debug 留痕", "relation": "不重复", "note": "已入库（e917ec14/a0d277b0）；本批 HEAD 已含该刀，行号一致"},
+    {"source": "369 在工", "item": "刀5 N4 六件写面 fixture 收口（P1）", "relation": "相邻/并案", "note": "本批『全量回归比对零接线』与 N4 测试基建同面；建议并入 N4 后续，不另立施工刀"},
+    {"source": "369 在工", "item": "刀6 A5 57 条 cont/break 分档", "relation": "不重复", "note": "本批不涉分档"},
+    {"source": "在册 373 K 组", "item": "T-K1主闭环卸载-1 / T-K2判据改口径-1 / T-存量重算机制-1 / T-K2试点-1 / T-K2进程池票-1", "relation": "相邻", "note": "任务四引用其『安全面＋产出一致』口径；本批不重复立项。闭环键断（存量）与 T-K2 可复算验收面相邻，建议并案评估"},
+    {"source": "在册 376", "item": "T-占位符产出源-1", "relation": "相邻", "note": "任务一生成侧质量门对照，不重复"},
+    {"source": "在册 377", "item": "T-运行中推理复用-1", "relation": "相邻", "note": "任务二经验库消费面复核，不重复提票"},
+    {"source": "已结案", "item": "T-闭环键断链修补-1（P1）", "relation": "**残余**", "note": "该票结案口径为『**新入池**条目起即带 dedup_key』；本批实测 patch_history 87 条（最后落地 10-14）**全部早于该刀**，键命中 0/87 ⇒ 存量面仍未覆盖。作为残余证据单列，不翻案"},
+    {"source": "已结案", "item": "T-审计回写接线-1（P0）/ T-审计键归一化迁移-1（P0）", "relation": "不重复", "note": "前者管 set_status 生产零调用，后者管 audit/generator 键公式错位；本批发现的是**触发点语义**（沙箱成功→FIXED）与**存量键缺失**，两件不同"},
+    {"source": "已结案", "item": "T-executed回写缺口-1（P1）/ T-367-N5逐例归族-1", "relation": "不重复", "note": "executed 已由 367 刀2 补上；本批只列『executed 与 applied 分属两链、无一致性校验』"},
+    {"source": "已结案", "item": "T-全量回归可跑通-1（P2）/ T-366-分片基线归族-1（P2）", "relation": "**残余**", "note": "两票已交付 runner 与 26 片基线；本批实测 --compare/diff schema 已在位但**生产零调用**。属『基建已建、未接线』残余，建议并 N4"},
+    {"source": "已结案", "item": "T-进化保守模式-1（P2，SAFE_TO_AUTO_FIX 类型分级）", "relation": "相邻", "note": "该票是唯一族级配置雏形（单 list、默认空、仅 A 通道）；本批『族分级缺位』指缺 P 级/测试强度/回退策略三维，不重复该票"},
+    {"source": "已结案", "item": "T-进化验证率-1（P0）", "relation": "相邻", "note": "该票解决『不可验证即进应用』；本批发现 post-apply 验证三维中两维恒 None ⇒ trust 调权恒 0，是**调权面**不是验证率面"},
+    {"source": "已结案", "item": "164 组（推理路由放宽/补救沉淀/指标闭环/断网生存协议）", "relation": "不重复", "note": "任务二学习闭环只做边界对照"},
+    {"source": "挂起专项", "item": "#3 v4-pro 悬案 / #6 消费口零认领 / #26 首拍复核 / 凌晨内存 100% 归属", "relation": "不推进", "note": "书内明令本批不主动推进、不翻案"},
+    {"source": "台账外专项", "item": "#58 自主进化分级路线", "relation": "本体", "note": "本批即 #58 前置；无在册 ID，结论待星轨汇总、小林终裁"}
+  ],
+
+  "new_candidates": [
+    {"id": "T-371-族表默认档-1", "p": "P1", "stop": "不停机", "summary": "risk 表 11 族、trust 表 7 族均无『未识别族』兜底方向：默认低风险+trust40（=自动分诊门槛）。patch_history 79/87 属 5 个未入表主力族（silent_exception57/Traceback9/print_instead_of_log8/bare_return_none3/code_optimization2）", "anchor": "PatchManager.py:1918-1936/2095-2104；data/patches/patch_history.json", "suggest": "补『未识别族不得进自动档』的 fail-closed 兜底（或显式登记默认族），零停机"},
+    {"id": "T-371-低风险放行绕总开关-1", "p": "P1", "stop": "不停机", "summary": "T-101a auto_released 通道不受 auto_apply_enabled 约束（M96 收口条件 auto_approved and not auto_released），且允许 source=llm；实测 12 件", "anchor": "PatchManager.py:841-869/3999-4016", "suggest": "给 B 通道独立开关或并入总开关；llm 是否保留须小林裁决"},
+    {"id": "T-371-池FIXED沙箱触发-1", "p": "P1", "stop": "不停机", "summary": "池 set_status(FIXED) 唯一生产调用点在 dispatch:2829，判据是沙箱 motor.execute success；沙箱注释明写『绝不 apply 到源码』⇒ 审计『已修』语义提前于源码落地", "anchor": "dispatch:2710/2829；PatchManager.py:4332 真落地", "suggest": "FIXED 改由落地事件触发，或新增 landed 事件与 sandbox 事件分离"},
+    {"id": "T-371-存量闭环节缺口-1", "p": "P2", "stop": "不停机", "summary": "patch_history 87/87 无 dedup_key（全部早于 352 刀2/闭环键票），FIXED 与 verify 回灌对存量全部 no_dedup_key 计数；问题池存量条目无法被这批历史补丁核销", "anchor": "data/patches/patch_history.json；dispatch:2710-2745", "suggest": "存量回填或明确『仅新补丁生效』并同步读数口径；与 T-K2 并案评估"},
+    {"id": "T-371-effect验证零调权-1", "p": "P2", "stop": "不停机", "summary": "post-apply verify 传 problem_gone=None/perf=None/function_ok=verify_passed ⇒ 单维已知 ⇒ passed=None、trust_delta=0；历史 50 条 verdict 中 47 条 +10 为旧口径遗留", "anchor": "PatchManager.py:4425-4445；EvolutionEffectVerifier.py:180-235", "suggest": "补 problem_gone 探针或显式声明该维度永久不判；失败侧补扣分入口"},
+    {"id": "T-371-回滚备份失效-1", "p": "P2", "stop": "不停机", "summary": "76 条 applied 全 rollback_available=True，backup_path 实际存在仅 20 条 ⇒ 56 条回滚时会走『备份恢复失败』；回滚标记与物理能力脱节", "anchor": "PatchManager.py:4334/4855；data/patches/patch_history.json", "suggest": "回滚前探活备份并在读数上区分『可回滚/仅标记』；备份保留策略另议"},
+    {"id": "T-371-族分级配置缺位-1", "p": "P2", "stop": "不停机", "summary": "无族级分级配置（只有 SAFE_TO_AUTO_FIX 单 list）；新增一族需改 6 处硬编码（risk/trust/core/护栏/生命周期/黑名单）+ 单测", "anchor": "t3 device_2", "suggest": "先立配置结构与只读校验，不翻任何档"},
+    {"id": "T-371-回归比对零接线-1", "p": "P2", "stop": "不停机", "summary": "runner 具备 --compare 与 diff schema、26 片基线在位，但生产零调用；落地前后无自动比对与阻断", "anchor": "tools/ci/m365_full_regression_runner.py:109-274", "suggest": "并入 N4 测试基建后续，不另开刀"},
+    {"id": "T-371-指标回退缺位-1", "p": "P2", "stop": "不停机", "summary": "无『指标越阈值→自动回滚/停档』判据；chain_metrics 六段率只进周报一行；回滚仅故障驱动", "anchor": "chain_metrics.py；PatchManager.py:4855", "suggest": "L2 前置；先定阈值口径再谈接线"},
+    {"id": "T-371-证据门哨兵漂移-1", "p": "P3", "stop": "不停机", "summary": "_m338_evidence_ok 仍以『恒 70』为零信息哨兵，而 280 刀4 已把默认改 40 ⇒ 默认值不再被识别（未知族 trust 40 直接过门）", "anchor": "dispatch:1810-1830；PatchManager.py:1929", "suggest": "哨兵值随默认值同源，或改为 source=='default' 判据"},
+    {"id": "T-371-自动分诊名表过宽-1", "p": "P3", "stop": "不停机", "summary": "_LIFECYCLE_NAMES 含 run/start/stop/close/init/reset 等通用名 ⇒ 大量业务方法被结构性排除出自动分诊（转人工）；白名单又仅 2 条", "anchor": "dispatch:888-905/1918", "suggest": "名表与调用图入边联合判定，先观察不翻"}
+  ],
+
+  "doc_corrections": [
+    {"item": "371 任务书 §2.2『config.py:2507 family 配置块』", "actual": "config.py:2507 是 relation_patterns 的 family（人物关系模型），与补丁族无关；补丁族无配置块", "action": "文档订正（不立票）"},
+    {"item": "371 任务书 §2.2『8 门槛』", "actual": "实测 16 项判据/动作，草案未给 8 项名单", "action": "报告按实测重列"},
+    {"item": "371 任务书 §6.2.1 L2 起点『PatchManager.py:1145–1150』", "actual": "该处是 M94 老化日志文本（开关默认 False）；现行生效的是 T-101a(:664-712)，判据不同源", "action": "报告订正起点口径"}
+  ],
+
+  "stop_check": "本批 11 条候选（P1×3 / P2×6 / P3×2）+ 文档订正 3 项，全部不停机、不改 config、不触发补丁应用、不重启曈曈。"
+}

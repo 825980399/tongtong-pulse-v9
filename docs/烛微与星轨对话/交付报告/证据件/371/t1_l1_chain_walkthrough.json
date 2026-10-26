@@ -1,0 +1,227 @@
+{
+  "schema": "zw371.t1_l1_chain_walkthrough/v1",
+  "batch": 371,
+  "auditor": "烛微",
+  "generated_at": "2026-10-26 09:26:50",
+  "head": "a0d277b0",
+  "head_note": "取证时点 HEAD=a0d277b0（10-26 09:13 369刀4证据件落盘）。书内行号 3368/2538/1058 与本 HEAD 一致（刀4 已入库），另 87 条历史补丁账本为 data/ 只读快照。路灯 369 刀5/刀6 仍可能改动工作树，本件全部取 HEAD，不采信未提交工作树。",
+  "scope": "只读静态：patch_candidates_consumer.py / patch_execution_dispatch.py / patch_generator.py / PatchManager.py / EvolutionLoop.py / TestGenerator.py / config.py / data 账本快照",
+
+  "links": [
+    {
+      "no": 1,
+      "stage": "发现候选",
+      "mechanism": "池条目 → 候选工单(patch_candidates.jsonl) → 生成器侧只读消费（白名单六字段 + 键继承 + 跨拍去重）",
+      "anchors": [
+        "nucleus/evolution/patch_candidates_consumer.py:6-27 契约八条",
+        "nucleus/evolution/patch_candidates_consumer.py:84 _project_entry（白名单投影）",
+        "nucleus/evolution/patch_candidates_consumer.py:112 consume_patch_candidates",
+        "nucleus/audit_problem_pool_consumer.py:519/541 唯一写入方 + set_status(CLAIMED)",
+        "config.py:6400 ENABLE_PATCH_GENERATOR = False"
+      ],
+      "io": "in: data/reports/audit/routes/patch_candidates.jsonl（只增不改）；out: entries[六字段+dedup_key]",
+      "closed": "半成品",
+      "thin": [
+        "料道本身闭环（写入/读取/去重/键继承都有单点），但**生成闸默认关**（ENABLE_PATCH_GENERATOR=False）⇒ 候选默认不变成补丁",
+        "候选文件当前不存在（consume 返回 absent），料道空转属『结构在、流量无』，非代码缺口"
+      ]
+    },
+    {
+      "no": 2,
+      "stage": "生成",
+      "mechanism": "generate_patch_draft 产出补丁六字段 + 入队口补证据三要素（risk/trust/blast 各带 basis+source）",
+      "anchors": [
+        "nucleus/evolution/patch_generator.py:2090 generate_patch_draft",
+        "nucleus/reasoning/PatchManager.py:2111-2136 入队补 patch_evidence（委派 dispatch._m338_derive_evidence 单一取数口）",
+        "nucleus/evolution/patch_execution_dispatch.py:1765-1808 _m338_derive_evidence",
+        "nucleus/evolution/patch_execution_dispatch.py:861 _extract_def_name；:874 is_fragment_to_full"
+      ],
+      "io": "in: 候选 entry + 上下文检索；out: patch{file,method,original_code,modified_code,issue_type,risk_level,trust_score,patch_evidence}",
+      "closed": "真闭环（生成链路本身）",
+      "thin": [
+        "证据三要素的 basis 只回答『这个值凭什么被算出来』（issue_type→表），**不回答『该补丁质量是否可信』**；trust 与 risk 同源自 issue_type，属同一信息源的两份投影",
+        "片段→完整（嵌套 def）是已知生成形态病，判据只在派单侧排除，生成侧无拦截"
+      ]
+    },
+    {
+      "no": 3,
+      "stage": "规则筛选",
+      "mechanism": "风险档 / 信任分 / 沙箱黑名单 / 两通道分类 / 牵连半径 / 生命周期名 / 失败上限 cap / 核心文件红线",
+      "anchors": [
+        "PatchManager.py:2095-2104 _m280_risk_by_issue_type（11 族 + 默认『低』）",
+        "PatchManager.py:2107-2110 + 1918-1936 _m280_trust_by_issue_type（7 族 + 默认 40.0）",
+        "patch_execution_dispatch.py:1288 scan_dangerous_keywords；:1212 sandbox_channel_policy（326 两通道，只分类不改拦）",
+        "patch_execution_dispatch.py:1031 blast_radius_of；:888 _LIFECYCLE_NAMES；:899 PILOT_FIRST_BATCH；:2139 _DISPATCH_FAIL_CAP=2",
+        "PatchManager.py:532-560 _M80_CORE_FILE_MARKERS（main/config/base/nucleus/pulse|field|mnemosyne|reasoning|security|evolution + 三宪法器官）",
+        "config.py:1037 ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL = True",
+        "config.py:1176 SAFE_TO_AUTO_FIX = []（唯一族级白名单 list，默认空 ⇒ 不限制；只被 A 通道消费）"
+      ],
+      "io": "in: 补丁候选集；out: 自动派单池 / 转人工 / 拒绝分布（_LAST_TRIAGE_REJ 对外可见）",
+      "closed": "半成品",
+      "thin": [
+        "★★族表对**现行主力族零覆盖**：patch_history 87 条中 silent_exception 57 / Traceback 9 / print_instead_of_log 8 / bare_return_none_in_except 3 / code_optimization 2（合计 79，90.8%）**都不在 risk 表也不在 trust 表** ⇒ 全部落到默认『低风险 + trust 40』，而 40 恰是 PATCH_AUTO_APPROVE_TRUST_THRESHOLD 与 AUTO_TRIAGE_MIN_TRUST 的同一条线",
+        "默认值方向是 fail-open（未知族=最低风险），与 346 刀4『高危族扩表』的收紧方向相反；扩表只覆盖已知高危名，未识别名自动进入最宽档",
+        "**无分级配置面**：config.py 全库 family 仅出现 1 次（:2507），且是关系模型 relation_patterns，不是补丁族；族级配置只有 SAFE_TO_AUTO_FIX 一个 list（默认空、仅 A 通道消费、无 P 级/测试强度/回退策略字段）；其余族分类全部硬编码在 5 张表里（见 t3 5.2）",
+        "牵连半径不可判定 ⇒ 转人工（正确保守），但 `blast_radius_of` 依赖调用图缓存，图缺时整池静默转人工——属『可解释但容量为零』"
+      ]
+    },
+    {
+      "no": 4,
+      "stage": "证据门（草案称 8 门槛）",
+      "mechanism": "实测到 16 项判据/动作，分派单侧 8＋批准侧 4＋落地侧 4；不含任何『业务语义』门件",
+      "anchors": [
+        "见本件 gates 段（逐项锚点）"
+      ],
+      "io": "in: patch；out: 通过/拒收 + 拒收原因（reason 串）",
+      "closed": "真闭环（判据在、拒收有留痕）",
+      "thin": [
+        "草案『8 门槛』与实测 16 项不符，且草案未给 8 项名单，无法逐名对表（按实测重列，不凑数）",
+        "16 项全部是**结构/安全/形态**门件：零项回答『改完业务行为是否仍正确』（该缺口归任务二）",
+        "G6 证据门对『trust=40 默认』放行：_m338_evidence_ok 只把『恒 70』当零信息量哨兵，而 280 刀4 已把默认改成 40 ⇒ 默认值不再被识别为『无信息』"
+      ]
+    },
+    {
+      "no": 5,
+      "stage": "批准通路",
+      "mechanism": "三条通路：人工（_approve_via source=human）/ 机器自动批准 A（入队口 auto_approved）/ 机器放行 B（T-101a auto_released）",
+      "anchors": [
+        "PatchManager.py:806 _approve_via（唯一 approved 写入口，三重 fail-closed：字段契约/边界/真值）",
+        "PatchManager.py:2240-2262 机器自动批准 A：risk/trust/白名单 + 非 llm + auto_apply_enabled + 非核心 → :2259 auto_approved=True",
+        "PatchManager.py:841-869 _m105_try_release_low_risk → auto_released=True（:2279 附近注释）",
+        "PatchManager.py:664-712 _m101_low_risk_release_path（判据：低风险 + 嵌套 verified True + baseline_errors>0 + 非核心 + 非护栏方法）",
+        "PatchManager.py:3999-4016 apply_all_pending 入口 M96 收口：只拦 auto_approved，**不拦 auto_released**",
+        "config.py:1146 auto_apply_enabled=False；:1165 local_auto_apply_enabled=False；:1360 TRUST_THRESHOLD=40"
+      ],
+      "io": "in: pending_patches.json / patch_history.json；out: approved（approved_source/approved_signer/approved_judged_by/approved_basis）",
+      "closed": "真闭环，但**档位定性需修正**",
+      "thin": [
+        "★★『现行 L1＝机发现+机生成+规则筛选+**人工批准**』不成立：机器通道 A 实测 6 件（auto_approved）、通道 B 实测 12 件（auto_released），合计 18/87",
+        "★B 通道**不受 auto_apply_enabled 总开关约束**（M96 收口条件 `auto_approved and not auto_released`），且**允许 source=llm** ⇒ 总开关关闭状态下仍存在机器放行路径；其安全边界只剩三关（信任/风险/冷却）+ 核心文件红线 + 护栏方法清单",
+        "B 通道要求 baseline_errors>0（有错可修），是当前唯一实质质量前置；该条件把『空转假成功』挡在外面（与 _truth_ok 同向）",
+        "人工批准无上限、无抽检比例；机器批准有单批硬上限（派单侧 _DISPATCH_HARD_CAP=1），批准侧无对应上限"
+      ]
+    },
+    {
+      "no": 6,
+      "stage": "隔离验证",
+      "mechanism": "PulseCodeSandbox.on_pulse(motor.execute) 子进程隔离执行补丁代码；不写源码；O3 判死删除走 verify_ast_delete",
+      "anchors": [
+        "patch_execution_dispatch.py:2591 dispatch_and_verify（绝不 apply）",
+        "patch_execution_dispatch.py:544 set_dispatch_framework / main.py 装配注入 code_sandbox 器官",
+        "patch_execution_dispatch.py:2473 verify_ast_delete（删除动作专用：存在性+删除后语法+孤儿引用）",
+        "PatchManager.py:944 注释口径：runtime_verify_result.verified 为唯一真值，顶层 runtime_verified 为污染字段"
+      ],
+      "io": "in: modified_code；out: {success,error} → runtime_verify_result{verified,detail,execution_source,executed_at}",
+      "closed": "真闭环（隔离真、语义标注如实，ast_delete 与 motor 分开标注）",
+      "thin": [
+        "沙箱判据是**子串黑名单**，面对本仓方法体整段（84 条历史补丁命中 61 条=72.6%，其中 getattr( 54 条、真逃逸 2 条）——口径错配已在 326 记录，本批不重复立票",
+        "沙箱执行成功 ≠ 源码落地，但下游有一处按『应用成功』消费该事件（见第 7 环）"
+      ]
+    },
+    {
+      "no": 7,
+      "stage": "落地与回写",
+      "mechanism": "apply_all_pending(only_approved=True) 写盘（mkstemp+os.replace，先备份）；执行态 executed 由派单侧写；池状态由 _m356_close_loop_fixed 回写",
+      "anchors": [
+        "main.py:3741 _patch_mgr.apply_all_pending(only_approved=True)",
+        "PatchManager.py:4323-4345 写盘 + applied=True + rollback_available=True + record_activation",
+        "patch_execution_dispatch.py:2625 _write_back（executed=1，绝不写 applied；applied 三处真实写入：PatchManager:4332 / dispatch:3249 / ParamPatchManager:365,368）",
+        "patch_execution_dispatch.py:2710 _m356_close_loop_fixed；唯一生产调用 :2829（`if _v.get(\"success\")`）",
+        "nucleus/audit_problem_pool.py:1105 note_verify_feedback（350 回灌，需 dedup_key）"
+      ],
+      "io": "in: approved patch；out: 源码文件 / applied / applied_at / rollback_available / 池 status",
+      "closed": "半成品（且有语义错位）",
+      "thin": [
+        "★★**池 FIXED 由『沙箱执行成功』触发，不是源码落地**：dispatch:2829 的判据是 `_v.get(\"success\")`（motor.execute 返回），而该通道注释明写『绝不 apply 到源码』⇒ 审计池可能在代码未落地时被标 FIXED（状态机合法、语义提前）",
+        "★★**键断使回写对存量全失效**：patch_history 87 条 dedup_key 命中 0/87；_m356_close_loop_fixed 无键即 return（计 no_dedup_key）。352 刀2 的强制键只在**入队后**生效，历史 87 条（最后落地 10-14）全部早于该刀",
+        "applied 与 executed 双字段不同源：executed 由派单写（沙箱），applied 由落地写（写盘）；368 已核『顶层 executed 落地通道零写入』的旧口径已被 367 刀2 补上，但两字段仍分属两条链，无一致性校验",
+        "落地后无『改前/改后行为比对』（见 t3 5.1）：写盘成功即视为落地完成"
+      ]
+    },
+    {
+      "no": 8,
+      "stage": "回滚面",
+      "mechanism": "rollback_available 置位 → rollback_last / rollback_patch 恢复备份 → 台账记账（history rolled_back + effect_verify rolled_back + 生命周期 record_rollback）",
+      "anchors": [
+        "PatchManager.py:4334 rollback_available=True（唯一置位点，紧接写盘成功）",
+        "PatchManager.py:4807 rollback_last；:4855 rollback_patch（要求 applied=True 且 rollback_available=True，否则拒）",
+        "PatchManager.py:4776 _m346_record_rollback → patch_lifecycle.mark_history_rolled_back / mark_effect_verify_rolled_back(:494)",
+        "触发点：main.py:3991/:4159 启动失败与自验证失败；rollback_patch 由 runtime_verify_failed 调用"
+      ],
+      "io": "in: patch_history + backup_path；out: 文件恢复 / applied=False / rolled_back_at / 三处台账",
+      "closed": "半成品",
+      "thin": [
+        "★★**76 条 applied 补丁全部 rollback_available=True，但 backup_path 实际存在的只有 20 条**（56/76 备份已被清理或轮转）⇒ 这 56 条回滚时会走 restore 失败分支（`备份恢复失败`），标记仍在但物理不可回滚",
+        "回滚触发全部是『故障后』（启动失败/自验证失败/运行期验证失败），**无『指标恶化』触发**（见 t3 5.3）",
+        "rollback 只按单个 patch_id 精确回滚，无『一批/一族』批量撤回，也无降档撤权动作"
+      ]
+    }
+  ],
+
+  "gates": {
+    "claimed_in_book": 8,
+    "measured": 16,
+    "verdict": "实测 16 项（去重后），草案『8 门槛』数目不符且未给名单；按实测重列，不凑数。16 项中 0 项是业务语义判据。",
+    "items": [
+      {"id": "G1", "name": "AST 语法/可解析", "anchor": "patch_execution_dispatch.py:1258 _m325_ast_tokens；TestGenerator.py:171 _check_syntax", "action": "解析失败⇒不可判定/拒（unparsed 按不可信处理）", "side": "派单"},
+      {"id": "G2", "name": "def 头/方法存在性", "anchor": "patch_execution_dispatch.py:861 _extract_def_name；TestGenerator.py:218 _render_test_script(hasattr+callable)", "action": "def 名与 method 错配⇒结构缺陷拒收", "side": "生成/派单"},
+      {"id": "G3", "name": "形态闸：片段→完整（嵌套 def）", "anchor": "patch_execution_dispatch.py:874 is_fragment_to_full", "action": "select 永久排除，不派单", "side": "派单"},
+      {"id": "G4", "name": "沙箱黑名单 + 两通道分类", "anchor": "patch_execution_dispatch.py:1288 scan_dangerous_keywords；:1212 sandbox_channel_policy", "action": "would_block=True⇒沙箱必拦；real 类转人工", "side": "派单"},
+      {"id": "G5", "name": "牵连半径 blast", "anchor": "patch_execution_dispatch.py:1031 blast_radius_of", "action": ">1 或 None（不可判定）⇒转人工", "side": "派单"},
+      {"id": "G6", "name": "证据三要素门", "anchor": "patch_execution_dispatch.py:1810 _m338_evidence_ok；config.py:5554 ENABLE_PATCH_EVIDENCE_GATE=True", "action": "risk/trust/blast 任一不可复算⇒拒入自动派单池", "side": "派单"},
+      {"id": "G7", "name": "失败上限 cap（侧账）", "anchor": "patch_execution_dispatch.py:2139 _DISPATCH_FAIL_CAP=2；_m326 侧账", "action": "持久累计≥2⇒转人工，不再自动派单", "side": "派单"},
+      {"id": "G8", "name": "生命周期名排除 + 试点白名单", "anchor": "patch_execution_dispatch.py:888 _LIFECYCLE_NAMES；:899 PILOT_FIRST_BATCH", "action": "构造/启停/run/close 等名不进自动分诊；白名单仅 2 条", "side": "派单"},
+      {"id": "G9", "name": "批准三关（信任/风险/冷却）", "anchor": "PatchManager.py:3922 _check_patch_safety", "action": "机器批准/机器放行必过三关；纯人工批准豁免", "side": "批准"},
+      {"id": "G10", "name": "核心文件红线", "anchor": "PatchManager.py:532-560 _M80_CORE_FILE_MARKERS / _m80_is_core_file", "action": "core 文件禁止机器批准与机器放行（人工仍可）", "side": "批准/落地"},
+      {"id": "G11", "name": "护栏方法清单", "anchor": "PatchManager.py:594 _M96_NO_AUTO_PATCH_METHODS", "action": "安全护栏函数禁改（人工亦须显式）", "side": "批准"},
+      {"id": "G12", "name": "冻结门", "anchor": "PatchManager.py:3929 frozen 判定", "action": "fail-closed，优先于一切安全校验", "side": "落地"},
+      {"id": "G13", "name": "真值门（假成功）", "anchor": "PatchManager.py:789 _truth_ok / :772 _is_false_success", "action": "baseline_errors==0 却申报 verified⇒拒升 approved", "side": "批准"},
+      {"id": "G14", "name": "结构不变量（类方法数不降）", "anchor": "PatchManager.py:4300-4322 AST 结构校验", "action": "方法数下降⇒拒绝写盘", "side": "落地"},
+      {"id": "G15", "name": "防循环重启棘轮+冷却", "anchor": "PatchManager.py:4060-4130 _max_restart_count / _m113e_restart_cooldown_hours", "action": "超限⇒冷却锁死，期满放行一次", "side": "落地"},
+      {"id": "G16", "name": "路径越界", "anchor": "PatchManager.py:4770 _m80_safe_target_path", "action": "目标不在项目根内⇒拒绝落地/回滚", "side": "落地/回滚"}
+    ]
+  },
+
+  "auto_approve": {
+    "configs": {
+      "PATCH_AUTO_APPROVE_TRUST_THRESHOLD": {"value": 40, "anchor": "config.py:1360", "consumer": "EVOLUTION_CONFIG.auto_apply_min_trust（save_pending_patch 与 _check_patch_safety 同值约定）"},
+      "PATCH_AUTO_APPROVE_STALE_DAYS": {"value": 7, "anchor": "config.py:1362", "consumer": "老化策略（ENABLE_PENDING_QUEUE_AGING=False ⇒ 不生效）"},
+      "PATCH_AUTO_APPROVE_ACCEPT_RUNTIME_VERIFIED": {"value": true, "anchor": "config.py:1366", "consumer": "读取点见 config.py:5271 注释；老化/放行判据"},
+      "PATCH_AUTO_APPROVE_PRUNE_PENDING": {"value": true, "anchor": "config.py:1368", "consumer": "pending 剪枝"},
+      "auto_apply_enabled": {"value": false, "anchor": "config.py:1146", "consumer": "_m80_auto_apply_enabled → 机器批准 A 与 apply_all_pending 入口"},
+      "local_auto_apply_enabled": {"value": false, "anchor": "config.py:1165", "consumer": "_m85_local_low_risk_auto_apply"},
+      "auto_apply_min_trust": {"value": 40, "anchor": "config.py:1153", "consumer": "_check_patch_safety 与 save_pending_patch"},
+      "auto_apply_max_risk": {"value": 2, "anchor": "config.py:1156", "consumer": "同上（2=低）"},
+      "SAFE_TO_AUTO_FIX": {"value": [], "anchor": "config.py:1176", "consumer": "空表⇒不限制（零回归）"}
+    },
+    "paths": [
+      {"id": "H", "name": "人工批准", "write": "_approve_via(source='human'|<名>)", "gate": "字段契约+边界+真值；落地侧纯人工跳过三关", "limit": "无上限"},
+      {"id": "A", "name": "机器自动批准（入队口）", "write": "save_pending_patch → _approve_via('save') → auto_approved=True", "gate": "risk/trust/白名单 + 非 llm + auto_apply_enabled + 非核心", "limit": "单批不限；落地入口按 M96 总开关收口"},
+      {"id": "B", "name": "机器放行（低风险可放行 T-101a）", "write": "_m105_try_release_low_risk → _approve_via('auto') → auto_released=True", "gate": "低风险 + 嵌套 verified True + baseline_errors>0 + 非核心 + 非护栏方法；**不查 auto_apply_enabled**", "limit": "无数量上限；落地仍走三关"}
+    ],
+    "ledger_snapshot": {
+      "patch_history_rows": 87,
+      "status": {"approved": 73, "runtime_verified": 13, "wont_fix": 1},
+      "applied_true": 76,
+      "auto_approved_true": 6,
+      "auto_released_true": 12,
+      "last_applied_date": "2026-10-14",
+      "applied_by_top_dir": {"organs": 69, "tests": 4, "nucleus": 3},
+      "dedup_key_present": "0/87",
+      "problem_fixed": {"True": 59, "None": 28},
+      "pending_rows": 10
+    },
+    "boundary": "计数来自 data/patches/*.json 只读快照（不给活体计数口径）；『最近窗口放行件数』只能到账本层，重启后新增需另窗复算。"
+  },
+
+  "thin_points_top": [
+    "P1-A 族表默认档 fail-open：79/87 补丁所属 5 个主力族无分级，落默认低风险+trust 40（恰在阈值线）",
+    "P1-B 机器放行 B 通道在总开关关闭时仍可放行（M96 只拦 auto_approved）且允许 llm 来源",
+    "P1-C 池 FIXED 由沙箱执行成功触发，与源码落地解耦",
+    "P1-D 存量 87 条零 dedup_key，闭环第 3/5 段（FIXED/verify 回灌）对存量全部无法回写",
+    "P2-E 76 条 applied 中 56 条备份已不存在，回滚标记与实际能力脱节",
+    "P2-F 证据门把『恒 70』当零信息哨兵，默认值已改 40 ⇒ 默认值逃脱哨兵",
+    "P2-G 无补丁族配置面；新增一族需改 5 张硬编码表",
+    "P2-H 落地后无改前/改后行为比对，写盘成功即视为闭环"
+  ]
+}

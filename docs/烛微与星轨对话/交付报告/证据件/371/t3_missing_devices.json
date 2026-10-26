@@ -1,0 +1,91 @@
+{
+  "schema": "zw371.t3_missing_devices/v1",
+  "batch": 371,
+  "auditor": "烛微",
+  "generated_at": "2026-10-26 09:26:50",
+  "head": "a0d277b0",
+
+  "device_1_full_regression_compare": {
+    "claim": "缺『候选落地后全量回归面自动比对』",
+    "verdict": "装置**存在但零接线**（manual-only），非缺位",
+    "evidence": [
+      {"item": "比对装置", "fact": "tools/ci/m365_full_regression_runner.py 具备 --update-baseline / --compare，diff schema=m366.full_regression.diff/v1，输出 baseline_diff.json", "anchor": "m365_full_regression_runner.py:109-199/:210-274"},
+      {"item": "基线内容", "fact": "m366_full_regression_baseline.json：schema=m366.full_regression.baseline/v1，as_of=20261025_134531，shards=26，shard_size=20，per_test_timeout=60s，hard_timeout=900s；每片只记 files/rc/summary 文本/failed_cases/hard_hang/timeout_cases", "anchor": "tools/ci/baselines/m366_full_regression_baseline.json"},
+      {"item": "调用方", "fact": "生产面零调用（无 import、无 main 触发、无 apply 前后钩子）；只能人手 CLI 跑", "anchor": "git grep m365_full_regression_runner / full_regression_baseline → 仅 tools/ 自身"},
+      {"item": "生产数据哨兵", "fact": "runner 对 data/patches/pending_patches.json、patch_history.json、data/evolution/effect_verify.json 跑前跑后算 sha 并**只记录不改**", "anchor": "runner:47-64"},
+      {"item": "卡死史", "fact": "`pytest tests/ -q` 6347/6352 例两次卡死（54% RSS8831MB / 30%，位置不同⇒非固定用例）；替代证据仅受影响子集 226 例全绿；本 runner 即为解此而建（分片+per-test timeout+硬超时）", "anchor": "runner 文件头 :3-14"},
+      {"item": "覆盖边界", "fact": "基线是『pytest 全量分片结果快照』，不是『生产行为/产出快照』；比对的是测试通过集合与 rc，不是改前改后的系统行为差异", "anchor": "runner:132-199 build_baseline/diff"},
+      {"item": "既有替代手段", "fact": "往返/兼容（仅 PulseSnapshot）、ruff（整文件）、2 个 verify 脚本回归、定向单测——都不能承担『落地前回归门』；apply_all_pending 写盘前后无任何比对调用", "anchor": "PatchManager.py:4300-4345（写盘段无比对）"}
+    ],
+    "gap": "缺『改前快照 → 改后跑 → 差异清单 → 阻断/回退』的自动链；现有比对器需人工、且只比测试面",
+    "reuse_hint": "可直接复用 runner 的 --compare 与 baseline_diff 结构；缺口只在『谁触发、谁判红、红了谁回滚』"
+  },
+
+  "device_2_family_policy_config": {
+    "claim": "缺『族别分级配置面』",
+    "verdict": "基本成立：族级配置只有一个单维白名单 list（SAFE_TO_AUTO_FIX，默认空、仅 A 通道消费），无分级字段；其余全部硬编码",
+    "evidence": [
+      {"item": "config 全库 family 出现次数", "fact": "1 次，位于 config.py:2507 的 relation_patterns（人物关系模型 family），**与补丁族无关** ⇒ 371 任务书 T0 §2.2 引用的『config.py:2507 family 配置块』为误标", "anchor": "config.py grep family → 仅 :2507"},
+      {"item": "风险表（硬编码）", "fact": "11 族：sql_injection/lock_with_emit/non_atomic_write/command_injection/path_traversal/eval_usage/pickle_load→高；thread_no_daemon/resource_no_close/cross_module_singleton_call→中；periodic_task_no_reentry→低；**未命中→『低』**", "anchor": "PatchManager.py:2095-2104"},
+      {"item": "信任表（硬编码）", "fact": "7 族：sql_injection20/lock_with_emit25/non_atomic_write30/thread_no_daemon50/resource_no_close55/cross_module_singleton_call60/periodic_task_no_reentry75；**未命中→40.0**", "anchor": "PatchManager.py:1918-1936"},
+      {"item": "核心文件表（硬编码）", "fact": "main.py/config.py/base/nucleus/pulse|field|mnemosyne|reasoning|security|evolution + 三宪法器官", "anchor": "PatchManager.py:532-540"},
+      {"item": "护栏方法与生命周期名（硬编码）", "fact": "_M96_NO_AUTO_PATCH_METHODS（_safe_eval_arithmetic/guard_write/_check_patch_safety/_check_patch_path/_verify_in_copy/_is_core_file…）；_LIFECYCLE_NAMES（__init__/start/stop/run/close/reset…）", "anchor": "PatchManager.py:594-600；dispatch:888-897"},
+      {"item": "沙箱黑名单与惯用法白名单", "fact": "DANGEROUS_KEYWORDS 36 项（PulseCodeSandbox）+ TRUSTED_CODE_IDIOMS 登记册 + DESIGN_INTERNAL_IDIOMS（eval/compile 算术沙箱）", "anchor": "organs/motor/PulseCodeSandbox.py:57-83；dispatch:1108-1130"},
+      {"item": "试点白名单", "fact": "PILOT_FIRST_BATCH 仅 2 条 refresh_runtime_params", "anchor": "dispatch:899-905"},
+      {"item": "唯一的族级配置项", "fact": "config.EVOLUTION_CONFIG[\"SAFE_TO_AUTO_FIX\"] = []（默认空 ⇒ 不施加限制）；消费点仅 save_pending_patch 的机器批准 A（`_whitelist_ok_a1`），**不影响派单/测试强度/回退策略**；属 T-进化保守模式-1（已结案）产物", "anchor": "config.py:1176；PatchManager.py:2247-2250"}
+    ],
+    "new_family_change_points": [
+      "PatchManager._m280_risk_by_issue_type",
+      "PatchManager._m280_trust_by_issue_type",
+      "PatchManager._M80_CORE_FILE_MARKERS（若新族落点变了）",
+      "PatchManager._M96_NO_AUTO_PATCH_METHODS（若涉及护栏）",
+      "dispatch._LIFECYCLE_NAMES / PILOT_FIRST_BATCH",
+      "PulseCodeSandbox.DANGEROUS_KEYWORDS 或 TRUSTED_CODE_IDIOMS（若引入新危险调用面）",
+      "配套单测（现有 tests 对上述值有断言，改表需同步）"
+    ],
+    "redline_table": [
+      {"redline": "写盘/删文件", "current_intercept": "沙箱黑名单 open(/os.remove/os.unlink/os.rmdir/shutil.rmtree（子串即拦）；落地侧 G14 结构不变量 + G16 路径越界；核心文件红线覆盖 nucleus/**", "anchor": "PulseCodeSandbox.py:57-83；PatchManager.py:4300/4770", "gap": "黑名单是**子串**匹配，`open(` 也会拦本仓正常 file IO ⇒ 写盘类补丁在沙箱侧恒不可执行（转人工），不是安全策略而是口径副作用"},
+      {"redline": "起线程/起进程", "current_intercept": "沙箱黑名单 threading.Thread/multiprocessing/subprocess/os.system/ctypes/cffi（子串即拦）", "anchor": "PulseCodeSandbox.py:57-83", "gap": "同上：真实调用与字符串字面量不区分（分类在 scan_dangerous_keywords 里做了，但沙箱本身不区分）"},
+      {"redline": "网络调用", "current_intercept": "沙箱黑名单 socket./urllib./requests.；另有 nucleus/ssrf_guard 主收口（另一条链）", "anchor": "PulseCodeSandbox.py:57-83；nucleus/ssrf_guard.py", "gap": "沙箱拦的是关键字，不是出站流量；沙箱内若用未登记方式出网（ctypes 已拦）未见兜底证据"},
+      {"redline": "状态机迁移", "current_intercept": "audit_problem_pool._LEGAL_TRANSITIONS + set_status 唯一写口 + BFS 路径校验", "anchor": "nucleus/audit_problem_pool.py:1014 及 _status_path", "gap": "**没有『禁止补丁改状态机』的专门门件**；靠 nucleus/** 属核心文件间接挡机器路径，人工批准仍可改"},
+      {"redline": "生命周期方法", "current_intercept": "_LIFECYCLE_NAMES 仅在自动分诊阶段排除（转人工）；落地侧无二次判定", "anchor": "dispatch:888-897；select_for_auto_triage:1918", "gap": "排除只在『自动派单』一层；人工批准后仍会落地，属『降自动、不降人工』"},
+      {"redline": "备份/回滚/质量门自身", "current_intercept": "_M96_NO_AUTO_PATCH_METHODS 精确名 + nucleus/reasoning 核心文件红线（机器路径全禁）", "anchor": "PatchManager.py:594-600/532-540", "gap": "只按**方法名精确匹配**；同名方法在别的文件不受约束；且人工批准无护栏"},
+      {"redline": "LLM 类补丁", "current_intercept": "source=='llm' ⇒ 机器批准 A 一律拒（PatchManager:2240 附近 `_source_is_llm_a1`）；但**机器放行 B 允许 llm**（T-101a 注释明示）；派单侧证据门/牵连闸照常", "anchor": "PatchManager.py:2255-2262；:841-869", "gap": "『LLM 一律不自动放行』在 B 通道不成立——B 只要求低风险+verified+baseline_errors>0"},
+      {"redline": "O3 判死删除", "current_intercept": "走 verify_ast_delete（存在性+删除后语法+孤儿引用），**不过沙箱黑名单**（删除无代码可执行）；仍然要人工 approve_o3_patch", "anchor": "dispatch:2591/2473；PatchManager.py: 无关沙箱", "gap": "删除动作完全绕开 G4 沙箱预检；红线只剩 _M96 名表与人工复核"}
+    ],
+    "missing_from_draft_redline": [
+      "silent_exception / Traceback / print_instead_of_log / bare_return_none_in_except / code_optimization —— 现行 5 大主力族（79/87）既不在红线表也不在风险表，默认低风险",
+      "O3 删除族未列入草案红线清单（现行无沙箱预检）"
+    ]
+  },
+
+  "device_3_metric_auto_rollback": {
+    "claim": "缺『指标自动回退装置』",
+    "verdict": "成立（无任何指标→撤回/停档/回滚 的联动）",
+    "evidence": [
+      {"item": "回滚触发全集", "fact": "仅 3 类：启动失败自动回退（main:3983-4000）、自验证失败回退（main:4138-4172）、运行期验证失败 rollback_patch（PatchManager:4855，rolled_back_reason=runtime_verify_failed）。**无指标阈值触发**", "anchor": "main.py:3983/4138；PatchManager.py:4855"},
+      {"item": "回滚能力实况", "fact": "76 条 applied 全 rollback_available=True，backup_path 实际存在仅 20 条 ⇒ 56 条物理不可回滚", "anchor": "data/patches/patch_history.json 只读快照"},
+      {"item": "可复用回退范式", "fact": "① ENABLE_* 默认 False=零行为（关即回退）② 两通道预检 shadow（只分类不改拦）③ LIF_SHADOW 观测不门控 ④ auto_released 标记可追踪可撤 ⑤ 棘轮冷却（超限锁死+期满放行）", "anchor": "config.py:1037/5554；PatchManager.py:4060-4130"},
+      {"item": "指标数据源", "fact": "见 metrics_sources 表；其中 generator_drafts.json **不存在** ⇒ 生成段/免人工占比恒无分母", "anchor": "data/evolution/generator_drafts.json absent（chain_metrics 生成段依赖）"},
+      {"item": "指标消费者", "fact": "chain_metrics.compute_chain_metrics 六段率只供 weekly_report_line 一行日志（[352周报]），无任何自动决策消费方", "anchor": "nucleus/evolution/chain_metrics.py:60-230"},
+      {"item": "effect_verify 与档位", "fact": "verdict 只回填 patch.trust_score / effect_verified，不改 status、不改批准档位、不触发回滚", "anchor": "EvolutionEffectVerifier.py:224-235"}
+    ],
+    "metrics_sources": [
+      {"metric": "applied 数", "source": "patch_history.json[applied is True]", "live": "有（落盘）", "note": "76/87；最后 2026-10-14"},
+      {"metric": "验证已判/回灌可用", "source": "effect_verify.json[verdicts.passed is not None] / 真实文件条目", "live": "有（落盘）", "note": "50 条 verdict：47 True/2 False/1 None"},
+      {"metric": "池状态与 problem_fixed", "source": "审计池 status / problem_fixed / verify_feedback", "live": "有（落盘）", "note": "problem_fixed=verified 依赖 dedup_key，存量 87 条零键"},
+      {"metric": "生成段/免人工占比", "source": "generator_drafts.json[requires_confirmation=False]", "live": "**无**（文件不存在）", "note": "chain_metrics 该段 state=absent ⇒ 分母 0"},
+      {"metric": "派单三段（选中/执行/落地）", "source": "_m324 trace 追加（dispatch 每拍）", "live": "有（jsonl 追加）", "note": "包含 blocked_reason/selected_source"},
+      {"metric": "破零三态", "source": "zero_break_judge.judge_zero_break（broken/half_through/not_started）", "live": "有（计算式，非采集）", "note": "依赖 applied/executed 双字段"},
+      {"metric": "回滚率", "source": "patch_history[rolled_back_at]/patch_lifecycle", "live": "**未采集**（无聚合口径，patch_lifecycle.json 不存在）", "note": "需新增聚合或从 history 现算"},
+      {"metric": "测试通过率（补丁级）", "source": "patch.dynamic_test（仅代码学习链写入）", "live": "部分（仅该链）", "note": "派单链无测试结果字段"}
+    ],
+    "gap": "无『指标恶化→自动停档/撤回/回滚』判据；现有回滚是故障驱动而非指标驱动；回滚能力本身对存量 56/76 已失效"
+  },
+
+  "summary_three_devices": [
+    {"device": "落地后全量回归自动比对", "state": "装置在（runner+baseline+diff schema）", "wiring": "零接线（CLI 手工）", "blocking_tier": "L2 及以上（无差异阻断⇒机器放行后无法自动发现行为回归）"},
+    {"device": "族别分级配置面", "state": "完全缺位（6 张硬编码表）", "wiring": "—", "blocking_tier": "L2 及以上（无法按族给档位/测试强度/回退策略）"},
+    {"device": "指标自动回退", "state": "完全缺位（仅故障驱动回滚）", "wiring": "—", "blocking_tier": "L2 及以上（误判无法自动撤回）"}
+  ]
+}

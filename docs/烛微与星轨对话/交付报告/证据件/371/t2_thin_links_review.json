@@ -1,0 +1,93 @@
+{
+  "schema": "zw371.t2_thin_links_review/v1",
+  "batch": 371,
+  "auditor": "烛微",
+  "generated_at": "2026-10-26 09:26:50",
+  "head": "a0d277b0",
+
+  "call_chain": {
+    "dispatch_side": {
+      "claim": "patch_execution_dispatch.py 零 TestGenerator/测试生成调用",
+      "verdict": "成立（独立复核）",
+      "evidence": "git grep 生产面 'TestGenerator|generate_and_run|generate_and_test'：仅 EvolutionLoop.py:25/:207/:656 与 TestGenerator.py 自身/__init__ 导出；dispatch 全文 0 命中",
+      "note": "沙箱执行通道只做『跑一遍补丁代码』，不做测试生成"
+    },
+    "one_key_loop": {
+      "claim": "EvolutionLoop:656 generate_and_run 为历史遗留死挂载",
+      "verdict": "**不成立**（不是死挂载，但只在一条非主链上）",
+      "evidence": [
+        "EvolutionLoop.py:654 test_patch → :656 self._test_generator.generate_and_run(patch)",
+        "唯一生产调用方：organs/brain/PulseCodeLearner.py:3595 `_test_result = _evo_loop.test_patch(_p)`（:3585 现建 EvolutionLoop）",
+        "触发条件：PulseCodeLearner.review_own_code_issues（:2592/_review_own_code_issues:3142），每 _code_review_interval=500 心跳一次（:165），且只对 status=='approved' 的补丁跑（:3591 `if _p.get('status') != 'approved': continue`）",
+        "run_full_loop（一键串归档/测试/应用请求）生产零调用，仅 EvolutionLoop.py:1056 __main__ 自测"
+      ],
+      "note": "测试门在『代码学习审视 → approved 补丁』这条链上真实存在；在『派单主链』上不存在。两条链不共享测试门。"
+    },
+    "side_channels": [
+      {"name": "PeriodicTestScheduler", "anchor": "nucleus/evolution/PeriodicTestScheduler.py:39；organs/brain/PulseCodeLearner.py:204 装配", "scope": "显式清单 _AUTO_LIGHT 仅 2 个脚本（verify_phase17_1_5.py / verify_semantic_kernel.py）；重型脚本默认空", "verdict": "在，但覆盖面=2 个验证脚本，非测试生成"},
+      {"name": "SelfInspector / probe_scan_worker", "anchor": "tools/probe_scan_worker.py；ENABLE_RULE_CHANNEL_SUBPROCESS 默认 False（361 票 T-自检子进程化-1 已结案，373/364 观察窗）", "scope": "静态扫描（AST/规则），产出问题清单，不跑补丁", "verdict": "旁路，不构成补丁测试门"}
+    ]
+  },
+
+  "test_depth": [
+    {"method": "_check_syntax", "anchor": "TestGenerator.py:171", "assert_form": "仅 ast.parse(modified_code) 语法", "semantic": false, "fail_action": "返回 passed=False"},
+    {"method": "_generate_test_script", "anchor": "TestGenerator.py:184", "assert_form": "落盘生成脚本；无断言内容（渲染由 _render_test_script 决定）", "semantic": false, "fail_action": "写失败⇒None⇒跳过"},
+    {"method": "_file_to_module", "anchor": "TestGenerator.py:205", "assert_form": "路径→模块名（无根前缀剥离，仅去扩展名拼接）", "semantic": false, "fail_action": "空⇒跳过"},
+    {"method": "_render_test_script", "anchor": "TestGenerator.py:218", "assert_form": "importlib.import_module + hasattr(method) + callable；方法不存在仅 **[WARN]** 不失败", "semantic": false, "fail_action": "import 异常⇒exit 1；方法缺失⇒仍 0"},
+    {"method": "_run_test_script", "anchor": "TestGenerator.py:268", "assert_form": "子进程 `python script`，rc==0 即通过；超时 TIMEOUT_CONFIG['llm_call']", "semantic": false, "fail_action": "rc!=0⇒passed=False"},
+    {"method": "_run_ruff_check", "anchor": "TestGenerator.py:291", "assert_form": "对**整个文件**跑 ruff check（非补丁片段）；返回 rc!=0 记问题数", "semantic": false, "fail_action": "超时/异常⇒**passed=True（跳过即通过）**"},
+    {"method": "_run_roundtrip_test", "anchor": "TestGenerator.py:317", "assert_form": "仅当 file/issue_type 命中 snapshot|parquet|codec|store|serialize|storage|format 才跑；脚本只有 PulseSnapshot 一份固定模板", "semantic": false, "fail_action": "非命中⇒跳过=passed；超时 120s⇒False"},
+    {"method": "_render_roundtrip_script", "anchor": "TestGenerator.py:352", "assert_form": "仅 'PulseSnapshot' in file 才返回脚本，其余 None", "semantic": false, "fail_action": "None⇒跳过"},
+    {"method": "_run_compat_test", "anchor": "TestGenerator.py:361", "assert_form": "仅 snapshot|parquet|codec|loader 或 json.loads/from_dict/_decode/_parse 命中才跑；脚本只有 PulseSnapshot 一份", "semantic": false, "fail_action": "非命中⇒跳过；异常⇒passed=True"},
+    {"method": "_render_compat_script", "anchor": "TestGenerator.py:397", "assert_form": "同上一份 PulseSnapshot 模板", "semantic": false, "fail_action": "None⇒跳过"},
+    {"method": "_run_regression_tests", "anchor": "TestGenerator.py:407", "assert_form": "跑 2 个 verify 脚本（均存在），verdict=`failed==0 and passed>0`；缺脚本显式记 missing", "semantic": false, "fail_action": "失败/超时/missing⇒failed+1"},
+    {"method": "generate_and_run（汇总）", "anchor": "TestGenerator.py:104-170", "assert_form": "六阶段 AND；其中 import 阶段缺脚本时默认 passed=True；summary 只列语法/导入/回归三类失败", "semantic": false, "fail_action": "任一 False⇒passed=False"}
+  ],
+
+  "thin_link_A_verdict": {
+    "claim": "第 5 步定向测试缺『业务语义正负样本断言』",
+    "verdict": "成立",
+    "evidence": [
+      "12 个方法无一处构造『输入→预期输出』断言；最强断言是 hasattr+callable（对象存在性）",
+      "往返/兼容两类唯一模板只服务 PulseSnapshot 一族（_render_* 均硬判文件名），其余族恒跳过=通过",
+      "回归面=2 个 verify 脚本，与补丁目标方法无对应关系",
+      "ruff 对整文件而非补丁片段，且超时/异常默认通过（fail-open）"
+    ],
+    "correction": "『缺业务语义断言』成立；但『测试装置缺失』不准确——装置完整、可运行、六阶段有汇总裁定，缺的是**断言形态**与**族覆盖**。另：该装置只接在代码学习链（approved 后），派单主链无测试门。",
+    "static_provable": "断言形态与覆盖面（本件已逐方法取证）",
+    "needs_live": "各阶段实际通过率/误杀率（需重启窗跑 test_patch 取样）"
+  },
+
+  "thin_link_B_verdict": {
+    "claim": "第 10 步学习闭环：失败只用于拒收，trust 不回流调权",
+    "verdict": "部分成立（装置在、流量为零）",
+    "evidence": [
+      {"item": "trust 派生", "fact": "_m280_trust_by_issue_type 为 7 族静态表 + 默认 40.0；同族不同质量补丁得同分；未知族=40（等于 auto_triage 门槛 40 与 PATCH_AUTO_APPROVE_TRUST_THRESHOLD 40）", "anchor": "PatchManager.py:1918-1936"},
+      {"item": "失败回流（拒收/回滚/运行期失败）", "fact": "fail ledger 只做 cap 计次（_DISPATCH_FAIL_CAP=2→转人工）；patch_history 记 rolled_back/reject_reason；effect_verify 记 verdict；池记 verify_feedback。**四处都不改 trust_score、不改阈值、不改族分级**", "anchor": "dispatch:623 _m326_bump_fail_ledger；PatchManager:4776 _m346_record_rollback；pool:1105 note_verify_feedback"},
+      {"item": "唯一下行调权（pre-apply）", "fact": "LLM 复核 FAIL ⇒ trust_score = max(10, trust-10)，标记 llm_review_failed（软信号）", "anchor": "SafeEvolutionExecutor.py:3787-3793"},
+      {"item": "唯一上行调权（post-apply）", "fact": "apply 后 ENABLE_EVOLUTION_EFFECT_VERIFY=True 时调用 verifier.verify(problem_gone=None, function_ok=bool(verify_passed), perf_delta_ms=None) → apply_trust_adjustment", "anchor": "PatchManager.py:4425-4445；config.py:550"},
+      {"item": "★调权算术结论", "fact": "_known=[function_ok] 单元素 ⇒ 不进 all(_known) 分支；_d1 is None 分支 ⇒ passed=None、trust_delta=0 ⇒ **新落地补丁 trust 恒不变**。历史 effect_verify.json 50 条 verdict 中 47 条 passed=True/delta=+10 属旧口径（problem_gone=bool(passed)）遗留", "anchor": "EvolutionEffectVerifier.py:180-212；data/evolution/effect_verify.json 只读快照"},
+      {"item": "成功样本沉淀", "fact": "patch_generator.load_feedback_examples 从 effect_verify.json 取真实 verdict 作 few-shot；load_negative_examples 从池终态取死因作负样本 ⇒ **进 prompt，不改阈值**", "anchor": "patch_generator.py:1003/1060/1182"},
+      {"item": "经验库消费方（120 条）", "fact": "reasoning_experience.json total_count=120；消费方：SelfCalibrator:348（语义检索）、VectorStore:819（quality_flag 过滤）、ExperiencePollutionGuard:70/192（污染护栏）、experience_pool:1167（声明独立数据源）、main:459/688（索引器装配）、PulseLung:2789（读取）", "anchor": "nucleus/reasoning/SelfCalibrator.py:345-350 等"}
+    ],
+    "correction": "『trust 不回流』表述过强：回流管道在位（verifier + apply_trust_adjustment + 历史 47 条 +10 实证），但当前三维度里 problem_gone/perf 恒 None、唯一已知维度只证明『没弄坏』⇒ 现行口径下 trust_delta 恒 0，等于**有管道无流量**。失败侧（回滚/拒收）则确实**零扣分入口**。",
+    "static_provable": "判据算术与调用点（已逐行取证）",
+    "needs_live": "实际 delta 分布是否与静态推演一致（需重启窗落一批补丁观察 effect_verify.json）"
+  },
+
+  "gaps_by_family": [
+    {"family": "规则类（print→log / bare_return / silent_exception / code_optimization）", "current": "语法+import+ruff+2 脚本回归；零行为断言", "min_test_device": "对目标方法构造最小输入→断言返回/副作用（如 silent_exception 族：except 分支必须仍 raise/return 原语义）；建议用 AST 抽取 handler 形态做结构断言 + 单例函数注入桩做行为断言"},
+    {"family": "状态机类（claim/fixed/verified 迁移）", "current": "无", "min_test_device": "对 _LEGAL_TRANSITIONS 走一条合法路径 + 一条非法路径，断言非法被拒（现有 audit_problem_pool 已有转移表，可零新增语义）"},
+    {"family": "写盘类（json/jsonl 原子写、快照）", "current": "仅 PulseSnapshot 有往返/兼容模板", "min_test_device": "tmp 沙箱根写→读→字段等价；断点写（进程中断）后文件可解析"},
+    {"family": "网络类（LLM 出口/渠道）", "current": "无（沙箱只跑纯代码）", "min_test_device": "桩替换出口，断言超时/降级/重试计数；**禁止真外呼**"}
+  ],
+
+  "verify_vs_falsify": [
+    {"claim": "派单通道零 TestGenerator", "verdict": "成立", "anchor": "git grep 生产面"},
+    {"claim": "一键闭环是死挂载", "verdict": "不成立", "anchor": "PulseCodeLearner.py:3595"},
+    {"claim": "测试缺业务语义正负样本", "verdict": "成立", "anchor": "TestGenerator.py 12 方法逐读"},
+    {"claim": "trust 只由 issue_type 静态映射", "verdict": "成立（入队口）", "anchor": "PatchManager.py:2107-2110"},
+    {"claim": "失败只用于拒收、trust 不回流", "verdict": "部分成立（有管道、零流量；失败侧零扣分）", "anchor": "EvolutionEffectVerifier.py:180-235 + PatchManager.py:4425-4445"},
+    {"claim": "经验库仅 SelfCalibrator 一个消费方", "verdict": "不成立（至少 6 处）", "anchor": "见 evidence 经验库消费方"}
+  ]
+}

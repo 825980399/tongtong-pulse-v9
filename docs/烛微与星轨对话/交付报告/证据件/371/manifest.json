@@ -1,0 +1,53 @@
+{
+  "schema": "zw371.delivery_manifest/v1",
+  "batch": 371,
+  "auditor": "烛微",
+  "head": "a0d277b0",
+  "generated_at": "2026-10-26 09:26:50",
+  "copies": "小件整份（5 件机读均 <20KB，无摘要件）",
+  "files": [
+    {
+      "name": "t1_l1_chain_walkthrough.json",
+      "kind": "machine_evidence",
+      "bytes": 20503,
+      "sha256": "d9879b83c2d927fc5c9aa87246ee829aa9ac97a31d39ecc5ce90232570ab7e28",
+      "source": "tmp/zw371_root/t1_l1_chain_walkthrough.json"
+    },
+    {
+      "name": "t2_thin_links_review.json",
+      "kind": "machine_evidence",
+      "bytes": 11395,
+      "sha256": "1db4a0b89c31c71666f133c4ebce8e695e45f373f5c77516753743454adaa558",
+      "source": "tmp/zw371_root/t2_thin_links_review.json"
+    },
+    {
+      "name": "t3_missing_devices.json",
+      "kind": "machine_evidence",
+      "bytes": 13151,
+      "sha256": "5166b1e42a7e0fa61d06cc9c7bbcb3b6525dfc7246724421ebdf90eadfc41b67",
+      "source": "tmp/zw371_root/t3_missing_devices.json"
+    },
+    {
+      "name": "t4_tier_roadmap.json",
+      "kind": "machine_evidence",
+      "bytes": 11279,
+      "sha256": "43441e73122bd6e4e82df402272bbe20678f4d4a79d644d01c489fa932656c46",
+      "source": "tmp/zw371_root/t4_tier_roadmap.json"
+    },
+    {
+      "name": "h1_dedup_checklist.json",
+      "kind": "machine_evidence",
+      "bytes": 9447,
+      "sha256": "3cd14cad00871166bfa171714011c5c9d8af2432a01002fedfeec25244d3b4df",
+      "source": "tmp/zw371_root/h1_dedup_checklist.json"
+    },
+    {
+      "name": "烛微_371批前置分析报告_20261026.md",
+      "kind": "report",
+      "bytes": 22591,
+      "sha256": "b6b1d26bac517f2357eae961ff8531b389410af58d36b731a7b5fc14c9fb686f",
+      "source": "docs/烛微与星轨对话/分析报告/烛微_371批前置分析报告_20261026.md"
+    }
+  ],
+  "note": "主件在 tmp/zw371_root/ 与分析报告目录；本目录为 git 跟踪版本化副本，sha256 为落盘副本摘要"
+}
