@@ -9,7 +9,28 @@ import os
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _DESIGN = os.path.join(_REPO, "docs", "分析报告", "路灯_198批_实弹刀预嵌设计.md")
-_TASKBOOK = os.path.join(_REPO, "docs", "路灯与星轨对话", "任务书", "第198批_施工任务书_20261012.md")
+
+
+def _locate_taskbook():
+    """★372刀8：历史任务书已被 36afdd03 归入 `任务书/archive/`（按角色分文件夹）。
+
+    按候选路径找第一个存在的；★两处都没有则仍返回原址 ⇒ 后续 open() 照常抛
+    FileNotFoundError —— **不吞、不跳过**（"找不到就跳过"会让本条永久绿，
+    那才叫销毁判别力）。
+    """
+    _cands = [
+        os.path.join(_REPO, "docs", "路灯与星轨对话", "任务书", "archive",
+                     "第198批_施工任务书_20261012.md"),
+        os.path.join(_REPO, "docs", "路灯与星轨对话", "任务书",
+                     "第198批_施工任务书_20261012.md"),
+    ]
+    for _p in _cands:
+        if os.path.exists(_p):
+            return _p
+    return _cands[-1]
+
+
+_TASKBOOK = _locate_taskbook()
 
 
 def test_design_doc_exists():

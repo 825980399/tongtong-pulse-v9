@@ -326,7 +326,11 @@ def test_354_d6_body_integrity_wired_into_evidence_gate():
     _t = _src("nucleus/evolution/patch_generator.py")
     assert "_bi = check_body_integrity(" in _t
     assert "_checks[\"body_integrity\"] = _bi" in _t
-    assert "[354预检] body_integrity=truncated" in _t
+    # ★372刀8：原找 "[354预检] body_integrity=truncated"；355刀2 已把该日志改写为
+    #   "[355生成器] 判据A行数比=truncated …"（并新增判据B 尾部覆盖 check_tail_coverage）。
+    #   改断言为现态文案；并加反向断言 —— 旧文案不得复活（防回退被读成"仍合格"）。
+    assert "[355生成器] 判据A行数比=truncated" in _t
+    assert "[354预检] body_integrity=truncated" not in _t, "旧文案不应复活"
 
 
 # ==========================================================================

@@ -401,7 +401,13 @@ class TestScriptSwitches(unittest.TestCase):
         self.assertEqual(_rc, 0)
         _line = [x for x in _out.splitlines() if "已注册分析器" in x]
         self.assertTrue(_line)
-        self.assertEqual(_line[0].split(":", 1)[1].strip(), "call_graph")
+        # ★372刀8：311批刀2 起 SelfAwarenessEngine.__init__ **默认注册**
+        #   structure_change（结构指纹差分），故这里不止 call_graph 一个。
+        #   改为按逗号拆分后断言包含 call_graph，且 structure_change 也应在
+        #   —— 守的是"调用图分析器确实被注册"这一意图，不锁死清单。
+        _names = [x.strip() for x in _line[0].split(":", 1)[1].split(",") if x.strip()]
+        self.assertIn("call_graph", _names, _names)
+        self.assertIn("structure_change", _names, _names)
         self.assertIn("代码结构健康度", _out)
 
 
