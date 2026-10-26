@@ -665,7 +665,12 @@ class LLMCallRecorder:
         _today = self._day_str(now)
         if self._last_rotate_day == _today:
             return
+        # ★371A5：留旧值以便失败回滚。原实现在 try **之前**就把「今天已轮转」置位，
+        #   清理一旦抛异常，当天后续调用会被 `_last_rotate_day == _today` 直接挡掉 ⇒
+        #   注释所称「下一次触发会重试」**并不成立**（当天永不重试）。
+        _prev_day = self._last_rotate_day
         self._last_rotate_day = _today
+        _rm_failed = 0
         try:
             _d = self.base_dir()
             if not os.path.isdir(_d):
@@ -678,12 +683,22 @@ class LLMCallRecorder:
                 try:
                     if os.path.getmtime(_fp) < _cutoff:
                         os.remove(_fp)
-                except OSError:
+                except OSError as _rm_e:
+                    # ★371A5：单个过期文件删不掉不足以让整轮失败，但要计数出声
+                    _rm_failed += 1
+                    silent_exc(_rm_e, where="nucleus.llm.call_recorder::_rotate remove", level="debug")
                     continue
         except Exception as e:
-            # 清理失败不影响主流程（下一次触发会重试）
-            silent_exc(e, where="nucleus.llm.call_recorder::_rotate L346")
+            # ★371A5：回滚「今天已轮转」标记，让下一次调用真的重试；并升 WARNING。
+            self._last_rotate_day = _prev_day
+            silent_exc(e, where="nucleus.llm.call_recorder::_rotate L346", level="warning")
+            _module_logger.warning(
+                f"[调用留存] 滚窗清理失败（已回滚当天去重标记，下次调用重试）: "
+                f"{type(e).__name__}: {e} [371A5]")
             return
+        if _rm_failed:
+            _module_logger.warning(
+                f"[调用留存] 滚窗清理有 {_rm_failed} 个过期文件未能删除（保留待下次）[371A5]")
 
     def record(self, *, origin: str, prompt: Any, response: Any,
                prompt_version: str = "", channel: str = "", model: str = "",

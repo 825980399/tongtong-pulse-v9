@@ -250,6 +250,7 @@ class AsyncEncodeQueue:
             return 0
         store, _enc = self._ensure_deps()
         added = 0
+        _failed = 0
         _m102_seen = set()
         try:
             # ★Dxxx/W5：取含冷驱逐节点的全集，避免冷驱逐合法节点被 reap_orphans 误判孤儿删除
@@ -270,8 +271,16 @@ class AsyncEncodeQueue:
                     if self.submit(nid, text):
                         added += 1
             except Exception as _m369_e:
+                # ★371A5：原实现只跳过不计数 ⇒「该节点永久未编码」无人知。
+                #   逐条留 debug，集尾汇总打 WARNING（避免 N 条刷屏）。
+                _failed += 1
                 silent_exc(_m369_e, where="nucleus/semantic/AsyncEncodeQueue.py:reconcile", level="debug")
                 continue
+        if _failed:
+            # ★371A5：needs_encode 对同一节点仍为 True ⇒ 下一轮 reconcile 会重试
+            _logger.warning(
+                f"[编码队列] 对账有 {_failed}/{len(nodes)} 个节点处理失败未入队，"
+                f"下一轮 reconcile 会重试 [371A5]")
         # ★第102批 T-102b：反向回收——清除「节点已不存在」的孤儿向量
         #   （原 reconcile 只单向补码，只增不减，孤儿向量只涨不降）
         _m102_reaped = 0

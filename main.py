@@ -3519,8 +3519,18 @@ class PulseFramework:
                             else:
                                 time.sleep(_probe_interval)
                         except Exception as _m369_e:
-                            silent_exc(_m369_e, where="main.py:_probe_loop", level="debug")
-                            break
+                            # ★371A5：原为 break ⇒ 任何等待异常都让整条探查链**永久停掉**，
+                            #   且只留 debug（默认级别看不到）。改为「本轮跳过、链路继续」，
+                            #   升 WARNING + 连续次数留痕；只有 _running 转 False 才退出循环。
+                            _pn = int(getattr(self, "_probe_wait_fail_n", 0)) + 1
+                            self._probe_wait_fail_n = _pn
+                            silent_exc(_m369_e, where="main.py:_probe_loop", level="warning")
+                            self._log(LogLevel.WARNING,
+                                      f"[探查周期] 等待心跳脉冲失败（第 {_pn} 次），本轮跳过、"
+                                      f"探查链不终止: {type(_m369_e).__name__}: {_m369_e} [371A5]")
+                            # 防异常加速空转：退避到不超过 60s 再试
+                            time.sleep(min(float(_probe_interval), 60.0))
+                            continue
                         if not getattr(self, "_running", False):
                             break
                         try:
