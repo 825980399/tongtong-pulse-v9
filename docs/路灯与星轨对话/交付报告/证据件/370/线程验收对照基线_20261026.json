@@ -1,0 +1,53 @@
+{
+  "source": {
+    "report_md": "docs/路灯与星轨对话/交付报告/路灯_342批交付报告_20261022.md",
+    "report_sections": [
+      "八、未达线/如实申报 第2条",
+      "九、移交待裁 E-7"
+    ],
+    "raw_json": "tmp/p342_root/d5_threads_live.json",
+    "raw_json_note": "位于 gitignore 的 tmp/ 下；本件是其持久副本（含票面未记的时刻/RSS/间隔）"
+  },
+  "proc_gen": "pid43864@20261022-080715",
+  "pid": 43864,
+  "ticks": 3,
+  "interval_s": 6.0,
+  "fields": [
+    "tick",
+    "pid",
+    "threads",
+    "rss_mb",
+    "sampled_at"
+  ],
+  "rows": [
+    {
+      "tick": 1,
+      "pid": 43864,
+      "threads": 184,
+      "rss_mb": 6079.2,
+      "sampled_at": "10:33:57"
+    },
+    {
+      "tick": 2,
+      "pid": 43864,
+      "threads": 187,
+      "rss_mb": 6078.9,
+      "sampled_at": "10:34:03"
+    },
+    {
+      "tick": 3,
+      "pid": 43864,
+      "threads": 182,
+      "rss_mb": 6078.5,
+      "sampled_at": "10:34:09"
+    }
+  ],
+  "thread_values": [
+    184,
+    187,
+    182
+  ],
+  "verdict": "NOT_DUE",
+  "not_due_reason": "本代次跑改前代码（08:07:15 启动 < 10:2x 改码）⇒ 刀5 验收③『同代次≥3拍下降』结构上不可达，判 NOT_DUE",
+  "note": "342 E-7：下次重启窗开工首件事补测；对照基线 184/187/182 @pid43864。本刀（370刀4）只归档基线＋补可复用夹具，不宣称线程已下降。"
+}

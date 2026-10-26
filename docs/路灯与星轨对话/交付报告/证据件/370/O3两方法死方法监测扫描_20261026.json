@@ -1,0 +1,176 @@
+{
+  "root": "D:\\xinrenlei\\tongtong-pulse-v9",
+  "targets": [
+    {
+      "file": "nucleus/audit_problem_pool.py",
+      "name": "plan_target_drift",
+      "surfaces": {
+        "prod": {
+          "def_n": 1,
+          "call_n": 0,
+          "attr_read_n": 0,
+          "mention_n": 2,
+          "defs": [
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 184
+            }
+          ],
+          "calls": [],
+          "attrs": [],
+          "mentions": [
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 184
+            },
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 204
+            }
+          ]
+        },
+        "test": {
+          "def_n": 0,
+          "call_n": 0,
+          "attr_read_n": 0,
+          "mention_n": 6,
+          "defs": [],
+          "calls": [],
+          "attrs": [],
+          "mentions": [
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 4
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 27
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 106
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 107
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 113
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 118
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "nucleus/audit_problem_pool.py",
+      "name": "restore_pool",
+      "surfaces": {
+        "prod": {
+          "def_n": 1,
+          "call_n": 0,
+          "attr_read_n": 0,
+          "mention_n": 4,
+          "defs": [
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 1008
+            }
+          ],
+          "calls": [],
+          "attrs": [],
+          "mentions": [
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 998
+            },
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 1004
+            },
+            {
+              "f": "nucleus/audit_problem_pool.py",
+              "l": 1008
+            },
+            {
+              "f": "nucleus/evolution/zero_break_judge.py",
+              "l": 920
+            }
+          ]
+        },
+        "test": {
+          "def_n": 0,
+          "call_n": 2,
+          "attr_read_n": 0,
+          "mention_n": 12,
+          "defs": [],
+          "calls": [
+            {
+              "f": "tests/test_m345_batch.py",
+              "l": 101
+            },
+            {
+              "f": "tests/test_m345_batch.py",
+              "l": 108
+            }
+          ],
+          "attrs": [],
+          "mentions": [
+            {
+              "f": "tests/test_m345_batch.py",
+              "l": 101
+            },
+            {
+              "f": "tests/test_m345_batch.py",
+              "l": 108
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 4
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 7
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 27
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 102
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 103
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 104
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 105
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 114
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 119
+            },
+            {
+              "f": "tests/test_m370_blade3_dead_method.py",
+              "l": 120
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
