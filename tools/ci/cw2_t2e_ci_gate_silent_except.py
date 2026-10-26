@@ -13,7 +13,10 @@
      若不在已知豁免集合 → 阻断。
 
 实现：AST 比较 base 版本与目标版本中「静默 handler」集合（按指纹 identity 取差集）。
-唯一键：(path, qualname, nth_in_function, body_sha256[:16])，行号仅作备注。
+唯一键：**(path, qualname, tname, kind, body_sha256[:16])** —— ★371A5 起**去 nth**
+（同函数内前面的静默 handler 修好后序号前移会让后面误报新增，故序号退出身份，
+  改由 tname + kind 承担区分；同形多份由多重集计数保证「变多也算新增」）。
+行号仅作备注，不参与身份。
 退出码：0=通过，1=存在违规（CI fail / pre-commit 阻断），2=指纹基线缺失（配置错误）。
 
 用法：
@@ -207,8 +210,21 @@ def emit_baseline(path):
 
 
 def _fmt_identity(ident):
-    path, qualname, nth, sha16 = ident
-    return f"{path}::{qualname}[#{nth}]{sha16}"
+    """把 identity 元组格式化成一行人读串（**纯格式化，不参与判定**）。
+
+    ★372刀15：371A5 起 identity 是五元组 `(path, qualname, tname, kind, sha16)`，
+    旧实现仍按四元组解包 ⇒ 本函数一被调用就 ValueError，而它只出现在
+    **门禁失败**的打印路径 ⇒ 真失败时报告器先崩。这里改为兼容五元组，
+    并保留对旧四元组形态的容忍（历史基线件里可能还有旧格式）。
+    """
+    _parts = tuple(ident)
+    if len(_parts) == 5:
+        path, qualname, tname, kind, sha16 = _parts
+        return f"{path}::{qualname}[{tname}/{kind}]{sha16}"
+    if len(_parts) == 4:                      # 历史四元组（含 nth）
+        path, qualname, nth, sha16 = _parts
+        return f"{path}::{qualname}[#{nth}]{sha16}"
+    return repr(ident)
 
 
 def main():
