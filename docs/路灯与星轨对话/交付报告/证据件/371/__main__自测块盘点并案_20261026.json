@@ -1,0 +1,99 @@
+{
+ "_schema": "m371.main_blocks_inventory.v2",
+ "captured_at": "2026-10-26T18:2x+08:00",
+ "tool": "tools/scan_main_blocks.py",
+ "scan_scope": "config.py / main.py / organs/** / nucleus/**（排除 tests/tmp/data/tools/.bak/.aionclaw-tmp）",
+ "baseline_360": {
+  "blocks": 111,
+  "high_risk": 59,
+  "print_only": 50,
+  "no_side_effect": 2,
+  "total_lines": 5327
+ },
+ "rerun_371": {
+  "blocks": 111,
+  "high_risk": 59,
+  "print_only": 50,
+  "no_side_effect": 2,
+  "total_lines": 5327
+ },
+ "drift": {
+  "blocks": 0,
+  "high_risk": 0,
+  "print_only": 0,
+  "no_side_effect": 0,
+  "total_lines": 0,
+  "verdict": "与 360 基线五项全等 ⇒ 零漂移（360 至今无新增、无收口、无工具口径变更）"
+ },
+ "concurrent_selfcheck_inventory": {
+  "target": "base/BasePulseOrgan.py",
+  "current_line_count": 652,
+  "has_main_block": false,
+  "closed_by_commit": "d63d1d69",
+  "closed_by_batch": "354",
+  "removed_content": [
+   "if __name__ == \"__main__\":",
+   "=== BasePulseOrgan v9.5 并发安全自测 ===",
+   "4. 并发安全验证（10线程同时调用）",
+   "5. 并发熔断验证（混合正常+异常脉冲）"
+  ],
+  "evidence": "git show d63d1d69 -- base/BasePulseOrgan.py 显示上述行全部前缀为 `-`（删除）；d63d1d69^ 版本 656 行处仍有 __main__ 块、697/716 行并发安全验证、718 行并发熔断验证",
+  "verdict": "T-并发自检移出-1 的「BasePulseOrgan:709/726 并发自检块」子项**已在 354 批收口**，本刀可申报 static_verified 核销；不重复施工"
+ },
+ "disposition_policy": {
+  "basis": "生产 import 路径永不执行 __main__ 块 ⇒ 块内自测对运行时零贡献；但块可能承载「验证价值」，故不一律删",
+  "groups": [
+   {
+    "group": "起线程/起进程型（start）",
+    "count_share": "高危 59 中的绝大多数（盘点表逐条列 start）",
+    "suggestion": "删除",
+    "reason": "演示性并发自测，生产不执行；已有 tests/ 覆盖同类语义",
+    "risk": "低",
+    "precondition": "逐处确认块内无「仅此处才有的断言」"
+   },
+   {
+    "group": "写盘型",
+    "count_share": "高危 59 的其余部分",
+    "suggestion": "删除",
+    "reason": "自测写盘若被手工执行会污染 data/；且无测试价值",
+    "risk": "中（若有人在本地手工跑过，可能依赖其产物）",
+    "precondition": "确认块写到的是临时路径而非 data/ 生产路径"
+   },
+   {
+    "group": "网络型",
+    "count_share": "高危 59 的其余部分",
+    "suggestion": "删除",
+    "reason": "自测发网络请求会在离线环境挂住",
+    "risk": "低",
+    "precondition": "无"
+   },
+   {
+    "group": "仅打印 50 块",
+    "count_share": "50",
+    "suggestion": "保留打印（文档性示例）",
+    "reason": "零副作用，且对读代码的人有说明价值",
+    "risk": "低",
+    "precondition": "确认确无副作用调用（盘点工具已判 print_only）"
+   },
+   {
+    "group": "无副作用 2 块",
+    "count_share": "2",
+    "suggestion": "保留",
+    "reason": "已判无副作用，删除收益近零",
+    "risk": "低",
+    "precondition": "无"
+   }
+  ],
+  "explicitly_not_doing": [
+   "本刀不批量删除任何块",
+   "不把生产 import 路径上的逻辑误判为死代码",
+   "不新增 config 开关"
+  ]
+ },
+ "unit_test_plan": [
+  "①扫描工具复跑成功、块数/高危/打印/无副作用四项与 JSON 一致",
+  "②基线漂移对照表齐备（360 与 371 两组数值 + drift 判定）",
+  "③并发自检块在位性结论有 git 证据支撑（d63d1d69 删除行可检索）",
+  "④生产面零越界（organs/nucleus/main/config 零改动）"
+ ]
+}
