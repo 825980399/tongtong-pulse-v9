@@ -6,11 +6,9 @@
 ③ 生产面零 diff（本刀只读）
 ④ 候选子刀清单风险分级字段齐备（风险/停机/动什么 不缺项）
 """
-import ast
 import io
 import json
 import os
-import re
 import subprocess
 import unittest
 
