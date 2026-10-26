@@ -1,0 +1,279 @@
+{
+ "probe_version": "m371.n1.memattr.v1",
+ "generated_ts": 1793005934.53579,
+ "outside": {
+  "mode": "outside",
+  "pid": 25948,
+  "ts": 1793005934.4987607,
+  "rss_mb": 6195.2,
+  "vms_mb": 8344.9,
+  "num_handles": 2334,
+  "num_threads": 163,
+  "num_open_files": null,
+  "cpu_percent": 0.0,
+  "create_time": 1792988705.0635223,
+  "thread_name_top": [],
+  "access_ok": true,
+  "err": null,
+  "note_open_files": "Windows 无 num_fds；open_files 需枚举句柄，本探针不枚举（成本高）"
+ },
+ "inproc": null,
+ "liver_rows_n": 13,
+ "liver_rows_head": [
+  "2026-10-26 16:07:56 [肝] DEBUG: [T-107a] 资源采样: RSS=7.19GB 句柄=2459 打开文件=18 线程=185 基线增长=3.02GB 进程启动≈13371s  pid=25948 gen=pid25948@20261026-122505",
+  "2026-10-26 16:13:08 [肝] DEBUG: [T-107a] 资源采样: RSS=7.25GB 句柄=2410 打开文件=17 线程=185 基线增长=3.09GB 进程启动≈13683s  pid=25948 gen=pid25948@20261026-122505",
+  "2026-10-26 16:18:19 [肝] DEBUG: [T-107a] 资源采样: RSS=7.28GB 句柄=2434 打开文件=18 线程=190 基线增长=3.12GB 进程启动≈13994s  pid=25948 gen=pid25948@20261026-122505",
+  "2026-10-26 16:23:31 [肝] DEBUG: [T-107a] 资源采样: RSS=7.28GB 句柄=2407 打开文件=17 线程=184 基线增长=3.12GB 进程启动≈14306s  pid=25948 gen=pid25948@20261026-122505",
+  "2026-10-26 16:28:43 [肝] DEBUG: [T-107a] 资源采样: RSS=7.16GB 句柄=2419 打开文件=17 线程=188 基线增长=3.00GB 进程启动≈14618s  pid=25948 gen=pid25948@20261026-122505"
+ ],
+ "health_snapshot": {
+  "timestamp": 1793005922.1553109,
+  "beat_count": 1310,
+  "proc_gen": "pid25948@20261026-122505",
+  "code_version": "335.cg.v1",
+  "pid": 25948,
+  "pulse": {
+   "emitted": 40990,
+   "completed": 137426,
+   "timeout": 0,
+   "pending": 0
+  },
+  "info_field": {
+   "published": 41288,
+   "matched": 41287,
+   "active_conditions": 123
+  },
+  "memory_pressure": {
+   "ok": true,
+   "process_rss_mb": 6196.5,
+   "system_percent": 74.2,
+   "reason": "进程 RSS 6196.5MB > 6144.0MB",
+   "gc_triggered": false,
+   "gc_last_rss_mb": null,
+   "rss_peak_mb": 7575.0,
+   "rss_peak_ts": 1793003255.2209804,
+   "instant_drop_mb": null,
+   "restart_armed": false,
+   "restart_count": 0,
+   "image_mb": 610.7,
+   "heap_mb": 5585.8,
+   "growth_alarm": {
+    "triggered": false,
+    "growth_mb_per_min": -223.761,
+    "rss_mb": 6196.5,
+    "triggers": [],
+    "gc_triggered": false,
+    "auto_gc_last": {
+     "collected": 448,
+     "pause_ms": 630.954,
+     "triggers": [
+      "growth"
+     ],
+     "rss_mb": 7371.9,
+     "percent": 15.0
+    }
+   },
+   "self_probe": {
+    "ran": false,
+    "mode": null,
+    "path": null,
+    "elapsed_sec": null,
+    "reason": "not_in_slot(hour=17 slots=(5, 13))",
+    "top_n": 0
+   },
+   "release_heartbeat": {
+    "status": "throttled",
+    "beats_since": 9,
+    "every": 10
+   },
+   "paid_usage": {
+    "status": "throttled",
+    "beats_since": 9,
+    "every": 10
+   },
+   "m363_diag": {
+    "status": "throttled",
+    "beats_since": 9,
+    "every": 10
+   },
+   "m366_inventory": {
+    "status": "disabled",
+    "switch": "ENABLE_ORGAN_INVENTORY_EXPORT"
+   },
+   "m364_leaderboard": {
+    "status": "throttled",
+    "every": 3600
+   }
+  },
+  "nodes": {
+   "total": 13978,
+   "hot": 9814,
+   "warm": 4072,
+   "cold": 92
+  },
+  "knowledge_evolution": {
+   "l1_count": 544,
+   "l2_count": 9317,
+   "l3_count": 4117,
+   "interest_summary": {},
+   "instinct_count": 7,
+   "l3_pure": 4110,
+   "knowledge_density": 0.961
+  },
+  "organs": {
+   "total": 66,
+   "running": 66,
+   "fused": 0,
+   "recovering": 0,
+   "stopped": 0,
+   "idle": 0
+  },
+  "snapshot_backups": 2,
+  "link_status": {
+   "eye_to_visual": {
+    "event": "eyes.stream_frame",
+    "emitter": "眼睛",
+    "receiver": "视觉皮层",
+    "status": "connected"
+   },
+   "visual_to_chat": {
+    "event": "chat.user_presence_detected",
+    "emitter": "视觉皮层",
+    "receiver": "对话模块",
+    "status": "connected"
+   },
+   "chat_to_mouth": {
+    "event": "mouth.speak",
+    "emitter": "对话模块",
+    "receiver": "嘴巴",
+    "status": "connected"
+   }
+  },
+  "heartbeat": {
+   "interval": 13.0,
+   "beat_count": 1313,
+   "status": "搏动中"
+  },
+  "current_user": "访客",
+  "dream": {
+   "count": 76,
+   "last_topic": "【种子记忆】[代码关联·PulseLiver] _compress_reflections （功能: (待大模型分析)）"
+  },
+  "reflection": {
+   "count": 5,
+   "last_domain": "通用"
+  },
+  "liver": {
+   "compress_count": 18,
+   "fuse_count": 0,
+   "instinct_upgrade": 0
+  },
+  "request_dedup": {
+   "claimed": 2,
+   "duplicate": 0,
+   "waiting": 0,
+   "takeover": 0,
+   "completed": 2,
+   "cancelled": 0,
+   "expired": 0,
+   "inflight": 0,
+   "cached": 1,
+   "timeout": 30.0,
+   "max_wait": 10,
+   "enabled": true
+  },
+  "patch_needs_repair": 0,
+  "controller": {
+   "operations": 4,
+   "files_read": 0,
+   "urls_opened": 1
+  },
+  "headless_browser": {
+   "total_searches": 30,
+   "successful_searches": 30,
+   "total_articles": 30,
+   "total_chars": 22871,
+   "last_search_topic": "site:baike.baidu.com 技术架构 基础 概念 原理 -拼音 -部首 -笔顺 -怎么读",
+   "last_articles": 1,
+   "last_status": "completed"
+  },
+  "social_emotions": {
+   "感激": 0.0,
+   "自豪": 0.0,
+   "愧疚": 0.0,
+   "羞耻": 0.0
+  },
+  "top_interests": [
+   {
+    "dim": "人文哲学",
+    "val": 0.18
+   },
+   {
+    "dim": "技术架构",
+    "val": 0.14
+   },
+   {
+    "dim": "未知探索",
+    "val": 0.12
+   },
+   {
+    "dim": "编程开发",
+    "val": 0.1
+   },
+   {
+    "dim": "人工智能",
+    "val": 0.1
+   }
+  ],
+  "life_state": {
+   "state": "静默",
+   "previous": "浅层活跃",
+   "since": 1793005729.7552867,
+   "explore_interval": 300.0,
+   "dream_interval": 300.0
+  },
+  "emotion_state": {
+   "emotion": "满足",
+   "intensity": 0.381,
+   "trend": {
+    "direction": "stable",
+    "rate": 0.066,
+    "stability": "consistent",
+    "current_emotion": "满足",
+    "description": "满足情绪平稳中"
+   },
+   "inertia_applied": true
+  }
+ },
+ "candidates": [
+  {
+   "candidate": "进程 RSS 总量（症状锚点）",
+   "reading": "6195.2 MB",
+   "evidence": "psutil 进程外读数；肝阈值 RSS_WARN=6144.0MB、成长线=2048.0MB/300s",
+   "verdict_hint": "超阈值"
+  },
+  {
+   "candidate": "线程数（每线程栈+局部持有）",
+   "reading": "163",
+   "evidence": "psutil num_threads；370 长窗 137→193（+56）",
+   "verdict_hint": "需对照重启后基线"
+  },
+  {
+   "candidate": "句柄数（泄漏常客）",
+   "reading": "2334",
+   "evidence": "psutil num_handles；肝阈值 5000；370 长窗 1835→2515(+680)",
+   "verdict_hint": "未超阈值但增长快"
+  },
+  {
+   "candidate": "肝 T-107a 资源采样增长（日志侧）",
+   "reading": "13 拍",
+   "evidence": "logs/pulse.log 过滤 gen 后的资源采样行",
+   "verdict_hint": "见 growth 字段"
+  }
+ ],
+ "boundary": [
+  "本工具只读：不改阈值、不写 data/、不新起定时器、不被生产 import",
+  "进程外档是曈曈真实读数；进程内档只反映探针自己",
+  "归属定论须进程内注入长窗采样，本批不接"
+ ]
+}
