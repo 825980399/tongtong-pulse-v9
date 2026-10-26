@@ -27,6 +27,8 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from collections import Counter
+
 from ci_common import extract_handlers, handler_identity
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -151,7 +153,9 @@ def load_known_fingerprints():
         return None
     with open(FINGERPRINT_BASELINE, encoding="utf-8") as _f:
         data = json.load(_f)
-    return set(handler_identity(x) for x in data)
+    # ★371A5：改用多重集 —— 去 nth 后「同函数内 N 个完全相同的静默 handler」
+    #   共用一个 identity，只有计数才能区分「多了一个」还是「少了一个」。
+    return Counter(handler_identity(x) for x in data)
 
 
 def full_repo_scan(KNOWN):
@@ -161,7 +165,7 @@ def full_repo_scan(KNOWN):
       full_set: 仓库当前所有静默 handler 的 identity 集合（tracked）。
       untracked_bad: 未跟踪 .py 中「不在已知豁免集合」的静默 handler [(rel, identity)]。
     """
-    full = set()
+    full = Counter()
     for rel in git_ls_files_py():
         src = git_read_worktree(rel)
         if not src:
@@ -170,7 +174,7 @@ def full_repo_scan(KNOWN):
             hs = extract_handlers(src, rel)
         except SyntaxError:
             continue
-        full |= set(handler_identity(x) for x in hs)
+        full.update(handler_identity(x) for x in hs)
     untracked_bad = []
     for rel in git_untracked_py():
         src = git_read_worktree(rel)
@@ -240,23 +244,26 @@ def main():
         if old is None:
             old = ""
         try:
-            so = set(handler_identity(x) for x in extract_handlers(old, rel))
+            so = Counter(handler_identity(x) for x in extract_handlers(old, rel))
         except SyntaxError:
             parse_errs += 1
             continue
         try:
-            sn = set(handler_identity(x) for x in extract_handlers(new, rel))
+            sn = Counter(handler_identity(x) for x in extract_handlers(new, rel))
         except SyntaxError:
             parse_errs += 1
             continue
-        genuine = sn - (so | KNOWN)
+        # ★371A5：Counter 差集（sn - (so + KNOWN) 只保留正计数）
+        #   ⇒ 同形 handler 由 1 个变 2 个也算新增；D8 的 nth 漂移不算（identity 已去 nth）。
+        genuine = sn - (so + KNOWN)
         if genuine:
-            total_added += len(genuine)
-            added_details.append((rel, genuine))
+            total_added += sum(genuine.values())
+            added_details.append((rel, list(genuine.elements())))
 
     # 全仓兜底：rot（已知豁免消失）+ 未跟踪盲区
     full_set, untracked_bad = full_repo_scan(KNOWN)
-    rot = [k for k in KNOWN if k not in full_set]
+    # ★371A5：rot 用多重集差 —— 「豁免 2 个、仓里只剩 1 个」也算腐化
+    rot = list((KNOWN - full_set).elements())
 
     crcrlf_bad = check_crcrlf(files)
 

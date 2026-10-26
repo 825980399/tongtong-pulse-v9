@@ -13,6 +13,7 @@
 import os
 import sys
 import tempfile
+from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_legacy_assembly_gate as _lg
@@ -32,15 +33,19 @@ from nucleus.self_awareness.rule_engine import (
 
 
 def file_added(old_src, new_src, known, rel="sample.py"):
-    """复刻门禁 main 的 diff 指纹差集逻辑，返回新增静默 handler 数。"""
-    so = set(handler_identity(x) for x in extract_handlers(old_src, rel))
-    sn = set(handler_identity(x) for x in extract_handlers(new_src, rel))
-    return len(sn - (so | known))
+    """复刻门禁 main 的 diff 指纹差集逻辑，返回新增静默 handler 数。
+
+    ★371A5：与主门禁同步改为多重集（Counter）—— 去 nth 后同形 handler 共用
+    identity，只有计数才能区分「多了一个」；set 差集会漏报。
+    """
+    so = Counter(handler_identity(x) for x in extract_handlers(old_src, rel))
+    sn = Counter(handler_identity(x) for x in extract_handlers(new_src, rel))
+    return sum((sn - (so + known)).values())
 
 
 def rot_missing(known, full_set):
-    """复刻 rot 检查：已知豁免中在 full_set 缺失的项。"""
-    return [k for k in known if k not in full_set]
+    """复刻 rot 检查：已知豁免中在 full_set 缺失的项（★371A5 多重集口径）。"""
+    return list((known - full_set).elements())
 
 
 def untracked_bad(rel, src, known):
@@ -53,10 +58,10 @@ def untracked_bad(rel, src, known):
 
 
 def _build_known(snippets):
-    known = set()
+    known = Counter()   # ★371A5：多重集，与主门禁一致
     for rel, src in snippets:
         for fp in extract_handlers(src, rel):
-            known.add(handler_identity(fp))
+            known[handler_identity(fp)] += 1
     return known
 
 
@@ -467,10 +472,10 @@ def main():
         failures.append("③ 新增except应为红，实际绿")
 
     # ④ 删 handler -> 红（rot）
-    full_with = set(handler_identity(x) for x in extract_handlers(EXEMPT, "mod.py"))
+    full_with = Counter(handler_identity(x) for x in extract_handlers(EXEMPT, "mod.py"))
     if rot_missing(known, full_with):
         failures.append("④ 前置假设错误：完整集合应含已知豁免")
-    if not rot_missing(known, set()):
+    if not rot_missing(known, Counter()):
         failures.append("④ 删handler应为红（rot），实际绿")
 
     # ⑤ 新增未跟踪静默文件 -> 红
