@@ -44,7 +44,6 @@ _m365_fb_log = _m365_logging.getLogger("pulse.organ.ears")
 from nucleus.const import (
     ChatEvent,
     DigestEvent,
-    EarEvent,
     LogLevel,
     MotorEvent,
     PersonaEvent,
@@ -669,97 +668,3 @@ ORGAN_META = {
     "post_wiring": [],
 }
 
-if __name__ == "__main__":
-    # ★主线第37批 T5（P2-229）：本块是**开发自测**（手动 `python 本文件` 运行），
-    #   用 print 输出到控制台是正确形态 —— 框架运行时**不会执行**本块（__main__ 守卫）。
-    #   器官的运行时日志统一走 `self._log`（见业务方法）；自测块不改为 _log 的原因：
-    #   ① 自测需要控制台可见输出；② 本块无 `self`（用的是局部实例变量）。
-    print("=== PulseEars v9.5 分层脉冲自测 ===\n")
-
-    class MockInfoField:
-        def __init__(self):
-            self.published = []
-        def publish(self, pulse):
-            self.published.append(pulse)
-
-    mock_field = MockInfoField()
-
-    ears = PulseEars("耳朵")
-    ears.set_info_field(mock_field)
-    ears.start()
-
-    result1 = ears.on_pulse({
-        "event_type": ChatEvent.MESSAGE,
-        "payload": {"content": "你是谁", "user_name": "小林"},
-        "priority": 8,
-    })
-    print(f"1. '你是谁': {result1['intent']}")
-
-    # 验证意图检测脉冲的 layer 标记
-    intent_pulses = [p for p in mock_field.published if p.get("event_type") == EarEvent.INTENT_DETECTED]
-    if intent_pulses:
-        print(f"   INTENT_DETECTED脉冲 layer: {intent_pulses[-1].get('layer', '未设置')} (预期L1)")
-
-    # 验证消化脉冲的 layer 标记
-    digest_pulses_l2 = [p for p in mock_field.published if p.get("event_type") == DigestEvent.KNOWLEDGE]
-    if digest_pulses_l2:
-        print(f"   KNOWLEDGE脉冲 layer: {digest_pulses_l2[-1].get('layer', '未设置')} (预期L2)")
-
-    print("\n2. 代码块检测 - Python代码:")
-    result2 = ears.on_pulse({
-        "event_type": ChatEvent.MESSAGE,
-        "payload": {
-            "content": "```python\nprint('Hello World')\nx = 1 + 2\nprint(x)\n```",
-            "user_name": "小林"
-        },
-        "priority": 8,
-    })
-    print(f"   状态: {result2['status']}")
-    print(f"   代码块数: {result2['block_count']}")
-    print(f"   语言: {result2['languages']}")
-
-    # 验证代码执行脉冲的 layer 标记
-    execute_pulses = [p for p in mock_field.published if p.get("event_type") == MotorEvent.EXECUTE]
-    if execute_pulses:
-        print(f"   EXECUTE脉冲 layer: {execute_pulses[-1].get('layer', '未设置')} (预期L1)")
-
-    print("\n3. 代码块检测 - 无语言标记:")
-    result3 = ears.on_pulse({
-        "event_type": ChatEvent.MESSAGE,
-        "payload": {
-            "content": "```\nfor i in range(5):\n    print(i)\n```",
-            "user_name": "小林"
-        },
-        "priority": 8,
-    })
-    print(f"   状态: {result3['status']}")
-    print(f"   代码块数: {result3['block_count']}")
-
-    print("\n4. 危险代码检测（耳朵只识别，代码沙箱拦截）:")
-    result4 = ears.on_pulse({
-        "event_type": ChatEvent.MESSAGE,
-        "payload": {
-            "content": "```python\nimport os\nos.system('del /f *.*')\n```",
-            "user_name": "测试用户"
-        },
-        "priority": 8,
-    })
-    print(f"   状态: {result4['status']}")
-    print("   说明: 耳朵只识别代码块，危险拦截由代码沙箱处理")
-
-    status = ears.on_pulse({
-        "event_type": SystemEvent.STATUS_REQUEST,
-        "payload": {},
-        "priority": 5,
-    })
-    print(f"\n5. 统计: 监听{status['listen_count']}次, "
-          f"代码块{status['code_block_count']}次, "
-          f"分布={status['intent_distribution']}")
-
-    print(f"\n6. motor.execute 脉冲: {len(execute_pulses)} 条")
-    for p in execute_pulses[:2]:
-        payload = p["payload"]
-        print(f"   - 语言={payload['language']}, 代码长度={len(payload['code'])}, layer={p.get('layer', '未设置')}")
-
-    ears.stop()
-    print("\n=== 自测全部通过 ===")

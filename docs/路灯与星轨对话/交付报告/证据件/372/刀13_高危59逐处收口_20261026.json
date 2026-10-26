@@ -1,0 +1,130 @@
+{
+ "batch": 372,
+ "blade": 13,
+ "ticket": "T-371-高危59逐处收口-1",
+ "batch_no_of_series": 1,
+ "rule": [
+  "assert_in_block==0",
+  "ast_block_bounds",
+  "compile+ast_equal",
+  "preserve_eol"
+ ],
+ "baseline": {
+  "blocks": 111,
+  "high_risk": 59,
+  "print_only": 50,
+  "no_side_effect": 2,
+  "lines": 5327
+ },
+ "after": {
+  "blocks": 101,
+  "high_risk": 49,
+  "print_only": 50,
+  "no_side_effect": 2,
+  "lines": 4391
+ },
+ "collected_n": 10,
+ "lines_removed": 936,
+ "collected": [
+  {
+   "file": "organs/motor/PulseCodeSandbox.py",
+   "start": 507,
+   "end": 615,
+   "lines_removed": 109,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": true
+  },
+  {
+   "file": "organs/body/PulseLiver.py",
+   "start": 3825,
+   "end": 3925,
+   "lines_removed": 101,
+   "assert_in_block": 0,
+   "tail_after_block": 3,
+   "crlf": true
+  },
+  {
+   "file": "organs/motor/PulseFileDigester.py",
+   "start": 732,
+   "end": 832,
+   "lines_removed": 101,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": true
+  },
+  {
+   "file": "organs/body/PulseStomach.py",
+   "start": 2540,
+   "end": 2635,
+   "lines_removed": 96,
+   "assert_in_block": 0,
+   "tail_after_block": 4,
+   "crlf": false
+  },
+  {
+   "file": "organs/senses/PulseEars.py",
+   "start": 672,
+   "end": 765,
+   "lines_removed": 94,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": false
+  },
+  {
+   "file": "organs/identity/PulseSpiritConstitution.py",
+   "start": 683,
+   "end": 772,
+   "lines_removed": 90,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": true
+  },
+  {
+   "file": "organs/senses/PulseEyes.py",
+   "start": 652,
+   "end": 739,
+   "lines_removed": 88,
+   "assert_in_block": 0,
+   "tail_after_block": 2,
+   "crlf": true
+  },
+  {
+   "file": "organs/brain/PulseReflection.py",
+   "start": 931,
+   "end": 1017,
+   "lines_removed": 87,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": true
+  },
+  {
+   "file": "organs/brain/PulseSemanticComprehension.py",
+   "start": 889,
+   "end": 973,
+   "lines_removed": 85,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": false
+  },
+  {
+   "file": "organs/identity/PulsePersonalityKernel.py",
+   "start": 867,
+   "end": 951,
+   "lines_removed": 85,
+   "assert_in_block": 0,
+   "tail_after_block": 1,
+   "crlf": true
+  }
+ ],
+ "deferred": [
+  {
+   "file": "organs/brain/PulseInterestModel.py",
+   "why": "块内 assert=1 ⇒ 顺延（可能有独有验证）"
+  }
+ ],
+ "deferred_n": 1,
+ "remaining_high_risk": 49,
+ "side_effect_fixed": "organs/senses/PulseEars.py 删块后 EarEvent 变未使用导入，已移除",
+ "three_state": "static_verified"
+}
