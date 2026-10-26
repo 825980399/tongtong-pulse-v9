@@ -411,6 +411,91 @@ _M366_WRITE_REDIRECTS = (
 #: 这不是污染 ⇒ 全树探测里**不记为脏**，但仍在报告里可见（记 designed 计数）。
 _M366_DESIGNED_SUBDIRS = ("data/.t_face_roster/",)
 
+# ----------------------------------------------- ★369刀5：动态路径族沙箱注入（N4 续面）
+#: 六件写面的实测归属（`logs/full_regression/n4_writemap/*.json` 前后树快照）：
+#:   m84    新增 4× data/reports/memory/top_types_*.json ＋ 改 data/verification_learning.json
+#:   m60    改 data/metrics/evolution_effectiveness.json
+#:   t101a  新增 data/call_graph/unresolved_samples_*.jsonl（12MB/份）
+#:   t105a  新增 同上
+#:   m49    删 2× unresolved_samples_*（★真相：不是"瞬删瞬建"，是 dump_samples 的
+#:          _roll「只留最新 7 份」在滚，删的是上一批测试刚建出来的样本）
+#:   m53    删 4× top_types_20261022_*（同一族滚动副作用；本刀**隔离执行**）
+_M369_DYNAMIC_TARGETS = {
+    "test_dialog_evol_m84.py":
+        ("verification_learning_hub 单例 + 自观测产物改道",
+         "data/verification_learning.json ／ data/reports/memory/top_types_*.json"),
+    "test_evolution_backup_filter_m60.py":
+        ("PatchAutoApprover.DEFAULT_FILE 类属性",
+         "data/metrics/evolution_effectiveness.json"),
+    "test_t101a_low_risk_release.py":
+        ("unresolved_samples._dir_of",
+         "data/call_graph/unresolved_samples_*.jsonl"),
+    "test_t105a_release_loop.py":
+        ("unresolved_samples._dir_of",
+         "data/call_graph/unresolved_samples_*.jsonl"),
+    "test_tool_wiring_m49.py":
+        ("unresolved_samples._dir_of（连 _roll 一起进沙箱）",
+         "data/call_graph/unresolved_samples_*.jsonl 的滚动删除"),
+    "test_patch_self_apply_m53.py":
+        ("自观测产物改道 + unresolved 沙箱（★破坏性用例，隔离执行）",
+         "data/reports/memory/top_types_*.json 的删除"),
+}
+
+
+def m369_sandbox_root(tmp_root: str) -> str:
+    """六件共用的沙箱根（纯函数，便于单测）。"""
+    return os.path.join(str(tmp_root), "data")
+
+
+def m369_inject_all(tmp_root: str) -> dict:
+    """把六件涉及的写口一次性注入沙箱。返回 {注入点: 目标路径}。
+
+    ★全部走生产侧已留好的注入口（铁律158），不改任何生产代码。
+    """
+    import importlib
+    _done: dict = {}
+    _root = m369_sandbox_root(tmp_root)
+    os.makedirs(_root, exist_ok=True)
+
+    # ① 自观测产物改道（top_types_*）：生产侧 domain_guard 的隔离声明分支
+    os.environ["PULSE_ISOLATION_ROOT"] = _root
+    _done["env.PULSE_ISOLATION_ROOT"] = _root
+
+    # ② verification_learning_hub 单例 → 沙箱实例（构造器本就支持 file_path）
+    try:
+        _vh = importlib.import_module("nucleus.mnemosyne.verification_learning_hub")
+        _p = os.path.join(_root, "verification_learning.json")
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _vh._hub = _vh.VerificationLearningHub(file_path=_p)
+        _done["verification_learning_hub._hub"] = _p
+    except Exception as _e:  # noqa: BLE001
+        print("[369刀5] verification_learning_hub 注入跳过: %s" % type(_e).__name__)
+
+    # ③ evolution_effectiveness.json：注入口是 **_ISO_BASE_DIR**（模块级隔离变量，
+    #   源码注释即写明「测试隔离 shim 会 patch 本模块的该变量」）。
+    #   ★不是 DEFAULT_FILE —— 那是文件名常量，改它只会改文件名、不改目录，
+    #   实测按 DEFAULT_FILE 注入后 data/metrics/evolution_effectiveness.json 仍被改。
+    try:
+        _pa = importlib.import_module("nucleus.evolution.PatchAutoApprover")
+        _d = os.path.join(_root, "metrics")
+        os.makedirs(_d, exist_ok=True)
+        _pa._ISO_BASE_DIR = _d
+        _done["PatchAutoApprover._ISO_BASE_DIR"] = _d
+    except Exception as _e:  # noqa: BLE001
+        print("[369刀5] PatchAutoApprover 注入跳过: %s" % type(_e).__name__)
+
+    # ④ unresolved_samples._dir_of → 沙箱（写与 _roll 删除一起进沙箱）
+    try:
+        _us = importlib.import_module("nucleus.self_awareness.unresolved_samples")
+        _d = os.path.join(_root, "call_graph")
+        os.makedirs(_d, exist_ok=True)
+        _us._dir_of = lambda project_root=None: _d
+        _done["unresolved_samples._dir_of"] = _d
+    except Exception as _e:  # noqa: BLE001
+        print("[369刀5] unresolved_samples 注入跳过: %s" % type(_e).__name__)
+
+    return _done
+
 
 def m366_redirect_plan(tmp_root: str) -> list:
     """按重定向表算目标路径（纯函数，便于测试）：[(模块, 属性, 目标绝对路径)]。"""
@@ -445,6 +530,47 @@ def m366_redirect_data_writes(tmp_path, monkeypatch):
         monkeypatch.setattr(_m, _attr, _tgt, raising=False)
         _done["%s.%s" % (_mod, _attr)] = _tgt
     yield _done
+
+
+@pytest.fixture(autouse=True)
+def m369_dynamic_sandbox(request, tmp_path, monkeypatch):
+    """★369刀5：对「动态路径族」六件测试注入沙箱写口（其余测试零影响）。
+
+    与 `m366_redirect_data_writes` 的分工：
+      · 后者 patch **模块级 REL 常量**（os.path.join 会丢弃 root ⇒ 单点转向沙箱）；
+      · 本 fixture 处理**常量表覆盖不到**的动态拼接/默认参数/类属性/函数级路径。
+    触发条件严格按测试文件名白名单（`_M369_DYNAMIC_TARGETS`），非白名单直接 yield 空。
+    """
+    if is_framework_running() or os.environ.get("PULSE_DATA_REDIRECT", "1") == "0":
+        yield {}
+        return
+    _fspath = str(getattr(request.node, "fspath", "") or "")
+    _base = os.path.basename(_fspath)
+    if _base not in _M369_DYNAMIC_TARGETS:
+        yield {}
+        return
+    _done = m369_inject_all(str(tmp_path))
+    # 用例结束后恢复：env 与类属性都要还原，避免污染同会话后续测试
+    _prev_env = os.environ.get("PULSE_ISOLATION_ROOT")
+    try:
+        yield _done
+    finally:
+        if _prev_env is None:
+            os.environ.pop("PULSE_ISOLATION_ROOT", None)
+        else:
+            os.environ["PULSE_ISOLATION_ROOT"] = _prev_env
+        try:
+            import importlib
+
+            _vh = importlib.import_module("nucleus.mnemosyne.verification_learning_hub")
+            _vh._hub = None
+            _us = importlib.import_module("nucleus.self_awareness.unresolved_samples")
+            importlib.reload(_us)
+        except Exception as _m369_re:
+            # ★cw2 门禁：清理失败不得静默吞（`pass` 会被判新增静默 except，实测阻断过一次）。
+            #   这里用 silent_exc 留痕，既满足门禁也让"注入未还原"这件事可见。
+            silent_exc(_m369_re, where="conftest.m369_dynamic_sandbox 还原",
+                       level="warning")
 
 
 # ---------------------------------------------------------------- v2：全树写入探测
