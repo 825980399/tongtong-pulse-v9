@@ -114,9 +114,13 @@ class TestEngineCore(unittest.TestCase):
         self.assertFalse(e.register_analyzer("fake_loops", lambda _e: {}),
                          "重复注册应被忽略")
         self.assertTrue(e.register_analyzer("fake_loops", lambda _e: {}, replace=True))
-        self.assertEqual(e.list_analyzers(), ["fake_loops"])
+        # ★372刀8：311批刀2 起引擎 __init__ 会**默认注册** structure_change
+        #   （结构指纹差分，挂在既有节拍上），故空引擎不再是一张白纸。
+        #   实测空引擎 list_analyzers() == ["structure_change"]。
+        self.assertEqual(sorted(e.list_analyzers()), ["fake_loops", "structure_change"])
         self.assertTrue(e.unregister_analyzer("fake_loops"))
-        self.assertEqual(e.list_analyzers(), [])
+        self.assertEqual(e.list_analyzers(), ["structure_change"],
+                         "注销 fake_loops 后应只剩引擎默认的 structure_change")
 
     def test_register_validates_args(self):
         e = SelfAwarenessEngine()
@@ -628,12 +632,15 @@ class TestIntegration(unittest.TestCase):
         _e = get_self_awareness_engine()
         # ★第36批 T1：4 个（原）+ call_graph / knowledge_quality（新增接线）
         # ★第38批 T2：+ evolution_health（P2-214 接线）→ 7 个。
+        # ★372刀8：+ event_tap（主线第17批 T5/P2-63 EventTap 旁路监听器）
+        #          + structure_change（311批刀2，引擎 __init__ 默认注册）→ **9 个**。
         #   判据（skill §31.5）：该断言守的是**当前设计契约**（生产接线清单），
         #   故**同步期望值并保持 == 精确计数**，而非放宽为 assertGreaterEqual。
         self.assertEqual(sorted(_e.list_analyzers()),
-                         ["call_graph", "code_review", "evolution_health",
-                          "fake_loops", "knowledge_quality", "log_analyzer",
-                          "production_consumption"])
+                         ["call_graph", "code_review", "event_tap",
+                          "evolution_health", "fake_loops", "knowledge_quality",
+                          "log_analyzer", "production_consumption",
+                          "structure_change"])
         self.assertEqual(_e.get_stats()["run_count"], 0, "启动不得自动分析")
         self.assertTrue(any("SelfAwareness" in m for _, m in _msgs))
 

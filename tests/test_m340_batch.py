@@ -153,12 +153,23 @@ def test_30_reanchor_fields_present_and_history_kept():
     #   172刀0 时代的 64（证明 340 刀2 那次重锚没被 342 刀5 抹掉）。
     assert len(_h) >= 2
     assert _h[0]["from"]["total_occurrences"] == 64
-    # 最近一条的 `from` == 本次重锚前的值（62/45），`to` == 文件里的现值
-    assert _h[-1]["from"]["total_occurrences"] == 62
-    assert _h[-1]["from"]["file_count"] == 45
+    # ★372刀8：原实现**写死** `_h[-1]["from"] == 62/45`（342刀5 时代的值），
+    #   而基线是**活的** —— 364刀A6、372刀8 又各重锚一次，最近一条 from 已是 56/42。
+    #   改为**结构性断言**（不写死任何数字，且比原断言更强）：
+    #   ① 链条连续：每条的 `to` == 下一条的 `from` —— 这才是"历史是累积的、
+    #      不是被最后一次覆盖"的真正证明（原断言用写死的 62 只能证明一次）；
+    #   ② 末条 `to` == 文件现值；
+    #   ③ 末条归因算术自洽。
+    for _i in range(len(_h) - 1):
+        assert _h[_i]["to"] == _h[_i + 1]["from"], (
+            "重锚历史必须首尾相接（第 %d 条的 to != 第 %d 条的 from）：%s vs %s"
+            % (_i, _i + 1, _h[_i]["to"], _h[_i + 1]["from"]))
     assert _h[-1]["to"]["total_occurrences"] == _d["total_occurrences"]
+    assert _h[-1]["to"]["file_count"] == _d["file_count"]
     assert sum(a["delta_occurrences"] for a in _h[-1]["attribution"]) == \
         _h[-1]["to"]["total_occurrences"] - _h[-1]["from"]["total_occurrences"]
+    assert sum(a["delta_files"] for a in _h[-1]["attribution"]) == \
+        _h[-1]["to"]["file_count"] - _h[-1]["from"]["file_count"]
 
 
 def test_31_baseline_numbers_match_current_scan():

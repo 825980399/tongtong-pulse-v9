@@ -169,17 +169,30 @@ def test_342_d5_thread_baseline_reanchored_with_attribution():
     """
     _p = os.path.join(ROOT, "tools", "ci", "baselines", "thread_spawn_baseline.json")
     _d = json.load(io.open(_p, encoding="utf-8"))
-    assert _d["total_occurrences"] == 59 and _d["file_count"] == 44
     _h = _d.get("reanchor_history") or []
     assert _h
-    _last = _h[-1]
-    assert _last["reanchor_by"] == "342刀5"
+    # ★372刀8：原实现断言「**最后一条**重锚必须是 342刀5、总数必须 59/44」。
+    #   但基线是**活的** —— 364刀A6（→56/42）、372刀8（→58/44）又各重锚一次，
+    #   于是"最后一条"早已不是 342刀5 ⇒ 该断言每次重锚都会红。
+    #   ★不改为把 59 改成 58（那只是把快照挪一格，下次照样红），而是
+    #     **按署名定位 342刀5 那一条**再验它自己的归因自洽 ——
+    #     守的是「342刀5 那次重锚的归因算术自洽」这一意图，与后续重锚无关。
+    _last = None
+    for _x in _h:
+        if _x.get("reanchor_by") == "342刀5":
+            _last = _x
+            break
+    assert _last is not None, "重锚历史里应仍保有 342刀5 那一条（历史不得被覆盖）"
     assert _last["from"]["total_occurrences"] == 62
     assert _last["from"]["file_count"] == 45
+    assert _last["to"]["total_occurrences"] == 59
+    assert _last["to"]["file_count"] == 44
     _sd = sum(a["delta_occurrences"] for a in _last["attribution"])
     _sf = sum(a["delta_files"] for a in _last["attribution"])
     assert _sd == _last["to"]["total_occurrences"] - _last["from"]["total_occurrences"]
     assert _sf == _last["to"]["file_count"] - _last["from"]["file_count"]
+    # 现值仍应与"当前扫描"一致（该不变量由 test_m340_batch::test_31 真扫校验）
+    assert _d["total_occurrences"] == _h[-1]["to"]["total_occurrences"]
 
 
 def test_342_d5_pair_evidence_complete():
