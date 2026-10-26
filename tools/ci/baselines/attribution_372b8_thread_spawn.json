@@ -1,0 +1,18 @@
+[
+  {
+    "file": "nucleus/m365_mem_attribution.py",
+    "delta_occurrences": 1,
+    "delta_files": 1,
+    "commit": "83c0d39d",
+    "batch": "365/B2",
+    "reason": "365/B2「内存归属 fixed/live 同进程采样接线」新增的采样线程（threading.Thread(target=_loop, name=\"m365_mem_attrib\", daemon=True)）。该文件是**本批新建**（原不存在），故 occurrences 与 files 各 +1。"
+  },
+  {
+    "file": "organs/body/PulseHeart.py",
+    "delta_occurrences": 1,
+    "delta_files": 1,
+    "commit": "b0285387",
+    "batch": "365/C1",
+    "reason": "365/C1「心跳链断链防护——独立看门狗」新增的看门狗线程（threading.Thread(target=self._m365_watchdog_loop, daemon=True)）。实测该文件在 b0285387 之前 spawn 数为 0（git show b0285387^ 验证），故 occurrences 与 files 各 +1。"
+  }
+]
