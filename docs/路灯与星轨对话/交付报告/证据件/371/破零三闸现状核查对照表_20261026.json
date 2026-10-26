@@ -1,0 +1,131 @@
+{
+ "_schema": "m371.three_gates_snapshot.v1",
+ "_note": "371 刀3 只读核查的快照读数（每一值均标注来源与时刻）；本文件是**当拍快照**，不作为长期基线",
+ "captured_at": "2026-10-26T17:24:04+08:00",
+ "captured_by": "路灯 (371 刀3)",
+ "proc_gen": "pid25948@20261026-122505",
+ "pid": 25948,
+ "beat": 1371,
+ "gates": {
+  "gate1_action_surface": {
+   "anchor": "nucleus/self_inspector.py:7999 _m340_judge_action_open",
+   "constants": {
+    "_O3_MISJUDGE_LINE": 0.1,
+    "_M340_JUDGE_ACTION_MIN_TICKS": 3
+   },
+   "reading": {
+    "judge_action_open": false,
+    "verdict": "CLOSED",
+    "mode": "review",
+    "sample": "PASS|provisional(混现)",
+    "misjudge": 0.0
+   },
+   "source_lines": [
+    "[340判死] severity 档拒收: file=somatics/reflex.py method=enable_rule 原因=action_closed（行动面开=False）",
+    "[326刀2][O3开闸] … sample=PASS misjudge=0.0",
+    "[326刀2][O3开闸] … sample=provisional misjudge=0.0 official=NOT_RUN reason=判据面未跑"
+   ],
+   "blocker": "sample 间歇 provisional ⇒ 三项全满足不成立 ⇒ streak 反复归零，够不到连续 3 tick",
+   "finding_note": "docstring 写「三取一」，实现为 `_mode_ok and _sample_ok and _mis_ok`（三取与），措辞误导，只记录不改"
+  },
+  "gate2_o3_open": {
+   "anchor": "nucleus/self_inspector.py:7215 o3_open_gate_report",
+   "reading": {
+    "official": "NOT_RUN",
+    "reason": "判据面未跑",
+    "evidence_tier": "hard_strict",
+    "target": 100,
+    "hard_total": 357,
+    "pool": 644,
+    "capped": false,
+    "sample": "provisional",
+    "misjudge": 0.0
+   },
+   "blocker": "上游判据面未产出 ⇒ 无输入可判（BLOCKED_UPSTREAM 口径成立）；不是候选不足（hard_total 357 > target 100）",
+   "causal_link": "闸① 不开 ⇒ 判据面不产 ⇒ 闸② 恒 NOT_RUN；二者同一链条，不可分别疏通"
+  },
+  "gate3_reload_chain": {
+   "anchors": [
+    "nucleus/mnemosyne/live_gate.py:267 _cond_recall",
+    "nucleus/mnemosyne/live_gate.py:285 _cond_cold",
+    "nucleus/mnemosyne/live_gate.py:301 live_gate_ok",
+    "organs/core/PulseMetricsCollector.py:679/704",
+    "nucleus/mnemosyne/PulseNodePool.py:2780/2836/2840-2867/2869-2897"
+   ],
+   "reading": {
+    "ok": false,
+    "mode": "shadow",
+    "heap_mb": 1738.7,
+    "w1": "alive",
+    "reload": null,
+    "cold_index": 5531,
+    "blocked_by": "recall_hit_rate_ge_95",
+    "paused": "-",
+    "live_sw": "off"
+   },
+   "blocker": "★写侧从未生成 reload_stats.json（data/ 全树零命中）⇒ 读侧只能收 None ⇒ 被 recall_hit_rate_ge_95 单拦",
+   "break_location": "write_side_never_persisted",
+   "not_break_location": "read_side_path_mismatch",
+   "dual_reading_warning": {
+    "a": "[338冷化] 召回 … 回载=可用  ← 内存内本次召回判定（PulseNodePool）",
+    "b": "[350开闸] live_gate … 回载=None  ← 持久化统计文件不可得",
+    "note": "两者不是同一件事；看到 a 不能推断 b 满足"
+   },
+   "heap_drift_note": "任务书 T0(15:04) 记 6749.4，本拍(17:24) 1738.7；heap 随 GC/淘汰大幅波动，引用必须带时刻"
+  }
+ },
+ "subknife_candidates": [
+  {
+   "id": "A",
+   "title": "sample 间歇 provisional 成因定位",
+   "surface": "判据面",
+   "risk": "中",
+   "needs_downtime": false,
+   "touches": "只读定位优先；改抽验逻辑须另报裁决"
+  },
+  {
+   "id": "B",
+   "title": "reload_stats.json 写侧未落盘断点定位",
+   "surface": "回载链",
+   "risk": "低",
+   "needs_downtime": false,
+   "touches": "只定位"
+  },
+  {
+   "id": "C",
+   "title": "确认写侧逻辑在但未触发后，补首次落盘",
+   "surface": "回载链写侧",
+   "risk": "中高",
+   "needs_downtime": false,
+   "touches": "改生产写路径，重启生效"
+  },
+  {
+   "id": "D",
+   "title": "闸① docstring「三取一」订正为「三取与」",
+   "surface": "文档面",
+   "risk": "低",
+   "needs_downtime": false,
+   "touches": "纯文案"
+  },
+  {
+   "id": "E",
+   "title": "heap 读数引用口径统一（带时刻）",
+   "surface": "文档/观测面",
+   "risk": "低",
+   "needs_downtime": false,
+   "touches": "不改代码"
+  }
+ ],
+ "explicitly_not_doing": [
+  "翻任何闸",
+  "改 _LEGAL_TRANSITIONS 状态机",
+  "写审批池/审计池数据",
+  "放宽 recall_hit_rate_ge_95 或连续 tick 门槛"
+ ],
+ "boundary": {
+  "production_diff": "none",
+  "writes_data": false,
+  "new_config_switch": false,
+  "needs_downtime": false
+ }
+}
