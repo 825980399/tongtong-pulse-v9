@@ -26,7 +26,11 @@ from organs.brain.PulseInnerWorld import PulseInnerWorld
 _IW_SRC = open(os.path.join(_PROJECT_ROOT, "organs", "brain", "PulseInnerWorld.py"),
                encoding="utf-8").read()
 
-_CH = "ark-ds-v4-flash"          # 取一个真实存在的渠道名
+_CH = "modelscope"              # ★372刀8：原写 ark-ds-v4-flash，该渠道随 ark-* 于 352刀9
+                               #   （2026-10-23 小林触发，火山免费额度耗尽）挂起 ⇒
+                               #   get_semaphore() 对它返回 None，下游 .max_value 就炸。
+                               #   取一个**现态真实存在**的渠道（max_concurrent=2，便于验并发上限）。
+                               #   ★这不是产品缺陷：产品对未注册渠道返回 None 是正确行为。
 _OLD_HTTP = _ssrf.safe_http_json
 _OLD_CFG = _rl.get_llm_call_config
 
@@ -99,10 +103,16 @@ class TestSourceWiring(unittest.TestCase):
 
     def test_03_release_in_finally(self):
         """release 必须在 finally 中（异常路径不得泄漏许可）。"""
+        # ★372刀8：原实现取 acquire 之后**固定 2600 字符**窗口。源码一变长
+        #   （363刀B2 记账块插入后该段几乎翻倍）release 就落到窗口外 ⇒ 假红，
+        #   而 release 其实一直在（PulseInnerWorld.py 的 finally 里）。
+        #   改为不依赖窗口的定位：acquire 之后必须有 release，且两者之间有 finally。
         _i = _IW_SRC.index("_m32_slot = _m32_mgr.acquire(")
-        _seg = _IW_SRC[_i:_i + 2600]
-        self.assertIn("finally:", _seg)
-        self.assertIn("_m32_mgr.release(_m32_ch)", _seg)
+        _j = _IW_SRC.find("_m32_mgr.release(_m32_ch)", _i)
+        self.assertNotEqual(_j, -1, "acquire 之后必须有 release（否则许可泄漏）")
+        _f = _IW_SRC.find("finally:", _i, _j)
+        self.assertNotEqual(_f, -1,
+                            "release 必须在 finally 中（异常路径不得泄漏许可）")
 
 
 class TestConcurrencyGuard(_Base):
