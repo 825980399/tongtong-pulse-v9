@@ -157,8 +157,36 @@ class TestSafeRollover(unittest.TestCase):
     def setUp(self):
         self.d = tempfile.mkdtemp(prefix="m49_t33_")
         self.log = os.path.join(self.d, "t.log")
+        # ★372刀8：349刀10① 起 doRollover 有前置闸门 _m349_rotate_allowed() ——
+        #   非入口进程一律**不轮转**（防 348 事故：脚本把 .1 挪走、把 .5 覆盖，
+        #   主进程毫无察觉）。本测试的 __main__ 是 pytest 不是 main.py ⇒ 被拦 ⇒
+        #   doRollover 直接 return ⇒ 不出 .1、不写 marker、重试与告警逻辑根本走不到
+        #   （表现为 test_31/32/35/38/39 五条同时红，而红因各不相同、极易误判）。
+        #   这是产品的**设计变更**不是缺陷 ⇒ 用产品自带的 PULSE_LOG_ROTATE=1
+        #   强开通路（logger.py:531 明确支持 env 强开），**不打桩绕过闸门本身**，
+        #   闸门逻辑仍被真实执行（走 env_force_on 分支）。
+        #   闸门结果进程内缓存于 _M349_ROTATE_DECISION，故每次先 clear 再判定。
+        self._orig_rot_env = os.environ.get("PULSE_LOG_ROTATE")
+        os.environ["PULSE_LOG_ROTATE"] = "1"
+        _lg._M349_ROTATE_DECISION.clear()
+        # ★372刀8：356刀12② 轮转风暴防护 —— 同进程 60s 滑窗内轮转上限 3 次
+        #   （防"截断失败→主文件没变小→立刻再触发"的风暴）。该滑窗是**模块级**
+        #   状态，整类连跑时前面用例会把 3 次预算用光 ⇒ 本类的兜底轮转被冷却拦下
+        #   ⇒ test_38 拿不到 .1（单独跑却是通过的，典型的状态残留假红）。
+        #   这里清空以隔离用例；★防护逻辑本身仍被真实执行，且下方
+        #   test_40 专门守着它，避免"清状态=删覆盖"。
+        _lg._M356_ROLLOVER_STAMPS.clear()
+        _lg._M356_ROLLOVER_STORM_WARNED = False
 
     def tearDown(self):
+        # 还原环境 + 清缓存（防止把 allowed=True 残留给同进程的后续测试）
+        if self._orig_rot_env is None:
+            os.environ.pop("PULSE_LOG_ROTATE", None)
+        else:
+            os.environ["PULSE_LOG_ROTATE"] = self._orig_rot_env
+        _lg._M349_ROTATE_DECISION.clear()
+        _lg._M356_ROLLOVER_STAMPS.clear()
+        _lg._M356_ROLLOVER_STORM_WARNED = False
         shutil.rmtree(self.d, ignore_errors=True)
 
     def _handler(self):
@@ -347,9 +375,41 @@ class TestSafeRollover(unittest.TestCase):
                 h.close()
         finally:
             _logger.removeHandler(_cap)
+        # ★372刀8：360刀4 起失败路径统一留痕 `_m360_rollover_note`，其消息同样以
+        #   "日志轮转失败"开头（"日志轮转失败[stage=...]"）⇒ 旧的宽过滤条件把它们
+        #   一并计入（实测 5 条而非 1 条）。
+        #   本用例守的是**59批冷却告警器**（"复制+截断兜底也失败"）：冷却期内只报 1 次。
+        #   两类留痕语义不同 —— 360 留痕是**逐次计数**（设计如此，带累计计数），
+        #   不受 59 批冷却约束，故分列断言，不混在一起数。
         _warns = [r.getMessage() for r in _records
-                  if r.levelno == logging.WARNING and "日志轮转失败" in r.getMessage()]
+                  if r.levelno == logging.WARNING
+                  and "复制+截断兜底也失败" in r.getMessage()]
+        _notes = [r.getMessage() for r in _records
+                  if r.levelno == logging.WARNING
+                  and "日志轮转失败[stage=" in r.getMessage()]
         self.assertEqual(len(_warns), 1, "冷却期内应只报 1 次 WARNING")
+        # 360 留痕逐次记录（2 次 doRollover × 每次 2 个 stage），至少应有多条
+        self.assertGreaterEqual(len(_notes), 2,
+                                "360 留痕应逐次记录，不应被 59 批冷却吞掉")
+
+    def test_40_storm_budget_caps_rollover(self):
+        """★372刀8 补守：356刀12② 滑窗限额（60s 内 3 次）必须真的拦得住。
+
+        本类 setUp 会清空 _M356_ROLLOVER_STAMPS 做用例隔离 —— 那同时也把这条
+        产品行为的覆盖清掉了，故这里专门补一条，避免"清状态 = 静默删覆盖"。
+        """
+        _lg._M356_ROLLOVER_STAMPS.clear()
+        _lg._M356_ROLLOVER_STORM_WARNED = False
+        _n = _lg._M356_ROLLOVER_MAX_PER_WINDOW
+        self.assertGreaterEqual(_n, 1)
+        _oks = [_lg._m356_rollover_budget_ok() for _ in range(_n)]
+        self.assertEqual(_oks, [True] * _n, "窗口内前 N 次都应放行")
+        # 第 N+1 次必须被拦（否则风暴防护形同虚设）
+        self.assertFalse(_lg._m356_rollover_budget_ok(),
+                         "超出滑窗限额后必须冷却降级（不再复制）")
+        _lg._M356_ROLLOVER_STAMPS.clear()
+        _lg._M356_ROLLOVER_STORM_WARNED = False
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

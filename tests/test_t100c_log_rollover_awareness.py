@@ -11,6 +11,8 @@ import json
 import os
 import time
 
+import pytest
+
 import nucleus.logger as _lg
 from nucleus.logger import (
     _LOG_INTEGRITY_FILE,
@@ -26,6 +28,22 @@ from nucleus.logger import (
 def _write_file(path, content):
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
+
+
+@pytest.fixture(autouse=True)
+def _allow_rotate(monkeypatch):
+    """★372刀8：349刀10① 起 doRollover 有前置闸门 _m349_rotate_allowed() ——
+    非入口进程一律不轮转（防 348 事故）。pytest 的 __main__ 不是 main.py ⇒
+    被拦 ⇒ doRollover 直接 return ⇒ 不出 .1、不写 marker。
+
+    这是产品的**设计变更**不是缺陷 ⇒ 用产品自带的 PULSE_LOG_ROTATE=1 强开通路
+    （logger.py:531 明确支持），**不打桩绕过闸门本身** —— 闸门仍被真实执行，
+    只是判定走 env_force_on 分支。闸门结果进程内缓存，故前后都要 clear。
+    """
+    monkeypatch.setenv("PULSE_LOG_ROTATE", "1")
+    _lg._M349_ROTATE_DECISION.clear()
+    yield
+    _lg._M349_ROTATE_DECISION.clear()
 
 
 def test_doRollover_writes_unique_marker(tmp_path):
