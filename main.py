@@ -2102,8 +2102,17 @@ class PulseFramework:
         #   参数由 `config.SNAPSHOT_LAZY_LOAD` 决定，默认 False（理由与实测数据见
         #   config.py 该键上方注释）；修通与否与开关是两件事，开关关着也能被隔离根
         #   以 `load(full_load=False)` 直接驱动验证。
+        # ★372刀6：把开关口径**打到日志上** —— 改前只有源码注释说明「默认关、维持全量」，
+        #   启动日志里查不到，事后无法从现场回答"这次跑的是懒加载还是全量"。
+        #   本行纯观测：不改取值、不改分支，只把已算好的那个布尔念一遍。
+        _m372_lazy_on = bool(getattr(config, "SNAPSHOT_LAZY_LOAD", False))
+        self._log(LogLevel.INFO,
+                  "[372刀6] 快照加载口径: SNAPSHOT_LAZY_LOAD=%s ⇒ %s"
+                  "（342刀1 实测懒加载 122.6s 扫+131.4s 物化 vs 全量 6.0s，"
+                  "故维持全量；切片算法优化属长期项）"
+                  % (_m372_lazy_on, "懒加载" if _m372_lazy_on else "全量"))
         restored_nodes = self.snapshot.load(
-            full_load=False if bool(getattr(config, "SNAPSHOT_LAZY_LOAD", False)) else True)
+            full_load=False if _m372_lazy_on else True)
         # 加载L1独立快照
         l1_nodes = self.snapshot.load_l1()
         if l1_nodes:
