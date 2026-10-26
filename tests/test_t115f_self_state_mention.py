@@ -44,6 +44,17 @@ class _FakeCortex(PC):
         self._self_state_mention_last_ts = 0.0
         self._self_state_mention_cids = set()
         self._log = lambda *a, **k: None
+        # ★372刀8：补 237 批刀2 回执钩所需的账本属性（与 PulseCortex.__init__
+        #   的 :154-157 原样一致）。缺它们 ⇒ _receipt_ledger_pop 抛 AttributeError
+        #   ⇒ 被红线的「任何异常一律降级为无影响」except 吞掉 ⇒ 恒返回原回复，
+        #   于是 3 条正例红、2 条负控**假通过**（判据根本没被检验）。
+        #   这里补**真实依赖**而非给 _receipt_ledger_pop 打桩，
+        #   是为了让回执钩走真实代码路径（账本空 ⇒ 返 None ⇒ 继续走六道门）。
+        import threading as _th
+        self._pending_receipt_ledger = {}
+        self._pending_receipt_ledger_lock = _th.RLock()
+        self._pending_receipt_ledger_max = 512
+        self._pending_receipt_ledger_ttl = 3600.0
 
 
 class TestT115fSelfStateMention(unittest.TestCase):
@@ -100,6 +111,21 @@ class TestT115fSelfStateMention(unittest.TestCase):
         out = self._call(eng, "原回复", cid="c2", user_input="你最近怎么样")
         self.assertNotEqual(out, "原回复")
         self.assertIn("知识质量", out)
+
+    def test_fake_cortex_has_receipt_hook_deps(self):
+        """★372刀8 守门：夹具必须齐备回执钩依赖，且回执钩真能跑通返 None。
+
+        没有这条，将来产品再给 _maybe_append_self_state 加新依赖时，
+        夹具会再次静默缺失 ⇒ 异常被红线 except 吞掉 ⇒ 正例红、负控假通过，
+        而报告上只显示"断言不相等"，看不出是夹具问题。
+        """
+        c = _FakeCortex(_FakeEngine())
+        for _attr in ("_pending_receipt_ledger", "_pending_receipt_ledger_lock",
+                      "_pending_receipt_ledger_max", "_pending_receipt_ledger_ttl"):
+            self.assertTrue(hasattr(c, _attr), f"夹具缺回执钩依赖 {_attr}")
+        # 账本空 ⇒ pop 必须返 None（不是抛异常被吞）
+        self.assertIsNone(c._receipt_ledger_pop("c-x"))
+        self.assertIsNone(c._receipt_ledger_pop(""))
 
     def test_forbidden_word_dropped(self):
         eng = _FakeEngine(level="critical", fresh=True, summary={
