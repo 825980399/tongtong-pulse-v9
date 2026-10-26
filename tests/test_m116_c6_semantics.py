@@ -147,17 +147,31 @@ class T116fCreatedAt(unittest.TestCase):
 
     def test_02_backfill_inside_save_pending_patch(self):
         """补记必须落在 save_pending_patch 的元数据补全段（saved_at 之后、status 之前）。"""
-        lines = self.src.split("\n")
+        # ★372刀8：原实现取 `def save_pending_patch(` 之后**固定 40 行**窗口。
+        #   实测 def 在 2058 行、created_at 补记在 2235 行 —— **相距 177 行**，
+        #   窗口根本装不下 ⇒ 假红（代码一直都在，是考题窗口太短）。
+        #   （与 372刀8 第二批 test_branch_concurrency_m32::test_03 完全同型。）
+        #   改为 **AST 定位方法体** lineno..end_lineno，不依赖任何写死窗口长度。
+        import ast as _ast
         try:
-            i_fn = next(i for i, ln in enumerate(lines)
-                        if ln.startswith("    def save_pending_patch("))
-        except StopIteration:
+            _tree = _ast.parse(self.src)
+        except SyntaxError as _se:
+            self.fail("PatchManager.py 解析失败: %s" % _se)
+        _fn = None
+        for _node in _ast.walk(_tree):
+            if isinstance(_node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
+                    and _node.name == "save_pending_patch":
+                _fn = _node
+                break
+        if _fn is None:
             self.fail("未找到 save_pending_patch 定义")
-        seg = "\n".join(lines[i_fn:i_fn + 40])
+        _lines = self.src.split("\n")
+        seg = "\n".join(_lines[_fn.lineno - 1:_fn.end_lineno])
         self.assertIn("if not patch.get(\"created_at\"):", seg)
         self.assertIn('patch["created_at"] = time.time()', seg)
         i_saved = seg.find('patch["saved_at"] = time.time()')
         i_created = seg.find('patch["created_at"] = time.time()')
+        self.assertNotEqual(i_saved, -1, "方法体内应能找到 saved_at 赋值")
         self.assertLess(i_saved, i_created, "created_at 补记应位于 saved_at 之后")
 
 
