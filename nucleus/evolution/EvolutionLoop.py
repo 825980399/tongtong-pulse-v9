@@ -125,7 +125,8 @@ def _m326_next_tick(root: str | None = None) -> int:
                     try:
                         import json as _json
                         _last = max(_last, int((_json.loads(_line) or {}).get("tick", 0) or 0))
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/evolution/EvolutionLoop.py:_m326_next_tick", level="debug")
                         continue
     except OSError as _e:
         silent_exc(_e, where="EvolutionLoop::_m326_next_tick", level="debug")

@@ -212,7 +212,8 @@ class ResonanceEngine:
                 nid, sim = item[0], float(item[1])
                 if nid:
                     out[str(nid)] = max(0.0, min(1.0, sim))
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_build_semantic_map", level="debug")
                 continue
         if out:
             self._semantic_calls += 1
@@ -250,7 +251,8 @@ class ResonanceEngine:
                 nid, score = item[0], float(item[1])
                 if nid:
                     out[str(nid)] = max(0.0, min(1.0, score))
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_build_rule_map", level="debug")
                 continue
         if out:
             self._rule_calls += 1
@@ -692,7 +694,8 @@ class ResonanceEngine:
                 continue
             try:
                 _related = _pool.get_related_nodes(_sid, limit=_max_per_seed)
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_expand_by_association", level="debug")
                 continue
             for _rn in (_related or []):
                 if _added >= _max_added:
@@ -711,7 +714,8 @@ class ResonanceEngine:
                         _log_budget -= 1
                     if len(_second_hop_seeds) < 5:
                         _second_hop_seeds.append((_rid, _rn))
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_expand_by_association", level="debug")
                     continue
 
         # 第二跳（浅层扩展：仅从第一跳前5个邻居再扩一层，仍受总量上限约束）
@@ -720,7 +724,8 @@ class ResonanceEngine:
                 break
             try:
                 _hop2 = _pool.get_related_nodes(_rid, limit=2)
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_expand_by_association", level="debug")
                 continue
             for _n2 in (_hop2 or []):
                 if _added >= _max_added:
@@ -732,7 +737,8 @@ class ResonanceEngine:
                     candidates.append(_n2.to_dict())
                     _have.add(_nid2)
                     _added += 1
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/synapsys/ResonanceEngine.py:_expand_by_association", level="debug")
                     continue
         return _added
     # ========== 五维得分计算 ==========

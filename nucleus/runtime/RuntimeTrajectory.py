@@ -300,7 +300,8 @@ class RuntimeTrajectory:
                             continue
                         try:
                             _rec = json.loads(_line)
-                        except Exception:
+                        except Exception as _m369_e:
+                            silent_exc(_m369_e, where="nucleus/runtime/RuntimeTrajectory.py:_maybe_compact", level="debug")
                             continue
                         _tid = _rec.get("trajectory_id")
                         if _tid in _seen:

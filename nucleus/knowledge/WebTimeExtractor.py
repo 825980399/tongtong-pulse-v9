@@ -239,7 +239,8 @@ class WebTimeExtractor:
                      "%Y年%m月%d日", "%Y年%m月%d日 %H:%M", "%Y-%m-%dT%H:%M:%S.%f"):
             try:
                 return datetime.strptime(_s[:26], _fmt).timestamp()
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/knowledge/WebTimeExtractor.py:_parse_iso", level="debug")
                 continue
         return 0.0
 

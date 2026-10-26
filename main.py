@@ -3518,7 +3518,8 @@ class PulseFramework:
                                 _ctrl.wait_heartbeat_pulse(_probe_interval)
                             else:
                                 time.sleep(_probe_interval)
-                        except Exception:
+                        except Exception as _m369_e:
+                            silent_exc(_m369_e, where="main.py:_probe_loop", level="debug")
                             break
                         if not getattr(self, "_running", False):
                             break

@@ -1419,7 +1419,8 @@ class SelfInspector(SilentLogMixin):
                                 "methods": _methods,
                                 "method_count": len(_methods),
                             }
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/self_inspector.py:_build_project_class_index", level="debug")
                         continue
             try:
                 import psutil
@@ -1626,7 +1627,8 @@ class SelfInspector(SilentLogMixin):
                         try:
                             with open(_fp, encoding="utf-8", errors="ignore") as _f:
                                 _m = self._HEAD_CN_RE.search(_f.read(800))
-                        except Exception:
+                        except Exception as _m369_e:
+                            silent_exc(_m369_e, where="nucleus/self_inspector.py:_build_organ_name_index", level="debug")
                             continue
                         if _m:
                             _cn = _m.group(2)
@@ -1663,7 +1665,8 @@ class SelfInspector(SilentLogMixin):
         for _p in _patterns:
             try:
                 _m = re.search(_p, msg)
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_inspector.py:guess_method_from_message", level="debug")
                 continue
             if _m:
                 return _m.group(1)
@@ -1741,7 +1744,8 @@ class SelfInspector(SilentLogMixin):
                 try:
                     with open(_fp, encoding="utf-8", errors="ignore") as _f:
                         _src = _f.read()
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/self_inspector.py:_build_logger_tag_index", level="debug")
                     continue
                 for _m in self._M91_LOGGER_CALL_RE.finditer(_src):
                     for _tag in self._m91_logger_literal_to_tags(_m.group(1)):
@@ -1787,7 +1791,8 @@ class SelfInspector(SilentLogMixin):
                             with open(os.path.join(_dp, _f),
                                       encoding="utf-8", errors="ignore") as _fh:
                                 _src = _fh.read()
-                        except Exception:
+                        except Exception as _m369_e:
+                            silent_exc(_m369_e, where="nucleus/self_inspector.py:_build_organ_alias_index", level="debug")
                             continue
                         for _re in self._M91_ORGAN_NAME_RES:
                             for _m in _re.finditer(_src):
@@ -2006,7 +2011,8 @@ class SelfInspector(SilentLogMixin):
                         try:
                             with open(_fp, encoding="utf-8", errors="ignore") as _f:
                                 _head = _f.read(800)
-                        except Exception:
+                        except Exception as _m369_e:
+                            silent_exc(_m369_e, where="nucleus/self_inspector.py:build_organ_metadata", level="debug")
                             continue
                         _m = self._HEAD_CN_RE.search(_head)
                         if not _m:
@@ -2032,7 +2038,8 @@ class SelfInspector(SilentLogMixin):
                 try:
                     with open(_fp, encoding="utf-8", errors="ignore") as _f:
                         _src = _f.read()
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/self_inspector.py:build_organ_metadata", level="debug")
                     continue
                 for _line in _src.split("\n"):
                     _m = self._IMPORT_LINE_RE.match(_line)
@@ -3128,7 +3135,8 @@ class SelfInspector(SilentLogMixin):
                         continue
                     try:
                         _out.append(json.loads(_line))
-                    except ValueError:
+                    except ValueError as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/self_inspector.py:_si_read_jsonl", level="debug")
                         continue
         except OSError as _e:
             silent_exc(_e, "self_inspector.py:_si_read_jsonl", level="debug")
@@ -3243,7 +3251,8 @@ class SelfInspector(SilentLogMixin):
             try:
                 with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
                     _src = _f.read()
-            except OSError:
+            except OSError as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_inspector.py:_detect_god_file", level="debug")
                 continue
             _lines = _src.count("\n") + (1 if _src and not _src.endswith("\n") else 0)
             _branches = self._si_count_branches(_src)
@@ -5352,7 +5361,8 @@ class SelfInspector(SilentLogMixin):
             try:
                 with open(_f, encoding='utf-8', errors='ignore') as _fobj:
                     _content = _fobj.read()
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_inspector.py:_detect_dead_code", level="debug")
                 continue
             _contents[_f] = _content
             for _m in _re.finditer(r'^\s*def\s+(\w+)\s*\(', _content, _re.MULTILINE):
@@ -6159,7 +6169,8 @@ def _m325_build_name_index(project_root=None) -> dict:
                 try:
                     _src = open(_p, encoding="utf-8", errors="ignore").read()
                     _tree = ast.parse(_src)
-                except (OSError, SyntaxError, ValueError):
+                except (OSError, SyntaxError, ValueError) as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/self_inspector.py:_m325_build_name_index", level="debug")
                     continue
                 _in_tests = _rel.startswith("tests/")
                 for _n in ast.walk(_tree):

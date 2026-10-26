@@ -722,7 +722,8 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
         _out["scanned"] += 1
         try:
             _age = _now - float(_p.get("created_at") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/evolution/patch_execution_dispatch.py:_m331_rf_ttl_sweep", level="debug")
             continue
         _out["ages_sec"][str(_p.get("id") or "")] = round(_age, 1)
         if _age >= _ttl:
@@ -1265,7 +1266,8 @@ def _m325_ast_tokens(code: str) -> set | None:
     for _cand in (_src, _tw.dedent(_src)):
         try:
             _tr = _ast.parse(_cand)
-        except (SyntaxError, ValueError):
+        except (SyntaxError, ValueError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/evolution/patch_execution_dispatch.py:_m325_ast_tokens", level="debug")
             continue
         _toks: set = set()
         for _n in _ast.walk(_tr):
@@ -2358,7 +2360,8 @@ def _m344_count_orphan_refs(method: str, root: str, exclude_abs: str) -> dict:
                     return _out
                 try:
                     _txt = io.open(_abs, encoding="utf-8", errors="ignore").read()
-                except OSError:
+                except OSError as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/evolution/patch_execution_dispatch.py:_m344_count_orphan_refs", level="debug")
                     continue
                 _out["files_scanned"] += 1
                 if _needle not in _txt:

@@ -123,7 +123,8 @@ class KnowledgeAccessLayer:
         while len(self._cache) > self._cache_size:
             try:
                 self._cache.pop(next(iter(self._cache)))
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/knowledge_access_layer.py:_cache_put", level="debug")
                 break
 
     # ---------------- 节点基础操作 ----------------
@@ -212,7 +213,8 @@ class KnowledgeAccessLayer:
                     continue
                 if end_time is not None and _c > end_time:
                     continue
-            except TypeError:
+            except TypeError as _m369_e:
+                silent_exc(_m369_e, where="nucleus/knowledge_access_layer.py:search_by_time_range", level="debug")
                 continue
             _out.append(_n)
         return _out

@@ -837,7 +837,8 @@ class SelfAwarenessEngine:
                 _fp = os.path.join(_d, _fn)
                 try:
                     _m = os.path.getmtime(_fp)
-                except OSError:
+                except OSError as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/self_awareness/SelfAwarenessEngine.py:_m40_latest_profile_file", level="debug")
                     continue
                 if _m > _best_m:
                     _best, _best_m = _fp, _m
@@ -1181,7 +1182,8 @@ class SelfAwarenessEngine:
             _cv = _dig(getattr(_c, _path[0], None), list(_path[1:]), 0)
             try:
                 _bn, _cn = int(_bv), int(_cv)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_awareness/SelfAwarenessEngine.py:compare_profiles", level="debug")
                 continue
             _delta = _cn - _bn
             _rate = None if _bn == 0 else round(_delta / float(_bn), 4)

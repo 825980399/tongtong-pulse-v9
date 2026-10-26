@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Any
 
 from nucleus.data.DataAccessLayer import safe_read_json
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.json")
@@ -127,7 +128,8 @@ class ParamAnalyzer:
                     current_window = []
                 current_window.append(change)
                 last_time = ts
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/evolution/ParamAnalysisReport.py:analyze_correlations", level="debug")
                 continue
 
         if current_window:

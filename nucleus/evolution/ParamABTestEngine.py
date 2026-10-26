@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any
 
 from nucleus.evolution.LogAnalyzer import extract_log_level  # ★主线第30批 T2：真实日志级别解析
+from nucleus._silent_except import silent_exc
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -169,7 +170,8 @@ def run_ab_test_in_process(test_config: dict) -> dict[str, Any]:
                         continue
                     try:
                         t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()  # noqa: DTZ007
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/evolution/ParamABTestEngine.py:run_ab_test_in_process", level="debug")
                         continue
                     if start_time <= t <= end_time:
                         metrics["total_lines"] += 1
@@ -216,7 +218,8 @@ def run_ab_test_in_process(test_config: dict) -> dict[str, Any]:
                             log_start = t
                         if log_end is None or t > log_end:
                             log_end = t
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/evolution/ParamABTestEngine.py:run_ab_test_in_process", level="debug")
                         continue
 
         if log_start is None or log_end is None:
@@ -312,6 +315,12 @@ def run_ab_test_in_process(test_config: dict) -> dict[str, Any]:
                     f"建议继续观察")
 
     except Exception as e:
+        # ★369刀4 附带收尾：本处原本已是「错误回传」语义（写进 result["error"]），不是真吞；
+        #   补 silent_exc 只为观测留痕，不改变行为。之所以本刀要动它：同函数内另两处
+        #   cont 分支被补留痕后，cw2 指纹里的 nth 会重编号（0/1/2 → 这里变成 0），
+        #   门禁据此报「新增 1 处静默」⇒ 属 nth 漂移假象，补上留痕即可让集合归零。
+        silent_exc(e, where="nucleus/evolution/ParamABTestEngine.py:run_ab_test_in_process",
+                   level="debug")
         result["error"] = str(e)
 
     return result

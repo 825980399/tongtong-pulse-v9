@@ -4009,7 +4009,8 @@ class SafeEvolutionExecutor:
                 continue
             try:
                 _d = _json.loads(_ln)
-            except ValueError:
+            except ValueError as _m369_e:
+                silent_exc(_m369_e, where="nucleus/reasoning/SafeEvolutionExecutor.py:_k1_build_task_face", level="debug")
                 continue
             _sev = str(_d.get("severity") or _d.get("level") or "").upper()
             if _sev not in _want:

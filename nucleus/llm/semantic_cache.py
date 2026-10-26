@@ -232,7 +232,8 @@ class SemanticCache:
                         continue
                     try:
                         _e = CacheEntry.from_dict(json.loads(_line))
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/llm/semantic_cache.py:_load", level="debug")
                         continue
                     if _e is None or not _e.hash:
                         continue

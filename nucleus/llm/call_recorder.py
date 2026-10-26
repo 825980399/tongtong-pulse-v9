@@ -1179,7 +1179,8 @@ def channel_hhi(by_channel: dict) -> float:
     for _v in (by_channel or {}).values():
         try:
             _tot += int((_v or {}).get("calls") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/llm/call_recorder.py:channel_hhi", level="debug")
             continue
     if _tot <= 0:
         return 0.0
@@ -1187,7 +1188,8 @@ def channel_hhi(by_channel: dict) -> float:
     for _v in (by_channel or {}).values():
         try:
             _s = int((_v or {}).get("calls") or 0) / float(_tot)
-        except (TypeError, ValueError, ZeroDivisionError):
+        except (TypeError, ValueError, ZeroDivisionError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/llm/call_recorder.py:channel_hhi", level="debug")
             continue
         _h += _s * _s
     return round(_h, 4)

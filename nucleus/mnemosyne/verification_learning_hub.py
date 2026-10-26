@@ -885,7 +885,8 @@ def _m326_rule_tier(rules: list) -> str:
         if isinstance(_r, dict):
             try:
                 _cs.append(float(_r.get("confidence", 0) or 0))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/mnemosyne/verification_learning_hub.py:_m326_rule_tier", level="debug")
                 continue
     if not _cs:
         return "empty"

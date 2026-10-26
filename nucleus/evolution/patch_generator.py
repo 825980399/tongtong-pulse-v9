@@ -1860,7 +1860,8 @@ def screen_forbidden_refs(draft: dict) -> dict:
         try:
             _tree = _ast.parse(_src)
             break
-        except SyntaxError:
+        except SyntaxError as _m369_e:
+            silent_exc(_m369_e, where="nucleus/evolution/patch_generator.py:screen_forbidden_refs", level="debug")
             continue
     if _tree is None:
         _o["why"] = "unparsable"

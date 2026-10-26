@@ -61,7 +61,8 @@ class ContradictionResolver:
                     silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_timestamp_of L60")
             try:
                 return float(v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/reasoning/ContradictionResolver.py:_timestamp_of", level="debug")
                 continue
         return None
 

@@ -176,7 +176,8 @@ def safe_read_json(path, default=None):
             try:
                 _gzraw = _rawb.decode(enc)
                 break
-            except (UnicodeDecodeError, UnicodeError):
+            except (UnicodeDecodeError, UnicodeError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/data/DataAccessLayer.py:safe_read_json", level="debug")
                 continue
         if _gzraw is None:
             _module_logger.error(f"[读取失败·gz编码] path={path} 四种编码均无法解码")
@@ -194,7 +195,8 @@ def safe_read_json(path, default=None):
             with open(path, encoding=enc) as f:
                 raw = f.read()
             break
-        except (UnicodeDecodeError, UnicodeError):
+        except (UnicodeDecodeError, UnicodeError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/data/DataAccessLayer.py:safe_read_json", level="debug")
             continue
         except Exception as _exc:
             _module_logger.debug(f"[读取失败] path={path} enc={enc} type={type(_exc).__name__} {_exc}")
@@ -295,7 +297,8 @@ def safe_read_text(path, default=""):
         try:
             with open(path, encoding=enc) as f:
                 return f.read()
-        except (UnicodeDecodeError, UnicodeError):
+        except (UnicodeDecodeError, UnicodeError) as _m369_e:
+            silent_exc(_m369_e, where="nucleus/data/DataAccessLayer.py:safe_read_text", level="debug")
             continue
         except Exception as _exc:
             _module_logger.debug(f"[读取失败] path={path} type={type(_exc).__name__} {_exc}")

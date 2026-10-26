@@ -2400,7 +2400,8 @@ class PulseInnerWorldKnowledgeMixin:
                         if _ar.is_cross_domain and _ar.confidence > _best_conf:
                             _best_conf = _ar.confidence
                             _best_hyp = _ar.migrated_hypothesis
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="organs/brain/pulse_inner_world_knowledge.py:_orchestrate_reason", level="debug")
                         _cand_fail += 1
                         continue
                 if _cand_fail:

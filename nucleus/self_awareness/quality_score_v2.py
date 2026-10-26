@@ -157,7 +157,8 @@ def _disk_consumption_rate() -> float | None:
             try:
                 _j = json.load(open(os.path.join(_dp, _fn),
                                        encoding="utf-8"))
-            except (OSError, ValueError):
+            except (OSError, ValueError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_awareness/quality_score_v2.py:_disk_consumption_rate", level="debug")
                 continue
             if not isinstance(_j, dict):
                 continue

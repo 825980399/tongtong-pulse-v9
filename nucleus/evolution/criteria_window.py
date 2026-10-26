@@ -563,7 +563,8 @@ def _parse_proc_gen(proc_gen: str):
     for _fmt in ("%Y%m%d-%H%M%S", "%Y%m%d%H%M%S"):
         try:
             return datetime.strptime(_ts, _fmt).timestamp()
-        except ValueError:
+        except ValueError as _m369_e:
+            silent_exc(_m369_e, where="nucleus/evolution/criteria_window.py:_parse_proc_gen", level="debug")
             continue
     return None
 

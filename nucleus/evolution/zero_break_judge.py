@@ -794,7 +794,8 @@ def read_calibration(path: str) -> dict:
                     continue
                 try:
                     _last = _json.loads(_ln)
-                except Exception:                               # noqa: BLE001
+                except Exception as _m369_e:  # noqa: BLE001
+                    silent_exc(_m369_e, where="nucleus/evolution/zero_break_judge.py:read_calibration", level="debug")
                     continue
     except OSError as _e:
         silent_exc(_e, "zero_break_judge.read_calibration", level="debug")

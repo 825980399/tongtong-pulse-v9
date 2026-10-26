@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 __all__ = [
     "FLAG_DUPLICATE",
@@ -226,7 +227,8 @@ class DuplicateNodeDetector:
                         _dup.quality_flag = flag
                         _dup.quality_reason = _reason
                         _dup.duplicate_of = _kid
-                    except Exception:
+                    except Exception as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/knowledge/DuplicateNodeDetector.py:mark", level="debug")
                         continue
                 _n += 1
         return _n

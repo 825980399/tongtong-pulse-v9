@@ -111,7 +111,8 @@ class DataQualityGuard:
             _n += 1
             try:
                 _flag, _reason = self._tagger.classify(_node)
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/knowledge/DataQualityGuard.py:scan_nodes", level="debug")
                 continue
             _flags[_flag] += 1
             if _reason:

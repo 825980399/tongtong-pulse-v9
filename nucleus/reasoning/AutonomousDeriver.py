@@ -136,8 +136,9 @@ class AutonomousDeriver:
                                 "trust": getattr(node, 'trust_score', 50.0),
                             })
                             break
-                        except re.error:
+                        except re.error as _m369_e:
                             # 关键词含无法处理的正则特殊字符，跳过此组合
+                            silent_exc(_m369_e, where="nucleus/reasoning/AutonomousDeriver.py:_deductive_derive", level="debug")
                             continue
 
         if len(causal_pairs) < 2:

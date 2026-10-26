@@ -124,7 +124,8 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
         addr = info[4][0]
         try:
             ip = ipaddress.ip_address(addr)
-        except ValueError:
+        except ValueError as _m369_e:
+            silent_exc(_m369_e, where="nucleus/ssrf_guard.py:is_safe_http_url", level="debug")
             continue
         # ★修复：改用 is_global 作为「是否公网」的主判定依据。
         # 原逻辑用 is_private 判定，Python 的 ipaddress 对 IPv6 过渡地址段

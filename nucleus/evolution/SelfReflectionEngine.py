@@ -88,6 +88,7 @@ class SelfReflectionEngine:
                             timeout=_cfg["timeout_by_purpose"]["general"],
                         )
                 except Exception as _fo_err:
+                    silent_exc(_fo_err, where="nucleus/evolution/SelfReflectionEngine.py:_call_llm", level="debug")
                     _last_exc = _fo_err
                     self._m44_last_error = f"{type(_fo_err).__name__}: {_fo_err}"
                     continue

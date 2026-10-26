@@ -1182,7 +1182,8 @@ class PulseSnapshot:
                     continue
                 try:
                     _rec = json.loads(_line)
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/mnemosyne/PulseSnapshot.py:_m67_apply_incremental_log", level="debug")
                     _bad += 1
                     continue
                 _nid = str(_rec.get("node_id") or "")
@@ -1459,7 +1460,8 @@ class PulseSnapshot:
                     _row["evol_level"] = _lv
                     _out.append(PulseNode.from_dict(self._parquet_row_to_dict(_row, level=_lv)))
                     _lv_real[_lv] += 1
-                except Exception:
+                except Exception as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/mnemosyne/PulseSnapshot.py:_m81_load_parquet_unified", level="debug")
                     continue
             _lv_loaded[_lv] = _tbl.num_rows
         if not _out:

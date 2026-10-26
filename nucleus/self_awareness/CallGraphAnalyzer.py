@@ -2386,7 +2386,8 @@ class CallGraphAnalyzer:
                         continue
                     try:
                         _entries.append(_json.loads(_line))
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as _m369_e:
+                        silent_exc(_m369_e, where="nucleus/self_awareness/CallGraphAnalyzer.py:a5_growth_intake_assertion", level="debug")
                         continue
         except OSError as _e:
             silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账")
@@ -2396,7 +2397,8 @@ class CallGraphAnalyzer:
         for _e in _entries:
             try:
                 _max_tick = max(_max_tick, int(_e.get("tick", 0) or 0))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as _m369_e:
+                silent_exc(_m369_e, where="nucleus/self_awareness/CallGraphAnalyzer.py:a5_growth_intake_assertion", level="debug")
                 continue
         _out["tick_now"] = int(tick_now if tick_now is not None else _max_tick)
         # 承接证据：patch_history 的 (file, method) → status

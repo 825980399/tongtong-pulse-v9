@@ -269,7 +269,8 @@ class AsyncEncodeQueue:
                 if store.needs_encode(nid, text):
                     if self.submit(nid, text):
                         added += 1
-            except Exception:
+            except Exception as _m369_e:
+                silent_exc(_m369_e, where="nucleus/semantic/AsyncEncodeQueue.py:reconcile", level="debug")
                 continue
         # ★第102批 T-102b：反向回收——清除「节点已不存在」的孤儿向量
         #   （原 reconcile 只单向补码，只增不减，孤儿向量只涨不降）

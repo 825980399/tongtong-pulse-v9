@@ -23,6 +23,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from typing import Any
+from nucleus._silent_except import silent_exc
 
 
 class PerformanceProfiler:
@@ -102,7 +103,8 @@ class PerformanceProfiler:
                         "tottime": round(_tottime, 4),
                         "cumtime": round(_cumtime, 4),
                     })
-                except (ValueError, IndexError):
+                except (ValueError, IndexError) as _m369_e:
+                    silent_exc(_m369_e, where="nucleus/evolution/PerformanceProfiler.py:_parse_pstats", level="debug")
                     continue
         return _funcs
 

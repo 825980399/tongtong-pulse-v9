@@ -50,6 +50,7 @@ from nucleus.const import (
 from nucleus.data.DataAccessLayer import safe_read_json  # ★R5：视觉流日志读取
 from nucleus.logger import exc_location
 from nucleus.security.face_codec import load_roster, save_roster  # ★T-134b 人脸名册加密存储
+from nucleus._silent_except import silent_exc
 
 _DIRTY_FACE_KEYS = ("用户", "访客", "小林")  # ★R5-1 脏键唯一真相源（:362 守卫/load 过滤/save 过滤三处共用）
 
@@ -187,7 +188,8 @@ class PulseVisualCortex(BasePulseOrgan):
                     except (ImportError, TypeError, ValueError):
                         try:
                             _vec = [float(x) for x in _enc]
-                        except (TypeError, ValueError):
+                        except (TypeError, ValueError) as _m369_e:
+                            silent_exc(_m369_e, where="organs/senses/PulseVisualCortex.py:__init__", level="debug")
                             _dropped += 1
                             continue
                     _it = _item or {}
