@@ -1,0 +1,525 @@
+{
+ "batch": 372,
+ "blade": 8,
+ "ticket": "T-371-134-A42考题过时收口-1",
+ "n": 42,
+ "by_category": {
+  "待逐条定位": 20,
+  "风险档位口径": 2,
+  "接口/属性缺失": 3,
+  "源码锚点过期": 2,
+  "日志/告警口径": 2,
+  "日志轮转行为变更": 3,
+  "基线快照过期": 2,
+  "渠道/模型名": 5,
+  "字符串比较": 3
+ },
+ "product_state": {
+  "channels": {
+   "zhipu-47-flash": {
+    "model": "glm-4.7-flash",
+    "priority": 1,
+    "enabled": true
+   },
+   "bailian-qwen-plus": {
+    "model": "qwen-plus",
+    "priority": 2,
+    "enabled": true
+   },
+   "bailian-qwen-max": {
+    "model": "qwen-max",
+    "priority": 5,
+    "enabled": true
+   },
+   "siliconflow-qwen2-7b": {
+    "model": "zai-org/GLM-5.3-Flash",
+    "priority": 3,
+    "enabled": true
+   },
+   "zhipu": {
+    "model": "glm-4-flash",
+    "priority": 4,
+    "enabled": true
+   },
+   "modelscope": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "priority": 7,
+    "enabled": true
+   },
+   "deepseek": {
+    "model": "deepseek-v4-flash",
+    "priority": 8,
+    "enabled": true
+   }
+  },
+  "first_channel": "zhipu-47-flash",
+  "paid": [
+   "deepseek"
+  ],
+  "risk_rank": "低/low=1 中/medium=2 高=3；372刀1 未登记族兜底 低→中"
+ },
+ "rows": [
+  {
+   "nodeid": "tests/test_a2_reasoning_metrics_m164.py::test_snapshot_extends_three_link_and_scene",
+   "file": "tests/test_a2_reasoning_metrics_m164.py",
+   "case": "test_snapshot_extends_three_link_and_scene",
+   "err_current": null,
+   "err_archive": "AssertionError: assert {'attempt': 2...ated': 0, ...} == {'attempt': 2...ated': 0, ...}",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_a5_pii_final_scan_m161.py::TestA5SharedAllowDomains::test_09_meta_line_hits_catches_real_pii",
+   "file": "tests/test_a5_pii_final_scan_m161.py",
+   "case": "TestA5SharedAllowDomains::test_09_meta_line_hits_catches_real_pii",
+   "err_current": null,
+   "err_archive": "AssertionError: 真实手机号应命中",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_adaptive_coverage_extension_m65.py::TestCodeLearningAdaptive::test_21_get_load_level",
+   "file": "tests/test_adaptive_coverage_extension_m65.py",
+   "case": "TestCodeLearningAdaptive::test_21_get_load_level",
+   "err_current": null,
+   "err_archive": "AssertionError: 'low' != 'medium'",
+   "same_as_archive": false,
+   "category": "风险档位口径",
+   "product_basis": "346刀5 起风险档位统一走 `_m346_risk_rank`（中英归一：低/low=1、中/medium=2、高=3）；372刀1 起**未登记族**兜底 低→中",
+   "action": "考题断言按 `_m346_risk_rank` 口径写；涉及未登记族时按 372刀1 的新兜底（中）"
+  },
+  {
+   "nodeid": "tests/test_adaptive_coverage_extension_m65.py::TestDigestAdaptive::test_41_get_load_level",
+   "file": "tests/test_adaptive_coverage_extension_m65.py",
+   "case": "TestDigestAdaptive::test_41_get_load_level",
+   "err_current": null,
+   "err_archive": "AssertionError: 'low' != 'medium'",
+   "same_as_archive": false,
+   "category": "风险档位口径",
+   "product_basis": "346刀5 起风险档位统一走 `_m346_risk_rank`（中英归一：低/low=1、中/medium=2、高=3）；372刀1 起**未登记族**兜底 低→中",
+   "action": "考题断言按 `_m346_risk_rank` 口径写；涉及未登记族时按 372刀1 的新兜底（中）"
+  },
+  {
+   "nodeid": "tests/test_assertion_robustness_m33.py::TestNoFragileSourceCount::test_01_no_bare_name_count_in_tests",
+   "file": "tests/test_assertion_robustness_m33.py",
+   "case": "TestNoFragileSourceCount::test_01_no_bare_name_count_in_tests",
+   "err_current": null,
+   "err_archive": "AssertionError: Lists differ: ['test_main_loop_pulse_knife1_m172.py:45: [68 chars] 1)'] != []",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_10_holds_slot_during_call",
+   "file": "tests/test_branch_concurrency_m32.py",
+   "case": "TestConcurrencyGuard::test_10_holds_slot_during_call",
+   "err_current": null,
+   "err_archive": "AssertionError: unexpectedly None : 应成功返回分支内容",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_12_skips_when_channel_full",
+   "file": "tests/test_branch_concurrency_m32.py",
+   "case": "TestConcurrencyGuard::test_12_skips_when_channel_full",
+   "err_current": null,
+   "err_archive": "AttributeError: 'NoneType' object has no attribute 'max_value'",
+   "same_as_archive": false,
+   "category": "接口/属性缺失",
+   "product_basis": "被测对象返回 None ⇒ 断言访问 `.max_value` 炸；需先定位该 getter 的现态返回契约",
+   "action": "先查该接口现态是否仍返回该对象（可能已改返回 None 表示不可用），再定是改考题还是另立缺陷票"
+  },
+  {
+   "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_13_switch_off_bypasses_guard",
+   "file": "tests/test_branch_concurrency_m32.py",
+   "case": "TestConcurrencyGuard::test_13_switch_off_bypasses_guard",
+   "err_current": null,
+   "err_archive": "AttributeError: 'NoneType' object has no attribute 'max_value'",
+   "same_as_archive": false,
+   "category": "接口/属性缺失",
+   "product_basis": "被测对象返回 None ⇒ 断言访问 `.max_value` 炸；需先定位该 getter 的现态返回契约",
+   "action": "先查该接口现态是否仍返回该对象（可能已改返回 None 表示不可用），再定是改考题还是另立缺陷票"
+  },
+  {
+   "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrentThreads::test_20_never_exceeds_channel_max",
+   "file": "tests/test_branch_concurrency_m32.py",
+   "case": "TestConcurrentThreads::test_20_never_exceeds_channel_max",
+   "err_current": null,
+   "err_archive": "AttributeError: 'NoneType' object has no attribute 'max_value'",
+   "same_as_archive": false,
+   "category": "接口/属性缺失",
+   "product_basis": "被测对象返回 None ⇒ 断言访问 `.max_value` 炸；需先定位该 getter 的现态返回契约",
+   "action": "先查该接口现态是否仍返回该对象（可能已改返回 None 表示不可用），再定是改考题还是另立缺陷票"
+  },
+  {
+   "nodeid": "tests/test_branch_concurrency_m32.py::TestSourceWiring::test_03_release_in_finally",
+   "file": "tests/test_branch_concurrency_m32.py",
+   "case": "TestSourceWiring::test_03_release_in_finally",
+   "err_current": null,
+   "err_archive": "AssertionError: '_m32_mgr.release(_m32_ch)' not found in '_m32_slot = _m32_mgr.acquire(\\n                            _m32_ch, blocking=True,\\n                            timeout=float(_cfg[\"timeout_by",
+   "same_as_archive": false,
+   "category": "源码锚点过期",
+   "product_basis": "考题在源码里找旧片段；产品已重构该段（批次见源码注释）",
+   "action": "改为内容锚（函数名/常量名）而非逐字片段，或按现态源码更新片段"
+  },
+  {
+   "nodeid": "tests/test_call_graph_m21.py::TestScriptSwitches::test_call_graph_only",
+   "file": "tests/test_call_graph_m21.py",
+   "case": "TestScriptSwitches::test_call_graph_only",
+   "err_current": null,
+   "err_archive": "AssertionError: 'structure_change, call_graph' != 'call_graph'",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_dialogue_routing_m49.py::TestSourceWiring::test_54_taskbook_line_311_is_only_thinking",
+   "file": "tests/test_dialogue_routing_m49.py",
+   "case": "TestSourceWiring::test_54_taskbook_line_311_is_only_thinking",
+   "err_current": null,
+   "err_archive": "AssertionError: -1 not greater than 0 : 该行应仍存在（本批未改动它）",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_31_permission_error_silenced",
+   "file": "tests/test_log_decay_robustness_m49.py",
+   "case": "TestSafeRollover::test_31_permission_error_silenced",
+   "err_current": null,
+   "err_archive": "AssertionError: 0 != 3 : 应重试 3 次",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_32_warning_recorded_once",
+   "file": "tests/test_log_decay_robustness_m49.py",
+   "case": "TestSafeRollover::test_32_warning_recorded_once",
+   "err_current": null,
+   "err_archive": "AssertionError: no logs of level WARNING or higher triggered on nucleus.logger",
+   "same_as_archive": false,
+   "category": "日志/告警口径",
+   "product_basis": "369 批做过日志瘦身（多族降噪）⇒ 告警计数/文案与旧考题不符",
+   "action": "按现态留痕口径更新计数断言"
+  },
+  {
+   "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_35_normal_rollover_still_works",
+   "file": "tests/test_log_decay_robustness_m49.py",
+   "case": "TestSafeRollover::test_35_normal_rollover_still_works",
+   "err_current": null,
+   "err_archive": "AssertionError: False is not true : 应轮转出 .1 备份文件",
+   "same_as_archive": false,
+   "category": "日志轮转行为变更",
+   "product_basis": "轮转实现已迭代（370刀1 回退分支改原子写；另有 .1 备份口径）",
+   "action": "按现态轮转实现更新断言；若属产品缺陷则另立票"
+  },
+  {
+   "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_38_copy_truncate_fallback_rotates",
+   "file": "tests/test_log_decay_robustness_m49.py",
+   "case": "TestSafeRollover::test_38_copy_truncate_fallback_rotates",
+   "err_current": null,
+   "err_archive": "AssertionError: False is not true : 应轮转出 .1 备份",
+   "same_as_archive": false,
+   "category": "日志轮转行为变更",
+   "product_basis": "轮转实现已迭代（370刀1 回退分支改原子写；另有 .1 备份口径）",
+   "action": "按现态轮转实现更新断言；若属产品缺陷则另立票"
+  },
+  {
+   "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_39_warn_cooldown_suppresses_repeat",
+   "file": "tests/test_log_decay_robustness_m49.py",
+   "case": "TestSafeRollover::test_39_warn_cooldown_suppresses_repeat",
+   "err_current": null,
+   "err_archive": "AssertionError: 0 != 1 : 冷却期内应只报 1 次 WARNING",
+   "same_as_archive": false,
+   "category": "日志/告警口径",
+   "product_basis": "369 批做过日志瘦身（多族降噪）⇒ 告警计数/文案与旧考题不符",
+   "action": "按现态留痕口径更新计数断言"
+  },
+  {
+   "nodeid": "tests/test_log_line_dynamic_m32.py::TestNoHardcodedLineLeft::test_11_all_use_exc_location",
+   "file": "tests/test_log_line_dynamic_m32.py",
+   "case": "TestNoHardcodedLineLeft::test_11_all_use_exc_location",
+   "err_current": null,
+   "err_archive": "AssertionError: 17 not greater than or equal to 18 : 5 个文件合计应 >= 18 处",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_log_locate_fix_m90.py::TestT90bBug3PrefixToContains::test_30_legacy_prefix_miss_on_real_tags",
+   "file": "tests/test_log_locate_fix_m90.py",
+   "case": "TestT90bBug3PrefixToContains::test_30_legacy_prefix_miss_on_real_tags",
+   "err_current": null,
+   "err_archive": "AssertionError: True is not false : 改前算法不该命中 '框架'（红）",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_log_locate_m91.py::TestT91aCoverage::test_33_先红_v3_off_reproduces_the_16_misses",
+   "file": "tests/test_log_locate_m91.py",
+   "case": "TestT91aCoverage::test_33_先红_v3_off_reproduces_the_16_misses",
+   "err_current": null,
+   "err_archive": "AssertionError: Lists differ: ['wecom_chat_bridge', 'WriteGuard', '时间中枢', '胸腺', '硬件启动器'] != []",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_m116_c6_semantics.py::T116fCreatedAt::test_02_backfill_inside_save_pending_patch",
+   "file": "tests/test_m116_c6_semantics.py",
+   "case": "T116fCreatedAt::test_02_backfill_inside_save_pending_patch",
+   "err_current": null,
+   "err_archive": "AssertionError: 'if not patch.get(\"created_at\"):' not found in '    def save_pending_patch(self, patch: dict[str, Any]):\\n        \"\"\"\\n        保存待应用的补丁到队列。\\n        ★v23.0增强：自动补齐元数据 + 去重检查。\\n        \"",
+   "same_as_archive": false,
+   "category": "源码锚点过期",
+   "product_basis": "考题在源码里找旧片段；产品已重构该段（批次见源码注释）",
+   "action": "改为内容锚（函数名/常量名）而非逐字片段，或按现态源码更新片段"
+  },
+  {
+   "nodeid": "tests/test_m337_batch.py::test_m337_thread_gate_passes_now",
+   "file": "tests/test_m337_batch.py",
+   "case": "test_m337_thread_gate_passes_now",
+   "err_current": null,
+   "err_archive": "AssertionError: [OK] 重锚署名自检：与 HEAD 一致（+0/+0），无需重锚",
+   "same_as_archive": false,
+   "category": "基线快照过期",
+   "product_basis": "product 改了 spawn 点/署名 ⇒ 基线必须 `--emit --attr` 重锚（工具自带自检已提示）",
+   "action": "按工具提示重锚基线；不得手工改数字"
+  },
+  {
+   "nodeid": "tests/test_m340_batch.py::test_30_reanchor_fields_present_and_history_kept",
+   "file": "tests/test_m340_batch.py",
+   "case": "test_30_reanchor_fields_present_and_history_kept",
+   "err_current": null,
+   "err_archive": "assert 59 == 62",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_m340_batch.py::test_31_baseline_numbers_match_current_scan",
+   "file": "tests/test_m340_batch.py",
+   "case": "test_31_baseline_numbers_match_current_scan",
+   "err_current": null,
+   "err_archive": "AssertionError: 基线 56 != 实扫 58（改了 spawn 点就必须 --emit --attr 重锚）",
+   "same_as_archive": false,
+   "category": "基线快照过期",
+   "product_basis": "product 改了 spawn 点/署名 ⇒ 基线必须 `--emit --attr` 重锚（工具自带自检已提示）",
+   "action": "按工具提示重锚基线；不得手工改数字"
+  },
+  {
+   "nodeid": "tests/test_m342_batch.py::test_342_d5_thread_baseline_reanchored_with_attribution",
+   "file": "tests/test_m342_batch.py",
+   "case": "test_342_d5_thread_baseline_reanchored_with_attribution",
+   "err_current": null,
+   "err_archive": "assert (56 == 59)",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_m354_batch.py::test_354_d6_body_integrity_wired_into_evidence_gate",
+   "file": "tests/test_m354_batch.py",
+   "case": "test_354_d6_body_integrity_wired_into_evidence_gate",
+   "err_current": null,
+   "err_archive": "assert '[354预检] body_integrity=truncated' in '# -*- coding: utf-8 -*-\\n\"\"\"★349刀1（P0 · 裁决②）：本地补丁**生成器**（烛微349审计1 方案A）。\\n\\n## 为什么单独成模块\\n\\n`PatchManager` 是**补丁生命周期的账房...T_READY] / _tot, 4) if _tot else N",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D1_priority_ladder_matches_taskbook",
+   "file": "tests/test_m96_followups.py",
+   "case": "TestM96ChannelPriority::test_D1_priority_ladder_matches_taskbook",
+   "err_current": null,
+   "err_archive": "AssertionError: 4 != 1 : zhipu 优先级应为 1，实际 4",
+   "same_as_archive": false,
+   "category": "渠道/模型名",
+   "product_basis": "现态 priority：zhipu-47-flash=1, bailian-qwen-plus=2, siliconflow-qwen2-7b=3, zhipu=4, bailian-qwen-max=5, modelscope=7, deepseek=8",
+   "action": "考题写死的旧 priority 改为现态值"
+  },
+  {
+   "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D2_new_models_already_in_pool",
+   "file": "tests/test_m96_followups.py",
+   "case": "TestM96ChannelPriority::test_D2_new_models_already_in_pool",
+   "err_current": null,
+   "err_archive": "AssertionError: 'ark-ds-v4.1-flash' not found in {'bailian-qwen-plus', 'zhipu', 'modelscope', 'zhipu-47-flash', 'siliconflow-qwen2-7b', 'bailian-qwen-max', 'deepseek'}",
+   "same_as_archive": false,
+   "category": "渠道/模型名",
+   "product_basis": "352刀9（2026-10-23 小林触发）免费渠道替换：ark-* 全部挂起，改走免费渠道；现态首选渠道 = `zhipu-47-flash`（priority 最小）",
+   "action": "考题里的渠道名/首选断言改为现态渠道池取值，或直接断言 `config.REMOTE_API_CHANNELS` 推导结果"
+  },
+  {
+   "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D4_free_channel_is_first",
+   "file": "tests/test_m96_followups.py",
+   "case": "TestM96ChannelPriority::test_D4_free_channel_is_first",
+   "err_current": null,
+   "err_archive": "AssertionError: 'zhipu-47-flash' != 'zhipu'",
+   "same_as_archive": false,
+   "category": "渠道/模型名",
+   "product_basis": "352刀9（2026-10-23 小林触发）免费渠道替换：ark-* 全部挂起，改走免费渠道；现态首选渠道 = `zhipu-47-flash`（priority 最小）",
+   "action": "考题里的渠道名/首选断言改为现态渠道池取值，或直接断言 `config.REMOTE_API_CHANNELS` 推导结果"
+  },
+  {
+   "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D5_paid_channel_is_last_of_top7",
+   "file": "tests/test_m96_followups.py",
+   "case": "TestM96ChannelPriority::test_D5_paid_channel_is_last_of_top7",
+   "err_current": null,
+   "err_archive": "AssertionError: 'modelscope' != 'deepseek'",
+   "same_as_archive": false,
+   "category": "渠道/模型名",
+   "product_basis": "现态渠道池（priority 升序）：zhipu-47-flash(p1) → bailian-qwen-plus(p2) → siliconflow-qwen2-7b(p3) → zhipu(p4) → bailian-qwen-max(p5) → modelscope(p7) → deepseek(p8)",
+   "action": "按现态 priority 重排断言；需要最后兜底时断言 deepseek(p8) 而非旧名"
+  },
+  {
+   "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D6_quota_values_corrected",
+   "file": "tests/test_m96_followups.py",
+   "case": "TestM96ChannelPriority::test_D6_quota_values_corrected",
+   "err_current": null,
+   "err_archive": "KeyError: 'ark-seed-21-pro'",
+   "same_as_archive": false,
+   "category": "渠道/模型名",
+   "product_basis": "同上：火山方舟（ark-*）免费额度耗尽 ⇒ 10 条 ark 渠道已挂起（352刀9）",
+   "action": "考题不得再引用 ark-* 渠道名"
+  },
+  {
+   "nodeid": "tests/test_main_loop_pulse_knife1_m172.py::TestMainLoopPulseKnife1::test_call_sites_converted",
+   "file": "tests/test_main_loop_pulse_knife1_m172.py",
+   "case": "TestMainLoopPulseKnife1::test_call_sites_converted",
+   "err_current": null,
+   "err_archive": "AssertionError: 3 != 2",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_daily_reset_clears_usage",
+   "file": "tests/test_quota_type_m97.py",
+   "case": "TestQuotaType::test_daily_reset_clears_usage",
+   "err_current": null,
+   "err_archive": "AssertionError: 1000000 != 0",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_fixed_channel_exhausts",
+   "file": "tests/test_quota_type_m97.py",
+   "case": "TestQuotaType::test_fixed_channel_exhausts",
+   "err_current": null,
+   "err_archive": "AssertionError: False is not true",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_quota_type_from_config",
+   "file": "tests/test_quota_type_m97.py",
+   "case": "TestQuotaType::test_quota_type_from_config",
+   "err_current": null,
+   "err_archive": "AssertionError: 'fixed' != 'daily_reward'",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_real_bullet_preembed_design_m198.py::test_taskbook_records_three_release_conditions",
+   "file": "tests/test_real_bullet_preembed_design_m198.py",
+   "case": "test_taskbook_records_three_release_conditions",
+   "err_current": null,
+   "err_archive": "FileNotFoundError: [Errno 2] No such file or directory: 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\docs\\\\路灯与星轨对话\\\\任务书\\\\第198批_施工任务书_20261012.md'",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_self_awareness_m18.py::TestEngineCore::test_register_and_list_analyzers",
+   "file": "tests/test_self_awareness_m18.py",
+   "case": "TestEngineCore::test_register_and_list_analyzers",
+   "err_current": null,
+   "err_archive": "AssertionError: Lists differ: ['structure_change', 'fake_loops'] != ['fake_loops']",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_self_awareness_m18.py::TestIntegration::test_main_init_path_no_error",
+   "file": "tests/test_self_awareness_m18.py",
+   "case": "TestIntegration::test_main_init_path_no_error",
+   "err_current": null,
+   "err_archive": "AssertionError: Lists differ: ['cal[23 chars], 'event_tap', 'evolution_health', 'fake_loops[80 chars]nge'] != ['cal[23 chars], 'evolution_health', 'fake_loops', 'knowledge[47 chars]ion']",
+   "same_as_archive": false,
+   "category": "待逐条定位",
+   "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
+   "action": "先补依据再动断言；未拿到依据不改"
+  },
+  {
+   "nodeid": "tests/test_t100c_log_rollover_awareness.py::test_doRollover_writes_unique_marker",
+   "file": "tests/test_t100c_log_rollover_awareness.py",
+   "case": "test_doRollover_writes_unique_marker",
+   "err_current": null,
+   "err_archive": "AssertionError: 轮转后应写入 .rollover_marker.json",
+   "same_as_archive": false,
+   "category": "日志轮转行为变更",
+   "product_basis": "轮转实现已迭代（370刀1 回退分支改原子写；另有 .1 备份口径）",
+   "action": "按现态轮转实现更新断言；若属产品缺陷则另立票"
+  },
+  {
+   "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_concerning_requires_keyword",
+   "file": "tests/test_t115f_self_state_mention.py",
+   "case": "TestT115fSelfStateMention::test_concerning_requires_keyword",
+   "err_current": null,
+   "err_archive": "AssertionError: '原回复' == '原回复'",
+   "same_as_archive": false,
+   "category": "字符串比较",
+   "product_basis": "两串看起来相同却不相等 ⇒ 通常是不可见字符/换行/归一化差异",
+   "action": "打印 repr 定位差异；若是产品归一化改动（如去空白）则改考题，否则另立票"
+  },
+  {
+   "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_cooldown_skips",
+   "file": "tests/test_t115f_self_state_mention.py",
+   "case": "TestT115fSelfStateMention::test_cooldown_skips",
+   "err_current": null,
+   "err_archive": "AssertionError: '原回复' == '原回复'",
+   "same_as_archive": false,
+   "category": "字符串比较",
+   "product_basis": "两串看起来相同却不相等 ⇒ 通常是不可见字符/换行/归一化差异",
+   "action": "打印 repr 定位差异；若是产品归一化改动（如去空白）则改考题，否则另立票"
+  },
+  {
+   "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_low_health_mentions_knowledge_and_suggestion",
+   "file": "tests/test_t115f_self_state_mention.py",
+   "case": "TestT115fSelfStateMention::test_low_health_mentions_knowledge_and_suggestion",
+   "err_current": null,
+   "err_archive": "AssertionError: '原回复' == '原回复'",
+   "same_as_archive": false,
+   "category": "字符串比较",
+   "product_basis": "两串看起来相同却不相等 ⇒ 通常是不可见字符/换行/归一化差异",
+   "action": "打印 repr 定位差异；若是产品归一化改动（如去空白）则改考题，否则另立票"
+  }
+ ]
+}
