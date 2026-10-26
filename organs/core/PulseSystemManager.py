@@ -38,6 +38,24 @@ from nucleus.organ_identity import resolve_organ_key, resolve_organ_keys
 # ★T-112d：豁免表统一归一化为规范 key 集合（命名空间对齐）
 _SILENCE_EXEMPT_KEYS = resolve_organ_keys(SILENCE_EXEMPT_ORGANS)
 
+# ★370刀2：boot 后台自检的**超预算告警阈值**（秒）。
+#   口径与 L0 看门狗一致，优先读 config.PULSE_LAYER["l0_processor_timeout"]
+#   （InfoField.py:417 同款，默认 8.0s）；**不新增 config 开关**。
+#   本常量仅是 config 项缺失时的兜底字面量，正常路径不生效。
+_BOOT_CHECK_BUDGET_FALLBACK_S = 8.0
+
+
+def _boot_check_budget_s() -> float:
+    """当前 L0 预算（秒）。读不到既有 config 项时回落到模块常量。
+
+    ★不用 try/except 兜底：纯 return 的异常分支会被静默门判为「吞异常」
+    （铁律176）。这里用 getattr + isinstance 把「取不到」与「取到脏值」
+    都收敛成显式回落，路径上不存在被吞掉的异常。
+    """
+    _layer = getattr(config, "PULSE_LAYER", None)
+    _v = (_layer or {}).get("l0_processor_timeout", _BOOT_CHECK_BUDGET_FALLBACK_S)
+    return float(_v) if isinstance(_v, (int, float)) else _BOOT_CHECK_BUDGET_FALLBACK_S
+
 
 class PulseSystemManager(BasePulseOrgan):
     """系统自主管理器（v9.5 分层脉冲版）"""
@@ -167,18 +185,78 @@ class PulseSystemManager(BasePulseOrgan):
         }
 
     def _run_boot_checks(self) -> None:
-        """★T-112c：后台执行 boot 重任务（服务检查 + 硬件检测），不阻塞 L0 worker。"""
+        """★T-112c：后台执行 boot 重任务（服务检查 + 硬件检测），不阻塞 L0 worker。
+
+        ★370刀2：补**超时/心跳留痕**——开始时刻／分段耗时／超预算告警／失败态落字段。
+        缺口是「12s 串行跑在 8s 预算后台线程里，但跑多久、哪段慢、超没超、失败在哪
+        一段全无观测」，出事只能靠猜。
+
+        ★并发语义零改动（小林裁决口径）：仍为 daemon 后台线程串行执行，
+        不新增同步等待、不合并线程、不向上抛出、不改 `start()` 立即返回 pending 口径；
+        超预算只打 WARNING 留痕，**不强制中断**后台线程。
+        """
+        _t0 = time.time()
+        _budget = _boot_check_budget_s()
+        # 本轮结果先置空值口径：异常时也能据此区分「没跑完」与「跑完为空」
+        self._last_boot_services = None
+        self._last_boot_hardware = None
+        self._last_boot_check_meta = {
+            "state": "running", "started_ts": _t0,
+            "budget_s": _budget, "segments": {}, "failed_at": None,
+        }
+        self._log(LogLevel.INFO,
+                  f"[系统启动] 后台自检开始（预算 {_budget:.1f}s）[370刀2]")
+
+        _stage = "services"
         try:
+            _t1 = time.time()
             self._last_boot_services = self._check_and_repair_services()
+            _seg_s = round(time.time() - _t1, 3)
+
+            _stage = "hardware"
+            _t2 = time.time()
             self._last_boot_hardware = self._check_hardware()
+            _seg_h = round(time.time() - _t2, 3)
+
+            _total = round(time.time() - _t0, 3)
             _mem_ok = (self._last_boot_hardware or {}).get("memory_ok", True)
             _svc_n = len(self._last_boot_services or {})
+            self._last_boot_check_meta = {
+                "state": "ok", "started_ts": _t0, "finished_ts": time.time(),
+                "total_s": _total, "budget_s": _budget,
+                "segments": {"services": _seg_s, "hardware": _seg_h},
+                "services_n": _svc_n, "memory_ok": bool(_mem_ok),
+                "over_budget": _total > _budget, "failed_at": None,
+            }
             self._log(LogLevel.INFO,
                       f"[系统启动] 后台自检完成: 服务 {_svc_n} 项, "
-                      f"内存{'正常' if _mem_ok else '告警'}")
+                      f"内存{'正常' if _mem_ok else '告警'}"
+                      f"（分段 服务{_seg_s}s/硬件{_seg_h}s 合计{_total}s）[370刀2]")
+            if _total > _budget:
+                # ★超预算只留痕不中断：后台线程强杀会留下半截状态
+                self._log(LogLevel.WARNING,
+                          f"[系统启动] 后台自检超预算: {_total}s > {_budget:.1f}s"
+                          f"（服务{_seg_s}s/硬件{_seg_h}s）；拆细任务另立票，"
+                          f"本处不中断后台线程 [370刀2]")
         except Exception as _e:
+            _total = round(time.time() - _t0, 3)
+            self._last_boot_check_meta = {
+                "state": "failed", "started_ts": _t0, "finished_ts": time.time(),
+                "total_s": _total, "budget_s": _budget,
+                "segments": dict(getattr(self, "_last_boot_check_meta", {})
+                                 .get("segments", {}) or {}),
+                "failed_at": _stage,
+                "error_type": type(_e).__name__, "error_msg": str(_e)[:200],
+            }
+            # ★失败态落字段（空值口径）＋ ERROR 留痕（异常类型/消息/分段位置），不吞异常
+            if self._last_boot_services is None:
+                self._last_boot_services = {}
+            if self._last_boot_hardware is None:
+                self._last_boot_hardware = {
+                    "memory_ok": True, "error": f"{type(_e).__name__}: {_e}"}
             self._log(LogLevel.ERROR,
-                      f"[系统启动] 后台自检异常: {type(_e).__name__}: {_e}")
+                      f"[系统启动] 后台自检异常（分段 {_stage}，耗时 {_total}s）: "
+                      f"{type(_e).__name__}: {_e} [370刀2]")
 
     def _on_system_stop(self, payload: dict) -> dict[str, Any]:
         self._running = False
