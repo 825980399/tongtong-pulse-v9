@@ -102,7 +102,7 @@ def test_01_rename_rejected_falls_back_to_atomic_write(tmp_path, monkeypatch):
     assert [d["seq"] for d in data] == [1, 2, 3], "回退分支不得截断既有条目"
     assert state["n"] == 2, "回退分支应再执行一次原子 replace（实际 %d）" % state["n"]
     assert h.has(LogLevel.WARNING, "370刀1"), "应留 370刀1 回退补写告警"
-    assert not h.has(LogLevel.WARNING, "退化为整体重写"), "未触发三级兜底时不该报退化"
+    assert not h.has(LogLevel.WARNING, "已回退为整体重写"), "未触发三级兜底时不该报退化"
     assert not _leftover_tmp(tmp_path), "临时文件不得残留"
 
 
@@ -117,7 +117,7 @@ def test_02_replace_retry_fails_then_truncate_then_error(tmp_path, monkeypatch):
     h.run(log)
     data = json.loads(_REAL_OPEN(str(log), encoding="utf-8").read())
     assert [d["seq"] for d in data] == [1, 2], "兜底截断写仍需写入本批条目"
-    assert h.has(LogLevel.WARNING, "退化为整体重写"), "应留三级兜底 WARNING"
+    assert h.has(LogLevel.WARNING, "已回退为整体重写"), "应留三级兜底 WARNING"
     assert st["n"] >= 2, "原子写应至少尝试两次（实际 %d）" % st["n"]
 
     # --- 第二段：截断写也失败 ⇒ ERROR 留痕（本批条目丢失口径保留）---
@@ -156,7 +156,7 @@ def test_03_main_path_atomic_write_not_regressed(tmp_path, monkeypatch):
     assert [d["seq"] for d in data] == [1, 2]
     assert state["n"] == 1, "主路径应只 replace 一次（实际 %d）" % state["n"]
     assert not h.has(LogLevel.WARNING, "370刀1"), "主路径成功不得打回退告警"
-    assert not h.has(LogLevel.WARNING, "退化为整体重写"), "主路径成功不得打兜底告警"
+    assert not h.has(LogLevel.WARNING, "已回退为整体重写"), "主路径成功不得打兜底告警"
     assert not hasattr(h, "_m363_rename_last"), "主路径成功不得记 rename 失败快照"
     assert not _leftover_tmp(tmp_path), "临时文件不得残留"
 
@@ -173,7 +173,7 @@ def test_04_no_temp_leftover_when_fallback_writes(tmp_path, monkeypatch):
 
     # 主路径 mkstemp 出来的临时文件必须被回退分支接手并在 finally 清掉
     assert not _leftover_tmp(tmp_path), "回退分支退出后临时文件残留：%s" % _leftover_tmp(tmp_path)
-    assert h.has(LogLevel.WARNING, "退化为整体重写"), "应走三级兜底并留痕"
+    assert h.has(LogLevel.WARNING, "已回退为整体重写"), "应走三级兜底并留痕"
 
 
 def test_05_rename_fail_probe_preserved(tmp_path, monkeypatch):
