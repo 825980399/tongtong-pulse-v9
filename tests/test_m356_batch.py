@@ -195,11 +195,21 @@ def test_356_d5_atomic_write_both_sites():
 
 
 def test_356_d5_no_bare_truncating_open():
-    """目标文件不得再被裸 open(...,'w') 截断。"""
+    """★374刀8（d5 判据改造）：主路径不许裸截断写，**三级兜底层豁免**。
+
+    旧判据是字面扫「文件里不许出现 `open(log_path, 'w'`」——分不清
+    「主路径裸写」（真缺陷）与「rename 两次被拒后的兜底裸写」（370 刀1 有意保留：
+    不回退就丢整批条目），自 370 起持续红。现按 **AST + 位置** 判：
+      · 主路径（不在 except 体内）出现裸 `open(log_path,'w')` ⇒ 红；
+      · 裸写只允许在 except 兜底分支，且该 handler 必须留痕；
+      · 主路径必须仍是「临时文件 + os.replace」原子写。
+    """
+    import sys as _sys
+    if os.path.dirname(os.path.abspath(__file__)) not in _sys.path:
+        _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_m374_c8_d5_write_path import assert_no_primary_bare_write
     for _rel in ("organs/motor/PulseLegs.py", "organs/senses/PulseVisualCortex.py"):
-        _t = _src(_rel)
-        assert "open(log_path, 'w'" not in _t, _rel
-        assert 'open(log_path, "w"' not in _t, _rel
+        assert_no_primary_bare_write(_rel)
 
 
 def test_356_d5_learn_log_lock_present():
