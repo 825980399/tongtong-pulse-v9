@@ -69,7 +69,13 @@ class TestA5SharedAllowDomains:
 
     def test_09_meta_line_hits_catches_real_pii(self):
         """★真实 PII 仍须命中（不能因修误报而漏检）。"""
-        hits = list(m._meta_line_hits("联系电话 " + "138" + "12345678" + " 请回拨"))
+        # 正例号须「手机形态但不在 _TEST_PHONES 白名单」：白名单号是刻意豁免的
+        # 测试假号，用它断言命中会随白名单扩充而失效（同 175刀2 订正口径），
+        # 故由白名单号做 1[3-9] 段补集动态生成，且先自证不落白名单。
+        _wl = sorted(m._TEST_PHONES)[0]
+        _alt = next("1" + _d + _wl[2:] for _d in "3456789" if _d != _wl[1])
+        assert _alt not in m._TEST_PHONES, "构造号不应落入白名单"
+        hits = list(m._meta_line_hits("联系电话 " + _alt + " 请回拨"))
         assert hits, "真实手机号应命中"
 
 

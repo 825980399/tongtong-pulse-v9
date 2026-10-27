@@ -181,9 +181,17 @@ def test_snapshot_extends_three_link_and_scene():
         assert k in d, f"快照 derived 缺失键: {k}"
     assert isinstance(d["scene_llm_dependency_ratio"], dict)
     # ★第233批 刀1.1 + 第241批 刀2（C案一刀三得）：快照随计数器字典自动携带新键
-    assert snap["counters"]["remediation"] == {
-        "attempt": 2, "success": 1, "distilled": 1,
-        "distilled_delegated": 0, "returned": 0, "missed": 0}
+    # ★372刀8：上句既是设计意图，就不该用 == 锁死全集（否则每新增一个计数器必红）。
+    #   实测现态已比原断言多两键 —— **第300批刀3** 补的
+    #   entered_verification(进入输出校验) / blocked(判定阻断)。
+    #   故改为断言**子集**：原有 6 键的值必须正确，不限制新增键。
+    _rem = snap["counters"]["remediation"]
+    for _k, _v in (("attempt", 2), ("success", 1), ("distilled", 1),
+                   ("distilled_delegated", 0), ("returned", 0), ("missed", 0)):
+        assert _rem.get(_k) == _v, f"remediation.{_k} 应为 {_v}，实际 {_rem.get(_k)}"
+    # 300批刀3 的两键应在位（守新增契约不被回退）
+    for _k in ("entered_verification", "blocked"):
+        assert _k in _rem, f"remediation 缺 300批刀3 新增键: {_k}"
 
 
 # ---------------------------------------------------------------------------
