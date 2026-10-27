@@ -1244,11 +1244,18 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
 #   ① paid_tokens > 0               ⇒ 收费兜底被触发，当日必须复盘
 #   ② HHI > 0.6                     ⇒ 单渠道依赖提示（HHI=Σ份额²，1=全押一家）
 #   ③ per-channel 月额燃烧率 > 5%   ⇒ 月额/20 预警（月 30 天，日烧超 1/20 即危险）
-#   ④ 429/健康度                    ⇒ 由渠道健康面给出（此处只读不判，避免跨面）
+#   ④ 429/健康度                    ⇒ ★375刀11 起在本函数给出（见下方 _health）：
+#      354 原写「由渠道健康面给出，此处只读不判」——但 ChannelHealthTracker 是
+#      **进程内内存态**、重启即清零，拿不出「当日累计」；能给出当日累计的只有这份
+#      日汇总 ⇒ 这一维只能算在这里，不能"等别处给"（等了 21 批，一直是空的）。
 # =====================================================================
 
 #: HHI 阈值（>0.6 提示单渠道依赖；1.0 = 全部调用都走同一渠道）
 CHANNEL_HHI_ALERT = 0.6
+#: ★375刀11：健康度告警线（失败率 > 40% ⇒ 该渠道当日基本不可用）
+CHANNEL_HEALTH_ALERT = 0.6
+#: ★375刀11：单渠道当日限流次数告警线（与刀10 入池判据同阈值，一处改两处跟）
+CHANNEL_RATE_LIMIT_ALERT = 2
 #: per-channel 月额燃烧率预警线（日烧 > 月额/20 ⇒ 按 30 天折算会烧穿）
 CHANNEL_BURN_RATE_ALERT = 0.05
 #: per-channel 月额（免费额度）口径表；-1 = 无月额口径（永久免费/积分抵扣/收费）
@@ -1262,7 +1269,9 @@ CHANNEL_MONTHLY_QUOTA: dict = {
     "deepseek": -1,
 }
 
-CHANNEL_READING_SCHEMA = "channel_reading/354.v1"
+#: ★375刀11：`354.v1 → 375.v1` —— 补上了第四维（429/健康度）与 `error_dim_state`，
+#:   键集变了就升版本，免得消费方按旧版读新体（多出的键不认、缺的键 KeyError）。
+CHANNEL_READING_SCHEMA = "channel_reading/375.v1"
 
 
 def channel_hhi(by_channel: dict) -> float:
@@ -1428,6 +1437,43 @@ def read_daily_tokens_report(base_dir: str | None = None) -> dict:
                                    "按 30 天折算 %d）" % (100.0 * _rate,
                                                     100.0 * CHANNEL_BURN_RATE_ALERT,
                                                     _tk, _q, _tk * 30)})
+    # ---- ④ 429 / 健康度（★375刀11）----
+    # 354 的四维里这一维是**空的**：注释写「由渠道健康面给出（此处只读不判）」，
+    # 但 `ChannelHealthTracker` 是进程内内存态、重启即清零，给不出「当日累计」；
+    # 能给出当日累计的只有这份日汇总 ⇒ 这一维只能在这里算，不能"等别处给"。
+    _health = {}
+    _has_dims = False
+    for _name, _v in (_bc or {}).items():
+        if not isinstance(_v, dict):
+            continue
+        _c = int(_v.get("calls") or 0)
+        _f = int(_v.get("failed") or 0)
+        _rl = int(_v.get("rate_limit") or 0)
+        # 两个错误面键**同时**在才算"采到了"（375刀10 起才写）
+        _dims = ("failed" in _v and "rate_limit" in _v)
+        _has_dims = _has_dims or _dims
+        # ★375刀11 修正：没采到错误面 ⇒ 健康度**无从计算**（不是 100%）。给 None，
+        #   与「真 0 次失败」严格区分；否则日志行会把旧格式打成 `x=1.0`（假安全）。
+        _hf = (1.0 - min(1.0, _f / float(_c))) if (_c and _dims) else None
+        _health[_name] = {"calls": _c, "failed": _f, "rate_limit": _rl,
+                          "health": (None if _hf is None else round(_hf, 4)),
+                          "error_dims": _dims}
+        if not _dims:
+            # 旧格式（375刀10 之前落盘）⇒ **不做健康判断**：
+            # 没有失败计数不等于零失败，读成"100% 健康"就是假安全（铁律166）。
+            continue
+        if _c and _rl >= CHANNEL_RATE_LIMIT_ALERT:
+            _alerts.append({"code": "rate_limited", "level": "warn",
+                            "channel": _name, "value": _rl,
+                            "why": (f"当日限流 {_rl} 次 ≥ "
+                                    f"{CHANNEL_RATE_LIMIT_ALERT}（容量信号："
+                                    "要么加渠道、要么降频；不是「服务坏了」）")})
+        if _hf is not None and _hf < CHANNEL_HEALTH_ALERT:
+            _alerts.append({"code": "unhealthy", "level": "warn",
+                            "channel": _name, "value": round(_hf, 4),
+                            "why": (f"健康度 {100.0 * _hf:.1f}% < "
+                                    f"{100.0 * CHANNEL_HEALTH_ALERT:.0f}%"
+                                    f"（{_f}/{_c} 次失败）")})
     _out = {
         "schema": CHANNEL_READING_SCHEMA,
         "date": (_d or {}).get("date") or "-",
@@ -1437,6 +1483,9 @@ def read_daily_tokens_report(base_dir: str | None = None) -> dict:
         "hhi": _hhi,
         "alerts": _alerts,
         "by_channel_burn": _burn,
+        # ★375刀11：第四维读数 + 「这一维到底采到没采到」
+        "by_channel_health": _health,
+        "error_dim_state": ("ok" if _has_dims else "unavailable"),
         "threshold_deprecated": ("全局日阈值 DAILY_PAID_TOKEN_ALERT=1_000_000 口径错误："
                                  "月额免费额度是 per-channel，全局日用量比全局月额永远不告警"
                                  "（假安全）⇒ 已由 per-channel 燃烧率 + paid>0 + HHI 三告警取代"),
@@ -1447,6 +1496,14 @@ def read_daily_tokens_report(base_dir: str | None = None) -> dict:
             "[354渠道] 判读 date=%s calls=%d tokens=%d paid=%d HHI=%.3f 告警=%d 明细=%s",
             _out["date"], _calls, _out["total_tokens"], _paid, _hhi, len(_alerts),
             ";".join("%s:%s=%s" % (a["code"], a["channel"], a["value"]) for a in _alerts) or "无")
+        # ★375刀11：第四维单独一行（可 grep）—— 「这一维没采到」与「采到且全健康」
+        #   在汇总行里长得一样，必须分开说（铁律166）。
+        _module_logger.info(
+            "[375渠道] 健康度 error_dim=%s 渠道数=%d 明细=%s",
+            _out["error_dim_state"], len(_health),
+            ";".join(f"{k}={'N/A' if v['health'] is None else v['health']}"
+                     f"(限流{v['rate_limit']})"
+                     for k, v in _health.items()) or "-")
     except Exception as _le:
         silent_exc(_le, where="call_recorder::read_daily_tokens_report trace")
     return _out

@@ -638,6 +638,56 @@ def append_global_awareness_section(report_path: str, logger: Any = None) -> dic
         "as_of": _as_of_txt, "stale_sec": _stale}
 
 
+def append_channel_reading_section(report_path: str,
+                                   logger: Any = None) -> dict[str, Any]:
+    """★375批刀11：日报输出**四维渠道判读**（paid / HHI / 燃烧率 / 429 健康度）。
+
+    为什么必须有这一节：`read_daily_tokens_report()` 在 354 批就写好了，
+    但**零生产调用点**（只有测试引用）⇒ 四维判读对活体完全不可见，
+    而真正每天在跑的仍是 `record()` 里那个**全局** `DAILY_PAID_TOKEN_ALERT`
+    —— 口径错的还在跑、口径对的没挂上。
+
+    只读、只往日报追加一节；任何异常只 warning，绝不影响调度主流程。
+    """
+    _log = logger or _module_logger
+    _rep: dict[str, Any] = {}
+    try:
+        from nucleus.llm.call_recorder import read_daily_tokens_report as _m375_rd
+        _rep = _m375_rd() or {}
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_channel_reading_section:取数", level="warning")
+        return {}
+    try:
+        _alerts = _rep.get("alerts") if isinstance(_rep.get("alerts"), list) else []
+        _health = (_rep.get("by_channel_health")
+                   if isinstance(_rep.get("by_channel_health"), dict) else {})
+        _h_txt = ",".join(
+            f"{_k}=" + ("N/A" if (_v or {}).get("health") is None
+                        else f"{100.0 * float((_v or {}).get('health')):.0f}%")
+            for _k, _v in _health.items()) or "-"
+        _a_txt = ";".join(f"{a.get('code')}@{a.get('channel')}={a.get('value')}"
+                          for a in _alerts if isinstance(a, dict)) or "无"
+        _usage_txt = (f"  · date={_rep.get('date') or '-'}"
+                      f" calls={int(_rep.get('calls') or 0)}"
+                      f" tokens={int(_rep.get('total_tokens') or 0)}"
+                      f" paid={int(_rep.get('paid_tokens') or 0)}")
+        _lines = ["", "【渠道四维判读】", _usage_txt,
+                  f"  · HHI={float(_rep.get('hhi') or 0.0):.3f}（>0.6 即单渠道依赖）",
+                  f"  · 健康度(第四维, error_dim={_rep.get('error_dim_state') or '-'})={_h_txt}",
+                  f"  · 告警 {len(_alerts)} 条：{_a_txt}",
+                  f"  · 口径说明：{_rep.get('threshold_deprecated') or '-'}",
+                  ""]
+        with open(report_path, "a", encoding="utf-8") as _f:
+            _f.write("\n".join(_lines))
+    except Exception as e:
+        silent_exc(e, "daily_reader.append_channel_reading_section:写日报小节",
+                   level="warning")
+    _log.info("[375渠道] 日报节 date=%s HHI=%.3f 告警=%d error_dim=%s",
+              _rep.get("date") or "-", float(_rep.get("hhi") or 0.0),
+              len(_rep.get("alerts") or []), _rep.get("error_dim_state") or "-")
+    return _rep
+
+
 def append_paid_usage_section(report_path: str, logger: Any = None) -> dict[str, Any]:
     """★第360批 刀0-3：日报输出当日「付费 tokens / 免费 tokens / 付费占比」一行。
 

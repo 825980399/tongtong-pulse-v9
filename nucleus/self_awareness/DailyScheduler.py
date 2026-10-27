@@ -668,6 +668,17 @@ class SelfAwarenessDailyScheduler:
                 except Exception as _m360e:
                     silent_exc(_m360e, "DailyScheduler.run_once:付费占比")
 
+            # ★第375批 刀11：日报输出**四维渠道判读**（paid/HHI/燃烧率/429 健康度）。
+            #   354 把判读函数写好了但零调用点 —— 口径对的没跑、口径错的（全局
+            #   DAILY_PAID_TOKEN_ALERT）每天在跑。这里把它挂上，纯只读、零语义变更。
+            if not self._is_test_env() and _rp:
+                try:
+                    from nucleus.self_awareness import daily_reader as _375_dr
+                    _res["channel_reading"] = _375_dr.append_channel_reading_section(
+                        _rp, logger=_module_logger)
+                except Exception as _m375e:
+                    silent_exc(_m375e, "DailyScheduler.run_once:四维渠道判读")
+
             # ★第312批 刀3：留痕行读上游结果前先兑 dict（上游异常路径可能返回 None，
             #   直接 `.get()` 会在留痕行自抛 AttributeError，把「回扫失败」升级成「每日拍失败」）。
             #   守卫见模块级 `_m312_as_dict`。
