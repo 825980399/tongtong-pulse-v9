@@ -25,6 +25,7 @@ from config import TIMEOUT_CONFIG
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus import thread_guard  # ★374刀9：线程引导滞留观测
 from nucleus._silent_except import silent_exc
 from nucleus.const import (
     DigestEvent,
@@ -183,6 +184,8 @@ class PulseLiver(BasePulseOrgan):
         self._res_open_files = None
         self._res_rss_max = None
         self._res_warn_count = 0
+        # ★374刀9：线程落差状态（OS 线程数 − Python 活跃线程数 的基线/持续计数）
+        self._thread_gap_state: dict = {}
     def _load_liver_config(self):
         """从config加载肝脏配置，失败时使用兜底值"""
         # ★骨架优化：统一配置加载（基类 _get_config_section 内部已安全处理异常）
@@ -498,6 +501,9 @@ class PulseLiver(BasePulseOrgan):
         self._res_handles = _handles
         self._res_open_files = _open_files
         self._res_threads = _threads
+        # ★374刀9：引导滞留的**持续增量**观测——差值持续为正 ⇒ 有线程不在 Python 视野里
+        _gap = thread_guard.gap_delta(_threads)
+        self._thread_gap_state = thread_guard.next_gap_state(self._thread_gap_state, _gap)
 
         if self._rss_baseline is None:
             self._rss_baseline = _rss
@@ -523,6 +529,14 @@ class PulseLiver(BasePulseOrgan):
             _warned = True
         if _warned:
             self._res_warn_count += 1
+        if self._thread_gap_state.get("warn"):
+            self._log(LogLevel.WARNING,
+                      f"[374刀9] 线程落差持续增大: OS线程−Python活跃={_gap} "
+                      f"(基线 {self._thread_gap_state.get('base')} · 连续 "
+                      f"{self._thread_gap_state.get('persist')} 个采样点) "
+                      f"⇒ 疑似有线程卡在引导期（滞留快照 "
+                      f"{len(thread_guard.stuck_snapshot())} 条）")
+            self._res_warn_count += 1
         try:
             _uptime_s = time.time() - _proc.create_time()
         except Exception as _e:
@@ -541,7 +555,8 @@ class PulseLiver(BasePulseOrgan):
         _uptime_str = f"进程启动≈{_uptime_s:.0f}s" if _uptime_s is not None else "进程启动时刻不可用"
         self._log(LogLevel.DEBUG,
                   f"[T-107a] 资源采样: RSS={_rss/1024**3:.2f}GB 句柄={_handles} "
-                  f"打开文件={_open_files} 线程={_threads} 基线增长={_growth/1024**3:.2f}GB {_uptime_str}")
+                  f"打开文件={_open_files} 线程={_threads} 线程落差={_gap} "
+                  f"基线增长={_growth/1024**3:.2f}GB {_uptime_str}")
 
     def _resource_stats(self) -> dict:
         """暴露资源看门狗最新快照（供 get_stats / 5051 面板消费）。"""
@@ -552,6 +567,10 @@ class PulseLiver(BasePulseOrgan):
             "handles": self._res_handles,
             "open_files": self._res_open_files,
             "threads": self._res_threads,
+            # ★374刀9：线程落差与持续计数（None 表示本次拿不到 OS 线程数，不是 0）
+            "thread_gap": self._thread_gap_state.get("delta"),
+            "thread_gap_base": self._thread_gap_state.get("base"),
+            "thread_gap_persist": self._thread_gap_state.get("persist"),
             "warn_count": self._res_warn_count,
             "sample_count": len(self._rss_samples),
         }

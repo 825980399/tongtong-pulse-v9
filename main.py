@@ -4359,6 +4359,16 @@ def main():
     _lv_thread = threading.Thread(target=_liveness_watchdog, name="LivenessWatchdog", daemon=True)
     _lv_thread.start()
 
+    # ★374刀9：线程引导滞留看门狗——**启动期预建**（不是要用时才懒起），
+    #   与 nucleus/thread_guard.py::safe_start 配对：后者登记，前者按 ident 判滞留。
+    try:
+        from nucleus.thread_guard import ensure_watchdog as _tg_ensure
+        if not _tg_ensure():
+            logging.getLogger("pulse").warning(
+                "[374刀9] 线程引导看门狗未能启动（thread_guard 已留痕，观测面不可用）")
+    except Exception as _tg_e:
+        silent_exc(_tg_e, "main.py[374刀9-线程引导看门狗]")
+
     # ★第162批刀7：启动清场——移除上一轮遗留的 shutdown_request.json，防粘滞触发
     try:
         from nucleus.evolution import night_orchestration as _night_orch_mod
