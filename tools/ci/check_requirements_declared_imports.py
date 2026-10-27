@@ -42,14 +42,33 @@ ALIASES = {
 PROJECT_TOPS = set()
 
 
+#: 非代码目录：既不是包，也不该被当成「项目内顶层」
+_NON_CODE_DIRS = {'data', 'logs', 'tmp', 'docs', 'dist', 'build', 'node_modules',
+                  '__pycache__', '.git', '.workbuddy', '.venv', 'venv'}
+
+
 def _collect_project_tops():
     tops = set()
     for name in os.listdir(REPO_ROOT):
         p = os.path.join(REPO_ROOT, name)
-        if os.path.isdir(p) and os.path.isfile(os.path.join(p, '__init__.py')):
-            tops.add(name)
-        elif os.path.isfile(p) and name.endswith('.py'):
+        if os.path.isfile(p) and name.endswith('.py'):
             tops.add(name[:-3])
+            continue
+        if not os.path.isdir(p) or name.startswith('.') or name in _NON_CODE_DIRS:
+            continue
+        if os.path.isfile(os.path.join(p, '__init__.py')):
+            tops.add(name)
+            continue
+        # ★373刀6：无 `__init__.py` 的**命名空间包**目录（somatics/、hardware/ ...）
+        #   也是仓库内代码 ⇒ 必须算项目内顶层。否则 main.py 的
+        #   `from somatics.sensor import Sensor` 会被误判成「未声明第三方 import」。
+        #   （此误报在 PROD_FILES 修成真扫之后才暴露 —— 以前 main.py 根本没被扫。）
+        for _root, _dirs, _files in os.walk(p):
+            _dirs[:] = [d for d in _dirs
+                        if d not in _NON_CODE_DIRS and not d.startswith('.')]
+            if any(f.endswith('.py') for f in _files):
+                tops.add(name)
+                break
     tops.update({'nucleus', 'organs', 'base', 'config', 'main', 'tools', 'tests'})
     return tops
 
@@ -137,14 +156,20 @@ def scan_tree(tree, declared, project_tops, protected):
     return violations
 
 
-def scan_file(path, declared, project_tops, protected):
-    """返回该文件的违规顶层包名列表。"""
+def scan_file(path, declared, project_tops):
+    """返回该文件的违规顶层包名列表。
+
+    ★373刀6：`protected` 必须在**本函数自己解析出的这棵树**上算。
+      原实现把它做成入参、由调用方传另一棵树的 id 集合 ⇒ 两份 AST 节点对象
+      不同、id 永不命中 ⇒「有 ImportError 降级保护」的豁免系统性失效
+      （判据写对了但永远走不到，铁律159）。改为一律就地计算。
+    """
     import contextlib
     with contextlib.suppress(OSError, SyntaxError):
         # 读/解析失败（权限/语法）不在此门禁范围（另有编译门禁）；跳过避免误阻
         src = open(path, encoding='utf-8', newline=None).read()
         tree = ast.parse(src, filename=path)
-        return scan_tree(tree, declared, project_tops, protected)
+        return scan_tree(tree, declared, project_tops, _collect_protected(tree))
     return []
 
 
@@ -175,7 +200,7 @@ def selftest():
     f1.write("import nonexistentpkg123\n")
     f1.close()
     try:
-        vs = scan_file(f1.name, declared, project_tops, set())
+        vs = scan_file(f1.name, declared, project_tops)
         assert vs, "正例：未声明包应报违规"
     finally:
         os.unlink(f1.name)
@@ -185,7 +210,7 @@ def selftest():
     f2.write("import allowedpkg\n")
     f2.close()
     try:
-        vs2 = scan_file(f2.name, declared, project_tops, set())
+        vs2 = scan_file(f2.name, declared, project_tops)
         assert not vs2, "反例：已声明包不应报违规"
     finally:
         os.unlink(f2.name)
@@ -219,28 +244,15 @@ def main(argv=None):
                 if not fn.endswith('.py'):
                     continue
                 fp = os.path.join(root, fn)
-                try:
-                    src = open(fp, encoding='utf-8', newline=None).read()
-                    tree = ast.parse(src, filename=fp)
-                except (OSError, SyntaxError):
-                    continue
-                prot = _collect_protected(tree)
-                vs = scan_file(fp, declared, project_tops, prot)
-                for v in vs:
+                for v in scan_file(fp, declared, project_tops):
                     all_viol.append((fp, v))
 
     for fn in PROD_FILES:
-        fp = os.path.join(REPO_ROOT, fp)
-        if not os.path.isfile(fp):
-            continue
-        try:
-            src = open(fp, encoding='utf-8', newline=None).read()
-            tree = ast.parse(src, filename=fp)
-        except (OSError, SyntaxError):
-            continue
-        prot = _collect_protected(tree)
-        vs = scan_file(fp, declared, project_tops, prot)
-        for v in vs:
+        # ★373刀6：原为 `fp = os.path.join(REPO_ROOT, fp)` —— 自引用，`fp` 实际取到
+        #   上面 walk 循环**泄漏**的变量（join 到另一条绝对路径）⇒ config.py /
+        #   main.py 这两个入口文件从未被真正扫描过（门禁对它们是瞎的）。
+        fp = os.path.join(REPO_ROOT, fn)
+        for v in scan_file(fp, declared, project_tops):
             all_viol.append((fp, v))
 
     if all_viol:
