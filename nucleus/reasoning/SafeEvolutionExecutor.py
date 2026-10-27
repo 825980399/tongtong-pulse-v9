@@ -6773,6 +6773,20 @@ class SafeEvolutionExecutor:
                     _module_logger.warning(
                         "[335刀4][K1判定] 判定失败（不影响本拍）：%s: %s",
                         type(_k1_e).__name__, _k1_e)
+                # ★374刀3（T-K1主闭环卸载-1）：productive 的产出**卸载回主闭环**。
+                #   此前这里只计数、只打日志 ⇒ 子代理跑得再好，曈曈也拿不到东西
+                #   （K1 达成却仍在隔离验证态）。择路＝写盘：审计池
+                #   `persist_pool` 是审查报告的唯一落盘口，下游 load_pool /
+                #   consumer / 看板三处都在读，不需要新信号通道。
+                #   失败只留痕、不阻断本拍（观测不得阻断主流程）。
+                if _productive:
+                    try:
+                        from nucleus.evolution.k1_offload import offload_report
+                        _result["k1_offload"] = offload_report(_stats.get("report") or [])
+                    except Exception as _off_e:
+                        _module_logger.warning(
+                            "[374刀3][K1卸载] 卸载异常（不影响本拍）：%s: %s",
+                            type(_off_e).__name__, _off_e)
                 if not _productive:
                     # ★318批刀4：零产出 ⇒ 显式标「任务面空」，不得以"无异常"代替"无输入"
                     _module_logger.info(
