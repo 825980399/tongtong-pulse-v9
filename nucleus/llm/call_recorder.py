@@ -380,6 +380,68 @@ def _m352b_empty_day(day: str) -> dict:
     }
 
 
+#: ★375刀10：限流的**显式标记表**（铁律153：不在"理由字符串里随手找关键字"，
+#:   而是声明一张表、逐项比对；表变了判据行为跟着变，可 review）。
+_RATE_LIMIT_MARKERS = ("429", "too many requests", "rate limit", "rate_limit",
+                       "ratelimit", "throttl", "限流", "请求过于频繁")
+
+#: ★375刀10：**渠道族**。票面说的「zhipu 占比」指这一族，不是单指 p4 兜底渠道
+#:   `zhipu`。实测 2026-10-27 当日 `by_channel` 是
+#:   `zhipu-47-flash 33 / bailian-qwen-plus 43 / unknown 4` —— **`zhipu` 一条都没有**
+#:   ⇒ 只认 `"zhipu"` 这个 key，判据对现网永远 `undecidable`（写了但判不了）。
+#:   族表是**显式全集**（渠道名来自 config targets，可枚举）；族外同前缀渠道仍然
+#:   计入但单列到 `unknown`，让「族表过期」可见，而不是悄悄漏算。
+CHANNEL_FAMILIES: dict = {
+    "zhipu": ("zhipu", "zhipu-47-flash"),
+    "siliconflow": ("siliconflow-qwen2-7b",),
+    "modelscope": ("modelscope",),
+}
+
+
+def _m375_is_rate_limit(rec: dict) -> bool:
+    """这条调用是否被**限流**（429）。
+
+    只看 `status` / `error` 两个字段 —— `status` 是枚举
+    （success / failed / timeout），429 这个事实只体现在 `error` 文本里
+    （适配器把 HTTP 状态写进去）。
+
+    **判的是"有没有发生限流"，不是"服务端可不可用"**：两者不进同一个计数
+    （限流是容量信号，失败是质量信号，混在一起就分不清该扩容还是该修）。
+    """
+    _st = str((rec or {}).get("status") or "").lower()
+    _er = str((rec or {}).get("error") or "").lower()
+    for _mk in _RATE_LIMIT_MARKERS:
+        if _mk in _st or _mk in _er:
+            return True
+    return False
+
+
+def _m375_family_calls(by_channel: dict, family: str) -> dict:
+    """把 `by_channel` 里**同一族**的渠道聚合起来（calls / failed / rate_limit）。
+
+    Returns:
+        {calls, failed, rate_limit, members, unknown}
+        `members` = 命中的族内渠道名；`unknown` = 同前缀但不在族表里的渠道名
+        （**已计入**，只是单列出来让族表过期可见）。
+    """
+    _names = CHANNEL_FAMILIES.get(family) or ()
+    _agg = {"calls": 0, "failed": 0, "rate_limit": 0,
+            "members": [], "unknown": []}
+    for _k, _v in (by_channel or {}).items():
+        if not isinstance(_v, dict):
+            continue
+        if _k in _names:
+            _agg["members"].append(str(_k))
+        elif str(_k).startswith(str(family)):
+            _agg["unknown"].append(str(_k))
+        else:
+            continue
+        _agg["calls"] += int(_v.get("calls") or 0)
+        _agg["failed"] += int(_v.get("failed") or 0)
+        _agg["rate_limit"] += int(_v.get("rate_limit") or 0)
+    return _agg
+
+
 def _m352b_accumulate(prev: dict, rec: dict, day: str,
                       paid_channels=None) -> dict:
     """把**一条**调用记录累进当日汇总。**纯函数**（不改入参，返回新 dict）。
@@ -412,6 +474,11 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
         silent_exc(e, where="call_recorder::_m352b_accumulate tokens 非数值")
         _tk = 0
 
+    # ★375刀10：本条的错误面（给 `by_channel` 用；`by_model` 不加 ——
+    #   限流/失败是**渠道**属性，不是模型属性，加进模型桶只会让两处口径打架）。
+    _m375_ok = (str(rec.get("status") or "").lower() == STATUS_SUCCESS)
+    _m375_429 = _m375_is_rate_limit(rec)
+
     out["calls"] = int(out.get("calls") or 0) + 1
     out["total_tokens"] = int(out.get("total_tokens") or 0) + _tk
     for _key, _name in (("by_channel", _ch), ("by_model", _md)):
@@ -424,6 +491,16 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
             _cell = {"calls": 0, "tokens": 0}
         _cell["calls"] = int(_cell.get("calls") or 0) + 1
         _cell["tokens"] = int(_cell.get("tokens") or 0) + _tk
+        # ★375刀10：渠道错误面计数。此前 `by_channel` 只有 {calls, tokens}，
+        #   于是下游两处判据**写了也走不通**：
+        #     · `evaluate_pool_expansion` 读 rate_limit ⇒ 字段不存在 ⇒ 恒 0
+        #       ⇒ 千帆判据永远 "defer"；
+        #     · `read_daily_tokens_report` 的第四维「429/健康度」无数据可判。
+        #   缺这两个计数，判据就只是文案。
+        if _key == "by_channel":
+            _cell["failed"] = int(_cell.get("failed") or 0) + (0 if _m375_ok else 1)
+            _cell["rate_limit"] = (int(_cell.get("rate_limit") or 0)
+                                   + (1 if _m375_429 else 0))
         _bucket[_name] = _cell
 
     if _ch in _paid:
@@ -1402,21 +1479,96 @@ def evaluate_pool_expansion(daily_rows: list) -> dict:
         return _out
     _last2 = _rows[-2:]
     _shares = []
+    _z_calls = 0
+    _z_failed = 0
+    _z_429 = 0
+    _z_members = set()
+    _z_unknown = set()
+    _tot_all = 0
     for _r in _last2:
         _bc = _r.get("by_channel") or {}
-        _tot = sum(int((v or {}).get("calls") or 0) for v in _bc.values())
-        _z = int((_bc.get("zhipu") or {}).get("calls") or 0)
-        _shares.append((_z / _tot) if _tot else 0.0)
+        _tot = sum(int((v or {}).get("calls") or 0)
+                   for v in _bc.values() if isinstance(v, dict))
+        # ★375刀10：按**族**聚合。只认 `by_channel["zhipu"]` 的话，现网
+        #   （主力在 `zhipu-47-flash`）永远算不出占比 ⇒ 判据永远不可判。
+        _zf = _m375_family_calls(_bc, "zhipu")
+        _tot_all += _tot
+        _z_calls += _zf["calls"]
+        _z_failed += _zf["failed"]
+        _z_429 += _zf["rate_limit"]
+        _z_members.update(_zf["members"])
+        _z_unknown.update(_zf["unknown"])
+        _shares.append((_zf["calls"] / _tot) if _tot else 0.0)
+    # ★375刀10：判据必须**整条**判。354 只落地了「连续 2 日占比>70%」，
+    #   `∧ (健康度<0.6 ∨ 429≥2/日)` 那半截**没有代码** ⇒ 只要 zhipu 占比高
+    #   就建议入池，哪怕它 100% 成功、零限流 —— 那正是「不该换渠道」的情形。
     _both_over = all(s > 0.70 for s in _shares)
-    _rl = sum(int(((_r.get("by_channel") or {}).get(_c) or {}).get("rate_limit")
-                  or 0) for _r in _last2 for _c in ("siliconflow-qwen2-7b", "modelscope"))
-    _v1 = "join" if _both_over else "defer"
+    _z_health = (1.0 - (_z_failed / float(_z_calls))) if _z_calls else None
+    _cond2 = ((_z_health is not None and _z_health < 0.6) or _z_429 >= 2)
+    if _tot_all <= 0 or _z_calls <= 0:
+        # 两日一条调用都没有 / 有调用但没一条走 zhipu 族 ⇒ 占比无意义，**不可判**
+        # （原来 _tot=0 ⇒ share=0.0 ⇒ defer，等于把"判不了"说成"不达标"）
+        _v1 = "undecidable"
+    elif _both_over and _cond2:
+        _v1 = "join"
+    else:
+        _v1 = "defer"
     _out["verdicts"]["TokenHub"] = _v1
-    _out["trace"].append("TokenHub: zhipu占比最近2日=%s 阈值>0.70 ⇒ %s"
-                         % ([round(s, 3) for s in _shares], _v1))
-    _v2 = "join" if _rl >= 2 else "defer"
+    _out["trace"].append(
+        "TokenHub: zhipu族占比最近2日=%s 阈值>0.70；健康度=%s 阈值<0.60；"
+        "限流合计=%d 阈值≥2 ⇒ %s（族成员=%s%s）"
+        % ([round(s, 3) for s in _shares],
+           ("N/A" if _z_health is None else round(_z_health, 3)), _z_429, _v1,
+           ",".join(sorted(_z_members)) or "-",
+           ("；族表外同前缀=" + ",".join(sorted(_z_unknown))) if _z_unknown else ""))
+    # ---- 千帆：siliconflow 族 + modelscope 族 ----
+    _q_calls = 0
+    _q_429 = 0
+    _q_cells = []
+    _q_unknown = set()
+    for _r in _last2:
+        _bc = _r.get("by_channel") or {}
+        for _fam in ("siliconflow", "modelscope"):
+            _qf = _m375_family_calls(_bc, _fam)
+            _q_calls += _qf["calls"]
+            _q_429 += _qf["rate_limit"]
+            _q_unknown.update(_qf["unknown"])
+            for _m in _qf["members"]:
+                _q_cells.append(_bc.get(_m) or {})
+            for _m in _qf["unknown"]:
+                _q_cells.append(_bc.get(_m) or {})
+    # ★375刀10：千帆判据分**三态**，不能一刀切成"有数据/没数据"。
+    #   `rate_limit` 是本刀才采集的，此前落盘的日汇总没有这个键 ——
+    #   但「渠道一次都没被调用」和「渠道被调用过、只是旧格式没这个键」是两件事：
+    #     · 一次都没出现 ⇒ 零调用 ⇒ 限流必然 0，这是**事实**（no_calls ⇒ defer）；
+    #     · 出现过但没有键 ⇒ 分不清「真 0」与「没采」（stale_schema ⇒ undecidable）。
+    #   合成一个 "unavailable" 会让从没配 key 的渠道永远不可判（key 白设）。
+    if not _q_cells:
+        _rl_state = "no_calls"
+        _v2 = "defer"
+    elif all("rate_limit" in _c for _c in _q_cells):
+        _rl_state = "ok"
+        _v2 = "join" if _q_429 >= 2 else "defer"
+    else:
+        _rl_state = "stale_schema"
+        _v2 = "undecidable"
     _out["verdicts"]["qianfan-ernie-speed"] = _v2
-    _out["trace"].append("千帆: siliconflow/modelscope 429 合计=%d 阈值≥2 ⇒ %s" % (_rl, _v2))
+    _out["trace"].append(
+        "千帆: siliconflow/modelscope 族 限流合计=%d 阈值≥2（采集状态=%s，调用=%d）⇒ %s"
+        % (_q_429, _rl_state, _q_calls, _v2))
+    # ★375刀10：错误面读数随结论一起出 —— 只有结论、没有分母，等于没法复核。
+    _out["error_surface"] = {
+        "zhipu_calls": _z_calls, "zhipu_failed": _z_failed,
+        "zhipu_rate_limit": _z_429,
+        "zhipu_health": (None if _z_health is None else round(_z_health, 4)),
+        "zhipu_members": sorted(_z_members),
+        "zhipu_unknown_members": sorted(_z_unknown),
+        "qianfan_calls": _q_calls, "qianfan_rate_limit": _q_429,
+        "qianfan_state": _rl_state,
+        "qianfan_unknown_members": sorted(_q_unknown),
+        "schema_note": ("按渠道**族**聚合（族表=CHANNEL_FAMILIES，族外同前缀单列）；"
+                        "health=1-failed/calls；限流单列（容量信号≠质量信号）"),
+    }
     try:
         _module_logger.info(
             "[354渠道] 入池判据 TokenHub=%s 千帆=%s 判据值=%s（key 已设不浪费，未达即暂缓）",

@@ -154,10 +154,18 @@ def test_354_d4_pool_expansion_undecidable_when_insufficient():
 
 
 def test_354_d4_pool_expansion_join_when_criteria_met():
-    """连续 2 日 zhipu 占比 >70% ⇒ TokenHub 入池；无 429 ⇒ 千帆暂缓（key 不浪费）。"""
+    """★375刀10 修正：判据是**两条同时成立**（占比>70% ∧ 健康度<0.6 或 429≥2/日）。
+
+    354 原断言用「占比 80%/85%、零失败、零限流」的 rows 期望 `join` —— 那等于
+    「只要用得多就换渠道」，把「依赖」和「依赖且**不好用**」混为一谈，正是判据被
+    削掉一半的化石。这里换成「占比高 **且** 不健康」的 rows，才与文案对得上；
+    「占比高但健康 ⇒ 不换」由 `test_m375_d10_pool_criteria.py::test_07` 反向钉住。
+    """
     import nucleus.llm.call_recorder as CR
-    _rows = [{"by_channel": {"zhipu": {"calls": 80}, "bailian-qwen-plus": {"calls": 20}}},
-             {"by_channel": {"zhipu": {"calls": 85}, "bailian-qwen-plus": {"calls": 15}}}]
+    _rows = [{"by_channel": {"zhipu": {"calls": 80, "failed": 40, "rate_limit": 0},
+                             "bailian-qwen-plus": {"calls": 20}}},
+             {"by_channel": {"zhipu": {"calls": 85, "failed": 45, "rate_limit": 0},
+                             "bailian-qwen-plus": {"calls": 15}}}]
     _r = CR.evaluate_pool_expansion(_rows)
     assert _r["verdicts"]["TokenHub"] == "join"
     assert _r["verdicts"]["qianfan-ernie-speed"] == "defer"
