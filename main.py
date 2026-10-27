@@ -4226,12 +4226,19 @@ def main():
     except Exception as e:
         logging.getLogger("pulse").warning(f"[框架] Web对话窗口启动失败 (端口5052): {e}")
 
+    # P1-5: 启动配置热重载监听
+    # ★373刀2（卡点二 P1）：调用点由 load_all() **之后前移到之前**。
+    #   依据（T0 复核，三条依赖面均无器官实例依赖）：
+    #     __load_user_config() 只读 data/config_override.json；
+    #     _apply_env_overrides() 只读环境变量；
+    #     _notify_hot_reload_callbacks() 只遍历回调表，load_all 前为空表 ⇒ 空转。
+    #   为什么：卡点二现场是主线程推进到 Thread.start() 的 _started.wait() 死等；
+    #   前移使该点发生在进程内线程基数最小处，且器官创建时用的已是重载后配置。
+    config.start_config_watcher()
+
     # 启动功能模块加载器
     framework.function_loader = FunctionLoader(framework)
     framework.function_loader.load_all()
-
-    # P1-5: 启动配置热重载监听
-    config.start_config_watcher()
 
     # ★P1: 注册各器官的热重载回调（配置变更后自动刷新参数）
     try:

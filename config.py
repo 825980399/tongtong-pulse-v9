@@ -4148,8 +4148,32 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
         silent_exc(e, where="config::log_config_change L3677")
 
 def _watch_config_file():
-    """后台线程：监听配置文件变更并自动重载"""
-    global _last_config_mtime, _config_watcher_running
+    """后台线程：监听配置文件变更并自动重载
+
+    ★373刀2：线程体外层加 `BaseException` 兜底 —— 线程里的未捕获异常默认走
+    `threading.excepthook`，在无控制台（pythonw/服务化）场景下**不留痕**，
+    表现为「热重载忽然不工作了」却查不到原因。此处在退出前留一条 WARNING
+    并把 `_config_watcher_running` 置回 False（让 stop/restart 的语义与
+    实际状态一致，避免 `start_config_watcher()` 因 running=True 假象而拒绝重启）。
+    """
+    global _config_watcher_running
+
+    try:
+        _watch_config_loop()
+    except BaseException as e:
+        _config_watcher_running = False
+        try:
+            import logging as _logging
+            _logging.getLogger("Config").warning(
+                f"[373刀2] 配置热重载线程异常退出（已不可用）: "
+                f"{type(e).__name__}: {e}")
+        except Exception as _le:
+            print(f"[Config] 配置热重载线程异常退出: {type(e).__name__}: {e} ({_le})")
+
+
+def _watch_config_loop():
+    """原 `_watch_config_file` 的循环体（★373刀2 抽出，行为逐行不变）"""
+    global _last_config_mtime
 
     while _config_watcher_running:
         try:
@@ -4173,17 +4197,57 @@ def _watch_config_file():
 
         time.sleep(5)
 
+# ★373刀2：`Thread.start()` 耗时观测预算（秒）。**不是** config 开关（本批禁新增开关），
+#   是模块级常量；超过它只打 WARNING 留痕，不改任何行为。
+_WATCHER_START_BUDGET_SEC = 2.0
+
+
 def start_config_watcher():
-    """启动配置文件监听（由 main.py 调用）"""
+    """启动配置文件监听（由 main.py 调用）
+
+    ★373刀2（卡点二 · watcher 前移与启动失败留痕 P1）：
+      调用点已由 `main.py` **前移到 `function_loader.load_all()` 之前**（原在之后）。
+
+      T0 复核（三条依赖面，均无器官实例依赖，故 load_all 之前可用）：
+        ① `__load_user_config()` —— 只读 `data/config_override.json` + 原子合并全局配置；
+        ② `_apply_env_overrides()` —— 只读环境变量；
+        ③ `_notify_hot_reload_callbacks()` —— 只遍历 `_hot_reload_callbacks`，
+           该表在 load_all 之前是空表（`config.py` 模块级 `= []`）⇒ 空转安全。
+      反而更优：load_all 之前就位 ⇒ 器官创建时用的已是重载后的配置。
+
+      为什么前移（卡点二现场）：EOF 后主线程推进到本函数末尾的 `Thread.start()`
+      即 CPython `threading.py` 的 `self._started.wait()` 死等（两轮堆栈快照帧一致），
+      同进程另有 7 个后台线程同类卡死。前移使该点发生在进程内线程基数最小处，
+      且热重载不再是「器官全部就绪后才有」的末端依赖。
+
+      **可观测性边界（本刀只做留痕，不做机制面修复）**：`Thread.start()` 若真死等，
+      本函数无法用 try/except 捕获（它不抛异常、只是不返回），故这里只能做
+      「启动前一条 / 启动后一条 + 耗时度量超预算 WARNING」。跨进程的死等定性
+      待烛微丁票 `T-372-前置-CPython线程启动死等定性-1`，本刀不越界。
+    """
     global _config_watcher_running, _config_watcher_thread
 
     if _config_watcher_running:
         return
 
     _config_watcher_running = True
-    _config_watcher_thread = threading.Thread(target=_watch_config_file, daemon=True)
+    print("[Config] [373刀2] watcher 线程启动中（load_all 之前）")
+    _t0 = time.monotonic()
+    _config_watcher_thread = threading.Thread(
+        target=_watch_config_file, name="config-watcher", daemon=True)
     _config_watcher_thread.start()
-    print(f"[Config] 配置热重载监听已启动 ({_CONFIG_OVERRIDE_PATH})")
+    _dt = time.monotonic() - _t0
+    if _dt > _WATCHER_START_BUDGET_SEC:
+        try:
+            import logging as _logging
+            _logging.getLogger("Config").warning(
+                f"[373刀2] Thread.start() 耗时 {_dt:.2f}s > 预算 "
+                f"{_WATCHER_START_BUDGET_SEC:.1f}s —— 疑似 _started 死等前的长阻塞，"
+                f"卡点二观察点")
+        except Exception as _le:
+            print(f"[Config] [373刀2] watcher 启动耗时 {_dt:.2f}s（留痕失败: {_le}）")
+    print(f"[Config] 配置热重载监听已启动 ({_CONFIG_OVERRIDE_PATH}) "
+          f"[373刀2] start_cost={_dt:.3f}s thread=config-watcher")
 
 def stop_config_watcher():
     """停止配置文件监听（由 main.py 在退出时调用）"""
