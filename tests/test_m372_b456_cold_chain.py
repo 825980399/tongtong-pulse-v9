@@ -45,11 +45,13 @@ def test_02_cold_thresholds_untouched():
         PulseNodePool, "_M_DEFAULT_MAX_WARM") else True
     _cfg_txt = _src("config.py")
     assert _cfg_txt.count("nodepool_max_warm=50000") >= 1 or "nodepool_max_warm" in _cfg_txt
-    # 实例默认参数仍是 50000
+    # 实例默认参数：★373刀4 已按新裁决调档（9500—15000 保守端 ⇒ 15000）。
+    #   372 当时的 50000 是「本刀只出复核结论」的守值，前提被 373 任务书取代。
     import inspect
     _sig = inspect.signature(PulseNodePool.__init__)
     if "max_warm" in _sig.parameters:
-        assert _sig.parameters["max_warm"].default == 50000
+        assert _sig.parameters["max_warm"].default == 15000, \
+            "373刀4 调档后默认值应为 15000（保守端）"
     # 不新增调阈值开关（372 只允许刀7 那一个 # [M372-CFG]，且不是阈值开关）
     assert _cfg_txt.count("# [M372-CFG]") == 1
     assert "[M372-CFG]" not in _cfg_txt.split("ENABLE_RULE_CHANNEL_SUBPROCESS = False")[0].split("# [M372-CFG]")[-1]

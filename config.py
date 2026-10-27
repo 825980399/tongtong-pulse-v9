@@ -3692,7 +3692,10 @@ RUNTIME_PARAMS = {
     "visual_stable_absence_ratio": 0.1,        # 稳定缺席比例（15%帧有人才认为无人）
     # node_pool参数
     "nodepool_max_hot": 10000,                 # 热池最大节点数
-    "nodepool_max_warm": 50000,                # 温池最大节点数
+    # ★373刀4：50000 → 15000（保守端）。实测生产池 19087 节点，50000 是它的
+    #   2.6 倍 ⇒ 温池永不溢出 ⇒ 冷化链零事件。本键与 PulseNodePool.__init__
+    #   的默认值**必须同值**：refresh_runtime_params() 会拿这里覆盖默认值。
+    "nodepool_max_warm": 15000,                # 温池最大节点数
     "nodepool_max_cold_cache": 5000,           # 冷池内存缓存上限
     # 心脏（心跳）参数
     "heart_base_interval": 10.0,               # 基础心跳间隔（秒）

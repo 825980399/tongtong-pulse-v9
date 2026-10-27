@@ -110,7 +110,15 @@ class PulseNodePool(SilentLogMixin):
         冷池 (cold): L1 低频历史节点 —— 按需加载/淘汰
     """
 
-    def __init__(self, max_hot: int = 10000, max_warm: int = 50000):
+    # ★373刀4（B2 · 冷化阈值调档 P2）：max_warm 50000 → 15000（任务书区间
+    #   9500—15000 的**保守端**）。依据：生产池实测 **19087** 节点，50000 是其 2.6 倍
+    #   ⇒ `_enforce_capacity` 的 `while len(self._warm) > self._max_warm` 永不成立
+    #   ⇒ 冷化链零事件（372 刀12 §2.3 已实证：`349回载` 日志 0 行、`reload_stats.json`
+    #   从未生成）。取 15000 ⇒ 溢出 4087 条（约 21%），既让链路可达，又不至于把温池
+    #   一次性抽干（9500 会溢出 50%，驱逐过猛）。
+    #   ★两处必须同改：`refresh_runtime_params()` 会拿 `config.RUNTIME_PARAMS
+    #   ["nodepool_max_warm"]` 覆盖本默认值 —— 只改这里等于没改（热重载一跑就回 50000）。
+    def __init__(self, max_hot: int = 10000, max_warm: int = 15000):
         """
         Args:
             max_hot: 热池最大节点数
@@ -233,12 +241,16 @@ class PulseNodePool(SilentLogMixin):
     def set_max_warm(self, value: int, reason: str = "runtime") -> int:
         """温池上限**运行时钩子** —— 调阈值但**不硬改 config 默认值**。
 
-        为什么需要这个钩子：`_max_warm` 默认 50000，而生产池实测约 1.9 万节点，
+        为什么需要这个钩子：`_max_warm` 原默认 50000，而生产池实测约 1.9 万节点，
         `_enforce_capacity` 里 `while len(self._warm) > self._max_warm` 在重启窗内
         **永远不成立** ⇒ warm→cold 这一段冷化链虽然代码存在，实际不可达。
-        星轨裁决「不硬改阈值」（先等重启窗压测圈数据再定档），所以这里只提供
+        353 批当时星轨裁决「不硬改阈值」（先等重启窗压测圈数据再定档），故只提供
         **运行时旋钮**：压测/验证时把它调到当前温池附近，即可让链路真正跑起来，
         且不留任何持久化副作用（`refresh_runtime_params()` 一调即回配置值）。
+
+        ★373刀4：上面的「不硬改」**已被 373 任务书取代**（小林 2026-10-27 批准
+        「调档落 9500—15000 保守端」）⇒ 默认值已改 15000（见 `__init__` 处注释），
+        本钩子语义随之从「唯一手段」降为「运行时微调」（压测时临时下探、验完调回）。
 
         Args:
             value: 新的温池上限（必须 ≥1；非法值原样保留并告警，不静默吞掉）。

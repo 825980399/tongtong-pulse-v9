@@ -231,10 +231,24 @@ def test_353_d3_hook_rejects_invalid_without_changing_state():
 
 
 def test_353_d3_config_threshold_not_hard_changed():
-    """裁决"不硬改阈值"：config 侧 50000 必须原样（钩子只是运行时旋钮）。"""
+    """353 裁决「不硬改阈值」：config 侧必须原样（钩子只是运行时旋钮）。
+
+    ★373刀4 前提被**新裁决取代**（不是放宽）：373 任务书经小林 2026-10-27 批准
+    「冷化阈值 max_warm 调档落 9500—15000 保守端」，353 的"不硬改"到此失效。
+    本条判据随之改为**守新裁决**，强度不降：
+      * 仍必须显式硬编码在 RUNTIME_PARAMS（不许删键、不许改成 getattr 兜底）；
+      * 必须落在任务书区间 [9500, 15000]；
+      * 必须与 `PulseNodePool.__init__` 默认值**同值**（只改一处 = 热重载即回退）。
+    """
+    import inspect
+
     import config
+    from nucleus.mnemosyne.PulseNodePool import PulseNodePool
     _v = (getattr(config, "RUNTIME_PARAMS", {}) or {}).get("nodepool_max_warm")
-    assert _v == 50000
+    assert isinstance(_v, int), f"RUNTIME_PARAMS.nodepool_max_warm 必须是显式整数，实得 {_v!r}"
+    assert 9500 <= _v <= 15000, f"调档值 {_v} 越出 373 任务书区间 [9500, 15000]"
+    _d = inspect.signature(PulseNodePool.__init__).parameters["max_warm"].default
+    assert _v == _d, f"config={_v} 与默认值={_d} 不一致 ⇒ refresh_runtime_params() 会覆盖回去"
 
 
 def test_353_d3_enforce_capacity_wired_in_three_places():
