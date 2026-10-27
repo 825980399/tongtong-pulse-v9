@@ -396,8 +396,11 @@ class TestT93cWritePointGuard(unittest.TestCase):
         self.assertEqual(["applied"], _r["status"], _r)
 
     def test_C5_guard_is_off_by_default(self):
-        self.assertFalse(_m92_base_indent_guard_on(), "写盘侧复用开关，默认必须关闭")
-        self.assertFalse(_m92_ast_struct_guard_on())
+        # ★372刀9 口径对齐：写盘侧**复用**验证侧同一对开关，故其默认值随
+        #   第295批刀1（config 翻 True）＋第303批刀1（兜底默认翻 True）一起变；
+        #   本题真正要守的是「写盘侧与验证侧复用同一开关」，不是旧默认值。
+        self.assertTrue(_m92_base_indent_guard_on(), "写盘侧复用开关，现默认开启")
+        self.assertTrue(_m92_ast_struct_guard_on())
 
 
 # ==========================================================================

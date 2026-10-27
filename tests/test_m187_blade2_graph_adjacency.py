@@ -23,6 +23,10 @@ _FAKE_GRAPH = {
 }
 
 
+# ★372刀9：产品侧读图入口已由「实时 export_event_graph()」改为
+#   `load_event_graph_cache()`（见 nucleus/self_inspector.py 同名方法体），
+#   原用例桩在旧入口 ⇒ 桩空转、读到真实缓存/空 ⇒ 三条假红。
+#   此处桩在**现行**入口上，判据与断言不变（仍验证一阶邻接计数与查询语义）。
 def _fake_export():
     return _FAKE_GRAPH
 
@@ -31,23 +35,23 @@ _inst = types.SimpleNamespace()
 
 
 def test_build_adjacency_counts():
-    _orig = eg.export_event_graph
-    eg.export_event_graph = _fake_export
+    _orig = eg.load_event_graph_cache
+    eg.load_event_graph_cache = _fake_export
     try:
         adj = si.SelfInspector._build_event_graph_adjacency(_inst)
     finally:
-        eg.export_event_graph = _orig
+        eg.load_event_graph_cache = _orig
     # PulseA 波及 {B,C} 且被 D 驱动 → 并集 3
     assert adj == {"PulseA": 3, "PulseB": 1, "PulseC": 1, "PulseD": 1}, adj
 
 
 def test_query_adjacency_affects_and_driven_by():
-    _orig = eg.export_event_graph
-    eg.export_event_graph = _fake_export
+    _orig = eg.load_event_graph_cache
+    eg.load_event_graph_cache = _fake_export
     try:
         q = si.SelfInspector.query_event_graph_adjacency(_inst, "PulseA")
     finally:
-        eg.export_event_graph = _orig
+        eg.load_event_graph_cache = _orig
     assert q["organ"] == "PulseA"
     assert q["affects"] == ["PulseB", "PulseC"], q["affects"]
     assert q["driven_by"] == ["PulseD"], q["driven_by"]
@@ -55,12 +59,12 @@ def test_query_adjacency_affects_and_driven_by():
 
 
 def test_query_adjacency_leaf_organ():
-    _orig = eg.export_event_graph
-    eg.export_event_graph = _fake_export
+    _orig = eg.load_event_graph_cache
+    eg.load_event_graph_cache = _fake_export
     try:
         q = si.SelfInspector.query_event_graph_adjacency(_inst, "PulseB")
     finally:
-        eg.export_event_graph = _orig
+        eg.load_event_graph_cache = _orig
     assert q["affects"] == []
     assert q["driven_by"] == ["PulseA"]
     assert q["blast_radius"] == 1

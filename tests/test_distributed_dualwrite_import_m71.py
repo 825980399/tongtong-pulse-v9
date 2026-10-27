@@ -28,7 +28,12 @@ class TestM71Config(unittest.TestCase):
         self.assertFalse(config.ENABLE_NEO4J_DUAL_WRITE)
 
     def test_02_influx_write_only_off(self):
-        self.assertFalse(config.ENABLE_INFLUXDB_WRITE_ONLY)
+        # ★372刀9 口径对齐：ENABLE_INFLUXDB_WRITE_ONLY 已由 **第173批刀0**
+        #   定为「窗前开启（长稳窗采集 process_rss_mb 时序）」⇒ 现态 True。
+        #   原「默认关闭」断言与产品现态不符（考题过时）；方法名沿用归档
+        #   nodeid 作对账锚点，不改名。
+        self.assertTrue(config.ENABLE_INFLUXDB_WRITE_ONLY,
+                        "173批刀0 窗前定值：开启（长稳窗时序采集）")
 
     def test_03_sample_rate_default(self):
         self.assertAlmostEqual(config.INFLUXDB_SAMPLE_RATE, 0.01, places=4)
@@ -44,7 +49,10 @@ class TestM71Config(unittest.TestCase):
 
     def test_08_three_feature_switches_off(self):
         self.assertFalse(config.ENABLE_NEO4J_GRAPH_STORE)
-        self.assertFalse(config.ENABLE_INFLUXDB_TIMESERIES)
+        # ★372刀9：TIMESERIES 与 WRITE_ONLY 同属 **173批刀0** 窗前定值（现态 True）；
+        #   NEO4J_GRAPH_STORE / DISTRIBUTED 仍为 False（产品现态未变）。
+        self.assertTrue(config.ENABLE_INFLUXDB_TIMESERIES,
+                        "173批刀0 窗前定值：开启（长稳窗时序采集）")
         self.assertFalse(config.ENABLE_DISTRIBUTED)
 
     def test_09_marker_present_in_config(self):
@@ -131,7 +139,9 @@ class TestT1Neo4jDualWritePool(unittest.TestCase):
             config.INFLUXDB_SAMPLE_RATE = old
 
     def test_21_influx_disabled(self):
-        self.assertFalse(self.pool._m71_influx_enabled())
+        # ★372刀9：`_m71_influx_enabled()` = TIMESERIES and WRITE_ONLY，
+        #   两者均为 173批刀0 窗前定值 True ⇒ 现态启用。
+        self.assertTrue(self.pool._m71_influx_enabled())
 
     def test_22_influx_write_safe_when_off(self):
         # 关闭时不写库、不抛异常

@@ -278,23 +278,31 @@ class TestT92aSwitchContract(unittest.TestCase):
     """A 开关契约：默认关闭（任务书要求）、运行时即时生效、读取失败兜底。"""
 
     def test_A1_defaults_are_false(self):
-        self.assertIs(False, _m92_base_indent_guard_on(), "T-92c 默认必须**关闭**")
-        self.assertIs(False, _m92_ast_struct_guard_on(), "T-92d 默认必须**关闭**")
+        # ★372刀9 口径对齐：两道结构关已翻闸为开——
+        #   **第295批刀1**（config 两键 True，"先观察一批"已过期，正式结案）
+        #   ＋**第303批刀1**（getattr 兜底默认同步翻 True，双保险）。
+        #   原「默认必须关闭」是 92 批保守口径，已过时；方法名沿用归档 nodeid。
+        self.assertIs(True, _m92_base_indent_guard_on(), "T-92c 295批刀1 已翻闸为开")
+        self.assertIs(True, _m92_ast_struct_guard_on(), "T-92d 295批刀1 已翻闸为开")
 
     def test_A2_runtime_toggle_takes_effect_immediately(self):
         for _sw, _fn in ((_SW_C, _m92_base_indent_guard_on), (_SW_D, _m92_ast_struct_guard_on)):
             with _switches(**{_sw: True}):
                 self.assertIs(True, _fn(), f"{_sw}=True 应即时生效")
-            self.assertIs(False, _fn(), f"{_sw} 恢复后应回到 False")
+            # ★372刀9：恢复后回到**默认 True**（295批刀1 翻闸），非旧口径 False。
+            self.assertIs(True, _fn(), f"{_sw} 恢复后应回到默认 True")
 
     def test_A3_getattr_fallback_when_config_attr_absent(self):
-        """config 无该属性（如旧配置）时须按默认 False 兜底，而非抛异常。"""
+        """config 无该属性（如旧配置）时须按兜底默认处理，而非抛异常。
+
+        ★372刀9：兜底默认已由**第303批刀1** 同步翻为 True（原为 92 批保守 False）。
+        """
         for _sw, _fn in ((_SW_C, _m92_base_indent_guard_on), (_SW_D, _m92_ast_struct_guard_on)):
             _old = getattr(config, _sw, _MISSING)
             if _old is not _MISSING:
                 delattr(config, _sw)
             try:
-                self.assertIs(False, _fn(), f"{_sw} 缺失时应兜底 False")
+                self.assertIs(True, _fn(), f"{_sw} 缺失时应兜底 True（303批刀1）")
             finally:
                 if _old is not _MISSING:
                     setattr(config, _sw, _old)
@@ -547,7 +555,9 @@ class TestT92gEndToEnd(unittest.TestCase):
 
     def test_G1_red_all_switches_off_incident_sails_through(self):
         """★红：开关全关（= 第91批末行为）时，事故补丁**通过**既有全部验证。"""
-        _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED)
+        # ★372刀9：本题语义是「两关**全关**＝第91批末行为」，故须显式关闸；
+        #   产品现态默认已开（295/303 批翻闸），不显式关就测不到「零回归」。
+        _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED, **{_SW_C: False, _SW_D: False})
         self.assertNotIn(_r.get("stage"), ("base_indent_guard_failed",
                                           "ast_structure_guard_failed"),
                          "开关关闭时不应新增拦截（零回归）")
@@ -560,7 +570,9 @@ class TestT92gEndToEnd(unittest.TestCase):
         self.assertTrue(any("基础缩进不一致" in _e for _e in _r.get("errors", [])), _r)
 
     def test_G3_green_t92d_blocks(self):
-        _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED, **{_SW_D: True})
+        # ★372刀9：须显式关闭 T-92c，否则基础缩进关先命中、stage 恒为
+        #   base_indent_guard_failed，测不到 T-92d（短路顺序耦合）。
+        _r = self._run(A_ID, A_ORIGINAL, A_MODIFIED, **{_SW_C: False, _SW_D: True})
         self.assertEqual("ast_structure_guard_failed", _r.get("stage"))
         self.assertFalse(_r.get("passed"))
         self.assertTrue(any("类方法数量异常缩水" in _e for _e in _r.get("errors", [])), _r)
@@ -568,9 +580,10 @@ class TestT92gEndToEnd(unittest.TestCase):
     def test_G4_green_both_incidents_blocked_by_both_switches(self):
         for _tag, _pid, _oc, _mc in (("A", A_ID, A_ORIGINAL, A_MODIFIED),
                                      ("B", B_ID, B_ORIGINAL, B_MODIFIED)):
-            _rc = self._run(_pid, _oc, _mc, **{_SW_C: True})
+            # ★372刀9：单关隔离——开一关必关另一关，否则先命中的关掩盖后者。
+            _rc = self._run(_pid, _oc, _mc, **{_SW_C: True, _SW_D: False})
             self.assertEqual("base_indent_guard_failed", _rc.get("stage"), f"{_tag} T-92c")
-            _rd = self._run(_pid, _oc, _mc, **{_SW_D: True})
+            _rd = self._run(_pid, _oc, _mc, **{_SW_C: False, _SW_D: True})
             self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), f"{_tag} T-92d")
 
     def test_G5_corpus_zero_false_block_by_judgement(self):

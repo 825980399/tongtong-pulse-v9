@@ -40,11 +40,13 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import config as _cfg
 from nucleus.reasoning.PatchManager import PatchManager
 
 _PM_SRC_PATH = os.path.join(ROOT, "nucleus", "reasoning", "PatchManager.py")
@@ -234,7 +236,12 @@ class TestT92dEndToEnd(unittest.TestCase):
             shutil.rmtree(_root, ignore_errors=True)
 
     def test_D1_current_version_labels_step3_error(self):
-        _r = self._run(_pm(), "cur")
+        # ★372刀9：两道结构关已翻闸为开（295批刀1＋303批刀1），会在第 3 步
+        #   整份语法校验**之前**先命中 base_indent_guard_failed。本用例考的是
+        #   「第 3 步文案带异常类名」，故显式关闸以隔离到该步（不改产品默认值）。
+        with mock.patch.object(_cfg, "ENABLE_M92_PATCH_BASE_INDENT_GUARD", False), \
+                mock.patch.object(_cfg, "ENABLE_M92_PATCH_AST_STRUCT_GUARD", False):
+            _r = self._run(_pm(), "cur")
         self.assertEqual("syntax_check_failed", _r.get("stage"), _r)
         _errs = [str(_e) for _e in _r.get("errors", [])]
         _hit = [_e for _e in _errs if _LABEL_RE.match(_e)]

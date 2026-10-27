@@ -48,10 +48,13 @@ _MARKER = "# [M92-CFG]"
 _MARKER_M91 = "# [M91-CFG]"
 
 # 本批登记的开关及其**期望值**（任务书：前者 True 沿用兜底；后两者默认关闭）
+#: 登记表 = 「config 里这几个开关应是什么值」的**唯一期望源**。
+#: ★372刀9 对齐：两道结构关已由**第295批刀1** 翻闸为 True（"先观察一批"正式结案），
+#:   登记期望同步订正；非本表覆盖的开关一律不动。
 _EXPECT = {
     "ENABLE_NONORGAN_FILE_RESOLVE": True,
-    "ENABLE_M92_PATCH_BASE_INDENT_GUARD": False,
-    "ENABLE_M92_PATCH_AST_STRUCT_GUARD": False,
+    "ENABLE_M92_PATCH_BASE_INDENT_GUARD": True,
+    "ENABLE_M92_PATCH_AST_STRUCT_GUARD": True,
 }
 
 
@@ -103,8 +106,12 @@ class TestT92bRuntimeConsistency(unittest.TestCase):
                           f"运行时 {_name} 与登记值不一致")
 
     def test_B2_getters_return_registered_values(self):
-        self.assertIs(False, _m92_base_indent_guard_on())
-        self.assertIs(False, _m92_ast_struct_guard_on())
+        # ★372刀9：getter 实测须等于**登记表**里的值（现为 True），
+        #   不再硬编码旧口径 False。
+        self.assertIs(_EXPECT["ENABLE_M92_PATCH_BASE_INDENT_GUARD"],
+                      _m92_base_indent_guard_on())
+        self.assertIs(_EXPECT["ENABLE_M92_PATCH_AST_STRUCT_GUARD"],
+                      _m92_ast_struct_guard_on())
 
     def test_B3_nonorgan_resolve_reads_true(self):
         """T-87b 消费点的读取口径（`getattr(config, 'ENABLE_NONORGAN_FILE_RESOLVE', True)`）仍为 True。"""

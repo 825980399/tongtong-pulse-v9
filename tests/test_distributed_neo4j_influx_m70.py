@@ -96,8 +96,8 @@ class TestInfluxDBStore(unittest.TestCase):
         self.store = InfluxDBStore()
 
     def test_11_disabled_by_default(self):
-        """默认关闭。"""
-        self.assertFalse(config.ENABLE_INFLUXDB_TIMESERIES)
+        """173批刀0 窗前定值：开启（长稳窗时序采集）；方法名沿用归档 nodeid。"""
+        self.assertTrue(config.ENABLE_INFLUXDB_TIMESERIES)
 
     def test_12_not_available(self):
         """未启用时不可用。"""
@@ -407,7 +407,8 @@ class TestIntegrationM70(unittest.TestCase):
     def test_55_defaults_all_off(self):
         """三个新功能默认全部关闭（安全要求 3.4）。"""
         self.assertFalse(config.ENABLE_NEO4J_GRAPH_STORE)
-        self.assertFalse(config.ENABLE_INFLUXDB_TIMESERIES)
+        # ★372刀9：TIMESERIES 为 173批刀0 窗前定值 True（其余两键仍 False）。
+        self.assertTrue(config.ENABLE_INFLUXDB_TIMESERIES)
         self.assertFalse(config.ENABLE_DISTRIBUTED)
 
 

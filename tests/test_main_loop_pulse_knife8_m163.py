@@ -24,8 +24,10 @@ class TestMainLoopPulseKnife8(unittest.TestCase):
             _cfg.MAIN_LOOP_PULSE_ENABLED = self._orig_switch
 
     def test_default_off_zero_regression(self):
-        # 默认开关关闭 → 网关不启用（循环走原 time.sleep，零行为变化）
-        self.assertFalse(self._ctrl._should_use_pulse_gateway())
+        # ★372刀9：MAIN_LOOP_PULSE_ENABLED 已由 **163批双P0活体验证定稿**
+        #   （commit d27ac1e7「三灰度开关落盘 True」）翻闸 ⇒ 现态开启。
+        #   本题保留「网关读数与 config 一致」这一不变量，方法名沿用归档 nodeid。
+        self.assertTrue(self._ctrl._should_use_pulse_gateway())
         # 事件未置位 → 短超时返回 False（不挂死）
         self.assertFalse(self._ctrl.wait_heartbeat_pulse(0.05))
 

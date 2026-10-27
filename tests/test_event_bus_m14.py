@@ -282,11 +282,19 @@ class TestSingletonAndSwitch(unittest.TestCase):
         reset_event_bus()
 
     def test_switch_defaults_off_and_async_disabled(self):
-        self.assertIs(getattr(config, "ENABLE_EVENT_BUS", None), False,
-                      "灰度开关默认必须为 False（不改动现有通信方式）")
+        # ★372刀9 口径对齐：ENABLE_EVENT_BUS 已由 **第356B批** 正式接线
+        #   （config.py 注释在位，值 True）⇒ 原「灰度默认必须为 False」口径过时。
+        #   方法名沿用归档 nodeid 作对账锚点，不改名。
+        self.assertIs(getattr(config, "ENABLE_EVENT_BUS", None), True,
+                      "356B 接线后现态为 True（原灰度默认关闭口径已过时）")
         bus = get_event_bus()
-        self.assertFalse(bus.stats()["async_enabled"],
-                         "开关关闭时单例应为同步退化模式")
+        # ★372刀9：异步标志 = 总开关 and EVENT_BUS_CONFIG["async_enabled"]（见
+        #   nucleus/events/EventBus.py::get_event_bus）⇒ 总开关开启时它就是 True。
+        #   本句守的是「单例异步态与两处配置的合取一致」，不是旧口径的恒 False。
+        _cfg_async = bool((getattr(config, "EVENT_BUS_CONFIG", {}) or {}).get("async_enabled", True))
+        self.assertIs(bus.stats()["async_enabled"],
+                      bool(getattr(config, "ENABLE_EVENT_BUS", False)) and _cfg_async,
+                      "单例异步态应与 总开关×async_enabled 的合取一致")
 
     def test_singleton_identity_and_reset(self):
         b1 = get_event_bus()

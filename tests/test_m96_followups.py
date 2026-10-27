@@ -51,6 +51,26 @@ def _bak(rel):
     return open(p, encoding="utf-8", errors="ignore").read()
 
 
+def _evolution_config_value(tree, key):
+    """只在模块级 `EVOLUTION_CONFIG = {...}` 里取 key 的值节点（找不到返回 None）。
+
+    ★372刀9：原用例遍历**所有** ast.Dict 且「最后命中即取」，会误命中
+    `SELF_MOD_LEVELS["L1_AUTO_APPROVE"]["gate_keys"]` 里的**描述性**同名键
+    （值为 True，语义是「该等级要求此键为真」而非开关登记）⇒ 假红。
+    真开关只在 EVOLUTION_CONFIG；本题断言语义不变（登记值须显式 False）。
+    """
+    for _n in _walk(tree):
+        if isinstance(_n, ast.Assign) and any(
+                isinstance(_tg, ast.Name) and _tg.id == "EVOLUTION_CONFIG"
+                for _tg in _n.targets):
+            if isinstance(_n.value, ast.Dict):
+                for _k, _v in zip(_n.value.keys, _n.value.values):
+                    if isinstance(_k, ast.Constant) and _k.value == key:
+                        return _v
+            return None
+    return None
+
+
 def _tree(rel):
     src = _read(rel)
     src = src.removeprefix("\ufeff")
@@ -186,7 +206,12 @@ def _channels_struct():
 class TestM96ChannelPool(unittest.TestCase):
 
     def test_A1_switch_registered_default_off(self):
-        """config 必须有新开关，且默认 False（灰度，零行为变化）。"""
+        """config 必须有该开关，且取值等于产品现态。
+
+        ★372刀9：ENABLE_EVOLUTION_USE_CHANNEL_POOL 已由**第360批刀0-1**
+        （DeepSeek 付费止血）翻闸为 True ⇒ 原「灰度默认 False」口径过时。
+        方法名沿用归档 nodeid 作对账锚点。
+        """
         src = _read(CFG_REL).replace("\r\n", "\n")
         self.assertIn("ENABLE_EVOLUTION_USE_CHANNEL_POOL", src)
         t = _tree(CFG_REL)
@@ -196,7 +221,8 @@ class TestM96ChannelPool(unittest.TestCase):
                 for tg in n.targets:
                     if isinstance(tg, ast.Name) and tg.id == "ENABLE_EVOLUTION_USE_CHANNEL_POOL":
                         found = True
-                        self.assertIs(n.value.value, False, "默认必须为 False（灰度）")
+                        self.assertIs(n.value.value, True,
+                                      "360批刀0-1 翻闸后现态为 True（原灰度默认已过时）")
         self.assertTrue(found, "开关未在 config.py 顶层赋值")
 
     def test_A2_getter_reads_switch(self):
@@ -296,25 +322,15 @@ class TestM96ChannelPool(unittest.TestCase):
 class TestM96ApprovalGovernance(unittest.TestCase):
 
     def test_B1_local_switch_registered_false(self):
-        t = _tree(CFG_REL)
-        hit = None
-        for n in _walk(t):
-            if isinstance(n, ast.Dict):
-                for k, v in zip(n.keys, n.values):
-                    if isinstance(k, ast.Constant) and k.value == "local_auto_apply_enabled":
-                        hit = v
+        # ★372刀9：只在 EVOLUTION_CONFIG 里取（见 _evolution_config_value 说明）。
+        hit = _evolution_config_value(_tree(CFG_REL), "local_auto_apply_enabled")
         self.assertTrue(hit is not None,
                         "config 未登记 local_auto_apply_enabled（N1-①：缺省即开）")
         self.assertIs(hit.value, False, "必须显式为 False")
 
     def test_B2_allow_core_registered_false(self):
-        t = _tree(CFG_REL)
-        hit = None
-        for n in _walk(t):
-            if isinstance(n, ast.Dict):
-                for k, v in zip(n.keys, n.values):
-                    if isinstance(k, ast.Constant) and k.value == "allow_core_auto_apply":
-                        hit = v
+        # ★372刀9：同上，限定 EVOLUTION_CONFIG（描述性 gate_keys 里的 True 不算登记）。
+        hit = _evolution_config_value(_tree(CFG_REL), "allow_core_auto_apply")
         self.assertTrue(hit is not None, "config 未登记 allow_core_auto_apply")
         self.assertIs(hit.value, False)
 
