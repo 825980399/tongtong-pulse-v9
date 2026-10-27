@@ -15,8 +15,26 @@ import os
 import threading
 import time
 
-from aibot import WSClient
-from aibot.types import WSClientOptions
+try:  # ★373刀6（票 T-372-U-import-aibot-1）：缺包 ⇒ 本通道静默禁用，不炸启动
+    #   175刀4 已把 aibot 从 requirements 移除（pip 上无此包，由部署环境单独提供），
+    #   保护原先只写在 main.py 调用方；门禁 `check_requirements_declared_imports`
+    #   看的是 **import 点本身**，两处都不满足 ⇒ 本批把降级下沉到 import 点。
+    from aibot import WSClient
+    from aibot.types import WSClientOptions
+    _AIBOT_IMPORT_ERROR = None
+except ImportError as _e_aibot:  # 未安装 / 装坏 —— 企业微信长连接通道整体禁用
+    WSClient = None  # type: ignore[assignment,misc]
+    WSClientOptions = None  # type: ignore[assignment,misc]
+    _AIBOT_IMPORT_ERROR = _e_aibot
+    # 就地取日志器：模块级 `_logger` 要等下面那批 nucleus import 走完才建好，
+    # 而本 handler 只在缺包时执行一次 —— 就地 import 是唯一不破坏 import 顺序的写法。
+    # 一条 WARNING 即可定位「企微通道为何没起来」，不必等调用方报错才发现。
+    from nucleus.logger import get_module_logger as _get_module_logger
+
+    _get_module_logger("wecom_chat_bridge").warning(
+        "[373刀6] aibot SDK 不可用 ⇒ 企业微信长连接通道禁用（不阻断启动）: %s: %s"
+        "｜恢复方式：按 175刀4 既有部署方式装回 aibot",
+        type(_AIBOT_IMPORT_ERROR).__name__, _AIBOT_IMPORT_ERROR)
 
 from nucleus._silent_except import silent_exc
 from nucleus.aibot_logger import get_aibot_logger  # ★v9.5压制AiBotSDK心跳DEBUG日志
@@ -57,6 +75,14 @@ class WeComChatBridge(SilentLogMixin):
 
     def start(self):
         """启动后台线程，建立长连接"""
+        if _AIBOT_IMPORT_ERROR is not None:
+            # ★373刀6：缺包时**不留半启动态**——不起线程、不注册回复监听、
+            #   `_running` 保持 False（否则 stop() 会对着不存在的 loop 空转）。
+            _logger.warning(
+                "[373刀6] aibot SDK 不可用 ⇒ start() 直接返回，通道保持禁用"
+                "（未起线程 / 未注册回复监听）: %s: %s",
+                type(_AIBOT_IMPORT_ERROR).__name__, _AIBOT_IMPORT_ERROR)
+            return
         if self._running:
             return
         self._running = True
@@ -148,6 +174,11 @@ class WeComChatBridge(SilentLogMixin):
 
     async def _async_connect(self):
         """异步建立连接并注册消息事件"""
+        if WSClientOptions is None or WSClient is None:
+            # ★373刀6：正常路径由 start() 早退挡住；此处守住**直接调用**
+            #   （单测/未来重连重构）不会变成 "'NoneType' object is not callable"。
+            _logger.warning("[373刀6] aibot SDK 不可用 ⇒ 跳过建连（通道禁用）")
+            return
         try:
             options = WSClientOptions(
                 bot_id=self._bot_id,
