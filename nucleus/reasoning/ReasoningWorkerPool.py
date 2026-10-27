@@ -51,6 +51,22 @@ def m363_exc_stats() -> dict:
     return {"counts": dict(_M363_EXC_COUNTS), "last": dict(_M363_EXC_LAST)}
 
 
+def m375_cpu_route_stats() -> dict:
+    """★375刀3：CPU 门面接线统计（只读；单例未建时 state=absent）。
+
+    读法：`routed > 0` 才说明 `parallel_scheduler.submit_cpu_bound` 在活体上真被调过；
+    `fallback` 只应在 Hybrid 关闭或池不可用时增长 —— 持续增长即接线失效信号。
+    """
+    _names = sorted(ReasoningWorkerPool._M375_CPU_ROUTE_NAMES)
+    _p = _reasoning_pool
+    if _p is None:
+        return {"state": "absent", "routed": 0, "fallback": 0, "last": "", "names": _names}
+    _r = dict(getattr(_p, "_m375_route", {}) or {})
+    _r["state"] = "present"
+    _r["names"] = _names
+    return _r
+
+
 
 def _is_alive(proc) -> bool:
     """★P2-24：安全判断子进程是否存活。
@@ -72,6 +88,15 @@ class ReasoningWorkerPool:
     使用 ProcessPoolExecutor 在独立进程中执行 CPU 密集的推理任务，
     绕过 Python GIL 限制，充分利用多核 CPU。
     """
+
+    # ★375刀3：纯 CPU 任务接统一门面（`parallel_scheduler.submit_cpu_bound`）。
+    #   只接这两个**已在跨进程跑的**任务；认不出的任务名一律走原路径（不猜、不接管）。
+    #   意图：让 `submit_cpu_bound` 从「有键无色」变成真调用，复用 Hybrid 既有进程池
+    #   （main.py 启动时主动 `_ensure_pools()`，活体实测已初始化 4 进程）⇒ **不新增任何池**。
+    _M375_CPU_ROUTE_NAMES = frozenset({
+        "verify_patch_effect_in_process",
+        "run_ab_test_in_process",
+    })
 
     def __init__(self):
         # ★P1 优化：进程数接入全局并行调度器信号（硬件自适应），与其余线程池统一调度信号源。
@@ -126,6 +151,8 @@ class ReasoningWorkerPool:
         self._last_degraded_recover = 0.0           # ★第22批 T2：上次「降级后恢复尝试」时间
         self._closed = False                        # shutdown 后禁止再重建（防停机复活）
         self._pool_config_cache: tuple[bool, int, float] | None = None
+        # ★375刀3：CPU 门面接线计数（routed=真走了统一门面；fallback=接失败回落原路径）
+        self._m375_route: dict = {"routed": 0, "fallback": 0, "last": ""}
 
         # 初始化进程池
         self._init_pool()
@@ -227,6 +254,11 @@ class ReasoningWorkerPool:
         with self._lock:
             self._task_count += 1
 
+        # ★375刀3：纯 CPU 任务先走统一门面；未接管（None）则继续下面的自持池路径。
+        _m375_fut = self._m375_cpu_route(func_name, args, kwargs)
+        if _m375_fut is not None:
+            return _m375_fut
+
         # ★主线第15批 T2/P1-92：崩溃 → 重建 → 重试本次提交（最多两轮）
         for _attempt in range(2):
             try:
@@ -275,6 +307,41 @@ class ReasoningWorkerPool:
                 self._fail_count += 1
             return None
         return self._sync_future(func_name, *args, **kwargs)
+
+    def _m375_cpu_route(self, func_name: str, args: tuple, kwargs: dict):
+        """★375刀3：纯 CPU 任务 → `parallel_scheduler.submit_cpu_bound`（统一门面）。
+
+        为什么只接白名单：Hybrid 池与自持池的降级/重建语义不同，全量切换属架构变更
+        （375 刀2 已判「不新建池、不动路由」）。本刀只把**已在跨进程跑的纯 CPU 任务**
+        接上门面 —— 自持池负载因此下降，且不新增任何池（Hybrid 池随 main.py 启动建立）。
+
+        返回 None = 未接管，调用方继续走原自持池路径，功能与降级语义完全不变。
+        """
+        if func_name not in self._M375_CPU_ROUTE_NAMES:
+            return None
+        _t0 = time.time()
+        try:
+            from nucleus.parallel_scheduler import get_parallel_scheduler
+            _fut = get_parallel_scheduler().submit_cpu_bound(
+                ReasoningWorkerPool._execute_reasoning_task, func_name, *args,
+                task_name=f"rw:{func_name}", **kwargs)
+        except Exception as e:
+            with self._lock:
+                self._m375_route["fallback"] += 1
+                self._m375_route["last"] = f"fallback:{type(e).__name__}"
+            _module_logger.warning(
+                "[375刀3] CPU 门面接线失败，回落自持池: %s | %s: %s",
+                func_name, type(e).__name__, str(e)[:120])
+            silent_exc(e, where="ReasoningWorkerPool._m375_cpu_route", level="debug")
+            return None
+        with self._lock:
+            self._m375_route["routed"] += 1
+            self._m375_route["last"] = func_name
+        _module_logger.info(
+            "[375刀3][K2试点] CPU 任务已接统一门面: %s 交接耗时=%.2fms routed=%d fallback=%d",
+            func_name, (time.time() - _t0) * 1000.0,
+            self._m375_route["routed"], self._m375_route["fallback"])
+        return _fut
 
     @staticmethod
     def _execute_reasoning_task(func_name: str, *args, **kwargs):
