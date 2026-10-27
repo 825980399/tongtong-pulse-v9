@@ -3328,6 +3328,12 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                 _p["applied_at"] = (_p.get("applied_at") or _p.get("landed_at")
                                     or time.time())
                 _p["o3_dispatch_verdict"] = "applied"
+                # ★374刀2（T-373-O3通道闭环缺口-1）：与主通道 `:2857` 对齐 ——
+                #   落地成功必须回写审计池 FIXED。373 刀5 只把 applied/applied_at
+                #   归位到落地事件上，**漏了闭环这一句** ⇒ O3 通道消费的补丁
+                #   status 永远停在 claimed/open，破零的 set_status(FIXED) 首条
+                #   落不到这条通道上。复用同一函数、同一状态机，不新建写口。
+                _m356_close_loop_fixed(_p)
             else:
                 # `sandbox_only` 是**新增取值**：消费方 `self_inspector` 只认
                 # `== "applied"`（等值判据），故新增取值不会被误判成已应用。
