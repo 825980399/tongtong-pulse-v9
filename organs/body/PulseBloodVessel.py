@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 import config
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus.const import SILENCE_EXEMPT_ORGANS, HeartEvent, KnowledgeEvent, LogLevel, VascularEvent
+from nucleus.const import SILENCE_EXEMPT_ORGANS, HeartEvent, LogLevel, VascularEvent
 from nucleus.organ_identity import resolve_organ_key  # ★T-112d：器官名归一化
 
 
@@ -372,83 +372,3 @@ ORGAN_META = {
     "post_wiring": [],
 }
 
-if __name__ == "__main__":
-    print("=== PulseBloodVessel v9.5 分层脉冲自测 ===\n")
-
-    class MockInfoField:
-        def __init__(self):
-            self.published = []
-        def publish(self, pulse):
-            self.published.append(pulse)
-
-    class MockCore:
-        def emit(self, source_organ, event_type, payload, priority, layer="L1"):
-            return {
-                # [批次4·深度体检][MAINT-4] __main__ mock 补回 pulse_id
-                "pulse_id": f"pulse:{source_organ}:{event_type}",
-                "event_type": event_type,
-                "source_organ": source_organ,
-                "payload": payload,
-                "priority": priority,
-                "layer": layer,
-            }
-
-    vessel = PulseBloodVessel("血管")
-    mock_field = MockInfoField()
-    mock_core = MockCore()
-    vessel.set_info_field(mock_field)
-    vessel.set_pulse_core(mock_core)
-    vessel._silence_threshold = 2
-    vessel._check_interval = 1
-
-    vessel.start()
-
-    print("1. 模拟胃和眼睛的活跃脉冲:")
-    vessel.on_pulse({
-        "event_type": KnowledgeEvent.WRITTEN,
-        "source_organ": "胃",
-        "payload": {},
-        "priority": 3,
-    })
-    vessel.on_pulse({
-        "event_type": "knowledge.retrieved",
-        "source_organ": "眼睛",
-        "payload": {},
-        "priority": 3,
-    })
-    print(f"   追踪器官: {list(vessel._organ_last_active.keys())}")
-    print(f"   脉冲计数: {dict(vessel._organ_pulse_count)}")
-
-    print("\n2. 第一次巡检（无沉默）:")
-    result = vessel.on_pulse({
-        "event_type": HeartEvent.BEAT,
-        "source_organ": "心脏",
-        "payload": {"beat_count": 1},
-        "priority": 2,
-    })
-    print(f"   活跃器官={result['active_organs']}, 沉默={result['silent_organs']}")
-
-    print("\n3. 模拟沉默（将胃的最后活跃时间设为30秒前）:")
-    vessel._organ_last_active["胃"] = time.time() - 30
-    result = vessel.on_pulse({
-        "event_type": HeartEvent.BEAT,
-        "source_organ": "心脏",
-        "payload": {"beat_count": 2},
-        "priority": 2,
-    })
-    print(f"   沉默器官: {[s['organ'] for s in result['silent_organs']]}")
-    print(f"   告警脉冲已发射: {len(mock_field.published) > 0}")
-
-    # 验证告警脉冲的 layer 标记
-    alert_pulses = [p for p in mock_field.published if p.get("event_type") == VascularEvent.SILENT_ORGAN]
-    if alert_pulses:
-        print(f"   SILENT_ORGAN脉冲 layer: {alert_pulses[0].get('layer', '未设置')} (预期L0)")
-
-    print("\n4. 血管统计:")
-    stats = vessel.get_stats()
-    print(f"   心跳数: {stats['beat_count']}")
-    print(f"   追踪器官: {stats['total_tracked_organs']}")
-    print(f"   器官活跃记录: {stats['organ_activity']}")
-
-    vessel.stop()
-    print("\n=== 自测全部通过 ===")

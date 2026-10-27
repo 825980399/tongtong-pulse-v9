@@ -1,0 +1,180 @@
+{
+  "batch": 2,
+  "rule_source": "372 刀13 批1 `b13`（三条裁决规则）",
+  "collected_n": 8,
+  "deferred_n": 2,
+  "deferred": [
+    {
+      "file": "organs/brain/PulseInterestModel.py",
+      "lineno": 822,
+      "why": null
+    },
+    {
+      "file": "organs/body/PulseLung.py",
+      "lineno": 3232,
+      "why": "块内 assert=2"
+    }
+  ],
+  "blocks": [
+    {
+      "file": "organs/brain/PulseRiskPerception.py",
+      "lineno": 1098,
+      "lines": 84,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 1182,
+      "end_lineno": 1181,
+      "bytes_before": 55001,
+      "bytes_after": 51570
+    },
+    {
+      "file": "organs/brain/PulseCortex.py",
+      "lineno": 3902,
+      "lines": 83,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 3985,
+      "end_lineno": 3984,
+      "bytes_before": 216764,
+      "bytes_after": 213546
+    },
+    {
+      "file": "organs/brain/PulseInnerWorld.py",
+      "lineno": 17519,
+      "lines": 83,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 17792,
+      "end_lineno": 17601,
+      "bytes_before": 939795,
+      "bytes_after": 936652
+    },
+    {
+      "file": "organs/immune/PulseWhiteCell.py",
+      "lineno": 875,
+      "lines": 83,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 958,
+      "end_lineno": 957,
+      "bytes_before": 41621,
+      "bytes_after": 38364
+    },
+    {
+      "file": "organs/body/PulseKidney.py",
+      "lineno": 779,
+      "lines": 82,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 864,
+      "end_lineno": 860,
+      "bytes_before": 41442,
+      "bytes_after": 38561
+    },
+    {
+      "file": "organs/body/PulseBloodVessel.py",
+      "lineno": 375,
+      "lines": 80,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 455,
+      "end_lineno": 454,
+      "bytes_before": 21451,
+      "bytes_after": 18541
+    },
+    {
+      "file": "organs/identity/PulseGrowth.py",
+      "lineno": 282,
+      "lines": 77,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 359,
+      "end_lineno": 358,
+      "bytes_before": 15293,
+      "bytes_after": 12321
+    },
+    {
+      "file": "organs/endocrine/PulseHormones.py",
+      "lineno": 1048,
+      "lines": 76,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": [
+          "print",
+          "get"
+        ]
+      },
+      "total_file_lines": 1125,
+      "end_lineno": 1123,
+      "bytes_before": 52336,
+      "bytes_after": 49346
+    }
+  ],
+  "lines_removed": 648,
+  "baseline": {
+    "blocks": 101,
+    "high_risk": 49,
+    "print_only": 50,
+    "no_side_effect": 2,
+    "lines": 4391
+  },
+  "after": {
+    "blocks": 93,
+    "high_risk": 41,
+    "print_only": 50,
+    "no_side_effect": 2,
+    "lines": 3743
+  },
+  "remaining_high_risk": 41
+}
