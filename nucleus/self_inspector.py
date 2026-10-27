@@ -159,6 +159,51 @@ def _m374_is_organ_origin(origin: str | None) -> bool:
     return bool(origin) and origin.split(".", 1)[0] == _M374_ORGAN_PKG
 
 
+#: ★374刀6（D2 · 票 `T-370-嵌套函数重复计数-1`）：嵌套函数的行号集合。
+#:
+#: `_parse_methods` 的 `^\s*(?:async\s+)?def` 会连**嵌套函数**一起收成"方法"，
+#: 而外层方法的方法体又包含整段嵌套定义 ⇒ 同一物理行被扫两遍、报两条
+#: （合成样本实测：2 个物理行报 3 条；票面 Cortex「2 行变 4 条」同型）。
+#: 外层 body 已经覆盖嵌套函数，再单独扫一遍是**纯重复**。
+
+
+@lru_cache(maxsize=256)
+def _m374_nested_func_lines(file_path: str) -> frozenset[int]:
+    """返回该文件里**嵌套在另一个函数内部**的函数定义行号（类方法不算嵌套）。"""
+    _out: set[int] = set()
+    try:
+        with open(file_path, encoding="utf-8", errors="replace") as _f:
+            _tree = ast.parse(_f.read())
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::_m374_nested_func_lines",
+                   level="debug")
+        return frozenset()
+
+    def _walk(node: Any, _depth: int) -> None:
+        for _ch in ast.iter_child_nodes(node):
+            if isinstance(_ch, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if _depth >= 1:
+                    _out.add(int(_ch.lineno))
+                _walk(_ch, _depth + 1)
+            else:
+                _walk(_ch, _depth)
+
+    _walk(_tree, 0)
+    return frozenset(_out)
+
+
+def _m374_is_nested_start(nested: frozenset, line: int) -> bool:
+    r"""判断某个"方法"起点是不是嵌套函数。
+
+    `_parse_methods` 的行号**系统性偏 1~2**（`^\s*` 会吞掉 def 前的空行，且
+    `_read_method_body` 的切片基准比 1-based 行号偏一位），所以按 ±1 容差判：
+    多认一个不亏——外层 body 已覆盖它；少认一个就退回重复计数。
+    """
+    if not nested:
+        return False
+    return (line in nested) or (line + 1 in nested) or (line - 1 in nested)
+
+
 #: ★356刀4②：这些方法名不适用「周期任务重入守卫」——构造器/析构器不是周期任务。
 _M356_NO_REENTRY_SKIP = frozenset({"__init__", "__new__", "__del__", "__post_init__"})
 
@@ -3968,9 +4013,13 @@ class SelfInspector(SilentLogMixin):
         all_issues: list[dict[str, Any]] = []
         for organ_name, info in organ_data.items():
             file_path = info.get("file_path", "")
+            # ★374刀6：该文件的嵌套函数行号（外层 body 已覆盖，跳过以免重复计数）
+            _m374_nested = _m374_nested_func_lines(file_path)
             for method in info.get("methods", []):
                 method_name = method.get("name", "")
                 start_line = method.get("line_number", 0)
+                if _m374_is_nested_start(_m374_nested, start_line):
+                    continue
                 # 读取方法体
                 # ★PHASE12-P1-2扩展：传入方法名启用按名兜底。
                 #   此处是全量检测的唯一入口，此前行号 off-by-one 导致约 60%
@@ -4005,6 +4054,25 @@ class SelfInspector(SilentLogMixin):
                 self._check_mutable_default(body, file_path, organ_name, method_name, start_line, all_issues)
                 self._check_hardcoded_abs_path(body, file_path, organ_name, method_name, start_line, all_issues)
                 self._check_print_debug(body, file_path, organ_name, method_name, start_line, all_issues)
+        # ★374刀6（D2）第二道：出口按 **(file, 行号, 类型, 签名)** 去重。
+        #   签名取描述文本（检测器用命中的代码构造它，同一处代码两次命中逐字相同）；
+        #   **不含 method**——外层方法名与嵌套函数名正是重复计数唯一的区别。
+        #   注：`line` 本身仍偏 1~2（见 `_m374_is_nested_start`），所以这道只兜
+        #   "同一行被两个入口登记"；行号修正后将自动变得完整，但那是另一张票。
+        _m374_seen: set[tuple] = set()
+        _m374_kept: list[dict[str, Any]] = []
+        for _issue in all_issues:
+            _sig = (_issue.get("file", ""), int(_issue.get("line", 0) or 0),
+                    _issue.get("type", ""), _issue.get("description", ""))
+            if _sig in _m374_seen:
+                continue
+            _m374_seen.add(_sig)
+            _m374_kept.append(_issue)
+        if len(_m374_kept) != len(all_issues):
+            _module_logger.info(
+                f"[374刀6] 重复条目去重 {len(all_issues) - len(_m374_kept)} 条"
+                f"（{len(all_issues)} → {len(_m374_kept)}）")
+            all_issues = _m374_kept
         # ★FIX(P0.5 分级初筛 + 假阳性治理): 标注置信度分级，并过滤已知误报
         _filtered_issues = []
         # ★P1补丁覆盖扩展：本地规则可自动修复的问题类型（与 SafeEvolutionExecutor._generate_patch 对齐）。
