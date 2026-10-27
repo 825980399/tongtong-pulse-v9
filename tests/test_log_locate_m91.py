@@ -441,15 +441,42 @@ class TestT91aCoverage(unittest.TestCase):
     def test_33_先红_v3_off_reproduces_the_16_misses(self):
         """★先红证据（运行期）：V3 关闭 ⇒ 16 个缺口标签**全部**回到不可定位。
 
-        断言方向为「⊆」：这 16 个标签在 V2 下**结构性**不可命中（命名源错位），
-        故不随日志增长而失效。
+        ★375刀12 修分母：探测对象由 `self.tags`（活体日志 TAG）改为 `_GAP_TAGS`
+        本体。改前 `_miss` 取自 `self.tags`、`_still` 却过滤常量 `_GAP_TAGS` ——
+        两个分母不相等时，**日志里暂时没出现**的缺口标签会直接落进 `_still` 被判红。
+        372 刀8 记录的 5 个（wecom_chat_bridge / WriteGuard / 时间中枢 / 胸腺 /
+        硬件启动器）正是这一类：当日日志尚未出现它们，而 V3 关闭时的真实命中数
+        是 **0**（`tmp/repro375d12.py` 已逐字复现该列表）。
+        `locate_issue` 对 (organ, msg) 是纯函数，不要求标签出现在日志里
+        ⇒ 直接探 16 个本体，覆盖面更全、且不随日志轮转变色。
         """
         with _Switch(_SWITCH, False):
-            _miss = set(t for t in self.tags
-                        if not self.insp.locate_issue(t, "").get("file"))
-        _still = [t for t in _GAP_TAGS if t not in _miss]
-        self.assertEqual(_still, [],
-                         f"以下标签在 V3 关闭时竟然命中（说明先红证据不成立）：{_still}")
+            _hit = [t for t in _GAP_TAGS if self.insp.locate_issue(t, "").get("file")]
+        self.assertEqual(_hit, [],
+                         f"以下标签在 V3 关闭时竟然命中（说明先红证据不成立）：{_hit}")
+
+    def test_33b_gap_probe_does_not_read_live_log(self):
+        """★375刀12：本结论不许随「日志里有没有这个标签」变红变绿。
+
+        造一个**一个缺口标签都不含**的 tags 列表（复刻 372 刀8 的时点）：
+          · 旧口径（`_miss` 取自 tags）⇒ 16 个缺口标签**全部**落入 `_still`，必红；
+          · 新口径（直接探 `_GAP_TAGS`）⇒ 纹丝不动。
+        这一条是 test_33 自己的反向验证：改回去就立刻红。
+        """
+        _saved = self.tags
+        try:
+            type(self).tags = ["noise_only_tag"]
+            with _Switch(_SWITCH, False):
+                _hit = [t for t in _GAP_TAGS if self.insp.locate_issue(t, "").get("file")]
+            self.assertEqual(_hit, [],
+                             "日志缺失这些标签时缺口探测被牵动（分母仍取自 tags）")
+            _old_miss = set(t for t in self.tags
+                            if not self.insp.locate_issue(t, "").get("file"))
+            _old_still = [t for t in _GAP_TAGS if t not in _old_miss]
+            self.assertEqual(len(_old_still), len(_GAP_TAGS),
+                             "旧口径在「日志无缺口标签」时必然全红（372 刀8 的红因）")
+        finally:
+            type(self).tags = _saved
 
     def test_34_v3_strictly_improves_over_v2(self):
         with _Switch(_SWITCH, False):
