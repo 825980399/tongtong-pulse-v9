@@ -51,6 +51,17 @@ _LOW_RISK_RE = re.compile("|".join(_LOW_RISK_LINE_PATTERNS))
 # 数值参数微调：行内只改了数字/True/False
 _NUM_TUNING_RE = re.compile(r'[\d.]+|True|False|None')
 
+# ★375刀4：复现结论 → `problem_gone` 的唯一映射表。
+#   背景：post-apply 的效果验证曾恒传 `problem_gone=None`，三维退化成一维；
+#   而 `verify()` 里 `all(_known)` 对 `[True]` 也为真 ⇒ **一维通过就 +10 分**。
+#   同一次应用里 `patch_active_reprobe.apply_reprobe()` 已把复现结论原地写进 patch，
+#   那是现成的真实信号，没必要继续传 None。
+_M375_PROBLEM_GONE_MAP: dict[str, tuple[bool | None, str]] = {
+    "true_pass": (True, "复现实测：修复前复现、修复后完全消失"),
+    "partial_fix": (False, "复现实测：问题数减少但未清零"),
+    "false_pass": (None, "复现实测：修复前无法复现 ⇒ 无基线，不可判定"),
+}
+
 
 # ★第九批：测试隔离用默认目录（tools/test_isolation_shim.redirect_all 会重定向到 ISO_DIR）
 _ISO_BASE_DIR: str | None = None
@@ -138,6 +149,20 @@ class EvolutionEffectVerifier:
 
     # ==================== 效果验证 ====================
 
+    @staticmethod
+    def problem_gone_from_reprobe(patch: dict[str, Any]) -> tuple[bool | None, str]:
+        """★375刀4：把同一次应用回填的复现结论映射成 `problem_gone`。
+
+        返回 `(bool|None, 说明)`。**`false_pass` 映射为 None 而不是 False**：
+        它是「修复前根本复现不出」= 没有基线，判 False 会按「问题仍在」扣 -15 分，
+        把「测不了」惩罚成「做错了」（与第47批「无法判定≠失败」同一条线）。
+        缺值 / 未知结论同样返回 None —— 不猜（铁律159 同型）。
+        """
+        _v = str((patch or {}).get("reprobe_verdict") or "").strip()
+        if _v in _M375_PROBLEM_GONE_MAP:
+            return _M375_PROBLEM_GONE_MAP[_v]
+        return None, f"无复现结论（{_v or '缺值'}）⇒ 不可判定"
+
     def verify(self, patch: dict[str, Any], issue: dict[str, Any] | None = None,
                *, problem_gone: bool | None = None,
                function_ok: bool | None = None,
@@ -185,9 +210,6 @@ class EvolutionEffectVerifier:
         if not _known:
             _passed, _reason = None, "三项均未测量，无法判定（不计入修复率）"
             _delta = 0
-        elif all(_known):
-            _passed, _reason = True, f"{_d1_note}；{_d2_note}；{_d3_note}"
-            _delta = 10
         elif _d1 is False:
             _passed, _reason = False, f"问题未解决（{_d1_note}）"
             _delta = -15
@@ -197,9 +219,23 @@ class EvolutionEffectVerifier:
             #   这会把"不知道"惩罚成"做错了"，与语义拆分（不可判定=不奖不罚）冲突。
             _passed, _reason = None, f"问题是否消失不可判定（{_d1_note}）；{_d2_note}；{_d3_note}"
             _delta = 0
-        else:
+        elif False in _known:
             _passed, _reason = False, f"{_d1_note}；{_d2_note}；{_d3_note}"
             _delta = -10
+        elif len(_known) == 3:
+            _passed, _reason = True, f"{_d1_note}；{_d2_note}；{_d3_note}"
+            _delta = 10
+        else:
+            # ★375刀4：**覆盖不足不是通过**。原实现用 `all(_known)` 判通过，
+            #   而 `all([True])` 也为真 ⇒ 只传 function_ok 一项就能拿 +10 分，
+            #   三维判据被一个维度冒充（零调权形同虚设）。
+            #   改判：已知维度全过但不足三维 ⇒ 不可判定（不奖不罚），缺口如实报出。
+            _missing = [n for n, d in (("problem_gone", _d1), ("function_ok", _d2),
+                                       ("perf_ok", _d3)) if d is None]
+            _passed = None
+            _reason = (f"仅 {len(_known)}/3 维可判且均通过，缺 {'/'.join(_missing)}"
+                       " ⇒ 覆盖不足，不奖不罚")
+            _delta = 0
 
         _verdict = {
             "patch_id": _pid,

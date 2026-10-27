@@ -4557,15 +4557,24 @@ class PatchManager:
                             #   却被同时当成"问题真的消失了"。
                             #   → 此处 `problem_gone=None`（**不可判定**），
                             #     真正的业务探针由调用方补充上报后回填。
+                            # ★375刀4：`problem_gone` 不再恒 None —— 同一次应用里
+                            #   `apply_reprobe()` 刚把复现结论原地写进 patch（上方
+                            #   `_m85_apply_reprobe`），那就是真实的问题复查信号。
+                            #   `false_pass`（修复前复现不出）映射为 None：无基线≠问题仍在。
+                            _m375_pg, _m375_pg_note = _EV.problem_gone_from_reprobe(patch)
+                            _m375_func_ok = bool(_verify_result.get("passed"))
                             _verdict = _verifier.verify(
                                 patch,
                                 {"type": patch.get("issue_type") or patch.get("type", ""),
                                  "file": patch.get("file", ""),
                                  "method": patch.get("method", "")},
-                                problem_gone=None,  # ★第47批：无法判定≠已修复
-                                function_ok=bool(_verify_result.get("passed")),
-                                perf_delta_ms=None,  # 性能由调用方实测后回填
+                                problem_gone=_m375_pg,
+                                function_ok=_m375_func_ok,
+                                perf_delta_ms=None,  # 无实测耗时源：如实未测量，不编造
                             )
+                            _module_logger.debug(
+                                "[375刀4] 效果验证入参 problem_gone=%s（%s）function_ok=%s perf=未测量",
+                                _m375_pg, _m375_pg_note, _m375_func_ok)
                             _verifier.apply_trust_adjustment(patch, _verdict)
                             # ★第47批：写入语义拆分字段（no_regression / problem_fixed /
                             #   verification_granularity / effectiveness），
