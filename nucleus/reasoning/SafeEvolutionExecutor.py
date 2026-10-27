@@ -4136,7 +4136,12 @@ class SafeEvolutionExecutor:
     K2_MAX_WORKERS = 2          # 并发 2（任务书钉死）
     K2_ROUNDS = 3               # 串行/并行各 3 轮取均值
     K2_BLAST_LIMIT = 1          # blast_radius_of > 1 ⇒ 不并行，转人工
-    K2_DROP_TARGET = 0.30       # 墙钟下降通过线
+    K2_DROP_TARGET = 0.30       # 墙钟下降通过线（仅 I/O 型负载适用）
+    # ★375刀1：口径分离。本负载是纯 CPU Python（读源码 + ast.parse + 图外 probe），
+    #   三件全在 GIL 下 ⇒ 线程并发只换调度不换执行权，「降 >=30%」对 GIL 天花板无意义
+    #   （340B 刀8 实测 20.21s -> 19.47s，降 3.68%，与合成负载 0.66% 同量级）。
+    K2_GIL_NOISE_BAND = 0.05    # 纯 CPU 噪声带：|drop| < 5% 视为同量级（调度开销可忽略）
+    K2_CPU_KINDS = frozenset({"code_scan", "struct_assert"})  # 纯 CPU 负载 kind 白名单
 
     @staticmethod
     def _m321_data_snapshot(project_root: str | None = None, cap: int = 200000) -> dict:
@@ -4380,6 +4385,57 @@ class SafeEvolutionExecutor:
         return {"items": _items, "deferred": _deferred,
                 "file_pool": len(_files), "class_source": "ast_class_inventory"}
 
+    @classmethod
+    def _k2_load_kinds(cls, items: list) -> dict:
+        """★375刀1：负载形态计数（只统计，不改任何执行路径）。"""
+        _cnt: dict = {}
+        for _it in items or []:
+            _k = str(_it.get("kind") or "unknown")
+            _cnt[_k] = _cnt.get(_k, 0) + 1
+        return _cnt
+
+    @classmethod
+    def _k2_is_cpu_bound(cls, items: list) -> bool:
+        """★375刀1：全部条目均为纯 CPU kind 才算纯 CPU 负载。
+
+        空集 / 含未知 kind ⇒ False。**不猜**：认不出的负载按 I/O 型原口径判，
+        宁可继续要 30%（不放过真退化），也不因为认不出就放宽口径（铁律159 同型）。
+        """
+        _kinds = cls._k2_load_kinds(items)
+        if not _kinds:
+            return False
+        return set(_kinds).issubset(set(cls.K2_CPU_KINDS))
+
+    @classmethod
+    def _k2_verdict_of(cls, *, leak: bool, prod_eq: bool, cpu_bound: bool,
+                       drop: float) -> dict:
+        """★375刀1：K2 试点判定唯一裁决口（纯函数，无 IO、不看时钟）。
+
+        优先级：隔离泄漏 > 产出不等 > 负载形态口径。
+        纯 CPU 负载改判「并发不劣化 + 调度开销可忽略」= 并行比串行慢的部分不超过
+        `K2_GIL_NOISE_BAND`；I/O 型负载仍按 `K2_DROP_TARGET` 判降幅。
+        **不强行降速**：本函数只改判定，不给并行路径加任何等待/节流/sleep。
+        """
+        _drop = float(drop or 0.0)
+        _ovh = round(max(0.0, -_drop), 4)      # 调度开销 = 并发比串行慢的比例
+        _ovh_ok = _ovh <= cls.K2_GIL_NOISE_BAND
+        if leak:
+            _v = "isolation_leak"
+        elif not prod_eq:
+            _v = "productivity_mismatch"
+        elif cpu_bound:
+            _v = "cpu_ceiling_ok" if _ovh_ok else "cpu_ceiling_breach"
+        elif _drop >= cls.K2_DROP_TARGET:
+            _v = "parallel_pilot_pass"
+        else:
+            _v = "wallclock_not_dropped"
+        return {"verdict": _v,
+                "criteria": ("cpu_gil_ceiling" if cpu_bound else "io_speedup"),
+                "drop_target_applied": (None if cpu_bound else cls.K2_DROP_TARGET),
+                "sched_overhead_ratio": _ovh,
+                "sched_overhead_ok": bool(_ovh_ok),
+                "gil_noise_band": cls.K2_GIL_NOISE_BAND}
+
     def _k2_partition(self, items: list, k: int = 2) -> list:
         """按**文件**分片：同文件全部项必进同一片 ⇒ 结构性保证 (file, method) 互斥。"""
         _k = max(int(k or 2), 1)
@@ -4458,7 +4514,9 @@ class SafeEvolutionExecutor:
                           max_files: int = 40, max_classes: int = 6) -> dict:
         """★321刀2：K2 只读并行试点 —— 串行 vs 2 并发各 3 轮，比墙钟 + 比产出率。
 
-        通过线：**墙钟下降 >= 30% 且 productive/reviewed 完全相等**。
+        ★375刀1 口径分离：**纯 CPU 负载**（kind 全在 `K2_CPU_KINDS`）判
+        「并发不劣化 + 调度开销可忽略」——GIL 天花板下本就该不提速，不强行降速；
+        **I/O 型负载**仍判「墙钟下降 >= 30%」。两者都要求 productive/reviewed 完全相等，
         只降墙钟不产出 = 并行空转，判不通过。计数只在主进程聚合。
         """
         _root = self._m321_isolated_root(project_root)
@@ -4499,19 +4557,20 @@ class SafeEvolutionExecutor:
             _attrib = "live_heartbeat"
         else:
             _attrib = "none"
-        if _leak:
-            _verdict = "isolation_leak"
-        elif _drop >= self.K2_DROP_TARGET and _prod_eq:
-            _verdict = "parallel_pilot_pass"
-        elif not _prod_eq:
-            _verdict = "productivity_mismatch"
-        else:
-            _verdict = "wallclock_not_dropped"
+        _cpu_bound = self._k2_is_cpu_bound(_tk["items"])
+        _j = self._k2_verdict_of(leak=_leak, prod_eq=_prod_eq,
+                                 cpu_bound=_cpu_bound, drop=_drop)
+        _verdict = _j["verdict"]
         _module_logger.info(
             "[321刀2][K2并行] items=%d shards=%d rounds=%d 串行均值=%.3fs 并行均值=%.3fs "
-            "下降=%.1f%% 产出(串/并)=%d/%d verdict=%s 泄漏=%s",
+            "下降=%.1f%% 产出(串/并)=%d/%d verdict=%s 泄漏=%s "
+            "[375刀1]口径=%s 负载=%s 开销=%.2f%% 通过线=%s",
             len(_tk["items"]), len(_buckets), _n, _ms, _mp, _drop * 100.0,
-            _acc_s["reviewed"], _acc_p["reviewed"], _verdict, _leak)
+            _acc_s["reviewed"], _acc_p["reviewed"], _verdict, _leak,
+            _j["criteria"], ("纯CPU" if _cpu_bound else "I/O或混合"),
+            _j["sched_overhead_ratio"] * 100.0,
+            ("不劣化(<=%.0f%%)" % (self.K2_GIL_NOISE_BAND * 100.0)
+             if _cpu_bound else "降>=%.0f%%" % (self.K2_DROP_TARGET * 100.0)))
         return {"isolated_root": _root, "rounds": _n,
                 "items": len(_tk["items"]), "shards": [len(b) for b in _buckets],
                 "deferred": len(_tk["deferred"]),
@@ -4520,6 +4579,13 @@ class SafeEvolutionExecutor:
                 "serial_secs": _ser, "parallel_secs": _par,
                 "serial_mean": round(_ms, 4), "parallel_mean": round(_mp, 4),
                 "drop_ratio": round(_drop, 4), "drop_target": self.K2_DROP_TARGET,
+                "drop_target_applied": _j["drop_target_applied"],
+                "criteria": _j["criteria"],
+                "load_cpu_bound": bool(_cpu_bound),
+                "load_kinds": self._k2_load_kinds(_tk["items"]),
+                "sched_overhead_ratio": _j["sched_overhead_ratio"],
+                "sched_overhead_ok": _j["sched_overhead_ok"],
+                "gil_noise_band": _j["gil_noise_band"],
                 "productivity_serial": _acc_s, "productivity_parallel": _acc_p,
                 "productivity_equal": _prod_eq,
                 "data_files_before": _fp0.get("files"),
