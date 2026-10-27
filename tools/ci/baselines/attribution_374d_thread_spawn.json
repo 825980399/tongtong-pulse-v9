@@ -1,0 +1,10 @@
+[
+  {
+    "file": "nucleus/thread_guard.py",
+    "delta_occurrences": 2,
+    "delta_files": 1,
+    "commit": "374刀9（本刀；生产改动见 82ea6a71，基线笔为其后的单独一笔）",
+    "batch": "374/D9",
+    "reason": "374 刀9「线程引导滞留观测」新建 nucleus/thread_guard.py，内含 2 个真实 spawn 点：① ensure_watchdog() 起**进程级唯一**常驻看门狗（名 ThreadGuardWatchdog，启动期由 main.py 预建一次，幂等），② safe_start() 提供的统一受观测启动入口（本身不再另起 watchdog，只是把调用方的线程包一层登记/判滞留）。两处都是门禁口径 `threading.Thread(` 的实打实用点，不是文档串误命中——首版曾因文档串里写了裸 `threading.Thread(...).start()` 被多数 1 次，已改写为 `Thread(...).start()`（那是说明性文字，不是 spawn 点），故 delta 记为 +2 而非 +3。性质：①是观测装置自带的唯一常驻线程（不随任务数增长），②当前**尚无生产调用者**（为后续把散落 spawn 点逐步迁移过来的备料），故本次不构成并发点净增。"
+  }
+]

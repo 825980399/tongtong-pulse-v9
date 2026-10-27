@@ -2,23 +2,23 @@
   "metric": "production_thread_spawn_points",
   "pattern": "threading.Thread(",
   "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
-  "total_occurrences": 59,
-  "file_count": 45,
+  "total_occurrences": 61,
+  "file_count": 46,
   "anchored_by": "172刀0",
   "anchored_at": "2026-10-08",
   "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber",
   "attribution": [
     {
-      "file": "functions/chat/chat_service.py",
-      "delta_occurrences": 1,
+      "file": "nucleus/thread_guard.py",
+      "delta_occurrences": 2,
       "delta_files": 1,
-      "commit": "373刀1（本刀；生产改动随本批提交，实际 hash 见 第373批交付报告 §刀1）",
-      "batch": "373/A1",
-      "reason": "373 刀1「ChatService 剥离主装配路径（卡点一·342刀5 回归 P0）」把 `start()` 末尾同步驻留的 `self._chat_loop()`（`input()` 无超时，装配线程被钉死 6h23m）改为起独立 daemon 线程 `threading.Thread(target=self._chat_loop, name=\"chat-service-loop\", daemon=True)` 后立即返回。该文件在本次改动前的门禁口径 spawn 数为 0（文件内只有 `threading.Timer(`，不计入 `threading.Thread(` 口径），故 occurrences 与 files 各 +1。属**恢复 342 刀5 之前的线程语义**：342 刀5 去掉了加载器侧每模块一条线程，代价是 ChatService 的驻留循环直接钉住装配线程；本刀把该线程移到 ChatService 自己名下，是同一职责的归还，不是净增并发。"
+      "commit": "374刀9（本刀；生产改动见 82ea6a71，基线笔为其后的单独一笔）",
+      "batch": "374/D9",
+      "reason": "374 刀9「线程引导滞留观测」新建 nucleus/thread_guard.py，内含 2 个真实 spawn 点：① ensure_watchdog() 起**进程级唯一**常驻看门狗（名 ThreadGuardWatchdog，启动期由 main.py 预建一次，幂等），② safe_start() 提供的统一受观测启动入口（本身不再另起 watchdog，只是把调用方的线程包一层登记/判滞留）。两处都是门禁口径 `threading.Thread(` 的实打实用点，不是文档串误命中——首版曾因文档串里写了裸 `threading.Thread(...).start()` 被多数 1 次，已改写为 `Thread(...).start()`（那是说明性文字，不是 spawn 点），故 delta 记为 +2 而非 +3。性质：①是观测装置自带的唯一常驻线程（不随任务数增长），②当前**尚无生产调用者**（为后续把散落 spawn 点逐步迁移过来的备料），故本次不构成并发点净增。"
     }
   ],
   "reanchor_note": "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）",
-  "reanchor_by": "373刀1",
+  "reanchor_by": "374刀9",
   "reanchor_at": "2026-10-27",
   "reanchor_history": [
     {
@@ -231,6 +231,38 @@
           "commit": "b0285387",
           "batch": "365/C1",
           "reason": "365/C1「心跳链断链防护——独立看门狗」新增的看门狗线程（threading.Thread(target=self._m365_watchdog_loop, daemon=True)）。实测该文件在 b0285387 之前 spawn 数为 0（git show b0285387^ 验证），故 occurrences 与 files 各 +1。"
+        }
+      ]
+    },
+    {
+      "reanchor_by": "374刀9",
+      "reanchor_at": "2026-10-27",
+      "from": {
+        "total_occurrences": 59,
+        "file_count": 45
+      },
+      "to": {
+        "total_occurrences": 61,
+        "file_count": 46
+      },
+      "attribution": [
+        {
+          "file": "nucleus/thread_guard.py",
+          "delta_occurrences": 2,
+          "delta_files": 1,
+          "commit": "374刀9（本刀；生产改动见 82ea6a71，基线笔为其后的单独一笔）",
+          "batch": "374/D9",
+          "reason": "374 刀9「线程引导滞留观测」新建 nucleus/thread_guard.py，内含 2 个真实 spawn 点：① ensure_watchdog() 起**进程级唯一**常驻看门狗（名 ThreadGuardWatchdog，启动期由 main.py 预建一次，幂等），② safe_start() 提供的统一受观测启动入口（本身不再另起 watchdog，只是把调用方的线程包一层登记/判滞留）。两处都是门禁口径 `threading.Thread(` 的实打实用点，不是文档串误命中——首版曾因文档串里写了裸 `threading.Thread(...).start()` 被多数 1 次，已改写为 `Thread(...).start()`（那是说明性文字，不是 spawn 点），故 delta 记为 +2 而非 +3。性质：①是观测装置自带的唯一常驻线程（不随任务数增长），②当前**尚无生产调用者**（为后续把散落 spawn 点逐步迁移过来的备料），故本次不构成并发点净增。"
+        }
+      ],
+      "prev_attribution": [
+        {
+          "file": "functions/chat/chat_service.py",
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "commit": "373刀1（本刀；生产改动随本批提交，实际 hash 见 第373批交付报告 §刀1）",
+          "batch": "373/A1",
+          "reason": "373 刀1「ChatService 剥离主装配路径（卡点一·342刀5 回归 P0）」把 `start()` 末尾同步驻留的 `self._chat_loop()`（`input()` 无超时，装配线程被钉死 6h23m）改为起独立 daemon 线程 `threading.Thread(target=self._chat_loop, name=\"chat-service-loop\", daemon=True)` 后立即返回。该文件在本次改动前的门禁口径 spawn 数为 0（文件内只有 `threading.Timer(`，不计入 `threading.Thread(` 口径），故 occurrences 与 files 各 +1。属**恢复 342 刀5 之前的线程语义**：342 刀5 去掉了加载器侧每模块一条线程，代价是 ChatService 的驻留循环直接钉住装配线程；本刀把该线程移到 ChatService 自己名下，是同一职责的归还，不是净增并发。"
         }
       ]
     }
