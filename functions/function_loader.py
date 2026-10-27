@@ -112,6 +112,12 @@ class FunctionLoader:
                 #   起写入线程）。⇒ 这层线程只换来「装配顺序不确定」：
                 #   改前 4 个模块的 `start()` 先后由线程调度决定，改后 == 声明顺序。
                 #   异常仍在 `_run_module` 内同一处捕获并上报（信息不变，只是不再跨线程）。
+                #   ★373刀1 补记（342 刀5 前提的例外）：上述「各模块 start() 自己再起线程」
+                #   对 `health_ui`/`web_chat` 成立，但 **`ChatService` 是例外** ——
+                #   其 `start()` 原先末尾同步驻留 `_chat_loop()`（`input()` 无超时阻塞），
+                #   这正是卡点一（342 刀5 回归 P0）。373 刀1 已把 `start()` 改为起
+                #   daemon 线程后立即返回，例外到此消除；留着本行是因为**判断依据**要能回查：
+                #   342 前置查证未覆盖 `ChatService`，本行即该盲区的就地留痕。
                 self._run_module(instance, meta.name)
                 self._log(LogLevel.INFO,
                           "[342去线程] action=removed line=106 target=_run_module "

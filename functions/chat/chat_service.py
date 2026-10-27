@@ -41,7 +41,10 @@ FUNCTION_META = {
     "name": "对话交互",
     "class_name": "ChatService",
     "always_on": True,
-    "thread_mode": "blocking",
+    # ★373刀1（卡点一）：原值 "blocking" 是**名实不符**——阻塞的是 `_chat_loop()` 里的
+    #   `input()`，不是装配语义。现在 `start()` 起独立 daemon 线程后立即返回，
+    #   与 `health_ui` / `web_chat` 同模式 ⇒ 据实改为 "background"。
+    "thread_mode": "background",
 }
 
 
@@ -70,6 +73,8 @@ class ChatService:
         self._silence_intervals = [120, 600, 1800, 3600, 7200]  # 5次递进间隔
         # 当前活跃用户（视觉皮层检测到人脸时会更新）
         self._current_user_name = "访客"
+        # ★373刀1：控制台对话循环的线程句柄（start() 起线程后立即返回，stop() 可观测）
+        self._chat_loop_thread: threading.Thread | None = None
 
     # ========== 框架注入 ==========
 
@@ -97,6 +102,21 @@ class ChatService:
     # ========== 启动与停止 ==========
 
     def start(self):
+        """启动对话服务 —— **装配路径不驻留**，起循环线程后立即返回。
+
+        ★373刀1（卡点一 · 342刀5 回归修复 P0）：
+          342 刀5 `32e24c1b` 把 `function_loader._run_module` 从「每模块一条线程」改成
+          同步直调，前提是「各功能模块的 `start()` 自己再起线程」。该前提对
+          `health_ui` / `web_chat` 成立，**对 `ChatService` 不成立** —— 本方法原先
+          末尾同步调 `self._chat_loop()`，而 `_chat_loop()` 里的 `input()` 无超时阻塞
+          ⇒ 装配线程被 stdin 永久钉死（现场：6h23m，主线程从未进主循环，4366-4368
+          循环外首拍 `[351节拍]` 0 命中，shutdown/补丁闸门/消费口全部不工作）。
+          ⇒ 现在 `start()` 只做「注册监听器 + 打横幅 + 起循环线程」三件事，随后返回。
+
+        线程模型：`_chat_loop` 跑在独立 daemon 线程（名 `chat-service-loop`），
+        主线程不再读 stdin。stdin 在无控制台场景（pythonw / 服务化）下会立即 EOF，
+        `_chat_loop` 对此显式留痕后退出循环，**不炸启动**。
+        """
         self._running = True
         self._register_global_listener()  # 启动时就注册一个持久的回复监听器
         self._log(LogLevel.INFO, "对话服务已启动（异步双向模式）")
@@ -108,7 +128,17 @@ class ChatService:
         print("  输入 'help', 查看帮助")
         print("=" * 50 + "\n")
         self._reset_silence_timer() # 启动初始计时
-        self._chat_loop()
+        # ★373刀1：重复 start() 不叠线程（旧线程可能正卡在 input() 里，
+        #   再起一条会出现两条线程抢同一个 stdin，输入被随机吞掉）。
+        if self._chat_loop_thread is not None and self._chat_loop_thread.is_alive():
+            self._log(LogLevel.WARNING, "对话循环线程已在运行，本次 start() 不重复拉起")
+            return
+        self._chat_loop_thread = threading.Thread(
+            target=self._chat_loop, name="chat-service-loop", daemon=True)
+        self._chat_loop_thread.start()
+        self._log(LogLevel.INFO,
+                  "[373刀1] action=detached thread=chat-service-loop "
+                  "daemon=True start_returned_immediately=True")
     def stop(self):
         self._running = False
         # 取消静默计时器，防止退出时还在发射脉冲
@@ -116,6 +146,13 @@ class ChatService:
             self._silence_timer.cancel()
             self._silence_timer = None
         self._unregister_global_listener()
+        # ★373刀1：`_chat_loop` 可能正阻塞在 `input()` 上，`_running=False` 只能让它在
+        #   **下一次** 拿到输入后退出。此处只做观测留痕（daemon 线程随进程回收），
+        #   不引入 join()/关闭 stdin 等新的同步阻塞点。
+        if self._chat_loop_thread is not None and self._chat_loop_thread.is_alive():
+            self._log(LogLevel.INFO,
+                      "[373刀1] 对话循环线程仍在 input() 上等待，随进程退出回收"
+                      "（next-input-exit 语义不变）")
         self._log(LogLevel.INFO, "对话服务已停止")
 
     # ========== 全局回复监听器 (非阻塞的关键) ==========
@@ -336,6 +373,12 @@ class ChatService:
                 try:
                     user_input = input("💬 你: ").strip()
                 except EOFError as e:
+                    # ★373刀1：无控制台场景（pythonw / 服务化 / stdin 重定向到 /dev/null）
+                    #   下 input() 立即 EOF。这是**预期降级**而非故障：留痕后退出循环，
+                    #   不炸启动、不影响监听器与静默计时器（它们不依赖 stdin）。
+                    self._log(LogLevel.INFO,
+                              f"[373刀1] stdin EOF ⇒ 控制台对话循环退出"
+                              f"（非交互启动属预期，{type(e).__name__}）")
                     silent_exc(e, where="functions/chat/chat_service.py:322")
                     break
 
