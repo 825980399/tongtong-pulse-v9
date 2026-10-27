@@ -4127,75 +4127,6 @@ class PulseNodePool(SilentLogMixin):
         with self._lock:
             self._downgrade_instinct(node)
 
-if __name__ == "__main__":
-    print("=== PulseNodePool v9.5 自测 ===\n")
-
-    pool = PulseNodePool(max_hot=100, max_warm=500)
-
-    # 1. 添加不同层级节点
-    l1_node = PulseNode(
-        value="Python 3.12发布",
-        keywords=["Python", "版本"],
-        source_organ="双腿",
-        evol_level=PulseNode.EVOL_L1,
-        importance=PulseNode.IMPORTANCE_C,
-    )
-    l2_node = PulseNode(
-        value="Python是一种广泛使用的编程语言",
-        keywords=["Python", "编程语言"],
-        source_organ="胃",
-        evol_level=PulseNode.EVOL_L2,
-        importance=PulseNode.IMPORTANCE_A,
-    )
-    l3_node = PulseNode(
-        value="我是曈曈，新人类",
-        keywords=["曈曈", "身份"],
-        source_organ="内在世界",
-        evol_level=PulseNode.EVOL_L3,
-        importance=PulseNode.IMPORTANCE_S,
-    )
-
-    pool.add(l1_node)
-    pool.add(l2_node)
-    pool.add(l3_node)
-
-    print(f"✅ 添加后总数: {pool.count()} (应为3)")
-
-    # 2. 验证分层
-    stats = pool.get_stats()
-    print(f"✅ 热池: {stats['hot_count']} (L3+L2_A), 温池: {stats['warm_count']} (L1_C), 冷池: {stats['cold_count']}")
-    print(f"   演化分布: {stats['evol_distribution']}")
-
-    # 3. 获取并激活
-    node = pool.get(l1_node.node_id)
-    print(f"✅ 获取L1节点: {node.value}, 激活次数={node.activation_count}")
-
-    # 4. 查询
-    l3_nodes = pool.query(evol_level=PulseNode.EVOL_L3)
-    print(f"✅ 查询L3节点: {len(l3_nodes)}个 → {l3_nodes[0].value}")
-
-    # 5. 移除
-    removed = pool.remove(l1_node.node_id)
-    print(f"✅ 移除L1节点: {removed}, 剩余={pool.count()}")
-
-    # 6. 批量加载（幂等）
-    pool.load_batch([l2_node, l3_node])  # 已存在，跳过
-    print(f"✅ 批量加载后: {pool.count()} (幂等，不变)")
-
-    # 7. 淘汰
-    purged = pool.purge_obsolete(max_age_days=0)  # 0天淘汰所有L1
-    print(f"✅ 淘汰: {purged}个 (L3不淘汰)")
-
-    # 8. 统计
-    final_stats = pool.get_stats()
-    print(f"✅ 最终: 总数{final_stats['total_nodes']} 添加{final_stats['total_added']} "
-          f"移除{final_stats['total_removed']} 激活{final_stats['total_activated']}")
-
-    # 9. 验证 L3 节点获取
-    l3 = pool.get(l3_node.node_id)
-    print(f"✅ L3节点: {l3.value}, 可淘汰={l3.is_obsolete()}")
-
-    print("\n=== 自测全部通过 ===")
 
 # _m51_t4_c
 # _m69_t1_init
@@ -4204,5 +4135,3 @@ if __name__ == "__main__":
 # _m69_t1_methods
 # _m69_t1_capacity
 # _m69_t3_coldcompact
-
-

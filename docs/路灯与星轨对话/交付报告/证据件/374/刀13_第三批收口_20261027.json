@@ -1,0 +1,181 @@
+{
+  "batch": 3,
+  "rule_source": "372 刀13 批1 `b13` ＋ 373 批2（三条规则，未新增口径）",
+  "collected_n": 8,
+  "deferred_n": 3,
+  "deferred": [
+    {
+      "file": "organs/brain/PulseInterestModel.py",
+      "lineno": 822,
+      "why": "批1 已裁决顺延（块内 assert=1），继续顺延，不重复裁决"
+    },
+    {
+      "file": "organs/body/PulseLung.py",
+      "lineno": 3232,
+      "why": "块内 assert=2"
+    },
+    {
+      "file": "nucleus/evolution/ExperienceTransfer.py",
+      "lineno": 401,
+      "why": "块内 assert=7（本批新增顺延项）"
+    }
+  ],
+  "blocks": [
+    {
+      "file": "organs/body/PulseHeart.py",
+      "lineno": 1190,
+      "end_lineno": 1264,
+      "lines": 75,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 76,
+      "trimmed_eof_blanks": 1,
+      "was_last_node": true,
+      "bytes_before": 63433,
+      "bytes_after": 60696
+    },
+    {
+      "file": "organs/identity/PulseEthics.py",
+      "lineno": 619,
+      "end_lineno": 693,
+      "lines": 75,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 77,
+      "trimmed_eof_blanks": 2,
+      "was_last_node": true,
+      "bytes_before": 33903,
+      "bytes_after": 31037
+    },
+    {
+      "file": "organs/immune/PulseSkin.py",
+      "lineno": 205,
+      "end_lineno": 276,
+      "lines": 72,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 73,
+      "trimmed_eof_blanks": 1,
+      "was_last_node": true,
+      "bytes_before": 10350,
+      "bytes_after": 7410
+    },
+    {
+      "file": "nucleus/mnemosyne/PulseSnapshot.py",
+      "lineno": 3281,
+      "end_lineno": 3350,
+      "lines": 70,
+      "side_effects": {
+        "high": [
+          "save",
+          "remove"
+        ],
+        "low": []
+      },
+      "deleted_lines": 70,
+      "trimmed_eof_blanks": 0,
+      "was_last_node": false,
+      "bytes_before": 180885,
+      "bytes_after": 178176
+    },
+    {
+      "file": "organs/identity/PulseNarrativeSelf.py",
+      "lineno": 1192,
+      "end_lineno": 1261,
+      "lines": 70,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 72,
+      "trimmed_eof_blanks": 2,
+      "was_last_node": true,
+      "bytes_before": 57571,
+      "bytes_after": 54970
+    },
+    {
+      "file": "nucleus/mnemosyne/PulseNodePool.py",
+      "lineno": 4130,
+      "end_lineno": 4198,
+      "lines": 69,
+      "side_effects": {
+        "high": [
+          "remove"
+        ],
+        "low": []
+      },
+      "deleted_lines": 71,
+      "trimmed_eof_blanks": 2,
+      "was_last_node": true,
+      "bytes_before": 220161,
+      "bytes_after": 217718
+    },
+    {
+      "file": "organs/motor/PulseHands.py",
+      "lineno": 194,
+      "end_lineno": 262,
+      "lines": 69,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 70,
+      "trimmed_eof_blanks": 1,
+      "was_last_node": true,
+      "bytes_before": 9559,
+      "bytes_after": 6644
+    },
+    {
+      "file": "organs/motor/PulseMouth.py",
+      "lineno": 540,
+      "end_lineno": 606,
+      "lines": 67,
+      "side_effects": {
+        "high": [
+          "start"
+        ],
+        "low": []
+      },
+      "deleted_lines": 68,
+      "trimmed_eof_blanks": 1,
+      "was_last_node": true,
+      "bytes_before": 27674,
+      "bytes_after": 24927
+    }
+  ],
+  "lines_removed": 567,
+  "deleted_physical_lines": 577,
+  "baseline": {
+    "blocks": 93,
+    "high_risk": 41,
+    "print_only": 50,
+    "no_side_effect": 2,
+    "lines": 3743
+  },
+  "after": {
+    "blocks": 85,
+    "high_risk": 33,
+    "print_only": 50,
+    "no_side_effect": 2,
+    "lines": 3176
+  },
+  "scan_tool": "tools/scan_main_blocks.py",
+  "ruff_new": 0,
+  "note": "block 行数之和 567 = 3743-3176；物理删除 577 行 = 567 + 10 行EOF 空行（8 块中 6 块是文件最后一条顶层语句，删除后把 EOF 多余空行收成单个换行，逐块记在 trimmed_eof_blanks）"
+}

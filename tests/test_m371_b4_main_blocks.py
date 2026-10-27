@@ -21,6 +21,22 @@ SNAP = os.path.join(ROOT, "docs", "路灯与星轨对话", "交付报告", "证�
 SCAN = os.path.join(ROOT, "tools", "scan_main_blocks.py")
 TARGET = os.path.join(ROOT, "base", "BasePulseOrgan.py")
 
+#: ★374刀10：本条断言的是**现场**与快照一致。371 快照（111 块）自 372 批1 起就已
+#: 与现场不符（372 后 101、373 后 93、374 后 85）——即这条自 372 起**先天红**，
+#: 因为"盘点快照"是历史账、不可能跟着后续每批删除走。改为跟随**最新一批收口证据件**：
+#: 语义仍是「现场 == 最新的账」，只是账本换成最新那本。371 快照文件**一字未改**。
+_EVID_BASE = os.path.join(ROOT, "docs", "路灯与星轨对话", "交付报告", "证据件")
+_LATEST = [("374", "刀13_第三批收口_20261027.json"),
+           ("373", "刀13_第二批收口_20261027.json")]
+
+
+def _latest_after():
+    for _sub, _name in _LATEST:
+        _p = os.path.join(_EVID_BASE, _sub, _name)
+        if os.path.exists(_p):
+            return json.loads(_read(_p))["after"]
+    raise AssertionError("找不到任何一批收口证据件")
+
 
 def _read(p):
     with io.open(p, encoding="utf-8") as f:
@@ -46,8 +62,7 @@ class TestInventoryRerun(unittest.TestCase):
         self.assertTrue(os.path.exists(out), "未生成盘点件")
         md = _read(out)
 
-        snap = json.loads(_read(SNAP))
-        want = snap["rerun_371"]
+        want = _latest_after()
         m_blocks = re.search(r"自测块总数：\*\*(\d+)\*\*", md)
         m_high = re.search(r"高危（[^）]*）：\*\*(\d+)\*\*", md)
         m_print = re.search(r"仅打印：\*\*(\d+)\*\*", md)

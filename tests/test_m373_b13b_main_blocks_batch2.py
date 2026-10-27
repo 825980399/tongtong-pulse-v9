@@ -14,6 +14,22 @@ _EVID_DIR = Path("docs/路灯与星轨对话/交付报告/证据件/373")
 _EVID_JSON = _EVID_DIR / "刀13_第二批收口_20261027.json"
 _EVID_MD = _EVID_DIR / "刀13_第二批收口_20261027.md"
 
+#: ★374刀10：判据跟随**最新账**。每批继续收口都会让上一批的固定数过时，但
+#: 「现场必须等于最新账」这条语义不变；本批（374）收口后现场 85/33，
+#: 若继续钉死 93 就变成"每删一批就把上一批的测试判红"。历史证据件**不改**。
+_LATEST = [
+    (Path("docs/路灯与星轨对话/交付报告/证据件/374"), "刀13_第三批收口_20261027.json"),
+    (_EVID_DIR, "刀13_第二批收口_20261027.json"),
+]
+
+
+def _latest_evid():
+    for _d, _n in _LATEST:
+        _p = _d / _n
+        if _p.exists():
+            return json.loads(_p.read_text(encoding="utf-8"))
+    raise AssertionError("找不到任何一批收口证据件")
+
 
 def _blocks_in(fp):
     """返回该文件里模块级 `__main__` 块的行号列表。"""
@@ -55,13 +71,13 @@ def test_02_collected_blocks_gone_deferred_kept():
 
 
 def test_03_current_scan_matches_evidence():
-    """③ 现场复扫与证据件一致（防「删完又长回来」）。"""
+    """③ 现场复扫与**最新一批**证据件一致（防「删完又长回来」）。"""
     sys.path.insert(0, str(Path("tools")))
     import scan_main_blocks as S  # 复用扫描器本体（就这一处需要 tools/ 在 path 上）
 
     _rows = S.scan()
     _high = [r for r in _rows if r["side_effects"]["high"]]
-    d = _evid()
+    d = _latest_evid()
     assert len(_rows) == d["after"]["blocks"], f"块数漂移: {len(_rows)}"
     assert len(_high) == d["after"]["high_risk"], f"高危数漂移: {len(_high)}"
     assert sum(r["lines"] for r in _rows) == d["after"]["lines"], "总行数漂移"
