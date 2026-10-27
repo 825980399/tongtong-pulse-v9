@@ -19,6 +19,7 @@ import threading
 import textwrap
 import time
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 from config import EXTERNAL_CALL_TIMEOUTS, TIMEOUT_CONFIG
@@ -81,6 +82,82 @@ _M356_CONTRACT_SINGLETONS = frozenset({
     "get_event_bus",       # 契约②：跨器官事件广播
     "get_pulse_bus",       # 历史误名：本就该报，但让它走「不存在模块」那条判据
 })
+
+#: ★374刀5（D1 · 票 `T-370-检测器器官直调误报-1`）：跨模块单例直调的**来源分档**。
+#:
+#: 「器官不得跨模块直调」的真意是**不得绕过脉冲总线直调另一个器官**；
+#: 而 `get_runtime_tempo()` / `get_kal()` / `get_experience_pool()` 这类是
+#: **基础设施工厂**（定义在 `nucleus/`），本来就是给器官用的正门，报出来纯噪声
+#: （实测 33 条命中，来源 100% 是 `nucleus/*`，`organs/*` 一条没有）。
+#: 判据从「命中即违规」改为按 `get_xxx` 的**来源模块**分档：
+#:   · `organs.*` ⇒ 真·跨器官直调 ⇒ 报
+#:   · 其他已知包 ⇒ 基础设施工厂   ⇒ 不报
+#:   · 解析不出   ⇒ **保守上报**（赦免必须可达；不解就赦免等于开黑洞，铁律159）
+_M374_ORGAN_PKG = "organs"
+
+
+@lru_cache(maxsize=256)
+def _m374_import_map(file_path: str) -> dict[str, str]:
+    """扫一次文件，返回 `get_xxx` → **来源模块全名**（只认 `from M import get_x`）。
+
+    相对导入按文件所在包解析（`from .foo import get_bar` 在 `organs/brain/x.py`
+    里解析成 `organs.brain.foo`）——不解析相对导入的话，器官内部互调会被当成
+    「来源不明」甚至「基础设施」而**漏报真风险**。
+
+    文件不可读 / 语法错 ⇒ 返回空表，调用方按「未解析」保守上报。
+    结果按路径缓存；同一文件在一次扫描里只解析一次。
+    """
+    _out: dict[str, str] = {}
+    try:
+        with open(file_path, encoding="utf-8", errors="replace") as _f:
+            _tree = ast.parse(_f.read())
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector::_m374_import_map", level="debug")
+        return _out
+    # 包名必须按**仓库相对路径**算。扫描器给的是 "organs/body/X.py" 这种相对路径，
+    # 但单测/外部调用可能给绝对路径，且**跨盘** relpath 会直接抛 ValueError；
+    # 混着拼点号会得到一坨绝对路径碎片（实测把 organs 内互调解析成非器官⇒漏报）。
+    # 解析不出 ⇒ 置空 ⇒ 相对导入按「未解析」保守上报（不是赦免）。
+    _rel = "" if os.path.isabs(file_path) else file_path
+    if not _rel:
+        try:
+            _rel = os.path.relpath(os.path.abspath(file_path))
+        except Exception as _e2:
+            silent_exc(_e2, where="self_inspector::_m374_import_map relpath",
+                       level="debug")
+            _rel = ""
+    if _rel.startswith(".."):
+        _rel = ""
+    _pkg = os.path.dirname(_rel).replace(os.sep, ".").replace("/", ".")
+    for _n in ast.walk(_tree):
+        if not isinstance(_n, ast.ImportFrom):
+            continue
+        if _n.level:
+            if not _pkg:
+                # 相对导入 + 包名不可解析 ⇒ **不猜**：猜成裸模块名会把器官互调
+                # 当成外部包而赦免（漏报真风险）。留给调用方按「未解析」上报。
+                continue
+            _parts = _pkg.split(".")
+            _drop = _n.level - 1
+            if _drop > 0:
+                _parts = _parts[:-_drop] if _drop <= len(_parts) else []
+            _mod = ".".join(_parts)
+            if _n.module:
+                _mod = f"{_mod}.{_n.module}" if _mod else _n.module
+        else:
+            _mod = _n.module or ""
+        if not _mod:
+            continue
+        for _a in _n.names:
+            if _a.name.startswith("get_"):
+                _out[_a.name] = _mod
+    return _out
+
+
+def _m374_is_organ_origin(origin: str | None) -> bool:
+    """来源模块是不是**器官包**（`organs.*`）。"""
+    return bool(origin) and origin.split(".", 1)[0] == _M374_ORGAN_PKG
+
 
 #: ★356刀4②：这些方法名不适用「周期任务重入守卫」——构造器/析构器不是周期任务。
 _M356_NO_REENTRY_SKIP = frozenset({"__init__", "__new__", "__del__", "__post_init__"})
@@ -4510,6 +4587,12 @@ class SelfInspector(SilentLogMixin):
     def _check_cross_module_singleton_call(self, body: str, file_path: str, organ: str, method: str, start_line: int, issues: list):
         """检测直接调用其他模块单例的方法（★FIX: 架构基线固化·器官不得跨模块直调）。
 
+        ★374刀5（D1）：第三条排除——**来源分档**（见 `_m374_import_map`）：
+          `get_xxx` 的来源模块在 `nucleus/*`（基础设施工厂）⇒ 不报。
+          器官用 `get_runtime_tempo()` 取节律、`get_kal()` 查知识库是正门用法，
+          与「绕过脉冲总线直调另一个器官」是两件事；旧判据把两者混为一谈
+          （实测 33 条命中里真跨器官 0 条）。来源解析不出 ⇒ 仍报（不赦免未知）。
+
         ★356刀4：两条排除（355 交付实测 15/15 假阳性的直接原因）：
           ① **`self.xxx()` 不是跨模块调用** —— 原正则连 `self.stress_axis.get_stats()`
              这种同器官调用也命中，把"自己调自己"报成"跨模块耦合"；
@@ -4531,6 +4614,10 @@ class SelfInspector(SilentLogMixin):
             _callee = _sig.split("(", 1)[0].strip()
             if _callee in _M356_CONTRACT_SINGLETONS:
                 continue
+            # ★374刀5（D1）：来源分档——基础设施工厂不是「跨器官直调」
+            _origin = _m374_import_map(file_path).get(_callee)
+            if _origin is not None and not _m374_is_organ_origin(_origin):
+                continue
             line_num = start_line + body[:_m.start()].count('\n')
             suggestion = self._generate_fix_suggestion("cross_module_singleton_call", file_path, method, line_num)
             issues.append({
@@ -4539,7 +4626,8 @@ class SelfInspector(SilentLogMixin):
                 "method": method,
                 "line": line_num,
                 "type": "cross_module_singleton_call",
-                "description": f"直接调用其他模块单例的方法（{_sig.strip()}），可能绕过脉冲总线造成隐式耦合",
+                "description": (f"直接调用其他模块单例的方法（{_sig.strip()}，"
+                                f"来源={_origin or '未解析'}），可能绕过脉冲总线造成隐式耦合"),
                 "suggestion": suggestion,
             })
 
