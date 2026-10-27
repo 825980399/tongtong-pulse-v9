@@ -9,6 +9,12 @@
 
 注意：测试会临时 git add / git reset 临时探针文件，并在 finally 中清理，
 不影响仓库既有暂存内容（仅复位本测试创建的探针）。
+
+★372刀10 实测（取数丢失的真因，非红）：
+  `test_py_commit_runs_full_gates` / `test_mixed_runs_full_gates` 各跑一次**真实**
+  pre-commit 全链，单次实测 **85.6s / 84.8s**（docs-only 那条仅 8.4s）。
+  134 基线那轮的分片器是「单项 60s 超时」，这两条必然被卡断、pytest 拿不到 summary
+  ⇒ 归档只能记「取数丢失（U）」。**任何批量跑本文件的分片器，单项超时须 ≥120s**。
 """
 import os
 import subprocess

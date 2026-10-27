@@ -8,6 +8,7 @@
 - 接线修复：_enforce_cold_cache 不再被 cold_compaction 节流早返回阻断（runtime_metrics
   在位且 should_execute=False 时驱逐仍须跑）→ 验证"驱逐→flush→索引重建→新鲜度复位"闭环。
 """
+import config
 import importlib
 import json
 import os
@@ -140,8 +141,14 @@ def test_knife3_s3_stale_warning():
         shutil.rmtree(_d + ".index.json", ignore_errors=True)
 
 
-def test_knife3_enforce_cold_cache_not_blocked_by_throttle():
-    """★接线回归：runtime_metrics 在位且 should_execute=False 时，驱逐仍必须跑（修复前被早返回跳过）。"""
+def test_knife3_enforce_cold_cache_not_blocked_by_throttle(monkeypatch):
+    """★接线回归：runtime_metrics 在位且 should_execute=False 时，驱逐仍必须跑（修复前被早返回跳过）。
+
+    ★372刀10 隔离：本题考**固定阈值 LRU** 是否被 cold_compaction 节流阻断；产品现态
+    `ENABLE_COLD_POOL_PERCENTILE_SHRINK=True`（173批刀0 窗前定值）会改走分位路径、
+    根本不进 LRU ⇒ 显式关该开关隔离到被测路径（不改产品默认值）。
+    """
+    monkeypatch.setattr(config, "ENABLE_COLD_POOL_PERCENTILE_SHRINK", False)
     pool = PulseNodePool()
     _d = tempfile.mkdtemp(prefix="k3_wire_")
     try:
@@ -176,8 +183,12 @@ def test_knife3_enforce_cold_cache_not_blocked_by_throttle():
         shutil.rmtree(_d, ignore_errors=True)
 
 
-def test_knife3_eviction_rebuild_closure():
-    """★打桩证据：驱逐→flush→索引重建→新鲜度告警复位 闭环真实跑过一次（需 pyarrow）。"""
+def test_knife3_eviction_rebuild_closure(monkeypatch):
+    """★打桩证据：驱逐→flush→索引重建→新鲜度告警复位 闭环真实跑过一次（需 pyarrow）。
+
+    ★372刀10 隔离：同 throttle 用例——显式关分位驱逐开关，令闭环跑在 LRU 路径上。
+    """
+    monkeypatch.setattr(config, "ENABLE_COLD_POOL_PERCENTILE_SHRINK", False)
     if importlib.util.find_spec("pyarrow") is None:
         pytest.skip("pyarrow 不可用，跳过真实驱逐→重建闭环（throttle 接线测试已覆盖）")
     pool = PulseNodePool()
