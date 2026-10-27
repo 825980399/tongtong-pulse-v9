@@ -1,0 +1,38 @@
+{
+ "scope": "条件解除复测：写面函数全部以 project_root/tmp 或 PULSE_ISOLATION_ROOT 显式注入临时目录，不触生产 data/；「条件未满足不写」与「条件解除必写」成对断言，单点只测前者会得到假干净（D13）；unresolved 族用预置份数造条件，artifact/hub 族用隔离声明与构造器参数注入；全部写入落在显式注入的沙箱目录内，生产 data/ 零变动（可用预置文件名反查）",
+ "tmp_root": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m375_b7_2m_lyllg",
+ "conditional_count": 4,
+ "faces_total": 7,
+ "unresolved": {
+  "dir": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m375_b7_2m_lyllg\\data\\call_graph",
+  "below_keep": {
+   "before": 6,
+   "after": 7,
+   "deleted": 0,
+   "expect_deleted": 0
+  },
+  "above_keep": {
+   "before": 8,
+   "after": 7,
+   "deleted": 2,
+   "expect_deleted": 2
+  },
+  "consistent": true,
+  "ok": true
+ },
+ "artifact": {
+  "declared_dir": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m375_b7_2m_lyllg\\_m344_isolated_reports",
+  "reason": "isolation_declared",
+  "rerouted": true,
+  "under_tmp": true,
+  "ok": true
+ },
+ "hub": {
+  "ctor_path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m375_b7_2m_lyllg\\verification_learning.json",
+  "hub_path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\m375_b7_2m_lyllg\\verification_learning.json",
+  "follows_ctor": true,
+  "default_is_prod": true,
+  "ok": true
+ },
+ "all_ok": true
+}
