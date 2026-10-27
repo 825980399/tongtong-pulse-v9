@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "b7df477d4777798de1a161325dbb4d53030e4884",
- "observed_at": "2026-10-23T00:34:12",
+ "anchor_sha": "edb7b14fd9d2af0ef3ce85704452a57e4bfc5cbc",
+ "observed_at": "2026-10-27T15:05:40",
  "watch": [
   "organs/brain/PulseInnerWorld.py",
   "organs/brain/pulse_inner_world_*"
@@ -13,16 +13,16 @@
     "try": 215,
     "except": 216,
     "except_pass": 0,
-    "if": 1813,
+    "if": 1816,
     "for": 289,
     "while": 1,
-    "return": 794,
+    "return": 799,
     "raise": 0,
     "await": 0,
     "emit_calls": 104,
-    "methods": 351,
-    "lines": 17626,
-    "ast_sha256_12": "c64ababbac98"
+    "methods": 350,
+    "lines": 17708,
+    "ast_sha256_12": "e3ea1ed17cb1"
    },
    "priority_hist": {
     "2": 4,
@@ -90,8 +90,8 @@
     "await": 0,
     "emit_calls": 2,
     "methods": 25,
-    "lines": 2454,
-    "ast_sha256_12": "8087c191f9c8"
+    "lines": 2489,
+    "ast_sha256_12": "261b6f330b6e"
    },
    "priority_hist": {
     "4": 1,
@@ -121,10 +121,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "367后续 E11（学习目标漂移修复，CI 基线单笔 [ci-gate-change]）：PulseInnerWorld 新增**模块级**函数 goal_area_path_prefixes（methods +1）及其 3 个分支/3 个 return；评估判据里 nodes_after 改走别名前缀（if +2）、失败分支前加「无样本」挡板（if +1、return +1）、failed_domains 的单字遍历改整体匹配（if ±0）。合计 if 1813→1818(+5)、return 794→799(+5)、methods 351→352(+1)。★try/except 未变（215/216 不变）—— 本笔不新增异常处理器。★这两项增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。",
- "expected_delta": {
-  "if": 5,
-  "return": 5,
-  "methods": 1
- }
+ "delta_reason": "367后续 E11（学习目标漂移修复，CI 基线单笔 [ci-gate-change]）：PulseInnerWorld 新增**模块级**函数 goal_area_path_prefixes（methods +1）及其 3 个分支/3 个 return；评估判据里 nodes_after 改走别名前缀（if +2）、失败分支前加「无样本」挡板（if +1、return +1）、failed_domains 的单字遍历改整体匹配（if ±0）。合计 if 1813→1818(+5)、return 794→799(+5)、methods 351→352(+1)。★try/except 未变（215/216 不变）—— 本笔不新增异常处理器。★这两项增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。｜★373顺带/刀13批2（高危 __main__ 自测块收口 8 块，本笔同提交更新基准）：PulseInnerWorld.py 删除 `if __name__ == \"__main__\"` 演示块 83 行 ⇒ if 1818→1816（−2）、methods 352→350（−2）、lines 17791→17708，try/except/for/return/await/emit 与两个直方**全部不变**（演示块不含 emit）。另：原 expected_delta {if:5, return:5, methods:1} 系 367后续 E11 的授权增量，但基准当年未随代码重生成；本笔把基准对齐实况后**清空该组授权**——留着一个已满足的预期增量，会让将来恰好 +5 的夹带被静默放行。",
+ "expected_delta": {}
 }
