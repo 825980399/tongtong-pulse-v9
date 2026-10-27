@@ -4467,6 +4467,15 @@ def main():
                 # ★367刀1③：同一分类标签口径
                 _logger.debug("[351节拍] branch=night_digest_exc err=%s",
                               type(_nd_e).__name__)
+            # ★374刀4（T-存量重算机制-1）：存量 `verifiable_rate` 重算。
+            #   存量历史补丁的派生字段只在「补丁应用时」与「人工跑回填工具」两个
+            #   时刻写过，之后哪怕探针/基线给出了新证据也没人回去重算 ⇒ 比率冻结。
+            #   这里补上**定时触发**（6h 节流在 `maybe_recompute` 内部，无变化不写盘）。
+            try:
+                from nucleus.evolution import verifiable_recompute as _vr
+                _vr.maybe_recompute(os.path.dirname(os.path.abspath(__file__)))
+            except Exception as _vr_e:
+                silent_exc(_vr_e, "main.py[374刀4-存量重算]")
             # ★346批刀 1（P0）：问题池消费口——「发现→行动」的那一段。
             #   与审查主链**解耦**：审查照原节拍跑，消费在这里按自己的节拍认领。
             #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。
