@@ -5005,6 +5005,9 @@ EVOLUTION_LLM_PRICE_TABLE = {
 #   COLD_POOL_SHRINK_BATCH_INTERVAL_SEC（默认 600=10min）防风暴。
 #   ★默认 False：保留原有固定阈值行为，零回归；停窗期翻 True 后重启生效
 #     （改驱逐逻辑需重启；运行期观测见验收项）。
+#   ★372刀外遗留订正：本开关已由**第173批刀0 窗前定值**翻为 True（见下方行尾注）。
+#     连带观察（C 级，未写成定论）：分位路径下 `int(n×20%)==0` 时直接 return，
+#     「冷池容量 > _max_cold_cache 但 n×20% < 1」的小池是**驱逐死区**（本行不含改动）。
 ENABLE_COLD_POOL_PERCENTILE_SHRINK = True  # 冷池分位动态化驱逐总开关（★第173批刀0 窗前定值：开启，取灰度档；原默认关/零回归，需重启生效）
 COLD_POOL_SHRINK_PERCENTILE = 0.20           # 驱逐目标分位（最低 last_access 的占比）
 COLD_POOL_SHRINK_BATCH_MAX = 1000            # 单次驱逐批上限（防风暴）
@@ -6166,7 +6169,10 @@ NIGHT_ORCH_DIGEST_ENABLED = True
 #   验证率口径真实化；False=回退为原「应用即待验证」桩（零行为变化，默认）。
 PARAM_PATCH_EFFECT_VERIFY_ENABLED = True
 
-# ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（默认关闭→零行为变化）
+# ★第163批 刀8（P0★）：主循环/保活脉冲网关开关（原设计：默认关闭→零行为变化）
+#   ★372刀外遗留订正：本开关已由**第163批双P0活体验证定稿**（commit d27ac1e7
+#     「三灰度开关落盘 True」）正式翻闸为 True。上方「默认关闭→零行为变化」是
+#     **历史设计口径**，不是现态 —— 读代码/写用例请以值 True 为准。
 MAIN_LOOP_PULSE_ENABLED = True
 
 
