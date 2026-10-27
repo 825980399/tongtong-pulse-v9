@@ -67,7 +67,11 @@ def test_03_ab_findings_have_source_evidence():
     # A 面锚点：只在 w1 != alive 时降级
     assert '_w1b.get("verdict") != "alive"' in _s
     assert '"provisional"' in _s
-    assert "W1=%s ⇒ 抽样结论降 provisional" in _s
+    # ★373刀3：降级理由加带成因（stale_kind）⇒ 格式串从 "W1=%s ⇒" 变为 "W1=%s%s ⇒"。
+    #   判据**不放宽**：仍要求「W1 值 + 降 provisional」在同一格式串里，并新增一条 ——
+    #   成因变量必须真的被拼进去（否则等于加了字段却没人用，正是 337/349 踩过的坑）。
+    assert "W1=%s%s ⇒ 抽样结论降 provisional" in _s
+    assert '_wk = _w1b.get("stale_kind")' in _s
     # 走的是统一薄封装（不重复实现阈值）
     assert "from nucleus.world_model.external_heartbeat import (" in _s
     assert "w1_verdict_brief as _w1v" in _s

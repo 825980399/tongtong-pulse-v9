@@ -36,13 +36,25 @@ from collections import deque
 from nucleus._silent_except import silent_exc
 
 #: 口径版本（换判据必须换版本号，避免历史读数被静默重解释）
-W1_CRITERIA_VERSION = "328.w1.v1"
+#: ★373刀3 v1→v2：新增 `stale_kind` 成因判别 + 订正心跳实拍口径（见下）。
+#:   历史 v1 读数里的 `stale` 仍成立，只是 v2 起能区分「心脏没跳」与「落盘滞后」。
+W1_CRITERIA_VERSION = "373.w1.v2"
 
 _SNAPSHOT_REL = os.path.join("data", "monitor", "health_snapshot.json")
 _ALERTS_REL = os.path.join("data", "reports", "alerts.jsonl")
 
 #: 快照最大可接受年龄（秒）。心跳 ~10—13s 一次、`snapshot_interval=1`（每拍都落），
 #: 取 90s ≈ 连丢 7 拍才判 stale —— 宁可漏报也不误报（误报会让 W1 变成噪声源）。
+#:
+#: ★373刀3 实测复核（`logs/pulse.log` 638 条心跳行 / 2 个代次）：
+#:   * 真实心跳节奏 = **11s/拍**，beat 序列 1721→1731→1741 每 10 拍落一条日志
+#:     ⇒ **日志里看到的"110s 间隔"是抽样，不是心跳周期**（本条最容易被读错，
+#:     372 刀12 记的"alive 窗 30min"即由此类推失真）；
+#:   * ⇒ 90s 窗 = 连丢 7—8 拍，原设计**成立，本刀不动这个值**（动它就等于
+#:     放宽门槛，属候选乙已被否的同类动作）；
+#:   * 实测 `w1=alive` 296 条 / `w1=stale` 10 条（96.7% alive），且 10 条 stale
+#:     **全部**落在心跳停跳时段（17:24 后 beat 恒定 1371）⇒ **卡点不是窗太短，
+#:     是心脏停跳**。本刀因此把 `stale` 拆成可区分的成因，让下次重启一眼看出是哪种。
 DEFAULT_MAX_AGE_SEC = 90.0
 #: 辅助告警流的扫描深度（只看尾部，避免把 5MB 历史全读进内存）
 _ALERT_TAIL_LINES = 4000
@@ -214,8 +226,11 @@ def external_heartbeat_verdict(root: str | None = None,
                "snapshot_ts": _snap.get("snapshot_ts"), "taken_at": _now}
 
     _verdict = "alive"
+    _stale_kind = None
     if _age > _max:
         _verdict = "stale"
+        # ★373刀3：先记成因占位「只按年龄判」，下面拿到 beat 增量后再细分。
+        _stale_kind = "age_over_no_delta"
         _basis.append("快照年龄 %.1fs > 阈值 %.0fs ⇒ stale（进程可能卡住或落盘被占）"
                       % (_age, _max))
     else:
@@ -236,8 +251,17 @@ def external_heartbeat_verdict(root: str | None = None,
             elif _verdict == "alive":
                 # 年龄新鲜但心跳不动：落盘还在写、心脏没跳 —— 这是"半死"，必须报 stale
                 _verdict = "stale"
+                _stale_kind = "beat_stalled"
                 _basis.append("快照新鲜但 beat_count 未增长（%s→%s）⇒ 心脏未推进，判 stale"
                               % (prev_sample.get("beat_count"), _beat))
+            if _verdict == "stale" and _delta > 0:
+                # ★373刀3：年龄超线但 beat 仍在涨 ⇒ 是「落盘滞后」不是「心脏停跳」。
+                #   这两种 stale 的处置方向相反：前者查写盘/线程，后者查心跳链。
+                #   混在一起报 stale，会让下一次排查从头再来（372 刀12 即如此）。
+                _stale_kind = "age_over"
+                _basis.append(
+                    f"但 beat_count {prev_sample.get('beat_count')}→{_beat}（+{_delta}）"
+                    f"仍在推进 ⇒ 成因=落盘滞后（非心脏停跳）")
     else:
         _basis.append("未提供上一次采样 ⇒ 只按年龄判，未做增量判定")
 
@@ -251,6 +275,11 @@ def external_heartbeat_verdict(root: str | None = None,
         "criteria_version": W1_CRITERIA_VERSION,
         "max_age_sec": _max,
         "age_sec": _age,
+        # ★373刀3：stale 的**成因**（alive/unavailable 时为 None）
+        #   beat_stalled —— beat_count 未增长：心脏没跳（查心跳链）
+        #   age_over     —— 年龄超线但 beat 在涨：落盘滞后（查写盘/线程）
+        #   age_over_no_delta —— 没给上次采样，无法区分（调用方应逐个传 prev_sample）
+        "stale_kind": _stale_kind,
         "beat_delta": _delta,
         "evidence": {"snapshot": _snap, "alerts": _alerts},
         "basis": _basis,
@@ -268,7 +297,7 @@ def w1_verdict_brief(prev_sample: dict | None = None,
 
     返回归一结构：
       ``{"verdict": alive|stale|unavailable, "age_sec": float|None,
-         "basis": str, "raw": dict}``
+         "stale_kind": str|None, "basis": str, "raw": dict}``
     取数异常 ⇒ `verdict="unavailable"`（**绝不猜 alive**：猜 alive 会让"外部说卡"
     被当成"外部说好"，仲裁方向正好反）。
     """
@@ -294,6 +323,9 @@ def w1_verdict_brief(prev_sample: dict | None = None,
                 }
         return {"verdict": str(_r.get("verdict") or "unavailable"),
                 "age_sec": _age,
+                # ★373刀3：成因必须随 brief 出去。337/349 两次教训一致——
+                #   只留在 `raw` 里的字段，消费方（A6/O3）永远读不到。
+                "stale_kind": _r.get("stale_kind"),
                 # ★口径警告随行：安静 ≠ 死了；alerts 只作辅助证据，**不参与 verdict**
                 "alerts": _alerts_brief,
                 "basis": str(_r.get("basis") or ""),

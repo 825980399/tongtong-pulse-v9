@@ -7337,14 +7337,21 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         #   在旧信号上做判据手术，会把"外部说卡"读成"抽验通过"。
         if isinstance(_rep.get("sample"), dict):
             _rep["sample"]["w1"] = {"verdict": _w1b.get("verdict"),
-                                    "age_sec": _w1b.get("age_sec")}
+                                    "age_sec": _w1b.get("age_sec"),
+                                    # ★373刀3：stale 成因随判定一起落盘
+                                    "stale_kind": _w1b.get("stale_kind")}
             if _w1b.get("verdict") != "alive" and \
                     _rep["sample"].get("verdict") not in (None, "UNAVAILABLE"):
                 _rep["sample"]["verdict_raw"] = _rep["sample"].get("verdict")
                 _rep["sample"]["verdict"] = "provisional"
+                # ★373刀3：理由里带 **成因**。只写「W1=stale」的话，读者无法区分
+                #   「心脏停跳」与「落盘滞后」——这两者处置方向相反（372 刀12 就是
+                #   因为只有 stale 两个字，才把它误判成"窗太短"）。
+                _wk = _w1b.get("stale_kind")
                 _rep["sample"]["verdict_reason"] = (
-                    "W1=%s ⇒ 抽样结论降 provisional（不作为开闸依据）"
-                    % _w1b.get("verdict"))
+                    "W1=%s%s ⇒ 抽样结论降 provisional（不作为开闸依据）"
+                    % (_w1b.get("verdict"),
+                       (f"({_wk})" if _wk else "")))
     _rep["reduction"] = hard_candidate_reduction_analysis(
         items=_items if _items else None, project_root=project_root)
     # ---- B/C 降量选项（只算可消量与风险，不代选）----
