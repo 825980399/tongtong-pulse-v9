@@ -22,6 +22,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import (
     BoneMarrowEvent,
     ChatEvent,
@@ -55,6 +56,33 @@ try:
     from config import PULSE_PRIORITY
 except ImportError:
     PULSE_PRIORITY = {"HIGH": 7}
+
+
+# ========== ★374刀1：心跳链存活加固（停跳根因收口） ==========
+#
+# 事故现场（2026-10-26 17:24:34 → 当日停机）：beat 冻结在 1374、health_snapshot 停更，
+# 而同一进程里的 60s 分诊节拍与小时级件在 17:28:06 全部恢复 ⇒ 不是线程死、也不是写盘
+# 阻塞，是**进程被整体停放约 209s**（同窗口日志零输出、RSS 4.52→2.46GB、打开文件 17→0）。
+# 恢复后所有周期件自愈，唯独两条「自续链 Timer」死了：心跳（`pulse_core.emit`）与
+# TimeCore（`_broadcast`）——它们的共同点是**续链写在 finally 里**，而那一拍卡在
+# `field.publish` 上没有返回 ⇒ 永远排不出下一拍。
+#
+# 因此这里修的是**模型级单点**，不是某一处锁：
+#   ① 每一拍进入即先排下一拍（`_m374_schedule_ahead`），续链不再依赖「这一拍能返回」；
+#   ② 重入守卫从布尔升级为**带租约的锁**：租约内跳过（正常慢拍），过期由后来的一拍接管；
+#   ③ 接管时抓全线程栈落 logs/，下次停跳能直接看到卡在哪一行；
+#   ④ 看门狗兼作「进程级停放探针」＋「看门狗存活留痕」（缺席＝看门狗自己死了）。
+#
+# 阈值一律**硬编码常量**（任务书：本批不新增 config 开关）。
+_M374_GUARD_STALE_FACTOR = 3.0      # 守卫租约 = 3×当前间隔（≈连丢 3 拍判卡死）
+_M374_FALLBACK_INTERVAL = 30.0      # current_interval 取不到时的保守间隔
+_M374_MAX_TAKEOVER_STREAK = 3       # 连续接管上限（防"发布面永久卡死"时线程堆积）
+_M374_SUSPEND_MIN_SEC = 30.0        # 看门狗自己睡过头的判定阈值 ⇒ 进程级停放
+_M374_WD_TRACE_EVERY_SEC = 600.0    # 看门狗存活留痕周期
+_M374_STALL_DIR = os.path.join("logs", "heartbeat_stall")
+# 守卫令牌锁：**模块级**（单测常用 `__new__` 造实例、绕开 __init__，
+# 实例锁会让它们直接 AttributeError）。临界区只有几条属性赋值，争用可忽略。
+_M374_GUARD_LOCK = threading.Lock()
 
 
 class PulseHeart(BasePulseOrgan):
@@ -138,6 +166,14 @@ class PulseHeart(BasePulseOrgan):
         #   超过心跳间隔（或被多处触发），可能并发进入导致 _beat_count 竞态。
         #   此标志保证同一时刻只有一个心跳在执行，重入时直接跳过。
         self._heartbeat_in_progress = False
+        # ★374刀1：守卫租约起点（与 in_progress 同时写；缺失时按最后进入时刻反推）
+        self._heartbeat_started_at: float = 0.0
+        self._m374_takeover = 0          # 租约过期接管次数
+        self._m374_takeover_streak = 0   # 连续接管次数（成功完成一拍即清零）
+        # ★374刀1：守卫令牌。用**单调序号**而不是时间戳——Windows 上 time.time()
+        #   粒度可达 15.6ms，两拍可能取到同一个浮点数，拿它当身份键会让旧拍
+        #   误判成接管拍、替它把门打开（铁律201：浮动读数不进身份键）。
+        self._m374_beat_seq = 0
 
         # ★属性初始化完整性补全（自动审查添加）
         self._status_sweep_counter = 0
@@ -374,18 +410,54 @@ class PulseHeart(BasePulseOrgan):
         """定时器回调：通过PulseCore统一发射心跳脉冲（L0生命线层）"""
         if not self.is_running:
             return
-        # ★PHASE17-阶段二子任务5.7：重入守卫。
-        #   若上一个心跳仍在执行（执行时长超过心跳间隔、或定时器被多处触发），
-        #   直接跳过本次，避免 _beat_count 并发竞态与心跳逻辑叠加执行。
-        #   下一个心跳由「正在执行中的那次」的 finally 负责调度，不会断链。
+        # ★374刀1 ①：**先排下一拍，再判守卫**。
+        #   原实现的续链只在 finally ⇒ 这一拍卡住就永久断链（17:24 事故）。
+        #   现在进入即预排，任何早期返回/卡死都不会让链停。
+        self._m374_schedule_ahead()
+        # ★PHASE17-阶段二子任务5.7：重入守卫（★374刀1 ②：布尔 → 带租约的锁）。
+        #   原实现「有人在跑就直接返回」，而"有人在跑"的最坏情况是**永远在跑**——
+        #   守卫被那一拍永久占住，后续每一拍都早退。现在按持有时间区分：
+        #   ≤ 租约 ⇒ 正常慢拍，跳过；> 租约 ⇒ 原拍已判卡死，由本拍接管续跳。
+        _m374_now = time.time()
+        _m374_tok = None  # 本拍令牌（finally 可能先于赋值进入，故先置 None）
         if self._heartbeat_in_progress:
-            return
-        self._heartbeat_in_progress = True
-        # ★367 后续：记录进入时刻，供看门狗判「这一拍是否已经卡死」。
-        self._heartbeat_started_at = time.time()
+            _m374_started = float(getattr(self, "_heartbeat_started_at", 0) or 0)
+            if _m374_started <= 0:
+                # 兜底：守卫为真但没留进入时刻 ⇒ 用最后一拍进入时刻反推（不按 0 算，
+                # 否则 held 恒为天文数字，会误杀正常慢拍）。
+                _m374_started = float(getattr(self, "_last_beat_time", 0) or 0)
+            _m374_held = _m374_now - _m374_started
+            _m374_lease = self._m374_guard_lease()
+            if _m374_held <= _m374_lease:
+                return
+            self._m374_takeover = int(getattr(self, "_m374_takeover", 0)) + 1
+            self._m374_takeover_streak = int(getattr(self, "_m374_takeover_streak", 0)) + 1
+            if self._m374_takeover_streak > _M374_MAX_TAKEOVER_STREAK:
+                # 连续接管说明发布面持续卡死：继续接管只会堆线程。此处**只保链不自伤**，
+                # 下一拍已经排好，等发布面自己恢复或由 367 看门狗兜底。
+                self._log(LogLevel.ERROR,
+                          f"[374刀1] 连续接管已达 {self._m374_takeover_streak - 1} 次仍未恢复 "
+                          f"⇒ 停止接管（只保链），beat={getattr(self, '_beat_count', 0)}",
+                          error_code="heartbeat_takeover_capped")
+                return
+            _m374_dump = self._m374_dump_stall(_m374_held)
+            self._log(LogLevel.ERROR,
+                      f"[374刀1] 心跳重入守卫租约过期 {_m374_held:.1f}s > "
+                      f"{_m374_lease:.1f}s ⇒ 第{self._m374_takeover}次接管续跳"
+                      f"（beat={getattr(self, '_beat_count', 0)}，"
+                      f"抓栈={_m374_dump or '失败'}）",
+                      error_code="heartbeat_guard_takeover")
+        with _M374_GUARD_LOCK:
+            self._m374_beat_seq = int(getattr(self, "_m374_beat_seq", 0)) + 1
+            _m374_tok = self._m374_beat_seq
+            self._heartbeat_in_progress = True
+            # ★367 后续：记录进入时刻，供看门狗判「这一拍是否已经卡死」。
+            self._heartbeat_started_at = _m374_now
         if self.info_field is None:
             # 信息场不可用，无法发射脉冲，但仍然安排下一次心跳尝试恢复
-            self._heartbeat_in_progress = False
+            with _M374_GUARD_LOCK:
+                if _m374_tok is not None and self._m374_beat_seq == _m374_tok:
+                    self._heartbeat_in_progress = False
             # ★365刀C1：这条早退路径同样会续链失败（且它比 finally 更早出现），一并兜底
             try:
                 self._schedule_next_beat()
@@ -494,8 +566,16 @@ class PulseHeart(BasePulseOrgan):
             # ★P0-1核心修复：无论心跳执行成功或失败，必须安排下一次心跳
             # ★PHASE17-阶段二子任务5.7：先释放重入守卫标志，再调度下一次，
             #   确保标志不会因 finally 未执行而卡死（finally 必然执行）。
-            self._heartbeat_in_progress = False
-            self._heartbeat_started_at = 0.0
+            # ★374刀1 ③：释放要**认令牌**。接管引入后，「先卡死后又返回」的旧拍会与
+            #   接管拍同时在跑；旧拍若无条件清标志，就在接管拍还在跑时把门打开 ⇒
+            #   第三拍叠进来，反而造出原本不存在的并发。只有仍持有租约的那一拍能释放。
+            with _M374_GUARD_LOCK:
+                if _m374_tok is not None and self._m374_beat_seq == _m374_tok:
+                    self._heartbeat_in_progress = False
+                    self._heartbeat_started_at = 0.0
+                    # ★374刀1：本拍能走到收尾 ⇒ 发布面恢复正常，接管连击清零。
+                    #   同样要认令牌：卡死旧拍的迟到返回不能替接管拍清零。
+                    self._m374_takeover_streak = 0
             # ★365刀C1：续链失败兜底 —— `_schedule_next_beat()` 自己抛异常（Timer 构造失败/
             #   线程资源耗尽）时，过去异常直接从 finally 抛出 ⇒ **定时链静默断掉**：没有下一拍、
             #   没有日志、没有计数，外部只能看到"心跳突然不动了"。现在留痕＋计数，交看门狗复核。
@@ -510,6 +590,59 @@ class PulseHeart(BasePulseOrgan):
                           f"last_beat={getattr(self, '_last_beat_time', 0)}）："
                           f"{type(_ce365).__name__}: {_ce365}",
                           error_code="heartbeat_chain_break")
+
+    # ========== ★374刀1：心跳链存活加固 ==========
+
+    def _m374_schedule_ahead(self) -> None:
+        """先排下一拍再干活：续链不再依赖「这一拍能返回」。
+
+        正常路径下 `finally` 仍会再排一次（cancel 旧的，按"本体结束"重新计时），
+        因此节拍口径与改动前一致；差别只在**卡死时**——本拍永不返回，但下一拍
+        已经在路上，链不会死。
+
+        计数单独记（`_m374_pre_sched_fail`），不混进 365 的 `_m365_chain_fail`：
+        后者是"finally 续链"的读数，混用会让两处失败叠成假读数。
+        """
+        try:
+            self._schedule_next_beat()
+        except Exception as _e:
+            self._m374_pre_sched_fail = int(getattr(self, "_m374_pre_sched_fail", 0)) + 1
+            self._log(LogLevel.ERROR,
+                      f"[374刀1] 预排下一拍失败（第{self._m374_pre_sched_fail}次，"
+                      f"beat={getattr(self, '_beat_count', 0)}）："
+                      f"{type(_e).__name__}: {_e}",
+                      error_code="heartbeat_pre_sched_fail")
+
+    def _m374_guard_lease(self) -> float:
+        """守卫租约秒数（3×当前间隔；间隔取不到用保守值）。"""
+        _iv = float(getattr(self, "current_interval", 0) or 0)
+        if _iv <= 0:
+            _iv = _M374_FALLBACK_INTERVAL
+        return _M374_GUARD_STALE_FACTOR * _iv
+
+    def _m374_dump_stall(self, held_s: float) -> str | None:
+        """卡死现场抓全线程栈（best-effort：失败只留痕，绝不影响心跳链路）。
+
+        为什么用 faulthandler：它由运行时直接遍历线程栈，不需要被卡线程配合，
+        也不需要新建 Timer/线程（刀9 已明确 Timer 自身也要 Thread.start，会一起卡死）。
+        """
+        try:
+            import faulthandler
+            os.makedirs(_M374_STALL_DIR, exist_ok=True)
+            _path = os.path.join(_M374_STALL_DIR, f"stall_{int(time.time())}.txt")
+            with open(_path, "w", encoding="utf-8") as _f:
+                _f.write(f"# [374刀1] 心跳重入守卫租约过期，接管前抓栈\n"
+                         f"# held={held_s:.1f}s beat={getattr(self, '_beat_count', 0)} "
+                         f"interval={getattr(self, 'current_interval', 0)} "
+                         f"pid={os.getpid()} at={time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                _f.flush()
+                faulthandler.dump_traceback(file=_f, all_threads=True)
+            self._m374_last_dump = _path
+            return _path
+        except Exception as _e:
+            self._m374_last_dump = None
+            silent_exc(_e, where="PulseHeart::_m374_dump_stall")
+            return None
 
     # ========== ★365刀C1：心跳链看门狗 ==========
 
@@ -528,10 +661,29 @@ class PulseHeart(BasePulseOrgan):
         return {"ok": True, "why": "started"}
 
     def _m365_watchdog_loop(self):
-        """看门狗主循环：按当前间隔的一半节拍自检（最短 5s）。"""
+        """看门狗主循环：按当前间隔的一半节拍自检（最短 5s）。
+
+        ★374刀1 ④：本线程同时兼任**进程级停放探针**与**看门狗存活留痕**。
+        17:24 事故最要命的两点是：① 全进程停了 209s，事后日志里毫无痕迹（当时只有
+        TimeCore 那条 209.4s 跳变告警，看不出是全进程停放）；② 看门狗没救回心跳，
+        但也无法判断它是死了还是在跳过。现在两件事都有痕迹：
+          * 睡 5s 却过了 ≥35s ⇒ 打印"进程级停放"并抓栈；
+          * 每 10 分钟一条"看门狗存活"INFO（缺席即看门狗自己死了）。
+        """
         while getattr(self, "_m365_wd_running", False):
             _iv = float(getattr(self, "current_interval", 30.0) or 30.0)
-            time.sleep(max(5.0, _iv / 2.0))
+            _nap = max(5.0, _iv / 2.0)
+            _t0 = time.time()
+            time.sleep(_nap)
+            _slept = time.time() - _t0
+            if _slept > _nap + _M374_SUSPEND_MIN_SEC:
+                self._m374_suspend = int(getattr(self, "_m374_suspend", 0)) + 1
+                _sus_dump = self._m374_dump_stall(_slept)
+                self._log(LogLevel.WARNING,
+                          f"[374刀1] 进程级停放：看门狗本应睡 {_nap:.1f}s，实际过了 "
+                          f"{_slept:.1f}s（第{self._m374_suspend}次）⇒ 全进程被挂起"
+                          f"（OS 换出/休眠；不是单链故障）；抓栈={_sus_dump or '失败'}",
+                          error_code="process_suspend_detected")
             try:
                 self.m365_beat_watchdog()
             except Exception as _e:
@@ -539,6 +691,23 @@ class PulseHeart(BasePulseOrgan):
                 self._log(LogLevel.WARNING,
                           f"[365链] 看门狗自身异常（第{self._m365_wd_fail}次）："
                           f"{type(_e).__name__}: {_e}")
+            self._m374_wd_trace()
+
+    def _m374_wd_trace(self) -> None:
+        """看门狗存活留痕（每 10 分钟一条 INFO）：日志里缺席＝看门狗本身死了。"""
+        _now = time.time()
+        _at = float(getattr(self, "_m374_wd_trace_at", 0) or 0)
+        if _at > 0 and (_now - _at) < _M374_WD_TRACE_EVERY_SEC:
+            return
+        self._m374_wd_trace_at = _now
+        _last = float(getattr(self, "_last_beat_time", 0) or 0)
+        self._log(LogLevel.INFO,
+                  f"[374刀1][365链] 看门狗存活 age="
+                  f"{(_now - _last) if _last > 0 else -1:.1f}s "
+                  f"in_progress={bool(getattr(self, '_heartbeat_in_progress', False))} "
+                  f"beat={int(getattr(self, '_beat_count', 0))} "
+                  f"takeover={int(getattr(self, '_m374_takeover', 0))} "
+                  f"suspend={int(getattr(self, '_m374_suspend', 0))}")
 
     def m365_beat_watchdog(self) -> dict:
         """★365刀C1：gap > 2×interval ⇒ WARNING 告警并尝试续链。

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import sys
 import time
 
@@ -146,16 +147,34 @@ class TestSkipVisibility:
 
 class TestStampsWired:
     def test_08_enter_sets_started_at(self):
-        """进入心跳时必须写进入时刻（否则看门狗无法判卡死）。"""
+        """进入心跳时必须写进入时刻（否则看门狗无法判卡死）。
+
+        ★374刀1：进入块包进 `with _M374_GUARD_LOCK:`，时刻改取**入口处的一次
+        读数** `_m374_now`（同一拍只读一次钟，保证"守卫判据用的钟"与"记下的钟"
+        是同一个数）。判据按语义守：进入段内必须把 `_heartbeat_started_at` 写成
+        真实时间值，来源允许 `_m374_now` / `time()`；写成常量即失败。
+        """
         src = io.open(_SRC, encoding="utf-8").read()
-        seg = src[src.index("self._heartbeat_in_progress = True"):]
-        assert "_heartbeat_started_at = time.time()" in seg[:400], "进入时未记时刻"
+        i = src.index("with _M374_GUARD_LOCK:")
+        seg = src[i:i + 500]
+        assert "self._heartbeat_in_progress = True" in seg, "进入时未置位"
+        assert re.search(
+            r"self\._heartbeat_started_at = (_m374_now|time\(\)|time\.time\(\))", seg
+        ), "进入时未记真实时刻（不得写常量/0）"
 
     def test_09_finally_clears_started_at(self):
-        """finally 里必须清零（否则下一拍会被误判成卡死）。"""
+        """finally 里必须清零（否则下一拍会被误判成卡死）。
+
+        ★374刀1：释放改成「按令牌序号认人」——只有仍持有租约的那一拍能释放，
+        卡死旧拍的迟到返回不得替接管拍开门。判据比原先的"两行相邻"更严：
+        要求在**令牌守卫内**同时释放标志与清零时刻。
+        """
         src = io.open(_SRC, encoding="utf-8").read()
-        seg = src[src.index("self._heartbeat_in_progress = False\n            self._heartbeat_started_at"):]
-        assert "_heartbeat_started_at = 0.0" in seg[:120]
+        # 令牌判据在两处出现（info_field 早退 + finally），要盯**最后**那处＝finally
+        i = src.rindex("if _m374_tok is not None and self._m374_beat_seq == _m374_tok:")
+        seg = src[i:i + 600]
+        assert "self._heartbeat_in_progress = False" in seg, "finally 未释放守卫"
+        assert "self._heartbeat_started_at = 0.0" in seg, "finally 未清零时刻"
 
     def test_10_no_dual_timer_risk(self):
         """强制复位只续链**一次**（双定时器是原注释明确要防的）。"""

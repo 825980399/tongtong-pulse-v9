@@ -21,6 +21,10 @@ from nucleus._silent_except import silent_exc
 from nucleus.chronos.GlobalClock import GlobalClock
 from nucleus.const import SystemEvent
 
+# ★374刀1：模块级锁（理由同 PulseHeart：单测用 __new__ 造实例，实例锁会炸）
+_TIMER_LOCK = threading.Lock()
+_M374_TICK_LOCK = threading.Lock()
+
 
 class TimeCore:
     """时间中枢内核单例。"""
@@ -51,6 +55,15 @@ class TimeCore:
         self._managed_tasks: dict[str, dict[str, Any]] = {}
         self._managed_tasks_lock = threading.Lock()
         self._last_tick_time = 0.0
+        # ★374刀1：租约守卫字段。
+        #   PulseHeart 侧本就有「先 cancel 再建」的串行化，TimeCore 侧一直没有；
+        #   本刀把 `_tick` 改成「进入即预排 + finally 再排」后，不 cancel 就会每拍
+        #   翻倍（1→2→4…），比断链更快致命，所以两件事必须一起做（锁见模块级常量）。
+        self._m374_tick_in_progress = False
+        self._m374_tick_started = 0.0
+        self._m374_tick_takeover = 0
+        # ★374刀1：令牌用单调序号（理由同 PulseHeart：时间戳粒度会撞车）
+        self._m374_tick_seq = 0
         self._logger = None
         try:
             from nucleus.logger import get_organ_logger
@@ -95,9 +108,19 @@ class TimeCore:
 
     def _schedule_next(self) -> None:
         try:
-            self._timer = threading.Timer(self._interval, self._tick)
-            self._timer.daemon = True
-            self._timer.start()
+            with _TIMER_LOCK:
+                # ★374刀1：**先取消旧的再建新的**（对齐 PulseHeart._schedule_next_beat）。
+                #   对已触发的 Timer 调 cancel() 是空操作，不影响正在执行的这一拍；
+                #   但能保证「预排」与「finally 重排」不会留下两个活定时器。
+                _old = self._timer
+                if _old is not None:
+                    try:
+                        _old.cancel()
+                    except Exception as _ce:
+                        silent_exc(_ce, where="nucleus.chronos.TimeCore::_schedule_next cancel")
+                self._timer = threading.Timer(self._interval, self._tick)
+                self._timer.daemon = True
+                self._timer.start()
         except Exception as e:
             # ★365刀C1：续链失败必须**可数、可见** —— 原先只有一行 INFO（等价于静默），
             #   链断了在日志里翻不出来。现计数＋WARNING（与 PulseHeart 同口径）。
@@ -120,10 +143,33 @@ class TimeCore:
                 "interval": float(getattr(self, "_interval", 0) or 0)}
 
     def _tick(self) -> None:
-        try:
-            if not self._running:
+        """定时器回调：广播 time.tick，并按需驱动被托管任务。
+
+        ★374刀1：与 PulseHeart 同型收口 —— **进入即预排下一拍**，续链不再依赖
+        「本拍能返回」。事故（10-26 17:28:06）正是这一拍卡在 `_broadcast()` 里
+        没回来，而续链只写在 finally ⇒ 之后 `[time.tick]` 再没出现过。
+        守卫的早退放在 try 之前（同 PulseHeart）：跳过就只是跳过，不该顺带
+        再排一次让读数看起来像"跑了一拍"。
+        """
+        if not self._running:
+            return
+        self._schedule_next()
+        now = time.time()
+        # 租约守卫：租约内 ⇒ 正常慢拍，跳过；超租约 ⇒ 上一拍已判卡死，由本拍接管续跳。
+        _m374_lease = 3.0 * float(getattr(self, "_interval", 60.0) or 60.0)
+        _m374_held = now - float(getattr(self, "_m374_tick_started", 0) or 0)
+        if getattr(self, "_m374_tick_in_progress", False):
+            if _m374_held <= _m374_lease:
                 return
-            now = time.time()
+            self._m374_tick_takeover = int(getattr(self, "_m374_tick_takeover", 0)) + 1
+            self._log(f"[374刀1] TimeCore 上一拍卡死 {_m374_held:.1f}s > "
+                      f"{_m374_lease:.1f}s ⇒ 第{self._m374_tick_takeover}次接管续跳")
+        with _M374_TICK_LOCK:
+            self._m374_tick_seq = int(getattr(self, "_m374_tick_seq", 0)) + 1
+            _m374_tok = self._m374_tick_seq
+            self._m374_tick_in_progress = True
+            self._m374_tick_started = now
+        try:
             # ★watchdog（可选增强）：检测上一拍是否异常延迟（超过 2 个间隔）。
             # 仅告警、不自动回退 Heart（回退逻辑需 Heart 重新注册，风险较高，避免引入新故障）。
             if self._last_tick_time > 0:
@@ -141,6 +187,11 @@ class TimeCore:
         except Exception as e:
             self._log(f"tick 异常: {e}")
         finally:
+            # ★374刀1：认令牌释放 —— 卡死旧拍的迟到返回不得替接管拍开门，
+            #   否则第三拍会叠进来（造出原本不存在的并发）。
+            with _M374_TICK_LOCK:
+                if self._m374_tick_seq == _m374_tok:
+                    self._m374_tick_in_progress = False
             if self._running:
                 self._schedule_next()
 
