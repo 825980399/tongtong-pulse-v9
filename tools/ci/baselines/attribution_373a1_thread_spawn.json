@@ -1,0 +1,10 @@
+[
+  {
+    "file": "functions/chat/chat_service.py",
+    "delta_occurrences": 1,
+    "delta_files": 1,
+    "commit": "373刀1（本刀；生产改动随本批提交，实际 hash 见 第373批交付报告 §刀1）",
+    "batch": "373/A1",
+    "reason": "373 刀1「ChatService 剥离主装配路径（卡点一·342刀5 回归 P0）」把 `start()` 末尾同步驻留的 `self._chat_loop()`（`input()` 无超时，装配线程被钉死 6h23m）改为起独立 daemon 线程 `threading.Thread(target=self._chat_loop, name=\"chat-service-loop\", daemon=True)` 后立即返回。该文件在本次改动前的门禁口径 spawn 数为 0（文件内只有 `threading.Timer(`，不计入 `threading.Thread(` 口径），故 occurrences 与 files 各 +1。属**恢复 342 刀5 之前的线程语义**：342 刀5 去掉了加载器侧每模块一条线程，代价是 ChatService 的驻留循环直接钉住装配线程；本刀把该线程移到 ChatService 自己名下，是同一职责的归还，不是净增并发。"
+  }
+]

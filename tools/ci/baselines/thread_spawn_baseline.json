@@ -2,31 +2,23 @@
   "metric": "production_thread_spawn_points",
   "pattern": "threading.Thread(",
   "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
-  "total_occurrences": 58,
-  "file_count": 44,
+  "total_occurrences": 59,
+  "file_count": 45,
   "anchored_by": "172刀0",
   "anchored_at": "2026-10-08",
   "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber",
   "attribution": [
     {
-      "file": "nucleus/m365_mem_attribution.py",
+      "file": "functions/chat/chat_service.py",
       "delta_occurrences": 1,
       "delta_files": 1,
-      "commit": "83c0d39d",
-      "batch": "365/B2",
-      "reason": "365/B2「内存归属 fixed/live 同进程采样接线」新增的采样线程（threading.Thread(target=_loop, name=\"m365_mem_attrib\", daemon=True)）。该文件是**本批新建**（原不存在），故 occurrences 与 files 各 +1。"
-    },
-    {
-      "file": "organs/body/PulseHeart.py",
-      "delta_occurrences": 1,
-      "delta_files": 1,
-      "commit": "b0285387",
-      "batch": "365/C1",
-      "reason": "365/C1「心跳链断链防护——独立看门狗」新增的看门狗线程（threading.Thread(target=self._m365_watchdog_loop, daemon=True)）。实测该文件在 b0285387 之前 spawn 数为 0（git show b0285387^ 验证），故 occurrences 与 files 各 +1。"
+      "commit": "373刀1（本刀；生产改动随本批提交，实际 hash 见 第373批交付报告 §刀1）",
+      "batch": "373/A1",
+      "reason": "373 刀1「ChatService 剥离主装配路径（卡点一·342刀5 回归 P0）」把 `start()` 末尾同步驻留的 `self._chat_loop()`（`input()` 无超时，装配线程被钉死 6h23m）改为起独立 daemon 线程 `threading.Thread(target=self._chat_loop, name=\"chat-service-loop\", daemon=True)` 后立即返回。该文件在本次改动前的门禁口径 spawn 数为 0（文件内只有 `threading.Timer(`，不计入 `threading.Thread(` 口径），故 occurrences 与 files 各 +1。属**恢复 342 刀5 之前的线程语义**：342 刀5 去掉了加载器侧每模块一条线程，代价是 ChatService 的驻留循环直接钉住装配线程；本刀把该线程移到 ChatService 自己名下，是同一职责的归还，不是净增并发。"
     }
   ],
   "reanchor_note": "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）",
-  "reanchor_by": "372刀8",
+  "reanchor_by": "373刀1",
   "reanchor_at": "2026-10-27",
   "reanchor_history": [
     {
@@ -199,6 +191,46 @@
           "delta_occurrences": -3,
           "delta_files": -2,
           "reason": "354 重锚（d63d1d69）之后到 HEAD **零提交**改动 'threading.Thread('（git log -S 实测空），代码面未变；当前计数差异系工具口径（注释/字符串/路径排除）与 354 重锚时点不一致所致。364刀A6 按当前工具口径重锚，不放宽判据、不改扫描范围。"
+        }
+      ]
+    },
+    {
+      "reanchor_by": "373刀1",
+      "reanchor_at": "2026-10-27",
+      "from": {
+        "total_occurrences": 58,
+        "file_count": 44
+      },
+      "to": {
+        "total_occurrences": 59,
+        "file_count": 45
+      },
+      "attribution": [
+        {
+          "file": "functions/chat/chat_service.py",
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "commit": "373刀1（本刀；生产改动随本批提交，实际 hash 见 第373批交付报告 §刀1）",
+          "batch": "373/A1",
+          "reason": "373 刀1「ChatService 剥离主装配路径（卡点一·342刀5 回归 P0）」把 `start()` 末尾同步驻留的 `self._chat_loop()`（`input()` 无超时，装配线程被钉死 6h23m）改为起独立 daemon 线程 `threading.Thread(target=self._chat_loop, name=\"chat-service-loop\", daemon=True)` 后立即返回。该文件在本次改动前的门禁口径 spawn 数为 0（文件内只有 `threading.Timer(`，不计入 `threading.Thread(` 口径），故 occurrences 与 files 各 +1。属**恢复 342 刀5 之前的线程语义**：342 刀5 去掉了加载器侧每模块一条线程，代价是 ChatService 的驻留循环直接钉住装配线程；本刀把该线程移到 ChatService 自己名下，是同一职责的归还，不是净增并发。"
+        }
+      ],
+      "prev_attribution": [
+        {
+          "file": "nucleus/m365_mem_attribution.py",
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "commit": "83c0d39d",
+          "batch": "365/B2",
+          "reason": "365/B2「内存归属 fixed/live 同进程采样接线」新增的采样线程（threading.Thread(target=_loop, name=\"m365_mem_attrib\", daemon=True)）。该文件是**本批新建**（原不存在），故 occurrences 与 files 各 +1。"
+        },
+        {
+          "file": "organs/body/PulseHeart.py",
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "commit": "b0285387",
+          "batch": "365/C1",
+          "reason": "365/C1「心跳链断链防护——独立看门狗」新增的看门狗线程（threading.Thread(target=self._m365_watchdog_loop, daemon=True)）。实测该文件在 b0285387 之前 spawn 数为 0（git show b0285387^ 验证），故 occurrences 与 files 各 +1。"
         }
       ]
     }
