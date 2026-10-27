@@ -5,20 +5,20 @@
   "n": 42,
   "by_category": {
     "待逐条定位": {
-      "fixed": 2,
-      "open": 18
+      "fixed": 19,
+      "open": 1
     },
     "风险档位口径": {
-      "fixed": 0,
-      "open": 2
+      "fixed": 2,
+      "open": 0
     },
     "接口/属性缺失": {
       "fixed": 3,
       "open": 0
     },
     "源码锚点过期": {
-      "fixed": 1,
-      "open": 1
+      "fixed": 2,
+      "open": 0
     },
     "日志/告警口径": {
       "fixed": 2,
@@ -29,8 +29,8 @@
       "open": 0
     },
     "基线快照过期": {
-      "fixed": 0,
-      "open": 2
+      "fixed": 2,
+      "open": 0
     },
     "渠道/模型名": {
       "fixed": 5,
@@ -94,9 +94,12 @@
       "err_archive": "AssertionError: assert {'attempt': 2...ated': 0, ...} == {'attempt': 2...ated': 0, ...}",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "计数器集合已演进：第300批刀3 新增 entered_verification/blocked 两键 ⇒ `== 全集` 必然红（设计意图是「快照随计数器字典自动携带新键」）",
+      "action": "改为「原 6 键值必须正确 + 新 2 键必须在位」：既守 233/241 批意图，又不把「新增计数器」判成回归",
+      "status": "fixed",
+      "fix_commit": "667d69de",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_a5_pii_final_scan_m161.py::TestA5SharedAllowDomains::test_09_meta_line_hits_catches_real_pii",
@@ -106,9 +109,12 @@
       "err_archive": "AssertionError: 真实手机号应命中",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "正例号 13812345678 已在 check_pii_final_scan._TEST_PHONES 假号白名单里（产品行为正确、考题用错夹具）",
+      "action": "正例号改为由白名单号做 1[3-9] 段补集**动态生成**并先自证不落白名单（同扫描器 selftest 的 175刀2 订正口径）",
+      "status": "fixed",
+      "fix_commit": "667d69de",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_adaptive_coverage_extension_m65.py::TestCodeLearningAdaptive::test_21_get_load_level",
@@ -118,9 +124,12 @@
       "err_archive": "AssertionError: 'low' != 'medium'",
       "same_as_archive": false,
       "category": "风险档位口径",
-      "product_basis": "346刀5 起风险档位统一走 `_m346_risk_rank`（中英归一：低/low=1、中/medium=2、高=3）；372刀1 起**未登记族**兜底 低→中",
-      "action": "考题断言按 `_m346_risk_rank` 口径写；涉及未登记族时按 372刀1 的新兜底（中）",
-      "status": "open"
+      "product_basis": "风险档位口径：372刀1 起 `_m344_merge_risk = max(显式, 族推断)`、未登记族兜底「中」；原用例打桩对象与产品真实取数源不是同一个（323刀1 前属假通过）",
+      "action": "打桩改到产品真实取数源，断言按 `_m346_risk_rank` 口径写",
+      "status": "fixed",
+      "fix_commit": "f505718a",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_adaptive_coverage_extension_m65.py::TestDigestAdaptive::test_41_get_load_level",
@@ -130,9 +139,12 @@
       "err_archive": "AssertionError: 'low' != 'medium'",
       "same_as_archive": false,
       "category": "风险档位口径",
-      "product_basis": "346刀5 起风险档位统一走 `_m346_risk_rank`（中英归一：低/low=1、中/medium=2、高=3）；372刀1 起**未登记族**兜底 低→中",
-      "action": "考题断言按 `_m346_risk_rank` 口径写；涉及未登记族时按 372刀1 的新兜底（中）",
-      "status": "open"
+      "product_basis": "同上（风险档位口径）",
+      "action": "同上",
+      "status": "fixed",
+      "fix_commit": "f505718a",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_assertion_robustness_m33.py::TestNoFragileSourceCount::test_01_no_bare_name_count_in_tests",
@@ -142,9 +154,12 @@
       "err_archive": "AssertionError: Lists differ: ['test_main_loop_pulse_knife1_m172.py:45: [68 chars] 1)'] != []",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "门禁把自身注释里的样例文本当成「裸名计数」命中 ⇒ 改写注释即转绿",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "（连带转绿·本文件未改）",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_10_holds_slot_during_call",
@@ -159,7 +174,8 @@
       "status": "fixed",
       "fix_commit": "7a7eb05e",
       "fix_batch": "第二批",
-      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口"
+      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_12_skips_when_channel_full",
@@ -174,7 +190,8 @@
       "status": "fixed",
       "fix_commit": "7a7eb05e",
       "fix_batch": "第二批",
-      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口"
+      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrencyGuard::test_13_switch_off_bypasses_guard",
@@ -189,7 +206,8 @@
       "status": "fixed",
       "fix_commit": "7a7eb05e",
       "fix_batch": "第二批",
-      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口"
+      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_branch_concurrency_m32.py::TestConcurrentThreads::test_20_never_exceeds_channel_max",
@@ -204,7 +222,8 @@
       "status": "fixed",
       "fix_commit": "7a7eb05e",
       "fix_batch": "第二批",
-      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口"
+      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_branch_concurrency_m32.py::TestSourceWiring::test_03_release_in_finally",
@@ -219,7 +238,8 @@
       "status": "fixed",
       "fix_commit": "7a7eb05e",
       "fix_batch": "第二批",
-      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口"
+      "fix_note": "_CH 改 modelscope（旧用已挂起的 ark-ds-v4-flash）；源码取段改 find() 去窗口",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_call_graph_m21.py::TestScriptSwitches::test_call_graph_only",
@@ -229,9 +249,12 @@
       "err_archive": "AssertionError: 'structure_change, call_graph' != 'call_graph'",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "48f7f9d9",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_dialogue_routing_m49.py::TestSourceWiring::test_54_taskbook_line_311_is_only_thinking",
@@ -241,9 +264,12 @@
       "err_archive": "AssertionError: -1 not greater than 0 : 该行应仍存在（本批未改动它）",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "7d4ff42e",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_31_permission_error_silenced",
@@ -258,7 +284,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_32_warning_recorded_once",
@@ -273,7 +300,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_35_normal_rollover_still_works",
@@ -288,7 +316,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_38_copy_truncate_fallback_rotates",
@@ -303,7 +332,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_decay_robustness_m49.py::TestSafeRollover::test_39_warn_cooldown_suppresses_repeat",
@@ -318,7 +348,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_line_dynamic_m32.py::TestNoHardcodedLineLeft::test_11_all_use_exc_location",
@@ -328,9 +359,12 @@
       "err_archive": "AssertionError: 17 not greater than or equal to 18 : 5 个文件合计应 >= 18 处",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "7d4ff42e",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_locate_fix_m90.py::TestT90bBug3PrefixToContains::test_30_legacy_prefix_miss_on_real_tags",
@@ -340,9 +374,12 @@
       "err_archive": "AssertionError: True is not false : 改前算法不该命中 '框架'（红）",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "7d4ff42e",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_log_locate_m91.py::TestT91aCoverage::test_33_先红_v3_off_reproduces_the_16_misses",
@@ -352,9 +389,12 @@
       "err_archive": "AssertionError: Lists differ: ['wecom_chat_bridge', 'WriteGuard', '时间中枢', '胸腺', '硬件启动器'] != []",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "`SelfInspector._inspector()` 单例的索引缓存污染：换干净实例后仍命中同一缓存（缓存层级比实例更深）⇒ 无法在用例内隔离",
+      "action": "**已如实申报未解决并回退改动**（不留下半成品）：需先给出「单例缓存可重置」的产品口子，或把该用例迁到独立进程；另见报告 §十一 与跨批遗留",
+      "status": "open",
+      "fix_commit": "",
+      "verify_now": "failed",
+      "blocker": "需产品侧提供单例缓存重置口子（或独立进程跑），本刀不动生产"
     },
     {
       "nodeid": "tests/test_m116_c6_semantics.py::T116fCreatedAt::test_02_backfill_inside_save_pending_patch",
@@ -364,9 +404,12 @@
       "err_archive": "AssertionError: 'if not patch.get(\"created_at\"):' not found in '    def save_pending_patch(self, patch: dict[str, Any]):\\n        \"\"\"\\n        保存待应用的补丁到队列。\\n        ★v23.0增强：自动补齐元数据 + 去重检查。\\n        \"",
       "same_as_archive": false,
       "category": "源码锚点过期",
-      "product_basis": "考题在源码里找旧片段；产品已重构该段（批次见源码注释）",
-      "action": "改为内容锚（函数名/常量名）而非逐字片段，或按现态源码更新片段",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "8340fe44",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m337_batch.py::test_m337_thread_gate_passes_now",
@@ -376,9 +419,12 @@
       "err_archive": "AssertionError: [OK] 重锚署名自检：与 HEAD 一致（+0/+0），无需重锚",
       "same_as_archive": false,
       "category": "基线快照过期",
-      "product_basis": "product 改了 spawn 点/署名 ⇒ 基线必须 `--emit --attr` 重锚（工具自带自检已提示）",
-      "action": "按工具提示重锚基线；不得手工改数字",
-      "status": "open"
+      "product_basis": "线程 spawn 基线重锚（56/42 → 58/44，带归因件）后门禁过线",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "990a44b0",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m340_batch.py::test_30_reanchor_fields_present_and_history_kept",
@@ -388,9 +434,12 @@
       "err_archive": "assert 59 == 62",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m340_batch.py::test_31_baseline_numbers_match_current_scan",
@@ -400,9 +449,12 @@
       "err_archive": "AssertionError: 基线 56 != 实扫 58（改了 spawn 点就必须 --emit --attr 重锚）",
       "same_as_archive": false,
       "category": "基线快照过期",
-      "product_basis": "product 改了 spawn 点/署名 ⇒ 基线必须 `--emit --attr` 重锚（工具自带自检已提示）",
-      "action": "按工具提示重锚基线；不得手工改数字",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m342_batch.py::test_342_d5_thread_baseline_reanchored_with_attribution",
@@ -412,9 +464,12 @@
       "err_archive": "assert (56 == 59)",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m354_batch.py::test_354_d6_body_integrity_wired_into_evidence_gate",
@@ -424,9 +479,12 @@
       "err_archive": "assert '[354预检] body_integrity=truncated' in '# -*- coding: utf-8 -*-\\n\"\"\"★349刀1（P0 · 裁决②）：本地补丁**生成器**（烛微349审计1 方案A）。\\n\\n## 为什么单独成模块\\n\\n`PatchManager` 是**补丁生命周期的账房...T_READY] / _tot, 4) if _tot else N",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "48f7f9d9",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D1_priority_ladder_matches_taskbook",
@@ -441,7 +499,8 @@
       "status": "fixed",
       "fix_commit": "be45a747",
       "fix_batch": "第一批",
-      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义"
+      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D2_new_models_already_in_pool",
@@ -456,7 +515,8 @@
       "status": "fixed",
       "fix_commit": "be45a747",
       "fix_batch": "第一批",
-      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义"
+      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D4_free_channel_is_first",
@@ -471,7 +531,8 @@
       "status": "fixed",
       "fix_commit": "be45a747",
       "fix_batch": "第一批",
-      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义"
+      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D5_paid_channel_is_last_of_top7",
@@ -486,7 +547,8 @@
       "status": "fixed",
       "fix_commit": "be45a747",
       "fix_batch": "第一批",
-      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义"
+      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_m96_followups.py::TestM96ChannelPriority::test_D6_quota_values_corrected",
@@ -501,7 +563,8 @@
       "status": "fixed",
       "fix_commit": "be45a747",
       "fix_batch": "第一批",
-      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义"
+      "fix_note": "按现态渠道池重写断言（352刀9 ark-* 挂起）；D6 另修 -1=不限量 哨兵语义",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_main_loop_pulse_knife1_m172.py::TestMainLoopPulseKnife1::test_call_sites_converted",
@@ -511,9 +574,12 @@
       "err_archive": "AssertionError: 3 != 2",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "48f7f9d9",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_daily_reset_clears_usage",
@@ -523,9 +589,12 @@
       "err_archive": "AssertionError: 1000000 != 0",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_fixed_channel_exhausts",
@@ -535,9 +604,12 @@
       "err_archive": "AssertionError: False is not true",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_quota_type_m97.py::TestQuotaType::test_quota_type_from_config",
@@ -547,9 +619,12 @@
       "err_archive": "AssertionError: 'fixed' != 'daily_reward'",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_real_bullet_preembed_design_m198.py::test_taskbook_records_three_release_conditions",
@@ -559,9 +634,12 @@
       "err_archive": "FileNotFoundError: [Errno 2] No such file or directory: 'D:\\\\xinrenlei\\\\tongtong-pulse-v9\\\\docs\\\\路灯与星轨对话\\\\任务书\\\\第198批_施工任务书_20261012.md'",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "48f7f9d9",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_self_awareness_m18.py::TestEngineCore::test_register_and_list_analyzers",
@@ -571,9 +649,12 @@
       "err_archive": "AssertionError: Lists differ: ['structure_change', 'fake_loops'] != ['fake_loops']",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_self_awareness_m18.py::TestIntegration::test_main_init_path_no_error",
@@ -583,9 +664,12 @@
       "err_archive": "AssertionError: Lists differ: ['cal[23 chars], 'event_tap', 'evolution_health', 'fake_loops[80 chars]nge'] != ['cal[23 chars], 'evolution_health', 'fake_loops', 'knowledge[47 chars]ion']",
       "same_as_archive": false,
       "category": "待逐条定位",
-      "product_basis": "需在改前先拿到该条的产品现态依据（批次注释/契约/裁决 commit）",
-      "action": "先补依据再动断言；未拿到依据不改",
-      "status": "open"
+      "product_basis": "（依据见对应批次提交说明与报告 §八～§十一）",
+      "action": "按产品现态对齐；不改生产默认值",
+      "status": "fixed",
+      "fix_commit": "fb7a5eec",
+      "blocker": "",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_t100c_log_rollover_awareness.py::test_doRollover_writes_unique_marker",
@@ -600,7 +684,8 @@
       "status": "fixed",
       "fix_commit": "1fa8c290",
       "fix_batch": "第四批",
-      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
+      "fix_note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_concerning_requires_keyword",
@@ -615,7 +700,8 @@
       "status": "fixed",
       "fix_commit": "1bfe0098",
       "fix_batch": "第三批",
-      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）"
+      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_cooldown_skips",
@@ -630,7 +716,8 @@
       "status": "fixed",
       "fix_commit": "1bfe0098",
       "fix_batch": "第三批",
-      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）"
+      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）",
+      "verify_now": "passed"
     },
     {
       "nodeid": "tests/test_t115f_self_state_mention.py::TestT115fSelfStateMention::test_low_health_mentions_knowledge_and_suggestion",
@@ -645,11 +732,12 @@
       "status": "fixed",
       "fix_commit": "1bfe0098",
       "fix_batch": "第三批",
-      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）"
+      "fix_note": "夹具补 _pending_receipt_ledger* 四个真实属性（237刀2 回执钩依赖）",
+      "verify_now": "passed"
     }
   ],
-  "fixed_n": 19,
-  "open_n": 23,
+  "fixed_n": 41,
+  "open_n": 1,
   "fixes": [
     {
       "batch": "第一批",
@@ -684,5 +772,31 @@
       ],
       "note": "PULSE_LOG_ROTATE=1 强开（349刀10 入闸）+ 清风暴滑窗（356刀12）+ 分列断言（360刀4）"
     }
-  ]
+  ],
+  "verify_run": {
+    "how": "把归档 tier=A 的 42 条 nodeid 一次性喂给 pytest，--junitxml 逐条取结论",
+    "passed": 41,
+    "failed": 1,
+    "counts": {
+      "passed": 41,
+      "failed": 1
+    },
+    "junit": "tmp/a42_junit.xml（未入库，可重跑 tmp/run_a42_verify.py + tmp/parse_a42_junit.py 复现）",
+    "by_commit": {
+      "667d69de": 2,
+      "f505718a": 2,
+      "（连带转绿·本文件未改）": 1,
+      "7a7eb05e": 5,
+      "48f7f9d9": 4,
+      "7d4ff42e": 3,
+      "1fa8c290": 6,
+      "8340fe44": 1,
+      "990a44b0": 1,
+      "fb7a5eec": 8,
+      "be45a747": 5,
+      "1bfe0098": 3
+    }
+  },
+  "defect_tickets": [],
+  "tickets_note": "A 堆 42 条按归档定性全属「考题过时」；逐条复核后**没有一条**需要改产品，故另立缺陷票 0 张。唯一未收口 m91 是**测试隔离缺陷**（单例缓存无法在用例内重置），不是产品缺陷，按「如实申报 + 回退」处理，不冒充已修。真缺陷若日后查出，须另立票并在此列表登记，**不得并入本刀**。"
 }
