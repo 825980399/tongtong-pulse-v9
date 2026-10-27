@@ -190,6 +190,47 @@ def extract_handlers_v2(src, path="<unknown>"):
     return out
 
 
+def extract_unclassified(src, path="<unknown>"):
+    """★374刀7（D10）：被 `_kind_of` 判 None 而**从判据里消失**的 handler。
+
+    `_kind_of` 只认 pass / ret / assign / cont / break 五种「整体同形」。handler 体里
+    只要多出一句无法归类的语句（典型形态：先留痕/加点数/改状态，末尾
+    `pass` / `continue` / `break` / `return`），整条就被判 None ⇒ 既不进静默清单、
+    也不进任何报表，**人看不见它存在**。票面（D10「条目静默消失」）说的就是这个。
+
+    本刀**只做可见化，不改判据边界**：这些 handler 单独成桶并带上末句形态输出
+    （`tail_swallow` 标记末句是否 `Pass/Continue/Break/Return`）。
+
+    为什么不顺手把它们归进 pass/cont/break？实测全仓这类有 **147 条**（含 `config.py`
+    之类热点文件），一加宽就等于把 cw2 门禁的静默基线整体抬高——
+    `ci_common.extract_handlers` 是**门禁侧的尺子**，扩它的分母属「改尺子」，
+    须另报裁决单独立项，不在本刀夹带。这里给出可裁数据，裁决前不擅动。
+    """
+    out = []
+    tree = ast.parse(src)
+    funcs = [(n.lineno, n.end_lineno or n.lineno, n.name)
+             for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    handlers = sorted([n for n in ast.walk(tree) if isinstance(n, ast.ExceptHandler)],
+                      key=lambda n: n.lineno)
+    for h in handlers:
+        if _has_report(h):
+            continue
+        if _kind_of(h.body) is not None:
+            continue
+        _last = h.body[-1] if h.body else None
+        out.append({
+            "path": path.replace("\\", "/"),
+            "qualname": _enclosing_func(funcs, h.lineno),
+            "lineno": h.lineno,
+            "tname": ast.unparse(h.type) if h.type else "bare",
+            "stmts": len(h.body),
+            "last": type(_last).__name__ if _last is not None else "empty",
+            "tail_swallow": isinstance(_last, (ast.Pass, ast.Continue, ast.Break,
+                                               ast.Return)),
+        })
+    return out
+
+
 def _v2_identity(fp):
     return (fp["path"], fp["qualname"], fp["nth"], fp["tname"], fp["kind"], fp["sha16"])
 
@@ -220,11 +261,16 @@ def read_src(rel):
         return f.read()
 
 
+#: ★374刀7：最近一次 `scan()` 收集到的「判 None 而消失」的 handler（供报表/调试）。
+LAST_UNCLASSIFIED: list = []
+
+
 def scan(scope="prod"):
     files = git_ls_files_py()
     if scope == "prod":
         files = [f for f in files if in_prod(f)]
     old, new, parse_err = [], [], []
+    _uncl: list = []
     for rel in files:
         src = read_src(rel)
         if not src:
@@ -236,9 +282,14 @@ def scan(scope="prod"):
             _LOG.warning("旧判据解析失败 %s: %s", rel, _e)
         try:
             new.extend(extract_handlers_v2(src, rel))
+            # ★374刀7（D10）：判 None 的 handler 也收进桶里，不让它无声消失。
+            #   与 v2 共用同一个 try：本文件自己的「零静默 handler」断言
+            #   （m364 test_tool_file_has_no_silent_handler）不许再多一个 except。
+            _uncl.extend(extract_unclassified(src, rel))
         except SyntaxError as _e:
             parse_err.append((rel, "v2", str(_e)))
             _LOG.warning("新判据解析失败 %s: %s", rel, _e)
+    LAST_UNCLASSIFIED[:] = _uncl
     return files, old, new, parse_err
 
 
@@ -337,6 +388,12 @@ def main():
         } for x in added if x["tname"] in CONTROL_FLOW_TNAMES and x["kind"] in ("cont", "break")],
         "added_control_flow_count": sum(
             1 for x in added if x["tname"] in CONTROL_FLOW_TNAMES and x["kind"] in ("cont", "break")),
+        # ★374刀7（D10）：判 None 而消失的 handler —— 必须**有数可看**
+        "unclassified_count": len(LAST_UNCLASSIFIED),
+        "unclassified_tail_swallow": sum(
+            1 for x in LAST_UNCLASSIFIED if x["tail_swallow"]),
+        "unclassified_by_last": _by("last", LAST_UNCLASSIFIED),
+        "unclassified_sample": LAST_UNCLASSIFIED[:20],
         "removed_count": len(removed),
         "removed_sample": [list(handler_identity(x)) for x in removed[:20]],
         "baseline_total": len(base),
@@ -351,8 +408,12 @@ def main():
         with open(args.out_json, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
     print(json.dumps({k: v for k, v in report.items()
-                      if k not in ("added", "baseline_migration")}, ensure_ascii=False, indent=2))
+                      if k not in ("added", "baseline_migration",
+                                   "unclassified_sample")},
+                     ensure_ascii=False, indent=2))
     print(f"[added] {len(added)} 条（详见 --out-json）")
+    print(f"[unclassified] {len(LAST_UNCLASSIFIED)} 条判 None 而消失"
+          f"（其中末句吞控制流 {report['unclassified_tail_swallow']} 条）")
     return 0
 
 
