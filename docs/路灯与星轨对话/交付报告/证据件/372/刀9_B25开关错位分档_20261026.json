@@ -90,13 +90,13 @@
     "tests/test_m187_blade2_graph_adjacency.py": "3 passed",
     "tests/test_main_loop_pulse_knife8_m163.py": "4 passed",
     "tests/test_m92_gate2_label.py": "9 passed, 3 skipped",
-    "tests/test_m92_patch_guards.py": "28 passed, 1 skipped, 1 failed（G5=tier C，本刀不并入）",
+    "tests/test_m92_patch_guards.py": "28 passed, 1 skipped, 1 failed（G5=tier C，本刀不并入） → ★2026-10-27 补收：29 passed, 1 skipped（G5 已收口）",
     "tests/test_m92_switch_registry.py": "14 passed, 3 skipped",
     "tests/test_m93_apply_guard.py": "16 passed, 3 skipped, 6 xfailed",
     "tests/test_m96_followups.py": "38 passed, 1 skipped, 4 xfailed"
   },
   "out_of_scope": [
-    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G5_corpus_zero_false_block_by_judgement（归档 tier=C id=86，命中面 10 条 > 上限 3 ⇒ 判据过宽，属 C 堆真缺陷面，本刀不并入）",
+    "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G5_corpus_zero_false_block_by_judgement（归档 tier=C id=86，命中面 10 条 > 上限 3 ⇒ 判据过宽，属 C 堆真缺陷面，本刀不并入）　★2026-10-27 补收口：tier 由 C 改 A（判据本身无缺陷、考题数量上限过时），已改为形态断言；见 followup_20261027",
     "U 档另 30 条测试间污染（归 D7 测试隔离专项）"
   ],
   "rows": [
@@ -406,5 +406,20 @@
       "product_basis": "MAIN_LOOP_PULSE_ENABLED 现态 True（第163批双P0活体验证定稿 commit d27ac1e7「三灰度开关落盘 True」）",
       "action": "assertFalse → assertTrue（方法名沿用归档 nodeid 作对账锚点）"
     }
-  ]
+  ],
+  "followup_20261027": {
+    "what": "G5（归档 tier=C id=86）补收口",
+    "tier_change": "C → A（判据本身无缺陷，是考题把判据绑在活体语料条数上）",
+    "evidence": [
+      "corpus 实测 93 条（用例 docstring 旧称 72 条早已漂移），命中 10 条",
+      "10 条 base 落差全为 -8（original=8 → modified=0），形态同构：modified 首个可执行行是 col 0 的 def …(self): / import … —— 即 91d 事故『类方法被 dedent 成模块级』",
+      "3 条 applied=True 均为 92 批之前（守卫尚不存在时）入库的历史样本：2 条带 correction_* 事后纠正记录、1 条走 rebuilt 路径 ⇒ 不构成『守卫漏放』"
+    ],
+    "why_not_c_tier": "corpus 是运行期 live 数据（data/patches/pending_patches.json + patch_history.json，条数随 LLM 产出增长）；用绝对条数当判据等于把测试绑在活体数据上（A2 锁易变精确值），语料一长必然红，且红了也说明不了判据好坏",
+    "change": "删 assertLessEqual(len(_hit), 3)；改形态断言 set(base(original)-base(modified)) == {8}（空集同样红 ⇒ 事故样本被清理也报出）",
+    "reverse_verification": "判据改 {9} ⇒ FAILED；还原后 ⇒ 1 passed；还原字节相等 True",
+    "rerun": "tests/test_m92_patch_guards.py → 29 passed, 1 skipped（skip=.bak_batch92 缺失，原设计）",
+    "probe_artifacts": "tmp/g5_probe.json / tmp/g5_status.json（探针，不含于 git）",
+    "note": "本文件 verify_runs / out_of_scope 保留 2026-10-26 时点原文，未篡改历史结论"
+  }
 }

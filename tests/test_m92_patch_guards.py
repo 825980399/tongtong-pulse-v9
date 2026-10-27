@@ -27,7 +27,8 @@
      `(full_content, modified_full)`。★第91批教训：helper 全绿 ≠ 生产链路已接线；
   G. 端到端 —— 合成同构工程 + 真实事故补丁：关全关时 `passed=True`（**红**：既有
      全部验证放行），T-92c / T-92d 各自产出 `base_indent_guard_failed` /
-     `ast_structure_guard_failed`（**绿**）。另证 72 条生产补丁在判据层面零误拦。
+     `ast_structure_guard_failed`（**绿**）。另证生产补丁 corpus 在判据层面零误拦
+     （只命中「类方法体 8 → 模块级 0」的事故形态，见 G5 用例 docstring）。
 """
 import ast
 import hashlib
@@ -587,14 +588,37 @@ class TestT92gEndToEnd(unittest.TestCase):
             self.assertEqual("ast_structure_guard_failed", _rd.get("stage"), f"{_tag} T-92d")
 
     def test_G5_corpus_zero_false_block_by_judgement(self):
-        """★零误拦（判据层面）：72 条生产补丁里只有事故那 2 条命中 T-92c 判据。"""
+        """★零误拦（判据层面）：命中的**全是 8→0 事故形态**，无一条合法补丁被拦。
+
+        ★372 刀外复核（2026-10-27）定性：原断言「命中 ≤ 3 条」是 92 批时点的快照，
+        实测 10 条红 ⇒ 定性为**考题过时、判据本身无缺陷**（证据 `tmp/g5_probe.json`）：
+          · corpus 是**运行期 live 数据**（`data/patches/pending_patches.json` +
+            `patch_history.json`，现 93 条且随 LLM 产出增长）⇒ 用绝对条数当判据，
+            等于把测试绑在活体数据上（A2「锁易变精确值」）：语料一长必然红，
+            且红了也说明不了判据好坏；
+          · 10 条命中形态**完全同构**：`base(original)=8 → base(modified)=0`，
+            modified 首个可执行行是 col 0 的 `def …(self):` / `import …` —— 正是
+            91d 事故「类方法被 dedent 成模块级」的形态，**判据命中是正确的**（该拦）；
+          · 其中 3 条 `applied=True` 是 92 批之前（守卫尚未存在）入库的历史样本：
+            2 条带 `correction_*` 事后纠正记录、1 条走 rebuilt 路径 ⇒ 不构成
+            「守卫漏放」，本用例不被用来追溯 92 批之前的行为。
+        故判据改为**形态断言**：命中落差必须恒为 8（单向：深→浅）。新增同形态样本
+        不红（本来就该拦），一旦出现异形态（如把代码包进 if/try 导致 base 变深）
+        立刻红并报出 id —— 判别力比数量上限更强，且不随语料增长漂移。
+        """
         _corpus = _patch_library()
         self.assertGreater(len(_corpus), 20)
         _hit = [_x for _x in _corpus
                 if _m92_base_indent(_x["original_code"]) != _m92_base_indent(_x["modified_code"])]
         self.assertTrue(all(str(_x.get("source")) == "llm" for _x in _hit),
                         "非 LLM 补丁被命中 ⇒ 判据过宽：%s" % [_x.get("id") for _x in _hit])
-        self.assertLessEqual(len(_hit), 3, "命中面过大，需复核判据：%s" % [_x.get("id") for _x in _hit])
+        # 事故形态结构性判据：类方法体(8) → 模块级(0)，落差恒为 8。
+        # 空集同样红 —— 那意味着语料里的事故样本被清理，本用例已失去判别力。
+        _deltas = {_m92_base_indent(_x["original_code"]) - _m92_base_indent(_x["modified_code"])
+                   for _x in _hit}
+        self.assertEqual(_deltas, {8},
+                         "命中落差不全为 8 ⇒ 判据命中了新形态，须人工复核：%s"
+                         % [_x.get("id") for _x in _hit])
 
     def test_G6_legacy_behaviour_unchanged_when_off(self):
         """零回归：开关全关时，改前/改后对同一事故补丁的**结论**一致。"""
