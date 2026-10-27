@@ -1,0 +1,495 @@
+{
+ "scope": "静态 AST 判据：路径链首段==data 且基准∈{项目根, 相对字面量, data 常量} 才算指向生产数据区；基准为 tmp_path/tempfile/*_td 判 TMP；基准为函数调用结果判 UNKNOWN 且**不计入**生产面；只认显式写类调用（不含 json.dumps、不含 is_*/check_* 判定函数）；reject_write/guard_write 单列 via_guard（测守卫≠真写，测试类环境守卫一律拒写）；扫描面=tests/test_*.py；标记判定=装饰器精确匹配 pytest.mark.production_data",
+ "counts": {
+  "marked": 15,
+  "touch_prod": 30,
+  "marked_and_touch": 9,
+  "over_marked": 6,
+  "missing_mark": 21
+ },
+ "over_marked": [
+  {
+   "file": "test_patch_auto_approve_m53.py",
+   "qual": "TestThresholdSourceWiring",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  },
+  {
+   "file": "test_report_disk_prune_m51.py",
+   "qual": "TestPruneDisk",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  },
+  {
+   "file": "test_report_disk_prune_m51.py",
+   "qual": "TestCleanupTool",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  },
+  {
+   "file": "test_reprobe_diff_scope_m55.py",
+   "qual": "TestForceRecompute",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  },
+  {
+   "file": "test_write_guard_m44.py",
+   "qual": "TestExperiencePoolGuard",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  },
+  {
+   "file": "test_write_guard_m44.py",
+   "qual": "TestPatchManagerGuard",
+   "marked": true,
+   "writes": [],
+   "reads": [],
+   "bases": [],
+   "kind": "none"
+  }
+ ],
+ "missing_mark": [
+  {
+   "file": "test_b156_6_log_isolation.py",
+   "qual": "TestDataReportsIsolation",
+   "marked": false,
+   "writes": [
+    "reject_write(_p, explicit=False, component='B156-6-test')",
+    "reject_write(_p, explicit=True, component='B156-6-test')"
+   ],
+   "reads": [],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "via_guard"
+  },
+  {
+   "file": "test_b1_strict_verdict_m165.py",
+   "qual": "TestProductionStrict",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(cls.TARGET)",
+    "open(cls.TARGET, encoding='utf-8')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_data_access_layer.py",
+   "qual": "test_read_json_corrupt_backup_naming",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isdir(corrupted_dir)",
+    "os.path.isdir(corrupted_dir)",
+    "os.listdir(corrupted_dir)"
+   ],
+   "bases": [
+    "PROD",
+    "TMP"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_dialog_evol_m84.py",
+   "qual": "TestM84PatchLedger",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.exists(_data)",
+    "os.path.getmtime(_data)",
+    "os.path.exists(_data)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_knife10_toolreg_persist_m162.py",
+   "qual": "test_load_missing_file_returns_zero",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "_r.load('data/__nonexistent_tool_registry__.json')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m354_batch.py",
+   "qual": "test_354_d1_no_write_to_production_snapshot",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.stat(_main)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_m354_batch.py",
+   "qual": "test_354_d6_stock_replay_zero_rejected",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "io.open(os.path.join(_ROOT, 'data', 'patches', 'pending_patches.json'), encoding='utf-8')"
+   ],
+   "bases": [
+    "UNKNOWN"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m354_batch.py",
+   "qual": "test_354_d7_pending_all_have_dedup_key",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "io.open(os.path.join(_ROOT, 'data', 'patches', 'pending_patches.json'), encoding='utf-8')"
+   ],
+   "bases": [
+    "UNKNOWN"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m354_batch.py",
+   "qual": "test_354_d7_key_v2_dedup_by_real_method",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "io.open(os.path.join(_ROOT, 'data', 'patches', 'pending_patches.json'), encoding='utf-8')"
+   ],
+   "bases": [
+    "UNKNOWN"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m355_batch.py",
+   "qual": "test_355_d0_snapshot_manifest_consistent",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(keep)",
+    "os.path.getsize(keep)",
+    "os.path.exists(drop)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_m355_batch.py",
+   "qual": "test_355_d0_main_snapshot_loadable_head",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(p)",
+    "io.open(p, 'rb')",
+    "io.open(p, 'rb')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m356_batch.py",
+   "qual": "test_356_batch_accounts",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "io.open(os.path.join(_ROOT, 'data', 'patches', 'pending_patches.json'), encoding='utf-8')",
+    "io.open(os.path.join(_ROOT, 'data', 'patches', 'applied_355.json'), encoding='utf-8')"
+   ],
+   "bases": [
+    "UNKNOWN"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m356_batch.py",
+   "qual": "test_356_d14_pool_keys_unique_and_dialect_clean",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "io.open(_p, encoding='utf-8')"
+   ],
+   "bases": [],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m356_batch.py",
+   "qual": "test_356_d14_map_and_merged_archive_exist",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_m)",
+    "os.path.isfile(_a)",
+    "io.open(_m, encoding='utf-8')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m371_b3_three_gates.py",
+   "qual": "TestSnapshotConsistency",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.walk(os.path.join(ROOT, 'data'))"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m94_dependency_layers.py",
+   "qual": "TestM94ProductionSnapshot",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_PROD_SNAP)",
+    "open(_PROD_SNAP, encoding='utf-8')",
+    "os.path.isfile(_PROD_SNAP)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_m94_pending_aging.py",
+   "qual": "TestM94Production",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_PENDING_REAL)",
+    "open(_PENDING_REAL, encoding='utf-8')",
+    "os.path.isfile(_HISTORY_REAL)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_patch_auto_approve_m53.py",
+   "qual": "TestEnqueueAutoApprove",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(p)",
+    "open(p, encoding='utf-8')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_report_bus_m47.py",
+   "qual": "TestBackwardCompat",
+   "marked": false,
+   "writes": [],
+   "reads": [
+    "os.path.isdir(_d)",
+    "os.path.isdir(_d)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_write_guard_m51.py",
+   "qual": "TestRejectMatrix",
+   "marked": false,
+   "writes": [
+    "wg.reject_write(_PROD)"
+   ],
+   "reads": [],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "via_guard"
+  },
+  {
+   "file": "test_write_guard_m51.py",
+   "qual": "TestLogging",
+   "marked": false,
+   "writes": [
+    "wg.guard_write(_PROD, component='UT_M51')",
+    "wg.reject_write(_PROD)",
+    "wg.guard_write(_PROD, component='UT_M51_nr')"
+   ],
+   "reads": [],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "via_guard"
+  }
+ ],
+ "marked_ok": [
+  {
+   "file": "test_experience_summary_hemostasis_m47.py",
+   "qual": "TestProductionNotTouched",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_p)",
+    "open(_p, encoding='utf-8')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_hemostasis_verify_m48.py",
+   "qual": "TestProductionState",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(self.POOL)",
+    "os.path.getsize(self.POOL)",
+    "os.path.getmtime(self.POOL)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_patch_active_reprobe_m51.py",
+   "qual": "TestProductionSmoke",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_p)",
+    "open(_p, encoding='utf-8')",
+    "os.path.isfile(_p)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_patch_auto_approve_p1_m54.py",
+   "qual": "TestStatusCleanupT31",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.exists(_hist)",
+    "open(_hist, encoding='utf-8')"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_patch_dedup_m43.py",
+   "qual": "TestArtifacts",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_p_)",
+    "open(_p_, encoding='utf-8')",
+    "os.path.isfile(_p_)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_patch_verification_split_m47.py",
+   "qual": "TestProductionBackfilled",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(cls.TARGET)",
+    "open(cls.TARGET, encoding='utf-8')",
+    "os.path.isdir(_d)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_report_bus_wiring_m50.py",
+   "qual": "TestWriteGuardNotBypassed",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(_ap)",
+    "os.path.getsize(_ap)",
+    "os.path.isfile(_ap)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "existence_only"
+  },
+  {
+   "file": "test_serp_cleanup_m50.py",
+   "qual": "TestProductionState",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isfile(self.POOL)",
+    "os.path.getmtime(self.POOL)",
+    "os.path.isfile(self.POOL)"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  },
+  {
+   "file": "test_write_guard_m44.py",
+   "qual": "TestPollutionArchive",
+   "marked": true,
+   "writes": [],
+   "reads": [
+    "os.path.isdir(_base)",
+    "glob.glob(os.path.join(_ROOT, 'data', '_archive', 'test_pollution', '*', 'MANIFEST.json'))"
+   ],
+   "bases": [
+    "PROD"
+   ],
+   "kind": "content_read"
+  }
+ ]
+}
