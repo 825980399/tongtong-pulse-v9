@@ -1,0 +1,86 @@
+{
+  "ticket": "T-371-回滚备份失效-1",
+  "batch": "375 刀5",
+  "generated_at": "2026-10-27 21:57:06",
+  "source": "data/patches/patch_history.json（只读，未写盘）",
+  "scope": "只判备份是否可读（目录非空 / 文件存在），不判备份内容与补丁前内容是否一致；空 backup_path 判不可回滚；扫描面=data/patches/patch_history.json 的 applied 条目",
+  "audit": {
+    "scope": "只判备份是否可读（目录非空 / 文件存在），不判备份内容与补丁前内容是否一致；空 backup_path 判不可回滚；扫描面=data/patches/patch_history.json 的 applied 条目",
+    "applied": 76,
+    "marked_rollbackable": 76,
+    "effective_rollbackable": 20,
+    "marked_but_missing": 56,
+    "unmarked_but_present": 0,
+    "missing_reasons": {
+      "backup_missing": 56
+    },
+    "missing_sample": [
+      {
+        "id": "patch_1788744800_b98",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153613",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788744813_1de",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153615",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788590332_d15",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153616",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788765051_7ff",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153618",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788590358_74b",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153620",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788744789_612",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153622",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788745747_92c",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260907_153623",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788797016_0d3",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260908_083624",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788797029_1b8",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260908_083625",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788784192_a62",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260908_083627",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788773456_c17",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260908_083629",
+        "reason": "backup_missing"
+      },
+      {
+        "id": "patch_1788773469_2a4",
+        "backup_path": "i\\tongtong-pulse-v9\\data\\code_backups\\backup_20260908_083630",
+        "reason": "backup_missing"
+      }
+    ]
+  },
+  "reconcile_dry_run": {
+    "apply": false,
+    "changed": 56,
+    "note": "dry-run：未改任何字段（本批不改审计池数据）"
+  },
+  "conclusion": "applied 全部标 rollback_available=True，但备份物理可读仅占一部分；标 True 而备份缺失的条目物理不可回滚。根因=标记是写入时刻真话、后续备份被保留策略清理而无复核口。本刀：新写入点先实测再置标记；存量只出清单不改账。"
+}

@@ -4440,7 +4440,35 @@ class PatchManager:
                     #   派单侧的 set_status(FIXED) 已改为只认本字段。
                     patch["landed"] = True
                     patch["landed_at"] = patch["applied_at"]
-                    patch["rollback_available"] = True
+                    # ★375刀5：可回滚标记改为**实测**后再置。存量实测（375 刀5）：
+                    #   applied=76 条**全部**标 True、**全部**有 backup_path，
+                    #   但备份物理可读只有 20 条 —— 56 条早被 code_backups 保留策略清掉。
+                    #   标记是「写入那一刻的真话」，坏在没有复核口 ⇒ 备份被清后仍标 True，
+                    #   把 patch_lifecycle「无回滚能力不得进 activated」的硬点架空。
+                    #   这里在置标记的同一时刻判一次物理可读性，新产出的记录不再有假可回滚；
+                    #   存量历史账本刀不动（任务书：不改审计池数据）。
+                    try:
+                        from nucleus.evolution.rollback_audit import (
+                            F_UNAVAILABLE_REASON as _M375_RB_REASON,
+                        )
+                        from nucleus.evolution.rollback_audit import (
+                            backup_present as _m375_bp,
+                        )
+                        _m375_rb_ok, _m375_rb_why = _m375_bp(patch)
+                    except Exception as _m375_rbe:
+                        # 审计件不可用不得反过来把应用判失败：退回原语义并留痕
+                        silent_exc(
+                            _m375_rbe,
+                            where="PatchManager::apply_all_pending 375刀5 回滚实测",
+                            level="warning")
+                        _m375_rb_ok, _m375_rb_why = True, "audit_unavailable"
+                    patch["rollback_available"] = bool(_m375_rb_ok)
+                    if not _m375_rb_ok:
+                        patch[_M375_RB_REASON] = _m375_rb_why
+                        _module_logger.warning(
+                            "[375刀5] 补丁%s 备份不可读（%s），rollback_available 置 False：%s",
+                            str(patch.get("id", ""))[:12], _m375_rb_why,
+                            str(patch.get("backup_path", ""))[-60:])
                     # ★372刀3（裁决 A3）：FIXED 改由**落地成功**触发 —— 就是这个时刻。
                     #   改前挂在派单循环的沙箱 success 上（沙箱不碰源码），
                     #   审计"已修"提前于落地。这里 os.replace 已落盘，才是真落地。
