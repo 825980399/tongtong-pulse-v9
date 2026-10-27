@@ -104,11 +104,19 @@ def test_342_d3_k2_verdict_is_safety_based():
 
 
 def test_342_d3_arch_ticket_written():
-    """进程池并行架构票已出（只设计不实现）。"""
-    _p = os.path.join(ROOT, "tmp", "p342_root", "k2_arch_ticket.md")
-    if not os.path.exists(_p):
-        import pytest
-        pytest.skip("架构票在 tmp/（gitignored），本机外不可见")
+    """进程池并行架构票已出（只设计不实现）。
+
+    ★375刀2：票已落 git 副本 `docs/路灯与星轨对话/架构/K2进程池架构票_20261027.md`。
+    判据改为**优先读 git 副本** —— 原判据只看 tmp/（gitignored），换机/换窗口后
+    文件不存在 ⇒ 永远 skip，等于判据不存在（铁律159「赦免须可达」同型）。
+    """
+    _cands = [
+        os.path.join(ROOT, "docs", "路灯与星轨对话", "架构",
+                     "K2进程池架构票_20261027.md"),
+        os.path.join(ROOT, "tmp", "p342_root", "k2_arch_ticket.md"),
+    ]
+    _p = next((_x for _x in _cands if os.path.exists(_x)), None)
+    assert _p, "架构票在两处都不存在（git 副本与 tmp 均缺）"
     _t = io.open(_p, encoding="utf-8").read()
     for _sec in ("可行性", "影响面", "分叉"):
         assert _sec in _t
