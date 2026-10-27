@@ -2711,6 +2711,10 @@ def get_m365_close_loop_stats() -> dict:
 #:   改前这里的 `success` 直接触发 `set_status(FIXED)`，而沙箱注释明写
 #:   "绝不 apply 到源码" ⇒ 审计「已修」提前于落地。现把两件事拆开各记各的。
 _M372_SANDBOX_ONLY = {"n": 0}
+# ★373刀5：O3 双标通道同型计数 —— 沙箱成功但未落地（applied 不置位）。
+#   与 `_M372_SANDBOX_ONLY` 分开记：两者是**不同通道**（主流程 dispatch vs O3 确认后派单），
+#   合成一个数就分不清「哪个通道还在提前置位」。
+_M373_O3_SANDBOX_ONLY = {"n": 0}
 
 
 def _m372_landed_ok(patch) -> bool:
@@ -3309,9 +3313,31 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
         _p["o3_dispatched_at"] = time.time()
         _p["o3_dispatch_attempts"] = int(_p.get("o3_dispatch_attempts") or 0) + 1
         if _v.get("success"):
-            _p["applied"] = True
-            _p["applied_at"] = time.time()
-            _p["o3_dispatch_verdict"] = "applied"
+            # ★373刀5（与 372 刀3 同型 · 裁决 A3）：沙箱成功 ≠ 源码落地。
+            #   原实现沙箱一成功就置 `applied=True/applied_at=now`，把"沙箱跑通"
+            #   冒充"补丁已落到源码" —— 与 372 刀3 修掉的 `:2846-2857` 是同一个错误，
+            #   只是发生在 O3 确认后派单这条**独立通道**上（主流程改了它没改）。
+            #   现在：沙箱结果独立留痕（sandbox_ok / sandbox_ok_at），
+            #   `applied` 只认 `landed is True`（与主流程共用同一判据 `_m372_landed_ok`）。
+            _p["sandbox_ok"] = True
+            _p["sandbox_ok_at"] = _v.get("executed_at") or time.time()
+            if _m372_landed_ok(_p):
+                _p["applied"] = True
+                # 落地时间优先取既有值（PatchManager 真落地时写的 applied_at/landed_at），
+                # 都没有才用当前时刻 —— 不能拿"本次派单时刻"冒充落地时刻。
+                _p["applied_at"] = (_p.get("applied_at") or _p.get("landed_at")
+                                    or time.time())
+                _p["o3_dispatch_verdict"] = "applied"
+            else:
+                # `sandbox_only` 是**新增取值**：消费方 `self_inspector` 只认
+                # `== "applied"`（等值判据），故新增取值不会被误判成已应用。
+                _p["o3_dispatch_verdict"] = "sandbox_only"
+                _M373_O3_SANDBOX_ONLY["n"] = int(_M373_O3_SANDBOX_ONLY.get("n", 0)) + 1
+                _module_logger.debug(
+                    "[373刀5] O3 沙箱成功但未落地 ⇒ 不置 applied: patch=%s file=%s"
+                    "（累计 o3_sandbox_only=%d；落地由 apply_all_pending 触发热路径）",
+                    str(_p.get("id") or "")[:24], _p.get("file"),
+                    _M373_O3_SANDBOX_ONLY["n"])
         else:
             _p["o3_dispatch_verdict"] = "verify_failed"
         _results.append(_v)
