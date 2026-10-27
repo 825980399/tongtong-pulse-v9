@@ -1788,11 +1788,19 @@ class PatchManager:
                 #   写失败不影响作废主流程（作废照常发生，只留 warning）。
                 try:
                     from nucleus.evolution import criteria_window as _cw
+                    # ★375刀9：作废条目从 pending 池**直接消失**（不写 status、
+                    #   不进 history）⇒ 当日入池计数会**回退**，1/天 限额可被
+                    #   「生成→作废→再生成」绕开。台账必须自带入池标记与**入池
+                    #   时间**，`_m333_intake_rate` 才能按同日口径把它补算回来
+                    #   （缺这两个字段，第三轨就只能瞎猜或虚增）。
                     _cw.note_converge_voided(
                         _it.get("id"), file=str(_it.get("file") or ""),
                         method=_method_name, reason="284刀5 结构缺陷补丁作废",
                         def_name=str(_def_name or ""),
-                        mismatch=bool(_mismatch), no_def=bool(_no_def))
+                        mismatch=bool(_mismatch), no_def=bool(_no_def),
+                        issue_type=str(_it.get("issue_type") or ""),
+                        o3_dead_code=bool(_it.get("o3_dead_code") is True),
+                        generated_at=_it.get("generated_at") or 0)
                 except Exception as _cw_e:                       # noqa: BLE001
                     silent_exc(_cw_e, where="PatchManager::_m280 344作废台账",
                                level="warning")

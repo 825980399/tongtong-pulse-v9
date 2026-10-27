@@ -7227,6 +7227,57 @@ def _m333_intake_rate(project_root: str | None = None,
             _readable += 1
         _all.extend(_items)
 
+    # ★375刀9：**第三轨** —— 作废台账（`data/reports/converge_voided.jsonl`）。
+    #   为什么非要补这一轨（实测缺口）：`PatchManager._m280_converge_pending` 对
+    #   结构缺陷补丁是 `continue` 掉 —— 不写 status、不进 history、条目**直接从
+    #   pending 池消失**。于是作废一条，当日入池计数就少一条 ⇒ 「每天 ≤1 条」可被
+    #   「生成 → 作废 → 再生成」无限绕开。撤销那条路 354刀5 已堵（只改 status、
+    #   不动入池标记），作废这条路当时没堵（它压根不写 status）。
+    #   台账自 344刀2 起 append-only（日志会轮转、台账不会），能用来补算。
+    #   只认台账**自带 O3 标记**的条目（375刀9 起写入）：存量 170 条无标记一律不计
+    #   —— 宁可漏报不虚增（虚增会让限额变严，把正常入池卡住）。
+    #   不复用 `criteria_window.read_converge_voided_ledger`：那个口把 OSError 吞成
+    #   []，分不清「没有台账」与「台账读不了」，而这两件事必须分得开（铁律166）。
+    _voided_rows: list = []
+    _voided_state = "absent"
+    try:
+        from nucleus.evolution.criteria_window import (
+            CONVERGE_VOIDED_LEDGER_REL as _m375_cvrel)
+        # ★基准必须与上两轨**同一个** `_root`：`converge_voided_ledger_path()`
+        #   钉的是「本模块上溯三层」的项目根，不看 `project_root` 参数 ——
+        #   照它读，隔离调用（`project_root=` 临时目录）仍会读到**生产台账**，
+        #   三轨基准分叉（铁律158 路径注入）。相对路径取它的常量，不抄字面量。
+        _voided_p = os.path.join(_root, _m375_cvrel.replace("/", os.sep))
+        if os.path.isfile(_voided_p):
+            _voided_state = "ok"
+            import json as _json2
+            with open(_voided_p, encoding="utf-8", errors="ignore") as _vf:
+                for _ln in _vf:
+                    _ln = _ln.strip()
+                    if not _ln:
+                        continue
+                    try:
+                        _vd = _json2.loads(_ln)
+                    except ValueError as _vje:
+                        # 坏行不阻断（台账 append-only，进程被杀会留半行），
+                        # 但**必须留痕**：不留痕的话「读到 0 条」分不清
+                        # 「没有作废」与「整行都没解析出来」（cw2 也把
+                        # 纯赋值 + continue 判静默）。
+                        silent_exc(_vje, where="self_inspector::_m333 375刀9 台账坏行",
+                                   level="debug")
+                        _voided_state = "bad_lines"
+                        continue
+                    if isinstance(_vd, dict):
+                        _voided_rows.append(_vd)
+    except Exception as _ve:
+        # 台账读不了 ⇒ 记 unreadable，**不填 0**（填 0 会被读成「没有作废」）
+        silent_exc(_ve, where="self_inspector::_m333 375刀9 作废台账", level="warning")
+        _module_logger.warning(
+            "[375刀9][入池速率] 作废台账不可读（%s: %s）⇒ 作废条数记「不可算」，"
+            "不填 0", type(_ve).__name__, _ve)
+        _voided_state = "unreadable"
+        _voided_rows = []
+
     _marker_ever = sum(1 for _e in _all if _is_o3(_e))
     _cnt = 0
     # ★348刀2②（75号）：豁免项单独计数——**不是不算，是不进额度**。
@@ -7234,7 +7285,11 @@ def _m333_intake_rate(project_root: str | None = None,
     _exempt = 0
     _exempt_by: dict = {}
     # ★354刀5：两条「限额回退」口径的显式计数（343裁决『实测钉死』补课，烛微 a5 证据）
-    _revoked = 0      # 已撤销但**仍计入**当日额度的条数（撤销不回退）
+    # ★375刀9：撤销口径拆成两个读数 —— 原来只有一个 `_revoked`，且它的计数
+    #   语句放在「348 豁免」之后 ⇒ 与豁免集合有交集的 3 个值（wont_fix /
+    #   cancelled / revoked）走不到那里 ⇒ 恒 0（实现≠生效）。
+    _revoked = 0      # 撤销状态的总条数（**真实计数**，不受豁免影响）
+    _revoked_back = 0  # 其中「被 348 豁免掉 ⇒ 当日额度**实际回退**」的条数
     _restore = 0      # 显式标记 restore、不占额度的条数
     for _e in _all:
         if not _is_o3(_e):
@@ -7244,15 +7299,23 @@ def _m333_intake_rate(project_root: str | None = None,
         if _e.get(_O3_RESTORE_NO_QUOTA_FIELD) is True:
             _restore += 1
             continue
+        # ★375刀9：撤销**先计数**，再判 348 豁免。
+        #   原来这段在豁免之后 ⇒ 与 `_O3_QUOTA_EXEMPT_STATUSES` 有交集的
+        #   `wont_fix/cancelled/revoked` 被豁免 `continue` 掉，撤销分支根本
+        #   走不到 ⇒ `revoked_no_rollback` 对这 3 个值恒 0（假读数）。
+        _is_revoked = str(_e.get("status") or "") in _O3_REVOKED_STATUSES
+        if _is_revoked:
+            _revoked += 1
         _qf, _qr = _m348_quota_exempt(_e)
         if _qf:
             _exempt += 1
             _exempt_by[_qr] = _exempt_by.get(_qr, 0) + 1
+            if _is_revoked:
+                # 撤销了、但 348 豁免让它**不占额度** ⇒ 当日额度实际回退了。
+                # 354刀5 注释说「撤销不回退」，两条集合在这里打架；
+                # 本刀不改判定（改口径会改变当日入池数 ⇒ 交裁决），只把事实数出来。
+                _revoked_back += 1
             continue
-        # ★354刀5①：撤销不回退 —— 撤销只改 status，不动入池标记 ⇒ 当日计数不减。
-        #   这里只做**观测计数并留痕**，不改入池判定（改判定会开绕口子，违反 333 裁定）。
-        if str(_e.get("status") or "") in _O3_REVOKED_STATUSES:
-            _revoked += 1
         _ts = _e.get("generated_at") or _e.get("created_at") or 0
         try:
             _ts = float(_ts or 0)
@@ -7268,6 +7331,42 @@ def _m333_intake_rate(project_root: str | None = None,
             continue
         _cnt += 1
 
+    # ★375刀9：作废条目补算回当日入池数（**不退额度**）。
+    #   三条去重，防虚增（虚增会把正常入池卡死）：
+    #     ① 只认台账自带 O3 标记的条目（存量无标记 ⇒ 不计）；
+    #     ② 同 `patch_id` 多条台账只算 1 条（同一条补丁作废多次仍是「入池过一次」）；
+    #     ③ `patch_id` 仍在两轨里 ⇒ 上面已计过，不双计。
+    #   落窗用 `generated_at`（入池时间），取不到回落到 `ts`（作废时间）——
+    #   用入池时间才与上两轨同口径（否则隔日作废会把昨天的账记到今天）。
+    _voided_back = 0
+    _voided_o3 = 0
+    _voided_dup = 0
+    _live_ids = {str(_e.get("id") or "") for _e in _all if str(_e.get("id") or "")}
+    _seen_vid: set = set()
+    for _vd in _voided_rows:
+        _is_o3v = (_vd.get(_O3_INTAKE_BOOL_FIELD) is True
+                   or str(_vd.get("issue_type") or "") in _O3_INTAKE_ISSUE_TYPES)
+        if not _is_o3v:
+            continue
+        _voided_o3 += 1
+        _vid = str(_vd.get("patch_id") or "")
+        if _vid and (_vid in _seen_vid or _vid in _live_ids):
+            _voided_dup += 1
+            continue
+        if _vid:
+            _seen_vid.add(_vid)
+        _vts = _vd.get("generated_at") or _vd.get("ts") or 0
+        try:
+            _vts = float(_vts or 0)
+        except (TypeError, ValueError) as _vte:
+            silent_exc(_vte, where="self_inspector::_m333 375刀9 作废时间戳",
+                       level="debug")
+            _vts = 0.0
+        if _vts and _vts < _lo:
+            continue
+        _voided_back += 1
+    _cnt += _voided_back
+
     # ★339刀2：四条件可观测化（任一环缺 ⇒ partial_at=段N，不一刀切 false）
     _cc = _m339_consumer_connected([_e for _e in _all if _is_o3(_e)],
                                    project_root=_root)
@@ -7282,6 +7381,9 @@ def _m333_intake_rate(project_root: str | None = None,
                 "consumer_note": (_cc or {}).get("note"),
                 "consumer_proc_gen": (_cc or {}).get("proc_gen"),
                 "reason": "入池数据源两轨皆不可读（不填 0）",
+                # ★375刀9：两轨都读不到 ⇒ 作废补算同样不可信 ⇒ 填 None，不填 0
+                "voided_no_rollback": None, "voided_candidates": None,
+                "voided_ledger": _voided_state,
                 "note": "不可算 ≠ 达标：报告里不得把本项显示为 0"}
     _ok = bool(_cnt <= _O3_INTAKE_MAX_PER_DAY)
     if _marker_ever:
@@ -7294,12 +7396,31 @@ def _m333_intake_rate(project_root: str | None = None,
     _module_logger.info(
         "[354限额] 撤销不回退 n=%d（撤销只改 status，不动入池标记）"
         " restore不占额度 n=%d 当日入池=%d/%d",
-        _revoked, _restore, _cnt, _O3_INTAKE_MAX_PER_DAY)
+        _revoked - _revoked_back, _restore, _cnt, _O3_INTAKE_MAX_PER_DAY)
+    # ★375刀9：撤销口径**分档**留痕 —— 撤销了但额度仍回退的那部分必须单独可见，
+    #   否则「撤销不回退」会把 348 豁免悄悄退掉的额度盖住（铁律166 不同事实不同措辞）。
+    _module_logger.info(
+        "[375限额] 撤销分档 总=%d 真正不回退=%d 撤销但被348豁免(额度已回退)=%d",
+        _revoked, _revoked - _revoked_back, _revoked_back)
+    # ★375刀9：作废口径单独留一行（可 grep）。当日入池数**含**作废补算的条数，
+    #   否则「入池 2 条」与「池里只有 1 条」对不上，读数会被当成计数错。
+    _module_logger.info(
+        "[375限额] 作废不回退 补算=%d（台账 O3 标记 %d / 重复或仍在池 %d / "
+        "台账状态 %s）", _voided_back, _voided_o3, _voided_dup, _voided_state)
     return {"count": int(_cnt), "limit": _O3_INTAKE_MAX_PER_DAY,
             "window_sec": _win, "rate_ok": _ok, "source_ok": True,
             "quota_exempt": _exempt, "quota_exempt_by": dict(_exempt_by),
-            "revoked_no_rollback": int(_revoked),
+            # ★375刀9：`revoked_no_rollback` 收窄为「撤销且仍计入额度」；
+            #   撤销总条数与「撤销但被豁免」各自单列，三者自洽（和不出来的就是错）。
+            "revoked_no_rollback": int(_revoked - _revoked_back),
+            "revoked_total": int(_revoked),
+            "revoked_but_exempt": int(_revoked_back),
             "restore_no_quota": int(_restore),
+            # ★375刀9：作废条目补算回当日额度的条数（**作废不回退**）
+            "voided_no_rollback": int(_voided_back),
+            "voided_candidates": int(_voided_o3),
+            "voided_dup_skipped": int(_voided_dup),
+            "voided_ledger": _voided_state,
             "sources": _srcs, "marker_hits": int(_marker_ever),
             # ★339刀2：**四条件同立才 True**（旧口径只看入池标记）
             "consumer_connected": bool((_cc or {}).get("connected") is True),
