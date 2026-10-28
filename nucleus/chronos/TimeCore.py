@@ -26,6 +26,54 @@ _TIMER_LOCK = threading.Lock()
 _M374_TICK_LOCK = threading.Lock()
 
 
+#: ★380刀1（T-380-tick死信）：已因"零消费者"被跳过的托管任务（每个只记一次，避免每分钟刷屏）。
+_M380_GATED_TICKS: set = set()
+
+
+def _m380_gate_on() -> bool:
+    """灰度开关 `ENABLE_M380_TICK_CONSUMER_GATE`（默认开）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M380_TICK_CONSUMER_GATE", True))
+    except Exception as _e:
+        silent_exc(_e, where="TimeCore::_m380_gate_on")
+        return True
+
+
+def _m380_tick_consumer_ok(field, event_type: str) -> bool:
+    """★380刀1（T-380-tick死信）：托管 tick 只发给**真有消费者**的事件名。
+
+    为什么要在**这一层**挡：三个 tick 的名字写在 `config.TIMECORE_SCHEDULE_CONFIG` 里，
+    源码里 grep 不到字面量（379 批"找不到发布点"的真因），所以改不到"发布点"本身；
+    调度器是它们唯一的共同出口，闸门放这里才是一处管三个。
+    """
+    if not _m380_gate_on():
+        return True
+    try:
+        _fn = getattr(field, "has_real_consumer", None)
+        if _fn is None:
+            return True
+        return bool(_fn(event_type))
+    except Exception as _e:
+        silent_exc(_e, where="TimeCore::_m380_tick_consumer_ok")
+        return True
+
+
+def _m380_note_gated(task_id: str, event_type: str) -> None:
+    """每个任务只记一次 —— 这类 tick 每分钟都可能到期。"""
+    try:
+        _k = str(task_id or "")
+        if _k in _M380_GATED_TICKS:
+            return
+        _M380_GATED_TICKS.add(_k)
+        import logging as _lg
+        _lg.getLogger(__name__).info(
+            "[380刀1] 托管任务 %s 的事件 %s 无真实消费者 ⇒ 停止投递（每任务只记一次）",
+            _k, event_type)
+    except Exception as _e:
+        silent_exc(_e, where="TimeCore::_m380_note_gated", level="debug")
+
+
 class TimeCore:
     """时间中枢内核单例。"""
 
@@ -235,6 +283,9 @@ class TimeCore:
                 field = get_info_field()
                 if field is None:
                     self._log(f"InfoField 尚未就绪，跳过托管任务 {tid}")
+                    continue
+                if not _m380_tick_consumer_ok(field, info["event_type"]):
+                    _m380_note_gated(tid, info["event_type"])
                     continue
                 field.publish({
                     "event_type": info["event_type"],

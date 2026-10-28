@@ -2543,6 +2543,35 @@ class InfoField(SilentLogMixin):
         with self._handled_lock:
             return self._total_handled
 
+    def has_real_consumer(self, event_type: str) -> bool:
+        """★380刀1（T-380-tick死信）：该事件名是否还有**非万能**消费者（真实订阅器官）。
+
+        为什么要这个口：`config.TIMECORE_SCHEDULE_CONFIG` 里有三个 203 批登记的
+        "B类家务"tick（runtime.metrics.collect / metrics.collector.tick /
+        snapshot.rotate.tick），注释写的是"消费侧接线待观察窗" —— 事实是从未接线，
+        于是每 60/300/1800 秒各发一次零消费者脉冲（死信台账里 431 条就是它们）。
+
+        判据与 `dead_events_report()` 内部**同一套**（剔除 `event_types` 含 `*` 或空的
+        万能条件，如血管的 v24.0 通配），不许两处各写一份（铁律：同一事实一个判据）。
+
+        读不到条件表 ⇒ True（保守照发：宁可多发一条脉冲，不可误封业务）。
+        """
+        try:
+            with self._lock:
+                _conds = dict(self._conditions)
+            for _cd in _conds.values():
+                _c = _cd.get("condition", {}) or {}
+                _ets = _c.get("event_types", []) or []
+                if (not _ets) or ("*" in _ets):
+                    continue          # 万能条件不算消费者（264刀1 口径）
+                for _pat in _ets:
+                    if _pat != "*" and self._match_event(event_type, _pat):
+                        return True
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::has_real_consumer")
+            return True
+
     def get_stats(self) -> dict[str, Any]:
         layer_stats = {}
         for layer_tag, pool in self._layer_pools.items():
