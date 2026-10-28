@@ -3232,10 +3232,37 @@ def _m351_watch_zero_break(pending_rows: list, results: list | None,
     try:
         from nucleus.evolution import zero_break_judge as _zb351
         _hrows = _m350_read_history_rows(project_root)
-        _ws = _zb351.watch_batch(_zb351.WATCH_IDS,
+        # ★385刀1：先自愈观察位 —— 384刀2 清零把唯一观察位删掉后，破零判据
+        #   恒返 `not_in_pool` 且那是**正常返回值**（不报警）⇒ 静默失明。
+        #   挂在这里而不是启动钩子：破零只在「有一拍真的派了/没得派」时才有意义，
+        #   与 351 批挂派单出口的理由一致；而且没有可靠的"启动完成"钩子可挂。
+        _heal = _zb351.self_heal_watch(pending_rows, _hrows)
+        # ★385刀1：只在**状态变化**时告警 —— 本函数每拍派单都调，无条件打会刷屏。
+        if _heal.get("changed"):
+            if _heal.get("state") == "healed":
+                _module_logger.warning(
+                    "[385刀1] 破零观察位在 pending 里全失效 ⇒ 已自愈补位:"
+                    " added=%s active=%s",
+                    _heal.get("added"), list(_heal.get("active") or []))
+            elif _heal.get("state") in ("no_candidate", "no_pending"):
+                _module_logger.warning(
+                    "[385刀1] 破零观察位在 pending 里全失效且**无法自愈**:"
+                    " state=%s why=%s active=%s pending=%d"
+                    " ⇒ 破零判据已失明，需人工补位（只告警一次，状态变化才再报）",
+                    _heal.get("state"), _heal.get("why"),
+                    list(_heal.get("active") or []), int(_heal.get("pending_rows") or 0))
+        _ws = _zb351.watch_batch(None,
                                  pending_rows=pending_rows,
                                  history_rows=_hrows, results=results,
                                  project_root=project_root)
+        _dead = [_w.get("patch_id") for _w in _ws
+                 if str(_w.get("verdict") or "") == "not_in_pool"]
+        if _dead:
+            # ★385刀1：缺失**必须可见** —— 改前它是正常返回值，日志里只有
+            #   `verdict=not_in_pool`，与"这一拍没派单"长得一样。
+            _module_logger.warning(
+                "[385刀1] 观察位缺失（not_in_pool）%d 个: %s ⇒ 这些位已被清空/改名，"
+                "破零对它无读数", len(_dead), _dead)
         for _w in _ws:
             _module_logger.info("[351破零] %s proc_gen=%s",
                                 _zb351.watch_line(_w), _m335_pg())

@@ -925,7 +925,30 @@ def collect_death_samples(project_root: str | None = None,
 WATCH_SCHEMA = "zero_break_watch/351.v1"
 
 #: ★351 破零观察位（具名，不扫全池；换观察对象只改这里）
-WATCH_IDS = ("o3_b31b31fee790d6e9",)
+#: ★385刀1：从**单值改多值** —— 384刀2 依规清零 pending 时把唯一观察位
+#:   `o3_b31b31fee790d6e9` 一并删掉，破零判据随即恒返 `not_in_pool` 且**不报警**，
+#:   等于「破零这件事静默失明」。多值 + 自愈后，单点消失不再导致全盲。
+#: ★这里只放**真实存在过**的 ID（不编）：①351 起的原观察位（384刀2 已随 pending
+#:   清零消失）；②history 里唯一的 O3 条目（已 wont_fix/approved，留作历史锚点）。
+#:   **第 3 个位由自愈从 pending 真实挑选**，挑不到就由调用方如实告警。
+WATCH_IDS = (
+    "o3_b31b31fee790d6e9",
+    "o3_1792638584_57885429",
+)
+
+#: ★385刀1：观察位**容量**上限 —— 票面「至少 3 个候选位」的落法：
+#:   `WATCH_IDS` 是静态种子，自愈补进来的放 `_WATCH_RUNTIME`，两者合计不超过它。
+WATCH_CAPACITY = 5
+
+#: ★385刀1：自愈补进来的观察位（**进程内**有效，不落盘；每次启动重新挑）。
+_WATCH_RUNTIME: list = []
+
+#: ★385刀1：算作「O3 候选」的 issue_type（与 patch_execution_dispatch 同集）。
+_O3_CANDIDATE_TYPES = ("dead_code", "dead_code_candidate")
+
+#: ★385刀1：上一次自愈状态（用于 `changed` 去重 —— 派单每拍都调，
+#:   无条件打 WARNING 会在一次停机里刷出成百上千条同义告警）。
+_LAST_HEAL_STATE: list = [""]
 
 
 def _watch_find(rows: list, patch_id: str) -> dict | None:
@@ -999,10 +1022,121 @@ def watch_candidate(patch_id: str, *,
     }
 
 
+def active_watch_ids() -> tuple:
+    """★385刀1：当前生效的观察位 = 自愈补进来的 + 静态种子（去重保序）。"""
+    _out: list = []
+    for _x in list(_WATCH_RUNTIME) + list(WATCH_IDS):
+        _s = str(_x or "").strip()
+        if _s and _s not in _out:
+            _out.append(_s)
+    return tuple(_out)
+
+
+def self_heal_watch(pending_rows=None, history_rows=None,
+                    capacity: int | None = None) -> dict:
+    """★385刀1：观察位自愈 —— 静态位**全失效**时，从 pending 挑 1 个 O3 候选补上。
+
+    为什么需要：384刀2 依规清零 pending，把唯一观察位删掉后，`watch_candidate`
+    对每个位都返 `not_in_pool`，而那是**正常返回值**（不报警）⇒ 破零这件事
+    静默失明，直到某天有人翻报告才发现。
+
+    **纯判据**：只改模块级 `_WATCH_RUNTIME`，不读盘、不写盘、**不打日志**
+    （本模块自 351 起就是纯判据，日志由调用方 `_m351_watch_zero_break` 打）。
+
+    四态（不同事实不同措辞，铁律166）：
+      · `healthy`      至少一个观察位在 pending/history 里 ⇒ 不动
+      · `healed`       原本全失效，已从 pending 补进 1 个 O3 候选
+      · `no_candidate` 全失效、pending 有货但**没有 O3 候选** ⇒ 调用方须 WARNING
+      · `no_pending`   全失效且 pending 读不到/为空 ⇒ 调用方须 WARNING
+    """
+    _pend = pending_rows if isinstance(pending_rows, list) else []
+    _hist = history_rows if isinstance(history_rows, list) else []
+    _cap = int(WATCH_CAPACITY if capacity is None else capacity)
+    _active = list(active_watch_ids())
+    _out = {"schema": "zero_break_watch_heal/385.v1", "state": "healthy",
+            "active": _active, "added": "", "why": "",
+            "capacity": _cap, "pending_rows": len(_pend)}
+
+    # ① 只要还有一个位**在 pending**，就算健康（不折腾）。
+    #   ★只看 pending、不看 history：破零观察的是「会不会被选中进沙箱」，
+    #   而 history 里的已结案条目（wont_fix/approved/verified）永远不会再被派单；
+    #   把它当"活着"会让自愈永不触发 ⇒ 又回到静默失明（本刀要修的就是这个）。
+    for _pid in _active:
+        if _watch_find(_pend, _pid) is not None:
+            _out["why"] = "at_least_one_in_pending"
+            _out["changed"] = (_LAST_HEAL_STATE[0] != "healthy")
+            _LAST_HEAL_STATE[0] = "healthy"
+            return _out
+
+    # ② 全失效：从 pending 里找 O3 候选（真实挑，不编）
+    if not _pend:
+        _out["state"] = "no_pending"
+        _out["why"] = "pending_empty_or_unreadable"
+        _out["changed"] = (_LAST_HEAL_STATE[0] != "no_pending")
+        _LAST_HEAL_STATE[0] = "no_pending"
+        return _out
+    if len(_active) >= _cap:
+        _out["state"] = "no_candidate"
+        _out["why"] = "capacity_full(no_room_to_heal)"
+        _out["changed"] = (_LAST_HEAL_STATE[0] != "no_candidate")
+        _LAST_HEAL_STATE[0] = "no_candidate"
+        return _out
+
+    _pick = ""
+    for _r in _pend:
+        if not isinstance(_r, dict):
+            continue
+        _rid = str(_r.get("patch_id") or _r.get("id") or "").strip()
+        if not _rid or _rid in _active:
+            continue
+        _it = str(_r.get("issue_type") or "")
+        if _rid.startswith("o3_") or _it in _O3_CANDIDATE_TYPES:
+            _pick = _rid
+            break
+
+    if not _pick:
+        _out["state"] = "no_candidate"
+        _out["why"] = "pending_has_no_o3_candidate"
+        _out["changed"] = (_LAST_HEAL_STATE[0] != "no_candidate")
+        _LAST_HEAL_STATE[0] = "no_candidate"
+        return _out
+
+    _WATCH_RUNTIME.append(_pick)
+    _out["state"] = "healed"
+    _out["added"] = _pick
+    _out["active"] = list(active_watch_ids())
+    _out["why"] = "static_watch_all_missing"
+    _out["changed"] = (_LAST_HEAL_STATE[0] != "healed:%s" % _pick)
+    _LAST_HEAL_STATE[0] = "healed:%s" % _pick
+    return _out
+
+
+def watch_available(pending_rows=None, history_rows=None) -> list:
+    """★385刀1：诊断口 —— 每个观察位当前是否在库（供自省/报告读）。"""
+    _pend = pending_rows if isinstance(pending_rows, list) else []
+    _hist = history_rows if isinstance(history_rows, list) else []
+    _out = []
+    for _pid in active_watch_ids():
+        _out.append({
+            "patch_id": _pid,
+            "in_pending": _watch_find(_pend, _pid) is not None,
+            "in_history": _watch_find(_hist, _pid) is not None,
+            "runtime": _pid in _WATCH_RUNTIME,
+        })
+    return _out
+
+
+def reset_watch_runtime() -> None:
+    """★385刀1：清空自愈补进来的观察位（测试/热重载用；不动静态种子）。"""
+    _WATCH_RUNTIME.clear()
+    _LAST_HEAL_STATE[0] = ""
+
+
 def watch_batch(patch_ids, **kw) -> list:
     """批量（默认只观察 `WATCH_IDS`），异常不抛给调用方。"""
     _out = []
-    for _pid in (patch_ids or WATCH_IDS):
+    # ★385刀1：用**动态**观察位（自愈补进来的 + 静态种子），不再只看常量。
+    for _pid in (patch_ids or active_watch_ids()):
         try:
             _out.append(watch_candidate(str(_pid), **kw))
         except Exception as _e:                                 # noqa: BLE001
