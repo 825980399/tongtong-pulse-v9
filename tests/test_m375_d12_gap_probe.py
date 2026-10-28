@@ -69,16 +69,39 @@ def test_02_fresh_instance_does_not_inherit_cache():
 def test_03_old_denominator_goes_red_when_log_misses_tags():
     """复刻 372 时点：日志不含那 5 个标签 ⇒ **旧口径**必然把这 5 个判红。
 
-    旧口径 = `_miss` 取自 tags、`_still` 过滤 `_GAP_TAGS`。这里把 tags 换成
-    「只保留其它标签」的列表，算出与 372 记录**同一份**列表。
+    旧口径 = `_miss` 取自 tags、`_still` 过滤 `_GAP_TAGS`。
+
+    ★376刀1 改判据（_m376_d1_identity）：原断言 `_still == _RECORDED_5` 把整份
+    372 时点快照钉死，日志一轮转就红（375 核验复跑即因此红）—— 那是**环境漂移**，
+    不是回归。但任务书给的「`_RECORDED_5 ⊆ _still`」容差式**不能照抄**：
+    `_tags_then` 开头就把那 5 个剥掉了，`_miss` 里永远没有它们，子集式对任何
+    环境恒真（连日志都不读）—— 等于删了断言还留着绿灯。
+
+    改钉**机制恒等式**（环境无关、且真会红）：
+
+        判红集合 == (缺口标签 - 当日日志标签) ∪ 372 那 5 个
+
+    来源只有两个：日志里没出现的缺口标签进不了 `_miss`；那 5 个被剥出分母也进不了。
+    反过来 —— 某缺口标签**日志里出现过却仍判红**，说明它还能被定位：要么 V3 漏开，
+    要么它已不是缺口（`_GAP_TAGS` 该重锚）。两者都是真回归，必须红。
     """
     _insp = T._inspector()
-    _tags_then = [t for t in T._real_tags()[0] if t not in _RECORDED_5]
+    # tags 只读**一次**：`_still` 与判据侧同源，否则两读之间活体写日志就会让
+    # 分子分母不同源（铁律271）。
+    _tags_live = T._real_tags()[0]
+    _log_set = set(_tags_live)
+    _tags_then = [t for t in _tags_live if t not in _RECORDED_5]
     with T._Switch(T._SWITCH, False):
         _miss = {t for t in _tags_then if not _insp.locate_issue(t, "").get("file")}
     _still = [t for t in T._GAP_TAGS if t not in _miss]
-    assert _still == _RECORDED_5, (
-        f"红因复现失败：期望与 372 记录逐字一致的 {_RECORDED_5!r}，实得 {_still!r}")
+
+    _expected = (set(T._GAP_TAGS) - _log_set) | set(_RECORDED_5)
+    _extra = sorted(set(_still) - _expected)     # 日志里出现过却判红 ⇒ 真回归
+    _lost = sorted(_expected - set(_still))      # 该红却没判红 ⇒ 常量/分母漂移
+    assert set(_still) == _expected, (
+        f"判红集合与机制不符：多判 {_extra!r}（当日日志里出现过却仍判红 ⇒ V3 漏开"
+        f"或它已不是缺口，`_GAP_TAGS` 需重锚 —— 真回归）；漏判 {_lost!r}"
+        f"（该红没红 ⇒ 分母或 `_GAP_TAGS` 漂移）；实得 {_still!r}")
 
 
 def test_04_red_reason_is_set_subtraction_not_locate():
