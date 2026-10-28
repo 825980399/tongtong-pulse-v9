@@ -6340,8 +6340,12 @@ class SafeEvolutionExecutor:
             patch["verification"] = _vr
             if not _vr.get("passed"):
                 patch["status"] = "verification_failed"
+                # ★378刀3（T-378-日志id截断-1）：打**全 id**。
+                #   原来只打前 16 字符 + "..."，而同一秒批量生成的多文件补丁
+                #   前缀**完全相同**（`patch_multi_<ts>_<n>`）⇒ 事后无法定位是哪一个。
+                #   截断省下的那几个字符，换来的是「查不到」，不划算。
                 _module_logger.warning(
-                    f"跨文件补丁验证失败: {patch.get('id', '')[:16]}... → {_vr.get('errors', [])}")
+                    f"跨文件补丁验证失败: {patch.get('id', '')} → {_vr.get('errors', [])}")
                 return False
             import config  # type: ignore[possibly-unbound]
             _auto_apply = getattr(config, 'EVOLUTION_CONFIG', {}).get("auto_apply_enabled", False)  # type: ignore[possibly-unbound]
@@ -6371,7 +6375,7 @@ class SafeEvolutionExecutor:
                     # ★审美判据择优(深化·E6): 跨文件补丁 D 级同样不自动批准。
                     patch["status"] = "verified"
                     _module_logger.warning(
-                        f"审美门槛拦截: 跨文件补丁D级(质量低)转人工审批 {patch.get('id', '')[:16]}...")
+                        f"审美门槛拦截: 跨文件补丁D级(质量低)转人工审批 {patch.get('id', '')}")
                 else:
                     # ★主线第79批 T1(P0 安全审计): 跨文件补丁同样——核心文件永远不自动批准，
                     #   强制等待人工审批(status=verified)；仅非核心走自动批准(approved)。
@@ -6382,11 +6386,11 @@ class SafeEvolutionExecutor:
                         if self._core_auto_apply_allowed():
                             _module_logger.warning(
                                 f"灰度开关允许核心文件自动批准(回退旧行为): "
-                                f"{patch.get('id', '')[:16]}...")
+                                f"{patch.get('id', '')}")
                         else:
                             _module_logger.warning(
                                 f"核心文件强制人工审批(安全红线，不自动批准): "
-                                f"{patch.get('id', '')[:16]}... → {patch.get('file', '')}")
+                                f"{patch.get('id', '')} → {patch.get('file', '')}")
                     else:
                         patch["status"] = "approved"
             else:

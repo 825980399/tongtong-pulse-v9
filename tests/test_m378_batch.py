@@ -4,6 +4,7 @@
 被测面全部为**真实实现**，不复制逻辑；「改前行为」用内联固化算法对照
 （铁律58.3：先红证据要能永久复现，不依赖 .bak_batchN）。
 """
+import io
 import json
 import os
 import sys
@@ -190,3 +191,32 @@ def test_m378_d2_age_helper_never_raises():
     assert ped._m378_sandbox_age_sec({"sandbox_ok": True, "sandbox_ok_at": "abc"}) is None
     assert ped._m378_sandbox_age_sec({"sandbox_ok": False, "sandbox_ok_at": 1.0}) is None
     assert ped._m378_sandbox_age_sec(None) is None
+
+
+# ===================================================================== 刀3
+def _src(rel):
+    with io.open(os.path.join(ROOT, rel), encoding="utf-8") as _f:
+        return _f.read()
+
+
+def test_m378_d3_no_id_truncation_left():
+    """★核心：同类截断一处不留（任务书点 1 处，实测同型 4 处）。"""
+    _s = _src("nucleus/reasoning/SafeEvolutionExecutor.py")
+    assert "patch.get('id', '')[:16]" not in _s
+    assert _s.count("patch.get('id', '')}") == 4
+
+
+def test_m378_d3_legacy_truncation_loses_identity():
+    """反向：内联固化旧格式，证明同秒批量补丁的前 16 字符**必然相撞**。
+
+    这就是"改全 id"的理由 —— 不是美观问题，是事后**查不到是哪一个**。
+    """
+    def _legacy(pid):
+        return pid[:16] + "..."
+
+    _a = "patch_multi_1788000000_017"
+    _b = "patch_multi_1788000000_018"
+    assert _a != _b
+    assert _legacy(_a) == _legacy(_b) == "patch_multi_1788...", "旧格式两者不可区分"
+    # 全 id 可区分
+    assert _a != _b and len(_a) > 16
