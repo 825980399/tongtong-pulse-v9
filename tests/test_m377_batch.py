@@ -207,7 +207,13 @@ def test_m377_d1_missing_id_is_skipped(tmp_path):
 def test_m377_d1_default_ids_follow_zero_break_watch_slot():
     """默认只动 351 刀3 起的破零观察位；观察位换人时本工具必须同步（否则补错条目）。"""
     from nucleus.evolution.zero_break_judge import WATCH_IDS
-    assert tuple(BF.DEFAULT_PATCH_IDS) == tuple(WATCH_IDS) == (TARGET_ID,)
+    # ★385刀1：`WATCH_IDS` 从**单值**扩成多值元组（原观察位被 384刀2 清零删掉后
+    #   破零静默失明，故改成"种子多值 + 自愈补位"，第 3 个由自愈从 pending 挑）。
+    #   ⇒ 本工具的默认名单只需**跟随**观察位集合，不必与之全等；硬钉"全等且只有 1 个"
+    #   会在每次扩容时假红（383刀4 已经在流转表守卫上栽过同一类跟法）。
+    assert set(BF.DEFAULT_PATCH_IDS) <= set(WATCH_IDS), (
+        "377 回填工具的默认名单必须落在观察位集合内 —— 观察位换人时本工具要同步")
+    assert TARGET_ID in WATCH_IDS, "扩容不该把 351 起的原观察位丢掉"
 
 
 # ================================================================ 刀2：G4 线提额
