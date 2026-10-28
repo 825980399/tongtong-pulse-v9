@@ -885,11 +885,14 @@ def is_fragment_to_full(patch: dict) -> bool:
 #:   实例化（`__init__`）、析构、上下文管理、启停框架钩子都由解释器/框架调用，
 #:   源码里没有调用点 ⇒ 入边 0 是**图的盲区**，不是「没人依赖它」。
 #:   这类方法的牵连半径**不可判定** ⇒ 一律转人工，绝不按 0 放行。
+#: ★381刀7（T-381-分诊名表过宽）：**生命周期名表收窄**。改前 23 个名字里混着 run/start/setup/
+#:   reset/init/initialize/on_* 等 —— 这些是**普通业务方法**，把它们当"生命周期"
+#:   会让自动分诊对它们"结构性失明"（既不判死也不派单），等于给一堆活方法
+#:   贴了免检标签。只保留**真正由框架/解释器调用**的：构造、析构、上下文、关闭、停止。
 _LIFECYCLE_NAMES = frozenset((
-    "__init__", "__new__", "__del__", "__post_init__", "__enter__", "__exit__",
-    "__aenter__", "__aexit__", "__call__", "__getattr__",
-    "start", "stop", "setup", "teardown", "init", "initialize", "close",
-    "shutdown", "reset", "run", "on_start", "on_stop", "on_init",
+    "__init__", "__new__", "__del__", "__post_init__",
+    "__enter__", "__exit__", "__aenter__", "__aexit__",
+    "close", "stop", "shutdown",
 ))
 
 #: ★第306批 刀4：**受控试点首批白名单** —— 只有这 2 条 `refresh_runtime_params`
@@ -1827,11 +1830,27 @@ def _m338_evidence_ok(patch: dict) -> tuple:
     if str((_ev.get("risk") or {}).get("source")) == "llm_self_report":
         return False, "risk 仅 LLM 自评（无 issue_type 可复算）", _ev
     if str((_ev.get("trust") or {}).get("source")) == "default":
-        return False, "trust 为恒 70 默认（零信息量）", _ev
+        # ★381刀6（T-381-哨兵漂移）：数字从 config 取，别再写死 70（默认值已改 40）。
+        return False, ("trust 为恒 %.0f 默认（零信息量）" % _m381_trust_sentinel()), _ev
     return True, ("derived_legacy" if _legacy else "ok"), _ev
 
 
 AUTO_TRIAGE_MIN_TRUST = 40.0
+
+
+def _m381_trust_sentinel() -> float:
+    """★381刀6（T-381-哨兵漂移）：trust 的**默认值哨兵** —— 读 config，不写死。
+
+    病根：拒绝理由把"恒 70 默认值"写死在文案里，而默认值早已改成 40
+    ⇒ 哨兵认不出"这就是默认值"，两种后果都错：要么放过零信息条目，
+    要么给出指向错误数字的告警。读 config 才能跟着默认值一起漂。
+    """
+    try:
+        import config as _c381
+        return float(getattr(_c381, "AUTO_TRIAGE_TRUST_DEFAULT", 70.0))
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m381_trust_sentinel")
+        return 70.0
 
 
 def select_for_auto_triage(patch_history: list, limit: int = 1,
