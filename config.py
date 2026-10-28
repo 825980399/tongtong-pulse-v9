@@ -5598,7 +5598,17 @@ ENABLE_MEMORY_RELEASE_LIVE = False
 #   拿 RSS 回落当验收线会把"释放成功但没归还"判成失败。
 MEMORY_RELEASE_G2_HEAP_MB = 1200.0        # ≥此值 ⇒ 软释放（语义缓存TTL/shadow deque/观测缓冲）
 MEMORY_RELEASE_G3_HEAP_MB = 1700.0        # ≥此值 ⇒ 冷化 warm→cold
-MEMORY_RELEASE_G4_HEAP_MB = 2000.0        # ≥此值 ⇒ 只告警不重启（★小林 D3 验收硬线 ≤2.0GB）
+#   ★377刀2：G4 线 2000 → 7000，**承认活体现状**。旧线 2000 是 338 批设计值
+#   （小林 D3 验收硬线 ≤2.0GB），但实测稳态 heap 已在 4.9GB（2026-10-28 12:03 三拍
+#   4863.8 → 4913.8 → 4944.0MB），旧线下**每一拍都落 G4_ALARM_ONLY**（实测 215 拍全落
+#   G4，另 11 拍 G0 拦）⇒ G2/G3 动作永远不可达，决策树实际只剩一档，是**判据分辨力**
+#   问题而非内存问题。提额后 2000-7000MB 区间按 G3（冷化）/G2（软释放）分档，仍告警
+#   （≥7000 照旧 G4）但不误拦门。
+#   ★口径提醒：本键同时是两个验收辅助函数（`release_policy.heap_peak_guard` 与
+#   §⑨ 判定线双写的 heap 轨）的**默认线**——二者当前**无生产调用方**（仅测试显式传
+#   `line_mb`），故本批不动任何生效中的验收口径；将来若接线，须显式传 `line_mb=2000`
+#   保住 D3 硬线，不要吃默认值，否则等于把验收尺子放宽到 7GB。
+MEMORY_RELEASE_G4_HEAP_MB = 7000.0
 MEMORY_RELEASE_COOLDOWN_BEATS = 30        # G0 冷却闸门：距上次释放≥30 拍
 MEMORY_RELEASE_IDLE_SEC = 1800.0          # 防误杀①：last_access 过期阈值（秒）
 MEMORY_RELEASE_COLD_BATCH_MAX = 1000      # G3 每批冷化上限（防风暴）

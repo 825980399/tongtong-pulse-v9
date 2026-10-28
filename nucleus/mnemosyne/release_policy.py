@@ -94,7 +94,11 @@ def thresholds() -> dict[str, float]:
     return {
         "g2_heap_mb": float(_cfg("MEMORY_RELEASE_G2_HEAP_MB", 1200.0)),
         "g3_heap_mb": float(_cfg("MEMORY_RELEASE_G3_HEAP_MB", 1700.0)),
-        # 硬线在小林 D3 拍板：heap 单日峰值 ≤2.0GB。G4 到线只告警，不重启。
+        # ★377刀2：G4 线已由 2000 提额到 7000（承认活体稳态 4.9GB 现状，见 config.py）。
+        #   这里的 fallback 2000 **不是漏改**：config 读不到时退回旧保守线（宁可全落
+        #   G4 只告警，也不误开 G2/G3 动作）；正常路径一律走 config，默认值不生效。
+        # D3 硬线（heap 单日峰值 ≤2.0GB）口径仍在，但须调用方**显式传**
+        #   `line_mb` / `heap_line_mb=2000.0`，不要吃本键的默认值。
         "g4_heap_mb": float(_cfg("MEMORY_RELEASE_G4_HEAP_MB", 2000.0)),
         "cooldown_beats": int(_cfg("MEMORY_RELEASE_COOLDOWN_BEATS", 30)),
         "idle_sec": float(_cfg("MEMORY_RELEASE_IDLE_SEC", 1800.0)),
@@ -409,7 +413,10 @@ def degrade_verdict(rss_mb: float | None, heap_mb: float | None, *,
 def judge_pass_line(rss_end_mb: float | None, heap_peak_mb: float | None, *,
                     rss_line_mb: float | None = None,
                     heap_line_mb: float | None = None) -> dict[str, Any]:
-    """⑨ 判定线**双写**：期末 RSS <12GB **∧** heap 单日峰值 <2.0GB，两项都过才算过。
+    """⑨ 判定线**双写**：期末 RSS <12GB **∧** heap 单日峰值 <D3 硬线 2.0GB，两项都过才算过。
+
+    ★377刀2：`heap_line_mb` 的**默认值**来自 G4 键（已提额到 7000）⇒ 判 D3 时必须
+    **显式**传 `heap_line_mb=2000.0`，否则等于把尺子悄悄放宽到 7GB（可见化≠改尺子）。
 
     为什么必须双写：只写 RSS 会把「少装库」这种架构收益误记成「内存治理有效」
     ——镜像小一点 RSS 就下来了，而堆可能还在涨。反过来只看 heap 也不行：镜像
@@ -446,10 +453,13 @@ def judge_pass_line(rss_end_mb: float | None, heap_peak_mb: float | None, *,
 
 
 def heap_peak_guard(peak_mb: float | None, *, line_mb: float | None = None) -> dict[str, Any]:
-    """验收硬线判定：heap 单日峰值 ≤2.0GB。
+    """验收硬线判定：heap 单日峰值 ≤ ``line_mb``（缺省取 G4 键，377刀2 后为 7000）。
 
-    `peak_mb=None` ⇒ `verdict="unavailable"`（**不判通过**）。理由：没测到峰值时
-    "≤2.0GB"是个无法证伪的命题，判 PASS 等于白送一个达标。
+    ★D3 硬线（≤2.0GB）仍在：判 D3 时必须显式 `line_mb=2000.0`，不要吃默认值 ——
+    缺省值跟着 G4 键一起被提额到了 7GB（可见化≠改尺子）。
+
+    `peak_mb=None` ⇒ `verdict="unavailable"`（**不判通过**）：没测到峰值时"≤硬线"
+    是个无法证伪的命题，判 PASS 等于白送一个达标。
     """
     _line = float(line_mb if line_mb is not None else thresholds()["g4_heap_mb"])
     if peak_mb is None:

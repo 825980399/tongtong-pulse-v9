@@ -208,3 +208,64 @@ def test_m377_d1_default_ids_follow_zero_break_watch_slot():
     """默认只动 351 刀3 起的破零观察位；观察位换人时本工具必须同步（否则补错条目）。"""
     from nucleus.evolution.zero_break_judge import WATCH_IDS
     assert tuple(BF.DEFAULT_PATCH_IDS) == tuple(WATCH_IDS) == (TARGET_ID,)
+
+
+# ================================================================ 刀2：G4 线提额
+def test_m377_d2_g4_line_raised_to_7000():
+    """票面口径：`G4_HEAP_MB` 2000→7000（真键名带 MEMORY_RELEASE_ 前缀）。"""
+    import config
+    from nucleus.mnemosyne import release_policy as rp
+    assert float(config.MEMORY_RELEASE_G4_HEAP_MB) == 7000.0
+    assert rp.thresholds()["g4_heap_mb"] == 7000.0
+    # 三档顺序未被破坏（提额只动 G4，不许把 G2/G3 顶乱）
+    _th = rp.thresholds()
+    assert _th["g2_heap_mb"] < _th["g3_heap_mb"] < _th["g4_heap_mb"]
+
+
+def test_m377_d2_tier_regains_resolution():
+    """反向·核心：旧线下活体读数 4.9GB **恒落 G4**（实测 215 拍全落），提额后须落 G3。
+
+    这条是本刀唯一的实质收益证据——不是"数字变大"，是判据从一档恢复成四档。
+    """
+    from nucleus.mnemosyne import release_policy as rp
+    _th = rp.thresholds()
+    _live = 4944.0                      # 2026-10-28 12:03:49 活体实测 heap
+    assert _live < _th["g4_heap_mb"] and _live >= _th["g3_heap_mb"]
+    _tier, _why = rp.pick_tier(_live)
+    assert _tier == rp.TIER_G3, _why
+    assert _tier != rp.TIER_G4, "提额后仍落 G4 ⇒ 本刀无效"
+    # 四档边界都要能分出来（含提额后的新 G4 边界）
+    assert rp.pick_tier(7100.0)[0] == rp.TIER_G4
+    assert rp.pick_tier(1800.0)[0] == rp.TIER_G3
+    assert rp.pick_tier(1300.0)[0] == rp.TIER_G2
+    assert rp.pick_tier(800.0)[0] == rp.TIER_G1
+    # 测不到 heap ⇒ 不释放（语义不因提额而变化）
+    assert rp.pick_tier(None)[0] == rp.TIER_G1
+
+
+def test_m377_d2_acceptance_line_coupling_is_explicit():
+    """★口径陷阱钉死：两个验收辅助函数的**默认线**跟着 G4 键走（现为 7000）。
+
+    它们当前无生产调用方（全库仅本批测试与 m338 测试调用，且 m338 显式传 2000）
+    ⇒ 本批不动任何生效中的验收口径；但将来接线必须显式传 2000 才等于 D3 硬线。
+    """
+    from nucleus.mnemosyne import release_policy as rp
+    _d = rp.heap_peak_guard(5000.0)
+    assert _d["line_mb"] == 7000.0 and _d["verdict"] == "pass"
+    assert rp.heap_peak_guard(5000.0, line_mb=2000.0)["verdict"] == "fail"
+    assert rp.heap_peak_guard(1800.0, line_mb=2000.0)["verdict"] == "pass"
+    # 判定线双写：heap 轨默认同样跟 G4 键
+    _p = rp.judge_pass_line(8000.0, 5000.0)
+    assert _p["heap_line_mb"] == 7000.0
+    assert rp.judge_pass_line(8000.0, 5000.0,
+                              heap_line_mb=2000.0)["verdict"] != "pass"
+
+
+def test_m377_d2_fallback_stays_conservative():
+    """`release_policy` 里的 fallback 2000 **不是漏改**：config 读不到时退回旧保守线。"""
+    import inspect
+    from nucleus.mnemosyne import release_policy as rp
+    _src = inspect.getsource(rp.thresholds)
+    assert '_cfg("MEMORY_RELEASE_G4_HEAP_MB", 2000.0)' in _src, \
+        "fallback 被改动 ⇒ 须同步 config.py 注释里的口径说明"
+
