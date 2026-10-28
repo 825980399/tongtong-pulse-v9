@@ -2756,13 +2756,22 @@ class PulseLiver(BasePulseOrgan):
                     # 但原逻辑固定 300 秒重试，7 小时内空转 2411 次。
                     # 修复 1：记录失败时该路径的数据指纹（节点数+质量节点数），
                     #        若数据无变化则无需重试，指数退避等待数据真正演化。
-                    if not hasattr(self, '_fuse_fail_fingerprint'):
-                        self._fuse_fail_fingerprint = {}
+                    # 全节点口径的质量达标数（日志与停滞记录用；指纹口径见下）
                     _quality_count = sum(
                         1 for n in nodes
                         if getattr(n, 'trust_score', 50.0) >= 40.0
                     )
-                    _fingerprint = (len(nodes), _quality_count)
+                    if not hasattr(self, '_fuse_fail_fingerprint'):
+                        self._fuse_fail_fingerprint = {}
+                    # ★377刀5-②：指纹改数**非占位符**节点（含其质量计数）。
+                    #   为什么：素材入口拦生效后，占位符节点会被 `_fuse_group` 剔掉，
+                    #   但若指纹仍按 `len(nodes)` 算，就会出现「素材实际变了、指纹没变」
+                    #   ⇒ 364A4 的「指纹未变即封顶 6h」把路径继续钉死，改动看不见效果。
+                    #   扣掉占位符后：拦截一旦生效指纹必变 ⇒ 允许重试一次；重试仍失败
+                    #   （指纹已稳定）照旧封顶，不会无限重试。
+                    #   注：上面 `_quality_count` 仍是**全节点**口径，只用于日志与停滞记录，
+                    #   与本指纹口径不同（不同事实不同措辞，铁律166）。
+                    _fingerprint = self._m377_fuse_fingerprint(nodes)
                     _prev_fingerprint = self._fuse_fail_fingerprint.get(prefix)
                     _data_unchanged = (_prev_fingerprint == _fingerprint)
                     self._fuse_fail_fingerprint[prefix] = _fingerprint
@@ -2934,6 +2943,72 @@ class PulseLiver(BasePulseOrgan):
             "blocked_until": dict(list(blocked.items())[:20]),
         }
 
+    # ========================================== 377刀5：占位符素材入口拦
+    def _m377_is_placeholder(self, text) -> bool:
+        """占位符字面量判据（★四类同源，唯一定义在 `PlaceholderSanitizer`）。
+
+        为什么不在本文件再写一份字面量：改前这里是内联 `_ph_literal = "[器官别名]"`
+        一处比对，而 `PlaceholderSanitizer.contains_placeholder_literal` 覆盖四类
+        （`[器官别名]` / 以 `关联知识：。` 开头 / 以 `[归纳升华]` 开头 /
+        以 `[数据流·` 开头）——两份判据必然漂移，且漂移了没人发现。
+
+        取不到判据时**退化为旧单字面量并留痕一次**：不静默缩小判据面
+        （否则「拦截变严/变松」在日志里看不出来）。
+        """
+        try:
+            from nucleus.knowledge.PlaceholderSanitizer import (
+                contains_placeholder_literal as _cpl377,
+            )
+            return bool(_cpl377(text))
+        except Exception as _e377:
+            silent_exc(_e377, where="organs.body.PulseLiver::_m377_is_placeholder")
+            if not getattr(self, "_m377_ph_warned", False):
+                self._m377_ph_warned = True
+                self._log(LogLevel.WARNING,
+                          "[377刀5] 占位符判据不可用，退化为单字面量 '[器官别名]'"
+                          "（会漏 关联知识：。 / [归纳升华] / [数据流· 三类）")
+            return "[器官别名]" in str(text or "")
+
+    def _m377_drop_placeholder_nodes(self, prefix: str,
+                                     nodes: list) -> tuple[int, list]:
+        """把占位符节点从融合素材里**整组剔除**，返回 `(剔除数, 保留列表)`。
+
+        开关仍是 `KNOWLEDGE_FUSION_SKIP_PLACEHOLDER`（关掉 ⇒ 原样返回，零行为变化）。
+        """
+        _nodes = list(nodes or [])
+        if not bool(getattr(config, "KNOWLEDGE_FUSION_SKIP_PLACEHOLDER", False)):
+            return 0, _nodes
+        _kept = []
+        _drop = 0
+        for _n in _nodes:
+            if self._m377_is_placeholder(str(getattr(_n, "value", "") or "")):
+                _drop += 1
+                continue
+            _kept.append(_n)
+        if _drop:
+            self._log(LogLevel.DEBUG,
+                      "[377刀5] 融合素材剔除占位符节点 %d 条（路径=%s，剩 %d 条）"
+                      % (_drop, prefix, len(_kept)))
+        return _drop, _kept
+
+    def _m377_fuse_fingerprint(self, nodes: list) -> tuple:
+        """路径级熔断的数据指纹 = `(非占位符节点数, 其中 trust≥40 的条数)`。
+
+        ★377刀5：扣掉占位符节点。理由见 `_fuse_l2_to_l3` 调用处注释 ——
+        素材入口拦生效后素材实际变了，指纹必须能反映出来，否则 364A4 的
+        「指纹未变即封顶 6h」会让改动看不见效果。
+        """
+        _nodes = list(nodes or [])
+        _ph = 0
+        _q = 0
+        for _n in _nodes:
+            if self._m377_is_placeholder(str(getattr(_n, "value", "") or "")):
+                _ph += 1
+                continue
+            if getattr(_n, "trust_score", 50.0) >= 40.0:
+                _q += 1
+        return (len(_nodes) - _ph, _q)
+
     def _fuse_group(self, prefix: str, nodes: list[PulseNode],
                     _min_quality_nodes: int | None = None) -> bool:
         try:
@@ -2949,6 +3024,21 @@ class PulseLiver(BasePulseOrgan):
             # 过滤掉路径包含残词特征的节点
             quality_nodes = [n for n in quality_nodes
                            if not self._is_path_noise(getattr(n, 'space_path', ''))]
+
+            # ★377刀5-①：素材**入口**拦 —— 占位符节点整组不进队列。
+            #   位置必须在下面「阈值判定」之前：改前只在取样循环里比对单个字面量，
+            #   那时占位符节点仍计入 `len(quality_nodes)` —— 阈值放行判定、关键词抽取、
+            #   "由N条认知融合而成" 三处全被虚高；且只认 `[器官别名]` 一类，
+            #   漏 `关联知识：。` / `[归纳升华]` / `[数据流·` 三类（判据见 PlaceholderSanitizer）。
+            _ph_dropped, quality_nodes = self._m377_drop_placeholder_nodes(
+                prefix, quality_nodes)
+            if _ph_dropped and not quality_nodes:
+                # 全组都是占位符 ⇒ 本路径没有可融合素材。返回 False 会进 `_fuse_l2_to_l3`
+                # 的失败记账 ⇒ 交给 364A4 的路径级熔断封顶，不再每轮空转；
+                # 措辞与「质量不足」明确区分（铁律166）。
+                self._log(LogLevel.WARNING,
+                          f"融合跳过(素材全为占位符): 剔除{_ph_dropped}条，路径={prefix}")
+                return False
 
             # 过滤后节点数不足阈值，跳过融合
             if len(quality_nodes) < _min_quality_nodes:
@@ -3021,12 +3111,12 @@ class PulseLiver(BasePulseOrgan):
             #   翻 True 后：①含占位符字面量的源节点不作融合素材；②产出内容仍含
             #   占位符则该条不产出（治本：封堵融合模板扩散污染源）。
             _skip_ph = bool(getattr(config, "KNOWLEDGE_FUSION_SKIP_PLACEHOLDER", False))
-            _ph_literal = "[器官别名]"  # ★与 tools/cleanup_alias_placeholder_nodes.py 同源判据
             _sample_value = ""
             for _n in quality_nodes[:10]:
                 _val = str(_n.value) if _n.value else ""
                 # ★刀B②-①：含占位符字面量的源节点不得作为融合素材（封堵扩散源）
-                if _skip_ph and _ph_literal in _val:
+                # ★377刀5：判据由内联 "[器官别名]" 一类换成四类同源判据
+                if _skip_ph and self._m377_is_placeholder(_val):
                     continue
                 # 跳过元描述类的内部格式节点（这些节点本身就是压缩产生的无实质内容壳）
                 if any(_marker in _val for _marker in ["相关知识汇总", "核心智慧结晶", "复盘认知"]):
@@ -3050,9 +3140,11 @@ class PulseLiver(BasePulseOrgan):
             # ★第159批 上B 刀B②-②：融合模板「占位符存在则不产出该条」守卫（治本）。
             #   仅对含方括号占位符**字面量**生效（★红线：不得用 len>200 and
             #   startswith("我了解到") 组合——PollutionTagger 用它判污染会误伤真回答）。
-            if _skip_ph and _ph_literal in concept:
+            # ★377刀5：判据由内联单字面量换成 `PlaceholderSanitizer.contains_placeholder_literal`
+            #   的四类同源判据（`[器官别名]` / `关联知识：。` / `[归纳升华]` / `[数据流·`）。
+            if _skip_ph and self._m377_is_placeholder(concept):
                 self._log(LogLevel.WARNING,
-                          f"融合拦截: 产出内容含占位符字面量，路径={prefix}，跳过L3融合")
+                          f"融合拦截: 产出内容含占位符字面量（四类判据），路径={prefix}，跳过L3融合")
                 return False
             # ===== 用户输入污染终极防护：检测融合内容是否包含原始问题文本 =====
             _concept_lower = concept.lower()
