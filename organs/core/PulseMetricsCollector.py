@@ -71,11 +71,129 @@ except ImportError:
     _cache_seconds = 30
 
 
+# ===== ★377刀4：tracemalloc 常驻 + 两快照差分（376 刀5 A/B 的两处病根）=====
+#  病根一（376 刀5 实测）：原实现 `start(1) → take_snapshot() → finally: stop()` **全在
+#    同一次调用内**完成 ⇒ 快照的 `since_start` 只覆盖探针自己那几毫秒，
+#    17/17 份产物 `tracemalloc_rows` 全 0 行。于是四类归因恒 `total_size_kb=0.0`、
+#    `pct=None`，下游再把这个 None 当 0 读 —— 「没采到」与「真是 0」在产物里同形（铁律276）。
+#  病根二：`top20 = (_gc_types or _tm_rows)` —— gc 有值就把 tracemalloc 的**尺寸**行顶掉，
+#    而 `gc_type_rows` 只有**条数**没有字节数。拿计数当尺寸算占比，分母恒 0。
+#  处置（本刀，只动观测面，不改内存回收策略、不改任何业务状态）：
+#    ① 进程早期 `start(1)` 并**常驻**（`M339_TRACEMALLOC_MODE="resident"`）⇒ basis 变
+#       `cumulative`，快照覆盖进程至今的分配；
+#    ② 相邻两次探针各取一份快照，用 `compare_to` 出差分 ⇒ 「这段时间涨了哪几行」。
+#       累计值分不清老账与新账，增量才是治理要的那个数；
+#    ③ 归因只吃**有尺寸的** tracemalloc 行；无尺寸行 ⇒ `state="unavailable"`，
+#       绝不再吐 0.0。
+_M377_TM_MODES = ("resident", "window", "off")
+_M377_TM_OWNED = False          # tracemalloc 是否由本模块 start（只停自己起的）
+_M377_TM_BASELINE = "_tm_baseline.snap"
+
+
+def _m377_cfg(name: str, default):
+    """读配置（走已加载的 config 模块；读不到回退默认，绝不抛）。"""
+    _c = sys.modules.get("config")
+    return default if _c is None else getattr(_c, name, default)
+
+
+def _m377_tm_ensure() -> dict:
+    """确保 tracemalloc 处于期望状态（只在 `resident` 模式 start，且**不 stop**）。
+
+    返回 `{mode, tracing, started_by_us, error?}`；本函数绝不抛。
+    """
+    global _M377_TM_OWNED
+    _out: dict[str, Any] = {"mode": "off", "tracing": False,
+                            "started_by_us": False}
+    try:
+        import tracemalloc as _tm
+        _mode = str(_m377_cfg("M339_TRACEMALLOC_MODE", "resident") or "").lower()
+        if _mode not in _M377_TM_MODES:
+            # 未知取值 ⇒ 按 resident 处理并留痕（观测面不因拼错而静默退化成空采）
+            silent_exc(ValueError("unknown M339_TRACEMALLOC_MODE=%r" % (_mode,)),
+                       where="PulseMetricsCollector::_m377_tm_ensure mode")
+            _mode = "resident"
+        _out["mode"] = _mode
+        _out["tracing"] = bool(_tm.is_tracing())
+        if _mode == "resident" and not _out["tracing"]:
+            _tm.start(1)
+            _M377_TM_OWNED = True
+            _out["tracing"] = True
+            _out["started_by_us"] = True
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_ensure")
+        _out["error"] = type(_e).__name__
+    return _out
+
+
+def _m377_tm_delta(snap, base_path: str, top_n: int = 20) -> tuple[list, str]:
+    """当前快照与上一份基线快照差分 ⇒ (增量行, 状态)。
+
+    增量 = `size_diff > 0` 的行（这段时间**涨**的），按字节降序取 top_n。
+    状态四态，**不用空列表冒充「无增量」**（铁律276：没采到 ≠ 真 0）：
+
+      | state | 含义 |
+      |---|---|
+      | `ok` | 差分成功且有增量行 |
+      | `no_growth` | 差分成功但没有正增量（真·没涨） |
+      | `no_baseline` | 首次运行，没有可比基线 |
+      | `baseline_unreadable` | 基线存在但读不动（版本/损坏） |
+
+    调用方（探针）另有 `window_mode` / `off` 两态用于标注「本次没做差分」的原因。
+    无论差分成功与否都会把当前快照写成新基线（供下一拍比较）。
+    """
+    import tracemalloc as _tm
+    _rows: list = []
+    _state = "ok"
+    try:
+        if not os.path.isfile(base_path):
+            _state = "no_baseline"
+        else:
+            _base = _tm.Snapshot.load(base_path)
+            for _st in snap.compare_to(_base, "lineno")[:top_n]:
+                _diff = int(getattr(_st, "size_diff", 0) or 0)
+                if _diff <= 0:
+                    continue
+                try:
+                    _frame = _st.traceback[0] if _st.traceback else None
+                    _fn = str(getattr(_frame, "filename", "?") or "?")
+                    _fn = _fn.replace("\\", "/").split("/")[-1]
+                    _ln = int(getattr(_frame, "lineno", 0) or 0)
+                except (IndexError, AttributeError) as _fde:
+                    # 帧不可读不该静默：否则增量行会静静退化成 "?:0"，看起来像"没定位"
+                    silent_exc(_fde, where="PulseMetricsCollector::_m377_tm_delta frame")
+                    _fn, _ln = "?", 0
+                _rows.append({"file": _fn, "line": _ln,
+                              "size_kb": round(_diff / 1024.0, 1),
+                              "count": int(getattr(_st, "count_diff", 0) or 0)})
+            if not _rows:
+                _state = "no_growth"
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta compare")
+        _state = "baseline_unreadable"
+        _rows = []
+    try:
+        # ★基线落盘前必须先建目录 —— 差分发生在**产物写盘之前**，此时 `_dir` 可能
+        #   还不存在；不建目录会 FileNotFoundError 被静默吞掉，下一拍又是 no_baseline
+        #   （377刀4 首跑实测踩到：第一拍 no_baseline、第二拍仍 no_baseline）。
+        _bd = os.path.dirname(os.path.abspath(base_path))
+        if _bd:
+            os.makedirs(_bd, exist_ok=True)
+        _tmp = base_path + ".tmp"
+        snap.dump(_tmp)
+        os.replace(_tmp, base_path)
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta dump")
+    return _rows, _state
+
+
 class PulseMetricsCollector(BasePulseOrgan):
     """脉冲驱动多层级指标采集器（v9.5 分层脉冲版）"""
 
     def __init__(self, organ_name: str = "指标采集器"):
         super().__init__(organ_name)
+        # ★377刀4：进程早期就把 tracemalloc 起成常驻（resident 模式），否则快照只能
+        #   覆盖探针自己那几毫秒（376 刀5 的 17/17 份空采根因）。失败不影响器官装配。
+        self._m377_tm_state = _m377_tm_ensure()
         self._metrics_history: list = []
         self._snapshot_count = 0
         self._beat_count = 0
@@ -427,16 +545,22 @@ class PulseMetricsCollector(BasePulseOrgan):
     def _m349_heap_attribution(self, rows: list) -> dict:
         """把 tracemalloc 行聚成四类占比。
 
-        返回 `{buckets: {ast|pulsenode|image|other: {size_kb,count,pct}},
-               total_size_kb, total_count, basis}`。
+        返回 `{state, buckets, total_size_kb, total_count, basis}`。
+
+        ★377刀4 契约变更（**不再吐 0.0**）：只接受**带尺寸**的 tracemalloc 行；
+        没有尺寸行时返回 `state="unavailable"` + `total_size_kb=None` + `buckets={}`。
+        为什么必须改：旧实现把 `gc_type_rows`（只有条数、没有字节）当尺寸行喂进来，
+        算出的 `total_size_kb` 恒 `0.0`、`pct` 恒 `None`，而产物里 `0.0` 与
+        「真的归零」同形 ⇒ 读者会把「没采到」当「没占用」（铁律276）。
+
         `pct` 按 **size** 算（内存治理看字节，不看条数）；`count` 单列，
         因为"很多小对象"与"一个巨块"是两种病。
         """
         _b = {k: {"size_kb": 0.0, "count": 0, "pct": None}
               for k in self._M349_HEAP_BUCKETS}
-        for _r in rows or []:
-            if not isinstance(_r, dict):
-                continue
+        _rows = [r for r in (rows or []) if isinstance(r, dict)]
+        _with_size = 0
+        for _r in _rows:
             _k = self._m349_heap_bucket(_r.get("file"))
             try:
                 _sz = float(_r.get("size_kb") or 0.0)
@@ -448,15 +572,30 @@ class PulseMetricsCollector(BasePulseOrgan):
             except (TypeError, ValueError) as _e:
                 silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution count")
                 _cnt = 0
+            if _sz > 0:
+                _with_size += 1
             _b[_k]["size_kb"] = round(_b[_k]["size_kb"] + _sz, 1)
             _b[_k]["count"] += _cnt
         _tot = round(sum(v["size_kb"] for v in _b.values()), 1)
+        # ★无尺寸行（空 / 全是计数行 / 全 0）⇒ 归因不可用，**不给 0.0 冒充读数**
+        if _with_size == 0 or _tot <= 0:
+            return {"state": "unavailable",
+                    "reason": ("no_rows" if not _rows else "zero_size_rows"),
+                    "buckets": {}, "total_size_kb": None,
+                    "total_count": sum(v["count"] for v in _b.values()),
+                    "rows": len(_rows), "rows_with_size": _with_size,
+                    "basis": ("无带尺寸的 tracemalloc 行 ⇒ 四类占比不可算"
+                              "（**不是 0 占用**；查 tracemalloc_rows 与 "
+                              "tracemalloc_basis 定位空采原因）")}
         for _k, _v in _b.items():
-            _v["pct"] = (round(_v["size_kb"] / _tot, 4) if _tot > 0 else None)
-        return {"buckets": _b, "total_size_kb": _tot,
+            _v["pct"] = round(_v["size_kb"] / _tot, 4)
+        return {"state": "ok", "reason": "",
+                "buckets": _b, "total_size_kb": _tot,
                 "total_count": sum(v["count"] for v in _b.values()),
+                "rows": len(_rows), "rows_with_size": _with_size,
                 "basis": ("按 tracemalloc 行的文件名归四类；pct 按 size_kb 计，"
-                          "**只覆盖本次快照可见的行**（window 模式下不是全堆）")}
+                          "**只覆盖本次快照可见的行**（cumulative 模式下含进程至今，"
+                          "增量看 tracemalloc_delta_rows）")}
 
     def _m339_memory_probe(self, heap_mb=None,
                            out_dir: str | None = None) -> dict[str, Any]:
@@ -503,37 +642,73 @@ class PulseMetricsCollector(BasePulseOrgan):
                               "not_in_slot(hour=%d slots=%s)" % (_lt.tm_hour, _hours))
             return _out
         _t0 = time.perf_counter()
+        # ★377刀4：产物目录提前解析 —— 两快照差分的基线文件也要落在同一个（可能是
+        #   被域过滤改道后的）目录里；改道逻辑本身零改动，只把位置前移。
+        _dir = out_dir or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), "data", "reports", "memory")
+        # ★344补 3（A-17 三类出口③）：隔离/验证进程**改道**，不写生产目录。
+        #   实测：`top_types_20261022_194451.json` 的 proc_gen=pid15780（验证进程）
+        #   却落在生产 data/reports/memory/（当时活体是 pid22576）。
+        #   判据只认**显式隔离声明**（env）——活体代次目前没有
+        #   落盘 oracle，拿不到真值就不能拿它当判据（铁律156/166）。
+        try:
+            from nucleus.domain_guard import guard_artifact_dir as _m344_gad
+            _dir, _m344_arq = _m344_gad(
+                _dir, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
+        except Exception as _m344_gae:
+            silent_exc(_m344_gae,
+                       where="PulseMetricsCollector._m339_memory_probe 344补 3 域过滤")
         _tm_rows: list = []
+        _tm_rows_state = "unavailable"
+        _tm_delta_rows: list = []
+        _tm_delta_state = "unavailable"
         _gc_types: list = []
         _basis = ""
         try:
             if "tracemalloc" in _mode:
                 import tracemalloc as _tm
-                _started = not _tm.is_tracing()
-                if _started:
-                    _tm.start(1)
-                try:
-                    _snap = _tm.take_snapshot()
-                    _basis = ("since_start（本次开启后的分配，**不代表全堆**）"
-                              if _started else "cumulative（进程内早已开启）")
-                    for _st in _snap.statistics("lineno")[:_topn]:
-                        try:
-                            _frame = _st.traceback[0] if _st.traceback else None
-                            _fn = str(getattr(_frame, "filename", "?") or "?")
-                            _fn = _fn.replace("\\", "/").split("/")[-1]
-                            _ln = int(getattr(_frame, "lineno", 0) or 0)
-                        except (IndexError, AttributeError) as _fde:
-                            _fn, _ln = "?", 0
-                            # ★cw2 铁律150：纯赋值兜底 = 静默 handler，必须留痕
-                            self._log(LogLevel.DEBUG,
-                                      "[339内存观测] tracemalloc 帧不可读"
-                                      "（记为 ?:0）: %s" % (type(_fde).__name__,))
-                        _tm_rows.append({"file": _fn, "line": _ln,
-                                         "size_kb": round(_st.size / 1024.0, 1),
-                                         "count": int(_st.count)})
-                finally:
-                    if _started and _tmmode != "resident":
-                        _tm.stop()
+                _tmst = _m377_tm_ensure()
+                if _tmst.get("mode") == "off":
+                    _tm_rows_state = "off"
+                    _tm_delta_state = "off"
+                    _basis = "off（M339_TRACEMALLOC_MODE=off，本次不采）"
+                else:
+                    _started = not _tm.is_tracing()
+                    if _started:
+                        _tm.start(1)
+                    try:
+                        _snap = _tm.take_snapshot()
+                        _basis = ("since_start（本次才开启，只覆盖本拍之后的分配，"
+                                  "**不代表全堆**）" if _started else
+                                  "cumulative（进程早期起常驻，覆盖进程至今的分配）")
+                        for _st in _snap.statistics("lineno")[:_topn]:
+                            try:
+                                _frame = _st.traceback[0] if _st.traceback else None
+                                _fn = str(getattr(_frame, "filename", "?") or "?")
+                                _fn = _fn.replace("\\", "/").split("/")[-1]
+                                _ln = int(getattr(_frame, "lineno", 0) or 0)
+                            except (IndexError, AttributeError) as _fde:
+                                _fn, _ln = "?", 0
+                                # ★cw2 铁律150：纯赋值兜底 = 静默 handler，必须留痕
+                                self._log(LogLevel.DEBUG,
+                                          "[339内存观测] tracemalloc 帧不可读"
+                                          "（记为 ?:0）: %s" % (type(_fde).__name__,))
+                            _tm_rows.append({"file": _fn, "line": _ln,
+                                             "size_kb": round(_st.size / 1024.0, 1),
+                                             "count": int(_st.count)})
+                        _tm_rows_state = "ok" if _tm_rows else "empty"
+                        # ★377刀4：两快照差分（只有常驻 tracer 的基线才有意义）
+                        if _started:
+                            _tm_delta_state = "window_mode"
+                        else:
+                            _tm_delta_rows, _tm_delta_state = _m377_tm_delta(
+                                _snap, os.path.join(_dir, _M377_TM_BASELINE), _topn)
+                    finally:
+                        # ★377刀4：只有**本拍临时开启**且仍是 window 模式才停；
+                        #   常驻模式绝不停（停了下一拍又变 since_start 空采）。
+                        if _started and _tmmode != "resident":
+                            _tm.stop()
             if _heap_hi or _mode == "gc_objects":
                 import gc as _gcm
                 _cnt: dict = {}
@@ -570,38 +745,36 @@ class PulseMetricsCollector(BasePulseOrgan):
             "criteria_version": _v["criteria_version"],
             "heap_mb": (round(float(heap_mb), 1) if heap_mb is not None else None),
             "image_mb": _img,
-            "top20": (_gc_types or _tm_rows),
+            "top20": (_tm_rows or _gc_types),
+            # ★377刀4：top20 的来源必须写明 —— 旧实现 `(_gc_types or _tm_rows)` 让 gc 的
+            #   **条数**行顶掉 tracemalloc 的**尺寸**行，读者无法分辨这一栏是字节还是条数。
+            "top20_source": ("tracemalloc" if _tm_rows
+                             else ("gc_types" if _gc_types else "none")),
             # ── 附带读数（不替代上面六项）──
             "top_n": _topn,
             "mode": _mode,
             "tracemalloc_rows": _tm_rows,
+            "tracemalloc_rows_state": _tm_rows_state,
+            # ★377刀4：相邻两拍差分的**增量**尺寸（累计值分不清老账与新账）
+            "tracemalloc_delta_rows": _tm_delta_rows,
+            "tracemalloc_delta_state": _tm_delta_state,
+            "tracemalloc_mode": str(_tmmode),
             "gc_type_rows": _gc_types,
             "tracemalloc_basis": _basis,
             # ★349刀5：四类占比（AST / PulseNode / image / other）
-            "heap_attribution": self._m349_heap_attribution(
-                _tm_rows if _tm_rows else _gc_types),
+            #   ★377刀4：只吃**有尺寸的** tracemalloc 行；无尺寸行 ⇒ state=unavailable，
+            #   不再拿 gc 计数行当尺寸算出 0.0（那正是「没采到」与「真 0」同形的根因）。
+            "heap_attribution": self._m349_heap_attribution(_tm_rows),
             "tracemalloc_is_tracing": bool(
                 __import__("tracemalloc").is_tracing()),
             "elapsed_sec": round(_elapsed, 3),
             "ts": _now,
             "note": ("只产计数与读数，**不改任何业务状态**；"
-                     "window 模式下 tracemalloc 快照只覆盖本次开启后的分配"),
+                     "resident 模式下 tracemalloc 常驻（basis=cumulative，含进程至今），"
+                     "`tracemalloc_delta_rows` 是相邻两拍差分的增量；"
+                     "window 模式下快照只覆盖本拍之后，归因不可用会显式标 unavailable"),
         }
-        _dir = out_dir or os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__)))), "data", "reports", "memory")
-        # ★344补 3（A-17 三类出口③）：隔离/验证进程**改道**，不写生产目录。
-        #   实测：`top_types_20261022_194451.json` 的 proc_gen=pid15780（验证进程）
-        #   却落在生产 data/reports/memory/（当时活体是 pid22576）。
-        #   判据只认**显式隔离声明**（env）——活体代次目前没有
-        #   落盘 oracle，拿不到真值就不能拿它当判据（铁律156/166）。
-        try:
-            from nucleus.domain_guard import guard_artifact_dir as _m344_gad
-            _dir, _m344_arq = _m344_gad(
-                _dir, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
-        except Exception as _m344_gae:
-            silent_exc(_m344_gae,
-                       where="PulseMetricsCollector._m339_memory_probe 344补 3 域过滤")
+        # ★377刀4：目录解析与 344补 3 域过滤已前移到采样之前（差分基线要落在同一目录）。
         try:
             os.makedirs(_dir, exist_ok=True)
             _p = os.path.join(_dir, "top_types_%s.json" %

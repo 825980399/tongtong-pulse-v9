@@ -379,3 +379,110 @@ def test_m377_d3_dir_cap_returns_dir_full(tmp_path, monkeypatch):
     assert _r2["count"] == 1
 
 
+# ================================================================ 刀4：内存观测
+def _mk_pmc():
+    from organs.core.PulseMetricsCollector import PulseMetricsCollector
+    return PulseMetricsCollector("t377d4")
+
+
+def test_m377_d4_attribution_never_reports_zero_for_no_data():
+    """★反向验证（376 刀5 病根二）：没有尺寸行时必须 unavailable，**不许出 0.0**。"""
+    _pmc = _mk_pmc()
+    for _rows, _why in (([], "no_rows"),
+                        ([{"file": "a.py", "count": 7}], "zero_size_rows"),
+                        ([{"file": "a.py", "line": 1, "size_kb": 0.0, "count": 3}],
+                         "zero_size_rows")):
+        _r = _pmc._m349_heap_attribution(_rows)
+        assert _r["state"] == "unavailable", _rows
+        assert _r["reason"] == _why
+        assert _r["total_size_kb"] is None, "不许拿 0.0 冒充「没采到」"
+        assert _r["total_size_kb"] != 0.0
+        assert _r["buckets"] == {}, "无尺寸时不许产出四类占比（那会是假 0%）"
+
+
+def test_m377_d4_attribution_ok_when_sizes_present():
+    _pmc = _mk_pmc()
+    _rows = [{"file": "CallGraphAnalyzer.py", "line": 10, "size_kb": 300.0, "count": 4},
+             {"file": "mnemosyne/PulseNodePool.py", "line": 20, "size_kb": 100.0,
+              "count": 2},
+             {"file": "PIL/Image.py", "line": 30, "size_kb": 400.0, "count": 1},
+             {"file": "random.py", "line": 40, "size_kb": 200.0, "count": 5}]
+    _r = _pmc._m349_heap_attribution(_rows)
+    assert _r["state"] == "ok" and _r["reason"] == ""
+    assert _r["total_size_kb"] == 1000.0
+    assert _r["buckets"]["ast"]["size_kb"] == 300.0
+    assert _r["buckets"]["pulsenode"]["size_kb"] == 100.0
+    assert _r["buckets"]["image"]["size_kb"] == 400.0
+    assert abs(sum(b["pct"] for b in _r["buckets"].values()) - 1.0) < 1e-6
+    assert _r["rows_with_size"] == 4
+
+
+def test_m377_d4_delta_states(tmp_path):
+    """两快照差分的四态：no_baseline → ok（有增长）→ baseline_unreadable。"""
+    import tracemalloc as _tm
+    from organs.core.PulseMetricsCollector import _m377_tm_delta
+    if not _tm.is_tracing():
+        _tm.start(1)
+    _base = str(tmp_path / "_tm_baseline.snap")
+    _rows, _st = _m377_tm_delta(_tm.take_snapshot(), _base)
+    assert _st == "no_baseline" and _rows == []
+    assert os.path.isfile(_base), "差分后必须留下基线，否则下一拍又只能 no_baseline"
+    _junk = [bytearray(4096) for _ in range(300)]        # 制造真实增长
+    assert len(_junk) == 300
+    _rows2, _st2 = _m377_tm_delta(_tm.take_snapshot(), _base)
+    assert _st2 == "ok", "有增长却报 %s" % _st2
+    assert _rows2 and all(r["size_kb"] > 0 for r in _rows2)
+    assert _rows2 == sorted(_rows2, key=lambda r: -r["size_kb"]), "增量须按字节降序"
+    # 基线读不动 ⇒ 如实报，不得当成「无增量」
+    with open(_base, "w", encoding="utf-8") as _f:
+        _f.write("not-a-snapshot")
+    _rows3, _st3 = _m377_tm_delta(_tm.take_snapshot(), _base)
+    assert _st3 == "baseline_unreadable" and _rows3 == []
+
+
+def test_m377_d4_probe_end_to_end_resident(tmp_path, monkeypatch):
+    """端到端：resident 模式下**不许再空采** —— rows 非空、basis=cumulative、
+    归因 state=ok、top20 来源标明 tracemalloc。"""
+    import config as _c
+    import time as _t
+    _pmc = _mk_pmc()
+    _h = int(_t.localtime().tm_hour)
+    monkeypatch.setattr(_c, "M339_MEMORY_PROBE_HOURS", (_h,), raising=False)
+    monkeypatch.setattr(_c, "M339_MEMORY_PROBE_TOP_N", 8, raising=False)
+    monkeypatch.setattr(_c, "M339_MEMORY_PROBE_MAX_SEC", 120.0, raising=False)
+    monkeypatch.setattr(_c, "M339_TRACEMALLOC_MODE", "resident", raising=False)
+    _pmc._m339_probe_last_slot = None
+    _pmc._m339_probe_last_gc_slot = None
+    _r = _pmc._m339_memory_probe(heap_mb=100.0, out_dir=str(tmp_path))
+    assert _r["ran"] is True, _r.get("reason")
+    _p = json.loads(open(_r["path"], encoding="utf-8").read())
+    assert _p["tracemalloc_rows"], "常驻模式仍空采 ⇒ 刀4 未生效"
+    assert "cumulative" in _p["tracemalloc_basis"]
+    assert _p["top20_source"] == "tracemalloc"
+    assert _p["heap_attribution"]["state"] == "ok"
+    assert _p["heap_attribution"]["total_size_kb"] > 0, "归因仍算成 0 ⇒ 病根二未修"
+    assert _p["tracemalloc_delta_state"] == "no_baseline"
+    assert _p["mode"] in ("tracemalloc", "tracemalloc+gc_objects")
+
+
+def test_m377_d4_probe_off_mode_is_labelled(tmp_path, monkeypatch):
+    """反向：off 模式不许"看着像空采" —— 必须显式标 off + 归因 unavailable。"""
+    import config as _c
+    import time as _t
+    _pmc = _mk_pmc()
+    monkeypatch.setattr(_c, "M339_MEMORY_PROBE_HOURS",
+                        (int(_t.localtime().tm_hour),), raising=False)
+    monkeypatch.setattr(_c, "M339_MEMORY_PROBE_MAX_SEC", 120.0, raising=False)
+    monkeypatch.setattr(_c, "M339_TRACEMALLOC_MODE", "off", raising=False)
+    _pmc._m339_probe_last_slot = None
+    _pmc._m339_probe_last_gc_slot = None
+    _r = _pmc._m339_memory_probe(heap_mb=100.0, out_dir=str(tmp_path))
+    assert _r["ran"] is True, _r.get("reason")
+    _p = json.loads(open(_r["path"], encoding="utf-8").read())
+    assert _p["tracemalloc_rows_state"] == "off"
+    assert _p["tracemalloc_delta_state"] == "off"
+    assert _p["heap_attribution"]["state"] == "unavailable"
+    assert _p["top20_source"] == "none"
+
+
+

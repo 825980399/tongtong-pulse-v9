@@ -6064,7 +6064,16 @@ M339_MEMORY_PROBE_HOURS = (5, 13)          # 每日采样槽位（本地时间�
 M339_MEMORY_PROBE_TOP_N = 20               # top-N 类型数
 M339_MEMORY_PROBE_MAX_SEC = 3.0            # 单次快照耗时上限（超时不写盘，记 WARNING）
 M339_MEMORY_GC_TYPES_HEAP_MB = 1200.0      # 第二档触发线 H1（heap>H1 才做 gc 类型计数）
-M339_TRACEMALLOC_MODE = "window"           # "window"=仅钩子内开启后关（零常驻开销），"resident"=常驻
+# ★377刀4：默认由 "window" 改 "resident"。
+#   为什么改：window 模式下 `start → snapshot → stop` 全在同一次调用内完成，
+#   快照的 since_start 只覆盖探针自己那几毫秒 ⇒ 实测 17/17 份产物
+#   `tracemalloc_rows` 全 0 行，四类归因恒 `total_size_kb=0.0`（「没采到」与
+#   「真是 0」在产物里同形）。resident 模式在进程早期 `start(1)` 并常驻
+#   （只记 1 层帧，开销最小档），快照 basis 变 cumulative，并支持相邻两拍差分出
+#   **增量**尺寸（累计值分不清老账与新账）。
+#   三态：`resident`（默认，常驻+差分）／`window`（旧行为，仅钩子内开关）／
+#         `off`（完全关闭，产物里显式标 off，不冒充空采）。
+M339_TRACEMALLOC_MODE = "resident"         # "resident"=常驻(默认) / "window"=钩子内开关 / "off"=关闭
 # [M339-CFG]
 
 
