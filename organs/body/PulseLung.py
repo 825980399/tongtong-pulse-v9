@@ -1973,6 +1973,21 @@ class PulseLung(BasePulseOrgan):
                         duration: float, status: str, origin: str,
                         error: str = "", prompt_version: str = "") -> None:
         """留存一条调用对（任何异常只记 DEBUG，绝不影响主推理流程）。"""
+        # ★378刀8（T-EventBus遥测扩面-1）：把每次 LLM 调用**旁路**发布到事件总线（只喂 EventTap 统计，
+        #   无业务订阅者）。为什么挂在这里：`by_source` 长期只有 PulseLiver/PulseStomach
+        #   两个来源（实测 21/452 条），订阅面喂不饱；而本方法是成功/失败/兜底
+        #   **都要经过**的唯一收口，是唯一能稳定产生流量的位置。
+        #   `tap_publish` 自带开关判定与异常兜底（见 EventTap:353），故只需 1 行。
+        try:
+            from nucleus.events.EventTap import tap_publish as _m378_tap
+            _m378_tap("lung.llm_call",
+                      {"channel": channel, "model": model, "status": status,
+                       "duration_ms": int(float(duration or 0) * 1000),
+                       "origin": origin, "prompt_version": prompt_version,
+                       "error": (error or "")[:120]},
+                      source="PulseLung", switch_attr="ENABLE_LUNG_EVENT_TAP")
+        except Exception as _te378:
+            silent_exc(_te378, where="PulseLung::_m40_trace_call tap", level="debug")
         try:
             from nucleus.llm.call_recorder import get_call_recorder
             _r = get_call_recorder()
