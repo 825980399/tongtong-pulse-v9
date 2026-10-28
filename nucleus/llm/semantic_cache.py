@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -630,6 +631,40 @@ def _m377_scene_for_gate(prompt: str) -> str:
     return _l2_classify_scene(prompt)
 
 
+#: ★378刀5（T-378-L2签名分级-1）：把「机器产物判据」从**两条字符串**升级成**分级签名**。
+#:   377刀6 只收了栈回溯头与代码围栏 —— 那是"最要命"，不是"穷举"。实测仍漏网的都是
+#:   `_code >= 2` 数不到的单标记形态：单处 `SELECT … FROM`、单处行首 `print(` /
+#:   `def foo(` / `import os`、单行 `ValueError: …`（没有 Traceback 头）。
+#:
+#:   ★两条判据都认**形状**、不认"出现过某个词"：
+#:     ① 行首代码关键字 —— 自然语言提问不会把 "def foo(" 写在行首；
+#:     ② SQL 的 select…from **成对**出现 —— 解释"SELECT 和 UPDATE 的区别"时不会带 from；
+#:     ③ 行首 `XxxError:` / `XxxException:` —— 报错行形态（句中的 `Error:` 不算）。
+#:   ★刻意**不收**：裸 `import ` / `print(` / `Error:` 出现在**句中** —— 那会误杀
+#:   「Python 里 import 和 from 的区别是什么？」，与本刀目的正相反（377刀6 已栽过一次）。
+_M378_CODE_LINE_PREFIX_RE = re.compile(
+    r"(?m)^[ \t]*(?:def |class |async def |import [A-Za-z_]|from [A-Za-z_][\w.]* import "
+    r"|return |print\(|raise |@[A-Za-z_])")
+_M378_SQL_PAIR_RE = re.compile(r"(?is)\bselect\b[^\n]{0,300}?\bfrom\b")
+_M378_EXC_LINE_RE = re.compile(r"(?m)^[ \t]*[A-Za-z_][\w.]*(?:Error|Exception)\s*:")
+
+
+def _m378_scene_for_gate(prompt: str) -> str:
+    """★378刀5（T-378-L2签名分级-1）：准入闸场景口径 = 377 硬签名 ∧ 378 分级签名 ∧ 旧分类轴。
+
+    叠加顺序（先严后宽）；`_l2_classify_scene()` 仍然**一行不改**
+    —— 188刀1 建它时只承诺用于遥测分桶，本函数不去动那个契约。
+    """
+    if _m377_scene_for_gate(prompt) == "code":
+        return "code"
+    _p = prompt or ""
+    if (_M378_CODE_LINE_PREFIX_RE.search(_p)
+            or _M378_SQL_PAIR_RE.search(_p)
+            or _M378_EXC_LINE_RE.search(_p)):
+        return "code"
+    return _l2_classify_scene(prompt)
+
+
 @dataclass
 class L2Entry:
     """L2 缓存条目（内存；含向量供余弦比对）。"""
@@ -705,7 +740,9 @@ class SemanticCacheL2:
             return True, "allowed"
         if _o == "system_internal" and not cls._m377_system_internal_on():
             return False, "system_internal_admission_off"
-        _scene = _m377_scene_for_gate(prompt)
+        # ★378刀5（T-378-L2签名分级-1）：判据升级为分级签名（行首代码/SQL 成对/异常行），
+        #   仍含 377刀6 的两条硬签名；旧分类轴只作最后回落。
+        _scene = _m378_scene_for_gate(prompt)
         if _scene in _scenes:
             return True, "allowed_knowledge_qa"
         return False, "scene_%s_not_knowledge_qa" % _scene
