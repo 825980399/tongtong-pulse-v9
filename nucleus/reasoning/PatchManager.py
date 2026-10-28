@@ -1785,6 +1785,67 @@ class PatchManager:
         return PatchManager._M280_RISK_BY_FAMILY.get(
             str(issue_type or ""), PatchManager._M372_DEFAULT_FAMILY_RISK)
 
+    @staticmethod
+    def _m383_family_triage_enabled() -> bool:
+        """★383刀5：三级族分级总开关（读 config，**默认关**）。
+
+        关 ⇒ `_m383_family_triage` 一律返 "off"，调用点逐字回到 176 批的
+        SAFE_TO_AUTO_FIX 单表逻辑 ⇒ 零行为变化，可随时回滚。
+        """
+        try:
+            import config as _c383
+            return bool(getattr(_c383, "ENABLE_M383_FAMILY_TRIAGE", False))
+        except Exception as _e383:
+            silent_exc(_e383, where="PatchManager::_m383_family_triage_enabled",
+                       level="debug")
+            return False
+
+    @staticmethod
+    def _m383_family_triage(patch) -> str:
+        """★383刀5：把补丁的 issue_type 归入 SAFE / REVIEW / BLOCKED。
+
+        **档次直接派生自 `_M280_RISK_BY_FAMILY`**，不另立第二张族表：
+            风险低（rank 1） ⇒ SAFE     可自动审批
+            风险中（rank 2） ⇒ REVIEW   转人工（**含未登记族**，372刀1 的兜底）
+            风险高（rank 3） ⇒ BLOCKED  永不自动，另打 WARNING 留痕
+
+        返回 "off" 表示开关关闭 —— 调用方按旧逻辑处理（不是"未知档"）。
+        档次判定走 `_m346_risk_rank`，不写中文字面比较（346刀5 的纪律）。
+        """
+        if not PatchManager._m383_family_triage_enabled():
+            return "off"
+        _it = str((patch or {}).get("issue_type", "") or "")
+        _rank = PatchManager._m346_risk_rank(
+            PatchManager._m280_risk_by_issue_type(_it))
+        if _rank == 1:
+            return "safe"
+        if _rank == 3:
+            return "blocked"
+        # rank 2 与「不认识」（None）都落 REVIEW：保守转人工，绝不放行
+        return "review"
+
+    @staticmethod
+    def _m383_family_triage_table() -> dict:
+        """★383刀5：三级各自的**具体族名**（从风险表派生，供诊断与交付物）。
+
+        票面要求「每级列具体族名」—— 这里列的是**在册真实族**，不是示意。
+        ★SAFE 只有 1 个族：`_M280_RISK_BY_FAMILY` 里只有 1 个「低」族。
+          要凑出第 2 个必须把某个「中」族降到「低」，那是安全面放宽，
+          不在本刀范围，也**不该为了"每级≥2"去凑数**。
+        """
+        _by_rank = {1: "SAFE", 2: "REVIEW", 3: "BLOCKED"}
+        out = {"SAFE": [], "REVIEW": [], "BLOCKED": []}
+        for _fam, _risk in PatchManager._M280_RISK_BY_FAMILY.items():
+            _lv = _by_rank.get(PatchManager._m346_risk_rank(_risk))
+            if _lv:
+                out[_lv].append(str(_fam))
+        for _k in out:
+            out[_k].sort()
+        out["UNREGISTERED"] = "REVIEW"
+        out["DEFAULT_FAMILY_RISK"] = PatchManager._M372_DEFAULT_FAMILY_RISK
+        out["SOURCE"] = "_M280_RISK_BY_FAMILY"
+        return out
+
     #: 风险档位权重（★344刀3）。中英双写是因为历史数据里两种都有
     #: （`select_for_auto_triage` 至今仍写 `in ("低", "low")`）。
     _M344_RISK_RANK = {"低": 1, "low": 1, "中": 2, "medium": 2, "中危": 2,
@@ -2556,6 +2617,20 @@ class PatchManager:
         _safe_list_a1 = list(_evo_cfg_a1.get("SAFE_TO_AUTO_FIX", []) or [])
         _issue_type_a1 = str(patch.get("issue_type", "") or "")
         _whitelist_ok_a1 = (not _safe_list_a1) or (_issue_type_a1 in _safe_list_a1)
+        # ★383刀5：三级族分级。开关关（默认）⇒ `_triage_a1 == "off"`，
+        #   下面这段一行都不执行 ⇒ 逐字回到 176 批口径。
+        #   ★零放宽：只在旧判定**已通过**的基础上再收紧，
+        #     旧判定拒绝的补丁，三级绝不会把它放行。
+        _triage_a1 = PatchManager._m383_family_triage(patch)
+        if _triage_a1 != "off":
+            _whitelist_ok_a1 = _whitelist_ok_a1 and (_triage_a1 == "safe")
+            if _triage_a1 in ("review", "blocked"):
+                patch["family_triage"] = _triage_a1
+            if _triage_a1 == "blocked":
+                _module_logger.warning(
+                    f"[补丁自动审批][383刀5] 高危族禁用自动档: "
+                    f"{patch.get('file', '')}:{patch.get('method', '')} "
+                    f"issue_type={_issue_type_a1} ⇒ 转人工（BLOCKED）")
         # ★第280批刀3：llm 补丁永不自动审批（即使 risk/trust/whitelist 达标也转人工）。
         _source_is_llm_a1 = str(patch.get("source", "")) == "llm"
         if (_risk_ok_a1 and _trust_ok_a1 and _whitelist_ok_a1
