@@ -105,6 +105,41 @@ def _cfg(name: str, default: Any) -> Any:
         return default
 
 
+def _m380_pulse_snapshot(write: bool = False) -> dict:
+    """★380刀2（T-380-CallGraph接线）：自检轮次用的脉冲链快照（379刀1 的链 + 379刀2 的死信/孤儿）。
+
+    为什么要接进轮次：379 刀1 的 `_build_pulse_call_chain` 建好后**只有单测在调**，
+    等于能力落地但没人用（铁律：既有能力未接线）。轮次是天然的调用点（1 次/天，
+    IO 可忽略），且 profile 与它同目录，审计时一眼能对照。
+
+    Args:
+        write: True 才落盘 `data/reports/pulse_call_chain.json`（单测传 False）
+
+    Returns:
+        dict: {chain_path, chain_stats, orphans, dead_letters, separated, error}
+    """
+    _out = {"chain_path": "", "chain_stats": {}, "orphans": 0,
+            "dead_letters": 0, "separated": True, "error": ""}
+    try:
+        from nucleus.self_inspector import SelfInspector as _SI380
+        _ins = _SI380.__new__(_SI380)
+        _rep = _ins._build_pulse_call_chain(write=bool(write))
+        _out["chain_path"] = str(_rep.get("written") or "")
+        _out["chain_stats"] = dict(_rep.get("stats") or {})
+        _up = {str((c.get("publisher") or {}).get("method") or ""): bool(c.get("upstream"))
+               for c in (_rep.get("chains") or [])
+               if (c.get("publisher") or {}).get("method")}
+        from utils.pulse_tracer import orphan_dead_report as _odr380
+        _view = _odr380(ast_upstream_provider=lambda _e: _up.get(str(_e), True))
+        _out["orphans"] = int((_view.get("orphans") or {}).get("total") or 0)
+        _out["dead_letters"] = int((_view.get("dead_letters") or {}).get("total") or 0)
+        _out["separated"] = "total" not in _view
+    except Exception as _e:
+        silent_exc(_e, where="DailyScheduler::_m380_pulse_snapshot", level="warning")
+        _out["error"] = "%s: %s" % (type(_e).__name__, _e)
+    return _out
+
+
 def schedule_enabled() -> bool:
     """每日调度总开关（`ENABLE_SELF_AWARENESS_DAILY_SCHEDULE`，默认 True）。"""
     return bool(_cfg("ENABLE_SELF_AWARENESS_DAILY_SCHEDULE", True))
@@ -356,6 +391,9 @@ class SelfAwarenessDailyScheduler:
             _rp = os.path.join(_out, f"report_{_ts}.txt")
             _eng.generate_report(_rp)
             _res["report_path"] = _rp
+            # ★380刀2（T-380-CallGraph接线）：脉冲语义链 + 死信/孤儿两侧读数（379刀1/刀2 的能力接线）。
+            #   放在报告生成之后：即便这段失败也不影响 profile/report 落盘。
+            _res["pulse_snapshot"] = _m380_pulse_snapshot(write=True)
             # ★主线第50批 T1（P0-1）：自认知报告 → ReportBus
             #   （`generate_report` 内部已发；此处补一条带调度上下文的记录）
             try:
