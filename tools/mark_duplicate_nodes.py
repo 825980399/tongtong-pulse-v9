@@ -56,15 +56,26 @@ _STRUCT_RE = re.compile(rb'[\[\]{}"\\]')
 
 
 def _locate_nodes_array(f) -> int:
-    """定位顶层 "nodes" 数组起始的 '[' 之后的位置（字节偏移）。"""
+    """定位顶层 "nodes" 数组起始的 '[' 之后的位置（字节偏移）。
+
+    ★384刀1 修：改前实现有两个缺陷，实测会让**整次扫描扫出 0 个节点
+    却一声不响**（`iter_snapshot_nodes` 对 json.loads 失败是静默 continue）：
+      ① `find(b'"nodes"')` 会命中**字符串值** —— 快照里调用图有
+         `"args": "nodes"`（偏移 ~1.04MB），于是从它后面的 `[` 开始扫，
+         那里根本不是节点数组；
+      ② 搜索窗口只有 1MB —— 真实 `"nodes":` 在 ~1.25MB
+         （freq_index 把字段推到后面）。
+    现改为：匹配带冒号的 `"nodes":`（字段名形态，不会被值命中）+ 窗口 4MB。
+    守卫见 tests/test_m384_d1_snapshot_locate.py（用真实快照核对偏移）。
+    """
     f.seek(0)
-    _buf = f.read(1 << 20)
-    _i = _buf.find(b'"nodes"')
+    _buf = f.read(1 << 22)          # ★384刀1：1MB → 4MB
+    _i = _buf.find(b'"nodes":')      # ★384刀1：带冒号，避免命中字符串值
     if _i < 0:
-        raise ValueError('快照中未找到 "nodes" 字段')
-    _j = _buf.find(b"[", _i + 7)
+        raise ValueError('前 4MB 未找到 "nodes": 字段')
+    _j = _buf.find(b"[", _i + 8)
     if _j < 0:
-        raise ValueError('"nodes" 后未找到 [')
+        raise ValueError('"nodes": 后未找到 [')
     return _j + 1
 
 
