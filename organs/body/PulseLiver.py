@@ -266,6 +266,14 @@ class PulseLiver(BasePulseOrgan):
         _content = (payload or {}).get("content")
         if not _content:
             return
+        # ★380刀3（T-380-肝吸收去重）：同一正文（sha256 相同）只吸收一次。
+        #   改前**根本没有去重**（全文件无 dedup/sha256/hashlib 任何痕迹）——
+        #   票面说"去重 key 未生效"偏轻了：真相是从未存在过。实测同一正文一日进肝 70 次。
+        #   去重只挡"进肝"，不挡日志之外的行为；重复时打 DEBUG 便于观察，不再建节点。
+        if self._m380_digest_seen(str(_content)):
+            self._log(LogLevel.DEBUG,
+                      f"[380刀3] 肝吸收重复跳过（sha256 命中）: {str(_content)[:40]}")
+            return
         self._log(LogLevel.DEBUG,
                   f"[第98批T-98b] 肝吸收 digest.knowledge: {str(_content)[:50]}")
         try:
@@ -282,6 +290,35 @@ class PulseLiver(BasePulseOrgan):
         except Exception as _e:
             self._log(LogLevel.DEBUG,
                       f"[第98批T-98b] 知识沉淀失败(已忽略): {type(_e).__name__}: {_e}")
+
+    #: ★380刀3（T-380-肝吸收去重）：去重表上限（超了按先入先出淘汰；只防内存无限涨，不影响正确性）。
+    _M380_DIGEST_SEEN_MAX = 4096
+
+    def _m380_digest_seen(self, text: str) -> bool:
+        """返回 True = 这条正文已吸收过（应跳过）；False = 首见，已登记。
+
+        指纹用 **sha256(正文)**，不用"前 N 字"：正文前 50 字常常相同
+        （`【种子记忆】[自我理解·X] …`），按前缀去重会把不同内容误判成重复。
+        """
+        try:
+            import hashlib as _hl
+            _fp = _hl.sha256(str(text).encode("utf-8", "ignore")).hexdigest()
+            _seen = self.__dict__.setdefault("_m380_digest_seen_set", set())
+            _order = self.__dict__.setdefault("_m380_digest_seen_order", [])
+            if _fp in _seen:
+                return True
+            _seen.add(_fp)
+            _order.append(_fp)
+            # ★380刀3：上限从**类**上取（`getattr(type(self), …)`），
+            #   这样单测拿桩对象调本方法也不会 AttributeError（桩没有实例属性）。
+            _cap = int(getattr(type(self), "_M380_DIGEST_SEEN_MAX", 4096) or 4096)
+            while len(_order) > _cap:
+                _old = _order.pop(0)
+                _seen.discard(_old)
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="PulseLiver::_m380_digest_seen", level="debug")
+            return False        # 判不了就照旧吸收（宁可重复，不可丢知识）
 
     def get_resonance_conditions(self) -> list[dict[str, Any]]:
         return [
