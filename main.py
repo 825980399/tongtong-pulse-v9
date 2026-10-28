@@ -40,6 +40,12 @@ _re._cache = {}  # 预留给后续正则优化
 import logging
 import signal
 import threading
+
+#: ★380刀4（T-380-优雅停）：进程级停止位。置位后所有"长睡轮询"循环必须立刻退出。
+#:   病根：18:07:40 器官并行停止完成后，自主意图循环仍在 `sleep(2700)` 里睡，
+#:   主进程又空转约 3 分钟才 exit（票面现象）。用 Event 而不是 bool：
+#:   睡眠可以被 `wait()` 打断，bool 只能等睡醒。
+_M380_STOP = threading.Event()
 import time
 
 # ★P1修复: 启动时把当前工作目录归一化到项目根目录
@@ -605,8 +611,10 @@ class PulseFramework:
                     #   只记录不执行，为后续「自主意图→任务」积累数据。
                     from collections import deque as _deque
                     _pending_intent_queue = _deque(maxlen=50)
-                    _tm.sleep(_rd.uniform(60, 900))
-                    while True:
+                    # ★380刀4（T-380-优雅停）：错峰等待可被打断；已置位则不进循环。
+                    if _M380_STOP.wait(_rd.uniform(60, 900)):
+                        return
+                    while not _M380_STOP.is_set():
                         try:
                             _intent = _intent_ig.generate()
                             if _intent:
@@ -633,6 +641,9 @@ class PulseFramework:
                         # ★176批段6（#246）：自主意图环定长睡眠 → 心跳脉冲驱动（C11-1 族 449651c 范式）
                         #   脉冲网关未启用时 wait 超时回落 = 原 2700s 节奏（零回归）。
                         _ctrl = self.controller if self is not None else None
+                        # ★380刀4（T-380-优雅停）：每拍先看停止位（0.1s 代价换"停后不再等 45 分钟"）。
+                        if _M380_STOP.wait(0.1):
+                            break
                         if _ctrl is not None and hasattr(_ctrl, "wait_heartbeat_pulse"):
                             _ctrl.wait_heartbeat_pulse(2700.0)
                         else:
@@ -2864,6 +2875,9 @@ class PulseFramework:
             self._log(LogLevel.INFO,
                      f"器官并行停止完成: {len(_stop_tasks)}个 "
                      f"(耗时{time.time()-_stop_start:.1f}s, 总耗时{time.time()-_stop_t0:.1f}s)")
+            # ★380刀4（T-380-优雅停）：器官停完立刻置停止位 —— 后台长睡循环（自主意图等）当场退出，
+            #   不再"业务循环又跑一轮"；收尾 flush 在后面的 finally 里照常执行。
+            _M380_STOP.set()
 
         # ★P0-1修复：器官停止后立即停止记忆验证后台线程（冷节点召回/记忆验证），
         # 避免退出期间后台线程仍在读写node_pool，与快照保存争抢锁导致退出挂起
