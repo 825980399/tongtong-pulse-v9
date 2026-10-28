@@ -1315,6 +1315,23 @@ class PulseMetricsCollector(BasePulseOrgan):
                         _wfe383,
                         where="PulseMetricsCollector::_collect_memory_pressure 383刀3")
                     _out["write_face"] = None
+                # ★385刀2：DL3 影子账本（resource 域，每 N 拍一条）。
+                #   ★只在有结果时才写 `_out` —— 开关关时输出结构与改前逐字相同。
+                try:
+                    from nucleus.decision import shadow as _dec385
+                    _t385 = int(getattr(self, "_m385_dec_tick", 0)) + 1
+                    self._m385_dec_tick = _t385
+                    _r385 = _dec385.observe_resource(
+                        queue_snapshot=(_out.get("queues") if isinstance(_out, dict) else None),
+                        rss_mb=(_out.get("rss_mb") if isinstance(_out, dict) else None),
+                        tick=_t385,
+                    )
+                    if _r385:
+                        _out["dec_shadow"] = _r385
+                except Exception as _dece385:
+                    silent_exc(
+                        _dece385,
+                        where="PulseMetricsCollector::_collect_memory_pressure 385刀2")
 
                 # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
                 #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。

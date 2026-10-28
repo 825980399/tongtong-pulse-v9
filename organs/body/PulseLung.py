@@ -1995,6 +1995,21 @@ class PulseLung(BasePulseOrgan):
         except Exception as _oe383:
             silent_exc(_oe383, where="PulseLung::_m40_trace_call oa4_shadow",
                        level="debug")
+        # ★385刀2：DL3 影子账本（chat 域，每 100 次回答抽样一条）。
+        #   ★开关关时只 +1 计数 —— 不构造对象、不写盘，对调用方零影响。
+        try:
+            from nucleus.decision import shadow as _dec385
+            _c385 = int(getattr(self, "_m385_chat_tick", 0)) + 1
+            self._m385_chat_tick = _c385
+            _dec385.observe_chat(
+                intent_type="", confidence=None, route=str(channel or ""),
+                tick=_c385,
+                evidence=["lung_call:channel=%s" % (channel or "-"),
+                          "model:%s" % (model or "-")],
+            )
+        except Exception as _dce385:
+            silent_exc(_dce385, where="PulseLung::_m40_trace_call dec_shadow",
+                       level="debug")
         try:
             from nucleus.llm.call_recorder import get_call_recorder
             _r = get_call_recorder()

@@ -3266,6 +3266,21 @@ def _m351_watch_zero_break(pending_rows: list, results: list | None,
         for _w in _ws:
             _module_logger.info("[351破零] %s proc_gen=%s",
                                 _zb351.watch_line(_w), _m335_pg())
+            # ★385刀2：DL3 影子账本（patch 域）。开关默认关 ⇒ 内部第一行
+            #   就返回，不构造对象也不写盘；异常绝不影响派单。
+            try:
+                from nucleus.decision import shadow as _dec385
+                _dec385.observe_patch(
+                    patch_id=str(_w.get("patch_id") or ""),
+                    file=str(_w.get("file") or ""),
+                    status=str(_w.get("verdict") or ""),
+                    dispatched=bool(_w.get("selected_gt_0")),
+                    evidence=["zero_break_watch:%s" % _w.get("patch_id"),
+                              "verdict:%s" % _w.get("verdict")],
+                )
+            except Exception as _dec_e:
+                silent_exc(_dec_e, where="patch_execution_dispatch::385DL3影子patch",
+                           level="debug")
         return _ws
     except Exception as _e:                                 # noqa: BLE001
         silent_exc(_e, where="patch_execution_dispatch::351破零观察",
