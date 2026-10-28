@@ -1078,6 +1078,24 @@ class SemanticCacheL2:
                        "nucleus/llm/semantic_cache.py:SemanticCacheL2.record_feedback",
                        level="debug")
 
+    def _m380_idle_state(self) -> str:
+        """★380刀5（T-380-L2空转）：四态标注 —— disabled / no_calls / calls_no_hit / ok。
+
+        `no_calls` 与 `calls_no_hit` 是**两个不同事实**，不许合并成"hits=0"：
+        前者是"没人用"，后者是"用了但一次没中"（阈值过高/语义不相似）。
+        """
+        try:
+            if not self.enabled():
+                return "disabled"
+            _h = int(self._stat.get("hits") or 0)
+            _m = int(self._stat.get("misses") or 0)
+            if _h + _m == 0:
+                return "no_calls"
+            return "ok" if _h > 0 else "calls_no_hit"
+        except Exception as _e:
+            silent_exc(_e, where="SemanticCacheL2::_m380_idle_state")
+            return "unknown"
+
     def telemetry(self) -> dict:
         """★188刀1：只读遥测快照（命中率/污染率·按场景分桶）。零副作用。"""
         # ★198刀1：入口一次性 INFO（验收：telemetry() 确被进入，用于区分「分支未及」与「异常吞」）。
@@ -1150,6 +1168,12 @@ class SemanticCacheL2:
                 "ttl_sec": self.ttl_sec(), "threshold": self.threshold(),
                 "hit_rate": round(self._stat["hits"] / _o, 4) if _o else 0.0,
                 "telemetry": self.telemetry(),
+                # ★380刀5（T-380-L2空转）：**空转口径**——把"没被调用"和"调了没命中"分开。
+                #   改前 hits/misses 双 0 有两种完全不同的原因，读数长得一样：
+                #     ① 生产面**没人调** lookup（L1 已命中 / 调用方未接线）；
+                #     ② 调了但全 miss。
+                #   不分开就必然得出"缓存坏了"的错误结论。
+                "idle_state": self._m380_idle_state(),
                 # ★377刀6：准入结果分桶（被拒也要可见，否则"全被挡"与"没请求"同形）
                 "admission": {"admitted": dict(_adm.get("admitted") or {}),
                               "rejected": dict(_adm.get("rejected") or {})},
