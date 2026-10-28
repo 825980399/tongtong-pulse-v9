@@ -5220,6 +5220,17 @@ ENABLE_EXPERIENCE_DECAY_ON_TRIM = True
 # T3-2：眼睛推流统计日志级别（True=保持 INFO；默认 False=降为 DEBUG）
 ENABLE_EYES_STREAM_STATS_INFO = False   # D3反向[L399] **语义反向**：False=降噪（默认）；True=回到旧行为（打印流统计，PulseEyes:412）
 EYES_STREAM_STATS_INFO_INTERVAL = 1800   # 保留低频 INFO 摘要的间隔（秒）
+
+# ===== ★386刀2（T-386-眼睛分道）：帧流脉冲采样 =====
+#   背景：eyes.stream_frame 占全框架脉冲 **85.8%**（20261029 实测 1998/2329），
+#   100% 落 L3 ⇒ L3 队列与背压几乎全由它主导。
+#   ★采样**只减少脉冲发射**，帧照常采集（推流日志/UI 不受影响）。
+#   ★N=1 ⇒ **全发**，逐字回到旧行为（零回归路径）。
+EYES_STREAM_PULSE_SAMPLE_EVERY = 3      # 每 N 帧发 1 次脉冲（1=全发）
+# ★启动窗口：前 N 帧**全速**、不采样 —— 对齐 PulseVisualCortex._on_stream_frame 的
+#   「前 30 帧内累计 2 帧人脸 ⇒ 立刻打招呼」。若启动期也采样，这个"快速启动确认"
+#   会被拖成几分钟 ⇒ 等于废掉功能。**改这里要同时看视觉皮层那个 30**。
+EYES_STREAM_BOOTSTRAP_FRAMES = 30
 # T3-3：日志轮转失败（Windows 文件占用）重试次数与间隔
 LOG_ROLLOVER_RETRY = 3
 LOG_ROLLOVER_RETRY_WAIT = 0.2

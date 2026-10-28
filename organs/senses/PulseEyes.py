@@ -308,6 +308,63 @@ class PulseEyes(BasePulseOrgan):
                 time.sleep(0.1)  # 短暂等待后重试
 
             return None
+    # ===== ★386刀2（T-386-眼睛分道）：帧流脉冲采样 =====
+    #: 背景：眼睛帧流占全框架脉冲 **85.8%**（今日实测 1998/2329；票面写 73.9%，
+    #:   方向一致、量级更高），100% 落 L3 ⇒ L3 队列/背压几乎全由它主导。
+    #:
+    #: ★为什么不做「独立队列/独立层」：L3 队列上限当前是 **300**（不是注释里的 100），
+    #:   且**今日实测背压 0 次** ⇒ 换队列属于无的放矢；真要降的是**发射量**。
+    #: ★为什么不改「独立通道」：视觉皮层 `PulseVisualCortex._on_stream_frame`
+    #:   **就是靠这条脉冲拿帧**（payload 带 raw_data），改链路等于改它的输入源
+    #:   ⇒ 与票面「不动视觉皮层业务逻辑」直接冲突。
+    #: ★为什么不直接 1/N 硬采到底：票面目标「占比 <30%」按实测需 **1/15**
+    #:   （稳态约 23 秒一帧）⇒ 「快速启动/离开确认」事实上失效。故保留启动窗口全速，
+    #:   稳态温和采样；**未达 30% 是刻意取舍**，不是没做完（见交付报告 §刀2）。
+    _M386_SAMPLE_DEFAULT = 3
+
+    def _m386_pulse_sample_every(self) -> int:
+        """帧流脉冲采样率：每 N 帧发 1 次（**1 = 全发，零回归**）。"""
+        try:
+            import config as _c386
+            _n = int(getattr(_c386, "EYES_STREAM_PULSE_SAMPLE_EVERY",
+                             self._M386_SAMPLE_DEFAULT) or 1)
+        except Exception as _e386:
+            silent_exc(_e386, where="PulseEyes::_m386_pulse_sample_every",
+                       level="debug")
+            _n = self._M386_SAMPLE_DEFAULT
+        return _n if _n >= 1 else 1
+
+    def _m386_should_emit_pulse(self) -> bool:
+        """★本帧是否发脉冲（纯判定，可单测）。
+
+        True 的三种情况：①采样关闭（N<=1）；②处于启动窗口内；③命中 `seq % N == 0`。
+        ★只看 `self._frame_seq`，不读盘、不碰 info_field ⇒ 判据可复算。
+        """
+        _n = self._m386_pulse_sample_every()
+        if _n <= 1:
+            return True
+        if self._frame_seq <= self._m386_bootstrap_frames():
+            return True
+        return (self._frame_seq % _n) == 0
+
+    def _m386_bootstrap_frames(self) -> int:
+        """★启动窗口：前 N 帧**全速**发、不采样。
+
+        对齐 `PulseVisualCortex._on_stream_frame` 的「前 30 帧内累计 2 帧人脸 ⇒
+        立刻打招呼」：若启动期就采样，这个「快速启动确认」会被拖成几分钟，
+        等于**废掉功能**。
+
+        ★跨模块耦合（显式声明）：视觉皮层若改这个 30 帧窗口，这里要同步改，
+        否则启动确认会变慢。已在单测里把两处的数字钉成同一个常量。
+        """
+        try:
+            import config as _c386
+            return int(getattr(_c386, "EYES_STREAM_BOOTSTRAP_FRAMES", 30) or 0)
+        except Exception as _e386:
+            silent_exc(_e386, where="PulseEyes::_m386_bootstrap_frames",
+                       level="debug")
+            return 30
+
     def _stream_loop(self):
         """后台推流线程：持续采集摄像头帧，定向发射给视觉皮层"""
         empty_count = 0  # 连续空帧计数
@@ -321,6 +378,7 @@ class PulseEyes(BasePulseOrgan):
         _frame_empty = 0
         _publish_success = 0
         _publish_fail = 0
+        _publish_skipped = 0   # ★386刀2：被采样跳过的帧（不发脉冲）
         _last_stats_time = time.time()
 
         while self._stream_running and self.is_running:
@@ -364,21 +422,27 @@ class PulseEyes(BasePulseOrgan):
                             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
                         try:
-                            self.info_field.publish(self.pulse_core.emit(
-                                source_organ=self.organ_name,
-                                event_type=EyeEvent.STREAM_FRAME,
-                                target_organ="PulseVisualCortex",
-                                payload={
-                                    "raw_data": frame_data,
-                                    "frame_seq": self._frame_seq,
-                                    "timestamp": time.time(),
-                                    "width": frame_data.shape[1],
-                                    "height": frame_data.shape[0],
-                                },
-                                priority=3,
-                                layer="L3"
-                            ))
-                            _publish_success += 1
+                            # ★386刀2：帧流脉冲采样 —— 帧**照常采集**（推流日志/UI 不受影响），
+                            # 仅**不发脉冲** ⇒ 不占 L3 队列。视觉皮层有 `_last_processed_seq`
+                            # 判过期帧，跳帧不会导致错序；代价是它收到的帧变稀。
+                            if not self._m386_should_emit_pulse():
+                                _publish_skipped += 1
+                            else:
+                                self.info_field.publish(self.pulse_core.emit(
+                                    source_organ=self.organ_name,
+                                    event_type=EyeEvent.STREAM_FRAME,
+                                    target_organ="PulseVisualCortex",
+                                    payload={
+                                        "raw_data": frame_data,
+                                        "frame_seq": self._frame_seq,
+                                        "timestamp": time.time(),
+                                        "width": frame_data.shape[1],
+                                        "height": frame_data.shape[0],
+                                    },
+                                    priority=3,
+                                    layer="L3"
+                                ))
+                                _publish_success += 1
                         except Exception as _pub_e:
                             _publish_fail += 1
                             self._log(LogLevel.WARNING, f"推流发布失败: {type(_pub_e).__name__}: {_pub_e}")
@@ -422,7 +486,7 @@ class PulseEyes(BasePulseOrgan):
                 _m49_interval = _m49_summary_interval
                 _m49_level = LogLevel.DEBUG
             if time.time() - _last_stats_time >= _m49_interval:
-                self._log(_m49_level, f"推流统计: 循环={_loop_count}, 成功帧={_frame_success}, 空帧={_frame_empty}, 发布成功={_publish_success}, 发布失败={_publish_fail}, stream_running={self._stream_running}, is_running={self.is_running}")
+                self._log(_m49_level, f"推流统计: 循环={_loop_count}, 成功帧={_frame_success}, 空帧={_frame_empty}, 发布成功={_publish_success}, 发布失败={_publish_fail}, 采样跳过={_publish_skipped}, stream_running={self._stream_running}, is_running={self.is_running}")
                 _last_stats_time = time.time()
 
             time.sleep(0.5)  # 星轨调整：8.3fps→2fps，降低L3队列负载（人脸识别等功能完善后再调回）
