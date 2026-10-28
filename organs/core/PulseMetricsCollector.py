@@ -827,6 +827,39 @@ class PulseMetricsCollector(BasePulseOrgan):
     _M382_THREADS_WARN = 50
     _M382_HANDLES_WARN = 5000
 
+    #: ★383刀1（T-383-tier分布）：写盘节流（秒）。分布是慢变量，每拍写盘没意义还会磨盘。
+    _M383_DUMP_EVERY_SEC = 300.0
+
+    def _m383_dump_tier_distribution(self, path: str | None = None) -> str:
+        """★383刀1（T-383-tier分布）：把 tier 分布落 `data/metrics/tier_distribution.json`。
+
+        为什么写盘放在**这里**而不是 release_policy：那个模块的 docstring 明写
+        「释放路径不 import 新模块（顶部只导 gc/tracemalloc/time）」——
+        统计口径进得去，IO 只能出到已经有 os/json 的调用方。
+
+        Returns: 实际路径；节流中或失败返回空串。
+        """
+        try:
+            _now = time.time()
+            _last = float(getattr(self, "_m383_last_dump_ts", 0.0) or 0.0)
+            if _now - _last < self._M383_DUMP_EVERY_SEC:
+                return ""
+            self._m383_last_dump_ts = _now
+            from nucleus.mnemosyne.release_policy import tier_distribution as _td383
+            _body = dict(_td383())
+            _body["generated_at"] = _now
+            _p = path or os.path.join("data", "metrics", "tier_distribution.json")
+            _dir = os.path.dirname(_p)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            with io.open(_p, "w", encoding="utf-8", newline="\n") as _f:
+                json.dump(_body, _f, ensure_ascii=False, indent=2)
+            return _p
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m383_dump_tier_distribution",
+                       level="warning")
+            return ""
+
     def _m382_resource_probe(self) -> dict:
         """★382刀9（T-382-线程句柄埋点）：每拍采线程数/句柄数，超阈值打 WARNING。
 
@@ -1266,6 +1299,13 @@ class PulseMetricsCollector(BasePulseOrgan):
                     silent_exc(_rpe382,
                                where="PulseMetricsCollector::_collect_memory_pressure 382刀9")
                     _out["resource_probe"] = None
+                # ★383刀1（T-383-tier分布）：tier 分布慢节奏落盘（节流 300s，失败不影响采集）。
+                try:
+                    _out["tier_distribution_path"] = self._m383_dump_tier_distribution()
+                except Exception as _tde383:
+                    silent_exc(_tde383,
+                               where="PulseMetricsCollector::_collect_memory_pressure 383刀1")
+                    _out["tier_distribution_path"] = ""
 
                 # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
                 #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。

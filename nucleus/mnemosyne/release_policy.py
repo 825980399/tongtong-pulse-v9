@@ -264,7 +264,52 @@ def check_guards(cand: dict, *, now_ts: float | None = None,
 
 
 # ---------------------------------------------------------------- 分级
+# ================================================================ 383刀1
+#: ★383刀1（T-383-tier分布）：tier 分布**纯内存**统计 —— 不 import 新模块、不做 IO。
+#:   写盘在调用方（PulseMetricsCollector），因为本模块顶部**只许**导
+#:   gc/tracemalloc/time（见模块 docstring 的「释放路径不 import 新模块」）。
+_M383_TIER_COUNTS: dict = {}
+
+
+def record_tier(tier: str, n: int = 1) -> None:
+    """★383刀1（T-383-tier分布）：记一次 tier 判定（异常只留痕，不影响返回）。"""
+    try:
+        _k = str(tier or "?")
+        _M383_TIER_COUNTS[_k] = int(_M383_TIER_COUNTS.get(_k, 0)) + int(n or 1)
+    except Exception as _e:
+        silent_exc(_e, where="release_policy::record_tier", level="debug")
+
+
+def tier_distribution() -> dict:
+    """★383刀1（T-383-tier分布）：分布快照 {counts, total, shares}。"""
+    try:
+        _c = dict(_M383_TIER_COUNTS)
+    except Exception as _e:
+        silent_exc(_e, where="release_policy::tier_distribution", level="debug")
+        _c = {}
+    _tot = sum(int(v) for v in _c.values())
+    _shares = ({k: round(int(v) / float(_tot), 4) for k, v in _c.items()}
+               if _tot else {})
+    return {"counts": _c, "total": _tot, "shares": _shares}
+
+
+def reset_tier_distribution() -> None:
+    """★383刀1（T-383-tier分布）：清空计数（**仅供测试 / 轮次起点**）。"""
+    _M383_TIER_COUNTS.clear()
+
+
 def pick_tier(heap_mb: float | None) -> tuple[str, str]:
+    """★383刀1（T-383-tier分布）：**只读包装** —— 判完记一笔分布，层级判定逐字不变。
+
+    为什么包在这一层：`pick_tier` 是**唯一**决定 tier 的函数；
+    `apply_decision` 对 G0/G1 直接跳过，钩在那里会漏掉绝大多数拍。
+    """
+    _pair = _pick_tier_impl(heap_mb)
+    record_tier(_pair[0])
+    return _pair
+
+
+def _pick_tier_impl(heap_mb: float | None) -> tuple[str, str]:
     """按 heap_mb 选级。`heap_mb=None`（测不到）⇒ 只观测，**不释放**。"""
     _th = thresholds()
     if heap_mb is None:
