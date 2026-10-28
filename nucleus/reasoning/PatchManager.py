@@ -337,6 +337,106 @@ def _m376_try_balance_reason(tb: dict) -> str:
     return f"try 块平衡检查未给出拒收结论（state={tb.get('state')}，不拦）"
 
 
+# ========================================== 377刀3：失败补丁正文独立审计件
+#  _m377_dump_failed_patch
+#  【为什么】376刀4 把关2a 的拒收理由换成了可执行的定位文案（缺几处、缺在第几行），
+#    但**补丁正文仍不落盘** —— 376 刀4 证据件的原话是：跨夜 12 次 `patch_multi_1793...`
+#    在 `data/` 全库查不到该 id。于是下一次同类残片重来时，能读到「缺几处」，
+#    读不到「缺的到底是什么写法」⇒ 复盘只能靠猜，同一生成缺陷反复重犯。
+#  【做什么】关2a 拒收时，把该补丁**正文原样**落 `data/audit/failed_patches/` 独立 JSON：
+#    带 issue id（`id` / `dedup_key`）、`file` / `method`、关名、拒收原因、try 统计、片段末行。
+#  【能力边界】**只加写盘，不改闸的任何裁决**：本函数返回 `{"written": bool, ...}`，
+#    调用方**不看**返回值（拒收照旧、reason 一字不变）；落盘失败/目录满/写盘守卫拒写
+#    一律返 `written=False` 并留痕，绝不抛异常、绝不改变补丁是否被拒。
+#  【为什么不落 `data/patches/`】那是补丁池与历史主数据（`_save_patch_list` 18 个写点）；
+#    审计件是旁路证据，放 `data/audit/` 既有人工审计区，互不覆盖。
+#  【为什么封顶】常驻活体会持续产出残片，无上限长跑会把盘写满；封顶后只停写盘，
+#    仍返回 `dir_full` 让调用方可观测（不是静默丢弃）。
+_M377_FAILED_PATCH_SUBDIR = ("data", "audit", "failed_patches")
+_M377_FAILED_PATCH_MAX = 400               # 目录内 .json 条目上限（含），超出只报 dir_full
+_M377_FAILED_PATCH_FIELD_MAX = 200_000     # 单个正文字段的截断上限（字符），防单件过大
+
+
+def _m377_failed_patch_dir(root: str | None = None) -> str:
+    """失败补丁留档目录。`root` 缺省取本仓库根（`nucleus/reasoning/` 上溯三层）。"""
+    _base = root or os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    return os.path.join(_base, *_M377_FAILED_PATCH_SUBDIR)
+
+
+def _m377_dump_failed_patch(patch: Any, reason: str, *,
+                            stage: str = "2a",
+                            root: str | None = None,
+                            tb: dict | None = None) -> dict:
+    """把关2a 拒收的补丁正文落一份独立审计件。**绝不抛异常、绝不改裁决。**"""
+    try:
+        if not isinstance(patch, dict):
+            return {"written": False, "why": "not_dict"}
+        _dir = _m377_failed_patch_dir(root)
+        try:
+            os.makedirs(_dir, exist_ok=True)
+        except Exception as _me377:
+            silent_exc(_me377, where="PatchManager::_m377_dump_failed_patch makedirs")
+            return {"written": False, "why": "mkdir_failed"}
+        try:
+            _have = sum(1 for _f in os.listdir(_dir) if _f.endswith(".json"))
+        except Exception as _le377:
+            silent_exc(_le377, where="PatchManager::_m377_dump_failed_patch listdir")
+            _have = 0
+        if _have >= _M377_FAILED_PATCH_MAX:
+            return {"written": False, "why": "dir_full", "count": _have}
+
+        _pid = str(patch.get("id") or patch.get("patch_id") or "unknown")
+        _safe = "".join(_c if (_c.isalnum() or _c in "-_") else "_"
+                        for _c in _pid)[:48]
+        _ts = time.time()
+        _name = "%s_%s_%s.json" % (
+            time.strftime("%Y%m%d_%H%M%S", time.localtime(_ts)), _safe, stage)
+        _path = os.path.join(_dir, _name)
+        _orig = str(patch.get("original_code") or "")
+        _mod = str(patch.get("modified_code") or "")
+        _rec = {
+            "schema": "failed_patch/377.v1",
+            "saved_at": _ts,
+            "saved_at_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_ts)),
+            "stage": stage,
+            "gate": "关2a try 块平衡（376刀4）" if stage == "2a" else stage,
+            "reason": str(reason or "")[:2000],
+            "issue_id": _pid,
+            "dedup_key": patch.get("dedup_key") or patch.get("dedup_key_v2"),
+            "file": patch.get("file"),
+            "method": patch.get("method"),
+            "issue_type": patch.get("issue_type"),
+            "source": patch.get("source") or patch.get("repair_source"),
+            "risk_level": patch.get("risk_level"),
+            "try_balance": (
+                {_k: tb.get(_k) for _k in
+                 ("state", "tries", "handlers", "deficit", "open_lines", "tail")}
+                if isinstance(tb, dict) else None),
+            "original_code": _orig[:_M377_FAILED_PATCH_FIELD_MAX],
+            "modified_code": _mod[:_M377_FAILED_PATCH_FIELD_MAX],
+            "orig_len": len(_orig),
+            "mod_len": len(_mod),
+            "truncated": (len(_orig) > _M377_FAILED_PATCH_FIELD_MAX
+                          or len(_mod) > _M377_FAILED_PATCH_FIELD_MAX),
+            "pid": os.getpid(),
+        }
+        from nucleus.data.write_guard import guard_write as _m377_gw
+        if not _m377_gw(_path, component="FailedPatchAudit"):
+            return {"written": False, "why": "write_guard"}
+        _tmp = _path + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            _f.write(json.dumps(_rec, ensure_ascii=False, indent=2))
+            _f.flush()
+            os.fsync(_f.fileno())
+        os.replace(_tmp, _path)
+        return {"written": True, "path": _path, "bytes": os.path.getsize(_path),
+                "truncated": _rec["truncated"]}
+    except Exception as _e377:
+        silent_exc(_e377, where="PatchManager::_m377_dump_failed_patch")
+        return {"written": False, "why": "exception"}
+
+
 # ★第90批 T-90a：LLM 补丁「字段契约」必填校验（关0）。
 #   为什么必须单列一关（而不是靠关1/关3 顺带拦下）：
 #     · 关1 的判据是 `not _mod_norm or _mod_norm == _orig_norm` ——
@@ -3520,8 +3620,27 @@ class PatchManager:
         #   故对既有全部通过的补丁零影响（裁决等价性见 tests/test_m376_d4_try_balance.py）。
         _tb376 = _m376_try_balance(_mod_norm)
         if _tb376["state"] in ("unbalanced", "orphan"):
+            _why376 = _m376_try_balance_reason(_tb376)
+            # ★377刀3：正文落独立审计件（只加写盘，**不改裁决**）——
+            #   返回值只用于留痕，判据分支与 reason 一字不变。
+            _dump377 = _m377_dump_failed_patch(
+                patch, _why376, stage="2a",
+                root=getattr(self, "_project_root", None), tb=_tb376)
+            if _dump377.get("written"):
+                _module_logger.info(
+                    "[377刀3] 关2a 失败补丁正文已留档: patch=%s file=%s method=%s "
+                    "bytes=%s truncated=%s",
+                    str(patch.get("id") or "")[:24], patch.get("file"),
+                    patch.get("method"), _dump377.get("bytes"),
+                    _dump377.get("truncated"))
+            else:
+                # 留档失败必须可观测，否则「有没有留档」与「没走到这一关」同形
+                _module_logger.warning(
+                    "[377刀3] 关2a 失败补丁正文留档未成功（拒收结论不受影响）: "
+                    "patch=%s why=%s", str(patch.get("id") or "")[:24],
+                    _dump377.get("why"))
             return {"complete": False,
-                    "reason": _m376_try_balance_reason(_tb376)}
+                    "reason": _why376}
 
         # 关2：语法可解析（dedent + 虚拟函数包装，兼容带缩进/含 return 的方法体片段）
         #   ★PULSE-DEFECT-20260902-01: 方法体片段含 return，dedent 后顶层 return 非法，

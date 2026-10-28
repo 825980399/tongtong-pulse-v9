@@ -269,3 +269,113 @@ def test_m377_d2_fallback_stays_conservative():
     assert '_cfg("MEMORY_RELEASE_G4_HEAP_MB", 2000.0)' in _src, \
         "fallback 被改动 ⇒ 须同步 config.py 注释里的口径说明"
 
+
+# ================================================================ 刀3：失败补丁正文留档
+_UNBALANCED = "def f():\n    try:\n        x = 1\n    y = 2\n"
+_ORPHAN = "x = 1\nexcept Exception:\n    pass\n"
+_BALANCED = ("def f():\n    try:\n        x = 1\n"
+             "    except Exception:\n        x = 2\n    return x\n")
+
+
+def _mk_manager(tmp_path):
+    from nucleus.reasoning.PatchManager import PatchManager
+    return PatchManager(str(tmp_path))
+
+
+def _patch_with(code, _id="patch_multi_1793000000_abcd"):
+    return {"id": _id, "file": "organs/body/Demo.py", "method": "demo",
+            "issue_type": "dead_code_candidate", "source": "llm_multi_file",
+            "risk_level": "中", "dedup_key": "deadbeefdeadbeef",
+            "original_code": "def demo():\n    x = 9\n    return x\n",
+            "modified_code": code}
+
+
+def _dump_dir(tmp_path):
+    from nucleus.reasoning import PatchManager as PM
+    return PM._m377_failed_patch_dir(str(tmp_path))
+
+
+def _dump_files(tmp_path):
+    _d = _dump_dir(tmp_path)
+    if not os.path.isdir(_d):
+        return []
+    return sorted(f for f in os.listdir(_d) if f.endswith(".json"))
+
+
+@pytest.mark.parametrize("code,state", [(_UNBALANCED, "unbalanced"),
+                                        (_ORPHAN, "orphan")])
+def test_m377_d3_rejected_patch_body_is_archived(tmp_path, code, state):
+    """关2a 拒收 ⇒ 正文落独立审计件，带 issue id ＋ 拒收原因 ＋ try 统计。"""
+    pm = _mk_manager(tmp_path)
+    _r = pm._check_llm_patch_completeness(_patch_with(code))
+    assert _r["complete"] is False and "try 块不平衡" in _r["reason"]
+    _files = _dump_files(tmp_path)
+    assert len(_files) == 1, "拒收但没留档（正是 376 刀4 抱怨的『data/ 全库查不到』）"
+    _rec = json.loads((tmp_path / "data" / "audit" / "failed_patches"
+                       / _files[0]).read_text(encoding="utf-8"))
+    assert _rec["schema"] == "failed_patch/377.v1"
+    assert _rec["issue_id"] == "patch_multi_1793000000_abcd"
+    assert _rec["dedup_key"] == "deadbeefdeadbeef"
+    assert _rec["stage"] == "2a"
+    assert _rec["reason"] == _r["reason"], "留档原因必须与返回给调用方的一字不差"
+    assert _rec["modified_code"] == code, "正文必须原样落盘（后缀若被裁就会再次无法复盘）"
+    assert _rec["try_balance"]["state"] == state
+    assert _rec["file"] == "organs/body/Demo.py" and _rec["method"] == "demo"
+
+
+def test_m377_d3_balanced_patch_writes_nothing(tmp_path):
+    """零回归：通过关2a 的补丁不得产出审计件（否则目录会被正常件淹没）。"""
+    pm = _mk_manager(tmp_path)
+    _r = pm._check_llm_patch_completeness(_patch_with(_BALANCED))
+    assert _r.get("complete") is not False, _r.get("reason")
+    assert _dump_files(tmp_path) == []
+
+
+def test_m377_d3_verdict_unchanged_when_dump_fails(tmp_path, monkeypatch):
+    """★反向验证：留档失败**不得**改变拒收结论（三态：拒收 / 未留档 / 原因不变）。"""
+    from nucleus.reasoning import PatchManager as PM
+    pm = _mk_manager(tmp_path)
+    _base = pm._check_llm_patch_completeness(_patch_with(_UNBALANCED))
+    _n_before = len(_dump_files(tmp_path))
+    assert _n_before == 1                      # 基线确实留了档
+    monkeypatch.setattr(PM, "_m377_dump_failed_patch",
+                        lambda *a, **kw: {"written": False, "why": "boom"})
+    _r = pm._check_llm_patch_completeness(_patch_with(_UNBALANCED))
+    assert _r == _base, "留档失败泄漏进了裁决分支"
+    assert _r["complete"] is False
+    assert len(_dump_files(tmp_path)) == _n_before, "留档失败却仍写盘"
+
+
+def test_m377_d3_dump_never_raises(tmp_path):
+    """★反向验证：helper 对任何入参都不得抛（它在拒收路径上，抛=拒收路径被劫持）。"""
+    from nucleus.reasoning import PatchManager as PM
+    for _bad in (None, "not-a-dict", 123, [1, 2]):
+        _r = PM._m377_dump_failed_patch(_bad, "why-not", root=str(tmp_path))
+        assert isinstance(_r, dict) and _r["written"] is False
+        assert _r["why"] == "not_dict"
+    # 空 dict 也只在注入根下落盘（默认根是生产仓库，测试绝不碰）
+    _r = PM._m377_dump_failed_patch({}, "why-not", root=str(tmp_path))
+    assert _r["written"] is True            # 空正文也能留档（正是「零留存」要修的场景）
+    # 目录口径
+    assert PM._m377_failed_patch_dir("/tmp/x").replace("\\", "/").endswith(
+        "/data/audit/failed_patches")
+    # 默认根必须指向本仓库（不依赖 cwd）
+    _d = PM._m377_failed_patch_dir().replace("\\", "/")
+    assert _d.endswith("/data/audit/failed_patches")
+    assert os.path.abspath(_d).replace("\\", "/").startswith(
+        os.path.abspath(ROOT).replace("\\", "/"))
+
+
+def test_m377_d3_dir_cap_returns_dir_full(tmp_path, monkeypatch):
+    """封顶：目录满后停写盘但**明确报 dir_full**（不是静默丢弃）。"""
+    from nucleus.reasoning import PatchManager as PM
+    monkeypatch.setattr(PM, "_M377_FAILED_PATCH_MAX", 1)
+    _p = _patch_with(_UNBALANCED, _id="p_cap_1")
+    _r1 = PM._m377_dump_failed_patch(_p, "r1", root=str(tmp_path))
+    assert _r1["written"] is True
+    _r2 = PM._m377_dump_failed_patch(_patch_with(_UNBALANCED, _id="p_cap_2"),
+                                     "r2", root=str(tmp_path))
+    assert _r2["written"] is False and _r2["why"] == "dir_full"
+    assert _r2["count"] == 1
+
+
