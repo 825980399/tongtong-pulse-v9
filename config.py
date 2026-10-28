@@ -6048,7 +6048,22 @@ ENABLE_PENDING_QUEUE_AGING_O3 = True
 # ============================================================================
 ENABLE_M383_FAMILY_TRIAGE = False
 # [M383-D5-CFG]
+
 # ============================================================================
+# ★第383批刀4（T-383-O3-stale）：O3 判死条目的 OPEN 超时计时。默认**关**。
+#   问题：O3 判死条目 OPEN 后没有裁决人，却一直占观察位（低危限额与全局截断
+#         都是 open 优先），把真该处理的条目挤出去。
+#   开 ⇒ 每拍 persist 时，issue_type ∈ (dead_code, dead_code_candidate) 且
+#        status=open 且 first_seen 超 O3_STALE_TTL_DAYS 天的条目 ⇒ 转 stale。
+#   ★stale **不是结案**：不进 TERMINAL_STATUSES ⇒ 不污染结案率口径，
+#     也不被 prune 当结案删除（POOL_RETAIN_DAYS 同为 7 天，一并会当天删掉）。
+#   回滚：设回 False（已转 stale 的条目保持原样，可用
+#         `set_status(key, "open")` 逐条回退 —— 流转表已开 stale→open）。
+#   读取点：nucleus/audit_problem_pool.py::_m383_o3_stale_on / stale_o3_open_entries
+# ============================================================================
+ENABLE_O3_STALE_TIMEOUT = False
+O3_STALE_TTL_DAYS = 7
+# [M383-D4-CFG]# ============================================================================
 # ★第372批刀7（`T-371-规则通道开关补定义-1`）：规则通道**子进程化**开关——补定义
 #   为什么补：改前 `config.py` 对这个开关**零命中**，唯一读取点是
 #   `nucleus/exploration_audit.py::_m363_rule_subprocess_on` 里的

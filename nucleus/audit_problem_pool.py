@@ -96,9 +96,14 @@ STATUS_WONTFIX = "wontfix"
 #   但要先重新定位”（机器的事实）。混用会把 27 条待重定位的真问题
 #   当成“已结案”丢掉。
 STATUS_TARGET_DRIFTED = "target_drifted"
+#: ★383刀4：O3 判死条目 OPEN 超时后转此态 —— **「不推进」不是「已结案」**。
+#   刻意**不进** TERMINAL_STATUSES：否则同时踩两个坑
+#     ① 结案率口径被污染（烛微口径：status≠verified/wontfix 即未结案）；
+#     ② POOL_RETAIN_DAYS 同为 7 天，转 stale 当天就被 prune 当结案删掉。
+STATUS_STALE = "stale"
 
 ALL_STATUSES = (STATUS_OPEN, STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED,
-                STATUS_WONTFIX, STATUS_TARGET_DRIFTED)
+                STATUS_WONTFIX, STATUS_TARGET_DRIFTED, STATUS_STALE)
 
 #: 终态：进入后视为"结案"，可被超期 prune（烛微口径：status≠verified/wontfix 即未结案）
 TERMINAL_STATUSES = (STATUS_VERIFIED, STATUS_WONTFIX)
@@ -106,7 +111,7 @@ TERMINAL_STATUSES = (STATUS_VERIFIED, STATUS_WONTFIX)
 #: 合法流转（非法流转只告警不写，不静默纠正）
 _LEGAL_TRANSITIONS = {
     STATUS_OPEN: (STATUS_CLAIMED, STATUS_FIXED, STATUS_VERIFIED, STATUS_WONTFIX,
-                  STATUS_TARGET_DRIFTED),
+                  STATUS_TARGET_DRIFTED, STATUS_STALE),
     STATUS_CLAIMED: (STATUS_FIXED, STATUS_OPEN, STATUS_WONTFIX, STATUS_TARGET_DRIFTED),
     STATUS_FIXED: (STATUS_VERIFIED, STATUS_CLAIMED, STATUS_WONTFIX, STATUS_TARGET_DRIFTED),
     STATUS_VERIFIED: (STATUS_OPEN, STATUS_WONTFIX),
@@ -114,6 +119,9 @@ _LEGAL_TRANSITIONS = {
     # ★352刀1：漂移**不是结案**。必须能回 open（重新定位后继续），
     #   也允许直接判 wontfix（确认该问题已随代码消失）。
     STATUS_TARGET_DRIFTED: (STATUS_OPEN, STATUS_WONTFIX),
+    # ★383刀4：stale 留两条回升通道 —— 回 open（有人要处理了）/ 直接 wontfix
+    #   （确认该问题已随代码消失）。不给 fixed：它本来就没人在修。
+    STATUS_STALE: (STATUS_OPEN, STATUS_WONTFIX),
 }
 
 #: severity 值域（烛微345挂账59）
@@ -730,6 +738,104 @@ def _is_open(entry: dict) -> bool:
     return str(entry.get("status", STATUS_OPEN)) not in TERMINAL_STATUSES
 
 
+def _m383_is_actionable(entry: dict) -> bool:
+    """★383刀4：「可推进」判据 —— 与 `_is_open`（未结案）**不是一回事**。
+
+    为什么要分开：`_is_open` 被 `prune` 用来保护「超期但未结案也留」，
+    那是**留存**语义；限额与全局截断排序要的是「谁该占观察位」，是**优先级**
+    语义。混用会让 stale 条目要么被删（错）、要么继续占位（也错）。
+    """
+    if not _is_open(entry):
+        return False
+    return str(entry.get("status", STATUS_OPEN)) != STATUS_STALE
+
+
+def _transition_verdict(old: str, new: str) -> str:
+    """★383刀4：流转合法性判定的**唯一真源**（`set_status` 与批量转换共用）。
+
+    返回 "ok" / "bad_status" / "illegal_transition"。
+    抽这一层是为了让批量转 stale 复用同一张 `_LEGAL_TRANSITIONS`，
+    而不是在别处再写一份 if 判断 —— 两份规则必然分叉。
+    """
+    if new not in ALL_STATUSES:
+        return "bad_status"
+    if new not in _LEGAL_TRANSITIONS.get(old, ()):
+        return "illegal_transition"
+    return "ok"
+
+
+#: ★383刀4：O3 判死族。与 `patch_execution_dispatch._M339_O3_ISSUE_TYPES` 同集，
+#: 有守卫测试断言两者一致（这里不直接 import 是为了避免 evolution ↔ audit 循环依赖）。
+_M383_O3_DEAD_TYPES = ("dead_code", "dead_code_candidate")
+
+#: ★383刀4：OPEN 超时天数兜底值（票面默认 7 天；config.O3_STALE_TTL_DAYS 优先）。
+_M383_O3_STALE_TTL_DAYS = 7
+
+
+def _m383_o3_stale_on() -> bool:
+    """★383刀4：O3 stale 计时总开关（读 config，**默认关** ⇒ 零回归）。"""
+    try:
+        import config as _c383
+        return bool(getattr(_c383, "ENABLE_O3_STALE_TIMEOUT", False))
+    except Exception as _e383:
+        silent_exc(_e383, where="audit_problem_pool::_m383_o3_stale_on",
+                   level="debug")
+        return False
+
+
+def _m383_o3_stale_ttl_days() -> float:
+    """★383刀4：TTL 天数（config.O3_STALE_TTL_DAYS 优先，兜底 7 天）。"""
+    try:
+        import config as _c383
+        return float(getattr(_c383, "O3_STALE_TTL_DAYS", _M383_O3_STALE_TTL_DAYS))
+    except Exception as _e383:
+        silent_exc(_e383, where="audit_problem_pool::_m383_o3_stale_ttl_days",
+                   level="debug")
+        return float(_M383_O3_STALE_TTL_DAYS)
+
+
+def stale_o3_open_entries(entries: list, now: float | None = None,
+                          ttl_days: float | None = None) -> tuple:
+    """★383刀4：O3 判死条目 OPEN 超时 ⇒ 转 stale（票面「不再占观察位」）。
+
+    **纯函数**：不读盘、不落盘、不改全局状态；只改传入的 dict（与 `prune` /
+    `cap_low_severity` 同风格），返回 `(entries, changed)`。
+
+    只吃同时满足三条的条目：
+      1. `issue_type` ∈ O3 判死族（dead_code / dead_code_candidate）
+      2. `status == "open"`（claimed/fixed 有人在推进，不动）
+      3. `now - first_seen_ts > ttl_days * 86400`
+
+    按 `_transition_verdict` 校验后再改 —— 走的是与 `set_status` 同一张
+    `_LEGAL_TRANSITIONS`，不另写一份规则。
+    """
+    _now = float(now if now is not None else time.time())
+    _ttl = _m383_o3_stale_ttl_days() if ttl_days is None else float(ttl_days)
+    _limit = _now - _ttl * 86400.0
+    _changed = 0
+    for _e in (entries if isinstance(entries, list) else []):
+        if not isinstance(_e, dict):
+            continue
+        if str(_e.get("issue_type") or "") not in _M383_O3_DEAD_TYPES:
+            continue
+        if str(_e.get("status", STATUS_OPEN)) != STATUS_OPEN:
+            continue
+        _f = _first_ts(_e)
+        if _f is None or float(_f) > _limit:
+            continue
+        if _transition_verdict(STATUS_OPEN, STATUS_STALE) != "ok":
+            continue
+        _e["status"] = STATUS_STALE
+        _hist = _e.get("status_history")
+        if not isinstance(_hist, list):
+            _hist = []
+        _hist.append({"status": STATUS_STALE, "at": _now,
+                      "note": "O3 判死超 %g 天未裁决（383刀4）" % _ttl})
+        _e["status_history"] = _hist
+        _changed += 1
+    return entries, _changed
+
+
 def cap_low_severity(entries: list, cap: int | None = None) -> tuple:
     """★367 后续：低危（severity=low）条目入池限额。纯函数，可单测。
 
@@ -756,7 +862,8 @@ def cap_low_severity(entries: list, cap: int | None = None) -> tuple:
     if len(_low) <= _cap:
         return list(entries), []
 
-    _low_sorted = sorted(_low, key=lambda _e: (0 if _is_open(_e) else 1,
+    # ★383刀4：排序用「可推进」而非「未结案」—— stale 条目要让位，但不结案。
+    _low_sorted = sorted(_low, key=lambda _e: (0 if _m383_is_actionable(_e) else 1,
                                                -(_first_ts(_e) or 0)))
     _keep_low_ids = {id(_e) for _e in _low_sorted[:_cap]}
     _dropped = _low_sorted[_cap:]
@@ -927,6 +1034,17 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
             "[351归因] 历史条目追溯: filled=%d already=%d fallback=%d locatable=%d "
             "proc_gen=%s", _bf["filled"], _bf["already"], _bf["fallback"],
             _bf["locatable"], _pg)
+    # ★383刀4：O3 判死条目 OPEN 超时 ⇒ 转 stale（开关默认关）。
+    #   位置：prune 之前、cap 之前 —— prune 只按 first_seen 判留存、不看 status
+    #   （stale 不进 TERMINAL_STATUSES ⇒ 仍受「未结案也留」保护，不会被删）；
+    #   而 cap 与全局截断要看到 stale 才能把它排到后面。
+    _stale_n = 0
+    if _m383_o3_stale_on():
+        _merged, _stale_n = stale_o3_open_entries(_merged, now=_now)
+        if _stale_n:
+            _module_logger.info(
+                "[383刀4] O3 判死超 %g 天未裁决 ⇒ 转 stale: %d 条（不再占观察位）",
+                _m383_o3_stale_ttl_days(), _stale_n)
     _kept, _pruned = prune(_merged, _now, retain_days)
     # ★367 后续：低危限额（必须在全局截断**之前**：否则全局截断先砍，限额就形同虚设）
     _kept, _low_dropped = cap_low_severity(_kept)
@@ -937,7 +1055,9 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
             MAX_LOW_ENTRIES, len(_low_dropped))
     _truncated = 0
     if len(_kept) > MAX_POOL_ENTRIES:
-        _kept.sort(key=lambda e: (0 if _is_open(e) else 1, -(_first_ts(e) or 0)))
+        # ★383刀4：同上，stale 排后（它不该占截断名额，但仍算未结案）。
+        _kept.sort(key=lambda e: (0 if _m383_is_actionable(e) else 1,
+                                  -(_first_ts(e) or 0)))
         _truncated = len(_kept) - MAX_POOL_ENTRIES
         _kept = _kept[:MAX_POOL_ENTRIES]
 
@@ -972,14 +1092,15 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
     if _pruned:
         _module_logger.info("[345池] prune: %d 条", _pruned)
     _module_logger.info(
-        "[345池] persist: total=%d new=%d updated=%d pruned=%d sev_invalid=%d file=%s proc_gen=%s",
-        len(_kept), _added, _updated, _pruned, len(_rejected),
+        "[345池] persist: total=%d new=%d updated=%d pruned=%d stale=%d sev_invalid=%d file=%s proc_gen=%s",
+        len(_kept), _added, _updated, _pruned, _stale_n, len(_rejected),
         os.path.basename(_path), _pg)
     # ★348刀8：**先记账再查删**（顺序不可倒：反了会把本拍刚写的快照报成"指纹缺失"）。
     _m348_fp = note_pool_fingerprint(_path, _payload, _now, root, audit_dir_path)
     _m348_loss = detect_pool_loss(root, audit_dir_path, _now, current_path=_path)
     return {"state": "ok", "path": _path, "total": len(_kept), "added": _added,
             "updated": _updated, "pruned": _pruned, "truncated": _truncated,
+            "stale_converted": _stale_n,
             "severity_rejected": len(_rejected),
             "snapshot_day": day_stamp(_now), "prev_state": _prev["state"],
             "proc_gen": _pg,
