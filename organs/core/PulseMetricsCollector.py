@@ -469,6 +469,11 @@ class PulseMetricsCollector(BasePulseOrgan):
     _M339_PROBE_TOP_N = 20
     _M339_PROBE_MAX_SEC = 3.0
     _M339_GC_HEAP_MB = 1200.0
+    # ★386刀3：gc 全堆扫描的**时间预算**（秒）。超过即截断，但**照样写盘**
+    #   ——改前是「超 3s 就整份不写」⇒ 大堆下永远没有产物。
+    #   预算必须**小于** _M339_PROBE_MAX_SEC，否则仍会走到不写盘分支。
+    _M339_GC_SCAN_BUDGET_SEC = 2.0
+    _m339_gc_last: dict = {}
 
     @staticmethod
     def _m339_cfg_get(name: str, default):
@@ -711,10 +716,28 @@ class PulseMetricsCollector(BasePulseOrgan):
                             _tm.stop()
             if _heap_hi or _mode == "gc_objects":
                 import gc as _gcm
+                # ★386刀3：给全堆扫描加**时间预算**。
+                #   改前是"整份扫完再判超时"，大堆下必然超 ⇒ 从不写盘；
+                #   现在是"扫到预算就停"，产物标 truncated ⇒ **一定有产物**。
+                #   ★截断后 top20 只是**已扫描部分**的分布，不是全堆分布；
+                #     所以必须把 gc_scanned / gc_truncated 一起落盘，
+                #     否则读者会把它当全量读数用（铁律196：边界写在前）。
+                _budget = float(self._m339_cfg_get(
+                    "M339_GC_SCAN_BUDGET_SEC", self._M339_GC_SCAN_BUDGET_SEC))
                 _cnt: dict = {}
+                _scanned = 0
+                _truncated = False
                 for _o in _gcm.get_objects():
                     _n = type(_o).__name__
                     _cnt[_n] = _cnt.get(_n, 0) + 1
+                    _scanned += 1
+                    if not (_scanned & 0xFFFF) and (
+                            time.perf_counter() - _t0) > _budget:
+                        _truncated = True
+                        break
+                self._m339_gc_last = {"scanned": _scanned,
+                                      "truncated": _truncated,
+                                      "budget_sec": _budget}
                 _gc_types = [{"type": _k, "count": _v}
                              for _k, _v in sorted(_cnt.items(),
                                                   key=lambda _x: -_x[1])[:_topn]]
@@ -728,7 +751,27 @@ class PulseMetricsCollector(BasePulseOrgan):
             return _out
         _elapsed = time.perf_counter() - _t0
         _out["elapsed_sec"] = round(_elapsed, 3)
-        if _elapsed > _maxsec:
+        # ★386刀3：截断**也算受控** —— 预算已经在扫描中途把它砍停，
+        #   此时"不写盘"只会让产物继续缺席（旧行为下大堆**从不写盘**）。
+        #   开关 `M339_WRITE_ON_TRUNCATED`（默认 True）关掉 ⇒ 逐字回到旧判定。
+        _trunc = bool(getattr(self, "_m339_gc_last", {}).get("truncated", False))
+        _write_trunc = bool(self._m339_cfg_get("M339_WRITE_ON_TRUNCATED", True))
+        if _trunc and _write_trunc and _elapsed > _maxsec:
+            self._log(LogLevel.INFO,
+                      "[339内存观测] 扫描被预算截断（%.2fs > 预算 %.2fs，"
+                      "scanned=%d）⇒ **仍写盘**（产物标 gc_truncated=true，"
+                      "只代表已扫描部分，不是全堆分布）mode=%s"
+                      % (_elapsed,
+                         getattr(self, "_m339_gc_last", {}).get("budget_sec", 0.0),
+                         getattr(self, "_m339_gc_last", {}).get("scanned", 0),
+                         _mode))
+            _out["reason"] = "truncated_but_written"
+            # ★不篡改 `_elapsed`：产物里的 elapsed_sec 必须是**真实耗时**，
+            #   写成 0 就又是一个"没采到 vs 真 0"同形的假读数（铁律276）。
+            _allow_timeout = True
+        else:
+            _allow_timeout = False
+        if _elapsed > _maxsec and not _allow_timeout:
             self._log(LogLevel.WARNING,
                       "[339内存观测] 单次快照 %.2fs > %.2fs ⇒ **不写盘**"
                       "（自身分配开销会把治理变增负） mode=%s"
@@ -760,6 +803,10 @@ class PulseMetricsCollector(BasePulseOrgan):
             "tracemalloc_delta_state": _tm_delta_state,
             "tracemalloc_mode": str(_tmmode),
             "gc_type_rows": _gc_types,
+            # ★386刀3：gc 扫描的实际口径（截断与否 / 扫了多少）
+            "gc_scanned": int(getattr(self, "_m339_gc_last", {}).get("scanned", 0) or 0),
+            "gc_truncated": bool(getattr(self, "_m339_gc_last", {}).get("truncated", False)),
+            "gc_scan_budget_sec": float(getattr(self, "_m339_gc_last", {}).get("budget_sec", 0.0) or 0.0),
             "tracemalloc_basis": _basis,
             # ★349刀5：四类占比（AST / PulseNode / image / other）
             #   ★377刀4：只吃**有尺寸的** tracemalloc 行；无尺寸行 ⇒ state=unavailable，
