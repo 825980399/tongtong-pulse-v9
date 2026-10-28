@@ -47,6 +47,10 @@ def _vec(*vals):
 
 _LONG_Q = "请详细介绍一下量子计算的基本原理和应用场景"
 
+#: ★377刀6：代码型 prompt —— 只用来验「`system_internal` 仍拒 code 类」。
+#:   两处 code 标记（`def ` / `import `）⇒ `_l2_classify_scene` 判 `code`。
+_CODE_Q = "def foo():\n    import os\n    return os.path.join('a', 'b')\n"
+
 
 class _Base(unittest.TestCase):
     def setUp(self):
@@ -136,15 +140,30 @@ class TestMemoryEviction(_Base):
 
 class TestGates(_Base):
     def test_30_origin_gate_store(self):
-        """非 user_query 不写入。"""
+        """★377刀6 政策变更：`system_internal` 放开**知识问答类**，code 类仍拒。
+
+        原文是「非 user_query 不写入」，钉的是旧政策。377 批 §七 要求放开
+        `system_internal` 的知识问答类（自动学习映射产出的解释性内容应当复用），
+        **只**挡 code 类（避免旧答案污染演化改码）。故：
+
+        - `_LONG_Q`（纯知识问答，无 code/reason 标记 ⇒ chat）**现应放行**；
+        - `_CODE_Q`（code 标记 ≥2）仍拒；
+        - `evolution_task` 不在白名单，仍拒。
+
+        勿把断言方向改回去；要验拒请用 `_CODE_Q`。
+        """
         _l2 = self._l2()
-        self.assertFalse(_l2.store(_LONG_Q, "答案", origin="system_internal"))
+        self.assertTrue(_l2.store(_LONG_Q, "答案", origin="system_internal"))
+        self.assertFalse(_l2.store(_CODE_Q, "答案", origin="system_internal"))
         self.assertFalse(_l2.store(_LONG_Q, "答案", origin="evolution_task"))
 
     def test_31_origin_gate_lookup(self):
+        """★377刀6：origin 闸两侧对称 —— 存侧放行的查侧也放行，存侧拒的查侧也拿不到。"""
         _l2 = self._l2()
         _l2.store(_LONG_Q, "答案", origin="user_query")
-        self.assertIsNone(_l2.lookup(_LONG_Q, origin="system_internal"))
+        self.assertIsNotNone(_l2.lookup(_LONG_Q, origin="system_internal"))
+        self.assertIsNone(_l2.lookup(_CODE_Q, origin="system_internal"))
+        self.assertIsNone(_l2.lookup(_LONG_Q, origin="evolution_task"))
 
     def test_32_short_prompt_not_cached(self):
         _l2 = self._l2()

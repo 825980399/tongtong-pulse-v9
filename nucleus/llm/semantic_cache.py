@@ -604,6 +604,32 @@ def _l2_classify_scene(prompt: str) -> str:
     return "chat"
 
 
+#: ★377刀6：**机器产物硬签名** —— 命中即判 code，不受 `_code_markers` 的「≥2」限制。
+#:   为什么需要这一层：`_l2_classify_scene` 判 code 要求**两个**标记，于是
+#:   「只有 `Traceback` 一个标记」的报错行会被判成 `chat`，从而被 origin 场景闸放过 ——
+#:   刀6 生产口径探针实测就是从这里漏的（`Traceback (most recent call last):` ⇒ chat ⇒ 放行）。
+#:   只收两条「人不会在自然语言提问里逐字写出来」的签名：栈回溯头、代码围栏。
+#:   **刻意不**把 `def ` / `import ` / `return ` 这类单词塞进来：那个方向会误杀
+#:   「Python 里 import 和 from 的区别是什么？」这种**真·编程知识问答**，
+#:   等于把刀6 的目的反过来做（第一版「只放 chat」已经栽过同类跟头）。
+#:   单词类仍只走原有的 ≥2 计数。
+_M377_HARD_CODE_SIGNATURES = ("traceback (most recent call last)", "```")
+
+
+def _m377_scene_for_gate(prompt: str) -> str:
+    """★377刀6：**准入闸专用**场景口径 = 硬签名优先，其余仍走 `_l2_classify_scene`。
+
+    两层是**叠加**，不是替换：`_l2_classify_scene()` 原样不动，
+    188刀1 的遥测分桶（命中率/污染率按场景）口径逐字不变；
+    本函数只补两条**机器产物**硬签名，把「单标记的栈/围栏」从 `chat` 里捞出来。
+    """
+    _p = (prompt or "").lower()
+    for _sig in _M377_HARD_CODE_SIGNATURES:
+        if _sig in _p:
+            return "code"
+    return _l2_classify_scene(prompt)
+
+
 @dataclass
 class L2Entry:
     """L2 缓存条目（内存；含向量供余弦比对）。"""
@@ -628,13 +654,70 @@ class SemanticCacheL2:
     四道闸门（全部通过才返回；任一失败 → 静默回落渠道调用）：
       ① 置信闸：余弦 sim ≥ 阈值（沿用 L1 校准值 0.85）；
       ② 时效闸：now - ts ≤ L2 TTL（1 小时）；
-      ③ 幂等闸：origin ∈ {user_query} 且 prompt 无指代/时间标记 且 长度 ≥ MIN_LEN；
+      ③ 幂等闸：origin 过准入闸（★377刀6：`user_query` 全放；
+         `system_internal` 仅限**知识问答类**即场景 `chat`/`reasoning`，`code` 类仍拒）
+         且 prompt 无指代/时间标记 且 长度 ≥ MIN_LEN；
       ④ 质量闸：缓存响应非空。
 
     淘汰：超容量 → LRU（按 ``last_hit_ts``，而非写入 ts）；过 TTL 条目懒删。
     """
 
-    _ALLOWED_ORIGINS = ("user_query",)
+    #: ★377刀6：`system_internal`（自动学习映射）放进白名单，但**只限知识问答类** ——
+    #: 具体场景由 `_M377_ORIGIN_SCENE_GATE` 限定，evolution/code 类仍拒。
+    _ALLOWED_ORIGINS = ("user_query", "system_internal")
+
+    #: ★377刀6：每个 origin 的**场景闸**（不在表里的 origin 原样放行）。
+    #:   `system_internal` 放 `chat` + `reasoning`，**只拒 `code`**。
+    #:   为什么不是「只放 chat」—— 拿现有分类轴实测就会撞墙：`_l2_classify_scene`
+    #:   把任何带「为什么/怎么/？」的句子判成 `reasoning`，而**知识问答本身就是提问**
+    #:   ⇒ 只放 chat 等于把所有真·知识问答全拒（本刀第一版就这么写，单测当场红）。
+    #:   在这条轴上，真正要挡的只有 `code`（演化改码形态），那才是
+    #:   「缓存旧答案污染演化」的来源。故闸 = 非 code。
+    #:   ★判据不是裸用 `_l2_classify_scene`，而是 `_m377_scene_for_gate()` ——
+    #:   它在上面那层之上补了「机器产物硬签名」（单标记栈/围栏也算 code），
+    #:   原因见该常量注释：裸用会放过只带一个 `Traceback` 的报错行。
+    _M377_ORIGIN_SCENE_GATE = {"system_internal": ("chat", "reasoning")}
+
+    @classmethod
+    def _m377_system_internal_on(cls) -> bool:
+        """★377刀6 灰度开关（默认开）：关掉即逐字回到 331 批的「只放 user_query」。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_L2_ADMIT_SYSTEM_INTERNAL", True))
+        except Exception as _e:
+            silent_exc(_e, where="SemanticCacheL2::_m377_system_internal_on")
+            return True
+
+    @classmethod
+    def _m377_origin_gate(cls, origin: str, prompt: str) -> tuple[bool, str]:
+        """★377刀6：origin 准入闸 = **白名单** ∧ **每 origin 的场景闸**。
+
+        返回 `(是否放行, 原因)`；原因用于遥测分桶（"被拒"不再是黑箱）。
+
+        四态：`origin_not_allowed` / `system_internal_admission_off` /
+        `allowed_knowledge_qa` / `scene_<x>_not_knowledge_qa` / `allowed`。
+        """
+        _o = str(origin or "")
+        if _o not in cls._ALLOWED_ORIGINS:
+            return False, "origin_not_allowed"
+        _scenes = cls._M377_ORIGIN_SCENE_GATE.get(_o) or ()
+        if not _scenes:
+            return True, "allowed"
+        if _o == "system_internal" and not cls._m377_system_internal_on():
+            return False, "system_internal_admission_off"
+        _scene = _m377_scene_for_gate(prompt)
+        if _scene in _scenes:
+            return True, "allowed_knowledge_qa"
+        return False, "scene_%s_not_knowledge_qa" % _scene
+
+    def _m377_adm_note(self, admitted: bool, why: str) -> None:
+        """★377刀6：准入结果分桶计数（`{原因: 次数}`；永不抛）。"""
+        try:
+            _k = "admitted" if admitted else "rejected"
+            _b = self._m377_adm.setdefault(_k, {})
+            _b[why] = _b.get(why, 0) + 1
+        except Exception as _e:
+            silent_exc(_e, where="SemanticCacheL2::_m377_adm_note")
 
     def __init__(self, cache: SemanticCache | None = None, encoder: Any = None) -> None:
         self._lock = threading.RLock()
@@ -642,6 +725,10 @@ class SemanticCacheL2:
         self._cache = cache                    # 可选：复用 L1 编码器与阈值
         self._encoder_override = encoder
         self._stat = {"hits": 0, "misses": 0, "rejected": 0, "stores": 0}
+        # ★377刀6：准入闸分桶计数（`{原因: 次数}`）——
+        #   改前 origin 被拒是**直接 return**，不进 `_stat`，于是"非用户流量全被挡"
+        #   这件事在遥测里完全看不见（表现为 hits/misses 恒 0 的"空转"，与"没请求"同形）。
+        self._m377_adm = {"admitted": {}, "rejected": {}}
         # ★188刀1：L2 只读遥测（命中率/污染率·按场景分桶：代码类/闲聊类/推理类）。
         #   纯计数、零行为变化（不影响四闸命中判定/阈值/开关）。下游负反馈经
         #   record_feedback() 回填，未被调用时 neg 恒为 0（跑 2-3 批出分布）。
@@ -814,10 +901,13 @@ class SemanticCacheL2:
         """写入一条 L2 缓存（仅 **合法 origin + 非空响应 + 足够长 prompt**）。"""
         if not self.enabled() or not prompt or not response:
             return False
-        if str(origin or "") not in self._ALLOWED_ORIGINS:
+        _adm377, _adm_why377 = self._m377_origin_gate(origin, prompt)
+        if not _adm377:
+            self._m377_adm_note(False, _adm_why377)
             # ★331批刀9：被准入闸拦下 ⇒ 记一次去标识化影子计数（不改准入语义）
             self._m331_shadow_note(origin, prompt)
             return False
+        self._m377_adm_note(True, _adm_why377)
         if len(prompt) < self.min_len():
             return False
         if _l2_prompt_is_session_private(prompt):
@@ -849,10 +939,13 @@ class SemanticCacheL2:
         try:
             if not self.enabled() or not prompt:
                 return None
-            if str(origin or "") not in self._ALLOWED_ORIGINS:
+            _adm377, _adm_why377 = self._m377_origin_gate(origin, prompt)
+            if not _adm377:
+                self._m377_adm_note(False, _adm_why377)
                 # ★331批刀9：查询侧同样记影子（"本可命中但被准入拦"的次数）
                 self._m331_shadow_note(origin, prompt)
                 return None
+            self._m377_adm_note(True, _adm_why377)
             if len(prompt) < self.min_len():
                 self._stat["rejected"] += 1
                 self._tele_bump(_scene, "misses")
@@ -963,6 +1056,23 @@ class SemanticCacheL2:
             _m = _v.get("misses", 0)
             _v["hit_rate"] = round(_h / (_h + _m), 4) if (_h + _m) else 0.0
             _v["pollution_rate"] = round(_v.get("neg", 0) / _h, 4) if _h else 0.0
+        # ★377刀6：准入闸分桶单独落一行（变化才打）。
+        #   为什么不并进下面那行：下面那行有「读数不变就抑制」的判据（369 刀1），
+        #   把准入桶塞进同一个签名会让两个不同事实互相遮蔽；且准入先于四闸发生，
+        #   被拒的请求**根本不进** hits/misses ⇒ 不单列就永远是「全 0 空转」。
+        try:
+            _adm377 = getattr(self, "_m377_adm", None) or {}
+            _adm_a = int(sum((_adm377.get("admitted") or {}).values()))
+            _adm_r = int(sum((_adm377.get("rejected") or {}).values()))
+            _adm_sig = "%s|%s" % (sorted((_adm377.get("admitted") or {}).items()),
+                                  sorted((_adm377.get("rejected") or {}).items()))
+            if (_adm_a or _adm_r) and _m369_changed("semantic_cache_l2.admission",
+                                                    _adm_sig):
+                _L.info("[semantic_cache_l2] 准入闸 admission admitted=%d rejected=%d "
+                        "明细=%s", _adm_a, _adm_r, _adm377)
+        except Exception as _adm_e:
+            silent_exc(_adm_e,
+                       where="SemanticCacheL2::telemetry admission")
         # ★191刀2：INFO 日志输出（命中率/污染率·按场景分布），方便观测共窗收证。
         #   仅新增日志，不改任何命中判定 / 存储 / 返回。
         try:
@@ -998,10 +1108,14 @@ class SemanticCacheL2:
         with self._lock:
             _n = len(self._entries)
         _o = self._stat["hits"] + self._stat["misses"]
+        _adm = getattr(self, "_m377_adm", None) or {}
         return {"enabled": self.enabled(), "entries": _n, "capacity": self.capacity(),
                 "ttl_sec": self.ttl_sec(), "threshold": self.threshold(),
                 "hit_rate": round(self._stat["hits"] / _o, 4) if _o else 0.0,
                 "telemetry": self.telemetry(),
+                # ★377刀6：准入结果分桶（被拒也要可见，否则"全被挡"与"没请求"同形）
+                "admission": {"admitted": dict(_adm.get("admitted") or {}),
+                              "rejected": dict(_adm.get("rejected") or {})},
                 **self._stat}
 
     def clear(self) -> None:
