@@ -4842,7 +4842,8 @@ EVOLUTION_BASELINE_WINDOW_DAYS = 7        # 基线统计窗口（天；0 = 全�
 # 背景：data/ 下 1274 个 .corrupted（同一文件的历史快照）+ 知识备份无上限轮转
 #   （实测 5 份 × 438MB = 2.19GB，且每 ~10 分钟仍在新增）。
 #   ★生成侧根因：`PulseSnapshot._max_backups` **硬编码 5**（第204行）。
-KNOWLEDGE_BACKUP_KEEP = 2                # ★备份保留份数（原硬编码 5 → 第41批改 3 → 338批刀1 定为 2 并与代码默认/注释三处统一）
+KNOWLEDGE_BACKUP_KEEP = 1                # ★备份保留份数（原硬编码 5 → 41批改 3 → 338批刀1 定为 2 → **384批刀3 改 1**：
+#   停机窗实测 2 份 .bak 合计 1.41GB 而冷备已压 gzip，热备留 1 份足够回滚一层）
 ENABLE_KNOWLEDGE_BACKUP_ROTATION = True  # 轮转总开关（关闭 → 回到旧值 5，零回归）
 CORRUPTED_QUARANTINE_DAYS = 30           # 无对应版本的 .corrupted 隔离保留天数
 
