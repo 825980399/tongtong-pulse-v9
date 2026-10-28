@@ -220,6 +220,123 @@ def _m89_len_floor() -> float:
     return 0.0
 
 
+# ========================================== 376刀4：try 块平衡静态闸（关2a）
+#  _m376_try_balance
+#  【为什么】跨夜 12 次 `patch_multi_1793...` 全部因
+#    `SyntaxError: expected 'except' or 'finally' block (<llm-patch>, line 35~44)`
+#    被关2 拒收：日志里只有 ast 的泛化文案，看不出「几个 try 缺收尾、缺在第几行」，
+#    而补丁正文不落盘（`data/` 全库查不到该 id）⇒ 事后无法复盘，下一轮照原样重犯。
+#  【做什么】入库前先数一遍**语句级** `try` 与 `except`/`finally`（tokenize 口径，
+#    字符串/注释/属性名自动排除 —— 铁律227），不平衡时给出可执行的原因：
+#    缺几处、缺在第几行、片段末尾长什么样。
+#  【只在必然非法时才拒】两条形态：
+#    ① `try` 数 > `except`+`finally` 数 ⇒ 至少一个 try 没有收尾；
+#    ② 有 `except`/`finally` 而 `try` 数为 0 ⇒ 片段起点落在 try 内部（窗口错位）。
+#    两条都**必然**让关2 的 ast.parse 失败 ⇒ 关2a 不改变任何补丁的通过/拒绝结论，
+#    只把理由从「ast 泛化文案」换成可定位、可动手的信息。
+#  【能力边界】它是**下界**探测器，不是完整校验器：
+#    `try/except` 与 `try/finally` 写成一缺一（tries=2 / handlers=2）时判 ok，
+#    这种形态仍由关2 兜住。不猜、不补。
+#  【为什么不自动补全】用 `except Exception: raise` 补上，会让「被丢掉的原 handler」
+#    静默变成「向上抛」，而关0/1/2/3/3b **全绿** —— 语义变了判据看不见。
+#    实证见 `docs/路灯与星轨对话/交付报告/证据件/376/刀4_try平衡闸_20261028.md`。
+_M376_TRY_KEYWORDS = ("try", "except", "finally")
+
+
+def _m376_try_balance(code: str) -> dict:
+    """语句级统计 `try` / `except` / `finally`（纯函数，不读写任何全局状态）。
+
+    返回 `{"tries","handlers","deficit","open_lines","state","tail","detail"}`；
+    `state` 四态：
+
+      | state | 含义 | 调用方动作 |
+      |---|---|---|
+      | `ok` | 两侧自洽（含「根本没有 try」） | 放行，交关2 |
+      | `unbalanced` | `try` 多于 handler ⇒ 至少一个 try 缺收尾 | 关2a 拒收 |
+      | `orphan` | 有 handler 却没有 try ⇒ 片段起点落在 try 内部 | 关2a 拒收 |
+      | `unknown` | tokenize 读不动 ⇒ **不拦**（不猜） | 放行，交关2 |
+    """
+    import io as _io376
+    import tokenize as _tk376
+    _tries = 0
+    _exc = 0
+    _fin = 0
+    _try_lines = []
+    _h_line = 0
+    try:
+        _toks = list(_tk376.generate_tokens(_io376.StringIO(code or "").readline))
+    except Exception as _e376:
+        # 读不动就是读不动：不猜、不拦，把裁决权交回关2（它有自己的 try/except）
+        silent_exc(_e376, where="nucleus.reasoning.PatchManager::_m376_try_balance")
+        return {"tries": 0, "handlers": 0, "deficit": 0, "open_lines": [],
+                "state": "unknown", "tail": "",
+                "detail": f"tokenize 失败（不拦）: {type(_e376).__name__}: {_e376}"}
+    _prev = None
+    for _t in _toks:
+        if _t.type in (_tk376.NL, _tk376.NEWLINE, _tk376.INDENT, _tk376.DEDENT):
+            _prev = _t.type
+            continue
+        if _t.type == _tk376.COMMENT:
+            continue
+        # 语句级判据：关键字必须处在行首位置（前一个有效 token 是 NEWLINE/INDENT/
+        #   DEDENT 或文件开头）。`x.try` / `@try` / `"try:"` 一律不计数。
+        if _t.type == _tk376.NAME and _t.string in _M376_TRY_KEYWORDS:
+            if _prev in (None, _tk376.NEWLINE, _tk376.INDENT, _tk376.DEDENT):
+                if _t.string == "try":
+                    _tries += 1
+                    _try_lines.append(_t.start[0])
+                elif _t.string == "except":
+                    _exc += 1
+                    if not _h_line:
+                        _h_line = _t.start[0]
+                else:
+                    _fin += 1
+                    if not _h_line:
+                        _h_line = _t.start[0]
+        _prev = _t.type
+    _handlers = _exc + _fin
+    _deficit = _tries - _handlers
+    if _deficit > 0:
+        _state = "unbalanced"
+        _open = _try_lines[-_deficit:]
+    elif _tries == 0 and _handlers > 0:
+        _state = "orphan"
+        _open = [_h_line]
+        _deficit = _handlers
+    else:
+        _state = "ok"
+        _open = []
+        _deficit = 0
+    # 片段末行：补丁不落盘，留这一小段让下一次能一眼看出「断在哪」（长度有界）
+    _tail = ""
+    for _ln in reversed((code or "").split("\n")):
+        if _ln.strip():
+            _tail = _ln.strip()[:60]
+            break
+    return {"tries": _tries, "handlers": _handlers, "deficit": _deficit,
+            "open_lines": _open, "state": _state, "tail": _tail, "detail": ""}
+
+
+def _m376_try_balance_reason(tb: dict) -> str:
+    """把关2a 的统计翻成「问题 + 定位 + 已拦截」三段式文案。"""
+    _lns = "、".join(str(x) for x in (tb.get("open_lines") or []))
+    _tail = tb.get("tail") or ""
+    if tb.get("state") == "unbalanced":
+        return (f"try 块不平衡：{tb.get('tries')} 个 try / "
+                f"{tb.get('handlers')} 处 except+finally，缺 {tb.get('deficit')} 处收尾"
+                f"（第 {_lns} 行的 try 没有对应 except/finally）；"
+                f"片段末行={_tail!r}"
+                "（入库前静态闸拦截，未进入副本验证）")
+    if tb.get("state") == "orphan":
+        return (f"try 块不平衡：有 {tb.get('handlers')} 处 except/finally 却没有 try"
+                f"（第 {_lns} 行）——补丁起点落在 try 内部（fragment 窗口错位）；"
+                f"片段末行={_tail!r}"
+                "（入库前静态闸拦截，未进入副本验证）")
+    # ★按状态显式分支，不留 else 兜底：原实现的 `if unbalanced ... else 说 orphan`
+    #   会把 `ok` / `unknown` 也描述成「片段窗口错位」（V2 反向注入暴露）。
+    return f"try 块平衡检查未给出拒收结论（state={tb.get('state')}，不拦）"
+
+
 # ★第90批 T-90a：LLM 补丁「字段契约」必填校验（关0）。
 #   为什么必须单列一关（而不是靠关1/关3 顺带拦下）：
 #     · 关1 的判据是 `not _mod_norm or _mod_norm == _orig_norm` ——
@@ -3396,6 +3513,15 @@ class PatchManager:
         # 关1：非空 + 实质差异
         if not _mod_norm or _mod_norm == _orig_norm:
             return {"complete": False, "reason": "修改内容为空或与原文完全一致"}
+
+        # 关2a：try 块平衡（★376刀4）—— 摆在关2 之前，比 ast.parse 更早给出
+        #   **可执行**的原因（缺几处、缺在第几行、片段末行长什么样）。
+        #   只拒「try 多于 handler」与「有 handler 无 try」两种**必然语法非法**形态，
+        #   故对既有全部通过的补丁零影响（裁决等价性见 tests/test_m376_d4_try_balance.py）。
+        _tb376 = _m376_try_balance(_mod_norm)
+        if _tb376["state"] in ("unbalanced", "orphan"):
+            return {"complete": False,
+                    "reason": _m376_try_balance_reason(_tb376)}
 
         # 关2：语法可解析（dedent + 虚拟函数包装，兼容带缩进/含 return 的方法体片段）
         #   ★PULSE-DEFECT-20260902-01: 方法体片段含 return，dedent 后顶层 return 非法，
