@@ -423,6 +423,27 @@ class EventBus:
         return {"alarm": True, "depth": _m.get("queue_depth"),
                 "threshold": _m.get("queue_alarm_threshold")}
 
+    def has_subscribers(self, name: str) -> bool:
+        """★379刀4（DJ4-01）：事件名当前是否有**业务**订阅方。
+
+        为什么要剔除通配观察者：EventTap 以 `**` 订阅全部事件（只做旁路统计），
+        直接数 `_subs` 永远非空 ⇒ 发布侧闸门形同虚设、零目标广播一条都挡不住。
+        故这里把 `**` / `*` 视为"观察者"而非"消费者"。
+
+        读不到订阅表 ⇒ 返回 True（保守照发：宁可多发一条，不可误封业务）。
+        """
+        try:
+            with self._lock:
+                for _s in list(self._subs.values()):
+                    if str(_s.pattern) in ("**", "*"):
+                        continue
+                    if _match(_s.pattern, name):
+                        return True
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="EventBus::has_subscribers")
+            return True
+
     def _deliver(self, event: Event) -> int:
         """把事件投递给全部匹配订阅（按优先级 → 注册时间 → sub_id 稳定排序）。"""
         with self._lock:
@@ -430,6 +451,14 @@ class EventBus:
             matched.sort(key=lambda s: (int(s.priority), s.created_at, s.sub_id))
             if not matched:
                 self._zero_match_events += 1
+                # ★379刀2（DJ4-04）：登记死信（发布时无任何订阅方 ⇒ 必然 0 次投递）。
+                #   与孤儿（AST 无上游）分开计，读数才可能和 tracer 对上。
+                try:
+                    from utils.pulse_tracer import note_dead_letter as _ndl
+                    _ndl(event.name, source=getattr(event, "source", "") or "")
+                except Exception as _de:
+                    silent_exc(_de, where="EventBus::_deliver dead_letter",
+                               level="debug")
                 # ★360刀9：按**事件名**分桶 —— 全局计数回答不了
                 #   "哪一类事件是 100% 死广播"（DJ4：pattern_prewarm 149 /
                 #   pattern_prediction 52 全零匹配）。
@@ -661,6 +690,18 @@ class EventBus:
 # ======================================================================
 _bus: EventBus | None = None
 _bus_lock = threading.Lock()
+
+
+def has_subscribers(name: str) -> bool:
+    """★379刀4（DJ4-01）：模块级便捷入口 —— 发布方在热路径上直接用，避免自持 bus 引用。
+
+    语义与 `EventBus.has_subscribers` 完全一致（剔除 `**` / `*` 观察者；读不到 ⇒ True）。
+    """
+    try:
+        return bool(get_event_bus().has_subscribers(name))
+    except Exception as _e:
+        silent_exc(_e, where="EventBus::has_subscribers(module)")
+        return True
 
 
 def get_event_bus() -> EventBus:

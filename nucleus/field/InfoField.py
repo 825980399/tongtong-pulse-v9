@@ -43,6 +43,43 @@ _PULSE_LAYER_L1 = "L1"
 _PULSE_LAYER_L2 = "L2"
 _PULSE_LAYER_L3 = "L3"
 
+#: ★379刀4（DJ4-01）：票面点名的两个"零匹配高风险"发布点。
+#:   闸门只作用于这两类 —— 不给全库发布点套闸（热路径多一次订阅表扫描不划算，
+#:   且会让"发了没发"变难追）。
+_M379_GATED_EVENTS = ("pattern_prediction", "pattern_prewarm")
+_M379_GATED_SEEN: set = set()
+
+
+def _m379_bus_has_consumer(event_name: str) -> bool:
+    """★379刀4（DJ4-01）：该事件名在 EventBus 上是否还有**业务**订阅方。
+
+    读不到订阅表 ⇒ True（保守照发）；开关 `ENABLE_M379_ZERO_TARGET_GATE` 关闭 ⇒ 恒 True。
+    """
+    try:
+        import config as _c379
+        if not bool(getattr(_c379, "ENABLE_M379_ZERO_TARGET_GATE", True)):
+            return True
+    except Exception as _ce:
+        silent_exc(_ce, where="InfoField::_m379_bus_has_consumer cfg", level="debug")
+    try:
+        from nucleus.events.EventBus import has_subscribers as _hs
+        return bool(_hs(event_name))
+    except Exception as _e:
+        silent_exc(_e, where="InfoField::_m379_bus_has_consumer")
+        return True
+
+
+def _m379_note_skipped(event_name: str) -> None:
+    """每个事件名只记一次 —— 这类信号每分钟都在发，逐条记会把日志淹掉。"""
+    try:
+        if event_name in _M379_GATED_SEEN:
+            return
+        _M379_GATED_SEEN.add(event_name)
+        _module_logger.info(
+            "[379刀4] %s 零订阅方 ⇒ 停止广播（每次进程只记一次）", event_name)
+    except Exception as _e:
+        silent_exc(_e, where="InfoField::_m379_note_skipped", level="debug")
+
 # v9.5: 脉冲风暴处理动作
 _STORM_AGGREGATE = "aggregate"
 _STORM_THROTTLE = "throttle"
@@ -2762,7 +2799,7 @@ class InfoField(SilentLogMixin):
                     #   hasattr 恒为 False，pattern_prediction 事件自上线起从未产生过。
                     #   最小侵入修复：改用 getattr 兼容两种命名，优先公共属性。
                     _pc = getattr(self, "pulse_core", None) or getattr(self, "_pulse_core", None)
-                    if _pc is not None:
+                    if _pc is not None and _m379_bus_has_consumer("pattern_prediction"):
                         _pc.emit(
                             source_organ="InfoField",
                             event_type="pattern_prediction",
@@ -2778,6 +2815,8 @@ class InfoField(SilentLogMixin):
                         )
                         _module_logger.debug(
                             f"模式预测信号: {etype} (频率={freq}, 次数={count})")
+                    elif _pc is not None:
+                        _m379_note_skipped("pattern_prediction")
                 except Exception as _pe:
                     _module_logger.debug(f"模式预测信号发射失败: {_pe}")
 
@@ -2807,7 +2846,7 @@ class InfoField(SilentLogMixin):
                 if _prewarm:
                     _pc2 = (getattr(self, "pulse_core", None)
                             or getattr(self, "_pulse_core", None))
-                    if _pc2 is not None:
+                    if _pc2 is not None and _m379_bus_has_consumer("pattern_prewarm"):
                         for _u in _prewarm[:3]:
                             _pc2.emit(
                                 source_organ="InfoField",
@@ -2822,6 +2861,8 @@ class InfoField(SilentLogMixin):
                                 priority=1,
                                 layer="L1",
                             )
+                    elif _pc2 is not None:
+                        _m379_note_skipped("pattern_prewarm")
                     # ★主线第3批 任务4(P1-18)：将即将发生的周期事件真正交给
                     #   消费方执行「知识预加载」——此前 pattern_prewarm 仅被发射、无人消费。
                     try:
