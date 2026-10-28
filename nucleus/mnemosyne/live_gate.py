@@ -123,7 +123,10 @@ def _load_state(state_path: str | None = None) -> dict:
         # ★E10（T-350开闸回载缺口-1）：缺席是确定性事实，**不得每拍重复**留痕；
         #   只在首次 / 曾存在又被清掉（事故信号）时打一条。
         if _absence_notice.note_absent(_p):
-            _module_logger.debug("[350开闸] 台账不存在 path=%s（首次运行或刚被清理）", _p)
+            # ★378刀7（T-350开闸回载缺口-1）：首次不存在是**初始化事实**，用 INFO 让人看得见；
+            #   重复与"曾存在又消失"由 note_absent 判定，本行不会每拍刷
+            #   （现网实测两条各 1 行/进程）。
+            _module_logger.info("[350开闸] 台账不存在 path=%s（首次运行或刚被清理）", _p)
         return _blank_state(_p, "absent")
     except Exception as _e:                                   # noqa: BLE001
         silent_exc(_e, where="live_gate::_load_state")

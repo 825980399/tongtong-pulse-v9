@@ -862,7 +862,8 @@ class PulseMetricsCollector(BasePulseOrgan):
                 #   DEBUG 实测约 2 条/拍、10 族合计约 1000 行/h 里占两条纯噪声。
                 #   ⇒ 只在「首次发现」或「曾存在又被清掉」时留痕（后者是事故信号）。
                 if _absence_notice.note_absent(_p):
-                    self._log(LogLevel.DEBUG,
+                    # ★378刀7（T-350开闸回载缺口-1）：首条用 INFO（初始化事实），后续由 note_absent 挡住。
+                    self._log(LogLevel.INFO,
                               "[350开闸] 回载统计尚不存在 path=%s ⇒ 命中率样本=0"
                               "（首次或刚被清理）" % _p)
                 _rs = None        # 还没跑过回载 ⇒ 无样本（不是 0）
