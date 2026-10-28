@@ -251,3 +251,208 @@ def next_gap_state(prev: dict | None, gap: int | None) -> dict:
     _persist = int(_p.get("persist") or 0) + 1 if _delta >= THREAD_GAP_BUMP else 0
     return {"base": int(_p["base"]), "persist": _persist, "delta": _delta,
             "warn": _persist >= THREAD_GAP_PERSIST_SAMPLES}
+
+
+# =========================================== 376刀3：线程落差快照（观察票）
+#  _m376_d3_gap_snapshot
+#  【为什么加】跨夜 131 个连续采样点只告诉我们「落差 94-97、没回落」，**没告诉是谁**。
+#  【能答到什么】CPython 给不出原生线程的名字，本件**也不编造名字**。它给三样：
+#    ① Python 侧全量清单（name/ident/daemon/dummy）—— `threading.enumerate()` 的副本；
+#    ② OS 侧 tid 集合 **减去** Python 侧 ident 集合 ⇒ 没被登记那批的**确切 tid 与 CPU 时间**；
+#    ③ 连续快照间的 tid 差分 ⇒ 新增那批出现在**哪一拍**（可与同时段动作对照）。
+#  【口径自检】`native_only` 条数应≈`gap`。若明显大于 `gap + GAP_IDENT_DOMAIN_SLACK`，
+#    说明该平台 `Thread.ident` 与 OS tid **不同源** ⇒ 标 `ident_domain_mismatch=True`，
+#    该字段只作相对变化看，不当绝对数用（不猜）。
+#  【不改调度】本件只在 PulseLiver **已经判定 warn** 的分支里被调用；抓取频率由
+#    `should_snapshot` 限流（首告警 / 落差再涨 ≥5 / 每 12 拍一次），131 拍不会刷屏。
+GAP_SNAP_SCHEMA = "thread_gap_snapshot/376.v1"
+#: 内存里最多留几份快照（面板只读最近一份）
+MAX_GAP_SNAPSHOTS = 8
+#: 落差比上次快照再涨这么多 ⇒ 立刻补抓一份（抓"新增"的那一拍）
+GAP_SNAP_MIN_JUMP = 5
+#: 持续告警期间每 N 个采样点抓一次（5min × 12 = 1h）
+GAP_SNAP_EVERY_N = 12
+#: `native_only` 允许比 `gap` 多出的条数（超过即判 ident 域不同源）
+GAP_IDENT_DOMAIN_SLACK = 5
+
+_GAP_SNAPSHOTS: list = []
+_GAP_SINCE = 0
+_GAP_LAST_TIDS: set = set()
+
+
+def python_side_threads() -> list:
+    """`threading.enumerate()` 的安全副本。
+
+    ★不持 `_LOCK` 调用 `enumerate()`：它自己要拿 threading 的内部锁，与新建线程
+      互等就会把观测面变成新的卡点（374 刀9 的教训同型）。
+    """
+    _out = []
+    for _t in threading.enumerate():
+        _out.append({
+            "name": str(getattr(_t, "name", "") or ""),
+            "ident": getattr(_t, "ident", None),
+            "daemon": bool(getattr(_t, "daemon", False)),
+            "dummy": type(_t).__name__ == "_DummyThread",
+        })
+    return _out
+
+
+def name_histogram(rows) -> dict:
+    """线程名 → 条数（"哪个子系统起了几条"一眼可见）。"""
+    _h: dict = {}
+    for _r in rows or []:
+        _n = str((_r or {}).get("name") or "")
+        _h[_n] = _h.get(_n, 0) + 1
+    return _h
+
+
+def _os_tids(proc) -> list | None:
+    """psutil 侧 tid + CPU 时间；取不到 ⇒ **None**（不填空列表冒充"没有"）。"""
+    if proc is None:
+        return None
+    try:
+        _rows = []
+        for _t in proc.threads():
+            _rows.append({"id": int(_t.id),
+                          "user": round(float(_t.user_time or 0.0), 4),
+                          "sys": round(float(_t.system_time or 0.0), 4)})
+        return _rows
+    except Exception as _e:
+        silent_exc(_e, where="thread_guard::_os_tids", level="debug")
+        return None
+
+
+def native_only_threads(os_tids, py_idents) -> dict:
+    """OS 线程里**不在 Python 视野**的那一批（tid 集合差）。
+
+    `os_tids is None` ⇒ `state="unavailable"`、`count=None`：拿不到与真是 0 必须分开
+    （铁律276：只挡告警不挡读数就是假安全）。
+    """
+    if os_tids is None:
+        return {"state": "unavailable", "count": None, "tids": [], "rows": [],
+                "os_total": None, "py_total": None}
+    _py = {int(x) for x in (py_idents or []) if isinstance(x, int)}
+    _extra = [r for r in os_tids if int(r["id"]) not in _py]
+    _extra.sort(key=lambda r: (r["user"] + r["sys"]), reverse=True)
+    return {"state": "ok", "count": len(_extra),
+            "tids": sorted(int(r["id"]) for r in _extra),
+            "rows": _extra[:32], "os_total": len(os_tids), "py_total": len(_py)}
+
+
+def build_gap_snapshot(gap, os_threads, os_tids, py_threads=None, now=None,
+                       prev_tids=None) -> dict:
+    """组装一份落差快照（纯函数，便于单测）。"""
+    _now = float(time.time() if now is None else now)
+    _py = python_side_threads() if py_threads is None else list(py_threads)
+    _idents = [x.get("ident") for x in _py if isinstance(x.get("ident"), int)]
+    _nat = native_only_threads(os_tids, _idents)
+    _prev = set(prev_tids or ())
+    _new = (sorted(set(_nat.get("tids") or []) - _prev) if _prev else [])
+    _mis = (isinstance(_nat.get("count"), int) and isinstance(gap, int)
+            and _nat["count"] > int(gap) + GAP_IDENT_DOMAIN_SLACK)
+    return {
+        "schema": GAP_SNAP_SCHEMA,
+        "at": round(_now, 3),
+        "gap": gap,
+        "os_threads": os_threads,
+        "py_active": threading.active_count(),
+        "py_dummy": sum(1 for x in _py if x.get("dummy")),
+        "py_names": name_histogram(_py),
+        "py_threads": _py,
+        "native_only": _nat,
+        "new_tids": _new,
+        "ident_domain_mismatch": _mis,
+        "boundary": ("原生线程名 CPython 取不到、本快照不编造；`native_only` 给 tid 集合"
+                     "与 CPU 时间，靠 `new_tids` 差分定位『哪一拍新增』。"
+                     "`ident_domain_mismatch=True` 时该集合只作相对变化看"),
+    }
+
+
+def should_snapshot(prev_snap, gap, since: int) -> tuple:
+    """抓取限流（纯函数）。返回 `(是否抓, 原因)`。
+
+    三条触发：① 首次告警；② 落差比上次快照再涨 ≥ `GAP_SNAP_MIN_JUMP`；
+    ③ 持续告警期间每 `GAP_SNAP_EVERY_N` 拍一次。其余不抓——131 拍全抓等于刷屏。
+    """
+    if prev_snap is None:
+        return True, "first_warn"
+    _pg = prev_snap.get("gap")
+    if (isinstance(_pg, int) and isinstance(gap, int)
+            and (int(gap) - int(_pg)) >= GAP_SNAP_MIN_JUMP):
+        return True, f"jump_+{int(gap) - int(_pg)}"
+    if int(since) >= GAP_SNAP_EVERY_N:
+        return True, f"periodic_{int(since) + 1}"
+    return False, ""
+
+
+def maybe_gap_snapshot(gap, os_threads=None, proc=None, now=None) -> dict | None:
+    """PulseLiver 已判 warn 时调用：按限流决定是否抓快照，并打一行可 grep 的日志。
+
+    返回被抓下的快照；未到抓取条件 ⇒ **None**（不返回空 dict 冒充"抓了但没内容"）。
+    """
+    global _GAP_SINCE, _GAP_LAST_TIDS
+    with _LOCK:
+        _prev = dict(_GAP_SNAPSHOTS[-1]) if _GAP_SNAPSHOTS else None
+        _since = _GAP_SINCE
+    _due, _why = should_snapshot(_prev, gap, _since)
+    if not _due:
+        with _LOCK:
+            _GAP_SINCE += 1
+        return None
+    _snap = build_gap_snapshot(gap, os_threads, _os_tids(proc), now=now,
+                               prev_tids=sorted(_GAP_LAST_TIDS) or None)
+    _snap["trigger"] = _why
+    with _LOCK:
+        _GAP_SNAPSHOTS.append(_snap)
+        if len(_GAP_SNAPSHOTS) > MAX_GAP_SNAPSHOTS:
+            del _GAP_SNAPSHOTS[: len(_GAP_SNAPSHOTS) - MAX_GAP_SNAPSHOTS]
+        _GAP_SINCE = 0
+        _GAP_LAST_TIDS = set(_snap["native_only"].get("tids") or [])
+    _top = sorted(_snap["py_names"].items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+    _LOG.warning(
+        "[376刀3] 线程落差快照 trigger=%s gap=%s os=%s py=%s dummy=%s "
+        "未登记=%s(本拍新增 %s) 顶层=[%s] ident域=%s",
+        _why, _snap.get("gap"), _snap.get("os_threads"), _snap.get("py_active"),
+        _snap.get("py_dummy"),
+        _snap["native_only"].get("count"), len(_snap.get("new_tids") or []),
+        ",".join(f"{k} x{v}" for k, v in _top),
+        "错位" if _snap.get("ident_domain_mismatch") else "一致")
+    return _snap
+
+
+def last_gap_snapshots() -> list:
+    """已抓到的快照副本（按抓取顺序）。"""
+    with _LOCK:
+        return [dict(x) for x in _GAP_SNAPSHOTS]
+
+
+def gap_snapshot_summary() -> dict | None:
+    """最近一份快照的**摘要**（面板用；从没抓过 ⇒ None，不填 0）。"""
+    _s = last_gap_snapshots()
+    if not _s:
+        return None
+    _x = _s[-1]
+    return {
+        "schema": GAP_SNAP_SCHEMA,
+        "at": _x.get("at"),
+        "trigger": _x.get("trigger"),
+        "gap": _x.get("gap"),
+        "os_threads": _x.get("os_threads"),
+        "py_active": _x.get("py_active"),
+        "py_dummy": _x.get("py_dummy"),
+        "native_only": (_x.get("native_only") or {}).get("count"),
+        "native_state": (_x.get("native_only") or {}).get("state"),
+        "new_tids": len(_x.get("new_tids") or []),
+        "ident_domain_mismatch": bool(_x.get("ident_domain_mismatch")),
+        "py_names_top": sorted((_x.get("py_names") or {}).items(),
+                               key=lambda kv: (-kv[1], kv[0]))[:3],
+    }
+
+
+def reset_gap_snapshots() -> None:
+    """清空快照与限流计数（测试用；生产不调用）。"""
+    global _GAP_SINCE, _GAP_LAST_TIDS
+    with _LOCK:
+        _GAP_SNAPSHOTS.clear()
+        _GAP_SINCE = 0
+        _GAP_LAST_TIDS = set()

@@ -537,6 +537,13 @@ class PulseLiver(BasePulseOrgan):
                       f"⇒ 疑似有线程卡在引导期（滞留快照 "
                       f"{len(thread_guard.stuck_snapshot())} 条）")
             self._res_warn_count += 1
+            # ★376刀3（观察票）：只在**已判 warn** 的分支里补一份落差快照
+            #   （Python 侧清单 + 未登记 tid 集合 + 与上一拍的 tid 差分），
+            #   答「那几十条是谁起的」。限流在 thread_guard.should_snapshot：
+            #   首告警 / 落差再涨 ≥5 / 每 12 拍一次 ⇒ 131 拍不会刷屏。
+            #   不改判据、不改调度、不改采样间隔；未到条件返回 None。
+            #   _m376_d3_gap_snapshot
+            thread_guard.maybe_gap_snapshot(_gap, _threads, _proc)
         try:
             _uptime_s = time.time() - _proc.create_time()
         except Exception as _e:
@@ -571,6 +578,8 @@ class PulseLiver(BasePulseOrgan):
             "thread_gap": self._thread_gap_state.get("delta"),
             "thread_gap_base": self._thread_gap_state.get("base"),
             "thread_gap_persist": self._thread_gap_state.get("persist"),
+            # ★376刀3：最近一份落差快照摘要（从没抓过 ⇒ None，不是 0）
+            "thread_gap_snapshot": thread_guard.gap_snapshot_summary(),
             "warn_count": self._res_warn_count,
             "sample_count": len(self._rss_samples),
         }
