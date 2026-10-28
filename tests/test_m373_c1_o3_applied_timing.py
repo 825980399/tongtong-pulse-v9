@@ -114,12 +114,18 @@ def test_03_verify_failed_never_applied(tmp_path, monkeypatch):
 #:   当成「本刀放开的」是考题前提错误；改为快照对比后判别力更强：
 #:   多一条边、少一条边、改一条边都红。
 _LEGAL_TRANSITIONS_SNAPSHOT_373 = {
-    "open": ("claimed", "fixed", "verified", "wontfix", "target_drifted"),
+    # ★385刀1：383刀4 **受控新增** STATUS_STALE（O3 判死超时转 stale，非结案），
+    #   此处同步基线。守卫本意是「不许为流转顺畅放宽既有边」；新增**状态**属
+    #   功能扩展，必须显式更新基线并留痕 —— 否则守卫会永久红，等于坏掉的警报器。
+    "open": ("claimed", "fixed", "verified", "wontfix", "target_drifted", "stale"),
     "claimed": ("fixed", "open", "wontfix", "target_drifted"),
     "fixed": ("verified", "claimed", "wontfix", "target_drifted"),
     "verified": ("open", "wontfix"),
     "wontfix": ("open",),
     "target_drifted": ("open", "wontfix"),
+    # stale 留两条回升通道：回 open（有人要处理了）/ 直接 wontfix。
+    #   **不给 fixed**：它本来就没人在修。
+    "stale": ("open", "wontfix"),
 }
 
 
