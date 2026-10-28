@@ -2992,6 +2992,36 @@ def _m339_o3_dispatch_ready(patch: dict) -> tuple:
 #: O3 判死候选最多可豁免几次（裁决⑥B 的保底：第 2 次失败后仍转人工）
 _O3_CAP_EXEMPT_MAX = 2
 
+# ★378刀2（T-378-沙箱TTL冻结-1）：沙箱成功后的**冻结窗口**（秒）。
+#   为什么要有：373刀5 让"沙箱成功 ≠ 落地"，于是补丁在落地前**每拍重跑一次沙箱**
+#   —— 实测 `o3_dispatch_attempts=2`、`o3_sandbox_only` 每拍 +1，白烧沙箱且噪声堆积。
+#   冻结到期的判据只认 `sandbox_ok_at`（373刀5 已留痕），不新开时点字段。
+_M378_SANDBOX_TTL_SEC = 1800.0
+
+
+def _m378_ttl_freeze_on() -> bool:
+    """★378刀2 灰度开关（默认开）：关掉即逐字回到"每拍重派"。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M378_SANDBOX_TTL_FREEZE", True))
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m378_ttl_freeze_on")
+        return True
+
+
+def _m378_sandbox_age_sec(patch) -> float | None:
+    """沙箱成功至今的秒数；没成功过/时点不可读 ⇒ None（= 不冻结）。"""
+    if not isinstance(patch, dict) or patch.get("sandbox_ok") is not True:
+        return None
+    _at = patch.get("sandbox_ok_at")
+    if not _at:
+        return None
+    try:
+        return max(0.0, time.time() - float(_at))
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m378_sandbox_age_sec")
+        return None
+
 #: 沙箱验证并发上限（裁决⑦：试点 2-3；**派单仍串行**，只并发验证环节）
 _M345_VERIFY_WORKERS = 2
 
@@ -3229,7 +3259,10 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                 "reason": "待修池结构不可判定"}
     _rej = {"not_o3": 0, "not_confirmed": 0,
             "still_requires_confirmation": 0, "applied": 0,
-            "expired": 0, "cap": 0, "pending_cleared": 0}
+            "expired": 0, "cap": 0, "pending_cleared": 0,
+            # # ★378刀2（T-378-沙箱TTL冻结-1）：沙箱成功后在 TTL 内被冻结的条数（
+            #   它是"**没白跑**"的凭证 —— 有计数就说明冻结真的挡住了重派）。
+            "sandbox_ttl": 0}
     # ★350刀4：每批先对账一次（pending × patch_history），撤单的当场摘出。
     #   默认 persist=False：本次只在内存里标记、不写生产数据（隔离约束）；
     #   待重启窗由运维开关打开落盘。
@@ -3250,6 +3283,16 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
         if not _ok:
             if _why in _rej:
                 _rej[_why] += 1
+            continue
+        # # ★378刀2（T-378-沙箱TTL冻结-1）：沙箱刚成功过 ⇒ TTL 内不重派（落地走 apply_all_pending
+        #   热路径；本函数重派也**不会**让补丁落地，只会重复烧沙箱）。
+        _sb_age = _m378_sandbox_age_sec(_p)
+        if (_sb_age is not None and _sb_age < _M378_SANDBOX_TTL_SEC
+                and _m378_ttl_freeze_on()):
+            _rej["sandbox_ttl"] = int(_rej.get("sandbox_ttl", 0)) + 1
+            _module_logger.info(
+                "[378刀2][O3派单] 沙箱成功未满 TTL ⇒ 冻结不重派: patch=%s age=%.0fs ttl=%.0fs",
+                str(_p.get("id") or "")[:24], _sb_age, _M378_SANDBOX_TTL_SEC)
             continue
         _fc = _m326_persisted_fail_count(_p, _ledger)
         if _fc >= _DISPATCH_FAIL_CAP:
