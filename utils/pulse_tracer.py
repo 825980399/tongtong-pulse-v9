@@ -395,6 +395,94 @@ def mark_route_matched(pulse_id, real_matched, universal_matched, dispatched, st
             "status": status,
         }
 
+#: ★379刀2（DJ4-04）：死信判定窗（秒）—— 发布后这么久内无任何 delivery 即算死信。
+_DEAD_LETTER_WINDOW_SEC = 60.0
+#: event_name -> {"count": int, "first_ts": float, "last_ts": float, "sources": set}
+_DEAD_LETTERS: dict = {}
+_DEAD_LOCK = threading.Lock()
+
+
+def note_dead_letter(event_name: str, source: str = "") -> int:
+    """★379刀2（DJ4-04）：登记一次**死信**（发布时无任何订阅方匹配）。
+
+    与"孤儿"是两个事实，分开计：
+      · 死信：**发布时**就没有订阅方 ⇒ 这次投递必然 0 次；
+      · 孤儿：发布点**在 AST 调用图里没有上游** ⇒ 是结构问题，不是投递问题。
+
+    Returns: 该事件名累计死信数（便于调用方就地判断是否要降噪）。
+    """
+    _n = str(event_name or "")
+    if not _n:
+        return 0
+    _now = time.time()
+    with _DEAD_LOCK:
+        _d = _DEAD_LETTERS.setdefault(_n, {"count": 0, "first_ts": _now,
+                                           "last_ts": _now, "sources": set()})
+        _d["count"] = int(_d.get("count") or 0) + 1
+        _d["last_ts"] = _now
+        if source:
+            _d["sources"].add(str(source))
+        return int(_d["count"])
+
+
+def dead_letter_stats() -> dict:
+    """★379刀2（DJ4-04）：死信读数（**按事件名分桶**；与孤儿分开报）。"""
+    with _DEAD_LOCK:
+        _items = [{"event": _k, "count": int(_v.get("count") or 0),
+                   "first_ts": _v.get("first_ts"), "last_ts": _v.get("last_ts"),
+                   "sources": sorted(_v.get("sources") or [])}
+                  for _k, _v in _DEAD_LETTERS.items()]
+    _items.sort(key=lambda x: -x["count"])
+    return {"window_sec": _DEAD_LETTER_WINDOW_SEC,
+            "total": sum(i["count"] for i in _items),
+            "distinct_events": len(_items),
+            "items": _items}
+
+
+def reset_dead_letters() -> None:
+    """清空死信计数（**仅供测试/诊断**；生产运行期不要调）。"""
+    with _DEAD_LOCK:
+        _DEAD_LETTERS.clear()
+
+
+def orphan_dead_report(events=None, min_age=None, subscription_provider=None,
+                        ast_upstream_provider=None) -> dict:
+    """★379刀2（DJ4-04）：**两侧读数并列**（不给合并总数 —— 混报正是本刀要修的病）。
+
+    Args:
+        events: 事件环（None ⇒ 取当前环快照，行为与 _detect_orphans 一致）
+        ast_upstream_provider: 可选，给定 event_type 返回"该发布点是否有上游"
+            （由 CallGraph 脉冲通道提供，见 379刀1 `_build_pulse_call_chain`）
+
+    Returns:
+        {orphans: {...}, dead_letters: {...}, ast_orphans: {...}, note: str}
+    """
+    _ev = [] if events is None else events
+    _orph = _detect_orphans(_ev, min_age=min_age,
+                            subscription_provider=subscription_provider)
+    _ast = {"checked": 0, "orphan_publishers": [], "unavailable": True}
+    if ast_upstream_provider is not None:
+        _ast = {"checked": 0, "orphan_publishers": [], "unavailable": False}
+        for _o in _orph:
+            _ast["checked"] += 1
+            try:
+                if not ast_upstream_provider(_o.get("event_type") or ""):
+                    _ast["orphan_publishers"].append(_o.get("event_type"))
+            except Exception as _e:
+                silent_exc(_e, "utils/pulse_tracer.py:orphan_dead_report ast",
+                           level="debug")
+        _ast["orphan_publishers"] = sorted(set(_ast["orphan_publishers"]))
+    return {
+        "orphans": {"total": len(_orph),
+                    "kind": "no_receiver_emit",
+                    "basis": "发射后 min_age 秒内无器官接收（运行态）"},
+        "dead_letters": dead_letter_stats(),
+        "ast_orphans": _ast,
+        "note": ("死信=发布时无订阅方（投递 0 次）；孤儿=发布点在 AST 调用图无上游。"
+                 "两者不混报（★379刀2（DJ4-04））"),
+    }
+
+
 def _detect_orphans(events, min_age=None, subscription_provider=None):
     """检测孤儿脉冲：发射超过min_age秒且无接收的emit事件。
 
@@ -461,6 +549,9 @@ def _detect_orphans(events, min_age=None, subscription_provider=None):
             "universal_only": _universal_only,
             "route_status": _rm.get("status") if _has_rm else None,
             "error": "孤儿脉冲: 发射后无器官接收",
+            # ★379刀2（DJ4-04）：本条目统计的是"发射后无接收"，**不是** AST 孤儿。
+            #   两个事实分开命名，避免"孤儿=0 vs 死信 716"这类跨面冲突。
+            "kind": "no_receiver_emit",
         })
     return orphans
 

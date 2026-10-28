@@ -18,7 +18,6 @@ T0 实测（纠正票面窗口）：
 import os
 import sys
 
-import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
