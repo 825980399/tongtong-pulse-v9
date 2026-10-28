@@ -823,6 +823,56 @@ class PulseMetricsCollector(BasePulseOrgan):
             silent_exc(_e, where="PulseMetricsCollector::_m344_heap_probe", level="debug")
             return None
 
+    #: ★382刀9（T-382-线程句柄埋点）：阈值（可被 config 覆盖：PROC_THREADS_WARN / PROC_HANDLES_WARN）。
+    _M382_THREADS_WARN = 50
+    _M382_HANDLES_WARN = 5000
+
+    def _m382_resource_probe(self) -> dict:
+        """★382刀9（T-382-线程句柄埋点）：每拍采线程数/句柄数，超阈值打 WARNING。
+
+        ★只采不拦：不新建定时器（挂在内存采样同一条活链上）、不改任何调度、
+        不因超标做任何动作 —— 这类指标的价值是「能看见增长」，不是「自动处置」。
+
+        采不到就如实记 -1（**不许记 0**：0 会被读成「没有线程」，是假读数）。
+        """
+        _out = {"threads": -1, "handles": -1, "warned": False, "why": ""}
+        try:
+            import threading as _th382
+            _out["threads"] = int(_th382.active_count())
+        except Exception as _te382:
+            silent_exc(_te382, where="PulseMetricsCollector::_m382_resource_probe threads",
+                       level="debug")
+        try:
+            import psutil as _ps382
+            _out["handles"] = int(_ps382.Process().num_handles())
+        except Exception as _he382:
+            # 无 psutil / 非 Windows / 权限不足 都走这里；保留上次读数（-1 表示采不到）
+            silent_exc(_he382, where="PulseMetricsCollector::_m382_resource_probe handles",
+                       level="debug")
+        try:
+            import config as _c382
+            _tw = int(getattr(_c382, "PROC_THREADS_WARN", self._M382_THREADS_WARN))
+            _hw = int(getattr(_c382, "PROC_HANDLES_WARN", self._M382_HANDLES_WARN))
+        except Exception as _ce382:
+            silent_exc(_ce382, where="PulseMetricsCollector::_m382_resource_probe cfg",
+                       level="debug")
+            _tw, _hw = self._M382_THREADS_WARN, self._M382_HANDLES_WARN
+        _over = []
+        if _out["threads"] > _tw:
+            _over.append("线程 %d > %d" % (_out["threads"], _tw))
+        if _out["handles"] > _hw:
+            _over.append("句柄 %d > %d" % (_out["handles"], _hw))
+        _out["warned"] = bool(_over)
+        _out["why"] = "、".join(_over)
+        if _over:
+            _n = int(getattr(self, "_m382_probe_beats", 0)) + 1
+            self._m382_probe_beats = _n
+            # 每 10 拍最多报一次（这类超限会持续存在，逐拍报等于刷屏）
+            if _n % 10 == 1:
+                self._log(LogLevel.WARNING,
+                          "[382刀9] 进程资源超阈值: %s" % _out["why"])
+        return _out
+
     def _m350_live_gate_tick(self, heap_mb, w1_verdict, beat: int) -> dict:
         """★350刀2①：每拍跑一次开闸判定（四条件同立）并留痕。
 
@@ -1209,6 +1259,13 @@ class PulseMetricsCollector(BasePulseOrgan):
                               "[339内存观测] 钩子外层异常（不静默）: %s: %s"
                               % (type(_mpe).__name__, _mpe))
                     _out["self_probe"] = None
+                # ★382刀9（T-382-线程句柄埋点）：线程/句柄每拍埋点（挂在同一条活采样链，不新建定时器）。
+                try:
+                    _out["resource_probe"] = self._m382_resource_probe()
+                except Exception as _rpe382:
+                    silent_exc(_rpe382,
+                               where="PulseMetricsCollector::_collect_memory_pressure 382刀9")
+                    _out["resource_probe"] = None
 
                 # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
                 #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。
