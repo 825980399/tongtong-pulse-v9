@@ -73,6 +73,8 @@ def judge_zero_break(record: dict,
     _checks["executed_ge_1"] = {"ok": _ex >= 1, "got": _ex, "expect": ">=1"}
 
     # ② applied is True（**必须是 True，不是"真值"**：字符串 "false" 也是真值）
+    #    # ★378刀1（T-378-破零判据同源-1）：本字段**只认台账**（pending/history 的 `applied`），
+    #    `watch_candidate` 不得用本拍沙箱结果覆盖它（沙箱成功 ≠ 落地，见 373刀5）。
     _ap = record.get("applied")
     _checks["applied_true"] = {"ok": _ap is True, "got": _ap, "expect": "is True"}
 
@@ -965,7 +967,13 @@ def watch_candidate(patch_id: str, *,
             _rec["file"] = _hist["file"]
     if isinstance(_res, dict):
         _rec["executed"] = 1
-        _rec["applied"] = _res.get("success") is True
+        # ★378刀1（T-378-破零判据同源-1）：`applied` **只认台账**，不许被本拍结果覆盖。
+        #   原实现 `_rec["applied"] = _res.get("success") is True` 会让 `[351破零]`
+        #   把「本拍沙箱执行成功」说成「补丁已落到源码」，而台账里 `applied` 仍是
+        #   null（373刀5 明确"沙箱成功 ≠ 落地"）⇒ missing 从 3 项缩成 1 项，
+        #   看起来"就差 ledger_verified 一步"，实际差的是同一件落地事的两面。
+        #   本拍结果另存 `sandbox_ok`，好让人分辨"跑了没落地"与"压根没跑"。
+        _rec["sandbox_ok"] = _res.get("success") is True
         if _res.get("verified") is not None and "verified" not in _rec:
             _rec["verified"] = _res.get("verified")
     _judge = judge_zero_break(_rec, project_root=project_root) if _rec else {
@@ -979,6 +987,7 @@ def watch_candidate(patch_id: str, *,
         "in_history": isinstance(_hist, dict),
         "selected": _selected,
         "selected_gt_0": _selected > 0,
+        "sandbox_ok": (_rec.get("sandbox_ok") if _rec else None),
         "dispatch_attempts": (_rec.get("o3_dispatch_attempts") if _rec else None),
         "zero_broken": bool(_judge.get("zero_broken")),
         "verdict": _judge.get("verdict"),
