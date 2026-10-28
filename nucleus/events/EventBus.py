@@ -489,6 +489,41 @@ class EventBus:
     # ------------------------------------------------------------------
     # 异步工作线程
     # ------------------------------------------------------------------
+    def check_idle(self, beats: int = 10) -> dict:
+        """★381刀4（T-381-EventBus降级判定）：连续 `beats` 拍 delivered 无增长 ⇒ WARNING（**不阻塞发布**）。
+
+        为什么要这个：EventBus 接线后一直 `subscriptions/published/delivered` 全 0，
+        但"0"本身没有时间维度 —— 分不出"刚启动还没流量"和"接线了但没人要"。
+        用"连续 N 拍不涨"给它一个时间维度；只告警，**不改任何发布行为**。
+
+        Returns: {idle_beats, delivered, threshold, warned, why}
+        """
+        _n = max(1, int(beats or 10))
+        with self._lock:
+            _cur = int(self._delivered or 0)
+            _last = getattr(self, "_m381_last_delivered", None)
+            if _last is None or _cur != _last:
+                self._m381_idle_beats = 0
+                self._m381_last_delivered = _cur
+            else:
+                self._m381_idle_beats = int(getattr(self, "_m381_idle_beats", 0)) + 1
+            _idle = int(getattr(self, "_m381_idle_beats", 0))
+        _warned = False
+        if _idle >= _n:
+            _warned = True
+            if int(getattr(self, "_m381_warned_at", -1)) != _idle:
+                self._m381_warned_at = _idle
+                try:
+                    _logger.warning(
+                        "[" + M4 + "] 连续 %d 拍无投递（delivered=%d，订阅=%d）"
+                        " ⇒ 疑似订阅方无真实消费；不影响发布",
+                        _idle, _cur, len(self._subs or {}))
+                except Exception as _we:
+                    silent_exc(_we, where="EventBus::check_idle warn", level="debug")
+        return {"idle_beats": _idle, "delivered": _cur, "threshold": _n,
+                "warned": _warned,
+                "why": ("连续 %d 拍无投递" % _idle) if _warned else "有投递或未达阈值"}
+
     def _ensure_worker(self) -> None:
         """惰性启动后台工作线程（幂等、线程安全）。"""
         if not self._async_enabled:
