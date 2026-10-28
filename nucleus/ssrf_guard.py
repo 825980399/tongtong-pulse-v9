@@ -15,10 +15,47 @@ import ipaddress
 import json
 import logging
 import socket
+import threading
 import urllib.error
 import urllib.request
 from typing import Any
 from urllib.parse import urlparse
+
+#: ★382刀10（T-382-SSRF分类）：三类拦截分开计数 —— 改前三类混在一起（实测 DNS_FAIL 27 /
+#:   PRIVATE_ADDR 2 / 其他 4），只能靠人肉匹配中文文案，没法做趋势。
+#:   ★只加计数、不改任何判定：`is_safe_http_url` 的返回值与语义逐字不变。
+_M382_BLOCK_COUNTS = {"DNS_FAIL": 0, "PRIVATE_ADDR": 0, "OTHER": 0}
+_M382_BLOCK_LOCK = threading.Lock()
+
+
+def _m382_bump(kind: str) -> None:
+    """★382刀10（T-382-SSRF分类）：给某一类拦截计数（容错：任何异常都不影响判定）。"""
+    try:
+        with _M382_BLOCK_LOCK:
+            _M382_BLOCK_COUNTS[str(kind)] = int(
+                _M382_BLOCK_COUNTS.get(str(kind), 0)) + 1
+    except Exception as _be:
+        # ★382刀10：计数失败绝不影响安全判定，但**不许静默**（铁律176/cw2 门禁）
+        silent_exc(_be, where="ssrf_guard::_m382_bump", level="debug")
+
+
+def ssrf_block_stats() -> dict:
+    """★382刀10（T-382-SSRF分类）：三类拦截计数快照 + 合计（供诊断/日报读取）。"""
+    try:
+        with _M382_BLOCK_LOCK:
+            _d = dict(_M382_BLOCK_COUNTS)
+    except Exception as _de:
+        silent_exc(_de, where="ssrf_guard::ssrf_block_stats", level="debug")
+        _d = {}
+    _d["total"] = sum(int(v) for v in _d.values())
+    return _d
+
+
+def reset_ssrf_block_stats() -> None:
+    """★382刀10（T-382-SSRF分类）：清空计数（**仅供测试/诊断**）。"""
+    with _M382_BLOCK_LOCK:
+        for _k in list(_M382_BLOCK_COUNTS):
+            _M382_BLOCK_COUNTS[_k] = 0
 
 try:  # ★360刀0-2：埋点失败要留痕，但守卫本身不能被埋点依赖拖垮
     from nucleus._silent_except import silent_exc
@@ -101,6 +138,7 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
         return False, "URL 解析失败"
 
     if parsed.scheme not in _ALLOWED_SCHEMES:
+        _m382_bump("OTHER")
         return False, f"不支持的协议: {parsed.scheme}"
 
     host = (parsed.hostname or "").strip().lower()
@@ -109,6 +147,7 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
 
     # 硬安全底线：云元数据 / 未指定 / 保留地址，即使“受信任”也拒绝
     if host in _TRUSTED_HARD_BLOCK:
+        _m382_bump("PRIVATE_ADDR")
         return False, f"拒绝云元数据/保留地址: {host}"
 
     # 受信任主机（管理员显式配置）：允许私网/环回，仍要求 http/https（上方已校验）
@@ -118,6 +157,7 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
+        _m382_bump("DNS_FAIL")
         return False, f"无法解析主机: {host}"
 
     for info in infos:
@@ -135,6 +175,7 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
         # 注：2001::1（Teredo 占位地址）is_global=False，仍会被正确拦截——
         # 该地址本身不可通信，是运行环境 DNS 污染导致的异常解析，非 SSRF 误判。
         if not ip.is_global:
+            _m382_bump("PRIVATE_ADDR")
             return False, f"拒绝非公网地址: {host} -> {addr}"
 
     return True, ""
@@ -157,6 +198,7 @@ def safe_http_json(
     """
     _allowed, _reason = is_safe_http_url(url)
     if not _allowed:
+        _m382_bump("OTHER")
         return False, f"SSRF 防护拦截: {_reason}"
     # ★第360批 刀0-2：统一 JSON 出口的付费埋点（append-only，失败静默不阻断）
     _m360_rid = ""
