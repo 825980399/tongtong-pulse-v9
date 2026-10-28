@@ -147,6 +147,49 @@ def scan(snapshot: str, path_depth: int = 5) -> dict:
     }
 
 
+def analyse_path(space_path: str) -> dict:
+    """★385刀3：单条长路径的**分档判据**（纯函数，可复算）。
+
+    为什么用「段重复」作最强信号：正常层级不会出现同名层级两次
+    （`/自我/架构/设计文档/...` 里每段都不同）；而
+    `/…/编程助手/框架/异步/协议/框架/进化/框架/编译/框架/…` 里「框架」出现 4 次，
+    是把**关键词当成路径段**堆出来的 —— 这才是真噪声，不是"路径长"。
+
+    `noise=True` 的判据：**段重复 ≥2 次** 或 **段数 ≥8**。
+    """
+    _s = [x for x in str(space_path or "").split("/") if x]
+    _c = collections.Counter(_s)
+    _dup = [k for k, v in _c.items() if v >= 2]
+    return {
+        "path": space_path,
+        "depth": len(_s),
+        "chars": len(str(space_path or "")),
+        "dup_segs": _dup,
+        "max_dup": (max(_c.values()) if _c else 0),
+        "long_segs": [x for x in _s if len(x) > 24],
+        "noise": bool(_dup) or len(_s) >= 8,
+    }
+
+
+def classify_long_paths(rows: list) -> dict:
+    """★385刀3：把 `deep_path` 明细分成两档（`noise_likely` / `long_ok`）。
+
+    返回 `{"noise_likely": [...], "long_ok": [...], "depth_hist": {...}}`，
+    每项都是 `analyse_path` 的输出，按「噪声分高者先」排序。
+    """
+    _a = [analyse_path((r or {}).get("space_path")) for r in (rows or [])
+          if isinstance(r, dict)]
+    _noise = [x for x in _a if x["noise"]]
+    _ok = [x for x in _a if not x["noise"]]
+    _noise.sort(key=lambda y: (-y["max_dup"], -y["depth"]))
+    _ok.sort(key=lambda y: (-y["depth"], -y["chars"]))
+    return {
+        "noise_likely": _noise,
+        "long_ok": _ok,
+        "depth_hist": dict(collections.Counter(x["depth"] for x in _a)),
+    }
+
+
 def _print(r: dict) -> None:
     print("=" * 76)
     print("384刀1 知识快照质量问题分类（只读）")
