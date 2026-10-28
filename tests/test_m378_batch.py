@@ -220,3 +220,47 @@ def test_m378_d3_legacy_truncation_loses_identity():
     assert _legacy(_a) == _legacy(_b) == "patch_multi_1788...", "旧格式两者不可区分"
     # 全 id 可区分
     assert _a != _b and len(_a) > 16
+
+
+# ===================================================================== 刀4
+def test_m378_d4_acceptance_line_is_decoupled_from_g4():
+    """★核心：验收线读独立键（2000），分档线仍读 G4（7000）⇒ 两者**不同源**。"""
+    from nucleus.mnemosyne import release_policy as rp
+    assert config.MEMORY_PEAK_ACCEPTANCE_MB == 2000.0
+    assert rp.acceptance_line_mb() == 2000.0
+    assert rp.thresholds()["g4_heap_mb"] == 7000.0
+    assert rp.acceptance_line_mb() != rp.thresholds()["g4_heap_mb"], \
+        "验收线与分档线若相等，说明又并回一个键了"
+
+
+def test_m378_d4_guard_default_restores_d3_line():
+    """默认线回到 2.0GB：1999 过 / 2001 不过（边界两侧各一例，铁律275）。"""
+    from nucleus.mnemosyne import release_policy as rp
+    assert rp.heap_peak_guard(1999.0)["verdict"] == "pass"
+    assert rp.heap_peak_guard(2001.0)["verdict"] == "fail"
+    assert rp.heap_peak_guard(2001.0)["line_mb"] == 2000.0
+
+
+def test_m378_d4_judge_default_restores_d3_line():
+    from nucleus.mnemosyne import release_policy as rp
+    _d = rp.judge_pass_line(12000.0, 1999.0)
+    assert _d["heap_line_mb"] == 2000.0 and _d["verdict"] == "pass"
+    assert rp.judge_pass_line(12000.0, 2001.0)["verdict"] == "fail"
+
+
+def test_m378_d4_explicit_override_still_works():
+    """显式传线仍优先（按季度口径临时放宽的能力不能被这次改动拿走）。"""
+    from nucleus.mnemosyne import release_policy as rp
+    assert rp.heap_peak_guard(6000.0, line_mb=7000.0)["verdict"] == "pass"
+    assert rp.judge_pass_line(12000.0, 6000.0, heap_line_mb=7000.0)["verdict"] == "pass"
+
+
+def test_m378_d4_legacy_coupling_would_pass_2500():
+    """反向：内联固化**改前**口径（默认线吃 G4=7000）⇒ 2500MB 会被判 pass。
+
+    这就是本刀要堵的洞：不显式传 2000 时，验收尺子被分档提额顺手放宽。
+    """
+    _legacy_line = 7000.0
+    assert (2500.0 <= _legacy_line) is True, "改前口径下 2500MB 判 pass（不该）"
+    from nucleus.mnemosyne import release_policy as rp
+    assert rp.heap_peak_guard(2500.0)["verdict"] == "fail", "改后应判 fail"

@@ -5623,6 +5623,14 @@ MEMORY_DEGRADE_HEAP_MB = 2560.0           # 降级线 heap 轨（2.5GB）
 #   只写 RSS 会把"少装库"的架构收益误记成"治理有效"。
 MEMORY_PASS_RSS_MB = 12288.0              # 判定线 RSS 项（12GB）
 
+# ★378刀4（T-378-G4独立键-1）：**验收线**独立成键，与分档线解耦。
+#   病根：`MEMORY_RELEASE_G4_HEAP_MB` 被三处共用（pick_tier 分档 / heap_peak_guard
+#   峰值验收 / judge_pass_line 的 heap 轨）。377刀2 把它 2000→7000 后，两个"验收"
+#   函数的**缺省值**跟着被放宽到 7GB —— 当时只能靠注释+单测要求调用方显式传 2000，
+#   那是"提醒"不是"装置"（可见化≠改尺子）。
+#   现在：验收口径读本键（2000 = 小林 D3 硬线 ≤2.0GB），分档口径仍读 G4 键（7000）。
+MEMORY_PEAK_ACCEPTANCE_MB = 2000.0        # 验收硬线：heap 单日峰值 ≤2.0GB（D3）
+
 # 刀3：冷化链观测开关（只读留痕，不改驱逐策略）。
 ENABLE_COLD_CHAIN_OBSERVE = True
 # 刀3：冷池内存占用观测（只读计数，不参与决策）。

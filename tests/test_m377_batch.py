@@ -244,21 +244,24 @@ def test_m377_d2_tier_regains_resolution():
 
 
 def test_m377_d2_acceptance_line_coupling_is_explicit():
-    """★口径陷阱钉死：两个验收辅助函数的**默认线**跟着 G4 键走（现为 7000）。
+    """★377刀2 立的口子，**378刀4 已补上** —— 本用例随契约反向同步（强度不降）。
 
-    它们当前无生产调用方（全库仅本批测试与 m338 测试调用，且 m338 显式传 2000）
-    ⇒ 本批不动任何生效中的验收口径；但将来接线必须显式传 2000 才等于 D3 硬线。
+    377刀2 把 G4 线提到 7000 时，两个验收辅助函数的**默认线**跟着走 7000，
+    当时只能靠注释+单测要求调用方显式传 2000（"提醒"不是"装置"）。
+    378刀4 新增 `MEMORY_PEAK_ACCEPTANCE_MB=2000` 解耦 ⇒ 现在默认即 D3 硬线，
+    要放宽必须**显式**传 7000。
     """
     from nucleus.mnemosyne import release_policy as rp
     _d = rp.heap_peak_guard(5000.0)
-    assert _d["line_mb"] == 7000.0 and _d["verdict"] == "pass"
-    assert rp.heap_peak_guard(5000.0, line_mb=2000.0)["verdict"] == "fail"
-    assert rp.heap_peak_guard(1800.0, line_mb=2000.0)["verdict"] == "pass"
-    # 判定线双写：heap 轨默认同样跟 G4 键
+    assert _d["line_mb"] == 2000.0 and _d["verdict"] == "fail"
+    assert rp.heap_peak_guard(5000.0, line_mb=7000.0)["verdict"] == "pass"
+    assert rp.heap_peak_guard(1800.0)["verdict"] == "pass"
+    # 判定线双写：heap 轨默认同样取验收键（不再跟 G4 分档键）
     _p = rp.judge_pass_line(8000.0, 5000.0)
-    assert _p["heap_line_mb"] == 7000.0
+    assert _p["heap_line_mb"] == 2000.0
+    assert _p["verdict"] != "pass"
     assert rp.judge_pass_line(8000.0, 5000.0,
-                              heap_line_mb=2000.0)["verdict"] != "pass"
+                              heap_line_mb=7000.0)["verdict"] == "pass"
 
 
 def test_m377_d2_fallback_stays_conservative():

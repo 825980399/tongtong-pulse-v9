@@ -410,13 +410,26 @@ def degrade_verdict(rss_mb: float | None, heap_mb: float | None, *,
             "why": (("触发：" + "、".join(_triggers)) if _triggers else "两轨均未越线")}
 
 
+def acceptance_line_mb() -> float:
+    """★378刀4（T-378-G4独立键-1）：**验收**硬线（与分档线解耦）。
+
+    为什么单独一个函数：验收线（D3 ≤2.0GB）与分档线（G4 7000MB）是**两个不同事实**
+    —— 前者问"达没达标"，后者问"该不该告警/冷化"。共用一个键时，提额那个会顺手
+    把尺子放宽（377刀2 就是这么埋下的）。
+
+    缺 config 时回落 `2000.0`：宁可保守判失败，也不能让"读不到配置"变成"自动达标"。
+    """
+    return float(_cfg("MEMORY_PEAK_ACCEPTANCE_MB", 2000.0))
+
+
 def judge_pass_line(rss_end_mb: float | None, heap_peak_mb: float | None, *,
                     rss_line_mb: float | None = None,
                     heap_line_mb: float | None = None) -> dict[str, Any]:
     """⑨ 判定线**双写**：期末 RSS <12GB **∧** heap 单日峰值 <D3 硬线 2.0GB，两项都过才算过。
 
-    ★377刀2：`heap_line_mb` 的**默认值**来自 G4 键（已提额到 7000）⇒ 判 D3 时必须
-    **显式**传 `heap_line_mb=2000.0`，否则等于把尺子悄悄放宽到 7GB（可见化≠改尺子）。
+    ★378刀4：`heap_line_mb` 的**默认值**改读 `MEMORY_PEAK_ACCEPTANCE_MB`（2000，D3 硬线），
+    不再吃分档键 G4（7000）—— 377刀2 提额时这两者曾共用一个键，验收尺子被顺手放宽。
+    调用方仍可显式覆盖（如按季度口径临时调线），但**默认即正确**。
 
     为什么必须双写：只写 RSS 会把「少装库」这种架构收益误记成「内存治理有效」
     ——镜像小一点 RSS 就下来了，而堆可能还在涨。反过来只看 heap 也不行：镜像
@@ -427,8 +440,8 @@ def judge_pass_line(rss_end_mb: float | None, heap_peak_mb: float | None, *,
     """
     _rss_line = float(rss_line_mb if rss_line_mb is not None else
                       _cfg("MEMORY_PASS_RSS_MB", 12288.0))
-    _heap_line = float(heap_line_mb if heap_line_mb is not None else
-                       thresholds()["g4_heap_mb"])
+    _heap_line = float(heap_line_mb if heap_line_mb is not None
+                       else acceptance_line_mb())
     if rss_end_mb is None or heap_peak_mb is None:
         _miss = []
         if rss_end_mb is None:
@@ -453,15 +466,15 @@ def judge_pass_line(rss_end_mb: float | None, heap_peak_mb: float | None, *,
 
 
 def heap_peak_guard(peak_mb: float | None, *, line_mb: float | None = None) -> dict[str, Any]:
-    """验收硬线判定：heap 单日峰值 ≤ ``line_mb``（缺省取 G4 键，377刀2 后为 7000）。
+    """验收硬线判定：heap 单日峰值 ≤ ``line_mb``（缺省取 `MEMORY_PEAK_ACCEPTANCE_MB`=2000）。
 
-    ★D3 硬线（≤2.0GB）仍在：判 D3 时必须显式 `line_mb=2000.0`，不要吃默认值 ——
-    缺省值跟着 G4 键一起被提额到了 7GB（可见化≠改尺子）。
+    ★378刀4：缺省线已与分档键 G4（7000）**解耦** ⇒ 判 D3 不必再显式传 `line_mb`，
+    默认就是 2.0GB 硬线；要按别的口径判才需要覆盖。
 
     `peak_mb=None` ⇒ `verdict="unavailable"`（**不判通过**）：没测到峰值时"≤硬线"
     是个无法证伪的命题，判 PASS 等于白送一个达标。
     """
-    _line = float(line_mb if line_mb is not None else thresholds()["g4_heap_mb"])
+    _line = float(line_mb if line_mb is not None else acceptance_line_mb())
     if peak_mb is None:
         return {"verdict": "unavailable", "peak_mb": None, "line_mb": _line,
                 "why": "未取到 heap 峰值（不得据此判通过）"}
