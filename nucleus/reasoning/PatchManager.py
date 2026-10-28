@@ -743,6 +743,60 @@ class PatchManager:
         patch["dedup_key"] = _expect
         return _out
 
+    @staticmethod
+    def _m384_ensure_dedup_key_v2(patch: dict[str, Any]) -> dict:
+        """★384刀4：产出 `dedup_key_v2`（按 **modified_code 里的真实方法名**）。
+
+        与 v1（`_m352_ensure_dedup_key`）的**唯一**差别是 method 的取值来源：
+          · v1 用 `patch["method"]` 字段 —— 历史条目里可能是推断名 / 带占位 / 与代码
+            实际 def 名不一致；
+          · v2 用 `_m323_ast_def_name(modified_code)` 解析出的**真实 `def` 名**（AST，
+            带重缩进重试，能处理片段是方法体的情况）。
+        公式**完全相同**：`sha1(norm_file|method|issue_type)[:16]`（复用
+        `patch_generator.make_dedup_key`，不另写一份）。
+
+        ★双写不迁移：存量条目的 method 是否真实**无法自动判定**，若就地改写会让
+          v1 与池侧 `dedup_key` 对不上、两侧对账直接断掉 ⇒ 迁移并入下一个停机窗。
+          本刀只保证**新条目**起同时带 v1 与 v2。
+
+        三态（不同事实不同措辞，铁律166）：
+          · `same`    真实方法名 == method 字段 ⇒ v2 与 v1 同值（仍写，便于下游统一取 v2）
+          · `differs` 两者不同 ⇒ 这正是 v2 要暴露的问题，写 v2 并留痕
+          · `skipped` 解析不出 def 名（空 modified_code / 无 def / 语法坏）⇒ **不写 v2**
+                      （宁可没有键，也不编一个假键 —— 假键会让去重按错的组归并）
+        """
+        _out = {"ok": False, "action": "skipped", "v2": "", "real_method": "",
+                "why": "", "schema": "pending_dedup_key_v2/384.v1"}
+        _f = str((patch or {}).get("file") or "").strip()
+        _m = str((patch or {}).get("method") or "").strip()
+        _i = str((patch or {}).get("issue_type") or "").strip()
+        if not _f:
+            _out["why"] = "missing_file"
+            return _out
+        _code = (patch or {}).get("modified_code")
+        if not isinstance(_code, str) or not _code.strip():
+            _out["why"] = "no_modified_code"
+            return _out
+        _real = str(PatchManager._m323_ast_def_name(_code) or "").strip()
+        if not _real:
+            _out["why"] = "no_def_in_code"
+            return _out
+        _out["real_method"] = _real
+        try:
+            from nucleus.evolution.patch_generator import make_dedup_key as _mk
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m384_ensure_dedup_key_v2 import")
+            _out["why"] = "key_module_unavailable:%s" % type(_e).__name__
+            return _out
+        _v2 = _mk(_f, _real, _i)
+        _out["v2"] = _v2
+        _out["ok"] = True
+        _out["action"] = "same" if _real == _m else "differs"
+        if not _m:
+            _out["why"] = "method_empty_use_real"
+        patch["dedup_key_v2"] = _v2
+        return _out
+
     # ========== ★主线第80批 T7 (P0-3)：核心文件免签改写统一闸门 ==========
     #   单一路由，供 save_pending_patch（入队覆写）/ 反思直批(main.py) /
     #   落地(apply_all_pending) 共用。核心性单一真源为 SafeEvolutionExecutor._is_core_file。
@@ -2711,6 +2765,22 @@ class PatchManager:
         except Exception as _m352_e:
             # 异常不阻断入队（不能因新闸门丢真补丁），但**必须可见**
             silent_exc(_m352_e, where="PatchManager::save_pending_patch 352去重键",
+                       level="warning")
+
+        # ★384刀4：v2 键（按 modified_code 里的真实方法名）—— v1 双写，存量不迁移。
+        #   放在 v1 之后：v1 已是「入池必有」的稳定键，v2 只是叠一层可对账的真实名。
+        try:
+            _m384_v2 = PatchManager._m384_ensure_dedup_key_v2(patch)
+            patch["dedup_key_v2_status"] = _m384_v2["action"]
+            if _m384_v2["action"] == "differs":
+                _module_logger.info(
+                    "[384去重] dedup_key_v2 与 v1 不同（method 字段非真实 def 名）:"
+                    " id=%s method=%r real=%r",
+                    str(patch.get("id") or "")[:32], patch.get("method"),
+                    _m384_v2["real_method"])
+        except Exception as _m384_e:
+            # 异常不阻断入队（与 352 同纪律：不能因新键丢真补丁），但必须可见
+            silent_exc(_m384_e, where="PatchManager::save_pending_patch 384v2键",
                        level="warning")
 
         pending = self._load_patch_list(self._pending_file)
