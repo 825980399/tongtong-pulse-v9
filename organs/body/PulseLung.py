@@ -1942,7 +1942,21 @@ class PulseLung(BasePulseOrgan):
             return str(origin)
         try:
             from nucleus.llm.call_recorder import ORIGIN_ALIASES, ORIGIN_SYSTEM_INTERNAL
-            return ORIGIN_ALIASES.get(str(caller or ""), ORIGIN_SYSTEM_INTERNAL)
+            _key = str(caller or "")
+            # ★378刀6（T-378-origin兜底告警-1）：未登记 caller 兜底成 `system_internal` 是**猜**，不是事实
+            #   （铁律：origin 兜底 = 猜）。猜了至少要说一声，否则它的流量会被
+            #   当成"后台学习"静默归因，事后按 origin 分账必然算错。
+            #   每个 caller 名**只告警一次**（进程级），避免热路径刷屏 ——
+            #   这条 WARNING 的目的是"让人去登记 ORIGIN_ALIASES"，不是记流水。
+            if _key and _key not in ORIGIN_ALIASES:
+                _seen = globals().setdefault("_M378_UNKNOWN_CALLERS", set())
+                if _key not in _seen:
+                    _seen.add(_key)
+                    _module_logger.warning(
+                        "[378刀6] 未登记的 caller=%s ⇒ origin 兜底为 system_internal"
+                        "（请在 nucleus/llm/call_recorder.py 的 ORIGIN_ALIASES 登记）",
+                        _key)
+            return ORIGIN_ALIASES.get(_key, ORIGIN_SYSTEM_INTERNAL)
         except Exception as e:
             silent_exc(e, where="organs.body.PulseLung::_m40_resolve_origin L1640")
             return "system_internal"
