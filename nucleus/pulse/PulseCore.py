@@ -170,6 +170,10 @@ class PulseCore:
             layer = self._infer_layer(event_type)
         elif layer is None:
             layer = "L1"
+        # ★379刀3（DJ4-02）：显式 L3 的生命线/节拍/快照类，按语义归 L1。
+        #   为什么必须修在 emit 收口而不是各发射点：发射点散在 117 处，
+        #   逐处改必然漏；而"事件语义 → 层级"是一条规则，应只有一处真源。
+        layer = self._m379_resolve_layer(event_type, layer)
 
         # 更新 layer 统计
         with self._layer_stats_lock:
@@ -291,11 +295,70 @@ class PulseCore:
                             self._resonance_update_count, _dist["synapses"],
                             _dist["real"], _dist["simplified"])
 
+    #: ★379刀3（DJ4-02）：**生命线 / 节拍 / 器官互调 / 快照巡检**类事件前缀。
+    #:   这类事件的性质是"系统活着就会一直发"，不是"自主推理"，按任务书规则归 L1。
+    #:   ★刻意不含 `eyes.`：相机帧占全量 74.78%，而 L2/L3 才带 TTL+随机降载
+    #:   （InfoField:634/642），把它挪进 L1 等于拆掉泄压阀 ⇒ 队列必炸。
+    _M379_LIFELINE_PREFIXES = (
+        "heart.", "energy.", "touch.", "spinal.", "hormones.",
+        "proprioception.", "metrics.", "curiosity.",
+        "system.status.", "snapshot.", "organ.",
+    )
+
+    #: ★379刀3（DJ4-02）：已经是 L0/L1 的不动（只纠正"高报"为 L3 的那些）。
+    _M379_LOWERABLE_LAYERS = ("L2", "L3")
+
+    def _m379_is_lifeline(self, event_type: str) -> bool:
+        """事件是否属生命线/节拍/快照巡检类（纯字符串判定，无副作用）。"""
+        _e = str(event_type or "")
+        return any(_e.startswith(_p) for _p in self._M379_LIFELINE_PREFIXES)
+
+    def _m379_resolve_layer(self, event_type: str, layer: str) -> str:
+        """★379刀3（DJ4-02）：把生命线类的 L2/L3 **归一到 L1**（灰度开关可关）。
+
+        返回最终层级。关闭开关时原样返回（逐字回到改前行为）。
+        """
+        if layer not in self._M379_LOWERABLE_LAYERS:
+            return layer
+        if not self._m379_lifeline_fix_on():
+            return layer
+        if not self._m379_is_lifeline(event_type):
+            return layer
+        self._m379_note_downgrade(event_type, layer)
+        return "L1"
+
+    @staticmethod
+    def _m379_lifeline_fix_on() -> bool:
+        """灰度开关 `ENABLE_M379_LIFELINE_LAYER`（默认开：本批 P0 要的就是它生效）。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M379_LIFELINE_LAYER", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCore::_m379_lifeline_fix_on")
+            return True
+
+    def _m379_note_downgrade(self, event_type: str, was: str) -> None:
+        """每个 (event_type, 原层) 只记一次 —— 热路径上 9 万次 emit 不能逐条打日志。"""
+        try:
+            _seen = self.__dict__.setdefault("_m379_downgrades", set())
+            _k = (str(event_type or ""), str(was))
+            if _k in _seen:
+                return
+            _seen.add(_k)
+            logger.info("[379刀3] 生命线归层 %s→L1（原层 %s；每类只记一次）",
+                        event_type, was)
+        except Exception as _e:
+            silent_exc(_e, where="PulseCore::_m379_note_downgrade", level="debug")
+
     def _infer_layer(self, event_type: str) -> str:
         """
         根据事件类型推断默认层级（v9.5 新增）。
         如果无匹配则返回 'L1'。
+
+        ★379刀3（DJ4-02）：先过生命线规则 —— 避免"显式没传 layer 时"漏判。
         """
+        if self._m379_is_lifeline(event_type) and self._m379_lifeline_fix_on():
+            return "L1"
         if event_type in _DEFAULT_LAYER_MAP:
             return _DEFAULT_LAYER_MAP[event_type]
         return "L1"
@@ -465,8 +528,9 @@ if __name__ == "__main__":
     print(f"3. 自动推断 L1: event=chat.message, layer={p2['layer']} ✅")
 
     p3 = core.emit("潜意识", Event.CURIOSITY_TICK)
-    assert p3["layer"] == "L3", f"自动推断失败: {p3['layer']}"
-    print(f"4. 自动推断 L3: event=curiosity.tick, layer={p3['layer']} ✅")
+    # ★379刀3：curiosity.* 属"节拍类"，按新规则归 L1（原断言 L3 是改前口径）。
+    assert p3["layer"] == "L1", f"自动推断失败: {p3['layer']}"
+    print(f"4. 节拍类归 L1: event={Event.CURIOSITY_TICK}, layer={p3['layer']} ✅")
 
     # 未知事件默认 L1
     p4 = core.emit("未知", Event.UNKNOWN_EVENT)
