@@ -43,6 +43,83 @@ def _match_rule(request_text: str) -> str:
     return ""
 
 
+# ===== ★383刀2（T-383-OA4单向影子）：**单向**影子观察 =====
+#: 为什么是单向：双向影子要同一 prompt 走两遍（规则 + LLM）⇒ LLM 调用**翻倍**，
+#:   而渠道里挂着收费兜底。单向影子只用**已经发生的** LLM 回答做对照，零额外调用。
+#:
+#: 它能回答什么（说清楚，不夸大）：
+#:   ① 规则覆盖率 —— 有多少请求本来可以被确定性规则免掉 LLM；
+#:   ② 凭证可见率 —— 规则命中时，本地凭证字符串是否出现在 LLM 回答里。
+#: 它**不能**回答「规则答案与 LLM 答案语义是否一致」——那需要双向，本批不做。
+_M383_SHADOW: dict = {"scored": 0, "hit": 0, "no_rule": 0,
+                     "agree": 0, "disagree": 0}
+
+
+def _m383_shadow_on() -> bool:
+    """★383刀2（T-383-OA4单向影子）：开关 `ENABLE_M383_OA4_SHADOW`（默认开）。"""
+    return bool(getattr(_cfg, "ENABLE_M383_OA4_SHADOW", True))
+
+
+def observe_llm_answer(request_text: str, llm_answer: str) -> dict:
+    """★383刀2（T-383-OA4单向影子）：拿**已有的** LLM 回答做单向对照，记录规则覆盖率与凭证可见率。
+
+    ★绝不调用 LLM、绝不调用 `resolve()`（避免递归观测）、绝不产生 IO。
+
+    Returns: {on, rule_hit, rule_id, agree(True/False/None), bucket}
+      · agree=None 表示「无法判」（没命中规则 / 没产出凭证），**不计入一致率分母**。
+    """
+    _out = {"on": False, "rule_hit": False, "rule_id": "",
+            "agree": None, "bucket": "off"}
+    if not _m383_shadow_on():
+        return _out
+    _out["on"] = True
+    _rid = _match_rule(request_text)
+    _M383_SHADOW["scored"] = int(_M383_SHADOW.get("scored", 0)) + 1
+    if not _rid:
+        _M383_SHADOW["no_rule"] = int(_M383_SHADOW.get("no_rule", 0)) + 1
+        _out["bucket"] = "no_rule"
+        return _out
+    _out["rule_hit"] = True
+    _out["rule_id"] = _rid
+    _M383_SHADOW["hit"] = int(_M383_SHADOW.get("hit", 0)) + 1
+    _evidence, _src = _m182_local_evidence(_rid)
+    if not _evidence:
+        # 规则命中了，但没开凭证 / 没登记产出器 ⇒ 无法判一致，只记覆盖率
+        _out["bucket"] = "hit_no_evidence"
+        return _out
+    _agree = str(_evidence) in str(llm_answer or "")
+    _out["agree"] = bool(_agree)
+    _out["bucket"] = "agree" if _agree else "disagree"
+    _M383_SHADOW["agree" if _agree else "disagree"] = int(
+        _M383_SHADOW.get("agree" if _agree else "disagree", 0)) + 1
+    return _out
+
+
+def shadow_stats() -> dict:
+    """★383刀2（T-383-OA4单向影子）：影子读数 —— 覆盖率 / 凭证可见率分开算，**不给合并结论**。"""
+    _s = dict(_M383_SHADOW)
+    _n = int(_s.get("scored", 0)) or 0
+    _h = int(_s.get("hit", 0)) or 0
+    _scorable = int(_s.get("agree", 0)) + int(_s.get("disagree", 0))
+    return {
+        "scored": _n,
+        "rule_hit": _h,
+        "rule_coverage_pct": (round(_h * 100.0 / _n, 2) if _n else None),
+        "scorable": _scorable,
+        "agree": int(_s.get("agree", 0)),
+        "disagree": int(_s.get("disagree", 0)),
+        "agree_rate_pct": (round(int(_s.get("agree", 0)) * 100.0 / _scorable, 2)
+                            if _scorable else None),
+        "note": "单向影子：只用已有 LLM 回答，零额外调用；agree_rate 仅在…有凭证时可算",
+    }
+
+
+def reset_shadow_stats() -> None:
+    """★383刀2（T-383-OA4单向影子）：清空影子计数（**仅供测试**）。"""
+    for _k in list(_M383_SHADOW):
+        _M383_SHADOW[_k] = 0
+
+
 def resolve(request_text: str, *, llm_call=None) -> dict[str, Any]:
     """双路三态解析。
 

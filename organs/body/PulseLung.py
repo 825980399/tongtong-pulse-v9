@@ -1988,6 +1988,13 @@ class PulseLung(BasePulseOrgan):
                       source="PulseLung", switch_attr="ENABLE_LUNG_EVENT_TAP")
         except Exception as _te378:
             silent_exc(_te378, where="PulseLung::_m40_trace_call tap", level="debug")
+        # ★383刀2（T-383-OA4单向影子）：单向影子 —— 拿**已产出的**回答做规则对照，不额外调 LLM。
+        try:
+            from nucleus.field.active_memory_dual import observe_llm_answer as _oa383
+            _oa383(prompt, response or "")
+        except Exception as _oe383:
+            silent_exc(_oe383, where="PulseLung::_m40_trace_call oa4_shadow",
+                       level="debug")
         try:
             from nucleus.llm.call_recorder import get_call_recorder
             _r = get_call_recorder()
