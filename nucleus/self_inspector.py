@@ -12,6 +12,7 @@ self_inspector.py —— 自省检查器
 """
 
 import ast
+import io
 import json
 import os
 import re
@@ -1445,6 +1446,220 @@ class SelfInspector(SilentLogMixin):
         except Exception as _se:
             silent_exc(_se, "self_inspector.py:1026")
         return sorted(callers)
+
+    # ================================================================ 379刀1
+    #: ★379刀1（DJ4-05）：脉冲语义通道 —— 发布函数名（只认这两类入口）。
+    _M379_PUBLISH_FUNCS = ("tap_publish", "publish", "publish_async")
+
+    #: 扫描范围（按目录；`tmp/` `.bak*` 与测试件排除，避免把测试桩算成在役发布点）。
+    _M379_SCAN_DIRS = ("nucleus", "organs", "functions", "base", "soma",
+                       "somatics", "utils", "hardware")
+
+    @staticmethod
+    def _m379_iter_py_files(root: str):
+        """遍历扫描范围内的 .py（跳过 __pycache__ 与 .bak*；tests 不在范围内）。"""
+        import os as _os
+        for _d in ("nucleus", "organs", "functions", "base", "soma",
+                   "somatics", "utils", "hardware"):
+            _base = _os.path.join(root, _d)
+            if not _os.path.isdir(_base):
+                continue
+            for _dp, _dn, _fn in _os.walk(_base):
+                _dn[:] = [x for x in _dn
+                          if x != "__pycache__" and not x.startswith(".bak")]
+                for _f in _fn:
+                    if _f.endswith(".py"):
+                        yield _os.path.join(_dp, _f)
+
+    def _m379_scan_publish_sites(self, root: str) -> list:
+        """扫出**发布点**：{file, method, lineno, event, callee}。
+
+        只认两种形态（其余一律不算，避免把 `bus.publish` 的别的对象误收）：
+          · `tap_publish("x.y", …)`            —— 旁路入口
+          · `xxx_bus.publish("x.y", …)` / `get_event_bus().publish("x.y", …)`
+        事件名取**第一个位置参数的字面量**；非字面量（变量/常量引用）记为 `<dynamic>`。
+        """
+        import ast as _ast
+        _out = []
+        for _p in self._m379_iter_py_files(root):
+            try:
+                _src = io.open(_p, encoding="utf-8", errors="ignore").read()
+                _tree = _ast.parse(_src)
+            except (OSError, SyntaxError) as _e:
+                silent_exc(_e, "self_inspector.py:_m379_scan_publish_sites parse",
+                           level="debug")
+                continue
+            for _node in _ast.walk(_tree):
+                if not isinstance(_node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                    continue
+                for _c in _ast.walk(_node):
+                    if not isinstance(_c, _ast.Call):
+                        continue
+                    _name = ""
+                    _fn = _c.func
+                    if isinstance(_fn, _ast.Name):
+                        _name = _fn.id
+                    elif isinstance(_fn, _ast.Attribute):
+                        _name = _fn.attr
+                    if _name not in self._M379_PUBLISH_FUNCS:
+                        continue
+                    # ★379刀1：两种入口的形态都收紧，避免把"同名方法"算成在役发布点。
+                    #   `tap_publish` 是**模块级函数** ⇒ 只认裸调用（`registry.tap_publish` 不算）；
+                    #   `publish` 太泛 ⇒ 只认 receiver 明确是 bus 的形态。
+                    _recv = _fn.value if isinstance(_fn, _ast.Attribute) else None
+                    if _name == "tap_publish":
+                        if not isinstance(_fn, _ast.Name):
+                            continue
+                    else:
+                        _rt = ""
+                        if isinstance(_recv, _ast.Name):
+                            _rt = _recv.id.lower()
+                        elif isinstance(_recv, _ast.Call):
+                            _rt = "bus"
+                        if "bus" not in _rt:
+                            continue
+                    _ev = "<dynamic>"
+                    if _c.args and isinstance(_c.args[0], _ast.Constant) \
+                            and isinstance(_c.args[0].value, str):
+                        _ev = _c.args[0].value
+                    _out.append({
+                        "file": os.path.relpath(_p, root).replace("\\", "/"),
+                        "method": _node.name,
+                        "lineno": int(getattr(_c, "lineno", 0)),
+                        "event": _ev,
+                        "callee": _name,
+                    })
+        _out.sort(key=lambda x: (x["file"], x["lineno"]))
+        return _out
+
+    def _m379_reverse_callers(self, root: str, sites: list) -> dict:
+        """按**函数名**做跨文件反向引用：{method: [调用它的 method…]}。
+
+        口径收窄（与 344 条"删后新孤儿"同思路）：只认 `Name(` / `.name(` 形态，
+        不做类型推断 —— 同名函数可能被误认，故只在报告里标 `name_based=True`，
+        **不据此判死**（本通道只做可视化/适配度，不参与任何删除或拦截）。
+        """
+        import ast as _ast
+        _targets = {s["method"] for s in sites}
+        _callers: dict = {}
+        for _p in self._m379_iter_py_files(root):
+            try:
+                _tree = _ast.parse(io.open(_p, encoding="utf-8",
+                                           errors="ignore").read())
+            except (OSError, SyntaxError) as _e:
+                silent_exc(_e, "self_inspector.py:_m379_reverse_callers parse",
+                           level="debug")
+                continue
+            for _node in _ast.walk(_tree):
+                if not isinstance(_node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                    continue
+                for _c in _ast.walk(_node):
+                    if not isinstance(_c, _ast.Call):
+                        continue
+                    _fn = _c.func
+                    _nm = _fn.id if isinstance(_fn, _ast.Name) else (
+                        _fn.attr if isinstance(_fn, _ast.Attribute) else "")
+                    if _nm in _targets and _nm != _node.name:
+                        _callers.setdefault(_nm, set()).add(_node.name)
+            # 同一文件的方法名可能跨类重复，故只按"函数名"聚合，不保证唯一
+        return {k: sorted(v) for k, v in _callers.items()}
+
+    def _build_pulse_call_chain(self, root: str | None = None,
+                                out_path: str | None = None,
+                                write: bool = False) -> dict:
+        """★379刀1（DJ4-05）：**脉冲语义调用链**（独立通道，不改 AST 主路径）。
+
+        Args:
+            root: 项目根（默认本文件上两级）
+            out_path: 输出路径（默认 `data/reports/pulse_call_chain.json`）
+            write: True 才落盘（默认只算不写 —— 便于单测/隔离验证）
+
+        Returns:
+            dict: {schema, root, generated_at, sites, chains, stats}
+              · sites  —— 每个发布点的 {file, method, lineno, event, callee}
+              · chains —— 每个发布点 + 其**上游调用方**（跨文件按函数名反查）
+              · stats  —— total_sites / with_upstream / coverage_pct / dynamic_events
+        """
+        import time as _time
+        _root = root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _sites = self._m379_scan_publish_sites(_root)
+        _rev = self._m379_reverse_callers(_root, _sites)
+        _chains = []
+        _with_up = 0
+        for _s in _sites:
+            _up = _rev.get(_s["method"]) or []
+            if _up:
+                _with_up += 1
+            _chains.append({
+                "event": _s["event"],
+                "publisher": {"file": _s["file"], "method": _s["method"],
+                              "lineno": _s["lineno"], "callee": _s["callee"]},
+                "upstream": _up,
+                "upstream_basis": "name_based",
+            })
+        _tot = len(_sites)
+        _rep = {
+            "schema": "pulse_call_chain/379.v1",
+            "root": _root,
+            "generated_at": _time.time(),
+            "sites": _sites,
+            "chains": _chains,
+            "stats": {
+                "total_sites": _tot,
+                "with_upstream": _with_up,
+                "coverage_pct": round(_with_up * 100.0 / _tot, 2) if _tot else 0.0,
+                "dynamic_events": sum(1 for _s in _sites if _s["event"] == "<dynamic>"),
+                "distinct_events": len({_s["event"] for _s in _sites}),
+            },
+        }
+        if write:
+            _out = out_path or os.path.join(_root, "data", "reports",
+                                            "pulse_call_chain.json")
+            try:
+                os.makedirs(os.path.dirname(_out), exist_ok=True)
+                import json as _json
+                with io.open(_out, "w", encoding="utf-8", newline="\n") as _f:
+                    _json.dump(_rep, _f, ensure_ascii=False, indent=2)
+                _rep["written"] = _out
+            except OSError as _e:
+                silent_exc(_e, "self_inspector.py:_build_pulse_call_chain write",
+                           level="warning")
+                _rep["written"] = ""
+        return _rep
+
+    @staticmethod
+    def _m379_merge_with_ast_chain(ast_chain: dict | None,
+                                   pulse_chain: dict | None) -> dict:
+        """把 AST 链与脉冲链**合并去重**（按 (file, method) 键；AST 优先保留细节）。
+
+        只合并不改写：AST 链原样放进 `ast` 子树，脉冲链放进 `pulse` 子树，
+        `merged` 给出并集键列表 —— 谁缺了哪一半一眼可见（这就是"适配度"的分子）。
+        """
+        _ast_methods = set()
+        _pulse_methods = set()
+        try:
+            for _c in (ast_chain or {}).get("calls") or []:
+                if isinstance(_c, dict) and _c.get("method"):
+                    _ast_methods.add(str(_c["method"]))
+        except Exception as _e:
+            silent_exc(_e, "self_inspector.py:_m379_merge_with_ast_chain ast",
+                       level="debug")
+        try:
+            for _c in (pulse_chain or {}).get("chains") or []:
+                _m = (_c.get("publisher") or {}).get("method")
+                if _m:
+                    _pulse_methods.add(str(_m))
+        except Exception as _e:
+            silent_exc(_e, "self_inspector.py:_m379_merge_with_ast_chain pulse",
+                       level="debug")
+        return {
+            "ast": ast_chain or {},
+            "pulse": pulse_chain or {},
+            "ast_methods": sorted(_ast_methods),
+            "pulse_methods": sorted(_pulse_methods),
+            "merged_methods": sorted(_ast_methods | _pulse_methods),
+            "dup_removed": sorted(_ast_methods & _pulse_methods),
+        }
 
     def _get_class_context(self, file_path: str, class_name: str) -> dict[str, Any]:
         """★第二阶段：获取类上下文信息（基类、属性、其他方法）。
