@@ -68,6 +68,19 @@ from utils.time_utils import get_current_datetime
 _module_logger = logging.getLogger(__name__)
 
 
+def _m383_note_semantic_upstream() -> None:
+    """★383刀6：标记「上游已发布 SEMANTIC_CLASSIFY」（只计数，绝不影响对话）。
+
+    为什么要在发布侧留痕：live 里 `llm_total=0` 与「埋点坏了」长得一模一样，
+    而真实原因往往是「没有对话流量」。不在发布侧记一笔，这两种情况永远分不开。
+    """
+    try:
+        from nucleus.field.external_dependency_observe import note_semantic_upstream
+        note_semantic_upstream()
+    except Exception as _e:
+        silent_exc(_e, where="PulseCortex::_m383_note_semantic_upstream", level="debug")
+
+
 class PulseCortex(BasePulseOrgan):
     """脉冲驱动大脑皮层（v9.5 分层脉冲版）"""
 
@@ -896,6 +909,7 @@ class PulseCortex(BasePulseOrgan):
 
         # 发射分类请求脉冲给语义理解器（v24.0修改）
         if self.qica is not None:  # 条件可改为 if self.semantic_comprehension is not None
+            _m383_note_semantic_upstream()
             self._emit(Event.SEMANTIC_CLASSIFY, {
                 "content": content,
                 "user_name": user_name,
@@ -1164,6 +1178,7 @@ class PulseCortex(BasePulseOrgan):
             if not _ctx:
                 continue
             self._active_correlation_id = _cid
+            _m383_note_semantic_upstream()
             self._emit(Event.SEMANTIC_CLASSIFY, {
                 "content": _ctx.get("content", ""),
                 "user_name": _ctx.get("user_name", "用户"),
