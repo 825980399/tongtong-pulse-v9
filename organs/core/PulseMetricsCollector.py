@@ -1306,6 +1306,15 @@ class PulseMetricsCollector(BasePulseOrgan):
                     silent_exc(_tde383,
                                where="PulseMetricsCollector::_collect_memory_pressure 383刀1")
                     _out["tier_distribution_path"] = ""
+                # ★383刀3（T-383-写面观察）：只读采样（mtime 差分），节流 300s，不拦截任何写。
+                try:
+                    from nucleus.metrics.write_face import observe_once as _wf383
+                    _out["write_face"] = _wf383()
+                except Exception as _wfe383:
+                    silent_exc(
+                        _wfe383,
+                        where="PulseMetricsCollector::_collect_memory_pressure 383刀3")
+                    _out["write_face"] = None
 
                 # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
                 #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。
