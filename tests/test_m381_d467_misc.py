@@ -90,3 +90,19 @@ def test_m381_d8_probe_not_tracked_and_ignored():
     assert _r.stdout.strip() == "", "探针件仍在索引里: %r" % _r.stdout
     with io.open(os.path.join(ROOT, ".gitignore"), encoding="utf-8") as _f:
         assert "tests/_probe_py_m162.py" in _f.read()
+
+def test_m381_d4_warning_actually_logs(caplog):
+    """★补洞：只断言 warned=True 抓不到"文案里引用了未定义变量"这类错。
+
+    381 刀4 首版把标记载荷写成了 `"[" + M4 + "]"`（M4 是补丁脚本里的变量），
+    运行到打日志这一句就 NameError，被自己的 except 吞掉 ⇒ warned 仍为 True、
+    用例全绿，但**日志一条都没打**。此例把"真的打出日志"钉住。
+    """
+    import logging as _lg
+    _b = EventBus(async_enabled=False)
+    with caplog.at_level(_lg.WARNING):
+        for _ in range(11):
+            _b.check_idle(10)
+    _hits = [r for r in caplog.records if "连续" in r.getMessage()
+             and "拍无投递" in r.getMessage()]
+    assert _hits, "告警没有真的打出来（warned=True 不代表日志成功）"

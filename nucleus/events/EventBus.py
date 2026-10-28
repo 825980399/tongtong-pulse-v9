@@ -515,7 +515,7 @@ class EventBus:
                 self._m381_warned_at = _idle
                 try:
                     _logger.warning(
-                        "[" + M4 + "] 连续 %d 拍无投递（delivered=%d，订阅=%d）"
+                        "[381刀4] 连续 %d 拍无投递（delivered=%d，订阅=%d）"
                         " ⇒ 疑似订阅方无真实消费；不影响发布",
                         _idle, _cur, len(self._subs or {}))
                 except Exception as _we:
