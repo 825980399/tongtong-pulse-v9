@@ -143,6 +143,16 @@ TIMECORE_SCHEDULE_CONFIG = {
     "runtime_metrics": {"interval": 60, "event_type": "runtime.metrics.collect"},
     "metrics_collector": {"interval": 300, "event_type": "metrics.collector.tick"},
     "snapshot_rotate": {"interval": 1800, "event_type": "snapshot.rotate.tick"},
+    # ★380刀6（T-380-调度面去重）：**调度面清单（32 项）与去重结论** —— 本批只登记，不迁移。
+    #   背景：TimeCore 托管 32 个任务，器官内另有 20 处 threading.Timer 并存，
+    #   曾被怀疑"双调度面重复轮询"。逐项核过后的结论：**没有重复**，理由是两类
+    #   件的语义根本不同：
+    #     · 本表的项 = **周期 tick**（到点就发，interval 固定，可错峰、可统计）
+    #     · Timer 的项 = **一次性相位**（心跳对齐 / 单次延迟重启 / 超时熔断），
+    #       只跑一次且常带引用捕获，塞进 TimeCore 会让"一次性"变"周期性" ⇒ 行为变。
+    #   ⇒ 迁移的收益（少一个调度面）小于风险（相位语义被改），故**不迁**，
+    #   改为在 tests/test_m380_d6_schedule.py 里钉一条守卫：
+    #   任何 Timer 的回调**不得**发射本表里已登记的 event_type（那才是真重复）。
     # ===== 204批·刀2：A类纯周期件（SelfAwareness）时效闸登记 =====
     # 源码无现成 %60/%30/%150 tick 周期件（D#6）：本批为在时效闸新登记三个触发项，
     # 类比203批刀3（B类Top3），消费侧接线待观察窗。interval = N × 标称拍长(13.5s)（D#7）。
