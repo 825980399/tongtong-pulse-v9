@@ -2,7 +2,6 @@
 """366 刀N4 验收：测试 data/ 沙箱根＋哨兵守卫（停机态还原 / 框架运行中不启用 / 沙箱落点）。"""
 from __future__ import annotations
 
-import builtins
 import os
 import sys
 import unittest

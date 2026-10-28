@@ -11,7 +11,6 @@ import json
 import os
 import sys
 
-import pytest
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TOOLS_CI = os.path.join(_HERE, "tools", "ci")

@@ -37,7 +37,6 @@ def test_01_load_chain_reachable_and_lazy_branch_before_parquet():
 # ============================================================ 刀5 不调阈值
 def test_02_cold_thresholds_untouched():
     """本刀只出复核结论：max_warm / max_hot 一字未动，也不新增开关。"""
-    import config
     from nucleus.mnemosyne.PulseNodePool import PulseNodePool
 
     # 默认值与配置值仍是 50000（本刀建议区间只写在证据件里，不落代码）
