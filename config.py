@@ -4916,8 +4916,14 @@ ENABLE_EVENT_TAP_INTEGRATION = True
 #   关闭 → analyze() 直接返回空图（零扫描开销）。
 ENABLE_CALL_GRAPH_ANALYSIS = True
 # 扫描范围（相对项目根；默认排除 tests/tmp/.bak*/__pycache__）
+# ★397刀2：补 `hardware` / `config.py` / `pulse_doctor.py`。
+#   这三处原不在范围内 ⇒ 调用图在它们上面**没有节点**，用图判"零调用"会得到"没采到"
+#   而不是"真没人调用"。补进来后与生产面 409 个 .py 对齐。
+#   ★这里是**运行期生效值**（CallGraphAnalyzer._scan_dirs() 优先读它），
+#     改 `_DEFAULT_SCAN_DIRS` 不改这里不生效 —— 两处必须同步。
 CALL_GRAPH_SCAN_DIRS = ["nucleus", "organs", "functions", "base",
-                        "utils", "somatics", "main.py"]
+                        "utils", "somatics", "hardware", "main.py",
+                        "config.py", "pulse_doctor.py"]
 
 # ==================== ★主线第18批 T6/P2-105：测试临时目录优化 ====================
 # 背景：测试隔离目录原为 tmp/test_data（绝对路径 44 字符）+ 其下 p17_<pid>_<ts> 嵌套，

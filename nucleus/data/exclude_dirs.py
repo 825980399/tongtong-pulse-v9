@@ -81,6 +81,46 @@ CALL_GRAPH_EXCLUDED = SOURCE_SCAN_DIRS | frozenset({
     "test", ".venv", "docs", "hardware",
 })
 
+
+# =============================================================================
+# ★397刀2：调用图排除改「顶层相对路径」匹配
+#
+#   事故：`CALL_GRAPH_EXCLUDED` 含裸名 `"data"`，而 CallGraphAnalyzer 在 `os.walk`
+#   里按**目录名**剪枝（`if x not in _EXCLUDE_DIRS`）⇒ 深层的 `nucleus/data/` 被
+#   连带剪掉 6 个真实生产文件（DataAccessLayer / exclude_dirs / write_guard /
+#   path_utils / call_graph_guard / experience_cleanup —— **其中两个正是扫描规则本身**）。
+#   后果不是"少扫几个文件"这么轻：用调用图判"零调用"时，这 6 个文件是**没采到**，
+#   会被读成"没人调用" ⇒ 死代码结论假 0（铁律 276 同型）。
+#
+#   修法：排除只对**顶层**那一段生效。`data/` 排除、`nucleus/data/` 不排除。
+#   裸名集合 `CALL_GRAPH_EXCLUDED` 保留不动（FakeLoopDetector / ProductionConsumptionMatcher
+#   与 `test_tool_wiring_m49` 的子集断言都依赖它）。
+# =============================================================================
+
+
+#: ★397刀2：顶层判据用的集合 —— **去掉 `hardware`**。
+#   `CALL_GRAPH_EXCLUDED` 里之所以有 "hardware"，是因为那时 hardware 根本不在扫描范围
+#   （列不列都一样）。本刀把它**纳入**扫描范围后，"排除 hardware" 就从冗余变成自相矛盾：
+#   顶层 `hardware` 一排除，其下 `hardware/robot_body/` 6 个文件就被整段剪掉。
+#   裸名集合 `CALL_GRAPH_EXCLUDED` 本身不动（`test_tool_wiring_m49` 的子集断言依赖它），
+#   只有**顶层判据**用这个去掉 hardware 的版本。
+CALL_GRAPH_EXCLUDED_TOPLEVEL = CALL_GRAPH_EXCLUDED - frozenset({"hardware"})
+
+
+def is_call_graph_excluded(rel_dir: str) -> bool:
+    """`rel_dir`（相对项目根的目录路径，如 `nucleus/data`）是否应被调用图排除。
+
+    只匹配**顶层**那一段：
+        "data"               → True   （顶层数据目录）
+        "nucleus/data"       → False  （深层同名目录，是真源码）
+        "tests/unit"         → True   （顶层是 tests）
+        "hardware/robot_body"→ False  （hardware 已纳入扫描范围，见上）
+    """
+    if not rel_dir:
+        return False
+    _top = str(rel_dir).replace("\\", "/").strip("/").split("/")[0]
+    return _top in CALL_GRAPH_EXCLUDED_TOPLEVEL
+
 #: ★磁盘枚举通道排除（**不含 data/logs** —— 它们正是目标数据目录）
 DISK_SCAN_EXCLUDED = frozenset({
     "tmp", "__pycache__", "node_modules", ".git", ".pytest_cache",

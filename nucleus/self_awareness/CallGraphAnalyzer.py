@@ -40,6 +40,7 @@ from typing import Any
 from nucleus._silent_except import silent_exc  # ★326批刀5：A5 异常口径与全项目一致
 from nucleus.proc_gen import proc_gen_str as _m335_pg
 from nucleus.data.exclude_dirs import CALL_GRAPH_EXCLUDED  # ★第49批 T5
+from nucleus.data.exclude_dirs import is_call_graph_excluded  # ★397刀2
 from nucleus.data.path_utils import (
     safe_relpath as _safe_relpath,  # ★第55批 T3（跨盘安全，同盘行为与 os.path.relpath 一致）
     sanitize_sys_path as _sanitize_sys_path,  # ★323批刀0：副本导入防线
@@ -74,8 +75,13 @@ _EXCLUDE_DIRS = CALL_GRAPH_EXCLUDED
 _EXCLUDE_DIR_PREFIXES = (".bak", ".")
 
 #: 默认扫描范围（相对项目根）
+#  ★397刀2：补 `hardware` / `config.py` / `pulse_doctor.py`。
+#    这三处原来不在范围内 ⇒ 调用图对它们**没有节点**，用图判"零调用"时是"没采到"。
+#    ★改这里**不够**：`config.py::CALL_GRAPH_SCAN_DIRS` 才是运行期生效值（本函数有
+#      `from config import CALL_GRAPH_SCAN_DIRS` 覆盖），两处必须一起改。
 _DEFAULT_SCAN_DIRS = ("nucleus", "organs", "functions", "base", "utils",
-                      "somatics", "main.py")
+                      "somatics", "hardware", "main.py", "config.py",
+                      "pulse_doctor.py")
 
 #: Python 魔术方法（不作为"孤立函数"计入 —— 由解释器/框架调用）
 _MAGIC_ALLOW = frozenset((
@@ -222,6 +228,17 @@ def _dotted(node: Any) -> str:
     return ""
 
 
+def _excluded_dir(parent_abs: str, dirname: str, project_root: str) -> bool:
+    """★397刀2：`os.walk` 剪枝判据 —— 按**顶层相对路径**判，不再按裸目录名。
+
+    用裸名判会把 `nucleus/data/` 一起剪掉（该目录下 6 个是真生产文件，其中
+    `exclude_dirs.py` / `write_guard.py` 就是本套扫描规则本身）；被剪掉的文件在
+    调用图里**没有节点**，于是"零调用"结论在这些文件上是"没采到"而不是"真没人调用"。
+    """
+    _rel = _safe_relpath(os.path.join(parent_abs, dirname), project_root).replace(os.sep, "/")
+    return is_call_graph_excluded(_rel)
+
+
 def _iter_py_files(project_root: str, scan_dirs: list) -> list:
     """遍历扫描范围内所有 .py 文件，返回相对路径列表（已排序）。"""
     _out: list = []
@@ -234,7 +251,7 @@ def _iter_py_files(project_root: str, scan_dirs: list) -> list:
             continue
         for _dp, _dirs, _files in os.walk(_p):
             _dirs[:] = [x for x in _dirs
-                        if x not in _EXCLUDE_DIRS
+                        if not _excluded_dir(_dp, x, project_root)
                         and not x.startswith(_EXCLUDE_DIR_PREFIXES)]
             for _fn in _files:
                 if _fn.endswith(".py"):
