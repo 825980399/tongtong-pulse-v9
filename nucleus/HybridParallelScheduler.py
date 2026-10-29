@@ -10,8 +10,18 @@ HybridParallelScheduler.py —— 混合并行调度器
 机制: 基于TaskType类实现，包含10个核心方法
 定位: 任务调度层
 
-⚠️ @deprecated (P2-64 并发收敛): 新代码请使用 nucleus.parallel_scheduler.get_parallel_scheduler()。
-本调度器保留实现，仅遗留调用点（main.py / self_inspector.py）使用，禁止新代码 import。
+⚠️ 门面委托后端（P2-64 并发收敛）：**实现保留、不要删**。
+
+新代码请走 `nucleus.parallel_scheduler.get_parallel_scheduler()` 门面，**不要直接 import 本模块**。
+
+★397刀3 纠错：本文件**原被标注为弃用**，并声称"仅遗留调用点使用、禁止新代码引入"，
+  这与实际依赖**相反**（旧措辞不复述，避免再次被静态扫描/检索命中）：
+  * `nucleus/parallel_scheduler.py:27-28` **模块级 import** 了本模块的
+    `TaskType` 与 `get_hybrid_scheduler`，`:365` 的 `submit_cpu_bound` 100% 委托过来；
+  * `main.py:2429 / :3141` 也有函数内 import；
+  * 旧注释列的第三个调用点 `self_inspector` 则**根本没有**调用点（全仓无引用）。
+注释与代码相反时，被删的一定是代码 —— 这种"标弃用但实际硬依赖"的写法是误删事故
+最容易发生的地方。故改为如实描述：它是门面的**后端实现**，不是可弃的遗留件。
 """
 
 from __future__ import annotations
