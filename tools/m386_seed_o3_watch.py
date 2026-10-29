@@ -318,7 +318,12 @@ def main() -> int:
         return 2
 
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    _bak = os.path.join(BACKUP_DIR, "pending_before_386_d1.json")
+    # ★387刀4：备份名**带时间戳** —— 原实现固定用 `pending_before_386_d1.json`，
+    #   387 连续补 2 个位时第二次备份**覆盖**了第一次 ⇒ 中间状态无法回退。
+    #   （同一个工具跑多次就得能留多份，这是本刀实测踩到的。）
+    _bak = os.path.join(
+        BACKUP_DIR,
+        "pending_before_%s.json" % time.strftime("%Y%m%d_%H%M%S", time.localtime()))
     _src_sha = _sha256(_a.target)
     try:
         with open(_a.target, "rb") as _fi, open(_bak, "wb") as _fo:

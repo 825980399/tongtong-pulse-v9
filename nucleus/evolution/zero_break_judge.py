@@ -1082,7 +1082,10 @@ def self_heal_watch(pending_rows=None, history_rows=None,
         _LAST_HEAL_STATE[0] = "no_candidate"
         return _out
 
-    _pick = ""
+    # ★387刀4：从「只补 1 个」改成「**补满到容量上限**」。
+    #   387 补位后 pending 里有 3 个 O3 候选，而旧实现只挑第一个就 break
+    #   ⇒ 另外 2 个永远进不了观察位，"多候选防单点失明"形同虚设。
+    _picks: list = []
     for _r in _pend:
         if not isinstance(_r, dict):
             continue
@@ -1091,23 +1094,25 @@ def self_heal_watch(pending_rows=None, history_rows=None,
             continue
         _it = str(_r.get("issue_type") or "")
         if _rid.startswith("o3_") or _it in _O3_CANDIDATE_TYPES:
-            _pick = _rid
-            break
+            _picks.append(_rid)
+            if len(_active) + len(_picks) >= _cap:
+                break
 
-    if not _pick:
+    if not _picks:
         _out["state"] = "no_candidate"
         _out["why"] = "pending_has_no_o3_candidate"
         _out["changed"] = (_LAST_HEAL_STATE[0] != "no_candidate")
         _LAST_HEAL_STATE[0] = "no_candidate"
         return _out
 
-    _WATCH_RUNTIME.append(_pick)
+    _WATCH_RUNTIME.extend(_picks)
     _out["state"] = "healed"
-    _out["added"] = _pick
+    _out["added"] = _picks[0]
+    _out["added_all"] = list(_picks)
     _out["active"] = list(active_watch_ids())
     _out["why"] = "static_watch_all_missing"
-    _out["changed"] = (_LAST_HEAL_STATE[0] != "healed:%s" % _pick)
-    _LAST_HEAL_STATE[0] = "healed:%s" % _pick
+    _out["changed"] = (_LAST_HEAL_STATE[0] != "healed:%s" % ",".join(_picks))
+    _LAST_HEAL_STATE[0] = "healed:%s" % ",".join(_picks)
     return _out
 
 
