@@ -32,12 +32,12 @@ import logging
 import os
 import queue
 import re
-import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from nucleus._env import is_test_env
 from nucleus._silent_except import silent_exc
 from nucleus.log_state import changed as _m369_changed, sig as _m369_sig
 
@@ -386,14 +386,12 @@ class SemanticCache:
     # ------------------------------------------------------------------
     @staticmethod
     def _is_test_env() -> bool:
-        """是否处于 pytest 环境（防"测试意外加载真模型"拖慢/污染）。"""
-        try:
-            if os.environ.get("PYTEST_CURRENT_TEST"):
-                return True
-            return "pytest" in sys.modules
-        except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::_is_test_env L350")
-            return False
+        """是否处于 pytest 环境（防"测试意外加载真模型"拖慢/污染）。
+
+        ★398 刀2：委托 `nucleus._env.is_test_env`。原先本处的判断顺序与其余 6 处
+        相反（先看环境变量再看 `sys.modules`），收口后统一。
+        """
+        return is_test_env()
 
     def observe_async(self, prompt: str, response: str,
                       origin: str = "") -> bool:

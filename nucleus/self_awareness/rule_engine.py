@@ -33,7 +33,6 @@ import inspect
 import logging
 import os
 import subprocess
-import sys
 import time
 from typing import Any
 
@@ -293,11 +292,3 @@ def latest_report_path() -> str:
     """报告落盘路径（``data/self_awareness/rule_reports/rule_<ts>.json``）。"""
     return os.path.join(_PROJECT_ROOT, "data", "self_awareness", "rule_reports",
                         "rule_{}.json".format(time.strftime("%Y%m%d_%H%M%S")))
-
-
-def _is_test_env() -> bool:
-    try:
-        return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.rule_engine::_is_test_env")
-        return False

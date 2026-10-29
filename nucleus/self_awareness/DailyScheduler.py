@@ -26,13 +26,13 @@
 """
 
 import os
-import sys
 import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from nucleus._env import is_test_env
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 
@@ -244,8 +244,11 @@ class SelfAwarenessDailyScheduler:
         出现一组疑似**测试产出**的 `profile_/report_<ts>` 文件。根因是"某测试
         隐式使用了默认 output_dir（= 生产路径）"。本方法 + `_is_production_output_dir`
         构成防御：测试环境**拒绝写生产目录**。
+
+        ★398 刀2：委托 `nucleus._env.is_test_env`。原先本处是 7 份实现里**唯一
+        没有 try/except** 的一份，收口后与其他处一致。
         """
-        return bool(os.environ.get("PYTEST_CURRENT_TEST")) or "pytest" in sys.modules
+        return is_test_env()
 
     def _is_production_output_dir(self, path: str) -> bool:
         """给定目录是否等于**生产**输出目录（`SELF_AWARENESS_OUTPUT_DIR`，相对项目根）。"""

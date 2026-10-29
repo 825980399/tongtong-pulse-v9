@@ -76,10 +76,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from typing import Any
 
+from nucleus._env import is_test_env
 from nucleus._silent_except import silent_exc
 
 __all__ = [
@@ -131,11 +131,8 @@ def reports_root() -> str:
 
 
 def _is_test_env() -> bool:
-    try:
-        return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.capability_ledger::_is_test_env")
-        return False
+    """★398 刀2：委托 `nucleus._env.is_test_env`（实现唯一收口，本地留名免动调用点）。"""
+    return is_test_env()
 
 
 # ------------------------------------------------------------------ v2 四归位

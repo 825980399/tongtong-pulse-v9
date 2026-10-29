@@ -38,6 +38,9 @@ import sys
 import time
 from typing import Any
 
+from nucleus._env import (
+    is_production_data_path, is_test_env, should_refuse_write,
+)
 from nucleus._silent_except import silent_exc
 
 __all__ = [
@@ -75,31 +78,21 @@ def override_path() -> str:
 
 
 def _is_test_env() -> bool:
-    """测试环境判定（pytest 下不得写生产 data/）。"""
-    try:
-        return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::_is_test_env")
-        return False
+    """★398 刀2：委托 `nucleus._env.is_test_env`（实现唯一收口，本地留名免动调用点）。"""
+    return is_test_env()
 
 
 def _is_production_data_path(path: str) -> bool:
-    """路径是否位于项目的 ``data/`` 下（生产数据区）。"""
-    try:
-        _p = os.path.abspath(path).replace("\\", "/").lower()
-        _r = _PROJECT_ROOT.replace("\\", "/").lower()
-        return _p.startswith(_r + "/data/")
-    except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::_is_production_data_path")
-        return True
+    """★398 刀2：委托 `nucleus._env.is_production_data_path`（三处同名判据合并为一份）。"""
+    return is_production_data_path(path)
 
 
 def _writable(path: str) -> bool:
-    """是否允许写入该路径（生产区 + 测试环境 → 拒绝）。"""
-    if _is_test_env() and _is_production_data_path(path):
-        sys.stderr.write(f"[maturity_ledger] 测试环境跳过生产写入: {path}\n")
-        return False
-    return True
+    """是否允许写入该路径（生产区 + 测试环境 → 拒绝）。
+
+    ★398 刀2：判据并入 `nucleus._env.should_refuse_write`。
+    """
+    return not should_refuse_write(path, tag="maturity_ledger")
 
 
 # ------------------------------------------------------------------ 采数（N-9 口径）

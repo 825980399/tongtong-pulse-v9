@@ -40,6 +40,7 @@ import sys
 import time
 from typing import Any
 
+from nucleus._env import is_test_env, should_refuse_write
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 
@@ -83,20 +84,17 @@ def cooldown_path() -> str:
 
 
 def _is_test_env() -> bool:
-    try:
-        return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception as e:
-        silent_exc(e, where="nucleus.evolution.task_ledger::_is_test_env")
-        return False
+    """★398 刀2：委托 `nucleus._env.is_test_env`（实现唯一收口，本地留名免动调用点）。"""
+    return is_test_env()
 
 
 def _writable(path: str) -> bool:
-    """是否允许写入（pytest 环境 + 生产 data/ → 拒绝，防测试污染）。"""
-    if _is_test_env() and os.path.abspath(path).replace("\\", "/").lower().startswith(
-            _PROJECT_ROOT.replace("\\", "/").lower() + "/data/"):
-        sys.stderr.write(f"[task_ledger] 测试环境跳过生产写入: {path}\n")
-        return False
-    return True
+    """是否允许写入（pytest 环境 + 生产 data/ → 拒绝，防测试污染）。
+
+    ★398 刀2：判据并入 `nucleus._env.should_refuse_write`（原先此处内联了一份
+    与 `maturity_ledger` 等价的判断，两份已合并为一份）。
+    """
+    return not should_refuse_write(path, tag="task_ledger")
 
 
 # ------------------------------------------------------------------ 原子读写

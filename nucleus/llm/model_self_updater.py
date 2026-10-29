@@ -30,10 +30,10 @@ from __future__ import annotations
 import io
 import json
 import os
-import sys
 import time
 from typing import Any
 
+from nucleus._env import is_production_data_path, is_test_env
 from nucleus._silent_except import silent_exc
 
 __all__ = [
@@ -89,21 +89,13 @@ def _cfg_float(name: str, default: float) -> float:
 
 
 def _in_test_env() -> bool:
-    try:
-        return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    except Exception as e:
-        silent_exc(e, where="nucleus.llm.model_self_updater::_in_test_env L93")
-        return False
+    """★398 刀2：委托 `nucleus._env.is_test_env`（本处原名与其余 6 处不同，收口后统一）。"""
+    return is_test_env()
 
 
 def _is_production_path(path: str) -> bool:
-    try:
-        _p = os.path.abspath(path).replace("\\", "/").lower()
-        _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
-        return _p.startswith(_r + "/data/")
-    except Exception as e:
-        silent_exc(e, where="nucleus.llm.model_self_updater::_is_production_path L102")
-        return True
+    """★398 刀2：委托 `nucleus._env.is_production_data_path`。"""
+    return is_production_data_path(path)
 
 
 def internal_model_origin() -> str:
