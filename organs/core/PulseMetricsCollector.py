@@ -71,6 +71,18 @@ except ImportError:
     _cache_seconds = 30
 
 
+# ===== ★396刀2：观测面安慰剂效应收口（status 不再自报）=====
+#  `health_snapshot.json` 的 `heartbeat.status` 过去是常量串「搏动中」——它是"心跳体
+#  里写死的一句话"，不是判定结果。更要命的是写它的 `_on_heartbeat_observe` 本身由心跳
+#  驱动：心跳一停，这条 handler 再没人调，快照就冻结在最后一帧，而那一帧永远乐观。
+#  现场因此出现「心跳死后 46 分钟仍报搏动中」（data/monitor/health_snapshot.json
+#  beat_count=35 / status=搏动中）。
+#  修法：status 一律在**读快照时按 gap 现算**，判据 = gap ≥ 3×interval ⇒ 停搏；
+#        payload 里带来的 status 只用于识别「显式停止」这一种真值，其余不采信。
+_M396_HEARTBEAT_STALL_FACTOR = 3.0
+_M396_HEARTBEAT_STATUS_SRC = "computed@read"   # 写进快照，标明这不是自报串
+
+
 # ===== ★377刀4：tracemalloc 常驻 + 两快照差分（376 刀5 A/B 的两处病根）=====
 #  病根一（376 刀5 实测）：原实现 `start(1) → take_snapshot() → finally: stop()` **全在
 #    同一次调用内**完成 ⇒ 快照的 `since_start` 只覆盖探针自己那几毫秒，
@@ -279,6 +291,14 @@ class PulseMetricsCollector(BasePulseOrgan):
         # ===== P1-4 修复: 节点池引用 =====
         self._node_pool = None
         self._cached_heartbeat = {}      # 缓存最新心跳数据
+        # ★396刀2：**最后一次真正收到心跳脉冲的墙钟时刻**。
+        #   为什么需要它：本采集器自己是心跳驱动的，心跳一停，`_on_heartbeat_*` 不再被
+        #   调用 ⇒ `_cached_heartbeat` 冻结在最后一帧 ⇒ 快照里 status 永远是"搏动中"。
+        #   现场因此出现过「心跳死后 46 分钟，health_snapshot 仍报搏动中」。
+        #   活体判据必须是「读时算 gap」，不能是"缓存里写了什么"。
+        self._m396_last_beat_rx_at: float = 0.0
+        self._m396_beat_rx_count: int = 0
+        self._m396_explicit_stop: bool = False   # 收到过显式「已停搏」信号
         self._cached_current_user = "访客"  # 缓存当前用户
         self._dream_count = 0          # 梦境推演次数
         self._dream_last_topic = ""    # 最近梦境主题
@@ -366,6 +386,29 @@ class PulseMetricsCollector(BasePulseOrgan):
         return {"status": "collected", "snapshot_id": self._snapshot_count}
     # ========== P1-4: 心跳驱动可观测性快照 ==========
 
+    def _m396_heartbeat_status(self, interval: float) -> tuple[str, float | None]:
+        """★396刀2：按「距最后一次真正收到心跳的 gap」算心跳状态（**读时计算**）。
+
+        为什么不能沿用 payload/缓存里的 status：那两句都是常量串（PulseHeart 发
+        "搏动中"、本采集器缓存里也写死"搏动中"）。而"心跳停了"这件事的**唯一可靠
+        观测量是时间差**——它不依赖任何还在跑的代码来自报。
+
+        Returns:
+            (status, gap_s)；`gap_s is None` 表示从未收到过心跳（起搏期），
+            不是"gap=0"（铁律 276：没采到与真 0 必须分两个字段）。
+        """
+        if getattr(self, "_m396_explicit_stop", False):
+            return "已停搏（显式停止信号）", None
+        _iv = float(interval or 0) or 10.0
+        _last = float(getattr(self, "_m396_last_beat_rx_at", 0) or 0)
+        if _last <= 0:
+            return "起搏中（尚未收到心跳）", None
+        _gap = max(0.0, time.time() - _last)
+        _limit = _M396_HEARTBEAT_STALL_FACTOR * _iv
+        if _gap >= _limit:
+            return f"停搏（{_gap:.0f}s 未跳，阈值 {_limit:.0f}s）", _gap
+        return "搏动中", _gap
+
     def _on_heartbeat_observe(self, payload: dict | None = None) -> dict[str, Any] | None:
         """心跳触发：按间隔输出可观测性快照"""
         if not self._obs_enabled:
@@ -374,10 +417,13 @@ class PulseMetricsCollector(BasePulseOrgan):
         # 从心跳脉冲 payload 中直接提取心率数据（线程安全：锁内更新缓存）
         with self._cache_lock:
             if payload:
+                # ★396刀2：只采「确实收到了心跳」这个事实与读数，**不采信自报的 status**。
+                self._m396_last_beat_rx_at = time.time()
+                self._m396_beat_rx_count += 1
+                self._m396_explicit_stop = False
                 self._cached_heartbeat = {
                     "interval": payload.get("interval", 10.0),
                     "beat_count": payload.get("beat_count", 0),
-                    "status": "搏动中",
                 }
 
             # 尝试从信息场获取最新用户身份
@@ -413,12 +459,24 @@ class PulseMetricsCollector(BasePulseOrgan):
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         return {"status": "observed", "beat": self._beat_count}
     def _on_heartbeat_alive(self, payload: dict) -> dict[str, Any]:
-        """缓存心脏存活数据"""
+        """缓存心脏存活数据。
+
+        ★396刀2：**不再采信 payload 里的 status**（PulseHeart 发的是常量串"搏动中"，
+        采信它等于把"自报"当"实测"）。这里只做两件事：
+          * 认出「已停搏」这一个**显式**真值（stop() 主动发的，不是推断）；
+          * 其余情况只更新"确实收到过心跳"的时刻，状态留给读快照时按 gap 现算。
+        """
         with self._cache_lock:
+            _p_status = str(payload.get("status") or "")
+            if _p_status == "已停搏":
+                self._m396_explicit_stop = True
+            else:
+                self._m396_explicit_stop = False
+                self._m396_last_beat_rx_at = time.time()
+                self._m396_beat_rx_count += 1
             self._cached_heartbeat = {
                 "interval": payload.get("interval", 10.0),
                 "beat_count": payload.get("beat_count", 0),
-                "status": payload.get("status", "未知"),
             }
         return {"status": "cached"}
 
@@ -1641,6 +1699,8 @@ class PulseMetricsCollector(BasePulseOrgan):
 
         # 器官级：状态统计
         organ_status_stats = self._collect_organ_status_stats()
+        # ★396刀2 ③：三口径归一 —— declared 成为唯一"器官数"主口径
+        organ_status_stats = self._m396_attach_organ_counts(organ_status_stats)
         snapshot["organs"] = organ_status_stats
 
         # 快照级：备份信息
@@ -1650,9 +1710,19 @@ class PulseMetricsCollector(BasePulseOrgan):
         snapshot["link_status"] = self._collect_link_status()
 
         # 动态心率数据
-        snapshot["heartbeat"] = dict(self._cached_heartbeat) if self._cached_heartbeat else {
-            "interval": 10.0, "beat_count": 0, "status": "起搏中"
+        # ★396刀2：status 一律**读时现算**，绝不取缓存里的自报串。缓存里的 interval /
+        #   beat_count 是"最后一次收到心跳时它说了什么"，而 status 是"现在到底还跳不跳"——
+        #   两者来源不同，必须分别取。心跳停了以后这条路径仍可能被别的事件调用（COLLECT），
+        #   那时 status 会如实翻成"停搏"，不再冻结在最后一帧的乐观值。
+        _hb = dict(self._cached_heartbeat) if self._cached_heartbeat else {
+            "interval": 10.0, "beat_count": 0
         }
+        _hb_status, _hb_gap = self._m396_heartbeat_status(_hb.get("interval") or 10.0)
+        _hb["status"] = _hb_status
+        _hb["status_source"] = _M396_HEARTBEAT_STATUS_SRC
+        _hb["gap_s"] = (round(_hb_gap, 2) if _hb_gap is not None else None)
+        _hb["beat_rx_count"] = int(getattr(self, "_m396_beat_rx_count", 0))
+        snapshot["heartbeat"] = _hb
 
         # 当前用户身份
         snapshot["current_user"] = self._cached_current_user
@@ -1829,6 +1899,56 @@ class PulseMetricsCollector(BasePulseOrgan):
                 stats["idle"] += 1
 
         return stats
+
+    # ===== ★396刀2 ③：器官数三口径归一 =====
+
+    def _m396_declared_organ_count(self) -> dict[str, Any]:
+        """声明口径的器官数（**唯一权威**）= `OrganAssembler.validate()["organ_count"]`。
+
+        读的是启动期装配自检钉在 `nucleus.organ_assembler` 模块槽位上的最后一份报告。
+        取不到时如实报 `declared=None` / `declared_source=not_scanned`，
+        **不拿活体注册数（66）凑数**——"没采到"与"真是这个数"必须可分（铁律 276）。
+        """
+        try:
+            from nucleus.organ_assembler import get_last_validate_report
+            _rep = get_last_validate_report()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m396_declared_organ_count")
+            return {"declared": None, "declared_source": "unavailable"}
+        if not _rep:
+            return {"declared": None, "declared_source": "not_scanned"}
+        return {
+            "declared": _rep.get("organ_count"),
+            "declared_ok": _rep.get("ok"),
+            "declared_errors": _rep.get("error_count"),
+            "declared_warnings": _rep.get("warning_count"),
+            "declared_source": str(_rep.get("source") or "organ_assembler.validate()"),
+        }
+
+    def _m396_attach_organ_counts(self, stats: dict[str, Any]) -> dict[str, Any]:
+        """★396刀2 ③：三个器官数收敛到**一个主口径**，其余具名说明不同事实。
+
+        过去 `organs.total`（66）被当成"器官总数"读，而文档里同时流传 56（ORGAN_META
+        声明）与 57（+QICA 准器官）。三个数指三件不同的事，混读的结果是同一个问题有
+        三个答案。现在：
+
+          * `declared`        —— **唯一器官数主口径**，来自 assembler.validate()；
+          * `runtime_registered` —— 信息场里注册过条件的器官名去重数（活体读数，
+            含框架准器官，也可能漏掉不发脉冲的器官，**不是器官数**）；
+          * `total`          —— **保留旧值**以免 30 天趋势线断代，但用
+            `total_meaning` 明确它不是器官数。直接改值等于用新口径涂改历史曲线。
+
+        铁律 166：不同事实用不同措辞；铁律 271：判据的分子分母必须同源。
+        """
+        _decl = self._m396_declared_organ_count()
+        _runtime = int(stats.get("total", 0) or 0)
+        stats.update(_decl)
+        stats["runtime_registered"] = _runtime
+        stats["total_meaning"] = "runtime_registered（旧口径：信息场条件名去重，不是器官数）"
+        stats["counts_note"] = ("器官数只认 declared（assembler.validate）；"
+                                "runtime_registered 是活体注册读数，两者是不同事实")
+        return stats
+
     #: ★主线第50批 T3（P2-329）：期望接收者 → **真实注册名别名**。
     #  背景：判据原用单一字符串做子串匹配，但对话侧真实注册名是
     #  「Web对话-人脸监听」（web_chat.py:658）与

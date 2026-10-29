@@ -51,6 +51,41 @@ FRAMEWORK_COMPONENTS: frozenset[str] = frozenset({
 FRAMEWORK_QUASI_ORGANS: frozenset[str] = frozenset({"QICA"})
 
 
+# ===== ★396刀2 ③：启动期装配自检结果的**单一存放点**=====
+#  背景：器官数在系统里存在三个口径 —— 56（ORGAN_META 声明）、57（声明 + QICA 准器官）、
+#  66（活体信息场注册名去重）。看板上同一个问题有三个答案，且 health_snapshot 报的是
+#  第三个（66）却叫 "total"，读起来像"器官总数"。
+#  约定：**器官数只认 `OrganAssembler.validate()["organ_count"]`**（声明口径），由
+#  main.py 装配完成后钉在下面这个槽位；任何采集方需要"器官数"都读这里，不许自己数。
+#  为什么放模块级而不是 framework 属性：采集器（PulseMetricsCollector）拿不到 framework
+#  引用（它只有 info_field），而 organ_assembler 是双方都已 import 的模块——放这里
+#  不新增注入链、不制造第二份真相。
+_LAST_VALIDATE_REPORT: dict[str, Any] | None = None
+
+
+def set_last_validate_report(report: dict[str, Any] | None) -> None:
+    """登记最近一次 `OrganAssembler.validate()` 的结果（启动期一次，只写不读）。"""
+    global _LAST_VALIDATE_REPORT
+    if not report:
+        _LAST_VALIDATE_REPORT = None
+        return
+    _stats = report.get("stats") or {}
+    _LAST_VALIDATE_REPORT = {
+        "organ_count": report.get("organ_count"),
+        "ok": report.get("ok"),
+        "error_count": len(report.get("errors") or []),
+        "warning_count": len(report.get("warnings") or []),
+        "always_online_count": _stats.get("always_online_count"),
+        "degradable_count": _stats.get("degradable_count"),
+        "source": "organ_assembler.validate()",
+    }
+
+
+def get_last_validate_report() -> dict[str, Any] | None:
+    """读取最近一次 validate 结果；未登记返回 None（调用方须如实报 unknown）。"""
+    return _LAST_VALIDATE_REPORT
+
+
 class OrganAssembler:
     """声明式器官装配器。
 

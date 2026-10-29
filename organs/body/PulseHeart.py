@@ -103,6 +103,7 @@ _M396_WD_NAP_FACTOR = 1.5          # 看门狗节拍 = 1.5×心跳周期
 _M396_WD_NAP_MIN = 15.0            # 但绝不短于 15s（救援不能比心跳还快——这正是 livelock 根因）
 _M396_RESCUE_CONFIRM_FACTOR = 3.0  # 救援确认窗口 = 3×interval（给足 3 拍机会）
 _M396_STALL_FACTOR = 3.0           # 观测面判「停搏」：gap ≥ 3×interval
+_M396_STALL_SNAPSHOT_EVERY_SEC = 60.0  # 停搏快照落盘节流（心跳已死，1 分钟一条足够）
 
 
 def _m396_timer_alive(timer) -> bool:
@@ -224,6 +225,8 @@ class PulseHeart(BasePulseOrgan):
         self._m396_rescue_failed = 0        # 救援超窗 beat 仍未增的次数
         self._m396_enter_fp = None          # 进入留痕的状态指纹（is_running|timer_alive）
         self._m396_enter_beat = -1          # 上次进入留痕的 beat
+        self._m396_stall_snap_at = 0.0      # ★396刀2：上次停搏快照落盘时刻（60s 节流）
+        self._m396_stall_snap_n = 0         # ★396刀2：停搏快照累计落盘次数
 
         # ★属性初始化完整性补全（自动审查添加）
         self._status_sweep_counter = 0
@@ -544,6 +547,9 @@ class PulseHeart(BasePulseOrgan):
             return
 
         try:
+            # ★396刀2：status 必须在刷新 `_last_beat_time` **之前**算——它衡量的是
+            #   「上一拍到现在」的真实间隔；先刷新再算恒为 0，等于又变回常量串。
+            _m396_status = self._m396_beat_status()
             self._beat_count += 1
             now = time.time()
             self._last_beat_time = now  # ★节律同步：记录最后心跳时间
@@ -609,7 +615,7 @@ class PulseHeart(BasePulseOrgan):
             self._emit(HeartEvent.ALIVE, {
                 "beat_count": self._beat_count,
                 "interval": self.current_interval,
-                "status": "搏动中",
+                "status": _m396_status,   # ★396刀2：按 gap 现算，不再硬编码
             }, priority=3, layer="L3")  # ★v24.0减负
 
             # ★v9.5心跳节律周期日志（供后台分析脉冲架构真实性）
@@ -696,6 +702,23 @@ class PulseHeart(BasePulseOrgan):
                       f"interval={float(getattr(self, 'current_interval', 0) or 0):.2f}s")
         except Exception as _e:
             silent_exc(_e, where="PulseHeart::_m396_trace_enter")
+
+    def _m396_beat_status(self) -> str:
+        """★396刀2 ①：心跳体内发的状态串也按 gap 现算，不再硬编码"搏动中"。
+
+        正常拍 gap≈0 ⇒ "搏动中"；但若这一拍本体卡了很久才走到发信号那一步，它会如实
+        显示"停搏（Ns 未跳）"——同一句文案不再有第二种真相。
+        ★调用位置很关键：必须在 `_last_beat_time = now` **之前**算，否则恒为 0。
+        """
+        _iv = float(getattr(self, "current_interval", 0) or 0) or _M374_FALLBACK_INTERVAL
+        _last = float(getattr(self, "_last_beat_time", 0) or 0)
+        if _last <= 0:
+            return "搏动中"
+        _gap = max(0.0, time.time() - _last)
+        _limit = _M396_STALL_FACTOR * _iv
+        if _gap >= _limit:
+            return f"停搏（{_gap:.0f}s 未跳，阈值 {_limit:.0f}s）"
+        return "搏动中"
 
     def _m374_schedule_ahead(self) -> None:
         """先排下一拍再干活：续链不再依赖「这一拍能返回」。
@@ -839,7 +862,86 @@ class PulseHeart(BasePulseOrgan):
                 self._log(LogLevel.WARNING,
                           f"[365链] 看门狗自身异常（第{self._m365_wd_fail}次）："
                           f"{type(_e).__name__}: {_e}")
+            # ★396刀2：心跳停摆时把真相落盘（内部自己判 gap 与 60s 节流）
+            self._m396_stall_snapshot()
             self._m374_wd_trace()
+
+    def _m396_stall_snapshot_path(self) -> str:
+        """停搏快照要写的文件路径（单独成方法，单测可替换，避免污染生产 data/）。"""
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(_root, "data", "monitor", "health_snapshot.json")
+
+    def _m396_stall_snapshot(self) -> dict[str, Any] | None:
+        """★396刀2 ②：心跳停摆时**主动刷新** health_snapshot 的 heartbeat 段。
+
+        为什么必须由看门狗来写：`health_snapshot.json` 的常规写入方是
+        `PulseMetricsCollector._on_heartbeat_observe`，而它由心跳驱动——心跳一停，
+        它就不再被调用，快照冻结在最后一帧，那一帧永远写着"搏动中"（现场 46 分钟）。
+        看门狗是唯一与心跳链无关、且此刻仍然活着的线程，只能由它把"停搏"落盘。
+
+        最小侵入：只改 `heartbeat` 段 + 顶层 `heartbeat_stall` 标记，其余字段原样保留；
+        走 `safe_write_json`（与采集器同一条硬化通道：路径锁 + 退避重试 + 唯一 tmp）；
+        60s 节流。失败只留痕，绝不影响看门狗主循环。
+
+        ★并发说明：读-改-写存在丢失更新窗口，但本方法**只在 gap ≥ 3×interval 时**执行，
+        而那一刻采集器早已不再写快照（它就是心跳驱动的），实际冲突概率为零。
+        """
+        _iv = float(getattr(self, "current_interval", 0) or 0)
+        _last = float(getattr(self, "_last_beat_time", 0) or 0)
+        if _iv <= 0 or _last <= 0:
+            return None
+        _now = time.time()
+        _gap = _now - _last
+        if _gap < _M396_STALL_FACTOR * _iv:
+            return None
+        _last_at = float(getattr(self, "_m396_stall_snap_at", 0) or 0)
+        if _last_at > 0 and (_now - _last_at) < _M396_STALL_SNAPSHOT_EVERY_SEC:
+            return None
+        try:
+            import json
+
+            from nucleus.data.DataAccessLayer import safe_write_json
+
+            _p = self._m396_stall_snapshot_path()
+            _snap: dict[str, Any] = {}
+            if os.path.exists(_p):
+                try:
+                    with open(_p, encoding="utf-8") as _f:
+                        _snap = json.load(_f) or {}
+                except Exception as _re:
+                    silent_exc(_re, where="PulseHeart::_m396_stall_snapshot read")
+                    _snap = {}
+            if not isinstance(_snap, dict):
+                _snap = {}
+            _hb = dict(_snap.get("heartbeat") or {})
+            _hb["interval"] = _iv
+            _hb["beat_count"] = int(getattr(self, "_beat_count", 0))
+            _hb["status"] = f"停搏（{_gap:.0f}s 未跳，阈值 {_M396_STALL_FACTOR * _iv:.0f}s）"
+            _hb["status_source"] = "watchdog@stall"
+            _hb["gap_s"] = round(_gap, 2)
+            _snap["heartbeat"] = _hb
+            _snap["heartbeat_stall"] = {
+                "since": _last,
+                "gap_s": round(_gap, 2),
+                "beat": int(getattr(self, "_beat_count", 0)),
+                "by": "PulseHeart._m365_watchdog_loop",
+                "at": _now,
+            }
+            self._m396_stall_snap_at = _now
+            self._m396_stall_snap_n = int(getattr(self, "_m396_stall_snap_n", 0)) + 1
+            _ok = safe_write_json(_p, _snap, backup=False)
+            if not _ok:
+                self._log(LogLevel.WARNING,
+                          f"[396刀2] 停搏快照写入返回 False（th={_M396_STALL_FACTOR * _iv:.1f}s "
+                          f"gap={_gap:.1f}s）⇒ health_snapshot 仍停在旧值",
+                          error_code="heartbeat_stall_snapshot_failed")
+            return {"ok": bool(_ok), "path": _p, "gap_s": round(_gap, 2)}
+        except Exception as _e:
+            silent_exc(_e, where="PulseHeart::_m396_stall_snapshot")
+            self._log(LogLevel.WARNING,
+                      f"[396刀2] 停搏快照写入异常：{type(_e).__name__}: {_e}",
+                      error_code="heartbeat_stall_snapshot_failed")
+            return None
 
     def _m374_wd_trace(self) -> None:
         """看门狗存活留痕（每 10 分钟一条 INFO）：日志里缺席＝看门狗本身死了。"""

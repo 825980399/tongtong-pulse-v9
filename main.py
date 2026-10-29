@@ -1333,7 +1333,18 @@ class PulseFramework:
             from nucleus.organ_assembler import OrganAssembler
             from nucleus.organ_loader import OrganLoader
             _metas = OrganLoader(self).scan_organs_directory()
-            _diff = OrganAssembler(_metas).diff_declared_vs_instantiated(set(self.organs.keys()))
+            _asm = OrganAssembler(_metas)
+            _diff = _asm.diff_declared_vs_instantiated(set(self.organs.keys()))
+            # ★396刀2 ③：器官数三口径归一 —— 把 validate() 结果钉成**全局唯一**器官数来源。
+            #   为什么钉在这里：本段两个装配分支（declarative / legacy 回退）**都会走**，
+            #   而 legacy 分支不调 validate ⇒ 只放 _init_organs_declarative 会让回退模式下
+            #   快照只能报 unknown。此处 _metas 已在手，validate() 只是图遍历（微秒级）。
+            #   消费方：PulseMetricsCollector._m396_declared_organ_count()。
+            try:
+                from nucleus.organ_assembler import set_last_validate_report
+                set_last_validate_report(_asm.validate())
+            except Exception as _ve396:
+                silent_exc(_ve396, "main.py:1336 396器官数归一登记", level="warning")
             self._log(LogLevel.INFO,
                       f"[装配具名差集] 声明基线(ORGAN_META)={_diff['declared_count']} "
                       f"装配={_diff['instantiated_count']} "
