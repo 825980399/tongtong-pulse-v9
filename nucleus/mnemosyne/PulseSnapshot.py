@@ -1407,6 +1407,52 @@ class PulseSnapshot:
             ]
         return _base
 
+    # ★388刀1：Parquet → Python 行的**批次大小**（行数）。<=0 ⇒ 退回整表 to_pylist
+    _M388_PARQUET_BATCH_ROWS = 20000
+
+    def _m388_parquet_batch_rows(self) -> int:
+        """逐批转换的批大小；<=0 表示退回旧的一次性 `to_pylist()`（零回归路径）。"""
+        try:
+            import config as _c388
+            _v = getattr(_c388, "M388_PARQUET_BATCH_ROWS",
+                         self._M388_PARQUET_BATCH_ROWS)
+            return int(_v)
+        except Exception as _e388:
+            silent_exc(_e388, where="PulseSnapshot::_m388_parquet_batch_rows",
+                       level="debug")
+            return self._M388_PARQUET_BATCH_ROWS
+
+    def _m388_iter_rows(self, tbl):
+        """★★388刀1：按批 yield 行，替代 `tbl.to_pylist()` 的全量转换。
+
+        为什么必须分批：`to_pylist()` 会把整张 Arrow 表**一次性**物化成
+        Python dict 列表 —— 行数 × 列数个对象同时存活。388 实测该行为进程内
+        **第一大分配点**（3304 万对象 / 2.0GB）。分批后每批转换完即可释放，
+        峰值内存随批大小线性下降，而**结果逐字相同**。
+
+        ★失败即退回全量（零回归）：`to_batches` 不可用时照样能加载，
+        只是回到旧的内存开销 —— 观测/加载链绝不因本优化而失败。
+        """
+        _n = self._m388_parquet_batch_rows()
+        if _n <= 0:
+            for _r in tbl.to_pylist():
+                yield _r
+            return
+        try:
+            _batched = False
+            for _batch in tbl.to_batches(max_chunksize=_n):
+                _batched = True
+                for _r in _batch.to_pylist():
+                    yield _r
+            if _batched:
+                return
+        except Exception as _e388:
+            silent_exc(_e388, where="PulseSnapshot::_m388_iter_rows",
+                       level="warning")
+        # 退回：全量（与改动前完全一致）
+        for _r in tbl.to_pylist():
+            yield _r
+
     def _m81_load_parquet_unified(self):
         """★第81批 T5：统一 Parquet 加载入口（路径甲/乙/by_level 共用）。
 
@@ -1454,7 +1500,10 @@ class PulseSnapshot:
                 return None
             if _meta is None and _md:
                 _meta = _md
-            for _row in _tbl.to_pylist():
+            # ★388刀1：逐批 yield（原 `to_pylist()` 整表一次性转 Python 对象，
+            #   实测该行分配 3304 万对象 / 2.0GB = tracemalloc top1）。
+            #   语义逐字不变：同样的行序、字段、计数，只是峰值内存更低。
+            for _row in self._m388_iter_rows(_tbl):
                 try:
                     # ③ 显式带回分区列（目录名即权威层级，不依赖 pyarrow 自动注入）
                     _row["evol_level"] = _lv
