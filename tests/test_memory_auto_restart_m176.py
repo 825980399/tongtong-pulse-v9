@@ -144,8 +144,19 @@ def test_bucket_bump_and_lock(tmp_path):
 
 
 def test_cooldown_hours_reads_own_key(tmp_path):
+    """冷却窗口读 `MEMORY_RESTART_COOLDOWN_HOURS`（自己的键），不回退到补丁桶。
+
+    ★387刀1 同步：内存冷却从 24h 改成 **6h**，而补丁冷却 `PATCH_RESTART_COOLDOWN_HOURS`
+    仍是 24h ⇒ 两个键**不同值**，这条的鉴别力反而更强（读到 24 就说明回退了）。
+
+    ★顺带暴露一个夹具缺陷：`_make_patch_mgr` 的 `patch.dict(...)` 在 `with`
+    块结束即失效，所以本用例读的其实是**真实 config**——它一直在隐式依赖
+    默认值。改默认值就会红（387 改到 6.0 时正是如此）。
+    """
     _pm = _make_patch_mgr(tmp_path)
-    assert _pm._memory_restart_cooldown_hours() == 24.0
+    _got = _pm._memory_restart_cooldown_hours()
+    assert _got == 6.0, "应读内存自己的冷却键（387 起为 6h），实际 %s" % _got
+    assert _got != 24.0, "读到 24h 说明**回退**到了补丁桶，本用例就失去意义"
 
 
 # --------------------------------------------------------------------------
