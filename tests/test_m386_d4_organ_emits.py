@@ -86,11 +86,12 @@ def test_m386_d4_reason_states_boundary():
     _r = oe.zero_emit_report()
     for _cls in _r["silent_suspects"]:
         _t = _r["declarations"][_cls]["reason"]
-        # ★387刀3 同步：理由按「无输入 / 有输入仍哑」分成两种措辞，
-        #   都必须写清"本声明不代替真因调查"这个边界（"待查" 或 "无输入"）。
-        assert "不" in _t, "%s 的声明未写清能力边界" % _cls
-        assert ("待查" in _t) or ("无输入" in _t), \
-            "%s 的声明没说清是待查还是无输入: %s" % (_cls, _t)
+        # ★387刀3 / 388刀3 两次同步（这个断言已被措辞变化打断两次）：
+        #   别再钉**具体措辞**，改钉**语义** —— 理由必须说清"这是不是故障"。
+        #   措辞演进：真哑待查 → 无输入 → 条件待命 → 人工确认非故障。
+        assert len(_t) >= 20, "%s 的理由太短，说不清边界" % _cls
+        assert any(_k in _t for _k in ("待查", "无输入", "非故障", "不是故障")), \
+            "%s 的声明没说清是不是故障: %s" % (_cls, _t)
 
 
 def test_m386_d4_schema_and_counts_plausible():
