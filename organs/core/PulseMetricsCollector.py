@@ -465,7 +465,15 @@ class PulseMetricsCollector(BasePulseOrgan):
     #         **不新开调度器**（333刀2 纪律）。
     #   频率：每日 1-2 次槽位（05:00 / 13:00，避开 03:50-04:10 首转窗）；
     #         **禁止每拍采样**——自身分配开销会把治理变增负。
-    _M339_PROBE_HOURS = (5, 13)
+    # ★388刀2：槽位从「每天 2 次(5/13 点)」加密到**每 2 小时一次**。
+    #   387刀2 的结论：一天只有 2 次归因机会，而泄漏 5 小时就到危险区 ⇒
+    #   采样密度远远不够（13:00 那次才第一次拿到 tracemalloc top20）。
+    # ★配套的**成本护栏**（不然加密=增负）：实测一次含 tracemalloc 的采样要
+    #   ~14 分钟（3300 万对象做 statistics），所以：
+    #     · gc 扫描仍受 `M339_GC_SCAN_BUDGET_SEC`(2s) 约束（386刀3）
+    #     · tracemalloc 阶段超 `M339_MEMORY_PROBE_MAX_SEC` ⇒ **不写盘**（388刀2 补）
+    #   ⇒ 加密后若采样太贵，结果是"没产物"而不是"卡住进程"。
+    _M339_PROBE_HOURS = tuple(range(0, 24, 2))
     _M339_PROBE_TOP_N = 20
     _M339_PROBE_MAX_SEC = 3.0
     _M339_GC_HEAP_MB = 1200.0
@@ -714,6 +722,12 @@ class PulseMetricsCollector(BasePulseOrgan):
                         #   常驻模式绝不停（停了下一拍又变 since_start 空采）。
                         if _started and _tmmode != "resident":
                             _tm.stop()
+            # ★388刀2：记录 **tracemalloc 阶段**耗时 —— 用来区分"超时是谁造成的"。
+            #   387刀3 的「截断也写盘」被实测钻了空子：13:00 那次 elapsed=837s，
+            #   其中 gc 扫描只占约 2s（被预算截断），剩下 835s 全是 tracemalloc；
+            #   gc 截断却把它整份放行 ⇒ 一次采样卡住进程 14 分钟，正是 386刀3
+            #   要避免的"治理变增负"。
+            self._m388_tm_sec = time.perf_counter() - _t0
             if _heap_hi or _mode == "gc_objects":
                 import gc as _gcm
                 # ★386刀3：给全堆扫描加**时间预算**。
@@ -756,7 +770,12 @@ class PulseMetricsCollector(BasePulseOrgan):
         #   开关 `M339_WRITE_ON_TRUNCATED`（默认 True）关掉 ⇒ 逐字回到旧判定。
         _trunc = bool(getattr(self, "_m339_gc_last", {}).get("truncated", False))
         _write_trunc = bool(self._m339_cfg_get("M339_WRITE_ON_TRUNCATED", True))
-        if _trunc and _write_trunc and _elapsed > _maxsec:
+        # ★388刀2：gc 截断**只在 gc 阶段本身受控时**才放行。
+        #   若 tracemalloc 阶段也超了预算 ⇒ 那是"采样太贵"，不是"扫描被砍停"
+        #   ⇒ 不放行（放行等于允许一次 14 分钟的采样写盘，把治理变成增负）。
+        _tm_sec = float(getattr(self, "_m388_tm_sec", 0.0) or 0.0)
+        _tm_over = bool("tracemalloc" in str(_mode or "")) and _tm_sec > _maxsec
+        if _trunc and _write_trunc and _elapsed > _maxsec and not _tm_over:
             self._log(LogLevel.INFO,
                       "[339内存观测] 扫描被预算截断（%.2fs > 预算 %.2fs，"
                       "scanned=%d）⇒ **仍写盘**（产物标 gc_truncated=true，"
