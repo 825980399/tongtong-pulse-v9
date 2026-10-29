@@ -332,6 +332,8 @@ class PulseBloodVessel(BasePulseOrgan):
                 "silence_escalation": dict(self._organ_silence_state),
             }
 
+    # ★398刀4：预埋未接 —— 全仓 0 调用点（398 实测 64 def / 0 引用）。
+    #   场共振阶段（PHASE19+）再接线；在那之前不要当它是已生效的场感知能力。
     def on_field_oscillation(self, frequency: float, amplitude: float, phase: float, field_strength: float):
         """【预留 v10.0】"""
 

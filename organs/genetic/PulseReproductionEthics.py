@@ -73,6 +73,8 @@ class PulseReproductionEthics(BasePulseOrgan):
         return [{"organ_name": self.organ_name, "event_types": [ReproductionEthicsEvent.ETHICS_CHECK, SystemEvent.STATUS_REQUEST], "min_priority": 1}]
 
     # ========== 未来演化预留（v10.0 振荡场） ==========
+    # ★398刀4：预埋未接 —— 全仓 0 调用点（398 实测 64 def / 0 引用）。
+    #   场共振阶段（PHASE19+）再接线；在那之前不要当它是已生效的场感知能力。
     def on_field_oscillation(self, frequency: float, amplitude: float,
                               phase: float, field_strength: float) -> dict[str, Any] | None:
         """【预留 v10.0】"""

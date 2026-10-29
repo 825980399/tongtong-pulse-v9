@@ -3853,6 +3853,8 @@ class PulseLiver(BasePulseOrgan):
                 self._instinct_downgrade_count += 1
                 self._log(LogLevel.INFO, f"本能降级: {node.value[:60]}... (闲置{days_since_last_use:.0f}天)")
 
+    # ★398刀4：预埋未接 —— 全仓 0 调用点（398 实测 64 def / 0 引用）。
+    #   场共振阶段（PHASE19+）再接线；在那之前不要当它是已生效的场感知能力。
     def on_field_oscillation(self, frequency: float, amplitude: float, phase: float, field_strength: float):
         pass
 
