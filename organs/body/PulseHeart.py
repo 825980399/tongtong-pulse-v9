@@ -682,8 +682,10 @@ class PulseHeart(BasePulseOrgan):
           * 完全没有本行 + 看门狗在喊 ⇒ Timer 链断了（livelock / 链被掐）；
           * 有本行但 beat 不增   ⇒ 早退（is_running=False / info_field=None）或卡死。
 
-        节流：状态指纹（is_running + Timer 存活）变化立即打一条（排障要点），
-        状态不变则每 60 拍一条（≈10 分钟），避免把 DEBUG 文件刷满。
+        节流：状态指纹（is_running + Timer 存活）变化立即打一条，状态不变则每 60 拍
+        一条（≈10 分钟）。★级别分两档：指纹变化用 **INFO**（这是排障关键点，而
+        `LOG_LEVEL_FILE` 是配置项、可能被人抬到 INFO，用 DEBUG 就有被过滤的风险），
+        常规节拍用 DEBUG。
         """
         try:
             _alive = _m396_timer_alive(getattr(self, "_next_timer", None))
@@ -694,12 +696,14 @@ class PulseHeart(BasePulseOrgan):
             _last_beat = int(getattr(self, "_m396_enter_beat", -1))
             if _fp == _last_fp and (_beat - _last_beat) < 60:
                 return
+            _changed = (_fp != _last_fp)
             self._m396_enter_fp = _fp
             self._m396_enter_beat = _beat
-            self._log(LogLevel.DEBUG,
+            self._log(LogLevel.INFO if _changed else LogLevel.DEBUG,
                       f"[396刀1] 心跳进入 beat={_beat} is_running={_run} "
                       f"timer_alive={_alive} "
-                      f"interval={float(getattr(self, 'current_interval', 0) or 0):.2f}s")
+                      f"interval={float(getattr(self, 'current_interval', 0) or 0):.2f}s"
+                      f"{'（状态变化）' if _changed else ''}")
         except Exception as _e:
             silent_exc(_e, where="PulseHeart::_m396_trace_enter")
 
