@@ -86,9 +86,26 @@ def test_03_windows_sep_and_leading_slash_tolerated():
 
 # ---------------------------------------------------------------- ② 覆盖范围
 def test_04_total_is_409():
-    """票面验收：调用图覆盖 409 个 .py。"""
+    """票面验收：调用图覆盖 409 个 .py。
+
+    ★用 `>=` 而不是 `==`：409 是**397刀2 交付那一刻**的读数；此后任何新增生产 .py
+      都会让它继续涨（实测刀5 新增 `nucleus/decision/arbitrate.py` 后变成 410）。
+      钉死 `==` 会让"新增一个正常源码文件"变成红灯，那是判据在惩罚正常行为
+      （铁律 268：断言别钉会随证据变化的精确值）。真正的票面语义是
+      "42 个盲区文件已补齐"，由下限 + test_05/06 的具名清单共同守住。
+    """
     _f = _files()
-    assert len(_f) == _EXPECT_TOTAL, f"覆盖 {len(_f)} ≠ {_EXPECT_TOTAL}"
+    assert len(_f) >= _EXPECT_TOTAL, f"覆盖 {len(_f)} < {_EXPECT_TOTAL}（盲区没补齐）"
+
+
+def test_04b_growth_stays_inside_production_tree():
+    """总数可以涨，但**不能**靠放进 tmp/tests/.bak 来涨（那是排除集被放宽了）。"""
+    _f = _files()
+    _bad = [x for x in _f
+            if x.split("/")[0] in {"tests", "tmp", "tools", "docs", "data", "logs"}
+            or x.split("/")[0].startswith(".bak")
+            or "__pycache__" in x]
+    assert not _bad, f"非生产文件进了图：{_bad[:10]}"
 
 
 @pytest.mark.parametrize("rel", _DATA_FILES)
