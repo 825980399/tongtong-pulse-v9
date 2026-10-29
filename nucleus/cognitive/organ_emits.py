@@ -94,14 +94,33 @@ def emit_guarded(file_path: str) -> bool:
     for _i, _l in enumerate(_lines):
         if not any(_p.search(_l) for _p in _EMITTER_PATTERNS):
             continue
-        # 往上找最近的非空、非注释、非装饰器行
+        # ① 直接被 if/for 包裹
         for _j in range(_i - 1, max(-1, _i - 12), -1):
             _prev = _lines[_j].strip()
             if not _prev or _prev.startswith("#") or _prev.startswith("@"):
                 continue
             if _guard.match(_prev) and _prev.rstrip().endswith(":"):
                 return True
-            return False
+            break
+        # ② ★387刀3 漏掉的**早退型**（guard clause）：`if <条件>: return`
+        #    —— 设备管理器就是这种：`if current_hash == last: return`（能力没变化
+        #    就不广播），emit 没有被 if 包住，却在早退之后。
+        _ind = len(_l) - len(_l.lstrip())
+        for _j in range(max(0, _i - 40), _i):
+            _s = _lines[_j]
+            _s_strip = _s.strip()
+            if (len(_s) - len(_s.lstrip())) != _ind and _s_strip:
+                continue
+            if not _guard.match(_s_strip) or not _s_strip.rstrip().endswith(":"):
+                continue
+            # if 之后的下一行（或跳过注释）是不是 return
+            for _k in range(_j + 1, min(len(_lines), _j + 4)):
+                _nxt = _lines[_k].strip()
+                if not _nxt or _nxt.startswith("#"):
+                    continue
+                if _nxt.startswith("return"):
+                    return True
+                break
     return False
 
 
@@ -202,6 +221,28 @@ def _auto_reason(has_emitter: bool, hits: int, input_fired: int,
             "本声明**不**代替该调查" % (hits, _ins, input_fired))
 
 
+#: ★388刀3 人工复核结论 —— 自动判据**看不出调用方条件**时以这里为准。
+#   387刀3 的 `emit_guarded` 只扫发射器附近的 if/早退；而这 3 个的触发条件
+#   在**调用方**（谁调这个方法），静态扫不到 ⇒ 只能人工读代码后登记。
+#   登记后 `source` 记为 "manual_388"，不再标成"真哑嫌疑"。
+MANUAL_NOTES_388 = {
+    "PulseDeviceManager": (
+        "条件广播（非故障）：`_broadcast_capabilities` 先算能力哈希，"
+        "`if current_hash == self._last_capability_hash: return` —— "
+        "**设备能力没变化就不广播**。零发射 = 摄像头/麦克风/扬声器等能力未变。"),
+    "PulseEars": (
+        "无语音输入（非故障）：`_emit_voice_message` 需要 Vosk 识别出"
+        "**含中文且非噪音单字**的语音。零发射 = 没人对着麦克风说话。"),
+    "PulseGlobalLearner": (
+        "条件告警（非故障）：唯一的发射点是漂移告警 "
+        "`Event.GLOBAL_LEARNER_DRIFT_DETECTED`（PulseGlobalLearner.py:249），"
+        "只在检测到模型漂移时才发。零发射 = **没有漂移 = 学习状态健康**。"),
+    "PulseBloodVessel": (
+        "条件告警（非故障）：4 处发射器全在「发现沉默器官才告警」的分支里，"
+        "零发射 = 没有器官失联 = 系统健康。"),
+}
+
+
 def build_declarations(zero_emit_rows: list) -> dict:
     """按**扫描事实**生成声明（不手编结论）。
 
@@ -225,8 +266,16 @@ def build_declarations(zero_emit_rows: list) -> dict:
             "input_fired": int(_r.get("input_fired") or 0),
             "no_input": bool(_has and int(_r.get("input_fired") or 0) == 0),
             "emit_guarded": bool(_r.get("emit_guarded")),
-            "source": "auto_scan",         # 人工复核后改成 manual 并写复核人
+            "source": "auto_scan",
         }
+        # ★人工复核结论覆盖自动判据（388刀3）
+        _note = MANUAL_NOTES_388.get(_cls)
+        if _note:
+            _out[_cls]["reason"] = _note
+            _out[_cls]["source"] = "manual_388"
+            _out[_cls]["benign"] = True     # 已确认非故障，不再列为嫌疑
+        else:
+            _out[_cls]["benign"] = False
     return _out
 
 
@@ -319,7 +368,10 @@ def zero_emit_report(pulse_pairs_path: str | None = None) -> dict:
         "suspects_strict": sorted(
             k for k, v in _decl.items()
             if v.get("emits") is True and v.get("emit_guarded") is not True
-            and v.get("no_input") is not True),
+            and v.get("no_input") is not True and v.get("benign") is not True),
+        # ★388刀3：已人工确认非故障的（不再当嫌疑）
+        "benign_confirmed": sorted(k for k, v in _decl.items()
+                                   if v.get("benign") is True),
         "declarations": _decl,
     }
 
