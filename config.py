@@ -6623,3 +6623,86 @@ PATCH_GENERATOR_TIMEOUT_SEC = 60.0
 #   现场实测：今日池 664 条里 52 条是盘符绝对路径、612 条是相对路径 ⇒ 同一个文件
 #   可能派生两个 dedup_key。开=归一（原值留 `file_raw` 可回溯），关=逐字回到改前行为。
 ENABLE_FILE_FIELD_NORMALIZE = True
+
+
+# ============================================================================
+# ★397刀4：13 个幽灵开关补显式赋值（另补 4 个同病参数）
+#
+# 背景（烛微 390 + 烛微 393 验收实锤）：这 13 个键**代码在读、config 里没有赋值行**，
+#   全靠 `getattr(config, "X", True)` 的第三个参数生效。后果不是"少写一行注释"——
+#   **出事时无法用配置降级**：想关只能改代码、发版、重启；而它们恰恰都是各批施工
+#   留下的"灰度/一键回滚"开关，存在的唯一意义就是"能在出事时立刻关掉"。
+#   开关不落 config，等于这个开关不存在。
+#
+# 口径：
+#   * 前 11 个 `ENABLE_*` + `PENDING_GRADED_PILOT_ONLY` = **生产开关**（默认 True）；
+#   * `ENABLE_COLD_STORAGE` 只在测试里被读 ⇒ 单列在最后，标为测试专用；
+#   * 末尾 4 个是**阈值/路径参数**不是开关，但同病（也靠 getattr 默认值、同样
+#     只能在代码里改），一并补齐。
+#
+# ★纪律：默认值**一律沿用代码里 getattr 的第三个参数**，本批不改任何行为（零回归）。
+#   想改行为请另开批次并写明判据 —— 不要让"补赋值"顺手变成"改默认"。
+# ============================================================================
+
+# 审查问题池「消费侧」总开关（audit_problem_pool_consumer 与 k1_offload 共用同一键）。
+# 默认 True：关掉 ⇒ 池不再被消费，只写不读，会变成垃圾场；这是**降级**手段不是常态。
+ENABLE_AUDIT_POOL_CONSUME = True
+
+# 审查完成后把结果落进池（`data/reports/audit/audit_<YYYYMMDD>.json`）。
+# 默认 True：`persist=None` 时读它；置 False 即回到"只返回 report 不落盘"。
+ENABLE_AUDIT_POOL_PERSIST = True
+
+# 语义缓存 L2 是否准入 `system_internal` origin（377刀6 灰度）。
+# 默认 True：关掉 ⇒ 逐字回到 331 批的「只放 user_query」。
+ENABLE_L2_ADMIT_SYSTEM_INTERNAL = True
+
+# 沙箱成功后的 TTL 冻结（378刀2 灰度）：命中即不再每拍重派同一补丁。
+# 默认 True：关掉 ⇒ 逐字回到"每拍重派"。
+ENABLE_M378_SANDBOX_TTL_FREEZE = True
+
+# 生命线事件的层位修正（379批 P0）：把误降到后台层的生命线事件拉回 L1。
+# 默认 True：**这一条关掉会直接弱化告警/熔断**，只在定位层位问题时短时关。
+ENABLE_M379_LIFELINE_LAYER = True
+
+# 托管 tick 的消费者闸（380刀1）：只把 tick 发给真有消费者的事件名。
+# 默认 True：关掉 ⇒ 恢复"无消费者也照发"（死信回潮）。
+ENABLE_M380_TICK_CONSUMER_GATE = True
+
+# 主动记忆双路 OA4 单向影子（383刀2）：用已有 LLM 回答做规则覆盖率的单向对照。
+# 默认 True：只观测不干预，关掉即停止影子统计。
+ENABLE_M383_OA4_SHADOW = True
+
+# 付费/免费 token 占比的心跳采样（指标采集器）。
+# 默认 True：关掉 ⇒ 占比曲线断供（这条曲线是费用判读的唯一来源）。
+ENABLE_PAID_USAGE_HEARTBEAT = True
+
+# pending 补丁「分级候选」总开关（363刀A2）。
+# 默认 True：读不到配置也按 True（与既有 O3 老化开关同族口径）。
+ENABLE_PENDING_GRADED_CANDIDATE = True
+
+# 写面观测（383批）：扫描 data/ 下产物的落盘面。
+# 默认 True：关掉 = 完全不扫、零读数。
+ENABLE_WRITE_FACE_OBSERVE = True
+
+# 分级候选是否**只在试点名单内**生效（363刀A2 灰度）。
+# 默认 True：置 False 即全量放开（放开前应先看试点期的拒收分布）。
+PENDING_GRADED_PILOT_ONLY = True
+
+# ---- 4 个同病参数（阈值/路径，不是开关，但同样只能在代码里改）----
+
+# EventBus 队列积压到多少条开始告警。
+EVENTBUS_QUEUE_ALARM_DEPTH = 1000
+
+# 付费 API trace 的相对路径（空串 = 用模块内默认落点）。
+PAID_API_TRACE_REL = ""
+
+# 付费占比心跳的采样节流：每 N 拍一条（默认 10 拍 ≈ 2 分钟）。
+PAID_USAGE_HEARTBEAT_EVERY_BEATS = 10
+
+# 写面观测的扫描间隔（秒）。
+WRITE_FACE_OBSERVE_EVERY_SEC = 300.0
+
+# ---- 测试专用开关（**生产面无人读**，仅 tests/ 使用）----
+# `ENABLE_COLD_STORAGE` 全仓只有一个读点：`tests/test_cold_storage_batch_m81.py`。
+# 它不进生产链路 ⇒ 补在这里只为"键存在、值可查"，**不要**据此判断冷存功能是否开启。
+ENABLE_COLD_STORAGE = True
