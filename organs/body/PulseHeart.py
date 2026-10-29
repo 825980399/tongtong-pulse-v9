@@ -85,6 +85,46 @@ _M374_STALL_DIR = os.path.join("logs", "heartbeat_stall")
 _M374_GUARD_LOCK = threading.Lock()
 
 
+# ========== ★396刀1：Timer 链 livelock 收口（看门狗把链掐死） ==========
+#
+# 洞鉴391 实锤：看门狗节拍原为 `max(5.0, iv/2.0)` ＝ 5.0s，而心跳周期实测 9.5s；
+# `_schedule_next_beat()` 又**无条件 cancel 在途 Timer**。两条凑在一起：
+#   gap 一旦越过 2×iv，看门狗每 5s 就"救援"一次 ⇒ 每次都在 9.5s 到期前把 Timer
+#   取消重建 ⇒ 定时器永远活不到 fire ⇒ 心跳永久停摆；而每次救援都返回
+#   `rescheduled`＝成功 ⇒ 外部看到的是"已自愈"。
+# 现场：beat 冻在 35，gap 从 19s 单调涨到 3000s+，看门狗 353/484 次重建 Timer。
+#
+# 修法（三条互相咬合，缺一不可）：
+#   ① 建造前先判「在途 Timer 是否还活着」——活着就不动它（看门狗在这里失去掐链能力）；
+#   ② 救援周期 ≥ 心跳周期：`max(1.5×iv, 15s)`，慢于心跳才可能观察到"下一拍有没有来"；
+#   ③ 成功判据从「我做了动作」改成「beat 真的前进了」——救援当时只记 pending，
+#      下一次看门狗醒来核对 beat 差值，超窗未增则记 `heartbeat_rescue_failed`。
+_M396_WD_NAP_FACTOR = 1.5          # 看门狗节拍 = 1.5×心跳周期
+_M396_WD_NAP_MIN = 15.0            # 但绝不短于 15s（救援不能比心跳还快——这正是 livelock 根因）
+_M396_RESCUE_CONFIRM_FACTOR = 3.0  # 救援确认窗口 = 3×interval（给足 3 拍机会）
+_M396_STALL_FACTOR = 3.0           # 观测面判「停搏」：gap ≥ 3×interval
+
+
+def _m396_timer_alive(timer) -> bool:
+    """在途 Timer 是否还活着（best-effort：判不了就按"死"处理，退回旧的 cancel+新建）。
+
+    为什么不用 `finished` 事件：`threading.Timer.run()` 在**调用 function 期间**
+    `finished` 尚未 set，而 `is_alive()` 此时为 True——两者都区分不了"正在执行本拍"
+    与"还在等下一次到期"。真正的区分靠调用方传 `_me`（当前线程）：
+    正在跑的那一拍本身就是那个 Timer，`_cur is current_thread()` 会让它放行。
+    """
+    _alive = getattr(timer, "is_alive", None)
+    if not callable(_alive):
+        return False
+    try:
+        # ★严格 `is True`：单测里的 MagicMock 什么属性都能取到、什么都返回真值，
+        #   用 bool() 会让假 Timer 被误判成"存活"从而永久跳过调度。
+        return _alive() is True
+    except Exception as _e:  # 已停止的线程/已析构对象
+        silent_exc(_e, where="PulseHeart::_m396_timer_alive")
+        return False
+
+
 class PulseHeart(BasePulseOrgan):
     """
     脉冲驱动心脏（v9.5 分层脉冲版）
@@ -174,6 +214,16 @@ class PulseHeart(BasePulseOrgan):
         #   粒度可达 15.6ms，两拍可能取到同一个浮点数，拿它当身份键会让旧拍
         #   误判成接管拍、替它把门打开（铁律201：浮动读数不进身份键）。
         self._m374_beat_seq = 0
+
+        # ★396刀1：Timer 链 livelock 收口（字段在此**显式声明**——靠 getattr 兜底会
+        #   掩盖初始化遗漏，test_m374 的 test_15 就守这条）。
+        self._m396_sched_created = 0        # 真的新建了 Timer 的次数
+        self._m396_sched_skipped = 0        # 因在途 Timer 存活而幂等跳过的次数
+        self._m396_rescue_pending = None    # 待确认的救援（{beat_before, at, deadline, gap_before}）
+        self._m396_rescue_ok = 0            # 救援后 beat 确实前进的次数（下游观测量判据）
+        self._m396_rescue_failed = 0        # 救援超窗 beat 仍未增的次数
+        self._m396_enter_fp = None          # 进入留痕的状态指纹（is_running|timer_alive）
+        self._m396_enter_beat = -1          # 上次进入留痕的 beat
 
         # ★属性初始化完整性补全（自动审查添加）
         self._status_sweep_counter = 0
@@ -388,15 +438,33 @@ class PulseHeart(BasePulseOrgan):
 
     # ========== 心跳定时器 ==========
 
-    def _schedule_next_beat(self):
-        """安排下一次心跳"""
-        # ★PHASE17-阶段二子任务5.7：本方法已有 _timer_lock 串行化 + 先 cancel 旧定时器，
-        #   天然防止多定时器并发，故无需额外的 _in_progress 标志（加反而可能漏调度）。
-        #   真正的重入风险在 _trigger_heartbeat（定时器回调），已在该处加守卫。
+    def _schedule_next_beat(self) -> bool:
+        """安排下一次心跳；返回**是否真的新建了 Timer**（False＝在途那条还活着，没动）。
+
+        ★396刀1（P0 livelock）：原实现无条件 `cancel()` 在途 Timer 再新建。看门狗
+        节拍 5s < 心跳周期 9.5s ⇒ 只要 gap 越过阈值，每轮"救援"都在旧 Timer 到期前
+        把它取消、再建一个新的 9.5s ⇒ **定时器永远活不到 fire**，心跳永久停摆，而
+        每轮救援都自报"成功"。现在按「在途 Timer 是否还活着」分流：
+
+          * 预排（`_m374_schedule_ahead`）：`_cur is current_thread()`——本拍就是这个
+            Timer 触发的，它已经在跑 function、不会再 fire 第二次 ⇒ 必须放行新建；
+          * 收尾（finally）：预排已建好下一条，存活且非本线程 ⇒ **幂等返回 False**；
+          * 看门狗救援：存活即说明链没断，绝不重建（重建＝把链掐死，本刀修的就是它）。
+
+        节拍口径随之从「本体结束 + interval」变为「本体开始 + interval」。旧口径会把
+        本体耗时叠进 gap（实测 9.5s 周期 + 2~3s 本体 ⇒ gap 12s+），新口径才符合
+        任务书验收的「gap 稳定在 9.5s ± 2s」。
+        """
         with self._timer_lock:
-            # 取消旧定时器
-            if self._next_timer is not None:
-                self._next_timer.cancel()
+            _cur = self._next_timer
+            _me = threading.current_thread()
+            if _cur is not None and _cur is not _me and _m396_timer_alive(_cur):
+                # 在途那条还活着 ⇒ 下一拍一定会来，这一刻新建只会把它的到期时间推后。
+                self._m396_sched_skipped = int(getattr(self, "_m396_sched_skipped", 0)) + 1
+                return False
+            # 取消旧定时器（已 fire 完 / 已 cancel / 已被判死，cancel 是幂等无副作用的）
+            if _cur is not None:
+                _cur.cancel()
 
             # 创建新定时器
             self._next_timer = threading.Timer(
@@ -405,9 +473,15 @@ class PulseHeart(BasePulseOrgan):
             )
             self._next_timer.daemon = True
             self._next_timer.start()
+            self._m396_sched_created = int(getattr(self, "_m396_sched_created", 0)) + 1
+            return True
 
     def _trigger_heartbeat(self):
         """定时器回调：通过PulseCore统一发射心跳脉冲（L0生命线层）"""
+        # ★396刀1 ④：**首行**留痕。现场排障最缺的就是这一条——停跳时日志里只有
+        #   看门狗在喊「已尝试续链」，看不出这一拍到底有没有进来、进来时
+        #   is_running / 在途 Timer 是什么状态（早退？livelock？）。
+        self._m396_trace_enter()
         if not self.is_running:
             return
         # ★374刀1 ①：**先排下一拍，再判守卫**。
@@ -593,12 +667,44 @@ class PulseHeart(BasePulseOrgan):
 
     # ========== ★374刀1：心跳链存活加固 ==========
 
+    def _m396_trace_enter(self) -> None:
+        """★396刀1 ④：每次进入心跳的留痕（在 `_trigger_heartbeat` 首行调用）。
+
+        停跳现场的日志里过去只有看门狗在喊「已尝试续链」，看不出这一拍**到底有没有
+        进来**、进来时 `is_running` 与在途 Timer 是什么状态。有了这行，
+        「早退」与「livelock」两种停摆一眼可分：
+          * 完全没有本行 + 看门狗在喊 ⇒ Timer 链断了（livelock / 链被掐）；
+          * 有本行但 beat 不增   ⇒ 早退（is_running=False / info_field=None）或卡死。
+
+        节流：状态指纹（is_running + Timer 存活）变化立即打一条（排障要点），
+        状态不变则每 60 拍一条（≈10 分钟），避免把 DEBUG 文件刷满。
+        """
+        try:
+            _alive = _m396_timer_alive(getattr(self, "_next_timer", None))
+            _run = bool(getattr(self, "is_running", False))
+            _fp = f"{int(_run)}|{int(_alive)}"
+            _beat = int(getattr(self, "_beat_count", 0))
+            _last_fp = getattr(self, "_m396_enter_fp", None)
+            _last_beat = int(getattr(self, "_m396_enter_beat", -1))
+            if _fp == _last_fp and (_beat - _last_beat) < 60:
+                return
+            self._m396_enter_fp = _fp
+            self._m396_enter_beat = _beat
+            self._log(LogLevel.DEBUG,
+                      f"[396刀1] 心跳进入 beat={_beat} is_running={_run} "
+                      f"timer_alive={_alive} "
+                      f"interval={float(getattr(self, 'current_interval', 0) or 0):.2f}s")
+        except Exception as _e:
+            silent_exc(_e, where="PulseHeart::_m396_trace_enter")
+
     def _m374_schedule_ahead(self) -> None:
         """先排下一拍再干活：续链不再依赖「这一拍能返回」。
 
-        正常路径下 `finally` 仍会再排一次（cancel 旧的，按"本体结束"重新计时），
-        因此节拍口径与改动前一致；差别只在**卡死时**——本拍永不返回，但下一拍
-        已经在路上，链不会死。
+        ★396刀1：这里之所以还能真的建出新 Timer，是因为本拍**就是**在途那个
+        Timer 的 `run()` 里执行的（`_cur is current_thread()` ⇒ 放行）；随后
+        `finally` 再调一次会因「下一条已存活」而幂等返回，不再 cancel 重建。
+        因此节拍口径从「本体结束 + interval」变为「本体开始 + interval」——
+        旧口径会把本体耗时叠进 gap，新口径才稳定在 interval 本身。
 
         计数单独记（`_m374_pre_sched_fail`），不混进 365 的 `_m365_chain_fail`：
         后者是"finally 续链"的读数，混用会让两处失败叠成假读数。
@@ -646,6 +752,42 @@ class PulseHeart(BasePulseOrgan):
 
     # ========== ★365刀C1：心跳链看门狗 ==========
 
+    def _m396_confirm_rescue(self, now: float, beat: int) -> str | None:
+        """★396刀1 ③：核对上一次救援是否**真的**让 beat 前进了（下游观测量判据）。
+
+        为什么必须延迟核对：`_schedule_next_beat()` 只是挂一个 interval 之后的 Timer，
+        调用返回 True 不代表心跳会跳。过去把「动作已发出」当「已成功」，于是链被掐死
+        时日志里照样一路 `rescheduled` —— 这就是任务书说的安慰剂效应。
+
+        判据后移到**下一次看门狗醒来**（节拍 ≥15s，覆盖 1.5 个心跳周期）：
+          * beat 比救援时大 ⇒ `_m396_rescue_ok` +1，INFO 记恢复读数；
+          * 过了确认窗口（3×interval）beat 仍未增 ⇒ `_m396_rescue_failed` +1，
+            ERROR 明确「问题不在链，在早退或心跳体卡死」，不再谎报成功。
+        """
+        _p = getattr(self, "_m396_rescue_pending", None)
+        if not _p:
+            return None
+        _before = int(_p.get("beat_before", beat))
+        _at = float(_p.get("at", now) or now)
+        if beat > _before:
+            self._m396_rescue_ok = int(getattr(self, "_m396_rescue_ok", 0)) + 1
+            self._m396_rescue_pending = None
+            self._log(LogLevel.INFO,
+                      f"[396链] 续链已确认生效：beat {_before}→{beat}，"
+                      f"发出救援后 {now - _at:.1f}s 内恢复（判据＝下游观测量，非返回值）")
+            return "confirmed"
+        _deadline = float(_p.get("deadline", 0) or 0)
+        if _deadline > 0 and now >= _deadline:
+            self._m396_rescue_failed = int(getattr(self, "_m396_rescue_failed", 0)) + 1
+            self._m396_rescue_pending = None
+            self._log(LogLevel.ERROR,
+                      f"[396链] 续链**失败**：发出救援后已过 {now - _at:.1f}s，"
+                      f"beat 仍为 {beat}（原 {_before}，gap_before={_p.get('gap_before')}s）"
+                      f"⇒ 链没断，问题在早退（is_running/info_field）或心跳体卡死",
+                      error_code="heartbeat_rescue_failed")
+            return "failed"
+        return "pending"
+
     def _m365_start_watchdog(self):
         """启动心跳链独立看门狗（幂等；**不自动重启进程**，只告警＋尝试续链）。"""
         if getattr(self, "_m365_wd_running", False):
@@ -661,18 +803,24 @@ class PulseHeart(BasePulseOrgan):
         return {"ok": True, "why": "started"}
 
     def _m365_watchdog_loop(self):
-        """看门狗主循环：按当前间隔的一半节拍自检（最短 5s）。
+        """看门狗主循环：节拍 = max(1.5×间隔, 15s)，**必须慢于心跳**。
+
+        ★396刀1 ②：原节拍 `max(5.0, iv/2.0)` 是这次 livelock 的另一半成因——
+        5s 比 9.5s 的心跳周期还快，配合 `_schedule_next_beat()` 的无条件 cancel，
+        每轮"救援"都在旧 Timer 到期前把它掐掉 ⇒ 定时器永远活不到 fire。
+        救援者的节拍必须**慢于**被救援对象，否则它观察不到"下一拍到底来没来"，
+        更没资格判定成功。
 
         ★374刀1 ④：本线程同时兼任**进程级停放探针**与**看门狗存活留痕**。
         17:24 事故最要命的两点是：① 全进程停了 209s，事后日志里毫无痕迹（当时只有
         TimeCore 那条 209.4s 跳变告警，看不出是全进程停放）；② 看门狗没救回心跳，
         但也无法判断它是死了还是在跳过。现在两件事都有痕迹：
-          * 睡 5s 却过了 ≥35s ⇒ 打印"进程级停放"并抓栈；
+          * 睡过头（> 节拍 + 30s）⇒ 打印"进程级停放"并抓栈；
           * 每 10 分钟一条"看门狗存活"INFO（缺席即看门狗自己死了）。
         """
         while getattr(self, "_m365_wd_running", False):
             _iv = float(getattr(self, "current_interval", 30.0) or 30.0)
-            _nap = max(5.0, _iv / 2.0)
+            _nap = max(_iv * _M396_WD_NAP_FACTOR, _M396_WD_NAP_MIN)
             _t0 = time.time()
             time.sleep(_nap)
             _slept = time.time() - _t0
@@ -717,6 +865,13 @@ class PulseHeart(BasePulseOrgan):
         与心跳链无关的线程来发现"链不动了"。
         不自动重启进程（任务书红线）；续链复用 `_heartbeat_in_progress` 重入守卫，
         正在执行中的那一拍不会被看门狗插队。
+
+        ★396刀1 ③：本方法的成功判据整体换过——
+          旧：`_schedule_next_beat()` 没抛异常 ⇒ `action="rescheduled"` ⇒ `ok=True`。
+              「我做了动作」被当成「心跳好了」，而恰恰是这个动作在把链掐死。
+          新：动作发出只记 `rescue_pending`（`ok=False`），结果由**下一次**调用里
+              `_m396_confirm_rescue()` 按 beat 是否前进判定；在途 Timer 还活着时干脆
+              拒绝重建（`no_rescue_needed`）——因为此时链没断，重建成事不足败事有余。
         """
         _iv = float(getattr(self, "current_interval", 0) or 0)
         _last = float(getattr(self, "_last_beat_time", 0) or 0)
@@ -724,6 +879,8 @@ class PulseHeart(BasePulseOrgan):
         if not getattr(self, "is_running", False) or _iv <= 0 or _last <= 0:
             # 未启动/尚无基线 ⇒ 不判（避免启动期误报）
             return {"ok": True, "action": "no_baseline"}
+        # ★396：先核对上一次救援的真实结果（延迟确认，见 _m396_confirm_rescue）
+        self._m396_confirm_rescue(_now, int(getattr(self, "_beat_count", 0)))
         _gap = _now - _last
         if _gap <= 2.0 * _iv:
             return {"ok": True, "action": "none", "gap_s": round(_gap, 2)}
@@ -766,24 +923,53 @@ class PulseHeart(BasePulseOrgan):
             self._heartbeat_in_progress = False
             self._heartbeat_started_at = 0.0
         self._m365_wd_gap_warn = int(getattr(self, "_m365_wd_gap_warn", 0)) + 1
+        _beat_before = int(getattr(self, "_beat_count", 0))
         _action = "reschedule_failed"
+        _created = False
         try:
-            self._schedule_next_beat()
-            _action = "rescheduled"
-            self._log(LogLevel.WARNING,
-                      f"[365链] 心跳间隔异常 gap={_gap:.1f}s > 2×{_iv}s（第"
-                      f"{self._m365_wd_gap_warn}次）⇒ 已尝试续链（beat={self._beat_count}）")
+            _created = bool(self._schedule_next_beat())
         except Exception as _e:
             self._m365_chain_fail = int(getattr(self, "_m365_chain_fail", 0)) + 1
             self._log(LogLevel.ERROR,
                       f"[365链] 心跳间隔异常且续链失败 gap={_gap:.1f}s > 2×{_iv}s："
                       f"{type(_e).__name__}: {_e}",
                       error_code="heartbeat_chain_break")
-        return {"ok": _action == "rescheduled", "action": _action,
-                "gap_s": round(_gap, 2)}
+            return {"ok": False, "action": _action, "gap_s": round(_gap, 2),
+                    "beat": _beat_before, "created": False}
+
+        if _created:
+            # 动作发出 ≠ 成功。只记 pending，结果交给下一次调用的延迟确认。
+            self._m396_rescue_pending = {
+                "beat_before": _beat_before,
+                "at": _now,
+                "gap_before": round(_gap, 2),
+                "deadline": _now + _M396_RESCUE_CONFIRM_FACTOR * _iv,
+            }
+            _action = "rescue_pending"
+            self._log(LogLevel.WARNING,
+                      f"[365链] 心跳间隔异常 gap={_gap:.1f}s > 2×{_iv}s（第"
+                      f"{self._m365_wd_gap_warn}次）⇒ 已新建定时器（beat={_beat_before}，"
+                      f"**结果未确认**：{_M396_RESCUE_CONFIRM_FACTOR * _iv:.0f}s 后按 beat 是否前进判定）",
+                      error_code="heartbeat_rescue_pending")
+        else:
+            # ★396 核心：在途 Timer 还活着 ⇒ 链没断，绝不重建。
+            #   旧实现在这里 cancel + 新建，只要看门狗比心跳快，就会把链永久掐死。
+            _action = "no_rescue_needed"
+            self._log(LogLevel.WARNING,
+                      f"[365链] 心跳间隔异常 gap={_gap:.1f}s > 2×{_iv}s（第"
+                      f"{self._m365_wd_gap_warn}次）⇒ **拒绝重建**：在途定时器仍存活，"
+                      f"链没断（396：重建会把它掐死）。beat 不前进的原因在早退"
+                      f"（is_running/info_field）或心跳体卡死，不在链；beat={_beat_before}",
+                      error_code="heartbeat_chain_alive_no_rescue")
+        return {"ok": False, "action": _action, "gap_s": round(_gap, 2),
+                "beat": _beat_before, "created": _created}
 
     def m365_chain_stats(self) -> dict:
-        """★365刀C1：心跳链健康读数（只读；供心跳/健康检查与 live 窗复核）。"""
+        """★365刀C1：心跳链健康读数（只读；供心跳/健康检查与 live 窗复核）。
+
+        ★396刀1：新增四个读数，把「调度被跳过／救援已确认／救援失败」分开记，
+        不再用单一 `chain_fail` 混口径（铁律 282：表头 `A or B` 混口径 ⇒ 拆键）。
+        """
         _last = float(getattr(self, "_last_beat_time", 0) or 0)
         _iv = float(getattr(self, "current_interval", 0) or 0)
         return {"chain_fail": int(getattr(self, "_m365_chain_fail", 0)),
@@ -792,7 +978,13 @@ class PulseHeart(BasePulseOrgan):
                 "gap_warn": int(getattr(self, "_m365_wd_gap_warn", 0)),
                 "beat_count": int(getattr(self, "_beat_count", 0)),
                 "interval": _iv,
-                "gap_s": (round(time.time() - _last, 2) if _last > 0 else None)}
+                "gap_s": (round(time.time() - _last, 2) if _last > 0 else None),
+                # ★396刀1：调度面读数
+                "sched_created": int(getattr(self, "_m396_sched_created", 0)),
+                "sched_skipped": int(getattr(self, "_m396_sched_skipped", 0)),
+                "rescue_pending": bool(getattr(self, "_m396_rescue_pending", None)),
+                "rescue_ok": int(getattr(self, "_m396_rescue_ok", 0)),
+                "rescue_failed": int(getattr(self, "_m396_rescue_failed", 0))}
 
     def _cancel_timer(self):
         """取消心跳定时器"""

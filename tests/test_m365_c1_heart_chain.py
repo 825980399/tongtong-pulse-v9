@@ -60,11 +60,19 @@ class TestC1HeartChain(unittest.TestCase):
 
     # ③ gap > 2×interval ⇒ 告警并尝试续链
     def test_03_watchdog_gap_warns_and_reschedules(self):
+        """★396刀1 收窄判据：动作发出 ≠ 成功。
+
+        原断言 `action == "rescheduled"` 钉的是「我调了 _schedule_next_beat」——
+        而 livelock 事故里正是这个动作在把链掐死，却一路自报成功。现在动作发出只记
+        `rescue_pending`（`ok=False`），结果由下一次调用的 beat 差值确认。
+        「真的调了续链」这一语义仍由 `assert_called_once` 守住。
+        """
         h = _mk(current_interval=10.0, _last_beat_time=0.0)
         h._last_beat_time = __import__("time").time() - 100.0
         with mock.patch.object(PulseHeart, "_schedule_next_beat") as _sch:
             r = h.m365_beat_watchdog()
-        self.assertEqual(r.get("action"), "rescheduled")
+        self.assertEqual(r.get("action"), "rescue_pending")
+        self.assertFalse(r.get("ok"), "396：未确认的救援不得报成功")
         _sch.assert_called_once()
         self.assertEqual(h.m365_chain_stats().get("gap_warn"), 1)
         self.assertTrue(any(k.get("level") or True for a, k in h._logs), h._logs)
