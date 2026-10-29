@@ -86,7 +86,11 @@ def test_m386_d4_reason_states_boundary():
     _r = oe.zero_emit_report()
     for _cls in _r["silent_suspects"]:
         _t = _r["declarations"][_cls]["reason"]
-        assert "不" in _t and "待查" in _t, "%s 的声明未写清能力边界" % _cls
+        # ★387刀3 同步：理由按「无输入 / 有输入仍哑」分成两种措辞，
+        #   都必须写清"本声明不代替真因调查"这个边界（"待查" 或 "无输入"）。
+        assert "不" in _t, "%s 的声明未写清能力边界" % _cls
+        assert ("待查" in _t) or ("无输入" in _t), \
+            "%s 的声明没说清是待查还是无输入: %s" % (_cls, _t)
 
 
 def test_m386_d4_schema_and_counts_plausible():
