@@ -5549,9 +5549,18 @@ MEMORY_AUTO_GC_RSS_MB = 8192.0
 #   MEMORY_AUTO_RESTART_RSS_MB：触发自动重启的进程 RSS 上限（MB）= GC 线 8192 + 1GB 梯度。
 #   MEMORY_RESTART_COOLDOWN_HOURS：重启冷却窗口（小时），与补丁重启冷却（_m113e 默认 24h）对齐。
 #   ★三层默认全 False/0 → 启动行为与 175 一致（零回归）；活体验证需停窗翻 True 重启框架。
-ENABLE_MEMORY_AUTO_RESTART = False
-MEMORY_AUTO_RESTART_RSS_MB = 9216.0
-MEMORY_RESTART_COOLDOWN_HOURS = 24.0
+# ★387刀1（2026-10-29）：**打开**自动重启保命。
+#   背景：386 晚内存从 12GB 涨到 36GB、电脑卡死重启，而三路自救全断
+#   （GC 跑而不降 / 台账不写盘 / 自动重启关）⇒ 先开这一路保命。
+ENABLE_MEMORY_AUTO_RESTART = True
+#   12GB（原 9GB）。★为什么抬高：活体 2026-10-29 08:00 实测 RSS **7736MB**，
+#   阈值定 9216 时安全余量仅 1.5GB，正常波动就可能误杀；12288 留出 4.5GB。
+MEMORY_AUTO_RESTART_RSS_MB = 12288.0
+#   6 小时（原 24h）。★冷却的真实边界：本键**只在计数桶达到 3 次上限被锁后**
+#   才起作用（`PatchManager.memory_restart_bucket_state().locked`），
+#   前 3 次重启之间**没有最小间隔**，只靠「连续 2 次 GC 后 RSS 仍越阈」这个条件。
+#   所以缩到 6h 影响的是「锁死后多久能再自愈」，不是「多久重启一次」。
+MEMORY_RESTART_COOLDOWN_HOURS = 6.0
 
 # ★176批段4 A1（2026-10-09）：真多步推理每步补写 _last_deep_think_partial 的灰度开关。
 #   默认 False（零回归）：开启后 _multi_step_execute_v2 每步复用 _m27_cache_partial(:15795)
