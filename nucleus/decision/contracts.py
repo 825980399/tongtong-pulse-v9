@@ -140,6 +140,11 @@ class DecideResult:
     rollback: dict
     policy_version: str = POLICY_VERSION
     shadow: bool = True
+    #: ★397刀5：仲裁结果（`arbitrate.arbitrate()` 的产物）。
+    #: 过渡期为**唯一**承载"真裁决"的字段 —— `action` 仍然是 `DEFER`。
+    #: 影子期/未走仲裁的域为 `{}`（不是 None）：空字典表示"本条没有仲裁结论"，
+    #: 与"仲裁了但结论是 DEFER"用 `would_be` 字段区分（铁律 276：没采到 ≠ 结论为 0）。
+    arbitration: dict = field(default_factory=dict)
 
     def validate(self) -> list:
         bad = []
@@ -179,6 +184,7 @@ class DecideResult:
             "rollback": dict(self.rollback or {}),
             "policy_version": self.policy_version,
             "shadow": bool(self.shadow),
+            "arbitration": dict(self.arbitration or {}),
         }
 
 
@@ -189,7 +195,8 @@ def shadow_result(request: DecisionRequest, *, action: str = "DEFER",
                   degrade_policy: str = "NONE",
                   rollback: dict | None = None,
                   budget: dict | None = None,
-                  ttl_sec: float = 60.0) -> DecideResult:
+                  ttl_sec: float = 60.0,
+                  arbitration: dict | None = None) -> DecideResult:
     """按「只写不判」造一条影子结果。
 
     ★为什么 action 默认 `DEFER`：影子期不该出现 `EXECUTE` ——
@@ -211,4 +218,5 @@ def shadow_result(request: DecisionRequest, *, action: str = "DEFER",
         rollback=dict(rollback or {}),
         policy_version=request.policy_version,
         shadow=True,
+        arbitration=dict(arbitration or {}),
     )

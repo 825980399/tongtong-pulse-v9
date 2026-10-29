@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
-"""385 刀2：DL3 影子账本（**只写不判**）。
+"""385 刀2：DL3 影子账本（**只写不判**）＋ 397 刀5 仲裁过渡层。
+
+## 397 刀5 起本模块多了一层：影子之上叠仲裁
+
+`arbitrate.arbitrate()` 会给 `resource` / `patch` 两域算出**真裁决**，但过渡期
+**仍然只写在 `arbitration.would_be` 里，`action` 保持 `DEFER`**。
+为什么不让 action 直接变成 APPROVE/REJECT：那会让账本看起来像"L3 已经在下指令"，
+而执行器此刻**必须忽略它**——这种错位比"没有裁决"更危险（396 刚修过同型问题：
+读数看起来在自愈，实际在掐链）。观察一段时间、判据稳定后再切真。
+
+`chat` 域**不走仲裁**（要调 LLM，判错代价高）。
 
 ## 三条红线（洞鉴 385 §6.6 + 本批任务书）
 
@@ -34,6 +44,7 @@ import time
 
 from nucleus._silent_except import silent_exc
 from nucleus.decision import ledger
+from nucleus.decision.arbitrate import arbitrate, enabled_for as arbitrate_enabled_for
 from nucleus.decision.contracts import (
     DecisionRequest, make_request_id, shadow_result,
 )
@@ -51,6 +62,10 @@ _COUNTS: dict = {
     "skipped": {"patch": 0, "resource": 0, "chat": 0},
     "written": {"patch": 0, "resource": 0, "chat": 0},
     "by_status": {},
+    #: ★397刀5：仲裁裁决分布（APPROVE / REJECT / DEFER）——
+    #   `by_status` 是**写盘**状态，与"裁决是什么"是两件事，不能混在同一个键里
+    #   （铁律 282：表头 `A or B` 混口径 ⇒ 拆键）。
+    "by_would_be": {},
 }
 
 #: 最近 N 次「构造 + 写盘」耗时（毫秒）
@@ -107,6 +122,7 @@ def stats() -> dict:
         "skipped": dict(_COUNTS["skipped"]),
         "written": dict(_COUNTS["written"]),
         "by_status": dict(_COUNTS["by_status"]),
+        "by_would_be": dict(_COUNTS["by_would_be"]),
         "elapsed_samples": len(_ELAPSED_MS),
         "p99_ms": round(p99_ms(), 3),
     }
@@ -118,6 +134,7 @@ def reset_stats() -> None:
         for _d in _COUNTS[_k]:
             _COUNTS[_k][_d] = 0
     _COUNTS["by_status"].clear()
+    _COUNTS["by_would_be"].clear()
     _ELAPSED_MS.clear()
 
 
@@ -147,14 +164,24 @@ def _emit(*, scope: str, candidates: list, signals: dict, constraints: dict,
         if _bad:
             _COUNTS["by_status"]["req_invalid"] = _COUNTS["by_status"].get("req_invalid", 0) + 1
             return None
+        # ★397刀5：影子之上叠一层仲裁。**action 仍是 DEFER**（过渡期红线），
+        #   真裁决写在 `arbitration.would_be` —— 一旦 action 出现 APPROVE/REJECT，
+        #   账本看起来就像"L3 已经在下指令"，而执行器此刻必须忽略它（396 同型教训）。
+        _arb: dict = {}
+        if arbitrate_enabled_for(scope):
+            _arb = arbitrate(_req)
+            _wb = str(_arb.get("would_be") or "")
+            if _wb:
+                _COUNTS["by_would_be"][_wb] = _COUNTS["by_would_be"].get(_wb, 0) + 1
         _res = shadow_result(_req, action=action, target=target, priority=priority,
-                             evidence=list(evidence or []))
+                             evidence=list(evidence or []), arbitration=_arb)
         _st = ledger.append(_res, _req, path=path, explicit=explicit)
         _COUNTS["by_status"][_st] = _COUNTS["by_status"].get(_st, 0) + 1
         if _st == "ok":
             _COUNTS["written"][scope] = _COUNTS["written"].get(scope, 0) + 1
         return {"status": _st, "decision_id": _res.decision_id,
-                "request_id": _req.request_id}
+                "request_id": _req.request_id,
+                "would_be": str(_arb.get("would_be") or "")}
     except Exception as _e:
         silent_exc(_e, where="decision.shadow._emit", level="warning")
         return None
