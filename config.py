@@ -667,6 +667,10 @@ PULSE = {
     "fingerprint_ttl_seconds": 5.0,
     "heartbeat_interval_seconds": 10.0,
     "info_field_max_history": 2000,
+    # ★389刀2：历史归档时省略重负载（帧 raw_data 等）。
+    #   实测 2000 条历史 × 450KB/帧 = 887MB 常驻；关掉即退回旧的浅拷贝行为。
+    "info_field_history_elide_heavy": True,
+    "info_field_history_elide_min_bytes": 65536,
 }
 
 # ========== 知识节点池参数 ==========

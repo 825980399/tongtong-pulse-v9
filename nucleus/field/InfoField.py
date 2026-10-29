@@ -208,6 +208,10 @@ class InfoField(SilentLogMixin):
 
         # 脉冲历史记录（环形缓冲）
         self._history: deque = deque(maxlen=max_history)
+        # ★389刀2（T-389-帧持有）：历史归档重负载省略计数（只增不减，供取证）
+        self._m389_elided_calls = 0        # 被省略过的**脉冲数**
+        self._m389_elided_items = 0        # 被替换的**字段数**
+        self._m389_elided_bytes = 0        # 被替换掉的**字节数**（按 nbytes/len 计）
 
         # 线程安全锁
         # ★A6【P2】锁序一致性诊断结论（2026-09-06，只诊断不重构）：
@@ -557,6 +561,93 @@ class InfoField(SilentLogMixin):
                             phase: float) -> dict[str, Any]:
         return {}
 
+    # ===== ★389刀2（T-389-帧持有）：历史归档省略重负载 =====
+    #: 重负载判定阈值（字节）：帧实测 ~450KB/帧，远高于此线；小字段不受影响。
+    _M389_ELIDE_MIN_BYTES = 65536
+
+    def _m389_elide_enabled(self) -> bool:
+        """是否启用历史重负载省略（**默认开**；关 ⇒ 与改前逐字相同）。"""
+        try:
+            _p = getattr(_cfg, "PULSE", None)
+            if isinstance(_p, dict):
+                return bool(_p.get("info_field_history_elide_heavy", True))
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m389_elide_enabled", level="debug")
+        return True
+
+    def _m389_elide_min_bytes(self) -> int:
+        try:
+            _p = getattr(_cfg, "PULSE", None)
+            if isinstance(_p, dict):
+                _v = _p.get("info_field_history_elide_min_bytes",
+                            self._M389_ELIDE_MIN_BYTES)
+                _n = int(_v)
+                if _n > 0:
+                    return _n
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m389_elide_min_bytes", level="debug")
+        return int(self._M389_ELIDE_MIN_BYTES)
+
+    @staticmethod
+    def _m389_heavy_bytes(value: Any) -> int | None:
+        """重负载的**字节规模**（不是重负载 ⇒ None）。**不 import numpy**。
+
+        覆盖三类：`bytes/bytearray/memoryview`（长度）与带 `nbytes` 的对象
+        （numpy ndarray 有 `nbytes`；pyarrow Buffer 用 `.size`，不在此列，
+        但帧链路走的是 ndarray，够用）。
+        """
+        try:
+            if isinstance(value, memoryview):
+                return int(value.nbytes)
+            if isinstance(value, (bytes, bytearray)):
+                return len(value)
+            _nb = getattr(value, "nbytes", None)
+            if isinstance(_nb, int) and not isinstance(_nb, bool) and _nb > 0:
+                return int(_nb)
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m389_heavy_bytes", level="debug")
+        return None
+
+    def _m389_elide_heavy(self, payload: Any) -> dict:
+        """把 **历史副本** 里的重负载换成占位描述（**live 脉冲不受影响**）。
+
+        为什么必须做（实测证据，13:00 槽位）
+        ------------------------------------
+        `publish` 第 4 步原来写 `dict(pulse.get("payload", {}))` —— 浅拷贝，
+        `raw_data`（整帧 numpy 数组）原样被 `_history` 带走；而 `_history` 上限是
+        `config.PULSE["info_field_max_history"]` = **2000**。
+        13:00 tracemalloc 实测 `PulseEyes.py:305`（`cap.read()` 分配点）
+        = **886.9MB / 2018 对象**（≈ 450KB/帧），与 2000 条历史上限数量级吻合。
+
+        语义边界：`_history` 的用途是**事件溯源**（谁在何时发了什么），不是图像回放。
+        省略只影响"从历史里读 payload"的读者（`get_current()` 拿到占位描述），
+        **活体分发链路一字不改** —— 视觉皮层拿的是 live pulse，不是历史副本。
+        """
+        _empty: dict = {}
+        if not isinstance(payload, dict):
+            # 非 dict 的 payload：历史只留型别，不保留对象本身
+            self._m389_elided_calls += 1
+            self._m389_elided_items += 1
+            _empty = {"_elided": "non_dict_payload",
+                      "type": type(payload).__name__}
+            return _empty
+        _min = self._m389_elide_min_bytes()
+        _out: dict = {}
+        _hit = 0
+        for _k, _v in payload.items():
+            _n = self._m389_heavy_bytes(_v)
+            if _n is not None and _n >= _min:
+                _out[_k] = {"_elided": "heavy", "type": type(_v).__name__,
+                            "nbytes": int(_n)}
+                _hit += 1
+                self._m389_elided_items += 1
+                self._m389_elided_bytes += int(_n)
+            else:
+                _out[_k] = _v
+        if _hit:
+            self._m389_elided_calls += 1
+        return _out
+
     # ========== 脉冲发布 ==========
     def publish(self, pulse: dict[str, Any]) -> dict[str, Any]:
         # ★P1 运行时埋点: 记录脉冲处理耗时起点（零阻塞，仅在结尾投递）
@@ -700,8 +791,18 @@ class InfoField(SilentLogMixin):
                 "layer": layer,
                 "timestamp_ns": timestamp_ns,
                 "ttl_ns": ttl_ns,
-                "payload_keys": list(pulse.get("payload", {}).keys()),
-                "payload": dict(pulse.get("payload", {})),   # ★FIX(H1): 存储完整 payload 供 get_current 读取
+                # ★389刀2：payload 理论上是 dict，但热路径上出现过 list（外部拼错）。
+                #   改前这里 `.keys()` 会抛 AttributeError，把一条脏脉冲变成一次异常；
+                #   改为按型别取键 —— 与下方 `_m389_elide_heavy` 的非 dict 分支对齐。
+                "payload_keys": (list(pulse.get("payload", {}).keys())
+                                 if isinstance(pulse.get("payload", {}), dict)
+                                 else []),
+                # ★FIX(H1)：存储 payload 供 get_current 读取。
+                #   ★389刀2：**重负载不入档**（浅拷贝会把整帧 numpy 钉在 history 里，
+                #   2000 条上限 ⇒ 887MB 常驻）。关掉开关即退回旧的 `dict(payload)`。
+                "payload": (self._m389_elide_heavy(pulse.get("payload", {}))
+                            if self._m389_elide_enabled()
+                            else dict(pulse.get("payload", {}))),
             })
             self._total_published += 1
             self._mark_processed(_dedup_key)
@@ -2590,6 +2691,15 @@ class InfoField(SilentLogMixin):
                 "total_storm_blocked": self._total_storm_blocked,
                 "active_conditions": len(self._conditions),
                 "history_size": len(self._history),
+                # ★389刀2：历史重负载省略读数（没采到与真 0 分得开：
+                #   `enabled=False` ⇒ 本组计数恒 0，不代表"没有重负载"）
+                "history_elide": {
+                    "enabled": self._m389_elide_enabled(),
+                    "calls": self._m389_elided_calls,
+                    "items": self._m389_elided_items,
+                    "bytes": self._m389_elided_bytes,
+                    "min_bytes": self._m389_elide_min_bytes(),
+                },
                 "has_pulse_core": self.pulse_core is not None,
                 "has_resonance_engine": self.resonance_engine is not None,
                 "layer_pools": layer_stats,
