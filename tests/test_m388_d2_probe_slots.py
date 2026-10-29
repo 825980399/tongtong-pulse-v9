@@ -19,18 +19,26 @@ from organs.core.PulseMetricsCollector import PulseMetricsCollector as C  # noqa
 SRC = os.path.join(ROOT, "organs", "core", "PulseMetricsCollector.py")
 
 
-def test_m388_d2_slots_every_two_hours():
-    """★核心：槽位 = 每 2 小时（12 个），不再是 (5, 13)。"""
-    assert len(C._M339_PROBE_HOURS) == 12, C._M339_PROBE_HOURS
-    assert C._M339_PROBE_HOURS == tuple(range(0, 24, 2))
-    assert 13 not in C._M339_PROBE_HOURS, "不再是 13 点单槽"
-    assert 12 in C._M339_PROBE_HOURS
+def test_m388_d2_slots_density_intent_kept_by_gc_not_tracemalloc():
+    """★389刀1 更正：**tracemalloc 重采**不得加密（388 这条断言被实测推翻）。
+
+    388刀2 的原始断言是"12 个偶数槽"。两条证据把它推翻：
+      ① `config.py::M339_MEMORY_PROBE_HOURS=(5,13)` 才是生产生效值
+         （`_m339_cfg_get` 优先读 config）⇒ 12 槽从未生效，只让默认值骗人；
+      ② 真生效会更糟：tracemalloc 单次实测 **837s**（3300 万对象做 statistics），
+         12 槽 = 每 2 小时卡进程 14 分钟。
+    "密度不够"的诉求改由 **gc 轻采**（2-3s，每小时已在跑）承担。
+    """
+    import config as _cfg
+    _h = tuple(C._M339_PROBE_HOURS)
+    assert len(_h) <= 3, _h
+    assert _h == tuple(int(_x) for _x in _cfg.M339_MEMORY_PROBE_HOURS), _h
+    assert 13 in _h, "13 点仍是实测最有用的一槽（13:00 首次拿到 top20）"
 
 
-def test_m388_d2_all_slots_are_even_hours():
-    """槽位全是偶数小时 ⇒ 任意时刻距下次采样不超过 2 小时。"""
+def test_m388_d2_all_slots_are_valid_hours():
+    """槽位必须是合法小时（不校验"每 2 小时"，见上条）。"""
     for _h in C._M339_PROBE_HOURS:
-        assert _h % 2 == 0, _h
         assert 0 <= _h <= 23, _h
 
 

@@ -87,13 +87,77 @@ except ImportError:
 #       绝不再吐 0.0。
 _M377_TM_MODES = ("resident", "window", "off")
 _M377_TM_OWNED = False          # tracemalloc 是否由本模块 start（只停自己起的）
-_M377_TM_BASELINE = "_tm_baseline.snap"
+_M377_TM_BASELINE = "_tm_baseline.snap"     # ★389刀1：仅作**旧版兼容**名，不再被写
+#: ★389刀1：同代基线最多保留几份（每份 ~0.7MB；只留最近几代供回溯）
+_M389_TM_BASELINE_KEEP = 8
 
 
 def _m377_cfg(name: str, default):
     """读配置（走已加载的 config 模块；读不到回退默认，绝不抛）。"""
     _c = sys.modules.get("config")
     return default if _c is None else getattr(_c, name, default)
+
+
+def _m389_tm_safe_gen() -> str:
+    """本进程代次的安全文件名片段（取不到 ⇒ `unknown`，**不填 pid 之外的假值**）。"""
+    _g = ""
+    try:
+        from nucleus.proc_gen import proc_gen_str as _pgs
+        _g = str(_pgs() or "")
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_safe_gen")
+    if not _g:
+        return "unknown"
+    return "".join(_ch if (_ch.isalnum() or _ch in "-_") else "_"
+                   for _ch in _g)[:64]
+
+
+def _m389_tm_baseline_path(dir_path: str) -> str:
+    """★389刀1：差分基线**按进程代分键** —— 跨代比较必然出假读数。
+
+    为什么必须分键（实测证据，不是理论洁癖）
+    ----------------------------------------
+    `_m377_tm_delta` 是「当前快照 vs 上一份基线快照」。改前基线固定叫
+    `_tm_baseline.snap`，**不区分进程代**。于是：
+
+      · 13:37 那次基线由 pid21168 写下（该进程 13:37:53 因 RSS 超限重启）；
+      · 14:08 起的新进程 pid22680 首次采样会把**已死进程**的快照当基线；
+      · 死进程的 33M 对象在新进程里根本不存在 ⇒ `compare_to` 全是负增量
+        ⇒ 行全被 `size_diff <= 0` 过滤 ⇒ 报 `no_growth`（假「没涨」）。
+        这与「真的没涨」完全同形（铁律276：没采到 ≠ 真 0）。
+
+    分键后旧代基线自然闲置；`_m389_tm_prune_baselines` 只留最近
+    `_M389_TM_BASELINE_KEEP` 代，避免 `data/reports/memory/` 无限长。
+    """
+    return os.path.join(dir_path, "_tm_baseline_%s.snap" % _m389_tm_safe_gen())
+
+
+def _m389_tm_prune_baselines(dir_path: str, keep: int | None = None) -> list:
+    """只保留最近 N 份**按代**基线（含旧版无后缀名一并清掉）。返回被删文件名。
+
+    失败一律吞掉：清理是维护动作，绝不影响采样（本函数不参与任何判定）。
+    """
+    _keep = int(keep if keep is not None else _M389_TM_BASELINE_KEEP)
+    _dropped: list = []
+    try:
+        if not os.path.isdir(dir_path):
+            return _dropped
+        _names = [n for n in os.listdir(dir_path)
+                  if n.startswith("_tm_baseline") and n.endswith(".snap")]
+        if len(_names) <= _keep:
+            return _dropped
+        _full = [(os.path.getmtime(os.path.join(dir_path, n)), n) for n in _names]
+        _full.sort(reverse=True)
+        for _mt, _n in _full[_keep:]:
+            try:
+                os.remove(os.path.join(dir_path, _n))
+                _dropped.append(_n)
+            except OSError as _re:
+                silent_exc(_re, where="PulseMetricsCollector::_m389_tm_prune_baselines",
+                           level="debug")
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_prune_baselines")
+    return _dropped
 
 
 def _m377_tm_ensure() -> dict:
@@ -466,6 +530,8 @@ class PulseMetricsCollector(BasePulseOrgan):
     #   频率：每日 1-2 次槽位（05:00 / 13:00，避开 03:50-04:10 首转窗）；
     #         **禁止每拍采样**——自身分配开销会把治理变增负。
     # ★388刀2：槽位从「每天 2 次(5/13 点)」加密到**每 2 小时一次**。
+    #   ★★该改动**已被 389刀1 回滚**（理由见本节末尾两条实测依据）——
+    #   保留原文只为留痕，**不要**照此再改一遍。
     #   387刀2 的结论：一天只有 2 次归因机会，而泄漏 5 小时就到危险区 ⇒
     #   采样密度远远不够（13:00 那次才第一次拿到 tracemalloc top20）。
     # ★配套的**成本护栏**（不然加密=增负）：实测一次含 tracemalloc 的采样要
@@ -473,7 +539,13 @@ class PulseMetricsCollector(BasePulseOrgan):
     #     · gc 扫描仍受 `M339_GC_SCAN_BUDGET_SEC`(2s) 约束（386刀3）
     #     · tracemalloc 阶段超 `M339_MEMORY_PROBE_MAX_SEC` ⇒ **不写盘**（388刀2 补）
     #   ⇒ 加密后若采样太贵，结果是"没产物"而不是"卡住进程"。
-    _M339_PROBE_HOURS = tuple(range(0, 24, 2))
+    # ★389刀1：**回滚 388刀2 的每 2 小时 12 槽**。两条实测依据：
+    #   ① `config.py::M339_MEMORY_PROBE_HOURS=(5,13)` 才是生产生效值（`_m339_cfg_get`
+    #      优先读 config）⇒ 12 槽从未生效，只让"默认值骗人"（第 4 次同型坑）；
+    #   ② 真生效会更糟：tracemalloc 单次实测 **837s**（3300 万对象做 statistics），
+    #      12 槽 = 每 2 小时卡进程 14 分钟 ⇒ 正是 386刀3 要避免的"治理变增负"。
+    #   观测量加密走 gc 轻采（2-3s，每小时已在跑）；tracemalloc 保持每日 2 次。
+    _M339_PROBE_HOURS = (5, 13)
     _M339_PROBE_TOP_N = 20
     _M339_PROBE_MAX_SEC = 3.0
     _M339_GC_HEAP_MB = 1200.0
@@ -716,7 +788,8 @@ class PulseMetricsCollector(BasePulseOrgan):
                             _tm_delta_state = "window_mode"
                         else:
                             _tm_delta_rows, _tm_delta_state = _m377_tm_delta(
-                                _snap, os.path.join(_dir, _M377_TM_BASELINE), _topn)
+                                _snap, _m389_tm_baseline_path(_dir), _topn)
+                            self._m389_tm_pruned = _m389_tm_prune_baselines(_dir)
                     finally:
                         # ★377刀4：只有**本拍临时开启**且仍是 window 模式才停；
                         #   常驻模式绝不停（停了下一拍又变 since_start 空采）。
