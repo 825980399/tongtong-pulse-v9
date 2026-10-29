@@ -6095,7 +6095,15 @@ O3_STALE_TTL_DAYS = 7
 #   命名用 DL3 / dec_ 前缀，避开 InfoField 已有的 L3 脉冲层撞名。
 #   读取点：nucleus/decision/shadow.py::enabled
 # ============================================================================
-ENABLE_DEC_SHADOW = False
+# ★388刀4：**开灯**。开灯前已确认的两件事（实测，非推断）：
+#   ① 写盘守卫放行：`guard_write("data/decisions/...", explicit=True,
+#      component="DecisionLedger")` → **True**（脚本身份实测亦为 True）。
+#   ② 只写不判：结果一律 shadow=True / action 默认 DEFER，执行器必须忽略
+#      ⇒ 开灯不改变任何执行行为（385刀2 的三条红线仍在）。
+#   ★代价与观察点：chat 域随 LLM 调用写行 ⇒ 落盘量随对话量走；
+#     若 `data/decisions/` 行数增长过快或写盘报错（`decision.ledger.append`
+#     会 silent_exc(level=warning)，不影响主流程），关回 False 即零回归。
+ENABLE_DEC_SHADOW = True
 # [M385-D2-CFG]
 # ============================================================================
 # ★第372批刀7（`T-371-规则通道开关补定义-1`）：规则通道**子进程化**开关——补定义
