@@ -2229,9 +2229,19 @@ class PulseCortex(BasePulseOrgan):
                          file_paths: list | None = None, code_blocks: list | None = None,
                          suggested_method: str = "knowledge_retrieve",
                          knowledge_paths: list | None = None) -> dict[str, Any]:
-        """根据意图执行路由（v9.5: 所有发射脉冲标记L1实时交互层）"""
+        """根据意图执行路由（v9.5: 所有发射脉冲标记L1实时交互层）
+
+        ★405刀4：首行的 `route_target` 不再赋值即弃 —— 由
+        `config.ENABLE_INTENT_ROUTES` 决定要不要真的按它派发：
+          · 开关**关**（默认）→ 与改前逐字节同行为：兜底一律发 `mouth.speak`
+          · 开关**开**         → 兜底按 `_INTENT_DISPATCHABLE` 派发；
+            目标不在白名单（`hands.execute` / `system.status.response` 等）
+            时**回落** `mouth.speak`，并在返回值 `route_fallback_reason` 里
+            写明为什么没用配置的目标（不静默降级）
+        """
         # 按路由表分发
-        route_target = self._intent_routes.get(intent, MouthEvent.SPEAK)  # noqa: F841
+        # ★405刀4：F841 抑制已摘掉 —— 下面兜底分支真的会读它。
+        route_target = self._intent_routes.get(intent, MouthEvent.SPEAK)
 
         # ===== 新增: 工具认知判断 =====
         # 在发给内在世界之前，先判断"这个问题最适合用哪种工具"
@@ -2340,18 +2350,39 @@ class PulseCortex(BasePulseOrgan):
             }
 
         # 内在世界未注入，走默认路由
-        self._emit(MouthEvent.SPEAK, {
-            "content": content,
-            "user_name": user_name,
-            "source": "cortex_fallback",
-        }, priority=7, layer="L1")
+        # ★405刀4：这里是 `route_target` 唯一语义成立的地方 —— 「没有别的路可走，
+        #   只能按路由表派发」。开关关时行为与改前**逐字节一致**。
+        _fallback_target = MouthEvent.SPEAK
+        _fallback_reason = "route_disabled"
+        if self._intent_routes_enabled():
+            _want = str(route_target or "")
+            if _want in self._INTENT_DISPATCHABLE:
+                _fallback_target = _want
+                _fallback_reason = "route_table"
+            else:
+                _fallback_reason = "target_not_dispatchable:%s" % (_want or "<empty>")
+                self._log(LogLevel.DEBUG,
+                          f"[405刀4] 意图 {intent!r} 的路由目标 {_want!r} 不可兜底派发"
+                          f"（payload 契约或事件方向不匹配），回落 {MouthEvent.SPEAK}")
+        _payload405 = (self._build_intent_payload(
+            _fallback_target, content, user_name, correlation_id)
+            if _fallback_reason == "route_table"
+            else {"content": content, "user_name": user_name,
+                  "source": "cortex_fallback"})
+        self._emit(_fallback_target, _payload405, priority=7, layer="L1")
         self._decision_count += 1
-        return {
+        _ret405 = {
             "status": "routed",
             "intent": intent,
-            "target": MouthEvent.SPEAK,
+            "target": _fallback_target,
             "reason": "inner_world_not_available",
         }
+        # 开关开时把「配置想要什么 / 实际发了什么 / 为什么」一并带出，
+        # 否则没法验证"路由表的配置真的影响了结果"。
+        if self._intent_routes_enabled():
+            _ret405["route_target_requested"] = str(route_target or "")
+            _ret405["route_fallback_reason"] = _fallback_reason
+        return _ret405
     def _assess_tool_suitability(self, content: str, intent: str) -> dict[str, Any]:
         """
         评估当前问题最适合使用哪种工具。
@@ -3119,6 +3150,69 @@ class PulseCortex(BasePulseOrgan):
         """★P3-5补闭环：本体感知报告 → 汇总到自我状态"""
         self._latest_reports["proprioception"] = payload
         return {"status": "proprioception_recorded"}
+
+    # ==================================================================
+    # ★405刀4：意图路由灰度开关（修 `route_target` 断头路）
+    # ==================================================================
+    # 402 刀4 查明：`_route_by_intent` 首行
+    #     `route_target = self._intent_routes.get(intent, MouthEvent.SPEAK)`（行尾带 noqa F841 抑制注释）
+    # **赋值后从不使用** ⇒ `INTENT_ROUTES` 整张表是死配置，算完就扔。
+    # 本刀把它接上，但默认关 —— 开关关时一行旧代码都不动。
+    #
+    #: ★可作为「兜底派发目标」的事件白名单。
+    #: 只收 **payload 契约与 `_route_by_intent` 手里的材料匹配** 的目标 ——
+    #: 它手里只有自然语言 `content` + `user_name` + `correlation_id`：
+    #:   · mouth.speak  ← content / user_name                 ✅
+    #:   · eyes.search  ← query=content                       ✅
+    #: 明确**排除**（理由写在这里，免得后来人以为是漏了）：
+    #:   · hands.execute           要 `code` 字段。意图路由手里是自然语言，
+    #:                             派过去必然走 `_on_execute` 的「空代码 skipped」
+    #:                             （PulseHands.py:65）—— 发了等于没发，还会
+    #:                             让「hand 收到了但没做」看起来像执行失败。
+    #:   · system.status.response  是**响应**事件（PulseSystemManager 发出来的）。
+    #:                             由 Cortex 主动发会把「谁在响应」搞乱。
+    _INTENT_DISPATCHABLE = frozenset((MouthEvent.SPEAK, EyeEvent.SEARCH))
+    #: 意图路由开关缺失时的默认值（**关**：不改变默认行为）
+    _INTENT_ROUTES_DEFAULT = False
+
+    @staticmethod
+    def _intent_routes_enabled() -> bool:
+        """读 `config.ENABLE_INTENT_ROUTES`（默认 False）。
+
+        任务书 405 刀4 写的键名是小写 `enable_intent_routes`；本项目 config
+        全大写，故落为 `ENABLE_INTENT_ROUTES`，并在 config 注释里双向标注。
+        """
+        try:
+            import config as _cfg405i
+            return bool(getattr(_cfg405i, "ENABLE_INTENT_ROUTES", False))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_intent_routes_enabled",
+                       level="debug")
+            return False
+
+    @staticmethod
+    def _build_intent_payload(route_target: Any, content: str, user_name: str,
+                              correlation_id: str) -> dict:
+        """按目标事件类型构造 payload（不同消费者要的字段不一样）。
+
+        ★为什么必须分型构造：`eyes.search` 的消费者读 `query`
+        （`PulseEyes._on_search` L222），`mouth.speak` 的消费者读 `content`。
+        用同一份 payload 通吃，总有一边拿到空字段 —— 那才是真正的"发了个寂寞"。
+        """
+        _t = str(route_target or "")
+        if _t == EyeEvent.SEARCH:
+            return {
+                "query": str(content or ""),
+                "user_name": str(user_name or "用户"),
+                "correlation_id": str(correlation_id or ""),
+                "source": "cortex_intent_route",
+            }
+        return {
+            "content": str(content or ""),
+            "user_name": str(user_name or "用户"),
+            "correlation_id": str(correlation_id or ""),
+            "source": "cortex_intent_route",
+        }
 
     def _load_intent_routes(self) -> dict:
         """从config加载意图路由表，失败时用兜底"""

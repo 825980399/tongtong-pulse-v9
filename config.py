@@ -2704,6 +2704,22 @@ INTENT_ROUTES = {
     "规划": "hands.execute",
     "分析": "mouth.speak",
 }
+# ★第405批 刀4：意图路由**灰度开关**（任务书原名 `enable_intent_routes`，本项目
+#   常量全大写故落为 ENABLE_INTENT_ROUTES）。
+#   背景（402 刀4）：`PulseCortex._route_by_intent` 首行把 INTENT_ROUTES 查出来
+#   赋给 `route_target` 之后**再也不用**（F841）⇒ 上面这张表是死配置。
+#   开关语义：
+#     False（默认）→ 与改前逐字节同行为：兜底一律发 mouth.speak
+#     True         → 兜底按上表派发；目标不在可派发白名单
+#                    （`PulseCortex._INTENT_DISPATCHABLE` = mouth.speak / eyes.search）
+#                    时回落 mouth.speak，并在返回值 `route_fallback_reason` 写明原因。
+#   ★为什么 `hands.execute` / `system.status.response` 不可兜底派发（不是漏了）：
+#     · hands.execute 要 `code` 字段，意图路由手里只有自然语言 ⇒ 必然空代码 skipped
+#     · system.status.response 是**响应**事件（PulseSystemManager 发），
+#       由 Cortex 主动发会把"谁在响应"搞乱
+#   ★打开本开关后，`eyes.search` 会**第一次真的被发射**（405 刀3 清单的 B 档 2 条之一），
+#     这也是验证开关生效最直接的观测点。
+ENABLE_INTENT_ROUTES = False
 # ========== 胃消化器官配置 ==========
 STOMACH_CONFIG = {
     # 不安全关键词（硬拦截，直接拒绝）
