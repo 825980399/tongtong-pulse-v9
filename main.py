@@ -4220,6 +4220,15 @@ def main():
 
     # P1修复：全局异常钩子——任何线程（含守护线程）抛出的未捕获异常都写入崩溃日志，
     # 避免"静默退出"无迹可寻（此前框架在 flaky 硬件上卡死后被外部杀掉，无任何日志）。
+    # --- 406 刀2 未捕获异常接免疫系统 ---
+    # D 档 #15：PulseWhiteCell 订了 SystemEvent.ERROR_REPORT 且真能跑 `_attempt_repair`，
+    # 但全库零发射端 —— 而 `_crash_hook` 就是现成的"全局异常钩子"。
+    # 节流理由：某线程反复抛同一个异常时，每抛一次都让免疫系统跑一遍修复，
+    # 代价远高于写一行崩溃日志 ⇒ 按「异常指纹」限频 + 全程总量上限。
+    _m406_er_state = {"last": {}, "total": 0}
+    _M406_ER_MAX_TOTAL = 50
+    _M406_ER_MIN_INTERVAL = 60.0
+
     def _crash_hook(exc_type, exc_value, exc_tb):
         import traceback as _tb
         _msg = "".join(_tb.format_exception(exc_type, exc_value, exc_tb))
@@ -4233,6 +4242,38 @@ def main():
             _tb.print_exception(exc_type, exc_value, exc_tb)
         except Exception as _se:
             silent_exc(_se, "main.py:3372")
+        # ★406 刀2：把未捕获异常接到免疫系统（system.error_report）。
+        #   这里**只上报**，是否修复、怎么修由 `PulseWhiteCell._on_error_report` 决定；
+        #   本块任何失败都不得影响崩溃日志与堆栈打印 —— 那是最后的取证途径。
+        try:
+            _fw406 = framework
+            _pc406 = getattr(_fw406, "pulse_core", None) if _fw406 is not None else None
+            _if406 = getattr(_fw406, "info_field", None) if _fw406 is not None else None
+            _key406 = f"{exc_type.__name__}:{str(exc_value)[:80]}"
+            _now406 = time.time()
+            if (_pc406 is not None and _if406 is not None
+                    and _m406_er_state["total"] < _M406_ER_MAX_TOTAL
+                    and _now406 - _m406_er_state["last"].get(_key406, 0.0)
+                    >= _M406_ER_MIN_INTERVAL):
+                _m406_er_state["last"][_key406] = _now406
+                _m406_er_state["total"] += 1
+                from nucleus.const import SystemEvent as _SysEv406
+                _pulse406 = _pc406.emit(
+                    source_organ="框架",
+                    event_type=_SysEv406.ERROR_REPORT,
+                    payload={
+                        "error_type": exc_type.__name__,
+                        "error_message": str(exc_value)[:500],
+                        "source_organ": "框架",
+                        "origin": "uncaught_exception",
+                    },
+                    priority=8,
+                    layer="L0",
+                )
+                _if406.publish(_pulse406)
+        except Exception as _se406:
+            silent_exc(_se406, "main.py:3378")
+
     sys.excepthook = _crash_hook
     threading.excepthook = lambda args: _crash_hook(
         args.exc_type, args.exc_value, args.exc_traceback)

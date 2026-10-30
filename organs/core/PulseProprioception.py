@@ -372,6 +372,60 @@ class PulseProprioception(BasePulseOrgan):
         caps["manipulation"]["potential"] = "机械臂、灵巧手、Dynamixel 舵机"
 
         self._hardware_capabilities = caps
+        # ★406 刀2：能力矩阵重建后，把「变化」上报成 attached/detached
+        self._m406_report_hw_transitions(dc)
+
+
+    # --- 406 刀2 硬件变化上报 ---
+    def _m406_report_hw_transitions(self, dc: dict) -> int:
+        """硬件能力**变化**时上报 attached / detached（补 D 档 #9/#10 的发射端）。
+
+        背景：本文件订阅了 SystemEvent.DEVICE_ATTACHED / DEVICE_DETACHED，而全库
+        零发射端（405 批契约断裂清单 D 档）。能力枚举其实每拍都在跑
+        （`_evaluate_hardware_capabilities` 由心跳与初始化驱动），
+        缺的只是「变化了就上报」这一步。
+
+        ★为什么签名取自 `dc`（设备管理器枚举表）而不是 `self._hardware_capabilities`：
+          `_on_device_attached` 会**直接改** `_hardware_capabilities[...]["available"]`；
+          拿它当基准会出现「事件回灌 → 下一轮重建改回去 → 再上报」的 flapping 自环。
+          `dc` 是外部真值，事件处理路径不碰它 ⇒ 签名单调可信。
+
+        首帧对**已可用**设备补一条 attached（即"启动枚举补首帧"），
+        否则开机就在位的摄像头永远不会被上报。
+
+        返回本轮上报条数（0 = 无变化），便于判据断言。
+        """
+        _MAP = (
+            ("sensor.camera.available", "camera"),
+            ("sensor.microphone.available", "microphone"),
+            ("sensor.speaker.available", "speaker"),
+        )
+        _sig = {_name: bool(dc.get(_key, False)) for _key, _name in _MAP}
+        _prev = getattr(self, "_m406_hw_sig", None)
+        _first = _prev is None
+        _n = 0
+        try:
+            for _name, _on in _sig.items():
+                _old = bool(_prev.get(_name, False)) if isinstance(_prev, dict) else False
+                if _first:
+                    if not _on:
+                        continue          # 首帧只补报"在位"的，不噪报未接入的
+                elif _old == _on:
+                    continue
+                _ev = SystemEvent.DEVICE_ATTACHED if _on else SystemEvent.DEVICE_DETACHED
+                self._emit(_ev, {
+                    "device_type": _name,
+                    "available": _on,
+                    "source": "proprioception_capability_scan",
+                    "initial": bool(_first),
+                }, priority=4, layer="L2")
+                _n += 1
+            self._m406_hw_sig = _sig
+        except Exception as e:
+            self._log(LogLevel.WARNING,
+                      f"[406刀2] 硬件变化上报失败（不影响能力矩阵）: "
+                      f"{type(e).__name__}: {e}")
+        return _n
 
     def _detect_camera(self) -> dict[str, Any]:
         """检测系统中的摄像头设备"""
