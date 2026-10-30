@@ -148,7 +148,11 @@ def test_m313_dump_graph_snapshot_writes_valid_and_sweeps_history(tmp_path, monk
     assert _path != "" and os.path.isfile(_path)
     assert not _hist.exists()
     assert (_d / "_quarantine" / "graph_20251231_235959.json").is_file()
-    assert len(list(_d.glob("graph_*.json"))) == 1
+    # ★401刀3：`graph_latest.json` 是**常驻副本**，不占滚动配额、也不算一份快照 ——
+    #   判据只对时间戳快照计数（钉死 ==1 会被"多了一个正常文件"顶红，铁律268）。
+    _snaps = [p for p in _d.glob("graph_*.json") if p.name != "graph_latest.json"]
+    assert len(_snaps) == 1, "滚动后应只剩最新一份快照：%s" % [p.name for p in _snaps]
+    assert (_d / "graph_latest.json").is_file(), "常驻副本没落盘"
 
 
 # ------------------------------------------------------------------ 刀3

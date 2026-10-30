@@ -32,6 +32,14 @@ from nucleus._silent_except import silent_exc
 
 #: 合格图的最小节点数（生产实测 6700+；合成夹具 12）
 MIN_NODES = 100
+
+#: ★401批刀3：**派生副本**文件名 —— 它不是一份快照，只是最近一份的副本。
+#:   为什么必须显式跳过：字母 'l' 排在所有 `graph_YYYYmmdd_HHMMSS` 之后
+#:   ⇒ `sorted(glob)[-1]`（按文件名取最新）会**永远**选中它；副本一旦落后，
+#:   就变成"看不见的旧图"（数字看着正常，只是旧）。
+#:   按 mtime 取最新的消费方（`self_inspector._m342_load_latest_graph`）本不会误选，
+#:   但本模块两个入口都改成**按名字过滤**，不靠"排序刚好正确"。
+DERIVED_COPY_NAMES = ("graph_latest.json",)
 #: 合格图的最小覆盖文件数（生产实测 300+；合成夹具 4）
 MIN_FILES = 10
 #: 合成夹具的包路径前缀（`pkg/a.py` / `pkg/b.py` …）
@@ -100,6 +108,9 @@ def select_latest_graph(graph_dir: str, pattern: str = "graph_*.json") -> dict:
     _out: dict = {"ok": False, "path": "", "graph": None, "rejected": []}
     try:
         _files = sorted(glob.glob(os.path.join(str(graph_dir or ""), pattern)))
+        # ★401批刀3：派生副本不参与"选最新"（它不是新快照，只是最近一份的副本）
+        _files = [_p for _p in _files
+                  if os.path.basename(_p) not in DERIVED_COPY_NAMES]
         if not _files:
             return _out
         for _p in reversed(_files):          # 新 → 旧
@@ -160,6 +171,10 @@ def quarantine_invalid_graphs(graph_dir: str, logger=None) -> dict:
         _qdir = os.path.join(_dir, QUARANTINE_DIRNAME)
         _out["quarantine_dir"] = _qdir
         for _p in sorted(glob.glob(os.path.join(_dir, "graph_*.json"))):
+            # ★401批刀3：副本每次都被当候选读一遍 12MB，既浪费又让 `checked` 虚高；
+            #   它与快照同命运（快照被隔离时它也失去意义），但那份快照会自己进来。
+            if os.path.basename(_p) in DERIVED_COPY_NAMES:
+                continue
             _out["checked"] += 1
             _gd = None
             _why = ""

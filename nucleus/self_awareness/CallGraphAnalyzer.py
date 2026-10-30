@@ -744,6 +744,22 @@ class _Collector(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+# ★401批刀3：常驻副本文件名。**必须**被 call_graph_guard 的选择器与本节流清理跳过 ——
+#   它的首字母 'l' 排在所有 `graph_YYYYmmdd_HHMMSS` 之后，任何按**文件名**排序取
+#   "最新"的消费方都会永远选中它；副本一旦落后就变成"看不见的旧图"。
+_M401_GRAPH_LATEST_NAME = "graph_latest.json"
+
+
+def _m401_keep_latest_default() -> bool:
+    """★401批刀3：`--keep-latest` 的默认值（config 可关；取不到按开）。"""
+    try:
+        import config as _cfg401
+        return bool(getattr(_cfg401, "ENABLE_M401_GRAPH_KEEP_LATEST", True))
+    except Exception as _e:
+        silent_exc(_e, where="CallGraphAnalyzer::_m401_keep_latest_default")
+        return True
+
+
 # ----------------------------------------------------------------------
 # 主类
 # ----------------------------------------------------------------------
@@ -1212,12 +1228,21 @@ class CallGraphAnalyzer:
                     self._unresolved += 1
                     _cat = self._m318_classify_unresolved(_rc)
                 # ★318批刀0（R3）：放弃处不再是「只有计数器、无样本」——留样本给 R1 对表
+                # ★401批刀3（L1）：补「回归三元组」 file:line:call_expr。
+                #   318 只有 file + caller，同一个方法里十几个未解析点无法定位到行，
+                #   「上一批能解析、这一批解析不出」的退化看不见。
                 if len(self._m318_samples) < self._M318_MAX_SAMPLES:
+                    _m401_parts = list(_rc.get("parts") or [])
                     self._m318_samples.append({
                         "cat": _cat,
-                        "parts": list(_rc.get("parts") or [])[:4],
+                        "parts": _m401_parts[:4],
                         "module": _rc.get("module", ""),
                         "file": _rc.get("file", ""),
+                        # 行号：取不到就是 None，**不填 0**（没有"第 0 行"这种事）
+                        "line": _rc.get("line"),
+                        "call_expr": (".".join(str(_p401) for _p401 in _m401_parts)
+                                      or "<dynamic:%s>" % (_rc.get("attr_name")
+                                                           or _rc.get("kind") or "?")),
                         "in_class": _rc.get("in_class", ""),
                         "caller": _rc.get("caller_qual", ""),
                     })
@@ -1244,7 +1269,9 @@ class CallGraphAnalyzer:
         if getattr(self, "_m318_samples", None):
             try:
                 from nucleus.self_awareness.unresolved_samples import dump_samples
-                _sp = dump_samples(self._m318_samples, self.project_root)
+                # ★401批刀3：传 cap 让落盘侧能把「是否截断」写进 meta
+                _sp = dump_samples(self._m318_samples, self.project_root,
+                                   cap=self._M318_MAX_SAMPLES)
                 _logger.info("[318刀0][R3] 未解析样本落盘: %s（%d 条）",
                              _sp, len(self._m318_samples))
             except Exception as _se:
@@ -1728,7 +1755,8 @@ class CallGraphAnalyzer:
     # ------------------------------------------------------------------
     # T2：健康度分析
     # ------------------------------------------------------------------
-    def dump_graph_snapshot(self, graph: dict | None = None, keep: int = 7) -> str:
+    def dump_graph_snapshot(self, graph: dict | None = None, keep: int = 7,
+                            keep_latest: bool | None = None) -> str:
         """★第304批 刀1：调用图**本体**落盘（图不再「分析完即弃」）。
 
         产出 `data/call_graph/graph_<ts>.json`，规格与 303 批刀6 per-item 落盘一致
@@ -1749,6 +1777,12 @@ class CallGraphAnalyzer:
             消费方都会把**软推断当硬自证**。现另落 `edge_types_total`（=逐边条数）与
             `edge_types_source="per_edge_kind"`，供 A6 断言逐档对表。
 
+        Args:
+            keep: 快照滚动保留份数（默认 7）。
+            keep_latest: ★401批刀3：是否另存 `graph_latest.json` 常驻副本。
+                `None`（默认）⇒ 跟随 `config.ENABLE_M401_GRAPH_KEEP_LATEST`；
+                显式 `True/False` 覆盖（重建 CLI 的 `--keep-latest` / `--no-keep-latest` 走这里）。
+
         Returns: 落盘绝对路径；失败返回空串（绝不阻断调用方）。
         """
         import time as _time
@@ -1759,6 +1793,8 @@ class CallGraphAnalyzer:
             _root = _project_root()
             _dir = os.path.join(_root, "data", "call_graph")
             os.makedirs(_dir, exist_ok=True)
+            _keep_latest_on = (bool(keep_latest) if keep_latest is not None
+                               else _m401_keep_latest_default())
             # ★第313批 刀2（写侧守卫，P1）：312 只补了**读侧**（选择器不取合成图），
             #   写侧仍脏 —— 实测 `pkg/a.py` 类合成图三次进生产目录，且占着滚动 7 份的配额
             #   （一份 4 文件的假图能把一份 6700 节点的真图挤出窗口）。两道闸：
@@ -1830,9 +1866,32 @@ class CallGraphAnalyzer:
             _payload["dumped_at"] = _time.time()
             self.export_json(_tmp, data=_payload)
             os.replace(_tmp, _path)
+            # ★401批刀3（L1 常驻副本）：另存一份 `graph_latest.json`，**不占滚动 7 份的配额**。
+            #   为什么需要：`keep=7` 按小时轮转会冲掉历史对比基线（烛微401 §风险②），
+            #   而"上一个代码版本的图"恰恰是回归对比的参照物；重建一次就有一份常驻底片。
+            #   副本与快照**同内容同刻**（同一份 _payload），故它不新不旧；
+            #   写盘失败只留痕、不影响快照与判据（返回值仍为快照路径）。
+            _m401_lp = ""
+            if _keep_latest_on:
+                _m401_lp = os.path.join(_dir, _M401_GRAPH_LATEST_NAME)
+                try:
+                    if _m313_write_guard(_m401_lp,
+                                         component="CallGraphAnalyzer.graph_latest"):
+                        _m401_ltmp = _m401_lp + ".tmp"
+                        self.export_json(_m401_ltmp, data=_payload)
+                        os.replace(_m401_ltmp, _m401_lp)
+                    else:
+                        _m401_lp = ""
+                except Exception as _le:
+                    _m401_lp = ""
+                    _logger.warning("常驻副本 graph_latest 落盘失败（快照已落，不影响判据）: %s: %s",
+                                    type(_le).__name__, _le)
             try:
+                # ★401批刀3：常驻副本不进轮转名单 —— 否则它会占掉 7 份里的一份，
+                #   且因字母序靠后而"永不被删"（真正需要滚动的反而被挤出去）。
                 _olds = sorted(_f for _f in os.listdir(_dir)
-                               if _f.startswith("graph_") and _f.endswith(".json"))
+                               if (_f.startswith("graph_") and _f.endswith(".json")
+                                   and _f != _M401_GRAPH_LATEST_NAME))
                 for _old in _olds[:-keep]:
                     os.remove(os.path.join(_dir, _old))
             except Exception as _e:
@@ -1842,6 +1901,9 @@ class CallGraphAnalyzer:
                          os.path.relpath(_path, _root),
                          len(_payload.get("nodes") or []),
                          len(_payload.get("edges") or []), _edge_types)
+            if _m401_lp:
+                _logger.info("[401刀3] 常驻副本: %s（不进滚动配额）",
+                             os.path.relpath(_m401_lp, _root))
             # ★331批刀2：落盘即自检 —— 把"图刚落盘"变成 A6 的触发点。
             #   挂在**统一落盘口**上：任何调用路径（含 SelfAwarenessEngine 的图重建）
             #   都会经过这里，不会有挂点漏网。自检失败只留痕，**不阻断落盘**。
