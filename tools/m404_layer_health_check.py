@@ -186,6 +186,51 @@ def read_snapshot_max_age(root=None):
     return float(_v), "external_heartbeat.py:%d" % _line
 
 
+def _probe_pid_is_framework(pid):
+    """快照自报的 pid 是否仍是**框架**进程：``True``/``False``/``None``（判不了）。
+
+    ★为什么不能只靠 `is_framework_running()`
+    ----------------------------------------
+    它按"命令行里有没有 basename==``main.py``"匹配，**任何带 main.py 路径的命令都会
+    骗到它** —— `git commit -- main.py` 自己、`python -m py_compile main.py`、编辑器
+    打开的文件参数，全都会让它在框架早已停机时返回 True。
+    404 刀4 提交时实测到一次：面板报"框架在跑但快照不更新"（L5 FAIL），
+    而全机 `psutil` 枚举下来 main.py 进程数为 0。
+
+    快照里带着框架**自己**报的 ``pid``，核验"这个 pid 还活着且命令行指向 main.py"
+    才是硬证据；拿不到 pid 就老实说判不了（``None``），不猜。
+    """
+    try:
+        _pid = int(pid)
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework[pid]",
+                   level="debug")
+        return None
+    if _pid <= 0:
+        return None
+    try:
+        import psutil
+    except Exception as _e:
+        silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework[import]",
+                   level="debug")
+        return None
+    try:
+        if not psutil.pid_exists(_pid):
+            return False
+        _proc = psutil.Process(_pid)
+        try:
+            _cl = _proc.cmdline()
+        except (psutil.AccessDenied, psutil.NoSuchProcess) as _e:
+            silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework[cmdline]",
+                       level="debug")
+            return None
+        from nucleus.evolution.night_orchestration import _cmdline_is_framework_main
+        return bool(_cmdline_is_framework_main(_cl))
+    except Exception as _e:
+        silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework")
+        return None
+
+
 def _probe_framework_running(root):
     """框架是否在跑：``True``/``False``/``None``（None = psutil 不可用，判不了）。"""
     try:
@@ -406,25 +451,44 @@ def check_l5(ctx):
                 "pid": _d.get("pid"),
                 "strict_5s": bool(_snap_age is not None
                                   and _snap_age <= TASK_LITERAL_STALE_S)})
+    if _snap_age is None:
+        return _bad("L5", "健康快照", "快照年龄取不到（mtime 与 timestamp 都读不到）", _ev)
+    # ① 新鲜就是新鲜 —— 不 enquête 进程。省一次 psutil 全表扫描（约 1s），
+    #    也彻底躲开下面那条进程判据的假阳性。
+    if _snap_age <= _max:
+        return _ok("L5", "健康快照", "年龄 %.1fs ≤ 上限 %.0fs（beat=%s，字面 5s 口径 %s）"
+                   % (_snap_age, _max, _ev["beat_count"],
+                      "满足" if _ev["strict_5s"] else "不满足"), _ev)
+    # ② 陈旧：先用**快照自报 pid** 核验（硬证据），拿不到才退回进程枚举
+    _alive = ctx.get("snapshot_pid_alive", _UNSET)
+    if _alive is _UNSET:
+        _alive = _probe_pid_is_framework(_d.get("pid"))
+    _ev["snapshot_pid_alive"] = _alive
+    if _alive is True:
+        return _bad("L5", "健康快照",
+                    "快照自报 pid=%s 仍是框架进程，但快照已 %.1fs 未更新（> 上限 %.0fs）"
+                    % (_d.get("pid"), _snap_age, _max), _ev)
+    if _alive is False:
+        return _skip("L5", "健康快照", "framework_down",
+                     "快照自报 pid=%s 已不在（框架停机，快照 age=%.1fs）—— 停机时本层不判"
+                     % (_d.get("pid"), _snap_age), _ev)
+    # ③ pid 判不了：退回进程枚举，但**只把 True 当线索不当铁证**
     _run = ctx.get("framework_running", _UNSET)
     if _run is _UNSET:
         _run = _probe_framework_running(ctx["root"])
     _ev["framework_running"] = _run
+    _ev["running_unverified"] = bool(_run is True)
     if _run is None:
         return _skip("L5", "健康快照", "psutil_unavailable",
-                     "psutil 不可用，判不了框架是否在跑（age=%s）" % _snap_age, _ev)
+                     "psutil 不可用，判不了框架是否在跑（age=%.1fs）" % _snap_age, _ev)
     if _run is False:
         return _skip("L5", "健康快照", "framework_down",
-                     "框架未运行（快照 age=%ss）—— 停机时本层不判，避免假警报"
+                     "框架未运行（快照 age=%.1fs）—— 停机时本层不判，避免假警报"
                      % _snap_age, _ev)
-    if _snap_age is None:
-        return _bad("L5", "健康快照", "快照年龄取不到", _ev)
-    if _snap_age > _max:
-        return _bad("L5", "健康快照", "快照年龄 %.1fs > 上限 %.0fs（框架在跑但快照不更新）"
-                    % (_snap_age, _max), _ev)
-    return _ok("L5", "健康快照", "年龄 %.1fs ≤ 上限 %.0fs（beat=%s，字面 5s 口径 %s）"
-               % (_snap_age, _max, _ev["beat_count"],
-                  "满足" if _ev["strict_5s"] else "不满足"), _ev)
+    return _skip("L5", "健康快照", "running_unverified",
+                 "进程枚举说 main.py 在跑，但快照没有可用 pid 交叉核验（age=%.1fs）；"
+                 "该判据会被 `git commit -- main.py` 这类命令骗到，故不判 FAIL" % _snap_age,
+                 _ev)
 
 
 # ---------------------------------------------------------------------------
@@ -506,8 +570,8 @@ CHECKS = [
 # ---------------------------------------------------------------------------
 def make_context(root=None, now=None, strict=False, pairs_cap=None,
                  snapshot_max_age=None, framework_running=_UNSET,
-                 snapshot_5s=False):
-    """构造检查上下文（测试可注入 ``framework_running``，不碰 psutil）。"""
+                 snapshot_5s=False, snapshot_pid_alive=_UNSET):
+    """构造检查上下文（测试可注入 ``snapshot_pid_alive`` / ``framework_running``，不碰 psutil）。"""
     _ctx = {"root": os.path.abspath(root or _ROOT),
             "now": float(now if now is not None else time.time()),
             "strict": bool(strict),
@@ -516,6 +580,8 @@ def make_context(root=None, now=None, strict=False, pairs_cap=None,
             "snapshot_5s": bool(snapshot_5s)}
     if framework_running is not _UNSET:
         _ctx["framework_running"] = framework_running
+    if snapshot_pid_alive is not _UNSET:
+        _ctx["snapshot_pid_alive"] = snapshot_pid_alive
     return _ctx
 
 

@@ -354,6 +354,13 @@ class TestL4(unittest.TestCase):
 
 
 class TestL5(unittest.TestCase):
+    """L5 三态：新鲜 ⇒ PASS；陈旧且**快照自报 pid 还活着** ⇒ FAIL；pid 没了 ⇒ SKIP。
+
+    ★为什么不用 `is_framework_running()` 当主判据：它按"命令行里有 basename==main.py"
+      匹配，`git commit -- main.py` 自己就会骗到它（404 刀4 提交时实测出现假阳性，
+      面板报"框架在跑但快照不更新"，实际全机 main.py 进程数为 0）。
+    """
+
     def setUp(self):
         self._td = _mkroot()
         self._p = os.path.join(self._td, "data", "monitor", "health_snapshot.json")
@@ -371,7 +378,7 @@ class TestL5(unittest.TestCase):
             silent_exc(_e, where="tests.test_m404_k3_layer_health.TestL5._snap", level="debug")
 
     def _ctx(self, **kw):
-        kw.setdefault("framework_running", True)
+        kw.setdefault("snapshot_pid_alive", True)
         return lh.make_context(root=self._td, now=self._now, **kw)
 
     def test_70_missing_is_skip(self):
@@ -382,13 +389,13 @@ class TestL5(unittest.TestCase):
     def test_71_framework_down_skips_even_if_stale(self):
         """★本批最重要的一条：停机时快照必然旧，判 FAIL 就是假警报。"""
         self._snap(4000)
-        _r = lh.check_l5(self._ctx(framework_running=False))
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=False))
         self.assertEqual(_r["status"], lh.SKIP)
         self.assertEqual(_r["reason"], "framework_down")
 
     def test_72_psutil_unavailable_skips(self):
-        self._snap(10)
-        _r = lh.check_l5(self._ctx(framework_running=None))
+        self._snap(400)
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=None, framework_running=None))
         self.assertEqual(_r["status"], lh.SKIP)
         self.assertEqual(_r["reason"], "psutil_unavailable")
 
@@ -403,6 +410,7 @@ class TestL5(unittest.TestCase):
         self._snap(400)
         _r = lh.check_l5(self._ctx())
         self.assertEqual(_r["status"], lh.FAIL)
+        self.assertIn("999", _r["detail"], "FAIL 必须点明是哪个 pid 还活着")
 
     def test_75_task_literal_5s_mode(self):
         self._snap(8)
@@ -420,7 +428,7 @@ class TestL5(unittest.TestCase):
     def test_77_age_takes_more_conservative_of_two(self):
         """文件刚被 touch 但内容旧 ⇒ 必须按内容 age 判（防"touch 一下就算新鲜"）。"""
         self._snap(0)
-        _write(self._p, {"timestamp": self._now - 500, "beat_count": 21})
+        _write(self._p, {"timestamp": self._now - 500, "beat_count": 21, "pid": 999})
         _r = lh.check_l5(self._ctx())
         self.assertEqual(_r["status"], lh.FAIL)
         self.assertGreaterEqual(_r["evidence"]["age_s"], 499)
@@ -430,6 +438,46 @@ class TestL5(unittest.TestCase):
         _r = lh.check_l5(self._ctx(snapshot_max_age=10.0))
         self.assertEqual(_r["status"], lh.FAIL)
         self.assertEqual(_r["evidence"]["max_age_source"], "cli")
+
+    def test_79_pid_dead_beats_process_enumeration(self):
+        """★假阳性回归：进程枚举说"在跑"，但快照 pid 已死 ⇒ 只能 SKIP，不能 FAIL。
+
+        这正是 404 刀4 提交时踩到的：`git commit -F msg -- main.py` 自己的命令行
+        含 main.py，`is_framework_running()` 因此返回 True。
+        """
+        self._snap(4000)
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=False, framework_running=True))
+        self.assertEqual(_r["status"], lh.SKIP)
+        self.assertEqual(_r["reason"], "framework_down")
+
+    def test_7a_pid_alive_beats_process_enumeration(self):
+        """反向同理：pid 活着就是活着，进程枚举说 False 也不改判。"""
+        self._snap(400)
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=True, framework_running=False))
+        self.assertEqual(_r["status"], lh.FAIL)
+
+    def test_7b_unverified_running_is_skip_not_fail(self):
+        """没有 pid 可核验时，枚举出的 True 只能当线索 —— 不许凭它判 FAIL。"""
+        self._snap(400)
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=None, framework_running=True))
+        self.assertEqual(_r["status"], lh.SKIP)
+        self.assertEqual(_r["reason"], "running_unverified")
+        self.assertTrue(_r["evidence"]["running_unverified"])
+
+    def test_7c_fresh_path_does_not_probe_processes(self):
+        """新鲜时不该去问进程（省 1s psutil，也彻底避开假阳性）。"""
+        self._snap(5)
+        _r = lh.check_l5(self._ctx(snapshot_pid_alive=None, framework_running=None))
+        self.assertEqual(_r["status"], lh.PASS)
+        self.assertNotIn("snapshot_pid_alive", _r["evidence"])
+
+    def test_7d_probe_pid_is_framework_real(self):
+        """真调一次：自身 python 进程的 pid 不是框架 ⇒ False；非法 pid ⇒ None。"""
+        self.assertFalse(lh._probe_pid_is_framework(os.getpid()))
+        self.assertIsNone(lh._probe_pid_is_framework(None))
+        self.assertIsNone(lh._probe_pid_is_framework(0))
+        self.assertIsNone(lh._probe_pid_is_framework("不是数字"))
+        self.assertFalse(lh._probe_pid_is_framework(99999999))
 
 
 class TestL6(unittest.TestCase):
@@ -573,14 +621,19 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(_res["overall"], lh.FAIL, "有 FAIL 时不能被 SKIP 稀释成 PARTIAL")
 
     def test_a2_partial_when_only_skip(self):
-        """★5 层 PASS + 2 层 SKIP ⇒ PARTIAL 且 exit 0（停机期间提交不该被挡）。"""
+        """★6 层 PASS + 1 层 SKIP ⇒ PARTIAL 且 exit 0（停机期间提交不该被挡）。
+
+        L5 在这里是 PASS：`_populate` 刚写出的快照 age≈0，**新鲜就是新鲜**，
+        不需要问进程（这也是 404 刀4 提交时那次 L5 假红的修法）。
+        唯一 SKIP 的是 L4 —— 00:30 还没到首条小时汇总的时刻。
+        """
         self._populate()
         _res = lh.run_all(self._ctx())
-        self.assertEqual(_res["counts"], {"pass": 5, "fail": 0, "skip": 2, "total": 7})
+        self.assertEqual(_res["counts"], {"pass": 6, "fail": 0, "skip": 1, "total": 7})
         self.assertEqual(_res["overall"], "PARTIAL")
         self.assertEqual(_res["exit_code"], 0)
         _skip = {c["layer"]: c["reason"] for c in _res["checks"] if c["status"] == lh.SKIP}
-        self.assertEqual(_skip, {"L4": "day_too_young", "L5": "framework_down"})
+        self.assertEqual(_skip, {"L4": "day_too_young"})
 
     def test_a3_strict_makes_skip_fail(self):
         self._populate()
@@ -588,8 +641,8 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(_res["overall"], "PARTIAL")
         self.assertEqual(_res["exit_code"], 2)
 
-    def test_a4_all_pass_when_framework_running(self):
-        """7 层全 PASS：把 L4/L5 也补齐（L4 造一条汇总、L5 换 15:00 + 框架在跑）。"""
+    def test_a4_all_pass_when_every_layer_ready(self):
+        """7 层全 PASS：L4 造一条汇总、L5 落一份 3s 前的快照。"""
         self._populate()
         _now = _ts(2026, 10, 30, 15, 0)
         _write(os.path.join(self._td, "data", "monitor", "causal_chains_20261030.jsonl"),
