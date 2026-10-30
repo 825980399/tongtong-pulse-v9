@@ -1103,6 +1103,14 @@ class PulseFramework:
         #   注意：只注册分析器，不触发分析（避免拖慢启动）。
         self._init_self_awareness()
 
+        # ===== ★405刀3：共同决策发射通道注入 =====
+        #   402 刀1 查明：`consent.propose` / `consent.decide` 有精确订阅
+        #   （`PulseConsent.get_resonance_conditions` 明写承接）却**全库零发射**
+        #   ⇒ 共同决策器官永久空转。本方法把「补丁入队 = 提议」
+        #   「补丁审批 = 决策」接上；PatchManager 侧只认一个可注入的发射器，
+        #   不注入则一条不发（默认零行为变化）。
+        self._wire_consent_channel()
+
         # ===== R4阶段二：存续编排器接入主链路 =====
         # 在所有器官装配完成后，统一装配 SurvivalOrchestrator（兼容 legacy/declarative 双路径）。
         self._wire_survival_orchestrator()
@@ -1259,6 +1267,64 @@ class PulseFramework:
         except Exception as _e:
             self._log(LogLevel.WARNING,
                       f"[SelfAwareness] 自我认知引擎初始化失败（不影响启动）: "
+                      f"{type(_e).__name__}: {_e}")
+
+    def _wire_consent_channel(self):
+        """★405刀3：给 PatchManager 注入共同决策脉冲发射器。
+
+        为什么需要它：`consent.propose` / `consent.decide` 是 402 刀1 查出的
+        19 条契约断裂里唯一"根因已定位"的两条 —— `PulseConsent` 订了、全库
+        没人发。审批流程就是它们的正主：补丁入队是"重大变更提议"，人工审批
+        是这条提议的"决定"。
+
+        为什么走注入而不是让 PatchManager 直接找器官：
+          PatchManager 在 `nucleus/reasoning/` 下，不持有 pulse_core / info_field
+          （全库 grep `pulse_core` = 0）。硬接会形成 reasoning → organs 的反向
+          依赖；注入把方向掰回来（装配层 → reasoning）。
+
+        发射口径：`source_organ="补丁管理器"`（**不**用"共同决策"）——
+        用器官名会与 `PulseConsent` 自己的 `organ_name` 撞上，形成自环
+        （自己提的议自己决），proposal_count 会翻倍。
+
+        失败只记 WARNING：脉冲是观测与协同手段，审批才是安全关键路径。
+        """
+        try:
+            from nucleus.reasoning.PatchManager import set_consent_emitter
+        except Exception as _im:
+            silent_exc(_im, where="main::_wire_consent_channel/import",
+                       level="warning")
+            self._log(LogLevel.WARNING,
+                      f"[405刀3] 共同决策通道注入跳过（导入失败）: "
+                      f"{type(_im).__name__}: {_im}")
+            return
+        _pc = getattr(self, "pulse_core", None)
+        _if = getattr(self, "info_field", None)
+        if _pc is None or _if is None:
+            self._log(LogLevel.WARNING,
+                      "[405刀3] 共同决策通道未注入：pulse_core / info_field 缺失")
+            return
+
+        def _emit(_event_type: str, _payload: dict, _priority: int = 5):
+            """构造并按信息场发布一条共同决策脉冲。"""
+            _pulse = _pc.emit(
+                source_organ="补丁管理器",
+                event_type=_event_type,
+                payload=_payload,
+                priority=int(_priority),
+                layer="L3",          # 补丁审批属后台自主层
+            )
+            _if.publish(_pulse)
+            return _pulse
+
+        try:
+            set_consent_emitter(_emit)
+            self._log(LogLevel.INFO,
+                      "[405刀3] 共同决策发射通道已注入（consent.propose / "
+                      "consent.decide 由此发射）")
+        except Exception as _e:
+            silent_exc(_e, where="main::_wire_consent_channel", level="warning")
+            self._log(LogLevel.WARNING,
+                      f"[405刀3] 共同决策通道注入失败（不影响启动）: "
                       f"{type(_e).__name__}: {_e}")
 
     def _wire_survival_orchestrator(self):

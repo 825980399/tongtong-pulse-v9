@@ -36,6 +36,103 @@ _module_logger = get_module_logger("PatchManager")
 # ★第162批刀5（E2）：事件总线发布失败累计计数（可观测 + 门控读取）
 _publish_fail_count = 0
 
+# ======================================================================
+# ★405刀3：共同决策（ConsentEvent）发射通道
+# ======================================================================
+# 背景（402 刀1 契约断裂 19 条里的第 1、2 条）：
+#   `PulseConsent` 在 `get_resonance_conditions()` 里明写承接
+#   `ConsentEvent.PROPOSE` / `ConsentEvent.DECIDE`，但**全库零发射**
+#   ⇒ 共同决策器官永久空转（proposal_count / accepted_count 恒 0）。
+#   查"该谁发"的结论：**审批流程**该发 —— 补丁入队 = 一次"重大变更提议"，
+#   人工审批 = 这项提议的"决定"。PatchManager 正是这条流程的唯一收口。
+#
+# 为什么用注入式而不是直接 import 器官：
+#   ① PatchManager 不持有器官/信息场（全库 `grep pulse_core` = 0），
+#      它拿不到 PulseCore，硬接会引入反向依赖（reasoning → organs）；
+#   ② 不注入 = 一条不发（默认零行为变化），单测/离线脚本完全不受影响；
+#   ③ 与项目既有范式一致（`patch_execution_dispatch.set_dispatch_framework`）。
+_CONSENT_EMITTER: Any = None
+#: 发射失败累计（与 `_publish_fail_count` 同型：可观测、不阻断主流程）
+_consent_emit_fail_count = 0
+
+
+def set_consent_emitter(fn: Any) -> None:
+    """注入共同决策脉冲发射器（装配层调用一次）。
+
+    Args:
+        fn: 形如 ``fn(event_type: str, payload: dict, priority: int) -> Any``。
+            传 None 表示摘除（测试隔离用）。
+
+    本函数不校验签名——校验的收益配不上它带来的耦合；真接错了，
+    第一次发射就会在 `_emit_consent` 的异常分支里留下 WARNING。
+    """
+    global _CONSENT_EMITTER
+    _CONSENT_EMITTER = fn
+
+
+def get_consent_emitter() -> Any:
+    """当前注入的发射器（None = 未注入）。"""
+    return _CONSENT_EMITTER
+
+
+def get_consent_emit_fail_count() -> int:
+    """共同决策脉冲发射失败计数（供观测/测试断言）。"""
+    return _consent_emit_fail_count
+
+
+def _emit_consent(event_type: str, payload: dict,
+                  priority: int = 5) -> bool:
+    """发一条 ``consent.*`` 脉冲；未注入 / 发送失败均返回 False。
+
+    ★**绝不抛异常、绝不阻断审批主流程**：审批是安全关键路径，脉冲是观测与
+    协同手段。发射失败只累计计数 + 打一次 WARNING（限频，见下）。
+
+    ★WARNING 限频：补丁入队在生产上可达数百次/天（实测 915 次/1.5h 的去重
+    日志就是这个量级）。每次失败都打会淹掉日志，故只在前 3 次与每 50 次
+    打一条 —— 既不会静默，也不会刷屏。
+    """
+    global _consent_emit_fail_count
+    _fn = _CONSENT_EMITTER
+    if _fn is None:
+        return False
+    try:
+        from nucleus.const import ConsentEvent as _CE405
+        if event_type not in (_CE405.PROPOSE, _CE405.DECIDE):
+            return False
+    except Exception as _e:
+        silent_exc(_e, where="PatchManager::_emit_consent/const", level="debug")
+    try:
+        _fn(str(event_type), dict(payload or {}), int(priority))
+        return True
+    except Exception as _e:
+        _consent_emit_fail_count += 1
+        if _consent_emit_fail_count <= 3 or _consent_emit_fail_count % 50 == 0:
+            _module_logger.warning(
+                "[405刀3] 共同决策脉冲发射失败（第 %d 次，不影响审批主流程）: %s: %s",
+                _consent_emit_fail_count, type(_e).__name__, _e)
+        return False
+
+
+def _m405_proposal_payload(patch: Any) -> dict:
+    """把一条补丁折叠成 ``consent.propose`` 的载荷。
+
+    ★只放**标识与定位**字段（id/file/method/source），不放 `modified_code`：
+    整段代码进脉冲会让 pulse_log 体积按 MB 级膨胀，且决策方要的是"改哪儿"，
+    不是"改成什么"。要看正文去 patch 队列按 id 取。
+    """
+    _p = patch if isinstance(patch, dict) else {}
+    return {
+        "proposal_id": str(_p.get("id") or ""),
+        "details": {
+            "file": str(_p.get("file") or ""),
+            "method": str(_p.get("method") or ""),
+            "repair_source": str(_p.get("repair_source") or ""),
+            "entry_source": str(_p.get("entry_source") or ""),
+            "trust_score": _p.get("trust_score"),
+        },
+        "source": "PatchManager",
+    }
+
 
 def _m344_split_failed_details(failed_details) -> dict:
     """★344批刀6：把失败记录按**形态**与**状态**分流（纯函数、无副作用）。
@@ -2916,6 +3013,17 @@ class PatchManager:
             f"[补丁入队] {patch.get('id','')[:16]} {patch.get('file','')}:"
             f"{patch.get('method','')} trust={patch.get('trust_score','?')} "
             f"src={patch.get('repair_source','?')}")
+        # ★405刀3：入队 = 一次"重大变更提议" ⇒ 发 ConsentEvent.PROPOSE。
+        #   位置刻意放在 `_save_patch_list` **之后**：只有真落了盘才算提议成立，
+        #   入队被拒/写盘失败的路径不该让共同决策那边看到幽灵提议。
+        try:
+            from nucleus.const import ConsentEvent as _CE405p
+            _emit_consent(_CE405p.PROPOSE, _m405_proposal_payload(patch),
+                          priority=5)
+        except Exception as _e405p:
+            silent_exc(_e405p,
+                       where="PatchManager::save_pending_patch 405提议发射",
+                       level="debug")
 
     def _composite_score(self, patch: dict[str, Any]) -> float:
         """★多候选择优合并：综合分 = 0.4*审美 + 0.3*信任 + 0.3*价值（0~100 同量纲）。
@@ -3131,6 +3239,22 @@ class PatchManager:
         _auto_apply = _m54_auto_apply_on()
         if _auto_apply:
             _patch["auto_apply_requested"] = True
+        # ★405刀3：审批通过 = 对那条提议的"决定" ⇒ 发 ConsentEvent.DECIDE。
+        #   放在这里而不是 `_approve_via` 内部：`_approve_via` 是治理门禁的底层
+        #   实现，批量/单条/O3 三条道都会经过它，在那里发会重复计数；此处只覆盖
+        #   "单条审批确实成功"这一条路径，与 `approve_all_patches` 各自记账。
+        try:
+            from nucleus.const import ConsentEvent as _CE405d
+            _emit_consent(_CE405d.DECIDE, {
+                "proposal_id": str(_patch.get("id") or ""),
+                "decision": "accept",
+                "signer": str(signer or ""),
+                "source": "PatchManager.approve_patch",
+            }, priority=5)
+        except Exception as _e405d:
+            silent_exc(_e405d,
+                       where="PatchManager::approve_patch 405决策发射",
+                       level="debug")
         return {"ok": True, "file": os.path.basename(_patch.get("file", "")),
                 "reason": _reason, "auto_apply": _auto_apply,
                 "stale": bool(_patch.get("stale"))}
@@ -3152,6 +3276,20 @@ class PatchManager:
                     continue
                 if not PatchManager._approve_via(_p, "human", signer):
                     continue
+                # ★405刀3：批量道同样逐条发 DECIDE（与单条道同一口径，
+                #   区别只在 signer 来源与触发入口）。
+                try:
+                    from nucleus.const import ConsentEvent as _CE405b
+                    _emit_consent(_CE405b.DECIDE, {
+                        "proposal_id": str(_p.get("id") or ""),
+                        "decision": "accept",
+                        "signer": str(signer or ""),
+                        "source": "PatchManager.approve_all_patches",
+                    }, priority=5)
+                except Exception as _e405b:
+                    silent_exc(_e405b,
+                               where="PatchManager::approve_all_patches 405决策发射",
+                               level="debug")
                 # ★v9.5审美判据：批量审批同样记录质量分（不阻断闭环）
                 try:
                     from nucleus.evolution.AestheticJudge import get_aesthetic_judge
