@@ -25,6 +25,7 @@ grade                                       —— A⇒WARNING（必改），B/C
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import json
 import os
@@ -37,6 +38,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))  # tools/ci ⇒ 仓库根（两级）
 _LEDGER = os.path.join(_HERE, "baselines", "m365_silent_except_ledger.json")
 _SCANNER = os.path.join(_ROOT, "tools", "scan_silent_except_dual.py")
+
+if _ROOT not in sys.path:  # ★399刀1：给退役归因用（直接跑本脚本时也能 import nucleus）
+    sys.path.insert(0, _ROOT)
+
+from nucleus._silent_except import silent_exc  # noqa: E402
 
 SCHEMA = "m365.silent_except_ledger.v1"
 
@@ -80,16 +86,105 @@ def _load_existing_meta(path: str | None = None) -> dict:
     return _out
 
 
+# ---------------------------------------------------------------- ★399刀1 退役归档
+def _load_ledger_raw(path: str | None = None) -> dict:
+    """读既有台账原文（rows + retired），读不到就给空壳。与 `_load_existing_meta` 分开：
+    那个只关心"要保真的元数据"，这个还要管"已经退役的行别丢"。"""
+    _p = path or _LEDGER
+    if not os.path.isfile(_p):
+        return dict()
+    try:
+        with open(_p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="m365_silent_ledger::_load_ledger_raw")
+        return dict()
+
+
+def _find_func_node(tree, qualname: str):
+    """按 qualname 找函数节点（支持 `Class.method`；找不到就退回同名叶子）。"""
+    _leaf = str(qualname or "").split(".")[-1]
+    _exact, _loose = [], []
+
+    def _walk(node, prefix):
+        for ch in ast.iter_child_nodes(node):
+            if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                _q = (prefix + "." + ch.name) if prefix else ch.name
+                if _q == qualname:
+                    _exact.append(ch)
+                elif ch.name == _leaf:
+                    _loose.append(ch)
+                _walk(ch, _q)
+            elif isinstance(ch, ast.ClassDef):
+                _walk(ch, (prefix + "." + ch.name) if prefix else ch.name)
+
+    _walk(tree, "")
+    if _exact:
+        return _exact[0]
+    return _loose[0] if _loose else None
+
+
+def _calls_name(fn, name: str) -> bool:
+    for _n in ast.walk(fn):
+        if isinstance(_n, ast.Call):
+            _f = _n.func
+            if isinstance(_f, ast.Name) and _f.id == name:
+                return True
+            if isinstance(_f, ast.Attribute) and _f.attr == name:
+                return True
+    return False
+
+
+def _retire_reason(row: dict) -> str:
+    """一条台账行为什么不在差集里了。
+
+    ★只用于**归档说明**，不参与任何判据（判据只看 `rows`＝待办）。
+    三种取值：`fixed`（函数还在且已补 `silent_exc`）／
+    `func_gone`（qualname 在现仓找不到）／`no_longer_silent`（函数在、无 silent_exc、
+    也已被新判据放过 —— 静默 handler 本身被删掉了）。
+    """
+    _p = os.path.join(_ROOT, str(row.get("path") or ""))
+    try:
+        with open(_p, encoding="utf-8-sig", errors="replace") as f:
+            _src = f.read()
+    except OSError as _e:
+        # 文件都没了 ⇒ 函数必然不在（这是 func_gone 最常见的原因，别归成 unknown）
+        silent_exc(_e, where="m365_silent_ledger::_retire_reason::open")
+        return "func_gone"
+    try:
+        _t = ast.parse(_src)
+    except (SyntaxError, ValueError) as _e:
+        silent_exc(_e, where="m365_silent_ledger::_retire_reason::parse")
+        return "unknown"
+    _fn = _find_func_node(_t, str(row.get("qualname") or ""))
+    if _fn is None:
+        return "func_gone"
+    if _calls_name(_fn, "silent_exc"):
+        return "fixed"
+    return "no_longer_silent"
+
+
 def build_ledger(preserve: bool = True) -> dict:
     """重算「新判据多抓到的条目」并组装台账。
 
     ★366刀N3：`preserve=True` 时把既有台账里的人工元数据（manual_review/exemption）
     按身份键搬过来 —— 否则每次 `--emit` 都会把人工作出的结论冲掉（那就没人敢往里写）。
+
+    ★399刀1：差集两侧必须用**同一个**键函数（见下面 `_old_cmp` 注释）；
+    `preserve=True` 时还会把"上次在册、这次不在差集里"的行挪进 `retired` 存档，
+    并把它们的 `manual_review`/`exemption` 一并带走 —— 结案不等于抹掉。
     """
     _m = _load_scanner()
+    _prev = _load_ledger_raw() if preserve else dict()
     _meta = _load_existing_meta() if preserve else {}
     _files, _old, _new, _parse_err = _m.scan("prod")
-    _old_cmp = set(_m.handler_identity(x) for x in _old)
+    # ★399刀1 修：两侧必须用**同一个**键函数。原代码左边用 `handler_identity`
+    #   （5 元组，含 tname/kind；371A5 把 nth 从身份里去掉了），右边用 `_cmp_key`
+    #   （4 元组，含 nth、不含 tname/kind）⇒ 两个元组永远不相等 ⇒ 差集恒等于全集
+    #   （399 实测 552 = 全部 `_new`，台账被迫退化成"所有新判据命中"）。
+    #   `_cmp_key` 自己的注释写明它就是"跨判据可比键（同一 handler 的两副面孔）"，
+    #   所以两侧都用它 —— 只有它保证"同一个 handler 的两副判据面孔"能对上。
+    _old_cmp = set(_m._cmp_key(x) for x in _old)
     _added = [x for x in _new if _m._cmp_key(x) not in _old_cmp]
     _rows = []
     for _x in sorted(_added, key=lambda r: (r["path"], r["lineno"], r["qualname"])):
@@ -114,6 +209,25 @@ def build_ledger(preserve: bool = True) -> dict:
                 _r.update(_m2)
     _by_kind: dict = {}
     _by_grade: dict = {}
+    # ★399刀1：把"上次在册、这次不在差集里"的行挪进 retired 存档。
+    #   为什么不能直接丢：台账里有 6 条人工结论，其中 1 条（A 档）对应的 handler 已被修好，
+    #   它必然离开差集 —— 但"修好了"是**结案**，不是"没发生过"。丢掉就等于抹掉审计链。
+    #   只在 preserve=True 时累积，保证 `--emit` 幂等（同一批再跑不会重复追加）。
+    _retired = list(_prev.get("retired") or [])
+    if preserve:
+        _live = set(identity_of(_r) for _r in _rows)
+        _seen = set(identity_of(_r) for _r in _retired)
+        for _r0 in (_prev.get("rows") or []):
+            _k = identity_of(_r0)
+            if _k in _live or _k in _seen:
+                continue
+            _r1 = dict(_r0)
+            _r1["retired_reason"] = _retire_reason(_r0)
+            _retired.append(_r1)
+            _seen.add(_k)
+        _retired.sort(key=lambda r: (str(r.get("path") or ""),
+                                     str(r.get("qualname") or ""),
+                                     str(r.get("retired_reason") or "")))
     for _r in _rows:
         _by_kind[_r["kind"]] = int(_by_kind.get(_r["kind"], 0)) + 1
         _by_grade[_r["grade"]] = int(_by_grade.get(_r["grade"], 0)) + 1
@@ -125,7 +239,18 @@ def build_ledger(preserve: bool = True) -> dict:
         "total": len(_rows),
         "by_kind": _by_kind,
         "by_grade": _by_grade,
+        # ★399刀1：这两个计数原先**是手工写进 json 的**，`--emit` 一跑就没了
+        #   （实测 emit 后 `manual_review_n`/`control_flow_exempt_n` 双变 None ⇒
+        #   test_01/test_02 当场红）。改由 rows 现场派生，从此不会再漂。
+        "manual_review_n": sum(1 for r in _rows if r.get("manual_review")),
+        "control_flow_exempt_n": sum(1 for r in _rows if r.get("exemption")),
         "parse_err": [list(p) for p in _parse_err],
+        "retired_note": ("退役存档：曾在本台账、现已不在差集内。reason 三态 "
+                         "fixed（已补 silent_exc）/ func_gone（qualname 不在了）/ "
+                         "no_longer_silent（静默 handler 本身被删）。带 manual_review 的"
+                         "是人工结论已结案，**勿删**。"),
+        "retired_n": len(_retired),
+        "retired": _retired,
         "rows": _rows,
     }
 
