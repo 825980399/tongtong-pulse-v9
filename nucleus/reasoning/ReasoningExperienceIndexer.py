@@ -26,6 +26,29 @@ from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
 import logging
 logger = logging.getLogger("nucleus.reasoning.ReasoningExperienceIndexer")
 
+
+def _exc_site(exc: BaseException) -> str:
+    """取异常**抛出点**的 `文件:行号 in 函数`（取 traceback 最后一帧）。
+
+    ★为什么不用 `exc.__traceback__` 只打类型：405 刀2 的任务是"确认到底走到
+    哪一步抛了"。只看异常类型分不出「是 exp.record 内部的 json.dump 炸了」
+    还是「是 ReasoningExperience.record 自己的相似度计算炸了」—— 具体到
+    文件名+行号，重启后 24h 的日志才能自证。
+    取不到 traceback 时返回 `<no-tb>`，绝不因为**记录异常**而再抛一次。
+    """
+    try:
+        import traceback as _tb
+        _frames = _tb.extract_tb(exc.__traceback__)
+        if not _frames:
+            return "<no-tb>"
+        _last = _frames[-1]
+        return "%s:%s in %s()" % (
+            os.path.basename(str(_last.filename)), _last.lineno,
+            str(_last.name or "?"))
+    except Exception as _e:
+        silent_exc(_e, where="ReasoningExperienceIndexer::_exc_site", level="debug")
+        return "<unavailable>"
+
 # ★第232批 刀2：旁路哨兵窗口（成功增量计数达此值即核一次蒸馏滞后，连续两窗>0 即告警）
 _SENTINEL_WINDOW = 50
 # ★第245批 刀1：哨兵确认窗数默认（连续多少窗缺口>0 即告警）；刀2 读取函数带 config 回退
@@ -320,10 +343,27 @@ class ReasoningExperienceIndexer:
         """★第164批 刀A1：LLM 补救成功路径——(问题, 正确答案) 蒸馏为 L2 节点 + 候选规则。
 
         仅当双写开启且 node_pool 就绪时写 L2 节点副本；JSON 经验始终记录。
-        无 try/except：异常上抛给调用方既有异常边界（不新增静默 except 处理）。
+        异常语义（★405刀2 起）：
+          · `_exp.record()` 抛 → 打一行 WARNING（含异常位置/经验文件/计数）
+            后**原样上抛**；调用方既有异常边界不变，`_remediation_count`
+            照旧不 +1 —— 即**只定位，不修复**，distilled 仍然会是 0。
+          · `_persist_state()` 抛 → 由它自己打 WARNING 并自吞（它本来就有
+            自己的 try/except，外层收不到，可见化只能在那里做）。
+          · 两步措辞不同（step=1 / step=2），日志里可直接分辨断在哪一步。
         """
         _q = str(question or "").strip()
         _a = str(correct_answer or "").strip()
+        # ★405刀2：经验池的真实落盘文件（任务书要求 WARNING 带"文件名"）。
+        #   `_exp` 可能是注入的替身（测试），没有 _file_path 就用 <unknown>，
+        #   绝不因为取个路径把主链路弄挂。
+        try:
+            _exp_file = os.path.basename(
+                str(getattr(self._exp, "_file_path", "") or "") ) or "<unknown>"
+        except Exception as _e405p:
+            silent_exc(_e405p,
+                       where="ReasoningExperienceIndexer::record_remediation_success",
+                       level="debug")
+            _exp_file = "<unreadable>"
         # ★284批刀2：metric success 与 indexer 入口同源（灭 165 条差额）。
         #   把 metric 计数点搬进 indexer 入口之后——只要进了入口就算 success，
         #   与蒸馏（distilled / distilled_delegated）严格 1:1 同源。
@@ -343,10 +383,44 @@ class ReasoningExperienceIndexer:
                 self._sentinel_distilled_delegated += 1
             self._sentinel_check_window()
             return
-        self._exp.record(_q, "remediation_success", source="remediation", confidence=float(confidence))
+        # ================================================================
+        # ★405刀2：distilled 异常可见化（**只定位，不修复**）
+        #   生产实证：success 461 - delegated 292 = 169 次非空本应走到下面的
+        #   distilled++，实际 distilled=0；同时 state 文件 remediation_count=0
+        #   而 nodes_written=78 —— 说明持久化通道本身是通的，堵点在「那两行
+        #   之前」。隔离环境用空池 / 生产池副本（128 条）都复现不出异常，
+        #   所以本刀**不猜根因**，只把两步各自做成可分辨的观测点，让重启后
+        #   24h 的日志自己说出答案。
+        #   分步措辞刻意不同：step=1 由本函数打（并原样上抛，不改契约），
+        #   step=2 由 _persist_state 内部打（它自己吞，外层看不见）。
+        # ================================================================
+        logger.debug("[405刀2] step=1 before _exp.record: q_len=%d exp_file=%s",
+                     len(_q), _exp_file)
+        try:
+            self._exp.record(_q, "remediation_success", source="remediation",
+                             confidence=float(confidence))
+        except Exception as _e405:
+            # 原契约「无 try/except：异常上抛给调用方」在这里**保留**：
+            #   WARNING 打完立即 raise，调用方（PulseCortex）行为不变，
+            #   `_remediation_count` 也照旧不会 +1 —— 这是"只定位不修复"的
+            #   硬约束：偷偷吞掉会让 distilled 开始增长，那就变成修复了。
+            logger.warning(
+                "[405刀2] 蒸馏中断于 step=1 _exp.record: %s: %s | 异常位置=%s"
+                " | 经验文件=%s | 本题累计 _remediation_count=%d"
+                " | 已持久化 remediation_count=%d",
+                type(_e405).__name__, _e405, _exc_site(_e405), _exp_file,
+                self._remediation_count,
+                self._base_remediation + self._remediation_count)
+            raise
+        logger.debug("[405刀2] step=1 after _exp.record: OK（经验池已写入）")
         with self._state_lock:
+            logger.debug("[405刀2] step=2 before bump+_persist_state: count=%d",
+                         self._remediation_count)
             self._remediation_count += 1
             self._persist_state()
+            logger.debug("[405刀2] step=2 after _persist_state: count=%d"
+                         "（两步全通过 ⇒ 若 distilled 仍为 0，堵点在下方"
+                         " distilled 分支或 metrics 侧）", self._remediation_count)
         self._remediation_log.append({
             "question": _q, "answer": _a, "rule": rule_candidate, "ts": time.time()})
         if len(self._remediation_log) > 500:
@@ -572,7 +646,19 @@ class ReasoningExperienceIndexer:
                 json.dump(_payload, _f, ensure_ascii=False)
             os.replace(_tmp, _STATE_PATH)
         except Exception as _e:
-            silent_exc(_e, "nucleus.reasoning.ReasoningExperienceIndexer::_persist_state")
+            # ★405刀2：这里是**唯一**能看到本步异常的地方 —— 本方法自带
+            #   try/except，外层（record_remediation_success / PulseCortex）
+            #   永远看不到这个异常。任务书要求"异常从 DEBUG 升 WARNING"，
+            #   在别处升是无效的：别处根本收不到。
+            logger.warning(
+                "[405刀2] 计数落盘中断于 step=2 _persist_state（本步自吞，"
+                "不影响主链路）: %s: %s | 异常位置=%s | 目标文件=%s"
+                " | 待写 remediation_count=%d",
+                type(_e).__name__, _e, _exc_site(_e), _STATE_PATH,
+                self._base_remediation + self._remediation_count)
+            silent_exc(_e,
+                       "nucleus.reasoning.ReasoningExperienceIndexer::_persist_state",
+                       level="warning")
 
 # ==================================================================
 # 单例
