@@ -468,6 +468,34 @@ class RuntimeMetrics:
         return {"rss_mb": round(_rss, 1), "vms_mb": round(_vms, 1),
                 "percent": round(_pct, 1)}
 
+    def _m403_alarm_transition(self, logger, key: str, triggered: bool,
+                               alarm_msg: str, recover_msg: str) -> None:
+        """★403刀4③：阈值告警状态机（正常→超阈值 WARNING / 持续 30s 节流 / 恢复 INFO）。
+
+        为什么必须做：RSS 超阈值后本方法每 10s 被调一次，现场 21 分钟刷了 150 条
+        一模一样的 WARNING，真正的异常全被淹掉。告警应该是**状态变化**的通知，
+        不是"每次采样都念一遍"。
+        """
+        _st = _M403_ALARM_STATE.setdefault(str(key), {"state": "normal", "last": 0.0})
+        _now = time.time()
+        try:
+            if triggered:
+                if _st["state"] != "alarm":
+                    logger.warning(alarm_msg)
+                    _st["state"] = "alarm"
+                    _st["last"] = _now
+                elif (_now - float(_st.get("last") or 0.0)) >= _M403_ALARM_THROTTLE_S:
+                    # 持续超阈值：30s 才允许再念一次（证明还活着，但不再刷屏）
+                    logger.warning(alarm_msg)
+                    _st["last"] = _now
+            else:
+                if _st["state"] == "alarm":
+                    logger.info(recover_msg)
+                    _st["state"] = "normal"
+                    _st["last"] = _now
+        except Exception as _e:
+            silent_exc(_e, where="runtime_metrics._m403_alarm_transition")
+
     def check_memory_alarm(self, threshold_percent: float = 80.0) -> bool:
         """★主线第65批 T5：内存超阈值告警（True=触发）。调用方自行决定降载/GC。
 
@@ -477,15 +505,15 @@ class RuntimeMetrics:
         import logging
         _logger = logging.getLogger("pulse.module.runtime_metrics")
         _pct = self.get_memory_usage().get("percent", 0.0)
-        if _pct >= float(threshold_percent):
-            try:
-                _logger.warning(
-                    f"[运行时指标] 内存使用率 {_pct:.1f}% ≥ 阈值 {threshold_percent:.1f}%，"
-                    f"建议降载/触发 GC")
-            except Exception as _se:
-                silent_exc(_se, "runtime_metrics.py:376")
-            return True
-        return False
+        _hit = _pct >= float(threshold_percent)
+        # ★403刀4③：改状态机（原实现每次调用都 warning，10s 一次刷屏）
+        self._m403_alarm_transition(
+            _logger, "memory_percent_simple", _hit,
+            "[运行时指标] 内存使用率 %.1f%% ≥ 阈值 %.1f%%，建议降载/触发 GC"
+            % (_pct, float(threshold_percent)),
+            "[运行时指标] 内存使用率已回落至 %.1f%%（阈值 %.1f%%），告警解除"
+            % (_pct, float(threshold_percent)))
+        return _hit
 
     def get_memory_growth_rate(self, window_samples: int = 60) -> float:
         """★主线第66批 T1.4：估算内存增长率（MB/分钟）。
@@ -551,22 +579,16 @@ class RuntimeMetrics:
         _gc_done = False
         if _triggered:
             try:
-                # ★364刀B1②：告警按**真实闸因**分别说清楚，不再用 else 兜着
-                if "percent" in _triggers:
-                    _logger.warning(
-                        "[运行时指标] 内存使用率 %.1f%% ≥ 阈值 %.1f%%，RSS=%.1fMB，"
-                        "增长率 %.2fMB/分钟（闸因=%s）",
-                        _pct, threshold_percent, _rss, _growth, ",".join(_triggers))
-                if "rss" in _triggers:
-                    _logger.warning(
-                        "[运行时指标] RSS %.1fMB ≥ 自动GC阈值 %.1fMB（使用率 %.1f%%，"
-                        "增长率 %.2fMB/分钟，闸因=%s）",
-                        _rss, _rss_thr, _pct, _growth, ",".join(_triggers))
-                if "growth" in _triggers and "percent" not in _triggers:
-                    _logger.warning(
-                        "[运行时指标] 内存增长率 %.2fMB/分钟 ≥ 阈值 %.1fMB/分钟（疑似内存泄漏），"
-                        "RSS=%.1fMB 使用率=%.1f%%（闸因=%s）",
-                        _growth, _growth_thr, _rss, _pct, ",".join(_triggers))
+                # ★364刀B1②：告警按**真实闸因**说清楚，不再用 else 兜着。
+                # ★403刀4③：三条分支合并为一条消息并走状态机 —— 原来每次采样最多打 3 条
+                #   WARNING，10s 一轮，21 分钟 150 条，全是同一件事。
+                _msg = ("[运行时指标] 内存告警（闸因=%s）：使用率 %.1f%%（阈值 %.1f%%），"
+                        "RSS=%.1fMB（自动GC阈值 %.1fMB），增长率 %.3fMB/分钟（阈值 %.1f）"
+                        % (",".join(_triggers), _pct, threshold_percent,
+                           _rss, _rss_thr, _growth, _growth_thr))
+                self._m403_alarm_transition(
+                    _logger, "memory_detailed", True, _msg,
+                    "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
             except Exception as _se:
                 silent_exc(_se, "runtime_metrics.py:435")
             if auto_gc and _enable_gc:
@@ -585,12 +607,23 @@ class RuntimeMetrics:
                     _last_auto_gc.append(_gc_stats)
                     if len(_last_auto_gc) > 20:
                         del _last_auto_gc[:-20]
-                    _logger.warning(
+                    # ★403刀4③：GC 是**正常行为**，不该占 WARNING。
+                    #   `_last_auto_gc` 与返回值 `gc_triggered` 仍照常给观测面，
+                    #   需要看的时候按 DEBUG 打开即可。
+                    _logger.debug(
                         "[运行时指标] 自动GC完成：回收 %d 个对象，暂停 %.2fms，闸因=%s，"
                         "RSS=%.1fMB 使用率=%.1f%%",
                         _collected, _gc_pause_ms, ",".join(_triggers), _rss, _pct)
                 except Exception as _se:
                     silent_exc(_se, "runtime_metrics.py:441")
+        else:
+            # 未触发 ⇒ 只有"从告警恢复到正常"这一刻才留 INFO（重复调用不会再打）
+            try:
+                self._m403_alarm_transition(
+                    _logger, "memory_detailed", False, "",
+                    "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
+            except Exception as _se:
+                silent_exc(_se, "runtime_metrics.py:441b")
         return {"triggered": _triggered, "percent": _pct, "rss_mb": _rss,
                 "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done,
                 # ★364刀B1②③：闸因与回收读数一起返回（观测面可直接读）
@@ -630,6 +663,11 @@ class RuntimeMetrics:
 _metrics: RuntimeMetrics | None = None
 _metrics_lock = threading.Lock()
 
+
+#: ★403刀4③：阈值告警状态机（key -> {"state": "normal"/"alarm", "last": ts}）
+_M403_ALARM_STATE: dict = {}
+#: 持续超阈值时的重复告警间隔（秒）—— 票面：30 秒内不重复打
+_M403_ALARM_THROTTLE_S = 30.0
 
 #: ★364刀B1③：最近 20 次自动 GC 的读数（进程内，供观测面读取）
 _last_auto_gc: list = []

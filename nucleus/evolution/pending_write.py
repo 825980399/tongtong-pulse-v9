@@ -38,6 +38,31 @@ PENDING_REL = os.path.join("data", "patches", "pending_patches.json")
 #: 判据：写后读回的条数必须与写入一致
 _READBACK_RETRY = 1
 
+#: ★403刀4：os.replace 重试（Windows 上多进程同时写同一文件常撞 WinError 5/32）
+_REPLACE_RETRIES = 3
+_REPLACE_RETRY_GAP_S = 0.1
+
+
+def _replace_with_retry(tmp_path: str, target_path: str,
+                        retries: int = _REPLACE_RETRIES,
+                        gap_s: float = _REPLACE_RETRY_GAP_S) -> None:
+    """原子替换带重试：Windows 读者持句柄时 `os.replace` 会抛 WinError 5/32。
+
+    重试用完后仍失败 ⇒ 抛最后一次异常（由调用方决定是报错还是保留 tmp 供取证）。
+    """
+    _last = None
+    for _i in range(max(1, int(retries))):
+        try:
+            os.replace(tmp_path, target_path)
+            return
+        except OSError as _e:
+            _last = _e
+            if _i < max(1, int(retries)) - 1:
+                time.sleep(gap_s)
+    if _last is not None:
+        raise _last
+    raise OSError("replace failed")
+
 
 def pending_path(root: str | None = None) -> str:
     """pending 文件路径（`root` 仅供隔离注入；不传就是生产路径）。"""
@@ -100,7 +125,7 @@ def write_pending(payload: Any, *, path: str | None = None,
                 json.dump(payload, _f, ensure_ascii=False, indent=1)
                 _f.flush()
                 os.fsync(_f.fileno())
-            os.replace(_tmp, _p)
+            _replace_with_retry(_tmp, _p)   # ★403刀4：3 次重试，间隔 100ms
             _tmp = None
         except (OSError, TypeError, ValueError) as _e:
             silent_exc(_e, where="pending_write.write_pending[%s]" % (writer or "?"),

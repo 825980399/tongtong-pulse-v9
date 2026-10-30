@@ -119,7 +119,21 @@ def save_budget(data: dict, path: str | None = None,
     _tmp = _p + ".tmp335"
     with open(_tmp, "w", encoding="utf-8") as _f:
         json.dump(data, _f, ensure_ascii=False, indent=2)
-    os.replace(_tmp, _p)
+    # ★403刀4：Windows 上多进程同时写同一文件会撞 WinError 5（拒绝访问）——
+    #   原来单次 os.replace，撞上就整笔预算写失败。改 3 次重试、间隔 100ms。
+    _last_exc = None
+    for _i in range(3):
+        try:
+            os.replace(_tmp, _p)
+            _last_exc = None
+            break
+        except OSError as _e:
+            _last_exc = _e
+            if _i < 2:
+                time.sleep(0.1)
+    if _last_exc is not None:
+        # 保留 tmp 供取证（不删——删了现场就没了），异常交调用方
+        raise _last_exc
     return _p
 
 
