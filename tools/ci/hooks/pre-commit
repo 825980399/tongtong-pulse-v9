@@ -8,6 +8,7 @@
 #   5) 367 后续 保留名门禁：Windows 保留设备名（NUL/CON/PRN/AUX/COM1-9/LPT1-9）不得被跟踪
 #   + 404 刀3 七层自我分析体系自检面板（tools/m404_layer_health_check.py，默认 warn 不阻断）
 #      405 刀5 起「模板 ≡ 实装」由 install_precommit_hook.py --check 校验（CI 与手动都可跑）
+#   + 406 刀1 hook 模板/实装同步自检（install_precommit_hook.py --check，默认 warn 不阻断）
 #
 # 第162批提速（刀13/14/15）：
 #   刀13 GATE_PATH_SPLIT — 仅文档路径提交跳过全部代码/collect 门禁（登记册+隔离守卫仍执行）
@@ -215,6 +216,36 @@ if [ "$SKIP_CODE_GATES" -ne 1 ]; then
     fi
   else
     echo "[pre-commit] 未找到七层自检面板：$LH（跳过）" >&2
+  fi
+fi
+
+# --- 6) 406 刀1 hook 模板 ≡ 实装 同步自检（默认**不阻断**）---
+#   405 刀5 给 install_precommit_hook.py 加了 --check：模板 ≠ 实装即非零退出。
+#   挂在这里 = 每次提交自动提醒，不必再靠人记得手跑 --check。
+#   为什么必须有这道提醒（404 批的真实事故，别把它当形式主义）：
+#     404 刀3 往**本机** .git/hooks/pre-commit 加了 30 行七层自检，却没同步回模板，
+#     于是「改了本机忘了改模板」潜伏五天；期间那段代码里还写着「本 hook 未纳入版本管理」
+#     这句错话自我麻醉，把事故包装成了「已知限制」。
+#   默认不阻断的理由同第 5 段：--check 比对的是**本机安装态**，
+#     干净克隆 / CI / worktree 里 .git/hooks 未必存在 ⇒ 做成阻断门会「新克隆一律提交不了」。
+#   需要严格时：HOOK_SYNC_GATE=block git commit
+#   一致时本段**零输出**（--check 的输出被捕获后丢弃，只在不一致时打印）。
+if [ "$SKIP_CODE_GATES" -ne 1 ]; then
+  HK="$ROOT/tools/ci/install_precommit_hook.py"
+  if [ -f "$HK" ]; then
+    HK_OUT=$("$PY" "$HK" --check 2>&1)
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      if [ "${HOOK_SYNC_GATE:-warn}" = "block" ]; then
+        printf '%s\n' "$HK_OUT" >&2
+        fail "hook 模板与实装不同步（HOOK_SYNC_GATE=block；修复：\"$PY\" \"$HK\"）"
+      else
+        printf '%s\n' "$HK_OUT" >&2
+        echo "[pre-commit] ⚠ hook 模板和实装不同步，跑 install_precommit_hook.py 安装（不阻断；HOOK_SYNC_GATE=block 可阻断）" >&2
+      fi
+    fi
+  else
+    echo "[pre-commit] 未找到 hook 安装脚本：$HK（跳过）" >&2
   fi
 fi
 
