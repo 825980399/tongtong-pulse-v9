@@ -29,12 +29,21 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
 from nucleus.self_awareness.health_bands import level_v1  # ★199刀2：层②分级带单一真源
+# ★405刀1：分片缓存 + 运行账本（缓存/账本失败绝不影响分析器，见该模块 docstring）
+from nucleus.self_awareness.AnalyzerCache import (
+    get_analyzer_cache,
+    peek_analyzer_cache,
+    log_analyzer_run,
+    prune_analyzer_runs,
+    tree_sig,
+)
 
 _logger = get_module_logger("SelfAwarenessEngine")
 
@@ -126,6 +135,107 @@ def _timeout_sec() -> float:
         _logger.debug("读取分析器超时配置失败，用默认 30s: %s: %s",
                       type(e).__name__, e)
         return 30.0
+
+
+#: ★405刀1：分析器超时分级（秒）。
+#: 背景：此前 5 个分析器串行 + 统一 30s。call_graph 单跑实测 18–20s
+#:   （Pass1 6.2s + Pass2 14.0s），框架满载时被 GIL 争抢可拉到 100s+ ⇒ 必然超时、
+#:   结果被丢弃、画像三维空。分级后 call_graph 给到 120s，留足争抢余量。
+_TIMEOUT_TIERS = {
+    "call_graph": 120.0,
+    "knowledge_quality": 60.0,
+}
+#: 未列入分级的分析器用这个（与历史 SELF_AWARENESS_TIMEOUT_SEC 默认值一致）
+_DEFAULT_ANALYZER_TIMEOUT = 30.0
+
+
+def _analyzer_timeout_sec(name: str, fallback: float | None = None) -> float:
+    """按分析器名取分级超时。
+
+    优先级（高 → 低）：
+      1. ``config.ANALYZER_TIMEOUT_OVERRIDES[name]``（运维热调，无需改码）
+      2. 内置分级 ``_TIMEOUT_TIERS``
+      3. 调用方传入的 ``fallback``（引擎构造参数 ``timeout_sec``）
+      4. ``config.SELF_AWARENESS_TIMEOUT_SEC`` / 30s
+
+    ★把 fallback 放在分级**之后**是刻意的：构造参数是「全局默认」，
+    分级是「按分析器特调」，特调应当赢。否则实例化时传一次 30 就等于把
+    分级表整体废掉。
+    """
+    _nm = str(name or "")
+    try:
+        import config
+        _ov = getattr(config, "ANALYZER_TIMEOUT_OVERRIDES", None)
+        if isinstance(_ov, dict) and _nm in _ov:
+            _v = float(_ov[_nm])
+            if _v > 0:
+                return _v
+    except Exception as _e:
+        silent_exc(_e, where="SelfAwarenessEngine::_analyzer_timeout_sec", level="debug")
+    if _nm in _TIMEOUT_TIERS:
+        return _TIMEOUT_TIERS[_nm]
+    if fallback is not None and float(fallback) > 0:
+        return float(fallback)
+    return _timeout_sec()
+
+
+# ----------------------------------------------------------------------
+# ★405刀1：分析器独立线程池（2 worker）
+# ----------------------------------------------------------------------
+_POOL: ThreadPoolExecutor | None = None
+_POOL_LOCK = threading.Lock()
+_POOL_WORKERS: int | None = None
+
+
+def _pool_workers() -> int:
+    """读 ``config.ANALYZER_POOL_WORKERS``（默认 2；0 = 不启用异步）。"""
+    try:
+        import config
+        return max(0, int(getattr(config, "ANALYZER_POOL_WORKERS", 2)))
+    except Exception as _e:
+        silent_exc(_e, where="SelfAwarenessEngine::_pool_workers", level="debug")
+        return 2
+
+
+def get_analyzer_pool() -> ThreadPoolExecutor | None:
+    """取分析器线程池（懒建；worker 数配为 0 时返回 None）。
+
+    ★为什么要独立池：分析器跑在**框架主循环之外**，不能占用请求/对话线程。
+    这是任务书 405 刀1「异步化」的落点，配置为 0 即完全退回同步语义。
+    """
+    global _POOL, _POOL_WORKERS
+    _n = _pool_workers()
+    if _n <= 0:
+        return None
+    with _POOL_LOCK:
+        if _POOL is None or _POOL_WORKERS != _n:
+            if _POOL is not None:
+                _POOL.shutdown(wait=False)
+            _POOL = ThreadPoolExecutor(max_workers=_n,
+                                       thread_name_prefix="SelfAwarenessPool")
+            _POOL_WORKERS = _n
+            _logger.info("[405刀1] 分析器线程池已建立：%d worker", _n)
+        return _POOL
+
+
+def reset_analyzer_pool() -> None:
+    """测试用：销毁线程池（下次取用时按当前配置重建）。"""
+    global _POOL, _POOL_WORKERS
+    with _POOL_LOCK:
+        if _POOL is not None:
+            _POOL.shutdown(wait=False)
+        _POOL = None
+        _POOL_WORKERS = None
+
+
+def _cache_enabled() -> bool:
+    """分片缓存总开关（``config.ANALYZER_CACHE_ENABLED``，默认 True）。"""
+    try:
+        import config
+        return bool(getattr(config, "ANALYZER_CACHE_ENABLED", True))
+    except Exception as _e:
+        silent_exc(_e, where="SelfAwarenessEngine::_cache_enabled", level="debug")
+        return True
 
 
 def _project_root() -> str:
@@ -459,6 +569,13 @@ class SelfAwarenessEngine:
         self._run_count = 0
         self._skipped_off = 0
         self._timeout_sec = timeout_sec
+        # ★405刀1：异步化 —— 最近一次**成功**完成的画像 + 完成时刻。
+        #   口径刻意分开存：`_profile` 是「最后一次跑的结果」（可能全超时），
+        #   `_last_success_*` 才是 get_portrait() 该读的东西。两者混淆会让
+        #   一次全超时的空画像顶掉上一份好画像，等于把好不容易跑出来的结果弄丢。
+        self._last_success_ts: float | None = None
+        self._last_success_profile: SelfAwarenessProfile | None = None
+        self._inflight: Future | None = None
         # ★第311批 刀2：结构变化脉冲的消费者状态（订阅 + 重扫节流 + 计数）
         self._m311_consumer_cond = ""
         self._m311_last_rescan_ts = 0.0
@@ -678,21 +795,46 @@ class SelfAwarenessEngine:
 
         with self._lock:
             _analyzers = list(self._analyzers)
-        _timeout = self._timeout_sec if self._timeout_sec is not None else _timeout_sec()
         _profile = SelfAwarenessProfile(timestamp=_now_iso())
         _runs: dict[str, dict[str, Any]] = {}
+        # ★405刀1：分片缓存按轮归零命中计数（跨轮累计看不出"这一轮命中多少"）。
+        #   ★用 peek 不用 get：缓存文件实测 13.7 MB，加载约 1s。本轮若不含
+        #   call_graph，白付这笔开销毫无意义 —— 真要用的人（integrate_call_graph）
+        #   自己会 get_analyzer_cache() 建。这里只"看"已有实体，不"造"。
+        _cache_on = _cache_enabled()
+        _cache = peek_analyzer_cache() if _cache_on else None
+        if _cache is not None:
+            _cache.reset_stats()
+        _run_t0 = time.perf_counter()
 
         for _name, _func, _fld in _analyzers:
             if scope != "all" and scope not in (_name, _fld):
                 continue
+            # ★405刀1：分级超时 —— call_graph 120s / knowledge_quality 60s / 其余 30s
+            _timeout = _analyzer_timeout_sec(_name, self._timeout_sec)
+            _hit_before = (_cache.stats()["hit"] if _cache is not None else 0)
             _t0 = time.perf_counter()
             _value, _err = self._run_with_timeout(_name, _func, _timeout)
             _elapsed = round((time.perf_counter() - _t0) * 1000.0, 2)
+            _hit_after = (_cache.stats()["hit"] if _cache is not None else 0)
+            _shards = 0
+            if isinstance(_value, dict):
+                _st = _value.get("graph_stats")
+                _shards = int(((_st or {}).get("shards") if isinstance(_st, dict)
+                               else 0) or _value.get("shards") or 0)
             _runs[_name] = {
                 "status": "ok" if _err is None else _err,
                 "elapsed_ms": _elapsed,
                 "field": _fld or _name,
+                "timeout_sec": round(float(_timeout), 1),
             }
+            # ★405刀1：运行账本（任务书要求 {name, elapsed_ms, shards, cache_hit, ok}）
+            log_analyzer_run(
+                _name, _elapsed, shards=_shards,
+                cache_hit=bool(_hit_after > _hit_before), ok=(_err is None),
+                extra={"field": _fld or _name,
+                       "timeout_sec": round(float(_timeout), 1),
+                       "status": "ok" if _err is None else str(_err)[:120]})
             if _err == "timeout":
                 _logger.warning(
                     "分析器 %s 超时(>%.1fs)已跳过（结果丢弃，不阻塞调用方）",
@@ -752,11 +894,114 @@ class SelfAwarenessEngine:
                 _logger.warning("综合评分计算失败（保持缺省）: %s: %s",
                                 type(e).__name__, e)
         _profile.summary = self._build_summary(_profile)
+        # ★405刀1："成功"口径 —— 至少一个分析器 ok 且画像确实有内容。
+        #   全超时的一轮不更新 _last_success_*，否则一次空跑会把上一份好画像顶掉。
+        _ok_count = sum(1 for _r in _runs.values()
+                        if _r.get("status") == "ok")
+        _has_content = any(bool(getattr(_profile, _f, None))
+                           for _f in _PROFILE_DICT_FIELDS if _f != "extra")
         with self._lock:
             self._profile = _profile
             self._last_run = _runs
             self._run_count += 1
+            if _ok_count > 0 and _has_content:
+                self._last_success_ts = time.time()
+                self._last_success_profile = SelfAwarenessProfile.from_dict(
+                    _profile.to_dict())
+        _total_ms = round((time.perf_counter() - _run_t0) * 1000.0, 2)
+        _logger.info("[405刀1] 全量分析完成: %d 个分析器 / %d 成功 / 总耗时 %.2fs%s",
+                     len(_runs), _ok_count, _total_ms / 1000.0,
+                     ("（缓存 %s）" % (_cache.stats() if _cache is not None else "关"))
+                     if _cache_on else "")
+        # 缓存与账本维护：落盘失败只留痕，绝不影响本轮结果（红线见 AnalyzerCache）。
+        # ★这里取的是本轮**结束时**的单例：call_graph 若在本轮跑过，缓存刚被
+        # 它建好并写脏，此处负责统一落盘一次（而不是让每个分析器各写一遍）。
+        _fin = peek_analyzer_cache() if _cache_on else None
+        if _fin is not None:
+            _fin.save()
+        try:
+            _pruned = prune_analyzer_runs()
+            if _pruned:
+                _logger.debug("[405刀1] 运行账本清理过期行: %d", _pruned)
+        except Exception as _pe:
+            silent_exc(_pe, where="SelfAwarenessEngine::run_all_analyses::prune",
+                       level="debug")
         return _profile
+
+    # ------------------------------------------------------------------
+    # ★405刀1：异步提交 + 只读画像（任务书刀1「异步化」）
+    # ------------------------------------------------------------------
+    def submit_analysis(self, scope: str = "all") -> Future | None:
+        """把一轮全量分析提交到独立线程池，**立即返回** Future。
+
+        返回 None 表示未能提交（`ANALYZER_POOL_WORKERS=0` 关闭了异步，或有
+        另一轮正在跑）。调用方据此决定要不要退回同步 `run_all_analyses()`。
+        """
+        _pool = get_analyzer_pool()
+        if _pool is None:
+            return None
+        with self._lock:
+            if self._inflight is not None and not self._inflight.done():
+                _logger.debug("[405刀1] 已有一轮分析在跑，本次提交跳过")
+                return None
+            _fut = _pool.submit(self._run_guarded, scope)
+            self._inflight = _fut
+            return _fut
+
+    def _run_guarded(self, scope: str = "all") -> SelfAwarenessProfile | None:
+        """线程池里跑一轮分析；异常只记 WARNING（池里的异常没人接，必须自己吞）。"""
+        try:
+            return self.run_all_analyses(scope)
+        except Exception as _e:
+            _logger.warning("[405刀1] 后台分析轮次异常（不影响框架）: %s: %s",
+                            type(_e).__name__, _e)
+            return None
+
+    def is_analysis_running(self) -> bool:
+        """是否有一轮异步分析正在跑。"""
+        with self._lock:
+            return self._inflight is not None and not self._inflight.done()
+
+    def get_portrait(self) -> dict[str, Any]:
+        """只读**最近一次成功**的画像 + `stale_seconds`（★405刀1）。
+
+        与 `get_profile()` 的分工：
+          - `get_profile()` 返回 `SelfAwarenessProfile` 对象（可 merge/set），
+            语义是「最后一次跑的画像」，可能来自一次全超时的空跑。
+          - `get_portrait()` 返回 dict 只读快照，**只认最近一次成功的结果**，
+            并附带 `stale_seconds` 说明它有多旧。
+
+        **本方法绝不触发任何分析**（任务书 405 刀1：「不许在请求线程里现算」）。
+        要刷新鲜度，调 `submit_analysis()` 异步跑。
+
+        `stale_seconds` 语义（三种"没有"必须能分辨）：
+          - 有成功结果 → 距该次成功的秒数（float，可能很大）
+          - 从未成功过 → None（**不是 0**：0 会被读成"刚刚跑过"）
+          - 时钟回拨     → 0（宁可说"刚跑过"也不给负数）
+        """
+        with self._lock:
+            _prof = self._last_success_profile
+            _ts = self._last_success_ts
+            _runs = dict(self._last_run)
+            _count = self._run_count
+            _inflight = self._inflight is not None and not self._inflight.done()
+        _age: float | None = None
+        if _ts is not None:
+            _age = max(0.0, round(time.time() - float(_ts), 3))
+        _out: dict[str, Any] = {
+            "profile": (_prof.to_dict() if _prof is not None else None),
+            "stale_seconds": _age,
+            "has_success": _prof is not None,
+            "last_run_status": _runs,
+            "run_count": _count,
+            "analysis_running": _inflight,
+            "source": "SelfAwarenessEngine.get_portrait",
+        }
+        # 便捷镜像：把三个关键维度提到顶层，调用方不用钻两层
+        for _f in ("knowledge_health", "fake_loops", "call_graph_health"):
+            _v = getattr(_prof, _f, None) if _prof is not None else None
+            _out[_f] = dict(_v) if isinstance(_v, dict) else {}
+        return _out
 
     def run_analyzer(self, name: str) -> dict[str, Any] | None:
         """单独执行一个分析器，返回其结果（不改变当前画像）。"""
@@ -764,7 +1009,8 @@ class SelfAwarenessEngine:
             _hit = next((x for x in self._analyzers if x[0] == name), None)
         if _hit is None:
             return None
-        _timeout = self._timeout_sec if self._timeout_sec is not None else _timeout_sec()
+        # ★405刀1：与 run_all_analyses 同一套分级（单跑 large 分析器不再被 30s 卡死）
+        _timeout = _analyzer_timeout_sec(_hit[0], self._timeout_sec)
         _value, _err = self._run_with_timeout(_hit[0], _hit[1], _timeout)
         if _err is not None:
             _logger.debug("单独执行分析器 %s 未成功: %s", name, _err)
@@ -1568,7 +1814,25 @@ class SelfAwarenessEngine:
         try:
             from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
             _cg = CallGraphAnalyzer(project_root=project_root, scan_dirs=scan_dirs)
-            _graph = _cg.analyze()
+            # ★405刀1：走分片+缓存路径（默认开）。判据见 CallGraphAnalyzer.analyze_sharded：
+            #   输出与 analyze() **完全同构等值**，热缓存实测 20.7s → 11.6s（-44%）。
+            #   关闭开关即退回原来的单次全量 analyze()，零行为差异。
+            _graph = None
+            if _cache_enabled():
+                try:
+                    import config as _cfg405
+                    _graph = _cg.analyze_sharded(
+                        shard_size=int(getattr(_cfg405, "ANALYZER_SHARD_SIZE", 120)),
+                        parallel=int(getattr(_cfg405, "ANALYZER_SHARD_PARALLEL", 2)),
+                        cache=get_analyzer_cache())
+                except Exception as _se:
+                    # 分片路径的任何异常都退回全量路径 —— 分析结果不能因为
+                    # 优化路径出错而丢掉（两者输出等值，退回是免费的）。
+                    _logger.warning("[405刀1] 分片建图失败，退回全量 analyze(): %s: %s",
+                                    type(_se).__name__, _se)
+                    _graph = None
+            if _graph is None:
+                _graph = _cg.analyze()
             _health = _cg.analyze_health(_graph)
             _health["graph_stats"] = dict(_graph.get("stats") or {})
             # ★第304批 刀1：图**本体**落盘。此前 integrate 只回传 health + stats 摘要，
@@ -1670,7 +1934,23 @@ class SelfAwarenessEngine:
                 KnowledgeQualityAnalyzer,
             )
             _kq = KnowledgeQualityAnalyzer(project_root=project_root)
-            return _kq.generate_report(nodes)
+            # ★405刀1：知识质量的"分片"落在**数据源级**而非文件级 —— 它的输入
+            #   不是 .py 而是 3 个 parquet 分区 + 1 份 L1 快照（实测 load 3.9s +
+            #   report 5.1s ≈ 9s）。数据源一个字节没变就没必要重算这 9 秒，
+            #   这与任务书「未变更文件直接复用缓存」同义，只是"文件"指数据源。
+            #   ★注入 nodes 的调用（测试路径）不走缓存：那批输入的签名无法表达。
+            _cache405 = get_analyzer_cache() if _cache_enabled() else None
+            _sig405 = (tree_sig([_kq.parquet_dir, _kq.l1_snapshot])
+                       if (_cache405 is not None and nodes is None) else None)
+            if _sig405 is not None:
+                _hit405 = _cache405.get("knowledge_quality:report", _sig405)
+                if isinstance(_hit405, dict) and _hit405:
+                    _logger.debug("[405刀1] 知识质量命中数据源缓存，跳过 9s 重算")
+                    return dict(_hit405)
+            _rep405 = _kq.generate_report(nodes)
+            if _sig405 is not None and isinstance(_rep405, dict) and _rep405:
+                _cache405.put("knowledge_quality:report", _sig405, _rep405)
+            return _rep405
         except Exception as e:  # 整合失败不影响引擎
             _logger.warning("知识质量分析整合失败（返回空 dict）: %s: %s",
                             type(e).__name__, e)

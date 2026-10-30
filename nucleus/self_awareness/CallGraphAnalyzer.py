@@ -36,6 +36,7 @@ import json
 import os
 import time
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor  # ★405刀1：分片并行
 
 from nucleus._silent_except import silent_exc  # ★326批刀5：A5 异常口径与全项目一致
 from nucleus.proc_gen import proc_gen_str as _m335_pg
@@ -53,6 +54,9 @@ from nucleus.logger import (
 )
 
 _logger = get_module_logger("CallGraphAnalyzer")
+
+# ★405刀1：文件签名（(mtime_ns, size)）与缓存共用一份实现
+from nucleus.self_awareness.AnalyzerCache import file_sig as _file_sig
 
 #: ★323批刀0：导入期就地剔除 sys.path 里的备份/打包目录（越早越好——
 #: 晚一步，同进程后续的 `import nucleus.*` 仍可能命中副本）
@@ -886,8 +890,24 @@ class CallGraphAnalyzer:
         self._m322_name_idx = None
         self._m322_infer_stats = {"param_ann": 0, "ret_value": 0}
 
-    def _collect_file(self, rel: str) -> Any:
-        """解析单个文件，产出 `_Collector`；解析失败返回 None 并记 WARNING。"""
+    #: ★405刀1：快照字段表 —— 需要跨轮缓存复用的 `_Collector` 属性。
+    #: 实测 14 个属性全部 JSON 可序列化（`param_types` 是类属性，故用 getattr 兜底）。
+    _SNAPSHOT_ATTRS = (
+        "rel_file", "module", "defs", "bindings", "raw_calls", "emits",
+        "subs", "entries", "name_tables", "class_bases", "param_types",
+        "ret_ann", "assign_src",
+    )
+    #: ★405刀1：缓存键前缀（与分析器名一致，避免与知识质量缓存撞键）
+    _CACHE_NS = "call_graph:"
+
+    def _collect_snapshot(self, rel: str) -> dict | None:
+        """解析单个文件 → 纯 JSON 快照；解析失败返回 None。
+
+        ★405刀1：本方法**不修改分析器任何状态**（不碰 `_defs`/`_bindings`/
+        `_raw_*`），因此可以安全地跑在分片线程里。合并由 `_merge_snapshot`
+        单独完成 —— 拆两段是为了让「解析」可缓存、可并行，而「合并」留在
+        单线程里保持顺序确定（`_defs` 首次命中口径依赖文件顺序）。
+        """
         _abs = os.path.join(self.project_root, rel.replace("/", os.sep))
         _module = _module_id(rel)
         try:
@@ -929,13 +949,28 @@ class CallGraphAnalyzer:
         #   （只要异常对象被日志/账本留住，整棵树就活着）。此处显式断引用并记账。
         _m344_note_tree_dropped()
         del _tree
+        # ★405刀1：导出快照（纯 JSON，不含 AST 引用）
+        _snap: dict = {}
+        for _a in self._SNAPSHOT_ATTRS:
+            _snap[_a] = getattr(_c, _a, None)
+        return _snap
+
+    def _merge_snapshot(self, rel: str, snap: dict) -> None:
+        """把一份快照合并进分析器状态。
+
+        ★405刀1：逻辑逐行照搬原 `_collect_file` 后半段，**不做任何语义改动**
+        （含 `_defs` 首次命中优先、`_by_module_top` 覆盖、`ret_ann`/`assign_src`
+        并回）。唯一变化是从 `_c.xxx` 取值改为 `snap.get(...)`，并把
+        `_module` 优先取快照里的值（缓存复用时也自洽）。
+        """
+        _module = str(snap.get("module") or _module_id(rel))
         # 登记
-        self._bindings[rel] = dict(_c.bindings)
+        self._bindings[rel] = dict(snap.get("bindings") or {})
         # ★320批刀5：合并本文件采到的继承关系（跨文件同名类靠尾名唯一闸消歧）
-        for _k, _v in getattr(_c, "class_bases", {}).items():
+        for _k, _v in (snap.get("class_bases") or {}).items():
             self._class_bases.setdefault(_k, list(_v))
         _top: dict = {}
-        for _d in _c.defs:
+        for _d in (snap.get("defs") or []):
             if _d["id"] in self._defs:
                 continue
             self._defs[_d["id"]] = _d
@@ -945,23 +980,151 @@ class CallGraphAnalyzer:
             self._caller_module[_d["id"]] = _d["module"]
         self._by_module_top[_module] = _top
         self._raw_calls.extend(
-            [dict(x, file=rel, module=_module) for x in _c.raw_calls])        # ★322批刀1：把收集器采集到的「返回注解 / 赋值源」并进分析器
+            [dict(x, file=rel, module=_module) for x in (snap.get("raw_calls") or [])])
+        # ★322批刀1：把收集器采集到的「返回注解 / 赋值源」并进分析器
         #   （收集器按文件用完即弃，不并回来 = 这档永远空转，实测 0 边就是这原因）
-        _cra = getattr(_c, "ret_ann", None) or {}
+        _cra = snap.get("ret_ann") or {}
         if _cra:
             self.ret_ann.update(_cra)
-        _cas = getattr(_c, "assign_src", None) or {}
+        _cas = snap.get("assign_src") or {}
         if _cas:
             self.assign_src.update(_cas)
         self._raw_emits.extend(
-            [dict(x, file=rel, module=_module) for x in _c.emits])
+            [dict(x, file=rel, module=_module) for x in (snap.get("emits") or [])])
         self._raw_subs.extend(
-            [dict(x, file=rel, module=_module) for x in _c.subs])
+            [dict(x, file=rel, module=_module) for x in (snap.get("subs") or [])])
         self._raw_entries.extend(
-            [dict(x, file=rel, module=_module) for x in _c.entries])
+            [dict(x, file=rel, module=_module) for x in (snap.get("entries") or [])])
         self._raw_tables.extend(
-            [dict(x, file=rel, module=_module) for x in _c.name_tables])
-        return _c
+            [dict(x, file=rel, module=_module) for x in (snap.get("name_tables") or [])])
+
+    def _collect_file(self, rel: str) -> dict | None:
+        """解析并合并单个文件；解析失败返回 None。
+
+        ★405刀1：返回类型由 `_Collector` 改为快照 dict。全库调用方已核查：
+        `analyze()` / `analyze_sharded()` 只做 None 判定，
+        `tests/test_log_stability_m22.py:368` 传的是 `bad.py`（走失败分支）。
+        """
+        _snap = self._collect_snapshot(rel)
+        if _snap is None:
+            return None
+        self._merge_snapshot(rel, _snap)
+        return _snap
+
+    def analyze_sharded(self, shard_size: int = 120, parallel: int = 2,
+                        cache: Any = None) -> dict:
+        """分片 + 缓存 + 片间并行地建图，输出与 `analyze()` 完全同构。
+
+        ★405刀1 实测口径（勿再猜）：
+          · Pass1（AST 解析+采集）与 Pass2（跨文件解析）实测 **6.2s : 14.0s**
+            —— Pass2 才是大头，而 Pass2 依赖全库 `_defs` 才能解析跨文件边，
+            **不能按文件切分**。故本方法只分片 Pass1，Pass2 仍在主线程一次完成。
+          · 4 片 × threading 的 Pass1 加速比实测 **1.00x**（CPython GIL，AST
+            解析是纯 CPU 活）。分片的真实收益不在并行，而在：
+            ① 片内文件签名全命中缓存时整片跳过解析；
+            ② 每片工作量有界，便于将来换进程池接管（跨出 GIL）。
+            `parallel` 参数如实生效，但**不要据此预期 CPU 加速**。
+
+        Args:
+            shard_size: 每片最多文件数（任务书 405 刀1 要求 ≤120）。
+            parallel: 片间并发度；≤1 时串行。
+            cache: `AnalyzerCache` 实例；None 时不使用缓存。
+
+        Returns:
+            与 `analyze()` 同构的 dict；`stats` 额外多 `shards` 与
+            `cache_hit_files` 两个键（只增不改，按名取值的下游不受影响）。
+        """
+        if not _scan_enabled():
+            # 开关关闭：完全复用原短路路径，不引入第二条"关闭"分支
+            return self.analyze()
+
+        _t0 = time.perf_counter()
+        _files = _iter_py_files(self.project_root, self.scan_dirs)
+        self._reset()
+        _size = max(1, int(shard_size or 120))
+        _shards = [_files[_i:_i + _size] for _i in range(0, len(_files), _size)]
+
+        def _do_shard(_group: list) -> tuple:
+            """单分片：逐文件先查缓存，未命中才解析。纯解析，不碰主实例状态。"""
+            _w = CallGraphAnalyzer(self.project_root, self.scan_dirs)
+            _out: list = []
+            _hit = 0
+            _bad: list = []
+            for _rel in _group:
+                _sig = None
+                if cache is not None:
+                    _sig = _file_sig(os.path.join(
+                        self.project_root, _rel.replace("/", os.sep)))
+                _cached = (cache.get(self._CACHE_NS + _rel, _sig)
+                           if (_sig and cache is not None) else None)
+                if _cached is not None:
+                    _out.append((_rel, _cached))
+                    _hit += 1
+                    continue
+                _snap = _w._collect_snapshot(_rel)
+                if _snap is None:
+                    _bad.append(_rel)
+                    continue
+                if cache is not None and _sig is not None:
+                    cache.put(self._CACHE_NS + _rel, _sig, _snap)
+                _out.append((_rel, _snap))
+            return _out, _hit, _bad
+
+        _par = int(parallel or 1)
+        if _par > 1 and len(_shards) > 1:
+            with ThreadPoolExecutor(max_workers=_par,
+                                    thread_name_prefix="cg-shard") as _ex:
+                _results = list(_ex.map(_do_shard, _shards))
+        else:
+            _results = [_do_shard(_g) for _g in _shards]
+
+        _pairs: list = []
+        _hit_files = 0
+        for _list, _h, _bad in _results:
+            _pairs.extend(_list)
+            _hit_files += _h
+            self._parse_errors.extend(_bad)
+        # 主线程按文件顺序合并：`_defs` 首次命中口径与 `analyze()` 逐文件合并完全一致
+        for _rel, _snap in _pairs:
+            self._merge_snapshot(_rel, _snap)
+        self._pass2_resolve([])
+
+        _nodes = [dict(v) for v in self._defs.values()]
+        _edges = []
+        for _caller, _targets in self._graph.items():
+            for _callee, _cnt in _targets.items():
+                _edges.append({"caller": _caller, "callee": _callee,
+                               "count": int(_cnt),
+                               "kind": self._edge_kinds.get((_caller, _callee),
+                                                            "static")})
+        _elapsed_ms = round((time.perf_counter() - _t0) * 1000.0, 2)
+        self._graph_data = {
+            "nodes": _nodes,
+            "edges": _edges,
+            "stats": {
+                "total_files": len(_files),
+                "parsed_files": len(_pairs),
+                "total_functions": len(_nodes),
+                "total_calls": int(self._total_calls),
+                "cross_file_calls": int(self._cross_file),
+                "dynamic_calls_unresolved": int(self._unresolved + self._dynamic),
+                "dynamic_calls": int(self._dynamic),
+                "unresolved_calls": int(self._unresolved),
+                "external_calls": int(self._external),
+                "parse_errors": len(self._parse_errors),
+                "elapsed_ms": _elapsed_ms,
+                # ★405刀1 新增（只增不改）
+                "shards": len(_shards),
+                "cache_hit_files": int(_hit_files),
+            },
+            "parse_error_files": list(self._parse_errors[:20]),
+        }
+        _logger.info("调用图构建完成（分片）: %d 文件 / %d 函数 / %d 调用"
+                     "（跨文件 %d / %d 片 / 缓存命中 %d）耗时 %.2fs",
+                     len(_files), len(_nodes), self._total_calls,
+                     self._cross_file, len(_shards), _hit_files,
+                     _elapsed_ms / 1000.0)
+        return self._graph_data
 
     #: ★318批刀0：未解析样本单轮留存上限（防内存无限增长；落盘后即清）
     #: 实测全库未解析+external ≈ 52k 条（2026-10-19），上限取 30 万防截断失真

@@ -4728,6 +4728,30 @@ CODE_QUALITY_CONFIG = {
 # 红线：全部为静态分析，不触发任何运行时保存/加载；启动时只初始化、**不自动分析**。
 ENABLE_SELF_AWARENESS_ENGINE = True          # 引擎总开关（关闭时 run_all_analyses 直接返回）
 SELF_AWARENESS_TIMEOUT_SEC = 30              # 单个分析器超时（秒），超时打 WARNING 并跳过
+
+# ★第405批 刀1：分析器超时分级 / 分片 / 缓存 / 异步 =========================
+# 背景（烛微406 实测）：5 个分析器此前**串行 + 统一 30s 超时**。call_graph 单跑
+#   18–20s（Pass1 6.2s + Pass2 14.0s），框架满载时被 GIL 争抢可拉到 100s+ ⇒
+#   必然超时、结果被丢弃、画像三维空。以下五项是本批的修法。
+#   · ANALYZER_TIMEOUT_OVERRIDES：按分析器名覆盖超时（空 dict = 用内置分级）。
+#     内置分级：call_graph 120s / knowledge_quality 60s / 其余 30s。
+#   · ANALYZER_SHARD_SIZE：call_graph 每片最多文件数（405 刀1 要求 ≤120）。
+#   · ANALYZER_SHARD_PARALLEL：片间并发度。★实测 4 片线程跑 Pass1 加速比
+#     **1.00x**（CPython GIL，AST 解析纯 CPU）——分片的收益在"片内全命中缓存
+#     就整片跳过"，不在并行；此参数保留给将来进程池接管。
+#   · ANALYZER_CACHE_TTL_SEC：分片缓存 TTL（默认 24h）。键 = (文件, mtime_ns, size)，
+#     落 data/self_awareness/analyzer_cache.json。实测热缓存 20.7s → 11.6s（-44%）。
+#   · ANALYZER_POOL_WORKERS：分析器独立线程池 worker 数（0 = 不启用异步提交）。
+#     分析器跑在池里，get_portrait() 只读最近一次成功结果 + stale_seconds，
+#     绝不在请求线程里现算。
+ANALYZER_TIMEOUT_OVERRIDES = {}      # {分析器名: 秒}；非空项优先于内置分级
+ANALYZER_SHARD_SIZE = 120            # call_graph 每片最多文件数
+ANALYZER_SHARD_PARALLEL = 2          # 片间并发度（线程；GIL 下 CPU 不加速，见上）
+ANALYZER_CACHE_ENABLED = True        # 分片缓存总开关（False = 冷跑，仅供对照实验）
+ANALYZER_CACHE_TTL_SEC = 86400       # 分片缓存 TTL（秒）= 24h
+ANALYZER_RUNS_KEEP_DAYS = 30         # analyzer_runs.jsonl 保留天数
+ANALYZER_POOL_WORKERS = 2            # 分析器线程池 worker 数（0 = 不启用异步）
+# _m405_k1_config
 ENABLE_PRODUCTION_CONSUMPTION_MATCHER = True  # 产出-消费配对器（T2）
 ENABLE_FAKE_LOOP_DETECTOR = True             # 虚假闭环检测器（T3）
 # 两个静态扫描器的扫描范围（目录或单文件路径，相对项目根）
