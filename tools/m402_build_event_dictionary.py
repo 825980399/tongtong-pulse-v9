@@ -81,6 +81,48 @@ _ORGAN_NAME_RE = re.compile(r"^[\u4e00-\u9fff]{1,8}$")
 
 #: never_emitted 三分类的注释线索
 _RESERVED_HINTS = ("预留", "预埋", "待接线", "待接入", "拟接线", "协议未启用", "PHASE")
+
+# ★402 刀4：配置驱动的定时发射通道（静态扫描的最大假阳性来源）
+#   config.py 的该表由 TimeCore 按 interval 发射，事件名以 `task["event_type"]`
+#   下标形态进 emit，静态无法归属 ⇒ 必须单独读表，否则会把在发的事件判成零发射。
+_SCHEDULE_TABLE = "TIMECORE_SCHEDULE_CONFIG"
+_SCHEDULE_PRODUCER = "TimeCore"
+
+# ★402 刀4：人工核实过的例外。静态分析看不见的两条通道 + 已退役件，
+#   逐条带证据留痕（行号会漂，故证据写"文件+特征串"不写死行号）。
+#   verdict:
+#     emitted_dynamic —— 确实在发，只是事件名经变量/字典间接进 emit ⇒ 计 producers
+#     retired        —— 订阅方已知不加载（幽灵监听）⇒ 归 deprecated
+#     broken_route   —— 真零发射，且已定位根因 ⇒ 留 orphan_consumer 带 root_cause
+#   键写 `Class.MEMBER` 引用名（事件字符串门禁禁裸点分字面量），运行时解析成事件值。
+_MANUAL_REVIEW = {
+    "MediaEvent.IMAGE_DETECTED": (
+        "emitted_dynamic",
+        "PulseFileDigester._handle_media_file: `event_map` 字典取值后以 "
+        "`event_type=specific_event` 进 emit，事件名经变量间接",
+    ),
+    "MediaEvent.AUDIO_DETECTED": ("emitted_dynamic", "同上 event_map 通道"),
+    "MediaEvent.VIDEO_DETECTED": ("emitted_dynamic", "同上 event_map 通道"),
+    "MediaEvent.UNKNOWN": (
+        "emitted_dynamic",
+        "`event_map.get(media_type, MediaEvent.UNKNOWN)` 的缺省值，同一通道",
+    ),
+    "HandsEvent.EXECUTE": (
+        "broken_route",
+        "PulseCortex._route_by_intent 首行 `route_target = self._intent_routes"
+        ".get(intent, ...)  # noqa: F841` —— 算完从不使用，方法后续走硬编码分支；"
+        "config.INTENT_ROUTES 里 \"代码\"/\"规划\" 都指向本事件 ⇒ 意图路由是断头路",
+    ),
+    "EyeEvent.SEARCH": (
+        "broken_route",
+        "同 hands.execute 的断头路；config.INTENT_ROUTES 里 \"知识\" 指向本事件",
+    ),
+    "InferenceEngineEvent.EXECUTE": (
+        "retired",
+        "nucleus/organ_loader.py 注释：跳过自动加载以消除「订阅了 inference.execute "
+        "却无人发射」的幽灵监听 ⇒ 订阅方根本不加载",
+    ),
+}
 _DEPRECATED_HINTS = ("废弃", "已摘除", "死常量", "不再使用", "已移除", "笔误遗留")
 
 
@@ -200,15 +242,28 @@ def collect_constants(root: str) -> dict:
             "const_lines": lines}
 
 
-def _near_comment(lines, lineno: int, up: int = 3) -> str:
-    """取定义行上方 up 行的注释上下文（用于判预留/废弃）。"""
+def _near_comment(lines, lineno: int) -> str:
+    """取定义行**紧邻**上方的连续注释块（用于判预留/废弃）。
+
+    ★402 刀4 修正：原实现固定回看 3 行再过滤注释行，会**跨越类边界** ——
+    `nucleus/const.py:400` 的 `EyeEvent.SEARCH` 因此吃到了上一个类 `DecisionEvent`
+    的「RESULT 已摘除…确认死常量」注释，被判成废弃件（实际是意图路由断头路）。
+    改为遇空行/非注释行即停，取到的必然是**本定义专属**的注释。
+    """
     try:
-        seg = lines[max(0, lineno - up - 1):lineno]
+        out = []
+        i = lineno - 2                     # lineno 是 1-based；本行自身不算
+        while i >= 0:
+            s = lines[i].strip()
+            if not s or not s.startswith("#"):
+                break
+            out.append(s)
+            i -= 1
+        return "\n".join(reversed(out))
     except (IndexError, TypeError) as exc:
         silent_exc(exc, where="m402_build_event_dictionary._near_comment:%s" % lineno,
                    level="debug")
         return ""
-    return "\n".join(x.strip() for x in seg if x.strip().startswith("#"))
 
 
 # ============================ 2) 发射面 ============================
@@ -364,6 +419,51 @@ def scan_consumers(root: str) -> dict:
     return by_key
 
 
+def scan_schedule_table(root: str, ref_to_value: dict) -> dict:
+    """读 config.py 的 TIMECORE_SCHEDULE_CONFIG -> {事件值: 任务名}。
+
+    ★第三源。前两源（AST 扫 `.emit(...)`、扫订阅声明）都看不见这张表：
+    表里存的是 `event_type` 字段，发射侧写 `self._emit(task_info["event_type"], ...)`，
+    事件实参是下标取值，静态扫描只能归入 dynamic 盲区。
+    不读这张表就会把**已在定时发射**的事件误报成「有订阅却零发射」。
+    """
+    fp = os.path.join(root, "config.py")
+    if not os.path.isfile(fp):
+        return {}
+    tree = _parse_cached(root, "config.py", fp)
+    if tree is None:
+        return {}
+
+    target = None
+    for st in tree.body:
+        if (isinstance(st, ast.Assign) and len(st.targets) == 1
+                and isinstance(st.targets[0], ast.Name)
+                and st.targets[0].id == _SCHEDULE_TABLE):
+            target = st.value
+            break
+    if not isinstance(target, ast.Dict):
+        return {}
+
+    out = {}
+    for k, v in zip(target.keys, target.values):
+        if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+            continue
+        if not isinstance(v, ast.Dict):
+            continue
+        ev = None
+        for kk, vv in zip(v.keys, v.values):
+            if not (isinstance(kk, ast.Constant) and kk.value == "event_type"):
+                continue
+            if isinstance(vv, ast.Constant) and isinstance(vv.value, str):
+                ev = vv.value
+            else:
+                ref = _const_ref(vv)
+                ev = ref_to_value.get(ref) if ref else None
+        if ev:
+            out[ev] = k.value
+    return out
+
+
 def _organ_of_class(tree, fn) -> str | None:
     """找该函数所属类的**类名**（consumers 的稳定唯一标识）。
 
@@ -418,6 +518,15 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
     emit_scan = scan_emits(root)
     emit = emit_scan["by_key"]
     cons = scan_consumers(root)
+    # ★第三源：配置驱动的定时发射（不读这张表就会误报契约断裂）
+    sched = scan_schedule_table(root, ref_to_value)
+
+    # ★证据表的键是 `Class.MEMBER` 引用名，这里解析成事件值（过门禁 + 随常量改名）
+    manual = {}
+    for _ref, _meta in _MANUAL_REVIEW.items():
+        _v = ref_to_value.get(_ref)
+        if _v:
+            manual[_v] = _meta
 
     # 解析 producers / consumers 到值
     producers = defaultdict(set)
@@ -431,6 +540,17 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
             producers[v].add(r)
         payload_keys[v].extend(rec["payload_keys"])
         dynamic_payload[v] += rec["dynamic_payload"]
+
+    # ★调度表里的任务到点由 TimeCore 发射 ⇒ 计入 producers。
+    #   402 刀4 纠偏：漏这一步时 50 条「契约断裂」里 27 条是假阳性。
+    for _v in sched:
+        if _v in all_values:
+            producers[_v].add(_SCHEDULE_PRODUCER)
+
+    # ★已人工核实「确实在发、只是变量间接」的条目：计入 producers，不留在 never 桶
+    for _v, (_verdict, _ev) in manual.items():
+        if _verdict == "emitted_dynamic" and _v in all_values:
+            producers[_v].add("dynamic_channel")
 
     # ★consumers 必须区分「精确订阅」与「通配订阅」：
     #   只算精确订阅会把 `chat.*` 顺带能收到的事件也当成"有专人订阅"，
@@ -518,6 +638,9 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
             "required_keys": req,
             "never_emitted": v not in producers,
             "test_emit_count": int(test_emit.get(v, 0)),
+            "scheduled_by": sched.get(v),
+            "manual_verdict": (manual.get(v) or (None,))[0],
+            "manual_evidence": (manual.get(v) or (None, None))[1],
         }
         events[v] = rec
 
@@ -542,7 +665,13 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
         for e in entries:
             if e["value"] == v:
                 ctx += (e.get("comment") or "") + "\n"
-        if any(h in ctx for h in _DEPRECATED_HINTS):
+        _mv = manual.get(v)
+        if _mv and _mv[0] == "retired":
+            buckets["deprecated"].append(v)
+            why[v] = "已退役：%s" % _mv[1]
+            continue
+        if any(h in ctx for h in _DEPRECATED_HINTS) and not (
+                _mv and _mv[0] == "broken_route"):
             buckets["deprecated"].append(v)
             why[v] = "const.py 定义处注释含废弃线索"
             continue
@@ -556,8 +685,13 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
             continue
         if events[v]["consumers"]:
             buckets["orphan_consumer"].append(v)
-            why[v] = ("有 %d 个**精确**订阅方却零发射 ⇒ 契约断裂：订阅方永远收不到"
-                      % len(events[v]["consumers"]))
+            _rc = manual.get(v)
+            if _rc and _rc[0] == "broken_route":
+                why[v] = ("有 %d 个**精确**订阅方却零发射 ⇒ 契约断裂。"
+                          "**根因已定位**：%s" % (len(events[v]["consumers"]), _rc[1]))
+            else:
+                why[v] = ("有 %d 个**精确**订阅方却零发射 ⇒ 契约断裂：订阅方永远收不到"
+                          % len(events[v]["consumers"]))
             continue
         if events[v]["consumers_wildcard"]:
             buckets["wildcard_only"].append(v)
@@ -612,6 +746,8 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
             "literal_only_events": len(literal_only),
             "literal_only_static_orphan": len(
                 [1 for r in literal_only.values() if r["static_orphan"]]),
+            # ★第三源读数：调度表覆盖多少个事件（这些不是"零发射"）
+            "scheduled_producers": len([v for v in sched if v in all_values]),
         },
         "never_emitted_breakdown": {
             "counts": {k: len(x) for k, x in buckets.items()},
@@ -636,6 +772,12 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
                      "`self._emit(task_info['event_type'], ...)`），静态无法归属到具体事件 "
                      "⇒ never_emitted / orphan_consumer 的判定以此为**已知盲区**："
                      "被判为「零发射」的事件，仍可能由 dynamic_emit_sites 所示的发射点覆盖。"),
+            "schedule_channel": (
+                "config.py 的 %s 表由 TimeCore 按 interval 发射，事件名以 "
+                "`task[\"event_type\"]` 下标形态出现，静态扫描看不到 ⇒ 已单列"
+                "第三源读入（事件记录里的 scheduled_by 字段即该表的任务名）。"
+                "402 刀4 纠偏：未读入前曾把 27 条**在正常定时发射**的事件"
+                "误报成契约断裂。" % _SCHEDULE_TABLE),
             "payload_unavailable": ("payload 为变量而非字典字面量时，key 列表为空（记 "
                                     "payload_dynamic 计数），不代表该事件没有 payload。"),
             "consumers_scope": ("consumers 只含**静态可解析**的订阅声明：器官 "
@@ -650,6 +792,15 @@ def build_dictionary(root: str, *, max_payload_samples: int = 12) -> dict:
                                    "`static_orphan=True` **已知含假阳性**：事件名可先存进 "
                                    "config 再动态发射（`config.py:119` 的 "
                                    "`snapshot.auto_save` → `PulseHeart.py:1333`），静态扫不到。"),
+        },
+        # ★人工核实过的例外（静态分析看不见的通道 + 已退役件），逐条带证据
+        "manual_review": {
+            "note": ("静态扫描看不见两条通道：① config.py 的调度表（已作第三源读入）"
+                     "② 局部字典/变量间接进 emit（如 event_map -> specific_event）。"
+                     "本段是**人工核过**的例外，每条带证据；未列入的 orphan_consumer "
+                     "仍按静态口径判为契约断裂。"),
+            "items": {k: {"verdict": v[0], "evidence": v[1]}
+                      for k, v in sorted(manual.items())},
         },
         "literal_only": literal_only,
         "events": events,

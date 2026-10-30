@@ -292,6 +292,63 @@ class TestNeverEmitted(unittest.TestCase):
                          "出现了仅测试发射的真实事件，需更新分桶说明")
 
 
+class TestScheduleChannel(unittest.TestCase):
+    """第三源：config.py 的 TIMECORE_SCHEDULE_CONFIG（配置驱动定时发射）。
+
+    402 刀4 事故：这张表的事件名以 `task["event_type"]` 下标形态进 emit，
+    AST 扫描归入 dynamic 盲区 ⇒ 首版把 27 条**正在定时发射**的事件误报成
+    「有订阅却零发射」。这四条守的就是这个盲区。
+    """
+
+    def test_70_schedule_table_is_read(self):
+        """调度表必须被读进来（少于 25 条说明第三源没接上）。"""
+        d = _dict()
+        n = d["totals"]["scheduled_producers"]
+        self.assertGreaterEqual(n, 25, "调度表覆盖数 %d 偏少，第三源可疑" % n)
+
+    def test_71_scheduled_events_not_never_emitted(self):
+        """被调度表覆盖的事件不得判成零发射。"""
+        d = _dict()
+        covered = [v for v, e in d["events"].items() if e.get("scheduled_by")]
+        self.assertTrue(covered, "没有任何事件带 scheduled_by 字段")
+        for v in covered:
+            self.assertFalse(d["events"][v]["never_emitted"],
+                             "%s 由调度表定时发射，不得判零发射" % v)
+
+    def test_72_manual_review_items_have_evidence(self):
+        """人工核实条目必须带证据，verdict 限三种。"""
+        d = _dict()
+        items = d["manual_review"]["items"]
+        self.assertTrue(items, "manual_review 为空")
+        allowed = {"emitted_dynamic", "retired", "broken_route"}
+        for k, v in items.items():
+            self.assertIn(v["verdict"], allowed, k)
+            self.assertTrue(v["evidence"].strip(), "%s 缺证据" % k)
+
+    def test_73_broken_route_not_reclassified(self):
+        """已定位根因的断头路不得被启发式规则改判成 deprecated。
+
+        回归点：`_near_comment` 曾跨越类边界，让 `EyeEvent.SEARCH` 吃到上一个类
+        `DecisionEvent` 的「RESULT 已摘除…死常量」注释，于是被判废弃 —— 掩盖了
+        「意图路由算完不用（`# noqa: F841`）」这个真缺陷。
+        """
+        d = _dict()
+        e = d["events"]["eyes.search"]
+        self.assertEqual(e["manual_verdict"], "broken_route")
+        self.assertTrue(e["never_emitted"], "eyes.search 确实零发射")
+        self.assertEqual(e["never_bucket"], "orphan_consumer",
+                         "不得因注释误读而改判")
+
+    def test_74_near_comment_stops_at_class_boundary(self):
+        """上一个类的注释不得污染下一个类的常量。"""
+        d = _dict()
+        e = d["events"]["eyes.search"]
+        self.assertNotIn("已摘除", e.get("manual_evidence", "") or "")
+        # const.py 里 EyeEvent.SEARCH 上方紧邻是类声明，故无专属注释
+        self.assertFalse((e.get("comment") or "").strip(),
+                         "eyes.search 不该取到跨类注释：%r" % e.get("comment"))
+
+
 class TestDuplicates(unittest.TestCase):
     """重复值分组。"""
 
