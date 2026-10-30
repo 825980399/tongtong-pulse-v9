@@ -66,6 +66,10 @@ DEFAULT_PAIRS_CAP = 500000
 DEFAULT_SNAPSHOT_MAX_AGE_S = 90.0
 #: 任务书字面的「最近 5s」（仅供 --snapshot-5s 与 strict_5s 读数使用）
 TASK_LITERAL_STALE_S = 5.0
+#: L6 小时快照年龄上限（任务书 405 刀6 定为 3700s ≈ 1h2min）。
+#: 比小时落盘周期 3600s 宽 100s —— 容一次整点写入的抖动，又不至于放过
+#: 「隔了一个小时还没写」的真实陈旧。可用 --l6-max-age 覆盖。
+DEFAULT_L6_MAX_AGE_S = 3700.0
 
 _MONITOR = os.path.join("data", "monitor")
 _UNSET = object()
@@ -495,6 +499,17 @@ def check_l5(ctx):
 # L6 温冷快照
 # ---------------------------------------------------------------------------
 def check_l6(ctx):
+    """温冷分层快照：结构合法 + 年龄不超上限。
+
+    ★405 刀6 之前本函数**只看结构不看年龄** ⇒ 停机 2.2h 仍报 PASS
+      （404 遗留，见交付报告「L6 只判文件存在」条）。现在年龄也进判据。
+
+    判据顺序（**不可交换**）：
+        ① 存在 → ② 可解析 → ③ schema → ④ warm/cold 齐 → ⑤ 非空
+        这五步是真故障，一律 FAIL；
+        ⑥ 年龄 ≤ 上限 → PASS；否则按 L5 同口径 SKIP（reason 可分辨）。
+      把年龄放在最后，是为了「结构坏了 + 同时超龄」时仍报 FAIL 而不是降级 SKIP。
+    """
     _p = os.path.join(ctx["root"], _MONITOR, "health_snapshot_hourly.json")
     if not os.path.exists(_p):
         return _bad("L6", "温冷快照", "health_snapshot_hourly.json 不存在（温冷分层没落盘）",
@@ -503,18 +518,66 @@ def check_l6(ctx):
     if not isinstance(_d, dict):
         return _bad("L6", "温冷快照", "health_snapshot_hourly.json 不可解析", {"path": _p})
     _schema = str(_d.get("schema") or "")
-    _ev = {"path": _p, "schema": _schema, "age_s": _age(_p, ctx["now"]),
+    # 年龄取 mtime 与快照自报 timestamp 中**更保守**的那个（与 L5 逐字同口径）：
+    # 前者防"写盘卡住但内容旧"，后者防"文件被 touch 过"。
+    _age_file = _age(_p, ctx["now"])
+    _ts = _d.get("timestamp")
+    _age_ts = None
+    try:
+        _age_ts = round(float(ctx["now"]) - float(_ts), 1) if _ts is not None else None
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="tools.m404_layer_health_check.check_l6[timestamp]", level="debug")
+    _cand = [_a for _a in (_age_file, _age_ts) if _a is not None]
+    # ★变量名不能叫 _age：会遮蔽模块级的 _age() 函数（本行以上刚调过它）
+    _snap_age = max(_cand) if _cand else None
+    _max = ctx.get("l6_max_age")
+    _max_src = "cli" if _max is not None else "default"
+    if _max is None:
+        _max = DEFAULT_L6_MAX_AGE_S
+    _ev = {"path": _p, "schema": _schema, "age_s": _snap_age,
+           # ★必须无条件写入，不能只在超龄分支里补：evidence 是排查唯一依据，
+           #   字段随分支缺失会让人以为"这条判据不存在"。fresh 路径同样要能看到它。
+           "has_pid_field": "pid" in _d,
+           "age_from_file_s": _age_file, "age_from_ts_s": _age_ts,
+           "max_age_s": _max, "max_age_source": _max_src,
            "warm_age_s": _d.get("warm_age_s"), "cold_age_s": _d.get("cold_age_s"),
            "has_warm": isinstance(_d.get("warm"), dict),
            "has_cold": isinstance(_d.get("cold"), dict)}
+    # ---- 结构判据（硬 FAIL，必须在年龄之前）----
     if not _schema.startswith("snapshot_tiers/"):
         return _bad("L6", "温冷快照", "schema 不是 snapshot_tiers/*（实际 %r）" % _schema, _ev)
     if not (_ev["has_warm"] and _ev["has_cold"]):
         return _bad("L6", "温冷快照", "缺 warm 或 cold 段", _ev)
     if not _d.get("warm") and not _d.get("cold"):
         return _bad("L6", "温冷快照", "warm 与 cold 都是空的（等于没分层）", _ev)
-    return _ok("L6", "温冷快照", "schema=%s 温 %s / 冷 %s，年龄 %ss"
-               % (_schema, _ev["warm_age_s"], _ev["cold_age_s"], _ev["age_s"]), _ev)
+    # ---- 年龄判据（405 刀6 新增）----
+    if _snap_age is None:
+        # 连 mtime 都读不到属环境异常，不是"不新鲜" ⇒ 不报 FAIL
+        return _skip("L6", "温冷快照", "snapshot_age_unavailable",
+                     "温冷快照年龄取不到（mtime 与 timestamp 都读不到）", _ev)
+    if _snap_age <= _max:
+        return _ok("L6", "温冷快照", "schema=%s 温 %s / 冷 %s，年龄 %.1fs ≤ 上限 %.0fs（%s）"
+                   % (_schema, _ev["warm_age_s"], _ev["cold_age_s"], _snap_age, _max, _max_src),
+                   _ev)
+    # 超龄：**本文件没有 pid 字段**（实测只有 schema/timestamp/warm/cold/*_age_s/*_at）
+    # ⇒ L5 那条「自报 pid 做硬证据」的路走不通，只能枚举进程，且枚举只能当线索。
+    _run = ctx.get("framework_running", _UNSET)
+    if _run is _UNSET:
+        _run = _probe_framework_running(ctx["root"])
+    _ev["framework_running"] = _run
+    if _run is None:
+        return _skip("L6", "温冷快照", "psutil_unavailable",
+                     "psutil 不可用，判不了框架是否在跑（小时快照 age=%.1fs > 上限 %.0fs）"
+                     % (_snap_age, _max), _ev)
+    if _run is False:
+        return _skip("L6", "温冷快照", "framework_down",
+                     "小时快照 age=%.1fs > 上限 %.0fs，且框架未运行 —— 停机时本层不判，"
+                     "避免假警报（与 L5 同口径）" % (_snap_age, _max), _ev)
+    return _skip("L6", "温冷快照", "running_unverified",
+                 "小时快照 age=%.1fs > 上限 %.0fs，进程枚举说 main.py 在跑，但本文件"
+                 "**没有 pid 字段**可交叉核验；该线索会被 `git commit -- main.py` 这类"
+                 "命令骗到，故不判 FAIL（与 L5 对 running_unverified 的处置一致）"
+                 % (_snap_age, _max), _ev)
 
 
 # ---------------------------------------------------------------------------
@@ -570,13 +633,15 @@ CHECKS = [
 # ---------------------------------------------------------------------------
 def make_context(root=None, now=None, strict=False, pairs_cap=None,
                  snapshot_max_age=None, framework_running=_UNSET,
-                 snapshot_5s=False, snapshot_pid_alive=_UNSET):
+                 snapshot_5s=False, snapshot_pid_alive=_UNSET,
+                 l6_max_age=None):
     """构造检查上下文（测试可注入 ``snapshot_pid_alive`` / ``framework_running``，不碰 psutil）。"""
     _ctx = {"root": os.path.abspath(root or _ROOT),
             "now": float(now if now is not None else time.time()),
             "strict": bool(strict),
             "pairs_cap": pairs_cap,
             "snapshot_max_age": snapshot_max_age,
+            "l6_max_age": l6_max_age,
             "snapshot_5s": bool(snapshot_5s)}
     if framework_running is not _UNSET:
         _ctx["framework_running"] = framework_running
@@ -644,6 +709,8 @@ def main(argv=None):
                      help="覆盖 L3 行数上限（默认静态解析 config.py）")
     _ap.add_argument("--snapshot-max-age", dest="snapshot_max_age", type=float, default=None,
                      help="覆盖 L5 快照年龄上限（秒）")
+    _ap.add_argument("--l6-max-age", dest="l6_max_age", type=float, default=None,
+                     help="覆盖 L6 温冷快照年龄上限（秒，默认 %g）" % DEFAULT_L6_MAX_AGE_S)
     _ap.add_argument("--layer", default=None, help="只跑某几层，逗号分隔（如 L3,L5）")
     _a = _ap.parse_args(argv)
     if _a.pairs_cap is not None and _a.pairs_cap <= 0:
@@ -652,7 +719,8 @@ def main(argv=None):
                   "这里直接拒绝，避免误以为设定生效）")
 
     _ctx = make_context(root=_a.root, strict=_a.strict, pairs_cap=_a.pairs_cap,
-                        snapshot_max_age=_a.snapshot_max_age, snapshot_5s=_a.snapshot_5s)
+                        snapshot_max_age=_a.snapshot_max_age, snapshot_5s=_a.snapshot_5s,
+                        l6_max_age=_a.l6_max_age)
     _res = run_all(_ctx)
     if _a.layer:
         _want = {_x.strip().upper() for _x in _a.layer.split(",") if _x.strip()}
