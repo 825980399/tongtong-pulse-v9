@@ -115,11 +115,19 @@ def test_05_nucleus_data_in_graph(rel):
 
 
 def test_06_hardware_and_root_scripts_in_graph():
-    """另外 9 个盲区（扫描范围问题，不是排除集问题）。"""
+    """另外 9 个盲区（扫描范围问题，不是排除集问题）。
+
+    ★399刀2：`hardware/hw_abstraction.py` 已删除（10 行纯 docstring 空壳，全仓零 import），
+      从具名清单移出 —— 覆盖数 411→410，仍 >= `_EXPECT_TOTAL`。
+      `hardware/` 仍在具名清单里（`robot_body_driver.py`），所以这条判据守的
+      "hardware 目录进扫描范围" 这一层语义没丢。
+    """
     _f = _files()
-    for _rel in ("hardware/hw_abstraction.py", "hardware/robot_body/robot_body_driver.py",
+    for _rel in ("hardware/robot_body/robot_body_driver.py",
                  "config.py", "pulse_doctor.py", "main.py"):
         assert _rel in _f, f"{_rel} 不在扫描范围内"
+    # hardware 目录整体仍要在（不能因为删了一个空壳就把整个目录从扫描范围里摘掉）
+    assert any(x.startswith("hardware/") for x in _f), "hardware/ 整个目录掉出扫描范围了"
 
 
 # ---------------------------------------------------------------- ③ 生效值同步

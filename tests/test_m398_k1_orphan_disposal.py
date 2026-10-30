@@ -27,9 +27,11 @@ if _ROOT not in sys.path:
 _MANIFEST = os.path.join(
     _ROOT, "docs", "路灯与星轨对话", "分析报告", "路灯_398批_孤儿处置清单.md")
 
-#: A 类：157 批已封存（13 个运行时模块 + 1 个构建脚本）
+#: A 类：157 批已封存（12 个运行时模块 + 1 个构建脚本）
+#: ★399刀2：`hardware/hw_abstraction.py` 已按任务书删除（10 行纯 docstring 空壳、
+#:   全仓零 import），从本清单移出 —— 它当初在 A 类里的理由是"删掉几乎无损，建议单独成刀"，
+#:   399 批就是那一刀。历史记录见处置清单 §五.1。
 _KEEP_SEALED = [
-    "hardware/hw_abstraction.py",
     "somatics/actuator.py",
     "somatics/body_state.py",
     "nucleus/chronos/EventStream.py",
@@ -57,8 +59,8 @@ _FALSE_POSITIVE = {
 _ALL = _KEEP_SEALED + _KEEP_ANNOTATED
 
 #: import 冒烟清单（模块路径；pulse_doctor 是脚本入口，只做文件存在性检查）
+#: ★399刀2 起为 14 个（原 15 减 `hardware.hw_abstraction`）
 _SMOKE = [
-    "hardware.hw_abstraction",
     "somatics.actuator",
     "somatics.body_state",
     "nucleus.chronos.EventStream",
@@ -100,7 +102,11 @@ def test_02_manifest_lists_every_candidate():
 
 # ---------------------------------------------------------------- 文件存在
 def test_03_all_candidates_exist():
-    """15 个保留件 + 2 个误判件都必须在磁盘上（本批**没有删任何文件**）。"""
+    """14 个保留件 + 2 个误判件都必须在磁盘上。
+
+    ★399刀2 起是 14（原 15 减 `hardware/hw_abstraction.py`，该件已按 399 任务书删除）。
+    398 批本身**没删任何文件**，这条判据当时守的就是那个结论。
+    """
     _gone = [r for r in _ALL + list(_FALSE_POSITIVE)
              if not os.path.isfile(os.path.join(_ROOT, r))]
     assert not _gone, f"文件不见了（本批不该删任何东西）：{_gone}"
@@ -109,7 +115,7 @@ def test_03_all_candidates_exist():
 # ---------------------------------------------------------------- 处置标注
 @pytest.mark.parametrize("rel", _KEEP_SEALED)
 def test_04_sealed_has_deprecated_mark(rel):
-    """A 类 14 个必须带 157 批封存标注（缺了就是标注被误删）。"""
+    """A 类 13 个必须带 157 批封存标注（缺了就是标注被误删）。"""
     _head = _read_head(rel, 40)
     assert "@deprecated" in _head, f"{rel} 头部缺 157 批 @deprecated 标注"
     assert "157-D" in _head, f"{rel} 的标注里没有票号 157-D"
@@ -138,7 +144,7 @@ def test_06_false_positives_have_evidence():
 # ---------------------------------------------------------------- 冒烟
 @pytest.mark.parametrize("mod", _SMOKE)
 def test_07_import_smoke(mod):
-    """全量 import 冒烟：15 个件都要能导入（证明它们本身没腐烂）。"""
+    """全量 import 冒烟：14 个件都要能导入（证明它们本身没腐烂）。"""
     import importlib
 
     _m = importlib.import_module(mod)
