@@ -2604,6 +2604,44 @@ class InfoField(SilentLogMixin):
             history = [h for h in history if h.get("event_type") == event_type]
         return list(reversed(history))[-limit:]
 
+    def recent_event_names(self, since_ns: int, limit: int = 50) -> list:
+        """★403刀3：取 `since_ns` 之后发生过的事件名（**去重、保序、不含 payload**）。
+
+        为什么单独开一个方法而不是复用 `get_history()`：
+          * `get_history()` 会先 `list(self._history)` **全量拷贝**（上限 2000 条）再过滤，
+            在 5s 一次的心跳路径上白白拷一份；
+          * 这里从 deque 尾部倒着走，遇到第一条早于 `since_ns` 的记录就停，
+            实际只看最近几秒的增量。
+
+        Args:
+            since_ns: 起始纳秒时间戳（含）。<=0 视为"没有上界"，返回空表。
+            limit: 最多返回多少个不同事件名。
+
+        Returns:
+            事件名列表（按首次出现顺序，已去重）。取不到时返回 []，绝不抛。
+        """
+        if not since_ns or since_ns <= 0:
+            return []
+        _out: list = []
+        _seen: set = set()
+        try:
+            with self._lock:
+                for _rec in reversed(self._history):
+                    _ts = _rec.get("timestamp_ns") or 0
+                    if _ts < since_ns:
+                        break
+                    _et = _rec.get("event_type")
+                    if not _et or _et in _seen:
+                        continue
+                    _seen.add(_et)
+                    _out.append(_et)
+                    if len(_out) >= limit:
+                        break
+        except Exception as _e:
+            silent_exc(_e, where="InfoField.recent_event_names")
+            return []
+        return _out
+
     def get_current(self, key: str) -> Any | None:
         """查**脉冲历史**里 `event_type == key` 的最近一条记录（★不是"读当前值"）。
 
