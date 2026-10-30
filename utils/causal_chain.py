@@ -375,6 +375,320 @@ def tick_from_heartbeat(now: float | None = None) -> dict:
         return {"ok": False, "error": "%s: %s" % (type(_e).__name__, _e)}
 
 
+# ===== 404 刀1：L4 因果强度判定 =====
+# 背景：403 刀1 只落"谁导致谁"的事实（链的频次与中位间隔），没有"强弱"。
+# 本段在**同一次窗口读取**上再算三项指标（口径与 build_chains 完全一致）：
+#   ① 频次 count            —— A→B 在窗口内出现多少次
+#   ② 条件概率 p_b_given_a  —— P(B|A) = count(A→B) / A 的全部出链数
+#      （另给 p_a_given_b = P(A|B)，反向参考，成本为零）
+#   ③ 时间衰减 weighted_count —— 近 RECENT_WINDOW_S 的链权重 RECENT_WEIGHT，其余 BASE_WEIGHT
+# 只计算不告警（告警策略留给后续批次）。
+STRENGTH_SCHEMA = "causal_strength/404.v1"
+#: 「近期」窗口（秒）—— 最近 10 分钟
+RECENT_WINDOW_S = 600.0
+#: 近期权重（越近越重要）
+RECENT_WEIGHT = 2.0
+#: 窗口内其余部分的权重
+BASE_WEIGHT = 1.0
+#: 每日落盘保留的链数上限（按 weighted_count 排序）
+STRENGTH_TOP_N = 50
+#: 同一天内两次汇总的最小间隔（秒）—— 防止重启后反复重写同一天
+STRENGTH_MIN_GAP_S = 3600.0
+#: 每日钩子名（与 organ_emits 同一挂点）
+STRENGTH_HOOK = "causal_strength_daily"
+
+
+def strength_output_path(day: str | None = None, root: str | None = None) -> str:
+    """当日强度台账 ``data/monitor/causal_strength_YYYYMMDD.json``（每天一个文件）。"""
+    _day = day or time.strftime("%Y%m%d")
+    return os.path.join(root or project_root(), _REL_DIR, "causal_strength_%s.json" % _day)
+
+
+def _ratio(_num: float, _den: float) -> float | None:
+    """安全比值：分母为 0 时返回 None（没观测到 ≠ 概率 0）。"""
+    try:
+        if not _den:
+            return None
+        return round(float(_num) / float(_den), 4)
+    except (TypeError, ZeroDivisionError) as _e:
+        silent_exc(_e, where="utils.causal_chain._ratio", level="debug")
+        return None
+
+
+def build_strength(rows: list, now: float, window_s: float = WINDOW_S) -> dict:
+    """从 pairs 行算因果强度（**纯函数**，不碰盘）。
+
+    链判定口径与 :func:`build_chains` 严格一致（同器官相邻 emit gap<1s、
+    跨器官同 pulse_id 且 gap<5s），差别只在于本函数**额外按时间段分桶计数**。
+
+    Args:
+        rows: `pulse_pairs` 行。
+        now: 窗口右端（秒）。
+        window_s: 窗口长度（秒）。
+
+    Returns:
+        ``{"totals": {...}, "same_organ": [...], "cross_organ": [...]}``；
+        每条链：``from``/``to``/``count``/``weighted_count``/``recent_count``/
+        ``base_count``/``p_b_given_a``/``p_a_given_b``/``gap_ms_p50``。
+    """
+    _now = float(now)
+    _cut_recent = _now - RECENT_WINDOW_S
+    _cut_all = _now - float(window_s)
+
+    _emits = []
+    _recvs = []
+    for _r in rows or []:
+        _ts = _r.get("ts")
+        if not isinstance(_ts, (int, float)):
+            continue
+        if float(_ts) < _cut_all:
+            continue
+        _t = _r.get("type")
+        if _t == "emit":
+            _emits.append(_r)
+        elif _t == "receive":
+            _recvs.append(_r)
+
+    # ---------- 同器官：相邻 emit（与 build_chains 同口径）----------
+    _by_organ = defaultdict(list)
+    for _r in _emits:
+        _by_organ[str(_r.get("organ") or "")].append(_r)
+
+    _same = defaultdict(lambda: {"n": 0, "recent": 0, "base": 0, "gaps": []})
+    _same_out = defaultdict(int)   # A 的出链总数（P(B|A) 的分母）
+    _same_in = defaultdict(int)    # B 的入链总数（P(A|B) 的分母）
+    _same_links = 0
+    for _organ, _lst in _by_organ.items():
+        if len(_lst) < 2:
+            continue
+        _lst.sort(key=lambda x: (x.get("ts") or 0.0, x.get("seq") or 0))
+        for _a, _b in zip(_lst, _lst[1:]):
+            _ts_a = float(_a.get("ts") or 0.0)
+            _ts_b = float(_b.get("ts") or 0.0)
+            _gap = _ts_b - _ts_a
+            if _gap < 0 or _gap >= SAME_ORGAN_MAX_GAP_S:
+                continue
+            _fa = str(_a.get("event_type") or "")
+            _fb = str(_b.get("event_type") or "")
+            _e = _same[(_fa, _fb)]
+            _e["n"] += 1
+            # 时间衰减按**链的完成时刻**（B 的 ts）分桶
+            if _ts_b >= _cut_recent:
+                _e["recent"] += 1
+            else:
+                _e["base"] += 1
+            if len(_e["gaps"]) < MAX_GAP_SAMPLES:
+                _e["gaps"].append(_gap)
+            _same_out[_fa] += 1
+            _same_in[_fb] += 1
+            _same_links += 1
+
+    _same_rows = []
+    for (_fa, _fb), _v in _same.items():
+        _w = _v["base"] * BASE_WEIGHT + _v["recent"] * RECENT_WEIGHT
+        _same_rows.append({
+            "from": _fa, "to": _fb,
+            "count": _v["n"],
+            "recent_count": _v["recent"],
+            "base_count": _v["base"],
+            "weighted_count": round(_w, 2),
+            "p_b_given_a": _ratio(_v["n"], _same_out.get(_fa, 0)),
+            "p_a_given_b": _ratio(_v["n"], _same_in.get(_fb, 0)),
+            "gap_ms_p50": _p50(_v["gaps"]),
+        })
+    _same_rows.sort(key=lambda x: (-x["weighted_count"], -x["count"], x["from"], x["to"]))
+
+    # ---------- 跨器官：同 pulse_id 的 emit → receive ----------
+    _emit_by_pid = {}
+    for _r in _emits:
+        _pid = _r.get("pulse_id")
+        if _pid and _pid not in _emit_by_pid:
+            _emit_by_pid[_pid] = _r
+    _cross = defaultdict(lambda: {"n": 0, "recent": 0, "base": 0, "gaps": []})
+    _cross_out = defaultdict(int)
+    _cross_in = defaultdict(int)
+    _cross_links = 0
+    _unmatched = 0
+    _seen = set()
+    for _rc in _recvs:
+        _pid = _rc.get("pulse_id")
+        _em = _emit_by_pid.get(_pid) if _pid else None
+        if _em is None:
+            _unmatched += 1
+            continue
+        _to = str(_rc.get("organ") or "")
+        _dup_key = (_pid, _to)
+        if _dup_key in _seen:
+            continue
+        _seen.add(_dup_key)
+        _fo = str(_em.get("organ") or "")
+        if not _fo or not _to or _fo == _to:
+            continue
+        _ts_e = float(_em.get("ts") or 0.0)
+        _ts_r = float(_rc.get("ts") or 0.0)
+        _gap = _ts_r - _ts_e
+        if _gap < 0 or _gap >= CROSS_ORGAN_MAX_GAP_S:
+            continue
+        _ev = str(_rc.get("event_type") or _em.get("event_type") or "")
+        _e = _cross[(_fo, _to, _ev)]
+        _e["n"] += 1
+        if _ts_r >= _cut_recent:
+            _e["recent"] += 1
+        else:
+            _e["base"] += 1
+        if len(_e["gaps"]) < MAX_GAP_SAMPLES:
+            _e["gaps"].append(_gap)
+        _cross_out[_fo] += 1
+        _cross_in[_to] += 1
+        _cross_links += 1
+
+    _cross_rows = []
+    for (_fo, _to, _ev), _v in _cross.items():
+        _w = _v["base"] * BASE_WEIGHT + _v["recent"] * RECENT_WEIGHT
+        _cross_rows.append({
+            "from_organ": _fo, "to_organ": _to, "event": _ev,
+            "count": _v["n"],
+            "recent_count": _v["recent"],
+            "base_count": _v["base"],
+            "weighted_count": round(_w, 2),
+            "p_b_given_a": _ratio(_v["n"], _cross_out.get(_fo, 0)),
+            "p_a_given_b": _ratio(_v["n"], _cross_in.get(_to, 0)),
+            "gap_ms_p50": _p50(_v["gaps"]),
+        })
+    _cross_rows.sort(key=lambda x: (-x["weighted_count"], -x["count"],
+                                    x["from_organ"], x["to_organ"], x["event"]))
+
+    return {
+        "totals": {
+            "emit": len(_emits),
+            "receive": len(_recvs),
+            "same_organ_links": _same_links,
+            "cross_organ_links": _cross_links,
+            "unmatched_receive": _unmatched,
+            "same_organ_distinct": len(_same_rows),
+            "cross_organ_distinct": len(_cross_rows),
+            "recent_window_s": RECENT_WINDOW_S,
+            "recent_weight": RECENT_WEIGHT,
+            "base_weight": BASE_WEIGHT,
+        },
+        "same_organ": _same_rows[:STRENGTH_TOP_N],
+        "cross_organ": _cross_rows[:STRENGTH_TOP_N],
+    }
+
+
+def _write_json_atomic(record: dict, path: str) -> bool:
+    """原子写（tmp + 3 次退避 replace）——403 刀4 的 WinError 5 教训复用。"""
+    _dir = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(_dir):
+        os.makedirs(_dir, exist_ok=True)
+    _tmp = path + ".tmp"
+    try:
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(record, _f, ensure_ascii=False, indent=2)
+            _f.flush()
+            os.fsync(_f.fileno())
+    except OSError as _e:
+        silent_exc(_e, where="utils.causal_chain._write_json_atomic[write]")
+        return False
+    _last = None
+    for _i in range(3):
+        try:
+            os.replace(_tmp, path)
+            return True
+        except OSError as _e:
+            _last = _e
+            silent_exc(_e, where="utils.causal_chain._write_json_atomic[replace-retry]",
+                       level="debug")
+            if _i < 2:
+                time.sleep(0.1)
+    if _last is not None:
+        silent_exc(_last, where="utils.causal_chain._write_json_atomic[replace]", level="warning")
+    return False
+
+
+def run_strength_daily(now: float | None = None, root: str | None = None,
+                       force: bool = False, window_s: float = WINDOW_S) -> dict:
+    """跑一次因果强度汇总并落盘（每日 03:00 钩子 / 运维手工均可调）。
+
+    判重口径：**当日文件存在且 age < STRENGTH_MIN_GAP_S ⇒ 跳过**。
+    不用内存变量判重 —— 403 批的 ``_LAST_RUN`` 在进程重启后归零，
+    实测同一小时被写了两条汇总（详见本批交付报告 T0 偏差表）。
+    """
+    _now = float(now if now is not None else time.time())
+    _p = strength_output_path(root=root)
+    if not force:
+        try:
+            if os.path.isfile(_p):
+                # ★判重用**墙钟**，不用传入的 now：文件 mtime 永远是系统时间，
+                #   用 now 比较会在"补跑历史窗口"（now 与系统时间偏离）时恒不命中，
+                #   表现为同一天被反复重写。
+                _age = time.time() - os.path.getmtime(_p)
+                if 0 <= _age < STRENGTH_MIN_GAP_S:
+                    return {"ok": True, "skipped": "recent", "path": _p,
+                            "age_s": round(_age, 1)}
+        except OSError as _e:
+            silent_exc(_e, where="utils.causal_chain.run_strength_daily[mtime]", level="debug")
+
+    _src = pairs_path(root=root)
+    _tail = tail_rows(_src, window_s=window_s, now=_now)
+    _st = build_strength(_tail["rows"], _now, window_s=window_s)
+    _rec = {
+        "schema": STRENGTH_SCHEMA,
+        "kind": "daily_strength",
+        "day": time.strftime("%Y%m%d", time.localtime(_now)),
+        "generated_at": round(_now, 3),
+        "window_s": round(float(window_s), 1),
+        "rule": {
+            "same_organ_max_gap_s": SAME_ORGAN_MAX_GAP_S,
+            "cross_organ_max_gap_s": CROSS_ORGAN_MAX_GAP_S,
+            "recent_window_s": RECENT_WINDOW_S,
+            "recent_weight": RECENT_WEIGHT,
+            "base_weight": BASE_WEIGHT,
+            "metrics": {
+                "count": "频次：窗口内 A→B 出现次数",
+                "p_b_given_a": "条件概率：count(A→B) / A 的全部出链数",
+                "p_a_given_b": "反向条件概率：count(A→B) / B 的全部入链数",
+                "weighted_count": "时间衰减加权频次：近 10 分钟 x2、其余 x1",
+            },
+        },
+        "source": {
+            "file": os.path.basename(_src),
+            "bytes_read": _tail["bytes"],
+            "truncated": _tail["truncated"],
+            "skipped_lines": _tail["skipped_lines"],
+            "reason": _tail["reason"],
+        },
+        "totals": _st["totals"],
+        "same_organ": _st["same_organ"],
+        "cross_organ": _st["cross_organ"],
+        "note": "只计算不告警（告警策略留后续批次）",
+    }
+    _ok = _write_json_atomic(_rec, _p)
+    return {"ok": bool(_ok), "path": _p, "written": 1 if _ok else 0,
+            "rows": len(_tail["rows"]), "truncated": _tail["truncated"],
+            "totals": _st["totals"]}
+
+
+def register_causal_strength_schedule(scheduler=None):
+    """把每日 03:00 因果强度汇总挂进 DailyScheduler（与 organ_emits 同挂点）。
+
+    返回调度器实例；不可用 / 不支持每日钩子时返回 None（不影响启动）。
+    """
+    try:
+        _sched = scheduler
+        if _sched is None:
+            from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+            _sched = get_daily_scheduler()
+        if _sched is None or not hasattr(_sched, "add_daily_hook"):
+            return None
+        _sched.add_daily_hook(STRENGTH_HOOK, run_strength_daily)
+        return _sched
+    except Exception as _e:
+        silent_exc(_e, where="utils.causal_chain.register_causal_strength_schedule",
+                   level="warning")
+        return None
+
+
 if __name__ == "__main__":  # pragma: no cover - 手工试跑
     import argparse
 

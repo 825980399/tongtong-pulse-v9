@@ -1229,6 +1229,10 @@ class PulseFramework:
                 #   测试引用）⇒ 接线进同一个每日 03:00 调度点，落 organ_emits_YYYYMMDD.json。
                 from nucleus.cognitive.organ_emits import register_organ_emits_schedule
                 register_organ_emits_schedule()
+                # ★404刀1：L4 因果强度判定——与 organ_emits 同一 03:00 挂点，
+                #   落 data/monitor/causal_strength_YYYYMMDD.json（频次/条件概率/时间衰减）。
+                from utils.causal_chain import register_causal_strength_schedule
+                register_causal_strength_schedule()
                 # ★第295批 刀2/刀3：行动面通电——派单路径 + 执行结果回写。
                 #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
                 from nucleus.evolution.patch_execution_dispatch import (

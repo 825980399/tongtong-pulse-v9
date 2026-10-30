@@ -17,7 +17,6 @@ import json
 import os
 import shutil
 import tempfile
-import time
 import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
