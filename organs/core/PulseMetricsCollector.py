@@ -337,6 +337,16 @@ class PulseMetricsCollector(BasePulseOrgan):
         }
         # ===== 线程安全：统一缓存锁 =====
         self._cache_lock = threading.Lock()
+        # ===== ★403刀2：温/冷指标分频缓存 =====
+        #   热指标每 5s 必算；温 60s、冷 300s 才算一次（默认 skip_slow=False 时不走缓存，
+        #   保持既有测试/调用方行为不变）。
+        self._m403_warm_cache: dict[str, Any] = {}
+        self._m403_cold_cache: dict[str, Any] = {}
+        self._m403_warm_at: float = 0.0
+        self._m403_cold_at: float = 0.0
+        self._m403_tier_dirty: bool = False
+        # ★403刀3：上一次快照时刻（纳秒），用于取"两次心跳之间"的事件名
+        self._m403_prev_snap_ns: int = 0
 
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
@@ -395,8 +405,9 @@ class PulseMetricsCollector(BasePulseOrgan):
                                        'data', 'monitor', 'health_snapshot.json')
             os.makedirs(os.path.dirname(health_path), exist_ok=True)
             # 构建完整的快照数据（和心跳触发的一样）
-            full_snapshot = self._build_observability_snapshot()
-            safe_write_json(health_path, full_snapshot)
+            # ★403刀2：温/冷走分频缓存，热文件与 hourly 文件分别落盘
+            full_snapshot = self._build_observability_snapshot(skip_slow=True)
+            self._m403_write_tiered(health_path, full_snapshot)
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
@@ -464,13 +475,13 @@ class PulseMetricsCollector(BasePulseOrgan):
 
         # 构建可观测性快照（锁内完成，确保读到一致的数据快照）
         with self._cache_lock:
-            snapshot = self._build_observability_snapshot()
+            snapshot = self._build_observability_snapshot(skip_slow=True)
 
         try:
             health_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                        'data', 'monitor', 'health_snapshot.json')
             # T-112a：改走硬化写通道（路径锁 + 退避重试 + 唯一 tmp + 失败清理）
-            if not safe_write_json(health_path, snapshot, backup=False):
+            if not self._m403_write_tiered(health_path, snapshot):
                 self._log(LogLevel.WARNING, "health_snapshot.json 写入失败（需关注）")
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
@@ -496,7 +507,21 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "beat_count": payload.get("beat_count", 0),
             }
         self._m402_dead_letter_tick()
+        self._m403_causal_tick()
         return {"status": "cached"}
+
+    def _m403_causal_tick(self) -> None:
+        """★403刀1：L4 因果链每小时汇总（墙钟按整点小时桶自门）。
+
+        与 `_m402_dead_letter_tick` 同一挂点、同一原则：观测件不反噬主循环，
+        失败只留痕不抛；真正的节流在 `utils.causal_chain.tick_from_heartbeat`
+        里按 `int(now // 3600)` 判桶，所以这里每拍调用也只在整点后第一次真跑。
+        """
+        try:
+            from utils.causal_chain import tick_from_heartbeat
+            tick_from_heartbeat()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m403_causal_tick")
 
     def _m402_dead_letter_tick(self) -> None:
         """★402刀2：死信三列台账（墙钟自门 300s，落 data/monitor/dead_letters_*.jsonl）。
@@ -1666,8 +1691,14 @@ class PulseMetricsCollector(BasePulseOrgan):
             _out["reason"] = f"采集异常: {type(_e).__name__}"
         return _out
 
-    def _build_observability_snapshot(self) -> dict[str, Any]:
-        """构建完整的可观测性快照"""
+    def _build_observability_snapshot(self, skip_slow: bool = False) -> dict[str, Any]:
+        """构建完整的可观测性快照。
+
+        Args:
+            skip_slow: ★403刀2 —— True 时温/冷指标走分频缓存（60s/300s 才算一次），
+                热指标照常每次现算。默认 False：**每次都全量现算**，保持既有调用方
+                与测试的行为不变（不让"分频"变成一次静默的行为变更）。
+        """
         snapshot = {
             "timestamp": time.time(),
             "beat_count": self._beat_count,
@@ -1732,36 +1763,9 @@ class PulseMetricsCollector(BasePulseOrgan):
             snapshot["threads"] = {"n": self._m401_thread_count()}
             snapshot["handles"] = {"n": self._m401_handle_count()}
 
-        # 系统级：节点池统计
-        node_stats = {}
-        node_pool = getattr(self, '_node_pool', None)
-        if node_pool is None and self.info_field:
-            node_pool = getattr(self.info_field, 'node_pool', None)
-        if node_pool:
-            pool_stats = node_pool.get_stats()
-            node_stats = {
-                "total": pool_stats.get("total_nodes", 0),
-                "hot": pool_stats.get("hot_count", 0),
-                "warm": pool_stats.get("warm_count", 0),
-                "cold": pool_stats.get("cold_count", 0),
-            }
-        snapshot["nodes"] = node_stats
-
-        # P2-4: 知识演化指标
-        evol_stats = self._collect_knowledge_evolution(node_pool)
-        snapshot["knowledge_evolution"] = evol_stats
-
-        # 器官级：状态统计
-        organ_status_stats = self._collect_organ_status_stats()
-        # ★396刀2 ③：三口径归一 —— declared 成为唯一"器官数"主口径
-        organ_status_stats = self._m396_attach_organ_counts(organ_status_stats)
-        snapshot["organs"] = organ_status_stats
-
-        # 快照级：备份信息
-        snapshot["snapshot_backups"] = self._count_snapshot_backups()
-
-        # 核心链路状态统计
-        snapshot["link_status"] = self._collect_link_status()
+        # ★403刀2：温/冷指标整块搬进分频缓存（热路径不再每 5s 遍历器官/glob 目录/读补丁文件）
+        snapshot.update(self._m403_tier_block("warm", skip_slow))
+        snapshot.update(self._m403_tier_block("cold", skip_slow))
 
         # 动态心率数据
         # ★396刀2：status 一律**读时现算**，绝不取缓存里的自报串。缓存里的 interval /
@@ -1776,6 +1780,24 @@ class PulseMetricsCollector(BasePulseOrgan):
         _hb["status_source"] = _M396_HEARTBEAT_STATUS_SRC
         _hb["gap_s"] = (round(_hb_gap, 2) if _hb_gap is not None else None)
         _hb["beat_rx_count"] = int(getattr(self, "_m396_beat_rx_count", 0))
+        # ★403刀3：把这 5 秒里发生过的事件名列进来 —— 复盘时不必再回翻 pulse_tracer
+        #   只放**事件名**（去重、上限 50），不放 payload：快照是 5s 一写的，塞 payload 会爆。
+        _m403_now_ns = time.time_ns()
+        _m403_prev_ns = int(getattr(self, "_m403_prev_snap_ns", 0) or 0)
+        _m403_evts: list = []
+        if _m403_prev_ns:
+            try:
+                _m403_evts = self.info_field.recent_event_names(
+                    _m403_prev_ns, limit=50) if self.info_field else []
+            except Exception as _e:
+                silent_exc(_e, where="PulseMetricsCollector::_build_observability_snapshot"
+                                     "[prev_beat_events]")
+                _m403_evts = []
+        _hb["prev_beat_events"] = list(_m403_evts)
+        _hb["prev_beat_event_count"] = len(_m403_evts)
+        _hb["prev_beat_span_s"] = (
+            round((_m403_now_ns - _m403_prev_ns) / 1e9, 3) if _m403_prev_ns else None)
+        self._m403_prev_snap_ns = _m403_now_ns
         snapshot["heartbeat"] = _hb
 
         # 当前用户身份
@@ -1798,67 +1820,6 @@ class PulseMetricsCollector(BasePulseOrgan):
             "instinct_upgrade": self._instinct_upgrade_count,
         }
 
-        # ===== 新增：请求去重统计（★T-113d：通电后让去重可见，防止"沉默器官"）=====
-        # 总开关关闭时 get_request_deduplicator() 返回 None → 仅标注 enabled=False；
-        # 开启（启动侧设 PULSE_REQUEST_DEDUP=1）后含完整累计统计（claimed/duplicate/...）。
-        _dd_enabled = False
-        _dd_stats: dict[str, Any] = {"enabled": False}
-        try:
-            from nucleus.field.RequestDeduplicator import get_request_deduplicator
-            _dd = get_request_deduplicator()
-        except Exception:
-            _dd = None
-        if _dd is not None:
-            _dd_enabled = True
-            try:
-                _dd_stats = _dd.stats()
-                _dd_stats["enabled"] = True
-            except Exception as _e:
-                self._log(LogLevel.WARNING, f"[请求去重] 统计采集失败: {_e}")
-        snapshot["request_dedup"] = _dd_stats
-
-        # ===== 新增：needs_repair 积压统计（★T-113e④：让死字段被消费，不再零读者）=====
-        # SafeEvolutionExecutor 在 runtime_failed 时写 needs_repair=True，此前全活树 0 读者。
-        # 此处只读消费（fail-safe），把「真失败待重修」补丁数暴露到可观测快照。
-        # （删除该字段会破坏第114批"needs_repair=真失败待重修 / undecidable=不可判定"
-        #   拆分复用计划，故选「接消费」而非「删除」。)
-        _nr_count = 0
-        try:
-            import os as _os
-            _root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-            _pp = _os.path.join(_root, "data", "patches", "pending_patches.json")
-            if _os.path.exists(_pp):
-                # ★第146批 T146-7：改走 DataAccessLayer.safe_read_json ——
-                #   其编码回退链首位即 utf-8-sig，可透明剥离 UTF-8 BOM；
-                #   旧写法 open(encoding="utf-8") 遇到 BOM 的补丁文件会抛异常，
-                #   落到下面的 WARNING 分支造成每次采集刷一条告警。
-                from nucleus.data.DataAccessLayer import safe_read_json as _safe_read_json
-                _pending = _safe_read_json(_pp, [])
-                if isinstance(_pending, list):
-                    _nr_count = sum(1 for _p in _pending
-                                    if isinstance(_p, dict) and _p.get("needs_repair"))
-        except Exception as _e:
-            self._log(LogLevel.WARNING, f"[needs_repair] 积压采集失败: {_e}")
-        snapshot["patch_needs_repair"] = _nr_count
-
-        # ===== 新增：控制器统计（从历史脉冲中统计） =====
-        controller_stats = {"operations": 0, "files_read": 0, "urls_opened": 0}
-        if self.info_field:
-            try:
-                history = self.info_field.get_history(limit=500)
-                for entry in history:
-                    et = entry.get("event_type", "")
-                    if et == ControllerEvent.OPEN_URL:
-                        controller_stats["urls_opened"] += 1
-                    elif et == ControllerEvent.READ_FILE:
-                        controller_stats["files_read"] += 1
-                    elif et.startswith("controller."):
-                        controller_stats["operations"] += 1
-            except Exception as e:
-                if should_warn("mc:snapshot_stats", 300):
-                    silent_exc(e, "PulseMetricsCollector.py:428 快照统计", level="warning")
-        snapshot["controller"] = controller_stats
-
         # ===== 新增：无头浏览器统计 =====
         snapshot["headless_browser"] = dict(self._headless_stats)
 
@@ -1880,6 +1841,176 @@ class PulseMetricsCollector(BasePulseOrgan):
             "emotion": "中性", "intensity": 0.0, "trend": {}, "inertia_applied": False,
         }
         return snapshot
+
+    # ========== ★403刀2：温/冷指标分频 ==========
+
+    def _m403_node_pool(self):
+        """取节点池引用（温/冷两档共用；取不到返回 None，不抛）。"""
+        _np = getattr(self, "_node_pool", None)
+        if _np is None and self.info_field:
+            _np = getattr(self.info_field, "node_pool", None)
+        return _np
+
+    def _m403_collect_warm(self) -> dict[str, Any]:
+        """温指标（60s 一档）：器官状态、节点池、链路订阅、控制器历史、请求去重、兴趣 TOP。
+
+        这些都要遍历器官/订阅条件/历史，成本远高于读内存缓存，故不放在 5s 路径上。
+        """
+        _out: dict[str, Any] = {}
+
+        # 器官级：状态统计
+        _organs = self._collect_organ_status_stats()
+        # ★396刀2 ③：三口径归一 —— declared 成为唯一"器官数"主口径
+        _out["organs"] = self._m396_attach_organ_counts(_organs)
+
+        # 系统级：节点池统计
+        _node_pool = self._m403_node_pool()
+        _ns = {}
+        if _node_pool:
+            try:
+                _ps = _node_pool.get_stats()
+                _ns = {
+                    "total": _ps.get("total_nodes", 0),
+                    "hot": _ps.get("hot_count", 0),
+                    "warm": _ps.get("warm_count", 0),
+                    "cold": _ps.get("cold_count", 0),
+                }
+            except Exception as _e:
+                silent_exc(_e, where="PulseMetricsCollector::_m403_collect_warm[nodes]")
+                _ns = {}
+        _out["nodes"] = _ns
+
+        # 核心链路状态统计
+        _out["link_status"] = self._collect_link_status()
+
+        # 控制器统计（从历史脉冲中统计）
+        _ctrl = {"operations": 0, "files_read": 0, "urls_opened": 0}
+        if self.info_field:
+            try:
+                _history = self.info_field.get_history(limit=500)
+                for _entry in _history:
+                    _et = _entry.get("event_type", "")
+                    if _et == ControllerEvent.OPEN_URL:
+                        _ctrl["urls_opened"] += 1
+                    elif _et == ControllerEvent.READ_FILE:
+                        _ctrl["files_read"] += 1
+                    elif _et.startswith("controller."):
+                        _ctrl["operations"] += 1
+            except Exception as _e:
+                if should_warn("mc:snapshot_stats", 300):
+                    silent_exc(_e, "PulseMetricsCollector.py:428 快照统计", level="warning")
+        _out["controller"] = _ctrl
+
+        # 请求去重统计（总开关关闭 → 仅标注 enabled=False）
+        _dd_stats: dict[str, Any] = {"enabled": False}
+        try:
+            from nucleus.field.RequestDeduplicator import get_request_deduplicator
+            _dd = get_request_deduplicator()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m403_collect_warm[dedup import]",
+                       level="debug")
+            _dd = None
+        if _dd is not None:
+            try:
+                _dd_stats = dict(_dd.stats())
+                _dd_stats["enabled"] = True
+            except Exception as _e:
+                self._log(LogLevel.WARNING, f"[请求去重] 统计采集失败: {_e}")
+        _out["request_dedup"] = _dd_stats
+
+        # 兴趣前 5 维度（内存缓存，随温档一起刷新）
+        _out["top_interests"] = [
+            {"dim": _d, "val": round(_v, 2)} for _d, _v in self._cached_top_interests
+        ]
+        return _out
+
+    def _m403_collect_cold(self) -> dict[str, Any]:
+        """冷指标（300s 一档）：知识演化、快照备份数、待重修补丁积压。
+
+        备份数是 glob 目录、补丁积压要读一次 `pending_patches.json` —— 都是文件 IO，
+        却几分钟才变一次，属于典型的"被 5s 热路径拖累"。
+        """
+        _out: dict[str, Any] = {}
+        _node_pool = self._m403_node_pool()
+
+        # P2-4: 知识演化指标
+        _out["knowledge_evolution"] = self._collect_knowledge_evolution(_node_pool)
+
+        # 快照级：备份信息
+        _out["snapshot_backups"] = self._count_snapshot_backups()
+
+        # needs_repair 积压（SafeEvolutionExecutor 写、此处只读消费）
+        _nr = 0
+        try:
+            _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            _pp = os.path.join(_root, "data", "patches", "pending_patches.json")
+            if os.path.exists(_pp):
+                # ★第146批 T146-7：走 safe_read_json（编码回退链首位 utf-8-sig，剔 BOM）
+                from nucleus.data.DataAccessLayer import safe_read_json as _safe_read_json
+                _pending = _safe_read_json(_pp, [])
+                if isinstance(_pending, list):
+                    _nr = sum(1 for _p in _pending
+                              if isinstance(_p, dict) and _p.get("needs_repair"))
+        except Exception as _e:
+            self._log(LogLevel.WARNING, f"[needs_repair] 积压采集失败: {_e}")
+        _out["patch_needs_repair"] = _nr
+        return _out
+
+    def _m403_tier_block(self, tier: str, skip_slow: bool) -> dict[str, Any]:
+        """按档取指标：``skip_slow=False`` 一律现算（默认行为不变）；
+        True 时按 60s/300s 墙钟复用缓存，刷新过的档置 dirty（由写盘侧落 hourly）。"""
+        if not skip_slow:
+            return self._m403_collect_warm() if tier == "warm" else self._m403_collect_cold()
+        _now = time.time()
+        if tier == "warm":
+            _cache, _at, _iv = self._m403_warm_cache, self._m403_warm_at, 60.0
+            _fn = self._m403_collect_warm
+        else:
+            _cache, _at, _iv = self._m403_cold_cache, self._m403_cold_at, 300.0
+            _fn = self._m403_collect_cold
+        if _cache and (_now - float(_at)) < _iv:
+            return dict(_cache)
+        try:
+            _new = _fn()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m403_tier_block[%s]" % tier)
+            return dict(_cache)
+        if tier == "warm":
+            self._m403_warm_cache = dict(_new)
+            self._m403_warm_at = _now
+        else:
+            self._m403_cold_cache = dict(_new)
+            self._m403_cold_at = _now
+        self._m403_tier_dirty = True
+        return dict(_new)
+
+    def _m403_write_tiered(self, health_path: str, snapshot: dict) -> bool:
+        """写热文件；温/冷有刷新时另写 ``health_snapshot_hourly.json``。
+
+        Returns:
+            bool：热文件写成功与否（与改造前 `safe_write_json` 的返回值同语义）。
+        """
+        try:
+            from utils import snapshot_tiers as _st
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m403_write_tiered[import]")
+            return safe_write_json(health_path, snapshot, backup=False)
+
+        _now = time.time()
+        _hp = _st.hourly_path(health_path)
+        _hot = _st.build_hot(snapshot, self._m403_warm_at, self._m403_cold_at,
+                             now=_now, warm_path=os.path.basename(_hp))
+        _ok = safe_write_json(health_path, _hot, backup=False)
+        if self._m403_tier_dirty:
+            _hourly = _st.build_hourly(self._m403_warm_cache, self._m403_cold_cache,
+                                       self._m403_warm_at, self._m403_cold_at, now=_now)
+            # 温冷文件写失败不掩盖热文件结果：热文件是本刀的主产物
+            if not safe_write_json(_hp, _hourly, backup=False):
+                if should_warn("mc:m403_hourly_write", 300):
+                    self._log(LogLevel.WARNING, "health_snapshot_hourly.json 写入失败（需关注）")
+            else:
+                self._m403_tier_dirty = False
+        return bool(_ok)
 
     # ========== P2-4: 知识演化可视化 ==========
 
