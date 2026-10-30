@@ -265,6 +265,9 @@ class InfoField(SilentLogMixin):
         self._total_published = 0
         self._total_handled = 0  # ★P1: 已完成（handler 执行完毕）的脉冲计数，供假死探测器判断框架是否真正在运转
         self._total_matched = 0
+        # ★401刀2：剔除万能器官（血管 event_types=["*"]）后的匹配计数——
+        #   与 pulse_tracer 的 real_matched 同口径，供 health 双列对照。
+        self._total_matched_real = 0
         self._total_unmatched = 0
         self._total_duplicated = 0   # v9.5新增: 幂等拦截计数
         self._total_expired = 0      # v9.5新增: TTL过期计数
@@ -1041,6 +1044,10 @@ class InfoField(SilentLogMixin):
             from utils.pulse_tracer import _UNIVERSAL_ONLY_ORGANS as _UOA
             _real = len([o for o in matched_organs if o not in _UOA])
             _univ = len(matched_organs) - _real
+            # ★401刀2：real 口径计数（只要有一个非万能器官命中即 +1）
+            if _real > 0:
+                self._total_matched_real = int(
+                    getattr(self, "_total_matched_real", 0)) + 1
             _status = "ok" if matched_organs else "unmatched"
             _trace_route_matched(pulse_id, _real, _univ, bool(matched_organs), _status)
         except Exception as _e:
@@ -2685,6 +2692,8 @@ class InfoField(SilentLogMixin):
             return {
                 "total_published": self._total_published,
                 "total_matched": self._total_matched,
+                # ★401刀2：剔万能器官后的匹配数（real 口径，与 tracer 同源判据）
+                "total_matched_real": int(getattr(self, "_total_matched_real", 0)),
                 "total_unmatched": self._total_unmatched,
                 "total_duplicated": self._total_duplicated,
                 "total_expired": self._total_expired,

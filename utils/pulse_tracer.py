@@ -9,6 +9,7 @@
 import atexit
 import json
 import os
+import shutil
 import logging
 
 logger = logging.getLogger("pulse.tracer")
@@ -63,7 +64,7 @@ _TO_EMIT_FILLED = 0
 _EVENT_SEQ = 0                 # 事件单调递增序号（落盘去重用）
 _LAST_PAIR_SEQ = -1            # 已落盘的最后一笔事件序号（哨兵，首笔 seq=0 亦落盘）
 _LAST_PAIR_FLUSH_TS = 0.0      # 上次成对流强制 flush 时间戳（10min 双保险）
-_PAIR_FILE_CAP = 200000        # pulse_pairs.jsonl 行数上限（230批改正-a：从2万扩到20万，防止下沉后emit采样被receive洪流挤饿）
+_PAIR_FILE_CAP = 500000        # ★401刀2：行数上限回退默认（230批 20万 → 401批 50万）；真源＝RUNTIME_PARAMS["pulse_pair_file_cap"]
 _PAIR_FLUSH_EVERY_SEC = 60.0    # 1 分钟强制 flush 双保险（210批·刀2：环容调大后配套收紧）
 # ★第258批 刀1：孤儿心跳线节流（2s 闸下每小时一行，一夜≤24行，避免造新噪音海）
 _ORPHAN_HEARTBEAT_EVERY_SEC = 3600
@@ -169,6 +170,79 @@ def _get_pair_path():
     return os.path.join(base, "data", "monitor", "pulse_pairs_%s.jsonl" % day)
 
 
+# ★401刀2：pairs 行数状态（跨日换文件 / 被外部删除时按行实测重建，其余按增量累加）
+_PAIR_LINE_STATE: dict = {"path": None, "lines": 0}
+_pair_state_lock = threading.Lock()
+
+
+def _pair_file_cap() -> int:
+    """pairs 单文件行数上限 ← RUNTIME_PARAMS["pulse_pair_file_cap"]，回退 _PAIR_FILE_CAP。"""
+    try:
+        import config
+        _rp = getattr(config, "RUNTIME_PARAMS", None) or {}
+        _v = _rp.get("pulse_pair_file_cap") if isinstance(_rp, dict) else None
+        if isinstance(_v, bool) or not isinstance(_v, int) or _v <= 0:
+            return _PAIR_FILE_CAP
+        return _v
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::_pair_file_cap")
+        return _PAIR_FILE_CAP
+
+
+def _pair_trim_by_lines_on() -> bool:
+    """401刀2 灰度开关 ENABLE_M401_PAIR_TRIM_BY_LINES；缺省 True。
+
+    关闭 ⇒ 回到旧判据（进程内序号比上限，实际永不 trim），零行为变化（旧行为）。
+    """
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M401_PAIR_TRIM_BY_LINES", True))
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::_pair_trim_by_lines_on")
+        return True
+
+
+def _pair_count_lines(path: str) -> int:
+    """按行实测文件行数（只在换文件/首见时调用，不进热路径）。"""
+    _n = 0
+    with open(path, "r", encoding="utf-8", errors="replace") as _f:
+        for _l in _f:  # 只计数，不读内容
+            _n += 1
+    return _n
+
+
+def _pair_lines_after_append(path: str, appended: int) -> int:
+    """追加后文件行数：同路径增量累加；路径变化（跨日）或首见 ⇒ 按行实测。"""
+    with _pair_state_lock:
+        if _PAIR_LINE_STATE.get("path") != path:
+            try:
+                _n = _pair_count_lines(path)
+            except OSError as _e:
+                silent_exc(_e, where="utils.pulse_tracer::_pair_lines_after_append 实测失败")
+                _n = int(appended or 0)
+            _PAIR_LINE_STATE["path"] = path
+            _PAIR_LINE_STATE["lines"] = _n
+            return _n
+        _PAIR_LINE_STATE["lines"] = int(_PAIR_LINE_STATE.get("lines") or 0) + int(appended or 0)
+        return int(_PAIR_LINE_STATE["lines"])
+
+
+def _backup_pair_file(path: str) -> str:
+    """★401刀2：trim 前先备份（同目录 <name>.trim.bak，只保最新一份）。
+
+    返回备份路径；失败返回空串（不阻断 trim —— 但要留 WARNING，
+    因为"删当天更早的数据"这件事一旦无备份不可逆）。
+    """
+    _bp = path + ".trim.bak"
+    try:
+        shutil.copy2(path, _bp)
+        return _bp
+    except OSError as _e:
+        logger.warning("pulse_tracer: [401刀2] trim 前备份失败（继续 trim，数据不可回溯）: %s: %s",
+                       type(_e).__name__, _e)
+        return ""
+
+
 def _dump_pairs():
     """207批·刀3：将环内未落盘的 emit/receive 事件追加至当日 pulse_pairs_YYYYMMDD.jsonl。
 
@@ -206,25 +280,41 @@ def _dump_pairs():
             for _r in _rows:
                 _pf.write(json.dumps(_r, ensure_ascii=False))
                 _pf.write("\n")
-        # 超容回写（仅在序号跨过整倍数时偶发执行，控制频率）
-        if _LAST_PAIR_SEQ > _PAIR_FILE_CAP:
-            _trim_pair_file(_path)
+        # ★401刀2：超容判据改为「**文件当前行数**」。旧实现拿**进程内序号**比行数上限，
+        #   而 `_EVENT_SEQ` 每次进程启动归零 ⇒ 只要单进程写不满 20 万笔就永不 trim
+        #   （实测 10-29 单日文件 95MB / 约 32 万行仍在增长）。行数由「首见按行实测 +
+        #   其后增量累加」维护，只在真超限时才回写；回写前先备份。
+        if _pair_trim_by_lines_on():
+            _n_lines = _pair_lines_after_append(_path, len(_rows))
+            if _n_lines > _pair_file_cap():
+                _trim_pair_file(_path)
     except Exception as e:
         print(f"[WARNING] pulse_tracer._dump_pairs: {type(e).__name__}: {e}")
 
 
 def _trim_pair_file(path):
-    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 _PAIR_FILE_CAP 行（观测采样）。"""
+    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 cap 行（观测采样）。
+
+    ★401刀2：①上限取 `_pair_file_cap()`（RUNTIME_PARAMS 单一源）；
+             ②回写**前先备份**（等于删掉当天更早的数据，必须可回溯）。
+    """
+    _cap = _pair_file_cap()
     try:
         with open(path, "r", encoding="utf-8") as _f:
             _lines = _f.readlines()
-        if len(_lines) <= _PAIR_FILE_CAP:
+        if len(_lines) <= _cap:
             return
-        _keep = _lines[-_PAIR_FILE_CAP:]
+        _bp = _backup_pair_file(path)
+        _keep = _lines[-_cap:]
         _tmp = path + ".tmp"
         with open(_tmp, "w", encoding="utf-8") as _f:
             _f.writelines(_keep)
         os.replace(_tmp, path)
+        logger.info("pulse_tracer: [401刀2] pairs 已 trim %d → %d 行（备份=%s）",
+                    len(_lines), len(_keep), _bp or "无")
+        with _pair_state_lock:
+            if _PAIR_LINE_STATE.get("path") == path:
+                _PAIR_LINE_STATE["lines"] = len(_keep)
     except Exception as e:
         print(f"[WARNING] pulse_tracer._trim_pair_file: {type(e).__name__}: {e}")
 
@@ -627,6 +717,78 @@ def _flush_at_exit():
 atexit.register(_flush_at_exit)
 
 
+# ★401刀2：孤儿环形 JSONL（按天轮转）—— 数组文件仍是 UI 口径（2s 轮询，必须小），
+#   环形文件才是「同日全量、跨日不累计」的回归/审计口径。
+_ORPHAN_RING_STATE: dict = {"path": None, "lines": 0}
+_ORPHAN_RING_FALLBACK = 5000
+
+
+def _today_start_ts() -> float:
+    """今日 00:00 的时间戳（本地时区）。"""
+    _n = datetime.now()
+    return datetime(_n.year, _n.month, _n.day).timestamp()
+
+
+def _orphan_ring_max() -> int:
+    """环形上限 ← RUNTIME_PARAMS["pulse_tracer_orphan_ring_max"]，回退 5000。"""
+    try:
+        import config
+        _rp = getattr(config, "RUNTIME_PARAMS", None) or {}
+        _v = _rp.get("pulse_tracer_orphan_ring_max") if isinstance(_rp, dict) else None
+        if isinstance(_v, bool) or not isinstance(_v, int) or _v <= 0:
+            return _ORPHAN_RING_FALLBACK
+        return _v
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::_orphan_ring_max")
+        return _ORPHAN_RING_FALLBACK
+
+
+def _orphan_ring_path() -> str:
+    """data/monitor/pulse_orphans_YYYYMMDD.jsonl（每次实时拼装，跨午夜自动换文件）。"""
+    base = (_ISO_BASE_DIR if _ISO_BASE_DIR is not None
+            else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base, "data", "monitor",
+                        "pulse_orphans_%s.jsonl" % datetime.now().strftime("%Y%m%d"))
+
+
+def _ring_append_orphans(rows) -> None:
+    """★401刀2：新孤儿追加进当日 JSONL 环形；超过 maxlen 回写最近 maxlen 行。"""
+    _rows = [r for r in (rows or []) if isinstance(r, dict)]
+    if not _rows:
+        return
+    _cap = _orphan_ring_max()
+    _p = _orphan_ring_path()
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        with open(_p, "a", encoding="utf-8") as _f:
+            for _r in _rows:
+                _f.write(json.dumps(_r, ensure_ascii=False) + "\n")
+        with _pair_state_lock:
+            _first = _ORPHAN_RING_STATE.get("path") != _p
+            _ORPHAN_RING_STATE["path"] = _p
+            if _first:
+                try:
+                    _n = _pair_count_lines(_p)
+                except OSError as _e:
+                    silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans 实测失败")
+                    _n = len(_rows)
+            else:
+                _n = int(_ORPHAN_RING_STATE.get("lines") or 0) + len(_rows)
+            _ORPHAN_RING_STATE["lines"] = _n
+        if _n > _cap:
+            with open(_p, "r", encoding="utf-8", errors="replace") as _f:
+                _lines = _f.readlines()
+            _keep = _lines[-_cap:]
+            _tmp = _p + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as _f:
+                _f.writelines(_keep)
+            os.replace(_tmp, _p)
+            with _pair_state_lock:
+                _ORPHAN_RING_STATE["lines"] = len(_keep)
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans")
+
+
 def flush_to_file(force: bool = False):
     """将当前事件列表写入JSON文件，同时更新孤儿脉冲记录
     
@@ -693,6 +855,18 @@ def flush_to_file(force: bool = False):
                 print(f"[WARNING] pulse_tracer.py:128: {type(e).__name__}: {e}")
                 existing_orphans = []
 
+        # ★401刀2：孤儿**不再跨天累计** —— 只保留当日（更早的整批丢弃）。
+        #   旧实现把历史数组整体读回再追加 ⇒ 变成"最大 N 条的跨天混合堆"，
+        #   看板分不清"今天新出现"还是"上月底遗留"。按 timestamp 切日，无歧义。
+        _day_start = _today_start_ts()
+        _before_n = len(existing_orphans)
+        existing_orphans = [
+            o for o in existing_orphans
+            if isinstance(o, dict) and float(o.get("timestamp", 0) or 0) >= _day_start]
+        if _before_n != len(existing_orphans):
+            logger.info("pulse_tracer: [401刀2] 孤儿数组跨天清理 %d → %d 条（只保当日）",
+                        _before_n, len(existing_orphans))
+
         # 去重：基于 timestamp + organ + event_type
         existing_keys = set()
         for o in existing_orphans:
@@ -715,6 +889,8 @@ def flush_to_file(force: bool = False):
 
         # 原子写孤儿记录
         safe_write_json(orphan_path, existing_orphans, backup=False)
+        # ★401刀2：同日全量进环形 JSONL（跨日自动换文件；数组只作 UI 视图）
+        _ring_append_orphans(new_orphans)
 
         # ★第258批 刀1：孤儿心跳线（观测面零语义变更；V 窗取数定案前先点亮可观测入口）
         #   落点：孤儿已写盘（上方 safe_write_json），new_orphans 与 events_snapshot 仍在手，五个数全齐。
