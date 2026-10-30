@@ -3658,6 +3658,16 @@ RUNTIME_PARAMS = {
     # 记忆存储参数
     "memory_snapshot_interval": 300,          # 记忆快照保存间隔（秒）
     "memory_cold_node_recall_count": 50,      # 冷节点召回数量
+    # ★401刀1：内存双阈值归一 —— RUNTIME_PARAMS 成为**唯一定义源**（可被 override 覆盖），
+    #   两个模块级常量 MEMORY_AUTO_GC_RSS_MB / HIGH_LOAD_PROCESS_RSS_MB 改为由这里派生。
+    #   默认值与派生前逐字相同 ⇒ 零行为变化。注意：常量在**导入时**求值，故热改这两键
+    #   需重启才对常量读取方（InfoField / runtime_metrics）生效 —— 与既有 INFO 常量一致。
+    "memory_auto_gc_rss_mb": 8192.0,          # 自动 GC 触发的进程 RSS 上限（MB）
+    "memory_high_load_rss_mb": 6144.0,        # 进程 RSS 高载阈值（MB，InfoField 双口径）
+    # ★401刀2：pairs 单文件行数上限（230批 20万 → 401批 50万）与孤儿环形上限。
+    #   20261029 单日 pairs 已到 95MB / 约 32 万行 ⇒ 20 万上限会在半天内被突破。
+    "pulse_pair_file_cap": 500000,            # pulse_pairs_YYYYMMDD.jsonl 行数上限
+    "pulse_tracer_orphan_ring_max": 5000,     # pulse_orphans_YYYYMMDD.jsonl 环形条数
     "memory_hot_node_max": 500,               # 热节点最大数量
     "memory_node_expire_days": 30,            # 节点过期天数
     # 知识检索参数
@@ -5551,7 +5561,7 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   重启生效；阈值下调须等 A1 归属结论＋一周实测回落幅度另议。
 ENABLE_MEMORY_AUTO_GC = True
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
-MEMORY_AUTO_GC_RSS_MB = 8192.0
+MEMORY_AUTO_GC_RSS_MB = float(RUNTIME_PARAMS.get("memory_auto_gc_rss_mb", 8192.0))   # ★401刀1：单一定义源＝RUNTIME_PARAMS["memory_auto_gc_rss_mb"]
 
 # ★主线第176批 段2（2026-10-09）：内存超限自动重启开关（默认全关，零回归）
 #   ENABLE_MEMORY_AUTO_RESTART：连续 2 次 GC 仍越阈（RSS 仍 > MEMORY_AUTO_RESTART_RSS_MB）
@@ -6507,7 +6517,18 @@ ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE = True   # SafeEvolutionExecutor：已解
 ENABLE_OSCILLON_STARTUP_REPORT = True       # nucleus/field/OscillonField.py：启动报告开关
 ENABLE_REPORT_DWELL_AUDIT = True            # tools/report_dwell_audit.py：滞留审计开关
 ENABLE_REPORT_EXPECTED_CONSUMERS = True     # nucleus/reporting/report_bus.py：期望消费者校验
-HIGH_LOAD_PROCESS_RSS_MB = 6144.0           # nucleus/field/InfoField.py：进程 RSS 高载阈值(MB)
+# ★401刀1/刀2：L5 快照补字段 + pairs cap 判据灰度开关（均默认 True＝修复生效；
+#   关闭后回到 401 之前的行为，零行为变化）。读取点：
+#   ENABLE_M401_SNAPSHOT_EXTRA_FIELDS → PulseMetricsCollector::_m401_extra_fields_on
+#   ENABLE_M401_PAIR_TRIM_BY_LINES   → utils/pulse_tracer::_pair_trim_by_lines_on
+#   ENABLE_M401_UNRESOLVED_FULL      → CallGraphAnalyzer（unresolved 样本 → 全量清单）
+ENABLE_M401_SNAPSHOT_EXTRA_FIELDS = True
+ENABLE_M401_PAIR_TRIM_BY_LINES = True
+# ★401批刀3：调用图落盘时另存一份 `graph_latest.json` 常驻副本
+#   （不占滚动 7 份配额；`call_graph_guard` 两个选择器显式跳过它）。
+ENABLE_M401_GRAPH_KEEP_LATEST = True
+ENABLE_M401_UNRESOLVED_FULL = True
+HIGH_LOAD_PROCESS_RSS_MB = float(RUNTIME_PARAMS.get("memory_high_load_rss_mb", 6144.0))   # ★401刀1：单一定义源＝RUNTIME_PARAMS["memory_high_load_rss_mb"]（nucleus/field/InfoField.py 高载阈值）
 INSIGHT_HYPOTHESIS_MIN_SCORE = 0.5          # nucleus/InsightBoard.py：洞见假设入板最小分
 INSIGHT_TOP_N_DUMP = 5                      # nucleus/InsightBoard.py：洞见落盘 TopN
 KNOWLEDGE_CURRENT_VERSION = None            # KnowledgeQualityAnalyzer：当前知识版本（None=自动）

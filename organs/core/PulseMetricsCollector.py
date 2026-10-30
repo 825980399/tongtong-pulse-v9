@@ -262,6 +262,23 @@ def _m377_tm_delta(snap, base_path: str, top_n: int = 20) -> tuple[list, str]:
     return _rows, _state
 
 
+# ★401刀1：GC 观测态（模块级，只写字典，零 IO / 零线程）
+#   为什么需要它：`gc.get_stats()` 只给"各代回收次数"，**没有时间戳**；
+#   看板要判"最近有没有回收过"必须自己记时刻，否则只能看计数变化猜。
+_M401_GC_LAST: dict = {"at": None, "gen": None}
+_M401_GC_PROBE_ON = False
+
+
+def _m401_gc_callback(phase, info):
+    """★401刀1：记录最近一次 GC 完成（phase=stop）时刻与代次。"""
+    try:
+        if phase == "stop":
+            _M401_GC_LAST["at"] = time.time()
+            _M401_GC_LAST["gen"] = int((info or {}).get("generation", -1))
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m401_gc_callback")
+
+
 class PulseMetricsCollector(BasePulseOrgan):
     """脉冲驱动多层级指标采集器（v9.5 分层脉冲版）"""
 
@@ -1669,14 +1686,38 @@ class PulseMetricsCollector(BasePulseOrgan):
         # 系统级：信息场统计
         if self.info_field:
             field_stats = self.info_field.get_stats()
+            _raw_m = int(field_stats.get("total_matched", 0) or 0)
+            # ★401刀2：real 口径可能不存在（老版本/替身）⇒ None 而非 0（没测到 ≠ 真 0）
+            _real_m = field_stats.get("total_matched_real")
             snapshot["info_field"] = {
                 "published": field_stats.get("total_published", 0),
-                "matched": field_stats.get("total_matched", 0),
+                # `matched` 保留原名与原值（历史消费方：health_ui / 报表），口径 = matched_raw
+                "matched": _raw_m,
+                # ★401刀2：双列口径 —— raw 含万能器官（血管 event_types=["*"] 几乎必中），
+                #   real 剔除后与 pulse_tracer 的 real_matched 同口径。
+                #   ★两者**不可互比**：health 曾自报 100% 而 tracer 7.8%，就是拿 raw 比 real。
+                "matched_raw": _raw_m,
+                "matched_real": _real_m,
+                "matched_source": {
+                    "matched_raw": "InfoField.total_matched（含万能器官）",
+                    "matched_real": "InfoField.total_matched_real（剔 _UNIVERSAL_ONLY_ORGANS）",
+                },
                 "active_conditions": field_stats.get("active_conditions", 0),
             }
 
         # 172刀3：内存压力双口径读数（进程 RSS MB + 系统内存占比）
-        snapshot["memory_pressure"] = self._collect_memory_pressure()
+        # ★401刀1：**一次采集、多块复用** —— `_collect_memory_pressure` 有副作用
+        #   （记峰值 / 跑增长告警三闸 / 可能真触发 GC），绝不能为补字段调第二次。
+        _m401_mp = self._collect_memory_pressure()
+        snapshot["memory_pressure"] = _m401_mp
+        # ★401刀1：L5 停更排查暴露的观测缺口 —— 快照只有 memory_pressure 与 heartbeat，
+        #   看不出「增长速率 / GC 次数与最后时刻 / 线程数 / 句柄数」。四块全部复用既有读数，
+        #   不新开采样链；取不到一律 None（**不填 0**：没测到 ≠ 真 0）。
+        if self._m401_extra_fields_on():
+            snapshot["memory"] = self._m401_memory_block(_m401_mp)
+            snapshot["gc"] = self._m401_gc_block(_m401_mp)
+            snapshot["threads"] = {"n": self._m401_thread_count()}
+            snapshot["handles"] = {"n": self._m401_handle_count()}
 
         # 系统级：节点池统计
         node_stats = {}
@@ -2069,6 +2110,98 @@ class PulseMetricsCollector(BasePulseOrgan):
         with self._cache_lock:
             self._instinct_upgrade_count += 1
         return {"status": "cached"}
+    # ========== ★401刀1：L5 快照补四块（memory / gc / threads / handles） ==========
+    def _m401_extra_fields_on(self) -> bool:
+        """401刀1 灰度开关 ENABLE_M401_SNAPSHOT_EXTRA_FIELDS；缺省 True（补字段生效）。
+
+        关闭 ⇒ 四块都不写（快照回到 401 之前的样子），零行为变化。
+        """
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M401_SNAPSHOT_EXTRA_FIELDS", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m401_extra_fields_on")
+            return True
+
+    def _m401_memory_block(self, mp: dict[str, Any] | None) -> dict[str, Any]:
+        """memory{process_rss_mb, system_percent, growth_mb_per_min}。
+
+        `source` 标明口径：三值都出自**同一次** `memory_pressure` 采样（不另采）。
+        增长速率来自告警链读数；链不可用 ⇒ None。
+        """
+        _mp = mp if isinstance(mp, dict) else {}
+        _al = _mp.get("growth_alarm")
+        _al = _al if isinstance(_al, dict) else {}
+        return {
+            "process_rss_mb": _mp.get("process_rss_mb"),
+            "system_percent": _mp.get("system_percent"),
+            "growth_mb_per_min": _al.get("growth_mb_per_min"),
+            "source": "memory_pressure",
+        }
+
+    def _m401_gc_block(self, mp: dict[str, Any] | None) -> dict[str, Any]:
+        """gc{count, last_gc_at, auto_gc_triggered}。
+
+        * `count` = `gc.get_stats()` 各代 `collections` 之和（解释器启动以来，单调递增）；
+        * `last_gc_at` = 本进程内**观测到**的最近一次回收完成时刻（gc.callbacks 记录）；
+          从未观测到 ⇒ None（不是"0 秒前"）；
+        * `auto_gc_triggered` = 告警链三闸是否触发（单轨，取 memory_pressure.gc_triggered）。
+        """
+        _mp = mp if isinstance(mp, dict) else {}
+        _cnt = None
+        _gens = None
+        try:
+            import gc as _gc
+            _st = _gc.get_stats() or []
+            _sum = 0
+            for _s in _st:
+                _sum += int((_s or {}).get("collections", 0) or 0)
+            _cnt = _sum
+            _gens = len(_st)
+            self._m401_gc_probe_install(_gc)
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_block")
+        _last = dict(_M401_GC_LAST)
+        return {
+            "count": _cnt,
+            "last_gc_at": _last.get("at"),
+            "last_gc_gen": _last.get("gen"),
+            "auto_gc_triggered": _mp.get("gc_triggered"),
+            "generations": _gens,
+        }
+
+    def _m401_gc_probe_install(self, gc_mod) -> None:
+        """惰性挂一次 gc 回调（幂等；不在 import 期做，避免污染模块加载）。"""
+        global _M401_GC_PROBE_ON
+        if _M401_GC_PROBE_ON:
+            return
+        try:
+            gc_mod.callbacks.append(_m401_gc_callback)
+            _M401_GC_PROBE_ON = True
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_probe_install")
+
+    def _m401_thread_count(self) -> int | None:
+        """线程数（含本线程）。取不到 ⇒ None。"""
+        try:
+            return int(threading.active_count())
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m401_thread_count")
+            return None
+
+    def _m401_handle_count(self) -> int | None:
+        """进程句柄数（Windows 有效）。非 Windows / psutil 不支持 ⇒ None（**不填 0**）。"""
+        try:
+            import psutil
+            _proc = psutil.Process()
+            _fn = getattr(_proc, "num_handles", None)
+            if not callable(_fn):
+                return None
+            return int(_fn())
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m401_handle_count")
+            return None
+
     def _count_snapshot_backups(self) -> int:
         """P1-4: 统计快照备份文件数"""
         try:
