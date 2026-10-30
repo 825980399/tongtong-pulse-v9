@@ -757,7 +757,15 @@ def collect_assertions(project_root: str | None = None,
                         "call_graph_handbook_rule", "", _graph_rel, observed_at=_now))
 
     # ---------- 源4：health_snapshot 10 条 ----------
-    _snap = _read_json(os.path.join(_root, "data", "monitor", "health_snapshot.json"), None)
+    # ★403刀2：冷/温字段已分频到 health_snapshot_hourly.json —— 这里读合并视图，
+    #   否则 `health.knowledge_evolution.present` 等断言会翻成 field_not_exposed（假警报）。
+    _hs_path = os.path.join(_root, "data", "monitor", "health_snapshot.json")
+    try:
+        from utils.snapshot_tiers import read_merged as _m403_merged
+        _snap = _m403_merged(_hs_path) or None
+    except Exception as _m403e:
+        silent_exc(_m403e, where="expectation_ledger.health_snapshot[merged]", level="warning")
+        _snap = _read_json(_hs_path, None)
     for _fname in ["beat_count", "nodes", "pulse", "info_field", "memory_pressure",
                    "knowledge_evolution", "organs", "heartbeat", "dream",
                    "reflection"][:_SOURCE_BUDGET["health_snapshot"]]:

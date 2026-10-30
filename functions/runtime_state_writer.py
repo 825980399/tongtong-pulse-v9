@@ -135,7 +135,15 @@ class RuntimeStateWriter:
                 "data", "monitor", "health_snapshot.json"
             )
             if os.path.exists(snapshot_path):
-                snapshot = safe_read_json(snapshot_path, default={})
+                # ★403刀2：knowledge_evolution / organs 已搬到 health_snapshot_hourly.json，
+                #   这里必须读合并视图，否则进化看板会变成两个空对象（静默变空最难查）。
+                try:
+                    from utils.snapshot_tiers import read_merged as _merged_snapshot
+                    snapshot = _merged_snapshot(snapshot_path)
+                except Exception as _m403e:
+                    silent_exc(_m403e, where="runtime_state_writer._collect_state[merged]",
+                               level="warning")
+                    snapshot = safe_read_json(snapshot_path, default={})
                 state["evolution"] = {
                     "knowledge_evolution": snapshot.get("knowledge_evolution", {}),
                     "organs": snapshot.get("organs", {}),

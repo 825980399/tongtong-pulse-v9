@@ -926,8 +926,17 @@ class HealthHandler(BaseHTTPRequestHandler):
         )
         try:
             if os.path.exists(snapshot_path):
-                with open(snapshot_path, encoding='utf-8') as f:
-                    data = f.read()
+                # ★403刀2：热文件已拆走温/冷指标，出口统一合并后再发给前端
+                #   （前端 JS 一行都不用改；合并放在服务端也避免每次都多一次请求）
+                try:
+                    from utils.snapshot_tiers import read_merged as _merged_snapshot
+                    import json as _json
+                    data = _json.dumps(_merged_snapshot(snapshot_path), ensure_ascii=False)
+                except Exception as _m403e:
+                    silent_exc(_m403e, where="health_ui._serve_snapshot[merged]",
+                               level="warning")
+                    with open(snapshot_path, encoding='utf-8') as f:
+                        data = f.read()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
                 self.send_header('Cache-Control', 'no-cache')
