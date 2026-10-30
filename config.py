@@ -1150,6 +1150,18 @@ REASONING_EXPERIENCE_INDEX_CONFIG = {
 REASONING_SENTINEL_WINDOW = 50     # 成功增量累计达此值即核一次蒸馏滞后（守卫灵敏度，非旁路探针）
 REASONING_SENTINEL_CONSEC = 2      # 缺口连续多少窗>0 即告警（守卫灵敏度，非旁路探针）
 
+# ========== ★406 批刀3：经验路由阈值埋点 + 纯知识拦截放开 ==========
+# 背景（烛微 406 实测）：经验路由 0 命中不只是"没人问"，路上还有四道硬跳过，
+#   其中"纯知识查询一律跳过经验匹配"把绝大多数正常提问挡在经验回路之外。
+# 本刀只做两件事：① 埋点看**真实** score 分布；② 把拦截从"一律跳"改成"本地答得了才跳"。
+#   ★阈值**不改**（ReasoningExperience._min_confidence 仍为 0.5），先跑 3 天看分布再定。
+EXPERIENCE_ROUTE_TRACE = True
+# 纯知识拦截放开：只有本地知识命中 **≥ 此值** 才跳过经验匹配（交本地检索作答）；
+#   命中不足 → 放行给经验匹配，经验不命中再自然回退本地检索。
+EXPERIENCE_KNOWLEDGE_GUARD_MIN_HITS = 3
+# 命中计数的有界采样上限（节点数）。口径与 MULTI_STEP_ENTRY_PROBE_SCAN_LIMIT 一致（800 为实测平衡点）。
+EXPERIENCE_KNOWLEDGE_GUARD_SCAN_LIMIT = 800
+
 # ========== 自我进化配置 ==========
 EVOLUTION_CONFIG = {
     # 自动执行总开关——★进化闭环升级(完美级): 默认开启全自主进化。

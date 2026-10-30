@@ -4186,6 +4186,122 @@ class PulseInnerWorld(
             "strategy_applied": ctx.payload.get("strategy_context", {}),
         }, priority=8, layer="L2")
         return {"status": "rule_match", "answer": rule_answer}
+
+    # --- 406 刀3 经验路由埋点 / 纯知识拦截放开 ---
+    @staticmethod
+    def _m406_route_trace_on() -> bool:
+        """★406 刀3：经验路由 score 埋点是否输出（默认 True）。
+
+        True  = 每次经验匹配打一行 DEBUG（`LOG_LEVEL_FILE = DEBUG`，能落进 logs/pulse.log）；
+        False = 完全静默 —— 3 天实测数据收够后直接把开关关掉，不必回来删代码。
+
+        示例:
+            PulseInnerWorld._m406_route_trace_on()  ->  True
+        """
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "EXPERIENCE_ROUTE_TRACE", True))
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_route_trace_on")
+            return True
+
+    @staticmethod
+    def _m406_knowledge_guard_params() -> tuple:
+        """★406 刀3：纯知识拦截的 (命中下限, 采样上限)，带整型与下限回退。
+
+        返回:
+            (min_hits, scan_limit) —— 缺键 / 非数值 / <=0 一律回退 (3, 800)。
+
+        示例:
+            PulseInnerWorld._m406_knowledge_guard_params()  ->  (3, 800)
+        """
+        try:
+            import config as _cfg
+            _min_hits = int(getattr(_cfg, "EXPERIENCE_KNOWLEDGE_GUARD_MIN_HITS", 3) or 3)
+            _scan = int(getattr(_cfg, "EXPERIENCE_KNOWLEDGE_GUARD_SCAN_LIMIT", 800) or 800)
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_guard_params")
+            _min_hits, _scan = 3, 800
+        return max(1, _min_hits), max(50, _scan)
+
+    def _m406_knowledge_hit_count(self, question: str) -> int:
+        """★406 刀3：本地知识「命中条数」探针（零模型、零副作用）。
+
+        ★为什么不直接用 `_knowledge_retrieve` 的结果：
+          ① 它返回的是**已融合的答案字符串**，拿不到条数；
+          ② 它内部是 ``resonate_topk(..., top_k=3)`` —— **上限就是 3**，
+             拿它判「命中 >=3 条」几乎恒不成立，等于把拦截整段废成"永远放行"；
+          ③ 它中途会触发 ``feedback_llm_fallback("local_retrieval")`` 等副作用，
+             当探针用会污染自校准数据。
+        故改用「核心词 × 有界采样节点」的字面命中计数 —— 与 `_m35_entry_probe`
+        的领域预判**同口径**（项目内既有先例，成本可控、语义可解释）。
+
+        返回:
+            命中节点数；池不可用 / 提不出核心词 / 采样异常 → **0**。
+            （0 的语义是"本地答不了" ⇒ 调用方**不跳过**经验匹配。探针故障绝不会
+             反过来把问题拦掉，与"放开拦截"的方向一致。）
+
+        示例:
+            iw._m406_knowledge_hit_count("什么是量子纠缠")   # doctest: +SKIP
+            2
+        """
+        _pool = getattr(self, "node_pool", None)
+        if _pool is None:
+            return 0
+        try:
+            _scan = self._m406_knowledge_guard_params()[1]
+            _terms = [str(_w) for _w in (self._m31_extract_key_terms(question, limit=3) or [])
+                      if len(str(_w)) >= 2]
+            if not _terms:
+                return 0
+            _sample = _pool.query(evol_level="L2", limit=_scan) or []
+            if not _sample:
+                _sample = _pool.query(limit=_scan) or []
+            _hits = 0
+            for _n in _sample:
+                _blob = "{} {}".format(
+                    str(getattr(_n, "value", "") or ""),
+                    " ".join(str(_k) for _k in (getattr(_n, "keywords", None) or [])),
+                )
+                if any(_t in _blob for _t in _terms):
+                    _hits += 1
+            return _hits
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_hit_count")
+            return 0
+
+    def _m406_trace_experience_route(self, question: str, exp_match, reasoning_exp) -> None:
+        """★406 刀3：把一次经验路由的真实分数打成一行 DEBUG。
+
+        格式对齐 406 任务书：``[406刀3] experience_route score=0.xx query="..." top_hit="..."``，
+        末尾追加 ``hit / thr / n / type / src`` 五个字段（命中位、当前阈值、经验库条数、
+        命中条目的推导类型与来源）—— 有这几个字段，3 天后才能回答两件事：
+          · 分数分布是否卡在阈值附近（该不该调阈值）；
+          · "命中了却仍 0 产出"的究竟是哪一类条目（类型闸/白名单闸挡掉的）。
+
+        ★为什么 score 取诊断属性而非 ``exp_match["confidence"]``：
+          ``search()`` 在 score < ``_min_confidence`` 时返回 None，把**低分段的真实分数
+          一起丢掉**；而"阈值 0.5 该不该调"恰恰只能靠低分段判断。
+
+        本方法**只打日志**，任何失败都不得影响路由（异常经 silent_exc 留痕后吞掉）。
+        """
+        try:
+            _diag = getattr(reasoning_exp, "last_search_diagnostics", None) or {}
+            _score = float(_diag.get("best_score", 0.0) or 0.0)
+            _hit = bool(_diag.get("hit", False))
+            _thr = float(_diag.get("threshold", 0.5) or 0.5)
+            _n = int(_diag.get("n_experiences", 0) or 0)
+            _m = exp_match or {}
+            _top = str(_m.get("matched_example", "") or "-")[:40].replace('"', "'")
+            _type = str(_m.get("derivation_type", "") or "-")
+            _src = str(_m.get("source", "") or "-")
+            self._log(LogLevel.DEBUG,
+                      f"[406刀3] experience_route score={_score:.2f} hit={int(_hit)} "
+                      f"thr={_thr:.2f} n={_n} type={_type or '-'} src={_src or '-'} "
+                      f"query=\"{question[:40]}\" top_hit=\"{_top}\"")
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_trace_experience_route")
+
     def _detect_experience_route(self, ctx: "PulseInnerWorld.InferenceContext"):
         """
         优先级65：经验匹配路由。
@@ -4206,19 +4322,36 @@ class PulseInnerWorld(
         if _is_replay_exclusive or _is_conflict_exclusive:
             return None  # 七步复盘和冲突独占信号跳过经验匹配
 
-        # ★修复：纯知识查询问题不经验验路由——优先本地检索
+        # ★406 刀3：纯知识查询不再**一律**跳过经验匹配 ——
+        #   改为「本地知识真答得了才跳过」。406 前这里是"见到 什么是/是什么 直接 return None"，
+        #   实测把绝大多数正常提问挡在经验回路之外（烛微 406 结论之一）。
         _KNOWLEDGE_QUERY_SIGNALS = ["什么是", "是什么", "为什么是", "怎么理解", "如何定义"]
-        if any(s in ctx.question for s in _KNOWLEDGE_QUERY_SIGNALS) and \
-                not re.search(r'规则\s*\d+.*(?:→|->|=>)|冲突|矛盾|类比|归纳|演绎', ctx.question):
-            self._log(LogLevel.DEBUG, "经验匹配路由: 纯知识查询，跳过经验路由，交本地检索")
-            # ★第266批 刀1：本地决策计数对称——纯知识查询本地检索路径补记账（只加计数不改分支）
+        _is_knowledge_query = any(s in ctx.question for s in _KNOWLEDGE_QUERY_SIGNALS) and \
+            not re.search(r'规则\s*\d+.*(?:→|->|=>)|冲突|矛盾|类比|归纳|演绎', ctx.question)
+        if _is_knowledge_query:
+            # ★第266批 刀1：本地决策计数对称——记账**频次与 406 前一致**（每次纯知识提问 1 次）。
+            #   406 前是"一律跳过 + 记 1 次"；现在不论经验最终命中与否，都仍是"未调用大模型"的
+            #   本地决策，故记账位置保持在分支入口，不因放行而丢计数、也不因经验命中而重复计。
             record_local_inference(KIND_RULE)
-            return None
+            _m406_hits = self._m406_knowledge_hit_count(ctx.question)
+            _m406_min_hits = self._m406_knowledge_guard_params()[0]
+            if _m406_hits >= _m406_min_hits:
+                self._log(LogLevel.DEBUG,
+                          f"[406刀3] knowledge_guard skip=1 hits={_m406_hits}>={_m406_min_hits} "
+                          f"query=\"{ctx.question[:40]}\"")
+                return None
+            self._log(LogLevel.DEBUG,
+                      f"[406刀3] knowledge_guard skip=0 hits={_m406_hits}<{_m406_min_hits} "
+                      f"query=\"{ctx.question[:40]}\" 放行经验匹配")
 
         try:
             from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
             _reasoning_exp = get_reasoning_experience()
             _exp_match = _reasoning_exp.search(ctx.question)
+            # ★406 刀3：阈值实测埋点。位置在 search() 之后、任何类型/算子判断之前 ——
+            #   这样"命中了但被类型闸挡掉"也能在分布里看见，而不是只剩一个 hit=0。
+            if self._m406_route_trace_on():
+                self._m406_trace_experience_route(ctx.question, _exp_match, _reasoning_exp)
             if not _exp_match or _exp_match.get("confidence", 0) < 0.5:
                 return None
 

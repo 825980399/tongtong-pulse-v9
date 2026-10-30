@@ -39,6 +39,12 @@ class ReasoningExperience(SilentLogMixin):
         self._max_experiences = 200
         self._min_confidence = 0.5  # 最低匹配置信度
 
+        # ★406 刀3：上一次 search() 的诊断快照（只读观测，**不参与判分**）。
+        #   为什么需要它：search() 在 score < _min_confidence 时**返回 None**，
+        #   把低于阈值的真实分数一起丢掉 —— 而"阈值该不该调"恰恰只能靠低分段判断。
+        #   读取方：PulseInnerWorld._m406_trace_experience_route（埋点）。
+        self.last_search_diagnostics: dict[str, Any] = {}
+
         # ★v23.0新增：特征提取缓存
         self._feature_cache: dict[str, dict[str, Any]] = {}  # question→features
         self._feature_cache_max = 100  # 最多缓存100个问题的特征
@@ -176,6 +182,13 @@ class ReasoningExperience(SilentLogMixin):
             {"derivation_type": str, "confidence": float, "source": str, "matched_example": str}
             如果无匹配返回None
         """
+        # ★406 刀3：每次检索先复位诊断快照（异常中断时也留得下初值，不留上一轮脏数据）
+        self.last_search_diagnostics = {
+            "best_score": 0.0,
+            "threshold": float(self._min_confidence),
+            "n_experiences": len(self._experiences),
+            "hit": False,
+        }
         current_features = self.extract_structural_features(question)
 
         best_match = None
@@ -204,7 +217,11 @@ class ReasoningExperience(SilentLogMixin):
                 best_score = score
                 best_match = exp
 
-        if best_match and best_score >= self._min_confidence:
+        # ★406 刀3：把**未截断**的 best_score 落进诊断快照（命中与否都记）
+        _is_hit = bool(best_match and best_score >= self._min_confidence)
+        self.last_search_diagnostics["best_score"] = round(float(best_score), 4)
+        self.last_search_diagnostics["hit"] = _is_hit
+        if _is_hit:
             return {
                 "derivation_type": best_match.get("derivation_type", ""),
                 "confidence": round(best_score, 2),
