@@ -2726,6 +2726,16 @@ class InfoField(SilentLogMixin):
 
     # ========== ★登顶路线图-协调层：死数据/幽灵监听审计 ==========
 
+    def event_publish_counts(self) -> dict[str, int]:
+        """★402刀2（死信三列·路由面）：发布次数只读快照（event_type → 次数）。
+
+        只给**发布量**，不给"有没有命中条件"的结论 —— 后者由
+        `audit_ghost_listeners()` 的 `dead_events` 给出（它已剔除万能条件）。
+        死信台账把两者拼起来，才是路由面的完整读数。
+        """
+        with self._lock:
+            return dict(self._event_publish_count)
+
     def audit_ghost_listeners(self, min_publish_threshold: int = 0) -> dict[str, Any]:
         """
         审计信息场中的“死数据”与“幽灵监听”。

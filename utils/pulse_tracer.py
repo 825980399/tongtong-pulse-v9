@@ -55,6 +55,12 @@ _lock = threading.Lock()
 #   mark_route_matched 凭 pulse_id 就地打点路由结果（发射当场权威）。
 _EMIT_INDEX: dict[str, dict] = {}
 
+# ★402刀2（死信三列·运行面）：每事件名的累计 emit / receive 次数。
+#   为什么不用事件环：环只有 200 槽（_MAX_EVENTS），高负载下几秒就滚完，
+#   跨不过死信台账的 300s 窗口 ⇒ 只记累计量，由台账取两次快照相减得窗口增量。
+_EMIT_COUNTS: dict[str, int] = {}
+_RECV_COUNTS: dict[str, int] = {}
+
 # 207批·刀1：target_organ 标注制填充率观测（仅 ENABLE_TARGET_ORGAN_FIELD 时计数，生死闸）
 _TO_FILL_RATE_EVERY = 500   # 每 N 次 emit 打一行填充率 INFO
 _TO_EMIT_TOTAL = 0
@@ -385,6 +391,8 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
         "matched_organs": []
     }
     with _lock:
+        _ek = event_type if isinstance(event_type, str) else str(event_type)
+        _EMIT_COUNTS[_ek] = _EMIT_COUNTS.get(_ek, 0) + 1
         event["seq"] = _EVENT_SEQ
         _EVENT_SEQ += 1
         _events.append(event)
@@ -418,6 +426,8 @@ def log_receive(organ_name, event_type, source_organ, pulse_id=""):
     """
     with _lock:
         global _EVENT_SEQ, _EMIT_INDEX
+        _rk = event_type if isinstance(event_type, str) else str(event_type)
+        _RECV_COUNTS[_rk] = _RECV_COUNTS.get(_rk, 0) + 1
         # 207批·刀3 + 268批 刀1：优先按 pulse_id 经 _EMIT_INDEX 做 O(1) 精确回填；
         # 索引未命中（事件已出环 / 非脉冲路由发射）再退化为事件类型启发式反扫兜底。
         if pulse_id:
@@ -533,6 +543,26 @@ def reset_dead_letters() -> None:
     """清空死信计数（**仅供测试/诊断**；生产运行期不要调）。"""
     with _DEAD_LOCK:
         _DEAD_LETTERS.clear()
+
+
+def traffic_counts() -> dict:
+    """★402刀2：运行面**累计**收发计数快照（emit / receive 按事件名分桶）。
+
+    调用方拿到快照后自行做差得到窗口增量（死信台账每 300s 取一次）。
+    之所以返回累计量而非窗口量：本模块不该替调用方决定窗口长度。
+    """
+    with _lock:
+        _e = dict(_EMIT_COUNTS)
+        _r = dict(_RECV_COUNTS)
+    return {"emits": _e, "receives": _r,
+            "distinct_emitted": len(_e), "distinct_received": len(_r)}
+
+
+def reset_traffic_counts() -> None:
+    """清空运行面收发计数（**仅供测试/诊断**；生产运行期不要调）。"""
+    with _lock:
+        _EMIT_COUNTS.clear()
+        _RECV_COUNTS.clear()
 
 
 def orphan_dead_report(events=None, min_age=None, subscription_provider=None,

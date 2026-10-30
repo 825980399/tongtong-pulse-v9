@@ -495,7 +495,20 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "interval": payload.get("interval", 10.0),
                 "beat_count": payload.get("beat_count", 0),
             }
+        self._m402_dead_letter_tick()
         return {"status": "cached"}
+
+    def _m402_dead_letter_tick(self) -> None:
+        """★402刀2：死信三列台账（墙钟自门 300s，落 data/monitor/dead_letters_*.jsonl）。
+
+        挂在心跳存活处理上：它每拍都会来（~30s），台账内部按墙钟判 5 分钟整点，
+        所以既不依赖调度器启动顺序，也不会在热路径上做 IO。
+        """
+        try:
+            from utils.dead_letter_ledger import tick_from_heartbeat
+            tick_from_heartbeat()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m402_dead_letter_tick")
 
     def _on_persona_switched(self, payload: dict) -> dict[str, Any]:
         """缓存当前用户身份"""
