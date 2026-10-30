@@ -27,14 +27,17 @@ if _ROOT not in sys.path:
 _MANIFEST = os.path.join(
     _ROOT, "docs", "路灯与星轨对话", "分析报告", "路灯_398批_孤儿处置清单.md")
 
-#: A 类：157 批已封存（12 个运行时模块 + 1 个构建脚本）
+#: A 类：157 批已封存（现 11 个运行时模块 + 1 个构建脚本）
 #: ★399刀2：`hardware/hw_abstraction.py` 已按任务书删除（10 行纯 docstring 空壳、
 #:   全仓零 import），从本清单移出 —— 它当初在 A 类里的理由是"删掉几乎无损，建议单独成刀"，
 #:   399 批就是那一刀。历史记录见处置清单 §五.1。
+#: ★402刀3：`nucleus/chronos/EventStream.py` 已按 402 任务书刀3 删除（381 行、
+#:   生产/测试零 import，唯一"引用"是 StreamMiner 的 docstring 计划与 398 的三条守卫）。
+#:   它原先的处置是"等 PHASE19 接线"，402 改为"不再等，直接回收"——
+#:   历史记录见处置清单 §五.2。删除后 A 类 13 → 12 个。
 _KEEP_SEALED = [
     "somatics/actuator.py",
     "somatics/body_state.py",
-    "nucleus/chronos/EventStream.py",
     "nucleus/evolution/ParamPatchEffectVerifier.py",
     "nucleus/evolution/PerformanceProfiler.py",
     "nucleus/genesis/EvolutionTracker.py",
@@ -59,11 +62,11 @@ _FALSE_POSITIVE = {
 _ALL = _KEEP_SEALED + _KEEP_ANNOTATED
 
 #: import 冒烟清单（模块路径；pulse_doctor 是脚本入口，只做文件存在性检查）
-#: ★399刀2 起为 14 个（原 15 减 `hardware.hw_abstraction`）
+#: ★399刀2 起为 14 个（原 15 减 `hardware.hw_abstraction`）；
+#: ★402刀3 起为 13 个（再减 `nucleus.chronos.EventStream`）
 _SMOKE = [
     "somatics.actuator",
     "somatics.body_state",
-    "nucleus.chronos.EventStream",
     "nucleus.evolution.ParamPatchEffectVerifier",
     "nucleus.evolution.PerformanceProfiler",
     "nucleus.genesis.EvolutionTracker",
@@ -102,9 +105,10 @@ def test_02_manifest_lists_every_candidate():
 
 # ---------------------------------------------------------------- 文件存在
 def test_03_all_candidates_exist():
-    """14 个保留件 + 2 个误判件都必须在磁盘上。
+    """13 个保留件 + 2 个误判件都必须在磁盘上。
 
-    ★399刀2 起是 14（原 15 减 `hardware/hw_abstraction.py`，该件已按 399 任务书删除）。
+    ★399刀2 起是 14（原 15 减 `hardware/hw_abstraction.py`，该件已按 399 任务书删除）；
+    ★402刀3 起是 13（再减 `nucleus/chronos/EventStream.py`，已按 402 任务书刀3 删除）。
     398 批本身**没删任何文件**，这条判据当时守的就是那个结论。
     """
     _gone = [r for r in _ALL + list(_FALSE_POSITIVE)
@@ -115,7 +119,7 @@ def test_03_all_candidates_exist():
 # ---------------------------------------------------------------- 处置标注
 @pytest.mark.parametrize("rel", _KEEP_SEALED)
 def test_04_sealed_has_deprecated_mark(rel):
-    """A 类 13 个必须带 157 批封存标注（缺了就是标注被误删）。"""
+    """A 类 12 个必须带 157 批封存标注（缺了就是标注被误删）。"""
     _head = _read_head(rel, 40)
     assert "@deprecated" in _head, f"{rel} 头部缺 157 批 @deprecated 标注"
     assert "157-D" in _head, f"{rel} 的标注里没有票号 157-D"
@@ -144,7 +148,7 @@ def test_06_false_positives_have_evidence():
 # ---------------------------------------------------------------- 冒烟
 @pytest.mark.parametrize("mod", _SMOKE)
 def test_07_import_smoke(mod):
-    """全量 import 冒烟：14 个件都要能导入（证明它们本身没腐烂）。"""
+    """全量 import 冒烟：13 个件都要能导入（证明它们本身没腐烂）。"""
     import importlib
 
     _m = importlib.import_module(mod)

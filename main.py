@@ -1225,6 +1225,10 @@ class PulseFramework:
                 # ★第262批 刀1②：丙-2先行 —— 把 InfoField 死数据/幽灵监听审计挂入每日调度
                 from nucleus.field.InfoField import register_infofield_dead_events_schedule
                 register_infofield_dead_events_schedule()
+                # ★402刀3：零发射器官审计此前是"生产零消费"的孤儿模块（全仓仅 3 处
+                #   测试引用）⇒ 接线进同一个每日 03:00 调度点，落 organ_emits_YYYYMMDD.json。
+                from nucleus.cognitive.organ_emits import register_organ_emits_schedule
+                register_organ_emits_schedule()
                 # ★第295批 刀2/刀3：行动面通电——派单路径 + 执行结果回写。
                 #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
                 from nucleus.evolution.patch_execution_dispatch import (

@@ -22,9 +22,11 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import sys
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(os.path.dirname(_HERE))
@@ -380,3 +382,58 @@ def assert_all_declared(report: dict | None = None) -> bool:
     """★门禁判据：零发射器官**必须**都有声明（票面验收第 4 条）。"""
     _r = report if report is not None else zero_emit_report()
     return (not _r.get("undeclared")) and int(_r.get("declared_count") or 0) > 0
+
+
+# ============== ★402刀3：接线进 DailyScheduler 03:00（不删，接线） ==============
+# 386~388 三批把本模块做成了「零发射审计」的现成品，但**生产零消费** ——
+# 全仓只有 3 个测试文件 import 它（386/387/388 各自的判据）。
+# 402 刀3 的处置是接线而不是删除：审计结论只有跑起来才有价值，删掉等于放弃这条观测。
+
+ORGAN_EMITS_HOOK = "organ_emits_zero_emit_402"
+
+
+def _report_dir() -> str:
+    """`data/monitor/`（与 infofield_dead_events.json 同目录，便于一起看）。"""
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "data", "monitor")
+
+
+def dump_zero_emit_report(pulse_pairs_path: str | None = None) -> dict | None:
+    """跑一次零发射审计并原子落盘 `data/monitor/organ_emits_YYYYMMDD.json`。
+
+    无参可调用（契合 `DailyScheduler.add_daily_hook(fn: Callable[[], Any])`）。
+    失败返回 None，不抛 —— 挂在调度线程上的东西不许把调度带崩。
+    """
+    try:
+        _r = zero_emit_report(pulse_pairs_path)
+        _p = os.path.join(_report_dir(),
+                          "organ_emits_%s.json" % time.strftime("%Y%m%d"))
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _tmp = _p + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            json.dump(_r, _f, ensure_ascii=False, indent=1)
+        os.replace(_tmp, _p)
+        return _r
+    except Exception as _e:
+        silent_exc(_e, where="organ_emits.dump_zero_emit_report", level="warning")
+        return None
+
+
+def register_organ_emits_schedule(scheduler=None):
+    """★402刀3：把零发射审计挂进 DailyScheduler 的**每日 03:00** 调度点。
+
+    返回调度器实例；调度器不可用 / 不支持每日钩子时返回 None（不影响启动）。
+    """
+    try:
+        _sched = scheduler
+        if _sched is None:
+            from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
+            _sched = get_daily_scheduler()
+        if _sched is None or not hasattr(_sched, "add_daily_hook"):
+            return None
+        _sched.add_daily_hook(ORGAN_EMITS_HOOK, dump_zero_emit_report)
+        return _sched
+    except Exception as _e:
+        silent_exc(_e, where="organ_emits.register_organ_emits_schedule",
+                   level="warning")
+        return None
