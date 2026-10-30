@@ -58,9 +58,18 @@ def scan(ledger):
 # ------------------------------------------------------------------ ①
 
 def test_ledger_coverage_three_classes_reproducible(ledger, scan):
-    """① 68 条三类分列可复现：已豁免 11 / 已留痕 57 / 待留痕 0。"""
+    """① 68 条三类分列可复现：已豁免 11 / 已留痕 0 / 待留痕 0 / 已毕业 57。
+
+    ★399刀1：留痕面从 56 条降到 **0** —— 不是判据失效，是那 56 条**在这一批全部毕业**
+    （399 重跑差集实测：68 条里 58 条已离开"新判据差集"，其中 55 条补了 silent_exc）。
+    分类口径不变（互斥且覆盖全集），`retired` 从 1 涨到 58。
+    ★真正守的**不是** `rest == 56` 这个数，而是下面两条：
+      ① `todo == 0`（留痕面里没有未留痕的）；
+      ② 四类之和 == 全集（守恒式）。
+    钉 `rest == 56` 会把"修好了"判成失败（铁律 268）。
+    """
     rows = ledger["rows"]
-    assert len(rows) == 68, "台账全集应为 68，实际 %d" % len(rows)
+    assert len(rows) == 68, "台账全集应为 68（★全集只增不删），实际 %d" % len(rows)
 
     exempt = [r for r in rows if r.get("manual_review") or r.get("exemption")]
     # ★371A5：`retired_by` 条目已「毕业」（被后续施工修好、不再静默），退出留痕面；
@@ -71,14 +80,17 @@ def test_ledger_coverage_three_classes_reproducible(ledger, scan):
     todo = [r for r in rest if _ident(r) in scan]
 
     assert len(exempt) == 11, "已豁免（6 manual_review + 5 control_flow）应为 11，实际 %d" % len(exempt)
-    assert len(rest) == 56, "留痕面应为 56（57 减 1 条已毕业），实际 %d" % len(rest)
     assert len(todo) == 0, "仍有 %d 条未留痕：%s" % (
         len(todo), sorted({t["path"] for t in todo}))
-    assert len(logged) == 56
     # 四类互斥且覆盖全集（exempt + logged + todo + retired）
     _retired = [r for r in rows if r.get("retired_by")
                 and not (r.get("manual_review") or r.get("exemption"))]
     assert len(exempt) + len(logged) + len(todo) + len(_retired) == len(rows)
+    # ★399刀1 新增：本批退役的行必须写明为什么（不许"莫名消失"）
+    _mine = [r for r in rows if str(r.get("retired_by") or "").startswith("399")]
+    assert _mine, "399 批一条都没退役？那这批要修的东西去哪了"
+    assert all(r.get("retired_reason") for r in _mine), \
+        "399 退役的行必须带 retired_reason（否则归因是空的）"
 
 
 def test_exempt_entries_not_double_traced(ledger):
@@ -142,8 +154,10 @@ def test_trace_calls_have_where_and_level(ledger):
 
     ★本例同时守护「不是假通过」：找不到对应 handler 会直接失败（不是静默跳过）。
     """
-    rows = [r for r in ledger["rows"]
-            if not (r.get("manual_review") or r.get("exemption") or r.get("retired_by"))]
+    # ★399刀1：留痕面已归零（56 条全毕业）⇒ 改验**已毕业且 reason=fixed** 的那些行：
+    #   它们才是"确实补了 silent_exc"的一群。判据意图不变（留痕必须带 where/level），
+    #   只是证据从"在册"搬到了"结案"。
+    rows = [r for r in ledger["rows"] if r.get("retired_reason") == "fixed"]
     checked = 0
     for r in rows:
         path = r["path"]
@@ -177,15 +191,17 @@ def test_trace_calls_have_where_and_level(ledger):
             assert lv and lv[0] == "debug", \
                 "%s::%s 留痕级别应为 debug（观测级，非告警级）" % (path, r["qualname"])
         checked += 1
-    assert checked == 56, "应核查并命中 56 条（含 1 条毕业），实际 %d" % checked
+    assert checked == len(rows) > 0, "应核查并命中 %d 条，实际 %d" % (len(rows), checked)
 
 
 # ------------------------------------------------------------------ ③
 
 def test_control_flow_semantics_preserved(ledger):
     """③ 留痕不得改动控制流：handler body 末条仍须是原来的 continue/break。"""
-    rows = [r for r in ledger["rows"]
-            if not (r.get("manual_review") or r.get("exemption") or r.get("retired_by"))]
+    # ★399刀1：留痕面已归零（56 条全毕业）⇒ 改验**已毕业且 reason=fixed** 的那些行：
+    #   它们才是"确实补了 silent_exc"的一群。判据意图不变（留痕必须带 where/level），
+    #   只是证据从"在册"搬到了"结案"。
+    rows = [r for r in ledger["rows"] if r.get("retired_reason") == "fixed"]
     checked = 0
     for r in rows:
         path = r["path"]
@@ -209,7 +225,7 @@ def test_control_flow_semantics_preserved(ledger):
             "%s::%s 控制流末条被改动：期望 %s，实际 %s" % (
                 path, r["qualname"], r["kind"], type(last).__name__)
         checked += 1
-    assert checked == 56, "应核查 56 条（含 1 条毕业），实际 %d（防止空跑假通过）" % checked
+    assert checked == len(rows) > 0, "应核查 %d 条，实际 %d（防止空跑假通过）" % (len(rows), checked)
 
 
 # ------------------------------------------------------------------ ④

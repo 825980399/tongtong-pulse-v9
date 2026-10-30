@@ -121,48 +121,78 @@ def test_04_zero_drift_now(tool):
     _d = tool.diff_ledger(_old["rows"], _live["rows"])
     assert _d["added"] == [], f"新增未入册 {len(_d['added'])} 条：{_d['added'][:5]}"
     assert _d["removed"] == [], f"在册但已不在差集 {len(_d['removed'])} 条：{_d['removed'][:5]}"
-    assert _d["same"] == len(_old["rows"])
+    # `diff_ledger` 两侧跳过退役行 ⇒ same 等于**在册**条数（不是全集 68）
+    _live_n = len([r for r in _old["rows"] if not r.get("retired_by")])
+    assert _d["same"] == _live_n, f"same {_d['same']} != 在册 {_live_n}"
 
 
-# ---------------------------------------------------------------- ③ 退役存档
+# ---------------------------------------------------------------- ③ 退役标记（原地，不另开名单）
 def test_05_retired_rows_have_reason(tool):
-    """每条退役行都要写明为什么离开（fixed / func_gone / no_longer_silent）。"""
+    """★退役是**原地打标**（`retired_by` 非空），不是把行搬到另一个数组。
+
+    为什么：371A5 起台账就用 `retired_by` 这个字段，369 那批判据也按它过滤。
+    399 第一版另开了 `retired` 数组，结果 1 条 A 档人工结论脱离了 `test_01` 能看见的范围，
+    还要同时改 4 个历史判据 —— 两份名单必然分叉，及时改回。
+    """
     _live = tool.build_ledger(preserve=True)
-    _ret = _live.get("retired") or []
-    assert _ret, "退役存档为空 —— 说明 58 条历史行没被带走（人工结论会被抹掉）"
-    _bad = [r for r in _ret if str(r.get("retired_reason") or "") not in _REASONS]
-    assert not _bad, f"有 {len(_bad)} 条退役行没有合法 reason：{_bad[:3]}"
+    _rows = _live.get("rows") or []
+    _ret = [r for r in _rows if r.get("retired_by")]
+    assert _ret, "一条退役行都没有 —— 58 条历史行去哪了？"
+    # ① 带 `retired_reason` 的行，取值必须合法
+    _with = [r for r in _ret if r.get("retired_reason")]
+    assert _with, "没有任何带 retired_reason 的退役行 —— 归因整个是空的"
+    _bad = [r for r in _with if str(r.get("retired_reason")) not in _REASONS]
+    assert not _bad, f"有 {len(_bad)} 条退役行 reason 非法：{_bad[:3]}"
+    # ② 归因不许停在 unknown（那是"文件不可读/不可解析"，等于没归因）
     _unk = [r for r in _ret if r.get("retired_reason") == "unknown"]
-    assert not _unk, f"{len(_unk)} 条退役行归因失败（文件不可读/不可解析）：{_unk[:3]}"
+    assert not _unk, f"{len(_unk)} 条退役行归因失败：{_unk[:3]}"
+    # ③ 本批（399）打标的行**必须**带 reason；371A5 那条老行不必（它有自己的 retired_note）
+    _mine = [r for r in _ret if str(r.get("retired_by") or "").startswith("399")]
+    assert _mine, "本批一条都没打标"
+    assert all(r.get("retired_reason") for r in _mine), "本批打标的行必须带 retired_reason"
 
 
 def test_06_retired_keeps_human_conclusions(tool):
-    """★人工结论一条都不能丢：退役行里的 `manual_review` 必须原样还在。"""
+    """★★人工结论一条都不能丢：退役行仍在 `rows` 里，`manual_review` 原样保留。"""
     _live = tool.build_ledger(preserve=True)
-    _ret = {(r.get("path"), r.get("qualname")): r for r in (_live.get("retired") or [])}
-    _target = ("nucleus/llm/call_recorder.py", "_rotate")
-    assert _target in _ret, "唯一那条 A 档结论（_rotate）没进退役存档 —— 被抹掉了"
-    _mr = _ret[_target].get("manual_review") or {}
+    _rows = _live.get("rows") or []
+    _hit = [r for r in _rows
+            if r.get("path") == "nucleus/llm/call_recorder.py"
+            and r.get("qualname") == "_rotate"]
+    assert len(_hit) == 1, f"_rotate 在台账里应恰好 1 条，实际 {len(_hit)}"
+    _r = _hit[0]
+    _mr = _r.get("manual_review") or {}
     assert _mr.get("verdict") == "A", f"verdict 丢了：{_mr}"
     assert _mr.get("reviewed_by") == "路灯"
     assert _mr.get("reviewed_at") == "2026-10-25"
-    assert _ret[_target].get("retired_reason") == "fixed", (
-        "它离开差集的原因应该是 fixed（函数体内已有 silent_exc）")
+    assert str(_r.get("retired_by") or "").startswith("399"), "它应该是本批结案的"
+    assert _r.get("retired_reason") == "fixed", (
+        "它离开差集的原因应为 fixed（函数体内已有 silent_exc）")
 
 
-def test_07_retired_n_matches_len(tool):
-    """自报计数必须与实测同源（铁律 271：分子分母同源）。"""
+def test_07_counts_add_up(tool):
+    """守恒式：`live_n + retired_n == total == len(rows)`（铁律 271：分子分母同源）。"""
     _live = tool.build_ledger(preserve=True)
-    assert int(_live.get("retired_n") or 0) == len(_live.get("retired") or [])
-    assert int(_live.get("total") or 0) == len(_live.get("rows") or [])
+    _rows = _live.get("rows") or []
+    _live_n = int(_live.get("live_n") or 0)
+    _ret_n = int(_live.get("retired_n") or 0)
+    assert int(_live.get("total") or 0) == len(_rows)
+    assert _live_n + _ret_n == len(_rows), (
+        f"live {_live_n} + retired {_ret_n} != total {len(_rows)}")
+    assert _live_n == len([r for r in _rows if not r.get("retired_by")])
+    # by_kind_live 必须与在册行同源
+    _bk = _live.get("by_kind_live") or {}
+    assert sum(int(v) for v in _bk.values()) == _live_n, (
+        f"by_kind_live 合计 {sum(int(v) for v in _bk.values())} != live_n {_live_n}")
 
 
 # ---------------------------------------------------------------- ④ emit 幂等 / 计数不再丢
 def test_08_emit_is_idempotent(tool):
-    """连跑两次 `preserve=True`，退役存档不增长（否则每次 emit 都会翻倍）。"""
+    """连跑两次 `preserve=True`：退役数不涨、行数不涨（否则每次 emit 都会翻倍）。"""
     _a = tool.build_ledger(preserve=True)
     _b = tool.build_ledger(preserve=True)
     assert int(_a.get("retired_n") or 0) == int(_b.get("retired_n") or 0)
+    assert len(_a.get("rows") or []) == len(_b.get("rows") or [])
 
 
 def test_09_counts_are_derived_not_handwritten(tool):
