@@ -44,7 +44,11 @@ if _ROOT not in sys.path:  # ★399刀1：给退役归因用（直接跑本脚�
 
 from nucleus._silent_except import silent_exc  # noqa: E402
 
-SCHEMA = "m365.silent_except_ledger.v1"
+#: ★399刀1：366 N3（`da1f0ad1`）把台账升成 v2（加了 manual_review / exemption），
+#:   但**只在 json 里手改了 `schema` 字段**，工具这个常量一直是 v1
+#:   ⇒ 一旦 `--emit` 就退版，`test_m365_b3::test_01` 当场红。
+#:   现在把常量补成 v2（结构确实是 v2），从此 emit 不会再把版本号打回去。
+SCHEMA = "m365.silent_except_ledger.v2"
 
 
 def _load_scanner():
@@ -135,14 +139,27 @@ def _calls_name(fn, name: str) -> bool:
     return False
 
 
-def _retire_reason(row: dict) -> str:
+#: 退役原因 → 写进 `retired_by` 的中文说明（★沿用 371A5 已有的 `retired_by` 约定，
+#: 例：`"371A5第1笔（break→continue＋WARNING，已非静默 handler）"`）
+_REASON_CN = {
+    "fixed": "已补 silent_exc 留痕，不再是静默 handler",
+    "func_gone": "函数已不存在",
+    "no_longer_silent": "静默 handler 已被删除",
+    "identity_drift": "函数体变化导致身份漂移，已按新身份重新入册",
+    "unknown": "归因失败，待人看",
+}
+
+
+def _retire_reason(row: dict, live_pq=None) -> str:
     """一条台账行为什么不在差集里了。
 
-    ★只用于**归档说明**，不参与任何判据（判据只看 `rows`＝待办）。
-    三种取值：`fixed`（函数还在且已补 `silent_exc`）／
-    `func_gone`（qualname 在现仓找不到）／`no_longer_silent`（函数在、无 silent_exc、
-    也已被新判据放过 —— 静默 handler 本身被删掉了）。
+    ★只用于**归档说明**（写进 `retired_by`），不参与任何判据。
+    取值：`fixed`（函数还在且已补 `silent_exc`）／`func_gone`（qualname 找不到）／
+    `no_longer_silent`（函数在、无 silent_exc，静默 handler 本身被删）／
+    `identity_drift`（同 (path, qualname) 仍有在册行，只是 sha16 变了）。
     """
+    if live_pq and (str(row.get("path") or ""), str(row.get("qualname") or "")) in live_pq:
+        return "identity_drift"
     _p = os.path.join(_ROOT, str(row.get("path") or ""))
     try:
         with open(_p, encoding="utf-8-sig", errors="replace") as f:
@@ -164,15 +181,19 @@ def _retire_reason(row: dict) -> str:
     return "no_longer_silent"
 
 
-def build_ledger(preserve: bool = True) -> dict:
+def build_ledger(preserve: bool = True, batch: str | None = None) -> dict:
     """重算「新判据多抓到的条目」并组装台账。
 
     ★366刀N3：`preserve=True` 时把既有台账里的人工元数据（manual_review/exemption）
     按身份键搬过来 —— 否则每次 `--emit` 都会把人工作出的结论冲掉（那就没人敢往里写）。
 
-    ★399刀1：差集两侧必须用**同一个**键函数（见下面 `_old_cmp` 注释）；
-    `preserve=True` 时还会把"上次在册、这次不在差集里"的行挪进 `retired` 存档，
-    并把它们的 `manual_review`/`exemption` 一并带走 —— 结案不等于抹掉。
+    ★399刀1：三件事
+      ① 差集两侧必须用**同一个**键函数（见下面 `_old_cmp` 注释）；
+      ② `preserve=True` 时以**既有全集**为底重排：仍活跃的行用现算字段覆盖，
+         已离开差集的行**原地**标 `retired_by` / `retired_reason`。
+         ★沿用 371A5 已有的 `retired_by` 约定（首行就是那样写的），
+         不另开一个 `retired` 数组 —— 两份名单迟早分叉；
+      ③ 幂等：已退役的行不会被重复标、也不会被"复活"。
     """
     _m = _load_scanner()
     _prev = _load_ledger_raw() if preserve else dict()
@@ -209,48 +230,66 @@ def build_ledger(preserve: bool = True) -> dict:
                 _r.update(_m2)
     _by_kind: dict = {}
     _by_grade: dict = {}
-    # ★399刀1：把"上次在册、这次不在差集里"的行挪进 retired 存档。
-    #   为什么不能直接丢：台账里有 6 条人工结论，其中 1 条（A 档）对应的 handler 已被修好，
-    #   它必然离开差集 —— 但"修好了"是**结案**，不是"没发生过"。丢掉就等于抹掉审计链。
-    #   只在 preserve=True 时累积，保证 `--emit` 幂等（同一批再跑不会重复追加）。
-    _retired = list(_prev.get("retired") or [])
-    if preserve:
-        _live = set(identity_of(_r) for _r in _rows)
-        _seen = set(identity_of(_r) for _r in _retired)
-        for _r0 in (_prev.get("rows") or []):
+    # ★399刀1：以既有全集为底做「在册 / 退役」重排。
+    #   为什么不能像第一版那样另开一个 `retired` 数组：那样一来 `rows`（待办）与
+    #   `retired`（结案）是两份名单，retired 里那 1 条 A 档人工结论就脱离了 `test_01`
+    #   能看见的范围；而且 369 那批判据早就按 `retired_by` 字段在过滤（371A5 起就有 1 条），
+    #   再开一套只会分叉。**沿用既有约定：退役 = 行的 `retired_by` 非空，行本身不删。**
+    if preserve and _prev.get("rows"):
+        _live_by_id = {identity_of(r): r for r in _rows}
+        _live_pq = {(str(r.get("path") or ""), str(r.get("qualname") or ""))
+                    for r in _rows}
+        _merged = []
+        for _r0 in _prev.get("rows") or []:
             _k = identity_of(_r0)
-            if _k in _live or _k in _seen:
-                continue
-            _r1 = dict(_r0)
-            _r1["retired_reason"] = _retire_reason(_r0)
-            _retired.append(_r1)
-            _seen.add(_k)
-        _retired.sort(key=lambda r: (str(r.get("path") or ""),
-                                     str(r.get("qualname") or ""),
-                                     str(r.get("retired_reason") or "")))
+            if _k in _live_by_id:
+                _r1 = dict(_live_by_id.pop(_k))     # 仍活跃：用现算字段（行号/body 会更新）
+                _r1.pop("retired_by", None)
+                _r1.pop("retired_reason", None)
+                _merged.append(_r1)
+            else:
+                _r1 = dict(_r0)                      # 已离开差集：原地退役（幂等，不覆盖已有标注）
+                if not _r1.get("retired_by"):
+                    _why = _retire_reason(_r0, _live_pq)
+                    _r1["retired_reason"] = _why
+                    _r1["retired_by"] = "%s（%s）" % (
+                        str(batch or "unspecified"), _REASON_CN.get(_why, _why))
+                _merged.append(_r1)
+        _merged.extend(_live_by_id.values())         # 真正的全新条目
+        _rows = sorted(_merged, key=lambda r: (str(r.get("path") or ""),
+                                               str(r.get("qualname") or ""),
+                                               int(r.get("nth") or 0)))
+    _live_rows = [r for r in _rows if not r.get("retired_by")]
     for _r in _rows:
         _by_kind[_r["kind"]] = int(_by_kind.get(_r["kind"], 0)) + 1
         _by_grade[_r["grade"]] = int(_by_grade.get(_r["grade"], 0)) + 1
+    _by_kind_live: dict = {}
+    for _r in _live_rows:
+        _by_kind_live[_r["kind"]] = int(_by_kind_live.get(_r["kind"], 0)) + 1
     return {
         "schema": SCHEMA,
         "judge_version": "v2 (five-tuple + cont/break)",
         "basis": "tools/scan_silent_except_dual.py（旧判据直接调 ci_common 权威实现）",
         "note": "本台账只留痕；判据切换（主体）后置 366+，切前须人工带元数据分档",
+        # ★399刀1：`total` 是**全集**（含已退役），`live_n` 才是当前待办数。
+        #   别把 total 当待办看 —— 399 实测全集 68 / 在册 10。
         "total": len(_rows),
+        "live_n": len(_live_rows),
         "by_kind": _by_kind,
         "by_grade": _by_grade,
-        # ★399刀1：这两个计数原先**是手工写进 json 的**，`--emit` 一跑就没了
-        #   （实测 emit 后 `manual_review_n`/`control_flow_exempt_n` 双变 None ⇒
-        #   test_01/test_02 当场红）。改由 rows 现场派生，从此不会再漂。
+        "by_kind_live": _by_kind_live,
+        # ★399刀1：这两个计数原先**是手工写进 json 的**，`--emit` 一跑就变 None
+        #   （实测 ⇒ test_01/test_02 当场红，而人只看到"台账没零漂移"）。
+        #   改由 rows 现场派生，从此不会再漂。
         "manual_review_n": sum(1 for r in _rows if r.get("manual_review")),
         "control_flow_exempt_n": sum(1 for r in _rows if r.get("exemption")),
         "parse_err": [list(p) for p in _parse_err],
-        "retired_note": ("退役存档：曾在本台账、现已不在差集内。reason 三态 "
-                         "fixed（已补 silent_exc）/ func_gone（qualname 不在了）/ "
-                         "no_longer_silent（静默 handler 本身被删）。带 manual_review 的"
-                         "是人工结论已结案，**勿删**。"),
-        "retired_n": len(_retired),
-        "retired": _retired,
+        "retired_note": ("退役约定（★371A5 起）：行的 `retired_by` 非空＝已结案/已毕业，"
+                         "**行本身不删**，`manual_review` 元数据原样保留。"
+                         "`retired_reason` 取值：fixed（已补 silent_exc）/ func_gone（qualname 不在了）"
+                         "/ no_longer_silent（静默 handler 被删）/ identity_drift（body 变了、"
+                         "同一 (path, qualname) 已按新身份重新入册）。"),
+        "retired_n": len(_rows) - len(_live_rows),
         "rows": _rows,
     }
 
@@ -262,9 +301,14 @@ def identity_of(row: dict) -> tuple:
 
 
 def diff_ledger(old_rows: list, new_rows: list) -> dict:
-    """按身份（**不含行号**）比对台账与现仓：行号漂移不算变化。"""
-    _o = {identity_of(r) for r in (old_rows or [])}
-    _n = {identity_of(r) for r in (new_rows or [])}
+    """按身份（**不含行号**）比对台账与现仓：行号漂移不算变化。
+
+    ★399刀1：两侧都**跳过已退役行**（`retired_by` 非空）。它们本来就不在现仓差集里，
+    拿它们算 `removed` 只会让"零漂移"永远红。退役行的正确性由它们自己的
+    `retired_reason` 承担（`test_m369_blade4` / `test_m399_k1` 都在验）。
+    """
+    _o = {identity_of(r) for r in (old_rows or []) if not r.get("retired_by")}
+    _n = {identity_of(r) for r in (new_rows or []) if not r.get("retired_by")}
     return {"added": sorted(_n - _o), "removed": sorted(_o - _n),
             "same": len(_o & _n)}
 
@@ -273,11 +317,13 @@ def main():
     _ap = argparse.ArgumentParser()
     _ap.add_argument("--emit", action="store_true")
     _ap.add_argument("--check", action="store_true")
+    _ap.add_argument("--batch", default=None,
+                     help="本次退役归属（写进 retired_by 前缀，例：399刀1）")
     _args = _ap.parse_args()
     if not (_args.emit or _args.check):
         _ap.print_help()
         return 0
-    _new = build_ledger()
+    _new = build_ledger(batch=_args.batch)
     if _args.emit:
         os.makedirs(os.path.dirname(_LEDGER), exist_ok=True)
         _tmp = _LEDGER + ".tmp"
