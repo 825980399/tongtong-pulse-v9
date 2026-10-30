@@ -3711,7 +3711,7 @@ _SELF_RESTART_CHILD_PIDS: set = set()
 _SELF_RESTART_PIDS_LOCK = threading.Lock()
 
 
-def _spawn_self_restart() -> bool:
+def _spawn_self_restart(reason: str = "self_restart") -> bool:
     """拉起一个新的框架进程接管（自重启），并登记其 PID 以免被退出清理误杀。
 
     返回 True 表示已成功拉起接班进程。
@@ -3752,6 +3752,8 @@ def _spawn_self_restart() -> bool:
             )
         with _SELF_RESTART_PIDS_LOCK:
             _SELF_RESTART_CHILD_PIDS.add(_proc.pid)
+        # ★404刀4②：留下交接便条（父 pid → 接班 pid + 接班窗口标题），失败不影响重启
+        _write_restart_notice(_project_root, _os.getpid(), _proc.pid, reason=reason)
         if _boot_log_fh is not None:
             try:
                 _boot_log_fh.close()
@@ -3772,6 +3774,79 @@ def _is_self_restart_child(pid) -> bool:
     except Exception as e:
         silent_exc(e, where="main::_is_self_restart_child L3327")
         return False
+
+
+# ===== 404 刀4：自动重启窗口可见性 =====
+# 背景（T0 实测）：
+#   * `_spawn_self_restart` 用 `CREATE_NEW_CONSOLE` 给接班进程一个独立控制台，但**没人设标题**，
+#     新窗口标题是 `python.exe` 的路径 ⇒ 自重启后两个窗口长得一模一样，分不清谁是新的、谁是残留；
+#   * 任务书写「重启前在 `data/runtime.lock` 旁边写 restart_notice.txt」—— **该文件盘上不存在、
+#     全仓无创建代码**（`nucleus/evolution/night_orchestration.py` 头部已记载，162 批刀7 起改用
+#     psutil 进程判据）。真正的控制文件是 `data/shutdown_request.json` ⇒ 便条放 `data/`（同目录）。
+#
+# 为什么标题由**子进程自己**设：pid 与启动时刻只有它自己知道。父进程 Popen 前设一遍会张冠李戴
+# （接班进程还没起来），Popen 后再设就晚了（窗口已经画出来了）。所以这里提供纯函数
+# `_console_title_text` 供判据核对、`_set_console_title` 给子进程在 `__main__` 里自己调一次。
+_CONSOLE_TITLE_PREFIX = "曈曈"
+
+
+def _console_title_text(pid=None, started_at=None):
+    """窗口标题文本：``曈曈 pid=1234 启动于2026-10-30 19:52:31``（纯函数，便于判据核对）。"""
+    _pid = int(pid if pid is not None else os.getpid())
+    _ts = float(started_at if started_at is not None else time.time())
+    return "%s pid=%d 启动于%s" % (
+        _CONSOLE_TITLE_PREFIX, _pid,
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_ts)))
+
+
+def _set_console_title(title=None, started_at=None) -> bool:
+    """把**当前进程**的控制台窗口标题改掉（仅 Windows；失败返回 False，绝不抛）。
+
+    非 Windows / 进程没有控制台（pythonw、stdout 被重定向且无 console）时
+    `SetConsoleTitleW` 会失败，这里按"没设成"处理 —— 它只是可见性增强，不该影响启动。
+    """
+    try:
+        if sys.platform != "win32":
+            return False
+        import ctypes
+        _t = title if title is not None else _console_title_text(started_at=started_at)
+        return bool(ctypes.windll.kernel32.SetConsoleTitleW(_t))
+    except Exception as _e:
+        silent_exc(_e, where="main::_set_console_title", level="debug")
+        return False
+
+
+def _write_restart_notice(project_root, parent_pid, child_pid, reason="self_restart"):
+    """★404刀4②：在 ``data/`` 下写 ``restart_notice.txt`` —— 一次自重启的交接便条。
+
+    ★与任务书的**时序差异**（如实记录，已写入 404 交付报告）：任务书写"重启**前**写"，
+      本实现写在 `Popen` **之后**。理由：接班 pid 只有 Popen 返回后才知道，写在之前会缺掉
+      最关键的一半信息（"新进程是哪个"正是这张便条要回答的问题）。它仍然写在**父进程退出之前**，
+      所以"重启发生时盘上有便条"这个目的完全成立。
+
+    Returns:
+        便条路径；写失败返回 ``None``（**不影响重启**，只留痕）。
+    """
+    try:
+        _dir = os.path.join(project_root, "data")
+        os.makedirs(_dir, exist_ok=True)
+        _p = os.path.join(_dir, "restart_notice.txt")
+        _now = time.time()
+        _txt = (
+            "%s 曈曈自重启\n"
+            "父进程 pid=%s → 接班 pid=%s\n"
+            "原因：%s\n"
+            "接班窗口标题：%s\n"
+            "（本文件每次重启被覆盖；由 main._write_restart_notice 写）\n"
+            % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_now)),
+               parent_pid, child_pid, reason, _console_title_text(child_pid, _now))
+        )
+        with open(_p, "w", encoding="utf-8", newline="\n") as _f:
+            _f.write(_txt)
+        return _p
+    except Exception as _e:
+        silent_exc(_e, where="main::_write_restart_notice", level="warning")
+        return None
 
 
 def _apply_pending_patches_and_restart(framework) -> bool:
@@ -4747,6 +4822,8 @@ if __name__ == "__main__":
     import os as _os
     _os.environ.setdefault("OPENCV_LOG_LEVEL", "0")
     _os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
+    # ★404刀4①：窗口标题带 pid 与启动时刻 —— 自重启后新窗口一眼能和残留旧窗口区分开
+    _set_console_title()
     main()
 # _m49_t1_legs_done
 # _m49_t2_wire_done
