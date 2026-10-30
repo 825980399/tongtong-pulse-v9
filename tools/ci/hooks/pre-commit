@@ -6,6 +6,8 @@
 #   3) cw3-A 语义守恒（仅当 organs/brain/PulseInnerWorld.py 变更时）
 #   4) T150-5 门禁隔离守卫：CI 门禁文件不得与业务代码同批暂存
 #   5) 367 后续 保留名门禁：Windows 保留设备名（NUL/CON/PRN/AUX/COM1-9/LPT1-9）不得被跟踪
+#   + 404 刀3 七层自我分析体系自检面板（tools/m404_layer_health_check.py，默认 warn 不阻断）
+#      405 刀5 起「模板 ≡ 实装」由 install_precommit_hook.py --check 校验（CI 与手动都可跑）
 #
 # 第162批提速（刀13/14/15）：
 #   刀13 GATE_PATH_SPLIT — 仅文档路径提交跳过全部代码/collect 门禁（登记册+隔离守卫仍执行）
@@ -179,6 +181,41 @@ if [ -f "$REGCOLS" ]; then
   fi
 else
   echo "[pre-commit] 未找到 check_register_columns：$REGCOLS（跳过）" >&2
+fi
+
+# --- 5) 404 刀3 七层自我分析体系自检面板（默认**不阻断**）---
+#   为什么默认不阻断：
+#     * L4（当天有小时汇总）/ L5（快照新鲜）是**运行时**判据，框架停机时必然 SKIP 或陈旧；
+#     * /data/ 整目录被 .gitignore 忽略，干净克隆里七层全无产物 ⇒ 必然 FAIL。
+#   把运行时判据做成阻断门 = "停机维护期间禁止提交" + "新克隆一律提交不了"，属自伤。
+#   需要严格时：LAYER_HEALTH_GATE=block LAYER_HEALTH_STRICT=1 git commit（SKIP 也算失败）。
+#   ★405 刀5 订正（原注释有误，务必别再改回去）：
+#     原注释写「本 hook 未纳入版本管理（tools/ci/hooks/ 只版本化了 commit-msg）」——
+#     **这是错的**。本文件的模板就是 tools/ci/hooks/pre-commit，早已入库
+#     （c4adee56 / 7ad8d6b4 / 1071e384 三笔历史）。真正缺的只是「模板 → 实装」的同步：
+#     404 刀3 只改了本机 .git/hooks/pre-commit，没改模板，于是这一步五天没进版本库。
+#     现在装/校验统一走 `python tools/ci/install_precommit_hook.py [--check]`，
+#     --check 会把「模板落后于实装」直接判非零退出，这类静默缺口不会再潜伏。
+if [ "$SKIP_CODE_GATES" -ne 1 ]; then
+  LH="$ROOT/tools/m404_layer_health_check.py"
+  if [ -f "$LH" ]; then
+    LH_ARGS=""
+    if [ "${LAYER_HEALTH_STRICT:-0}" = "1" ]; then
+      LH_ARGS="--strict"
+    fi
+    # shellcheck disable=SC2086  # LH_ARGS 需要按空格分词
+    "$PY" "$LH" $LH_ARGS
+    st=$?
+    if [ "$st" -ne 0 ]; then
+      if [ "${LAYER_HEALTH_GATE:-warn}" = "block" ]; then
+        fail "七层自检未通过（LAYER_HEALTH_GATE=block；调试：$PY tools/m404_layer_health_check.py）"
+      else
+        echo "[pre-commit] ⚠ 七层自检有未通过项（不阻断；LAYER_HEALTH_GATE=block 可阻断）" >&2
+      fi
+    fi
+  else
+    echo "[pre-commit] 未找到七层自检面板：$LH（跳过）" >&2
+  fi
 fi
 
 if [ "$overall" -ne 0 ]; then
