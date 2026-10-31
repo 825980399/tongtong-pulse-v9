@@ -6930,3 +6930,48 @@ ENABLE_M411_EXPERIENCE_HITS = True
 #          nucleus/genesis/StreamMiner.py::StreamMiner.__init__
 M411_SIGMA_K = 2.0
 M411_PERIODICITY_KEEP = 100
+
+# ==================== 第412批（Step5a叙事落盘 + 经验池治理 + O3放行dry-run）====================
+# 排发：星轨｜日期：2026-10-31
+# [M412-CFG]
+#
+# ENABLE_M412_NARRATIVE_STORE
+#   默认值：True
+#   语义：开启时 `PulseNarrativeSelf.persist()` 每日落 `data/narrative/narrative_YYYYMMDD.jsonl`
+#        （每天一条摘要，同天重跑=替换，日级幂等），`load()` 启动时回放最近 7 天恢复叙事事件；
+#        关闭时两个方法都返回 disabled/switch_off，与改造前一致。
+#   ★产物里 `headline`/`delta`/`intent` 本批**留空**（413 再填）。
+#   读取点：nucleus/observability/narrative_store.py::enabled()
+ENABLE_M412_NARRATIVE_STORE = True
+#
+# ENABLE_M412_EXPERIENCE_GOVERNANCE
+#   默认值：True
+#   语义：开启时模板类经验打 `is_template` 标记并在命中排序里**降权**（TEMPLATE_WEIGHT=0.3）；
+#        关闭时不标记、不降权。
+#   ★降权不是删除：模板条目仍在池里、仍可召回。
+#   读取点：nucleus/observability/experience_governance.py::enabled()
+ENABLE_M412_EXPERIENCE_GOVERNANCE = True
+#
+# ENABLE_M412_PERF_DELTA
+#   默认值：True
+#   语义：开启时 PatchManager 在调 `verify()` 前做一次 **A/B 沙箱导入耗时**采样
+#        （改后 − 改前），把第三维 perf_ok 供上；关闭时恒传 None（回退 411 行为）。
+#   ★测不出来给 None，**绝不给 0**（0 会被判成 perf_ok ⇒ 编造"没有变化"）。
+#   读取点：nucleus/evolution/perf_delta_probe.py::enabled()
+ENABLE_M412_PERF_DELTA = True
+#
+# ENABLE_M412_O3_DELETE_DRYRUN
+#   默认值：True
+#   语义：开启时 O3 删死代码 dry-run 报表可用（**只统计不 apply**）；关闭时报表返回
+#        graph_state=unavailable 且 eligible=None。
+#   读取点：nucleus/evolution/o3_delete_dryrun.py::enabled()
+ENABLE_M412_O3_DELETE_DRYRUN = True
+#
+# PATCH_M412_DELETE_ONLY_GATE
+#   默认值：**False**（★本批不开闸）
+#   语义：True 时把 `delete_only`（只删不增）计入 `patch_risk_gate` 的窄闸清单
+#        ⇒ 这类补丁可以被免签自动应用；False 时只是**认得出**、**不放行**。
+#   ★为什么默认关：删除不可逆，且 dry-run 实测"按当前判据会放行 0 条"
+#     （591 条 O3 里 587 条是 public_api）⇒ 开闸没有收益，先查 O3 判死质量。
+#   读取点：nucleus/evolution/patch_risk_gate.py::_delete_only_enabled()
+PATCH_M412_DELETE_ONLY_GATE = False
