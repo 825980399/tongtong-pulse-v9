@@ -6843,3 +6843,41 @@ EXPERIENCE_PROMPT_GUARD = True
 # False        = 恢复 407 前行为（只看"在文件里"），仅供对照排查。
 # ★不动派单侧：它拒派 expired 是**对的**（任务书明令），本开关只改健康判据。
 WATCH_HEAL_ALIVE_ONLY = True
+
+# ==================== 第410批（Step4a 数据面基线 + 预测对账）====================
+# 排发：星轨｜日期：2026-10-31
+# [M410-CFG]
+#
+# ENABLE_M410_PERIODIC_PROFILE
+#   默认值：True
+#   语义：开启时 tools/m410_build_profile.py 落盘 data/world_model/periodic_profile.json，
+#        且 StreamMiner 按类型取容差；关闭时 build() 不写盘、tolerance_for() 恒返回 None
+#        ⇒ StreamMiner 回落改造前的 60s 一刀切（零行为变化）。
+#   读取点：nucleus/world_model/periodic_profile.py::enabled()（全模块唯一开关读取处）
+ENABLE_M410_PERIODIC_PROFILE = True
+#
+# ENABLE_M410_TYPED_TOLERANCE
+#   默认值：True
+#   语义：开启时 StreamMiner._check_prediction_hits 按 event_type 查表取容差（分类型）；
+#        关闭时该函数行为逐字回到改造前（tolerance 形参默认 60.0，不看档案）。
+#        依赖 ENABLE_M410_PERIODIC_PROFILE：档案开关关闭 ⇒ 无档案 ⇒ 本开关开启也会回落 60s，
+#        这不是 bug，是"无档案就不猜"的保守设计（详见 periodic_profile.tolerance_for docstring）。
+#   读取点：nucleus/genesis/StreamMiner.py::_m410_typed_tolerance_on()
+ENABLE_M410_TYPED_TOLERANCE = True
+#
+# ENABLE_M410_HIT_RATE_ALERT
+#   默认值：True
+#   语义：开启时日级 hit_rate 落盘 data/world_model/hit_rate_YYYYMMDD.json、
+#        且失配告警走 InsightBoard.post + health_snapshot.json 的 world_model 字段；
+#        关闭时只算不落盘不告警（只读观测）。
+#   读取点：nucleus/world_model/hit_rate.py::alert_enabled()
+ENABLE_M410_HIT_RATE_ALERT = True
+#
+# M410_HIT_RATE_WINDOW_SEC / M410_HIT_RATE_ALERT_BELOW / M410_HIT_RATE_EVICT_BELOW
+#   日级 hit_rate 的滚动窗与两档阈值（任务书刀3：连续 2 窗 <0.5 告警 / 连续 5 窗 <0.3 淘汰）。
+#   读取点：nucleus/world_model/hit_rate.py::_cfg_float()
+M410_HIT_RATE_WINDOW_SEC = 86400.0
+M410_HIT_RATE_ALERT_BELOW = 0.5
+M410_HIT_RATE_EVICT_BELOW = 0.3
+M410_HIT_RATE_ALERT_STREAK = 2
+M410_HIT_RATE_EVICT_STREAK = 5
