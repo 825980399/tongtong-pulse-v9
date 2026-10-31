@@ -96,6 +96,19 @@ class StreamMiner:
         self._total_prediction_hits = 0
         self._total_pruned_patterns = 0
         self._last_persist_at = 0.0
+
+        # ===== ★第410批刀2：分类型预测（periodic 时刻 / count 条数 / burst 批数）=====
+        #   刀1 的周期档案回答「该用多宽的容差」，本段回答「该预测什么」。
+        #   三套状态互不替代：_pending_predictions 只装时刻型，_m410_win_preds 只装窗口型。
+        self._m410_tp = None            # typed_prediction 模块（懒加载，避免启动期引入链）
+        self._m410_prof = {}            # 周期档案快照
+        self._m410_prof_at = 0.0        # 快照读取时刻（300s 缓存）
+        self._m410_windows = {}         # event_type -> WindowTracker（count/burst）
+        self._m410_hist = {}            # event_type -> [已关闭窗口的条数/批数]
+        self._m410_win_preds = []       # 窗口型预测（未结算）
+        self._m410_verdicts = deque(maxlen=2000)   # 判定流水（刀3 抽样审计用）
+        self._m410_stat = {}            # event_type -> {"hit","miss","no_coverage"}
+        self._m410_noted = {}           # 留痕节流表（key -> 上次记录时刻），防刷屏
         if auto_load:
             try:
                 self.load_patterns()
@@ -456,51 +469,460 @@ class StreamMiner:
         return _out
 
     def register_periodic_predictions(self, horizon_sec: float | None = None) -> int:
-        """把"即将发生"的周期预测登记到待验证队列（后续事件到达时校验命中率）。"""
+        """把"即将发生"的周期预测登记到待验证队列（后续事件到达时校验命中率）。
+
+        ★第410批刀2：七类事件改由 `_m410_register_typed_time()` 按**档案 median**
+        统一预测，不再依赖"模式发现"的 CV<0.2 门槛。实测依据：
+          - energy.metabolism_snapshot 有 50 个样本、median 30.148s，却没有 periodic
+            模式（CV 门槛没过）⇒ 按旧路径它永远登记不到预测，覆盖率是 0；
+          - 两条路都登记的话，同一事件会被预测两次（模式 13.5 / 档案 13.505），
+            一个命中一个 miss，命中率被凭空稀释一半。
+        其余 70+ 个事件类型保持旧路径（不扩大改动面）。
+        """
+        _h = float(horizon_sec if horizon_sec is not None
+                   else self._consume_cfg("predict_horizon_sec", 300))
         _upcoming = self.get_upcoming_events(horizon_sec)
-        if not _upcoming:
-            return 0
+        _now = time.time()
+        _added = 0
         with self._lock:
             _have = {(p["event_type"], round(p["predicted_ts"], 1))
                      for p in self._pending_predictions}
-            _added = 0
             for _u in _upcoming:
+                if self._m410_on() and self._m410_is_target(_u.get("event_type", "")):
+                    continue          # 七类由 typed 路径统一负责（见 docstring）
                 _key = (_u["event_type"], round(_u["predicted_ts"], 1))
                 if _key in _have:
+                    continue
+                _pt2, _tol2, _why2 = self._m410_plan(_u["event_type"])
+                if _pt2 in ("count", "burst"):
+                    # 窗口型不登记「时刻」预测 —— 它预测的是「下一分钟多少条/几批」。
                     continue
                 self._pending_predictions.append({
                     "event_type": _u["event_type"],
                     "predicted_ts": _u["predicted_ts"],
-                    "created_at": time.time(),
+                    "created_at": _now,
+                    "tolerance_sec": (round(float(_tol2), 3) if _tol2 is not None else None),
+                    "predict_type": _pt2,
                 })
+                _have.add(_key)
                 self._total_predictions += 1
                 _key_q = f"periodic:{_u['event_type']}"
                 _q = self._pattern_quality.setdefault(_key_q, {"predictions": 0, "hits": 0})
                 _q["predictions"] = int(_q.get("predictions", 0)) + 1
                 _added += 1
+            _added += self._m410_register_typed_time(_now, _h)
             if len(self._pending_predictions) > 200:
                 self._pending_predictions = self._pending_predictions[-200:]
         return _added
 
-    def _check_prediction_hits(self, event_type: str, timestamp: float, tolerance: float = 60.0):
-        """事件真实到达时校验周期预测是否命中（feed_event 内调用，异常不冒泡）。"""
+    def _m410_is_target(self, event_type: str) -> bool:
+        """是否属于七类（七类的预测口径统一由 typed 路径负责）。"""
+        _tp = self._m410_mod()
+        return bool(_tp is not None and _tp.is_target(event_type))
+
+    def _m410_note_throttled(self, key: str, event_type: str, verdict: str,
+                             min_gap: float = 600.0, **extra) -> None:
+        """同类留痕节流（默认 10 分钟一次）—— 免得 consume 每轮刷 7 条 no_coverage。"""
+        _now = time.time()
+        if (_now - float(self._m410_noted.get(key, 0.0))) < float(min_gap):
+            return
+        self._m410_noted[key] = _now
+        self._m410_note(event_type, verdict, **extra)
+
+    def _m410_register_typed_time(self, now: float, horizon: float) -> int:
+        """七类 periodic：用档案 median 从「该类型最后一条事件」推下一次时刻。"""
+        if not self._m410_on():
+            return 0
+        _tp = self._m410_mod()
+        if _tp is None:
+            return 0
+        _events = (self._m410_profile(now).get("events") or {})
+        _have = {(p["event_type"], round(p["predicted_ts"], 1))
+                 for p in self._pending_predictions}
+        _added = 0
+        for _et in _tp.pp.TARGET_EVENTS:
+            _pt, _tol, _why = self._m410_plan(_et)
+            if _pt != "periodic":
+                continue                      # count/burst 走分钟窗，不预测时刻
+            if _tol is None:
+                self._m410_note_throttled("noprof:" + _et, _et, "no_coverage",
+                                          predict_type=_pt, why=_why, actual=None)
+                continue
+            _stamps = self._periodicity_cache.get(_et) or []
+            _med = (_events.get(_et) or {}).get("median_interval_sec")
+            if not _stamps or not _med:
+                continue                      # 没有历史时刻 / 档案没给 median ⇒ 不猜
+            _pred = float(_stamps[-1]) + float(_med)
+            _delta = _pred - now
+            if _delta < 0 or _delta > horizon:
+                # 已过期或太远：不登记。登记过去时刻只会制造假 miss
+                # （旧实现 _pending_predictions 里就躺着 6700s 前的僵尸预测）
+                continue
+            _key = (_et, round(_pred, 1))
+            if _key in _have:
+                continue
+            _have.add(_key)
+            self._pending_predictions.append({
+                "event_type": _et,
+                "predicted_ts": _pred,
+                "created_at": now,
+                "tolerance_sec": round(float(_tol), 3),
+                "predict_type": _pt,
+                "source": "profile",
+            })
+            self._total_predictions += 1
+            _q = self._pattern_quality.setdefault(
+                f"periodic:{_et}", {"predictions": 0, "hits": 0})
+            _q["predictions"] = int(_q.get("predictions", 0)) + 1
+            _added += 1
+        return _added
+
+    def _check_prediction_hits(self, event_type: str, timestamp: float,
+                               tolerance: float | None = None):
+        """事件真实到达时对账（feed_event 内调用，异常不冒泡）。
+
+        ★第410批刀2：容差不再恒 60s，改为按 event_type 查表：
+          - periodic 型（触觉/代谢/脊髓/心跳/alive）：容差 = 档案 median × pct
+            （5%；脊髓 10%）—— 实测心跳 13.51s × 5% ≈ 0.68s，不再是 60s；
+          - count / burst 型（眼睛帧 / 知识写入）：**不做时刻判定**，事件只喂进
+            分钟窗计数器，窗口关闭时按「下一分钟条数/批数是否落在 μ±2σ」判；
+          - 非七类（time.tick 等）与开关关闭时：保持旧 60s，不扩大改动面。
+        `tolerance` 显式传入时优先生效（保留旧调用点/单测的直调能力）。
+        """
+        _pt, _tol, _why = self._m410_plan(event_type)
+        if _pt in ("count", "burst"):
+            self._m410_track(event_type, float(timestamp), _pt)
+            return
+        if tolerance is not None:
+            _tol = float(tolerance)
         with self._lock:
+            if self._m410_on():
+                # ★刀2 补上「错过」：旧实现只增不减，pending 里躺着 6700s 前的
+                #   curiosity.tick 预测，却仍然给出 94.4% 的总命中率 —— 分母是假的。
+                self._m410_expire(float(timestamp))
             if not self._pending_predictions:
                 return
             _hit_idx = -1
             for _i, _p in enumerate(self._pending_predictions):
                 if _p.get("event_type") != event_type:
                     continue
-                if abs(float(_p.get("predicted_ts", 0)) - timestamp) <= tolerance:
+                # 关掉刀2 开关时忽略已存盘的 tolerance_sec，一律按 60s 判
+                # —— 否则「关回去」并不等于旧行为（旧实现里根本没有这个字段）。
+                _p_tol = _p.get("tolerance_sec") if self._m410_on() else None
+                if _p_tol is None:
+                    _p_tol = _tol
+                if _p_tol is None:
+                    # 类型判得了、容差判不了（档案缺失）⇒ 跳过，不拿沉默当反证
+                    continue
+                if abs(float(_p.get("predicted_ts", 0)) - timestamp) <= float(_p_tol):
                     _hit_idx = _i
                     break
             if _hit_idx < 0:
                 return
-            self._pending_predictions.pop(_hit_idx)
+            _p_hit = self._pending_predictions.pop(_hit_idx)
             self._total_prediction_hits += 1
+            self._m410_note(
+                event_type, "hit", predict_type=_pt,
+                err_sec=round(timestamp - float(_p_hit.get("predicted_ts", 0) or 0), 3),
+                tolerance_sec=_p_hit.get("tolerance_sec"))
             _key = f"periodic:{event_type}"
             _q = self._pattern_quality.setdefault(_key, {"predictions": 0, "hits": 0})
             _q["hits"] = int(_q.get("hits", 0)) + 1
+
+    # ---- ②b 第410批刀2：分类型预测（周期时刻 / 分钟条数 / 分钟批数）----
+
+    def _m410_mod(self):
+        """懒加载 typed_prediction（避免 StreamMiner 在启动期拉入 world_model 链）。"""
+        if self._m410_tp is None:
+            try:
+                from nucleus.world_model import typed_prediction as _tp
+                self._m410_tp = _tp
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_mod L1")
+                return None
+        return self._m410_tp
+
+    def _m410_on(self) -> bool:
+        """刀2 灰度开关：关闭 ⇒ 全部回落旧 60s 一刀切（逐字节等价旧行为）。"""
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "ENABLE_M410_TYPED_TOLERANCE", True))
+        except Exception as e:
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_on L1")
+            return False
+
+    def _m410_profile(self, now: float) -> dict:
+        """周期档案快照（300s 缓存；缺失/过期返回 {}，由调用方决定回落）。"""
+        if (now - self._m410_prof_at) < 300.0:
+            return self._m410_prof
+        _snap = {}
+        try:
+            from nucleus.world_model import periodic_profile as _pp
+            _snap = _pp.load_profile(max_age_sec=3600.0, now=now)
+        except Exception as e:
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_profile L1")
+            _snap = {}
+        self._m410_prof = _snap
+        self._m410_prof_at = now
+        return _snap
+
+    def _m410_plan(self, event_type: str) -> tuple[str, float | None, str]:
+        """(预测型, 时刻容差秒, 依据)。
+
+        依据四态：
+          legacy     开关关闭 → 旧 60s
+          non_target 非七类（time.tick 等 70+ 类）→ 旧 60s，不扩大改动面
+          typed      按任务书表格：periodic 用 median×pct，count/burst 不设时刻容差
+          no_profile 七类 periodic 但档案缺失/过期 → tol=None（判不了，不猜 60s）
+        """
+        if not self._m410_on():
+            return ("periodic", 60.0, "legacy")
+        _tp = self._m410_mod()
+        if _tp is None:
+            return ("periodic", 60.0, "legacy")
+        _pt = _tp.classify(event_type)
+        if not _pt:
+            return ("periodic", 60.0, "non_target")
+        if _pt != "periodic":
+            return (_pt, None, "typed")
+        _tol = None
+        try:
+            from nucleus.world_model import periodic_profile as _pp
+            _tol = _pp.tolerance_for(event_type, self._m410_profile(time.time()))
+        except Exception as e:
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_plan L1")
+        if _tol is None:
+            return (_pt, None, "no_profile")
+        return (_pt, float(_tol), "typed")
+
+    def _m410_note(self, event_type: str, verdict: str, **extra) -> None:
+        """记一条判定：累计计数 + 流水。verdict ∈ hit/miss/no_coverage。"""
+        _q = self._m410_stat.setdefault(
+            event_type, {"hit": 0, "miss": 0, "no_coverage": 0})
+        if verdict in _q:
+            _q[verdict] = int(_q[verdict]) + 1
+        _rec = {"event_type": event_type, "verdict": verdict, "at": time.time()}
+        _rec.update(extra)
+        self._m410_verdicts.append(_rec)
+
+    def _m410_range(self, event_type: str, predict_type: str,
+                    profile: dict, tp) -> tuple[float | None, int | None, int | None]:
+        """窗口型预测区间（三层，从近到远）：
+
+        1) 已关闭窗口的实测 μ±2σ（最可信，攒够 3 窗即生效）
+        2) periodicity 缓存原始时间戳估速率（比档案新；burst 双峰间隔只能这样估）
+        3) 档案 median/p90 外推（最后一次回落，区间偏宽但不会凭空造数）
+        """
+        _exp, _lo, _hi = tp.expected_range(self._m410_hist.get(event_type) or [])
+        if _lo is not None:
+            return (_exp, _lo, _hi)
+        _exp, _lo, _hi = tp.rate_range(self._periodicity_cache.get(event_type) or [],
+                                       batch=(predict_type == "burst"))
+        if _lo is not None:
+            return (_exp, _lo, _hi)
+        if predict_type == "burst":
+            # burst 的间隔是双峰分布（批内 2s / 批间几百秒），拿 median 外推会得到
+            # 「每分钟 6 批」，与事实（每 60s 窗 0~1 批）方向相反 ⇒ 宁可不判。
+            return (None, None, None)
+        _ev = (profile.get("events") or {}).get(event_type) or {}
+        return tp.cold_start_range(_ev.get("median_interval_sec"),
+                                   _ev.get("p90_interval_sec"))
+
+    def _m410_track(self, event_type: str, timestamp: float, predict_type: str) -> None:
+        """count/burst 型：事件喂进分钟窗；窗口一关就结算已登记的预测。"""
+        _tp = self._m410_mod()
+        if _tp is None:
+            return
+        with self._lock:
+            _tr = self._m410_windows.get(event_type)
+            if _tr is None:
+                _tr = _tp.WindowTracker()
+                self._m410_windows[event_type] = _tr
+            for _w in _tr.feed(timestamp):
+                self._m410_settle(event_type, predict_type, _w, _tp)
+
+    def _m410_settle(self, event_type: str, predict_type: str, win: dict, tp) -> None:
+        """窗口关闭结算：先判已登记预测，再把实测值并入历史（历史只收真观测）。"""
+        _actual = int(win["batches"] if predict_type == "burst" else win["count"])
+        _pred = None
+        for _i, _p in enumerate(self._m410_win_preds):
+            if (_p.get("event_type") == event_type
+                    and _p.get("window_start") == win["window_start"]):
+                _pred = self._m410_win_preds.pop(_i)
+                break
+        if _pred is None:
+            # 这一窗没登记过预测（如 consume 未跑到）⇒ 不判，但观测照收
+            self._m410_note(event_type, tp.VERDICT_NO_COVERAGE,
+                            predict_type=predict_type,
+                            window_start=win["window_start"],
+                            expected=None, lo=None, hi=None, actual=_actual)
+        else:
+            # ★burst 型走点判：60s 窗内批数恒 ∈{0,1}，区间判据会恒中（见 typed_prediction）
+            _v = (tp.judge_point(_actual, _pred.get("expected"))
+                  if predict_type == "burst"
+                  else tp.judge(_actual, _pred.get("lo"), _pred.get("hi")))
+            self._m410_note(event_type, _v,
+                            predict_type=predict_type,
+                            window_start=win["window_start"],
+                            expected=_pred.get("expected"), lo=_pred.get("lo"),
+                            hi=_pred.get("hi"), actual=_actual)
+        _hist = self._m410_hist.setdefault(event_type, [])
+        _hist.append(_actual)
+        if len(_hist) > tp.HISTORY_MAX:
+            del _hist[: len(_hist) - tp.HISTORY_MAX]
+        # ★链式：本窗一关就给下一窗登记（含「一条都没来」的空窗），
+        #   否则覆盖率取决于 consume 的节拍，而不是取决于数据本身。
+        self._m410_register_window(event_type, predict_type,
+                                   float(win["window_end"]), float(win["window_end"]))
+
+    def _m410_expire(self, now: float) -> int:
+        """时刻型预测超时未到 ⇒ 判 miss 并出队（旧实现从不出队，见 94.4% 假分母）。"""
+        if not self._pending_predictions:
+            return 0
+        _keep = []
+        _n = 0
+        for _p in self._pending_predictions:
+            if _p.get("predict_type") in ("count", "burst"):
+                continue          # 不该出现在这里；留在队列由 sweep 统一清
+            _tol = _p.get("tolerance_sec")
+            _deadline = float(_p.get("predicted_ts", 0) or 0) + float(
+                60.0 if _tol is None else _tol)
+            if _deadline < now:
+                self._m410_note(_p.get("event_type", "?"), "miss",
+                                predict_type=_p.get("predict_type", "periodic"),
+                                predicted_ts=_p.get("predicted_ts"),
+                                tolerance_sec=_tol, actual=None)
+                _n += 1
+                continue
+            _keep.append(_p)
+        if _n:
+            self._pending_predictions = _keep
+        return _n
+
+    def register_typed_predictions(self, now: float | None = None) -> int:
+        """给「下一个尚未开始的分钟窗」登记 count/burst 预测，返回新登记数。
+
+        与 register_periodic_predictions 并列：那个管时刻，这个管条数/批数。
+        同一个 (event_type, window_start) 只登记一次；已开始的窗口不登记
+        （事后登记预测 = 用已知结果编预测）。
+        """
+        if not self._m410_on():
+            return 0
+        _tp = self._m410_mod()
+        if _tp is None:
+            return 0
+        _now = float(now if now is not None else time.time())
+        _w0 = _tp.next_window_start(_now)
+        _prof = self._m410_profile(_now)
+        _added = 0
+        with self._lock:
+            for _et in _tp.pp.TARGET_EVENTS:
+                _pt = _tp.classify(_et)
+                if _pt not in ("count", "burst"):
+                    continue
+                _added += self._m410_register_window(_et, _pt, _w0, _now, _prof)
+            if len(self._m410_win_preds) > 200:
+                self._m410_win_preds = self._m410_win_preds[-200:]
+        return _added
+
+    def _m410_register_window(self, event_type: str, predict_type: str,
+                              window_start: float, now: float,
+                              profile: dict | None = None) -> int:
+        """给指定窗口登记一条条数/批数预测（已存在则跳过），返回新增数。
+
+        ★由 `_m410_settle()` 在每窗关闭后**链式**调用一次，给下一窗登记：
+          consume 的节拍（200 条事件）比 60s 窗粗得多，只靠 consume 会大量漏登记，
+          报表里就会堆满 no_coverage、hit_rate 只剩个位数样本（回放实测 68/69）。
+        """
+        _tp = self._m410_mod()
+        if _tp is None:
+            return 0
+        for _p in self._m410_win_preds:
+            if (_p.get("event_type") == event_type
+                    and _p.get("window_start") == window_start):
+                return 0
+        _exp, _lo, _hi = self._m410_range(
+            event_type, predict_type,
+            profile if profile is not None else self._m410_profile(now), _tp)
+        if _lo is None:
+            # 既无窗口历史、档案也没有该类的速率 ⇒ 不登记。
+            # 登记一个空区间只会制造假 no_coverage，掩盖真正的采集缺失。
+            self._m410_note(event_type, _tp.VERDICT_NO_COVERAGE,
+                            predict_type=predict_type, window_start=window_start,
+                            expected=None, lo=None, hi=None, actual=None)
+            return 0
+        self._m410_win_preds.append({
+            "event_type": event_type,
+            "predict_type": predict_type,
+            "window_start": float(window_start),
+            "expected": _exp,
+            "lo": _lo,
+            "hi": _hi,
+            "created_at": float(now),
+        })
+        return 1
+
+    def sweep_typed_predictions(self, now: float | None = None) -> dict:
+        """对账推进（分钟级挂载点）：关空窗 + 清过期预测。
+
+        Returns:
+            {"closed_windows": int, "expired_periodic": int, "dropped_windows": int}
+        """
+        _res = {"closed_windows": 0, "expired_periodic": 0, "dropped_windows": 0}
+        if not self._m410_on():
+            return _res
+        _tp = self._m410_mod()
+        if _tp is None:
+            return _res
+        _now = float(now if now is not None else time.time())
+        with self._lock:
+            for _et, _tr in list(self._m410_windows.items()):
+                _pt = _tp.classify(_et) or "count"
+                for _w in _tr.close_until(_now):
+                    self._m410_settle(_et, _pt, _w, _tp)
+                    _res["closed_windows"] += 1
+            _res["expired_periodic"] = self._m410_expire(_now)
+            _keep = []
+            for _p in self._m410_win_preds:
+                _end = float(_p.get("window_start") or 0) + float(_tp.WINDOW_SEC)
+                if _end <= _now:
+                    # 窗口早该关了却没等到关闭记录（长空档被跳过）⇒ 判 no_coverage。
+                    # 不猜 0：0 条会让「眼睛关了」和「挖掘器没被喂」混成一件事。
+                    self._m410_note(_p.get("event_type", "?"),
+                                    _tp.VERDICT_NO_COVERAGE,
+                                    predict_type=_p.get("predict_type"),
+                                    window_start=_p.get("window_start"),
+                                    expected=_p.get("expected"), lo=_p.get("lo"),
+                                    hi=_p.get("hi"), actual=None)
+                    _res["dropped_windows"] += 1
+                    continue
+                _keep.append(_p)
+            self._m410_win_preds = _keep
+        return _res
+
+    def get_typed_prediction_stats(self) -> dict:
+        """刀2 统计快照（刀3 hit_rate 聚合的输入；hit_rate=None 表示无覆盖样本）。"""
+        with self._lock:
+            _by: dict[str, dict] = {}
+            for _et, _q in self._m410_stat.items():
+                _h = int(_q.get("hit", 0))
+                _m = int(_q.get("miss", 0))
+                _nc = int(_q.get("no_coverage", 0))
+                _cov = _h + _m
+                _by[_et] = {
+                    "hit": _h, "miss": _m, "no_coverage": _nc, "covered": _cov,
+                    "hit_rate": (round(_h / _cov, 4) if _cov else None),
+                }
+            _tp = self._m410_tp
+            return {
+                "enabled": self._m410_on(),
+                "version": (_tp.version() if _tp is not None else ""),
+                "by_event": _by,
+                "pending_periodic": len(self._pending_predictions),
+                "pending_windows": len(self._m410_win_preds),
+                "windows_tracked": len(self._m410_windows),
+                "recent": list(self._m410_verdicts)[-20:],
+            }
 
     # ---- ③ 重复模式消费：负载预测 ----
 
@@ -563,6 +985,9 @@ class StreamMiner:
         """
         _prewarm = self.get_upcoming_events(horizon_sec)
         _added = self.register_periodic_predictions(horizon_sec)
+        # ★第410批刀2：窗口型（count/burst）预测登记 + 过期对账推进
+        _typed_added = self.register_typed_predictions()
+        _sweep = self.sweep_typed_predictions()
         _load = self.get_load_forecast()
         _quality = self.evaluate_pattern_quality()
         # 定期落盘（默认5分钟一次，避免频繁IO）
@@ -572,6 +997,8 @@ class StreamMiner:
         return {
             "prewarm": _prewarm,
             "registered_predictions": _added,
+            "registered_typed_predictions": _typed_added,
+            "typed_sweep": _sweep,
             "load_forecast": _load,
             "quality": _quality,
             "enabled": self._consume_enabled(),
