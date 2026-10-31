@@ -197,21 +197,55 @@ class TestPatchAutoApproverDeprecated(unittest.TestCase):
                 if f.endswith(".py"):
                     yield os.path.join(dp, f)
 
+    #: ★408 刀4：判「生产调用点」的四个符号（类名 + 三个模块级函数）
+    _CALL_NAMES = frozenset(("scan_pending", "prune_pending",
+                             "get_patch_auto_approver", "PatchAutoApprover"))
+
+    @classmethod
+    def _call_sites(cls, tree):
+        """AST 里**真的调用**了这四个符号的位置（`Call` 节点，不是"文本里出现过"）。"""
+        _out = []
+        for _n in ast.walk(tree):
+            if not isinstance(_n, ast.Call):
+                continue
+            _f = _n.func
+            _nm = _f.id if isinstance(_f, ast.Name) else getattr(_f, "attr", "")
+            if _nm in cls._CALL_NAMES:
+                _out.append((_n.lineno, _nm))
+        return _out
+
     def test_40_no_production_call_sites(self):
-        """★核心依据：classify/scan_pending/prune_pending/get_patch_auto_approver 无生产调用点。"""
+        """★核心依据：classify/scan_pending/prune_pending/get_patch_auto_approver 无生产调用点。
+
+        ★408 刀4 改 AST 口径：原实现是 `if _pat in _t` **子串**匹配，被
+          `tools/ci/replay_conditional_writes.py:82` 的**回放数据串**
+          （JSON 里写着 `PatchAutoApprover(_base_dir=…)`）判红 ——
+          子串匹配分不清"调用"与"提到名字"。查调用点就该看 `ast.Call`。
+        ★同时补两条防腐：① 解析失败的文件不许被悄悄跳过（跳过 = 少扫一个
+          还宣布"没有调用点"）；② 扫描面下限，防目录结构一变就空转成假绿。
+        """
         _self_rel = os.path.join("nucleus", "evolution", "PatchAutoApprover.py")
         _prod = []
+        _parse_err = []
+        _scanned = 0
         for fp in self._iter_py():
             rel = os.path.relpath(fp, _ROOT)
             # ★第54批：tmp/ 是排查/补丁脚本目录（ruff.toml 亦 exclude），**不是生产代码**
-            #   → 不参与「生产调用点」判定，否则工具脚本文本里的字符串会误伤 deprecated 结论。
             if rel == _self_rel or rel.startswith(("tests" + os.sep, "tmp" + os.sep)):
                 continue
+            _scanned += 1
             _t = open(fp, encoding="utf-8", errors="replace").read()
-            for _pat in ("scan_pending(", "prune_pending(", "get_patch_auto_approver(",
-                         "PatchAutoApprover("):
-                if _pat in _t:
-                    _prod.append((rel, _pat))
+            try:
+                _tree = ast.parse(_t)
+            except SyntaxError as _e:
+                _parse_err.append("%s:%s" % (rel, _e.lineno))
+                continue
+            for _ln, _nm in self._call_sites(_tree):
+                _prod.append((rel, _ln, _nm))
+        self.assertEqual(_parse_err, [],
+                         "有文件解析失败 → 扫描不完整：%s" % _parse_err)
+        self.assertGreater(_scanned, 200,
+                           "扫描面 %d 太小，断言可能是空转" % _scanned)
         self.assertEqual(_prod, [], "PatchAutoApprover 出现生产调用点 → deprecated 结论失效")
 
     def test_41_module_docstring_marks_deprecated(self):

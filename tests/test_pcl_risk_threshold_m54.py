@@ -16,9 +16,9 @@
 ⑤ 防漂移：改配置值，计算结果跟随（★断言写在 with 块内，铁律 49）
 ⑥ 全库扫描（用统一排除列表 C3）：生产代码中无其他 `risk <= N` 硬编码残留
 """
+import ast
 import contextlib
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 
 import config
+from nucleus._silent_except import silent_exc
 from nucleus.data import exclude_dirs
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +35,50 @@ _PCL_REL = os.path.join("organs", "brain", "PulseCodeLearner.py")
 
 def _read(rel):
     return open(os.path.join(_ROOT, rel), encoding="utf-8", errors="replace").read()
+
+
+#: ★408 刀4：被判为「risk 门槛」的左手名字（`risk` / `risk_level` / `self._risk` …）
+_RISK_GATE_NAMES = ("risk", "risk_level", "_risk", "_risk_level")
+
+
+def _is_risk_name(node):
+    """是不是「risk 家族」的名字（`Name` / `Attribute` 两种写法都认）。"""
+    if isinstance(node, ast.Name):
+        _s = node.id
+    elif isinstance(node, ast.Attribute):
+        _s = node.attr
+    else:
+        return False
+    return _s.lower() in _RISK_GATE_NAMES
+
+
+def _is_int_const(node):
+    """整数字面量（bool 是 int 的子类，必须排掉 —— `risk <= True` 不是门槛）。"""
+    return (isinstance(node, ast.Constant) and isinstance(node.value, int)
+            and not isinstance(node.value, bool))
+
+
+def _risk_gate_hits(tree):
+    """AST 里「`risk <= 整数`」形态的门槛比较（含反向写法 `整数 >= risk`）。
+
+    ★为什么必须是 AST 而不是按行正则（408 批实测）：
+      正则口径唯一的命中是 `config.py:1367` 的
+      `"semantics": "非核心 ∧ trust>=40 ∧ risk<=2 ∧ …"` —— 那是**说明文字**，
+      不是可执行的门槛。按行扫字符串常量 = "文档里写了什么就被判红"。
+      反过来正则还漏真正的门槛形态（跨行、反向比较），两头都不对。
+    """
+    _out = []
+    for _n in ast.walk(tree):
+        if not isinstance(_n, ast.Compare):
+            continue
+        for _op, _rhs in zip(_n.ops, _n.comparators):
+            if _is_risk_name(_n.left) and isinstance(_op, ast.LtE) \
+                    and _is_int_const(_rhs):
+                _out.append((_n.lineno, ast.unparse(_n)[:80]))
+            elif _is_int_const(_n.left) and isinstance(_op, ast.GtE) \
+                    and _is_risk_name(_rhs):
+                _out.append((_n.lineno, ast.unparse(_n)[:80]))
+    return _out
 
 
 def _compute_risk_max(cfg_ev, ev_cfg):
@@ -108,23 +153,37 @@ class TestPclRiskThresholdM54(unittest.TestCase):
             self.assertEqual(_compute_risk_max(config, fake2), 1)
 
     def test_06_no_other_hardcoded_risk_gate(self):
-        """全库扫描（★C3 统一排除列表）：生产代码无其他 `risk <= N` 硬编码残留。"""
-        pat = re.compile(r"risk\s*<=\s*\d")
+        """全库扫描（★C3 统一排除列表）：生产代码无其他 `risk <= N` 硬编码残留。
+
+        ★408 刀4 改 AST 口径：原实现按行正则扫 `risk\\s*<=\\s*\\d`，唯一命中是
+          `config.py:1367` 的**说明文字** `"semantics": "… risk<=2 …"` ——
+          一句文档被判成可执行门槛。改用 `Compare` 节点后两头都更准：
+          既不认字符串常量，也能抓到反向写法 `2 >= risk`。
+        """
         hits = []
+        scanned = 0
+        parse_errors = []
         for path in exclude_dirs.iter_python_files(_ROOT):
             rel = os.path.relpath(path, _ROOT).replace("\\", "/")
             if rel.startswith(("tests/", "tmp/", ".bak")):
                 continue
+            scanned += 1
             try:
                 txt = open(path, encoding="utf-8", errors="replace").read()
-            except OSError:
+            except OSError as e:
+                silent_exc(e, where="tests/test_pcl_risk_threshold_m54.py 读文件")
                 continue
-            for i, line in enumerate(txt.splitlines(), 1):
-                s = line.strip()
-                if s.startswith("#"):
-                    continue
-                if pat.search(s):
-                    hits.append("%s:%d: %s" % (rel, i, s[:80]))
+            try:
+                tree = ast.parse(txt)
+            except SyntaxError as e:
+                parse_errors.append("%s:%s" % (rel, e.lineno))
+                continue
+            for ln, src in _risk_gate_hits(tree):
+                hits.append("%s:%d: %s" % (rel, ln, src))
+        self.assertEqual(parse_errors, [],
+                         "有文件解析失败 → 扫描不完整：%s" % parse_errors)
+        self.assertGreater(scanned, 400,
+                           "扫描面 %d 太小，断言可能是空转" % scanned)
         self.assertEqual(hits, [], "生产代码仍有 risk 门槛硬编码：\n" + "\n".join(hits))
 
 

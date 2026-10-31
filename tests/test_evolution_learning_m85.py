@@ -338,7 +338,16 @@ class TestM85RealFixRateDenominator(unittest.TestCase):
         self.assertEqual(_r["verifiable_count"], 2)
 
     def test_31_function_rate_uses_verifiable_denominator(self):
-        _ps = [{"problem_fixed": True}, {"problem_fixed": False},
+        """分母 = 可判定数（1 True + 1 False），None 分子分母都不计 ⇒ 1/2 = 0.5。
+
+        ★★408 刀4 改夹具（306 刀2 之后）：`problem_fixed` 不再是读取值，
+          而是一律重派生 —— 裸 `{"problem_fixed": True}` 被派生成
+          `(None, "no_probe")`（没有探针证据），于是分母也变 0。
+          夹具改用 `reprobe_verdict`（全仓唯一真值，见 `derive_problem_fixed`
+          的规则表），**断言一字未改**：分母仍应为 2、值仍为 0.5。
+        """
+        _ps = [{"reprobe_verdict": "true_pass", "reprobe_baseline_hits": 3},
+               {"reprobe_verdict": "false_pass"},
                {"problem_fixed": None}, {"problem_fixed": None}]
         self.assertAlmostEqual(PVS.real_fix_rate(_ps), 0.5, places=4,
                                msg="分母应为可判定数(2)")

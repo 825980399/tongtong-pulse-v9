@@ -122,10 +122,14 @@ def test_03_pool_state_chain_still_legal():
     assert _pool.STATUS_VERIFIED in _T[_pool.STATUS_FIXED], "fixed→verified 必须合法"
     assert _pool.STATUS_OPEN in _T[_pool.STATUS_VERIFIED]
     # 流转表逐项等于基线（本刀只改触发源，不动状态机）
+    # ★★408 刀4 重锥：此后又加了 `stale`（长期无人认领）—— 见
+    #   `open -> stale` 与 `stale -> (open, wontfix)`。这张表是快照式断言，
+    #   快照不同步就会红；重锤到当前真实状态机（仍然逐项穷举，
+    #   不放宽为“只查几条关键边”）。
     assert _T == {
         _pool.STATUS_OPEN: (_pool.STATUS_CLAIMED, _pool.STATUS_FIXED,
                             _pool.STATUS_VERIFIED, _pool.STATUS_WONTFIX,
-                            _pool.STATUS_TARGET_DRIFTED),
+                            _pool.STATUS_TARGET_DRIFTED, _pool.STATUS_STALE),
         _pool.STATUS_CLAIMED: (_pool.STATUS_FIXED, _pool.STATUS_OPEN,
                                _pool.STATUS_WONTFIX, _pool.STATUS_TARGET_DRIFTED),
         _pool.STATUS_FIXED: (_pool.STATUS_VERIFIED, _pool.STATUS_CLAIMED,
@@ -133,6 +137,7 @@ def test_03_pool_state_chain_still_legal():
         _pool.STATUS_VERIFIED: (_pool.STATUS_OPEN, _pool.STATUS_WONTFIX),
         _pool.STATUS_WONTFIX: (_pool.STATUS_OPEN,),
         _pool.STATUS_TARGET_DRIFTED: (_pool.STATUS_OPEN, _pool.STATUS_WONTFIX),
+        _pool.STATUS_STALE: (_pool.STATUS_OPEN, _pool.STATUS_WONTFIX),
     }
     # 唯一 set_status 调用点仍在既有封装内（不新增第二个真实调用点）。
     # ★注意：不能数裸 "set_status(" —— 注释/docstring 里也有这个词；只数带模块前缀的调用。

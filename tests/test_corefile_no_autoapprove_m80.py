@@ -53,12 +53,28 @@ class TestCoreFileNoAutoApproveM80:
     # ---------- 辅助 ----------
     def _mk_patch(self, pid, file, status="pending", risk="极低", trust=95,
                   method="some_method"):
+        """构造一条结构合法的补丁。
+
+        ★408 刀4 改夹具：`modified_code` 必须含 `def <method>()`。
+        284 刀5 的「结构缺陷补丁作废」判据：`method` 非空但
+        `modified_code` 里取不到 def 名 ⇒ 整条作废、不入 pending。
+        原夹具用 `NEW_CODE_X`（不是 def），于是这些用例在 284 刀5 之后
+        拿不到 `details`、也改不动 status —— 红的不是闸门，是夹具形态。
+        ★闸门本身一字未动：下面每条断言仍然是“核心文件不得自动 approved”。
+        """
+        _code = "def %s():\n    return 1\n" % method
         return {
             "id": pid,
             "file": file,
             "method": method,
-            "original_code": "OLD_CODE_X",
-            "modified_code": "NEW_CODE_X",
+            "original_code": _code,
+            "modified_code": _code.replace("return 1", "return 2"),
+            # ★★408 刀4 再补：`issue_type` 必须是**已登记族**。
+            #   372 刀1 未登记族 fail-closed 至中风险 ⇒ 自动档关闭、
+            #   转人工，于是“低风险应自动 approved”那条永远不成立。
+            #   `periodic_task_no_reentry` 是 280刀2 十一族里的**低**风险族
+            #   （trust 75），正好对应本文件要验的“低风险”语义。
+            "issue_type": "periodic_task_no_reentry",
             "aesthetic_score": {"total": 90.0, "grade": "A", "syntax_valid": True},
             "risk_level": risk,
             "trust_score": trust,
@@ -128,8 +144,9 @@ class TestCoreFileNoAutoApproveM80:
             "id": "p_land_1",
             "file": _target,
             "method": "m",
-            "original_code": "X = 1",
-            "modified_code": "X = 2",
+            # ★同上：不是 def 会被 284刀5 作废，拿不到 details[0]
+            "original_code": "def m():\n    return 1\n",
+            "modified_code": "def m():\n    return 2\n",
             "aesthetic_score": {"total": 90.0, "grade": "A", "syntax_valid": True},
             "risk_level": "极低",
             "trust_score": 95,
