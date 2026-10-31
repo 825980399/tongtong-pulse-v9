@@ -6803,3 +6803,14 @@ WRITE_FACE_OBSERVE_EVERY_SEC = 300.0
 # `ENABLE_COLD_STORAGE` 全仓只有一个读点：`tests/test_cold_storage_batch_m81.py`。
 # 它不进生产链路 ⇒ 补在这里只为"键存在、值可查"，**不要**据此判断冷存功能是否开启。
 ENABLE_COLD_STORAGE = True
+
+# ========== ★407 批：推理经验库「代码学习 prompt」入库闸门 ==========
+# 实测（407 T0）：`data/context/reasoning_experience.json` 128 条里 114 条（89.1%）
+# 是 `remote_api_confirmed` 型污染，其中 97 条的 `example_question` 就是代码学习
+# 用的那条模板 prompt（`请分析以下Python方法，并返回一个JSON格式的结果…`）。
+# 源头在 `organs/body/PulseLung.py` 的「回复质量高 ⇒ 记一条经验」分支：它把
+# **我们自己发出去的指令**当成了可复用经验。这些条目恒定抢占 top1，命中后又被
+# `PulseInnerWorld._SKIP_TYPES` 整类砍掉 ⇒ 经验路由永远 0 有效产出。
+#
+# 关闭本开关 ⇒ `ReasoningExperience.record()` 恢复 407 前的行为（来者不拒）。
+EXPERIENCE_PROMPT_GUARD = True

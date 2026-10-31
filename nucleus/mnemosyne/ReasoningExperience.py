@@ -23,6 +23,69 @@ from nucleus.data.DataAccessLayer import safe_write_json  # T-112a：复用硬�
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
+# ========== ★407 刀1：代码学习 prompt 的入库闸门 ==========
+# ★为什么非要有这道闸（实测依据，别再当形式主义）：
+#   406/407 批实测 `data/context/reasoning_experience.json` 128 条里 **114 条（89.1%）**
+#   是 `remote_api_confirmed` 型污染，其中 **97 条**的 `example_question` 就是代码学习
+#   用的那条模板 prompt（`请分析以下Python方法，并返回一个JSON格式的结果…`）。
+#   源头是 `organs/body/PulseLung.py` 的「回复质量高 ⇒ 记一条经验」分支：它把
+#   **我们自己发出去的指令**记成"用户问题"，而那条指令既不是用户提问、也不是可复用
+#   的推理经验。后果是它们恒定抢占 top1，命中后又被
+#   `PulseInnerWorld._SKIP_TYPES` 整类砍掉 ⇒ 经验路由永远 0 有效产出。
+#
+# ★为什么闸门挂在 `record()` 而不挂在 `PulseLung.py`：
+#   `record()` 是**唯一写入口**（全库所有写点都经它）。挂写点必漏 ——
+#   406 刀4 的风险标签同样挂在唯一写口 `pending_write.write_pending()` 上。
+#
+# ★为什么判据用"模板指纹"而不是 `source`/`derivation_type`：
+#   污染条的 `source` 是 `quality_feedback`（与正常条完全一样），
+#   `derivation_type` 是 `remote_api_confirmed`（与"真·远程经验"同值）。
+#   只有**文本形态**能把两者分开，所以识别器看文本。
+
+#: 强指纹：命中任意一条即判为代码学习模板 prompt。
+_CODE_PROMPT_STRONG = (
+    "请分析以下Python方法",
+    "返回一个JSON格式的结果",
+)
+
+#: 弱指纹：需**同时出现**才判（单看"方法名:"可能出现在用户正常提问里）。
+_CODE_PROMPT_STRUCT = ("方法名:", "代码:", "返回格式")
+
+
+def is_code_learning_prompt(text: Any) -> bool:
+    """★407刀1：这条 `example_question` 是不是「代码学习模板 prompt」。
+
+    ★为什么强指纹用"请分析以下Python方法"而不是笼统的"请分析以下"：
+      "请分析以下" 会命中真实用户提问（如"请分析以下两种架构的差异"），
+      而带 `Python方法` 的模板句是**框架自己生成的**，用户不会这么问。
+    ★弱指纹三件套同时命中也判为污染：即便模板措辞将来改了，
+      只要还带着 `方法名:/代码:/返回格式` 三段结构，就仍是同一条指令。
+    """
+    if not isinstance(text, str) or not text.strip():
+        return False
+    if any(_m in text for _m in _CODE_PROMPT_STRONG):
+        return True
+    return all(_m in text for _m in _CODE_PROMPT_STRUCT)
+
+
+def _m407_is_clean(exp: Any) -> bool:
+    """★407刀1：该条经验是否**可参与检索**（污染闸）。
+
+    ★判据与 `nucleus.data.experience_cleanup.is_retrievable` **完全同口径**
+      （`polluted is True` / `is_cleaned is False` 即拦），只是不 import 它 ——
+      那套是 L3 经验池（`experience_pool.json`）的清洗模块，本类是**推理经验**库。
+      等价性由 `tests/test_m407_k1_prompt_guard.py` 在真实库上**逐样本比对**守住。
+    ★只拦**显式标记**的记录：未标记的记录零影响（零回归的结构性保证）。
+    """
+    if not isinstance(exp, dict):
+        return False
+    if exp.get("polluted") is True:
+        return False
+    if exp.get("is_cleaned") is False:
+        return False
+    return True
+
+
 class ReasoningExperience(SilentLogMixin):
     """
     推理经验管理器。
@@ -66,6 +129,25 @@ class ReasoningExperience(SilentLogMixin):
             "question_type_hint": 2.0,
         }
         self._load()
+    # ========== ★407 刀1：闸门开关 ==========
+    def _m407_prompt_guard_on(self) -> bool:
+        """代码学习 prompt 的入库闸门开关（默认开；关 ⇒ 回到 407 前，来者不拒）。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "EXPERIENCE_PROMPT_GUARD", True))
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_prompt_guard_on")
+            return True
+
+    def _m407_polluted_gate_on(self) -> bool:
+        """污染条的检索闸门开关 —— 复用项目既有开关，不另起一套。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_EXPERIENCE_CLEANUP_FILTER", True))
+        except Exception as e:
+            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_polluted_gate_on")
+            return True
+
     # ========== 持久化 ==========
     def _load(self):
         """从文件加载经验库"""
@@ -188,13 +270,23 @@ class ReasoningExperience(SilentLogMixin):
             "threshold": float(self._min_confidence),
             "n_experiences": len(self._experiences),
             "hit": False,
+            # ★407刀1：污染闸排除条数（0 = 库里没有污染条 / 闸门关着）
+            "n_excluded_polluted": 0,
         }
         current_features = self.extract_structural_features(question)
 
         best_match = None
         best_score = 0.0
 
+        # ★407刀1：污染条在**打分之前**就出局 —— 不是"命中后再砍"。
+        #   实测（407 T0）：污染条恒定拿 0.88，把真经验挤到第 2、3 名；
+        #   命中后再判污染等于「先让错的赢，再宣布比赛作废」。
+        _m407_gate = self._m407_polluted_gate_on()
+        _m407_polluted = 0
         for exp in self._experiences:
+            if _m407_gate and not _m407_is_clean(exp):
+                _m407_polluted += 1
+                continue
             exp_features = exp.get("features", {})
             if not exp_features:
                 continue
@@ -221,6 +313,13 @@ class ReasoningExperience(SilentLogMixin):
         _is_hit = bool(best_match and best_score >= self._min_confidence)
         self.last_search_diagnostics["best_score"] = round(float(best_score), 4)
         self.last_search_diagnostics["hit"] = _is_hit
+        # ★407刀1：污染闸的读数（排除多少条）必须与统计口径一起落盘，
+        #   否则"分数掉了"与"库里少了货"两种事实分不开。
+        self.last_search_diagnostics["n_excluded_polluted"] = int(_m407_polluted)
+        if _m407_polluted:
+            self._log(LogLevel.DEBUG,
+                      f"[407刀1] 检索候选集: 总={len(self._experiences)} "
+                      f"排除污染={_m407_polluted} 剩余={len(self._experiences) - _m407_polluted}")
         if _is_hit:
             return {
                 "derivation_type": best_match.get("derivation_type", ""),
@@ -284,9 +383,22 @@ class ReasoningExperience(SilentLogMixin):
             source: 经验来源（local=本地推测, remote_api=大模型判断）
             confidence: 置信度
         """
+        # ★407刀1：代码学习 prompt 不入经验库 —— 它占满 89% 的库容却一条可用都没有。
+        #   放在函数**第一行**（算特征之前）：既省一次特征提取，也保证任何写点都被覆盖。
+        if self._m407_prompt_guard_on() and is_code_learning_prompt(question):
+            _n = int(getattr(self, "_m407_prompt_guard_hits", 0)) + 1
+            self._m407_prompt_guard_hits = _n
+            self._log(LogLevel.DEBUG,
+                      f"[407刀1] 代码学习 prompt 不入经验库（累计拦下 {_n} 条）: "
+                      f"{str(question)[:48]!r}")
+            return
+
         features = self.extract_structural_features(question)
 
         # 检查是否已存在高度相似的经验
+        # ★407刀2 预告：刀2 会给 `search()` 加 `exclude_types` 参数，届时这里要显式传
+        #   `exclude_types=()` —— 去重是**库内自洽**判断，不该因为"路由侧不读远程条"
+        #   而让远程条互相之间失去去重。刀1 阶段 `search()` 还没有该参数，不能传。
         existing = self.search(question)
         if existing and existing.get("confidence", 0) >= 0.85:
             # 更新已有经验的来源和置信度
