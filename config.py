@@ -6604,6 +6604,10 @@ ENABLE_M401_PAIR_TRIM_BY_LINES = True
 #   （不占滚动 7 份配额；`call_graph_guard` 两个选择器显式跳过它）。
 ENABLE_M401_GRAPH_KEEP_LATEST = True
 ENABLE_M401_UNRESOLVED_FULL = True
+# ★409刀1：假设强制附可观测判据（observable_criterion / observation_window / due_at）
+#   灰度总开关，默认 True＝判据生效；关闭后老行为（不写任何字段、不打 WARNING），零行为变化。
+#   读取点：nucleus/evolution/hypothesis_criteria.enabled()（唯一读点，写路径全经它判）。
+ENABLE_M409_HYPOTHESIS_CRITERIA = True
 HIGH_LOAD_PROCESS_RSS_MB = float(RUNTIME_PARAMS.get("memory_high_load_rss_mb", 6144.0))   # ★401刀1：单一定义源＝RUNTIME_PARAMS["memory_high_load_rss_mb"]（nucleus/field/InfoField.py 高载阈值）
 INSIGHT_HYPOTHESIS_MIN_SCORE = 0.5          # nucleus/InsightBoard.py：洞见假设入板最小分
 INSIGHT_TOP_N_DUMP = 5                      # nucleus/InsightBoard.py：洞见落盘 TopN

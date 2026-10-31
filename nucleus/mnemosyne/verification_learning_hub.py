@@ -683,6 +683,36 @@ class VerificationLearningHub:
         os.replace(_tmp, _p)
         return _p
 
+    def _m409_annotate_entry(self, entry: dict, key: str, is_new: bool) -> None:
+        """★409刀1：假设入库必带可观测判据 + 观察窗 + 到期时刻。
+
+        * 新假设（``is_new=True``）：缺字段 → 能补的补（``due_at`` 由观察窗推），
+          补不了就打 ``missing_criterion=True`` 并打 WARNING。
+        * 老条目（``is_new=False``）：只打 ``missing_criterion=True``，**不强制补**
+          —— 补判据需要知道当初想验什么，程序猜不出来（任务书纪律）。
+
+        ★为什么不让它抛：这是盘账路径的增强，判据层出问题不该阻断吸收结果落盘。
+        """
+        try:
+            from nucleus.evolution import hypothesis_criteria as _hc
+            _rep = _hc.annotate_new_entry(entry, treat_as_new=is_new)
+            if _rep.get("skipped"):
+                return
+            _bits = list(_rep.get("warnings") or [])
+            if _rep.get("missing"):
+                _bits.append("缺字段=" + ",".join(_rep["missing"]))
+            if not _bits:
+                return
+            _tag = "（新增）" if is_new else "（老条目）"
+            self._log(LogLevel.WARNING,
+                      f"[409刀1] 假设缺可观测判据 {str(key)[:60]}{_tag}："
+                      f"{'；'.join(_bits)}"
+                      f" ⇒ 已标 missing_criterion=True，不阻断入库")
+        except Exception as _e:
+            silent_exc(_e,
+                       where="verification_learning_hub::_m409_annotate_entry",
+                       level="warning")
+
     def _m335_persist_batch(self, organ: str, tag: str, rules: list,
                             applied: int) -> dict:
         """把**本批规则**的吸收结果 upsert 进盘账（`applied_total` 累加不重置）。
@@ -704,6 +734,9 @@ class VerificationLearningHub:
             _key = _m335_strategy_key(_r)
             _full = "%s|%s|%s" % (organ, tag, _key)
             _e = _bk.get(_full) if isinstance(_bk.get(_full), dict) else {}
+            # ★409刀1：新条目要在**写回 _bk 之前**判出来，
+            #   否则 `_full in _bk` 恒为 True，所有条目都被当成老条目。
+            _m409_is_new = _full not in _bk
             _e.update({
                 "rule": _key,
                 "type": _r.get("type"),
@@ -720,11 +753,19 @@ class VerificationLearningHub:
                 "last_seen": _now,
             })
             _bk[_full] = _e
+            self._m409_annotate_entry(_e, _key, _m409_is_new)
             _n += 1
         if not _n:
             return {"ok": False, "total": 0, "reason": "no_rule"}
         _d["version"] = _M335_STRATEGY_VERSION
         _d["updated_at"] = _now
+        try:
+            from nucleus.evolution import hypothesis_criteria as _hc
+            _d.setdefault("criteria_version", _hc.version())
+        except Exception as _e:
+            silent_exc(_e,
+                       where="verification_learning_hub::_m335_persist_batch",
+                       level="debug")
         try:
             _p = self._m335_save_strategies(_d)
         except OSError as _e:
