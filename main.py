@@ -813,6 +813,27 @@ class PulseFramework:
             self.info_field.set_stream_miner(self.stream_miner)
         self._log(LogLevel.INFO, "事件流挖掘器已激活 (窗口=100, 基线=500)")
 
+        # ★第410批刀3：世界模型对账 —— 分钟级挂 TimeCore 现有 60s 广播（不新建调度器）。
+        #   为什么用条件订阅而不是新线程：time.tick 已经在广播了，多一个订阅方就是
+        #   多一个 handler，生命周期跟着信息场走，停机/重启不需要额外的收尾。
+        try:
+            import config as _cfg_m410wm
+            if getattr(_cfg_m410wm, "ENABLE_M410_HIT_RATE_ALERT", False):
+                from nucleus.const import SystemEvent as _SE_m410wm
+                from nucleus.world_model import hit_rate as _hr_m410wm
+                self._m410_wm_cond = self.info_field.register_condition(
+                    organ_name="world_model",
+                    event_types=[_SE_m410wm.TIME_TICK],
+                    min_priority=1,
+                    handler=lambda _pulse=None: _hr_m410wm.sample(),
+                )
+                self._log(LogLevel.INFO,
+                          "世界模型对账已挂 time.tick（60s 采样窗，条件 %s）"
+                          % (self._m410_wm_cond,))
+        except Exception as _m410wm_e:
+            self._log(LogLevel.DEBUG,
+                      f"世界模型对账挂载失败（不影响主链路）: {_m410wm_e}")
+
         # 频率-相位锁定器——注入共振引擎，为未来自组织协同奠定基础
         self.phase_lock = FrequencyPhaseLock(lock_threshold=0.1)
         if hasattr(self.resonance_engine, 'set_phase_lock'):

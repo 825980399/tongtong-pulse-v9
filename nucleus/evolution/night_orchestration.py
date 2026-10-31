@@ -557,6 +557,31 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         except Exception as _le:
             silent_exc(_le, where="night_orchestration.generate_night_digest.ledger")
 
+        # ★410批刀3：预测命中率日报表 —— 复用同一 04:00 编译点，不新建调度器。
+        try:
+            from nucleus.world_model import hit_rate as _hr410
+            _hp = _hr410.write_report()
+            _hrep = _hr410.report()
+            _htot = _hrep.get("total") or {}
+            _L.append("## 六、预测命中率（world_model · 滚动 24h）")
+            _L.append("")
+            _L.append("- 总命中率：%s ｜ 有判定 **%s** 条（hit %s / miss %s）｜ 无覆盖 %s 条"
+                      % (_htot.get("hit_rate"), _htot.get("covered", 0),
+                         _htot.get("hit", 0), _htot.get("miss", 0),
+                         _htot.get("no_coverage", 0)))
+            _L.append("- 采样窗：%s 个 ｜ 日报表：%s"
+                      % (_hrep.get("windows_sampled", 0), _hp or "未落盘"))
+            _L.append("- 失配中：%s" % (list(_hrep.get("mismatches") or []) or "无"))
+            _L.append("- 已淘汰模式：%s" % (list(_hrep.get("evicted") or []) or "无"))
+            for _et, _t in (_hrep.get("types") or {}).items():
+                if _t.get("covered"):
+                    _L.append("  - `%s`：hit %s / miss %s ⇒ **%s**（无覆盖 %s）"
+                              % (_et, _t["hit"], _t["miss"], _t["hit_rate"],
+                                 _t.get("no_coverage", 0)))
+            _L.append("")
+        except Exception as _he:
+            silent_exc(_he, where="night_orchestration.generate_night_digest.hit_rate")
+
         with open(_digest_path, "w", encoding="utf-8") as _f:
             _f.write("\n".join(_L) + "\n")
         return _digest_path

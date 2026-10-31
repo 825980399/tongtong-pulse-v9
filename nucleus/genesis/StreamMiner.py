@@ -974,6 +974,28 @@ class StreamMiner:
                         self._total_pruned_patterns += 1
         return {"evaluated": len(_details), "pruned": _pruned, "details": _details}
 
+    def evict_pattern(self, event_type: str, reason: str = "") -> bool:
+        """淘汰某事件类型的周期模式（第410批刀3：连续 N 窗命中率过低时调用）。
+
+        只摘「周期模式 + 待验证预测」，**不清历史质量计数** —— 沿用 409 批纪律：
+        淘汰要能追溯，删掉计数等于把"它曾经怎么错"也一起删了。
+        """
+        _key = f"periodic:{event_type}"
+        with self._lock:
+            _had = _key in self._discovered_patterns
+            self._discovered_patterns.pop(_key, None)
+            if self._pending_predictions:
+                self._pending_predictions = [
+                    p for p in self._pending_predictions
+                    if p.get("event_type") != event_type]
+            if _had:
+                self._total_pruned_patterns += 1
+        if _had:
+            from nucleus.logger import get_module_logger as _gml410
+            _gml410("StreamMiner").info(
+                "[410刀3] 淘汰周期模式 %s（%s）", event_type, reason or "-")
+        return _had
+
     # ---- 综合消费入口 ----
 
     def consume(self, horizon_sec: float | None = None) -> dict[str, Any]:

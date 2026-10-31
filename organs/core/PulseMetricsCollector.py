@@ -1840,6 +1840,21 @@ class PulseMetricsCollector(BasePulseOrgan):
         snapshot["emotion_state"] = dict(self._cached_emotion_state) if self._cached_emotion_state else {
             "emotion": "中性", "intensity": 0.0, "trend": {}, "inertia_applied": False,
         }
+
+        # ★410刀3：世界模型对账读数。为什么非要塞进 health_snapshot：InsightBoard 的
+        #   告警条目 query_count 一直是 0（没人看黑板），只有快照是"每 5s 自动被读"的那一路。
+        #   取不到就写 None（不写 0）：没测到 ≠ 测得 0 命中。
+        try:
+            import config as _cfg_wm
+            if getattr(_cfg_wm, "ENABLE_M410_HIT_RATE_ALERT", False):
+                from nucleus.world_model import hit_rate as _hr410
+                snapshot["world_model"] = _hr410.snapshot_for_health()
+            else:
+                snapshot["world_model"] = {"enabled": False}
+        except Exception as _e_wm:
+            silent_exc(_e_wm, where="PulseMetricsCollector::_build_observability_snapshot"
+                                    "[world_model]")
+            snapshot["world_model"] = {"enabled": None, "error": type(_e_wm).__name__}
         return snapshot
 
     # ========== ★403刀2：温/冷指标分频 ==========
