@@ -607,6 +607,31 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         except Exception as _he:
             silent_exc(_he, where="night_orchestration.generate_night_digest.hit_rate")
 
+        # ★412刀1（Step5a 叙事落盘）：挂在**同一 04:00 编译点**，不新建调度器。
+        #   落的是**活体器官**的当日叙事摘要（找不到器官就如实报 organ_missing，
+        #   不 new 一个假的 —— 那写下去就是编造）。
+        try:
+            from nucleus.observability import narrative_store as _ns412
+            _np = _ns412.persist_from_organ()
+            _nsum = _ns412.summary()
+            _L.append("## 七、叙事落盘（Step5a · 412刀1）")
+            _L.append("")
+            _L.append("- 落盘：%s（%s）" % ("PASS" if _np.get("ok") else "未落盘",
+                                            _np.get("reason") or "ok"))
+            _L.append("- 当日文件：%s" % _np.get("path", _ns412.day_path()))
+            _L.append("- 连续天数：**%s** ｜ 回放条数 %s ｜ 有记录天数 %s"
+                      % (_nsum.get("continuous_days"), _nsum.get("replayed_rows"),
+                         _nsum.get("days_with_file")))
+            _L.append("- 状态：%s（坏行 %s）" % (_nsum.get("state"), _nsum.get("bad_lines")))
+            _L.append("")
+        except Exception as _ne412:
+            silent_exc(_ne412, where="night_orchestration.generate_night_digest.narrative_store")
+            _L.append("## 七、叙事落盘（Step5a · 412刀1）")
+            _L.append("")
+            _L.append("- **落盘失败**（已留痕，不阻断摘要）：%s: %s"
+                      % (type(_ne412).__name__, _ne412))
+            _L.append("")
+
         with open(_digest_path, "w", encoding="utf-8") as _f:
             _f.write("\n".join(_L) + "\n")
         return _digest_path

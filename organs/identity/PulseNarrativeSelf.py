@@ -79,6 +79,13 @@ class PulseNarrativeSelf(BasePulseOrgan):
         self._max_reports = 10
         self._report_interval = 0.0
         self._load_narrative_config()
+        # ★412刀1：启动即回放最近 7 天叙事（**落盘口径**）。
+        #   没有文件 ⇒ state=empty，不编造；回放失败只留痕，不许让器官起不来。
+        self._narrative_store_state: dict[str, Any] = {}
+        try:
+            self._narrative_store_state = self.load()
+        except Exception as _e_ns412:
+            silent_exc(_e_ns412, where="PulseNarrativeSelf.__init__ 412刀1 叙事回放")
 
     def _load_narrative_config(self):
         """从config加载叙事自我配置，失败时使用兜底值"""
@@ -197,6 +204,74 @@ class PulseNarrativeSelf(BasePulseOrgan):
             "event_id": event["id"],
             "crisis_detected": crisis is not None,
         }
+
+    # ============ ★412刀1：叙事落盘 / 回放 ============
+
+    def persist(self, now: float | None = None) -> dict[str, Any]:
+        """把当日叙事摘要落到 `data/narrative/narrative_YYYYMMDD.jsonl`（每天一条）。
+
+        ★`headline` / `delta` / `intent` 本批**留空** —— 那是 413 的活，
+          这里填任何值都是编造（411 铁律：取不到就不给）。
+        """
+        try:
+            from nucleus.observability import narrative_store as _ns412
+        except Exception as _e_imp:
+            silent_exc(_e_imp, where="PulseNarrativeSelf.persist 412刀1 import")
+            return {"ok": False, "reason": "import_failed"}
+        if not _ns412.enabled():
+            return {"ok": False, "reason": "disabled"}
+        _now = float(now if now is not None else time.time())
+        _evs = [x for x in (getattr(self, "_narrative_events", None) or [])
+                if isinstance(x, dict)]
+        _cd = _ns412.continuous_days(now=_now)
+        _row = _ns412.row_of(
+            _ns412.day_stamp(_now),
+            generated_at=_now,
+            narrative_events=len(_evs),
+            continuous_days=int(_cd.get("days") or 0),
+            weekly_reports=len(getattr(self, "_weekly_reports", None) or []),
+            events=_evs,
+        )
+        return _ns412.persist_daily(_row, now=_now)
+
+    def load(self, days: int = 7, now: float | None = None) -> dict[str, Any]:
+        """回放最近 N 天 jsonl，恢复 `_narrative_events`（≤150 条，与内存 cap 同口径）。
+
+        Returns:
+            ``{"state", "restored", "continuous_days", "bad_lines", "reason"}``
+            ★`state="empty"`（没落过盘）与 `"partial"`（有文件但读不出）**分开**。
+        """
+        try:
+            from nucleus.observability import narrative_store as _ns412
+        except Exception as _e_imp:
+            silent_exc(_e_imp, where="PulseNarrativeSelf.load 412刀1 import")
+            return {"state": "unavailable", "restored": 0, "continuous_days": 0,
+                    "bad_lines": 0, "reason": "import_failed"}
+        if not _ns412.enabled():
+            return {"state": "disabled", "restored": 0, "continuous_days": 0,
+                    "bad_lines": 0, "reason": "switch_off"}
+        _r = _ns412.load_recent(days=days, now=now)
+        _evs: list[dict] = []
+        for _row in _r.get("rows") or []:
+            for _e in (_row.get("events") or []):
+                if isinstance(_e, dict):
+                    _evs.append(_e)
+        if _evs:
+            _evs = _evs[-150:]
+            self._narrative_events = _evs
+            # id 自增游标必须接上回放的最大 id，否则新事件会与旧事件撞号
+            try:
+                _max_id = max(int(_e.get("id") or 0) for _e in _evs)
+            except Exception as _e_id:
+                silent_exc(_e_id, where="PulseNarrativeSelf.load 412刀1 max_id",
+                           level="debug")
+                _max_id = 0
+            self._record_count = max(int(getattr(self, "_record_count", 0) or 0), _max_id)
+        _cd = _ns412.continuous_days(now=now)
+        return {"state": _r.get("state"), "restored": len(_evs),
+                "continuous_days": int(_cd.get("days") or 0),
+                "bad_lines": int(_r.get("bad_lines") or 0),
+                "reason": _r.get("state") or ""}
 
     def _on_reflect(self, payload: dict) -> dict[str, Any]:
         """自我反思"""
@@ -581,7 +656,18 @@ class PulseNarrativeSelf(BasePulseOrgan):
         5. 关系深度（核心人物互动次数）
         6. 叙事事件丰富度（原有维度）
         """
-        total_events = len(self._narrative_events)  # noqa: F841
+        # ★412刀1：这一行原本算出来**没用**（带 `# noqa: F841`），
+        #   六维里的"维度6 叙事事件丰富度"一直是空的。现在接上，且用**落盘口径**：
+        #   内存条数重启即归零，落盘连续天数才是"我连续存在了多少天"的事实来源。
+        total_events = len(self._narrative_events)
+        _ns_days = 0
+        _ns_state = ""
+        try:
+            _st = getattr(self, "_narrative_store_state", None) or {}
+            _ns_days = int(_st.get("continuous_days") or 0)
+            _ns_state = str(_st.get("state") or "")
+        except Exception as _e_ns:
+            silent_exc(_e_ns, where="PulseNarrativeSelf._generate_life_stage_summary 412刀1")
         dominant_values = sorted(self._dynamic_values.items(), key=lambda x: x[1], reverse=True)
         top_value = dominant_values[0][0] if dominant_values else "学习"
 
@@ -704,6 +790,21 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     _growth_score += 0.8
         except Exception as e:
             self._log(LogLevel.ERROR, f'异常: {e}')
+
+        # 维度6：叙事事件丰富度（★412刀1 接上，落盘口径）
+        #   ★零回归设计：只有**落盘有记录**时才加分 —— 没落过盘的实例
+        #     与改造前逐字一致（不加分、不加信号）。连续天数才是锚点。
+        if _ns_days >= 7:
+            _growth_score += 1.5
+            _growth_signals.append(f"叙事已连续落盘{_ns_days}天，我的故事在时间上是连续的")
+        elif _ns_days >= 3:
+            _growth_score += 0.8
+            _growth_signals.append(f"叙事已连续落盘{_ns_days}天")
+        elif _ns_days >= 1:
+            _growth_score += 0.3
+        elif total_events >= 20:
+            # 落盘还没有、但内存里确实攒了事件 ⇒ 用内存数给个弱信号（不冒充落盘）
+            _growth_score += 0.2
 
         # ===== 综合判定生命周期阶段 =====
         if _growth_score >= 8:
