@@ -245,6 +245,26 @@ def _probe_framework_running(root):
         return None
 
 
+def _framework_down(ctx):
+    """★408 刀3：框架是否**确定**停机。
+
+    Returns:
+        ``True`` = 确定停机（psutil 判到且没有框架主进程）
+        ``False`` = 在跑
+        ``None`` = 判不了（psutil 不可用 / import 失败）
+
+    ★三态而不是两态：调用方必须能区分"没在跑"与"不知道有没有在跑"。
+      把 ``None`` 当 ``True`` 用 = 给所有停机层发万能挡箭牌（406 批 L5 假阳性
+      的教训：那一刀正是因为把"判不了"当成了"没在跑"才误报）。
+    """
+    _run = ctx.get("framework_running", _UNSET)
+    if _run is _UNSET:
+        _run = _probe_framework_running(ctx.get("root"))
+    if _run is None:
+        return None
+    return (not _run)
+
+
 def _ok(layer, name, detail, evidence=None):
     return {"layer": layer, "name": name, "status": PASS, "detail": detail,
             "reason": None, "evidence": evidence or {}}
@@ -371,10 +391,22 @@ def check_l4(ctx):
     _p = os.path.join(ctx["root"], _MONITOR, "causal_chains_%s.jsonl" % _day)
     _hour = time.localtime(float(ctx["now"])).tm_hour
     _ev = {"path": _p, "day": _day, "local_hour": _hour}
+    # ★408 刀3：停机时把「没有台账」判 SKIP 而不是 FAIL —— 与 L5/L6 **同一个**
+    #   `framework_down` 判据、同一个 skip_reason。
+    #   为什么非改不可：停机期间每次提交都会带一条 L4 FAIL ⇒ 整体恒 FAIL ⇒
+    #   「FAIL 有信息量」这句话就失效了（406 批实测：同一个停机事实，L4 判 FAIL
+    #   而 L5/L6 判 SKIP，读数自相矛盾）。
+    #   ★判不了（``None``）**退回 FAIL**：不许把"没判"当成"没事"。
+    _down = _framework_down(ctx)
+    _ev["framework_running"] = None if _down is None else (not _down)
     if not os.path.exists(_p):
         if _hour < 1:
             return _skip("L4", "因果链", "day_too_young",
                          "当天首个小时还没过完（首条小时汇总在 01:00 之后），判不了", _ev)
+        if _down:
+            return _skip("L4", "因果链", "framework_down",
+                         "框架停机，当天没有 causal_chains 台账 —— 停机时本层不判"
+                         "（与 L5/L6 同口径）", _ev)
         return _bad("L4", "因果链", "当天没有 causal_chains 台账", _ev)
     _rows = 0
     _hours = []
@@ -408,6 +440,10 @@ def check_l4(ctx):
     if not _rows:
         if _hour < 1:
             return _skip("L4", "因果链", "day_too_young", "文件在但还没到 01:00", _ev)
+        if _down:
+            return _skip("L4", "因果链", "framework_down",
+                         "框架停机，当天台账里没有 hourly_summary —— 停机时本层不判"
+                         "（与 L5/L6 同口径）", _ev)
         return _bad("L4", "因果链", "当天台账里没有 hourly_summary 记录", _ev)
     _stale = None
     if _hours:

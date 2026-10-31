@@ -310,8 +310,11 @@ class TestL4(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self._td, ignore_errors=True)
 
-    def _ctx(self, _now):
-        return lh.make_context(root=self._td, now=_now, framework_running=False)
+    def _ctx(self, _now, framework_running=False):
+        # ★408 刀3：`framework_running` 现在是 L4 的**判据输入** ——
+        #   停机时"没有台账"是 SKIP 不是 FAIL。要断言 FAIL 必须显式声明"在跑"。
+        return lh.make_context(root=self._td, now=_now,
+                               framework_running=framework_running)
 
     def _path(self, _now):
         return os.path.join(self._td, "data", "monitor",
@@ -325,14 +328,23 @@ class TestL4(unittest.TestCase):
         self.assertEqual(_r["reason"], "day_too_young")
 
     def test_61_missing_after_one_am_is_fail(self):
+        # ★408 刀3 改：只在**框架在跑**时判 FAIL；停机时判 SKIP(framework_down)
+        #   （否则停机期间每次提交都带一条注定红 ⇒「FAIL 有信息量」失效）
         _now = _ts(2026, 10, 30, 15, 0)
-        _r = lh.check_l4(self._ctx(_now))
+        _r = lh.check_l4(self._ctx(_now, framework_running=True))
         self.assertEqual(_r["status"], lh.FAIL)
+
+    def test_61b_missing_after_one_am_but_down_is_skip(self):
+        _now = _ts(2026, 10, 30, 15, 0)
+        _r = lh.check_l4(self._ctx(_now, framework_running=False))
+        self.assertEqual(_r["status"], lh.SKIP)
+        self.assertEqual(_r["reason"], "framework_down")
 
     def test_62_file_without_summary_fail(self):
         _now = _ts(2026, 10, 30, 15, 0)
         _write(self._path(_now), '{"kind":"other"}\n')
-        self.assertEqual(lh.check_l4(self._ctx(_now))["status"], lh.FAIL)
+        self.assertEqual(lh.check_l4(self._ctx(_now, framework_running=True))["status"],
+                         lh.FAIL)
 
     def test_63_ok_pass_with_latest_hour(self):
         _now = _ts(2026, 10, 30, 15, 0)
