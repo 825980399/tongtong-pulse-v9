@@ -26,7 +26,9 @@
   ② 取不到就**直调真实生产者** `PulseCodeLearner.get_stats()`
      ——器官活体从 `SelfAwarenessEngine.set_awareness_organs()` 注册的器官表取
      （308 批接线，中文名/属性名/类名三套键都认）；
-  ③ 两路都取不到 ⇒ `source="unavailable"` 且 `gap` 明确写成**结构性缺口**
+  ③（★411 刀3 新增）再读落盘快照 `data/context/code_progress.json`
+     —— 活体与脉冲都取不到时，上一轮的真实读数仍可用，但 `state="stale"` 必须标注；
+  ④ 三路都取不到 ⇒ `source="unavailable"` 且 `gap` 明确写成**结构性缺口**
      （`no_producer(...)`），**绝不返回 0 冒充读数**。
 
 语义边界：纯只读。本模块不 emit、不写缓存、不改器官内部口径；
@@ -153,7 +155,26 @@ def get_code_learning_stats(info_field: Any = None, organs: Any = None,
             silent_exc(e, where="nucleus.code_learning_stats::get_code_learning_stats:learner",
                        level="warning")
 
-    # ③ 分母兜底（只补分母，绝不补分子）
+    # ③ ★411 刀3：读落盘快照（`data/context/code_progress.json`）
+    #   为什么需要第三路：生产者（PulseCodeLearner 每轮结束）可能还没跑、
+    #   或器官表尚未注册 —— 此时落盘快照就是**上一轮的真实读数**。
+    #   ★必须调在 ① ② 之后：活体读数永远优先于文件（文件可能 stale）。
+    if _understood is None:
+        try:
+            from nucleus.observability import code_progress_store as _m411_cps
+            _snap = _m411_cps.load()
+            if _snap.get("state") in ("ok", "stale") and _snap.get("understood") is not None:
+                _understood = _snap["understood"]
+                if _snap.get("total_methods") is not None:
+                    _total = _snap["total_methods"]
+                _src = "code_progress.json:%s" % _snap.get("state")
+                if _snap.get("state") == "stale":
+                    _gap = "snapshot_stale(age=%ss)" % _snap.get("age_sec")
+        except Exception as e:
+            silent_exc(e, where="nucleus.code_learning_stats::get_code_learning_stats:file",
+                       level="warning")
+
+    # ④ 分母兜底（只补分母，绝不补分子）
     if (_total is None or _total <= 0) and fallback_total:
         _t_fb = _as_count(fallback_total)
         if _t_fb:

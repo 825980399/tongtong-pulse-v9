@@ -1432,6 +1432,25 @@ class PulseCodeLearner(BasePulseOrgan):
             if progress["understood"] % 50 == 0 and progress["understood"] > 0:
                 self._extract_code_risks()
 
+            # ★411 刀3：**每轮学习结束把掌握率落盘**（单一写入口见
+            #   `nucleus.observability.code_progress_store`）。
+            #   为什么放在 `_trace_exit` 之前：追踪出口是"本轮完成"的正式标记，
+            #   先落盘再报完成，避免"报了完成却没留下读数"。
+            #   取不到就传 None —— 该模块会拒绝写 0/0（0 与"没采到"必须可分）。
+            try:
+                from nucleus.observability import code_progress_store as _m411_cps
+                _m411_stats = self.get_stats()
+                _m411_cps.store(
+                    _m411_stats.get("understood"),
+                    _m411_stats.get("total_methods"),
+                    gen="PulseCodeLearner._learn_own_code_structure",
+                    source="live",
+                )
+            except Exception as _m411_cpe:
+                self._log(LogLevel.WARNING,
+                          "[411刀3] 掌握率落盘失败（不影响本轮学习）: %s: %s"
+                          % (type(_m411_cpe).__name__, _m411_cpe))
+
             # ★v17.0 D8预埋：追踪出口
             self._trace_exit("_learn_own_code_structure", {
                 "status": "completed",

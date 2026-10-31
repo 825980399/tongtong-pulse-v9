@@ -536,8 +536,14 @@ class ContextSnapshot(SilentLogMixin):
     # 代码理解进度持久化
 
     def save_code_progress(self, progress_data: dict[str, Any]) -> bool:
-        """
-        保存代码理解进度到独立快照。
+        """保存代码理解进度到独立快照。
+
+        ★411 刀3：**落盘委派给** `nucleus.observability.code_progress_store`。
+        为什么不让两处各写一份：本类此前全仓 **零个实例化点**（`ContextSnapshot(`
+        只出现在定义与自测块），`save_all()` 里的这行调用一次都没执行过 ⇒
+        `data/context/code_progress.json` 从未存在。现在把"写"收成单一入口，
+        本方法只保留**兼容语义**：还没接生产者的老调用方仍能落盘，但会补上
+        `ts`/`gen`（否则新鲜度不可判）。
         """
         # ★P1-9修复：加锁保护
         with self._lock:
@@ -545,15 +551,17 @@ class ContextSnapshot(SilentLogMixin):
                 return True
 
             try:
-                snapshot = {
-                    "version": "v1.0",
-                    "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "understood": progress_data.get("understood", 0),
-                    "total_methods": progress_data.get("total_methods", 0),
-                    "organs_list": progress_data.get("organs_list", []),
-                }
-
-                return self._atomic_write(self._code_progress_path, snapshot)
+                from nucleus.observability import code_progress_store as _m411_cps
+                _r = _m411_cps.store(
+                    progress_data.get("understood"),
+                    progress_data.get("total_methods"),
+                    gen="ContextSnapshot.save_code_progress",
+                    source="live",
+                )
+                if not _r.get("ok"):
+                    _module_logger.warning(
+                        "代码进度保存未落盘: %s", _r.get("reason", ""))
+                return bool(_r.get("ok"))
 
             except Exception as e:
                 _module_logger.error(f"代码进度保存失败: {e}")
