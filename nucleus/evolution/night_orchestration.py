@@ -557,6 +557,31 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         except Exception as _le:
             silent_exc(_le, where="night_orchestration.generate_night_digest.ledger")
 
+        # ★411批刀6（410 遗留①）：周期档案自动重建 —— **必须排在命中率报表之前**，
+        #   否则报表用的还是旧容差（档案过期后七类会退成 no_coverage，读数直接变假）。
+        #   与报表同一 04:00 编译点，不新建调度器（410 红线延续）。
+        try:
+            from nucleus.world_model import periodic_profile as _pp411
+            _prof_written = _pp411.build()
+            _prof_path = _pp411.save_profile(_prof_written)
+            _psum = _pp411.summarize(_prof_written)
+            _L.append("## 五点五、周期档案重建（world_model · 七类）")
+            _L.append("")
+            _L.append("- 产物：%s" % (_prof_path or "**未落盘**"))
+            _L.append("- 七类齐全：%s（ok %s/%s ｜ 分布 %s）"
+                      % ("PASS" if _psum.get("complete") else "FAIL",
+                         _psum.get("ok", 0), _psum.get("total", 0),
+                         _psum.get("by_predict_type", {})))
+            _L.append("- 容差口径：%s" % _psum.get("tolerance_basis", {}))
+            _L.append("")
+        except Exception as _pe411:
+            silent_exc(_pe411, where="night_orchestration.generate_night_digest.periodic_profile")
+            _L.append("## 五点五、周期档案重建（world_model · 七类）")
+            _L.append("")
+            _L.append("- **重建失败**（已留痕，不阻断摘要）：%s: %s"
+                      % (type(_pe411).__name__, _pe411))
+            _L.append("")
+
         # ★410批刀3：预测命中率日报表 —— 复用同一 04:00 编译点，不新建调度器。
         try:
             from nucleus.world_model import hit_rate as _hr410

@@ -103,6 +103,29 @@ PREDICT_TYPE_DESC: dict[str, str] = {
     "burst": "突发型（gap 切批，下一分钟几批）",
 }
 
+#: ★411批刀6：按 σ 定容差的系数（目标 tol ≈ 2σ）。
+#: 410 批用「median × 百分比」，实测同一个 5% 落到 **9.18σ（heart.beat）~1.02σ
+#: （heart.alive）** 两端 —— 前者几乎必中、后者七成命中就判失配。百分比不是
+#: 统计宽度，σ 才是。保留百分比表仅作**样本不足时的回退**。
+SIGMA_K = 2.0
+
+#: p90 对应的正态分位数（用于由 p90-median 反推 σ）
+P90_Z = 1.2816
+
+
+def sigma_k() -> float:
+    """当前生效的 σ 系数（`config.M411_SIGMA_K`，缺省用本模块 SIGMA_K）。
+
+    ★做成函数而不是常量：档案是 04:00 批量重建的，若把系数钉在导入期，
+      改配置就必须重启框架才生效（在线施工下等于改不了）。
+    """
+    try:
+        import config as _c
+        return float(getattr(_c, "M411_SIGMA_K", SIGMA_K))
+    except Exception as _exc:
+        silent_exc(_exc, where="world_model.periodic_profile.sigma_k", level="debug")
+        return SIGMA_K
+
 #: 相对项目根的落盘位置
 PROFILE_REL = os.path.join("data", "world_model", "periodic_profile.json")
 
@@ -219,27 +242,78 @@ def _round(v: float | None, nd: int = 4) -> float | None:
 # --------------------------------------------------------------------- 档案
 
 
+def sigma_from_p90(median: float | None, p90: float | None) -> float | None:
+    """由 median 与 p90 反推标准差 σ 的估计值。
+
+    ★为什么用 p90 而不是样本标准差：`_periodicity_cache` 只保留**最近 N 个时间戳**
+    （410 时 50，411 提到 100），拿样本 std 会被个别抖动主导；p90 对尾部更稳。
+    代价是**假设近似正态**（间隔分布是单峰的，burst 型那条双峰路径不走这里）。
+    """
+    if median is None or p90 is None:
+        return None
+    try:
+        _d = float(p90) - float(median)
+    except (TypeError, ValueError) as _exc:
+        silent_exc(_exc, where="world_model.periodic_profile.sigma_from_p90", level="debug")
+        return None
+    if _d <= 0:
+        # p90 <= median ⇒ 分布退化（全等间隔/样本太少），σ 估计不可用
+        return None
+    return _d / P90_Z
+
+
 def _one_entry(event_type: str, stamps: list[Any]) -> dict[str, Any]:
     """构造单类事件的档案条目。数据不足时 median/p90 为 None（不编造）。"""
     _iv = sorted(intervals_of(stamps))
     _p_type = PREDICT_TYPE.get(event_type, "periodic")
     _pct_cfg = TOLERANCE_PCT.get(event_type)
     _med = _median(_iv)
+    _p90 = _pct(_iv, 0.9)
+    _sigma = sigma_from_p90(_med, _p90)
+
+    # ★411 口径（按 σ 定容差）：σ 估得出来就用 2σ；估不出来才回退到任务书 410 的百分比。
+    #   两种口径**都写进档案**（`tolerance_basis` 标明），读数才可解释。
     _tol = None
+    _tol_pct_sec = None
+    _tol_basis = "none"
     if _pct_cfg is not None and _med is not None:
-        _tol = _med * float(_pct_cfg)
+        _tol_pct_sec = _med * float(_pct_cfg)
+    # ★只有**periodic 型（TOLERANCE_PCT 非 None）**才谈时刻容差。
+    #   count/burst 型（eyes/digest）的 TOLERANCE_PCT 本来就是 None —— 它们预测的是
+    #   "下一分钟多少条/几批"，没有"下一次何时来"这回事。若在这里也按 σ 给个容差，
+    #   会凭空造出 `digest.knowledge tol=186s` 这种荒谬值（实测踩到过），
+    #   还会让下游误以为这两类走的是时刻判据。
+    if _pct_cfg is None:
+        _tol, _tol_basis = None, "none"
+    elif _sigma is not None and _sigma > 0:
+        _k411 = sigma_k()
+        _tol = _k411 * _sigma
+        _tol_basis = "sigma_k%g" % _k411
+    elif _tol_pct_sec is not None:
+        _tol = _tol_pct_sec
+        _tol_basis = "pct"
+    if _tol is not None and _tol <= 0:
+        # ★样本退化（间隔恒 0 / 只有一条间隔）⇒ 百分比口径算出 0.0 秒。
+        #   "容差 0 秒"会被下游读成"必须精确到毫秒"，是**假精度**；
+        #   与 409 批纪律一致：取不到就不给，不拿 0 冒充读数。
+        _tol, _tol_basis = None, "none"
 
     _ok = len(_iv) >= max(1, MIN_SAMPLES - 1)
     _entry: dict[str, Any] = {
         "event_type": event_type,
         "median_interval_sec": _round(_med),
-        "p90_interval_sec": _round(_pct(_iv, 0.9)),
+        "p90_interval_sec": _round(_p90),
+        "sigma_sec": _round(_sigma),
         "sample_count": len(stamps or []),
         "predict_type": _p_type,
         "predict_target": PREDICT_TYPE_DESC.get(_p_type, ""),
         "interval_count": len(_iv),
         "tolerance_pct": _pct_cfg,
+        "tolerance_pct_sec": _round(_tol_pct_sec),
         "tolerance_sec": _round(_tol),
+        "tolerance_basis": _tol_basis,
+        "sigma_ratio": (round(_tol / _sigma, 2)
+                        if (_tol is not None and _sigma) else None),
         "ok": bool(_ok),
     }
     if not _ok:
@@ -414,8 +488,21 @@ def summarize(profile: dict | None = None) -> dict[str, Any]:
         _by_type[_t] = _by_type.get(_t, 0) + 1
         if _e.get("ok"):
             _ok += 1
+    _basis: dict[str, int] = {}
+    _sigma_ratios: list[float] = []
+    for _e in _ev.values():
+        _b = str(_e.get("tolerance_basis") or "none")
+        _basis[_b] = _basis.get(_b, 0) + 1
+        _r = _e.get("sigma_ratio")
+        if isinstance(_r, (int, float)):
+            _sigma_ratios.append(float(_r))
+    _ratio_txt = ("n/a" if not _sigma_ratios else
+                  "%.2f~%.2f（中位 %.2f）" % (min(_sigma_ratios), max(_sigma_ratios),
+                                             sorted(_sigma_ratios)[len(_sigma_ratios) // 2]))
     return {
         "version": (_p or {}).get("version", ""),
+        "tolerance_basis": _basis,
+        "sigma_ratio_range": _ratio_txt,
         "generated_at": (_p or {}).get("generated_at"),
         "total": len(_ev),
         "ok": _ok,

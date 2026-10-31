@@ -69,6 +69,8 @@ class StreamMiner:
 
         # 周期性检测缓存: event_type → [timestamps]
         self._periodicity_cache: dict[str, list[float]] = {}
+        #: ★411刀6：每类保留的周期样本数（410 时是硬编码 50，回放实测样本太少）
+        self._M411_PERIODICITY_KEEP = self._m411_periodicity_keep()
 
         # 关联组件引用
         self.event_stream = None
@@ -95,6 +97,22 @@ class StreamMiner:
         self._total_predictions = 0
         self._total_prediction_hits = 0
         self._total_pruned_patterns = 0
+
+    @staticmethod
+    def _m411_periodicity_keep() -> int:
+        """★411刀6：每类保留的周期样本数（`config.M411_PERIODICITY_KEEP`，缺省 100）。
+
+        非法值（<=0 / 非整数）一律回落 100 —— 这个数是**缓存上限**，
+        写 0 会把周期检测彻底饿死，属于"宁可保守"的参数。
+        """
+        try:
+            import config as _c
+            _v = int(getattr(_c, "M411_PERIODICITY_KEEP", 100))
+            return _v if _v > 0 else 100
+        except Exception as _exc:
+            silent_exc(_exc, where="genesis.StreamMiner:_m411_periodicity_keep",
+                       level="debug")
+            return 100
         self._last_persist_at = 0.0
 
         # ===== ★第410批刀2：分类型预测（periodic 时刻 / count 条数 / burst 批数）=====
@@ -154,8 +172,12 @@ class StreamMiner:
                 self._periodicity_cache[event_type] = []
             self._periodicity_cache[event_type].append(timestamp)
             # 限制缓存大小
-            if len(self._periodicity_cache[event_type]) > 50:
-                self._periodicity_cache[event_type] = self._periodicity_cache[event_type][-50:]
+            # ★411批刀6（410 遗留④）：50 → 100。内存增量 KB 级（每类多 50 个 float），
+            #   换来七类时刻预测的样本翻倍 —— 410 回放里每类只有 2~4 条预测，
+            #   命中率的置信区间宽到没有解释力。
+            if len(self._periodicity_cache[event_type]) > self._M411_PERIODICITY_KEEP:
+                self._periodicity_cache[event_type] = (
+                    self._periodicity_cache[event_type][-self._M411_PERIODICITY_KEEP:])
 
             # ★A-16：事件真实到达 → 校验周期预测命中（仅消费开关开启时；异常不冒泡）
             try:

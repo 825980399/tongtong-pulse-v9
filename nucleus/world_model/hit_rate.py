@@ -283,6 +283,31 @@ def rolling(now: float | None = None, state: dict | None = None) -> dict:
             "types": _types, "total": _tot}
 
 
+def _coverage_block(agg: dict | None) -> dict:
+    """★411刀6：覆盖率 = 有判定 / (有判定 + 无覆盖)。
+
+    为什么必须进报表：410 回放里眼睛帧 60 hit / 8 无覆盖 ≈ 88% 覆盖率，
+    而 `heart.alive` 只有 2 条预测。**低覆盖下的高命中率不是健康证据** ——
+    不给覆盖率，读者会把"只在能判的少数情况里命中"当成"预测很准"。
+    """
+    _agg = agg if isinstance(agg, dict) else {}
+    _t = _agg.get("total") if isinstance(_agg.get("total"), dict) else {}
+    _types = _agg.get("types") if isinstance(_agg.get("types"), dict) else {}
+
+    def _one(d: dict) -> dict:
+        _cov = int(d.get("covered", 0) or 0)
+        _nc = int(d.get("no_coverage", 0) or 0)
+        _den = _cov + _nc
+        return {"covered": _cov, "no_coverage": _nc,
+                "coverage": (round(_cov / _den, 4) if _den > 0 else None)}
+
+    _out = {"total": _one(_t), "types": {}}
+    for _et, _d in _types.items():
+        if isinstance(_d, dict):
+            _out["types"][_et] = _one(_d)
+    return _out
+
+
 def report(now: float | None = None, state: dict | None = None) -> dict:
     """日报表内容（供落盘/工具/测试共用，不写盘）。"""
     _now = float(now if now is not None else time.time())
@@ -300,6 +325,8 @@ def report(now: float | None = None, state: dict | None = None) -> dict:
         "windows_sampled": int(_st.get("windows", 0) or 0),
         "types": _agg["types"],
         "total": _agg["total"],
+        # ★411刀6：覆盖率（低覆盖下的高命中率不算健康）
+        "coverage": _coverage_block(_agg),
         "mismatches": _low,
         "evicted": _evicted,
         "alerts": list(_st.get("alerts") or [])[-20:],
@@ -308,6 +335,7 @@ def report(now: float | None = None, state: dict | None = None) -> dict:
             "evict_below": evict_rate(), "evict_streak": evict_streak(),
             "min_window_samples": MIN_WINDOW_SAMPLES,
             "hit_rate_denominator": "hit+miss（no_coverage 单列，不进分母）",
+            "coverage_denominator": "covered+no_coverage（411刀6 新增，判断读数的可信度）",
         },
     }
 
