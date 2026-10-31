@@ -20,6 +20,9 @@ T0 核实发现这是**两件事被同一个字段名混在一起**：
 本批只做**观测**：算命中、打 DEBUG、把结果放进 context 供日后渲染侧取用；
 **不拼进 prompt**（任务书要求"一周后再开拼"）。开关 `ENABLE_M411_EXPERIENCE_HITS`
 关掉即完全静默。
+
+★412刀2 追加：命中排序对**模板类经验降权**（`experience_governance.is_template`）。
+降权不是删除 —— 模板条目仍在池里、仍可召回，只是不再靠复制得多霸占 top2。
 """
 
 from __future__ import annotations
@@ -108,27 +111,37 @@ def top_hits(question: str, top_k: int = 2,
     except Exception as _e:
         silent_exc(_e, where="observability.experience_hits:top_hits:query", level="debug")
         return []
-    _scored: list[tuple[int, float, dict]] = []
+    _scored: list[tuple[float, float, dict]] = []
     for _e in (_cands or []):
         if not isinstance(_e, dict):
             continue
         _s = score_one(_q, _e)
         if _s <= 0:
             continue
+        # ★412刀2：模板类经验**降权不删除**（权重 1.0 = 不降权）
+        try:
+            from nucleus.observability import experience_governance as _eg412
+            _w = _eg412.retrieval_weight(_e) if _eg412.enabled() else 1.0
+        except Exception as _e_w:
+            silent_exc(_e_w, where="observability.experience_hits:top_hits:weight",
+                       level="debug")
+            _w = 1.0
         try:
             _ts = float(_e.get("timestamp") or 0.0)
         except (TypeError, ValueError) as _exc:
             # ★不是"没有时间戳"，是"时间戳不是数"
             silent_exc(_exc, where="observability.experience_hits:top_hits:ts", level="debug")
             _ts = 0.0
-        _scored.append((_s, _ts, _e))
+        # ★权重放在元组里带回，**不往经验条目上写字段** ——
+        #   池里的 dict 会被落盘，写进去就是把观测口径污染进产物。
+        _scored.append((_s * float(_w), _ts, _e, float(_w)))
     if not _scored:
         return []
     # 先按分数、同分按时间新→旧
-    _scored.sort(key=lambda x: (-x[0], -x[1]))
+    _scored.sort(key=lambda x: (-x[0], -x[1]))   # 先按**加权分**、同分按时间新→旧
     _out: list[dict[str, Any]] = []
     _seen: dict[str, int] = {}
-    for _s, _ts, _e in _scored:
+    for _s, _ts, _e, _w in _scored:
         if len(_out) >= max(1, int(top_k)):
             break
         _txt = _text_of(_e)
@@ -144,6 +157,9 @@ def top_hits(question: str, top_k: int = 2,
         _out.append({
             "id": str(_e.get("id") or ""),
             "score": _s,
+            "score_weighted": round(_s * _w, 2),
+            "weight": _w,
+            "is_template": bool(_e.get("is_template")),
             "text": _txt[:SNIPPET_CHARS],
             "ts": round(_ts, 3) if _ts > 0 else None,
             "motivation": str(_e.get("motivation") or "")[:40],
