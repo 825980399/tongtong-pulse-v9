@@ -4224,25 +4224,6 @@ class PulseInnerWorld(
             _min_hits, _scan = 3, 800
         return max(1, _min_hits), max(50, _scan)
 
-    @staticmethod
-    def _m407_reuse_example_answer() -> bool:
-        """★407 刀2：是否允许把 `matched_example`（别人的问题）当答案返回。
-
-        默认 **False** —— 详见 `config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER` 处的
-        长注释：经验池 128 条**没有任何字段承载答案**，"复用其结论"在数据层面
-        不成立；407 刀1 清理后实测 7 个不同问题全部命中同一条 `unknown` 并返回
-        `'我需要更多的一手资料和实践来建立扎实的认知'`。
-
-        示例:
-            PulseInnerWorld._m407_reuse_example_answer()  ->  False
-        """
-        try:
-            import config as _cfg
-            return bool(getattr(_cfg, "EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", False))
-        except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m407_reuse_example_answer")
-            return False
-
     def _m406_knowledge_hit_count(self, question: str) -> int:
         """★406 刀3：本地知识「命中条数」探针（零模型、零副作用）。
 
@@ -4434,8 +4415,21 @@ class PulseInnerWorld(
             # 调用对应的推理算子
             _experience_result = None
             if _use_default:
-                # ★P2-25：unknown/空类型走默认内容相似度匹配（复用经验库最相近结论）
-                _experience_result = self._derive_experience_default(ctx.question, _exp_match)
+                # ★408 刀1：这条路**不再产出答案**。
+                #   经验池 128 条的全部键（confidence / derivation_type /
+                #   example_question / features / source / timestamp / polluted /
+                #   quality_flag / cleanup_*）里**没有任何字段承载答案** —— 407 T0 实测。
+                #   原实现返回的 `matched_example` 是 `example_question[:80]`，
+                #   即**另一个人的问题**；407 用开关堵住，408 把整条路删掉：
+                #   命中仍留痕（谁被命中、命中什么），答案一律交 `_fallback_to_lung_model()`。
+                #   ★为什么不是"从 example_question 里猜答案"：猜出来的东西没法验证，
+                #     等于把不确定输出伪装成确定输出 —— 比直接说"我去问大模型"更糟。
+                self._log(LogLevel.INFO,
+                          f"[408刀1] 未标注类型经验仅作参考、不当答案: "
+                          f"type={_exp_type or '空'} confidence="
+                          f"{_exp_match.get('confidence', 0):.2f} "
+                          f"matched={str(_exp_match.get('matched_example') or '')[:40]!r}"
+                          f" ⇒ 走大模型兜底")
             elif _exp_type == "deductive":
                 _experience_result = self._derive_deductive_chain(ctx.question)
             elif _exp_type == "inductive":
@@ -4475,8 +4469,10 @@ class PulseInnerWorld(
                 }, priority=7, layer="L2")
                 return {"status": f"experience_{_status_type}", "answer": _experience_result}
 
-            # 经验库判断了类型但推理算子失败 → 走大模型兜底或诚实回答
-            self._log(LogLevel.INFO, f"经验匹配类型={_exp_type}但推理算子返回None，走兜底")
+            # 经验库判到类型但推理算子没产出（或本就是未标注类型、不再直接给答案）
+            # → 走大模型兜底或诚实回答
+            self._log(LogLevel.INFO,
+                      f"经验匹配类型={_exp_type or '空'}但推理算子未产出答案，走兜底")
             _fallback_result = self._fallback_to_lung_model(ctx, ctx.guidance)
             if _fallback_result:
                 # 替换返回状态为 experience_failed 系列
@@ -4493,39 +4489,6 @@ class PulseInnerWorld(
         except Exception as _exp_e:
             self._log(LogLevel.DEBUG, f"经验匹配路由异常: {_exp_e}")
             return None
-
-    def _derive_experience_default(self, question: str, exp_match: dict) -> str | None:
-        """
-        ★P2-25：unknown/空类型经验的默认匹配逻辑（基于内容相似度）。
-
-        ★407刀2 修正：原实现把 `matched_example`（= `example_question[:80]`，
-          即**另一个人的问题**）直接 return 出去当答案 —— 而 docstring 写的是
-          "直接复用其结论"。两者都不成立：
-            · `search()` 返回的 `matched_example` 取自 `example_question`；
-            · 经验池全部键里**没有任何字段承载答案**（407 T0 实测 128 条）。
-          407 刀1 清理污染条后这条路被推到台前：7 个不同问题全部命中同一条
-          `unknown` 并返回 `'我需要更多的一手资料和实践来建立扎实的认知'`。
-          刀2 把远程类型排除出候选集后，能命中的几乎只剩 `unknown`，
-          这条路会从"几乎不可达"变成"常态可达" ⇒ 必须同批处理。
-
-        返回:
-            仅在 `config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER=True` 时返回
-            `matched_example`（407 前行为，仅供对照排查）；默认返回 None，
-            由调用方走既有的 `_fallback_to_lung_model()` 兜底 / 诚实回答。
-        """
-        if not exp_match:
-            return None
-        if not self._m407_reuse_example_answer():
-            _ex = str(exp_match.get("matched_example") or "")
-            self._log(LogLevel.DEBUG,
-                      f"[407刀2] 不复用 example_question 当答案: "
-                      f"type={exp_match.get('derivation_type', '') or '-'} "
-                      f"matched={_ex[:40]!r} ⇒ 回退本地检索/大模型兜底")
-            return None
-        _example = exp_match.get("matched_example")
-        if not _example or not isinstance(_example, str):
-            return None
-        return _example
 
     def _detect_conflict_exclusive(self, ctx: "PulseInnerWorld.InferenceContext"):
         """

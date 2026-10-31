@@ -10,8 +10,8 @@
   E `record()` 去重显式传 `()` —— 远程类型条目之间**仍能互相去重**。
   F 路由侧（AST）：`_SKIP_TYPES` 定义在 `search()` 调用**之前**，且作为
     `exclude_types` 实参传入；清单本身**一字未改**（任务书明令）。
-  G 刀2 配套：`_derive_experience_default` 默认返回 None（不复用别人的问题当答案），
-    开关打开才恢复 407 前行为。
+  G 刀2 配套（★408 批改）：错答案路已被**整条删除** —— 不是"默认关"，而是符号
+    在类/配置/源码里都不存在，连"打开"的入口都没有。
 
 ★为什么 F 组要用 AST 而不是文本包含：
   `_SKIP_TYPES` 在 `_detect_experience_route` 里出现 4 次（注释 2 次 + 定义 + 判断），
@@ -346,6 +346,10 @@ class TestF_RouterWiring(unittest.TestCase):
 
 # ------------------------------------------------------------------ G 刀2 配套
 class TestG_NoExampleAsAnswer(unittest.TestCase):
+    """★408 批改：407 是"开关关掉"，408 把整条错答案路**删掉** ⇒ 断言从
+    「开关双向」改成「符号结构上不存在」。断言强度不降：之前能"打开"，
+    现在连打开的办法都没有。"""
+
     MATCH = {
         "derivation_type": "unknown",
         "confidence": 0.68,
@@ -353,41 +357,28 @@ class TestG_NoExampleAsAnswer(unittest.TestCase):
         "matched_example": "我需要更多的一手资料和实践来建立扎实的认知",
     }
 
-    def _fake(self):
+    def test_60_derive_method_gone(self):
+        """`_derive_experience_default` 已从类上删除（连"被调用"的可能都没有）。"""
         from organs.brain.PulseInnerWorld import PulseInnerWorld
+        self.assertFalse(hasattr(PulseInnerWorld, "_derive_experience_default"))
 
-        class _F:
-            pass
+    def test_61_switch_method_gone(self):
+        """407 那条判断"是否复用据例"的静态判据也一并删除。"""
+        from organs.brain.PulseInnerWorld import PulseInnerWorld
+        self.assertFalse(hasattr(PulseInnerWorld, "_m407_reuse_example_answer"))
 
-        f = _F()
-        f._m407_reuse_example_answer = PulseInnerWorld._m407_reuse_example_answer
-        f._log = lambda *a, **k: None
-        return PulseInnerWorld, f
-
-    def test_60_default_returns_none(self):
-        """默认：不复用别人的问题当答案。"""
-        IW, f = self._fake()
-        with patch("config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", False, create=True):
-            self.assertIsNone(IW._derive_experience_default(f, "什么是量子纠缠", self.MATCH))
-
-    def test_61_switch_on_restores_old_behaviour(self):
-        """开关打开 ⇒ 恢复 407 前行为（对照排查用）。"""
-        IW, f = self._fake()
-        with patch("config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", True, create=True):
-            self.assertEqual(self.MATCH["matched_example"],
-                             IW._derive_experience_default(f, "什么是量子纠缠", self.MATCH))
-
-    def test_62_empty_match_still_none(self):
-        """空 match 一律 None —— 与开关无关。"""
-        IW, f = self._fake()
-        with patch("config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", True, create=True):
-            self.assertIsNone(IW._derive_experience_default(f, "x", {}))
-            self.assertIsNone(IW._derive_experience_default(f, "x", None))
-
-    def test_63_config_default_is_false(self):
-        """config 里的默认值必须是 False（默认要选"不出事"的那一边）。"""
+    def test_62_switch_gone_from_config(self):
+        """config 里不再有该开关 —— 不存在"打开它"的入口。"""
         import config
-        self.assertIs(False, getattr(config, "EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", True))
+        self.assertFalse(hasattr(config, "EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER"))
+
+    def test_63_no_source_reference(self):
+        """生产源码里不再引用这三个符号（AST 层，注释不算调用）。"""
+        _src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "organs", "brain", "PulseInnerWorld.py"),
+                    "rb").read().decode("utf-8", "replace")
+        for _sym in ("_derive_experience_default", "_m407_reuse_example_answer"):
+            self.assertNotIn(_sym, _src, "%s 仍在源码里" % _sym)
 
 
 if __name__ == "__main__":
