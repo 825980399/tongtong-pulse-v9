@@ -5210,7 +5210,23 @@ class PatchManager:
                                 f"[效果验证] 补丁{patch['id'][:12]} 已应用并通过验证: "
                                 f"{_verdict.get('reason', '')}")
                     except Exception as e:
-                        _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                        # ★411刀2：这条分支就是任务书说的"吞异常"处 —— 实测它**不是静默**
+                        #   （本来就在打 warning），但**没有上下文**：不知道是哪个补丁、
+                        #   断在哪一步。加 patch_id + 阶段 + 异常类型，才能与
+                        #   `patch_history.effect_verify_state="missing"` 对上账。
+                        _pid_411 = str(patch.get("id") or "")[:24]
+                        _module_logger.warning(
+                            "[411刀2][效果验证失败] patch_id=%s stage=verify_or_writeback "
+                            "err=%s: %s ⇒ 该补丁将保持 effect_verify_state=missing"
+                            "（这是**验证未完成**，不是「验证不通过」）",
+                            _pid_411, type(e).__name__, str(e)[:200])
+                        try:
+                            patch["effect_verify_error"] = "%s: %s" % (
+                                type(e).__name__, str(e)[:180])
+                        except Exception as _e_mark:
+                            silent_exc(_e_mark,
+                                       where="PatchManager::apply effect_verify_error标记",
+                                       level="debug")
                     # ★审美判据深化（E6）：C/D级补丁附审美提示，不阻断闭环
                     _aes_note = None
                     if patch.get("aesthetic_grade") in ("C", "D"):
