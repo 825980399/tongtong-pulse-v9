@@ -6814,3 +6814,26 @@ ENABLE_COLD_STORAGE = True
 #
 # 关闭本开关 ⇒ `ReasoningExperience.record()` 恢复 407 前的行为（来者不拒）。
 EXPERIENCE_PROMPT_GUARD = True
+
+# ========== ★407 批：经验路由「复用 example_question 当答案」总闸 ==========
+# 407 T0 实测：`ReasoningExperience.search()` 返回的 `matched_example` 是
+# **另一个问题的前 80 字**，而 `PulseInnerWorld._derive_experience_default()`
+# 直接把它 `return` 出去，经 `_enhance_answer()` 后作为**最终答案** emit。
+# 更根本的是：经验池 128 条的全部键只有
+# `confidence / derivation_type / example_question / features / source / timestamp
+#  / polluted / pollution_reason / quality_flag / quality_weight / cleanup_*` ——
+# **没有任何一个字段承载答案**。所以「直接复用其结论」在数据层面根本不成立，
+# docstring 与代码不符是历史遗留。
+#
+# 后果实测（407 刀1 清理后）：7 个不同问题（`什么是量子纠缠`／`请解释一下光合作用`／
+# `1+1 等于几` …）**全部**命中同一条 `unknown`/`local_fallback`，返回
+# `'我需要更多的一手资料和实践来建立扎实的认知'` —— 一句和被问的事毫无关系的话。
+# 刀2 把远程类型从候选集排除后，能命中的几乎只剩 `unknown` ⇒ 这条路会从
+# "被污染条挤占、几乎不可达"变成"**常态可达**"，等于用一个 bug 换另一个 bug。
+#
+# 关闭（默认）⇒ `_derive_experience_default()` 返回 None ⇒ 路由走既有的
+# `_fallback_to_lung_model()`（大模型兜底 / 诚实回答），行为更正确。
+# 打开 ⇒ 恢复 407 前行为（把别人的问题当答案），仅供对照排查用。
+# ★为什么默认是 False 而不是 True：这个能力本身就错。留 True 等于默许错答案
+#   上线，等到出问题再关。默认值要选"不出事"的那一边。
+EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER = False

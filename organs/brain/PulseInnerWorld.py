@@ -4224,6 +4224,25 @@ class PulseInnerWorld(
             _min_hits, _scan = 3, 800
         return max(1, _min_hits), max(50, _scan)
 
+    @staticmethod
+    def _m407_reuse_example_answer() -> bool:
+        """★407 刀2：是否允许把 `matched_example`（别人的问题）当答案返回。
+
+        默认 **False** —— 详见 `config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER` 处的
+        长注释：经验池 128 条**没有任何字段承载答案**，"复用其结论"在数据层面
+        不成立；407 刀1 清理后实测 7 个不同问题全部命中同一条 `unknown` 并返回
+        `'我需要更多的一手资料和实践来建立扎实的认知'`。
+
+        示例:
+            PulseInnerWorld._m407_reuse_example_answer()  ->  False
+        """
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER", False))
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m407_reuse_example_answer")
+            return False
+
     def _m406_knowledge_hit_count(self, question: str) -> int:
         """★406 刀3：本地知识「命中条数」探针（零模型、零副作用）。
 
@@ -4347,7 +4366,15 @@ class PulseInnerWorld(
         try:
             from nucleus.mnemosyne.ReasoningExperience import get_reasoning_experience
             _reasoning_exp = get_reasoning_experience()
-            _exp_match = _reasoning_exp.search(ctx.question)
+            # ★407刀2：`_SKIP_TYPES` 提到 `search()` **之前**定义，并作为
+            #   `exclude_types` 注入检索层 —— 让这些条目在**打分之前**就出候选集。
+            #   407 前是"打完分、拿下 top1、再在下面 if 里整类砍掉 return None"：
+            #   结果是真经验永远排第 2、3 名，埋点里只看到 `hit=0`，
+            #   分不清"库里没货"和"被类型闸挡了"。
+            #   ★清单本身**一字未改**（407 任务书明令）；只改它生效的**时机**。
+            #   下面 4364 那一处判断保留作双保险（检索层被绕过时仍然拦）。
+            _SKIP_TYPES = ("remote_api_confirmed", "remote_api")  # 远程经验，本地不执行
+            _exp_match = _reasoning_exp.search(ctx.question, exclude_types=_SKIP_TYPES)
             # ★406 刀3：阈值实测埋点。位置在 search() 之后、任何类型/算子判断之前 ——
             #   这样"命中了但被类型闸挡掉"也能在分布里看见，而不是只剩一个 hit=0。
             if self._m406_route_trace_on():
@@ -4361,7 +4388,7 @@ class PulseInnerWorld(
                 "deductive", "inductive", "analogical", "conflict_resolution",
                 "multi_variable", "long_term_evolution", "meta_reflection",
             }
-            _SKIP_TYPES = ("remote_api_confirmed", "remote_api")  # 远程经验，本地不执行
+            # ★407刀2：清单已提到 `search()` 之前定义（见上），此处只做判断。
             _exp_type = _exp_match.get("derivation_type", "")
             if _exp_type in _SKIP_TYPES:
                 self._log(LogLevel.DEBUG,
@@ -4470,10 +4497,30 @@ class PulseInnerWorld(
     def _derive_experience_default(self, question: str, exp_match: dict) -> str | None:
         """
         ★P2-25：unknown/空类型经验的默认匹配逻辑（基于内容相似度）。
-        经验库已按内容相似度检索到最相近的既有经验，直接复用其结论，
-        不再因类型未标注而整条跳过回退本地检索。
+
+        ★407刀2 修正：原实现把 `matched_example`（= `example_question[:80]`，
+          即**另一个人的问题**）直接 return 出去当答案 —— 而 docstring 写的是
+          "直接复用其结论"。两者都不成立：
+            · `search()` 返回的 `matched_example` 取自 `example_question`；
+            · 经验池全部键里**没有任何字段承载答案**（407 T0 实测 128 条）。
+          407 刀1 清理污染条后这条路被推到台前：7 个不同问题全部命中同一条
+          `unknown` 并返回 `'我需要更多的一手资料和实践来建立扎实的认知'`。
+          刀2 把远程类型排除出候选集后，能命中的几乎只剩 `unknown`，
+          这条路会从"几乎不可达"变成"常态可达" ⇒ 必须同批处理。
+
+        返回:
+            仅在 `config.EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER=True` 时返回
+            `matched_example`（407 前行为，仅供对照排查）；默认返回 None，
+            由调用方走既有的 `_fallback_to_lung_model()` 兜底 / 诚实回答。
         """
         if not exp_match:
+            return None
+        if not self._m407_reuse_example_answer():
+            _ex = str(exp_match.get("matched_example") or "")
+            self._log(LogLevel.DEBUG,
+                      f"[407刀2] 不复用 example_question 当答案: "
+                      f"type={exp_match.get('derivation_type', '') or '-'} "
+                      f"matched={_ex[:40]!r} ⇒ 回退本地检索/大模型兜底")
             return None
         _example = exp_match.get("matched_example")
         if not _example or not isinstance(_example, str):

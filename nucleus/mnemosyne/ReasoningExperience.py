@@ -256,10 +256,26 @@ class ReasoningExperience(SilentLogMixin):
             return "conflict_request"
         return "general"
     # ========== 经验检索 ==========
-    def search(self, question: str) -> dict[str, Any] | None:
+    def search(self, question: str,
+               exclude_types: "tuple[str, ...] | None" = None) -> dict[str, Any] | None:
         """
         在经验库中搜索与当前问题结构最相似的历史经验。
-        
+
+        Args:
+            question: 待匹配的问题
+            exclude_types: ★407刀2 要在**打分之前**整类排除的 `derivation_type`。
+                `None`（默认）= 不排除（407 前行为，向后兼容）；
+                `()` = 显式不排除（调用方有意为之，与 None 等价但语义更明确）。
+                ★为什么由**调用方注入**而不是在检索层硬编码 `_SKIP_TYPES`：
+                  「远程经验本地不执行」是**路由侧**的决策，清单属路由知识。
+                  检索层再抄一份必然漂移（两份清单各改一半 = 谁都不知道真实边界）。
+                  所以检索层只负责"按给定清单过滤"，清单本身留在
+                  `PulseInnerWorld._detect_experience_route` 那一处。
+                ★为什么**必须在打分之前**排除而不是命中后再判：
+                  命中后再判 = 先让错的赢、再宣布比赛作废 —— 打分阶段仍然被
+                  这些条目污染（它们拿走 top1，真经验永远排第 2、3 名），
+                  埋点里也只会看到 `hit=0`，看不出"是被类型闸挡的"。
+
         Returns:
             {"derivation_type": str, "confidence": float, "source": str, "matched_example": str}
             如果无匹配返回None
@@ -272,6 +288,8 @@ class ReasoningExperience(SilentLogMixin):
             "hit": False,
             # ★407刀1：污染闸排除条数（0 = 库里没有污染条 / 闸门关着）
             "n_excluded_polluted": 0,
+            # ★407刀2：类型闸排除条数（0 = 调用方没传 exclude_types / 无该类型条目）
+            "n_excluded_type": 0,
         }
         current_features = self.extract_structural_features(question)
 
@@ -283,9 +301,16 @@ class ReasoningExperience(SilentLogMixin):
         #   命中后再判污染等于「先让错的赢，再宣布比赛作废」。
         _m407_gate = self._m407_polluted_gate_on()
         _m407_polluted = 0
+        # ★407刀2：类型闸。与污染闸同一个位置（打分之前），也同一个理由。
+        #   `exclude_types=None` ⇒ 不过滤，407 前的调用点零影响。
+        _m407_ex_types = tuple(exclude_types or ())
+        _m407_typed = 0
         for exp in self._experiences:
             if _m407_gate and not _m407_is_clean(exp):
                 _m407_polluted += 1
+                continue
+            if _m407_ex_types and exp.get("derivation_type", "") in _m407_ex_types:
+                _m407_typed += 1
                 continue
             exp_features = exp.get("features", {})
             if not exp_features:
@@ -316,10 +341,16 @@ class ReasoningExperience(SilentLogMixin):
         # ★407刀1：污染闸的读数（排除多少条）必须与统计口径一起落盘，
         #   否则"分数掉了"与"库里少了货"两种事实分不开。
         self.last_search_diagnostics["n_excluded_polluted"] = int(_m407_polluted)
-        if _m407_polluted:
+        self.last_search_diagnostics["n_excluded_type"] = int(_m407_typed)
+        # ★407刀2：候选集变化必须一行看全 —— 只报"排除类型 3 条"看不出
+        #   是"库里只有 3 条这类"还是"总共 200 条里排掉 3 条"。
+        _m407_left = len(self._experiences) - _m407_polluted - _m407_typed
+        if _m407_polluted or _m407_typed:
             self._log(LogLevel.DEBUG,
-                      f"[407刀1] 检索候选集: 总={len(self._experiences)} "
-                      f"排除污染={_m407_polluted} 剩余={len(self._experiences) - _m407_polluted}")
+                      f"[407刀2] 检索候选集: 总={len(self._experiences)} "
+                      f"排除污染={_m407_polluted} 排除类型={_m407_typed}"
+                      f"{'(' + ','.join(_m407_ex_types) + ')' if _m407_typed else ''} "
+                      f"剩余={_m407_left} 参与打分")
         if _is_hit:
             return {
                 "derivation_type": best_match.get("derivation_type", ""),
@@ -396,10 +427,11 @@ class ReasoningExperience(SilentLogMixin):
         features = self.extract_structural_features(question)
 
         # 检查是否已存在高度相似的经验
-        # ★407刀2 预告：刀2 会给 `search()` 加 `exclude_types` 参数，届时这里要显式传
-        #   `exclude_types=()` —— 去重是**库内自洽**判断，不该因为"路由侧不读远程条"
-        #   而让远程条互相之间失去去重。刀1 阶段 `search()` 还没有该参数，不能传。
-        existing = self.search(question)
+        # ★407刀2：这里**显式**传 `exclude_types=()`。
+        #   去重是「库内自洽」判断：问的是"这条经验库里有没有同一条"，
+        #   与"路由侧读不读远程条"无关。若跟着路由默认值排除远程类型，
+        #   同一模板 prompt 会被重复记 N 条（因为每次去重都看不见同类）。
+        existing = self.search(question, exclude_types=())
         if existing and existing.get("confidence", 0) >= 0.85:
             # 更新已有经验的来源和置信度
             for exp in self._experiences:
