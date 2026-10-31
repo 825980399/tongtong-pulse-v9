@@ -10306,6 +10306,22 @@ class PulseInnerWorld(
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
         # ===== v22.0 P3新增结束 =====
 
+        # ===== ★411 刀4：经验池命中（**只记不拼**） =====
+        # 为什么用独立键 `experience_hits` 而不是复用 `search_experience`：
+        #   后者是**搜索工具经验**（best_tool / success_rate，服务"该用哪个检索工具"），
+        #   数据源 data/context/search_experience.json；经验池那 378 条体验记忆是另一回事。
+        #   直接覆盖会让下游读到不存在的 best_tool ⇒ 语义污染。
+        # 本批只算命中、打 DEBUG、把结果留在 context；**不拼进 prompt**（任务书要求一周后再开拼）。
+        context["experience_hits"] = []
+        context["experience_hit_n"] = 0
+        try:
+            from nucleus.observability import experience_hits as _m411_eh
+            _m411_obs = _m411_eh.observe(question)
+            context["experience_hits"] = list(_m411_obs.get("hits") or [])
+            context["experience_hit_n"] = int(_m411_obs.get("n") or 0)
+        except Exception as _m411_ehe:
+            silent_exc(_m411_ehe, where="PulseInnerWorld._build_memory_context 411刀4 经验命中")
+
         return context
     def _analyze_relation_signals(self, question: str, user_name: str):
         """
