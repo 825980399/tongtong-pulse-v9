@@ -632,6 +632,36 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                       % (type(_ne412).__name__, _ne412))
             _L.append("")
 
+        # ★412刀4：O3 删死代码 delete_only **dry-run 报表**（每天统计，不真 apply）。
+        #   挂在同一 04:00 编译点，不新建调度器。真调用图分析约 20s，
+        #   一天一次可接受；分析失败只留痕，不阻断摘要。
+        try:
+            from nucleus.evolution import o3_delete_dryrun as _dr412
+            _rep = _dr412.report(sample=8)
+            _L.append("## 八、O3 删死代码 dry-run（412刀4 · 只统计不 apply）")
+            _L.append("")
+            _L.append("- 若开闸将放行：**%s** 条（O3 判死族 %s 条，不可判 %s 条）"
+                      % (_rep.get("eligible"), _rep.get("o3_total"),
+                         _rep.get("undecidable")))
+            _L.append("- 调用图：state=%s 孤儿 %s 个 / 覆盖文件 %s"
+                      % (_rep["graph"]["state"], _rep["graph"]["orphans"],
+                         _rep["graph"]["files"]))
+            _L.append("- 拒因分布：%s" % json.dumps(_rep.get("rejected") or {},
+                                                  ensure_ascii=False))
+            for _s in (_rep.get("samples") or [])[:8]:
+                _L.append("  · %s ::%s（%s L%s）"
+                          % (_s["file"], _s["method"], _s["id"], _s["line"]))
+            _L.append("- 说明：%s" % (_rep.get("reason") or "判据见 basis 字段"))
+            _L.append("")
+        except Exception as _oe412:
+            silent_exc(_oe412,
+                       where="night_orchestration.generate_night_digest.o3_delete_dryrun")
+            _L.append("## 八、O3 删死代码 dry-run（412刀4 · 只统计不 apply）")
+            _L.append("")
+            _L.append("- **报表失败**（已留痕，不阻断摘要）：%s: %s"
+                      % (type(_oe412).__name__, _oe412))
+            _L.append("")
+
         with open(_digest_path, "w", encoding="utf-8") as _f:
             _f.write("\n".join(_L) + "\n")
         return _digest_path
