@@ -1021,6 +1021,13 @@ class PatchManager:
                     "[补丁自动审批][M96] 目标为安全护栏函数，转人工审批: %s",
                     patch.get("method", ""))
                 return False
+            # ★406刀4：diff 窄闸（只收窄）。既有判据不看"动了什么"，这里补上。
+            _m406_ok, _m406_why = PatchManager._m406_narrow_gate(patch)
+            if not _m406_ok:
+                _module_logger.info(
+                    "[补丁自动审批][406窄闸] 本地低风险放行被拦下(%s): %s:%s",
+                    _m406_why, patch.get("file", ""), patch.get("method", ""))
+                return False
             return True
         except Exception as _e:
             _module_logger.debug(
@@ -1089,6 +1096,14 @@ class PatchManager:
             if PatchManager._m80_is_core_file(_fp):
                 return False
             if str(patch.get("method", "")) in PatchManager._M96_NO_AUTO_PATCH_METHODS:
+                return False
+            # ★406刀4：diff 窄闸（只收窄）。B 通道此前也只看 trust/risk/类型，
+            #   不看"动了什么"；本闸是 PATCH_M406_NARROW_GATE 控制的可回退增量。
+            _m406_ok, _m406_why = PatchManager._m406_narrow_gate(patch)
+            if not _m406_ok:
+                _module_logger.info(
+                    "[T-101a][406窄闸] 低风险放行被拦下(%s): %s:%s",
+                    _m406_why, patch.get("file", ""), patch.get("method", ""))
                 return False
             return True
         except Exception:
@@ -2028,6 +2043,31 @@ class PatchManager:
         if _rank is None:
             _rank = PatchManager._M344_RISK_RANK.get(_raw)
         return int(_rank) if _rank is not None else None
+
+    @staticmethod
+    def _m406_narrow_gate(patch: dict) -> tuple:
+        """★406刀4：免签通道的**最后一道 diff 窄闸**（只收窄、不放宽）。
+
+        为什么需要：`_m85` / `_m101` 两条通道都只看 trust / risk_level / issue_type，
+        **从不看"这次改动到底动了什么"** —— 实测 pending 里 8 条补丁全部走到
+        `runtime_verified + verified=True` 却 `applied=False`，而它们动的都是逻辑行。
+        任务书对 low 的定义是「只改注释/文档/测试/配置默认值 False」⇒ 本闸把这句变成代码。
+
+        Returns:
+            `(allowed, why)`。判据实现在 `nucleus/evolution/patch_risk_gate.gate_allows`：
+              · `PATCH_M406_NARROW_GATE=False` ⇒ `(True, "gate_off")`（完全回退 406 前行为）
+              · 否则只有 diff∈{comment_only,doc_only,test_only} ∧ 单测全绿 ∧ 不跨器官
+                ∧ 不碰审批池 才 `(True, "low:<kind>")`，其余一律 `(False, ...)`
+
+        ★异常 → `(False, "gate_error")`：本闸是"前置"约束，闸自己坏了不该放行
+          （与 `_m101` except 的保守口径一致），且经 silent_exc 留痕。
+        """
+        try:
+            from nucleus.evolution.patch_risk_gate import gate_allows
+            return gate_allows(patch)
+        except Exception as e:
+            silent_exc(e, where="nucleus.reasoning.PatchManager::_m406_narrow_gate")
+            return False, "gate_error"
 
     @staticmethod
     def _m346_is_low_risk(risk_level) -> bool:

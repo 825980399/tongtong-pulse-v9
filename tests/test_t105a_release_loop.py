@@ -40,6 +40,18 @@ def _master_on(monkeypatch):
     """
     import config
     monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
+    _gate_off(monkeypatch)
+
+
+def _gate_off(monkeypatch):
+    """★406刀4：关掉「diff 窄闸」，隔离出本文件要验的 B 通道自身判据。
+
+    本文件夹具是 `return 1 → return 2` 的真实逻辑改动 ⇒ 窄闸在位时
+    test_B 的"合格补丁须放行"必然被拦。窄闸在位会拦这件事由
+    test_F_406_narrow_gate_blocks_logic_diff 钉住，不靠本文件。
+    """
+    import config
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", False, raising=False)
 
 
 class _DummyBackup:
@@ -80,6 +92,27 @@ def _low_risk_patch(target, **kw):
     }
     _p.update(kw)
     return _p
+
+
+def test_F_406_narrow_gate_blocks_logic_diff():
+    """★406刀4：本文件名下的"合格低风险补丁"（逻辑改动）在窄闸在位时不再免签。
+
+    与 test_B 是同一个 `_low_risk_patch` 夹具 —— test_B 关窄闸验"通道本身能放行"，
+    本条开窄闸验"逻辑改动仍被拦"。两条并排，收窄范围一目了然。
+    """
+    import config
+    from nucleus.evolution.patch_risk_gate import gate_allows, judge
+
+    assert getattr(config, "PATCH_M406_NARROW_GATE", None) is True, (
+        "★本用例要求窄闸在位（默认 True）；若被关掉则收窄失效")
+    _p = _low_risk_patch("tmp/t105a_gate_probe.py",
+                         runtime_verify_result={"verified": True, "baseline": 3},
+                         baseline_errors=3)
+    _j = judge(_p)
+    assert _j["diff_kind"] == "logic", _j
+    assert _j["eligible"] is False, _j
+    _ok, _why = gate_allows(_p)
+    assert _ok is False and _why == "medium:logic", (_ok, _why)
 
 
 def test_A_enqueue_without_nested_verify_not_released(monkeypatch):
@@ -123,12 +156,13 @@ def test_B_enqueue_nested_verified_and_baseline_released(monkeypatch):
     assert _p.get("release_reason") == "low_risk_release:T-101a"
 
 
-def test_C_post_verify_recheck_releases():
+def test_C_post_verify_recheck_releases(monkeypatch):
     """★C：验证后复查 ⇒ 放行（直接驱动补回边同款助手 _m105_try_release_low_risk）。
 
     对应 ``SafeEvolutionExecutor.verify_submitted_patches`` 尾部补回边循环：
     遍历 status∈{pending, runtime_verified} 的条目，对满足 T-101a 判据者置 approved。
     """
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸，专测"复查放行"本身
     tmp = tempfile.mkdtemp(prefix="t105a_C_")
     target = _make_target(tmp)
     pm = _make_pm(tmp)
@@ -154,8 +188,9 @@ def test_C_post_verify_recheck_releases():
     assert _again is False, "★已 approved 须幂等，不得重复放行"
 
 
-def test_D_polluted_top_level_ignored_when_nested_false():
+def test_D_polluted_top_level_ignored_when_nested_false(monkeypatch):
     """★D：顶层污染字段 runtime_verified=True 即使嵌套 verified=False 也不放行（双保险）。"""
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸，让"嵌套 verified=False"成为唯一否决因
     tmp = tempfile.mkdtemp(prefix="t105a_D_")
     target = _make_target(tmp)
     pm = _make_pm(tmp)
@@ -170,8 +205,9 @@ def test_D_polluted_top_level_ignored_when_nested_false():
     assert _p.get("status") != "approved"
 
 
-def test_E_baseline_zero_routes_to_human():
+def test_E_baseline_zero_routes_to_human(monkeypatch):
     """★E：嵌套 verified=True 但 baseline_errors<=0（效果不可判定）⇒ 不放行（转人工）。"""
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸，让"baseline=0"成为唯一否决因
     tmp = tempfile.mkdtemp(prefix="t105a_E_")
     target = _make_target(tmp)
     pm = _make_pm(tmp)

@@ -61,6 +61,10 @@ def test_02_landed_write_triggers_close_loop(monkeypatch):
 
     import config
     monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
+    # ★406刀4：关掉「diff 窄闸」，隔离出本用例要验的"落地成功才置 FIXED"。
+    #   本用例补丁是 `return 'ORIG' → 'LANDED'` 的真实逻辑改动，窄闸在位时
+    #   连 approved 都拿不到，落地链路根本走不到，就测不到 372刀3 的触发点。
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", False, raising=False)
 
     _tmp = tempfile.mkdtemp(prefix="m372b3_")
     os.makedirs(os.path.join(PROJECT_ROOT, "tmp"), exist_ok=True)

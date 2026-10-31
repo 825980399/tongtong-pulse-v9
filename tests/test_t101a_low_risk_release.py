@@ -24,6 +24,13 @@ def _master_on(monkeypatch):
     """
     import config
     monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
+    # ★406刀4（2026-10-31 裁决）：再关掉「diff 窄闸」。
+    #   本文件验的是 B 通道**自身**判据（嵌套 verified / baseline / 风险档），
+    #   而 406 窄闸只放注释/文档/测试类 diff；本文件探针是
+    #   `return 'ORIGINAL_MARKER' → 'T101A_LANDED_MARKER'` 的真实逻辑改动
+    #   ⇒ 窄闸在位时全链落地必然被拦，T-101a 的落地能力就测不到了。
+    #   窄闸在位时"确实会拦"由 test_406_narrow_gate_blocks_logic_landing 钉住。
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", False, raising=False)
 
 
 class _DummyBackup:
@@ -98,6 +105,57 @@ def test_low_risk_release_promotes_and_lands_on_disk(monkeypatch):
         content = f.read()
     assert "T101A_LANDED_MARKER" in content, "disk probe: modified_code NOT landed"
     assert "ORIGINAL_MARKER" not in content, "disk probe: original_code still present"
+
+
+def test_406_narrow_gate_blocks_logic_landing(monkeypatch):
+    """★406刀4：同一份**逻辑改动**补丁，在窄闸在位时不得被免签放行、磁盘不得被改写。
+
+    与上一条用例是同一份夹具、同一份补丁 —— 唯一差别是窄闸开关。
+    这样写是为了让"本刀收窄了什么"与"T-101a 原本能做什么"并排可读。
+    """
+    import config
+    from nucleus.evolution.patch_risk_gate import gate_allows, judge
+
+    monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", True, raising=False)
+
+    tmp = tempfile.mkdtemp(prefix="t101a_gate_")
+    target = _make_target(tmp)
+    original = "def probe_func():\n    return 'ORIGINAL_MARKER'\n"
+    with open(target, "w", encoding="utf-8") as f:
+        f.write(original)
+
+    patch = {
+        "id": "t101a_gate_probe",
+        "file": target,
+        "method": "probe_func",
+        "original_code": original,
+        "modified_code": "def probe_func():\n    return 'T101A_LANDED_MARKER'\n",
+        "risk_level": "\u4f4e",
+        "runtime_verify_result": {"verified": True, "baseline": 3},
+        "baseline_errors": 3,
+        "source": "local_rule",
+        "issue_type": "periodic_task_no_reentry",
+        "status": "verified",
+        "trust_score": 90,
+        "confidence": "high",
+        "aesthetic_score": {"total": 90, "grade": "A", "syntax_valid": True},
+    }
+
+    # 判据层：diff 是逻辑改动 ⇒ medium，永不 eligible
+    _j = judge(patch)
+    assert _j["diff_kind"] == "logic", _j
+    assert _j["eligible"] is False, _j
+    _ok, _why = gate_allows(patch)
+    assert _ok is False and _why == "medium:logic", (_ok, _why)
+
+    # 链路层：即便 T-101a 的其余判据全过，也不得升 approved / 落盘
+    pm = _make_pm(tmp)
+    pm.save_pending_patch(patch)
+    assert patch.get("status") != "approved", patch.get("status")
+    assert not patch.get("auto_released")
+    with open(target, encoding="utf-8") as f:
+        assert f.read() == original, "★窄闸在位时磁盘不得被改写"
 
 
 def test_high_risk_or_unverified_not_auto_released(monkeypatch):

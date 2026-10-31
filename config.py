@@ -1162,14 +1162,38 @@ EXPERIENCE_KNOWLEDGE_GUARD_MIN_HITS = 3
 # 命中计数的有界采样上限（节点数）。口径与 MULTI_STEP_ENTRY_PROBE_SCAN_LIMIT 一致（800 为实测平衡点）。
 EXPERIENCE_KNOWLEDGE_GUARD_SCAN_LIMIT = 800
 
+# ========== ★406 批刀4：低风险补丁「diff 窄闸」 ==========
+# 背景（406 批实测，见 `docs/路灯与星轨对话/分析报告/路灯_406批_破零三道闸实测_20261031.md`）：
+#   pending 里 8 条 LLM 补丁都已走到 `status=runtime_verified` + `verified=True`，
+#   却**全部** `applied=False` —— 破零卡在最后一步。而既有免签判据
+#   （`PatchManager._m85_local_low_risk_auto_apply` / `_m101_low_risk_release_path`）
+#   只看 trust / risk_level / issue_type，**从来不看"这次改动到底动了什么"**。
+# 任务书对 low 的定义是「只改注释 / 文档 / 测试 / 配置默认值 False」——
+#   本闸就是把这句话变成**可判定的代码**（`nucleus/evolution/patch_risk_gate.py`）。
+# 语义（只收窄、不放宽）：加在既有判据**之后**，只有
+#     diff ∈ {comment_only, doc_only, test_only}
+#     ∧ 单测全绿 ∧ 不跨器官 ∧ 不碰审批池/状态机
+#   才允许免签自动应用。原本被拒的补丁不会因本闸变成放行。
+# True  = 启用窄闸（406 起默认）；
+# False = 完全回退 406 前行为（`gate_allows()` 恒放行，零回归）。
+PATCH_M406_NARROW_GATE = True
+
 # ========== 自我进化配置 ==========
 EVOLUTION_CONFIG = {
     # 自动执行总开关——★进化闭环升级(完美级): 默认开启全自主进化。
-    #   依赖「强验证兜底 + 健康度对比 + 自动回退 + 防循环重启」四重防线保障安全，
-    #   核心文件也纳入自动流程（不再强制人工审批）。
-    #   ★S1关闭：当前测试覆盖率0.268%，验证链存在「遇self跳过」「回归失败不阻塞」
-    #   两处弱化，语义错误补丁可静默写入核心源码。待测试覆盖与验证链补齐后再评估开启。
-    "auto_apply_enabled": False,  # ★S1：关闭自动改写源码，需人工审批后再开启
+    #   依赖「强验证兜底 + 健康度对比 + 自动回退 + 防循环重启」四重防线保障安全。
+    #   ★S1 关闭（2026-09-20 起，历时约 6 周）：测试覆盖率 0.268%，验证链存在
+    #   「遇self跳过」「回归失败不阻塞」两处弱化 ⇒ 语义错误补丁可静默写入核心源码。
+    #   ★406刀4 重新打开（小林 2026-10-31 裁决「开总闸 + 注释类窄闸」）：
+    #   这次不是"直接信任验证链"，而是**同时**加了一道只收窄的 diff 窄闸
+    #   （`PATCH_M406_NARROW_GATE` / `nucleus/evolution/patch_risk_gate.py`）——
+    #   打开总闸后真正能自动应用的只有「只动注释/文档/测试 ∧ 单测全绿 ∧
+    #   不跨器官 ∧ 不碰审批池」这一类，**逻辑行改不动**。
+    #   核心文件仍由 `allow_core_auto_apply=False` 独立红线挡着（本批不动）；
+    #   `source="llm"` 仍由 `_m101` 独立拦着（372刀2 口径，本批不动）。
+    #   回退：① 本键改回 False（最彻底）；② 仅 `PATCH_M406_NARROW_GATE=False`
+    #   （放回 406 前既有判据，不等价于关闭总闸）。
+    "auto_apply_enabled": True,  # ★406刀4：False→True（附带 diff 窄闸，见上方 PATCH_M406_NARROW_GATE）
     # 只有当推演方案的综合信任分达到此阈值时，才允许自动执行
     # ★第53批 T1（P0-补丁1/3）：60 → 40，与实际补丁信任分对齐。
     #   实测依据：2026-09-09 起生成的补丁 trust_score 全为 40；旧值 60 高于任何

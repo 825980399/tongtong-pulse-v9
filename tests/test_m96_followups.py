@@ -17,6 +17,7 @@
 """
 import ast
 import csv
+import contextlib
 import json
 import os
 import unittest
@@ -319,6 +320,25 @@ class TestM96ChannelPool(unittest.TestCase):
 # ===========================================================================
 # B · T-96b 审批治理（N1）
 # ===========================================================================
+@contextlib.contextmanager
+def _gate_off_406():
+    """★406刀4：临时关闭「diff 窄闸」，隔离出本文件要验的免签判据。
+
+    本文件的夹具（`self._p()`）只有 file/method/source/confidence/risk_level，
+    **没有** original_code/modified_code ⇒ 窄闸判 `unknown` → medium → 拦下。
+    若不开这层隔离，"显式开 local 开关仍须放行"这条就会 RED，而若改成断言 False，
+    本文件验的 m85/m96 判据就彻底测丢了（判据在不在都 False）。
+    ⇒ 收窄的事实由各用例里"窄闸在位 ⇒ 被拦"的断言单独钉住，不靠这里。
+    """
+    import config as _c
+    _old = getattr(_c, "PATCH_M406_NARROW_GATE", True)
+    setattr(_c, "PATCH_M406_NARROW_GATE", False)
+    try:
+        yield
+    finally:
+        setattr(_c, "PATCH_M406_NARROW_GATE", _old)
+
+
 class TestM96ApprovalGovernance(unittest.TestCase):
 
     def test_B1_local_switch_registered_false(self):
@@ -344,9 +364,14 @@ class TestM96ApprovalGovernance(unittest.TestCase):
               "source": "local_rule", "confidence": "high", "risk_level": "低"}
         self.assertFalse(PatchManager._m85_local_low_risk_auto_apply(_p),
                          "缺省下不得自动放行（人工审批回归）")
-        # 显式置 True 仍须放行 ⇒ 证明是收开关而非删除能力
-        self.assertTrue(PatchManager._m85_local_low_risk_auto_apply(
-            _p, {"local_auto_apply_enabled": True}))
+        # ★406刀4：窄闸在位时，显式开 local 开关也不再放行（`_p` 没有 diff ⇒ unknown）
+        self.assertFalse(PatchManager._m85_local_low_risk_auto_apply(
+            _p, {"local_auto_apply_enabled": True}),
+            "★406窄闸在位时，非注释类补丁不得再走免签")
+        # 关掉窄闸：显式置 True 仍须放行 ⇒ 证明是**收窄**而非删除能力
+        with _gate_off_406():
+            self.assertTrue(PatchManager._m85_local_low_risk_auto_apply(
+                _p, {"local_auto_apply_enabled": True}))
 
     def test_B4_human_approval_still_passes_safety(self):
         """★星轨裁决：机器/人工必须区分，人工批准语义不得被反向破坏。"""

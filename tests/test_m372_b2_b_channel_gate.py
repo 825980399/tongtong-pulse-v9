@@ -12,7 +12,12 @@
     `SafeEvolutionExecutor.verify_submitted_patches`，都经 `_m105_try_release_low_risk`。
 
 本刀：在 `_m101` 加两道闸（总开关 / llm），两调用点自动同受控；
-不另开 B 独立开关（否 C-1 乙）；不动总开关默认值（仍 False）。
+不另开 B 独立开关（否 C-1 乙）；**372 当时**不动总开关默认值（仍 False）。
+
+★406刀4（2026-10-31 裁决）改动本文件两处口径：
+  ① 总开关默认值已由 False 打开 ⇒ 守卫升级为「总闸 ∧ 窄闸」双真；
+  ② 新增「diff 窄闸」会先于本文件验的两道闸拦下逻辑改动补丁 ⇒ 旧判据用例
+     一律先 `_gate_off()` 隔离（见该函数说明），另补一条窄闸在位断言防静默拆除。
 """
 from __future__ import annotations
 
@@ -27,6 +32,20 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _CFG_ON = {"auto_apply_enabled": True}
 _CFG_OFF = {"auto_apply_enabled": False}
+
+
+def _gate_off(monkeypatch):
+    """★406刀4：把「diff 窄闸」显式关掉，隔离出本文件要验的 372 两道闸。
+
+    为什么必须关：本文件验的「总开关 / source=llm」两道判据都**加在窄闸之前**，
+    而 `_mk()` 用的是 `return 0 → return 1` 这种真实逻辑改动 ⇒ 窄闸在位时
+    所有"应放行"分支都会先被拦下：断言 True 会 RED，改成断言 False 又会让
+    372 的判据彻底测丢（判据在不在都 False）。
+    ⇒ 正交能力各自隔离：窄闸由 tests/test_m406_k4_patch_risk_gate.py 专册守；
+      本文件在关掉窄闸后，另用一条显式断言钉住"窄闸在位时会拦"。
+    """
+    import config
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", False, raising=False)
 
 
 def _mk(**kw):
@@ -68,19 +87,25 @@ def _pm(tmp):
 
 
 # ============================================================ ① 总开关关闭即拒
-def test_01_master_switch_off_rejects_b_channel():
+def test_01_master_switch_off_rejects_b_channel(monkeypatch):
     """总开关关闭 ⇒ B 通道同样拒（改前是"即使关闭也放行"）。"""
+    # ---------- (甲) 406「总闸 ∧ 窄闸」口径：必须在窄闸**在位**时验 ----------
+    import config
+    assert config.EVOLUTION_CONFIG.get("auto_apply_enabled") is True, (
+        "★406刀4 起总闸默认 True；若变回 False，说明有人关了，需同步复核窄闸与本文档")
+    assert getattr(config, "PATCH_M406_NARROW_GATE", None) is True, (
+        "★总闸打开必须以窄闸在位为前提；窄闸被关掉等于放回 406 前的裸判据")
+    # 打开 ≠ 全放行：`_mk()` 是**真实逻辑改动**（return 0 → return 1），窄闸必须拦。
+    assert PatchManager._m101_low_risk_release_path(_mk()) is False, (
+        "★406窄闸失效：总闸打开后，逻辑改动补丁竟然被免签放行了")
+
+    # ---------- (乙) 372 的两道闸：关掉窄闸以隔离变量 ----------
+    _gate_off(monkeypatch)
     _ok_patch = _mk()
     assert PatchManager._m101_low_risk_release_path(_ok_patch, _CFG_ON) is True, (
         "★判别力前提：同一份补丁在总开关开启时必须能放行，否则下面 OFF 返回 False "
         "可能只是因为别的原因被拦")
     assert PatchManager._m101_low_risk_release_path(_ok_patch, _CFG_OFF) is False
-
-    # 默认 config（EVOLUTION_CONFIG.auto_apply_enabled = False）⇒ B 通道关闭
-    import config
-    assert config.EVOLUTION_CONFIG.get("auto_apply_enabled") is False, (
-        "★本刀不改总开关默认值（仍 False）；若这里变了，说明有人翻了总开关")
-    assert PatchManager._m101_low_risk_release_path(_mk()) is False
 
     # `_m105` 同样不放行（不会出现"判据 False 但状态被改"）
     _p = _mk()
@@ -91,8 +116,9 @@ def test_01_master_switch_off_rejects_b_channel():
 
 
 # ============================================================ ② source=llm 排除
-def test_02_llm_source_excluded_from_b_channel():
+def test_02_llm_source_excluded_from_b_channel(monkeypatch):
     """source=llm 一律不进 B 通道（与 A 通道 `_m85` 口径对齐）。"""
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸，见 `_gate_off` 说明
     for _src in ("llm", "LLM", " Llm ", "llm "):
         assert PatchManager._m101_low_risk_release_path(
             _mk(source=_src), _CFG_ON) is False, _src
@@ -108,8 +134,9 @@ def test_02_llm_source_excluded_from_b_channel():
 
 
 # ============================================================ ③ 既有低风险路径不回归
-def test_03_existing_low_risk_path_not_regressed():
+def test_03_existing_low_risk_path_not_regressed(monkeypatch):
     """总开关开启时，B 通道原有判据（风险/嵌套验证/baseline/核心文件/护栏）一字未松。"""
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸；否则下面几条会被窄闸抢先拦下
     assert PatchManager._m101_low_risk_release_path(_mk(), _CFG_ON) is True
     # 既有否决项逐条复核（这些是 101/105 批的既有不变量，本刀不得动）
     assert PatchManager._m101_low_risk_release_path(
@@ -136,6 +163,7 @@ def test_04_two_call_sites_both_controlled(monkeypatch):
     """入队口与验证后复查口都受同一道闸约束（不靠"只改一处"）。"""
     import config
     monkeypatch.setitem(config.EVOLUTION_CONFIG, "auto_apply_enabled", True)
+    _gate_off(monkeypatch)      # ★406刀4：隔离窄闸，专测两道闸在**两个调用点**都生效
 
     # 调用点一：save_pending_patch（入队）—— llm 源即使总开关开、验证齐备也不放行
     _tmp = tempfile.mkdtemp(prefix="m372b2_enq_")

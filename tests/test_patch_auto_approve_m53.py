@@ -82,9 +82,17 @@ class TestThresholdUnified(unittest.TestCase):
     def test_07_max_risk_unchanged(self):
         self.assertEqual(config.EVOLUTION_CONFIG.get("auto_apply_max_risk"), 2)
 
-    def test_08_auto_apply_enabled_still_false(self):
-        """★裁决3：auto_apply_enabled 延后第54批，本批不得改动。"""
-        self.assertIs(config.EVOLUTION_CONFIG.get("auto_apply_enabled"), False)
+    def test_08_auto_apply_enabled_and_narrow_gate(self):
+        """★406刀4（2026-10-31 裁决）：总闸由 False 打开，**但必须与窄闸同在**。
+
+        历史：m53 当年裁决「延后第54批，本批不得改动」⇒ 本用例断言 False。
+        406 批重新裁决打开，故守卫口径升级为「总闸 ∧ 窄闸」双真：
+        只开总闸 = 按 risk_level 直接改源码（S1 关闭要拦的正是这个）；
+        只开窄闸 = 通道哑掉。两者缺一都不算安全落地。
+        """
+        self.assertIs(config.EVOLUTION_CONFIG.get("auto_apply_enabled"), True)
+        self.assertIs(getattr(config, "PATCH_M406_NARROW_GATE", None), True,
+                      "总闸打开必须以窄闸在位为前提（406刀4）")
 
 
 class TestEnqueueAutoApprove(unittest.TestCase):

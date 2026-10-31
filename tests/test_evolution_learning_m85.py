@@ -10,6 +10,7 @@
 ★行尾：本文件 LF（与 tests/ 惯例一致）。
 ★先红后绿：改前上述符号/行为均不存在或行为相反 → 红。
 """
+import contextlib
 import json
 import os
 import shutil
@@ -360,6 +361,25 @@ class TestM85RealFixRateDenominator(unittest.TestCase):
 # ===========================================================================
 # M85-4  T-85d 本地低风险补丁自动应用
 # ===========================================================================
+@contextlib.contextmanager
+def _gate_off_406():
+    """★406刀4：临时关闭「diff 窄闸」，隔离出本文件要验的免签判据。
+
+    本文件的夹具（`self._p()`）只有 file/method/source/confidence/risk_level，
+    **没有** original_code/modified_code ⇒ 窄闸判 `unknown` → medium → 拦下。
+    若不开这层隔离，"显式开 local 开关仍须放行"这条就会 RED，而若改成断言 False，
+    本文件验的 m85/m96 判据就彻底测丢了（判据在不在都 False）。
+    ⇒ 收窄的事实由各用例里"窄闸在位 ⇒ 被拦"的断言单独钉住，不靠这里。
+    """
+    import config as _c
+    _old = getattr(_c, "PATCH_M406_NARROW_GATE", True)
+    setattr(_c, "PATCH_M406_NARROW_GATE", False)
+    try:
+        yield
+    finally:
+        setattr(_c, "PATCH_M406_NARROW_GATE", _old)
+
+
 class TestM85LocalAutoApply(unittest.TestCase):
 
     @staticmethod
@@ -381,10 +401,17 @@ class TestM85LocalAutoApply(unittest.TestCase):
         self.assertFalse(
             PatchManager._m85_local_low_risk_auto_apply(self._p()),
             "缺省（config 已登记 False）下不得自动放行")
-        self.assertTrue(
+        # ★406刀4：窄闸在位时，**显式开 local 开关也不再放行**（本夹具没有 diff ⇒ unknown）。
+        #   这是本刀有意的收窄，必须钉住 —— 否则将来有人删掉窄闸，本用例照样全绿。
+        self.assertFalse(
             PatchManager._m85_local_low_risk_auto_apply(
                 self._p(), {"local_auto_apply_enabled": True}),
-            "显式开启后仍须放行（能力保留）")
+            "★406窄闸在位时，非注释类补丁不得再走免签")
+        with _gate_off_406():
+            self.assertTrue(
+                PatchManager._m85_local_low_risk_auto_apply(
+                    self._p(), {"local_auto_apply_enabled": True}),
+                "关掉窄闸后仍须放行（能力保留 ⇒ 证明是收窄不是删除）")
 
     def test_41_llm_source_not_allowed(self):
         self.assertFalse(

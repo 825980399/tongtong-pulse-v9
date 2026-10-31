@@ -141,10 +141,16 @@ class TestStaleDetectionT32(unittest.TestCase):
 class TestAutoApplySwitchT33(unittest.TestCase):
     """T3.3：auto_apply_enabled 在 PatchManager 生效。"""
 
-    def test_10_default_false(self):
-        """默认（config 为 False）→ _m54_auto_apply_on() 返回 False。"""
-        self.assertIs(config.EVOLUTION_CONFIG.get("auto_apply_enabled"), False)
-        self.assertIs(_m54_auto_apply_on(), False)
+    def test_10_default_true_after_406(self):
+        """★406刀4：默认已由 False 打开 ⇒ `_m54_auto_apply_on()` 跟随返回 True。
+
+        守卫仍保留其原意：读的是 **config** 而不是硬编码（test_11 用 with 块验跟随）。
+        """
+        self.assertIs(config.EVOLUTION_CONFIG.get("auto_apply_enabled"), True,
+                      "406刀4 起总闸默认 True（2026-10-31 裁决）")
+        self.assertIs(_m54_auto_apply_on(), True)
+        self.assertIs(getattr(config, "PATCH_M406_NARROW_GATE", None), True,
+                      "总闸打开必须以窄闸在位为前提（406刀4）")
 
     def test_11_follows_config(self):
         """★防漂移：config 置 True → 读取结果跟随（断言在 with 块内）。"""
@@ -161,18 +167,34 @@ class TestAutoApplySwitchT33(unittest.TestCase):
             with mock.patch.object(config, "ENABLE_PATCH_APPROVE_AUTO_APPLY", False):
                 self.assertIs(_m54_auto_apply_on(), False)
 
-    def test_13_approve_returns_auto_apply_flag(self):
-        """审批结果带 auto_apply 字段（默认 False = 只审批不应用）。"""
-        _tmp = tempfile.mkdtemp(prefix="m54_pm2_")
-        _mgr = PatchManager(_tmp)
+    def _approve_once(self, tmp):
+        _mgr = PatchManager(tmp)
         with open(_mgr._pending_file, "w", encoding="utf-8") as f:
             json.dump([{"file": "a.py", "method": "m",
                         "original_code": "def m():\n    return 1\n",
                         "modified_code": "def m():\n    return 2\n"}], f)
-        _r = _mgr.approve_patch(0)
+        return _mgr.approve_patch(0)
+
+    def test_13_approve_returns_auto_apply_flag(self):
+        """审批结果带 auto_apply 字段，且**跟随总闸**（★406刀4 起默认 True）。
+
+        ★与「免签自动应用」不是一回事：这里**人已经批准**了，总闸只决定批完是否顺手写盘。
+        406 刀4 的 diff 窄闸管的是"没人看也能自动应用"，不参与本路径。
+        """
+        _r = self._approve_once(tempfile.mkdtemp(prefix="m54_pm2_"))
         self.assertTrue(_r.get("ok"), _r)
         self.assertIn("auto_apply", _r, "审批结果应带 auto_apply 字段")
-        self.assertIs(_r["auto_apply"], False)
+        self.assertIs(_r["auto_apply"], True,
+                      "406刀4 起总闸默认 True；若变 False，说明有人关了总闸")
+
+        # ★判别力：字段必须**跟随配置**，不是写死 True（关总闸 ⇒ 只审批不应用）
+        _off = dict(config.EVOLUTION_CONFIG)
+        _off["auto_apply_enabled"] = False
+        with _cfg_switch("EVOLUTION_CONFIG", _off):
+            _r2 = self._approve_once(tempfile.mkdtemp(prefix="m54_pm2_off_"))
+        self.assertTrue(_r2.get("ok"), _r2)
+        self.assertIs(_r2["auto_apply"], False,
+                      "关总闸后审批不得自动应用（与 test_11 同口径）")
 
 
 class TestDeprecatedT34(unittest.TestCase):

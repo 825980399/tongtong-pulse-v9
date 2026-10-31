@@ -95,6 +95,33 @@ def _rows_on_disk(path: str) -> int | None:
         return None
 
 
+def _m406_annotate(payload: Any, writer: str, project_root: str | None = None) -> dict:
+    """★406刀4：落 pending 前给每条补 `m406_risk` 并留痕（**失败绝不影响写盘**）。
+
+    为什么挂在"唯一写口"而不是每个写者：pending 有 3 个写者 / 11 个写点，
+    挂写者就要挂 11 次且必然漏；挂写口则"只要进 pending 就一定有标签"。
+
+    Returns: `{"changed": int, "written": int}`（诊断用；异常时全 0）。
+    """
+    try:
+        from nucleus.evolution.patch_risk_gate import annotate_rows, record_audit
+        _rows = payload if isinstance(payload, list) else None
+        if _rows is None and isinstance(payload, dict):
+            for _k in ("patches", "pending", "items"):
+                if isinstance(payload.get(_k), list):
+                    _rows = payload[_k]
+                    break
+        if not _rows:
+            return {"changed": 0, "written": 0}
+        _a = annotate_rows(_rows)
+        _r = record_audit(_rows, project_root=project_root, writer=writer)
+        return {"changed": int(_a.get("changed") or 0),
+                "written": int(_r.get("written") or 0)}
+    except Exception as e:
+        silent_exc(e, where="pending_write._m406_annotate", level="debug")
+        return {"changed": 0, "written": 0}
+
+
 def write_pending(payload: Any, *, path: str | None = None,
                   root: str | None = None, writer: str = "",
                   verify_rows: bool = True) -> dict:
@@ -112,6 +139,11 @@ def write_pending(payload: Any, *, path: str | None = None,
         失败**不抛**（写盘失败不得反过来打断调用方主流程），由调用方按需处理。
     """
     _p = path or pending_path(root)
+    # ★406刀4：**落 pending 时**打风险标签（low/medium/high + 三条件）并留痕。
+    #   放在写盘之前 ⇒ 落盘的那份 JSON 里就已经带 `m406_risk`，不需要等下一拍补。
+    _m406_root = root or (os.path.dirname(os.path.dirname(os.path.dirname(_p)))
+                          if path else None)
+    _m406 = _m406_annotate(payload, writer, _m406_root)
     _rows = _rows_of(payload)
     _t0 = time.time()
     with PENDING_WRITE_LOCK:

@@ -190,11 +190,26 @@ def test_d5_new_family_blocks_auto_apply():
     assert PM._m85_local_low_risk_auto_apply(patch, {"local_auto_apply_enabled": True}) is False
 
 
-def test_d5_low_family_still_releasable():
+def test_d5_low_family_still_releasable(monkeypatch):
+    """★406刀4：本用例验 m346 的低危族表（"低危族可放行"），与 406「diff 窄闸」正交。
+
+    夹具没有 original_code/modified_code ⇒ 窄闸判 `unknown` → medium → 拦下，
+    本用例就变成"因为别的原因 False"，测不到 m346 的低危族结论。
+    ⇒ 先把"窄闸在位会拦"钉住，再关掉窄闸验低危族本身（收窄而非删除能力）。
+    """
+    import config
+
     patch = {"id": "p", "file": "nucleus/demo.py", "method": "normal_method",
              "source": "local_rule", "confidence": "high",
              "issue_type": "periodic_task_no_reentry", "risk_level": "低",
              "learning_attempt": False}
+    # ① 窄闸在位：同一份补丁被拦（收窄是有意的）
+    assert getattr(config, "PATCH_M406_NARROW_GATE", None) is True, "★窄闸必须默认在位"
+    assert PM._m85_local_low_risk_auto_apply(
+        patch, {"local_auto_apply_enabled": True}) is False, (
+        "★406窄闸未生效：没有 diff 可判的补丁竟然被免签放行")
+    # ② 关掉窄闸：低危族本身仍可放行（m346 结论不变）
+    monkeypatch.setattr(config, "PATCH_M406_NARROW_GATE", False, raising=False)
     assert PM._m85_local_low_risk_auto_apply(patch, {"local_auto_apply_enabled": True}) is True
 
 
