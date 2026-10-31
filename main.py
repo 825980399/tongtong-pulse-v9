@@ -1248,6 +1248,12 @@ class PulseFramework:
                     register_hypothesis_reconciler as _409_reg_reconcile,
                 )
                 _409_reg_reconcile()
+                # ★409刀3：把三条具体判据（复发/效果/复用）的探针装上。
+                #   不装的话对账会全程落 no_probe 的 unknown（机制通但永远判不出结论）。
+                from nucleus.evolution.hypothesis_probes import (
+                    install as _409_install_probes,
+                )
+                _409_install_probes()
                 # ★第295批 刀2/刀3：行动面通电——派单路径 + 执行结果回写。
                 #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
                 from nucleus.evolution.patch_execution_dispatch import (

@@ -118,6 +118,11 @@ def _data_root() -> str:
     return _DATA_DIR or _root()
 
 
+def data_root() -> str:
+    """公开只读入口：刀3 的探针要按同一个根去找数据源（否则测试重定向会失效）。"""
+    return _data_root()
+
+
 def ledger_path() -> str:
     return os.path.join(_data_root(), LEDGER_REL)
 

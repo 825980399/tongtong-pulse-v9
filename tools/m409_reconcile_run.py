@@ -138,6 +138,106 @@ def cmd_demo() -> int:
         shutil.rmtree(_tmp, ignore_errors=True)
 
 
+def cmd_probe() -> int:
+    """拿**真实数据**跑三个判据，打印三态实测输出。
+
+    ★ 全程 `dry_run=True` + 账本写在 tmp/ ⇒ 真实 `data/` 零改动，所以不需要
+      重定向数据源根（重定向会同时改掉数据源和落盘根，反而是首跑的坑）。
+    """
+    from nucleus.evolution import hypothesis_probes as hp
+    import time
+
+    _p("[自检] " + json.dumps(hp.selfcheck(), ensure_ascii=False))
+    _hp_installed = hp.install()
+    _p(f"[探针] 安装 {_hp_installed}")
+
+    _snaps = hp._audit_snapshots()
+    _now = _snaps[-1][0] if _snaps else time.time()
+    _eff = hp._load_effect().get("verdicts") or {}
+    _by = {"true": [], "false": [], "none": []}
+    for _pid, _v in _eff.items():
+        _by["true" if _v.get("passed") is True else
+            "false" if _v.get("passed") is False else "none"].append(_pid)
+
+    _strat = {}
+
+    def _add(tag, crit, win, due):
+        _strat[tag] = {"rule": f"demo::{tag}", "strategy": f"[实测样本] {tag}",
+                       hc.F_CRITERION: crit, hc.F_WINDOW: win, hc.F_DUE: due}
+
+    # 判据1 复发：一条真实签名（应 refuted）+ 一条不存在的签名（应 confirmed）
+    #          + 一条窗口外无覆盖的（应 unknown）
+    if _snaps:
+        # ★两个挑选条件都是为了"能演示到命中分支"：
+        #   1) 排除 wontfix —— 探针显式排除它（"主动不修"不能拿来说补丁失效）
+        #   2) `last_seen_ts` 必须落在窗口内 —— 否则同签名在池中也判不出复发
+        #   （第一版只挑了"有 method"，结果 last_seen 太旧，命中 0 次，
+        #    表面 confirmed 实际谁也没验到）
+        _e0 = next((e for e in _snaps[-1][1]
+                    if isinstance(e, dict) and e.get("method")
+                    and str(e.get("status") or "") not in ("wontfix",)
+                    and (hp._num(e.get("last_seen_ts")) or 0) >= _now - 86400), None)
+        if _e0:
+            _sig = hp._audit_sig(_e0)
+            _add("复发/真实签名见池中", {"kind": hc.KIND_RECURRENCE,
+                                    "signature": _sig}, "24h", _now - 60)
+    _add("复发/不存在的签名", {"kind": hc.KIND_RECURRENCE,
+                            "signature": "no\\such\\file.py::x::y"}, "24h", _now - 60)
+    _add("复发/窗口外无审计", {"kind": hc.KIND_RECURRENCE,
+                            "signature": "no\\such\\file.py::x::y"}, "24h",
+         _now - 40 * 86400)
+
+    # 判据2 效果：真实 verdict 三态各取一条
+    for _tag, _key in (("effect/通过", "true"), ("effect/未通过", "false"),
+                       ("effect/未判定(None)", "none")):
+        if _by[_key]:
+            _add(_tag, {"kind": hc.KIND_EFFECT, "patch_id": _by[_key][0]},
+                 "24h", _now - 60)
+
+    # 判据3 复用：真实 prompt 里的方法名（应 refuted）+ 假方法名（应 confirmed）
+    #          + 空方法名（应 unknown/coarse_signature）
+    _rows, _files = hp._trace_rows(_now - 86400, _now)
+    _m = ""
+    for _r in _rows:
+        _txt = str(_r.get("prompt") or "")
+        _i = _txt.find("方法名:")
+        if _i >= 0:
+            _m = _txt[_i + 4:].split("\n")[0].strip()
+            if _m:
+                break
+    if _m:
+        _add("复用/真实方法名", {"kind": hc.KIND_REUSE,
+                            "signature": f"x.py::t::{_m}"}, "7d", _now - 60)
+    _add("复用/假方法名", {"kind": hc.KIND_REUSE,
+                        "signature": "x.py::t::NoSuchMethodZZZ"}, "7d", _now - 60)
+    _add("复用/无方法名", {"kind": hc.KIND_REUSE,
+                        "signature": "x.py::t::"}, "7d", _now - 60)
+
+    _tmp_ledger = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "tmp", "m409_probe_ledger.json")
+    os.makedirs(os.path.dirname(_tmp_ledger), exist_ok=True)
+    with open(_tmp_ledger, "w", encoding="utf-8") as _f:
+        json.dump({"version": "335.1", "updated_at": 0.0, "strategies": _strat},
+                  _f, ensure_ascii=False, indent=2)
+    try:
+        _r = hr.reconcile(now=_now, path=_tmp_ledger, dry_run=True)
+        _p(f"[对账] now={_now:.0f}  due={_r['due']}  confirmed={_r['confirmed']}  "
+           f"refuted={_r['refuted']}  unknown={_r['unknown']}  "
+           f"written={_r['written']}（dry_run）")
+        _p(f"  {'结论':<10} {'判据':<11} {'卡点':<18} {'样本':<26} 说明")
+        for _row in _r.get("rows") or []:
+            _p(f"  {_row['result']:<10} {(_row['kind'] or '-'):<11} "
+               f"{(_row['reason'] or '-'):<18} {(_row.get('key') or '')[:26]:<26} "
+               f"{(_row.get('detail') or '')[:48]}")
+    finally:
+        try:
+            os.remove(_tmp_ledger)
+        except OSError as _exc:
+            from nucleus._silent_except import silent_exc as _se
+            _se(_exc, where="m409_reconcile_run.cmd_probe.cleanup", level="debug")
+    return 0
+
+
 def _dump_rows(rows: list) -> None:
     if not rows:
         _p("  （本轮无到期条目）")
@@ -154,11 +254,15 @@ def main(argv=None) -> int:
     _g.add_argument("--stats", action="store_true", help="只读盘账（默认）")
     _g.add_argument("--run", action="store_true", help="真跑一轮（会写盘）")
     _g.add_argument("--demo", action="store_true", help="合成演示（不碰真实 data/）")
+    _g.add_argument("--probe", action="store_true",
+                    help="用真实数据跑三判据（dry_run，真实 data/ 零改动）")
     _a = _ap.parse_args(argv)
     if _a.run:
         return cmd_run()
     if _a.demo:
         return cmd_demo()
+    if _a.probe:
+        return cmd_probe()
     return cmd_stats()
 
 
