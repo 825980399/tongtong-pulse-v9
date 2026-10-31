@@ -1241,6 +1241,13 @@ class PulseFramework:
                 #   落 data/monitor/causal_strength_YYYYMMDD.json（频次/条件概率/时间衰减）。
                 from utils.causal_chain import register_causal_strength_schedule
                 register_causal_strength_schedule()
+                # ★409刀2：假设对账——同一 03:00 挂点。刀1 只让假设"写下判据"，
+                #   写下 ≠ 验过；对账让到期假设真的出结论（confirmed/refuted/unknown）
+                #   并写回账本。判据探针（刀3）未装时一律落 unknown，不硬判。
+                from nucleus.evolution.hypothesis_reconciler import (
+                    register_hypothesis_reconciler as _409_reg_reconcile,
+                )
+                _409_reg_reconcile()
                 # ★第295批 刀2/刀3：行动面通电——派单路径 + 执行结果回写。
                 #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
                 from nucleus.evolution.patch_execution_dispatch import (
