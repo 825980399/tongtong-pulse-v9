@@ -740,6 +740,34 @@ def _m92_ast_struct_guard(before_src: str, after_src: str):
     }
 
 
+
+def _m412_perf_delta_ms(patch, project_root=None):
+    """★412刀3：给 `verify()` 的第三维**供数**（改后导入耗时 − 改前导入耗时）。
+
+    为什么以前恒 None：`verify()` 要 `problem_gone/function_ok/perf_ok` 三维全知
+    才算 passed，少一维就恒落 unverifiable。本函数补第三维 ——
+    **A/B 沙箱导入耗时**（详见 `nucleus/evolution/perf_delta_probe.py`）。
+
+    ★拿不到就返回 None：**0 会被判成 perf_ok**，那是编造"没有变化"。
+    开关关闭 / 缺 original_code / 沙箱跑不出读数 ⇒ 一律 None（与改造前一致）。
+    """
+    try:
+        import config as _c412
+        if not bool(getattr(_c412, "ENABLE_M412_PERF_DELTA", True)):
+            return None
+        from nucleus.evolution.perf_delta_probe import perf_delta_for_patch as _p412
+        _r = _p412(patch, project_root=project_root)
+    except Exception as _e412:
+        silent_exc(_e412, where="PatchManager::_m412_perf_delta_ms")
+        return None
+    _d = (_r or {}).get("delta_ms")
+    if not isinstance(_d, (int, float)):
+        _module_logger.debug(
+            "[412刀3] perf_delta 未测出（%s=%s）⇒ 保持 perf 未测量",
+            (_r or {}).get("state"), (_r or {}).get("reason"))
+        return None
+    return float(_d)
+
 class PatchManager:
     # ★第298批刀2：入队哨兵计数器（类属性，内存态跨实例共享，供日报四数读取）
     _shape_rejected_count = 0   # 入队形态拒绝数（片段→完整）
@@ -5174,7 +5202,7 @@ class PatchManager:
                                  "method": patch.get("method", "")},
                                 problem_gone=_m375_pg,
                                 function_ok=_m375_func_ok,
-                                perf_delta_ms=None,  # 无实测耗时源：如实未测量，不编造
+                                perf_delta_ms=_m412_perf_delta_ms(patch, self._project_root),
                             )
                             _module_logger.debug(
                                 "[375刀4] 效果验证入参 problem_gone=%s（%s）function_ok=%s perf=未测量",
