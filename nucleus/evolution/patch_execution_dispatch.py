@@ -3240,17 +3240,41 @@ def _m351_watch_zero_break(pending_rows: list, results: list | None,
         # ★385刀1：只在**状态变化**时告警 —— 本函数每拍派单都调，无条件打会刷屏。
         if _heal.get("changed"):
             if _heal.get("state") == "healed":
+                # ★407刀3：补了哪几条、跳过了哪几条、补完还剩几个能派单 —— 一行给全。
+                #   只报 added 不报 skipped，读日志的人会以为"pending 里就这些，全补上了"。
                 _module_logger.warning(
-                    "[385刀1] 破零观察位在 pending 里全失效 ⇒ 已自愈补位:"
-                    " added=%s active=%s",
-                    _heal.get("added"), list(_heal.get("active") or []))
+                    "[407刀3] 破零观察位无一条存活 ⇒ 已自愈补位:"
+                    " added=%s skipped(死状态)=%s active=%d eligible=%d/%d pending=%d",
+                    list(_heal.get("added_all") or []), list(_heal.get("skipped") or []),
+                    int(_heal.get("n_active") or 0), int(_heal.get("n_eligible") or 0),
+                    int(_heal.get("capacity") or 0), int(_heal.get("pending_rows") or 0))
+            elif _heal.get("state") == "only_expired":
+                # ★407刀3：与 no_candidate 分开报 —— 前者该去**重新排发**，
+                #   后者该去**造补丁**；合成一句会把人引到错的方向。
+                _module_logger.warning(
+                    "[407刀3] 破零观察位无一条存活，且 pending 里的 O3 候选**全是死状态**:"
+                    " skipped=%s 死状态=%s active=%d eligible=%d ⇒ 可派单观察位=0。"
+                    "处置方向是重新排发（不是造补丁）。只告警一次，状态变化才再报",
+                    list(_heal.get("skipped") or []),
+                    list(_heal.get("dead_active") or []),
+                    int(_heal.get("n_active") or 0), int(_heal.get("n_eligible") or 0))
             elif _heal.get("state") in ("no_candidate", "no_pending"):
                 _module_logger.warning(
                     "[385刀1] 破零观察位在 pending 里全失效且**无法自愈**:"
-                    " state=%s why=%s active=%s pending=%d"
+                    " state=%s why=%s active=%d eligible=%d pending=%d"
                     " ⇒ 破零判据已失明，需人工补位（只告警一次，状态变化才再报）",
                     _heal.get("state"), _heal.get("why"),
-                    list(_heal.get("active") or []), int(_heal.get("pending_rows") or 0))
+                    int(_heal.get("n_active") or 0), int(_heal.get("n_eligible") or 0),
+                    int(_heal.get("pending_rows") or 0))
+        else:
+            # ★407刀3：状态没变也要让「可派单数」可见 —— 406 的教训是
+            #   "数量够 ≠ 能派单"，而旧日志只在状态变化时出声，
+            #   稳态运行下一个字都不打，等于数字永远不被人看见。这里用 DEBUG。
+            _module_logger.debug(
+                "[407刀3] 观察位读数: state=%s active=%d eligible=%d 死状态=%s pending=%d",
+                _heal.get("state"), int(_heal.get("n_active") or 0),
+                int(_heal.get("n_eligible") or 0), list(_heal.get("dead_active") or []),
+                int(_heal.get("pending_rows") or 0))
         _ws = _zb351.watch_batch(None,
                                  pending_rows=pending_rows,
                                  history_rows=_hrows, results=results,

@@ -950,6 +950,43 @@ _O3_CANDIDATE_TYPES = ("dead_code", "dead_code_candidate")
 #:   无条件打 WARNING 会在一次停机里刷出成百上千条同义告警）。
 _LAST_HEAL_STATE: list = [""]
 
+#: ★407刀3：算作「已死」的 pending 状态 —— 这些行**还在文件里**，但永远不会被派单。
+#: ★为什么必须单独列出来（406 实测）：5 个观察位里 3 个 `status="expired_pending"`，
+#:   而它们 `o3_auto_dispatch_ready=True`、`requires_confirmation=False`，
+#:   唯一拦住它们的就是 `patch_execution_dispatch._m339_o3_dispatch_ready()` 里
+#:   那一行 `if status == "expired_pending": return False, "expired"`。
+#:   自愈的健康判据只看「在 pending 文件里找得到」⇒ 认为 5 位全健康、不再补 ⇒
+#:   **「数量够 ≠ 能派单」**：验收线写 ≥3 已达标，实际可派单 0 条。
+#:   两个模块对同一状态的理解不一致，就是本刀要修的东西。
+#: ★只列 `expired_pending`：任务书明令「派单侧逻辑不动」，所以这里不新增判据，
+#:   只是把派单侧**已经在用**的那一条搬过来当健康判据。
+WATCH_DEAD_STATUSES = ("expired_pending",)
+
+
+def _m407_alive_check_on() -> bool:
+    """★407刀3：健康判据是否计入「已死状态」（默认开）。
+
+    关 ⇒ 恢复 407 前行为（只看「在 pending 文件里找得到」），仅供对照排查。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "WATCH_HEAL_ALIVE_ONLY", True))
+    except Exception as e:                                  # noqa: BLE001
+        silent_exc(e, where="zero_break_judge::_m407_alive_check_on")
+        return True
+
+
+def _m407_watch_alive(row) -> bool:
+    """★407刀3：这一行 pending **还有机会被派单**吗（真·eligible）。
+
+    ★只判 `status`，不判别的字段：`o3_auto_dispatch_ready` / `requires_confirmation`
+      在这 3 条上都是「可以派」的值，靠它们判会全票通过 ⇒ 判据必须落在
+      派单侧真正拦住它的那一个字段上。
+    """
+    if not isinstance(row, dict):
+        return False
+    return str(row.get("status") or "") not in WATCH_DEAD_STATUSES
+
 
 def _watch_find(rows: list, patch_id: str) -> dict | None:
     for _r in (rows or []):
@@ -1032,6 +1069,29 @@ def active_watch_ids() -> tuple:
     return tuple(_out)
 
 
+def alive_watch_ids(pending_rows=None) -> tuple:
+    """★407刀3：当前观察位里**真的还能被派单**的那几个（如实读数）。
+
+    ★为什么与 `active_watch_ids()` 并存而不是改掉它：
+      `active_watch_ids()` 回答的是「我们要观察哪几位」（范围问题），
+      `alive_watch_ids()` 回答的是「这几位里还有几个活着」（能力问题）。
+      把前者改成后者，expired 位就不再被观察 ⇒ 破零读数直接消失，
+      等于为了修一个假健康指标而挖掉一个真观测点。
+      ⇒ 两个口径各自保留，报告/告警读后者。
+    """
+    _pend = pending_rows if isinstance(pending_rows, list) else []
+    _on = _m407_alive_check_on()
+    _out: list = []
+    for _pid in active_watch_ids():
+        _row = _watch_find(_pend, _pid)
+        if _row is None:
+            continue
+        if _on and not _m407_watch_alive(_row):
+            continue
+        _out.append(_pid)
+    return tuple(_out)
+
+
 def self_heal_watch(pending_rows=None, history_rows=None,
                     capacity: int | None = None) -> dict:
     """★385刀1：观察位自愈 —— 静态位**全失效**时，从 pending 挑 1 个 O3 候选补上。
@@ -1043,30 +1103,53 @@ def self_heal_watch(pending_rows=None, history_rows=None,
     **纯判据**：只改模块级 `_WATCH_RUNTIME`，不读盘、不写盘、**不打日志**
     （本模块自 351 起就是纯判据，日志由调用方 `_m351_watch_zero_break` 打）。
 
-    四态（不同事实不同措辞，铁律166）：
-      · `healthy`      至少一个观察位在 pending/history 里 ⇒ 不动
-      · `healed`       原本全失效，已从 pending 补进 1 个 O3 候选
+    五态（不同事实不同措辞，铁律166）：
+      · `healthy`      至少一个观察位**还活着**（在 pending 且状态不是死状态）⇒ 不动
+      · `healed`       原本全失效，已从 pending 补进 O3 候选
+      · `only_expired` ★407刀3 新增 —— pending 里有 O3 候选但**全是死状态**
+                       （`status="expired_pending"`），补了也没用 ⇒ 调用方须 WARNING，
+                       且此时「可派单观察位 = 0」必须如实报 0，不能报 5
       · `no_candidate` 全失效、pending 有货但**没有 O3 候选** ⇒ 调用方须 WARNING
       · `no_pending`   全失效且 pending 读不到/为空 ⇒ 调用方须 WARNING
+
+    ★407刀3：健康判据从「在 pending 里找得到」改成「在 pending 里找得到**且状态未死**」。
+      原因：expired 行仍在文件里 ⇒ 旧判据恒判健康 ⇒ 从不补位 ⇒ 观察位数量虚高
+      而可派单数为 0（406 实测 5 条里 3 条 expired、2 条已结案）。
     """
     _pend = pending_rows if isinstance(pending_rows, list) else []
     _hist = history_rows if isinstance(history_rows, list) else []
     _cap = int(WATCH_CAPACITY if capacity is None else capacity)
     _active = list(active_watch_ids())
+    _alive_on = _m407_alive_check_on()
+    _alive = list(alive_watch_ids(_pend))
+    _skipped: list = []          # ★407刀3：被跳过的死状态候选（补位时逐条记）
+    _dead_active: list = []      # ★407刀3：观察位里「在 pending 但已死」的那几个
     _out = {"schema": "zero_break_watch_heal/385.v1", "state": "healthy",
             "active": _active, "added": "", "why": "",
-            "capacity": _cap, "pending_rows": len(_pend)}
+            "capacity": _cap, "pending_rows": len(_pend),
+            # ★407刀3：数量的**两个口径**必须同时给 —— 只给 active 会让人以为
+            #   "5 条观察位"就等于"5 条能派单"，406 就是栽在这个误读上。
+            "n_active": len(_active), "n_eligible": len(_alive),
+            "eligible": _alive, "skipped": _skipped, "dead_active": _dead_active,
+            "alive_check": _alive_on}
 
     # ① 只要还有一个位**在 pending**，就算健康（不折腾）。
     #   ★只看 pending、不看 history：破零观察的是「会不会被选中进沙箱」，
     #   而 history 里的已结案条目（wont_fix/approved/verified）永远不会再被派单；
     #   把它当"活着"会让自愈永不触发 ⇒ 又回到静默失明（本刀要修的就是这个）。
     for _pid in _active:
-        if _watch_find(_pend, _pid) is not None:
-            _out["why"] = "at_least_one_in_pending"
-            _out["changed"] = (_LAST_HEAL_STATE[0] != "healthy")
-            _LAST_HEAL_STATE[0] = "healthy"
-            return _out
+        _row = _watch_find(_pend, _pid)
+        if _row is None:
+            continue
+        if _alive_on and not _m407_watch_alive(_row):
+            # ★407刀3：在文件里 ≠ 活着。expired 行留着不删，但不该撑住"健康"。
+            _dead_active.append(_pid)
+            continue
+        _out["why"] = ("at_least_one_alive_in_pending" if _alive_on
+                       else "at_least_one_in_pending")
+        _out["changed"] = (_LAST_HEAL_STATE[0] != "healthy")
+        _LAST_HEAL_STATE[0] = "healthy"
+        return _out
 
     # ② 全失效：从 pending 里找 O3 候选（真实挑，不编）
     if not _pend:
@@ -1094,15 +1177,29 @@ def self_heal_watch(pending_rows=None, history_rows=None,
             continue
         _it = str(_r.get("issue_type") or "")
         if _rid.startswith("o3_") or _it in _O3_CANDIDATE_TYPES:
+            # ★407刀3：死状态候选**补进来也没用** —— `_m339_o3_dispatch_ready()`
+            #   会在派单侧把它拒掉（`(False, "expired")`）。补位是为了让观察位
+            #   "能读出破零"，补一条永远派不出去的等于自己骗自己。
+            if _alive_on and not _m407_watch_alive(_r):
+                _skipped.append(_rid)
+                continue
             _picks.append(_rid)
             if len(_active) + len(_picks) >= _cap:
                 break
 
     if not _picks:
-        _out["state"] = "no_candidate"
-        _out["why"] = "pending_has_no_o3_candidate"
-        _out["changed"] = (_LAST_HEAL_STATE[0] != "no_candidate")
-        _LAST_HEAL_STATE[0] = "no_candidate"
+        # ★407刀3：`only_expired` 与 `no_candidate` 是**两件事**，不能合并 ——
+        #   · no_candidate：pending 里根本没有 O3 候选 ⇒ 该去造补丁
+        #   · only_expired：有 O3 候选，但全是过期行 ⇒ 该去**重新排发**，不是造补丁
+        #   合成一个状态，告警文案就只能写"没有候选"，把人引到错的方向。
+        if _skipped:
+            _out["state"] = "only_expired"
+            _out["why"] = "all_o3_candidates_are_dead(%s)" % ",".join(WATCH_DEAD_STATUSES)
+        else:
+            _out["state"] = "no_candidate"
+            _out["why"] = "pending_has_no_o3_candidate"
+        _out["changed"] = (_LAST_HEAL_STATE[0] != _out["state"])
+        _LAST_HEAL_STATE[0] = _out["state"]
         return _out
 
     _WATCH_RUNTIME.extend(_picks)
@@ -1110,6 +1207,11 @@ def self_heal_watch(pending_rows=None, history_rows=None,
     _out["added"] = _picks[0]
     _out["added_all"] = list(_picks)
     _out["active"] = list(active_watch_ids())
+    # ★407刀3：补完之后**重新算一次**真实可派单数 —— 新补进来的位也可能
+    #   在 pending 里被同时标成死状态（同一拍里被别的流程改掉），
+    #   不重算就会报一个"补了 3 条所以有 3 条"的乐观数。
+    _out["eligible"] = alive_watch_ids(_pend)
+    _out["n_eligible"] = len(_out["eligible"])
     _out["why"] = "static_watch_all_missing"
     _out["changed"] = (_LAST_HEAL_STATE[0] != "healed:%s" % ",".join(_picks))
     _LAST_HEAL_STATE[0] = "healed:%s" % ",".join(_picks)

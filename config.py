@@ -6837,3 +6837,18 @@ EXPERIENCE_PROMPT_GUARD = True
 # ★为什么默认是 False 而不是 True：这个能力本身就错。留 True 等于默许错答案
 #   上线，等到出问题再关。默认值要选"不出事"的那一边。
 EXPERIENCE_REUSE_EXAMPLE_AS_ANSWER = False
+
+# ========== ★407 批：观察位「健康」是否计入已死状态 ==========
+# 406 批实测：`active_watch_ids()` 静态 2 条 + 自愈补满至 `WATCH_CAPACITY=5`
+# ⇒ 报"5 条观察位"（验收线 ≥3 已达标），而**可派单 0 条**：
+#   3 条 `status="expired_pending"`（派单侧 `_m339_o3_dispatch_ready()` 返
+#   `(False, "expired")`）+ 2 条已结案。
+# 根因是 `self_heal_watch` 的健康判据只看「**在 pending 文件里找得到**」——
+# expired 行明明还在文件里 ⇒ 自愈认为 5 位全健康、不再补位 ⇒ 数量恒虚高。
+# ⇒ 「数量够 ≠ 能派单」。两个模块对同一状态理解不一致。
+#
+# True （默认）= `expired_pending` 不算健康，自愈补位时跳过它、只补真 eligible；
+#                观察位数量另给 `n_eligible`，如实反映可派单数。
+# False        = 恢复 407 前行为（只看"在文件里"），仅供对照排查。
+# ★不动派单侧：它拒派 expired 是**对的**（任务书明令），本开关只改健康判据。
+WATCH_HEAL_ALIVE_ONLY = True
