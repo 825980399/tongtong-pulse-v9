@@ -6881,3 +6881,52 @@ M410_HIT_RATE_ALERT_BELOW = 0.5
 M410_HIT_RATE_EVICT_BELOW = 0.3
 M410_HIT_RATE_ALERT_STREAK = 2
 M410_HIT_RATE_EVICT_STREAK = 5
+
+# ==================== 第411批（遗留修复 + 内存定位 + 经验消费链打通）====================
+# 排发：星轨｜日期：2026-10-31
+# [M411-CFG]
+#
+# ENABLE_M411_MEMORY_BY_ORGAN
+#   默认值：True
+#   语义：开启时 PulseMetricsCollector 每 300s 采一次器官级对象分布并落盘
+#        data/monitor/memory_by_organ_YYYYMMDD.json，health_snapshot 带
+#        memory_by_organ_top3；关闭时该采样口直接返回 disabled（采集主链零影响）。
+#   口径：单进程内**不可分各器官 RSS**（内核不按 Python 类拆页），产物是
+#        "从器官实例出发、深度<=2 的对象图浅尺寸"，产物里 `rss_separable=False`。
+#   读取点：nucleus/observability/memory_by_organ.py::enabled()
+ENABLE_M411_MEMORY_BY_ORGAN = True
+#
+# ENABLE_M411_EFFECT_VERIFY_HEALTH
+#   默认值：True
+#   语义：开启时 health_snapshot.world_model 带
+#        effect_verify_stale / effect_verify_state / effect_verify_age_sec / effect_verify_updated；
+#        关闭时这几个键**不写**（缺读数 ≠ 不旧，绝不写 False 冒充）。
+#   读取点：nucleus/evolution/effect_verify_health.py::enabled()
+ENABLE_M411_EFFECT_VERIFY_HEALTH = True
+#
+# ENABLE_M411_CODE_PROGRESS
+#   默认值：True
+#   语义：开启时 PulseCodeLearner 每轮学习结束原子写 data/context/code_progress.json，
+#        且 get_code_learning_stats() 增加"读落盘快照"这一路（活体读数优先）；
+#        关闭时 store() 拒绝写、取数口不看文件（回落到"取不到就是取不到"）。
+#   读取点：nucleus/observability/code_progress_store.py::enabled()
+ENABLE_M411_CODE_PROGRESS = True
+#
+# ENABLE_M411_EXPERIENCE_HITS
+#   默认值：True
+#   语义：开启时 _build_memory_context 末尾算 top2 经验命中并打 DEBUG 日志，
+#        结果放独立键 experience_hits / experience_hit_n（**不改 search_experience**）；
+#        关闭时完全静默（不查询、不写键值变化、不打日志）。
+#   ★本批只记不拼：命中不进入 prompt（任务书要求一周后再开拼）。
+#   读取点：nucleus/observability/experience_hits.py::enabled()
+ENABLE_M411_EXPERIENCE_HITS = True
+#
+# M411_SIGMA_K / M411_PERIODICITY_KEEP
+#   默认值：2.0 / 100
+#   语义：M411_SIGMA_K 是"按 σ 定容差"的系数（目标 tol≈K·σ；410 的 5% 口径实测
+#        落到 1.02σ~9.18σ 两端，故 411 改按 σ）；M411_PERIODICITY_KEEP 是 StreamMiner
+#        每类保留的周期样本数（410 时硬编码 50，回放样本太少见 411 批交付报告）。
+#   读取点：nucleus/world_model/periodic_profile.py::sigma_k()
+#          nucleus/genesis/StreamMiner.py::StreamMiner.__init__
+M411_SIGMA_K = 2.0
+M411_PERIODICITY_KEEP = 100
