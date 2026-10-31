@@ -219,8 +219,13 @@ class TestC_KnowledgeGuard(unittest.TestCase):
                 "best_score": 0.0, "threshold": 0.5, "n_experiences": 128, "hit": False,
             }
 
-            def search(self, q):
+            def search(self, q, exclude_types=None):
+                # ★407刀2：签名跟上 `ReasoningExperience.search(question, exclude_types=None)`。
+                #   不改的话本 mock 会 TypeError，被路由外层 `except Exception` 吞掉，
+                #   `_calls["n"]` 不增 ⇒ 4 个用例假红（测出来的是 mock 过时，不是代码坏了）。
+                #   顺手把实参记下来，供 test_04b 断言"路由侧确实注入了 _SKIP_TYPES"。
                 outer._calls["n"] += 1
+                outer._calls.setdefault("exclude_types", []).append(exclude_types)
                 return None  # 放行后不命中 ⇒ 本函数仍走 return None（被测路径终结在此）
 
         self._p1 = patch.object(_rxmod, "get_reasoning_experience", lambda: _RXMod())
@@ -267,6 +272,16 @@ class TestC_KnowledgeGuard(unittest.TestCase):
         iw = _mk_iw(pool, [])
         iw._detect_experience_route(_Ctx("什么是量子纠缠"))
         self.assertEqual(1, self._calls["n"], "放行后必须真的去查经验库")
+
+    def test_04b_search_called_with_skip_types(self):
+        """★407刀2：放行后的检索必须**带上 `_SKIP_TYPES`** —— 否则又回到"命中后再砍"。"""
+        pool = _Pool([_N("无关", ["天气"])])
+        iw = _mk_iw(pool, [])
+        iw._detect_experience_route(_Ctx("什么是量子纠缠"))
+        _seen = self._calls.get("exclude_types") or []
+        self.assertTrue(_seen, "search 一次都没被调用")
+        self.assertEqual(("remote_api_confirmed", "remote_api"), tuple(_seen[0]),
+                         "路由侧没有把 _SKIP_TYPES 注入检索层")
 
     def test_05_no_pool_passes_not_blocks(self):
         iw = _mk_iw(None, [])
@@ -393,8 +408,21 @@ class TestE_Structure(unittest.TestCase):
         # search 调用有多次（默认算子/回退），埋点必须在**所有** search 之后
         self.assertGreaterEqual(t[0], min(s))
         # 精确定位：埋点应紧跟 |_exp_match = ...search(...)| 那一次
-        _seg = ast.get_source_segment(_src(_IW), self.fn) or ""
-        self.assertIn("_reasoning_exp.search(ctx.question)", _seg)
+        # ★407刀2：原断言按字符串匹配 `_reasoning_exp.search(ctx.question)`，
+        #   刀2 加了 `exclude_types=_SKIP_TYPES` 实参后必然红 —— 那是**钉措辞**，
+        #   不是本例要守的语义（本例守的是"埋点紧跟真的那次检索"）。
+        #   改成 AST：只要求存在对 `_reasoning_exp.search` 的调用，不锁实参写法；
+        #   实参正确性由 test_m407_k2_type_gate::test_51 单独守。
+        _found = None
+        for _n in ast.walk(self.fn):
+            if (isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)
+                    and _n.func.attr == "search"
+                    and isinstance(_n.func.value, ast.Name)
+                    and _n.func.value.id == "_reasoning_exp"):
+                _found = _n
+                break
+        self.assertIsNotNone(_found, "找不到对 _reasoning_exp.search 的调用")
+        self.assertLessEqual(_found.lineno, t[0], "埋点早于检索 ⇒ 埋的是上一轮的读数")
 
     def test_02_trace_before_skip_types(self):
         t = self._call_lines("_m406_trace_experience_route")

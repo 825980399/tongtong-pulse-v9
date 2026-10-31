@@ -1131,7 +1131,7 @@ def self_heal_watch(pending_rows=None, history_rows=None,
             #   "5 条观察位"就等于"5 条能派单"，406 就是栽在这个误读上。
             "n_active": len(_active), "n_eligible": len(_alive),
             "eligible": _alive, "skipped": _skipped, "dead_active": _dead_active,
-            "alive_check": _alive_on}
+            "alive_check": _alive_on, "why_detail": ""}
 
     # ① 只要还有一个位**在 pending**，就算健康（不折腾）。
     #   ★只看 pending、不看 history：破零观察的是「会不会被选中进沙箱」，
@@ -1145,8 +1145,12 @@ def self_heal_watch(pending_rows=None, history_rows=None,
             # ★407刀3：在文件里 ≠ 活着。expired 行留着不删，但不该撑住"健康"。
             _dead_active.append(_pid)
             continue
-        _out["why"] = ("at_least_one_alive_in_pending" if _alive_on
-                       else "at_least_one_in_pending")
+        # ★407刀3：`why` 的取值**保持 385 批的既有枚举**（`at_least_one_in_pending`）——
+        #   它是 385 的测试与报告都钉过的机器可读值，为了一句更精确的文案去改它，
+        #   等于用"措辞变更"换取"契约破裂"。精确性由新增的 `why_detail` 承载。
+        _out["why"] = "at_least_one_in_pending"
+        _out["why_detail"] = ("at_least_one_alive_in_pending" if _alive_on
+                              else "at_least_one_in_pending")
         _out["changed"] = (_LAST_HEAL_STATE[0] != "healthy")
         _LAST_HEAL_STATE[0] = "healthy"
         return _out

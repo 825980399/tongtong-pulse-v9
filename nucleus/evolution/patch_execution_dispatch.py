@@ -3242,9 +3242,12 @@ def _m351_watch_zero_break(pending_rows: list, results: list | None,
             if _heal.get("state") == "healed":
                 # ★407刀3：补了哪几条、跳过了哪几条、补完还剩几个能派单 —— 一行给全。
                 #   只报 added 不报 skipped，读日志的人会以为"pending 里就这些，全补上了"。
+                # ★407刀3：**保留 385 批的日志前缀原样**（385 的测试按串匹配它），
+                #   新读数接在同一行后面 —— 加信息不该以改旧措辞为代价。
                 _module_logger.warning(
-                    "[407刀3] 破零观察位无一条存活 ⇒ 已自愈补位:"
-                    " added=%s skipped(死状态)=%s active=%d eligible=%d/%d pending=%d",
+                    "[385刀1] 破零观察位在 pending 里全失效 ⇒ 已自愈补位:"
+                    " [407刀3] added=%s skipped(死状态)=%s active=%d eligible=%d/%d"
+                    " pending=%d",
                     list(_heal.get("added_all") or []), list(_heal.get("skipped") or []),
                     int(_heal.get("n_active") or 0), int(_heal.get("n_eligible") or 0),
                     int(_heal.get("capacity") or 0), int(_heal.get("pending_rows") or 0))

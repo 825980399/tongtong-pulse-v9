@@ -137,7 +137,9 @@ class TestC_HealthyFlips(_Base):
         with patch("config.WATCH_HEAL_ALIVE_ONLY", True, create=True):
             out = self.zb.self_heal_watch(rows, [])
         self.assertEqual("healthy", out["state"])
-        self.assertIn("alive", out["why"])
+        # ★`why` 保持 385 批的既有枚举（契约），精确性读 `why_detail`
+        self.assertEqual("at_least_one_in_pending", out["why"])
+        self.assertEqual("at_least_one_alive_in_pending", out["why_detail"])
 
     def test_22_not_in_pending_still_unhealthy(self):
         """压根不在 pending 的位照旧不算健康（刀3 没动这一半）。"""
@@ -242,12 +244,33 @@ class TestG_SwitchRollback(_Base):
         self.assertEqual("healed", out["state"], "关掉开关应恢复到 407 前：expired 也补")
         self.assertEqual(set(r["patch_id"] for r in ONLY_DEAD), set(out["added_all"]))
 
-    def test_61_off_says_old_why(self):
-        """开关关时 why 用 407 前措辞（`at_least_one_in_pending`），不冒充新口径。"""
+    def test_61_why_enum_not_broken(self):
+        """★385 批钉过的 `why` 枚举**不许因刀3 而变** —— 精确性走 `why_detail`。
+
+        ★为什么这条在案：385 的测试按字符串匹配 `at_least_one_in_pending`，
+          改措辞 = 契约破裂，而刀3 想要的精确性用新字段就能拿到。
+          「加信息不改旧措辞」是本项目反复栽过的坑（见 MEMORY 环境坑一节）。
+        """
         rows = [{"patch_id": self.zb.WATCH_IDS[0], "status": "expired_pending"}]
+        live = [{"patch_id": self.zb.WATCH_IDS[0], "status": "pending"}]
         with patch("config.WATCH_HEAL_ALIVE_ONLY", False, create=True):
-            out = self.zb.self_heal_watch(rows, [])
-        self.assertEqual("at_least_one_in_pending", out["why"])
+            old = self.zb.self_heal_watch(rows, [])
+        self.zb.reset_watch_runtime()
+        with patch("config.WATCH_HEAL_ALIVE_ONLY", True, create=True):
+            new = self.zb.self_heal_watch(live, [])
+        self.assertEqual("at_least_one_in_pending", old["why"])
+        self.assertEqual("at_least_one_in_pending", new["why"],
+                         "两开关下 why 必须同值")
+        self.assertEqual("at_least_one_in_pending", old["why_detail"])
+        self.assertEqual("at_least_one_alive_in_pending", new["why_detail"])
+
+    def test_63_caller_log_prefix_preserved(self):
+        """385 批的日志前缀必须原样保留（385 测试按串匹配它）。"""
+        seg = io.open(_DSP, encoding="utf-8", errors="replace").read()
+        seg = seg[seg.index("def _m351_watch_zero_break"):]
+        seg = seg[:seg.index("def dispatch_o3_approved")]
+        self.assertIn("[385刀1] 破零观察位在 pending 里全失效 ⇒ 已自愈补位", seg)
+        self.assertIn("[407刀3]", seg)
 
     def test_62_config_default_is_true(self):
         import config
