@@ -1551,6 +1551,14 @@ class PulseMetricsCollector(BasePulseOrgan):
                     silent_exc(_rpe382,
                                where="PulseMetricsCollector::_collect_memory_pressure 382刀9")
                     _out["resource_probe"] = None
+                # ★411刀1：器官级内存归因（300s 节流；异常不影响采集主链）
+                try:
+                    _out["memory_by_organ"] = self._m411_memory_by_organ(
+                        _out.get("process_rss_mb"))
+                except Exception as _mbo411:
+                    silent_exc(_mbo411,
+                               where="PulseMetricsCollector::_collect_memory_pressure 411刀1")
+                    _out["memory_by_organ"] = None
                 # ★383刀1（T-383-tier分布）：tier 分布慢节奏落盘（节流 300s，失败不影响采集）。
                 try:
                     _out["tier_distribution_path"] = self._m383_dump_tier_distribution()
@@ -1690,6 +1698,65 @@ class PulseMetricsCollector(BasePulseOrgan):
             silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
             _out["reason"] = f"采集异常: {type(_e).__name__}"
         return _out
+
+    # ========== ★411刀1：器官级内存归因（每 300s 一次，挂在已活采样链上） ==========
+
+    def _m411_memory_by_organ(self, rss_mb: float | None = None) -> dict[str, Any]:
+        """采一次器官级对象分布并落盘（**节流 300s**，异常不外抛）。
+
+        为什么不做"各器官 RSS"：单进程内内核不会按 Python 类拆 RSS（见
+        `nucleus/observability/memory_by_organ.py` 顶部说明）。这里给的是
+        **从器官实例出发、深度≤2 的对象图浅尺寸**，并在产物里写清口径。
+
+        省电设计：节流判定放在最前，平时每拍只比一次时间就返回 ——
+        与 383刀1 的 tier 分布落盘同型，不新建定时器。
+        """
+        try:
+            from nucleus.observability import memory_by_organ as _mo411
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m411_memory_by_organ:import")
+            return {"state": "unavailable", "reason": "import_failed"}
+        if not _mo411.enabled():
+            return {"state": "disabled", "reason": "ENABLE_M411_MEMORY_BY_ORGAN=False"}
+        _now = time.time()
+        _last = float(getattr(self, "_m411_mbo_last", 0.0) or 0.0)
+        if (_now - _last) < float(_mo411.SAMPLE_EVERY_SEC):
+            # 未到点：直接回上次读数（快照字段仍有值，不必重新遍历）
+            _cached = getattr(self, "_m411_mbo_reading", None)
+            return _cached if isinstance(_cached, dict) else {
+                "state": "throttled", "reason": "first_sample_pending"}
+        self._m411_mbo_last = _now
+        _r = _mo411.sample_organs(rss_mb=rss_mb, now=_now)
+        _w = _mo411.append_record(_r, now=_now, force=True,
+                                  sample_every_sec=_mo411.SAMPLE_EVERY_SEC)
+        self._m411_mbo_reading = _r
+        _out = {
+            "state": _r.get("state"),
+            "mode": _r.get("mode"),
+            "basis": _r.get("basis"),
+            "rss_mb": _r.get("rss_mb"),
+            "rss_separable": False,
+            "elapsed_ms": _r.get("elapsed_ms"),
+            "objects_total": _r.get("objects_total"),
+            "objects_attributed": _r.get("objects_attributed"),
+            "coverage": _r.get("coverage"),
+            "partial": _r.get("partial"),
+            "top3": _mo411.top3(_r),
+            "organs": _r.get("organs"),
+            "path": _w.get("path"),
+            "written": _w.get("written"),
+            "reason": _r.get("reason"),
+            "ts": _r.get("ts"),
+        }
+        _module_logger.debug("[411刀1] 器官内存采样: state=%s elapsed=%sms top3=%s",
+                             _out.get("state"), _out.get("elapsed_ms"),
+                             [(t.get("organ"), t.get("objs")) for t in _out["top3"]])
+        return _out
+
+    def _m411_mbo_last_reading(self) -> dict[str, Any]:
+        """取上次采样读数（快照用；没有就返回空结构，不触发采样）。"""
+        _r = getattr(self, "_m411_mbo_reading", None)
+        return _r if isinstance(_r, dict) else {}
 
     def _build_observability_snapshot(self, skip_slow: bool = False) -> dict[str, Any]:
         """构建完整的可观测性快照。
@@ -1855,6 +1922,62 @@ class PulseMetricsCollector(BasePulseOrgan):
             silent_exc(_e_wm, where="PulseMetricsCollector::_build_observability_snapshot"
                                     "[world_model]")
             snapshot["world_model"] = {"enabled": None, "error": type(_e_wm).__name__}
+
+        # ★411刀2：效果验证新鲜度（任务书指定落在 world_model.effect_verify_stale）。
+        #   为什么放这里：`effect_verify.json` 从 10-25 起没动过，而"停更"这件事
+        #   没有任何地方在报 —— 只能靠快照每 5s 被读的那一路把它顶出来。
+        #   ★stale=None 表示**判不了**（读不到 updated），不是"不旧"。
+        try:
+            from nucleus.evolution import effect_verify_health as _evh411
+            # ★灰度：关掉就**不写这几个键**（缺读数 ≠ 不旧，绝不写 False 冒充）
+            if _evh411.enabled():
+                _wm = snapshot.get("world_model")
+                if not isinstance(_wm, dict):
+                    _wm = {}
+                _wm.update(_evh411.snapshot_block())
+                snapshot["world_model"] = _wm
+        except Exception as _e_evh:
+            silent_exc(_e_evh, where="PulseMetricsCollector::_build_observability_snapshot"
+                                     "[effect_verify]")
+            _wm = snapshot.get("world_model")
+            if not isinstance(_wm, dict):
+                _wm = {}
+            _wm["effect_verify_stale"] = None
+            _wm["effect_verify_state"] = "unavailable"
+            snapshot["world_model"] = _wm
+
+        # ★411刀1：器官级内存前 3 名（只放 3 条，避免快照膨胀）。
+        #   ★口径：`est_mb` 是**对象图浅尺寸**，不是 RSS —— 单进程内不可分。
+        #   取不到就写 state，不写空 list 冒充"没有器官占内存"。
+        try:
+            _mbo_r = self._m411_mbo_last_reading()
+            if _mbo_r:
+                _mbo_top3 = []
+                for _t in (_mbo_r.get("organs") or [])[:3]:
+                    _mbo_top3.append({"organ": _t.get("organ"),
+                                      "objs": _t.get("objs"),
+                                      "est_mb": _t.get("est_mb")})
+                snapshot["memory_by_organ_top3"] = _mbo_top3
+                snapshot["memory_by_organ"] = {
+                    "state": _mbo_r.get("state"),
+                    "mode": _mbo_r.get("mode"),
+                    "basis": _mbo_r.get("basis"),
+                    "rss_separable": False,
+                    "objects_total": _mbo_r.get("objects_total"),
+                    "objects_attributed": _mbo_r.get("objects_attributed"),
+                    "coverage": _mbo_r.get("coverage"),
+                    "elapsed_ms": _mbo_r.get("elapsed_ms"),
+                    "ts": _mbo_r.get("ts"),
+                }
+            else:
+                snapshot["memory_by_organ_top3"] = []
+                snapshot["memory_by_organ"] = {"state": "not_sampled_yet"}
+        except Exception as _e_mbo:
+            silent_exc(_e_mbo, where="PulseMetricsCollector::_build_observability_snapshot"
+                                    "[memory_by_organ]")
+            snapshot["memory_by_organ_top3"] = []
+            snapshot["memory_by_organ"] = {"state": None,
+                                           "error": type(_e_mbo).__name__}
         return snapshot
 
     # ========== ★403刀2：温/冷指标分频 ==========
