@@ -50,6 +50,29 @@ SCHEMA = "patch_risk_gate/406.v1"
 #: 任务书对 low 的 diff 定义 —— **只**动这几类才可能是 low
 DIFF_NARROW_KINDS = ("comment_only", "doc_only", "test_only")
 
+#: ★412刀4：`delete_only`（只删不增）**能识别，但默认不开闸**。
+#:   为什么不放进 DIFF_NARROW_KINDS：放进去就等于**立刻真放行删代码**，
+#:   而任务书/红线都写明"本批只 dry-run 不真 apply"。所以判据先具备、
+#:   开闸走独立开关 `config.PATCH_M412_DELETE_ONLY_GATE`（默认 False ⇒ 零回归）。
+DELETE_ONLY_KIND = "delete_only"
+
+
+def _delete_only_enabled() -> bool:
+    """★412刀4：是否把 `delete_only` 计入窄闸（默认 False = 不开闸）。"""
+    try:
+        import config as _c412
+        return bool(getattr(_c412, "PATCH_M412_DELETE_ONLY_GATE", False))
+    except Exception as _e:
+        silent_exc(_e, where="patch_risk_gate._delete_only_enabled", level="debug")
+        return False
+
+
+def narrow_kinds() -> tuple:
+    """当前生效的窄闸清单（含灰度开关控制的 delete_only）。"""
+    if _delete_only_enabled():
+        return tuple(DIFF_NARROW_KINDS) + (DELETE_ONLY_KIND,)
+    return tuple(DIFF_NARROW_KINDS)
+
 #: 台账里算「已验证」的状态集合（与 `zero_break_judge.VERIFIED_STATUSES` 同源）
 VERIFIED_STATUSES = ("runtime_verified", "verified", "applied_verified")
 
@@ -119,6 +142,21 @@ def _skeleton(src: str) -> str:
     return ast.dump(_tree)
 
 
+def _is_delete_only(orig: str, new: str) -> bool:
+    """是否"只删不增"：**无任何新增有效行** 且 **有效行数变少**。
+
+    ★为什么不用 difflib 精确 diff：这里的用途是"这条补丁有没有新增代码"，
+      新增行判定用 `_added_lines`（与 import 增量判定同一口径）就够，
+      精确 diff 反而会把"移动了几行"判成既增又删 —— 那不是 delete_only。
+    """
+    _added = _added_lines(orig, new)
+    if _added:
+        return False
+    def _n(txt: str) -> int:
+        return len([_l for _l in txt.splitlines() if _l.strip()])
+    return _n(new) < _n(orig)
+
+
 def diff_kind(record: Any) -> str:
     """这次补丁**动了什么**：`comment_only` / `doc_only` / `test_only` / `logic` / `unknown`。
 
@@ -151,6 +189,9 @@ def diff_kind(record: Any) -> str:
     except (SyntaxError, ValueError) as _e:
         silent_exc(_e, where="patch_risk_gate.diff_kind 解析前后片段")
         return "unknown"
+    # ★412刀4：只删不增 ⇒ `delete_only`（注意：**识别** 与 **放行** 是两件事）
+    if _is_delete_only(_orig, _new):
+        return DELETE_ONLY_KIND
     return "logic"
 
 
@@ -244,7 +285,7 @@ def judge(record: Any, project_root: str | None = None) -> dict:
     _c3 = check_not_approval_pool(record)
     if not _c3["ok"] or not _c2["ok"]:
         _level = "high"
-    elif _kind in DIFF_NARROW_KINDS and _c1["ok"]:
+    elif _kind in narrow_kinds() and _c1["ok"]:
         _level = "low"
     else:
         _level = "medium"
@@ -472,5 +513,6 @@ def gate_status() -> dict:
         silent_exc(_e, where="patch_risk_gate.gate_status 读开关")
         _on = True
     return {"schema": SCHEMA, "gate_on": _on,
-            "narrow_kinds": list(DIFF_NARROW_KINDS),
+            "narrow_kinds": list(narrow_kinds()),
+            "delete_only_enabled": _delete_only_enabled(),
             "approval_pool_files": len(APPROVAL_POOL_FILES)}
