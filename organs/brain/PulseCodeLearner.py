@@ -3179,6 +3179,27 @@ class PulseCodeLearner(BasePulseOrgan):
         try:
             self._log(LogLevel.INFO, "代码自我审视触发...")
             inspector = self._get_inspector()
+            # ★416刀1：**启动窗口内**的全库扫方法交给 self_inspector 的低优先级
+            #   延迟线程执行，不与 L0 生命线抢 CPU。
+            #   实测依据（2026-11-01 13:13:02 活体）：13:14:05 这里触发 →
+            #   `detect_code_issues()` 全库扫方法体（`[方法体定位]` 峰值 112 次/秒）
+            #   → 13:14:35 心跳守卫已持有 21.8s → 13:14:45 接管续跳
+            #   → 13:44 假死探测器连发、进程冻结。
+            #   回退：开关关 / 已过启动窗口 / 线程正在跑 ⇒ 逐字回到下面的同步调用。
+            _sub = getattr(inspector, "submit_deferred_scan", None)
+            if callable(_sub):
+                _defer = _sub(reason="code_review")
+                if isinstance(_defer, dict) and _defer.get("started"):
+                    self._log(LogLevel.INFO,
+                              "[416刀1] 代码自我审视已交给低优先级延迟线程"
+                              "（延迟%.0fs，不抢 L0；why=%s）"
+                              % (float(_defer.get("delay_sec") or 0.0),
+                                 _defer.get("why")))
+                    return
+                if isinstance(_defer, dict):
+                    self._log(LogLevel.DEBUG,
+                              "[416刀1] 延迟线程未启动（%s）⇒ 走原同步扫描"
+                              % _defer.get("why"))
             issues = inspector.detect_code_issues()
 
             # ★进化闭环升级(完美级): 接入日志动态归因（阶段1：如何发现问题）

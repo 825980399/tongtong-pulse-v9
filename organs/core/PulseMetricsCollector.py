@@ -172,6 +172,61 @@ def _m389_tm_prune_baselines(dir_path: str, keep: int | None = None) -> list:
     return _dropped
 
 
+# ============================================================================
+# ★416刀2：内存探针护栏（单飞租约 / 尝试即占槽 / 堆高跳过 tracemalloc）
+# ----------------------------------------------------------------------------
+# 真凶（2026-11-01 实测定性）：
+#   `_m339_memory_probe` 在 `M339_MEMORY_PROBE_HOURS=(5,13)` 那两个槽位跑
+#   tracemalloc 全堆快照。`M339_TRACEMALLOC_MODE=resident` ⇒ 1.4M 活块常驻追踪，
+#   单次 `take_snapshot()` 实测 309 / 997 / 1624 / 1804 秒，随后 MemoryError。
+#   而 `_m339_probe_last_slot` **只在写盘成功后**才置位 ⇒ 失败路径 `return` 后
+#   30s 心跳再来一次 ⇒ 多份快照在飞、层层叠加：
+#     · 05:00 触发 → 05:05:12(309s) / 05:05:17(289s) 两笔同时在跑
+#     · 05:22(997s) / 05:46(1804s) / 05:54(1624s) / 三次 MemoryError
+#     · 内存 05:00-05:56 由 24.8% 涨到 81.3%（+27GB），13:00 那轮直接顶到 95%
+#   结论：**不是对象泄漏，是快照自身层叠**。三道护栏如下。
+# ============================================================================
+
+#: 单次探针的租约上限（秒）：租约到期自动失效，不依赖 finally 复位
+_M416_PROBE_MAX_RUNTIME_SEC = 900.0
+
+
+def _m416_probe_cfg(key: str, default):
+    """读 416 护栏配置（取不到就回默认，不抛）。"""
+    try:
+        import config as _c
+        return getattr(_c, key, default)
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector._m416_probe_cfg", level="debug")
+        return default
+
+
+def _m416_probe_guard_on() -> bool:
+    """★416刀2：护栏总开关 `ENABLE_M416_MEMORY_PROBE_GUARD`（缺省 True）。"""
+    return bool(_m416_probe_cfg("ENABLE_M416_MEMORY_PROBE_GUARD", True))
+
+
+def _m416_probe_skip_heap_mb() -> float:
+    """★416刀2：堆超过这个量级就不起 tracemalloc 快照（缺省 12000MB）。"""
+    try:
+        return float(_m416_probe_cfg("M416_MEMORY_PROBE_SKIP_HEAP_MB", 12000.0))
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="PulseMetricsCollector._m416_probe_skip_heap_mb",
+                   level="debug")
+        return 12000.0
+
+
+def _m416_probe_max_runtime_sec() -> float:
+    """★416刀2：单飞租约秒数（缺省 900s）。"""
+    try:
+        return float(_m416_probe_cfg("M416_MEMORY_PROBE_MAX_RUNTIME_SEC",
+                                     _M416_PROBE_MAX_RUNTIME_SEC))
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="PulseMetricsCollector._m416_probe_max_runtime_sec",
+                   level="debug")
+        return _M416_PROBE_MAX_RUNTIME_SEC
+
+
 def _m377_tm_ensure() -> dict:
     """确保 tracemalloc 处于期望状态（只在 `resident` 模式 start，且**不 stop**）。
 
@@ -839,6 +894,33 @@ class PulseMetricsCollector(BasePulseOrgan):
                               if _in_slot else
                               "not_in_slot(hour=%d slots=%s)" % (_lt.tm_hour, _hours))
             return _out
+        # ★416刀2：三道护栏 —— 见文件头 `_m416_probe_guard_on` 上方长注释。
+        if _m416_probe_guard_on():
+            # ① 租约式单飞：上一轮没结束就不起第二轮（租约到期自动失效，
+            #    不依赖 finally —— 原实现有 4 个提前 return，用布尔锁会永久卡死）。
+            _now0 = time.time()
+            _lease = float(getattr(self, "_m416_probe_busy_until", 0.0) or 0.0)
+            if _now0 < _lease:
+                _out["reason"] = ("busy（上一轮未结束，租约剩 %.0fs）"
+                                  % (_lease - _now0))
+                return _out
+            self._m416_probe_busy_until = _now0 + _m416_probe_max_runtime_sec()
+            # ② 尝试即占槽：一轮只试一次。原实现只在写盘成功后置
+            #    `_m339_probe_last_slot` ⇒ 超时/异常后每 30s 重试一次，
+            #    多份 tracemalloc 快照层叠 = 11-01 内存雪崩的直接机制。
+            if "tracemalloc" in _mode:
+                self._m339_probe_last_slot = _slot
+            if _heap_hi:
+                self._m339_probe_last_gc_slot = _slot
+            # ③ 堆太高 ⇒ 只做 gc 计数。1.4M 活块上 take_snapshot 单次 300~1800s，
+            #    结论还拿不到（产物里 tracemalloc_rows 恒空）—— 成本收益完全倒挂。
+            if "tracemalloc" in _mode and heap_mb is not None \
+                    and float(heap_mb) > _m416_probe_skip_heap_mb():
+                _mode = "gc_objects"
+                self._log(LogLevel.WARNING,
+                          "[416刀2] heap=%.0fMB > %.0fMB ⇒ 本轮跳过 tracemalloc"
+                          " 快照（11-01 实测单次 300~1800s 且随后 MemoryError）"
+                          % (float(heap_mb), _m416_probe_skip_heap_mb()))
         _t0 = time.perf_counter()
         # ★377刀4：产物目录提前解析 —— 两快照差分的基线文件也要落在同一个（可能是
         #   被域过滤改道后的）目录里；改道逻辑本身零改动，只把位置前移。

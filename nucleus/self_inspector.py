@@ -434,6 +434,129 @@ def _m414_private_pool_on() -> bool:
                    level="debug")
         return True
 
+# ============================================================================
+# ★416刀1：启动期「全库扫方法」挪到独立低优先级线程
+# ----------------------------------------------------------------------------
+# 实测（2026-11-01 13:13:02 那次活体）：
+#   13:14:05 `代码自我审视触发` → `detect_code_issues()` 全库扫方法体
+#   （`[方法体定位]` 峰值 112 次/秒）→ 13:14:35 心跳守卫已持有 21.8s
+#   → 13:14:45 `heartbeat_guard_takeover` 接管续跳（抓栈 logs/heartbeat_stall）
+#   → 13:44 假死探测器连发、进程冻结。
+# 处置：启动窗口内的这次扫描改由**独立 daemon 线程 + 最低线程优先级 + 延迟 30s**
+#   执行，且每扫 10 个方法体让出 1ms，不与 L0 生命线抢 CPU。
+#   开关 `ENABLE_SELF_INSPECTOR_STARTUP_SCAN` 关闭 ⇒ 逐字回到原同步路径。
+# ============================================================================
+
+#: 默认延迟秒数（任务书：启动后延迟 30 秒再开始扫）
+_M416_SCAN_DELAY_SEC = 30.0
+#: 默认「启动窗口」秒数：只有进程启动后这么久以内的请求才走延迟线程
+_M416_STARTUP_WINDOW_SEC = 180.0
+#: 每扫多少个方法体让出一次
+_M416_YIELD_EVERY = 10
+#: 每次让出多少秒
+_M416_YIELD_SEC = 0.001
+
+#: 当前是否处于「延迟扫描线程」上下文（只有该线程里为 True）
+_m416_coop_on = False
+#: 让步计数器（模块级，便于单测断言「确实让过」）
+_m416_coop_ticks = 0
+
+
+def m416_coop_stats() -> dict:
+    """★416刀1：让步计数（只读，供单测/状态面）。"""
+    return {"on": bool(_m416_coop_on),
+            "ticks": int(_m416_coop_ticks),
+            "yield_every": int(_M416_YIELD_EVERY),
+            "yield_sec": float(_M416_YIELD_SEC)}
+
+
+def _m416_set_coop(on: bool) -> None:
+    """★416刀1：置/清「让步上下文」标志（只由延迟扫描线程体调用）。"""
+    global _m416_coop_on
+    _m416_coop_on = bool(on)
+
+
+def _m416_coop_tick() -> None:
+    """★416刀1：延迟扫描线程里每 `_M416_YIELD_EVERY` 次调用让出 `_M416_YIELD_SEC`。
+
+    只在延迟扫描线程内生效（`_m416_coop_on` 由线程体置位/复位），其余调用方
+    （演化链、代码学习）**零开销**：一次布尔判断就返回。
+    """
+    global _m416_coop_ticks
+    if not _m416_coop_on:
+        return
+    _m416_coop_ticks += 1
+    if _m416_coop_ticks % _M416_YIELD_EVERY:
+        return
+    time.sleep(_M416_YIELD_SEC)
+
+
+def _m416_set_thread_lowest() -> str:
+    """★416刀1：把**当前线程**优先级降到最低。
+
+    Returns:
+        后端名（`win32_lowest` / `win32_failed` / `posix_nice19` / `unavailable`）——
+        带回返回值而不是纯副作用，单测/状态面才能断言「确实降过」。
+    """
+    try:
+        if os.name == "nt":
+            import ctypes
+            _k32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+            # ★必须显式 argtypes/restype（416 首跑实测栽在这里）：
+            #   ctypes 默认按 c_int 传参，会把 64 位伪句柄 0xFFFFFFFFFFFFFFFE
+            #   截成 0x00000000FFFFFFFE ⇒ SetThreadPriority 返回 0（看起来像"不支持"，
+            #   其实是把句柄传坏了）。GetCurrentThread 的 restype 也必须是 c_void_p。
+            _k32.GetCurrentThread.restype = ctypes.c_void_p
+            _k32.SetThreadPriority.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            _k32.SetThreadPriority.restype = ctypes.c_int
+            _k32.GetThreadPriority.argtypes = [ctypes.c_void_p]
+            _k32.GetThreadPriority.restype = ctypes.c_int
+            _h = ctypes.c_void_p(_k32.GetCurrentThread())
+            # THREAD_PRIORITY_LOWEST = -2（Windows SDK winbase.h）
+            if not _k32.SetThreadPriority(_h, -2):
+                return "win32_failed"
+            _got = int(_k32.GetThreadPriority(_h))
+            return "win32_lowest" if _got == -2 else "win32_set_but_%d" % _got
+        os.nice(19)  # type: ignore[attr-defined]
+        return "posix_nice19"
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector._m416_set_thread_lowest", level="debug")
+        return "unavailable"
+
+
+def m416_scan_switch_on() -> bool:
+    """★416刀1：`ENABLE_SELF_INSPECTOR_STARTUP_SCAN`（缺省 True）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_SELF_INSPECTOR_STARTUP_SCAN", True))
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector.m416_scan_switch_on", level="debug")
+        return True
+
+
+def m416_scan_delay_default() -> float:
+    """★416刀1：`M416_STARTUP_SCAN_DELAY_SEC`（缺省 30s）。"""
+    try:
+        import config as _c
+        return float(getattr(_c, "M416_STARTUP_SCAN_DELAY_SEC",
+                             _M416_SCAN_DELAY_SEC))
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector.m416_scan_delay_default", level="debug")
+        return _M416_SCAN_DELAY_SEC
+
+
+def m416_startup_window_default() -> float:
+    """★416刀1：`M416_STARTUP_WINDOW_SEC`（缺省 180s）。"""
+    try:
+        import config as _c
+        return float(getattr(_c, "M416_STARTUP_WINDOW_SEC",
+                             _M416_STARTUP_WINDOW_SEC))
+    except Exception as _e:
+        silent_exc(_e, where="self_inspector.m416_startup_window_default",
+                   level="debug")
+        return _M416_STARTUP_WINDOW_SEC
+
+
 
 class SelfInspector(SilentLogMixin):
     """
@@ -1862,6 +1985,8 @@ class SelfInspector(SilentLogMixin):
         Returns:
             包含方法详情和代码体的字典，如果找不到则返回None
         """
+        # ★416刀1：延迟扫描线程里每 10 个方法体让出 1ms（其余调用方零开销）
+        _m416_coop_tick()
         all_organs = self._scan_all_organs()
         organ_info = all_organs.get(organ_name)
         if not organ_info:
@@ -2565,6 +2690,162 @@ class SelfInspector(SilentLogMixin):
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
 
         return classes
+
+    # ==================================================================
+    # ★416刀1：启动期全库扫方法 —— 独立低优先级延迟线程
+    # ==================================================================
+
+    def m416_scan_state(self) -> dict[str, Any]:
+        """★416刀1：延迟扫描线程的只读状态（供 /status、单测与停机确认）。"""
+        _th = getattr(self, "_m416_scan_thread", None)
+        return {
+            "switch": bool(m416_scan_switch_on()),
+            "started": bool(getattr(self, "_m416_scan_started", False)),
+            "running": bool(_th is not None and _th.is_alive()),
+            "thread_name": (_th.name if _th is not None else ""),
+            "priority_backend": str(getattr(self, "_m416_priority_backend", "") or ""),
+            "delay_sec": float(getattr(self, "_m416_scan_delay",
+                                      _M416_SCAN_DELAY_SEC)),
+            "wait_sec": round(float(getattr(self, "_m416_wait_sec", 0.0)), 3),
+            "runs": int(getattr(self, "_m416_scan_runs", 0)),
+            "last": dict(getattr(self, "_m416_scan_last", {}) or {}),
+            "coop": m416_coop_stats(),
+        }
+
+    def in_startup_window(self, window_sec: float | None = None) -> bool:
+        """★416刀1：现在是否还在「启动窗口」内（自 `_boot_ts` 起算）。
+
+        `_boot_ts` 为 0（构造异常）时保守返回 True —— 宁可走延迟线程，
+        也不在启动期把主链拉去全库扫。
+        """
+        _w = (float(window_sec) if window_sec is not None
+              else m416_startup_window_default())
+        _b = float(getattr(self, "_boot_ts", 0) or 0)
+        if _b <= 0:
+            return True
+        return (time.time() - _b) <= _w
+
+    def submit_deferred_scan(self, reason: str = "code_review",
+                             delay_sec: float | None = None,
+                             force: bool = False) -> dict[str, Any]:
+        """★416刀1：把一次「全库扫方法」提交给延迟低优先级线程。
+
+        只有**同时**满足下列三条才真起线程；否则返回 `started=False` + `why`，
+        调用方据此回退同步路径（**不静默**，铁律 150）：
+
+          1. 开关 `ENABLE_SELF_INSPECTOR_STARTUP_SCAN` 为真；
+          2. 线程未在跑（**单飞**：绝不允许两轮扫描叠着抢 CPU）；
+          3. `force=True` 或仍在启动窗口内（启动窗口外的周期审视保持原同步语义）。
+
+        Returns:
+            ``{"started": bool, "why": str, "delay_sec": float, "reason": str,
+               "thread": str}``
+        """
+        _delay = (float(delay_sec) if delay_sec is not None
+                  else m416_scan_delay_default())
+        _out: dict[str, Any] = {"started": False, "why": "", "delay_sec": _delay,
+                                "reason": str(reason), "thread": ""}
+        if not m416_scan_switch_on():
+            _out["why"] = "switch_off(ENABLE_SELF_INSPECTOR_STARTUP_SCAN=False)"
+            return _out
+        _th = getattr(self, "_m416_scan_thread", None)
+        if _th is not None and _th.is_alive():
+            _out["why"] = "already_running"
+            return _out
+        if not force and not self.in_startup_window():
+            _out["why"] = "outside_startup_window"
+            return _out
+
+        _evt = threading.Event()
+        _th = threading.Thread(
+            target=self._m416_scan_body,
+            args=(_evt, _delay, str(reason)),
+            name="self-inspector-deferred-scan",
+            daemon=True,
+        )
+        self._m416_scan_stop = _evt
+        self._m416_scan_thread = _th
+        self._m416_scan_delay = _delay
+        self._m416_scan_started = True
+        try:
+            _th.start()
+        except Exception as _e:
+            silent_exc(_e, where="self_inspector.submit_deferred_scan:start",
+                       level="warning")
+            self._m416_scan_thread = None
+            self._m416_scan_last = {"error": "thread_start_failed:%s"
+                                             % type(_e).__name__}
+            _out["why"] = "thread_start_failed"
+            return _out
+        _out["started"] = True
+        _out["why"] = "started"
+        _out["thread"] = _th.name
+        return _out
+
+    def _m416_scan_body(self, stop_evt: "threading.Event", delay_sec: float,
+                        reason: str = "code_review") -> None:
+        """★416刀1：延迟扫描线程体 —— 延迟 → 降优先级 → 扫全库 → 复位。
+
+        `stop_evt.wait(delay)` 让停机钩子能在 30s 延迟里立刻打断（不必等满）。
+        全流程异常只留痕不抛：这是后台线程，抛出去没人接。
+        """
+        _t0 = time.time()
+        _t1 = _t0
+        try:
+            if stop_evt.wait(max(0.0, float(delay_sec))):
+                self._m416_scan_last = {"reason": str(reason),
+                                        "skipped": "stopped_before_start"}
+                return
+            self._m416_wait_sec = time.time() - _t0
+            self._m416_priority_backend = _m416_set_thread_lowest()
+            _m416_set_coop(True)
+            _t1 = time.time()
+            _organs = self._scan_all_organs()
+            _issues = self.detect_code_issues()
+            self._m416_scan_last = {
+                "reason": str(reason),
+                "at": round(time.time(), 3),
+                "organs": len(_organs or {}),
+                "issues": len(_issues or []),
+                "scan_sec": round(time.time() - _t1, 3),
+                "coop_ticks": int(_m416_coop_ticks),
+                "priority": str(self._m416_priority_backend),
+            }
+            self._m416_scan_runs = int(getattr(self, "_m416_scan_runs", 0)) + 1
+            _module_logger.info(
+                "[416刀1] 延迟低优先级全库扫描完成 reason=%s 器官=%d 问题=%d "
+                "延迟=%.1fs 扫描=%.1fs 让步=%d次 优先级=%s"
+                % (reason, len(_organs or {}), len(_issues or []),
+                   float(self._m416_wait_sec), time.time() - _t1,
+                   int(_m416_coop_ticks), self._m416_priority_backend))
+        except Exception as _e:
+            silent_exc(_e, where="self_inspector._m416_scan_body", level="warning")
+            self._m416_scan_last = {"reason": str(reason),
+                                    "error": "%s: %s" % (type(_e).__name__, _e),
+                                    "scan_sec": round(time.time() - _t1, 3)}
+            _module_logger.warning("[416刀1] 延迟低优先级全库扫描失败（已留痕）: %s: %s",
+                                   type(_e).__name__, _e)
+        finally:
+            _m416_set_coop(False)
+
+    def stop_deferred_scan(self, timeout: float = 5.0) -> bool:
+        """★416刀1：停机钩子 —— 置停止位并等线程退出。
+
+        Returns: 线程确实不在了才 True；超时仍活 ⇒ False（调用方自行决定是否留痕）。
+        """
+        _evt = getattr(self, "_m416_scan_stop", None)
+        if _evt is not None:
+            _evt.set()
+        _th = getattr(self, "_m416_scan_thread", None)
+        if _th is None:
+            return True
+        try:
+            _th.join(max(0.0, float(timeout)))
+        except Exception as _e:
+            silent_exc(_e, where="self_inspector.stop_deferred_scan:join",
+                       level="debug")
+            return False
+        return not _th.is_alive()
 
     def scan_all_organs(self) -> dict[str, dict[str, Any]]:
         """公开封装 _scan_all_organs，供代码学习/安全演化执行器调用（规则14）"""
@@ -8732,6 +9013,16 @@ def shutdown_self_inspector() -> None:
     _inst = _self_inspector
     _self_inspector = None
     if _inst is not None:
+        # ★416刀1：先停延迟扫描线程（daemon 也会随进程退，但显式停能让
+        #   「还在扫」与「已停」在日志里分得开，且避免 shutdown 期间继续读盘）
+        try:
+            _m416_stopped = _inst.stop_deferred_scan(timeout=5.0)
+            if not _m416_stopped:
+                _module_logger.warning(
+                    "[416刀1] 延迟扫描线程 5s 内未退出（daemon，随进程回收）")
+        except Exception as _m416_se:
+            silent_exc(_m416_se, where="self_inspector.shutdown_self_inspector 416刀1",
+                       level="debug")
         _sd = getattr(_inst, "shutdown", None) or getattr(_inst, "stop", None)
         if _sd is not None:
             try:

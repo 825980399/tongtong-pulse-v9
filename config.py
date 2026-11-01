@@ -6244,7 +6244,9 @@ M339_DOMAIN_EXCLUDE_PREFIXES = ("tests/", "test_")
 #   产物：data/reports/memory/top_types_<ymd_hms>.json（**只落这一处**）
 #   读取点：organs/core/PulseMetricsCollector.py::_m339_memory_probe
 # ============================================================================
-M339_MEMORY_PROBE_HOURS = (5, 13)          # 每日采样槽位（本地时间小时）
+M339_MEMORY_PROBE_HOURS = (5,)             # 每日采样槽位（本地时间小时）
+#   ★416刀2：13:00 那槽取消 —— 两个槽位恰好是两次内存爆点（05:36 破 80%、
+#   13:05 破 95%），单槽已够做日粒度趋势，不再一天冒两次险。
 M339_MEMORY_PROBE_TOP_N = 20               # top-N 类型数
 M339_MEMORY_PROBE_MAX_SEC = 3.0            # 单次快照耗时上限（超时不写盘，记 WARNING）
 M339_MEMORY_GC_TYPES_HEAP_MB = 1200.0      # 第二档触发线 H1（heap>H1 才做 gc 类型计数）
@@ -6257,7 +6259,12 @@ M339_MEMORY_GC_TYPES_HEAP_MB = 1200.0      # 第二档触发线 H1（heap>H1 才
 #   **增量**尺寸（累计值分不清老账与新账）。
 #   三态：`resident`（默认，常驻+差分）／`window`（旧行为，仅钩子内开关）／
 #         `off`（完全关闭，产物里显式标 off，不冒充空采）。
-M339_TRACEMALLOC_MODE = "resident"         # "resident"=常驻(默认) / "window"=钩子内开关 / "off"=关闭
+M339_TRACEMALLOC_MODE = "off"              # "resident"=常驻 / "window"=钩子内开关 / "off"=关闭(416 起默认)
+#   ★416刀2 实测订正：`resident` 下每次 `take_snapshot()` 在 1.4M 活块上要
+#   300~1800 秒，且失败路径**不置槽位标记** ⇒ 每 30s 心跳再起一次，多份
+#   快照层叠 ⇒ 内存雪崩（11-01 05:00-05:56 实测 24.8%→81.3%，13:00 那轮
+#   直接把进程顶到 95% 后 MemoryError）。归因能力本来也没拿到（产物里
+#   `tracemalloc_rows` 恒空）。改 off 后探针只做 gc 计数，2~3s 完事。
 # [M339-CFG]
 
 
@@ -7034,3 +7041,63 @@ ENABLE_M414_NARRATIVE_EVENTS = True
 #   关闭时零行为变化（唯一副作用是每次对话多一条 INFO 日志）。
 #   读取点：organs/body/PulseLung.py::_m415_experience_in_prompt_on()
 ENABLE_M415_EXPERIENCE_IN_PROMPT = False
+
+# ======================================================================
+# [M416-CFG] 第416批 · self_inspector 启动扫描线程化 + 内存探针护栏
+# ======================================================================
+#
+# ENABLE_SELF_INSPECTOR_STARTUP_SCAN
+#   默认值：True
+#   语义：True 时「启动窗口内的全库扫方法」不再同步跑在调用线程里，而是交给
+#        `SelfInspector.submit_deferred_scan()` 起的**独立 daemon 线程**：
+#        延迟 `M416_STARTUP_SCAN_DELAY_SEC` 秒 → 线程优先级降到最低
+#        （Windows THREAD_PRIORITY_LOWEST=-2）→ 扫器官 + 全库检测，
+#        每扫 10 个方法体 `sleep(1ms)` 让出 CPU。
+#        False 时 `submit_deferred_scan()` 直接返回 `switch_off`，
+#        调用方逐字回到原同步路径（零行为变化）。
+#   为什么：11-01 13:14:05 `代码自我审视触发` → 全库扫方法体（`[方法体定位]`
+#        峰值 112 次/秒）→ 13:14:35 心跳守卫已持有 21.8s → 13:14:45 接管续跳
+#        → 13:44 假死探测器连发、进程冻结。L0 看门狗同一窗口内 8s 超时。
+#   读取点：nucleus/self_inspector.py::m416_scan_switch_on()
+ENABLE_SELF_INSPECTOR_STARTUP_SCAN = True
+#
+# M416_STARTUP_SCAN_DELAY_SEC
+#   默认值：30.0（秒）
+#   语义：延迟扫描线程启动后先等这么久再扫（等 L0 生命线铺完、首个心跳周期过去）。
+#   读取点：nucleus/self_inspector.py::m416_scan_delay_default()
+M416_STARTUP_SCAN_DELAY_SEC = 30.0
+#
+# M416_STARTUP_WINDOW_SEC
+#   默认值：180.0（秒）
+#   语义：只有进程启动后这么久以内的「代码自我审视」请求才走延迟线程；
+#        窗口外的周期审视（500 心跳 / 健康度驱动）保持原同步语义不变
+#        —— 那条链要拿 issues 做补丁生成，异步化会打断下游。
+#   读取点：nucleus/self_inspector.py::m416_startup_window_default()
+M416_STARTUP_WINDOW_SEC = 180.0
+#
+# ENABLE_M416_MEMORY_PROBE_GUARD
+#   默认值：True
+#   语义：True 时 `_m339_memory_probe` 加三道护栏 ——
+#        (1) **单飞**：上一轮没跑完就不再起第二轮（原实现无此保护，多份快照叠着跑）；
+#        (2) **尝试即占槽**：进函数就把 `_m339_probe_last_slot` 置成本槽，失败/超时
+#            也不再每拍重试（原实现只在写盘成功后置位 ⇒ 失败 ⇒ 30s 后再来一次）；
+#        (3) **堆高跳过 tracemalloc**：heap > `M416_MEMORY_PROBE_SKIP_HEAP_MB`
+#            时只做 gc 计数，不起 tracemalloc 快照。
+#        False 时逐字回到 415 行为（排障用）。
+#   读取点：organs/core/PulseMetricsCollector.py::_m416_probe_guard_on()
+ENABLE_M416_MEMORY_PROBE_GUARD = True
+#
+# M416_MEMORY_PROBE_SKIP_HEAP_MB
+#   默认值：12000.0（MB）
+#   语义：堆占用超过这个量级时，tracemalloc 快照的成本与风险都不划算
+#        （1.4M 活块 ⇒ 单次 300s+），直接降级为 gc 计数。
+#   读取点：organs/core/PulseMetricsCollector.py::_m416_probe_skip_heap_mb()
+M416_MEMORY_PROBE_SKIP_HEAP_MB = 12000.0
+#
+# M416_MEMORY_PROBE_MAX_RUNTIME_SEC
+#   默认值：900.0（秒）
+#   语义：单飞**租约**时长 —— 上一轮探针开始后这么久内不再起新一轮。
+#        用租约而不是布尔锁，是因为 _m339_memory_probe 有 4 个提前 return，
+#        布尔锁一旦漏复位就把探针永久锁死；租约到期自动失效，最坏只是多跑一轮。
+#   读取点：organs/core/PulseMetricsCollector.py::_m416_probe_max_runtime_sec()
+M416_MEMORY_PROBE_MAX_RUNTIME_SEC = 900.0

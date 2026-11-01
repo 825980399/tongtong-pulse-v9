@@ -413,6 +413,10 @@ class _Collector(ast.NodeVisitor):
             "file": self.rel_file,
             "line": node.lineno,
             "type": "method" if _cls else "function",
+            # ★416刀3：方法体内的**嵌套 def**（`_scope` 里已有 func ⇒ 不是类成员）。
+            #   这类函数体常被当值传给 `re.sub` / `sorted(key=)` 一类调用，
+            #   静态图没有 call 边 ⇒ 会被判死。单列一标，供值位判据精确放行。
+            "nested": bool(any(_k == "func" for _k, _ in self._scope)),
         })
         # ★321批刀0（C类路线①）：采集**形参类型注解** `def f(x: C)` → {x: "C"}。
         #   只认**简单名**（ast.Name）与字符串字面量注解；`Optional[C]` / `psutil.P`
@@ -801,6 +805,8 @@ class CallGraphAnalyzer:
         self._m414_testref_cache = None       # tests/ 引用过的标识符
         self._m414_valueref_cache = None      # 方法名被当作值引用的集合
         self._m414_getattrref_cache = None    # getattr/hasattr 字面名集合
+        # ★416刀3：模块级函数名出现在**值位**（dict value / Assign 右值 / import）
+        self._m416_namevalref_cache = None
 
         self._graph_data: dict = {}      # analyze() 结果缓存
         self._unresolved = 0
@@ -1887,6 +1893,87 @@ class CallGraphAnalyzer:
         self._m414_valueref_cache = frozenset(_names)
         return self._m414_valueref_cache
 
+    def _m416_name_value_ref_names(self) -> frozenset:
+        """★416刀3：**模块级函数名**出现在「值位」的集合。
+
+        值位四源（415 抽验里三条假死分别落在前三条上，第四条是 416 复验补的）：
+          1. `ast.Dict` 的 value —— 裸 `ast.Name`（如 `CHANNELS = {"entity": ch_entity}`）
+             或字符串常量（如 `{"handler": "_on_heartbeat"}`）；
+          2. `ast.Assign` / `ast.AnnAssign` 的**右值**是裸 `ast.Name`
+             （如 `_tp = transport or ollama_transport`）；
+          3. `ast.ImportFrom` / `ast.Import` 的绑定名
+             （如 `from nucleus.evolution import get_llm_evolution_engine`）；
+          4. **裸 Name 作调用实参/关键字实参**（`_re.sub(pat, fn, s)`、
+             `sorted(xs, key=fn)`）—— 416 首轮复验里剩下的那 1 条假死正是它。
+
+        为什么必须单独一档：静态调用图只统计 **call 边**，上面三种写法都
+        不产生 call 边 ⇒ 入度 0 ⇒ 被判死；但运行时确实会被调到（作为回调/
+        注册表项/再导出）。414 的 `value_ref` 只认 `ast.Attribute`
+        （`self._monitor_loop`），**裸 Name 一个不认** —— 415 实测盲区2 的
+        32 条命中里带 `value_ref` 的是 **0 条**。
+
+        口径边界（防误保护）：
+          * 只收**模块级函数**能对上的名字 —— 由调用方按 `_defs[...]["type"]`
+            过滤，本函数只负责「名字在值位出现过」这一事实；
+          * **排除定义处**：`def foo():` 里的 `foo` 不是引用，靠
+            `ast.FunctionDef.name` 不进任何值位天然成立（这里是 Name 载入，
+            定义名不是 `ast.Name` 节点）；
+          * 注释/docstring 天然不算（AST 里没有它们的位置）。
+
+        Returns: 名字集合（frozenset）。解析失败逐文件留痕跳过，不抛。
+        """
+        if self._m416_namevalref_cache is not None:
+            return self._m416_namevalref_cache
+        _names: set = set()
+        try:
+            _files = _iter_py_files(self.project_root, self.scan_dirs)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m416_name_value_ref_names:files",
+                       level="warning")
+            self._m416_namevalref_cache = frozenset()
+            return self._m416_namevalref_cache
+        for _rel in _files:
+            # `_iter_py_files` 给的是相对 project_root 的路径，必须 join 回来
+            _abs = os.path.join(self.project_root, str(_rel).replace("/", os.sep))
+            try:
+                with open(_abs, encoding="utf-8", errors="ignore") as _fobj:
+                    _tree = ast.parse(_fobj.read())
+            except Exception as _e:
+                silent_exc(_e, where="CallGraphAnalyzer:_m416_name_value_ref_names:file",
+                           level="debug")
+                continue
+            for _n in ast.walk(_tree):
+                # 源1：dict value
+                if isinstance(_n, ast.Dict):
+                    for _v in (_n.values or []):
+                        if isinstance(_v, ast.Name):
+                            _names.add(_v.id)
+                        elif isinstance(_v, ast.Constant) and isinstance(_v.value, str):
+                            _names.add(_v.value)
+                # 源2：Assign / AnnAssign 右值裸 Name
+                elif isinstance(_n, (ast.Assign, ast.AnnAssign)):
+                    _val = getattr(_n, "value", None)
+                    if isinstance(_val, ast.Name):
+                        _names.add(_val.id)
+                # 源4：**裸 Name 作调用实参/关键字实参**（`re.sub(pat, fn, s)`、
+                #   `sorted(xs, key=fn)`）—— 裸 Name 只可能是模块级函数或嵌套 def，
+                #   类方法必写 `self.f`（Attribute，已被 value_ref 覆盖）⇒ 精确。
+                elif isinstance(_n, ast.Call):
+                    for _a in list(_n.args) + [kw.value for kw in _n.keywords]:
+                        if isinstance(_a, ast.Name):
+                            _names.add(_a.id)
+                # 源3：import 绑定
+                elif isinstance(_n, ast.ImportFrom):
+                    for _al in (_n.names or []):
+                        if _al.name and _al.name != "*":
+                            _names.add(_al.asname or _al.name)
+                elif isinstance(_n, ast.Import):
+                    for _al in (_n.names or []):
+                        if _al.name and _al.name != "*":
+                            _names.add(_al.asname or _al.name.split(".")[-1])
+        self._m416_namevalref_cache = frozenset(_names)
+        return self._m416_namevalref_cache
+
     def _m414_test_ref_names(self) -> frozenset:
         """tests/ 下所有 .py 里**出现过**的标识符（`Name.id` ∪ `Attribute.attr`）。
 
@@ -1931,6 +2018,8 @@ class CallGraphAnalyzer:
         _testref = self._m414_test_ref_names()
         _valref = self._m414_value_ref_names()
         _gatref = self._m414_getattr_ref_names()
+        # ★416刀3：裸 Name / 字符串 / import 绑定出现在值位的名字（只对模块级函数生效）
+        _namevalref = self._m416_name_value_ref_names()
         _out = []
         for _nid, _d in self._defs.items():
             if self._in_deg.get(_nid, 0) > 0:
@@ -1957,6 +2046,13 @@ class CallGraphAnalyzer:
                 "value_ref": bool(_name in _valref),
                 # ★414刀1 补档：getattr/hasattr 字面名派发（静态图无形）
                 "getattr_ref": bool(_name in _gatref),
+                # ★416刀3 补档：模块级函数名出现在值位（dict value / Assign 右值 /
+                #   import 绑定）⇒ 没有 call 边但确实在用。**只对模块级函数生效**
+                #   （`_d["type"] == "function"`）：类方法的同名值位巧合太多，
+                #   纳进来会大面积误保护真死代码。
+                "value_ref_name": bool(_name in _namevalref
+                                       and (_d["type"] == "function"
+                                            or _d.get("nested"))),
                 "entry_like": _name in _ENTRY_LIKE,
             })
         _out.sort(key=lambda x: (x["file"], x["line"]))

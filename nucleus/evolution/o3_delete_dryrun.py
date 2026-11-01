@@ -42,7 +42,7 @@ _module_logger = get_module_logger("O3DeleteDryRun")
 
 #: ★414刀1 起判据换版：public_api 改实证三源、新增 test_only 拒因。
 #: **前缀必须保持 "412."** —— 412 单测 test_36/test_43 钉的就是这个前缀。
-_M412_DD_VERSION = "412.5"
+_M412_DD_VERSION = "412.6"
 
 #: 灰度开关
 SWITCH = "ENABLE_M412_O3_DELETE_DRYRUN"
@@ -223,11 +223,32 @@ def judge_entry(entry: dict, index: dict[str, Any]) -> dict[str, Any]:
         _checks["getattr_ref"] = bool(_row.get("getattr_ref"))
         if _row.get("getattr_ref"):
             _reasons.append("getattr_ref（有 getattr/hasattr 字面名派发）")
+        # ★416刀3 补档：**模块级函数名出现在值位**（dict value / Assign 右值 /
+        #   import 绑定）—— 415 抽验 440 条里那 3 条假死全在这一类，
+        #   而 414 的 `value_ref` 只认 `ast.Attribute`（`self.f`），
+        #   裸 Name 一个不认（415 实测：盲区2 的 32 条命中里带 value_ref 的 = 0）。
+        #   口径只覆盖模块级函数，类方法不进（见 CallGraphAnalyzer 同名方法注释）。
+        _checks["value_ref_name"] = bool(_row.get("value_ref_name"))
+        if _row.get("value_ref_name"):
+            _reasons.append("value_ref_name（模块级函数名出现在值位："
+                            "dict value / Assign 右值 / import 绑定）")
 
     _core = _f in CORE_FILES
     _checks["core_file"] = _core
     if _core:
         _reasons.append("core_file（核心文件不许删）")
+
+    # ★416刀3 补档：CI 指纹基线钉住的条目 **真死 ≠ 可删**。
+    #   415 实测 eligible 里 59 条被 `tools/ci/baselines/method_signature_baseline.json`
+    #   或 `silent_except_baseline.json` 钉住：删了 `fp_signature_drift` 立刻报
+    #   `removed` ⇒ 门禁红。这批先排除、不删（要删得先改基线，属另一笔账）。
+    #   `index["ci_locked"]` 为 None（未注入）时不判，保持向后兼容。
+    _ci = (index or {}).get("ci_locked")
+    if _ci is not None:
+        _hit_ci = (_f, _m) in _ci
+        _checks["ci_locked"] = _hit_ci
+        if _hit_ci:
+            _reasons.append("ci_locked（被 CI 指纹基线钉住，删了门禁必红）")
 
     if (index or {}).get("state") != "ok":
         return {"eligible": None, "checks": _checks,
