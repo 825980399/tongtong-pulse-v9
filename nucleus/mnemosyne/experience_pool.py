@@ -868,6 +868,42 @@ class ExperiencePool:
 
     # ========== 查询接口 ==========
 
+    def annotate_flags(self, flags: dict[str, dict[str, Any]]) -> int:
+        """按 `id` 批量写入字段；值为 `None` 表示**删除**该键。
+
+        ★为什么必须有这个入口（413 刀4 实测）：`query_experiences` 返回的是
+          `dict(exp)` **副本** —— 调用方在副本上改字段，`_save()` 写出去的
+          仍是 `_experiences` 里的原对象，标记**一条都落不了盘**
+          （412 刀2 的 `--annotate --write` 因此长期"报成功、零落盘"）。
+          这里直接改原对象，绕开副本。
+
+        Args:
+            flags: ``{id: {字段名: 新值, ...}}``；值 `None` = 删除该键。
+
+        Returns:
+            实际发生变化的**条目数**（不是传入条数）。
+        """
+        _n = 0
+        with self._lock:
+            for _e in self._experiences:
+                if not isinstance(_e, dict):
+                    continue
+                _u = flags.get(str(_e.get("id") or ""))
+                if not _u:
+                    continue
+                _hit = False
+                for _k, _v in _u.items():
+                    if _v is None:
+                        if _k in _e:
+                            _e.pop(_k, None)
+                            _hit = True
+                    elif _e.get(_k) != _v:
+                        _e[_k] = _v
+                        _hit = True
+                if _hit:
+                    _n += 1
+        return _n
+
     def query_experiences(self,
                           emotion_tags: list[str] | None = None,
                           reward_type: str | None = None,

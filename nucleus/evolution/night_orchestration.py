@@ -618,11 +618,31 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("")
             _L.append("- 落盘：%s（%s）" % ("PASS" if _np.get("ok") else "未落盘",
                                             _np.get("reason") or "ok"))
-            _L.append("- 当日文件：%s" % _np.get("path", _ns412.day_path()))
+            _L.append("- 摘要日：**%s**（04:00 落盘 ⇒ 结算**前一天**）"
+                      % (_np.get("day") or "-"))
+            _L.append("- 摘要文件：%s" % _np.get("path", _ns412.day_path()))
             _L.append("- 连续天数：**%s** ｜ 回放条数 %s ｜ 有记录天数 %s"
                       % (_nsum.get("continuous_days"), _nsum.get("replayed_rows"),
                          _nsum.get("days_with_file")))
             _L.append("- 状态：%s（坏行 %s）" % (_nsum.get("state"), _nsum.get("bad_lines")))
+            _dg = _np.get("digest") or {}
+            _L.append("- headline：%s（依据 %s）"
+                      % (_dg.get("headline") or "**空**",
+                         _dg.get("headline_basis") or "-"))
+            _L.append("- intent：%s（%s）"
+                      % (_dg.get("intent") or "**空**",
+                         _dg.get("intent_reason") or "-"))
+            _dd = _dg.get("delta") or {}
+            if _dd:
+                for _dk in ("nodes", "llm_ratio", "patches", "narrative_events"):
+                    _c = _dd.get(_dk)
+                    if not isinstance(_c, dict):
+                        continue
+                    _L.append("  - %s：%s → %s（Δ%s）%s"
+                              % (_dk, _c.get("prev"), _c.get("cur"),
+                                 _c.get("delta"), _c.get("reason") or ""))
+            else:
+                _L.append("- delta：**空**（digest 未产出）")
             _L.append("")
         except Exception as _ne412:
             silent_exc(_ne412, where="night_orchestration.generate_night_digest.narrative_store")
@@ -660,6 +680,33 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("")
             _L.append("- **报表失败**（已留痕，不阻断摘要）：%s: %s"
                       % (type(_oe412).__name__, _oe412))
+            _L.append("")
+
+        # ★413刀4：经验池模板标记 —— **必须由框架进程自己写**。
+        #   实测三种失败：①`query_experiences` 返回 dict 副本 ⇒ 改副本落不了盘；
+        #   ②`_save()` 遇写盘守卫静默 return ⇒ 旧实现误报 written=true；
+        #   ③框架进程会周期性 `_save()` ⇒ 外部脚本写进去也会被覆盖。
+        #   ⇒ 挂同一 04:00 编译点，不新建调度器（410/412 红线延续）。
+        try:
+            from nucleus.observability import experience_governance as _eg413
+            _ar = _eg413.annotate(dry_run=False)
+            _L.append("## 九、经验池模板标记（413刀4 · 框架进程内写）")
+            _L.append("")
+            _L.append("- 扫描：**%s** 条 ｜ 模板 **%s** 条 ｜ 本次改动 %s 条 ｜ 回写 %s 条"
+                      % (_ar.get("scanned"), _ar.get("template_rows"),
+                         _ar.get("changed"), _ar.get("applied")))
+            _L.append("- 落盘：%s ｜ 读回 is_template=**%s** ｜ 原因 %s"
+                      % ("PASS" if _ar.get("written") else "**未落盘**",
+                         _ar.get("landed"), _ar.get("reason") or "ok"))
+            _L.append("- 说明：模板条只**降权**（weight=%s），不删除" % _eg413.TEMPLATE_WEIGHT)
+            _L.append("")
+        except Exception as _ee413:
+            silent_exc(_ee413,
+                       where="night_orchestration.generate_night_digest.experience_governance")
+            _L.append("## 九、经验池模板标记（413刀4 · 框架进程内写）")
+            _L.append("")
+            _L.append("- **失败**（已留痕，不阻断摘要）：%s: %s"
+                      % (type(_ee413).__name__, _ee413))
             _L.append("")
 
         with open(_digest_path, "w", encoding="utf-8") as _f:

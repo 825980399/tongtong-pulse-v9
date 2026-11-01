@@ -193,52 +193,125 @@ def annotate(pool: Any = None, dry_run: bool = True, limit: int = 0,
     """给模板类经验打 `is_template` / `template_key`（**不删条目**）。
 
     Returns:
-        ``{"ok", "scanned", "changed", "template_rows", "written", "reason"}``
+        ``{"ok", "scanned", "changed", "template_rows", "applied",
+           "written", "landed", "reason"}``
+
+        ★`written` 只在**读回校验通过**时才为 True（413 刀4）。旧实现只要
+          `_save()` 没抛异常就报 True，而写盘守卫是**静默 return** 的
+          ⇒ "报成功、零落盘"（412 实测：`written=true` 但 `is_template` 落 0 条）。
+        ★`applied` / `landed` 分开：前者是"回写原对象触及的条目数"，
+          后者是"重新查一遍看到的已标记条数"。
     """
     if not enabled():
         return {"ok": False, "scanned": 0, "changed": 0, "template_rows": 0,
-                "written": False, "reason": "disabled"}
+                "applied": 0, "written": False, "landed": 0, "reason": "disabled"}
     _p, _rows = _pool_of(pool, limit)
     if _p is None:
         return {"ok": False, "scanned": 0, "changed": 0, "template_rows": 0,
-                "written": False, "reason": "query_failed"}
+                "applied": 0, "written": False, "landed": 0, "reason": "query_failed"}
     if not _rows:
         return {"ok": True, "scanned": 0, "changed": 0, "template_rows": 0,
-                "written": False, "reason": "pool_returned_nothing"}
+                "applied": 0, "written": False, "landed": 0,
+                "reason": "pool_returned_nothing"}
     _c = Counter(norm_key(_x) for _x in _rows)
     _tpl = {_k for _k, _n in _c.items() if _n >= max(2, int(min_dup))}
     _changed = 0
     _n_rows = 0
+    _flags: dict[str, dict[str, Any]] = {}
     for _x in _rows:
         _k = norm_key(_x)
         _flag = _k in _tpl
         if _flag:
             _n_rows += 1
-        if bool(_x.get("is_template")) != _flag or _flag and (
-                _x.get("template_key") or "")[:KEY_CHARS] != _k:
-            if not dry_run:
-                _x["is_template"] = _flag
-                if _flag:
-                    _x["template_key"] = _k[:KEY_CHARS]
-                else:
-                    _x.pop("template_key", None)
-            _changed += 1
+        # 与现状有差异才动它（"上次标了、这次不该标"也算差异 ⇒ 清得掉）
+        _dirty = (bool(_x.get("is_template")) != _flag
+                  or (_flag and (_x.get("template_key") or "")[:KEY_CHARS] != _k))
+        if not _dirty:
+            continue
+        if not dry_run:
+            _x["is_template"] = _flag
+            if _flag:
+                _x["template_key"] = _k[:KEY_CHARS]
+            else:
+                _x.pop("template_key", None)
+        _changed += 1
+        _id = str(_x.get("id") or "")
+        if _id:
+            # ★只把**差异条目**交给回写层：全量交会把 398 条全写上
+            #   `is_template=False`（语义等价，但白污染一遍池文件）
+            _flags[_id] = ({"is_template": True, "template_key": _k[:KEY_CHARS]}
+                           if _flag else {"is_template": False, "template_key": None})
     if dry_run or _changed == 0:
         return {"ok": True, "scanned": len(_rows), "changed": _changed,
-                "template_rows": _n_rows, "written": False,
+                "template_rows": _n_rows, "applied": 0, "written": False, "landed": 0,
                 "reason": ("dry_run" if dry_run else "no_change")}
+
+    # ① 把标记回写到池里的**原对象**（`_rows` 是副本，改它没用）
+    _applied = 0
+    _apply = getattr(_p, "annotate_flags", None)
+    if callable(_apply):
+        try:
+            _applied = int(_apply(_flags) or 0)
+        except Exception as _e:
+            silent_exc(_e, where="observability.experience_governance:annotate:apply",
+                       level="warning")
+            return {"ok": False, "scanned": len(_rows), "changed": _changed,
+                    "template_rows": _n_rows, "applied": 0, "written": False,
+                    "landed": 0, "reason": "apply_failed:%s" % type(_e).__name__}
+    else:
+        # 引用型池（返回值就是内部对象）⇒ 上面的循环已经改到了
+        _applied = _changed
+
+    # ② 先看写盘闸门：`_save()` 遇守卫是静默 return，不会抛异常
+    _gw: Any = None
+    _pf = getattr(_p, "_pool_file", None)
+    if _pf is not None:
+        try:
+            from nucleus.data.write_guard import guard_write as _gw_fn
+            _gw = _gw_fn(_pf,
+                         explicit=bool(getattr(_p, "_m44_base_dir_explicit", False)),
+                         component="ExperienceGovernance")
+        except ImportError as _e_imp:
+            silent_exc(_e_imp, where="observability.experience_governance:annotate:guard",
+                       level="debug")
+            _gw = None
+    if _gw is False:
+        return {"ok": False, "scanned": len(_rows), "changed": _changed,
+                "template_rows": _n_rows, "applied": _applied, "written": False,
+                "landed": 0, "reason": "write_guard_refused"}
+
+    # ③ 落盘
     try:
         _p._save()
     except Exception as _e:
         silent_exc(_e, where="observability.experience_governance:annotate:save",
                    level="warning")
         return {"ok": False, "scanned": len(_rows), "changed": _changed,
-                "template_rows": _n_rows, "written": False,
-                "reason": "save_failed:%s" % type(_e).__name__}
-    _module_logger.info("[412刀2] 模板标记：扫描 %d 条，标记 %d 条（改 %d）",
-                        len(_rows), _n_rows, _changed)
-    return {"ok": True, "scanned": len(_rows), "changed": _changed,
-            "template_rows": _n_rows, "written": True, "reason": ""}
+                "template_rows": _n_rows, "applied": _applied, "written": False,
+                "landed": 0, "reason": "save_failed:%s" % type(_e).__name__}
+
+    # ④ **读回校验** —— 只有真落盘才报 written=True
+    _landed = -1
+    try:
+        _back = _p.query_experiences(limit=len(_rows) + 1000) or []
+        _landed = sum(1 for _x in _back if isinstance(_x, dict) and _x.get("is_template"))
+    except Exception as _e:
+        silent_exc(_e, where="observability.experience_governance:annotate:verify",
+                   level="warning")
+        _landed = -1
+
+    _ok = (_landed == _n_rows)
+    if not _ok:
+        silent_exc(RuntimeError("annotate_verify_mismatch"),
+                   where="observability.experience_governance:annotate:verify_mismatch",
+                   level="warning")
+    else:
+        _module_logger.info("[412刀2] 模板标记：扫描 %d 条，标记 %d 条（改 %d）",
+                            len(_rows), _n_rows, _changed)
+    return {"ok": _ok, "scanned": len(_rows), "changed": _changed,
+            "template_rows": _n_rows, "applied": _applied, "written": _ok,
+            "landed": _landed,
+            "reason": "" if _ok else "verify_mismatch:%s!=%d" % (_landed, _n_rows)}
 
 
 def version() -> str:

@@ -55,7 +55,31 @@ def _probe():
             self.saved = 0
 
         def query_experiences(self, limit=10):
-            return list(self.rows)[-int(limit):] if limit else list(self.rows)
+            # ★413刀4：复刻**真池**语义 —— 返回 `dict(exp)` 副本。
+            #   412 的探针返回原引用，于是把"改副本后 _save() 写不出标记"
+            #   这个真 bug 整个放过去了（探针假绿）。
+            _src = self.rows[-int(limit):] if limit else self.rows
+            return [dict(x) for x in _src]
+
+        def annotate_flags(self, flags):
+            """与真池同语义：按 id 改**原对象**，None 值表示删除。"""
+            _n = 0
+            for _e in self.rows:
+                _u = flags.get(str(_e.get("id") or ""))
+                if not _u:
+                    continue
+                _hit = False
+                for _k, _v in _u.items():
+                    if _v is None:
+                        if _k in _e:
+                            _e.pop(_k, None)
+                            _hit = True
+                    elif _e.get(_k) != _v:
+                        _e[_k] = _v
+                        _hit = True
+                if _hit:
+                    _n += 1
+            return _n
 
         def _save(self):
             self.saved += 1
@@ -82,6 +106,8 @@ def _probe():
     _r2 = eg.annotate(_p, dry_run=False)
     _ok.append(("write 后模板条被标记", _r2["written"] is True
                 and sum(1 for x in _p.rows if x.get("is_template")) == 5))
+    _ok.append(("读回校验 landed=5 且无 reason（413刀4）",
+                _r2.get("landed") == 5 and _r2.get("reason") == ""))
     _ok.append(("非模板条不带标记",
                 all(not x.get("is_template") for x in _p.rows
                     if str(x.get("id") or "").startswith("u"))))
