@@ -204,6 +204,96 @@ class TestChannels(_Base):
         self.assertEqual(acc.WAIT, acc.c_channels().state)
 
 
+class TestChannelStreak(_Base):
+    """★420/L09-6：`L09-5` 的判据在**改前代码**上就 PASS（9 渠道 / 最大 32.9%），
+    没有判别力；这里按「最长同渠道连续段」判，现网改前基线是 **15**。"""
+
+    def _traces(self, rows):
+        _t = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        _w(self.root, "data/llm_traces/calls_%s.jsonl" % acc._today(), text=_t)
+
+    def test_34_balanced_pass_with_boundary(self):
+        # 40 轮 a/b/c 轮转 ⇒ 连续段恒 1，远低于线
+        self._traces([{"ts": i, "channel": c}
+                      for i, c in enumerate(["a", "b", "c"] * 40)])
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.PASS, r.state, r.detail)
+        self.assertEqual(1, r.value["max_streak"])
+        self.assertEqual(120, r.value["calls"])
+        # ★边界两侧各一例（铁律 275）：== 线 通过，线+1 不通过。
+        #   ★样本必须 >= TH_STREAK_MIN_CALLS，否则会先被"样本不足"判 WAIT ——
+        #   第一版只造 4 次，测出来是 WAIT（工具是对的，我测试写错了）。
+        _k = acc.TH_CHANNEL_MAX_STREAK
+        _rows = []
+        for _g in range(12):                      # 12 轮 (a×k, b) = 12*(k+1) 次
+            _rows += [{"ts": _g * 10 + _i, "channel": "a"} for _i in range(_k)]
+            _rows.append({"ts": _g * 10 + _k, "channel": "b"})
+        self.assertGreaterEqual(len(_rows), acc.TH_STREAK_MIN_CALLS)
+        self._traces(_rows)
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.PASS, r.state, r.detail)
+        self.assertEqual(_k, r.value["max_streak"])
+
+        _rows2 = []
+        for _g in range(12):                      # 12 轮 (a×(k+1), b)
+            _rows2 += [{"ts": _g * 10 + _i, "channel": "a"} for _i in range(_k + 1)]
+            _rows2.append({"ts": _g * 10 + _k + 1, "channel": "b"})
+        self._traces(_rows2)
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.FAIL, r.state, r.detail)
+        self.assertEqual(_k + 1, r.value["max_streak"])
+
+    def test_35_monopoly_fail(self):
+        # 现网改前形态：单渠道长段（实测 15，这里放大到 90）
+        self._traces([{"ts": i, "channel": "direct"} for i in range(90)]
+                     + [{"ts": 90 + i, "channel": "zhipu"} for i in range(10)])
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.FAIL, r.state, r.detail)
+        self.assertEqual(90, r.value["max_streak"])
+        self.assertEqual("direct", r.value["max_streak_channel"])
+
+    def test_36_not_alive_is_wait_not_fail(self):
+        """框架不活 ⇒ WAIT，但**读数必须留着**（那是改前基线，不是"没数据"）。"""
+        self._traces([{"ts": i, "channel": "direct"} for i in range(90)]
+                     + [{"ts": 90 + i, "channel": "zhipu"} for i in range(10)])
+        r = acc.c_channel_streak(time.time(), False)
+        self.assertEqual(acc.WAIT, r.state, r.detail)
+        self.assertEqual(90, r.value["max_streak"])
+        self.assertFalse(r.value["framework_alive"])
+
+    def test_37_small_sample_is_wait(self):
+        """样本 < TH_STREAK_MIN_CALLS ⇒ 判不出均衡，必须 WAIT（不许硬判）。"""
+        self._traces([{"ts": i, "channel": c}
+                      for i, c in enumerate(["a", "b"] * 5)])
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.WAIT, r.state, r.detail)
+        self.assertLess(r.value["calls"], acc.TH_STREAK_MIN_CALLS)
+
+    def test_38_no_trace_is_wait(self):
+        self.assertEqual(acc.WAIT, acc.c_channel_streak(time.time(), True).state)
+
+    def test_39_sorted_by_ts_not_file_order(self):
+        """★按 `ts` 排序后再数段：文件里的落盘顺序不等于调用顺序。
+
+        构造：真顺序是 `a,a,b,b` 重复 10 轮（20 段 / 最长 2）；
+        而按落盘顺序读是 `a,b,a,b,…`（40 段 / 最长 1）。
+        ⇒ 段数 20 才说明排过序，40 就说明直接吃了文件顺序。
+        """
+        rows = []
+        for k in range(10):
+            _b = 4 * k
+            rows.append({"ts": _b + 1, "channel": "a"})
+            rows.append({"ts": _b + 3, "channel": "b"})   # 落盘顺序 b 在 a 前面
+            rows.append({"ts": _b + 2, "channel": "a"})
+            rows.append({"ts": _b + 4, "channel": "b"})
+        self._traces(rows)
+        r = acc.c_channel_streak(time.time(), True)
+        self.assertEqual(acc.PASS, r.state, r.detail)
+        self.assertEqual(20, r.value["segments"])
+        self.assertEqual(2, r.value["max_streak"])
+        self.assertEqual(40, r.value["calls"])
+
+
 class TestExitCode(_Base):
     """★退出码是给 CI 用的：WAIT 不能等于 FAIL。"""
 

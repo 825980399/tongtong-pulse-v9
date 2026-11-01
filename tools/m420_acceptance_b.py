@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""m420_acceptance_b.py —— B 类「代码已施工 · 等活体」11 条判据一键验收（第420批）。
+"""m420_acceptance_b.py —— B 类「代码已施工 · 等活体」12 条判据一键验收（第420批）。
 
 ## 为什么要这个工具
 
@@ -8,7 +8,7 @@
 「代码已写好、只需跑起来看一眼」。但『看一眼』散在 7 个地方、口径各异，
 结果就是**每批都说"待活体验收"，然后没验**（416 起连续三批）。
 
-本工具把 7 项拆成 11 条**可执行判据**，一条命令出结论。判据全部来自
+本工具把 7 项拆成 12 条**可执行判据**，一条命令出结论。判据全部来自
 **已落盘的产物 / 日志 / 快照**，不需要在框架进程内执行任何代码。
 
 ## 三态（★`unknown` 必须是一等公民）
@@ -53,6 +53,8 @@ TH_THREADS = 60                    # 418 刀3②：线程上限 61→29，验收
 TH_GROWTH_MB_PER_MIN = 200.0       # 2GB / 10min = 200MB/min
 TH_CHANNEL_TOP_SHARE = 0.60        # 单渠道最大份额（418 刀2 均衡前是 66.7%）
 TH_CHANNEL_MIN_USED = 3            # 至少用到几个渠道
+TH_CHANNEL_MAX_STREAK = 3          # ★420/L09-6：最长同渠道连续段（现网改前实测 15）
+TH_STREAK_MIN_CALLS = 30           # 连续段判据的样本下限（不足则判不出均衡）
 TH_PERF_DELTA_RATIO = 0.90         # effect_verify 里 perf_delta_ms 非 None 的比例
 
 
@@ -290,6 +292,72 @@ def c_channels():
              % (len(cnt), _top, _share * 100, TH_CHANNEL_TOP_SHARE * 100, n))
 
 
+def c_channel_streak(now: float, alive: bool):
+    """L09⑥ 最长同渠道连续段（418 刀2 的**有判别力**判据）。
+
+    ★为什么另立一条：`L09-5` 的判据（≥3 渠道、单渠道份额 ≤60%）**在改前代码上
+    就已经 PASS** —— 今日 666 条 trace 实测 **9 渠道 / 最大 `zhipu-47-flash`
+    32.9%**。拿一条"改前也能过"的判据去验收改后效果＝自欺（铁律 35）。
+
+    ★仿真基线也不作数：418 刀2 报的是「最大份额 66.7%→16.7% / 连续段 **4**→1」，
+    那是 240 次 **3 渠道仿真**；现网改前实测**最长连续段 15**（`direct`）。
+    ⇒ 真实现网基线取 15，改后期望 ≤3，用 `--json` 的 `value.max_streak` 直接对账。
+
+    ★框架不活时判 **WAIT**：今日 trace 全部产生于改前进程，此刻判 FAIL 等于把
+    「还没重启」记成「均衡没生效」——与 `L09-1`/`L09-2` 同一口径（铁律 45）。
+    """
+    p = _p("data/llm_traces/calls_%s.jsonl" % _today())
+    if not os.path.isfile(p):
+        return R("L09-6", "最长同渠道连续段", WAIT, None, "今日 calls_*.jsonl 不存在")
+    rows = []
+    try:
+        with io.open(p, encoding="utf-8", errors="ignore") as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    d = json.loads(ln)
+                except ValueError as e:
+                    # 坏行（半行写入/非 JSON）—— 去重留痕，不逐行刷屏
+                    _warn("c_channel_streak:json", e)
+                    continue
+                _ts = d.get("ts")
+                rows.append((float(_ts) if isinstance(_ts, (int, float)) else 0.0,
+                             str(d.get("channel") or "?")))
+    except OSError as e:
+        _warn("c_channel_streak:" + p, e)
+        return R("L09-6", "最长同渠道连续段", WAIT, None, "读取失败 %s" % e)
+    if not rows:
+        return R("L09-6", "最长同渠道连续段", WAIT, None, "今日 0 条调用")
+    rows.sort(key=lambda x: x[0])
+    seq = [c for _t, c in rows]
+    _best, _best_ch, _cur, _prev, _seg = 1, seq[0], 1, seq[0], 1
+    for c in seq[1:]:
+        if c == _prev:
+            _cur += 1
+        else:
+            _seg += 1
+            _cur, _prev = 1, c
+        if _cur > _best:
+            _best, _best_ch = _cur, c
+    _v = {"calls": len(seq), "segments": _seg, "max_streak": _best,
+          "max_streak_channel": _best_ch,
+          "mean_streak": round(len(seq) / float(_seg), 2),
+          "framework_alive": alive}
+    _tail = "%d 次 / %d 段 / 最长连续 %s×%d（线 ≤%d）" % (
+        len(seq), _seg, _best_ch, _best, TH_CHANNEL_MAX_STREAK)
+    if not alive:
+        return R("L09-6", "最长同渠道连续段", WAIT, _v,
+                 _tail + "；框架未运行 ⇒ 这是**改前基线**读数，不能当改后结论")
+    if len(seq) < TH_STREAK_MIN_CALLS:
+        return R("L09-6", "最长同渠道连续段", WAIT, _v,
+                 _tail + "；样本 < %d 次，判不出均衡" % TH_STREAK_MIN_CALLS)
+    if _best <= TH_CHANNEL_MAX_STREAK:
+        return R("L09-6", "最长同渠道连续段", PASS, _v, _tail)
+    return R("L09-6", "最长同渠道连续段", FAIL, _v, _tail)
+
+
 def c_world_model():
     """L04 世界模型日报首条。
 
@@ -492,7 +560,8 @@ def run(since_min: float = 60.0) -> list:
     print()
 
     rows = [c_patterns(now, alive), c_threads(alive), c_lock_wait(),
-            c_fusion(now, since_min), c_channels(), c_world_model(),
+            c_fusion(now, since_min), c_channels(),
+            c_channel_streak(now, alive), c_world_model(),
             c_narrative(), c_mem_by_organ(), c_perf_delta(), c_coop_tick(),
             c_memory_wall()]
     return rows
@@ -519,7 +588,7 @@ def render(rows) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="B 类「等活体」11 条判据一键验收（第420批）",
+        description="B 类「等活体」12 条判据一键验收（第420批）",
         epilog="退出码：0 全 PASS ｜ 1 有 FAIL ｜ 2 无 FAIL 但有 WAIT")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--since-min", type=float, default=60.0,
