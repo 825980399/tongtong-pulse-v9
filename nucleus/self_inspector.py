@@ -417,6 +417,24 @@ def m364_ttl_events() -> list:
     return [dict(x) for x in _m364_ttl_events]
 
 
+def _m414_private_pool_on() -> bool:
+    """★414刀1：私有方法是否进判死候选池（`ENABLE_M414_O3_PRIVATE_IN_POOL`）。
+
+    为什么需要这个开关：413 查出候选生成阶段把 `_` 开头的方法整类跳过
+    ⇒ 全库 5962 个生产类方法里 **55.7% 从未进过判死视野**，而 O3 判死池
+    589/590 条全是 public_api 正是这个结构性缺口的下游表现。
+    放开是**扩大视野**（不改判死严格度），但问题池条目会变多，
+    所以留一个可回退的闸。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M414_O3_PRIVATE_IN_POOL", True))
+    except Exception as _e:
+        silent_exc(_e, where="nucleus/self_inspector.py:_m414_private_pool_on",
+                   level="debug")
+        return True
+
+
 class SelfInspector(SilentLogMixin):
     """
     框架自描述生成器。
@@ -5738,7 +5756,18 @@ class SelfInspector(SilentLogMixin):
             _contents[_f] = _content
             for _m in _re.finditer(r'^\s*def\s+(\w+)\s*\(', _content, _re.MULTILINE):
                 _name = _m.group(1)
-                if _name.startswith(('_', '__')):
+                # ★414刀1 改动1：私有方法**进候选池**（413 根因①）。
+                #   原实现 `startswith(('_', '__'))` 实际等价于 `startswith('_')`
+                #   （`'_'` 已覆盖 `'__'`）⇒ 私有方法整类进不了视野。
+                #   只跳 `__x__` 魔术方法：那是 Python 协议，由解释器调用，
+                #   静态调用图里天然无入边，判死必然是误判。
+                #   ★为什么私有方法更该判：它本来就不该被外部调用，
+                #   「自己类里没人调」就是**真死**，比公开方法干净得多。
+                #   ★量级已实测（414 探针）：候选项 836 → 1124（1.34×），
+                #   因为 `_call_count > _def_count` 这道筛天然滤掉高频私有名。
+                if _name.startswith('__') and _name.endswith('__'):
+                    continue
+                if _name.startswith('_') and not _m414_private_pool_on():
                     continue
                 if _name in ('main', 'run', 'start', 'stop', 'setup', 'teardown'):
                     continue
@@ -6019,6 +6048,8 @@ class SelfInspector(SilentLogMixin):
                         'type': 'dead_code',
                         'severity': 'info',
                         'review_only': True,
+                        # ★414刀1：私有/公开分档留痕（413 查出旧池里私有 0 条）
+                        'is_private': _name.startswith('_'),
                         'review_reason': ('soft_edge_only' if _tier == "soft"
                                           else ('framework_hook_override'
                                                 if _tier == "framework_hook"
@@ -6041,6 +6072,8 @@ class SelfInspector(SilentLogMixin):
                     'file': _f, 'organ': 'global', 'method': _name, 'line': _line,
                     'type': 'dead_code',
                     'severity': 'low',
+                    # ★414刀1：私有/公开分档留痕（同上）
+                    'is_private': _name.startswith('_'),
                     # ★322批刀0/刀3：证据档位（hard=三层皆无入边｜infer-only=只有推断边）
                     'evidence_tier': _tier,
                     'description': f'方法 {_name} 无静态入边/按名边/事件边且非注册入口（疑似死代码）',

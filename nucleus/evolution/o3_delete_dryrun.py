@@ -40,7 +40,9 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("O3DeleteDryRun")
 
-_M412_DD_VERSION = "412.4"
+#: ★414刀1 起判据换版：public_api 改实证三源、新增 test_only 拒因。
+#: **前缀必须保持 "412."** —— 412 单测 test_36/test_43 钉的就是这个前缀。
+_M412_DD_VERSION = "412.5"
 
 #: 灰度开关
 SWITCH = "ENABLE_M412_O3_DELETE_DRYRUN"
@@ -198,10 +200,29 @@ def judge_entry(entry: dict, index: dict[str, Any]) -> dict[str, Any]:
     else:
         _checks["public_api"] = bool(_row.get("public_api"))
         _checks["entry_like"] = bool(_row.get("entry_like"))
+        # ★414刀1 改动3：测试引用前置排除。
+        #   413 抽查的 15 条"仅测试引用"删了 `pytest` 立刻红 ⇒ 它们不是死代码，
+        #   是**测试的唯一消费者**。单列 `test_only` 拒因（不混进 public_api），
+        #   这样"被测试用"和"对外契约"在审计时能分开找不同人确认。
+        _checks["test_ref"] = bool(_row.get("test_ref"))
         if _row.get("public_api"):
-            _reasons.append("public_api（可能被外部/框架调用）")
+            _reasons.append("public_api（在 __all__ 或反射表里）")
         if _row.get("entry_like"):
             _reasons.append("entry_like（像入口）")
+        if _row.get("test_ref"):
+            _reasons.append("test_only（被测试直接引用，删了 pytest 就红）")
+        # ★414刀1 补档：方法被当作**值**传递（`Thread(target=self._monitor_loop)`、
+        #   `_pool.submit(self._run_guarded, ...)`）—— 调用图里没有 call 边，
+        #   但它是线程体/回调/定时器入口，删了功能直接断。
+        #   414 抽样实测：30 条里 4 条假死**全部**是这一类（13.3%）。
+        _checks["value_ref"] = bool(_row.get("value_ref"))
+        if _row.get("value_ref"):
+            _reasons.append("value_ref（被当作值传递/线程体/回调，静态图无 call 边）")
+        # ★414刀1 补档：`getattr(obj, "方法名")` 字面派发 —— 显式按名调用证据。
+        #   414 复验时修完 value_ref 剩下的 4 条假死**全部**是这一类。
+        _checks["getattr_ref"] = bool(_row.get("getattr_ref"))
+        if _row.get("getattr_ref"):
+            _reasons.append("getattr_ref（有 getattr/hasattr 字面名派发）")
 
     _core = _f in CORE_FILES
     _checks["core_file"] = _core
@@ -242,8 +263,11 @@ def report(entries: Any = None, graph: Any = None, now: float | None = None,
         "graph": {"state": _idx.get("state"), "orphans": len(_idx.get("orphans") or {}),
                   "files": (len(_idx["files"]) if _idx.get("files") else None),
                   "reason": _idx.get("reason", "")},
-        "basis": ("a)O3判死族且open b)在图内且孤立(非public_api/非entry_like) "
-                  "c)非核心文件 —— 三者全满足；图不可判 ⇒ 不放行"),
+        "basis": ("a)O3判死族且open b)在图内且孤立(非public_api/非entry_like/"
+                  "非test_only) c)非核心文件 —— 三者全满足；图不可判 ⇒ 不放行"
+                  "｜414起 public_api=在__all__或在main.py反射表；test_only=被tests/引用；"
+                  "value_ref=被当作值传递(Thread target/submit 实参)；"
+                  "getattr_ref=有 getattr/hasattr 字面名派发"),
         "reason": "",
     }
     if _src.get("state") != "ok":

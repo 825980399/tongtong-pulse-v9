@@ -795,6 +795,13 @@ class CallGraphAnalyzer:
         self._m318_samples: list = []
         self._m318_last_kind: str = ""
 
+        # ★414刀1：public_api 三条实证判据的缓存（懒加载，见 _m414_* 方法）
+        self._m414_all_cache: dict = {}       # rel_file -> frozenset(__all__ 名字)
+        self._m414_reflect_cache = None       # main.py 反射表函数名
+        self._m414_testref_cache = None       # tests/ 引用过的标识符
+        self._m414_valueref_cache = None      # 方法名被当作值引用的集合
+        self._m414_getattrref_cache = None    # getattr/hasattr 字面名集合
+
         self._graph_data: dict = {}      # analyze() 结果缓存
         self._unresolved = 0
         self._cross_file = 0
@@ -889,6 +896,12 @@ class CallGraphAnalyzer:
         self.assign_src = {}
         self._m322_name_idx = None
         self._m322_infer_stats = {"param_ann": 0, "ret_value": 0}
+        # ★414刀1：判据缓存按轮重建（__all__/反射表/tests 都可能在同一进程内变）
+        self._m414_all_cache = {}
+        self._m414_reflect_cache = None
+        self._m414_testref_cache = None
+        self._m414_valueref_cache = None
+        self._m414_getattrref_cache = None
 
     #: ★405刀1：快照字段表 —— 需要跨轮缓存复用的 `_Collector` 属性。
     #: 实测 14 个属性全部 JSON 可序列化（`param_types` 是类属性，故用 getattr 兜底）。
@@ -1699,9 +1712,225 @@ class CallGraphAnalyzer:
             self.analyze()
         return self._graph_data
 
+    # ------------------------------------------------------------ ★414刀1 判据
+    # public_api 判据重写（413 根因②）：
+    #   旧判据 `not _name.startswith("_")` **没有区分力** —— 全库 5962 个生产类
+    #   方法里 44.3% 不带下划线，于是它们全被贴上"公共 API"标签保护起来，
+    #   而真正有对外契约的只是极少数。413 实测 589/590 条判死全归 public_api。
+    #   新判据只认**可枚举的证据**：
+    #     (1) 在该文件的 `__all__` 里          → public_api=True
+    #     (2) 在 main.py 的 (模块, 函数) 反射表里 → public_api=True
+    #     (3) 被 tests/ 引用                     → test_ref=True（独立一档，
+    #        拒因 `test_only`；不混进 public_api，否则"被测试用"和"对外契约"
+    #        两种完全不同的语义会被同一个字段吞掉，审计时分不清该找谁确认）
+    #   三条都不满足 ⇒ public_api=False，照常进候选池。
+
+    def _m414_all_names(self, rel_file: str) -> frozenset:
+        """该文件 `__all__` 里的名字（按文件缓存）。
+
+        口径：只看**模块顶层**的 `__all__ = [...]` 赋值，取字符串常量元素。
+        动态拼的 `__all__`（如 `__all__ = [x for x in ...]`）取不到 ⇒ 返回空集，
+        这是**偏危险**的方向，所以下面 `_m414_test_ref_names` 再兜一层。
+        """
+        _key = str(rel_file)
+        if _key in self._m414_all_cache:
+            return self._m414_all_cache[_key]
+        _names: set = set()
+        _abs = os.path.join(self.project_root, _key.replace("\\", "/").replace("/", os.sep))
+        try:
+            with open(_abs, encoding="utf-8", errors="ignore") as _fobj:
+                _tree = ast.parse(_fobj.read())
+            for _node in _tree.body:
+                if isinstance(_node, ast.Assign):
+                    _tgts, _val = _node.targets, _node.value
+                elif isinstance(_node, ast.AnnAssign):
+                    _tgts, _val = [_node.target], _node.value
+                else:
+                    continue
+                if not any(isinstance(_t, ast.Name) and _t.id == "__all__"
+                           for _t in _tgts):
+                    continue
+                if isinstance(_val, (ast.List, ast.Tuple, ast.Set)):
+                    for _e in _val.elts:
+                        if isinstance(_e, ast.Constant) and isinstance(_e.value, str):
+                            _names.add(_e.value)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m414_all_names", level="debug")
+        _out = frozenset(_names)
+        self._m414_all_cache[_key] = _out
+        return _out
+
+    def _m414_reflect_names(self) -> frozenset:
+        """main.py 里 `[(模块名, 函数名), ...]` 反射表的**函数名**集合。
+
+        为什么用 AST 扫而不是硬编码：表会漂移 —— 413 任务书写"20 项"，
+        414 实测 **21 项**。硬编码会立刻过期，AST 让判据跟着表走。
+        收集口径故意放宽到"任何二元字符串元组且首元素含 `.`"，多收只是
+        多保护（少删几条），不会误删。
+        """
+        if self._m414_reflect_cache is not None:
+            return self._m414_reflect_cache
+        _names: set = set()
+        _abs = os.path.join(self.project_root, "main.py")
+        try:
+            with open(_abs, encoding="utf-8", errors="ignore") as _fobj:
+                _tree = ast.parse(_fobj.read())
+            for _node in ast.walk(_tree):
+                if not isinstance(_node, (ast.List, ast.Tuple)):
+                    continue
+                for _e in _node.elts:
+                    if not isinstance(_e, ast.Tuple) or len(_e.elts) != 2:
+                        continue
+                    _a, _b = _e.elts
+                    if not (isinstance(_a, ast.Constant) and isinstance(_a.value, str)
+                            and isinstance(_b, ast.Constant) and isinstance(_b.value, str)):
+                        continue
+                    if "." in _a.value and _b.value.isidentifier():
+                        _names.add(_b.value)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m414_reflect_names", level="debug")
+        self._m414_reflect_cache = frozenset(_names)
+        return self._m414_reflect_cache
+
+    def _m414_getattr_ref_names(self) -> frozenset:
+        """`getattr/hasattr/setattr(obj, "名字")` 里出现的**字符串字面名**集合。
+
+        为什么必须补这一档（414 复验实测）：修掉 `value_ref` 之后**剩下 4 条
+        假死全部是它** ——
+            getattr(_self, "get_total_handled")   # InfoField
+            getattr(self, "evict_pattern")        # StreamMiner
+            getattr(_store, "update_node")        # neo4j_store
+            getattr(_organ, "get_learned_behaviors")
+        这三类 `getattr/hasattr/setattr` 是**按名派发**的显式证据：方法真的会被
+        调到，只是编译器/静态图看不见。self_inspector 内部早有同类判据
+        （`_GETATTR_RE` → `_byname_names`），但 O3 消费的 `get_isolated_functions`
+        一直没有 ⇒ 两边口径不一致，这里补齐。
+        """
+        if self._m414_getattrref_cache is not None:
+            return self._m414_getattrref_cache
+        _names: set = set()
+        try:
+            _files = _iter_py_files(self.project_root, self.scan_dirs)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m414_getattr_ref_names:files",
+                       level="warning")
+            self._m414_getattrref_cache = frozenset()
+            return self._m414_getattrref_cache
+        _API = ("getattr", "hasattr", "setattr", "delattr")
+        for _rel in _files:
+            # ★同上：`_iter_py_files` 给的是相对路径，必须 join project_root
+            _abs = os.path.join(self.project_root, str(_rel).replace("/", os.sep))
+            try:
+                with open(_abs, encoding="utf-8", errors="ignore") as _fobj:
+                    _tree = ast.parse(_fobj.read())
+            except Exception as _e:
+                silent_exc(_e, where="CallGraphAnalyzer:_m414_getattr_ref_names:file",
+                           level="debug")
+                continue
+            for _n in ast.walk(_tree):
+                if not isinstance(_n, ast.Call):
+                    continue
+                if not (isinstance(_n.func, ast.Name) and _n.func.id in _API):
+                    continue
+                if len(_n.args) < 2:
+                    continue
+                _a = _n.args[1]
+                if isinstance(_a, ast.Constant) and isinstance(_a.value, str):
+                    _names.add(_a.value)
+        self._m414_getattrref_cache = frozenset(_names)
+        return self._m414_getattrref_cache
+
+    def _m414_value_ref_names(self) -> frozenset:
+        """方法名被**当作值**引用过的集合（`ast.Attribute` 且不在 `Call.func` 位）。
+
+        为什么必须单独一档（414 抽样实测）：`
+            threading.Thread(target=self._monitor_loop, daemon=True)
+            _pool.submit(self._run_guarded, scope)
+            self._trigger_autonomous_derivation,     # 作为参数传下去
+        ` 这类写法里方法**不是被调用**，是实现里的回调/线程体/定时器入口 ——
+        调用图只统计 call 边 ⇒ 入度 0 ⇒ 被判死。413 的 22 条假死里有这一类，
+        414 的 30 条抽样里 **4 条全部是它**（4/30 = 13.3%）。
+
+        口径：全库同名属性值引用即算，**不区分类归属**。偏保守（同名巧合会
+        多保护几条真死），但删除不可逆 —— 宁可漏删 10 条，不可误删 1 条。
+        """
+        if self._m414_valueref_cache is not None:
+            return self._m414_valueref_cache
+        _names: set = set()
+        try:
+            _files = _iter_py_files(self.project_root, self.scan_dirs)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m414_value_ref_names:files",
+                       level="warning")
+            self._m414_valueref_cache = frozenset()
+            return self._m414_valueref_cache
+        for _rel in _files:
+            # ★`_iter_py_files` 返回的是**相对 project_root 的路径**，不是绝对路径
+            #   ⇒ 必须 join 回来。直接 open() 会按 cwd 解析，换个工作目录就静默
+            #   读到别的文件（假绿）。
+            _abs = os.path.join(self.project_root, str(_rel).replace("/", os.sep))
+            try:
+                with open(_abs, encoding="utf-8", errors="ignore") as _fobj:
+                    _tree = ast.parse(_fobj.read())
+            except Exception as _e:
+                silent_exc(_e, where="CallGraphAnalyzer:_m414_value_ref_names:file",
+                           level="debug")
+                continue
+            # 先标记"调用位"的 Attribute（`x.name()` 里的 `x.name`），其余都算值引用
+            _call_pos = set()
+            for _n in ast.walk(_tree):
+                if isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute):
+                    _call_pos.add(id(_n.func))
+            for _n in ast.walk(_tree):
+                if isinstance(_n, ast.Attribute) and id(_n) not in _call_pos:
+                    _names.add(_n.attr)
+        self._m414_valueref_cache = frozenset(_names)
+        return self._m414_valueref_cache
+
+    def _m414_test_ref_names(self) -> frozenset:
+        """tests/ 下所有 .py 里**出现过**的标识符（`Name.id` ∪ `Attribute.attr`）。
+
+        ★口径偏保守：只要名字在测试代码里被提到就算（不管它是被直接调用、
+          还是写在 `hasattr` / `getattr` 断言里）。413 抽查的 15 条
+          "仅测试引用"正是删了 `pytest` 立刻红的那批 —— 宁可多保 10 条，
+          不可误删 1 条（删除不可逆）。
+        """
+        if self._m414_testref_cache is not None:
+            return self._m414_testref_cache
+        _names: set = set()
+        _troot = os.path.join(self.project_root, "tests")
+        try:
+            for _dp, _dn, _fn in os.walk(_troot):
+                _dn[:] = [d for d in _dn
+                          if d != "__pycache__" and not d.startswith(".")]
+                for _f in _fn:
+                    if not _f.endswith(".py"):
+                        continue
+                    try:
+                        with open(os.path.join(_dp, _f), encoding="utf-8",
+                                  errors="ignore") as _fobj:
+                            _tree = ast.parse(_fobj.read())
+                    except Exception as _e:
+                        silent_exc(_e, where="CallGraphAnalyzer:_m414_test_ref_names:file",
+                                   level="debug")
+                        continue
+                    for _node in ast.walk(_tree):
+                        if isinstance(_node, ast.Name):
+                            _names.add(_node.id)
+                        elif isinstance(_node, ast.Attribute):
+                            _names.add(_node.attr)
+        except Exception as _e:
+            silent_exc(_e, where="CallGraphAnalyzer:_m414_test_ref_names", level="warning")
+        self._m414_testref_cache = frozenset(_names)
+        return self._m414_testref_cache
+
     def get_isolated_functions(self) -> list:
         """从未被调用的函数/方法（排除魔术方法与入口类）。"""
         self._ensure()
+        _reflect = self._m414_reflect_names()
+        _testref = self._m414_test_ref_names()
+        _valref = self._m414_value_ref_names()
+        _gatref = self._m414_getattr_ref_names()
         _out = []
         for _nid, _d in self._defs.items():
             if self._in_deg.get(_nid, 0) > 0:
@@ -1711,14 +1940,23 @@ class CallGraphAnalyzer:
                 continue
             if _name.startswith("__") and _name.endswith("__"):
                 continue
+            _f = _d["file"]
+            # ★414刀1 改动2：public_api 只认可枚举的对外契约（见上方长注释）
+            _pub = (_name in _reflect) or (_name in self._m414_all_names(_f))
             _out.append({
                 "id": _nid,
                 "name": _name,
-                "file": _d["file"],
+                "file": _f,
                 "line": _d["line"],
                 "type": _d["type"],
-                # 公共 API：非下划线开头且名字具入口特征 → 可能被外部/框架调用
-                "public_api": (not _name.startswith("_")),
+                "public_api": bool(_pub),
+                # ★414刀1 改动3：被 tests/ 引用 ⇒ 删了 pytest 就红，独立一档
+                "test_ref": bool(_name in _testref),
+                # ★414刀1 补档：被当作值传递（Thread target / submit 实参）
+                #   ⇒ 没有 call 边但确实在用，单列一档（拒因 value_ref）
+                "value_ref": bool(_name in _valref),
+                # ★414刀1 补档：getattr/hasattr 字面名派发（静态图无形）
+                "getattr_ref": bool(_name in _gatref),
                 "entry_like": _name in _ENTRY_LIKE,
             })
         _out.sort(key=lambda x: (x["file"], x["line"]))
