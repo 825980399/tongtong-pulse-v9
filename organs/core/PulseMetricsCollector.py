@@ -1748,9 +1748,15 @@ class PulseMetricsCollector(BasePulseOrgan):
             "reason": _r.get("reason"),
             "ts": _r.get("ts"),
         }
-        _module_logger.debug("[411刀1] 器官内存采样: state=%s elapsed=%sms top3=%s",
-                             _out.get("state"), _out.get("elapsed_ms"),
-                             [(t.get("organ"), t.get("objs")) for t in _out["top3"]])
+        # ★413刀2：411刀1 原本写的是模块级 logger 的 `debug(...)`，但本模块
+        #   从未定义过该符号 —— 每 300s 的**真实采样拍**会在 `return _out` 之前抛
+        #   NameError，被 `_collect_memory_pressure` 的 except 兜住 ⇒ 该拍快照的
+        #   `memory_by_organ` 被置 None（落盘在异常之前已完成，所以产物本身完好）。
+        #   改用本类既有的 `self._log`（内部即 `self._logger.log`），零新增符号。
+        self._log(LogLevel.DEBUG,
+                  "[411刀1] 器官内存采样: state=%s elapsed=%sms top3=%s"
+                  % (_out.get("state"), _out.get("elapsed_ms"),
+                     [(t.get("organ"), t.get("objs")) for t in (_out.get("top3") or [])]))
         return _out
 
     def _m411_mbo_last_reading(self) -> dict[str, Any]:
