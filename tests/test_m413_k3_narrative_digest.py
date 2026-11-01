@@ -340,7 +340,11 @@ def test_e4_switch_off_falls_back_to_412_blank(monkeypatch):
     _row = _rows[-1]
     assert _row["headline"] == ""
     assert _row["intent"] == ""
-    assert _row["delta"] == {"nodes": None, "llm_ratio": None, "patches": None}
+    # ★414刀2 改契约：delta 增第 4 格。这格受 `ENABLE_M414_NARRATIVE_EVENTS`
+    #   控制（414 的开关），**不**受 413 摘要开关控制 ⇒ 413 开关关闭时它仍在，
+    #   只是值为 None（与三格同为 None 口径）。
+    assert _row["delta"] == {"nodes": None, "llm_ratio": None, "patches": None,
+                             "narrative_events": None}
 
 
 def test_e5_second_night_sees_the_first_night_values():

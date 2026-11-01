@@ -261,6 +261,9 @@ class PulseNarrativeSelf(BasePulseOrgan):
             nodes=_dl.get("nodes"),
             llm_ratio=_dl.get("llm_ratio"),
             patches=_dl.get("patches"),
+            # ★414刀2：delta 第 4 格（cell 结构）。顶层 `narrative_events` 仍是
+            #   当日条数 int，两者并存不冲突（语义不同：条数 vs 与前一日之差）。
+            delta_narrative_events=_dl.get("narrative_events"),
             headline=_dig.get("headline") or "",
             intent=_dig.get("intent") or "",
             prev_intent_verdict=_dig.get("prev_intent_verdict"),

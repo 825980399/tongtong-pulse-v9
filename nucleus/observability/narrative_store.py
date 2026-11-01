@@ -24,9 +24,9 @@
 `data/narrative/narrative_YYYYMMDD.jsonl` —— 每天一个文件、**每天一条摘要行**，
 append-only 语义（同一天重跑 ⇒ 替换当天那一行，不产生第二条，日级幂等）。
 
-行格式（任务书指定；`headline`/`delta`/`intent` 413 再填，**本批留空不编造**）::
+行格式（任务书指定）::
 
-    {date, version, headline, delta{nodes,llm_ratio,patches},
+    {date, version, headline, delta{nodes,llm_ratio,patches,narrative_events},
      intent, prev_intent_verdict, evidence_refs, generated_at,
      narrative_events, continuous_days}
 """
@@ -44,7 +44,12 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("NarrativeStore")
 
-_M412_NS_VERSION = "412.1"
+#: ★414刀2：delta 从三格扩到四格（加 `narrative_events`）。
+#: **前缀必须保持 "412."** —— 412 单测钉的是这个前缀，且本文件仍是 412 的产物。
+_M412_NS_VERSION = "412.2"
+
+#: ★414刀2：delta 第四格的灰度开关。关 ⇒ `delta` 退回 412 的三格（可秒级回退）。
+EVENTS_SWITCH = "ENABLE_M414_NARRATIVE_EVENTS"
 
 #: 相对数据根的落盘目录
 NARRATIVE_REL = os.path.join("data", "narrative")
@@ -81,6 +86,21 @@ def enabled() -> bool:
         return bool(getattr(_c, SWITCH, True))
     except Exception as _e:
         silent_exc(_e, where="observability.narrative_store:enabled")
+        return True
+
+
+def events_enabled() -> bool:
+    """★414刀2：`delta` 里是否带第四格 `narrative_events`。
+
+    为什么单独一个开关而不是复用 `ENABLE_M412_NARRATIVE_STORE`：
+    关掉整个落盘会把叙事摘要一起关掉（波及面太大），而这里只是想
+    **只回退 delta 契约**（万一有下游按三键解析）。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, EVENTS_SWITCH, True))
+    except Exception as _e:
+        silent_exc(_e, where="observability.narrative_store:events_enabled")
         return True
 
 
@@ -174,18 +194,26 @@ def _atomic_write_lines(path: str, rows: list[dict]) -> tuple[bool, str]:
 def row_of(date: str, generated_at: float | None = None, **fields: Any) -> dict[str, Any]:
     """构造一行摘要（任务书行格式；**未知字段不吞**，显式落进 `extra`）。
 
-    ★`headline` / `delta` / `intent` 本批**留空** —— 那是 413 的活，
-      这里填任何值都是编造。
+    ★412 时 `headline` / `delta` / `intent` 留空；413 起由
+      `narrative_digest` 纯模板供给（不引入生成模型）；414 起 `delta` 增第 4 格
+      `narrative_events`。每一格都是 cell 结构 `{cur, prev, delta, source, reason}`
+      —— 取不到时**显式写 reason**，不填 0 假充。
     """
+    _delta: dict[str, Any] = {
+        "nodes": fields.pop("nodes", None),
+        "llm_ratio": fields.pop("llm_ratio", None),
+        "patches": fields.pop("patches", None),
+    }
+    # ★414刀2：第四格。参数名用 `delta_narrative_events` 是为了不与**顶层**的
+    #   `narrative_events`（当日条数 int，`load()` 要读它）撞名 —— 两者语义不同：
+    #   顶层 = 当日有多少条；这里 = 与前一日比多了/少了几条。
+    if events_enabled():
+        _delta["narrative_events"] = fields.pop("delta_narrative_events", None)
     _row: dict[str, Any] = {
         "date": str(date),
         "version": _M412_NS_VERSION,
         "headline": str(fields.pop("headline", "") or ""),
-        "delta": {
-            "nodes": fields.pop("nodes", None),
-            "llm_ratio": fields.pop("llm_ratio", None),
-            "patches": fields.pop("patches", None),
-        },
+        "delta": _delta,
         "intent": str(fields.pop("intent", "") or ""),
         "prev_intent_verdict": fields.pop("prev_intent_verdict", None),
         "evidence_refs": list(fields.pop("evidence_refs", None) or []),

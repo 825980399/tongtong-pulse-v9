@@ -71,7 +71,9 @@ def test_01_row_has_all_contract_fields():
     for _k in ("date", "version", "headline", "delta", "intent",
                "prev_intent_verdict", "evidence_refs", "generated_at"):
         assert _k in _r, "任务书行格式缺 %s" % _k
-    assert set(_r["delta"]) == {"nodes", "llm_ratio", "patches"}
+    # ★414刀2 改契约：delta 增第 4 格 narrative_events（开关默认开）。
+    #   判据语义不变 —— 仍然钉「delta 的键集恰好是这些，不多不少」。
+    assert set(_r["delta"]) == {"nodes", "llm_ratio", "patches", "narrative_events"}
 
 
 def test_02_headline_delta_intent_left_empty():
@@ -80,7 +82,8 @@ def test_02_headline_delta_intent_left_empty():
     assert _r["headline"] == ""
     assert _r["intent"] == ""
     assert _r["prev_intent_verdict"] is None
-    assert _r["delta"] == {"nodes": None, "llm_ratio": None, "patches": None}
+    assert _r["delta"] == {"nodes": None, "llm_ratio": None, "patches": None,
+                           "narrative_events": None}
     assert _r["evidence_refs"] == []
 
 

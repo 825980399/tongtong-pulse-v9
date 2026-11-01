@@ -6990,3 +6990,28 @@ PATCH_M412_DELETE_ONLY_GATE = False
 #     不引入生成模型、不新增外部依赖；取不到的项显式写 reason，不填 0 假充有值。
 #   读取点：nucleus/observability/narrative_digest.py::enabled()
 ENABLE_M413_NARRATIVE_DIGEST = True
+
+# ======================================================================
+# [M414-CFG] 第414批 · O3判据改造 + narrative delta 补全
+# ======================================================================
+#
+# ENABLE_M414_O3_PRIVATE_IN_POOL
+#   默认值：True
+#   语义：开启时 `self_inspector._detect_dead_code` 的候选生成**不再整类跳过**
+#        下划线开头的方法（只跳 `__x__` 魔术方法）⇒ 私有方法进判死候选池。
+#        为什么：413 查出全库 5962 个生产类方法里 55.7% 带下划线、从未进过
+#        判死视野，而 O3 判死池 589/590 条全是 public_api 正是这个缺口的
+#        下游表现。私有方法本来就不该被外部调用，"自己类里没人调"就是真死。
+#   量级：414 探针实测过调用计数筛的候选项 836 → 1124（1.34×），问题池不失控。
+#   关闭时退回 412 行为（私有方法整类跳过），零回归。
+#   读取点：nucleus/self_inspector.py::_m414_private_pool_on()
+ENABLE_M414_O3_PRIVATE_IN_POOL = True
+#
+# ENABLE_M414_NARRATIVE_EVENTS
+#   默认值：True
+#   语义：开启时叙事摘要 jsonl 的 `delta` 里多一格 `narrative_events`
+#        （{cur, prev, delta, source}），并同时提到 jsonl 顶层；
+#        关闭时 `delta` 退回 412 的三格（nodes/llm_ratio/patches）且顶层不写。
+#   ★为什么要开关：改的是 412 钉死的 `row_of()` 契约，留一条回退路。
+#   读取点：nucleus/observability/narrative_digest.py::events_enabled()
+ENABLE_M414_NARRATIVE_EVENTS = True
