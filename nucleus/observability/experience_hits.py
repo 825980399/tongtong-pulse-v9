@@ -111,7 +111,8 @@ def top_hits(question: str, top_k: int = 2,
     except Exception as _e:
         silent_exc(_e, where="observability.experience_hits:top_hits:query", level="debug")
         return []
-    _scored: list[tuple[float, float, dict]] = []
+    #: (原始相关分, 时间戳, 条目, 权重) —— ★存**原始分**，不存加权分
+    _scored: list[tuple[float, float, dict, float]] = []
     for _e in (_cands or []):
         if not isinstance(_e, dict):
             continue
@@ -134,11 +135,14 @@ def top_hits(question: str, top_k: int = 2,
             _ts = 0.0
         # ★权重放在元组里带回，**不往经验条目上写字段** ——
         #   池里的 dict 会被落盘，写进去就是把观测口径污染进产物。
-        _scored.append((_s * float(_w), _ts, _e, float(_w)))
+        # ★414刀4 修：这里只存**原始分**。原实现存 `_s * _w`，而输出时
+        #   `score_weighted` 又乘一次 `_w` ⇒ 权重被平方（0.3 变成 0.09）。
+        #   412/413 没暴露是因为生产池 `is_template` 全缺、`_w` 恒 1.0。
+        _scored.append((float(_s), _ts, _e, float(_w)))
     if not _scored:
         return []
-    # 先按分数、同分按时间新→旧
-    _scored.sort(key=lambda x: (-x[0], -x[1]))   # 先按**加权分**、同分按时间新→旧
+    # 先按**加权分**、同分按时间新→旧（加权分在这里现算，不再依赖元组里的值）
+    _scored.sort(key=lambda x: (-(x[0] * x[3]), -x[1]))
     _out: list[dict[str, Any]] = []
     _seen: dict[str, int] = {}
     for _s, _ts, _e, _w in _scored:
@@ -156,7 +160,10 @@ def top_hits(question: str, top_k: int = 2,
         _seen[_key] = 1
         _out.append({
             "id": str(_e.get("id") or ""),
-            "score": _s,
+            # ★414刀4：`score` = **原始相关分**（只反映文本匹配，不受权重影响），
+            #   `score_weighted` = 原始分 × 权重（只乘一次）。
+            #   这样"模板被降权了多少"可以直接从两个数看出来，不会被平方混淆。
+            "score": round(_s, 4),
             "score_weighted": round(_s * _w, 2),
             "weight": _w,
             "is_template": bool(_e.get("is_template")),
