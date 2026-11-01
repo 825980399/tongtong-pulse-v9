@@ -1,0 +1,18 @@
+[
+  {
+    "file": "nucleus/self_inspector.py",
+    "delta_occurrences": 1,
+    "delta_files": 0,
+    "commit": "416刀1（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
+    "batch": "416/D1",
+    "reason": "416 刀1「self_inspector 线程化 + 降优先级」在 SelfInspector.submit_deferred_scan() 里新增**唯一**一个 spawn 点（nucleus/self_inspector.py:2760，name='self-inspector-deferred-scan'，daemon=True）。性质：①单飞 —— 起线程前判 `_m416_scan_thread.is_alive()`，同刻最多一条；②受开关 `ENABLE_SELF_INSPECTOR_STARTUP_SCAN` 与启动窗口 180s 双重限制，窗口外不再起；③停机路径 shutdown_self_inspector() 会先 stop_deferred_scan(timeout=5.0) 收线程。故不构成并发点净增（进程内该线程数上限恒为 1）。另：同文件 3603 行的 `threading.Thread(...)` 是**既有**文档串（HEAD 已有，本次未改），故本文件 HEAD=1 → now=2 的增量只记 1。"
+  },
+  {
+    "file": ".bak_batch347_PulseController.py",
+    "delta_occurrences": 1,
+    "delta_files": 1,
+    "commit": "非本批产物（347 批遗留的根目录备份文件，gitignore 未跟踪）",
+    "batch": "347/遗留",
+    "reason": "★口径漏洞如实记账，不藏：门禁 SKIP_DIRS 只按**目录名**排除 `.bak*`（`d.startswith('.bak')`），而这是**仓根下的单个文件**，不在 dirs 里 ⇒ 漏网。该文件是 347 批把 organs/motor/PulseController.py 备份到根目录时留下的副本，非源码、不入版本库（`.gitignore` 的 `.bak_batch*` 规则只匹配目录形态，故它既未被忽略也不在 HEAD 里）。本批**不擅自删除**他人遗留文件，只把它记进重锚归因；建议下一批单独一刀：把门禁的文件级过滤补成 `d.startswith('.bak') or fn.startswith('.bak')`，并清掉仓根这类单文件备份。修好后本项归因可随基线回落到 62/46。"
+  }
+]
