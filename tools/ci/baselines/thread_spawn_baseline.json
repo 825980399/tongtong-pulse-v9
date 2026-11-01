@@ -2,23 +2,23 @@
   "metric": "production_thread_spawn_points",
   "pattern": "threading.Thread(",
   "caliber": "occurrences of 'threading.Thread(' in .py files under repo root, EXCLUDING paths starting with tests/, and excluding directories: .bak* (all batch backups), data/ (runtime), tmp/, .git, __pycache__, caches",
-  "total_occurrences": 64,
-  "file_count": 48,
+  "total_occurrences": 63,
+  "file_count": 47,
   "anchored_by": "172刀0",
   "anchored_at": "2026-10-08",
   "note": "resolves historical ambiguity 49/37 vs 60/20+ vs 121/67; locked to production-source caliber",
   "attribution": [
     {
-      "file": "organs/core/PulseMetricsCollector.py",
-      "delta_occurrences": 1,
-      "delta_files": 1,
-      "commit": "417刀1（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
-      "batch": "417/D1",
-      "reason": "417 刀1「心跳路径轻量化」在 PulseMetricsCollector._m417_ensure_worker() 里新增**唯一**一个 spawn 点（name='m417-hb-observer'，daemon=True）。性质：①单飞 —— 起线程前判 `_m417_thread.is_alive()`，同刻最多一条；②懒起 —— 只有第一次真正登记重活请求时才起，空闲进程不占线程；③受开关 `ENABLE_M417_HEARTBEAT_ASYNC_CACHE` 限制，关掉立刻回到 416 的纯同步行为（不起线程）；④停机路径 m417_stop_async() 置停止位 + join(timeout)，且 _m417_stop 置位后 _m417_ensure_worker() 直接返回 False，不再重启。故不构成并发点净增（进程内该线程数上限恒为 1）。★delta 口径：该文件在 416 基线里 spawn 点为 0 ⇒ 本次既是 +1 次，也是 +1 个「有 spawn 的文件」；仓根 `.bak_batch347_PulseController.py` 那 +1 已由 416 重锚吃进 63/47，本轮不重复计。"
+      "file": "docs/台账/历史备份归档/.bak_batch347_PulseController.py",
+      "delta_occurrences": -1,
+      "delta_files": -1,
+      "commit": "420/L08（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
+      "batch": "420/L08",
+      "reason": "★420/L08 修口径缺陷：scan() 此前只过滤 dirs（`dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.bak')]`），而**文件名不在 dirs 里**，于是归档目录下的 `.bak_batch347_PulseController.py` 长期被计进基线。caliber 原文写的是 'excluding .bak* (all batch backups)'，实现与口径不一致 ⇒ 基线虚高。实测：非 tests/data/tmp 下的 .bak 单文件共 3 个（.bak_batch347_EvolutionLoop.py / .bak_batch347_PulseController.py / .bak_batch350_ap.py），其中只有 PulseController 那个含 1 次 `threading.Thread(`。本次在 fns 循环里补 `if fn.startswith('.bak'): continue`，同时 docstring 的排除方式说明同步。delta = -1/-1 **纯口径修正、零生产代码面改动**：被排除的是历史备份文件，不是任何活体 spawn 点。417 刀1 那条归因里写的『仓根 .bak_batch347_PulseController.py 那 +1 已由 416 重锚吃进 63/47』正是本缺陷的痕迹（该文件实际在 docs/台账/历史备份归档/ 下，不在仓根）。"
     }
   ],
   "reanchor_note": "★337刀11 起：重锚必须带归因，且归因分项之和 == delta（脚本强制）",
-  "reanchor_by": "417刀1",
+  "reanchor_by": "420刀L08",
   "reanchor_at": "2026-11-01",
   "reanchor_history": [
     {
@@ -343,6 +343,38 @@
           "commit": "非本批产物（347 批遗留的根目录备份文件，gitignore 未跟踪）",
           "batch": "347/遗留",
           "reason": "★口径漏洞如实记账，不藏：门禁 SKIP_DIRS 只按**目录名**排除 `.bak*`（`d.startswith('.bak')`），而这是**仓根下的单个文件**，不在 dirs 里 ⇒ 漏网。该文件是 347 批把 organs/motor/PulseController.py 备份到根目录时留下的副本，非源码、不入版本库（`.gitignore` 的 `.bak_batch*` 规则只匹配目录形态，故它既未被忽略也不在 HEAD 里）。本批**不擅自删除**他人遗留文件，只把它记进重锚归因；建议下一批单独一刀：把门禁的文件级过滤补成 `d.startswith('.bak') or fn.startswith('.bak')`，并清掉仓根这类单文件备份。修好后本项归因可随基线回落到 62/46。"
+        }
+      ]
+    },
+    {
+      "reanchor_by": "420刀L08",
+      "reanchor_at": "2026-11-01",
+      "from": {
+        "total_occurrences": 64,
+        "file_count": 48
+      },
+      "to": {
+        "total_occurrences": 63,
+        "file_count": 47
+      },
+      "attribution": [
+        {
+          "file": "docs/台账/历史备份归档/.bak_batch347_PulseController.py",
+          "delta_occurrences": -1,
+          "delta_files": -1,
+          "commit": "420/L08（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
+          "batch": "420/L08",
+          "reason": "★420/L08 修口径缺陷：scan() 此前只过滤 dirs（`dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.bak')]`），而**文件名不在 dirs 里**，于是归档目录下的 `.bak_batch347_PulseController.py` 长期被计进基线。caliber 原文写的是 'excluding .bak* (all batch backups)'，实现与口径不一致 ⇒ 基线虚高。实测：非 tests/data/tmp 下的 .bak 单文件共 3 个（.bak_batch347_EvolutionLoop.py / .bak_batch347_PulseController.py / .bak_batch350_ap.py），其中只有 PulseController 那个含 1 次 `threading.Thread(`。本次在 fns 循环里补 `if fn.startswith('.bak'): continue`，同时 docstring 的排除方式说明同步。delta = -1/-1 **纯口径修正、零生产代码面改动**：被排除的是历史备份文件，不是任何活体 spawn 点。417 刀1 那条归因里写的『仓根 .bak_batch347_PulseController.py 那 +1 已由 416 重锚吃进 63/47』正是本缺陷的痕迹（该文件实际在 docs/台账/历史备份归档/ 下，不在仓根）。"
+        }
+      ],
+      "prev_attribution": [
+        {
+          "file": "organs/core/PulseMetricsCollector.py",
+          "delta_occurrences": 1,
+          "delta_files": 1,
+          "commit": "417刀1（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
+          "batch": "417/D1",
+          "reason": "417 刀1「心跳路径轻量化」在 PulseMetricsCollector._m417_ensure_worker() 里新增**唯一**一个 spawn 点（name='m417-hb-observer'，daemon=True）。性质：①单飞 —— 起线程前判 `_m417_thread.is_alive()`，同刻最多一条；②懒起 —— 只有第一次真正登记重活请求时才起，空闲进程不占线程；③受开关 `ENABLE_M417_HEARTBEAT_ASYNC_CACHE` 限制，关掉立刻回到 416 的纯同步行为（不起线程）；④停机路径 m417_stop_async() 置停止位 + join(timeout)，且 _m417_stop 置位后 _m417_ensure_worker() 直接返回 False，不再重启。故不构成并发点净增（进程内该线程数上限恒为 1）。★delta 口径：该文件在 416 基线里 spawn 点为 0 ⇒ 本次既是 +1 次，也是 +1 个「有 spawn 的文件」；仓根 `.bak_batch347_PulseController.py` 那 +1 已由 416 重锚吃进 63/47，本轮不重复计。"
         }
       ]
     }

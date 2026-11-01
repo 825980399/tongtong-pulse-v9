@@ -7,7 +7,8 @@
     指标 = 仓库内所有 .py 文件中 `threading.Thread(` 出现次数（不重复计数文件）
     排除目录：tests/（测试，非生产）、.bak*（全部批次备份，gitignored）、
               data/（运行时输出，本批纪律零写盘 data）、tmp/、.git、__pycache__、各缓存目录
-    排除方式：路径不以 tests/ 开头；跳过上述目录
+    排除方式：路径不以 tests/ 开头；跳过上述目录；
+              ★420/L08：**文件名**也按 .bak 前缀排除（此前只排目录）
 
 门禁行为：
     默认：读取基线 JSON，断言 当前计数 == 基线（occurrences + file_count 双向一致）；
@@ -63,6 +64,12 @@ def scan():
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".bak")]
         for fn in fns:
             if not fn.endswith(".py"):
+                continue
+            # ★420/L08：**文件级也要排** —— 此前只过滤 dirs，而文件名不在 dirs 里，
+            #   于是散落在归档目录的 `.bak_batch347_PulseController.py` 这类单文件备份
+            #   一直被计进基线（实测虚高 1 次 / 1 文件）。caliber 写的是 "excluding
+            #   .bak* (all batch backups)"，实现必须与口径一致。
+            if fn.startswith(".bak"):
                 continue
             full = os.path.join(root, fn)
             rel = os.path.relpath(full, REPO_ROOT).replace("\\", "/")
