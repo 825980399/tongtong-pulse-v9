@@ -704,6 +704,34 @@ class PulseKidney(BasePulseOrgan):
 
 
 
+    def _m420_kal_entry(self, where: str = ""):
+        """★420/L02：取「真正存在」的 KAL 入口 —— 本器官自持优先，全局单例兜底。
+
+        为什么需要它：`_m70_kal_get_node` / `_m70_kal_search_by_level` 原来调
+        `self._pulse_bus.request(...)`，而 `_pulse_bus` 这个属性**全库从未被赋值**
+        （器官基类没有它；`EventBus` 只有 publish/subscribe/publish_async，**无
+        `request`**）⇒ `ENABLE_KAL_CALL_SITES=True`（config:5987，是开的）时一旦被
+        调用必抛 AttributeError，被 except 吞掉后回落直连 —— 属「假通路」而不是
+        「关掉的功能」：失败且静默，比缺功能更坏。
+        历史备份 `data/code_backups/backup_20260920_181326` 里此处原本写的就是
+        `get_kal().get_node(node_id)`，是后续补丁把它改坏的。
+
+        取法顺序：
+          ① `self._kal` —— `set_node_pool()` 里构造，node_pool 一定对（首选）；
+          ② `get_kal()` —— 别的器官注入过的全局单例（兜底）；
+          ③ None —— 调用方**必须**回落 `_m70_direct_get_node`，不许在这里抛。
+        """
+        _kal = getattr(self, "_kal", None)
+        if _kal is not None:
+            return _kal
+        try:
+            from nucleus.knowledge_access_layer import get_kal
+            return get_kal()
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseKidney::_m420_kal_entry " + str(where),
+                       level="warning")
+            return None
+
     def _m70_kal_get_node(self, node_id):
         """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。
 
@@ -714,12 +742,17 @@ class PulseKidney(BasePulseOrgan):
         """
         if not self._m70_kal_callsites_on():
             return self._m70_direct_get_node(node_id)
-        try:
-            _r = self._pulse_bus.request('kal.get_node', node_id)
-            if _r is not None:
-                return _r
-        except Exception as e:
-            self._log(LogLevel.ERROR, f'异常: {e}')
+        # ★420/L02：原为 `self._pulse_bus.request('kal.get_node', node_id)` ——
+        #   `_pulse_bus` 属性全库从未赋值，一调必 AttributeError（假通路）。
+        _kal = self._m420_kal_entry("_m70_kal_get_node")
+        if _kal is not None:
+            try:
+                _r = _kal.get_node(node_id)
+                if _r is not None:
+                    return _r
+            except Exception as e:
+                silent_exc(e, where="organs.body.PulseKidney::_m70_kal_get_node L420",
+                           level="error")
         return self._m70_direct_get_node(node_id)
 
     def _m70_kal_search_by_level(self, evol_level, top_k=10):
@@ -730,16 +763,25 @@ class PulseKidney(BasePulseOrgan):
         """
         if not self._m70_kal_callsites_on():
             return []
-        try:
-            _r = self._pulse_bus.request(
-                'nucleus.knowledge_access_layer.search_by_evol_level',
-                evol_level=evol_level,
-                top_k=top_k,
-            )
-            if _r:
-                return _r
-        except Exception as e:
-            self._log(LogLevel.ERROR, f'异常: {e}')
+        # ★420/L02：原为 `self._pulse_bus.request('...search_by_evol_level', ...)`。
+        #   ★为什么**不**用 `query_nodes`（它看着更像"官方透传"）：实测
+        #   `PulseNodePool.query(evol_level='L9')` **返回全部节点** —— 它的分支是
+        #   `if evol_level and evol_level in self._level_index:`，未知层级会落进
+        #   `else:` 走全池遍历，而 `_matches()` 里**根本没有 evol_level 判断**
+        #   （只查 importance/source_organ/space_path_prefix）⇒ 未知层级静默返回
+        #   全量，语义与"按层级搜索"相反（PulseNodePool.py:1391-1462）。
+        #   `search_by_evol_level` 是 `getattr(_n,'evol_level',None) == evol_level`
+        #   的严格相等匹配，语义正确；它**不吃 top_k**（历史版本传 `top_k=top_k`
+        #   会 TypeError），所以用切片实现上限。
+        _kal = self._m420_kal_entry("_m70_kal_search_by_level")
+        if _kal is not None:
+            try:
+                _r = _kal.search_by_evol_level(evol_level)
+                if _r:
+                    return _r[:int(top_k or 10)]
+            except Exception as e:
+                silent_exc(e, where="organs.body.PulseKidney::_m70_kal_search_by_level L420",
+                           level="error")
         return []
 
     def _m70_direct_get_node(self, node_id):

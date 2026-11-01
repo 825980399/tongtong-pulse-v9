@@ -2464,43 +2464,66 @@ class PulseStomach(BasePulseOrgan):
 
 
 
+    def _m420_kal_entry(self, where: str = ""):
+        """★420/L02：取「真正存在」的 KAL 入口 —— 本器官自持优先，全局单例兜底。
+
+        为什么需要它：`_m70_kal_get_node` / `_m70_kal_search_by_level` 原来调
+        `self._pulse_bus.request(...)`，而 `_pulse_bus` 这个属性**全库从未被赋值**
+        （器官基类没有它；`EventBus` 只有 publish/subscribe/publish_async，**无
+        `request`**）⇒ `ENABLE_KAL_CALL_SITES=True`（config:5987，是开的）时一旦被
+        调用必抛 AttributeError，被 except 吞掉后回落直连 —— 属「假通路」而不是
+        「关掉的功能」：失败且静默，比缺功能更坏。
+        历史备份 `data/code_backups/backup_20260920_181326` 里此处原本写的就是
+        `get_kal().get_node(node_id)`，是后续补丁把它改坏的。
+
+        取法顺序：
+          ① `self._kal` —— `set_node_pool()` 里构造，node_pool 一定对（首选）；
+          ② `get_kal()` —— 别的器官注入过的全局单例（兜底）；
+          ③ None —— 调用方**必须**回落 `_m70_direct_get_node`，不许在这里抛。
+        """
+        _kal = getattr(self, "_kal", None)
+        if _kal is not None:
+            return _kal
+        try:
+            from nucleus.knowledge_access_layer import get_kal
+            return get_kal()
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseStomach::_m420_kal_entry " + str(where),
+                       level="warning")
+            return None
+
     def _m70_kal_get_node(self, node_id):
         if not self._m70_kal_callsites_on():
             return self._m70_direct_get_node(node_id)
-        try:
-            _bus = getattr(self, "_pulse_bus", None)
-            if _bus is None:
-                _bus = getattr(self, "_bus", None)
-            if _bus is None:
-                _bus = getattr(self, "_pulse", None)
-            if _bus is not None and hasattr(_bus, "call"):
-                _r = _bus.call("nucleus.knowledge_access_layer.get_node", node_id)
+        # ★420/L02：原实现探测 `_pulse_bus` / `_bus` / `_pulse` 三个属性再调
+        #   `_bus.call(...)`，而这三个属性**在器官上全都不存在** ⇒ 探测链必然
+        #   一路 None 到底，KAL 从未被真正调用过（假通路，且静默）。
+        _kal = self._m420_kal_entry("_m70_kal_get_node")
+        if _kal is not None:
+            try:
+                _r = _kal.get_node(node_id)
                 if _r is not None:
                     return _r
-        except Exception as e:
-            silent_exc(e, where="organs.body.PulseStomach::_m70_kal_get_node L2414")
+            except Exception as e:
+                silent_exc(e, where="organs.body.PulseStomach::_m70_kal_get_node L420",
+                           level="error")
         return self._m70_direct_get_node(node_id)
     def _m70_kal_search_keywords(self, keywords=None, top_k=10):
         if not self._m70_kal_callsites_on():
             return []
-        try:
-            _kws = keywords or []
-            _bus = getattr(self, "_pulse_bus", None)
-            if _bus is not None and hasattr(_bus, "request"):
-                _r = _bus.request(
-                    "kal.search_by_keywords",
-                    {"keywords": _kws, "top_k": top_k},
-                )
-                if _r:
-                    return _r
-                return []
-            _kal = getattr(self, "_kal", None)
-            if _kal is not None and hasattr(_kal, "search_by_keywords"):
+        # ★420/L02：删掉 `_bus.request("kal.search_by_keywords", {...})` 分支 ——
+        #   `_bus` 恒为 None（器官上没有 `_pulse_bus`/`_bus`/`_pulse`），该分支
+        #   永不执行，留着只会让读者以为"有个总线可用"。直接走真实 KAL。
+        _kws = keywords or []
+        _kal = self._m420_kal_entry("_m70_kal_search_keywords")
+        if _kal is not None:
+            try:
                 _r = _kal.search_by_keywords(_kws, top_k=top_k)
                 if _r:
                     return _r
-        except Exception as e:
-            silent_exc(e, where="organs.body.PulseStomach::_m70_kal_search_keywords L2427")
+            except Exception as e:
+                silent_exc(e, where="organs.body.PulseStomach::_m70_kal_search_keywords L420",
+                           level="error")
         return []
     def _m70_direct_get_node(self, node_id):
         """回退路径：直连 node_pool。"""
