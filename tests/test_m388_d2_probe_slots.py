@@ -33,7 +33,11 @@ def test_m388_d2_slots_density_intent_kept_by_gc_not_tracemalloc():
     _h = tuple(C._M339_PROBE_HOURS)
     assert len(_h) <= 3, _h
     assert _h == tuple(int(_x) for _x in _cfg.M339_MEMORY_PROBE_HOURS), _h
-    assert 13 in _h, "13 点仍是实测最有用的一槽（13:00 首次拿到 top20）"
+    # ★418 同步（第416批契约变更）：416 刀2 把 tracemalloc 重采**收敛为单槽 05:00**
+    #   —— 实测单次 289~1805s，多槽等于一天内多次把进程卡住 —— config 随之改为 `(5,)`。
+    #   原「13 点必须还在」写于 389 刀1，已被 416 的实测结论推翻 ⇒ 同步为单槽。
+    #   「采样密度不够」的诉求改由 gc 轻采（2~3s、每小时）承担，不靠 tracemalloc。
+    assert _h == (5,), _h
 
 
 def test_m388_d2_all_slots_are_valid_hours():

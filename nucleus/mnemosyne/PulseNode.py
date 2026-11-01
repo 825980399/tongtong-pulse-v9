@@ -42,14 +42,26 @@ _module_logger = get_module_logger("PulseNode")
 #   防止其他调用方未回填导致 L2/L3 静默塌缩 L1（与 PulseSnapshot._m68_load_from_parquet 回填配套）。
 _m80_evol_missing = {"n": 0}
 
-# ★第80批 T5：_m70_blanked 节点 save 还原写盘时的聚合告警（最多 5 次/进程）。
-_m80_blanked = {"n": 0}
+# ★第80批 T5：_m70_blanked 节点 save 还原写盘时的聚合告警。
+# ★418刀3③：原来「最多 5 次/进程」在**同一次 save 批量里**就把 5 条全打完 ——
+#   一次快照 5 行逐字相同的 WARNING，读日志的人只会看到刷屏，看不到「有几个节点」。
+#   改成**只打一条**（首条带口径说明），其余仅计数；总数用
+#   `m418_blanked_stats()` 取，需要时由上层汇总上报。
+_m80_blanked = {"n": 0, "logged": 0}
 def _m80_blanked_warn():
-    if _m80_blanked["n"] < 5:
-        _module_logger.warning(
-            "[第80批 T5] _m70_blanked 节点 save 时还原 value/linked_nodes 写盘"
-            "（HOT_COLD_LOAD 误开保护：避免静默写空）")
-        _m80_blanked["n"] += 1
+    _m80_blanked["n"] += 1
+    if _m80_blanked["logged"]:
+        return
+    _m80_blanked["logged"] = 1
+    _module_logger.warning(
+        "[第80批 T5] _m70_blanked 节点 save 时还原 value/linked_nodes 写盘"
+        "（HOT_COLD_LOAD 误开保护：避免静默写空）"
+        "；★418刀3③：同一事实只报这一条，后续同类仅计数（m418_blanked_stats() 可查总数）")
+
+
+def m418_blanked_stats() -> dict:
+    """`_m70_blanked` 还原写盘的累计计数（`n`=命中节点数，`logged`=是否已告警）。"""
+    return dict(_m80_blanked)
 
 
 class PulseNode:

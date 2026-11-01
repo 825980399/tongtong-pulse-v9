@@ -81,6 +81,16 @@ def m364_fuse_backoff_plan(fail_count, fingerprint, prev_fingerprint, base_block
     return float(min(base_block * _mult, cap)), int(fail_count), "exponential"
 
 
+def _m418_safe_pn_on() -> bool:
+    """`ENABLE_M418_FUSION_SAFE_PATHNAME`（缺省 True；关掉逐字回旧行为）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_M418_FUSION_SAFE_PATHNAME", True))
+    except Exception as e:
+        silent_exc(e, where="organs.body.PulseLiver::_m418_safe_pn_on")
+        return True
+
+
 class PulseLiver(BasePulseOrgan):
     """
     肝 —— 知识自我优化器官（共享记忆版 · v9.5 分层脉冲版）
@@ -2981,6 +2991,59 @@ class PulseLiver(BasePulseOrgan):
         }
 
     # ========================================== 377刀5：占位符素材入口拦
+    def _m418_safe_path_name(self, prefix: str) -> str:
+        """★418刀3④：从空间路径里取一个**不含占位符**的展示名。
+
+        规则：从最后一段往前找第一个"不是占位符"的段；全是占位符/空 ⇒ `核心智慧`。
+        「是不是占位符」同时试裸段与方括号形态 —— `[器官别名]` 才是判据的命中形态，
+        裸 `器官别名` 单独测是不命中的（这正是本 bug 隐蔽的原因）。
+        """
+        _raw = [str(_s).strip() for _s in str(prefix or "").split("/")]
+        _segs = [_s for _s in _raw if _s]
+        _dropped = []
+        for _s in reversed(_segs):
+            if self._m418_seg_is_placeholder(_s):
+                _dropped.append(_s)
+                continue
+            if _dropped:
+                self._m418_try_log(
+                    LogLevel.DEBUG,
+                    "[418刀3④] 路径段含占位符，已剥除 %s ⇒ 用 %s"
+                    % ("/".join(reversed(_dropped)), _s))
+            return _s
+        if _segs:
+            self._m418_try_log(
+                LogLevel.WARNING,
+                "[418刀3④] 空间路径全部是占位符段 %s ⇒ 展示名退化为「核心智慧」"
+                % ("/".join(_segs),))
+        return "核心智慧"
+
+    def _m418_try_log(self, level, message) -> None:
+        """★418刀3④：留痕**绝不允许**影响返回值。
+
+        本方法是「占位符剥除」的降级路径 —— 剥完退化到 `核心智慧` 的那一支恰恰
+        最需要兜底成功。此前直接调 `self._log()`，logger 不可用（半构造对象 /
+        日志系统未就绪）时抛 `AttributeError`，整个 `_m418_safe_path_name` 崩掉，
+        外层只能回落到**旧逻辑**（照抄 `prefix.split("/")[-1]`），等于修复失效。
+        """
+        try:
+            self._log(level, message)
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_m418_try_log")
+
+    def _m418_seg_is_placeholder(self, seg) -> bool:
+        """单个路径段是否占位符（裸形态与 `[段]` 形态都试）。"""
+        _s = str(seg or "").strip()
+        if not _s:
+            return True
+        try:
+            if self._m377_is_placeholder(_s):
+                return True
+            return bool(self._m377_is_placeholder("[%s]" % _s))
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLiver::_m418_seg_is_placeholder")
+            return False
+
     def _m377_is_placeholder(self, text) -> bool:
         """占位符字面量判据（★四类同源，唯一定义在 `PlaceholderSanitizer`）。
 
@@ -3137,9 +3200,14 @@ class PulseLiver(BasePulseOrgan):
                              f"融合跳过(关键词质量低): {', '.join(core_keywords)}")
                     return False
 
-            path_name = prefix.split("/")[-1] if prefix else "核心智慧"
+            # ★418刀3④：路径名本身可能就是占位符（实测 `/自我理解/器官别名`）——
+            #   直接拼进 `f"[{path_name}] …"` 会产出 `[器官别名] …`，被下面的守卫
+            #   拦掉 ⇒ 这条融合永远不产出。生成端先剥掉占位符段。
+            path_name = (self._m418_safe_path_name(prefix)
+                         if _m418_safe_pn_on() else
+                         (prefix.split("/")[-1] if prefix else "核心智慧"))
             if not core_keywords:
-                core_keywords = [prefix.split("/")[-1] if prefix else "综合"]
+                core_keywords = [path_name if path_name else "综合"]
             kw_text = "、".join(core_keywords)
 
             # 新增：从源节点中提取一段实质内容作为L3摘要，避免生成纯元描述的空壳节点

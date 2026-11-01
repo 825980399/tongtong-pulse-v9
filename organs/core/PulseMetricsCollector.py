@@ -283,6 +283,32 @@ def m417_stats() -> dict[str, Any]:
     return dict(_m417_state)
 
 
+def _m418_arrow_loaded() -> bool:
+    """pyarrow 是否已被**本进程**加载（决定 `arrow_mb` 的 0 该怎么读）。"""
+    try:
+        return "pyarrow" in sys.modules
+    except Exception as e:
+        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_loaded")
+        return False
+
+
+def _m418_arrow_mb():
+    """Arrow/C 层当前已分配字节（MB，3 位小数）。
+
+    ★未加载 pyarrow 时返回 **None**（不是 0）：`total_allocated_bytes()`
+      在未 import 时恒为 0，与「加载了但确实没分配」同形；用 None + `arrow_loaded`
+      两个字段一起，读者才分得清「没有 Arrow」和「Arrow 空着」（铁律 276）。
+    """
+    try:
+        if "pyarrow" not in sys.modules:
+            return None
+        import pyarrow as _pa
+        return round(float(_pa.total_allocated_bytes()) / 1048576.0, 3)
+    except Exception as e:
+        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_mb")
+        return None
+
+
 def _m377_tm_ensure() -> dict:
     """确保 tracemalloc 处于期望状态（只在 `resident` 模式 start，且**不 stop**）。
 
@@ -793,7 +819,12 @@ class PulseMetricsCollector(BasePulseOrgan):
     #   ② 真生效会更糟：tracemalloc 单次实测 **837s**（3300 万对象做 statistics），
     #      12 槽 = 每 2 小时卡进程 14 分钟 ⇒ 正是 386刀3 要避免的"治理变增负"。
     #   观测量加密走 gc 轻采（2-3s，每小时已在跑）；tracemalloc 保持每日 2 次。
-    _M339_PROBE_HOURS = (5, 13)
+    # ★418收尾：本常量只是 `_m339_cfg_get` 的 **fallback**（config 缺失才用）。
+    #   第416批已把 `config.M339_MEMORY_PROBE_HOURS` 收敛为 `(5,)` ——
+    #   实测 tracemalloc 单次 289~1805s，多槽 = 一天内多次卡住进程 ——
+    #   但这里漏改，于是 fallback `(5, 13)` 与真实生效值不一致（默认值骗人）。
+    #   同步为 `(5,)`，**零行为变化**（生产永远走 config 那一支）。
+    _M339_PROBE_HOURS = (5,)
     _M339_PROBE_TOP_N = 20
     _M339_PROBE_MAX_SEC = 3.0
     _M339_GC_HEAP_MB = 1200.0
@@ -1087,11 +1118,28 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _budget = float(self._m339_cfg_get(
                     "M339_GC_SCAN_BUDGET_SEC", self._M339_GC_SCAN_BUDGET_SEC))
                 _cnt: dict = {}
+                _byt: dict = {}
                 _scanned = 0
+                _bytes_err = 0
                 _truncated = False
+                # ★418刀4：`sys.getsizeof` 是 C 实现（~0.3µs/次），1.4M 活块约 +0.4s；
+                #   与 count 同一次遍历里累加，不额外多走一遍 `gc.get_objects()`。
                 for _o in _gcm.get_objects():
                     _n = type(_o).__name__
                     _cnt[_n] = _cnt.get(_n, 0) + 1
+                    try:
+                        _byt[_n] = _byt.get(_n, 0) + int(sys.getsizeof(_o))
+                    except Exception as _e:
+                        # 个别对象的 `__sizeof__` 可能抛（自定义类/代理对象）；
+                        # 记一笔计数，**不**用 0 冒充「0 字节」。
+                        # ★418收尾：这里在 1.4M 活对象的循环里，每失败一次都
+                        #   silent_exc 会变成新的刷屏源 ⇒ 只首次留痕，其余靠
+                        #   `_bytes_err` 计数（已作为 gc_bytes_err 上报）。
+                        _bytes_err += 1
+                        if _bytes_err == 1:
+                            silent_exc(
+                                _e,
+                                where="organs.core.PulseMetricsCollector::_m339_memory_probe")
                     _scanned += 1
                     if not (_scanned & 0xFFFF) and (
                             time.perf_counter() - _t0) > _budget:
@@ -1100,9 +1148,14 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._m339_gc_last = {"scanned": _scanned,
                                       "truncated": _truncated,
                                       "budget_sec": _budget}
-                _gc_types = [{"type": _k, "count": _v}
+                # ★418刀4：`bytes` 与 `count` 同序（都按 count 降序取前 top_n）；
+                #   `bytes_kind` 显式标 shallow —— 见文件头/产物 note 的口径说明。
+                _gc_types = [{"type": _k, "count": _v,
+                              "bytes": int(_byt.get(_k, 0) or 0)}
                              for _k, _v in sorted(_cnt.items(),
                                                   key=lambda _x: -_x[1])[:_topn]]
+                self._m418_gc_bytes_total = int(sum(_byt.values()))
+                self._m418_gc_bytes_err = int(_bytes_err)
         except Exception as _se:
             silent_exc(_se, where="PulseMetricsCollector::_m339_memory_probe body")
             # 铁律150：不静默——探针自身报错必须可见（否则"没产物"与"报错"长得一样）
@@ -1174,6 +1227,17 @@ class PulseMetricsCollector(BasePulseOrgan):
             "gc_scanned": int(getattr(self, "_m339_gc_last", {}).get("scanned", 0) or 0),
             "gc_truncated": bool(getattr(self, "_m339_gc_last", {}).get("truncated", False)),
             "gc_scan_budget_sec": float(getattr(self, "_m339_gc_last", {}).get("budget_sec", 0.0) or 0.0),
+            # ★418刀4：内存定性两列 —— 「28GB 里谁占的」靠这两项才回答得了
+            "gc_bytes_total": int(getattr(self, "_m418_gc_bytes_total", 0) or 0),
+            "gc_bytes_kind": "shallow",
+            "gc_bytes_shallow": True,
+            # ★418刀4：范围口径 —— `gc.get_objects()` 只返回**被 GC 跟踪**的对象。
+            #   实测 CPython 3.12：只装 int/str 的 dict `gc.is_tracked()==False`，
+            #   永远不在这个列表里。所以 count/bytes 都是「已跟踪部分」的下界。
+            "gc_objects_scope": "gc_tracked_only",
+            "gc_bytes_err": int(getattr(self, "_m418_gc_bytes_err", 0) or 0),
+            "arrow_mb": _m418_arrow_mb(),
+            "arrow_loaded": _m418_arrow_loaded(),
             "tracemalloc_basis": _basis,
             # ★349刀5：四类占比（AST / PulseNode / image / other）
             #   ★377刀4：只吃**有尺寸的** tracemalloc 行；无尺寸行 ⇒ state=unavailable，

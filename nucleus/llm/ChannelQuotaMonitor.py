@@ -396,9 +396,9 @@ class ChannelQuotaMonitor:
                     _out.append(dict(_ch))
                     continue
                 if _r < _pause:
-                    self._warn_once(_n, "pause", _r)
-                    _module_logger.warning(
-                        f"[渠道额度] {_n} 额度不足 {_r * 100:.1f}%，已暂停（跳过）")
+                    if self._warn_once(_n, "pause", _r):
+                        _module_logger.warning(
+                            f"[渠道额度] {_n} 额度不足 {_r * 100:.1f}%，已暂停（跳过）")
                     self._event_once(_n, "paused", _r)   # ★T4：暂停事件（INFO）
                     continue
                 _c2 = dict(_ch)
@@ -407,23 +407,29 @@ class ChannelQuotaMonitor:
                         _c2["priority"] = int(_ch.get("priority", 999)) + 3
                     except Exception:
                         _c2["priority"] = 999
-                    self._warn_once(_n, "degrade", _r)
-                    _module_logger.warning(
-                        f"[渠道额度] {_n} 额度不足 {_r * 100:.1f}%，已降低优先级"
-                        f"（{_ch.get('priority')} → {_c2['priority']}）")
+                    if self._warn_once(_n, "degrade", _r):
+                        _module_logger.warning(
+                            f"[渠道额度] {_n} 额度不足 {_r * 100:.1f}%，已降低优先级"
+                            f"（{_ch.get('priority')} → {_c2['priority']}）")
                     # ★T4b：记录降级态（供后续"恢复"判定；本档不另打日志）
                     self._event_once(_n, "degraded", _r)
                 else:
-                    self._warned.pop(_n, None)   # 额度恢复 → 允许再次告警
+                    # ★418刀3⑦：`_warned.pop` 原来无条件执行 —— 每次
+                    #   `apply_to_channels()` 都把去重键擦掉，于是每次调用都
+                    #   「第一次告警」，去重形同不存在（实测同一渠道 16.9%
+                    #   每 2 分钟复读一遍）。只有**真的回到阈值之上**才允许复位。
+                    if _r >= _alert:
+                        self._warned.pop(_n, None)
                     # ★T4：恢复事件（INFO）—— 此前额度恢复**无任何日志**，
                     #   运维无法从日志判断渠道何时重新可用。
                     self._event_once(_n, "recovered", _r)
                     if _r < _alert:
                         # ★T4：预警档（20%）—— 早于降级/暂停，留出处置窗口
-                        self._warn_once(_n, "alert", _r)
-                        _module_logger.warning(
-                            f"[额度监控] 渠道{_n}剩余额度{_r * 100:.1f}%，"
-                            f"低于{_alert * 100:.0f}%阈值")
+                        # ★418刀3⑦：一条事实一行日志 —— `_warn_once` 真打了才补明细
+                        if self._warn_once(_n, "alert", _r):
+                            _module_logger.warning(
+                                f"[额度监控] 渠道{_n}剩余额度{_r * 100:.1f}%，"
+                                f"低于{_alert * 100:.0f}%阈值")
                 _out.append(_c2)
             _out.sort(key=lambda x: x.get("priority", 999))
             return _out
@@ -432,8 +438,12 @@ class ChannelQuotaMonitor:
                 f"[渠道额度] 策略应用失败，使用原始池: {type(_e).__name__}: {_e}")
             return channels
 
-    def _warn_once(self, name: str, level: str, ratio: float) -> None:
-        """同一渠道同一档位只打一次告警（避免刷屏；状态变化后重置）。
+    def _warn_once(self, name: str, level: str, ratio: float) -> bool:
+        """同一渠道同一档位只判定一次（去重闸门；状态变化后重置）。
+
+        ★418刀3⑦：**只判定、不打印**，返回 True 表示「该打」，由调用方打那一条。
+        此前它自己打一行 `[渠道额度] X 剩余 …%（阈值 …）`、调用点再打一行明细 ⇒
+        同一条事实同一毫秒两条 WARNING。日志条数守恒：每档每条事实恰好一行。
 
         ★第37批 T4：由两档（降级/暂停）扩展为**三档**（预警/降级/暂停），
         档位按实际剩余比例推导（不再依赖调用方传参，避免传错档位）。
@@ -442,12 +452,11 @@ class ChannelQuotaMonitor:
                 else ("degrade" if ratio < self.degrade_ratio() else "alert"))
         with self._lock:
             if self._warned.get(name) == _key:
-                return
+                # ★418刀3⑦：**必须返回 False** —— 调用方靠这个返回值决定
+                #   要不要补第二行明细，否则「已去重」和「刚打过」长得一样。
+                return False
             self._warned[name] = _key
-        _label = {"pause": "暂停", "degrade": "降级", "alert": "预警"}.get(_key, _key)
-        _module_logger.warning(
-            f"[渠道额度] {name} 剩余 {max(0.0, ratio) * 100:.1f}%"
-            f"（阈值 {_label}）")
+        return True
 
     def _event_once(self, name: str, kind: str, ratio: float) -> None:
         """★第37批 T4（P2-228）：状态切换**事件**日志（暂停 / 恢复）。

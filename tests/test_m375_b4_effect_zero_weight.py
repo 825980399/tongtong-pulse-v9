@@ -148,8 +148,16 @@ def test_11_post_apply_passes_real_problem_gone():
         "调用侧仍恒传 problem_gone=None（零调权未修）")
     assert getattr(_pg, "id", "") == "_m375_pg", "problem_gone 应来自复现结论回填"
     _perf = _kw.get("perf_delta_ms")
-    assert isinstance(_perf, ast.Constant) and _perf.value is None, (
-        "无实测耗时源时应如实 None，不许编造数字")
+    # ★418 同步（第412批契约变更）：412 已接入**实测**耗时源
+    #   `_m412_perf_delta_ms(patch, project_root)`，不再是恒 `None`。
+    #   原断言「必须是 Constant None」写于 375，随即过期 —— 它真正想守的不变量是
+    #   **「不许编造数字」**，那应当要求「来自实测调用」，而不是「恒为 None」。
+    assert isinstance(_perf, ast.Call), (
+        "perf_delta_ms 应来自实测耗时源 _m412_perf_delta_ms(...)，不许写死")
+    assert getattr(_perf.func, "id", "") == "_m412_perf_delta_ms", ast.unparse(_perf)
+    for _a in _perf.args:
+        assert not (isinstance(_a, ast.Constant) and isinstance(_a.value, (int, float))), (
+            "实测耗时源的实参不许是数字字面量：%s" % ast.unparse(_a))
     _has_map = any(isinstance(n, ast.Call)
                    and getattr(n.func, "attr", "") == "problem_gone_from_reprobe"
                    for n in ast.walk(_tree))

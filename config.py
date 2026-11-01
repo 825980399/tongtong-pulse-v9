@@ -1507,6 +1507,46 @@ ADVANCED_TASK_FREE_FIRST = True
 # 允许回退付费前**至少**要试过的免费档数量（禁止免费渠道一失败就直接付费）。
 ADVANCED_TASK_FREE_MIN_ATTEMPTS = 2
 
+# ★418刀2：渠道池「负载均衡排序」总开关。
+#   True（默认）= `_call_via_channels` 在多目标轮询前，先对**免费组**按
+#     「并发余量 0.45 + 成功率 0.35 + 剩余额度 0.20」重排，选当前最空闲的先打；
+#     付费组顺序不动、仍垫底（免费优先、付费兜底的红线不破）。
+#     熔断中的渠道沉到免费组末尾（不删除，调用侧仍按 `circuit_break_threshold`
+#     / `circuit_break_seconds` 跳过，熔断语义零改动）。
+#   False = 逐字回到 360 的「免费组内按 priority 升序」老路径（出问题秒切）。
+#   实现：`nucleus/llm/channel_balance.py::order_by_load`。
+ENABLE_CHANNEL_LOAD_BALANCE = True
+
+# ★418刀3②：常驻线程上限收敛（活体 89~90 > 告警线 50；实测 81 个是线程池 worker）。
+#   True（默认）= 各池上限过 `utils/thread_budget.cap()` 的预算表；
+#   False = 逐字回到改前公式（HybridIO=min(64,cpu*2)、L1/L2=cpu//2 ...）。
+ENABLE_M418_THREAD_SLIMMING = True
+# 池名 -> 上限。合计 29（改前同口径合计 61，降 32）。只压不放：预算比原值大时不会调高。
+M418_THREAD_CAPS = {
+    "l0": 1,          # 生命线（原 1）
+    "l1": 6,          # 实时层（原 max(4, cpu//2) = 8）
+    "l2": 6,          # 认知层（原 max(4, cpu//2) = 8）
+    "l3": 4,          # 自主层（原 max(2, cpu//4) = 4）
+    "adaptive": 4,    # 自适应池（原 max(4, cpu//2) = 8）
+    "hybrid_io": 8,   # 混合调度 IO 池（原 min(64, cpu*2) = 32）
+}
+
+# ★418刀3①：锁等待读数的「时间窗」口径开关。
+#   改前 `_lock_waits` 是 `deque(maxlen=500)` **按条数**老化、且只在 `> 0` 时 append
+#   ⇒ 繁忙期填满后均值冻结在历史高峰（实测连报几小时「平均 50.0ms」，而同一窗口
+#   热点锁累计只有 11ms）；分母里没有 0 值样本，「平均等待」其实是「发生过等待的
+#   那些次的平均」。改动后按 `_M418_LOCK_WAIT_WINDOW_SEC=120s` 时间窗过滤、0 值入分母。
+#   True（默认）= 时间窗 + 0 值入分母；False = 逐字回到「按条数 + 只收 >0」老口径。
+ENABLE_M418_LOCK_WAIT_WINDOW = True
+
+# ★418刀3④：融合「素材名」占位符自造开关。
+#   改前 `path_name = prefix.split("/")[-1]`，对 `/自我理解/器官别名` 取到的是
+#   `器官别名`，模板 `f"[{path_name}] …"` 于是自己产出 `[器官别名] …`，反过来被
+#   占位符守卫拦下 —— 不是守卫太严，是生成端自己造了占位符（裸段单独测不命中，
+#   所以很隐蔽）。True（默认）= 从末段往前找第一个非占位符段（全占位符 ⇒ `核心智慧`）；
+#   False = 逐字回到改前的 `prefix.split("/")[-1]`。
+ENABLE_M418_FUSION_SAFE_PATHNAME = True
+
 REMOTE_API_CHANNELS = {
     # 总开关：False 时肺部走 REMOTE_API_CONFIG 单端点旧路径（与改造前一致）
     "enabled": True,

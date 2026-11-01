@@ -349,6 +349,16 @@ def _m352b_paid_channels() -> frozenset:
     return _M352B_DEFAULT_PAID
 
 
+def _m418_replace(tmp: str, dst: str) -> bool:
+    """★418刀3⑥：Windows 原子替换重试（WinError 5/32/33 ⇒ 退避重试）。"""
+    try:
+        from utils.atomic_io import replace_with_retry as _r
+        return bool(_r(tmp, dst))
+    except Exception as e:
+        silent_exc(e, where="call_recorder::_m418_replace")
+        return False
+
+
 def _m352b_alert_threshold() -> int:
     """每日付费 tokens 告警阈值（单一来源 `config.DAILY_PAID_TOKEN_ALERT`）。"""
     try:
@@ -953,7 +963,12 @@ class LLMCallRecorder:
                 _tmp = _path + ".tmp"
                 with open(_tmp, "w", encoding="utf-8") as _f:
                     json.dump(_data, _f, ensure_ascii=False, indent=2)
-                os.replace(_tmp, _path)
+                # ★418刀3⑥：Windows 下目标被别的进程打开着 ⇒ os.replace 抛
+                #   WinError 5「拒绝访问」（实测每 60s 一条）。改走退避重试；
+                #   重试用尽才失败，失败语义仍由外层 except 降级（不阻断主流程）。
+                if not _m418_replace(_tmp, _path):
+                    raise PermissionError(
+                        "daily_tokens 原子替换失败（重试用尽）: %s" % _path)
                 with open(_path, encoding="utf-8") as _f:
                     _back = json.load(_f) or {}
                 if _back.get("date") != _data.get("date") \

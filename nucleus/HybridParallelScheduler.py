@@ -174,7 +174,17 @@ class HybridParallelScheduler(SilentLogMixin):
                     self._process_pool = None
                     self._process_workers = 0
             if not self._thread_pool:
-                self._thread_workers = min(self._HARD_FUSE_MAX_THREADS, max(4, self._cpu_count * 2))
+                # ★418刀3②：上限收敛到 `utils/thread_budget`（16 核 = min(64,32) = 32）。
+                #   实测 81/90 个活体线程是 futures 线程池 worker，这是最大的一处。
+                #   开关关掉 ⇒ `cap()` 原样返回，逐字回到改前。
+                _m418_raw = min(self._HARD_FUSE_MAX_THREADS, max(4, self._cpu_count * 2))
+                try:
+                    from utils.thread_budget import cap as _m418_cap
+                    self._thread_workers = int(_m418_cap("hybrid_io", _m418_raw))
+                except Exception as _m418_e:
+                    self._thread_workers = _m418_raw
+                    silent_exc(_m418_e,
+                               where="HybridParallelScheduler::_ensure_pools 418刀3②")
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._thread_workers, thread_name_prefix="HybridIO")
                 _log(f"线程池初始化完成: {self._thread_workers}个线程")
 

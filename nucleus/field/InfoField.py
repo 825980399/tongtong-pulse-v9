@@ -534,6 +534,24 @@ class InfoField(SilentLogMixin):
                 thread_name_prefix="L3-Autonomous"
             )
 
+        # ★418刀3②：五条分层池上限统一过预算（改前 L0=1 L1=8 L2=8 L3=4 Adaptive=8）。
+        _m418_raw = {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
+                     "l3": _l3_workers, "adaptive": _adaptive_workers}
+        try:
+            from utils.thread_budget import cap as _m418_cap
+            _l0_workers = int(_m418_cap("l0", _l0_workers))
+            _l1_workers = int(_m418_cap("l1", _l1_workers))
+            _l2_workers = int(_m418_cap("l2", _l2_workers))
+            _l3_workers = int(_m418_cap("l3", _l3_workers))
+            _adaptive_workers = int(_m418_cap("adaptive", _adaptive_workers))
+        except Exception as _m418_e:
+            silent_exc(_m418_e, where="InfoField::_init_task_pool 418刀3②")
+        if _m418_raw != {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
+                         "l3": _l3_workers, "adaptive": _adaptive_workers}:
+            _module_logger.info(
+                "[418刀3②] 分层池上限收敛: %s → L0=%d L1=%d L2=%d L3=%d Adaptive=%d",
+                _m418_raw, _l0_workers, _l1_workers, _l2_workers, _l3_workers,
+                _adaptive_workers)
         self._adaptive_pool_size = _adaptive_workers
         self._adaptive_task_pool = ThreadPoolExecutor(
             max_workers=self._adaptive_pool_size,

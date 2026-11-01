@@ -1,0 +1,89 @@
+{
+  "_note": "418刀3⑤：从生产 data/evolution/effect_verify.json 移出的测试桩；仅供单测夹具使用，不得回灌生产",
+  "verdicts": {
+    "tp1": {
+      "patch_id": "tp1",
+      "file": "a.py",
+      "issue_type": "log",
+      "passed": true,
+      "trust_delta": 10,
+      "reason": "问题已消失；功能正常；性能变化100ms（可接受）",
+      "dims": {
+        "problem_gone": true,
+        "function_ok": true,
+        "perf_ok": true,
+        "notes": [
+          "问题已消失",
+          "功能正常",
+          "性能变化100ms（可接受）"
+        ]
+      },
+      "verified_at": 1788880139.9402149
+    },
+    "tp2": {
+      "patch_id": "tp2",
+      "file": "",
+      "issue_type": "log",
+      "passed": false,
+      "trust_delta": -15,
+      "reason": "问题未解决（问题仍在）",
+      "dims": {
+        "problem_gone": false,
+        "function_ok": true,
+        "perf_ok": true,
+        "notes": [
+          "问题仍在",
+          "功能正常",
+          "性能变化100ms（可接受）"
+        ]
+      },
+      "verified_at": 1788880139.941217
+    },
+    "tp3": {
+      "patch_id": "tp3",
+      "file": "",
+      "issue_type": "perf",
+      "passed": false,
+      "trust_delta": -10,
+      "reason": "未判定（缺少问题复查探针）；未判定（缺少功能校验）；性能变化9999ms（退化）",
+      "dims": {
+        "problem_gone": null,
+        "function_ok": null,
+        "perf_ok": false,
+        "notes": [
+          "未判定（缺少问题复查探针）",
+          "未判定（缺少功能校验）",
+          "性能变化9999ms（退化）"
+        ]
+      },
+      "verified_at": 1788880139.9432192
+    },
+    "tp4": {
+      "patch_id": "tp4",
+      "file": "",
+      "issue_type": "x",
+      "passed": null,
+      "trust_delta": 0,
+      "reason": "三项均未测量，无法判定（不计入修复率）",
+      "dims": {
+        "problem_gone": null,
+        "function_ok": null,
+        "perf_ok": null,
+        "notes": [
+          "未判定（缺少问题复查探针）",
+          "未判定（缺少功能校验）",
+          "未测量"
+        ]
+      },
+      "verified_at": 1788880139.9442189
+    }
+  },
+  "issues": {
+    "a.py::log::f": {
+      "first_seen": 1788880139.9462209,
+      "fixed_at": 0.0,
+      "recurrences": 1,
+      "last_seen": 1788880139.9502242
+    }
+  }
+}

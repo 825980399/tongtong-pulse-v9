@@ -98,6 +98,34 @@ class StreamMiner:
         self._total_prediction_hits = 0
         self._total_pruned_patterns = 0
 
+        # ===== ★418刀1：以下状态曾是「隐形死代码」=====
+        #   411刀6 在 `__init__` 尾部插入 `@staticmethod _m411_periodicity_keep` 时，
+        #   以 `def` 行为锚点替换，把 410 刀2 的整块初始化**留在了新方法体内**、
+        #   而且排在 `except: return 100` 之后 ⇒ 永不执行（且方法里没有 `self`）。
+        #   四个下游症状：`_m410_stat`/`_m410_tp` 等属性缺失、分类型命中率无数据、
+        #   `patterns.json` 只因外部原因才写、`world_model.hit_rate` 每 60s 报
+        #   `AttributeError`（silent_exc 可见化）。此处搬回原位置，逐字保留语义。
+        self._last_persist_at = 0.0
+
+        # ===== ★第410批刀2：分类型预测（periodic 时刻 / count 条数 / burst 批数）=====
+        #   刀1 的周期档案回答「该用多宽的容差」，本段回答「该预测什么」。
+        #   三套状态互不替代：_pending_predictions 只装时刻型，_m410_win_preds 只装窗口型。
+        self._m410_tp = None            # typed_prediction 模块（懒加载，避免启动期引入链）
+        self._m410_prof = {}            # 周期档案快照
+        self._m410_prof_at = 0.0        # 快照读取时刻（300s 缓存）
+        self._m410_windows = {}         # event_type -> WindowTracker（count/burst）
+        self._m410_hist = {}            # event_type -> [已关闭窗口的条数/批数]
+        self._m410_win_preds = []       # 窗口型预测（未结算）
+        self._m410_verdicts = deque(maxlen=2000)   # 判定流水（刀3 抽样审计用）
+        self._m410_stat = {}            # event_type -> {"hit","miss","no_coverage"}
+        self._m410_noted = {}           # 留痕节流表（key -> 上次记录时刻），防刷屏
+        # ★418刀1：`auto_load` 此前也在这块死代码里 ⇒ 传 True 等于没传。
+        if auto_load:
+            try:
+                self.load_patterns()
+            except Exception as e:
+                silent_exc(e, where="nucleus.genesis.StreamMiner::__init__ auto_load")
+
     @staticmethod
     def _m411_periodicity_keep() -> int:
         """★411刀6：每类保留的周期样本数（`config.M411_PERIODICITY_KEEP`，缺省 100）。
@@ -113,25 +141,6 @@ class StreamMiner:
             silent_exc(_exc, where="genesis.StreamMiner:_m411_periodicity_keep",
                        level="debug")
             return 100
-        self._last_persist_at = 0.0
-
-        # ===== ★第410批刀2：分类型预测（periodic 时刻 / count 条数 / burst 批数）=====
-        #   刀1 的周期档案回答「该用多宽的容差」，本段回答「该预测什么」。
-        #   三套状态互不替代：_pending_predictions 只装时刻型，_m410_win_preds 只装窗口型。
-        self._m410_tp = None            # typed_prediction 模块（懒加载，避免启动期引入链）
-        self._m410_prof = {}            # 周期档案快照
-        self._m410_prof_at = 0.0        # 快照读取时刻（300s 缓存）
-        self._m410_windows = {}         # event_type -> WindowTracker（count/burst）
-        self._m410_hist = {}            # event_type -> [已关闭窗口的条数/批数]
-        self._m410_win_preds = []       # 窗口型预测（未结算）
-        self._m410_verdicts = deque(maxlen=2000)   # 判定流水（刀3 抽样审计用）
-        self._m410_stat = {}            # event_type -> {"hit","miss","no_coverage"}
-        self._m410_noted = {}           # 留痕节流表（key -> 上次记录时刻），防刷屏
-        if auto_load:
-            try:
-                self.load_patterns()
-            except Exception as e:
-                silent_exc(e, where="nucleus.genesis.StreamMiner::__init__ L101")
 
     # ========== 框架控制 ==========
 
@@ -431,7 +440,11 @@ class StreamMiner:
                 _tmp = f"{_path}.tmp"
                 with open(_tmp, "w", encoding="utf-8") as _f:
                     json.dump(_payload, _f, ensure_ascii=False, indent=2)
-                os.replace(_tmp, _path)
+                # ★418刀3⑥：同 call_recorder 的 WinError 5 问题（目标被活体进程
+                #   打开着时 replace 会拒绝访问）⇒ 走退避重试，重试用尽才失败。
+                from utils.atomic_io import replace_with_retry as _m418_repl
+                if not _m418_repl(_tmp, _path):
+                    raise PermissionError("patterns.json 原子替换失败: %s" % _path)
                 self._last_persist_at = time.time()
                 return True
             except Exception as e:

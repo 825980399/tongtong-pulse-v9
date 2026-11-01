@@ -343,12 +343,57 @@ class EvolutionEffectVerifier:
                 "tracked_issues": len(self._issues),
             }
 
+    #: ★418刀3⑤：测试桩的识别口径（只为**生产落盘**服务，非生产路径原样保留）
+    _M418_STUB_PATCH_IDS = frozenset({"tp1", "tp2", "tp3", "tp4"})
+    _M418_STUB_ISSUE_PREFIXES = ("a.py::", "<test>::")
+
+    @staticmethod
+    def _m418_is_stub_patch(patch_id) -> bool:
+        """`tp1`~`tpN` 这类是单测/手工验证的桩，不是真补丁。"""
+        _p = str(patch_id or "").strip()
+        if _p in EvolutionEffectVerifier._M418_STUB_PATCH_IDS:
+            return True
+        if _p.startswith("tp") and _p[2:].isdigit():
+            return True
+        return False
+
+    @classmethod
+    def _m418_is_stub_issue(cls, signature) -> bool:
+        return str(signature or "").startswith(cls._M418_STUB_ISSUE_PREFIXES)
+
+    def _m418_production_path(self) -> bool:
+        """当前落盘路径是否**生产**路径（否则是单测沙箱，必须原样保留桩）。"""
+        try:
+            return os.path.abspath(self._save_path) == os.path.abspath(
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__)))), "data", "evolution",
+                    "effect_verify.json"))
+        except Exception as e:
+            silent_exc(e, where="EvolutionEffectVerifier::_m418_production_path")
+            return False
+
+    def _m418_strip_stubs(self) -> tuple:
+        """就地剔除测试桩，返回 `(剔除的 verdict 数, 剔除的 issue 数)`。"""
+        if not self._m418_production_path():
+            return 0, 0
+        _v0, _i0 = len(self._verdicts), len(self._issues)
+        self._verdicts = {k: v for k, v in self._verdicts.items()
+                          if not self._m418_is_stub_patch(k)}
+        self._issues = {k: v for k, v in self._issues.items()
+                        if not self._m418_is_stub_issue(k)}
+        return _v0 - len(self._verdicts), _i0 - len(self._issues)
+
     def _load(self) -> None:
         try:
             if os.path.exists(self._save_path):
                 _raw = safe_read_json(self._save_path, default={})
                 self._issues = _raw.get("issues", {}) or {}
                 self._verdicts = _raw.get("verdicts", {}) or {}
+                # ★418刀3⑤：读盘时就剔掉测试桩（生产路径才生效），
+                #   否则 get_stats()/chain_metrics 的「修复率」会被桩拉偏。
+                _v, _i = self._m418_strip_stubs()
+                if _v or _i:
+                    _log("info", f"[效果验证] 已剔除测试桩 verdicts={_v} issues={_i}")
         except Exception as _e:
             _log("warning", f"[效果验证] 加载失败，以空库启动: {_e}")
 
@@ -356,6 +401,12 @@ class EvolutionEffectVerifier:
         try:
             os.makedirs(self._base_dir, exist_ok=True)
             with self._lock:
+                # ★418刀3⑤：落盘前兜底过滤（生产路径才生效）
+                if self._m418_production_path():
+                    _v_stub, _i_stub = self._m418_strip_stubs()
+                    if _v_stub or _i_stub:
+                        _log("info", f"[效果验证] 落盘前剔除测试桩 verdicts={_v_stub}"
+                                    f" issues={_i_stub}")
                 _dump = {"version": 1, "updated": time.time(),
                          "issues": self._issues, "verdicts": self._verdicts}
             _tmp = self._save_path + ".tmp"

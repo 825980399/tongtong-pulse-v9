@@ -24,6 +24,57 @@ from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异�
 from nucleus.logging.sanitizer import sanitize
 
 
+#: ★418刀3①：锁等待均值的时间窗（秒）。120s ≈ 4 个采样周期，
+#:   短到不会被半小时前的尖峰污染，长到在低流量下仍有样本。
+_M418_LOCK_WAIT_WINDOW_SEC = 120.0
+_M418_LOCK_WAIT_MAXLEN = 2000
+
+
+def _m418_lock_window_on() -> bool:
+    """`ENABLE_M418_LOCK_WAIT_WINDOW`（缺省 True；关掉逐字回旧公式）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_M418_LOCK_WAIT_WINDOW", True))
+    except Exception as e:
+        silent_exc(e, "runtime_metrics.py:_m418_lock_window_on")
+        return True
+
+
+def _m418_lock_window_avg(waits, stamps, now) -> tuple:
+    """时间窗内的锁等待均值与样本数，返回 `(avg_ms, samples)`。
+
+    三条口径：
+      · 只统计 `now - window` 之后的样本（**按时间老化**，不按条数）；
+      · 样本**含 0 值** —— 分母是「这段时间里发生过多少次发布」；
+      · 窗口内没有样本 ⇒ `(0.0, 0)`，并把 0 样本这件事交给调用方展示
+        （不许把「没样本」写成「等待为 0」，但也不许让它继续报旧峰值）。
+    """
+    if waits is None or stamps is None:
+        return 0.0, 0
+    try:
+        _n = min(len(waits), len(stamps))
+    except Exception as _e:                      # pragma: no cover - 防御
+        silent_exc(_e, where="nucleus.runtime_metrics::_m418_lock_window_avg")
+        return 0.0, 0
+    if not _n:
+        return 0.0, 0
+    _lo = float(now) - _M418_LOCK_WAIT_WINDOW_SEC
+    _sum, _cnt = 0.0, 0
+    try:
+        _w = list(waits)[-_n:]
+        _t = list(stamps)[-_n:]
+        for _i in range(_n):
+            if float(_t[_i]) >= _lo:
+                _sum += float(_w[_i])
+                _cnt += 1
+    except Exception as e:
+        silent_exc(e, "runtime_metrics.py:_m418_lock_window_avg")
+        return 0.0, 0
+    if not _cnt:
+        return 0.0, 0
+    return round(_sum / _cnt, 3), _cnt
+
+
 class RuntimeMetrics:
     """运行时指标采集器（零阻塞异步聚合）。
 
@@ -76,7 +127,9 @@ class RuntimeMetrics:
         # 累计平均 bug：pulse_count 单调递增，长时间运行后新样本权重→0。
         # 改为只保留最近 N 个脉冲耗时，pulse_avg_ms 反映「近期」而非「累计」。
         self._pulse_durations: deque = deque(maxlen=500)  # 最近 500 次脉冲耗时
-        self._lock_waits: deque = deque(maxlen=500)        # 最近 500 次锁等待
+        # ★418刀3①：条数窗 → 时间窗；样本含 0 值。
+        self._lock_waits: deque = deque(maxlen=_M418_LOCK_WAIT_MAXLEN)
+        self._lock_wait_ts: deque = deque(maxlen=_M418_LOCK_WAIT_MAXLEN)
 
         # ===== ★B2：时间序列环形缓冲（供历史趋势展示）=====
         self._history: deque = deque(maxlen=720)  # 默认保留 720 个采样点
@@ -150,9 +203,16 @@ class RuntimeMetrics:
                         sum(self._pulse_durations) / len(self._pulse_durations), 3
                     )
                     self._metrics["pulse_max_ms"] = max(self._metrics["pulse_max_ms"], _dur)
+                    # ★418刀3①：样本**含 0 值**，并带上采样时刻。
+                    #   只收非 0（旧行为）会让「平均等待」变成「发生过等待的那些次的
+                    #   平均」—— 系统越空闲、报出来的均值越高，方向反了。
                     if _lock_wait > 0:
                         self._metrics["lock_wait_total_ms"] += _lock_wait
                         self._metrics["lock_wait_count"] += 1
+                    if _m418_lock_window_on():
+                        self._lock_waits.append(float(_lock_wait))
+                        self._lock_wait_ts.append(time.time())
+                    elif _lock_wait > 0:
                         self._lock_waits.append(_lock_wait)
                     self._metrics["queue_max_depth"] = max(self._metrics["queue_max_depth"], _depth)
                     self._last_queue_depth = _depth
@@ -184,12 +244,9 @@ class RuntimeMetrics:
             return
         self._last_sample_at = _now
         with self._lock:
-            # ★B1一致性：lock_wait_avg_ms 也走滑动窗口（用 _lock_waits deque），
-            #   避免与 pulse_avg_ms 一样出现「累计平均冻结」问题。
-            _lock_wait_avg = (
-                round(sum(self._lock_waits) / len(self._lock_waits), 3)
-                if self._lock_waits else 0.0
-            )
+            # ★418刀3①：改用**时间窗**均值（旧实现是条数窗 ⇒ 空闲期不老化）。
+            _lock_wait_avg, _lock_wait_n = _m418_lock_window_avg(
+                self._lock_waits, getattr(self, "_lock_wait_ts", None), _now)
             _point = {
                 "ts": _now,
                 "pulse_count": self._metrics["pulse_count"],
@@ -197,6 +254,10 @@ class RuntimeMetrics:
                 "pulse_avg_ms": self._metrics["pulse_avg_ms"],
                 "pulse_max_ms": self._metrics["pulse_max_ms"],
                 "lock_wait_avg_ms": _lock_wait_avg,
+                # ★418刀3①：均值必须自带**分母**，否则「50ms over 3 个样本」
+                #   和「50ms over 400 个样本」在监控上长得一模一样。
+                "lock_wait_samples": _lock_wait_n,
+                "lock_wait_window_sec": _M418_LOCK_WAIT_WINDOW_SEC,
                 "queue_max_depth": self._metrics["queue_max_depth"],
                 "thread_count": self._metrics["thread_count"],
                 "reentry_count": self._metrics["reentry_count"],
@@ -639,11 +700,11 @@ class RuntimeMetrics:
             _s["error_snapshots"] = list(self._metrics["error_snapshots"])
             _s["alerts"] = list(self._metrics["alerts"])
             _s["thread_count"] = threading.active_count()
-            # ★B1一致性：直接提供滑动窗口的锁等待平均（避免消费方各自用累计值计算）
-            _s["lock_wait_avg_ms"] = (
-                round(sum(self._lock_waits) / len(self._lock_waits), 3)
-                if self._lock_waits else 0.0
-            )
+            # ★418刀3①：与告警同口径（时间窗 + 含 0 值），避免两处算法漂移
+            _s["lock_wait_avg_ms"] = _m418_lock_window_avg(
+                self._lock_waits, self._lock_wait_ts, time.time())[0]
+            _s["lock_wait_samples"] = _m418_lock_window_avg(
+                self._lock_waits, self._lock_wait_ts, time.time())[1]
             return _s
 
     def get_history(self, limit: int = 120) -> list[dict[str, Any]]:

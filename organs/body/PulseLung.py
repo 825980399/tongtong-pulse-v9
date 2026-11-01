@@ -1834,6 +1834,42 @@ class PulseLung(BasePulseOrgan):
             silent_exc(e, where="organs.body.PulseLung::_m360_order_candidates")
             return candidates
 
+    def _m418_balance_candidates(self, candidates: list, caller: str = "") -> list:
+        """★418刀2：**免费组**按负载重排（付费组原样垫底）。
+
+        为什么需要：`_call_via_channels` 是「按 priority 顺序试」——只要 priority=1
+        那条还有余量，同一批请求就**全部**压在它身上（`zhipu-47-flash` 的
+        `max_concurrent=1` 长期吃满，而后 6 条免费渠道空转）。本方法把「忙时即切」
+        从「失败之后」提前到「排序阶段」。
+
+        三因子（并发余量 0.45 / 成功率 0.35 / 剩余额度 0.20）见
+        `nucleus/llm/channel_balance.py`；**只在免费组内重排**，
+        付费渠道顺序不动、仍垫底（免费优先、付费兜底的红线）。
+        开关 `ENABLE_CHANNEL_LOAD_BALANCE` 关闭 ⇒ 原样返回，逐字回到旧顺序。
+        """
+        try:
+            from nucleus.llm.channel_balance import log_order as _m418_log
+            from nucleus.llm.channel_balance import order_by_load as _m418_order
+            _new, _info = _m418_order(candidates,
+                                      health=self._get_channel_health(),
+                                      caller=caller,
+                                      paid_names=self._m360_paid_names())
+            self._m418_last = _info
+            # 留痕节流：同一 caller 60s 内最多一行（这条链是每请求都会走的热路径）
+            if _info.get("applied") and _info.get("moved"):
+                _now = time.time()
+                _at = getattr(self, "_m418_log_at", None)
+                if not isinstance(_at, dict):
+                    _at = {}
+                    self._m418_log_at = _at
+                if _now - float(_at.get(caller, 0.0)) >= 60.0:
+                    _at[caller] = _now
+                    _m418_log(caller, _info)
+            return _new
+        except Exception as e:
+            silent_exc(e, where="organs.body.PulseLung::_m418_balance_candidates")
+            return candidates
+
     @staticmethod
     def _m360_adv_free_first_on() -> bool:
         """高级任务质量门总开关（`ADVANCED_TASK_FREE_FIRST`，默认 True）。"""
@@ -2282,6 +2318,9 @@ class PulseLung(BasePulseOrgan):
         _candidates = self._prefer_cheap_channels(_candidates, is_background=_is_bg_call)
         # ★第360批 刀0-1：统一排序 —— 免费优先、付费垫底（advanced 不再插队）
         _candidates = self._m360_order_candidates(_candidates)
+        # ★418刀2：负载均衡 —— 免费组内按「并发余量+成功率+剩余额度」重排
+        #   （开关 ENABLE_CHANNEL_LOAD_BALANCE 关闭时原样返回，逐字回到旧顺序）
+        _candidates = self._m418_balance_candidates(_candidates, caller=caller)
         # ★主线第24批 T4：用户对话优先付费渠道（免费渠道后置作为兜底）
         #   注：USER_DIALOG_PREFER_PAID=False（360 刀0-1）时该函数原样返回；
         #   显式切回 True 时付费置顶**覆盖**上面的统一排序（开关语义优先）。
