@@ -107,13 +107,20 @@ def test_21_methods_callable():
     assert _st["by_event"] == {}
 
 
-def test_22_consume_does_not_raise():
-    """`consume()` 是生产入口（InfoField 调），此前首次调用会 AttributeError。"""
+def test_22_consume_does_not_raise(tmp_path):
+    """`consume()` 是生产入口（InfoField 调），此前首次调用会 AttributeError。
+
+    ★418 收尾：`consume()` 内部会走到 `save_patterns()` 无参 ⇒ 用 `self._storage_path`。
+    不隔离就等于**每跑一次测试覆盖一次生产 patterns.json**（本轮实测：saved_at 变、
+    sha256 变、内容被写成空数据）。所以构造后第一件事必须改路径。
+    """
     from nucleus.genesis.StreamMiner import StreamMiner
     _m = StreamMiner()
+    _m._storage_path = str(tmp_path / "patterns.json")     # ★必须先改路径再调生产方法
     _r = _m.consume()
     assert isinstance(_r, dict)
     assert "prewarm" in _r and "quality" in _r
+    assert os.path.exists(_m._storage_path), "consume 落盘落到了别处（路径没生效）"
 
 
 def test_23_consumption_stats_readable():
@@ -156,18 +163,23 @@ def test_31_persist_interval_triggers_after_init(tmp_path):
     assert _m._last_persist_at > 0
 
 
-def test_32_auto_load_reads_back(tmp_path):
-    """`auto_load=True` 必须真的读回（此前被死代码吞掉）。"""
+def test_32_auto_load_reads_back(tmp_path, monkeypatch):
+    """`auto_load=True` 必须真的读回（此前被死代码吞掉）。
+
+    ★418 收尾：`auto_load=True` 在 `__init__` 里就 load，那时还来不及改
+    `_storage_path` ⇒ 必须先把**类属性** `_DEFAULT_STORAGE` 指到 tmp，
+    否则构造期会去读生产文件（只读，但同样不干净）。
+    """
     import json
     from nucleus.genesis.StreamMiner import StreamMiner
     _p = str(tmp_path / "patterns.json")
     json.dump({"version": 1, "patterns": {"k": {"v": 1}},
                "periodicity": {"e": [1.0, 2.0]}, "quality": {}},
               open(_p, "w", encoding="utf-8"))
+    monkeypatch.setattr(StreamMiner, "_DEFAULT_STORAGE", _p, raising=False)
     _m = StreamMiner(auto_load=True)
-    _m._storage_path = _p
-    _m.load_patterns()
-    assert "k" in _m._discovered_patterns
+    assert "k" in _m._discovered_patterns, "auto_load 没在构造期读回（开关仍是死的）"
+    assert _m._storage_path == _p
 
 
 # ============================================================ ④ 回归：开关/语义不变
@@ -198,3 +210,38 @@ def test_42_eol_preserved():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# ============================================================ ⑤ 守门：测试不得污染生产
+def test_90_no_test_touches_production_storage():
+    """★418 收尾守门：本文件里每个 `StreamMiner(...)` 构造后都必须隔离路径。
+
+    判据（AST，不看措辞）：对每个 `StreamMiner(...)` 赋值语句，其后 40 行内必须出现
+    `_storage_path` 或 `_DEFAULT_STORAGE`，否则判红 —— 因为 `consume()` /
+    `save_patterns()` / `auto_load` 三条路都会摸到 `_storage_path`。
+
+    为什么必须静态查：本轮就是「断言写得很漂亮、但测试本身在写生产」——
+    单测全绿，生产文件被静默覆盖。
+    """
+    import ast
+    _src = open(os.path.abspath(__file__), encoding="utf-8").read()
+    _tree = ast.parse(_src)
+    _lines = _src.splitlines()
+    _bad = []
+    for _node in ast.walk(_tree):
+        if not isinstance(_node, ast.Assign):
+            continue
+        if not isinstance(_node.value, ast.Call):
+            continue
+        _fn = _node.value.func
+        _name = getattr(_fn, "id", None) or getattr(_fn, "attr", None)
+        if _name != "StreamMiner":
+            continue
+        _lo = _node.lineno
+        _hi = min(len(_lines), _lo + 40)
+        _win = "\n".join(_lines[_lo:_hi])
+        if "_storage_path" not in _win and "_DEFAULT_STORAGE" not in _win:
+            _bad.append(_lo)
+    assert not _bad, (
+        "★这些行构造了 StreamMiner 却没隔离存储路径（会写生产 patterns.json）：%s"
+        % _bad)
