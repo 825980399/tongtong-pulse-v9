@@ -3142,7 +3142,7 @@ class PulseNodePool(SilentLogMixin):
         if not nodes:
             return 0
         try:
-            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
+            import pyarrow.parquet as pq  # 可用性探测（pa_compat 内部再导入 pa）· ★421/R1-B3 pq 在用
         except Exception as e:
             silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_flush_cold_buffer_nodes L2576")
             return 0
@@ -3727,7 +3727,7 @@ class PulseNodePool(SilentLogMixin):
                 return {"before_files": 0, "after_files": 0, "node_count": 0,
                         "dedup_count": 0, "success": False, "reason": "high_load_paused"}
         try:
-            import pyarrow.parquet as pq  # noqa: F401 - 可用性探测（pa_compat 内部再导入 pa）
+            import pyarrow.parquet as pq  # 可用性探测（pa_compat 内部再导入 pa）· ★421/R1-B4 pq 在用
         except Exception as _e:
             silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L2978")
             return {"before_files": 0, "after_files": 0, "node_count": 0,

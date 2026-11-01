@@ -10,7 +10,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-import config  # noqa: F401
+import config  # ★421/R1-B1：483 行 getattr(config, ...) 在用，noqa 已失效
 from nucleus.const import ErrorCode, LogLevel, OrganStatus, SystemEvent
 from nucleus.logger import exc_location, get_organ_logger
 from nucleus.lif_shadow import LIFShadow

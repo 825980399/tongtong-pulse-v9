@@ -39,7 +39,7 @@ def test_m388_d3_device_manager_is_guard_clause():
 
     387刀3 的 `emit_guarded` **只认 if 包裹**，漏了早退型 ⇒ 本刀补上。
     """
-    _src = oe.__dict__  # noqa: F841
+    _src = oe.__dict__  # ★421/R1-B7：_ 前缀属 ruff dummy 名，F841 本就不报
     assert oe.emit_guarded("organs/core/PulseDeviceManager.py") is True
 
 

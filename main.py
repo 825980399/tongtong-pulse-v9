@@ -2242,7 +2242,7 @@ class PulseFramework:
                   "故维持全量；切片算法优化属长期项）"
                   % (_m372_lazy_on, "懒加载" if _m372_lazy_on else "全量"))
         restored_nodes = self.snapshot.load(
-            full_load=False if _m372_lazy_on else True)
+            full_load=not _m372_lazy_on)  # ★421/R1-A1：SIM211 等价化简
         # 加载L1独立快照
         l1_nodes = self.snapshot.load_l1()
         if l1_nodes:

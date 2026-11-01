@@ -20,7 +20,7 @@ InfoField 已有一个 **L3 脉冲层**（L0–L3 队列 / 背压 / 降级）。
 
 开关 `config.ENABLE_DEC_SHADOW`（默认关）。
 """
-from nucleus.decision.contracts import (  # noqa: F401
+from nucleus.decision.contracts import (  # ★421/R1-B2：__all__ 覆盖再导出，noqa 已失效
     ACTIONS, CONTRACT_SCHEMA, DEGRADE_POLICIES, POLICY_VERSION, REASON_CODES,
     SCOPES, DecideResult, DecisionRequest, make_decision_id, make_request_id,
     shadow_result,

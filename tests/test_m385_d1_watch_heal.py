@@ -26,7 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import pytest  # noqa: F401  （本文件用不到，但保留与本批其它件一致的可读性）
+import pytest  # ★421/R1-B6：34 行 @pytest.fixture 在用，原"用不到"注释写错
 
 from nucleus.evolution import zero_break_judge as zb  # noqa: E402
 

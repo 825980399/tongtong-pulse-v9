@@ -31,7 +31,7 @@ from typing import Any, Callable
 
 from nucleus._silent_except import silent_exc
 
-from .report_envelope import SEV_P0, SEV_P1, ConsumeResult, ReportEnvelope, make_envelope  # noqa: F401
+from .report_envelope import SEV_P0, SEV_P1, ConsumeResult, ReportEnvelope, make_envelope  # ★421/R1-B5 5 名全在用
 
 MAX_REPORTS = 100
 # ★主线第51批 T5（P2-357）：**磁盘**保留份数（原 MAX_REPORTS 仅约束内存）。

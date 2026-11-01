@@ -94,7 +94,7 @@ def test_env_var_can_still_inject_real_value():
     try:
         # 直接验证渲染入口对环境变量的响应（不重载模块，避免污染其它用例）
         from config import PLACEHOLDER_VALUES as _pv
-        assert "<BIRTH_DATE>" in _pv or True  # 占位表存在性兜底断言
+        assert "<BIRTH_DATE>" in _pv  # ★421/R1-A2：原 "... or True" 恒真等于没写，改真断言
         injected = "出生于{}".format(os.environ["TTP_BIRTH_DATE"])
         assert "1999" in injected
     finally:

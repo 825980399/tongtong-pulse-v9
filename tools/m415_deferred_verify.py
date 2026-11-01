@@ -215,7 +215,7 @@ def check_narrative_replay(loader: Callable[[], dict] | None = None) -> dict:
     `loader` 可注入（单测用），默认走真 `narrative_store`。
     """
     if loader is None:
-        def loader():  # noqa: F811  — 局部默认实现
+        def loader():  # 局部默认实现 · ★421/R1-B8：F811 不覆盖遮蔽形参
             from nucleus.observability import narrative_store as _ns
             return _ns.summary()
     try:
