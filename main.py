@@ -3835,20 +3835,18 @@ def _spawn_self_restart(reason: str = "self_restart") -> bool:
             silent_exc(e, "main:_spawn_self_restart:boot_crash.log打开失败", level="warning")
             _boot_log_fh = None
         if _sys.platform == 'win32':
+            # ★修复自动重启无控制台：stdout/stderr不再重定向到文件，让新窗口正常显示输出
+            #   启动崩溃留痕改由main.py顶层try-except写boot_crash.log（不再靠重定向）
             _proc = subprocess.Popen(
                 [_sys.executable, __file__],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
                 cwd=_project_root,
-                stdout=_boot_log_fh,
-                stderr=_boot_log_fh,
             )
         else:
             _proc = subprocess.Popen(
                 [_sys.executable, __file__],
                 start_new_session=True,
                 cwd=_project_root,
-                stdout=_boot_log_fh,
-                stderr=_boot_log_fh,
             )
         with _SELF_RESTART_PIDS_LOCK:
             _SELF_RESTART_CHILD_PIDS.add(_proc.pid)
