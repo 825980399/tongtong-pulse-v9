@@ -1,0 +1,10 @@
+[
+ {
+  "file": "organs/core/PulseMetricsCollector.py",
+  "delta_occurrences": 1,
+  "delta_files": 1,
+  "commit": "417刀1（本刀；基线笔为其后的单独一笔 [ci-gate-change]）",
+  "batch": "417/D1",
+  "reason": "417 刀1「心跳路径轻量化」在 PulseMetricsCollector._m417_ensure_worker() 里新增**唯一**一个 spawn 点（name='m417-hb-observer'，daemon=True）。性质：①单飞 —— 起线程前判 `_m417_thread.is_alive()`，同刻最多一条；②懒起 —— 只有第一次真正登记重活请求时才起，空闲进程不占线程；③受开关 `ENABLE_M417_HEARTBEAT_ASYNC_CACHE` 限制，关掉立刻回到 416 的纯同步行为（不起线程）；④停机路径 m417_stop_async() 置停止位 + join(timeout)，且 _m417_stop 置位后 _m417_ensure_worker() 直接返回 False，不再重启。故不构成并发点净增（进程内该线程数上限恒为 1）。★delta 口径：该文件在 416 基线里 spawn 点为 0 ⇒ 本次既是 +1 次，也是 +1 个「有 spawn 的文件」；仓根 `.bak_batch347_PulseController.py` 那 +1 已由 416 重锚吃进 63/47，本轮不重复计。"
+ }
+]
