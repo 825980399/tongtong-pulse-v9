@@ -7015,3 +7015,22 @@ ENABLE_M414_O3_PRIVATE_IN_POOL = True
 #   ★为什么要开关：改的是 412 钉死的 `row_of()` 契约，留一条回退路。
 #   读取点：nucleus/observability/narrative_digest.py::events_enabled()
 ENABLE_M414_NARRATIVE_EVENTS = True
+
+# ======================================================================
+# [M415-CFG] 第415批 · 经验池命中拼进对话 prompt
+# ======================================================================
+#
+# ENABLE_M415_EXPERIENCE_IN_PROMPT
+#   默认值：False（**影子 / dry-run**）
+#   语义：True 时 `PulseLung._build_chat_prompt` 在记忆段之后拼一段
+#        【相关经验参考】——取经验池 top3、每条 ≤100 字、合计 ≤500 字，
+#        query 用**用户问题原文**，检索走 411 刀4 的 `experience_hits.top_hits`
+#        （含 412 模板降权、414 权重平方修复）。
+#        False 时**照算命中、照记一行日志，但 prompt 逐字不变** ——
+#        日志形如 `[415刀4] 经验命中(影子) 命中=3 拼入=0条/0字 ...`，
+#        其中 `拼入` 是"如果开拼会占多少字"，不是实际拼入量。
+#   为什么默认 False：经验池 400 条里 68.75% 是模板复制品（414 实测），
+#        直接开拼有把对话带成复读机的风险 ⇒ 先跑一周影子看命中分布再开。
+#   关闭时零行为变化（唯一副作用是每次对话多一条 INFO 日志）。
+#   读取点：organs/body/PulseLung.py::_m415_experience_in_prompt_on()
+ENABLE_M415_EXPERIENCE_IN_PROMPT = False

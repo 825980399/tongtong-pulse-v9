@@ -41,6 +41,97 @@ from config import LLM_TEMPERATURE_BASE  # 183批刀3：统一温度单一来源
 from nucleus.const import DigestEvent, LogLevel, LungEvent, MouthEvent, SystemEvent
 from nucleus.shadow_v2_probe import build_shadow_v2_fragment  # ★199刀1：影子 v2 只读检索探针
 
+# ======================================================================
+# ★415 刀4：经验池命中拼进对话 prompt（**先影子后实弹**）
+# ======================================================================
+# 背景：411 刀4 已建好检索（`experience_hits.top_hits`，含 412 的模板降权、414 的权重平方修复），
+#   但**只记不拼** —— `_build_memory_context` 把命中塞进 `context["experience_hits"]` 就结束了，
+#   对话 prompt 里从来没有过经验内容。本刀把它接到 `_build_chat_prompt` 的记忆段之后。
+# 为什么接在这里而不是 `_build_channel_messages`：后者只有拼好的 prompt 字符串、拿不到用户问题原文，
+#   而任务书要求「用用户输入的问题当query」；`_build_chat_prompt` 两条调用链（直连 / 渠道）都经过，
+#   覆盖面更全。
+#: 总开关（config 登记）。默认 False = **影子模式**：照算命中、照记日志，但 prompt 逐字不变。
+_M415_EXP_SWITCH = "ENABLE_M415_EXPERIENCE_IN_PROMPT"
+#: 取几条（任务书：top3）
+_M415_EXP_TOP_K = 3
+#: 每条最多取 summary 前 100 字（`top_hits` 的 text 已截到 80 字，这里再兜一层）
+_M415_EXP_ITEM_CHARS = 100
+#: 三（N）条合计不超 500 字
+_M415_EXP_TOTAL_CHARS = 500
+
+
+def _m415_experience_in_prompt_on() -> bool:
+    """开关：默认 **False**（影子）。读 config 属性，取不到按 False。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, _M415_EXP_SWITCH, False))
+    except (ImportError, AttributeError) as _e:
+        silent_exc(_e, where="PulseLung._m415_experience_in_prompt_on", level="debug")
+        return False
+
+
+def _m415_build_experience_fragment(question: str, hits=None):
+    """算一次经验命中并拼成 prompt 片段（纯函数，便于单测）。
+
+    Args:
+        question: 用户问题原文（**不是**拼好的 prompt —— 检索要干净 query）。
+        hits: 预置命中（单测注入用）；None 时现查 `experience_hits.top_hits`。
+
+    Returns:
+        ``(fragment, obs)``：
+        - ``fragment``：要拼进 prompt 的段落；**开关关闭 / 没命中 / 全被截断时为 ``""``**
+        - ``obs``：``{"on","n_hits","n_used","chars","weights","ids","texts","dropped"}``
+          影子模式下 ``n_used``/``chars`` 照样如实填 —— 那正是"如果开拼会占多少字"。
+    """
+    _obs = {"on": _m415_experience_in_prompt_on(), "n_hits": 0, "n_used": 0,
+            "chars": 0, "weights": [], "ids": [], "texts": [], "dropped": 0}
+    _q = (question or "").strip()
+    if not _q:
+        return "", _obs
+    _hits = hits
+    if _hits is None:
+        try:
+            from nucleus.observability import experience_hits as _eh
+            _hits = _eh.top_hits(_q, top_k=_M415_EXP_TOP_K)
+        except (ImportError, AttributeError, TypeError, ValueError) as _e:
+            silent_exc(_e, where="PulseLung._m415_build_experience_fragment:top_hits",
+                       level="debug")
+            return "", _obs
+    _hits = list(_hits or [])
+    _obs["n_hits"] = len(_hits)
+    if not _hits:
+        return "", _obs
+    _lines = []
+    _used = 0
+    for _h in _hits:
+        if not isinstance(_h, dict):
+            continue
+        _t = str(_h.get("text") or "").strip()
+        if not _t:
+            continue
+        _t = _t[:_M415_EXP_ITEM_CHARS]
+        _line = "%d. %s" % (len(_lines) + 1, _t)
+        if _used + len(_line) > _M415_EXP_TOTAL_CHARS:
+            break                      # ★预算满就停，不再往后挤
+        _lines.append(_line)
+        _used += len(_line)
+        try:
+            _obs["weights"].append(round(float(_h.get("weight", 1.0) or 1.0), 4))
+        except (TypeError, ValueError):
+            _obs["weights"].append(1.0)
+        _obs["ids"].append(str(_h.get("id") or ""))
+        _obs["texts"].append(_t[:40])
+    _obs["n_used"] = len(_lines)
+    _obs["chars"] = _used
+    _obs["dropped"] = max(0, len(_hits) - len(_lines))
+    if not _lines:
+        return "", _obs
+    _frag = ("\n【相关经验参考】（这是你在类似情境下积累的经验，可参考、不必照搬）\n"
+             + "\n".join(_lines) + "\n")
+    # ★影子模式：算出来但**不拼** —— obs 里照样给出 n_used/chars，日志据此说"如果开拼会占多少字"
+    return (_frag if _obs["on"] else ""), _obs
+
+
 
 class PulseLung(BasePulseOrgan):
     """
@@ -3159,6 +3250,25 @@ class PulseLung(BasePulseOrgan):
                 total = exp.get("total_searches", 0)
                 if success_rate < 0.3 and total >= 2:
                     prompt += "\n【注意】你之前探索过类似的话题，发现自己在这方面还有很多不了解的地方。回答时可以坦诚表达这一点。\n"
+
+        # ★415 刀4：经验池命中拼进 prompt（先影子后实弹）
+        #   影子（默认，开关关）：照算命中 + 记一行日志，`prompt` 逐字不变；
+        #   实弹（开关开）：拼成【相关经验参考】段（每条 ≤100 字、合计 ≤500 字）。
+        #   query 用**用户问题原文**，不是拼好的 prompt —— 后者含身份/记忆/说话要求，会稀释匹配。
+        try:
+            _m415_frag, _m415_obs = _m415_build_experience_fragment(user_message)
+            self._log(
+                LogLevel.INFO,
+                "[415刀4] 经验命中(%s) 命中=%d 拼入=%d条/%d字 丢弃=%d 权重=%s ids=%s"
+                % ("实弹" if _m415_obs["on"] else "影子",
+                   _m415_obs["n_hits"], _m415_obs["n_used"], _m415_obs["chars"],
+                   _m415_obs["dropped"], _m415_obs["weights"], _m415_obs["ids"]),
+            )
+            if _m415_frag:
+                prompt += _m415_frag
+        except Exception as _m415_e:
+            silent_exc(_m415_e, where="PulseLung._build_chat_prompt 415刀4 经验拼装",
+                       level="debug")
 
         # ★框架运行纠偏：若同类问题此前多次回复质量偏低，注入纠偏提醒
         _correction_hint = self._get_correction_hint(user_message)
