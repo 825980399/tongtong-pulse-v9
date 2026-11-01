@@ -1259,19 +1259,6 @@ class PulseHeart(BasePulseOrgan):
             "喜悦": -0.15, "愤怒": -0.15, "恐惧": -0.15,
             "悲伤": 0.10, "中性": 0.0,
         }
-    def _get_field_value(self, key: str, default: float) -> float:
-        """从信息场获取值（带默认）"""
-        try:
-            record = self.info_field.get_current(key)
-            if record and isinstance(record, dict):
-                payload = record.get("payload", {})
-                for field in [key, "value", "level", "usage"]:
-                    if field in payload:
-                        return float(payload[field])
-            return default
-        except Exception:
-            self._log(LogLevel.WARNING, f"从信息场获取值失败(key={key})，使用默认值{default}")
-            return default
 
     # ========== 未来演化预留（v10.0 振荡场） ==========
 

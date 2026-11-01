@@ -483,13 +483,6 @@ class PulseCore:
             while len(self._completed_fingerprints) > self._max_fingerprints:
                 self._completed_fingerprints.popitem(last=False)
 
-    def _clean_expired_fingerprints(self, ttl_seconds: float = 5.0):
-        now = time.time()
-        with self._execution_lock:
-            expired = [pid for pid, ts in self._completed_fingerprints.items() if now - ts > ttl_seconds]
-            for pid in expired:
-                del self._completed_fingerprints[pid]
-
     # ========== 统计信息（v9.5 增强） ==========
 
     def get_stats(self) -> dict[str, Any]:

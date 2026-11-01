@@ -758,21 +758,6 @@ class PulseVisualCortex(BasePulseOrgan):
                           f"[人脸识别] 识别异常（累计失败 {_fc} 次）: {_e}")
             return (None, 0.0)
 
-    def _extract_face_encoding(self, frame) -> Any | None:
-        """从帧中提取人脸编码（不进行比对）"""
-        if not self._has_face_recognition:
-            return None
-
-        try:
-            import face_recognition
-            rgb_frame = frame[:, :, ::-1]
-            face_encodings = face_recognition.face_encodings(rgb_frame)
-            if face_encodings:
-                return face_encodings[0]
-        except (Exception, SystemExit) as e:  # ★T-119a 硬化：SystemExit 非 Exception 子类
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-        return None
-
     # ========== 帧分析（纯元数据） ==========
 
     def _analyze_frame(self, payload: dict[str, Any]) -> dict[str, Any]:

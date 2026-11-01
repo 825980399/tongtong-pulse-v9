@@ -1200,15 +1200,6 @@ class ResonanceEngine:
         _src = self._source_timeliness_seconds(_source_age)
         return min(1.0, 0.5 * _act + 0.5 * _src)
 
-    def _source_timeliness(self, node: dict) -> float:
-        """知识来源时效性（分段阈值）。来源越新分越高，下限 0.20（旧知识低但不丢弃）。"""
-        _src = node.get("source_time", None)
-        if not _src or _src <= 0:
-            _src = node.get("acquired_time", node.get("created_at", 0))
-        if not _src or _src <= 0:
-            return 0.5  # 无来源时间信息，给中性分（不偏向新也不偏向旧）
-        return self._source_timeliness_seconds(time.time() - _src)
-
     def _source_timeliness_seconds(self, source_age_seconds: float) -> float:
         """来源时效性（按秒计的分段阈值），供 Python 兜底层与 Cython 版保持数值一致。"""
         if source_age_seconds < 604800:        # <7天

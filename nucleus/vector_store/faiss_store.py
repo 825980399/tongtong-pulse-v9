@@ -75,11 +75,6 @@ class FAISSVectorStore:
             self._faiss_available = False
             _logger.warning("[T2] faiss 未安装，回退到暴力余弦计算")
 
-    def _ensure_state(self) -> None:
-        if self._initialized:
-            return
-        self._initialized = True
-
     def _auto_select_index_type(self, n_vectors: int) -> str:
         """根据向量数量自动选择索引类型。"""
         if self._index_type != "auto":

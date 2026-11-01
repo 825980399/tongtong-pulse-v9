@@ -342,12 +342,6 @@ class SurvivalOrchestrator(SilentLogMixin):
         self._locked_level = level
         self._lock_until = time.time() + COOLDOWN_SECONDS
 
-    def _maybe_unlock(self) -> None:
-        """冷却期结束后解锁。"""
-        if self._state_locked and time.time() >= self._lock_until:
-            self._state_locked = False
-            self._locked_level = ""
-
     # ========== 反馈回路（第二批启用，本批预留） ==========
 
     def _feedback(self, action_results: dict[str, Any]) -> None:

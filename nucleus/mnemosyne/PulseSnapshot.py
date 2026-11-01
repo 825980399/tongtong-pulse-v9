@@ -555,27 +555,6 @@ class PulseSnapshot:
             _evicted = sorted(getattr(self.node_pool, '_cold_evicted', set()))
             snapshot["evicted_node_ids"] = _evicted
         return snapshot
-    def _count_changed_nodes(self, saved_nodes: list) -> int:
-        """
-        ★P0-4新增：统计自上次保存后发生变更的节点数量。
-        变更判断基于节点校验和对比。
-        """
-        if not self._last_saved_nodes_map:
-            return len(saved_nodes)  # 无历史记录，全部视为变更
-
-        _changed = 0
-        for _node in saved_nodes:
-            _node_id = _node.node_id
-            _current_checksum = getattr(_node, 'checksum', '')
-            _saved_checksum = self._last_saved_nodes_map.get(_node_id, '')
-            if _current_checksum != _saved_checksum:
-                _changed += 1
-
-        # 也统计被删除的节点
-        _current_ids = {n.node_id for n in saved_nodes}
-        _deleted = sum(1 for _nid in self._last_saved_nodes_map if _nid not in _current_ids)
-
-        return _changed + _deleted
 
     def _get_changed_nodes(self, saved_nodes: list) -> tuple[list, set]:
         """

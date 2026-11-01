@@ -16,6 +16,7 @@ import io
 import json
 import os
 import re
+import sys
 import threading
 import textwrap
 import time
@@ -556,6 +557,124 @@ def m416_startup_window_default() -> float:
                    level="debug")
         return _M416_STARTUP_WINDOW_SEC
 
+
+
+# ===== ★417刀2：主扫描让出点（协作式，**全局**进度计数）=====
+#  为什么是全局计数而不是 `threading.local()`：`_do_scan_all_organs` 走 `run_group`
+#  结构化并行，66 个文件摊到 16 个 worker 上 —— **每个线程只有 4 个文件**，
+#  按线程计数则永远攒不满 10，让出点是死代码（417 首版实测 ticks=0，栽的就是这个）。
+#  改成全局计数后：谁跨过第 10 个单位的边界，就由谁来让这一毫秒。
+#  计数用一把小锁保护（每次 1 次 acquire ≈ 50ns；全量扫描约 1.7 万次单位 ⇒ 累计 ~1ms）。
+_M417_YIELD_EVERY = 10
+_M417_YIELD_SEC = 0.001
+_M417_YIELD_SWITCH = "ENABLE_M417_SCAN_YIELD"
+_m417_yield_lock = threading.Lock()
+_m417_yield_state: dict[str, Any] = {
+    "ticks": 0,          # 真让出次数
+    "units": 0,          # 累计处理单位数
+    "sleep_sec": 0.0,    # 累计睡掉的秒数（开销的可观测量）
+    "threads": 0,        # 参与过计数的线程数（并行覆盖面）
+    "sleep_threads": 0,  # 真正执行过让出的线程数
+    "_n": 0,             # 内部余数（不对外，stats 里会剔掉）
+}
+_m417_yield_tids: set = set()
+_m417_yield_sleep_tids: set = set()
+
+
+def m417_yield_on() -> bool:
+    """★417刀2 总开关 `ENABLE_M417_SCAN_YIELD`（缺省 True）。关掉 ⇒ 零让出。"""
+    _c = sys.modules.get("config")
+    return bool(getattr(_c, _M417_YIELD_SWITCH, True)) if _c is not None else True
+
+
+def _m417_reset_yield_state() -> None:
+    """清零让出计数（单测用）。"""
+    with _m417_yield_lock:
+        for _k in list(_m417_yield_state):
+            _m417_yield_state[_k] = 0.0 if isinstance(_m417_yield_state[_k], float) else 0
+        _m417_yield_tids.clear()
+        _m417_yield_sleep_tids.clear()
+
+
+def m417_yield_stats() -> dict:
+    """让出统计（盘上可观测量：真触发了几次 / 睡掉多少毫秒 / 覆盖几个线程）。"""
+    with _m417_yield_lock:
+        _o = {_k: _v for _k, _v in _m417_yield_state.items() if not _k.startswith("_")}
+        _o["sleep_ms"] = round(float(_o.get("sleep_sec") or 0.0) * 1000.0, 2)
+    _o["every"] = _M417_YIELD_EVERY
+    _o["unit_sec"] = _M417_YIELD_SEC
+    _o["switch_on"] = m417_yield_on()
+    return _o
+
+
+def _m417_scan_tick(step: int = 1) -> None:
+    """登记 `step` 个单位；全局累计每满 `_M417_YIELD_EVERY` 让出一次。
+
+    ★一次调用**最多让一次**（step 很大也不补睡）—— 让出点的目的是把长任务切片，
+    不是按单位数付罚款；补睡只会让开销无界。
+    ★开销守则：开关关闭时只做一次 `getattr` 就返回（热路径零成本）。
+    """
+    if not m417_yield_on():
+        return
+    with _m417_yield_lock:
+        _st = _m417_yield_state
+        _st["units"] = int(_st.get("units") or 0) + step
+        _n = int(_st.get("_n") or 0) + step
+        _cross = _n // _M417_YIELD_EVERY
+        _st["_n"] = _n - _cross * _M417_YIELD_EVERY
+        _tid = threading.get_ident()
+        if _tid not in _m417_yield_tids and len(_m417_yield_tids) < 256:
+            _m417_yield_tids.add(_tid)
+            _st["threads"] = len(_m417_yield_tids)
+        if not _cross:
+            return
+        _st["ticks"] = int(_st.get("ticks") or 0) + 1
+        _st["sleep_sec"] = float(_st.get("sleep_sec") or 0.0) + _M417_YIELD_SEC
+        if _tid not in _m417_yield_sleep_tids and len(_m417_yield_sleep_tids) < 256:
+            _m417_yield_sleep_tids.add(_tid)
+            _st["sleep_threads"] = len(_m417_yield_sleep_tids)
+    # ★锁外睡：睡在锁内会让「让出」退化成「串行化」，那是最坏的结果。
+    time.sleep(_M417_YIELD_SEC)
+
+
+# ===== ★417刀2：tests/ 语料一次读入 =====
+#  `_m348_protocol_iface_declared` 原本对**每个**候选都 os.walk 整个 tests/ 并逐文件 open。
+#  实测 954 候选 × 725 个测试文件 ⇒ 51.3 万次 open（cProfile：_io.open 41.4s + read 27.7s，
+#  合计占 `_detect_dead_code` 115s 里的 88.96s）。语料在一次检测内不变 ⇒ 读一次就够。
+#  ★「失败不缓存」沿用 323刀0 的教训：一次读错把空表钉死，整轮判据会永久退化。
+_M348_TESTS_SRC: dict[str, Any] = {"built": False, "rows": [], "files": 0, "bytes": 0}
+
+
+def _m348_tests_corpus() -> list:
+    """tests/ 下全部 .py 源码（惰性、只读、目录不存在时不缓存）。"""
+    if _M348_TESTS_SRC.get("built"):
+        return _M348_TESTS_SRC.get("rows") or []
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _troot = os.path.join(_root, "tests")
+    if not os.path.isdir(_troot):
+        return []
+    _rows, _n, _b = [], 0, 0
+    for _dp, _dn, _fn in os.walk(_troot):
+        _dn[:] = [_d for _d in _dn if not _d.startswith(".")]
+        for _tf in _fn:
+            if not _tf.endswith(".py"):
+                continue
+            try:
+                with open(os.path.join(_dp, _tf), encoding="utf-8", errors="replace") as _fh:
+                    _tsrc = _fh.read()
+            except OSError as _te:
+                silent_exc(_te, where="self_inspector._m348_tests_corpus")
+                continue
+            _rows.append(_tsrc)
+            _n += 1
+            _b += len(_tsrc)
+    _M348_TESTS_SRC.update({"built": True, "rows": _rows, "files": _n, "bytes": _b})
+    return _rows
+
+
+def _m348_reset_tests_corpus() -> None:
+    """清语料缓存（单测/热更用）。"""
+    _M348_TESTS_SRC.update({"built": False, "rows": [], "files": 0, "bytes": 0})
 
 
 class SelfInspector(SilentLogMixin):
@@ -2935,6 +3054,8 @@ class SelfInspector(SilentLogMixin):
             # 原串行解析57个文件耗时较长，并行化后显著提升代码学习启动速度
             def _parse_one_file(args):
                 fp, dn = args
+                # ★417刀2：并行路径的让出点（每个 worker 线程独立计数，每 10 个文件 1ms）
+                _m417_scan_tick()
                 try:
                     _cls = self._parse_classes(fp)
                     _mth = self._parse_methods(fp)
@@ -4530,6 +4651,8 @@ class SelfInspector(SilentLogMixin):
             # ★374刀6：该文件的嵌套函数行号（外层 body 已覆盖，跳过以免重复计数）
             _m374_nested = _m374_nested_func_lines(file_path)
             for method in info.get("methods", []):
+                # ★417刀2：串行主循环的让出点（1434 个方法体，每 10 个让 1ms）
+                _m417_scan_tick()
                 method_name = method.get("name", "")
                 start_line = method.get("line_number", 0)
                 if _m374_is_nested_start(_m374_nested, start_line):
@@ -6237,6 +6360,8 @@ class SelfInspector(SilentLogMixin):
                       "soft_review": 0, "infer_only": 0}
 
         for _name, _defs in _methods.items():
+            # ★417刀2：死码候选循环的让出点（这一层是两个 tick 之外最耗 CPU 的地方）
+            _m417_scan_tick()
             _call_count = _call_counts.get(_name, 0)
             _def_count = len(_defs)
             if _call_count > _def_count:
@@ -7221,22 +7346,13 @@ def _m348_protocol_iface_declared(item: dict) -> bool:
         if any(_m.lower() in _head for _m in _M348_PROTOCOL_MARKERS):
             return True
         # ③ 测试引用（有测试即非死码）
-        _troot = os.path.join(_root, "tests")
-        if os.path.isdir(_troot):
-            for _dp, _dn, _fn in os.walk(_troot):
-                _dn[:] = [_d for _d in _dn if not _d.startswith(".")]
-                for _tf in _fn:
-                    if not _tf.endswith(".py"):
-                        continue
-                    try:
-                        _tsrc = open(os.path.join(_dp, _tf), encoding="utf-8",
-                                        errors="replace").read()
-                    except OSError as _te:
-                        # cw2：纯 continue 也是静默（铁律176）——读不到测试文件要留痕
-                        silent_exc(_te, where="self_inspector._m348_protocol_iface_declared tests")
-                        continue
-                    if ("%s(" % _n) in _tsrc and _n in _tsrc:
-                        return True
+        #    ★417刀2：语料**一次读入缓存**。原实现对每个候选都 os.walk 整个 tests/ 并逐
+        #    文件 open —— 实测 954 候选 × 725 个测试文件 ⇒ 51.3 万次 open，光这一项就占
+        #    `_detect_dead_code` 115s 里的 88.96s（cProfile：_io.open 41.4s + read 27.7s）。
+        #    判据语义不变：仍是「任意一个测试文件里同时出现 `name(` 与 `name`」即豁免。
+        for _tsrc in _m348_tests_corpus():
+            if ("%s(" % _n) in _tsrc and _n in _tsrc:
+                return True
         return False
     except Exception as _e:
         silent_exc(_e, where="self_inspector._m348_protocol_iface_declared")

@@ -3020,27 +3020,6 @@ class PulseLung(BasePulseOrgan):
             _hints.append("必须用中文回答，不要使用英文")
         return "；".join(_hints)
 
-    def _build_enhanced_prompt(self, user_message: str, user_name: str,
-                                memory_context: dict | None = None, knowledge_context: str = "") -> str:
-        """
-        构建增强提示词：在基础身份prompt基础上，注入知识上下文和记忆。
-        
-        Args:
-            user_message: 用户消息
-            user_name: 用户名
-            memory_context: 记忆上下文（关系+情绪+知识片段）
-            knowledge_context: 额外的知识上下文（相关L2/L3节点摘要）
-        
-        Returns:
-            增强提示词
-        """
-        prompt = self._build_chat_prompt(user_message, user_name, memory_context)
-
-        # 注入知识上下文
-        if knowledge_context:
-            prompt += f"\n\n【你的相关知识】\n{knowledge_context}\n"
-
-        return prompt
     def _do_chat(self, model_name: str, user_message: str, user_name: str,
                  memory_context: dict | None = None, use_remote: bool = False,
                  is_background: bool = False,

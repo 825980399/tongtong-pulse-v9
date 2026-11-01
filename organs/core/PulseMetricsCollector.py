@@ -227,6 +227,62 @@ def _m416_probe_max_runtime_sec() -> float:
         return _M416_PROBE_MAX_RUNTIME_SEC
 
 
+# ===== ★417刀1：心跳路径轻量化（异步观测 worker）=====
+#  T0 实测（417，logs/pulse.log* 全量 4 次 L0 看门狗 8s 超时）：卡死线程栈 4/4 落在
+#  `_on_heartbeat_alive` 尾部的两个 tick 上，**没有一次**落在 `_cache_lock`：
+#    ① `_m402_dead_letter_tick`：函数体内 `from utils.dead_letter_ledger import ...`
+#       是**热路径上的懒 import**，本进程首次调用要跑完整 import 机（stat 全部
+#       sys.path 条目）——05:58 / 11:05 两次的栈就停在 `_path_isfile`；
+#    ② `_m403_causal_tick`：`causal_chain.build_chains()` 纯 Python 聚合——
+#       12:55 / 13:14 两次的栈停在 `build_chains`。
+#  ⇒ 416 把病根归到「`_on_heartbeat_observe` 持 `_cache_lock`」是**错的**：
+#     `_cache_lock` 段在 observe 里，而 observe 走 L3；L0 卡死的是 alive 的尾巴。
+#  处置：开关打开时把「重活」整批挪到后台低优先级 worker —— observe 的
+#    `_refresh_organ_cache` / `_build_observability_snapshot` / 落盘，alive 的两个 tick。
+#    handler 只留 O(1) 计数与时间戳。开关关掉 ⇒ **完全回到 416 的同步行为**。
+_M417_SWITCH_ATTR = "ENABLE_M417_HEARTBEAT_ASYNC_CACHE"
+_M417_WORKER_NAME = "m417-hb-observer"
+_M417_JOB_SNAPSHOT = "snapshot"
+_M417_JOB_TICKS = "ticks"
+#: 进程级计数（模块级，跨实例累加；单测用 `_m417_reset_state()` 归零）
+_m417_state: dict[str, Any] = {
+    "started": 0,          # 起过几次 worker 线程
+    "jobs": 0,             # worker 真跑了几个批次
+    "coalesced": 0,        # 合并（同一批次重复登记）次数
+    "snapshot_ok": 0, "snapshot_fail": 0,
+    "ticks_ok": 0, "ticks_fail": 0,
+    "last_job_ms": None, "max_job_ms": None,
+    "last_error": None,
+    "priority": None,      # worker 线程优先级设置结果（低优先级证据）
+}
+
+
+def _m417_reset_state() -> None:
+    """把模块级计数清零（单测隔离用；生产不调）。"""
+    for _k in list(_m417_state.keys()):
+        _m417_state[_k] = 0 if isinstance(_m417_state[_k], int) else None
+
+
+def m417_cfg(name: str, default):
+    """读 config（走已加载的 config 模块；读不到回退默认，绝不抛）。"""
+    _c = sys.modules.get("config")
+    return default if _c is None else getattr(_c, name, default)
+
+
+def m417_async_switch_on() -> bool:
+    """★417刀1 总开关 `ENABLE_M417_HEARTBEAT_ASYNC_CACHE`（缺省 True）。
+
+    缺省为 True 的理由：这是**降阻塞**的改动，不改任何业务读数；出问题可秒关。
+    config 里读不到（老配置/单测瘦身）⇒ 也按 True，保持与生产同一条路径。
+    """
+    return bool(m417_cfg(_M417_SWITCH_ATTR, True))
+
+
+def m417_stats() -> dict[str, Any]:
+    """进程级 worker 统计（只读副本，供 health/单测）。"""
+    return dict(_m417_state)
+
+
 def _m377_tm_ensure() -> dict:
     """确保 tracemalloc 处于期望状态（只在 `resident` 模式 start，且**不 stop**）。
 
@@ -403,6 +459,17 @@ class PulseMetricsCollector(BasePulseOrgan):
         # ★403刀3：上一次快照时刻（纳秒），用于取"两次心跳之间"的事件名
         self._m403_prev_snap_ns: int = 0
 
+        # ===== ★417刀1：异步观测 worker 的实例状态 =====
+        #  `_m417_ready` 是**瘦身实例的闸门**：单测常用 `__new__` 手搓采集器
+        #  （只塞几个字段），那种实例没有这个标记 ⇒ 自动退回同步路径，
+        #  回归测试零影响。生产走 `__init__` ⇒ True。
+        self._m417_ready = True
+        self._m417_lock = threading.Lock()      # 只管 pending 集合，绝不复用 _cache_lock
+        self._m417_pending: set[str] = set()    # 合并式：集合里只有 job 名，天然去重
+        self._m417_wake = threading.Event()
+        self._m417_stop = threading.Event()
+        self._m417_thread: threading.Thread | None = None
+
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
         event_type = pulse.get("event_type", "")
@@ -525,8 +592,17 @@ class PulseMetricsCollector(BasePulseOrgan):
                 return None
             self._snapshot_count += 1
 
-            # 刷新器官指标缓存
-            self._refresh_organ_cache()
+            # ★417刀1：开关打开 ⇒ 只登记一次「要产快照」的信号，重活交给后台 worker。
+            #   为什么连 `_refresh_organ_cache` 也挪走：它 30s 才真跑一次，但真跑那次
+            #   要遍历全部注册条件 —— 属于「可以不在 handler 里做的事」。
+            _m417_queued = self._m417_request(_M417_JOB_SNAPSHOT)
+            if not _m417_queued:
+                # 开关关闭 ⇒ 416 原样：锁内刷新器官缓存
+                self._refresh_organ_cache()
+
+        if _m417_queued:
+            # 形态与同步路径保持一致（status/beat 不变），只多一个 async 标记
+            return {"status": "observed", "beat": self._beat_count, "async": True}
 
         # 构建可观测性快照（锁内完成，确保读到一致的数据快照）
         with self._cache_lock:
@@ -561,8 +637,12 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "interval": payload.get("interval", 10.0),
                 "beat_count": payload.get("beat_count", 0),
             }
-        self._m402_dead_letter_tick()
-        self._m403_causal_tick()
+        # ★417刀1：这两个 tick 是 L0 看门狗 8s 超时的**实测真凶**（4/4 次卡死栈都在
+        #   这里：`_m402` 的懒 import 冷加载 / `_m403` 的 build_chains 聚合）。
+        #   开关打开 ⇒ 整批交给后台 worker；关掉 ⇒ 416 原样的同步顺序。
+        if not self._m417_request(_M417_JOB_TICKS):
+            self._m402_dead_letter_tick()
+            self._m403_causal_tick()
         return {"status": "cached"}
 
     def _m403_causal_tick(self) -> None:
@@ -1845,6 +1925,178 @@ class PulseMetricsCollector(BasePulseOrgan):
         """取上次采样读数（快照用；没有就返回空结构，不触发采样）。"""
         _r = getattr(self, "_m411_mbo_reading", None)
         return _r if isinstance(_r, dict) else {}
+
+    # ===== ★417刀1：异步观测 worker（心跳/L0 handler 只发信号，重活在这里跑） =====
+    def _m417_enabled(self) -> bool:
+        """本实例是否走异步路径。
+
+        两道门：① `_m417_ready`（`__new__` 手搓的瘦身实例没有 ⇒ 退回同步）
+        ② config 开关。任一不满足 ⇒ 同步，行为与 416 逐字节一致。
+        """
+        if not self.__dict__.get("_m417_ready"):
+            return False
+        return m417_async_switch_on()
+
+    def _m417_request(self, kind: str) -> bool:
+        """登记一次重活请求（非阻塞、合并式）。Returns: 是否已交给 worker。
+
+        ★合并语义：`_m417_pending` 是集合，同一 job 连登 100 次也只跑 1 次；
+        worker 取走时才 clear ⇒ 取走后新来的请求会再排一批，不会丢。
+        """
+        try:
+            if not self._m417_enabled():
+                return False
+            _lock = self.__dict__.get("_m417_lock")
+            if _lock is None:      # 半初始化实例：宁可同步，不要假装异步
+                return False
+            with _lock:
+                if kind in self._m417_pending:
+                    _m417_state["coalesced"] += 1
+                else:
+                    self._m417_pending.add(kind)
+            self._m417_ensure_worker()
+            _wake = self.__dict__.get("_m417_wake")
+            if _wake is not None:
+                _wake.set()
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m417_request")
+            return False
+
+    def _m417_ensure_worker(self) -> bool:
+        """懒起 worker 线程（单飞）。Returns: 线程是否在跑。"""
+        _th = self.__dict__.get("_m417_thread")
+        if _th is not None and _th.is_alive():
+            return True
+        _stop = self.__dict__.get("_m417_stop")
+        _wake = self.__dict__.get("_m417_wake")
+        if _stop is None or _wake is None:
+            return False
+        if _stop.is_set():
+            return False
+        _th = threading.Thread(
+            target=self._m417_worker_loop,
+            args=(_stop, _wake),
+            name=_M417_WORKER_NAME,
+            daemon=True,
+        )
+        try:
+            _th.start()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m417_ensure_worker")
+            return False
+        self._m417_thread = _th
+        _m417_state["started"] += 1
+        return True
+
+    def _m417_worker_loop(self, stop_evt, wake_evt) -> None:
+        """worker 主循环：等信号 → 取走 pending → 顺序执行 → 记录耗时。"""
+        try:
+            from utils.thread_priority import set_current_thread_lowest
+            _m417_state["priority"] = set_current_thread_lowest()
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m417_worker_loop[priority]")
+            _m417_state["priority"] = "unavailable"
+        while not stop_evt.is_set():
+            try:
+                if not wake_evt.wait(5.0):
+                    continue
+                wake_evt.clear()
+                with self._m417_lock:
+                    _job = set(self._m417_pending)
+                    self._m417_pending.clear()
+                if not _job:
+                    continue
+                self._m417_run_job(_job)
+            except Exception as _e:
+                _m417_state["last_error"] = "%s: %s" % (type(_e).__name__, _e)
+                silent_exc(_e, where="PulseMetricsCollector::_m417_worker_loop",
+                           level="warning")
+
+    def _m417_run_job(self, job: set) -> None:
+        """执行一批 job 并计时（批次耗时是「worker 有没有拖住」的唯一观测量）。"""
+        _t0 = time.perf_counter()
+        _m417_state["jobs"] += 1
+        if _M417_JOB_SNAPSHOT in job:
+            self._m417_build_and_write()
+        if _M417_JOB_TICKS in job:
+            self._m417_ticks()
+        _dt = (time.perf_counter() - _t0) * 1000.0
+        _m417_state["last_job_ms"] = round(_dt, 1)
+        _mx = _m417_state.get("max_job_ms") or 0.0
+        if _dt > _mx:
+            _m417_state["max_job_ms"] = round(_dt, 1)
+
+    def _m417_build_and_write(self) -> bool:
+        """缓存刷新 + 快照构建 + 落盘。
+
+        ★**不整段持 `_cache_lock`**：整段持锁等于把锁变成新的阻塞点——L0 的
+        `_on_heartbeat_alive` 一进函数就要抢这把锁，worker 持锁 3s 它就再卡 3s，
+        只是把 stall 从「handler 里算」挪成「handler 里等」。锁只包住刷新那一小段，
+        快照构建按「某一瞬间的近似」处理（它本来就是观测件，不是事务）。
+        """
+        try:
+            with self._cache_lock:
+                self._refresh_organ_cache()
+            snapshot = self._build_observability_snapshot(skip_slow=True)
+        except Exception as _e:
+            _m417_state["snapshot_fail"] += 1
+            silent_exc(_e, where="PulseMetricsCollector::_m417_build_and_write[build]",
+                       level="warning")
+            return False
+        try:
+            health_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                'data', 'monitor', 'health_snapshot.json')
+            if not self._m403_write_tiered(health_path, snapshot):
+                _m417_state["snapshot_fail"] += 1
+                self._log(LogLevel.WARNING,
+                          "[417刀1] health_snapshot.json 写入失败（需关注）")
+                return False
+        except Exception as _e:
+            _m417_state["snapshot_fail"] += 1
+            silent_exc(_e, where="PulseMetricsCollector::_m417_build_and_write[write]",
+                       level="warning")
+            return False
+        _m417_state["snapshot_ok"] += 1
+        return True
+
+    def _m417_ticks(self) -> None:
+        """死信台账 + 因果链两个 tick（都是墙钟自门，挪到后台不改变频率语义）。"""
+        try:
+            self._m402_dead_letter_tick()
+            self._m403_causal_tick()
+            _m417_state["ticks_ok"] += 1
+        except Exception as _e:
+            _m417_state["ticks_fail"] += 1
+            silent_exc(_e, where="PulseMetricsCollector::_m417_ticks", level="warning")
+
+    def m417_async_stats(self) -> dict[str, Any]:
+        """本实例视图（线程在不在 + 进程级计数）。"""
+        _th = self.__dict__.get("_m417_thread")
+        _out = dict(_m417_state)
+        _out["thread_alive"] = bool(_th is not None and _th.is_alive())
+        _out["pending"] = sorted(self.__dict__.get("_m417_pending") or ())
+        _out["switch_on"] = m417_async_switch_on()
+        _out["ready"] = bool(self.__dict__.get("_m417_ready"))
+        return _out
+
+    def m417_stop_async(self, timeout: float = 5.0) -> bool:
+        """停机：置停止位 + 唤醒 + 等 worker 退出。Returns: 线程是否已停。"""
+        _stop = self.__dict__.get("_m417_stop")
+        _wake = self.__dict__.get("_m417_wake")
+        _th = self.__dict__.get("_m417_thread")
+        if _stop is None or _th is None:
+            return True
+        _stop.set()
+        if _wake is not None:
+            _wake.set()
+        try:
+            _th.join(timeout=max(0.0, float(timeout)))
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::m417_stop_async")
+        return not _th.is_alive()
+
 
     def _build_observability_snapshot(self, skip_slow: bool = False) -> dict[str, Any]:
         """构建完整的可观测性快照。

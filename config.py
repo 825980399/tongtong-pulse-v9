@@ -7101,3 +7101,34 @@ M416_MEMORY_PROBE_SKIP_HEAP_MB = 12000.0
 #        布尔锁一旦漏复位就把探针永久锁死；租约到期自动失效，最坏只是多跑一轮。
 #   读取点：organs/core/PulseMetricsCollector.py::_m416_probe_max_runtime_sec()
 M416_MEMORY_PROBE_MAX_RUNTIME_SEC = 900.0
+
+# ---------------------------------------------------------------------------
+# [M417-CFG] 第417批 · 心跳路径轻量化（异步观测 worker）
+# ---------------------------------------------------------------------------
+# 背景（417 T0 实测，logs/pulse.log* 里全部 4 次 L0 看门狗 8s 超时）：
+#   卡死线程栈 4/4 落在 `_on_heartbeat_alive` 尾部的两个 tick 上，**没有一次**
+#   落在 `_cache_lock`。416 把病根归到「observe 持锁」是错的 —— observe 走 L3，
+#   L0 卡死的是 alive 的尾巴：
+#     ① `_m402_dead_letter_tick` 函数体内 `from utils.dead_letter_ledger import ...`
+#        是热路径上的**懒 import**，本进程首调要跑完整 import 机（stat 全部 sys.path
+#        条目），05:58 / 11:05 两次的栈就停在 `_path_isfile`；
+#     ② `_m403_causal_tick` 的 `causal_chain.build_chains()` 是纯 Python 聚合，
+#        12:55 / 13:14 两次的栈停在 `build_chains`。
+#   处置：开关打开 ⇒ 两个 tick + 器官缓存刷新 + 快照构建 + health_snapshot 落盘
+#   整批挪到后台低优先级 worker（`m417-hb-observer`，THREAD_PRIORITY_LOWEST），
+#   handler 只留 O(1) 计数与时间戳。
+#
+# ENABLE_M417_HEARTBEAT_ASYNC_CACHE
+#   默认值：True（降阻塞改动，不改任何业务读数）
+#   语义：True  ⇒ 心跳/L0 handler 只登记信号，重活由 worker 跑；
+#        False ⇒ **逐字回到 416 的同步行为**（出问题秒关，排障用）。
+#   读取点：organs/core/PulseMetricsCollector.py::m417_async_switch_on()
+ENABLE_M417_HEARTBEAT_ASYNC_CACHE = True
+
+# ENABLE_M417_SCAN_YIELD
+#   默认值：True
+#   语义：主扫描的协作式让出点总开关。打开 ⇒ 并行解析每 10 个文件、主检测每 10 个
+#        方法、死码候选每 10 个，各让出 1ms（按线程独立计数，每个 worker 都让）。
+#        False ⇒ 零让出（排障/测纯扫描耗时时用）。
+#   读取点：nucleus/self_inspector.py::m417_yield_on()
+ENABLE_M417_SCAN_YIELD = True

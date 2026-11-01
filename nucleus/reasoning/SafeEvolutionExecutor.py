@@ -1121,28 +1121,6 @@ class SafeEvolutionExecutor:
 
         return _result
 
-    def _classify_issue_complexity(self, issue: dict[str, Any]) -> str:
-        """★学生-老师模式：问题复杂度分级，决定询问策略。
-        L1简单：本地规则可修 → 不问老师（已在上层处理）
-        L2中等：模式明确但本地无规则 → 一次询问
-        L3复杂：需根因分析/架构设计 → 多轮追问
-        """
-        _type = issue.get("type", "")
-        _desc = issue.get("description", "").lower()
-        # L3复杂问题特征
-        _complex_keywords = ["架构", "设计", "性能", "死锁", "竞态", "内存泄漏",
-                             "重构", "优化", "根因", "崩溃", "数据丢失"]
-        if any(k in _desc for k in _complex_keywords):
-            return "L3"
-        # L2中等：本地不可修但有明确类型
-        if _type and _type not in {"silent_exception", "bare_except", "status_request_duplicate",
-                                    "unbounded_deque", "thread_no_daemon", "no_timeout_http",
-                                    "mutable_default_arg", "comparison_with_none",
-                                    "boolean_comparison", "os_path_join", "print_instead_of_log",
-                                    "fstring_preferred"}:
-            return "L2"
-        return "L1"
-
     def _read_snippet_from_file(self, file_path: str, method_name: str = "",
                                 max_lines: int = 40) -> str:
         """★第22批 T4/P2-122：按文件路径（可选方法名）读取代码片段。
@@ -6446,75 +6424,6 @@ class SafeEvolutionExecutor:
 
         return "; ".join(changes[:5]) if changes else "无实质性变更"
 
-    def _patch_silent_exception(self, plan: dict[str, Any],
-                                 file_path: str, original_code: str) -> dict[str, Any]:
-        """为静默异常生成补丁"""
-        description = (
-            f"在 {plan.get('target', '?')}.{plan.get('method', '?')} 方法中，"
-            f"将静默异常捕获 except Exception: pass 改为记录日志。"
-        )
-
-        return {
-            "file": file_path or f"organs/{plan.get('target', '?')}.py",
-            "method": plan.get("method", ""),
-            "type": "add_exception_logging",
-            "description": description,
-            "action": plan.get("action", ""),
-            "risk_level": "低",
-            "original_pattern": "except Exception:\n    pass",
-            "suggested_code": (
-                "except Exception as e:\n"
-                "    self._log(LogLevel.ERROR, f'异常: {e}')"
-            ),
-        }
-
-    def _patch_bare_except(self, plan: dict[str, Any],
-                            file_path: str, original_code: str) -> dict[str, Any]:
-        """为裸except生成补丁"""
-        return {
-            "file": file_path or f"organs/{plan.get('target', '?')}.py",
-            "method": plan.get("method", ""),
-            "type": "fix_bare_except",
-            "description": "将裸 except: 改为 except Exception: 并添加日志",
-            "action": plan.get("action", ""),
-            "risk_level": "低",
-            "original_pattern": "except:",
-            "suggested_code": (
-                "except Exception as e:\n"
-                "    self._log(LogLevel.ERROR, f'异常: {e}')"
-            ),
-        }
-
-    def _patch_status_request(self, plan: dict[str, Any],
-                               file_path: str) -> dict[str, Any]:
-        """为_on_status_request重复代码生成补丁"""
-        return {
-            "file": file_path or f"organs/{plan.get('target', '?')}.py",
-            "method": "_on_status_request",
-            "type": "dedup_status_request",
-            "description": "简化 _on_status_request 方法，改为调用 self.get_stats()",
-            "action": plan.get("action", ""),
-            "risk_level": "极低",
-            "original_pattern": "手动维护的重复代码",
-            "suggested_code": (
-                "def _on_status_request(self):\n"
-                "    return self.get_stats()"
-            ),
-        }
-
-    def _patch_generic(self, plan: dict[str, Any],
-                        file_path: str, original_code: str) -> dict[str, Any]:
-        """为通用问题生成补丁"""
-        return {
-            "file": file_path or f"organs/{plan.get('target', '?')}.py",
-            "method": plan.get("method", ""),
-            "type": "manual_review",
-            "description": plan.get("description", "需要手动审查"),
-            "action": plan.get("action", "建议创造者手动审查该位置代码"),
-            "risk_level": "待评估",
-            "original_pattern": "需手动审查",
-            "suggested_code": f"// 请审查 {plan.get('target', '?')}.{plan.get('method', '?')} 方法",
-        }
     def _auto_apply_patch(self, patch: dict[str, Any]) -> dict[str, Any]:
         """
         自动应用补丁（仅在auto_apply_enabled=True时调用）。

@@ -479,24 +479,6 @@ class PulseEars(BasePulseOrgan):
             safe_write_json(ear_log_path, log_data)
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
-    def _update_ear_log(self, text: str | None = None, status: str = ""):
-        """更新耳朵监听日志的最新条目"""
-        try:
-            ear_log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                         'data', 'stream', 'ear_stream_log.json')
-            if os.path.exists(ear_log_path):
-                log_data = safe_read_json(ear_log_path, default=[])
-                if isinstance(log_data, dict):
-                    self._log(LogLevel.WARNING,
-                              "[第81批 T6] 耳朵流日志为 dict（历史脏文件），自愈为 list")
-                    log_data = []
-                if log_data:
-                    if text:
-                        log_data[-1]["recognized_text"] = text
-                    log_data[-1]["status"] = status
-            safe_write_json(ear_log_path, log_data)
-        except Exception as e:
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
     # ========== 代码块检测与执行 ==========
 
