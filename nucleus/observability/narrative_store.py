@@ -240,6 +240,23 @@ def append_record(row: dict[str, Any], now: float | None = None) -> dict[str, An
     return persist_daily(row=row, now=now)
 
 
+def prev_row(now: float | None = None) -> dict[str, Any]:
+    """取**前一天**的叙事行（没有文件/没有行 ⇒ 返回 `{}`）。
+
+    ★413刀3：`persist_daily` 只读写当天文件，而 Step5b 的 `delta` / `intent`
+      需要「当日 vs 前一日」的对照 —— 日间对比必须显式跨文件读，不能靠内存。
+    """
+    _now = float(now if now is not None else time.time())
+    _p = _day_path_of(day_stamp(_now - 86400.0))
+    if not os.path.exists(_p):
+        return {}
+    _rows, _bad = _read_lines(_p)
+    if _bad:
+        silent_exc(RuntimeError("prev_row_bad_lines=%d" % _bad),
+                   where="observability.narrative_store:prev_row", level="debug")
+    return _rows[-1] if _rows else {}
+
+
 def list_days(now: float | None = None, lookback: int = MAX_STREAK_LOOKBACK) -> list[str]:
     """从今天往前**有文件**的日期列表（升序）。"""
     _now = float(now if now is not None else time.time())

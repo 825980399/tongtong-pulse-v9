@@ -210,8 +210,12 @@ class PulseNarrativeSelf(BasePulseOrgan):
     def persist(self, now: float | None = None) -> dict[str, Any]:
         """把当日叙事摘要落到 `data/narrative/narrative_YYYYMMDD.jsonl`（每天一条）。
 
-        ★`headline` / `delta` / `intent` 本批**留空** —— 那是 413 的活，
-          这里填任何值都是编造（411 铁律：取不到就不给）。
+        ★413 起 `headline` / `delta` / `intent` / `evidence_refs` 由
+          `narrative_digest.build()` 供给 —— 纯模板拼接，**不引入生成模型**；
+          任一量取不到就写 `reason`，不填 0 假充（411 铁律：取不到就不给）。
+        ★**摘要日**：夜摘要在 04:00 跑，落的是**刚过去的那一天**
+          （`narrative_digest.digest_anchor`），与 `continuous_days` 的
+          "允许昨日锚"口径一致；412 按 `now` 落当天是自相矛盾的。
         """
         try:
             from nucleus.observability import narrative_store as _ns412
@@ -224,15 +228,65 @@ class PulseNarrativeSelf(BasePulseOrgan):
         _evs = [x for x in (getattr(self, "_narrative_events", None) or [])
                 if isinstance(x, dict)]
         _cd = _ns412.continuous_days(now=_now)
+        _cdays = int(_cd.get("days") or 0)
+        # ★413刀3（Step5b）：headline / delta / intent / evidence_refs
+        #   纯模板拼接，**不引入生成模型**；任一量取不到就写 reason，不填 0 假充。
+        #   开关 `ENABLE_M413_NARRATIVE_DIGEST` 关闭 ⇒ `_dig={}` ⇒ 回到 412 的留空口径。
+        # ★摘要日锚点：开关关闭时锚点 = now ⇒ **逐字**回到 412 行为（可秒级回退）。
+        _dig: dict[str, Any] = {}
+        _anchor = _now
+        try:
+            from nucleus.observability import narrative_digest as _nd413
+            if _nd413.enabled():
+                _anchor = _nd413.digest_anchor(_now)
+                _dig = _nd413.build(
+                    _evs, now=_now,
+                    prev_row=_ns412.prev_row(now=_anchor),
+                    cont_days=_cdays,
+                )
+        except Exception as _e_dig413:
+            silent_exc(_e_dig413, where="PulseNarrativeSelf.persist 413刀3 digest")
+            _dig = {}
+            _anchor = _now
+        _dl = _dig.get("delta") if isinstance(_dig.get("delta"), dict) else {}
         _row = _ns412.row_of(
-            _ns412.day_stamp(_now),
+            _ns412.day_stamp(_anchor),
             generated_at=_now,
-            narrative_events=len(_evs),
-            continuous_days=int(_cd.get("days") or 0),
+            # ★`narrative_events` 改为**当日**条数（412 记的是含 7 天回放的全量，
+            #   与「当日叙事摘要」语义不符）；全量另记 `narrative_events_total`。
+            narrative_events=int(_dig.get("narrative_events", len(_evs))),
+            continuous_days=_cdays,
             weekly_reports=len(getattr(self, "_weekly_reports", None) or []),
             events=_evs,
+            nodes=_dl.get("nodes"),
+            llm_ratio=_dl.get("llm_ratio"),
+            patches=_dl.get("patches"),
+            headline=_dig.get("headline") or "",
+            intent=_dig.get("intent") or "",
+            prev_intent_verdict=_dig.get("prev_intent_verdict"),
+            evidence_refs=_dig.get("evidence_refs") or [],
+            headline_basis=_dig.get("headline_basis") or "",
+            headline_event_id=_dig.get("headline_event_id"),
+            headline_detail=_dig.get("headline_detail") or {},
+            intent_reason=_dig.get("intent_reason") or "",
+            intent_changed=bool(_dig.get("intent_changed")),
+            narrative_events_total=int(_dig.get("narrative_events_total", len(_evs))),
+            event_types=_dig.get("event_types") or [],
         )
-        return _ns412.persist_daily(_row, now=_now)
+        _res = _ns412.persist_daily(_row, now=_anchor)
+        # 供夜摘要段直接展示（不额外读文件）；键名不改 `ok`/`path` 等既有契约
+        # ★`delta` 取 `_dl`（4 键，含 narrative_events）而不是 `_row["delta"]`
+        #   —— 后者的键集被 412 单测 test_02 钉死为三键，加不进去；
+        #   而"当日事件数"是叙事器官自有量，夜摘要段要能直接看到。
+        _res["digest"] = {
+            "headline": _row.get("headline") or "",
+            "headline_basis": (_row.get("extra") or {}).get("headline_basis") or "",
+            "intent": _row.get("intent") or "",
+            "intent_reason": (_row.get("extra") or {}).get("intent_reason") or "",
+            "delta": _dl or {},
+            "evidence_refs": _row.get("evidence_refs") or [],
+        }
+        return _res
 
     def load(self, days: int = 7, now: float | None = None) -> dict[str, Any]:
         """回放最近 N 天 jsonl，恢复 `_narrative_events`（≤150 条，与内存 cap 同口径）。
@@ -656,7 +710,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
         5. 关系深度（核心人物互动次数）
         6. 叙事事件丰富度（原有维度）
         """
-        # ★412刀1：这一行原本算出来**没用**（带 `# noqa: F841`），
+        # ★412刀1：这一行原本算出来**没用**（当时靠 F841 的未使用豁免掩着），
         #   六维里的"维度6 叙事事件丰富度"一直是空的。现在接上，且用**落盘口径**：
         #   内存条数重启即归零，落盘连续天数才是"我连续存在了多少天"的事实来源。
         total_events = len(self._narrative_events)

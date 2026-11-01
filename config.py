@@ -6975,3 +6975,18 @@ ENABLE_M412_O3_DELETE_DRYRUN = True
 #     （591 条 O3 里 587 条是 public_api）⇒ 开闸没有收益，先查 O3 判死质量。
 #   读取点：nucleus/evolution/patch_risk_gate.py::_delete_only_enabled()
 PATCH_M412_DELETE_ONLY_GATE = False
+#
+# ============================================================
+# [M413-CFG] 第 413 批新增配置
+# ============================================================
+#
+# ENABLE_M413_NARRATIVE_DIGEST
+#   默认值：**True**（本批直接接生产）
+#   语义：开启时 `PulseNarrativeSelf.persist()` 会调
+#        `nucleus/observability/narrative_digest.build()` 产出 Step5b 三字段
+#        （headline / delta / intent）并写入当日叙事 jsonl；
+#        关闭时走 412 原路径、三字段留空 —— **一行配置即可回退**。
+#   ★为什么默认开：三个字段全是「模板字符串 + 既有数据源读值」，
+#     不引入生成模型、不新增外部依赖；取不到的项显式写 reason，不填 0 假充有值。
+#   读取点：nucleus/observability/narrative_digest.py::enabled()
+ENABLE_M413_NARRATIVE_DIGEST = True
