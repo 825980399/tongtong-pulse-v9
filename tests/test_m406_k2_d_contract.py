@@ -95,7 +95,7 @@ class TestB_Wiring(unittest.TestCase):
         cls.main_src = _read(_MAIN)
 
     def test_10_transition_method_exists(self):
-        seg, node = _func_src(_PP, "_m406_report_hw_transitions")
+        _seg, node = _func_src(_PP, "_m406_report_hw_transitions")
         self.assertIsNotNone(node, "PulseProprioception 缺 _m406_report_hw_transitions")
 
     def test_11_called_from_evaluate(self):
@@ -306,7 +306,7 @@ class TestD_CrashHookBehaviour(unittest.TestCase):
         return env, core, fld, writes
 
     def test_30_emits_once(self):
-        env, core, fld, writes = self._load()
+        env, core, fld, _writes = self._load()
         env["_crash_hook"](ValueError, ValueError("boom-406"), None)
         self.assertEqual(len(core.calls), 1, core.calls)
         self.assertEqual(len(fld.pubs), 1)
@@ -357,7 +357,7 @@ class TestD_CrashHookBehaviour(unittest.TestCase):
         self.assertEqual(len(writes), 1)
 
     def test_37_emit_failure_is_safe(self):
-        env, core, _, writes = self._load()
+        env, _core, _, writes = self._load()
 
         class _Bad:
             def emit(self, **k):

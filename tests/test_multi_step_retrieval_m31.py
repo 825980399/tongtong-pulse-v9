@@ -230,7 +230,7 @@ class TestOperationalAdmission(unittest.TestCase):
         _code = ("def _probe(self, question):\n"
                  + textwrap.indent(_seg, "    ") + "    return 'ADMITTED'\n")
         _ns = {"str": str, "any": any, "bool": bool, "len": len}
-        exec(compile(_code, "<m31-v2gate>", "exec"), _ns)
+        exec(compile(_code, "<m31-v2gate>", "exec"), _ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
         return _ns["_probe"]
 
     def test_40_operational_signal_is_true(self):

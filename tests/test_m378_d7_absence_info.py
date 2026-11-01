@@ -66,8 +66,8 @@ def test_m378_d7_no_debug_left_at_both_sites():
             ("nucleus/mnemosyne/live_gate.py",
              '_module_logger.debug("[350开闸] 台账不存在'),
             ("organs/core/PulseMetricsCollector.py",
-             'self._log(LogLevel.DEBUG,\n'
-             '                              "[350开闸] 回载统计尚不存在')):
+             ('self._log(LogLevel.DEBUG,\n'
+              '                              "[350开闸] 回载统计尚不存在'))):
         with io.open(os.path.join(ROOT, _rel), encoding="utf-8") as _f:
             _s = _f.read()
         assert _needle not in _s, "%s 仍有 DEBUG 首条留痕" % _rel

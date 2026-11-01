@@ -73,7 +73,7 @@ class TestCounting:
         def _boom(*a, **k):
             raise socket.gaierror("no such host")
         monkeypatch.setattr(socket, "getaddrinfo", _boom)
-        ok, why = sg.is_safe_http_url("http://no-such-host-e6.invalid/x")
+        ok, _why = sg.is_safe_http_url("http://no-such-host-e6.invalid/x")
         assert ok is False
         assert sg.m367_ssrf_reject_stats()["by_group"].get("dns_fail") == 1
 

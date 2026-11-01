@@ -235,7 +235,7 @@ class TestOrganLogGovernance(unittest.TestCase):
 
     def test_30_no_print_in_business_code(self):
         """★业务代码不得有 print（框架运行时信息必须走日志）。"""
-        for _k, _p in ORGS.items():
+        for _p in ORGS.values():
             _a, _b = self._prints(os.path.join(_ROOT, _p))
             self.assertEqual(_b, 0, f"{_p} 业务代码仍有 {_b} 处 print")
 
@@ -245,7 +245,7 @@ class TestOrganLogGovernance(unittest.TestCase):
         self.assertEqual(_tot, 77, f"自测块 print 合计应 77，实际 {_tot}")
 
     def test_32_selftest_blocks_documented(self):
-        for _k, _p in ORGS.items():
+        for _p in ORGS.values():
             _t = open(os.path.join(_ROOT, _p), encoding="utf-8").read()
             self.assertIn("主线第37批 T5（P2-229）：本块是**开发自测**", _t, _p)
 

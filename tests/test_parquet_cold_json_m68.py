@@ -157,14 +157,14 @@ class TestJsonFaultTolerant(unittest.TestCase):
 
     def test_83_trailing_comma(self):
         """尾随逗号可修复。"""
-        ok, data, st = _ft.parse_json_fault_tolerant('{"功能":"f","关键步骤":["a","b",]}')
+        ok, data, _st = _ft.parse_json_fault_tolerant('{"功能":"f","关键步骤":["a","b",]}')
         self.assertTrue(ok)
         self.assertEqual(data["关键步骤"], ["a", "b"])
 
     def test_84_code_fence(self):
         """markdown 代码块可剥离后解析。"""
         _s = '```json\n{"功能":"f"}\n```'
-        ok, data, st = _ft.parse_json_fault_tolerant(_s)
+        ok, data, _st = _ft.parse_json_fault_tolerant(_s)
         self.assertTrue(ok)
         self.assertEqual(data["功能"], "f")
 

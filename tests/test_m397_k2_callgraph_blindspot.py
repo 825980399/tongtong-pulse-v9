@@ -138,7 +138,7 @@ def test_07_config_scan_dirs_matches_default():
     """
     import config as _cfg
 
-    _cfg_dirs = list(getattr(_cfg, "CALL_GRAPH_SCAN_DIRS") or [])
+    _cfg_dirs = list(_cfg.CALL_GRAPH_SCAN_DIRS or [])
     assert _cfg_dirs, "config 未定义 CALL_GRAPH_SCAN_DIRS"
     assert set(_cfg_dirs) == set(_cga._DEFAULT_SCAN_DIRS), (
         f"config 生效值 {sorted(_cfg_dirs)} ≠ 默认槽位 {sorted(_cga._DEFAULT_SCAN_DIRS)}")

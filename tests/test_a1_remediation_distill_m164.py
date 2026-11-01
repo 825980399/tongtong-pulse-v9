@@ -80,7 +80,7 @@ def _make_indexer(enabled=True):
 
 
 def test_remediation_writes_l2_node():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, exp, pool, _queue = _make_indexer(True)
     idx.record_remediation_success(question="1+1=?", correct_answer="2",
                                     rule_candidate="self_correction:verify")
     assert len(pool.added) == 1
@@ -93,14 +93,14 @@ def test_remediation_writes_l2_node():
 
 
 def test_remediation_submits_to_queue():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, _exp, _pool, queue = _make_indexer(True)
     idx.record_remediation_success(question="q", correct_answer="a")
     assert len(queue.submitted) == 1
     assert queue.submitted[0][0] == "node-1"
 
 
 def test_remediation_records_json_and_memory():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, _exp, _pool, _queue = _make_indexer(True)
     idx.record_remediation_success(question="q", correct_answer="a", rule_candidate="r")
     succ = idx.get_remediation_successes()
     assert len(succ) == 1
@@ -112,7 +112,7 @@ def test_remediation_records_json_and_memory():
 
 
 def test_failure_mode_writes_l1_node():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, _exp, pool, _queue = _make_indexer(True)
     idx.record_failure_mode(pattern="输出相关性低", question="q",
                             context="cortex_output_blocked_to_lung")
     assert len(pool.added) == 1
@@ -153,7 +153,7 @@ def test_node_pool_none_safe():
 
 
 def test_empty_inputs_noop():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, exp, pool, _queue = _make_indexer(True)
     idx.record_remediation_success(question="", correct_answer="")
     idx.record_remediation_success(question="q", correct_answer="")
     idx.record_failure_mode(pattern="", question="")
@@ -164,7 +164,7 @@ def test_empty_inputs_noop():
 
 
 def test_record_with_index_regression_double_write():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, _exp, pool, _queue = _make_indexer(True)
     res = idx.record_with_index("为什么天是蓝的", "causal", source="local", confidence=0.7)
     assert res["json_written"] is True
     assert res["node_written"] is True
@@ -181,7 +181,7 @@ def test_class_exposes_a1_methods():
 
 
 def test_failure_mode_distinct_from_remediation_paths():
-    idx, exp, pool, queue = _make_indexer(True)
+    idx, _exp, pool, _queue = _make_indexer(True)
     idx.record_remediation_success(question="q1", correct_answer="a1")
     idx.record_failure_mode(pattern="p1", question="q2")
     assert len(pool.added) == 2

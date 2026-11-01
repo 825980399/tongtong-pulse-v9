@@ -235,7 +235,7 @@ def test_dw_delete_relationship_removes_neo4j(neo4j_env):
 
 
 def test_dw_consistency_check_consistent(neo4j_env):
-    pool, mock, _ = neo4j_env
+    pool, _mock, _ = neo4j_env
     from nucleus.mnemosyne.PulseNode import PulseNode
     a = PulseNode(value="t1-h", evol_level="L2")
     pool.add(a)
@@ -334,7 +334,7 @@ def test_ow_node_accessed_sampled_0_0(influx_env):
 
 
 def test_ow_query_executed(influx_env):
-    pool, mock = influx_env
+    _pool, mock = influx_env
     try:
         from organs.body.PulseStomach import PulseStomach
         stom = PulseStomach()
@@ -471,7 +471,7 @@ def test_read_enabled_prefers_neo4j(neo4j_env):
 
 
 def test_read_stats_counts(neo4j_env):
-    pool, mock, _ = neo4j_env
+    pool, _mock, _ = neo4j_env
     from nucleus.mnemosyne.PulseNode import PulseNode
     a = PulseNode(value="t4-c", evol_level="L2")
     pool.add(a)

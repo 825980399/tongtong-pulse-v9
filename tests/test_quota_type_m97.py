@@ -24,6 +24,15 @@ import config
 from nucleus.llm.ChannelQuotaMonitor import ChannelQuotaMonitor
 
 
+def _naive(*args, **kw):
+    """构造 naive datetime（★421/R3：这里**有意**不带 tzinfo）。
+
+    `ChannelQuotaMonitor._ensure_daily_reset(now=...)` 与 `_daily_reset` 的
+    "YYYY-MM-DD" 都是本地日界；带 tz 的值会与生产侧 naive 的 `datetime.now()`
+    比较时抛 TypeError。DTZ001 在此属「设计内」，在函数里说明一次。
+    """
+    return datetime.datetime(*args, **kw)  # noqa: DTZ001
+
 def _mk():
     _d = tempfile.mkdtemp(prefix="m97_quota_")
     return ChannelQuotaMonitor(usage_path=os.path.join(_d, "q.json"))
@@ -108,7 +117,7 @@ class TestQuotaType(unittest.TestCase):
                 "prompt_tokens": 0, "completion_tokens": 0,
                 "total_tokens_used": 1000000, "last_updated": 0.0}
             m._daily_reset[_CH] = "2000-01-01"   # 模拟陈旧日期
-            _fake = datetime.datetime(2026, 9, 21, 12, 0, 0)   # 已过 11 点
+            _fake = _naive(2026, 9, 21, 12, 0, 0)   # 已过 11 点
             m._ensure_daily_reset(_CH, now=_fake)
             self.assertEqual(m.get_used(_CH), 0)
             self.assertEqual(m._daily_reset[_CH], "2026-09-21")
@@ -122,7 +131,7 @@ class TestQuotaType(unittest.TestCase):
             "prompt_tokens": 0, "completion_tokens": 0,
             "total_tokens_used": 1000000, "last_updated": 0.0}
         m._daily_reset["ark-ds-v4-flash"] = "2026-09-21"
-        _fake = datetime.datetime(2026, 9, 21, 15, 0, 0)
+        _fake = _naive(2026, 9, 21, 15, 0, 0)
         m._ensure_daily_reset("ark-ds-v4-flash", now=_fake)  # 今日已重置
         self.assertEqual(m.get_used("ark-ds-v4-flash"), 1000000, "同日内不应重置")
 
@@ -133,7 +142,7 @@ class TestQuotaType(unittest.TestCase):
             "prompt_tokens": 0, "completion_tokens": 0,
             "total_tokens_used": 100000, "last_updated": 0.0}
         m._daily_reset["ark-seed-21-pro"] = "2000-01-01"
-        _fake = datetime.datetime(2026, 9, 21, 12, 0, 0)
+        _fake = _naive(2026, 9, 21, 12, 0, 0)
         m._ensure_daily_reset("ark-seed-21-pro", now=_fake)
         self.assertEqual(m.get_used("ark-seed-21-pro"), 100000)
 

@@ -99,7 +99,7 @@ def test_m3_negative_diff_warn():
 # ---------------------------------------------------------------------------
 def test_m4_sparse_pass():
     from datetime import datetime, timedelta
-    base = datetime(2026, 10, 14, 16, 0, 0)
+    base = datetime(2026, 10, 14, 16, 0, 0)  # noqa: DTZ001 —— 合成时间，与 gate_health_check 的 naive 口径一致
     dist = [(base + timedelta(seconds=60 * i), 1, 1) for i in range(5)]  # 5 行分散
     rr = g.check_distribution_density(dist)
     assert rr["status"] == g.PASS
@@ -107,7 +107,7 @@ def test_m4_sparse_pass():
 
 def test_m4_dense_warn():
     from datetime import datetime, timedelta
-    base = datetime(2026, 10, 14, 16, 0, 0)
+    base = datetime(2026, 10, 14, 16, 0, 0)  # noqa: DTZ001 —— 合成时间，与 gate_health_check 的 naive 口径一致
     # 同一 10min 桶内 50 行 → 超 40 阈值
     dist = [(base + timedelta(seconds=i), 1, 1) for i in range(50)]
     r = g.check_distribution_density(dist)

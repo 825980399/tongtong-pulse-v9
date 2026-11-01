@@ -332,11 +332,11 @@ def _gate_off_406():
     """
     import config as _c
     _old = getattr(_c, "PATCH_M406_NARROW_GATE", True)
-    setattr(_c, "PATCH_M406_NARROW_GATE", False)
+    _c.PATCH_M406_NARROW_GATE = False
     try:
         yield
     finally:
-        setattr(_c, "PATCH_M406_NARROW_GATE", _old)
+        _c.PATCH_M406_NARROW_GATE = _old
 
 
 class TestM96ApprovalGovernance(unittest.TestCase):
@@ -668,7 +668,7 @@ class TestM96LedgerDelivery(unittest.TestCase):
         return rows[0], rows[1:]
 
     def test_E1_ledger_has_report_rows(self):
-        hdr, body = self._rows()
+        _hdr, body = self._rows()
         hits = [r for r in body if any("烛微第1期" in c for c in r)]
         self.assertGreaterEqual(len(hits), 11, "台账中「烛微第1期」条目不足 11：%d" % len(hits))
 

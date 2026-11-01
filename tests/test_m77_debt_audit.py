@@ -173,7 +173,7 @@ class TestT3LocalFixRule(unittest.TestCase):
                   "plan_type": "bare_return_none_in_except",
                   "modified_code": original,
                   "_applied_strategy": ""}
-            exec(textwrap.dedent(self.branch), ns)
+            exec(textwrap.dedent(self.branch), ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
             return ns["modified_code"], ns["_applied_strategy"]
         finally:
             real_cfg.ENABLE_LOCAL_FIX_BARE_RETURN_NONE = old

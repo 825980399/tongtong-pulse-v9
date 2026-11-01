@@ -44,7 +44,7 @@ class TestE8SourceContext:
         """失败时把 source / length / head 记进 `_LAST_PARSE_FAILURE`。"""
         # 数组内两个字符串缺逗号：修复链**必须**救不回（见 test_10）
         bad = '{"关键步骤": ["a" "b"]}'
-        obj, method = jr.parse_with_repair(bad, source="stomach.code_analysis")
+        _obj, method = jr.parse_with_repair(bad, source="stomach.code_analysis")
         assert method == "none", "这条必须失败，否则说明语义篡改又回来了"
         assert jr._LAST_PARSE_FAILURE.get("source") == "stomach.code_analysis"
         assert jr._LAST_PARSE_FAILURE.get("length") == len(bad)
@@ -52,7 +52,7 @@ class TestE8SourceContext:
 
     def test_03_source_default_empty_not_faked(self):
         """不传 source 时记空串（**不伪装成某个器官**）。"""
-        obj, method = jr.parse_with_repair("{这不是 json")
+        _obj, method = jr.parse_with_repair("{这不是 json")
         if method == "none":
             assert jr._LAST_PARSE_FAILURE.get("source") == ""
 

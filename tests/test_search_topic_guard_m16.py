@@ -30,7 +30,7 @@ def _load_helpers():
     i = src.index("_SEARCH_PREFIX_ALT_NEW")
     j = src.index("class PulseInnerWorld(")
     ns = {"__name__": "piw_helpers_probe"}
-    exec(compile(src[i:j], "<search-prefix-helpers>", "exec"), ns)
+    exec(compile(src[i:j], "<search-prefix-helpers>", "exec"), ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
     return ns
 
 

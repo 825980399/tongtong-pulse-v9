@@ -75,7 +75,7 @@ def test_item_truncated_to_100_chars(monkeypatch):
 def test_three_hits_total_309_chars(monkeypatch):
     """3 条 × (100 字 + "N. ") = 309 字 ⇒ 500 预算不会被顶到（如实记账）。"""
     monkeypatch.setattr(config, SWITCH, True, raising=False)
-    frag, obs = PL._m415_build_experience_fragment("q", hits=_hits("甲" * 200, "乙" * 200, "丙" * 200))
+    _frag, obs = PL._m415_build_experience_fragment("q", hits=_hits("甲" * 200, "乙" * 200, "丙" * 200))
     assert obs["n_used"] == 3
     assert obs["chars"] == 309
     assert obs["dropped"] == 0

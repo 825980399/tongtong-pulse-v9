@@ -154,7 +154,7 @@ class TestStomachImmuneFix(unittest.TestCase):
                 check_self_consistency_for_node as _real,
             )
             ns["check_self_consistency_for_node"] = _real
-        exec(compile(_immune_block_source(), "<immune-block>", "exec"), ns)
+        exec(compile(_immune_block_source(), "<immune-block>", "exec"), ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
         return ns
 
     # --- 根因证明：旧参数名确实会抛 TypeError ---
@@ -276,7 +276,7 @@ class TestLiverCallEdgeFix(unittest.TestCase):
             "config": config,
             "isinstance": isinstance,
         }
-        exec(compile(_liver_block_source(), "<liver-block>", "exec"), ns)
+        exec(compile(_liver_block_source(), "<liver-block>", "exec"), ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
         return ns
 
     def test_source_unpacking_order_fixed(self):

@@ -85,7 +85,7 @@ class TestConfigCommentTruth(unittest.TestCase):
         for key in CASES:
             if getattr(_cfg, key, None) is not True:
                 continue
-            blk, _asg = _block_for(self._lines, key)
+            _blk, _asg = _block_for(self._lines, key)
             # 溯源可以写成行尾注（如 `= True  # ★第173批刀0 窗前定值`），
             # 故把赋值行一并纳入判据——只认"上方注释块"会漏掉这类合法写法。
             _blk, _asg = _block_for(self._lines, key)

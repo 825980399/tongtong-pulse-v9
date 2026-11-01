@@ -55,7 +55,7 @@ def _run_blocks(path, ns_extra):
     _ns = {"tap_publish": _capture, "time": _time}
     _ns.update(ns_extra)
     for _b in _iter_publish_blocks(path):
-        exec(compile(textwrap.dedent(_b), "<tap-block>", "exec"), _ns)
+        exec(compile(textwrap.dedent(_b), "<tap-block>", "exec"), _ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
     return _calls
 
 

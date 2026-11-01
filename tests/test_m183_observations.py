@@ -74,7 +74,7 @@ def test_hebbian_apply_decay_force_gate():
     # force=True → 绕过闸门，执行衰减
     _l.apply_decay(force=True)
     assert _l._total_decays == 2
-    for _k, _v in _l._connections.items():
+    for _v in _l._connections.values():
         assert _v < 0.5  # 权重被 (1 - decay_rate) 衰减
 
 

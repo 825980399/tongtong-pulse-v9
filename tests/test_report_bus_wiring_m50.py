@@ -265,7 +265,7 @@ class TestWiring(_Base):
     def test_44_at_least_three_production_call_sites(self):
         """★任务书要求 ≥2 处实际调用（本批 4 处）。"""
         n = 0
-        for _rel, _s in _SRC.items():
+        for _s in _SRC.values():
             n += sum(_s.count(x) for x in
                      ("publish_health", "publish_pollution",
                       "publish_self_cognition", "publish_patch_quality",

@@ -93,7 +93,7 @@ def _evo_delay_from_source(switch_on):
         "LogLevel": _FakeLevel,
     }
     try:
-        exec(compile(_blk, "<main.py evo-delay slice>", "exec"), _env)
+        exec(compile(_blk, "<main.py evo-delay slice>", "exec"), _env)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
     finally:
         config.ENABLE_RANDOM_INITIAL_DELAY = _old
     return _env

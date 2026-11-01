@@ -33,6 +33,16 @@ from nucleus.self_awareness.DailyScheduler import (
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _naive(*args, **kw):
+    """构造 naive datetime（★421/R3：这里**有意**不带 tzinfo）。
+
+    被测的 `SelfAwarenessDailyScheduler._due/_today_done` 用的是 `datetime.now()`
+    这类**本地 naive** 时间；断言里给它带 tz 的值会在相减时抛
+    `TypeError: can't compare offset-naive and offset-aware datetimes`。
+    DTZ001 在此属「设计内」，集中在本函数说明一次，避免 25 个调用点各加 noqa。
+    """
+    return datetime(*args, **kw)  # noqa: DTZ001
+
 class _FakeProfile:
     def __init__(self):
         self.timestamp = "2026-09-13T03:00:00"
@@ -134,34 +144,34 @@ class TestDueAndDedup(unittest.TestCase):
                                           output_dir=self.d, **kw)
 
     def test_10_due_before_time_false(self):
-        self.assertFalse(self._mk()._due(datetime(2026, 9, 13, 2, 59)))
+        self.assertFalse(self._mk()._due(_naive(2026, 9, 13, 2, 59)))
 
     def test_11_due_at_time_true(self):
-        self.assertTrue(self._mk()._due(datetime(2026, 9, 13, 3, 0)))
+        self.assertTrue(self._mk()._due(_naive(2026, 9, 13, 3, 0)))
 
     def test_12_due_after_time_true(self):
         """错过调度点（框架刚启动）也应补跑。"""
-        self.assertTrue(self._mk()._due(datetime(2026, 9, 13, 9, 30)))
+        self.assertTrue(self._mk()._due(_naive(2026, 9, 13, 9, 30)))
 
     def test_13_today_done_false_when_empty(self):
-        self.assertFalse(self._mk()._today_done(datetime(2026, 9, 13, 3, 0)))
+        self.assertFalse(self._mk()._today_done(_naive(2026, 9, 13, 3, 0)))
 
     def test_14_today_done_true_when_report_exists(self):
-        _day = datetime(2026, 9, 13).strftime("%Y%m%d")
+        _day = _naive(2026, 9, 13).strftime("%Y%m%d")
         open(os.path.join(self.d, f"report_{_day}_030000.txt"),
                 "w", encoding="utf-8").write("x")
-        self.assertTrue(self._mk()._today_done(datetime(2026, 9, 13, 3, 5)))
+        self.assertTrue(self._mk()._today_done(_naive(2026, 9, 13, 3, 5)))
 
     def test_15_yesterday_report_does_not_block(self):
         open(os.path.join(self.d, "report_20260912_030000.txt"),
                 "w", encoding="utf-8").write("x")
-        self.assertFalse(self._mk()._today_done(datetime(2026, 9, 13, 3, 5)))
+        self.assertFalse(self._mk()._today_done(_naive(2026, 9, 13, 3, 5)))
 
     def test_16_dir_missing_treated_as_not_done(self):
         _s = SelfAwarenessDailyScheduler(
             engine=_FakeEngine(),
             output_dir=os.path.join(self.d, "not_exists"))
-        self.assertFalse(_s._today_done(datetime(2026, 9, 13, 3, 5)))
+        self.assertFalse(_s._today_done(_naive(2026, 9, 13, 3, 5)))
 
 
 class TestRunOnce(unittest.TestCase):
@@ -232,7 +242,7 @@ class TestThreadLifecycle(unittest.TestCase):
         _e = _FakeEngine()
         _s = SelfAwarenessDailyScheduler(
             engine=_e, output_dir=self.d,
-            now_fn=lambda: datetime(2026, 9, 13, 3, 30),
+            now_fn=lambda: _naive(2026, 9, 13, 3, 30),
             check_interval=0.05)
         self.assertTrue(_s.start())
         self.assertTrue(_s.is_running())
@@ -257,7 +267,7 @@ class TestThreadLifecycle(unittest.TestCase):
     def test_32_start_twice_is_idempotent(self):
         _s = SelfAwarenessDailyScheduler(
             engine=_FakeEngine(), output_dir=self.d,
-            now_fn=lambda: datetime(2026, 9, 13, 1, 0),   # 未到点，不会执行
+            now_fn=lambda: _naive(2026, 9, 13, 1, 0),   # 未到点，不会执行
             check_interval=10.0)
         self.assertTrue(_s.start())
         self.assertFalse(_s.start(), "重复启动应返回 False")
@@ -341,15 +351,15 @@ class TestDayBoundary(unittest.TestCase):
 
     def test_60_due_at_2359_is_true(self):
         """23:59启动时 _due=True（已过03:00调度点，属于补跑窗口）。"""
-        self.assertTrue(self._mk()._due(datetime(2026, 9, 13, 23, 59)))
+        self.assertTrue(self._mk()._due(_naive(2026, 9, 13, 23, 59)))
 
     def test_61_due_at_midnight_is_false(self):
         """次日00:00时 _due=False（未到03:00调度点）。"""
-        self.assertFalse(self._mk()._due(datetime(2026, 9, 14, 0, 0)))
+        self.assertFalse(self._mk()._due(_naive(2026, 9, 14, 0, 0)))
 
     def test_62_due_at_0259_is_false(self):
         """次日02:59时 _due=False（仍未到03:00）。"""
-        self.assertFalse(self._mk()._due(datetime(2026, 9, 14, 2, 59)))
+        self.assertFalse(self._mk()._due(_naive(2026, 9, 14, 2, 59)))
 
     def test_63_cross_day_today_done_uses_new_date(self):
         """跨日后 _today_done 使用新日期检查，昨天的报告不阻塞今天。"""
@@ -358,11 +368,11 @@ class TestDayBoundary(unittest.TestCase):
                 "w", encoding="utf-8").write("x")
         _s = self._mk()
         # 9月13日23:59：当天已完成 → True
-        self.assertTrue(_s._today_done(datetime(2026, 9, 13, 23, 59)))
+        self.assertTrue(_s._today_done(_naive(2026, 9, 13, 23, 59)))
         # 9月14日00:00：跨日后当天无报告 → False
-        self.assertFalse(_s._today_done(datetime(2026, 9, 14, 0, 0)))
+        self.assertFalse(_s._today_done(_naive(2026, 9, 14, 0, 0)))
         # 9月14日03:00：当天无报告 → False（应执行）
-        self.assertFalse(_s._today_done(datetime(2026, 9, 14, 3, 0)))
+        self.assertFalse(_s._today_done(_naive(2026, 9, 14, 3, 0)))
 
     def test_64_cross_day_full_flow_skip_then_run(self):
         """完整跨日流程：23:59当天已完成→跳过；次日03:00→执行。"""
@@ -371,17 +381,17 @@ class TestDayBoundary(unittest.TestCase):
                 "w", encoding="utf-8").write("x")
         _s = self._mk()
         # 23:59：due=True 但 today_done=True → 跳过
-        self.assertTrue(_s._due(datetime(2026, 9, 13, 23, 59)))
-        self.assertTrue(_s._today_done(datetime(2026, 9, 13, 23, 59)))
+        self.assertTrue(_s._due(_naive(2026, 9, 13, 23, 59)))
+        self.assertTrue(_s._today_done(_naive(2026, 9, 13, 23, 59)))
         # 次日00:00：due=False → 不执行
-        self.assertFalse(_s._due(datetime(2026, 9, 14, 0, 0)))
+        self.assertFalse(_s._due(_naive(2026, 9, 14, 0, 0)))
         # 次日03:00：due=True 且 today_done=False → 应执行
-        self.assertTrue(_s._due(datetime(2026, 9, 14, 3, 0)))
-        self.assertFalse(_s._today_done(datetime(2026, 9, 14, 3, 0)))
+        self.assertTrue(_s._due(_naive(2026, 9, 14, 3, 0)))
+        self.assertFalse(_s._today_done(_naive(2026, 9, 14, 3, 0)))
 
     def test_65_2359_without_report_triggers_makeup_run(self):
         """23:59当天无报告时，_due=True且_today_done=False→补跑当天。"""
-        _fixed = datetime(2026, 9, 13, 23, 59)
+        _fixed = _naive(2026, 9, 13, 23, 59)
         _s = SelfAwarenessDailyScheduler(
             engine=_FakeEngine(), output_dir=self.d,
             now_fn=lambda: _fixed)
@@ -392,7 +402,7 @@ class TestDayBoundary(unittest.TestCase):
         _s.run_once()
         self.assertTrue(_s._today_done(_fixed))
         # 次日03:00：due=True且当天无报告 → 正常执行
-        _next_day = datetime(2026, 9, 14, 3, 0)
+        _next_day = _naive(2026, 9, 14, 3, 0)
         self.assertTrue(_s._due(_next_day))
         self.assertFalse(_s._today_done(_next_day))
 
@@ -402,8 +412,8 @@ class TestDayBoundary(unittest.TestCase):
         # mock调度时间为23:30（通过monkeypatch不便，直接验证_due逻辑）
         # 23:29 < 23:30 → False（如果调度点是23:30）
         # 这里用默认03:00验证边界：02:59 False, 03:00 True
-        self.assertFalse(_s._due(datetime(2026, 9, 13, 2, 59)))
-        self.assertTrue(_s._due(datetime(2026, 9, 13, 3, 0)))
+        self.assertFalse(_s._due(_naive(2026, 9, 13, 2, 59)))
+        self.assertTrue(_s._due(_naive(2026, 9, 13, 3, 0)))
 
 
 if __name__ == "__main__":

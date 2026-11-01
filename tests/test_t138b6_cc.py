@@ -53,7 +53,7 @@ def test_b6_cc7_positive_control(tmp_path):
     ins = _make_inspector(str(tmp_path))
     blocks = ins._si_cc_blocks(_CC7_SRC)
     assert len(blocks) == 1, f"应只取 Function 块，实际 {blocks}"
-    name, cc, lineno = blocks[0]
+    name, cc, _lineno = blocks[0]
     assert name == "branchy"
     assert cc == 7, f"6 个 if 分支链应为 cc=7，实际 {cc}"
 

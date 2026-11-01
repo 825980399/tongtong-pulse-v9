@@ -112,7 +112,7 @@ def test_no_tautology_after_render():
         assert "小名曈曈" not in v, f"同义反复未清除（小名）：{v[:80]}"
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
-    for k, raw in rules.items():
+    for raw in rules.values():
         v = render_placeholders(str(raw))
         assert "我叫曈曈，小名曈曈" not in v, f"identity_rules 同义反复未清除：{v[:80]}"
 
@@ -124,7 +124,7 @@ def test_no_false_claim_about_shared_name():
         assert "共享同一个名字" not in v, f"事实矛盾文案未清除：{v[:80]}"
 
     rules = (config.INNER_WORLD_CONFIG or {}).get("identity_rules") or {}
-    for _k, raw in rules.items():
+    for raw in rules.values():
         v = render_placeholders(str(raw))
         assert "共享同一个名字" not in v, f"identity_rules 事实矛盾未清除：{v[:80]}"
 

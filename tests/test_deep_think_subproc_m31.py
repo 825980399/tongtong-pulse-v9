@@ -235,7 +235,7 @@ class TestCallSiteRealExec(unittest.TestCase):
         _ns = {"self": _iw, "time": time, "LogLevel": _LL,
                "hasattr": hasattr, "Exception": Exception,
                "ctx": _ctx}
-        exec(compile(_seg, "<m31-slice>", "exec"), _ns)
+        exec(compile(_seg, "<m31-slice>", "exec"), _ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
         return _ns.get("_deep_result"), _calls
 
     def test_40_degraded_falls_back_to_main_process(self):

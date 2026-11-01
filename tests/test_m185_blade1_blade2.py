@@ -114,7 +114,7 @@ def test_blade2_tools_roundtrip(tmp_path):
     d = json.loads(open(snap, encoding="utf-8").read())
     d["l3_anchors_hash"] = "sha256:deadbeef"
     open(snap, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False))
-    disk, cur, mismatch = compare_personality_snapshot_at_startup(k, path=snap)
+    disk, _cur, mismatch = compare_personality_snapshot_at_startup(k, path=snap)
     assert mismatch is True and disk == "sha256:deadbeef"
 
 

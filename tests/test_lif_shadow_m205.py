@@ -70,7 +70,7 @@ def test_flush_writes_jsonl_with_fields(tmp_path):
     sh.observe(160.0, "自我认知", "self_awareness.tick.60")  # 触发第 2 次自动落盘
     sh.observe(220.0, "自我认知", "self_awareness.tick.150")
     sh.flush()  # 落第 3 条
-    fname = os.path.join(out, "lif_shadow_%s.jsonl" % datetime.now().strftime("%Y%m%d"))
+    fname = os.path.join(out, "lif_shadow_%s.jsonl" % datetime.now().strftime("%Y%m%d"))  # noqa: DTZ005 —— 文件名取本地日期，与 LIFShadow 内部 datetime.now() 同口径；改 UTC 会在 00:00-08:00 错一天
     assert os.path.exists(fname)
     with open(fname, encoding="utf-8") as f:
         lines = [ln for ln in f.read().splitlines() if ln.strip()]

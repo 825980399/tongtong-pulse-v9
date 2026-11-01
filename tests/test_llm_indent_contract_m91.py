@@ -69,13 +69,13 @@ if ROOT not in sys.path:
 import config  # noqa: E402
 
 _SE_MOD = importlib.import_module("nucleus.reasoning.SafeEvolutionExecutor")
-_SE_CLS = getattr(_SE_MOD, "SafeEvolutionExecutor")
-_GATE2_CHECK = getattr(_SE_MOD, "_m91_gate2_check")
-_GATE2_PARSE = getattr(_SE_MOD, "_m91_gate2_parse")
+_SE_CLS = _SE_MOD.SafeEvolutionExecutor
+_GATE2_CHECK = _SE_MOD._m91_gate2_check
+_GATE2_PARSE = _SE_MOD._m91_gate2_parse
 _SWITCH = "ENABLE_M91_LLM_INDENT_REPAIR"
 
 _PM_MOD = importlib.import_module("nucleus.reasoning.PatchManager")
-_PM_CLS = getattr(_PM_MOD, "PatchManager")
+_PM_CLS = _PM_MOD.PatchManager
 
 _SEE_REL = os.path.join("nucleus", "reasoning", "SafeEvolutionExecutor.py")
 _BAK_SE = os.path.join(ROOT, ".bak_batch91", "nucleus", "reasoning",
@@ -138,7 +138,7 @@ def _load_legacy_se():
     _sp = importlib.util.spec_from_loader(_ld.name, _ld)
     _mod = importlib.util.module_from_spec(_sp)
     _ld.exec_module(_mod)
-    return getattr(_mod, "SafeEvolutionExecutor")
+    return _mod.SafeEvolutionExecutor
 
 
 class _CfgSwitch:
@@ -498,7 +498,7 @@ class TestIndentContractM91(unittest.TestCase):
     # --------------------------------------------------------------- F 开关契约
     def test_F1_switch_default_on_and_getattr_fallback(self):
         """默认值 True：`config` 未定义时也要为 True（`getattr` 兜底）。"""
-        _fn = getattr(_SE_MOD, "_m91_indent_repair_on")
+        _fn = _SE_MOD._m91_indent_repair_on
         with _CfgSwitch(_SWITCH, False):
             self.assertFalse(_fn())
         with _CfgSwitch(_SWITCH, True):

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import io
+import re
 
 from nucleus.mnemosyne.PulseSnapshot import PulseSnapshot
 
@@ -16,12 +17,33 @@ def _src(fp):
     return io.open(fp, encoding="utf-8", errors="replace").read()
 
 
+def _full_load_arg(_main):
+    """取 `snapshot.load(full_load=<expr>)` 里的实参表达式（★421/R3）。
+
+    为什么不再钉字面量：本文件原来两处都写死
+    `full_load=False if _m372_lazy_on else True`。421/R1 把那行做了 SIM211
+    等价化简（`False if x else True` ⇒ `not x`，穷举 9 个取值验证过等价），
+    字面量一变这两条用例就红了 —— 钉的是措辞而不是语义（铁律 3）。
+    改为解析实参：只要求它由 `_m372_lazy_on` 派生，且不重新读一次配置。
+    """
+    # ★只认 `self.snapshot.load(...)` 这一处调用：全文第一个 `full_load=`
+    #   出现在上方注释里（`# 以 load(full_load=False) 直接驱动验证`），
+    #   按裸 `full_load=` 匹配会取到注释里的 `False` —— 会得到一个永远失败的判据。
+    _m = re.search(r"self\.snapshot\.load\(\s*full_load=([^)\n]+)", _main)
+    assert _m, "main.py 里找不到 self.snapshot.load(full_load=...) 的实参"
+    return _m.group(1).strip()
+
+
 # ============================================================ 刀4 可达性
 def test_01_load_chain_reachable_and_lazy_branch_before_parquet():
     """342刀1 的透传与"懒加载先于 parquet"顺序必须仍在（这是可达性的两个支点）。"""
     _main = _src("main.py")
     # ① 透传在位（不再是"无参调用恒 True"）
-    assert 'full_load=False if _m372_lazy_on else True' in _main
+    _fl = _full_load_arg(_main)
+    assert "_m372_lazy_on" in _fl, (
+        "full_load 必须由 _m372_lazy_on 派生（实得 %r）" % _fl)
+    assert "config" not in _fl, (
+        "full_load 实参不许再独立读一次开关（实得 %r）" % _fl)
     assert "_m372_lazy_on = bool(getattr(config, \"SNAPSHOT_LAZY_LOAD\", False))" in _main
 
     # ② PulseSnapshot.load 里，懒加载入口必须在 parquet 分支**之前**被调用
@@ -61,12 +83,14 @@ def test_03_lazy_switch_default_false_and_trace_present():
     """默认 False 未翻；启动留痕在位且与分支**共用同一布尔**（防"日志说全量、实际走懒加载"）。"""
     import config
 
-    assert getattr(config, "SNAPSHOT_LAZY_LOAD") is False, "默认必须保持 False（裁决甲）"
+    assert config.SNAPSHOT_LAZY_LOAD is False, "默认必须保持 False（裁决甲）"
     _main = _src("main.py")
     assert "[372刀6] 快照加载口径: SNAPSHOT_LAZY_LOAD=%s ⇒ %s" in _main
     # 取值只算一次：日志与 load 用的是同一个变量
     assert _main.count("_m372_lazy_on = bool(getattr(config, \"SNAPSHOT_LAZY_LOAD\", False))") == 1
-    assert "full_load=False if _m372_lazy_on else True" in _main
+    _fl = _full_load_arg(_main)
+    assert "_m372_lazy_on" in _fl, (
+        "日志与 load 分支必须共用同一布尔（实得 %r）" % _fl)
     # 不许再出现第二处独立读开关（两处各读一次就可能口径不一致）
     assert _main.count('getattr(config, "SNAPSHOT_LAZY_LOAD"') == 1
 

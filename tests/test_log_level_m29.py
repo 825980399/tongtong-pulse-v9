@@ -125,14 +125,14 @@ class TestHealthScoreNoMisjudge(unittest.TestCase):
     def test_11_warning_not_counted_as_error(self):
         """★核心回归：WARNING 行只进 warnings，不进 errors。"""
         with _TmpLog([_LINE_WARNING_WITH_ERROR_WORD] * 2) as p:
-            errors, criticals, tracebacks, total = HealthScore(_PROJECT_ROOT)._scan_log(p, "stability")
+            errors, criticals, _tracebacks, _total = HealthScore(_PROJECT_ROOT)._scan_log(p, "stability")
         self.assertEqual(errors, 0, f"errors={errors}")
         self.assertEqual(criticals, 0)
 
     def test_12_warning_mode_counts_warning(self):
         """noise 模式仍正确统计 warnings。"""
         with _TmpLog([_LINE_WARNING_WITH_ERROR_WORD] * 2) as p:
-            warnings, total, _rep = HealthScore(_PROJECT_ROOT)._scan_log(p, "noise")
+            warnings, _total, _rep = HealthScore(_PROJECT_ROOT)._scan_log(p, "noise")
         self.assertEqual(warnings, 2)
 
     def test_13_real_error_counted(self):

@@ -191,7 +191,7 @@ class TestDialoguePresumption(unittest.TestCase):
 
         ns = {"payload": payload, "self": _FakeSelf(),
               "LogLevel": _LogLevel, "__builtins__": __builtins__}
-        exec(textwrap.dedent(block), ns)      # 执行真实源码切片（回退即失败）
+        exec(textwrap.dedent(block), ns)      # noqa: S102 —— 执行真实源码切片（回退即失败）
         return ns, logged
 
     def test_20_missing_mark_presumes_dialogue(self):
@@ -203,7 +203,7 @@ class TestDialoguePresumption(unittest.TestCase):
 
     def test_21_switch_off_restores_old_behavior(self):
         """关闭 → 回到旧行为：无 correlation_id 视为后台学习。"""
-        ns, logs = self._run_norm({"task_type": "chat"}, presume=False)
+        ns, _logs = self._run_norm({"task_type": "chat"}, presume=False)
         self.assertFalse(ns["payload"]["is_dialogue"])
         ns2, _ = self._run_norm({"task_type": "chat", "correlation_id": "ctx:1"},
                                 presume=False)

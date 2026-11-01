@@ -196,7 +196,7 @@ def test_32_default_paid_names_align_with_360():
     """默认口径必须含 advanced（`PAID_CHANNEL_NAMES`），不能只认 `PAID_CHANNELS`。"""
     _got = CB._lb_paid_default()
     import config
-    _want = frozenset(str(x) for x in (getattr(config, "PAID_CHANNEL_NAMES") or []))
+    _want = frozenset(str(x) for x in (config.PAID_CHANNEL_NAMES or []))
     assert _got == _want, (_got, _want)
     assert "advanced" in _got
 

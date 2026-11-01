@@ -151,7 +151,7 @@ class TestTerminateEmitPoint:
 
     def test_terminate_branch_own_fallback_preserved(self):
         """分层不得误杀终止分支自身的后台兜底学习（行为零变化）。"""
-        iw, out = self._drive_stage1()
+        iw, _out = self._drive_stage1()
         assert len(iw._fallback_calls) == 1, (
             "终止分支自身的后台兜底被改动: %d 次" % len(iw._fallback_calls))
 

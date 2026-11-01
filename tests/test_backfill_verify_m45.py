@@ -126,8 +126,8 @@ class TestBoundary(_Base):
         _d = os.path.join(self._tmp, "bad")
         os.makedirs(_d)
         _fp = _mk(_d, "calls_20260101.jsonl", [
-            '{"trace_id":"x","prompt_version":"","status":"failed",'
-            '"error":"","response":"","prompt":"q"}',
+            ('{"trace_id":"x","prompt_version":"","status":"failed",'
+             '"error":"","response":"","prompt":"q"}'),
             'NOT JSON AT ALL',
             '[1,2,3]',
         ])

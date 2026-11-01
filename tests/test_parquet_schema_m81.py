@@ -305,7 +305,7 @@ class TestParquetSchemaM81(unittest.TestCase):
                     float(getattr(n, "source_time", 0) or 0)) for n in out}
             self.assertEqual(cur, prev, "第%d轮 7 字段值应零偏移" % (_round + 1))
             # 用读回节点作为下一轮输入（真实 round-trip）
-            s.node_pool = SimpleNamespace(get_all_including_evicted=lambda: out)
+            s.node_pool = SimpleNamespace(get_all_including_evicted=lambda: out)  # noqa: B023 —— 有意晚绑定：断言的是「最后一轮」的 out
 
 
 if __name__ == "__main__":

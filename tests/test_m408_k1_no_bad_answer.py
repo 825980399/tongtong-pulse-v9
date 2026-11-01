@@ -244,8 +244,7 @@ class TestE_UseDefaultBranch(unittest.TestCase):
         _out = []
         for _n in _if.body:
             _out.append(_n)
-            for _c in ast.walk(_n):
-                _out.append(_c)
+            _out.extend(ast.walk(_n))
         return _out
 
     def test_40_branch_produces_no_answer(self):

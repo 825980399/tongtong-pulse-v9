@@ -74,7 +74,7 @@ class TestD1ReflectionBlindSignal(unittest.TestCase):
         """领域词来自既有 _failed_domain_records（count>=2 才入表）。"""
         with _Switch(ENABLE_INNER_WORLD_QUALITY_ESCALATION=True):
             o = _StubOrgan(failed={"代码": 3, "量子": 1})
-            domains, flag = self.iw._m182_reflection_blind_domains(o)
+            domains, _flag = self.iw._m182_reflection_blind_domains(o)
         self.assertIn("代码", domains)
         self.assertNotIn("量子", domains)
 
@@ -83,8 +83,8 @@ class TestD1ReflectionBlindSignal(unittest.TestCase):
         with _Switch(ENABLE_INNER_WORLD_QUALITY_ESCALATION=True):
             o = _StubOrgan(
                 failed={},
-                insights=["最近35%的推理置信度较低。主动扫描发现了2个知识盲区——"
-                          "其中最需要关注的是「代码」（薄弱区，仅1个节点）。"],
+                insights=[("最近35%的推理置信度较低。主动扫描发现了2个知识盲区——"
+                           "其中最需要关注的是「代码」（薄弱区，仅1个节点）。")],
             )
             domains, flag = self.iw._m182_reflection_blind_domains(o)
         self.assertIn("代码", domains)

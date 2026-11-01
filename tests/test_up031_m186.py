@@ -117,6 +117,6 @@ def test_conversion_equivalence():
             tc = sp[-1]
             vals.append(_sample(tc))
         orig = fmt % tuple(vals)
-        inner = _fmt_to_fstring_inner(fmt, lambda i: repr(vals[i]))
+        inner = _fmt_to_fstring_inner(fmt, lambda i: repr(vals[i]))  # noqa: B023 —— lambda 在本轮内被同步调用，vals 就是当前轮的值
         new = eval('f"' + inner + '"')
         assert orig == new, f"不等价: {fmt!r} orig={orig!r} new={new!r}"

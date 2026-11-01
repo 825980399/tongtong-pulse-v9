@@ -58,7 +58,6 @@ def setUpModule():
 
 def tearDownModule():
     """还原生产渠道配置，避免污染同进程内的其他测试。"""
-    global _OLD_CHANNELS
     if _OLD_CHANNELS is not None:
         config.REMOTE_API_CHANNELS = _OLD_CHANNELS
 

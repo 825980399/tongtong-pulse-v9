@@ -382,11 +382,11 @@ def _gate_off_406():
     """
     import config as _c
     _old = getattr(_c, "PATCH_M406_NARROW_GATE", True)
-    setattr(_c, "PATCH_M406_NARROW_GATE", False)
+    _c.PATCH_M406_NARROW_GATE = False
     try:
         yield
     finally:
-        setattr(_c, "PATCH_M406_NARROW_GATE", _old)
+        _c.PATCH_M406_NARROW_GATE = _old
 
 
 class TestM85LocalAutoApply(unittest.TestCase):

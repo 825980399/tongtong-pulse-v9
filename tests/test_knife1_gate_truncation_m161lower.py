@@ -117,7 +117,7 @@ class TestKnife1TruncationBlocks:
         assert 'FAIL' in out
 
     def test_06_normal_run_not_flagged_as_truncation(self):
-        rc, out = _run_slice_full(NORMAL)
+        _rc, out = _run_slice_full(NORMAL)
         assert '截断检测' not in out, f'★正常运行被误判为截断：{out[:300]}'
         assert '汇总行完整' in out or 'PASS' in out
 

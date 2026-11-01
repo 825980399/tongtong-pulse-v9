@@ -205,7 +205,7 @@ class TestT3LocalFixRule(unittest.TestCase):
                 "modified_code": original,
                 "_applied_strategy": "",
             }
-            exec(textwrap.dedent(self.branch), ns)
+            exec(textwrap.dedent(self.branch), ns)  # noqa: S102 —— exec 的是本测试从生产源码抽出的切片
             return ns["modified_code"], ns["_applied_strategy"]
         finally:
             _real_cfg.ENABLE_LOCAL_FIX_BARE_RETURN_NONE = _old
@@ -289,11 +289,11 @@ class TestT4GitInit(unittest.TestCase):
         self.assertIn("技术债务清偿", so2, f"root commit 不是预期基始提交: {so2[:120]!r}")
 
     def test_33_data_not_tracked(self):
-        rc, so, _ = _git(["ls-files", "data"])
+        _rc, so, _ = _git(["ls-files", "data"])
         self.assertEqual(so.strip(), "", f"data/ 被提交: {so[:200]}")
 
     def test_34_logs_not_tracked(self):
-        rc, so, _ = _git(["ls-files", "logs"])
+        _rc, so, _ = _git(["ls-files", "logs"])
         self.assertEqual(so.strip(), "", f"logs/ 被提交: {so[:200]}")
 
     def test_35_no_pycache_tracked(self):
@@ -317,7 +317,7 @@ class TestT4GitInit(unittest.TestCase):
         同时不违背星轨的显式决策。
         """
         _ALLOWED_HOSTS = ("gitee.com", "openi.pcl.ac.cn", "github.com")
-        rc, so, _ = _git(["remote", "-v"])
+        _rc, so, _ = _git(["remote", "-v"])
         lines = [x for x in so.splitlines() if x.strip()]
         for line in lines:
             parts = line.split()

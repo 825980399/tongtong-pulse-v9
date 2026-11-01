@@ -93,7 +93,7 @@ def test_04_declared_callers_really_import_it(rel):
 
 def test_05_wrong_third_caller_is_documented_as_absent():
     """旧注释错列的 `self_inspector` 调用点：全仓确实没有引用（把"查证过"固化下来）。"""
-    for _rel, _meta in _BACKENDS.items():
+    for _rel in _BACKENDS:
         _mod = os.path.basename(_rel)[:-3]
         for _d in ("nucleus", "organs", "base", "functions", "somatics", "utils"):
             for _dp, _dns, _fns in os.walk(os.path.join(_ROOT, _d)):

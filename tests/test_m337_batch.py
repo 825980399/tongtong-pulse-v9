@@ -247,7 +247,7 @@ def test_m337_thread_gate_passes_now():
     #   过 00:00 必红（时钟依赖，铁律179 同型）。改为「署名在位 + 台账自洽」，时间无关且更严。
     assert isinstance(b.get("reanchor_by"), str) and b["reanchor_by"]
     _ra = str(b.get("reanchor_at") or "")
-    datetime.datetime.strptime(_ra, "%Y-%m-%d")   # 非法日期/空值直接抛
+    datetime.datetime.strptime(_ra, "%Y-%m-%d")   # noqa: DTZ007 —— 只校验格式，不用返回值
     _h = b.get("reanchor_history") or []
     assert (b.get("reanchor_by"), b.get("reanchor_at")) == (
         _h[-1].get("reanchor_by"), _h[-1].get("reanchor_at"))
