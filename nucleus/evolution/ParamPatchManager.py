@@ -31,6 +31,14 @@ _PATCH_HISTORY_PATH = os.path.join(_PROJECT_ROOT, "data", "param_patch_history.j
 _HARD_CAP = 1                      # 批量追加令硬闸：本轮至多应用 1 条（免疫 max_apply 被放大击穿）
 _DEFAULT_OBSERVE_WINDOW_S = 60     # 效果观察窗（秒）：apply 时记 effect_verify_due_at = now + 此值
 
+# ★421刀2：独立进程验证报「没判定出来」时，单个补丁的重试上限。
+# 为什么必须配这道闸：`patches_to_verify` 的筛选条件是 `not effect_verified`，
+# 本刀把 unknown 的补丁改成 `effect_verified=False` 之后，**同一个补丁会每轮
+# 都被重新提交**（5 分钟一轮 × 30s 超时），把验证通道打满。故按补丁计数限流：
+# 试满 N 次仍判不出就放弃它。
+# `get_stats()["verify_unjudged"]` 是**统计口径**（累计次数），与本上限无关。
+_M421_MAX_UNJUDGED_RETRY = 3
+
 # 参数安全范围（防止参数调整过度）
 # ★A-9死参数清理（2026-09-08，内部协作者拍板）：移除 search_quality_threshold /
 #   search_low_overlap_threshold / innerworld_search_quality_threshold /
@@ -196,6 +204,10 @@ class ParamPatchManager:
         self._auto_apply_thread = None
         self._auto_apply_interval = 300  # 每5分钟检查一次（压力均衡）
         self._last_auto_apply = 0.0
+        # ★421刀2：效果验证的判定率计数。unknown 不再被当成"验证通过"之后，
+        #   "报了多少次"与"判出结果多少次"必须能分开看，否则看不出验证器在空转。
+        self._verify_total = 0
+        self._verify_unjudged = 0
 
     def generate_patch(self, param_name: str, new_value: Any,
                        reason: str, source: str = "auto") -> dict[str, Any] | None:
@@ -595,12 +607,20 @@ class ParamPatchManager:
             rolled_back = sum(1 for p in self._applied_patches if p.get("status") == "rolled_back")
             effective = sum(1 for p in self._applied_patches
                           if p.get("status") == "applied" and p.get("effect_verified"))
+            _vt421 = int(getattr(self, "_verify_total", 0) or 0)
+            _vu421 = int(getattr(self, "_verify_unjudged", 0) or 0)
             return {
                 "pending": len(self._pending_patches),
                 "total_applied": total,
                 "rolled_back": rolled_back,
                 "effective": effective,
                 "success_rate": round(effective / max(1, total - rolled_back), 2) if total > rolled_back else 0,
+                # ★421刀2：验证器判定率。`verify_unjudged / verify_total` 偏高说明
+                #   独立进程一直在报 unknown（池不可用 / 日志窗口没样本），此时
+                #   `effective` 不涨的原因是**验证没跑**，不是"补丁没用"。
+                "verify_total": _vt421,
+                "verify_unjudged": _vu421,
+                "verify_judged_rate": (round(1 - _vu421 / _vt421, 3) if _vt421 else 0.0),
             }
 
     def auto_apply_pending(self, max_apply: int = 3, auto_verify: bool = True) -> dict[str, Any]:
@@ -741,7 +761,12 @@ class ParamPatchManager:
                 m = _re.match(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', line)
                 if m:
                     from datetime import datetime
-                    return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                    # ★421：日志时间戳是**本地墙钟**，naive 值调 `.timestamp()`
+                    #   按本地时区解释 —— 与它比较的 `patch["applied_at"]` 来自
+                    #   `time.time()`（epoch），同口径。加 tzinfo 会让整个
+                    #   前后时间窗平移，属设计内，故不按规则建议补 tz。
+                    return datetime.strptime(  # noqa: DTZ007
+                        m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
                 return None
 
             for patch in patches_to_verify:
@@ -867,6 +892,9 @@ class ParamPatchManager:
                 for patch in self._applied_patches:
                     if (patch.get("status") == "applied"
                             and not patch.get("effect_verified")
+                            # ★421刀2：判不出结果的补丁不无限重试（见常量注释）
+                            and int(patch.get("effect_unjudged", 0) or 0)
+                            < _M421_MAX_UNJUDGED_RETRY
                             and patch.get("applied_at")
                             and (now - patch["applied_at"]) > 60):
                         patches_to_verify.append(patch)
@@ -908,7 +936,22 @@ class ParamPatchManager:
                         # 更新补丁状态
                         effect = verify_result.get("effect", "unknown")
                         recommendation = verify_result.get("recommendation", "observe")
-                        patch["effect_verified"] = True
+                        # ★421刀2：`unknown`/None/空串 = **独立进程没判出来**
+                        #   （ParamPatchEffectVerifier 的初始值就是 "unknown"，异常早退
+                        #   时也停在初始值）。原实现无条件写 True，等于"没验证也算验证过"，
+                        #   把 `get_stats()["effective"]`（已应用且已验证）整体抬高。
+                        #   ★为什么不把 `uncertain` 一起算未判定：`uncertain` 是日志对比
+                        #   **算完了**之后的明确分类（error_delta==0 且 warning_delta>0），
+                        #   与"根本没算出结果"不是一回事。
+                        _unjudged421 = effect in (None, "unknown", "")
+                        patch["effect_verified"] = not _unjudged421
+                        self._verify_total = int(getattr(self, "_verify_total", 0)) + 1
+                        if _unjudged421:
+                            self._verify_unjudged = int(
+                                getattr(self, "_verify_unjudged", 0)) + 1
+                            # 逐补丁重试计数：防止同一补丁每轮重验（见常量注释）
+                            patch["effect_unjudged"] = int(
+                                patch.get("effect_unjudged", 0) or 0) + 1
                         patch["effect_result"] = effect
                         patch["effect_verified_at"] = time.time()
                         patch["before_metrics"] = verify_result.get("before_metrics", {})

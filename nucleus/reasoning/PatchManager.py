@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from nucleus.logger import (
     get_module_logger,
@@ -339,6 +339,38 @@ def _m89_len_floor() -> float:
 #    实证见 `docs/路灯与星轨对话/交付报告/证据件/376/刀4_try平衡闸_20261028.md`。
 _M376_TRY_KEYWORDS = ("try", "except", "finally")
 
+# ★421刀4：markdown 围栏剥离。
+#   为什么放在 `dedent` **之后**：围栏行通常顶格写（```python），而 dedent 以整段
+#   的**公共缩进**为基准 —— 先剥会把「围栏 + 代码」的相对缩进一起算进去，剥完反而错位。
+#   为什么必须剥：围栏字符会同时污染三道闸 —— 关2 的 `ast.parse` 直接报
+#   SyntaxError（真凶：合法补丁被当成语法错），关3 的相似度被 ```/语言名稀释，
+#   关3b 的长度被虚增。实测 `data/audit/failed_patches/` 里 47 条 2a 标本中有
+#   16 条正文带 ```python。
+#   零裁决变化：只削**首尾**围栏行，中间内容一字不动；围栏本身不含 try/except，
+#   剥它不会让「本该被拒」的补丁变成"平衡"。
+_M421_FENCE_PREFIX = "```"
+
+
+def _m421_strip_md_fence(text: str) -> str:
+    """剥掉首尾 markdown 代码围栏，返回 strip 后的正文（★421刀4）。
+
+    只削**首尾**围栏行::
+
+        "```python\n    def f():\n        pass\n```"  →  "def f():\n    pass"
+
+    中间出现的 ``` 一律不动 —— 那是正文里真的三反引号，剥了会改语义。
+    无围栏时等价于 ``text.strip()``（对既有输入是恒等变换）。
+    """
+    _t = (text or "").strip()
+    if not _t.startswith(_M421_FENCE_PREFIX):
+        return _t
+    _lines = _t.split("\n")
+    if _lines and _lines[0].strip().startswith(_M421_FENCE_PREFIX):
+        _lines = _lines[1:]
+    if _lines and _lines[-1].strip().startswith(_M421_FENCE_PREFIX):
+        _lines = _lines[:-1]
+    return "\n".join(_lines).strip()
+
 
 def _m376_try_balance(code: str) -> dict:
     """语句级统计 `try` / `except` / `finally`（纯函数，不读写任何全局状态）。
@@ -487,7 +519,7 @@ def _m377_dump_failed_patch(patch: Any, reason: str, *,
         _safe = "".join(_c if (_c.isalnum() or _c in "-_") else "_"
                         for _c in _pid)[:48]
         _ts = time.time()
-        _name = "%s_%s_%s.json" % (
+        _name = "{}_{}_{}.json".format(
             time.strftime("%Y%m%d_%H%M%S", time.localtime(_ts)), _safe, stage)
         _path = os.path.join(_dir, _name)
         _orig = str(patch.get("original_code") or "")
@@ -843,9 +875,9 @@ class PatchManager:
             return _out
         try:
             from nucleus.evolution.patch_generator import make_dedup_key as _mk
-        except Exception as _e:                                # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PatchManager::_m352_ensure_dedup_key import")
-            _out["why"] = "key_module_unavailable:%s" % type(_e).__name__
+            _out["why"] = f"key_module_unavailable:{type(_e).__name__}"
             return _out
         _expect = _mk(_f, _m, _i)
         _out["expect"] = _expect
@@ -863,7 +895,7 @@ class PatchManager:
         else:
             _out["ok"] = True
             _out["action"] = "recomputed"
-            _out["why"] = "inconsistent:%s!=%s" % (_cur[:16], _expect[:16])
+            _out["why"] = f"inconsistent:{_cur[:16]}!={_expect[:16]}"
             patch["dedup_key_raw"] = _cur
         patch["dedup_key"] = _expect
         return _out
@@ -911,7 +943,7 @@ class PatchManager:
             from nucleus.evolution.patch_generator import make_dedup_key as _mk
         except Exception as _e:
             silent_exc(_e, where="PatchManager::_m384_ensure_dedup_key_v2 import")
-            _out["why"] = "key_module_unavailable:%s" % type(_e).__name__
+            _out["why"] = f"key_module_unavailable:{type(_e).__name__}"
             return _out
         _v2 = _mk(_f, _real, _i)
         _out["v2"] = _v2
@@ -976,11 +1008,9 @@ class PatchManager:
         """★T7(P0-3)：免签改写闸门——命中核心文件或总开关关闭 → 拦截(True)。
         与 status==verified 组合：verified 补丁一律禁止升 approved。
         """
-        if PatchManager._m80_is_core_file(patch.get("file", "")):
-            return True
-        if not PatchManager._m80_auto_apply_enabled(evo_cfg):
-            return True
-        return False
+        # ★421：短路顺序与原 if 链一致（先判核心文件，再判总开关）
+        return (PatchManager._m80_is_core_file(patch.get("file", ""))
+                or not PatchManager._m80_auto_apply_enabled(evo_cfg))
 
     # ★第96批 T-96c（N2-② 烛微第1期）：**禁止自动补丁**的目标符号清单。
     #   历史补丁曾对 `_safe_eval_arithmetic` 这类**安全护栏**函数自动生成补丁，
@@ -1161,9 +1191,7 @@ class PatchManager:
         _file = patch.get("file")
         if not isinstance(_file, str) or not _file.strip():
             return False
-        if not (patch.get("original_code") or patch.get("modified_code")):
-            return False
-        return True
+        return bool(patch.get("original_code") or patch.get("modified_code"))
 
     @staticmethod
     def _boundary_check(patch: dict, source: str, signer) -> bool:
@@ -1414,9 +1442,7 @@ class PatchManager:
                 return False          # ★无路径信息 → 不放行（保守）
             if PatchManager._m80_is_core_file(_fp):
                 return False
-            if PatchManager._m94_is_god_file(_fp):
-                return False
-            return True
+            return not PatchManager._m94_is_god_file(_fp)
         except Exception as e:
             silent_exc(e, where="nucleus.reasoning.PatchManager::_m94_aging_eligible L750")
             return False
@@ -1454,14 +1480,14 @@ class PatchManager:
         _n = len([p for p in pending if isinstance(p, dict)])
         _maxc = PatchManager._m94_aging_max_count()
         if _n >= _maxc:
-            return True, "count=%d>=%d" % (_n, _maxc)
+            return True, f"count={_n}>={_maxc}"
         _ages = [a for a in (PatchManager._m94_patch_age_hours(p, now)
                              for p in pending) if isinstance(a, float)]
         _maxh = PatchManager._m94_aging_max_hours()
         if _ages and max(_ages) >= _maxh:
-            return True, "max_age={:.1f}h>={:.1f}h".format(max(_ages), _maxh)
-        return False, "below_threshold(n=%d,max_age=%s)" % (
-            _n, ("{:.1f}h".format(max(_ages))) if _ages else "unknown")
+            return True, f"max_age={max(_ages):.1f}h>={_maxh:.1f}h"
+        _max_age_s = f"{max(_ages):.1f}h" if _ages else "unknown"
+        return False, f"below_threshold(n={_n},max_age={_max_age_s})"
 
     def pending_aging_preview(self, now: float | None = None) -> dict[str, Any]:
         """★T-94a：只读预览——当前 pending 队列在老化策略下会放行哪些补丁。
@@ -1479,7 +1505,8 @@ class PatchManager:
         try:
             _pending = self._load_patch_list(self._pending_file)
         except Exception as _e:
-            _out["reason"] = "load_failed:{}".format(type(_e).__name__)
+            silent_exc(_e, where="nucleus.reasoning.PatchManager::pending_aging_preview")
+            _out["reason"] = f"load_failed:{type(_e).__name__}"
             return _out
         if not isinstance(_pending, list):
             return _out
@@ -1634,7 +1661,7 @@ class PatchManager:
         _items = basis.get("items") if isinstance(basis.get("items"), dict) else basis
         _miss = [k for k in PatchManager._M339_REVIEW_ITEMS if _items.get(k) is None]
         if _miss:
-            return False, "审核四项缺 %s" % ",".join(_miss), _miss
+            return False, "审核四项缺 {}".format(",".join(_miss)), _miss
         # 上帝文件只加严不放松：显式 True ⇒ 不许走自动派单
         if _items.get("god_file") is True:
             return False, "目标为上帝文件（PulseInnerWorld.py）⇒ 只加严不放松", ["god_file"]
@@ -1693,7 +1720,7 @@ class PatchManager:
             _p["acked_origin_status"] = str(_p.get("status") or PatchManager._M339_O3_AGING_REVERT)
             _p["status"] = PatchManager._M339_O3_AGING_TARGET
             _p["expired_at"] = _now
-            _p["expired_reason"] = "o3_unjudged_age=%.1fh>=%.0fh" % (_age, _maxh)
+            _p["expired_reason"] = f"o3_unjudged_age={_age:.1f}h>={_maxh:.0f}h"
             _p["expired_revertible"] = True
             _ids.append(str(_p.get("id") or "")[:32])
         _out["expired"] = len(_ids)
@@ -1730,7 +1757,8 @@ class PatchManager:
         """
         _pending = self._load_patch_list(self._pending_file)
         if not (0 <= index < len(_pending)):
-            return {"ok": False, "reason": "索引越界，共%d个待审批补丁" % len(_pending)}
+            return {"ok": False,
+                    "reason": f"索引越界，共{len(_pending)}个待审批补丁"}
         _p = _pending[index]
         if not self._m339_is_o3(_p):
             _module_logger.warning(
@@ -1919,7 +1947,9 @@ class PatchManager:
     #:   也无法回答「这个族到底登记过没有」。移到类属性后 `_m372_family_registered`
     #:   与族覆盖对照件共用同一份数据，不会两处各抄一份再漂移。
     #:   ★取值一字未动（280刀2 立的 11 族：7 高 / 3 中 / 1 低）。
-    _M280_RISK_BY_FAMILY = {
+    # ★421：`ClassVar` 把"这是**类级只读常量**、全实例共享"写进类型。
+    #   原写法只有裸赋值，ruff 判不出意图故报 RUF012。
+    _M280_RISK_BY_FAMILY: ClassVar[dict] = {
         "sql_injection": "高",
         "lock_with_emit": "高",
         "non_atomic_write": "高",
@@ -1934,7 +1964,9 @@ class PatchManager:
     }
 
     #: ★372刀1：族 → 信任分。同上，表即唯一真源（280刀4 立的 7 族，取值一字未动）。
-    _M280_TRUST_BY_FAMILY = {
+    # ★421：`ClassVar` 把"这是**类级只读常量**、全实例共享"写进类型。
+    #   原写法只有裸赋值，ruff 判不出意图故报 RUF012。
+    _M280_TRUST_BY_FAMILY: ClassVar[dict] = {
         "sql_injection": 20.0,
         "lock_with_emit": 25.0,
         "non_atomic_write": 30.0,
@@ -2033,8 +2065,8 @@ class PatchManager:
             _lv = _by_rank.get(PatchManager._m346_risk_rank(_risk))
             if _lv:
                 out[_lv].append(str(_fam))
-        for _k in out:
-            out[_k].sort()
+        for _vals in out.values():
+            _vals.sort()
         out["UNREGISTERED"] = "REVIEW"
         out["DEFAULT_FAMILY_RISK"] = PatchManager._M372_DEFAULT_FAMILY_RISK
         out["SOURCE"] = "_M280_RISK_BY_FAMILY"
@@ -2042,9 +2074,13 @@ class PatchManager:
 
     #: 风险档位权重（★344刀3）。中英双写是因为历史数据里两种都有
     #: （`select_for_auto_triage` 至今仍写 `in ("低", "low")`）。
-    _M344_RISK_RANK = {"低": 1, "low": 1, "中": 2, "medium": 2, "中危": 2,
+    # ★421：`ClassVar` 把"这是**类级只读常量**、全实例共享"写进类型。
+    #   原写法只有裸赋值，ruff 判不出意图故报 RUF012。
+    _M344_RISK_RANK: ClassVar[dict] = {"低": 1, "low": 1, "中": 2, "medium": 2, "中危": 2,
                        "高": 3, "high": 3}
-    _M344_RANK_NAME = {1: "低", 2: "中", 3: "高"}
+    # ★421：`ClassVar` 把"这是**类级只读常量**、全实例共享"写进类型。
+    #   原写法只有裸赋值，ruff 判不出意图故报 RUF012。
+    _M344_RANK_NAME: ClassVar[dict] = {1: "低", 2: "中", 3: "高"}
 
     @staticmethod
     def _m346_risk_rank(risk_level) -> int | None:
@@ -2196,7 +2232,7 @@ class PatchManager:
             # 派单侧证据门会按“证据缺”拒入（宁可转人工也不猜）。
             return {"evidence_version": "338.d4.v1",
                     "risk": None, "trust": None, "blast": None,
-                    "derive_error": "%s: %s" % (type(_e).__name__, _e)}
+                    "derive_error": f"{type(_e).__name__}: {_e}"}
 
     # ★343批刀1（E-12 · P0）：O3 判死候选豁免 284 刀5 的 def 校验。
     #   病根（星轨 12:51 现场 + 12:45 断点定位）：`approve_o3_patch` 人工 approve
@@ -2298,7 +2334,7 @@ class PatchManager:
                         issue_type=str(_it.get("issue_type") or ""),
                         o3_dead_code=bool(_it.get("o3_dead_code") is True),
                         generated_at=_it.get("generated_at") or 0)
-                except Exception as _cw_e:                       # noqa: BLE001
+                except Exception as _cw_e:
                     silent_exc(_cw_e, where="PatchManager::_m280 344作废台账",
                                level="warning")
                 _voided += 1
@@ -2406,11 +2442,13 @@ class PatchManager:
                 "process_scoped": True, "source": "unavailable"}
         try:
             import json as _json
-            from nucleus.evolution.patch_execution_dispatch import (
-                _history_path as _hp, is_sandbox_incompatible, scan_dangerous_keywords)
+
+            from nucleus.evolution.patch_execution_dispatch import _history_path as _hp
+            from nucleus.evolution.patch_execution_dispatch import is_sandbox_incompatible, scan_dangerous_keywords
             _p = history_path or _hp()
             _out["source"] = _p
-            _hist = _json.load(open(_p, encoding="utf-8"))
+            with open(_p, encoding="utf-8") as _hf:
+                _hist = _json.load(_hf)
             if isinstance(_hist, dict):
                 _hist = _hist.get("patches") or []
             _cls: dict = {}
@@ -2557,7 +2595,7 @@ class PatchManager:
                     json.dump(_raw, _f, ensure_ascii=False, indent=2)
         except Exception as _e:
             silent_exc(_e, where="nucleus.reasoning.PatchManager::sweep_runtime_failed 323", level="warning")
-            _res["skipped_reason"] = "%s: %s" % (type(_e).__name__, _e)
+            _res["skipped_reason"] = f"{type(_e).__name__}: {_e}"
         return _res
 
     def save_pending_patch(self, patch: dict[str, Any]):
@@ -2985,9 +3023,7 @@ class PatchManager:
         for _existing in pending:
             # 相似度兜底：仅当键失配时才启用，避免误伤「同方法不同来源」的择优空间
             _sim_dup = False
-            if not (
-                self._patch_dedup_key(_existing) == _new_key
-            ):
+            if self._patch_dedup_key(_existing) != _new_key:
                 _exist_code = _existing.get("modified_code", "") or ""
                 if (
                     _new_code and _exist_code
@@ -3474,7 +3510,7 @@ class PatchManager:
                 f"issue_type={patch.get('issue_type', '')!r}, "
                 f"method={patch.get('method', '')!r}, "
                 f"file={patch.get('file', '')!r}, "
-                f"keys={sorted(str(_k) for _k in patch.keys())}）")
+                f"keys={sorted(str(_k) for _k in patch)}）")
             return result
 
         # ★策略自进化扩展(长期深化): 验证深度按历史策略效果 + 风险分级动态标记。
@@ -3940,8 +3976,10 @@ class PatchManager:
         #   真实补丁，导致自主修复验证链在完整性第一关被卡死。
         #   修复: 语法解析与相似度对比前统一 textwrap.dedent（缩进仅结构上下文，不影响判定）。
         import textwrap as _tw
-        _orig_norm = _tw.dedent(_original or "").strip()
-        _mod_norm = _tw.dedent(_modified or "").strip()
+        # ★421刀4：dedent 之后**先剥 markdown 围栏**，再进三道闸
+        #   （理由与实测见 `_m421_strip_md_fence` 上方注释）。
+        _orig_norm = _m421_strip_md_fence(_tw.dedent(_original or ""))
+        _mod_norm = _m421_strip_md_fence(_tw.dedent(_modified or ""))
 
         # 关0：字段契约（★第90批 T-90a 新增）
         #   把「字段缺失」与「内容残缺」分开报因 —— 文案把「字段没传」伪装成
@@ -4026,7 +4064,6 @@ class PatchManager:
         except Exception as e:
             silent_exc(e, "nucleus/reasoning/PatchManager.py:1944", level="warning")
             # 相似度计算失败不阻断验证（保守放行，交给后续语法/导入关）
-            pass
 
         # 关3b：长度下限（★第89批 T-89a 新增，与关3 并列的**独立**判据）
         #   为什么必须补：补丁是**整段替换**（PatchManager._verify_in_copy 的
@@ -4144,8 +4181,9 @@ class PatchManager:
                 # 安全说明: 此处 exec 对象为框架自身补丁代码(original/modified)，非外部输入；
                 #   纯函数判定已拦截一切外部名称依赖(os/sys/...)，命名空间仅含 builtins，
                 #   全异常捕获兜底 —— 属受控隔离执行。
-                exec(compile(_orig_def, "<orig>", "exec"), _ns_o)  # 受控隔离执行框架自身代码
-                exec(compile(_mod_def, "<mod>", "exec"), _ns_m)  # 受控隔离执行框架自身代码
+                # 受控隔离执行框架自身代码（命名空间仅含 builtins，见上方安全说明）
+                exec(compile(_orig_def, "<orig>", "exec"), _ns_o)  # noqa: S102
+                exec(compile(_mod_def, "<mod>", "exec"), _ns_m)  # noqa: S102
             except Exception as _e:
                 return {"checked": False, "equivalent": True,
                         "reason": f"构造探针失败(签名引用外部类型?): {_e}"}
@@ -4599,6 +4637,7 @@ class PatchManager:
                     capture_output=True, text=True, timeout=_timeout,
                     encoding="utf-8", errors="replace",
                     cwd=self._project_root, env=_env,
+                    check=False,   # ★421：显式声明（默认即 False，零行为变化）
                 )
                 if _proc.returncode == 0:
                     _passed += 1
@@ -4668,7 +4707,7 @@ class PatchManager:
                     _min_trust = _EV.trust_threshold_for(patch)
                 except Exception as e:
                     silent_exc(e, "nucleus/reasoning/PatchManager.py:2584", level="warning")
-                    pass  # 判定失败则维持原门槛，绝不放宽
+                    # 判定失败则维持原门槛，绝不放宽
             if _trust < _min_trust:
                 return {"safe": False, "reason": f"信任分数不足({_trust}<{_min_trust})"}
             _risk = patch.get("risk_level", "低")
@@ -5249,8 +5288,7 @@ class PatchManager:
                             "（这是**验证未完成**，不是「验证不通过」）",
                             _pid_411, type(e).__name__, str(e)[:200])
                         try:
-                            patch["effect_verify_error"] = "%s: %s" % (
-                                type(e).__name__, str(e)[:180])
+                            patch["effect_verify_error"] = f"{type(e).__name__}: {str(e)[:180]}"
                         except Exception as _e_mark:
                             silent_exc(_e_mark,
                                        where="PatchManager::apply effect_verify_error标记",
@@ -5563,8 +5601,7 @@ class PatchManager:
         """
         _out = {"history": None, "effect": None}
         try:
-            from nucleus.evolution.patch_lifecycle import (
-                mark_effect_verify_rolled_back, mark_history_rolled_back)
+            from nucleus.evolution.patch_lifecycle import mark_effect_verify_rolled_back, mark_history_rolled_back
             _out["history"] = mark_history_rolled_back(
                 patch, reason=reason, source="PatchManager.rollback")
             if _out["history"].get("ok"):

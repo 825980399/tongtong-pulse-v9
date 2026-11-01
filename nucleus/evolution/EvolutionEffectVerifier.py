@@ -344,7 +344,18 @@ class EvolutionEffectVerifier:
             }
 
     #: ★418刀3⑤：测试桩的识别口径（只为**生产落盘**服务，非生产路径原样保留）
-    _M418_STUB_PATCH_IDS = frozenset({"tp1", "tp2", "tp3", "tp4"})
+    #: ★421刀5：补齐 418 当时漏登记的 10 条。识别判据是「在
+    #:   `data/patches/patch_history.json` 里找不到同 id」—— 它们分别来自
+    #:   演示脚本（p0demo4）、临时项目（c5 / int1）、单条探针（t101a_probe / p93 /
+    #:   zw2case1b）、性能桩（pperf）、`issued_type="x"`+`file="a.py"` 的占位
+    #:   （p3d / pno / pab），**从来不是真补丁**。
+    #:   实测（2026-11-02）：这 10 条在 87 条 patch_history 里命中 **0**；
+    #:   剔除后剩 40 条，40 条**全部**能在 patch_history 里找到（0 条悬空）。
+    _M418_STUB_PATCH_IDS = frozenset({
+        "tp1", "tp2", "tp3", "tp4",
+        "p0demo4", "p93", "zw2case1b", "c5", "t101a_probe",
+        "int1", "p3d", "pperf", "pno", "pab",
+    })
     _M418_STUB_ISSUE_PREFIXES = ("a.py::", "<test>::")
 
     @staticmethod
@@ -353,9 +364,7 @@ class EvolutionEffectVerifier:
         _p = str(patch_id or "").strip()
         if _p in EvolutionEffectVerifier._M418_STUB_PATCH_IDS:
             return True
-        if _p.startswith("tp") and _p[2:].isdigit():
-            return True
-        return False
+        return bool(_p.startswith("tp") and _p[2:].isdigit())
 
     @classmethod
     def _m418_is_stub_issue(cls, signature) -> bool:

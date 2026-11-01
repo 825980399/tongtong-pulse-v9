@@ -11,7 +11,6 @@ PulseMetricsCollector —— 多层级指标采集器 · 运行态可观测性�
 定位: 全系统的「仪表盘」，是运行态可观测性的唯一汇聚点。
 """
 
-import io
 import json
 import os
 import sys
@@ -35,11 +34,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from base.BasePulseOrgan import BasePulseOrgan
-from nucleus._silent_except import silent_exc
 from nucleus import absence_notice as _absence_notice
+from nucleus._silent_except import silent_exc
 from nucleus._warn_throttle import should_warn
 from nucleus.const import (
     HeartEvent,
@@ -141,7 +140,7 @@ def _m389_tm_baseline_path(dir_path: str) -> str:
     分键后旧代基线自然闲置；`_m389_tm_prune_baselines` 只留最近
     `_M389_TM_BASELINE_KEEP` 代，避免 `data/reports/memory/` 无限长。
     """
-    return os.path.join(dir_path, "_tm_baseline_%s.snap" % _m389_tm_safe_gen())
+    return os.path.join(dir_path, f"_tm_baseline_{_m389_tm_safe_gen()}.snap")
 
 
 def _m389_tm_prune_baselines(dir_path: str, keep: int | None = None) -> list:
@@ -225,6 +224,194 @@ def _m416_probe_max_runtime_sec() -> float:
         silent_exc(_e, where="PulseMetricsCollector._m416_probe_max_runtime_sec",
                    level="debug")
         return _M416_PROBE_MAX_RUNTIME_SEC
+
+
+# ===== ★421刀6：补丁链四字段（gen / queue / apply / ledger）=====
+#  为什么必须进 health_snapshot：补丁链**停摆 11 天**这件事此前没有任何地方在报
+#  —— 实测 2026-11-02 00:26：patch_history 里最后一条 `generated_at` 是
+#  2026-10-22 17:59，最后一次 `applied_at` 是 2026-10-14。看板上只看到
+#  「补丁 0 条」，与「系统没活干」同形（同 411 刀2 的处置思路：只有快照是
+#  每 5s 被读的那一路）。
+#  为什么必须带缓存：`patch_history.json` 是 **848 KB**（87 条完整补丁，含
+#  original_code / modified_code 全文），而 `_build_observability_snapshot`
+#  走 5s 心跳路径 —— 直接解析等于每 5s 啃 848 KB，会把心跳线程拖垮。
+#  故走 60s TTL：5s 路径只读缓存，过期才真碰盘。
+#  四字段口径（★「0」与「读不到」必须分开，读不到的写 None 并记 errors）：
+#    gen    = patch_history 里 generated_at 落在**本地今天**的条数
+#    queue  = pending_patches.json 的条数（当前队列深度，天然是"此刻"）
+#    apply  = patch_history 里 applied_at 落在本地今天的条数
+#    ledger = verify_feedback_ledger.json 的 applied 里今天的条数
+_M421_PATCH_CHAIN_TTL = 60.0
+_M421_PC_FIELDS = ("gen", "queue", "apply", "ledger")
+_m421_pc_cache: dict = {"at": 0.0, "data": None}
+_m421_pc_lock = threading.Lock()
+
+
+def _m421_today_bounds() -> tuple:
+    """本地「今天」的 [起, 止) epoch。
+
+    ★必须用**本地时区**：数据里的 `generated_at` / `applied_at` 都是
+    `time.time()` 落的 epoch，按本地日切才和人对得上（同 414 的时区口径）。
+    """
+    _lt = time.localtime()
+    _start = time.mktime((_lt.tm_year, _lt.tm_mon, _lt.tm_mday,
+                          0, 0, 0, 0, 0, -1))
+    return _start, _start + 86400.0
+
+
+def _m421_count_today(rows: list, field: str, lo: float, hi: float) -> int:
+    """数 rows 里 `field` 落在 [lo, hi) 的条数（类型不对的一律跳过，不猜）。"""
+    _n = 0
+    for _r in rows:
+        if not isinstance(_r, dict):
+            continue
+        _v = _r.get(field)
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            continue
+        if lo <= float(_v) < hi:
+            _n += 1
+    return _n
+
+
+def _m421_max_ts(rows: list, field: str):
+    """rows 里 `field` 的最大值（没有则 None）。用于判"最后一条是哪天"。"""
+    _m = None
+    for _r in rows:
+        if not isinstance(_r, dict):
+            continue
+        _v = _r.get(field)
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            continue
+        if _m is None or float(_v) > _m:
+            _m = float(_v)
+    return _m
+
+
+def _m421_patch_chain_read(root: str | None = None) -> dict:
+    """读三个源组装 patch_chain 块（★421刀6）。读不到的源记 errors，**不写 0**。"""
+    from nucleus.data.DataAccessLayer import safe_read_json
+
+    _root = root or os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    _errs: dict = {}
+    _lo, _hi = _m421_today_bounds()
+    _out: dict = {f: None for f in _M421_PC_FIELDS}
+    _out["last_gen_at"] = None
+    _out["last_apply_at"] = None
+
+    # --- 源1/2：patch_history（生成 / 应用）---
+    _hp = os.path.join(_root, "data", "patches", "patch_history.json")
+    try:
+        if os.path.exists(_hp):
+            _rows = safe_read_json(_hp, default=None)
+            if isinstance(_rows, list):
+                _out["gen"] = _m421_count_today(_rows, "generated_at", _lo, _hi)
+                _out["apply"] = _m421_count_today(_rows, "applied_at", _lo, _hi)
+                _out["last_gen_at"] = _m421_max_ts(_rows, "generated_at")
+                _out["last_apply_at"] = _m421_max_ts(_rows, "applied_at")
+            else:
+                _errs["patch_history"] = "读不出列表"
+        else:
+            _errs["patch_history"] = "文件不存在"
+    except Exception as _e1:
+        silent_exc(_e1, where="PulseMetricsCollector::_m421_patch_chain_read[history]")
+        _errs["patch_history"] = type(_e1).__name__
+
+    # --- 源3：pending_patches（队列深度）---
+    _pp = os.path.join(_root, "data", "patches", "pending_patches.json")
+    try:
+        if os.path.exists(_pp):
+            _pend = safe_read_json(_pp, default=None)
+            if isinstance(_pend, list):
+                _out["queue"] = len(_pend)
+            else:
+                _errs["pending_patches"] = "读不出列表"
+        else:
+            _errs["pending_patches"] = "文件不存在"
+    except Exception as _e2:
+        silent_exc(_e2, where="PulseMetricsCollector::_m421_patch_chain_read[pending]")
+        _errs["pending_patches"] = type(_e2).__name__
+
+    # --- 源4：verify_feedback_ledger（落账）---
+    _lp = os.path.join(_root, "data", "evolution", "verify_feedback_ledger.json")
+    try:
+        if os.path.exists(_lp):
+            _led = safe_read_json(_lp, default=None)
+            _ap = _led.get("applied") if isinstance(_led, dict) else None
+            if isinstance(_ap, dict):
+                # 键是 patch_id；值是 epoch，或 {"at": epoch, ...}
+                _n = 0
+                for _v in _ap.values():
+                    _t = _v.get("at") if isinstance(_v, dict) else _v
+                    if isinstance(_t, bool) or not isinstance(_t, (int, float)):
+                        continue
+                    if _lo <= float(_t) < _hi:
+                        _n += 1
+                _out["ledger"] = _n
+            elif isinstance(_led, dict):
+                # 结构对、只是还没落过账 ⇒ 真的 0 条（不是"读不到"）
+                _out["ledger"] = 0
+            else:
+                _errs["verify_feedback_ledger"] = "读不出对象"
+        else:
+            _errs["verify_feedback_ledger"] = "文件不存在"
+    except Exception as _e3:
+        silent_exc(_e3, where="PulseMetricsCollector::_m421_patch_chain_read[ledger]")
+        _errs["verify_feedback_ledger"] = type(_e3).__name__
+
+    _miss = sum(1 for _f in _M421_PC_FIELDS if _out[_f] is None)
+    _out["state"] = ("ok" if _miss == 0
+                     else "unavailable" if _miss == len(_M421_PC_FIELDS)
+                     else "partial")
+    _out["errors"] = _errs
+    _out["day"] = time.strftime("%Y-%m-%d", time.localtime(_lo))
+    _out["read_at"] = time.time()
+    return _out
+
+
+def _m421_patch_chain_snapshot(root: str | None = None,
+                               ttl: float | None = None) -> dict:
+    """带 TTL 缓存的 patch_chain 读数（★421刀6）。5s 路径只读缓存。
+
+    ★缓存对象**原地改**（`_m421_pc_cache["data"] = ...`）而不是重新赋值，
+      避免在函数里引入 `global`（本仓 `PLW0602` 已清过一轮，不再新增）。
+    """
+    _ttl = _M421_PATCH_CHAIN_TTL if ttl is None else float(ttl)
+
+    def _fresh() -> dict | None:
+        _c = _m421_pc_cache
+        if _c["data"] is not None and (time.time() - float(_c["at"] or 0)) < _ttl:
+            return dict(_c["data"])
+        return None
+
+    _hit = _fresh()
+    if _hit is not None:
+        _hit["cache"] = "hit"
+        return _hit
+    with _m421_pc_lock:
+        _hit = _fresh()
+        if _hit is not None:
+            _hit["cache"] = "hit"
+            return _hit
+        try:
+            _d = _m421_patch_chain_read(root)
+        except Exception as _e:
+            silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_snapshot")
+            _d = {f: None for f in _M421_PC_FIELDS}
+            _d["state"] = "unavailable"
+            _d["errors"] = {"read": type(_e).__name__}
+            _d["read_at"] = time.time()
+        _m421_pc_cache["at"] = time.time()
+        _m421_pc_cache["data"] = _d
+        _out = dict(_d)
+        _out["cache"] = "miss"
+        return _out
+
+
+def _m421_pc_reset_cache() -> None:
+    """清缓存（★421刀6；仅单测用 —— 否则跨用例会读到上一条的数据）。"""
+    _m421_pc_cache["at"] = 0.0
+    _m421_pc_cache["data"] = None
 
 
 # ===== ★417刀1：心跳路径轻量化（异步观测 worker）=====
@@ -322,7 +509,7 @@ def _m377_tm_ensure() -> dict:
         _mode = str(_m377_cfg("M339_TRACEMALLOC_MODE", "resident") or "").lower()
         if _mode not in _M377_TM_MODES:
             # 未知取值 ⇒ 按 resident 处理并留痕（观测面不因拼错而静默退化成空采）
-            silent_exc(ValueError("unknown M339_TRACEMALLOC_MODE=%r" % (_mode,)),
+            silent_exc(ValueError(f"unknown M339_TRACEMALLOC_MODE={_mode!r}"),
                        where="PulseMetricsCollector::_m377_tm_ensure mode")
             _mode = "resident"
         _out["mode"] = _mode
@@ -832,7 +1019,10 @@ class PulseMetricsCollector(BasePulseOrgan):
     #   ——改前是「超 3s 就整份不写」⇒ 大堆下永远没有产物。
     #   预算必须**小于** _M339_PROBE_MAX_SEC，否则仍会走到不写盘分支。
     _M339_GC_SCAN_BUDGET_SEC = 2.0
-    _m339_gc_last: dict = {}
+    # ★421：`ClassVar` 是**有意的** —— 这份 GC 采样缓存是进程级共享的
+    #   （同一个进程内多个采集器实例都应看到同一份"上次扫了什么"），
+    #   不是每个实例各一份。原写法只有 `: dict` 标注，ruff 判不出意图故报 RUF012。
+    _m339_gc_last: ClassVar[dict] = {}
 
     @staticmethod
     def _m339_cfg_get(name: str, default):
@@ -989,8 +1179,8 @@ class PulseMetricsCollector(BasePulseOrgan):
         _tmmode = str(self._m339_cfg_get("M339_TRACEMALLOC_MODE", "window"))
         _now = time.time()
         _lt = time.localtime(_now)
-        _slot = "%04d%02d%02d-%02d" % (_lt.tm_year, _lt.tm_mon, _lt.tm_mday,
-                                       _lt.tm_hour)
+        _slot = (f"{_lt.tm_year:04d}{_lt.tm_mon:02d}{_lt.tm_mday:02d}"
+                 f"-{_lt.tm_hour:02d}")
         _in_slot = int(_lt.tm_hour) in _hours
         _heap_hi = bool(heap_mb is not None and float(heap_mb) > _h1)
         _last = getattr(self, "_m339_probe_last_slot", None)
@@ -1001,9 +1191,9 @@ class PulseMetricsCollector(BasePulseOrgan):
         elif _heap_hi and _last_gc != _slot:
             _mode = "gc_objects"
         if not _mode:
-            _out["reason"] = ("slot_done(hour=%d slot=%s)" % (_lt.tm_hour, _slot)
+            _out["reason"] = (f"slot_done(hour={_lt.tm_hour} slot={_slot})"
                               if _in_slot else
-                              "not_in_slot(hour=%d slots=%s)" % (_lt.tm_hour, _hours))
+                              f"not_in_slot(hour={_lt.tm_hour} slots={_hours})")
             return _out
         # ★416刀2：三道护栏 —— 见文件头 `_m416_probe_guard_on` 上方长注释。
         if _m416_probe_guard_on():
@@ -1029,9 +1219,8 @@ class PulseMetricsCollector(BasePulseOrgan):
                     and float(heap_mb) > _m416_probe_skip_heap_mb():
                 _mode = "gc_objects"
                 self._log(LogLevel.WARNING,
-                          "[416刀2] heap=%.0fMB > %.0fMB ⇒ 本轮跳过 tracemalloc"
-                          " 快照（11-01 实测单次 300~1800s 且随后 MemoryError）"
-                          % (float(heap_mb), _m416_probe_skip_heap_mb()))
+                          f"[416刀2] heap={float(heap_mb):.0f}MB > {_m416_probe_skip_heap_mb():.0f}MB ⇒ 本轮跳过 tracemalloc"
+                          " 快照（11-01 实测单次 300~1800s 且随后 MemoryError）")
         _t0 = time.perf_counter()
         # ★377刀4：产物目录提前解析 —— 两快照差分的基线文件也要落在同一个（可能是
         #   被域过滤改道后的）目录里；改道逻辑本身零改动，只把位置前移。
@@ -1084,7 +1273,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                                 # ★cw2 铁律150：纯赋值兜底 = 静默 handler，必须留痕
                                 self._log(LogLevel.DEBUG,
                                           "[339内存观测] tracemalloc 帧不可读"
-                                          "（记为 ?:0）: %s" % (type(_fde).__name__,))
+                                          f"（记为 ?:0）: {type(_fde).__name__}")
                             _tm_rows.append({"file": _fn, "line": _ln,
                                              "size_kb": round(_st.size / 1024.0, 1),
                                              "count": int(_st.count)})
@@ -1160,9 +1349,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             silent_exc(_se, where="PulseMetricsCollector::_m339_memory_probe body")
             # 铁律150：不静默——探针自身报错必须可见（否则"没产物"与"报错"长得一样）
             self._log(LogLevel.WARNING,
-                      "[339内存观测] 采样异常（mode=%s）: %s: %s"
-                      % (_mode, type(_se).__name__, _se))
-            _out["reason"] = "probe_error:%s" % type(_se).__name__
+                      f"[339内存观测] 采样异常（mode={_mode}）: {type(_se).__name__}: {_se}")
+            _out["reason"] = f"probe_error:{type(_se).__name__}"
             return _out
         _elapsed = time.perf_counter() - _t0
         _out["elapsed_sec"] = round(_elapsed, 3)
@@ -1178,13 +1366,13 @@ class PulseMetricsCollector(BasePulseOrgan):
         _tm_over = bool("tracemalloc" in str(_mode or "")) and _tm_sec > _maxsec
         if _trunc and _write_trunc and _elapsed > _maxsec and not _tm_over:
             self._log(LogLevel.INFO,
-                      "[339内存观测] 扫描被预算截断（%.2fs > 预算 %.2fs，"
-                      "scanned=%d）⇒ **仍写盘**（产物标 gc_truncated=true，"
-                      "只代表已扫描部分，不是全堆分布）mode=%s"
-                      % (_elapsed,
-                         getattr(self, "_m339_gc_last", {}).get("budget_sec", 0.0),
-                         getattr(self, "_m339_gc_last", {}).get("scanned", 0),
-                         _mode))
+                      f"[339内存观测] 扫描被预算截断（{_elapsed:.2f}s > 预算 "
+                      f"{getattr(self, '_m339_gc_last', {}).get('budget_sec', 0.0):.2f}s，"
+                      "scanned="
+                      f"{getattr(self, '_m339_gc_last', {}).get('scanned', 0)}"
+                      "）⇒ **仍写盘**（产物标 gc_truncated=true，"
+                      "只代表已扫描部分，不是全堆分布）"
+                      f"mode={_mode}")
             _out["reason"] = "truncated_but_written"
             # ★不篡改 `_elapsed`：产物里的 elapsed_sec 必须是**真实耗时**，
             #   写成 0 就又是一个"没采到 vs 真 0"同形的假读数（铁律276）。
@@ -1193,9 +1381,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             _allow_timeout = False
         if _elapsed > _maxsec and not _allow_timeout:
             self._log(LogLevel.WARNING,
-                      "[339内存观测] 单次快照 %.2fs > %.2fs ⇒ **不写盘**"
-                      "（自身分配开销会把治理变增负） mode=%s"
-                      % (_elapsed, _maxsec, _mode))
+                      f"[339内存观测] 单次快照 {_elapsed:.2f}s > {_maxsec:.2f}s ⇒ **不写盘**"
+                      f"（自身分配开销会把治理变增负） mode={_mode}")
             _out["reason"] = "timeout"
             return _out
         _v = self._m339_version_stamp()
@@ -1255,17 +1442,15 @@ class PulseMetricsCollector(BasePulseOrgan):
         # ★377刀4：目录解析与 344补 3 域过滤已前移到采样之前（差分基线要落在同一目录）。
         try:
             os.makedirs(_dir, exist_ok=True)
-            _p = os.path.join(_dir, "top_types_%s.json" %
-                              time.strftime("%Y%m%d_%H%M%S", _lt))
+            _p = os.path.join(_dir, "top_types_{}.json".format(time.strftime("%Y%m%d_%H%M%S", _lt)))
             _tmp = _p + ".tmp"
-            with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
                 json.dump(_payload, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, _p)
         except OSError as _we:
             silent_exc(_we, where="PulseMetricsCollector::_m339_memory_probe write")
             self._log(LogLevel.WARNING,
-                      "[339内存观测] 产物写盘失败 %s：%s: %s"
-                      % (_dir, type(_we).__name__, _we))
+                      f"[339内存观测] 产物写盘失败 {_dir}：{type(_we).__name__}: {_we}")
             _out["reason"] = "write_failed"
             return _out
         if "tracemalloc" in _mode:
@@ -1275,10 +1460,11 @@ class PulseMetricsCollector(BasePulseOrgan):
         _out.update({"ran": True, "mode": _mode, "path": _p,
                      "top_n": len(_payload["top20"])})
         self._log(LogLevel.INFO,
-                  "[339内存观测] 快照完成 mode=%s top=%d 耗时=%.2fs heap_mb=%s "
-                  "image_mb=%s proc_gen=%s code_version=%s criteria=%s 产物=%s"
-                  % (_mode, _out["top_n"], _elapsed, _payload["heap_mb"], _img,
-                     _v["proc_gen"], _v["code_version"], _v["criteria_version"], _p))
+                  f"[339内存观测] 快照完成 mode={_mode} top={_out['top_n']} "
+                  f"耗时={_elapsed:.2f}s heap_mb={_payload['heap_mb']} "
+                  f"image_mb={_img} proc_gen={_v['proc_gen']} "
+                  f"code_version={_v['code_version']} "
+                  f"criteria={_v['criteria_version']} 产物={_p}")
         return _out
 
     # ===== ★343批刀4：释放决策树心跳（G0-G4 生产侧触发） =====
@@ -1297,7 +1483,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             if _rss is None or _img is None:
                 return None
             return round(max(0.0, float(_rss) - float(_img)), 1)
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseMetricsCollector::_m344_heap_probe", level="debug")
             return None
 
@@ -1330,7 +1516,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             _dir = os.path.dirname(_p)
             if _dir:
                 os.makedirs(_dir, exist_ok=True)
-            with io.open(_p, "w", encoding="utf-8", newline="\n") as _f:
+            with open(_p, "w", encoding="utf-8", newline="\n") as _f:
                 json.dump(_body, _f, ensure_ascii=False, indent=2)
             return _p
         except Exception as _e:
@@ -1370,9 +1556,9 @@ class PulseMetricsCollector(BasePulseOrgan):
             _tw, _hw = self._M382_THREADS_WARN, self._M382_HANDLES_WARN
         _over = []
         if _out["threads"] > _tw:
-            _over.append("线程 %d > %d" % (_out["threads"], _tw))
+            _over.append(f"线程 {_out['threads']} > {_tw}")
         if _out["handles"] > _hw:
-            _over.append("句柄 %d > %d" % (_out["handles"], _hw))
+            _over.append(f"句柄 {_out['handles']} > {_hw}")
         _out["warned"] = bool(_over)
         _out["why"] = "、".join(_over)
         if _over:
@@ -1381,7 +1567,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             # 每 10 拍最多报一次（这类超限会持续存在，逐拍报等于刷屏）
             if _n % 10 == 1:
                 self._log(LogLevel.WARNING,
-                          "[382刀9] 进程资源超阈值: %s" % _out["why"])
+                          "[382刀9] 进程资源超阈值: {}".format(_out["why"]))
         return _out
 
     def _m350_live_gate_tick(self, heap_mb, w1_verdict, beat: int) -> dict:
@@ -1396,7 +1582,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from nucleus.proc_gen import proc_gen_str as _pgs
             _pg = str(_pgs() or "")
-        except Exception as _pge:                              # noqa: BLE001
+        except Exception as _pge:
             silent_exc(_pge, where="PulseMetricsCollector::_m350_live_gate_tick pg",
                        level="debug")
         _hist = getattr(self, "_m350_heap_hist", None)
@@ -1410,6 +1596,8 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from nucleus.mnemosyne.PulseNodePool import (
                 m350_cold_index_evidence as _cie,
+            )
+            from nucleus.mnemosyne.PulseNodePool import (
                 m350_reload_stats_path as _rsp,
             )
             _ci = _cie()
@@ -1425,21 +1613,21 @@ class PulseMetricsCollector(BasePulseOrgan):
                 if _absence_notice.note_absent(_p):
                     # ★378刀7（T-350开闸回载缺口-1）：首条用 INFO（初始化事实），后续由 note_absent 挡住。
                     self._log(LogLevel.INFO,
-                              "[350开闸] 回载统计尚不存在 path=%s ⇒ 命中率样本=0"
-                              "（首次或刚被清理）" % _p)
+                              f"[350开闸] 回载统计尚不存在 path={_p} ⇒ 命中率样本=0"
+                              "（首次或刚被清理）")
                 _rs = None        # 还没跑过回载 ⇒ 无样本（不是 0）
-            except Exception as _rse:                          # noqa: BLE001
+            except Exception as _rse:
                 silent_exc(_rse, where="PulseMetricsCollector::_m350_live_gate_tick reload",
                            level="debug")
                 _rs = None
-        except Exception as _pe:                               # noqa: BLE001
+        except Exception as _pe:
             silent_exc(_pe, where="PulseMetricsCollector::_m350_live_gate_tick pool",
                        level="debug")
         _g = _lg.live_gate_ok(heap_mb=heap_mb, heap_history=_hist,
                               w1_verdict=w1_verdict, reload_stats=_rs,
                               cold_index_writable=_ci, proc_gen=_pg,
                               paused=_lg.paused_categories())
-        _lg.log_gate(_g, where="[343心跳] beat=%d" % int(beat))
+        _lg.log_gate(_g, where=f"[343心跳] beat={int(beat)}")
         self._m350_live_gate = _g
         return _g
 
@@ -1481,8 +1669,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         except Exception as _impe:
             silent_exc(_impe, where="PulseMetricsCollector::_m343_release_heartbeat import")
             self._log(LogLevel.WARNING,
-                      "[343释放] release_policy 不可用 ⇒ 本轮无档位行: %s: %s"
-                      % (type(_impe).__name__, _impe))
+                      f"[343释放] release_policy 不可用 ⇒ 本轮无档位行: {type(_impe).__name__}: {_impe}")
             return {"status": "unavailable", "why": "import_failed"}
         # W1 取真实值；取不到就 None（G0 会如实拦，**不猜 alive**）
         _w1 = None
@@ -1499,8 +1686,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             heap_mb=heap_mb, w1_verdict=_w1, now_ts=_now, candidates=(),
             beat_count=_bc,
             last_release_beat=getattr(self, "_m343_last_release_beat", None))
-        _rp343.log_decision(_dec, where="[343心跳] beat=%d every=%d w1=%s"
-                            % (_bc, _every, _w1 or "unavailable"))
+        _rp343.log_decision(_dec, where=(f"[343心跳] beat={_bc} every={_every} "
+                                         f"w1={_w1 or 'unavailable'}"))
         # ★344批刀5：343刀4 只挂决策（`candidates_offered` 硬编码 0 = 只决策不释放），
         #   本刀补**执行面**：G2/G3 档位时真实触发 AST 释放（清池 + gc.collect(2)
         #   + 前后实测活体计数），并留痕 `[344释放] ast_cleanup nodes=... heap=...→...`。
@@ -1518,25 +1705,23 @@ class PulseMetricsCollector(BasePulseOrgan):
                     tier=str(_dec.get("tier") or ""),
                     heap_before=heap_mb,
                     heap_probe=self._m344_heap_probe,
-                    where="[343心跳] beat=%d every=%d" % (_bc, _every))
+                    where=f"[343心跳] beat={_bc} every={_every}")
         except Exception as _are:
             silent_exc(_are, where="PulseMetricsCollector::_m343_release_heartbeat 344刀5")
             _offer_src = "unavailable"
             self._log(LogLevel.WARNING,
-                      "[344释放] AST 释放面异常（不静默）: %s: %s"
-                      % (type(_are).__name__, _are))
+                      f"[344释放] AST 释放面异常（不静默）: {type(_are).__name__}: {_are}")
         # ★350刀2①：live 开闸判定器**同拍**判一次（只判不动：LIVE_ENABLED 默认 off）。
         #   挂在这里的理由与 343/344 一致：这是活体唯一每拍拿到 heap 的地方，
         #   另起一条路会得到第二份 heap 读数，判据打架时无法复算。
         _lg350 = None
         try:
             _lg350 = self._m350_live_gate_tick(heap_mb, _w1, _bc)
-        except Exception as _lge:                              # noqa: BLE001
+        except Exception as _lge:
             silent_exc(_lge, where="PulseMetricsCollector::_m343_release_heartbeat 350开闸",
                        level="warning")
             self._log(LogLevel.WARNING,
-                      "[350开闸] 判定器异常（不静默）: %s: %s"
-                      % (type(_lge).__name__, _lge))
+                      f"[350开闸] 判定器异常（不静默）: {type(_lge).__name__}: {_lge}")
         return {"status": "ok", "tier": _dec.get("tier"),
                 "tier_why": _dec.get("tier_why"),
                 "g0_blocked_by": list(_dec.get("g0", {}).get("blocked_by") or []),
@@ -1568,7 +1753,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         except Exception as _e:
             silent_exc(_e, where="PulseMetricsCollector::_m366_inventory_tick export",
                        level="warning")
-            return {"status": "error", "why": "%s: %s" % (type(_e).__name__, _e)}
+            return {"status": "error", "why": f"{type(_e).__name__}: {_e}"}
 
     def _m364_leaderboard_tick(self) -> dict:
         """★364刀B4：器官健康排行的心跳接线点（**低频**，不新增定时器/线程）。
@@ -1686,8 +1871,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         except Exception as _e360u:
             silent_exc(_e360u, where="PulseMetricsCollector::_m360_paid_usage_tick")
             self._log(LogLevel.WARNING,
-                      "[360付费占比] 心跳取数失败（不静默）: %s: %s"
-                      % (type(_e360u).__name__, _e360u))
+                      f"[360付费占比] 心跳取数失败（不静默）: {type(_e360u).__name__}: {_e360u}")
             return {"status": "error", "why": type(_e360u).__name__}
 
     def _collect_memory_pressure(self) -> dict[str, Any]:
@@ -1767,8 +1951,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     silent_exc(_mpe,
                                where="PulseMetricsCollector::_collect_memory_pressure 339刀4")
                     self._log(LogLevel.WARNING,
-                              "[339内存观测] 钩子外层异常（不静默）: %s: %s"
-                              % (type(_mpe).__name__, _mpe))
+                              f"[339内存观测] 钩子外层异常（不静默）: {type(_mpe).__name__}: {_mpe}")
                     _out["self_probe"] = None
                 # ★382刀9（T-382-线程句柄埋点）：线程/句柄每拍埋点（挂在同一条活采样链，不新建定时器）。
                 try:
@@ -1828,8 +2011,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     silent_exc(_rhe,
                                where="PulseMetricsCollector::_collect_memory_pressure 343刀4")
                     self._log(LogLevel.WARNING,
-                              "[343释放] 心跳外层异常（不静默）: %s: %s"
-                              % (type(_rhe).__name__, _rhe))
+                              f"[343释放] 心跳外层异常（不静默）: {type(_rhe).__name__}: {_rhe}")
                     _out["release_heartbeat"] = {"status": "error",
                                                  "why": type(_rhe).__name__}
 
@@ -1980,8 +2162,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         #   `memory_by_organ` 被置 None（落盘在异常之前已完成，所以产物本身完好）。
         #   改用本类既有的 `self._log`（内部即 `self._logger.log`），零新增符号。
         self._log(LogLevel.DEBUG,
-                  "[411刀1] 器官内存采样: state=%s elapsed=%sms top3=%s"
-                  % (_out.get("state"), _out.get("elapsed_ms"),
+                  "[411刀1] 器官内存采样: state={} elapsed={}ms top3={}".format(_out.get("state"), _out.get("elapsed_ms"),
                      [(t.get("organ"), t.get("objs")) for t in (_out.get("top3") or [])]))
         return _out
 
@@ -2073,7 +2254,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     continue
                 self._m417_run_job(_job)
             except Exception as _e:
-                _m417_state["last_error"] = "%s: %s" % (type(_e).__name__, _e)
+                _m417_state["last_error"] = f"{type(_e).__name__}: {_e}"
                 silent_exc(_e, where="PulseMetricsCollector::_m417_worker_loop",
                            level="warning")
 
@@ -2382,6 +2563,22 @@ class PulseMetricsCollector(BasePulseOrgan):
             snapshot["memory_by_organ_top3"] = []
             snapshot["memory_by_organ"] = {"state": None,
                                            "error": type(_e_mbo).__name__}
+
+        # ★421刀6：补丁链四字段。为什么放这里而不是 `world_model` 里：
+        #   它是**链路自身的吞吐**（生成→排队→应用→落账），与
+        #   `world_model.effect_verify_stale`（验证结论新鲜度）是两个维度。
+        #   ★读不到的源写 None + errors，绝不写 0 —— 「0 条」与「读不到」
+        #   在排障时处置完全相反。
+        try:
+            snapshot["patch_chain"] = _m421_patch_chain_snapshot()
+        except Exception as _e_pc421:
+            silent_exc(_e_pc421, where="PulseMetricsCollector::"
+                                       "_build_observability_snapshot[patch_chain]")
+            snapshot["patch_chain"] = {
+                **{f: None for f in _M421_PC_FIELDS},
+                "state": "unavailable",
+                "errors": {"call": type(_e_pc421).__name__},
+            }
         return snapshot
 
     # ========== ★403刀2：温/冷指标分频 ==========
@@ -2515,7 +2712,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             _new = _fn()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m403_tier_block[%s]" % tier)
+            silent_exc(_e, where=f"PulseMetricsCollector::_m403_tier_block[{tier}]")
             return dict(_cache)
         if tier == "warm":
             self._m403_warm_cache = dict(_new)
@@ -2611,7 +2808,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         """P1-4: 统计器官状态分布（在线/熔断/恢复中/离线）"""
         stats = {"total": 0, "running": 0, "fused": 0, "recovering": 0, "stopped": 0, "idle": 0}
 
-        for _organ_name, organ_data in self._cached_organ_stats.items():
+        for organ_data in self._cached_organ_stats.values():
             stats["total"] += 1
             status = organ_data.get("status", "unknown")
             if status == "RUNNING" or status == OrganStatus.RUNNING:
@@ -2737,7 +2934,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             conditions = getattr(self.info_field, '_conditions', {})
             # 统计每个事件的订阅情况
             event_subscribers = {}
-            for _cond_id, cond_data in conditions.items():
+            for cond_data in conditions.values():
                 organ_name = cond_data.get("condition", {}).get("organ_name", "")
                 event_types = cond_data.get("condition", {}).get("event_types", [])
                 for et in event_types:
@@ -2745,7 +2942,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                         event_subscribers[et] = []
                     event_subscribers[et].append(organ_name)
 
-            for _key, link in links.items():
+            for link in links.values():
                 event = link["event"]
                 subscribers = event_subscribers.get(event, [])
                 expected_receiver = link["receiver"]
@@ -2772,7 +2969,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         # 从信息场中获取所有已注册的器官信息
         if self.info_field:
             conditions = getattr(self.info_field, '_conditions', {})
-            for _cond_id, cond_data in conditions.items():
+            for cond_data in conditions.values():
                 organ_name = cond_data.get("condition", {}).get("organ_name", "")
                 if organ_name and organ_name not in self._cached_organ_stats:
                     self._cached_organ_stats[organ_name] = {

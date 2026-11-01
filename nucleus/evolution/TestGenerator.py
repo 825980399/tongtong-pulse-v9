@@ -329,8 +329,17 @@ if __name__ == "__main__":
         try:
             with open(_script_path, "w", encoding="utf-8") as _f:
                 _f.write(_script)
-        except Exception:
-            return {"passed": True, "detail": "脚本写入失败（跳过）"}
+        except Exception as _e_w:
+            # ★421刀7：**写入失败 = 这一关没测**，不能记 passed=True。
+            #   原实现把"测试根本没跑"伪装成"测试通过"，让往返校验在最需要它的
+            #   时候（磁盘满 / 目录不可写 / 权限变更）静默失效 —— 而这一关正是
+            #   用来拦「存储格式类补丁改坏了序列化」的。
+            #   注：本方法里其余的 `passed=True` 都是「**不适用**所以跳过」
+            #   （非存储类变更 / 无对应模板 / 子进程异常），语义不同，不在本刀范围。
+            silent_exc(_e_w, where="TestGenerator::_run_roundtrip_test write")
+            return {"passed": False,
+                    "detail": (f"脚本写入失败: {type(_e_w).__name__}: {_e_w}"
+                               f"（path={_script_path}）")}
         try:
             _proc = subprocess.run(
                 ["python", _script_path],

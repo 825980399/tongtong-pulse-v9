@@ -27,7 +27,6 @@
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -111,7 +110,7 @@ def experience_text(exp: dict) -> str:
     _m = str(exp.get("motivation") or "").strip()
     _s = str(exp.get("summary") or "").strip()
     if _m and _s:
-        return "{}。{}".format(_m, _s)
+        return f"{_m}。{_s}"
     return _m or _s
 
 
@@ -144,6 +143,12 @@ class ExperienceRetriever:
         self._cache_sig: tuple = ()
         self._obs_count = 0
         self._last_observe: dict = {}
+        # ★421刀3：「降级」状态（与 VectorStore 的 `_m360_last_search_failed` 同型）。
+        #   为什么不改 `retrieve()` 的返回结构：它返回 list，有 6 条既有单测断言
+        #   `== []`，`retrieve_with_adjacency` / `compare` 也按 list 消费 —— 改形态
+        #   会当场炸。故把「空」与「故障」分开记在状态里，由三个**只加不改**的口
+        #   暴露给调用方：`last_degrade()` / `stats()` / `retrieve_with_adjacency()`。
+        self._m421_degrade: dict = {"degraded": False, "reason": ""}
 
     # -------------------------------------------------- 依赖
     def pool(self) -> Any:
@@ -173,17 +178,48 @@ class ExperienceRetriever:
         return bool(self._filter_polluted)
 
     # -------------------------------------------------- 候选集
+    def _m421_mark_degrade(self, reason: str) -> None:
+        """记一次降级（★421刀3）。**只写状态，不改任何返回值**。"""
+        self._m421_degrade = {"degraded": True, "reason": str(reason or "")[:300]}
+
+    def _m421_clear_degrade(self) -> None:
+        """清降级（★421刀3）：本轮候选集读成功即视为恢复。"""
+        self._m421_degrade = {"degraded": False, "reason": ""}
+
+    def last_degrade(self) -> dict:
+        """最近一次候选集/检索是否降级（★421刀3 的公开口）。
+
+        返回 ``{"degraded": bool, "reason": str}``。调用方据此区分
+        「检索一直空」与「池/编码器故障」—— 两者处置完全不同：前者可以不召回，
+        后者必须报障。
+        """
+        _d = self._m421_degrade or {}
+        return {"degraded": bool(_d.get("degraded")),
+                "reason": str(_d.get("reason") or "")}
+
     def _all_experiences(self) -> list:
+        """池里的全部经验（读不到时返回 [] 并**记降级**）。
+
+        ★421刀3：原实现 `except Exception: return []` —— 池抛错与「池里真没有」
+        在调用方看来一模一样，一条「检索一直空」的故障能静默很久。
+        """
         try:
             _p = self.pool()
             _raw = getattr(_p, "_experiences", None)
             if isinstance(_raw, list):
+                self._m421_clear_degrade()
                 return _raw
             _q = getattr(_p, "query_experiences", None)
             if callable(_q):
-                return list(_q(limit=100000) or [])
+                _out = list(_q(limit=100000) or [])
+                self._m421_clear_degrade()
+                return _out
+            self._m421_mark_degrade("池对象既无 _experiences 也无 query_experiences")
             return []
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::"
+                                 "_all_experiences L186")
+            self._m421_mark_degrade(f"{type(_e).__name__}: {_e}")
             return []
 
     def candidates(self, include_polluted: bool | None = None,
@@ -277,7 +313,9 @@ class ExperienceRetriever:
                 return self._with_adjacent(_out, adjacency_limit)
             return _out
         except Exception as _e:                      # 检索失败不得影响调用方
-            print("[经验检索] 检索异常: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+            # ★421刀3：走正规留痕 + 记降级。stderr 打印在日志里查不到，等于没报。
+            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::retrieve L279")
+            self._m421_mark_degrade(f"retrieve: {type(_e).__name__}: {_e}")
             return []
 
     # -------------------------------------------------- 邻接扩展（282批刀2）
@@ -351,14 +389,20 @@ class ExperienceRetriever:
         _k = int(top_k) if top_k else self.top_k()
         _on = bool(_graph_adjacency_enabled())
         _r = self.retrieve(query, top_k=_k, expand_adjacent=_on)
+        _deg = self.last_degrade()
         if isinstance(_r, dict):
             return {"direct": list(_r.get("direct") or []),
                     "adjacent": list(_r.get("adjacent") or []),
                     "adjacent_meta": dict(_r.get("adjacent_meta") or {}),
-                    "enabled": True}
+                    "enabled": True,
+                    # ★421刀3：空结果到底是"没有"还是"故障"（只加键，不动既有键）
+                    "degraded": _deg["degraded"],
+                    "degrade_reason": _deg["reason"]}
         return {"direct": list(_r or []), "adjacent": [],
                 "adjacent_meta": {"expanded": False, "reason": "switch_off"},
-                "enabled": False}
+                "enabled": False,
+                "degraded": _deg["degraded"],
+                "degrade_reason": _deg["reason"]}
 
     def baseline_retrieve(self, query: str, limit: int | None = None) -> list:
         """**现有**检索器口径的结果（元数据过滤 + 时间倒序，含污染）。
@@ -371,7 +415,7 @@ class ExperienceRetriever:
             if callable(_q):
                 return list(_q(limit=_lim) or [])
         except Exception as _e:
-            print("[经验检索] 现有检索器调用失败: {}: {}".format(type(_e).__name__, _e),
+            print(f"[经验检索] 现有检索器调用失败: {type(_e).__name__}: {_e}",
                   file=sys.stderr)
         return []
 
@@ -402,15 +446,15 @@ class ExperienceRetriever:
         _cmp = self.compare(query, top_k=top_k)
         self._obs_count += 1
         self._last_observe = _cmp
-        _line = ("[经验检索] 新检索器返回%d条，现有返回%d条，重叠%d条"
-                 "（现有污染%d条/%.1f%%）"
-                 % (_cmp["new_count"], _cmp["old_count"], _cmp["overlap"],
-                    _cmp["old_polluted"], _cmp["old_polluted_ratio"] * 100.0))
+        _line = (f"[经验检索] 新检索器返回{_cmp['new_count']}条，"
+                 f"现有返回{_cmp['old_count']}条，重叠{_cmp['overlap']}条"
+                 f"（现有污染{_cmp['old_polluted']}条/"
+                 f"{_cmp['old_polluted_ratio'] * 100.0:.1f}%）")
         if logger is not None:
             try:
                 logger.info(_line)
             except Exception as _e:
-                print("[经验检索] 日志失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+                print(f"[经验检索] 日志失败: {type(_e).__name__}: {_e}", file=sys.stderr)
         return _cmp
 
     def observe_daily(self, sample: int = 3, logger: Any = None) -> dict:
@@ -442,12 +486,13 @@ class ExperienceRetriever:
         }
         if logger is not None:
             try:
-                logger.info("[经验检索] 每日观测: %d 个样本 / 新均%s条 / 旧均%s条 / 重叠均%s条"
-                            "（旧结果污染率均 %.1f%%）"
-                            % (_sum["samples"], _sum["avg_new"], _sum["avg_old"],
-                               _sum["avg_overlap"], _sum["old_polluted_ratio_avg"] * 100.0))
+                logger.info(f"[经验检索] 每日观测: {_sum['samples']} 个样本 / "
+                            f"新均{_sum['avg_new']}条 / 旧均{_sum['avg_old']}条 / "
+                            f"重叠均{_sum['avg_overlap']}条"
+                            f"（旧结果污染率均 "
+                            f"{_sum['old_polluted_ratio_avg'] * 100.0:.1f}%）")
             except Exception as _e:
-                print("[经验检索] 日志失败: {}: {}".format(type(_e).__name__, _e), file=sys.stderr)
+                print(f"[经验检索] 日志失败: {type(_e).__name__}: {_e}", file=sys.stderr)
         return _sum
 
     def stats(self) -> dict:
@@ -459,6 +504,10 @@ class ExperienceRetriever:
             "cached_vectors": len(self._vec_cache),
             "observations": self._obs_count,
             "last_observe": self._last_observe,
+            # ★421刀3：降级读数。`degraded=True` 时 `retrieve` 返回的空列表
+            #   表示**故障**而不是"没有匹配"，两者的处置完全不同。
+            "degraded": self.last_degrade()["degraded"],
+            "degrade_reason": self.last_degrade()["reason"],
         }
 
 
@@ -492,7 +541,8 @@ def analyze_pollution(pool: Any = None) -> dict:
             _q = getattr(pool, "query_experiences", None)
             _raw = list(_q(limit=100000) or []) if callable(_q) else []
     except Exception as _e:
-        return {"status": "error", "error": "{}: {}".format(type(_e).__name__, _e), "total": 0}
+        silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::analyze_pollution")
+        return {"status": "error", "error": f"{type(_e).__name__}: {_e}", "total": 0}
 
     from collections import Counter
     _total = len(_raw)
@@ -516,11 +566,12 @@ def analyze_pollution(pool: Any = None) -> dict:
     _rep["findings"] = []
     if _rep["pollution_rate"] > 0.5:
         _rep["findings"].append(
-            "污染率 %.1f%%（%d/%d）—— 现有检索器按时间倒序取前 N 条时，"
-            "结果极易被同质模板文本占满。" % (_rep["pollution_rate"] * 100.0,
-                                              _rep["polluted"], _rep["total"]))
+            f"污染率 {_rep['pollution_rate'] * 100.0:.1f}%（"
+            f"{_rep['polluted']}/{_rep['total']}）"
+            "—— 现有检索器按时间倒序取前 N 条时，结果极易被同质模板文本占满。")
     if _reasons:
-        _rep["findings"].append("污染原因分布：{}".format("、".join("%s×%d" % (k, v) for k, v in _reasons.most_common(3))))
+        _m421_dist = "、".join(f"{k}×{v}" for k, v in _reasons.most_common(3))
+        _rep["findings"].append(f"污染原因分布：{_m421_dist}")
     return _rep
 
 
@@ -533,7 +584,7 @@ def save_pollution_report(report: dict, path: str | None = None) -> str | None:
         _d = os.path.dirname(_p)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        with io.open(_p, "w", encoding="utf-8") as _f:
+        with open(_p, "w", encoding="utf-8") as _f:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
     except OSError as e:

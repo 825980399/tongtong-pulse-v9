@@ -41,6 +41,12 @@ ExperiencePool —— 体验记忆库（v24.0新增）
 
 _module_logger = get_module_logger("ExperiencePool")
 
+# ★421刀1：读盘失败的**唯一哨兵**。
+# 为什么不能复用 `None` 或 `{}`：`safe_read_json(path, default=None)` 内部会把
+# `default is None` 强改成 `{}`，于是「文件读不出来」与「文件中确实是空池」拿到
+# 的是同一个 `{}` —— 这正是本刀要消灭的「静默归零」。
+_M421_READ_FAILED = object()
+
 
 class ExperiencePool:
     """
@@ -85,6 +91,11 @@ class ExperiencePool:
 
         # 体验池主存储
         self._experiences: list[dict[str, Any]] = []
+        # ★421刀1：读盘健康状况（not_loaded / absent / ok / degraded）。
+        #   为什么需要：原实现读盘失败直接 `_experiences = []`，整个池被静默清空，
+        #   外部只看到「池里 0 条」，与「确实还没记录过」无法区分。
+        self._load_state: str = "not_loaded"
+        self._load_error: str | None = None
 
         # 从config读取配置，失败使用默认
         try:
@@ -1161,17 +1172,53 @@ class ExperiencePool:
             _module_logger.error(f"保存失败: {e}")
 
     def _load(self):
-        """从文件加载体验池"""
+        """从文件加载体验池（★421刀1：失败**保留旧值**，不再静默归零）。
+
+        原实现是 `safe_read_json(..., default={})` + `data.get("experiences", [])`
+        —— 解析失败时 safe_read_json 返回 `{}`，于是 `.get` 得到 `[]` 并**直接
+        覆盖** `self._experiences`：一次坏盘清空整个池，只留一个 print（日志里看不见）。
+        现在四条：
+          1) 文件不存在 = 正常首启（`absent`），不报错也不清空；
+          2) 读盘/解析失败 ⇒ **保留** `self._experiences` 原值与全部标量；
+          3) 记 `_load_state="degraded"` + `_load_error`，由 `get_stats()` 暴露；
+          4) 走 `_module_logger.error` 正规通道（不再 print）。
+        """
+        if not os.path.exists(self._pool_file):
+            self._load_state = "absent"
+            self._load_error = None
+            return
         try:
-            if os.path.exists(self._pool_file):
-                data = safe_read_json(self._pool_file, default={})
-                self._experiences = data.get("experiences", [])
-                self._total_recorded = data.get("total_recorded", 0)
-                self._total_summarized = data.get("total_summarized", 0)
-                self._total_decayed = data.get("total_decayed", 0)
+            _raw = safe_read_json(self._pool_file, default=_M421_READ_FAILED)
+            if _raw is _M421_READ_FAILED:
+                self._load_state = "degraded"
+                self._load_error = "读盘失败（不可读 / 0 字节 / JSON 解析失败）"
+            elif not isinstance(_raw, dict):
+                self._load_state = "degraded"
+                self._load_error = f"顶层不是对象（实得 {type(_raw).__name__}）"
+            elif not isinstance(_raw.get("experiences"), list):
+                self._load_state = "degraded"
+                self._load_error = ("缺少 experiences 列表（实得 "
+                                    f"{type(_raw.get('experiences')).__name__}）")
+            else:
+                self._experiences = _raw["experiences"]
+                self._total_recorded = _raw.get("total_recorded", 0)
+                self._total_summarized = _raw.get("total_summarized", 0)
+                self._total_decayed = _raw.get("total_decayed", 0)
+                self._load_state = "ok"
+                self._load_error = None
+                return
+            # 三种 degraded 共用一条留痕：明确写出"保留了几条"，便于活体判读
+            _module_logger.error(
+                f"[经验池] 读盘降级，**保留旧值** {len(self._experiences)} 条："
+                f"{self._load_error} | path={self._pool_file}")
         except Exception as e:
-            print(f"[WARNING] experience_pool.py:492: {type(e).__name__}: {e}")
-            self._experiences = []
+            # 兜底：safe_read_json 本身不该抛，但**绝不能**因为异常而清空池
+            self._load_state = "degraded"
+            self._load_error = f"{type(e).__name__}: {e}"
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_load L1163")
+            _module_logger.error(
+                f"[经验池] 读盘异常，**保留旧值** {len(self._experiences)} 条："
+                f"{self._load_error} | path={self._pool_file}")
 
     # ========== 统计信息 ==========
 
@@ -1193,6 +1240,11 @@ class ExperiencePool:
                 "total_summarized": self._total_summarized,
                 "total_decayed": self._total_decayed,
                 "file_exists": os.path.exists(self._pool_file),
+                # ★421刀1：读盘健康度。`load_state="degraded"` 表示**内存里这份池
+                #   是上一次成功读盘的内容**（旧值被保留），不是磁盘现状。
+                #   `load_state="absent"` 是正常首启（文件还没建）。
+                "load_state": self._load_state,
+                "load_error": self._load_error,
             }
 
     def get_inventory_consistency_report(self) -> dict[str, Any]:
