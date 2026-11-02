@@ -185,7 +185,8 @@ class PulseCortex(BasePulseOrgan):
                 get_verification_learning_hub,
             )
             self._vl_hub = get_verification_learning_hub()
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L188", level="debug")
             self._vl_hub = None
         # ★v25.1 P1智能化: 输出验证阈值自适应
         #   原逻辑：固定0.5阈值，导致某些类型问题总是误判。
@@ -197,7 +198,8 @@ class PulseCortex(BasePulseOrgan):
             self._adaptive_relevance_threshold = _rp.get("output_relevance_threshold", 0.5)
             self._retrieval_top_k = _rp.get("knowledge_query_max_results", 20)
             self._retrieval_resonance_threshold = _rp.get("knowledge_min_similarity", 0.5)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L200", level="debug")
             self._adaptive_relevance_threshold = 0.5
             self._retrieval_top_k = 20
             self._retrieval_resonance_threshold = 0.5
@@ -209,7 +211,8 @@ class PulseCortex(BasePulseOrgan):
         try:
             from nucleus.reasoning.SelfCorrector import get_self_corrector
             self._self_corrector = get_self_corrector()
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L212", level="debug")
             self._self_corrector = None
         # ★P1 推理质量反馈回流引擎（单例模式）
         self._feedback_loop = None
@@ -218,21 +221,24 @@ class PulseCortex(BasePulseOrgan):
                 get_reasoning_feedback_loop,
             )
             self._feedback_loop = get_reasoning_feedback_loop()
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L221", level="debug")
             self._feedback_loop = None
         # ★P2 推理策略智能选择器（单例模式）
         self._strategy_selector = None
         try:
             from nucleus.reasoning.StrategySelector import get_strategy_selector
             self._strategy_selector = get_strategy_selector()
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L228", level="debug")
             self._strategy_selector = None
         # ★P0 运行轨迹记录引擎（单例模式）
         self._trajectory = None
         try:
             from nucleus.runtime.RuntimeTrajectory import get_runtime_trajectory
             self._trajectory = get_runtime_trajectory()
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::__init__ L235", level="debug")
             self._trajectory = None
         self._correlation_counter = 0
         self._max_pending = 100
@@ -446,7 +452,8 @@ class PulseCortex(BasePulseOrgan):
                     os.path.basename(_f.filename), _f.lineno, _f.name)
             else:
                 _loc = "无traceback"
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_log_ignored_exception L449", level="debug")
             _loc = "位置解析失败"
 
         _msg = f"异常已忽略（需关注）: {type(e).__name__}: {e} | 位置={_loc}"
@@ -2891,7 +2898,8 @@ class PulseCortex(BasePulseOrgan):
                 _getter = getattr(self.self_awareness, 'get_learned_behaviors', None)
                 if callable(_getter):
                     _learned = _getter() or {}
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_build_strategy_context L2894", level="debug")
             _learned = {}
 
         if _learned:
@@ -3157,13 +3165,15 @@ class PulseCortex(BasePulseOrgan):
                     try:
                         import config
                         _strategy_enabled = bool(getattr(config, "FEATURE", {}).get("use_probe_strategy", False))
-                    except Exception:
+                    except Exception as _m428_e:
+                        silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_do_audit L3160", level="debug")
                         _strategy_enabled = False
                     if _strategy_enabled:
                         try:
                             from nucleus.probe_strategy import get_probe_strategy_memory
                             _strategy = get_probe_strategy_memory().compute_strategy()
-                        except Exception:
+                        except Exception as _m428_e:
+                            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_do_audit L3166", level="debug")
                             _strategy = None
 
                     _report = run_parallel_audit(_inspector, strategy=_strategy)
@@ -3195,7 +3205,8 @@ class PulseCortex(BasePulseOrgan):
                     try:
                         import config as _cfg
                         _hypo_enabled = bool(getattr(_cfg, "FEATURE", {}).get("use_probe_hypothesis", False))
-                    except Exception:
+                    except Exception as _m428_e:
+                        silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_do_audit L3198", level="debug")
                         _hypo_enabled = False
                     if _hypo_enabled:
                         try:
@@ -3218,7 +3229,8 @@ class PulseCortex(BasePulseOrgan):
                                         continue
                                     try:
                                         _target_issues = _inspector.detect_code_issues(target_organs=[_organ])
-                                    except Exception:
+                                    except Exception as _m428_e:
+                                        silent_exc(_m428_e, where="organs/brain/PulseCortex.py::_do_audit L3221", level="debug")
                                         _target_issues = []
                                     _verified += 1
                                     _target_types = set(_hypo.get("target_types", []))
@@ -3999,7 +4011,8 @@ class PulseCortex(BasePulseOrgan):
             import config as _ln_cfg
             _ln_chars = int(getattr(_ln_cfg, "LATE_NIGHT_TRUNCATE_CHARS", 100) or 100)
             _ln_sent = int(getattr(_ln_cfg, "LATE_NIGHT_TRUNCATE_SENTENCES", 2) or 2)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::enhance_reply L4002", level="debug")
             _ln_chars, _ln_sent = 100, 2
         if is_late_night and len(answer) > _ln_chars and not _is_inference:
             sentences = answer.replace('\n', '。').split('。')
@@ -4035,7 +4048,8 @@ class PulseCortex(BasePulseOrgan):
             _dlg_limit = int(getattr(_tr_cfg, "DIALOG_REPLY_TRUNCATE_CHARS", 1000) or 0)
             _dlg_min_sent = int(getattr(_tr_cfg,
                                         "DIALOG_REPLY_TRUNCATE_MIN_SENTENCES", 6) or 6)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseCortex.py::enhance_reply L4038", level="debug")
             _dlg_limit, _dlg_min_sent = 1000, 6
         if _dlg_limit > 0 and len(answer) > _dlg_limit and not _is_inference:
             import re as _re_len

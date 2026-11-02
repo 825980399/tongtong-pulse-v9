@@ -110,6 +110,19 @@ def test_01_site_manifest_is_24_and_each_removes_one_handler():
                            capture_output=True, text=True, encoding="utf-8-sig")
         head_src = r.stdout
         head_n = len(extract_handlers(head_src, rel))
+        # ★428 显式关闸：原判据（HEAD − 现在 == 站点数）依赖「本批改动**尚未提交**」
+        #   这个一次性状态；424 批一经提交，HEAD 就含改动 ⇒ 差值恒 0 ⇒ 永久红。
+        #   实测 428 批跑出 EvolutionLoop.py「HEAD 5 − 现在 5 = 0，但站点数 1」。
+        #   故：已在 HEAD 里的文件改走**与提交状态无关**的直接判据 —— 该文件里带
+        #   [424刀1] 留痕的 handler，现在必须已不被判为静默。原断言保留给未提交情形。
+        if head_n - now[rel] == 0 and n > 0:
+            _silent_ln = {h["lineno"] for h in extract_handlers(_read(os.path.join(ROOT, rel)), rel)}
+            _tagged = [ln for (r_, ln, _w) in sites if r_ == rel]
+            _still = [ln for ln in _tagged if ln in _silent_ln]
+            assert not _still, (
+                f"{rel}: 该文件已随提交进入 HEAD，改用直接判据 —— "
+                f"带 [424刀1] 留痕的 handler 仍有 {len(_still)} 处被判静默：{_still}")
+            continue
         assert head_n - now[rel] == n, (
             f"{rel}: HEAD 静默 {head_n} − 现在 {now[rel]} = {head_n - now[rel]}，"
             f"但站点数 {n}（静默数没按预期下降 ⇒ 有一处 silent_exc 没生效）")
@@ -117,9 +130,20 @@ def test_01_site_manifest_is_24_and_each_removes_one_handler():
 
 # ---------------------------------------------------------------- 2 总量只降不升
 def test_02_core_dirs_silent_total_not_grow():
-    """两目录静默 handler 总量 ≤ 57（改前 81，本批 24 ⇒ 57）。用 `<=` 不钉死，允许继续降。"""
+    """两目录静默 handler 总量 ≤ 59。用 `<=` 不钉死，允许继续降。
+
+    演进账（每次变动都必须在此**具名**，否则「只降不升」就成了空话）：
+      改前 81 → 424 批 24 处 ⇒ 57；
+      ★428 批 +3（三处**探测型** handler，异常本身就是返回值，加日志等于刷屏）：
+        · `LLMEvolutionEngine._m428_self_contained_prefix` 的 pass 形态
+        · 同函数 continue 形态（逐行回退候选前缀）
+        · `perf_delta_probe._m428_parses_standalone`（判定能否独立成模块）
+        三者已在 G02 门禁 `silent_except_fingerprints.json` 显式豁免（113 → 116 条）；
+      ★428 批 −1（`LLMEvolutionEngine` 解析失败留痕 DEBUG→WARNING，该 handler 不再判静默）
+      ⇒ 57 + 3 − 1 = 59。
+    """
     total = sum(_silent_map().values())
-    assert total <= 57, f"静默 handler 反涨到 {total}（应为 ≤57）"
+    assert total <= 59, f"静默 handler 反涨到 {total}（应为 ≤59）"
 
 
 # ---------------------------------------------------------------- 3 行为不变 + 有留痕
@@ -192,7 +216,10 @@ def test_06_log_level_is_debug_not_warning(caplog):
 
 # ---------------------------------------------------------------- 6 白名单已显式 shrink
 def test_07_fingerprint_baseline_shrunk_and_consistent():
-    """基线 116→113 的三条已移除，且剩余 113 条仍能在仓库里找到（不腐化）。"""
+    """基线演进：116→113 的三条已移除；★428 批 →116（+3 探测型豁免，见 test_02）。
+
+    剩余条目仍必须能在仓库里找到（不腐化）。
+    """
     import json as _json
 
     from ci_common import handler_identity
@@ -200,7 +227,14 @@ def test_07_fingerprint_baseline_shrunk_and_consistent():
     with open(os.path.join(ROOT, "tools", "ci", "silent_except_fingerprints.json"),
               encoding="utf-8") as _bf:
         base = _json.load(_bf)
-    assert len(base) == 113, f"基线应为 113 条，实际 {len(base)}"
+    assert len(base) == 116, f"基线应为 116 条，实际 {len(base)}"
+    # ★428：新增的 3 条必须就是那两处**探测型**函数（不得拿别的静默来凑数）
+    _new_428 = {
+        ("nucleus/evolution/LLMEvolutionEngine.py", "_m428_self_contained_prefix"),
+        ("nucleus/evolution/perf_delta_probe.py", "_m428_parses_standalone"),
+    }
+    _have = {(e["path"], e["qualname"]) for e in base}
+    assert _new_428 <= _have, f"428 批探测型豁免未登记：{_new_428 - _have}"
     gone = {
         ("nucleus/evolution/criteria_window.py", "write_ledger_conclusions"),
         ("nucleus/evolution/zero_break_judge.py", "write_calibration_ledger"),

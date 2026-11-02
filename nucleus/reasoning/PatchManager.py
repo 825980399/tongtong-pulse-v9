@@ -969,6 +969,30 @@ def _m92_ast_struct_guard(before_src: str, after_src: str):
 
 
 
+def _m428_perf_detail(patch, project_root=None):
+    """★428刀3：`perf_delta_ms` 的**明细**（P95 / 内存 / A/B 模式），供 verdict 存数。
+
+    为什么不并进 `_m412_perf_delta_ms`：那个函数的返回值被既有单测钉成 float|None
+    （铁律「既有测试的桩点也是契约」）⇒ 只加不改，另开一个返回明细的口。
+    开关/异常语义与 412 完全一致：开关关、测不出、抛异常 ⇒ 一律 `None`。
+    """
+    try:
+        import config as _c428
+        if not bool(getattr(_c428, "ENABLE_M412_PERF_DELTA", True)):
+            return None
+        from nucleus.evolution.perf_delta_probe import perf_delta_for_patch as _p428
+        _r = _p428(patch, project_root=project_root)
+    except Exception as _e428:
+        silent_exc(_e428, where="PatchManager::_m428_perf_detail")
+        return None
+    if not isinstance(_r, dict) or _r.get("state") != "ok":
+        _module_logger.debug(
+            "[428刀3] perf 明细未测出（%s=%s）⇒ verdict 三个 perf 字段留 None",
+            (_r or {}).get("state"), (_r or {}).get("reason"))
+        return None
+    return _r
+
+
 def _m412_perf_delta_ms(patch, project_root=None):
     """★412刀3：给 `verify()` 的第三维**供数**（改后导入耗时 − 改前导入耗时）。
 
@@ -1168,7 +1192,8 @@ class PatchManager:
         try:
             from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
             return SafeEvolutionExecutor._is_core_file(file_path or "")
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_m80_is_core_file L1195", level="debug")
             _norm = (file_path or "").replace("\\", "/")
             return any(m in _norm for m in PatchManager._M80_CORE_FILE_MARKERS)
 
@@ -1566,7 +1591,8 @@ class PatchManager:
             import config as _c
             return max(1, int(getattr(_c, "PENDING_AGING_MAX_COUNT",
                                       PatchManager._M94_AGING_DEFAULT_MAX_COUNT)))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_m94_aging_max_count L1593", level="debug")
             return PatchManager._M94_AGING_DEFAULT_MAX_COUNT
 
     @staticmethod
@@ -1576,7 +1602,8 @@ class PatchManager:
             import config as _c
             return max(0.0, float(getattr(_c, "PENDING_AGING_MAX_AGE_HOURS",
                                           PatchManager._M94_AGING_DEFAULT_MAX_HOURS)))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_m94_aging_max_hours L1603", level="debug")
             return PatchManager._M94_AGING_DEFAULT_MAX_HOURS
 
     @staticmethod
@@ -3054,7 +3081,8 @@ class PatchManager:
         _min_trust_a1 = _evo_cfg_a1.get("auto_apply_min_trust", 60)
         try:
             _trust_val_a1 = float(patch.get("trust_score", 0) or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::save_pending_patch L3081", level="debug")
             _trust_val_a1 = 0.0
         # ★M85-4（第85批 T-85d / D84-4）：本地低风险补丁放行自动应用。
         #   三道既有门槛（风险/信任/免签总开关）对本地补丁放宽，
@@ -3231,7 +3259,8 @@ class PatchManager:
                         _ratio = difflib.SequenceMatcher(
                             None, _exist_code, _new_code).ratio()
                         _sim_dup = _ratio > 0.9
-                    except Exception:
+                    except Exception as _m428_e:
+                        silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::save_pending_patch L3258", level="debug")
                         _sim_dup = False
             if _sim_dup:
                 _module_logger.debug(
@@ -3669,11 +3698,13 @@ class PatchManager:
             # ③ 必须落在项目根目录内
             if os.path.commonpath([_abs, _root]) != _root:
                 return False, f"路径越界(不在项目根目录内): {_raw} → {_abs}"
-        except ValueError:
+        except ValueError as _m428_e:
             # Windows 跨盘符（C:\ vs D:\）无法求公共路径
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_check_patch_path L3696", level="warning")
             return False, f"路径越界(跨盘符): {_raw}"
         except Exception as _e:
             # 判定失败一律拒绝，绝不因异常而放行
+            silent_exc(_e, where="nucleus/reasoning/PatchManager.py::_check_patch_path L3699", level="warning")
             return False, f"路径校验异常(已拒绝): {_raw} ({_e})"
 
         return True, ""
@@ -3722,7 +3753,8 @@ class PatchManager:
             _is_core = any(m in _norm_f for m in _core_markers)
             if _hist.get("rule_bad") or _is_core:
                 _verify_depth = "deep"
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_verify_in_copy L3749", level="warning")
             _verify_depth = "standard"
         result["verify_depth"] = _verify_depth
 
@@ -4018,6 +4050,7 @@ class PatchManager:
         try:
             from nucleus.security.sandbox_limits import execute_code_in_subprocess
         except Exception as _imp_err:
+            silent_exc(_imp_err, where="nucleus/reasoning/PatchManager.py::_verify_import_in_subprocess L4044", level="warning")
             return {"ok": False, "reason": f"沙箱模块不可用: {_imp_err}"}
 
         # 副本文件必须真实存在（_verify_in_copy 已生成 tmp_target）。
@@ -4061,6 +4094,7 @@ class PatchManager:
                 source_label=f"patch_import_check:{_module_name}",
             )
         except Exception as _e:
+            silent_exc(_e, where="nucleus/reasoning/PatchManager.py::_verify_import_in_subprocess L4087", level="warning")
             return {"ok": False, "reason": f"沙箱执行异常: {_e}"}
 
         # 资源超限 → fail-closed。
@@ -4151,7 +4185,8 @@ class PatchManager:
                         "reason": f"方法 {_method} 签名被修改: {_before} → {_after}"}
             return {"checked": True, "consistent": True,
                     "reason": f"方法 {_method} 签名一致"}
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_check_method_signature_consistency L4178", level="warning")
             return {"checked": False, "consistent": True, "reason": "签名校验异常，跳过"}
 
     def _check_llm_patch_completeness(self, patch: dict[str, Any]) -> dict[str, Any]:
@@ -4417,6 +4452,7 @@ class PatchManager:
                 exec(compile(_orig_def, "<orig>", "exec"), _ns_o)  # noqa: S102
                 exec(compile(_mod_def, "<mod>", "exec"), _ns_m)  # noqa: S102
             except Exception as _e:
+                silent_exc(_e, where="nucleus/reasoning/PatchManager.py::_behavior_equivalence_probe L4443", level="debug")
                 return {"checked": False, "equivalent": True,
                         "reason": f"构造探针失败(签名引用外部类型?): {_e}"}
             _f_orig = _ns_o[_method]
@@ -4505,6 +4541,7 @@ class PatchManager:
                 try:
                     _r_m = _f_mod(*_args)
                 except Exception as _e_m:
+                    silent_exc(_e_m, where="nucleus/reasoning/PatchManager.py::_behavior_equivalence_probe L4531", level="debug")
                     return {"checked": True, "equivalent": False,
                             "reason": f"原正常但修改后抛异常: {_e_m}"}
                 _checked += 1
@@ -4519,6 +4556,7 @@ class PatchManager:
             return {"checked": True, "equivalent": True,
                     "reason": "行为等价", "samples": _checked}
         except Exception as _e:
+            silent_exc(_e, where="nucleus/reasoning/PatchManager.py::_behavior_equivalence_probe L4545", level="debug")
             return {"checked": False, "equivalent": True, "reason": f"探针异常: {_e}"}
 
     def _load_history_experience(self, issue_type: str, limit: int = 3) -> str:
@@ -4586,7 +4624,8 @@ class PatchManager:
                 _total += 1
             return {"total": _total,
                     "stages": dict(sorted(_stages.items(), key=lambda kv: -kv[1]))}
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::get_history_failure_stats L4613", level="debug")
             return {"total": 0, "stages": {}}
 
     _STRATEGY_HALF_LIFE = 14 * 86400  # 策略效果时间衰减半衰期（14天）
@@ -4732,7 +4771,8 @@ class PatchManager:
                 "summary": ("；".join(_parts) if _parts else "无同类历史")
                            + (f"（{_prior}）" if _prior else ""),
             }
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::get_strategy_effectiveness L4759", level="debug")
             return {"issue_type": issue_type, "no_history": True, "rule_bad": False,
                     "llm_proven": False, "strategies": {}, "prior": "", "summary": "异常"}
 
@@ -4776,7 +4816,8 @@ class PatchManager:
                         with open(_file, encoding="utf-8") as _f:
                             _content = _f.read()
                         _exists = _mod.strip() in _content
-                    except Exception:
+                    except Exception as _m428_e:
+                        silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::generate_patch_regression_records L4803", level="debug")
                         _exists = False
                 _rec["checks"].append({"name": "modified_code_present", "passed": _exists})
                 # 2) 纯函数行为等价（附加，仅 checked=True 时纳入判定）
@@ -4800,6 +4841,7 @@ class PatchManager:
             return {"total": len(_records), "passed": _passed,
                     "records": _records, "summary": _summary}
         except Exception as _e:
+            silent_exc(_e, where="nucleus/reasoning/PatchManager.py::generate_patch_regression_records L4826", level="debug")
             return {"total": 0, "passed": 0, "records": [],
                     "summary": f"生成回归记录异常: {_e}"}
 
@@ -4828,7 +4870,8 @@ class PatchManager:
             _test_scripts = list(getattr(
                 _cfg_mod, 'EVOLUTION_CONFIG', {}).get(
                     "regression_scripts", _default_scripts) or _default_scripts)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_run_regression_tests L4855", level="debug")
             _test_scripts = list(_default_scripts)
         _timeout = 300  # 主回归脚本较重，60s 不够
         try:
@@ -4952,6 +4995,7 @@ class PatchManager:
             if time.time() - _last < _cooldown:
                 return {"safe": False, "reason": f"冷却中({int(_cooldown)}s)"}
         except Exception as _e:
+            silent_exc(_e, where="nucleus/reasoning/PatchManager.py::_check_patch_safety L4978", level="warning")
             return {"safe": False, "reason": f"安全校验异常: {_e}"}
         return {"safe": True, "reason": ""}
 
@@ -5407,6 +5451,7 @@ class PatchManager:
                                 "落地后磁盘未命中 modified_code" if _mc96
                                 else "补丁缺 modified_code，无法复核")
                     except Exception as _dve96:
+                        silent_exc(_dve96, where="nucleus/reasoning/PatchManager.py::apply_all_pending L5433", level="debug")
                         patch["disk_verify_reason"] = (
                             f"磁盘复核异常: {type(_dve96).__name__}: {_dve96}")
                     if not patch.get("disk_verified"):
@@ -5474,10 +5519,21 @@ class PatchManager:
                                 problem_gone=_m375_pg,
                                 function_ok=_m375_func_ok,
                                 perf_delta_ms=_m412_perf_delta_ms(patch, self._project_root),
+                                # ★428刀3：把 P95 / 内存 / A/B 模式一并带进去存盘。
+                                #   为什么单独算一次而不是复用上面那个 float：
+                                #   上面那个为兼容旧契约只返回 delta，丢了 P95 与内存。
+                                perf_detail=_m428_perf_detail(patch, self._project_root),
                             )
+                            # ★428刀3：原文案硬写"perf=未测量"—— 412 之后已经会供数了，
+                            #   这句会让读日志的人以为第三维永远是空的。
                             _module_logger.debug(
-                                "[375刀4] 效果验证入参 problem_gone=%s（%s）function_ok=%s perf=未测量",
-                                _m375_pg, _m375_pg_note, _m375_func_ok)
+                                "[375刀4] 效果验证入参 problem_gone=%s（%s）"
+                                "function_ok=%s perf=%s",
+                                _m375_pg, _m375_pg_note, _m375_func_ok,
+                                ("未测量" if _verdict.get("perf_delta_ms") is None
+                                 else (f"{_verdict.get('perf_delta_ms'):+.3f}ms/"
+                                       f"p95={_verdict.get('perf_p95_ms')}/"
+                                       f"mem={_verdict.get('perf_mem_mb')}")))
                             _verifier.apply_trust_adjustment(patch, _verdict)
                             # ★第47批：写入语义拆分字段（no_regression / problem_fixed /
                             #   verification_granularity / effectiveness），
@@ -5935,6 +5991,7 @@ class PatchManager:
                     shutil.copy2(backup_path, patch["file"])
                     _restored = True
             except Exception as _e:
+                silent_exc(_e, where="nucleus/reasoning/PatchManager.py::rollback_patch L5973", level="warning")
                 return {"ok": False, "reason": f"回滚补丁 {patch_id} 失败: {_e}"}
             if not _restored:
                 return {"ok": False, "reason": f"补丁 {patch_id} 备份恢复失败"}
@@ -6072,7 +6129,8 @@ class PatchManager:
                     if _rel and not _rel.startswith(".."):
                         return _rel
             return file_path  # 锚定失败，不敢动，原样返回
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_normalize_patch_file L6111", level="debug")
             return file_path  # 任何异常都不改坏数据
 
     def _resolve_patch_file(self, file_path: str) -> str:
@@ -6084,7 +6142,8 @@ class PatchManager:
             if _re_r.match(r"^[A-Za-z]:[/\\]", file_path) or os.path.isabs(file_path):
                 return file_path
             return os.path.join(self._project_root, file_path.replace("/", os.sep))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_resolve_patch_file L6123", level="debug")
             return file_path
 
     def _load_patch_list(self, path, default=None):

@@ -13,8 +13,11 @@ LLMEvolutionEngine.py —— LLM进化引擎
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+import re
+import textwrap
 import time
 from typing import Any
 
@@ -25,11 +28,103 @@ from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
 
+# ===== ★428刀1：生成侧截断治理 =====
+# 【T0 实测，非推测】67 条关2a 拒收标本（data/audit/failed_patches/）用正确管线
+#   （先剥围栏再 dedent）跑 `ast.parse`：**0/67 通过**，其中 66 条报
+#   `expected 'except' or 'finally' block`。逐件对账后定位到四个独立缺陷
+#   （见 _m428_strip_fence_lines / _m428_self_contained_prefix / _call_llm
+#    的 finish_reason 检测 / 本文件 prompt 要求6），四者互不替代。
+#
+# token 预算：原 4096。86 批实测同类推理模型 8000 档才拿到 stop/content 1311 字
+#   （reasoning 约 1.8 万字）；此处取 8192，不追到 16384 是因为跨文件补丁包
+#   正常只需 3~6k tokens，过高预算只会延长单次耗时。
+_M428_MULTI_PATCH_MAX_TOKENS = 8192
+#: 续写上限（**有界**：铁律「必配重试上限」，防"每次都被截断"变成死循环）
+_M428_MAX_CONTINUATIONS = 1
+#: 续写时回灌的原文尾部长度（字符）
+_M428_CONTINUE_TAIL_CHARS = 2000
+#: 喂给模型的原文上限。**与改造前同为 3000**，改动只在"切在哪"（行边界+语法自洽）
+_M428_PROMPT_ORIG_LIMIT = 3000
+#: 语法自洽回退的最大行数（防止整段原文都解析不了时退化成全量重试）
+_M428_BACKTRACK_LINES = 80
+
+_FENCE_RE = re.compile(r"^\s*```[a-zA-Z0-9_+-]*\s*$")
+
+
+def _m428_strip_fence_lines(text) -> str:
+    """剥掉 markdown 围栏行（含 ```` ```python ````）。**围栏不是代码。**
+
+    为什么必须在**解析侧**剥而不是只靠 prompt 禁：实测 67 条拒收标本里 54 条的
+    `original_code`/`modified_code` 首行就是 ```` ```python ````——模型把围栏写进了
+    JSON 字符串值**内部**，而原解析侧只剥回复最外层的围栏。
+    后果有两层：① 片段第 1 行不是代码 ⇒ `ast.parse` 必报 invalid syntax；
+    ② `original_code` 在目标文件里永远定位不到 ⇒ 唯一性检查恒 False。
+    """
+    _s = str(text or "")
+    _out = []
+    for _ln in _s.splitlines():
+        if _FENCE_RE.match(_ln):
+            continue
+        _out.append(_ln)
+    _joined = "\n".join(_out)
+    # ★保留原有结尾换行： 会被当作**精确锚点**去目标文件里做替换，
+    #   少一个结尾 \n 会让锚点退化成某行前缀，替换后残留一个空行。
+    if _s.endswith(("\n", "\r")) and not _joined.endswith("\n"):
+        _joined += "\n"
+    return _joined
+
+
+def _m428_self_contained_prefix(text, limit=_M428_PROMPT_ORIG_LIMIT):
+    """在 `limit` 内取**语法自洽**的前缀，返回 `(片段, 是否被截断)`。
+
+    为什么不能直接 `text[:limit]`：3000 字硬切会切在语句中间（实测标本里出现
+    半截字面量 `...["trust_penalty"`）；模型看到半个 `try` 就照着写半个
+    `try` —— 这在关2a 表现为「try 块不平衡」，但**真因是喂进去的原文不完整**。
+
+    做法：先剥围栏；长度够就整段（若整段本身解析不了再回退）；
+    长度超了就从 `limit` 往前逐行回退，取**第一个能通过 `ast.parse` 的前缀**。
+    回退超过 `_M428_BACKTRACK_LINES` 行仍不行 ⇒ 按行边界硬切并如实标"已截断"
+    （不返回原文，避免把 3000 字上限变成无上限）。
+
+    注意：方法体片段本身缩进，需 `dedent` 后才是合法模块，故探测用 dedent 后的文本；
+    返回值仍是**原缩进**，调用方无需再处理。
+    """
+    _s = str(text or "")
+    _s = _m428_strip_fence_lines(_s)
+    if not _s.strip():
+        return "", False
+    if len(_s) <= limit:
+        try:
+            ast.parse(textwrap.dedent(_s))
+            return _s, False
+        except SyntaxError:
+            pass  # 原文自身不完整 ⇒ 落到下面回退（不谎报"完整"）
+    _ends = [i for i, _ch in enumerate(_s[:limit]) if _ch == "\n"]
+    for _end in reversed(_ends[-_M428_BACKTRACK_LINES:]):
+        _cand = _s[:_end]
+        if not _cand.strip():
+            continue
+        try:
+            ast.parse(textwrap.dedent(_cand))
+        except SyntaxError:
+            continue
+        return _cand, True
+    _cut = _s.rfind("\n", 0, limit)
+    return (_s[:_cut] if _cut > 0 else _s[:limit]), True
+
+
 class LLMEvolutionEngine(SilentLogMixin):
     """LLM 主导的进化引擎（跨文件 + 多步规划）。"""
 
     def __init__(self, project_root: str):
         self._project_root = project_root
+        # ★428刀1：截断可见化状态。`finish_reason` 此前在本模块**零读取**
+        #   ⇒ 模型没写完时 content 照旧被当"完整回复"返回，一路流到关2a
+        #   才以「try 块不平衡」被拒 —— 拒收理由描述的是**现象**，
+        #   真因（模型没写完）在生成侧一个字都没留。
+        self._m428_last_finish_reason = ""
+        self._m428_truncated = False
+        self._m428_continuations = 0
 
     # ========== LLM 调用（复用 ssrf_guard 安全网络层） ==========
 
@@ -166,7 +261,26 @@ class LLMEvolutionEngine(SilentLogMixin):
                 self._m44_last_model = _m340_srv
             _choices = _data.get("choices", [])
             if _choices:
-                return _choices[0].get("message", {}).get("content", "")
+                _c0 = _choices[0] if isinstance(_choices[0], dict) else {}
+                # ★428刀1：`finish_reason` 首次被读取。取值语义：
+                #   "stop"   模型自己收尾 ⇒ 内容完整；
+                #   "length" 撞 max_tokens ⇒ 内容**必然**是半截；
+                #   "content_filter" / 其他 ⇒ 内容可能被外部截断。
+                #   两种非 stop 都置 _m428_truncated，供调用方决策（续写/丢弃）。
+                self._m428_last_finish_reason = str(_c0.get("finish_reason") or "")
+                self._m428_truncated = (
+                    self._m428_last_finish_reason not in ("", "stop"))
+                _txt = str((_c0.get("message") or {}).get("content") or "")
+                if self._m428_last_finish_reason == "length":
+                    _usage = _data.get("usage") or {}
+                    self._log(
+                        LogLevel.WARNING,
+                        "[428刀1][生成截断] finish_reason=length ⇒ 模型没写完："
+                        f"content={len(_txt)} 字 "
+                        f"completion_tokens={_usage.get('completion_tokens')} "
+                        f"(prompt_tokens={_usage.get('prompt_tokens')}) "
+                        "｜ 该回复**不可当完整结果使用**")
+                return _txt
             return None
         except Exception as e:
             # 修复：用框架日志系统代替print，确保写入日志文件
@@ -205,12 +319,29 @@ class LLMEvolutionEngine(SilentLogMixin):
         # 读取调用方代码（供 LLM 同步修改）
         _callers_code = self._read_callers_code(call_chain, self_inspector)
 
+        # ★428刀1：原文必须**语法自洽**地进 prompt。
+        #   原实现 `{original_code[:3000]}` 是字面硬切 —— 实测标本里切出了
+        #   半截字面量 `...["trust_penalty"`。模型看到半个 `try` 就写半个
+        #   `try`，于是在关2a 报「try 块不平衡」；把账记在模型头上是错的。
+        _orig_capped, _orig_cut = _m428_self_contained_prefix(
+            original_code, _M428_PROMPT_ORIG_LIMIT)
+        _cut_notice = ""
+        if _orig_cut:
+            _cut_notice = (
+                "★注意：上面的原始代码因长度限制**只给出了前一部分**"
+                "（已在完整的语句块边界处截断），后面部分**未提供**。\n"
+                "因此：①不要声称自己看到了完整方法；②如果你必须改动截断点之后的内容，"
+                "请把 original_code 收敛到**你确实看到的**那个完整语句块内；"
+                "③无论如何**不得产出半截语句块**（`try` 必须有 `except`/`finally`，"
+                "`if`/`for`/`while`/`def` 必须有完整块体）——"
+                "宁可缩小改动范围，也不要留下未闭合的块。\n\n")
         _prompt = (
             f"你是曈曈的架构级代码重构助手。请对下面的问题生成「跨文件补丁包」。\n\n"
             f"问题类型: {issue.get('type', '')}\n"
             f"问题描述: {issue.get('description', '')}\n"
             f"目标方法: {method_name}（位于 {file_path}）\n\n"
-            f"目标方法原始代码:\n```python\n{original_code[:3000]}\n```\n\n"
+            f"目标方法原始代码:\n```python\n{_orig_capped}\n```\n\n"
+            f"{_cut_notice}"
             f"{_call_ctx}"
             f"{_callers_code}"
             f"要求：\n"
@@ -222,14 +353,56 @@ class LLMEvolutionEngine(SilentLogMixin):
             f"\"original_code\": \"修改前完整代码\", \"modified_code\": \"修改后完整代码\"}}]}}。\n"
             f"4. 每个补丁的 original_code 必须能在对应文件中唯一定位（含足够上下文）。\n"
             f"5. 只输出 JSON，不要输出任何解释或 markdown 代码块标记。\n"
+            # ★428刀1 要求6：实测 54/67 拒收标本的根因就是"锚点不自洽" ——
+            #   模型按原要求4只保证"能唯一定位"，于是给出从 `try:` 起、
+            #   到 `except` 前止的最小锚点，替换后天然缺 handler。
+            f"6. ★original_code 与 modified_code 必须是**语法自洽的完整语句块**："
+            f"try 必须连同它的 except/finally 一起给出，if/for/while/def/with "
+            f"必须连同完整块体一起给出；**严禁**把一个复合语句从中间切开。"
+            f"两个字段的值内**不得**出现 ``` 围栏或任何 markdown 标记。\n"
             f"\n{self._aesthetic_guidance()}"
         )
+        _sys = "你是曈曈的架构级代码重构引擎，输出严格 JSON 结构。"
+        self._m428_truncated = False
+        self._m428_last_finish_reason = ""
+        self._m428_continuations = 0
         _response = self._call_llm(
-            system="你是曈曈的架构级代码重构引擎，输出严格 JSON 结构。",
+            system=_sys,
             prompt=_prompt,
             model=None,  # 用 advanced_model（复杂重构需强模型）
-            max_tokens=4096,
+            max_tokens=_M428_MULTI_PATCH_MAX_TOKENS,
         )
+        # ★428刀1：被截断就发**一次**「继续」续写。
+        #   为什么不直接丢弃：截断发生在 JSON 中途时 `json.loads` 整条失败，
+        #   一条只差尾部 200 字的补丁会变成**零产出**（"全损"与"被判不合格"
+        #   是两件事，前者连审计都没有）。续写一次能把"差一点"救回来。
+        #   为什么上限 1 次：铁律「重试必须配上限」——若模型每轮都截断，
+        #   无上限续写会把一次生成放大成 N 次计费调用。
+        while (self._m428_truncated and _response
+               and self._m428_continuations < _M428_MAX_CONTINUATIONS):
+            self._m428_continuations += 1
+            _tail = _response[-_M428_CONTINUE_TAIL_CHARS:]
+            _more = self._call_llm(
+                system=_sys,
+                prompt=(
+                    _prompt
+                    + "\n\n【已生成的部分输出（因长度被截断，直接接着写即可）】\n"
+                    + _tail
+                    + "\n\n【续写指令】请**只输出紧接上面的剩余内容**："
+                      "不要重复已有部分，不要重新输出 JSON 开头，不要解释，"
+                      "不要输出 markdown 围栏。"
+                ),
+                model=None,
+                max_tokens=_M428_MULTI_PATCH_MAX_TOKENS,
+            )
+            if not _more:
+                self._log(
+                    LogLevel.WARNING,
+                    "[428刀1][续写失败] 续写调用无返回，保留被截断的原文"
+                    f"（finish_reason={self._m428_last_finish_reason or '?'}，"
+                    f"共尝试 {self._m428_continuations} 次）")
+                break
+            _response = _response + _more
         return self._parse_multi_file_patch(_response, issue)
 
     def _aesthetic_guidance(self) -> str:
@@ -296,6 +469,13 @@ class LLMEvolutionEngine(SilentLogMixin):
                     continue
                 if not _p.get("original_code"):
                     continue
+                # ★428刀1：**值内围栏必须在这里剥**。实测 54/67 拒收标本的
+                #   original_code/modified_code 首行是 ```python —— 模型把围栏
+                #   写进了 JSON 字符串值内部，而原实现只剥回复最外层围栏。
+                #   围栏不是代码：留着它 ⇒ ast 必报 invalid syntax，且
+                #   original_code 在目标文件里永远定位不到（唯一性恒 False）。
+                _p["original_code"] = _m428_strip_fence_lines(_p.get("original_code"))
+                _p["modified_code"] = _m428_strip_fence_lines(_p.get("modified_code"))
                 # ★P3 最小化改动检查
                 _change_ratio = self._calc_change_ratio(_p.get("original_code", ""), _p.get("modified_code", ""))
                 # ★P3 零冲突检查：original_code 在文件中唯一存在
@@ -315,6 +495,9 @@ class LLMEvolutionEngine(SilentLogMixin):
                     "change_ratio": round(_change_ratio, 3),  # ★P3 改动比例（0-1，越低越精准）
                     "original_unique": _unique,  # ★P3 original_code 是否在文件中唯一
                     "repair_source": "llm_multi_file",
+                    # ★428刀1：本次回复是否被模型/网关截断（"只加不改"的观测口）。
+                    #   下游据此可把"生成不完整"与"生成完整但质量差"分开归因。
+                    "m428_gen_truncated": bool(self._m428_truncated),
                     "generated_at": time.time(),
                     "status": "pending",
                     "verification": None,
@@ -323,9 +506,16 @@ class LLMEvolutionEngine(SilentLogMixin):
                 }
                 _result.append(_patch)
             return _result
-        except (json.JSONDecodeError, Exception) as e:
-            # 修复：用框架日志系统代替print
-            self._log(LogLevel.DEBUG, f"多文件补丁JSON解析失败: {type(e).__name__}: {e}")
+        except Exception as e:
+            # ★428刀1：原为 DEBUG ⇒ 生产日志里等于不存在。
+            #   而"整条回复解析不出来"= **本次生成全损**，与"解析成功但补丁
+            #   被判不合格"是两种完全不同的事实，必须能分开看见。
+            self._log(
+                LogLevel.WARNING,
+                f"[428刀1][补丁包解析失败] {type(e).__name__}: {str(e)[:200]}"
+                f" ｜ 回复 {len(str(response or ''))} 字"
+                f" finish_reason={self._m428_last_finish_reason or '?'}"
+                " ⇒ 本条生成全损（不是补丁被判不合格）")
             return []
 
     # ========== 阶段B核心2：多步规划 ==========

@@ -201,7 +201,8 @@ class PulseInnerWorld(
             from nucleus.evolution.QualityClosedLoop import create_search_quality_loop
             self._search_quality_loop = create_search_quality_loop(
                 log_fn=lambda msg: self._log(LogLevel.INFO, msg))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::__init__ L204", level="debug")
             self._search_quality_loop = None
         # ★v25.1 P1智能化: 知识检索深度自适应
         #   原逻辑：固定limit=50，简单问题浪费资源，复杂问题可能漏检。
@@ -381,7 +382,8 @@ class PulseInnerWorld(
             import config
             cfg = getattr(config, 'INNER_WORLD_ADVANCED_CONFIG', {})
             return cfg
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_load_advanced_config L384", level="debug")
             return {}
     # ========== 框架注入接口 ==========
 
@@ -2777,7 +2779,8 @@ class PulseInnerWorld(
             return ""
         try:
             _complexity = float(getattr(ctx, "_question_complexity", 0.0) or 0.0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m29_deep_think_trigger_reason L2780", level="debug")
             _complexity = 0.0
         if _complexity < self._m29_complexity_threshold():
             return ""
@@ -2867,7 +2870,8 @@ class PulseInnerWorld(
                          f"已强制转换为字符串")
                 try:
                     deep_answer = str(deep_answer)
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_detect_force_deep_think L2870", level="debug")
                     deep_answer = f"关于「{ctx.question[:40]}」的深度思考过程遇到了一些波折，但这本身就是思考的一部分。"
             self._inference_count += 1
             self._cache_inference(ctx.question, deep_answer, ctx.user_name)
@@ -6162,7 +6166,8 @@ class PulseInnerWorld(
 
             return result
 
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::get_reasoning_skill_portrait L6165", level="debug")
             result["self_comment"] = "推理技能数据暂时不可用"
             return result
     def _extract_weak_areas_from_reflection(self, insights: list,
@@ -7922,7 +7927,8 @@ class PulseInnerWorld(
                     view_a, view_b, common_topic, trust_a, trust_b
                 )
                 _truth_position = _truth_voice.get("position", "")[:200]
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_conduct_internal_debate L7925", level="debug")
                 _truth_position = "（求真本能暂时无法参与辩论）"
         else:
             _truth_position = "证据是认知的基础，信任分数的差距反映了经过验证的事实差异。"
@@ -9464,6 +9470,8 @@ class PulseInnerWorld(
 
         # 1. 检查知识节点增长
         nodes_after = 0
+        # ★428刀4：查询失败必须能与"真的零增长"区分（见下方 except 分支）
+        _nodes_query_failed = False
         try:
             path_dist = self.node_pool.get_path_distribution()  # type: ignore[possibly-unbound]
             # ★367 后续 E11：先按「领域名→知识路径」别名命中（两套词表本无交集，
@@ -9478,7 +9486,17 @@ class PulseInnerWorld(
                     _hit = bool(label and target_area in label)  # type: ignore[possibly-unbound]
                 if _hit:
                     nodes_after += count
-        except Exception:
+        except Exception as _m428_e:
+            # ★428刀4【真bug】原来这里只把 nodes_after 置 0 —— 而 0 会让
+            #   nodes_growth = -nodes_before（一个大负数），下游据此判「效果不佳」
+            #   并**累加一次失败**；连续 3 次就强制切换学习目标。
+            #   即「知识分布查询炸了」被记成「学习把知识毁了」。
+            #   本文件在 367 后续 E11 已立过同一条规矩（「无样本 ≠ 零成功率」），
+            #   此处是同一类混淆的反向（**错误 ≠ 零**），按同一口径处理：
+            #   置降级标记，下游不据此计失败。
+            #   分级 warning：它不报错，只会让学习评估长期偏负 —— 属"静默污染判断"。
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_evaluate_learning_effectiveness L9481", level="warning")
+            _nodes_query_failed = True
             nodes_after = 0
 
         nodes_before = latest_plan.get("nodes_before", 0)
@@ -9535,16 +9553,30 @@ class PulseInnerWorld(
                    f"但还需要更多实践来加深理解")
 
         elif nodes_growth <= 0 and success_rate < 0.5:
-            if not _has_sample:
+            if not _has_sample or _nodes_query_failed:
                 # ★367 后续 E11：本窗口该领域**没有推理样本** ⇒ 无法判「理解不深」。
                 #   不计失败、不清零、不切换，只留痕（铁律 166：不同事实不同措辞——
                 #   「没样本」与「样本全是低分」是两件事，不能都写成「效果不佳」）。
-                self._log(LogLevel.INFO,
-                          f"学习效果评估: 「{target_area}」本窗口无推理样本，"
-                          f"不判优劣、不计失败（现有计次="
-                          f"{self._consecutive_fail_counts.get(_fail_key, 0)}）")  # type: ignore[possibly-unbound]
+                # ★428刀4：挡板再多认**第三种**情况 —— 知识节点分布**读取失败**。
+                #   它同样不是"没长"（原来 nodes_after=0 会算出 nodes_growth 为大负数，
+                #   被当成"学习把知识毁了"并累加失败）。处置与「没样本」一致（不计失败），
+                #   但措辞与级别必须分开：读取失败是**故障**（WARNING），没样本是**正常**
+                #   （INFO）。为什么不开新分支：CW3-A 以 if/return 计数为语义基准，
+                #   新开分支要动 CI 基线并泛化授权；而"挡板多认一种情况"不改语义结构。
+                _m428_no_sample = not _has_sample
+                self._log(
+                    LogLevel.INFO if _m428_no_sample else LogLevel.WARNING,
+                    (f"学习效果评估: 「{target_area}」本窗口无推理样本，"
+                     if _m428_no_sample else
+                     f"学习效果评估: 「{target_area}」知识节点分布读取失败，"
+                     f"节点增长不可判定，")
+                    + f"不判优劣、不计失败（现有计次="
+                      f"{self._consecutive_fail_counts.get(_fail_key, 0)}）")  # type: ignore[possibly-unbound]
                 return (f"我在「{target_area}」方面还没有足够的实践样本可供评估，"
-                        f"继续积累一段时间再看效果。")
+                        f"继续积累一段时间再看效果。"
+                        if _m428_no_sample else
+                        f"我在「{target_area}」方面的学习进展暂时无法量化"
+                        f"（知识节点分布读取失败），继续观察。")
             # 效果不佳：累加失败计数
             _fail_count = self._consecutive_fail_counts.get(_fail_key, 0) + 1
             self._consecutive_fail_counts[_fail_key] = _fail_count
@@ -10237,7 +10269,8 @@ class PulseInnerWorld(
             if hasattr(self.node_pool, 'get_instincts'):
                 try:
                     _instinct_nodes = list(self.node_pool.get_instincts())
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_build_memory_context L10240", level="debug")
                     _instinct_nodes = []
             all_nodes = l3_nodes + l2_nodes + _instinct_nodes
 
@@ -10472,7 +10505,8 @@ class PulseInnerWorld(
         try:
             from nucleus.reasoning.SelfCalibrator import evidence_confidence as _ec
             return _ec(base, rtype, evidence)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_evidence_conf L10475", level="debug")
             return base
 
     def _ingest_identity_claims(self, question: str, user_name: str) -> int:
@@ -13346,7 +13380,8 @@ class PulseInnerWorld(
                 "version": summary.get("system_version", "v9.5"),
                 "organ_count": summary.get("organ_count", 50),
             }
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_generate_self_awareness_snapshot L13349", level="debug")
             snapshot["identity"] = {"name": "曈曈", "version": "v9.5", "organ_count": 50}
 
         # 2. 动态诊断
@@ -13377,7 +13412,8 @@ class PulseInnerWorld(
                 "fused_organs": organs.get("fused", 0),
                 "warnings": diagnosis.get("warnings", [])[:3],
             }
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_generate_self_awareness_snapshot L13380", level="debug")
             snapshot["knowledge"] = {"total_nodes": 0}
             snapshot["health"] = {"overall": "unknown"}
 
@@ -14455,7 +14491,8 @@ class PulseInnerWorld(
             _scan_limit = int(getattr(_cfg, "MULTI_STEP_ENTRY_PROBE_SCAN_LIMIT", 800) or 800)
             _min_nodes = int(getattr(_cfg, "MULTI_STEP_ENTRY_PROBE_MIN_NODES", 5) or 5)
             _min_trust = float(getattr(_cfg, "MULTI_STEP_ENTRY_PROBE_MIN_TRUST", 30.0) or 30.0)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m35_entry_probe L14458", level="debug")
             _scan_limit, _min_nodes, _min_trust = 800, 5, 30.0
 
         try:
@@ -14463,12 +14500,14 @@ class PulseInnerWorld(
             _sample = []
             try:
                 _sample = self.node_pool.query(evol_level="L2", limit=_scan_limit) or []
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m35_entry_probe L14466", level="debug")
                 _sample = []
             if not _sample:
                 try:
                     _sample = self.node_pool.query(limit=_scan_limit) or []
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m35_entry_probe L14471", level="debug")
                     _sample = []
             if not _sample:
                 return None                      # 池空 → 不确定，不改行为
@@ -14486,7 +14525,8 @@ class PulseInnerWorld(
                         str(getattr(_n, "value", "") or ""),
                         " ".join(str(_k) for _k in (getattr(_n, "keywords", None) or [])),
                     )
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m35_entry_probe L14489", level="debug")
                     _blob = ""
                 if _terms and any(_t in _blob for _t in _terms):
                     _hits += 1
@@ -14509,7 +14549,8 @@ class PulseInnerWorld(
                 return None                      # 探针异常 → 不确定
             try:
                 _probe_weak = not self._validate_step_result(_probe, _probe_prompt)
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m35_entry_probe L14512", level="debug")
                 _probe_weak = False              # 校验异常 → 保守视为命中
 
             if _domain_weak and _probe_weak:
@@ -15146,7 +15187,8 @@ class PulseInnerWorld(
             try:
                 _m30_target = int(getattr(__import__('config'),
                                           'LLM_TARGET_OUTPUT_LENGTH', 300) or 300)
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_generate_branch_with_model L15149", level="debug")
                 _m30_target = 300
             _m30_branch_len_req = (f"请从「{branch_name}」这个方向展开分析，"
                                    f"内容要具体充分，不少于{_m30_target}字。要求：")
@@ -15514,7 +15556,8 @@ class PulseInnerWorld(
         try:
             import config as _cfg_gran
             _gran_fix = bool(getattr(_cfg_gran, "ENABLE_OVERLAP_GRANULARITY_FIX", True))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_verify_knowledge_relevance L15517", level="warning")
             _gran_fix = True
 
         # ★主线第32批 T2（P2-189）评估结论：**保留定长切片**。
@@ -15954,8 +15997,9 @@ class PulseInnerWorld(
             try:
                 import jieba  # type: ignore
                 _tokens = list(jieba.cut(_q))
-            except Exception:
+            except Exception as _m428_e:
                 # 最后回退：按标点与高频虚词切分（比定长切片安全得多）
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m31_extract_key_terms L15957", level="debug")
                 _tokens = re.split(
                     r'[，。！？；：、,.!?;:\s]+'
                     r'|(?:的|了|和|与|及|或|在|是|有|请|帮|我|你|它|把|被|对|从|到)',
@@ -16013,12 +16057,14 @@ class PulseInnerWorld(
         _channel_first = True
         try:
             _channel_first = bool(getattr(_cfg, "ENABLE_BRANCH_GEN_CHANNEL_FIRST", True))
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m31_branch_endpoint L16016", level="debug")
             _channel_first = True
         if _channel_first:
             try:
                 _channels = _cfg.get_active_channels()
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m31_branch_endpoint L16021", level="debug")
                 _channels = []
             for _c in _channels or []:
                 try:
@@ -16035,7 +16081,8 @@ class PulseInnerWorld(
         # ② 回退单端点（修复前行为）
         try:
             _rc = getattr(_cfg, "REMOTE_API_CONFIG", None) or {}
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m31_branch_endpoint L16038", level="debug")
             _rc = {}
         try:
             if not _rc.get("enabled", False):
@@ -16108,7 +16155,8 @@ class PulseInnerWorld(
         if isinstance(result, dict):
             try:
                 _st = str(result.get("status", "") or "未知")
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_m31_accept_subproc_deep_result L16111", level="debug")
                 _st = "未知"
             self._log(LogLevel.DEBUG,
                       f"深度思考·子进程结果不可用(status={_st})，改由主进程同步执行")
@@ -16329,13 +16377,15 @@ class PulseInnerWorld(
                             else:
                                 try:
                                     _val = str(_node.value)[:100] if _node.value else ""
-                                except Exception:
+                                except Exception as _m428_e:
+                                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_deep_think L16332", level="debug")
                                     _val = ""
                             _path = str(getattr(_node, 'space_path', '/'))
                             _knowledge_parts.append(f"[{_path}] {_val}")
                         if _knowledge_parts:
                             _knowledge_context = "；".join(_knowledge_parts)
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_deep_think L16338", level="debug")
                     _knowledge_context = ""
 
             # 存储每一轮的思考结果
@@ -17282,7 +17332,8 @@ class PulseInnerWorld(
         if self.stress_axis:
             try:
                 _stress_load = float(self.stress_axis.get_stress_level() or 0.0)
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="organs/brain/PulseInnerWorld.py::_capture_meta_state L17285", level="debug")
                 _stress_load = 0.0
         if _stress_load >= 0.7 or recent_count > 80:
             state["cognitive_load"] = "high"

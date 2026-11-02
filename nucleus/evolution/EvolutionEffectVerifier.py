@@ -166,7 +166,8 @@ class EvolutionEffectVerifier:
     def verify(self, patch: dict[str, Any], issue: dict[str, Any] | None = None,
                *, problem_gone: bool | None = None,
                function_ok: bool | None = None,
-               perf_delta_ms: float | None = None) -> dict[str, Any]:
+               perf_delta_ms: float | None = None,
+               perf_detail: dict[str, Any] | None = None) -> dict[str, Any]:
         """对一次补丁应用做效果验证，返回裁决。
 
         Args:
@@ -175,6 +176,10 @@ class EvolutionEffectVerifier:
             problem_gone: ① 问题是否消失（None = 无法判定）
             function_ok: ② 相关功能是否正常（None = 无法判定）
             perf_delta_ms: ③ 性能变化（正数=变慢；None = 未测量）
+            perf_detail: ③ 的**明细**（★428刀3 新增，可选）——
+                `{"p95_delta_ms": float|None, "mem_delta_mb": float|None,
+                  "before_ms", "after_ms", "ab_mode"}`。
+                判据一个字不用它：只用于把数值存进 verdict 供事后复核。
 
         Returns:
             {"passed", "dims": {...}, "trust_delta", "reason", "patch_id"}
@@ -237,6 +242,17 @@ class EvolutionEffectVerifier:
                        " ⇒ 覆盖不足，不奖不罚")
             _delta = 0
 
+        # ★428刀3：三维度**数值**也落盘（改造前只用一次就算丢）。
+        #   任务书问"验证一个补丁后真有 perf_delta_ms 字段吗"——改造前没有：
+        #   `verify()` 把入参用一次算 `perf_ok` 就返回，verdict 里只剩一个布尔
+        #   和一句文案 ⇒ 事后既不能复核判得对不对，也做不了趋势。
+        #   取数优先级：显式入参 > perf_detail > None；**拿不到就是 None**，
+        #   绝不写 0（0 是个"测过了、没变化"的断言，而这里的事实是"没测"）。
+        _pd = perf_detail if isinstance(perf_detail, dict) else {}
+        _perf_ms = (float(perf_delta_ms) if isinstance(perf_delta_ms, (int, float))
+                    else None)
+        _perf_p95 = _pd.get("p95_delta_ms")
+        _perf_mem = _pd.get("mem_delta_mb")
         _verdict = {
             "patch_id": _pid,
             "file": patch.get("file", ""),
@@ -248,6 +264,13 @@ class EvolutionEffectVerifier:
                 "problem_gone": _d1, "function_ok": _d2, "perf_ok": _d3,
                 "notes": [_d1_note, _d2_note, _d3_note],
             },
+            # ★428刀3：三维度数值（正 = 变慢 / 变多，与 perf_delta_ms 同语义）
+            "perf_delta_ms": _perf_ms,
+            "perf_p95_ms": (float(_perf_p95)
+                            if isinstance(_perf_p95, (int, float)) else None),
+            "perf_mem_mb": (float(_perf_mem)
+                            if isinstance(_perf_mem, (int, float)) else None),
+            "perf_ab_mode": str(_pd.get("ab_mode") or ""),
             "verified_at": time.time(),
         }
         with self._lock:

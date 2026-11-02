@@ -32,9 +32,12 @@ function_ok / perf_ok` **三维全知**；而 `PatchManager.py:5177` 固定传
 
 from __future__ import annotations
 
+import ast
+import math
 import os
 import shutil
 import tempfile
+import textwrap
 from typing import Any
 
 from nucleus._silent_except import silent_exc
@@ -42,7 +45,29 @@ from nucleus.logger import get_module_logger
 
 _module_logger = get_module_logger("PerfDeltaProbe")
 
-_M412_PP_VERSION = "412.3"
+#: 形如 `412.3+428.1`：**前缀是 412 的契约版本**（既有单测钉死 startswith("412.")），
+#: `+428.1` 是 428 刀3 的扩展标记（A/B 同构 + P95 + 内存）。
+_M412_PP_VERSION = "412.3+428.1"
+
+# ===== ★428刀3：A/B 两侧必须"同构" =====
+# 【实测】412 首版把 after 侧写成"整文件"、before 侧写成 `original_code` 原文。
+#   生产里 original_code 是**方法体片段**（带 8 空格缩进、常以 `try:` 开头），
+#   写成 .py 后 import 必失败 ⇒ before 侧永远 `no_sample`。
+#   复跑 87 条真实补丁记录，**全部**报
+#   `measure_failed(before=no_sample（沙箱没跑出可用读数） after=ok)`。
+#   这就是 41 条 verdict 里 40 条 `perf_ok=null` 的真因（不是"没接线"）。
+#
+# 两个模式（**只加不改**，保住 412 的 15 条契约测试）：
+#   * `standalone`  —— original_code 自己就是个完整模块（412 测试的形态）⇒ 原路径；
+#   * `revert_in_file` —— original_code 是片段（生产真实形态）⇒ 把**目标文件全文**
+#     里的 modified_code 换回 original_code，得到"改前"的完整文件。
+#     两侧都是完整模块 ⇒ 才可比。
+#   两种都做不到 ⇒ `missing` + 明确原因，**不拿 0 冒充"没有变化"**。
+_AB_MODE_STANDALONE = "standalone"
+_AB_MODE_REVERT = "revert_in_file"
+
+#: P95 采样下限：样本太少时 P95 退化成最大值，故注明实际样本数
+_P95_MIN_SAMPLES = 3
 
 #: 灰度开关
 SWITCH = "ENABLE_M412_PERF_DELTA"
@@ -80,6 +105,14 @@ def _import_code(file_abs: str, project_root_abs: str) -> str:
         "    sys.stderr.write('M412_IMPORT_FAIL: ' + repr(_e) + '\\n')\n"
         "    sys.exit(3)\n"
         "print('M412_MS', (time.perf_counter() - _t0) * 1000.0, flush=True)\n"
+        # ★428刀3：内存占用（RSS，MB）。放在"M412_MS"**之后**打，
+        #   保证 412 既有解析逻辑（只找 M412_MS 行）完全不受影响。
+        "try:\n"
+        "    import psutil as _ps\n"
+        "    print('M428_MEM_MB', _ps.Process().memory_info().rss / 1048576.0,"
+        " flush=True)\n"
+        "except BaseException:\n"
+        "    pass\n"
     )
 
 
@@ -92,7 +125,8 @@ def measure_import_ms(file_abs: str, project_root: str | None = None,
         ``{"state": ok|error, "ms": float|None, "samples": list[float], "reason": str}``
         ★取**最小值**：冷启动抖动只会让数变大，最小值最接近稳态。
     """
-    _out: dict[str, Any] = {"state": "error", "ms": None, "samples": [], "reason": ""}
+    _out: dict[str, Any] = {"state": "error", "ms": None, "samples": [],
+                            "p95_ms": None, "mem_mb": None, "reason": ""}
     if not file_abs or not os.path.isfile(file_abs):
         _out["reason"] = "file_missing"
         return _out
@@ -105,6 +139,7 @@ def measure_import_ms(file_abs: str, project_root: str | None = None,
     _root = os.path.abspath(project_root or os.path.dirname(file_abs))
     _code = _import_code(os.path.abspath(file_abs), _root)
     _samples: list[float] = []
+    _mems: list[float] = []
     for _ in range(max(1, int(repeats))):
         try:
             _res = execute_code_in_subprocess(
@@ -119,7 +154,14 @@ def measure_import_ms(file_abs: str, project_root: str | None = None,
         for _ln in (_res.stdout or "").splitlines():
             if _ln.startswith("M412_MS"):
                 _line = _ln
-                break
+            elif _ln.startswith("M428_MEM_MB"):
+                # ★428刀3：内存读数缺失不算失败（psutil 可能不可用），
+                #   只让 mem_mb 保持 None —— 不因为"量不到内存"就丢掉耗时读数。
+                try:
+                    _mems.append(float(_ln.split()[1]))
+                except (IndexError, ValueError) as _me:
+                    silent_exc(_me, where="evolution.perf_delta_probe:parse_mem",
+                               level="debug")
         if not _line:
             continue
         try:
@@ -130,8 +172,59 @@ def measure_import_ms(file_abs: str, project_root: str | None = None,
         _out["reason"] = "no_sample（沙箱没跑出可用读数）"
         return _out
     _out.update({"state": "ok", "ms": round(min(_samples), 3),
-                 "samples": [round(x, 3) for x in _samples]})
+                 "samples": [round(x, 3) for x in _samples],
+                 "p95_ms": _m428_p95_ms(_samples),
+                 "mem_mb": (round(max(_mems), 3) if _mems else None)})
     return _out
+
+
+def _m428_p95_ms(samples) -> float | None:
+    """P95（毫秒）。样本 < `_P95_MIN_SAMPLES` 时 P95 等价于最大值 —— 如实返回，不修正。"""
+    _xs = sorted(float(x) for x in (samples or []))
+    if not _xs:
+        return None
+    _i = math.ceil(0.95 * len(_xs)) - 1
+    _i = max(0, min(_i, len(_xs) - 1))
+    return round(_xs[_i], 3)
+
+
+def _m428_parses_standalone(text) -> bool:
+    """这段文本能否**独立**当一个模块 `ast.parse` 通过（决定走哪个 A/B 模式）。"""
+    _s = str(text or "")
+    if not _s.strip():
+        return False
+    try:
+        ast.parse(textwrap.dedent(_s))
+        return True
+    except SyntaxError:
+        return False
+
+
+def _m428_revert_in_file(full_text, modified_code, original_code) -> str | None:
+    """把"已打补丁的整文件"还原成"改前"：`modified_code` → `original_code`（只换首处）。
+
+    返回 None 表示**换不了**（补丁没落地 / 空白漂移）——此时必须报 missing，
+    不能拿"没换成的文件"当 before 侧（那等于 A/A，delta 恒 0，会被判成 perf_ok）。
+
+    容错顺序（只做机械等价变换，不改代码语义）：
+      ① 原样替换；② 统一换行后替换（CRLF/LF 漂移）；
+      ③ 两侧都剥掉行尾空白后替换。
+    """
+    _full = str(full_text or "")
+    _mod = str(modified_code or "")
+    _orig = str(original_code or "")
+    if not _full or not _mod.strip():
+        return None
+    if _mod in _full:
+        return _full.replace(_mod, _orig, 1)
+    _full_n = _full.replace("\r\n", "\n")
+    if _mod.replace("\r\n", "\n") in _full_n:
+        return _full_n.replace(_mod.replace("\r\n", "\n"), _orig, 1)
+    _strip = "\n".join(_ln.rstrip() for _ln in _full_n.splitlines())
+    _mod_s = "\n".join(_ln.rstrip() for _ln in _mod.replace("\r\n", "\n").splitlines())
+    if _mod_s and _mod_s in _strip:
+        return _strip.replace(_mod_s, _orig, 1)
+    return None
 
 
 def _write_temp(src_text: str, name: str = "target", workdir: str | None = None) -> str | None:
@@ -160,7 +253,12 @@ def perf_delta_for_patch(patch: dict, project_root: str | None = None,
         不拿 0 冒充"没有变化"（0 会被判成 perf_ok）。
     """
     _out: dict[str, Any] = {"state": "error", "before_ms": None, "after_ms": None,
-                            "delta_ms": None, "reason": "", "repeats": int(repeats)}
+                            "delta_ms": None, "reason": "", "repeats": int(repeats),
+                            # ★428刀3：三维度（任务书要的三个指标）
+                            "before_p95_ms": None, "after_p95_ms": None,
+                            "p95_delta_ms": None,
+                            "before_mem_mb": None, "after_mem_mb": None,
+                            "mem_delta_mb": None, "ab_mode": ""}
     if not enabled():
         _out.update({"state": "missing", "reason": "disabled"})
         return _out
@@ -179,27 +277,73 @@ def perf_delta_for_patch(patch: dict, project_root: str | None = None,
 
     _work = tempfile.mkdtemp(prefix="m412_perf_ab_")
     try:
-        _after_path = _write_temp(_read_text(_file), name="after", workdir=_work)
-        _before_path = _write_temp(_orig, name="before", workdir=_work)
-        if not _after_path or not _before_path:
+        _after_full = _read_text(_file)
+        # ★428刀3：before 侧**不能用"能否 ast.parse"来判别** —— 方法体片段
+        #   （如 `self._foo(x)\nreturn y`）在模块级完全能解析，但 import 时
+        #   要**执行**它 ⇒ `self` 未定义 ⇒ NameError ⇒ 沙箱 no_sample。
+        #   实测：首版用 ast.parse 判别，23 条真实补丁仍全部
+        #   `ab_mode=standalone / before=no_sample`。
+        #   "能否导入"只能实测，故改为**按优先级列候选、逐个实测取第一个成功者**。
+        _plans: list[tuple[str, str]] = []
+        _rev = _m428_revert_in_file(_after_full, patch.get("modified_code"), _orig)
+        if _rev is not None:
+            # ① 优先：同一文件的"改前 vs 改后"，这是语义上唯一正确的 A/B
+            _plans.append((_AB_MODE_REVERT, _rev))
+        # ② 兜底：412 原契约（测试里 original_code 就是整模块）
+        _plans.append((_AB_MODE_STANDALONE, _orig))
+        _after_path = _write_temp(_after_full, name="after", workdir=_work)
+        if not _after_path:
             _out["reason"] = "temp_write_failed"
             return _out
-        _b = measure_import_ms(_before_path, project_root=project_root,
-                               repeats=repeats, timeout_sec=timeout_sec)
         _a = measure_import_ms(_after_path, project_root=project_root,
                                repeats=repeats, timeout_sec=timeout_sec)
-        _out["before_ms"] = _b.get("ms")
         _out["after_ms"] = _a.get("ms")
+        _b = {"ms": None, "reason": "no_plan"}
+        _ab_mode = ""
+        _tried: list[str] = []
+        for _mode, _before_text in _plans:
+            _tried.append(_mode)
+            _bp = _write_temp(_before_text, name="before", workdir=_work)
+            if not _bp:
+                continue
+            _rb = measure_import_ms(_bp, project_root=project_root,
+                                    repeats=repeats, timeout_sec=timeout_sec)
+            if _rb.get("ms") is not None:
+                _b, _ab_mode = _rb, _mode
+                break
+            _b = _rb
+            _module_logger.debug(
+                "[428刀3] A/B 模式 %s 未跑出读数（%s），尝试下一方案",
+                _mode, _rb.get("reason") or "?")
+        _out["ab_mode"] = _ab_mode
+        _out["before_ms"] = _b.get("ms")
         if _b.get("ms") is None or _a.get("ms") is None:
             _out["state"] = "error"
-            _out["reason"] = "measure_failed(before=%s after=%s)" % (
-                _b.get("reason") or "ok", _a.get("reason") or "ok")
+            _out["reason"] = (
+                f"measure_failed(tried={','.join(_tried) or '-'} "
+                f"before={_b.get('reason') or 'ok'} "
+                f"after={_a.get('reason') or 'ok'})")
             return _out
         _out["state"] = "ok"
         # ★正 = 变慢（与 verify() 的 perf_delta_ms 语义一致）
         _out["delta_ms"] = round(float(_a["ms"]) - float(_b["ms"]), 3)
-        _module_logger.debug("[412刀3] perf_delta before=%.3fms after=%.3fms delta=%.3fms",
-                             float(_b["ms"]), float(_a["ms"]), float(_out["delta_ms"]))
+        # ★428刀3：P95 与内存同口径（都是"改后 − 改前"）。任一侧缺读数 ⇒ None，
+        #   不拿 0 顶（0 会被读成"没有变化"）。
+        _out["before_p95_ms"] = _b.get("p95_ms")
+        _out["after_p95_ms"] = _a.get("p95_ms")
+        if _b.get("p95_ms") is not None and _a.get("p95_ms") is not None:
+            _out["p95_delta_ms"] = round(float(_a["p95_ms"]) - float(_b["p95_ms"]), 3)
+        _out["before_mem_mb"] = _b.get("mem_mb")
+        _out["after_mem_mb"] = _a.get("mem_mb")
+        if _b.get("mem_mb") is not None and _a.get("mem_mb") is not None:
+            _out["mem_delta_mb"] = round(float(_a["mem_mb"]) - float(_b["mem_mb"]), 3)
+        _module_logger.debug(
+            "[428刀3] perf_delta mode=%s before=%.3fms after=%.3fms delta=%.3fms "
+            "｜ p95 %.3f→%.3f (Δ%s) ｜ mem %s→%s MB (Δ%s)",
+            _ab_mode, float(_b["ms"]), float(_a["ms"]), float(_out["delta_ms"]),
+            float(_b["p95_ms"] or 0.0), float(_a["p95_ms"] or 0.0),
+            _out["p95_delta_ms"], _out["before_mem_mb"], _out["after_mem_mb"],
+            _out["mem_delta_mb"])
         return _out
     finally:
         try:

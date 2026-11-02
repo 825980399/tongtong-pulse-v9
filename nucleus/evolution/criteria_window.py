@@ -117,7 +117,10 @@ def write_ledger_conclusions(path: str | None = None,
                     try:
                         _o = _json350.loads(_ln)
                     except Exception as _e:
-                        silent_exc(_e, where="criteria_window.write_ledger_conclusions[424刀1]")
+                        # ★428：补 level（m369 台账要求每条留痕都写明级别；单行解析失败
+                        #   只跳过该条、不影响台账整体 ⇒ debug，与同函数 read/write 两处口径一致）
+                        silent_exc(_e, where="criteria_window.write_ledger_conclusions[424刀1]",
+                                   level="debug")
                         continue
                     if isinstance(_o, dict) and _o.get("key"):
                         _seen.add(str(_o["key"]))

@@ -276,7 +276,8 @@ class IntentPrototypeStore:
             v = v / n
             sims = self._matrix @ v
             return {name: float(sims[i]) for i, name in enumerate(self._names)}
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/qica/IntentChannels.py::similarities L279", level="debug")
             return {}
 
 
@@ -317,7 +318,8 @@ class ClassificationFeedback:
                     if isinstance(_d, dict) and isinstance(_d.get("intents"), dict):
                         self._data = _d
                         self._data.setdefault("adjust_events", [])
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="nucleus/qica/IntentChannels.py::load L320", level="debug")
                 pass  # 反馈数据损坏不影响主流程
             self._loaded = True
 
@@ -868,8 +870,9 @@ def refine_intent(text: str, result: dict, semantic_raw: dict | None = None) -> 
         # 重算 top_raw，保证「语义高置信覆盖规则」判定拿到关系查询的真实余弦
         if semantic_raw:
             result["top_raw"] = float(semantic_raw.get("关系查询", 0.0))
-    except Exception:
+    except Exception as _m428_e:
         # 精修为增强项，失败不得影响主流程
+        silent_exc(_m428_e, where="nucleus/qica/IntentChannels.py::refine_intent L871", level="debug")
         return result
     return result
 
@@ -963,7 +966,8 @@ def fuse(channel_scores: dict[str, dict[str, float]]) -> dict[str, Any]:
     # ★P1-41：附带 L1/L2 层次归属（可选字段，不参与打分、不改变分类流程）
     try:
         _l1, _l2 = IntentHierarchy.get_instance().lookup(top_intent)
-    except Exception:
+    except Exception as _m428_e:
+        silent_exc(_m428_e, where="nucleus/qica/IntentChannels.py::fuse L966", level="debug")
         _l1, _l2 = "", ""
 
     # ★主线第5批 任务3+4：QICA 8 通道贡献度遥测（预埋 PHASE18 器官关联图谱）

@@ -107,12 +107,20 @@ def thresholds() -> dict[str, float]:
 
 
 def night_window_sec() -> tuple[int, int, float]:
-    """复用夜间编排的 04:00±600s 常量（**不另抄一份**，抄一份就多一处会漂的口径）。"""
+    """复用夜间编排的 04:00 时刻常量（**不另抄一份**，抄一份就多一处会漂的口径）。
+
+    ★428刀2：容差改读 `NIGHT_WINDOW_TOLERANCE_SEC`（仍是 600s），
+      而**不是** `NIGHT_DIGEST_TOLERANCE_SEC`（428 已收到 300s）。
+      理由：本函数服务的是 G0 闸门「04:00±600s 内不释放内存，避免干扰
+      ledger 自转」。digest 的可执行窗口是另一个判据；跟着一起收窄会让
+      04:05–04:10 变成"可以释放内存"的时段 —— 正是闸门要防的事。
+      两个数同源（都来自 04:00），但宽度必须各管各的。
+    """
     try:
         from nucleus.evolution import night_orchestration as _no
         return (int(getattr(_no, "NIGHT_DIGEST_HOUR", 4)),
                 int(getattr(_no, "NIGHT_DIGEST_MINUTE", 0)),
-                float(getattr(_no, "NIGHT_DIGEST_TOLERANCE_SEC", 600.0)))
+                float(getattr(_no, "NIGHT_WINDOW_TOLERANCE_SEC", 600.0)))
     except Exception as _e:
         silent_exc(_e, where="release_policy::night_window_sec", level="warning")
         return (4, 0, 600.0)

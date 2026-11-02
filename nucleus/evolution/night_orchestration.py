@@ -36,7 +36,18 @@ _module_logger = get_module_logger("NightOrchestration")
 # 修正：在 main.py **既有主循环**加一个轻量定时点（不新建调度器、不起线程）。
 NIGHT_DIGEST_HOUR = 4              # 调度时刻（时）
 NIGHT_DIGEST_MINUTE = 0            # 调度时刻（分）
-NIGHT_DIGEST_TOLERANCE_SEC = 600.0  # ±容差（04:00±10min 视为窗口内）
+# ★428刀2：±10min → **±5min**（03:55–04:05）。
+#   为什么收紧：333 批设 600s 时只求"能跑起来"，未定窗口宽度。实测运行时刻
+#   03:51 / 03:52 / 03:55 全部落在 03:50 之后 —— 名义上"04:00 的 digest"
+#   实际在 03:52 就产出了，人读时无法把它与"前一晚的结果"区分开。
+#   任务书要求严格 04:00±5：早于 03:55 不算、晚于 04:05 也不算。
+#   不会漏跑：main.py 对该调度点有 60s 墙钟节流，300s 窗内约 10 次 tick。
+NIGHT_DIGEST_TOLERANCE_SEC = 300.0  # ±容差（04:00±5min 视为窗口内）
+# ★428刀2：**这不是重复常量**。内存释放的 G0 闸门要的是"别在 ledger 自转
+#   前后半小时内动内存"，与 digest 的可执行窗口是**两个判据**，只是一直
+#   共用同一个数。任务书只要求收 digest 的窗口，故此处显式拆开、
+#   让 `release_policy` 沿用原 600s —— 保住原行为，零连带。
+NIGHT_WINDOW_TOLERANCE_SEC = 600.0  # 内存释放闸门的夜间静默窗（原口径，未改）
 NIGHT_DIGEST_STATE_REL = "data/reports/night_digest_state.json"
 #: `generate_night_digest` 最近一次 sweep 的读数（留痕用；不跨进程持久化）
 _LAST_SWEEP_RESULT: dict = {}
@@ -260,7 +271,7 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
         project_root: 项目根（**隔离验证传隔离根**，ledger 路径随 root 走）
         now:          注入当前时间（datetime；测试用）
         state_path:   状态文件路径（默认 `<root>/data/reports/night_digest_state.json`）
-        tolerance_sec: 04:00 的 ± 容差秒数（默认 600s）
+        tolerance_sec: 04:00 的 ± 容差秒数（默认 300s = 04:00±5min，428刀2）
         enabled:      覆盖 `config.NIGHT_ORCH_DIGEST_ENABLED`
 
     Returns:

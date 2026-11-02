@@ -471,7 +471,8 @@ def _normalize_file_key(file_val: str) -> str:
         _p = _safe_relpath(_p, _PROJECT_ROOT)
         _p = os.path.normcase(_p)
         return _p.replace(os.sep, "/").replace("\\", "/")
-    except Exception:
+    except Exception as _m428_e:
+        silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_normalize_file_key L474", level="debug")
         return str(file_val)
 
 # ★第86批 T-86a（P0）：LLM 修复补丁零产出根因修复 —— 推理模型 token 预算。
@@ -533,8 +534,10 @@ def _m91_gate2_parse(code: str) -> tuple:
                       filename="<llm-patch>")
         return True, "", 0
     except SyntaxError as _g2_e:
+        silent_exc(_g2_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m91_gate2_parse L535", level="warning")
         return False, f"{type(_g2_e).__name__}: {_g2_e}", int(getattr(_g2_e, "lineno", 0) or 0)
     except Exception as _g2_e2:
+        silent_exc(_g2_e2, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m91_gate2_parse L537", level="warning")
         return False, f"{type(_g2_e2).__name__}: {_g2_e2}", 0
 
 
@@ -653,7 +656,8 @@ def _issue_filter_reason(file_path: str, project_root: str = "") -> str:
     _norm = file_path.replace("\\", "/")
     try:
         _patterns = list(getattr(config, "EVOLUTION_ISSUE_PATH_EXCLUDE_PATTERNS", []) or [])
-    except Exception:
+    except Exception as _m428_e:
+        silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_issue_filter_reason L656", level="debug")
         _patterns = []
     for _pat in _patterns:
         _p = (_pat or "").replace("\\", "/")
@@ -665,7 +669,8 @@ def _issue_filter_reason(file_path: str, project_root: str = "") -> str:
     try:
         _bak_prefixes = list(
             getattr(config, "EVOLUTION_ISSUE_BACKUP_DIR_PREFIXES", [".bak"]) or []) or [".bak"]
-    except Exception:
+    except Exception as _m428_e:
+        silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_issue_filter_reason L668", level="debug")
         _bak_prefixes = [".bak"]
     for _seg in _norm.split("/"):
         if any(_seg.startswith(_bp) for _bp in _bak_prefixes):
@@ -761,7 +766,8 @@ class SafeEvolutionExecutor:
                         str(_k): float(_v) for _k, _v in _cd_secs.items()
                         if isinstance(_v, (int, float)) and not isinstance(_v, bool)
                     }
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::__init__ L764", level="debug")
             self._no_fix_cooldown_secs = {}
         if not self._no_fix_cooldown_secs:
             # ★第95批 T-95a：回填表不再含死配置「已有待审批」
@@ -1159,6 +1165,7 @@ class SafeEvolutionExecutor:
                         "class_method_count": _class_method_count,
                     }
         except Exception as _ctx_err:
+            silent_exc(_ctx_err, where="nucleus/reasoning/SafeEvolutionExecutor.py::_deep_root_cause_analysis L1161", level="debug")
             _result["code_context"] = {"error": str(_ctx_err)}
 
         # 2. 日志关联分析
@@ -1175,6 +1182,7 @@ class SafeEvolutionExecutor:
                 "has_runtime_impact": _error_count > 0,
             }
         except Exception as _log_err:
+            silent_exc(_log_err, where="nucleus/reasoning/SafeEvolutionExecutor.py::_deep_root_cause_analysis L1177", level="debug")
             _result["log_analysis"] = {"error": str(_log_err)}
 
         # 3. 历史修复经验
@@ -1254,7 +1262,8 @@ class SafeEvolutionExecutor:
             if _ra:
                 _parts.append("修复风险: " + _ra.get("risk_level", "未知"))
             _result["summary"] = "；".join(_parts)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_deep_root_cause_analysis L1257", level="debug")
             _result["summary"] = _result["static_analysis"]
 
         return _result
@@ -1942,7 +1951,8 @@ class SafeEvolutionExecutor:
                 strategies=["local_rule", "llm"],
                 epsilon=0.3,
             )
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation L1945", level="debug")
             _strategy_ad = None
         # ★P1补丁覆盖扩展：本地规则可修类型从 4 类扩到 6 类，
         # 与 _generate_patch 的 elif 分支保持一致（silent_exception/bare_except/
@@ -2102,7 +2112,8 @@ class SafeEvolutionExecutor:
                     import config as _cfg_nor87
                     _nor_on = bool(getattr(
                         _cfg_nor87, "ENABLE_NONORGAN_FILE_RESOLVE", True))
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation L2105", level="debug")
                     _nor_on = True
                 if _nor_on:
                     try:
@@ -2167,7 +2178,8 @@ class SafeEvolutionExecutor:
                     import config as _cfg_m22
                     _fallback_on = bool(
                         getattr(_cfg_m22, "ENABLE_REPAIR_SNIPPET_FALLBACK", True))
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation L2170", level="debug")
                     _fallback_on = True
                 if _fallback_on:
                     # ★第88批 T-88a（根因：错误素材 ⇒ 结构性不可应用补丁）：
@@ -2188,7 +2200,8 @@ class SafeEvolutionExecutor:
                         import config as _cfg_m88
                         _m88_mat_on = bool(getattr(
                             _cfg_m88, "ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE", True))
-                    except Exception:
+                    except Exception as _m428_e:
+                        silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation L2191", level="debug")
                         _m88_mat_on = True
                     _m88_mat_file = _file or _resolved_file
                     if _m88_mat_on and not _m88_mat_file:
@@ -2341,7 +2354,8 @@ class SafeEvolutionExecutor:
                     import config as _cfg_m60
                     _degrade_on = bool(
                         getattr(_cfg_m60, "ENABLE_REPAIR_SNIPPET_DEGRADATION", True))
-                except Exception:
+                except Exception as _m428_e:
+                    silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::repair_with_distillation L2344", level="debug")
                     _degrade_on = True
                 if _degrade_on and _file and not _has_pending_dup:
                     try:
@@ -2804,7 +2818,8 @@ class SafeEvolutionExecutor:
         try:
             import config as _c
             _m = str(getattr(_c, "EVOLUTION_BASELINE_MATCH_MODE", "file") or "file")
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m41_match_mode L2807", level="debug")
             _m = "file"
         return _m if _m in ("file_method", "file", "file_or_method") else "file"
 
@@ -2825,7 +2840,8 @@ class SafeEvolutionExecutor:
         try:
             import config as _c
             _days = int(getattr(_c, "EVOLUTION_BASELINE_WINDOW_DAYS", 7) or 0)
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m41_baseline_since L2828", level="debug")
             _days = 7
         if not self._m41_baseline_fix_on():
             return 0.0
@@ -3792,7 +3808,8 @@ class SafeEvolutionExecutor:
         except SyntaxError as e:
             silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:3320:_clean_llm_code", level="debug")
             # 语法有问题，尝试归一化
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_clean_llm_code L3795", level="debug")
             return _code          # 其他异常（如 ValueError 空源码）不处理
         # ★176批段3 A3 埋点：进入归一化计数（类级累计，供真实失败率量化）
         SafeEvolutionExecutor._A3_normalize_entered += 1
@@ -3814,7 +3831,8 @@ class SafeEvolutionExecutor:
                     f"语法检查由失败转为通过（P0-10/P2-96）")
                 SafeEvolutionExecutor._A3_normalize_places += _total_n
                 return _fixed
-            except SyntaxError:
+            except SyntaxError as _m428_e:
+                silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_clean_llm_code L3817", level="debug")
                 _cur = _fixed
         # ★176批段3 A3 埋点：归一化后仍失败判定 + 词面可检日志
         #   到达此处且 _total_n>0 ⇒ 归一化发生过但循环内 parse 未通过（通过会提前 return），
@@ -4946,7 +4964,8 @@ class SafeEvolutionExecutor:
                                         f"[策略自进化] {patch.get('issue_type')} 动态信任门槛 "
                                         f"{_base_trust}→{_min_trust}")
                                 _llm_trust_ok = patch.get("trust_score", 0) >= _min_trust
-                            except Exception:
+                            except Exception as _m428_e:
+                                silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::execute L4949", level="debug")
                                 _llm_trust_ok = True
                         if _is_llm_patch and not _llm_trust_ok:
                             patch["status"] = "verified"
@@ -5036,7 +5055,8 @@ class SafeEvolutionExecutor:
             if _hist.get("llm_proven"):
                 return max(40, int(base_trust * 0.8))
             return base_trust
-        except Exception:
+        except Exception as _m428_e:
+            silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_dynamic_llm_min_trust L5039", level="debug")
             return base_trust
 
     def _reflect_and_retry(self, patch: dict[str, Any], plan: dict[str, Any],
@@ -5751,7 +5771,8 @@ class SafeEvolutionExecutor:
             try:
                 import config as _cfg_brne
                 _brne_on = bool(getattr(_cfg_brne, "ENABLE_LOCAL_FIX_BARE_RETURN_NONE", True))
-            except Exception:
+            except Exception as _m428_e:
+                silent_exc(_m428_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_generate_patch L5754", level="debug")
                 _brne_on = True
             if not _brne_on:
                 _applied_strategy = "bare_return_none_disabled"
@@ -5905,6 +5926,7 @@ class SafeEvolutionExecutor:
                     _ast_qc.parse(code, filename="<llm-patch>")
                     return (True, None)
                 except SyntaxError as _e:
+                    silent_exc(_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_try_ast_parse L5907", level="debug")
                     return (False, f"{_e.msg} (line {_e.lineno})")
 
             # 第一次尝试：直接ast.parse(适用于完整文件替换)
@@ -6697,6 +6719,7 @@ class SafeEvolutionExecutor:
                 try:
                     compile(new_content, file_path, 'exec')
                 except SyntaxError as e:
+                    silent_exc(e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_apply_patch_to_file L6699", level="debug")
                     return {"success": False, "error": f"替换后代码语法错误: {e}"}
 
                 # 原子写入（★FIX: 改用 mkstemp 随机名，避免预测名 TOCTOU/符号链接重定向）
@@ -6718,6 +6741,7 @@ class SafeEvolutionExecutor:
                 return {"success": False, "error": "未找到匹配的原始模式"}
 
         except Exception as e:
+            silent_exc(e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_apply_patch_to_file L6720", level="debug")
             return {"success": False, "error": str(e)[:80]}
 
     # ==================================================================
