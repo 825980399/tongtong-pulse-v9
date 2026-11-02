@@ -115,12 +115,21 @@ def test_07_decorator_and_attribute_are_not_statement_level():
 
 
 # ======================================================== ⑤ tokenize 读不动
-def test_08_tokenize_failure_is_unknown_and_not_blocking():
+def test_08_tokenize_failure_goes_to_parse_precheck():
+    """★427刀2 规格变更：tokenize 读不动 ⇒ 由「片段可解析」预检拒收。
+
+    旧语义（376 批）：state=unknown ⇒ 关2a 放行，交给关2 报 ast 泛化文案。
+    新语义（427 刀2）：reject 得更早，理由指向**片段不完整**而不是 try 不平衡——
+    括号未闭合本就同时是解析失败，把它说成"try 不平衡"是误导。
+    回滚点：`ENABLE_M427_PARSE_PRECHECK=False`（回到旧语义，本条后两行会红）。
+    """
     tb = _m376_try_balance("try:\n    x(\n")          # 括号未闭合
     assert tb["state"] == "unknown"
     assert tb["detail"].startswith("tokenize 失败（不拦）")
     _r = _gate({"original_code": _ORIG, "modified_code": "try:\n    x(\n"})
     assert "try 块不平衡" not in (_r.get("reason") or ""), "unknown 态不许被关2a 拦"
+    assert _r["complete"] is False, "刀2 后：解析不了的片段必须拒收"
+    assert _r["reason"].startswith("生成片段不完整（围栏/截断）"), _r["reason"]
 
 
 # ======================================================== ⑥ 裁决等价性
@@ -140,11 +149,17 @@ def test_10_gate2a_precedes_gate2_with_actionable_reason():
     _r = _gate({"original_code": _ORIG, "modified_code": "try:\n    x()\nreturn 1\n"})
     _why = _r.get("reason") or ""
     assert _r["complete"] is False
-    assert _why.startswith("try 块不平衡"), _why
+    # ★427刀2 规格变更（回滚点：`ENABLE_M427_PARSE_PRECHECK=False`）：
+    #   任务书要求"片段语法错时先报片段不完整，而不是 try 不平衡"。前导标签改钉新值，
+    #   但 376 的三条定位信息**一字不许少**（否则等于拿定位换标签）。
+    assert _why.startswith("生成片段不完整（围栏/截断）"), _why
     assert "缺 1 处收尾" in _why
     assert "第 1 行" in _why
     assert "入库前静态闸拦截" in _why
-    assert "expected 'except' or 'finally'" not in _why, "仍走了 ast 泛化文案 ⇒ 没抢在关2 前面"
+    # ★427刀2：这条从「不许出现 ast 文案」翻成「必须带 ast 真因」——旧断言的前提是
+    #   "关2 的 ast 泛化文案不可读"，而刀2 恰恰要把那句
+    #   `expected 'except' or 'finally'` 摆到最显眼处：它就是"被截断"的铁证。
+    assert "expected 'except' or 'finally'" in _why, "刀2 的真因没进 reason ⇒ 又退回泛化文案"
 
 
 # ======================================================== ⑦ 文案有界
