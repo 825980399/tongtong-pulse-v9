@@ -42,7 +42,7 @@ def _collect_parquet(cold_dir):
                 _t = pq.read_table(_fp, columns=["node_id", "evol_level"])
                 _d = _t.to_pylist()
             except Exception as _e:
-                silent_exc(_e, where="tools.ci.check_cold_index_relational._collect_parquet")
+                silent_exc(_e, where="tools.ci.check_cold_index_relational._collect_parquet", level="debug")
                 continue
             for _r in _d:
                 _nid = str(_r.get("node_id", "") or "")
@@ -90,7 +90,7 @@ def main(argv=None):
         with open(_idx_path, "r", encoding="utf-8") as _f:
             _index = json.load(_f)
     except Exception as _e:
-        silent_exc(_e, where="tools.ci.check_cold_index_relational.main(index)")
+        silent_exc(_e, where="tools.ci.check_cold_index_relational.main(index)", level="debug")
         print("[S4] FAIL：索引文件无法解析 %s" % _idx_path)
         return 1
     if not isinstance(_index, dict) or not _index:

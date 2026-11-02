@@ -152,13 +152,13 @@ def _write_collect_trace(level, count, status):
                 if not isinstance(_prev, list):
                     _prev = []
             except Exception as _je:
-                silent_exc(_je, where="check_red_baseline_gate._write_collect_trace.load")
+                silent_exc(_je, where="check_red_baseline_gate._write_collect_trace.load", level="debug")
                 _prev = []
         _prev.append(_entry)
         json.dump(_prev[-50:], open(_trace_path, "w", encoding="utf-8"),
                   ensure_ascii=False, indent=2)
     except Exception as _e:
-        silent_exc(_e, where="check_red_baseline_gate._write_collect_trace")
+        silent_exc(_e, where="check_red_baseline_gate._write_collect_trace", level="debug")
 
 
 def _collect_full(baseline):
@@ -221,7 +221,7 @@ def compute_affected_test_files(changed_files=None):
                            encoding="utf-8", errors="replace").read()
                 tree = ast.parse(src)
             except Exception as _e:
-                silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files.parse")
+                silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files.parse", level="debug")
                 continue
             imported = set()
             for node in ast.walk(tree):
@@ -237,7 +237,7 @@ def compute_affected_test_files(changed_files=None):
                         break
         return sorted(affected)
     except Exception as _e:
-        silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files")
+        silent_exc(_e, where="check_red_baseline_gate.compute_affected_test_files", level="debug")
         return None
 
 
@@ -392,7 +392,7 @@ def _base_for_selftest():
                 "known_fail": _b["known_fail"], "pollution_set": _b["pollution_set"],
                 "env_fingerprint": _b.get("env_fingerprint", {}), "raw": _b.get("raw", {})}
     except Exception as _be:
-        silent_exc(_be, where="check_red_baseline_gate._base_for_selftest")
+        silent_exc(_be, where="check_red_baseline_gate._base_for_selftest", level="debug")
         return {"collect_baseline": 4785, "known_fail": set(), "pollution_set": set(),
                 "env_fingerprint": {}, "raw": {}}
 
@@ -437,7 +437,7 @@ def selftest():
         try:
             _gbk_wrap.flush()
         except Exception as _fe:
-            silent_exc(_fe, where="check_red_baseline_gate.selftest.gbk_flush")
+            silent_exc(_fe, where="check_red_baseline_gate.selftest.gbk_flush", level="debug")
         sys.stderr = _old_stderr
     print("[selftest] 解析单测通过；超时掩码+GBK 编码安全通过")
 

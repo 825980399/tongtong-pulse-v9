@@ -101,7 +101,7 @@ def _load_ledger_raw(path: str | None = None) -> dict:
         with open(_p, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError) as _e:
-        silent_exc(_e, where="m365_silent_ledger::_load_ledger_raw")
+        silent_exc(_e, where="m365_silent_ledger::_load_ledger_raw", level="debug")
         return dict()
 
 
@@ -166,12 +166,12 @@ def _retire_reason(row: dict, live_pq=None) -> str:
             _src = f.read()
     except OSError as _e:
         # 文件都没了 ⇒ 函数必然不在（这是 func_gone 最常见的原因，别归成 unknown）
-        silent_exc(_e, where="m365_silent_ledger::_retire_reason::open")
+        silent_exc(_e, where="m365_silent_ledger::_retire_reason::open", level="debug")
         return "func_gone"
     try:
         _t = ast.parse(_src)
     except (SyntaxError, ValueError) as _e:
-        silent_exc(_e, where="m365_silent_ledger::_retire_reason::parse")
+        silent_exc(_e, where="m365_silent_ledger::_retire_reason::parse", level="debug")
         return "unknown"
     _fn = _find_func_node(_t, str(row.get("qualname") or ""))
     if _fn is None:

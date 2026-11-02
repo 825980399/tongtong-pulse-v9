@@ -72,7 +72,7 @@ def _ssrf_ok(url: str) -> bool:
         ok, _reason = is_safe_http_url(url)
         return bool(ok)
     except Exception as _e:
-        silent_exc(_e, where="live_gold9_148._ssrf_ok")
+        silent_exc(_e, where="live_gold9_148._ssrf_ok", level="debug")
         return False
 
 
@@ -81,7 +81,7 @@ def _rss_mb() -> float | None:
         import psutil
         return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
     except Exception as _e:
-        silent_exc(_e, where="live_gold9_148._rss_mb")
+        silent_exc(_e, where="live_gold9_148._rss_mb", level="debug")
         return None
 
 
@@ -132,12 +132,12 @@ def main() -> int:
             try:
                 eb = he.read().decode("utf-8", "ignore")[:200]
             except Exception as _e:
-                silent_exc(_e, where="live_gold9_148.main.http_body")
+                silent_exc(_e, where="live_gold9_148.main.http_body", level="debug")
                 eb = ""
             print(f"[FAIL] {cid}: HTTP {he.code} {eb}")
             results.append((cid, f"http{he.code}", None, time.time() - t0, 0))
         except Exception as exc:
-            silent_exc(exc, where="live_gold9_148.main")
+            silent_exc(exc, where="live_gold9_148.main", level="debug")
             print(f"[FAIL] {cid}: {type(exc).__name__}: {exc}")
             results.append((cid, "err", None, time.time() - t0, 0))
 

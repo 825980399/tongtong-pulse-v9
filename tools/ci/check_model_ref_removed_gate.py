@@ -102,7 +102,7 @@ def check():
                 data = f.read()
         except OSError as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, where="tools.ci.check_model_ref_removed_gate::check read")
+            silent_exc(_e, where="tools.ci.check_model_ref_removed_gate::check read", level="debug")
             continue
         # .py 先剔除整行注释，避免历史说明性提及被误判
         _ext = os.path.splitext(rel)[1].lower()

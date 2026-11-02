@@ -241,7 +241,7 @@ class Index:
         try:
             return self.src(p).splitlines()[n - 1].strip()
         except Exception as e:
-            silent_exc(e, where="tools.ci.check_write_only_gates::line_of L241")
+            silent_exc(e, where="tools.ci.check_write_only_gates::line_of L241", level="debug")
             return ""
 
     def build(self, files):
@@ -257,7 +257,7 @@ class Index:
         try:
             return ast.parse(self.src(f), filename=f)
         except (SyntaxError, ValueError) as e:
-            silent_exc(e, where="tools.ci.check_write_only_gates::_parse L256")
+            silent_exc(e, where="tools.ci.check_write_only_gates::_parse L256", level="debug")
             return None
 
     def _tokenize(self, f):
@@ -440,7 +440,7 @@ def _ext_index(ix: Index) -> dict:
                         texts.append(open(os.path.join(root, n), encoding="utf-8",
                                              errors="replace").read())
                     except Exception as e:
-                        silent_exc(e, where="tools.ci.check_write_only_gates::_ext_index L438")
+                        silent_exc(e, where="tools.ci.check_write_only_gates::_ext_index L438", level="debug")
     blob = "\n".join(texts)
     if blob:
         for m in re.finditer(r"_[A-Za-z][A-Za-z0-9_]{2,}", blob):
@@ -637,7 +637,7 @@ def changed_files(base):
             try:
                 x = x[1:-1].encode().decode("unicode_escape").encode("latin1").decode("utf-8")
             except Exception as e:
-                silent_exc(e, where="tools.ci.check_write_only_gates::changed_files L635")
+                silent_exc(e, where="tools.ci.check_write_only_gates::changed_files L635", level="debug")
         out.append(x)
     return out
 

@@ -70,12 +70,12 @@ def scan_file(path):
         with open(path, "r", encoding="utf-8") as f:
             src = f.read()
     except Exception as _e:  # pragma: no cover - 编码/读取异常时跳过该文件
-        silent_exc(_e, where="tools.ci.check_silent_exc_arity::scan_file read")
+        silent_exc(_e, where="tools.ci.check_silent_exc_arity::scan_file read", level="debug")
         return []
     try:
         tree = ast.parse(src, filename=path)
     except SyntaxError as _se:  # pragma: no cover - 语法错误文件不纳入（另有 ruff 把关）
-        silent_exc(_se, where="tools.ci.check_silent_exc_arity::scan_file parse")
+        silent_exc(_se, where="tools.ci.check_silent_exc_arity::scan_file parse", level="debug")
         return []
     violations = []
     for node in ast.walk(tree):
