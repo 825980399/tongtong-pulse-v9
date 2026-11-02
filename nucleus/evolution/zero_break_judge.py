@@ -324,7 +324,7 @@ def reference_truth_batch(project_root: str, items: list, *,
         _scanned += 1
         try:
             _txt = open(_p, "r", encoding="utf-8", errors="replace").read()
-        except Exception as _e:                                # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.reference_truth_batch read",
                        level="debug")
             continue
@@ -396,7 +396,7 @@ def _def_owner(file_abs: str, method: str) -> dict:
         import ast as _ast
         with open(file_abs, "r", encoding="utf-8", errors="replace") as _f:
             _tree = _ast.parse(_f.read())
-    except Exception as _e:                                     # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="zero_break_judge._def_owner parse", level="debug")
         _res["state"] = "parse_failed"
         return _res
@@ -468,7 +468,7 @@ def reference_truth_scoped(project_root: str, items: list, *,
         try:
             with open(_p, "r", encoding="utf-8", errors="replace") as _f:
                 _txt = _f.read()
-        except Exception as _e:                                 # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.reference_truth_scoped read",
                        level="debug")
             continue
@@ -568,7 +568,7 @@ def reference_truth(project_root: str, file: str, method: str, *,
     try:
         import re as _re_mod
         _re = _re_mod.compile(r"\b" + _re_mod.escape(_m) + r"\b")
-    except Exception as _e:                                     # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="zero_break_judge.reference_truth regex")
         return {"dead": None, "refs": None, "why": "正则构造失败",
                 "truth_source": TRUTH_SOURCE}
@@ -580,7 +580,7 @@ def reference_truth(project_root: str, file: str, method: str, *,
         _scanned += 1
         try:
             _txt = open(_p, "r", encoding="utf-8", errors="replace").read()
-        except Exception as _e:                                 # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.reference_truth read", level="debug")
             continue
         _hits = len(_re.findall(_txt))
@@ -755,7 +755,8 @@ def write_calibration_ledger(path: str, decision: dict, *,
                         continue
                     try:
                         _seen.add(str(_json.loads(_ln).get("key") or ""))
-                    except Exception:                           # noqa: BLE001
+                    except Exception as _e:
+                        silent_exc(_e, where="zero_break_judge.write_calibration_ledger[424刀1]")
                         continue
         except OSError as _e:
             silent_exc(_e, "zero_break_judge.write_calibration_ledger read",
@@ -796,7 +797,7 @@ def read_calibration(path: str) -> dict:
                     continue
                 try:
                     _last = _json.loads(_ln)
-                except Exception as _m369_e:  # noqa: BLE001
+                except Exception as _m369_e:
                     silent_exc(_m369_e, where="nucleus/evolution/zero_break_judge.py:read_calibration", level="debug")
                     continue
     except OSError as _e:
@@ -838,7 +839,7 @@ def collect_death_samples(project_root: str | None = None,
             _p = _ap.load_pool()
             if _p.get("state") == "ok":
                 _rows = _p["entries"]
-        except Exception as _e:                                 # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.collect_death_samples pool")
             _rows = []
     _cands = []
@@ -882,7 +883,7 @@ def collect_death_samples(project_root: str | None = None,
                 for _r in _bad.values():
                     _df["by_verdict"][_r["verdict"]] = (
                         _df["by_verdict"].get(_r["verdict"], 0) + 1)
-        except Exception as _e:                                # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.collect_death_samples drift")
             # 预检不可用：**如实标未过滤**，不假装“没有漂移”（铁律156）
             _df["applied"] = False
@@ -971,7 +972,7 @@ def _m407_alive_check_on() -> bool:
     try:
         import config as _c
         return bool(getattr(_c, "WATCH_HEAL_ALIVE_ONLY", True))
-    except Exception as e:                                  # noqa: BLE001
+    except Exception as e:
         silent_exc(e, where="zero_break_judge::_m407_alive_check_on")
         return True
 
@@ -1250,7 +1251,7 @@ def watch_batch(patch_ids, **kw) -> list:
     for _pid in (patch_ids or active_watch_ids()):
         try:
             _out.append(watch_candidate(str(_pid), **kw))
-        except Exception as _e:                                 # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="zero_break_judge.watch_batch", level="warning")
             _out.append({"schema": WATCH_SCHEMA, "patch_id": str(_pid),
                          "error": "%s: %s" % (type(_e).__name__, _e)})

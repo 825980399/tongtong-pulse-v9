@@ -213,9 +213,11 @@ def cleanup_temp_snapshot_residue(min_age_seconds: float = 60.0) -> int:
                     continue  # 太新，可能是正在运行的 pytest 临时文件
                 os.remove(_fpath)
                 _removed += 1
-            except Exception:
+            except Exception as _e:
+                silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]")
                 continue  # 单个删除失败不影响其它
-    except Exception:
+    except Exception as _e:
+        silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]")
         return _removed
     return _removed
 
@@ -1150,7 +1152,8 @@ class PulseSnapshot:
                 _nid = getattr(_n, "node_id", "")
                 if _nid:
                     _by_id[_nid] = _n
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m67_apply_incremental_log[424刀1]")
             return nodes
         # ★先收集再按 (node_id, ts) 折叠，保证乱序幂等
         _recs = {}
@@ -1583,7 +1586,8 @@ class PulseSnapshot:
         用于加载侧 FAIL-fast 分层保真校验与测试。失败/无数据返回空 dict。"""
         try:
             import pyarrow.parquet as _pq68
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m68_parquet_level_counts[424刀1]")
             return {}
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
@@ -1671,6 +1675,27 @@ class PulseSnapshot:
             os.replace(tmp_path, self.l1_snapshot_path)
 
             self._log(LogLevel.DEBUG, f"L1快照保存完成: {len(l1_nodes)} 个L1节点")
+            # ★424刀2：落盘后立刻对账（只做便宜的两项：文件自洽 + 本应写入数 vs 实际条数）。
+            #   真不一致 ⇒ WARNING；对账自身出任何问题都只静默留痕，绝不影响本次保存结果。
+            try:
+                from nucleus.mnemosyne import knowledge_count_reconcile as _m424_kc
+                # ★ 从 l1_snapshot_path 推项目根，**不能用 __file__**：
+                #   隔离验证时 snapshot_path 已改到 tmp/，用 __file__ 会去对账**生产**文件，
+                #   打出假 WARNING（424 实测踩到）。
+                _m424_root = os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(self.l1_snapshot_path))))
+                _m424_res = _m424_kc.reconcile(
+                    _m424_root,
+                    node_pool=self.node_pool,
+                    wrote_count=len(snapshot.get("nodes", [])),
+                    at_write=True,
+                )
+                if _m424_res.get("status") == "mismatch":
+                    self._log(LogLevel.WARNING,
+                              "[424刀2] L1 落盘对账不一致: %s"
+                              % [d["code"] for d in _m424_res.get("diffs", [])])
+            except Exception as _e:
+                silent_exc(_e, where="PulseSnapshot._save_l1_locked[424刀2-对账]")
             return True
         except Exception as e:
             self._log(LogLevel.ERROR, f"L1快照保存失败: {e}")
@@ -1905,7 +1930,7 @@ class PulseSnapshot:
             return None
         try:
             _view = self._load_lazy()
-        except Exception as _e342:  # noqa: BLE001 - 懒加载任何失败都必须回退全量而非炸启动
+        except Exception as _e342:
             self._log(LogLevel.WARNING,
                       "[342刀1] 懒加载失败，回退全量（src=%s）: %s: %s"
                       % (src, type(_e342).__name__, _e342))
@@ -1921,7 +1946,7 @@ class PulseSnapshot:
                       "[342刀1] 懒加载视图为空（src=%s），判为不可用并回退全量" % src)
             try:
                 _view.close()
-            except Exception as _ce342:  # noqa: BLE001 - 关句柄失败不影响回退决策
+            except Exception as _ce342:
                 silent_exc(_ce342,
                            where="nucleus.mnemosyne.PulseSnapshot::_m342_try_lazy_load close")
             return None
@@ -1940,7 +1965,7 @@ class PulseSnapshot:
         """
         try:
             from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
-        except Exception as _ie342:  # noqa: BLE001 - 导入失败按「不是视图」处理最安全
+        except Exception as _ie342:
             silent_exc(_ie342,
                        where="nucleus.mnemosyne.PulseSnapshot::_m342_is_lazy_view import")
             return False
@@ -2234,7 +2259,8 @@ class PulseSnapshot:
                     # 重新计算 checksum（元数据留空，首次 save 会全量写入）
                     try:
                         self._last_saved_checksum = self._compute_node_list_checksum(_pq_nodes)
-                    except Exception:
+                    except Exception as _e:
+                        silent_exc(_e, where="PulseSnapshot._load_internal[424刀1]")
                         self._last_saved_checksum = ""
                     self._last_save_nodes = len(_pq_nodes)
                     elapsed = time.time() - start_time
@@ -2457,7 +2483,8 @@ class PulseSnapshot:
                     return False
                 try:
                     _declared = int(expected_count)
-                except Exception:
+                except Exception as _e:
+                    silent_exc(_e, where="PulseSnapshot._verify_integrity[424刀1]")
                     _declared = -1
                 if _declared == 0:
                     # 快照自己声明 0 个节点（首次启动 / 空知识库）→ 正常，不应报 ERROR
@@ -2720,7 +2747,8 @@ class PulseSnapshot:
                 if fname.startswith(base_name) and ".bak" in fname:
                     fpath = os.path.join(snapshot_dir, fname)
                     backups.append((os.path.getmtime(fpath), fpath))
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._cleanup_old_backups_count[424刀1]")
             return removed
 
         backups.sort(reverse=True)
@@ -3147,7 +3175,8 @@ class PulseSnapshot:
                     _lv_counts[_lv] += 1
             try:
                 _checksum = self._compute_node_list_checksum(_saved)
-            except Exception:
+            except Exception as _e:
+                silent_exc(_e, where="PulseSnapshot._save_parquet_locked[424刀1]")
                 _checksum = ""
             try:
                 _table = _table.replace_schema_metadata({

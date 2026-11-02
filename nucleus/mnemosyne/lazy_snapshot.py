@@ -135,7 +135,8 @@ def _iter_snapshot(mm: mmap.mmap, array_key: bytes = b"nodes"):
                     try:
                         node_dict = json.loads(raw)
                         nid = node_dict.get("node_id")
-                    except Exception:
+                    except Exception as _e:
+                        silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]")
                         nid = None
                         node_dict = {}
                     nid_key = nid if isinstance(nid, str) else None
@@ -155,7 +156,8 @@ def _iter_snapshot(mm: mmap.mmap, array_key: bytes = b"nodes"):
             try:
                 metadata[key] = json.loads(
                     mm[vspan[0]:vspan[1]].decode("utf-8", "replace"))
-            except Exception:
+            except Exception as _e:
+                silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]")
                 metadata[key] = None
             i = vspan[1]
 

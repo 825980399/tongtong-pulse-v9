@@ -7127,6 +7127,16 @@ ENABLE_M422_NARRATIVE_FLUSH = True
 #   读取点：nucleus/evolution/archive_recovery.py::recover
 ENABLE_M423_ARCHIVE_RECOVERY = True
 
+# ★424 刀2：知识库 L1 计数多口径对账（落盘后自动跑 + 按需全量）。
+#   为什么需要：同一句「L1 有多少条」框架里有 4 个互不等价的口径 ——
+#     ① get_stats()['evol_distribution']['L1']（含 ephemeral）  生产 578
+#     ② pulse_l1_snapshot.json 的 l1_count / len(nodes)（排除 ephemeral）生产 562
+#     ③ cold.index.json（已归档，全是 L1）                      生产 5536
+#     ④ cold/*.parquet 去重 node_id（同上）                     生产 5536
+#   ①②差 16 条 = ephemeral；③④与①②本是两个集合，只能比「重叠」不能比「相等」。
+#   本开关只读 + 只打 WARNING，不改任何计数与落盘行为；改回 False 即完全停用。
+ENABLE_M424_KNOWLEDGE_COUNT_RECONCILE = True
+
 # ======================================================================
 # [M415-CFG] 第415批 · 经验池命中拼进对话 prompt
 # ======================================================================

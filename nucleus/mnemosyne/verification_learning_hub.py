@@ -374,6 +374,7 @@ class VerificationLearningHub:
                 "distill_threshold": self._distill_threshold,
             }
         except Exception as e:
+            silent_exc(e, where="verification_learning_hub.get_stats[424刀1]")
             return {"total": 0, "remediation_count": 0, "remediation_rate": 0.0, "top_failure_reasons": []}
 
     def should_verify(self, organ: str, task_type: str,

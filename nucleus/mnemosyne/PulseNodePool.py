@@ -81,7 +81,7 @@ def m350_cold_index_evidence(cold_dir: str | None = None) -> dict:
         _module_logger.info("[350开闸] 冷索引不存在 path=%s（条件④不立）", _p)
         return {"state": "absent", "writable": False, "index_entries": 0,
                 "index_mtime": None, "path": _p, "why": "冷索引不存在"}
-    except Exception as _e:  # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="PulseNodePool::m350_cold_index_evidence")
         return {"state": "unreadable", "writable": None, "index_entries": None,
                 "index_mtime": None, "path": _p, "why": "读不到不猜"}
@@ -92,7 +92,7 @@ def _m343_pg() -> str:
     try:
         from nucleus.proc_gen import proc_gen_str as _pgs
         return str(_pgs())
-    except Exception as _e:                                      # noqa: BLE001
+    except Exception as _e:
         # 取不到代次只降级为 unknown（**不填 0**，铁律：0 会被读成合法代次），但必须留痕
         silent_exc(_e, where="PulseNodePool::_m343_pg")
         return "unknown"
@@ -560,7 +560,8 @@ class PulseNodePool(SilentLogMixin):
             # ★知识污染治理：钳制信任分到 [0, 100]，堵住快照恢复/越界写入的异常信任分
             try:
                 node.trust_score = max(0.0, min(100.0, float(node.trust_score)))
-            except Exception:
+            except Exception as _e:
+                silent_exc(_e, where="PulseNodePool.add[424刀1]")
                 node.trust_score = 50.0
 
             # ===== 幂等检查 =====
@@ -2052,7 +2053,8 @@ class PulseNodePool(SilentLogMixin):
         try:
             with open(_path, encoding="utf-8") as _f:
                 return _json.load(_f)
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="PulseNodePool._l3_fuse_state[424刀1]")
             return {"date": "", "count": 0}
 
     def _l3_fuse_allows(self) -> bool:
@@ -2731,7 +2733,7 @@ class PulseNodePool(SilentLogMixin):
                 with open(_lp, "a", encoding="utf-8") as _lf:
                     _lf.write(json.dumps(_rec, ensure_ascii=False) + "\n")
                 _led_ok = True
-            except Exception as _e:                              # noqa: BLE001
+            except Exception as _e:
                 silent_exc(_e, where="PulseNodePool::_m343_record_eviction ledger")
         # ② 内存索引（键=node_id，与 _rebuild_cold_index 同结构 + 343 三字段）
         try:
@@ -2748,7 +2750,7 @@ class PulseNodePool(SilentLogMixin):
                     "evict_ts": _now, "evict_path": path,
                 }
                 _n_idx = len(self._cold_index)
-        except Exception as _e:                                  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m343_record_eviction index")
             _n_idx = -1
         # ③ 持久化（节流：首条立即写，同窗口内合并，避免 140 次全量重写）
@@ -2798,7 +2800,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             return os.path.join(os.path.dirname(self._cold_dir.rstrip(os.sep))
                                 or self._cold_dir, "reload_stats.json")
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m349_reload_stats_path")
             return "reload_stats.json"
 
@@ -2846,7 +2848,7 @@ class PulseNodePool(SilentLogMixin):
                     int(_st["evictions"]), int(_st["skipped_not_evicted"]),
                     _st["proc_gen"])
             self._m349_persist_reload_stats()
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m349_note_reload")
 
     def _m349_persist_reload_stats(self, force: bool = False) -> bool:
@@ -2874,7 +2876,7 @@ class PulseNodePool(SilentLogMixin):
             os.replace(_tmp, _p)
             self._m349_reload_persist_ts = _now
             return True
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m349_persist_reload_stats")
             return False
 
@@ -2919,7 +2921,7 @@ class PulseNodePool(SilentLogMixin):
                         _v["state"] = "flushed"
                         _v["reload"] = "available"
                         _done += 1
-        except Exception as _e:                                  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m343_mark_flushed")
             return 0
         if _done:
@@ -2961,7 +2963,7 @@ class PulseNodePool(SilentLogMixin):
                 silent_exc(_e2, where="PulseNodePool::_m343_persist_cold_index mtime")
                 _mt = _now
             return True, _mt
-        except Exception as _e:                                  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="PulseNodePool::_m343_persist_cold_index")
             self._cold_index_stale = True
             _module_logger.warning(
@@ -3167,7 +3169,7 @@ class PulseNodePool(SilentLogMixin):
             # ★343刀6：flush 落盘后，驱逐条目由 pending_flush → flushed（回载=可用）
             try:
                 self._m343_mark_flushed(len(_rows))
-            except Exception as _m343f_e:                        # noqa: BLE001
+            except Exception as _m343f_e:
                 silent_exc(_m343f_e,
                            where="PulseNodePool::_flush_cold_buffer_nodes 343置flushed")
             return len(_rows)

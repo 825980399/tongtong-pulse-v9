@@ -340,7 +340,8 @@ class EvolutionLoop(SilentLogMixin):
                         skip_detectors=["dead_code", "cc_growth"],
                         min_severity="medium",
                     )
-                except TypeError:
+                except TypeError as _e:
+                    silent_exc(_e, where="EvolutionLoop.discover_all_issues[424刀1]")
                     _inspector_issues = _inspector.detect_code_issues()
                 if _inspector_issues:
                     # 只取 high/medium 级（low/info 是 long_method/print_debug 等

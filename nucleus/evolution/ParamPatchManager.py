@@ -573,7 +573,8 @@ class ParamPatchManager:
             if os.path.exists(_PATCH_HISTORY_PATH):
                 history = safe_read_json(_PATCH_HISTORY_PATH, default={})
                 self._applied_patches = history.get("applied", [])[-100:]  # 保留最近100条
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="ParamPatchManager._load_history[424刀1]")
             self._applied_patches = []
 
     def _save_history(self):

@@ -116,11 +116,12 @@ def write_ledger_conclusions(path: str | None = None,
                         continue
                     try:
                         _o = _json350.loads(_ln)
-                    except Exception:                            # noqa: BLE001
+                    except Exception as _e:
+                        silent_exc(_e, where="criteria_window.write_ledger_conclusions[424刀1]")
                         continue
                     if isinstance(_o, dict) and _o.get("key"):
                         _seen.add(str(_o["key"]))
-    except Exception as _e:                                      # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="criteria_window::write_ledger_conclusions read")
     _added = []
     _dir = os.path.dirname(_p)
@@ -137,7 +138,7 @@ def write_ledger_conclusions(path: str | None = None,
                 _row["schema"] = "criteria_ledger/350.v1"
                 _f.write(_json350.dumps(_row, ensure_ascii=False) + "\n")
                 _added.append(_k)
-    except Exception as _e:                                      # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="criteria_window::write_ledger_conclusions write",
                    level="warning")
         return {"ok": False, "added": _added, "path": _p,
@@ -235,7 +236,7 @@ def note_converge_voided(patch_id, file: str = "", method: str = "",
     try:
         from nucleus.proc_gen import proc_gen_str as _pgs
         _rec["proc_gen"] = str(_pgs() or "unknown")
-    except Exception as _e:                                    # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="criteria_window::note_converge_voided proc_gen",
                    level="debug")
     _rec.update(fields)
@@ -755,7 +756,7 @@ def judge_rounds(rows, criteria_version: str = "343.j3",
                 "（items=%s；不可判 ≠ 没问题，禁止读成通过）",
                 _alarm["count"], _alarm["threshold"],
                 ",".join(str(x.get("item")) for x in _alarm["items"])[:200])
-        except Exception as _le:                                  # noqa: BLE001
+        except Exception as _le:
             # 打告警失败不影响返回：alarm 字段已随返回值带出，调用方仍可判定。
             silent_exc(_le, where="criteria_window::judge_rounds logger.error")
     return {"rounds": _rounds, "n_qualified": _nq,

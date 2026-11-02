@@ -491,7 +491,8 @@ def load_history(path: str | None = None) -> list:
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _d = json.loads(_f.read())
         return _d if isinstance(_d, list) else []
-    except (OSError, ValueError):
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="patch_quality_evaluator.load_history[424刀1]")
         return []
 
 

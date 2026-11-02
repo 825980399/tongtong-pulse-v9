@@ -307,9 +307,11 @@ if __name__ == "__main__":
                 return {"passed": True, "detail": "RUFF 全绿"}
             _lines = [l for l in _out.splitlines() if l.strip()]
             return {"passed": False, "detail": f"RUFF {len(_lines)}项问题", "output": _out[-1000:]}
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as _e:
+            silent_exc(_e, where="TestGenerator._run_ruff_check[424刀1]")
             return {"passed": True, "detail": "RUFF 超时（跳过，不阻断）"}
         except Exception as _e:
+            silent_exc(_e, where="TestGenerator._run_ruff_check[424刀1]")
             return {"passed": True, "detail": f"RUFF 不可用（跳过）: {_e}"}
 
     # ========== 4. 端到端往返测试（★P0 新增） ==========
@@ -356,6 +358,7 @@ if __name__ == "__main__":
         except subprocess.TimeoutExpired:
             return {"passed": False, "detail": "往返测试超时(120s)"}
         except Exception as _e:
+            silent_exc(_e, where="TestGenerator._run_roundtrip_test[424刀1]")
             return {"passed": True, "detail": f"往返测试异常（跳过）: {_e}"}
 
     def _render_roundtrip_script(self, patch_id: str, patch: dict[str, Any]) -> str | None:
@@ -383,7 +386,8 @@ if __name__ == "__main__":
         try:
             with open(_script_path, "w", encoding="utf-8") as _f:
                 _f.write(_script)
-        except Exception:
+        except Exception as _e:
+            silent_exc(_e, where="TestGenerator._run_compat_test[424刀1]")
             return {"passed": True, "detail": "脚本写入失败（跳过）"}
         try:
             _proc = subprocess.run(
@@ -401,6 +405,7 @@ if __name__ == "__main__":
         except subprocess.TimeoutExpired:
             return {"passed": False, "detail": "兼容测试超时(120s)"}
         except Exception as _e:
+            silent_exc(_e, where="TestGenerator._run_compat_test[424刀1]")
             return {"passed": True, "detail": f"兼容测试异常（跳过）: {_e}"}
 
     def _render_compat_script(self, patch_id: str, patch: dict[str, Any]) -> str | None:
