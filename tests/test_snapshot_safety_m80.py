@@ -124,10 +124,20 @@ def test_A4_cold_no_storm(snapshot):
     内存桩无法复现逐节点磁盘召回，此处以「枚举次数有界」作为回归护栏：
     一次全量保存枚举节点池的遍数恒定（观测为 3：主JSON + Parquet保底 + L1快照），
     不会随节点数线性增长（否则即风暴回归）。
+
+    ★425：常数 3 → 5。**不是本批引入** —— A/B 实测：把 PulseSnapshot 换回
+    425 改动前的备份跑同一用例，同样 5 次同样红。真因是 424 刀2 在
+    `_save_l1_locked` 挂了「L1 落盘对账」，`count_pool_l1()` 自己枚举一次池，
+    加上对账自身一次入参，合计把常数从 3 推到 5。
+    回滚点：把 `ENABLE_M424_KNOWLEDGE_COUNT_RECONCILE` 置 False，常数应回落 3，
+    届时把下面的 5 改回 4 即为原状。
     """
     snapshot.save(force_full=True)
     _calls = snapshot.node_pool.recall_calls
-    assert _calls <= 4, f"节点池枚举次数异常偏高（疑似逐节点召回风暴）: {_calls}"
+    # ★425：5 = 3（本用例原观测：主JSON + Parquet保底 + L1快照）
+    #        + 2（424 刀2 落盘对账：count_pool_l1 枚举一次 + 对账自身一次入参）。
+    #   仍用精确上界而不是 `<= 10` 之类宽放：这条护栏的意义就是「多一次都算回归」。
+    assert _calls <= 5, f"节点池枚举次数异常偏高（疑似逐节点召回风暴）: {_calls}"
 
 
 def test_A5_incremental_log_disabled(snapshot):
