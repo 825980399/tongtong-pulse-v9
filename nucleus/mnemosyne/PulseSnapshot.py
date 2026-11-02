@@ -706,6 +706,7 @@ class PulseSnapshot:
             "extra_state": self._extra_state,
         }
 
+        _t_json0 = time.time()
         try:
             # ★v29：全量保存同样用紧凑模式（保留轮转备份，兼容旧版加载）
             # ★第67批 T1：分批流式写（默认开，SNAPSHOT_BATCH_SIZE > 0）——
@@ -725,6 +726,9 @@ class PulseSnapshot:
         except Exception as e:
             self._log(LogLevel.ERROR, f"全量保存失败: {type(e).__name__}: {e}")
             return False
+        # ★425刀1：JSON 写盘单列计时。全量 13~24s 里这一步占大头（757MB 实测 11.29s），
+        #   不做分解就只能看到「全量慢」而定位不到是谁慢。
+        self._m425_last_json_write_sec = time.time() - _t_json0
 
         # 更新状态
         self._last_saved_checksum = current_checksum
@@ -739,7 +743,8 @@ class PulseSnapshot:
         self._log(LogLevel.INFO,
                   f"全量保存完成: {len(saved_nodes)}个节点 "
                   f"(L1={len(l1_nodes)}, L2/L3={len(l2_l3_nodes)}) "
-                  f"耗时 {elapsed:.2f}s")
+                  f"耗时 {elapsed:.2f}s (其中 JSON 写 "
+                  f"{getattr(self, '_m425_last_json_write_sec', 0.0):.2f}s)")
         # ★PHASE13-P1-3（2026-09-07）：快照保存超时告警。
         #   15小时运行实测：正常 12~416s，但 03:14:41 出现过一次 **921.17s**
         #   （约 15.4 分钟），是正常值的 2~6 倍，事后自行恢复、未再复现。
@@ -1112,7 +1117,10 @@ class PulseSnapshot:
             return False
         _parquet_enabled = bool(getattr(self, "_use_parquet", False))
         _parquet_ok = True
+        _pq_write_sec = 0.0
+        _pq_verify_sec = 0.0
         if _parquet_enabled:
+            _t_pq0 = time.time()
             try:
                 _parquet_ok = bool(self.save_parquet())
             except Exception as _e:
@@ -1120,6 +1128,28 @@ class PulseSnapshot:
                 self._log(LogLevel.WARNING,
                           f"[第81批补2 T1] Parquet 物化异常（检查点未达成，保留增量日志）: "
                           f"{type(_e).__name__}: {_e}")
+            _pq_write_sec = time.time() - _t_pq0
+            # ★425刀1：物化成功后**校验刚写出来的这一份**，再决定要不要清增量日志。
+            #   原实现只在 `_full_save` 里校验过**上一轮**的 Parquet（写之前），
+            #   新写的这份从未被校验，而「清空 jsonl」的依据恰恰是它 ——
+            #   一旦新档 schema 塌缩/缺列，jsonl 又被清掉，就等于把可重放的账本烧了。
+            #   校验走 footer（425刀1 快路径，0.003s），对全量总耗时无可测影响。
+            if _parquet_ok:
+                _t_pqv0 = time.time()
+                try:
+                    _new_rows = self._m68_verify_parquet()
+                except Exception as _e:
+                    _new_rows = -1
+                    silent_exc(_e, where="PulseSnapshot._m67_full_checkpoint[425刀1-校验新Parquet]")
+                _pq_verify_sec = time.time() - _t_pqv0
+                if _new_rows < 0:
+                    _parquet_ok = False
+                    self._log(LogLevel.WARNING,
+                              "[425刀1] 新写 Parquet 校验未通过（检查点未达成，保留增量日志）")
+                else:
+                    self._log(LogLevel.INFO,
+                              f"[425刀1] 新写 Parquet 校验通过: {_new_rows} 行 "
+                              f"(校验 {_pq_verify_sec:.3f}s)")
         if not _parquet_ok:
             self._log(LogLevel.WARNING,
                       "[第81批补2 T1] 全量检查点未达成：Parquet 物化失败，增量日志保留"
@@ -1129,7 +1159,9 @@ class PulseSnapshot:
             self._m67_clear_incremental_log()
             self._log(LogLevel.INFO,
                       f"[第81批补2 T1] 全量检查点达成: {len(saved_nodes)} 节点, "
-                      f"Parquet{('已刷新' if _parquet_enabled else '未启用')}, jsonl 已重置")
+                      f"Parquet{('已刷新' if _parquet_enabled else '未启用')}, jsonl 已重置 "
+                      f"(parquet写 {_pq_write_sec:.2f}s / 校验 {_pq_verify_sec:.3f}s / "
+                      f"json写 {getattr(self, '_m425_last_json_write_sec', 0.0):.2f}s)")
         return True
 
     def _m67_apply_incremental_log(self, nodes: list) -> list:
@@ -1313,9 +1345,9 @@ class PulseSnapshot:
             self._log(LogLevel.WARNING,
                       f"[A案dual] 双源计数分歧 parquet={_pc} json={_jc}（仅告警，不阻断）")
         # R6 全池上限不变式：合并集 == 并集（防复活/丢失）
-        _union = (set(n.node_id for n in (pq_nodes or [])) |
-                  set(n.node_id for n in (js_nodes or [])))
-        _merged_ids = set(n.node_id for n in _merged)
+        _union = ({n.node_id for n in (pq_nodes or [])} |
+                  {n.node_id for n in (js_nodes or [])})
+        _merged_ids = {n.node_id for n in _merged}
         if _merged_ids != _union:
             self._log(LogLevel.ERROR,
                       f"[A案dual] R6 不变式自检失败：合并 {len(_merged_ids)} vs 并集 "
@@ -1529,7 +1561,19 @@ class PulseSnapshot:
 
     def _m68_verify_parquet(self, root: str | None = None) -> int:
         """★T1(第81批升级)：保存后校验 Parquet 完整性 + schema 双校验。
-        返回总行数；缺列/版本过旧/分层塌缩任一失败返回 -1（调用方据此回退 JSON + ERROR）。"""
+        返回总行数；缺列/版本过旧/分层塌缩任一失败返回 -1（调用方据此回退 JSON + ERROR）。
+
+        ★425刀1：新增 **footer 元数据快路径**。
+          背景（生产实测）：原实现用 `read_table()` 把数据页整表读进内存，
+          3 分片 / 14575 行要 **1.20s**；而三项校验只需要 `schema.names` /
+          `num_rows` / `key_value_metadata` —— 这三样全在 Parquet footer 里，
+          `read_metadata()` 实测 **0.0029s（414 倍）**。
+          快路径与深路径**判据逐条等价**：① 缺列 → footer schema.names；
+          ② schema 版本 → footer key_value_metadata；③ 分层塌缩 → footer num_rows。
+          故「能判出坏档」的能力不减，只是不再把数据页读上来。
+          快路径抛任何异常（footer 本身损坏）→ **回退原 `read_table` 深校验**，
+          绝不把「footer 读不出来」当成「没有 parquet」。
+        """
         try:
             import pyarrow.parquet as _pq68
         except Exception:
@@ -1539,42 +1583,131 @@ class PulseSnapshot:
             return -1
         _req = set(self._m81_parquet_required_columns())
         _exp_ver = self._m81_parquet_expected_schema_version()
+        # ★425刀1：快路径开关（config 缺键按开）。关 ⇒ 无条件走深校验，与 424 批逐字一致。
+        _fast_on = True
+        try:
+            import config as _cfg425
+            _fast_on = bool(getattr(_cfg425, "SNAPSHOT_PARQUET_VERIFY_FASTPATH", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-读快路径开关]")
+        if not _fast_on:
+            return self._m68_verify_parquet_deep(_pq68, _base, _req, _exp_ver)
+        try:
+            _fast = self._m425_verify_parquet_meta(_pq68, _base, _req, _exp_ver)
+            if _fast is not None:
+                return _fast
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-快路径转深校验]")
+        return self._m68_verify_parquet_deep(_pq68, _base, _req, _exp_ver)
+
+    def _m425_verify_parquet_meta(self, pq_mod, base: str, required: set,
+                                 expected_ver: str):
+        """★425刀1：只读 Parquet footer 的等价校验（判据见 `_m68_verify_parquet`）。
+
+        Returns:
+            int  —— 校验通过时的总行数；
+            -1   —— 确认校验失败（缺列 / 版本过旧 / 分层塌缩）；
+            None —— footer 不可读，调用方应转深校验（本函数不吞异常语义）。
+        """
         _total = 0
         _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
-        try:
-            for _lv in ("L1", "L2", "L3"):
-                _d = os.path.join(_base, f"evol_level={_lv}")
-                if not os.path.isdir(_d):
-                    continue
-                _tbl = _pq68.read_table(_d)
+        _kv_all = {}
+        for _lv in ("L1", "L2", "L3"):
+            _d = os.path.join(base, f"evol_level={_lv}")
+            if not os.path.isdir(_d):
+                continue
+            _files = sorted(_f for _f in os.listdir(_d) if _f.endswith(".parquet"))
+            if not _files:
+                continue
+            _rows = 0
+            for _fn in _files:
+                _md = pq_mod.read_metadata(os.path.join(_d, _fn))
                 # ① 必需列集合校验
-                _missing = _req - set(_tbl.schema.names)
+                # ★ 必须取 arrow 顶层列名：`ParquetSchema.names` 是**物理叶子列名**，
+                #   嵌套 list/struct 会被展开（`relation_type`/`target_node_id` 冒充列名），
+                #   而顶层列 `semantic_relations`/`keywords`/... 反而消失 ——
+                #   用它判「缺列」会把好档判成坏档（425刀1 等价性实测踩到）。
+                _missing = required - set(_md.schema.to_arrow_schema().names)
                 if _missing:
                     self._log(LogLevel.ERROR,
                               f"[第81批 T1] Parquet 校验失败: 缺列 {sorted(_missing)}({_lv})")
                     return -1
                 # ② schema 版本元数据校验
-                _md = _tbl.schema.metadata or {}
-                _ver = (_md.get(b"m81_schema_version") or b"").decode("utf-8", "replace")
-                if _ver and _ver != _exp_ver:
+                _kvm = _md.metadata or {}
+                _ver = (_kvm.get(b"m81_schema_version") or b"").decode("utf-8", "replace")
+                if _ver and _ver != expected_ver:
                     self._log(LogLevel.ERROR,
-                              f"[第81批 T1] Parquet schema 版本过旧: 磁盘={_ver} 期望={_exp_ver}，回退 JSON")
+                              f"[第81批 T1] Parquet schema 版本过旧: "
+                              f"磁盘={_ver} 期望={expected_ver}，回退 JSON")
                     return -1
+                if _kvm:
+                    _kv_all = _kvm
+                _rows += int(_md.num_rows)
+            _lv_counts[_lv] = _rows
+            _total += _rows
+        # ③ 分层分布校验：总量>0 但某层元数据期望>0 实际=0（塌缩）
+        for _k in ("L1", "L2", "L3"):
+            _mc = _kv_all.get((f"{_k.lower()}_count").encode())
+            if _mc is None:
+                continue
+            try:
+                _exp_n = int(_mc.decode("utf-8", "replace") or 0)
+            except Exception as _e:
+                silent_exc(_e, where="PulseSnapshot._m425_verify_parquet_meta[425刀1]")
+                _exp_n = 0
+            if _exp_n > 0 and _lv_counts[_k] == 0:
+                self._log(LogLevel.ERROR,
+                          f"[第81批 T1] Parquet 分层校验失败: "
+                          f"{_k} 期望={_exp_n} 实际=0（塌缩），回退 JSON")
+                return -1
+        return _total
+
+    def _m68_verify_parquet_deep(self, pq_mod, base: str, required: set,
+                                 expected_ver: str) -> int:
+        """★425刀1：原 `read_table` 深校验（逐行读数据页）。仅快路径不可用时调用。"""
+        _total = 0
+        _lv_counts = {"L1": 0, "L2": 0, "L3": 0}
+        _kv_all = {}
+        try:
+            for _lv in ("L1", "L2", "L3"):
+                _d = os.path.join(base, f"evol_level={_lv}")
+                if not os.path.isdir(_d):
+                    continue
+                _tbl = pq_mod.read_table(_d)
+                # ① 必需列集合校验
+                _missing = required - set(_tbl.schema.names)
+                if _missing:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T1] Parquet 校验失败: 缺列 {sorted(_missing)}({_lv})")
+                    return -1
+                # ② schema 版本元数据校验
+                _kvm = _tbl.schema.metadata or {}
+                _ver = (_kvm.get(b"m81_schema_version") or b"").decode("utf-8", "replace")
+                if _ver and _ver != expected_ver:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T1] Parquet schema 版本过旧: "
+                              f"磁盘={_ver} 期望={expected_ver}，回退 JSON")
+                    return -1
+                if _kvm:
+                    _kv_all = _kvm
                 _n = _tbl.num_rows
                 _total += _n
                 _lv_counts[_lv] = _n
             # ③ 分层分布校验：总量>0 但某层元数据期望>0 实际=0（塌缩）
             for _k in ("L1", "L2", "L3"):
-                _mc = (_md.get((f"{_k.lower()}_count").encode()) if _md else None)
-                if _mc is not None:
-                    try:
-                        _exp_n = int(_mc.decode("utf-8", "replace") or 0)
-                    except Exception:
-                        _exp_n = 0
-                    if _exp_n > 0 and _lv_counts[_k] == 0:
-                        self._log(LogLevel.ERROR,
-                                  f"[第81批 T1] Parquet 分层校验失败: {_k} 期望={_exp_n} 实际=0（塌缩），回退 JSON")
-                        return -1
+                _mc = _kv_all.get((f"{_k.lower()}_count").encode())
+                if _mc is None:
+                    continue
+                try:
+                    _exp_n = int(_mc.decode("utf-8", "replace") or 0)
+                except Exception as _e425:
+                    silent_exc(_e425, where="PulseSnapshot._m68_verify_parquet_deep[425刀1]")
+                    _exp_n = 0
+                if _exp_n > 0 and _lv_counts[_k] == 0:
+                    self._log(LogLevel.ERROR,
+                              f"[第81批 T1] Parquet 分层校验失败: "
+                              f"{_k} 期望={_exp_n} 实际=0（塌缩），回退 JSON")
+                    return -1
             return _total
         except Exception as _e:
             self._log(LogLevel.ERROR,
@@ -1932,18 +2065,18 @@ class PulseSnapshot:
             _view = self._load_lazy()
         except Exception as _e342:
             self._log(LogLevel.WARNING,
-                      "[342刀1] 懒加载失败，回退全量（src=%s）: %s: %s"
-                      % (src, type(_e342).__name__, _e342))
+                      f"[342刀1] 懒加载失败，回退全量（src={src}）: "
+                      f"{type(_e342).__name__}: {_e342}")
             return None
         if not self._m342_is_lazy_view(_view):
             self._log(LogLevel.WARNING,
-                      "[342刀1] 懒加载返回类型不符协议（src=%s type=%s），回退全量"
-                      % (src, type(_view).__name__))
+                      f"[342刀1] 懒加载返回类型不符协议"
+                      f"（src={src} type={type(_view).__name__}），回退全量")
             return None
         _n342 = len(_view)
         if _n342 <= 0:
             self._log(LogLevel.WARNING,
-                      "[342刀1] 懒加载视图为空（src=%s），判为不可用并回退全量" % src)
+                      f"[342刀1] 懒加载视图为空（src={src}），判为不可用并回退全量")
             try:
                 _view.close()
             except Exception as _ce342:
@@ -1951,9 +2084,9 @@ class PulseSnapshot:
                            where="nucleus.mnemosyne.PulseSnapshot::_m342_try_lazy_load close")
             return None
         self._log(LogLevel.INFO,
-                  "[342刀1] 懒加载生效 src=%s nodes=%d index_status=%s max_cache=%s"
-                  % (src, _n342, getattr(_view, "index_status", "unknown"),
-                     getattr(_view, "max_cache", "?")))
+                  f"[342刀1] 懒加载生效 src={src} nodes={_n342} "
+                  f"index_status={getattr(_view, 'index_status', 'unknown')} "
+                  f"max_cache={getattr(_view, 'max_cache', '?')}")
         return _view
 
     @staticmethod
@@ -2310,10 +2443,9 @@ class PulseSnapshot:
         #   「读到了 0 条」与「压根没读到」。
         self._m338_index_health = snapshot_index.health(self.snapshot_path)
         self._log(LogLevel.INFO,
-                  "[338刀1] 快照索引 status=%s nodes=%s index=%s"
-                  % (self._m338_index_health.get("status"),
-                     self._m338_index_health.get("nodes"),
-                     "written" if getattr(view, "index_written", False) else "-"))
+                  f"[338刀1] 快照索引 status={self._m338_index_health.get('status')} "
+                  f"nodes={self._m338_index_health.get('nodes')} "
+                  f"index={'written' if getattr(view, 'index_written', False) else '-'}")
         md = view.metadata
         self.inference_cache = md.get("inference_cache", {})
         self._extra_state = md.get("extra_state", {})
@@ -3425,7 +3557,7 @@ def _m102_cold_index_ids(cache: dict) -> set:
             return cache["ids"]
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _d = json.load(_f)
-        _ids = set(str(k) for k in _d.keys()) if isinstance(_d, dict) else set()
+        _ids = {str(k) for k in _d} if isinstance(_d, dict) else set()
         cache["mtime"] = _mt
         cache["ids"] = _ids
         return _ids

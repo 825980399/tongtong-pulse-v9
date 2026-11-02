@@ -32,6 +32,7 @@
 """
 
 import json
+import logging
 import os
 import time
 from typing import Any
@@ -65,6 +66,13 @@ INSIGHT_TYPE = "prediction_mismatch"
 #: 测试/工具用的落盘根重定向
 _DATA_DIR: str | None = None
 
+#: ★425刀2：小时报文件名前缀。与日报 `hit_rate_YYYYMMDD.json` **不同名**，
+#:   所以「日报保留、小时报新增」在文件系统层面就成立，不需要额外约定。
+HOURLY_PREFIX = "hit_rate_hourly_"
+
+#: ★425刀2：小时报开关（config 里同名常量优先，缺键按开）。
+ENABLE_HOURLY_SWITCH = "ENABLE_M425_HOURLY_HIT_RATE"
+
 #: 状态文件 mtime 缓存（health_snapshot 每 5s 读一次，不重复解析）
 _CACHE: dict[str, Any] = {"mtime": 0.0, "state": {}}
 
@@ -87,7 +95,7 @@ def _cfg(key: str, default: Any) -> Any:
         import config as _c
         return getattr(_c, key, default)
     except Exception as _exc:
-        silent_exc(_exc, where="world_model.hit_rate._cfg:%s" % key, level="debug")
+        silent_exc(_exc, where=f"world_model.hit_rate._cfg:{key}", level="debug")
         return default
 
 
@@ -136,7 +144,8 @@ def report_dir() -> str:
 
 def report_path(now: float | None = None) -> str:
     _now = float(now if now is not None else time.time())
-    return os.path.join(report_dir(), "hit_rate_%s.json" % time.strftime("%Y%m%d", time.localtime(_now)))
+    _day = time.strftime("%Y%m%d", time.localtime(_now))
+    return os.path.join(report_dir(), f"hit_rate_{_day}.json")
 
 
 # --------------------------------------------------------------------- 状态读写
@@ -360,6 +369,145 @@ def write_report(now: float | None = None) -> str | None:
         return None
 
 
+# --------------------------------------------------------------- 小时报（425刀2）
+
+
+def hourly_enabled() -> bool:
+    """★425刀2：小时报开关。总开关（ENABLE_M410_HIT_RATE_ALERT）关掉时一并关。"""
+    if not enabled():
+        return False
+    return bool(_cfg("ENABLE_M425_HOURLY_HIT_RATE", True))
+
+
+def hourly_key(now: float | None = None) -> str:
+    """小时键，例 `20261102_15`。既是文件名成分，也是幂等判据。"""
+    _now = float(now if now is not None else time.time())
+    return time.strftime("%Y%m%d_%H", time.localtime(_now))
+
+
+def hourly_report_path(now: float | None = None) -> str:
+    _now = float(now if now is not None else time.time())
+    return os.path.join(report_dir(), f"{HOURLY_PREFIX}{hourly_key(_now)}.json")
+
+
+def _hour_slice(state: dict, hour_ts: float) -> dict:
+    """取「本小时」各类型的增量。
+
+    `state["hours"][et]` 是 `[[hour_ts, hit, miss, no_coverage], ...]` 的分段列表，
+    同一小时内的多次采样已经累加到同一段（见 `sample()`），所以
+    「ts == 本小时起点」的那一段**就是本小时的净增量**，不用再自己做差分。
+    """
+    _out = {}
+    for _et, _segs in (state.get("hours") or {}).items():
+        _h = _m = _nc = 0
+        for _seg in _segs or []:
+            try:
+                if float(_seg[0]) != float(hour_ts):
+                    continue
+                _h += int(_seg[1])
+                _m += int(_seg[2])
+                _nc += int(_seg[3])
+            except (IndexError, TypeError, ValueError) as _exc:
+                silent_exc(_exc, where="world_model.hit_rate._hour_slice:seg", level="debug")
+                continue
+        if _h or _m or _nc:
+            _cov = _h + _m
+            _out[_et] = {"hit": _h, "miss": _m, "no_coverage": _nc, "covered": _cov,
+                         "hit_rate": (round(_h / _cov, 4) if _cov else None)}
+    return _out
+
+
+def hourly_report(now: float | None = None, state: dict | None = None) -> dict:
+    """小时报内容（不写盘）。
+
+    只留任务书要求的四样：命中数 / 未命中数 / 命中率 / top 命中是什么。
+    另附 `rolling_24h`：与日报 `report()["total"]` **同源同算法**，
+    这样「小时报和日报对得上吗」可以直接拿两个字段相减来验，不必靠人眼看。
+    """
+    _now = float(now if now is not None else time.time())
+    _st = state if state is not None else load_state()
+    _hour_ts = _hour_of(_now)
+    _types = _hour_slice(_st, _hour_ts)
+    _h = sum(v["hit"] for v in _types.values())
+    _m = sum(v["miss"] for v in _types.values())
+    _nc = sum(v["no_coverage"] for v in _types.values())
+    _cov = _h + _m
+    # top 命中：本小时 hit 数最多的类型（并列时取 hit_rate 高者，再并列取名字稳定序）
+    _top = None
+    if _types:
+        _k = max(_types, key=lambda k: (_types[k]["hit"],
+                                        _types[k]["hit_rate"] or 0.0, k))
+        _top = {"event_type": _k, "hit": _types[_k]["hit"],
+                "hit_rate": _types[_k]["hit_rate"],
+                "covered": _types[_k]["covered"]}
+    _roll = rolling(_now, _st)
+    _rt = _roll.get("total") or {}
+    return {
+        "version": _M410_HITRATE_VERSION,
+        "kind": "hourly",
+        "generated_at": _now,
+        "hour": hourly_key(_now),
+        "hour_start": _hour_ts,
+        "hour_range": time.strftime("%Y-%m-%d %H:00-%H:59", time.localtime(_hour_ts)),
+        "total": {"hit": _h, "miss": _m, "covered": _cov, "no_coverage": _nc,
+                  "hit_rate": (round(_h / _cov, 4) if _cov else None)},
+        "top": _top,
+        "types": {k: {"hit": v["hit"], "miss": v["miss"],
+                      "hit_rate": v["hit_rate"]} for k, v in _types.items()},
+        # 与日报同一算法（都走 rolling()），仅用于对账，不是「本小时」
+        "rolling_24h": {"hit": int(_rt.get("hit", 0) or 0),
+                        "miss": int(_rt.get("miss", 0) or 0),
+                        "covered": int(_rt.get("covered", 0) or 0),
+                        "hit_rate": _rt.get("hit_rate")},
+        "windows_sampled": int(_st.get("windows", 0) or 0),
+        "daily_report": os.path.basename(report_path(_now)),
+    }
+
+
+def write_hourly_report(now: float | None = None, state: dict | None = None,
+                        force: bool = False) -> str | None:
+    """落盘小时报。开关关闭 / 本小时已存在且非 force / 写失败 → None。
+
+    原子写（temp + os.replace），命名与日报不同名前缀 ⇒ **绝不覆盖日报**。
+    """
+    if not hourly_enabled():
+        return None
+    _now = float(now if now is not None else time.time())
+    _p = hourly_report_path(_now)
+    if (not force) and os.path.exists(_p):
+        return None
+    try:
+        _rep = hourly_report(_now, state=state)
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _tmp = _p + ".tmp425"
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(_rep, _f, ensure_ascii=False, indent=2)
+            _f.write("\n")
+        os.replace(_tmp, _p)
+    except OSError as _exc:
+        silent_exc(_exc, where="world_model.hit_rate.write_hourly_report", level="warning")
+        return None
+    _t = _rep.get("total") or {}
+    _top = _rep.get("top") or {}
+    try:
+        logging.getLogger("pulse").info(
+            "[425刀2] 小时报已生成: %s 命中 %s / 未命中 %s ⇒ %s ｜ top=%s(%s) ｜ %s",
+            _rep.get("hour"), _t.get("hit"), _t.get("miss"), _t.get("hit_rate"),
+            _top.get("event_type"), _top.get("hit"), os.path.basename(_p))
+    except Exception as _exc:
+        silent_exc(_exc, where="world_model.hit_rate.write_hourly_report:log", level="debug")
+    return _p
+
+
+def maybe_write_hourly(now: float | None = None, state: dict | None = None) -> str | None:
+    """★425刀2：挂在 60s 采样点上的入口 —— 跨小时才写一份，本小时已写过就静默返回。
+
+    幂等靠**文件名**（`hit_rate_hourly_YYYYMMDD_HH.json` 存在即已写），
+    不额外维护「上次写入小时」的状态字段 —— 少一个字段就少一处会和文件不同步的地方。
+    """
+    return write_hourly_report(now, state=state, force=False)
+
+
 # --------------------------------------------------------------------- 告警
 
 
@@ -464,19 +612,20 @@ def sample(now: float | None = None, miner=None) -> dict:
         else:
             _sk["crit"] = 0
         if int(_sk["low"]) == _a_n:
-            _txt = ("预测命中率失配：%s 连续 %d 个采样窗 < %.2f（本窗 %s，覆盖 %d 条）"
-                    % (_et, _a_n, _a_rate, _rate, _cov))
+            _txt = (f"预测命中率失配：{_et} 连续 {_a_n} 个采样窗 < {_a_rate:.2f}"
+                    f"（本窗 {_rate}，覆盖 {_cov} 条）")
             _iid = post_alert(_txt, [_et], level="warn", confidence=0.6)
             _st.setdefault("alerts", []).append(
                 {"at": _now, "event_type": _et, "level": "warn", "text": _txt,
                  "insight_id": _iid, "window_hit_rate": _rate, "covered": _cov})
             _out["alerts"].append({"event_type": _et, "level": "warn", "text": _txt})
         if int(_sk["crit"]) == _e_n and not _sk.get("evicted"):
-            _why = "hit_rate<%.2f x%d" % (_e_rate, _e_n)
+            _why = f"hit_rate<{_e_rate:.2f} x{_e_n}"
             _done = _evict(miner, _et, _why)
             _sk["evicted"] = bool(_done)
-            _txt = ("预测模式淘汰：%s 连续 %d 个采样窗 < %.2f（本窗 %s）⇒ %s"
-                    % (_et, _e_n, _e_rate, _rate, "已摘除周期记录" if _done else "摘除未生效"))
+            _txt = (f"预测模式淘汰：{_et} 连续 {_e_n} 个采样窗 < {_e_rate:.2f}"
+                    f"（本窗 {_rate}）⇒ "
+                    f"{'已摘除周期记录' if _done else '摘除未生效'}")
             _iid = post_alert(_txt, [_et], level="evict", confidence=0.9)
             _st.setdefault("alerts", []).append(
                 {"at": _now, "event_type": _et, "level": "evict", "text": _txt,
@@ -492,6 +641,14 @@ def sample(now: float | None = None, miner=None) -> dict:
         _out["reset"] = _reset
     save_state(_st)
     _out["windows"] = int(_st["windows"])
+    # ★425刀2：小时报 —— 挂在这个 60s 采样点上（不新建调度器），跨小时才写一份。
+    #   放在 save_state 之后：小时报读的是刚落盘的 state，和日报读同一份数据。
+    try:
+        _hp = maybe_write_hourly(_now, state=_st)
+        if _hp:
+            _out["hourly_report"] = _hp
+    except Exception as _exc:
+        silent_exc(_exc, where="world_model.hit_rate.sample:hourly", level="warning")
     return _out
 
 

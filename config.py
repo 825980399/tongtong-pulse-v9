@@ -7137,6 +7137,25 @@ ENABLE_M423_ARCHIVE_RECOVERY = True
 #   本开关只读 + 只打 WARNING，不改任何计数与落盘行为；改回 False 即完全停用。
 ENABLE_M424_KNOWLEDGE_COUNT_RECONCILE = True
 
+# ★425 刀1：Parquet 完整性校验走 footer 元数据快路径。
+#   为什么改：`_m68_verify_parquet` 原来用 `read_table()` 把数据页整表读上来数行数，
+#   生产实测 3 分片 / 14575 行 = **1.20s**；而三项校验（缺列 / schema 版本 / 分层塌缩）
+#   只需要 schema.names、num_rows、key_value_metadata —— 全在 Parquet footer 里，
+#   `read_metadata()` 实测 **0.0029s（441 倍）**。全量保存因此从 13.75s 降到 ~12.5s。
+#   等价性已验：正常档 / 缺列 / 版本过旧 / 分层塌缩 / 空目录 / footer 损坏 共 6 档，
+#   快慢两条路径判定**逐条一致**（含 footer 损坏时自动回退深校验）。
+#   改回 False ⇒ 无条件走原 `read_table` 深校验，行为与 424 批完全一致。
+SNAPSHOT_PARQUET_VERIFY_FASTPATH = True
+
+# ★425 刀2：hit_rate 小时报（日报保留，小时报是新增）。
+#   为什么加：日报只在 04:00 的 generate_night_digest 里写一次，命中率崩了要等一天。
+#   小时报挂在既有 60s 采样点（time.tick → world_model.hit_rate.sample()）上，
+#   跨小时才写一份，文件名 `hit_rate_hourly_YYYYMMDD_HH.json`，
+#   与日报 `hit_rate_YYYYMMDD.json` **不同名** ⇒ 文件系统层面就不可能覆盖日报。
+#   内容只四样：命中数 / 未命中数 / 命中率 / top 命中；另附 rolling_24h（与日报同一算法）
+#   供对账。改回 False 即完全停用（不写文件、不打日志），零副作用。
+ENABLE_M425_HOURLY_HIT_RATE = True
+
 # ======================================================================
 # [M415-CFG] 第415批 · 经验池命中拼进对话 prompt
 # ======================================================================
