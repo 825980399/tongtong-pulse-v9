@@ -328,7 +328,7 @@ class PulseFramework:
             _git_proc = subprocess.run(
                 ["git", "rev-parse", "--short", "HEAD"],
                 cwd=os.path.dirname(os.path.abspath(__file__)),
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             _git_hash = (_git_proc.stdout or "").strip() or "unknown"
             self._logger.info(f"[版本指纹] 启动 HEAD={_git_hash}")
@@ -741,18 +741,17 @@ class PulseFramework:
                         _m356_eb = _m356_gb()
                         _m356_st = _m356_eb.get_stats()
                         self._log(LogLevel.INFO,
-                                  "[356刀16] EventBus 已接线: subscriptions=%s "
-                                  "queue=%s published=%s delivered=%s dropped=%s async=%s"
-                                  % (_m356_st.get("subscriptions"),
-                                     _m356_st.get("queue_size"),
-                                     _m356_st.get("published"),
-                                     _m356_st.get("delivered"),
-                                     _m356_st.get("dropped"),
-                                     _m356_st.get("async_enabled")))
+                                  f"[356刀16] EventBus 已接线: "
+                                  f"subscriptions={_m356_st.get('subscriptions')} "
+                                  f"queue={_m356_st.get('queue_size')} "
+                                  f"published={_m356_st.get('published')} "
+                                  f"delivered={_m356_st.get('delivered')} "
+                                  f"dropped={_m356_st.get('dropped')} "
+                                  f"async={_m356_st.get('async_enabled')}")
                 except Exception as _m356_ebe:
                     self._log(LogLevel.WARNING,
-                              "[356刀16] EventBus 对账失败（已忽略）: %s"
-                              % type(_m356_ebe).__name__)
+                              "[356刀16] EventBus 对账失败（已忽略）: "
+                              f"{type(_m356_ebe).__name__}")
         except Exception as _m50_re:
             try:
                 self._log(LogLevel.WARNING,
@@ -828,8 +827,7 @@ class PulseFramework:
                     handler=lambda _pulse=None: _hr_m410wm.sample(),
                 )
                 self._log(LogLevel.INFO,
-                          "世界模型对账已挂 time.tick（60s 采样窗，条件 %s）"
-                          % (self._m410_wm_cond,))
+                          f"世界模型对账已挂 time.tick（60s 采样窗，条件 {self._m410_wm_cond}）")
         except Exception as _m410wm_e:
             self._log(LogLevel.DEBUG,
                       f"世界模型对账挂载失败（不影响主链路）: {_m410wm_e}")
@@ -1279,6 +1277,8 @@ class PulseFramework:
                 #   注入 framework（供派单拿 code_sandbox 器官）+ 挂每日钩子（单批上限 1 条）。
                 from nucleus.evolution.patch_execution_dispatch import (
                     register_with_daily_schedule as _295_reg_dispatch,
+                )
+                from nucleus.evolution.patch_execution_dispatch import (
                     set_dispatch_framework as _295_set_fw,
                 )
                 _295_set_fw(self)
@@ -2237,10 +2237,10 @@ class PulseFramework:
         #   本行纯观测：不改取值、不改分支，只把已算好的那个布尔念一遍。
         _m372_lazy_on = bool(getattr(config, "SNAPSHOT_LAZY_LOAD", False))
         self._log(LogLevel.INFO,
-                  "[372刀6] 快照加载口径: SNAPSHOT_LAZY_LOAD=%s ⇒ %s"
+                  f"[372刀6] 快照加载口径: SNAPSHOT_LAZY_LOAD={_m372_lazy_on} ⇒ "
+                  f"{'懒加载' if _m372_lazy_on else '全量'}"
                   "（342刀1 实测懒加载 122.6s 扫+131.4s 物化 vs 全量 6.0s，"
-                  "故维持全量；切片算法优化属长期项）"
-                  % (_m372_lazy_on, "懒加载" if _m372_lazy_on else "全量"))
+                  "故维持全量；切片算法优化属长期项）")
         restored_nodes = self.snapshot.load(
             full_load=not _m372_lazy_on)  # ★421/R1-A1：SIM211 等价化简
         # 加载L1独立快照
@@ -3829,7 +3829,9 @@ def _spawn_self_restart(reason: str = "self_restart") -> bool:
         #   避免启动期崩溃信息随控制台丢失、无迹可查。
         try:
             _os.makedirs(_os.path.join(_project_root, "logs"), exist_ok=True)
-            _boot_log_fh = open(_os.path.join(_project_root, "logs", "boot_crash.log"),
+            # SIM115 豁免（理由）：长生命周期句柄 —— 本行之后要交给 Popen 的 stdout，
+            #   用 with 会在 Popen 起来之前就把它关掉（不是漏关，是不能关）
+            _boot_log_fh = open(_os.path.join(_project_root, "logs", "boot_crash.log"),  # noqa: SIM115
                                  "a", encoding="utf-8")
         except Exception as e:
             silent_exc(e, "main:_spawn_self_restart:boot_crash.log打开失败", level="warning")
@@ -3892,9 +3894,8 @@ def _console_title_text(pid=None, started_at=None):
     """窗口标题文本：``曈曈 pid=1234 启动于2026-10-30 19:52:31``（纯函数，便于判据核对）。"""
     _pid = int(pid if pid is not None else os.getpid())
     _ts = float(started_at if started_at is not None else time.time())
-    return "%s pid=%d 启动于%s" % (
-        _CONSOLE_TITLE_PREFIX, _pid,
-        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_ts)))
+    return (f"{_CONSOLE_TITLE_PREFIX} pid={_pid} 启动于"
+            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_ts))}")
 
 
 def _set_console_title(title=None, started_at=None) -> bool:
@@ -3931,13 +3932,11 @@ def _write_restart_notice(project_root, parent_pid, child_pid, reason="self_rest
         _p = os.path.join(_dir, "restart_notice.txt")
         _now = time.time()
         _txt = (
-            "%s 曈曈自重启\n"
-            "父进程 pid=%s → 接班 pid=%s\n"
-            "原因：%s\n"
-            "接班窗口标题：%s\n"
+            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now))} 曈曈自重启\n"
+            f"父进程 pid={parent_pid} → 接班 pid={child_pid}\n"
+            f"原因：{reason}\n"
+            f"接班窗口标题：{_console_title_text(child_pid, _now)}\n"
             "（本文件每次重启被覆盖；由 main._write_restart_notice 写）\n"
-            % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_now)),
-               parent_pid, child_pid, reason, _console_title_text(child_pid, _now))
         )
         with open(_p, "w", encoding="utf-8", newline="\n") as _f:
             _f.write(_txt)
@@ -3945,6 +3944,284 @@ def _write_restart_notice(project_root, parent_pid, child_pid, reason="self_rest
     except Exception as _e:
         silent_exc(_e, where="main::_write_restart_notice", level="warning")
         return None
+
+
+
+# ===== ★422批刀3：周期 apply（5 分钟一拍）+ 防循环闸 =====
+# 病根（任务书刀3）：`apply` 只有两个触发口 —— 进化器主动请求
+#   （`EvolutionDriver.has_apply_request()`）与进程退出 `finally`。
+#   跑一夜不重启时，pending 里即使有 approved 件也**永不落地**
+#   （421 实测：`last_apply_at` 停在 10-14，应用端早停 18 天；生成端只停了 10 天）。
+# 设计（与既有两处触发口**并存**，不替换、不放宽任何既有闸）：
+#   · 墙钟 300s 一拍，不是"每 N 拍"——主循环节拍受心跳驱动、拍长不可控，
+#     这与 348刀7 把夜间 digest 从"每 60 拍"改成"墙钟 60s"是同一个理由；
+#   · 三道闸全过才动手：
+#       ① `_self_modify_forbidden_until`（既有；`_apply_pending_patches_and_restart`
+#          入口内还有第二层，这里提前跳过省一次 IO 与一次白涨计数）
+#       ② `restart_count.txt` 计数桶锁（PatchManager 同一个持久桶，含 24h 冷却）
+#       ③ 本进程至少已跑 600s —— 重启后必须留出观察窗，否则
+#          "应用→重启→立刻再应用"就成环（任务书 ⚠️ 点名的无限重启风险）
+#   · 没有 approved 件 ⇒ 只记 idle、**不调 apply**（不白涨 restart_count）
+#   · apply 失败的件进重试队列（持久化到 `data/patches/apply_retry_422.json`），
+#     同一件失败 3 次 ⇒ 标 `dead`；approved 件**全部 dead** 时周期通道拒绝重启
+#     （重启只会空转），这是"最多重试 3 次"落地的方式，也是防无限重启的最后一道。
+_M422_APPLY_INTERVAL_SEC = 300.0        # 5 分钟一拍（任务书指定）
+_M422_MIN_RUN_WINDOW_SEC = 600.0        # 重启后至少跑 10 分钟才允许再 apply
+_M422_APPLY_RETRY_MAX = 3               # 同一补丁 apply 失败最多重试 3 次
+_M422_APPLY_RETRY_REL = os.path.join("data", "patches", "apply_retry_422.json")
+_M422_APPLY_RETRY_VERSION = "422.1"
+
+#: 周期 apply 的运行态（进程内；读数走 `get_m422_apply_tick_state()`）
+_M422_APPLY_TICK: dict = {
+    "boot_ts": 0.0,          # 本进程第一次参与节拍的时刻（≈启动时刻）
+    "last_tick_ts": 0.0,     # 上一次"到点"的时刻（墙钟节流用）
+    "ticks": 0,              # 到点次数
+    "fired": 0,              # 真的调过「应用+重启」入口的次数
+    "skipped": {},           # 被闸拦下的原因分布（按 reason 前缀计）
+    "last_reason": "",       # 最近一次拦下/跳过的原因
+    "last_count": {},        # 最近一次 approved 统计
+    "last_result": None,     # 最近一次 apply_all_pending 的原始返回（重试队列消费）
+}
+
+
+def _m422_apply_retry_path(path: str | None = None) -> str:
+    """重试队列路径（`path` 仅供隔离验证注入，生产调用方不传）。"""
+    if path:
+        return path
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        _M422_APPLY_RETRY_REL)
+
+
+def _m422_load_apply_retry(path: str | None = None) -> dict:
+    """读重试队列；缺失/损坏一律返回空结构（**绝不因它坏了拦住 apply**）。"""
+    import json as _json
+    _p = _m422_apply_retry_path(path)
+    try:
+        if not os.path.isfile(_p):
+            return {"version": _M422_APPLY_RETRY_VERSION, "patches": {}}
+        with open(_p, encoding="utf-8") as _f:
+            _d = _json.load(_f)
+        if not isinstance(_d, dict):
+            return {"version": _M422_APPLY_RETRY_VERSION, "patches": {}}
+        if not isinstance(_d.get("patches"), dict):
+            _d["patches"] = {}
+        _d.setdefault("version", _M422_APPLY_RETRY_VERSION)
+        return _d
+    except Exception as _e:
+        silent_exc(_e, "main.py:_m422_load_apply_retry", level="warning")
+        return {"version": _M422_APPLY_RETRY_VERSION, "patches": {}}
+
+
+def _m422_save_apply_retry(data: dict, path: str | None = None) -> bool:
+    """原子写重试队列；失败只留痕返回 False（不影响 apply 主流程）。"""
+    import json as _json
+    _p = _m422_apply_retry_path(path)
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _body = dict(data or {})
+        _body["version"] = _M422_APPLY_RETRY_VERSION
+        _body["updated_at"] = time.time()
+        with open(_p + ".tmp", "w", encoding="utf-8", newline="\n") as _f:
+            _json.dump(_body, _f, ensure_ascii=False, indent=2)
+        os.replace(_p + ".tmp", _p)
+        return True
+    except Exception as _e:
+        silent_exc(_e, "main.py:_m422_save_apply_retry", level="warning")
+        return False
+
+
+def _m422_note_apply_result(result, path: str | None = None,
+                            now: float | None = None) -> dict:
+    """把一次 apply 的结果记进重试队列：成功出队、失败 +1、满 3 次标 dead。"""
+    _now = float(time.time() if now is None else now)
+    _out = {"seen": 0, "applied": 0, "failed": 0, "dead": 0}
+    if not isinstance(result, dict):
+        return _out
+    _details = result.get("details") or []
+    if not isinstance(_details, list):
+        return _out
+    _d = _m422_load_apply_retry(path)
+    _ps = _d["patches"]
+    _changed = False
+    for _it in _details:
+        if not isinstance(_it, dict):
+            continue
+        _pid = str(_it.get("id") or "")
+        if not _pid:
+            continue
+        _out["seen"] += 1
+        _changed = True
+        if str(_it.get("status") or "") == "applied":
+            _out["applied"] += 1
+            _ps.pop(_pid, None)      # 成功即出队（"最多重试 3 次"按连续失败算）
+            continue
+        _out["failed"] += 1
+        _rec = _ps.get(_pid)
+        if not isinstance(_rec, dict):
+            _rec = {"fails": 0, "first_at": _now}
+        _rec["fails"] = int(_rec.get("fails") or 0) + 1
+        _rec["last_at"] = _now
+        _rec["last_reason"] = str(_it.get("reason") or "")[:200]
+        _rec["file"] = str(_it.get("file") or "")
+        if _rec["fails"] >= _M422_APPLY_RETRY_MAX and not _rec.get("dead"):
+            _rec["dead"] = True
+            _rec["dead_at"] = _now
+            _out["dead"] += 1
+            _logger.warning(
+                "[422刀3][周期apply] 同一件失败 %d 次 ⇒ 标 dead（周期通道不再为它重启）"
+                " patch=%s file=%s last=%s",
+                _rec["fails"], _pid[:32], os.path.basename(_rec["file"]) or "-",
+                _rec["last_reason"][:80])
+        _ps[_pid] = _rec
+    if _changed:
+        _m422_save_apply_retry(_d, path)
+    return _out
+
+
+def _m422_dead_patch_ids(path: str | None = None) -> set:
+    """已标 dead 的补丁 id 集合（周期通道据此判断"还有没有值得重启的件"）。"""
+    _d = _m422_load_apply_retry(path)
+    return {str(k) for k, v in (_d.get("patches") or {}).items()
+            if isinstance(v, dict) and v.get("dead")}
+
+
+def _m422_count_approved_pending() -> dict:
+    """待落地 approved 件统计（**只读**：走 PatchManager 的读口，不写任何文件）。"""
+    _out = {"approved": 0, "dead": 0, "live": 0}
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager
+        _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
+        _rows = _pm._load_patch_list(_pm._pending_file)
+    except Exception as _e:
+        silent_exc(_e, "main.py:_m422_count_approved_pending", level="warning")
+        return _out
+    if not isinstance(_rows, list):
+        return _out
+    _dead = _m422_dead_patch_ids()
+    for _p in _rows:
+        if not isinstance(_p, dict):
+            continue
+        if str(_p.get("status") or "") != "approved" or _p.get("applied") is True:
+            continue
+        _out["approved"] += 1
+        if str(_p.get("id") or "") in _dead:
+            _out["dead"] += 1
+    _out["live"] = _out["approved"] - _out["dead"]
+    return _out
+
+
+def _m422_apply_guard(framework, now: float | None = None) -> tuple:
+    """三道闸全过才允许周期 apply；返回 (allowed, reason)。"""
+    _now = float(time.time() if now is None else now)
+    _forbid_until = float(getattr(framework, "_self_modify_forbidden_until", 0.0) or 0.0)
+    if _now < _forbid_until:
+        return False, "self_modify_forbidden(remain=%.0fs)" % (_forbid_until - _now)
+    _bucket: dict = {}
+    try:
+        from nucleus.reasoning.PatchManager import PatchManager
+        _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
+        _bucket = _pm.memory_restart_bucket_state()
+    except Exception as _e:
+        # 读数失败不 fail-open 也不 fail-closed：按"未锁"继续，但留痕（与 335刀6 熔断同口径）
+        silent_exc(_e, "main.py:_m422_apply_guard", level="warning")
+        _logger.warning("[422刀3][周期apply] 重启计数桶读数失败 ⇒ 按未锁处理（不猜上限）")
+        _bucket = {}
+    if _bucket.get("locked"):
+        return False, (
+            f"restart_locked(counter={_bucket.get('counter')}"
+            f"/{_bucket.get('max')}"
+            f" remain={float(_bucket.get('remain_sec') or 0.0):.0f}s)")
+    _boot = float(_M422_APPLY_TICK.get("boot_ts") or 0.0)
+    if _boot > 0:
+        _age = _now - _boot
+        if _age < _M422_MIN_RUN_WINDOW_SEC:
+            return False, (f"min_run_window(age={_age:.0f}s"
+                           f"<{_M422_MIN_RUN_WINDOW_SEC:.0f}s)")
+    return True, ""
+
+
+def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
+    """主循环每拍调用；内部按墙钟 300s 节流。放行且**有活件**才走「应用+重启」。
+
+    Returns: `{"status": ...}`；`status=="applied_restarting"` ⇒ 调用方必须 `sys.exit(0)`。
+    """
+    _now = float(time.time() if now is None else now)
+    _st = _M422_APPLY_TICK
+    if not _st.get("boot_ts"):
+        _st["boot_ts"] = _now
+        _logger.info(
+            "[422刀3][周期apply] 挂载起算 interval=%.0fs window=%.0fs retry_max=%d"
+            "（首次真正动手不早于启动后 %.0fs）",
+            _M422_APPLY_INTERVAL_SEC, _M422_MIN_RUN_WINDOW_SEC,
+            _M422_APPLY_RETRY_MAX, _M422_MIN_RUN_WINDOW_SEC)
+    if not _st.get("last_tick_ts"):
+        # 首拍**只起算**（与 `dispatch_on_tick` 同款：挂载瞬间不抢跑一拍）
+        _st["last_tick_ts"] = _now
+        return {"status": "armed", "interval_sec": _M422_APPLY_INTERVAL_SEC}
+    _last = float(_st.get("last_tick_ts") or 0.0)
+    if (_now - _last) < _M422_APPLY_INTERVAL_SEC:
+        return {"status": "not_due",
+                "remain_sec": round(_M422_APPLY_INTERVAL_SEC - (_now - _last), 1)}
+    _st["last_tick_ts"] = _now
+    _st["ticks"] = int(_st.get("ticks") or 0) + 1
+    _ok, _why = _m422_apply_guard(framework, _now)
+    if not _ok:
+        _k = str(_why).split("(")[0]
+        _st["skipped"][_k] = int(_st["skipped"].get(_k, 0)) + 1
+        _st["last_reason"] = _why
+        _logger.debug("[422刀3][周期apply] 闸门拦下 ⇒ 跳过: %s", _why)
+        return {"status": "blocked", "reason": _why}
+    _cnt = _m422_count_approved_pending()
+    _st["last_count"] = _cnt
+    if int(_cnt.get("approved", 0)) <= 0:
+        _st["last_reason"] = "no_approved"
+        return {"status": "idle", "count": _cnt}
+    if int(_cnt.get("live", 0)) <= 0:
+        # 有 approved 件但**全部**已 dead ⇒ 重启只会空转，明确拒绝（防无限重启末闸）
+        _st["last_reason"] = "retry_exhausted"
+        _logger.warning(
+            "[422刀3][周期apply] approved=%d 全部已 dead ⇒ 不重启"
+            "（防循环闸生效；要重试请人工清 apply_retry_422.json）", _cnt.get("approved"))
+        return {"status": "blocked", "reason": "retry_exhausted", "count": _cnt}
+    _logger.info(
+        "[422刀3][周期apply] 到点且有活件 ⇒ 应用并重启: approved=%d live=%d dead=%d "
+        "ticks=%d fired=%d",
+        _cnt.get("approved"), _cnt.get("live"), _cnt.get("dead"),
+        _st["ticks"], _st["fired"])
+    _st["fired"] = int(_st.get("fired") or 0) + 1
+    try:
+        if framework is not None and hasattr(framework, "stop"):
+            framework.stop()
+    except Exception as _se:
+        silent_exc(_se, "main.py:_m422_periodic_apply_tick stop")
+    _st["last_result"] = None
+    _restarting = False
+    try:
+        _restarting = bool(_apply_pending_patches_and_restart(framework))
+    except Exception as _ae:
+        silent_exc(_ae, "main.py:_m422_periodic_apply_tick apply", level="warning")
+        _logger.warning("[422刀3][周期apply] 应用入口异常（忽略，下拍再试）: %s: %s",
+                        type(_ae).__name__, _ae)
+    # 无论是否重启都要落账：否则"应用失败但没触发重启"这条路径永远进不了重试队列
+    _note = _m422_note_apply_result(_st.get("last_result"), now=_now)
+    if _restarting:
+        return {"status": "applied_restarting", "count": _cnt, "note": _note}
+    return {"status": "applied_no_restart", "count": _cnt, "note": _note}
+
+
+def get_m422_apply_tick_state() -> dict:
+    """★422刀3：周期 apply 运行态快照（只读拷贝；报表 / 单测 / 活体核对用）。"""
+    _st = _M422_APPLY_TICK
+    return {"interval_sec": _M422_APPLY_INTERVAL_SEC,
+            "min_run_window_sec": _M422_MIN_RUN_WINDOW_SEC,
+            "retry_max": _M422_APPLY_RETRY_MAX,
+            "boot_ts": _st.get("boot_ts"),
+            "last_tick_ts": _st.get("last_tick_ts"),
+            "ticks": _st.get("ticks"), "fired": _st.get("fired"),
+            "skipped": dict(_st.get("skipped") or {}),
+            "last_reason": _st.get("last_reason"),
+            "last_count": dict(_st.get("last_count") or {})}
+
 
 
 def _apply_pending_patches_and_restart(framework) -> bool:
@@ -3964,6 +4241,8 @@ def _apply_pending_patches_and_restart(framework) -> bool:
             _patch_result = {"applied": 0, "failed": 0, "details": [], "skipped_constraint": True}
         else:
             _patch_result = _patch_mgr.apply_all_pending(only_approved=True)
+        # ★422刀3：把本次结果挂到周期 apply 的运行态上（重试队列从这里消费）
+        _M422_APPLY_TICK["last_result"] = _patch_result
         if _patch_result["applied"] > 0 or _patch_result["failed"] > 0:
             _logger.info(f"[补丁] 应用完成: {_patch_result['applied']}个成功, {_patch_result['failed']}个失败")
             for _detail in _patch_result["details"]:
@@ -4585,7 +4864,10 @@ def main():
                                 except Exception as e:
                                     silent_exc(e, "main.py:3725 崩溃日志轮转rename", level="warning")
                                 try:
-                                    _crash_fh = open(_cp, "a", encoding="utf-8", errors="replace")
+                                    # SIM115 豁免（理由）：句柄交给 _fh.enable 长期持有，
+                                    #   本处用 with 会立刻关闭、后续 write 全丢
+                                    _crash_fh = open(_cp, "a", encoding="utf-8",  # noqa: SIM115
+                                                     errors="replace")
                                     _fh.enable(file=_crash_fh)
                                 except Exception as _re:
                                     logging.getLogger("pulse").warning(f"[假死探测器] 轮转后重开崩溃日志失败: {_re}")
@@ -4650,6 +4932,25 @@ def main():
             "[351节拍] every=%d source=%s consume_on=%s consume_source=%s",
             _pool_consume_every, _pc_src, _pc_consume_on, _pc_sw_src)
         _shutdown_chan = None
+        # ★422刀4：叙事启动补跑 —— 按**摘要日**判「该落的那天有没有行」，
+        #   没有且当前 <12:00 就补一次。
+        #   为什么放循环外：这是**一次性启动动作**，放循环内要靠标记位防重，
+        #   而标记位本身就是状态（多一个可能错的东西）。
+        #   为什么需要它：`DIGEST_SETTLE_HOUR=6` 让 04:00 那拍落的是**前一天**，
+        #   ⇒ 白天的 `narrative_YYYYMMDD.jsonl` 天然不存在（422 T0 实测），
+        #   而夜间编排的 `last_run_ymd` 用的是日历日 ⇒ 记「跑过了」但没今天的文件。
+        try:
+            from nucleus.observability import narrative_flush as _m422_nf
+            _m422_cu = _m422_nf.maybe_catchup_on_boot(
+                root=os.path.dirname(os.path.abspath(__file__)))
+            logging.getLogger("pulse").info(
+                "[422刀4] 叙事启动补跑 status=%s 摘要日=%s landed=%s reason=%s",
+                _m422_cu.get("status"), _m422_cu.get("digest_day"),
+                _m422_cu.get("landed"), _m422_cu.get("reason") or "ok")
+        except Exception as _m422_cu_e:
+            silent_exc(_m422_cu_e, "main.py[422刀4-叙事启动补跑]")
+        # ★422刀4：周期 flush 的墙钟节流（与夜间编排同款 60s，避免每拍 stat 状态文件）
+        _m422_fl_last_ts = 0.0
         while not exit_requested:
             # ★163批 刀8（P0★）：主循环改由心跳脉冲网关驱动
             #   （灰度 OFF 默认退化为 time.sleep(1)，零行为变化）
@@ -4724,6 +5025,25 @@ def main():
                 # ★367刀1③：同一分类标签口径
                 _logger.debug("[351节拍] branch=night_digest_exc err=%s",
                               type(_nd_e).__name__)
+            # ★422刀4：叙事周期 flush（10:00 / 16:00 / 22:00 三槽；04:00 归夜间编排）。
+            #   为什么挂在夜间编排旁边：同一类「叙事/摘要落地」关注点，
+            #   一起读日志就够；不新建调度器。
+            #   节流：槽位判定在 `flush_tick` 内部；这里只担 60s 墙钟门，
+            #   否则每秒一次 `load_state` 就是白读磁盘。
+            try:
+                _m422_fl_now = time.monotonic()
+                if _m422_fl_now - _m422_fl_last_ts >= 60.0:
+                    _m422_fl_last_ts = _m422_fl_now
+                    from nucleus.observability import narrative_flush as _m422_nf2
+                    _m422_fr = _m422_nf2.flush_tick(
+                        root=os.path.dirname(os.path.abspath(__file__)))
+                    if _m422_fr.get("status") in ("flushed", "flush_failed", "give_up"):
+                        _logger.info(
+                            "[422刀4] 叙事周期 flush status=%s slot=%s 摘要日=%s reason=%s",
+                            _m422_fr.get("status"), _m422_fr.get("slot"),
+                            _m422_fr.get("digest_day"), _m422_fr.get("reason") or "ok")
+            except Exception as _m422_fr_e:
+                silent_exc(_m422_fr_e, "main.py[422刀4-叙事周期flush]")
             # ★374刀4（T-存量重算机制-1）：存量 `verifiable_rate` 重算。
             #   存量历史补丁的派生字段只在「补丁应用时」与「人工跑回填工具」两个
             #   时刻写过，之后哪怕探针/基线给出了新证据也没人回去重算 ⇒ 比率冻结。
@@ -4804,6 +5124,14 @@ def main():
                             sys.exit(0)
                 except Exception as _apply_check_e:
                     logging.getLogger("pulse").warning(f"[进化] 应用请求检测异常(忽略): {_apply_check_e}")
+                # ★422批刀3：周期 apply（内部按墙钟 300s 自节流，本块 ~10s 一拍）
+                try:
+                    _m422_ar = _m422_periodic_apply_tick(framework)
+                    if _m422_ar.get("status") == "applied_restarting":
+                        sys.exit(0)
+                except Exception as _m422_ae:
+                    logging.getLogger("pulse").warning(
+                        f"[422刀3][周期apply] 节拍异常(忽略): {_m422_ae}")
     except KeyboardInterrupt as _se:
         silent_exc(_se, "main.py:3646")
     except Exception as _main_loop_e:

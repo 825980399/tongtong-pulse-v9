@@ -14,12 +14,11 @@ SafeEvolutionExecutor.py —— 安全进化执行器
 import os
 import re
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import config  # ★主线第59批 T2：问题发现器路径过滤需读取 config 运行时配置
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
 from nucleus._silent_except import silent_exc
-from nucleus.proc_gen import get_proc_gen as _m335_proc_gen
 from nucleus.api_rate_limiter import api_rate_limited, get_llm_call_config
 from nucleus.data.DataAccessLayer import safe_read_json
 
@@ -32,12 +31,155 @@ from nucleus.evolution.patch_verification_split import (  # ★164批B2
 from nucleus.llm.call_recorder import trace_evolution_call
 from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 from nucleus.logger import get_module_logger
+from nucleus.proc_gen import get_proc_gen as _m335_proc_gen
 
 # ★第九批 B-3：置信度证据化——由「硬编码常数」改为
 #   0.9 × 该类型历史成功率系数 × 证据强度系数（开关关闭时原值返回）
 from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_conf
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
+
+# _m422_k1_statement_block_clip
+# ===== ★422批 刀1：片段按「完整语句块」边界截断 =====
+# 背景（T0 实测，非推测）：`_read_snippet_from_file` 原实现是「从 def 行硬取 40 行」。
+#   对 `PulseLiver._compress_group`（实测 230 行）取值时，窗口正好切在 `try:` 块内部
+#   —— 素材 try=1 / except=0。LLM 拿到的素材本身就是「try 没闭合」的残缺代码，
+#   它生成的 original_code / modified_code 自然也是残缺的 ⇒ 关2a（try 平衡）必拒。
+#   实测 53 条 2a 标本中 40 条 original_code 只有 4 行且首行就是 `try:`。
+# 修法：把「硬截 N 行」换成「按完整语句块累积」——复合语句块
+#   （try/for/while/if/with/def/class/match）**整体纳入或整体排除**，绝不返回半截块；
+#   字符上限同样落在块边界上（原实现按字符硬切 `[:2000]` 也会腰斩块）。
+# 为什么用缩进法而不是 AST：输入是「从 def 起的剩余全文」或整文件，但截断场景下
+#   文本未必是合法 Python（正是本函数要容忍的输入）；且本判据只需「块边界」不需要
+#   语法树。项目内 `patch_generator.extract_source_snippet` 用的也是缩进法（同源先例）。
+# 红线：整段都在预算内 ⇒ **原样返回**，与改造前逐字一致（零回归）。
+_M422_BLOCK_HEADS = frozenset({
+    "try", "except", "finally", "for", "while", "if", "elif", "else",
+    "with", "def", "class", "async", "match", "case",
+})
+# 续接关键字：它们与上一行同缩进，但属于**同一个**复合语句（不能当块结束）
+_M422_CONT_HEADS = frozenset({"except", "finally", "elif", "else", "case"})
+
+
+def _m422_indent_of(line: str) -> int:
+    """行首缩进宽度（tab 按 4 列计，与项目其余缩进判定一致）。"""
+    _n = 0
+    for _ch in line:
+        if _ch == " ":
+            _n += 1
+        elif _ch == "\t":
+            _n += 4
+        else:
+            break
+    return _n
+
+
+def _m422_head_of(line: str) -> str:
+    """取该行的首 token（用于判复合语句头）；空行/注释返回空串。"""
+    _s = (line or "").strip()
+    if not _s or _s.startswith("#"):
+        return ""
+    return re.split(r"[\s(:]", _s, maxsplit=1)[0]
+
+
+def _m422_is_block_head(line: str) -> bool:
+    """该行是否开启一个复合语句块（首 token 命中 + 以冒号收尾）。"""
+    _s = (line or "").strip()
+    if not _s.endswith(":"):
+        return False
+    return _m422_head_of(line) in _M422_BLOCK_HEADS
+
+
+def _m422_is_continuation(line: str) -> bool:
+    """该行是否是与上一行同块的续接（except/finally/elif/else/case）。"""
+    return _m422_head_of(line) in _M422_CONT_HEADS
+
+
+def _m422_block_end(lines: list, idx: int, n: int) -> int:
+    """返回从 `idx` 起那个语句块的结束下标（开区间）。
+
+    非复合块 ⇒ `idx + 1`；复合块 ⇒ 缩进回到 ≤ 本行缩进的第一个
+    **非空 / 非注释 / 非续接**行。括号续行按 ( [ { 计数跳过。
+    """
+    _base = _m422_indent_of(lines[idx])
+    _depth = 0
+    _j = idx
+    while _j < n:
+        _ln = lines[_j]
+        _s = _ln.strip()
+        if _s:
+            _depth += _s.count("(") + _s.count("[") + _s.count("{")
+            _depth -= _s.count(")") + _s.count("]") + _s.count("}")
+        if _j > idx and _depth <= 0 and _s and not _s.startswith("#"):
+            if _m422_indent_of(_ln) <= _base and not _m422_is_continuation(_ln):
+                return _j
+        _j += 1
+    return n
+
+
+def _m422_clip_statement_blocks(text: str, max_lines: int = 40,
+                                max_chars: int = 2000) -> str:
+    """按「完整语句块」边界裁剪源码片段（纯函数，无副作用）。
+
+    Args:
+        text: 待裁剪文本（整文件内容，或从 `def xxx` 起的剩余全文）。
+        max_lines: 行数预算 —— 超出时按块边界**整体排除**，不腰斩。
+        max_chars: 字符预算 —— 同样落在块边界（原实现 `[:2000]` 会切断块）。
+
+    Returns:
+        裁剪后的片段。**整段都在预算内 ⇒ 原样返回**（零回归路径）。
+        首块（def/class）就超预算时，退化为「块头行 + 其内部完整子块」，
+        保证返回的一定是若干**完整**语句 / 语句块。
+    """
+    _t = text or ""
+    if not _t:
+        return ""
+    _lines = _t.splitlines(True)
+    _n = len(_lines)
+    _lim = max(1, int(max_lines or 1))
+    _cmax = max(1, int(max_chars or 1))
+
+    # ── 快路径：整段放得下 ⇒ 逐字原样（改造前后完全一致）──
+    if _n <= _lim and len(_t) <= _cmax:
+        return _t.strip()
+
+    def _span(i: int) -> int:
+        return _m422_block_end(_lines, i, _n) if _m422_is_block_head(_lines[i]) else i + 1
+
+    # ── 第一层：从第 0 行起按块累积 ──
+    _out: list = []
+    _chars = 0
+    _i = 0
+    while _i < _n:
+        _j = _span(_i)
+        _chunk = _lines[_i:_j]
+        _cch = sum(len(x) for x in _chunk)
+        if len(_out) + len(_chunk) > _lim or _chars + _cch > _cmax:
+            break
+        _out.extend(_chunk)
+        _chars += _cch
+        _i = _j
+
+    # ── 第二层：首块就超预算（典型 = 方法整块 > max_lines）⇒ 进入块内部取子块 ──
+    if not _out:
+        if _m422_is_block_head(_lines[0]):
+            _inner_end = _span(0)
+        else:
+            _inner_end = 1
+        _out = [_lines[0]]
+        _chars = len(_lines[0])
+        _k = 1
+        while _k < _inner_end:
+            _m = min(_span(_k), _inner_end)
+            _chunk = _lines[_k:_m]
+            _cch = sum(len(x) for x in _chunk)
+            if len(_out) + len(_chunk) > _lim or _chars + _cch > _cmax:
+                break
+            _out.extend(_chunk)
+            _chars += _cch
+            _k = _m
+    return "".join(_out).strip()
+
 
 # ===== ★317批刀3（G-8）：子进程产出率计数 =====
 # 背景：并行子进程 118/149 次 `result=no_anomaly，审查=0，报告=0`——
@@ -106,8 +248,8 @@ _K1_VERDICT_OK = "达成"
 _K1_VERDICT_PENDING = "pending"
 _K1_VERDICT_FAIL = "未达成"
 _K1_VERDICT_UNKNOWN = "不可判"
-_K1_VERDICT_CRITERIA = ("333刀3判据：同一进程代次内累计 %d 拍 ≥%d/%d 且三列同报"
-                        % (_K1_MIN_RUNS, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+_K1_VERDICT_CRITERIA = (f"333刀3判据：同一进程代次内累计 {_K1_MIN_RUNS} 拍 ≥"
+                        f"{_K1_MIN_PRODUCTIVE}/{_K1_MIN_RUNS} 且三列同报")
 
 #: 最近一次自动判定（供开闸判定树⑦ / 报表头消费；**进程内，不跨代次**）
 _K1_LAST: dict = {}
@@ -137,20 +279,17 @@ def _m335_k1_judge(runs, productive, zero, proc_gen, source="in_process",
     _cols_ok = (_runs == _prod + _zero)
     if _runs < _K1_MIN_RUNS:
         _v = _K1_VERDICT_PENDING
-        _why = ("本代次 %d 拍 < 可判窗口 %d 拍 ⇒ pending"
-                "（不记 0、不记未达成）" % (_runs, _K1_MIN_RUNS))
+        _why = (f"本代次 {_runs} 拍 < 可判窗口 {_K1_MIN_RUNS} 拍 ⇒ pending"
+                "（不记 0、不记未达成）")
     elif not _cols_ok:
         _v = _K1_VERDICT_UNKNOWN
-        _why = ("三列不自洽（runs=%d ≠ productive=%d + zero=%d）⇒ 不可判"
-                % (_runs, _prod, _zero))
+        _why = f"三列不自洽（runs={_runs} ≠ productive={_prod} + zero={_zero}）⇒ 不可判"
     elif _prod >= _K1_MIN_PRODUCTIVE:
         _v = _K1_VERDICT_OK
-        _why = ("本代次 %d/%d 拍产出 ≥ %d/%d 且三列同报"
-                % (_prod, _runs, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+        _why = f"本代次 {_prod}/{_runs} 拍产出 ≥ {_K1_MIN_PRODUCTIVE}/{_K1_MIN_RUNS} 且三列同报"
     else:
         _v = _K1_VERDICT_FAIL
-        _why = ("本代次 %d/%d 拍产出 < %d/%d 线"
-                % (_prod, _runs, _K1_MIN_PRODUCTIVE, _K1_MIN_RUNS))
+        _why = f"本代次 {_prod}/{_runs} 拍产出 < {_K1_MIN_PRODUCTIVE}/{_K1_MIN_RUNS} 线"
     return {"verdict": _v, "reason": _why,
             "runs": _runs, "productive": _prod, "zero_output": _zero,
             "cols_consistent": bool(_cols_ok),
@@ -237,8 +376,8 @@ def _m337_k1_mark(res: dict, expect_gen: "str | None") -> dict:
     _ov = res.get("verdict")
     res["gen_consistent"] = False
     res["verdict"] = _K1_VERDICT_UNKNOWN
-    res["reason"] = ("跨代次残留不可信：本读数 proc_gen=%s ≠ 期望 %s"
-                     "（原判 %s：%s）" % (_pg or "unknown", str(expect_gen),
+    res["reason"] = ("跨代次残留不可信：本读数 proc_gen={} ≠ 期望 {}"
+                     "（原判 {}：{}）".format(_pg or "unknown", str(expect_gen),
                                        _ov, res.get("reason") or ""))
     _K1_LAST.clear()
     _K1_LAST.update(res)
@@ -272,7 +411,7 @@ def get_k1_verdict(project_root: str | None = None,
     if _g is None:
         _r = {"verdict": _K1_VERDICT_UNKNOWN, "reason": (
             "本进程无 K1 读数且活体日志无 `[317刀3][产出率]` 行"
-            "（日志=%s）⇒ 不可判（不填 0）" % _lp),
+            f"（日志={_lp}）⇒ 不可判（不填 0）"),
             "runs": None, "productive": None, "zero_output": None,
             "cols_consistent": None,
             "min_runs": _K1_MIN_RUNS, "min_productive": _K1_MIN_PRODUCTIVE,
@@ -299,9 +438,8 @@ def get_k1_last() -> dict:
 
 def _m335_k1_log_line(res: dict) -> str:
     """★335刀8：`[335刀4][K1判定]` 单行文案（带 proc_gen，压测取证硬前提）。"""
-    return ("[335刀4][K1判定] proc_gen=%s runs=%s productive=%s zero=%s "
-            "verdict=%s source=%s reason=%s"
-            % (res.get("proc_gen") or "unknown", res.get("runs"),
+    return ("[335刀4][K1判定] proc_gen={} runs={} productive={} zero={} "
+            "verdict={} source={} reason={}".format(res.get("proc_gen") or "unknown", res.get("runs"),
                res.get("productive"), res.get("zero_output"),
                res.get("verdict"), res.get("source"), res.get("reason")))
 
@@ -1155,11 +1293,15 @@ class SafeEvolutionExecutor:
             _module_logger.debug(
                 f"[代码片段] 文件读取失败: {file_path} - {type(_e).__name__}: {_e}")
             return ""
+        # ★422刀1：不再硬截 max_lines 行 / 硬切 2000 字 —— 两者都会腰斩复合语句块。
+        #   改按「完整语句块」累积：块整体纳入或整体排除（整段放得下时逐字不变）。
         if method_name:
             for _i, _ln in enumerate(_lines):
                 if f"def {method_name}" in _ln:
-                    return "".join(_lines[_i:_i + max_lines]).strip()[:2000]
-        return "".join(_lines[:max_lines]).strip()[:2000]
+                    return _m422_clip_statement_blocks(
+                        "".join(_lines[_i:]), max_lines=max_lines, max_chars=2000)
+        return _m422_clip_statement_blocks(
+            "".join(_lines), max_lines=max_lines, max_chars=2000)
 
     def _extract_comparison_material(self, issue: dict[str, Any], related_logs: str,
                                      file_path: str = "", method_name: str = "") -> str:
@@ -3369,7 +3511,7 @@ class SafeEvolutionExecutor:
     #   2) 归一化只作用于「代码区」，跳过字符串字面量与 # 注释，
     #      避免把中文字符串/注释里的「，」误改成半角（保语义、保可读性）；
     #   3) 归一化后再次 ast.parse，仅当真的修好了才记 INFO 日志。
-    _FULLWIDTH_CODE_MAP = {
+    _FULLWIDTH_CODE_MAP: ClassVar[dict] = {
         "，": ",",   # 全角逗号（实证最高频）
         "（": "(", "）": ")",
         "：": ":", "；": ";",
@@ -4087,12 +4229,12 @@ class SafeEvolutionExecutor:
             try:
                 _cp = _sp.run([_sys.executable, "-c", _code, _payload],
                               capture_output=True, text=True, timeout=90,
-                              cwd=os.getcwd())
+                              cwd=os.getcwd(), check=False)
                 if _cp.returncode == 0 and _cp.stdout.strip():
                     _res_child = _json.loads(_cp.stdout.strip().splitlines()[-1])
                 else:
                     _res_child = {"fed": len(_face), "reviewed": 0,
-                                   "skipped": "child_rc=%s" % _cp.returncode,
+                                   "skipped": f"child_rc={_cp.returncode}",
                                    "stderr": (_cp.stderr or "")[-300:]}
             except Exception as _e:
                 silent_exc(_e, where="SafeEvolutionExecutor.k1_task_face_probe.subprocess")
@@ -4159,8 +4301,7 @@ class SafeEvolutionExecutor:
                   "runtime_state.json.bak.1", "runtime_state.json.bak.2",
                   "tool_strategy_memory.json", "verification_learning.json",
                   "pulse_trace.json", "health_snapshot.json")
-        return _bare in _exact or _bare.endswith(".bak") or _bare.endswith(".bak.1") \
-            or _bare.endswith(".bak.2")
+        return _bare in _exact or _bare.endswith((".bak", ".bak.1", ".bak.2"))
 
     @staticmethod
     def _m321_isolated_root(project_root: str | None = None) -> str:
@@ -4198,8 +4339,7 @@ class SafeEvolutionExecutor:
                     return {"exists": True, "files": _n, "max_mtime": -1.0, "capped": True}
                 try:
                     _m = os.stat(os.path.join(_dp, _f)).st_mtime
-                    if _m > _mx:
-                        _mx = _m
+                    _mx = max(_mx, _m)
                 except OSError as _e:
                     silent_exc(_e, where="SafeEvolutionExecutor._m321_data_fingerprint.stat")
         return {"exists": True, "files": _n, "max_mtime": round(_mx, 3)}
@@ -4345,18 +4485,18 @@ class SafeEvolutionExecutor:
         _deferred: list[dict] = []
         for _abs in _files[:_cap]:
             _rel = os.path.relpath(_abs, _root).replace(os.sep, "/")
-            _items.append({"task_id": "code_scan:%s" % _rel, "kind": "code_scan",
+            _items.append({"task_id": f"code_scan:{_rel}", "kind": "code_scan",
                            "file": _rel, "method": "_module_", "abs": _abs, "blast": 0})
         for _c in self._k2_classes_from_ast(_files[:_cap], max_classes):
             _rel = os.path.relpath(_c["file"], _root).replace(os.sep, "/")
-            _iq = "%s.%s" % (_c["cls"], _c["method"])
+            _iq = "{}.{}".format(_c["cls"], _c["method"])
             _br = self._k2_blast(_iq, _rel)
-            _row = {"task_id": "struct_assert:%s" % _iq, "kind": "struct_assert",
+            _row = {"task_id": f"struct_assert:{_iq}", "kind": "struct_assert",
                     "file": _rel, "method": str(_c["method"]), "abs": _c["file"],
                     "blast": _br}
             if _br is None or int(_br) > self.K2_BLAST_LIMIT:
                 _row["defer_reason"] = ("blast_unknown" if _br is None
-                                        else "blast>%d" % self.K2_BLAST_LIMIT)
+                                        else f"blast>{self.K2_BLAST_LIMIT}")
                 _deferred.append(_row)
             else:
                 _items.append(_row)
@@ -4433,7 +4573,7 @@ class SafeEvolutionExecutor:
         import json as _json
         import subprocess as _sp
         import sys as _sys
-        _spd = os.path.join(isolated_root, "shard_%s.json" % tag)
+        _spd = os.path.join(isolated_root, f"shard_{tag}.json")
         with open(_spd, "w", encoding="utf-8") as _f:
             _json.dump({"items": shard}, _f, ensure_ascii=False)
         return _sp.Popen([_sys.executable, "-c", self._k2_worker_src(), _spd],
@@ -4456,7 +4596,7 @@ class SafeEvolutionExecutor:
                     "error": "timeout"}
         if proc.returncode != 0 or not (_out or "").strip():
             return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
-                    "error": "rc=%s" % proc.returncode,
+                    "error": f"rc={proc.returncode}",
                     "stderr": (_err or "")[-200:]}
         try:
             _d = _json.loads((_out or "").strip().splitlines()[-1])
@@ -4473,7 +4613,7 @@ class SafeEvolutionExecutor:
         _t0 = _time.time()
         _res = []
         for _i, _b in enumerate(buckets):
-            _tg = "%s_s%d" % (prefix, _i)
+            _tg = f"{prefix}_s{_i}"
             _res.append(self._k2_collect(self._k2_start(_b, _tg, isolated_root), _tg))
         return _time.time() - _t0, _res
 
@@ -4483,7 +4623,7 @@ class SafeEvolutionExecutor:
         _t0 = _time.time()
         _ps = []
         for _i, _b in enumerate(buckets):
-            _tg = "%s_p%d" % (prefix, _i)
+            _tg = f"{prefix}_p{_i}"
             _ps.append((self._k2_start(_b, _tg, isolated_root), _tg))
         _res = [self._k2_collect(_p, _tg) for _p, _tg in _ps]
         return _time.time() - _t0, _res
@@ -4508,12 +4648,12 @@ class SafeEvolutionExecutor:
         _acc_s = {"scanned": 0, "reviewed": 0, "findings": 0}
         _acc_p = {"scanned": 0, "reviewed": 0, "findings": 0}
         for _r in range(_n):
-            _w1, _r1 = self._k2_round_serial(_buckets, _root, "r%d" % (_r + 1))
+            _w1, _r1 = self._k2_round_serial(_buckets, _root, f"r{_r + 1}")
             _ser.append(round(_w1, 4))
             for _x in _r1:
                 for _k in _acc_s:
                     _acc_s[_k] += int(_x.get(_k) or 0)
-            _w2, _r2 = self._k2_round_parallel(_buckets, _root, "r%d" % (_r + 1))
+            _w2, _r2 = self._k2_round_parallel(_buckets, _root, f"r{_r + 1}")
             _par.append(round(_w2, 4))
             for _x in _r2:
                 for _k in _acc_p:
@@ -5322,8 +5462,7 @@ class SafeEvolutionExecutor:
                 _res["result"] = "no_safe_fix"
             else:
                 _patch = {
-                    "id": "patch_learn_%d_%04x" % (
-                        int(time.time()), abs(hash(_modified)) & 0xFFFF),
+                    "id": f"patch_learn_{int(time.time())}_{abs(hash(_modified)) & 0xFFFF:04x}",
                     "file": file_path,
                     "method": method,
                     "issue_type": _type,

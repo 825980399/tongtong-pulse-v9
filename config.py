@@ -14,27 +14,27 @@ import time
 
 from nucleus._silent_except import silent_exc
 from nucleus.const import (
-    LogLevel,
     BoneMarrowEvent,
+    CodeEvent,
     DeviceEvent,
     DNARepairEvent,
     EnergyEvent,
     EvolutionEvent,
     GrowthEvent,
     HealthEvent,
+    LogLevel,
     MetricsEvent,
     NarrativeEvent,
     NurtureEvent,
     PersonalityEvent,
     ProprioceptionEvent,
     ReproductionEthicsEvent,
+    SelfAwarenessEvent,
     SkinEvent,
     SpinalCordEvent,
     ThymusEvent,
     TouchEvent,
     WhiteCellEvent,
-    SelfAwarenessEvent,
-    CodeEvent,
 )
 
 # ========== 项目根目录 ==========
@@ -4253,7 +4253,9 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
         import json as _json
         from datetime import datetime as _dt
         log_entry = {
-            "timestamp": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+            # 本行豁免 DTZ005（理由）：时间串原样落进配置变更日志，加 tz 会让
+            #   格式变成 `2026-11-02 10:00:00+08:00` —— 那是行为变更，不改。
+            "timestamp": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),  # noqa: DTZ005
             "param": param_name,
             "old_value": old_value,
             "new_value": new_value,
@@ -4370,7 +4372,9 @@ def start_config_watcher():
 
 def stop_config_watcher():
     """停止配置文件监听（由 main.py 在退出时调用）"""
-    global _config_watcher_running, _config_watcher_thread
+    # ★422 ruff 收尾：`_config_watcher_thread` 在本函数里**只读**
+    #   （`.is_alive()` / `.join()`），不绑定名字 ⇒ 不写进 global（PLW0602）。
+    global _config_watcher_running
     _config_watcher_running = False
     if _config_watcher_thread and _config_watcher_thread.is_alive():
         _config_watcher_thread.join(timeout=3)
@@ -6405,7 +6409,7 @@ def find_unrendered_placeholders(obj, _path="", _acc=None):
                 break
     elif isinstance(obj, list):
         for i, x in enumerate(obj):
-            find_unrendered_placeholders(x, "%s[%d]" % (_path, i), _acc)
+            find_unrendered_placeholders(x, f"{_path}[{i}]", _acc)
     elif isinstance(obj, dict):
         for k, v in obj.items():
             find_unrendered_placeholders(v, f"{_path}.{k}", _acc)
@@ -6421,7 +6425,10 @@ def _apply_placeholder_render():
       - SEED_MEMORIES[*].value（keywords 保持不动，仍是匹配键）
       - INNER_WORLD_CONFIG.identity_rules 的每个**值**（键是查询元组，不动）
     """
-    global DIGITAL_LIFE_REGISTRY, SEED_MEMORIES, INNER_WORLD_CONFIG
+    # ★422 ruff 收尾：原为 `global DIGITAL_LIFE_REGISTRY, SEED_MEMORIES,
+    #   INNER_WORLD_CONFIG` —— 本函数对三者只做**原地修改**（`X[k] = v`），
+    #   从不绑定名字，global 声明是多余的（PLW0602 ×3）。删掉语义不变：
+    #   原地修改本来就不需要 global。
 
     try:
         if isinstance(DIGITAL_LIFE_REGISTRY, dict):
@@ -7062,6 +7069,39 @@ ENABLE_M414_O3_PRIVATE_IN_POOL = True
 #   ★为什么要开关：改的是 412 钉死的 `row_of()` 契约，留一条回退路。
 #   读取点：nucleus/observability/narrative_digest.py::events_enabled()
 ENABLE_M414_NARRATIVE_EVENTS = True
+
+# ======================================================================
+# [M422-CFG] 第422批 · 叙事补跑 + 每 6h flush
+# ======================================================================
+#
+# 背景（422 批刀4 T0 实测）
+#   任务书说「叙事只挂 04:00，错过窗口就不补」，实测**不是错过**：
+#   11-02 凌晨 `last_run_ymd=20261102`（跑了）、`last_added=114`，
+#   但 `data/narrative/` 下只有 `narrative_20261101.jsonl`。
+#   真因是两套日戳口径：夜间编排幂等用**日历日**，叙事落盘用**摘要日**
+#   （`DIGEST_SETTLE_HOUR=6`，04:00 跑 ⇒ 锚点回退一天 ⇒ 落**前一天**）。
+#   ⇒ `narrative_YYYYMMDD.jsonl` 要等次日凌晨才出现，白天永远是空的。
+#
+# ENABLE_M422_NARRATIVE_CATCHUP
+#   默认值：True
+#   语义：启动时按**摘要日**判「该落的那天有没有行」；没有且当前 <12:00
+#        ⇒ 立刻补跑一次（走既有 `narrative_store.persist_from_organ()`）。
+#   幂等：状态文件记 `catchup_ymd`+`catchup_ok`，同一天补成功过就不再补。
+#   关闭时零行为变化（入口直接返回 status=disabled）。
+#   读取点：nucleus/observability/narrative_flush.py::_m422_k4_enabled
+ENABLE_M422_NARRATIVE_CATCHUP = True
+#
+# ENABLE_M422_NARRATIVE_FLUSH
+#   默认值：True
+#   语义：主循环按**槽位**（10:00 / 16:00 / 22:00，各留到当天末）flush 叙事，
+#        与 04:00 夜间编排合计 4 拍/天。同一槽当天只跑一次；
+#        漏掉的中间槽不追（下一拍覆盖同一批事件）。
+#   注意：`persist_daily` 是**替换当天那一行**，一天多拍**不会多出行**；
+#        「一天多个时间点的 flush 记录」由 append-only 审计账
+#        `data/narrative/flush_history.jsonl` 体现（不是摘要文件行数）。
+#   关闭时零行为变化（入口直接返回 status=disabled）。
+#   读取点：nucleus/observability/narrative_flush.py::_m422_k4_enabled
+ENABLE_M422_NARRATIVE_FLUSH = True
 
 # ======================================================================
 # [M415-CFG] 第415批 · 经验池命中拼进对话 prompt

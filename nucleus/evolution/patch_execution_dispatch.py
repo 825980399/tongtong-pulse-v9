@@ -18,17 +18,16 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import io
 import json
 import os
+import tempfile
 import time
 from typing import Any
 
 from nucleus._silent_except import silent_exc
-from nucleus.drop_tracker import note_drop
-
-from nucleus.logger import get_module_logger
 from nucleus.const import MotorEvent
+from nucleus.drop_tracker import note_drop
+from nucleus.logger import get_module_logger
 from nucleus.proc_gen import proc_gen_str as _m335_pg
 
 _module_logger = get_module_logger("PatchExecutionDispatch")
@@ -50,7 +49,7 @@ def _m343_o3_stable_id(file_norm, method: str,
     口径：`file` 归一为 `/` 分隔、去前导 `./`（避免同一文件两种写法两个 id）。
     """
     _f = str(file_norm or "").replace("\\", "/").lstrip("./")
-    _k = "%s::%s::%s::%s" % (_f, str(method or ""), str(issue_type or ""),
+    _k = "{}::{}::{}::{}".format(_f, str(method or ""), str(issue_type or ""),
                             str(marker or ""))
     return "o3_" + hashlib.sha1(_k.encode("utf-8")).hexdigest()[:16]
 
@@ -202,7 +201,7 @@ def _m365_o3_review_items(cand: dict, gate_report: dict | None) -> dict:
             continue
         if (str(_r.get("file") or "").replace("\\", "/") == _f
                 and str(_r.get("method") or "") == _m):
-            _sample = ["%s:%s" % (_f, _r.get("line"))]
+            _sample = ["{}:{}".format(_f, _r.get("line"))]
             break
     # ③ 上帝文件静态复算（只加严；取不到不填 False）
     _god = None
@@ -359,9 +358,8 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
         "file": _c.get("file"), "method": _c.get("method"),
         "line": _c.get("line"),
         "issue_type": "dead_code_candidate",
-        "description": ("O3 开闸入池：方法 %s 图内三层无入边且图外无证据"
-                        "（hard_strict）⇒ 待人工确认是否删除"
-                        % (_c.get("method"),)),
+        "description": ("O3 开闸入池：方法 {} 图内三层无入边且图外无证据"
+                        "（hard_strict）⇒ 待人工确认是否删除".format(_c.get("method"))),
         # ★入池标记（334挂账⑦ 要把它从"从未出现"变成"可数事实"）
         "o3_marker": _si._M335_O3_MARKER,
         "o3_dead_code": True,
@@ -588,7 +586,8 @@ def _m326_load_fail_ledger(path: str | None = None) -> dict:
     try:
         if not os.path.isfile(_p):
             return {"version": _M326_FAIL_LEDGER_VERSION, "patches": {}}
-        _d = json.load(io.open(_p, encoding="utf-8"))
+        with open(_p, encoding="utf-8") as _fh:
+            _d = json.load(_fh)
         if not isinstance(_d, dict):
             return {"version": _M326_FAIL_LEDGER_VERSION, "patches": {}}
         if not isinstance(_d.get("patches"), dict):
@@ -610,7 +609,7 @@ def _m326_save_fail_ledger(data: dict, path: str | None = None) -> bool:
         _body["version"] = _M326_FAIL_LEDGER_VERSION
         _body["updated_at"] = time.time()
         _tmp = _p + ".tmp"
-        with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
             json.dump(_body, _f, ensure_ascii=False, indent=2)
         os.replace(_tmp, _p)
         return True
@@ -701,10 +700,11 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
             "kept": 0, "archived_ids": [], "keep_ids": [], "ages_sec": {},
             "structure": "", "error": ""}
     try:
-        _d = json.load(io.open(_pp, encoding="utf-8"))
+        with open(_pp, encoding="utf-8") as _fh:
+            _d = json.load(_fh)
     except Exception as e:
         silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep read")
-        _out["error"] = "read_failed:%s" % type(e).__name__
+        _out["error"] = f"read_failed:{type(e).__name__}"
         return _out
     if not isinstance(_d, list):
         _out["structure"] = "dict_only_report（不改动）"
@@ -738,7 +738,7 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
     # ---- 真正归档 ----
     try:
         os.makedirs(os.path.dirname(_arch), exist_ok=True)
-        with io.open(_arch, "a", encoding="utf-8", newline="\n") as _f:
+        with open(_arch, "a", encoding="utf-8", newline="\n") as _f:
             for _p in _aged:
                 _row = dict(_p)
                 _row["archived_at"] = _now
@@ -751,14 +751,14 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
                                    path=ledger_path)
         _left = [_p for _p in _d if _p not in _aged]
         _tmp = _pp + ".m331.tmp"
-        with io.open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
             json.dump(_left, _f, ensure_ascii=False, indent=2)
         os.replace(_tmp, _pp)
         _out["written"] = True
         _out["archive_file"] = _arch
     except Exception as e:
         silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep write")
-        _out["error"] = "write_failed:%s" % type(e).__name__
+        _out["error"] = f"write_failed:{type(e).__name__}"
     return _out
 
 
@@ -800,6 +800,282 @@ def _m326_persisted_fail_count(patch: dict, ledger: dict | None = None,
             _led = 0
     return max(_field, _led)
 
+# ===== ★422批刀2：同 (file, method) 连续失败 3 次 ⇒ 冷却 24h =====
+# 为什么（422 任务书刀2）：
+#   侧账 `patch_fail_counts.json` **按 patch id** 计数，而 LLM 每轮生成的补丁 id 都是新的
+#   （`patch_learn_<ts>_<hash>` / `patch_multi_<ts>_` 组）⇒ 换个 id 就绕过 cap，
+#   同一个 `PulseLiver._compress_group` 四天被派单 44 次、次次失败。
+#   按 id 计数度量的是"这个补丁文件坏没坏"，度量不到"这个方法能不能改"。
+# 口径（与既有 per-patch cap **并存**，不互替 —— 删掉 cap 等于放宽既有安全闸）：
+#   · 键 = (归一化 file, method) 二元组，归一化与 `_m343_o3_stable_id` 同款，
+#     避免 `a\b.py` 与 `a/b.py`、`./a.py` 与 `a.py` 被算成两个方法；
+#   · 一次"尝试未成功" = 执行失败（`_write_back` 失败分支）
+#     或 派单前被拦（`dispatch_runtime_verified_patches` 的 blocked 分支）；
+#   · 连续失败达 3 次 ⇒ `cooldown_until = now + 24h`；
+#   · 冷却期内**不计数、不延期**（否则每次被拦都给它续命，永远解不开）；
+#   · 冷却到期 ⇒ 惰性清零 `consec_fail`（"允许再试"，且要重新攒满 3 次才会再冷却）；
+#   · 成功一次 ⇒ `consec_fail` 归零（"连续"二字的口径）。
+# 独立文件而不并入 `patch_fail_counts.json`：后者已有 9 个 id 记录，混入方法键会让
+#   "按 id"与"按方法"两种语义互相污染，外部巡检脚本按 `patches` 解析还会读到怪键。
+_M422_COOLDOWN_REL = os.path.join("data", "patches", "method_cooldown.json")
+_M422_COOLDOWN_VERSION = "422.1"
+_M422_COOLDOWN_FAIL_THRESHOLD = 3        # 连续失败几次 ⇒ 冷却
+_M422_COOLDOWN_SEC = 24 * 3600.0         # 冷却时长（秒）
+_M422_COOLDOWN_REASON = "cooldown_24h"   # 派单器拦下来的 reason 字面量（任务书点名）
+
+
+def _m422_cooldown_path(path: str | None = None) -> str:
+    """冷却账路径（`path` 仅供隔离验证注入，生产调用方不传）。
+
+    ★422 刀2 加固（施工中被实测逼出来的）：pytest 会给**每个用例**设
+      `PYTEST_CURRENT_TEST`，生产进程里没有它。不加这层，任何调
+      `_m324_blocked_reason` 或走 O3 通道的**旧**测试（m373/m374 等）都会往
+      **生产** `data/patches/method_cooldown.json` 写假方法账 —— 施工期实测
+      被写进 `a.py::_dead_method`。写进去的假账 `cooldown_until=0.0`、
+      `consec_fail=0` 不拦人，但「测试污染生产数据」本身不能当常态。
+    """
+    if path:
+        return path
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return os.path.join(tempfile.gettempdir(),
+                            f"pulse_m422_cooldown_sandbox_{os.getpid()}.json")
+    return os.path.join(_m326_repo_root(), _M422_COOLDOWN_REL)
+
+
+def _m422_norm_file(file_norm) -> str:
+    """文件归一：`\\`→`/`、去前导 `./` —— 与 `_m343_o3_stable_id` 同一口径。"""
+    return str(file_norm or "").replace("\\", "/").lstrip("./")
+
+
+def _m422_pair_of(patch) -> tuple:
+    """取 (归一化 file, method)；缺任一 ⇒ ("", "")（**不猜**，宁可放弃计数）。
+
+    `file` 字段在历史补丁里一律存在（实测 87/87）；`target_file` 只作兜底，
+    因为 O3 入池路径的候选用的是 `target_file` 写法。
+    """
+    if not isinstance(patch, dict):
+        return "", ""
+    _f = _m422_norm_file(patch.get("file") or patch.get("target_file"))
+    _m = str(patch.get("method") or "").strip()
+    if not _f or not _m:
+        return "", ""
+    return _f, _m
+
+
+def _m422_pair_key(pair) -> str:
+    """二元组 → 账键 `file::method`；**任一侧为空 ⇒ 返回空串**。
+
+    注意：`"%s::%s" % ("", "")` 得到的是 `"::"`（**非空、truthy**），
+    所以"有没有键"只能靠这里判空，调用方的 `if not _key` 才不会漏。
+    漏判的后果实测过：缺 file/method 的补丁写出键为 `::` 的假方法账，
+    所有无归属失败堆在一起，还会为它建出生产账文件。
+    """
+    if not isinstance(pair, (tuple, list)) or len(pair) < 2:
+        return ""
+    if not str(pair[0] or "") or not str(pair[1] or ""):
+        return ""
+    return f"{pair[0]}::{pair[1]}"
+
+
+def _m422_load_cooldown(path: str | None = None) -> dict:
+    """读冷却账；缺失/损坏一律返回空结构（**绝不因侧账坏了阻断派单**）。"""
+    _p = _m422_cooldown_path(path)
+    try:
+        if not os.path.isfile(_p):
+            return {"version": _M422_COOLDOWN_VERSION, "methods": {}}
+        with open(_p, encoding="utf-8") as _fh:
+            _d = json.load(_fh)
+        if not isinstance(_d, dict):
+            return {"version": _M422_COOLDOWN_VERSION, "methods": {}}
+        if not isinstance(_d.get("methods"), dict):
+            _d["methods"] = {}
+        _d.setdefault("version", _M422_COOLDOWN_VERSION)
+        return _d
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m422_load_cooldown",
+                   level="warning")
+        return {"version": _M422_COOLDOWN_VERSION, "methods": {}}
+
+
+def _m422_save_cooldown(data: dict, path: str | None = None) -> bool:
+    """原子写冷却账；失败只留痕返回 False（不影响派单主流程）。"""
+    _p = _m422_cooldown_path(path)
+    try:
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        _body = dict(data or {})
+        _body["version"] = _M422_COOLDOWN_VERSION
+        _body["updated_at"] = time.time()
+        _tmp = _p + ".tmp"
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(_body, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _p)
+        return True
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m422_save_cooldown",
+                   level="warning")
+        return False
+
+
+def _m422_settle(rec: dict, now: float) -> dict:
+    """惰性结算：冷却到期 ⇒ `consec_fail` 归零、`cooldown_until` 清 0（只改副本）。
+
+    为什么必须"到期清零"而不是留着 consec_fail：留着的话解锁后再失败 1 次就
+    立刻重新进冷却，等于冷却时长被偷偷拉长成"每 24h 只准试 1 次"，
+    与任务书的"允许再试（重新攒 3 次）"不符。
+    """
+    _r = dict(rec or {})
+    try:
+        _until = float(_r.get("cooldown_until") or 0.0)
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m422_settle 非数值",
+                   level="debug")
+        _until = 0.0
+    if _until and _until <= float(now):
+        _r["cooldown_until"] = 0.0
+        _r["consec_fail"] = 0
+        _r["unlocked_at"] = float(now)
+        _r["unlock_count"] = int(_r.get("unlock_count") or 0) + 1
+    return _r
+
+
+def _m422_method_state(patch, now: float | None = None,
+                       path: str | None = None) -> dict:
+    """只读：该补丁所属 (file, method) 的冷却账现状（含到期惰性解锁的**推算**）。"""
+    _now = float(time.time() if now is None else now)
+    _pair = _m422_pair_of(patch)
+    _key = _m422_pair_key(_pair)
+    _out = {"key": _key, "file": _pair[0], "method": _pair[1],
+            "consec_fail": 0, "total_fail": 0, "cooldown_until": 0.0,
+            "cooling": False, "remain_sec": 0.0, "cool_count": 0,
+            "last_reason": "", "last_category": ""}
+    if not _key:
+        return _out
+    _d = _m422_load_cooldown(path)
+    _rec = (_d.get("methods") or {}).get(_key)
+    if not isinstance(_rec, dict):
+        return _out
+    _r = _m422_settle(_rec, _now)
+    try:
+        _until = float(_r.get("cooldown_until") or 0.0)
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m422_method_state 非数值",
+                   level="debug")
+        _until = 0.0
+    _out.update({
+        "consec_fail": int(_r.get("consec_fail") or 0),
+        "total_fail": int(_r.get("total_fail") or 0),
+        "cooldown_until": _until,
+        "cooling": bool(_until > _now),
+        "remain_sec": max(0.0, _until - _now),
+        "cool_count": int(_r.get("cool_count") or 0),
+        "last_reason": str(_r.get("last_reason") or ""),
+        "last_category": str(_r.get("last_category") or ""),
+    })
+    return _out
+
+
+def _m422_cooldown_reason(patch, now: float | None = None,
+                          path: str | None = None) -> str:
+    """该补丁此刻是否因**方法级冷却**不可派单：返回 `"cooldown_24h"` 或 `""`。
+
+    字面量刻意不带括号参数 —— 任务书点名 `reason="cooldown_24h"`，
+    细节（连续次数 / 剩余时长 / 方法名）走日志行与冷却账，不塞进 reason。
+    """
+    _st = _m422_method_state(patch, now=now, path=path)
+    return _M422_COOLDOWN_REASON if _st.get("cooling") else ""
+
+
+def _m422_note_method_fail(patch, reason: str = "", category: str = "",
+                           now: float | None = None,
+                           path: str | None = None) -> dict:
+    """记一次"该 (file, method) 尝试未成功"；满 3 次 ⇒ 进 24h 冷却。
+
+    冷却期内再次调用**原样返回、不计数不延期**（幂等）—— 否则派单器每拍拦一次
+    就给它续 24h，方法永远解不开（自锁）。
+    """
+    _now = float(time.time() if now is None else now)
+    _pair = _m422_pair_of(patch)
+    _key = _m422_pair_key(_pair)
+    if not _key:
+        return {"key": "", "ignored": True, "why": "no_file_or_method"}
+    _d = _m422_load_cooldown(path)
+    _rec = _m422_settle((_d.get("methods") or {}).get(_key) or {}, _now)
+    try:
+        _until = float(_rec.get("cooldown_until") or 0.0)
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m422_note_method_fail 非数值",
+                   level="debug")
+        _until = 0.0
+    if _until > _now:
+        return {"key": _key, "ignored": True, "why": "already_cooling",
+                "cooling": True, "remain_sec": _until - _now,
+                "consec_fail": int(_rec.get("consec_fail") or 0),
+                "cooldown_until": _until}
+    _consec = int(_rec.get("consec_fail") or 0) + 1
+    _rec["consec_fail"] = _consec
+    _rec["total_fail"] = int(_rec.get("total_fail") or 0) + 1
+    _rec["last_reason"] = str(reason or "")[:200]
+    _rec["last_category"] = str(category or "")
+    _rec["last_fail_at"] = _now
+    _rec.setdefault("first_at", _now)
+    _entered = False
+    if _consec >= _M422_COOLDOWN_FAIL_THRESHOLD:
+        _rec["cooldown_until"] = _now + _M422_COOLDOWN_SEC
+        _rec["cooled_at"] = _now
+        _rec["cool_count"] = int(_rec.get("cool_count") or 0) + 1
+        _entered = True
+    _d.setdefault("methods", {})[_key] = _rec
+    _m422_save_cooldown(_d, path)
+    if _entered:
+        # 一条具名行就能回答"什么时候、哪个方法、失败几次、卡在哪个环节"
+        _module_logger.info(
+            "[422刀2][方法冷却] 进入冷却 reason=%s consec=%d/%d hours=%.0f "
+            "file=%s method=%s last=%s cat=%s proc_gen=%s",
+            _M422_COOLDOWN_REASON, _consec, _M422_COOLDOWN_FAIL_THRESHOLD,
+            _M422_COOLDOWN_SEC / 3600.0, _pair[0], _pair[1],
+            str(reason or "")[:60], str(category or "") or "-", _m335_pg())
+    return {"key": _key, "ignored": False, "entered_cooldown": _entered,
+            "consec_fail": _consec, "cooldown_until": _rec.get("cooldown_until", 0.0),
+            "total_fail": _rec["total_fail"]}
+
+
+def _m422_note_method_ok(patch, now: float | None = None,
+                        path: str | None = None) -> dict:
+    """成功一次 ⇒ 该 (file, method) 的连续失败归零（立刻解锁）。
+
+    没有账记录时**直接返回、不建文件**：成功是常态，不该为每个跑通的方法留垃圾。
+    """
+    _now = float(time.time() if now is None else now)
+    _pair = _m422_pair_of(patch)
+    _key = _m422_pair_key(_pair)
+    if not _key:
+        return {"key": "", "skipped": "no_file_or_method"}
+    _d = _m422_load_cooldown(path)
+    _rec = (_d.get("methods") or {}).get(_key)
+    if not isinstance(_rec, dict):
+        return {"key": _key, "skipped": "no_record"}
+    _rec = _m422_settle(_rec, _now)
+    if not int(_rec.get("consec_fail") or 0) and not float(_rec.get("cooldown_until") or 0.0):
+        return {"key": _key, "skipped": "already_clean"}
+    _rec["consec_fail"] = 0
+    _rec["cooldown_until"] = 0.0
+    _rec["last_ok_at"] = _now
+    _rec["last_reason"] = ""
+    _rec["last_category"] = ""
+    _d.setdefault("methods", {})[_key] = _rec
+    _m422_save_cooldown(_d, path)
+    return {"key": _key, "skipped": "", "reset": True,
+            "total_fail": int(_rec.get("total_fail") or 0)}
+
+
+def get_m422_cooldown_ledger(path: str | None = None) -> dict:
+    """★422刀2：冷却账快照（只读拷贝；交付报告 / 巡检用，**不改盘**）。"""
+    _d = _m422_load_cooldown(path)
+    return {"version": _d.get("version"), "updated_at": _d.get("updated_at"),
+            "methods": dict(_d.get("methods") or {}),
+            "path": _m422_cooldown_path(path)}
+
+
 
 def _m326_seed_from_trace(trace_path: str | None = None, dry_run: bool = True,
                           path: str | None = None) -> dict:
@@ -815,7 +1091,9 @@ def _m326_seed_from_trace(trace_path: str | None = None, dry_run: bool = True,
     _acc: dict[str, int] = {}
     try:
         if os.path.isfile(_tp):
-            for _line in io.open(_tp, encoding="utf-8"):
+            with open(_tp, encoding="utf-8") as _fh:
+                _lines = _fh.readlines()
+            for _line in _lines:
                 _line = _line.strip()
                 if not _line:
                     continue
@@ -825,7 +1103,7 @@ def _m326_seed_from_trace(trace_path: str | None = None, dry_run: bool = True,
                 except (ValueError, TypeError) as _m360e:
                     # ★360刀3：补丁条目丢失 ⇒ 派单台账对不上
                     note_drop("patch_execution_dispatch._read_dispatch_state",
-                              "bad_line", "%s" % _m360e)
+                              "bad_line", f"{_m360e}")
                     continue
                 if not isinstance(_r, dict):
                     continue
@@ -986,6 +1264,8 @@ def load_call_graph_cache(force: bool = False,
         #   宁可用旧的真图，也不信新的假图。
         from nucleus.data.call_graph_guard import (
             format_rejected as _fmt_rej2,
+        )
+        from nucleus.data.call_graph_guard import (
             select_latest_graph as _sel_graph2,
         )
         _pick2 = _sel_graph2(graph_dir or os.path.join(_root, "data", "call_graph"))
@@ -1183,13 +1463,13 @@ def classify_code_channel(patch: dict, project_root: str | None = None) -> dict:
                        level="debug")
             _in_repo = False
         if not _in_repo:
-            _reasons.append("file 落在仓外(%s) ⇒ 外部片段" % _file)
+            _reasons.append(f"file 落在仓外({_file}) ⇒ 外部片段")
             _untrusted.append("outside_repo")
         elif not os.path.isfile(_abs):
-            _reasons.append("file 在仓内但文件不存在(%s) ⇒ 不可信" % _file)
+            _reasons.append(f"file 在仓内但文件不存在({_file}) ⇒ 不可信")
             _untrusted.append("file_missing")
         else:
-            _reasons.append("file 落仓内且存在(%s)" % _file)
+            _reasons.append(f"file 落仓内且存在({_file})")
     if not _orig.strip():
         _reasons.append("original_code 为空 ⇒ 非「方法体替换」，按外部片段处理")
         _untrusted.append("no_original")
@@ -1208,7 +1488,7 @@ def classify_code_channel(patch: dict, project_root: str | None = None) -> dict:
                 "judge": "沙箱 DANGEROUS_KEYWORDS（逐字同判据）"}
     return {"channel": CHANNEL_TRUSTED, "file": _file, "reasons": _reasons,
             "untrusted_by": [],
-            "registry": "惯用法白名单（TRUSTED_CODE_IDIOMS，%d 条）" % len(TRUSTED_CODE_IDIOMS),
+            "registry": f"惯用法白名单（TRUSTED_CODE_IDIOMS，{len(TRUSTED_CODE_IDIOMS)} 条）",
             "judge": "子串判据不变；命中且全属登记册 ⇒ 记 idiom，不算生成质量问题"}
 
 
@@ -1226,8 +1506,7 @@ def sandbox_channel_policy() -> dict:
                 "criteria": ["patch.file 落在仓内且文件存在",
                              "patch.original_code 非空（方法体替换）",
                              "patch.modified_code 可 AST 解析"],
-                "registry": "TRUSTED_CODE_IDIOMS（%d 条，带理由登记）"
-                            % len(TRUSTED_CODE_IDIOMS),
+                "registry": f"TRUSTED_CODE_IDIOMS（{len(TRUSTED_CODE_IDIOMS)} 条，带理由登记）",
                 "action": "命中且全属登记册 ⇒ class=idiom（不算生成质量问题）；"
                           "命中含非登记册真实调用 ⇒ class=real（真危险，转人工）",
             },
@@ -1452,7 +1731,7 @@ def _m365_prefilter_tier(scan: dict) -> tuple:
     if _cls in ("idiom", "literal"):
         return False, (_scope or _cls)
     # 未知 class ⇒ fail-closed（不猜"放行"）
-    return True, "unknown:%s" % _cls
+    return True, f"unknown:{_cls}"
 
 
 def is_sandbox_incompatible(patch: dict) -> bool:
@@ -1641,9 +1920,8 @@ def _m363_read_pending_rows(project_root: str | None = None) -> list:
         _path = _m335_pending_path(project_root, None)
         if not os.path.isfile(_path):
             return []
-        import io as _io
         import json as _json
-        with _io.open(_path, encoding="utf-8") as _f:
+        with open(_path, encoding="utf-8") as _f:
             _rows = _json.load(_f)
         if isinstance(_rows, dict):
             _rows = _rows.get("patches") or []
@@ -1782,7 +2060,7 @@ def _m338_derive_evidence(patch: dict) -> dict:
     _ev: dict = {"evidence_version": _M338_EVIDENCE_VERSION,
                  "risk": None, "trust": None, "blast": None}
     if _risk in _M338_RISK_OK and _it:
-        _ev["risk"] = {"value": _risk, "basis": "issue_type=%s" % _it,
+        _ev["risk"] = {"value": _risk, "basis": f"issue_type={_it}",
                        "source": "_m280_risk_by_issue_type"}
     elif _risk in _M338_RISK_OK:
         _ev["risk"] = {"value": _risk,
@@ -1805,7 +2083,7 @@ def _m338_derive_evidence(patch: dict) -> dict:
     _br = blast_radius_of(_m, file=_f) if _m else None
     if _br is not None:
         _ev["blast"] = {"value": int(_br),
-                        "basis": "method=%s file=%s 入边BFS(depth=3)" % (_m, _f),
+                        "basis": f"method={_m} file={_f} 入边BFS(depth=3)",
                         "source": "blast_radius_of"}
     return _ev
 
@@ -1826,12 +2104,12 @@ def _m338_evidence_ok(patch: dict) -> tuple:
         _legacy = False
     _miss = [k for k in ("risk", "trust", "blast") if not isinstance(_ev.get(k), dict)]
     if _miss:
-        return False, "证据缺 %s" % ",".join(_miss), _ev
+        return False, "证据缺 {}".format(",".join(_miss)), _ev
     if str((_ev.get("risk") or {}).get("source")) == "llm_self_report":
         return False, "risk 仅 LLM 自评（无 issue_type 可复算）", _ev
     if str((_ev.get("trust") or {}).get("source")) == "default":
         # ★381刀6（T-381-哨兵漂移）：数字从 config 取，别再写死 70（默认值已改 40）。
-        return False, ("trust 为恒 %.0f 默认（零信息量）" % _m381_trust_sentinel()), _ev
+        return False, (f"trust 为恒 {_m381_trust_sentinel():.0f} 默认（零信息量）"), _ev
     return True, ("derived_legacy" if _legacy else "ok"), _ev
 
 
@@ -2016,14 +2294,14 @@ def build_reusable_candidates(patch_history: list, limit: int = 20,
 
         if _fc >= _DISPATCH_FAIL_CAP:
             _reason = "cap"
-            _acts.append("连续验证失败 %d 次（cap=%d）⇒ 需先看失败原因，"
-                         "改动修正方案后才能重置计数" % (_fc, _DISPATCH_FAIL_CAP))
+            _acts.append(f"连续验证失败 {_fc} 次（cap={_DISPATCH_FAIL_CAP}）⇒ 需先看失败原因，"
+                         "改动修正方案后才能重置计数")
         if _status not in ("runtime_verified", "approved"):
             _reason = _reason or "status"
-            _acts.append("状态为 %r（需 runtime_verified 或 approved）⇒ 补运行时验证" % (_status,))
+            _acts.append(f"状态为 {_status!r}（需 runtime_verified 或 approved）⇒ 补运行时验证")
         if _risk not in ("低", "low"):
             _reason = _reason or "risk"
-            _acts.append("risk_level=%r（需 低）⇒ 按 issue_type 重定级（_m280_risk_by_issue_type）" % (_risk,))
+            _acts.append(f"risk_level={_risk!r}（需 低）⇒ 按 issue_type 重定级（_m280_risk_by_issue_type）")
         try:
             _trust = float(_p.get("trust_score") or 0)
         except (TypeError, ValueError) as _te338b:
@@ -2033,23 +2311,23 @@ def build_reusable_candidates(patch_history: list, limit: int = 20,
             _trust = 0.0
         if _trust < AUTO_TRIAGE_MIN_TRUST:
             _reason = _reason or "trust"
-            _acts.append("trust_score=%.1f < %.1f ⇒ 补验证证据（复现日志 + 回归用例）后按 issue_type 重算" % (_trust, AUTO_TRIAGE_MIN_TRUST))
+            _acts.append(f"trust_score={_trust:.1f} < {AUTO_TRIAGE_MIN_TRUST:.1f} ⇒ 补验证证据（复现日志 + 回归用例）后按 issue_type 重算")
         if is_fragment_to_full(_p):
             _reason = _reason or "morph"
             _acts.append("形态=片段→完整（original 无 def、modified 有 def）⇒ original_code 需补完整函数体")
         if _m in _LIFECYCLE_NAMES:
             _reason = _reason or "lifecycle"
-            _acts.append("方法名 %r 属生命周期（图上结构性失明）⇒ 不得自动派单，只能人工审" % _m)
+            _acts.append(f"方法名 {_m!r} 属生命周期（图上结构性失明）⇒ 不得自动派单，只能人工审")
         _br = blast_radius_of(_m, file=_f) if _m else None
         if _br is None:
             _reason = _reason or "blast"
             _acts.append("牵连不可判定（方法名未入图 / 无 file 消歧）⇒ 需人工确认调用面后定值")
         elif _br > 1:
             _reason = _reason or "blast"
-            _acts.append("牵连半径=%d > 1 ⇒ 需拆分小改动或转专项验证" % _br)
+            _acts.append(f"牵连半径={_br} > 1 ⇒ 需拆分小改动或转专项验证")
         if _ev_miss:
             _reason = _reason or "evidence"
-            _acts.append("证据缺 %s ⇒ 生成侧补 patch_evidence（risk/trust/blast 各带 basis）" % ",".join(_ev_miss))
+            _acts.append("证据缺 {} ⇒ 生成侧补 patch_evidence（risk/trust/blast 各带 basis）".format(",".join(_ev_miss)))
         if str((_ev.get("risk") or {}).get("source")) == "llm_self_report":
             _reason = _reason or "evidence"
             _acts.append("risk 仅 LLM 自评⇒ 需补 issue_type 使其可复算")
@@ -2090,7 +2368,7 @@ def build_reusable_candidates(patch_history: list, limit: int = 20,
             _d = os.path.dirname(out_path)
             if _d:
                 os.makedirs(_d, exist_ok=True)
-            with io.open(_tmp, "w", encoding="utf-8", newline="") as _f:
+            with open(_tmp, "w", encoding="utf-8", newline="") as _f:
                 json.dump(_out, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, out_path)
         except Exception as _e:
@@ -2118,8 +2396,9 @@ def _sc2_probe(class_name: str = "PulseInnerWorld", reason: str = "") -> dict:
         return {"status": "throttled"}
     _SC2_LAST_TS[class_name] = _now
     try:
-        from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
         import json as _json
+
+        from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
         _dir = os.path.join(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))), "data", "call_graph")
         _fs = sorted(f for f in os.listdir(_dir)
@@ -2168,7 +2447,7 @@ _DISPATCH_BLAST_CAP = 1     # 单次派单允许影响的文件数上限（安�
 
 
 # ===== ★337批刀2：重启时刻（开闸判据「重启后新图」的唯一取数口）=====
-def _m337_boot_time() -> "float | None":
+def _m337_boot_time() -> float | None:
     """★337批刀2：本进程**重启时刻** —— 与 `proc_gen` 同源（同一个 create_time）。
 
     为什么必须补这个（336移交① · 337前置§3.2）：`o3_open_gate_report()` 的
@@ -2211,8 +2490,7 @@ def _m337_last_attempt_ts(patch: dict) -> float:
                 "[337刀1] 尝试时刻字段非数值，跳过: %s: %s",
                 type(_te).__name__, _te)
             _v = 0.0
-        if _v > _best:
-            _best = _v
+        _best = max(_best, _v)
     return _best
 _M324_TRACE_KEEP = 500      # 派单留痕文件最多保留行数（超限滚动截断，防无界增长）
 
@@ -2243,7 +2521,7 @@ def _m324_append_trace(rec: dict) -> str:
     _p = _m324_trace_path()
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
-        with io.open(_p, "a", encoding="utf-8", newline="\n") as _f:
+        with open(_p, "a", encoding="utf-8", newline="\n") as _f:
             _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except OSError as _e:
         silent_exc(_e, where="patch_execution_dispatch::_m324_append_trace", level="warning")
@@ -2260,15 +2538,22 @@ def _m324_fail_count(patch: dict) -> int:
         return 0
 
 
-def _m324_blocked_reason(patch: dict, ledger: dict | None = None) -> str:
-    """★324批刀0 / ★326批刀1：该补丁不可自动派单的原因（空串 = 可派）。只读。
+def _m324_blocked_reason(patch: dict, ledger: dict | None = None,
+                         cooldown_path: str | None = None,
+                         now: float | None = None) -> str:
+    """★324批刀0 / ★326批刀1 / ★422批刀2：该补丁不可自动派单的原因（空串 = 可派）。只读。
 
     ★326：cap 判定用**持久累计值** `max(记录字段, 侧账)`——重启后不会归零，
     因此"永久失败补丁无限重试"不再可能（6ecc 实测：字段缺失但 trace 有 2 次失败证据）。
+    ★422刀2：方法级冷却闸**前置**于 per-patch cap —— 前者按 (file, method) 拦住
+    "换个 id 再来一遍"，后者按 patch id 拦住"同一条补丁反复重试"，两个维度不互替。
     """
+    _cd = _m422_cooldown_reason(patch, now=now, path=cooldown_path)
+    if _cd:
+        return _cd
     _fc = _m326_persisted_fail_count(patch, ledger)
     if _fc >= _DISPATCH_FAIL_CAP:
-        return "verify_fail_cap(%d>=%d,persisted)" % (_fc, _DISPATCH_FAIL_CAP)
+        return f"verify_fail_cap({_fc}>={_DISPATCH_FAIL_CAP},persisted)"
     return ""
 
 
@@ -2278,7 +2563,7 @@ def _m324_rej_reason() -> str:
     if not _items:
         return ""
     _items.sort(key=lambda kv: (-kv[1], kv[0]))
-    return "triage:" + ",".join("%s=%d" % kv for kv in _items)
+    return "triage:" + ",".join(f"{kv[0]}={kv[1]}" for kv in _items)
 
 
 # ==================== ★344批刀1②：O3 判死删除动作的 AST 级执行校验 ====================
@@ -2378,7 +2663,8 @@ def _m344_count_orphan_refs(method: str, root: str, exclude_abs: str) -> dict:
                     _out["truncated"] = True
                     return _out
                 try:
-                    _txt = io.open(_abs, encoding="utf-8", errors="ignore").read()
+                    with open(_abs, encoding="utf-8", errors="ignore") as _fh:
+                        _txt = _fh.read()
                 except OSError as _m369_e:
                     silent_exc(_m369_e, where="nucleus/evolution/patch_execution_dispatch.py:_m344_count_orphan_refs", level="debug")
                     continue
@@ -2515,29 +2801,30 @@ def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
 
     _abs = os.path.join(_root, _file)
     if not os.path.isfile(_abs):
-        return _fail("ast_delete:file_not_found", "源文件不存在: %s" % _file,
+        return _fail("ast_delete:file_not_found", f"源文件不存在: {_file}",
                      target_file=_file)
     try:
-        _src = io.open(_abs, encoding="utf-8", newline="").read()
+        with open(_abs, encoding="utf-8", newline="") as _fh:
+            _src = _fh.read()
     except (OSError, UnicodeDecodeError) as _e:
         silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete read",
                    level="warning")
         return _fail("ast_delete:read_failed",
-                     "%s: %s" % (type(_e).__name__, _e), target_file=_file)
+                     f"{type(_e).__name__}: {_e}", target_file=_file)
     try:
         _tree = ast.parse(_src)
     except SyntaxError as _e:
         silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete parse",
                    level="warning")
         return _fail("ast_delete:source_syntax_error",
-                     "当前源码本身语法错误，无法判定（行 %s）" % _e.lineno,
+                     f"当前源码本身语法错误，无法判定（行 {_e.lineno}）",
                      target_file=_file)
 
     # ① 目标 def 存在
     _node, _all_lines, _hit_declared = _m344_find_def(_tree, _method, patch.get("line"))
     if _node is None:
         return _fail("ast_delete:target_def_not_found",
-                     "文件内无 def %s（同名 0 处）" % _method,
+                     f"文件内无 def {_method}（同名 0 处）",
                      target_file=_file, def_lines=[])
 
     # ② 删除后语法完整
@@ -2546,8 +2833,7 @@ def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
     _end = int(getattr(_node, "end_lineno", 0) or 0)
     if _start < 0 or _end <= _start or _end > len(_lines):
         return _fail("ast_delete:span_unusable",
-                     "def 行区间不可用 start=%s end=%s lines=%s"
-                     % (_start, _end, len(_lines)), target_file=_file)
+                     f"def 行区间不可用 start={_start} end={_end} lines={len(_lines)}", target_file=_file)
     _removed = _end - _start
     _new_src = "".join(_lines[:_start] + _lines[_end:])
     try:
@@ -2558,8 +2844,7 @@ def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
         silent_exc(_e, where="patch_execution_dispatch::verify_ast_delete post",
                    level="debug")
         return _fail("ast_delete:post_delete_syntax_error",
-                     "删掉 %s 后文件语法不完整（行 %s: %s）"
-                     % (_method, _e.lineno, _e.msg),
+                     f"删掉 {_method} 后文件语法不完整（行 {_e.lineno}: {_e.msg}）",
                      target_file=_file, def_lines=_all_lines,
                      removed_lines=_removed)
 
@@ -2577,21 +2862,21 @@ def verify_ast_delete(patch: dict, project_root: str | None = None) -> dict:
             _pid[:24], _file, _method, len(_new_orphans), _nm, _m335_pg())
         return _fail(
             "ast_delete:post_delete_orphans",
-            "删掉 %s 会使 %d 个本文件成员变成零引用孤儿（%s）"
-            "（删一个、造一个新的），需拆条复核"
-            % (_method, len(_new_orphans), _nm),
+            f"删掉 {_method} 会使 {len(_new_orphans)} 个本文件成员变成零引用孤儿（{_nm}）"
+            "（删一个、造一个新的），需拆条复核",
             target_file=_file, def_lines=_all_lines, removed_lines=_removed,
             new_orphans=_new_orphans)
 
     # ③ 孤儿引用（仅告警，不参与成败判定）
     _orphan = _m344_count_orphan_refs(_method, _root, _abs)
 
-    _detail = ("ast_delete 目标存在(file=%s method=%s 实际行=%s 声明行=%s 同名=%d 处)"
-               " 删除后语法完整(移除 %d 行)"
-               " 孤儿引用 call_attr=%d attr_read=%d text_only=%d(参考值,不阻断)"
-               % (_file, _method, int(_node.lineno), patch.get("line"),
-                  len(_all_lines), _removed,
-                  _orphan["call_attr"], _orphan["attr_read"], _orphan["text_only"]))
+    _detail = (f"ast_delete 目标存在(file={_file} method={_method}"
+               f" 实际行={int(_node.lineno)} 声明行={patch.get('line')}"
+               f" 同名={len(_all_lines)} 处)"
+               f" 删除后语法完整(移除 {_removed} 行)"
+               f" 孤儿引用 call_attr={_orphan['call_attr']}"
+               f" attr_read={_orphan['attr_read']}"
+               f" text_only={_orphan['text_only']}(参考值,不阻断)")
     if not _hit_declared:
         _detail += " 行号漂移=是"
     _module_logger.info(
@@ -2656,7 +2941,7 @@ def _write_back(patch: dict, verdict: dict) -> None:
     _esrc = str(verdict.get("execution_source") or MotorEvent.EXECUTE)
     _vdetail = str(verdict.get("detail") or "")
     if not _vdetail:
-        _vdetail = ("[执行验证] %s " % _esrc) + ("成功" if _ok else "失败") \
+        _vdetail = (f"[执行验证] {_esrc} ") + ("成功" if _ok else "失败") \
             + (f": {_err}" if _err else "")
     patch["runtime_verified"] = _ok
     patch["runtime_verify_result"] = {
@@ -2699,6 +2984,8 @@ def _write_back(patch: dict, verdict: dict) -> None:
         # ★331批刀4：改走统一计次入口（带类别，后验时可区分"执行失败"与"被拦"）
         _persisted = _m331_note_blocked(patch.get("id"), reason=_err,
                                         category="verify_failed")
+        # ★422刀2：同一 (file, method) 的连续失败计数（换 id 也跑不掉）
+        _m422_note_method_fail(patch, reason=_err, category="verify_failed")
         patch["runtime_verify_fail_count"] = max(
             _m324_fail_count(patch) + 1, int(_persisted or 0))
         patch["runtime_verify_last_attempt_at"] = time.time()
@@ -2708,6 +2995,8 @@ def _write_back(patch: dict, verdict: dict) -> None:
     else:
         patch["runtime_verify_fail_count"] = 0
         _m326_reset_fail_ledger(patch.get("id"))
+        # ★422刀2：成功一次 ⇒ 该 (file, method) 的连续失败归零（"连续"的口径）
+        _m422_note_method_ok(patch)
         patch["fail_count_persisted"] = 0
         patch["fail_count_source"] = "ledger+field(326.1)"
 
@@ -2776,8 +3065,7 @@ def _m356_close_loop_fixed(patch: dict) -> dict | None:
         from nucleus import audit_problem_pool as _app
         _r = _app.set_status(
             _key, _app.STATUS_FIXED,
-            note="[356闭环] patch=%s 应用成功（motor.execute success）"
-                 % str(patch.get("id") or "")[:40])
+            note="[356闭环] patch={} 应用成功（motor.execute success）".format(str(patch.get("id") or "")[:40]))
         _module_logger.info(
             "[356闭环] set_status(FIXED) patch=%s key=%s state=%s changed=%s",
             str(patch.get("id") or "")[:24], _key,
@@ -2803,7 +3091,8 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     if not os.path.isfile(_hp):
         return {"status": "no_history", "dispatched": 0}
     try:
-        _hist = json.load(io.open(_hp, encoding="utf-8"))
+        with open(_hp, encoding="utf-8") as _fh:
+            _hist = json.load(_fh)
     except Exception as e:
         silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch load history")
         return {"status": "load_failed", "dispatched": 0}
@@ -2857,6 +3146,9 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
             #   它们在派单前被拦下，永远走不到沙箱，旧的"只统计执行失败"量不到它们，
             #   于是 cap 对它们不生效、失败件只增不消化。计次后累积到 cap 即自动转人工。
             _m331_note_blocked(_p.get("id"), reason=_why, category="dispatch_blocked")
+            # ★422刀2：派单前被拦也算一次"尝试未成功"（冷却自身导致的拦截由
+            #   `_m422_note_method_fail` 内部幂等忽略，不会自己给自己续命）
+            _m422_note_method_fail(_p, reason=_why, category="dispatch_blocked")
             _module_logger.info(
                 "[324刀0] 选中但转人工（不进沙箱）: patch=%s method=%s reason=%s",
                 str(_p.get("id", ""))[:16], str(_p.get("method") or ""), _why)
@@ -2886,7 +3178,7 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     if _results or _suspect_n:
         try:
             _tmp = _hp + ".m295.tmp"
-            with io.open(_tmp, "w", encoding="utf-8") as _f:
+            with open(_tmp, "w", encoding="utf-8") as _f:
                 json.dump(_hist, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, _hp)
         except Exception as e:
@@ -2954,7 +3246,7 @@ def _m350_read_history_rows(project_root: str | None = None) -> list:
         if isinstance(_d, dict):
             _d = _d.get("patches") or _d.get("history") or []
         return _d if isinstance(_d, list) else []
-    except Exception as _e:  # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="patch_execution_dispatch::_m350_read_history_rows")
         return []
 
@@ -3183,7 +3475,7 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
                 "[349刀11] verify pool=subproc n=%d ok=%d verify_kind=ast_only",
                 len(_sub), sum(1 for _x in _sub if _x.get("success")))
             return _sub
-        except Exception as _e:  # noqa: BLE001
+        except Exception as _e:
             silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent subproc")
             _module_logger.warning(
                 "[349刀11] 子进程池不可用，回落线程池（不静默）: %s: %s",
@@ -3210,7 +3502,7 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
             for _i, _att, _f in _futs:
                 try:
                     _v = _f.result()
-                except Exception as _e:  # noqa: BLE001 —— 单个补丁失败不得拖垮整批
+                except Exception as _e:  # 单个补丁失败不得拖垮整批
                     silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent")
                     _v = {"patch_id": patches[_i].get("id", ""), "success": False,
                           "error": f"verify_exc:{type(_e).__name__}"}
@@ -3302,14 +3594,14 @@ def _m351_watch_zero_break(pending_rows: list, results: list | None,
                     file=str(_w.get("file") or ""),
                     status=str(_w.get("verdict") or ""),
                     dispatched=bool(_w.get("selected_gt_0")),
-                    evidence=["zero_break_watch:%s" % _w.get("patch_id"),
-                              "verdict:%s" % _w.get("verdict")],
+                    evidence=["zero_break_watch:{}".format(_w.get("patch_id")),
+                              "verdict:{}".format(_w.get("verdict"))],
                 )
             except Exception as _dec_e:
                 silent_exc(_dec_e, where="patch_execution_dispatch::385DL3影子patch",
                            level="debug")
         return _ws
-    except Exception as _e:                                 # noqa: BLE001
+    except Exception as _e:
         silent_exc(_e, where="patch_execution_dispatch::351破零观察",
                    level="warning")
         return []
@@ -3348,6 +3640,8 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
     _rej = {"not_o3": 0, "not_confirmed": 0,
             "still_requires_confirmation": 0, "applied": 0,
             "expired": 0, "cap": 0, "pending_cleared": 0,
+            # ★422刀2：方法级冷却拦下的条数（与 cap 分开计数，便于分辨卡在哪一层）
+            "cooldown_24h": 0,
             # # ★378刀2（T-378-沙箱TTL冻结-1）：沙箱成功后在 TTL 内被冻结的条数（
             #   它是"**没白跑**"的凭证 —— 有计数就说明冻结真的挡住了重派）。
             "sandbox_ttl": 0}
@@ -3409,6 +3703,15 @@ def dispatch_o3_approved(limit: int = 1, framework: Any = None,
                     _ex_reason or ("非环境缺陷" if _p.get("o3_dead_code") is True
                                    else "非O3判死候选"))
                 continue
+        # ★422刀2：O3 通道同样受方法级冷却约束（两通道同口径，否则绕道即绕过）
+        if _m422_cooldown_reason(_p):
+            _rej["cooldown_24h"] = int(_rej.get("cooldown_24h", 0)) + 1
+            _module_logger.info(
+                "[422刀2][O3派单] 方法冷却中 ⇒ 不派单: patch=%s reason=%s "
+                "file=%s method=%s proc_gen=%s",
+                str(_p.get("id") or "")[:24], _M422_COOLDOWN_REASON,
+                _m422_pair_of(_p)[0], _m422_pair_of(_p)[1], _m335_pg())
+            continue
         _cands.append(_p)
     if not _cands:
         _module_logger.info(
