@@ -18,6 +18,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from nucleus._silent_except import silent_exc
+
 
 class IntentGenerator:
     """真正意图自主生成器。"""
@@ -166,6 +168,16 @@ class IntentGenerator:
             self._intent_history.append(_intent)
             if len(self._intent_history) > 100:
                 self._intent_history = self._intent_history[-50:]
+        # ★431刀3：把"三路信号 → 意图"这一次合成落盘（旁路，不改返回值）。
+        #   实测本层**没有 LLM 调用**（`_generate_intent_text` 是确定性模板），
+        #   所以记的是输入信号而不是 prompt/response —— 不编造不存在的字段。
+        try:
+            from nucleus.observability import observations as _m431_obs
+            _m431_obs.record_intent_evolution(_intent, {
+                "value": _value_sig, "experience": _exp_sig, "state": _state_sig})
+        except Exception as _m431_e:
+            silent_exc(_m431_e, where="IntentGenerator.generate::observations",
+                       level="debug")
         return _intent
 
     @staticmethod

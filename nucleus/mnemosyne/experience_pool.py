@@ -204,6 +204,14 @@ class ExperiencePool:
                 "decay_rate": decay_rate,
                 "is_summarized": False,
                 "summary": content[:200],
+            # ★431刀5：入池即带 `is_template=False`（默认非模板）。
+            #   根因：`annotate()` 只回写**差异条目**（412/413 设计的取舍，避免全量
+            #   白写 `False`），所以「从没被标过」的条目在盘上是**没有这个键**的。
+            #   431 实测：343 条里 212 条 True、143 条**缺键**，`is_template` 覆盖率
+            #   永远到不了 100%，下游读 `exp.get("is_template")` 拿到 None 而非 False。
+            #   本行让新条目自带默认值；老条目由 `tmp/m431_d5_backfill.py` 一次性补齐。
+            #   语义零变化：`is_template(exp)` 用 `bool(exp.get(...))`，缺键与 False 等价。
+            "is_template": False,
             "activation_count": 0,
             "summary_version": self.SUMMARY_VERSION,
         }
@@ -1544,6 +1552,11 @@ class ExperiencePool:
                                     f"{type(_raw.get('experiences')).__name__}）")
             else:
                 self._experiences = _raw["experiences"]
+                # ★431刀5 整修：缺 `is_template` 键的老条目在**加载期**补 False。
+                #   离线改盘无效 —— 活体进程的落盘权威是内存池，下一次 _save()
+                #   会把盘上补写整份覆盖（431 实测 1 分钟内被写回）。放这里 ⇒
+                #   内存有键 ⇒ 后续任何一次 _save() 自动持久化，幂等且不用停机。
+                self._m431_backfill_template_flag()
                 self._total_recorded = _raw.get("total_recorded", 0)
                 self._total_summarized = _raw.get("total_summarized", 0)
                 self._total_decayed = _raw.get("total_decayed", 0)
@@ -1566,6 +1579,33 @@ class ExperiencePool:
             _module_logger.error(
                 f"[经验池] 读盘异常，**保留旧值** {len(self._experiences)} 条："
                 f"{self._load_error} | path={self._pool_file}")
+
+    # ========== ★431刀5：is_template 覆盖补齐 ==========
+
+    def _m431_backfill_template_flag(self) -> int:
+        """给缺 `is_template` 键的条目补 `False`，返回补了几条（幂等）。
+
+        为什么缺键要按 False 计：`annotate()` 只回写**差异**条目（避免全量白写
+        False），所以「从没被判过」的条目在盘上是**没有这个键**的。缺键的语义
+        是「未判过」，保守默认 False 与 `retrieval_weight` 里 `.get(...)` 的
+        既有行为完全一致（等价于 None → 假），因此**不改任何检索权重**。
+
+        只补缺键：已判 True 的（412 批 `mark_templates` 按 duplicate/merged 判出）
+        一律保留原值，绝不回翻。
+        """
+        _n = 0
+        try:
+            for _e in (self._experiences or []):
+                if isinstance(_e, dict) and "is_template" not in _e:
+                    _e["is_template"] = False
+                    _n += 1
+            if _n:
+                _module_logger.info(
+                    "[431刀5] 加载期补齐 is_template=False：补 %d 条 / 共 %d 条（之前缺键）",
+                    _n, len(self._experiences))
+        except Exception as e:
+            silent_exc(e, where="experience_pool::_m431_backfill_template_flag", level="debug")
+        return _n
 
     # ========== 统计信息 ==========
 

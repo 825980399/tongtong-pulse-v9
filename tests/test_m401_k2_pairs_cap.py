@@ -24,9 +24,9 @@ import pytest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-import config as _cfg  # noqa: E402
-import utils.pulse_tracer as _pt  # noqa: E402
-from organs.core.PulseMetricsCollector import PulseMetricsCollector  # noqa: E402
+import config as _cfg
+import utils.pulse_tracer as _pt
+from organs.core.PulseMetricsCollector import PulseMetricsCollector
 
 _IF_PATH = os.path.join(_ROOT, "nucleus", "field", "InfoField.py")
 
@@ -56,8 +56,7 @@ def _reset_state():
 def _write_lines(path, n, tag="L"):
     os.makedirs(os.path.dirname(str(path)), exist_ok=True)
     with open(str(path), "w", encoding="utf-8", newline="\n") as _f:
-        for _i in range(n):
-            _f.write("%s%d\n" % (tag, _i))
+        _f.writelines(f"{tag}{_i}\n" for _i in range(n))
     return str(path)
 
 
@@ -100,29 +99,47 @@ def test_01_line_state_measures_then_accumulates(tmp_path):
 
 
 def test_02_trim_by_lines_really_trims(tmp_path, monkeypatch):
-    """行数 > cap ⇒ 真 trim 到 cap 行，保留的是**最近** cap 行（老的先走）。"""
+    """行数 > cap ⇒ 真 trim 到**低水位**（cap×0.9），保留的是**最近** N 行（老的先走）。
+
+    ★431刀2 规格变更（2026-11-02，铁律 68：改钉新值 + 注明回滚点）
+      旧规格：裁回 `cap` 行。实测生产 21/22/23 点各 trim 360/445/442 次
+      （≈7.4 次/分钟），每次重写 148MB ⇒ 65 GB/小时 IO —— 因为 `_dump_pairs`
+      每轮只追加几十行，裁回 cap 后下一轮立刻又超限。
+      新规格：裁到 `cap × pulse_pair_trim_low_ratio`（默认 0.9），留 10% 余量。
+      **回滚点**：`config.RUNTIME_PARAMS["pulse_pair_trim_low_ratio"] = 1.0`
+      （`_pair_trim_low_water()` 会在 `_low >= _cap` 时强制降到 `cap-1`，
+      所以真要完全回到旧行为得同时把 431刀2 的调用点去掉）。
+    """
     monkeypatch.setitem(_cfg.RUNTIME_PARAMS, "pulse_pair_file_cap", 5)
+    monkeypatch.setitem(_cfg.RUNTIME_PARAMS, "pulse_pair_trim_low_ratio", 0.9)
     _p = _write_lines(os.path.join(str(tmp_path), "pairs.jsonl"), 12)
 
     _pt._trim_pair_file(_p)
 
-    assert _count(_p) == 5, "没按行数 trim 到 cap"
+    # cap=5 ⇒ 低水位 int(5*0.9)=4
+    assert _count(_p) == 4, "431刀2：应裁到低水位 cap×0.9=4，不是 cap=5"
     with open(_p, encoding="utf-8") as _f:
         _lines = [x.strip() for x in _f if x.strip()]
-    assert _lines == ["L7", "L8", "L9", "L10", "L11"], "trim 应保留最近 cap 行：%s" % _lines
+    assert _lines == ["L8", "L9", "L10", "L11"], f"trim 应保留最近 N 行：{_lines}"
 
 
 def test_03_trim_backs_up_before_cut(tmp_path, monkeypatch):
-    """trim 前必须留备份：等于删掉当天更早的数据，一旦无备份不可逆。"""
+    """trim 前必须留备份：等于删掉当天更早的数据，一旦无备份不可逆。
+
+    ★431刀2 规格变更：末行断言由 `== 3`（cap）改为 `== 2`（低水位 int(3*0.9)）。
+      备份侧断言**不动**（不管裁到几行，备份都必须是裁前全量）—— 这条是不变量。
+    """
     monkeypatch.setitem(_cfg.RUNTIME_PARAMS, "pulse_pair_file_cap", 3)
+    monkeypatch.setitem(_cfg.RUNTIME_PARAMS, "pulse_pair_trim_low_ratio", 0.9)
     _p = _write_lines(os.path.join(str(tmp_path), "pairs.jsonl"), 9)
 
     _pt._trim_pair_file(_p)
 
     _bak = _p + ".trim.bak"
     assert os.path.isfile(_bak), "没有 trim 前备份"
-    assert _count(_bak) == 9, "备份应是 trim 前的全量（%d 行）" % _count(_bak)
-    assert _count(_p) == 3
+    _bak_n = _count(_bak)
+    assert _bak_n == 9, f"备份应是 trim 前的全量（{_bak_n} 行）"
+    assert _count(_p) == 2, "431刀2：cap=3 ⇒ 低水位 2"
 
 
 def test_04_cap_and_switch_come_from_config(monkeypatch):
@@ -144,7 +161,8 @@ def test_05_trigger_uses_line_count_not_process_seq():
     这是本刀的要害：旧判据比的是**进程内事件序号**，重启归零 ⇒ 永不触发。
     用 AST 找调用，而不是 grep 文本（旧变量名在注释里也有）。
     """
-    _tree = ast.parse(open(_pt.__file__, encoding="utf-8").read())
+    with open(_pt.__file__, encoding="utf-8") as _fh:
+        _tree = ast.parse(_fh.read())
     _dump = None
     for _n in ast.walk(_tree):
         if isinstance(_n, ast.FunctionDef) and _n.name == "_dump_pairs":
@@ -162,7 +180,7 @@ def test_06_orphan_ring_rotates_by_day_and_caps(tmp_path, monkeypatch):
     monkeypatch.setattr(_pt, "_ISO_BASE_DIR", str(tmp_path))
     monkeypatch.setitem(_cfg.RUNTIME_PARAMS, "pulse_tracer_orphan_ring_max", 3)
     _today = _pt.datetime.now().strftime("%Y%m%d")
-    _p = os.path.join(str(tmp_path), "data", "monitor", "pulse_orphans_%s.jsonl" % _today)
+    _p = os.path.join(str(tmp_path), "data", "monitor", f"pulse_orphans_{_today}.jsonl")
     assert _pt._orphan_ring_path() == _p, "环形文件应按天命名（跨日自动换文件）"
 
     _pt._ring_append_orphans([{"n": 1}, {"n": 2}])
@@ -171,7 +189,7 @@ def test_06_orphan_ring_rotates_by_day_and_caps(tmp_path, monkeypatch):
     assert _count(_p) == 3, "超 maxlen 应回写最近 N 行（不是无限追加）"
     with open(_p, encoding="utf-8") as _f:
         _ns = [__import__("json").loads(x)["n"] for x in _f if x.strip()]
-    assert _ns == [3, 4, 5], "环形应保留最新行：%s" % _ns
+    assert _ns == [3, 4, 5], f"环形应保留最新行：{_ns}"
 
 
 def test_07_today_start_ts_is_local_midnight():
@@ -187,7 +205,7 @@ def test_08_snapshot_has_dual_match_columns(monkeypatch):
     _c = _bare_collector(_InfoFieldStub(
         {"total_published": 200, "total_matched": 199,
          "total_matched_real": 17, "active_conditions": 4}))
-    monkeypatch.setattr(_c, "_collect_memory_pressure", lambda: {})
+    monkeypatch.setattr(_c, "_collect_memory_pressure", dict)
 
     _s = _c._build_observability_snapshot()["info_field"]
 
@@ -202,7 +220,7 @@ def test_09_missing_real_is_none_not_zero(monkeypatch):
     """老版本/替身的 get_stats 没有 real 字段 ⇒ `None`，不许填 0 冒充"一次没匹配上"。"""
     _c = _bare_collector(_InfoFieldStub(
         {"total_published": 10, "total_matched": 9}))
-    monkeypatch.setattr(_c, "_collect_memory_pressure", lambda: {})
+    monkeypatch.setattr(_c, "_collect_memory_pressure", dict)
 
     _s = _c._build_observability_snapshot()["info_field"]
     assert _s["matched_real"] is None, "缺读数填了 0"
@@ -212,7 +230,8 @@ def test_09_missing_real_is_none_not_zero(monkeypatch):
 def test_10_infofield_counts_real_only_when_matched():
     """AST：`_total_matched_real` 只在 `if <real> > 0` 分支里 +1（万能器官命中也算命中，
     但 real 口径只数"真匹配"，判据必须能从结构上看出这条门）。"""
-    _tree = ast.parse(open(_IF_PATH, encoding="utf-8").read())
+    with open(_IF_PATH, encoding="utf-8") as _fh:
+        _tree = ast.parse(_fh.read())
     _ok = False
     for _n in ast.walk(_tree):
         if not isinstance(_n, ast.If) or not isinstance(_n.test, ast.Compare):
@@ -249,7 +268,7 @@ def test_11_thread_state_lock_is_not_reentrant_deadlock():
         _t.join(timeout=10)
     assert all(not _t.is_alive() for _t in _ts), "状态锁死锁"
     assert _pt._PAIR_LINE_STATE["lines"] == 160, \
-        "并发累加丢增量：%s（应为 160）" % _pt._PAIR_LINE_STATE["lines"]
+        "并发累加丢增量：{}（应为 160）".format(_pt._PAIR_LINE_STATE["lines"])
 
 
 if __name__ == "__main__":

@@ -352,6 +352,14 @@ def observe(question: str, top_k: int = 2, pool: Any = None,
         _lg.debug(_log)
     except Exception as _e:
         silent_exc(_e, where="observability.experience_hits:observe:log", level="debug")
+    # ★431刀3：命中明细落盘（旁路）。`_log` 只有一行文本、score 埋在括号里，
+    #   事后无法统计"哪几条最常被复用"；这里把每条的 id/score/is_template 存下来。
+    try:
+        from nucleus.observability import observations as _m431_obs
+        _m431_obs.record_experience_hits(question, _hits, _cand)
+    except Exception as _m431_e:
+        silent_exc(_m431_e, where="observability.experience_hits:observe:observations",
+                   level="debug")
     return {"enabled": True, "n": len(_hits), "hits": _hits,
             "candidates": _cand, "at": _t, "log": _log}
 

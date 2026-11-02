@@ -8,18 +8,20 @@
 
 import atexit
 import json
+import logging
 import os
 import shutil
-import logging
-
-logger = logging.getLogger("pulse.tracer")
 import threading
 import time
 from datetime import datetime
 
 from nucleus._silent_except import silent_exc
-from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
 from nucleus.const import EnergyEvent  # 204批·刀4：报告即终点白名单（常量属性访问）
+from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
+
+# ★431 收尾：logger 原来插在 import 中间（把 import 块劈成两段 ⇒ I001×2）。
+#   挪到 import 之后 —— logging.getLogger 无顺序依赖，行为零差异。
+logger = logging.getLogger("pulse.tracer")
 
 # 204批·刀4：报告即终点白名单（快照类事件本就'报告即终点'，不参与孤儿检测）
 _REPORT_ENDPOINT_WHITELIST = {
@@ -172,11 +174,14 @@ def _get_pair_path():
     不缓存路径：跨日（跨午夜）调用须重算日期，故每次实时拼装当日文件名。
     """
     base = _ISO_BASE_DIR if _ISO_BASE_DIR is not None else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    day = datetime.now().strftime("%Y%m%d")
-    return os.path.join(base, "data", "monitor", "pulse_pairs_%s.jsonl" % day)
+    # ★DTZ005 有意屏蔽：文件名按**本地日期**切分（跨午夜换文件），换 UTC 会差一天。
+    day = datetime.now().strftime("%Y%m%d")  # noqa: DTZ005
+    return os.path.join(base, "data", "monitor", f"pulse_pairs_{day}.jsonl")
 
 
 # ★401刀2：pairs 行数状态（跨日换文件 / 被外部删除时按行实测重建，其余按增量累加）
+# ★431刀2：裁切低水位比例默认值（真源＝RUNTIME_PARAMS["pulse_pair_trim_low_ratio"]）。
+_PAIR_TRIM_LOW_RATIO = 0.9
 _PAIR_LINE_STATE: dict = {"path": None, "lines": 0}
 _pair_state_lock = threading.Lock()
 
@@ -231,6 +236,47 @@ def _pair_lines_after_append(path: str, appended: int) -> int:
             return _n
         _PAIR_LINE_STATE["lines"] = int(_PAIR_LINE_STATE.get("lines") or 0) + int(appended or 0)
         return int(_PAIR_LINE_STATE["lines"])
+
+
+def _pair_trim_low_ratio() -> float:
+    """★431刀2：裁切低水位比例 ← `RUNTIME_PARAMS["pulse_pair_trim_low_ratio"]`。
+
+    含义：文件超过 `_pair_file_cap()` 时，**一次裁到 cap × ratio**，而不是裁回 cap。
+    为什么要这个（431 实测）：旧判据是「超上限就裁回上限」，而 `_dump_pairs` 每次
+    只追加几十行 ⇒ 下一轮立刻又超几行 ⇒ 又整体重写一遍 148MB。生产日志实测
+    21/22/23 点各 trim 360/445/442 次（≈7.4 次/分钟），稳态 65 GB/小时磁盘写。
+    留出 10% 余量后，重写间隔从「几行」变成「5 万行」，频率降约 3 个数量级。
+
+    非法值（bool/非数字/<=0/>1）一律回落默认 0.9 —— 绝不因配置写坏而停掉裁切。
+    """
+    try:
+        import config
+        _rp = getattr(config, "RUNTIME_PARAMS", None) or {}
+        _v = _rp.get("pulse_pair_trim_low_ratio") if isinstance(_rp, dict) else None
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            return _PAIR_TRIM_LOW_RATIO
+        _f = float(_v)
+        if _f <= 0.0 or _f > 1.0:
+            return _PAIR_TRIM_LOW_RATIO
+        return _f
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::_pair_trim_low_ratio", level="debug")
+        return _PAIR_TRIM_LOW_RATIO
+
+
+def _pair_trim_low_water() -> int:
+    """★431刀2：裁切目标行数 = `cap × ratio`，且**至少比 cap 小 1**。
+
+    下限保护：cap 很小时（如测试把 cap 设成 3）ratio 取整可能等于 cap，
+    那样裁完还是超 ⇒ 下一轮继续裁，等于没修。故强制 `min(cap - 1, ...)`，
+    cap <= 1 时无法再降，直接返回 cap（放弃水位线，保功能优先）。
+    """
+    _cap = _pair_file_cap()
+    if _cap <= 1:
+        return _cap
+    _low = int(_cap * _pair_trim_low_ratio())
+    # ★PLR1730：两段 if 合成一次 clamp，语义完全等价（先压到 cap-1 再托到 1）。
+    return max(1, min(_cap - 1, _low))
 
 
 def _backup_pair_file(path: str) -> str:
@@ -299,25 +345,31 @@ def _dump_pairs():
 
 
 def _trim_pair_file(path):
-    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 cap 行（观测采样）。
+    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 N 行（观测采样）。
 
     ★401刀2：①上限取 `_pair_file_cap()`（RUNTIME_PARAMS 单一源）；
              ②回写**前先备份**（等于删掉当天更早的数据，必须可回溯）。
+    ★431刀2：③裁到**低水位**（cap×ratio，默认 45 万）而不是裁回 cap。
+             旧判据下每次只追加几十行就又超限 ⇒ 每分钟重写 7 次 148MB
+             （生产日志实测 1349 次/天）。留 10% 余量后重写间隔变成 5 万行。
     """
     _cap = _pair_file_cap()
+    _low = _pair_trim_low_water()
     try:
         with open(path, "r", encoding="utf-8") as _f:
             _lines = _f.readlines()
         if len(_lines) <= _cap:
             return
         _bp = _backup_pair_file(path)
-        _keep = _lines[-_cap:]
+        _keep = _lines[-_low:]
         _tmp = path + ".tmp"
         with open(_tmp, "w", encoding="utf-8") as _f:
             _f.writelines(_keep)
         os.replace(_tmp, path)
         logger.info("pulse_tracer: [401刀2] pairs 已 trim %d → %d 行（备份=%s）",
                     len(_lines), len(_keep), _bp or "无")
+        logger.info("pulse_tracer: [431刀2] 裁到低水位 %d（cap=%d，下次要再长 %d 行才重写）",
+                    len(_keep), _cap, _cap - len(_keep))
         with _pair_state_lock:
             if _PAIR_LINE_STATE.get("path") == path:
                 _PAIR_LINE_STATE["lines"] = len(_keep)
@@ -371,7 +423,9 @@ def _get_orphan_path():
 
 def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None):
     """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
-    global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ, _EMIT_INDEX
+    # ★431 收尾：去掉 _EMIT_INDEX —— 本函数对它只有下标赋值（非名字绑定），
+    #   `global` 声明无效（PLW0602）；留着会让读代码的人误以为这里重建了索引。
+    global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
     # ★第222批·刀1：int-3幽灵追踪——target_organ 必须为 str，非 str 视为幽灵来源并告警+归一
     if not isinstance(target_organ, str):
         logger.warning(
@@ -425,7 +479,8 @@ def log_receive(organ_name, event_type, source_organ, pulse_id=""):
     - 接收记录直记 pulse_id，供 STDP 成对流落盘精确配对。
     """
     with _lock:
-        global _EVENT_SEQ, _EMIT_INDEX
+        # ★431 收尾：同 log_emit —— _EMIT_INDEX 只读/下标写，无需 global（PLW0602）。
+        global _EVENT_SEQ
         _rk = event_type if isinstance(event_type, str) else str(event_type)
         _RECV_COUNTS[_rk] = _RECV_COUNTS.get(_rk, 0) + 1
         # 207批·刀3 + 268批 刀1：优先按 pulse_id 经 _EMIT_INDEX 做 O(1) 精确回填；
@@ -755,8 +810,9 @@ _ORPHAN_RING_FALLBACK = 5000
 
 def _today_start_ts() -> float:
     """今日 00:00 的时间戳（本地时区）。"""
-    _n = datetime.now()
-    return datetime(_n.year, _n.month, _n.day).timestamp()
+    # ★DTZ005/DTZ001 有意屏蔽：算的是**本地**今日 00:00（孤儿环按本地日切分）。
+    _n = datetime.now()  # noqa: DTZ005
+    return datetime(_n.year, _n.month, _n.day).timestamp()  # noqa: DTZ001
 
 
 def _orphan_ring_max() -> int:
@@ -777,8 +833,9 @@ def _orphan_ring_path() -> str:
     """data/monitor/pulse_orphans_YYYYMMDD.jsonl（每次实时拼装，跨午夜自动换文件）。"""
     base = (_ISO_BASE_DIR if _ISO_BASE_DIR is not None
             else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base, "data", "monitor",
-                        "pulse_orphans_%s.jsonl" % datetime.now().strftime("%Y%m%d"))
+    # ★DTZ005 有意屏蔽：同 pairs —— 孤儿环文件名按本地日期切分。
+    _day = datetime.now().strftime("%Y%m%d")  # noqa: DTZ005
+    return os.path.join(base, "data", "monitor", f"pulse_orphans_{_day}.jsonl")
 
 
 def _ring_append_orphans(rows) -> None:
@@ -791,8 +848,7 @@ def _ring_append_orphans(rows) -> None:
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
         with open(_p, "a", encoding="utf-8") as _f:
-            for _r in _rows:
-                _f.write(json.dumps(_r, ensure_ascii=False) + "\n")
+            _f.writelines(json.dumps(_r, ensure_ascii=False) + "\n" for _r in _rows)
         with _pair_state_lock:
             _first = _ORPHAN_RING_STATE.get("path") != _p
             _ORPHAN_RING_STATE["path"] = _p

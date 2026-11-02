@@ -35,9 +35,17 @@ except Exception:  # pragma: no cover - 兜底：独立单测时无项目内依�
     def silent_exc(e, where="", level="debug"):
         pass
 
-__all__ = ["BALANCE_TAG", "channel_has_room", "pick_balanced_index", "log_pick",
-           "LB_TAG", "channel_headroom", "channel_load", "order_by_load",
-           "log_order"]
+__all__ = [
+    "BALANCE_TAG",
+    "LB_TAG",
+    "channel_has_room",
+    "channel_headroom",
+    "channel_load",
+    "log_order",
+    "log_pick",
+    "order_by_load",
+    "pick_balanced_index",
+]
 
 #: 留痕前缀（任务书刀1 规定格式：`[353均衡] caller= picked= reason=`）
 BALANCE_TAG = "[353均衡]"
@@ -142,6 +150,14 @@ def log_pick(caller: str, rows: list, index: int, reason: str) -> None:
                   BALANCE_TAG, caller or "-", _picked or "-", reason)
     except Exception as e:
         silent_exc(e, where="nucleus.llm.channel_balance::log_pick.emit", level="debug")
+    # ★431刀3：选择明细落盘（旁路）。日志那行只有 picked/reason，没有候选全貌，
+    #   事后答不了"当时其它渠道为什么没被选"；这里把候选快照一并存下。
+    try:
+        from nucleus.observability import observations as _m431_obs
+        _m431_obs.record_channel_choice(caller, _picked, reason, rows)
+    except Exception as _m431_e:
+        silent_exc(_m431_e, where="nucleus.llm.channel_balance::log_pick.observations",
+                   level="debug")
 
 
 
@@ -263,7 +279,7 @@ def channel_load(name: str, health=None, quota=None, manager=None) -> dict:
         try:
             _n = int(health.consecutive_fails(name) or 0)
             if _n:
-                _why.append("fails:%d" % _n)
+                _why.append(f"fails:{_n:d}")
         except Exception as e:
             silent_exc(e, where="nucleus.llm.channel_balance::channel_load.fails", level="debug")
         try:
@@ -278,7 +294,7 @@ def channel_load(name: str, health=None, quota=None, manager=None) -> dict:
             if _r is not None:
                 _rem = max(0.0, min(1.0, float(_r)))
                 if _rem < 1.0:
-                    _why.append("quota:%.2f" % _rem)
+                    _why.append(f"quota:{_rem:.2f}")
         except Exception as e:
             silent_exc(e, where="nucleus.llm.channel_balance::channel_load.quota", level="debug")
             _why.append("quota:error")
@@ -368,10 +384,13 @@ def log_order(caller: str, info: dict) -> None:
     try:
         _parts = []
         for _ld in (info.get("rows") or []):
-            _parts.append("%s(hr=%.2f,ok=%.2f,q=%.2f,score=%.2f)"
-                          % (_ld.get("name") or "?", _ld.get("headroom", 0.0),
-                             _ld.get("success", 0.0), _ld.get("remaining", 0.0),
-                             _ld.get("score", 0.0)))
+            _cname = _ld.get("name") or "?"
+            _hr = _ld.get("headroom", 0.0)
+            _okr = _ld.get("success", 0.0)
+            _qrem = _ld.get("remaining", 0.0)
+            _cscore = _ld.get("score", 0.0)
+            _parts.append(
+                f"{_cname}(hr={_hr:.2f},ok={_okr:.2f},q={_qrem:.2f},score={_cscore:.2f})")
         _LOG.info("%s caller=%s order=%s | paid_tail=%s | %s",
                   LB_TAG, caller or "-", ">".join(info.get("order") or []) or "-",
                   ">".join(info.get("paid_tail") or []) or "-", " ".join(_parts))

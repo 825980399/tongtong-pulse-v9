@@ -35,6 +35,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import time
@@ -279,5 +280,127 @@ def stats() -> dict:
     return {"enabled": enabled(), "pending": len(_pending), "path": _path, "lines": _n}
 
 
+def _retention_days() -> int:
+    """留存天数 ← `config.DIALOGUE_TRACE_RETENTION_DAYS`（默认 30）。
+
+    非法值（bool/非 int/<=0）一律返回 0 = **不清理**。方向很关键：
+    配置写坏时宁可让文件攒着，也不能把不该删的删掉（不可逆）。
+    """
+    try:
+        import config
+        _v = getattr(config, "DIALOGUE_TRACE_RETENTION_DAYS", 30)
+        if isinstance(_v, bool) or not isinstance(_v, int) or _v <= 0:
+            return 0
+        return int(_v)
+    except Exception as _e:
+        silent_exc(_e, where="dialogue_process_trace::_retention_days", level="debug")
+        return 0
+
+
+def _day_of_name(fn: str):
+    """从 `dialogue_process_YYYYMMDD.jsonl` 里取日期；取不到返回 None。"""
+    _p = "dialogue_process_"
+    if not fn.startswith(_p) or not fn.endswith(".jsonl"):
+        return None
+    _s = fn[len(_p):-len(".jsonl")]
+    if len(_s) != 8 or not _s.isdigit():
+        return None
+    try:
+        return datetime.date(int(_s[0:4]), int(_s[4:6]), int(_s[6:8]))
+    except ValueError as _e:
+        silent_exc(_e, where="dialogue_process_trace::_day_of_name", level="debug")
+        return None
+
+
+def sweep_old(days: int | None = None, dry_run: bool = False,
+              now: float | None = None) -> dict:
+    """★★431刀4：删掉 `days` 天前的整份对话落盘文件（**默认 30 天**）。
+
+    判据：文件名里的日期 `< 今日 - days`。今日与 `days` 天前都保留
+    （「30 天滚动」=留最近 30 天），`days=30` 时第 31 天的那份才删。
+
+    Returns:
+        ``{"enabled","days","scanned","removed","freed_bytes","files","kept",
+           "dry_run","failed","reason"}``
+
+    ★永不抛异常：清理是夜间链的搭车项，炸了也只少清一次。
+    ★失败可重试：本函数无「今天已清」内存标记，失败下次调用照常再试
+      （对齐 `call_recorder._rotate` 的 371A5 教训）。
+    """
+    _d = _retention_days() if days is None else int(days)
+    _out = {"enabled": enabled(), "days": _d, "scanned": 0, "removed": 0,
+            "freed_bytes": 0, "files": [], "kept": 0, "dry_run": bool(dry_run),
+            "failed": 0, "reason": ""}
+    if not _out["enabled"]:
+        _out["reason"] = "trace_disabled"
+        return _out
+    if _d <= 0:
+        _out["reason"] = "retention_days_invalid"
+        return _out
+    try:
+        _dir = _out_dir()
+        if not os.path.isdir(_dir):
+            _out["reason"] = "no_dir"
+            return _out
+        # ★DTZ012 是有意屏蔽的：这里**要的就是本地日期** —— 落盘文件按本地
+        #   日期切分（`dialogue_process_YYYYMMDD.jsonl`），用 UTC 会差一天。
+        _today = datetime.date.fromtimestamp(  # noqa: DTZ012
+            float(now if now is not None else time.time()))
+        _cutoff = _today - datetime.timedelta(days=_d)
+        for _fn in sorted(os.listdir(_dir)):
+            _day = _day_of_name(_fn)
+            if _day is None:
+                continue
+            _out["scanned"] += 1
+            if _day >= _cutoff:
+                _out["kept"] += 1
+                continue
+            _fp = os.path.join(_dir, _fn)
+            try:
+                _sz = os.path.getsize(_fp)
+            except OSError as _se:
+                silent_exc(_se, where="dialogue_process_trace::sweep_old stat",
+                           level="debug")
+                _sz = 0
+            if dry_run:
+                _out["files"].append({"name": _fn, "day": str(_day), "bytes": _sz})
+                _out["removed"] += 1
+                _out["freed_bytes"] += _sz
+                continue
+            try:
+                os.remove(_fp)
+            except OSError as _re:
+                # 单个文件删不掉不足以让整轮失败，但要计数出声（下次再来）
+                _out["failed"] += 1
+                silent_exc(_re, where="dialogue_process_trace::sweep_old remove",
+                           level="warning")
+                continue
+            _out["files"].append({"name": _fn, "day": str(_day), "bytes": _sz})
+            _out["removed"] += 1
+            _out["freed_bytes"] += _sz
+        _out["reason"] = "ok"
+        if _out["removed"]:
+            _module_logger.info(
+                "[431刀4] 对话落盘清理%s：删 %d 个文件，释放 %.2f MB "
+                "(留存 %d 天，截止 %s，扫描 %d 份，清单=%s)",
+                "(演练)" if dry_run else "", _out["removed"],
+                _out["freed_bytes"] / 1048576.0, _d, _cutoff, _out["scanned"],
+                ",".join(x["name"] for x in _out["files"]))
+        else:
+            _module_logger.info(
+                "[431刀4] 对话落盘清理%s：无过期文件（留存 %d 天，截止 %s，"
+                "扫描 %d 份，保留 %d 份）",
+                "(演练)" if dry_run else "", _d, _cutoff, _out["scanned"],
+                _out["kept"])
+        if _out["failed"]:
+            _module_logger.warning(
+                "[431刀4] 对话落盘清理有 %d 个过期文件未能删除（下次重试）",
+                _out["failed"])
+    except Exception as _e:
+        silent_exc(_e, where="dialogue_process_trace::sweep_old", level="warning")
+        _out["reason"] = f"error:{type(_e).__name__}"
+    return _out
+
+
 def version() -> str:
-    return "426.1"
+    return "431.1"

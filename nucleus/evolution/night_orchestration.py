@@ -290,7 +290,8 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
     _sp = state_path or _m333_digest_state_path(_root)
     if now is None:
         from datetime import datetime as _dt
-        now = _dt.now()
+        # ★DTZ005 有意屏蔽：夜间摘要按**本地日**切分（文件名/状态键都用本地日期）。
+        now = _dt.now()  # noqa: DTZ005
     _ymd = now.strftime("%Y%m%d")
     _st = _m333_read_state(_sp)
     _out = {"ran": False, "reason": "", "digest": None, "added": None,
@@ -312,7 +313,8 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
 
     from datetime import datetime as _dt2
     from datetime import timedelta as _td
-    _target = _dt2(now.year, now.month, now.day,
+    # ★DTZ001 有意屏蔽：调度点是**本地** 04:00 整（钟点对齐本地时区才有意义）。
+    _target = _dt2(now.year, now.month, now.day,  # noqa: DTZ001
                    NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE)
     _lo = _target - _td(seconds=_tol)
     _hi = _target + _td(seconds=_tol)
@@ -331,8 +333,8 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
             #   而不是"进程没跑"。两种说法对应的处置完全不同：
             #   前者要查调度点是否挂上，后者只能等下一个 04:00。
             _st["missed_reason"] = (
-                "本代次（proc_gen=%s）未覆盖今日 %02d:%02d±%.0fs 窗"
-                % (_m335_pg(), NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol))
+                f"本代次（proc_gen={_m335_pg()}）未覆盖今日 "
+                f"{NIGHT_DIGEST_HOUR:02d}:{NIGHT_DIGEST_MINUTE:02d}±{_tol:.0f}s 窗")
             _m333_write_state(_sp, _st)
             _module_logger.warning(
                 "[夜间编排] digest **未生成**：%s（今日 %s；窗=%s ~ %s）"
@@ -382,7 +384,7 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
             silent_exc(_se, where="night_orchestration::maybe_run_night_digest sc3",
                        level="warning")
             _out["sc3"] = {"status": "UNAVAILABLE",
-                           "reason": "SC-3 异常: %s" % type(_se).__name__}
+                           "reason": f"SC-3 异常: {type(_se).__name__}"}
         # ★339批刀5：**存量回算**——同链（04:00 digest 之后一次），
         #   **禁每拍**（全量回算要读全部留样 + patch_history）。
         #   红线：**只产计数与结论**，不改任何一侧数据（SC-3 同源）。
@@ -406,7 +408,7 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
                        where="night_orchestration::maybe_run_night_digest recompute",
                        level="warning")
             _out["recompute"] = {"status": "UNAVAILABLE",
-                                 "reason": "回算异常: %s" % type(_rce).__name__}
+                                 "reason": f"回算异常: {type(_rce).__name__}"}
     else:
         _out["reason"] = "failed"
         _module_logger.warning(
@@ -445,7 +447,8 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         from datetime import datetime
 
         _alerts_path = os.path.join(project_root, "data", "reports", "alerts.jsonl")
-        _as_of = as_of or datetime.now()
+        # ★DTZ005 有意屏蔽：摘要分区键用**本地日**，与 data/reports 下按日文件名一致。
+        _as_of = as_of or datetime.now()  # noqa: DTZ005
         _ymd = _as_of.strftime("%Y%m%d")
         _out_dir = os.path.join(project_root, "data", "reports")
         os.makedirs(_out_dir, exist_ok=True)
@@ -513,17 +516,20 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
         _L.append("")
         _L.append("## 一、概览")
         _L.append("")
-        _L.append("- 需人工介入条目（去重后）：**%d** 条" % len(_deduped))
-        _L.append("- P0：**%d** 条 ｜ P1：**%d** 条" % (len(_p0), len(_p1)))
-        _L.append("- 原始 alerts.jsonl 中 needs_human 命中：**%d** 条（含重复）" % len(_rows))
+        _L.append(f"- 需人工介入条目（去重后）：**{len(_deduped)}** 条")
+        _L.append(f"- P0：**{len(_p0)}** 条 ｜ P1：**{len(_p1)}** 条")
+        _L.append(f"- 原始 alerts.jsonl 中 needs_human 命中：**{len(_rows)}** 条（含重复）")
         _L.append("")
         _L.append("## 二、Top5 问题（按时间倒序）")
         _L.append("")
         if _top:
             for _i, _r in enumerate(_top, 1):
-                _L.append("%d. [%s] %s — %s（target=%s）" % (
-                    _i, _r.get("severity", "?"), _r.get("anomaly_type", "?"),
-                    _r.get("description", ""), _r.get("target", "")))
+                # 先捞局部变量再拼 —— 不把 dict.get 的引号嵌进 f-string（不赖 PEP 701）。
+                _sev = _r.get("severity", "?")
+                _typ = _r.get("anomaly_type", "?")
+                _desc = _r.get("description", "")
+                _tgt = _r.get("target", "")
+                _L.append(f"{_i}. [{_sev}] {_typ} — {_desc}（target={_tgt}）")
         else:
             _L.append("(无)")
         _L.append("")
@@ -557,12 +563,11 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                 silent_exc(_e, where="night_orchestration.generate_night_digest.trace", level="debug")
             _L.append("## 五、预期台账（world_model · 只观测不决策）")
             _L.append("")
-            _L.append("- 触发：triggered=%s ｜ 新增 **%s** 条 ｜ 幂等跳过 %s 条 ｜ reason=%s"
-                      % (_led.get("triggered"), _led.get("added", 0),
+            _L.append("- 触发：triggered={} ｜ 新增 **{}** 条 ｜ 幂等跳过 {} 条 ｜ reason={}".format(_led.get("triggered"), _led.get("added", 0),
                          _led.get("skipped", 0), _led.get("reason", "")))
-            _L.append("- 来源：source=%s（活体自然产出）" % (_led.get("source", "live"),))
-            _L.append("- 台账累计：**%s** 条" % (_led.get("total", 0),))
-            _L.append("- verdict 分布：%s" % (_led.get("verdicts", {}),))
+            _L.append("- 来源：source={}（活体自然产出）".format(_led.get("source", "live")))
+            _L.append("- 台账累计：**{}** 条".format(_led.get("total", 0)))
+            _L.append("- verdict 分布：{}".format(_led.get("verdicts", {})))
             _L.append("- 红线：`violated` 不参与入队/动机（本模块只写台账）")
             _L.append("")
         except Exception as _le:
@@ -579,18 +584,16 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("## 五点五、周期档案重建（world_model · 七类）")
             _L.append("")
             _L.append("- 产物：%s" % (_prof_path or "**未落盘**"))
-            _L.append("- 七类齐全：%s（ok %s/%s ｜ 分布 %s）"
-                      % ("PASS" if _psum.get("complete") else "FAIL",
+            _L.append("- 七类齐全：{}（ok {}/{} ｜ 分布 {}）".format("PASS" if _psum.get("complete") else "FAIL",
                          _psum.get("ok", 0), _psum.get("total", 0),
                          _psum.get("by_predict_type", {})))
-            _L.append("- 容差口径：%s" % _psum.get("tolerance_basis", {}))
+            _L.append("- 容差口径：{}".format(_psum.get("tolerance_basis", {})))
             _L.append("")
         except Exception as _pe411:
             silent_exc(_pe411, where="night_orchestration.generate_night_digest.periodic_profile", level="debug")
             _L.append("## 五点五、周期档案重建（world_model · 七类）")
             _L.append("")
-            _L.append("- **重建失败**（已留痕，不阻断摘要）：%s: %s"
-                      % (type(_pe411).__name__, _pe411))
+            _L.append(f"- **重建失败**（已留痕，不阻断摘要）：{type(_pe411).__name__}: {_pe411}")
             _L.append("")
 
         # ★410批刀3：预测命中率日报表 —— 复用同一 04:00 编译点，不新建调度器。
@@ -601,18 +604,15 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _htot = _hrep.get("total") or {}
             _L.append("## 六、预测命中率（world_model · 滚动 24h）")
             _L.append("")
-            _L.append("- 总命中率：%s ｜ 有判定 **%s** 条（hit %s / miss %s）｜ 无覆盖 %s 条"
-                      % (_htot.get("hit_rate"), _htot.get("covered", 0),
+            _L.append("- 总命中率：{} ｜ 有判定 **{}** 条（hit {} / miss {}）｜ 无覆盖 {} 条".format(_htot.get("hit_rate"), _htot.get("covered", 0),
                          _htot.get("hit", 0), _htot.get("miss", 0),
                          _htot.get("no_coverage", 0)))
-            _L.append("- 采样窗：%s 个 ｜ 日报表：%s"
-                      % (_hrep.get("windows_sampled", 0), _hp or "未落盘"))
+            _L.append("- 采样窗：{} 个 ｜ 日报表：{}".format(_hrep.get("windows_sampled", 0), _hp or "未落盘"))
             _L.append("- 失配中：%s" % (list(_hrep.get("mismatches") or []) or "无"))
             _L.append("- 已淘汰模式：%s" % (list(_hrep.get("evicted") or []) or "无"))
             for _et, _t in (_hrep.get("types") or {}).items():
                 if _t.get("covered"):
-                    _L.append("  - `%s`：hit %s / miss %s ⇒ **%s**（无覆盖 %s）"
-                              % (_et, _t["hit"], _t["miss"], _t["hit_rate"],
+                    _L.append("  - `{}`：hit {} / miss {} ⇒ **{}**（无覆盖 {}）".format(_et, _t["hit"], _t["miss"], _t["hit_rate"],
                                  _t.get("no_coverage", 0)))
             _L.append("")
         except Exception as _he:
@@ -627,21 +627,18 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _nsum = _ns412.summary()
             _L.append("## 七、叙事落盘（Step5a · 412刀1）")
             _L.append("")
-            _L.append("- 落盘：%s（%s）" % ("PASS" if _np.get("ok") else "未落盘",
+            _L.append("- 落盘：{}（{}）".format("PASS" if _np.get("ok") else "未落盘",
                                             _np.get("reason") or "ok"))
             _L.append("- 摘要日：**%s**（04:00 落盘 ⇒ 结算**前一天**）"
                       % (_np.get("day") or "-"))
-            _L.append("- 摘要文件：%s" % _np.get("path", _ns412.day_path()))
-            _L.append("- 连续天数：**%s** ｜ 回放条数 %s ｜ 有记录天数 %s"
-                      % (_nsum.get("continuous_days"), _nsum.get("replayed_rows"),
+            _L.append("- 摘要文件：{}".format(_np.get("path", _ns412.day_path())))
+            _L.append("- 连续天数：**{}** ｜ 回放条数 {} ｜ 有记录天数 {}".format(_nsum.get("continuous_days"), _nsum.get("replayed_rows"),
                          _nsum.get("days_with_file")))
-            _L.append("- 状态：%s（坏行 %s）" % (_nsum.get("state"), _nsum.get("bad_lines")))
+            _L.append("- 状态：{}（坏行 {}）".format(_nsum.get("state"), _nsum.get("bad_lines")))
             _dg = _np.get("digest") or {}
-            _L.append("- headline：%s（依据 %s）"
-                      % (_dg.get("headline") or "**空**",
+            _L.append("- headline：{}（依据 {}）".format(_dg.get("headline") or "**空**",
                          _dg.get("headline_basis") or "-"))
-            _L.append("- intent：%s（%s）"
-                      % (_dg.get("intent") or "**空**",
+            _L.append("- intent：{}（{}）".format(_dg.get("intent") or "**空**",
                          _dg.get("intent_reason") or "-"))
             _dd = _dg.get("delta") or {}
             if _dd:
@@ -649,8 +646,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                     _c = _dd.get(_dk)
                     if not isinstance(_c, dict):
                         continue
-                    _L.append("  - %s：%s → %s（Δ%s）%s"
-                              % (_dk, _c.get("prev"), _c.get("cur"),
+                    _L.append("  - {}：{} → {}（Δ{}）{}".format(_dk, _c.get("prev"), _c.get("cur"),
                                  _c.get("delta"), _c.get("reason") or ""))
             else:
                 _L.append("- delta：**空**（digest 未产出）")
@@ -659,8 +655,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             silent_exc(_ne412, where="night_orchestration.generate_night_digest.narrative_store", level="debug")
             _L.append("## 七、叙事落盘（Step5a · 412刀1）")
             _L.append("")
-            _L.append("- **落盘失败**（已留痕，不阻断摘要）：%s: %s"
-                      % (type(_ne412).__name__, _ne412))
+            _L.append(f"- **落盘失败**（已留痕，不阻断摘要）：{type(_ne412).__name__}: {_ne412}")
             _L.append("")
 
         # ★412刀4：O3 删死代码 delete_only **dry-run 报表**（每天统计，不真 apply）。
@@ -671,17 +666,14 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _rep = _dr412.report(sample=8)
             _L.append("## 八、O3 删死代码 dry-run（412刀4 · 只统计不 apply）")
             _L.append("")
-            _L.append("- 若开闸将放行：**%s** 条（O3 判死族 %s 条，不可判 %s 条）"
-                      % (_rep.get("eligible"), _rep.get("o3_total"),
+            _L.append("- 若开闸将放行：**{}** 条（O3 判死族 {} 条，不可判 {} 条）".format(_rep.get("eligible"), _rep.get("o3_total"),
                          _rep.get("undecidable")))
-            _L.append("- 调用图：state=%s 孤儿 %s 个 / 覆盖文件 %s"
-                      % (_rep["graph"]["state"], _rep["graph"]["orphans"],
+            _L.append("- 调用图：state={} 孤儿 {} 个 / 覆盖文件 {}".format(_rep["graph"]["state"], _rep["graph"]["orphans"],
                          _rep["graph"]["files"]))
-            _L.append("- 拒因分布：%s" % json.dumps(_rep.get("rejected") or {},
-                                                  ensure_ascii=False))
+            _L.append("- 拒因分布：{}".format(json.dumps(_rep.get("rejected") or {},
+                                                  ensure_ascii=False)))
             for _s in (_rep.get("samples") or [])[:8]:
-                _L.append("  · %s ::%s（%s L%s）"
-                          % (_s["file"], _s["method"], _s["id"], _s["line"]))
+                _L.append("  · {} ::{}（{} L{}）".format(_s["file"], _s["method"], _s["id"], _s["line"]))
             _L.append("- 说明：%s" % (_rep.get("reason") or "判据见 basis 字段"))
             _L.append("")
         except Exception as _oe412:
@@ -689,8 +681,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                        where="night_orchestration.generate_night_digest.o3_delete_dryrun", level="debug")
             _L.append("## 八、O3 删死代码 dry-run（412刀4 · 只统计不 apply）")
             _L.append("")
-            _L.append("- **报表失败**（已留痕，不阻断摘要）：%s: %s"
-                      % (type(_oe412).__name__, _oe412))
+            _L.append(f"- **报表失败**（已留痕，不阻断摘要）：{type(_oe412).__name__}: {_oe412}")
             _L.append("")
 
         # ★413刀4：经验池模板标记 —— **必须由框架进程自己写**。
@@ -703,21 +694,18 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _ar = _eg413.annotate(dry_run=False)
             _L.append("## 九、经验池模板标记（413刀4 · 框架进程内写）")
             _L.append("")
-            _L.append("- 扫描：**%s** 条 ｜ 模板 **%s** 条 ｜ 本次改动 %s 条 ｜ 回写 %s 条"
-                      % (_ar.get("scanned"), _ar.get("template_rows"),
+            _L.append("- 扫描：**{}** 条 ｜ 模板 **{}** 条 ｜ 本次改动 {} 条 ｜ 回写 {} 条".format(_ar.get("scanned"), _ar.get("template_rows"),
                          _ar.get("changed"), _ar.get("applied")))
-            _L.append("- 落盘：%s ｜ 读回 is_template=**%s** ｜ 原因 %s"
-                      % ("PASS" if _ar.get("written") else "**未落盘**",
+            _L.append("- 落盘：{} ｜ 读回 is_template=**{}** ｜ 原因 {}".format("PASS" if _ar.get("written") else "**未落盘**",
                          _ar.get("landed"), _ar.get("reason") or "ok"))
-            _L.append("- 说明：模板条只**降权**（weight=%s），不删除" % _eg413.TEMPLATE_WEIGHT)
+            _L.append(f"- 说明：模板条只**降权**（weight={_eg413.TEMPLATE_WEIGHT}），不删除")
             _L.append("")
         except Exception as _ee413:
             silent_exc(_ee413,
                        where="night_orchestration.generate_night_digest.experience_governance", level="debug")
             _L.append("## 九、经验池模板标记（413刀4 · 框架进程内写）")
             _L.append("")
-            _L.append("- **失败**（已留痕，不阻断摘要）：%s: %s"
-                      % (type(_ee413).__name__, _ee413))
+            _L.append(f"- **失败**（已留痕，不阻断摘要）：{type(_ee413).__name__}: {_ee413}")
             _L.append("")
 
         with open(_digest_path, "w", encoding="utf-8") as _f:
@@ -749,6 +737,24 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
     _out = _m348_impl_maybe_run_night_digest(
         project_root, now=now, state_path=state_path,
         tolerance_sec=tolerance_sec, enabled=enabled)
+    # ★★431刀4：04:00 digest **真正跑成功**的那一拍，顺带清理 30 天前的
+    #   对话落盘文件（`data/experience/dialogue_process_YYYYMMDD.jsonl`）。
+    #   为什么挂这里而不是另开调度点：本项目只有这一处「每天凌晨一定醒」的
+    #   窗口（04:00±5min，333刀2 定的），另开一个等于再造一套时间窗判定，
+    #   而 digest 的 ran=True 已经是「今天真的到点且跑过」的权威信号。
+    #   三不原则：不改 digest 返回值、失败不影响 digest、无「今天已清」内存标记
+    #   （对齐 call_recorder._rotate 的 371A5 教训：失败必须能重试）。
+    try:
+        if (_out or {}).get("ran"):
+            from nucleus import dialogue_process_trace as _m431_tr
+            _m431_sw = _m431_tr.sweep_old()
+            _module_logger.info(
+                "[431刀4] 夜间顺带清理 reason=%s 删=%s 释放=%sB 保留=%s",
+                _m431_sw.get("reason"), _m431_sw.get("removed"),
+                _m431_sw.get("freed_bytes"), _m431_sw.get("kept"))
+    except Exception as _m431_ce:
+        silent_exc(_m431_ce, where="night_orchestration.maybe_run_night_digest sweep_old",
+                   level="warning")
     try:
         _tol = float(tolerance_sec if tolerance_sec is not None
                      else NIGHT_DIGEST_TOLERANCE_SEC)

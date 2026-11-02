@@ -3794,6 +3794,11 @@ RUNTIME_PARAMS = {
     # ★401刀2：pairs 单文件行数上限（230批 20万 → 401批 50万）与孤儿环形上限。
     #   20261029 单日 pairs 已到 95MB / 约 32 万行 ⇒ 20 万上限会在半天内被突破。
     "pulse_pair_file_cap": 500000,            # pulse_pairs_YYYYMMDD.jsonl 行数上限
+    # ★431刀2：超上限时一次裁到 cap × 本比例（低水位），不是裁回 cap。
+    #   实测背景（431 T0）：旧判据「超几行就裁回上限」在生产上每分钟重写 7 次
+    #   148MB 文件（当日 1349 次，≈65 GB/小时 IO）。0.9 ⇒ 下次要再长 5 万行才重写。
+    #   非法值（bool/非数字/<=0/>1）由 `_pair_trim_low_ratio()` 回落 0.9。
+    "pulse_pair_trim_low_ratio": 0.9,
     "pulse_tracer_orphan_ring_max": 5000,     # pulse_orphans_YYYYMMDD.jsonl 环形条数
     "memory_hot_node_max": 500,               # 热节点最大数量
     "memory_node_expire_days": 30,            # 节点过期天数
@@ -3892,6 +3897,24 @@ RUNTIME_PARAMS = {
     # 文件消化器参数
     "file_digester_max_recent": 50,            # 最大最近记录数
 }
+# ★431刀1：知识库语义关系字符串共享（无损内存瘦身），见 `PulseNode._m431_share_relations`。
+#   背景（431 T0 实测）：知识库加载后 Python 堆 2305 MB，其中 L3 占 1861 MB，
+#   而 L3 的 `semantic_relations` 一份就 1518 MB（307 万条 6 键同构 dict，
+#   `relation_type`/`source`/`target_node_id` 大量重复取值却各持一份字符串）。
+#   打开后只把这些重复字符串换成同一实例，**值逐字不变**，实测省 302~484 MB。
+#   回退：写 False 即逐字回到改动前（关系条目原样返回）。
+ENABLE_M431_SR_INTERN = True
+# ★431刀3：三条「动作细节」观测旁路（`nucleus/observability/observations.py`）。
+#   落 `data/observations/{intent_evolution,experience_hits,channel_choices}_YYYYMMDD.jsonl`，
+#   append-only、按天切、全程不抛异常。关掉 ⇒ 完全静默且不建目录。
+#   为什么是旁路：这三条只记"判据"，不参与任何决策；主流程的返回值一个字节都不变。
+ENABLE_M431_OBSERVATIONS = True
+# ★431刀4：对话中间过程落盘（`data/experience/dialogue_process_YYYYMMDD.jsonl`）
+#   的留存天数。每天 04:00 夜间编排成功后顺带清理：「今日 - 本值」之前的整份删除。
+#   判据用**文件名里的 YYYYMMDD**，不用 mtime —— mtime 会被备份/复制/touch 刷新，
+#   那样"复制一份旧文件进来"就永远不过期，清理等于没做。
+#   <=0 或非法 ⇒ 不清理（宁可攒着，不许误删）。
+DIALOGUE_TRACE_RETENTION_DAYS = 30
 # ========== R1：source_url 结构化标记配置 ==========
 # 全局开关：True=启用结构化source_url字段；False=回退旧逻辑(URL混入trigger_reason)
 SOURCE_URL_STRUCTURED_ENABLED = True

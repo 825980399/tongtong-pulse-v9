@@ -450,7 +450,12 @@ class PulseNode:
         node.verification_status = data.get("verification_status", "verified")
         node.frequency_signature = data.get("frequency_signature", 0.0)
         node.linked_nodes = data.get("linked_nodes", [])
-        node.semantic_relations = data.get("semantic_relations", [])
+        # ★431刀1：语义关系字符串过有界共享池（无损，只复用重复取值的对象）。
+        #   实测依据见本文件 `_m431_share_relations` 上方的注释与
+        #   `tmp/m431_t0_kb7.py`：L3 全库 307 万条关系占 1518 MB，
+        #   其中重复的 relation_type/source/target_node_id 可省 302~484 MB。
+        node.semantic_relations = _m431_share_relations(
+            data.get("semantic_relations", []))
 
         # ★第102批 T-102c：linked_nodes 不再落盘（semantic_relations 为唯一权威存储），
         #   未存时由 semantic_relations 动态重建。
@@ -990,6 +995,89 @@ def _m102_linked_derived_on() -> bool:
         return _M102_LINKED_DERIVED_DEFAULT
 
 
+# ==================== ★431刀1：语义关系字符串共享池 ====================
+#: 关系条目里字符串取值的共享池（**有界**，见 `_m431_pool_str`）。
+#: 为什么不是 `sys.intern`：那是进程级永生表，塞进去永不释放；而本项目
+#: `target_node_id` 有 4205 个不同取值、知识库还会持续新增节点 ⇒ 用它等于
+#: 造一个只增不减的泄漏面。有界池超限即停用，语义不变、只是不再省内存。
+_M431_SR_POOL: dict = {}
+_M431_SR_POOL_MAX = 100000
+_M431_SR_POOL_OFF = False
+
+
+def _m431_intern_enabled() -> bool:
+    """灰度开关 `config.ENABLE_M431_SR_INTERN`（缺省 True）。
+
+    关闭 ⇒ 逐字回到改动前（关系条目原样返回），用于 A/B 与回退。
+    """
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M431_SR_INTERN", True))
+    except Exception as _e:
+        silent_exc(_e, where="PulseNode::_m431_intern_enabled", level="debug")
+        return False
+
+
+def _m431_pool_str(value: str) -> str:
+    """取共享池里的同一份字符串；池满/停用则原样返回。"""
+    global _M431_SR_POOL_OFF
+    if _M431_SR_POOL_OFF:
+        return value
+    _hit = _M431_SR_POOL.get(value)
+    if _hit is not None:
+        return _hit
+    if len(_M431_SR_POOL) >= _M431_SR_POOL_MAX:
+        # 一次性停用并留痕：继续往里塞只会让常驻内存单调上涨。
+        _M431_SR_POOL_OFF = True
+        try:
+            _module_logger.warning(
+                "[431刀1] 语义关系字符串池达上限 %d，停止复用（语义不变，"
+                "仅不再省内存）", _M431_SR_POOL_MAX)
+        except Exception as _le:
+            silent_exc(_le, where="PulseNode::_m431_pool_str log", level="debug")
+        return value
+    _M431_SR_POOL[value] = value
+    return value
+
+
+def _m431_share_relations(rels):
+    """★431刀1：把语义关系条目里的字符串换成池内同一份实例（**值不变**）。
+
+    只处理 `list[dict]` 形态；遇到非 dict 元素或任何异常 → **原样返回入参**
+    （加载链绝不因本优化失败）。
+
+    ★**原地替换**，不重建 dict。第一版是逐条 `_d = {}` 再复制键值，
+      实测本库 373 万条关系要多花 16s（36.6s → 52.6s）—— dict 分配就是
+      那 16s 的全部来源。原地改只做字符串对象同一化，`==` 与 `hash()` 都不变。
+      安全性：`rels` 来自 `from_dict(data)` 的 `data`，而生产加载链
+      （`_m81_load_parquet_unified` → `_parquet_row_to_dict`）每行都新建 dict，
+      不存在跨节点共享；即便被复用，改的也只是"同一个值换个等价实例"。
+    """
+    if not rels or not isinstance(rels, list):
+        return rels
+    if not _m431_intern_enabled():
+        return rels
+    try:
+        for _it in rels:
+            if type(_it) is not dict:
+                continue
+            for _k, _v in _it.items():
+                if type(_v) is str:
+                    _n431 = _m431_pool_str(_v)
+                    if _n431 is not _v:
+                        _it[_k] = _n431
+        return rels
+    except Exception as _e:
+        silent_exc(_e, where="PulseNode::_m431_share_relations", level="warning")
+        return rels
+
+
+def _m431_stats() -> dict:
+    """只读自检：池大小、是否已停用、开关状态（供运维/测试观测）。"""
+    return {"enabled": _m431_intern_enabled(), "pool_size": len(_M431_SR_POOL),
+            "pool_max": _M431_SR_POOL_MAX, "disabled": _M431_SR_POOL_OFF}
+
+
 def _m102_linked_derivable(linked, semantic_relations) -> bool:
     """linked_nodes 能否由 semantic_relations **完整**重建（是 ⇒ 可安全不落盘）。
 
@@ -1010,7 +1098,7 @@ def _m102_linked_derivable(linked, semantic_relations) -> bool:
             _tg.add(str(_t))
     if not _tg:
         return False
-    return set(str(_x) for _x in linked) == _tg
+    return {str(_x) for _x in linked} == _tg
 
 
 def _m102_derive_linked_nodes(semantic_relations) -> list:
