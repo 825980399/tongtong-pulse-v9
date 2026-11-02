@@ -9,7 +9,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import difflib
 import json
+import re
 import threading
 import time
 from typing import Any
@@ -46,6 +48,15 @@ _module_logger = get_module_logger("ExperiencePool")
 # `default is None` 强改成 `{}`，于是「文件读不出来」与「文件中确实是空池」拿到
 # 的是同一个 `{}` —— 这正是本刀要消灭的「静默归零」。
 _M421_READ_FAILED = object()
+
+# ★426刀3：近似去重的归一化正则。
+#   实测的近似重复大多是「同一个句子只差数字」：
+#     `感受到满足(强度0.50)` vs `感受到满足(强度0.53)`（difflib 0.9231）
+#     `学习到1条新经验` vs `学习到0条新经验`（difflib 0.9524）
+#   把数字统一替换成 `#` 之后这两对字面相同 ⇒ 可以直接按前缀分桶，
+#   只有同桶的才跑 difflib —— 430 条全量两两比对要 9 万次，启动期不可接受。
+_M426_NUM_RE = re.compile(r"\d+")
+_M426_WS_RE = re.compile(r"\s+")
 
 
 class ExperiencePool:
@@ -106,6 +117,9 @@ class ExperiencePool:
             self._high_emotion_threshold = _cfg.get("high_emotion_threshold", 0.7)
             self._low_emotion_threshold = _cfg.get("low_emotion_threshold", 0.3)
             self._decay_check_interval = _cfg.get("decay_check_interval", 3600)
+            # ★426刀3：近似去重阈值 + 池总量硬上限
+            self._m426_dedup_similarity = float(_cfg.get("dedup_similarity", 0.98))
+            self._max_total_experiences = int(_cfg.get("max_total_experiences", 800))
         except Exception as e:
             silent_exc(e, "nucleus/mnemosyne/experience_pool.py:97:经验池操作异常", level="warning")
             self._max_experiences = 500
@@ -113,6 +127,8 @@ class ExperiencePool:
             self._high_emotion_threshold = 0.7
             self._low_emotion_threshold = 0.3
             self._decay_check_interval = 3600
+            self._m426_dedup_similarity = 0.98
+            self._max_total_experiences = 800
         self._last_decay_check = 0.0
 
         # 统计
@@ -237,6 +253,24 @@ class ExperiencePool:
                         self._save()
                         return _existing.get("id", "")
 
+            # ★426刀3：近似去重（阈值 0.98）。上面的精确比对打不中"只差一个数字"
+            #   的重复 —— 实测 430 条里完全重复 0 组，近似重复 125 条（29.1%）。
+            #   命中即并入**已存在**的那条：activation 累加、timestamp 取最新、
+            #   不新增条目；开关关掉逐字回到只做精确去重的改前行为。
+            if self._m426_compact_on() and len(_dedup_key) >= 8:
+                _m426_hit = self._m426_find_similar(_dedup_key)
+                if _m426_hit is not None:
+                    _m426_base, _m426_r = _m426_hit
+                    self._m426_merge_into(_m426_base, {
+                        "id": "",  # 本次写入不落盘，不留幽灵 id
+                        "timestamp": experience.get("timestamp", time.time()),
+                        "summary": _dedup_key,
+                        "activation_count": 0,
+                    }, _m426_r)
+                    self._total_recorded -= 1
+                    self._save()
+                    return _m426_base.get("id", "")
+
             # ★主线第155批 T155-7 P2-8：写入端污染终检闸门
             #   复用 ExperiencePollutionGuard.detect 对写入条目做终检，
             #   确定污染(polluted)→隔离(_write_quarantine)不入库；
@@ -301,6 +335,23 @@ class ExperiencePool:
             summarized_experiences.sort(key=lambda e: e.get("timestamp", 0))
             to_remove_ids = {e["id"] for e in summarized_experiences[:excess]}
             self._experiences = [e for e in self._experiences if e["id"] not in to_remove_ids]
+
+        # ★426刀3：总量硬上限。改前只有 `_max_experiences`(500) 与
+        #   `_max_summarized`(1000) 两道**压缩**闸，池总量实际能涨到 1500 条；
+        #   任务书说的"没有上限"指的就是这个总量。这里补一道真删的上限：
+        #   超了按「最旧优先、同年龄低置信度优先」淘汰，重要的（激活≥3 /
+        #   高强度情绪 decay_rate=0 / pinned）不删。
+        if self._m426_evict_on():
+            try:
+                _m426_evicted = self._evict_overflow()
+            except Exception as _e:
+                silent_exc(_e, where="experience_pool::_trim_capacity 426刀3")
+                _m426_evicted = 0
+            if _m426_evicted:
+                _module_logger.info(
+                    "[426刀3] 经验池超过总量上限，淘汰 %d 条（上限 %d）",
+                    _m426_evicted,
+                    int(getattr(self, "_max_total_experiences", 800) or 0))
 
         # ★主线第49批 T3-1（P2-331）：情绪衰减检查接入。
         #   背景：`check_decay()` 原长期**无生产调用方**（旧注释称"仅定义 + 测试调用"）。
@@ -401,6 +452,298 @@ class ExperiencePool:
                                          == content):
                 return True
         return False
+
+    # ===== ★426刀3：近似去重 + 总量淘汰 =====
+
+    @staticmethod
+    def _m426_compact_on() -> bool:
+        """近似去重总开关（`ENABLE_M426_EXPERIENCE_COMPACT`，关掉回到只做精确去重）。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M426_EXPERIENCE_COMPACT", True))
+        except Exception as _e:
+            silent_exc(_e, where="experience_pool::_m426_compact_on")
+            return True
+
+    @staticmethod
+    def _m426_evict_on() -> bool:
+        """总量淘汰开关（`ENABLE_M426_EXPERIENCE_EVICT`，关掉回到只压缩不删）。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M426_EXPERIENCE_EVICT", True))
+        except Exception as _e:
+            silent_exc(_e, where="experience_pool::_m426_evict_on")
+            return True
+
+    @staticmethod
+    def _m426_norm(text: str) -> str:
+        """归一化：压空白 + 数字→`#`。只用于**分桶粗筛**，不用于最终判定。"""
+        try:
+            _s = _M426_WS_RE.sub(" ", str(text or "").strip())
+            return _M426_NUM_RE.sub("#", _s)
+        except Exception as _e:
+            silent_exc(_e, where="experience_pool::_m426_norm")
+            return str(text or "")[:120]
+
+    def _m426_find_similar(self, content: str):
+        """写入侧：找一条「内容几乎一样」的已存在经验。
+
+        Returns:
+            ``(entry, ratio)`` 或 ``None``。阈值默认 0.98 —— 0.96 会把
+            `学习到1条新经验` / `学习到0条新经验` 这种**语义相反**的句子也合并
+            （实测 0.9524），0.99 则一条都合并不了（实测 430 条里 0 对）。
+        """
+        if not content or len(content) < 8:
+            return None
+        _thr = float(getattr(self, "_m426_dedup_similarity", 0.98) or 0.98)
+        _key = self._m426_norm(content)
+        _head = _key[:8]
+        _best = None
+        _best_r = 0.0
+        for _e in self._experiences:
+            if not isinstance(_e, dict) or _e.get("polluted"):
+                continue
+            _s = str(_e.get("summary") or "").strip()
+            if len(_s) < 8:
+                continue
+            # 粗筛①：长度差过大不可能是 0.98 相似
+            if abs(len(_s) - len(content)) > max(12, int(len(content) * 0.35)):
+                continue
+            _k = self._m426_norm(_s)
+            # 粗筛②：语义开头不同就不用跑 difflib
+            if _k[:8] != _head:
+                continue
+            try:
+                # ★判定用**原文**：归一化只负责分桶。用归一化文本算相似度会把
+                #   `学习到1条新经验` / `学习到0条新经验` 抹成完全相同（1 vs 0 语义
+                #   相反），那正是 0.98 阈值要拦住的反例。
+                _r = difflib.SequenceMatcher(None, content, _s).ratio()
+            except Exception as _e2:
+                silent_exc(_e2, where="experience_pool::_m426_find_similar:ratio")
+                continue
+            if _r >= _thr and _r > _best_r:
+                _best, _best_r = _e, _r
+        if _best is None:
+            return None
+        return _best, _best_r
+
+    @staticmethod
+    def _m426_hard_protected(entry: dict, newest_cut: float) -> bool:
+        """**绝对**不删的三类：新的 / 永久保留的 / 显式钉住的。
+
+        ① `timestamp >= newest_cut`（池内最新 10%）—— 任务书「不要删新的」；
+        ② `decay_rate == 0`（高强度情绪，设计上就永久保留）；
+        ③ `pinned`。
+        ★这里**刻意没有**「activation 高就不删」：真实池里 activation 中位数
+          就有 200+（同一条被反复命中），写成绝对值门槛等于谁都不删，淘汰闸
+          永远不生效。重要程度改用**池内相对位置**，在 `_evict_overflow` 分两档。
+        """
+        try:
+            if float(entry.get("timestamp", 0) or 0) >= float(newest_cut):
+                return True
+            if float(entry.get("decay_rate", 0.05) or 0) == 0.0:
+                return True
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="experience_pool::_m426_hard_protected")
+        return bool(entry.get("pinned"))
+
+    @staticmethod
+    def _m426_merge_into(base: dict, other: dict, ratio: float) -> None:
+        """把 `other` 合并进 `base`（基条 = 组内**最早**那条）。
+
+        合并口径：
+          · `activation_count` 求和 +1（这次重复本身也算一次命中）
+          · `timestamp` 取**最新**（"最近还发生过"，别让合并把它变成旧条目）
+          · `summary` 取较长的那条（信息不丢）
+          · `merged_ids` 留痕（最多 10 个），可回溯被合掉的是谁
+        """
+        try:
+            _ac = (int(base.get("activation_count", 0) or 0)
+                   + int(other.get("activation_count", 0) or 0) + 1)
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="experience_pool::_m426_merge_into:ac")
+            _ac = 1
+        base["activation_count"] = _ac
+        try:
+            base["merged_count"] = int(base.get("merged_count", 0) or 0) + 1
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="experience_pool::_m426_merge_into:mc")
+            base["merged_count"] = 1
+        _other_id = str(other.get("id") or "")
+        if _other_id:
+            _ids = list(base.get("merged_ids") or [])
+            _ids.append(_other_id)
+            base["merged_ids"] = _ids[-10:]
+        base["merged_at"] = time.time()
+        base["merged_similarity"] = round(float(ratio), 4)
+        try:
+            base["timestamp"] = max(float(base.get("timestamp", 0) or 0),
+                                    float(other.get("timestamp", 0) or 0))
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="experience_pool::_m426_merge_into:ts")
+        _bs = str(base.get("summary") or "").strip()
+        _os = str(other.get("summary") or "").strip()
+        if len(_os) > len(_bs):
+            base["summary"] = _os
+
+    def _compact_similar_once(self, threshold: float | None = None) -> dict:
+        """单轮合并（内部用；外部请走 `compact_similar`）。
+
+        为什么需要多轮：合并会改写基条的 `summary`（取较长的那条），于是原本
+        只跟"被合掉那条"相似（0.98）的第三条，在第二轮才与基条达到阈值。
+        实测 430 条：第一轮合并 126 条，第二轮还能再合 3 条，第三轮 0 条。
+        """
+        _thr = float(threshold if threshold is not None else
+                     getattr(self, "_m426_dedup_similarity", 0.98) or 0.98)
+        _rows = [e for e in self._experiences
+                 if isinstance(e, dict) and not e.get("polluted")]
+        _buckets: dict[str, list] = {}
+        for _e in _rows:
+            _s = str(_e.get("summary") or "").strip()
+            if len(_s) < 8:
+                continue
+            _buckets.setdefault(self._m426_norm(_s)[:8], []).append(_e)
+
+        _drop_ids: set[str] = set()
+        _pairs: list[dict] = []
+        _groups = 0
+        for _group in _buckets.values():
+            if len(_group) < 2:
+                continue
+            _groups += 1
+            # ★426刀3 性能修正：桶内先按**归一化文本**排序，再只与相邻的代表比。
+            #   原实现是桶内两两比 —— 430 条里同一个"semantic 综合优化"家族有
+            #   200+ 条，退化成 2 万次 difflib，实测**首次加载卡 16 秒**（对话会顶住）。
+            #   归一化把数字抹平后，重复条目排序必然相邻，因此只看"最近的两个代表"
+            #   就能覆盖同一批重复；比较次数从 O(n²) 降到 O(n)。
+            _group.sort(key=lambda _x: (self._m426_norm(str(_x.get("summary") or "")),
+                                        float(_x.get("timestamp", 0) or 0)))
+            _kept: list[dict] = []
+            for _e in _group:
+                _eid = str(_e.get("id") or "")
+                _s = str(_e.get("summary") or "").strip()
+                _hit = None
+                for _b in _kept[-2:]:
+                    _bid = str(_b.get("id") or "")
+                    if not _eid or not _bid or _eid == _bid:
+                        continue
+                    _bs = str(_b.get("summary") or "").strip()
+                    if abs(len(_s) - len(_bs)) > max(12, int(len(_bs) * 0.35)):
+                        continue
+                    try:
+                        # 判定用原文（理由同 _m426_find_similar）
+                        _r = difflib.SequenceMatcher(None, _bs, _s).ratio()
+                    except Exception as _e2:
+                        silent_exc(_e2, where="experience_pool::compact_similar:ratio")
+                        continue
+                    if _r >= _thr:
+                        _hit = (_b, _r)
+                        break
+                if _hit is None:
+                    _kept.append(_e)
+                    continue
+                _base, _r = _hit
+                self._m426_merge_into(_base, _e, _r)
+                _drop_ids.add(_eid)
+                if len(_pairs) < 20:
+                    _pairs.append({"kept": _base.get("id"), "merged": _eid,
+                                   "ratio": round(_r, 4), "summary": _s[:60]})
+
+        if _drop_ids:
+            self._experiences = [
+                _e for _e in self._experiences
+                if not (isinstance(_e, dict) and str(_e.get("id") or "") in _drop_ids)]
+        return {"scanned": len(_rows), "before": len(_rows),
+                "after": len(_rows) - len(_drop_ids), "merged": len(_drop_ids),
+                "groups": _groups, "threshold": _thr, "pairs": _pairs}
+
+    def compact_similar(self, threshold: float | None = None) -> dict:
+        """把「内容几乎一样」的经验合并成一条（存量治理；就地改 `self._experiences`）。
+
+        ★跑到稳定为止（最多 3 轮）：否则第二次调用还能再合几条，
+          每次启动都少一点 —— 那不是"幂等"，是"慢性泄漏"。
+        ★不落盘：调用方决定（启动期由 `_m426_compact_on_load` 负责）。
+        Returns: ``{scanned, before, after, merged, groups, rounds, pairs[:20]}``
+        """
+        _thr = float(threshold if threshold is not None else
+                     getattr(self, "_m426_dedup_similarity", 0.98) or 0.98)
+        _before = len([e for e in self._experiences if isinstance(e, dict)])
+        _merged = 0
+        _pairs: list[dict] = []
+        _scanned = 0
+        _groups = 0
+        _rounds = 0
+        for _i in range(3):
+            _r = self._compact_similar_once(_thr)
+            _rounds = _i + 1
+            _scanned = _r.get("scanned", 0)
+            _groups = max(_groups, _r.get("groups", 0))
+            _merged += int(_r.get("merged", 0) or 0)
+            if len(_pairs) < 20:
+                _pairs.extend(_r.get("pairs", [])[:20 - len(_pairs)])
+            if not _r.get("merged"):
+                break
+        return {"scanned": _scanned, "before": _before,
+                "after": _before - _merged, "merged": _merged,
+                "groups": _groups, "rounds": _rounds,
+                "threshold": _thr, "pairs": _pairs}
+
+    def _evict_overflow(self) -> int:
+        """总量硬上限淘汰：超 `max_total_experiences` 时删最旧、同年龄低置信度优先。
+
+        ★顺序是按 `(timestamp, activation_count)` **升序**，不是按置信度优先：
+          任务书要「不要删新的、删最老的」—— 若以置信度为主键，一条刚写进来、
+          还没被激活过（activation=0）的新经验会最先被删，正好相反。
+          置信度作为**同年龄内的次序**，再加上 `_m426_protected` 的三条保护线。
+        """
+        _cap = int(getattr(self, "_max_total_experiences", 800) or 0)
+        if _cap <= 0 or len(self._experiences) <= _cap:
+            return 0
+        _need = len(self._experiences) - _cap
+        _rows = [e for e in self._experiences if isinstance(e, dict)]
+        # 池内「最新 10%」的时间线（不足 10 条时视为无绝对保护）
+        _ts = sorted(float(e.get("timestamp", 0) or 0) for e in _rows)
+        _newest_cut = _ts[int(len(_ts) * 0.9)] if len(_ts) >= 10 else float("inf")
+        # 「置信度」用池内**中位数**做相对线（绝对值门槛在真实池里人人满足）
+        _acts = sorted(int(e.get("activation_count", 0) or 0) for e in _rows)
+        _mid_act = _acts[len(_acts) // 2] if _acts else 0
+
+        _tier1, _tier2 = [], []
+        for _e in _rows:
+            if self._m426_hard_protected(_e, _newest_cut):
+                continue
+            _a = int(_e.get("activation_count", 0) or 0)
+            (_tier2 if _a >= _mid_act else _tier1).append(_e)
+        # 第一档：低置信度 ⇒ 最旧的先走（任务书：删最老的、置信度最低的）
+        _tier1.sort(key=lambda _x: (float(_x.get("timestamp", 0) or 0),
+                                    int(_x.get("activation_count", 0) or 0)))
+        # 第二档：仍超限才动"重要"的；同档先动置信度最低、再动最旧
+        _tier2.sort(key=lambda _x: (int(_x.get("activation_count", 0) or 0),
+                                    float(_x.get("timestamp", 0) or 0)))
+        _cand = _tier1 + _tier2
+        _drop = {str(e.get("id") or "") for e in _cand[:_need] if str(e.get("id") or "")}
+        if not _drop:
+            return 0
+        self._experiences = [
+            e for e in self._experiences
+            if not (isinstance(e, dict) and str(e.get("id") or "") in _drop)]
+        return len(_drop)
+
+    def _m426_compact_on_load(self) -> None:
+        """启动期做一次存量近似合并（幂等：没得合就不写盘）。"""
+        if not self._m426_compact_on():
+            return
+        try:
+            _r = self.compact_similar()
+        except Exception as _e:
+            silent_exc(_e, where="experience_pool::_m426_compact_on_load")
+            return
+        if not _r.get("merged"):
+            return
+        self._save()
+        _module_logger.info(
+            "[426刀3] 经验池近似去重：%d → %d 条（合并 %d，阈值 %.2f）",
+            _r["before"], _r["after"], _r["merged"], _r["threshold"])
 
     @staticmethod
     def _classify_pollution_risk(content: str, experience: dict) -> str:
@@ -1206,6 +1549,10 @@ class ExperiencePool:
                 self._total_decayed = _raw.get("total_decayed", 0)
                 self._load_state = "ok"
                 self._load_error = None
+                # ★426刀3：存量近似合并（幂等；没得合就不写盘）。
+                #   放在这里而不是后台线程：池子 430 条、分桶后只比对同桶，
+                #   实测 <50ms；换成周期扫描反而要处理"合并到一半被检索"的竞态。
+                self._m426_compact_on_load()
                 return
             # 三种 degraded 共用一条留痕：明确写出"保留了几条"，便于活体判读
             _module_logger.error(

@@ -325,12 +325,35 @@ class ParallelScheduler(SilentLogMixin):
         """★v9.5：资源压力信号（low/medium/high），供其他模块决策降级/升级。"""
         return self._probe_hardware_pressure().get("pressure", "low")
 
+    def _pool_workers(self) -> int:
+        """★426 刀1：建池时的真实 worker 数 = 当前并行度过预算表。
+
+        自适应逻辑会把 `_current_parallelism` 翻倍（最多 `_base_parallelism*2`=18），
+        所以**每次建池**都要过 cap()，否则只有首次生效。
+        """
+        try:
+            from utils.thread_budget import cap as _m426_cap
+            return int(_m426_cap("cortex_parallel", self._current_parallelism))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.parallel_scheduler::_pool_workers L426")
+            return int(self._current_parallelism)
+
+    def _new_pool(self) -> ThreadPoolExecutor:
+        """★426 刀1：建池 + 登记进预算表（inventory 可读）。"""
+        _p = ThreadPoolExecutor(
+            max_workers=self._pool_workers(), thread_name_prefix="cortex_parallel"
+        )
+        try:
+            from utils.thread_budget import register as _m426_reg
+            _m426_reg("cortex_parallel", _p)
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.parallel_scheduler::_new_pool register L426")
+        return _p
+
     def _rebuild_pool(self):
         """并行度变化时重建线程池。"""
         _old = self._pool
-        self._pool = ThreadPoolExecutor(
-            max_workers=self._current_parallelism, thread_name_prefix="cortex_parallel"
-        )
+        self._pool = self._new_pool()
         if _old:
             try:
                 _old.shutdown(wait=False)
@@ -342,9 +365,7 @@ class ParallelScheduler(SilentLogMixin):
         if self._pool is None:
             with self._lock:
                 if self._pool is None:
-                    self._pool = ThreadPoolExecutor(
-                        max_workers=self._current_parallelism, thread_name_prefix="cortex_parallel"
-                    )
+                    self._pool = self._new_pool()  # ★426 刀1：过预算表
         return self._pool
 
     def submit_parallel(self, tasks: list[Callable]) -> list[Any]:

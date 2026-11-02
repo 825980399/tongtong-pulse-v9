@@ -188,10 +188,18 @@ _POOL_WORKERS: int | None = None
 
 
 def _pool_workers() -> int:
-    """读 ``config.ANALYZER_POOL_WORKERS``（默认 2；0 = 不启用异步）。"""
+    """读 ``config.ANALYZER_POOL_WORKERS``（默认 2；0 = 不启用异步）。
+
+    ★426 刀1：再过一道预算表（`self_awareness`=2）。这个池是"少一个 worker 就少一条
+    分析结论"的池，预算与现值相同 —— 登记是为了让总量可见，不是来砍它的。
+    """
     try:
         import config
-        return max(0, int(getattr(config, "ANALYZER_POOL_WORKERS", 2)))
+        _n = max(0, int(getattr(config, "ANALYZER_POOL_WORKERS", 2)))
+        if _n <= 0:
+            return 0
+        from utils.thread_budget import cap as _m426_cap
+        return int(_m426_cap("self_awareness", _n))
     except Exception as _e:
         silent_exc(_e, where="SelfAwarenessEngine::_pool_workers", level="debug")
         return 2
@@ -214,6 +222,11 @@ def get_analyzer_pool() -> ThreadPoolExecutor | None:
             _POOL = ThreadPoolExecutor(max_workers=_n,
                                        thread_name_prefix="SelfAwarenessPool")
             _POOL_WORKERS = _n
+            try:
+                from utils.thread_budget import register as _m426_reg
+                _m426_reg("self_awareness", _POOL)
+            except Exception as _m426_e:
+                silent_exc(_m426_e, where="SelfAwarenessEngine::register 426刀1")
             _logger.info("[405刀1] 分析器线程池已建立：%d worker", _n)
         return _POOL
 

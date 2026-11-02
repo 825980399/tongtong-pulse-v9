@@ -705,6 +705,17 @@ class RuntimeMetrics:
                 self._lock_waits, self._lock_wait_ts, time.time())[0]
             _s["lock_wait_samples"] = _m418_lock_window_avg(
                 self._lock_waits, self._lock_wait_ts, time.time())[1]
+            # ★426 刀1：线程池清单（只读）。回答「每个池上限多少、实际起了几个、
+            #   队列里排了几个」——改前只能靠 faulthandler 转储逐块数，且那份转储
+            #   里同一批线程会重复出现（90 段 dump 不能相加）。这里直接按线程名前缀
+            #   反查，一个进程一份，不重复。
+            try:
+                from utils.thread_budget import inventory as _m426_inv
+                _inv = _m426_inv()
+                _s["thread_pools"] = _inv.get("pools", [])
+                _s["thread_budget_total"] = _inv.get("budget_total")
+            except Exception as _e:
+                silent_exc(_e, where="runtime_metrics::get_snapshot 426刀1")
             return _s
 
     def get_history(self, limit: int = 120) -> list[dict[str, Any]]:

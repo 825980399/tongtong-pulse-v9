@@ -40,6 +40,7 @@ from nucleus.const import (
     HeartEvent,  # ★v24.0新增：心跳事件用于清理待处理条目
     HormonesEvent,
     InferenceEvent,
+    InterestEvent,  # ★426刀5：兴趣变化事件（只缓存，供对话过程留痕）
     KnowledgeEvent,
     LogLevel,
     LungEvent,
@@ -237,6 +238,8 @@ class PulseCortex(BasePulseOrgan):
         self._max_pending = 100
         self._narrative_guidance = {}  # 叙事自我发来的行为指导
         self._current_emotion = "中性"  # 当前情绪状态
+        # ★426刀5：最近一次兴趣变化（`InterestEvent.CHANGED` 缓存，只读留痕用）
+        self._m426_last_interest_change = None
         self._risk_cautious_mode = False  # ★P0-1：风险谨慎模式标记
         self._risk_alert_summary = ""     # ★P3-5：基础风险告警摘要（供语气微调）
         self._safe_mode = False           # ★P3-5：L4 安全模式标记（暂停高风险推理）
@@ -784,6 +787,17 @@ class PulseCortex(BasePulseOrgan):
             if _beat_count % 50 == 0:
                 self._run_parallel_audit_async()
             return None
+        elif event_type == InterestEvent.CHANGED:
+            # ★426刀5：只缓存最近一次兴趣变化，供「对话中间过程」留痕取用。
+            #   该事件改前**无人订阅**（落到末尾 return None），这里只加缓存、
+            #   不写库、不改任何调度 —— 对话行为零变化。
+            self._m426_last_interest_change = {
+                "topic": (payload.get("topic") or payload.get("interest")
+                          or payload.get("name") or ""),
+                "delta": payload.get("delta") or payload.get("change"),
+                "at": time.time(),
+            }
+            return {"status": "cached"}
         elif event_type in self._report_event_types:
             # ★P3-5补闭环：汇总各器官的结果/报告类孤儿脉冲到自我状态（此前有发射无订阅）
             self._latest_reports[event_type] = payload
@@ -951,6 +965,21 @@ class PulseCortex(BasePulseOrgan):
 
         # 将QICA分类结果映射为路由意图
         intent = self._map_qica_result_to_intent(intent_type, channel)
+        # ★426刀5：对话中间过程开记录（QICA 结果一落地就开，路由阶段再补）
+        try:
+            from nucleus import dialogue_process_trace as _m426_tr
+            _m426_tr.begin(correlation_id, content, user_name)
+            _m426_tr.stamp(
+                correlation_id,
+                intent=intent,
+                intent_type=intent_type,
+                intent_confidence=payload.get("confidence"),
+                keywords=self._m426_keywords(content),
+                knowledge_paths=_knowledge_paths,
+                suggested_method=_suggested_method,
+            )
+        except Exception as _m426_e:
+            self._log_ignored_exception(_m426_e, "426刀5 对话过程开记录")
         return self._route_by_intent(correlation_id, intent, content, user_name,
                                      file_paths=ctx.get("file_paths", []),
                                      code_blocks=ctx.get("code_blocks", []),
@@ -1269,6 +1298,21 @@ class PulseCortex(BasePulseOrgan):
 
         # 取出暂存的上下文
         ctx = self._pending_inner_world.pop(correlation_id, None)
+        # ★426刀5：收口本轮对话过程（方法 / 答案预览 / 端到端耗时）。
+        #   correlation_id 为空=内在自主运行，没有对应记录 ⇒ finish 自行返回 None。
+        try:
+            from nucleus import dialogue_process_trace as _m426_tr
+            _m426_lat = None
+            if isinstance(ctx, dict) and ctx.get("timestamp"):
+                _m426_lat = round((time.time() - float(ctx["timestamp"])) * 1000, 1)
+            _m426_tr.finish(
+                correlation_id,
+                method=method,
+                answer_preview=(answer if isinstance(answer, str) else ""),
+                latency_ms=_m426_lat,
+            )
+        except Exception as _m426_e:
+            self._log_ignored_exception(_m426_e, "426刀5 对话过程收口")
 
         # ★P2 推理策略智能选择（仅对话链路，内在自主不干预）
         if self._strategy_selector and correlation_id:
@@ -2224,6 +2268,69 @@ class PulseCortex(BasePulseOrgan):
             "file_path": file_path,
         }
 
+    # ========== ★426刀5：对话中间过程留痕的取数小件 ==========
+
+    @staticmethod
+    def _m426_keywords(content: str) -> list:
+        """关键词：与经验命中打分**同一套分词口径**（2~4 字中文词片），取前 10。
+
+        为什么不另写一套：`experience_hits.tokens_of` 就是经验召回打分用的分词，
+        留痕用同一口径才能与「命中了哪条经验」对上账（两套切词会互相打脸）。
+        """
+        try:
+            from nucleus.observability.experience_hits import tokens_of
+            return sorted(tokens_of(content))[:10]
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m426_keywords")
+            return []
+
+    def _m426_interest_brief(self) -> list:
+        """最近一次兴趣变化（来自 `InterestEvent.CHANGED` 缓存，最多 1 条）。"""
+        _c = getattr(self, "_m426_last_interest_change", None)
+        if not isinstance(_c, dict):
+            return []
+        _topic = str(_c.get("topic") or "").strip()
+        if not _topic:
+            return []
+        _delta = _c.get("delta")
+        _suffix = "" if _delta is None else f"(Δ{_delta})"
+        return [f"{_topic}{_suffix}"]
+
+    def _m426_experience_brief(self, content: str) -> list:
+        """经验池命中：`experience_hits.top_hits`（与答案侧同一套打分）。
+
+        成本 ~4.6ms/次（423 批实测，500 候选窗口），每轮对话一次 —— 相对推理可忽略。
+        """
+        try:
+            from nucleus.observability import experience_hits as _eh
+            if not _eh.enabled():
+                return []
+            _hits = _eh.top_hits(content, top_k=3)
+            return [f"{h.get('id', '?')}|{str(h.get('text') or '')[:40]}"
+                    for h in (_hits or [])]
+        except Exception as _e:
+            self._log_ignored_exception(_e, "426刀5 经验命中取数")
+            return []
+
+    def _m426_channel_brief(self) -> tuple:
+        """渠道候选（活跃渠道 priority 升序）+ 说明。
+
+        ★为什么不是"实际选中的那个"：实际选择发生在下游
+          `PulseLung._call_via_channels`，那条链路上**没有 correlation_id**，
+          当前无法把"这一枪打在哪条渠道"与"这一轮对话"对上。
+          这里如实记候选顺序，并在 `channel_reason` 里写明实际选中要看哪条日志，
+          不伪造一个看起来像答案的字段。
+        """
+        try:
+            import config as _cfg
+            _names = [str(c.get("name") or "") for c in _cfg.get_active_channels()]
+            _reason = ("活跃渠道 priority 升序（418均衡会在调用前重排）；"
+                       "实际选中见 [353均衡] caller=... picked=... 日志")
+            return _names[:8], _reason
+        except Exception as _e:
+            self._log_ignored_exception(_e, "426刀5 渠道候选取数")
+            return [], "取数失败"
+
     def _route_by_intent(self, correlation_id: str, intent: str,
                          content: str, user_name: str,
                          file_paths: list | None = None, code_blocks: list | None = None,
@@ -2306,6 +2413,26 @@ class PulseCortex(BasePulseOrgan):
         else:
             _enhanced_content = content
 
+        # ★426刀5：路由阶段**必定可得**的中间结果先落一笔。
+        #   ★为什么不能放在下面 `if self.inner_world is not None:` 里面：
+        #     inner_world 未注入时整段被跳过（本地兜底路由），那样情绪/兴趣/
+        #     经验命中/渠道候选就全丢了 —— 记录的字段齐不齐不该取决于依赖装没装。
+        try:
+            from nucleus import dialogue_process_trace as _m426_tr
+            _m426_tr.begin(correlation_id, content, user_name)
+            _m426_ch_names, _m426_ch_reason = self._m426_channel_brief()
+            _m426_tr.stamp(
+                correlation_id,
+                intent=intent,
+                emotion=str(getattr(self, "_current_emotion", "") or ""),
+                interest_changes=self._m426_interest_brief(),
+                experience_hits=self._m426_experience_brief(content),
+                channel_candidates=_m426_ch_names,
+                channel_reason=_m426_ch_reason,
+            )
+        except Exception as _m426_e:
+            self._log_ignored_exception(_m426_e, "426刀5 对话过程基础留痕")
+
         # 所有问题都先问内在世界（就像人类先想"我知道这个吗？"）
         if self.inner_world is not None:
             self._pending_inner_world[correlation_id] = {
@@ -2330,6 +2457,18 @@ class PulseCortex(BasePulseOrgan):
                 strategy_context["qica_suggested_method"] = "rule_reason"
                 self._log(LogLevel.INFO, "反思→行动回路生效：历史推理失败较多，知识类问题优先走规则推理")
             self._log(LogLevel.INFO, f"QICA意图路由: 建议方法={suggested_method}, 知识路径={strategy_context['qica_knowledge_paths']}")
+            # ★426刀5：补齐**只在策略上下文里才有**的三项（其余在上面已落）。
+            #   这里只**取数**，不参与任何决策 —— 取数失败也只少一条记录。
+            try:
+                from nucleus import dialogue_process_trace as _m426_tr
+                _m426_tr.stamp(
+                    correlation_id,
+                    strategy_method=strategy_context.get("qica_suggested_method"),
+                    reasoning_preference=strategy_context.get("reasoning_preference"),
+                    knowledge_paths=strategy_context.get("qica_knowledge_paths"),
+                )
+            except Exception as _m426_e:
+                self._log_ignored_exception(_m426_e, "426刀5 对话过程补策略")
 
             # ===== 【P2-4新增】语境感知：发射推理请求时注入语境信号 =====
             _context_signal = self._detect_context_signal(content, intent)

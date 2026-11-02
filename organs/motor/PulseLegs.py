@@ -321,7 +321,20 @@ class PulseLegs(BasePulseOrgan):
         super().start()
         self._learn_running = True
         self._learn_worker_running = True
-        self._learn_pool = ThreadPoolExecutor(max_workers=self._learn_pool_size, thread_name_prefix="legs_learn")
+        # ★426 刀1：过预算表（`legs_learn`=3，与现值相同）。多路学习是后台任务型，
+        #   砍它会直接减少同时学习的路数，故只登记不压。
+        try:
+            from utils.thread_budget import cap as _m426_cap
+            _m426_n = int(_m426_cap("legs_learn", self._learn_pool_size))
+        except Exception as _m426_e:
+            silent_exc(_m426_e, where="PulseLegs::_start_learn_engine 426刀1")
+            _m426_n = self._learn_pool_size
+        self._learn_pool = ThreadPoolExecutor(max_workers=_m426_n, thread_name_prefix="legs_learn")
+        try:
+            from utils.thread_budget import register as _m426_reg
+            _m426_reg("legs_learn", self._learn_pool)
+        except Exception as _m426_e:
+            silent_exc(_m426_e, where="PulseLegs::register 426刀1")
         # 启动学习工作线程（从队列取任务分发给线程池）
         threading.Thread(target=self._learn_worker_loop, daemon=True).start()
         self._schedule_learn_timer()
@@ -394,10 +407,21 @@ class PulseLegs(BasePulseOrgan):
         """重建学习线程池（在能力变化时调用）"""
         with self._learn_queue_lock:
             old_pool = self._learn_pool
+            try:
+                from utils.thread_budget import cap as _m426_cap2
+                _m426_n2 = int(_m426_cap2("legs_learn", self._learn_pool_size))
+            except Exception as _m426_e:
+                silent_exc(_m426_e, where="PulseLegs::_rebuild_learn_pool 426刀1")
+                _m426_n2 = self._learn_pool_size
             self._learn_pool = ThreadPoolExecutor(
-                max_workers=self._learn_pool_size,
+                max_workers=_m426_n2,
                 thread_name_prefix="legs_learn"
             )
+            try:
+                from utils.thread_budget import register as _m426_reg2
+                _m426_reg2("legs_learn", self._learn_pool)
+            except Exception as _m426_e:
+                silent_exc(_m426_e, where="PulseLegs::register_rebuild 426刀1")
         if old_pool:
             try:
                 old_pool.shutdown(wait=False)

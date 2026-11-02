@@ -1521,14 +1521,30 @@ ENABLE_CHANNEL_LOAD_BALANCE = True
 #   True（默认）= 各池上限过 `utils/thread_budget.cap()` 的预算表；
 #   False = 逐字回到改前公式（HybridIO=min(64,cpu*2)、L1/L2=cpu//2 ...）。
 ENABLE_M418_THREAD_SLIMMING = True
-# 池名 -> 上限。合计 29（改前同口径合计 61，降 32）。只压不放：预算比原值大时不会调高。
+# 池名 -> 上限。只压不放：预算比原值大时不会调高。
+#
+# ★426 刀1：418 那版只覆盖 6 个池（合计 29），另有 6 个池**完全没有预算约束**：
+#   ExtOp=32 / ExtOpSched=2 / StructParallel=16 / cortex_parallel=9(可翻倍18)
+#   / SelfAwarenessPool=2 / legs_learn=3  ⇒ 上限合计 62~65。
+# 按"外层并发闸门只有 2、实测队列不排队"重定后，这 6 个池合计 29；
+# 全表 29 + 29 = **58 < 60**（418 的验收线是 <60，仍然成立）。
+# 只砍了三个真有冗余的：ExtOp 32→8、StructParallel 16→6、cortex_parallel 9→8；
+# ExtOpSched/SelfAwarenessPool/legs_learn 与现值持平（砍它们会真切减少并行能力）。
 M418_THREAD_CAPS = {
+    # —— 418 刀3② 已接入 ——
     "l0": 1,          # 生命线（原 1）
     "l1": 6,          # 实时层（原 max(4, cpu//2) = 8）
     "l2": 6,          # 认知层（原 max(4, cpu//2) = 8）
     "l3": 4,          # 自主层（原 max(2, cpu//4) = 4）
     "adaptive": 4,    # 自适应池（原 max(4, cpu//2) = 8）
     "hybrid_io": 8,   # 混合调度 IO 池（原 min(64, cpu*2) = 32）
+    # —— 426 刀1 新接入 ——
+    "ext_op": 8,          # 外部操作执行池（原 32；外层并发闸门只有 2）
+    "ext_sched": 2,       # 外部操作调度池（原 2，持平）
+    "struct_parallel": 6,  # 任务组扇出池（原硬编码 16）
+    "cortex_parallel": 8,  # 思维并行池（原 9，自适应可翻倍到 18）
+    "self_awareness": 2,   # 分析器池（原 2，持平）
+    "legs_learn": 3,       # 多路学习池（原 3，持平）
 }
 
 # ★418刀3①：锁等待读数的「时间窗」口径开关。
@@ -1642,14 +1658,33 @@ REMOTE_API_CHANNELS = {
             #   ★Token 形如 ms-xxxx（魔搭访问令牌，**不是 sk-**，别按 sk- 校验）。
             #   ★魔搭 API-Inference 非商业非营利，配额/并发动态调整 ⇒ 标 quota_type=dynamic，
             #     不承诺日/月额度（承诺了必然被打脸）。
+            #
+            # ★426 刀4（2026-11-02 活体实测）：**模型已下架，渠道降级保留**。
+            #   实测 POST 该端点返回 HTTP 400：
+            #     {"error":{"message":"Model id : Qwen/Qwen2.5-7B-Instruct ,
+            #      has no provider supported","request_id":"2b55c8bb-..."}}
+            #   ⇒ 端点还活着，模型没了。按任务书「不要删配置，只是降级」处理：
+            #     ① enabled=False —— `get_active_channels()` 就按这个字段过滤，
+            #        渠道选择（含 418 负载均衡重排）直接跳过它；
+            #     ② priority 7 → 99 —— 万一运维用 include_disabled=True 捞全量，
+            #        它也永远排最后，不会挤掉任何可用渠道；
+            #     ③ 加 4 个只读标记（channel_status/invalid_*），让面板与运维能
+            #        直接看出「为什么不用它」，不必翻日志。
+            #   ★api_url / api_key / model / quota_type 全部**逐字保留**：
+            #     模型回来后只改 enabled=True + priority=7 即可恢复，无需改代码。
             "name": "modelscope",
             "model": "Qwen/Qwen2.5-7B-Instruct",
             "quota_type": "dynamic",  # 免费限流，配额动态调整（非固定日/月额度）
             "quota_limit": -1,
             "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
             "api_key": os.environ.get("MODELSCOPE_API_KEY", ""),
-            "priority": 7,
-            "enabled": True,
+            "priority": 99,          # ★426 刀4：7 → 99（垫底；不删渠道位置）
+            "enabled": False,        # ★426 刀4：渠道选择跳过它
+            "channel_status": "invalid",
+            "invalid_since": "2026-11-02",
+            "invalid_reason": "模型下架：HTTP 400 Model id has no provider supported",
+            "invalid_evidence": "HTTP 400 {\"error\":{\"message\":\"Model id : "
+                                "Qwen/Qwen2.5-7B-Instruct , has no provider supported\"}}",
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
@@ -4042,12 +4077,32 @@ GLOBAL_LEARNER_CONFIG = {
 
 # 体验记忆池配置
 EXPERIENCE_POOL_CONFIG = {
-    "max_experiences": 500,             # 最多保留完整体验数
-    "max_summarized": 1000,             # 最多保留摘要体验数
+    "max_experiences": 500,             # 最多保留完整体验数（超了压缩成摘要，不删）
+    "max_summarized": 1000,             # 最多保留摘要体验数（超了删最旧）
     "high_emotion_threshold": 0.7,      # 高强度情绪阈值（不衰减）
     "low_emotion_threshold": 0.3,       # 低强度情绪阈值（快速衰减）
     "decay_check_interval": 3600,       # 衰减检查间隔（秒）
+    # ★426刀3：改前只有上面两道**压缩**闸，池总量实际能涨到 500+1000=1500 条；
+    #   本键是**真删**的总量硬上限（超出按「最旧优先、同年龄低置信度优先」淘汰，
+    #   激活≥3 / 高强度情绪 / pinned 三条保护线不删）。
+    "max_total_experiences": 800,
+    # ★426刀3：近似去重阈值（difflib ratio）。0.99 ⇒ 实测合并不了（430 条 0 对）；
+    #   0.96 ⇒ 会把"学习到1条新经验/学习到0条新经验"（0.9524）这种语义相反的
+    #   句子并掉；0.98 ⇒ 合 125 条、且上述反例安全。
+    "dedup_similarity": 0.98,
 }
+
+# ★426刀3：经验池两个独立开关（关掉逐字回到改前：只做精确去重、只压缩不删）。
+#   COMPACT = 写入侧近似去重 + 启动期存量合并；EVICT = 总量硬上限淘汰。
+ENABLE_M426_EXPERIENCE_COMPACT = True
+ENABLE_M426_EXPERIENCE_EVICT = True
+
+# ★426刀5：对话中间过程落盘（`nucleus/dialogue_process_trace.py`）。
+#   True（默认）= 每轮对话往 `data/experience/dialogue_process_YYYYMMDD.jsonl`
+#     追加一行：时间/问题/意图+置信度/关键词/知识路径/情绪/兴趣变化/经验命中/
+#     渠道候选+理由/方法/答案预览/端到端耗时。append-only、有界、不存素材。
+#   False = 完全静默（不建文件、不占内存），逐字回到改前（改前根本没有这份记录）。
+ENABLE_M426_DIALOGUE_TRACE = True
 
 # 精神宪法运行时配置
 SPIRIT_CONSTITUTION_CONFIG = {

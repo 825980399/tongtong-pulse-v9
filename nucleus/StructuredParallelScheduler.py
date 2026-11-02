@@ -33,6 +33,8 @@ from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from enum import Enum
+
+from nucleus._silent_except import silent_exc
 from typing import Any
 
 
@@ -139,7 +141,19 @@ class StructuredParallelScheduler:
         self._history: list[TaskGroupResult] = []
         self._max_history = 100
         # 共享线程池（子任务执行用，进程池由HybridParallelScheduler负责）
-        self._executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix="StructParallel")
+        # ★426 刀1：硬编码 16 → 预算 6（实测单组扇出峰值 ≤6，且下层还有 Hybrid 池兜并行）。
+        _m426_workers = 16
+        try:
+            from utils.thread_budget import cap as _m426_cap
+            _m426_workers = int(_m426_cap("struct_parallel", _m426_workers))
+        except Exception as _m426_e:
+            silent_exc(_m426_e, where="StructuredParallelScheduler::__init__ 426刀1")
+        self._executor = ThreadPoolExecutor(max_workers=_m426_workers, thread_name_prefix="StructParallel")
+        try:
+            from utils.thread_budget import register as _m426_reg
+            _m426_reg("struct_parallel", self._executor)
+        except Exception as _m426_e:
+            silent_exc(_m426_e, where="StructuredParallelScheduler::register 426刀1")
         self._shutdown = False  # ★v26.0修复：关闭标志，防止shutdown后仍提交任务
 
     @classmethod

@@ -33,7 +33,21 @@ _logger = get_module_logger("external_executor")
 # [批次4·深度体检][PERF-3] 模块级共享线程池（替代每次执行新建线程池）
 # ★FIX(硬件自适应): 外部操作是 IO 密集，线程数可到 CPU 核数 2 倍，设 8~32 上下限
 _OP_WORKERS = max(8, min(32, (os.cpu_count() or 8) * 2))
+# ★426 刀1：上限收敛到 `utils/thread_budget`（16 核原 32 → 预算 8）。
+#   压到 8 的依据不是"拍脑袋砍"：外层 _SCHEDULER_EXECUTOR 只有 2 并发、
+#   `_load_config` 的 `_max_concurrent` 默认也是 2 ⇒ 内层真实并发物理上限≈2，
+#   8 已是 4 倍余量；开关 `ENABLE_M418_THREAD_SLIMMING=False` 时逐字回到 32。
+try:
+    from utils.thread_budget import cap as _m426_cap
+    _OP_WORKERS = int(_m426_cap("ext_op", _OP_WORKERS))
+except Exception as _m426_e:
+    silent_exc(_m426_e, where="external_executor::_OP_WORKERS 426刀1")
 _OP_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=_OP_WORKERS, thread_name_prefix="ExtOp")
+try:
+    from utils.thread_budget import register as _m426_reg
+    _m426_reg("ext_op", _OP_EXECUTOR)
+except Exception as _m426_e:
+    silent_exc(_m426_e, where="external_executor::register 426刀1")
 
 # ★A1【P0】外层调度线程池：替代 _try_execute_next 中每任务新建 threading.Thread 的无界创建。
 #   设计说明（为何不用星轨字面的 _OP_EXECUTOR.submit(self._execute_operation)）：
@@ -43,8 +57,21 @@ _OP_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=_OP_WORKERS, th
 #   导致同池自锁死锁。故外层用独立的、有界的调度池，与内层执行池分离，两层互不阻塞。
 #   外层 max_workers 与并发上限对齐（默认 2，见 _load_config 的 _max_concurrent），
 #   因此外层线程数严格有界，彻底消除线程爆炸隐患。
+# ★426 刀1：与 `_max_concurrent` 对齐的 2 并发闸门，预算表登记为 ext_sched=2
+#   （cap 只压不放，这里原值就是 2，纯登记 + 受统一预算表可见）。
+try:
+    from utils.thread_budget import cap as _m426_cap2
+    _SCHED_WORKERS = int(_m426_cap2("ext_sched", 2))
+except Exception as _m426_e:
+    silent_exc(_m426_e, where="external_executor::_SCHED_WORKERS 426刀1")
+    _SCHED_WORKERS = 2
 _SCHEDULER_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-    max_workers=2, thread_name_prefix="ExtOpSched")
+    max_workers=_SCHED_WORKERS, thread_name_prefix="ExtOpSched")
+try:
+    from utils.thread_budget import register as _m426_reg2
+    _m426_reg2("ext_sched", _SCHEDULER_EXECUTOR)
+except Exception as _m426_e:
+    silent_exc(_m426_e, where="external_executor::register_sched 426刀1")
 
 
 class OperationPriority(Enum):
