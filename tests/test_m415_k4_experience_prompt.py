@@ -4,6 +4,11 @@
 被测对象：`organs/body/PulseLung.py::_m415_build_experience_fragment`
 口径（任务书原文）：top3 / 每条 ≤100 字 / 合计 ≤500 字 / 开关默认 False（影子）。
 
+★423 刀2 起默认值已由任务书改为 **True（实弹）**，两条相关断言随之调整：
+  - `test_switch_exists_and_default_on_since_423`：钉新规格（回滚开关时必须同步改这里）；
+  - `test_shadow_returns_empty_but_reports_numbers`：改为**显式关闸**再验影子分支，
+    不再依赖全局默认值 —— 否则默认值一动，这条行为用例就会假红。
+
 ★本批探针实测：真实经验池对「怎么优化代码质量」等三问**全部 0 命中**
   （`score_one` 是中文 2~4 字词片**整段切**，池内 summary 全是内部动机叙述）。
   所以这里的"全链路"用**注入 top_hits 返回值**来验，别依赖生产池内容 ——
@@ -19,22 +24,28 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import config  # noqa: E402
-import organs.body.PulseLung as PL  # noqa: E402
+import config
+import organs.body.PulseLung as PL
 
 SWITCH = "ENABLE_M415_EXPERIENCE_IN_PROMPT"
 HEADER = "【相关经验参考】"
 
 
 def _hits(*texts, weight=1.0):
-    return [{"id": "exp_%d" % i, "text": t, "weight": weight, "score": 1, "is_template": False}
+    return [{"id": f"exp_{i}", "text": t, "weight": weight, "score": 1, "is_template": False}
             for i, t in enumerate(texts)]
 
 
 # ---------------------------------------------------------------- 开关
-def test_switch_exists_and_default_off():
-    assert hasattr(config, SWITCH), "config 里必须有这个开关（默认关）"
-    assert getattr(config, SWITCH) is False
+def test_switch_exists_and_default_on_since_423():
+    """423 刀2：开关由影子（False）转实弹（True）。
+
+    ★这是**规格断言**：要回滚成影子，必须同时改 config.py 与这条用例，
+      避免"默认值悄悄变了没人发现"。
+    """
+    assert hasattr(config, SWITCH), "config 里必须有这个开关"
+    assert isinstance(getattr(config, SWITCH), bool), "开关必须是 bool，别用 0/1 糊"
+    assert getattr(config, SWITCH) is True, "423 刀2 起默认 True；回滚需同步改本用例"
 
 
 def test_switch_reader_false_when_missing(monkeypatch):
@@ -43,8 +54,12 @@ def test_switch_reader_false_when_missing(monkeypatch):
 
 
 # ---------------------------------------------------------------- 影子 vs 实弹
-def test_shadow_returns_empty_but_reports_numbers():
-    """影子模式：fragment 为空 ⇒ `prompt += ""` 逐字不变；但 obs 如实报字数。"""
+def test_shadow_returns_empty_but_reports_numbers(monkeypatch):
+    """影子模式：fragment 为空 ⇒ `prompt += ""` 逐字不变；但 obs 如实报字数。
+
+    ★显式关闸：本用例验的是"关闸时行为"，不该依赖 config 的全局默认值。
+    """
+    monkeypatch.setattr(config, SWITCH, False, raising=False)
     frag, obs = PL._m415_build_experience_fragment("今天感觉怎么样", hits=_hits("经验甲", "经验乙"))
     assert frag == ""
     assert obs["on"] is False
